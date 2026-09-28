@@ -22,7 +22,7 @@ const NOT_ITEMS = new Set([
   'grass_jungle', 'grass_taiga', 'path', 'farmland', 'roof_snow', 'leaves_snowy', 'coal_ore',
   'gem_ore', 'wheat_crop', 'carrot_crop', 'cabbage_crop', 'tall_grass', 'fern', 'bush',
   'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'rock',
-  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open',
+  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open', 'cell_door_top',
 ]);
 
 const BLOCK_VALUES = {

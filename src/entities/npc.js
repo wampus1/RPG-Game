@@ -68,7 +68,23 @@ export class NPC extends Entity {
   }
 
   get title() {
+    if (this.visit) return 'Traveling Merchant';
     return jobTitle(this.rec, this.settlement);
+  }
+
+  // The town this person belongs to (a visiting merchant's is elsewhere).
+  get homeLayout() {
+    return this.originLayout || this.layout;
+  }
+
+  get homeName() {
+    return this.visit ? this.visit.fromName : this.settlement.name;
+  }
+
+  // Their house in the town they're in now (none when visiting).
+  homeBuilding() {
+    if (this.visit || this.rec.home === null || this.rec.home === undefined) return null;
+    return this.layout.buildings[this.rec.home] || null;
   }
 
   // Sitting down on a chair, bench or stool they walked to.
@@ -144,7 +160,7 @@ export class NPC extends Entity {
   }
 
   homeTile() {
-    const b = this.rec.home !== null ? this.layout.buildings[this.rec.home] : null;
+    const b = this.homeBuilding();
     if (b && b.homeSpots.length) return b.homeSpots[this.rec.idx % b.homeSpots.length];
     const p = this.layout.plaza;
     return { x: p.cx, y: GROUND, z: p.cz + 2 };
@@ -154,7 +170,7 @@ export class NPC extends Entity {
   pickGoal(e) {
     const L = this.layout;
     const rec = this.rec;
-    const home = rec.home !== null ? L.buildings[rec.home] : null;
+    const home = this.homeBuilding();
     const rng = this.rng;
     this.releaseSpot();
     const claim = (spots) => {
@@ -218,7 +234,7 @@ export class NPC extends Entity {
         return target(sites[rng.int(0, sites.length - 1)], { tag: 'build', build: true });
       }
       case 'trial':
-        return target(e.target, { near: 1, tag: 'trial' });
+        return target(e.target, { tag: 'trial' });
       case 'sell':
         return target(e.target, { near: 1, tag: 'sell', sell: true });
       case 'forage': {
@@ -332,7 +348,31 @@ export class NPC extends Entity {
       case 'alert':
         this.alert(dt);
         break;
+      case 'escort':
+        this.escortWalk(dt);
+        break;
     }
+  }
+
+  // Leading an arrested player to the jail on a rope.
+  escortWalk(dt) {
+    const j = this.game.sim.justice;
+    const e = j.escort;
+    const p = this.game.player;
+    if (!e || e.guard !== this) {
+      this.calmDown(true);
+      return;
+    }
+    if (e.phase !== 'walk') {
+      this.face(p.x, p.z);
+      return;
+    }
+    // Don't get too far ahead of the prisoner.
+    if (Math.abs(this.x - p.x) + Math.abs(this.z - p.z) > 2) {
+      this.face(p.x, p.z);
+      return;
+    }
+    if (this.followPath(e.goal, 0)) j.escortArrived();
   }
 
   routine(dt) {
@@ -768,7 +808,7 @@ export class NPC extends Entity {
       return;
     }
     // Run home if possible, otherwise directly away from the threat.
-    const home = this.rec.home !== null ? this.layout.buildings[this.rec.home] : null;
+    const home = this.homeBuilding();
     if (!this.fleeGoal || this.stateT - (this.fleeSet || 0) > 6) {
       this.fleeSet = this.stateT;
       if (home && home.homeSpots.length && Math.hypot(home.inside.x - t.x, home.inside.z - t.z) > 4) {

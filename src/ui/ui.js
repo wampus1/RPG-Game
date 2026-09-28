@@ -375,7 +375,10 @@ export class UI {
       const cz = sim.citizen;
       let status = null;
       let col = C.dim;
-      if (j) {
+      if (sim.justice.escort) {
+        status = 'RESTRAINED · led to jail';
+        col = C.orange;
+      } else if (j) {
         if (j.phase === 'serving') {
           const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
           status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
@@ -614,12 +617,13 @@ export class UI {
     this.open(new W.LedgerWindow(this, this.game, t.s, t.L));
   }
   // Black-out card for being knocked out / marched to jail / escorted out.
-  showKnockout(how, town, returned) {
+  showKnockout(how, town, returned, weapons = 0) {
     const lines = how === 'knockout'
       ? ['You were knocked out...', `You come to in a cell in ${town}.`]
       : how === 'surrender' ? ['The guards march you to the jail...', `A cell in ${town}.`]
         : [`You are escorted out of ${town}...`, 'Never to return.'];
     if (returned) lines.push('Stolen goods were confiscated.');
+    if (weapons) lines.push('The guards took your weapons.');
     this.ko = { t: 0, dur: how === 'exile' ? 3 : 4, lines };
     this.closeAll();
   }

@@ -10,6 +10,7 @@ import { clamp } from '../util/rng.js';
 import { jobTitle } from '../entities/npcgen.js';
 import { DAY, ledger, mayorOf, alive, st, setOverride, invAdd } from './econ.js';
 import { removeItem, countItem } from '../game/inventory.js';
+import { findPath } from '../entities/pathfind.js';
 
 export const CRIMES = {
   theft: { label: 'Theft', sev: 'minor', fine: 10 },
@@ -51,6 +52,8 @@ export class Justice {
     this.trespass = null;
     this.brandish = null;
     this.exileWarn = -1;
+    this.sightings = new Map(); // sid -> [{t, x, z, who: [idx]}]
+    this.unsolved = []; // crimes nobody saw, waiting to be discovered
   }
 
   pendingIn(sid) {
@@ -76,14 +79,17 @@ export class Justice {
     const game = this.game;
     const def = CRIMES[type];
     const wits = (info.witnesses || []).filter((n) => n && !n.dead && !n.sleeping);
-    if (!wits.length) return null;
     const L = this.sim.layoutOf(sid);
+    // Circumstantial: people who saw you near the scene around the time.
+    const seen = (info.circumstantial || []).filter((i) => L.npcs[i] && alive(L.npcs[i]));
+    if (!wits.length && !seen.length) return null;
     const s = L.settlement;
     let sev = info.sev || def.sev;
     if (type === 'theft' && (info.value || 0) >= 25) sev = 'moderate';
     const crime = {
       type, sev, desc: info.desc || def.label, victim: info.victim || null, value: info.value || 0, items: info.items || null, owner: info.owner || null,
-      witnesses: wits.filter((n) => !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard'), day: game.day, minute: Math.floor(game.minute),
+      witnesses: wits.filter((n) => !n.visit && !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard'), day: game.day, minute: Math.floor(game.minute),
+      seen, at: info.at || null, when: info.when ?? null, suspected: !wits.length,
     };
     const list = this.pending.get(sid) || [];
     list.push(crime);
@@ -94,18 +100,101 @@ export class Justice {
     r.calm = 0;
     const hit = { minor: 6, moderate: 12, severe: 25 }[sev];
     for (const w of wits) this.sim.changeRep(w, -hit);
+    for (const i of seen) this.sim.changeRep({ rec: L.npcs[i], settlement: s }, -Math.ceil(hit / 3));
     if (info.victimNpc && !info.victimNpc.dead) this.sim.changeRep(info.victimNpc, -hit * 2);
     const was = game.isWanted(sid);
     game.wanted.set(sid, Math.max(game.wanted.get(sid) || 0, sev === 'minor' ? 240 : 1e9));
     const shouter = wits.find((n) => n.state === 'routine' || n.rec.job === 'guard') || wits[0];
     if (!info.quiet && shouter) shouter.say(shouter.rng.pick(SHOUTS[type] || SHOUTS.assault), 3.2, '#ff9080');
     if (!was) {
-      game.ui.msg(`${def.label} witnessed! You are wanted in ${s.name}.`, '#ff5050');
+      game.ui.msg(wits.length ? `${def.label} witnessed! You are wanted in ${s.name}.` : `You are suspected of ${lcFirst(describe(crime))} in ${s.name}!`, '#ff5050');
       game.audio?.play('alarm');
     }
-    game.alertGuards(sid, game.player, shouter, true);
+    game.alertGuards(sid, game.player, shouter || game.player, true);
     this.sim.areaCache.delete(sid);
     return crime;
+  }
+
+  // A crime nobody saw: it will be discovered later, and then the town asks
+  // who was seen nearby around that time.
+  unseen(sid, info) {
+    const now = this.sim.abs;
+    const delay = info.type === 'murder' ? 8 + Math.random() * 30 : 20 + Math.random() * 70;
+    this.unsolved.push({ sid, ...info, t: now, discoverAt: now + delay });
+  }
+
+  // Remember who saw the player where (checked about once a second).
+  recordSightings() {
+    const game = this.game;
+    const p = game.player;
+    if (p.dead) return;
+    const now = Math.floor(this.sim.abs);
+    for (const [sid, a] of game.active) {
+      const b = a.layout.bounds;
+      if (p.x < b.x0 - 24 || p.x > b.x1 + 24 || p.z < b.z0 - 20 || p.z > b.z1 + 20) continue;
+      const who = this.sim.witnesses(sid, p.x, p.z, 10).filter((n) => !n.visit && !n.hired).map((n) => n.rec.idx);
+      if (!who.length) continue;
+      const list = this.sightings.get(sid) || [];
+      const last = list[list.length - 1];
+      if (last && last.t === now && last.x === p.x && last.z === p.z) continue;
+      list.push({ t: now, x: p.x, z: p.z, who });
+      if (list.length > 300) list.splice(0, list.length - 300);
+      this.sightings.set(sid, list);
+    }
+  }
+
+  // Who saw the player within 12 tiles of (x, z) between t-25 and t+20 minutes.
+  suspectsNear(sid, x, z, t, exclude = null) {
+    const L = this.sim.layoutOf(sid);
+    const seen = new Map();
+    for (const s of this.sightings.get(sid) || []) {
+      if (s.t < t - 25 || s.t > t + 20) continue;
+      if (Math.max(Math.abs(s.x - x), Math.abs(s.z - z)) > 12) continue;
+      for (const i of s.who) if (i !== exclude && L.npcs[i] && alive(L.npcs[i]) && !seen.has(i)) seen.set(i, s.t);
+    }
+    return seen;
+  }
+
+  investigate() {
+    const now = this.sim.abs;
+    for (const u of [...this.unsolved]) {
+      if (now < u.discoverAt) continue;
+      this.unsolved.splice(this.unsolved.indexOf(u), 1);
+      this.solve(u);
+    }
+  }
+
+  solve(u) {
+    const game = this.game;
+    const L = this.sim.layoutOf(u.sid);
+    const day = game.day;
+    const seen = this.suspectsNear(u.sid, u.x, u.z, u.t, u.victimIdx ?? null);
+    const what = u.type === 'murder' ? `${u.victim} was found dead` : `The ${u.ownerName || 'owners'} found things missing`;
+    if (!seen.size) {
+      ledger(L, day, `${what}. Nobody knows who did it.`);
+      if (game.active.has(u.sid)) game.ui.msg(`${what} in ${L.settlement.name}. No one suspects you.`, '#c8c8c8');
+      return null;
+    }
+    const names = [...seen.keys()].map((i) => L.npcs[i].name.first);
+    const hh = Math.floor((u.t % DAY) / 60);
+    const mm = Math.floor(u.t % 60);
+    const crime = this.commit(u.sid, u.type, {
+      witnesses: [], circumstantial: [...seen.keys()], victim: u.victim, value: u.value, items: u.items, owner: u.owner, desc: u.desc,
+      at: u.place || null, when: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+    });
+    ledger(L, day, `${what}. ${names.slice(0, 2).join(' and ')} saw ${game.playerName} nearby around then.`);
+    if (game.active.has(u.sid)) game.ui.msg(`${what}! ${names.slice(0, 2).join(' and ')} saw you near the scene. The guards want a word.`, '#ff7060');
+    return crime;
+  }
+
+  // A victim who was the only one to see an attack takes it to the grave.
+  forgetVictim(sid, idx) {
+    const list = this.pendingIn(sid).filter((c) => !(c.witnesses.length === 1 && c.witnesses[0] === idx && !c.guardSaw && !(c.seen || []).length));
+    if (list.length) this.pending.set(sid, list);
+    else {
+      this.pending.delete(sid);
+      this.game.wanted.delete(sid);
+    }
   }
 
   // Crimes lapse for the petty stuff when the guards lose interest.
@@ -118,7 +207,9 @@ export class Justice {
 
   // ------------------------------------------------------------ arrests
   canHalt(sid) {
-    return this.haltCd <= 0 && !this.jail && !this.resisted.has(sid) && !this.pendingIn(sid).some((c) => c.sev === 'severe') && !this.game.ui.modal && !this.game.player.dead;
+    // Murderers caught in the act get no warning; suspects are asked to come along.
+    const caught = this.pendingIn(sid).some((c) => c.sev === 'severe' && !c.suspected);
+    return this.haltCd <= 0 && !this.jail && !this.escort && !this.resisted.has(sid) && !caught && !this.game.ui.modal && !this.game.player.dead && !this.game.player.restrained;
   }
 
   halt(guard) {
@@ -128,8 +219,189 @@ export class Justice {
     this.game.ui.openHalt?.(guard, this.pendingIn(sid));
   }
 
-  surrender(sid) {
-    this.imprison(sid, 'surrender');
+  // Coming quietly: a guard takes your weapons, ties your hands and leads
+  // you to the cell on a rope.
+  surrender(sid, guard = null) {
+    const game = this.game;
+    const L = this.sim.layoutOf(sid);
+    const p = game.player;
+    const guards = game.guardsOf(sid).filter((g) => !g.sleeping && g.distTo(p) <= 40);
+    if (!guard || guard.dead || guard.rec.job !== 'guard') guard = guards.sort((a, b) => a.distTo(p) - b.distTo(p))[0] || null;
+    if (!guard || !L.jail || p.dead) return this.imprison(sid, 'surrender');
+    for (const n of game.npcs) if (n !== guard && n.threat === p && (n.state === 'fight' || n.state === 'alert' || n.state === 'flee')) n.calmDown(true);
+    game.wanted.delete(sid);
+    game.stopPlayerActions?.();
+    p.sitting = null;
+    const returned = this.confiscateStolen(L, sid);
+    const weapons = this.confiscateWeapons(sid);
+    const spot = this.trialSpots(L, 1)[0];
+    this.escort = { sid, guard, goal: { x: spot.x, y: L.jail.y, z: spot.z }, phase: 'walk', t: 0, wait: 0, stepT: 0 };
+    p.restrained = true;
+    guard.wake?.();
+    guard.state = 'escort';
+    guard.threat = null;
+    guard.path = null;
+    guard.releaseSpot();
+    guard.face(p.x, p.z);
+    guard.say(weapons.length ? 'I\'ll take those. Hands out.' : 'Hands out. Come along.', 3);
+    game.ui.msg(`${guard.name} ${weapons.length ? `takes your ${weapons.map((w) => ITEMS[w.item].name.toLowerCase()).slice(0, 2).join(' and ')}, ` : ''}ties your hands and leads you to the jail.`, '#ffb080');
+    if (returned) game.ui.msg('Stolen goods were confiscated.', '#ffb080');
+    game.audio?.play('select');
+  }
+
+  // Weapons (and arrows) are held by the guards until you're released.
+  confiscateWeapons(sid) {
+    const p = this.game.player;
+    const taken = [];
+    for (let i = 0; i < p.inv.length; i++) {
+      const s = p.inv[i];
+      if (!s) continue;
+      const d = ITEMS[s.item];
+      if (d && (d.kind === 'weapon' || s.item === 'arrow')) {
+        taken.push({ item: s.item, count: s.count });
+        p.inv[i] = null;
+      }
+    }
+    const prev = this.held && this.held.sid === sid ? this.held.items : this.held ? (this.stashWeapons(this.sim.layoutOf(this.held.sid)), []) : [];
+    if (taken.length || prev.length) this.held = { sid, items: [...prev, ...taken] };
+    return taken;
+  }
+
+  // Released: the guards hand your weapons back, unless you killed someone.
+  returnWeapons(forfeit) {
+    const h = this.held;
+    if (!h || !h.items.length) {
+      this.held = null;
+      return;
+    }
+    const game = this.game;
+    const p = game.player;
+    this.held = null;
+    if (forfeit) {
+      game.ui.msg('Your weapons are forfeit: murderers don\'t get them back.', '#ff9060');
+      return;
+    }
+    for (const it of h.items) {
+      const left = p.give(it.item, it.count);
+      if (left) game.spawnDrop(it.item, left, p.x, p.y, p.z, true);
+    }
+    game.ui.msg(`The guard hands back your ${h.items.map((i) => ITEMS[i.item].name.toLowerCase()).slice(0, 3).join(', ')}.`, '#a0e0a0');
+  }
+
+  // Escaped: your weapons stay locked in the jail building's chest.
+  stashWeapons(L) {
+    const h = this.held;
+    this.held = null;
+    if (!h || !h.items.length || !L || !L.jail) return;
+    const w = this.game.world;
+    const b = L.buildings[L.jail.building];
+    let slots = null;
+    for (let z = b.z0; z <= b.z1 && !slots; z++) {
+      for (let x = b.x0; x <= b.x1 && !slots; x++) {
+        const id = w.getBlock(x, L.jail.y, z);
+        if (id === B.chest || id === B.barrel || id === B.crate) slots = w.getContainer(x, L.jail.y, z);
+      }
+    }
+    for (const it of h.items) {
+      if (!slots) break;
+      const i = slots.findIndex((s) => !s);
+      if (i >= 0) slots[i] = { item: it.item, count: it.count };
+    }
+    if (slots) this.game.ui.msg(`Your weapons are locked in a chest in the ${b.name}.`, '#ffb080');
+  }
+
+  confiscateStolen(L, sid) {
+    const p = this.game.player;
+    let returned = 0;
+    for (const c of this.pendingIn(sid)) {
+      if (c.type !== 'theft' || !c.items) continue;
+      for (const it of c.items) {
+        const n = Math.min(countItem(p.inv, it.item), it.count);
+        if (n <= 0) continue;
+        removeItem(p.inv, it.item, n);
+        returned += n;
+        c.found = true;
+        this.returnGoods(L, c.owner, it.item, n);
+      }
+    }
+    return returned;
+  }
+
+  // Each frame of an escort: the guard walks, the prisoner is pulled along.
+  updateEscort(dt) {
+    const e = this.escort;
+    const game = this.game;
+    const p = game.player;
+    const g = e.guard;
+    const L = this.sim.layoutOf(e.sid);
+    e.t += dt;
+    if (!g || g.dead || g.state !== 'escort' || p.dead) {
+      // The guard is gone: the rope goes slack and you're free (and wanted).
+      this.escort = null;
+      p.restrained = false;
+      if (g && !g.dead) g.calmDown(true);
+      game.ui.msg('The rope goes slack. You are free... for now.', '#ffe070');
+      game.wanted.set(e.sid, Math.max(game.wanted.get(e.sid) || 0, 1e9));
+      return;
+    }
+    if (e.t > 120) {
+      // Taking too long (stuck somewhere): march straight to the cell.
+      g.calmDown(true);
+      this.escort = null;
+      p.restrained = false;
+      this.imprison(e.sid, 'surrender', true);
+      return;
+    }
+    if (p.moving) return;
+    if (e.phase === 'walk') {
+      if (Math.abs(g.x - p.x) + Math.abs(g.z - p.z) > 1 && !g.moving) this.pullToward(g.x, g.y, g.z, 1);
+      else if (g.moving && Math.abs(g.fx - p.x) + Math.abs(g.fz - p.z) >= 1 && Math.abs(g.x - p.x) + Math.abs(g.z - p.z) > 1) this.pullToward(g.fx, g.fy, g.fz, 0);
+    } else if (e.phase === 'enter') {
+      const st = L.jail.stand;
+      if (p.x === st.x && p.z === st.z) {
+        this.escort = null;
+        p.restrained = false;
+        this.setCellDoor(L, false);
+        g.say('In you go. The hearing will be soon.', 3);
+        g.calmDown(true);
+        this.jail = { sid: e.sid, phase: 'gather', t: 0, how: 'surrender', party: [], lines: [], li: 0, lt: 0, release: null, cellless: false };
+        this.summon(L);
+        game.audio?.play('door');
+        return;
+      }
+      if (!this.pullToward(st.x, L.jail.y, st.z, 0)) {
+        e.stuck = (e.stuck || 0) + dt;
+        if (e.stuck > 3) game.teleportPlayer(st.x, L.jail.y, st.z);
+      }
+    }
+  }
+
+  // Take one step of the prisoner toward (x, z); false if no way.
+  pullToward(x, y, z, near) {
+    const game = this.game;
+    const p = game.player;
+    if (Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= near && Math.abs(x - p.x) + Math.abs(z - p.z) <= Math.max(1, near)) return true;
+    const path = findPath(game.world, p.x, p.y, p.z, x, y, z, { maxNodes: 400, near, partial: true });
+    if (!path || !path.length) return false;
+    const [nx, ny, nz] = path[0];
+    if (game.occupiedBySolid(nx, ny, nz, p)) return false;
+    const w = game.world;
+    if (w.getBlock(nx, ny, nz) === B.door && !w.getState(nx, ny, nz)) game.setDoor(nx, ny, nz, true);
+    p.face(nx, nz);
+    p.startMove(nx, ny, nz, 0.26);
+    game.onPlayerStep(nx, ny, nz, w.isWaterAt(nx, ny, nz));
+    return true;
+  }
+
+  // The guard reached the jail: open the cell and put the prisoner in.
+  escortArrived() {
+    const e = this.escort;
+    if (!e || e.phase !== 'walk') return;
+    const L = this.sim.layoutOf(e.sid);
+    e.phase = 'enter';
+    e.t = Math.min(e.t, 100);
+    this.setCellDoor(L, true);
+    this.game.audio?.play('door');
   }
 
   resist(sid, guard) {
@@ -146,38 +418,73 @@ export class Justice {
     this.imprison(sid, 'knockout');
   }
 
-  imprison(sid, how) {
+  imprison(sid, how, quick = false) {
     const game = this.game;
     const L = this.sim.layoutOf(sid);
     const p = game.player;
     for (const n of game.npcs) if (n.threat === p && (n.state === 'fight' || n.state === 'alert' || n.state === 'flee')) n.calmDown(true);
     game.wanted.delete(sid);
     game.stopPlayerActions?.();
-    // Stolen goods are confiscated and returned.
-    let returned = 0;
-    for (const c of this.pendingIn(sid)) {
-      if (c.type !== 'theft' || !c.items) continue;
-      for (const it of c.items) {
-        const n = Math.min(countItem(p.inv, it.item), it.count);
-        if (n <= 0) continue;
-        removeItem(p.inv, it.item, n);
-        returned += n;
-        this.returnGoods(L, c.owner, it.item, n);
-      }
-    }
-    game.advanceTime(how === 'knockout' ? 90 : 20);
+    p.restrained = false;
+    // Stolen goods are returned; weapons are held until release.
+    const returned = this.confiscateStolen(L, sid);
+    const weapons = this.confiscateWeapons(sid);
+    if (!quick) game.advanceTime(how === 'knockout' ? 90 : 20);
     const jail = L.jail;
     if (jail) {
       game.teleportPlayer(jail.stand.x, jail.y, jail.stand.z);
-      this.sim.setBlocks([[jail.door.x, jail.y, jail.door.z, B.cell_door, 0]]);
+      this.setCellDoor(L, false);
     } else {
       const pl = L.plaza;
       game.teleportPlayer(pl.cx + 1, GROUND, pl.cz + 1);
     }
     if (how === 'knockout') p.hp = Math.max(p.hp, 6);
     this.jail = { sid, phase: 'gather', t: 0, how, party: [], lines: [], li: 0, lt: 0, release: null, cellless: !jail };
-    game.ui.showKnockout?.(how, L.settlement.name, returned);
+    if (!quick) game.ui.showKnockout?.(how, L.settlement.name, returned, weapons.length);
     this.summon(L);
+  }
+
+  // Open or shut the cell. (The bars above the door let you walk under.)
+  setCellDoor(L, open) {
+    const j = L.jail;
+    if (!j) return;
+    const w = this.game.world;
+    const ops = [[j.door.x, j.y, j.door.z, open ? B.cell_door_open : B.cell_door, 0]];
+    if (!w.regionAt(j.door.x, j.door.z) || w.getBlock(j.door.x, j.y + 1, j.door.z) === B.iron_bars) ops.push([j.door.x, j.y + 1, j.door.z, B.cell_door_top, 0]);
+    this.sim.setBlocks(ops);
+  }
+
+  // Where the hearing's party stands: separate tiles near the cell door,
+  // leaving the way out of the cell clear.
+  trialSpots(L, n) {
+    const jail = L.jail;
+    const w = this.game.world;
+    if (!jail) return [...Array(n)].map((_, i) => ({ x: L.plaza.cx - 2 + i * 2, z: L.plaza.cz + 3 }));
+    const b = L.buildings[jail.building];
+    const key = (x, z) => x * 100000 + z;
+    const skip = new Set([...jail.cell, jail.door, jail.front].map((t) => key(t.x, t.z)));
+    const seen = new Set([key(jail.front.x, jail.front.z)]);
+    const q = [jail.front];
+    const out = [];
+    while (q.length && out.length < n && seen.size < 300) {
+      const t = q.shift();
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = t.x + dx;
+        const z = t.z + dz;
+        const k = key(x, z);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const inside = x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1;
+        const nearDoor = Math.abs(x - b.door.x) + Math.abs(z - b.door.z) <= 3;
+        if (!inside && !nearDoor) continue;
+        if (!w.canStand(x, jail.y, z, true)) continue;
+        q.push({ x, z });
+        const id = w.getBlock(x, jail.y, z);
+        if (!skip.has(k) && id !== B.door && !(x === b.door.x && z === b.door.z)) out.push({ x, z });
+      }
+    }
+    while (out.length < n) out.push({ x: b.outside.x + out.length, z: b.outside.z });
+    return out;
   }
 
   returnGoods(L, owner, item, n) {
@@ -196,7 +503,7 @@ export class Justice {
     const guard = L.npcs.find((r) => ok(r) && r.job === 'guard' && r !== judge);
     const wit = [];
     for (const c of this.pendingIn(sid)) {
-      for (const i of c.witnesses) {
+      for (const i of [...c.witnesses, ...(c.seen || [])]) {
         const r = L.npcs[i];
         if (ok(r) && r !== judge && r !== guard && !wit.includes(r) && r.job !== 'guard') wit.push(r);
       }
@@ -207,14 +514,14 @@ export class Justice {
     j.witnesses = wit.slice(0, 3).map((r) => r.idx);
     j.party = party.map((r) => r.idx);
     const now = this.sim.abs;
-    const target = L.jail ? L.jail.front : { x: L.plaza.cx, z: L.plaza.cz + 2 };
-    for (const r of party) {
-      setOverride(r, now, now + 300, 'trial', { target, place: 'jail' });
+    const spots = this.trialSpots(L, party.length);
+    party.forEach((r, i) => {
+      setOverride(r, now, now + 300, 'trial', { target: spots[i], place: 'jail' });
       if (r.ent && !r.ent.dead) {
         r.ent.wake();
         r.ent.activity = null;
       }
-    }
+    });
   }
 
   script(L) {
@@ -228,7 +535,7 @@ export class Justice {
     const lines = [];
     const say = (r, text) => lines.push({ idx: r ? r.idx : null, text });
     say(judge, j.how === 'surrender' ? 'You gave yourself up. That counts for something.' : 'Well now. What have we here?');
-    if (guard) say(guard, worst ? `We brought them in for ${describe(worst).toLowerCase()}.` : 'Caught them causing trouble.');
+    if (guard) say(guard, worst ? `We brought them in for ${lcFirst(describe(worst))}.` : 'Caught them causing trouble.');
     for (const i of j.witnesses) {
       const w = npc(i);
       const c = crimes.find((q) => q.witnesses.includes(i));
@@ -236,16 +543,36 @@ export class Justice {
       say(judge, `${w.name.first}, you saw what happened?`);
       say(w, testimony(c));
     }
+    // Nobody saw the deed itself: put together who was where, and when.
+    for (const c of crimes.filter((q) => q.suspected)) {
+      const seen = (c.seen || []).map((i) => npc(i)).filter((r) => r && alive(r));
+      say(judge, `No one saw ${c.type === 'murder' ? 'the killing' : 'the theft'} itself. So who was near when ${c.type === 'murder' ? `${(c.victim || 'the victim').split(' ')[0]} died` : 'the goods went missing'}?`);
+      for (const r of seen.slice(0, 2)) {
+        say(judge, `${r.name.first}?`);
+        say(r, `I saw them right near there, ${c.when ? `around ${c.when}` : 'about that time'}.`);
+      }
+      if (c.found && guard) say(guard, `And the stolen goods were in their pack when we took them in.`);
+      const score = seen.length + (c.found ? 2 : 0);
+      say(judge, score >= 2 ? 'Put together, that is hard to explain away.' : 'One sighting alone proves nothing.');
+    }
     say(judge, 'I have heard enough.');
     return lines;
   }
 
   update(dt) {
     this.haltCd -= dt;
+    if (this.pendingEscort !== null && this.pendingEscort !== undefined && this.game.active.has(this.pendingEscort)) {
+      const sid = this.pendingEscort;
+      this.pendingEscort = null;
+      this.imprison(sid, 'surrender', true);
+    }
+    if (this.escort) this.updateEscort(dt);
     if (this.jail) this.updateJail(dt);
     this.checkT -= dt;
     if (this.checkT <= 0) {
       this.checkT = 1;
+      this.recordSightings();
+      this.investigate();
       this.patrol();
     }
   }
@@ -258,7 +585,7 @@ export class Justice {
     if (j.phase === 'gather') {
       const target = L.jail ? L.jail.front : { x: L.plaza.cx, z: L.plaza.cz + 2 };
       const ents = j.party.map((i) => L.npcs[i]?.ent).filter((e) => e && !e.dead);
-      const here = ents.filter((e) => Math.max(Math.abs(e.x - target.x), Math.abs(e.z - target.z)) <= 3);
+      const here = ents.filter((e) => e.atGoal || Math.max(Math.abs(e.x - target.x), Math.abs(e.z - target.z)) <= 2);
       if ((j.t > 2 && here.length === ents.length) || j.t > 50) {
         j.phase = 'hearing';
         j.lines = this.script(L);
@@ -303,8 +630,11 @@ export class Justice {
     const crimes = this.pendingIn(j.sid);
     const charges = crimes.map((c) => {
       const names = c.witnesses.map((i) => L.npcs[i]).filter((r) => r && alive(r)).map((r) => `${r.name.first} ${r.name.last}`);
-      const proven = c.guardSaw || names.length > 0;
-      return { ...c, text: describe(c), names, proven };
+      const seenNames = (c.seen || []).map((i) => L.npcs[i]).filter((r) => r && alive(r)).map((r) => `${r.name.first} ${r.name.last}`);
+      const direct = c.guardSaw || names.length > 0;
+      const score = seenNames.length + (c.found ? 2 : 0);
+      const proven = direct || score >= 2;
+      return { ...c, text: describe(c), names, seenNames, proven, circumstantial: !direct && seenNames.length > 0 };
     });
     const proven = charges.filter((c) => c.proven);
     const rec = this.recordOf(j.sid);
@@ -325,7 +655,7 @@ export class Justice {
     return {
       sid: j.sid, town: s.name, judgeName: judge ? `${judge.name.first} ${judge.name.last}` : 'The council', judgeTitle: judge ? jobTitle(judge, s) : 'Council',
       charges, proven, fine, hours, coins, canPay: coins >= fine, sentence, citizen: this.sim.isCitizen(j.sid), pleaded: false, prior,
-      fineScale: e.fineScale,
+      fineScale: e.fineScale, weapons: this.held && this.held.items.length ? (proven.some((c) => c.type === 'murder') ? 'forfeit' : 'returned') : null,
     };
   }
 
@@ -373,6 +703,7 @@ export class Justice {
   }
 
   convict(L, v) {
+    this.forfeit = v.proven.some((c) => c.type === 'murder');
     const rec = this.recordOf(v.sid);
     for (const c of v.proven) {
       rec[c.sev]++;
@@ -401,9 +732,11 @@ export class Justice {
     const game = this.game;
     const L = this.sim.layoutOf(j.sid);
     this.dismissParty(L);
-    if (L.jail) this.sim.setBlocks([[L.jail.door.x, L.jail.y, L.jail.door.z, B.cell_door_open, 0]]);
+    this.setCellDoor(L, true);
     const guard = j.guard !== null ? L.npcs[j.guard] : null;
     if (guard && guard.ent && !guard.ent.dead) guard.ent.say(why === 'acquitted' ? 'Off you go, then.' : 'You\'re free to go. Behave yourself.', 3);
+    this.returnWeapons(this.forfeit);
+    this.forfeit = false;
     game.ui.msg(why === 'acquitted' ? 'Nothing could be proven. You are free to go.' : why === 'paid' ? 'Fine paid. You are free to go.' : 'Your time is served. You are free.', '#80e070');
     this.jail = null;
     return { released: true };
@@ -413,6 +746,7 @@ export class Justice {
     const j = this.jail;
     const p = this.game.player;
     this.jail = null;
+    this.stashWeapons(L);
     this.dismissParty(L);
     this.game.ui.msg('You broke out of jail!', '#ffb080');
     const wits = this.sim.witnesses(j.sid, p.x, p.z, 9);
@@ -433,6 +767,7 @@ export class Justice {
     const dz = e.z <= b.z0 + 2 ? -8 : e.z >= b.z1 - 2 ? 8 : dx === 0 ? 8 : 0;
     game.advanceTime(30);
     game.teleportPlayer(e.x + dx, GROUND, e.z + dz);
+    this.returnWeapons(v.proven.some((c) => c.type === 'murder'));
     game.ui.msg(`You have been EXILED from ${s.name}. Its guards will attack you on sight.`, '#ff5050');
     game.ui.showKnockout?.('exile', s.name, 0);
     return { exiled: true };
@@ -442,6 +777,7 @@ export class Justice {
     const game = this.game;
     this.dismissParty(L);
     this.jail = null;
+    this.held = null;
     ledger(L, game.day, `${game.playerName} was executed by order of ${v.judgeName}.`);
     game.executePlayer(`the executioner of ${L.settlement.name}`);
     return { executed: true };
@@ -502,7 +838,7 @@ export class Justice {
   // ------------------------------------------------------------ save
   serialize() {
     const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' ? 'serving' : 'gather', t: 0 } : null;
-    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j };
+    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings] };
   }
 
   load(d) {
@@ -511,7 +847,15 @@ export class Justice {
     this.record = new Map(d.record || []);
     this.exiled = new Set(d.exiled || []);
     this.jail = d.jail || null;
+    this.held = d.held || null;
+    this.unsolved = d.unsolved || [];
+    this.sightings = new Map(d.sightings || []);
+    this.pendingEscort = d.escortSid ?? null;
   }
+}
+
+export function lcFirst(s) {
+  return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
 
 export function describe(c) {

@@ -19,7 +19,7 @@ import { M } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
 import { Sim, buildingAt } from '../sim/sim.js';
-import { alive, invAdd, DAY } from '../sim/econ.js';
+import { alive, invAdd, DAY, setOverride } from '../sim/econ.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -321,7 +321,8 @@ export class Game {
         n.rec.leaving = false;
         n.rec.away = true;
       }
-      if (n.rec.visitor) this.sim.visitorEnts.delete(n.rec.visit.id);
+      if (n.visit) this.sim.visitorEnts.delete(n.visit.id);
+      if (n.visit && n.rec.visit === n.visit) n.rec.visit = null;
     }
     this.npcs = this.npcs.filter((n) => !a.npcs.includes(n));
     this.active.delete(s.id);
@@ -351,10 +352,26 @@ export class Game {
   spawnVisitor(L, visit, idx) {
     const a = this.active.get(L.settlement.id);
     if (!a) return null;
-    const rec = visitorRecord(visit, idx, L.settlement.id);
+    // A real merchant from another town comes as themselves (same face,
+    // family and reputation); random travelers get a made-up record.
+    let rec;
+    let origin = null;
+    if (visit.fromIdx !== undefined) {
+      origin = this.sim.layoutOf(visit.from);
+      rec = origin && origin.npcs[visit.fromIdx];
+      if (!rec || !alive(rec) || (rec.ent && !rec.ent.dead)) return null;
+      rec.visit = visit;
+      const now = this.day * DAY + this.minute;
+      setOverride(rec, now, visit.leave + 240, 'visit', { place: 'market' });
+    } else rec = visitorRecord(visit, idx, L.settlement.id);
     const e = L.entrances[idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
     const spot = this.findFreeSpot(e.x, e.z, GROUND);
     const n = new NPC(this, rec, L);
+    n.visit = visit;
+    if (origin) {
+      n.originLayout = origin;
+      n.repSid = origin.settlement.id;
+    }
     n.teleport(spot.x, spot.y, spot.z);
     rec.ent = n;
     a.npcs.push(n);
@@ -368,6 +385,10 @@ export class Game {
     this.removeOcc(n);
     n.dead = true;
     if (n.rec.ent === n) n.rec.ent = null;
+    if (n.visit && n.rec.visit === n.visit) {
+      n.rec.visit = null;
+      if (n.originLayout) n.rec.override = null;
+    }
     if (n.rec.leaving) {
       n.rec.leaving = false;
       n.rec.away = true;
@@ -406,7 +427,7 @@ export class Game {
       this.mining = null;
       return;
     }
-    const blocked = this.ui.modal || this.player.dead || !!this.sleep;
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     this.minute += dt * GAME_MINUTES_PER_SECOND * (this.sleepFast || 1);
     if (this.minute >= DAY_MINUTES) {
@@ -1026,6 +1047,7 @@ export class Game {
         }
         const open = id === B.cell_door_open;
         w.setBlock(x, y, z, open ? B.cell_door : B.cell_door_open, 0);
+        if (w.getBlock(x, y + 1, z) === B.iron_bars) w.setBlock(x, y + 1, z, B.cell_door_top, 0);
         this.audio?.play('door');
         break;
       }
@@ -1144,9 +1166,13 @@ export class Game {
       }
       return false;
     }
-    if (!wits.length) return false;
     const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : `the ${owner.label || 'shop'}`;
     const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
+    if (!wits.length) {
+      // Nobody saw. The owners will notice later...
+      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.label });
+      return false;
+    }
     const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
     this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
     return true;
@@ -1326,7 +1352,7 @@ export class Game {
     else this.ui.msg('You get up.', '#c8d8ff');
     // Villagers carry on with their day (after a full night, snap them to it).
     if (!early && !sl.jail) {
-      for (const a of this.active.values()) for (const n of a.npcs) if (!n.dead && n.state === 'routine' && !n.rec.visitor) {
+      for (const a of this.active.values()) for (const n of a.npcs) if (!n.dead && n.state === 'routine' && !n.visit) {
         n.activity = null;
         n.wake();
         n.placeForCurrentActivity();
@@ -1646,7 +1672,7 @@ export class Game {
     } else if (target.onHurt && source) target.onHurt(source);
     if (target.hp <= 0) {
       // The town subdues lawbreakers rather than killing them (unless exiled).
-      if (target.kind === 'player' && source && source.kind === 'npc' && !source.rec.visitor && !this.sim.justice.exiled.has(source.settlement.id)) {
+      if (target.kind === 'player' && source && source.kind === 'npc' && !source.visit && !source.hired && !this.sim.justice.exiled.has(source.settlement.id)) {
         target.hp = 1;
         this.sim.justice.knockout(source.settlement.id);
         return;
@@ -1660,7 +1686,7 @@ export class Game {
     const sid = victim.settlement.id;
     const guard = victim.rec.job === 'guard';
     const wits = this.sim.witnesses(sid, victim.x, victim.z, 8).filter((n) => n !== victim);
-    if (!victim.rec.visitor) wits.push(victim);
+    if (!victim.visit) wits.push(victim);
     const name = `${victim.rec.name.first} ${victim.rec.name.last}`;
     // One assault charge per victim per fight.
     const recent = this.sim.justice.pendingIn(sid).find((c) => (c.type === 'assault' || c.type === 'assault_guard') && c.victim === name && c.day === this.day);
@@ -1766,7 +1792,7 @@ export class Game {
       // Everything they carried falls to the ground.
       for (const it of rec.equipment.items) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
       for (const it of rec.inv || []) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
-      if (rec.visitor) for (const [k, n] of Object.entries(rec.visit.goods)) this.spawnDrop(k, n, e.x, e.y, e.z, true);
+      if (e.visit) for (const [k, n] of Object.entries(e.visit.goods)) this.spawnDrop(k, n, e.x, e.y, e.z, true);
       rec.inv = [];
       const coins = rec.coins || 0;
       if (coins) this.spawnDrop('coin', coins, e.x, e.y, e.z, true);
@@ -1774,17 +1800,24 @@ export class Game {
       const byPlayer = source && source.kind === 'player';
       const cause = byPlayer ? 'slain' : source ? `killed by a ${(source.name || 'beast').toLowerCase()}` : 'misadventure';
       rec.ent = null;
-      this.sim.recordDeath(L, rec, cause, byPlayer ? 'player' : null);
+      this.sim.recordDeath(e.originLayout || L, rec, cause, byPlayer ? 'player' : null);
       if (byPlayer) {
         this.stats.kills++;
         this.ui.msg(`${e.name} the ${e.title} has died.`, '#ff7060');
         const wits = this.sim.witnesses(sid, e.x, e.z, 10);
-        this.sim.justice.commit(sid, 'murder', { witnesses: wits, victim: `${rec.name.first} ${rec.name.last}` });
+        const vname = `${rec.name.first} ${rec.name.last}`;
+        if (wits.length) this.sim.justice.commit(sid, 'murder', { witnesses: wits, victim: vname });
+        else {
+          // Only the victim saw it: that knowledge dies with them. The body
+          // will be found, and the town will ask who was seen nearby.
+          this.sim.justice.forgetVictim(sid, rec.idx);
+          this.sim.justice.unseen(sid, { type: 'murder', x: e.x, z: e.z, victim: vname, victimIdx: rec.idx, desc: `The murder of ${vname}` });
+        }
         this.witness(e, source);
       } else this.ui.msg(`${e.name} the ${e.title} was killed!`, '#ff9080');
       // Family and friends who see it are devastated.
       const a = this.active.get(sid);
-      if (a && !rec.visitor) for (const n of a.npcs) {
+      if (a && !e.visit) for (const n of a.npcs) {
         if (n.dead || n === e || n.distTo(e) > 16) continue;
         const r = n.rec;
         const fam = r.partner === rec.idx || r.children.includes(rec.idx) || r.parents.includes(rec.idx) || r.household === rec.household;
@@ -1964,6 +1997,14 @@ export class Game {
         if (Math.random() < 0.08 && Math.abs(s.x - this.player.x) < 18) r.emit(s.x, s.y + 1, s.z, { n: 1, color: ['#ffb040', '#ffe070'], up: 20, speed: 10, gravity: -10, life: 0.9, oy: -2 });
       }
     }
+  }
+
+  // Pushing through foliage.
+  rustle(x, y, z) {
+    const w = this.world;
+    const id = LEAVES.has(w.getBlock(x, y + 1, z)) ? w.getBlock(x, y + 1, z) : w.getBlock(x, y, z);
+    this.renderer.emit(x, y + 1, z, { n: 5, color: this.blockColor(id), up: 18, speed: 30, life: 0.7, gravity: 30, oy: -4 });
+    this.audio?.play('dig');
   }
 
   onPlayerStep(x, y, z, water) {

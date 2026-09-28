@@ -100,7 +100,13 @@ test('a witnessed theft leads to arrest, a hearing and a fine', () => {
   assert.ok(game.isWanted(sid));
   assert.ok(game.sim.opinion(wits[0]) < before, 'witnesses think less of you');
   p.give('coin', 200);
+  p.give('iron_sword', 1);
   game.sim.justice.surrender(sid);
+  // A guard takes your weapons and leads you to the cell on a rope.
+  assert.ok(game.sim.justice.escort && p.restrained, 'being escorted');
+  assert.equal(countItem(p.inv, 'iron_sword'), 0, 'weapons taken');
+  for (let i = 0; i < 3000 && game.sim.justice.escort; i++) game.update(0.05, input);
+  assert.ok(!p.restrained);
   assert.ok(game.sim.justice.jail);
   assert.ok(L.jail.cell.some((c) => c.x === p.x && c.z === p.z), 'player is in the cell');
   assert.equal(game.world.getBlock(L.jail.door.x, L.jail.y, L.jail.door.z), B.cell_door);
@@ -118,6 +124,9 @@ test('a witnessed theft leads to arrest, a hearing and a fine', () => {
   assert.equal(countItem(p.inv, 'coin'), coins - verdict.fine);
   assert.equal(game.sim.justice.jail, null);
   assert.equal(game.world.getBlock(L.jail.door.x, L.jail.y, L.jail.door.z), B.cell_door_open);
+  assert.equal(countItem(p.inv, 'iron_sword'), 1, 'weapons returned');
+  // The way out is clear: through the open door and past the bars above it.
+  assert.ok(game.world.canStand(L.jail.door.x, L.jail.y, L.jail.door.z), 'can walk through the open cell door');
   assert.equal(game.sim.justice.recordOf(sid).convictions, 1);
 });
 
@@ -146,7 +155,7 @@ test('guards knock lawbreakers out instead of killing them; repeat killers are s
   // Twice more: a repeat murderer faces death or exile.
   game.sim.justice.commit(sid, 'murder', { witnesses: [guard], victim: 'Someone' });
   game.sim.justice.commit(sid, 'assault', { witnesses: [guard], victim: 'Someone Else' });
-  game.sim.justice.surrender(sid);
+  game.sim.justice.imprison(sid, 'surrender', true);
   const v2 = game.sim.justice.verdict();
   assert.ok(v2.sentence === 'death' || v2.sentence === 'exile', v2.sentence);
 });

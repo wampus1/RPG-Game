@@ -40,7 +40,9 @@ function def(name, props = {}) {
 const nonSolid = { solid: false, opaque: false };
 const plant = { ...nonSolid, render: 'plant', hardness: 0.05, replaceable: true, support: true };
 const sprite = { opaque: false, render: 'sprite', standable: false, support: true };
+// Leaves can always be walked through (they rustle and slow you a little).
 const leaves = (extra = []) => ({
+  solid: false,
   opaque: false,
   hardness: 0.25,
   tool: 'axe',
@@ -220,6 +222,7 @@ def('cell_door_open', { ...sprite, solid: false, interact: 'cell_door', tool: 'p
 def('stool', { ...sprite, solid: false, tool: 'axe', hardness: 0.4, interact: 'sit' });
 def('hanging_sign', { ...sprite, solid: false, interact: 'sign', rotatable: true, tool: 'axe', hardness: 0.3, support: false, label: 'Hanging Sign' });
 def('snare', { ...sprite, solid: false, interact: 'trap', tool: 'axe', hardness: 0.2, drop: [{ item: 'string', min: 1, max: 1 }, { item: 'stick', min: 1, max: 1 }], label: 'Snare' });
+def('cell_door_top', { opaque: false, solid: false, standable: false, tool: 'pick', hardness: 7, drop: null, label: 'Iron Bars' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

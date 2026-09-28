@@ -1134,7 +1134,7 @@ class Layout {
         this.put(t.x, Y0 + 1, t.z, B.iron_bars);
       }
       this.put(door.x, Y0, door.z, B.cell_door);
-      this.put(door.x, Y0 + 1, door.z, B.iron_bars);
+      this.put(door.x, Y0 + 1, door.z, B.cell_door_top);
       this.put(cell[0].x, Y0, cell[0].z, B.bed, sx > 0 ? 1 : 3);
       // No windows next to the cell.
       for (const t of cell) {

@@ -73,7 +73,7 @@ export function openingLine(npc, game) {
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
-  if (rec.visitor) return pick(rng, [`Greetings, friend! ${rec.name.first} ${rec.name.last}, merchant of ${rec.visit.fromName}.`, `Ah, a customer! Just in from ${rec.visit.fromName}.`]);
+  if (npc.visit) return pick(rng, [`Greetings, friend! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
   if (rep <= -25) return pick(rng, ['What do you want?', 'Make it quick.', 'Oh. It\'s you.']);
   if (!entry.met) {
     entry.met = true;
@@ -96,7 +96,7 @@ export function topicsFor(npc, game) {
   const wanted = game.isWanted(s.id);
   const out = [];
   const add = (id, label) => out.push({ id, label });
-  const trader = rec.visitor || JOBS[rec.job]?.trader || rec.job === 'cook';
+  const trader = npc.visit || JOBS[rec.job]?.trader || rec.job === 'cook';
   if (rec.job === 'guard' && (wanted || sim.justice.pendingIn(s.id).length)) add('surrender', 'I surrender.');
   if (wanted || sim.justice.exiled.has(s.id)) {
     add('bye', 'Goodbye.');
@@ -182,7 +182,7 @@ export function respond(npc, game, id, arg) {
   sim.meet(npc);
   switch (id) {
     case 'who': {
-      if (rec.visitor) return { lines: [`${rec.name.first} ${rec.name.last}, traveling merchant. I carry goods between ${rec.visit.fromName} and the towns around it.`] };
+      if (npc.visit) return { lines: [`${rec.name.first} ${rec.name.last}, traveling merchant from ${npc.visit.fromName}. I carry goods between there and the towns around it.`] };
       if (rec.age === 'child') return { lines: [pick(rng, [`I'm ${rec.name.first}! I'm ${6 + (rec.idx % 7)}!`, `I'm ${rec.name.first}. Wanna play tag?`, `My name's ${rec.name.first}!`])] };
       if (rec.job === 'retired') return { lines: [`I'm ${rec.name.first} ${rec.name.last}. I've lived in ${s.name} all my life.`] };
       const wp = rec.work && rec.work.building != null && L.buildings[rec.work.building] ? L.buildings[rec.work.building] : null;
@@ -203,7 +203,7 @@ export function respond(npc, game, id, arg) {
       else if (act.act === 'forage') lines.push(rec.age === 'child' ? 'Looking for berries. We\'ve got nothing to eat at home...' : 'Out looking for food. Times are lean.');
       else if (act.act === 'trial') lines.push('There\'s to be a hearing at the jail.');
       else if (act.act === 'travel') lines.push('Off on the road with my goods!');
-      else if (act.act === 'visit') lines.push(`Selling wares from ${rec.visit.fromName}. Have a look!`);
+      else if (act.act === 'visit') lines.push(`Selling wares from ${npc.visit ? npc.visit.fromName : 'afar'}. Have a look!`);
       else if (act.act === 'hobby' && HOBBIES[act.hobby]) lines.push(pick(rng, [`Nothing beats ${HOBBIES[act.hobby].label} after a long day.`, `I'm fond of ${HOBBIES[act.hobby].label}.`]));
       else if (act.act === 'work' && p.diligence < 0.3) lines.push(pick(rng, ['Don\'t tell anyone I\'m slacking off.', 'Is it quitting time yet?']));
       else if (act.act === 'work' && rec.job === 'cook') lines.push(pick(rng, ['Keeping the pot bubbling.', 'Cooking for half the town, as usual.']));
@@ -244,7 +244,7 @@ export function respond(npc, game, id, arg) {
       return { open: 'directions' };
     case 'surrender': {
       const sid = s.id;
-      return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid) };
+      return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid, npc) };
     }
     case 'citizen': return citizenTalk(npc, game, arg);
     case 'renounce':
@@ -366,7 +366,7 @@ function lifeIn(npc, game) {
   const lines = [];
   const living = L.npcs.filter(alive);
   const hungry = living.filter((r) => r.hungry >= 1).length;
-  if (rec.visitor) return ['Every town has its troubles. This one\'s kitchen could use better meat, if you ask me.'];
+  if (npc.visit) return [`Every town has its troubles. Back in ${npc.visit.fromName} we'd say this kitchen needs better meat.`];
   if (e.tax >= 0.18) lines.push(`Taxes are ${Math.round(e.tax * 100)}% now. The coffers are thin, the mayor says.`);
   else if (e.tax <= 0.05) lines.push(`Taxes are only ${Math.round(e.tax * 100)}%. Can't complain!`);
   const k = kitchenOf(L);
@@ -386,7 +386,7 @@ function lifeIn(npc, game) {
 
 function family(npc, game) {
   const rec = npc.rec;
-  const L = npc.layout;
+  const L = npc.homeLayout || npc.layout;
   const rng = npc.rng;
   const home = rec.home !== null ? L.buildings[rec.home] : null;
   const lines = [];

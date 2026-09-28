@@ -4,7 +4,7 @@ import { Entity } from './entity.js';
 import { PLAYER_STEP_TIME, INV_SIZE } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS } from '../world/items.js';
-import { BLOCKS } from '../world/blocks.js';
+import { BLOCKS, LEAVES } from '../world/blocks.js';
 
 const MOVE_KEYS = {
   KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
@@ -91,10 +91,29 @@ export class Player extends Entity {
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
     if (ny < 0) return;
     const other = this.game.occupiedBySolid(nx, ny, nz, this);
-    if (other) return;
+    if (other) {
+      // Nudge past a villager who is just standing in the way.
+      if (other.kind === 'npc' && other.state === 'routine' && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
+        this.pushT = (this.pushT || 0) + dt;
+        if (this.pushT < 0.35) return;
+        this.pushT = 0;
+        const from = { x: this.x, y: this.y, z: this.z };
+        this.startMove(nx, ny, nz, PLAYER_STEP_TIME * 1.3);
+        other.teleport(from.x, from.y, from.z);
+        other.face(nx, nz);
+        other.atGoal = false;
+        other.path = null;
+        if (Math.random() < 0.3) other.say(Math.random() < 0.5 ? 'Oh! Excuse me.' : 'Pardon.', 1.5);
+        this.game.onPlayerStep(nx, ny, nz, false);
+      }
+      return;
+    }
+    this.pushT = 0;
     const sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight');
     const water = w.isWaterAt(nx, ny, nz);
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * (sprint ? 0.62 : 1) * (water ? 1.9 : 1) * (ny !== this.y ? 1.15 : 1));
+    const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * (sprint ? 0.62 : 1) * (water ? 1.9 : 1) * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }
 }

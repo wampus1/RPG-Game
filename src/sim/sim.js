@@ -150,9 +150,16 @@ export class Sim {
     return m;
   }
 
+  // Reputation is kept with a person's home town (a visiting merchant
+  // remembers you from their own town).
+  repSidOf(npc) {
+    if (npc.repSid !== undefined) return npc.repSid;
+    return npc.settlement ? npc.settlement.id : npc.sid;
+  }
+
   opinion(npc) {
     const rec = npc.rec;
-    const sid = npc.settlement.id;
+    const sid = this.repSidOf(npc);
     let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid);
     const c = this.citizen;
     if (c && c.sid === sid && c.host !== null && rec.home === c.host) v += 10;
@@ -160,7 +167,7 @@ export class Sim {
   }
 
   changeRep(npc, delta) {
-    const sid = npc.settlement ? npc.settlement.id : npc.sid;
+    const sid = this.repSidOf(npc);
     const rec = npc.rec || npc;
     const r = this.repEntry(sid, rec.idx);
     r.v = clamp(r.v + delta, -100, 100);
@@ -172,7 +179,7 @@ export class Sim {
   }
 
   meet(npc) {
-    this.repEntry(npc.settlement.id, npc.rec.idx).met = true;
+    this.repEntry(this.repSidOf(npc), npc.rec.idx).met = true;
   }
 
   canGreet() {
@@ -209,7 +216,7 @@ export class Sim {
     const rec = npc.rec;
     const d = ITEMS[item];
     const day = this.game.day;
-    const r = this.repEntry(npc.settlement.id, rec.idx);
+    const r = this.repEntry(this.repSidOf(npc), rec.idx);
     let score = Math.min(12, 1 + d.value * 0.6);
     let reaction = 'fine';
     const hobbyItems = rec.hobbies.map((h) => ({ reading: 'book', fishing: 'fishing_rod', music: 'lute', praying: 'prayer_beads', smoking: 'pipe', dice: 'dice', sketching: 'sketchbook', gardening: 'seeds' }[h])).filter(Boolean);
@@ -245,7 +252,7 @@ export class Sim {
   }
 
   chat(npc, kind) {
-    const r = this.repEntry(npc.settlement.id, npc.rec.idx);
+    const r = this.repEntry(this.repSidOf(npc), npc.rec.idx);
     const day = this.game.day;
     const p = npc.rec.personality;
     if (kind === 'kind') {
@@ -266,7 +273,7 @@ export class Sim {
 
   // Good trades build goodwill (a little per coin spent, capped per day).
   noteTrade(npc, coins) {
-    const r = this.repEntry(npc.settlement.id, npc.rec.idx);
+    const r = this.repEntry(this.repSidOf(npc), npc.rec.idx);
     const day = this.game.day;
     if (r.trade !== day) {
       r.trade = day;
@@ -285,8 +292,8 @@ export class Sim {
     const rec = npc.rec;
     const L = npc.layout;
     const e = L.econ;
-    if (rec.visitor) {
-      const v = rec.visit;
+    if (npc.visit || rec.visitor) {
+      const v = npc.visit || rec.visit;
       return { store: v.goods, purse: { get: () => v.coins, add: (n) => { v.coins += n; } }, kind: 'general', wants: null };
     }
     const t = rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? (rec.job === 'cook' ? 'cook' : 'inn') : JOBS_TRADER(rec);
@@ -332,9 +339,15 @@ export class Sim {
     if (!alive(rec)) return null;
     if (rec.visitor) {
       rec.alive = false;
-      const list = this.visits.get(L.settlement.id) || [];
-      this.visits.set(L.settlement.id, list.filter((v) => v !== rec.visit));
+      for (const [sid, list] of this.visits) this.visits.set(sid, list.filter((v) => v !== rec.visit));
       return null;
+    }
+    // A traveling merchant who dies away from home is buried at home.
+    if (rec.visit) {
+      for (const [sid, list] of this.visits) this.visits.set(sid, list.filter((v) => v !== rec.visit));
+      rec.visit = null;
+      rec.away = false;
+      rec.trip = { phase: 'home', since: this.game.day };
     }
     const game = this.game;
     const s = L.settlement;

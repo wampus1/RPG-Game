@@ -10,7 +10,7 @@ import { openingLine, topicsFor, respond, placesFor } from '../game/dialogue.js'
 import { humanoidSheet } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive } from '../sim/econ.js';
 import { repLevel } from '../sim/sim.js';
-import { describe } from '../sim/justice.js';
+import { describe, lcFirst } from '../sim/justice.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -322,7 +322,7 @@ export class DialogueWindow extends Window {
     g.box(1, 1, 5, 5, { fg: C.faint });
     this.portraitPos = { x: (this.x + 2) * CHAR_W + 1, y: (this.y + 2) * CHAR_H - 4 };
     g.text(7, 1, n.name, C.hi);
-    const title = `${n.title}${rec.age === 'child' ? ' · child' : rec.age === 'elder' ? ' · elder' : ''} of ${rec.visitor ? rec.visit.fromName : n.settlement.name}`;
+    const title = `${n.title}${rec.age === 'child' ? ' · child' : rec.age === 'elder' ? ' · elder' : ''} of ${n.homeName}`;
     g.text(7, 2, title.slice(0, 62), C.cyan);
     g.text(7, 3, rec.traits.join(', ').slice(0, 62), C.purple);
     const op = game.sim.opinion(n);
@@ -508,7 +508,7 @@ export class TradeWindow extends Window {
     g.text(40, 18, `Your coins: ¤${coins}`, C.hi);
     g.text(40, 19, `Their purse: ¤${purse}`, purse < 10 ? C.orange : C.dim);
     const e = this.npc.layout.econ;
-    if (e && !this.npc.rec.visitor) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
+    if (e && !this.npc.visit) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
     g.text(2, this.h - 1, ' click buy/sell · SHIFT x5 / whole stack · ESC close ', C.faint);
   }
   buy(k, game, n) {
@@ -522,7 +522,7 @@ export class TradeWindow extends Window {
       if (countItem(p.inv, 'coin') < pr || !sh.store[k]) break;
       removeItem(p.inv, 'coin', pr);
       st.take(sh.store, k, 1);
-      const tax = e && !this.npc.rec.visitor ? Math.floor(pr * e.tax * 0.5) : 0;
+      const tax = e && !this.npc.visit ? Math.floor(pr * e.tax * 0.5) : 0;
       if (tax) e.treasury += tax;
       sh.purse.add(pr - tax);
       const left = p.give(k, 1);
@@ -585,8 +585,11 @@ export class HaltWindow extends Window {
   draw(g, game) {
     g.box(0, 0, this.w, this.h, { bg: 'rgba(40,24,8,0.96)', double: true, fg: C.hi, title: 'HALT!' });
     g.text(2, 1, `${this.guard.name}, ${this.guard.title}:`, C.cyan);
-    const what = this.crimes.slice(-3).map((c) => describe(c).toLowerCase());
-    const lines = wrap(`"You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. Come quietly to the ${this.guard.settlement.type === 'village' ? 'village' : 'town'} jail, or we do this the hard way."`, this.w - 4);
+    const what = this.crimes.slice(-3).map((c) => lcFirst(describe(c)));
+    const suspect = this.crimes.length && this.crimes.every((c) => c.suspected);
+    const lines = wrap(suspect
+      ? `"You were seen near ${what.length ? 'the scene of ' + what.join(', ') : 'trouble'}. You're coming with us to answer some questions. Come quietly."`
+      : `"You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. Come quietly to the ${this.guard.settlement.type === 'village' ? 'village' : 'town'} jail, or we do this the hard way."`, this.w - 4);
     lines.slice(0, 4).forEach((l, i) => g.text(2, 3 + i, l, C.white));
     const opts = [['1', 'Come quietly (go to jail and face a hearing)', () => this.answer(game, true)], ['2', 'Resist! (the guards will fight to subdue you)', () => this.answer(game, false)]];
     opts.forEach(([k, label, fn], i) => {
@@ -602,7 +605,7 @@ export class HaltWindow extends Window {
     this.answered = true;
     this.close();
     const sid = this.guard.settlement.id;
-    if (quiet) game.sim.justice.surrender(sid);
+    if (quiet) game.sim.justice.surrender(sid, this.guard);
     else game.sim.justice.resist(sid, this.guard);
   }
   onKey(k, game) {
@@ -635,7 +638,9 @@ export class TrialWindow extends Window {
       g.text(52, y, c.proven ? 'PROVEN' : 'NOT PROVEN', c.proven ? C.red : C.green);
       y++;
       const who = c.guardSaw ? ['a guard', ...c.names] : c.names;
-      g.text(7, y++, (who.length ? `Witness: ${who.slice(0, 3).join(', ')}` : 'No living witness').slice(0, 60), C.faint);
+      if (who.length) g.text(7, y++, `Witness: ${who.slice(0, 3).join(', ')}`.slice(0, 60), C.faint);
+      else if (c.seenNames && c.seenNames.length) g.text(7, y++, `Seen nearby: ${c.seenNames.slice(0, 3).join(', ')}${c.found ? ' · goods found on you' : ''}`.slice(0, 60), C.faint);
+      else g.text(7, y++, c.found ? 'Stolen goods found on you, but no witness' : 'No living witness', C.faint);
     }
     y++;
     const opts = [];
@@ -660,6 +665,8 @@ export class TrialWindow extends Window {
       if (!v.pleaded) opts.push([String(opts.length + 1), 'Plead for mercy', 'plead']);
     }
     if (v.citizen && v.proven.length) g.text(2, y++, 'Your citizenship will be revoked.', C.red);
+    if (v.weapons === 'returned' && v.sentence !== 'death') g.text(2, y++, 'Your weapons will be returned when you are released.', C.dim);
+    else if (v.weapons === 'forfeit') g.text(2, y++, 'Your weapons are forfeit.', C.orange);
     y = Math.max(y + 1, this.h - 2 - opts.length);
     this.opts = opts;
     opts.forEach(([k, label, choice], i) => {

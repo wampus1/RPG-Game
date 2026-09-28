@@ -382,7 +382,7 @@ function cubeTop(name, v, rand, rot) {
       p.line(3, 12, 12, 3, '#f0ffff');
       return p;
     }
-    case 'iron_bars': case 'cell_door': {
+    case 'iron_bars': case 'cell_door': case 'cell_door_top': {
       // Seen from above: a heavy rail with the bar tops along it.
       p.rect(0, 6, 16, 4, '#2e2e38');
       p.hline(0, 15, 6, '#8a8a98');
@@ -539,7 +539,7 @@ function cubeFront(name, v, rand, rot) {
       } else p.vline(7, 0, LH - 1, beam);
       return frontify(p, 0.86);
     }
-    case 'iron_bars': case 'cell_door': {
+    case 'iron_bars': case 'cell_door': case 'cell_door_top': {
       for (let x = 1; x < 16; x += 4) {
         p.rect(x, 0, 2, LH, '#4a4a58');
         p.vline(x, 0, LH - 1, '#a8a8b8');

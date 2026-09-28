@@ -72,6 +72,7 @@ export class Renderer {
     this.computeCutaway(world, player);
     this.drawWorld(game);
     this.drawProjectiles(game);
+    this.drawRope(game);
     this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
@@ -512,6 +513,38 @@ export class Renderer {
     c2.drawImage(c, 1, 1);
     this.dropIcons.set(key, o2);
     return o2;
+  }
+
+  // The rope from a guard's hand to a restrained prisoner.
+  drawRope(game) {
+    const e = game.sim && game.sim.justice.escort;
+    if (!e || !e.guard) return;
+    const ctx = this.ctx;
+    const at = (ent, dy) => {
+      const rp = ent.renderPos();
+      return { x: rp.x * TILE + 8 - this.camX, y: rp.z * TILE - rp.y * LH + LH + 10 - this.camY - dy };
+    };
+    const a = at(e.guard, 11);
+    const b = at(game.player, 10);
+    const n = 12;
+    const sag = 4 + Math.sin(this.time * 3) * 0.8;
+    let px = a.x;
+    let py = a.y;
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      const x = a.x + (b.x - a.x) * t;
+      const y = a.y + (b.y - a.y) * t + Math.sin(t * Math.PI) * sag;
+      ctx.fillStyle = '#3a2a18';
+      ctx.fillRect(Math.round(x), Math.round(y) + 1, 1, 1);
+      ctx.fillStyle = '#c8a064';
+      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+      if (Math.abs(x - px) > 1) ctx.fillRect(Math.round((x + px) / 2), Math.round((y + py) / 2), 1, 1);
+      px = x;
+      py = y;
+    }
+    // Bound wrists.
+    ctx.fillStyle = '#c8a064';
+    ctx.fillRect(Math.round(b.x) - 2, Math.round(b.y) - 1, 5, 2);
   }
 
   // Arrows in flight.
