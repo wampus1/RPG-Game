@@ -11,6 +11,13 @@ schedules.
 
 No dependencies and no build step: it's plain JavaScript modules and a canvas.
 
+![Title screen](docs/title.jpg)
+
+| | |
+| --- | --- |
+| ![A city plaza with market stalls](docs/city.jpg) | ![A village at night](docs/night.jpg) |
+| ![Inside a house: the roof is cut away](docs/interior.jpg) | ![The world map](docs/map.jpg) |
+
 ## Running
 
 ```sh
@@ -45,6 +52,7 @@ with the CRT effect off. `window.__game` exposes the running game.
 | Talk / trade | Right-click a villager (T in the dialogue opens trading) |
 | Toss item | Q (Ctrl+Q throws the whole stack), or drag it out of a window |
 | Eat held food | F or right-click |
+| Fish | Hold a fishing rod and right-click water |
 | Inventory / crafting / map / help | Tab, C, M, H |
 | Menu (save, load, CRT toggle, new world) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
@@ -59,7 +67,8 @@ cuts the roof and upper walls away so you can see inside; anything that hides
 you fades out and can be clicked through. Lighting is a flood-filled light map
 (walls block it, windows and open doors let it spill) sampled per visible
 surface in screen space, over a day/night sky colour. Torches and lanterns glow
-at night, chimneys smoke, and the whole frame goes through the CRT shader.
+at night, chimneys smoke, weather drifts between clear skies, rain, snow and
+fog, and the whole frame goes through the CRT shader.
 
 **World map.** Each map square is one region of 2×2 screens (64×36 tiles).
 Biomes are splotches: jittered seed points with random stretch and rotation,

@@ -526,7 +526,7 @@ export class BannerWindow extends Window {
 // ---------------------------------------------------------------- help
 export class HelpWindow extends Window {
   constructor(ui) {
-    super(ui, 70, 31, { kind: 'help' });
+    super(ui, 70, 32, { kind: 'help' });
     this.closeOnOutside = true;
   }
   draw(g) {
@@ -545,6 +545,7 @@ export class HelpWindow extends Window {
       ['TALK', 'Right-click a villager (T in chat to trade)'],
       ['TOSS', 'Q throws one item · CTRL+Q the whole stack'],
       ['EAT', 'F (or RMB) while holding food'],
+      ['FISH', 'Hold a fishing rod and right-click water'],
       ['WINDOWS', 'TAB bag · C craft · M map · ESC menu'],
       ['OPTIONS', 'F2 toggle CRT · F3 debug info'],
     ];
@@ -559,9 +560,9 @@ export class HelpWindow extends Window {
       'furnace, forge metal at an anvil. Beds set your respawn point.',
       'Explore to fill in the world map. Night brings monsters.',
     ];
-    tips.forEach((t, i) => g.text(3, 19 + i, t, C.dim));
-    g.text(3, 26, 'Every world is generated from its seed: biomes, rivers,', C.faint);
-    g.text(3, 27, 'civilizations, towns and every villager\'s life story.', C.faint);
+    tips.forEach((t, i) => g.text(3, 20 + i, t, C.dim));
+    g.text(3, 27, 'Every world is generated from its seed: biomes, rivers,', C.faint);
+    g.text(3, 28, 'civilizations, towns and every villager\'s life story.', C.faint);
     g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
   }
 }

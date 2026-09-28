@@ -71,6 +71,7 @@ export class Renderer {
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     this.computeCutaway(world, player);
     this.drawWorld(game);
+    this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
     this.drawOverlays(game);
@@ -505,6 +506,48 @@ export class Renderer {
     c2.drawImage(c, 1, 1);
     this.dropIcons.set(key, o2);
     return o2;
+  }
+
+  // ------------------------------------------------------------------ weather
+  drawWeather(game, dt) {
+    const w = game.weather;
+    if (!w || w.level <= 0.01) return;
+    const ctx = this.ctx;
+    const indoor = this.hidden !== null;
+    if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 220 }, () => ({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, s: 0.6 + Math.random() * 0.8 }));
+    const n = Math.floor(this.weatherDrops.length * w.level * (indoor ? 0.25 : 1));
+    if (w.kind === 'fog') {
+      ctx.fillStyle = `rgba(190,200,210,${0.28 * w.level})`;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      return;
+    }
+    const rain = w.kind === 'rain';
+    // Overcast tint.
+    ctx.fillStyle = rain ? `rgba(40,50,70,${0.18 * w.level})` : `rgba(200,210,230,${0.1 * w.level})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillStyle = rain ? 'rgba(170,190,230,0.55)' : 'rgba(245,248,255,0.9)';
+    for (let i = 0; i < n; i++) {
+      const d = this.weatherDrops[i];
+      if (rain) {
+        d.y += dt * 260 * d.s;
+        d.x -= dt * 60 * d.s;
+        ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
+        if (d.y > VIEW_H * (0.3 + d.s * 0.5) && Math.random() < 0.08) {
+          ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 4, 3, 1);
+          d.y = -4;
+        }
+      } else {
+        d.y += dt * 30 * d.s;
+        d.x += Math.sin(this.time * 1.5 + i) * dt * 12;
+        ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s > 1.1 ? 2 : 1, d.s > 1.1 ? 2 : 1);
+      }
+      if (d.y > VIEW_H) {
+        d.y = -4;
+        d.x = Math.random() * VIEW_W;
+      }
+      if (d.x < -4) d.x += VIEW_W + 4;
+      if (d.x > VIEW_W + 4) d.x -= VIEW_W + 4;
+    }
   }
 
   // ------------------------------------------------------------------ fx

@@ -67,8 +67,8 @@ export class Game {
     } else {
       const s = ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
-      sx = L ? L.plaza.cx + 1 : Math.floor(ow.cells.length / 2);
-      sz = L ? L.plaza.cz + 2 : 400;
+      sx = L ? L.plaza.cx + 2 : Math.floor(ow.cells.length / 2);
+      sz = L ? L.plaza.cz : 400;
       this.loadAround(sx, sz, true);
       const spot = this.findFreeSpot(sx, sz, GROUND);
       this.player = new Player(this, spot.x, spot.y, spot.z);
@@ -333,6 +333,8 @@ export class Game {
     this.spawning(dt);
     this.updateWanted(dt);
     this.growPlants(dt);
+    this.updateFishing(dt);
+    this.updateWeather(dt);
     this.ambientFx(dt);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 4);
     if (this.audio) this.audio.listener = this.player;
@@ -556,6 +558,10 @@ export class Game {
     }
     if (c && c.block && c.inReach && c.block.interact) {
       this.interact(c.x, c.y, c.z);
+      return;
+    }
+    if (held && held.fishing && c && c.block && c.block.liquid && c.inReach) {
+      this.castLine(c);
       return;
     }
     if (held && held.key === 'hoe' && c && c.block && c.inReach && [B.grass, B.dirt, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.path].includes(c.block.id) && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
@@ -976,6 +982,61 @@ export class Game {
       n.placeForCurrentActivity();
     }
     this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
+  }
+
+  // Fishing: cast into water, wait for a bite, reel it in.
+  castLine(c) {
+    const p = this.player;
+    if (this.fishing) {
+      this.ui.msg('You reel in your line.', '#80c8ff');
+      this.fishing = null;
+      return;
+    }
+    p.face(c.x, c.z);
+    p.doAction(0.35);
+    this.fishing = { x: c.x, y: c.y, z: c.z, t: 2.5 + Math.random() * 5, px: p.x, pz: p.z };
+    this.audio?.play('splash');
+    this.renderer.emit(c.x, c.y, c.z, { n: 6, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.5, oy: 2 });
+    this.ui.msg('You cast your line...', '#80c8ff');
+  }
+
+  updateFishing(dt) {
+    const f = this.fishing;
+    if (!f) return;
+    const p = this.player;
+    if (p.x !== f.px || p.z !== f.pz || !p.heldDef()?.fishing) {
+      this.fishing = null;
+      return;
+    }
+    f.t -= dt;
+    if (Math.random() < dt * 2) this.renderer.emit(f.x, f.y, f.z, { n: 1, color: '#e0f4ff', up: 6, life: 0.4, oy: 2, spreadX: 2 });
+    if (f.t > 0) return;
+    const r = Math.random();
+    const catchItem = r < 0.7 ? 'fish' : r < 0.8 ? 'string' : r < 0.9 ? 'bone' : r < 0.97 ? 'coin' : 'gem';
+    const left = p.give(catchItem, 1);
+    if (left) this.spawnDrop(catchItem, 1, p.x, p.y, p.z, true);
+    this.ui.msg(catchItem === 'fish' ? 'Caught a fish!' : `You fished up: ${ITEMS[catchItem].name}!`, '#80e070');
+    this.audio?.play('pickup');
+    this.renderer.emit(f.x, f.y, f.z, { n: 10, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 45, life: 0.6, oy: 2 });
+    p.doAction(0.3);
+    this.fishing = null;
+  }
+
+  // Weather drifts between clear skies, rain, snow (in cold places) and fog.
+  updateWeather(dt) {
+    const w = this.weather || (this.weather = { kind: 'clear', t: 240, level: 0 });
+    w.t -= dt;
+    if (w.t <= 0) {
+      const col = this.world.terrain.column(this.player.x, this.player.z, this.world.terrain.context(this.player.x, this.player.z, this.player.x, this.player.z), {});
+      const cold = ['tundra', 'taiga', 'mountain'].includes(col.biome);
+      const dry = col.biome === 'desert';
+      const r = Math.random();
+      w.kind = r < 0.55 || dry ? 'clear' : r < 0.85 ? (cold ? 'snow' : 'rain') : 'fog';
+      w.t = 180 + Math.random() * 420;
+      if (w.kind !== 'clear') this.ui.msg(w.kind === 'rain' ? 'It starts to rain.' : w.kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
+    }
+    const target = w.kind === 'clear' ? 0 : 1;
+    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), dt / 8);
   }
 
   eat() {
