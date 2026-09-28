@@ -11,6 +11,7 @@ import { hashString } from './util/rng.js';
 import { SaveStore } from './game/saves.js';
 import { CharacterWindow } from './ui/create.js';
 import { randomHero } from './game/hero.js';
+import { Music, musicMood } from './game/music.js';
 
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
 const params = new URLSearchParams(location.search);
@@ -22,6 +23,8 @@ view.height = VIEW_H;
 const crt = new CRT(screen, view);
 const renderer = new Renderer(view);
 const audio = new Audio();
+const music = new Music(audio);
+window.__music = music;
 const ui = new UI(audio);
 const input = new Input(screen, crt);
 let game = null;
@@ -55,7 +58,7 @@ function saveTo(id, note) {
     store.save(id, game);
     if (id !== 'auto') game.slot = id;
     ui.msg(note, '#80e070');
-    audio.play('select');
+    audio.play('save');
     return true;
   } catch (e) {
     const full = e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''));
@@ -163,6 +166,7 @@ ui.hooks = {
     ui.closeAll();
     ui.open(new TitleWindow(ui, store));
   },
+  toggleMusic: () => ui.msg(`Music ${music.toggle() ? 'on' : 'off'}`, '#a0c8ff'),
   toggleCrt: () => {
     crt.enabled = !crt.enabled;
     ui.msg(`CRT effect ${crt.enabled ? 'on' : 'off'}`, '#a0c8ff');
@@ -178,6 +182,7 @@ if (params.has('autostart')) {
 }
 else ui.open(new TitleWindow(ui, store));
 if (params.has('nocrt')) crt.enabled = false;
+if (params.has('nomusic')) music.toggle();
 
 const perf = (window.__perf = {});
 // Debug helper: teleport to a settlement by name, type or style.
@@ -240,6 +245,13 @@ function step(now) {
     ctx.fillStyle = '#07060b';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ui.render(ctx, null, fps);
+  }
+  // The music follows where you are and what you're doing.
+  try {
+    music.update(dt, game ? musicMood(game) : 'title');
+  } catch (e) {
+    if (!step.musicErr) console.error(e);
+    step.musicErr = true;
   }
   const t4 = performance.now();
   crt.present(now / 1000);

@@ -69,6 +69,7 @@ class Layout {
     this.signs = [];
     this.plots = [];
     this.wells = []; // where townsfolk draw water
+    this.bells = []; // alarm bells the watch rings at night
     this.graveyard = null;
     this.jail = null;
     this.plaza = null;
@@ -1872,22 +1873,35 @@ class Layout {
     // awning up on two posts over their head, so you can see who's selling.
     if (s.type !== 'village' && !ruined) {
       const awning = s.civ ? B[s.civ.color.awning] : B.awning_red;
+      // Along the edge of the square, or a row in where streets meet it.
       const spots = [];
-      for (let x = p.x0 + 2; x <= p.x1 - 2; x += 6) {
-        spots.push({ x, z: p.z0, dz: 1 });
-        spots.push({ x, z: p.z1, dz: -1 });
+      for (const depth of [0, 1]) {
+        for (let x = p.x0 + 2; x <= p.x1 - 2; x++) {
+          spots.push({ x, z: p.z0 + depth, dz: 1, depth });
+          spots.push({ x, z: p.z1 - depth, dz: -1, depth });
+        }
       }
+      rng.shuffle(spots);
+      spots.sort((a, b) => a.depth - b.depth);
+      const placed = [];
       let n = 0;
-      for (const st of rng.shuffle(spots)) {
+      for (const st of spots) {
         if (n >= (s.type === 'city' ? 4 : 2)) break;
+        if (placed.some((q) => q.dz === st.dz && Math.abs(q.x - st.x) < 6)) continue;
         const back = st.z;
         const front = st.z + st.dz;
-        const tiles = [];
+        const tiles = [[st.x, front + st.dz]];
         for (let dx = -2; dx <= 2; dx++) tiles.push([st.x + dx, back]);
         for (let dx = -1; dx <= 1; dx++) tiles.push([st.x + dx, front]);
         if (!tiles.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) continue;
-        // The posts never stand across a street coming into the square.
-        if ([-2, 2].some((dx) => this.maskAt(st.x + dx, back - st.dz) === M.ROAD)) continue;
+        // The stallholder must be able to get in from behind, and the posts
+        // never stand across a street coming into the square.
+        const behind = [-1, 0, 1].map((dx) => this.maskAt(st.x + dx, back - st.dz));
+        if (st.depth === 0) {
+          if ([-2, 2].some((dx) => this.maskAt(st.x + dx, back - st.dz) === M.ROAD)) continue;
+          if (!behind.some((m) => m === M.FREE || m === M.YARD || m === M.ROAD)) continue;
+        } else if (!behind.some((m) => m === M.PLAZA)) continue;
+        placed.push(st);
         for (let dx = -2; dx <= 2; dx++) this.put(st.x + dx, Y0 + 3, back, awning);
         for (const dx of [-2, 2]) {
           for (let y = Y0; y < Y0 + 3; y++) this.put(st.x + dx, y, back, B.fence);
@@ -1910,6 +1924,7 @@ class Layout {
       this.setMask(nb.x, nb.z, M.DECOR);
       this.signs.push({ x: nb.x, y: Y0, z: nb.z, kind: 'board' });
     }
+    if (!ruined) this.placeBells(rng);
     // Lamp posts along roads.
     if (!ruined && cond !== 'poor') {
       const every = s.type === 'city' ? 7 : cond === 'prosperous' ? 8 : 11;
@@ -1960,6 +1975,45 @@ class Layout {
     const cells = TREE_BUILDERS[type](r);
     for (const [dx, dy, dz, id] of cells) this.put(x + dx, Y0 + dy, z + dz, id);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.maskAt(x + dx, z + dz) === M.FREE) this.setMask(x + dx, z + dz, M.DECOR);
+  }
+
+  // Alarm bells: one on the square, and more round a bigger town (spread
+  // out, beside the roads) so the watch is never far from one.
+  placeBells(rng) {
+    const s = this.settlement;
+    const p = this.plaza;
+    const want = { village: 1, town: 2, city: 4 }[s.type] || 1;
+    const put = (x, z) => {
+      this.put(x, Y0, z, B.bell);
+      this.setMask(x, z, M.DECOR);
+      this.bells.push({ x, z });
+    };
+    for (const [x, z] of [[p.x1, p.z0], [p.x0, p.z1], [p.x1, p.z1]]) {
+      if (this.maskAt(x, z) === M.PLAZA) {
+        put(x, z);
+        break;
+      }
+    }
+    if (this.bells.length >= want) return;
+    const b = this.bounds;
+    const cands = [];
+    for (let z = b.z0 + 2; z < b.z1 - 1; z++) {
+      for (let x = b.x0 + 2; x < b.x1 - 1; x++) {
+        const m = this.maskAt(x, z);
+        if (m !== M.YARD && m !== M.FREE) continue;
+        if (!DIRS4.some(([dx, dz]) => this.maskAt(x + dx, z + dz) === M.ROAD)) continue;
+        cands.push({ x, z });
+      }
+    }
+    while (this.bells.length < want && cands.length) {
+      let best = null;
+      for (const c of cands) {
+        const d = this.bells.length ? Math.min(...this.bells.map((q) => Math.abs(q.x - c.x) + Math.abs(q.z - c.z))) : rng.next() * 10;
+        if (!best || d > best.d) best = { c, d };
+      }
+      if (!best || (this.bells.length && best.d < 14)) break;
+      put(best.c.x, best.c.z);
+    }
   }
 
   // Nothing may stand in front of a door, inside or out: barrels, tables,

@@ -226,6 +226,8 @@ def('snare', { ...sprite, solid: false, interact: 'trap', tool: 'axe', hardness:
 def('cell_door_top', { opaque: false, solid: false, standable: false, tool: 'pick', hardness: 7, drop: null, label: 'Iron Bars' });
 // Farmland soaked by rain or a bucket: crops grow twice as fast in it.
 def('farmland_wet', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moist Farmland' });
+// A town's alarm bell: the watch rings it to raise the other guards.
+def('bell', { ...sprite, interact: 'bell', tool: 'pick', hardness: 4, drop: 'iron_ingot', label: 'Alarm Bell' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

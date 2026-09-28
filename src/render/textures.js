@@ -818,6 +818,28 @@ const SPRITES = {
     }
     return p.outline(OUT);
   },
+  bell(rot, st, f) {
+    // A bronze bell under a little roof on two posts; it swings when rung.
+    const p = spr();
+    const wood = P.planks_dark[0];
+    p.rect(2, 7, 2, 21, wood);
+    p.rect(12, 7, 2, 21, wood);
+    p.hline(1, 14, 6, P.planks_dark[1]);
+    p.hline(1, 14, 7, wood);
+    p.hline(3, 12, 4, '#8a3a2a');
+    p.hline(2, 13, 5, '#a84a32');
+    const sw = st ? [-1, 0, 1, 0][f % 4] : 0;
+    const bx = 8 + sw;
+    p.vline(bx, 8, 9, '#3a3a44');
+    p.rect(bx - 2, 10, 4, 2, '#c89030');
+    p.rect(bx - 3, 12, 6, 4, '#c89030');
+    p.hline(bx - 4, bx + 3, 16, '#a87020');
+    p.vline(bx - 2, 10, 15, '#f0c860');
+    p.set(bx, 17 + (st ? f % 2 : 0), '#5a4a30');
+    p.hline(1, 4, 27, '#6a6a72');
+    p.hline(11, 14, 27, '#6a6a72');
+    return p.outline(OUT);
+  },
   lantern(rot, st, f) {
     const p = spr();
     const m = '#3a3a44';
@@ -1381,7 +1403,7 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
 const CUBE_ROT_FRONT = new Set(['bookshelf']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3 };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4 };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;

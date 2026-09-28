@@ -28,6 +28,7 @@ import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
+import { Playtime } from './playtime.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -48,6 +49,7 @@ export class Game {
     this.sim = new Sim(this);
     this.world.onLayout = (L) => this.sim.attach(L);
     this.crops = new CropGrowth(this);
+    this.playtime = new Playtime(this);
     this.world.onRegionLoad = (r) => {
       this.sim.applyPending(r);
       this.crops.scanRegion(r);
@@ -137,6 +139,114 @@ export class Game {
     this.updateSettlements(true);
     ow.markExplored(this.player.x, this.player.z, 2);
     if (this.hero && !save) this.introduce();
+  }
+
+  // Birds by day, crickets and owls by night, waves on the shore, wind up
+  // high, frogs in the swamp, and the rain (all outdoors only).
+  ambientSounds(dt) {
+    const a = this.audio;
+    if (!a) return;
+    const b = this.buildingAtPlayer ? this.buildingAtPlayer() : null;
+    const indoors = !!b && !b.underConstruction;
+    const w = this.weather;
+    a.setRain?.(w && w.kind === 'rain' && !indoors ? 0.6 + (w.level || 0) * 0.4 : 0);
+    this.ambT = (this.ambT ?? 3) - dt;
+    if (this.ambT > 0 || indoors || this.sleep) return;
+    this.ambT = 2 + Math.random() * 5;
+    const biome = this.biomeCache ? this.biomeCache.biome : 'plains';
+    const day = this.isDay();
+    const wet = w && w.kind !== 'clear';
+    const pick = (l) => l[Math.floor(Math.random() * l.length)];
+    let snd = null;
+    if (biome === 'beach' || biome === 'ocean') snd = day && !wet && Math.random() < 0.4 ? 'gull' : 'wave';
+    else if (biome === 'swamp') snd = day ? pick(['frog', 'bird']) : pick(['frog', 'cricket', 'frog']);
+    else if (biome === 'tundra' || biome === 'mountain') snd = !day && Math.random() < 0.15 ? 'howl' : 'wind';
+    else if (biome === 'desert') snd = day ? (Math.random() < 0.3 ? 'wind' : null) : 'cricket';
+    else if (day) snd = wet ? null : 'bird';
+    else snd = biome === 'forest' || biome === 'taiga' ? pick(['cricket', 'cricket', 'owl', Math.random() < 0.2 ? 'howl' : 'cricket']) : 'cricket';
+    if (snd) a.play(snd);
+  }
+
+  // ------------------------------------------------------------ alarm bells
+  // A town's bells that are still standing.
+  bellsOf(L) {
+    return (L.bells || []).filter((b) => this.world.getBlock(b.x, GROUND, b.z) === B.bell);
+  }
+
+  nearestBell(L, x, z) {
+    let best = null;
+    for (const b of this.bellsOf(L)) {
+      const d = Math.abs(b.x - x) + Math.abs(b.z - z);
+      if (!best || d < best.d) best = { ...b, d };
+    }
+    return best;
+  }
+
+  // Worth running to the bell? At night, with a threat about, and guards
+  // asleep who'd come if they heard it.
+  alarmNeeded(guard, threat) {
+    const m = this.minute;
+    if (!(m < 360 || m >= 1200) || !threat) return false;
+    const L = guard.layout;
+    const now = this.day * DAY + m;
+    if (L.econ && L.econ.bellAt !== undefined && now - L.econ.bellAt < 40) return false;
+    const b = this.nearestBell(L, guard.x, guard.z);
+    if (!b || b.d > 36) return false;
+    const a = this.active.get(L.settlement.id);
+    return !!a && a.npcs.some((n) => n !== guard && !n.dead && n.rec.job === 'guard' && n.sleeping);
+  }
+
+  // Ring the bell at (x, z): every guard in town wakes and turns out, to
+  // fight whatever's there or to see what the fuss is about.
+  ringBell(x, z, threat = null, by = null) {
+    const s = this.world.ow.settlementAt(x, z);
+    const a = s && this.active.get(s.id);
+    const w = this.world;
+    const y = GROUND;
+    w.setState(x, y, z, true);
+    this.bellT = (this.bellT || []).filter((q) => q.x !== x || q.z !== z);
+    this.bellT.push({ x, y, z, t: 5 });
+    this.renderer.emit(x, y + 1, z, { n: 6, color: ['#f0c860', '#ffffff'], up: 30, life: 0.5, oy: -14 });
+    const p = this.player;
+    if (Math.hypot(p.x - x, p.z - z) < 40) this.audio?.play('bell');
+    if (!a) return 0;
+    const L = a.layout;
+    const now = this.day * DAY + this.minute;
+    if (L.econ) L.econ.bellAt = now;
+    // Anything nasty about? Then it wasn't a false alarm.
+    const danger = threat || this.creatures.find((c) => !c.dead && c.hostileNow && Math.abs(c.x - x) + Math.abs(c.z - z) < 30) || null;
+    let woke = 0;
+    for (const n of a.npcs) {
+      if (n.dead || n === by || n.rec.job !== 'guard' || n.rec.away) continue;
+      if (n.sleeping) {
+        n.wake();
+        woke++;
+      }
+      n.emoteShow('!', '#ffb040', 1.5);
+      // Turned out: they stay up round the bell a while, even once it's over.
+      setOverride(n.rec, now, now + 25, 'alarm', { target: { x, z }, place: 'bell' });
+      n.activity = null;
+      if (danger && !danger.dead) n.engage(danger);
+    }
+    // Everyone else stirs; the light sleepers look out.
+    for (const n of a.npcs) if (!n.dead && n.sleeping && n.rec.job !== 'guard' && Math.abs(n.x - x) + Math.abs(n.z - z) < 16) n.emoteShow('?', '#c8c8c8', 1.5);
+    if (this.active.has(s.id) && s === this.currentSettlement) this.ui.msg(`The alarm bell is ringing in ${s.name}!${woke ? ` ${woke} guard${woke > 1 ? 's' : ''} turn${woke > 1 ? '' : 's'} out.` : ''}`, '#ffb040');
+    // Ringing it for nothing annoys the watch.
+    if (by === p && !danger) {
+      for (const n of a.npcs) if (n.rec.job === 'guard' && !n.dead) this.sim.changeRep(n, -3);
+      const g = a.npcs.find((n) => n.rec.job === 'guard' && !n.dead);
+      if (g) g.say(this.minute < 360 || this.minute >= 1200 ? 'Who rang the bell?! There\'s nothing here!' : 'That bell is for emergencies!', 3, '#ffb080');
+    }
+    return woke;
+  }
+
+  updateBells(dt) {
+    if (!this.bellT) return;
+    for (const q of this.bellT) {
+      q.t -= dt;
+      if (q.t <= 0 && this.world.getBlock(q.x, q.y, q.z) === B.bell) this.world.setState(q.x, q.y, q.z, false);
+    }
+    this.bellT = this.bellT.filter((q) => q.t > 0);
   }
 
   // ------------------------------------------------------------ your story
@@ -790,6 +900,8 @@ export class Game {
     this.growPlants(dt);
     this.crops.update(dt);
     this.updateFishing(dt, input);
+    this.playtime.update(dt);
+    this.updateBells(dt);
     this.updateCaravans(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
@@ -1177,7 +1289,7 @@ export class Game {
     }
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
     this.renderer.emit(x, y, z, { n: 10, color: this.blockColor(id), up: 45, speed: 60, life: 0.6, oy: -6 });
-    this.audio?.play('break');
+    this.audio?.play(b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
     this.popUnsupported(x, y + 1, z);
     this.flowWater(x, y, z);
     if (byPlayer) {
@@ -1425,7 +1537,7 @@ export class Game {
       }
       case 'container': {
         const slots = w.getContainer(x, y, z);
-        this.audio?.play('door');
+        this.audio?.play('chest');
         const owner = this.containerOwner(x, y, z);
         this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
         if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
@@ -1483,6 +1595,9 @@ export class Game {
       }
       case 'bed':
         this.trySleep(x, y, z);
+        break;
+      case 'bell':
+        this.ringBell(x, z, null, p);
         break;
       case 'well':
         if (this.useWell(x, y, z)) break;
@@ -1696,6 +1811,7 @@ export class Game {
     let wake = jailed ? j.release : (h >= 20 ? (this.day + 1) * DAY + 360 : this.day * DAY + 360);
     if (jailed) wake = Math.min(wake, now + 16 * 60);
     this.sleep = { phase: 'in', t: 0, bed: { x, y, z }, from: { x: p.x, y: p.y, z: p.z }, wake, start: now, hp0: p.hp, jail: jailed };
+    this.audio?.play('sleep');
     this.stopPlayerActions();
     p.sitting = null;
     p.teleport(x, y, z);
@@ -1831,7 +1947,7 @@ export class Game {
     if (!slot || slot.item !== 'bucket') return false;
     p.inv[p.selected] = { item: 'water_bucket', count: 1 };
     p.doAction(0.3);
-    this.audio?.play('splash');
+    this.audio?.play('fill');
     this.renderer.emit(x, y, z, { n: 8, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 30, life: 0.5, oy: -4 });
     this.ui.msg('You fill the bucket with water.', '#80c8ff');
     return true;
@@ -1846,7 +1962,7 @@ export class Game {
     if (!n) return false;
     p.inv[p.selected] = { item: 'bucket', count: 1 };
     p.doAction(0.3);
-    this.audio?.play('splash');
+    this.audio?.play('pour');
     this.renderer.emit(x, y + 1, z, { n: 14, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 20, speed: 40, life: 0.6, oy: -2 });
     this.ui.msg(`You water the soil (${n} patch${n > 1 ? 'es' : ''}). Moist soil grows crops twice as fast.`, '#80c8ff');
     return true;
@@ -1883,7 +1999,7 @@ export class Game {
   shoot(from, target, dmg) {
     const dist = Math.hypot(target.x - from.x, target.z - from.z);
     this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: 0.08 + dist * 0.045, dmg });
-    this.audio?.play('swing', from);
+    this.audio?.play('bow', from);
   }
 
   updateProjectiles(dt) {
@@ -2101,12 +2217,24 @@ export class Game {
 
   damage(target, amount, source, crit = false) {
     if (target.dead) return;
-    if (target.kind === 'npc' && target.rec.equipment.armor) amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
+    let armored = false;
+    if (target.kind === 'npc' && target.rec.equipment.armor) {
+      amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
+      armored = true;
+    }
     if (target.kind === 'player') {
       // Your armour, and the watch's mail if you wear the colours.
       const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue());
       if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
+      armored = a >= 0.1;
     }
+    // A fight you're in (the music follows it).
+    const foe = target.kind === 'player' ? source : source && source.kind === 'player' ? target : null;
+    if (foe) {
+      this.combatT = 5;
+      this.combatWith = foe.kind === 'npc' ? 'guard' : 'monster';
+    }
+    if (armored) this.audio?.play('armor_hit', target);
     target.hp -= amount;
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
@@ -2490,6 +2618,8 @@ export class Game {
   }
 
   ambientFx(dt) {
+    if (this.combatT > 0) this.combatT -= dt;
+    this.ambientSounds(dt);
     this.fxT -= dt;
     if (this.fxT > 0) return;
     this.fxT = 0.12;
@@ -2516,7 +2646,7 @@ export class Game {
   }
 
   onPlayerStep(x, y, z, water) {
-    this.audio?.play(water ? 'splash' : 'step');
+    this.audio?.play(water ? 'splash' : stepSound(BLOCKS[this.world.getBlock(x, y - 1, z)]));
     this.sim.careers.onStep();
     if (water) this.renderer.emit(x, y, z, { n: 4, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.4, oy: -2 });
   }
@@ -2583,6 +2713,16 @@ export class Game {
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// What your feet sound like on this.
+function stepSound(b) {
+  const n = b ? b.name : '';
+  if (/snow|ice/.test(n)) return 'step_snow';
+  if (/sand|gravel/.test(n)) return 'step_sand';
+  if (/plank|wood|log|bridge|timber/.test(n)) return 'step_wood';
+  if (/stone|cobble|brick|marble|path|slate|basalt/.test(n)) return 'step_stone';
+  return 'step_grass';
 }
 
 export { itemForBlock };

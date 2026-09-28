@@ -107,7 +107,7 @@ export function updateFishing(game, dt, input, rand = Math.random) {
       f.t = BITE_WINDOW * (heroHas(game.hero, 'angler') ? 1.5 : 1);
       f.dip = 1;
       p.emoteShow('!', '#ffe070', f.t);
-      game.audio?.play('splash');
+      game.audio?.play('bite');
       game.renderer.emit(f.x, f.y, f.z, { n: 10, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 35, life: 0.5, oy: 2 });
     }
     return;
@@ -125,6 +125,11 @@ export function updateFishing(game, dt, input, rand = Math.random) {
   }
   // Reeling: the fish darts about; you pull the zone after it.
   const pull = input && (input.isDown('Space') || input.mouse.down);
+  f.clickT = (f.clickT || 0) - dt;
+  if (pull && f.clickT <= 0) {
+    f.clickT = 0.18;
+    game.audio?.play('reel');
+  }
   f.turn -= dt;
   if (f.turn <= 0) {
     f.turn = 0.3 + rand() * 0.9 / f.fight;
@@ -160,7 +165,7 @@ function land(game, f) {
   const left = p.give(item, 1);
   if (left) game.spawnDrop(item, 1, p.x, p.y, p.z, true);
   game.ui.msg(item === 'fish' ? 'Caught a fish!' : `You fished up: ${ITEMS[item].name}!`, '#80e070');
-  game.audio?.play('pickup');
+  game.audio?.play('catch');
   game.renderer.emit(f.x, f.y, f.z, { n: 12, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 45, life: 0.6, oy: 2 });
   p.doAction(0.3);
   game.stats.fish = (game.stats.fish || 0) + (item === 'fish' ? 1 : 0);

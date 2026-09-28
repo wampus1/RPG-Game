@@ -29,16 +29,20 @@ npm start          # serves the folder on http://localhost:8080
 
 Any static web server works (the game uses ES modules, so it must be served
 over HTTP rather than opened as a `file://`). Then open the page and press
-**N** on the title screen for a random world, or **S** to type a seed.
+**N** on the title screen for a random world, or **S** to type a seed; either
+way you make your character first. **C** continues your latest save and **L**
+lists all of them.
 
 ```sh
 npm test           # world generation, settlement and NPC simulation tests
 ```
 
 Useful URL parameters for testing: `?autostart&seed=123` skips the title
-screen, `&time=1320` starts at 22:00, `&goto=city` (or a settlement name, a
-style like `sun`, or `abandoned`) teleports you there, and `&nocrt` starts
-with the CRT effect off. `window.__game` exposes the running game.
+screen (and the character screen; add `&origin=crash` or `&origin=native` for
+a random character with that origin), `&time=1320` starts at 22:00,
+`&goto=city` (or a settlement name, a style like `sun`, or `abandoned`)
+teleports you there, `&nocrt` starts with the CRT effect off and `&nomusic`
+with the music off. `window.__game` exposes the running game.
 
 ## Controls
 
@@ -56,10 +60,10 @@ with the CRT effect off. `window.__game` exposes the running game.
 | Sit | Click a chair, bench or stool; move to stand up |
 | Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
 | Toss item | Q (Ctrl+Q throws the whole stack), or drag it out of a window |
-| Eat held food | F or right-click |
+| Eat held food, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
-| Menu (save, load, CRT toggle, new world) | Esc |
+| Menu (save and load slots, music and CRT toggles, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
 
 ## What's in the world
@@ -314,8 +318,8 @@ warmer greetings, and your profile reads "Citizen of ..." instead of
 "Adventurer". Ask the mayor (or a builder) to enlarge your house, from a
 cottage to a proper house to a family home with six beds: builders put it up
 around the old one, keeping your door. The mayor takes a quarter off for
-citizens who've done good work for the town; a builder charges full price and
-pockets the fee. Every building has a hanging sign with its trade (or the
+citizens who've done good work for the town; a builder pockets the fee, and
+charges friends less. Every building has a hanging sign with its trade (or the
 family's name) that you can read.
 
 **Work.** The mayor licenses official professions. Citizens with a clean record
@@ -360,12 +364,69 @@ first drink from each well you find, and the first night's sleep in each
 village, make you a little hardier (+1 max HP each, up to a limit). The
 Wanted banner fades once you're away from the town that wants you.
 
+**Who you are.** A new game starts on the character screen: your name, skin,
+hair, face, shirt, trousers and accent colour (with a turning preview), your
+starting gear (wanderer, soldier, fisher, farmer, builder or merchant), four
+stats to spread points across (Strength for harder blows and quicker digging,
+Agility for speed, Endurance for health, Charm for prices and making
+friends), two specialties (Angler, Haggler, Forager, Digger, Brawler, Green
+Thumb, Light Step, Herbalist) and up to two traits (Honest Face, Tough,
+Strong Swimmer, Lucky, Early Riser, or a flaw like Frail, Blunt or
+Heavy-Footed that gives a stat point back). Then pick where you come from:
+**Crash Landing** wakes you on a beach beside the wreck of your ship, with a
+battered chest of what washed ashore and nobody on the island who knows you;
+**Island Native** starts you at home in one of the island's towns, a
+citizen living with your family, and everyone there knows you and likes you.
+
+**Armour and clothes.** Fifteen pieces to wear on your head, body, legs and
+feet: leather caps, tunics, trousers and boots, iron helmets, chainmail,
+breastplates, greaves and boots, straw hats, wool hoods, linen shirts, a fine
+coat and a gold circlet. They show on your character, take a share off every
+blow (up to 60%), sit in the Worn column of the inventory (right-click one to
+put it on, click a worn piece to take it off), can be sewn by hand or forged
+at the anvil, and are sold (and bought) by smiths, tailors and trappers.
+
+**Saves.** Five save slots and an autosave (written every morning at 7:00),
+each showing who, where and when; save or load from the menu, or pick up
+where you left off from the title screen.
+
+**Town life, continued.** Children out playing find each other and start a
+game of **tag** (whoever's it chases the rest until they catch one) or
+**hide-and-seek** (one counts at the base while the others tuck themselves in
+behind walls, barrels and trees, then goes looking), on the streets, round
+their houses or on the square. Meals, lessons (morning and afternoon classes)
+and guard shifts are staggered, so a town is never all at lunch at once.
+Every town has an **alarm bell** (two in a town, four in a city, spread out so
+one is always near): a night guard who spots trouble while the rest of the
+watch sleeps runs to the nearest bell and rings it, and every guard turns
+out. You can ring one too, but the watch won't thank you for a false alarm.
+Taxes are really collected: fractions of a coin carry over, so even small
+earners pay and a higher rate brings in more (the notice board shows what was
+collected), and citizens pay a small head tax plus the rate on what they
+earned in town (the journal shows the last bill). Builders who like you knock
+10-30% off enlarging your house, and knocking bits out of your own house
+upsets nobody. Market stalls face the square, three counters wide with the
+awning up on posts so you can see who's selling. New lots and extensions keep
+clear of gates and the roads out of them. Weather covers wider areas, changes
+in six-hour spells and drifts slowly across the island.
+
+**Sound and music.** Footsteps that sound like what you walk on, chopping,
+chipping and harvesting, armour clanks, bows, buckets, the fishing reel and
+the bite, a bell, children squealing, chests, sleep and a fanfare for new
+titles; birds, crickets, owls, frogs, gulls, waves, wind and wolves by place
+and time of day, and rain that hisses while it lasts. The music is made up as
+it plays and follows you: a theme for each biome (a pentatonic stroll on the
+plains, a Hijaz scale in the desert, a cold sparse tune on the tundra), one
+for villages, towns and cities (quieter at night) and taverns, an eerie one
+in ruins and abandoned places, a slow tolling one in graveyards, and battle
+music when beasts or the town guard come for you. Toggle it from the menu.
+
 ## Code layout
 
 ```
 src/
   config.js            grid, screen and world constants
-  main.js              bootstrap, main loop, title/save/load hooks
+  main.js              bootstrap, main loop, title/save/load/new-game hooks
   util/                seeded RNG + hashing, simplex noise, binary heap
   world/               blocks, items, recipes, biomes, names,
                        worldgen (world map), terrain (per-column sampling),
@@ -378,10 +439,13 @@ src/
                        pixel art), renderer (oblique painter), lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
-                       crafting, trade, dialogue, map, help, pause, title)
+                       crafting, trade, dialogue, map, help, pause, title,
+                       save slots), create (the character screen)
   game/                game rules, input, dialogue, villager chatter, crop
-                       growth and soil moisture, fishing, audio (synthesized
-                       SFX)
+                       growth and soil moisture, fishing, children's games,
+                       hero (character creation and perks), save slots,
+                       audio (synthesized SFX and ambience), music
+                       (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
                        merchants, abstract catch-up), justice (crimes,
                        suspicion, arrests, hearings, jail repairs), careers

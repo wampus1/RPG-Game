@@ -66,7 +66,10 @@ export function promote(sim, L, next, day) {
   for (const r of L.npcs) if (alive(r)) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.15);
   ledger(L, day, `A feast was held on the square to celebrate ${s.name} becoming a ${next}.`);
   const g = sim.game;
-  if (g.active.has(s.id)) g.ui.msg(`${s.name} is now a ${next}!`, '#ffe070');
+  if (g.active.has(s.id)) {
+    g.ui.msg(`${s.name} is now a ${next}!`, '#ffe070');
+    g.audio?.play('fanfare');
+  }
   return next;
 }
 

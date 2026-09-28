@@ -835,7 +835,7 @@ export class Sim {
     const now = this.renownTitle(sid);
     if (now === before) return null;
     this.game.ui.msg(`For ${why}, the people of ${s.name} now call you ${now} of ${s.name}!`, '#ffe070');
-    this.game.audio?.play('coin');
+    this.game.audio?.play('fanfare');
     const L = this.layoutOf(sid);
     if (L && L.econ) ledger(L, this.game.day, `${this.game.playerName} is named ${now} of ${s.name}.`);
     return now;

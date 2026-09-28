@@ -227,13 +227,21 @@ export class NPC extends Entity {
         return this.workGoal();
       case 'study':
         return tagged('study') || inBuilding(buildingOf('temple'), 'pray') || plazaTile();
-      case 'play':
-        return rng.chance(0.3) ? tagged('play') || plazaTile() : plazaTile();
+      case 'play': {
+        // Out in the streets and round the houses as much as on the square.
+        const r = rng.next();
+        if (r < 0.25) return tagged('play') || plazaTile();
+        if (r < 0.55 && home && home.outside) return { x: home.outside.x + rng.int(-3, 3), y: GROUND, z: home.outside.z + rng.int(-3, 3), wander: true };
+        if (r < 0.85) return roadTile();
+        return plazaTile();
+      }
       case 'social':
         if (e.place === 'tavern' || this.game.minute > 1140) return inBuilding(buildingOf('tavern'), 'social') || tagged('social') || plazaTile();
         return tagged(rng.chance(0.5) ? 'gossip' : 'social') || plazaTile();
       case 'wander':
         return roadTile();
+      case 'alarm':
+        return target(e.target, { tag: 'alarm', near: 2 });
       case 'mourn': case 'funeral':
         return target(e.target, { face: 2, tag: e.act, near: e.act === 'funeral' ? 1 : 0 });
       case 'build': {
@@ -393,6 +401,43 @@ export class NPC extends Entity {
       case 'caravan':
         this.caravanWalk(dt);
         break;
+      case 'alarm':
+        this.alarmRun(dt);
+        break;
+    }
+  }
+
+  // Off to the nearest bell to wake the rest of the watch.
+  startAlarm(threat) {
+    const b = this.game.nearestBell(this.layout, this.x, this.z);
+    if (!b) return this.engage(threat);
+    this.state = 'alarm';
+    this.threat = threat;
+    this.bell = b;
+    this.ringT = 0;
+    this.stateT = 0;
+    this.path = null;
+    this.atGoal = false;
+    this.releaseSpot();
+    this.say(this.rng.pick(['To the bell!', 'Raise the alarm!', 'I need the others. To the bell!']), 2.5, '#ffb080');
+  }
+
+  alarmRun(dt) {
+    const b = this.bell;
+    const t = this.threat;
+    if (!b || this.stateT > 30) return t && !t.dead ? this.engage(t) : this.calmDown(true);
+    if (!this.followPath({ x: b.x, z: b.z }, 1)) return;
+    this.face(b.x, b.z);
+    this.ringT += dt;
+    if (this.ringT > 0.4 && this.ringT - dt <= 0.4) {
+      this.doAction(0.5);
+      this.say('Wake up! To arms!', 2.5, '#ffb040');
+      this.game.ringBell(b.x, b.z, t && !t.dead ? t : null, this);
+    }
+    if (this.ringT > 1.6) {
+      this.bell = null;
+      if (t && !t.dead) this.engage(t);
+      else this.calmDown(true);
     }
   }
 
@@ -587,11 +632,13 @@ export class NPC extends Entity {
         this.path = null;
       }
     }
-    // Guards react to wanted players and nearby monsters.
+    // Guards react to wanted players and nearby monsters (at night, running
+    // to ring the alarm bell first if the rest of the watch is asleep).
     if (this.rec.job === 'guard' && !this.sleeping) {
       const t = game.findGuardTarget(this);
       if (t) {
-        this.engage(t);
+        if (game.alarmNeeded(this, t)) this.startAlarm(t);
+        else this.engage(t);
         return;
       }
     }
@@ -699,6 +746,8 @@ export class NPC extends Entity {
     const g = this.goal;
     const act = this.activity.entry;
     const game = this.game;
+    // In the middle of a game of tag or hide-and-seek: the game says where to go.
+    if (this.playing && act.act === 'play') return;
     this.idleT -= dt;
     this.emoteCd -= dt;
     this.lineCd -= dt;
@@ -1309,7 +1358,7 @@ export class NPC extends Entity {
       this.openedDoor = { x: nx, y: ty, z: nz, passed: false };
     }
     this.face(nx, nz);
-    const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? 0.8 : 1;
+    const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
     this.startMove(nx, ty, nz, this.step * pace * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;

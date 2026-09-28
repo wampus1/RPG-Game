@@ -1159,7 +1159,7 @@ export class HelpWindow extends Window {
 // ---------------------------------------------------------------- pause
 export class PauseWindow extends Window {
   constructor(ui) {
-    super(ui, 34, 15, { kind: 'pause' });
+    super(ui, 34, 16, { kind: 'pause' });
     this.items = [
       ['ESC', 'Resume', (g) => this.close()],
       ['S', 'Save game', (g) => this.ui.hooks.save && this.ui.hooks.save()],
@@ -1169,6 +1169,7 @@ export class PauseWindow extends Window {
         this.ui.open(new HelpWindow(this.ui));
       }],
       ['G', 'Toggle CRT effect', () => this.ui.hooks.toggleCrt && this.ui.hooks.toggleCrt()],
+      ['M', 'Music on/off', () => this.ui.hooks.toggleMusic && this.ui.hooks.toggleMusic()],
       ['N', 'New world', () => this.ui.hooks.newWorld && this.ui.hooks.newWorld()],
       ['T', 'Title screen', () => this.ui.hooks.title && this.ui.hooks.title()],
     ];

@@ -77,6 +77,7 @@ export function describeActivity(e) {
     case 'sell': return 'selling the catch';
     case 'repair': return 'repairing the jail';
     case 'watch': return 'guarding a miner';
+    case 'alarm': return 'answering the alarm bell';
     case 'camp': return 'looking the town over';
     case 'customer': return 'coming to buy from you';
     case 'confront': return 'looking for you';
