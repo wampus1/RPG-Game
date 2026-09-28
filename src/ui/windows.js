@@ -144,21 +144,27 @@ export class ContainerWindow extends Window {
     this.pos = pos;
     this.snap = this.counts();
   }
-  counts() {
+  counts(held = true) {
     const m = {};
     for (const s of this.slots) if (s) m[s.item] = (m[s.item] || 0) + s.count;
+    // An item picked up with the cursor hasn't left the chest yet.
+    const cs = this.ui.cursorStack;
+    if (held && cs) m[cs.item] = (m[cs.item] || 0) + cs.count;
     return m;
   }
+  onClose(game) {
+    if (game && this.pos.owner) this.checkTaken(game, false);
+  }
   // Notice items leaving someone else's container (possible theft).
-  checkTaken(game) {
-    const now = this.counts();
+  checkTaken(game, held = true) {
+    const now = this.counts(held);
     const taken = [];
     for (const [k, n] of Object.entries(this.snap)) {
       const d = n - (now[k] || 0);
       if (d > 0) taken.push({ item: k, count: d });
     }
     this.snap = now;
-    if (taken.length && game.onContainerTake(this.pos, taken)) this.close();
+    if (taken.length && game.onContainerTake(this.pos, taken) && held) this.close();
   }
   draw(g, game) {
     const p = game.player;
@@ -606,6 +612,8 @@ export class HaltWindow extends Window {
   }
   update(dt, game) {
     if (this.guard.dead) this.close();
+    // The guards wait for an answer.
+    else for (const g of game.guardsOf(this.guard.settlement.id)) g.haltT = Math.max(g.haltT, 2);
   }
 }
 
