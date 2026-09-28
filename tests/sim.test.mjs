@@ -191,7 +191,7 @@ test('becoming a citizen: a host family, builders and a finished house', () => {
   game.currentSettlement = L.settlement;
   assert.ok(topicsFor(mayor, game).some((t) => t.id === 'citizen'));
   const offer = respond(mayor, game, 'citizen');
-  assert.ok(offer.confirm);
+  assert.ok(offer.choices && offer.choices.some((o) => o.arg === 'yes'));
   respond(mayor, game, 'citizen', 'yes');
   const c = game.sim.citizen;
   assert.ok(c && c.sid === L.settlement.id);
@@ -243,12 +243,23 @@ test('dialogue offers real topics with answers', () => {
   const { a } = town(game);
   const n = a.npcs.find((q) => !q.dead && q.rec.age === 'adult' && q.rec.job !== 'guard');
   const ids = topicsFor(n, game).map((t) => t.id);
-  for (const id of ['who', 'doing', 'news', 'life', 'family', 'directions', 'kind', 'gift', 'bye']) assert.ok(ids.includes(id), `missing topic ${id}`);
-  for (const id of ['who', 'doing', 'news', 'life', 'family']) {
+  for (const id of ['ask', 'favor', 'kind', 'gift', 'bye']) assert.ok(ids.includes(id), `missing topic ${id}`);
+  const ask = respond(n, game, 'ask').choices.map((c) => c.id);
+  for (const id of ['who', 'doing', 'work', 'news', 'life', 'family', 'people', 'directions']) assert.ok(ask.includes(id), `missing question ${id}`);
+  for (const id of ['who', 'doing', 'work', 'news', 'life', 'family']) {
     const r = respond(n, game, id);
     assert.ok(r.lines && r.lines.length && r.lines.every((l) => typeof l === 'string' && l.length), id);
   }
-  assert.equal(respond(n, game, 'directions').open, 'directions');
+  // Asking again gets something new rather than the same introduction.
+  const again = respond(n, game, 'who').lines[0];
+  assert.ok(/Still|know who/.test(again), again);
+  const places = respond(n, game, 'directions').choices;
+  assert.ok(places.length > 2);
+  assert.match(respond(n, game, 'directions', places[0].arg).lines[0], /here/);
+  const people = respond(n, game, 'people').choices;
+  assert.ok(people.length >= 1);
+  const about = respond(n, game, 'people', people[0].arg).lines;
+  assert.ok(about.length >= 2 && about.every((l) => l.length), about.join(' / '));
 });
 
 test('sitting on a seat, and the new state survives a save', () => {

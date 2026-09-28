@@ -351,7 +351,100 @@ export class NPC extends Entity {
       case 'escort':
         this.escortWalk(dt);
         break;
+      case 'hired':
+        this.hiredDuty(dt);
+        break;
+      case 'leaving':
+        this.leaveWalk(dt);
+        break;
     }
+  }
+
+  // Hired by the player: keep close, see off any beasts, pass the time.
+  hiredDuty(dt) {
+    const g = this.game;
+    const p = g.player;
+    const car = g.sim.careers;
+    if (!this.hired || car.escort !== this.hired) {
+      this.hired = null;
+      this.calmDown(true);
+      return;
+    }
+    const t = car.escortThreat(this);
+    if (t) {
+      if (this.rng.chance(0.4)) this.say(this.rng.pick(['Stay behind me!', 'I\'ve got this one!', 'Back, beast!']), 2, '#ffe070');
+      this.engage(t);
+      return;
+    }
+    const d = Math.max(Math.abs(p.x - this.x), Math.abs(p.z - this.z));
+    if (d > 22 || Math.abs(p.y - this.y) > 6 || (this.pathFails > 2 && d > 5)) {
+      // Fell behind: catch up out of sight.
+      const spot = g.findFreeSpot(p.x - (p.dir === 3 ? 1 : p.dir === 1 ? -1 : 0), p.z - (p.dir === 0 ? 1 : p.dir === 2 ? -1 : 0), p.y);
+      this.teleport(spot.x, spot.y, spot.z);
+      this.path = null;
+      this.pathFails = 0;
+      return;
+    }
+    this.lineCd -= dt;
+    if (d <= 2) {
+      this.path = null;
+      if (this.lineCd <= 0 && !p.sleeping) {
+        this.lineCd = this.rng.float(50, 120);
+        this.say(this.escortLine(), 3.5);
+      }
+      this.idleT -= dt;
+      if (this.idleT <= 0) {
+        this.idleT = this.rng.float(2, 6);
+        if (this.rng.chance(0.5)) this.face(p.x, p.z);
+        else this.dir = this.rng.int(0, 3);
+      }
+      return;
+    }
+    if (!this.fgoal || Math.abs(this.fgoal.x - p.x) + Math.abs(this.fgoal.z - p.z) > 1) {
+      this.fgoal = { x: p.x, y: p.y, z: p.z };
+      this.path = null;
+    }
+    const box = { x0: Math.min(this.x, p.x) - 12, z0: Math.min(this.z, p.z) - 12, x1: Math.max(this.x, p.x) + 12, z1: Math.max(this.z, p.z) + 12 };
+    this.followPath(this.fgoal, 1, box);
+  }
+
+  escortLine() {
+    const g = this.game;
+    const s = g.currentSettlement;
+    const left = Math.ceil(g.sim.careers.hoursLeft());
+    const lines = ['Keep your eyes open.', 'Quiet so far.', 'I\'ve walked worse roads.', `${left} more hours on the job.`];
+    if (!g.isDay()) lines.push('Beasts come out after dark. Stay close.', 'I don\'t like this darkness.');
+    if (s && s.id === this.settlement.id) lines.push('Home sweet home.');
+    else if (s) lines.push(`So this is ${s.name}.`, `Never cared much for ${s.name}.`);
+    else lines.push('Nice country out here.', 'Watch your footing.');
+    return this.rng.pick(lines);
+  }
+
+  // Set off down the road toward their own town.
+  headHome() {
+    const b = this.layout.bounds;
+    const hx = (b.x0 + b.x1) / 2;
+    const hz = (b.z0 + b.z1) / 2;
+    const d = Math.hypot(hx - this.x, hz - this.z) || 1;
+    this.state = 'leaving';
+    this.stateT = 0;
+    this.path = null;
+    this.threat = null;
+    this.leaveGoal = { x: Math.round(this.x + ((hx - this.x) / d) * 18), y: this.y, z: Math.round(this.z + ((hz - this.z) / d) * 18) };
+    return d;
+  }
+
+  // Heading home down the road after a job, then gone.
+  leaveWalk() {
+    const g = this.game;
+    const p = g.player;
+    const far = Math.max(Math.abs(p.x - this.x), Math.abs(p.z - this.z)) > 16;
+    if (this.stateT > 40 || !this.leaveGoal || (far && this.stateT > 6)) {
+      g.despawnNpc(this);
+      return;
+    }
+    const box = { x0: Math.min(this.x, this.leaveGoal.x) - 10, z0: Math.min(this.z, this.leaveGoal.z) - 10, x1: Math.max(this.x, this.leaveGoal.x) + 10, z1: Math.max(this.z, this.leaveGoal.z) + 10 };
+    if (this.followPath(this.leaveGoal, 1, box) && far) g.despawnNpc(this);
   }
 
   // Leading an arrested player to the jail on a rope.
@@ -377,6 +470,11 @@ export class NPC extends Entity {
 
   routine(dt) {
     const game = this.game;
+    // Out of their own town with no reason to be here: walk home.
+    if (this.rec.away && !this.visit) {
+      this.headHome();
+      return;
+    }
     let act = activityFor(this.rec, game.day, game.minute);
     if (!this.activity || act.key !== this.activity.key) {
       const wasWork = this.activity && this.activity.entry.act === 'work';
@@ -668,7 +766,7 @@ export class NPC extends Entity {
   }
 
   // Walk one step along a path to `goal`. Returns true when arrived.
-  followPath(goal, near = 0) {
+  followPath(goal, near = 0, localBox = null) {
     const d = Math.max(Math.abs(goal.x - this.x), Math.abs(goal.z - this.z));
     if (d <= near && (near > 0 || this.x === goal.x && this.z === goal.z)) return true;
     if (!this.path || this.pathI >= this.path.length) {
@@ -678,11 +776,11 @@ export class NPC extends Entity {
       }
       if (!this.game.requestPathBudget()) return false;
       const b = this.settlement.bounds;
-      const box = { x0: Math.min(b.x0, this.x, goal.x) - 26, z0: Math.min(b.z0, this.z, goal.z) - 22, x1: Math.max(b.x1, this.x, goal.x) + 26, z1: Math.max(b.z1, this.z, goal.z) + 22 };
+      const box = localBox || { x0: Math.min(b.x0, this.x, goal.x) - 26, z0: Math.min(b.z0, this.z, goal.z) - 22, x1: Math.max(b.x1, this.x, goal.x) + 26, z1: Math.max(b.z1, this.z, goal.z) + 22 };
       const w0 = this.game.world;
       const av = this.avoid && this.avoid.t > 0 ? this.avoid : null;
       const blocked = av ? (x, z) => x === av.x && z === av.z : null;
-      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: 5000, partial: true, blocked });
+      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: localBox ? 2500 : 5000, partial: true, blocked });
       if (!p || !p.length) {
         if (BLOCKS[w0.getBlock(this.x, this.y, this.z)].solid) this.stepOff();
         this.pathFails++;
@@ -725,7 +823,8 @@ export class NPC extends Entity {
       this.openedDoor = { x: nx, y: ty, z: nz, passed: false };
     }
     this.face(nx, nz);
-    this.startMove(nx, ty, nz, this.step * (this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? 0.8 : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? 0.8 : 1;
+    this.startMove(nx, ty, nz, this.step * pace * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;
   }
@@ -847,6 +946,10 @@ export class NPC extends Entity {
   fight(dt) {
     const t = this.threat;
     const game = this.game;
+    if (this.hired && (this.distTo(game.player) > 14 || !t || t.kind === 'player')) {
+      this.calmDown(true);
+      return;
+    }
     const guard = this.rec.job === 'guard';
     const sid = this.settlement.id;
     const justice = game.sim.justice;
@@ -901,7 +1004,7 @@ export class NPC extends Entity {
   }
 
   calmDown(silent = false) {
-    this.state = 'routine';
+    this.state = this.hired ? 'hired' : 'routine';
     this.threat = null;
     this.path = null;
     this.activity = null;
@@ -911,6 +1014,10 @@ export class NPC extends Entity {
   }
 
   onHurt(attacker) {
+    if (this.hired && attacker && attacker.kind === 'player') {
+      this.game.sim.careers.endEscort('You turn on ME? We\'re done!');
+      this.hired = null;
+    }
     if (this.state === 'fight' && this.threat === attacker) return;
     this.prey = null;
     this.react(attacker, false);

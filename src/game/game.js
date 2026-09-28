@@ -24,6 +24,7 @@ import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
+import { ambientChatter } from './chatter.js';
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -379,6 +380,24 @@ export class Game {
     return n;
   }
 
+  // A hired guard reappears beside the player (after loading a save).
+  spawnEscort(e) {
+    const L = this.sim.layoutOf(e.sid);
+    const rec = L && L.npcs[e.idx];
+    if (!rec || !alive(rec)) return null;
+    if (rec.ent && !rec.ent.dead) this.despawnNpc(rec.ent);
+    const p = this.player;
+    const spot = this.findFreeSpot(p.x + 1, p.z + 1, p.y);
+    const n = new NPC(this, rec, L);
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
+    rec.away = true;
+    n.hired = e;
+    n.state = 'hired';
+    this.npcs.push(n);
+    return n;
+  }
+
   // Remove an NPC entity that walked out of town (merchants on the road).
   despawnNpc(n) {
     n.releaseSpot();
@@ -454,6 +473,7 @@ export class Game {
       n.update(dt);
       n.maybeGreet(this.player, dt);
     }
+    ambientChatter(this, dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     for (const c of this.creatures) c.update(dt);
@@ -817,6 +837,7 @@ export class Game {
     if (!s || !this.active.has(s.id)) return;
     const L = this.active.get(s.id).layout;
     if (L.maskAt(x, z) !== M.FIELD) return;
+    if (this.sim.careers.licensed('farmer', s.id)) return;
     const wits = this.sim.witnesses(s.id, x, z, 9);
     if (!wits.length) return;
     const items = drops.filter((d) => d.item !== 'seeds').map((d) => ({ item: d.item, count: d.count }));
@@ -1059,7 +1080,7 @@ export class Game {
           this.ui.msg('You take the catch from the snare.', '#e8e0a0');
           this.audio?.play('pickup');
           const s = this.world.ow.settlementsNear(x, z)[0];
-          if (s && this.active.has(s.id)) {
+          if (s && this.active.has(s.id) && !this.sim.careers.licensed('trapper', s.id)) {
             const wits = this.sim.witnesses(s.id, x, z, 8).filter((n) => n.rec.job === 'trapper');
             if (wits.length) this.sim.justice.commit(s.id, 'theft', { witnesses: wits, value: 3, desc: 'Stealing from a trapper\'s snare', items: [{ item: 'raw_meat', count: 1 }], owner: { kind: 'rec', id: wits[0].rec.idx } });
           }
@@ -1655,6 +1676,7 @@ export class Game {
   damage(target, amount, source, crit = false) {
     if (target.dead) return;
     if (target.kind === 'npc' && target.rec.equipment.armor) amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
+    if (target.kind === 'player' && this.sim.careers.armor()) amount = Math.max(1, Math.round(amount * (1 - this.sim.careers.armor())));
     target.hp -= amount;
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
@@ -1831,6 +1853,10 @@ export class Game {
     } else {
       const npcKill = source && source.kind === 'npc' && source.rec && source.rec.inv;
       if (!npcKill) this.stats.kills++;
+      if (source && source.kind === 'player') {
+        this.sim.careers.onKill(e);
+        this.sim.favors.onKill(e);
+      }
       for (const [item, min, max, chance] of e.S.drops) {
         if (Math.random() > chance) continue;
         const n = min + Math.floor(Math.random() * (max - min + 1));
@@ -2009,6 +2035,7 @@ export class Game {
 
   onPlayerStep(x, y, z, water) {
     this.audio?.play(water ? 'splash' : 'step');
+    this.sim.careers.onStep();
     if (water) this.renderer.emit(x, y, z, { n: 4, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.4, oy: -2 });
   }
 
@@ -2054,6 +2081,7 @@ export class Game {
     this.player.selected = pd.selected;
     this.player.spawn = pd.spawn;
     this.moveEntity(this.player, pd.x, pd.y, pd.z);
+    this.sim.careers.applyLook();
   }
 }
 

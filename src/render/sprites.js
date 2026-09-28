@@ -655,6 +655,21 @@ function simpleIcon(key) {
       for (let a = 0; a < 10; a++) p.set(8 + Math.cos(a / 1.6) * 4, 8 + Math.sin(a / 1.6) * 4, '#8a5a8a');
       p.set(8, 13, '#e0c040');
       break;
+    case 'guard_badge':
+      p.rect(4, 3, 8, 7, '#c8a030');
+      p.rect(5, 10, 6, 2, '#c8a030');
+      p.rect(6, 12, 4, 1, '#c8a030');
+      p.set(7, 13, '#c8a030');
+      p.rect(5, 4, 6, 6, '#3a5a9a');
+      p.vline(8, 4, 11, '#f0e070');
+      p.hline(5, 10, 6, '#f0e070');
+      break;
+    case 'letter':
+      p.rect(3, 5, 11, 7, '#ece4cc');
+      p.line(3, 5, 8, 9, '#b0a888');
+      p.line(13, 5, 8, 9, '#b0a888');
+      p.ellipse(8, 9, 1, 1, '#b02a2a');
+      break;
     case 'pipe':
       p.line(4, 7, 10, 9, '#5a3a1e');
       p.rect(10, 6, 3, 4, '#8a5a34');

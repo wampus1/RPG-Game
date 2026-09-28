@@ -12,6 +12,8 @@ import {
   ledger, alive, DAY, price, kitchenOf, STOCK,
 } from './econ.js';
 import { Justice } from './justice.js';
+import { Careers } from './careers.js';
+import { Favors } from './favors.js';
 import { removeItem, countItem } from '../game/inventory.js';
 
 const REP_LEVELS = [
@@ -43,6 +45,8 @@ export class Sim {
     this.tickT = 0;
     this.areaCache = new Map();
     this.justice = new Justice(game, this);
+    this.careers = new Careers(game, this);
+    this.favors = new Favors(game, this);
     this.bp = null;
   }
 
@@ -91,7 +95,9 @@ export class Sim {
       this.updateConstruction();
       this.syncVisitors();
       this.areaCache.clear();
+      this.favors.update();
     }
+    this.careers.update(dt);
     this.justice.update(dt);
   }
 
@@ -331,7 +337,7 @@ export class Sim {
     const op = this.opinion(npc);
     m *= op >= 35 ? 0.9 : op <= -25 ? 1.25 : 1;
     if (this.isCitizen(s.id)) m *= 0.92;
-    return m;
+    return m * this.careers.discount(npc);
   }
 
   // ------------------------------------------------------------ deaths
@@ -574,6 +580,7 @@ export class Sim {
     const L = this.layoutOf(c.sid);
     this.citizen = null;
     if (!quiet) this.game.ui.msg(`Your citizenship of ${L.settlement.name} was revoked (${reason}).`, '#ff7060');
+    this.careers.onRevoke(c.sid);
     ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}).`);
     const k = this.construction;
     if (k && k.sid === c.sid && !k.done) {
@@ -865,6 +872,8 @@ export class Sim {
       citizen: this.citizen,
       construction: this.construction,
       justice: this.justice.serialize(),
+      careers: this.careers.serialize(),
+      favors: this.favors.serialize(),
     };
   }
 
@@ -908,6 +917,8 @@ export class Sim {
     this.citizen = data.citizen || null;
     this.construction = data.construction || null;
     this.justice.load(data.justice);
+    this.careers.load(data.careers);
+    this.favors.load(data.favors);
   }
 }
 

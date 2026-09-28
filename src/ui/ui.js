@@ -128,6 +128,9 @@ export class UI {
         case 'KeyC':
           if (!game.player.dead) this.toggle('craft', () => new W.CraftWindow(this, 'hand'));
           continue;
+        case 'KeyJ':
+          if (!game.player.dead) this.toggle('journal', () => new W.JournalWindow(this));
+          continue;
         case 'KeyH':
         case 'F1':
           this.toggle('help', () => new W.HelpWindow(this));
@@ -394,9 +397,14 @@ export class UI {
         const L = game.active.get(s.id).layout;
         if (L.econ) status = `Taxes ${Math.round(L.econ.tax * 100)}%${L.econ.laws.armsBan ? ' · no weapons' : ''}`;
       }
+      let y = 3;
       if (status) {
-        g.fill(0, 3, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
-        g.text(1, 3, status.slice(0, 24), col);
+        g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, status.slice(0, 24), col);
+      }
+      for (const l of sim.careers.hudLines()) {
+        g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, l.text.slice(0, 24), l.color);
       }
     }
     // Clock + minimap panel.

@@ -93,7 +93,7 @@ export class Player extends Entity {
     const other = this.game.occupiedBySolid(nx, ny, nz, this);
     if (other) {
       // Nudge past a villager who is just standing in the way.
-      if (other.kind === 'npc' && other.state === 'routine' && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
+      if (other.kind === 'npc' && (other.state === 'routine' || other.state === 'hired') && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
         this.pushT = (this.pushT || 0) + dt;
         if (this.pushT < 0.35) return;
         this.pushT = 0;

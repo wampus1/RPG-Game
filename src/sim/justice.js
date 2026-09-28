@@ -244,7 +244,7 @@ export class Justice {
     guard.releaseSpot();
     guard.face(p.x, p.z);
     guard.say(weapons.length ? 'I\'ll take those. Hands out.' : 'Hands out. Come along.', 3);
-    game.ui.msg(`${guard.name} ${weapons.length ? `takes your ${weapons.map((w) => ITEMS[w.item].name.toLowerCase()).slice(0, 2).join(' and ')}, ` : ''}ties your hands and leads you to the jail.`, '#ffb080');
+    game.ui.msg(`${guard.name} ${weapons.length ? `takes your ${listItems(weapons)}, ` : ''}ties your hands and leads you to the jail.`, '#ffb080');
     if (returned) game.ui.msg('Stolen goods were confiscated.', '#ffb080');
     game.audio?.play('select');
   }
@@ -712,6 +712,7 @@ export class Justice {
     this.pending.delete(v.sid);
     this.resisted.delete(v.sid);
     if (v.proven.length && this.sim.isCitizen(v.sid)) this.sim.revoke('convicted of a crime');
+    if (v.proven.length) this.sim.careers.onConviction(v.sid);
     for (const c of v.proven) {
       // Victims and witnesses feel a little better once justice is done.
       for (const i of c.witnesses) if (L.npcs[i] && L.npcs[i].ent) this.sim.changeRep(L.npcs[i].ent, 2);
@@ -852,6 +853,12 @@ export class Justice {
     this.sightings = new Map(d.sightings || []);
     this.pendingEscort = d.escortSid ?? null;
   }
+}
+
+// "a wood sword, a hunting bow and 20 arrows"
+export function listItems(items) {
+  const parts = items.map((w) => `${w.count > 1 ? `${w.count} ` : ''}${ITEMS[w.item].name.toLowerCase()}${w.count > 1 && !/s$/.test(ITEMS[w.item].name) ? 's' : ''}`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0] || '';
 }
 
 export function lcFirst(s) {
