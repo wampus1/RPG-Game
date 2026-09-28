@@ -50,7 +50,7 @@ export function exchangeFor(a, b, game) {
   if (ra.hungry >= 1) opts.push([`${B}, have you any bread to spare?`, rb.personality.kindness > 0.55 ? 'Here, take some. Don\'t mention it.' : 'Sorry, we barely have enough ourselves.']);
   if (e.tax >= 0.16) opts.push([`${Math.round(e.tax * 100)}% tax! Can you believe it?`, 'Robbery, that\'s what it is.']);
   else if (e.tax <= 0.05) opts.push(['Taxes are low this season.', 'Long may it last.']);
-  const w = game.weather && game.weather.kind;
+  const w = game.weatherIn ? game.weatherIn(a.settlement) : game.weather && game.weather.kind;
   if (w === 'rain') opts.push(['Wet enough for you?', 'My boots are soaked through.']);
   else if (w === 'snow') opts.push(['Snow again...', 'I can\'t feel my toes.']);
   else if (w === 'fog') opts.push(['Can\'t see a thing in this fog.', 'Mind you don\'t walk into the well.']);

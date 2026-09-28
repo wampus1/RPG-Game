@@ -45,6 +45,15 @@ function hasSave() {
   }
 }
 
+function saveNow(note) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize()));
+    ui.msg(note, '#80e070');
+  } catch (e) {
+    ui.msg('Save failed: ' + e.message, '#ff5a50');
+  }
+}
+
 function startGame(seed, save = null) {
   const s = save ? save.seed : seed ?? (Math.random() * 2 ** 32) >>> 0;
   ui.closeAll();
@@ -55,6 +64,7 @@ function startGame(seed, save = null) {
     const t0 = performance.now();
     game = new Game({ seed: s, renderer, audio, ui, save });
     game.crt = crt;
+    game.autosave = () => saveNow(`Autosaved (day ${game.day}, 7:00).`);
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
     ui.showHud = true;
@@ -92,12 +102,7 @@ ui.hooks = {
   },
   save: () => {
     if (!game) return;
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize()));
-      ui.msg('Game saved.', '#80e070');
-    } catch (e) {
-      ui.msg('Save failed: ' + e.message, '#ff5a50');
-    }
+    saveNow('Game saved.');
     ui.closeAll();
   },
   load: () => {

@@ -4,7 +4,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, headSprite } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { Lighting } from './lighting.js';
@@ -69,11 +69,12 @@ export class Renderer {
 
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    this.computeCutaway(world, player);
+    this.computeCutaway(world, player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
     this.drawWorld(game);
     this.drawProjectiles(game);
     this.drawRope(game);
+    this.drawFishingLines(game);
     this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
@@ -86,24 +87,36 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ cutaway
-  computeCutaway(world, player) {
+  computeCutaway(world, player, bld = null) {
     const px = player.x;
     const pz = player.z;
     const py = player.y;
-    // Indoors if something solid is overhead within a few layers.
+    // Indoors if something solid is overhead (tall halls have high ridges).
     const covered = (x, z) => {
-      for (let y = py + 2; y < Math.min(WORLD_Y, py + 7); y++) {
+      for (let y = py + 2; y < Math.min(WORLD_Y, py + 16); y++) {
         const id = world.getBlock(x, y, z);
         if (id !== B.air && BLOCKS[id].render === 'cube' && !BLOCKS[id].name.startsWith('leaves')) return true;
       }
       return false;
     };
     this.hidden = null;
-    if (!covered(px, pz)) return;
+    // Inside a building's walls counts even under a hole in the roof.
+    const inside = bld && !bld.underConstruction && px >= bld.x0 && px <= bld.x1 && pz >= bld.z0 && pz <= bld.z1 && py < (bld.roofBase ?? WORLD_Y);
+    if (!inside && !covered(px, pz)) return;
     // Flood-fill the covered area (the roof footprint).
     const set = new Set();
     const q = [[px, pz]];
     set.add(px * 65536 + pz);
+    if (inside) {
+      for (let z = bld.z0; z <= bld.z1; z++) {
+        for (let x = bld.x0; x <= bld.x1; x++) {
+          const k = x * 65536 + z;
+          if (set.has(k)) continue;
+          set.add(k);
+          q.push([x, z]);
+        }
+      }
+    }
     while (q.length && set.size < 700) {
       const [x, z] = q.pop();
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -393,10 +406,10 @@ export class Renderer {
         const dir = e.dir;
         const top = feetY - CHAR_H + 1;
         if (inWater) {
-          ctx.drawImage(sheet, frame * CHAR_W, dir * CHAR_H, CHAR_W, CHAR_H - 6, sx, top + 3, CHAR_W, CHAR_H - 6);
+          ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
-        } else ctx.drawImage(sheet, frame * CHAR_W, dir * CHAR_H, CHAR_W, CHAR_H, sx, top, CHAR_W, CHAR_H);
+        } else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         const held = e.heldItem ? e.heldItem() : null;
         if (held) this.drawHeld(ctx, held, e, sx, top);
       }
@@ -412,6 +425,10 @@ export class Renderer {
       ctx.fillRect(sx + 3, feetY - 28, Math.round(w * f), 1);
     }
     const bubbles = this.bubbles || [];
+    // Voices behind closed doors stay there.
+    if ((e.bubble && e.bubble.t > 0) || (e.emote && e.emote.t > 0)) {
+      if (game && game.speechAudible && !game.speechAudible(e)) return;
+    }
     if (e.bubble && e.bubble.t > 0) bubbles.push({ text: e.bubble.text, x: sx + 8, y: feetY - (e.kind === 'creature' ? 20 : 28), color: e.bubble.color });
     if (e.emote && e.emote.t > 0) bubbles.push({ emote: true, text: e.emote.ch, x: sx + 5, y: feetY - 34 + Math.sin(this.time * 5) * 1.5, color: e.emote.color || '#ffe070' });
   }
@@ -523,6 +540,47 @@ export class Renderer {
   }
 
   // The rope from a guard's hand to a restrained prisoner.
+  // Rod, line and bobber: yours, and every fisher's at work.
+  drawFishingLines(game) {
+    const ctx = this.ctx;
+    const lines = [];
+    const f = game.fishing;
+    if (f) lines.push({ e: game.player, t: f, dip: f.dip || 0, reel: f.phase === 'reel' ? f.fish - 0.5 : 0 });
+    for (const n of game.visibleEntities || []) {
+      if (n.kind !== 'npc' || !n.fishSpot) continue;
+      const t = n.fishSpot();
+      if (t) lines.push({ e: n, t, dip: n.fishDip || 0, reel: 0 });
+    }
+    for (const L of lines) {
+      const rp = L.e.renderPos();
+      const hx = rp.x * TILE + 8 - this.camX;
+      const hy = rp.z * TILE - rp.y * LH + LH + 10 - this.camY - 12;
+      const bx = L.t.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
+      const bob = Math.sin(this.time * 3 + L.t.x) * 0.8;
+      const by = L.t.z * TILE - L.t.y * LH - this.camY + 10 + bob + L.dip * 2;
+      // Rod tip: up and out towards the water.
+      const dx = Math.sign(bx - hx) || 1;
+      const tx = hx + dx * 7;
+      const ty = hy - 9;
+      ctx.fillStyle = '#6a4a2a';
+      for (let i = 0; i <= 7; i++) ctx.fillRect(Math.round(hx + dx * i), Math.round(hy - i * 9 / 7), 1, 1);
+      // The line sags between rod tip and bobber.
+      ctx.fillStyle = 'rgba(232,232,240,0.85)';
+      const n = 14;
+      for (let i = 1; i < n; i++) {
+        const k = i / n;
+        ctx.fillRect(Math.round(tx + (bx - tx) * k), Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (L.dip > 0.6 ? 1 : 4)), 1, 1);
+      }
+      // Bobber (half under when something bites).
+      ctx.fillStyle = '#d02a2a';
+      ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2 + (L.dip > 0.6 ? 2 : 0), 3, L.dip > 0.6 ? 1 : 2);
+      ctx.fillStyle = '#f0f0f0';
+      if (L.dip <= 0.6) ctx.fillRect(Math.round(bx) - 1, Math.round(by), 3, 1);
+      ctx.fillStyle = 'rgba(224,244,255,0.6)';
+      ctx.fillRect(Math.round(bx) - 2 - (L.dip > 0.6 ? 1 : 0), Math.round(by) + 1, 5 + (L.dip > 0.6 ? 2 : 0), 1);
+    }
+  }
+
   drawRope(game) {
     const e = game.sim && game.sim.justice.escort;
     if (!e || !e.guard) return;

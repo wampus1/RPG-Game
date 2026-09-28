@@ -53,6 +53,7 @@ r('workbench', 'hay_bale', 1, { wheat: 6 });
 r('workbench', 'cloth', 1, { string: 4 });
 r('workbench', 'book', 1, { cloth: 1, reeds: 3 });
 r('workbench', 'fishing_rod', 1, { stick: 3, string: 2 });
+r('workbench', 'bucket', 1, { planks: 3, string: 1 });
 r('workbench', 'rug_red', 2, { cloth: 2 });
 r('workbench', 'rug_blue', 2, { cloth: 2 });
 r('workbench', 'rug_green', 2, { cloth: 2 });

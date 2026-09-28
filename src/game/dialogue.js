@@ -14,6 +14,7 @@ import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4 } from '../util/rng.js';
 import { countItem, removeItem } from './inventory.js';
+import { rainedRecently } from '../world/weather.js';
 
 function pick(rng, arr) {
   return arr[Math.floor(rng.next() * arr.length)];
@@ -89,6 +90,7 @@ export function openingLine(npc, game) {
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
+  if (npc.caravan) return pick(rng, [`Well met on the road! ${rec.name.first} ${rec.name.last}, merchant of ${s.name}, on my way to ${npc.caravan.to}.`, `Hello there! Heading to ${npc.caravan.to} with a pack of goods. Care to trade?`]);
   if (npc.visit) return pick(rng, [`Greetings, friend! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
   if (npc.hired) return npc.hired.companion ? pick(rng, [`What is it, ${name}?`, 'Yes, friend?', 'Need something?']) : pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
   const car = sim.careers;
@@ -125,6 +127,13 @@ export function openingLine(npc, game) {
     return p.sociability > 0.65
       ? pick(rng, [`Good ${tw}, traveler! Welcome to ${s.name}!`, `Oh, a new face! Welcome to ${s.name}. And you are...? ${name}? Lovely.`])
       : pick(rng, [`Good ${tw}.`, `Hello. You're not from ${s.name}, are you?`, 'Oh. Hello there.']);
+  }
+  // Bad weather gets a mention now and then.
+  const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
+  if (sky !== 'clear' && rep > -25 && rng.chance(0.3)) {
+    return sky === 'rain' ? pick(rng, [`Filthy weather, ${name}. Come in out of the rain!`, 'You look half drowned!', 'Wet day, isn\'t it?'])
+      : sky === 'snow' ? pick(rng, ['Brr! Cold enough for you?', `${name}! Shake the snow off, come in.`])
+        : pick(rng, ['Oh! You gave me a start, coming out of the fog like that.', 'Strange weather, this fog.']);
   }
   if (sim.isCitizen(s.id) && rep >= 10) return pick(rng, [`Hello again, ${name}! How's life treating our newest citizen?`, `Good ${tw}, neighbour!`, `${name}! What can I do for you?`]);
   if (rep >= 35) return pick(rng, [`${name}! Good to see you.`, `Ah, ${name}, my friend!`, `Always a pleasure, ${name}.`]);
@@ -191,6 +200,7 @@ export function topicsFor(npc, game) {
     const mine = dip.forPlayer(s.id);
     if (mine.length && countItem(game.player.inv, 'dispatch')) add('dispatch', `I bring a letter from ${dip.town(mine[0].from).name}.`);
     if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
+    add('towns', 'Tell me about the neighbouring towns.');
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
     if (sim.isCitizen(s.id)) add('renounce', 'I renounce my citizenship.');
     else add('citizen', inHall ? `Make me a citizen of ${s.name}.` : 'How do I become a citizen?');
@@ -208,7 +218,9 @@ export function topicsFor(npc, game) {
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
   add('ask', 'Can I ask you about...');
   if (!mine && !npc.hired && !npc.visit) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
-  add('kind', ['(Compliment them)', '(Chat about the weather)', '(Ask how they\'re doing)'][(rec.idx + game.day) % 3]);
+  const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
+  add('kind', (rec.idx + game.day) % 2 ? '(Compliment them)' : '(Ask how they\'re doing)');
+  if (sky !== 'clear' || (rec.idx + game.day) % 3 === 1) add('weathertalk', '(Chat about the weather)');
   add('gift', 'I have a gift for you.');
   add('rude', '(Insult them)');
   add('bye', 'Goodbye.');
@@ -693,7 +705,8 @@ function questions(npc, game) {
       ],
     });
   }
-  const w = game.weather && game.weather.kind !== 'clear' ? game.weather.kind : null;
+  const sky = game.weatherIn ? game.weatherIn(npc.settlement) : game.weather?.kind;
+  const w = sky && sky !== 'clear' ? sky : null;
   qs.push({
     id: 'weather', q: w === 'rain' ? 'Miserable rain, eh?' : w === 'snow' ? 'Cold enough for you?' : w === 'fog' ? 'Can\'t see a thing in this fog, can you?' : 'Lovely weather, isn\'t it?',
     answers: [
@@ -791,6 +804,7 @@ export function respond(npc, game, id, arg) {
       else if (act.act === 'mourn' || act.act === 'funeral') lines.push(`I'm paying my respects to ${act.who || 'an old friend'}.`);
       else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? `Building a house for our newest citizen: you, ${name}!` : 'Building. Mind the planks.');
       else if (act.act === 'repair') lines.push('Patching up the jail. Someone made a right mess of it.');
+      else if (act.act === 'home' && act.weather) lines.push(pick(rng, [`No sense working out in the ${act.weather === 'snow' ? 'snow' : act.weather === 'fog' ? 'fog' : 'rain'}. I'll catch up tomorrow.`, 'Staying dry. The work will keep.']));
       else if (act.act === 'forage') lines.push(rec.age === 'child' ? 'Looking for berries. We\'ve got nothing to eat at home...' : 'Out looking for food. Times are lean.');
       else if (act.act === 'trial') lines.push('There\'s to be a hearing at the jail.');
       else if (act.act === 'travel') {
@@ -870,6 +884,12 @@ export function respond(npc, game, id, arg) {
         return { lines: [first, q.q], choices: q.choices, back: '(Say nothing)' };
       }
       return { lines: [first, `(${lvl.label})`] };
+    }
+    case 'weathertalk': {
+      const d = sim.chat(npc, 'kind');
+      const lines = weatherTalk(npc, game);
+      if (!d) lines.push('(You\'ve already chatted today.)');
+      return { lines };
     }
     case 'answer': return answer(npc, game, arg);
     case 'rude': {
@@ -973,6 +993,19 @@ export function respond(npc, game, id, arg) {
         back: 'Good luck, whatever you choose.',
       };
     }
+    case 'towns': {
+      const near = sim.diplomacy.neighbours(s, 18).slice(0, 4);
+      if (!near.length) return { lines: ['We\'re out here on our own. Nobody lives within a week\'s walk.'] };
+      if (arg !== undefined && arg !== null) {
+        const o = near.find((q) => String(q.id) === String(arg));
+        if (o) return { lines: townReport(game, npc.layout, o), choices: near.filter((q) => q !== o).map((q) => ({ id: 'towns', arg: String(q.id), label: `And ${q.name}?` })), back: 'Thank you.' };
+      }
+      return {
+        lines: [`Our neighbours? ${near.map((o) => o.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}.`, 'Which would you like to hear about?'],
+        choices: near.map((o) => ({ id: 'towns', arg: String(o.id), label: `Tell me about ${o.name}.` })),
+        back: 'Never mind.',
+      };
+    }
     case 'mail': {
       const dip = sim.diplomacy;
       const q = dip.waitingFrom(s.id)[0];
@@ -981,7 +1014,7 @@ export function respond(npc, game, id, arg) {
       const pay = 10 + Math.round(dip.dist(s, to) * 3);
       if (arg !== 'yes') {
         return {
-          lines: [`As it happens, yes: a letter to the mayor of ${to.name}, ${KIND_TALK[q.kind] || 'on town business'}.`, `${to.name}'s council will pay you ¤${pay} when it arrives. It's about ${dip.travelHours(s, to)} hours on the road.`],
+          lines: [`As it happens, yes: a letter to the mayor of ${to.name}, ${KIND_TALK[q.kind] || 'on town business'}.`, `${to.name}'s council will pay you ¤${pay} when it arrives. It's ${townDirections(game, s, to)}.`],
           choices: [{ id: 'mail', arg: 'yes', label: 'I\'ll take it.' }], back: 'Not now.',
         };
       }
@@ -991,7 +1024,9 @@ export function respond(npc, game, id, arg) {
       const left = pl.give('dispatch', 1);
       if (left) game.spawnDrop('dispatch', left, pl.x, pl.y, pl.z, true);
       sim.changeRep(npc, 2);
-      return { lines: [`Here it is, sealed. Hand it to the mayor of ${to.name} and nobody else.`, '(Noted in your journal: J)'] };
+      q.where = townDirections(game, s, to);
+      revealTown(game, to);
+      return { lines: [`Here it is, sealed. Hand it to the mayor of ${to.name} and nobody else.`, `${to.name} is ${q.where}. I've marked it on your map.`, '(Noted in your journal: J)'] };
     }
     case 'dispatch': {
       const dip = sim.diplomacy;
@@ -1100,6 +1135,89 @@ function citizenTalk(npc, game, arg) {
   return { lines };
 }
 
+// Put a settlement on the player's map.
+export function revealTown(game, o) {
+  const ow = game.world.ow;
+  let fresh = false;
+  for (let z = o.cz; z < o.cz + o.cd; z++) for (let x = o.cx; x < o.cx + o.cw; x++) {
+    const k = z * MAP_W + x;
+    if (!ow.explored[k]) fresh = true;
+    ow.explored[k] = 1;
+  }
+  if (fresh) game.ui.msg(`Map updated: ${o.name}`, '#a0c8ff');
+  return fresh;
+}
+
+const COMPASS = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+
+// "about 6 hours' walk to the northeast (by the road)"
+export function townDirections(game, from, o) {
+  const dx = o.cx + o.cw / 2 - (from.cx + from.cw / 2);
+  const dz = o.cz + o.cd / 2 - (from.cz + from.cd / 2);
+  const dir = COMPASS[((Math.round(Math.atan2(dz, dx) / (Math.PI / 4)) % 8) + 8) % 8];
+  const dip = game.sim.diplomacy;
+  const h = dip.travelHours(from, o);
+  const road = dip.roads.some((r) => r.done && ((r.a === from.id && r.b === o.id) || (r.a === o.id && r.b === from.id)));
+  return `about ${h} hours' walk to the ${dir}${road ? ', along the new road' : ''}`;
+}
+
+// What a mayor knows about a neighbouring town.
+function townReport(game, L, o) {
+  const dip = game.sim.diplomacy;
+  const rel = dip.rel(L, o.id);
+  const what = o.type === 'city' ? 'a city' : o.type === 'town' ? 'a town' : 'a village';
+  const lines = [`${o.name} is ${what}, ${townDirections(game, L.settlement, o)}.`];
+  if (o.deserted) lines.push('Nobody lives there any more. The people packed up and left.');
+  else {
+    const mood = rel.trust >= 30 ? 'They\'re good friends of ours.' : rel.trust >= 10 ? 'We\'re on good terms.' : rel.trust < 0 ? 'Between us, we don\'t get on.' : 'We don\'t have much to do with them.';
+    const trade = rel.trade >= 2 ? ' Our merchants go back and forth all the time.' : rel.trade >= 1 ? ' We trade a little.' : '';
+    lines.push(mood + trade + (o.condition === 'prosperous' ? ' Rich place.' : o.condition === 'poor' ? ' Hard times there.' : ''));
+    const OL = game.sim.layoutOf(o.id);
+    const m = OL && OL.npcs.find((r) => r.job === 'mayor' && alive(r));
+    if (m) lines.push(`${m.name.first} ${m.name.last} is ${o.type === 'village' ? 'elder' : 'mayor'} there.`);
+  }
+  if (revealTown(game, o)) lines.push('(Marked on your map.)');
+  return lines;
+}
+
+// Small talk about the sky, coloured by who's talking.
+export function weatherTalk(npc, game) {
+  const rec = npc.rec;
+  const tr = rec.traits || [];
+  const rng = npc.rng;
+  const job = rec.job;
+  const kind = game.weatherIn ? game.weatherIn(npc.settlement) : 'clear';
+  const quit = rec.override && rec.override.weather;
+  if (quit) return [pick(rng, ['Too wet to work today. I\'ll make it up tomorrow... probably.', 'I packed it in early. Can you blame me?'])];
+  if (kind === 'rain') {
+    if (job === 'farmer') return [pick(rng, ['A good soaking rain. The fields drink it up: the crops grow twice as fast when the soil\'s wet.', 'Rain! Saves me hauling buckets from the well.'])];
+    if (job === 'fisher') return ['Fish bite better in the rain, you know.'];
+    if (tr.includes('gloomy') || tr.includes('lazy')) return [pick(rng, ['Rain, rain, rain. I\'m not setting foot outside more than I have to.', 'Miserable. Just miserable.'])];
+    if (tr.includes('cheerful') || tr.includes('romantic')) return ['I love the sound of rain on the roof. Makes the tavern cosy.'];
+    if (rec.age === 'child') return ['Mum says I can\'t splash in the puddles. I\'m going to anyway.'];
+    return [pick(rng, ['Wet enough for you? My boots are soaked through.', 'Rain again. Good for the fields, I suppose.'])];
+  }
+  if (kind === 'snow') {
+    if (rec.age === 'child') return ['Snow! Want to help me build a snowman?'];
+    if (job === 'farmer') return ['Nothing grows in this. The fields just sleep.'];
+    if (tr.includes('hardworking')) return ['A bit of snow never stopped honest work.'];
+    return [pick(rng, ['Cold enough to freeze your ears off.', 'I can\'t feel my toes. Is there a fire going at the tavern?'])];
+  }
+  if (kind === 'fog') {
+    if (tr.includes('superstitious')) return ['Fog like this... that\'s when the dead walk, my gran used to say.'];
+    if (job === 'guard') return ['Keep close in this fog. Anything could be out there.'];
+    return [pick(rng, ['Can\'t see a thing in this fog.', 'Mind you don\'t walk into the well.'])];
+  }
+  const night = game.minute >= 1200 || game.minute < 330;
+  if (night) return [pick(rng, ['Clear night. Look at all those stars.', 'Cold and clear tonight.'])];
+  if (job === 'farmer' && !rainedRecently(game.seed, npc.settlement, game.day * 1440 + game.minute, 36)) return ['Dry spell, this. I\'ve been hauling water to the fields all week.'];
+  return [pick(rng, ['Lovely day, isn\'t it?', 'Not a cloud in the sky.', 'Fine weather for it, whatever it is you\'re doing.'])];
+}
+
+function lcNews(t) {
+  return /^(A|An|The|Taxes|Law|Builders)\b/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+}
+
 function news(npc, game) {
   const L = npc.layout;
   const s = npc.settlement;
@@ -1113,6 +1231,14 @@ function news(npc, game) {
   }
   const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
   if (visits.length) items.push(`A merchant from ${visits[0].fromName} is in town, selling on the square.`);
+  // News from other towns, as the merchants tell it.
+  if (npc.visit && npc.visit.news && npc.visit.news.length) {
+    return [`Back home in ${npc.visit.fromName}? ${lcNews(npc.visit.news[(npc.newsI = (npc.newsI || 0) + 1) % npc.visit.news.length])}`];
+  }
+  for (const r of (e.rumours || []).slice(-3).reverse()) {
+    if (r.day < game.day - 8) continue;
+    items.push(pick(rng, [`Word from ${r.from}, by way of the merchants: ${lcNews(r.text)}`, `A merchant said that in ${r.from}, ${lcNews(r.text)}`]));
+  }
   // Rumours about the wider world mark the place on your map.
   const others = game.world.ow.settlements.filter((o) => o.id !== s.id && !deserted(o));
   if (others.length) {
@@ -1122,14 +1248,7 @@ function news(npc, game) {
     const dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'east' : 'west') : dz > 0 ? 'south' : 'north';
     const what = o.type === 'city' ? 'the great city of' : o.type === 'town' ? 'the town of' : 'a village called';
     items.push(`There's ${what} ${o.name} to the ${dir}.${o.condition === 'prosperous' ? ' Rich folk there.' : o.condition === 'poor' ? ' Hard times there, I hear.' : ''}`);
-    const ow = game.world.ow;
-    let fresh = false;
-    for (let z = o.cz; z < o.cz + o.cd; z++) for (let x = o.cx; x < o.cx + o.cw; x++) {
-      const k = z * MAP_W + x;
-      if (!ow.explored[k]) fresh = true;
-      ow.explored[k] = 1;
-    }
-    if (fresh) game.ui.msg(`Map updated: ${o.name}`, '#a0c8ff');
+    revealTown(game, o);
   }
   const gone = game.world.ow.settlements.find((o) => o.deserted && o.id !== s.id);
   if (gone && rng.chance(0.6)) items.push(`Did you hear? The people of ${gone.name} gave up and left. No guards, no one to protect them.`);

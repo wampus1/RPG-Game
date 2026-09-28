@@ -224,6 +224,8 @@ def('stool', { ...sprite, solid: false, tool: 'axe', hardness: 0.4, interact: 's
 def('hanging_sign', { ...sprite, solid: false, interact: 'sign', rotatable: true, tool: 'axe', hardness: 0.3, support: false, label: 'Hanging Sign' });
 def('snare', { ...sprite, solid: false, interact: 'trap', tool: 'axe', hardness: 0.2, drop: [{ item: 'string', min: 1, max: 1 }, { item: 'stick', min: 1, max: 1 }], label: 'Snare' });
 def('cell_door_top', { opaque: false, solid: false, standable: false, tool: 'pick', hardness: 7, drop: null, label: 'Iron Bars' });
+// Farmland soaked by rain or a bucket: crops grow twice as fast in it.
+def('farmland_wet', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moist Farmland' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -255,6 +257,10 @@ export const CROPS = {
   [B.carrot_crop]: { stages: 3, hours: 20, seed: 'carrot', produce: 'carrot' },
   [B.cabbage_crop]: { stages: 4, hours: 22, seed: 'cabbage_seeds', produce: 'cabbage' },
 };
+
+export function isFarmland(id) {
+  return id === B.farmland || id === B.farmland_wet;
+}
 
 export function cropStage(meta) {
   return (meta & META_AGE) >> 3;

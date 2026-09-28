@@ -10,6 +10,7 @@ import { drawText } from '../render/font.js';
 import { addItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
+import { ZONE } from '../game/fishing.js';
 import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
 
@@ -423,15 +424,24 @@ export class UI {
       this.renderMinimap(game);
     }
     this.minimapPos = { x: (bx + 1) * CHAR_W, y: 2 * CHAR_H };
-    // Wanted banner.
+    // Wanted banner: steady near the town, fading out a few seconds after
+    // you've left it behind (it comes back if you return).
+    if (!this.wantedSeen) this.wantedSeen = new Map();
     for (const [sid, t] of game.wanted) {
+      const near = (game.currentSettlement && game.currentSettlement.id === sid) || game.active.has(sid);
+      if (near || !this.wantedSeen.has(sid)) this.wantedSeen.set(sid, this.time);
+      // (a few fixed steps: each text colour gets its own glyph atlas)
+      const a = Math.ceil(Math.max(0, Math.min(1, 1 - (this.time - this.wantedSeen.get(sid) - 4) / 1.5)) * 4) / 4;
+      if (a <= 0) continue;
       if (Math.floor(this.time * 2) % 2 === 0) {
         const name = game.world.ow.settlements[sid].name;
         const txt = t > 1e6 ? ` !! WANTED IN ${name.toUpperCase()} !! ` : ` !! WANTED IN ${name.toUpperCase()} ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')} !! `;
-        g.center(1, txt, '#ffffff', 'rgba(160,20,20,0.85)');
+        g.center(1, txt, `rgba(255,255,255,${a.toFixed(2)})`, `rgba(160,20,20,${(0.85 * a).toFixed(2)})`);
       }
       break;
     }
+    for (const sid of this.wantedSeen.keys()) if (!game.wanted.has(sid)) this.wantedSeen.delete(sid);
+    this.drawFishing(g, game);
     // Belt.
     this.drawBelt(g, p);
     // Messages.
@@ -462,6 +472,31 @@ export class UI {
     if (this.debug) {
       g.text(25, 0, `${fps | 0}fps x${p.x} y${p.y} z${p.z} npcs${game.npcs.filter((n) => !n.dead).length} cr${game.creatures.length} reg${game.world.regions.size}`, C.green, 'rgba(0,0,0,0.6)');
     }
+  }
+
+  // The reel: keep your catch zone (green) over the fish until the line is in.
+  drawFishing(g, game) {
+    const f = game.fishing;
+    if (!f) return;
+    const W = 34;
+    const x0 = Math.floor((COLS - W - 4) / 2);
+    const y0 = BELT_Y - 6;
+    if (f.phase === 'bite') {
+      if (Math.floor(this.time * 6) % 2 === 0) g.center(y0 + 2, ' !! A BITE! Press SPACE !! ', '#1a1420', 'rgba(255,224,112,0.95)');
+      return;
+    }
+    if (f.phase !== 'reel') return;
+    g.box(x0, y0, W + 4, 5, { bg: 'rgba(10,20,34,0.9)', fg: C.cyan, title: 'REEL IT IN' });
+    const zs = Math.round((f.zone - ZONE / 2) * W);
+    const ze = Math.round((f.zone + ZONE / 2) * W);
+    let bar = '';
+    for (let i = 0; i < W; i++) bar += i >= zs && i < ze ? '█' : '░';
+    g.text(x0 + 2, y0 + 1, bar, f.inside ? C.green : '#4a7a5a');
+    const fx = Math.max(0, Math.min(W - 3, Math.round(f.fish * W) - 1));
+    g.text(x0 + 2 + fx, y0 + 1, '><>', f.inside ? C.hi : C.orange);
+    const n = Math.round(Math.max(0, Math.min(1, f.progress)) * W);
+    g.text(x0 + 2, y0 + 2, '▓'.repeat(n) + '·'.repeat(W - n), f.progress > 0.25 ? C.cyan : C.red);
+    g.text(x0 + 2, y0 + 3, 'Hold SPACE to pull right', C.faint);
   }
 
   drawBelt(g, p) {

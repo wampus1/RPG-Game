@@ -523,7 +523,6 @@ export function generateNPCs(layout, plan, seed) {
     .sort((a, b) => b.h.members.length - a.h.members.length);
   const freeHouses = [...houses].sort((a, b) => b.beds.length - a.beds.length);
   const jobQueue = [...plan.jobs];
-  let guardCount = 0;
   for (const { h } of hh) {
     const house = freeHouses.find((b) => b.beds.length >= h.members.length && !b.household);
     if (!house) continue;
@@ -569,10 +568,6 @@ export function generateNPCs(layout, plan, seed) {
         shift: 'day',
         restDay: rng.int(0, 6),
       };
-      if (job === 'guard') {
-        npc.shift = guardCount % 3 === 2 ? 'night' : 'day';
-        guardCount++;
-      }
       npc.hobbies = pickHobbies(rng, p, civ, avail, m.age);
       npc.equipment = equipmentFor(rng, job, npc.hobbies, s.condition, m.age);
       npc.look = makeLook(rng, style, m.age, job, civ);
@@ -596,6 +591,13 @@ export function generateNPCs(layout, plan, seed) {
     const adults = members.filter((x) => x.age === 'adult');
     if (adults.length === 2) adults[1].restDay = adults[0].restDay;
   }
+  // The night watch: about a third of the guards (at least one wherever
+  // there are two or more) walk the streets after dark.
+  const guards = npcs.filter((n) => n.job === 'guard');
+  const nightN = guards.length >= 2 ? Math.max(1, Math.floor(guards.length / 3)) : 0;
+  guards.forEach((g, i) => {
+    g.shift = i >= guards.length - nightN ? 'night' : 'day';
+  });
   for (const npc of npcs) {
     npc.schedule = makeSchedules(npc, rng.fork(npc.idx + 1000), avail);
   }
@@ -615,6 +617,21 @@ export function generateNPCs(layout, plan, seed) {
     }
   }
   return npcs;
+}
+
+// A child comes of age: a grown-up's clothes (same face and hair), their
+// own trade, and a grown-up's day.
+export function growUp(layout, rec, job, rng) {
+  const s = layout.settlement;
+  const adult = makeLook(rng, s.style, 'adult', job, s.civ);
+  rec.age = 'adult';
+  rec.look = { ...adult, skin: rec.look.skin, hair: rec.look.hair, hairStyle: rec.look.hairStyle === 'pigtails' ? 'braids' : rec.look.hairStyle, small: false };
+  rec.maxHp = 12;
+  rec.hp = 12;
+  rec.hobbies = pickHobbies(rng, rec.personality, s.civ, availOf(layout), 'adult');
+  rec.grown = true;
+  retrain(layout, rec, job, rng);
+  return rec;
 }
 
 // A baby born to a couple in town.

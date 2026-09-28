@@ -5,7 +5,7 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
 } from '../config.js';
 import { World } from '../world/world.js';
-import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta } from '../world/blocks.js';
+import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, itemForBlock } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player } from '../entities/player.js';
@@ -26,6 +26,10 @@ import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
+import { weatherAt, townWeather } from '../world/weather.js';
+import { castLine, updateFishing, hook } from './fishing.js';
+
+const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -402,6 +406,51 @@ export class Game {
     return n;
   }
 
+  // Merchants you meet on the road between towns. They come into being when
+  // you're near their route and fade out again behind you.
+  updateCaravans(dt) {
+    this.caravanT = (this.caravanT || 0) - dt;
+    if (this.caravanT > 0 || this.sleep) return;
+    this.caravanT = 1;
+    if (!this.caravans) this.caravans = new Map();
+    const p = this.player;
+    const ow = this.world.ow;
+    const live = new Set();
+    for (const tr of this.sim.travellers()) {
+      live.add(tr.key);
+      const n = this.caravans.get(tr.key);
+      const inTown = ow.settlementAt(tr.pos.x, tr.pos.z);
+      const d = Math.max(Math.abs(tr.pos.x - p.x), Math.abs(tr.pos.z - p.z));
+      if (n && !n.dead) {
+        n.caravan.tx = tr.target.x;
+        n.caravan.tz = tr.target.z;
+        const far = Math.max(Math.abs(n.x - p.x), Math.abs(n.z - p.z)) > 40;
+        const arrived = ow.settlementAt(n.x, n.z) === tr.to;
+        if (far || arrived) this.endCaravan(tr.key, n);
+        continue;
+      }
+      if (inTown || d > 26 || d < 8 || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
+      const spot = this.findFreeSpot(tr.pos.x, tr.pos.z, this.world.findStandY(tr.pos.x, tr.pos.z, GROUND));
+      if (!spot || ow.settlementAt(spot.x, spot.z)) continue;
+      const m = new NPC(this, tr.rec, tr.L);
+      m.caravan = { tx: tr.target.x, tz: tr.target.z, to: tr.to.name, from: tr.from.name };
+      m.state = 'caravan';
+      m.teleport(spot.x, spot.y, spot.z);
+      tr.rec.ent = m;
+      this.npcs.push(m);
+      this.caravans.set(tr.key, m);
+    }
+    for (const [k, n] of this.caravans) if (!live.has(k) || n.dead) this.endCaravan(k, n);
+  }
+
+  endCaravan(key, n) {
+    this.caravans.delete(key);
+    if (n && !n.dead) {
+      n.caravan = null;
+      this.despawnNpc(n);
+    }
+  }
+
   // A nomad band walks in from the road and camps by the square.
   spawnNomads(L, band) {
     const a = this.active.get(L.settlement.id);
@@ -525,11 +574,15 @@ export class Game {
     }
     const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
+    const abs0 = this.day * DAY_MINUTES + this.minute;
     this.minute += dt * GAME_MINUTES_PER_SECOND * (this.sleepFast || 1);
     if (this.minute >= DAY_MINUTES) {
       this.minute -= DAY_MINUTES;
       this.day++;
     }
+    // The game saves itself every morning at seven.
+    const abs1 = this.day * DAY_MINUTES + this.minute;
+    if (Math.floor((abs0 - AUTOSAVE_AT) / DAY_MINUTES) < Math.floor((abs1 - AUTOSAVE_AT) / DAY_MINUTES) && !this.player.dead) this.autosaveDue = true;
     if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel, uiRes.wheelShift);
     this.player.update(dt, input, blocked);
     if (!blocked) this.updateCursor(input);
@@ -545,10 +598,17 @@ export class Game {
       this.respawnT = 2;
       this.respawnReturning();
     }
-    for (const n of this.npcs) {
-      if (n.dead) continue;
-      n.update(dt);
-      n.maybeGreet(this.player, dt);
+    // When time races (asleep), people keep pace: several steps a frame.
+    const fast = this.sleepFast || 1;
+    const sub = fast > 2 ? Math.min(5, Math.ceil(fast / 15)) : 1;
+    const ndt = fast > 2 ? Math.min(0.5, (dt * fast) / sub) : dt;
+    if (sub > 1) this.pathBudget = 5 * sub;
+    for (let k = 0; k < sub; k++) {
+      for (const n of this.npcs) {
+        if (n.dead) continue;
+        n.update(ndt);
+        if (k === 0) n.maybeGreet(this.player, dt);
+      }
     }
     ambientChatter(this, dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
@@ -565,7 +625,8 @@ export class Game {
     this.updateWanted(dt);
     this.growPlants(dt);
     this.crops.update(dt);
-    this.updateFishing(dt);
+    this.updateFishing(dt, input);
+    this.updateCaravans(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 4);
@@ -577,6 +638,10 @@ export class Game {
     for (const c of this.creatures) if (Math.abs(c.x - p.x) < 22 && Math.abs(c.z - p.z) < 24) vis.push(c);
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 22 && Math.abs(d.z - p.z) < 24) vis.push(d);
     this.visibleEntities = vis;
+    if (this.autosaveDue) {
+      this.autosaveDue = false;
+      if (this.autosave) this.autosave();
+    }
   }
 
   // ------------------------------------------------------------ keys
@@ -607,6 +672,9 @@ export class Game {
         case 'KeyV':
           p.layerMode = null;
           this.ui.msg('Layer: AUTO', '#a0c8ff');
+          break;
+        case 'Space':
+          if (this.fishing) hook(this);
           break;
         case 'KeyE':
         case 'KeyF':
@@ -739,6 +807,12 @@ export class Game {
   handleMouse(dt, clicks, input) {
     const p = this.player;
     const c = this.cursor;
+    // Reeling in a fish: the mouse button pulls the line, nothing else.
+    if (this.fishing && this.fishing.phase === 'reel') {
+      this.mining = null;
+      this.pending = null;
+      return;
+    }
     for (const ck of clicks) {
       if (ck.type === 'down' && ck.button === 0) {
         if (c && c.entity) {
@@ -788,6 +862,10 @@ export class Game {
     const p = this.player;
     const c = this.cursor;
     const held = p.heldDef();
+    if (this.fishing && this.fishing.phase === 'bite') {
+      hook(this);
+      return;
+    }
     if (c && c.entity && c.entity.kind === 'npc' && c.entity.distTo(p) <= 4) {
       this.talk(c.entity);
       return;
@@ -796,12 +874,25 @@ export class Game {
       this.interact(c.x, c.y, c.z);
       return;
     }
+    // Buckets: fill from open water, pour over farmland (or the crops on it).
+    if (held && held.key === 'bucket' && c && c.block && c.block.liquid && c.inReach) {
+      this.fillBucket(c.x, c.y, c.z);
+      return;
+    }
+    if (held && held.key === 'water_bucket' && c && c.block && c.inReach) {
+      const y = isFarmland(c.block.id) ? c.y : CROPS[c.block.id] && isFarmland(this.world.getBlock(c.x, c.y - 1, c.z)) ? c.y - 1 : null;
+      if (y !== null) {
+        this.waterField(c.x, y, c.z);
+        return;
+      }
+    }
     if (held && held.fishing && c && c.block && c.block.liquid && c.inReach) {
       this.castLine(c);
       return;
     }
     if (held && held.key === 'hoe' && c && c.block && c.inReach && [B.grass, B.dirt, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.path].includes(c.block.id) && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
       this.world.setBlock(c.x, c.y, c.z, B.farmland);
+      if (this.weather && this.weather.kind === 'rain') this.crops.wetten(c.x, c.y, c.z);
       this.audio?.play('dig');
       return;
     }
@@ -1057,7 +1148,7 @@ export class Game {
     if (b.solid && this.occupiedAny(x, y, z)) return false;
     const below = BLOCKS[w.getBlock(x, y - 1, z)];
     if (b.support && !(below.solid || below.render === 'fence' || (b.render === 'flat' && below.liquid) || below.name === 'table' || below.name === 'counter')) return false;
-    if (CROPS[id] && w.getBlock(x, y - 1, z) !== B.farmland) return false;
+    if (CROPS[id] && !isFarmland(w.getBlock(x, y - 1, z))) return false;
     if (id === B.door) {
       const up = BLOCKS[w.getBlock(x, y + 1, z)];
       if (!(up.replaceable || up.id === B.air)) return false;
@@ -1207,8 +1298,15 @@ export class Game {
         this.trySleep(x, y, z);
         break;
       case 'well':
-        p.hp = Math.min(p.maxHp, p.hp + 2);
-        this.ui.msg('You drink the cool well water. (+2 HP)', '#80c8ff');
+        if (this.useWell(x, y, z)) break;
+        if (p.addVigor('wells', `${x},${z}`)) {
+          p.hp = Math.min(p.maxHp, p.hp + 2);
+          this.ui.msg(`The water of this well is crisp and pure. You feel hardier. (+1 max HP, now ${p.maxHp})`, '#80e0ff');
+          this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#80c8ff', '#e0f4ff'], up: 30, life: 0.7, gravity: -10 });
+        } else {
+          p.hp = Math.min(p.maxHp, p.hp + 2);
+          this.ui.msg('You drink the cool well water. (+2 HP)', '#80c8ff');
+        }
         this.audio?.play('splash');
         break;
       case 'altar': {
@@ -1251,8 +1349,8 @@ export class Game {
     const c = this.sim.citizen;
     if (b.playerHome) return c && c.home === b.id && c.sid === s.id ? { kind: 'mine', sid: s.id, label: 'yours' } : { kind: 'house', id: b.id, sid: s.id, label: 'not yours' };
     if (b.residential) {
-      const host = c && c.sid === s.id && c.host === b.id;
-      return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family` : null, b };
+      const host = this.sim.isGuest(s.id, b.id);
+      return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family${host ? ' (your hosts)' : ''}` : null, b };
     }
     // Staff on shift may use the shop's chests and barrels.
     if (this.sim.careers.onShift(s.id, b.id)) return { kind: 'work', id: b.id, sid: s.id, label: `${b.name} (work)`, b };
@@ -1272,19 +1370,12 @@ export class Game {
   // Items taken out of a container that isn't yours (called by the window).
   onContainerTake(pos, taken) {
     const owner = pos.owner;
-    if (!owner || owner.kind === 'mine' || owner.kind === 'work' || !taken.length) return false;
+    // Your hosts share what they have while you stay with them.
+    if (!owner || owner.kind === 'mine' || owner.kind === 'work' || owner.kind === 'host' || !taken.length) return false;
     const value = taken.reduce((n, t) => n + (ITEMS[t.item]?.value || 1) * t.count, 0);
     const sid = owner.sid;
     const p = this.player;
     const wits = this.sim.witnesses(sid, p.x, p.z, 7);
-    if (owner.kind === 'host') {
-      const fam = wits.filter((n) => n.rec.home === owner.id);
-      if (fam.length && value > 4) {
-        fam[0].say('Ask before you take, please. This is our home too.', 3.5, '#ffb080');
-        this.sim.changeRep(fam[0], -3);
-      }
-      return false;
-    }
     const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : `the ${owner.label || 'shop'}`;
     const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
     if (!wits.length) {
@@ -1403,6 +1494,9 @@ export class Game {
     } else if (owner && owner.kind === 'guard') {
       this.ui.msg('A guard\'s cot. Better not.', '#c8c8c8');
       return;
+    } else if (owner && owner.kind === 'taken') {
+      this.ui.msg('Someone is already asleep in that bed.', '#c8c8c8');
+      return;
     }
     const jailed = j && j.phase === 'serving';
     if (!jailed) p.spawn = { x: p.x, y: p.y, z: p.z };
@@ -1470,6 +1564,11 @@ export class Game {
     sl.early = early;
     const p = this.player;
     if (!early && !sl.jail) {
+      // A night under a village roof: country air and a good bed.
+      const s = this.world.ow.settlementAt(sl.bed.x, sl.bed.z);
+      if (s && s.type === 'village' && s.condition !== 'abandoned' && p.addVigor('villages', s.id)) {
+        this.ui.msg(`A night's sleep in ${s.name} leaves you hardier than before. (+1 max HP, now ${p.maxHp})`, '#a0ffa0');
+      }
       p.hp = p.maxHp;
       this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
     } else if (sl.jail && !early) this.ui.msg('You wake, stiff from the cot.', '#c8d8ff');
@@ -1531,6 +1630,53 @@ export class Game {
     this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
   }
 
+  // ------------------------------------------------------------ water
+  // Filling a bucket at a well (returns true if that's what happened).
+  useWell(x, y, z) {
+    if (this.player.heldItem() !== 'bucket') return false;
+    this.fillBucket(x, y, z);
+    return true;
+  }
+
+  fillBucket(x, y, z) {
+    const p = this.player;
+    const slot = p.inv[p.selected];
+    if (!slot || slot.item !== 'bucket') return false;
+    p.inv[p.selected] = { item: 'water_bucket', count: 1 };
+    p.doAction(0.3);
+    this.audio?.play('splash');
+    this.renderer.emit(x, y, z, { n: 8, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 30, life: 0.5, oy: -4 });
+    this.ui.msg('You fill the bucket with water.', '#80c8ff');
+    return true;
+  }
+
+  // Pour a bucket over a 3x3 patch of farmland: moist soil for a day and a
+  // half, and crops grow twice as fast in it.
+  waterField(x, y, z) {
+    const p = this.player;
+    let n = 0;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.crops.wetten(x + dx, y, z + dz, 36)) n++;
+    if (!n) return false;
+    p.inv[p.selected] = { item: 'bucket', count: 1 };
+    p.doAction(0.3);
+    this.audio?.play('splash');
+    this.renderer.emit(x, y + 1, z, { n: 14, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 20, speed: 40, life: 0.6, oy: -2 });
+    this.ui.msg(`You water the soil (${n} patch${n > 1 ? 'es' : ''}). Moist soil grows crops twice as fast.`, '#80c8ff');
+    return true;
+  }
+
+  // Can the player hear (and see the speech of) someone? Not through the
+  // walls of a building they aren't in, unless the door stands open nearby.
+  speechAudible(e) {
+    if (e.kind !== 'npc' || !e.layout || e.sleeping) return true;
+    const b = buildingAt(e.layout, e.x, e.z);
+    if (!b || b.underConstruction) return true;
+    const p = this.player;
+    if (p.x >= b.x0 && p.x <= b.x1 && p.z >= b.z0 && p.z <= b.z1) return true;
+    if (this.world.getState(b.door.x, GROUND, b.door.z) && Math.abs(p.x - b.door.x) + Math.abs(p.z - b.door.z) <= 4) return true;
+    return false;
+  }
+
   buildingAtPlayer() {
     const s = this.currentSettlement;
     if (!s) return null;
@@ -1566,57 +1712,40 @@ export class Game {
 
   // Fishing: cast into water, wait for a bite, reel it in.
   castLine(c) {
-    const p = this.player;
-    if (this.fishing) {
-      this.ui.msg('You reel in your line.', '#80c8ff');
-      this.fishing = null;
-      return;
-    }
-    p.face(c.x, c.z);
-    p.doAction(0.35);
-    this.fishing = { x: c.x, y: c.y, z: c.z, t: 2.5 + Math.random() * 5, px: p.x, pz: p.z };
-    this.audio?.play('splash');
-    this.renderer.emit(c.x, c.y, c.z, { n: 6, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.5, oy: 2 });
-    this.ui.msg('You cast your line...', '#80c8ff');
+    return castLine(this, c);
   }
 
-  updateFishing(dt) {
-    const f = this.fishing;
-    if (!f) return;
-    const p = this.player;
-    if (p.x !== f.px || p.z !== f.pz || !p.heldDef()?.fishing) {
-      this.fishing = null;
-      return;
-    }
-    f.t -= dt;
-    if (Math.random() < dt * 2) this.renderer.emit(f.x, f.y, f.z, { n: 1, color: '#e0f4ff', up: 6, life: 0.4, oy: 2, spreadX: 2 });
-    if (f.t > 0) return;
-    const r = Math.random();
-    const catchItem = r < 0.7 ? 'fish' : r < 0.8 ? 'string' : r < 0.9 ? 'bone' : r < 0.97 ? 'coin' : 'gem';
-    const left = p.give(catchItem, 1);
-    if (left) this.spawnDrop(catchItem, 1, p.x, p.y, p.z, true);
-    this.ui.msg(catchItem === 'fish' ? 'Caught a fish!' : `You fished up: ${ITEMS[catchItem].name}!`, '#80e070');
-    this.audio?.play('pickup');
-    this.renderer.emit(f.x, f.y, f.z, { n: 10, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 45, life: 0.6, oy: 2 });
-    p.doAction(0.3);
-    this.fishing = null;
+  updateFishing(dt, input) {
+    updateFishing(this, dt, input);
   }
 
-  // Weather drifts between clear skies, rain, snow (in cold places) and fog.
+  // Weather drifts between clear skies, rain, snow (in cold places) and fog;
+  // it's the same weather the towns around you are having.
   updateWeather(dt) {
-    const w = this.weather || (this.weather = { kind: 'clear', t: 240, level: 0 });
+    const w = this.weather || (this.weather = { kind: 'clear', level: 0, t: 0 });
     w.t -= dt;
     if (w.t <= 0) {
-      const col = this.world.terrain.column(this.player.x, this.player.z, this.world.terrain.context(this.player.x, this.player.z, this.player.x, this.player.z), {});
-      const cold = ['tundra', 'taiga', 'mountain'].includes(col.biome);
-      const dry = col.biome === 'desert';
-      const r = Math.random();
-      w.kind = r < 0.55 || dry ? 'clear' : r < 0.85 ? (cold ? 'snow' : 'rain') : 'fog';
-      w.t = 180 + Math.random() * 420;
-      if (w.kind !== 'clear') this.ui.msg(w.kind === 'rain' ? 'It starts to rain.' : w.kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
+      w.t = 2;
+      const p = this.player;
+      if (!this.biomeCache || Math.abs(this.biomeCache.x - p.x) + Math.abs(this.biomeCache.z - p.z) > 24) {
+        const col = this.world.terrain.column(p.x, p.z, this.world.terrain.context(p.x, p.z, p.x, p.z), {});
+        this.biomeCache = { x: p.x, z: p.z, biome: col.biome };
+      }
+      const kind = weatherAt(this.seed, p.x, p.z, this.day * DAY + this.minute, this.biomeCache.biome);
+      if (kind !== w.kind) {
+        if (w.seen && kind !== 'clear') this.ui.msg(kind === 'rain' ? 'It starts to rain.' : kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
+        else if (w.seen && w.kind !== 'fog') this.ui.msg(w.kind === 'rain' ? 'The rain stops.' : 'The snow stops falling.', '#a0b8d0');
+        w.kind = kind;
+      }
+      w.seen = true;
     }
     const target = w.kind === 'clear' ? 0 : 1;
     w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), dt / 8);
+  }
+
+  // The weather over a town right now.
+  weatherIn(s) {
+    return s ? townWeather(this.seed, s, this.day * DAY + this.minute) : this.weather?.kind || 'clear';
   }
 
   eat() {
@@ -2201,6 +2330,7 @@ export class Game {
   }
 
   onBlockChange(x, y, z, o, n) {
+    if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
     if (o === -1 || (BLOCKS[o] && (BLOCKS[o].light || BLOCKS[o].opaque)) || (BLOCKS[n] && (BLOCKS[n].light || BLOCKS[n].opaque))) this.lightDirty = true;
   }
 
@@ -2215,7 +2345,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor },
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: Array.from(this.world.ow.explored),
@@ -2239,6 +2369,10 @@ export class Game {
     const pd = data.player;
     this.loadAround(pd.x, pd.z, true);
     this.player = new Player(this, pd.x, pd.y, pd.z);
+    if (pd.vigor) {
+      this.player.vigor = pd.vigor;
+      this.player.recalcMaxHp();
+    }
     this.player.hp = pd.hp;
     this.player.inv = pd.inv;
     this.player.selected = pd.selected;

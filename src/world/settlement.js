@@ -68,6 +68,7 @@ class Layout {
     this.gates = [];
     this.signs = [];
     this.plots = [];
+    this.wells = []; // where townsfolk draw water
     this.graveyard = null;
     this.jail = null;
     this.plaza = null;
@@ -1695,6 +1696,7 @@ class Layout {
     // Plaza centerpiece.
     const center = s.type === 'village' || rng.chance(0.4) ? B.well : B.statue;
     this.put(p.cx, Y0, p.cz, center);
+    if (center === B.well) this.wells.push({ x: p.cx, z: p.cz });
     this.setMask(p.cx, p.cz, M.DECOR);
     for (const [dx, dz] of DIRS4) this.addSpot(p.cx + dx * 2, p.cz + dz * 2, dirOf(-dx, -dz), ['gossip', 'social', 'play', 'stroll', 'drink', 'music', 'sketch']);
     if (s.type === 'city') {
@@ -1702,7 +1704,9 @@ class Layout {
         const x = p.cx + dx;
         const z = p.cz + dz;
         if (this.maskAt(x, z) !== M.PLAZA) continue;
-        this.put(x, Y0, z, rng.chance(0.5) ? B.well : B.statue);
+        const id = rng.chance(0.5) ? B.well : B.statue;
+        this.put(x, Y0, z, id);
+        if (id === B.well) this.wells.push({ x, z });
         this.setMask(x, z, M.DECOR);
       }
     }

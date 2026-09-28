@@ -6,6 +6,9 @@ import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS } from '../world/items.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 
+const BASE_HP = 20;
+export const VIGOR_CAP = 8;
+
 const MOVE_KEYS = {
   KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
   KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0],
@@ -32,6 +35,25 @@ export class Player extends Entity {
     this.sitting = null;
     this.sleeping = false;
     this.wellFed = 0;
+    // Hardiness earned on the road: each new well drunk from and each
+    // village slept in adds a little to your health (up to a limit each).
+    this.vigor = { wells: [], villages: [] };
+  }
+
+  recalcMaxHp() {
+    const v = this.vigor;
+    this.maxHp = BASE_HP + Math.min(VIGOR_CAP, v.wells.length) + Math.min(VIGOR_CAP, v.villages.length);
+    this.hp = Math.min(this.hp, this.maxHp);
+  }
+
+  // Returns true if this is a new source of hardiness (and still counts).
+  addVigor(kind, key) {
+    const list = this.vigor[kind];
+    if (list.includes(key)) return false;
+    list.push(key);
+    if (list.length > VIGOR_CAP) return false;
+    this.recalcMaxHp();
+    return true;
   }
 
   heldItem() {

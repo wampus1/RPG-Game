@@ -9,22 +9,25 @@ import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
+import { townWeather, rainedRecently } from '../world/weather.js';
 
 export const DAY = 1440;
-const MAX_CATCHUP = 8 * DAY;
+// How far back a town's story is caught up when you return (towns you've
+// been to are also kept ticking over in the background).
+const MAX_CATCHUP = 45 * DAY;
 
 // What each kind of trader deals in (also what their shop restocks).
 export const STOCK = {
-  general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow'],
+  general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket'],
   smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars'],
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
   inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
   tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed'],
-  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign'],
+  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket'],
   herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue'],
   fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string'],
-  farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple'],
+  farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
   scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern'],
   trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare'],
 };
@@ -107,7 +110,28 @@ export function traderOf(rec) {
 export function ledger(L, day, text) {
   const e = L.econ;
   e.ledger.push({ day, text });
-  if (e.ledger.length > 24) e.ledger.shift();
+  if (e.ledger.length > 60) e.ledger.shift();
+}
+
+// Stories worth passing on to another town (not the comings and goings of
+// the merchants themselves).
+export function notableNews(L, sinceDay, max = 3) {
+  const out = [];
+  for (const it of [...L.econ.ledger].reverse()) {
+    if (it.day < sinceDay) break;
+    if (/merchant|came back from|set out for|arrived in town|wrote to|traveling|in its coffers|stand at \d+%|wages/i.test(it.text)) continue;
+    out.push(it.text);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+// News from elsewhere, as heard from the merchants.
+export function hearNews(L, from, items, day) {
+  const e = L.econ;
+  if (!items || !items.length) return;
+  const known = new Set((e.rumours || []).map((r) => r.text));
+  e.rumours = [...(e.rumours || []), ...items.filter((t) => !known.has(t)).map((text) => ({ from, text, day }))].filter((r) => r.day >= day - 10).slice(-8);
 }
 
 export function mayorOf(L) {
@@ -248,6 +272,34 @@ export function activityFor(rec, day, minute) {
   const a = activityAt(rec, minute, day);
   a.key = `${day}:${a.rest ? 'r' : 'w'}${a.index}`;
   return a;
+}
+
+// Outdoor trades, and whether this person packs it in when the weather
+// turns: the lazy and the gloomy go home, the hardworking carry on.
+const OUTDOOR = new Set(['farmer', 'fisher', 'lumberjack', 'miner', 'trapper', 'builder', 'laborer']);
+export function weatherQuits(rec, kind) {
+  if (kind === 'clear' || !OUTDOOR.has(rec.job) || rec.age !== 'adult') return false;
+  const tr = rec.traits || [];
+  if (tr.includes('hardworking') || tr.includes('disciplined')) return false;
+  let w = 0.5 - (rec.personality?.diligence ?? 0.5);
+  if (tr.includes('lazy')) w += 0.35;
+  if (tr.includes('gloomy')) w += 0.15;
+  if (tr.includes('timid')) w += 0.05;
+  if (tr.includes('cheerful') || tr.includes('patient')) w -= 0.1;
+  if (kind === 'snow') w += 0.1;
+  if (kind === 'fog') w -= 0.3;
+  return w > 0.12;
+}
+
+// Knocking off early for the weather: home until the shift would have ended.
+export function weatherBreak(rec, kind, day, minute) {
+  if (rec.override || rec.hired) return null;
+  const a = activityFor(rec, day, minute);
+  if (a.entry.act !== 'work' || !weatherQuits(rec, kind)) return null;
+  const now = day * DAY + minute;
+  const end = day * DAY + a.entry.e;
+  if (end - now < 30) return null;
+  return setOverride(rec, now, end, 'home', { place: 'home', weather: kind });
 }
 
 let overrideId = 1;
@@ -473,7 +525,8 @@ function produce(L, rec, rng) {
       sk.fishing = Math.min(1, sk.fishing + 0.001);
       return;
     case 'farmer':
-      if (rng.chance(0.5 * (0.5 + sk.farming))) invAdd(rec.inv, rng.pick(e.crops), rng.int(1, 3));
+      // Moist fields (recent rain, or water carried from the well) yield more.
+      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1))) invAdd(rec.inv, rng.pick(e.crops), rng.int(1, 3));
       return;
     case 'baker': {
       if (!biz) return;
@@ -696,12 +749,22 @@ function dailyNeeds(sim, L, day, rng) {
     // Mood drifts back toward normal.
     rec.mood += (0.55 - rec.mood) * 0.15;
     if (rec.away || rec.hungry < 1) continue;
+    // Wheat in the pantry can be baked into bread at home.
+    const pan = rec.home !== null && rec.home !== undefined ? L.econ.pantry[rec.home] : null;
+    if (pan && st.count(pan, 'wheat') >= 2) {
+      st.take(pan, 'wheat', 2);
+      rec.fed = 1;
+      rec.hungry = 0;
+      continue;
+    }
     // Hungry: go out and catch something. Parents who can't afford food go
     // themselves, and send the older children out too.
     if (rec.age === 'child') {
       const parents = rec.parents.map((i) => L.npcs[i]).filter((p) => p && alive(p) && !p.away);
+      // Money's no use when the kitchen's bare: after two hungry days the
+      // family goes out for food anyway.
       const canPay = parents.some((p) => p.coins >= 4);
-      if (canPay) continue;
+      if (canPay && rec.hungry < 2) continue;
       for (const p of parents) {
         if (p.override && p.override.e > day * DAY) continue;
         const slot = freeSlot(p, day, 600, 120);
@@ -711,7 +774,7 @@ function dailyNeeds(sim, L, day, rng) {
         const slot = freeSlot(rec, day, 780, 90);
         if (slot) setOverride(rec, slot.s, slot.e, 'forage');
       }
-    } else if (rec.coins < 5 || !kitchenOf(L)) {
+    } else if (rec.coins < 5 || !kitchenOf(L) || rec.hungry >= 2) {
       const slot = freeSlot(rec, day, 600, 120);
       if (slot && !(rec.override && rec.override.e > day * DAY)) setOverride(rec, slot.s, slot.e, 'forage');
     }
@@ -760,11 +823,12 @@ function payWages(L, day) {
     b.till -= each * workers.length;
   }
   let owed = 0;
-  const staff = L.npcs.filter((r) => alive(r) && !r.away && (r.job === 'guard' || r.job === 'mayor' || r.job === 'priest'));
-  for (const r of staff) owed += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : 3;
+  // The town pays its guards, mayor, priest and builders.
+  const staff = L.npcs.filter((r) => alive(r) && !r.away && (r.job === 'guard' || r.job === 'mayor' || r.job === 'priest' || r.job === 'builder'));
+  for (const r of staff) owed += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
   if (e.treasury >= owed) {
     e.treasury -= owed;
-    for (const r of staff) r.coins += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : 3;
+    for (const r of staff) r.coins += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
     e.unpaid = 0;
   } else {
     e.unpaid++;
@@ -790,15 +854,22 @@ function mayorReview(sim, L, day, rng) {
     e.tax = Math.round(Math.max(0.02, e.tax - 0.02) * 100) / 100;
     ledger(L, day, `${who} lowered taxes to ${Math.round(e.tax * 100)}%.`);
   }
+  // Bread for the hungry: when many go without, or anyone has for two days.
   const hungry = living.filter((r) => r.hungry >= 1 && !r.away);
-  if (hungry.length >= Math.max(2, pop * 0.12) && e.treasury > 25) {
+  if ((hungry.length >= Math.max(2, pop * 0.12) || hungry.some((r) => r.hungry >= 2)) && e.treasury > 25) {
     let spent = 0;
     const k = kitchenOf(L);
     for (const r of hungry) {
-      const pan = e.pantry[r.home];
-      if (!pan || e.treasury < 4) break;
+      if (e.treasury < 4) break;
+      if (r.home === null || r.home === undefined) continue;
+      const pan = e.pantry[r.home] || (e.pantry[r.home] = {});
       const meal = k && st.take(k.store, 'stew', 1) ? 'stew' : 'bread';
       st.add(pan, meal, 1);
+      // ...and sees that the one who went without actually eats it.
+      if (r.hungry >= 2) {
+        st.take(pan, meal, 1);
+        r.fed = Math.max(r.fed || 0, 1);
+      }
       e.treasury -= 4;
       if (k && meal === 'stew') k.till += 4;
       spent += 4;
@@ -897,7 +968,7 @@ function mortality(sim, L, day, rng) {
     else if (rec.job === 'trapper' && rng.chance(0.0006)) cause = 'a hunting accident';
     else if (rec.hungry >= 5 && rng.chance(0.15)) cause = 'starvation';
     else if (rec.hp <= 1 && rec.sick && rng.chance(0.05)) cause = 'illness';
-    if (cause) sim.recordDeath(L, rec, cause, null);
+    if (cause) sim.recordDeath(L, rec, cause, null, day);
   }
 }
 
@@ -908,8 +979,13 @@ export function tickHour(sim, L, h) {
   const hm = h - day * DAY;
   const hod = Math.floor(hm / 60);
   const rng = new RNG(hash4(s.seed, day, hod, 0x71c));
+  const sky = sim && sim.game ? townWeather(sim.game.seed, s, h + 30) : 'clear';
+  const active = sim && sim.game && sim.game.active && sim.game.active.has(s.id);
   for (const rec of L.npcs) {
     if (!alive(rec) || rec.away) continue;
+    // Out in the rain? Some would rather be at home (people in a town you're
+    // in decide for themselves, on the spot).
+    if (!active && sky !== 'clear') weatherBreak(rec, sky, day, hm + 30);
     // Schedule entries starting within this hour (active entities usually
     // handled these already, which the done-keys make harmless).
     const rest = day % 7 === rec.restDay;
@@ -926,7 +1002,11 @@ export function tickHour(sim, L, h) {
     if (mid.entry.act === 'work') produce(L, rec, rng);
   }
   if (hod >= 7 && hod <= 20) market(L, rng);
-  if (hod === 5) dailyNeeds(sim, L, day, rng);
+  if (hod === 5) {
+    // Are the fields moist today? Rain in the last day, or a well to water from.
+    if (sim && sim.game) L.econ.moist = rainedRecently(sim.game.seed, s, h, 24) || !!(L.wells && L.wells.length);
+    dailyNeeds(sim, L, day, rng);
+  }
   if (hod === 6) restock(L, rng);
   if (hod === 7) shopForPantries(L, rng);
   if (hod === 8) collectTaxes(L, day);

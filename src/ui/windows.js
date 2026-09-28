@@ -7,7 +7,7 @@ import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
-import { humanoidSheet } from '../render/sprites.js';
+import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive } from '../sim/econ.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
@@ -385,7 +385,7 @@ export class DialogueWindow extends Window {
   }
   drawPixels(ctx) {
     const sheet = humanoidSheet(this.npc.look);
-    ctx.drawImage(sheet, 0, 0, 16, 24, this.portraitPos.x, this.portraitPos.y, 16, 24);
+    ctx.drawImage(sheet, 0, 0, 16, SHEET_H, this.portraitPos.x, this.portraitPos.y - SPR_PAD, 16, SHEET_H);
   }
   update(dt, game) {
     this.chars += dt * 60;
@@ -491,9 +491,7 @@ export class TradeWindow extends Window {
     return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceParts(this.npc).base));
   }
   sellPrice(k, game) {
-    const op = game.sim.opinion(this.npc);
-    const lic = game.sim.careers.sellFactor(this.npc, k);
-    return Math.max(k === 'coin' ? 0 : 1, Math.floor(ITEMS[k].value * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) * lic));
+    return game.sim.sellPrice(this.npc, k);
   }
   wants(k, game) {
     const sh = this.shop(game);
@@ -792,7 +790,7 @@ export class JournalWindow extends Window {
     const fav = sim.favors.list;
     const mail = sim.diplomacy.letters.filter((q) => q.status === 'player');
     if (!fav.length && !mail.length) para('Nobody is waiting on you. Ask around: "Need a hand with anything?"', C.dim);
-    for (const q of mail) para(`• Carry the mayor's dispatch from ${car.townName(q.from)} to the mayor of ${car.townName(q.to)} (¤${q.pay || 10})`, C.cyan);
+    for (const q of mail) para(`• Carry the mayor's dispatch from ${car.townName(q.from)} to the mayor of ${car.townName(q.to)}${q.where ? `, ${q.where} of ${car.townName(q.from)}` : ''} (¤${q.pay || 10})`, C.cyan);
     for (const f of fav) {
       const left = f.due - game.day;
       para(`• ${sim.favors.describe(f)}`, f.kind === 'slay' && f.kills >= f.count ? C.green : '#e0d0b0');
@@ -864,12 +862,24 @@ export class LedgerWindow extends Window {
     if (visits.length) row('Visitors', `Merchant from ${visits[0].fromName}`);
     y++;
     g.text(3, y++, 'RECENT NOTICES', C.hi);
-    const notes = [...e.ledger].reverse().slice(0, 12);
+    const far = (e.rumours || []).slice(-2).reverse();
+    const notes = [...e.ledger].reverse().slice(0, far.length ? 9 : 12);
     for (const n of notes) {
       const lines = wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 6);
       for (const l of lines) {
         if (y >= this.h - 2) break;
         g.text(3, y++, l, '#e0d0b0');
+      }
+    }
+    // What the merchants brought back from other towns.
+    if (far.length && y < this.h - 4) {
+      y++;
+      g.text(3, y++, 'NEWS FROM AFAR', C.hi);
+      for (const r of far) {
+        for (const l of wrap(`${r.from}: ${r.text}`, this.w - 6)) {
+          if (y >= this.h - 2) break;
+          g.text(3, y++, l, C.cyan);
+        }
       }
     }
     g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);

@@ -14,6 +14,57 @@ const STRUCTURAL = (id) => {
 
 export const EXPAND_COST = { house_s: 120, house_m: 220 };
 
+// Work through a plan's blocks as the builders' hours allow. A block that is
+// already in place (clearing empty air, say) costs nothing, so the first
+// thing you see is walls going up, not minutes of nothing. Someone standing
+// where a block goes is asked to step aside (you get to wait for).
+export function placeSome(game, list, st, per, repair = false) {
+  const w = game.world;
+  if (st.spent === undefined) st.spent = st.placed * per;
+  if (!st.wait) st.wait = [];
+  let avail = st.work - st.spent;
+  const out = [];
+  const noop = ([x, y, z, id, meta = 0]) => w.regionAt(x, z) && w.getBlock(x, y, z) === id && (w.getMeta(x, y, z) & 0b111) === (meta & 0b111);
+  const inWay = ([x, y, z, id]) => {
+    if (!BLOCKS[id]?.solid || !w.regionAt(x, z)) return false;
+    const e = game.entityAt(x, y, z) || game.entityAt(x, y - 1, z);
+    if (!e) return false;
+    if (e.kind !== 'npc' || e.sleeping || e.hired) return true;
+    const spot = game.findFreeSpot(x + 1, z + 1, e.y);
+    if (!spot || (spot.x === x && spot.z === z)) return true;
+    e.teleport(spot.x, spot.y, spot.z);
+    return false;
+  };
+  const take = (op) => {
+    out.push(op);
+    avail -= per;
+    st.spent += per;
+  };
+  st.wait = st.wait.filter((op) => {
+    if (noop(op)) return false;
+    if (avail < per || inWay(op)) return true;
+    take(op);
+    return false;
+  });
+  while (st.placed < list.length) {
+    const op = list[st.placed];
+    // Repairs only fill gaps; they never knock down what's there now.
+    if (repair && w.regionAt(op[0], op[2]) && w.getBlock(op[0], op[1], op[2]) !== B.air) {
+      st.placed++;
+      continue;
+    }
+    if (noop(op)) {
+      st.placed++;
+      continue;
+    }
+    if (avail < per) break;
+    st.placed++;
+    if (inWay(op)) st.wait.push(op);
+    else take(op);
+  }
+  return out;
+}
+
 export class Works {
   constructor(game, sim) {
     this.game = game;
@@ -171,6 +222,23 @@ export class Works {
     });
   }
 
+  // How fast work goes. In a town you're in, it's the builders actually on
+  // site who count (none there yet: barely anything happens); elsewhere the
+  // town's crew is assumed to put in its hours.
+  crewRate(L, onJob, cap) {
+    const crew = this.sim.builders(L);
+    if (this.game.active.has(L.settlement.id)) {
+      const near = (r) => {
+        const o = r.override;
+        const sites = (o && (o.sites || (o.target ? [o.target] : null))) || [];
+        return sites.some((q) => Math.max(Math.abs(q.x - r.ent.x), Math.abs(q.z - r.ent.z)) <= 3);
+      };
+      const here = crew.filter((r) => r.ent && !r.ent.dead && onJob(r) && r.ent.act === 'build' && near(r)).length;
+      return here ? Math.min(cap, Math.max(0.5, here / 2)) : 0.1;
+    }
+    return crew.length ? Math.min(cap, Math.max(0.5, crew.length / 2)) : 0.25;
+  }
+
   daily(L, day) {
     for (const p of this.active(L.settlement.id)) this.assignSite(L, p, day, day * DAY + 420);
   }
@@ -182,8 +250,7 @@ export class Works {
       if (p.done) continue;
       const L = this.sim.layoutOf(p.sid);
       if (!L) continue;
-      const crew = this.sim.builders(L).length;
-      const rate = crew ? Math.min(1.6, Math.max(0.5, crew / 2)) : 0.25;
+      const rate = this.crewRate(L, (r) => r.override && r.override.project === p.id, 1.6);
       let t = p.last;
       let work = 0;
       while (t < now) {
@@ -200,26 +267,17 @@ export class Works {
         p.done = true;
         continue;
       }
-      const target = Math.min(plan.list.length, Math.floor((plan.list.length * p.work) / p.need));
-      if (target > p.placed) {
-        let batch = plan.list.slice(p.placed, target);
-        const w = this.game.world;
-        const g0 = this.game;
-        // Nobody gets walled in: wait for whoever is standing there to move.
-        const stop = batch.findIndex(([x, y, z, id]) => BLOCKS[id]?.solid && w.regionAt(x, z) && (g0.entityAt(x, y, z) || g0.entityAt(x, y - 1, z)));
-        if (stop >= 0) batch = batch.slice(0, stop);
-        if (!batch.length) continue;
-        // Repairs only fill gaps; they never knock down what's there now.
-        this.sim.setBlocks(p.kind === 'repair' ? batch.filter(([x, y, z]) => !w.regionAt(x, z) || w.getBlock(x, y, z) === B.air) : batch);
-        p.placed += batch.length;
-        const g = g0;
+      const batch = placeSome(this.game, plan.list, p, p.need / Math.max(1, plan.list.length), p.kind === 'repair');
+      if (batch.length) {
+        this.sim.setBlocks(batch);
+        const g = this.game;
         const e = batch[batch.length - 1];
         if (g.active.has(p.sid) && Math.abs(g.player.x - e[0]) < 24 && Math.abs(g.player.z - e[2]) < 20) {
           g.renderer.emit(e[0], e[1], e[2], { n: 4, color: ['#c8a064', '#8e6a3a', '#e8e0d0'], up: 30, life: 0.5, oy: -6 });
           if (Math.random() < 0.3) g.audio?.play('place');
         }
       }
-      if (p.placed >= plan.list.length) this.finish(L, p, plan);
+      if (p.placed >= plan.list.length && !p.wait.length) this.finish(L, p, plan);
     }
     if (this.projects.length > 40) this.projects = this.projects.filter((p) => !p.done);
   }

@@ -9,15 +9,16 @@ import { jobTitle } from '../entities/npcgen.js';
 import { graveyardFence } from '../world/settlement.js';
 import {
   initEcon, mayorOf, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
-  ledger, alive, DAY, price, kitchenOf, STOCK,
+  ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews,
 } from './econ.js';
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
 import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
-import { Works } from './works.js';
+import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
+import { electMayor, weddings, comingOfAge, raids } from './life.js';
 import { removeItem, countItem } from '../game/inventory.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
@@ -107,6 +108,17 @@ export class Sim {
     return s ? this.game.world.getLayout(s) : null;
   }
 
+  // Towns you've been to keep living while you're away: one at a time, a
+  // day's worth at most per step, so the world moves on without a stall.
+  backgroundTick() {
+    const list = [...this.game.world.layouts.values()].filter((L) => L.econ && L.econ.lastAbs !== null && !this.game.active.has(L.settlement.id));
+    if (!list.length) return;
+    this.bgI = ((this.bgI || 0) + 1) % list.length;
+    const L = list[this.bgI];
+    if (this.abs - L.econ.lastAbs < 60) return;
+    simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY));
+  }
+
   catchUp(L) {
     simulateTo(this, L, this.abs);
   }
@@ -120,6 +132,7 @@ export class Sim {
         simulateTo(this, layout, this.abs);
         this.syncTreasury(layout);
       }
+      this.backgroundTick();
       this.updateConstruction();
       this.works.update();
       this.diplomacy.update();
@@ -390,6 +403,10 @@ export class Sim {
     const rec = npc.rec;
     const L = npc.layout;
     const e = L.econ;
+    // A merchant met on the road sells from the pack they're carrying.
+    if (npc.caravan && rec.trip && rec.trip.goods) {
+      return { store: rec.trip.goods, purse: { get: () => rec.coins, add: (n) => { rec.coins += n; } }, kind: 'general', wants: null };
+    }
     if (npc.visit || rec.visitor) {
       const v = npc.visit || rec.visit;
       return { store: v.goods, purse: { get: () => v.coins, add: (n) => { v.coins += n; } }, kind: 'general', wants: null };
@@ -454,8 +471,18 @@ export class Sim {
     return { base: m, discount: d, reasons };
   }
 
+  // What a trader pays you for an item. A licensed professional's premium
+  // always shows, even on cheap goods where rounding would swallow it.
+  sellPrice(npc, k) {
+    const op = this.opinion(npc);
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1);
+    const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
+    const lic = this.careers.sellFactor(npc, k);
+    return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
+  }
+
   // ------------------------------------------------------------ deaths
-  recordDeath(L, rec, cause, killer) {
+  recordDeath(L, rec, cause, killer, when = null) {
     if (!alive(rec)) return null;
     if (rec.visitor) {
       rec.alive = false;
@@ -471,7 +498,8 @@ export class Sim {
     }
     const game = this.game;
     const s = L.settlement;
-    const day = game.day;
+    // (a death caught up from while you were away keeps its own date)
+    const day = when ?? game.day;
     const rng = new RNG(hash4(s.seed, rec.idx, day, 0xdea7));
     rec.alive = false;
     rec.deathDay = day;
@@ -580,6 +608,10 @@ export class Sim {
     checkSupply(this, L, day);
     checkHousing(this, L, day);
     births(this, L, day, rng);
+    electMayor(this, L, day);
+    weddings(this, L, day, rng);
+    comingOfAge(this, L, day);
+    raids(this, L, day, rng);
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
@@ -917,6 +949,16 @@ export class Sim {
   }
 
   // Who may sleep where: your own home, your host's guest bed, your jail cell.
+  // Staying with a family while your own house goes up: their home is
+  // yours to use (beds, chests, the lot) until you move out.
+  isGuest(sid, bid) {
+    const c = this.citizen;
+    if (!c || c.sid !== sid || c.host === null || c.host !== bid) return false;
+    const L = this.layoutOf(sid);
+    const home = c.home !== null && c.home !== undefined && L ? L.buildings[c.home] : null;
+    return !home || !!home.underConstruction;
+  }
+
   bedOwner(x, z) {
     const s = this.game.world.ow.settlementAt(x, z);
     if (!s) return null;
@@ -926,6 +968,11 @@ export class Sim {
     const c = this.citizen;
     if (b.playerHome) return c && c.sid === s.id && c.home === b.id ? null : { kind: 'other', b, L };
     if (c && c.sid === s.id && c.host === b.id && c.hostBed && c.hostBed.x === x && c.hostBed.z === z) return null;
+    if (this.isGuest(s.id, b.id)) {
+      // Any bed in the house, unless one of the family is asleep in it.
+      const inBed = this.game.npcs.some((n) => !n.dead && n.sleeping && n.x === x && n.z === z);
+      return inBed ? { kind: 'taken', b, L } : null;
+    }
     if (L.jail && L.jail.bed.x === x && L.jail.bed.z === z) return { kind: 'jail', b, L };
     if (!b.residential) return b.type === 'guardhouse' ? { kind: 'guard', b, L } : null;
     const living = L.npcs.filter((r) => r.home === b.id && alive(r));
@@ -998,8 +1045,7 @@ export class Sim {
     if (!c || c.done || c.cancelled) return;
     const L = this.layoutOf(c.sid);
     const now = this.abs;
-    const n = this.builders(L).length;
-    const rate = Math.min(1.5, Math.max(0.4, n / 2));
+    const rate = this.works.crewRate(L, (r) => r.override && r.override.act === 'build' && !r.override.project, 1.5);
     let t = c.last;
     let work = 0;
     while (t < now) {
@@ -1013,10 +1059,9 @@ export class Sim {
     c.work += work * rate;
     const bp = this.blueprint();
     if (!bp) return;
-    const target = Math.min(bp.list.length, Math.floor((bp.list.length * c.work) / c.need));
-    if (target > c.placed) {
-      this.setBlocks(bp.list.slice(c.placed, target));
-      c.placed = target;
+    const batch = placeSome(this.game, bp.list, c, c.need / Math.max(1, bp.list.length));
+    if (batch.length) {
+      this.setBlocks(batch);
       const g = this.game;
       const pl = L.plots[c.plot];
       if (Math.abs(g.player.x - pl.x0) < 24 && Math.abs(g.player.z - pl.z0) < 20 && Math.random() < 0.5) {
@@ -1024,7 +1069,7 @@ export class Sim {
         g.audio?.play('place');
       }
     }
-    if (c.placed >= bp.list.length) this.completeHouse(L, bp, false);
+    if (c.placed >= bp.list.length && !c.wait.length) this.completeHouse(L, bp, false);
   }
 
   completeHouse(L, bp, silent) {
@@ -1076,6 +1121,8 @@ export class Sim {
     const visit = {
       id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look,
       goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0,
+      // The news from home goes along with the goods.
+      news: notableNews(L, day - 5, 3),
     };
     t.ret = visit.leave + travel * 60;
     if (!this.visits.has(pick.o.id)) this.visits.set(pick.o.id, []);
@@ -1108,6 +1155,9 @@ export class Sim {
     this.visits.set(t.dest, list.filter((q) => q.id !== t.visit));
     const dest = this.game.world.ow.settlements[t.dest];
     ledger(L, day, `${rec.name.first} ${rec.name.last} came back from ${dest ? dest.name : 'the road'} (+¤${earned}).`);
+    // ...with the news from there.
+    const DL = dest && this.game.world.layouts.get(dest.id);
+    if (DL && DL.econ) hearNews(L, dest.name, notableNews(DL, day - 5, 3), day);
     this.importOre(L, rec, day);
   }
 
@@ -1138,6 +1188,12 @@ export class Sim {
     const sid = L.settlement.id;
     const list = this.visits.get(sid) || [];
     for (const v of list) if (!v.traded && h >= v.arrive) this.visitTrade(L, v, rng);
+    // A merchant arriving tells what's happening back home.
+    for (const v of list) {
+      if (v.told || h < v.arrive) continue;
+      v.told = true;
+      hearNews(L, v.fromName, v.news, Math.floor(h / DAY));
+    }
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
     const hod = Math.floor((h % DAY) / 60);
@@ -1152,6 +1208,8 @@ export class Sim {
       for (const k of rng.shuffle(opts).slice(0, 6)) if (ITEMS[k]) st.add(goods, k, k === 'gem' ? 1 : rng.int(1, 4));
       const v = makeVisitor(from, rng, h, goods);
       v.traded = true;
+      const OL = this.game.world.layouts.get(from.id);
+      v.news = OL && OL.econ ? notableNews(OL, this.game.day - 5, 2) : [];
       this.visits.set(sid, [...this.visits.get(sid), v]);
       ledger(L, this.game.day, `A traveling merchant, ${v.name.first} ${v.name.last} of ${from.name}, arrived in town.`);
     }
@@ -1182,6 +1240,51 @@ export class Sim {
   }
 
   // Spawn / retire visiting merchant entities in active settlements.
+  // Merchants out on the road right now: where they are between towns
+  // (along the road, if one has been built) and where they're heading.
+  travellers() {
+    const out = [];
+    const now = this.abs;
+    const ow = this.game.world.ow;
+    const centre = (s) => ({ x: Math.floor((s.cx + s.cw / 2) * 64), z: Math.floor((s.cz + s.cd / 2) * 36) });
+    for (const L of this.game.world.layouts.values()) {
+      if (!L.econ) continue;
+      const home = L.settlement;
+      for (const rec of L.npcs) {
+        const t = rec.trip;
+        if (!t || t.phase !== 'away' || !alive(rec)) continue;
+        const dest = ow.settlements[t.dest];
+        if (!dest) continue;
+        const v = (this.visits.get(t.dest) || []).find((q) => q.id === t.visit);
+        let from;
+        let to;
+        let f;
+        if (now >= t.depart && now < t.arrive) {
+          from = home;
+          to = dest;
+          f = (now - t.depart) / Math.max(1, t.arrive - t.depart);
+        } else if (v && now >= v.leave && now < t.ret) {
+          from = dest;
+          to = home;
+          f = (now - v.leave) / Math.max(1, t.ret - v.leave);
+        } else continue;
+        const road = this.diplomacy.roads.find((r) => r.done && ((r.a === from.id && r.b === to.id) || (r.a === to.id && r.b === from.id)));
+        let pos;
+        if (road && road.tiles && road.tiles.length) {
+          const i = Math.floor((road.a === from.id ? f : 1 - f) * (road.tiles.length - 1));
+          const tile = road.tiles[Math.max(0, Math.min(road.tiles.length - 1, i))];
+          pos = { x: tile[0], z: tile[2] };
+        } else {
+          const a = centre(from);
+          const b = centre(to);
+          pos = { x: Math.round(a.x + (b.x - a.x) * f), z: Math.round(a.z + (b.z - a.z) * f) };
+        }
+        out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, target: centre(to) });
+      }
+    }
+    return out;
+  }
+
   syncVisitors() {
     const g = this.game;
     const now = this.abs;
@@ -1233,7 +1336,8 @@ export class Sim {
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
-      migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children,
+      migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
+      ...(r.grown ? { hobbies: r.hobbies } : {}),
       // Someone who changed trade keeps their new one.
       ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift } : {}),
     });

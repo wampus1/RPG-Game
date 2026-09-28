@@ -1,0 +1,130 @@
+// Town life that goes on whether you're there or not: a new mayor chosen
+// when the old one dies, weddings, children growing up and taking up a
+// trade, and beasts at the edge of town in the night. Come back after a
+// while and the place has moved on.
+import { alive, ledger } from './econ.js';
+import { retrain, growUp } from '../entities/npcgen.js';
+import { RNG, hash4 } from '../util/rng.js';
+
+const residents = (L) => L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
+
+function syncEnt(r) {
+  const e = r.ent;
+  if (e && !e.dead) {
+    e.look = r.look;
+    e.activity = null;
+  }
+}
+
+// A town without a mayor chooses one after a couple of days: someone
+// respected, kind and sensible (an old hand or a noble, often).
+export function electMayor(sim, L, day) {
+  const e = L.econ;
+  const s = L.settlement;
+  if (s.deserted || L.npcs.some((r) => r.job === 'mayor' && alive(r) && !r.migrated)) {
+    e.mayorless = null;
+    return null;
+  }
+  if (e.mayorless === null || e.mayorless === undefined) {
+    e.mayorless = day;
+    return null;
+  }
+  if (day - e.mayorless < 2) return null;
+  const cands = residents(L).filter((r) => r.age !== 'child' && r.job !== 'guard' && !(r.hired));
+  if (!cands.length) return null;
+  const score = (r) => r.personality.kindness + r.personality.sociability * 0.6 + (r.skills?.trading || 0) + (r.age === 'elder' ? 0.5 : 0) + (r.job === 'noble' ? 0.8 : r.job === 'priest' ? 0.3 : 0);
+  const best = cands.sort((a, b) => score(b) - score(a))[0];
+  const old = best.job;
+  retrain(L, best, 'mayor', new RNG(hash4(best.idx, day, 0xe1ec)));
+  syncEnt(best);
+  e.mayorless = null;
+  ledger(L, day, `${best.name.first} ${best.name.last}${old && old !== 'retired' ? `, once a ${old},` : ''} was chosen as the new ${s.type === 'village' ? 'elder' : 'mayor'} of ${s.name}.`);
+  return best;
+}
+
+function related(L, a, b) {
+  if (a.parents.includes(b.idx) || b.parents.includes(a.idx)) return true;
+  return a.parents.some((p) => b.parents.includes(p));
+}
+
+// Two single grown-ups from different families marry now and then, and set
+// up home together (in the roomier of their two houses).
+export function weddings(sim, L, day, rng) {
+  if (L.settlement.deserted || !rng.chance(0.045)) return null;
+  const single = (r) => r.partner === null || r.partner === undefined || !alive(L.npcs[r.partner]);
+  const singles = rng.shuffle(residents(L).filter((r) => r.age === 'adult' && single(r) && r.job !== 'merchant'));
+  for (const a of singles) {
+    const b = singles.find((q) => q !== a && q.household !== a.household && !related(L, a, q) && ((a.friends || []).includes(q.idx) || rng.chance(0.25)));
+    if (!b) continue;
+    a.partner = b.idx;
+    b.partner = a.idx;
+    const ha = L.buildings[a.home];
+    const hb = L.buildings[b.home];
+    const room = (h) => (h ? h.beds.length - L.npcs.filter((r) => r.home === h.id && alive(r) && !r.migrated).length : -99);
+    // The one with less room moves in with the other (children too).
+    const [stay, move] = room(hb) > room(ha) ? [b, a] : [a, b];
+    if (stay.home !== null && stay.home !== undefined) {
+      const kids = L.npcs.filter((r) => alive(r) && r.age === 'child' && r.parents.includes(move.idx) && r.home === move.home);
+      for (const r of [move, ...kids]) {
+        r.home = stay.home;
+        r.household = stay.household;
+        r.bed = L.npcs.filter((q) => q.home === stay.home && alive(q)).length % Math.max(1, L.buildings[stay.home]?.beds.length || 1);
+      }
+    }
+    for (const r of [a, b]) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.3);
+    if (L.econ.festival !== undefined) L.econ.lastWedding = day;
+    ledger(L, day, `${a.name.first} ${a.name.last} and ${b.name.first} ${b.name.last} were married on the square. Half the town turned out.`);
+    return [a, b];
+  }
+  return null;
+}
+
+// Children grow up: one of them takes up a trade the town is short of.
+export function comingOfAge(sim, L, day) {
+  const s = L.settlement;
+  if (s.deserted) return null;
+  const people = residents(L);
+  for (const r of people) {
+    if (r.age !== 'child') continue;
+    const due = r.born !== undefined ? r.born + 90 : 25 + (hash4(s.seed, r.idx, 0xa6e) % 110);
+    if (day < due) continue;
+    const has = (j) => people.some((q) => q.job === j);
+    const trades = ['farmer', 'builder', 'fisher', 'trapper', 'lumberjack', 'miner', 'laborer'].filter((j) => L.hasWorkplaceFor(j));
+    const job = trades.find((j) => !has(j)) || (L.econ.hands && L.hasWorkplaceFor(L.econ.hands) ? L.econ.hands : null) || trades.find((j) => j === 'farmer' || j === 'laborer') || 'laborer';
+    growUp(L, r, job, new RNG(hash4(r.idx, day, 0x9a0)));
+    syncEnt(r);
+    ledger(L, day, `${r.name.first} ${r.name.last} has come of age and started work as a ${job}.`);
+    return r;
+  }
+  return null;
+}
+
+const BEASTS = { forest: 'wolves', taiga: 'wolves', tundra: 'wolves', mountain: 'wolves', jungle: 'a jaguar', swamp: 'boars', savanna: 'a lion', desert: 'jackals', plains: 'wolves' };
+
+// Now and then beasts come to the edge of town at night. The watch drives
+// them off; a town with no guards pays for it. (In a town you're in, the
+// beasts are real and you'll see them.)
+export function raids(sim, L, day, rng) {
+  const s = L.settlement;
+  if (s.deserted || sim.game.active.has(s.id)) return null;
+  if (!rng.chance(['forest', 'taiga', 'jungle', 'mountain', 'swamp'].includes(s.biome) ? 0.05 : 0.03)) return null;
+  const beast = BEASTS[s.biome] || 'wolves';
+  const people = residents(L);
+  const guards = people.filter((r) => r.job === 'guard' && r.age === 'adult');
+  const e = L.econ;
+  if (guards.length && (guards.length >= 2 || rng.chance(0.6))) {
+    const g = rng.pick(guards);
+    if (rng.chance(0.3)) g.hp = Math.max(4, (g.hp ?? 24) - rng.int(4, 10));
+    ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} came to the edge of town in the night; ${g.name.first} ${g.name.last} and the watch drove ${beast.startsWith('a ') ? 'it' : 'them'} off.`);
+    return { driven: true };
+  }
+  e.recent.violence = (e.recent.violence || 0) + 1;
+  const victim = rng.chance(0.25) ? rng.pick(people.filter((r) => r.age !== 'child')) : null;
+  if (victim && rng.chance(0.4)) {
+    sim.recordDeath(L, victim, `an attack by ${beast}`, null, day);
+    return { death: victim };
+  }
+  if (victim) victim.hp = Math.max(2, (victim.hp ?? 12) - 6);
+  ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} raided the outskirts in the night${victim ? ` and mauled ${victim.name.first} ${victim.name.last}` : ''}. There was no watch to stop ${beast.startsWith('a ') ? 'it' : 'them'}.`);
+  return { raided: true };
+}

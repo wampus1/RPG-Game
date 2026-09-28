@@ -8,6 +8,9 @@ import { mulberry32, hashString } from '../util/rng.js';
 const OUT = '#1c1622';
 export const CHAR_W = 16;
 export const CHAR_H = 24;
+// Headroom above each figure for tall hats and hairdos (drawn above row 0).
+export const SPR_PAD = 6;
+export const SHEET_H = CHAR_H + SPR_PAD;
 export const FRAMES = 5; // idle, walk A, walk B, action, sitting
 
 function toCanvas(px) {
@@ -39,7 +42,7 @@ const OUTFIT_COLORS = {
 };
 
 function drawHumanoid(look, dir, frame) {
-  const p = new Px(CHAR_W, CHAR_H);
+  const p = new Px(CHAR_W, SHEET_H);
   const skin = hex(look.skin);
   const hair = hex(look.hair);
   let shirt = hex(look.shirt);
@@ -69,7 +72,7 @@ function drawHumanoid(look, dir, frame) {
   const legH = CHAR_H - 2 - legY;
   const side = dir === 1 || dir === 3;
   const flip = dir === 3;
-  const S = (x, y, c) => p.set(flip ? CHAR_W - 1 - x : x, y, c);
+  const S = (x, y, c) => p.set(flip ? CHAR_W - 1 - x : x, y + SPR_PAD, c);
   const R = (x, y, w, h, c) => {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) S(x + i, y + j, c);
   };
@@ -138,7 +141,7 @@ function drawHumanoid(look, dir, frame) {
   // Shirt patterns on everyday clothes.
   const pat = look.pattern;
   if (pat && !skel && ['plain', 'vest', 'fisher', 'miner', 'apron', 'baker', 'smith', 'hunter', 'plaid'].includes(outfit)) {
-    if (pat === 'stripes') for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) for (let x = tx; x < tx + tw; x++) if (p.get(flip ? CHAR_W - 1 - x : x, y)[3]) S(x, y, shade(shirtC, 0.78));
+    if (pat === 'stripes') for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) for (let x = tx; x < tx + tw; x++) if (p.get(flip ? CHAR_W - 1 - x : x, y + SPR_PAD)[3]) S(x, y, shade(shirtC, 0.78));
     if (pat === 'collar') R(tx + 1, torsoY, tw - 2, 1, hex('#e8e0d0'));
     if (pat === 'sash' && dir !== 2) for (let i = 0; i < torsoH; i++) S(tx + (side ? 1 + (i >> 1) : 1 + i), torsoY + i, accent);
     if (pat === 'buttons' && dir === 0) for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) S(7, y, hex('#e8d8a0'));
@@ -346,8 +349,8 @@ export function humanoidSheet(look) {
   const key = JSON.stringify(look);
   let c = sheetCache.get(key);
   if (c) return c;
-  const sheet = new Px(CHAR_W * FRAMES, CHAR_H * 4);
-  for (let d = 0; d < 4; d++) for (let f = 0; f < FRAMES; f++) sheet.blit(drawHumanoid(look, d, f), f * CHAR_W, d * CHAR_H);
+  const sheet = new Px(CHAR_W * FRAMES, SHEET_H * 4);
+  for (let d = 0; d < 4; d++) for (let f = 0; f < FRAMES; f++) sheet.blit(drawHumanoid(look, d, f), f * CHAR_W, d * SHEET_H);
   c = toCanvas(sheet);
   sheetCache.set(key, c);
   return c;
@@ -358,7 +361,7 @@ export function headSprite(look) {
   const p = new Px(12, 10);
   const top = look.small ? 6 : 0;
   for (let y = 0; y < 10; y++) for (let x = 0; x < 12; x++) {
-    const c = full.get(x + 2, y + top - 1);
+    const c = full.get(x + 2, y + top - 1 + SPR_PAD);
     if (c[3]) p.set(x, y, c);
   }
   return toCanvas(p);
@@ -749,6 +752,19 @@ function simpleIcon(key) {
       p.rect(5, 4, 6, 6, '#3a5a9a');
       p.vline(8, 4, 11, '#f0e070');
       p.hline(5, 10, 6, '#f0e070');
+      break;
+    case 'bucket':
+    case 'water_bucket':
+      p.rect(4, 6, 8, 8, '#8e6a3a');
+      p.hline(4, 11, 6, '#b08a50');
+      p.hline(4, 11, 10, '#5a4020');
+      p.hline(5, 10, 13, '#6e5030');
+      p.line(4, 6, 8, 2, '#9a9aa4');
+      p.line(8, 2, 11, 6, '#9a9aa4');
+      if (key === 'water_bucket') {
+        p.hline(5, 10, 7, '#58a8e8');
+        p.hline(6, 9, 8, '#8cc8f8');
+      }
       break;
     case 'dispatch':
       p.rect(3, 4, 11, 8, '#e8dcb0');

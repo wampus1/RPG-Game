@@ -22,7 +22,7 @@ const NOT_ITEMS = new Set([
   'grass_jungle', 'grass_taiga', 'path', 'farmland', 'roof_snow', 'leaves_snowy', 'coal_ore',
   'gem_ore', 'wheat_crop', 'carrot_crop', 'cabbage_crop', 'tall_grass', 'fern', 'bush',
   'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'rock',
-  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open', 'cell_door_top',
+  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open', 'cell_door_top', 'farmland_wet',
 ]);
 
 const BLOCK_VALUES = {
@@ -94,6 +94,8 @@ item('club', { name: 'Wooden Club', kind: 'weapon', stack: 1, damage: 3, reach: 
 item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3, cooldown: 0.3, value: 10 });
 item('hammer', { name: 'Smith Hammer', kind: 'tool', stack: 1, tool: 'pick', speed: 2.5, damage: 3, reach: 1.4, cooldown: 0.5, value: 12 });
 item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, damage: 1.5, reach: 1.5, cooldown: 0.5, value: 5 });
+item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
+item('water_bucket', { name: 'Bucket of Water', kind: 'tool', stack: 1, value: 4, bucket: true, water: 3 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
 item('arrow', { value: 1 });

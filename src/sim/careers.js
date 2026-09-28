@@ -23,8 +23,8 @@ export const PROFESSIONS = {
     pitch: 'Licensed fishers sell their catch to our kitchens and traders at a premium.',
   },
   farmer: {
-    title: 'Farmer', fee: 6, minOp: -10, kit: [['hoe', 1], ['seeds', 8]], goods: ['wheat', 'carrot', 'cabbage', 'pumpkin'],
-    pitch: 'You may work and harvest the town fields as your own, and our traders pay a premium for your crops.',
+    title: 'Farmer', fee: 6, minOp: -10, kit: [['hoe', 1], ['seeds', 8], ['bucket', 1]], goods: ['wheat', 'carrot', 'cabbage', 'pumpkin'],
+    pitch: 'You may work and harvest the town fields as your own, and our traders pay a premium for your crops. Fill a bucket at the well on dry days: wet soil grows crops twice as fast.',
   },
 };
 

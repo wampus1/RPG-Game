@@ -31,6 +31,7 @@ const P = {
   ice: ['#80b4c8', '#6a9cb4', '#a4ccdc'],
   path: ['#9a7a52', '#7e6242', '#b09066'],
   farmland: ['#5e4028', '#4a3020', '#6e4c30'],
+  farmland_wet: ['#3e2a1a', '#2e1e12', '#4a3322'],
   planks: ['#b08850', '#8e6a3a', '#c8a064'],
   planks_birch: ['#dcc890', '#c0aa72', '#ecdcaa'],
   planks_dark: ['#6a4a2a', '#50361e', '#7e5a36'],
@@ -332,6 +333,12 @@ function cubeTop(name, v, rand, rot) {
     case 'path': {
       speckle(p, pal, rand, 0.3);
       for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#c4b49a');
+      return p;
+    }
+    case 'farmland_wet': {
+      speckle(p, pal, rand, 0.25);
+      for (let y = 1; y < 16; y += 4) p.hline(0, 15, y, pal[1]);
+      for (let i = 0; i < 5; i++) p.set(rand() * 16, 2 + Math.floor(rand() * 4) * 4, '#6a8aa8');
       return p;
     }
     case 'farmland': {

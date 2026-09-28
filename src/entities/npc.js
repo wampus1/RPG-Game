@@ -6,11 +6,11 @@ import { Entity } from './entity.js';
 import { NPC_STEP_TIME, GROUND } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
-import { BLOCKS, B, CROPS, cropMature } from '../world/blocks.js';
+import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
-import { activityFor, entryStart, invCount, invTake, invAdd, setOverride } from '../sim/econ.js';
+import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
 
 const EMOTES = {
   work: ['•', '#e8d8b0'], read: ['≡', '#a0c8ff'], study: ['≡', '#a0c8ff'], pray: ['†', '#ffe8a0'], music: ['♪', '#ff9ad0'],
@@ -103,12 +103,14 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
+    if (this.caravan) return 'crate';
     if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
     if (this.prey) return this.weapon();
     const a = this.activity?.entry;
     if (!a) return null;
     if (a.act === 'build' || a.act === 'repair') return 'hammer';
     if ((a.act === 'forage' || a.act === 'hunt') && this.atGoal) return this.weapon();
+    if (a.act === 'work' && this.rec.job === 'farmer' && (this.rec.water || 0) > 0) return 'water_bucket';
     if (a.act === 'work' && this.atGoal) return this.rec.equipment.tool;
     if (a.act === 'hobby' && this.atGoal) {
       const h = HOBBIES[a.hobby];
@@ -388,6 +390,9 @@ export class NPC extends Entity {
       case 'leaving':
         this.leaveWalk(dt);
         break;
+      case 'caravan':
+        this.caravanWalk(dt);
+        break;
     }
   }
 
@@ -465,6 +470,27 @@ export class NPC extends Entity {
     return d;
   }
 
+  // A merchant on the road between towns, pack on their back: a stretch at
+  // a time towards where they're going.
+  caravanWalk() {
+    const c = this.caravan;
+    if (!c) {
+      this.state = 'routine';
+      return;
+    }
+    const d = Math.hypot(c.tx - this.x, c.tz - this.z) || 1;
+    const g = this.leaveGoal;
+    if (!g || Math.max(Math.abs(g.x - this.x), Math.abs(g.z - this.z)) <= 1 || this.stateT > 25) {
+      const k = Math.min(12, d);
+      this.leaveGoal = { x: Math.round(this.x + ((c.tx - this.x) / d) * k), y: this.y, z: Math.round(this.z + ((c.tz - this.z) / d) * k) };
+      this.stateT = 0;
+      this.path = null;
+    }
+    const lg = this.leaveGoal;
+    const box = { x0: Math.min(this.x, lg.x) - 8, z0: Math.min(this.z, lg.z) - 8, x1: Math.max(this.x, lg.x) + 8, z1: Math.max(this.z, lg.z) + 8 };
+    this.followPath(lg, 1, box);
+  }
+
   // Heading home down the road after a job, then gone.
   leaveWalk() {
     const g = this.game;
@@ -534,6 +560,16 @@ export class NPC extends Entity {
       this.pathFails = 0;
       // Miners heading out: a big enough watch spares a guard to go along.
       if (this.rec.job === 'miner' && act.entry.act === 'work' && this.goal) game.sim.escortMiner(this, act);
+    }
+    // Rain or snow sends the less dedicated home early.
+    if (act.entry.act === 'work' && !this.visit && !this.nomad && this.rng.chance(dt * 0.04)) {
+      const sky = game.weatherIn(this.settlement);
+      if (sky !== 'clear' && weatherBreak(this.rec, sky, game.day, game.minute)) {
+        this.activity = null;
+        const lines = sky === 'snow' ? ['Too cold for this. I\'m going home.', 'My fingers are frozen. That\'s it for today.'] : sky === 'fog' ? ['Can\'t see my own hands in this fog. I\'m off home.'] : ['It\'s pouring! I\'m calling it a day.', 'Soaked through. Home, I think.', 'Nobody works in this rain. Not me, anyway.'];
+        this.say(this.rng.pick(lines), 3, '#a0b8d0');
+        return;
+      }
     }
     // A guard watching over a miner goes where they go, and home with them.
     if (this.act === 'watch') {
@@ -751,12 +787,41 @@ export class NPC extends Entity {
       if (!this.mineWork()) this.idleT = Math.min(this.idleT, 3);
       return;
     }
+    // At the well with an empty bucket: fill it and head back to the rows.
+    if (act.act === 'work' && g.tag === 'well') {
+      this.face(g.well.x, g.well.z);
+      this.doAction(0.4);
+      this.rec.water = 4;
+      game.renderer.emit(g.well.x, GROUND, g.well.z, { n: 8, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 30, life: 0.5, oy: -4 });
+      if (this.distTo(game.player) < 16) game.audio?.play('splash', this);
+      if (this.rng.chance(0.4)) this.say(this.rng.pick(['Fresh water for the fields.', 'Heavy, this bucket.', 'The rows are parched.']), 2.5);
+      this.goal = this.farmGoal() || this.workGoal();
+      this.atGoal = false;
+      this.path = null;
+      return;
+    }
     // Farmers bring in ripe crops by hand and sow the rows again.
     if (act.act === 'work' && g.tag === 'farm' && this.rng.chance(dt * 0.35)) {
       if (!this.farmWork()) this.idleT = Math.min(this.idleT, 1.5);
       return;
     }
-    if (act.act === 'work' && this.rng.chance(dt * 0.6)) {
+    // Fishers watch their bobber; now and then something bites.
+    if (act.act === 'work' && this.rec.job === 'fisher' && this.fishSpot()) {
+      this.fishDip = Math.max(0, (this.fishDip || 0) - dt * 2);
+      if (this.rng.chance(dt * 0.07)) {
+        const t = this.fishSpot();
+        this.fishDip = 1;
+        game.renderer.emit(t.x, t.y, t.z, { n: 8, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 30, life: 0.5, oy: 2 });
+        if (this.rng.chance(0.55)) {
+          this.doAction(0.4);
+          if (this.distTo(game.player) < 14) {
+            game.audio?.play('splash', this);
+            if (this.rng.chance(0.4)) this.say(this.rng.pick(['Got one!', 'A big one!', 'Ha! Supper.', 'Just a tiddler.']), 2.5);
+          }
+        }
+      }
+      if (this.idleT > 0) return;
+    } else if (act.act === 'work' && this.rng.chance(dt * 0.6)) {
       this.doAction(0.3);
       if (this.rec.job === 'blacksmith' && this.spot && this.spot.target) {
         const t = this.spot.target;
@@ -907,7 +972,7 @@ export class NPC extends Entity {
       const id = w.getBlock(x, y, z);
       if (CROPS[id]) {
         if (!ripe && cropMature(id, w.getMeta(x, y, z))) ripe = { x, z, id };
-      } else if (!bare && id === B.air && w.getBlock(x, y - 1, z) === B.farmland && !game.entityAt(x, y, z)) bare = { x, z };
+      } else if (!bare && id === B.air && isFarmland(w.getBlock(x, y - 1, z)) && !game.entityAt(x, y, z)) bare = { x, z };
     }
     const near = this.distTo(game.player) < 16;
     if (ripe) {
@@ -920,10 +985,9 @@ export class NPC extends Entity {
       if (near) game.audio?.play('break', this);
       return true;
     }
-    if (bare) {
+    if (bare && invCount(this.rec.inv, CROPS[this.fieldCrop(bare.x, bare.z)].seed) > 0) {
       const id = this.fieldCrop(bare.x, bare.z);
       const seed = CROPS[id].seed;
-      if (invCount(this.rec.inv, seed) <= 0) return false;
       invTake(this.rec.inv, seed, 1);
       this.face(bare.x, bare.z);
       this.doAction(0.3);
@@ -932,7 +996,70 @@ export class NPC extends Entity {
       if (near) game.audio?.play('place', this);
       return true;
     }
-    return false;
+    return this.waterWork();
+  }
+
+  // Dry rows get a bucket poured over them; an empty bucket means a walk to
+  // the well (a few times a day at most, and never in the rain).
+  waterWork() {
+    const game = this.game;
+    const w = game.world;
+    const rec = this.rec;
+    const y = this.y - 1;
+    let dry = null;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      if (w.getBlock(this.x + dx, y, this.z + dz) === B.farmland) {
+        dry = { x: this.x + dx, z: this.z + dz };
+        break;
+      }
+    }
+    if (!dry) return false;
+    if ((rec.water || 0) > 0) {
+      rec.water--;
+      let n = 0;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (game.crops.wetten(dry.x + dx, y, dry.z + dz)) n++;
+      this.face(dry.x, dry.z);
+      this.doAction(0.4);
+      game.renderer.emit(dry.x, this.y, dry.z, { n: 10, color: ['#58a8e8', '#8cc8f8', '#e0f4ff'], up: 18, speed: 36, life: 0.5, oy: -2 });
+      if (this.distTo(game.player) < 16) game.audio?.play('splash', this);
+      return n > 0;
+    }
+    const sky = game.weatherIn(this.settlement);
+    const wells = this.layout.wells || [];
+    if (sky === 'rain' || !wells.length) return false;
+    if (rec.wellDay !== game.day) {
+      rec.wellDay = game.day;
+      rec.wellTrips = 0;
+    }
+    if (rec.wellTrips >= 3) return false;
+    const well = wells.reduce((b, q) => (!b || Math.abs(q.x - this.x) + Math.abs(q.z - this.z) < Math.abs(b.x - this.x) + Math.abs(b.z - this.z) ? q : b), null);
+    const spot = game.findFreeSpot(well.x, well.z + 1, GROUND);
+    if (!spot) return false;
+    rec.wellTrips++;
+    this.releaseSpot();
+    this.goal = { x: spot.x, y: spot.y, z: spot.z, tag: 'well', well };
+    this.atGoal = false;
+    this.path = null;
+    return true;
+  }
+
+  // The patch of water a fisher at their spot has their line in.
+  fishSpot() {
+    if (!this.atGoal || this.moving || this.heldItem() !== 'fishing_rod') return null;
+    const key = `${this.x},${this.z},${this.dir}`;
+    if (this.fishKey === key) return this.fishTile;
+    const w = this.game.world;
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    let t = null;
+    for (let k = 1; k <= 3 && !t; k++) {
+      const x = this.x + DX[this.dir] * k;
+      const z = this.z + DZ[this.dir] * k;
+      for (const y of [this.y - 1, this.y - 2]) if (BLOCKS[w.getBlock(x, y, z)]?.liquid) t = t || { x, y, z };
+    }
+    this.fishKey = key;
+    this.fishTile = t;
+    return t;
   }
 
   // What grows in the field at (x, z).
@@ -958,7 +1085,7 @@ export class NPC extends Entity {
       for (const [dx, dz] of [[1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 1], [0, -1]]) {
         const id = w.getBlock(sp.x + dx, GROUND, sp.z + dz);
         if (CROPS[id] && cropMature(id, w.getMeta(sp.x + dx, GROUND, sp.z + dz))) score += 2;
-        else if (id === B.air && w.getBlock(sp.x + dx, GROUND - 1, sp.z + dz) === B.farmland) score += 1;
+        else if (id === B.air && isFarmland(w.getBlock(sp.x + dx, GROUND - 1, sp.z + dz))) score += 1;
       }
       if (score > bs) {
         bs = score;
