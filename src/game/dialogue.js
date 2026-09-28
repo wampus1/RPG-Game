@@ -506,12 +506,17 @@ function expandTalk(npc, game, arg) {
     return { lines: [{ busy: 'We\'re already working on it!', max: 'Your house is as big as we build them here.', room: 'There\'s no room around your house to build out, I\'m afraid.' }[t.reason] || 'I can\'t help with that.'] };
   }
   const good = mayor && sim.goodStanding(s.id);
-  const cost = good ? Math.round(t.cost * 0.75) : t.cost;
+  // A builder who thinks well of you knocks something off their own price.
+  const op = mayor ? 0 : sim.opinion(npc);
+  const friend = mayor ? 0 : op >= 75 ? 0.3 : op >= 50 ? 0.2 : op >= 30 ? 0.1 : 0;
+  const cost = good ? Math.round(t.cost * 0.75) : Math.round(t.cost * (1 - friend));
   const size = { house_m: 'a proper house with a third bed', house_l: 'a family house with room for six' }[t.next] || 'something bigger';
   if (arg !== 'yes') {
     const lines = [`We could make it ${size}. That's ¤${cost} for timber, stone and the builders' wages.`];
     if (good) lines.push(`That's a quarter off the usual ¤${t.cost}: you've been working hard for ${s.name}.`);
     else if (mayor) lines.push('Folk who do good work for the town get a better price, you know.');
+    else if (friend) lines.push(`${friend >= 0.3 ? 'For an old friend' : friend >= 0.2 ? 'For a friend' : 'For you'}, ${Math.round(friend * 100)}% off: it's usually ¤${t.cost}.`);
+    else lines.push('I do a better price for folk I know well, mind.');
     lines.push('It takes a few days, and you\'ll have builders underfoot.');
     return { lines, choices: [{ id: 'expand', arg: 'yes', label: `Do it. (Pay ¤${cost})` }], back: 'Maybe later.' };
   }

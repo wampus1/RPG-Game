@@ -2,7 +2,7 @@
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
-import { ITEMS, maxStack } from '../world/items.js';
+import { ITEMS, maxStack, WEAR_SLOTS } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
@@ -13,6 +13,7 @@ import { TIERS } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
+import { SLOTS, agoText, timeText } from '../game/saves.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -96,7 +97,7 @@ export function slotClick(ui, slots, i, ck, quickTarget) {
 // ---------------------------------------------------------------- inventory
 export class InventoryWindow extends Window {
   constructor(ui) {
-    super(ui, 63, 20, { kind: 'inventory' });
+    super(ui, 76, 20, { kind: 'inventory' });
   }
   draw(g, game) {
     const p = game.player;
@@ -105,8 +106,27 @@ export class InventoryWindow extends Window {
     slotTable(this, g, 1, 2, 9, p.inv, 0, BELT_SIZE, { selected: p.selected, quick: () => p.inv.slice(BELT_SIZE), onClick: (i, ck) => this.click(p, i, ck) });
     g.text(2, 6, 'Backpack', C.dim);
     slotTable(this, g, 1, 7, 9, p.inv, BELT_SIZE, INV_SIZE - BELT_SIZE, { onClick: (i, ck) => this.click(p, i, ck) });
+    // What you're wearing: drop armour or clothes on a place to put it on,
+    // click it to take it off.
+    g.text(40, 1, 'Worn', C.dim);
+    WEAR_SLOTS.forEach((k, j) => {
+      const sx = 40;
+      const sy = 2 + j * 4;
+      const hov = this.hovering(sx, sy, 3, 2);
+      g.box(sx - 1, sy - 1, 5, 4, { fg: C.faint });
+      g.fill(sx, sy, 3, 2, ' ', C.fg, hov ? 'rgba(70,60,90,0.95)' : 'rgba(26,22,34,0.95)');
+      const it = p.equip[k] && ITEMS[p.equip[k]];
+      if (it) {
+        g.icon(sx, sy, p.equip[k], 0);
+        if (hov) this.ui.itemTooltip({ item: p.equip[k], count: 1 });
+      } else g.text(sx + 1, sy, '·', C.faint);
+      g.text(sx + 5, sy, cap(k), it ? C.fg : C.faint);
+      g.text(sx + 5, sy + 1, it ? (it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', C.dim);
+      this.hit(sx, sy, 3, 2, () => this.wearClick(p, k));
+    });
+    g.text(40, 18, `Armour ${Math.round(p.armorValue() * 100)}%`, C.cyan);
     // Stats panel.
-    const x = 40;
+    const x = 53;
     g.box(x - 1, 1, 23, 17, { fg: C.faint });
     const pr = playerProfile(game);
     g.text(x + 1, 2, pr.name.toUpperCase().slice(0, 20), C.hi);
@@ -121,12 +141,40 @@ export class InventoryWindow extends Window {
     const held = p.heldDef();
     g.text(x + 1, 12, 'Holding:', C.dim);
     g.text(x + 1, 13, held ? held.name.slice(0, 20) : '(empty hand)', C.fg);
-    g.text(x + 1, 15, 'SHIFT+click: move', C.faint);
-    g.text(x + 1, 16, 'C craft · J journal', C.faint);
+    g.text(x + 1, 14, 'SHIFT+click: move', C.faint);
+    g.text(x + 1, 15, 'Right-click armour:', C.faint);
+    g.text(x + 1, 16, 'wear · C craft · J', C.faint);
     g.text(2, 19, ' Drag outside to drop ', C.faint);
+  }
+  // A worn place clicked: put on what's on the cursor, or take off what's there.
+  wearClick(p, k) {
+    const ui = this.ui;
+    const cs = ui.cursorStack;
+    if (cs) {
+      const it = ITEMS[cs.item];
+      if (!it || it.kind !== 'armor' || it.slot !== k) {
+        ui.audio?.play('error');
+        return;
+      }
+      const old = p.equip[k];
+      p.equip[k] = cs.item;
+      ui.cursorStack = old ? { item: old, count: 1 } : cs.count > 1 ? { item: cs.item, count: cs.count - 1 } : null;
+      ui.audio?.play('equip');
+      return;
+    }
+    if (p.equip[k]) {
+      ui.cursorStack = { item: p.equip[k], count: 1 };
+      p.equip[k] = null;
+      ui.audio?.play('select');
+    }
   }
   click(p, i, ck) {
     const other = i < BELT_SIZE ? [...Array(INV_SIZE - BELT_SIZE).keys()].map((k) => k + BELT_SIZE) : [...Array(BELT_SIZE).keys()];
+    // Right-click (or shift-click) armour to put it on.
+    if ((ck.button === 2 || ck.shift) && p.inv[i] && ITEMS[p.inv[i].item]?.kind === 'armor' && !this.ui.cursorStack) {
+      if (p.wear(i)) this.ui.audio?.play('equip');
+      return;
+    }
     if (ck.shift && p.inv[i]) {
       const s = p.inv[i];
       p.inv[i] = null;
@@ -1148,6 +1196,100 @@ export class PauseWindow extends Window {
   }
 }
 
+// ---------------------------------------------------------------- saves
+// Save or load: five slots of your own plus the autosave. Click a slot (or
+// press its number) to save there or load it; X deletes the one you're on.
+export class SaveSlotsWindow extends Window {
+  constructor(ui, mode, store) {
+    super(ui, 60, 22, { kind: 'saves' });
+    this.mode = mode;
+    this.store = store;
+    this.sel = mode === 'load' ? Math.max(0, store.list().findIndex((q) => q.meta && q.id === store.latest()?.id)) : 1;
+    this.confirm = null;
+  }
+  draw(g, game) {
+    const load = this.mode === 'load';
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: load ? 'LOAD GAME' : 'SAVE GAME' });
+    const list = this.store.list();
+    list.forEach((q, i) => {
+      const y = 2 + i * 3;
+      const auto = q.id === 'auto';
+      const usable = load ? !!q.meta : !auto;
+      const hov = this.hovering(2, y, this.w - 4, 2);
+      const sel = this.sel === i;
+      g.fill(2, y, this.w - 4, 2, ' ', C.fg, sel ? C.bgHi : hov ? '#3a3250' : '#1a1622');
+      const key = auto ? 'A' : q.id;
+      g.text(3, y, `[${key}]`, usable ? C.hi : C.faint);
+      if (q.meta) {
+        const m = q.meta;
+        g.text(8, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
+        g.text(this.w - 4 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
+        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 12), C.dim);
+      } else g.text(8, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
+      this.hit(2, y, this.w - 4, 2, () => {
+        this.sel = i;
+        this.pick(game);
+      });
+    });
+    const y = this.h - 3;
+    if (this.confirm) g.center(y, this.confirm.text, C.orange);
+    else g.center(y, load ? 'Click a slot or press its key to load it.' : 'Click a slot or press 1-5 to save there.', C.dim);
+    g.center(this.h - 2, '[↑↓] choose  [ENTER] ' + (load ? 'load' : 'save') + '  [X] delete  [ESC] back', C.faint);
+  }
+  pick(game) {
+    const q = this.store.list()[this.sel];
+    if (!q) return;
+    const h = this.ui.hooks;
+    if (this.mode === 'load') {
+      if (!q.meta) return;
+      h.loadSlot && h.loadSlot(q.id);
+      return;
+    }
+    if (q.id === 'auto' || !game) return;
+    // Saving over another game asks first.
+    if (q.meta && (q.meta.seed !== game.seed || q.meta.name !== game.playerName) && !(this.confirm && this.confirm.id === q.id && this.confirm.kind === 'save')) {
+      this.confirm = { id: q.id, kind: 'save', text: `Slot ${q.id} holds ${q.meta.name}'s game. Choose it again to overwrite.` };
+      return;
+    }
+    this.confirm = null;
+    if (h.saveSlot && h.saveSlot(q.id)) this.close();
+  }
+  remove() {
+    const q = this.store.list()[this.sel];
+    if (!q || !q.meta) return;
+    if (!(this.confirm && this.confirm.id === q.id && this.confirm.kind === 'delete')) {
+      this.confirm = { id: q.id, kind: 'delete', text: `Delete ${q.id === 'auto' ? 'the autosave' : `slot ${q.id}`}? Press X again.` };
+      return;
+    }
+    this.store.remove(q.id);
+    this.confirm = null;
+    this.ui.audio?.play('break');
+  }
+  onKey(k, game) {
+    const n = SLOTS.length;
+    if (k.code === 'Escape') {
+      this.close();
+      return true;
+    }
+    if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
+    else if (k.code === 'Enter' || k.code === 'Space') this.pick(game);
+    else if (k.code === 'KeyX' || k.code === 'Delete') this.remove();
+    else if (k.code === 'KeyA') {
+      this.sel = 0;
+      this.pick(game);
+    } else {
+      const d = /^Digit([1-5])$/.exec(k.code);
+      if (!d) return true;
+      this.sel = SLOTS.indexOf(d[1]);
+      this.pick(game);
+    }
+    if (!['Enter', 'Space', 'KeyX', 'Delete'].includes(k.code)) this.confirm = this.confirm && this.confirm.id === this.store.list()[this.sel]?.id ? this.confirm : null;
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------- death
 export class DeathWindow extends Window {
   constructor(ui, cause) {
@@ -1186,10 +1328,13 @@ const LOGO = [
 ];
 
 export class TitleWindow extends Window {
-  constructor(ui, hasSave) {
+  constructor(ui, store) {
     super(ui, COLS, ROWS, { kind: 'title', x: 0, y: 0 });
-    this.hasSave = hasSave;
+    this.store = store;
     this.t = 0;
+  }
+  get hasSave() {
+    return !!(this.store && this.store.any());
   }
   draw(g) {
     const t = this.t;
@@ -1217,15 +1362,22 @@ export class TitleWindow extends Window {
       }
     });
     g.center(10, '~ a tale of tiles, towns and torchlight ~', C.dim);
-    const opts = [['N', 'New world (random seed)'], ...(this.hasSave ? [['C', 'Continue saved game']] : []), ['S', 'New world from seed...'], ['H', 'How to play']];
+    const last = this.hasSave ? this.store.latest() : null;
+    const opts = [
+      ...(last ? [['C', `Continue: ${last.meta.name}, day ${last.meta.day}`.slice(0, 34)]] : []),
+      ['N', 'New game (random world)'],
+      ['S', 'New game from seed...'],
+      ...(this.hasSave ? [['L', 'Load game...']] : []),
+      ['H', 'How to play'],
+    ];
     opts.forEach(([k, label], i) => {
       const y = 13 + i * 2;
       const text = `[${k}]  ${label}`;
-      const x = Math.floor((this.w - 30) / 2);
-      const hov = this.hovering(x - 1, y, 32, 1);
-      g.fill(x - 1, y, 32, 1, ' ', C.fg, hov ? C.bgHi : 'rgba(20,16,28,0.9)');
+      const x = Math.floor((this.w - 38) / 2);
+      const hov = this.hovering(x - 1, y, 40, 1);
+      g.fill(x - 1, y, 40, 1, ' ', C.fg, hov ? C.bgHi : 'rgba(20,16,28,0.9)');
       g.text(x, y, text, hov ? C.hi : C.fg);
-      this.hit(x - 1, y, 32, 1, () => this.choose(k));
+      this.hit(x - 1, y, 40, 1, () => this.choose(k));
     });
     if (Math.floor(t * 2) % 2) g.center(this.h - 2, 'PRESS A KEY', C.faint);
   }
@@ -1235,13 +1387,14 @@ export class TitleWindow extends Window {
   choose(k) {
     const h = this.ui.hooks;
     if (k === 'N') h.start && h.start(null);
-    if (k === 'C' && this.hasSave) h.load && h.load();
+    if (k === 'C' && this.hasSave) h.continue && h.continue();
+    if (k === 'L' && this.hasSave) h.load && h.load();
     if (k === 'S' && h.askSeed) h.askSeed();
     if (k === 'H') this.ui.open(new HelpWindow(this.ui));
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyS: 'S', KeyH: 'H', Enter: 'N', Space: 'N' };
-    if (this.ui.find('help')) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (this.ui.find('help') || this.ui.find('saves') || this.ui.find('create')) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

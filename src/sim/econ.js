@@ -19,27 +19,27 @@ const MAX_CATCHUP = 45 * DAY;
 // What each kind of trader deals in (also what their shop restocks).
 export const STOCK = {
   general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket'],
-  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars'],
+  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots'],
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
   inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
-  tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed'],
+  tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots'],
   carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket'],
   herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue'],
   fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string'],
   farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
   scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern'],
-  trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare'],
+  trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers'],
 };
 
 // Which items each trade will buy from the player.
 export const WANTS = {
   general: null, // anything
-  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'gem', 'cobblestone'],
+  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'gem', 'cobblestone', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots'],
   baker: ['wheat', 'berries', 'apple', 'carrot'],
   inn: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'cooked_meat', 'cooked_fish'],
   cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'pumpkin', 'apple'],
-  tailor: ['string', 'leather', 'cloth', 'feather', 'wheat'],
+  tailor: ['string', 'leather', 'cloth', 'feather', 'wheat', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_trousers', 'leather_boots', 'leather_cap'],
   carpenter: ['log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow', 'planks', 'stick'],
   herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'sapling', 'slime_gel'],
   fisher: ['string', 'reeds', 'fish'],
@@ -534,8 +534,8 @@ export function entryStart(sim, L, rec, act, day, rng) {
 // ------------------------------------------------------------ production
 const INCOME = { blacksmith: 4, tailor: 3, carpenter: 3, herbalist: 2, scholar: 2, merchant: 3, miner: 3, lumberjack: 2, laborer: 2, beggar: 0.5, priest: 1, innkeeper: 2, barkeep: 2, noble: 1 };
 const GOODS = {
-  blacksmith: ['iron_ingot', 'iron_sword', 'stone_pickaxe', 'stone_axe', 'lantern', 'iron_bars'],
-  tailor: ['cloth', 'cloth', 'leather', 'rug_red', 'bed'],
+  blacksmith: ['iron_ingot', 'iron_sword', 'stone_pickaxe', 'stone_axe', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_boots'],
+  tailor: ['cloth', 'cloth', 'leather', 'rug_red', 'bed', 'linen_shirt', 'wool_trousers', 'leather_tunic'],
   carpenter: ['planks', 'chair', 'stool', 'table', 'chest', 'barrel', 'door'],
   herbalist: ['herb', 'herb', 'mushroom', 'sapling'],
   scholar: ['book', 'scroll'],

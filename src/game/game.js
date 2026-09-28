@@ -2,7 +2,7 @@
 // rules for interacting with blocks and creatures.
 import {
   TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, WATER_Y, REACH, BELT_SIZE,
-  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
+  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, MAP_W, MAP_H,
 } from '../config.js';
 import { World } from '../world/world.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
@@ -18,8 +18,8 @@ import { mulberry32, hash4 } from '../util/rng.js';
 import { M } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
-import { Sim, buildingAt } from '../sim/sim.js';
-import { alive, invAdd, DAY, setOverride } from '../sim/econ.js';
+import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
+import { alive, invAdd, DAY, setOverride, ledger } from '../sim/econ.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -28,6 +28,7 @@ import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
+import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
 
@@ -37,7 +38,7 @@ const START_KIT = [
 ];
 
 export class Game {
-  constructor({ seed, renderer, audio, ui, save = null }) {
+  constructor({ seed, renderer, audio, ui, save = null, hero = null }) {
     this.seed = seed >>> 0;
     this.renderer = renderer;
     this.audio = audio;
@@ -92,20 +93,183 @@ export class Game {
       sx = this.player.x;
       sz = this.player.z;
     } else {
-      const s = ow.spawnSettlement;
+      // A character made on the character screen: washed up on the shore,
+      // or at home in the town they grew up in.
+      this.hero = hero ? normalizeHero(hero) : null;
+      if (this.hero) this.playerName = this.hero.name;
+      const home = this.hero && this.hero.origin === 'native' ? this.pickHometown() : null;
+      const coast = this.hero && this.hero.origin === 'crash' ? this.coastSpot() : null;
+      const s = home || ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
       sx = L ? L.plaza.cx + 2 : Math.floor(ow.cells.length / 2);
       sz = L ? L.plaza.cz : 400;
+      if (coast) {
+        sx = coast.x;
+        sz = coast.z;
+      }
+      let host = null;
+      if (home) {
+        host = this.becomeNative(home);
+        if (host && host.house.inside) {
+          sx = host.house.inside.x;
+          sz = host.house.inside.z;
+        }
+      }
       this.loadAround(sx, sz, true);
       const spot = this.findFreeSpot(sx, sz, GROUND);
       this.player = new Player(this, spot.x, spot.y, spot.z);
       this.moveEntity(this.player, this.player.x, this.player.y, this.player.z);
-      for (const [k, n] of START_KIT) this.player.give(k, n);
-      this.player.give('coin', 25);
+      if (this.hero) {
+        const kit = KITS[this.hero.kit];
+        for (const [k, n] of [...kit.items, ...COMMON_KIT]) this.giveOrWear(k, n);
+        this.player.give('coin', kit.coins);
+        this.player.baseLook = { ...this.hero.look };
+        this.applyHero();
+        this.player.hp = this.player.maxHp;
+        this.player.spawn = { x: spot.x, y: spot.y, z: spot.z };
+        if (coast) this.wreckage(spot);
+      } else {
+        for (const [k, n] of START_KIT) this.player.give(k, n);
+        this.player.give('coin', 25);
+      }
     }
     this.loadAround(this.player.x, this.player.z, true);
     this.updateSettlements(true);
     ow.markExplored(this.player.x, this.player.z, 2);
+    if (this.hero && !save) this.introduce();
+  }
+
+  // ------------------------------------------------------------ your story
+  // Stats and traits that change your body: health for now (the rest is
+  // looked up where it matters).
+  applyHero() {
+    const p = this.player;
+    if (!p) return;
+    p.hpBonus = this.hero ? hpBonus(this.hero) : 0;
+    p.recalcMaxHp();
+  }
+
+  // Starting clothes go straight on; everything else into the pack.
+  giveOrWear(k, n) {
+    const it = ITEMS[k];
+    const p = this.player;
+    if (it && it.kind === 'armor' && !p.equip[it.slot]) {
+      p.equip[it.slot] = k;
+      if (n > 1) p.give(k, n - 1);
+      return;
+    }
+    p.give(k, n);
+  }
+
+  // The town you grew up in: a lived-in place (not a ruin), picked from the
+  // seed and your name.
+  pickHometown() {
+    const ow = this.world.ow;
+    const list = ow.settlements.filter((s) => s.condition !== 'abandoned' && !s.deserted && s.type !== 'camp');
+    if (!list.length) return null;
+    let h = 0;
+    for (const ch of String(this.hero.name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const rng = new RNG(hash4(this.seed, h, 0x707e));
+    const near = list.filter((s) => s.type !== 'city');
+    return rng.pick(near.length && rng.chance(0.75) ? near : list);
+  }
+
+  // Born and raised here: a citizen from the start, living with your family
+  // (their house is home until you have your own), and everyone knows you.
+  becomeNative(s) {
+    const sim = this.sim;
+    const L = this.world.getLayout(s);
+    let host = sim.pickHost(L);
+    if (!host) {
+      const b = L.buildings.find((q) => q.residential && q.household && !q.playerHome && L.npcs.some((r) => r.home === q.id && alive(r)));
+      if (b) host = { house: b, bed: b.beds[0] ? { x: b.beds[0].x, y: GROUND, z: b.beds[0].z } : null, family: b.family };
+    }
+    sim.citizen = { sid: s.id, since: 1, host: host ? host.house.id : null, hostBed: host ? host.bed : null, home: null, taxDay: this.day, owed: 0, native: true };
+    for (const r of L.npcs) {
+      if (!alive(r)) continue;
+      const e = sim.repEntry(s.id, r.idx);
+      const family = host && r.home === host.house.id;
+      e.v = Math.max(e.v, family ? 70 : r.age === 'child' ? 30 : 40);
+      e.met = true;
+    }
+    sim.renown.set(s.id, Math.max(sim.renown.get(s.id) || 0, RENOWN.friend));
+    sim.areaCache.delete(s.id);
+    this.hero.home = s.id;
+    this.hero.family = host ? host.family || null : null;
+    ledger(L, this.day, `${this.playerName}${this.hero.family ? ` of the ${this.hero.family} family` : ''} is back home in ${s.name}.`);
+    return host;
+  }
+
+  // The nearest stretch of beach to the island's settled heart, and a
+  // spot on dry sand beside the sea.
+  coastSpot() {
+    const ow = this.world.ow;
+    const s = ow.spawnSettlement;
+    const hx = s ? s.cx + s.cw / 2 : MAP_W / 2;
+    const hz = s ? s.cz + s.cd / 2 : MAP_H / 2;
+    const beaches = ow.cells.filter((c) => c && c.biome === 'beach').map((c) => ({ c, d: Math.hypot(c.cx - hx, (c.cz - hz) * 1.4) })).sort((a, b) => a.d - b.d);
+    for (const { c } of beaches.slice(0, 12)) {
+      const cx = Math.floor((c.cx + 0.5) * REGION_W);
+      const cz = Math.floor((c.cz + 0.5) * REGION_D);
+      this.loadAround(cx, cz, true);
+      let best = null;
+      for (let dz = -16; dz <= 16; dz++) {
+        for (let dx = -28; dx <= 28; dx++) {
+          const x = cx + dx;
+          const z = cz + dz;
+          if (ow.settlementAt(x, z)) continue;
+          const y = this.world.findStandY(x, z, GROUND);
+          if (y <= 0 || this.world.isWaterAt(x, y, z) || this.world.isWaterAt(x, y - 1, z)) continue;
+          let sea = 0;
+          for (const [ox, oz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 0], [-3, 0], [0, 3], [0, -3]]) if (this.world.isWaterAt(x + ox, y - 1, z + oz)) sea++;
+          if (!sea) continue;
+          const d = Math.abs(dx) + Math.abs(dz) - sea;
+          if (!best || d < best.d) best = { x, z, d };
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  // What washed up with you: planks, a battered crate, a broken mast.
+  wreckage(at) {
+    const w = this.world;
+    const rng = new RNG(hash4(this.seed, 0x5b1b));
+    let crate = false;
+    for (let i = 0; i < 10; i++) {
+      const x = at.x + rng.int(-4, 4);
+      const z = at.z + rng.int(-4, 4);
+      if (Math.abs(x - at.x) + Math.abs(z - at.z) < 2) continue;
+      const y = w.findStandY(x, z, at.y);
+      if (y <= 0 || w.getBlock(x, y, z) !== B.air || w.isWaterAt(x, y - 1, z)) continue;
+      if (!crate) {
+        w.setBlock(x, y, z, B.chest);
+        const slots = w.getContainer(x, y, z);
+        if (slots) {
+          slots.fill(null);
+          const loot = [['planks', rng.int(6, 12)], ['string', rng.int(2, 5)], ['bread', rng.int(1, 3)], ['coin', rng.int(5, 20)], ['torch', 4], [rng.pick(['cloth', 'leather', 'iron_ingot', 'book']), rng.int(1, 3)]];
+          loot.forEach(([k, n], j) => {
+            if (ITEMS[k] && j < slots.length) slots[j] = { item: k, count: n };
+          });
+        }
+        crate = true;
+      } else w.setBlock(x, y, z, rng.chance(0.6) ? B.planks : rng.chance(0.5) ? B.fence : B.barrel);
+    }
+  }
+
+  // The first words of a new story.
+  introduce() {
+    const h = this.hero;
+    const c = this.sim.citizen;
+    if (h.origin === 'native' && c) {
+      const L = this.sim.layoutOf(c.sid);
+      this.ui.msg(`Home again in ${L.settlement.name}${h.family ? `, with the ${h.family} family` : ''}. Everyone here knows you.`, '#ffe070');
+      this.ui.msg('Your family\'s beds and chests are yours to use until you have a house of your own.', '#a0c8ff');
+    } else {
+      this.ui.msg('You wake on wet sand. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
+      this.ui.msg('Nobody on this island knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');
+    }
   }
 
   // Nearest standable tile to (x, z), searching outward in rings.
@@ -679,6 +843,7 @@ export class Game {
         case 'KeyE':
         case 'KeyF':
           if (code === 'KeyF' && p.heldDef()?.kind === 'food') this.eat();
+          else if (code === 'KeyF' && p.heldDef()?.kind === 'armor') this.wearHeld();
           else this.interactFront();
           break;
       }
@@ -900,7 +1065,21 @@ export class Game {
       this.eat();
       return;
     }
+    if (held && held.kind === 'armor') {
+      this.wearHeld();
+      return;
+    }
     if (c && c.place && c.place.ok) this.tryPlace(c.place);
+  }
+
+  // Put on the armour or clothes in your hand.
+  wearHeld() {
+    const p = this.player;
+    const it = p.heldDef();
+    const was = p.equip[it.slot];
+    if (!p.wear(p.selected)) return;
+    this.ui.msg(`You put on the ${it.name.toLowerCase()}${was ? ` (and take off the ${ITEMS[was].name.toLowerCase()})` : ''}.`, '#c8e0ff');
+    this.audio?.play('equip');
   }
 
   // ------------------------------------------------------------ mining
@@ -910,6 +1089,7 @@ export class Game {
     const good = h && h.tool && h.tool === b.tool;
     let t = b.hardness * 1.5 / (good ? h.speed : 1);
     if (b.tool === 'pick' && !good) t *= 3.5;
+    t /= digMult(this.hero);
     return Math.max(0.08, t);
   }
 
@@ -988,7 +1168,11 @@ export class Game {
         w.setBlock(x, y, z, B.air);
         // Crops give seeds back if unripe, and more with a hoe.
         const crop = this.crops.harvest(id, meta, byPlayer && this.player.heldItem() === 'hoe', rand);
-        drops.push(...(crop || rollDrops(id, rand)));
+        const got = crop || rollDrops(id, rand);
+        // Green thumbs get an extra crop; foragers an extra handful.
+        if (byPlayer && crop && crop.length && crop[0].item !== CROPS[id]?.seed && heroHas(this.hero, 'farmer')) crop[0].count++;
+        else if (byPlayer && !crop && got.length && BLOCKS[id].render === 'plant' && heroHas(this.hero, 'forager') && rand() < 0.6) got[0].count++;
+        drops.push(...got);
       }
     }
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
@@ -1123,8 +1307,11 @@ export class Game {
     const s = this.world.ow.settlementAt(x, z);
     if (!s || !this.active.has(s.id)) return;
     const L = this.active.get(s.id).layout;
-    const inBuilding = L.buildings.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
-    const civic = inBuilding || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5;
+    const here = L.buildings.filter((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
+    // Your own house is yours to knock about: nobody minds.
+    const c = this.sim.citizen;
+    if (here.some((q) => q.playerHome && c && c.sid === s.id && c.home === q.id)) return;
+    const civic = here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5;
     if (!civic || b.render === 'plant') return;
     const wits = this.sim.witnesses(s.id, x, z, 7).filter((n) => n.state === 'routine');
     const witness = wits[0];
@@ -1757,12 +1944,13 @@ export class Game {
       this.ui.msg('You\'re not hungry.', '#c8c8c8');
       return;
     }
-    p.hp = Math.min(p.maxHp, p.hp + def.heal);
+    const heal = def.heal + (heroHas(this.hero, 'healer') ? 2 : 0);
+    p.hp = Math.min(p.maxHp, p.hp + heal);
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.3);
     this.audio?.play('eat');
-    this.ui.msg(`Ate ${def.name}. (+${def.heal} HP)`, '#80e070');
+    this.ui.msg(`Ate ${def.name}. (+${heal} HP)`, '#80e070');
     // Meal quality matters: bad cooking can turn your stomach, a delightful
     // meal keeps you going for a while.
     if (def.quality === 'terrible' && Math.random() < 0.35) {
@@ -1894,9 +2082,9 @@ export class Game {
       this.swing();
       return;
     }
-    p.attackCd = def && def.cooldown ? def.cooldown : 0.4;
+    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero);
     p.doAction(0.25);
-    let dmg = def && def.damage ? def.damage : 1 + Math.random() * 1.2;
+    let dmg = (def && def.damage ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     const crit = Math.random() < 0.1;
     if (crit) dmg *= 1.8;
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
@@ -1914,7 +2102,11 @@ export class Game {
   damage(target, amount, source, crit = false) {
     if (target.dead) return;
     if (target.kind === 'npc' && target.rec.equipment.armor) amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
-    if (target.kind === 'player' && this.sim.careers.armor()) amount = Math.max(1, Math.round(amount * (1 - this.sim.careers.armor())));
+    if (target.kind === 'player') {
+      // Your armour, and the watch's mail if you wear the colours.
+      const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue());
+      if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
+    }
     target.hp -= amount;
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
@@ -2345,7 +2537,9 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, equip: p.equip, look: p.baseLook },
+      name: this.playerName,
+      hero: this.hero || null,
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: Array.from(this.world.ow.explored),
@@ -2377,6 +2571,11 @@ export class Game {
     this.player.inv = pd.inv;
     this.player.selected = pd.selected;
     this.player.spawn = pd.spawn;
+    if (pd.equip) this.player.equip = { head: null, body: null, legs: null, feet: null, ...pd.equip };
+    if (pd.look) this.player.baseLook = pd.look;
+    if (data.name) this.playerName = data.name;
+    if (data.hero) this.hero = data.hero;
+    this.applyHero();
     this.moveEntity(this.player, pd.x, pd.y, pd.z);
     this.sim.careers.applyLook();
   }

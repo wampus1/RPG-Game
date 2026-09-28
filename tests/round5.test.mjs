@@ -151,7 +151,9 @@ test('enlarging your house: the mayor gives good workers a discount, builders ch
   game.sim.addRenown(sid, 12, 'testing');
   const off = Math.round(full * 0.75);
   assert.match(respond(mayor, game, 'expand').lines.join(' '), new RegExp(`¤${off}\\b.*quarter off`));
-  // ...but not from a builder, who is paid directly.
+  // ...but not from a builder, who is paid directly (and only knocks
+  // something off for friends).
+  game.sim.repEntry(sid, builder.rec.idx).v -= game.sim.opinion(builder);
   const offer = respond(builder, game, 'expand');
   assert.match(offer.lines.join(' '), new RegExp(`¤${full}\\b`));
   assert.ok(!/quarter off/.test(offer.lines.join(' ')));

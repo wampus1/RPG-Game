@@ -22,6 +22,17 @@ r('hand', 'workbench', 1, { planks: 4 });
 r('hand', 'campfire', 1, { stick: 3, cobblestone: 2 });
 r('hand', 'club', 1, { stick: 1, planks: 2 });
 
+// Leather and cloth, sewn by hand.
+r('hand', 'leather_cap', 1, { leather: 2, string: 1 });
+r('hand', 'leather_tunic', 1, { leather: 5, string: 2 });
+r('hand', 'leather_trousers', 1, { leather: 4, string: 1 });
+r('hand', 'leather_boots', 1, { leather: 2, string: 1 });
+r('hand', 'straw_hat', 1, { wheat: 4 });
+r('hand', 'wool_hood', 1, { cloth: 2, string: 1 });
+r('hand', 'linen_shirt', 1, { cloth: 3, string: 1 });
+r('hand', 'wool_trousers', 1, { cloth: 3, string: 1 });
+r('workbench', 'fine_coat', 1, { cloth: 5, string: 2, gold_ingot: 1 });
+
 // --- workbench ------------------------------------------------------------------
 r('workbench', 'wood_pickaxe', 1, { planks: 3, stick: 2 });
 r('workbench', 'wood_axe', 1, { planks: 3, stick: 2 });
@@ -95,6 +106,13 @@ r('anvil', 'hoe', 1, { iron_ingot: 1, stick: 2 });
 r('anvil', 'lantern', 1, { iron_ingot: 1, torch: 1 });
 r('anvil', 'anvil', 1, { iron_ingot: 5 });
 r('anvil', 'iron_bars', 4, { iron_ingot: 2 });
+// Armour at the anvil.
+r('anvil', 'iron_helmet', 1, { iron_ingot: 4 });
+r('anvil', 'chainmail', 1, { iron_ingot: 5, string: 2 });
+r('anvil', 'iron_breastplate', 1, { iron_ingot: 8, leather: 1 });
+r('anvil', 'iron_greaves', 1, { iron_ingot: 5, leather: 1 });
+r('anvil', 'iron_boots', 1, { iron_ingot: 3, leather: 1 });
+r('anvil', 'gold_circlet', 1, { gold_ingot: 2, gem: 1 });
 
 export const RECIPES = R;
 

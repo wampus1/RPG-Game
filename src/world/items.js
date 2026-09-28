@@ -100,6 +100,28 @@ item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, re
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
 item('arrow', { value: 1 });
 
+// --- armour & clothes ----------------------------------------------------------
+// Worn in one of four places. `armor` is the share of each blow it takes
+// off (the pieces add up, to at most 60%); `look` is how it shows on you.
+export const WEAR_SLOTS = ['head', 'body', 'legs', 'feet'];
+export const ARMOR_CAP = 0.6;
+const wear = (key, name, slot, armor, value, look, extra = {}) => item(key, { name, kind: 'armor', stack: 1, slot, armor, value, look, ...extra });
+wear('leather_cap', 'Leather Cap', 'head', 0.04, 10, 'lcap');
+wear('iron_helmet', 'Iron Helmet', 'head', 0.1, 40, 'helmet');
+wear('straw_hat', 'Straw Hat', 'head', 0, 4, 'straw');
+wear('wool_hood', 'Wool Hood', 'head', 0.02, 8, 'hood');
+wear('gold_circlet', 'Gold Circlet', 'head', 0, 60, 'circlet');
+wear('leather_tunic', 'Leather Tunic', 'body', 0.1, 24, 'leather');
+wear('chainmail', 'Chainmail Shirt', 'body', 0.18, 70, 'chain');
+wear('iron_breastplate', 'Iron Breastplate', 'body', 0.26, 110, 'plate');
+wear('linen_shirt', 'Linen Shirt', 'body', 0, 8, 'linen');
+wear('fine_coat', 'Fine Coat', 'body', 0.03, 45, 'coat');
+wear('leather_trousers', 'Leather Trousers', 'legs', 0.06, 16, 'leather');
+wear('iron_greaves', 'Iron Greaves', 'legs', 0.12, 60, 'plate');
+wear('wool_trousers', 'Wool Trousers', 'legs', 0.01, 8, 'cloth');
+wear('leather_boots', 'Leather Boots', 'feet', 0.03, 12, 'leather');
+wear('iron_boots', 'Iron Boots', 'feet', 0.06, 35, 'iron');
+
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });
 item('dice', { kind: 'misc', stack: 8, value: 3 });

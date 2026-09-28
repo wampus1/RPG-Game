@@ -6,10 +6,12 @@ import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game } from './game/game.js';
 import { UI } from './ui/ui.js';
-import { TitleWindow, HelpWindow } from './ui/windows.js';
+import { TitleWindow, HelpWindow, SaveSlotsWindow } from './ui/windows.js';
 import { hashString } from './util/rng.js';
+import { SaveStore } from './game/saves.js';
+import { CharacterWindow } from './ui/create.js';
+import { randomHero } from './game/hero.js';
 
-const SAVE_KEY = 'tessera-save-v1';
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
 const params = new URLSearchParams(location.search);
 
@@ -37,24 +39,45 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-function hasSave() {
+function browserStorage() {
   try {
-    return !!localStorage.getItem(SAVE_KEY);
+    return window.localStorage;
   } catch {
+    return null;
+  }
+}
+const store = new SaveStore(browserStorage());
+
+// Save into a slot; says so (or why it couldn't).
+function saveTo(id, note) {
+  if (!game) return false;
+  try {
+    store.save(id, game);
+    if (id !== 'auto') game.slot = id;
+    ui.msg(note, '#80e070');
+    audio.play('select');
+    return true;
+  } catch (e) {
+    const full = e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''));
+    ui.msg(full ? 'Not enough room to save: delete an old save first.' : `Save failed: ${e.message}`, '#ff5a50');
     return false;
   }
 }
 
-function saveNow(note) {
+function loadFrom(id) {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize()));
-    ui.msg(note, '#80e070');
+    const data = store.load(id);
+    if (!data) {
+      ui.msg('That save is empty.', '#ff5a50');
+      return;
+    }
+    startGame(null, data, id);
   } catch (e) {
-    ui.msg('Save failed: ' + e.message, '#ff5a50');
+    ui.msg('Load failed: ' + e.message, '#ff5a50');
   }
 }
 
-function startGame(seed, save = null) {
+function startGame(seed, save = null, slot = null, hero = null) {
   const s = save ? save.seed : seed ?? (Math.random() * 2 ** 32) >>> 0;
   ui.closeAll();
   ui.messages = [];
@@ -62,16 +85,17 @@ function startGame(seed, save = null) {
   // Let the loading text paint before the heavy generation work.
   setTimeout(() => {
     const t0 = performance.now();
-    game = new Game({ seed: s, renderer, audio, ui, save });
+    game = new Game({ seed: s, renderer, audio, ui, save, hero });
     game.crt = crt;
-    game.autosave = () => saveNow(`Autosaved (day ${game.day}, 7:00).`);
+    game.slot = slot && slot !== 'auto' ? slot : null;
+    game.autosave = () => saveTo('auto', `Autosaved (day ${game.day}, 7:00).`);
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
     ui.showHud = true;
     ui.hudP = 0;
     ui.lastSettlement = undefined;
     hideLoading();
-    ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
+    if (!save && !hero) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
     ui.msg('Press H for help.', '#a0c8ff');
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;
@@ -92,37 +116,52 @@ function hideLoading() {
   if (loadingEl) loadingEl.style.display = 'none';
 }
 
+// A new game: make your character first.
+function newGame(seed) {
+  const s = seed ?? (Math.random() * 2 ** 32) >>> 0;
+  ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, null, hero)));
+}
+
 ui.hooks = {
-  start: (seed) => startGame(seed),
+  start: (seed) => newGame(seed),
   askSeed: () => {
     const v = window.prompt('World seed (number or text):', '');
     if (v === null) return;
     const n = /^\d+$/.test(v.trim()) ? parseInt(v.trim(), 10) >>> 0 : hashString(v.trim());
-    startGame(n);
+    newGame(n);
   },
   save: () => {
     if (!game) return;
-    saveNow('Game saved.');
+    ui.open(new SaveSlotsWindow(ui, 'save', store));
+  },
+  load: () => ui.open(new SaveSlotsWindow(ui, 'load', store)),
+  saveSlot: (id) => {
+    const ok = saveTo(id, `Game saved to slot ${id}.`);
+    if (ok) ui.closeAll();
+    return ok;
+  },
+  loadSlot: (id) => loadFrom(id),
+  continue: () => {
+    const last = store.latest();
+    if (last) loadFrom(last.id);
+  },
+  // Quick save: back into the slot this game was last saved to or loaded from.
+  quickSave: () => {
+    if (!game) return;
+    if (game.slot) saveTo(game.slot, `Game saved to slot ${game.slot}.`);
+    else ui.open(new SaveSlotsWindow(ui, 'save', store));
+  },
+  newWorld: () => {
+    game = null;
+    ui.showHud = false;
     ui.closeAll();
+    newGame(null);
   },
-  load: () => {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) {
-        ui.msg('No saved game found.', '#ff5a50');
-        return;
-      }
-      startGame(null, JSON.parse(raw));
-    } catch (e) {
-      ui.msg('Load failed: ' + e.message, '#ff5a50');
-    }
-  },
-  newWorld: () => startGame(null),
   title: () => {
     game = null;
     ui.showHud = false;
     ui.closeAll();
-    ui.open(new TitleWindow(ui, hasSave()));
+    ui.open(new TitleWindow(ui, store));
   },
   toggleCrt: () => {
     crt.enabled = !crt.enabled;
@@ -130,8 +169,14 @@ ui.hooks = {
   },
 };
 
-if (params.has('autostart')) startGame(params.has('seed') ? parseInt(params.get('seed'), 10) >>> 0 : null);
-else ui.open(new TitleWindow(ui, hasSave()));
+// ?autostart skips the title (and ?origin=crash|native makes a random
+// character with that origin).
+if (params.has('autostart')) {
+  const seed = params.has('seed') ? parseInt(params.get('seed'), 10) >>> 0 : (Math.random() * 2 ** 32) >>> 0;
+  const origin = params.get('origin');
+  startGame(seed, null, null, origin ? { ...randomHero(seed), origin } : null);
+}
+else ui.open(new TitleWindow(ui, store));
 if (params.has('nocrt')) crt.enabled = false;
 
 const perf = (window.__perf = {});
@@ -171,12 +216,15 @@ function step(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   fps = fps * 0.95 + (1 / Math.max(dt, 0.001)) * 0.05;
-  if (game) {
+  // (Going back to the title mid-frame drops `game`; finish this frame
+  // with the one we started.)
+  const g = game;
+  if (g) {
     const t0 = performance.now();
-    game.update(dt, input);
+    g.update(dt, input);
     ui.update(dt, game);
     const t1 = performance.now();
-    renderer.render(game, dt);
+    if (game === g) renderer.render(g, dt);
     const t2 = performance.now();
     ui.render(ctx, game, fps);
     const t3 = performance.now();

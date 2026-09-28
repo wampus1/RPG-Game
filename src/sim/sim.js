@@ -21,6 +21,7 @@ import { Nomads } from './nomads.js';
 import { electMayor, weddings, comingOfAge, raids } from './life.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
+import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
@@ -270,7 +271,7 @@ export class Sim {
   opinion(npc) {
     const rec = npc.rec;
     const sid = this.repSidOf(npc);
-    let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid);
+    let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid) + opinionBonus(this.game.hero);
     const c = this.citizen;
     if (c && c.sid === sid && c.host !== null && rec.home === c.host) v += 10;
     return clamp(Math.round(v), -100, 100);
@@ -280,6 +281,7 @@ export class Sim {
     const sid = this.repSidOf(npc);
     const rec = npc.rec || npc;
     const r = this.repEntry(sid, rec.idx);
+    if (delta > 0) delta = Math.round(delta * repGainMult(this.game.hero) * 10) / 10;
     r.v = clamp(r.v + delta, -100, 100);
     r.met = true;
     this.areaCache.delete(sid);
@@ -310,6 +312,8 @@ export class Sim {
   witnesses(sid, x, z, radius = 7, exclude = null) {
     const a = this.game.active.get(sid);
     if (!a) return [];
+    // A light step: people have to be closer to notice.
+    if (heroHas(this.game.hero, 'sneak')) radius = Math.max(2, Math.round(radius * 0.7));
     return a.npcs.filter((n) => {
       if (n.dead || n.sleeping || n === exclude || n.rec.away) return false;
       if (Math.max(Math.abs(n.x - x), Math.abs(n.z - z)) > radius) return false;
@@ -468,6 +472,7 @@ export class Sim {
     const tr = rec.traits || [];
     m *= tr.includes('generous') ? 0.95 : tr.includes('stingy') || tr.includes('shrewd') ? 1.06 : 1;
     m *= 1 + (e ? e.tax * 0.5 : 0);
+    m *= priceMult(this.game.hero);
     const op = this.opinion(npc);
     if (op <= -25) m *= 1.25;
     let d = 1;
@@ -492,7 +497,7 @@ export class Sim {
   // always shows, even on cheap goods where rounding would swallow it.
   sellPrice(npc, k) {
     const op = this.opinion(npc);
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1);
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;

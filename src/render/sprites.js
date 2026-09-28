@@ -41,15 +41,26 @@ const OUTFIT_COLORS = {
   skeleton: {},
 };
 
+// Colours of worn armour and clothes (see items.js: look).
+const GEAR = {
+  leather: { shirt: '#7a5232', pants: '#6a4a2e', shoes: '#4a2e1a' },
+  chain: { shirt: '#8a8a98' },
+  plate: { shirt: '#a8aab8', pants: '#9a9aa8' },
+  coat: { shirt: '#3a2a4a' },
+  linen: { shirt: '#e8e0cc' },
+  cloth: { pants: '#4a4a6a' },
+  iron: { shoes: '#8a8a98' },
+};
+
 function drawHumanoid(look, dir, frame) {
   const p = new Px(CHAR_W, SHEET_H);
   const skin = hex(look.skin);
   const hair = hex(look.hair);
   let shirt = hex(look.shirt);
   let pants = hex(look.pants);
-  const shoes = hex(look.shoes);
+  let shoes = hex(look.shoes);
   const accent = hex(look.accent || '#b03030');
-  const outfit = look.outfit || 'plain';
+  const outfit = look.gear && look.gear.body && !(look.outfit || '').startsWith('robe') ? 'plain' : look.outfit || 'plain';
   const oc = OUTFIT_COLORS[outfit] || {};
   if (outfit === 'plaid') shirt = hex('#b03a2e');
   if (outfit === 'rags') {
@@ -58,6 +69,13 @@ function drawHumanoid(look, dir, frame) {
   }
   if (outfit === 'noble') shirt = accent;
   if (outfit === 'hunter') shirt = hex(oc.tunic);
+  // Worn armour and clothes change the colours underneath (and cover the
+  // everyday outfit's details).
+  const gear = look.gear || {};
+  let shoesG = null;
+  if (gear.body && GEAR[gear.body]?.shirt) shirt = hex(GEAR[gear.body].shirt);
+  if (gear.legs && GEAR[gear.legs]?.pants) pants = hex(GEAR[gear.legs].pants);
+  if (gear.feet && GEAR[gear.feet]?.shoes) shoesG = hex(GEAR[gear.feet].shoes);
   const skel = outfit === 'skeleton';
   const small = look.small;
   const sit = frame === 4;
@@ -76,6 +94,7 @@ function drawHumanoid(look, dir, frame) {
   const R = (x, y, w, h, c) => {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) S(x + i, y + j, c);
   };
+  if (shoesG) shoes = shoesG;
   const skinC = skel ? hex('#e8e4d4') : skin;
   const shirtC = skel ? hex('#d8d4c4') : shirt;
   const pantsC = skel ? hex('#c8c4b4') : pants;
@@ -148,6 +167,44 @@ function drawHumanoid(look, dir, frame) {
   }
   // Belt.
   if (!outfit.startsWith('robe') && outfit !== 'farmer') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
+  // Armour details over the top.
+  if (!skel) {
+    const G = (x, y, w, h, c) => R(x, y, w, h, hex(c));
+    if (gear.body === 'chain') {
+      for (let y = torsoY; y < torsoY + torsoH; y++) for (let x = tx; x < tx + tw; x++) S(x, y, hex((x + y) % 2 ? '#8a8a98' : '#6a6a78'));
+      G(tx, legY - 1, tw, 1, '#5a4030');
+    } else if (gear.body === 'plate') {
+      G(tx, torsoY, tw, 1, '#d8dce8');
+      G(tx, torsoY + torsoH - 1, tw, 1, '#7a7c88');
+      if (dir === 0) G(7, torsoY + 1, 2, torsoH - 2, '#c0c4d0');
+      if (dir !== 2 && !side) {
+        G(3, torsoY, 2, 2, '#b8bcc8');
+        G(11, torsoY, 2, 2, '#b8bcc8');
+      }
+    } else if (gear.body === 'leather') {
+      if (dir === 0) for (let y = torsoY + 1; y < torsoY + torsoH - 1; y += 2) G(7, y, 2, 1, '#3a2414');
+      G(tx, legY - 1, tw, 1, '#3a2414');
+    } else if (gear.body === 'coat') {
+      G(tx, torsoY, tw, torsoH + 3, GEAR.coat.shirt);
+      if (dir !== 2) G(7, torsoY, 2, torsoH + 3, '#c8a030');
+      G(tx, torsoY, tw, 1, '#c8a030');
+    } else if (gear.body === 'linen' && dir === 0) G(tx + 2, torsoY, tw - 4, 1, '#c8c0a8');
+    if (gear.legs === 'plate') {
+      const ky = legY + Math.floor(legH / 2);
+      if (!side) {
+        G(5, ky, 3, 1, '#d0d4e0');
+        G(8, ky, 3, 1, '#d0d4e0');
+      } else G(6, ky, 4, 1, '#d0d4e0');
+    }
+    if (gear.feet) {
+      // Boots come up over the ankle.
+      const bc = GEAR[gear.feet]?.shoes || '#4a2e1a';
+      if (!side && !sit) {
+        G(5, legY + legH - 1, 3, 1, bc);
+        G(8, legY + legH - 1, 3, 1, bc);
+      } else if (side && !sit) G(6, legY + legH - 1, 4, 1, bc);
+    }
+  }
   // Arms.
   const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'guard' ? hex(oc.chain2) : shirtC;
   if (!side) {
@@ -327,6 +384,11 @@ function drawHumanoid(look, dir, frame) {
       case 'flower':
         H(side ? hx + 5 : hx + 6, hy, 2, 1, '#f080b0');
         H(side ? hx + 6 : hx + 7, hy - 1, 1, 1, '#ffe070');
+        break;
+      case 'lcap':
+        H(hx, hy - 1, 8, 3, '#7a5232');
+        H(hx, hy + 1, 8, 1, '#5a3a1e');
+        if (side) H(hx + 7, hy + 2, 1, 3, '#7a5232');
         break;
       case 'hood':
         H(hx - 1, hy - 1, 10, 3, '#6a4a2a');
@@ -855,6 +917,62 @@ function blockIcon(id) {
   return p;
 }
 
+// Worn things: a little picture of the piece in its colours.
+function armorIcon(it) {
+  const p = new Px(16, 16);
+  const lk = it.look;
+  const col = {
+    lcap: '#7a5232', helmet: '#9a9aa8', straw: '#e8c860', hood: '#6a4a2a', circlet: '#e0b830',
+    leather: it.slot === 'feet' ? '#4a2e1a' : '#7a5232', chain: '#8a8a98', plate: '#a8aab8', linen: '#e8e0cc', coat: '#3a2a4a', cloth: '#4a4a6a', iron: '#8a8a98',
+  }[lk] || '#888888';
+  const c = hex(col);
+  const hi = shade(c, 1.25);
+  const lo = shade(c, 0.75);
+  if (it.slot === 'head') {
+    if (lk === 'straw') {
+      p.rect(2, 9, 12, 2, c);
+      p.rect(5, 5, 6, 4, shade(c, 0.9));
+      p.hline(5, 10, 8, hex('#a83a2a'));
+    } else if (lk === 'circlet') {
+      p.ellipse(8, 9, 5, 2, c);
+      for (let x = 6; x <= 10; x++) p.clear(x, 9);
+      p.set(8, 7, hex('#50c0e0'));
+    } else {
+      p.rect(4, 4, 8, 7, c);
+      p.hline(4, 11, 4, hi);
+      p.rect(3, 10, 10, 2, lo);
+      if (lk === 'helmet') p.rect(7, 7, 2, 5, lo);
+      if (lk === 'hood') p.rect(3, 6, 2, 8, c);
+    }
+  } else if (it.slot === 'body') {
+    p.rect(4, 3, 8, 10, c);
+    p.rect(2, 3, 2, 6, c);
+    p.rect(12, 3, 2, 6, c);
+    p.hline(4, 11, 3, hi);
+    if (lk === 'chain') for (let y = 4; y < 13; y++) for (let x = 4; x < 12; x++) if ((x + y) % 2) p.set(x, y, lo);
+    if (lk === 'plate') p.rect(7, 4, 2, 8, hi);
+    if (lk === 'leather') for (let y = 5; y < 12; y += 2) p.set(8, y, hex('#3a2414'));
+    if (lk === 'coat') p.rect(7, 3, 2, 11, hex('#c8a030'));
+    p.hline(4, 11, 12, lo);
+  } else if (it.slot === 'legs') {
+    p.rect(4, 3, 8, 2, lo);
+    p.rect(4, 5, 3, 9, c);
+    p.rect(9, 5, 3, 9, c);
+    if (lk === 'plate') {
+      p.hline(4, 6, 9, hi);
+      p.hline(9, 11, 9, hi);
+    }
+  } else {
+    p.rect(3, 6, 3, 6, c);
+    p.rect(3, 11, 5, 2, c);
+    p.rect(9, 6, 3, 6, c);
+    p.rect(9, 11, 5, 2, c);
+    p.hline(3, 5, 6, hi);
+    p.hline(9, 11, 6, hi);
+  }
+  return p.outline(OUT);
+}
+
 const iconCache = new Map();
 export function itemIcon(key) {
   let c = iconCache.get(key);
@@ -868,6 +986,7 @@ export function itemIcon(key) {
     if (m) px = toolIcon(m[2], m[1]);
     else if (key === 'hoe') px = toolIcon('hoe', 'iron');
     else if (key === 'hammer') px = toolIcon('hammer', 'iron');
+    else if (it.kind === 'armor') px = armorIcon(it);
     else px = simpleIcon(key);
   }
   c = toCanvas(px);

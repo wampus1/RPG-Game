@@ -141,11 +141,12 @@ export class Careers {
   applyLook() {
     const p = this.game.player;
     if (!p) return;
+    const base = p.baseLook || p.look;
     if (this.isGuard()) {
-      if (!this.oldLook) this.oldLook = { outfit: p.look.outfit, hat: p.look.hat };
-      p.look = { ...p.look, outfit: 'guard', hat: 'helmet' };
+      if (!this.oldLook) this.oldLook = { outfit: base.outfit, hat: base.hat };
+      p.look = { ...base, outfit: 'guard', hat: 'helmet' };
     } else if (this.oldLook) {
-      p.look = { ...p.look, ...this.oldLook };
+      p.look = { ...base, ...this.oldLook };
       this.oldLook = null;
     }
   }

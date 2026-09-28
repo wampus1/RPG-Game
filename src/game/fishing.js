@@ -3,6 +3,7 @@
 // button) to pull your catch zone along the bar and keep the fish inside it
 // until the line is in; let the fish run too long and it slips the hook.
 import { ITEMS } from '../world/items.js';
+import { has as heroHas } from './hero.js';
 
 const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
 export const ZONE = 0.3; // width of the catch zone on the bar
@@ -16,9 +17,11 @@ const CATCHES = [
   { item: 'gem', w: 4, fight: 1.6 },
 ];
 
-function rollCatch(rand) {
-  let r = rand() * CATCHES.reduce((n, c) => n + c.w, 0);
-  for (const c of CATCHES) {
+// The lucky pull up coins and gems twice as often.
+function rollCatch(rand, lucky = false) {
+  const list = lucky ? CATCHES.map((c) => (c.item === 'coin' || c.item === 'gem' ? { ...c, w: c.w * 2 } : c)) : CATCHES;
+  let r = rand() * list.reduce((n, c) => n + c.w, 0);
+  for (const c of list) {
     r -= c.w;
     if (r <= 0) return c;
   }
@@ -32,6 +35,7 @@ function waitTime(game, rand) {
   if (game.weather && game.weather.kind === 'rain') t *= 0.7;
   const m = game.minute;
   if ((m >= 300 && m < 480) || (m >= 1080 && m < 1260)) t *= 0.8;
+  if (heroHas(game.hero, 'angler')) t *= 0.75;
   return t;
 }
 
@@ -64,7 +68,7 @@ export function hook(game, rand = Math.random) {
     }
     return false;
   }
-  const c = rollCatch(rand);
+  const c = rollCatch(rand, heroHas(game.hero, 'lucky'));
   f.phase = 'reel';
   f.catch = c.item;
   f.fight = c.fight;
@@ -100,9 +104,9 @@ export function updateFishing(game, dt, input, rand = Math.random) {
     }
     if (f.t <= 0) {
       f.phase = 'bite';
-      f.t = BITE_WINDOW;
+      f.t = BITE_WINDOW * (heroHas(game.hero, 'angler') ? 1.5 : 1);
       f.dip = 1;
-      p.emoteShow('!', '#ffe070', BITE_WINDOW);
+      p.emoteShow('!', '#ffe070', f.t);
       game.audio?.play('splash');
       game.renderer.emit(f.x, f.y, f.z, { n: 10, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 35, life: 0.5, oy: 2 });
     }
@@ -140,7 +144,7 @@ export function updateFishing(game, dt, input, rand = Math.random) {
   }
   const inside = Math.abs(f.fish - f.zone) <= ZONE / 2;
   f.inside = inside;
-  f.progress += (inside ? 0.28 : -0.2 * f.fight) * dt;
+  f.progress += (inside ? 0.28 * (heroHas(game.hero, 'angler') ? 1.25 : 1) : -0.2 * f.fight) * dt;
   f.dip = inside ? 0.3 : 0.8;
   if (Math.random() < dt * 3) game.renderer.emit(f.x, f.y, f.z, { n: 1, color: '#e0f4ff', up: 10, life: 0.3, oy: 2 });
   if (f.progress >= 1) land(game, f);
