@@ -108,7 +108,10 @@ scarecrows, market stalls, wells and statues, all furnished inside.
 culture. Every villager gets a job (farmer, guard, blacksmith, innkeeper,
 merchant, priest, scholar, fisher, miner, lumberjack, noble…), a personality
 (bravery, sociability, diligence, temper, kindness and early-bird/night-owl
-leanings, shown as traits), one to three hobbies (fishing, reading, music,
+leanings, shown as traits, plus a quirk such as gossipy, generous, stingy,
+superstitious or devout that colours how they talk, pay and haggle), a look of
+their own (skin tones, hair colours and styles from afros to topknots, hats,
+glasses, earrings, freckles, old scars, patterned shirts), one to three hobbies (fishing, reading, music,
 dice, praying, gardening, sword practice, stargazing…), equipment from their
 job and hobbies, a home and a workplace. Only families (partners, children and
 grandparents) share a home. Schedules are built from all of this and offset
@@ -119,7 +122,8 @@ what they're doing with little emotes.
 
 When threatened, villagers decide based on personality and job: the brave
 fight back (or step in when a friend or relative is hurt), others shout for the
-guards, who come running, and the timid run home.
+guards, who come running, and the timid run home. Trappers never run from
+animals: a beast that gets close meets their blade.
 
 Villagers also talk among themselves. Two neighbours idling side by side
 trade a few lines about the tavern's food, taxes, the weather, the latest
@@ -129,9 +133,13 @@ rivals, children playing tag) or you, if you're within earshot.
 **Towns that run.** Every villager record carries coins, an inventory, skills,
 hunger and mood; every business has a till and a store; every household has a
 pantry; every settlement starts with a treasury that ranges from nearly empty
-(poor villages) to overflowing (prosperous cities). Trappers head out beyond
-the walls with bows and swords, check and re-lay their snares, and bring meat
-back to the tavern; fishers and farmers sell their catch and harvest; the
+(poor villages) to overflowing (prosperous cities), kept as coin in the town
+hall's chests (take some and the treasury really is poorer). Trappers head out
+beyond the walls with bows and swords, set new snares on their hunting grounds
+and make rounds to check them, and bring meat back to the tavern; farmers
+harvest ripe crops by hand and sow the rows again, and the fields grow back
+over the following days (wheat, carrots and cabbage each have their own pace
+and stages); fishers and farmers sell their catch and harvest; the
 cook turns it into meals whose quality depends on skill: *burnt gruel* makes
 people (and you) sick, a *savory feast* is a treat. People need to eat every
 day: they buy from the kitchen or eat from the family pantry, parents pay for
@@ -140,7 +148,10 @@ children) go out foraging and hunting instead. The mayor (a village elder in
 villages) reviews the books each morning: raising or lowering taxes, paying for
 bread for the hungry, raising fines after thefts, banning drawn weapons after
 violence, and throwing a feast day when the coffers are full. The notice board
-on the square shows the treasury, taxes, laws and recent events. Traveling
+on the square shows the treasury, taxes, laws and recent events. A town that
+loses all its guards asks one of its able adults to take up the spear; if
+nobody is left who can, its people pack up and move to another settlement
+(their own civilization's if they can), and the place stands deserted. Traveling
 merchants pack local goods, walk out of town, and turn up days later in other
 settlements, where you can trade with them on the square.
 
@@ -173,7 +184,10 @@ journal (J), pay what the person can afford (or the treasury, for official
 ones), build goodwill, and lapse, with some disappointment, if you take too
 long.
 
-**Crime and punishment.** A crime only counts if someone sees it: stealing from
+**Crime and punishment.** A crime only counts if someone sees it, and people
+only see what's in front of them: walls and closed doors block their view
+(windows and open doors don't), and someone with their back turned only
+notices what happens right behind them. Crimes include stealing from
 a chest or a snare, harvesting a town's fields, smashing things, trespassing in
 a home at night, brandishing a weapon where it's banned, assault and murder.
 Witnesses shout, think less of you, and call the guards. Even an unseen murder
@@ -187,8 +201,12 @@ and the hearing decides what can be proven, from what people saw directly and
 who was seen nearby, and sets the fine or the hours you'll serve if you can't
 pay (sleep on the cot to pass the time). You can plead for mercy. Released
 prisoners walk out of the opened cell and get their weapons back, unless they
-killed someone. Citizenship is revoked, and repeat serious offenders are
-exiled (guards attack on sight) or executed.
+killed someone. Break out instead and an empty cell tells its own story: you're
+wanted, guards who spot you try to arrest you, and one of them goes to patch the
+jail up, bar by bar. Citizenship is revoked, and repeat serious offenders are
+exiled (guards attack on sight) or executed. A citizen the town has come to
+hate gets a visit from the mayor: mend your ways within a few days, or lose
+your citizenship.
 
 **Death and graveyards.** Every settlement has a fenced graveyard with room to
 grow; when someone dies (old age, a wolf, you) a gravestone with their name,
@@ -208,16 +226,27 @@ family's name) that you can read.
 can join the **town watch**: you're sworn in with an iron sword, a bow and
 arrows and a guard badge, wear the uniform (which softens blows), are paid from
 the treasury for the hours you spend walking your beat between 6:00 and 20:00,
-and earn a bounty for every beast killed near town. Licensed **trappers**,
+and earn a bounty for every beast killed near town. Guards may carry weapons
+where arms are banned, but a guard held on trial, or one who insults the
+mayor, is thrown off the watch and hands back the badge and kit. Licensed **trappers**,
 **fishers** and **farmers** get starter tools, a premium from the town's traders
 for their goods, and the right to empty the town's snares or harvest its
-fields. Shopkeepers may take you on (if they like you and their till can
-afford it): be in the shop during their hours and you're paid by the hour at
-closing, with a staff discount; skip too many days and you're let go. You can
-also **hire a guard** as an escort for a few hours up to three days (if the
-town can spare one): they follow you anywhere, fight off beasts, keep you
-company, won't stand against the law, and walk home when the contract ends.
-The journal (J) shows your job, escort, requests and criminal record.
+fields, and once or twice a day townsfolk seek you out to buy your goods.
+Shopkeepers may take you on (if they like you and their till can afford it).
+You're paid at closing for work actually done: each shift brings chores (take
+stock of the shop's chests and barrels, bring in supplies and put them away),
+and customers come in to buy from the shop's stock through you. On shift you
+may use the shop's containers freely; you also get a staff discount.
+Insulting or attacking your employer gets you fired on the spot, and skipping
+too many days gets you let go. Discounts show in the trade window as the old
+price struck through in red. You can **hire a guard** as an escort for a few
+hours up to three days (if the town can spare one): they follow you anywhere,
+fight off beasts, keep you company, won't stand against the law, and walk
+home when the contract ends. Good friends (people who like you a lot) will
+come along as **companions** for free until you send them home, or until you
+lose their respect. The journal (J) shows your job and chores, escort,
+requests and criminal record. People you've just done a favour for won't ask
+again for a day or two.
 
 **Player.** Walk tile by tile, mine with tools or bare hands (blocks drop
 items you pick up by walking over them), place blocks and rotate asymmetric
@@ -225,7 +254,8 @@ ones, switch the working layer, fight with melee weapons or a bow, toss items,
 craft at a workbench, furnace or anvil, trade with shopkeepers (their stock and
 purse are real), eat, sit, sleep in beds to pass the night (the world dims and
 time races to dawn) and set your spawn point, push through leafy canopies,
-and save your game (Esc → Save).
+till farmland with a hoe and plant wheat seeds, carrots or cabbage seeds (a hoe
+also brings in a bigger harvest), and save your game (Esc → Save).
 
 ## Code layout
 
@@ -245,14 +275,16 @@ src/
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title)
-  game/                game rules, input, dialogue, villager chatter, audio
-                       (synthesized SFX)
+  game/                game rules, input, dialogue, villager chatter, crop
+                       growth, audio (synthesized SFX)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
                        merchants, abstract catch-up), justice (crimes,
-                       suspicion, arrests, hearings), careers (professions,
-                       shop work, hired escorts), favours, and the Sim hub
-                       (reputation, graves, mourning, citizenship and house
-                       building, saving)
+                       suspicion, arrests, hearings, jail repairs), careers
+                       (professions, shop work, customers, escorts,
+                       companions), favours, civic upkeep (guards, deserted
+                       towns), and the Sim hub (reputation, graves, mourning,
+                       citizenship and house building, treasury chests,
+                       saving)
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server
 ```

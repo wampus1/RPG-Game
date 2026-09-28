@@ -143,6 +143,7 @@ export class ContainerWindow extends Window {
     this.slots = slots;
     this.pos = pos;
     this.snap = this.counts();
+    this.inside = this.counts(false);
   }
   counts(held = true) {
     const m = {};
@@ -164,14 +165,18 @@ export class ContainerWindow extends Window {
       const d = n - (now[k] || 0);
       if (d > 0) taken.push({ item: k, count: d });
     }
-    // Put-in items only count once they've left the cursor.
+    // What landed in the container itself since last time (drag or shift-click).
     const settled = this.counts(false);
     for (const [k, n] of Object.entries(settled)) {
-      const d = n - (this.snap[k] || 0);
-      if (d > 0 && !(this.ui.cursorStack && this.ui.cursorStack.item === k)) added.push({ item: k, count: d });
+      const d = n - (this.inside[k] || 0);
+      if (d > 0) added.push({ item: k, count: d });
     }
+    this.inside = settled;
     this.snap = now;
-    if (added.length && game.onContainerPut && game.onContainerPut(this.pos, added)) this.snap = this.counts(held);
+    if (added.length && game.onContainerPut && game.onContainerPut(this.pos, added)) {
+      this.snap = this.counts(held);
+      this.inside = this.counts(false);
+    }
     if (taken.length && game.onContainerTake(this.pos, taken) && held) this.close();
   }
   draw(g, game) {
