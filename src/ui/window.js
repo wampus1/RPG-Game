@@ -69,13 +69,15 @@ export function describeActivity(e) {
     case 'home': return 'at home';
     case 'mourn': return 'mourning at a grave';
     case 'funeral': return 'at a funeral';
-    case 'build': return 'building a house';
+    case 'build': return e.label ? e.label : 'building a house';
     case 'forage': return 'looking for food';
     case 'trial': return 'at a hearing';
     case 'travel': return 'leaving on a journey';
     case 'visit': return 'selling wares';
     case 'sell': return 'selling the catch';
     case 'repair': return 'repairing the jail';
+    case 'watch': return 'guarding a miner';
+    case 'camp': return 'looking the town over';
     case 'customer': return 'coming to buy from you';
     case 'confront': return 'looking for you';
     default: return e.act;

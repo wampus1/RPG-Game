@@ -385,6 +385,60 @@ export class Game {
     return n;
   }
 
+  // A nomad band walks in from the road and camps by the square.
+  spawnNomads(L, band) {
+    const a = this.active.get(L.settlement.id);
+    if (!a) return null;
+    const out = [];
+    const all = { s: 0, e: 1440, act: 'camp', place: 'plaza' };
+    band.people.forEach((p, i) => {
+      const rec = {
+        ...JSON.parse(JSON.stringify(p)), id: `${L.settlement.id}:n${band.id}:${i}`, idx: 3000 + band.id * 10 + i, sid: L.settlement.id, visitor: true, nomadBand: band.id,
+        home: null, bed: 0, household: null, friends: [], work: { kind: 'none' }, schedule: { work: [all], rest: [all] },
+        coins: 5, inv: [], skills: { trading: 0.2, cooking: 0.3, hunting: 0.5, fishing: 0.3, farming: 0.3, building: 0.3, crafting: 0.3 },
+        fed: 1, hungry: 0, mood: 0.6, grief: [], override: null, away: false, doneKey: null,
+      };
+      const e = L.entrances[(band.id + i) % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+      const spot = this.findFreeSpot(e.x, e.z, GROUND);
+      const n = new NPC(this, rec, L);
+      n.nomad = band;
+      n.teleport(spot.x, spot.y, spot.z);
+      rec.ent = n;
+      a.npcs.push(n);
+      this.npcs.push(n);
+      out.push(n);
+    });
+    return out;
+  }
+
+  // The band settles: the travellers become townsfolk on the spot.
+  nomadsSettle(L, ents, recs) {
+    const a = this.active.get(L.settlement.id);
+    ents.forEach((n, i) => {
+      const rec = recs[i];
+      const pos = n && !n.dead ? { x: n.x, y: n.y, z: n.z } : null;
+      if (n && !n.dead) this.despawnNpc(n);
+      if (!a || !rec || !pos) return;
+      const m = new NPC(this, rec, L);
+      m.teleport(pos.x, pos.y, pos.z);
+      rec.ent = m;
+      a.npcs.push(m);
+      this.npcs.push(m);
+      if (i === 0) m.say(m.rng.pick(['We\'ll stay! This feels like home.', 'This is the place. We\'re staying.']), 4, '#a0e0a0');
+    });
+    if (a) this.ui.msg(`The ${recs[0]?.name.last || ''} family of nomads has settled in ${L.settlement.name}.`, '#a0e0a0');
+  }
+
+  nomadsLeave(ents) {
+    const now = this.day * DAY + this.minute;
+    ents.forEach((n, i) => {
+      if (!n || n.dead) return;
+      setOverride(n.rec, now, now + 240, 'travel', { place: 'road' });
+      n.activity = null;
+      if (i === 0) n.say(n.rng.pick(['Not for us. Back to the road.', 'We\'ll find somewhere else.']), 3.5);
+    });
+  }
+
   // A hired guard reappears beside the player (after loading a save).
   spawnEscort(e) {
     const L = this.sim.layoutOf(e.sid);
@@ -836,8 +890,20 @@ export class Game {
     if (byPlayer) {
       this.stats.mined++;
       this.checkVandalism(x, y, z, b);
+      this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
     }
+  }
+
+  // Knocking a hole in a town building: the builders will come and fix it.
+  noteBuildingDamage(x, z, id) {
+    const bl = BLOCKS[id];
+    if (!bl || (bl.render !== 'cube' && bl.render !== 'door')) return;
+    const s = this.world.ow.settlementAt(x, z);
+    if (!s || s.condition === 'abandoned' || s.deserted) return;
+    const L = this.world.getLayout(s);
+    const b = buildingAt(L, x, z);
+    if (b && !b.playerHome) this.sim.works.noteDamage(L, b);
   }
 
   // Harvesting a town's fields or gardens in front of people is theft.
@@ -1715,6 +1781,11 @@ export class Game {
     if (target.kind === 'npc' && source && source.kind === 'player' && this.sim.careers.employs(target)) {
       this.sim.careers.fire(target.layout, this.sim.careers.job, 'You attacked me! Get out, you\'re fired!');
     }
+    // Remember who a beast went for (rescuing them earns thanks).
+    if (target.kind === 'npc' && source && (source.kind === 'creature' || source.kind === 'monster')) {
+      source.victim = target;
+      source.victimT = this.sim.abs;
+    }
     // Violence against villagers is a crime; witnesses react.
     if (target.kind === 'npc' && source) {
       target.onHurt(source);
@@ -1781,10 +1852,12 @@ export class Game {
     const jailed = this.sim.justice.jail && this.sim.justice.jail.sid === sid;
     if (!jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid)) && !p.dead && guard.distTo(p) <= 12 && this.sim.canSee(guard, p.x, p.z, p.y)) return p;
     const b = guard.settlement.bounds;
+    const watching = guard.act === 'watch';
     for (const c of this.creatures) {
       if (c.dead || !c.hostileNow) continue;
-      if (guard.distTo(c) > 9) continue;
-      if (c.x < b.x0 - 10 || c.x > b.x1 + 10 || c.z < b.z0 - 10 || c.z > b.z1 + 10) continue;
+      if (guard.distTo(c) > (watching ? 11 : 9)) continue;
+      // Out guarding a miner, any beast nearby is theirs to deal with.
+      if (!watching && (c.x < b.x0 - 10 || c.x > b.x1 + 10 || c.z < b.z0 - 10 || c.z > b.z1 + 10)) continue;
       return c;
     }
     return null;
@@ -1885,6 +1958,7 @@ export class Game {
       if (source && source.kind === 'player') {
         this.sim.careers.onKill(e);
         this.sim.favors.onKill(e);
+        if (e.hostileNow) this.rescued(e);
       }
       for (const [item, min, max, chance] of e.S.drops) {
         if (Math.random() > chance) continue;
@@ -1894,6 +1968,39 @@ export class Game {
       }
       if (npcKill) source.onKill?.(e);
     }
+  }
+
+  // You killed a beast that was after someone: they, their family and
+  // anyone who watched are grateful.
+  rescued(beast) {
+    const saved = new Set();
+    for (const n of this.npcs) {
+      if (n.dead || n.hired) continue;
+      const hunted = beast.target === n && beast.distTo(n) <= 8;
+      const bitten = beast.victim === n && this.sim.abs - (beast.victimT || -1e9) < 10;
+      const scared = n.threat === beast && ['flee', 'fight', 'alert'].includes(n.state);
+      if (hunted || bitten || scared) saved.add(n);
+    }
+    if (!saved.size) return 0;
+    const p = this.player;
+    for (const n of saved) {
+      const gain = n.rec.job === 'guard' ? 3 : 8;
+      this.sim.changeRep(n, gain);
+      n.say(n.rng.pick(n.rec.job === 'guard' ? ['Good work. I owe you one.', 'Nicely done!'] : ['You saved me! Thank you!', 'Thank the stars you were here!', 'I thought I was done for... thank you!']), 3.5, '#a0e0a0');
+      n.face(p.x, p.z);
+      const a = this.active.get(n.settlement.id);
+      if (!a) continue;
+      for (const o of a.npcs) {
+        if (o === n || o.dead || saved.has(o)) continue;
+        const r = o.rec;
+        const fam = r.partner === n.rec.idx || r.children.includes(n.rec.idx) || r.parents.includes(n.rec.idx);
+        if (fam) this.sim.changeRep(o, 5);
+        else if (o.distTo(beast) <= 10 && this.sim.canSee(o, beast.x, beast.z)) this.sim.changeRep(o, 2);
+      }
+    }
+    this.stats.rescues = (this.stats.rescues || 0) + saved.size;
+    this.ui.msg(saved.size > 1 ? `You saved ${saved.size} people from the ${(beast.name || 'beast').toLowerCase()}.` : `You saved ${[...saved][0].rec.name.first} from the ${(beast.name || 'beast').toLowerCase()}.`, '#a0e0a0');
+    return saved.size;
   }
 
   playerDied(source) {

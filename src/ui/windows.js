@@ -782,7 +782,9 @@ export class JournalWindow extends Window {
     }
     head('REQUESTS');
     const fav = sim.favors.list;
-    if (!fav.length) para('Nobody is waiting on you. Ask around: "Need a hand with anything?"', C.dim);
+    const mail = sim.diplomacy.letters.filter((q) => q.status === 'player');
+    if (!fav.length && !mail.length) para('Nobody is waiting on you. Ask around: "Need a hand with anything?"', C.dim);
+    for (const q of mail) para(`• Carry the mayor's dispatch from ${car.townName(q.from)} to the mayor of ${car.townName(q.to)} (¤${q.pay || 10})`, C.cyan);
     for (const f of fav) {
       const left = f.due - game.day;
       para(`• ${sim.favors.describe(f)}`, f.kind === 'slay' && f.kills >= f.count ? C.green : '#e0d0b0');
@@ -878,6 +880,7 @@ export class MapWindow extends Window {
     const pcz = Math.floor(p.z / REGION_D);
     const blink = Math.floor(this.ui.time * 3) % 2;
     let hover = null;
+    const roads = game.sim.diplomacy.roadCells();
     for (let cz = 0; cz < MAP_H; cz++) {
       for (let cx = 0; cx < MAP_W; cx++) {
         const cell = ow.cell(cx, cz);
@@ -904,6 +907,10 @@ export class MapWindow extends Window {
             bg = '#1a4a8a';
           }
           if (this.civView && cell.civ !== null && ow.civs[cell.civ]) bg = shadeHex(ow.civs[cell.civ].color.hex, 0.45);
+          if (roads.has(cz * 10000 + cx) && cell.settlement === null) {
+            ch = hf ? '─' : '═';
+            fg = '#e8c890';
+          }
           g.put(x + hf, y, ch, fg, bg);
         }
         if (cell.settlement !== null) {
@@ -935,7 +942,7 @@ export class MapWindow extends Window {
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village  [■] town  ╔╗ city  ~ river  † ruins  @ you', C.faint);
+    g.text(2, y0 + 2, '⌂ village  [■] town  ╔╗ city  ~ river  ═ road  † ruins  @ you', C.faint);
     const t = ` [V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, C.dim);
   }

@@ -26,6 +26,7 @@ export const JOBS = {
   miner: { title: 'Miner', place: 'wild', start: 420, end: 1050, tools: ['stone_pickaxe', 'iron_pickaxe'], outfit: 'miner' },
   trapper: { title: 'Trapper', place: 'wild', start: 390, end: 1020, tools: ['bow'], outfit: 'hunter', trader: 'trapper' },
   laborer: { title: 'Laborer', place: 'warehouse', start: 450, end: 1050, tools: ['wood_shovel'], outfit: 'plain' },
+  builder: { title: 'Builder', place: 'rounds', start: 420, end: 1080, tools: ['hammer'], outfit: 'smith' },
   beggar: { title: 'Beggar', place: 'plaza', start: 480, end: 1140, tools: [], outfit: 'rags' },
   child: { title: 'Child' },
   retired: { title: 'Retiree' },
@@ -57,7 +58,7 @@ export function jobTitle(rec, s) {
 // Which building type each workplace job needs.
 export function workplaceTypeFor(job) {
   const p = JOBS[job]?.place;
-  if (!p || p === 'wild' || p === 'plaza' || p === 'dock' || p === 'farm') return null;
+  if (!p || p === 'wild' || p === 'plaza' || p === 'dock' || p === 'farm' || p === 'rounds') return null;
   return p;
 }
 
@@ -116,6 +117,7 @@ export function planPopulation(s, rng) {
   add('guard', Math.min(guardCap, Math.round(scale(rng.int(1, 2), 0, rng.int(3, 4), rng.int(7, 10)) * (has('martial') ? 1.5 : 1) * (poor ? 0.7 : 1))));
   add('mayor', 1);
   add('cook', T === 'city' ? 2 : 1);
+  if (T !== 'village') add('builder', T === 'city' ? 2 : 1);
   add('trapper', T === 'village' ? 1 : rng.int(1, 2));
   if (T !== 'village') add('farmer', T === 'city' ? 3 : 2);
   if (T !== 'village' || rng.chance(0.4)) add('innkeeper', 1);
@@ -612,6 +614,45 @@ export function generateNPCs(layout, plan, seed) {
     }
   }
   return npcs;
+}
+
+// A band of nomads: one family on the road, with its own name, faces and
+// habits. Records get their home, work and schedule when (if) they settle.
+const NOMAD_STYLES = ['vale', 'north', 'sun', 'wild', 'high'];
+export function makeNomadBand(rng, size) {
+  const style = rng.pick(NOMAD_STYLES);
+  const fam = familyName(rng, style);
+  const ages = ['adult'];
+  if (size >= 2) ages.push(rng.chance(0.8) ? 'adult' : 'elder');
+  while (ages.length < size) ages.push(rng.chance(0.75) ? 'child' : 'adult');
+  const avail = { tavern: true, temple: true, read: false, study: false, fish: true, train: false };
+  const out = ages.map((age, i) => {
+    const job = age === 'child' ? 'child' : age === 'elder' ? 'retired' : 'laborer';
+    const { p, traits } = makePersonality(rng, null, job, age);
+    if (i === 0 && !traits.includes('well-traveled')) traits.unshift('well-traveled');
+    const r = {
+      name: personName(rng, style, fam), age, job, partner: null, children: [], parents: [], friends: [], personality: p, traits,
+      hobbies: pickHobbies(rng, p, null, avail, age), alive: true, shift: 'day', restDay: rng.int(0, 6), nomad: true, style,
+    };
+    r.equipment = equipmentFor(rng, rng.chance(0.5) ? 'trapper' : 'laborer', r.hobbies, 'poor', age);
+    r.look = makeLook(rng, style, age, job, null);
+    if (age === 'adult' && rng.chance(0.5)) r.look.hat = 'hood';
+    r.look.outfit = age === 'child' ? 'plain' : rng.pick(['hunter', 'plain', 'rags', 'vest']);
+    r.maxHp = age === 'child' ? 6 : age === 'elder' ? 8 : 12;
+    r.hp = r.maxHp;
+    return r;
+  });
+  // The first two adults are partners, the children theirs.
+  const adults = out.map((r, i) => (r.age === 'adult' ? i : -1)).filter((i) => i >= 0);
+  if (adults.length >= 2) {
+    out[adults[0]].partner = adults[1];
+    out[adults[1]].partner = adults[0];
+  }
+  out.forEach((r, i) => {
+    if (r.age === 'child') r.parents = adults.slice(0, 2);
+  });
+  for (const a of adults.slice(0, 2)) out[a].children = out.map((r, i) => (r.age === 'child' ? i : -1)).filter((i) => i >= 0);
+  return { style, family: fam, people: out };
 }
 
 // A synthetic record for a traveling merchant visiting from elsewhere.

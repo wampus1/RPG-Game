@@ -111,6 +111,7 @@ item('ladle', { kind: 'misc', stack: 1, value: 3 });
 // Tokens of the player's standing: not wanted by any trader.
 item('guard_badge', { name: 'Guard Badge', kind: 'misc', stack: 1, value: 0, noSell: true });
 item('letter', { name: 'Sealed Letter', kind: 'misc', stack: 16, value: 0, noSell: true });
+item('dispatch', { name: 'Mayor\'s Dispatch', kind: 'misc', stack: 16, value: 0, noSell: true });
 
 export function getItem(key) {
   return ITEMS[key];

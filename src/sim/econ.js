@@ -503,6 +503,31 @@ function produce(L, rec, rng) {
       }
       return;
     }
+    case 'miner': {
+      // Out at the rock face: stone, coal and ore (a little gold if lucky).
+      if (rng.chance(0.55 * (0.6 + (sk.building || 0.3)))) {
+        const ore = rng.weighted([['cobblestone', 3], ['coal', 3], ['iron_ore', 2.5], ['gold_ore', 0.3]]);
+        invAdd(rec.inv, ore, rng.int(1, 2));
+      }
+      // Too much rubble to carry: leave it.
+      const rubble = invCount(rec.inv, 'cobblestone');
+      if (rubble > 16) invTake(rec.inv, 'cobblestone', rubble - 16);
+      return;
+    }
+    case 'blacksmith': {
+      // Iron ore and coal make ingots and tools; without them the forge idles.
+      if (biz && st.count(biz.store, 'iron_ore') >= 1) {
+        st.take(biz.store, 'iron_ore', 1);
+        if (st.count(biz.store, 'coal')) st.take(biz.store, 'coal', 1);
+        st.add(biz.store, rng.chance(0.6) ? 'iron_ingot' : rng.pick(GOODS.blacksmith), 1);
+        biz.till += 3;
+        biz.earned += 3;
+      } else if (biz) {
+        biz.till += 1;
+        biz.earned += 1;
+      }
+      return;
+    }
     case 'guard': case 'mayor': case 'child': case 'retired':
       return;
     default: {
@@ -536,9 +561,14 @@ function market(L, rng) {
   const pop = L.npcs.length;
   for (const rec of L.npcs) {
     if (!alive(rec) || rec.away || !rec.inv.length) continue;
-    if (!['trapper', 'fisher', 'farmer'].includes(rec.job) && !rec.forageResult) continue;
+    if (!['trapper', 'fisher', 'farmer', 'miner'].includes(rec.job) && !rec.forageResult) continue;
     for (const it of [...rec.inv]) {
       let buyer = null;
+      // The smithy buys ore and coal to work.
+      if (['iron_ore', 'coal', 'gold_ore'].includes(it.item)) {
+        const smithy = L.buildings.find((b) => b.type === 'smithy' && e.biz[b.id]);
+        if (smithy && st.count(e.biz[smithy.id].store, it.item) < 10) buyer = e.biz[smithy.id];
+      }
       if (k && (RAW_FOOD.includes(it.item) || VEG.includes(it.item))) {
         const have = st.count(k.store, 'raw_meat') + st.count(k.store, 'fish') + VEG.reduce((n, v) => n + st.count(k.store, v), 0);
         const meals = MEAL_ITEMS.reduce((a, m) => a + st.count(k.store, m), 0);
@@ -850,7 +880,8 @@ function merchants(sim, L, h, day, hod, rng) {
   for (const rec of L.npcs) {
     if (!rec.traveler || !alive(rec)) continue;
     const t = rec.trip || (rec.trip = { phase: 'home', since: day - 1 });
-    if (t.phase === 'home' && hod === 8 && day - t.since >= 2 && rng.chance(0.5)) sim.departMerchant(L, rec, h, day, rng);
+    const keen = sim.diplomacy ? Object.values(L.econ.relations || {}).reduce((m, r) => Math.max(m, r.trade || 0), 0) : 0;
+    if (t.phase === 'home' && hod === 8 && day - t.since >= (keen >= 2 ? 1 : 2) && rng.chance(0.5 + keen * 0.1)) sim.departMerchant(L, rec, h, day, rng);
     else if (t.phase === 'away' && h >= t.ret) sim.returnMerchant(L, rec, day);
   }
   sim.merchantVisits(L, h, rng);

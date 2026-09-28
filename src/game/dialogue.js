@@ -76,6 +76,7 @@ export function openingLine(npc, game) {
   const rep = sim.opinion(npc);
   const entry = sim.repEntry(s.id, rec.idx);
   const name = game.playerName;
+  if (npc.nomad) return pick(rng, [`Greetings. We're the ${rec.name.last}s, travellers. Is this a good place to live?`, 'Hello, friend. We\'re just passing through... or maybe not.', `The road's been long. What's ${s.name} like?`]);
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
     return cf.stage === 'expel'
@@ -103,6 +104,11 @@ export function openingLine(npc, game) {
     if (pr.have >= pr.need) return pick(rng, ['Oh! Did you manage it?', `${name}! Any luck with that favour?`]);
   }
   if (rep <= -25) return pick(rng, ['What do you want?', 'Make it quick.', 'Oh. It\'s you.']);
+  const warns = sim.diplomacy.warnedBy(s.id);
+  if (!entry.met && warns.length && rep < 10) {
+    entry.met = true;
+    return pick(rng, [`We've heard about you from ${warns[0].fromName}. Behave yourself here.`, `${name}... ${warns[0].fromName} wrote to us about you. I'm watching you.`]);
+  }
   if (!entry.met) {
     entry.met = true;
     if (p.kindness < 0.3) return pick(rng, ['What do you want?', 'Hmph. Another wanderer.']);
@@ -127,6 +133,14 @@ export function topicsFor(npc, game) {
   const wanted = game.isWanted(s.id);
   const out = [];
   const add = (id, label) => out.push({ id, label });
+  if (npc.nomad) {
+    add('nomad', 'Are you thinking of settling here?');
+    add('who', 'Where do you come from?');
+    add('kind', '(Chat about the road)');
+    add('gift', 'I have a gift for you.');
+    add('bye', 'Goodbye.');
+    return out;
+  }
   const trader = npc.visit || JOBS[rec.job]?.trader || rec.job === 'cook';
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
@@ -163,11 +177,17 @@ export function topicsFor(npc, game) {
   if (mine) add('favor_check', mine.kind === 'deliver' ? `About your letter for ${mine.toName}...` : 'About your request...');
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
   if (rec.job === 'mayor') {
+    const dip = sim.diplomacy;
+    const mine = dip.forPlayer(s.id);
+    if (mine.length && countItem(game.player.inv, 'dispatch')) add('dispatch', `I bring a letter from ${dip.town(mine[0].from).name}.`);
+    if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
     if (sim.isCitizen(s.id)) add('renounce', 'I renounce my citizenship.');
     else add('citizen', inHall ? `Make me a citizen of ${s.name}.` : 'How do I become a citizen?');
     add('profession', car.job && car.job.kind === 'profession' && car.job.sid === s.id ? 'About my post...' : 'I\'d like an official profession.');
   }
+  const home = sim.citizen && sim.citizen.sid === s.id && sim.citizen.home !== null && sim.citizen.home !== undefined ? npc.layout.buildings[sim.citizen.home] : null;
+  if (home && !home.underConstruction && (rec.job === 'mayor' || rec.job === 'builder' || rec.job === 'carpenter')) add('expand', rec.job === 'mayor' ? 'I\'d like to enlarge my house.' : 'Could you enlarge my house?');
   if (car.employs(npc)) add('job', 'About my job here...');
   else if (car.canEmploy(npc) && rep >= -10) add('job', `Could you use a hand at the ${bare(npc.layout.buildings[rec.work.building].name)}?`);
   if (rec.job === 'guard' && !npc.hired && !npc.visit) add('hire', 'I\'d like to hire you as an escort.');
@@ -449,6 +469,44 @@ function professionTalk(npc, game, arg) {
   return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got || 'Good luck out there.'].filter(Boolean) };
 }
 
+// Asking the mayor (who may knock something off the price for a hard
+// worker) or a builder directly to grow your house.
+function expandTalk(npc, game, arg) {
+  const sim = game.sim;
+  const L = npc.layout;
+  const s = npc.settlement;
+  const b = L.buildings[sim.citizen.home];
+  const t = sim.works.expansionTerms(L, b);
+  const mayor = npc.rec.job === 'mayor';
+  if (!t.ok) {
+    return { lines: [{ busy: 'We\'re already working on it!', max: 'Your house is as big as we build them here.', room: 'There\'s no room around your house to build out, I\'m afraid.' }[t.reason] || 'I can\'t help with that.'] };
+  }
+  const good = mayor && sim.goodStanding(s.id);
+  const cost = good ? Math.round(t.cost * 0.75) : t.cost;
+  const size = { house_m: 'a proper house with a third bed', house_l: 'a family house with room for six' }[t.next] || 'something bigger';
+  if (arg !== 'yes') {
+    const lines = [`We could make it ${size}. That's ¤${cost} for timber, stone and the builders' wages.`];
+    if (good) lines.push(`That's a quarter off the usual ¤${t.cost}: you've been working hard for ${s.name}.`);
+    else if (mayor) lines.push('Folk who do good work for the town get a better price, you know.');
+    lines.push('It takes a few days, and you\'ll have builders underfoot.');
+    return { lines, choices: [{ id: 'expand', arg: 'yes', label: `Do it. (Pay ¤${cost})` }], back: 'Maybe later.' };
+  }
+  const p = game.player;
+  if (countItem(p.inv, 'coin') < cost) return { lines: [`That'll be ¤${cost}. Come back when you have it.`] };
+  removeItem(p.inv, 'coin', cost);
+  if (mayor) L.econ.treasury += cost;
+  else npc.rec.coins = (npc.rec.coins || 0) + cost;
+  sim.works.startExpansion(L, b, t.bounds, 'player');
+  game.ui.msg(`The builders will enlarge your house in ${s.name}.`, '#ffe070');
+  game.audio?.play('coin');
+  return { lines: [mayor ? 'Wonderful. I\'ll send the builders round in the morning.' : 'Right! I\'ll get the lads on it first thing.'] };
+}
+
+const KIND_TALK = {
+  aid: 'asking for help with our treasury', guards: 'asking for a guard or two', settlers: 'asking for settlers', gift: 'with a small gift',
+  trade: 'about closer trade', road: 'about building a road between us', warn: 'warning them about a troublemaker', reply: 'answering theirs',
+};
+
 const TASKS = {
   smithy: 'work the bellows and sort the stock', tavern: 'serve tables and wash up', shop: 'mind the counter', bakery: 'knead dough and sell loaves',
   library: 'sort the shelves', tailor: 'cut cloth and take orders', workshop: 'sand and plane the timber', herbalist: 'grind herbs and bottle tinctures',
@@ -685,6 +743,7 @@ export function respond(npc, game, id, arg) {
       return { lines: [tn === 'warm' ? 'Ask away!' : tn === 'cold' ? 'What now?' : pick(rng, ['Hm? What about?', 'Sure, what is it?'])], choices: askMenu(npc, game) };
     case 'who': {
       if (npc.visit) return { lines: [`${rec.name.first} ${rec.name.last}, traveling merchant from ${npc.visit.fromName}. I carry goods between there and the towns around it.`] };
+      if (npc.nomad) return { lines: [`${rec.name.first} ${rec.name.last}. We come from everywhere and nowhere: the ${rec.name.last}s have been on the road for years.`, rec.age === 'child' ? 'I was born in a wagon!' : 'We\'re looking for somewhere to put down roots.'] };
       if (rec.age === 'child') return { lines: [pick(rng, [`I'm ${rec.name.first}! I'm ${6 + (rec.idx % 7)}!`, `I'm ${rec.name.first}. Wanna play tag?`, `My name's ${rec.name.first}!`])] };
       const pre = tn === 'cold' ? 'Why do you care? ' : '';
       // They remember telling you already, and share something new.
@@ -720,10 +779,14 @@ export function respond(npc, game, id, arg) {
       if (npc.hired) lines.push('Watching your back. What else?');
       else if (!act) lines.push('Just taking a breather.');
       else if (act.act === 'mourn' || act.act === 'funeral') lines.push(`I'm paying my respects to ${act.who || 'an old friend'}.`);
-      else if (act.act === 'build') lines.push(sim.citizen ? `Building a house for our newest citizen: you, ${name}!` : 'Building. Mind the planks.');
+      else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? `Building a house for our newest citizen: you, ${name}!` : 'Building. Mind the planks.');
+      else if (act.act === 'repair') lines.push('Patching up the jail. Someone made a right mess of it.');
       else if (act.act === 'forage') lines.push(rec.age === 'child' ? 'Looking for berries. We\'ve got nothing to eat at home...' : 'Out looking for food. Times are lean.');
       else if (act.act === 'trial') lines.push('There\'s to be a hearing at the jail.');
-      else if (act.act === 'travel') lines.push('Off on the road with my goods!');
+      else if (act.act === 'travel') {
+        const q = sim.diplomacy.letters.find((m) => m.carrierIdx === rec.idx && m.from === s.id && m.status === 'carried');
+        lines.push(q ? `Off to ${sim.diplomacy.town(q.to).name} with my goods, and a letter from the mayor.` : 'Off on the road with my goods!');
+      }
       else if (act.act === 'visit') lines.push(`Selling wares from ${npc.visit ? npc.visit.fromName : 'afar'}. Have a look!`);
       else if (act.act === 'hobby' && HOBBIES[act.hobby]) lines.push(pick(rng, [`Nothing beats ${HOBBIES[act.hobby].label} after a long day.`, `I'm fond of ${HOBBIES[act.hobby].label}.`]));
       else if (act.act === 'work' && p.diligence < 0.3) lines.push(pick(rng, ['Don\'t tell anyone I\'m slacking off.', 'Is it quitting time yet?']));
@@ -874,6 +937,69 @@ export function respond(npc, game, id, arg) {
         return { lines: [arg === 'defy' ? 'Then you leave me no choice. Your citizenship is revoked.' : 'Your name has been struck from the ledger. I\'m sorry it came to this.'], close: true };
       }
       return { lines: ['...'] };
+    }
+    case 'expand': return expandTalk(npc, game, arg);
+    case 'nomad': {
+      const b = npc.nomad;
+      if (!b) return { lines: ['...'] };
+      if (arg === 'vouch') {
+        const good = sim.isCitizen(s.id) || sim.areaMod(s.id) >= 0;
+        if (!b.vouchedBy) {
+          b.vouchedBy = true;
+          b.vouched += good ? 2 : 1;
+        }
+        return { lines: [good ? 'A citizen speaks well of it... that counts for a lot. Thank you.' : 'Kind of you to say. We\'ll see.'] };
+      }
+      const v = sim.nomads.judge(npc.layout, b);
+      const bits = [];
+      bits.push(v.room >= b.people.length ? 'There\'s room for us here' : 'But there\'s nowhere for us to live');
+      if (v.reasons.includes('hunger')) bits.push('and people look hungry');
+      if (v.reasons.includes('danger')) bits.push('and it doesn\'t feel safe');
+      if (v.reasons.includes('taxes')) bits.push('and the taxes are steep');
+      const hours = Math.max(0, Math.round((b.decide - sim.abs) / 60));
+      return {
+        lines: [`${bits.join(', ')}.`, v.ok ? `We're leaning towards staying. We'll decide within ${hours || 1} hours.` : `We'll move on in ${hours || 1} hours unless something changes our minds.`],
+        choices: b.vouchedBy ? null : [{ id: 'nomad', arg: 'vouch', label: `You should stay! ${s.name} is a good place.` }],
+        back: 'Good luck, whatever you choose.',
+      };
+    }
+    case 'mail': {
+      const dip = sim.diplomacy;
+      const q = dip.waitingFrom(s.id)[0];
+      if (!q) return { lines: ['Not today, thank you.'] };
+      const to = dip.town(q.to);
+      const pay = 10 + Math.round(dip.dist(s, to) * 3);
+      if (arg !== 'yes') {
+        return {
+          lines: [`As it happens, yes: a letter to the mayor of ${to.name}, ${KIND_TALK[q.kind] || 'on town business'}.`, `${to.name}'s council will pay you ¤${pay} when it arrives. It's about ${dip.travelHours(s, to)} hours on the road.`],
+          choices: [{ id: 'mail', arg: 'yes', label: 'I\'ll take it.' }], back: 'Not now.',
+        };
+      }
+      dip.playerTakes(q);
+      q.pay = pay;
+      const pl = game.player;
+      const left = pl.give('dispatch', 1);
+      if (left) game.spawnDrop('dispatch', left, pl.x, pl.y, pl.z, true);
+      sim.changeRep(npc, 2);
+      return { lines: [`Here it is, sealed. Hand it to the mayor of ${to.name} and nobody else.`, '(Noted in your journal: J)'] };
+    }
+    case 'dispatch': {
+      const dip = sim.diplomacy;
+      const q = dip.forPlayer(s.id)[0];
+      if (!q || !countItem(game.player.inv, 'dispatch')) return { lines: ['A letter? Where?'] };
+      removeItem(game.player.inv, 'dispatch', 1);
+      const from = dip.town(q.from);
+      dip.deliver(q);
+      const pay = Math.min(q.pay || 10, Math.max(0, Math.floor(e.treasury)));
+      e.treasury -= pay;
+      if (pay) {
+        const pl = game.player;
+        const left = pl.give('coin', pay);
+        if (left) game.spawnDrop('coin', left, pl.x, pl.y, pl.z, true);
+        game.audio?.play('coin');
+      }
+      sim.changeRep(npc, 4);
+      return { lines: [`From ${from.name}? Let me see... ${q.kind === 'gift' ? 'A gift! How generous.' : q.kind === 'warn' ? 'Hm. A warning. We\'ll keep our eyes open.' : 'I\'ll send an answer back directly.'}`, pay ? `Here's ¤${pay} for your trouble.` : 'I\'m afraid the treasury can\'t pay you right now.'] };
     }
     case 'turn_away':
       sim.careers.dismissCustomer(null);

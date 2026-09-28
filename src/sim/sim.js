@@ -14,7 +14,10 @@ import {
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
-import { checkWatch, deserted } from './civic.js';
+import { checkWatch, checkSupply, staffBuilding, relocate, deserted } from './civic.js';
+import { Works } from './works.js';
+import { Diplomacy, SOFT } from './diplomacy.js';
+import { Nomads } from './nomads.js';
 import { removeItem, countItem } from '../game/inventory.js';
 
 const REP_LEVELS = [
@@ -48,6 +51,9 @@ export class Sim {
     this.justice = new Justice(game, this);
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
+    this.works = new Works(game, this);
+    this.diplomacy = new Diplomacy(game, this);
+    this.nomads = new Nomads(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.confront = null; // the mayor coming to have a word about your conduct
@@ -67,8 +73,18 @@ export class Sim {
     const sv = this.saved && this.saved.get(sid);
     if (sv) this.applySettlement(L, sv);
     if (L.econ.deserted !== undefined) L.settlement.deserted = true;
+    // Buildings added since the town was founded come back in the order
+    // they went up (your cottage, new work buildings, enlarged houses).
     const c = this.construction;
-    if (c && c.sid === sid && !L.buildings[c.bid]) {
+    const steps = this.works.restore(L);
+    if (c && c.sid === sid && !L.buildings[c.bid]) steps.push({ bid: c.bid, player: true });
+    const rank = (st) => (st.player || st.q.kind === 'build' ? 0 : 1);
+    steps.sort((a, b) => a.bid - b.bid || rank(a) - rank(b));
+    for (const st of steps) {
+      if (!st.player) {
+        this.works.applyRestore(L, st);
+        continue;
+      }
       const plot = L.plots[c.plot];
       if (plot) {
         plot.taken = true;
@@ -101,6 +117,9 @@ export class Sim {
         this.syncTreasury(layout);
       }
       this.updateConstruction();
+      this.works.update();
+      this.diplomacy.update();
+      this.nomads.update();
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
@@ -150,15 +169,17 @@ export class Sim {
 
   // ------------------------------------------------------------ world edits
   // Block changes that must happen even if the region isn't loaded right now.
+  // An op marked 'soft' only clears plants and tree trunks (road building).
   setBlocks(ops) {
     const w = this.game.world;
     for (const op of ops) {
-      const [x, y, z, id, meta = 0] = op;
-      if (w.regionAt(x, z)) w.setBlock(x, y, z, id, meta);
-      else {
+      const [x, y, z, id, meta = 0, soft] = op;
+      if (w.regionAt(x, z)) {
+        if (!soft || SOFT.has(w.getBlock(x, y, z))) w.setBlock(x, y, z, id, meta);
+      } else {
         const key = w.regionKey(Math.floor(x / 64), Math.floor(z / 36));
         if (!this.pending.has(key)) this.pending.set(key, []);
-        this.pending.get(key).push([x, y, z, id, meta]);
+        this.pending.get(key).push(soft ? [x, y, z, id, meta, soft] : [x, y, z, id, meta]);
       }
     }
   }
@@ -169,7 +190,7 @@ export class Sim {
     const ops = this.pending.get(key);
     if (!ops) return;
     this.pending.delete(key);
-    for (const [x, y, z, id, meta] of ops) w.setBlock(x, y, z, id, meta);
+    for (const [x, y, z, id, meta, soft] of ops) if (!soft || SOFT.has(w.getBlock(x, y, z))) w.setBlock(x, y, z, id, meta);
   }
 
   // ------------------------------------------------------------ reputation
@@ -199,6 +220,7 @@ export class Sim {
     m -= Math.min(30, this.justice.notoriety(sid) * 6);
     if (this.isCitizen(sid)) m += 10;
     if (this.justice.exiled.has(sid)) m -= 60;
+    m -= this.diplomacy.penalty(sid);
     this.areaCache.set(sid, m);
     return m;
   }
@@ -550,6 +572,11 @@ export class Sim {
 
   dailyCivic(L, day, rng) {
     checkWatch(this, L, day, rng);
+    checkSupply(this, L, day);
+    this.diplomacy.consider(L, day, rng);
+    this.nomads.arrive(L, day, rng);
+    this.familyExpansions(L, day, rng);
+    this.works.daily(L, day);
     this.checkConduct(L, day);
     const c = this.construction;
     if (c && !c.done && c.sid === L.settlement.id) this.assignBuilders(L, day, day * DAY + 600);
@@ -584,6 +611,48 @@ export class Sim {
     void h;
     void day;
     void hod;
+  }
+
+  // A miner sells ore and coal to the smithy.
+  sellOre(L, rec) {
+    const smithy = L.buildings.find((b) => b.type === 'smithy' && L.econ.biz[b.id]);
+    if (!smithy) return 0;
+    const biz = L.econ.biz[smithy.id];
+    let sold = 0;
+    for (const it of [...rec.inv]) {
+      if (!['iron_ore', 'coal', 'gold_ore'].includes(it.item)) continue;
+      for (let i = 0; i < it.count; i++) {
+        const pr = price(it.item);
+        if (biz.till < pr + 3) break;
+        biz.till -= pr;
+        rec.coins += pr;
+        rec.earned += pr;
+        invTake(rec.inv, it.item, 1);
+        st.add(biz.store, it.item, 1);
+        sold++;
+      }
+    }
+    return sold;
+  }
+
+  // A miner going out to the rock face takes a guard along if the watch
+  // can spare one (more than three guards in town).
+  escortMiner(n, act) {
+    const L = n.layout;
+    const guards = L.npcs.filter((r) => r.job === 'guard' && alive(r) && !r.away);
+    if (guards.length <= 3) return null;
+    if (guards.some((r) => r.override && r.override.act === 'watch' && r.override.ward === n.rec.idx)) return null;
+    const free = guards.filter((r) => r.ent && !r.ent.dead && r.ent.state === 'routine' && !r.ent.sleeping && !r.override && r.shift !== 'night');
+    if (!free.length) return null;
+    const now = this.abs;
+    void act;
+    free.sort((a, b) => a.ent.distTo(n) - b.ent.distTo(n));
+    const g = free[0];
+    // Until the miner stops work (the guard checks) or eight hours at most.
+    setOverride(g, now, now + 480, 'watch', { target: { x: n.goal.x, z: n.goal.z }, place: 'wild', ward: n.rec.idx });
+    g.ent.activity = null;
+    if (g.ent.distTo(this.game.player) < 20) g.ent.say(`I'll keep watch while you dig, ${n.rec.name.first}.`, 3);
+    return g;
   }
 
   // A trapper or fisher drops off their catch at the tavern kitchen.
@@ -648,6 +717,51 @@ export class Sim {
       ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
     }
     return { ok: true, fee: t.fee, host, plot: t.plot };
+  }
+
+  // Send people from one town to live in another (guards and settlers
+  // lent between towns); they arrive after the journey.
+  sendPeople(from, recs, to, why) {
+    return relocate(this, from, recs, to, why);
+  }
+
+  // A new building went up: staff it.
+  onBuilt(L, b) {
+    staffBuilding(this, L, b, this.game.day);
+  }
+
+  // Doing good work for a town: a steady job there, or favours done.
+  goodStanding(sid) {
+    const j = this.careers.job;
+    if (j && j.sid === sid && (j.earned || 0) >= 25) return true;
+    let favours = 0;
+    for (const [k, r] of this.rep) if (k.startsWith(`${sid}:`) && r.favorNext !== undefined) favours++;
+    return favours >= 2 || (this.game.stats.rescues || 0) >= 3;
+  }
+
+  // Families who are crowded (or comfortably off) pay to enlarge their homes.
+  familyExpansions(L, day, rng) {
+    if (this.works.active(L.settlement.id).some((p) => p.kind === 'expand') || !rng.chance(0.35)) return;
+    for (const b of L.buildings) {
+      if (!b.residential || b.playerHome || !b.household) continue;
+      const people = L.npcs.filter((r) => r.home === b.id && alive(r) && !r.migrated);
+      const adults = people.filter((r) => r.age !== 'child');
+      if (!adults.length) continue;
+      const crowded = people.length > b.beds.length;
+      const purse = adults.reduce((n, r) => n + (r.coins || 0), 0);
+      const t = this.works.expansionTerms(L, b);
+      if (!t.ok || purse < t.cost * (crowded ? 1 : 2.5)) continue;
+      let left = t.cost;
+      for (const r of adults) {
+        const k = Math.min(left, Math.max(0, r.coins || 0));
+        r.coins -= k;
+        left -= k;
+      }
+      L.econ.treasury += Math.round(t.cost * 0.2);
+      this.works.startExpansion(L, b, t.bounds, { family: b.family });
+      ledger(L, day, `The ${b.family || 'a'} family paid ¤${t.cost} to enlarge their home.`);
+      return;
+    }
   }
 
   // A citizen who has made the town hate them gets a talking-to from the
@@ -784,13 +898,15 @@ export class Sim {
 
   // ------------------------------------------------------------ construction
   builders(L) {
-    const list = L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && (r.job === 'carpenter' || r.job === 'laborer'));
+    // The town's builders first, then carpenters and labourers lend a hand.
+    const list = L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && r.job === 'builder');
+    list.push(...L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && (r.job === 'carpenter' || r.job === 'laborer')));
     if (list.length < 2) {
       const extra = L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && !list.includes(r) && !['guard', 'mayor', 'cook', 'innkeeper', 'priest', 'merchant'].includes(r.job))
         .sort((a, b) => (b.skills?.building || 0) - (a.skills?.building || 0));
       list.push(...extra.slice(0, 2 - list.length));
     }
-    return list.slice(0, 3);
+    return list.slice(0, Math.max(3, list.filter((r) => r.job === 'builder').length));
   }
 
   buildSites(L) {
@@ -915,8 +1031,9 @@ export class Sim {
       .filter((q) => q.d < 16);
     if (!dests.length) return;
     dests.sort((a, b) => a.d - b.d);
-    const pick = dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
-    const travel = Math.round(3 + pick.d * 1.5);
+    // Letters from the mayor decide where the merchant goes first.
+    const pick = this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
+    const travel = this.diplomacy.travelHours(s, pick.o);
     const goods = packGoods(L, rec, rng);
     const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day });
     const visit = {
@@ -927,7 +1044,9 @@ export class Sim {
     if (!this.visits.has(pick.o.id)) this.visits.set(pick.o.id, []);
     this.visits.get(pick.o.id).push(visit);
     t.visit = visit.id;
-    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name} with a pack of goods.`);
+    const mail = this.diplomacy.letters.filter((q) => q.from === s.id && q.to === pick.o.id && q.status === 'waiting').length;
+    this.diplomacy.carry(s.id, pick.o.id, rec, t.arrive);
+    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name} with a pack of goods${mail ? ' and a letter from the mayor' : ''}.`);
     if (rec.ent && !rec.ent.dead) {
       // Walk out of town first, then vanish over the horizon.
       setOverride(rec, h, h + 180, 'travel', { place: 'road' });
@@ -1041,6 +1160,9 @@ export class Sim {
       construction: this.construction,
       justice: this.justice.serialize(),
       careers: this.careers.serialize(),
+      works: this.works.serialize(),
+      diplomacy: this.diplomacy.serialize(),
+      nomads: this.nomads.serialize(),
       deserted: [...this.deserted],
       favors: this.favors.serialize(),
     };
@@ -1093,6 +1215,9 @@ export class Sim {
     this.construction = data.construction || null;
     this.justice.load(data.justice);
     this.careers.load(data.careers);
+    this.works.load(data.works);
+    this.diplomacy.load(data.diplomacy);
+    this.nomads.load(data.nomads);
     this.deserted = new Set(data.deserted || []);
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);

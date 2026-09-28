@@ -7,7 +7,7 @@ import { NPC_STEP_TIME, GROUND } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
 import { BLOCKS, B, CROPS, cropMature } from '../world/blocks.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, rollDrops } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride } from '../sim/econ.js';
@@ -19,6 +19,9 @@ const EMOTES = {
   play: ['♪', '#80ffb0'], eat: ['♥', '#ff8080'], stroll: ['·', '#c8c8c8'], farm: ['♣', '#c8e070'], chop: ['!', '#e8b080'], mine: ['!', '#c8c8d8'],
   mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], build: ['■', '#e8c890'], repair: ['■', '#c8c8d8'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
 };
+
+// What a miner will dig into.
+const ROCK = new Set(['stone', 'cobblestone', 'coal_ore', 'iron_ore', 'gold_ore', 'gem_ore', 'gravel', 'sandstone', 'clay'].map((k) => B[k]).filter((v) => v !== undefined));
 
 const MEAL_LINES = {
   terrible: ['Ugh... gruel again.', 'Is this... food?', 'Burnt. Of course.', 'I\'ll pretend that was stew.'],
@@ -239,6 +242,11 @@ export class NPC extends Entity {
         return target(e.target, { tag: 'repair', near: 1 });
       case 'customer': case 'confront':
         return null;
+      case 'camp':
+        // Nomads look the town over: the square, the streets, the houses.
+        return rng.chance(0.5) ? plazaTile() : roadTile();
+      case 'watch':
+        return target(e.target, { tag: 'watch', near: 2 });
       case 'sell':
         return target(e.target, { near: 1, tag: 'sell', sell: true });
       case 'forage': {
@@ -315,6 +323,13 @@ export class NPC extends Entity {
       if (b) return claimFrom(b.work) || (b.homeSpots.length ? { ...b.homeSpots[rng.int(0, b.homeSpots.length - 1)], face: 0, wanderIn: b } : null);
       const p = L.plaza;
       return { x: rng.int(p.x0, p.x1), y: GROUND, z: rng.int(p.z0, p.z1), face: 0, wander: true };
+    }
+    if (w.kind === 'rounds') {
+      // Builders walk the town looking over the buildings.
+      const bs = L.buildings.filter((b) => b.outside && !b.underConstruction);
+      const b = bs[rng.int(0, bs.length - 1)];
+      if (!b) return null;
+      return { x: b.outside.x, y: GROUND, z: b.outside.z, face: rng.int(0, 3), tag: 'work', inspect: b.id, near: 1 };
     }
     if (w.kind === 'plaza') {
       const p = L.plaza;
@@ -489,13 +504,16 @@ export class NPC extends Entity {
       const wasWork = this.activity && this.activity.entry.act === 'work';
       this.activity = act;
       this.wake();
-      // After a day's hunting or fishing, take the catch to the tavern.
-      if (wasWork && act.entry.act !== 'work' && act.entry.act !== 'eat' && act.entry.act !== 'sleep' && (this.rec.job === 'trapper' || this.rec.job === 'fisher')) {
-        const catchN = (this.rec.inv || []).reduce((n, q) => n + (q.item === 'raw_meat' || q.item === 'fish' ? q.count : 0), 0);
-        const tavern = this.layout.buildings.find((b) => b.type === 'tavern');
-        if (catchN >= 2 && tavern && !this.rec.override) {
+      // After a day's hunting or fishing, take the catch to the tavern;
+      // miners take their ore to the smithy.
+      if (wasWork && act.entry.act !== 'work' && act.entry.act !== 'eat' && act.entry.act !== 'sleep' && ['trapper', 'fisher', 'miner'].includes(this.rec.job)) {
+        const miner = this.rec.job === 'miner';
+        const goods = miner ? ['iron_ore', 'coal', 'gold_ore'] : ['raw_meat', 'fish'];
+        const catchN = (this.rec.inv || []).reduce((n, q) => n + (goods.includes(q.item) ? q.count : 0), 0);
+        const dest = this.layout.buildings.find((b) => b.type === (miner ? 'smithy' : 'tavern'));
+        if (catchN >= 2 && dest && !this.rec.override) {
           const now = game.day * 1440 + game.minute;
-          setOverride(this.rec, now, now + 50, 'sell', { target: tavern.inside, place: 'tavern' });
+          setOverride(this.rec, now, now + 50, 'sell', { target: dest.inside, place: dest.type });
           act = activityFor(this.rec, game.day, game.minute);
           this.activity = act;
         }
@@ -507,6 +525,24 @@ export class NPC extends Entity {
       this.path = null;
       this.atGoal = false;
       this.pathFails = 0;
+      // Miners heading out: a big enough watch spares a guard to go along.
+      if (this.rec.job === 'miner' && act.entry.act === 'work' && this.goal) game.sim.escortMiner(this, act);
+    }
+    // A guard watching over a miner goes where they go, and home with them.
+    if (this.act === 'watch') {
+      const o = this.rec.override;
+      const ward = o && this.layout.npcs[o.ward];
+      const we = ward && ward.ent;
+      if (!we || we.dead || we.act !== 'work') {
+        this.rec.override = null;
+        this.activity = null;
+        return;
+      }
+      if (this.goal && Math.max(Math.abs(this.goal.x - we.x), Math.abs(this.goal.z - we.z)) > 4 && !we.moving) {
+        this.goal = { x: we.x, y: we.y, z: we.z, tag: 'watch', near: 2 };
+        this.atGoal = false;
+        this.path = null;
+      }
     }
     // Guards react to wanted players and nearby monsters.
     if (this.rec.job === 'guard' && !this.sleeping) {
@@ -565,7 +601,11 @@ export class NPC extends Entity {
     if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) this.mealBubble = this.rec.lastMeal;
     if (act === 'trial') this.face(this.game.player.x, this.game.player.z);
     if (g.trap) this.checkSnare(g.trap);
-    if (g.sell) {
+    if (g.sell && this.rec.job === 'miner') {
+      const n = this.game.sim.sellOre(this.layout, this.rec);
+      if (n) this.say(this.rng.pick(['Fresh ore for the forge!', `${n} loads from the mine.`, 'Good seam today.']), 3);
+      this.rec.override = null;
+    } else if (g.sell) {
       const n = this.game.sim.sellCatch(this.layout, this.rec);
       if (n) this.say(this.rng.pick(['Fresh catch for the kitchen!', 'Here you go, straight from the wild.', `${n} for the pot!`]), 3);
       this.rec.override = null;
@@ -674,7 +714,11 @@ export class NPC extends Entity {
       if (this.distTo(game.player) < 16) game.audio?.play('place', this);
       return;
     }
-    if (act.act === 'visit' && this.lineCd <= 0) {
+    if (act.act === 'camp' && this.lineCd <= 0) {
+      this.lineCd = this.rng.float(20, 45);
+      if (this.rng.chance(0.5) && this.distTo(game.player) < 14) this.say(this.rng.pick(['Nice square.', 'Do you think they have room for us?', 'Smells like stew. A good sign.', 'Look at those houses...', 'I could get used to this.']), 3);
+    }
+    if (act.act === 'visit' && this.lineCd <= 0 && this.rec.visit) {
       this.lineCd = this.rng.float(15, 35);
       const v = this.rec.visit;
       if (this.rng.chance(0.6)) this.say(this.rng.pick([`Fine goods from ${v.fromName}!`, 'Rare wares! Come and see!', 'Traded all the way from the coast!', 'Best prices this side of the river!']), 3, '#ffe070');
@@ -692,6 +736,11 @@ export class NPC extends Entity {
         return;
       }
       if (this.rng.chance(0.08) && this.distTo(game.player) < 34) game.spawnGameNear(this);
+    }
+    // Miners chip away at the rock face beside them.
+    if (act.act === 'work' && g.tag === 'mine' && this.rng.chance(dt * 0.35)) {
+      if (!this.mineWork()) this.idleT = Math.min(this.idleT, 3);
+      return;
     }
     // Farmers bring in ripe crops by hand and sow the rows again.
     if (act.act === 'work' && g.tag === 'farm' && this.rng.chance(dt * 0.35)) {
@@ -712,7 +761,14 @@ export class NPC extends Entity {
     if (this.idleT > 0) return;
     // Re-pick a spot now and then so places feel alive.
     this.idleT = this.rng.float(8, 25);
-    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || g.tag === 'farm') {
+    // A builder on their rounds spots damage and gets it fixed.
+    if (g.inspect !== undefined) {
+      const b = this.layout.buildings[g.inspect];
+      const p = b && game.sim.works.noteDamage(this.layout, b);
+      if (p) this.say(this.rng.pick([`This ${b.name.replace(/^The /, '').toLowerCase()} needs fixing.`, 'Who did this? Right, back to work.']), 3);
+      else if (this.rng.chance(0.3)) this.say(this.rng.pick(['Solid walls. Good.', 'That roof will hold.', 'Hm, needs a coat of paint.']), 2.5);
+    }
+    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || g.tag === 'farm' || g.inspect !== undefined) {
       this.goal = (g.tag === 'farm' && act.act === 'work' && this.farmGoal()) || (act.act === 'work' ? this.workGoal() : this.pickGoal(act));
       this.atGoal = false;
       this.path = null;
@@ -743,6 +799,90 @@ export class NPC extends Entity {
       this.path = null;
     }
     this.followPath(this.cgoal, 1);
+  }
+
+  // One swing of the pick at the nearest rock; every few swings a block
+  // comes loose. With the face dug back, they follow it in a little way.
+  mineWork() {
+    const game = this.game;
+    const w = game.world;
+    const rec = this.rec;
+    if ((rec.minedDay || -1) !== game.day) {
+      rec.minedDay = game.day;
+      rec.minedToday = 0;
+    }
+    if (rec.minedToday >= 24) return false;
+    const rock = (x, y, z) => ROCK.has(w.getBlock(x, y, z));
+    let t = this.mineTarget;
+    if (!t || !rock(t.x, t.y, t.z) || Math.max(Math.abs(t.x - this.x), Math.abs(t.z - this.z)) > 1) {
+      t = null;
+      // Into the face at chest and head height, or down into the ground to
+      // open a quarry pit (never more than two deep).
+      const dys = this.y - 1 >= GROUND - 2 ? [0, 1, -1] : [0, 1];
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const dy of dys) {
+          if (rock(this.x + dx, this.y + dy, this.z + dz)) {
+            t = { x: this.x + dx, y: this.y + dy, z: this.z + dz, hits: 0 };
+            break;
+          }
+        }
+        if (t) break;
+      }
+      this.mineTarget = t;
+    }
+    if (!t) {
+      // Walk up to the nearest rock face within a few paces of the spot.
+      const sp = this.spot || { x: this.x, z: this.z };
+      let best = null;
+      for (let dz = -5; dz <= 5; dz++) {
+        for (let dx = -5; dx <= 5; dx++) {
+          const x = sp.x + dx;
+          const z = sp.z + dz;
+          if (!rock(x, this.y, z) && !rock(x, this.y + 1, z) && !(this.y - 1 >= GROUND - 2 && rock(x, this.y - 1, z))) continue;
+          for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const tx = x + ax;
+            const tz = z + az;
+            const ty = w.findStandY(tx, tz, this.y);
+            if (ty !== this.y || game.occupiedBySolid(tx, ty, tz, this)) continue;
+            const d = Math.abs(tx - this.x) + Math.abs(tz - this.z);
+            if (!best || d < best.d) best = { x: tx, z: tz, d };
+          }
+        }
+      }
+      if (best && best.d > 0) {
+        this.goal = { x: best.x, y: this.y, z: best.z, tag: 'mine', face: this.dir };
+        this.atGoal = false;
+        this.path = null;
+        return true;
+      }
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = this.x + dx;
+        const nz = this.z + dz;
+        if (sp && Math.max(Math.abs(nx - sp.x), Math.abs(nz - sp.z)) > 4) continue;
+        const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
+        if (ny < 0 || game.occupiedBySolid(nx, ny, nz, this)) continue;
+        if (![0, 1, -1].some((dy) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ez]) => rock(nx + ex, ny + dy, nz + ez)))) continue;
+        this.face(nx, nz);
+        this.startMove(nx, ny, nz, this.step);
+        return true;
+      }
+      return false;
+    }
+    this.face(t.x, t.z);
+    this.doAction(0.3);
+    const id = w.getBlock(t.x, t.y, t.z);
+    const near = this.distTo(game.player) < 16;
+    game.renderer.emit(t.x, t.y, t.z, { n: 3, color: game.blockColor(id), up: 25, speed: 35, life: 0.4, oy: -6 });
+    if (near && this.rng.chance(0.5)) game.audio?.play('dig', this);
+    t.hits++;
+    if (t.hits < 3) return true;
+    w.setBlock(t.x, t.y, t.z, B.air);
+    for (const d of rollDrops(id, () => this.rng.next())) invAdd(rec.inv, d.item, d.count);
+    rec.minedToday++;
+    this.mineTarget = null;
+    if (near) game.audio?.play('break', this);
+    if ([B.iron_ore, B.gold_ore, B.gem_ore, B.coal_ore].includes(id) && near && this.rng.chance(0.6)) this.say(this.rng.pick(['Ore!', 'Now that\'s a find.', 'Look at that seam!']), 2.5);
+    return true;
   }
 
   // Harvest a ripe crop next to them, or sow an empty patch of farmland.

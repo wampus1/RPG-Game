@@ -750,6 +750,13 @@ function simpleIcon(key) {
       p.vline(8, 4, 11, '#f0e070');
       p.hline(5, 10, 6, '#f0e070');
       break;
+    case 'dispatch':
+      p.rect(3, 4, 11, 8, '#e8dcb0');
+      p.line(3, 4, 8, 8, '#a89868');
+      p.line(13, 4, 8, 8, '#a89868');
+      p.ellipse(8, 8, 1.5, 1.5, '#c8a030');
+      p.set(8, 8, '#8a2a2a');
+      break;
     case 'letter':
       p.rect(3, 5, 11, 7, '#ece4cc');
       p.line(3, 5, 8, 9, '#b0a888');

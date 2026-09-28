@@ -550,7 +550,7 @@ export class Careers {
     const rec = npc.rec;
     const s = npc.settlement;
     const sim = this.sim;
-    if (npc.visit || npc.hired) return { ok: false, reason: 'none' };
+    if (npc.visit || npc.hired || rec.visitor) return { ok: false, reason: 'none' };
     if (this.escort) return { ok: false, reason: 'busy' };
     if (sim.justice.exiled.has(s.id) || sim.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
     if (rec.age === 'child') return { ok: false, reason: 'child' };
@@ -692,7 +692,7 @@ export class Careers {
       this.nextCustomer = abs + 20;
       return;
     }
-    const cands = a.npcs.filter((n) => !n.dead && n.state === 'routine' && !n.sleeping && !n.hired && !n.visit && n.rec.age !== 'child'
+    const cands = a.npcs.filter((n) => !n.dead && n.state === 'routine' && !n.sleeping && !n.hired && !n.visit && !n.rec.visitor && n.rec.age !== 'child'
       && n.rec.idx !== j.employer && n.rec.job !== 'guard' && !n.rec.override && n.distTo(p) >= 5 && n.distTo(p) <= 40);
     if (!cands.length) {
       this.nextCustomer = abs + 30;

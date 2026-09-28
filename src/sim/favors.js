@@ -85,7 +85,7 @@ export class Favors {
     const rec = npc.rec;
     const L = npc.layout;
     const s = L.settlement;
-    if (npc.visit || npc.hired) return { none: 'traveling' };
+    if (npc.visit || npc.hired || rec.visitor) return { none: 'traveling' };
     if (this.given(npc)) return { none: 'active' };
     const r = this.sim.repEntry(s.id, rec.idx);
     if (r.favorDay === g.day) return { none: 'asked' };

@@ -146,6 +146,7 @@ class Layout {
     this.docks();
     this.decorate();
     this.wilds();
+    this.clearDoorways();
     this.paintGround();
     this.decorBase = null;
     if (s.condition !== 'abandoned') this.npcs = generateNPCs(this, this.plan, hash4(s.seed, 0x5eed));
@@ -677,6 +678,106 @@ class Layout {
     put.sort((a, b) => phase(a) - phase(b));
     list.push(...put);
     return { bld, list, chimneys, spots: newSpots, signs: newSigns };
+  }
+
+  // Build a building's blocks without touching the world: returns the
+  // final block for every cell (clearing the footprint first), ordered for
+  // construction (clearing, floor, walls bottom-up, roof, furniture).
+  planBuilding(bld, rng, clearTo = Y0 + 8) {
+    const chim = this.chimneys.length;
+    const spots = this.spots.length;
+    const signs = this.signs.length;
+    const mask = this.mask.slice();
+    this.collect = [];
+    this.local = new Map();
+    const target = new Map();
+    for (let z = bld.z0; z <= bld.z1; z++) for (let x = bld.x0; x <= bld.x1; x++) for (let y = Y0; y <= clearTo; y++) target.set(`${x},${y},${z}`, [x, y, z, B.air, 0]);
+    this.construct(bld, rng);
+    for (const e of this.collect) target.set(`${e[0]},${e[1]},${e[2]}`, e);
+    this.collect = null;
+    this.local = null;
+    const chimneys = this.chimneys.splice(chim);
+    const newSpots = this.spots.splice(spots);
+    const newSigns = this.signs.splice(signs);
+    this.mask = mask;
+    const phase = (e) => (e[3] === B.air ? -1 : e[1] < Y0 ? 0 : BLOCKS[e[3]].render === 'cube' || BLOCKS[e[3]].render === 'door' ? 1 + e[1] : 50);
+    const list = [...target.values()].sort((a, b) => phase(a) - phase(b) || b[1] - a[1]);
+    return { bld, list, chimneys, spots: newSpots, signs: newSigns };
+  }
+
+  // A new work building on an empty lot (the town grows what it lacks).
+  typedBlueprint(plot, type, id) {
+    const rng = new RNG(hash4(this.settlement.seed, 0xb11d, plot.id, type.length));
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    const r = plot;
+    const bld = {
+      id, type, name: BUILDING_NAMES[type] || 'Workshop', x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: r.outside,
+      residential: !!SPECS[type]?.residential, beds: [], work: [], seats: [], free: [], household: null,
+      mats: this.buildingMats(type, rng), tall: 2, built: true,
+    };
+    bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
+    if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
+    return this.planBuilding(bld, rng);
+  }
+
+  // Room to grow a house to the next size, keeping its door where it is.
+  expansionBounds(b) {
+    const next = { house_s: 'house_m', house_m: 'house_l' }[b.type];
+    if (!next) return null;
+    const rot = b.door.rot;
+    const alongX = rot === 0 || rot === 2; // door wall runs along x
+    const cw = alongX ? b.x1 - b.x0 + 1 : b.z1 - b.z0 + 1;
+    const cd = alongX ? b.z1 - b.z0 + 1 : b.x1 - b.x0 + 1;
+    const ok = (x, z, own) => {
+      if (own(x, z)) return true;
+      if (!this.inside(x, z, 2)) return false;
+      const m = this.maskAt(x, z);
+      if (m !== M.FREE && m !== M.YARD) return false;
+      const c = this.col(x, z);
+      return c && c.water < 0 && c.h === SURFACE;
+    };
+    const own = (x, z) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1;
+    for (const [w, d] of SPECS[next].size) {
+      if (w < cw || d < cd) continue;
+      const extraW = w - cw;
+      const extraD = d - cd;
+      for (let a = 0; a <= extraW; a++) {
+        let r;
+        if (rot === 0) r = { x0: b.x0 - a, x1: b.x1 + (extraW - a), z1: b.z1, z0: b.z0 - extraD };
+        else if (rot === 2) r = { x0: b.x0 - a, x1: b.x1 + (extraW - a), z0: b.z0, z1: b.z1 + extraD };
+        else if (rot === 1) r = { z0: b.z0 - a, z1: b.z1 + (extraW - a), x0: b.x0, x1: b.x1 + extraD };
+        else r = { z0: b.z0 - a, z1: b.z1 + (extraW - a), x1: b.x1, x0: b.x0 - extraD };
+        const d0 = b.door;
+        if (alongX ? d0.x <= r.x0 || d0.x >= r.x1 : d0.z <= r.z0 || d0.z >= r.z1) continue;
+        let fits = true;
+        for (let z = r.z0 - 1; z <= r.z1 + 1 && fits; z++) {
+          for (let x = r.x0 - 1; x <= r.x1 + 1 && fits; x++) {
+            const inRect = x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+            if (inRect && !ok(x, z, own)) fits = false;
+            if (!inRect && !own(x, z) && [M.BUILD, M.WALL, M.WATER].includes(this.maskAt(x, z))) fits = false;
+          }
+        }
+        if (fits) return { ...r, type: next };
+      }
+    }
+    return null;
+  }
+
+  // The blocks for a house grown to new bounds (same door, same family).
+  rebuildPlan(b, nb, rev = 1) {
+    const rng = new RNG(hash4(this.settlement.seed, 0xe4a, b.id, rev));
+    const bld = {
+      ...b, type: nb.type, x0: nb.x0, z0: nb.z0, x1: nb.x1, z1: nb.z1, beds: [], work: [], seats: [], free: [], homeSpots: [],
+      name: b.playerHome ? b.name : BUILDING_NAMES[nb.type], tall: 2,
+    };
+    const oldTop = (b.roofBase || Y0 + 2) + Math.max(b.x1 - b.x0, b.z1 - b.z0);
+    return this.planBuilding(bld, rng, Math.min(Y0 + 10, oldTop + 1));
+  }
+
+  // Mark a grown or new building's footprint on the layout mask.
+  claimFootprint(r) {
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) this.setMask(x, z, M.BUILD);
   }
 
   // Extend a side lane off an existing road into open ground.
@@ -1666,6 +1767,45 @@ class Layout {
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.maskAt(x + dx, z + dz) === M.FREE) this.setMask(x + dx, z + dz, M.DECOR);
   }
 
+  // Nothing may stand in front of a door, inside or out: barrels, tables,
+  // benches, lamp posts, stalls and wells are moved out of the way.
+  clearDoorways() {
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    const inAnyBuilding = (x, z) => this.buildings.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
+    const cleared = new Set();
+    const clear = (x, z, outside) => {
+      if (outside && inAnyBuilding(x, z)) return;
+      for (const y of [Y0, Y0 + 1]) {
+        const id = this.at(x, y, z);
+        if (id === undefined || id === B.air) continue;
+        const bl = BLOCKS[id];
+        if (bl.render === 'door' || bl.render === 'plant' || bl.render === 'flat') continue;
+        if (!bl.solid && bl.render !== 'sprite') continue;
+        this.put(x, y, z, B.air);
+        cleared.add(`${x},${z}`);
+      }
+    };
+    for (const b of this.buildings) {
+      const d = b.door;
+      if (!d) continue;
+      const ox = DX[d.rot];
+      const oz = DZ[d.rot];
+      clear(d.x + ox, d.z + oz, true);
+      clear(d.x + ox * 2, d.z + oz * 2, true);
+      if (b.inside) {
+        clear(b.inside.x, b.inside.z, false);
+        clear(b.inside.x - ox, b.inside.z - oz, false);
+      }
+    }
+    if (cleared.size) {
+      this.spots = this.spots.filter((sp) => !(sp.seat && cleared.has(`${sp.x},${sp.z}`)));
+      this.lamps = this.lamps.filter((l) => !cleared.has(`${l.x},${l.z}`));
+      this.signs = this.signs.filter((sg) => sg.y !== Y0 || !cleared.has(`${sg.x},${sg.z}`));
+    }
+    this.doorsCleared = cleared.size;
+  }
+
   paintGround() {
     const b = this.bounds;
     const mats = this.mats;
@@ -1694,6 +1834,8 @@ class Layout {
         return this.spotsByTag('fish').length > 0;
       case 'plaza':
         return !!this.plaza;
+      case 'rounds':
+        return this.buildings.length > 0;
       case 'wild':
         return this.spotsByTag(job === 'lumberjack' ? 'chop' : job === 'miner' ? 'mine' : 'hunt').length > 0;
       case 'guardhouse':
@@ -1720,6 +1862,7 @@ class Layout {
     if (J.place === 'farm') return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
     if (J.place === 'dock') return { kind: 'tag', tag: 'fish' };
     if (J.place === 'plaza') return { kind: 'plaza' };
+    if (J.place === 'rounds') return { kind: 'rounds' };
     if (J.place === 'wild') return { kind: 'tag', tag: job === 'lumberjack' ? 'chop' : job === 'miner' ? 'mine' : 'hunt' };
     if (job === 'merchant') {
       const stalls = this.spotsByTag('market');
