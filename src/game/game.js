@@ -301,6 +301,12 @@ export class Game {
     this.pathBudget = 5;
     const ev = input.consume();
     const uiRes = this.ui.handle(ev, input, this);
+    // The pause menu freezes the world; other windows let it keep living.
+    if (this.ui.find && (this.ui.find('pause') || this.ui.find('help'))) {
+      this.cursor = null;
+      this.mining = null;
+      return;
+    }
     const blocked = this.ui.modal || this.player.dead;
     this.minute += dt * GAME_MINUTES_PER_SECOND * (this.sleepFast || 1);
     if (this.minute >= DAY_MINUTES) {
