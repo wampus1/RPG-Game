@@ -2,7 +2,7 @@
 // and rotation-dependent shading), prop sprites, plants and overlays. All
 // images are packed into a single atlas canvas.
 import { TILE, LH } from '../config.js';
-import { BLOCKS } from '../world/blocks.js';
+import { BLOCKS, CROPS } from '../world/blocks.js';
 import { Px, shade } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 
@@ -22,13 +22,13 @@ const P = {
   grass_taiga: ['#5a7a4a', '#465e3a', '#6e9058', '#8a6a44'],
   dirt: ['#7a5436', '#5e3f28', '#946842', '#a8a098'],
   sand: ['#d2b46c', '#b99a58', '#e0c682'],
-  snow: ['#dce4ee', '#b8c6d8', '#eef3f9'],
+  snow: ['#b4bcc8', '#98a4b6', '#c4ccd8'],
   stone: ['#84848c', '#66666e', '#9e9ea6'],
   cobblestone: ['#7a7a80', '#505056', '#98989e'],
   gravel: ['#8a8680', '#6a665e', '#a8a49c', '#7a6e62'],
   clay: ['#a4a8b0', '#8a8e98', '#bcc0c8'],
   mud: ['#5a4630', '#45351f', '#6e5a40'],
-  ice: ['#a8dcf0', '#88c4e0', '#d8f4ff'],
+  ice: ['#80b4c8', '#6a9cb4', '#a4ccdc'],
   path: ['#9a7a52', '#7e6242', '#b09066'],
   farmland: ['#5e4028', '#4a3020', '#6e4c30'],
   planks: ['#b08850', '#8e6a3a', '#c8a064'],
@@ -66,7 +66,7 @@ const LEAF = {
   jungle: ['#28a032', '#1c7a26', '#40c048'],
   acacia: ['#7a9a2e', '#5e7a22', '#98b440'],
   willow: ['#6a9a5a', '#527a46', '#86b474'],
-  snowy: ['#2e5e3e', '#224a30', '#eef4fa'],
+  snowy: ['#2e5e3e', '#224a30', '#c4ccd8'],
 };
 
 // --- atlas ------------------------------------------------------------------
@@ -275,7 +275,7 @@ function cubeTop(name, v, rand, rot) {
     }
     case 'snow': {
       speckle(p, pal, rand, 0.18);
-      for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#b8c8e0');
+      for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#8e9cb4');
       return p;
     }
     case 'stone': case 'bedrock': {
@@ -373,7 +373,7 @@ function cubeTop(name, v, rand, rot) {
     case 'roof_red': case 'roof_slate': case 'roof_wood': case 'roof_green': return shingles(p, pal, rand, rot);
     case 'roof_snow': {
       shingles(p, P.roof_wood, rand, rot);
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (y % 4 !== 3 || rand() < 0.6) p.set(x, y, rand() < 0.15 ? '#c8d6e8' : '#eef4fa');
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (y % 4 !== 3 || rand() < 0.6) p.set(x, y, rand() < 0.15 ? '#a4b0c2' : '#c4ccd8');
       return p;
     }
     case 'glass': {
@@ -623,7 +623,7 @@ function cubeFront(name, v, rand, rot) {
       p.hline(0, 15, LH - 3, shade(pp[1], 0.8));
       if (name === 'roof_snow') for (let x = 0; x < 16; x++) {
         const d = 2 + (rand() < 0.4 ? 1 : 0);
-        for (let y = 0; y < d; y++) p.set(x, y, '#eef4fa');
+        for (let y = 0; y < d; y++) p.set(x, y, '#c4ccd8');
       }
       return frontify(p, 0.8);
     }
@@ -1249,6 +1249,62 @@ function plantSprite(name, v, rand) {
   return p;
 }
 
+// Growing crops: a sprite per stage, from sprouts to harvest.
+function cropSprite(name, stage, stages, rand) {
+  if (stage >= stages - 1) return plantSprite(name, 0, rand);
+  const p = spr();
+  const base = 25;
+  const blade = (x, h, c, lean = 0) => {
+    for (let k = 0; k < h; k++) p.set(x + Math.round((k / h) * lean), base - k, c);
+  };
+  const soilDots = () => {
+    for (let x = 2; x < 15; x += 3) p.set(x, base, '#4a3020');
+  };
+  switch (name) {
+    case 'wheat_crop':
+      if (stage === 0) {
+        soilDots();
+        for (let x = 2; x < 15; x += 3) blade(x, 2 + Math.floor(rand() * 2), '#6ac84a');
+      } else if (stage === 1) {
+        for (let x = 1; x < 16; x += 2) blade(x, 4 + Math.floor(rand() * 3), '#58b040', Math.floor(rand() * 3) - 1);
+      } else {
+        for (let x = 1; x < 16; x += 2) {
+          const h = 8 + Math.floor(rand() * 3);
+          blade(x, h, '#6aa840');
+          p.rect(x, base - h - 1, 1, 2, '#b8c860');
+        }
+      }
+      break;
+    case 'carrot_crop':
+      if (stage === 0) {
+        soilDots();
+        for (let x = 2; x < 15; x += 4) {
+          p.set(x, base - 1, '#6ac84a');
+          p.set(x + 1, base - 2, '#58b848');
+        }
+      } else {
+        for (let x = 2; x < 15; x += 4) {
+          blade(x, 4, '#4aa83a', -1);
+          blade(x + 1, 5, '#58b848', 1);
+        }
+      }
+      break;
+    case 'cabbage_crop': {
+      const r = [1, 1.5, 2.2][stage] || 2;
+      for (const x of [4, 11]) {
+        p.ellipse(x, base - Math.ceil(r / 2), r + 0.5, Math.max(1, r - 0.5), stage === 0 ? '#7ac85a' : '#6ab84a');
+        if (stage >= 2) p.set(x, base - 2, '#9ad870');
+      }
+      if (stage === 0) soilDots();
+      p.outline('#2e4a1e');
+      break;
+    }
+    default:
+      return plantSprite(name, 0, rand);
+  }
+  return p;
+}
+
 function flatSprite(name, v, rand) {
   const p = new Px(16, 16);
   if (name === 'lily_pad') {
@@ -1359,7 +1415,8 @@ export function buildTextures() {
           continue;
         }
         const arr = [];
-        if (b.render === 'plant') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(plantSprite(name, v, seed(v))));
+        if (b.render === 'plant' && CROPS[id]) for (let st = 0; st < CROPS[id].stages; st++) arr.push(addImage(cropSprite(name, st, CROPS[id].stages, seed(st))));
+        else if (b.render === 'plant') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(plantSprite(name, v, seed(v))));
         else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;

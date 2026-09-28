@@ -6,7 +6,7 @@ import { Entity } from './entity.js';
 import { NPC_STEP_TIME, GROUND } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
-import { BLOCKS, B } from '../world/blocks.js';
+import { BLOCKS, B, CROPS, cropMature } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
@@ -17,7 +17,7 @@ const EMOTES = {
   drink: ['♦', '#ffb060'], dice: ['¤', '#ffe070'], gossip: ['…', '#e8e8e8'], social: ['☺', '#e8e8e8'], fish: ['~', '#80c8ff'],
   garden: ['♣', '#80e070'], sketch: ['✎', '#e8d8b0'], train: ['!', '#ff8060'], stargaze: ['*', '#c8d8ff'], smoke: ['°', '#c8c8c8'],
   play: ['♪', '#80ffb0'], eat: ['♥', '#ff8080'], stroll: ['·', '#c8c8c8'], farm: ['♣', '#c8e070'], chop: ['!', '#e8b080'], mine: ['!', '#c8c8d8'],
-  mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], build: ['■', '#e8c890'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
+  mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], build: ['■', '#e8c890'], repair: ['■', '#c8c8d8'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
 };
 
 const MEAL_LINES = {
@@ -98,11 +98,11 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
-    if (this.state === 'fight') return this.weapon();
+    if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
     if (this.prey) return this.weapon();
     const a = this.activity?.entry;
     if (!a) return null;
-    if (a.act === 'build') return 'hammer';
+    if (a.act === 'build' || a.act === 'repair') return 'hammer';
     if ((a.act === 'forage' || a.act === 'hunt') && this.atGoal) return this.weapon();
     if (a.act === 'work' && this.atGoal) return this.rec.equipment.tool;
     if (a.act === 'hobby' && this.atGoal) {
@@ -235,6 +235,10 @@ export class NPC extends Entity {
       }
       case 'trial':
         return target(e.target, { tag: 'trial' });
+      case 'repair':
+        return target(e.target, { tag: 'repair', near: 1 });
+      case 'customer': case 'confront':
+        return null;
       case 'sell':
         return target(e.target, { near: 1, tag: 'sell', sell: true });
       case 'forage': {
@@ -294,7 +298,12 @@ export class NPC extends Entity {
       return { x: s.x, y: s.y, z: s.z, face: s.face, tag: 'work' };
     }
     if (w.kind === 'tag') {
-      // Trappers alternate between checking snares and hunting.
+      // Trappers alternate between checking snares (the town's and their
+      // own) and hunting.
+      if (w.tag === 'hunt' && rng.chance(0.3)) {
+        const own = this.ownSnareGoal();
+        if (own) return own;
+      }
       const tag = w.tag === 'hunt' && rng.chance(0.45) && L.spotsByTag('trap').length ? 'trap' : w.tag;
       const g = claimFrom(L.spotsByTag(tag));
       if (g) {
@@ -508,6 +517,17 @@ export class NPC extends Entity {
       }
     }
     if (this.sleeping) return;
+    if (this.act === 'customer' || this.act === 'confront') {
+      this.customerWalk();
+      return;
+    }
+    if (this.rec.job === 'trapper' && this.meleeWeapon()) {
+      const beast = game.creatures.find((c) => !c.dead && c.hostileNow && this.distTo(c) <= 2 && Math.abs(c.y - this.y) <= 1);
+      if (beast) {
+        this.react(beast, false);
+        return;
+      }
+    }
     if (this.prey) {
       this.hunt(dt);
       return;
@@ -628,11 +648,39 @@ export class NPC extends Entity {
         if (this.rng.chance(0.4)) this.say(this.rng.pick(['Almost got this beam!', 'Hand me that plank.', 'Steady...', 'A fine little cottage.']), 2.5);
       }
     }
+    // Guards patching up the jail after a breakout, a block at a time.
+    if (act.act === 'repair') {
+      this.repairT = (this.repairT || 0) - dt;
+      if (this.repairT > 0) return;
+      this.repairT = 1.3;
+      const j = game.sim.justice;
+      const missing = j.jailDamage(this.layout, act);
+      if (!missing.length) {
+        this.rec.override = null;
+        this.activity = null;
+        this.say(this.rng.pick(['There. Good as new.', 'Let\'s see them get out of that.']), 3);
+        return;
+      }
+      if (!this.saidRepair) {
+        this.saidRepair = true;
+        this.say(this.rng.pick(['Who did this to my jail?!', 'Look at this mess...']), 3, '#ffb080');
+      }
+      const [x, y, z, id, meta] = missing[0];
+      this.face(x, z);
+      this.doAction(0.3);
+      if (game.entityAt(x, y, z) || game.entityAt(x, y - 1, z)) return;
+      game.world.setBlock(x, y, z, id, meta);
+      game.renderer.emit(x, y, z, { n: 5, color: ['#c8c8d8', '#8a8a96', '#e8e0d0'], up: 30, speed: 40, life: 0.5, oy: -6 });
+      if (this.distTo(game.player) < 16) game.audio?.play('place', this);
+      return;
+    }
     if (act.act === 'visit' && this.lineCd <= 0) {
       this.lineCd = this.rng.float(15, 35);
       const v = this.rec.visit;
       if (this.rng.chance(0.6)) this.say(this.rng.pick([`Fine goods from ${v.fromName}!`, 'Rare wares! Come and see!', 'Traded all the way from the coast!', 'Best prices this side of the river!']), 3, '#ffe070');
     }
+    // Trappers set new snares on their hunting grounds.
+    if (g.hunt && act.act === 'work' && this.rec.job === 'trapper' && this.rng.chance(dt * 0.08) && this.laySnare()) return;
     // Hunters look for game near their hunting grounds (and now and then
     // an animal wanders by).
     if ((g.hunt || act.act === 'forage') && this.rng.chance(dt * 0.6)) {
@@ -644,6 +692,11 @@ export class NPC extends Entity {
         return;
       }
       if (this.rng.chance(0.08) && this.distTo(game.player) < 34) game.spawnGameNear(this);
+    }
+    // Farmers bring in ripe crops by hand and sow the rows again.
+    if (act.act === 'work' && g.tag === 'farm' && this.rng.chance(dt * 0.35)) {
+      if (!this.farmWork()) this.idleT = Math.min(this.idleT, 1.5);
+      return;
     }
     if (act.act === 'work' && this.rng.chance(dt * 0.6)) {
       this.doAction(0.3);
@@ -659,11 +712,115 @@ export class NPC extends Entity {
     if (this.idleT > 0) return;
     // Re-pick a spot now and then so places feel alive.
     this.idleT = this.rng.float(8, 25);
-    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || (g.tag === 'farm' && this.rng.chance(0.5))) {
-      this.goal = act.act === 'work' ? this.workGoal() : this.pickGoal(act);
+    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || g.tag === 'farm') {
+      this.goal = (g.tag === 'farm' && act.act === 'work' && this.farmGoal()) || (act.act === 'work' ? this.workGoal() : this.pickGoal(act));
       this.atGoal = false;
       this.path = null;
     } else if (this.rng.chance(0.3) && !this.sitting) this.dir = this.rng.int(0, 3);
+  }
+
+  // Walking over to buy something from the player, then waiting to be served.
+  customerWalk() {
+    const game = this.game;
+    const p = game.player;
+    const car = game.sim.careers;
+    const confront = this.act === 'confront';
+    const c = confront ? game.sim.confront : car.customer;
+    if (!c || c.idx !== this.rec.idx || c.sid !== this.settlement.id) {
+      this.rec.override = null;
+      this.activity = null;
+      return;
+    }
+    const d = Math.max(Math.abs(p.x - this.x), Math.abs(p.z - this.z));
+    if (d <= 1 || (d <= 2 && c.arrived)) {
+      this.path = null;
+      this.face(p.x, p.z);
+      if (!c.arrived) (confront ? game.sim.confronted(this) : car.customerArrived(this));
+      return;
+    }
+    if (!this.cgoal || Math.abs(this.cgoal.x - p.x) + Math.abs(this.cgoal.z - p.z) > 1) {
+      this.cgoal = { x: p.x, y: p.y, z: p.z };
+      this.path = null;
+    }
+    this.followPath(this.cgoal, 1);
+  }
+
+  // Harvest a ripe crop next to them, or sow an empty patch of farmland.
+  farmWork() {
+    const game = this.game;
+    const w = game.world;
+    const y = this.y;
+    let ripe = null;
+    let bare = null;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = this.x + dx;
+      const z = this.z + dz;
+      const id = w.getBlock(x, y, z);
+      if (CROPS[id]) {
+        if (!ripe && cropMature(id, w.getMeta(x, y, z))) ripe = { x, z, id };
+      } else if (!bare && id === B.air && w.getBlock(x, y - 1, z) === B.farmland && !game.entityAt(x, y, z)) bare = { x, z };
+    }
+    const near = this.distTo(game.player) < 16;
+    if (ripe) {
+      this.face(ripe.x, ripe.z);
+      this.doAction(0.3);
+      const drops = game.crops.harvest(ripe.id, w.getMeta(ripe.x, y, ripe.z), true, () => this.rng.next());
+      w.setBlock(ripe.x, y, ripe.z, B.air);
+      for (const d of drops) invAdd(this.rec.inv, d.item, d.count);
+      game.renderer.emit(ripe.x, y, ripe.z, { n: 6, color: game.blockColor(ripe.id), up: 30, speed: 40, life: 0.5, oy: -6 });
+      if (near) game.audio?.play('break', this);
+      return true;
+    }
+    if (bare) {
+      const id = this.fieldCrop(bare.x, bare.z);
+      const seed = CROPS[id].seed;
+      if (invCount(this.rec.inv, seed) <= 0) return false;
+      invTake(this.rec.inv, seed, 1);
+      this.face(bare.x, bare.z);
+      this.doAction(0.3);
+      game.crops.plant(bare.x, y, bare.z, id);
+      game.renderer.emit(bare.x, y, bare.z, { n: 4, color: ['#5e4028', '#7a5436'], up: 15, speed: 20, life: 0.4, oy: -2 });
+      if (near) game.audio?.play('place', this);
+      return true;
+    }
+    return false;
+  }
+
+  // What grows in the field at (x, z).
+  fieldCrop(x, z) {
+    const f = this.layout.fields.find((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
+    if (f && CROPS[f.crop]) return f.crop;
+    const w = this.game.world;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const id = w.getBlock(x + dx, this.y, z + dz);
+      if (CROPS[id]) return id;
+    }
+    return f ? B.carrot_crop : B.wheat_crop;
+  }
+
+  // The furrow with the most work waiting beside it.
+  farmGoal() {
+    const w = this.game.world;
+    const spots = this.layout.spotsByTag('farm').filter((s) => !s.claim || s.claim === this.id);
+    let best = null;
+    let bs = -1;
+    for (const sp of spots) {
+      let score = this.rng.float(0, 0.8);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [0, 1], [0, -1]]) {
+        const id = w.getBlock(sp.x + dx, GROUND, sp.z + dz);
+        if (CROPS[id] && cropMature(id, w.getMeta(sp.x + dx, GROUND, sp.z + dz))) score += 2;
+        else if (id === B.air && w.getBlock(sp.x + dx, GROUND - 1, sp.z + dz) === B.farmland) score += 1;
+      }
+      if (score > bs) {
+        bs = score;
+        best = sp;
+      }
+    }
+    if (!best || bs < 1) return null;
+    this.releaseSpot();
+    best.claim = this.id;
+    this.spot = best;
+    return { x: best.x, y: best.y, z: best.z, face: best.face, tag: 'farm' };
   }
 
   mourn(act) {
@@ -735,6 +892,42 @@ export class NPC extends Entity {
     void c;
   }
 
+  // Put down a snare on open ground beside them (they keep up to three).
+  laySnare() {
+    const rec = this.rec;
+    rec.snares = (rec.snares || []).filter((q) => this.game.world.regionAt(q.x, q.z) === null || this.game.world.getBlock(q.x, q.y, q.z) === B.snare);
+    if (rec.snares.length >= 3) return false;
+    const w = this.game.world;
+    const L = this.layout;
+    for (const [dx, dz] of this.rng.shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      const x = this.x + dx;
+      const z = this.z + dz;
+      const y = this.y;
+      if (w.getBlock(x, y, z) !== B.air && !BLOCKS[w.getBlock(x, y, z)].replaceable) continue;
+      if (!BLOCKS[w.getBlock(x, y - 1, z)].solid || this.game.entityAt(x, y, z)) continue;
+      const b = L.bounds;
+      if (x >= b.x0 - 3 && x <= b.x1 + 3 && z >= b.z0 - 3 && z <= b.z1 + 3) continue;
+      if (rec.snares.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < 6) || L.spotsByTag('trap').some((q) => q.trap && Math.abs(q.trap.x - x) + Math.abs(q.trap.z - z) < 6)) continue;
+      this.face(x, z);
+      this.doAction(0.5);
+      w.setBlock(x, y, z, B.snare, 0);
+      rec.snares.push({ x, y, z, from: { x: this.x, z: this.z } });
+      this.emoteShow('+', '#c8e070', 2);
+      if (this.distTo(this.game.player) < 12 && this.rng.chance(0.6)) this.say(this.rng.pick(['There. Let\'s see what we catch.', 'A fresh snare.', 'Should be a good spot.']), 2.5);
+      this.game.renderer.emit(x, y, z, { n: 4, color: ['#c8a064', '#e8e0d0'], up: 15, speed: 20, life: 0.4, oy: -4 });
+      return true;
+    }
+    return false;
+  }
+
+  // A trapper's round: one of the snares they set themselves.
+  ownSnareGoal() {
+    const own = (this.rec.snares || []).filter((q) => this.game.world.regionAt(q.x, q.z) && this.game.world.getBlock(q.x, q.y, q.z) === B.snare);
+    if (!own.length) return null;
+    const t = own[this.rng.int(0, own.length - 1)];
+    return { x: t.from.x, y: GROUND, z: t.from.z, face: this.dir, tag: 'hunt', trap: { x: t.x, y: t.y, z: t.z } };
+  }
+
   checkSnare(t) {
     const w = this.game.world;
     const cur = w.getBlock(t.x, t.y, t.z);
@@ -753,8 +946,14 @@ export class NPC extends Entity {
     if (w.getState(t.x, t.y, t.z)) {
       w.setState(t.x, t.y, t.z, false);
       invAdd(this.rec.inv, 'raw_meat', 1);
+      if (this.rng.chance(0.4)) invAdd(this.rec.inv, 'leather', 1);
       this.emoteShow('!', '#c8e070', 2);
-    } else this.emoteShow('?', '#c8c8c8', 1.5);
+      if (this.distTo(this.game.player) < 12 && this.rng.chance(0.6)) this.say(this.rng.pick(['Got one!', 'Supper!', 'Ha! Caught.']), 2.5);
+      this.game.renderer.emit(t.x, t.y, t.z, { n: 5, color: ['#a86a3c', '#e8e0d0'], up: 20, speed: 25, life: 0.5, oy: -4 });
+    } else {
+      this.emoteShow('?', '#c8c8c8', 1.5);
+      if (this.distTo(this.game.player) < 12 && this.rng.chance(0.3)) this.say(this.rng.pick(['Empty. Again.', 'Nothing yet.']), 2);
+    }
   }
 
   idle(dt) {
@@ -857,6 +1056,11 @@ export class NPC extends Entity {
     const close = victim && victim.rec && (this.rec.partner === victim.rec.idx || this.rec.children.includes(victim.rec.idx) || this.rec.parents.includes(victim.rec.idx) || (this.rec.friends || []).includes(victim.rec.idx));
     if (this.rec.job === 'guard') return this.engage(threat);
     if (this.rec.age === 'child') return this.startFlee(threat, witnessed ? null : '!!');
+    // Trappers don't run from animals: out comes the blade.
+    if (this.rec.job === 'trapper' && beast && this.meleeWeapon()) {
+      this.say(this.rng.pick(['Come on, then!', 'Not today, beast!', 'Easy... easy...']), 2, '#ffb080');
+      return this.engage(threat);
+    }
     const armed = !!this.weapon();
     // The brave fight back, or step in for friends and family (and against beasts).
     if (p.bravery > 0.68 && (armed || p.temper > 0.6) && (!witnessed || beast || close)) {

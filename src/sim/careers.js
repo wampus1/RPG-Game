@@ -1,9 +1,12 @@
 // The player's working life: an official profession granted by a mayor
-// (town guard, trapper, fisher, farmer), a paid job at someone's shop, and
-// guards hired to travel along as escorts.
+// (town guard, trapper, fisher, farmer), a job at someone's shop (chores and
+// customers to serve), customers who seek you out, guards hired to travel
+// along as escorts, and friends who come along as companions.
 import { JOBS } from '../entities/npcgen.js';
-import { alive, ledger } from './econ.js';
+import { alive, ledger, setOverride, invAdd, st, STOCK } from './econ.js';
 import { countItem, removeItem } from '../game/inventory.js';
+import { ITEMS } from '../world/items.js';
+import { BLOCKS } from '../world/blocks.js';
 
 export const PROFESSIONS = {
   guard: {
@@ -24,6 +27,22 @@ export const PROFESSIONS = {
     pitch: 'You may work and harvest the town fields as your own, and our traders pay a premium for your crops.',
   },
 };
+
+// What townsfolk come to buy from someone in each trade.
+const CUSTOMER_WANTS = {
+  guard: ['arrow', 'bread', 'raw_meat', 'leather'],
+  trapper: ['raw_meat', 'leather', 'feather'],
+  fisher: ['fish', 'cooked_fish'],
+  farmer: ['wheat', 'carrot', 'cabbage'],
+};
+
+// Goods a shop asks its helper to bring in.
+const SUPPLIES = {
+  smithy: ['iron_ore', 'coal'], tavern: ['raw_meat', 'fish', 'cabbage', 'carrot'], bakery: ['wheat', 'berries'], shop: ['leather', 'string', 'torch'],
+  tailor: ['leather', 'string', 'cloth'], workshop: ['log_oak', 'planks'], herbalist: ['herb', 'mushroom'], library: ['feather', 'book'],
+};
+
+const CONTAINERS = new Set(['chest', 'barrel', 'crate']);
 
 const ROLES = {
   smithy: 'Smith\'s Helper', tavern: 'Tavern Hand', shop: 'Shop Hand', bakery: 'Baker\'s Helper', library: 'Library Clerk',
@@ -68,6 +87,8 @@ export class Careers {
     this.ent = null;
     this.lastAbs = null;
     this.lastStep = -1e9;
+    this.customer = null; // someone on their way to buy from you
+    this.nextCustomer = null;
   }
 
   // Guards on duty have to actually walk their beat.
@@ -134,7 +155,9 @@ export class Careers {
     const g = this.game;
     const p = g.player;
     const out = [];
-    if (this.escort && this.ent && !this.ent.dead) out.push({ text: `Escort ${this.ent.rec.name.first} · ${Math.ceil(this.hoursLeft())}h left`, color: '#80e0ff' });
+    if (this.escort && this.ent && !this.ent.dead) out.push({ text: this.escort.companion ? `Companion: ${this.ent.rec.name.first}` : `Escort ${this.ent.rec.name.first} · ${Math.ceil(this.hoursLeft())}h left`, color: '#80e0ff' });
+    const c = this.customer;
+    if (c && c.arrived) out.push({ text: `${c.name} wants to buy!`, color: '#ffe070' });
     const j = this.job;
     if (!j || !p || p.restrained || this.sim.justice.jail) return out;
     const min = g.minute;
@@ -146,7 +169,8 @@ export class Careers {
     if (j.kind === 'employee' && min >= j.shift[0] && min < j.shift[1]) {
       const L = this.sim.layoutOf(j.sid);
       const b = L && buildingAt(L, p.x, p.z);
-      if (b && b.id === j.building) out.push({ text: `At work · ${(j.worked / 60).toFixed(1)}h today`, color: '#80e070' });
+      const left = (j.chores || []).filter((q) => !q.done).length;
+      if (b && b.id === j.building) out.push({ text: `At work · ${j.tasks || 0} done${left ? `, ${left} chores` : ''}`, color: '#80e070' });
       else out.push({ text: `Shift at the ${j.bname}!`, color: '#ffb060' });
     }
     return out;
@@ -162,11 +186,13 @@ export class Careers {
       out.push(`Sworn in on day ${j.since}. Earned so far: ¤${j.earned}.`);
       return out;
     }
-    return [
+    const out = [
       `Working for ${j.employerName} at the ${j.bname}, ${this.townName(j.sid)}.`,
-      `Shift ${clock(j.shift[0])}-${clock(j.shift[1])} inside the shop · ¤${j.wage}/hour, paid at closing.`,
-      `Worked today: ${(j.worked / 60).toFixed(1)}h. Earned so far: ¤${j.earned}. Staff discount at the shop.`,
+      `Shift ${clock(j.shift[0])}-${clock(j.shift[1])} · ¤${j.wage} per task (chores and customers), paid at closing. You may use the shop's chests while on shift.`,
+      `Done today: ${j.tasks || 0} tasks. Earned so far: ¤${j.earned}. Staff discount at the shop.`,
     ];
+    for (const c of j.chores || []) out.push(`${c.done ? '[x]' : '[ ]'} ${c.label}`);
+    return out;
   }
 
   // ------------------------------------------------------------ professions
@@ -209,6 +235,7 @@ export class Careers {
         given.push({ item, count: n });
       }
     }
+    this.job.kit = given;
     this.applyLook();
     const title = PROFESSIONS[job].title;
     ledger(L, g.day, `${g.playerName} was sworn in as ${/^[AEIOU]/.test(title) ? 'an' : 'a'} ${title.toLowerCase()} of ${s.name}.`);
@@ -219,16 +246,52 @@ export class Careers {
   resign(reason, quiet = false) {
     const j = this.job;
     if (!j) return;
+    this.dismissCustomer(null);
     const L = this.sim.layoutOf(j.sid);
     if (L) {
       if (j.kind === 'profession' && j.job === 'guard' && j.duty > 0) this.payDuty(L, j);
-      if (j.kind === 'employee' && j.worked > 0) this.payWages(L, j);
+      if (j.kind === 'employee' && j.tasks > 0) this.payWages(L, j);
     }
     this.job = null;
     const what = j.kind === 'profession' ? `your post as ${PROFESSIONS[j.job].title.toLowerCase()} of ${this.townName(j.sid)}` : `your job at the ${j.bname}`;
     if (!quiet) this.game.ui.msg(reason ? `You lost ${what} (${reason}).` : `You left ${what}.`, reason ? '#ff9060' : '#e8e0a0');
     if (L) ledger(L, this.game.day, `${this.game.playerName} ${reason ? 'was dismissed from' : 'left'} ${j.kind === 'profession' ? `the post of ${PROFESSIONS[j.job].title.toLowerCase()}` : `work at the ${j.bname}`}.`);
     this.applyLook();
+  }
+
+  // Thrown off the watch: the badge and the kit you were issued go back,
+  // wherever they are (your pack, or the jail's evidence chest).
+  stripGuard(reason) {
+    if (!this.isGuard()) return null;
+    const j = this.job;
+    const p = this.game.player;
+    const kit = [...(j.kit && j.kit.length ? j.kit : []), { item: 'guard_badge', count: 1 }];
+    const held = this.sim.justice.held;
+    const taken = [];
+    const seen = new Set();
+    for (const { item, count } of kit) {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      let n = count;
+      const inv = Math.min(n, countItem(p.inv, item));
+      if (inv) {
+        removeItem(p.inv, item, inv);
+        n -= inv;
+      }
+      if (n > 0 && held && held.items) {
+        for (const h of held.items) {
+          if (h.item !== item || n <= 0) continue;
+          const k = Math.min(h.count, n);
+          h.count -= k;
+          n -= k;
+        }
+        held.items = held.items.filter((h) => h.count > 0);
+      }
+      if (count - n > 0) taken.push({ item, count: count - n });
+    }
+    this.resign(reason, true);
+    this.game.ui.msg(`You are dismissed from the watch of ${this.townName(j.sid)} (${reason})${taken.length ? ' and must hand back your badge and kit' : ''}.`, '#ff9060');
+    return taken;
   }
 
   // A conviction or losing citizenship costs you your post in that town.
@@ -308,7 +371,7 @@ export class Careers {
     const j = this.job;
     if (j && j.kind === 'employee' && j.sid === s.id && j.building === bid) return { ok: false, reason: 'already' };
     if (biz.till < 20) return { ok: false, reason: 'poor' };
-    const wage = Math.max(2, Math.min(6, Math.round(2 + biz.till / 60))) + (op >= 35 ? 1 : 0);
+    const wage = Math.max(3, Math.min(8, Math.round(3 + biz.till / 50))) + (op >= 35 ? 1 : 0);
     const J = JOBS[rec.job] || { start: 480, end: 1080 };
     const shift = [J.start, Math.min(J.end, J.start + 600)];
     return { ok: true, wage, shift, bid, role: ROLES[b.type] || 'Hired Hand', bname: bare(b.name) };
@@ -323,35 +386,122 @@ export class Careers {
     this.job = {
       kind: 'employee', sid: L.settlement.id, building: t.bid, bname: t.bname, role: t.role, employer: npc.rec.idx,
       employerName: npc.rec.name.first, wage: t.wage, shift: t.shift, worked: 0, workDay: g.day, paidDay: -1, lastDay: g.day, since: g.day, earned: 0,
+      tasks: 0, served: 0, chores: null, choreDay: -1, shop: JOBS[npc.rec.job]?.trader || 'general',
     };
     ledger(L, g.day, `${npc.rec.name.first} took on ${g.playerName} at the ${t.bname}.`);
     this.sim.changeRep(npc, 2);
     return t;
   }
 
+  // Paid at closing for the work actually done: chores and customers served.
   payWages(L, j) {
-    const hours = j.worked / 60;
+    const tasks = j.tasks || 0;
+    j.tasks = 0;
     j.worked = 0;
     j.paidDay = this.game.day;
     const biz = L.econ.biz[j.building];
-    if (!biz || hours <= 0) return 0;
-    // An extra pair of hands brings in extra trade.
-    const extra = Math.round(hours * j.wage * 0.6);
-    biz.till += extra;
-    biz.earned = (biz.earned || 0) + extra;
-    const owed = Math.round(hours * j.wage);
+    if (!biz) return 0;
+    if (!tasks) {
+      if (j.lastDay === this.game.day) this.game.ui.msg(`No wages from the ${j.bname} today: you didn't get anything done.`, '#ffb080');
+      return 0;
+    }
+    const owed = tasks * j.wage;
     const paid = Math.max(0, Math.min(owed, Math.floor(biz.till)));
     biz.till -= paid;
     j.earned += paid;
     if (paid) this.pay(paid);
-    this.game.ui.msg(`Wages from the ${j.bname}: ¤${paid} for ${hours.toFixed(1)}h of work.`, '#ffe070');
+    this.game.ui.msg(`Wages from the ${j.bname}: ¤${paid} for ${tasks} task${tasks > 1 ? 's' : ''}.${paid < owed ? ' The till was short.' : ''}`, '#ffe070');
     const emp = L.npcs[j.employer];
-    if (emp && paid >= 3 && hours >= 3) this.sim.changeRep(emp.ent && !emp.ent.dead ? emp.ent : { rec: emp, settlement: L.settlement }, 1);
+    if (emp && tasks >= 3) this.sim.changeRep(emp.ent && !emp.ent.dead ? emp.ent : { rec: emp, settlement: L.settlement }, 1);
     return paid;
+  }
+
+  // On shift in the shop: you may use its chests and barrels.
+  onShift(sid, bid) {
+    const j = this.job;
+    const m = this.game.minute;
+    return !!j && j.kind === 'employee' && j.sid === sid && j.building === bid && m >= j.shift[0] - 30 && m < j.shift[1] + 30;
+  }
+
+  // Today's chores: take stock in the shop's containers, bring in supplies.
+  assignChores(L, j) {
+    const b = L.buildings[j.building];
+    const w = this.game.world;
+    const chores = [];
+    const boxes = [];
+    for (let z = b.z0; z <= b.z1; z++) {
+      for (let x = b.x0; x <= b.x1; x++) {
+        for (let y = 5; y <= 8; y++) {
+          const bl = BLOCKS[w.getBlock(x, y, z)];
+          if (bl && CONTAINERS.has(bl.name)) boxes.push({ x, y, z, name: bl.label.toLowerCase() });
+        }
+      }
+    }
+    const day = this.game.day;
+    for (let i = 0; i < Math.min(2, boxes.length); i++) {
+      const c = boxes[(day + i * 3 + j.building) % boxes.length];
+      if (chores.some((q) => q.x === c.x && q.z === c.z)) continue;
+      chores.push({ kind: 'stock', x: c.x, y: c.y, z: c.z, label: `Take stock of the ${c.name}`, done: false });
+    }
+    const wants = SUPPLIES[b.type];
+    if (wants) {
+      const item = wants[day % wants.length];
+      const n = 2 + (day % 3);
+      if (ITEMS[item]) chores.push({ kind: 'supply', item, count: n, got: 0, label: `Bring ${n} ${ITEMS[item].name.toLowerCase()} and put them in the shop's chests`, done: false });
+    }
+    j.chores = chores;
+    j.choreDay = day;
+  }
+
+  task(j, what) {
+    j.tasks = (j.tasks || 0) + 1;
+    j.lastDay = this.game.day;
+    this.game.ui.msg(`Work done: ${what}.`, '#a0e0a0');
+    this.game.audio?.play('select');
+  }
+
+  // Hooks from the container window.
+  onOpenContainer(pos) {
+    const j = this.job;
+    if (!j || j.kind !== 'employee' || !j.chores || !pos.owner || pos.owner.kind !== 'work') return;
+    const c = j.chores.find((q) => q.kind === 'stock' && !q.done && q.x === pos.x && q.y === pos.y && q.z === pos.z);
+    if (c) {
+      c.done = true;
+      this.task(j, c.label.toLowerCase());
+    }
+  }
+
+  onContainerPut(pos, added) {
+    const j = this.job;
+    if (!j || j.kind !== 'employee' || !j.chores || !pos.owner || pos.owner.kind !== 'work') return;
+    const c = j.chores.find((q) => q.kind === 'supply' && !q.done);
+    if (!c) return;
+    const a = added.find((q) => q.item === c.item);
+    if (!a) return;
+    c.got = Math.min(c.count, c.got + a.count);
+    // Supplies go onto the shop's shelves.
+    const slots = this.game.world.getContainer(pos.x, pos.y, pos.z);
+    const L = this.sim.layoutOf(j.sid);
+    let n = a.count;
+    for (let i = 0; i < slots.length && n > 0; i++) {
+      const sl = slots[i];
+      if (!sl || sl.item !== c.item) continue;
+      const k = Math.min(sl.count, n);
+      sl.count -= k;
+      n -= k;
+      if (sl.count <= 0) slots[i] = null;
+    }
+    st.add(L.econ.biz[j.building].store, c.item, a.count - n);
+    if (c.got >= c.count) {
+      c.done = true;
+      this.task(j, c.label.split(' and ')[0].toLowerCase());
+    } else this.game.ui.msg(`Supplies: ${c.got}/${c.count} ${ITEMS[c.item].name.toLowerCase()}.`, '#c8e0a0');
+    return true;
   }
 
   fire(L, j, why) {
     this.job = null;
+    this.dismissCustomer(null);
     const emp = L.npcs[j.employer];
     this.game.ui.msg(`${j.employerName}: "${why}" You were let go from the ${j.bname}.`, '#ff9060');
     ledger(L, this.game.day, `${j.employerName} let ${this.game.playerName} go from the ${j.bname}.`);
@@ -392,6 +542,33 @@ export class Careers {
     ledger(L, g.day, `${guard.rec.name.first} was hired as an escort by ${g.playerName}.`);
     g.audio?.play('coin');
     return { ok: true, ...o };
+  }
+
+  // ------------------------------------------------------------ companions
+  // Good friends will come along for a while, free of charge.
+  companionTerms(npc) {
+    const rec = npc.rec;
+    const s = npc.settlement;
+    const sim = this.sim;
+    if (npc.visit || npc.hired) return { ok: false, reason: 'none' };
+    if (this.escort) return { ok: false, reason: 'busy' };
+    if (sim.justice.exiled.has(s.id) || sim.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
+    if (rec.age === 'child') return { ok: false, reason: 'child' };
+    if (rec.age === 'elder') return { ok: false, reason: 'elder' };
+    if (rec.job === 'mayor' || rec.job === 'guard') return { ok: false, reason: 'duty' };
+    if ((rec.grief || []).some((g) => g.rel !== 'acquaintance')) return { ok: false, reason: 'grief' };
+    if (sim.opinion(npc) < 60) return { ok: false, reason: 'distrust' };
+    return { ok: true };
+  }
+
+  recruit(npc) {
+    const t = this.companionTerms(npc);
+    if (!t.ok) return t;
+    const L = npc.layout;
+    this.escort = { sid: L.settlement.id, idx: npc.rec.idx, name: npc.name, until: 1e12, fee: 0, companion: true };
+    this.attach(npc);
+    ledger(L, this.game.day, `${npc.rec.name.first} set off travelling with ${this.game.playerName}.`);
+    return { ok: true };
   }
 
   attach(n) {
@@ -470,7 +647,8 @@ export class Careers {
       return;
     }
     const j = this.sim.justice;
-    if (g.isWanted(e.sid) || j.exiled.has(e.sid) || j.pendingIn(e.sid).length) this.endEscort('I won\'t guard an outlaw. Our deal is off.');
+    if (g.isWanted(e.sid) || j.exiled.has(e.sid) || j.pendingIn(e.sid).length) this.endEscort(e.companion ? 'I can\'t be part of this. I\'m going home.' : 'I won\'t guard an outlaw. Our deal is off.');
+    else if (e.companion && this.sim.opinion(n) < 35) this.endEscort('I don\'t think I want to travel with you any more.');
     else if (j.jail || j.escort) this.endEscort('That\'s a matter for the law. I\'m off.');
     else if (this.sim.abs >= e.until) this.endEscort(n.rng.pick([`That's our time up. Safe travels, ${g.playerName}!`, 'Contract\'s done. Stay out of trouble!', 'Well, that\'s me finished. Take care out there.']));
   }
@@ -486,6 +664,131 @@ export class Careers {
     });
   }
 
+  // ------------------------------------------------------------ customers
+  // Now and then someone seeks you out to buy: townsfolk who know your trade,
+  // or shoppers who come in while you mind the shop.
+  updateCustomers() {
+    const j = this.job;
+    const g = this.game;
+    const p = g.player;
+    const abs = this.sim.abs;
+    const c = this.customer;
+    if (c) {
+      const L = this.sim.layoutOf(c.sid);
+      const rec = L && L.npcs[c.idx];
+      const n = rec && rec.ent;
+      if (!n || n.dead || abs > c.until || !j) this.dismissCustomer(abs > c.until ? 'Never mind, then.' : null);
+      return;
+    }
+    if (!j || (j.kind === 'profession' && !CUSTOMER_WANTS[j.job])) return;
+    if (this.nextCustomer === null) this.nextCustomer = abs + (j.kind === 'employee' ? 40 : 240) + Math.random() * 120;
+    if (abs < this.nextCustomer) return;
+    const min = g.minute;
+    const a = g.active.get(j.sid);
+    const busy = !a || p.dead || p.sleeping || p.restrained || g.sleep || this.sim.justice.jail || g.isWanted(j.sid) || min < 480 || min > 1140;
+    const L = a && a.layout;
+    const here = L && (j.kind === 'employee' ? buildingAt(L, p.x, p.z)?.id === j.building && min >= j.shift[0] && min < j.shift[1] : within(L.bounds, p.x, p.z, 6));
+    if (busy || !here) {
+      this.nextCustomer = abs + 20;
+      return;
+    }
+    const cands = a.npcs.filter((n) => !n.dead && n.state === 'routine' && !n.sleeping && !n.hired && !n.visit && n.rec.age !== 'child'
+      && n.rec.idx !== j.employer && n.rec.job !== 'guard' && !n.rec.override && n.distTo(p) >= 5 && n.distTo(p) <= 40);
+    if (!cands.length) {
+      this.nextCustomer = abs + 30;
+      return;
+    }
+    const n = cands[Math.floor(Math.random() * cands.length)];
+    let req;
+    if (j.kind === 'employee') {
+      const biz = L.econ.biz[j.building];
+      const have = Object.keys(biz.store).filter((k) => biz.store[k] > 0 && ITEMS[k] && k !== 'coin');
+      const list = have.length ? have : STOCK[j.shop] || ['bread'];
+      const item = list[Math.floor(Math.random() * list.length)];
+      const count = 1 + Math.floor(Math.random() * 3);
+      req = { kind: 'shop', item, count, price: Math.max(1, Math.round(ITEMS[item].value * 1.3)) * count };
+    } else {
+      const goods = CUSTOMER_WANTS[j.job];
+      const mine = goods.filter((k) => countItem(p.inv, k) > 0);
+      const item = (mine.length ? mine : goods)[Math.floor(Math.random() * (mine.length || goods.length))];
+      const count = 1 + Math.floor(Math.random() * 3);
+      req = { kind: 'buy', item, count, price: Math.max(1, Math.round(ITEMS[item].value)) * count };
+    }
+    this.customer = { sid: j.sid, idx: n.rec.idx, name: n.rec.name.first, ...req, until: abs + 90, arrived: false };
+    setOverride(n.rec, abs, abs + 90, 'customer', { place: 'player' });
+    n.activity = null;
+    this.nextCustomer = abs + (j.kind === 'employee' ? 60 + Math.random() * 90 : 360 + Math.random() * 360);
+  }
+
+  customerArrived(n) {
+    const c = this.customer;
+    if (!c || c.arrived) return;
+    c.arrived = true;
+    const what = `${c.count} ${ITEMS[c.item].name.toLowerCase()}`;
+    const j = this.job;
+    const line = c.kind === 'shop'
+      ? n.rng.pick([`Hello! I'd like ${what}, please.`, `Good day! Have you got ${what}?`, `${what}, please. Is that ¤${c.price}?`])
+      : n.rng.pick([`You're the ${PROFESSIONS[j.job].title.toLowerCase()}, aren't you? I'd buy ${what} for ¤${c.price}.`, `Selling ${what}? I'll give you ¤${c.price}.`]);
+    n.say(line, 5, '#ffe070');
+    n.emoteShow('¤', '#ffe070', 3);
+    this.game.ui.msg(`${n.rec.name.first} wants to buy ${what} (¤${c.price}). Talk to them to trade.`, '#ffe070');
+  }
+
+  isCustomer(npc) {
+    const c = this.customer;
+    return !!c && c.arrived && !npc.visit && c.sid === npc.settlement.id && c.idx === npc.rec.idx;
+  }
+
+  // Hand over the goods.
+  serveCustomer(npc) {
+    const c = this.customer;
+    if (!this.isCustomer(npc)) return { ok: false, reason: 'none' };
+    const j = this.job;
+    const p = this.game.player;
+    const L = npc.layout;
+    const rec = npc.rec;
+    if (c.kind === 'shop') {
+      const biz = L.econ.biz[j.building];
+      if ((biz.store[c.item] || 0) < c.count) {
+        this.dismissCustomer('Out of stock? Pity.');
+        return { ok: false, reason: 'stock' };
+      }
+      st.take(biz.store, c.item, c.count);
+      biz.till += c.price;
+      biz.earned = (biz.earned || 0) + c.price;
+      invAdd(rec.inv, c.item, c.count);
+      j.served = (j.served || 0) + 1;
+      this.task(j, `served ${rec.name.first} (¤${c.price} in the till)`);
+    } else {
+      if (countItem(p.inv, c.item) < c.count) return { ok: false, reason: 'missing' };
+      const price = Math.min(c.price, Math.max(0, rec.coins || 0));
+      removeItem(p.inv, c.item, c.count);
+      invAdd(rec.inv, c.item, c.count);
+      rec.coins -= price;
+      this.pay(price);
+      c.paid = price;
+    }
+    this.sim.changeRep(npc, 2);
+    const done = { ok: true, ...c };
+    this.dismissCustomer(null);
+    return done;
+  }
+
+  dismissCustomer(line) {
+    const c = this.customer;
+    this.customer = null;
+    if (!c) return;
+    const L = this.sim.layoutOf(c.sid);
+    const rec = L && L.npcs[c.idx];
+    if (!rec) return;
+    if (rec.override && rec.override.act === 'customer') rec.override = null;
+    const n = rec.ent;
+    if (n && !n.dead) {
+      n.activity = null;
+      if (line) n.say(line, 2.5);
+    }
+  }
+
   // ------------------------------------------------------------ time
   update() {
     const abs = this.sim.abs;
@@ -493,6 +796,7 @@ export class Careers {
     const dm = Math.max(0, Math.min(180, abs - this.lastAbs));
     this.lastAbs = abs;
     if (this.job) this.updateJob(dm);
+    this.updateCustomers();
     this.updateEscort();
     this.updateReturning(abs);
   }
@@ -524,20 +828,26 @@ export class Careers {
     }
     const [s0, e0] = j.shift;
     if (j.workDay !== day) {
-      if (j.worked > 0) this.payWages(L, j);
+      if (j.tasks > 0) this.payWages(L, j);
       j.workDay = day;
       j.worked = 0;
+      j.tasks = 0;
     }
     if (awake && min >= s0 && min < e0) {
       const b = buildingAt(L, p.x, p.z);
       if (b && b.id === j.building) {
         j.worked += dm;
-        j.lastDay = day;
+        if (j.worked >= 30) j.lastDay = day;
+        if (j.choreDay !== day) {
+          this.assignChores(L, j);
+          const emp2 = emp.ent && !emp.ent.dead ? emp.ent : null;
+          if (emp2 && j.chores.length) emp2.say(`Today: ${j.chores.map((q) => q.label.toLowerCase()).join('; ')}. And see to the customers!`, 6);
+          this.game.ui.msg(`Chores at the ${j.bname}: ${j.chores.map((q) => q.label.toLowerCase()).join('; ')}.`, '#c8e0a0');
+        }
       }
     }
     if (min >= e0 && j.paidDay !== day) {
-      if (j.worked > 0) this.payWages(L, j);
-      else j.paidDay = day;
+      this.payWages(L, j);
       if (day - j.lastDay >= 3) return this.fire(L, j, 'You haven\'t shown up for work in days.');
       const op = this.sim.opinion(emp.ent && !emp.ent.dead ? emp.ent : { rec: emp, settlement: L.settlement });
       if (op < -20) return this.fire(L, j, 'I can\'t have someone like you working for me.');

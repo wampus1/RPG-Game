@@ -159,11 +159,19 @@ export class ContainerWindow extends Window {
   checkTaken(game, held = true) {
     const now = this.counts(held);
     const taken = [];
+    const added = [];
     for (const [k, n] of Object.entries(this.snap)) {
       const d = n - (now[k] || 0);
       if (d > 0) taken.push({ item: k, count: d });
     }
+    // Put-in items only count once they've left the cursor.
+    const settled = this.counts(false);
+    for (const [k, n] of Object.entries(settled)) {
+      const d = n - (this.snap[k] || 0);
+      if (d > 0 && !(this.ui.cursorStack && this.ui.cursorStack.item === k)) added.push({ item: k, count: d });
+    }
     this.snap = now;
+    if (added.length && game.onContainerPut && game.onContainerPut(this.pos, added)) this.snap = this.counts(held);
     if (taken.length && game.onContainerTake(this.pos, taken) && held) this.close();
   }
   draw(g, game) {
@@ -273,10 +281,15 @@ export class DialogueWindow extends Window {
     if (this.choices) return this.back === null ? this.choices : [...this.choices, { id: 'back', label: this.back || '(Never mind)' }];
     return topicsFor(this.npc, game);
   }
+  // Long option labels get the full width (one column of seven).
+  isWide(all) {
+    return all.some((o) => o.label.length > Math.floor((this.w - 4) / 2) - 4);
+  }
   options(game) {
     const all = this.allOptions(game);
-    if (all.length <= 10) return all;
-    const per = 9;
+    const wide = this.isWide(all);
+    if (all.length <= (wide ? 7 : 10)) return all;
+    const per = wide ? 6 : 9;
     const pages = Math.ceil(all.length / per);
     if (this.page >= pages) this.page = 0;
     const page = all.slice(this.page * per, this.page * per + per);
@@ -317,7 +330,7 @@ export class DialogueWindow extends Window {
     g.box(1, 1, 5, 5, { fg: C.faint });
     this.portraitPos = { x: (this.x + 2) * CHAR_W + 1, y: (this.y + 2) * CHAR_H - 4 };
     g.text(7, 1, n.name, C.hi);
-    const title = `${n.title}${rec.age === 'child' ? ' · child' : rec.age === 'elder' ? ' · elder' : ''} of ${n.homeName}`;
+    const title = `${n.title}${rec.age === 'child' && n.title !== 'Child' ? ' · child' : rec.age === 'elder' && n.title !== 'Retiree' ? ' · elder' : ''} of ${n.homeName}`;
     g.text(7, 2, title.slice(0, 62), C.cyan);
     g.text(7, 3, rec.traits.join(', ').slice(0, 62), C.purple);
     const op = game.sim.opinion(n);
@@ -340,10 +353,11 @@ export class DialogueWindow extends Window {
     // Options: two columns, numbered.
     const opts = this.options(game);
     this.opts = opts;
-    const colW = Math.floor((this.w - 4) / 2);
+    const wide = this.isWide(opts);
+    const colW = wide ? this.w - 4 : Math.floor((this.w - 4) / 2);
     opts.forEach((o, i) => {
-      const col = i < 5 ? 0 : 1;
-      const row = i % 5;
+      const col = wide ? 0 : i < 5 ? 0 : 1;
+      const row = wide ? i : i % 5;
       const x = 2 + col * colW;
       const y = 12 + row;
       const key = i === 9 ? '0' : String(i + 1);
@@ -354,6 +368,11 @@ export class DialogueWindow extends Window {
       this.hit(x, y, colW - 1, 1, (ck, gm) => this.choose(o, gm));
     });
     g.text(2, this.h - 2, '1-9 choose · SPACE continue · T trade · G gift · ESC leave', C.faint);
+  }
+  onClose(game) {
+    // Walking out on the mayor's lecture counts as brushing it off.
+    const cf = game && game.sim.confront;
+    if (cf && cf.arrived && cf.idx === this.npc.rec.idx && cf.sid === this.npc.settlement.id) game.sim.settleConfront(this.npc, cf.stage === 'expel' ? 'expel' : 'defy');
   }
   drawPixels(ctx) {
     const sheet = humanoidSheet(this.npc.look);
@@ -458,6 +477,9 @@ export class TradeWindow extends Window {
   price(k, game) {
     return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceFactor(this.npc)));
   }
+  basePrice(k, game) {
+    return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceParts(this.npc).base));
+  }
   sellPrice(k, game) {
     const op = game.sim.opinion(this.npc);
     const lic = game.sim.careers.sellFactor(this.npc, k);
@@ -479,16 +501,24 @@ export class TradeWindow extends Window {
     const per = 10;
     this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, list.length - per)));
     if (!list.length) g.text(3, 3, 'Nothing for sale right now.', C.dim);
+    this.strikes = [];
     list.slice(this.scroll, this.scroll + per).forEach((k, i) => {
       const y = 2 + i * 2;
       const pr = this.price(k, game);
+      const base = this.basePrice(k, game);
       const can = coins >= pr;
       const hov = this.hovering(1, y, 36, 2);
       g.fill(1, y, 36, 2, ' ', C.fg, hov ? 'rgba(60,70,40,0.95)' : i % 2 ? 'rgba(22,18,28,0.9)' : undefined);
       g.icon(2, y, k, sh.store[k]);
-      g.text(6, y, ITEMS[k].name.slice(0, 20), can ? C.fg : C.dim);
+      g.text(6, y, ITEMS[k].name.slice(0, base > pr ? 16 : 20), can ? C.fg : C.dim);
       if (ITEMS[k].quality) g.text(6, y + 1, ITEMS[k].quality, ITEMS[k].quality === 'terrible' ? C.orange : ITEMS[k].quality === 'delightful' ? C.hi : C.green);
-      g.text(29, y, `¤${pr}`, can ? C.hi : C.red);
+      // A discount shows the old price struck through in red.
+      if (base > pr) {
+        const old = `¤${base}`;
+        g.text(28 - old.length, y, old, C.red);
+        this.strikes.push({ x: 28 - old.length, y, len: old.length });
+      }
+      g.text(29, y, `¤${pr}`, can ? (base > pr ? C.green : C.hi) : C.red);
       if (hov) this.ui.itemTooltip({ item: k, count: sh.store[k] });
       this.hit(1, y, 36, 2, (ck, gm) => this.buy(k, gm, ck.shift ? 5 : 1));
     });
@@ -506,6 +536,8 @@ export class TradeWindow extends Window {
     g.text(40, 19, `Their purse: ¤${purse}`, purse < 10 ? C.orange : C.dim);
     const e = this.npc.layout.econ;
     if (e && !this.npc.visit) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
+    const parts = game.sim.priceParts(this.npc);
+    if (parts.discount < 1) g.text(40, 21, `Discount ${Math.round((1 - parts.discount) * 100)}%: ${parts.reasons.join(', ')}`.slice(0, 37), C.green);
     g.text(2, this.h - 1, ' click buy/sell · SHIFT x5 / whole stack · ESC close ', C.faint);
   }
   buy(k, game, n) {
@@ -563,6 +595,10 @@ export class TradeWindow extends Window {
   }
   onWheel(d) {
     this.scroll += Math.sign(d);
+  }
+  drawPixels(ctx) {
+    ctx.fillStyle = '#ff4040';
+    for (const st of this.strikes || []) ctx.fillRect((this.x + st.x) * CHAR_W, (this.y + st.y) * CHAR_H + Math.floor(CHAR_H / 2), st.len * CHAR_W, 1);
   }
   onClose(game) {
     if (game) game.sim.closeShop(this.npc);
@@ -664,6 +700,7 @@ export class TrialWindow extends Window {
     if (v.citizen && v.proven.length) g.text(2, y++, 'Your citizenship will be revoked.', C.red);
     if (v.weapons === 'returned' && v.sentence !== 'death') g.text(2, y++, 'Your weapons will be returned when you are released.', C.dim);
     else if (v.weapons === 'forfeit') g.text(2, y++, 'Your weapons are forfeit.', C.orange);
+    if (v.stripped) g.text(2, y++, 'You are dismissed from the watch: your badge and kit are taken.', C.orange);
     y = Math.max(y + 1, this.h - 2 - opts.length);
     this.opts = opts;
     opts.forEach(([k, label, choice], i) => {
@@ -874,7 +911,7 @@ export class MapWindow extends Window {
             const lz = cz - s.cz;
             g.text(x, y, lz === 0 ? (lx === 0 ? '╔═' : '═╗') : lx === 0 ? '╚═' : '═╝', '#fff4d0', shadeHex(col, 0.6));
           }
-          if (s.condition === 'abandoned') g.text(x, y, ' †', '#a0a0a0', '#302830');
+          if (s.condition === 'abandoned' || s.deserted) g.text(x, y, ' †', '#a0a0a0', '#302830');
         }
         if (cx === pcx && cz === pcz && blink) g.put(x + ((p.x % REGION_W) >= REGION_W / 2 ? 1 : 0), y, '@', '#ffffff', '#c02020');
       }
@@ -947,7 +984,7 @@ export class BannerWindow extends Window {
   constructor(ui, s) {
     // Only one banner at a time.
     ui.windows = ui.windows.filter((w) => w.kind !== 'banner');
-    const sub = `${cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
+    const sub = `${cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.deserted ? 'deserted ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
     const w = Math.max(s.name.length + 8, sub.length + 4);
     super(ui, w, 4, { kind: 'banner', modal: false, y: 5 });
     this.s = s;

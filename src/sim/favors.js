@@ -41,8 +41,9 @@ const MAX_ACTIVE = 4;
 export function plural(item, n) {
   if (item === 'food') return 'something to eat';
   const nm = ITEMS[item].name.toLowerCase();
-  if (n === 1) return `${/^[aeiou]/.test(nm) ? 'an' : 'a'} ${nm}`;
-  if (/(s|ore|meat|fish|wheat|coal|string|leather|cobblestone|bread)$/.test(nm)) return `${n} ${nm}`;
+  const mass = /(ore|meat|fish|wheat|coal|string|leather|cobblestone|bread|cloth)$/.test(nm);
+  if (n === 1) return mass ? `some ${nm}` : `${/^[aeiou]/.test(nm) ? 'an' : 'a'} ${nm}`;
+  if (mass || /s$/.test(nm)) return `${n} ${nm}`;
   return `${n} ${nm}${/(ch|sh|x)$/.test(nm) ? 'es' : 's'}`;
 }
 
@@ -88,6 +89,8 @@ export class Favors {
     if (this.given(npc)) return { none: 'active' };
     const r = this.sim.repEntry(s.id, rec.idx);
     if (r.favorDay === g.day) return { none: 'asked' };
+    // Someone you just helped doesn't need you again straight away.
+    if (r.favorNext !== undefined && g.day < r.favorNext) return { none: 'recent' };
     if (this.sim.opinion(npc) < -25) return { none: 'distrust' };
     if (this.list.length >= MAX_ACTIVE) return { none: 'busy' };
     const key = `${s.id}:${rec.idx}:${g.day}`;
@@ -124,7 +127,8 @@ export class Favors {
     const official = rec.job === 'guard' || rec.job === 'mayor';
     const value = c.kind === 'fetch' ? (c.item === 'food' ? 3 : ITEMS[c.item].value * c.count) : c.kind === 'slay' ? c.count * 3 : 3;
     const purse = official && c.kind === 'slay' ? L.econ.treasury : rec.coins || 0;
-    let coins = rec.age === 'child' ? 1 : Math.round(value * 1.4 + 3);
+    const mood = rec.traits.includes('generous') ? 1.3 : rec.traits.includes('stingy') ? 0.6 : 1;
+    let coins = rec.age === 'child' ? 1 : Math.round((value * 1.4 + 3) * mood);
     coins = Math.max(0, Math.min(coins, Math.floor(purse * 0.5)));
     const o = {
       key, kind: c.kind, item: c.item || null, count: c.count || 1, hobby: c.hobby || null, to: c.to ?? null,
@@ -246,6 +250,8 @@ export class Favors {
     this.sim.changeRep(npc, f.rep);
     this.list = this.list.filter((q) => q !== f);
     this.done++;
+    const r = this.sim.repEntry(f.sid, f.giver);
+    r.favorNext = this.game.day + 1 + ((f.id + f.giver) % 2);
     if (f.kind === 'slay') ledger(L, this.game.day, `${this.game.playerName} cleared beasts from around ${L.settlement.name}.`);
     return paid;
   }

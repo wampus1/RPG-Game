@@ -3,6 +3,7 @@
 
 export const META_ROT = 0b011;
 export const META_STATE = 0b100;
+export const META_AGE = 0b111000; // crops: growth stage (bits 3-5)
 
 export const BLOCKS = [];
 export const B = {};
@@ -246,3 +247,25 @@ export const LOGS = new Set(
 export const LEAVES = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'snowy'].map((w) => B[`leaves_${w}`]),
 );
+
+// Crops: how many visual stages they pass through, game hours per stage,
+// what you plant them from and what they yield.
+export const CROPS = {
+  [B.wheat_crop]: { stages: 4, hours: 18, seed: 'seeds', produce: 'wheat' },
+  [B.carrot_crop]: { stages: 3, hours: 20, seed: 'carrot', produce: 'carrot' },
+  [B.cabbage_crop]: { stages: 4, hours: 22, seed: 'cabbage_seeds', produce: 'cabbage' },
+};
+
+export function cropStage(meta) {
+  return (meta & META_AGE) >> 3;
+}
+
+export function cropMeta(id, stage) {
+  const c = CROPS[id];
+  return c ? Math.max(0, Math.min(c.stages - 1, stage)) << 3 : 0;
+}
+
+export function cropMature(id, meta) {
+  const c = CROPS[id];
+  return !c || cropStage(meta) >= c.stages - 1;
+}

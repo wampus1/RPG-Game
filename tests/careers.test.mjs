@@ -83,13 +83,13 @@ test('licensed trades: a fee, a premium on goods, and the town\'s fields and sna
   assert.ok(!game.sim.careers.licensed('trapper', L.settlement.id));
 });
 
-test('working at a shop: terms, wages for hours inside during the shift, quitting', () => {
+test('working at a shop: chores, customers, the shop\'s chests, pay for work done, getting fired', () => {
   const { game, input, a, L, p } = start(7 * 60);
   const car = game.sim.careers;
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   assert.ok(car.canEmploy(smith));
   game.sim.changeRep(smith, 30);
-  L.econ.biz[smith.rec.work.building].till = 100;
+  L.econ.biz[smith.rec.work.building].till = 150;
   const terms = respond(smith, game, 'job');
   assert.ok(terms.choices.some((c) => c.arg === 'yes'), terms.lines.join(' '));
   respond(smith, game, 'job', 'yes');
@@ -99,12 +99,36 @@ test('working at a shop: terms, wages for hours inside during the shift, quittin
   const b = L.buildings[j.building];
   p.teleport(b.inside.x, 6, b.inside.z);
   assert.equal(buildingAt(L, p.x, p.z), b);
+  for (let i = 0; i < 800 && !j.chores; i++) game.update(0.2, input);
+  assert.ok(j.chores && j.chores.length >= 2, 'chores for the day');
+  // Opening the shop's chests on shift is work, not theft.
+  const stock = j.chores.filter((c) => c.kind === 'stock');
+  for (const c of stock) game.interact(c.x, c.y, c.z);
+  assert.equal(j.tasks, stock.length);
+  assert.equal(game.sim.justice.pendingIn(L.settlement.id).length, 0);
+  assert.equal(game.containerOwner(stock[0].x, stock[0].y, stock[0].z).kind, 'work');
+  // Customers come in and get served from the shop's stock.
+  let served = 0;
+  for (let i = 0; i < 5000 && !served && game.minute < j.shift[1] - 30; i++) {
+    game.update(0.2, input);
+    const c = car.customer;
+    if (c && c.arrived) {
+      const n = a.npcs.find((q) => q.rec.idx === c.idx);
+      assert.ok(topicsFor(n, game).some((t) => t.id === 'serve'));
+      L.econ.biz[j.building].store[c.item] = (L.econ.biz[j.building].store[c.item] || 0) + c.count;
+      respond(n, game, 'serve');
+      served++;
+    }
+  }
+  assert.ok(served, 'a customer was served');
+  const done = j.tasks;
   const coins = countItem(p.inv, 'coin');
   for (let i = 0; i < 20000 && game.minute < j.shift[1] + 2; i++) game.update(0.25, input);
   const wage = countItem(p.inv, 'coin') - coins;
-  assert.ok(wage >= j.wage * 6, `wages ${wage}`);
+  assert.ok(wage >= done * j.wage * 0.9, `wages ${wage} for ${done} tasks`);
   assert.ok(car.discount(smith) < 1, 'staff discount');
-  respond(smith, game, 'job', 'quit');
+  // Insulting the boss ends it.
+  respond(smith, game, 'rude');
   assert.equal(car.job, null);
 });
 

@@ -2,6 +2,7 @@
 // jobs, personality, hobbies, equipment, appearance and daily schedules.
 import { RNG, clamp, hash4 } from '../util/rng.js';
 import { personName, familyName } from '../world/names.js';
+import { ITEMS } from '../world/items.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
@@ -142,22 +143,34 @@ export function planPopulation(s, rng) {
 
 // ---------------------------------------------------------------- appearance
 const SKIN = {
-  vale: ['#f2c7a5', '#e8b48c', '#d9a077', '#f6d3b8', '#c48a62'],
-  north: ['#f6dcc8', '#f0cdb3', '#e9bf9f', '#fae6d8'],
-  sun: ['#c8905c', '#b07848', '#9a653a', '#d8a470', '#86532e'],
-  wild: ['#a86a3c', '#8e5630', '#b87a48', '#734424', '#c68a58'],
-  high: ['#e0aa84', '#d49a74', '#c88a64', '#ecc0a0'],
+  vale: ['#f2c7a5', '#e8b48c', '#d9a077', '#f6d3b8', '#c48a62', '#b07a52', '#fadcc4'],
+  north: ['#f6dcc8', '#f0cdb3', '#e9bf9f', '#fae6d8', '#f4d0bc', '#e2b494'],
+  sun: ['#c8905c', '#b07848', '#9a653a', '#d8a470', '#86532e', '#704226', '#e0b080'],
+  wild: ['#a86a3c', '#8e5630', '#b87a48', '#734424', '#c68a58', '#5e361c', '#4e2c18'],
+  high: ['#e0aa84', '#d49a74', '#c88a64', '#ecc0a0', '#b8805a', '#f0ceb0'],
 };
-const HAIR = ['#2a1a12', '#4a2c1a', '#6e4424', '#a0622a', '#d8a848', '#e8d078', '#b83a1c', '#1a1a22', '#5a5a5a'];
-const HAIR_STYLES = ['short', 'long', 'bald', 'ponytail', 'bun', 'braids', 'curly', 'mohawk', 'short', 'long'];
-const CLOTH = ['#8a3a2a', '#3a5a8a', '#4a7a3a', '#8a7a3a', '#6a4a7a', '#a86a2a', '#4a6a6a', '#7a2a4a', '#5a4a3a', '#2a4a6a', '#9a8a6a'];
-const PANTS = ['#3a2a1e', '#2a2a3a', '#4a3a2a', '#3a3a2a', '#2e3a4a', '#5a4a3a'];
+const ALL_SKIN = Object.values(SKIN).flat();
+const HAIR = [
+  '#2a1a12', '#4a2c1a', '#6e4424', '#a0622a', '#d8a848', '#e8d078', '#b83a1c', '#1a1a22', '#5a5a5a',
+  '#8a3a1a', '#e8e0c8', '#1a2030', '#6a3a1a', '#d07848', '#3a2418',
+];
+const DYED = ['#3a7a7a', '#6a3a7a', '#2a4a8a', '#8a2a4a'];
+const HAIR_STYLES = ['short', 'long', 'bald', 'ponytail', 'bun', 'braids', 'curly', 'mohawk', 'short', 'long', 'spiky', 'topknot', 'afro', 'sidepart', 'sidepart', 'pigtails'];
+const CLOTH = [
+  '#8a3a2a', '#3a5a8a', '#4a7a3a', '#8a7a3a', '#6a4a7a', '#a86a2a', '#4a6a6a', '#7a2a4a', '#5a4a3a', '#2a4a6a', '#9a8a6a',
+  '#b8a078', '#5a7a9a', '#7a5a3a', '#3a6a5a', '#9a4a5a', '#c89048', '#4a4a5a', '#6a8a4a', '#8a5a8a',
+];
+const PANTS = ['#3a2a1e', '#2a2a3a', '#4a3a2a', '#3a3a2a', '#2e3a4a', '#5a4a3a', '#4a4a4a', '#5a3a2a', '#2a3a2a'];
+const HAT_COLORS = ['#8a2a3a', '#2a4a7a', '#3a6a3a', '#c83a32', '#6a4a8a', '#c89030'];
 
 function makeLook(rng, style, age, job, civ) {
-  const skin = rng.pick(SKIN[style] || SKIN.vale);
-  let hair = rng.pick(HAIR);
-  if (age === 'elder') hair = rng.pick(['#d8d8d8', '#b0b0b0', '#f0f0f0', '#8a8a8a']);
+  // Mostly local looks, with the odd traveler's child from further afield.
+  const skin = rng.chance(0.12) ? rng.pick(ALL_SKIN) : rng.pick(SKIN[style] || SKIN.vale);
+  let hair = rng.chance(0.04) && age !== 'elder' ? rng.pick(DYED) : rng.pick(HAIR);
+  if (age === 'elder') hair = rng.pick(['#d8d8d8', '#b0b0b0', '#f0f0f0', '#8a8a8a', '#c8c0b0']);
   let hairStyle = rng.pick(HAIR_STYLES);
+  if (age !== 'child' && hairStyle === 'pigtails') hairStyle = rng.pick(['braids', 'ponytail']);
+  if (age === 'elder' && ['mohawk', 'spiky', 'afro'].includes(hairStyle)) hairStyle = rng.pick(['short', 'bald', 'bun']);
   const look = {
     skin, hair, hairStyle,
     shirt: rng.pick(CLOTH),
@@ -176,7 +189,26 @@ function makeLook(rng, style, age, job, civ) {
   if (job === 'baker') look.hat = 'chef';
   if (job === 'miner') look.hat = 'miner';
   if (job === 'fisher' && rng.chance(0.6)) look.hat = 'cap';
-  if (job === 'noble' || job === 'mayor') look.hat = rng.chance(0.5) ? 'feather' : null;
+  if (job === 'noble' || job === 'mayor') look.hat = rng.chance(0.5) ? 'feather' : rng.chance(0.3) ? 'circlet' : null;
+  if (!look.hat && rng.chance(0.14)) {
+    look.hat = rng.pick(age === 'child' ? ['flower', 'bandana'] : ['beret', 'bandana', 'wide', 'flower', 'beret']);
+    look.hatColor = rng.pick(HAT_COLORS);
+  }
+  if (rng.chance(0.4)) look.pattern = rng.pick(['stripes', 'sash', 'collar', 'buttons']);
+  // Glasses, earrings, freckles, moustaches, old scars.
+  const accs = age === 'child' ? [['freckles', 3], ['glasses', 1]]
+    : [['glasses', job === 'scholar' || job === 'priest' || age === 'elder' ? 5 : 1.5], ['earring', 1.5], ['freckles', age === 'elder' ? 0 : 1.2],
+      ['mustache', 1.5], ['scar', job === 'guard' || job === 'trapper' ? 3 : 0.5], ['eyepatch', job === 'guard' ? 0.8 : 0.15]];
+  if (rng.chance(job === 'scholar' ? 0.7 : 0.35)) {
+    let t = rng.float(0, accs.reduce((a, [, w]) => a + w, 0));
+    for (const [k, w] of accs) {
+      t -= w;
+      if (t <= 0) {
+        look.acc = k;
+        break;
+      }
+    }
+  }
   return look;
 }
 
@@ -208,6 +240,20 @@ function makePersonality(rng, civ, job, age) {
   if (p.kindness > 0.75) traits.push('kind');
   else if (p.kindness < 0.28) traits.push('gruff');
   if (!traits.length) traits.push('easygoing');
+  // A quirk of their own, nudged by what their people value.
+  const quirks = ['curious', 'stubborn', 'generous', 'stingy', 'cheerful', 'gloomy', 'superstitious', 'romantic', 'honest', 'gossipy', 'clumsy', 'proud', 'witty', 'absent-minded', 'thrifty', 'nosy'];
+  if (vals.includes('pious')) quirks.push('devout', 'devout');
+  if (vals.includes('scholarly')) quirks.push('curious', 'bookish');
+  if (vals.includes('mercantile')) quirks.push('thrifty', 'shrewd');
+  if (vals.includes('martial')) quirks.push('proud', 'disciplined');
+  if (vals.includes('agrarian')) quirks.push('down-to-earth', 'patient');
+  if (p.sociability > 0.6) quirks.push('gossipy');
+  if (p.kindness > 0.6) quirks.push('generous');
+  else if (p.kindness < 0.35) quirks.push('stingy');
+  if (rng.chance(age === 'child' ? 0.4 : 0.65)) {
+    const q = rng.pick(quirks.filter((t) => !(age === 'child' && ['romantic', 'thrifty', 'stingy', 'shrewd'].includes(t))));
+    if (!traits.includes(q)) traits.push(q);
+  }
   return { p, traits };
 }
 
@@ -415,6 +461,38 @@ export function makeSchedules(npc, rng, avail) {
   return { work: buildDay(npc, rng.fork('w'), avail, false), rest: buildDay(npc, rng.fork('r'), avail, true) };
 }
 
+// What a settlement offers for building daily routines.
+export function availOf(layout) {
+  return {
+    tavern: layout.buildings.some((b) => b.type === 'tavern'),
+    temple: layout.buildings.some((b) => b.type === 'temple'),
+    read: layout.buildings.some((b) => b.type === 'library'),
+    study: layout.buildings.some((b) => b.type === 'library' || b.type === 'temple'),
+    fish: layout.spotsByTag('fish').length > 0,
+    train: layout.spotsByTag('train').length > 0,
+  };
+}
+
+// Give someone a new trade: workplace, tools, clothes and a new routine.
+export function retrain(layout, rec, job, rng) {
+  rec.job = job;
+  rec.work = layout.assignWork(rec, rng);
+  const eq = equipmentFor(rng, job, rec.hobbies, layout.settlement.condition, rec.age);
+  rec.equipment = { ...rec.equipment, tool: eq.tool, armor: eq.armor, items: [...eq.items.filter((i) => ITEMS[i.item]?.kind === 'weapon' || i.item === eq.tool), ...(rec.equipment?.items || []).filter((i) => ITEMS[i.item]?.kind !== 'weapon')] };
+  const look = { ...rec.look, outfit: JOBS[job]?.outfit || 'plain' };
+  if (job === 'guard') {
+    look.hat = 'helmet';
+    rec.maxHp = 24;
+    rec.hp = Math.max(rec.hp ?? 12, 18);
+    rec.personality.bravery = Math.max(rec.personality.bravery, 0.6);
+    rec.shift = 'day';
+  }
+  rec.look = look;
+  rec.schedule = makeSchedules(rec, rng, availOf(layout));
+  rec.retrained = true;
+  return rec;
+}
+
 export function activityAt(npc, minute, day) {
   const sched = day % 7 === npc.restDay ? npc.schedule.rest : npc.schedule.work;
   const m = mins(minute);
@@ -434,14 +512,7 @@ export function generateNPCs(layout, plan, seed) {
   const style = s.style;
   const civ = s.civ;
   const npcs = [];
-  const avail = {
-    tavern: layout.buildings.some((b) => b.type === 'tavern'),
-    temple: layout.buildings.some((b) => b.type === 'temple'),
-    read: layout.buildings.some((b) => b.type === 'library'),
-    study: layout.buildings.some((b) => b.type === 'library' || b.type === 'temple'),
-    fish: layout.spotsByTag('fish').length > 0,
-    train: layout.spotsByTag('train').length > 0,
-  };
+  const avail = availOf(layout);
   // Pair households with houses (largest households get the largest houses).
   const houses = layout.buildings.filter((b) => b.residential);
   const hh = plan.households

@@ -5,7 +5,7 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
 } from '../config.js';
 import { World } from '../world/world.js';
-import { BLOCKS, B, META_STATE, LOGS, LEAVES } from '../world/blocks.js';
+import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta } from '../world/blocks.js';
 import { ITEMS, rollDrops, itemForBlock } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player } from '../entities/player.js';
@@ -25,6 +25,7 @@ import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
 import { ambientChatter } from './chatter.js';
+import { CropGrowth } from './crops.js';
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -41,7 +42,11 @@ export class Game {
     this.world.onChange = (x, y, z, o, n) => this.onBlockChange(x, y, z, o, n);
     this.sim = new Sim(this);
     this.world.onLayout = (L) => this.sim.attach(L);
-    this.world.onRegionLoad = (r) => this.sim.applyPending(r);
+    this.crops = new CropGrowth(this);
+    this.world.onRegionLoad = (r) => {
+      this.sim.applyPending(r);
+      this.crops.scanRegion(r);
+    };
     this.signIcons = new Map();
     this.projectiles = [];
     this.sleep = null;
@@ -487,6 +492,7 @@ export class Game {
     this.spawning(dt);
     this.updateWanted(dt);
     this.growPlants(dt);
+    this.crops.update(dt);
     this.updateFishing(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
@@ -644,7 +650,8 @@ export class Game {
         else if (hit.face === 'top') t = { x: hit.x, y: hit.y + 1, z: hit.z };
         else t = { x: hit.x, y: hit.y, z: hit.z + 1 };
         const ok = this.canPlace(placeId, t.x, t.y, t.z) && reach(t.x, t.y, t.z);
-        c.place = { ...t, id: placeId, rot: p.rot, ok };
+        // Seeds and carrots only offer to plant where they can grow.
+        if (ok || held.kind === 'block') c.place = { ...t, id: placeId, rot: p.rot, ok };
       }
     }
     this.cursor = c;
@@ -814,8 +821,11 @@ export class Game {
       if (LOGS.has(id) && this.isTreeLog(x, y, z)) {
         this.fellTree(x, y, z, drops);
       } else {
+        const meta = w.getMeta(x, y, z);
         w.setBlock(x, y, z, B.air);
-        drops.push(...rollDrops(id, rand));
+        // Crops give seeds back if unripe, and more with a hoe.
+        const crop = this.crops.harvest(id, meta, byPlayer && this.player.heldItem() === 'hoe', rand);
+        drops.push(...(crop || rollDrops(id, rand)));
       }
     }
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
@@ -963,7 +973,7 @@ export class Game {
     if (b.solid && this.occupiedAny(x, y, z)) return false;
     const below = BLOCKS[w.getBlock(x, y - 1, z)];
     if (b.support && !(below.solid || below.render === 'fence' || (b.render === 'flat' && below.liquid) || below.name === 'table' || below.name === 'counter')) return false;
-    if (id === B.wheat_crop && w.getBlock(x, y - 1, z) !== B.farmland) return false;
+    if (CROPS[id] && w.getBlock(x, y - 1, z) !== B.farmland) return false;
     if (id === B.door) {
       const up = BLOCKS[w.getBlock(x, y + 1, z)];
       if (!(up.replaceable || up.id === B.air)) return false;
@@ -992,7 +1002,8 @@ export class Game {
     const b = BLOCKS[id];
     const rot = b.rotatable ? p.rot : 0;
     const w = this.world;
-    w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0));
+    w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
+    if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
     if (id === B.door) w.setBlock(t.x, t.y + 1, t.z, B.door_top, rot);
     if (b.interact === 'container') {
       const r = w.regionAt(t.x, t.z);
@@ -1055,7 +1066,8 @@ export class Game {
         this.audio?.play('door');
         const owner = this.containerOwner(x, y, z);
         this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
-        if (owner && owner.sid !== undefined && owner.kind !== 'mine') this.peekWarning(owner);
+        if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
+        if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
         break;
       }
       case 'cell_door': {
@@ -1148,7 +1160,7 @@ export class Game {
   // Who a container belongs to: a household, a business, the player.
   containerOwner(x, y, z) {
     const s = this.world.ow.settlementAt(x, z);
-    if (!s || s.condition === 'abandoned') return null;
+    if (!s || s.condition === 'abandoned' || s.deserted) return null;
     const L = this.world.getLayout(s);
     const b = buildingAt(L, x, z);
     if (!b) return null;
@@ -1158,6 +1170,8 @@ export class Game {
       const host = c && c.sid === s.id && c.host === b.id;
       return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family` : null, b };
     }
+    // Staff on shift may use the shop's chests and barrels.
+    if (this.sim.careers.onShift(s.id, b.id)) return { kind: 'work', id: b.id, sid: s.id, label: `${b.name} (work)`, b };
     return { kind: 'biz', id: b.id, sid: s.id, label: b.name, b };
   }
 
@@ -1174,7 +1188,7 @@ export class Game {
   // Items taken out of a container that isn't yours (called by the window).
   onContainerTake(pos, taken) {
     const owner = pos.owner;
-    if (!owner || owner.kind === 'mine' || !taken.length) return false;
+    if (!owner || owner.kind === 'mine' || owner.kind === 'work' || !taken.length) return false;
     const value = taken.reduce((n, t) => n + (ITEMS[t.item]?.value || 1) * t.count, 0);
     const sid = owner.sid;
     const p = this.player;
@@ -1197,6 +1211,11 @@ export class Game {
     const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
     this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
     return true;
+  }
+
+  // Items put into a container (shop helpers stocking up).
+  onContainerPut(pos, added) {
+    return this.sim.careers.onContainerPut(pos, added);
   }
 
   jailLayoutAt(x, z) {
@@ -1548,6 +1567,12 @@ export class Game {
       npc.say('Zzz...', 2);
       return;
     }
+    // People in the middle of something urgent don't stop to chat.
+    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null }[npc.state];
+    if (busy !== undefined) {
+      if (busy) npc.say(busy, 2);
+      return;
+    }
     npc.face(this.player.x, this.player.z);
     this.player.face(npc.x, npc.z);
     this.ui.openDialogue(npc);
@@ -1686,6 +1711,10 @@ export class Game {
       this.shake = Math.min(1, this.shake + 0.4);
       if (source && source.name) this.ui.msg(`${source.name} hits you for ${amount}!`, '#ff7060', true);
     }
+    // Hitting your employer ends the job on the spot.
+    if (target.kind === 'npc' && source && source.kind === 'player' && this.sim.careers.employs(target)) {
+      this.sim.careers.fire(target.layout, this.sim.careers.job, 'You attacked me! Get out, you\'re fired!');
+    }
     // Violence against villagers is a crime; witnesses react.
     if (target.kind === 'npc' && source) {
       target.onHurt(source);
@@ -1750,7 +1779,7 @@ export class Game {
     const p = this.player;
     const sid = guard.settlement.id;
     const jailed = this.sim.justice.jail && this.sim.justice.jail.sid === sid;
-    if (!jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid)) && !p.dead && guard.distTo(p) <= 12) return p;
+    if (!jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid)) && !p.dead && guard.distTo(p) <= 12 && this.sim.canSee(guard, p.x, p.z, p.y)) return p;
     const b = guard.settlement.bounds;
     for (const c of this.creatures) {
       if (c.dead || !c.hostileNow) continue;
@@ -1944,7 +1973,7 @@ export class Game {
     const margin = night ? 14 : 6;
     for (const s of ow.settlementsNear(x, z)) {
       const b = s.bounds;
-      if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned') return;
+      if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned' && !s.deserted) return;
     }
     const y = this.world.findStandY(x, z, p.y);
     if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
@@ -2060,6 +2089,7 @@ export class Game {
       explored: Array.from(this.world.ow.explored),
       stats: this.stats,
       wanted: [...this.wanted],
+      crops: this.crops.serialize(),
       sim: this.sim.serialize(),
     };
   }
@@ -2072,6 +2102,7 @@ export class Game {
     if (data.explored) this.world.ow.explored.set(data.explored);
     if (data.stats) this.stats = data.stats;
     if (data.sim) this.sim.load(data.sim);
+    this.crops.load(data.crops);
     for (const [sid, t] of data.wanted || []) this.wanted.set(sid, t);
     const pd = data.player;
     this.loadAround(pd.x, pd.z, true);

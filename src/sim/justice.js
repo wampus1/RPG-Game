@@ -53,6 +53,7 @@ export class Justice {
     this.brandish = null;
     this.exileWarn = -1;
     this.sightings = new Map(); // sid -> [{t, x, z, who: [idx]}]
+    this.repairs = []; // jails to patch up after a breakout
     this.unsolved = []; // crimes nobody saw, waiting to be discovered
   }
 
@@ -82,14 +83,14 @@ export class Justice {
     const L = this.sim.layoutOf(sid);
     // Circumstantial: people who saw you near the scene around the time.
     const seen = (info.circumstantial || []).filter((i) => L.npcs[i] && alive(L.npcs[i]));
-    if (!wits.length && !seen.length) return null;
+    if (!wits.length && !seen.length && !info.known) return null;
     const s = L.settlement;
     let sev = info.sev || def.sev;
     if (type === 'theft' && (info.value || 0) >= 25) sev = 'moderate';
     const crime = {
       type, sev, desc: info.desc || def.label, victim: info.victim || null, value: info.value || 0, items: info.items || null, owner: info.owner || null,
-      witnesses: wits.filter((n) => !n.visit && !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard'), day: game.day, minute: Math.floor(game.minute),
-      seen, at: info.at || null, when: info.when ?? null, suspected: !wits.length,
+      witnesses: wits.filter((n) => !n.visit && !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard') || !!info.known, day: game.day, minute: Math.floor(game.minute),
+      seen, at: info.at || null, when: info.when ?? null, suspected: !wits.length && !info.known,
     };
     const list = this.pending.get(sid) || [];
     list.push(crime);
@@ -107,10 +108,10 @@ export class Justice {
     const shouter = wits.find((n) => n.state === 'routine' || n.rec.job === 'guard') || wits[0];
     if (!info.quiet && shouter) shouter.say(shouter.rng.pick(SHOUTS[type] || SHOUTS.assault), 3.2, '#ff9080');
     if (!was) {
-      game.ui.msg(wits.length ? `${def.label} witnessed! You are wanted in ${s.name}.` : `You are suspected of ${lcFirst(describe(crime))} in ${s.name}!`, '#ff5050');
+      game.ui.msg(wits.length ? `${def.label} witnessed! You are wanted in ${s.name}.` : info.known ? `${def.label}: you are wanted in ${s.name}.` : `You are suspected of ${lcFirst(describe(crime))} in ${s.name}!`, '#ff5050');
       game.audio?.play('alarm');
     }
-    game.alertGuards(sid, game.player, shouter || game.player, true);
+    if (wits.length || !info.known) game.alertGuards(sid, game.player, shouter || game.player, true);
     this.sim.areaCache.delete(sid);
     return crime;
   }
@@ -364,7 +365,7 @@ export class Justice {
         this.setCellDoor(L, false);
         g.say('In you go. The hearing will be soon.', 3);
         g.calmDown(true);
-        this.jail = { sid: e.sid, phase: 'gather', t: 0, how: 'surrender', party: [], lines: [], li: 0, lt: 0, release: null, cellless: false };
+        this.jail = { sid: e.sid, phase: 'gather', t: 0, how: 'surrender', party: [], lines: [], li: 0, lt: 0, release: null, cellless: false, floor: this.floorOf(L) };
         this.summon(L);
         game.audio?.play('door');
         return;
@@ -439,7 +440,7 @@ export class Justice {
       game.teleportPlayer(pl.cx + 1, GROUND, pl.cz + 1);
     }
     if (how === 'knockout') p.hp = Math.max(p.hp, 6);
-    this.jail = { sid, phase: 'gather', t: 0, how, party: [], lines: [], li: 0, lt: 0, release: null, cellless: !jail };
+    this.jail = { sid, phase: 'gather', t: 0, how, party: [], lines: [], li: 0, lt: 0, release: null, cellless: !jail, floor: jail ? this.floorOf(L) : null };
     if (!quick) game.ui.showKnockout?.(how, L.settlement.name, returned, weapons.length);
     this.summon(L);
   }
@@ -490,6 +491,7 @@ export class Justice {
   returnGoods(L, owner, item, n) {
     const e = L.econ;
     if (owner && owner.kind === 'house' && e.pantry[owner.id]) st.add(e.pantry[owner.id], item, n);
+    else if (owner && owner.kind === 'biz' && item === 'coin' && L.treasury && L.treasury.some((t) => t.building === owner.id)) e.treasury += n;
     else if (owner && owner.kind === 'biz' && e.biz[owner.id]) st.add(e.biz[owner.id].store, item, n);
     else if (owner && owner.kind === 'rec' && L.npcs[owner.id]) invAdd(L.npcs[owner.id].inv, item, n);
   }
@@ -573,6 +575,7 @@ export class Justice {
       this.checkT = 1;
       this.recordSightings();
       this.investigate();
+      this.updateRepairs();
       this.patrol();
     }
   }
@@ -637,6 +640,8 @@ export class Justice {
       return { ...c, text: describe(c), names, seenNames, proven, circumstantial: !direct && seenNames.length > 0 };
     });
     const proven = charges.filter((c) => c.proven);
+    // A guard on trial is a disgrace to the watch, whatever the verdict.
+    const stripped = this.sim.careers.isGuard(j.sid) ? this.sim.careers.stripGuard('held on trial') : null;
     const rec = this.recordOf(j.sid);
     const prior = rec.moderate + rec.severe;
     const seriousNow = proven.filter((c) => SEV_RANK[c.sev] >= 2).length;
@@ -656,6 +661,7 @@ export class Justice {
       sid: j.sid, town: s.name, judgeName: judge ? `${judge.name.first} ${judge.name.last}` : 'The council', judgeTitle: judge ? jobTitle(judge, s) : 'Council',
       charges, proven, fine, hours, coins, canPay: coins >= fine, sentence, citizen: this.sim.isCitizen(j.sid), pleaded: false, prior,
       fineScale: e.fineScale, weapons: this.held && this.held.items.length ? (proven.some((c) => c.type === 'murder') ? 'forfeit' : 'returned') : null,
+      stripped,
     };
   }
 
@@ -743,15 +749,58 @@ export class Justice {
     return { released: true };
   }
 
+  // Breaking out: an empty cell doesn't lie, so the town knows. Guards who
+  // spot you will try to arrest you, and the jail gets patched up.
   escape(L) {
     const j = this.jail;
     const p = this.game.player;
+    this.dismissParty(L);
     this.jail = null;
     this.stashWeapons(L);
-    this.dismissParty(L);
-    this.game.ui.msg('You broke out of jail!', '#ffb080');
+    this.game.ui.msg('You broke out of jail! The guards will be looking for you.', '#ffb080');
     const wits = this.sim.witnesses(j.sid, p.x, p.z, 9);
-    this.commit(j.sid, 'jailbreak', { witnesses: wits });
+    this.commit(j.sid, 'jailbreak', { witnesses: wits, known: true });
+    this.repairs.push({ sid: j.sid, at: this.sim.abs + 20, floor: j.floor || null });
+    ledger(L, this.game.day, `${this.game.playerName} broke out of the jail.`);
+  }
+
+  // The blocks that make up a jail cell, and which are missing.
+  jailDamage(L, rep) {
+    const jl = L.jail;
+    if (!jl || !jl.blocks) return [];
+    const w = this.game.world;
+    const want = [...jl.blocks, ...(rep && rep.floor ? rep.floor : [])];
+    return want.filter(([x, y, z, id]) => w.regionAt(x, z) && w.getBlock(x, y, z) !== id);
+  }
+
+  // A guard goes to fix the jail after a breakout.
+  updateRepairs() {
+    if (!this.repairs.length) return;
+    const game = this.game;
+    const now = this.sim.abs;
+    this.repairs = this.repairs.filter((r) => {
+      if (now < r.at) return true;
+      const L = this.sim.layoutOf(r.sid);
+      if (!L || !L.jail) return false;
+      const a = game.active.get(r.sid);
+      const missing = this.jailDamage(L, r);
+      if (!a) {
+        // Nobody to watch: the town just fixes it.
+        this.sim.setBlocks(L.jail.blocks.map((b) => [...b]));
+        return false;
+      }
+      if (!missing.length) return false;
+      if (r.guard && L.npcs[r.guard] && L.npcs[r.guard].override && L.npcs[r.guard].override.act === 'repair') return true;
+      const guards = game.guardsOf(r.sid).filter((g) => g.state === 'routine' && !g.sleeping && !g.hired);
+      if (!guards.length) return now < r.at + 600;
+      const f = L.jail.front;
+      guards.sort((p, q) => Math.hypot(p.x - f.x, p.z - f.z) - Math.hypot(q.x - f.x, q.z - f.z));
+      const g = guards[0];
+      setOverride(g.rec, now, now + 180, 'repair', { target: { x: f.x, z: f.z }, place: 'jail', sid: r.sid });
+      g.activity = null;
+      r.guard = g.rec.idx;
+      return true;
+    });
   }
 
   exile(L, v) {
@@ -822,7 +871,8 @@ export class Justice {
       }
     } else this.trespass = null;
     const held = p.heldDef();
-    if (L.econ.laws.armsBan && held && held.kind === 'weapon' && !game.isWanted(s.id)) {
+    // Guards of the town may carry arms where others may not.
+    if (L.econ.laws.armsBan && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id)) {
       const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 5);
       if (guard) {
         if (!this.brandish) {
@@ -839,7 +889,7 @@ export class Justice {
   // ------------------------------------------------------------ save
   serialize() {
     const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' ? 'serving' : 'gather', t: 0 } : null;
-    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings] };
+    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings], repairs: this.repairs.map((r) => ({ sid: r.sid, at: r.at, floor: r.floor })) };
   }
 
   load(d) {
@@ -852,6 +902,14 @@ export class Justice {
     this.unsolved = d.unsolved || [];
     this.sightings = new Map(d.sightings || []);
     this.pendingEscort = d.escortSid ?? null;
+    this.repairs = d.repairs || [];
+  }
+
+  // The cell floor as it was when you were locked in (for repairs).
+  floorOf(L) {
+    const w = this.game.world;
+    if (!L || !L.jail) return null;
+    return L.jail.cell.filter((t) => w.regionAt(t.x, t.z)).map((t) => [t.x, L.jail.y - 1, t.z, w.getBlock(t.x, L.jail.y - 1, t.z), 0]);
   }
 }
 

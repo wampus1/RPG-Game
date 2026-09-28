@@ -3,7 +3,7 @@
 // bucketed per region, plus semantic data (buildings, spots) used by NPCs.
 import { SURFACE, GROUND, REGION_W, REGION_D } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { B, BLOCKS, META_STATE } from './blocks.js';
+import { B, BLOCKS, META_STATE, CROPS, cropMeta } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 
@@ -86,7 +86,14 @@ class Layout {
     const lx = x - this.bounds.x0;
     const lz = z - this.bounds.z0;
     if (lx < 0 || lz < 0 || lx >= this.W || lz >= this.D) return;
-    this.mask[lz * this.W + lx] = v;
+    const i = lz * this.W + lx;
+    // Things set on the square or a street keep its paving underneath.
+    const old = this.mask[i];
+    if (v === M.DECOR && (old === M.PLAZA || old === M.ROAD)) {
+      if (!this.decorBase) this.decorBase = new Map();
+      this.decorBase.set(i, old);
+    }
+    this.mask[i] = v;
   }
   inside(x, z, inset = 0) {
     const b = this.bounds;
@@ -140,6 +147,7 @@ class Layout {
     this.decorate();
     this.wilds();
     this.paintGround();
+    this.decorBase = null;
     if (s.condition !== 'abandoned') this.npcs = generateNPCs(this, this.plan, hash4(s.seed, 0x5eed));
     this.local = null; // free construction scratch
   }
@@ -1075,7 +1083,12 @@ class Layout {
       b.work.push(...b.seats);
       tryPlace(B.bookshelf, 'north', { rot: 0 });
       tryPlace(B.bookshelf, 'north', { rot: 0 });
-      tryPlace(B.chest, 'wall', { access: true });
+      // The town's coffers: the treasury lives in these chests.
+      this.treasury = this.treasury || [];
+      for (let i = 0; i < (this.settlement.type === 'village' ? 1 : 2); i++) {
+        const ch = tryPlace(B.chest, 'wall', { access: true });
+        if (ch) this.treasury.push({ x: ch.x, y: Y0, z: ch.z, building: b.id });
+      }
       tryPlace(rugId, 'center', { solid: false });
       lamp();
       lamp();
@@ -1146,7 +1159,19 @@ class Layout {
           this.put(nx, Y0 + 1, nz, b.mats.wall);
         }
       }
-      this.jail = { building: b.id, cell, bed: cell[0], stand: cell[1], door, front, y: Y0 };
+      // Everything a breakout could damage, for the guards to rebuild.
+      const blocks = [];
+      for (const t of bars) blocks.push([t.x, Y0, t.z, B.iron_bars, 0], [t.x, Y0 + 1, t.z, B.iron_bars, 0]);
+      blocks.push([door.x, Y0, door.z, B.cell_door, 0], [door.x, Y0 + 1, door.z, B.cell_door_top, 0]);
+      for (const t of cell) {
+        for (const [dx, dz] of DIRS4) {
+          const nx = t.x + dx;
+          const nz = t.z + dz;
+          if (isIn(nx, nz)) continue;
+          blocks.push([nx, Y0, nz, b.mats.wall, 0], [nx, Y0 + 1, nz, b.mats.wall, 0]);
+        }
+      }
+      this.jail = { building: b.id, cell, bed: cell[0], stand: cell[1], door, front, y: Y0, blocks };
       return;
     }
   }
@@ -1233,7 +1258,8 @@ class Layout {
       for (let dz = 0; dz < 2; dz++) {
         for (let dx = 0; dx < 3; dx++) {
           this.put(x + dx, SURFACE, z + dz, B.farmland);
-          this.put(x + dx, Y0, z + dz, rng.pick(plants));
+          const id = rng.pick(plants);
+          this.put(x + dx, Y0, z + dz, id, cropMeta(id, 9));
           this.setMask(x + dx, z + dz, M.FIELD);
         }
       }
@@ -1394,7 +1420,10 @@ class Layout {
       }
       if (!ok) continue;
       const crop = rng.pick(crops);
-      const field = { x0: x, z0: z, x1: x + w - 1, z1: z + d - 1, spots: [] };
+      // Most fields stand ripe; some were sown more recently.
+      const ripe = rng.chance(0.65);
+      const stageOf = (id) => (CROPS[id] ? cropMeta(id, ripe ? 9 : rng.int(0, CROPS[id].stages - 2)) : 0);
+      const field = { x0: x, z0: z, x1: x + w - 1, z1: z + d - 1, spots: [], crop };
       for (let dz = 0; dz < d; dz++) {
         for (let dx = 0; dx < w; dx++) {
           const fx = x + dx;
@@ -1409,7 +1438,10 @@ class Layout {
           if (gate) continue;
           const furrow = dx % 3 === 0;
           this.put(fx, SURFACE, fz, furrow ? B.path : B.farmland);
-          if (!furrow) this.put(fx, Y0, fz, crop === B.pumpkin && rng.chance(0.6) ? B.carrot_crop : crop);
+          if (!furrow) {
+            const id = crop === B.pumpkin && rng.chance(0.6) ? B.carrot_crop : crop;
+            this.put(fx, Y0, fz, id, stageOf(id));
+          }
           else field.spots.push(this.addSpot(fx, fz, 2, ['farm']));
         }
       }
@@ -1639,7 +1671,8 @@ class Layout {
     const mats = this.mats;
     for (let z = b.z0; z <= b.z1; z++) {
       for (let x = b.x0; x <= b.x1; x++) {
-        const m = this.maskAt(x, z);
+        let m = this.maskAt(x, z);
+        if (m === M.DECOR && this.decorBase) m = this.decorBase.get((z - b.z0) * this.W + (x - b.x0)) ?? m;
         if (m === M.ROAD) this.put(x, SURFACE, z, this.col(x, z).water >= 0 ? B.planks : mats.road);
         else if (m === M.PLAZA) this.put(x, SURFACE, z, mats.plaza);
         else if (m === M.BRIDGE && !this.at(x, SURFACE, z)) {

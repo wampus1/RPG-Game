@@ -2,18 +2,19 @@
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
 import { GROUND } from '../config.js';
-import { B } from '../world/blocks.js';
+import { B, BLOCKS } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { jobTitle } from '../entities/npcgen.js';
 import { graveyardFence } from '../world/settlement.js';
 import {
-  initEcon, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
+  initEcon, mayorOf, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
   ledger, alive, DAY, price, kitchenOf, STOCK,
 } from './econ.js';
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
+import { checkWatch, deserted } from './civic.js';
 import { removeItem, countItem } from '../game/inventory.js';
 
 const REP_LEVELS = [
@@ -48,6 +49,8 @@ export class Sim {
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
     this.bp = null;
+    this.deserted = new Set();
+    this.confront = null; // the mayor coming to have a word about your conduct
   }
 
   get abs() {
@@ -57,11 +60,13 @@ export class Sim {
   // ------------------------------------------------------------ layouts
   attach(L) {
     initEcon(L);
+    L.baseN = L.npcs.length;
     const sid = L.settlement.id;
     const dead = this.game.deadNpcs.get(sid);
     if (dead) for (const i of dead) if (L.npcs[i]) L.npcs[i].alive = false;
     const sv = this.saved && this.saved.get(sid);
     if (sv) this.applySettlement(L, sv);
+    if (L.econ.deserted !== undefined) L.settlement.deserted = true;
     const c = this.construction;
     if (c && c.sid === sid && !L.buildings[c.bid]) {
       const plot = L.plots[c.plot];
@@ -91,14 +96,56 @@ export class Sim {
     this.tickT -= dt;
     if (this.tickT <= 0) {
       this.tickT = 0.5;
-      for (const { layout } of this.game.active.values()) simulateTo(this, layout, this.abs);
+      for (const { layout } of this.game.active.values()) {
+        simulateTo(this, layout, this.abs);
+        this.syncTreasury(layout);
+      }
       this.updateConstruction();
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
     }
     this.careers.update(dt);
+    this.updateConfront();
     this.justice.update(dt);
+  }
+
+  // ------------------------------------------------------------ treasury
+  // The town hall chests hold the treasury in coin. Coins put in or taken
+  // out change the treasury; the town's own spending refills or empties them.
+  syncTreasury(L) {
+    const list = L.treasury;
+    if (!list || !list.length || L.settlement.deserted) return;
+    const w = this.game.world;
+    const chests = list.filter((t) => w.regionAt(t.x, t.z) && w.getBlock(t.x, t.y, t.z) === B.chest).map((t) => w.getContainer(t.x, t.y, t.z)).filter(Boolean);
+    if (!chests.length) return;
+    const e = L.econ;
+    const count = chests.reduce((n, sl) => n + sl.reduce((m, q) => m + (q && q.item === 'coin' ? q.count : 0), 0), 0);
+    if (L.chestSeen !== undefined && count !== L.chestSeen) e.treasury = Math.max(0, e.treasury + (count - L.chestSeen));
+    // Don't shuffle coins around under someone's hands.
+    if (this.game.ui.find && this.game.ui.find('container')) {
+      L.chestSeen = count;
+      return;
+    }
+    const want = Math.max(0, Math.floor(e.treasury));
+    if (count !== want) {
+      let left = want;
+      chests.forEach((sl, ci) => {
+        for (let i = 0; i < sl.length; i++) if (sl[i] && sl[i].item === 'coin') sl[i] = null;
+        let n = ci === chests.length - 1 ? left : Math.min(left, Math.ceil(want / chests.length));
+        left -= n;
+        for (let i = 0; i < sl.length && n > 0; i++) {
+          if (sl[i]) continue;
+          const c = Math.min(999, n);
+          sl[i] = { item: 'coin', count: c };
+          n -= c;
+        }
+        left += n;
+      });
+      const r = w.regionAt(list[0].x, list[0].z);
+      if (r) r.modified = true;
+    }
+    L.chestSeen = chests.reduce((n, sl) => n + sl.reduce((m, q) => m + (q && q.item === 'coin' ? q.count : 0), 0), 0);
   }
 
   // ------------------------------------------------------------ world edits
@@ -200,21 +247,39 @@ export class Sim {
     return !!this.citizen && this.citizen.sid === sid;
   }
 
-  // NPCs who can see what happens at (x, z): same room or same street.
+  // NPCs who can see what happens at (x, z): close enough, looking that
+  // way (anyone right beside you notices), with no wall or closed door in
+  // between. Windows and open doors let them see through.
   witnesses(sid, x, z, radius = 7, exclude = null) {
     const a = this.game.active.get(sid);
     if (!a) return [];
-    const L = a.layout;
-    const b = buildingAt(L, x, z);
     return a.npcs.filter((n) => {
       if (n.dead || n.sleeping || n === exclude || n.rec.away) return false;
       if (Math.max(Math.abs(n.x - x), Math.abs(n.z - z)) > radius) return false;
-      const nb = buildingAt(L, n.x, n.z);
-      if (nb === b) return true;
-      // Someone standing in a doorway sees both sides.
-      const door = b || nb;
-      return Math.abs(n.x - door.door.x) + Math.abs(n.z - door.door.z) <= 1 || Math.abs(x - door.door.x) + Math.abs(z - door.door.z) <= 1;
+      return this.canSee(n, x, z);
     });
+  }
+
+  canSee(n, x, z, y = null) {
+    const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
+    if (d <= 1) return true;
+    const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][n.dir || 0];
+    if ((x - n.x) * fx + (z - n.z) * fz < 0 && d > 2) return false;
+    return this.lineOfSight(n.x, n.z, x, z, (y ?? n.y) + 1);
+  }
+
+  lineOfSight(x0, z0, x1, z1, y) {
+    const w = this.game.world;
+    const steps = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+    for (let i = 1; i < steps; i++) {
+      const x = Math.round(x0 + ((x1 - x0) * i) / steps);
+      const z = Math.round(z0 + ((z1 - z0) * i) / steps);
+      const id = w.getBlock(x, y, z);
+      const b = BLOCKS[id];
+      if (b.solid && b.opaque) return false;
+      if (b.interact === 'door' && b.solid && !w.getState(x, y, z)) return false;
+    }
+    return true;
   }
 
   // ------------------------------------------------------------ gifts & chat
@@ -327,17 +392,39 @@ export class Sim {
   // Price multipliers for the player: town prosperity, the trader's
   // temperament, sales tax, their opinion of you and citizenship.
   priceFactor(npc) {
+    const p = this.priceParts(npc);
+    return p.base * p.discount;
+  }
+
+  // The asking price before discounts, and the discounts you get.
+  priceParts(npc) {
     const rec = npc.rec;
     const s = npc.settlement;
     const e = npc.layout.econ;
     const cond = s.condition;
     let m = cond === 'prosperous' ? 1.5 : cond === 'poor' ? 1.2 : 1.35;
     m *= rec.personality.kindness > 0.7 ? 0.92 : rec.personality.kindness < 0.3 ? 1.15 : 1;
+    const tr = rec.traits || [];
+    m *= tr.includes('generous') ? 0.95 : tr.includes('stingy') || tr.includes('shrewd') ? 1.06 : 1;
     m *= 1 + (e ? e.tax * 0.5 : 0);
     const op = this.opinion(npc);
-    m *= op >= 35 ? 0.9 : op <= -25 ? 1.25 : 1;
-    if (this.isCitizen(s.id)) m *= 0.92;
-    return m * this.careers.discount(npc);
+    if (op <= -25) m *= 1.25;
+    let d = 1;
+    const reasons = [];
+    if (op >= 35) {
+      d *= 0.9;
+      reasons.push('friend');
+    }
+    if (this.isCitizen(s.id)) {
+      d *= 0.92;
+      reasons.push('citizen');
+    }
+    const staff = this.careers.discount(npc);
+    if (staff < 1) {
+      d *= staff;
+      reasons.push('staff');
+    }
+    return { base: m, discount: d, reasons };
   }
 
   // ------------------------------------------------------------ deaths
@@ -462,6 +549,8 @@ export class Sim {
   }
 
   dailyCivic(L, day, rng) {
+    checkWatch(this, L, day, rng);
+    this.checkConduct(L, day);
     const c = this.construction;
     if (c && !c.done && c.sid === L.settlement.id) this.assignBuilders(L, day, day * DAY + 600);
     const z = this.citizen;
@@ -486,9 +575,10 @@ export class Sim {
     // Snares near an active town catch things now and then.
     if (!this.game.active.has(L.settlement.id)) return;
     const w = this.game.world;
-    for (const sp of L.spotsByTag('trap')) {
-      const t = sp.trap;
-      if (!t || !w.regionAt(t.x, t.z)) continue;
+    const traps = L.spotsByTag('trap').map((sp) => sp.trap).filter(Boolean);
+    for (const r of L.npcs) if (r.snares) traps.push(...r.snares);
+    for (const t of traps) {
+      if (!w.regionAt(t.x, t.z)) continue;
       if (w.getBlock(t.x, t.y, t.z) === B.snare && !w.getState(t.x, t.y, t.z) && rng.chance(0.25)) w.setState(t.x, t.y, t.z, true);
     }
     void h;
@@ -558,6 +648,84 @@ export class Sim {
       ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
     }
     return { ok: true, fee: t.fee, host, plot: t.plot };
+  }
+
+  // A citizen who has made the town hate them gets a talking-to from the
+  // mayor, and if nothing changes within a few days, is thrown out.
+  checkConduct(L, day) {
+    const z = this.citizen;
+    if (!z || z.sid !== L.settlement.id) return;
+    const m = mayorOf(L);
+    if (!m) return;
+    const op = this.opinion({ rec: m, settlement: L.settlement });
+    if (op > -20) {
+      if (z.warned !== undefined && z.warned !== null && day - z.warned >= 1) {
+        z.warned = null;
+        ledger(L, day, `${this.game.playerName} mended their ways, and the council is satisfied.`);
+      }
+      return;
+    }
+    if (this.confront) return;
+    if (z.warned === undefined || z.warned === null) this.confront = { sid: L.settlement.id, idx: m.idx, stage: 'warn', arrived: false };
+    else if (day - z.warned >= 3) this.confront = { sid: L.settlement.id, idx: m.idx, stage: 'expel', arrived: false };
+  }
+
+  updateConfront() {
+    const c = this.confront;
+    if (!c) return;
+    const g = this.game;
+    const z = this.citizen;
+    if (!z || z.sid !== c.sid) {
+      this.confront = null;
+      return;
+    }
+    if (c.started && !c.arrived) {
+      const m0 = this.layoutOf(c.sid).npcs[c.idx];
+      if (!m0 || !m0.override || m0.override.act !== 'confront') c.started = false;
+    }
+    if (c.started || !g.active.has(c.sid)) return;
+    const p = g.player;
+    if (g.currentSettlement?.id !== c.sid || g.minute < 480 || g.minute > 1200 || p.sleeping || p.restrained || this.justice.jail || g.ui.modal) return;
+    const L = this.layoutOf(c.sid);
+    const m = L.npcs[c.idx];
+    const n = m && m.ent;
+    if (!n || n.dead || n.state !== 'routine' || n.sleeping || n.distTo(p) > 60) return;
+    c.started = true;
+    setOverride(m, this.abs, this.abs + 180, 'confront', { place: 'player' });
+    n.activity = null;
+    n.say(`${g.playerName}! A word, please.`, 3, '#ffe070');
+  }
+
+  // The mayor has reached you: out comes the lecture.
+  confronted(n) {
+    const c = this.confront;
+    if (!c || c.arrived) return;
+    c.arrived = true;
+    n.face(this.game.player.x, this.game.player.z);
+    this.game.talk(n);
+  }
+
+  // How the talk ends: 'promise', 'defy' or 'expel'.
+  settleConfront(n, how) {
+    const c = this.confront;
+    const z = this.citizen;
+    const L = n.layout;
+    this.confront = null;
+    if (n.rec.override && n.rec.override.act === 'confront') n.rec.override = null;
+    n.activity = null;
+    if (!z) return 'none';
+    if (how === 'promise') {
+      z.warned = this.game.day;
+      ledger(L, this.game.day, `The mayor warned ${this.game.playerName} about their conduct.`);
+      return 'warned';
+    }
+    if (how === 'defy' && c && c.stage === 'warn' && n.rec.personality.temper < 0.55) {
+      z.warned = this.game.day;
+      this.changeRep(n, -4);
+      return 'last';
+    }
+    this.revoke('expelled by the council for bad conduct');
+    return 'expelled';
   }
 
   pickHost(L) {
@@ -742,7 +910,7 @@ export class Sim {
     const s = L.settlement;
     const ow = this.game.world.ow;
     const dests = ow.settlements
-      .filter((o) => o.id !== s.id && o.condition !== 'abandoned')
+      .filter((o) => o.id !== s.id && !deserted(o))
       .map((o) => ({ o, d: Math.hypot(o.cx - s.cx, o.cz - s.cz) }))
       .filter((q) => q.d < 16);
     if (!dests.length) return;
@@ -798,7 +966,7 @@ export class Sim {
     if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07)) {
       const ow = this.game.world.ow;
       const s = L.settlement;
-      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && o.condition !== 'abandoned' && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18) || []);
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18) || []);
       if (!from) return;
       const goods = {};
       const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
@@ -873,6 +1041,7 @@ export class Sim {
       construction: this.construction,
       justice: this.justice.serialize(),
       careers: this.careers.serialize(),
+      deserted: [...this.deserted],
       favors: this.favors.serialize(),
     };
   }
@@ -881,12 +1050,17 @@ export class Sim {
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, doneKey: r.doneKey,
-      hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall,
+      hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
+      migrated: r.migrated,
+      // Someone who changed trade keeps their new one.
+      ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift } : {}),
     });
     return {
       sid: L.settlement.id,
       econ: L.econ,
-      recs: L.npcs.map(pickRec),
+      recs: L.npcs.slice(0, L.baseN ?? L.npcs.length).map(pickRec),
+      // People who moved here from elsewhere: whole records.
+      extra: L.npcs.slice(L.baseN ?? L.npcs.length).map(({ ent, ...r }) => (void ent, r)),
       graves: L.graveyard ? { rows: L.graveyard.rows, slots: L.graveyard.slots.map((s) => s.grave) } : null,
       plots: L.plots.map((p) => !!p.taken),
     };
@@ -897,6 +1071,7 @@ export class Sim {
     sv.recs.forEach((d, i) => {
       if (L.npcs[i]) Object.assign(L.npcs[i], d);
     });
+    for (const r of sv.extra || []) if (!L.npcs[r.idx]) L.npcs[r.idx] = { ...r };
     if (sv.graves && L.graveyard) {
       L.graveyard.rows = sv.graves.rows;
       sv.graves.slots.forEach((gr, i) => {
@@ -918,6 +1093,8 @@ export class Sim {
     this.construction = data.construction || null;
     this.justice.load(data.justice);
     this.careers.load(data.careers);
+    this.deserted = new Set(data.deserted || []);
+    for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
   }
 }

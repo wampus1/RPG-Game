@@ -50,7 +50,8 @@ item('gem', { value: 60 });
 item('string', { value: 2 });
 item('leather', { value: 5 });
 item('cloth', { value: 4 });
-item('seeds', { name: 'Seeds', value: 1, plant: B.wheat_crop });
+item('seeds', { name: 'Wheat Seeds', value: 1, plant: B.wheat_crop });
+item('cabbage_seeds', { name: 'Cabbage Seeds', value: 1, plant: B.cabbage_crop });
 item('wheat', { value: 2 });
 item('reeds', { value: 1 });
 item('herb', { value: 4 });
@@ -65,7 +66,7 @@ const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', h
 food('apple', 2, 2);
 food('berries', 1, 1);
 food('coconut', 2, 2);
-food('carrot', 2, 2);
+food('carrot', 2, 2, 'Carrot', { plant: B.carrot_crop });
 food('cabbage', 2, 2);
 food('mushroom', 1, 1);
 food('bread', 4, 4);

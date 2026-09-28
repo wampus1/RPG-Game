@@ -111,7 +111,7 @@ export function ledger(L, day, text) {
 }
 
 export function mayorOf(L) {
-  return L.npcs.find((r) => r.job === 'mayor' && alive(r)) || null;
+  return L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.migrated) || null;
 }
 
 export function kitchenOf(L) {

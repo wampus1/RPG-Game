@@ -11,6 +11,7 @@ import { alive, kitchenOf, mayorOf, st, activityFor, DAY } from '../sim/econ.js'
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare } from '../sim/careers.js';
 import { plural, relationTo } from '../sim/favors.js';
+import { deserted } from '../sim/civic.js';
 import { hash4 } from '../util/rng.js';
 import { countItem, removeItem } from './inventory.js';
 
@@ -75,6 +76,12 @@ export function openingLine(npc, game) {
   const rep = sim.opinion(npc);
   const entry = sim.repEntry(s.id, rec.idx);
   const name = game.playerName;
+  const cf = sim.confront;
+  if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
+    return cf.stage === 'expel'
+      ? `I warned you, ${name}. Nothing has changed, and the council has voted: you are no longer welcome as a citizen of ${s.name}.`
+      : `${name}, we need to talk. People keep coming to me about you: stealing, fighting, rudeness. As mayor I can't let it go on. Change your ways, or lose your citizenship.`;
+  }
   if (game.isWanted(s.id) && rec.job !== 'guard') return pick(rng, ['I have nothing to say to the likes of you.', 'Guards! Someone help!', 'Please... just go.']);
   if (rec.job === 'guard' && game.isWanted(s.id)) return 'You\'re wanted in this town. Come quietly, or else.';
   if (sim.justice.exiled.has(s.id)) return 'You were banished! Get out before the guards see you!';
@@ -82,7 +89,7 @@ export function openingLine(npc, game) {
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
   if (npc.visit) return pick(rng, [`Greetings, friend! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
-  if (npc.hired) return pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
+  if (npc.hired) return npc.hired.companion ? pick(rng, [`What is it, ${name}?`, 'Yes, friend?', 'Need something?']) : pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
   const car = sim.careers;
   if (car.employs(npc)) {
     const j = car.job;
@@ -121,6 +128,15 @@ export function topicsFor(npc, game) {
   const out = [];
   const add = (id, label) => out.push({ id, label });
   const trader = npc.visit || JOBS[rec.job]?.trader || rec.job === 'cook';
+  const cf = sim.confront;
+  if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
+    if (cf.stage === 'expel') add('conduct', '...I understand.');
+    else {
+      out.push({ id: 'conduct', arg: 'promise', label: 'You\'re right. I\'ll change my ways.' });
+      out.push({ id: 'conduct', arg: 'defy', label: 'Mind your own business.' });
+    }
+    return out;
+  }
   if (rec.job === 'guard' && !npc.hired && (wanted || sim.justice.pendingIn(s.id).length)) add('surrender', 'I surrender.');
   if (wanted || sim.justice.exiled.has(s.id)) {
     add('bye', 'Goodbye.');
@@ -131,8 +147,14 @@ export function topicsFor(npc, game) {
     add('bye', 'Goodbye.');
     return out;
   }
+  if (car.isCustomer(npc)) {
+    const c = car.customer;
+    const what = plural(c.item, c.count);
+    add('serve', c.kind === 'shop' ? `Here you are: ${what}. (¤${c.price})` : `Sell ${what} for ¤${c.price}.`);
+    add('turn_away', 'Sorry, not today.');
+  }
   if (npc.hired) {
-    add('escort', 'How long are you with me?');
+    add('escort', npc.hired.companion ? 'How are you holding up?' : 'How long are you with me?');
     add('dismiss', 'You can head home now.');
   }
   const letter = fav.letterFor(npc);
@@ -149,6 +171,7 @@ export function topicsFor(npc, game) {
   if (car.employs(npc)) add('job', 'About my job here...');
   else if (car.canEmploy(npc) && rep >= -10) add('job', `Could you use a hand at the ${bare(npc.layout.buildings[rec.work.building].name)}?`);
   if (rec.job === 'guard' && !npc.hired && !npc.visit) add('hire', 'I\'d like to hire you as an escort.');
+  else if (!npc.hired && !npc.visit && rec.age === 'adult' && rep >= 60 && !car.escort) add('companion', 'Come travel with me for a while?');
   const c = sim.construction;
   if (c && c.sid === s.id && !c.done && !c.cancelled && (rec.job === 'mayor' || (rec.override && rec.override.act === 'build'))) add('house', 'How is my house coming?');
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
@@ -326,7 +349,7 @@ function aboutPerson(npc, idx, game) {
   else if (o.hungry >= 1) lines.push(`I worry about ${first}. ${first} hasn't been eating.`);
   else if (theirs.met && theirs.v >= 30) lines.push(`${first} speaks well of you.`);
   else if (theirs.met && theirs.v <= -25) lines.push(`${first} doesn't think much of you, mind.`);
-  else if (rec.personality.sociability > 0.55 && o.traits.length) lines.push(`They say ${first} is ${o.traits[0]}.`);
+  else if ((rec.personality.sociability > 0.55 || rec.traits.includes('gossipy')) && o.traits.length) lines.push(`They say ${first} is ${o.traits[o.traits.length - 1]}.`);
   return { lines };
 }
 
@@ -442,8 +465,12 @@ function jobTalk(npc, game, arg) {
       return { lines: [pick(npc.rng, ['Sorry to see you go. The door\'s always open.', 'Suit yourself. Good luck.'])] };
     }
     const late = game.minute >= j.shift[0] && game.minute < j.shift[1] && game.buildingAtPlayer()?.id !== j.building;
+    const todo = (j.chores || []).filter((q) => !q.done).map((q) => q.label.toLowerCase());
     return {
-      lines: [`You work ${clock(j.shift[0])} to ${clock(j.shift[1])} in the ${j.bname}, at ¤${j.wage} an hour.`, late ? 'And your shift has started, you know. Get in here!' : j.earned ? `You've earned ¤${j.earned} so far. Good work.` : 'Just be here during your shift; wages are paid at closing.'],
+      lines: [
+        `You work ${clock(j.shift[0])} to ${clock(j.shift[1])} in the ${j.bname}. I pay ¤${j.wage} for every job done: chores, and customers served.`,
+        late ? 'And your shift has started, you know. Get in here!' : todo.length ? `Still to do today: ${todo.join('; ')}.` : j.choreDay === game.day ? 'Chores are done. Keep an eye out for customers.' : 'Come in during your shift and I\'ll tell you what needs doing.',
+      ],
       choices: [{ id: 'job', arg: 'quit', label: 'I\'d like to quit.' }],
     };
   }
@@ -457,14 +484,14 @@ function jobTalk(npc, game, arg) {
   }
   if (arg !== 'yes') {
     const b = L.buildings[t.bid];
-    const lines = [`I could use someone to ${TASKS[b.type] || 'help out'}. ${clock(t.shift[0])} to ${clock(t.shift[1])}, here in the ${t.bname}, ¤${t.wage} an hour, paid at closing.`];
+    const lines = [`I could use someone to ${TASKS[b.type] || 'help out'}. ${clock(t.shift[0])} to ${clock(t.shift[1])}, here in the ${t.bname}: chores, and serving customers. ¤${t.wage} a job, paid at closing.`];
     if (car.job) lines.push(`You'd have to give up being ${car.title()}, mind.`);
     return { lines, choices: [{ id: 'job', arg: 'yes', label: 'You\'ve got yourself a worker.' }], back: 'Not right now.' };
   }
   const r = car.employ(npc);
   if (!r.ok) return { lines: ['Hm. Something came up. Ask me later.'] };
   game.ui.msg(`New job: ${r.role} at the ${r.bname}. (J: journal)`, '#ffe070');
-  return { lines: [`Wonderful! Be here at ${clock(r.shift[0])} sharp.`, 'I pay for the hours you\'re actually in the shop, mind.'] };
+  return { lines: [`Wonderful! Be here at ${clock(r.shift[0])} sharp.`, 'I pay for work done, not for standing around, mind. You can use the shop\'s chests while you\'re on shift.'] };
 }
 
 function hireTalk(npc, game, arg) {
@@ -499,6 +526,7 @@ function favorTalk(npc, game) {
   if (o.none) {
     const line = {
       asked: 'You already asked today. Maybe tomorrow.', distrust: 'From you? No thank you.', busy: 'You look like you\'ve got your hands full already.',
+      recent: 'You\'ve done plenty for me already! Ask me again in a day or two.',
       traveling: 'I\'m only passing through. Thanks, though.',
     }[o.none] || pick(rng, npc.rec.personality.kindness > 0.6 ? ['No, I\'m fine. Kind of you to ask, though!', 'That\'s sweet of you. I\'m all right for now.'] : ['No.', 'I can manage.', 'Not today.']);
     return { lines: [line] };
@@ -774,6 +802,20 @@ export function respond(npc, game, id, arg) {
     case 'rude': {
       sim.chat(npc, 'rude');
       const angry = p.temper > 0.6;
+      if (npc.hired) {
+        const friend = npc.hired.companion;
+        sim.careers.endEscort(null);
+        return { lines: [friend ? 'I thought we were friends. I\'m going home.' : 'Protect yourself, then. I\'m done.'], close: true };
+      }
+      // Insulting your boss costs you the job; insulting the mayor may cost a guard the post.
+      if (sim.careers.employs(npc)) {
+        sim.careers.fire(npc.layout, sim.careers.job, 'Talk to me like that? You\'re fired!');
+        return { lines: ['How DARE you. Don\'t bother coming back to work!'], close: true };
+      }
+      if (rec.job === 'mayor' && sim.careers.isGuard(s.id) && rng.chance(0.4 + p.temper * 0.5)) {
+        sim.careers.stripGuard('insulted the mayor');
+        return { lines: ['You insult ME? Hand over that badge. You\'re off the watch!'], close: true };
+      }
       return { lines: [angry ? pick(rng, ['What did you just say to me?!', 'Say that again, I dare you!', 'Get out of my sight!']) : pick(rng, ['...That was uncalled for.', 'How rude!', 'I don\'t have to listen to this.'])], close: angry };
     }
     case 'gift': return { open: 'gift' };
@@ -801,9 +843,41 @@ export function respond(npc, game, id, arg) {
     case 'job': return jobTalk(npc, game, arg);
     case 'hire': return hireTalk(npc, game, arg);
     case 'escort': {
+      if (npc.hired && npc.hired.companion) return { lines: [pick(rng, ['Never better! It\'s good to see the world.', 'My feet hurt, but I wouldn\'t miss this.', `I do miss ${s.name} a little. But lead on!`])] };
       const h = Math.ceil(sim.careers.hoursLeft());
       return { lines: [`Another ${h} hour${h === 1 ? '' : 's'}, then I head back to ${s.name}.`] };
     }
+    case 'companion': {
+      const t = sim.careers.companionTerms(npc);
+      if (!t.ok) {
+        const why = {
+          busy: 'You\'ve already got company on the road.', crimes: 'Not with the guards after you.', child: 'I\'m not allowed!', elder: 'My old bones wouldn\'t last a day on the road, dear.',
+          duty: 'I can\'t leave my post, much as I\'d like to.', grief: 'Not now. I need to be here for my family.', distrust: 'We\'re not that close, are we?',
+        }[t.reason] || 'I can\'t.';
+        return { lines: [why] };
+      }
+      if (arg !== 'yes') return { lines: [`Travel with you? ${p.bravery > 0.55 ? 'I\'ve always wanted an adventure!' : 'It sounds a little frightening... but with you, why not?'}`], choices: [{ id: 'companion', arg: 'yes', label: 'Pack your things, then!' }], back: 'On second thought, stay here.' };
+      sim.careers.recruit(npc);
+      game.ui.msg(`${rec.name.first} is travelling with you. Talk to them to send them home.`, '#80e0ff');
+      return { lines: ['Lead the way!'], close: true };
+    }
+    case 'serve': {
+      const r = sim.careers.serveCustomer(npc);
+      if (!r.ok) return { lines: [r.reason === 'missing' ? 'You don\'t have that. Never mind, then.' : r.reason === 'stock' ? 'Out of stock? Pity. Another time.' : 'Hm?'], close: true };
+      return { lines: [r.kind === 'shop' ? pick(rng, ['Thank you kindly!', 'Just what I needed.']) : `Pleasure doing business! Here's ¤${r.paid}.`], close: true };
+    }
+    case 'conduct': {
+      const r = sim.settleConfront(npc, arg || 'expel');
+      if (r === 'warned') return { lines: ['See that you do. If things haven\'t improved in a few days, you\'ll hand back your citizenship.'] };
+      if (r === 'last') return { lines: ['...I\'ll pretend I didn\'t hear that. This is your last warning.'] };
+      if (r === 'expelled') {
+        return { lines: [arg === 'defy' ? 'Then you leave me no choice. Your citizenship is revoked.' : 'Your name has been struck from the ledger. I\'m sorry it came to this.'], close: true };
+      }
+      return { lines: ['...'] };
+    }
+    case 'turn_away':
+      sim.careers.dismissCustomer(null);
+      return { lines: [pick(rng, ['Oh. Another time, then.', 'Suit yourself.'])], close: true };
     case 'dismiss':
       sim.careers.endEscort(null);
       return { lines: [pick(rng, ['Right you are. Safe travels!', 'Suits me. Mind how you go.'])], close: true };
@@ -902,7 +976,7 @@ function news(npc, game) {
   const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
   if (visits.length) items.push(`A merchant from ${visits[0].fromName} is in town, selling on the square.`);
   // Rumours about the wider world mark the place on your map.
-  const others = game.world.ow.settlements.filter((o) => o.id !== s.id && o.condition !== 'abandoned');
+  const others = game.world.ow.settlements.filter((o) => o.id !== s.id && !deserted(o));
   if (others.length) {
     const o = others.sort((a, b) => Math.hypot(a.cx - s.cx, a.cz - s.cz) - Math.hypot(b.cx - s.cx, b.cz - s.cz))[(npc.newsI || 0) % Math.min(3, others.length)];
     const dx = o.cx - s.cx;
@@ -919,6 +993,8 @@ function news(npc, game) {
     }
     if (fresh) game.ui.msg(`Map updated: ${o.name}`, '#a0c8ff');
   }
+  const gone = game.world.ow.settlements.find((o) => o.deserted && o.id !== s.id);
+  if (gone && rng.chance(0.6)) items.push(`Did you hear? The people of ${gone.name} gave up and left. No guards, no one to protect them.`);
   const ruins = game.world.ow.settlements.find((o) => o.condition === 'abandoned');
   if (ruins && rng.chance(0.3)) items.push(`Folk say ${ruins.name} was abandoned. Might be treasure left behind...`);
   if (!items.length) items.push('Nothing much happens around here.');

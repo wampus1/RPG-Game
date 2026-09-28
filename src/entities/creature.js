@@ -6,7 +6,7 @@ import { RNG, hash4 } from '../util/rng.js';
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
   skeleton: { name: 'Skeleton', hp: 14, dmg: 3, step: 0.36, mode: 'hostile', aggro: 9, drops: [['bone', 1, 3, 1], ['coin', 1, 4, 0.5], ['string', 1, 2, 0.4]], night: true, humanoid: true },
-  wolf: { name: 'Wolf', hp: 12, dmg: 3, step: 0.26, mode: 'hostile', aggro: 8, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.5]], packs: true },
+  wolf: { name: 'Wolf', hp: 9, dmg: 2, step: 0.28, mode: 'hostile', aggro: 7, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.5]], packs: true },
   boar: { name: 'Boar', hp: 12, dmg: 3, step: 0.34, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 3, 1], ['leather', 1, 2, 0.6]] },
   deer: { name: 'Deer', hp: 8, dmg: 0, step: 0.24, mode: 'passive', drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.7]] },
   rabbit: { name: 'Rabbit', hp: 3, dmg: 0, step: 0.22, mode: 'passive', drops: [['raw_meat', 1, 1, 1]] },

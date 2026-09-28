@@ -75,6 +75,9 @@ export function describeActivity(e) {
     case 'travel': return 'leaving on a journey';
     case 'visit': return 'selling wares';
     case 'sell': return 'selling the catch';
+    case 'repair': return 'repairing the jail';
+    case 'customer': return 'coming to buy from you';
+    case 'confront': return 'looking for you';
     default: return e.act;
   }
 }

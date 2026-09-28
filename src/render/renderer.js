@@ -2,7 +2,7 @@
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
 import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, headSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
@@ -70,12 +70,18 @@ export class Renderer {
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     this.computeCutaway(world, player);
+    this.bubbles = [];
     this.drawWorld(game);
     this.drawProjectiles(game);
     this.drawRope(game);
     this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
+    // Speech bubbles and emotes go on top of everything, roofs included.
+    for (const b of this.bubbles) {
+      if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
+      else this.drawBubble(ctx, b.text, b.x, b.y, b.color);
+    }
     this.drawOverlays(game);
   }
 
@@ -255,7 +261,7 @@ export class Renderer {
               const arr = TEX.sprite[id * 4 + rot];
               const st = meta & META_STATE ? 1 : 0;
               let idx;
-              if (render === 'plant') idx = v;
+              if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
               else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(x, z, 5) % 4 : v);
               else idx = st * 4 + (animFrame + x + z) % 4;
               const s = arr[idx] || arr[0];
@@ -405,8 +411,9 @@ export class Renderer {
       ctx.fillStyle = f > 0.5 ? '#58c048' : f > 0.25 ? '#e8c030' : '#e04040';
       ctx.fillRect(sx + 3, feetY - 28, Math.round(w * f), 1);
     }
-    if (e.bubble && e.bubble.t > 0) this.drawBubble(ctx, e.bubble.text, sx + 8, feetY - (e.kind === 'creature' ? 20 : 28), e.bubble.color);
-    if (e.emote && e.emote.t > 0) drawText(ctx, e.emote.ch, sx + 5, feetY - 34 + Math.sin(this.time * 5) * 1.5, e.emote.color || '#ffe070', '#000');
+    const bubbles = this.bubbles || [];
+    if (e.bubble && e.bubble.t > 0) bubbles.push({ text: e.bubble.text, x: sx + 8, y: feetY - (e.kind === 'creature' ? 20 : 28), color: e.bubble.color });
+    if (e.emote && e.emote.t > 0) bubbles.push({ emote: true, text: e.emote.ch, x: sx + 5, y: feetY - 34 + Math.sin(this.time * 5) * 1.5, color: e.emote.color || '#ffe070' });
   }
 
   drawHeld(ctx, key, e, sx, top) {

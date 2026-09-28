@@ -135,6 +135,14 @@ function drawHumanoid(look, dir, frame) {
     S(tx + 2, torsoY + 2, hex(oc.patch));
     S(tx + 5, torsoY + 4, hex(oc.patch));
   }
+  // Shirt patterns on everyday clothes.
+  const pat = look.pattern;
+  if (pat && !skel && ['plain', 'vest', 'fisher', 'miner', 'apron', 'baker', 'smith', 'hunter', 'plaid'].includes(outfit)) {
+    if (pat === 'stripes') for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) for (let x = tx; x < tx + tw; x++) if (p.get(flip ? CHAR_W - 1 - x : x, y)[3]) S(x, y, shade(shirtC, 0.78));
+    if (pat === 'collar') R(tx + 1, torsoY, tw - 2, 1, hex('#e8e0d0'));
+    if (pat === 'sash' && dir !== 2) for (let i = 0; i < torsoH; i++) S(tx + (side ? 1 + (i >> 1) : 1 + i), torsoY + i, accent);
+    if (pat === 'buttons' && dir === 0) for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) S(7, y, hex('#e8d8a0'));
+  }
   // Belt.
   if (!outfit.startsWith('robe') && outfit !== 'farmer') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
   // Arms.
@@ -164,6 +172,11 @@ function drawHumanoid(look, dir, frame) {
       if (style === 'long' || style === 'braids') R(hx, hy + headH - 1, 8, 3, hairC);
       if (style === 'ponytail') R(7, hy + headH - 1, 2, 4, hairC);
       if (style === 'bun') R(6, hy - 1, 4, 2, hairC);
+      if (style === 'afro') R(hx - 1, hy - 2, 10, headH + 1, hairC);
+      if (style === 'pigtails') {
+        R(hx - 1, hy + 3, 1, 4, hairC);
+        R(hx + 8, hy + 3, 1, 4, hairC);
+      }
     } else if (side) {
       R(hx, hy, 8, 2, hairC);
       R(hx + 5, hy, 3, headH - 2, hairC);
@@ -171,6 +184,8 @@ function drawHumanoid(look, dir, frame) {
       if (style === 'ponytail') R(hx + 7, hy + 2, 2, 4, hairC);
       if (style === 'bun') R(hx + 6, hy - 1, 3, 2, hairC);
       if (style === 'mohawk') R(hx + 2, hy - 2, 3, 2, hairC);
+      if (style === 'afro') R(hx - 1, hy - 2, 10, 5, hairC);
+      if (style === 'pigtails') R(hx + 6, hy + 3, 2, 4, hairC);
     } else {
       R(hx, hy, 8, 2, hairC);
       R(hx, hy + 2, 1, 3, hairC);
@@ -186,7 +201,19 @@ function drawHumanoid(look, dir, frame) {
       if (style === 'bun') R(6, hy - 2, 4, 2, hairC);
       if (style === 'mohawk') R(6, hy - 2, 4, 2, hairC);
       if (style === 'short') S(hx + 3, hy + 2, hairC);
+      if (style === 'sidepart') R(hx, hy + 2, 3, 1, hairC);
+      if (style === 'afro') {
+        R(hx - 1, hy - 2, 10, 3, hairC);
+        R(hx - 1, hy + 1, 1, 4, hairC);
+        R(hx + 8, hy + 1, 1, 4, hairC);
+      }
+      if (style === 'pigtails') {
+        R(hx - 1, hy + 3, 1, 4, hairC);
+        R(hx + 8, hy + 3, 1, 4, hairC);
+      }
     }
+    if (style === 'spiky') for (let x = hx; x < hx + 8; x += 2) S(x + 1, hy - 1, hairC);
+    if (style === 'topknot') R(side ? hx + 4 : 7, hy - 3, 2, 3, hairC);
   }
   // Face.
   const eye = skel ? hex('#1a1414') : hex('#1e1a28');
@@ -203,6 +230,39 @@ function drawHumanoid(look, dir, frame) {
     S(hx + 1, hy + 4, eye);
     S(hx - 1 + 0, hy + 4, skinC);
     if (look.beard && !skel) R(hx, hy + 5, 4, 2, hairC);
+  }
+  // Face details and accessories.
+  const acc = look.acc;
+  if (acc && !skel) {
+    const A = (x, y, c) => S(x, y, hex(c));
+    if (acc === 'glasses') {
+      if (dir === 0) for (const x of [hx + 1, hx + 3, hx + 4, hx + 6]) A(x, hy + 4, '#c8c8d8');
+      else if (side) {
+        A(hx, hy + 4, '#c8c8d8');
+        A(hx + 2, hy + 4, '#c8c8d8');
+      }
+    } else if (acc === 'earring') {
+      if (dir === 0) {
+        A(hx, hy + 5, '#e8c030');
+        A(hx + 7, hy + 5, '#e8c030');
+      } else if (side) A(hx + 4, hy + 5, '#e8c030');
+    } else if (acc === 'freckles' && dir === 0) {
+      S(hx + 1, hy + 5, shade(skinC, 0.78));
+      S(hx + 6, hy + 5, shade(skinC, 0.78));
+      S(hx + 2, hy + 5, shade(skinC, 0.85));
+    } else if (acc === 'mustache' && !look.beard) {
+      if (dir === 0) R(hx + 2, hy + 5, 4, 1, hairC);
+      else if (side) R(hx, hy + 5, 2, 1, hairC);
+    } else if (acc === 'scar') {
+      if (dir === 0) {
+        A(hx + 5, hy + 3, '#a0584a');
+        A(hx + 6, hy + 5, '#a0584a');
+      } else if (side) A(hx + 2, hy + 3, '#a0584a');
+    } else if (acc === 'eyepatch') {
+      if (dir !== 2) R(hx, hy + 3, 8, 1, hex('#1a1414'));
+      if (dir === 0) R(hx + 5, hy + 3, 2, 2, hex('#1a1414'));
+      else if (side) R(hx, hy + 3, 2, 2, hex('#1a1414'));
+    }
   }
   // Hats.
   if (hat) {
@@ -242,6 +302,28 @@ function drawHumanoid(look, dir, frame) {
       case 'fur':
         H(hx - 1, hy - 1, 10, 3, '#8a6a4a');
         H(hx - 1, hy - 1, 10, 1, '#a8886a');
+        break;
+      case 'beret':
+        H(hx - 1, hy - 1, 9, 2, look.hatColor || '#8a2a3a');
+        H(hx + 6, hy - 2, 2, 1, look.hatColor || '#8a2a3a');
+        break;
+      case 'bandana':
+        H(hx, hy, 8, 2, look.hatColor || '#c83a32');
+        if (dir === 2) H(hx + 3, hy + 2, 2, 2, look.hatColor || '#c83a32');
+        else if (side) H(hx + 7, hy + 1, 2, 2, look.hatColor || '#c83a32');
+        break;
+      case 'wide':
+        H(hx - 2, hy, 12, 1, '#4a3424');
+        H(hx + 1, hy - 3, 6, 3, '#5a4030');
+        H(hx + 1, hy - 1, 6, 1, look.hatColor || '#8a2a2a');
+        break;
+      case 'circlet':
+        H(hx, hy + 1, 8, 1, '#e0b830');
+        if (dir === 0) H(hx + 3, hy + 1, 2, 1, '#50c0e0');
+        break;
+      case 'flower':
+        H(side ? hx + 5 : hx + 6, hy, 2, 1, '#f080b0');
+        H(side ? hx + 6 : hx + 7, hy - 1, 1, 1, '#ffe070');
         break;
       case 'hood':
         H(hx - 1, hy - 1, 10, 3, '#6a4a2a');
@@ -477,6 +559,10 @@ function simpleIcon(key) {
       break;
     case 'seeds':
       for (let i = 0; i < 6; i++) p.set(4 + rand() * 8, 6 + rand() * 6, '#c8a860');
+      break;
+    case 'cabbage_seeds':
+      for (let i = 0; i < 7; i++) p.set(4 + rand() * 8, 6 + rand() * 6, i % 2 ? '#3a2a1a' : '#6a5a3a');
+      p.set(8, 5, '#6ab84a');
       break;
     case 'wheat':
       for (let i = 0; i < 3; i++) {
