@@ -1,0 +1,127 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { World } from '../src/world/world.js';
+import { activityAt, JOBS, HOBBIES } from '../src/entities/npcgen.js';
+import { makeGame, stubInput } from './helpers.mjs';
+
+function allNpcs(seed) {
+  const w = new World(seed);
+  const out = [];
+  for (const s of w.ow.settlements) {
+    if (s.condition === 'abandoned') continue;
+    const L = w.getLayout(s);
+    out.push({ s, L });
+  }
+  return out;
+}
+
+test('every NPC has a job, personality, hobbies, equipment and a full-day schedule', () => {
+  for (const { L } of allNpcs(12345).slice(0, 12)) {
+    for (const n of L.npcs) {
+      assert.ok(JOBS[n.job], `job ${n.job}`);
+      assert.ok(n.traits.length > 0);
+      assert.ok(n.hobbies.length >= 1 && n.hobbies.every((h) => HOBBIES[h]));
+      assert.ok(n.equipment && Array.isArray(n.equipment.items));
+      for (const sched of [n.schedule.work, n.schedule.rest]) {
+        assert.equal(sched[0].s, 0);
+        assert.equal(sched[sched.length - 1].e, 1440);
+        for (let i = 1; i < sched.length; i++) assert.equal(sched[i].s, sched[i - 1].e, 'schedule gap');
+        assert.ok(sched.some((e) => e.act === 'sleep'));
+      }
+      if (n.age === 'adult' && n.job !== 'retired') assert.ok(n.schedule.work.some((e) => e.act === 'work'), `${n.job} never works`);
+    }
+  }
+});
+
+test('homes are only shared by members of the same family', () => {
+  for (const { L } of allNpcs(4242)) {
+    const byHome = new Map();
+    for (const n of L.npcs) {
+      if (!byHome.has(n.home)) byHome.set(n.home, []);
+      byHome.get(n.home).push(n);
+    }
+    for (const [, members] of byHome) {
+      if (members.length < 2) continue;
+      // Everyone sharing a house is connected by partner/parent/child links.
+      const ids = new Set(members.map((m) => m.idx));
+      for (const m of members) {
+        const linked = [m.partner, ...m.children, ...m.parents].some((i) => ids.has(i)) || members.every((o) => o.household === m.household);
+        assert.ok(linked, `${m.name.first} shares a home with strangers`);
+      }
+      // A house hosts exactly one household.
+      assert.equal(new Set(members.map((m) => m.household)).size, 1);
+    }
+  }
+});
+
+test('schedules are offset between NPCs (people wake at different times)', () => {
+  const { L } = allNpcs(12345).find((x) => x.s.type === 'town');
+  const wakes = L.npcs.filter((n) => n.age === 'adult').map((n) => n.schedule.work.find((e) => e.act !== 'sleep').s);
+  assert.ok(new Set(wakes).size > wakes.length / 2, 'wake times should vary');
+});
+
+test('population scales with settlement size', () => {
+  const list = allNpcs(4242);
+  const avg = (t) => {
+    const xs = list.filter((x) => x.s.type === t).map((x) => x.L.npcs.length);
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+  };
+  assert.ok(avg('village') < avg('town'));
+  assert.ok(avg('town') < avg('city'));
+});
+
+test('NPCs walk to their scheduled places over a simulated day', () => {
+  const game = makeGame(12345);
+  const input = stubInput();
+  const dt = 0.1;
+  const report = {};
+  // Start at 5:30 and simulate until ~23:30 in 3 checkpoints.
+  game.minute = 5 * 60 + 30;
+  for (const n of game.npcs) {
+    n.activity = null;
+    n.placeForCurrentActivity();
+  }
+  const checkpoints = [9 * 60, 13 * 60, 23 * 60 + 30];
+  const moved = new Set();
+  const start = new Map(game.npcs.map((n) => [n.id, `${n.x},${n.z}`]));
+  for (const cp of checkpoints) {
+    let guard = 0;
+    while (game.minute < cp && guard++ < 200000) {
+      game.update(dt, input);
+      for (const n of game.npcs) if (`${n.x},${n.z}` !== start.get(n.id)) moved.add(n.id);
+    }
+    const alive = game.npcs.filter((n) => !n.dead);
+    const atGoal = alive.filter((n) => n.atGoal || n.sleeping).length;
+    report[cp] = { atGoal, total: alive.length, sleeping: alive.filter((n) => n.sleeping).length };
+  }
+  const alive = game.npcs.filter((n) => !n.dead);
+  assert.ok(alive.length > 5);
+  assert.ok(moved.size >= alive.length * 0.6, `only ${moved.size}/${alive.length} NPCs moved`);
+  // Most people are where they want to be at each checkpoint.
+  for (const cp of checkpoints) assert.ok(report[cp].atGoal >= report[cp].total * 0.6, `checkpoint ${cp}: ${JSON.stringify(report[cp])}`);
+  // Late at night most are asleep.
+  assert.ok(report[23 * 60 + 30].sleeping >= report[23 * 60 + 30].total * 0.5, JSON.stringify(report));
+});
+
+test('attacking a villager makes people fight, flee or call guards', () => {
+  const game = makeGame(12345);
+  game.minute = 12 * 60;
+  const input = stubInput();
+  for (let i = 0; i < 20; i++) game.update(0.05, input);
+  const victim = game.npcs.find((n) => !n.dead && n.rec.job !== 'guard' && !n.sleeping);
+  game.player.teleport(victim.x + 1, victim.y, victim.z);
+  game.player.attackCd = 0;
+  game.attack(victim);
+  assert.ok(['fight', 'flee', 'alert'].includes(victim.state), victim.state);
+  assert.ok(game.isWanted(victim.settlement.id));
+  for (let i = 0; i < 40; i++) game.update(0.1, input);
+  const guards = game.guardsOf(victim.settlement.id);
+  if (guards.length) assert.ok(guards.some((g) => g.state === 'fight'), 'guards should respond');
+});
+
+test('activityAt maps every minute to an entry', () => {
+  const w = new World(1);
+  const L = w.getLayout(w.ow.spawnSettlement);
+  const n = L.npcs[0];
+  for (let m = 0; m < 1440; m += 7) assert.ok(activityAt(n, m, 3).entry);
+});

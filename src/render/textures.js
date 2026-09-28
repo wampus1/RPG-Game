@@ -1,0 +1,1372 @@
+// Procedural pixel-art textures for every block: cube faces (with variants
+// and rotation-dependent shading), prop sprites, plants and overlays. All
+// images are packed into a single atlas canvas.
+import { TILE, LH } from '../config.js';
+import { BLOCKS, B } from '../world/blocks.js';
+import { Px, hex, shade, mix } from './pixel.js';
+import { mulberry32, hash4 } from '../util/rng.js';
+
+export const VARIANTS = 4;
+export const SPR_H = TILE + LH; // 28: one-cell prop frame
+export const TALL_H = TILE + LH * 2; // 40: two-cell prop frame
+export const WATER_FRAMES = 4;
+
+const OUT = '#1c1622';
+
+// --- palettes -------------------------------------------------------------
+const P = {
+  grass: ['#5a9e3a', '#467e2e', '#74b84a', '#8ccc58'],
+  grass_lush: ['#3f8a34', '#2f6c28', '#58a444', '#6cbc50'],
+  grass_dry: ['#b0a448', '#8c8236', '#c8bc60', '#d8cc78'],
+  grass_jungle: ['#2e9a3a', '#22782c', '#44b850', '#5cd060'],
+  grass_taiga: ['#5a7a4a', '#465e3a', '#6e9058', '#8a6a44'],
+  dirt: ['#7a5436', '#5e3f28', '#946842', '#a8a098'],
+  sand: ['#e0c880', '#c8ae68', '#f0dc98'],
+  snow: ['#eef4fa', '#c8d6e8', '#ffffff'],
+  stone: ['#84848c', '#66666e', '#9e9ea6'],
+  cobblestone: ['#7a7a80', '#505056', '#98989e'],
+  gravel: ['#8a8680', '#6a665e', '#a8a49c', '#7a6e62'],
+  clay: ['#a4a8b0', '#8a8e98', '#bcc0c8'],
+  mud: ['#5a4630', '#45351f', '#6e5a40'],
+  ice: ['#a8dcf0', '#88c4e0', '#d8f4ff'],
+  path: ['#9a7a52', '#7e6242', '#b09066'],
+  farmland: ['#5e4028', '#4a3020', '#6e4c30'],
+  planks: ['#b08850', '#8e6a3a', '#c8a064'],
+  planks_birch: ['#dcc890', '#c0aa72', '#ecdcaa'],
+  planks_dark: ['#6a4a2a', '#50361e', '#7e5a36'],
+  stone_bricks: ['#8e8e96', '#5e5e66', '#a6a6ae'],
+  bricks: ['#a84a3a', '#8a3a2e', '#c05a48', '#c8b8a8'],
+  adobe: ['#c89a68', '#b08458', '#d8b080'],
+  plaster: ['#e8e0cc', '#d4ccb8', '#f4eee0'],
+  log_wall: ['#8a6440', '#6a4a2e', '#a47a50'],
+  marble: ['#eeeef2', '#d0d0d8', '#b0b0c0'],
+  sandstone: ['#d8c080', '#c0a868', '#e8d498'],
+  thatch: ['#d0b050', '#a88a3a', '#e8cc70'],
+  roof_red: ['#b04a36', '#8a3628', '#cc6048'],
+  roof_slate: ['#4e5a6e', '#3a4456', '#647088'],
+  roof_wood: ['#8a6038', '#6a4828', '#a47a4a'],
+  roof_green: ['#4a9a82', '#367a66', '#62b69a'],
+  hay_bale: ['#d8b848', '#b89838', '#8a6a28'],
+  water: ['#2e6ab0', '#24569a', '#4a8ad0', '#8cc4f0'],
+};
+const WOOD = {
+  oak: { bark: ['#6a4a2e', '#4e361f', '#80603c'], ring: ['#b08a58', '#8e6a40'] },
+  birch: { bark: ['#e8e4d8', '#2e2e2e', '#fafaf0'], ring: ['#dcc890', '#c0aa72'] },
+  pine: { bark: ['#4e3620', '#3a2816', '#62442a'], ring: ['#a07a50', '#806038'] },
+  palm: { bark: ['#a88a5a', '#8a6e44', '#c0a270'], ring: ['#d8c090', '#b09a6a'] },
+  jungle: { bark: ['#5e5230', '#48401f', '#746840'], ring: ['#9a7e4e', '#7e643c'] },
+  acacia: { bark: ['#8a7a6a', '#6a5a4a', '#a09080'], ring: ['#c08a50', '#a06e3c'] },
+  willow: { bark: ['#6e6450', '#50483a', '#847a64'], ring: ['#b09a70', '#907c58'] },
+};
+const LEAF = {
+  oak: ['#3e8a2e', '#2e6a22', '#58a840'],
+  birch: ['#7ab040', '#5e8e2e', '#98c858'],
+  pine: ['#2e5e3e', '#224a30', '#3e7450'],
+  palm: ['#4aa83a', '#388a2c', '#6cc450'],
+  jungle: ['#28a032', '#1c7a26', '#40c048'],
+  acacia: ['#7a9a2e', '#5e7a22', '#98b440'],
+  willow: ['#6a9a5a', '#527a46', '#86b474'],
+  snowy: ['#2e5e3e', '#224a30', '#eef4fa'],
+};
+
+// --- atlas ------------------------------------------------------------------
+const SLOT_W = 16;
+const SLOT_H = 40;
+const ATLAS_COLS = 64;
+let atlasCanvas = null;
+let atlasCtx = null;
+let nextSlot = 0;
+const pending = [];
+
+function addImage(px) {
+  const i = nextSlot++;
+  const slot = { x: (i % ATLAS_COLS) * SLOT_W, y: Math.floor(i / ATLAS_COLS) * SLOT_H, w: px.w, h: px.h };
+  pending.push({ px, slot });
+  return slot;
+}
+
+export const TEX = {
+  atlas: null,
+  top: [], // [id*4+rot] -> slots[variant]
+  front: [], // [id*4+rot] -> slots[variant]
+  sprite: [], // [id*4+rot] -> slots[state*4 + frame]
+  frontTop: [], // doors: upper half front, [id*4+rot] -> slots
+  crack: [],
+  avg: [], // average top colour per block (minimap)
+  misc: {},
+};
+
+// --- helpers ------------------------------------------------------------------
+function speckle(p, pal, rand, dens = 0.25) {
+  p.fill(pal[0]);
+  for (let y = 0; y < p.h; y++) {
+    for (let x = 0; x < p.w; x++) {
+      const r = rand();
+      if (r < dens * 0.5) p.set(x, y, pal[1]);
+      else if (r < dens) p.set(x, y, pal[2]);
+    }
+  }
+  return p;
+}
+
+function frontify(p, f = 0.8) {
+  p.tint(f);
+  for (let x = 0; x < p.w; x++) {
+    const c = p.get(x, 0);
+    if (c[3]) p.set(x, 0, shade(c, 1.22), c[3]);
+    const d = p.get(x, p.h - 1);
+    if (d[3]) p.set(x, p.h - 1, shade(d, 0.8), d[3]);
+  }
+  return p;
+}
+
+function randomWalk(p, rand, x, y, len, c) {
+  for (let i = 0; i < len; i++) {
+    p.set(x, y, c);
+    const r = rand();
+    if (r < 0.4) x += rand() < 0.5 ? 1 : -1;
+    else y += rand() < 0.5 ? 1 : -1;
+  }
+}
+
+function cobble(p, pal, rand, n = 7) {
+  const pts = [];
+  for (let i = 0; i < n; i++) pts.push({ x: rand() * p.w, y: rand() * p.h, f: 0.85 + rand() * 0.25 });
+  const near = (x, y) => {
+    let best = 0;
+    let bd = 1e9;
+    for (let i = 0; i < pts.length; i++) {
+      for (const ox of [-p.w, 0, p.w]) {
+        for (const oy of [-p.h, 0, p.h]) {
+          const dx = x - pts[i].x - ox;
+          const dy = y - pts[i].y - oy;
+          const d = dx * dx + dy * dy;
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        }
+      }
+    }
+    return best;
+  };
+  const id = [];
+  for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) id[y * p.w + x] = near(x, y);
+  for (let y = 0; y < p.h; y++) {
+    for (let x = 0; x < p.w; x++) {
+      const k = id[y * p.w + x];
+      const edge = x + 1 < p.w && id[y * p.w + x + 1] !== k || y + 1 < p.h && id[(y + 1) * p.w + x] !== k;
+      const top = y > 0 && id[(y - 1) * p.w + x] !== k || x > 0 && id[y * p.w + x - 1] !== k;
+      if (edge) p.set(x, y, pal[1]);
+      else if (top) p.set(x, y, shade(pal[2], pts[k].f));
+      else p.set(x, y, shade(rand() < 0.15 ? pal[1] : pal[0], pts[k].f));
+    }
+  }
+  return p;
+}
+
+function planks(p, pal, rand, rowH = 4) {
+  for (let r = 0; r * rowH < p.h; r++) {
+    const f = 0.9 + rand() * 0.18;
+    const base = shade(pal[0], f);
+    const seamX = Math.floor(rand() * p.w);
+    for (let y = r * rowH; y < Math.min(p.h, (r + 1) * rowH); y++) {
+      for (let x = 0; x < p.w; x++) {
+        let c = base;
+        if (rand() < 0.12) c = shade(pal[1], f);
+        if (y === (r + 1) * rowH - 1) c = pal[1];
+        if (x === seamX) c = pal[1];
+        p.set(x, y, c);
+      }
+    }
+    if (rand() < 0.5) {
+      const gx = Math.floor(rand() * 12);
+      p.hline(gx, gx + 3, r * rowH + 1, shade(pal[1], 1.05));
+    }
+    p.set((seamX + 1) % p.w, r * rowH + 1, pal[2]);
+  }
+  return p;
+}
+
+function bricks(p, pal, rand, rowH = 4, len = 8, mortar = null) {
+  const m = mortar || pal[1];
+  for (let y = 0; y < p.h; y++) {
+    const row = Math.floor(y / rowH);
+    const off = row % 2 ? len / 2 : 0;
+    for (let x = 0; x < p.w; x++) {
+      const bx = (x + off) % len;
+      if (y % rowH === rowH - 1 || bx === len - 1) p.set(x, y, m);
+      else {
+        const f = 0.92 + ((hash4(Math.floor((x + off) / len), row, 7) % 100) / 100) * 0.16;
+        let c = shade(pal[0], f);
+        if (y % rowH === 0 || bx === 0) c = shade(pal[2], f);
+        if (rand() < 0.1) c = shade(pal[1], 1.1);
+        p.set(x, y, c);
+      }
+    }
+  }
+  return p;
+}
+
+function shingles(p, pal, rand, rot) {
+  const f = rot === 0 || rot === 3 ? 1.08 : rot === 2 ? 0.8 : 0.95;
+  for (let y = 0; y < p.h; y++) {
+    const row = Math.floor(y / 4);
+    const off = row % 2 ? 2 : 0;
+    for (let x = 0; x < p.w; x++) {
+      const tx = (x + off) % 4;
+      let c = pal[0];
+      if (y % 4 === 3) c = pal[1];
+      else if (y % 4 === 0 && tx !== 3) c = pal[2];
+      if (tx === 3) c = shade(pal[1], 1.1);
+      if (rand() < 0.08) c = shade(c, 0.9);
+      p.set(x, y, shade(c, f));
+    }
+  }
+  if (rot === 1) {
+    p.rect(0, 6, p.w, 4, shade(pal[1], 0.95));
+    p.hline(0, p.w - 1, 6, shade(pal[2], 0.95));
+  }
+  return p;
+}
+
+function straw(p, pal, rand, rot = 0) {
+  p.fill(pal[0]);
+  for (let i = 0; i < 40; i++) {
+    const x = Math.floor(rand() * p.w);
+    const y = Math.floor(rand() * p.h);
+    const len = 2 + Math.floor(rand() * 4);
+    const c = rand() < 0.5 ? pal[1] : pal[2];
+    for (let k = 0; k < len; k++) p.set(x + (k >> 1) * (rand() < 0.3 ? 1 : 0), y + k, c);
+  }
+  if (rot === 2) p.tint(0.8);
+  else if (rot === 1) p.tint(0.92);
+  return p;
+}
+
+// --- cube faces -------------------------------------------------------------
+function cubeTop(name, v, rand, rot) {
+  const p = new Px(16, 16);
+  const pal = P[name];
+  switch (name) {
+    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': {
+      speckle(p, pal, rand, 0.35);
+      for (let i = 0; i < 10; i++) {
+        const x = Math.floor(rand() * 16);
+        const y = Math.floor(rand() * 15);
+        p.set(x, y, pal[3]);
+        p.set(x, y + 1, pal[2]);
+      }
+      if (name === 'grass_taiga') for (let i = 0; i < 6; i++) p.set(rand() * 16, rand() * 16, pal[3]);
+      return p;
+    }
+    case 'dirt': {
+      speckle(p, pal, rand, 0.3);
+      for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * 16, pal[3]);
+      return p;
+    }
+    case 'sand': {
+      speckle(p, pal, rand, 0.2);
+      if (v < 2) for (let k = 0; k < 2; k++) {
+        const y0 = 3 + k * 7 + Math.floor(rand() * 3);
+        for (let x = 0; x < 16; x++) p.set(x, y0 + Math.round(Math.sin((x + v * 3) / 2.5)), pal[1]);
+      }
+      return p;
+    }
+    case 'snow': {
+      speckle(p, pal, rand, 0.18);
+      for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#b8c8e0');
+      return p;
+    }
+    case 'stone': case 'bedrock': {
+      const sp = name === 'bedrock' ? ['#3a3a40', '#26262c', '#4e4e56'] : pal;
+      speckle(p, sp, rand, 0.22);
+      randomWalk(p, rand, rand() * 16, rand() * 16, 8, shade(sp[1], 0.85));
+      return p;
+    }
+    case 'cobblestone': return cobble(p, pal, rand, 7);
+    case 'gravel': {
+      speckle(p, pal, rand, 0.5);
+      for (let i = 0; i < 18; i++) {
+        const x = Math.floor(rand() * 16);
+        const y = Math.floor(rand() * 16);
+        const c = [pal[2], pal[3], pal[1]][i % 3];
+        p.set(x, y, c);
+        p.set(x + 1, y, c);
+        p.set(x, y + 1, shade(c, 0.8));
+      }
+      return p;
+    }
+    case 'clay': return speckle(p, pal, rand, 0.14);
+    case 'mud': {
+      speckle(p, pal, rand, 0.3);
+      for (let i = 0; i < 3; i++) {
+        const x = Math.floor(rand() * 13);
+        const y = Math.floor(rand() * 15);
+        p.hline(x, x + 2, y, '#7a6a52');
+      }
+      return p;
+    }
+    case 'ice': {
+      speckle(p, pal, rand, 0.12);
+      for (let i = 0; i < 3; i++) {
+        const x = Math.floor(rand() * 16);
+        const y = Math.floor(rand() * 16);
+        for (let k = 0; k < 5; k++) p.set(x + k, y - k, pal[2]);
+      }
+      return p;
+    }
+    case 'coal_ore': case 'iron_ore': case 'gold_ore': case 'gem_ore': {
+      speckle(p, P.stone, rand, 0.22);
+      const oc = { coal_ore: ['#1e1e22', '#3a3a40'], iron_ore: ['#c8906a', '#e8b890'], gold_ore: ['#e8c030', '#fff080'], gem_ore: ['#30d8c8', '#c060f0'] }[name];
+      for (let k = 0; k < 4; k++) {
+        const x = 2 + Math.floor(rand() * 12);
+        const y = 2 + Math.floor(rand() * 12);
+        p.set(x, y, oc[0]);
+        p.set(x + 1, y, oc[1]);
+        p.set(x, y + 1, oc[0]);
+        if (rand() < 0.6) p.set(x + 1, y + 1, oc[0]);
+      }
+      return p;
+    }
+    case 'path': {
+      speckle(p, pal, rand, 0.3);
+      for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#c4b49a');
+      return p;
+    }
+    case 'farmland': {
+      speckle(p, pal, rand, 0.25);
+      for (let y = 1; y < 16; y += 4) p.hline(0, 15, y, pal[1]);
+      return p;
+    }
+    case 'planks': case 'planks_birch': case 'planks_dark': return planks(p, pal, rand);
+    case 'stone_bricks': return bricks(p, pal, rand);
+    case 'mossy_bricks': {
+      bricks(p, P.stone_bricks, rand);
+      for (let i = 0; i < 26; i++) p.set(rand() * 16, rand() * 16, rand() < 0.5 ? '#4e7a34' : '#628e40');
+      return p;
+    }
+    case 'cracked_bricks': {
+      bricks(p, P.stone_bricks, rand);
+      randomWalk(p, rand, 4 + rand() * 8, 0, 18, '#3e3e46');
+      return p;
+    }
+    case 'bricks': return bricks(p, pal, rand, 4, 6, pal[3]);
+    case 'adobe': {
+      speckle(p, pal, rand, 0.16);
+      if (rand() < 0.5) randomWalk(p, rand, rand() * 16, rand() * 16, 5, pal[1]);
+      return p;
+    }
+    case 'plaster': return speckle(p, pal, rand, 0.1);
+    case 'timber': return planks(p, P.planks_dark, rand);
+    case 'log_wall': return planks(p, pal, rand, 4);
+    case 'marble': {
+      speckle(p, pal, rand, 0.08);
+      randomWalk(p, rand, rand() * 16, 0, 20, pal[2]);
+      return p;
+    }
+    case 'sandstone': {
+      speckle(p, pal, rand, 0.14);
+      return p;
+    }
+    case 'thatch': return straw(p, pal, rand, rot);
+    case 'roof_red': case 'roof_slate': case 'roof_wood': case 'roof_green': return shingles(p, pal, rand, rot);
+    case 'roof_snow': {
+      shingles(p, P.roof_wood, rand, rot);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (y % 4 !== 3 || rand() < 0.6) p.set(x, y, rand() < 0.15 ? '#c8d6e8' : '#eef4fa');
+      return p;
+    }
+    case 'glass': {
+      p.fill('#8e6a3a');
+      p.rect(1, 1, 14, 14, '#a8d8f0', 150);
+      p.line(3, 12, 12, 3, '#f0ffff');
+      return p;
+    }
+    case 'hay_bale': {
+      straw(p, pal, rand);
+      p.hline(0, 15, 4, pal[2]);
+      p.hline(0, 15, 11, pal[2]);
+      return p;
+    }
+    case 'counter': {
+      planks(p, P.planks, rand, 4);
+      p.tint(1.1);
+      return p;
+    }
+    case 'bookshelf': return planks(p, P.planks_dark, rand);
+    case 'awning_red': case 'awning_blue': case 'awning_yellow': case 'awning_green': {
+      const col = { awning_red: '#c83a32', awning_blue: '#3264c0', awning_yellow: '#e0b030', awning_green: '#3c9a48' }[name];
+      for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) p.set(x, y, Math.floor(x / 2) % 2 ? '#f0e8d8' : col);
+      for (let x = 0; x < 16; x++) p.set(x, 0, shade(col, 1.2));
+      return p;
+    }
+    case 'cactus': case 'counter_top': return speckle(p, ['#4a9a3a', '#387a2c', '#62b44a'], rand, 0.2);
+    default: {
+      if (name.startsWith('log_')) {
+        const w = WOOD[name.slice(4)];
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            const d = Math.hypot(x - 7.5, y - 7.5);
+            let c;
+            if (d > 6.6) c = rand() < 0.3 ? w.bark[1] : w.bark[0];
+            else c = Math.floor(d * 0.9) % 2 ? w.ring[1] : w.ring[0];
+            p.set(x, y, c);
+          }
+        }
+        p.set(7, 7, w.ring[1]);
+        // Round-ish log: corners transparent.
+        for (const [x, y] of [[0, 0], [1, 0], [0, 1], [15, 0], [14, 0], [15, 1], [0, 15], [1, 15], [0, 14], [15, 15], [14, 15], [15, 14]]) p.clear(x, y);
+        return p;
+      }
+      if (name.startsWith('leaves_')) return leavesTex(p, LEAF[name.slice(7)], rand, name === 'leaves_snowy');
+      return speckle(p, ['#ff00ff', '#aa00aa', '#ff66ff'], rand, 0.3);
+    }
+  }
+}
+
+function leavesTex(p, pal, rand, snowy, front = false) {
+  // Clustered foliage: dark gaps between rounded leaf clumps that are lit
+  // from the top-left, with ragged transparent edges.
+  const dark = shade(pal[1], 0.72);
+  p.fill(dark);
+  const clumps = [];
+  for (let i = 0; i < 9; i++) clumps.push([rand() * 16, rand() * p.h, 2.2 + rand() * 2.2]);
+  clumps.sort((a, b) => a[1] - b[1]);
+  for (const [cx, cy, r] of clumps) {
+    for (let y = Math.floor(cy - r); y <= cy + r; y++) {
+      for (let x = Math.floor(cx - r); x <= cx + r; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > r) continue;
+        const wx = ((x % 16) + 16) % 16;
+        const lit = -(dx + dy) / (r * 1.4);
+        let c = pal[0];
+        if (lit > 0.35) c = pal[2];
+        else if (lit < -0.45) c = pal[1];
+        if (d > r - 0.8 && lit < 0) c = pal[1];
+        p.set(wx, y, c);
+      }
+    }
+  }
+  for (let i = 0; i < 10; i++) p.set(rand() * 16, rand() * p.h, rand() < 0.5 ? shade(pal[2], 1.12) : dark);
+  if (snowy && !front) for (let i = 0; i < 50; i++) {
+    const x = Math.floor(rand() * 16);
+    const y = Math.floor(rand() * 16);
+    p.set(x, y, pal[2]);
+    if (rand() < 0.5) p.set(x + 1, y, pal[2]);
+  }
+  if (snowy && front) for (let x = 0; x < 16; x++) if (rand() < 0.7) p.set(x, 0, pal[2]);
+  // Ragged, rounded silhouette.
+  for (let i = 0; i < 16; i++) {
+    if (rand() < 0.45) p.clear(i, 0);
+    if (rand() < 0.45) p.clear(0, i);
+    if (rand() < 0.45) p.clear(15, i);
+    if (rand() < 0.35) p.clear(i, p.h - 1);
+  }
+  for (const [x, y] of [[0, 0], [1, 0], [0, 1], [15, 0], [14, 0], [15, 1]]) p.clear(x, y);
+  for (let i = 0; i < 4; i++) p.clear(1 + rand() * 14, 1 + rand() * (p.h - 2));
+  return p;
+}
+
+function cubeFront(name, v, rand, rot) {
+  const p = new Px(16, LH);
+  const pal = P[name];
+  switch (name) {
+    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': {
+      speckle(p, P.dirt, rand, 0.3);
+      for (let x = 0; x < 16; x++) {
+        const d = 2 + (rand() < 0.4 ? 1 : 0) + (rand() < 0.15 ? 2 : 0);
+        for (let y = 0; y < d; y++) p.set(x, y, y === d - 1 ? pal[1] : pal[0]);
+      }
+      return frontify(p);
+    }
+    case 'snow': {
+      speckle(p, P.dirt, rand, 0.3);
+      for (let x = 0; x < 16; x++) {
+        const d = 3 + (rand() < 0.4 ? 1 : 0);
+        for (let y = 0; y < d; y++) p.set(x, y, y === d - 1 ? P.snow[1] : P.snow[0]);
+      }
+      return frontify(p, 0.9);
+    }
+    case 'stone': case 'bedrock': {
+      const sp = name === 'bedrock' ? ['#3a3a40', '#26262c', '#4e4e56'] : pal;
+      speckle(p, sp, rand, 0.22);
+      for (let k = 0; k < 2; k++) {
+        const y = 3 + k * 5 + Math.floor(rand() * 2);
+        for (let x = 0; x < 16; x++) if (rand() < 0.7) p.set(x, y, sp[1]);
+      }
+      return frontify(p);
+    }
+    case 'sandstone': {
+      speckle(p, pal, rand, 0.14);
+      for (let y = 3; y < LH; y += 4) for (let x = 0; x < 16; x++) p.set(x, y + (rand() < 0.2 ? 1 : 0), pal[1]);
+      return frontify(p);
+    }
+    case 'planks': case 'planks_birch': case 'planks_dark': return frontify(planks(p, pal, rand));
+    case 'stone_bricks': return frontify(bricks(p, pal, rand));
+    case 'bricks': return frontify(bricks(p, pal, rand, 4, 6, pal[3]));
+    case 'log_wall': {
+      for (let y = 0; y < LH; y++) {
+        const k = y % 4;
+        const c = k === 0 ? pal[2] : k === 3 ? '#3a2818' : k === 2 ? pal[1] : pal[0];
+        for (let x = 0; x < 16; x++) p.set(x, y, rand() < 0.1 ? shade(c, 0.85) : c);
+      }
+      p.vline(0, 0, LH - 1, pal[1]);
+      return frontify(p, 0.92);
+    }
+    case 'timber': {
+      speckle(p, P.plaster, rand, 0.1);
+      const beam = '#5a3e26';
+      p.vline(0, 0, LH - 1, beam);
+      p.vline(15, 0, LH - 1, beam);
+      p.hline(0, 15, 0, beam);
+      p.hline(0, 15, LH - 1, beam);
+      if (v % 3 === 0) p.line(0, LH - 1, 15, 0, beam);
+      else if (v % 3 === 1) {
+        p.line(0, 0, 15, LH - 1, beam);
+      } else p.vline(7, 0, LH - 1, beam);
+      return frontify(p, 0.86);
+    }
+    case 'glass': {
+      p.fill('#8e6a3a');
+      p.rect(1, 1, 14, LH - 2, '#a8d8f0', 150);
+      p.vline(7, 1, LH - 2, '#8e6a3a');
+      p.hline(1, 14, 5, '#8e6a3a');
+      p.line(2, LH - 3, 5, 2, '#f0ffff');
+      p.line(9, LH - 3, 12, 2, '#f0ffff');
+      return p;
+    }
+    case 'hay_bale': {
+      straw(p, pal, rand);
+      p.vline(3, 0, LH - 1, pal[2]);
+      p.vline(12, 0, LH - 1, pal[2]);
+      return frontify(p, 0.85);
+    }
+    case 'counter': {
+      p.fill(P.planks_dark[0]);
+      p.rect(0, 0, 16, 2, P.planks[2]);
+      p.rect(2, 3, 5, LH - 5, P.planks_dark[1]);
+      p.rect(9, 3, 5, LH - 5, P.planks_dark[1]);
+      return frontify(p, 0.95);
+    }
+    case 'bookshelf': {
+      if (rot !== 0) return frontify(planks(p, P.planks_dark, rand));
+      p.fill('#3a2616');
+      p.rect(0, 0, 16, 1, P.planks_dark[2]);
+      p.rect(0, 5, 16, 1, P.planks_dark[0]);
+      p.rect(0, LH - 1, 16, 1, P.planks_dark[0]);
+      p.vline(0, 0, LH - 1, P.planks_dark[0]);
+      p.vline(15, 0, LH - 1, P.planks_dark[0]);
+      const colors = ['#a83232', '#3a62a8', '#3a8a4a', '#c8a032', '#7a3aa0', '#d8d0c0', '#8a5a2a'];
+      for (const [y0, y1] of [[1, 4], [6, LH - 2]]) {
+        let x = 1;
+        while (x < 15) {
+          const w = rand() < 0.7 ? 1 : 2;
+          const h = y1 - y0 + 1 - (rand() < 0.4 ? 1 : 0);
+          const c = colors[Math.floor(rand() * colors.length)];
+          p.rect(x, y1 - h + 1, w, h, c);
+          x += w;
+          if (rand() < 0.15) x++;
+        }
+      }
+      return p;
+    }
+    case 'awning_red': case 'awning_blue': case 'awning_yellow': case 'awning_green': {
+      const t = cubeTop(name, v, rand, rot);
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) p.set(x, y, t.get(x, y));
+      for (let x = 0; x < 16; x++) {
+        const k = x % 4;
+        const cut = k === 0 || k === 3 ? 3 : 1;
+        for (let y = LH - cut; y < LH; y++) p.clear(x, y);
+      }
+      return frontify(p, 0.85);
+    }
+    case 'thatch': {
+      straw(p, pal, rand);
+      p.rect(0, LH - 3, 16, 3, shade(pal[1], 0.7));
+      for (let x = 0; x < 16; x += 2) p.set(x, LH - 1, pal[2]);
+      return frontify(p, 0.85);
+    }
+    case 'roof_red': case 'roof_slate': case 'roof_wood': case 'roof_green': case 'roof_snow': {
+      const pp = name === 'roof_snow' ? P.roof_wood : pal;
+      shingles(p, pp, rand, 0);
+      p.rect(0, LH - 3, 16, 3, '#2e2018');
+      p.hline(0, 15, LH - 3, shade(pp[1], 0.8));
+      if (name === 'roof_snow') for (let x = 0; x < 16; x++) {
+        const d = 2 + (rand() < 0.4 ? 1 : 0);
+        for (let y = 0; y < d; y++) p.set(x, y, '#eef4fa');
+      }
+      return frontify(p, 0.8);
+    }
+    default: {
+      if (name.startsWith('log_')) {
+        const w = WOOD[name.slice(4)];
+        speckle(p, w.bark, rand, 0.2);
+        if (name === 'log_birch') {
+          for (let i = 0; i < 5; i++) {
+            const x = Math.floor(rand() * 13);
+            const y = Math.floor(rand() * LH);
+            p.hline(x, x + 1 + Math.floor(rand() * 2), y, '#2e2e2e');
+          }
+        } else {
+          for (let x = 1; x < 16; x += 3 + Math.floor(rand() * 2)) for (let y = 0; y < LH; y++) if (rand() < 0.8) p.set(x, y, w.bark[1]);
+        }
+        p.vline(0, 0, LH - 1, shade(w.bark[1], 0.8));
+        p.vline(15, 0, LH - 1, shade(w.bark[1], 0.8));
+        return frontify(p, 0.9);
+      }
+      if (name.startsWith('leaves_')) return frontify(leavesTex(p, LEAF[name.slice(7)], rand, name === 'leaves_snowy', true), 0.78);
+      // Generic: reuse the top pattern, darkened.
+      const t = cubeTop(name, v, rand, rot);
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) p.set(x, y, t.get(x, y), t.get(x, y)[3]);
+      return frontify(p);
+    }
+  }
+}
+
+// --- door textures -------------------------------------------------------------
+function doorFront(upper, rot, rand) {
+  const p = new Px(16, LH);
+  const wood = P.planks;
+  if (rot === 1 || rot === 3) {
+    // Seen edge-on inside a north-south wall.
+    p.fill(P.planks_dark[0]);
+    p.rect(5, 0, 6, LH, wood[1]);
+    return frontify(p, 0.9);
+  }
+  p.fill(P.planks_dark[1]);
+  p.rect(2, 0, 12, LH, wood[0]);
+  for (let x = 4; x < 14; x += 3) p.vline(x, 0, LH - 1, wood[1]);
+  p.vline(2, 0, LH - 1, P.planks_dark[0]);
+  p.vline(13, 0, LH - 1, P.planks_dark[0]);
+  if (upper) {
+    p.hline(2, 13, 0, P.planks_dark[0]);
+    p.rect(6, 3, 4, 4, '#2a3848');
+    p.set(6, 3, '#6a90b0');
+  } else {
+    p.hline(2, 13, 2, wood[1]);
+    p.set(11, 3, '#f0d040');
+    p.set(11, 4, '#a08020');
+  }
+  return p;
+}
+function doorTop(rot) {
+  const p = new Px(16, 16);
+  p.fill(P.planks_dark[0]);
+  if (rot === 1 || rot === 3) {
+    p.rect(5, 0, 6, 16, P.planks[0]);
+    p.vline(5, 0, 15, P.planks[1]);
+  } else {
+    p.rect(0, 5, 16, 6, P.planks[0]);
+    p.hline(0, 15, 5, P.planks[2]);
+  }
+  return p;
+}
+function doorOpenSprite(rot, upper) {
+  // Thin panel swung against the hinge side.
+  const p = new Px(16, SPR_H);
+  const wood = P.planks;
+  if (rot === 0 || rot === 2) {
+    p.rect(0, 0, 3, 16, wood[1]);
+    p.rect(0, 16, 3, LH, wood[0]);
+    p.vline(0, 0, SPR_H - 1, P.planks_dark[0]);
+    if (!upper) p.set(1, 20, '#f0d040');
+  } else {
+    p.rect(0, 0, 16, 3, wood[1]);
+    p.rect(0, 3, 16, 3, wood[0]);
+  }
+  return p;
+}
+
+// --- sprites (16 x SPR_H, or TALL_H) --------------------------------------------
+const FLOOR = LH; // y where the cell floor begins inside a prop frame
+
+function spr(h = SPR_H) {
+  return new Px(16, h);
+}
+
+const SPRITES = {
+  chest(rot, st, f, rand) {
+    const p = spr();
+    const wood = P.planks;
+    p.rect(2, 12, 12, 5, wood[2]);
+    p.hline(2, 13, 12, shade(wood[2], 1.15));
+    p.rect(2, 17, 12, 9, wood[0]);
+    p.hline(2, 13, 17, P.planks_dark[1]);
+    p.vline(4, 12, 25, '#5a5a62');
+    p.vline(11, 12, 25, '#5a5a62');
+    p.hline(2, 13, 25, wood[1]);
+    if (rot === 0) {
+      p.rect(7, 16, 2, 3, '#f0d040');
+      p.set(7, 18, '#8a6a10');
+    }
+    return p.outline(OUT);
+  },
+  barrel() {
+    const p = spr();
+    const c = ['#9a6a3a', '#7a5028', '#b88450'];
+    p.rect(3, 13, 10, 13, c[0]);
+    p.ellipse(7.5, 12, 5, 2, c[2]);
+    p.ellipse(7.5, 12, 3, 1, '#5a3a1e');
+    for (let x = 4; x < 13; x += 3) p.vline(x, 14, 25, c[1]);
+    p.hline(3, 12, 16, '#5a5a62');
+    p.hline(3, 12, 22, '#5a5a62');
+    p.vline(3, 14, 25, shade(c[0], 1.15));
+    return p.outline(OUT);
+  },
+  crate(rot, st, f, rand) {
+    const p = spr();
+    const w = P.planks;
+    p.rect(2, 11, 12, 6, w[2]);
+    p.rect(2, 17, 12, 9, w[0]);
+    p.line(2, 17, 13, 25, w[1]);
+    p.line(13, 17, 2, 25, w[1]);
+    p.hline(2, 13, 17, P.planks_dark[1]);
+    p.vline(2, 11, 25, P.planks_dark[0]);
+    p.vline(13, 11, 25, P.planks_dark[0]);
+    p.line(3, 12, 12, 15, w[1]);
+    return p.outline(OUT);
+  },
+  workbench() {
+    const p = spr();
+    p.rect(1, 12, 14, 5, P.planks[2]);
+    p.hline(1, 14, 12, shade(P.planks[2], 1.15));
+    p.rect(1, 17, 14, 2, P.planks[1]);
+    p.rect(2, 19, 2, 7, P.planks_dark[0]);
+    p.rect(12, 19, 2, 7, P.planks_dark[0]);
+    p.rect(4, 21, 8, 1, P.planks_dark[1]);
+    // Tools on top: saw and hammer.
+    p.hline(3, 7, 13, '#c0c0c8');
+    p.set(8, 13, '#6a4a2e');
+    p.hline(10, 12, 14, '#6a4a2e');
+    p.rect(12, 13, 2, 2, '#5a5a62');
+    return p.outline(OUT);
+  },
+  furnace(rot, st, f) {
+    const p = spr();
+    const s = P.stone;
+    p.rect(1, 6, 14, 20, s[0]);
+    p.rect(1, 6, 14, 5, s[2]);
+    for (let y = 12; y < 26; y += 4) p.hline(1, 14, y, s[1]);
+    p.rect(4, 15, 8, 9, '#1e1a1a');
+    p.hline(5, 10, 14, '#1e1a1a');
+    const fl = [['#e04a18', '#f8a030', '#fff0a0'], ['#d83a10', '#f8b840', '#ffe070']][f % 2];
+    p.rect(5, 20, 6, 4, fl[0]);
+    p.rect(6, 19 + (f % 2), 4, 3, fl[1]);
+    p.set(7 + (f % 2), 21, fl[2]);
+    p.rect(6, 7, 4, 2, '#3a3a40');
+    return p.outline(OUT);
+  },
+  anvil() {
+    const p = spr();
+    const m = ['#4a4a56', '#32323c', '#6a6a78'];
+    p.rect(2, 15, 12, 3, m[0]);
+    p.hline(2, 13, 15, m[2]);
+    p.rect(0, 16, 3, 1, m[0]);
+    p.rect(5, 18, 6, 4, m[1]);
+    p.rect(3, 22, 10, 4, m[0]);
+    p.hline(3, 12, 22, m[2]);
+    return p.outline(OUT);
+  },
+  torch(rot, st, f) {
+    const p = spr();
+    p.rect(7, 14, 2, 12, '#7a5430');
+    p.vline(7, 14, 25, '#8e6840');
+    p.rect(6, 12, 4, 3, '#3a2a1a');
+    if (st) {
+      const fl = [[0, 0], [1, -1], [-1, 0]][f % 3];
+      p.rect(6 + fl[0], 7 + fl[1], 4, 5, '#e85a18');
+      p.rect(7 + fl[0], 5 + fl[1], 2, 6, '#f8a830');
+      p.set(7 + fl[0], 9 + fl[1], '#fff4c0');
+      p.set(8, 4 + fl[1], '#f8a830');
+    }
+    return p.outline(OUT);
+  },
+  lantern(rot, st, f) {
+    const p = spr();
+    const m = '#3a3a44';
+    p.rect(5, 15, 6, 10, m);
+    p.rect(6, 16, 4, 8, st ? (f % 2 ? '#ffd860' : '#ffe890') : '#4a5058');
+    if (st) p.set(7, 18, '#fff8e0');
+    p.hline(4, 11, 25, m);
+    p.hline(5, 10, 14, m);
+    p.set(7, 12, m);
+    p.set(8, 12, m);
+    p.set(6, 13, m);
+    p.set(9, 13, m);
+    return p.outline(OUT);
+  },
+  campfire(rot, st, f) {
+    const p = spr();
+    for (let i = 0; i < 7; i++) p.set(2 + i * 2, 25 - (i % 2), '#7a7a82');
+    p.line(3, 24, 12, 21, '#6a4a2e');
+    p.line(3, 21, 12, 24, '#5a3e26');
+    if (st) {
+      const o = f % 3;
+      p.rect(5, 15 + (o === 1 ? 1 : 0), 6, 6, '#e04a18');
+      p.rect(6, 12 + o, 4, 7, '#f8a030');
+      p.rect(7, 16, 2, 3, '#fff0a0');
+      p.set(8 - (o === 2 ? 1 : 0), 10 + o, '#f8a030');
+    }
+    return p.outline(OUT);
+  },
+  bed(rot, st, f, rand, variant = 0) {
+    const p = spr();
+    const blanket = ['#b03a3a', '#3a5ab0', '#3a8a4a', '#8a5aa8'][variant % 4];
+    const frame = P.planks_dark;
+    // Mattress top area (floor plane raised by 3px) and a front board.
+    p.rect(1, FLOOR - 1, 14, 14, blanket);
+    p.rect(1, FLOOR + 13, 14, 3, frame[0]);
+    p.hline(1, 14, FLOOR + 13, frame[2]);
+    const pillow = '#f0ece0';
+    if (rot === 0) {
+      p.rect(1, FLOOR - 3, 14, 3, frame[0]);
+      p.rect(3, FLOOR, 10, 3, pillow);
+    } else if (rot === 2) {
+      p.rect(3, FLOOR + 9, 10, 3, pillow);
+    } else if (rot === 1) {
+      p.rect(2, FLOOR + 1, 3, 10, pillow);
+    } else {
+      p.rect(11, FLOOR + 1, 3, 10, pillow);
+    }
+    for (let x = 1; x < 15; x += 3) p.set(x, FLOOR + 6, shade(blanket, 1.2));
+    return p.outline(OUT);
+  },
+  table() {
+    const p = spr();
+    p.rect(1, 12, 14, 6, P.planks[2]);
+    p.hline(1, 14, 12, shade(P.planks[2], 1.15));
+    p.rect(1, 18, 14, 2, P.planks[1]);
+    p.rect(2, 20, 2, 6, P.planks_dark[0]);
+    p.rect(12, 20, 2, 6, P.planks_dark[0]);
+    return p.outline(OUT);
+  },
+  chair(rot) {
+    const p = spr();
+    const w = P.planks;
+    p.rect(4, 16, 8, 4, w[2]);
+    p.rect(4, 20, 8, 1, w[1]);
+    p.vline(4, 21, 26, P.planks_dark[0]);
+    p.vline(11, 21, 26, P.planks_dark[0]);
+    if (rot === 0) p.rect(4, 9, 8, 7, w[0]);
+    else if (rot === 2) p.rect(4, 19, 8, 6, w[0]);
+    else if (rot === 1) p.rect(11, 9, 2, 12, w[0]);
+    else p.rect(3, 9, 2, 12, w[0]);
+    return p.outline(OUT);
+  },
+  bench(rot) {
+    const p = spr();
+    const w = P.planks;
+    if (rot === 0 || rot === 2) {
+      p.rect(0, 16, 16, 4, w[2]);
+      p.rect(0, 20, 16, 1, w[1]);
+      p.vline(2, 21, 26, P.planks_dark[0]);
+      p.vline(13, 21, 26, P.planks_dark[0]);
+      if (rot === 0) p.rect(0, 11, 16, 4, w[0]);
+      else p.rect(0, 21, 16, 3, w[0]);
+    } else {
+      p.rect(5, 10, 6, 16, w[2]);
+      p.vline(5, 10, 25, w[1]);
+      p.rect(rot === 1 ? 10 : 4, 6, 2, 16, w[0]);
+    }
+    return p.outline(OUT);
+  },
+  well() {
+    const p = spr(TALL_H);
+    const s = P.cobblestone;
+    p.rect(1, 24, 14, 14, s[0]);
+    for (let y = 26; y < 38; y += 3) for (let x = 1 + ((y / 3) % 2) * 2; x < 15; x += 4) p.set(x, y, s[1]);
+    p.ellipse(7.5, 25, 6, 3, s[2]);
+    p.ellipse(7.5, 25, 4, 2, '#1e3a6a');
+    p.set(6, 25, '#4a7ab0');
+    p.rect(1, 8, 2, 18, P.planks_dark[0]);
+    p.rect(13, 8, 2, 18, P.planks_dark[0]);
+    p.hline(1, 14, 10, P.planks[1]);
+    for (let y = 0; y < 8; y++) p.hline(7 - y, 8 + y, y + 1, y % 2 ? P.roof_red[0] : P.roof_red[1]);
+    p.vline(8, 11, 20, '#c8b890');
+    p.rect(7, 20, 3, 3, '#7a7a82');
+    return p.outline(OUT);
+  },
+  altar() {
+    const p = spr();
+    const m = P.marble;
+    p.rect(1, 12, 14, 5, m[0]);
+    p.rect(1, 17, 14, 9, m[1]);
+    p.rect(1, 15, 14, 4, '#c8a030');
+    p.hline(1, 14, 15, '#f0d060');
+    p.rect(3, 8, 1, 4, '#f0ece0');
+    p.rect(12, 8, 1, 4, '#f0ece0');
+    p.set(3, 7, '#ffc040');
+    p.set(12, 7, '#ffc040');
+    p.rect(6, 19, 4, 5, '#c8a030');
+    return p.outline(OUT);
+  },
+  sign(rot) {
+    const p = spr();
+    p.rect(7, 18, 2, 8, P.planks_dark[0]);
+    p.rect(2, 9, 12, 9, P.planks[0]);
+    p.hline(2, 13, 9, P.planks[2]);
+    for (let y = 11; y < 17; y += 2) p.hline(4, 11 - (y % 4), y, '#4a3420');
+    return p.outline(OUT);
+  },
+  notice_board() {
+    const p = spr(TALL_H);
+    p.rect(2, 14, 2, 24, P.planks_dark[0]);
+    p.rect(12, 14, 2, 24, P.planks_dark[0]);
+    p.rect(1, 12, 14, 16, P.planks[1]);
+    p.hline(1, 14, 12, P.planks[2]);
+    p.rect(0, 10, 16, 2, P.roof_wood[1]);
+    const notes = [[3, 14, 4, 5], [9, 15, 4, 4], [4, 21, 5, 4], [10, 21, 3, 5]];
+    for (const [x, y, w, h] of notes) {
+      p.rect(x, y, w, h, '#f0e8d0');
+      p.hline(x + 1, x + w - 2, y + 2, '#8a8070');
+      p.set(x + 1, y, '#c83a32');
+    }
+    return p.outline(OUT);
+  },
+  gravestone() {
+    const p = spr();
+    const s = ['#9a9aa4', '#72727c', '#b4b4be'];
+    p.rect(4, 13, 8, 12, s[0]);
+    p.hline(5, 10, 12, s[0]);
+    p.hline(6, 9, 11, s[0]);
+    p.vline(4, 13, 24, s[2]);
+    p.vline(7, 14, 20, s[1]);
+    p.hline(5, 9, 16, s[1]);
+    p.rect(3, 25, 10, 1, '#5e3f28');
+    return p.outline(OUT);
+  },
+  statue() {
+    const p = spr(TALL_H);
+    const m = P.marble;
+    p.rect(1, 28, 14, 10, m[1]);
+    p.rect(1, 28, 14, 3, m[0]);
+    p.hline(1, 14, 28, '#ffffff');
+    const g = ['#b8b8c4', '#9a9aa8', '#d0d0dc'];
+    p.rect(6, 6, 4, 4, g[0]);
+    p.rect(5, 10, 6, 9, g[0]);
+    p.vline(5, 10, 18, g[2]);
+    p.rect(5, 19, 2, 8, g[1]);
+    p.rect(9, 19, 2, 8, g[1]);
+    p.rect(11, 4, 1, 8, g[0]);
+    p.rect(3, 11, 2, 6, g[1]);
+    p.rect(10, 1, 3, 3, '#e0c040');
+    return p.outline(OUT);
+  },
+  training_dummy() {
+    const p = spr(TALL_H);
+    p.rect(7, 10, 2, 28, P.planks_dark[0]);
+    p.rect(1, 16, 14, 2, P.planks[1]);
+    p.rect(4, 13, 8, 14, P.hay_bale[0]);
+    for (let i = 0; i < 12; i++) p.set(4 + (i * 5) % 8, 13 + (i * 3) % 14, P.hay_bale[1]);
+    p.ellipse(7.5, 19, 2, 2, '#f0ece0');
+    p.ellipse(7.5, 19, 1, 1, '#c83a32');
+    p.ellipse(7.5, 9, 3, 3, P.hay_bale[0]);
+    return p.outline(OUT);
+  },
+  scarecrow() {
+    const p = spr(TALL_H);
+    p.rect(7, 12, 2, 26, P.planks_dark[0]);
+    p.rect(1, 15, 14, 2, P.planks[1]);
+    p.rect(4, 14, 8, 10, '#8a4a3a');
+    p.vline(4, 14, 23, '#a45a48');
+    p.set(1, 17, P.hay_bale[0]);
+    p.set(14, 17, P.hay_bale[0]);
+    p.ellipse(7.5, 9, 3, 3, '#e8d098');
+    p.set(6, 9, '#2a1a10');
+    p.set(9, 9, '#2a1a10');
+    p.rect(3, 5, 10, 2, P.hay_bale[1]);
+    p.rect(5, 2, 6, 3, P.hay_bale[0]);
+    return p.outline(OUT);
+  },
+  pumpkin() {
+    const p = spr();
+    const o = ['#e07a20', '#b85a14', '#f09a40'];
+    p.ellipse(7.5, 21, 6, 4, o[0]);
+    p.vline(5, 18, 24, o[1]);
+    p.vline(10, 18, 24, o[1]);
+    p.hline(4, 8, 18, o[2]);
+    p.rect(7, 15, 2, 3, '#4a7a2a');
+    return p.outline(OUT);
+  },
+  cobweb() {
+    const p = spr();
+    const c = '#e8e8f0';
+    p.line(0, 0, 15, 27, c);
+    p.line(15, 0, 0, 27, c);
+    p.line(8, 0, 8, 27, c);
+    p.line(0, 13, 15, 13, c);
+    for (let r = 3; r <= 7; r += 4) {
+      for (let a = 0; a < 16; a++) {
+        const ang = (a / 16) * Math.PI * 2;
+        p.set(8 + Math.cos(ang) * r, 13 + Math.sin(ang) * r * 1.4, c);
+      }
+    }
+    for (let i = 0; i < p.d.length; i += 4) if (p.d[i + 3]) p.d[i + 3] = 170;
+    return p;
+  },
+  rock(rot, st, f, rand, v = 0) {
+    const p = spr();
+    const s = ['#8a8a92', '#68686f', '#a8a8b0'];
+    p.ellipse(7 + (v % 2), 21, 5 + (v % 2), 4, s[0]);
+    p.ellipse(6, 19, 2, 1, s[2]);
+    p.hline(3, 11, 24, s[1]);
+    return p.outline(OUT);
+  },
+  cactus(rot, st, f, rand) {
+    const p = spr();
+    const g = ['#4a9a3a', '#387a2c', '#62b44a'];
+    p.rect(4, 0, 8, 26, g[0]);
+    p.vline(4, 0, 25, g[2]);
+    p.vline(11, 0, 25, g[1]);
+    p.vline(7, 0, 25, g[1]);
+    for (let y = 2; y < 25; y += 4) {
+      p.set(3, y, '#f0e8c0');
+      p.set(12, y + 2, '#f0e8c0');
+    }
+    return p.outline(OUT);
+  },
+};
+
+// --- plants -------------------------------------------------------------------
+function plantSprite(name, v, rand) {
+  const p = spr();
+  const base = 25;
+  const blade = (x, h, c, lean = 0) => {
+    for (let k = 0; k < h; k++) p.set(x + Math.round((k / h) * lean), base - k, c);
+  };
+  switch (name) {
+    case 'tall_grass': {
+      const g = ['#5aa83a', '#76c04a', '#468a2e'];
+      for (let i = 0; i < 9; i++) blade(2 + Math.floor(rand() * 12), 5 + Math.floor(rand() * 8), g[i % 3], Math.floor(rand() * 5) - 2);
+      break;
+    }
+    case 'fern': {
+      const g = ['#3e8a3a', '#58a84a'];
+      for (let s = -1; s <= 1; s += 2) {
+        for (let k = 0; k < 7; k++) {
+          const x = 8 + s * k;
+          const y = base - 8 + Math.round((k * k) / 6);
+          p.set(x, y, g[0]);
+          p.set(x, y - 1, g[1]);
+          if (k % 2) p.set(x, y + 1, g[0]);
+        }
+      }
+      blade(8, 10, g[0]);
+      break;
+    }
+    case 'flower_red': case 'flower_yellow': case 'flower_blue': case 'flower_white': case 'flower_purple': {
+      const col = { flower_red: ['#e03a3a', '#ff7a6a'], flower_yellow: ['#f0c830', '#fff080'], flower_blue: ['#3a7ae0', '#80b0ff'], flower_white: ['#f0f0f0', '#ffffc0'], flower_purple: ['#9a4ad0', '#c890ff'] }[name];
+      const n = 2 + (v % 2);
+      for (let i = 0; i < n; i++) {
+        const x = 3 + Math.floor(rand() * 10);
+        const h = 6 + Math.floor(rand() * 5);
+        blade(x, h, '#4a8a2e');
+        p.set(x - 1, base - 3, '#5aa83a');
+        const y = base - h;
+        p.set(x, y - 1, col[0]);
+        p.set(x - 1, y, col[0]);
+        p.set(x + 1, y, col[0]);
+        p.set(x, y + 1, col[0]);
+        p.set(x, y, col[1]);
+      }
+      break;
+    }
+    case 'bush': case 'berry_bush': {
+      // Round shrub: dark body, lit from the top-left, leafy speckles.
+      const g = name === 'berry_bush' ? ['#2a6428', '#1a4418', '#4a9a3a', '#6cc450'] : ['#347a2a', '#1e4e1a', '#5aae44', '#86d060'];
+      p.ellipse(7.5, 19, 6, 5, g[0]);
+      p.ellipse(8.5, 21, 5, 3, g[1]);
+      p.ellipse(6, 17, 3, 2, g[2]);
+      for (let i = 0; i < 16; i++) {
+        const x = 3 + rand() * 10;
+        const y = 15 + rand() * 9;
+        if (p.alpha(x | 0, y | 0)) p.set(x, y, rand() < 0.4 ? g[3] : rand() < 0.5 ? g[1] : g[2]);
+      }
+      p.set(5, 16, g[3]);
+      p.set(6, 15, g[3]);
+      if (name === 'berry_bush') for (let i = 0; i < 7; i++) {
+        const x = 3 + rand() * 10;
+        const y = 16 + rand() * 7;
+        if (p.alpha(x | 0, y | 0)) p.set(x, y, i % 2 ? '#e0304a' : '#ff6a80');
+      }
+      p.outline(OUT);
+      break;
+    }
+    case 'dead_bush': {
+      const c = '#8a6a44';
+      p.line(8, base, 4, base - 7, c);
+      p.line(8, base, 12, base - 8, c);
+      p.line(8, base, 8, base - 9, c);
+      p.line(5, base - 5, 3, base - 8, c);
+      p.line(11, base - 5, 13, base - 6, c);
+      break;
+    }
+    case 'reeds': {
+      for (let i = 0; i < 4; i++) {
+        const x = 3 + i * 3 + Math.floor(rand() * 2);
+        const h = 12 + Math.floor(rand() * 8);
+        blade(x, h, '#6a9a3a');
+        p.rect(x, base - h - 3, 2, 4, '#7a4a28');
+      }
+      break;
+    }
+    case 'mushroom_red': case 'mushroom_brown': {
+      const cap = name === 'mushroom_red' ? ['#d03a3a', '#f0f0f0'] : ['#9a6a40', '#c8a078'];
+      const x = 5 + (v % 3) * 2;
+      p.rect(x, base - 4, 2, 5, '#f0e8d8');
+      p.ellipse(x + 0.5, base - 5, 3, 2, cap[0]);
+      p.set(x - 1, base - 6, cap[1]);
+      p.set(x + 2, base - 5, cap[1]);
+      if (v % 2) {
+        p.rect(11, base - 2, 1, 3, '#f0e8d8');
+        p.ellipse(11, base - 3, 2, 1, cap[0]);
+      }
+      p.outline(OUT);
+      break;
+    }
+    case 'herb': {
+      for (let i = 0; i < 5; i++) {
+        const x = 4 + Math.floor(rand() * 8);
+        blade(x, 5 + Math.floor(rand() * 3), '#4aa84a');
+        p.set(x - 1, base - 3, '#7ad07a');
+        p.set(x + 1, base - 4, '#7ad07a');
+      }
+      p.set(6, base - 7, '#ffffff');
+      p.set(10, base - 6, '#ffffff');
+      break;
+    }
+    case 'sapling': {
+      blade(8, 7, '#6a4a2e');
+      p.ellipse(8, base - 8, 2, 2, '#4aa83a');
+      p.set(6, base - 5, '#58b848');
+      p.set(10, base - 4, '#58b848');
+      break;
+    }
+    case 'wheat_crop': {
+      for (let x = 1; x < 16; x += 2) {
+        const h = 9 + Math.floor(rand() * 4);
+        blade(x, h, '#b8a040');
+        p.rect(x, base - h - 2, 1, 3, '#e8c850');
+      }
+      break;
+    }
+    case 'carrot_crop': {
+      for (let x = 2; x < 15; x += 4) {
+        p.set(x, base, '#f07a20');
+        p.set(x + 1, base, '#f07a20');
+        blade(x, 5, '#4aa83a', -1);
+        blade(x + 1, 6, '#58b848', 1);
+      }
+      break;
+    }
+    case 'cabbage_crop': {
+      for (const x of [4, 11]) {
+        p.ellipse(x, base - 2, 3, 2, '#6ab84a');
+        p.ellipse(x, base - 2, 1, 1, '#9ad870');
+      }
+      p.outline('#2e4a1e');
+      break;
+    }
+    default:
+      p.rect(6, 18, 4, 8, '#ff00ff');
+  }
+  return p;
+}
+
+function flatSprite(name, v, rand) {
+  const p = new Px(16, 16);
+  if (name === 'lily_pad') {
+    p.ellipse(7 + (v % 2), 8, 5, 4, '#3e8a2e');
+    p.ellipse(6 + (v % 2), 7, 2, 1, '#58a840');
+    p.line(7 + (v % 2), 8, 12, 6, '#2e6a22');
+    if (v === 0) {
+      p.set(9, 9, '#f090c0');
+      p.set(10, 9, '#ffd0e8');
+    }
+    return p;
+  }
+  const col = { rug_red: ['#a83232', '#d8a040'], rug_blue: ['#32509a', '#d8c070'], rug_green: ['#32804a', '#e0d090'] }[name] || ['#888', '#aaa'];
+  p.rect(1, 2, 14, 12, col[0]);
+  p.rect(2, 3, 12, 10, col[1]);
+  p.rect(3, 4, 10, 8, col[0]);
+  p.rect(6, 6, 4, 4, col[1]);
+  for (let x = 1; x < 15; x += 2) {
+    p.set(x, 1, col[1]);
+    p.set(x, 14, col[1]);
+  }
+  return p;
+}
+
+// Fence parts: post, east/west rail, north rail, south rail.
+function fenceParts() {
+  const w = P.planks;
+  const post = spr();
+  post.rect(6, 8, 4, 18, w[0]);
+  post.vline(6, 8, 25, w[2]);
+  post.hline(6, 9, 8, w[2]);
+  post.outline(OUT);
+  const east = spr();
+  east.rect(9, 12, 7, 2, w[1]);
+  east.rect(9, 18, 7, 2, w[1]);
+  east.hline(9, 15, 12, w[2]);
+  east.hline(9, 15, 18, w[2]);
+  const west = new Px(16, SPR_H);
+  west.blit(east, 0, 0, true);
+  const north = spr();
+  north.rect(7, 3, 2, 9, w[1]);
+  north.vline(7, 3, 11, w[2]);
+  const south = spr();
+  south.rect(7, 14, 2, 10, w[1]);
+  south.vline(7, 14, 23, w[2]);
+  return { post, east, west, north, south };
+}
+
+function crackOverlay(stage) {
+  const p = new Px(16, SPR_H);
+  const rand = mulberry32(99 + stage);
+  const n = 3 + stage * 5;
+  for (let i = 0; i < n; i++) {
+    let x = 8 + Math.floor(rand() * 5) - 2;
+    let y = 14 + Math.floor(rand() * 5) - 2;
+    const len = 3 + stage * 3;
+    for (let k = 0; k < len; k++) {
+      p.set(x, y, '#000000', 170);
+      const r = rand();
+      x += r < 0.33 ? -1 : r < 0.66 ? 1 : 0;
+      y += rand() < 0.5 ? -1 : 1;
+    }
+  }
+  return p;
+}
+
+// --- build --------------------------------------------------------------------
+const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
+const CUBE_ROT_FRONT = new Set(['bookshelf']);
+const PLANTS = new Set(['tall_grass', 'fern', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white', 'flower_purple', 'bush', 'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'sapling', 'wheat_crop', 'carrot_crop', 'cabbage_crop']);
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3 };
+
+export function buildTextures() {
+  if (TEX.atlas) return TEX;
+  for (const b of BLOCKS) {
+    const id = b.id;
+    const name = b.name;
+    const seed = (k) => mulberry32(hash4(id, k, 0x7e57));
+    if (b.render === 'cube' || b.render === 'liquid') {
+      for (let rot = 0; rot < 4; rot++) {
+        const needTopRot = CUBE_ROT_TOP.has(name);
+        const needFrontRot = CUBE_ROT_FRONT.has(name);
+        if (rot > 0 && !needTopRot) TEX.top[id * 4 + rot] = TEX.top[id * 4];
+        else {
+          const arr = [];
+          const n = name === 'water' ? WATER_FRAMES : VARIANTS;
+          for (let v = 0; v < n; v++) arr.push(addImage(name === 'water' ? waterTop(v) : cubeTop(name, v, seed(v * 10 + rot), rot)));
+          TEX.top[id * 4 + rot] = arr;
+        }
+        if (rot > 0 && !needFrontRot) TEX.front[id * 4 + rot] = TEX.front[id * 4];
+        else {
+          const arr = [];
+          const n = name === 'water' ? WATER_FRAMES : VARIANTS;
+          for (let v = 0; v < n; v++) arr.push(addImage(name === 'water' ? waterFront(v) : cubeFront(name, v, seed(v * 10 + 5 + rot), rot)));
+          TEX.front[id * 4 + rot] = arr;
+        }
+      }
+    } else if (b.render === 'door') {
+      const upper = name === 'door_top';
+      for (let rot = 0; rot < 4; rot++) {
+        TEX.top[id * 4 + rot] = [addImage(doorTop(rot))];
+        TEX.front[id * 4 + rot] = [addImage(doorFront(upper, rot, seed(rot)))];
+        TEX.sprite[id * 4 + rot] = [addImage(doorOpenSprite(rot, upper))];
+      }
+    } else if (b.render === 'sprite' || b.render === 'plant' || b.render === 'flat') {
+      for (let rot = 0; rot < 4; rot++) {
+        if (rot > 0 && !b.rotatable) {
+          TEX.sprite[id * 4 + rot] = TEX.sprite[id * 4];
+          continue;
+        }
+        const arr = [];
+        if (b.render === 'plant') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(plantSprite(name, v, seed(v))));
+        else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
+        else if (SPRITES[name]) {
+          const frames = ANIM[name] || 1;
+          const variants = name === 'rock' || name === 'bed' ? VARIANTS : 1;
+          // Layout: [state * 4 + frame] for animated props, or variants.
+          for (let st = 0; st < 2; st++) {
+            for (let f = 0; f < 4; f++) {
+              if (variants > 1) arr.push(addImage(SPRITES[name](rot, st, 0, seed(f), f)));
+              else arr.push(f < frames ? addImage(SPRITES[name](rot, st, f, seed(f))) : arr[st * 4]);
+            }
+          }
+        } else arr.push(addImage(plantSprite(name, 0, seed(0))));
+        TEX.sprite[id * 4 + rot] = arr;
+      }
+    }
+  }
+  const fp = fenceParts();
+  TEX.misc.fence = { post: addImage(fp.post), east: addImage(fp.east), west: addImage(fp.west), north: addImage(fp.north), south: addImage(fp.south) };
+  for (let s = 0; s < 4; s++) TEX.crack.push(addImage(crackOverlay(s)));
+  // Shadow blob for entities.
+  const sh = new Px(16, 8);
+  sh.ellipse(7.5, 3.5, 6, 2, '#000000');
+  for (let i = 0; i < sh.d.length; i += 4) if (sh.d[i + 3]) sh.d[i + 3] = 90;
+  TEX.misc.shadow = addImage(sh);
+
+  // Pack into the atlas.
+  const rows = Math.ceil(nextSlot / ATLAS_COLS);
+  atlasCanvas = document.createElement('canvas');
+  atlasCanvas.width = ATLAS_COLS * SLOT_W;
+  atlasCanvas.height = rows * SLOT_H;
+  atlasCtx = atlasCanvas.getContext('2d');
+  for (const { px, slot } of pending) atlasCtx.putImageData(px.toImageData(), slot.x, slot.y);
+  // Average colours for the minimap.
+  for (const b of BLOCKS) {
+    const t = TEX.top[b.id * 4] || TEX.sprite[b.id * 4];
+    if (!t || !t[0]) continue;
+    const s = t[0];
+    const data = atlasCtx.getImageData(s.x, s.y, s.w, Math.min(s.h, 16)).data;
+    let r = 0;
+    let g = 0;
+    let bl = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 100) continue;
+      r += data[i];
+      g += data[i + 1];
+      bl += data[i + 2];
+      n++;
+    }
+    TEX.avg[b.id] = n ? [r / n, g / n, bl / n] : [0, 0, 0];
+  }
+  pending.length = 0;
+  TEX.atlas = atlasCanvas;
+  return TEX;
+}
+
+function waterTop(frame) {
+  const p = new Px(16, 16);
+  const pal = P.water;
+  const rand = mulberry32(4242);
+  p.fill(pal[0], 215);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const w = Math.sin((x + frame * 4) * 0.8 + y * 1.3) + Math.sin((y - frame * 4) * 0.6 - x * 0.4);
+      if (w > 1.5) p.set(x, y, pal[3], 225);
+      else if (w > 1.0) p.set(x, y, pal[2], 220);
+      else if (w < -1.5) p.set(x, y, pal[1], 215);
+    }
+  }
+  if (rand() < 2) p.set((frame * 5) % 16, (frame * 7 + 3) % 16, '#e0f4ff', 240);
+  return p;
+}
+function waterFront(frame) {
+  const p = new Px(16, LH);
+  p.fill(P.water[1], 225);
+  for (let x = 0; x < 16; x++) if ((x + frame) % 5 === 0) p.set(x, 0, P.water[3], 230);
+  p.hline(0, 15, LH - 1, shade(P.water[1], 0.7));
+  return p;
+}
+
+export function atlas() {
+  return atlasCanvas;
+}
