@@ -159,10 +159,10 @@ export class Terrain {
     if (!water && lowFlat && h === SURFACE) {
       if (bdef.pools) {
         const pn = this.nPool(x / 10, z / 10) + this.nPool(x / 4, z / 4) * 0.25;
-        if (pn > 0.32) {
+        if (pn > 0.18) {
           water = true;
-          depth = pn > 0.55 ? 2 : 1;
-        } else out.wet = Math.min(out.wet, (0.32 - pn) * 10);
+          depth = pn > 0.5 ? 2 : 1;
+        } else out.wet = Math.min(out.wet, (0.18 - pn) * 10);
       } else if (bdef.ponds) {
         const pn = this.nPool(x / 13 + 400, z / 13) + this.nPool(x / 5, z / 5 + 400) * 0.2;
         if (pn > 0.78) {
@@ -206,7 +206,9 @@ export class Terrain {
       sub = B.stone;
     }
     if (bank) surf = COLD.has(biome) ? B.gravel : biome === 'swamp' ? B.mud : WARM.has(biome) ? B.sand : surf;
-    if (h >= SURFACE + 6 || (h >= SURFACE + 4 && COLD.has(biome))) surf = B.snow;
+    // Snow caps: patchy on the upper slopes, solid on the peaks.
+    const snowN = this.nPatch(x / 9 + 700, z / 9) * 0.5 + 0.5;
+    if (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && COLD.has(biome) && snowN > 0.3)) surf = B.snow;
     if (surf === B.ice) sub = B.dirt;
     out.surf = surf;
     out.sub = sub;

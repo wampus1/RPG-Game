@@ -57,7 +57,7 @@ function startGame(seed, save = null) {
     const t0 = performance.now();
     game = new Game({ seed: s, renderer, audio, ui, save });
     game.crt = crt;
-    if (params.has('time')) game.minute = parseInt(params.get('time'), 10);
+    if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
     ui.showHud = true;
     ui.hudP = 0;
@@ -68,6 +68,7 @@ function startGame(seed, save = null) {
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;
     if (params.has('goto')) window.__goto(params.get('goto'));
+    if (params.has('reveal')) game.revealMap = true;
   }, 30);
 }
 
@@ -154,6 +155,16 @@ let last = performance.now();
 let fps = 60;
 const ctx = view.getContext('2d');
 function frame(now) {
+  // Keep the loop alive even if a frame throws; log the error once per second.
+  requestAnimationFrame(frame);
+  try {
+    step(now);
+  } catch (e) {
+    if (!frame.lastErr || now - frame.lastErr > 1000) console.error(e);
+    frame.lastErr = now;
+  }
+}
+function step(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   fps = fps * 0.95 + (1 / Math.max(dt, 0.001)) * 0.05;
@@ -182,7 +193,6 @@ function frame(now) {
   const t4 = performance.now();
   crt.present(now / 1000);
   perf.crt = (perf.crt || 0) * 0.95 + (performance.now() - t4) * 0.05;
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 

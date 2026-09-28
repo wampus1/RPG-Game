@@ -6,12 +6,12 @@ export const ITEMS = {};
 function item(key, props) {
   const d = {
     key,
-    name: props.name || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     kind: 'material',
     stack: 64,
     value: 1,
     ...props,
   };
+  d.name = props.name || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   ITEMS[key] = d;
   return d;
 }
@@ -28,7 +28,8 @@ const NOT_ITEMS = new Set([
 const BLOCK_VALUES = {
   planks: 1, cobblestone: 1, stone_bricks: 2, glass: 3, chest: 8, door: 6, bed: 12,
   workbench: 8, furnace: 10, anvil: 40, lantern: 12, bookshelf: 15, marble: 4, iron_ore: 5,
-  gold_ore: 10, torch: 1,
+  gold_ore: 10, torch: 1, hay_bale: 4, pumpkin: 3, fence: 1, table: 5, chair: 3, bench: 4, barrel: 5, crate: 4,
+  rug_red: 4, rug_blue: 4, rug_green: 4, sapling: 2, flower_red: 1, flower_blue: 1, planks_dark: 1, sign: 3,
 };
 
 for (const b of BLOCKS) {

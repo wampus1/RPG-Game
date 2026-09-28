@@ -84,7 +84,7 @@ export const BIOMES = {
   swamp: {
     name: 'Swamp', char: '%', fg: '#9ab85a', bg: '#2e3a1e',
     surface: B.mud, sub: B.dirt, hills: 0,
-    patches: [[B.grass_lush, 10, 0.3], [B.clay, 6, 0.85]],
+    patches: [[B.grass_lush, 10, 0.5], [B.clay, 6, 0.85]],
     trees: [['willow', 4], ['dead', 1]], treeSpacing: 6, treeChance: 0.35, clump: 0.3,
     plants: [[B.reeds, 6], [B.tall_grass, 6], [B.mushroom_brown, 2], [B.fern, 3], [B.herb, 1]],
     plantDensity: 0.3, rocks: 0.001, pools: true,

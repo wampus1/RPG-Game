@@ -322,7 +322,7 @@ export class TradeWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `TRADE · ${this.npc.name.toUpperCase()}` });
     const coins = countItem(p.inv, 'coin');
     g.text(2, 1, 'BUY', C.hi);
-    g.text(24, 1, `Your coins: ¤${coins}`, C.hi);
+    g.text(38, this.h - 5, `Your coins: ¤${coins}`, C.hi);
     this.stock.forEach((k, i) => {
       const y = 2 + i * 2;
       if (y + 1 >= this.h - 1) return;

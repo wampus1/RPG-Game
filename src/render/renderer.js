@@ -219,6 +219,11 @@ export class Renderer {
                 const oy = liquid ? 3 : 0;
                 ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
                 if (!liquid && !aboveHidden) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
+                // Higher ground is a touch brighter so terraces read as height.
+                if (y > 6 && !liquid && b.opaque) {
+                  ctx.fillStyle = `rgba(255,250,235,${Math.min(0.16, (y - 6) * 0.028)})`;
+                  ctx.fillRect(sx, sy, 16, 16);
+                }
                 if (aboveHidden && b.opaque) {
                   // Cut-away wall tops read like a floor-plan section.
                   ctx.fillStyle = 'rgba(16,12,24,0.62)';

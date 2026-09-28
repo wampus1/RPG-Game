@@ -45,9 +45,9 @@ void main() {
   vec3 b1 = textureLod(uSoft, uv, 1.5).rgb;
   vec3 b2 = textureLod(uSoft, uv, 3.0).rgb;
   vec3 b3 = textureLod(uSoft, uv, 4.5).rgb;
-  vec3 bloom = max(b1 - 0.45, 0.0) * 0.6 + max(b2 - 0.35, 0.0) * 0.5 + max(b3 - 0.3, 0.0) * 0.45;
+  vec3 bloom = max(b1 - 0.62, 0.0) * 0.55 + max(b2 - 0.52, 0.0) * 0.5 + max(b3 - 0.45, 0.0) * 0.4;
   col += bloom * uGlow;
-  col += b3 * 0.05 * uGlow;
+  col += b3 * 0.035 * uGlow;
   // Scanlines keyed to source rows.
   float row = uv.y * uSrc.y;
   float scan = 0.5 + 0.5 * cos(6.2831853 * row);
