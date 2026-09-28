@@ -11,6 +11,7 @@ import { addItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
 import { Window, cap, describeActivity } from './window.js';
+import { repLevel } from '../sim/sim.js';
 
 export { Window, cap, describeActivity };
 
@@ -212,6 +213,7 @@ export class UI {
       } else if (w.state === 'closing') w.p -= dt / 0.17;
     }
     this.windows = this.windows.filter((w) => !(w.state === 'closing' && w.p <= 0));
+    if (this.ko) this.ko.t += dt;
     for (const m of this.messages) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0);
     if (this.fade > 0 && !(game && game.sleepFast)) this.fade = Math.max(0, this.fade - dt * 0.8);
@@ -252,6 +254,63 @@ export class UI {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, this.fade)})`;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     }
+    if (game && game.sleep) this.drawSleep(ctx, game);
+    if (this.ko) this.drawKnockout(ctx);
+  }
+
+  // Night falls gently: the world dims, a clock races toward dawn, and the
+  // sleeper's breath drifts up as Z's.
+  drawSleep(ctx, game) {
+    const sl = game.sleep;
+    let a;
+    if (sl.phase === 'in') a = Math.min(1, sl.t / 2.2);
+    else if (sl.phase === 'deep') a = 1;
+    else a = Math.max(0, 1 - sl.t / 1.4);
+    const k = a * a * (3 - 2 * a);
+    ctx.fillStyle = `rgba(6,6,22,${0.8 * k})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    // Vignette bands.
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = `rgba(0,0,8,${0.06 * k})`;
+      ctx.fillRect(0, i * 4, VIEW_W, 4);
+      ctx.fillRect(0, VIEW_H - (i + 1) * 4, VIEW_W, 4);
+    }
+    if (k < 0.3) return;
+    const g = new Grid(34, 7);
+    g.box(0, 0, 34, 7, { bg: 'rgba(12,12,30,0.9)', fg: '#3a3a6a' });
+    const h = Math.floor(game.minute / 60);
+    const m = Math.floor(game.minute % 60);
+    g.center(1, sl.jail ? 'Dozing on the cot...' : 'Sleeping...', '#c8d8ff');
+    g.center(2, `☾ ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}  Day ${game.day}`, '#a0b0e0');
+    const now = game.day * 1440 + game.minute;
+    const f = Math.max(0, Math.min(1, (now - sl.start) / Math.max(1, sl.wake - sl.start)));
+    const n = Math.round(f * 26);
+    g.text(4, 4, '▓'.repeat(n) + '░'.repeat(26 - n), '#6a7ac8');
+    g.center(5, sl.phase === 'out' ? '' : 'any key: wake up', '#5a5a8a');
+    drawGrid(ctx, g, Math.floor((COLS - 34) / 2), ROWS - 12, Math.min(1, (k - 0.3) / 0.4), 77, this.time);
+    // Drifting Z's above the bed.
+    const r = game.renderer;
+    const b = sl.bed;
+    const sx = b.x * TILE - r.camX + 10;
+    const sy = b.z * TILE - b.y * LH - r.camY;
+    for (let i = 0; i < 3; i++) {
+      const t = (this.time * 0.6 + i / 3) % 1;
+      ctx.globalAlpha = Math.sin(t * Math.PI) * k;
+      drawText(ctx, i % 2 ? 'z' : 'Z', Math.round(sx + t * 10 + i * 3), Math.round(sy - t * 22), '#c8d8ff');
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawKnockout(ctx) {
+    const ko = this.ko;
+    const fadeIn = ko.t < 0.3 ? ko.t / 0.3 : 1;
+    const fadeOut = ko.t > ko.dur - 1.2 ? Math.max(0, (ko.dur - ko.t) / 1.2) : 1;
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(fadeIn, fadeOut)})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    const g = new Grid(COLS, ko.lines.length * 2 + 1);
+    ko.lines.forEach((l, i) => g.center(i * 2, l, i === 0 ? '#ff9080' : '#c8c8d8'));
+    drawGrid(ctx, g, 0, Math.floor(ROWS / 2) - ko.lines.length, Math.min(1, ko.t / 0.6) * fadeOut, 99, this.time);
+    if (ko.t >= ko.dur) this.ko = null;
   }
 
   drawTooltip(ctx) {
@@ -310,6 +369,33 @@ export class UI {
       loc = BIOMES[col.biome].name;
     }
     g.text(1, 2, loc.slice(0, 22), s ? C.cyan : C.green);
+    const sim = game.sim;
+    if (sim) {
+      const j = sim.justice.jail;
+      const cz = sim.citizen;
+      let status = null;
+      let col = C.dim;
+      if (j) {
+        if (j.phase === 'serving') {
+          const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
+          status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
+        } else status = 'IN JAIL · hearing soon';
+        col = C.orange;
+      } else if (s && sim.justice.exiled.has(s.id)) {
+        status = 'EXILED FROM HERE';
+        col = C.red;
+      } else if (cz && s && cz.sid === s.id) {
+        status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : cz.host !== null ? `Citizen · guest of the ${sim.hostName() || ''}s`.slice(0, 24) : 'Citizen';
+        col = C.green;
+      } else if (s && game.active.has(s.id)) {
+        const L = game.active.get(s.id).layout;
+        if (L.econ) status = `Taxes ${Math.round(L.econ.tax * 100)}%${L.econ.laws.armsBan ? ' · no weapons' : ''}`;
+      }
+      if (status) {
+        g.fill(0, 3, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, 3, status.slice(0, 24), col);
+      }
+    }
     // Clock + minimap panel.
     const bx = COLS - 17;
     g.box(bx, 0, 16, 8, { bg: 'rgba(10,8,16,0.8)', fg: C.dim });
@@ -330,7 +416,7 @@ export class UI {
     for (const [sid, t] of game.wanted) {
       if (Math.floor(this.time * 2) % 2 === 0) {
         const name = game.world.ow.settlements[sid].name;
-        const txt = ` !! WANTED IN ${name.toUpperCase()} ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')} !! `;
+        const txt = t > 1e6 ? ` !! WANTED IN ${name.toUpperCase()} !! ` : ` !! WANTED IN ${name.toUpperCase()} ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')} !! `;
         g.center(1, txt, '#ffffff', 'rgba(160,20,20,0.85)');
       }
       break;
@@ -415,8 +501,13 @@ export class UI {
       if (e.kind === 'npc') {
         lines.push({ text: e.name, color: C.hi });
         lines.push({ text: `${e.title}${e.rec.age === 'child' ? ' (child)' : e.rec.age === 'elder' ? ' (elder)' : ''}`, color: C.cyan });
-        const act = e.sleeping ? 'sleeping' : e.state === 'flee' ? 'fleeing!' : e.state === 'fight' ? 'fighting!' : e.activity ? describeActivity(e.activity.entry) : '';
+        const act = e.sleeping ? 'sleeping' : e.state === 'flee' ? 'fleeing!' : e.state === 'fight' ? 'fighting!' : e.sitting ? `sitting · ${describeActivity(e.activity.entry)}` : e.activity ? describeActivity(e.activity.entry) : '';
         if (act) lines.push({ text: act, color: C.dim });
+        if (game.sim) {
+          const op = game.sim.opinion(e);
+          const lvl = repLevel(op);
+          lines.push({ text: `Opinion: ${lvl.label}`, color: lvl.color });
+        }
         lines.push({ text: 'RMB talk · LMB attack', color: C.faint });
       } else {
         lines.push({ text: e.name || e.species, color: e.hostileNow ? C.red : C.green });
@@ -508,15 +599,37 @@ export class UI {
   }
   openDialogue(npc) {
     this.closeAll();
-    this.open(new W.DialogueWindow(this, npc));
+    this.open(new W.DialogueWindow(this, npc, this.game));
+  }
+  openHalt(guard, crimes) {
+    this.closeAll();
+    this.open(new W.HaltWindow(this, guard, crimes));
+  }
+  openTrial(v) {
+    this.closeAll();
+    this.open(new W.TrialWindow(this, v));
+  }
+  openLedger(t) {
+    this.closeAll();
+    this.open(new W.LedgerWindow(this, this.game, t.s, t.L));
+  }
+  // Black-out card for being knocked out / marched to jail / escorted out.
+  showKnockout(how, town, returned) {
+    const lines = how === 'knockout'
+      ? ['You were knocked out...', `You come to in a cell in ${town}.`]
+      : how === 'surrender' ? ['The guards march you to the jail...', `A cell in ${town}.`]
+        : [`You are escorted out of ${town}...`, 'Never to return.'];
+    if (returned) lines.push('Stolen goods were confiscated.');
+    this.ko = { t: 0, dur: how === 'exile' ? 3 : 4, lines };
+    this.closeAll();
   }
   openTrade(npc) {
     this.closeAll();
     this.open(new W.TradeWindow(this, npc));
   }
-  openSign(lines) {
+  openSign(lines, title = 'SIGN') {
     this.closeAll();
-    this.open(new W.TextWindow(this, 'SIGN', lines));
+    this.open(new W.TextWindow(this, title, lines));
   }
   openBook(lines) {
     this.closeAll();
@@ -538,7 +651,7 @@ function easeOut(p) {
 
 
 function interactVerb(kind) {
-  return { door: 'open/close', container: 'open', workbench: 'craft', furnace: 'smelt', anvil: 'forge', torch: 'light', bed: 'sleep', sign: 'read', bookshelf: 'read', well: 'drink', altar: 'pray', grave: 'read', statue: 'look' }[kind] || 'use';
+  return { door: 'open/close', container: 'open', workbench: 'craft', furnace: 'smelt', anvil: 'forge', torch: 'light', bed: 'sleep', sign: 'read', bookshelf: 'read', well: 'drink', altar: 'pray', grave: 'read', statue: 'look', sit: 'sit', cell_door: 'open', trap: 'check' }[kind] || 'use';
 }
 
 

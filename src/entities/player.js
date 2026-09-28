@@ -29,6 +29,9 @@ export class Player extends Entity {
       outfit: 'hunter', accent: '#c83a32', hat: null,
     };
     this.bumpT = 0;
+    this.sitting = null;
+    this.sleeping = false;
+    this.wellFed = 0;
   }
 
   heldItem() {
@@ -54,9 +57,11 @@ export class Player extends Entity {
     this.updateBase(dt);
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
-    // Slow natural regeneration.
+    // Slow natural regeneration: faster when sitting or well fed.
     this.regenT += dt;
-    if (this.regenT > 6 && this.hp < this.maxHp && this.hp > 0) {
+    if (this.wellFed > 0) this.wellFed -= dt;
+    const every = (this.wellFed > 0 ? 2.5 : 6) / (this.sitting ? 2 : 1);
+    if (this.regenT > every && this.hp < this.maxHp && this.hp > 0) {
       this.regenT = 0;
       this.hp = Math.min(this.maxHp, this.hp + 1);
     }
@@ -66,6 +71,7 @@ export class Player extends Entity {
     if (input.lastMoveKey && input.isDown(input.lastMoveKey)) d = MOVE_KEYS[input.lastMoveKey];
     else for (const k in MOVE_KEYS) if (input.isDown(k)) d = MOVE_KEYS[k];
     if (!d) return;
+    this.sitting = null;
     const [dx, dz] = d;
     this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
     const nx = this.x + dx;

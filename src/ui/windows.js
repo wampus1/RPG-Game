@@ -6,9 +6,11 @@ import { ITEMS, maxStack } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
-import { JOBS, HOBBIES } from '../entities/npcgen.js';
-import { conversation } from '../game/dialogue.js';
+import { openingLine, topicsFor, respond, placesFor } from '../game/dialogue.js';
 import { humanoidSheet } from '../render/sprites.js';
+import { STOCK, WANTS, st, mayorOf, alive } from '../sim/econ.js';
+import { repLevel } from '../sim/sim.js';
+import { describe } from '../sim/justice.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -140,6 +142,23 @@ export class ContainerWindow extends Window {
     this.title = title;
     this.slots = slots;
     this.pos = pos;
+    this.snap = this.counts();
+  }
+  counts() {
+    const m = {};
+    for (const s of this.slots) if (s) m[s.item] = (m[s.item] || 0) + s.count;
+    return m;
+  }
+  // Notice items leaving someone else's container (possible theft).
+  checkTaken(game) {
+    const now = this.counts();
+    const taken = [];
+    for (const [k, n] of Object.entries(this.snap)) {
+      const d = n - (now[k] || 0);
+      if (d > 0) taken.push({ item: k, count: d });
+    }
+    this.snap = now;
+    if (taken.length && game.onContainerTake(this.pos, taken)) this.close();
   }
   draw(g, game) {
     const p = game.player;
@@ -152,6 +171,7 @@ export class ContainerWindow extends Window {
   update(dt, game) {
     // Walking away closes the chest.
     const p = game.player;
+    if (this.pos.owner) this.checkTaken(game);
     if (Math.max(Math.abs(p.x - this.pos.x), Math.abs(p.z - this.pos.z)) > 6) this.close();
   }
 }
@@ -224,42 +244,115 @@ export class CraftWindow extends Window {
 
 // ---------------------------------------------------------------- dialogue
 export class DialogueWindow extends Window {
-  constructor(ui, npc) {
-    super(ui, 72, 13, { kind: 'dialogue', y: ROWS - 18 });
+  constructor(ui, npc, game, reply = null) {
+    super(ui, 76, 21, { kind: 'dialogue', y: ROWS - 22 });
     this.npc = npc;
-    this.lines = null;
-    this.i = 0;
+    this.queue = reply ? [...reply] : null;
+    this.line = '';
     this.chars = 0;
+    this.mode = 'topics';
+    this.page = 0;
+    this.confirm = null;
+    this.game = game;
+  }
+  say(lines) {
+    this.queue = [...lines];
+    this.next();
+  }
+  next() {
+    this.line = this.queue && this.queue.length ? this.queue.shift() : this.line;
+    this.chars = 0;
+  }
+  options(game) {
+    const n = this.npc;
+    if (this.mode === 'directions') {
+      return [...placesFor(n, game).map((pl) => ({ id: 'directions', arg: pl.key, label: pl.label })), { id: 'back', label: '(Never mind)' }];
+    }
+    if (this.mode === 'confirm' && this.confirm) return [{ id: this.confirm.id, arg: 'yes', label: this.confirm.label }, { id: 'back', label: 'On second thought, no.' }];
+    const all = topicsFor(n, game);
+    if (all.length <= 10) return all;
+    const per = 9;
+    const pages = Math.ceil(all.length / per);
+    const page = all.slice(this.page * per, this.page * per + per);
+    page.push({ id: 'more', label: `More... (${this.page + 1}/${pages})` });
+    return page;
+  }
+  choose(o, game) {
+    const n = this.npc;
+    if (o.id === 'more') {
+      this.page++;
+      if (this.page * 9 >= topicsFor(n, game).length) this.page = 0;
+      return;
+    }
+    if (o.id === 'back') {
+      this.mode = 'topics';
+      this.confirm = null;
+      return;
+    }
+    const r = respond(n, game, o.id, o.arg);
+    game.audio?.play('select');
+    if (r.open === 'trade') return this.ui.openTrade(n);
+    if (r.open === 'gift') return this.ui.open(new GiftWindow(this.ui, n));
+    if (r.open === 'directions') {
+      this.mode = 'directions';
+      this.say(['Where to?']);
+      return;
+    }
+    if (o.id === 'directions') this.mode = 'topics';
+    this.mode = r.confirm ? 'confirm' : 'topics';
+    this.confirm = r.confirm || null;
+    this.page = 0;
+    if (r.lines) this.say(r.lines);
+    if (r.close) {
+      this.closing = 1.6;
+      this.after = r.after || null;
+    }
   }
   draw(g, game) {
     const n = this.npc;
-    if (!this.lines) this.lines = conversation(n, game);
+    if (this.queue === null) this.say([openingLine(n, game)]);
     const rec = n.rec;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true });
     g.box(1, 1, 5, 5, { fg: C.faint });
     this.portraitPos = { x: (this.x + 2) * CHAR_W + 1, y: (this.y + 2) * CHAR_H - 4 };
     g.text(7, 1, n.name, C.hi);
-    const title = `${n.title}${rec.age === 'child' ? ' · child' : rec.age === 'elder' ? ' · elder' : ''} of ${n.settlement.name}`;
-    g.text(7, 2, title.slice(0, 60), C.cyan);
-    g.text(7, 3, rec.traits.join(', ').slice(0, 60), C.purple);
-    const hobbies = rec.hobbies.map((h) => HOBBIES[h]?.label || h).join(', ');
-    g.text(7, 4, `Likes: ${hobbies}`.slice(0, 62), C.dim);
-    if (n.activity) g.text(7, 5, `Now: ${describeActivity(n.activity.entry)}`, C.faint);
-    const line = this.lines[this.i] || '...';
+    const title = `${n.title}${rec.age === 'child' ? ' · child' : rec.age === 'elder' ? ' · elder' : ''} of ${rec.visitor ? rec.visit.fromName : n.settlement.name}`;
+    g.text(7, 2, title.slice(0, 62), C.cyan);
+    g.text(7, 3, rec.traits.join(', ').slice(0, 62), C.purple);
+    const op = game.sim.opinion(n);
+    const lvl = repLevel(op);
+    const bars = Math.round((op + 100) / 20);
+    g.text(7, 4, 'Opinion', C.dim);
+    g.text(15, 4, '■'.repeat(bars) + '□'.repeat(10 - bars), lvl.color);
+    g.text(26, 4, `${lvl.label} (${op > 0 ? '+' : ''}${op})`, lvl.color);
+    const mood = rec.mood ?? 0.5;
+    g.text(46, 4, mood > 0.7 ? 'Mood: cheerful' : mood < 0.3 ? 'Mood: miserable' : mood < 0.45 ? 'Mood: low' : 'Mood: fine', C.faint);
+    if (n.activity) g.text(7, 5, `Now: ${describeActivity(n.activity.entry)}`.slice(0, 40), C.faint);
+    if (rec.hungry >= 1) g.text(46, 5, rec.hungry >= 2 ? 'Starving' : 'Hungry', C.orange);
+    // Current line, typed out.
+    const line = this.line || '...';
     const shown = line.slice(0, Math.floor(this.chars));
     const wl = wrap(shown, this.w - 6);
     wl.slice(0, 3).forEach((l, k) => g.text(3, 7 + k, (k === 0 ? '"' : ' ') + l + (k === wl.length - 1 && this.chars >= line.length ? '"' : ''), C.white));
-    const trader = JOBS[rec.job]?.trader && !game.isWanted(n.settlement.id);
-    const opts = [['SPACE', this.i < this.lines.length - 1 ? 'Next' : 'Again'], ...(trader ? [['T', 'Trade']] : []), ['ESC', 'Farewell']];
-    let x = 3;
-    for (const [k, label] of opts) {
-      const t = `[${k}] ${label}`;
-      const hov = this.hovering(x, this.h - 2, t.length, 1);
-      g.text(x, this.h - 2, t, hov ? C.hi : C.fg);
-      this.hit(x, this.h - 2, t.length, 1, (ck, gm) => this.act(k, gm));
-      x += t.length + 3;
-    }
-    g.text(this.w - 8, this.h - 1, ` ${this.i + 1}/${this.lines.length} `, C.faint);
+    if (this.queue && this.queue.length && this.chars >= line.length) g.text(this.w - 12, 10, '[SPACE] ►', Math.floor(this.ui.time * 3) % 2 ? C.hi : C.dim);
+    g.text(2, 11, '─'.repeat(this.w - 4), C.faint);
+    // Options: two columns, numbered.
+    const opts = this.options(game);
+    this.opts = opts;
+    const colW = Math.floor((this.w - 4) / 2);
+    opts.forEach((o, i) => {
+      const col = i < 5 ? 0 : 1;
+      const row = i % 5;
+      const x = 2 + col * colW;
+      const y = 12 + row;
+      const key = i === 9 ? '0' : String(i + 1);
+      const hov = this.hovering(x, y, colW - 1, 1);
+      g.fill(x, y, colW - 1, 1, ' ', C.fg, hov ? C.bgHi : undefined);
+      g.text(x, y, `${key}`, C.hi);
+      g.text(x + 2, y, o.label.slice(0, colW - 4), hov ? C.white : o.id === 'rude' ? C.orange : o.id === 'bye' ? C.dim : C.fg);
+      this.hit(x, y, colW - 1, 1, (ck, gm) => this.choose(o, gm));
+    });
+    g.text(2, this.h - 2, '1-9 choose · SPACE continue · T trade · G gift · ESC leave', C.faint);
   }
   drawPixels(ctx) {
     const sheet = humanoidSheet(this.npc.look);
@@ -267,113 +360,375 @@ export class DialogueWindow extends Window {
   }
   update(dt, game) {
     this.chars += dt * 60;
-    if (this.npc.dead || this.npc.distTo(game.player) > 6 || this.npc.state === 'flee' || this.npc.state === 'fight') this.close();
-  }
-  act(k, game) {
-    if (k === 'SPACE') {
-      const line = this.lines[this.i] || '';
-      if (this.chars < line.length) this.chars = line.length;
-      else {
-        this.i = (this.i + 1) % this.lines.length;
-        this.chars = 0;
+    if (this.closing !== undefined) {
+      this.closing -= dt;
+      if (this.closing <= 0) {
+        this.close();
+        if (this.after) this.after();
+        return;
       }
-    } else if (k === 'T') this.ui.openTrade(this.npc);
-    else if (k === 'ESC') this.close();
+    }
+    const n = this.npc;
+    if (n.dead || n.distTo(game.player) > 6 || n.state === 'flee' || n.state === 'fight') this.close();
   }
   onKey(k, game) {
-    if (k.code === 'Space' || k.code === 'Enter' || k.code === 'KeyE') this.act('SPACE', game);
-    else if (k.code === 'KeyT' && JOBS[this.npc.rec.job]?.trader) this.act('T', game);
-    else return false;
-    return true;
+    if (k.code === 'Space' || k.code === 'Enter') {
+      if (this.chars < this.line.length) this.chars = this.line.length;
+      else if (this.queue && this.queue.length) this.next();
+      return true;
+    }
+    const m = /^Digit(\d)$/.exec(k.code) || /^Numpad(\d)$/.exec(k.code);
+    if (m) {
+      const i = m[1] === '0' ? 9 : +m[1] - 1;
+      const o = this.opts && this.opts[i];
+      if (o) this.choose(o, game);
+      return true;
+    }
+    if (k.code === 'KeyT') {
+      const o = (this.opts || []).find((q) => q.id === 'trade');
+      if (o) this.choose(o, game);
+      return true;
+    }
+    if (k.code === 'KeyG') {
+      const o = (this.opts || []).find((q) => q.id === 'gift');
+      if (o) this.choose(o, game);
+      return true;
+    }
+    return false;
+  }
+}
+
+// Pick something from your inventory to give.
+export class GiftWindow extends Window {
+  constructor(ui, npc) {
+    super(ui, 39, 18, { kind: 'gift' });
+    this.npc = npc;
+  }
+  draw(g, game) {
+    const p = game.player;
+    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `GIFT FOR ${this.npc.rec.name.first.toUpperCase()}` });
+    g.text(2, 1, 'Click an item to give one.', C.dim);
+    slotTable(this, g, 1, 2, 9, p.inv, 0, INV_SIZE, { onClick: (i, ck, gm) => this.give(i, gm) });
+    g.text(2, this.h - 1, ' ESC cancel ', C.faint);
+  }
+  give(i, game) {
+    const p = game.player;
+    const s = p.inv[i];
+    if (!s) return;
+    const item = s.item;
+    s.count--;
+    if (s.count <= 0) p.inv[i] = null;
+    const r = game.sim.giveGift(this.npc, item);
+    const n = this.npc;
+    const nm = ITEMS[item].name.toLowerCase();
+    const lines = {
+      hungry: [`Food! Oh, thank you, I haven't eaten properly in days.`],
+      hobby: [`A ${nm}? How did you know? I love it!`],
+      love: [`For me? This ${nm} is beautiful. Thank you!`],
+      junk: [`...A ${nm}. Thanks, I guess?`],
+      coin: ['A coin? Well, I won\'t say no.'],
+      fine: [n.rec.personality.kindness > 0.6 ? `How thoughtful! Thank you for the ${nm}.` : `Hm. A ${nm}. Thanks.`],
+    }[r.reaction];
+    game.audio?.play('pickup');
+    this.close();
+    this.ui.open(new DialogueWindow(this.ui, n, game, [...lines, `(${repLevel(game.sim.opinion(n)).label})`]));
   }
 }
 
 // ---------------------------------------------------------------- trading
-const STOCK = {
-  general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds'],
-  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern'],
-  baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
-  inn: ['stew', 'cooked_meat', 'bread', 'apple', 'cooked_fish', 'dice'],
-  tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed'],
-  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate'],
-  herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue'],
-  fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string'],
-  farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple'],
-  scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern'],
-};
-
 export class TradeWindow extends Window {
   constructor(ui, npc) {
-    super(ui, 76, 24, { kind: 'trade' });
+    super(ui, 78, 26, { kind: 'trade' });
     this.npc = npc;
-    const t = JOBS[npc.rec.job]?.trader || 'general';
-    this.stock = (STOCK[t] || STOCK.general).filter((k) => ITEMS[k]);
-    const cond = npc.settlement.condition;
-    this.markup = (cond === 'prosperous' ? 1.6 : cond === 'poor' ? 1.25 : 1.4) * (npc.rec.personality.kindness > 0.7 ? 0.9 : npc.rec.personality.kindness < 0.3 ? 1.2 : 1);
+    this.scroll = 0;
   }
-  price(k) {
-    return Math.max(1, Math.round(ITEMS[k].value * this.markup));
+  shop(game) {
+    if (!this.shopData) this.shopData = game.sim.shopOf(this.npc);
+    return this.shopData;
   }
-  sellPrice(k) {
-    return Math.max(k === 'coin' ? 0 : 1, Math.floor(ITEMS[k].value * 0.5));
+  list(game) {
+    const sh = this.shop(game);
+    if (!sh) return [];
+    const order = STOCK[sh.kind] || [];
+    const keys = Object.keys(sh.store).filter((k) => sh.store[k] > 0 && ITEMS[k]);
+    keys.sort((a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)));
+    return keys;
+  }
+  price(k, game) {
+    return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceFactor(this.npc)));
+  }
+  sellPrice(k, game) {
+    const op = game.sim.opinion(this.npc);
+    return Math.max(k === 'coin' ? 0 : 1, Math.floor(ITEMS[k].value * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1)));
+  }
+  wants(k, game) {
+    const sh = this.shop(game);
+    if (!sh || k === 'coin') return false;
+    const w = WANTS[sh.kind];
+    return w === null || w === undefined ? true : w.includes(k);
   }
   draw(g, game) {
     const p = game.player;
+    const sh = this.shop(game);
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `TRADE · ${this.npc.name.toUpperCase()}` });
     const coins = countItem(p.inv, 'coin');
     g.text(2, 1, 'BUY', C.hi);
-    g.text(38, this.h - 5, `Your coins: ¤${coins}`, C.hi);
-    this.stock.forEach((k, i) => {
+    const list = this.list(game);
+    const per = 10;
+    this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, list.length - per)));
+    if (!list.length) g.text(3, 3, 'Nothing for sale right now.', C.dim);
+    list.slice(this.scroll, this.scroll + per).forEach((k, i) => {
       const y = 2 + i * 2;
-      if (y + 1 >= this.h - 1) return;
-      const pr = this.price(k);
+      const pr = this.price(k, game);
       const can = coins >= pr;
-      const hov = this.hovering(1, y, 34, 2);
-      g.fill(1, y, 34, 2, ' ', C.fg, hov ? 'rgba(60,70,40,0.95)' : i % 2 ? 'rgba(22,18,28,0.9)' : undefined);
-      g.icon(2, y, k, 1);
+      const hov = this.hovering(1, y, 36, 2);
+      g.fill(1, y, 36, 2, ' ', C.fg, hov ? 'rgba(60,70,40,0.95)' : i % 2 ? 'rgba(22,18,28,0.9)' : undefined);
+      g.icon(2, y, k, sh.store[k]);
       g.text(6, y, ITEMS[k].name.slice(0, 20), can ? C.fg : C.dim);
-      g.text(28, y, `¤${pr}`, can ? C.hi : C.red);
-      if (hov) this.ui.itemTooltip({ item: k, count: 1 });
-      this.hit(1, y, 34, 2, (ck, gm) => this.buy(k, gm, ck.shift ? 5 : 1));
+      if (ITEMS[k].quality) g.text(6, y + 1, ITEMS[k].quality, ITEMS[k].quality === 'terrible' ? C.orange : ITEMS[k].quality === 'delightful' ? C.hi : C.green);
+      g.text(29, y, `¤${pr}`, can ? C.hi : C.red);
+      if (hov) this.ui.itemTooltip({ item: k, count: sh.store[k] });
+      this.hit(1, y, 36, 2, (ck, gm) => this.buy(k, gm, ck.shift ? 5 : 1));
     });
-    g.text(38, 1, 'SELL (click your items)', C.hi);
-    slotTable(this, g, 37, 2, 9, p.inv, 0, INV_SIZE, {
-      onClick: (i, ck, gm) => this.sell(i, gm, ck.shift),
-    });
-    const hs = p.inv.findIndex((s, i) => s && this.hovering(38 + (i % 9) * 4, 3 + Math.floor(i / 9) * 3, 3, 2));
-    if (hs >= 0 && p.inv[hs].item !== 'coin') g.text(38, 16, `Sells for ¤${this.sellPrice(p.inv[hs].item)} each`, C.green);
-    g.text(2, this.h - 1, ' click buy/sell · SHIFT x5 / whole stack ', C.faint);
+    if (list.length > per) g.text(2, 22, `${this.scroll + 1}-${Math.min(list.length, this.scroll + per)} of ${list.length} (wheel)`, C.faint);
+    g.text(40, 1, 'SELL (click your items)', C.hi);
+    slotTable(this, g, 39, 2, 9, p.inv, 0, INV_SIZE, { onClick: (i, ck, gm) => this.sell(i, gm, ck.shift) });
+    const hs = p.inv.findIndex((q, i) => q && this.hovering(40 + (i % 9) * 4, 3 + Math.floor(i / 9) * 3, 3, 2));
+    if (hs >= 0 && p.inv[hs].item !== 'coin') {
+      const k = p.inv[hs].item;
+      g.text(40, 16, this.wants(k, game) ? `They'll pay ¤${this.sellPrice(k, game)} each` : 'They don\'t want that.', this.wants(k, game) ? C.green : C.red);
+    }
+    const purse = sh ? sh.purse.get() : 0;
+    g.text(40, 18, `Your coins: ¤${coins}`, C.hi);
+    g.text(40, 19, `Their purse: ¤${purse}`, purse < 10 ? C.orange : C.dim);
+    const e = this.npc.layout.econ;
+    if (e && !this.npc.rec.visitor) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
+    g.text(2, this.h - 1, ' click buy/sell · SHIFT x5 / whole stack · ESC close ', C.faint);
   }
   buy(k, game, n) {
     const p = game.player;
+    const sh = this.shop(game);
+    const e = this.npc.layout.econ;
     let bought = 0;
+    let spent = 0;
     for (let i = 0; i < n; i++) {
-      const pr = this.price(k);
-      if (countItem(p.inv, 'coin') < pr) break;
+      const pr = this.price(k, game);
+      if (countItem(p.inv, 'coin') < pr || !sh.store[k]) break;
       removeItem(p.inv, 'coin', pr);
+      st.take(sh.store, k, 1);
+      const tax = e && !this.npc.rec.visitor ? Math.floor(pr * e.tax * 0.5) : 0;
+      if (tax) e.treasury += tax;
+      sh.purse.add(pr - tax);
       const left = p.give(k, 1);
       if (left) game.spawnDrop(k, left, p.x, p.y, p.z, true);
       bought++;
+      spent += pr;
     }
     if (bought) {
       game.audio?.play('coin');
+      game.sim.noteTrade(this.npc, spent);
       this.npc.say(this.npc.rng.pick(['Pleasure doing business!', 'Thank you kindly.', 'Enjoy!', 'Come again!']), 2);
     } else game.audio?.play('error');
   }
   sell(i, game, all) {
     const p = game.player;
     const s = p.inv[i];
-    if (!s || s.item === 'coin') return;
-    const n = all ? s.count : 1;
-    const pr = this.sellPrice(s.item) * n;
+    const sh = this.shop(game);
+    if (!s || s.item === 'coin' || !sh) return;
+    if (!this.wants(s.item, game)) {
+      this.npc.say(this.npc.rng.pick(['I\'ve no use for that.', 'Not interested, sorry.']), 2);
+      game.audio?.play('error');
+      return;
+    }
+    const pr = this.sellPrice(s.item, game);
+    let n = all ? s.count : 1;
+    n = Math.min(n, pr > 0 ? Math.floor(sh.purse.get() / pr) : n);
+    if (n <= 0) {
+      this.npc.say('I can\'t afford that right now.', 2);
+      game.audio?.play('error');
+      return;
+    }
+    const item = s.item;
     s.count -= n;
     if (s.count <= 0) p.inv[i] = null;
-    const left = p.give('coin', pr);
+    st.add(sh.store, item, n);
+    sh.purse.add(-pr * n);
+    const left = p.give('coin', pr * n);
     if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
+    game.sim.noteTrade(this.npc, Math.ceil((pr * n) / 2));
     game.audio?.play('coin');
+  }
+  onWheel(d) {
+    this.scroll += Math.sign(d);
+  }
+  onClose(game) {
+    if (game) game.sim.closeShop(this.npc);
   }
   update(dt, game) {
     if (this.npc.dead || this.npc.distTo(game.player) > 6) this.close();
+  }
+}
+
+// ---------------------------------------------------------------- justice
+export class HaltWindow extends Window {
+  constructor(ui, guard, crimes) {
+    super(ui, 60, 13, { kind: 'halt' });
+    this.guard = guard;
+    this.crimes = crimes;
+  }
+  draw(g, game) {
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(40,24,8,0.96)', double: true, fg: C.hi, title: 'HALT!' });
+    g.text(2, 1, `${this.guard.name}, ${this.guard.title}:`, C.cyan);
+    const what = this.crimes.slice(-3).map((c) => describe(c).toLowerCase());
+    const lines = wrap(`"You're under arrest${what.length ? ' for ' + what.join(', ') : ''}. Come quietly to the ${this.guard.settlement.type === 'village' ? 'village' : 'town'} jail, or we do this the hard way."`, this.w - 4);
+    lines.slice(0, 4).forEach((l, i) => g.text(2, 3 + i, l, C.white));
+    const opts = [['1', 'Come quietly (go to jail and face a hearing)', () => this.answer(game, true)], ['2', 'Resist! (the guards will fight to subdue you)', () => this.answer(game, false)]];
+    opts.forEach(([k, label, fn], i) => {
+      const y = 8 + i;
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
+      g.text(3, y, `[${k}] ${label}`, hov ? C.white : C.fg);
+      this.hit(2, y, this.w - 4, 1, fn);
+    });
+    g.text(2, this.h - 1, ' 1/2 choose ', C.faint);
+  }
+  answer(game, quiet) {
+    this.answered = true;
+    this.close();
+    const sid = this.guard.settlement.id;
+    if (quiet) game.sim.justice.surrender(sid);
+    else game.sim.justice.resist(sid, this.guard);
+  }
+  onKey(k, game) {
+    if (k.code === 'Digit1' || k.code === 'Enter') this.answer(game, true);
+    else if (k.code === 'Digit2' || k.code === 'Escape') this.answer(game, false);
+    return true;
+  }
+  update(dt, game) {
+    if (this.guard.dead) this.close();
+  }
+}
+
+export class TrialWindow extends Window {
+  constructor(ui, v) {
+    super(ui, 70, 26, { kind: 'trial' });
+    this.v = v;
+  }
+  draw(g, game) {
+    const v = this.v;
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(24,18,12,0.97)', double: true, fg: C.hi, title: `HEARING · ${v.town.toUpperCase()}` });
+    g.text(2, 1, `Presiding: ${v.judgeTitle} ${v.judgeName}`, C.cyan);
+    g.text(2, 3, 'CHARGES', C.hi);
+    let y = 4;
+    if (!v.charges.length) g.text(3, y++, 'None.', C.dim);
+    for (const c of v.charges.slice(0, 6)) {
+      g.text(3, y, c.proven ? '■' : '□', c.proven ? C.red : C.green);
+      g.text(5, y, c.text.slice(0, 46), c.proven ? C.fg : C.dim);
+      g.text(52, y, c.proven ? 'PROVEN' : 'NOT PROVEN', c.proven ? C.red : C.green);
+      y++;
+      const who = c.guardSaw ? ['a guard', ...c.names] : c.names;
+      g.text(7, y++, (who.length ? `Witness: ${who.slice(0, 3).join(', ')}` : 'No living witness').slice(0, 60), C.faint);
+    }
+    y++;
+    const opts = [];
+    if (!v.proven.length) {
+      g.text(2, y++, '"Nothing can be proven. You are free to go."', C.green);
+      opts.push(['1', 'Leave', 'free']);
+    } else if (v.sentence === 'exile' || v.sentence === 'death') {
+      g.text(2, y++, `Previous serious convictions here: ${v.prior}.`, C.orange);
+      const t = v.sentence === 'exile' ? `"You are a menace. You are BANISHED from ${v.town}, never to return."` : '"Your crimes are beyond forgiveness. The sentence is DEATH."';
+      for (const l of wrap(t, this.w - 4)) g.text(2, y++, l, C.red);
+      if (!v.pleaded) opts.push(['2', 'Plead for mercy', 'plead']);
+      opts.unshift(['1', 'Accept your fate', 'accept']);
+    } else {
+      g.text(2, y, `Fine: ¤${v.fine}`, C.hi);
+      if (v.fineScale !== 1) g.text(16, y, `(local fines ×${v.fineScale})`, C.faint);
+      g.text(44, y++, `Your coins: ¤${v.coins}`, v.canPay ? C.green : C.red);
+      if (!v.canPay) g.text(2, y++, `You can't pay: that's ${v.hours} hours in the cell.`, C.orange);
+      if (v.mercy === true) g.text(2, y++, '"Very well, I will show some mercy."', C.green);
+      else if (v.mercy === false) g.text(2, y++, '"Your pleas do not move me."', C.orange);
+      if (v.canPay) opts.push(['1', `Pay ¤${v.fine} and go free`, 'pay']);
+      opts.push([String(opts.length + 1), `Serve ${v.hours} hours in the cell`, 'serve']);
+      if (!v.pleaded) opts.push([String(opts.length + 1), 'Plead for mercy', 'plead']);
+    }
+    if (v.citizen && v.proven.length) g.text(2, y++, 'Your citizenship will be revoked.', C.red);
+    y = Math.max(y + 1, this.h - 2 - opts.length);
+    this.opts = opts;
+    opts.forEach(([k, label, choice], i) => {
+      const yy = y + i;
+      const hov = this.hovering(2, yy, this.w - 4, 1);
+      g.fill(2, yy, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
+      g.text(3, yy, `[${k}] ${label}`, hov ? C.white : C.fg);
+      this.hit(2, yy, this.w - 4, 1, (ck, gm) => this.pick(choice, gm));
+    });
+  }
+  pick(choice, game) {
+    const r = game.sim.justice.resolve(choice);
+    if (choice === 'plead' && r) {
+      this.v = r;
+      return;
+    }
+    this.close();
+  }
+  onKey(k, game) {
+    const m = /^Digit(\d)$/.exec(k.code);
+    if (m && this.opts) {
+      const o = this.opts.find((q) => q[0] === m[1]);
+      if (o) this.pick(o[2], game);
+    }
+    return true;
+  }
+}
+
+export class LedgerWindow extends Window {
+  constructor(ui, game, s, L) {
+    super(ui, 62, 30, { kind: 'text' });
+    this.s = s;
+    this.L = L;
+    this.closeOnOutside = true;
+  }
+  draw(g, game) {
+    const { s, L } = this;
+    const e = L.econ;
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(40,30,20,0.96)', double: true, title: 'NOTICE BOARD' });
+    g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, '#f0e0c0');
+    const m = mayorOf(L);
+    const living = L.npcs.filter(alive);
+    const pop = living.length;
+    const coffers = e.treasury > pop * 35 ? 'overflowing' : e.treasury > pop * 15 ? 'healthy' : e.treasury > pop * 5 ? 'thin' : 'nearly empty';
+    let y = 3;
+    const row = (k, v, col = '#f0e0c0') => {
+      g.text(3, y, k, C.dim);
+      g.text(18, y++, v.slice(0, 40), col);
+    };
+    row(s.type === 'village' ? 'Elder' : 'Mayor', m ? `${m.name.first} ${m.name.last}` : '(none: the council governs)');
+    row('Population', `${pop}`);
+    row('Treasury', `¤${e.treasury} (${coffers})`, coffers === 'nearly empty' ? C.orange : '#f0e0c0');
+    row('Taxes', `${Math.round(e.tax * 100)}% of earnings`);
+    row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');
+    row('Laws', e.laws.armsBan ? 'No drawn weapons in town' : 'No special laws');
+    const hungry = living.filter((r) => r.hungry >= 1).length;
+    row('Food', hungry ? `${hungry} going hungry` : 'Everyone is fed', hungry ? C.orange : C.green);
+    const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
+    if (visits.length) row('Visitors', `Merchant from ${visits[0].fromName}`);
+    y++;
+    g.text(3, y++, 'RECENT NOTICES', C.hi);
+    const notes = [...e.ledger].reverse().slice(0, 12);
+    for (const n of notes) {
+      const lines = wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 6);
+      for (const l of lines) {
+        if (y >= this.h - 2) break;
+        g.text(3, y++, l, '#e0d0b0');
+      }
+    }
+    g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);
+  }
+  onKey(k) {
+    if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') {
+      this.close();
+      return true;
+    }
+    return false;
   }
 }
 
@@ -526,7 +881,7 @@ export class BannerWindow extends Window {
 // ---------------------------------------------------------------- help
 export class HelpWindow extends Window {
   constructor(ui) {
-    super(ui, 70, 32, { kind: 'help' });
+    super(ui, 76, 35, { kind: 'help' });
     this.closeOnOutside = true;
   }
   draw(g) {
@@ -534,35 +889,39 @@ export class HelpWindow extends Window {
     const rows = [
       ['MOVE', 'WASD / Arrows (tile by tile) · SHIFT sprint'],
       ['BELT', '1-9 or mouse wheel to select'],
-      ['INTERACT', 'Click doors, chests, workbenches, torches, beds...'],
+      ['INTERACT', 'Click doors, chests, benches, beds, signs, snares...'],
       ['', 'E: use what you point at / face · RMB also works'],
       ['MINE', 'Hold LMB on a block with a tool or empty hand'],
       ['PLACE', 'Select a block, then click (hold to paint)'],
       ['ROTATE', 'R cycles facing for chairs, beds, doors, roofs...'],
       ['LAYER', 'Z/X lock the mining/placing layer · V auto'],
-      ['', 'SHIFT+wheel also changes the layer'],
-      ['ATTACK', 'Click a creature or person with fists/weapon'],
-      ['TALK', 'Right-click a villager (T in chat to trade)'],
+      ['ATTACK', 'Click a creature or person (bows need arrows)'],
+      ['TALK', 'Right-click a villager, pick topics with 1-9'],
+      ['SIT', 'Click a chair, bench or stool · move to stand'],
+      ['SLEEP', 'Click a bed at night (yours, or your host\'s)'],
       ['TOSS', 'Q throws one item · CTRL+Q the whole stack'],
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
-      ['WINDOWS', 'TAB bag · C craft · M map · ESC menu'],
-      ['OPTIONS', 'F2 toggle CRT · F3 debug info'],
+      ['WINDOWS', 'TAB bag · C craft · M map · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {
       g.text(3, 2 + i, k, C.hi);
       g.text(13, 2 + i, v, C.fg);
     });
     const tips = [
-      'Villagers follow daily schedules: work, meals, hobbies, sleep.',
-      'Hurt someone and they may fight back, flee, or call the guards.',
-      'Chop trees for logs -> planks -> a workbench. Smelt ore in a',
-      'furnace, forge metal at an anvil. Beds set your respawn point.',
-      'Explore to fill in the world map. Night brings monsters.',
+      'Towns live on without you: cooks buy from trappers and fishers and',
+      'cook meals (good or awful), mayors set taxes and laws, merchants',
+      'travel between towns. Read the notice board on the square.',
+      'People remember you: gifts, kind words and fair trade win them over;',
+      'stealing and violence do not. Crimes only count if someone SEES',
+      'them. Guards arrest you (or knock you out); a hearing decides the',
+      'fine or jail time. Repeat offenders are banished or executed.',
+      'Talk to the mayor in the town hall to become a citizen: a family',
+      'takes you in while builders put up a house of your own.',
     ];
-    tips.forEach((t, i) => g.text(3, 20 + i, t, C.dim));
-    g.text(3, 27, 'Every world is generated from its seed: biomes, rivers,', C.faint);
-    g.text(3, 28, 'civilizations, towns and every villager\'s life story.', C.faint);
+    tips.forEach((t, i) => g.text(3, 19 + i, t, C.dim));
+    g.text(3, 30, 'Every world is generated from its seed: biomes, rivers,', C.faint);
+    g.text(3, 31, 'civilizations, towns and every villager\'s life story.', C.faint);
     g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
   }
 }

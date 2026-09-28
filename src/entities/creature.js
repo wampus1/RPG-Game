@@ -110,7 +110,10 @@ export class Creature extends Entity {
       if (!this.game.requestPathBudget()) return;
       this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1, partial: true });
       this.pathI = 0;
-      if (!this.path) return;
+      if (!this.path || !this.path.length) {
+        this.path = null;
+        return;
+      }
     }
     const [nx, , nz] = this.path[this.pathI];
     if (this.tryStep(nx, nz, this.S.step)) this.pathI++;

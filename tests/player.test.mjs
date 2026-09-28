@@ -120,11 +120,17 @@ test('tossing items and sleeping through the night', () => {
   assert.equal(p.inv[0], null);
   game.minute = 22 * 60;
   game.trySleep(p.x, p.y, p.z);
-  assert.ok(game.sleepFast > 1);
+  assert.ok(game.sleep && p.sleeping, 'lying down');
   const input = stubInput();
   let guard = 0;
-  while (game.sleepFast && guard++ < 5000) game.update(0.05, input);
-  assert.ok(!game.sleepFast, 'woke up');
+  let fast = 0;
+  while (game.sleep && guard++ < 5000) {
+    game.update(0.05, input);
+    fast = Math.max(fast, game.sleepFast || 0);
+  }
+  assert.ok(fast >= 30, 'time sped up while asleep');
+  assert.ok(!game.sleep && !game.sleepFast && !p.sleeping, 'woke up');
+  assert.equal(p.hp, p.maxHp);
   assert.ok(game.minute >= 6 * 60 && game.minute < 8 * 60, `woke at ${game.minute}`);
   assert.equal(game.day, 2);
 });

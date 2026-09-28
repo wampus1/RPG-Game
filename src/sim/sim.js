@@ -1,0 +1,914 @@
+// The town simulation layer that sits between the game and the settlement
+// records: economy ticks, reputation, mourning and graves, citizenship and
+// house building, traveling merchants, deferred world edits, and saving.
+import { GROUND } from '../config.js';
+import { B } from '../world/blocks.js';
+import { ITEMS } from '../world/items.js';
+import { RNG, hash4, clamp } from '../util/rng.js';
+import { jobTitle } from '../entities/npcgen.js';
+import { graveyardFence } from '../world/settlement.js';
+import {
+  initEcon, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
+  ledger, alive, DAY, price, kitchenOf, STOCK,
+} from './econ.js';
+import { Justice } from './justice.js';
+import { removeItem, countItem } from '../game/inventory.js';
+
+const REP_LEVELS = [
+  [-60, 'Hated', '#ff5050'], [-25, 'Disliked', '#ff9060'], [10, 'Neutral', '#c8c8c8'],
+  [35, 'Friendly', '#80e070'], [70, 'Liked', '#80e0ff'], [101, 'Trusted', '#ffe070'],
+];
+
+export function repLevel(v) {
+  for (const [max, label, color] of REP_LEVELS) if (v < max) return { label, color };
+  return { label: 'Trusted', color: '#ffe070' };
+}
+
+export function buildingAt(L, x, z) {
+  for (const b of L.buildings) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return b;
+  return null;
+}
+
+export class Sim {
+  constructor(game) {
+    this.game = game;
+    this.rep = new Map();
+    this.visits = new Map(); // sid -> [visit]
+    this.visitorEnts = new Map(); // visit id -> NPC entity
+    this.pending = new Map(); // region key -> [[x, y, z, id, meta]]
+    this.citizen = null;
+    this.construction = null;
+    this.saved = null; // sid -> settlement data from a save
+    this.greetT = 0;
+    this.tickT = 0;
+    this.areaCache = new Map();
+    this.justice = new Justice(game, this);
+    this.bp = null;
+  }
+
+  get abs() {
+    return this.game.day * DAY + this.game.minute;
+  }
+
+  // ------------------------------------------------------------ layouts
+  attach(L) {
+    initEcon(L);
+    const sid = L.settlement.id;
+    const dead = this.game.deadNpcs.get(sid);
+    if (dead) for (const i of dead) if (L.npcs[i]) L.npcs[i].alive = false;
+    const sv = this.saved && this.saved.get(sid);
+    if (sv) this.applySettlement(L, sv);
+    const c = this.construction;
+    if (c && c.sid === sid && !L.buildings[c.bid]) {
+      const plot = L.plots[c.plot];
+      if (plot) {
+        plot.taken = true;
+        const bp = L.blueprint(plot, L.buildings.length);
+        c.bid = bp.bld.id;
+        bp.bld.underConstruction = !c.done;
+        L.buildings.push(bp.bld);
+        this.bp = { sid, bp };
+        if (c.done) this.completeHouse(L, bp, true);
+      }
+    }
+  }
+
+  layoutOf(sid) {
+    const s = this.game.world.ow.settlements[sid];
+    return s ? this.game.world.getLayout(s) : null;
+  }
+
+  catchUp(L) {
+    simulateTo(this, L, this.abs);
+  }
+
+  update(dt) {
+    this.greetT -= dt;
+    this.tickT -= dt;
+    if (this.tickT <= 0) {
+      this.tickT = 0.5;
+      for (const { layout } of this.game.active.values()) simulateTo(this, layout, this.abs);
+      this.updateConstruction();
+      this.syncVisitors();
+      this.areaCache.clear();
+    }
+    this.justice.update(dt);
+  }
+
+  // ------------------------------------------------------------ world edits
+  // Block changes that must happen even if the region isn't loaded right now.
+  setBlocks(ops) {
+    const w = this.game.world;
+    for (const op of ops) {
+      const [x, y, z, id, meta = 0] = op;
+      if (w.regionAt(x, z)) w.setBlock(x, y, z, id, meta);
+      else {
+        const key = w.regionKey(Math.floor(x / 64), Math.floor(z / 36));
+        if (!this.pending.has(key)) this.pending.set(key, []);
+        this.pending.get(key).push([x, y, z, id, meta]);
+      }
+    }
+  }
+
+  applyPending(region) {
+    const w = this.game.world;
+    const key = w.regionKey(region.rx, region.rz);
+    const ops = this.pending.get(key);
+    if (!ops) return;
+    this.pending.delete(key);
+    for (const [x, y, z, id, meta] of ops) w.setBlock(x, y, z, id, meta);
+  }
+
+  // ------------------------------------------------------------ reputation
+  repEntry(sid, idx) {
+    const k = `${sid}:${idx}`;
+    let r = this.rep.get(k);
+    if (!r) {
+      r = { v: 0, met: false, chat: -1, gift: -1, trade: -1, tradeV: 0, insult: -1 };
+      this.rep.set(k, r);
+    }
+    return r;
+  }
+
+  // Standing with the town as a whole: a bad name with most of the people
+  // you've met, crimes on record, citizenship.
+  areaMod(sid) {
+    if (this.areaCache.has(sid)) return this.areaCache.get(sid);
+    let met = 0;
+    let bad = 0;
+    for (const [k, r] of this.rep) {
+      if (!r.met || !k.startsWith(`${sid}:`)) continue;
+      met++;
+      if (r.v < -15) bad++;
+    }
+    let m = 0;
+    if (met >= 3 && bad * 2 > met) m -= 15;
+    m -= Math.min(30, this.justice.notoriety(sid) * 6);
+    if (this.isCitizen(sid)) m += 10;
+    if (this.justice.exiled.has(sid)) m -= 60;
+    this.areaCache.set(sid, m);
+    return m;
+  }
+
+  opinion(npc) {
+    const rec = npc.rec;
+    const sid = npc.settlement.id;
+    let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid);
+    const c = this.citizen;
+    if (c && c.sid === sid && c.host !== null && rec.home === c.host) v += 10;
+    return clamp(Math.round(v), -100, 100);
+  }
+
+  changeRep(npc, delta) {
+    const sid = npc.settlement ? npc.settlement.id : npc.sid;
+    const rec = npc.rec || npc;
+    const r = this.repEntry(sid, rec.idx);
+    r.v = clamp(r.v + delta, -100, 100);
+    r.met = true;
+    this.areaCache.delete(sid);
+    const e = npc.emoteShow ? npc : rec.ent;
+    if (e && !e.dead && e.emoteShow && Math.abs(delta) >= 3) e.emoteShow(delta > 0 ? '♥' : '×', delta > 0 ? '#ff80a0' : '#ff6040', 1.6);
+    return r.v;
+  }
+
+  meet(npc) {
+    this.repEntry(npc.settlement.id, npc.rec.idx).met = true;
+  }
+
+  canGreet() {
+    return this.greetT <= 0;
+  }
+
+  markGreet() {
+    this.greetT = 4;
+  }
+
+  isCitizen(sid) {
+    return !!this.citizen && this.citizen.sid === sid;
+  }
+
+  // NPCs who can see what happens at (x, z): same room or same street.
+  witnesses(sid, x, z, radius = 7, exclude = null) {
+    const a = this.game.active.get(sid);
+    if (!a) return [];
+    const L = a.layout;
+    const b = buildingAt(L, x, z);
+    return a.npcs.filter((n) => {
+      if (n.dead || n.sleeping || n === exclude || n.rec.away) return false;
+      if (Math.max(Math.abs(n.x - x), Math.abs(n.z - z)) > radius) return false;
+      const nb = buildingAt(L, n.x, n.z);
+      if (nb === b) return true;
+      // Someone standing in a doorway sees both sides.
+      const door = b || nb;
+      return Math.abs(n.x - door.door.x) + Math.abs(n.z - door.door.z) <= 1 || Math.abs(x - door.door.x) + Math.abs(z - door.door.z) <= 1;
+    });
+  }
+
+  // ------------------------------------------------------------ gifts & chat
+  giveGift(npc, item) {
+    const rec = npc.rec;
+    const d = ITEMS[item];
+    const day = this.game.day;
+    const r = this.repEntry(npc.settlement.id, rec.idx);
+    let score = Math.min(12, 1 + d.value * 0.6);
+    let reaction = 'fine';
+    const hobbyItems = rec.hobbies.map((h) => ({ reading: 'book', fishing: 'fishing_rod', music: 'lute', praying: 'prayer_beads', smoking: 'pipe', dice: 'dice', sketching: 'sketchbook', gardening: 'seeds' }[h])).filter(Boolean);
+    if (d.kind === 'food' && rec.hungry >= 1) {
+      score += 10;
+      reaction = 'hungry';
+    } else if (hobbyItems.includes(item)) {
+      score += 8;
+      reaction = 'hobby';
+    } else if (item.startsWith('flower_') || item === 'gem' || item === 'gold_ingot' || d.quality === 'delightful' || item === 'pie') {
+      score += 5;
+      reaction = 'love';
+    } else if (['stick', 'dirt', 'cobblestone', 'bone', 'slime_gel', 'gravel', 'sand'].includes(item) || d.quality === 'terrible') {
+      score = -2;
+      reaction = 'junk';
+    }
+    if (item === 'coin') {
+      score = 3;
+      reaction = 'coin';
+    }
+    if (r.gift === day && score > 0) score *= 0.35;
+    r.gift = day;
+    const gained = this.changeRep(npc, Math.round(score));
+    // The gift goes into their inventory (food gets eaten when needed).
+    if (item === 'coin') rec.coins += 1;
+    else invAdd(rec.inv, item, 1);
+    if (d.kind === 'food' && rec.hungry >= 1) {
+      invTake(rec.inv, item, 1);
+      rec.fed++;
+      rec.hungry = 0;
+    }
+    return { reaction, score, rep: gained };
+  }
+
+  chat(npc, kind) {
+    const r = this.repEntry(npc.settlement.id, npc.rec.idx);
+    const day = this.game.day;
+    const p = npc.rec.personality;
+    if (kind === 'kind') {
+      if (r.chat === day) return 0;
+      r.chat = day;
+      const d = Math.round(2 + p.sociability * 3 + p.kindness * 2);
+      this.changeRep(npc, d);
+      return d;
+    }
+    if (kind === 'rude') {
+      const d = -Math.round(6 + p.temper * 6);
+      r.insult = day;
+      this.changeRep(npc, d);
+      return d;
+    }
+    return 0;
+  }
+
+  // Good trades build goodwill (a little per coin spent, capped per day).
+  noteTrade(npc, coins) {
+    const r = this.repEntry(npc.settlement.id, npc.rec.idx);
+    const day = this.game.day;
+    if (r.trade !== day) {
+      r.trade = day;
+      r.tradeV = 0;
+    }
+    const before = Math.floor(r.tradeV / 15);
+    r.tradeV += coins;
+    const after = Math.min(5, Math.floor(r.tradeV / 15));
+    if (after > before) this.changeRep(npc, after - before);
+    r.met = true;
+  }
+
+  // ------------------------------------------------------------ trading
+  // The shelf an NPC sells from and the purse they pay with.
+  shopOf(npc) {
+    const rec = npc.rec;
+    const L = npc.layout;
+    const e = L.econ;
+    if (rec.visitor) {
+      const v = rec.visit;
+      return { store: v.goods, purse: { get: () => v.coins, add: (n) => { v.coins += n; } }, kind: 'general', wants: null };
+    }
+    const t = rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? (rec.job === 'cook' ? 'cook' : 'inn') : JOBS_TRADER(rec);
+    if (!t) return null;
+    let biz = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;
+    if (t === 'cook' || t === 'inn') biz = kitchenOf(L) || biz;
+    if (biz) return { store: biz.store, purse: { get: () => biz.till + rec.coins, add: (n) => { if (n >= 0) biz.till += n; else { const fromTill = Math.min(biz.till, -n); biz.till -= fromTill; rec.coins -= -n - fromTill; } } }, kind: t };
+    // Farmers, fishers and trappers sell from their own pack.
+    if (!rec.stall) rec.stall = {};
+    for (const it of rec.inv) {
+      st.add(rec.stall, it.item, it.count);
+    }
+    rec.inv.length = 0;
+    return { store: rec.stall, purse: { get: () => rec.coins, add: (n) => { rec.coins += n; } }, kind: t, personal: true };
+  }
+
+  // Put a personal stall back into the NPC's pack when trading ends.
+  closeShop(npc) {
+    const rec = npc.rec;
+    if (!rec.stall) return;
+    for (const [k, n] of Object.entries(rec.stall)) invAdd(rec.inv, k, n);
+    rec.stall = null;
+  }
+
+  // Price multipliers for the player: town prosperity, the trader's
+  // temperament, sales tax, their opinion of you and citizenship.
+  priceFactor(npc) {
+    const rec = npc.rec;
+    const s = npc.settlement;
+    const e = npc.layout.econ;
+    const cond = s.condition;
+    let m = cond === 'prosperous' ? 1.5 : cond === 'poor' ? 1.2 : 1.35;
+    m *= rec.personality.kindness > 0.7 ? 0.92 : rec.personality.kindness < 0.3 ? 1.15 : 1;
+    m *= 1 + (e ? e.tax * 0.5 : 0);
+    const op = this.opinion(npc);
+    m *= op >= 35 ? 0.9 : op <= -25 ? 1.25 : 1;
+    if (this.isCitizen(s.id)) m *= 0.92;
+    return m;
+  }
+
+  // ------------------------------------------------------------ deaths
+  recordDeath(L, rec, cause, killer) {
+    if (!alive(rec)) return null;
+    if (rec.visitor) {
+      rec.alive = false;
+      const list = this.visits.get(L.settlement.id) || [];
+      this.visits.set(L.settlement.id, list.filter((v) => v !== rec.visit));
+      return null;
+    }
+    const game = this.game;
+    const s = L.settlement;
+    const day = game.day;
+    const rng = new RNG(hash4(s.seed, rec.idx, day, 0xdea7));
+    rec.alive = false;
+    rec.deathDay = day;
+    rec.cause = cause;
+    rec.override = null;
+    if (!game.deadNpcs.has(s.id)) game.deadNpcs.set(s.id, new Set());
+    game.deadNpcs.get(s.id).add(rec.idx);
+    const ent = rec.ent;
+    if (ent && !ent.dead) {
+      // A quiet passing (old age, illness): they simply aren't there any more.
+      ent.releaseSpot();
+      game.removeOcc(ent);
+      ent.dead = true;
+      game.npcs = game.npcs.filter((n) => n !== ent);
+      const a = game.active.get(s.id);
+      if (a) a.npcs = a.npcs.filter((n) => n !== ent);
+    }
+    rec.ent = null;
+    // Their savings pass to the family (or the town).
+    const heirs = [rec.partner, ...rec.children].map((i) => (i === null || i === undefined ? null : L.npcs[i])).filter((r) => r && alive(r));
+    if (heirs.length) {
+      const each = Math.floor(rec.coins / heirs.length);
+      for (const h of heirs) h.coins += each;
+    } else L.econ.treasury += rec.coins;
+    rec.coins = 0;
+    const slot = this.addGrave(L, rec, cause, day);
+    const name = `${rec.name.first} ${rec.name.last}`;
+    const fam = new Set([rec.partner, ...rec.children, ...rec.parents].filter((i) => i !== null && i !== undefined));
+    let k = 0;
+    for (const o of L.npcs) {
+      if (!alive(o) || o === rec) continue;
+      let rel = null;
+      if (fam.has(o.idx) || o.household === rec.household) rel = 'family';
+      else if ((rec.friends || []).includes(o.idx)) rel = 'friend';
+      else if (o.work && rec.work && o.work.building != null && o.work.building === rec.work.building) rel = 'acquaintance';
+      if (!rel) continue;
+      o.grief = o.grief || [];
+      o.grief.push({ idx: rec.idx, name, first: rec.name.first, rel, until: day + (rel === 'family' ? 5 : rel === 'friend' ? 3 : 1), slot: slot ? { x: slot.x, z: slot.z } : null, cause, byPlayer: killer === 'player' });
+      o.mood = clamp(o.mood - (rel === 'family' ? 0.35 : rel === 'friend' ? 0.2 : 0.08), 0, 1);
+      if (slot && rel !== 'acquaintance' && !o.away) {
+        const g = L.graveyard;
+        const tx = clamp(slot.x + ((k++ % 3) - 1), g.x + 1, g.x + g.W - 2);
+        setOverride(o, (day + 1) * DAY + 960, (day + 1) * DAY + 1020, 'funeral', { target: { x: tx, z: slot.z + 1 }, who: name });
+      }
+    }
+    const priest = L.npcs.find((r) => r.job === 'priest' && alive(r) && !r.away);
+    if (priest && slot) setOverride(priest, (day + 1) * DAY + 950, (day + 1) * DAY + 1025, 'funeral', { target: { x: slot.x, z: slot.z + 1 }, who: name, officiant: true });
+    L.econ.recent.deaths++;
+    ledger(L, day, `${name}, ${jobTitle(rec, s).toLowerCase()}, died (${cause}).${slot ? ' Funeral tomorrow at 16:00.' : ''}`);
+    if (rec.job === 'mayor') ledger(L, day, 'The council will govern until a new leader is chosen.');
+    if (this.citizen && this.citizen.sid === s.id && this.citizen.host === rec.home) {
+      // Hosting continues with the rest of the family, if any remain.
+      if (!L.npcs.some((r) => r.home === rec.home && alive(r))) this.citizen.host = null;
+    }
+    void rng;
+    return slot;
+  }
+
+  addGrave(L, rec, cause, day) {
+    const g = L.graveyard;
+    if (!g) return null;
+    let slot = g.slots.find((q) => q.row < g.rows && !q.grave);
+    if (!slot && g.rows < g.maxRows) {
+      const prev = g.rows;
+      g.rows++;
+      this.setBlocks(graveyardFence(g, prev).map(([x, z, id]) => [x, g.y, z, id, 0]));
+      ledger(L, day, 'The graveyard was extended to make room for the dead.');
+      slot = g.slots.find((q) => q.row < g.rows && !q.grave);
+    }
+    if (!slot) return null;
+    slot.grave = { name: `${rec.name.first} ${rec.name.last}`, title: jobTitle(rec, L.settlement), died: day, cause, idx: rec.idx, epitaph: epitaphFor(rec, L) };
+    this.setBlocks([[slot.x, g.y, slot.z, B.gravestone, 0]]);
+    return slot;
+  }
+
+  graveText(x, z) {
+    const w = this.game.world;
+    for (const s of w.ow.settlementsNear(x, z)) {
+      const L = w.layouts.get(s.id);
+      const g = L && L.graveyard;
+      if (!g) continue;
+      const slot = g.slots.find((q) => q.x === x && q.z === z);
+      if (!slot || !slot.grave) continue;
+      const gr = slot.grave;
+      if (gr.ancestor) return [`HERE LIES ${gr.name.toUpperCase()}`, `One of the first of ${s.name}.`, '', `"${gr.epitaph}"`];
+      return [`HERE LIES ${gr.name.toUpperCase()}`, `${gr.title} of ${s.name}`, `Died on day ${gr.died} (${gr.cause})`, '', `"${gr.epitaph}"`];
+    }
+    return ['A weathered gravestone.', 'The name has worn away.'];
+  }
+
+  // ------------------------------------------------------------ daily hooks
+  dailySocial(L, day, rng) {
+    for (const rec of L.npcs) {
+      if (!alive(rec) || rec.away) continue;
+      rec.grief = (rec.grief || []).filter((g) => g.until >= day);
+      const g = rec.grief.find((q) => q.rel !== 'acquaintance' && q.slot);
+      if (!g || (rec.override && rec.override.e > day * DAY)) continue;
+      if (!rng.chance(g.rel === 'family' ? 0.9 : 0.5)) continue;
+      const slot = freeSlot(rec, day, 600, 50);
+      if (slot) setOverride(rec, slot.s, slot.e, 'mourn', { target: { x: g.slot.x, z: g.slot.z + 1 }, who: g.name });
+    }
+  }
+
+  dailyCivic(L, day, rng) {
+    const c = this.construction;
+    if (c && !c.done && c.sid === L.settlement.id) this.assignBuilders(L, day, day * DAY + 600);
+    const z = this.citizen;
+    if (z && z.sid === L.settlement.id && z.taxDay !== day) {
+      z.taxDay = day;
+      const p = this.game.player;
+      const tax = Math.max(1, Math.round(12 * L.econ.tax));
+      if (countItem(p.inv, 'coin') >= tax) {
+        removeItem(p.inv, 'coin', tax);
+        L.econ.treasury += tax;
+        z.owed = 0;
+        this.game.ui.msg(`Paid ¤${tax} in taxes to ${L.settlement.name}.`, '#e8e0a0');
+      } else {
+        z.owed = (z.owed || 0) + 1;
+        this.game.ui.msg(`You couldn't pay your taxes to ${L.settlement.name}!`, '#ff9060');
+        if (z.owed >= 3) this.revoke('unpaid taxes');
+      }
+    }
+  }
+
+  hourly(L, h, day, hod, rng) {
+    // Snares near an active town catch things now and then.
+    if (!this.game.active.has(L.settlement.id)) return;
+    const w = this.game.world;
+    for (const sp of L.spotsByTag('trap')) {
+      const t = sp.trap;
+      if (!t || !w.regionAt(t.x, t.z)) continue;
+      if (w.getBlock(t.x, t.y, t.z) === B.snare && !w.getState(t.x, t.y, t.z) && rng.chance(0.25)) w.setState(t.x, t.y, t.z, true);
+    }
+    void h;
+    void day;
+    void hod;
+  }
+
+  // A trapper or fisher drops off their catch at the tavern kitchen.
+  sellCatch(L, rec) {
+    const k = kitchenOf(L);
+    if (!k) return 0;
+    let sold = 0;
+    for (const it of [...rec.inv]) {
+      if (!['raw_meat', 'fish', 'leather', 'carrot', 'cabbage', 'wheat'].includes(it.item) || it.item === 'leather') continue;
+      const n = Math.max(0, it.count - 1);
+      for (let i = 0; i < n; i++) {
+        const pr = price(it.item);
+        if (k.till < pr + 5) break;
+        k.till -= pr;
+        rec.coins += pr;
+        rec.earned += pr;
+        invTake(rec.inv, it.item, 1);
+        st.add(k.store, it.item, 1);
+        sold++;
+      }
+    }
+    return sold;
+  }
+
+  // ------------------------------------------------------------ citizenship
+  joinTerms(mayor) {
+    const L = mayor.layout;
+    const s = L.settlement;
+    const fee = { village: 15, town: 40, city: 80 }[s.type] || 30;
+    const op = this.opinion(mayor);
+    if (this.justice.exiled.has(s.id)) return { ok: false, reason: 'exiled' };
+    if (this.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
+    if (op < -10) return { ok: false, reason: 'distrust' };
+    if (this.isCitizen(s.id)) return { ok: false, reason: 'already' };
+    return { ok: true, fee: op >= 40 ? 0 : fee, plot: L.plots.find((p) => !p.taken) || null };
+  }
+
+  join(mayor) {
+    const L = mayor.layout;
+    const s = L.settlement;
+    const t = this.joinTerms(mayor);
+    if (!t.ok) return t;
+    const p = this.game.player;
+    if (countItem(p.inv, 'coin') < t.fee) return { ok: false, reason: 'money', fee: t.fee };
+    if (t.fee) removeItem(p.inv, 'coin', t.fee);
+    L.econ.treasury += t.fee;
+    if (this.citizen) this.revoke('moved', true);
+    const host = this.pickHost(L);
+    const day = this.game.day;
+    this.citizen = { sid: s.id, since: day, host: host ? host.house.id : null, hostBed: host ? host.bed : null, home: null, taxDay: day, owed: 0 };
+    if (host) for (const r of L.npcs) if (r.home === host.house.id && alive(r)) this.changeRep(r.ent || { rec: r, settlement: s }, 6);
+    this.changeRep(mayor, 5);
+    ledger(L, day, `${this.game.playerName} became a citizen of ${s.name}.`);
+    if (t.plot) {
+      t.plot.taken = true;
+      const bp = L.blueprint(t.plot, L.buildings.length);
+      bp.bld.underConstruction = true;
+      L.buildings.push(bp.bld);
+      this.bp = { sid: s.id, bp };
+      this.construction = { sid: s.id, plot: t.plot.id, bid: bp.bld.id, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
+      this.assignBuilders(L, day, this.abs);
+      ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
+    }
+    return { ok: true, fee: t.fee, host, plot: t.plot };
+  }
+
+  pickHost(L) {
+    let best = null;
+    for (const b of L.buildings) {
+      if (!b.residential || !b.household || b.playerHome) continue;
+      const members = L.npcs.filter((r) => r.home === b.id);
+      const living = members.filter(alive);
+      if (!living.length || b.beds.length <= members.length) continue;
+      const bed = b.beds[members.length];
+      const kind = living.reduce((a, r) => a + r.personality.kindness, 0) / living.length;
+      if (!best || kind > best.kind) best = { house: b, bed: { x: bed.x, y: GROUND, z: bed.z }, kind, family: b.family };
+    }
+    return best;
+  }
+
+  revoke(reason, quiet = false) {
+    const c = this.citizen;
+    if (!c) return;
+    const L = this.layoutOf(c.sid);
+    this.citizen = null;
+    if (!quiet) this.game.ui.msg(`Your citizenship of ${L.settlement.name} was revoked (${reason}).`, '#ff7060');
+    ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}).`);
+    const k = this.construction;
+    if (k && k.sid === c.sid && !k.done) {
+      k.cancelled = true;
+      this.clearBuilders(L);
+    }
+    this.areaCache.clear();
+  }
+
+  hostName() {
+    const c = this.citizen;
+    if (!c || c.host === null) return null;
+    const L = this.layoutOf(c.sid);
+    return L.buildings[c.host]?.family || null;
+  }
+
+  // Who may sleep where: your own home, your host's guest bed, your jail cell.
+  bedOwner(x, z) {
+    const s = this.game.world.ow.settlementAt(x, z);
+    if (!s) return null;
+    const L = this.game.world.getLayout(s);
+    const b = buildingAt(L, x, z);
+    if (!b) return null;
+    const c = this.citizen;
+    if (b.playerHome) return c && c.sid === s.id && c.home === b.id ? null : { kind: 'other', b, L };
+    if (c && c.sid === s.id && c.host === b.id && c.hostBed && c.hostBed.x === x && c.hostBed.z === z) return null;
+    if (L.jail && L.jail.bed.x === x && L.jail.bed.z === z) return { kind: 'jail', b, L };
+    if (!b.residential) return b.type === 'guardhouse' ? { kind: 'guard', b, L } : null;
+    const living = L.npcs.filter((r) => r.home === b.id && alive(r));
+    if (!living.length) return null;
+    return { kind: 'home', b, L, family: b.family };
+  }
+
+  // ------------------------------------------------------------ construction
+  builders(L) {
+    const list = L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && (r.job === 'carpenter' || r.job === 'laborer'));
+    if (list.length < 2) {
+      const extra = L.npcs.filter((r) => alive(r) && !r.away && r.age === 'adult' && !list.includes(r) && !['guard', 'mayor', 'cook', 'innkeeper', 'priest', 'merchant'].includes(r.job))
+        .sort((a, b) => (b.skills?.building || 0) - (a.skills?.building || 0));
+      list.push(...extra.slice(0, 2 - list.length));
+    }
+    return list.slice(0, 3);
+  }
+
+  buildSites(L) {
+    const c = this.construction;
+    const plot = L.plots[c.plot];
+    const out = [];
+    for (let z = plot.z0 - 1; z <= plot.z1 + 1; z++) {
+      for (let x = plot.x0 - 1; x <= plot.x1 + 1; x++) {
+        const ring = x < plot.x0 || x > plot.x1 || z < plot.z0 || z > plot.z1;
+        if (ring && (x + z) % 2 === 0) out.push({ x, z });
+      }
+    }
+    return out;
+  }
+
+  assignBuilders(L, day, fromAbs) {
+    const c = this.construction;
+    if (!c || c.done || c.cancelled) return;
+    const sites = this.buildSites(L);
+    this.builders(L).forEach((r, i) => {
+      const sched = day % 7 === r.restDay ? r.schedule.rest : r.schedule.work;
+      const works = sched.filter((e) => e.act === 'work' && e.s < 1140);
+      const s0 = works.length ? day * DAY + works[0].s : day * DAY + 480;
+      const e0 = works.length ? day * DAY + Math.min(works[works.length - 1].e, 1140) : day * DAY + 1080;
+      const s = Math.max(s0, fromAbs);
+      if (e0 - s < 30) return;
+      setOverride(r, s, e0, 'build', { target: sites[(i * 5) % sites.length], sites, place: 'site', allowMeals: true });
+    });
+  }
+
+  clearBuilders(L) {
+    for (const r of L.npcs) if (r.override && r.override.act === 'build') r.override = null;
+  }
+
+  blueprint() {
+    const c = this.construction;
+    if (!c) return null;
+    if (this.bp && this.bp.sid === c.sid) return this.bp.bp;
+    const L = this.layoutOf(c.sid);
+    if (this.bp && this.bp.sid === c.sid) return this.bp.bp;
+    const plot = L.plots[c.plot];
+    if (!plot) return null;
+    const bp = L.blueprint(plot, c.bid);
+    L.buildings[c.bid] = bp.bld;
+    this.bp = { sid: c.sid, bp };
+    return bp;
+  }
+
+  // Work accrues during daytime hours (07:00-19:00) while builders live.
+  updateConstruction() {
+    const c = this.construction;
+    if (!c || c.done || c.cancelled) return;
+    const L = this.layoutOf(c.sid);
+    const now = this.abs;
+    const n = this.builders(L).length;
+    const rate = Math.min(1.5, Math.max(0.4, n / 2));
+    let t = c.last;
+    let work = 0;
+    while (t < now) {
+      const dayStart = Math.floor(t / DAY) * DAY;
+      const a = Math.max(t, dayStart + 420);
+      const b = Math.min(now, dayStart + 1140);
+      if (b > a) work += b - a;
+      t = dayStart + DAY;
+    }
+    c.last = now;
+    c.work += work * rate;
+    const bp = this.blueprint();
+    if (!bp) return;
+    const target = Math.min(bp.list.length, Math.floor((bp.list.length * c.work) / c.need));
+    if (target > c.placed) {
+      this.setBlocks(bp.list.slice(c.placed, target));
+      c.placed = target;
+      const g = this.game;
+      const pl = L.plots[c.plot];
+      if (Math.abs(g.player.x - pl.x0) < 24 && Math.abs(g.player.z - pl.z0) < 20 && Math.random() < 0.5) {
+        g.renderer.emit(pl.x0 + 2, GROUND, pl.z0 + 2, { n: 4, color: ['#c8a064', '#8e6a3a', '#e8e0d0'], up: 30, life: 0.5, oy: -6 });
+        g.audio?.play('place');
+      }
+    }
+    if (c.placed >= bp.list.length) this.completeHouse(L, bp, false);
+  }
+
+  completeHouse(L, bp, silent) {
+    const c = this.construction;
+    c.done = true;
+    const bld = bp.bld;
+    bld.underConstruction = false;
+    if (!L.spots.includes(bp.spots[0])) L.spots.push(...bp.spots);
+    for (const ch of bp.chimneys) if (!L.chimneys.includes(ch)) L.chimneys.push(ch);
+    for (const sg of bp.signs) if (!L.signs.includes(sg)) L.signs.push(sg);
+    bld.homeName = `${this.game.playerName}'s Cottage`;
+    if (this.citizen && this.citizen.sid === c.sid) {
+      this.citizen.home = bld.id;
+      const bed = bld.beds[0];
+      if (bed) this.citizen.homeBed = { x: bed.x, y: GROUND, z: bed.z };
+    }
+    this.clearBuilders(L);
+    if (!silent) {
+      this.game.ui.msg(`Your new home in ${L.settlement.name} is finished!`, '#ffe070');
+      this.game.audio?.play('coin');
+      ledger(L, this.game.day, `The builders finished ${this.game.playerName}'s cottage.`);
+    }
+    this.game.refreshSigns?.();
+  }
+
+  constructionProgress() {
+    const c = this.construction;
+    if (!c) return null;
+    if (c.done) return 1;
+    const bp = this.blueprint();
+    return bp ? c.placed / bp.list.length : 0;
+  }
+
+  // ------------------------------------------------------------ merchants
+  departMerchant(L, rec, h, day, rng) {
+    const s = L.settlement;
+    const ow = this.game.world.ow;
+    const dests = ow.settlements
+      .filter((o) => o.id !== s.id && o.condition !== 'abandoned')
+      .map((o) => ({ o, d: Math.hypot(o.cx - s.cx, o.cz - s.cz) }))
+      .filter((q) => q.d < 16);
+    if (!dests.length) return;
+    dests.sort((a, b) => a.d - b.d);
+    const pick = dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
+    const travel = Math.round(3 + pick.d * 1.5);
+    const goods = packGoods(L, rec, rng);
+    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day });
+    const visit = {
+      id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look,
+      goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0,
+    };
+    t.ret = visit.leave + travel * 60;
+    if (!this.visits.has(pick.o.id)) this.visits.set(pick.o.id, []);
+    this.visits.get(pick.o.id).push(visit);
+    t.visit = visit.id;
+    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name} with a pack of goods.`);
+    if (rec.ent && !rec.ent.dead) {
+      // Walk out of town first, then vanish over the horizon.
+      setOverride(rec, h, h + 180, 'travel', { place: 'road' });
+      rec.leaving = true;
+    } else rec.away = true;
+  }
+
+  returnMerchant(L, rec, day) {
+    const t = rec.trip;
+    rec.away = false;
+    rec.leaving = false;
+    const list = this.visits.get(t.dest) || [];
+    const v = list.find((q) => q.id === t.visit);
+    let earned = v ? v.earned : 0;
+    if (!v || !v.traded) {
+      // Nobody watched the trip: assume the goods sold at a modest profit.
+      for (const [k, n] of Object.entries(t.goods)) earned += Math.round(price(k) * n * 1.25);
+    }
+    rec.coins += earned;
+    rec.earned += earned;
+    rec.trip = { phase: 'home', since: day };
+    this.visits.set(t.dest, list.filter((q) => q.id !== t.visit));
+    const dest = this.game.world.ow.settlements[t.dest];
+    ledger(L, day, `${rec.name.first} ${rec.name.last} came back from ${dest ? dest.name : 'the road'} (+¤${earned}).`);
+  }
+
+  // Visiting merchants sell to local businesses; strangers occasionally
+  // turn up when the player is in town.
+  merchantVisits(L, h, rng) {
+    const sid = L.settlement.id;
+    const list = this.visits.get(sid) || [];
+    for (const v of list) if (!v.traded && h >= v.arrive) this.visitTrade(L, v, rng);
+    const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
+    this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
+    const hod = Math.floor((h % DAY) / 60);
+    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07)) {
+      const ow = this.game.world.ow;
+      const s = L.settlement;
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && o.condition !== 'abandoned' && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18) || []);
+      if (!from) return;
+      const goods = {};
+      const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
+      if (from.coast || from.river) opts.push('fish', 'cooked_fish');
+      for (const k of rng.shuffle(opts).slice(0, 6)) if (ITEMS[k]) st.add(goods, k, k === 'gem' ? 1 : rng.int(1, 4));
+      const v = makeVisitor(from, rng, h, goods);
+      v.traded = true;
+      this.visits.set(sid, [...this.visits.get(sid), v]);
+      ledger(L, this.game.day, `A traveling merchant, ${v.name.first} ${v.name.last} of ${from.name}, arrived in town.`);
+    }
+  }
+
+  visitTrade(L, v, rng) {
+    v.traded = true;
+    const e = L.econ;
+    const k = kitchenOf(L);
+    const shop = L.buildings.find((b) => b.type === 'shop');
+    const sb = shop ? e.biz[shop.id] : null;
+    for (const [item, n] of Object.entries(v.goods)) {
+      let buyer = null;
+      if (k && ['fish', 'raw_meat', 'carrot', 'cabbage', 'wheat', 'bread', 'cooked_fish'].includes(item)) buyer = k;
+      else if (sb) buyer = sb;
+      if (!buyer) continue;
+      const sell = Math.min(n, rng.int(1, Math.max(1, Math.ceil(n / 2))));
+      for (let i = 0; i < sell; i++) {
+        const pr = Math.round(price(item) * 1.15);
+        if (buyer.till < pr + 5) break;
+        buyer.till -= pr;
+        v.earned += pr;
+        v.coins += pr;
+        st.take(v.goods, item, 1);
+        st.add(buyer.store, item, 1);
+      }
+    }
+  }
+
+  // Spawn / retire visiting merchant entities in active settlements.
+  syncVisitors() {
+    const g = this.game;
+    const now = this.abs;
+    for (const [sid, a] of g.active) {
+      const list = this.visits.get(sid) || [];
+      for (const v of list) {
+        const ent = this.visitorEnts.get(v.id);
+        const here = now >= v.arrive && now < v.leave;
+        if (here && (!ent || ent.dead) && !v.gone) {
+          const e2 = g.spawnVisitor(a.layout, v, 1000 + list.indexOf(v));
+          if (e2) this.visitorEnts.set(v.id, e2);
+        } else if (!here && ent && !ent.dead && now >= v.leave && !(ent.rec.override && ent.rec.override.act === 'travel')) {
+          setOverride(ent.rec, now, now + 240, 'travel', { place: 'road' });
+          v.gone = true;
+        }
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ save
+  serialize() {
+    const settlements = [];
+    for (const L of this.game.world.layouts.values()) {
+      if (!L.econ) continue;
+      settlements.push(this.serializeSettlement(L));
+    }
+    const visits = [];
+    for (const [sid, list] of this.visits) visits.push([sid, list]);
+    return {
+      settlements,
+      rep: [...this.rep],
+      visits,
+      pending: [...this.pending],
+      citizen: this.citizen,
+      construction: this.construction,
+      justice: this.justice.serialize(),
+    };
+  }
+
+  serializeSettlement(L) {
+    const pickRec = (r) => ({
+      coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
+      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, doneKey: r.doneKey,
+      hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall,
+    });
+    return {
+      sid: L.settlement.id,
+      econ: L.econ,
+      recs: L.npcs.map(pickRec),
+      graves: L.graveyard ? { rows: L.graveyard.rows, slots: L.graveyard.slots.map((s) => s.grave) } : null,
+      plots: L.plots.map((p) => !!p.taken),
+    };
+  }
+
+  applySettlement(L, sv) {
+    Object.assign(L.econ, sv.econ);
+    sv.recs.forEach((d, i) => {
+      if (L.npcs[i]) Object.assign(L.npcs[i], d);
+    });
+    if (sv.graves && L.graveyard) {
+      L.graveyard.rows = sv.graves.rows;
+      sv.graves.slots.forEach((gr, i) => {
+        if (L.graveyard.slots[i]) L.graveyard.slots[i].grave = gr;
+      });
+    }
+    (sv.plots || []).forEach((t, i) => {
+      if (L.plots[i]) L.plots[i].taken = t;
+    });
+  }
+
+  load(data) {
+    if (!data) return;
+    this.saved = new Map((data.settlements || []).map((s) => [s.sid, s]));
+    this.rep = new Map(data.rep || []);
+    this.visits = new Map(data.visits || []);
+    this.pending = new Map(data.pending || []);
+    this.citizen = data.citizen || null;
+    this.construction = data.construction || null;
+    this.justice.load(data.justice);
+  }
+}
+
+function JOBS_TRADER(rec) {
+  const t = { fisher: 'fisher', farmer: 'farmer', trapper: 'trapper', blacksmith: 'smith', merchant: 'general', baker: 'baker', tailor: 'tailor', carpenter: 'carpenter', herbalist: 'herbalist', scholar: 'scholar' }[rec.job];
+  return t && STOCK[t] ? t : null;
+}
+
+function epitaphFor(rec, L) {
+  if (rec.age === 'child') return 'Taken far too soon';
+  if (rec.partner !== null && rec.partner !== undefined && L.npcs[rec.partner]) return `Beloved partner of ${L.npcs[rec.partner].name.first}`;
+  if (rec.children.length) return 'A loving parent';
+  const byJob = { guard: 'Kept us safe', cook: 'Fed us all', farmer: 'Worked the good earth', priest: 'Walked in the light', trapper: 'Knew every trail', fisher: 'Gone to the far shore', blacksmith: 'Forged in fire' }[rec.job];
+  return byJob || ['Beloved by all', 'Gone but not forgotten', 'At rest at last', 'Forever in our hearts'][rec.idx % 4];
+}
+
+export { st, invCount, activityFor };

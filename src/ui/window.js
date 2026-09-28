@@ -67,6 +67,14 @@ export function describeActivity(e) {
     case 'play': return 'playing';
     case 'study': return 'at lessons';
     case 'home': return 'at home';
+    case 'mourn': return 'mourning at a grave';
+    case 'funeral': return 'at a funeral';
+    case 'build': return 'building a house';
+    case 'forage': return 'looking for food';
+    case 'trial': return 'at a hearing';
+    case 'travel': return 'leaving on a journey';
+    case 'visit': return 'selling wares';
+    case 'sell': return 'selling the catch';
     default: return e.act;
   }
 }

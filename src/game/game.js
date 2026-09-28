@@ -15,8 +15,15 @@ import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { removeItem, makeSlots } from './inventory.js';
 import { mulberry32, hash4 } from '../util/rng.js';
+import { M } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
+import { Sim, buildingAt } from '../sim/sim.js';
+import { alive, invAdd, DAY } from '../sim/econ.js';
+import { jobTitle, visitorRecord } from '../entities/npcgen.js';
+import { personName, familyName } from '../world/names.js';
+import { RNG } from '../util/rng.js';
+import { countItem } from './inventory.js';
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -31,6 +38,16 @@ export class Game {
     this.ui = ui;
     this.world = new World(this.seed);
     this.world.onChange = (x, y, z, o, n) => this.onBlockChange(x, y, z, o, n);
+    this.sim = new Sim(this);
+    this.world.onLayout = (L) => this.sim.attach(L);
+    this.world.onRegionLoad = (r) => this.sim.applyPending(r);
+    this.signIcons = new Map();
+    this.projectiles = [];
+    this.sleep = null;
+    const nrng = new RNG(hash4(this.seed, 0x9a3e));
+    const pstyle = this.world.ow.spawnSettlement ? this.world.ow.spawnSettlement.style : 'vale';
+    const pn = personName(nrng, pstyle, familyName(nrng, pstyle));
+    this.playerName = pn.first;
     this.minute = 7 * 60 + 30;
     this.day = 1;
     this.dt = 0;
@@ -260,12 +277,20 @@ export class Game {
       }
     }
     if (missing) return;
+    // The town's books were kept while we were away: catch up first.
+    this.sim.catchUp(layout);
     const dead = this.deadNpcs.get(s.id) || new Set();
     const npcs = [];
     for (const rec of layout.npcs) {
-      if (dead.has(rec.idx)) continue;
+      if (dead.has(rec.idx) || !alive(rec) || rec.away) continue;
+      if (rec.leaving) {
+        rec.leaving = false;
+        rec.away = true;
+        continue;
+      }
       const n = new NPC(this, rec, layout);
       n.placeForCurrentActivity();
+      rec.ent = n;
       npcs.push(n);
       this.npcs.push(n);
     }
@@ -280,6 +305,7 @@ export class Game {
       }
     }
     this.active.set(s.id, { layout, npcs });
+    this.refreshSigns();
   }
 
   deactivate(s) {
@@ -290,9 +316,82 @@ export class Game {
       this.removeOcc(n);
       n.dead = true;
       n.rec.hp = n.hp;
+      if (n.rec.ent === n) n.rec.ent = null;
+      if (n.rec.leaving) {
+        n.rec.leaving = false;
+        n.rec.away = true;
+      }
+      if (n.rec.visitor) this.sim.visitorEnts.delete(n.rec.visit.id);
     }
     this.npcs = this.npcs.filter((n) => !a.npcs.includes(n));
     this.active.delete(s.id);
+    this.refreshSigns();
+  }
+
+  // Returning villagers (e.g. merchants back from a trip) appear at the edge
+  // of town and walk in.
+  respawnReturning() {
+    for (const [sid, a] of this.active) {
+      const L = a.layout;
+      for (const rec of L.npcs) {
+        if (!alive(rec) || rec.away || rec.leaving || (rec.ent && !rec.ent.dead)) continue;
+        if (this.deadNpcs.get(sid)?.has(rec.idx)) continue;
+        const e = L.entrances[rec.idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+        const spot = this.findFreeSpot(e.x, e.z, GROUND);
+        const n = new NPC(this, rec, L);
+        n.teleport(spot.x, spot.y, spot.z);
+        rec.ent = n;
+        a.npcs.push(n);
+        this.npcs.push(n);
+      }
+    }
+  }
+
+  // A visiting merchant walks in from the road and sets up on the square.
+  spawnVisitor(L, visit, idx) {
+    const a = this.active.get(L.settlement.id);
+    if (!a) return null;
+    const rec = visitorRecord(visit, idx, L.settlement.id);
+    const e = L.entrances[idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+    const spot = this.findFreeSpot(e.x, e.z, GROUND);
+    const n = new NPC(this, rec, L);
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
+    a.npcs.push(n);
+    this.npcs.push(n);
+    return n;
+  }
+
+  // Remove an NPC entity that walked out of town (merchants on the road).
+  despawnNpc(n) {
+    n.releaseSpot();
+    this.removeOcc(n);
+    n.dead = true;
+    if (n.rec.ent === n) n.rec.ent = null;
+    if (n.rec.leaving) {
+      n.rec.leaving = false;
+      n.rec.away = true;
+    }
+    const a = this.active.get(n.settlement.id);
+    if (a) a.npcs = a.npcs.filter((q) => q !== n);
+    this.npcs = this.npcs.filter((q) => q !== n);
+  }
+
+  // Trade icons painted on hanging signs.
+  refreshSigns() {
+    const ICON = {
+      tavern: 'stew', shop: 'coin', smithy: 'iron_sword', temple: 'prayer_beads', bakery: 'bread', library: 'book', townhall: 'scroll',
+      guardhouse: 'spear', tailor: 'cloth', workshop: 'planks', herbalist: 'herb', warehouse: 'crate', barn: 'wheat', manor: 'gem',
+    };
+    this.signIcons.clear();
+    for (const { layout } of this.active.values()) {
+      for (const sg of layout.signs) {
+        if (sg.kind !== 'building') continue;
+        const b = layout.buildings[sg.building];
+        if (!b) continue;
+        this.signIcons.set(`${sg.x},${sg.y},${sg.z}`, b.playerHome ? 'bed' : b.residential ? (b.type === 'manor' ? 'gem' : 'door') : ICON[b.type] || 'coin');
+      }
+    }
   }
 
   // ------------------------------------------------------------ main update
@@ -307,13 +406,13 @@ export class Game {
       this.mining = null;
       return;
     }
-    const blocked = this.ui.modal || this.player.dead;
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep;
+    if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     this.minute += dt * GAME_MINUTES_PER_SECOND * (this.sleepFast || 1);
     if (this.minute >= DAY_MINUTES) {
       this.minute -= DAY_MINUTES;
       this.day++;
     }
-    if (this.sleepFast && this.minute > 6 * 60 && this.minute < 7 * 60) this.endSleep();
     if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel, uiRes.wheelShift);
     this.player.update(dt, input, blocked);
     if (!blocked) this.updateCursor(input);
@@ -323,11 +422,19 @@ export class Game {
     this.streamRegions();
     if (Math.random() < 0.05) this.updateSettlements();
     this.world.ow.markExplored(this.player.x, this.player.z, 1);
+    this.sim.update(dt);
+    this.respawnT = (this.respawnT || 0) - dt;
+    if (this.respawnT <= 0) {
+      this.respawnT = 2;
+      this.respawnReturning();
+    }
     for (const n of this.npcs) {
       if (n.dead) continue;
       n.update(dt);
       n.maybeGreet(this.player, dt);
     }
+    this.npcs = this.npcs.filter((n) => !n.dead);
+    this.updateProjectiles(dt);
     for (const c of this.creatures) c.update(dt);
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) this.removeOcc(c);
@@ -425,7 +532,9 @@ export class Game {
     }
     const w = this.world;
     const wx = mx + r.camX;
-    const wy = my + r.camY;
+    // Picking is offset half a block down so the block under the pointer is
+    // the one whose body you see there, not the one behind it.
+    const wy = my + r.camY - TILE / 2;
     let hit = null;
     if (p.layerMode !== null) {
       const L = p.y + p.layerMode;
@@ -502,6 +611,7 @@ export class Game {
 
   attackReach() {
     const h = this.player.heldDef();
+    if (h && h.ranged) return h.range;
     return Math.max(1, Math.floor(h && h.reach ? h.reach : 1.4));
   }
 
@@ -598,6 +708,13 @@ export class Game {
       this.mining = null;
       return;
     }
+    // In a cell, only the bars could possibly give way.
+    const j = this.sim.justice.jail;
+    if (j && !j.cellless && b.id !== B.iron_bars && b.id !== B.cell_door) {
+      if (!this.mining || this.mining.x !== c.x || this.mining.z !== c.z) this.ui.msg('The walls are solid stone and iron. Only the bars might give...', '#c8c8c8', true);
+      this.mining = { x: c.x, y: c.y, z: c.z, progress: 0, hitT: 1 };
+      return;
+    }
     const m = this.mining;
     if (!m || m.x !== c.x || m.y !== c.y || m.z !== c.z) {
       this.mining = { x: c.x, y: c.y, z: c.z, progress: 0, hitT: 0 };
@@ -646,6 +763,12 @@ export class Game {
       if (b.interact === 'container') {
         const slots = w.getContainer(x, y, z);
         for (const s of slots || []) if (s) drops.push({ ...s });
+        // Smashing open someone else's chest is still stealing.
+        if (byPlayer) {
+          const owner = this.containerOwner(x, y, z);
+          const taken = (slots || []).filter(Boolean).map((q) => ({ item: q.item, count: q.count }));
+          if (owner && taken.length) this.onContainerTake({ owner }, taken);
+        }
       }
       if (LOGS.has(id) && this.isTreeLog(x, y, z)) {
         this.fellTree(x, y, z, drops);
@@ -662,7 +785,28 @@ export class Game {
     if (byPlayer) {
       this.stats.mined++;
       this.checkVandalism(x, y, z, b);
+      this.checkCropTheft(x, z, id, drops);
     }
+  }
+
+  // Harvesting a town's fields or gardens in front of people is theft.
+  checkCropTheft(x, z, id, drops) {
+    if (![B.wheat_crop, B.carrot_crop, B.cabbage_crop, B.pumpkin].includes(id)) return;
+    const s = this.world.ow.settlementAt(x, z);
+    if (!s || !this.active.has(s.id)) return;
+    const L = this.active.get(s.id).layout;
+    if (L.maskAt(x, z) !== M.FIELD) return;
+    const wits = this.sim.witnesses(s.id, x, z, 9);
+    if (!wits.length) return;
+    const items = drops.filter((d) => d.item !== 'seeds').map((d) => ({ item: d.item, count: d.count }));
+    const value = items.reduce((n, d) => n + (ITEMS[d.item]?.value || 1) * d.count, 0);
+    const farmer = wits.find((n) => n.rec.job === 'farmer');
+    if (value < 3 && !farmer) {
+      wits[0].say('Hey, those crops aren\'t yours!', 3, '#ffb080');
+      this.sim.changeRep(wits[0], -3);
+      return;
+    }
+    this.sim.justice.commit(s.id, 'theft', { witnesses: wits, value, items, desc: 'Stealing crops from the fields', owner: farmer ? { kind: 'rec', id: farmer.rec.idx } : null, victimNpc: farmer });
   }
 
   isTreeLog(x, y, z) {
@@ -755,14 +899,15 @@ export class Game {
     const inBuilding = L.buildings.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
     const civic = inBuilding || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5;
     if (!civic || b.render === 'plant') return;
-    const witness = this.active.get(s.id).npcs.find((n) => !n.dead && !n.sleeping && n.state === 'routine' && n.distTo(this.player) <= 7);
+    const wits = this.sim.witnesses(s.id, x, z, 7).filter((n) => n.state === 'routine');
+    const witness = wits[0];
     if (!witness) return;
     const v = (this.vandal.get(s.id) || 0) + 1;
     this.vandal.set(s.id, v);
+    this.sim.changeRep(witness, -2);
     if (v >= 4) {
       this.vandal.set(s.id, 0);
-      witness.say('That\'s it! GUARDS!', 3, '#ff9080');
-      this.alertGuards(s.id, this.player, witness);
+      this.sim.justice.commit(s.id, 'vandalism', { witnesses: wits, desc: 'Vandalizing the town' });
     } else witness.say(['Hey! That\'s not yours!', 'Stop wrecking our town!', 'Do you mind?!'][v - 1], 3, '#ffb080');
   }
 
@@ -866,10 +1011,42 @@ export class Game {
       case 'container': {
         const slots = w.getContainer(x, y, z);
         this.audio?.play('door');
-        this.ui.openContainer(b.label, slots, { x, y, z });
-        this.checkTheft(x, z);
+        const owner = this.containerOwner(x, y, z);
+        this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
+        if (owner && owner.sid !== undefined && owner.kind !== 'mine') this.peekWarning(owner);
         break;
       }
+      case 'cell_door': {
+        const j = this.sim.justice.jail;
+        const L = this.jailLayoutAt(x, z);
+        if (j && L && j.sid === L.settlement.id) {
+          this.ui.msg('The cell door is locked.', '#ffb080');
+          this.audio?.play('error');
+          break;
+        }
+        const open = id === B.cell_door_open;
+        w.setBlock(x, y, z, open ? B.cell_door : B.cell_door_open, 0);
+        this.audio?.play('door');
+        break;
+      }
+      case 'trap': {
+        if (w.getState(x, y, z)) {
+          w.setState(x, y, z, false);
+          const left = p.give('raw_meat', 1);
+          if (left) this.spawnDrop('raw_meat', 1, p.x, p.y, p.z, true);
+          this.ui.msg('You take the catch from the snare.', '#e8e0a0');
+          this.audio?.play('pickup');
+          const s = this.world.ow.settlementsNear(x, z)[0];
+          if (s && this.active.has(s.id)) {
+            const wits = this.sim.witnesses(s.id, x, z, 8).filter((n) => n.rec.job === 'trapper');
+            if (wits.length) this.sim.justice.commit(s.id, 'theft', { witnesses: wits, value: 3, desc: 'Stealing from a trapper\'s snare', items: [{ item: 'raw_meat', count: 1 }], owner: { kind: 'rec', id: wits[0].rec.idx } });
+          }
+        } else this.ui.msg('A snare, set and waiting. Nothing caught yet.', '#c8c8c8');
+        break;
+      }
+      case 'sit':
+        this.sitOn(x, y, z);
+        break;
       case 'workbench':
         this.ui.openCrafting('workbench');
         break;
@@ -905,14 +1082,17 @@ export class Game {
         }
         break;
       }
-      case 'sign':
-        this.ui.openSign(this.signText(x, z));
+      case 'sign': {
+        const t = this.signText(x, y, z);
+        if (t.ledger) this.ui.openLedger(t);
+        else this.ui.openSign(t.lines || t, t.title);
         break;
+      }
       case 'bookshelf':
         this.ui.openBook(this.bookText(x, y, z));
         break;
       case 'grave':
-        this.ui.msg(`Here lies ${this.graveName(x, z)}. Rest in peace.`, '#c8c8d8');
+        this.ui.openSign(this.sim.graveText(x, z), 'GRAVESTONE');
         break;
       case 'statue': {
         const s = this.world.ow.settlementAt(x, z);
@@ -922,29 +1102,118 @@ export class Game {
     }
   }
 
-  checkTheft(x, z) {
+  // Who a container belongs to: a household, a business, the player.
+  containerOwner(x, y, z) {
     const s = this.world.ow.settlementAt(x, z);
-    if (!s || !this.active.has(s.id)) return;
-    const L = this.active.get(s.id).layout;
-    const bld = L.buildings.find((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
-    if (!bld) return;
-    const owner = this.active.get(s.id).npcs.find((n) => !n.dead && !n.sleeping && (n.rec.home === bld.id || n.rec.work?.building === bld.id) && n.distTo(this.player) <= 6);
-    if (owner) owner.say(owner.rec.personality.kindness > 0.6 ? 'Hey, that\'s ours! ...Take what you need, I suppose.' : 'Hands off my things!', 3.5, '#ffb080');
+    if (!s || s.condition === 'abandoned') return null;
+    const L = this.world.getLayout(s);
+    const b = buildingAt(L, x, z);
+    if (!b) return null;
+    const c = this.sim.citizen;
+    if (b.playerHome) return c && c.home === b.id && c.sid === s.id ? { kind: 'mine', sid: s.id, label: 'yours' } : { kind: 'house', id: b.id, sid: s.id, label: 'not yours' };
+    if (b.residential) {
+      const host = c && c.sid === s.id && c.host === b.id;
+      return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family` : null, b };
+    }
+    return { kind: 'biz', id: b.id, sid: s.id, label: b.name, b };
   }
 
-  signText(x, z) {
-    const s = this.world.ow.settlementAt(x, z);
-    if (!s) return ['A weathered sign.', 'The writing has long faded.'];
+  // Rummaging through someone's things in front of them.
+  peekWarning(owner) {
+    if (owner.kind === 'host') return;
+    const p = this.player;
+    const a = this.active.get(owner.sid);
+    if (!a) return;
+    const w = this.sim.witnesses(owner.sid, p.x, p.z, 6).find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
+    if (w && w.state === 'routine') w.say(w.rec.personality.kindness > 0.6 ? 'Can I help you with something?' : 'Hey! Keep your hands off our things!', 3, '#ffb080');
+  }
+
+  // Items taken out of a container that isn't yours (called by the window).
+  onContainerTake(pos, taken) {
+    const owner = pos.owner;
+    if (!owner || owner.kind === 'mine' || !taken.length) return false;
+    const value = taken.reduce((n, t) => n + (ITEMS[t.item]?.value || 1) * t.count, 0);
+    const sid = owner.sid;
+    const p = this.player;
+    const wits = this.sim.witnesses(sid, p.x, p.z, 7);
+    if (owner.kind === 'host') {
+      const fam = wits.filter((n) => n.rec.home === owner.id);
+      if (fam.length && value > 4) {
+        fam[0].say('Ask before you take, please. This is our home too.', 3.5, '#ffb080');
+        this.sim.changeRep(fam[0], -3);
+      }
+      return false;
+    }
+    if (!wits.length) return false;
+    const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : `the ${owner.label || 'shop'}`;
+    const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
+    const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
+    this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
+    return true;
+  }
+
+  jailLayoutAt(x, z) {
+    for (const s of this.world.ow.settlementsNear(x, z)) {
+      const L = this.world.layouts.get(s.id);
+      if (L && L.jail && Math.abs(L.jail.door.x - x) <= 3 && Math.abs(L.jail.door.z - z) <= 3) return L;
+    }
+    return null;
+  }
+
+  signText(x, y, z) {
+    const s = this.world.ow.settlementAt(x, z) || this.world.ow.settlementsNear(x, z)[0];
+    if (!s) return { lines: ['A weathered sign.', 'The writing has long faded.'] };
     const L = this.world.getLayout(s);
-    const lines = [`${s.name.toUpperCase()}`, `${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, `Population: ${L.npcs.filter((n) => !(this.deadNpcs.get(s.id)?.has(n.idx))).length}`, ''];
+    const sg = L.signs.find((q) => q.x === x && q.z === z && (q.y === y || q.y === undefined));
+    const e = L.econ;
+    const living = L.npcs.filter(alive);
+    const staff = (b) => living.filter((r) => r.work && r.work.building === b.id).map((r) => `${r.name.first} ${r.name.last} (${jobTitle(r, s).toLowerCase()})`);
+    if (sg && sg.kind === 'building') {
+      const b = L.buildings[sg.building];
+      if (b.residential) {
+        if (b.playerHome) return { title: 'HOME', lines: [b.underConstruction ? 'UNDER CONSTRUCTION' : (b.homeName || 'A cottage').toUpperCase(), '', b.underConstruction ? 'Builders are at work here.' : `Home of ${this.playerName}.`] };
+        const who = living.filter((r) => r.home === b.id);
+        const lines = [(b.homeName || b.name).toUpperCase(), ''];
+        if (!who.length) lines.push('The house stands empty.');
+        else lines.push(`Home of ${who.map((r) => r.name.first).join(', ')}`);
+        const lost = L.npcs.filter((r) => r.home === b.id && !alive(r));
+        if (lost.length) lines.push('', `In memory of ${lost.map((r) => r.name.first).join(' and ')}.`);
+        return { title: 'HOME', lines };
+      }
+      const lines = [b.name.toUpperCase(), ''];
+      const st2 = staff(b);
+      if (b.type === 'tavern') {
+        const k = e.biz[b.id];
+        const menu = k ? ['feast', 'stew', 'gruel'].filter((m) => k.store[m]).map((m) => ITEMS[m].name) : [];
+        lines.push('Meals served from dawn till late.', menu.length ? `On the menu: ${menu.join(', ')}` : 'The kitchen is out of food!');
+      } else if (b.type === 'townhall') {
+        lines.push(`Taxes: ${Math.round(e.tax * 100)}%`, 'Citizenship applications at the desk.');
+      } else if (b.type === 'guardhouse') lines.push('Report crimes to the guard.');
+      if (st2.length) lines.push('', ...st2.slice(0, 3));
+      else if (b.type !== 'townhall') lines.push('', 'Nobody seems to work here now.');
+      if (L.jail && L.jail.building === b.id) lines.push('', 'Holding cells within.');
+      return { title: 'SIGN', lines };
+    }
+    if (sg && sg.kind === 'plot') {
+      const pl = L.plots[sg.plot];
+      return { title: 'SIGN', lines: ['LAND FOR NEW CITIZENS', '', pl && pl.taken ? 'This lot has been claimed.' : `Become a citizen of ${s.name}`, pl && pl.taken ? '' : 'at the town hall, and a home will', pl && pl.taken ? '' : 'be built for you here.'] };
+    }
+    if (sg && sg.kind === 'graveyard') {
+      const g = L.graveyard;
+      const n = g ? g.slots.filter((q) => q.grave).length : 0;
+      const recent = g ? g.slots.filter((q) => q.grave && !q.grave.ancestor).sort((a, b) => b.grave.died - a.grave.died).slice(0, 3) : [];
+      return { title: 'GRAVEYARD', lines: [`THE RESTING PLACE OF ${s.name.toUpperCase()}`, '', `${n} souls rest here.`, ...(recent.length ? ['', 'Recently laid to rest:', ...recent.map((q) => `${q.grave.name} (day ${q.grave.died})`)] : [])] };
+    }
+    if (sg && sg.kind === 'board') return { ledger: true, s, L };
+    const lines = [`${s.name.toUpperCase()}`, `${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, `Population: ${living.length}`, ''];
     const names = [...new Set(L.buildings.filter((b) => !b.residential).map((b) => b.name))];
     if (names.length) lines.push('Services: ' + names.slice(0, 5).join(', '));
     if (s.condition === 'abandoned') lines.push('', '...someone scrawled: "LEAVE WHILE YOU CAN"');
+    else if (this.sim.justice.exiled.has(s.id)) lines.push('', `By order: ${this.playerName} is BANISHED.`);
     else if (s.condition === 'poor') lines.push('', 'NOTICE: Bread rations reduced. By order.');
     else if (s.condition === 'prosperous') lines.push('', 'Market day every day! Travelers welcome.');
-    const bounty = this.isWanted(s.id);
-    if (bounty) lines.push('', 'WANTED: a dangerous stranger. Report to the guard.');
-    return lines;
+    if (this.isWanted(s.id)) lines.push('', 'WANTED: a dangerous stranger. Report to the guard.');
+    return { title: 'SIGN', lines };
   }
 
   bookText(x, y, z) {
@@ -962,32 +1231,187 @@ export class Game {
     return books[Math.floor(rand() * books.length)];
   }
 
-  graveName(x, z) {
-    const rand = mulberry32(hash4(x, z, this.seed, 3));
-    const first = ['Aldo', 'Berta', 'Corin', 'Dela', 'Emrys', 'Fenna', 'Galt', 'Hesse', 'Ines', 'Jorn'][Math.floor(rand() * 10)];
-    return `${first}, beloved by all`;
-  }
-
+  // ------------------------------------------------------------ sleep & rest
   trySleep(x, y, z) {
+    const p = this.player;
     const h = this.minute / 60;
-    this.player.spawn = { x: this.player.x, y: this.player.y, z: this.player.z };
-    if (h >= 20 || h < 5) {
-      this.ui.msg('You fall asleep... (spawn point set)', '#c8d8ff');
-      this.sleepFast = 60;
-      this.ui.fade = 1;
-    } else this.ui.msg('You can only sleep at night. (spawn point set)', '#c8d8ff');
+    const j = this.sim.justice.jail;
+    const owner = this.sim.bedOwner(x, z);
+    if (owner && owner.kind === 'jail') {
+      if (!j || j.phase !== 'serving') {
+        this.ui.msg(j ? 'Not now: the hearing isn\'t over.' : 'You\'d rather not sleep in a cell.', '#c8c8c8');
+        return;
+      }
+    } else if (owner && owner.kind === 'home') {
+      const wits = this.sim.witnesses(owner.L.settlement.id, x, z, 6).filter((n) => n.rec.home === owner.b.id);
+      if (wits.length) wits[0].say('That\'s my bed! Out!', 3, '#ffb080');
+      this.ui.msg(`This bed belongs to the ${owner.family || ''} family.`, '#ffb080');
+      return;
+    } else if (owner && owner.kind === 'other') {
+      this.ui.msg('This isn\'t your home.', '#ffb080');
+      return;
+    } else if (owner && owner.kind === 'guard') {
+      this.ui.msg('A guard\'s cot. Better not.', '#c8c8c8');
+      return;
+    }
+    const jailed = j && j.phase === 'serving';
+    if (!jailed) p.spawn = { x: p.x, y: p.y, z: p.z };
+    if (!jailed && !(h >= 20 || h < 5)) {
+      this.ui.msg('You can only sleep at night. (spawn point set)', '#c8d8ff');
+      return;
+    }
+    // Wake at dawn, or when the sentence ends.
+    const now = this.day * DAY + this.minute;
+    let wake = jailed ? j.release : (h >= 20 ? (this.day + 1) * DAY + 360 : this.day * DAY + 360);
+    if (jailed) wake = Math.min(wake, now + 16 * 60);
+    this.sleep = { phase: 'in', t: 0, bed: { x, y, z }, from: { x: p.x, y: p.y, z: p.z }, wake, start: now, hp0: p.hp, jail: jailed };
+    this.stopPlayerActions();
+    p.sitting = null;
+    p.teleport(x, y, z);
+    p.sleeping = true;
+    p.dir = 0;
+    this.ui.msg(jailed ? 'You lie down on the hard cot...' : 'You climb into bed... (spawn point set)', '#c8d8ff');
+    this.audio?.play('select');
   }
 
-  endSleep() {
-    this.sleepFast = 0;
-    this.player.hp = this.player.maxHp;
-    // Villagers carry on with their day.
-    for (const a of this.active.values()) for (const n of a.npcs) if (!n.dead && n.state === 'routine') {
-      n.activity = null;
-      n.wake();
-      n.placeForCurrentActivity();
+  updateSleep(dt, pressed) {
+    const sl = this.sleep;
+    const p = this.player;
+    sl.t += dt;
+    const now = this.day * DAY + this.minute;
+    const woken = pressed && pressed.some((k) => k.code !== 'ShiftLeft' && k.code !== 'ShiftRight');
+    if (sl.phase === 'in') {
+      const k = Math.min(1, sl.t / 2.2);
+      this.sleepFast = 1 + 59 * k * k;
+      if (sl.t >= 2.2) {
+        sl.phase = 'deep';
+        sl.t = 0;
+      }
+      if (woken && sl.t > 0.4) this.wakeUp(true);
+    } else if (sl.phase === 'deep') {
+      this.sleepFast = 60;
+      // Resting heals over the night.
+      const frac = Math.min(1, (now - sl.start) / Math.max(60, sl.wake - sl.start));
+      p.hp = Math.max(p.hp, Math.min(p.maxHp, Math.round(sl.hp0 + (p.maxHp - sl.hp0) * frac)));
+      if (now >= sl.wake - 2) this.wakeUp(false);
+      else if (woken) this.wakeUp(true);
+    } else if (sl.phase === 'out') {
+      const k = Math.max(0, 1 - sl.t / 1.4);
+      this.sleepFast = Math.max(1, 1 + 59 * k * k * (sl.early ? 0.2 : 1));
+      if (sl.t >= 1.4) {
+        this.sleepFast = 0;
+        this.sleep = null;
+        p.sleeping = false;
+        const f = sl.from;
+        if (!this.occupiedBySolid(f.x, f.y, f.z, p) && this.world.canStand(f.x, f.y, f.z)) p.teleport(f.x, f.y, f.z);
+        else {
+          const spot = this.findFreeSpot(sl.bed.x, sl.bed.z, sl.bed.y);
+          p.teleport(spot.x, spot.y, spot.z);
+        }
+      }
     }
-    this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
+  }
+
+  wakeUp(early) {
+    const sl = this.sleep;
+    if (!sl || sl.phase === 'out') return;
+    sl.phase = 'out';
+    sl.t = 0;
+    sl.early = early;
+    const p = this.player;
+    if (!early && !sl.jail) {
+      p.hp = p.maxHp;
+      this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
+    } else if (sl.jail && !early) this.ui.msg('You wake, stiff from the cot.', '#c8d8ff');
+    else this.ui.msg('You get up.', '#c8d8ff');
+    // Villagers carry on with their day (after a full night, snap them to it).
+    if (!early && !sl.jail) {
+      for (const a of this.active.values()) for (const n of a.npcs) if (!n.dead && n.state === 'routine' && !n.rec.visitor) {
+        n.activity = null;
+        n.wake();
+        n.placeForCurrentActivity();
+      }
+    }
+  }
+
+  // Sit down on a chair, bench or stool.
+  sitOn(x, y, z) {
+    const p = this.player;
+    if (Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) > 1 || Math.abs(p.y - y) > 1) {
+      this.ui.msg('Too far away to sit there.', '#c8c8c8');
+      return;
+    }
+    const other = this.entityAt(x, y, z);
+    if (other && other !== p) {
+      this.ui.msg('Someone is already sitting there.', '#c8c8c8');
+      return;
+    }
+    if (!this.world.canStand(x, y, z)) return;
+    p.teleport(x, y, z);
+    const id = this.world.getBlock(x, y, z);
+    if (BLOCKS[id].rotatable) p.dir = this.world.getMeta(x, y, z) & 3;
+    p.sitting = { x, y, z };
+    this.stopPlayerActions();
+    this.audio?.play('select');
+    this.ui.msg('You sit down. (move to stand up)', '#c8c8c8', true);
+  }
+
+  stopPlayerActions() {
+    this.fishing = null;
+    this.mining = null;
+    this.pending = null;
+  }
+
+  advanceTime(min) {
+    this.minute += min;
+    while (this.minute >= DAY_MINUTES) {
+      this.minute -= DAY_MINUTES;
+      this.day++;
+    }
+  }
+
+  teleportPlayer(x, y, z) {
+    const p = this.player;
+    p.sitting = null;
+    this.loadAround(x, z, true);
+    const yy = this.world.canStand(x, y, z) ? y : this.world.findStandY(x, z, y);
+    p.teleport(x, yy > 0 ? yy : y, z);
+    this.renderer.camInit = false;
+    this.lightDirty = true;
+    this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
+  }
+
+  buildingAtPlayer() {
+    const s = this.currentSettlement;
+    if (!s) return null;
+    const L = this.world.layouts.get(s.id);
+    return L ? buildingAt(L, this.player.x, this.player.z) : null;
+  }
+
+  executePlayer(cause) {
+    const p = this.player;
+    p.hp = 0;
+    p.dead = true;
+    this.removeOcc(p);
+    this.playerDied({ name: cause });
+  }
+
+  // ------------------------------------------------------------ arrows
+  shoot(from, target, dmg) {
+    const dist = Math.hypot(target.x - from.x, target.z - from.z);
+    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: 0.08 + dist * 0.045, dmg });
+    this.audio?.play('swing', from);
+  }
+
+  updateProjectiles(dt) {
+    for (const a of this.projectiles) {
+      a.t += dt;
+      if (a.t < a.dur) continue;
+      a.done = true;
+      const t = a.target;
+      if (!t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1) this.damage(t, a.dmg, a.from);
+    }
+    this.projectiles = this.projectiles.filter((a) => !a.done);
   }
 
   // Fishing: cast into water, wait for a bite, reel it in.
@@ -1060,6 +1484,16 @@ export class Game {
     p.doAction(0.3);
     this.audio?.play('eat');
     this.ui.msg(`Ate ${def.name}. (+${def.heal} HP)`, '#80e070');
+    // Meal quality matters: bad cooking can turn your stomach, a delightful
+    // meal keeps you going for a while.
+    if (def.quality === 'terrible' && Math.random() < 0.35) {
+      p.hp = Math.max(1, p.hp - 3);
+      this.ui.msg('Ugh... your stomach churns. (-3 HP)', '#c0a060');
+      this.shake = Math.min(1, this.shake + 0.2);
+    } else if (def.quality === 'delightful') {
+      p.wellFed = 300;
+      this.ui.msg('Delightful! You feel well fed. (faster healing)', '#ffe070');
+    }
   }
 
   talk(npc) {
@@ -1156,6 +1590,21 @@ export class Game {
     const def = p.heldDef();
     const reach = this.attackReach();
     p.face(target.x, target.z);
+    p.sitting = null;
+    if (def && def.ranged) {
+      if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach) return this.swing();
+      if (countItem(p.inv, 'arrow') <= 0) {
+        this.ui.msg('You have no arrows.', '#ffb080', true);
+        this.audio?.play('error');
+        p.attackCd = 0.4;
+        return;
+      }
+      removeItem(p.inv, 'arrow', 1);
+      p.attackCd = def.cooldown;
+      p.doAction(0.3);
+      this.shoot(p, target, Math.round(def.damage * (Math.random() < 0.12 ? 1.8 : 1)));
+      return;
+    }
     if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1) {
       this.swing();
       return;
@@ -1192,30 +1641,45 @@ export class Game {
     // Violence against villagers is a crime; witnesses react.
     if (target.kind === 'npc' && source) {
       target.onHurt(source);
-      if (source.kind === 'player') this.crime(target);
-      else this.witness(target, source);
+      if (source.kind === 'player' && target.hp > 0) this.crime(target);
+      else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
-    if (target.hp <= 0) this.kill(target, source);
+    if (target.hp <= 0) {
+      // The town subdues lawbreakers rather than killing them (unless exiled).
+      if (target.kind === 'player' && source && source.kind === 'npc' && !source.rec.visitor && !this.sim.justice.exiled.has(source.settlement.id)) {
+        target.hp = 1;
+        this.sim.justice.knockout(source.settlement.id);
+        return;
+      }
+      this.kill(target, source);
+    }
   }
 
+  // The player hurt a villager.
   crime(victim) {
     const sid = victim.settlement.id;
-    const wasWanted = this.isWanted(sid);
-    this.wanted.set(sid, Math.max(this.wanted.get(sid) || 0, 150));
-    if (!wasWanted) {
-      this.ui.msg(`You are now WANTED in ${victim.settlement.name}!`, '#ff5050');
-      this.audio?.play('alarm');
+    const guard = victim.rec.job === 'guard';
+    const wits = this.sim.witnesses(sid, victim.x, victim.z, 8).filter((n) => n !== victim);
+    if (!victim.rec.visitor) wits.push(victim);
+    const name = `${victim.rec.name.first} ${victim.rec.name.last}`;
+    // One assault charge per victim per fight.
+    const recent = this.sim.justice.pendingIn(sid).find((c) => (c.type === 'assault' || c.type === 'assault_guard') && c.victim === name && c.day === this.day);
+    if (!recent) this.sim.justice.commit(sid, guard ? 'assault_guard' : 'assault', { witnesses: wits, victim: name, victimNpc: victim });
+    else {
+      this.sim.changeRep(victim, -10);
+      this.wanted.set(sid, Math.max(this.wanted.get(sid) || 0, 1e9));
     }
     this.witness(victim, this.player);
   }
 
+  // Bystanders react to a villager being hurt (by the player or a monster).
   witness(victim, attacker) {
     const a = this.active.get(victim.settlement.id);
     if (!a) return;
     for (const n of a.npcs) {
       if (n === victim || n.dead || n.state !== 'routine') continue;
       if (n.distTo(victim) > 8) continue;
-      n.react(attacker, true);
+      n.react(attacker, true, victim);
     }
   }
 
@@ -1230,17 +1694,15 @@ export class Game {
       g.engage(threat);
       called++;
     }
-    if (threat.kind === 'player') {
-      if (!this.isWanted(sid)) this.ui.msg('The guards have been called!', '#ff7060');
-      this.wanted.set(sid, Math.max(this.wanted.get(sid) || 0, 150));
-    }
+    if (called && threat.kind === 'player') this.ui.msg('The guards have been called!', '#ff7060');
     if (Math.max(Math.abs(caller.x - this.player.x), Math.abs(caller.z - this.player.z)) < 20) this.audio?.play('alarm');
   }
 
   findGuardTarget(guard) {
     const p = this.player;
     const sid = guard.settlement.id;
-    if (this.isWanted(sid) && !p.dead && guard.distTo(p) <= 12) return p;
+    const jailed = this.sim.justice.jail && this.sim.justice.jail.sid === sid;
+    if (!jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid)) && !p.dead && guard.distTo(p) <= 12) return p;
     const b = guard.settlement.bounds;
     for (const c of this.creatures) {
       if (c.dead || !c.hostileNow) continue;
@@ -1298,33 +1760,51 @@ export class Game {
     this.audio?.play('death', e);
     if (e.kind === 'npc') {
       e.releaseSpot();
-      e.rec.alive = false;
+      const L = e.layout;
+      const rec = e.rec;
       const sid = e.settlement.id;
-      if (!this.deadNpcs.has(sid)) this.deadNpcs.set(sid, new Set());
-      this.deadNpcs.get(sid).add(e.rec.idx);
-      for (const it of e.rec.equipment.items) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
-      if (e.rec.equipment.coins) this.spawnDrop('coin', e.rec.equipment.coins, e.x, e.y, e.z, true);
-      if (source && source.kind === 'player') {
+      // Everything they carried falls to the ground.
+      for (const it of rec.equipment.items) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
+      for (const it of rec.inv || []) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
+      if (rec.visitor) for (const [k, n] of Object.entries(rec.visit.goods)) this.spawnDrop(k, n, e.x, e.y, e.z, true);
+      rec.inv = [];
+      const coins = rec.coins || 0;
+      if (coins) this.spawnDrop('coin', coins, e.x, e.y, e.z, true);
+      rec.coins = 0;
+      const byPlayer = source && source.kind === 'player';
+      const cause = byPlayer ? 'slain' : source ? `killed by a ${(source.name || 'beast').toLowerCase()}` : 'misadventure';
+      rec.ent = null;
+      this.sim.recordDeath(L, rec, cause, byPlayer ? 'player' : null);
+      if (byPlayer) {
         this.stats.kills++;
         this.ui.msg(`${e.name} the ${e.title} has died.`, '#ff7060');
-        this.wanted.set(sid, 240);
+        const wits = this.sim.witnesses(sid, e.x, e.z, 10);
+        this.sim.justice.commit(sid, 'murder', { witnesses: wits, victim: `${rec.name.first} ${rec.name.last}` });
         this.witness(e, source);
-        // Family members are devastated.
-        const a = this.active.get(sid);
-        if (a) for (const n of a.npcs) {
-          if (n.dead || n.distTo(e) > 16) continue;
-          if (n.rec.partner === e.rec.idx || n.rec.children.includes(e.rec.idx) || n.rec.parents.includes(e.rec.idx)) {
-            n.say(`${e.rec.name.first}! NO!`, 4, '#ff9080');
-            if (n.state === 'routine') n.react(source, true);
-          }
-        }
+      } else this.ui.msg(`${e.name} the ${e.title} was killed!`, '#ff9080');
+      // Family and friends who see it are devastated.
+      const a = this.active.get(sid);
+      if (a && !rec.visitor) for (const n of a.npcs) {
+        if (n.dead || n === e || n.distTo(e) > 16) continue;
+        const r = n.rec;
+        const fam = r.partner === rec.idx || r.children.includes(rec.idx) || r.parents.includes(rec.idx) || r.household === rec.household;
+        const friend = (r.friends || []).includes(rec.idx);
+        if (fam) n.say(n.rng.pick([`${rec.name.first}! NO!`, `Not ${rec.name.first}! No, no, no...`, `${rec.name.first}!!`]), 4, '#ff9080');
+        else if (friend) n.say(n.rng.pick([`${rec.name.first}...? No!`, `They killed ${rec.name.first}!`]), 3.5, '#ffb080');
+        else if (n.distTo(e) <= 8) n.say(n.rng.pick(['Oh no...', 'Someone help!', 'Gods, no!']), 2.5, '#ffe070');
+        else continue;
+        if (n.state === 'routine' && source) n.react(source, true, e);
       }
     } else {
-      this.stats.kills++;
+      const npcKill = source && source.kind === 'npc' && source.rec && source.rec.inv;
+      if (!npcKill) this.stats.kills++;
       for (const [item, min, max, chance] of e.S.drops) {
         if (Math.random() > chance) continue;
-        this.spawnDrop(item, min + Math.floor(Math.random() * (max - min + 1)), e.x, e.y, e.z, true);
+        const n = min + Math.floor(Math.random() * (max - min + 1));
+        if (npcKill) invAdd(source.rec.inv, item, n);
+        else this.spawnDrop(item, n, e.x, e.y, e.z, true);
       }
+      if (npcKill) source.onKill?.(e);
     }
   }
 
@@ -1345,7 +1825,15 @@ export class Game {
     const p = this.player;
     p.dead = false;
     p.hp = p.maxHp;
-    this.wanted.clear();
+    p.sitting = null;
+    p.sleeping = false;
+    this.sleep = null;
+    this.sleepFast = 0;
+    // Petty crimes are forgotten; serious ones keep you wanted.
+    for (const sid of [...this.wanted.keys()]) {
+      this.sim.justice.forgetMinor(sid);
+      if (!this.sim.justice.pendingIn(sid).length) this.wanted.delete(sid);
+    }
     for (const n of this.npcs) if (n.state === 'fight' && n.threat === p) n.calmDown();
     const s = p.spawn;
     this.loadAround(s.x, s.z, true);
@@ -1359,9 +1847,10 @@ export class Game {
       const nt = t - dt;
       if (nt <= 0) {
         this.wanted.delete(sid);
+        this.sim.justice.forgetMinor(sid);
         const s = this.world.ow.settlements[sid];
         this.ui.msg(`The guards of ${s.name} have lost interest in you.`, '#a0e0a0');
-      } else this.wanted.set(sid, nt);
+      } else if (t < 1e8) this.wanted.set(sid, nt);
     }
   }
 
@@ -1392,9 +1881,11 @@ export class Game {
     const z = Math.round(p.z + Math.sin(a) * dist * 0.8);
     if (!this.world.regionAt(x, z)) return;
     const ow = this.world.ow;
+    // Night creatures keep their distance from lived-in places.
+    const margin = night ? 14 : 6;
     for (const s of ow.settlementsNear(x, z)) {
       const b = s.bounds;
-      if (x > b.x0 - 6 && x < b.x1 + 6 && z > b.z0 - 6 && z < b.z1 + 6 && s.condition !== 'abandoned') return;
+      if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned') return;
     }
     const y = this.world.findStandY(x, z, p.y);
     if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
@@ -1420,6 +1911,21 @@ export class Game {
       const y2 = this.world.findStandY(x + 1, z, y);
       if (y2 > 0 && !this.entityAt(x + 1, y2, z)) this.addCreature(new Creature(this, species, x + 1, y2, z));
     }
+  }
+
+  // An animal wanders near a hunter (so trappers have something to hunt
+  // while the player watches).
+  spawnGameNear(n) {
+    if (this.creatures.filter((c) => c.S.mode !== 'hostile' && c.species !== 'chicken').length >= 8) return;
+    const a = Math.random() * Math.PI * 2;
+    const x = Math.round(n.x + Math.cos(a) * 8);
+    const z = Math.round(n.z + Math.sin(a) * 6);
+    if (!this.world.regionAt(x, z)) return;
+    const y = this.world.findStandY(x, z, n.y);
+    if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
+    const s = n.settlement;
+    const opts = { tundra: ['rabbit'], desert: ['rabbit'], forest: ['deer', 'rabbit', 'boar'], taiga: ['deer', 'rabbit'], savanna: ['deer', 'boar'], jungle: ['boar', 'deer'], swamp: ['boar'] }[s.biome] || ['rabbit', 'deer', 'rabbit'];
+    this.addCreature(new Creature(this, opts[Math.floor(Math.random() * opts.length)], x, y, z, Math.floor(Math.random() * 3)));
   }
 
   growPlants(dt) {
@@ -1476,7 +1982,7 @@ export class Game {
     for (const r of this.world.regions.values()) if (r.modified) regions.push(r.serialize());
     const p = this.player;
     return {
-      v: 1,
+      v: 2,
       seed: this.seed,
       minute: this.minute,
       day: this.day,
@@ -1485,6 +1991,8 @@ export class Game {
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: Array.from(this.world.ow.explored),
       stats: this.stats,
+      wanted: [...this.wanted],
+      sim: this.sim.serialize(),
     };
   }
 
@@ -1495,6 +2003,8 @@ export class Game {
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
     if (data.explored) this.world.ow.explored.set(data.explored);
     if (data.stats) this.stats = data.stats;
+    if (data.sim) this.sim.load(data.sim);
+    for (const [sid, t] of data.wanted || []) this.wanted.set(sid, t);
     const pd = data.player;
     this.loadAround(pd.x, pd.z, true);
     this.player = new Player(this, pd.x, pd.y, pd.z);

@@ -22,7 +22,7 @@ const NOT_ITEMS = new Set([
   'grass_jungle', 'grass_taiga', 'path', 'farmland', 'roof_snow', 'leaves_snowy', 'coal_ore',
   'gem_ore', 'wheat_crop', 'carrot_crop', 'cabbage_crop', 'tall_grass', 'fern', 'bush',
   'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'rock',
-  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone',
+  'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open',
 ]);
 
 const BLOCK_VALUES = {
@@ -30,6 +30,7 @@ const BLOCK_VALUES = {
   workbench: 8, furnace: 10, anvil: 40, lantern: 12, bookshelf: 15, marble: 4, iron_ore: 5,
   gold_ore: 10, torch: 1, hay_bale: 4, pumpkin: 3, fence: 1, table: 5, chair: 3, bench: 4, barrel: 5, crate: 4,
   rug_red: 4, rug_blue: 4, rug_green: 4, sapling: 2, flower_red: 1, flower_blue: 1, planks_dark: 1, sign: 3,
+  iron_bars: 8, stool: 2, hanging_sign: 4, snare: 3,
 };
 
 for (const b of BLOCKS) {
@@ -60,7 +61,7 @@ item('book', { kind: 'misc', stack: 16, value: 10 });
 item('coin', { name: 'Gold Coin', kind: 'misc', stack: 999, value: 1 });
 
 // --- food ---------------------------------------------------------------------
-const food = (key, heal, value, name) => item(key, { kind: 'food', heal, value, name });
+const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
 food('apple', 2, 2);
 food('berries', 1, 1);
 food('coconut', 2, 2);
@@ -72,8 +73,11 @@ food('raw_meat', 1, 3, 'Raw Meat');
 food('cooked_meat', 6, 7, 'Roast Meat');
 food('fish', 1, 3, 'Raw Fish');
 food('cooked_fish', 5, 6, 'Grilled Fish');
-food('stew', 8, 12, 'Hearty Stew');
+food('stew', 7, 8, 'Hearty Stew', { quality: 'acceptable', meal: true });
 food('pie', 7, 10, 'Berry Pie');
+// Tavern meals: a cook's skill decides which one comes out of the pot.
+food('gruel', 2, 3, 'Burnt Gruel', { quality: 'terrible', meal: true });
+food('feast', 12, 15, 'Savory Feast', { quality: 'delightful', meal: true });
 
 // --- tools & weapons -----------------------------------------------------------
 const TIERS = { wood: [2, 1], stone: [3.2, 2], iron: [5, 3], gold: [7, 2] };
@@ -90,6 +94,8 @@ item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3
 item('hammer', { name: 'Smith Hammer', kind: 'tool', stack: 1, tool: 'pick', speed: 2.5, damage: 3, reach: 1.4, cooldown: 0.5, value: 12 });
 item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, damage: 1.5, reach: 1.5, cooldown: 0.5, value: 5 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
+item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
+item('arrow', { value: 1 });
 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });
@@ -100,6 +106,7 @@ item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4 });
 item('flute', { kind: 'misc', stack: 1, value: 12 });
 item('ledger', { kind: 'misc', stack: 1, value: 5 });
 item('scroll', { kind: 'misc', stack: 16, value: 6 });
+item('ladle', { kind: 'misc', stack: 1, value: 3 });
 
 export function getItem(key) {
   return ITEMS[key];

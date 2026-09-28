@@ -402,8 +402,8 @@ export class Overworld {
     }
     for (const cand of cityCand) if (!ordered.includes(cand)) ordered.push(cand);
     for (const { c } of ordered) {
-      if (this.civs.length >= 4) break;
-      if (tooClose(c.cx + 0.5, c.cz + 0.5, 10)) continue;
+      if (this.civs.length >= 3) break;
+      if (tooClose(c.cx + 0.5, c.cz + 0.5, 12)) continue;
       const style = styleOf(c);
       const vals = rng.shuffle([...VALUES]).slice(0, 2);
       const civ = {
@@ -445,16 +445,16 @@ export class Overworld {
     let towns = 0;
     // Towns span two map squares side by side.
     for (const { c } of singles) {
-      if (towns >= 8) break;
+      if (towns >= 5) break;
       const east = this.cell(c.cx + 1, c.cz);
-      if (score(east) < 0 || tooClose(c.cx + 0.5, c.cz, 6)) continue;
+      if (score(east) < 0 || tooClose(c.cx + 0.5, c.cz, 7.5)) continue;
       place('town', c.cx, c.cz, 2, 1, civWithin(c.cx, c.cz));
       towns++;
     }
     let villages = 0;
     for (const { c } of rng.shuffle(singles.slice(0, Math.floor(singles.length * 0.8)))) {
-      if (villages >= 18) break;
-      if (tooClose(c.cx, c.cz, 3.2)) continue;
+      if (villages >= 11) break;
+      if (tooClose(c.cx, c.cz, 4.6)) continue;
       place('village', c.cx, c.cz, 1, 1, civWithin(c.cx, c.cz));
       villages++;
     }
@@ -510,11 +510,11 @@ export class Overworld {
     let w;
     let d;
     if (type === 'village') {
-      w = rng.int(44, 52);
-      d = rng.int(26, 30);
+      w = rng.int(48, 56);
+      d = rng.int(28, 32);
     } else if (type === 'town') {
       w = REGION_W * 2 - rng.int(14, 22);
-      d = rng.int(29, 31);
+      d = rng.int(30, 33);
     } else {
       w = REGION_W * 2 - 16;
       d = REGION_D * 2 - 10;

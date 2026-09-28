@@ -3,7 +3,7 @@
 // bucketed per region, plus semantic data (buildings, spots) used by NPCs.
 import { SURFACE, GROUND, REGION_W, REGION_D } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { B, META_STATE } from './blocks.js';
+import { B, BLOCKS, META_STATE } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 
@@ -67,8 +67,12 @@ class Layout {
     this.lamps = [];
     this.gates = [];
     this.signs = [];
+    this.plots = [];
+    this.graveyard = null;
+    this.jail = null;
     this.plaza = null;
     this.npcs = [];
+    this.collect = null;
   }
 
   // ------------------------------------------------------------ basics
@@ -89,6 +93,11 @@ class Layout {
     return x >= b.x0 + inset && x <= b.x1 - inset && z >= b.z0 + inset && z <= b.z1 - inset;
   }
   put(x, y, z, id, meta = 0) {
+    if (this.collect) {
+      this.collect.push([x, y, z, id, meta]);
+      this.local.set(`${x},${y},${z}`, id);
+      return;
+    }
     const rk = this.world.regionKey(Math.floor(x / REGION_W), Math.floor(z / REGION_D));
     let arr = this.placements.get(rk);
     if (!arr) {
@@ -150,6 +159,7 @@ class Layout {
     }
   }
   col(x, z) {
+    if (!this.inside(x, z)) return this.world.terrain.column(x, z, this.ctx, {});
     return this.cols[(z - this.bounds.z0) * this.W + (x - this.bounds.x0)];
   }
 
@@ -396,11 +406,15 @@ class Layout {
     return true;
   }
 
+  sizesFor(type) {
+    if (type === 'townhall' && this.settlement.type === 'village') return [[8, 6], [7, 6]];
+    return SPECS[type].size;
+  }
+
   placeBuilding(type, cands, rng) {
-    const spec = SPECS[type];
     const allowWater = this.settlement.biome === 'swamp';
     for (const c of cands) {
-      for (const [w, d] of spec.size) {
+      for (const [w, d] of this.sizesFor(type)) {
         const offs = rng.shuffle([...Array(Math.max(1, w - 2)).keys()].map((i) => i + 1)).slice(0, 3);
         for (const off of offs) {
           const r = this.rectFor(c, w, d, off);
@@ -438,11 +452,13 @@ class Layout {
       free: [],
       household: null,
       mats: this.buildingMats(type, rng),
+      tall: type === 'townhall' && this.settlement.type === 'village' ? 2 : SPECS[type].tall || 2,
     };
     const DX = [0, -1, 0, 1];
     const DZ = [1, 0, -1, 0];
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
+    if (type === 'townhall' && this.settlement.type === 'village') bld.name = 'Village Hall';
     this.buildings.push(bld);
     return bld;
   }
@@ -457,7 +473,7 @@ class Layout {
     const count = (t, n = 1) => need.set(t, (need.get(t) || 0) + n);
     const jobs = this.plan.jobs;
     const jc = (j) => jobs.filter((x) => x === j).length;
-    if (jc('innkeeper') || jc('barkeep')) count('tavern', s.type === 'city' ? 2 : 1);
+    if (jc('innkeeper') || jc('barkeep') || jc('cook')) count('tavern', s.type === 'city' ? 2 : 1);
     if (jc('mayor')) count('townhall');
     if (jc('priest')) count('temple');
     if (jc('merchant')) count('shop', Math.max(1, Math.ceil(jc('merchant') / 2)));
@@ -474,7 +490,7 @@ class Layout {
     let civicOrder = ['townhall', 'temple', 'tavern', 'shop', 'library', 'smithy', 'bakery', 'guardhouse', 'tailor', 'workshop', 'herbalist', 'warehouse', 'barn'];
     if (s.type === 'village') {
       // Villages only support a handful of trades.
-      const keep = new Set(['tavern', 'barn']);
+      const keep = new Set(['tavern', 'barn', 'townhall']);
       for (const t of rng.shuffle(['temple', 'shop', 'smithy', 'bakery', 'workshop', 'herbalist', 'guardhouse'].filter((t) => need.has(t))).slice(0, 2)) keep.add(t);
       civicOrder = civicOrder.filter((t) => keep.has(t));
     }
@@ -493,6 +509,8 @@ class Layout {
         this.placeBuilding(t, nearCands, rng);
       }
     }
+    // Cities are dense: their graveyard claims ground before the houses.
+    if (s.type === 'city') this.cemetery(rng.fork('cemetery'));
     // Houses: one per household, sized to fit it; nobles get manors.
     const hhs = [...this.plan.households].sort((a, b) => b.members.length - a.members.length);
     let nobles = jc('noble');
@@ -510,19 +528,147 @@ class Layout {
         bld = this.placeBuilding(t, cands, rng);
         if (!bld && t === 'manor') bld = this.placeBuilding('house_l', cands, rng);
         if (!bld && n <= 5 && t === 'house_l') bld = this.placeBuilding('house_m', cands, rng);
-        if (!bld && lanes < 10 && this.growLane(rng)) {
+        if (!bld && lanes < 24 && this.growLane(rng)) {
           lanes++;
           cands = rng.shuffle(this.frontage());
         } else if (!bld) break;
       }
       if (bld && cands.length > 50) cands = cands.filter((c) => this.maskAt(c.x + c.dx, c.z + c.dz) === M.FREE);
     }
-    // Remaining trades, then fields on the outskirts.
+    // The graveyard, then the remaining trades, then fields on the outskirts.
+    if (!this.graveyard && !this.cemetery(rng.fork('cemetery')) && this.growLane(rng)) this.cemetery(rng.fork('cemetery2'));
     for (const t of late) {
       if (!this.placeBuilding(t, byPlaza(this.frontage()), rng) && this.growLane(rng)) this.placeBuilding(t, byPlaza(this.frontage()), rng);
     }
+    // Empty lots the town can build on later (e.g. for new citizens).
+    if (s.condition !== 'abandoned') {
+      for (let i = 0; i < 2; i++) if (!this.placePlot(rng) && !(this.growLane(rng) && this.placePlot(rng))) break;
+      if (!this.plots.length) this.fringePlot();
+    }
     this.farms();
-    for (const b of this.buildings) this.construct(b, rng.fork(b.id + 7));
+    // The jail goes in the guardhouse, else the town hall, else the tavern.
+    const jailOrder = ['guardhouse', 'townhall', 'tavern', 'warehouse', 'barn'];
+    for (const b of this.buildings) b.jailCand = s.condition !== 'abandoned' && jailOrder.includes(b.type);
+    const order = [...this.buildings].sort((a, b) => (jailOrder.includes(a.type) ? jailOrder.indexOf(a.type) : 99) - (jailOrder.includes(b.type) ? jailOrder.indexOf(b.type) : 99));
+    for (const b of order) this.construct(b, rng.fork(b.id + 7));
+  }
+
+  // Reserve a small lot beside a road; nothing is built there yet.
+  placePlot(rng) {
+    const cands = rng.shuffle(this.frontage());
+    for (const c of cands.slice(0, 400)) {
+      for (const [w, d] of SPECS.house_s.size) {
+        const r = this.rectFor(c, w, d, 1 + (hash4(c.x, c.z, 3) % Math.max(1, w - 2)));
+        if (!this.rectOk(r, false)) continue;
+        const front = { x: c.x + c.dx, z: c.z + c.dz };
+        const fm = this.maskAt(front.x, front.z);
+        if (fm !== M.FREE && fm !== M.ROAD && fm !== M.YARD) continue;
+        for (let z = r.z0 - 1; z <= r.z1 + 1; z++) {
+          for (let x = r.x0 - 1; x <= r.x1 + 1; x++) {
+            const inRect = x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+            if (inRect) this.setMask(x, z, M.BUILD);
+            else if (this.maskAt(x, z) === M.FREE && this.settlement.type === 'village') this.setMask(x, z, M.YARD);
+          }
+        }
+        this.setMask(front.x, front.z, M.ROAD);
+        const plot = { id: this.plots.length, type: 'house_s', x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: front };
+        this.plots.push(plot);
+        // A little sign on the empty lot.
+        const DX = [0, -1, 0, 1];
+        const DZ = [1, 0, -1, 0];
+        const inX = r.door.x - DX[r.door.rot];
+        const inZ = r.door.z - DZ[r.door.rot];
+        this.put(inX, Y0, inZ, B.sign, r.door.rot);
+        this.signs.push({ x: inX, y: Y0, z: inZ, kind: 'plot', plot: plot.id });
+        plot.signAt = { x: inX, y: Y0, z: inZ };
+        return plot;
+      }
+    }
+    return null;
+  }
+
+  // A lot just outside the edge (on the flattened fringe) facing the town.
+  fringePlot() {
+    const b = this.bounds;
+    const terrain = this.world.terrain;
+    const p = this.plaza;
+    const tileOk = (x, z) => {
+      if (this.inside(x, z)) {
+        const m = this.maskAt(x, z);
+        return m === M.FREE || m === M.YARD;
+      }
+      const c = terrain.column(x, z, this.ctx, {});
+      return c.h === SURFACE && c.water < 0 && c.flat > 0.05;
+    };
+    const cands = [];
+    for (let z = b.z0 - 7; z <= b.z1 + 2; z++) {
+      for (let x = b.x0 - 7; x <= b.x1 + 2; x++) {
+        if (x >= b.x0 + 2 && x + 5 <= b.x1 - 2 && z >= b.z0 + 2 && z + 5 <= b.z1 - 2) continue;
+        cands.push({ x, z, d: Math.hypot(x + 2 - p.cx, (z + 2 - p.cz) * 1.5) });
+      }
+    }
+    cands.sort((a, c) => a.d - c.d);
+    for (const { x, z } of cands) {
+      let ok = true;
+      for (let dz = -1; dz <= 5 && ok; dz++) for (let dx = -1; dx <= 5 && ok; dx++) ok = tileOk(x + dx, z + dz);
+      if (!ok) continue;
+      // Door on the side facing the plaza.
+      const dx = p.cx - (x + 2);
+      const dz = p.cz - (z + 2);
+      let door;
+      if (Math.abs(dx) > Math.abs(dz)) door = dx > 0 ? { x: x + 4, z: z + 2, rot: 3 } : { x, z: z + 2, rot: 1 };
+      else door = dz > 0 ? { x: x + 2, z: z + 4, rot: 0 } : { x: x + 2, z, rot: 2 };
+      const DX = [0, -1, 0, 1];
+      const DZ = [1, 0, -1, 0];
+      const outside = { x: door.x + DX[door.rot], z: door.z + DZ[door.rot] };
+      for (let qz = z; qz <= z + 4; qz++) for (let qx = x; qx <= x + 4; qx++) this.setMask(qx, qz, M.BUILD);
+      const plot = { id: this.plots.length, type: 'house_s', x0: x, z0: z, x1: x + 4, z1: z + 4, door, outside, fringe: true };
+      this.plots.push(plot);
+      const inX = door.x - DX[door.rot];
+      const inZ = door.z - DZ[door.rot];
+      this.put(inX, Y0, inZ, B.sign, door.rot);
+      this.signs.push({ x: inX, y: Y0, z: inZ, kind: 'plot', plot: plot.id });
+      plot.signAt = { x: inX, y: Y0, z: inZ };
+      return plot;
+    }
+    return null;
+  }
+
+  // Blocks for a house on a lot, in building order (used when builders
+  // construct a home for a new citizen at runtime).
+  blueprint(plot, id) {
+    const rng = new RNG(hash4(this.settlement.seed, 0xb10c, plot.id));
+    const r = plot;
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    const bld = {
+      id, type: plot.type, name: BUILDING_NAMES[plot.type], x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: r.outside,
+      residential: true, beds: [], work: [], seats: [], free: [], household: null, playerHome: true,
+      mats: this.buildingMats(plot.type, rng), tall: 2,
+    };
+    bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
+    const chim = this.chimneys.length;
+    const spots = this.spots.length;
+    const signs = this.signs.length;
+    const mask = this.mask.slice();
+    this.collect = [];
+    this.local = new Map();
+    const list = [];
+    // Clear the lot's plants and its sign first.
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) list.push([x, Y0, z, B.air, 0]);
+    this.construct(bld, rng);
+    const put = this.collect;
+    this.collect = null;
+    this.local = null;
+    const chimneys = this.chimneys.splice(chim);
+    const newSpots = this.spots.splice(spots);
+    const newSigns = this.signs.splice(signs);
+    this.mask = mask;
+    // Floor first, then walls bottom-up, roof, and furniture last.
+    const phase = (e) => (e[1] < Y0 ? 0 : BLOCKS[e[3]].render === 'cube' || BLOCKS[e[3]].render === 'door' ? 1 + e[1] : 50);
+    put.sort((a, b) => phase(a) - phase(b));
+    list.push(...put);
+    return { bld, list, chimneys, spots: newSpots, signs: newSigns };
   }
 
   // Extend a side lane off an existing road into open ground.
@@ -570,7 +716,7 @@ class Layout {
     const cond = s.condition;
     const poor = cond === 'poor';
     const ruined = cond === 'abandoned';
-    const wallH = spec.tall || 2;
+    const wallH = b.tall || spec.tall || 2;
     const topWall = Y0 + wallH - 1;
     const roofBase = topWall + 1;
     b.floorY = SURFACE;
@@ -788,6 +934,7 @@ class Layout {
     };
     const rugId = s.civ ? B[s.civ.color.rug] : B.rug_red;
     const t = b.type;
+    if (b.jailCand && !this.jail && !b.playerHome) this.jailCell(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
 
     if (b.residential) {
       const nBeds = t === 'house_s' ? 2 : t === 'house_m' ? 3 : t === 'manor' ? 5 : 6;
@@ -802,9 +949,11 @@ class Layout {
         seat(['eat', 'home'], table);
         if (rng.chance(0.5)) this.put(table.x, Y0 + 1, table.z, B.lantern, lit);
       }
-      tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      const chest = tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      if (chest) b.chestPos = { x: chest.x, y: Y0, z: chest.z };
       if (rng.chance(0.5)) tryPlace(B.barrel, 'wall');
       if (t === 'manor' || rng.chance(0.3)) tryPlace(B.bookshelf, 'north', { rot: 0 });
+      if (rng.chance(0.35)) tryPlace(B.stool, 'wall', { solid: false });
       if (t === 'manor') {
         tryPlace(B.bookshelf, 'north', { rot: 0 });
         tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
@@ -823,9 +972,10 @@ class Layout {
         const behind = { x: c.x, z: c.z - 1 };
         if (isIn(behind.x, behind.z) && !occ.has(key(behind.x, behind.z))) addWork(behind.x, behind.z, 0);
         const front = { x: c.x, z: c.z + 1 };
-        if (isIn(front.x, front.z) && !occ.has(key(front.x, front.z))) {
+        if (isIn(front.x, front.z) && !occ.has(key(front.x, front.z)) && !reserved.has(key(front.x, front.z))) {
           reserved.add(key(front.x, front.z));
-          b.seats.push(this.addSpot(front.x, front.z, 2, ['drink', 'social', 'eat', 'gossip'], { building: b.id }));
+          this.put(front.x, Y0, front.z, B.stool);
+          b.seats.push(this.addSpot(front.x, front.z, 2, ['drink', 'social', 'eat', 'gossip'], { building: b.id, seat: true }));
         }
       }
       tryPlace(B.barrel, 'corner');
@@ -959,6 +1109,48 @@ class Layout {
     b.homeSpots = b.free.map((q) => ({ x: q.x, y: Y0, z: q.z }));
   }
 
+  // A two-tile cell in a corner of the building behind iron bars.
+  jailCell(b, f) {
+    const { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 } = f;
+    if (ix1 - ix0 < 3 || iz1 - iz0 < 2) return;
+    for (const [cx, cz, sx, sz] of [[ix0, iz0, 1, 1], [ix1, iz0, -1, 1], [ix0, iz1, 1, -1], [ix1, iz1, -1, -1]]) {
+      const cell = [{ x: cx, z: cz }, { x: cx + sx, z: cz }];
+      const bars = [{ x: cx, z: cz + sz }, { x: cx + 2 * sx, z: cz }];
+      const door = { x: cx + sx, z: cz + sz };
+      const front = { x: cx + sx, z: cz + 2 * sz };
+      const diag = { x: cx + 2 * sx, z: cz + sz };
+      const solid = [...cell, ...bars, door];
+      if (![...solid, diag].every((t) => isIn(t.x, t.z) && !occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z)))) continue;
+      if (!isIn(front.x, front.z) || occ.has(key(front.x, front.z))) continue;
+      for (const t of solid) occ.add(key(t.x, t.z));
+      if (!connected()) {
+        for (const t of solid) occ.delete(key(t.x, t.z));
+        continue;
+      }
+      reserved.add(key(front.x, front.z));
+      reserved.add(key(diag.x, diag.z));
+      for (const t of bars) {
+        this.put(t.x, Y0, t.z, B.iron_bars);
+        this.put(t.x, Y0 + 1, t.z, B.iron_bars);
+      }
+      this.put(door.x, Y0, door.z, B.cell_door);
+      this.put(door.x, Y0 + 1, door.z, B.iron_bars);
+      this.put(cell[0].x, Y0, cell[0].z, B.bed, sx > 0 ? 1 : 3);
+      // No windows next to the cell.
+      for (const t of cell) {
+        for (const [dx, dz] of DIRS4) {
+          const nx = t.x + dx;
+          const nz = t.z + dz;
+          if (isIn(nx, nz)) continue;
+          this.put(nx, Y0, nz, b.mats.wall);
+          this.put(nx, Y0 + 1, nz, b.mats.wall);
+        }
+      }
+      this.jail = { building: b.id, cell, bed: cell[0], stand: cell[1], door, front, y: Y0 };
+      return;
+    }
+  }
+
   chimney(b, t) {
     // Chimney column rising through the roof above a hearth.
     const top = b.roofTop(t.z) + 1;
@@ -970,6 +1162,11 @@ class Layout {
     const s = this.settlement;
     const cond = s.condition;
     const o = b.outside;
+    // A hanging sign over the street names the building (or the family home).
+    if (cond !== 'abandoned' || rng.chance(0.4)) {
+      this.put(o.x, Y0 + 2, o.z, B.hanging_sign, b.door.rot);
+      this.signs.push({ x: o.x, y: Y0 + 2, z: o.z, kind: 'building', building: b.id });
+    }
     // Lantern beside the door in nice places.
     const side = [];
     const DX = [0, -1, 0, 1];
@@ -1017,7 +1214,6 @@ class Layout {
         if (a) this.addSpot(a.x, a.z, faceToward(a.x, a.z, spot.x, spot.z), ['train']);
       }
     }
-    if (b.type === 'temple' && s.condition !== 'abandoned') this.graveyard(b, rng);
     if (b.residential && s.type === 'village' && rng.chance(0.35)) {
       this.garden(b, [B.cabbage_crop, B.carrot_crop, B.flower_yellow], ['garden'], rng);
     }
@@ -1049,32 +1245,108 @@ class Layout {
     return false;
   }
 
-  graveyard(b, rng) {
-    for (let tries = 0; tries < 40; tries++) {
-      const w = 5;
-      const d = 4;
-      const x = rng.int(b.x0 - w - 1, b.x1 + 2);
-      const z = rng.int(b.z0 - d - 1, b.z1 + 2);
-      let ok = true;
-      for (let dz = -1; dz <= d && ok; dz++) for (let dx = -1; dx <= w && ok; dx++) {
-        const m = this.maskAt(x + dx, z + dz);
-        if (!this.inside(x + dx, z + dz, 2)) ok = false;
-        else if (dz >= 0 && dz < d && dx >= 0 && dx < w && m !== M.FREE) ok = false;
-        else if (m === M.BUILD || m === M.WALL) ok = false;
-      }
-      if (!ok) continue;
-      for (let dz = 0; dz < d; dz++) {
-        for (let dx = 0; dx < w; dx++) {
-          this.setMask(x + dx, z + dz, M.DECOR);
-          const edge = dz === 0 || dz === d - 1 || dx === 0 || dx === w - 1;
-          if (edge && !(dz === d - 1 && dx === 2)) this.put(x + dx, Y0, z + dz, B.fence);
-          else if (!edge && dx % 2 === 1) this.put(x + dx, Y0, z + dz, B.gravestone);
-          else if (!edge) this.put(x + dx, Y0, z + dz, rng.chance(0.4) ? B.flower_white : B.air);
+  // A fenced graveyard with room to grow: rows of graves separated by
+  // walkways, a central aisle and a gate on the south side. Space for extra
+  // rows is reserved so the yard can expand as people die.
+  cemetery(rng) {
+    const s = this.settlement;
+    const b = this.bounds;
+    const temple = this.buildings.find((q) => q.type === 'temple');
+    // Summed-area tables: free tiles, and tiles a graveyard may not touch.
+    const Wd = this.W;
+    const Dd = this.D;
+    const sat = (fn) => {
+      const t = new Int32Array((Wd + 1) * (Dd + 1));
+      for (let z = 0; z < Dd; z++) {
+        for (let x = 0; x < Wd; x++) {
+          const v = fn(b.x0 + x, b.z0 + z) ? 1 : 0;
+          t[(z + 1) * (Wd + 1) + x + 1] = v + t[z * (Wd + 1) + x + 1] + t[(z + 1) * (Wd + 1) + x] - t[z * (Wd + 1) + x];
         }
       }
-      this.addSpot(x + 2, z + d - 2, 2, ['pray', 'stroll']);
-      return;
+      return (x0, z0, x1, z1) => {
+        const a = x0 - b.x0;
+        const c = z0 - b.z0;
+        const e = x1 - b.x0 + 1;
+        const f = z1 - b.z0 + 1;
+        return t[f * (Wd + 1) + e] - t[c * (Wd + 1) + e] - t[f * (Wd + 1) + a] + t[c * (Wd + 1) + a];
+      };
+    };
+    const free = sat((x, z) => this.maskAt(x, z) === M.FREE || this.maskAt(x, z) === M.YARD);
+    const bad = sat((x, z) => {
+      const m = this.maskAt(x, z);
+      return m === M.BUILD || m === M.WALL || m === M.FIELD;
+    });
+    const rows = s.type === 'village' ? [3, 2] : s.type === 'town' ? [4, 3, 2] : [5, 4, 3, 2];
+    // Wide yards first; a narrow one (two graves a row) squeezes in anywhere.
+    const opts = [...rows.map((r) => [7, [1, 2, 4, 5], 3, r]), [5, [1, 3], 2, 3], [5, [1, 3], 2, 2]];
+    const p = this.plaza;
+    for (const [W, cols, gateDx, maxRows] of opts) {
+      const D = 2 * maxRows + 2;
+      let best = null;
+      for (let z = b.z0 + 2; z + D <= b.z1 - 1; z++) {
+        for (let x = b.x0 + 2; x + W <= b.x1 - 1; x++) {
+          if (free(x, z, x + W - 1, z + D - 1) !== W * D) continue;
+          if (bad(x - 1, z - 1, x + W, z + D) > 0) continue;
+          const cx = x + W / 2;
+          const cz = z + D / 2;
+          let score = temple ? Math.hypot(cx - (temple.x0 + temple.x1) / 2, cz - (temple.z0 + temple.z1) / 2) : -Math.hypot((cx - p.cx) / this.W, (cz - p.cz) / this.D) * 40;
+          score += rng.float(0, 4);
+          if (!best || score < best.score) best = { x, z, score };
+        }
+      }
+      // Last resort: just outside the edge, on the flattened fringe.
+      if (!best && W === 5 && maxRows === 2) {
+        const terrain = this.world.terrain;
+        const tileOk = (x, z) => {
+          if (this.inside(x, z)) {
+            const m = this.maskAt(x, z);
+            return m === M.FREE || m === M.YARD;
+          }
+          const c = terrain.column(x, z, this.ctx, {});
+          return c.h === SURFACE && c.water < 0 && c.flat > 0.6;
+        };
+        for (let z = b.z0 - D - 2; z <= b.z1 + 2 && !best; z++) {
+          for (let x = b.x0 - W - 2; x <= b.x1 + 2 && !best; x++) {
+            if (x >= b.x0 + 1 && x + W <= b.x1 - 1 && z >= b.z0 + 1 && z + D <= b.z1 - 1) continue;
+            let ok = true;
+            for (let dz = 0; dz < D && ok; dz++) for (let dx = 0; dx < W && ok; dx++) ok = tileOk(x + dx, z + dz);
+            for (let dz = -1; dz <= D && ok; dz++) {
+              for (let dx = -1; dx <= W && ok; dx++) {
+                const m = this.maskAt(x + dx, z + dz);
+                if (m === M.BUILD || m === M.WALL || m === M.FIELD || m === M.WATER) ok = false;
+              }
+            }
+            if (ok) best = { x, z };
+          }
+        }
+      }
+      if (best) {
+        const { x, z } = best;
+        for (let dz = 0; dz < D; dz++) for (let dx = 0; dx < W; dx++) this.setMask(x + dx, z + dz, M.DECOR);
+        const g = { x, z, W, maxRows, rows: 2, gateDx, y: Y0, slots: [] };
+        for (let k = 0; k < maxRows; k++) for (const dx of cols) g.slots.push({ x: x + dx, z: z + 1 + 2 * k, row: k, grave: null });
+        this.graveyard = g;
+        for (const [px, pz, id] of graveyardFence(g)) this.put(px, Y0, pz, id);
+        // A few old graves of the settlement's ancestors.
+        const old = s.condition === 'abandoned' ? rng.int(5, 8) : rng.int(2, 5);
+        const style = s.style;
+        for (const slot of rng.shuffle(g.slots.filter((q) => q.row < g.rows)).slice(0, old)) {
+          slot.grave = { name: ancestorName(rng, style), died: -rng.int(30, 4000), ancestor: true, epitaph: rng.pick(EPITAPHS) };
+          this.put(slot.x, Y0, slot.z, B.gravestone);
+        }
+        for (const slot of g.slots) if (!slot.grave && slot.row < g.rows && rng.chance(0.3)) this.put(slot.x, Y0, slot.z, B.flower_white);
+        this.addSpot(x + g.gateDx, z + 2, 2, ['pray', 'stroll']);
+        const sx = x - 1;
+        const sz = z + 2 * g.rows + 1;
+        if (this.maskAt(sx, sz) === M.FREE || this.maskAt(sx, sz) === M.YARD) {
+          this.put(sx, Y0, sz, B.sign, 0);
+          this.setMask(sx, sz, M.DECOR);
+          this.signs.push({ x: sx, y: Y0, z: sz, kind: 'graveyard' });
+        }
+        return g;
+      }
     }
+    return null;
   }
 
   findFreeNear(x, z, r, rng) {
@@ -1235,7 +1507,16 @@ class Layout {
     }
     for (const p of rng.shuffle(chop).slice(0, 6)) this.addSpot(p.x, p.z, 0, ['chop'], { wild: true });
     for (const p of rng.shuffle(mine).slice(0, 4)) this.addSpot(p.x, p.z, 3, ['mine'], { wild: true });
-    for (const p of rng.shuffle(hunt).slice(0, 6)) this.addSpot(p.x, p.z, 0, ['hunt', 'stroll'], { wild: true });
+    let traps = 0;
+    for (const p of rng.shuffle(hunt).slice(0, 7)) {
+      const near = Math.max(b.x0 - p.x, p.x - b.x1, b.z0 - p.z, p.z - b.z1) <= 10;
+      const tc = t.column(p.x + 1, p.z, this.ctx, {});
+      if (near && traps < 3 && tc.h === SURFACE && tc.water < 0 && this.settlement.condition !== 'abandoned') {
+        this.put(p.x + 1, Y0, p.z, B.snare);
+        this.addSpot(p.x, p.z, 3, ['hunt', 'trap'], { wild: true, trap: { x: p.x + 1, y: Y0, z: p.z } });
+        traps++;
+      } else this.addSpot(p.x, p.z, 0, ['hunt', 'stroll'], { wild: true });
+    }
   }
 
   // ------------------------------------------------------------ decoration
@@ -1422,6 +1703,37 @@ class Layout {
     bump(opts[0].id);
     return { kind: 'building', building: opts[0].id };
   }
+}
+
+const EPITAPHS = ['Beloved by all', 'Gone but not forgotten', 'At rest at last', 'Loved and missed', 'A true friend', 'Worked hard, rests well', 'Until we meet again', 'Forever in our hearts'];
+const ANCESTOR_FIRST = {
+  vale: ['Aldo', 'Berta', 'Corin', 'Dela', 'Emrys', 'Fenna', 'Galt', 'Hesse', 'Ines', 'Jorn'],
+  north: ['Asgrim', 'Brynja', 'Egil', 'Frida', 'Halvar', 'Ingrid', 'Ketil', 'Sigrun'],
+  sun: ['Amun', 'Bastet', 'Farid', 'Hanan', 'Idris', 'Layla', 'Nabil', 'Samira'],
+  wild: ['Ayo', 'Chidi', 'Ekon', 'Imani', 'Kofi', 'Nia', 'Tendai', 'Zola'],
+  high: ['Balin', 'Dagna', 'Durin', 'Helga', 'Thrain', 'Brunhild', 'Gimra', 'Orsik'],
+};
+function ancestorName(rng, style) {
+  return `${rng.pick(ANCESTOR_FIRST[style] || ANCESTOR_FIRST.vale)} ${rng.pick(['the Elder', 'the Founder', 'Oakheart', 'Stonebrook', 'Ashford', 'Millward', 'Greenhill', 'of the Old Road', 'Hearthkeeper', 'Longstride'])}`;
+}
+
+// Fence blocks for a graveyard with `g.rows` rows of graves: [x, z, id].
+// Air entries clear fences left over from a smaller yard.
+export function graveyardFence(g, prevRows = null) {
+  const out = [];
+  const { x, z, W } = g;
+  const south = z + 2 * g.rows + 1;
+  if (prevRows !== null) {
+    const oldSouth = z + 2 * prevRows + 1;
+    for (let dx = 1; dx < W - 1; dx++) out.push([x + dx, oldSouth, B.air]);
+  }
+  for (let dx = 0; dx < W; dx++) out.push([x + dx, z, B.fence]);
+  for (let dz = 1; dz < south - z; dz++) {
+    out.push([x, z + dz, B.fence]);
+    out.push([x + W - 1, z + dz, B.fence]);
+  }
+  for (let dx = 0; dx < W; dx++) if (dx !== g.gateDx) out.push([x + dx, south, B.fence]);
+  return out;
 }
 
 function dirOf(dx, dz) {

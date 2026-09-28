@@ -1,20 +1,31 @@
-// NPC behaviour: follow the daily schedule by walking tile by tile to homes,
-// workplaces and attractions; open/close doors; react to threats by fighting,
-// calling the guards, or fleeing.
+// NPC behaviour: follow the daily schedule (and any special plans the town
+// simulation gives them: mourning, hunting for food, building, trials,
+// trading trips) by walking tile by tile; open/close doors; react to threats
+// by fighting, calling the guards, or fleeing.
 import { Entity } from './entity.js';
 import { NPC_STEP_TIME, GROUND } from '../config.js';
-import { activityAt, JOBS, HOBBIES } from './npcgen.js';
+import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { dialogueLine } from '../game/dialogue.js';
+import { dialogueLine, greetLine } from '../game/dialogue.js';
+import { activityFor, entryStart, invCount, invTake, invAdd, setOverride } from '../sim/econ.js';
 
 const EMOTES = {
   work: ['•', '#e8d8b0'], read: ['≡', '#a0c8ff'], study: ['≡', '#a0c8ff'], pray: ['†', '#ffe8a0'], music: ['♪', '#ff9ad0'],
   drink: ['♦', '#ffb060'], dice: ['¤', '#ffe070'], gossip: ['…', '#e8e8e8'], social: ['☺', '#e8e8e8'], fish: ['~', '#80c8ff'],
   garden: ['♣', '#80e070'], sketch: ['✎', '#e8d8b0'], train: ['!', '#ff8060'], stargaze: ['*', '#c8d8ff'], smoke: ['°', '#c8c8c8'],
   play: ['♪', '#80ffb0'], eat: ['♥', '#ff8080'], stroll: ['·', '#c8c8c8'], farm: ['♣', '#c8e070'], chop: ['!', '#e8b080'], mine: ['!', '#c8c8d8'],
+  mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], build: ['■', '#e8c890'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
+};
+
+const MEAL_LINES = {
+  terrible: ['Ugh... gruel again.', 'Is this... food?', 'Burnt. Of course.', 'I\'ll pretend that was stew.'],
+  acceptable: ['Not bad at all.', 'Hits the spot.', 'Good and hearty.'],
+  delightful: ['Mmm! Delicious!', 'Now THAT is cooking!', 'What a meal!'],
+  plain: ['Bread again. It\'ll do.', 'A simple meal.'],
+  none: ['*stomach growls*', 'Nothing to eat today...', 'I\'m so hungry...'],
 };
 
 export class NPC extends Entity {
@@ -25,9 +36,9 @@ export class NPC extends Entity {
     this.layout = layout;
     this.settlement = layout.settlement;
     this.look = rec.look;
-    this.hp = rec.hp;
+    this.hp = rec.hp ?? rec.maxHp;
     this.maxHp = rec.maxHp;
-    this.rng = new RNG(hash4(rec.idx, layout.settlement.seed, 77));
+    this.rng = new RNG(hash4(rec.idx, layout.settlement.seed, 77, game.day));
     this.state = 'routine';
     this.path = null;
     this.pathI = 0;
@@ -42,10 +53,14 @@ export class NPC extends Entity {
     this.openedDoor = null;
     this.sleeping = false;
     this.bedTile = null;
-    this.greetCd = this.rng.float(2, 8);
+    this.greetCd = this.rng.float(8, 30);
     this.emoteCd = this.rng.float(3, 12);
     this.step = NPC_STEP_TIME * (rec.age === 'elder' ? 1.35 : rec.age === 'child' ? 0.85 : 1) * this.rng.float(0.9, 1.12);
     this.pathFails = 0;
+    this.haltT = 0;
+    this.prey = null;
+    this.mealBubble = null;
+    this.lineCd = this.rng.float(4, 10);
   }
 
   get name() {
@@ -53,14 +68,26 @@ export class NPC extends Entity {
   }
 
   get title() {
-    return JOBS[this.rec.job]?.title || 'Villager';
+    return jobTitle(this.rec, this.settlement);
+  }
+
+  // Sitting down on a chair, bench or stool they walked to.
+  get sitting() {
+    return this.atGoal && !this.moving && !this.sleeping && this.state === 'routine' && this.spot && this.spot.seat && this.x === this.spot.x && this.z === this.spot.z;
+  }
+
+  get act() {
+    return this.activity ? this.activity.entry.act : null;
   }
 
   heldItem() {
     if (this.sleeping) return null;
     if (this.state === 'fight') return this.weapon();
+    if (this.prey) return this.weapon();
     const a = this.activity?.entry;
     if (!a) return null;
+    if (a.act === 'build') return 'hammer';
+    if ((a.act === 'forage' || a.act === 'hunt') && this.atGoal) return this.weapon();
     if (a.act === 'work' && this.atGoal) return this.rec.equipment.tool;
     if (a.act === 'hobby' && this.atGoal) {
       const h = HOBBIES[a.hobby];
@@ -73,18 +100,31 @@ export class NPC extends Entity {
   weapon() {
     const t = this.rec.equipment.tool;
     if (t && ITEMS[t] && (ITEMS[t].kind === 'weapon' || ITEMS[t].kind === 'tool')) return t;
-    return null;
+    const w = this.rec.equipment.items.find((i) => ITEMS[i.item]?.kind === 'weapon');
+    return w ? w.item : null;
   }
 
-  attackDamage() {
+  meleeWeapon() {
     const w = this.weapon();
+    if (w && !ITEMS[w].ranged) return w;
+    const alt = this.rec.equipment.items.find((i) => ITEMS[i.item]?.kind === 'weapon' && !ITEMS[i.item].ranged);
+    return alt ? alt.item : null;
+  }
+
+  attackDamage(ranged = false) {
+    const w = ranged ? this.weapon() : this.meleeWeapon();
     const base = w ? ITEMS[w].damage : 1.5;
     return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? 1.2 : 1) * (this.rec.age === 'child' ? 0.4 : 1)));
   }
 
+  canShoot() {
+    const w = this.weapon();
+    return w && ITEMS[w].ranged && invCount(this.rec.inv || [], 'arrow') > 0;
+  }
+
   // ------------------------------------------------------------ placement
   placeForCurrentActivity() {
-    const act = activityAt(this.rec, this.game.minute, this.game.day);
+    const act = activityFor(this.rec, this.game.day, this.game.minute);
     this.activity = act;
     const goal = this.pickGoal(act.entry);
     this.goal = goal;
@@ -104,7 +144,7 @@ export class NPC extends Entity {
   }
 
   homeTile() {
-    const b = this.layout.buildings[this.rec.home];
+    const b = this.rec.home !== null ? this.layout.buildings[this.rec.home] : null;
     if (b && b.homeSpots.length) return b.homeSpots[this.rec.idx % b.homeSpots.length];
     const p = this.layout.plaza;
     return { x: p.cx, y: GROUND, z: p.cz + 2 };
@@ -114,7 +154,7 @@ export class NPC extends Entity {
   pickGoal(e) {
     const L = this.layout;
     const rec = this.rec;
-    const home = L.buildings[rec.home];
+    const home = rec.home !== null ? L.buildings[rec.home] : null;
     const rng = this.rng;
     this.releaseSpot();
     const claim = (spots) => {
@@ -146,6 +186,7 @@ export class NPC extends Entity {
       return { x: p.x + rng.int(-2, 2), y: GROUND, z: p.z + rng.int(-2, 2), wander: true };
     };
     const plazaTile = () => ({ x: rng.int(L.plaza.x0 + 1, L.plaza.x1 - 1), y: GROUND, z: rng.int(L.plaza.z0 + 1, L.plaza.z1 - 1), wander: true });
+    const target = (t, extra = {}) => (t ? { x: t.x, y: GROUND, z: t.z, ...extra } : null);
     switch (e.act) {
       case 'sleep': {
         const bed = home && home.beds[rec.bed];
@@ -170,6 +211,31 @@ export class NPC extends Entity {
         return tagged(rng.chance(0.5) ? 'gossip' : 'social') || plazaTile();
       case 'wander':
         return roadTile();
+      case 'mourn': case 'funeral':
+        return target(e.target, { face: 2, tag: e.act, near: e.act === 'funeral' ? 1 : 0 });
+      case 'build': {
+        const sites = e.sites || [e.target];
+        return target(sites[rng.int(0, sites.length - 1)], { tag: 'build', build: true });
+      }
+      case 'trial':
+        return target(e.target, { near: 1, tag: 'trial' });
+      case 'sell':
+        return target(e.target, { near: 1, tag: 'sell', sell: true });
+      case 'forage': {
+        const spots = [...L.spotsByTag('hunt'), ...L.spotsByTag('fish')];
+        const s = spots.length ? spots[rng.int(0, spots.length - 1)] : null;
+        return s ? { x: s.x, y: s.y, z: s.z, face: s.face, tag: 'forage', hunt: true, trap: s.trap } : roadTile();
+      }
+      case 'travel': {
+        const ents = L.entrances.length ? L.entrances : [{ x: L.bounds.x0 + 1, z: L.plaza.cz }];
+        let best = ents[0];
+        for (const q of ents) if (Math.abs(q.x - this.x) + Math.abs(q.z - this.z) < Math.abs(best.x - this.x) + Math.abs(best.z - this.z)) best = q;
+        return { x: best.x, y: GROUND, z: best.z, near: 1, leave: true };
+      }
+      case 'visit': {
+        const stalls = L.spotsByTag('shop');
+        return claim(stalls) || { ...plazaTile(), face: 0, visit: true };
+      }
       case 'hobby': {
         const h = HOBBIES[e.hobby];
         if (!h) return roadTile();
@@ -196,7 +262,7 @@ export class NPC extends Entity {
       const s = free[hash4(this.rec.idx, spots.length) % free.length];
       s.claim = this.id;
       this.spot = s;
-      return { x: s.x, y: s.y, z: s.z, face: s.face, tag: s.tags[0] };
+      return { x: s.x, y: s.y, z: s.z, face: s.face, tag: s.tags[0], trap: s.trap };
     };
     if (!w || w.kind === 'none') return null;
     if (w.kind === 'building') {
@@ -212,12 +278,14 @@ export class NPC extends Entity {
       return { x: s.x, y: s.y, z: s.z, face: s.face, tag: 'work' };
     }
     if (w.kind === 'tag') {
-      const g = claimFrom(L.spotsByTag(w.tag));
+      // Trappers alternate between checking snares and hunting.
+      const tag = w.tag === 'hunt' && rng.chance(0.45) && L.spotsByTag('trap').length ? 'trap' : w.tag;
+      const g = claimFrom(L.spotsByTag(tag));
       if (g) {
         g.tag = w.tag;
+        if (w.tag === 'hunt') g.hunt = true;
         return g;
       }
-      // No fields/shore/woods spots: help out at the related building or the square.
       const b = w.building != null ? L.buildings[w.building] : null;
       if (b) return claimFrom(b.work) || (b.homeSpots.length ? { ...b.homeSpots[rng.int(0, b.homeSpots.length - 1)], face: 0, wanderIn: b } : null);
       const p = L.plaza;
@@ -248,6 +316,7 @@ export class NPC extends Entity {
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.avoid) this.avoid.t -= dt;
     this.stateT += dt;
+    this.rec.hp = this.hp;
     if (this.moving) return;
     this.closeDoorBehind();
     switch (this.state) {
@@ -268,10 +337,25 @@ export class NPC extends Entity {
 
   routine(dt) {
     const game = this.game;
-    const act = activityAt(this.rec, game.minute, game.day);
-    if (!this.activity || act.entry !== this.activity.entry) {
+    let act = activityFor(this.rec, game.day, game.minute);
+    if (!this.activity || act.key !== this.activity.key) {
+      const wasWork = this.activity && this.activity.entry.act === 'work';
       this.activity = act;
       this.wake();
+      // After a day's hunting or fishing, take the catch to the tavern.
+      if (wasWork && act.entry.act !== 'work' && act.entry.act !== 'eat' && act.entry.act !== 'sleep' && (this.rec.job === 'trapper' || this.rec.job === 'fisher')) {
+        const catchN = (this.rec.inv || []).reduce((n, q) => n + (q.item === 'raw_meat' || q.item === 'fish' ? q.count : 0), 0);
+        const tavern = this.layout.buildings.find((b) => b.type === 'tavern');
+        if (catchN >= 2 && tavern && !this.rec.override) {
+          const now = game.day * 1440 + game.minute;
+          setOverride(this.rec, now, now + 50, 'sell', { target: tavern.inside, place: 'tavern' });
+          act = activityFor(this.rec, game.day, game.minute);
+          this.activity = act;
+        }
+      }
+      this.prey = null;
+      this.mealBubble = null;
+      entryStart(game.sim, this.layout, this.rec, act, game.day, this.rng);
       this.goal = this.pickGoal(act.entry);
       this.path = null;
       this.atGoal = false;
@@ -286,6 +370,10 @@ export class NPC extends Entity {
       }
     }
     if (this.sleeping) return;
+    if (this.prey) {
+      this.hunt(dt);
+      return;
+    }
     if (!this.goal) {
       this.idle(dt);
       return;
@@ -303,7 +391,40 @@ export class NPC extends Entity {
         this.sleeping = true;
         this.bedTile = this.goal.bed;
       } else if (this.goal.face !== undefined) this.dir = this.goal.face;
+      this.arrived();
     }
+  }
+
+  // Things that happen the moment they reach where they were going.
+  arrived() {
+    const g = this.goal;
+    const act = this.act;
+    if (g.leave) {
+      // Out on the road: gone until they come back.
+      this.game.despawnNpc(this);
+      return;
+    }
+    if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) this.mealBubble = this.rec.lastMeal;
+    if (act === 'trial') this.face(this.game.player.x, this.game.player.z);
+    if (g.trap) this.checkSnare(g.trap);
+    if (g.sell) {
+      const n = this.game.sim.sellCatch(this.layout, this.rec);
+      if (n) this.say(this.rng.pick(['Fresh catch for the kitchen!', 'Here you go, straight from the wild.', `${n} for the pot!`]), 3);
+      this.rec.override = null;
+    }
+  }
+
+  onMeal(r) {
+    if (this.atGoal) this.showMeal(r);
+    else this.mealBubble = r;
+  }
+
+  showMeal(r) {
+    if (!r || this.bubble) return;
+    const key = r.item ? (r.q === 'terrible' || r.q === 'acceptable' || r.q === 'delightful' ? r.q : 'plain') : 'none';
+    if (key === 'plain' && !this.rng.chance(0.3)) return;
+    if (key === 'acceptable' && !this.rng.chance(0.4)) return;
+    this.say(this.rng.pick(MEAL_LINES[key]), 3, key === 'none' || key === 'terrible' ? '#e0c080' : undefined);
   }
 
   wake() {
@@ -336,31 +457,166 @@ export class NPC extends Entity {
   atGoalBehaviour(dt) {
     const g = this.goal;
     const act = this.activity.entry;
+    const game = this.game;
     this.idleT -= dt;
     this.emoteCd -= dt;
+    this.lineCd -= dt;
+    if (this.mealBubble) {
+      this.showMeal(this.mealBubble);
+      this.mealBubble = null;
+    }
     // Periodic small actions & emotes that show what they're doing.
     if (this.emoteCd <= 0) {
       this.emoteCd = this.rng.float(6, 16);
-      const tag = act.act === 'hobby' ? HOBBIES[act.hobby]?.tag : act.act === 'work' ? g.tag || 'work' : act.act;
+      let tag = act.act === 'hobby' ? HOBBIES[act.hobby]?.tag : act.act === 'work' ? g.tag || 'work' : act.act;
+      if (act.act === 'work' && this.rec.job === 'cook') tag = 'cook';
       const em = EMOTES[tag];
       if (em && !g.wander) this.emoteShow(em[0], em[1], 2.2);
+    }
+    if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
+    if (act.act === 'trial') {
+      if (this.rng.chance(dt * 0.3)) this.face(game.player.x, game.player.z);
+      return;
+    }
+    if (act.act === 'build') {
+      if (this.rng.chance(dt * 1.6)) {
+        this.doAction(0.25);
+        const t = { x: this.x + [0, -1, 0, 1][this.dir], z: this.z + [1, 0, -1, 0][this.dir] };
+        if (this.rng.chance(0.5)) game.renderer.emit(t.x, GROUND, t.z, { n: 3, color: ['#c8a064', '#e8e0d0', '#8e6a3a'], up: 25, life: 0.4, oy: -6 });
+        if (this.rng.chance(0.25) && this.distTo(game.player) < 14) game.audio?.play(this.rng.chance(0.5) ? 'dig' : 'place', this);
+      }
+      if (this.lineCd <= 0) {
+        this.lineCd = this.rng.float(20, 50);
+        if (this.rng.chance(0.4)) this.say(this.rng.pick(['Almost got this beam!', 'Hand me that plank.', 'Steady...', 'A fine little cottage.']), 2.5);
+      }
+    }
+    if (act.act === 'visit' && this.lineCd <= 0) {
+      this.lineCd = this.rng.float(15, 35);
+      const v = this.rec.visit;
+      if (this.rng.chance(0.6)) this.say(this.rng.pick([`Fine goods from ${v.fromName}!`, 'Rare wares! Come and see!', 'Traded all the way from the coast!', 'Best prices this side of the river!']), 3, '#ffe070');
+    }
+    // Hunters look for game near their hunting grounds (and now and then
+    // an animal wanders by).
+    if ((g.hunt || act.act === 'forage') && this.rng.chance(dt * 0.6)) {
+      const c = this.findPrey(9);
+      if (c) {
+        this.prey = c;
+        this.preyT = 0;
+        this.releaseSpot();
+        return;
+      }
+      if (this.rng.chance(0.08) && this.distTo(game.player) < 34) game.spawnGameNear(this);
     }
     if (act.act === 'work' && this.rng.chance(dt * 0.6)) {
       this.doAction(0.3);
       if (this.rec.job === 'blacksmith' && this.spot && this.spot.target) {
         const t = this.spot.target;
-        this.game.renderer.emit(t.x, GROUND + 1, t.z, { n: 5, color: ['#ffe070', '#ffb040', '#ffffff'], up: 40, speed: 50, life: 0.4, oy: -4 });
-        this.game.audio?.play('clang', this);
+        game.renderer.emit(t.x, GROUND + 1, t.z, { n: 5, color: ['#ffe070', '#ffb040', '#ffffff'], up: 40, speed: 50, life: 0.4, oy: -4 });
+        game.audio?.play('clang', this);
+      } else if (this.rec.job === 'cook' && this.spot && this.spot.target && this.rng.chance(0.5)) {
+        const t = this.spot.target;
+        game.renderer.emit(t.x, GROUND + 1, t.z, { n: 2, color: ['#e8e8f0', '#c8c8d0'], up: 12, speed: 6, gravity: -8, life: 1.2, oy: -2 });
       }
     }
     if (this.idleT > 0) return;
     // Re-pick a spot now and then so places feel alive.
     this.idleT = this.rng.float(8, 25);
-    if (g.patrol || g.wander || g.wanderIn || (act.act === 'play') || (g.tag === 'farm' && this.rng.chance(0.5))) {
+    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || (g.tag === 'farm' && this.rng.chance(0.5))) {
       this.goal = act.act === 'work' ? this.workGoal() : this.pickGoal(act);
       this.atGoal = false;
       this.path = null;
-    } else if (this.rng.chance(0.3)) this.dir = this.rng.int(0, 3);
+    } else if (this.rng.chance(0.3) && !this.sitting) this.dir = this.rng.int(0, 3);
+  }
+
+  mourn(act) {
+    if (this.lineCd > 0) return;
+    this.lineCd = this.rng.float(10, 22);
+    const who = (act.who || '').split(' ')[0];
+    if (act.officiant) {
+      this.say(this.rng.pick([`We gather to remember ${act.who}.`, 'May they rest in the light.', `Go in peace, ${who}.`, 'From the earth, to the earth.']), 3.5, '#e8e0ff');
+      return;
+    }
+    if (this.rng.chance(0.55)) this.say(this.rng.pick([`Rest well, ${who}...`, `I miss you, ${who}.`, '*sniff*', `It isn't fair, ${who}...`, '...']), 3, '#b8c0e8');
+  }
+
+  // Look for game nearby (passive or neutral wildlife, not farm animals).
+  findPrey(r) {
+    let best = null;
+    let bd = r + 1;
+    for (const c of this.game.creatures) {
+      if (c.dead || c.species === 'chicken' || c.hostileNow) continue;
+      if (c.S.mode !== 'passive' && c.S.mode !== 'neutral') continue;
+      const d = this.distTo(c);
+      if (d < bd) {
+        best = c;
+        bd = d;
+      }
+    }
+    return best;
+  }
+
+  hunt(dt) {
+    const c = this.prey;
+    this.preyT = (this.preyT || 0) + dt;
+    if (!c || c.dead || this.distTo(c) > 14 || this.preyT > 60) {
+      this.prey = null;
+      this.atGoal = false;
+      this.path = null;
+      return;
+    }
+    const d = this.distTo(c);
+    if (this.canShoot() && d <= 6 && d >= 2) {
+      this.face(c.x, c.z);
+      if (this.attackCd <= 0) {
+        this.attackCd = 1.6;
+        this.doAction(0.3);
+        invTake(this.rec.inv, 'arrow', 1);
+        this.game.shoot(this, c, this.attackDamage(true));
+      }
+      return;
+    }
+    if (d <= 1) {
+      this.face(c.x, c.z);
+      if (this.attackCd <= 0) {
+        this.attackCd = 1.0;
+        this.doAction(0.3);
+        this.game.damage(c, this.attackDamage(false), this);
+      }
+      return;
+    }
+    if (!this.path || this.rng.chance(0.2)) this.path = null;
+    this.followPath({ x: c.x, y: c.y, z: c.z }, 1);
+  }
+
+  onKill(c) {
+    this.prey = null;
+    this.atGoal = false;
+    this.path = null;
+    if (this.rng.chance(0.5)) this.say(this.rng.pick(['Got one!', 'Supper!', 'Clean shot.']), 2);
+    if (this.rng.chance(0.3)) invAdd(this.rec.inv, 'arrow', 1);
+    void c;
+  }
+
+  checkSnare(t) {
+    const w = this.game.world;
+    const cur = w.getBlock(t.x, t.y, t.z);
+    if (cur === B.air || BLOCKS[cur].replaceable) {
+      // Someone took the snare: lay a new one.
+      if (!w.canStand(t.x, t.y, t.z) && cur !== B.air) return;
+      w.setBlock(t.x, t.y, t.z, B.snare, 0);
+      this.face(t.x, t.z);
+      this.doAction(0.4);
+      this.emoteShow('+', '#c8e070', 2);
+      return;
+    }
+    if (cur !== B.snare) return;
+    this.face(t.x, t.z);
+    this.doAction(0.3);
+    if (w.getState(t.x, t.y, t.z)) {
+      w.setState(t.x, t.y, t.z, false);
+      invAdd(this.rec.inv, 'raw_meat', 1);
+      this.emoteShow('!', '#c8e070', 2);
+    } else this.emoteShow('?', '#c8c8c8', 1.5);
   }
 
   idle(dt) {
@@ -393,6 +649,7 @@ export class NPC extends Entity {
         this.waitT = 1.5 + this.pathFails;
         if (this.pathFails > 3) {
           // Give up on this goal: pick another activity spot later.
+          if (this.goal && this.goal.leave) this.game.despawnNpc(this);
           this.goal = null;
           this.pathFails = 0;
         }
@@ -428,7 +685,7 @@ export class NPC extends Entity {
       this.openedDoor = { x: nx, y: ty, z: nz, passed: false };
     }
     this.face(nx, nz);
-    this.startMove(nx, ty, nz, this.step * (this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.activity?.entry.act === 'play' ? 0.8 : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    this.startMove(nx, ty, nz, this.step * (this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? 0.8 : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;
   }
@@ -447,20 +704,25 @@ export class NPC extends Entity {
   }
 
   // ------------------------------------------------------------ threats
-  // How this NPC responds when attacked or when it sees violence.
-  react(threat, witnessed = false) {
+  // How this NPC responds when attacked, or when they see someone else
+  // (a fellow citizen) being hurt.
+  react(threat, witnessed = false, victim = null) {
     if (this.dead || !threat || threat.dead) return;
     if (this.sleeping) {
       if (witnessed) return;
       this.wake();
     }
     const p = this.rec.personality;
+    const beast = threat.kind === 'creature' || threat.kind === 'monster';
     const guardsExist = this.game.guardsOf(this.settlement.id).length > 0;
+    const close = victim && victim.rec && (this.rec.partner === victim.rec.idx || this.rec.children.includes(victim.rec.idx) || this.rec.parents.includes(victim.rec.idx) || (this.rec.friends || []).includes(victim.rec.idx));
     if (this.rec.job === 'guard') return this.engage(threat);
     if (this.rec.age === 'child') return this.startFlee(threat, witnessed ? null : '!!');
     const armed = !!this.weapon();
-    if (!witnessed && p.bravery > 0.68 && (armed || p.temper > 0.6)) {
-      this.say(this.rng.pick(['You\'ll regret that!', 'Back off!', 'Take this!', 'How dare you!']), 2.5, '#ff9080');
+    // The brave fight back, or step in for friends and family (and against beasts).
+    if (p.bravery > 0.68 && (armed || p.temper > 0.6) && (!witnessed || beast || close)) {
+      const who = victim && victim.rec ? victim.rec.name.first : null;
+      this.say(close && who ? this.rng.pick([`Get away from ${who}!`, `Leave ${who} alone!`]) : this.rng.pick(['You\'ll regret that!', 'Back off!', 'Take this!', 'How dare you!']), 2.5, '#ff9080');
       return this.engage(threat);
     }
     if (guardsExist && (p.sociability > 0.3 || p.bravery > 0.4) && this.rng.chance(witnessed ? 0.7 : 0.85)) {
@@ -468,7 +730,11 @@ export class NPC extends Entity {
       this.stateT = 0;
       this.threat = threat;
       this.path = null;
-      this.say(this.rng.pick(['GUARDS! HELP!', 'Guards! Guards!', 'Help! Murder!', 'Someone call the guard!']), 3, '#ffe070');
+      const who = victim && victim.rec ? victim.rec.name.first : null;
+      const line = beast
+        ? this.rng.pick([`A ${(threat.name || 'beast').toLowerCase()}! Guards!`, 'Monster! Help!'])
+        : who ? this.rng.pick([`Help! ${who} is being attacked!`, `GUARDS! They're hurting ${who}!`]) : this.rng.pick(['GUARDS! HELP!', 'Guards! Guards!', 'Help! Murder!', 'Someone call the guard!']);
+      this.say(line, 3, '#ffe070');
       this.game.alertGuards(this.settlement.id, threat, this);
       return;
     }
@@ -481,6 +747,7 @@ export class NPC extends Entity {
     this.stateT = 0;
     this.path = null;
     this.atGoal = false;
+    this.prey = null;
     this.releaseSpot();
   }
 
@@ -489,6 +756,7 @@ export class NPC extends Entity {
     this.threat = threat;
     this.stateT = 0;
     this.path = null;
+    this.prey = null;
     this.releaseSpot();
     if (line) this.say(line, 2, '#ffe070');
   }
@@ -500,7 +768,7 @@ export class NPC extends Entity {
       return;
     }
     // Run home if possible, otherwise directly away from the threat.
-    const home = this.layout.buildings[this.rec.home];
+    const home = this.rec.home !== null ? this.layout.buildings[this.rec.home] : null;
     if (!this.fleeGoal || this.stateT - (this.fleeSet || 0) > 6) {
       this.fleeSet = this.stateT;
       if (home && home.homeSpots.length && Math.hypot(home.inside.x - t.x, home.inside.z - t.z) > 4) {
@@ -540,19 +808,48 @@ export class NPC extends Entity {
     const t = this.threat;
     const game = this.game;
     const guard = this.rec.job === 'guard';
-    const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !game.isWanted(this.settlement.id) && this.stateT > 25);
-    if (tooFar || this.stateT > 90) {
+    const sid = this.settlement.id;
+    const justice = game.sim.justice;
+    const lawful = t && t.kind === 'player' && (game.isWanted(sid) || justice.exiled.has(sid));
+    const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !lawful && this.stateT > 25);
+    if (tooFar || this.stateT > 90 || (t && t.kind === 'player' && justice.jail)) {
       this.calmDown();
       return;
     }
     const d = this.distTo(t);
-    const reach = this.weapon() && ITEMS[this.weapon()].reach > 2 ? 2 : 1;
+    if (guard && t.kind === 'player') {
+      // Waiting for an answer to "Halt!".
+      if (this.haltT > 0) {
+        this.haltT -= dt;
+        this.face(t.x, t.z);
+        if (d > 3) this.followPath({ x: t.x, y: t.y, z: t.z }, 2);
+        return;
+      }
+      if (d <= 2 && !justice.exiled.has(sid) && justice.canHalt(sid)) {
+        this.face(t.x, t.z);
+        this.say('Halt! In the name of the law!', 3, '#ffe070');
+        justice.halt(this);
+        return;
+      }
+    }
+    if (this.canShoot() && d >= 2 && d <= 6 && Math.abs(t.y - this.y) <= 2) {
+      this.face(t.x, t.z);
+      if (this.attackCd <= 0) {
+        this.attackCd = 1.5;
+        this.doAction(0.3);
+        invTake(this.rec.inv, 'arrow', 1);
+        game.shoot(this, t, this.attackDamage(true));
+      }
+      return;
+    }
+    const w = this.meleeWeapon();
+    const reach = w && ITEMS[w].reach > 2 ? 2 : 1;
     if (d <= reach && Math.abs(t.y - this.y) <= 1) {
       this.face(t.x, t.z);
       if (this.attackCd <= 0) {
         this.attackCd = guard ? 0.75 : 1.0;
         this.doAction(0.3);
-        game.damage(t, this.attackDamage(), this);
+        game.damage(t, this.attackDamage(false), this);
       }
       return;
     }
@@ -563,26 +860,45 @@ export class NPC extends Entity {
     this.followPath({ x: t.x, y: t.y, z: t.z }, reach);
   }
 
-  calmDown() {
+  calmDown(silent = false) {
     this.state = 'routine';
     this.threat = null;
     this.path = null;
     this.activity = null;
     this.fleeGoal = null;
-    if (this.rng.chance(0.5)) this.say(this.rng.pick(['Phew...', 'That was close.', '*sigh*', 'Is it over?']), 2);
+    this.haltT = 0;
+    if (!silent && this.rng.chance(0.5)) this.say(this.rng.pick(['Phew...', 'That was close.', '*sigh*', 'Is it over?']), 2);
   }
 
   onHurt(attacker) {
     if (this.state === 'fight' && this.threat === attacker) return;
+    this.prey = null;
     this.react(attacker, false);
   }
 
-  // Idle chatter when the player walks by.
+  // Passing remarks: rare, and dependent on how they feel about you.
   maybeGreet(player, dt) {
     this.greetCd -= dt;
-    if (this.greetCd > 0 || this.sleeping || this.state !== 'routine' || this.bubble) return;
+    if (this.greetCd > 0 || this.sleeping || this.state !== 'routine' || this.bubble || player.dead) return;
     if (this.distTo(player) > 3) return;
-    this.greetCd = this.rng.float(25, 60);
-    if (this.rng.chance(0.25 + this.rec.personality.sociability * 0.6)) this.say(dialogueLine(this, this.game, 'greet'), 3.5);
+    this.greetCd = this.rng.float(60, 150);
+    const sim = this.game.sim;
+    if (!sim.canGreet()) return;
+    const rep = sim.opinion(this);
+    const citizen = sim.isCitizen(this.settlement.id);
+    let chance = 0.04 + this.rec.personality.sociability * 0.08;
+    if (citizen) chance += 0.15;
+    if (rep >= 35) chance += 0.25;
+    else if (rep >= 10) chance += 0.1;
+    if (rep <= -25) chance = 0.2;
+    if (this.act === 'work' && this.atGoal) chance *= 0.5;
+    if (this.act === 'mourn' || this.act === 'funeral' || this.act === 'trial') chance = 0;
+    if ((this.rec.grief || []).some((g) => g.rel !== 'acquaintance')) chance *= 0.4;
+    if (!this.rng.chance(chance)) return;
+    sim.markGreet();
+    this.face(player.x, player.z);
+    this.say(greetLine(this, this.game, rep, citizen), 3.5, rep <= -25 ? '#ffb080' : undefined);
   }
 }
+
+export { dialogueLine };

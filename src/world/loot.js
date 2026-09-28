@@ -36,6 +36,7 @@ export function rollContainerLoot(world, x, y, z, blockName, settlement) {
   if (!settlement) return slots; // containers in the wild (or placed by the player) start empty
   const layout = world.getLayout(settlement);
   const b = layout.buildings.find((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
+  if (b && b.playerHome) return slots;
   let kind = settlement.condition === 'abandoned' ? 'ruins' : buildingKind(b ? b.type : null) || 'house';
   const table = TABLES[kind] || TABLES.house;
   const rand = mulberry32(hash4(x, y, z, world.seed ^ 0x100f));

@@ -71,6 +71,7 @@ export class Renderer {
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     this.computeCutaway(world, player);
     this.drawWorld(game);
+    this.drawProjectiles(game);
     this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
@@ -259,6 +260,11 @@ export class Renderer {
               const s = arr[idx] || arr[0];
               // Plants sway gently.
               ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+              // Hanging signs show what the building is.
+              if (id === B.hanging_sign) {
+                const ic = game.signIcons && game.signIcons.get(`${x},${y},${z}`);
+                if (ic) ctx.drawImage(this.dropIcon(ic), sx + 3, sy + SPR_H - s.h + 4);
+              }
             } else if (render === 'flat') {
               const arr = TEX.sprite[id * 4];
               const s = arr[v % arr.length];
@@ -376,7 +382,7 @@ export class Renderer {
         if (Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
         const sheet = humanoidSheet(e.look);
-        const frame = e.actionTimer > 0 ? 3 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : 0;
+        const frame = e.actionTimer > 0 ? 3 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = e.dir;
         const top = feetY - CHAR_H + 1;
         if (inWater) {
@@ -506,6 +512,30 @@ export class Renderer {
     c2.drawImage(c, 1, 1);
     this.dropIcons.set(key, o2);
     return o2;
+  }
+
+  // Arrows in flight.
+  drawProjectiles(game) {
+    const ctx = this.ctx;
+    for (const a of game.projectiles || []) {
+      const f = Math.min(1, a.t / a.dur);
+      const wx = a.x0 + (a.tx - a.x0) * f;
+      const wz = a.z0 + (a.tz - a.z0) * f;
+      const wy = a.y0 + (a.ty - a.y0) * f + Math.sin(f * Math.PI) * 0.4;
+      const sx = Math.round(wx * TILE + 8 - this.camX);
+      const sy = Math.round(wz * TILE - wy * LH + LH - this.camY);
+      const dx = a.tx - a.x0;
+      const dz = a.tz - a.z0;
+      const l = Math.hypot(dx, dz) || 1;
+      const ux = dx / l;
+      const uy = dz / l;
+      ctx.fillStyle = '#8a6038';
+      for (let i = 0; i < 5; i++) ctx.fillRect(Math.round(sx - ux * i), Math.round(sy - uy * i * 0.75), 1, 1);
+      ctx.fillStyle = '#e0e0e8';
+      ctx.fillRect(Math.round(sx + ux), Math.round(sy + uy * 0.75), 1, 1);
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(Math.round(sx - ux * 5), Math.round(sy - uy * 3.75), 1, 1);
+    }
   }
 
   // ------------------------------------------------------------------ weather

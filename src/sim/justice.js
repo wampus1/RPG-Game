@@ -1,0 +1,540 @@
+// Crime and punishment. Crimes only count when someone sees them. Guards
+// try to arrest (or subdue) the culprit instead of killing them; the town's
+// leader then hears the guard and the witnesses at the jail and decides what
+// can be proven, the fine or jail time, or, for repeat offenders, exile or
+// execution.
+import { GROUND } from '../config.js';
+import { B } from '../world/blocks.js';
+import { ITEMS } from '../world/items.js';
+import { clamp } from '../util/rng.js';
+import { jobTitle } from '../entities/npcgen.js';
+import { DAY, ledger, mayorOf, alive, st, setOverride, invAdd } from './econ.js';
+import { removeItem, countItem } from '../game/inventory.js';
+
+export const CRIMES = {
+  theft: { label: 'Theft', sev: 'minor', fine: 10 },
+  vandalism: { label: 'Vandalism', sev: 'minor', fine: 15 },
+  trespass: { label: 'Trespassing', sev: 'minor', fine: 10 },
+  brandishing: { label: 'Brandishing a weapon', sev: 'minor', fine: 10 },
+  assault: { label: 'Assault', sev: 'moderate', fine: 40 },
+  assault_guard: { label: 'Assaulting a guard', sev: 'moderate', fine: 60 },
+  resisting: { label: 'Resisting arrest', sev: 'moderate', fine: 30 },
+  jailbreak: { label: 'Escaping jail', sev: 'moderate', fine: 60 },
+  murder: { label: 'Murder', sev: 'severe', fine: 250 },
+};
+export const SEV_RANK = { minor: 1, moderate: 2, severe: 3 };
+const HOURLY_RATE = 5; // coins of fine worked off per hour in a cell
+
+const SHOUTS = {
+  theft: ['THIEF! Stop, thief!', 'Guards! A thief!', 'Put that back, thief!'],
+  vandalism: ['Stop wrecking our town! GUARDS!', 'Vandal! Guards!'],
+  trespass: ['Intruder! GUARDS!', 'Get out of our house! Guards!'],
+  brandishing: ['Halt! You were warned!'],
+  assault: ['Leave them alone! GUARDS!', 'Help! Someone\'s being attacked!', 'GUARDS! Murder!'],
+  assault_guard: ['They attacked a guard!', 'Guard down! Help!'],
+  resisting: ['They\'re resisting!', 'Get them!'],
+  jailbreak: ['The prisoner\'s escaping!', 'Jailbreak! Stop them!'],
+  murder: ['MURDER! Murder in the streets!', 'They killed them! GUARDS!'],
+};
+
+export class Justice {
+  constructor(game, sim) {
+    this.game = game;
+    this.sim = sim;
+    this.pending = new Map(); // sid -> [crime]
+    this.record = new Map(); // sid -> {minor, moderate, severe, convictions}
+    this.exiled = new Set();
+    this.jail = null;
+    this.resisted = new Set();
+    this.haltCd = 0;
+    this.checkT = 0;
+    this.trespass = null;
+    this.brandish = null;
+    this.exileWarn = -1;
+  }
+
+  pendingIn(sid) {
+    return this.pending.get(sid) || [];
+  }
+
+  recordOf(sid) {
+    let r = this.record.get(sid);
+    if (!r) {
+      r = { minor: 0, moderate: 0, severe: 0, convictions: 0 };
+      this.record.set(sid, r);
+    }
+    return r;
+  }
+
+  notoriety(sid) {
+    const r = this.record.get(sid);
+    return this.pendingIn(sid).length + (r ? r.convictions * 0.5 + r.severe : 0);
+  }
+
+  // ------------------------------------------------------------ crimes
+  commit(sid, type, info = {}) {
+    const game = this.game;
+    const def = CRIMES[type];
+    const wits = (info.witnesses || []).filter((n) => n && !n.dead && !n.sleeping);
+    if (!wits.length) return null;
+    const L = this.sim.layoutOf(sid);
+    const s = L.settlement;
+    let sev = info.sev || def.sev;
+    if (type === 'theft' && (info.value || 0) >= 25) sev = 'moderate';
+    const crime = {
+      type, sev, desc: info.desc || def.label, victim: info.victim || null, value: info.value || 0, items: info.items || null, owner: info.owner || null,
+      witnesses: wits.filter((n) => !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard'), day: game.day, minute: Math.floor(game.minute),
+    };
+    const list = this.pending.get(sid) || [];
+    list.push(crime);
+    this.pending.set(sid, list);
+    const r = L.econ.recent;
+    if (type === 'theft' || type === 'vandalism' || type === 'trespass') r.thefts++;
+    else r.violence++;
+    r.calm = 0;
+    const hit = { minor: 6, moderate: 12, severe: 25 }[sev];
+    for (const w of wits) this.sim.changeRep(w, -hit);
+    if (info.victimNpc && !info.victimNpc.dead) this.sim.changeRep(info.victimNpc, -hit * 2);
+    const was = game.isWanted(sid);
+    game.wanted.set(sid, Math.max(game.wanted.get(sid) || 0, sev === 'minor' ? 240 : 1e9));
+    const shouter = wits.find((n) => n.state === 'routine' || n.rec.job === 'guard') || wits[0];
+    if (!info.quiet && shouter) shouter.say(shouter.rng.pick(SHOUTS[type] || SHOUTS.assault), 3.2, '#ff9080');
+    if (!was) {
+      game.ui.msg(`${def.label} witnessed! You are wanted in ${s.name}.`, '#ff5050');
+      game.audio?.play('alarm');
+    }
+    game.alertGuards(sid, game.player, shouter, true);
+    this.sim.areaCache.delete(sid);
+    return crime;
+  }
+
+  // Crimes lapse for the petty stuff when the guards lose interest.
+  forgetMinor(sid) {
+    const list = this.pendingIn(sid).filter((c) => SEV_RANK[c.sev] >= 2);
+    if (list.length) this.pending.set(sid, list);
+    else this.pending.delete(sid);
+    this.resisted.delete(sid);
+  }
+
+  // ------------------------------------------------------------ arrests
+  canHalt(sid) {
+    return this.haltCd <= 0 && !this.jail && !this.resisted.has(sid) && !this.pendingIn(sid).some((c) => c.sev === 'severe') && !this.game.ui.modal && !this.game.player.dead;
+  }
+
+  halt(guard) {
+    const sid = guard.settlement.id;
+    this.haltCd = 30;
+    for (const g of this.game.guardsOf(sid)) g.haltT = 12;
+    this.game.ui.openHalt?.(guard, this.pendingIn(sid));
+  }
+
+  surrender(sid) {
+    this.imprison(sid, 'surrender');
+  }
+
+  resist(sid, guard) {
+    this.resisted.add(sid);
+    for (const g of this.game.guardsOf(sid)) g.haltT = 0;
+    this.commit(sid, 'resisting', { witnesses: this.game.guardsOf(sid).filter((g) => g.distTo(this.game.player) <= 10), quiet: true });
+    if (guard) guard.say('Then we do this the hard way!', 3, '#ff9080');
+  }
+
+  // The player dropped to 0 HP at the hands of the town: they wake up in jail.
+  knockout(sid) {
+    const p = this.game.player;
+    p.hp = 1;
+    this.imprison(sid, 'knockout');
+  }
+
+  imprison(sid, how) {
+    const game = this.game;
+    const L = this.sim.layoutOf(sid);
+    const p = game.player;
+    for (const n of game.npcs) if (n.threat === p && (n.state === 'fight' || n.state === 'alert' || n.state === 'flee')) n.calmDown(true);
+    game.wanted.delete(sid);
+    game.stopPlayerActions?.();
+    // Stolen goods are confiscated and returned.
+    let returned = 0;
+    for (const c of this.pendingIn(sid)) {
+      if (c.type !== 'theft' || !c.items) continue;
+      for (const it of c.items) {
+        const n = Math.min(countItem(p.inv, it.item), it.count);
+        if (n <= 0) continue;
+        removeItem(p.inv, it.item, n);
+        returned += n;
+        this.returnGoods(L, c.owner, it.item, n);
+      }
+    }
+    game.advanceTime(how === 'knockout' ? 90 : 20);
+    const jail = L.jail;
+    if (jail) {
+      game.teleportPlayer(jail.stand.x, jail.y, jail.stand.z);
+      this.sim.setBlocks([[jail.door.x, jail.y, jail.door.z, B.cell_door, 0]]);
+    } else {
+      const pl = L.plaza;
+      game.teleportPlayer(pl.cx + 1, GROUND, pl.cz + 1);
+    }
+    if (how === 'knockout') p.hp = Math.max(p.hp, 6);
+    this.jail = { sid, phase: 'gather', t: 0, how, party: [], lines: [], li: 0, lt: 0, release: null, cellless: !jail };
+    game.ui.showKnockout?.(how, L.settlement.name, returned);
+    this.summon(L);
+  }
+
+  returnGoods(L, owner, item, n) {
+    const e = L.econ;
+    if (owner && owner.kind === 'house' && e.pantry[owner.id]) st.add(e.pantry[owner.id], item, n);
+    else if (owner && owner.kind === 'biz' && e.biz[owner.id]) st.add(e.biz[owner.id].store, item, n);
+    else if (owner && owner.kind === 'rec' && L.npcs[owner.id]) invAdd(L.npcs[owner.id].inv, item, n);
+  }
+
+  // Leader, a guard and the witnesses come to the jail.
+  summon(L) {
+    const j = this.jail;
+    const sid = L.settlement.id;
+    const ok = (r) => r && alive(r) && !r.away && !r.visitor;
+    const judge = mayorOf(L) && !mayorOf(L).away ? mayorOf(L) : L.npcs.find((r) => ok(r) && r.job === 'guard') || [...L.npcs].filter((r) => ok(r) && r.age !== 'child').sort((a, b) => (b.age === 'elder') - (a.age === 'elder'))[0];
+    const guard = L.npcs.find((r) => ok(r) && r.job === 'guard' && r !== judge);
+    const wit = [];
+    for (const c of this.pendingIn(sid)) {
+      for (const i of c.witnesses) {
+        const r = L.npcs[i];
+        if (ok(r) && r !== judge && r !== guard && !wit.includes(r) && r.job !== 'guard') wit.push(r);
+      }
+    }
+    const party = [judge, guard, ...wit.slice(0, 3)].filter(Boolean);
+    j.judge = judge ? judge.idx : null;
+    j.guard = guard ? guard.idx : null;
+    j.witnesses = wit.slice(0, 3).map((r) => r.idx);
+    j.party = party.map((r) => r.idx);
+    const now = this.sim.abs;
+    const target = L.jail ? L.jail.front : { x: L.plaza.cx, z: L.plaza.cz + 2 };
+    for (const r of party) {
+      setOverride(r, now, now + 300, 'trial', { target, place: 'jail' });
+      if (r.ent && !r.ent.dead) {
+        r.ent.wake();
+        r.ent.activity = null;
+      }
+    }
+  }
+
+  script(L) {
+    const j = this.jail;
+    const sid = L.settlement.id;
+    const npc = (i) => (i === null || i === undefined ? null : L.npcs[i]);
+    const judge = npc(j.judge);
+    const guard = npc(j.guard);
+    const crimes = this.pendingIn(sid);
+    const worst = [...crimes].sort((a, b) => SEV_RANK[b.sev] - SEV_RANK[a.sev])[0];
+    const lines = [];
+    const say = (r, text) => lines.push({ idx: r ? r.idx : null, text });
+    say(judge, j.how === 'surrender' ? 'You gave yourself up. That counts for something.' : 'Well now. What have we here?');
+    if (guard) say(guard, worst ? `We brought them in for ${describe(worst).toLowerCase()}.` : 'Caught them causing trouble.');
+    for (const i of j.witnesses) {
+      const w = npc(i);
+      const c = crimes.find((q) => q.witnesses.includes(i));
+      if (!w || !c) continue;
+      say(judge, `${w.name.first}, you saw what happened?`);
+      say(w, testimony(c));
+    }
+    say(judge, 'I have heard enough.');
+    return lines;
+  }
+
+  update(dt) {
+    this.haltCd -= dt;
+    if (this.jail) this.updateJail(dt);
+    this.checkT -= dt;
+    if (this.checkT <= 0) {
+      this.checkT = 1;
+      this.patrol();
+    }
+  }
+
+  updateJail(dt) {
+    const j = this.jail;
+    const game = this.game;
+    const L = this.sim.layoutOf(j.sid);
+    j.t += dt;
+    if (j.phase === 'gather') {
+      const target = L.jail ? L.jail.front : { x: L.plaza.cx, z: L.plaza.cz + 2 };
+      const ents = j.party.map((i) => L.npcs[i]?.ent).filter((e) => e && !e.dead);
+      const here = ents.filter((e) => Math.max(Math.abs(e.x - target.x), Math.abs(e.z - target.z)) <= 3);
+      if ((j.t > 2 && here.length === ents.length) || j.t > 50) {
+        j.phase = 'hearing';
+        j.lines = this.script(L);
+        j.li = 0;
+        j.lt = 0.5;
+      }
+    } else if (j.phase === 'hearing') {
+      j.lt -= dt;
+      if (j.lt <= 0) {
+        const line = j.lines[j.li++];
+        if (!line) {
+          j.phase = 'verdict';
+          this.verdictData = this.verdict();
+          game.ui.openTrial?.(this.verdictData);
+          return;
+        }
+        const r = line.idx !== null ? L.npcs[line.idx] : null;
+        if (r && r.ent && !r.ent.dead) {
+          r.ent.say(line.text, 3.2);
+          r.ent.face(game.player.x, game.player.z);
+        } else game.ui.msg(`${r ? r.name.first : 'Someone'}: "${line.text}"`, '#e8e0c0');
+        j.lt = Math.min(4, 1.6 + line.text.length * 0.045);
+      }
+    } else if (j.phase === 'verdict') {
+      if (!game.ui.find?.('trial') && game.ui.openTrial) game.ui.openTrial(this.verdictData);
+    } else if (j.phase === 'serving') {
+      if (this.sim.abs >= j.release) this.release('served');
+    }
+    // Leaving the cell without being released is an escape.
+    if (j && this.jail === j && !j.cellless && L.jail && j.phase !== 'free') {
+      const p = game.player;
+      const inCell = L.jail.cell.some((c) => c.x === p.x && c.z === p.z);
+      if (!inCell && !p.moving) this.escape(L);
+    }
+  }
+
+  verdict() {
+    const j = this.jail;
+    const L = this.sim.layoutOf(j.sid);
+    const s = L.settlement;
+    const judge = j.judge !== null ? L.npcs[j.judge] : null;
+    const crimes = this.pendingIn(j.sid);
+    const charges = crimes.map((c) => {
+      const names = c.witnesses.map((i) => L.npcs[i]).filter((r) => r && alive(r)).map((r) => `${r.name.first} ${r.name.last}`);
+      const proven = c.guardSaw || names.length > 0;
+      return { ...c, text: describe(c), names, proven };
+    });
+    const proven = charges.filter((c) => c.proven);
+    const rec = this.recordOf(j.sid);
+    const prior = rec.moderate + rec.severe;
+    const seriousNow = proven.filter((c) => SEV_RANK[c.sev] >= 2).length;
+    const severeNow = proven.some((c) => c.sev === 'severe');
+    const harsh = (s.civ && s.civ.values.includes('martial')) || (judge && judge.personality.temper > 0.55);
+    let sentence = 'fine';
+    if (seriousNow && prior + seriousNow >= 3) sentence = severeNow && (harsh || rec.severe >= 1) ? 'death' : 'exile';
+    else if (severeNow && rec.severe >= 1) sentence = 'death';
+    const e = L.econ;
+    let fine = 0;
+    for (const c of proven) fine += CRIMES[c.type].fine + (c.type === 'theft' ? c.value * 2 : 0);
+    const mercy = judge ? 1.15 - judge.personality.kindness * 0.3 : 1;
+    fine = Math.round(fine * e.fineScale * mercy * (this.sim.isCitizen(j.sid) ? 0.9 : 1) * (j.how === 'surrender' ? 0.85 : 1));
+    const coins = countItem(this.game.player.inv, 'coin');
+    const hours = clamp(Math.ceil(fine / HOURLY_RATE), 2, 72);
+    return {
+      sid: j.sid, town: s.name, judgeName: judge ? `${judge.name.first} ${judge.name.last}` : 'The council', judgeTitle: judge ? jobTitle(judge, s) : 'Council',
+      charges, proven, fine, hours, coins, canPay: coins >= fine, sentence, citizen: this.sim.isCitizen(j.sid), pleaded: false, prior,
+      fineScale: e.fineScale,
+    };
+  }
+
+  // Player's choice in the trial window: 'pay' | 'serve' | 'plead' | 'accept' | 'free'.
+  resolve(choice) {
+    const v = this.verdictData;
+    const j = this.jail;
+    if (!v || !j) return null;
+    const game = this.game;
+    const L = this.sim.layoutOf(v.sid);
+    const judge = j.judge !== null ? L.npcs[j.judge] : null;
+    if (choice === 'plead') {
+      if (v.pleaded) return v;
+      v.pleaded = true;
+      const op = judge && judge.ent ? this.sim.opinion(judge.ent) : 0;
+      const chance = 0.25 + (judge ? judge.personality.kindness * 0.4 : 0.2) + op / 200;
+      if (Math.random() < chance) {
+        v.fine = Math.round(v.fine * 0.7);
+        v.hours = clamp(Math.ceil(v.fine / HOURLY_RATE), 1, 72);
+        v.canPay = v.coins >= v.fine;
+        v.mercy = true;
+        if (v.sentence === 'death') v.sentence = 'exile';
+      } else {
+        v.mercy = false;
+        if (judge && judge.ent) this.sim.changeRep(judge.ent, -4);
+      }
+      return v;
+    }
+    this.convict(L, v);
+    if (!v.proven.length || choice === 'free') return this.release('acquitted');
+    if (v.sentence === 'exile') return this.exile(L, v);
+    if (v.sentence === 'death') return this.execute(L, v);
+    if (choice === 'pay' && v.canPay) {
+      removeItem(game.player.inv, 'coin', v.fine);
+      L.econ.treasury += v.fine;
+      ledger(L, game.day, `${game.playerName} paid a fine of ¤${v.fine} (${v.proven.map((c) => CRIMES[c.type].label.toLowerCase()).join(', ')}).`);
+      return this.release('paid');
+    }
+    j.phase = 'serving';
+    j.release = this.sim.abs + v.hours * 60;
+    ledger(L, game.day, `${game.playerName} was jailed for ${v.hours} hours (${v.proven.map((c) => CRIMES[c.type].label.toLowerCase()).join(', ')}).`);
+    game.ui.msg(`Sentenced to ${v.hours} hours in the cell. Sleep on the cot to pass the time.`, '#ffb080');
+    this.dismissParty(L);
+    return v;
+  }
+
+  convict(L, v) {
+    const rec = this.recordOf(v.sid);
+    for (const c of v.proven) {
+      rec[c.sev]++;
+      rec.convictions++;
+    }
+    this.pending.delete(v.sid);
+    this.resisted.delete(v.sid);
+    if (v.proven.length && this.sim.isCitizen(v.sid)) this.sim.revoke('convicted of a crime');
+    for (const c of v.proven) {
+      // Victims and witnesses feel a little better once justice is done.
+      for (const i of c.witnesses) if (L.npcs[i] && L.npcs[i].ent) this.sim.changeRep(L.npcs[i].ent, 2);
+    }
+  }
+
+  dismissParty(L) {
+    const j = this.jail;
+    for (const i of j.party) {
+      const r = L.npcs[i];
+      if (r && r.override && r.override.act === 'trial') r.override = null;
+    }
+  }
+
+  release(why) {
+    const j = this.jail;
+    if (!j) return null;
+    const game = this.game;
+    const L = this.sim.layoutOf(j.sid);
+    this.dismissParty(L);
+    if (L.jail) this.sim.setBlocks([[L.jail.door.x, L.jail.y, L.jail.door.z, B.cell_door_open, 0]]);
+    const guard = j.guard !== null ? L.npcs[j.guard] : null;
+    if (guard && guard.ent && !guard.ent.dead) guard.ent.say(why === 'acquitted' ? 'Off you go, then.' : 'You\'re free to go. Behave yourself.', 3);
+    game.ui.msg(why === 'acquitted' ? 'Nothing could be proven. You are free to go.' : why === 'paid' ? 'Fine paid. You are free to go.' : 'Your time is served. You are free.', '#80e070');
+    this.jail = null;
+    return { released: true };
+  }
+
+  escape(L) {
+    const j = this.jail;
+    const p = this.game.player;
+    this.jail = null;
+    this.dismissParty(L);
+    this.game.ui.msg('You broke out of jail!', '#ffb080');
+    const wits = this.sim.witnesses(j.sid, p.x, p.z, 9);
+    this.commit(j.sid, 'jailbreak', { witnesses: wits });
+  }
+
+  exile(L, v) {
+    const game = this.game;
+    const s = L.settlement;
+    this.exiled.add(s.id);
+    ledger(L, game.day, `${game.playerName} was banished from ${s.name} by ${v.judgeName}.`);
+    this.dismissParty(L);
+    this.jail = null;
+    // Escorted out of town.
+    const b = s.bounds;
+    const e = L.entrances[0] || { x: b.x0, z: (b.z0 + b.z1) >> 1 };
+    const dx = e.x <= b.x0 + 2 ? -8 : e.x >= b.x1 - 2 ? 8 : 0;
+    const dz = e.z <= b.z0 + 2 ? -8 : e.z >= b.z1 - 2 ? 8 : dx === 0 ? 8 : 0;
+    game.advanceTime(30);
+    game.teleportPlayer(e.x + dx, GROUND, e.z + dz);
+    game.ui.msg(`You have been EXILED from ${s.name}. Its guards will attack you on sight.`, '#ff5050');
+    game.ui.showKnockout?.('exile', s.name, 0);
+    return { exiled: true };
+  }
+
+  execute(L, v) {
+    const game = this.game;
+    this.dismissParty(L);
+    this.jail = null;
+    ledger(L, game.day, `${game.playerName} was executed by order of ${v.judgeName}.`);
+    game.executePlayer(`the executioner of ${L.settlement.name}`);
+    return { executed: true };
+  }
+
+  // ------------------------------------------------------------ patrols
+  // Laws that are checked as you walk around: trespassing in homes at night,
+  // weapons bans, and exile.
+  patrol() {
+    const game = this.game;
+    const p = game.player;
+    const s = game.currentSettlement;
+    if (!s || !game.active.has(s.id) || p.dead || this.jail) return;
+    const a = game.active.get(s.id);
+    const L = a.layout;
+    if (this.exiled.has(s.id)) {
+      if (this.exileWarn !== s.id) {
+        this.exileWarn = s.id;
+        game.ui.msg(`You are exiled from ${s.name}! The guards will attack.`, '#ff5050');
+      }
+      for (const g of game.guardsOf(s.id)) if (!g.sleeping && g.distTo(p) <= 16 && g.state !== 'fight') g.engage(p);
+      return;
+    }
+    this.exileWarn = -1;
+    const m = game.minute;
+    const night = m >= 1320 || m < 330;
+    const b = this.game.buildingAtPlayer?.();
+    const c = this.sim.citizen;
+    const mine = b && c && c.sid === s.id && (b.id === c.home || b.id === c.host);
+    if (night && b && b.residential && !mine) {
+      const residents = a.npcs.filter((n) => n.rec.home === b.id && !n.sleeping && !n.dead && n.x >= b.x0 && n.x <= b.x1 && n.z >= b.z0 && n.z <= b.z1);
+      if (residents.length) {
+        if (!this.trespass || this.trespass.b !== b.id) {
+          this.trespass = { b: b.id, t: 0 };
+          residents[0].say('Hey! What are you doing in our house? Get out!', 3.5, '#ffb080');
+          this.sim.changeRep(residents[0], -5);
+        } else if ((this.trespass.t += 1) >= 10 && !this.trespass.done) {
+          this.trespass.done = true;
+          this.commit(s.id, 'trespass', { witnesses: residents, desc: `Trespassing in the ${b.homeName || 'house'}` });
+        }
+      }
+    } else this.trespass = null;
+    const held = p.heldDef();
+    if (L.econ.laws.armsBan && held && held.kind === 'weapon' && !game.isWanted(s.id)) {
+      const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 5);
+      if (guard) {
+        if (!this.brandish) {
+          this.brandish = { t: 0 };
+          guard.say(`Put that weapon away! It's the law in ${s.name}.`, 3.5, '#ffe070');
+        } else if ((this.brandish.t += 1) >= 12 && !this.brandish.done) {
+          this.brandish.done = true;
+          this.commit(s.id, 'brandishing', { witnesses: [guard] });
+        }
+      }
+    } else if (!held || held.kind !== 'weapon') this.brandish = null;
+  }
+
+  // ------------------------------------------------------------ save
+  serialize() {
+    const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' ? 'serving' : 'gather', t: 0 } : null;
+    return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j };
+  }
+
+  load(d) {
+    if (!d) return;
+    this.pending = new Map(d.pending || []);
+    this.record = new Map(d.record || []);
+    this.exiled = new Set(d.exiled || []);
+    this.jail = d.jail || null;
+  }
+}
+
+export function describe(c) {
+  switch (c.type) {
+    case 'theft': return c.desc && c.desc !== 'Theft' ? c.desc : `Theft worth ¤${c.value}`;
+    case 'assault': return c.victim ? `Assaulting ${c.victim}` : 'Assault';
+    case 'assault_guard': return c.victim ? `Assaulting guard ${c.victim}` : 'Assaulting a guard';
+    case 'murder': return c.victim ? `The murder of ${c.victim}` : 'Murder';
+    default: return c.desc || CRIMES[c.type].label;
+  }
+}
+
+function testimony(c) {
+  switch (c.type) {
+    case 'theft': return c.items && c.items.length ? `I saw them take ${c.items.map((i) => `${i.count} ${ITEMS[i.item]?.name || i.item}`).slice(0, 2).join(' and ')}!` : 'I saw them stealing, plain as day!';
+    case 'assault': case 'assault_guard': return c.victim ? `They attacked ${c.victim.split(' ')[0]}! Just like that!` : 'They started a fight!';
+    case 'murder': return c.victim ? `They killed ${c.victim.split(' ')[0]}! I saw it all...` : 'I saw them kill someone!';
+    case 'vandalism': return 'They were smashing up the town!';
+    case 'trespass': return 'They crept into a house in the middle of the night!';
+    case 'jailbreak': return 'They broke out of this very cell!';
+    case 'brandishing': return 'Waving a weapon about after being told not to.';
+    default: return 'I saw the whole thing.';
+  }
+}
+
+export { DAY };

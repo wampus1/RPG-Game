@@ -8,7 +8,7 @@ import { mulberry32, hashString } from '../util/rng.js';
 const OUT = '#1c1622';
 export const CHAR_W = 16;
 export const CHAR_H = 24;
-export const FRAMES = 4; // idle, walk A, walk B, action
+export const FRAMES = 5; // idle, walk A, walk B, action, sitting
 
 function toCanvas(px) {
   const c = document.createElement('canvas');
@@ -57,7 +57,8 @@ function drawHumanoid(look, dir, frame) {
   if (outfit === 'hunter') shirt = hex(oc.tunic);
   const skel = outfit === 'skeleton';
   const small = look.small;
-  const top = small ? 6 : look.stoop ? 1 : 0; // children are shorter
+  const sit = frame === 4;
+  const top = (small ? 6 : look.stoop ? 1 : 0) + (sit ? 4 : 0); // children are shorter; sitting lowers the body
   const walk = frame === 1 ? 1 : frame === 2 ? -1 : 0;
   const bob = frame === 1 || frame === 2 ? -1 : 0;
   const hy = top + bob; // head top y
@@ -77,7 +78,12 @@ function drawHumanoid(look, dir, frame) {
   const pantsC = skel ? hex('#c8c4b4') : pants;
 
   // Legs & shoes.
-  if (!side) {
+  if (sit && side) {
+    // Thigh forward along the seat, shin down to the floor.
+    R(2, legY, 7, 3, pantsC);
+    R(2, legY + 3, 3, Math.max(1, legH - 3), shade(pantsC, 0.9));
+    R(1, legY + legH, 4, 2, skel ? skinC : shoes);
+  } else if (!side) {
     const lL = walk > 0 ? legH - 1 : legH;
     const rL = walk < 0 ? legH - 1 : legH;
     R(5, legY, 3, lL, pantsC);
@@ -577,6 +583,37 @@ function simpleIcon(key) {
     case 'pie':
       p.ellipse(8, 9, 5, 3, '#d8a050');
       p.ellipse(8, 8, 3, 1, '#a02a4a');
+      break;
+    case 'gruel':
+      p.ellipse(8, 10, 5, 3, '#5a5046');
+      p.ellipse(8, 9, 4, 1, '#8a8068');
+      p.set(6, 9, '#3a3226');
+      p.set(10, 9, '#3a3226');
+      p.set(8, 6, '#7a7a7a');
+      p.set(9, 5, '#9a9a9a');
+      break;
+    case 'feast':
+      p.ellipse(8, 11, 6, 3, '#e8e4d8');
+      p.ellipse(7, 9, 3, 2, '#9a5424');
+      p.ellipse(6, 8, 1, 1, '#c8844a');
+      p.rect(11, 8, 2, 3, '#e8b060');
+      p.set(10, 10, '#4aa83a');
+      p.set(4, 10, '#f07a20');
+      break;
+    case 'bow':
+      for (let i = 0; i < 12; i++) p.set(4 + Math.round(Math.sin((i / 11) * Math.PI) * 4), 2 + i, i % 5 === 0 ? '#5e4024' : '#8a6038');
+      p.vline(4, 2, 13, '#e8e4d8');
+      break;
+    case 'arrow':
+      p.line(3, 13, 12, 4, '#8a6038');
+      p.line(11, 3, 13, 5, '#c0c0c8');
+      p.set(13, 3, '#e0e0e8');
+      p.set(3, 12, '#f0f0f0');
+      p.set(4, 14, '#f0f0f0');
+      break;
+    case 'ladle':
+      p.line(4, 3, 9, 10, '#9a9aa4');
+      p.ellipse(10, 11, 2, 2, '#c0c0c8');
       break;
     case 'spear':
       p.line(2, 14, 12, 4, HANDLE[0]);

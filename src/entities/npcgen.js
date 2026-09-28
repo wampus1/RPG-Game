@@ -1,12 +1,13 @@
 // NPC generation: population planning for a settlement, households/families,
 // jobs, personality, hobbies, equipment, appearance and daily schedules.
-import { RNG, clamp } from '../util/rng.js';
+import { RNG, clamp, hash4 } from '../util/rng.js';
 import { personName, familyName } from '../world/names.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
   guard: { title: 'Guard', place: 'guardhouse', start: 360, end: 1080, tools: ['spear', 'iron_sword'], outfit: 'guard' },
   innkeeper: { title: 'Innkeeper', place: 'tavern', start: 600, end: 1400, tools: [], outfit: 'apron', trader: 'inn' },
+  cook: { title: 'Cook', place: 'tavern', start: 420, end: 1260, tools: ['ladle'], outfit: 'baker', trader: 'cook' },
   barkeep: { title: 'Barkeep', place: 'tavern', start: 660, end: 1380, tools: [], outfit: 'apron' },
   blacksmith: { title: 'Blacksmith', place: 'smithy', start: 450, end: 1050, tools: ['hammer'], outfit: 'smith', trader: 'smith' },
   merchant: { title: 'Merchant', place: 'shop', start: 480, end: 1080, tools: ['ledger'], outfit: 'vest', trader: 'general' },
@@ -22,7 +23,7 @@ export const JOBS = {
   farmer: { title: 'Farmer', place: 'farm', start: 360, end: 1080, tools: ['hoe'], outfit: 'farmer', trader: 'farmer' },
   lumberjack: { title: 'Lumberjack', place: 'wild', start: 420, end: 1050, tools: ['iron_axe', 'stone_axe'], outfit: 'plaid' },
   miner: { title: 'Miner', place: 'wild', start: 420, end: 1050, tools: ['stone_pickaxe', 'iron_pickaxe'], outfit: 'miner' },
-  hunter: { title: 'Hunter', place: 'wild', start: 390, end: 1020, tools: ['dagger', 'stone_sword'], outfit: 'hunter' },
+  trapper: { title: 'Trapper', place: 'wild', start: 390, end: 1020, tools: ['bow'], outfit: 'hunter', trader: 'trapper' },
   laborer: { title: 'Laborer', place: 'warehouse', start: 450, end: 1050, tools: ['wood_shovel'], outfit: 'plain' },
   beggar: { title: 'Beggar', place: 'plaza', start: 480, end: 1140, tools: [], outfit: 'rags' },
   child: { title: 'Child' },
@@ -44,6 +45,13 @@ export const HOBBIES = {
   strolling: { label: 'long walks', tag: 'stroll', item: null },
   smoking: { label: 'pipe smoking', tag: 'smoke', item: 'pipe' },
 };
+
+// Job title, with a few settlement-dependent variants.
+export function jobTitle(rec, s) {
+  if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
+  if (rec.visitor) return 'Traveling Merchant';
+  return JOBS[rec.job]?.title || 'Villager';
+}
 
 // Which building type each workplace job needs.
 export function workplaceTypeFor(job) {
@@ -105,14 +113,17 @@ export function planPopulation(s, rng) {
   if (T === 'village') add('farmer', 2);
   const guardCap = Math.max(1, Math.round(adults * (T === 'village' ? 0.2 : 0.18)));
   add('guard', Math.min(guardCap, Math.round(scale(rng.int(1, 2), 0, rng.int(3, 4), rng.int(7, 10)) * (has('martial') ? 1.5 : 1) * (poor ? 0.7 : 1))));
-  if (T !== 'village' || rng.chance(0.55)) add('innkeeper', 1);
+  add('mayor', 1);
+  add('cook', T === 'city' ? 2 : 1);
+  add('trapper', T === 'village' ? 1 : rng.int(1, 2));
+  if (T !== 'village') add('farmer', T === 'city' ? 3 : 2);
+  if (T !== 'village' || rng.chance(0.4)) add('innkeeper', 1);
   if (T !== 'village') add('barkeep', T === 'city' ? 2 : 1);
   add('blacksmith', scale(rng.chance(0.6) ? 1 : 0, 0, 1, 2) + (has('artisan') ? 1 : 0));
   add('merchant', Math.round(scale(rng.chance(0.5) ? 1 : 0, 0, 2, 4) * (has('mercantile') ? 1.5 : 1)));
   add('priest', scale(has('pious') || rng.chance(0.4) ? 1 : 0, 0, 1, 2) + (has('pious') && T !== 'village' ? 1 : 0));
   add('baker', scale(rng.chance(0.4) ? 1 : 0, 0, 1, 2));
   if (T !== 'village' || has('scholarly')) add('scholar', scale(has('scholarly') ? 1 : 0, 0, has('scholarly') ? 2 : 1, has('scholarly') ? 3 : 2));
-  if (T !== 'village') add('mayor', 1);
   if (T === 'city') add('noble', rng.int(2, 3));
   if (T !== 'village') add('tailor', 1);
   if (T !== 'village' || has('artisan')) add('carpenter', 1);
@@ -120,7 +131,7 @@ export function planPopulation(s, rng) {
   if (s.river || s.lake || s.coast) add('fisher', Math.round(scale(rng.int(1, 2), 0, 2, 3) * (has('seafaring') ? 2 : 1)));
   if (['forest', 'taiga', 'jungle'].includes(s.biome)) add('lumberjack', T === 'city' ? 2 : 1);
   if (s.nearMountain) add('miner', rng.int(1, T === 'village' ? 2 : 3));
-  if (['forest', 'taiga', 'tundra', 'savanna'].includes(s.biome) && rng.chance(0.6)) add('hunter', 1);
+  if (['forest', 'taiga', 'tundra', 'savanna'].includes(s.biome) && rng.chance(0.6)) add('trapper', 1);
   if (poor && T !== 'village') add('beggar', rng.int(1, 3));
   add('farmer', Math.round(scale(rng.int(3, 5), 0, rng.int(3, 4), rng.int(4, 5)) * (has('agrarian') ? 1.5 : 1)));
   // Trim to the adult count, keeping essential roles first (in plan order).
@@ -240,6 +251,9 @@ function equipmentFor(rng, job, hobbies, cond, age) {
     tool = rng.pick(j.tools);
     items.push({ item: tool, count: 1 });
   }
+  if (job === 'trapper') {
+    items.push({ item: rng.chance(0.5) ? 'stone_sword' : 'iron_sword', count: 1 }, { item: 'arrow', count: rng.int(8, 16) });
+  }
   let hobbyItem = null;
   for (const h of hobbies) {
     let it = HOBBIES[h].item;
@@ -251,7 +265,7 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   }
   if (rng.chance(0.5)) items.push({ item: rng.pick(['bread', 'apple', 'berries', 'carrot', 'cooked_fish']), count: rng.int(1, 3) });
   const wealth = { prosperous: 1.6, normal: 1, poor: 0.5 }[cond] || 1;
-  const base = { noble: 60, mayor: 40, merchant: 30, blacksmith: 20, innkeeper: 18, scholar: 14, beggar: 1 }[job] ?? (age === 'child' ? 1 : 8);
+  const base = { noble: 60, mayor: 40, merchant: 30, blacksmith: 20, innkeeper: 18, cook: 14, scholar: 14, beggar: 1 }[job] ?? (age === 'child' ? 1 : 8);
   const coins = Math.max(0, Math.round(base * wealth * rng.float(0.5, 1.5)));
   return { tool, hobbyItem, items, coins, armor: job === 'guard' ? 0.35 : 0 };
 }
@@ -441,6 +455,8 @@ export function generateNPCs(layout, plan, seed) {
     if (!house) continue;
     house.household = h;
     const fam = familyName(rng, style);
+    house.family = fam;
+    house.homeName = house.type === 'manor' ? `${fam} Manor` : house.type === 'house_s' ? `${fam} Cottage` : `The ${fam} House`;
     const members = [];
     for (const m of h.members) {
       const idx = npcs.length;
@@ -450,8 +466,8 @@ export function generateNPCs(layout, plan, seed) {
         let k = 0;
         while (k < jobQueue.length && !layout.hasWorkplaceFor(jobQueue[k])) k++;
         job = k < jobQueue.length ? jobQueue.splice(k, 1)[0] : s.type === 'village' ? 'farmer' : 'laborer';
-        if (!layout.hasWorkplaceFor(job)) job = layout.hasWorkplaceFor('farmer') ? 'farmer' : 'laborer';
-        if (!layout.hasWorkplaceFor(job)) job = 'retired';
+        // Everyone able finds some work: the fields, the water, the woods.
+        if (!layout.hasWorkplaceFor(job)) job = ['farmer', 'fisher', 'trapper', 'laborer', 'lumberjack', 'miner'].find((alt) => layout.hasWorkplaceFor(alt)) || 'retired';
       }
       if (job === 'noble' && house.type !== 'manor') {
         // Nobles who didn't get a manor become merchants.
@@ -509,7 +525,43 @@ export function generateNPCs(layout, plan, seed) {
   for (const npc of npcs) {
     npc.schedule = makeSchedules(npc, rng.fork(npc.idx + 1000), avail);
   }
+  // Friendships: people who share a hobby, a workplace or an age group.
+  const frng = rng.fork('friends');
+  for (const npc of npcs) {
+    npc.friends = npc.friends || [];
+    const want = npc.personality.sociability > 0.6 ? 3 : npc.personality.sociability > 0.3 ? 2 : 1;
+    const cands = npcs.filter((o) => o !== npc && o.household !== npc.household && (o.age === npc.age || (o.age !== 'child' && npc.age !== 'child')) &&
+      (o.hobbies.some((h) => npc.hobbies.includes(h)) || (o.work && npc.work && o.work.building != null && o.work.building === npc.work.building) || frng.chance(0.15)));
+    for (const o of frng.shuffle(cands)) {
+      if (npc.friends.length >= want) break;
+      if (npc.friends.includes(o.idx)) continue;
+      npc.friends.push(o.idx);
+      o.friends = o.friends || [];
+      if (!o.friends.includes(npc.idx)) o.friends.push(npc.idx);
+    }
+  }
   return npcs;
+}
+
+// A synthetic record for a traveling merchant visiting from elsewhere.
+export function visitorRecord(visit, idx, sid) {
+  const rng = new RNG(hash4(idx, visit.arrive, 0x7a11));
+  const { p, traits } = makePersonality(rng, null, 'merchant', 'adult');
+  p.sociability = Math.max(p.sociability, 0.6);
+  const look = makeLook(rng, visit.style, 'adult', 'merchant', null);
+  look.hat = rng.pick(['feather', 'cap', 'hood', null]);
+  look.outfit = 'vest';
+  const all = { s: 0, e: 1440, act: 'visit', place: 'market' };
+  return {
+    id: `${sid}:v${idx}`, idx, sid, visitor: true, visit,
+    name: visit.name, age: 'adult', job: 'merchant', home: null, bed: 0, household: null,
+    partner: null, children: [], parents: [], friends: [], personality: p, traits: ['well-traveled', ...traits.slice(0, 1)],
+    hobbies: ['strolling'], look, alive: true, shift: 'day', restDay: -1,
+    equipment: { tool: 'ledger', hobbyItem: null, items: [], coins: 0, armor: 0 },
+    maxHp: 12, hp: 12, work: { kind: 'none' }, schedule: { work: [all], rest: [all] },
+    coins: visit.coins, inv: [], skills: { trading: 0.8, cooking: 0.2, hunting: 0.3, fishing: 0.2, farming: 0.1, building: 0.1, crafting: 0.3 },
+    fed: 1, hungry: 0, mood: 0.7, grief: [], override: null, away: false, doneKey: null,
+  };
 }
 
 export function describeNPC(npc) {

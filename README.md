@@ -7,7 +7,8 @@ and a WebGL CRT screen with scanlines, curvature and a soft glow.
 Every world is generated from a seed: stretched and morphed biome splotches,
 rivers, lakes, mountains and forests; civilizations with their own cultures;
 villages, towns and walled cities full of villagers who live out daily
-schedules.
+schedules, and towns that actually run: kitchens, taxes, laws, trials,
+funerals and trading trips, whether or not you're there to see them.
 
 No dependencies and no build step: it's plain JavaScript modules and a canvas.
 
@@ -17,6 +18,8 @@ No dependencies and no build step: it's plain JavaScript modules and a canvas.
 | --- | --- |
 | ![A city plaza with market stalls](docs/city.jpg) | ![A village at night](docs/night.jpg) |
 | ![Inside a house: the roof is cut away](docs/interior.jpg) | ![The world map](docs/map.jpg) |
+| ![Sitting at the tavern bar](docs/tavern.jpg) | ![Talking to the village cook](docs/dialogue.jpg) |
+| ![A hearing at the village jail](docs/hearing.jpg) | ![Falling asleep](docs/sleep.jpg) |
 
 ## Running
 
@@ -48,8 +51,10 @@ with the CRT effect off. `window.__game` exposes the running game.
 | Place block | Select a block item and click (hold to keep placing) |
 | Rotate the block you're about to place | R |
 | Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
-| Attack | Left-click a creature or person |
-| Talk / trade | Right-click a villager (T in the dialogue opens trading) |
+| Attack | Left-click a creature or person (a bow shoots arrows at range) |
+| Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
+| Sit | Click a chair, bench or stool; move to stand up |
+| Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
 | Toss item | Q (Ctrl+Q throws the whole stack), or drag it out of a window |
 | Eat held food | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
@@ -113,15 +118,73 @@ tile by tile, open and close doors, claim seats, beds and work spots, and show
 what they're doing with little emotes.
 
 When threatened, villagers decide based on personality and job: the brave
-fight back, others shout for the guards (who come running and pursue whoever
-is responsible) and the timid run home. Attack a villager and you're wanted in
-that settlement for a while.
+fight back (or step in when a friend or relative is hurt), others shout for the
+guards, who come running, and the timid run home.
+
+**Towns that run.** Every villager record carries coins, an inventory, skills,
+hunger and mood; every business has a till and a store; every household has a
+pantry; every settlement starts with a treasury that ranges from nearly empty
+(poor villages) to overflowing (prosperous cities). Trappers head out beyond
+the walls with bows and swords, check and re-lay their snares, and bring meat
+back to the tavern; fishers and farmers sell their catch and harvest; the
+cook turns it into meals whose quality depends on skill: *burnt gruel* makes
+people (and you) sick, a *savory feast* is a treat. People need to eat every
+day: they buy from the kitchen or eat from the family pantry, parents pay for
+their children, and when a family can't afford food, the parents (or the older
+children) go out foraging and hunting instead. The mayor (a village elder in
+villages) reviews the books each morning: raising or lowering taxes, paying for
+bread for the hungry, raising fines after thefts, banning drawn weapons after
+violence, and throwing a feast day when the coffers are full. The notice board
+on the square shows the treasury, taxes, laws and recent events. Traveling
+merchants pack local goods, walk out of town, and turn up days later in other
+settlements, where you can trade with them on the square.
+
+When you're far away, a settlement isn't stepped frame by frame: its books are
+caught up hour by hour (the same rules, fast) the next time it matters, and
+merchants and visitors arrive as events.
+
+**Reputation.** Each villager you meet has an opinion of you, from *Hated* to
+*Trusted*. Gifts (especially food for the hungry or something for their hobby),
+kind conversation and fair trades raise it; insults, violence and stealing
+lower it, and a bad name with most of a town sours everyone else there too.
+Opinion changes prices, how people greet you (rarely, and only if they like you
+or you're a neighbour) and what they'll talk about. Conversations have real
+topics: who they are, what they're doing, local news (which also reveals other
+towns on your map), life in town, family, directions, compliments, gifts,
+trading, and job-specific ones (citizenship with the mayor, surrender to a
+guard, a blessing from the priest).
+
+**Crime and punishment.** A crime only counts if someone sees it: stealing from
+a chest or a snare, harvesting a town's fields, smashing things, trespassing in
+a home at night, brandishing a weapon where it's banned, assault and murder.
+Witnesses shout, think less of you, and call the guards. Guards order you to
+halt: come quietly, or resist and be beaten unconscious (the town never kills
+you, unless you've been banished). You wake up in the jail cell; the mayor,
+a guard and the witnesses come to the jail, talk it over, and the hearing
+decides what can be proven, the fine, or the hours you'll serve if you can't
+pay (sleep on the cot to pass the time). You can plead for mercy. Citizenship
+is revoked, and repeat serious offenders are exiled (guards attack on sight)
+or executed.
+
+**Death and graveyards.** Every settlement has a fenced graveyard with room to
+grow; when someone dies (old age, a wolf, you) a gravestone with their name,
+trade, day and epitaph is added, and the yard is extended when it fills up.
+Families and friends mourn: they visit the grave, go quiet, talk about who they
+lost, and gather for a funeral the next afternoon with the priest.
+
+**Citizenship.** Ask the mayor in the town hall to become a citizen. You're
+taken in by a family with a spare bed while the town's builders put up a
+cottage for you on an empty lot over the next day or two (you can watch it go
+up, block by block). Citizens pay a little tax each day, get better prices and
+warmer greetings. Every building has a hanging sign with its trade (or the
+family's name) that you can read.
 
 **Player.** Walk tile by tile, mine with tools or bare hands (blocks drop
 items you pick up by walking over them), place blocks and rotate asymmetric
-ones, switch the working layer, fight, toss items, craft at a workbench,
-furnace or anvil, trade with shopkeepers, eat, sleep in beds to skip the
-night and set your spawn point, and save your game (Esc → Save).
+ones, switch the working layer, fight with melee weapons or a bow, toss items,
+craft at a workbench, furnace or anvil, trade with shopkeepers (their stock and
+purse are real), eat, sit, sleep in beds to pass the night (the world dims and
+time races to dawn) and set your spawn point, and save your game (Esc → Save).
 
 ## Code layout
 
@@ -142,6 +205,10 @@ src/
                        windows (inventory, containers, crafting, trade,
                        dialogue, map, help, pause, title)
   game/                game rules, input, dialogue, audio (synthesized SFX)
+  sim/                 town simulation: economy (meals, trades, taxes, mayors,
+                       merchants, abstract catch-up), justice (crimes, arrests,
+                       hearings), and the Sim hub (reputation, graves,
+                       mourning, citizenship and house building, saving)
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server
 ```

@@ -18,6 +18,8 @@ export class World {
     this.saved = new Map(); // serialized modified regions awaiting reload
     this.layouts = new Map();
     this.onChange = null; // (x, y, z, oldId, newId) => void
+    this.onLayout = null; // (layout) => void, after a settlement is laid out
+    this.onRegionLoad = null; // (region) => void
     this._lastKey = -1;
     this._lastRegion = null;
   }
@@ -35,6 +37,7 @@ export class World {
     if (!L) {
       L = buildLayout(this, s);
       this.layouts.set(s.id, L);
+      if (this.onLayout) this.onLayout(L);
     }
     return L;
   }
@@ -51,6 +54,7 @@ export class World {
     const saved = this.saved.get(key);
     r = saved ? Region.deserialize(saved) : generateRegion(this, rx, rz);
     this.regions.set(key, r);
+    if (this.onRegionLoad) this.onRegionLoad(r);
     return r;
   }
 

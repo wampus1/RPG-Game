@@ -176,8 +176,8 @@ def('campfire', {
 });
 def('bed', { ...sprite, interact: 'bed', rotatable: true, tool: 'axe', hardness: 0.6 });
 def('table', { ...sprite, tool: 'axe', hardness: 0.7 });
-def('chair', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.5 });
-def('bench', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.6 });
+def('chair', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.5, interact: 'sit' });
+def('bench', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.6, interact: 'sit' });
 def('well', { ...sprite, interact: 'well', tool: 'pick', hardness: 3, tall: true, drop: 'cobblestone' });
 def('altar', { ...sprite, interact: 'altar', tool: 'pick', hardness: 3, drop: 'marble' });
 def('sign', { ...sprite, interact: 'sign', rotatable: true, tool: 'axe', hardness: 0.4 });
@@ -213,6 +213,13 @@ def('lily_pad', { ...nonSolid, render: 'flat', hardness: 0.05, replaceable: true
 def('wheat_crop', { ...plant, drop: [{ item: 'wheat', min: 1, max: 2 }, { item: 'seeds', chance: 0.5 }], label: 'Wheat' });
 def('carrot_crop', { ...plant, drop: [{ item: 'carrot', min: 1, max: 3 }], label: 'Carrots' });
 def('cabbage_crop', { ...plant, drop: [{ item: 'cabbage', min: 1, max: 1 }], label: 'Cabbage' });
+// --- town life: jails, stools, hanging signs, snares (appended to keep ids stable)
+def('iron_bars', { opaque: false, standable: false, tool: 'pick', hardness: 6, label: 'Iron Bars' });
+def('cell_door', { opaque: false, standable: false, interact: 'cell_door', tool: 'pick', hardness: 7, drop: 'iron_bars', label: 'Cell Door' });
+def('cell_door_open', { ...sprite, solid: false, interact: 'cell_door', tool: 'pick', hardness: 7, drop: 'iron_bars', label: 'Cell Door' });
+def('stool', { ...sprite, solid: false, tool: 'axe', hardness: 0.4, interact: 'sit' });
+def('hanging_sign', { ...sprite, solid: false, interact: 'sign', rotatable: true, tool: 'axe', hardness: 0.3, support: false, label: 'Hanging Sign' });
+def('snare', { ...sprite, solid: false, interact: 'trap', tool: 'axe', hardness: 0.2, drop: [{ item: 'string', min: 1, max: 1 }, { item: 'stick', min: 1, max: 1 }], label: 'Snare' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

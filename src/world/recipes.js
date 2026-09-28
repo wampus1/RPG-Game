@@ -58,6 +58,11 @@ r('workbench', 'rug_blue', 2, { cloth: 2 });
 r('workbench', 'rug_green', 2, { cloth: 2 });
 r('workbench', 'training_dummy', 1, { hay_bale: 1, stick: 3 });
 r('workbench', 'log_wall', 4, { log_pine: 2 });
+r('workbench', 'stool', 2, { planks: 1, stick: 2 });
+r('workbench', 'hanging_sign', 1, { planks: 2, stick: 1, string: 1 });
+r('workbench', 'snare', 1, { stick: 2, string: 2 });
+r('workbench', 'bow', 1, { stick: 3, string: 3 });
+r('workbench', 'arrow', 8, { stick: 1, feather: 1, cobblestone: 1 });
 
 // --- furnace --------------------------------------------------------------------
 r('furnace', 'iron_ingot', 1, { iron_ore: 1, coal: 1 });
@@ -73,6 +78,7 @@ r('furnace', 'cooked_fish', 1, { fish: 1 });
 r('furnace', 'bread', 1, { wheat: 3 });
 r('furnace', 'stew', 1, { cooked_meat: 1, carrot: 1, mushroom: 1 });
 r('furnace', 'pie', 1, { berries: 3, wheat: 2 });
+r('furnace', 'feast', 1, { cooked_meat: 2, cooked_fish: 1, bread: 1, cabbage: 1 });
 
 // --- anvil ----------------------------------------------------------------------
 for (const t of ['iron', 'gold']) {
@@ -87,6 +93,7 @@ r('anvil', 'hammer', 1, { iron_ingot: 2, stick: 2 });
 r('anvil', 'hoe', 1, { iron_ingot: 1, stick: 2 });
 r('anvil', 'lantern', 1, { iron_ingot: 1, torch: 1 });
 r('anvil', 'anvil', 1, { iron_ingot: 5 });
+r('anvil', 'iron_bars', 4, { iron_ingot: 2 });
 
 export const RECIPES = R;
 

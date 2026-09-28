@@ -382,6 +382,17 @@ function cubeTop(name, v, rand, rot) {
       p.line(3, 12, 12, 3, '#f0ffff');
       return p;
     }
+    case 'iron_bars': case 'cell_door': {
+      // Seen from above: a heavy rail with the bar tops along it.
+      p.rect(0, 6, 16, 4, '#2e2e38');
+      p.hline(0, 15, 6, '#8a8a98');
+      p.hline(0, 15, 9, '#1e1e26');
+      for (let x = 1; x < 16; x += 4) {
+        p.rect(x, 5, 2, 6, '#5a5a68');
+        p.set(x, 5, '#c0c0cc');
+      }
+      return p;
+    }
     case 'hay_bale': {
       straw(p, pal, rand);
       p.hline(0, 15, 4, pal[2]);
@@ -527,6 +538,23 @@ function cubeFront(name, v, rand, rot) {
         p.line(0, 0, 15, LH - 1, beam);
       } else p.vline(7, 0, LH - 1, beam);
       return frontify(p, 0.86);
+    }
+    case 'iron_bars': case 'cell_door': {
+      for (let x = 1; x < 16; x += 4) {
+        p.rect(x, 0, 2, LH, '#4a4a58');
+        p.vline(x, 0, LH - 1, '#a8a8b8');
+        p.set(x + 2, 2, '#1c1622');
+      }
+      p.rect(0, 0, 16, 2, '#3a3a46');
+      p.hline(0, 15, 0, '#9a9aa8');
+      p.rect(0, LH - 2, 16, 2, '#3a3a46');
+      if (name === 'cell_door') {
+        p.rect(9, 4, 5, 4, '#2a2a34');
+        p.hline(9, 13, 4, '#8a8a98');
+        p.set(11, 5, '#e0c040');
+        p.set(11, 6, '#1a1420');
+      }
+      return p;
     }
     case 'glass': {
       p.fill('#8e6a3a');
@@ -922,6 +950,52 @@ const SPRITES = {
       p.rect(x, y, w, h, '#f0e8d0');
       p.hline(x + 1, x + w - 2, y + 2, '#8a8070');
       p.set(x + 1, y, '#c83a32');
+    }
+    return p.outline(OUT);
+  },
+  cell_door_open() {
+    // The barred door swung against the wall.
+    const p = spr();
+    for (let y = 2; y < 26; y += 1) if (y % 3 !== 0) p.set(1, y, '#7a7a86');
+    p.rect(0, 2, 2, 24, '#5e5e6a');
+    for (let y = 4; y < 26; y += 4) p.hline(0, 3, y, '#9a9aa8');
+    return p.outline(OUT);
+  },
+  stool() {
+    const p = spr();
+    const w = P.planks;
+    p.ellipse(7.5, 17, 4, 2, w[2]);
+    p.hline(4, 11, 18, w[1]);
+    p.vline(5, 19, 26, P.planks_dark[0]);
+    p.vline(10, 19, 26, P.planks_dark[0]);
+    p.hline(5, 10, 23, P.planks_dark[1]);
+    return p.outline(OUT);
+  },
+  hanging_sign(rot) {
+    // A board hung from an iron bracket; the renderer paints the trade icon.
+    const p = spr();
+    const iron = '#3a3a44';
+    if (rot === 1) p.hline(6, 15, 1, iron);
+    else if (rot === 3) p.hline(0, 9, 1, iron);
+    else p.hline(2, 13, 1, iron);
+    p.vline(3, 1, 4, iron);
+    p.vline(12, 1, 4, iron);
+    p.rect(2, 4, 12, 11, P.planks[1]);
+    p.hline(2, 13, 4, P.planks[2]);
+    p.hline(2, 13, 14, P.planks_dark[0]);
+    p.rect(3, 5, 10, 9, '#c8a86a');
+    return p.outline(OUT);
+  },
+  snare(rot, st) {
+    const p = spr();
+    p.line(4, 25, 7, 17, '#7a5430');
+    p.line(11, 25, 8, 17, '#7a5430');
+    if (st) {
+      // Sprung: a small catch hangs in the loop.
+      p.ellipse(8, 21, 3, 2, '#b89878');
+      p.set(6, 20, '#8a6a4a');
+    } else {
+      for (let a = 0; a < 12; a++) p.set(7.5 + Math.cos(a / 1.9) * 3, 23 + Math.sin(a / 1.9) * 1.5, '#e8e4d8');
     }
     return p.outline(OUT);
   },
