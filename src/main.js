@@ -2,7 +2,6 @@
 import { VIEW_W, VIEW_H } from './config.js';
 import { CRT } from './render/crt.js';
 import { Renderer } from './render/renderer.js';
-import { TEX } from './render/textures.js';
 import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game } from './game/game.js';
@@ -20,7 +19,6 @@ view.width = VIEW_W;
 view.height = VIEW_H;
 const crt = new CRT(screen, view);
 const renderer = new Renderer(view);
-globalThis.__texAvg = TEX.avg;
 const audio = new Audio();
 const ui = new UI(audio);
 const input = new Input(screen, crt);
@@ -42,7 +40,7 @@ resize();
 function hasSave() {
   try {
     return !!localStorage.getItem(SAVE_KEY);
-  } catch (e) {
+  } catch {
     return false;
   }
 }

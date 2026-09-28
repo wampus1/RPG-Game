@@ -435,7 +435,6 @@ function toolIcon(kind, tier) {
 function simpleIcon(key) {
   const p = new Px(16, 16);
   const rand = mulberry32(hashString(key));
-  const C = (c) => hex(c);
   switch (key) {
     case 'stick':
       p.line(4, 13, 12, 3, '#8a6038');

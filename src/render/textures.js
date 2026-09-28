@@ -2,8 +2,8 @@
 // and rotation-dependent shading), prop sprites, plants and overlays. All
 // images are packed into a single atlas canvas.
 import { TILE, LH } from '../config.js';
-import { BLOCKS, B } from '../world/blocks.js';
-import { Px, hex, shade, mix } from './pixel.js';
+import { BLOCKS } from '../world/blocks.js';
+import { Px, shade } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 
 export const VARIANTS = 4;
@@ -1244,7 +1244,6 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
 const CUBE_ROT_FRONT = new Set(['bookshelf']);
-const PLANTS = new Set(['tall_grass', 'fern', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white', 'flower_purple', 'bush', 'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'sapling', 'wheat_crop', 'carrot_crop', 'cabbage_crop']);
 const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3 };
 
 export function buildTextures() {

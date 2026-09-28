@@ -73,12 +73,12 @@ export class CRT {
     this.out = outCanvas;
     this.src = srcCanvas;
     this.enabled = true;
-    this.curve = 1;
+    this.curve = 0.8;
     this.glow = 1;
     this.gl = null;
     try {
       this.gl = outCanvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
-    } catch (e) {
+    } catch {
       this.gl = null;
     }
     if (this.gl) {

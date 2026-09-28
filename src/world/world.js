@@ -164,7 +164,8 @@ export class World {
   canStand(x, y, z, allowDoors = false) {
     if (y < 1 || y >= WORLD_Y - 1) return false;
     const feet = BLOCKS[this.getBlock(x, y, z)];
-    if (feet.solid && !(allowDoors && feet.interact === 'door')) return false;
+    // Doors are passable when open (NPCs path through closed ones and open them).
+    if (feet.solid && !(feet.interact === 'door' && (allowDoors || this.getState(x, y, z)))) return false;
     const head = BLOCKS[this.getBlock(x, y + 1, z)];
     if (head.solid || head.liquid) return false;
     const below = BLOCKS[this.getBlock(x, y - 1, z)];

@@ -155,7 +155,6 @@ export class UI {
       if (this.modal) {
         // Clicking outside an inventory while holding an item throws it.
         if (ck.type === 'down' && this.cursorStack) {
-          const p = game.player;
           const dx = ck.x - VIEW_W / 2;
           const dz = ck.y - VIEW_H / 2;
           const l = Math.hypot(dx, dz) || 1;
@@ -164,7 +163,6 @@ export class UI {
             this.cursorStack.count--;
             if (this.cursorStack.count <= 0) this.cursorStack = null;
           } else this.cursorStack = null;
-          void p;
         } else if (ck.type === 'down' && this.top() && this.top().closeOnOutside) this.close(this.top());
         continue;
       }
@@ -293,7 +291,7 @@ export class UI {
     g.clear();
     const p = game.player;
     // Hearts & coins.
-    g.fill(0, 0, 24, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
+    g.fill(0, 0, 25, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
     const hearts = Math.ceil(p.maxHp / 2);
     for (let i = 0; i < hearts; i++) {
       const v = p.hp - i * 2;
@@ -313,7 +311,7 @@ export class UI {
     }
     g.text(1, 2, loc.slice(0, 22), s ? C.cyan : C.green);
     // Clock + minimap panel.
-    const bx = COLS - 16;
+    const bx = COLS - 17;
     g.box(bx, 0, 16, 8, { bg: 'rgba(10,8,16,0.8)', fg: C.dim });
     const h = Math.floor(game.minute / 60);
     const m = Math.floor(game.minute % 60);
@@ -345,12 +343,12 @@ export class UI {
       const msg = this.messages[i];
       const lines = wrap(msg.text, 22);
       for (let j = lines.length - 1; j >= 0 && y > 12; j--) {
-        g.text(1, y, lines[j], msg.t < 1 ? C.faint : msg.color, 'rgba(10,8,16,0.5)');
+        g.text(2, y, lines[j], msg.t < 1 ? C.faint : msg.color, 'rgba(10,8,16,0.5)');
         y--;
       }
     }
     // Layer / rotation / hints.
-    const rx = COLS - 23;
+    const rx = COLS - 24;
     g.fill(rx, BELT_Y, 23, 4, ' ', C.fg, 'rgba(10,8,16,0.55)');
     g.text(rx + 1, BELT_Y, 'LAYER', C.dim);
     g.text(rx + 7, BELT_Y, game.layerLabel(), p.layerMode === null ? C.green : C.cyan);

@@ -1304,7 +1304,6 @@ class Layout {
     // Lamp posts along roads.
     if (!ruined && cond !== 'poor') {
       const every = s.type === 'city' ? 7 : cond === 'prosperous' ? 8 : 11;
-      let k = 0;
       const b = this.bounds;
       for (let z = b.z0 + 1; z < b.z1; z++) {
         for (let x = b.x0 + 1; x < b.x1; x++) {
@@ -1319,7 +1318,6 @@ class Layout {
           this.put(x, Y0 + 1, z, B.lantern, META_STATE);
           this.setMask(x, z, M.DECOR);
           this.lamps.push({ x, z });
-          k++;
         }
       }
     }

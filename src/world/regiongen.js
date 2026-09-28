@@ -1,6 +1,6 @@
 // Tile-level generation of one region: terrain columns, ores, vegetation and
 // any settlement structures that overlap the region.
-import { REGION_W, REGION_D, WORLD_Y, WATER_Y } from '../config.js';
+import { REGION_W, REGION_D, WORLD_Y } from '../config.js';
 import { hash4, hashf, mulberry32 } from '../util/rng.js';
 import { B, BLOCKS } from './blocks.js';
 import { BIOMES } from './biomes.js';

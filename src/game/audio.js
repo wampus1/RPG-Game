@@ -13,7 +13,7 @@ export class Audio {
           this.master.gain.value = this.volume;
           this.master.connect(this.ctx.destination);
           this.noiseBuf = this.makeNoise();
-        } catch (e) {
+        } catch {
           this.enabled = false;
         }
       } else if (this.ctx.state === 'suspended') this.ctx.resume();

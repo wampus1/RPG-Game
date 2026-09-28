@@ -1,11 +1,11 @@
 // Game orchestrator: owns the world, entities, time, input handling and the
 // rules for interacting with blocks and creatures.
 import {
-  TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, SURFACE, WATER_Y, REACH, BELT_SIZE,
+  TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, WATER_Y, REACH, BELT_SIZE,
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
 } from '../config.js';
 import { World } from '../world/world.js';
-import { BLOCKS, B, META_ROT, META_STATE, LOGS, LEAVES } from '../world/blocks.js';
+import { BLOCKS, B, META_STATE, LOGS, LEAVES } from '../world/blocks.js';
 import { ITEMS, rollDrops, itemForBlock } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player } from '../entities/player.js';
@@ -13,9 +13,10 @@ import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
-import { addItem, removeItem, makeSlots } from './inventory.js';
+import { removeItem, makeSlots } from './inventory.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { BIOMES } from '../world/biomes.js';
+import { TEX } from '../render/textures.js';
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -197,6 +198,14 @@ export class Game {
     if (this.genQueue.length) {
       const [X, Z] = this.genQueue.shift();
       if (!this.world.isLoaded(X, Z)) this.world.loadRegion(X, Z);
+    } else if (Math.random() < 0.1) {
+      // Idle: lay out nearby settlements ahead of time so arriving doesn't stall.
+      for (const s of this.world.ow.settlements) {
+        if (this.world.layouts.has(s.id)) continue;
+        if (Math.abs(s.cx - p.x / REGION_W) > 3 || Math.abs(s.cz - p.z / REGION_D) > 3) continue;
+        this.world.getLayout(s);
+        break;
+      }
     }
     // Unload far regions (kept if an active settlement needs them).
     if (Math.random() < 0.02) {
@@ -600,9 +609,7 @@ export class Game {
   }
 
   blockColor(id) {
-    const a = this.renderer ? null : null;
-    void a;
-    const avg = globalThis.__texAvg ? globalThis.__texAvg[id] : null;
+    const avg = TEX.avg[id];
     if (!avg) return ['#8a8a8a', '#6a6a6a'];
     const c = `rgb(${avg[0] | 0},${avg[1] | 0},${avg[2] | 0})`;
     const d = `rgb(${(avg[0] * 0.7) | 0},${(avg[1] * 0.7) | 0},${(avg[2] * 0.7) | 0})`;
@@ -1398,7 +1405,7 @@ export class Game {
   // ------------------------------------------------------------ save
   serialize() {
     const regions = [];
-    for (const [k, v] of this.world.saved) regions.push(v);
+    for (const v of this.world.saved.values()) regions.push(v);
     for (const r of this.world.regions.values()) if (r.modified) regions.push(r.serialize());
     const p = this.player;
     return {
