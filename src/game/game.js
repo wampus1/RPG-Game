@@ -354,6 +354,23 @@ export class Game {
     }
   }
 
+  // A baby born in town while you're there appears beside a parent.
+  spawnBorn(L, rec, parents) {
+    const a = this.active.get(L.settlement.id);
+    if (!a || (rec.ent && !rec.ent.dead)) return null;
+    const by = parents.map((p) => p.ent).find((e) => e && !e.dead);
+    const home = L.buildings[rec.home];
+    const at = by ? { x: by.x, z: by.z, y: by.y } : home ? { x: (home.x0 + home.x1) / 2, z: (home.z0 + home.z1) / 2, y: GROUND } : { x: L.plaza.cx, z: L.plaza.cz, y: GROUND };
+    const spot = this.findFreeSpot(at.x, at.z, at.y);
+    const n = new NPC(this, rec, L);
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
+    a.npcs.push(n);
+    this.npcs.push(n);
+    if (by) by.say(by.rng.pick([`Say hello to little ${rec.name.first}!`, `Our ${rec.name.first}, born today!`]), 4, '#a0e0a0');
+    return n;
+  }
+
   // A visiting merchant walks in from the road and sets up on the square.
   spawnVisitor(L, visit, idx) {
     const a = this.active.get(L.settlement.id);
@@ -398,8 +415,9 @@ export class Game {
         coins: 5, inv: [], skills: { trading: 0.2, cooking: 0.3, hunting: 0.5, fishing: 0.3, farming: 0.3, building: 0.3, crafting: 0.3 },
         fed: 1, hungry: 0, mood: 0.6, grief: [], override: null, away: false, doneKey: null,
       };
-      const e = L.entrances[(band.id + i) % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
-      const spot = this.findFreeSpot(e.x, e.z, GROUND);
+      // The family walks in together by one road.
+      const e = L.entrances[band.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+      const spot = this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
       const n = new NPC(this, rec, L);
       n.nomad = band;
       n.teleport(spot.x, spot.y, spot.z);
@@ -1786,6 +1804,8 @@ export class Game {
       source.victim = target;
       source.victimT = this.sim.abs;
     }
+    // A beast you strike turns on you: remember who it was hunting.
+    if (source && source.kind === 'player' && target.target && target.target.kind === 'npc') target.hunting = { n: target.target, t: this.sim.abs };
     // Violence against villagers is a crime; witnesses react.
     if (target.kind === 'npc' && source) {
       target.onHurt(source);
@@ -1976,14 +1996,18 @@ export class Game {
     const saved = new Set();
     for (const n of this.npcs) {
       if (n.dead || n.hired) continue;
-      const hunted = beast.target === n && beast.distTo(n) <= 8;
+      const was = beast.hunting && beast.hunting.n === n && this.sim.abs - beast.hunting.t < 10;
+      const hunted = (beast.target === n || was) && beast.distTo(n) <= 8;
       const bitten = beast.victim === n && this.sim.abs - (beast.victimT || -1e9) < 10;
       const scared = n.threat === beast && ['flee', 'fight', 'alert'].includes(n.state);
       if (hunted || bitten || scared) saved.add(n);
     }
     if (!saved.size) return 0;
     const p = this.player;
+    const deeds = new Map();
     for (const n of saved) {
+      const sid = this.sim.repSidOf(n);
+      deeds.set(sid, (deeds.get(sid) || 0) + (n.rec.job === 'guard' ? 1 : 3));
       const gain = n.rec.job === 'guard' ? 3 : 8;
       this.sim.changeRep(n, gain);
       n.say(n.rng.pick(n.rec.job === 'guard' ? ['Good work. I owe you one.', 'Nicely done!'] : ['You saved me! Thank you!', 'Thank the stars you were here!', 'I thought I was done for... thank you!']), 3.5, '#a0e0a0');
@@ -1999,6 +2023,7 @@ export class Game {
       }
     }
     this.stats.rescues = (this.stats.rescues || 0) + saved.size;
+    for (const [sid, pts] of deeds) this.sim.addRenown(sid, pts, 'saving lives');
     this.ui.msg(saved.size > 1 ? `You saved ${saved.size} people from the ${(beast.name || 'beast').toLowerCase()}.` : `You saved ${[...saved][0].rec.name.first} from the ${(beast.name || 'beast').toLowerCase()}.`, '#a0e0a0');
     return saved.size;
   }

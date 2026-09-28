@@ -74,16 +74,12 @@ export class Nomads {
     const houses = L.buildings.filter((h) => h.residential && !h.playerHome && !h.underConstruction);
     const famHouse = own && !own.underConstruction ? own : houses.find((h) => h.beds.length - used(h) >= b.people.length);
     const base = L.npcs.length;
-    const need = ['guard', 'builder', 'farmer', 'trapper', 'fisher', 'miner', 'lumberjack', 'laborer'].filter((j) => L.hasWorkplaceFor(j));
+    const need = [...(L.econ.hands ? [L.econ.hands] : []), 'guard', 'builder', 'farmer', 'trapper', 'fisher', 'miner', 'lumberjack', 'laborer'].filter((j) => L.hasWorkplaceFor(j));
     const recs = b.people.map((p, i) => {
       const house = famHouse || houses.find((h) => h.beds.length > used(h));
       const r = JSON.parse(JSON.stringify(p));
       Object.assign(r, { id: `${s.id}:${base + i}`, idx: base + i, sid: s.id, home: house ? house.id : null, household: `n${b.id}`, bed: house ? used(house) : 0, from: 'nomads', arrived: true });
-      if (house && !house.household) house.household = { members: [] };
-      if (house && !house.family) {
-        house.family = b.family;
-        house.homeName = `The ${b.family} House`;
-      }
+      if (house && !house.family) this.sim.works.nameHouse(L, house, b.family, b.people.map((q) => ({ age: q.age })));
       if (r.age === 'adult') {
         // Guards first if the town has none, then what the town lacks.
         const has = (j) => people.some((q) => q.job === j) || L.npcs.slice(base).some((q) => q.job === j);
@@ -137,7 +133,7 @@ export class Nomads {
       } else if (now < b.decide) continue;
       const v = this.judge(L, b);
       // Only short of room: the council may build them a home, and they wait.
-      if (!v.ok && v.reasons.length === 1 && v.reasons[0] === 'no room' && b.houseProject === undefined && L.econ.treasury >= 150 && L.plots.some((q) => !q.taken)) {
+      if (!v.ok && v.reasons.length === 1 && v.reasons[0] === 'no room' && b.houseProject === undefined && L.econ.treasury >= 150 && this.sim.works.freePlot(L)) {
         const p = this.sim.works.startBuilding(L, b.people.length <= 2 ? 'house_s' : 'house_m', ` for the ${b.family} family`);
         if (p) {
           L.econ.treasury -= 120;
@@ -155,6 +151,7 @@ export class Nomads {
         const recs = this.settle(L, b);
         b.stayed = true;
         g.nomadsSettle?.(L, ents, recs);
+        if (b.vouchedBy) this.sim.addRenown(b.sid, 1, 'welcoming newcomers');
       } else {
         b.stayed = false;
         const why = { 'no room': 'there was no room for them', hunger: 'too many were going hungry', danger: 'it didn\'t feel safe', taxes: 'the taxes were too high' }[v.reasons[0]] || 'it wasn\'t for them';

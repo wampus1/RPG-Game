@@ -563,7 +563,7 @@ class Layout {
   }
 
   // Reserve a small lot beside a road; nothing is built there yet.
-  placePlot(rng) {
+  placePlot(rng, sign = true) {
     const cands = rng.shuffle(this.frontage());
     for (const c of cands.slice(0, 400)) {
       for (const [w, d] of SPECS.house_s.size) {
@@ -582,6 +582,7 @@ class Layout {
         this.setMask(front.x, front.z, M.ROAD);
         const plot = { id: this.plots.length, type: 'house_s', x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: front };
         this.plots.push(plot);
+        if (!sign) return plot;
         // A little sign on the empty lot.
         const DX = [0, -1, 0, 1];
         const DZ = [1, 0, -1, 0];
@@ -597,7 +598,7 @@ class Layout {
   }
 
   // A lot just outside the edge (on the flattened fringe) facing the town.
-  fringePlot() {
+  fringePlot(sign = true, reach = 7, flat = 0.05) {
     const b = this.bounds;
     const terrain = this.world.terrain;
     const p = this.plaza;
@@ -607,11 +608,11 @@ class Layout {
         return m === M.FREE || m === M.YARD;
       }
       const c = terrain.column(x, z, this.ctx, {});
-      return c.h === SURFACE && c.water < 0 && c.flat > 0.05;
+      return c.h === SURFACE && c.water < 0 && c.flat >= flat;
     };
     const cands = [];
-    for (let z = b.z0 - 7; z <= b.z1 + 2; z++) {
-      for (let x = b.x0 - 7; x <= b.x1 + 2; x++) {
+    for (let z = b.z0 - reach; z <= b.z1 + reach - 5; z++) {
+      for (let x = b.x0 - reach; x <= b.x1 + reach - 5; x++) {
         if (x >= b.x0 + 2 && x + 5 <= b.x1 - 2 && z >= b.z0 + 2 && z + 5 <= b.z1 - 2) continue;
         cands.push({ x, z, d: Math.hypot(x + 2 - p.cx, (z + 2 - p.cz) * 1.5) });
       }
@@ -633,6 +634,7 @@ class Layout {
       for (let qz = z; qz <= z + 4; qz++) for (let qx = x; qx <= x + 4; qx++) this.setMask(qx, qz, M.BUILD);
       const plot = { id: this.plots.length, type: 'house_s', x0: x, z0: z, x1: x + 4, z1: z + 4, door, outside, fringe: true };
       this.plots.push(plot);
+      if (!sign) return plot;
       const inX = door.x - DX[door.rot];
       const inZ = door.z - DZ[door.rot];
       this.put(inX, Y0, inZ, B.sign, door.rot);
@@ -653,7 +655,7 @@ class Layout {
     const bld = {
       id, type: plot.type, name: BUILDING_NAMES[plot.type], x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: r.outside,
       residential: true, beds: [], work: [], seats: [], free: [], household: null, playerHome: true,
-      mats: this.buildingMats(plot.type, rng), tall: 2,
+      mats: this.buildingMats(plot.type, rng), tall: 2, fringe: !!plot.fringe,
     };
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     const chim = this.chimneys.length;
@@ -714,7 +716,7 @@ class Layout {
     const bld = {
       id, type, name: BUILDING_NAMES[type] || 'Workshop', x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: r.outside,
       residential: !!SPECS[type]?.residential, beds: [], work: [], seats: [], free: [], household: null,
-      mats: this.buildingMats(type, rng), tall: 2, built: true,
+      mats: this.buildingMats(type, rng), tall: 2, built: true, fringe: !!plot.fringe,
     };
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
@@ -729,11 +731,15 @@ class Layout {
     const alongX = rot === 0 || rot === 2; // door wall runs along x
     const cw = alongX ? b.x1 - b.x0 + 1 : b.z1 - b.z0 + 1;
     const cd = alongX ? b.z1 - b.z0 + 1 : b.x1 - b.x0 + 1;
+    // Villages have no walls to keep clear of, and a house on the edge of
+    // town may grow out into the open (never onto another building).
+    const lax = this.settlement.type === 'village' || b.fringe;
     const ok = (x, z, own) => {
       if (own(x, z)) return true;
-      if (!this.inside(x, z, 2)) return false;
+      if (!this.inside(x, z, lax ? 0 : 2) && (!lax || this.builtNear(x, z, b))) return false;
       const m = this.maskAt(x, z);
-      if (m !== M.FREE && m !== M.YARD) return false;
+      // Open ground, a yard, or a flower bed or garden (not on a street).
+      if (m !== M.FREE && m !== M.YARD && !(m === M.DECOR && !this.onStreet(x, z))) return false;
       const c = this.col(x, z);
       return c && c.water < 0 && c.h === SURFACE;
     };
@@ -773,6 +779,33 @@ class Layout {
     };
     const oldTop = (b.roofBase || Y0 + 2) + Math.max(b.x1 - b.x0, b.z1 - b.z0);
     return this.planBuilding(bld, rng, Math.min(Y0 + 10, oldTop + 1));
+  }
+
+  // Outside the town's mask: is there a building or lot here already?
+  builtNear(x, z, except) {
+    const near = (r) => x >= r.x0 - 1 && x <= r.x1 + 1 && z >= r.z0 - 1 && z <= r.z1 + 1;
+    return this.buildings.some((q) => q !== except && near(q)) || this.plots.some((p) => p && !p.taken && near(p));
+  }
+
+  // Decorations set on the square or a street (their paving lies beneath).
+  onStreet(x, z) {
+    return !!this.decorBase && this.decorBase.has((z - this.bounds.z0) * this.W + (x - this.bounds.x0));
+  }
+
+  // Every lot taken: the town marks out a new one beside a road, else on
+  // its edge (after founding, so no sign; the builders come straight away).
+  openPlot() {
+    const rng = new RNG(hash4(this.settlement.seed, 0x7a0e, this.plots.length));
+    return this.placePlot(rng, false) || this.fringePlot(false) || this.fringePlot(false, 16, 0);
+  }
+
+  // A lot opened after founding, marked out again after a reload.
+  reopenPlot(r) {
+    if (this.plots[r.id]) return this.plots[r.id];
+    const plot = { ...r, taken: false };
+    this.plots[r.id] = plot;
+    this.claimFootprint(plot);
+    return plot;
   }
 
   // Mark a grown or new building's footprint on the layout mask.

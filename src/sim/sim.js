@@ -14,11 +14,14 @@ import {
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
-import { checkWatch, checkSupply, staffBuilding, relocate, deserted } from './civic.js';
+import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
 import { Works } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
 import { removeItem, countItem } from '../game/inventory.js';
+
+// Deeds needed for a town to call you its Friend, or its Hero.
+export const RENOWN = { friend: 10, hero: 25 };
 
 const REP_LEVELS = [
   [-60, 'Hated', '#ff5050'], [-25, 'Disliked', '#ff9060'], [10, 'Neutral', '#c8c8c8'],
@@ -56,6 +59,7 @@ export class Sim {
     this.nomads = new Nomads(game, this);
     this.bp = null;
     this.deserted = new Set();
+    this.renown = new Map(); // sid -> points for good deeds done there
     this.confront = null; // the mayor coming to have a word about your conduct
   }
 
@@ -221,6 +225,7 @@ export class Sim {
     if (this.isCitizen(sid)) m += 10;
     if (this.justice.exiled.has(sid)) m -= 60;
     m -= this.diplomacy.penalty(sid);
+    m += Math.min(15, Math.floor((this.renown.get(sid) || 0) / 2));
     this.areaCache.set(sid, m);
     return m;
   }
@@ -573,6 +578,8 @@ export class Sim {
   dailyCivic(L, day, rng) {
     checkWatch(this, L, day, rng);
     checkSupply(this, L, day);
+    checkHousing(this, L, day);
+    births(this, L, day, rng);
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
@@ -687,7 +694,7 @@ export class Sim {
     if (this.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
     if (op < -10) return { ok: false, reason: 'distrust' };
     if (this.isCitizen(s.id)) return { ok: false, reason: 'already' };
-    return { ok: true, fee: op >= 40 ? 0 : fee, plot: L.plots.find((p) => !p.taken) || null };
+    return { ok: true, fee: op >= 40 ? 0 : fee, plot: this.works.freePlot(L) };
   }
 
   join(mayor) {
@@ -730,13 +737,43 @@ export class Sim {
     staffBuilding(this, L, b, this.game.day);
   }
 
+  // Renown: deeds done for a town (lives saved, favours, letters carried,
+  // beasts put down, a good word for newcomers) earn you a title there.
+  renownTitle(sid) {
+    const v = this.renown.get(sid) || 0;
+    return v >= RENOWN.hero ? 'Hero' : v >= RENOWN.friend ? 'Friend' : null;
+  }
+
+  addRenown(sid, pts, why) {
+    const s = this.game.world.ow.settlements[sid];
+    if (!s || pts <= 0 || this.justice.exiled.has(sid)) return null;
+    const before = this.renownTitle(sid);
+    this.renown.set(sid, (this.renown.get(sid) || 0) + pts);
+    this.areaCache.delete(sid);
+    const now = this.renownTitle(sid);
+    if (now === before) return null;
+    this.game.ui.msg(`For ${why}, the people of ${s.name} now call you ${now} of ${s.name}!`, '#ffe070');
+    this.game.audio?.play('coin');
+    const L = this.layoutOf(sid);
+    if (L && L.econ) ledger(L, this.game.day, `${this.game.playerName} is named ${now} of ${s.name}.`);
+    return now;
+  }
+
+  // Your best title, for the journal and profile.
+  bestRenown() {
+    let best = null;
+    for (const [sid, v] of this.renown) if (v >= RENOWN.friend && (!best || v > best.v)) best = { sid, v };
+    if (!best) return null;
+    return { sid: best.sid, title: `${this.renownTitle(best.sid)} of ${this.game.world.ow.settlements[best.sid].name}`, v: best.v };
+  }
+
   // Doing good work for a town: a steady job there, or favours done.
   goodStanding(sid) {
     const j = this.careers.job;
     if (j && j.sid === sid && (j.earned || 0) >= 25) return true;
     let favours = 0;
     for (const [k, r] of this.rep) if (k.startsWith(`${sid}:`) && r.favorNext !== undefined) favours++;
-    return favours >= 2 || (this.game.stats.rescues || 0) >= 3;
+    return favours >= 2 || (this.game.stats.rescues || 0) >= 3 || (this.renown.get(sid) || 0) >= RENOWN.friend;
   }
 
   // Families who are crowded (or comfortably off) pay to enlarge their homes.
@@ -1071,6 +1108,28 @@ export class Sim {
     this.visits.set(t.dest, list.filter((q) => q.id !== t.visit));
     const dest = this.game.world.ow.settlements[t.dest];
     ledger(L, day, `${rec.name.first} ${rec.name.last} came back from ${dest ? dest.name : 'the road'} (+¤${earned}).`);
+    this.importOre(L, rec, day);
+  }
+
+  // A town with a forge but nobody to mine brings its ore in by cart: the
+  // merchant buys it on the road and sells it to the smithy at a markup.
+  importOre(L, rec, day) {
+    const smithy = L.buildings.find((b) => b.type === 'smithy' && L.econ.biz[b.id]);
+    if (!smithy || L.npcs.some((r) => r.job === 'miner' && alive(r) && !r.migrated)) return 0;
+    const biz = L.econ.biz[smithy.id];
+    let n = 0;
+    for (const [item, want] of [['iron_ore', 6], ['coal', 4]]) {
+      const pr = Math.round(price(item) * 1.3);
+      for (let k = st.count(biz.store, item); k < want && biz.till >= pr + 5 && rec.coins >= price(item); k++) {
+        rec.coins -= price(item);
+        biz.till -= pr;
+        rec.coins += pr;
+        st.add(biz.store, item, 1);
+        n++;
+      }
+    }
+    if (n) ledger(L, day, `${rec.name.first} ${rec.name.last} brought back ore and coal for the smithy.`);
+    return n;
   }
 
   // Visiting merchants sell to local businesses; strangers occasionally
@@ -1164,6 +1223,7 @@ export class Sim {
       diplomacy: this.diplomacy.serialize(),
       nomads: this.nomads.serialize(),
       deserted: [...this.deserted],
+      renown: [...this.renown],
       favors: this.favors.serialize(),
     };
   }
@@ -1173,7 +1233,7 @@ export class Sim {
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
-      migrated: r.migrated,
+      migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children,
       // Someone who changed trade keeps their new one.
       ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift } : {}),
     });
@@ -1190,6 +1250,7 @@ export class Sim {
 
   applySettlement(L, sv) {
     Object.assign(L.econ, sv.econ);
+    for (const r of L.econ.openPlots || []) L.reopenPlot(r);
     sv.recs.forEach((d, i) => {
       if (L.npcs[i]) Object.assign(L.npcs[i], d);
     });
@@ -1219,6 +1280,7 @@ export class Sim {
     this.diplomacy.load(data.diplomacy);
     this.nomads.load(data.nomads);
     this.deserted = new Set(data.deserted || []);
+    this.renown = new Map(data.renown || []);
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
   }

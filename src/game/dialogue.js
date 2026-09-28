@@ -109,6 +109,16 @@ export function openingLine(npc, game) {
     entry.met = true;
     return pick(rng, [`We've heard about you from ${warns[0].fromName}. Behave yourself here.`, `${name}... ${warns[0].fromName} wrote to us about you. I'm watching you.`]);
   }
+  // A town's Friend or Hero is known on sight.
+  const renown = sim.renownTitle(s.id);
+  if (renown && rep > -25) {
+    const hero = renown === 'Hero';
+    if (!entry.met) {
+      entry.met = true;
+      return pick(rng, [`You must be ${name}, the ${renown} of ${s.name}! ${hero ? 'It\'s an honour.' : 'Welcome!'}`, `${name}! Everyone's talking about what you did for us.`]);
+    }
+    if (rng.chance(hero ? 0.45 : 0.3)) return pick(rng, hero ? [`Our hero! Good ${tw}, ${name}.`, `The ${renown} of ${s.name}, in person! Hello!`, `${name}! The whole town owes you.`] : [`Good ${tw}, friend of ${s.name}!`, `Ah, ${name}. Always welcome here.`]);
+  }
   if (!entry.met) {
     entry.met = true;
     if (p.kindness < 0.3) return pick(rng, ['What do you want?', 'Hmph. Another wanderer.']);
@@ -999,6 +1009,8 @@ export function respond(npc, game, id, arg) {
         game.audio?.play('coin');
       }
       sim.changeRep(npc, 4);
+      sim.addRenown(s.id, 2, 'carrying word between the towns');
+      sim.addRenown(q.from, 1, 'carrying word between the towns');
       return { lines: [`From ${from.name}? Let me see... ${q.kind === 'gift' ? 'A gift! How generous.' : q.kind === 'warn' ? 'Hm. A warning. We\'ll keep our eyes open.' : 'I\'ll send an answer back directly.'}`, pay ? `Here's ¤${pay} for your trouble.` : 'I\'m afraid the treasury can\'t pay you right now.'] };
     }
     case 'turn_away':

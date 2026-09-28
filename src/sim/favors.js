@@ -248,6 +248,7 @@ export class Favors {
       this.game.audio?.play('coin');
     }
     this.sim.changeRep(npc, f.rep);
+    this.sim.addRenown(f.sid, f.official ? 3 : 2, 'your help');
     this.list = this.list.filter((q) => q !== f);
     this.done++;
     const r = this.sim.repEntry(f.sid, f.giver);

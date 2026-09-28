@@ -51,6 +51,7 @@ export const HOBBIES = {
 // Job title, with a few settlement-dependent variants.
 export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
+  if (rec.nomadBand !== undefined) return 'Nomad';
   if (rec.visitor) return 'Traveling Merchant';
   return JOBS[rec.job]?.title || 'Villager';
 }
@@ -614,6 +615,28 @@ export function generateNPCs(layout, plan, seed) {
     }
   }
   return npcs;
+}
+
+// A baby born to a couple in town.
+export function makeChild(layout, a, b, rng) {
+  const s = layout.settlement;
+  const civ = s.civ;
+  const { p, traits } = makePersonality(rng, civ, 'child', 'child');
+  const avail = availOf(layout);
+  const r = {
+    name: personName(rng, s.style, a.name.last), age: 'child', job: 'child', home: a.home, household: a.household, partner: null, children: [],
+    parents: [a.idx, b.idx], friends: [], personality: p, traits, hobbies: pickHobbies(rng, p, civ, avail, 'child'), alive: true, shift: 'day',
+    restDay: a.restDay, maxHp: 6, hp: 6,
+  };
+  r.equipment = equipmentFor(rng, 'child', r.hobbies, s.condition, 'child');
+  const look = makeLook(rng, s.style, 'child', 'child', civ);
+  // A family resemblance.
+  look.skin = rng.chance(0.5) ? a.look.skin : b.look.skin;
+  if (rng.chance(0.6)) look.hair = rng.chance(0.5) ? a.look.hair : b.look.hair;
+  r.look = look;
+  r.work = { kind: 'none' };
+  r.schedule = makeSchedules(r, rng, avail);
+  return r;
 }
 
 // A band of nomads: one family on the road, with its own name, faces and

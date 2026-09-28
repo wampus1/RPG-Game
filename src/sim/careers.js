@@ -315,6 +315,7 @@ export class Careers {
     this.pay(pay);
     j.bounties++;
     j.earned += pay;
+    this.sim.addRenown(j.sid, 1, 'keeping the beasts at bay');
     this.game.ui.msg(`Bounty: ¤${pay} from ${L.settlement.name} for the ${(c.name || 'beast').toLowerCase()}.`, '#ffe070');
     return pay;
   }

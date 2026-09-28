@@ -72,6 +72,7 @@ export class NPC extends Entity {
 
   get title() {
     if (this.visit) return 'Traveling Merchant';
+    if (this.nomad) return 'Nomad';
     return jobTitle(this.rec, this.settlement);
   }
 
@@ -81,6 +82,7 @@ export class NPC extends Entity {
   }
 
   get homeName() {
+    if (this.nomad) return `the ${this.nomad.family} band`;
     return this.visit ? this.visit.fromName : this.settlement.name;
   }
 
@@ -358,6 +360,11 @@ export class NPC extends Entity {
     this.stateT += dt;
     this.rec.hp = this.hp;
     if (this.moving) return;
+    // Someone you're talking to stands and listens.
+    if (this.state === 'routine' && this.game.talkingTo === this && !this.sleeping) {
+      this.face(this.game.player.x, this.game.player.z);
+      return;
+    }
     this.closeDoorBehind();
     switch (this.state) {
       case 'routine':
@@ -737,7 +744,9 @@ export class NPC extends Entity {
       }
       if (this.rng.chance(0.08) && this.distTo(game.player) < 34) game.spawnGameNear(this);
     }
-    // Miners chip away at the rock face beside them.
+    // Miners chip away at the rock face beside them (and ask the watch for
+    // a guard now and then, if nobody came out with them).
+    if (act.act === 'work' && g.tag === 'mine' && this.rng.chance(dt * 0.1)) game.sim.escortMiner(this, act);
     if (act.act === 'work' && g.tag === 'mine' && this.rng.chance(dt * 0.35)) {
       if (!this.mineWork()) this.idleT = Math.min(this.idleT, 3);
       return;

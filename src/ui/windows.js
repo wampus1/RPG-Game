@@ -9,7 +9,7 @@ import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { humanoidSheet } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive } from '../sim/econ.js';
-import { repLevel } from '../sim/sim.js';
+import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 
 // ---------------------------------------------------------------- slot tables
@@ -110,6 +110,7 @@ export class InventoryWindow extends Window {
     g.text(x + 1, 2, pr.name.toUpperCase().slice(0, 20), C.hi);
     wrap(pr.title, 20).slice(0, 2).forEach((l, i) => g.text(x + 1, 3 + i, l, pr.citizen ? C.green : C.cyan));
     if (pr.job) g.text(x + 1, 5, pr.job.slice(0, 20), C.purple);
+    if (pr.renown) g.text(x + 1, pr.job ? 6 : 5, pr.renown.title.slice(0, 20), C.hi);
     g.text(x + 1, 7, `HP     ${Math.ceil(p.hp)}/${p.maxHp}`, C.red);
     g.text(x + 1, 8, `Coins  ¤${countItem(p.inv, 'coin')}`, C.hi);
     g.text(x + 1, 9, `Day    ${game.day}`, C.fg);
@@ -273,6 +274,8 @@ export class DialogueWindow extends Window {
     this.choices = null; // follow-up options offered by the last answer
     this.back = null;
     this.game = game;
+    // They stop what they're doing to listen.
+    if (game) game.talkingTo = npc;
   }
   say(lines) {
     this.queue = [...lines];
@@ -375,6 +378,7 @@ export class DialogueWindow extends Window {
     g.text(2, this.h - 2, '1-9 choose · SPACE continue · T trade · G gift · ESC leave', C.faint);
   }
   onClose(game) {
+    if (game && game.talkingTo === this.npc) game.talkingTo = null;
     // Walking out on the mayor's lecture counts as brushing it off.
     const cf = game && game.sim.confront;
     if (cf && cf.arrived && cf.idx === this.npc.rec.idx && cf.sid === this.npc.settlement.id) game.sim.settleConfront(this.npc, cf.stage === 'expel' ? 'expel' : 'defy');
@@ -466,6 +470,7 @@ export class TradeWindow extends Window {
     super(ui, 78, 26, { kind: 'trade' });
     this.npc = npc;
     this.scroll = 0;
+    if (ui.game) ui.game.talkingTo = npc;
   }
   shop(game) {
     if (!this.shopData) this.shopData = game.sim.shopOf(this.npc);
@@ -606,6 +611,7 @@ export class TradeWindow extends Window {
     for (const st of this.strikes || []) ctx.fillRect((this.x + st.x) * CHAR_W, (this.y + st.y) * CHAR_H + Math.floor(CHAR_H / 2), st.len * CHAR_W, 1);
   }
   onClose(game) {
+    if (game && game.talkingTo === this.npc) game.talkingTo = null;
     if (game) game.sim.closeShop(this.npc);
   }
   update(dt, game) {
@@ -745,6 +751,7 @@ export function playerProfile(game) {
     citizen: !!town,
     title: town ? `Citizen of ${town.name}` : 'Adventurer',
     job: sim.careers.title(),
+    renown: sim.bestRenown(),
   };
 }
 
@@ -760,6 +767,7 @@ export class JournalWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: 'rgba(28,22,16,0.96)', double: true, title: 'JOURNAL' });
     g.text(3, 1, pr.name, C.hi);
     g.text(4 + pr.name.length, 1, `· ${pr.title}`, pr.citizen ? C.green : C.cyan);
+    if (pr.renown) g.text(3, 2, `The ${pr.renown.title}`, C.hi);
     let y = 3;
     const head = (t) => {
       y++;
@@ -803,6 +811,15 @@ export class JournalWindow extends Window {
       para(`Wanted in ${car.townName(sid)}!`, C.red);
     }
     if (!any) para('No crimes on record. Keep it that way.', C.dim);
+    const deeds = [...sim.renown].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    if (deeds.length) {
+      head('RENOWN');
+      para(deeds.slice(0, 4).map(([sid, v]) => {
+        const t = sim.renownTitle(sid);
+        const need = t === 'Hero' ? '' : ` (${(t ? RENOWN.hero : RENOWN.friend) - v} to ${t ? 'Hero' : 'Friend'})`;
+        return `${car.townName(sid)}: ${t ? `${t} · ` : ''}${v} deeds${need}`;
+      }).join(' · '), C.hi);
+    }
     g.text(this.w - 14, this.h - 1, ' [J/ESC] ok ', C.faint);
   }
   onKey(k) {

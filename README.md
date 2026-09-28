@@ -155,6 +155,41 @@ nobody is left who can, its people pack up and move to another settlement
 merchants pack local goods, walk out of town, and turn up days later in other
 settlements, where you can trade with them on the square.
 
+**Towns that grow.** Builders make daily rounds and mend whatever gets broken
+(a smashed wall, a missing window, a door), block by block from the original
+plan. Every town keeps the trades its other trades depend on: a tavern needs a
+cook, and a cook needs farmers, trappers or fishers; a smith needs a miner, a
+baker a farmer, a carpenter a lumberjack, a tailor a trapper. When a link is
+missing the town retrains someone who can be spared, and when a building is
+missing (a tavern, a smithy, a bakery) the council pays for one and the
+builders put it up on an empty lot (marking out a new lot, on the edge of town
+if need be) and someone is hired to work it. If nobody can be spared, the
+mayor writes for settlers, and newcomers take the job. A forge with no rock to
+mine nearby gets its ore by cart from the town's merchants. Miners walk out to
+the rock with pickaxes and dig stone, coal and ore out of the face (or down
+into a quarry pit), sell the ore to the smithy, and in towns with more than
+three guards one of them goes along to keep watch. Families short of room get
+a new house from the council, couples with a spare bed have children now and
+then, and comfortably-off households pay to have their homes enlarged.
+Now and then a band of **nomads** camps on the square and weighs the place up:
+room for the whole family, full bellies, safety, fair taxes, and whether anyone
+put in a good word (you can). They settle and take up the work the town lacks,
+or move on; if all that stops them is a roof, the council may build them one.
+A nomad family can even bring a deserted town back to life.
+
+Mayors write to each other by the hands of traveling merchants (or a courier,
+or you, for a fee): asking for money when the treasury runs low, for guards or
+settlers, sending gifts to cool neighbours, proposing closer trade (more
+merchants on the road), building a **road** between them (laid tile by tile over
+the days that follow, bridged with planks over water, drawn on the map as ═,
+and halving the journey), and warning the neighbours about criminals. A town
+that was warned about you greets you coolly and thinks less of you. The mayor
+may ask you to carry a sealed dispatch to another town's mayor; the letter
+goes in your journal.
+
+Furniture, barrels and other props are never placed where they'd block a
+doorway, and whoever you're talking to (or trading with) stops to listen.
+
 When you're far away, a settlement isn't stepped frame by frame: its books are
 caught up hour by hour (the same rules, fast) the next time it matters, and
 merchants and visitors arrive as events.
@@ -175,6 +210,14 @@ tried the tavern's food?"), and your answer pleases or annoys them depending on
 who they are. Then there are gifts, trading, favours, and job-specific topics
 (citizenship and professions with the mayor, work with a shopkeeper, hiring or
 surrendering to a guard, a blessing from the priest).
+
+Killing a beast that was after someone earns their gratitude, and their
+family's, and anyone who saw it thinks better of you too. Such deeds (and
+favours, dispatches carried, bounties, a good word for newcomers) add up to
+**renown** with a town: enough and you're its *Friend*, more and its *Hero*.
+People greet you by your title, think better of you from the start, and the
+mayor offers you the good-worker price; your best title shows in the journal
+and on your profile.
 
 **Favours.** Ask "Need a hand with anything?" and people may want something:
 a cook needs meat, a blacksmith ore, a hungry neighbour a meal, a child some
@@ -219,7 +262,11 @@ taken in by a family with a spare bed while the town's builders put up a
 cottage for you on an empty lot over the next day or two (you can watch it go
 up, block by block). Citizens pay a little tax each day, get better prices and
 warmer greetings, and your profile reads "Citizen of ..." instead of
-"Adventurer". Every building has a hanging sign with its trade (or the
+"Adventurer". Ask the mayor (or a builder) to enlarge your house, from a
+cottage to a proper house to a family home with six beds: builders put it up
+around the old one, keeping your door. The mayor takes a quarter off for
+citizens who've done good work for the town; a builder charges full price and
+pockets the fee. Every building has a hanging sign with its trade (or the
 family's name) that you can read.
 
 **Work.** The mayor licenses official professions. Citizens with a clean record
@@ -281,8 +328,11 @@ src/
                        merchants, abstract catch-up), justice (crimes,
                        suspicion, arrests, hearings, jail repairs), careers
                        (professions, shop work, customers, escorts,
-                       companions), favours, civic upkeep (guards, deserted
-                       towns), and the Sim hub (reputation, graves, mourning,
+                       companions), favours, civic upkeep (guards, supply
+                       chains, housing, births, deserted towns), works
+                       (repairs, new buildings, house expansions),
+                       diplomacy (letters, roads, warnings), nomads, and the
+                       Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)
 tests/                 node:test suites (run headlessly with stubs)

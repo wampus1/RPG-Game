@@ -97,7 +97,7 @@ export class Diplomacy {
       if (rich.length) letter = this.write(s, pick(rich), 'aid', { amount: Math.max(60, pop * 8), for: e.wants || null });
     } else if (guards < Math.max(1, Math.round(pop / 14))) {
       letter = this.write(s, pick(near), 'guards');
-    } else if (pop < 10) {
+    } else if (pop < 10 || e.hands) {
       letter = this.write(s, pick(near), 'settlers');
     } else if (e.treasury > pop * 40) {
       const cold = near.filter((o) => this.rel(L, o.id).trust < 30);

@@ -2,7 +2,8 @@
 // to take up the spear, and if nobody can, its people pack up and move to
 // another settlement (their own civilization's if possible).
 import { alive, ledger, setOverride, DAY } from './econ.js';
-import { retrain, availOf, makeSchedules } from '../entities/npcgen.js';
+import { retrain, availOf, makeSchedules, makeChild } from '../entities/npcgen.js';
+import { initRec } from './econ.js';
 import { RNG, hash4 } from '../util/rng.js';
 
 export function deserted(s) {
@@ -207,6 +208,18 @@ export function checkSupply(sim, L, day) {
   const people = residents(L);
   const has = (j) => people.some((r) => r.job === j);
   const can = (j) => L.hasWorkplaceFor(j);
+  // A building standing empty for want of hands comes first.
+  if (e.hands) {
+    if (has(e.hands) || !L.buildings.some((b) => WORKERS[b.type] === e.hands && !b.underConstruction)) e.hands = null;
+    else {
+      const r = hireInto(sim, L, e.hands, day, 'at last someone could be spared');
+      if (r) {
+        const job = e.hands;
+        e.hands = null;
+        return { hired: r, job };
+      }
+    }
+  }
   // Missing links in the chain: hire one person per check.
   for (const link of LINKS) {
     if (!link.who.some(has) || link.needs.some(has)) continue;
@@ -239,10 +252,106 @@ export function checkSupply(sim, L, day) {
   return null;
 }
 
-// A finished work building gets someone to work in it.
+// A finished work building gets someone to work in it; a new house takes
+// in a family short of room.
 export function staffBuilding(sim, L, b, day) {
+  if (b.residential) return rehouse(sim, L, b, day);
   const job = WORKERS[b.type];
   if (!job) return null;
   if (L.npcs.some((r) => alive(r) && r.job === job && r.work && r.work.building === b.id)) return null;
-  return hireInto(sim, L, job, day, `the new ${b.name.replace(/^The /, '').toLowerCase()} needed staff`);
+  const r = hireInto(sim, L, job, day, `the new ${b.name.replace(/^The /, '').toLowerCase()} needed staff`);
+  if (!r) {
+    // Nobody to spare: the town looks for newcomers to take it on.
+    L.econ.hands = job;
+    ledger(L, day, `The new ${b.name.replace(/^The /, '').toLowerCase()} stands empty: nobody can be spared to work as a ${job}.`);
+  }
+  return r;
+}
+
+// Families without a home, or packed in with too few beds.
+function crowding(L) {
+  const people = residents(L).filter((r) => !r.away);
+  const homeless = people.filter((r) => r.home === null || r.home === undefined || !L.buildings[r.home]);
+  const packed = L.buildings.filter((h) => h.residential && !h.playerHome).map((h) => ({ h, n: people.filter((r) => r.home === h.id).length })).filter((q) => q.n > q.h.beds.length + 1);
+  return { homeless, packed };
+}
+
+function rehouse(sim, L, b, day) {
+  // A house built for a waiting band of nomads is theirs.
+  if (sim.nomads.bands.some((n) => !n.done && n.houseBid === b.id && n.sid === L.settlement.id)) return null;
+  const { homeless, packed } = crowding(L);
+  let movers = [];
+  if (homeless.length) {
+    const hh = homeless[0].household;
+    movers = homeless.filter((r) => r.household === hh).slice(0, b.beds.length + 2);
+  } else if (packed.length) {
+    packed.sort((a, c) => c.n - a.n);
+    const from = packed[0].h;
+    const inside = L.npcs.filter((r) => r.home === from.id && alive(r) && !r.migrated);
+    // A grown couple (or a single adult) moves out; the old folks stay put.
+    const adult = inside.find((r) => r.age === 'adult' && r.partner !== null && r.partner !== undefined && !inside.some((q) => r.parents.includes(q.idx) && q.age === 'adult'))
+      || inside.find((r) => r.age === 'adult');
+    if (adult) {
+      movers = [adult];
+      const partner = L.npcs[adult.partner];
+      if (partner && partner.home === from.id) movers.push(partner);
+      for (const c of inside) if (c.age === 'child' && movers.some((m) => c.parents.includes(m.idx))) movers.push(c);
+    }
+  }
+  if (!movers.length) return null;
+  movers.forEach((r, i) => {
+    r.home = b.id;
+    r.bed = i % Math.max(1, b.beds.length);
+    r.household = `h${b.id}`;
+  });
+  sim.works.nameHouse(L, b, movers[0].name.last, movers.map((r) => ({ age: r.age })));
+  ledger(L, day, `The ${b.family} family moved into the new house.`);
+  return movers;
+}
+
+// When people run short of room, the town builds another house.
+export function checkHousing(sim, L, day) {
+  const s = L.settlement;
+  if (deserted(s) || !L.econ) return null;
+  const { homeless, packed } = crowding(L);
+  if (homeless.length < 2 && !packed.length) return null;
+  if (sim.works.projects.some((p) => !p.done && p.sid === s.id && p.kind === 'build')) return null;
+  if (L.econ.treasury < 200 || !sim.works.freePlot(L)) return null;
+  const p = sim.works.startBuilding(L, 'house_m', ', as families are short of room');
+  if (p) L.econ.treasury -= 140;
+  return p;
+}
+
+// Couples with room to spare have children now and then.
+export function births(sim, L, day, rng) {
+  const s = L.settlement;
+  if (deserted(s)) return [];
+  const born = [];
+  for (const a of L.npcs) {
+    if (!alive(a) || a.away || a.migrated || a.age !== 'adult' || a.partner === null || a.partner === undefined) continue;
+    const b = L.npcs[a.partner];
+    if (!b || !alive(b) || b.away || b.age !== 'adult' || a.idx > b.idx || a.home !== b.home || a.home === null) continue;
+    const house = L.buildings[a.home];
+    if (!house) continue;
+    const kids = a.children.filter((i) => L.npcs[i] && alive(L.npcs[i])).length;
+    if (kids >= 3) continue;
+    const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
+    if (!rng.chance(living < house.beds.length ? 0.02 : 0.004)) continue;
+    const r = makeChild(L, a, b, new RNG(hash4(a.idx, b.idx, day, 0xba8e)));
+    r.idx = L.npcs.length;
+    r.id = `${s.id}:${r.idx}`;
+    r.sid = s.id;
+    r.bed = living % Math.max(1, house.beds.length);
+    r.born = day;
+    L.npcs.push(r);
+    initRec(r, new RNG(hash4(r.idx, day, 0xb0)));
+    a.children.push(r.idx);
+    b.children.push(r.idx);
+    a.mood = Math.min(1, (a.mood ?? 0.5) + 0.2);
+    b.mood = Math.min(1, (b.mood ?? 0.5) + 0.2);
+    ledger(L, day, `A baby, ${r.name.first}, was born to ${a.name.first} and ${b.name.first} ${a.name.last}.`);
+    sim.game.spawnBorn?.(L, r, [a, b]);
+    born.push(r);
+  }
+  return born;
 }

@@ -100,8 +100,20 @@ export class Works {
   }
 
   // A new work building on an empty lot, paid from the treasury.
+  // An empty lot, or a new one marked out when every lot is taken.
+  freePlot(L) {
+    const free = L.plots.find((q) => q && !q.taken);
+    if (free || !L.openPlot) return free || null;
+    const plot = L.openPlot();
+    if (!plot) return null;
+    const { id, type, x0, z0, x1, z1, door, outside, fringe } = plot;
+    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe });
+    ledger(L, this.game.day, 'The council marked out a new building lot.');
+    return plot;
+  }
+
   startBuilding(L, type, reason = '') {
-    const plot = L.plots.find((q) => !q.taken);
+    const plot = this.freePlot(L);
     if (!plot) return null;
     plot.taken = true;
     const bid = L.buildings.length;
@@ -231,7 +243,7 @@ export class Works {
     } else {
       const from = { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, type: b.type };
       // Old seats and spots of the smaller house go; the new ones come in.
-      L.spots = L.spots.filter((s) => !(s.building === b.id || (s.x >= b.x0 && s.x <= b.x1 && s.z >= b.z0 && s.z <= b.z1)));
+      L.spots = L.spots.filter((s) => !(s.building === b.id || (s.x >= nb.x0 && s.x <= nb.x1 && s.z >= nb.z0 && s.z <= nb.z1)));
       Object.assign(b, {
         type: nb.type, x0: nb.x0, z0: nb.z0, x1: nb.x1, z1: nb.z1, beds: nb.beds, seats: nb.seats, work: nb.work, free: nb.free,
         homeSpots: nb.homeSpots, roofTop: nb.roofTop, roofBase: nb.roofBase, chestPos: nb.chestPos, name: nb.name,
@@ -262,6 +274,16 @@ export class Works {
     this.game.refreshSigns?.();
   }
 
+  // A family moved into a newly built house: the house takes their name,
+  // remembered for when the town is laid out again.
+  nameHouse(L, b, family, members) {
+    b.family = family;
+    b.homeName = `The ${family} House`;
+    b.household = { members };
+    const q = this.built.find((w) => w.sid === L.settlement.id && w.bid === b.id);
+    if (q) q.family = { name: family, members };
+  }
+
   // Re-create finished and unfinished buildings when a town is laid out
   // again after loading (in the order they were first built).
   restore(L) {
@@ -289,6 +311,11 @@ export class Works {
         for (const sp of plan.spots) L.spots.push(sp);
         for (const ch of plan.chimneys) L.chimneys.push(ch);
         for (const sg of plan.signs) L.signs.push(sg);
+        if (q.family) {
+          b.family = q.family.name;
+          b.homeName = `The ${b.family} House`;
+          b.household = { members: q.family.members };
+        }
       } else plan.bld.underConstruction = true;
     } else if (q.kind === 'expand' && step.done) {
       const b = L.buildings[q.bid];
