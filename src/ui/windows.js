@@ -8,7 +8,9 @@ import { addItem, removeItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
-import { STOCK, WANTS, st, mayorOf, alive } from '../sim/econ.js';
+import { STOCK, WANTS, st, mayorOf, alive, stockOf } from '../sim/econ.js';
+import { TIERS } from '../sim/growth.js';
+import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 
@@ -115,6 +117,7 @@ export class InventoryWindow extends Window {
     g.text(x + 1, 8, `Coins  ¤${countItem(p.inv, 'coin')}`, C.hi);
     g.text(x + 1, 9, `Day    ${game.day}`, C.fg);
     g.text(x + 1, 10, `Mined ${game.stats.mined} · Kills ${game.stats.kills}`.slice(0, 20), C.dim);
+    g.text(x + 1, 11, `Fish ${game.stats.fish || 0} · Saved ${game.stats.rescues || 0}`.slice(0, 20), C.dim);
     const held = p.heldDef();
     g.text(x + 1, 12, 'Holding:', C.dim);
     g.text(x + 1, 13, held ? held.name.slice(0, 20) : '(empty hand)', C.fg);
@@ -860,6 +863,10 @@ export class LedgerWindow extends Window {
     row('Food', hungry ? `${hungry} going hungry` : 'Everyone is fed', hungry ? C.orange : C.green);
     const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
     if (visits.length) row('Visitors', `Merchant from ${visits[0].fromName}`);
+    const k = stockOf(L);
+    row('Stores', `${k.wood} timber, ${k.stone} stone${e.short ? ` (short for a ${BUILDING_NAMES[e.short]?.toLowerCase() || e.short})` : ''}`, e.short ? C.orange : '#f0e0c0');
+    const t = TIERS[s.type];
+    if (t) row('Growth', `${pop}/${t.pop} people to become a ${t.next}`);
     y++;
     g.text(3, y++, 'RECENT NOTICES', C.hi);
     const far = (e.rumours || []).slice(-2).reverse();

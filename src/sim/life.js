@@ -90,7 +90,14 @@ export function comingOfAge(sim, L, day) {
     if (day < due) continue;
     const has = (j) => people.some((q) => q.job === j);
     const trades = ['farmer', 'builder', 'fisher', 'trapper', 'lumberjack', 'miner', 'laborer'].filter((j) => L.hasWorkplaceFor(j));
-    const job = trades.find((j) => !has(j)) || (L.econ.hands && L.hasWorkplaceFor(L.econ.hands) ? L.econ.hands : null) || trades.find((j) => j === 'farmer' || j === 'laborer') || 'laborer';
+    // A trade the town lacks, or the family trade (as an apprentice), or
+    // whatever work there is in the fields.
+    const family = r.parents.map((i) => L.npcs[i]).filter((p) => p && alive(p)).map((p) => p.job)
+      .filter((j) => !['mayor', 'guard', 'noble', 'retired', 'merchant', 'child', 'beggar', 'priest'].includes(j) && L.hasWorkplaceFor(j));
+    const pickHash = hash4(s.seed, r.idx, 0x7ade) % 10;
+    const job = trades.find((j) => !has(j)) || (L.econ.hands && L.hasWorkplaceFor(L.econ.hands) ? L.econ.hands : null)
+      || (family.length && pickHash < 7 ? family[pickHash % family.length] : null)
+      || (['farmer', 'lumberjack', 'fisher', 'laborer'].filter((j) => L.hasWorkplaceFor(j))[pickHash % 4] ?? null) || 'laborer';
     growUp(L, r, job, new RNG(hash4(r.idx, day, 0x9a0)));
     syncEnt(r);
     ledger(L, day, `${r.name.first} ${r.name.last} has come of age and started work as a ${job}.`);

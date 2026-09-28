@@ -189,6 +189,44 @@ export function initRec(rec, rng) {
   rec.doneKeys = [];
 }
 
+// Timber and stone for building, cut and quarried by the town's own
+// lumberjacks, miners and labourers (or bought in when the council can
+// afford it). Each new building needs its share.
+export const MATERIALS = {
+  house_s: [12, 6], house_m: [20, 10], house_l: [30, 16], tavern: [30, 20], smithy: [20, 30], bakery: [18, 16], workshop: [26, 8],
+  shop: [20, 14], library: [26, 22], tailor: [18, 10], guardhouse: [14, 30], temple: [20, 40], herbalist: [16, 8], warehouse: [24, 12],
+};
+const STOCK_CAP = 300;
+
+export function stockOf(L) {
+  const e = L.econ;
+  if (!e.stock) {
+    const s = L.settlement;
+    const [w, st0] = { village: [40, 24], town: [80, 60], city: [150, 120] }[s.baseType || s.type] || [40, 24];
+    const k = { prosperous: 1.4, poor: 0.6 }[s.condition] || 1;
+    e.stock = { wood: Math.round(w * k), stone: Math.round(st0 * k) };
+  }
+  return e.stock;
+}
+
+export function hasMaterials(L, type) {
+  const [w, s] = MATERIALS[type] || [15, 10];
+  const k = stockOf(L);
+  return k.wood >= w && k.stone >= s;
+}
+
+export function useMaterials(L, type) {
+  const [w, s] = MATERIALS[type] || [15, 10];
+  const k = stockOf(L);
+  k.wood = Math.max(0, k.wood - w);
+  k.stone = Math.max(0, k.stone - s);
+}
+
+function gather(L, kind, n) {
+  const k = stockOf(L);
+  k[kind] = Math.min(STOCK_CAP, k[kind] + n);
+}
+
 export function initEcon(L) {
   if (L.econ) return L.econ;
   const s = L.settlement;
@@ -196,7 +234,7 @@ export function initEcon(L) {
   const pop = L.npcs.length;
   const vals = s.civ ? s.civ.values : [];
   const wealth = { prosperous: rng.float(1.4, 2.2), normal: rng.float(0.7, 1.3), poor: rng.float(0.15, 0.5) }[s.condition] ?? 0;
-  const typeF = { city: 1.5, town: 1.2, village: 1 }[s.type] || 1;
+  const typeF = { city: 1.5, town: 1.2, village: 1 }[s.baseType || s.type] || 1;
   const e = (L.econ = {
     wealth,
     treasury: Math.round(pop * 14 * wealth * typeF),
@@ -511,6 +549,9 @@ function produce(L, rec, rng) {
   const s = L.settlement;
   const bizId = rec.work && rec.work.building != null ? rec.work.building : null;
   const biz = bizId != null ? e.biz[bizId] : null;
+  // Felled timber and hauled stone go to the town's building stores.
+  if (rec.job === 'lumberjack' && rng.chance(0.6)) gather(L, 'wood', rng.int(1, 2));
+  else if (rec.job === 'laborer' && rng.chance(0.25)) gather(L, rng.chance(0.5) ? 'wood' : 'stone', 1);
   switch (rec.job) {
     case 'trapper': {
       const game = s.biome === 'desert' ? 0.5 : s.biome === 'tundra' ? 0.7 : 1;
@@ -557,7 +598,9 @@ function produce(L, rec, rng) {
       return;
     }
     case 'miner': {
-      // Out at the rock face: stone, coal and ore (a little gold if lucky).
+      // Out at the rock face: stone, coal and ore (a little gold if lucky),
+      // and blocks of stone for the town's builders.
+      if (rng.chance(0.5)) gather(L, 'stone', 1);
       if (rng.chance(0.55 * (0.6 + (sk.building || 0.3)))) {
         const ore = rng.weighted([['cobblestone', 3], ['coal', 3], ['iron_ore', 2.5], ['gold_ore', 0.3]]);
         invAdd(rec.inv, ore, rng.int(1, 2));

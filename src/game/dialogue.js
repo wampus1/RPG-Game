@@ -7,7 +7,8 @@ import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
 import { MAP_W } from '../config.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { ITEMS } from '../world/items.js';
-import { alive, kitchenOf, mayorOf, st, activityFor, DAY } from '../sim/econ.js';
+import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger } from '../sim/econ.js';
+import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare } from '../sim/careers.js';
 import { plural, relationTo } from '../sim/favors.js';
@@ -201,6 +202,7 @@ export function topicsFor(npc, game) {
     if (mine.length && countItem(game.player.inv, 'dispatch')) add('dispatch', `I bring a letter from ${dip.town(mine[0].from).name}.`);
     if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
     add('towns', 'Tell me about the neighbouring towns.');
+    add('donate', `I'd like to help ${s.name} grow.`);
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
     if (sim.isCitizen(s.id)) add('renounce', 'I renounce my citizenship.');
     else add('citizen', inHall ? `Make me a citizen of ${s.name}.` : 'How do I become a citizen?');
@@ -522,6 +524,69 @@ function expandTalk(npc, game, arg) {
   game.ui.msg(`The builders will enlarge your house in ${s.name}.`, '#ffe070');
   game.audio?.play('coin');
   return { lines: [mayor ? 'Wonderful. I\'ll send the builders round in the morning.' : 'Right! I\'ll get the lads on it first thing.'] };
+}
+
+// Timber and stone the player can give the council's building stores.
+const WOOD_GIFTS = ['planks', 'planks_birch', 'planks_dark', 'log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow'];
+const STONE_GIFTS = ['cobblestone', 'stone', 'stone_bricks', 'bricks'];
+
+// Helping a town grow: timber, stone or coin for the council.
+function donateTalk(npc, game, arg) {
+  const sim = game.sim;
+  const L = npc.layout;
+  const s = npc.settlement;
+  const e = L.econ;
+  const k = stockOf(L);
+  const inv = game.player.inv;
+  const count = (list) => list.reduce((n, it) => n + countItem(inv, it), 0);
+  const take = (list) => {
+    let n = 0;
+    for (const it of list) {
+      const c = countItem(inv, it);
+      if (c) removeItem(inv, it, c);
+      n += c;
+    }
+    return n;
+  };
+  const thanks = (n, what) => {
+    sim.changeRep(npc, Math.min(10, 2 + Math.floor(n / 10)));
+    sim.addRenown(s.id, Math.max(1, Math.floor(n / 16)), 'your gifts to the town');
+    ledger(L, game.day, `${game.playerName} gave the council ${what}.`);
+    game.audio?.play('coin');
+  };
+  if (arg === 'wood') {
+    const n = take(WOOD_GIFTS);
+    if (!n) return { lines: ['You don\'t seem to have any timber on you.'] };
+    k.wood += n * 2;
+    thanks(n, `${n} lengths of timber`);
+    return { lines: [`${n} lengths of good timber! The builders will be glad of it. Thank you, ${game.playerName}.`] };
+  }
+  if (arg === 'stone') {
+    const n = take(STONE_GIFTS);
+    if (!n) return { lines: ['You don\'t seem to have any stone on you.'] };
+    k.stone += n * 2;
+    thanks(n, `${n} blocks of stone`);
+    return { lines: [`${n} blocks of stone. That's a wall's worth, nearly. Thank you!`] };
+  }
+  if (arg === 'coin') {
+    if (countItem(inv, 'coin') < 50) return { lines: ['That\'s kind, but you\'re a little short yourself.'] };
+    removeItem(inv, 'coin', 50);
+    e.treasury += 50;
+    thanks(50, '¤50 for the building fund');
+    return { lines: ['Fifty for the building fund! You\'re a friend to this town.'] };
+  }
+  const t = TIERS[s.type];
+  const people = L.npcs.filter((r) => alive(r) && !r.migrated && !r.away).length;
+  const lines = [`Our stores hold ${k.wood} timber and ${k.stone} stone.${e.short ? ` We're short for the ${(BUILDING_NAMES[e.short] || e.short).toLowerCase()} we want to build.` : ''}`];
+  lines.push(t ? `With ${t.pop} folk and a healthy purse, ${s.name} could become a ${t.next}. We're ${people} now.` : `${s.name} is as grand as towns get. Now we keep it that way.`);
+  const choices = [];
+  const w = count(WOOD_GIFTS);
+  const st0 = count(STONE_GIFTS);
+  if (w) choices.push({ id: 'donate', arg: 'wood', label: `Give all my timber (${w}).` });
+  if (st0) choices.push({ id: 'donate', arg: 'stone', label: `Give all my stone (${st0}).` });
+  if (countItem(inv, 'coin') >= 50) choices.push({ id: 'donate', arg: 'coin', label: 'Give ¤50 to the building fund.' });
+  if (!choices.length) lines.push('Timber, stone or coin would all help, if you come by any.');
+  return { lines, choices: choices.length ? choices : null, back: 'Maybe another time.' };
 }
 
 const KIND_TALK = {
@@ -993,6 +1058,7 @@ export function respond(npc, game, id, arg) {
         back: 'Good luck, whatever you choose.',
       };
     }
+    case 'donate': return donateTalk(npc, game, arg);
     case 'towns': {
       const near = sim.diplomacy.neighbours(s, 18).slice(0, 4);
       if (!near.length) return { lines: ['We\'re out here on our own. Nobody lives within a week\'s walk.'] };

@@ -564,10 +564,10 @@ class Layout {
   }
 
   // Reserve a small lot beside a road; nothing is built there yet.
-  placePlot(rng, sign = true) {
+  placePlot(rng, sign = true, type = 'house_s') {
     const cands = rng.shuffle(this.frontage());
     for (const c of cands.slice(0, 400)) {
-      for (const [w, d] of SPECS.house_s.size) {
+      for (const [w, d] of (SPECS[type] || SPECS.house_s).size) {
         const r = this.rectFor(c, w, d, 1 + (hash4(c.x, c.z, 3) % Math.max(1, w - 2)));
         if (!this.rectOk(r, false)) continue;
         const front = { x: c.x + c.dx, z: c.z + c.dz };
@@ -608,6 +608,14 @@ class Layout {
         const m = this.maskAt(x, z);
         return m === M.FREE || m === M.YARD;
       }
+      // Later lots beyond the town's edge: never onto (or too far towards)
+      // another town, or on top of what's been built out there already.
+      if (!sign) {
+        if (Math.max(b.x0 - x, x - b.x1, b.z0 - z, z - b.z1) > 12) return false;
+        const other = this.world.ow.settlementAt(x, z);
+        if (other && other !== this.settlement) return false;
+        if (this.builtNear(x, z, null)) return false;
+      }
       const c = terrain.column(x, z, this.ctx, {});
       return c.h === SURFACE && c.water < 0 && c.flat >= flat;
     };
@@ -635,6 +643,7 @@ class Layout {
       for (let qz = z; qz <= z + 4; qz++) for (let qx = x; qx <= x + 4; qx++) this.setMask(qx, qz, M.BUILD);
       const plot = { id: this.plots.length, type: 'house_s', x0: x, z0: z, x1: x + 4, z1: z + 4, door, outside, fringe: true };
       this.plots.push(plot);
+      this.addSuburb(plot);
       if (!sign) return plot;
       const inX = door.x - DX[door.rot];
       const inZ = door.z - DZ[door.rot];
@@ -795,9 +804,82 @@ class Layout {
 
   // Every lot taken: the town marks out a new one beside a road, else on
   // its edge (after founding, so no sign; the builders come straight away).
-  openPlot() {
+  openPlot(type = 'house_s', insideOnly = false) {
     const rng = new RNG(hash4(this.settlement.seed, 0x7a0e, this.plots.length));
-    return this.placePlot(rng, false) || this.fringePlot(false) || this.fringePlot(false, 16, 0);
+    const inner = (type !== 'house_s' && this.placePlot(rng, false, type)) || this.placePlot(rng, false);
+    return inner || (insideOnly ? null : this.fringePlot(false) || this.fringePlot(false, 12, 0));
+  }
+
+  // Is the town walled (from its founding as a city, or built since)?
+  get walled() {
+    return !!this.wallBlock || !!(this.econ && this.econ.walled);
+  }
+
+  // A wall for a town that has grown into a city: round its edge, three
+  // blocks high with a crenellated top, open where the roads run out, and
+  // never across a building, a field or water.
+  wallPlan() {
+    const b = this.bounds;
+    const list = [];
+    const tiles = [];
+    const gates = [];
+    const seen = new Set();
+    const ok = (x, z) => {
+      const m = this.maskAt(x, z);
+      return m === M.FREE || m === M.YARD || (m === M.DECOR && !this.onStreet(x, z));
+    };
+    const visit = (x, z) => {
+      const k = x * 65536 + z;
+      if (seen.has(k)) return;
+      seen.add(k);
+      const m = this.maskAt(x, z);
+      if (m === M.ROAD || m === M.BRIDGE || m === M.PLAZA) {
+        gates.push({ x, z });
+        return;
+      }
+      if (!ok(x, z)) return;
+      const c = this.col(x, z);
+      if (!c || c.water >= 0 || c.h !== SURFACE) return;
+      tiles.push([x, z]);
+      for (let y = Y0; y < Y0 + 3; y++) list.push([x, y, z, B.stone_bricks, 0]);
+      if ((x + z) % 2 === 0) list.push([x, Y0 + 3, z, B.stone_bricks, 0]);
+    };
+    for (let x = b.x0; x <= b.x1; x++) {
+      visit(x, b.z0);
+      visit(x, b.z1);
+    }
+    for (let z = b.z0; z <= b.z1; z++) {
+      visit(b.x0, z);
+      visit(b.x1, z);
+    }
+    // Course by course, so the wall rises evenly all round.
+    list.sort((a, c) => a[1] - c[1]);
+    return { list, tiles, gates };
+  }
+
+  // Pull down a stretch of wall (five tiles) around an edge tile: a new way
+  // out for a city that has run out of room inside.
+  breachPlan(at) {
+    const b = this.bounds;
+    const alongX = at.z === b.z0 || at.z === b.z1;
+    const list = [];
+    const tiles = [];
+    for (let k = -2; k <= 2; k++) {
+      const x = alongX ? at.x + k : at.x;
+      const z = alongX ? at.z : at.z + k;
+      if (this.maskAt(x, z) !== M.WALL) continue;
+      tiles.push([x, z]);
+      for (let y = Y0 + 4; y >= Y0; y--) list.push([x, y, z, B.air, 0]);
+    }
+    return { list, tiles };
+  }
+
+  // Wall or breach finished (or restored): the layout mask follows.
+  applyWall(tiles, open) {
+    for (const [x, z] of tiles) {
+      this.setMask(x, z, open ? M.ROAD : M.WALL);
+      if (open) this.gates.push({ x, z });
+    }
   }
 
   // A lot opened after founding, marked out again after a reload.
@@ -812,6 +894,19 @@ class Layout {
   // Mark a grown or new building's footprint on the layout mask.
   claimFootprint(r) {
     for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) this.setMask(x, z, M.BUILD);
+    this.addSuburb(r);
+  }
+
+  // A lot or building beyond the town's first bounds still belongs to the
+  // town (its chests, its beds, its law).
+  addSuburb(r) {
+    const b = this.bounds;
+    if (r.x0 >= b.x0 && r.x1 <= b.x1 && r.z0 >= b.z0 && r.z1 <= b.z1) return;
+    const s = this.settlement;
+    const q = { x0: r.x0 - 1, z0: r.z0 - 1, x1: r.x1 + 1, z1: r.z1 + 1 };
+    s.suburbs = s.suburbs || [];
+    const has = s.suburbs.find((o) => o.x0 <= q.x0 && o.z0 <= q.z0 && o.x1 >= q.x1 && o.z1 >= q.z1);
+    if (!has) s.suburbs.push(q);
   }
 
   // Extend a side lane off an existing road into open ground.

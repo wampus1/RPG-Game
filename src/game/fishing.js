@@ -4,7 +4,7 @@
 // until the line is in; let the fish run too long and it slips the hook.
 import { ITEMS } from '../world/items.js';
 
-const BITE_WINDOW = 1.1; // seconds to strike once the bobber dips
+const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
 export const ZONE = 0.3; // width of the catch zone on the bar
 
 // What's on the end of the line, and how hard it fights.

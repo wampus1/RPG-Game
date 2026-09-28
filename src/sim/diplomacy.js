@@ -66,10 +66,10 @@ export class Diplomacy {
   // ------------------------------------------------------------ writing
   write(from, to, kind, payload = {}) {
     const L = this.sim.layoutOf(from.id);
-    const letter = { id: this.next++, from: from.id, to: to.id, kind, payload, day: this.game.day, status: 'waiting', written: this.sim.abs };
+    const letter = { id: this.next++, from: from.id, to: to.id, kind, payload, day: this.sim.today(), status: 'waiting', written: this.sim.now() };
     this.letters.push(letter);
     const m = L.npcs.find((r) => r.job === 'mayor' && alive(r));
-    ledger(L, this.game.day, `${m ? `${m.name.first} ${m.name.last}` : 'The council'} wrote to ${to.name}, ${KINDS[kind] || 'on town business'}.`);
+    ledger(L, this.sim.today(), `${m ? `${m.name.first} ${m.name.last}` : 'The council'} wrote to ${to.name}, ${KINDS[kind] || 'on town business'}.`);
     return letter;
   }
 

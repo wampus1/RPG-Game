@@ -572,6 +572,8 @@ export class Overworld {
     for (const s of this.settlementsNear(x, z)) {
       const b = s.bounds;
       if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return s;
+      // Lots and houses the town has spread onto beyond its first bounds.
+      if (s.suburbs) for (const r of s.suburbs) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return s;
     }
     return null;
   }

@@ -35,7 +35,15 @@ export class World {
   getLayout(s) {
     let L = this.layouts.get(s.id);
     if (!L) {
-      L = buildLayout(this, s);
+      // A town is always laid out as it was founded; how it has grown since
+      // is put back on top.
+      const now = s.type;
+      if (s.baseType) s.type = s.baseType;
+      try {
+        L = buildLayout(this, s);
+      } finally {
+        s.type = now;
+      }
       this.layouts.set(s.id, L);
       if (this.onLayout) this.onLayout(L);
     }

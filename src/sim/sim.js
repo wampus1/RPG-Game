@@ -19,6 +19,7 @@ import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
 import { electMayor, weddings, comingOfAge, raids } from './life.js';
+import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
@@ -68,6 +69,16 @@ export class Sim {
     return this.game.day * DAY + this.game.minute;
   }
 
+  // The day (and moment) being lived: the real one, or the one a town's
+  // catch-up has reached while you were away.
+  today() {
+    return this.simDay ?? this.game.day;
+  }
+
+  now() {
+    return this.simNow ?? this.abs;
+  }
+
   // ------------------------------------------------------------ layouts
   attach(L) {
     initEcon(L);
@@ -78,6 +89,12 @@ export class Sim {
     const sv = this.saved && this.saved.get(sid);
     if (sv) this.applySettlement(L, sv);
     if (L.econ.deserted !== undefined) L.settlement.deserted = true;
+    // A village that has grown into a town (or a town into a city).
+    const s0 = L.settlement;
+    if (L.econ.tier && L.econ.tier !== s0.type) {
+      if (!s0.baseType) s0.baseType = s0.type;
+      s0.type = L.econ.tier;
+    }
     // Buildings added since the town was founded come back in the order
     // they went up (your cottage, new work buildings, enlarged houses).
     const c = this.construction;
@@ -604,6 +621,19 @@ export class Sim {
   }
 
   dailyCivic(L, day, rng) {
+    this.simDay = day;
+    this.simNow = Math.min(this.abs, day * DAY + 600);
+    try {
+      this.civicDay(L, day, rng);
+    } finally {
+      this.simDay = null;
+      this.simNow = null;
+    }
+    // Building work in a town caught up from afar moves on with its days.
+    this.works.catchUp(L, Math.min(this.abs, (day + 1) * DAY));
+  }
+
+  civicDay(L, day, rng) {
     checkWatch(this, L, day, rng);
     checkSupply(this, L, day);
     checkHousing(this, L, day);
@@ -615,6 +645,7 @@ export class Sim {
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
+    growth(this, L, day);
     this.works.daily(L, day);
     this.checkConduct(L, day);
     const c = this.construction;
@@ -1327,6 +1358,8 @@ export class Sim {
       nomads: this.nomads.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
+      // How towns have grown: their size now, and ground they've spread onto.
+      grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null]),
       favors: this.favors.serialize(),
     };
   }
@@ -1385,6 +1418,15 @@ export class Sim {
     this.nomads.load(data.nomads);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
+    for (const [id, type, base, suburbs] of data.grown || []) {
+      const s = this.game.world.ow.settlements[id];
+      if (!s) continue;
+      if (type !== base) {
+        s.baseType = base;
+        s.type = type;
+      }
+      if (suburbs) s.suburbs = suburbs;
+    }
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
   }

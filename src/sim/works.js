@@ -2,10 +2,10 @@
 // town lacks, and growing houses for families (and the player) who pay for
 // it. Each project is a list of blocks placed in order as the builders put
 // in hours on site (visibly when the town is near, in bulk when it isn't).
-import { alive, ledger, setOverride, DAY } from './econ.js';
+import { alive, ledger, setOverride, DAY, hasMaterials, useMaterials } from './econ.js';
 import { B, BLOCKS } from '../world/blocks.js';
 
-const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5 };
+const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1 };
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
 const STRUCTURAL = (id) => {
   const b = BLOCKS[id];
@@ -83,6 +83,8 @@ export class Works {
     if (p.kind === 'build') plan = L.typedBlueprint(L.plots[p.plot], p.type, p.bid);
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
     else if (p.kind === 'repair') plan = { list: p.blocks };
+    else if (p.kind === 'wall') plan = L.wallPlan();
+    else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
     return plan;
   }
@@ -129,14 +131,14 @@ export class Works {
     p.id = this.next++;
     p.work = 0;
     p.placed = 0;
-    p.last = this.sim.abs;
-    p.start = this.sim.abs;
+    p.last = this.sim.now();
+    p.start = p.last;
     const plan = this.planOf(p);
     p.total = plan.list.length;
     p.need = Math.max(60, Math.round(p.total * MIN_PER_BLOCK[p.kind]));
     this.projects.push(p);
     const L = this.sim.layoutOf(p.sid);
-    ledger(L, this.game.day, `Builders started ${p.label}.`);
+    ledger(L, this.sim.today(), `Builders started ${p.label}.`);
     if (this.game.active.has(p.sid)) this.assignSite(L, p, this.game.day, this.sim.abs);
     return p;
   }
@@ -152,20 +154,33 @@ export class Works {
 
   // A new work building on an empty lot, paid from the treasury.
   // An empty lot, or a new one marked out when every lot is taken.
-  freePlot(L) {
+  freePlot(L, type = 'house_s', insideOnly = false) {
     const free = L.plots.find((q) => q && !q.taken);
     if (free || !L.openPlot) return free || null;
-    const plot = L.openPlot();
+    const plot = L.openPlot(type, insideOnly);
     if (!plot) return null;
-    const { id, type, x0, z0, x1, z1, door, outside, fringe } = plot;
-    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe });
-    ledger(L, this.game.day, 'The council marked out a new building lot.');
+    this.registerPlot(L, plot);
     return plot;
   }
 
+  // A lot marked out after founding: remembered so it's there after a reload.
+  registerPlot(L, plot) {
+    const { id, type, x0, z0, x1, z1, door, outside, fringe } = plot;
+    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe });
+    ledger(L, this.sim.today(), 'The council marked out a new building lot.');
+  }
+
+  // A new building, if the town has the timber and stone for it (coin is
+  // the caller's business).
   startBuilding(L, type, reason = '') {
-    const plot = this.freePlot(L);
+    if (!hasMaterials(L, type)) {
+      L.econ.short = type;
+      return null;
+    }
+    const plot = this.freePlot(L, type);
     if (!plot) return null;
+    useMaterials(L, type);
+    L.econ.short = null;
     plot.taken = true;
     const bid = L.buildings.length;
     const plan = L.typedBlueprint(plot, type, bid);
@@ -196,6 +211,14 @@ export class Works {
 
   // ------------------------------------------------------------ builders
   sites(p, L) {
+    if (p.kind === 'wall' || p.kind === 'breach') {
+      // Along the inside of the wall, a few paces apart.
+      const plan = this.planOf(p);
+      const b = L.bounds;
+      const inward = ([x, z]) => ({ x: x === b.x0 ? x + 1 : x === b.x1 ? x - 1 : x, z: z === b.z0 ? z + 1 : z === b.z1 ? z - 1 : z });
+      const out = (plan ? plan.tiles : []).filter((t, i) => p.kind === 'breach' || i % 7 === 0).map(inward);
+      return out.length ? out : [{ x: L.plaza.cx, z: L.plaza.cz }];
+    }
     const b = p.kind === 'build' ? L.plots[p.plot] : p.kind === 'expand' ? p.bounds : L.buildings[p.bid];
     const out = [];
     for (let z = b.z0 - 1; z <= b.z1 + 1; z++) {
@@ -245,11 +268,23 @@ export class Works {
 
   // ------------------------------------------------------------ time
   update() {
-    const now = this.sim.abs;
     for (const p of this.projects) {
       if (p.done) continue;
       const L = this.sim.layoutOf(p.sid);
       if (!L) continue;
+      this.advance(L, p, this.sim.abs);
+    }
+    if (this.projects.length > 40) this.projects = this.projects.filter((p) => !p.done);
+  }
+
+  // A town's projects moved on to a moment in its (caught-up) day, so a
+  // place you've been away from has really been building meanwhile.
+  catchUp(L, upTo) {
+    for (const p of this.projects) if (!p.done && p.sid === L.settlement.id && p.last < upTo) this.advance(L, p, upTo);
+  }
+
+  advance(L, p, now) {
+    {
       const rate = this.crewRate(L, (r) => r.override && r.override.project === p.id, 1.6);
       let t = p.last;
       let work = 0;
@@ -265,7 +300,7 @@ export class Works {
       const plan = this.planOf(p);
       if (!plan) {
         p.done = true;
-        continue;
+        return;
       }
       const batch = placeSome(this.game, plan.list, p, p.need / Math.max(1, plan.list.length), p.kind === 'repair');
       if (batch.length) {
@@ -279,15 +314,24 @@ export class Works {
       }
       if (p.placed >= plan.list.length && !p.wait.length) this.finish(L, p, plan);
     }
-    if (this.projects.length > 40) this.projects = this.projects.filter((p) => !p.done);
   }
 
   finish(L, p, plan, silent = false) {
     p.done = true;
     const sim = this.sim;
     for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
+    if (p.kind === 'wall' || p.kind === 'breach') {
+      L.applyWall(plan.tiles, p.kind === 'breach');
+      if (p.kind === 'wall') {
+        L.econ.walled = true;
+        for (const g of plan.gates) if (!L.gates.some((q) => q.x === g.x && q.z === g.z)) L.gates.push(g);
+      }
+      if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, tiles: plan.tiles });
+      if (!silent) ledger(L, this.sim.today(), p.kind === 'wall' ? `The builders finished the new city wall round ${L.settlement.name}.` : `A stretch of the city wall was pulled down so ${L.settlement.name} can grow beyond it.`);
+      return;
+    }
     if (p.kind === 'repair') {
-      if (!silent) ledger(L, this.game.day, `The builders finished ${p.label}.`);
+      if (!silent) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
       // More damage done in the meantime? Back to work.
       this.noteDamage(L, L.buildings[p.bid]);
       return;
@@ -322,7 +366,7 @@ export class Works {
     this.plans.delete(`${L.settlement.id}:${b.id}:${b.rev || 0}`);
     if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, plot: p.plot, type: p.type, bounds: p.bounds, rev: p.rev, from: b.planRef.from });
     if (!silent) {
-      ledger(L, this.game.day, `The builders finished ${p.label}.`);
+      ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
       if (p.owner === 'player') {
         this.game.ui.msg(`Your house in ${L.settlement.name} has been enlarged!`, '#ffe070');
         this.game.audio?.play('coin');
@@ -355,6 +399,11 @@ export class Works {
 
   applyRestore(L, step) {
     const q = step.q;
+    if ((q.kind === 'wall' || q.kind === 'breach') && step.done) {
+      L.applyWall(q.tiles || [], q.kind === 'breach');
+      if (q.kind === 'wall') L.econ.walled = true;
+      return;
+    }
     if (q.kind === 'build') {
       if (L.buildings[q.bid]) return;
       const plot = L.plots[q.plot];

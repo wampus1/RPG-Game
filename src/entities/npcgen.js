@@ -592,9 +592,9 @@ export function generateNPCs(layout, plan, seed) {
     if (adults.length === 2) adults[1].restDay = adults[0].restDay;
   }
   // The night watch: about a third of the guards (at least one wherever
-  // there are two or more) walk the streets after dark.
+  // there are three or more) walk the streets after dark.
   const guards = npcs.filter((n) => n.job === 'guard');
-  const nightN = guards.length >= 2 ? Math.max(1, Math.floor(guards.length / 3)) : 0;
+  const nightN = guards.length >= 3 ? Math.max(1, Math.floor(guards.length / 3)) : 0;
   guards.forEach((g, i) => {
     g.shift = i >= guards.length - nightN ? 'night' : 'day';
   });

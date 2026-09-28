@@ -428,7 +428,9 @@ export class UI {
     // you've left it behind (it comes back if you return).
     if (!this.wantedSeen) this.wantedSeen = new Map();
     for (const [sid, t] of game.wanted) {
-      const near = (game.currentSettlement && game.currentSettlement.id === sid) || game.active.has(sid);
+      const sb = game.world.ow.settlements[sid].bounds;
+      const pl = game.player;
+      const near = Math.max(sb.x0 - pl.x, pl.x - sb.x1, sb.z0 - pl.z, pl.z - sb.z1) <= 24;
       if (near || !this.wantedSeen.has(sid)) this.wantedSeen.set(sid, this.time);
       // (a few fixed steps: each text colour gets its own glyph atlas)
       const a = Math.ceil(Math.max(0, Math.min(1, 1 - (this.time - this.wantedSeen.get(sid) - 4) / 1.5)) * 4) / 4;

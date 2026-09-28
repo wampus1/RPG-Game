@@ -177,6 +177,28 @@ put in a good word (you can). They settle and take up the work the town lacks,
 or move on; if all that stops them is a roof, the council may build them one.
 A nomad family can even bring a deserted town back to life.
 
+Places grow. Building takes **timber and stone** as well as coin: lumberjacks,
+miners and labourers fill the council's stores, and when they run low the
+council buys some in from passing traders. As people arrive (babies, nomads,
+settlers) the council keeps a bed or two to spare by putting up houses, and
+adds the trades a bigger place should have. With enough people, buildings and
+money, a **village becomes a town** (a general store, a carpentry, a
+guardhouse) and a **town becomes a city** (a library, a tailor, a temple),
+with a feast on the square to celebrate. A new city **walls itself in**: its
+builders raise a crenellated stone wall round the old edge of town, leaving
+the roads open as gates. A walled city that has run out of room pulls down a
+stretch of its wall and builds beyond it, and houses and lots outside the old
+bounds still belong to the town. The notice board shows the town's stores and
+how close it is to growing; the mayor will gladly take timber, stone or coin
+from you for the building fund (and remember you for it).
+
+Life goes on: when a mayor dies the town chooses another after a couple of
+days, single folk from different families marry and set up home together,
+children come of age and take up the family trade (or what the town lacks),
+and in the night beasts come to the edge of town, driven off by the watch,
+or not, if there's no watch to speak of. People who've gone hungry two days
+running forage, bake their own wheat into bread, or are fed by the council.
+
 Mayors write to each other by the hands of traveling merchants (or a courier,
 or you, for a fee): asking for money when the treasury runs low, for guards or
 settlers, sending gifts to cool neighbours, proposing closer trade (more
@@ -184,15 +206,41 @@ merchants on the road), building a **road** between them (laid tile by tile over
 the days that follow, bridged with planks over water, drawn on the map as ═,
 and halving the journey), and warning the neighbours about criminals. A town
 that was warned about you greets you coolly and thinks less of you. The mayor
-may ask you to carry a sealed dispatch to another town's mayor; the letter
-goes in your journal.
+may ask you to carry a sealed dispatch to another town's mayor: they tell you
+which way it is and how many hours' walk, and mark it on your map (the letter
+goes in your journal). Ask a mayor about the neighbouring towns and they'll
+tell you where each one lies, who governs it and how the two towns get on.
+
+Traveling merchants carry the news both ways: what's happened in their home
+town goes with them, and they bring back word from where they've been. Ask
+around ("Any news?") or read it on the notice board under *News from afar*.
+Out in the country you may meet a merchant on the road between two towns
+(along the new road, if there is one), pack on their back, happy to trade
+from it before walking on.
 
 Furniture, barrels and other props are never placed where they'd block a
 doorway, and whoever you're talking to (or trading with) stops to listen.
+Voices inside a building stay inside: you only see what people say indoors
+when you're in there with them, or near an open door. About a third of the
+guards in a town of three or more keep the night watch. While you sleep and
+time races, everyone else keeps pace.
+
+**Weather** is the same for everyone: rain, snow and fog come and go over each
+part of the world in spells of a few hours, whether you're there or not.
+People talk about it (farmers are glad of the rain, children want to build
+snowmen), and in rain or snow the lazier and gloomier outdoor workers knock
+off early and go home, while the hardworking carry on. Rain soaks the fields
+(the soil darkens), and **moist farmland grows crops twice as fast**; it
+dries out a day after the rain stops. On dry days farmers fill a bucket at the
+well and water their rows, and so can you: craft a wooden bucket (or buy one),
+fill it at a well or open water, and pour it over a patch of farmland.
 
 When you're far away, a settlement isn't stepped frame by frame: its books are
-caught up hour by hour (the same rules, fast) the next time it matters, and
-merchants and visitors arrive as events.
+caught up hour by hour (the same rules, fast) the next time it matters (up to
+the last month and a half), towns you've been to keep ticking over in the
+background, building work carries on through those days, and merchants and
+visitors arrive as events. Leave a town for a few weeks and come back to find
+new faces, new houses and perhaps a different mayor.
 
 **Reputation.** Each villager you meet has an opinion of you, from *Hated* to
 *Trusted*. Gifts (especially food for the hungry or something for their hobby),
@@ -260,7 +308,8 @@ lost, and gather for a funeral the next afternoon with the priest.
 **Citizenship.** Ask the mayor in the town hall to become a citizen. You're
 taken in by a family with a spare bed while the town's builders put up a
 cottage for you on an empty lot over the next day or two (you can watch it go
-up, block by block). Citizens pay a little tax each day, get better prices and
+up, block by block, as soon as the builders are on site). While you stay with
+them, their home is yours: sleep in any free bed, use their chests. Citizens pay a little tax each day, get better prices and
 warmer greetings, and your profile reads "Citizen of ..." instead of
 "Adventurer". Ask the mayor (or a builder) to enlarge your house, from a
 cottage to a proper house to a family home with six beds: builders put it up
@@ -302,7 +351,14 @@ craft at a workbench, furnace or anvil, trade with shopkeepers (their stock and
 purse are real), eat, sit, sleep in beds to pass the night (the world dims and
 time races to dawn) and set your spawn point, push through leafy canopies,
 till farmland with a hoe and plant wheat seeds, carrots or cabbage seeds (a hoe
-also brings in a bigger harvest), and save your game (Esc → Save).
+also brings in a bigger harvest), and save your game (Esc → Save; the game
+also saves itself every morning at 7:00). **Fishing** takes patience: cast
+into water with a rod, watch the bobber (nibbles make it twitch), press SPACE
+when it goes under, then hold SPACE to keep the green catch zone over the fish
+until the line is in. Fishers in town have their lines in the water too. The
+first drink from each well you find, and the first night's sleep in each
+village, make you a little hardier (+1 max HP each, up to a limit). The
+Wanted banner fades once you're away from the town that wants you.
 
 ## Code layout
 
@@ -314,7 +370,8 @@ src/
   world/               blocks, items, recipes, biomes, names,
                        worldgen (world map), terrain (per-column sampling),
                        regiongen (tiles), trees, settlement (layouts,
-                       buildings, interiors), loot, region/world storage
+                       buildings, interiors, walls), weather, loot,
+                       region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), creature, item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
@@ -323,7 +380,8 @@ src/
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title)
   game/                game rules, input, dialogue, villager chatter, crop
-                       growth, audio (synthesized SFX)
+                       growth and soil moisture, fishing, audio (synthesized
+                       SFX)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
                        merchants, abstract catch-up), justice (crimes,
                        suspicion, arrests, hearings, jail repairs), careers
@@ -331,7 +389,9 @@ src/
                        companions), favours, civic upkeep (guards, supply
                        chains, housing, births, deserted towns), works
                        (repairs, new buildings, house expansions),
-                       diplomacy (letters, roads, warnings), nomads, and the
+                       diplomacy (letters, roads, warnings), nomads, town
+                       life (elections, weddings, coming of age, raids),
+                       growth (materials, town sizes, walls), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)
