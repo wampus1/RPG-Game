@@ -829,22 +829,33 @@ function dailyNeeds(sim, L, day, rng) {
   if (sim) sim.dailySocial(L, day, rng);
 }
 
+// Each morning the tax collector takes the town's share of yesterday's
+// earnings. Fractions of a coin carry over (so even small earners pay, and
+// a higher rate really does bring in more); what can't be paid is owed.
 function collectTaxes(L, day) {
   const e = L.econ;
   let total = 0;
+  const take = (o, earned, purse) => {
+    o.taxDue = Math.min(50, (o.taxDue || 0) + Math.max(0, earned) * e.tax);
+    const t = Math.min(purse, Math.floor(o.taxDue));
+    o.taxDue -= t;
+    return t;
+  };
   for (const rec of L.npcs) {
     if (!alive(rec) || rec.age === 'child' || rec.away) continue;
-    const t = Math.min(rec.coins, Math.round(rec.earnedY * e.tax));
+    const t = take(rec, rec.earnedY, rec.coins);
     rec.coins -= t;
+    rec.taxPaid = t;
     total += t;
   }
   for (const b of Object.values(e.biz)) {
-    const t = Math.min(b.till, Math.round(b.earnedY * e.tax));
+    const t = take(b, b.earnedY, b.till);
     b.till -= t;
     total += t;
   }
   e.treasury += total;
   e.taxY = total;
+  e.taxDay = day;
 }
 
 // Evening: businesses share profits with their workers and the treasury
@@ -871,7 +882,11 @@ function payWages(L, day) {
   for (const r of staff) owed += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
   if (e.treasury >= owed) {
     e.treasury -= owed;
-    for (const r of staff) r.coins += r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
+    for (const r of staff) {
+      const wage = r.job === 'guard' ? 5 : r.job === 'mayor' ? 8 : r.job === 'builder' ? 4 : 3;
+      r.coins += wage;
+      r.earned += wage;
+    }
     e.unpaid = 0;
   } else {
     e.unpaid++;

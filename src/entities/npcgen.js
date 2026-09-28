@@ -358,15 +358,16 @@ function buildDay(npc, rng, avail, rest) {
   bed = Math.min(bed, 1435);
 
   if (nightGuard && !rest) {
-    // Sleep in the morning, patrol all night.
-    push(0, 360, 'work', 'work');
-    push(360, 420, 'eat', 'home');
-    push(420, 900, 'sleep', 'bed');
-    push(900, 960, 'eat', 'home');
+    // Sleep in the morning, patrol all night (not all changing over at once).
+    const k = rng.float(-25, 25);
+    push(0, 360 + k, 'work', 'work');
+    push(360 + k, 420 + k, 'eat', 'home');
+    push(420 + k, 900 + k, 'sleep', 'bed');
+    push(900 + k, 960 + k, 'eat', 'home');
     const h = hobbies[0];
-    push(960, 1080, 'hobby', 'hobby', h);
-    push(1080, 1130, 'social', 'social');
-    push(1130, 1440, 'work', 'work');
+    push(960 + k, 1080 + k, 'hobby', 'hobby', h);
+    push(1080 + k, 1130 + k, 'social', 'social');
+    push(1130 + k, 1440, 'work', 'work');
     return out;
   }
 
@@ -375,16 +376,17 @@ function buildDay(npc, rng, avail, rest) {
   const bfEnd = wake + rng.float(25, 45);
   push(wake, bfEnd, 'eat', 'home');
   let t = bfEnd;
-  const dinnerS = 1100 + rng.float(-30, 30);
+  // Meals are staggered: not everyone downs tools at the same moment.
+  const dinnerS = 1100 + rng.float(-60, 60);
   if (hasJob) {
-    const startW = Math.max(t + 10, J.start + rng.float(-20, 20) - (p.diligence - 0.5) * 30);
+    const startW = Math.max(t + 10, J.start + rng.float(-35, 35) - (p.diligence - 0.5) * 30);
     push(t, startW, 'home', 'home');
     let endW = J.end + rng.float(-25, 25) + (p.diligence - 0.5) * 50;
-    const lunch = 715 + rng.float(-30, 30);
+    const lunch = 715 + rng.float(-60, 60);
     if (J.end - J.start > 400 && lunch > startW + 60 && lunch + 50 < endW) {
       push(startW, lunch, 'work', 'work');
       const lunchPlace = avail.tavern && p.sociability > 0.55 ? 'tavern' : 'home';
-      push(lunch, lunch + rng.float(35, 55), 'eat', lunchPlace);
+      push(lunch, lunch + rng.float(30, 60), 'eat', lunchPlace);
       t = out[out.length - 1].e;
     } else t = startW;
     if (J.end >= 1200) {
@@ -409,19 +411,34 @@ function buildDay(npc, rng, avail, rest) {
     }
   } else {
     // Free day: children study/play, adults do hobbies, elders potter about.
+    // Lessons come in classes, morning or afternoon, so the children
+    // aren't all at their books (or all out playing) at once.
+    const lunchC = 705 + rng.float(-35, 35);
     if (age === 'child' && !rest && avail.study) {
-      push(t, 540, 'play', 'home');
-      push(540, 720, 'study', 'study');
-      push(720, 765, 'eat', 'home');
-      push(765, dinnerS, 'play', 'play');
+      const cls = rng.int(0, 2);
+      if (cls < 2) {
+        const s0 = 510 + cls * 45 + rng.float(-10, 10);
+        push(t, s0, 'play', 'home');
+        push(s0, Math.min(lunchC, s0 + 150), 'study', 'study');
+        push(Math.min(lunchC, s0 + 150), lunchC, 'play', 'play');
+        push(lunchC, lunchC + 45, 'eat', 'home');
+        push(lunchC + 45, dinnerS, 'play', 'play');
+      } else {
+        const s1 = 810 + rng.float(-15, 15);
+        push(t, lunchC, 'play', 'play');
+        push(lunchC, lunchC + 45, 'eat', 'home');
+        push(lunchC + 45, s1, 'play', 'play');
+        push(s1, s1 + 140, 'study', 'study');
+        push(s1 + 140, dinnerS, 'play', 'play');
+      }
     } else if (age === 'child') {
-      push(t, 720, 'play', 'play');
-      push(720, 765, 'eat', 'home');
-      push(765, dinnerS, 'play', 'play');
+      push(t, lunchC, 'play', 'play');
+      push(lunchC, lunchC + 45, 'eat', 'home');
+      push(lunchC + 45, dinnerS, 'play', 'play');
     } else {
       const h1 = hobbies[0];
       const h2 = hobbies[1] || hobbies[0];
-      const mid = 720 + rng.float(-20, 20);
+      const mid = 720 + rng.float(-55, 55);
       push(t, t + rng.float(40, 80), 'wander', 'town');
       t = out[out.length - 1].e;
       push(t, mid, 'hobby', 'hobby', h1);

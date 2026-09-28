@@ -799,6 +799,15 @@ export class JournalWindow extends Window {
       para(`• ${sim.favors.describe(f)}`, f.kind === 'slay' && f.kills >= f.count ? C.green : '#e0d0b0');
       g.text(this.w - 16, y - 1, left <= 0 ? 'due today' : `due in ${left}d`, left <= 0 ? C.orange : C.faint);
     }
+    const cz = sim.citizen;
+    if (cz) {
+      const T = sim.layoutOf(cz.sid);
+      if (T) {
+        head('TAXES');
+        const lt = cz.lastTax;
+        para(`${car.townName(cz.sid)} taxes ${Math.round(T.econ.tax * 100)}% of what you earn there, plus a small head tax, each morning.${lt ? ` Last paid: ¤${lt.tax} on day ${lt.day}${lt.share ? ` (¤${lt.share} on ¤${lt.earned} earned, ¤${lt.poll} head tax)` : ''}.` : ''}${cz.owed ? ` You owe ${cz.owed} day${cz.owed > 1 ? 's' : ''}!` : ''}`, cz.owed ? C.orange : '#e0d0b0');
+      }
+    }
     head('STANDING');
     let any = false;
     for (const [sid, r] of sim.justice.record) {
@@ -856,7 +865,7 @@ export class LedgerWindow extends Window {
     row(s.type === 'village' ? 'Elder' : 'Mayor', m ? `${m.name.first} ${m.name.last}` : '(none: the council governs)');
     row('Population', `${pop}`);
     row('Treasury', `¤${e.treasury} (${coffers})`, coffers === 'nearly empty' ? C.orange : '#f0e0c0');
-    row('Taxes', `${Math.round(e.tax * 100)}% of earnings`);
+    row('Taxes', `${Math.round(e.tax * 100)}% of earnings${e.taxY ? ` (¤${e.taxY} collected)` : ''}`);
     row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');
     row('Laws', e.laws.armsBan ? 'No drawn weapons in town' : 'No special laws');
     const hungry = living.filter((r) => r.hungry >= 1).length;

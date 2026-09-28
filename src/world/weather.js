@@ -1,13 +1,18 @@
 // Weather is the same whoever asks: a function of place and time. The sky
-// changes in four-hour spells over areas a few map squares wide, and a wet
-// or dry front tends to hang around for half a day. So a town you're far
-// from has rain on its fields too, and its people grumble about it.
+// changes in six-hour spells over wide areas (five map squares across),
+// and a wet or dry front hangs around for most of a day. The areas drift
+// slowly on the wind, so a storm rolls in over a few hours rather than
+// switching on, and a town far away has rain on its fields too.
 import { hash4 } from '../util/rng.js';
 import { REGION_W, REGION_D } from '../config.js';
 
-export const SPELL = 240; // minutes
-const CELL_W = REGION_W * 3;
-const CELL_D = REGION_D * 3;
+export const SPELL = 360; // minutes
+const CELL_W = REGION_W * 5;
+const CELL_D = REGION_D * 5;
+// Tiles the weather moves per minute (east and a little south): about a
+// region's width a day.
+const DRIFT_X = 1 / 24;
+const DRIFT_Z = 1 / 60;
 const COLD = new Set(['tundra', 'taiga', 'mountain']);
 
 function frac(seed, a, b, c) {
@@ -17,8 +22,8 @@ function frac(seed, a, b, c) {
 // 'clear' | 'rain' | 'snow' | 'fog' at tile (x, z) at absolute minute abs.
 export function weatherAt(seed, x, z, abs, biome) {
   if (biome === 'desert') return 'clear';
-  const cx = Math.floor(x / CELL_W);
-  const cz = Math.floor(z / CELL_D);
+  const cx = Math.floor((x - abs * DRIFT_X) / CELL_W);
+  const cz = Math.floor((z - abs * DRIFT_Z) / CELL_D);
   const spell = Math.floor(abs / SPELL);
   const front = frac(seed, cx, cz, Math.floor(spell / 3) * 7 + 0x51);
   const r = frac(seed, cx, cz, spell * 13 + 0x3b);
@@ -37,7 +42,7 @@ export function townWeather(seed, s, abs) {
 
 // Did it rain (or snow) over this settlement in the `hours` before abs?
 export function rainedRecently(seed, s, abs, hours = 24) {
-  for (let t = abs; t > abs - hours * 60; t -= SPELL) {
+  for (let t = abs; t > abs - hours * 60; t -= 60) {
     const k = townWeather(seed, s, t);
     if (k === 'rain' || k === 'snow') return true;
   }

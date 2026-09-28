@@ -1051,11 +1051,22 @@ export class NPC extends Entity {
     const w = this.game.world;
     const DX = [0, -1, 0, 1];
     const DZ = [1, 0, -1, 0];
+    // Only open water: the surface of a pond, river or the sea, with nothing
+    // over it and nothing solid between the fisher and it.
     let t = null;
     for (let k = 1; k <= 3 && !t; k++) {
       const x = this.x + DX[this.dir] * k;
       const z = this.z + DZ[this.dir] * k;
-      for (const y of [this.y - 1, this.y - 2]) if (BLOCKS[w.getBlock(x, y, z)]?.liquid) t = t || { x, y, z };
+      if (BLOCKS[w.getBlock(x, this.y, z)]?.solid || BLOCKS[w.getBlock(x, this.y + 1, z)]?.solid) break;
+      for (const y of [this.y - 1, this.y - 2]) {
+        const here = BLOCKS[w.getBlock(x, y, z)];
+        if (here?.solid && !here.liquid) break;
+        const up = w.getBlock(x, y + 1, z);
+        if (here?.liquid && up === B.air) {
+          t = { x, y, z };
+          break;
+        }
+      }
     }
     this.fishKey = key;
     this.fishTile = t;

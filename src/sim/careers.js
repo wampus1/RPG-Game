@@ -321,6 +321,9 @@ export class Careers {
   }
 
   pay(n) {
+    // Earnings in your home town are taxed there.
+    const c = this.sim.citizen;
+    if (c) c.earned = (c.earned || 0) + n;
     const p = this.game.player;
     const left = p.give('coin', n);
     if (left) this.game.spawnDrop('coin', left, p.x, p.y, p.z, true);

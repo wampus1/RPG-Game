@@ -566,10 +566,11 @@ class Layout {
   // Reserve a small lot beside a road; nothing is built there yet.
   placePlot(rng, sign = true, type = 'house_s') {
     const cands = rng.shuffle(this.frontage());
+    const exits = this.exits();
     for (const c of cands.slice(0, 400)) {
       for (const [w, d] of (SPECS[type] || SPECS.house_s).size) {
         const r = this.rectFor(c, w, d, 1 + (hash4(c.x, c.z, 3) % Math.max(1, w - 2)));
-        if (!this.rectOk(r, false)) continue;
+        if (!this.rectOk(r, false) || !this.gateClear(r, exits)) continue;
         const front = { x: c.x + c.dx, z: c.z + c.dz };
         const fm = this.maskAt(front.x, front.z);
         if (fm !== M.FREE && fm !== M.ROAD && fm !== M.YARD) continue;
@@ -627,8 +628,9 @@ class Layout {
       }
     }
     cands.sort((a, c) => a.d - c.d);
+    const exits = this.exits();
     for (const { x, z } of cands) {
-      let ok = true;
+      let ok = this.gateClear({ x0: x, z0: z, x1: x + 4, z1: z + 4 }, exits);
       for (let dz = -1; dz <= 5 && ok; dz++) for (let dx = -1; dx <= 5 && ok; dx++) ok = tileOk(x + dx, z + dz);
       if (!ok) continue;
       // Door on the side facing the plaza.
@@ -754,6 +756,7 @@ class Layout {
       return c && c.water < 0 && c.h === SURFACE;
     };
     const own = (x, z) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1;
+    const exits = this.exits();
     for (const [w, d] of SPECS[next].size) {
       if (w < cw || d < cd) continue;
       const extraW = w - cw;
@@ -766,7 +769,7 @@ class Layout {
         else r = { z0: b.z0 - a, z1: b.z1 + (extraW - a), x1: b.x1, x0: b.x0 - extraD };
         const d0 = b.door;
         if (alongX ? d0.x <= r.x0 || d0.x >= r.x1 : d0.z <= r.z0 || d0.z >= r.z1) continue;
-        let fits = true;
+        let fits = this.gateClear(r, exits);
         for (let z = r.z0 - 1; z <= r.z1 + 1 && fits; z++) {
           for (let x = r.x0 - 1; x <= r.x1 + 1 && fits; x++) {
             const inRect = x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
@@ -795,6 +798,54 @@ class Layout {
   builtNear(x, z, except) {
     const near = (r) => x >= r.x0 - 1 && x <= r.x1 + 1 && z >= r.z0 - 1 && z <= r.z1 + 1;
     return this.buildings.some((q) => q !== except && near(q)) || this.plots.some((p) => p && !p.taken && near(p));
+  }
+
+  // Where roads leave the town (city gates, or the open ends of streets),
+  // and which way each runs out.
+  exits() {
+    const b = this.bounds;
+    const out = [];
+    const road = (x, z) => {
+      const m = this.maskAt(x, z);
+      return m === M.ROAD || m === M.BRIDGE;
+    };
+    for (let x = b.x0; x <= b.x1; x++) {
+      if (road(x, b.z0)) out.push({ x, z: b.z0, dx: 0, dz: -1 });
+      if (road(x, b.z1)) out.push({ x, z: b.z1, dx: 0, dz: 1 });
+    }
+    for (let z = b.z0 + 1; z < b.z1; z++) {
+      if (road(b.x0, z)) out.push({ x: b.x0, z, dx: -1, dz: 0 });
+      if (road(b.x1, z)) out.push({ x: b.x1, z, dx: 1, dz: 0 });
+    }
+    for (const g of this.gates) if (!out.some((q) => q.x === g.x && q.z === g.z)) out.push({ ...g, dx: 0, dz: 0 });
+    return out;
+  }
+
+  // Nothing new goes up hard by a gate, or across the road running out of
+  // it: a rectangle must keep two tiles clear of every gate, and of a lane
+  // two tiles either side of the road beyond it.
+  gateClear(r, exits = this.exits()) {
+    const x0 = r.x0 - 1;
+    const x1 = r.x1 + 1;
+    const z0 = r.z0 - 1;
+    const z1 = r.z1 + 1;
+    for (const g of exits) {
+      const dx = Math.max(x0 - g.x, 0, g.x - x1);
+      const dz = Math.max(z0 - g.z, 0, g.z - z1);
+      if (Math.max(dx, dz) <= 1) return false;
+      // The road out: a lane two tiles either side, fourteen tiles long.
+      if (g.dz && x1 >= g.x - 2 && x0 <= g.x + 2) {
+        const a = g.dz < 0 ? g.z - 14 : g.z;
+        const c = g.dz < 0 ? g.z : g.z + 14;
+        if (z1 >= a && z0 <= c) return false;
+      }
+      if (g.dx && z1 >= g.z - 2 && z0 <= g.z + 2) {
+        const a = g.dx < 0 ? g.x - 14 : g.x;
+        const c = g.dx < 0 ? g.x : g.x + 14;
+        if (x1 >= a && x0 <= c) return false;
+      }
+    }
+    return true;
   }
 
   // Decorations set on the square or a street (their paving lies beneath).
@@ -1816,27 +1867,39 @@ class Layout {
       this.setMask(x, z, M.DECOR);
       this.addSpot(x, z, rot, ['rest', 'read', 'smoke', 'social', 'sketch', 'music', 'stargaze'], { seat: true });
     }
-    // Market stalls around the plaza edges (towns & cities).
+    // Market stalls along the north and south edges of the plaza (towns &
+    // cities): a counter three wide with the stallholder behind it, and the
+    // awning up on two posts over their head, so you can see who's selling.
     if (s.type !== 'village' && !ruined) {
       const awning = s.civ ? B[s.civ.color.awning] : B.awning_red;
       const spots = [];
-      for (let x = p.x0 + 1; x < p.x1; x += 3) spots.push({ x, z: p.z0, face: 0 });
-      for (let x = p.x0 + 1; x < p.x1; x += 3) spots.push({ x, z: p.z1, face: 2 });
+      for (let x = p.x0 + 2; x <= p.x1 - 2; x += 6) {
+        spots.push({ x, z: p.z0, dz: 1 });
+        spots.push({ x, z: p.z1, dz: -1 });
+      }
       let n = 0;
       for (const st of rng.shuffle(spots)) {
         if (n >= (s.type === 'city' ? 4 : 2)) break;
-        if (this.maskAt(st.x, st.z) !== M.PLAZA) continue;
-        const inner = { x: st.x, z: st.z + (st.face === 0 ? 1 : -1) };
-        const back = { x: st.x, z: st.z - (st.face === 0 ? 1 : -1) };
-        if (this.maskAt(back.x, back.z) === M.BUILD || this.maskAt(back.x, back.z) === M.WALL) continue;
-        this.put(st.x, Y0, st.z, B.counter);
-        this.put(st.x, Y0 + 2, st.z, awning);
-        this.put(back.x, Y0 + 2, back.z, awning);
-        this.put(back.x, Y0, back.z, B.air);
-        this.setMask(st.x, st.z, M.DECOR);
-        const behind = this.maskAt(back.x, back.z) === M.WATER ? null : back;
-        if (behind) this.addSpot(behind.x, behind.z, st.face, ['market', 'work'], { stall: true });
-        this.addSpot(inner.x, inner.z, st.face === 0 ? 2 : 0, ['shop', 'social', 'stroll']);
+        const back = st.z;
+        const front = st.z + st.dz;
+        const tiles = [];
+        for (let dx = -2; dx <= 2; dx++) tiles.push([st.x + dx, back]);
+        for (let dx = -1; dx <= 1; dx++) tiles.push([st.x + dx, front]);
+        if (!tiles.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) continue;
+        // The posts never stand across a street coming into the square.
+        if ([-2, 2].some((dx) => this.maskAt(st.x + dx, back - st.dz) === M.ROAD)) continue;
+        for (let dx = -2; dx <= 2; dx++) this.put(st.x + dx, Y0 + 3, back, awning);
+        for (const dx of [-2, 2]) {
+          for (let y = Y0; y < Y0 + 3; y++) this.put(st.x + dx, y, back, B.fence);
+          this.setMask(st.x + dx, back, M.DECOR);
+        }
+        for (let dx = -1; dx <= 1; dx++) {
+          this.put(st.x + dx, Y0, front, B.counter);
+          this.setMask(st.x + dx, front, M.DECOR);
+        }
+        const face = st.dz > 0 ? 0 : 2;
+        this.addSpot(st.x, back, face, ['market', 'work'], { stall: true });
+        this.addSpot(st.x, front + st.dz, face === 0 ? 2 : 0, ['shop', 'social', 'stroll']);
         n++;
       }
     }

@@ -28,12 +28,32 @@ export function placeSome(game, list, st, per, repair = false) {
   const inWay = ([x, y, z, id]) => {
     if (!BLOCKS[id]?.solid || !w.regionAt(x, z)) return false;
     const e = game.entityAt(x, y, z) || game.entityAt(x, y - 1, z);
-    if (!e) return false;
-    if (e.kind !== 'npc' || e.sleeping || e.hired) return true;
-    const spot = game.findFreeSpot(x + 1, z + 1, e.y);
-    if (!spot || (spot.x === x && spot.z === z)) return true;
+    if (!e || e.dead || e.x !== x || e.z !== z) return false;
+    // Only you hold up the work: anyone or anything else is shooed aside,
+    // to open ground that isn't about to be built on.
+    if (e.kind === 'player') return true;
+    const spot = clearSpot(x, z, e.y);
+    if (!spot) return true;
     e.teleport(spot.x, spot.y, spot.z);
     return false;
+  };
+  let pending = null;
+  const clearSpot = (x, z, hint) => {
+    if (!pending) {
+      pending = new Set();
+      for (let i = st.placed; i < list.length; i++) pending.add(list[i][0] * 65536 + list[i][2]);
+      for (const op of st.wait) pending.add(op[0] * 65536 + op[2]);
+    }
+    for (let r = 1; r <= 8; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || pending.has((x + dx) * 65536 + z + dz)) continue;
+          const y = w.findStandY(x + dx, z + dz, hint);
+          if (y > 0 && !w.isWaterAt(x + dx, y, z + dz) && !game.entityAt(x + dx, y, z + dz)) return { x: x + dx, y, z: z + dz };
+        }
+      }
+    }
+    return null;
   };
   const take = (op) => {
     out.push(op);

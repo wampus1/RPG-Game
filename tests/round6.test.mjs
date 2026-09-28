@@ -275,6 +275,7 @@ test('farmers carry water from the well to dry rows', () => {
   const { game, input, w } = start(12345, 8 * 60);
   game.updateWeather = () => {};
   game.weather = { kind: 'clear', level: 0 };
+  game.weatherIn = () => 'clear';
   const wet = () => [...game.crops.fields.values()].filter((f) => w.regionAt(f.x, f.z) && w.getBlock(f.x, f.y, f.z) === B.farmland_wet).length;
   const before = wet();
   for (let i = 0; i < 900 && wet() <= before; i++) game.update(0.2, input);

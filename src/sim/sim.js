@@ -654,18 +654,32 @@ export class Sim {
     if (z && z.sid === L.settlement.id && z.taxDay !== day) {
       z.taxDay = day;
       const p = this.game.player;
-      const tax = Math.max(1, Math.round(12 * L.econ.tax));
+      // A small head tax, plus the town's rate on what you earned there.
+      const earned = z.earned || 0;
+      z.earned = 0;
+      const { tax, poll, share } = this.playerTax(L, earned);
       if (countItem(p.inv, 'coin') >= tax) {
         removeItem(p.inv, 'coin', tax);
         L.econ.treasury += tax;
+        L.econ.taxY = (L.econ.taxY || 0) + tax;
         z.owed = 0;
-        this.game.ui.msg(`Paid ¤${tax} in taxes to ${L.settlement.name}.`, '#e8e0a0');
+        z.lastTax = { day, tax, poll, share, earned, rate: L.econ.tax };
+        this.game.ui.msg(`Paid ¤${tax} in taxes to ${L.settlement.name}${share ? ` (${Math.round(L.econ.tax * 100)}% of your ¤${earned} earnings, plus ¤${poll})` : ''}.`, '#e8e0a0');
       } else {
         z.owed = (z.owed || 0) + 1;
         this.game.ui.msg(`You couldn't pay your taxes to ${L.settlement.name}!`, '#ff9060');
         if (z.owed >= 3) this.revoke('unpaid taxes');
       }
     }
+  }
+
+  // What a citizen owes each day: a head tax that rises with the rate, and
+  // the rate itself on yesterday's earnings in the town.
+  playerTax(L, earned) {
+    const rate = L.econ.tax;
+    const poll = Math.max(1, Math.round(10 * rate));
+    const share = Math.floor(earned * rate);
+    return { tax: poll + share, poll, share };
   }
 
   hourly(L, h, day, hod, rng) {

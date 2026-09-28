@@ -886,7 +886,7 @@ export class Game {
         return;
       }
     }
-    if (held && held.fishing && c && c.block && c.block.liquid && c.inReach) {
+    if (held && held.fishing && c && c.block && c.block.liquid && c.inReach && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
       this.castLine(c);
       return;
     }

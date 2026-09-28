@@ -74,7 +74,6 @@ export class Renderer {
     this.drawWorld(game);
     this.drawProjectiles(game);
     this.drawRope(game);
-    this.drawFishingLines(game);
     this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
@@ -186,6 +185,7 @@ export class Renderer {
       if (!arr) buckets.set(row, (arr = []));
       arr.push({ e, rp, layer: Math.ceil(rp.y - 0.001) + 1 });
     }
+    this.fishingDecos(game, buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();
@@ -303,12 +303,19 @@ export class Renderer {
         // Entities standing in this row whose body occupies up to this layer.
         if (ents) {
           while (ei < ents.length && ents[ei].layer <= y) {
-            this.drawEntity(ctx, ents[ei].e, ents[ei].rp, game);
-            ei++;
+            const q = ents[ei++];
+            if (q.deco) q.deco();
+            else this.drawEntity(ctx, q.e, q.rp, game);
           }
         }
       }
-      if (ents) while (ei < ents.length) this.drawEntity(ctx, ents[ei].e, ents[ei++].rp, game);
+      if (ents) {
+        while (ei < ents.length) {
+          const q = ents[ei++];
+          if (q.deco) q.deco();
+          else this.drawEntity(ctx, q.e, q.rp, game);
+        }
+      }
     }
   }
 
@@ -541,7 +548,10 @@ export class Renderer {
 
   // The rope from a guard's hand to a restrained prisoner.
   // Rod, line and bobber: yours, and every fisher's at work.
-  drawFishingLines(game) {
+  // Fishing rods, lines and bobbers are drawn in depth order with the world:
+  // each piece goes into the row it's over, so a wall or a person in front
+  // of the line hides it like anything else.
+  fishingDecos(game, buckets, zMin, zMax) {
     const ctx = this.ctx;
     const lines = [];
     const f = game.fishing;
@@ -551,33 +561,58 @@ export class Renderer {
       const t = n.fishSpot();
       if (t) lines.push({ e: n, t, dip: n.fishDip || 0, reel: 0 });
     }
+    const add = (row, layer, order, deco) => {
+      if (row < zMin || row > zMax) return;
+      let arr = buckets.get(row);
+      if (!arr) buckets.set(row, (arr = []));
+      arr.push({ deco, layer, rp: { y: order } });
+    };
     for (const L of lines) {
       const rp = L.e.renderPos();
+      const row = Math.ceil(rp.z - 0.001);
+      const layer = Math.ceil(rp.y - 0.001) + 1;
       const hx = rp.x * TILE + 8 - this.camX;
       const hy = rp.z * TILE - rp.y * LH + LH + 10 - this.camY - 12;
       const bx = L.t.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
       const bob = Math.sin(this.time * 3 + L.t.x) * 0.8;
       const by = L.t.z * TILE - L.t.y * LH - this.camY + 10 + bob + L.dip * 2;
-      // Rod tip: up and out towards the water.
       const dx = Math.sign(bx - hx) || 1;
       const tx = hx + dx * 7;
       const ty = hy - 9;
-      ctx.fillStyle = '#6a4a2a';
-      for (let i = 0; i <= 7; i++) ctx.fillRect(Math.round(hx + dx * i), Math.round(hy - i * 9 / 7), 1, 1);
-      // The line sags between rod tip and bobber.
-      ctx.fillStyle = 'rgba(232,232,240,0.85)';
+      // Rod: just after the one holding it.
+      add(row, layer, rp.y + 0.01, () => {
+        ctx.fillStyle = '#6a4a2a';
+        for (let i = 0; i <= 7; i++) ctx.fillRect(Math.round(hx + dx * i), Math.round(hy - i * 9 / 7), 1, 1);
+      });
+      // The line sags between rod tip and bobber, a row at a time.
       const n = 14;
+      const bLayer = L.t.y + 2;
+      const pieces = new Map();
       for (let i = 1; i < n; i++) {
         const k = i / n;
-        ctx.fillRect(Math.round(tx + (bx - tx) * k), Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (L.dip > 0.6 ? 1 : 4)), 1, 1);
+        const r = Math.round(rp.z + (L.t.z - rp.z) * k);
+        const px = Math.round(tx + (bx - tx) * k);
+        const py = Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (L.dip > 0.6 ? 1 : 4));
+        let pc = pieces.get(r);
+        if (!pc) pieces.set(r, (pc = { pts: [], layer: Math.round(layer + (bLayer - layer) * k) }));
+        pc.pts.push(px, py);
       }
-      // Bobber (half under when something bites).
-      ctx.fillStyle = '#d02a2a';
-      ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2 + (L.dip > 0.6 ? 2 : 0), 3, L.dip > 0.6 ? 1 : 2);
-      ctx.fillStyle = '#f0f0f0';
-      if (L.dip <= 0.6) ctx.fillRect(Math.round(bx) - 1, Math.round(by), 3, 1);
-      ctx.fillStyle = 'rgba(224,244,255,0.6)';
-      ctx.fillRect(Math.round(bx) - 2 - (L.dip > 0.6 ? 1 : 0), Math.round(by) + 1, 5 + (L.dip > 0.6 ? 2 : 0), 1);
+      for (const [r, pc] of pieces) {
+        add(r, pc.layer, 99, () => {
+          ctx.fillStyle = 'rgba(232,232,240,0.85)';
+          for (let i = 0; i < pc.pts.length; i += 2) ctx.fillRect(pc.pts[i], pc.pts[i + 1], 1, 1);
+        });
+      }
+      // Bobber (half under when something bites), floating on the water.
+      add(L.t.z, bLayer, 99, () => {
+        const under = L.dip > 0.6;
+        ctx.fillStyle = '#d02a2a';
+        ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2 + (under ? 2 : 0), 3, under ? 1 : 2);
+        ctx.fillStyle = '#f0f0f0';
+        if (!under) ctx.fillRect(Math.round(bx) - 1, Math.round(by), 3, 1);
+        ctx.fillStyle = 'rgba(224,244,255,0.6)';
+        ctx.fillRect(Math.round(bx) - 2 - (under ? 1 : 0), Math.round(by) + 1, 5 + (under ? 2 : 0), 1);
+      });
     }
   }
 
