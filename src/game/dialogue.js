@@ -353,7 +353,9 @@ export function whereIs(L, other, game) {
     }
     case 'home': return 'at home';
     case 'mourn': case 'funeral': return 'at the graveyard';
-    case 'build': return 'at the building site';
+    case 'event': return act.kind === 'wedding' ? 'at the wedding, by the square' : 'at the feast, by the square';
+    case 'poster': return 'going round town with posters';
+    case 'build': return act.event ? 'by the square, with the builders' : 'at the building site';
     case 'trial': return 'at the jail, for the hearing';
     case 'forage': return 'out looking for food';
     case 'travel': return 'setting off on the road';
@@ -960,6 +962,8 @@ function respondRaw(npc, game, id, arg) {
       if (npc.hired) lines.push('Watching your back. What else?');
       else if (!act) lines.push('Just taking a breather.');
       else if (act.act === 'mourn' || act.act === 'funeral') lines.push(`I'm paying my respects to ${act.who || 'an old friend'}.`);
+      else if (act.act === 'event') lines.push(eventLine(npc, game, act));
+      else if (act.act === 'poster') lines.push(act.mode === 'down' ? 'Taking the posters down. It was a grand day.' : 'Putting up posters, so nobody misses it. Here, have a look at one!');
       else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? (sim.citizen.native ? `Building your own place, ${name.split(' ')[0]}! Leaving the nest at last, eh?` : `Building a house for our newest citizen: you, ${name}!`) : 'Building. Mind the planks.');
       else if (act.act === 'repair') lines.push('Patching up the jail. Someone made a right mess of it.');
       else if (act.act === 'home' && act.weather) lines.push(pick(rng, [`No sense working out in the ${act.weather === 'snow' ? 'snow' : act.weather === 'fog' ? 'fog' : 'rain'}. I'll catch up tomorrow.`, 'Staying dry. The work will keep.']));
@@ -1534,9 +1538,52 @@ function lifeIn(npc, game) {
   if (hungry > living.length * 0.2) lines.push(`Too many people are going hungry: ${hungry} of us, at least.`);
   if (rec.mood < 0.35) lines.push(pick(rng, ['Honestly? It\'s been a hard season.', 'Could be better. Much better.']));
   else if (rec.mood > 0.75) lines.push(pick(rng, ['I couldn\'t be happier here!', 'Life is good.']));
-  if (game.day - e.festival <= 2) lines.push('Did you catch the feast day? Wonderful time.');
+  const plans = game.sim.events.plansOf(L, rec);
+  if (plans) lines.unshift(plansLine(npc, game, plans));
+  else if (e.lastFeast !== undefined && game.day - e.lastFeast <= 2) lines.push('Did you catch the feast day? Wonderful time.');
   if (e.recent.deaths > 0) lines.push('We\'ve buried people lately. The whole town feels it.');
   return lines.slice(0, 3);
+}
+
+// A wedding or a feast coming up: are they going (and if not, why not)?
+function plansLine(npc, game, { ev, going, when }) {
+  const L = npc.layout;
+  const rec = npc.rec;
+  const rng = npc.rng;
+  const sim = game.sim;
+  const what = ev.kind === 'wedding' ? `${sim.events.title(L, ev).replace(/^the /, '')}` : ev.kind === 'fete' ? 'the celebration' : 'the feast day';
+  if (ev.couple && ev.couple.includes(rec.idx)) {
+    const other = L.npcs[ev.couple.find((i) => i !== rec.idx)];
+    return pick(rng, [`I'm getting married ${when}! To ${other.name.first}! You'll come, won't you?`, `${when[0].toUpperCase()}${when.slice(1)} I marry ${other.name.first}. I can hardly sleep for thinking of it.`]);
+  }
+  if (rec.idx === ev.host) return ev.kind === 'wedding' ? `I'm to marry ${ev.couple.map((i) => L.npcs[i].name.first).join(' and ')} ${when}. Do come.` : `The feast is ${when}, by the square. I hope you'll come!`;
+  if (going) return pick(rng, [`Are you going to ${what} ${when}? I wouldn't miss it.`, `${what[0].toUpperCase()}${what.slice(1)} is ${when}! I've been looking forward to it all week.`]);
+  const tr = rec.traits || [];
+  const why = (rec.grief || []).some((g) => g.rel !== 'acquaintance') ? 'I\'m in no mood for merrymaking. Not after this week.'
+    : rec.job === 'guard' ? 'Somebody has to keep watch while everyone\'s dancing.'
+      : tr.includes('reserved') || tr.includes('timid') ? 'Crowds aren\'t really for me. I\'ll hear all about it after.'
+        : tr.includes('hardworking') ? 'Too much work to do, I\'m afraid.'
+          : tr.includes('gruff') || tr.includes('gloomy') ? 'Noise and nonsense. I\'ll be staying home.'
+            : (rec.mood ?? 0.5) < 0.35 ? 'I don\'t feel much like celebrating.' : 'I don\'t think I\'ll go, honestly.';
+  return `${what[0].toUpperCase()}${what.slice(1)} is ${when}. ${why}`;
+}
+
+// What someone at a wedding or a feast says they're doing.
+function eventLine(npc, game, act) {
+  const L = npc.layout;
+  const ev = game.sim.events.get(L, act.ev);
+  const town = L.settlement.name;
+  if (!ev) return 'Just enjoying the day.';
+  if (ev.kind === 'wedding') {
+    const [a, b] = ev.couple.map((i) => L.npcs[i].name.first);
+    if (act.role === 'couple') return 'I\'m getting married! Can you believe it?';
+    if (act.role === 'lead') return `I'm here to marry ${a} and ${b}.`;
+    return pick(npc.rng, [`We're here for ${a} and ${b}'s wedding. Isn't it lovely?`, `${a} and ${b}'s wedding! Grab a spot, it's filling up.`]);
+  }
+  if (act.role === 'dance') return 'Dancing! Come on, join in!';
+  if (act.role === 'serve') return 'Serving at the feast. Hungry?';
+  if (act.role === 'lead') return ev.kind === 'fete' ? `Celebrating! ${town} is a ${ev.tier} now.` : 'It\'s the feast day! I hope you\'re hungry.';
+  return ev.kind === 'fete' ? `We're celebrating: ${town} is a ${ev.tier} now!` : 'It\'s the feast day! Grab a plate.';
 }
 
 function family(npc, game) {

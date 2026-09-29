@@ -32,6 +32,7 @@ import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
+import { EVENT_BLOCKS } from '../sim/events.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -1630,7 +1631,7 @@ export class Game {
     // Your own house is yours to knock about: nobody minds.
     const c = this.sim.citizen;
     if (here.some((q) => q.playerHome && c && c.sid === s.id && c.home === q.id)) return;
-    const civic = here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5;
+    const civic = here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5 || EVENT_BLOCKS.has(b.id);
     if (!civic || b.render === 'plant') return;
     const wits = this.sim.witnesses(s.id, x, z, 7).filter((n) => n.state === 'routine');
     const witness = wits[0];
@@ -1963,6 +1964,7 @@ export class Game {
     const s = this.world.ow.settlementAt(x, z) || this.world.ow.settlementsNear(x, z)[0];
     if (!s) return { lines: ['A weathered sign.', 'The writing has long faded.'] };
     const L = this.world.getLayout(s);
+    if (this.world.getBlock(x, y, z) === B.poster) return this.sim.events.posterText(L, x, z);
     const sg = L.signs.find((q) => q.x === x && q.z === z && (q.y === y || q.y === undefined));
     const e = L.econ;
     const living = L.npcs.filter(alive);

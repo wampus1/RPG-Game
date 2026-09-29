@@ -18,7 +18,7 @@ const EMOTES = {
   drink: ['♦', '#ffb060'], dice: ['¤', '#ffe070'], gossip: ['…', '#e8e8e8'], social: ['☺', '#e8e8e8'], fish: ['~', '#80c8ff'],
   garden: ['♣', '#80e070'], sketch: ['✎', '#e8d8b0'], train: ['!', '#ff8060'], stargaze: ['*', '#c8d8ff'], smoke: ['°', '#c8c8c8'],
   play: ['♪', '#80ffb0'], eat: ['♥', '#ff8080'], stroll: ['·', '#c8c8c8'], farm: ['♣', '#c8e070'], chop: ['!', '#e8b080'], mine: ['!', '#c8c8d8'],
-  mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], build: ['■', '#e8c890'], repair: ['■', '#c8c8d8'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
+  mourn: ['†', '#b0b8e0'], funeral: ['†', '#b0b8e0'], wedding: ['♥', '#ff9ad0'], poster: ['≡', '#f0e8d0'], build: ['■', '#e8c890'], repair: ['■', '#c8c8d8'], cook: ['°', '#ffb060'], hunt: ['►', '#c8e070'], forage: ['♣', '#c8e070'],
 };
 
 // What a miner will dig into.
@@ -261,6 +261,26 @@ export class NPC extends Entity {
       }
       case 'alarm':
         return target(e.target, { tag: 'alarm', near: 2 });
+      case 'event': {
+        // A wedding or a feast: their own place there (a seat on a bench, a
+        // spot by the tables, or a place in the ring round the maypole).
+        const t = e.target;
+        if (!t) return plazaTile();
+        if (e.seat) this.spot = { x: t.x, y: GROUND, z: t.z, face: e.face, tags: ['event'], seat: true };
+        return { x: t.x, y: GROUND, z: t.z, face: e.face, tag: 'event', dance: e.role === 'dance' };
+      }
+      case 'poster': {
+        // Round the town with the posters, the nearest next.
+        const events = this.game.sim.events;
+        const ev = events.get(L, e.ev);
+        const i = ev ? events.nextPoster(L, ev, e.mode, this) : -1;
+        if (i < 0) {
+          if (rec.override && rec.override.act === 'poster') rec.override = null;
+          return inBuilding(home);
+        }
+        const q = ev.posters[i];
+        return { x: q.x, y: GROUND, z: q.z, near: 1, tag: 'poster', poster: i };
+      }
       case 'mourn': case 'funeral':
         return target(e.target, { face: 2, tag: e.act, near: e.act === 'funeral' ? 1 : 0 });
       case 'bury':
@@ -800,6 +820,7 @@ export class NPC extends Entity {
       this.rec.override = null;
       this.activity = null;
     }
+    if (g.poster !== undefined && act === 'poster') this.putPoster(g);
     if (g.trap) this.checkSnare(g.trap);
     if (g.sell && this.rec.job === 'miner') {
       const n = this.game.sim.sellOre(this.layout, this.rec);
@@ -870,10 +891,12 @@ export class NPC extends Entity {
       this.emoteCd = this.rng.float(6, 16);
       let tag = act.act === 'hobby' ? HOBBIES[act.hobby]?.tag : act.act === 'work' ? g.tag || 'work' : act.act;
       if (act.act === 'work' && this.rec.job === 'cook') tag = 'cook';
+      if (act.act === 'event') tag = act.kind === 'wedding' ? 'wedding' : act.role === 'dine' || act.role === 'serve' ? 'eat' : 'music';
       const em = EMOTES[tag];
       if (em && !g.wander) this.emoteShow(em[0], em[1], 2.2);
     }
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
+    if (act.act === 'event') return this.atEvent(act, dt);
     if (act.act === 'trial') {
       if (this.rng.chance(dt * 0.3)) this.face(game.player.x, game.player.z);
       return;
@@ -887,7 +910,10 @@ export class NPC extends Entity {
       }
       if (this.lineCd <= 0) {
         this.lineCd = this.rng.float(20, 50);
-        if (this.rng.chance(0.4)) this.say(this.rng.pick(['Almost got this beam!', 'Hand me that plank.', 'Steady...', 'A fine little cottage.']), 2.5);
+        const lines = act.event === 'stage' ? ['Hold the other end, would you?', 'A little to the left...', 'It\'ll be a fine do.', 'Mind the lanterns!', 'Nearly ready for them.']
+          : act.event === 'strike' ? ['What a night that was.', 'Careful with that, it\'s borrowed.', 'Down she comes.', 'Stack it by the wall.']
+            : ['Almost got this beam!', 'Hand me that plank.', 'Steady...', 'A fine little cottage.'];
+        if (this.rng.chance(0.4)) this.say(this.rng.pick(lines), 2.5);
       }
     }
     // Guards patching up the jail after a breakout, a block at a time.
@@ -1299,6 +1325,62 @@ export class NPC extends Entity {
     best.claim = this.id;
     this.spot = best;
     return { x: best.x, y: best.y, z: best.z, face: best.face, tag: 'farm' };
+  }
+
+  // Putting a poster up (or taking one down), then on to the next.
+  putPoster(g) {
+    const game = this.game;
+    const events = game.sim.events;
+    const o = this.rec.override;
+    const ev = o && o.act === 'poster' ? events.get(this.layout, o.ev) : null;
+    const q = ev && ev.posters[g.poster];
+    if (q) {
+      if (this.x === q.x && this.z === q.z) this.stepOff();
+      this.face(q.x, q.z);
+      this.doAction(0.5);
+      if (events.poster(this.layout, ev, g.poster, o.mode === 'up') && this.distTo(game.player) < 16) {
+        game.audio?.play('place', this);
+        if (this.rng.chance(0.5)) {
+          this.say(this.rng.pick(o.mode === 'up'
+            ? ['There. Everyone will see that.', 'One more up.', 'Don\'t miss it!', ev.kind === 'wedding' ? 'Tomorrow\'s the day!' : 'Free food! That\'ll bring them.']
+            : ['That\'s that, then.', 'Down it comes.', 'What a day that was.']), 2.5);
+        }
+      }
+    }
+    this.goal = this.pickGoal(this.activity.entry);
+    this.atGoal = false;
+    this.path = null;
+  }
+
+  // At a wedding or a feast: the one leading it says the words; the rest
+  // watch, cheer, eat, drink and dance.
+  atEvent(act, dt) {
+    const game = this.game;
+    const events = game.sim.events;
+    const ev = events.get(this.layout, act.ev);
+    if (!ev) return;
+    const t = game.day * 1440 + game.minute - ev.s;
+    if (act.role === 'lead') events.ceremony(this.layout, ev, t, this);
+    if (act.role === 'dance' && t >= 0 && ev.state === 'on') {
+      this.danceT = (this.danceT ?? this.rng.float(0.3, 1.2)) - dt;
+      if (this.danceT <= 0) {
+        this.danceT = this.rng.float(0.8, 1.5);
+        const nx = events.danceStep(ev, this.x, this.z);
+        if (nx && !game.occupiedBySolid(nx.x, this.y, nx.z, this)) {
+          this.goal = { x: nx.x, y: GROUND, z: nx.z, face: nx.face, tag: 'event', dance: true };
+          this.atGoal = false;
+          this.path = null;
+          if (this.rng.chance(0.08) && this.distTo(game.player) < 16) this.say(this.rng.pick(['La la la!', 'Wheee!', 'Round we go!', 'Faster!', 'Hup!']), 1.8, '#ff9ad0');
+        }
+      }
+      return;
+    }
+    // Facing where it's all happening.
+    if (this.goal && this.goal.face !== undefined && !this.sitting && this.rng.chance(dt * 0.3)) this.dir = this.goal.face;
+    if (this.lineCd > 0 || this.distTo(game.player) > 16) return;
+    this.lineCd = this.rng.float(14, 32);
+    const lines = events.chatter(this.layout, ev, this.rec, act.role, t);
+    if (lines && lines.length && this.rng.chance(0.5)) this.say(this.rng.pick(lines), 2.8, ev.kind === 'wedding' ? '#ffd0e8' : undefined);
   }
 
   mourn(act) {

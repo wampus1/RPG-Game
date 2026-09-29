@@ -356,6 +356,10 @@ test('life goes on: a new mayor is chosen, couples marry, children grow up, beas
   const m2 = electMayor(game.sim, L, day + 2);
   assert.ok(m2 && m2.job === 'mayor' && m2 !== mayor);
   const pair = weddings(game.sim, L, day + 2, always);
+  // Announced now; the wedding itself is two days on.
+  const ev = game.sim.events.upcoming(L).find((q) => q.couple && q.couple.includes(pair[0].idx));
+  assert.ok(ev && ev.day === day + 4);
+  for (let t = (day + 2) * 1440 + 660; t <= ev.e + 60; t += 60) game.sim.events.hourly(L, t);
   assert.ok(pair && pair[0].partner === pair[1].idx && pair[0].home === pair[1].home);
   const kids = L.npcs.filter((r) => r.age === 'child' && alive(r)).length;
   const grown = comingOfAge(game.sim, L, day + 400);
@@ -364,7 +368,7 @@ test('life goes on: a new mayor is chosen, couples marry, children grow up, beas
   const raid = raids(game.sim, L, day + 2, always);
   assert.ok(raid);
   assert.ok(L.econ.ledger.some((l) => /in the night/.test(l.text)));
-  game.day = day + 3;
+  game.day = day + 5;
   const g2 = reload(game);
   const L2 = g2.world.getLayout(g2.world.ow.settlements[s.id]);
   assert.equal(L2.npcs[m2.idx].job, 'mayor');

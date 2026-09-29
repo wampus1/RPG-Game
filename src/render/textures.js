@@ -963,6 +963,126 @@ const SPRITES = {
     p.hline(5, 10, 5, '#7a7a84');
     return p.outline(OUT);
   },
+  poster(rot, st) {
+    // A notice pinned to a post: a heart for a wedding, a sun for a feast.
+    const p = spr();
+    p.rect(7, 17, 2, 9, P.planks_dark[0]);
+    p.vline(7, 17, 25, P.planks_dark[2]);
+    p.rect(2, 3, 12, 15, '#f2ead6');
+    p.rect(2, 3, 12, 3, st ? '#d89a28' : '#d8487a');
+    p.hline(2, 13, 3, st ? '#f0c050' : '#f07aa0');
+    if (st) {
+      const sun = '#f0b820';
+      p.ellipse(7.5, 10, 2, 2, sun);
+      for (const [x, y] of [[7, 6], [8, 6], [4, 10], [11, 10], [5, 7], [10, 7], [5, 13], [10, 13]]) p.set(x, y, sun);
+    } else {
+      const red = '#e04868';
+      p.rect(5, 8, 2, 1, red);
+      p.rect(9, 8, 2, 1, red);
+      p.rect(5, 9, 6, 2, red);
+      p.rect(6, 11, 4, 1, red);
+      p.rect(7, 12, 2, 1, red);
+      p.set(6, 9, '#f8a0b8');
+    }
+    p.hline(4, 11, 14, '#8a8070');
+    p.hline(4, 9, 16, '#8a8070');
+    p.set(2, 17, '#d8ceb8');
+    p.set(13, 17, '#d8ceb8');
+    return p.outline(OUT);
+  },
+  flower_arch() {
+    // Two posts wound with greenery under an arch of leaves and flowers.
+    const p = spr(TALL_H);
+    const post = P.planks_dark;
+    p.rect(1, 12, 2, 27, post[0]);
+    p.rect(13, 12, 2, 27, post[0]);
+    p.vline(1, 12, 38, post[2]);
+    p.vline(13, 12, 38, post[2]);
+    const leaf = ['#3c8a3c', '#58a848', '#2e6e30'];
+    const top = (x) => 3 + Math.round(((x - 7.5) / 6.5) ** 2 * 9);
+    for (let x = 0; x < 16; x++) {
+      const y = top(Math.min(15, Math.max(0, x)));
+      for (let k = 0; k < 3; k++) p.set(x, y + k, leaf[(x + k) % 3]);
+    }
+    for (let y = 14; y < 37; y += 3) {
+      p.set(y % 2 ? 0 : 3, y, leaf[0]);
+      p.set(y % 2 ? 3 : 0, y + 1, leaf[1]);
+      p.set(y % 2 ? 12 : 15, y, leaf[0]);
+      p.set(y % 2 ? 15 : 12, y + 1, leaf[1]);
+    }
+    const flowers = ['#ff9ad0', '#ffffff', '#e04848', '#f0d040'];
+    for (let x = 1; x < 15; x += 2) p.set(x, top(x) + (x % 4 === 1 ? 0 : 1), flowers[(x >> 1) % 4]);
+    for (let y = 16; y < 36; y += 5) {
+      p.set(2, y, flowers[(y >> 2) % 4]);
+      p.set(14, y + 2, flowers[((y >> 2) + 1) % 4]);
+    }
+    p.rect(0, 36, 4, 3, '#b8603a');
+    p.rect(12, 36, 4, 3, '#b8603a');
+    return p.outline(OUT);
+  },
+  maypole(rot, st, f) {
+    // A tall striped pole with a crown of flowers and ribbons streaming
+    // down to the dancers.
+    const p = spr(TALL_H);
+    for (let y = 4; y < 38; y++) {
+      p.set(7, y, (y + 0) % 6 < 2 ? '#c83a32' : '#f0ece0');
+      p.set(8, y, (y + 1) % 6 < 2 ? '#a82a24' : '#d8d4c8');
+    }
+    const sway = f % 2;
+    const ribbons = [['#c83a32', 1, 30], ['#3264c0', 14, 30], ['#e0b030', 3, 36], ['#3c9a48', 12, 36]];
+    for (const [c, x, y] of ribbons) p.line(x < 8 ? 7 : 8, 5, x + (x < 8 ? -sway : sway), y, c);
+    p.ellipse(7.5, 4, 4, 1.5, '#3c8a3c');
+    for (const [x, c] of [[4, '#ff9ad0'], [7, '#ffffff'], [10, '#f0d040'], [12, '#e04848']]) p.set(x, 4, c);
+    p.rect(7, 1, 2, 2, '#f0d040');
+    p.rect(5, 37, 6, 2, P.planks_dark[0]);
+    return p.outline(OUT);
+  },
+  bunting(rot) {
+    // A string of little flags hung between posts at head height.
+    const p = spr();
+    const cols = ['#c83a32', '#e0b030', '#3264c0', '#3c9a48'];
+    const line = '#e8e0cc';
+    if (rot === 0 || rot === 2) {
+      const sag = (x) => 12 + Math.round(Math.sin((Math.PI * x) / 15) * 2);
+      for (let x = 0; x < 16; x++) p.set(x, sag(x), line);
+      for (let i = 0; i < 3; i++) {
+        const x0 = 1 + i * 5;
+        const y0 = sag(x0 + 1) + 1;
+        const c = cols[i % cols.length];
+        for (let k = 0; k < 4; k++) p.hline(x0 + (k >> 1), x0 + 3 - (k >> 1), y0 + k, c);
+      }
+    } else {
+      p.vline(7, 12, 27, line);
+      for (let i = 0; i < 3; i++) {
+        const y0 = 13 + i * 5;
+        const c = cols[(i + 1) % cols.length];
+        p.rect(8, y0, 2, 3, c);
+        p.set(8, y0 + 3, c);
+      }
+    }
+    return p;
+  },
+  feast_table() {
+    // A trestle table under a white cloth, laid with a roast, bread and ale.
+    const p = spr();
+    p.rect(1, 12, 14, 6, '#f0ece0');
+    p.hline(1, 14, 12, '#ffffff');
+    p.rect(1, 18, 14, 2, '#e0dccf');
+    p.hline(1, 14, 19, '#c83a32');
+    p.rect(2, 20, 2, 6, P.planks_dark[0]);
+    p.rect(12, 20, 2, 6, P.planks_dark[0]);
+    p.ellipse(4.5, 14, 3, 1.5, '#c8c8d0');
+    p.ellipse(4.5, 13, 2, 1.5, '#9a5a2a');
+    p.set(3, 12, '#c07a3a');
+    p.rect(8, 12, 3, 2, '#d8a050');
+    p.hline(8, 10, 12, '#e8c070');
+    p.rect(12, 10, 2, 4, '#8a6a4a');
+    p.hline(12, 13, 10, '#f8f4e8');
+    p.set(9, 16, '#c83a32');
+    p.set(10, 16, '#d84a3a');
+    p.set(6, 16, '#58a040');
+    return p.outline(OUT);
+  },
   torch(rot, st, f) {
     const p = spr();
     p.rect(7, 14, 2, 12, '#7a5430');
@@ -1577,7 +1697,7 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
 const CUBE_ROT_FRONT = new Set(['bookshelf']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2 };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2 };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;

@@ -10,7 +10,9 @@ import { GROUND } from '../config.js';
 // announcing it comes down).
 const FRAME = 0.45;
 
-const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1 };
+const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3 };
+// Put up for a wedding or a feast, and taken down again after.
+const TEMPORARY = new Set(['stage', 'strike']);
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
 const STRUCTURAL = (id) => {
   const b = BLOCKS[id];
@@ -109,7 +111,7 @@ export class Works {
     let plan = null;
     if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid, this.shopExtra(p)));
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
-    else if (p.kind === 'repair') plan = { list: p.blocks };
+    else if (p.kind === 'repair' || TEMPORARY.has(p.kind)) plan = { list: p.blocks };
     else if (p.kind === 'wall') plan = L.wallPlan();
     else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
@@ -337,7 +339,7 @@ export class Works {
       const out = (plan ? plan.tiles : []).filter((t, i) => p.kind === 'breach' || i % 7 === 0).map(inward);
       return out.length ? out : [{ x: L.plaza.cx, z: L.plaza.cz }];
     }
-    const b = p.kind === 'build' ? L.plots[p.plot] : p.kind === 'expand' ? p.bounds : L.buildings[p.bid];
+    const b = p.kind === 'build' ? L.plots[p.plot] : p.kind === 'expand' || TEMPORARY.has(p.kind) ? p.bounds : L.buildings[p.bid];
     const out = [];
     for (let z = b.z0 - 1; z <= b.z1 + 1; z++) {
       for (let x = b.x0 - 1; x <= b.x1 + 1; x++) {
@@ -358,7 +360,7 @@ export class Works {
       const s = Math.max(day * DAY + 420, fromAbs);
       const e = day * DAY + 1140;
       if (e - s < 30) return;
-      setOverride(r, s, e, 'build', { target: sites[(i * 5) % sites.length], sites, place: 'site', allowMeals: true, project: p.id, label: p.label });
+      setOverride(r, s, e, 'build', { target: sites[(i * 5) % sites.length], sites, place: 'site', allowMeals: true, project: p.id, label: p.label, ...(TEMPORARY.has(p.kind) ? { event: p.kind } : {}) });
       if (r.ent && !r.ent.dead) r.ent.activity = null;
     });
   }
@@ -420,7 +422,8 @@ export class Works {
         p.done = true;
         return;
       }
-      const batch = placeSome(this.game, plan.list, p, p.need / Math.max(1, plan.list.length), p.kind === 'repair');
+      // Repairs and stages only fill gaps: they never knock down what's there.
+      const batch = placeSome(this.game, plan.list, p, p.need / Math.max(1, plan.list.length), p.kind === 'repair' || p.kind === 'stage');
       if (batch.length) {
         this.sim.setBlocks(batch);
         const g = this.game;
@@ -440,6 +443,10 @@ export class Works {
     this.takeSignDown(L, p);
     const sim = this.sim;
     for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
+    if (TEMPORARY.has(p.kind)) {
+      if (!silent) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
+      return;
+    }
     if (p.kind === 'wall' || p.kind === 'breach') {
       L.applyWall(plan.tiles, p.kind === 'breach');
       if (p.kind === 'wall') {
@@ -496,6 +503,29 @@ export class Works {
     this.game.refreshSigns?.();
   }
 
+  // Everything left goes in at once (everyone pitches in).
+  finishNow(L, p) {
+    if (p.done) return;
+    const plan = this.planOf(p);
+    if (!plan) {
+      p.done = true;
+      return;
+    }
+    const w = this.game.world;
+    const keep = p.kind === 'repair' || p.kind === 'stage';
+    const rest = [...(p.wait || []), ...plan.list.slice(p.placed)].filter(([x, y, z]) => !keep || !w.regionAt(x, z) || w.getBlock(x, y, z) === B.air);
+    if (rest.length) this.sim.setBlocks(rest);
+    p.placed = plan.list.length;
+    p.wait = [];
+    this.finish(L, p, plan);
+  }
+
+  // Work stops for good (whatever's up stays up).
+  abandon(L, p) {
+    p.done = true;
+    for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
+  }
+
   // A family moved into a newly built house: the house takes their name,
   // remembered for when the town is laid out again.
   nameHouse(L, b, family, members) {
@@ -512,7 +542,7 @@ export class Works {
     const sid = L.settlement.id;
     const steps = [
       ...this.built.filter((q) => q.sid === sid).map((q) => ({ bid: q.bid, q, done: true })),
-      ...this.projects.filter((p) => p.sid === sid && !p.done && p.kind !== 'repair').map((p) => ({ bid: p.bid, q: p, done: false })),
+      ...this.projects.filter((p) => p.sid === sid && !p.done && p.kind !== 'repair' && !TEMPORARY.has(p.kind)).map((p) => ({ bid: p.bid, q: p, done: false })),
     ].sort((a, b) => a.bid - b.bid || (a.done === b.done ? 0 : a.done ? -1 : 1));
     return steps;
   }

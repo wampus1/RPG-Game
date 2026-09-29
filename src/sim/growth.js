@@ -61,10 +61,10 @@ export function promote(sim, L, next, day) {
   L.econ.tier = next;
   sim.areaCache.clear();
   ledger(L, day, `${s.name} has grown from a ${was} into a ${next}!${next === 'city' ? ' The council means to build a wall.' : ''}`);
-  // The whole place turns out to celebrate.
+  // Good news all round; and a celebration by the square in a couple of days.
   L.econ.festival = day;
-  for (const r of L.npcs) if (alive(r)) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.15);
-  ledger(L, day, `A feast was held on the square to celebrate ${s.name} becoming a ${next}.`);
+  for (const r of L.npcs) if (alive(r)) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.1);
+  sim.events.fete(L, day, next);
   const g = sim.game;
   if (g.active.has(s.id)) {
     g.ui.msg(`${s.name} is now a ${next}!`, '#ffe070');

@@ -47,33 +47,18 @@ function related(L, a, b) {
   return a.parents.some((p) => b.parents.includes(p));
 }
 
-// Two single grown-ups from different families marry now and then, and set
-// up home together (in the roomier of their two houses).
+// Two single grown-ups from different families decide to marry now and
+// then: the wedding is two days later (see events.js), and then they set up
+// home together (in the roomier of their two houses).
 export function weddings(sim, L, day, rng) {
   if (L.settlement.deserted || !rng.chance(0.045)) return null;
   const single = (r) => r.partner === null || r.partner === undefined || !alive(L.npcs[r.partner]);
-  const singles = rng.shuffle(residents(L).filter((r) => r.age === 'adult' && single(r) && r.job !== 'merchant'));
+  const taken = sim.events.engaged(L);
+  const singles = rng.shuffle(residents(L).filter((r) => r.age === 'adult' && single(r) && r.job !== 'merchant' && !taken.has(r.idx)));
   for (const a of singles) {
     const b = singles.find((q) => q !== a && q.household !== a.household && !related(L, a, q) && ((a.friends || []).includes(q.idx) || rng.chance(0.25)));
     if (!b) continue;
-    a.partner = b.idx;
-    b.partner = a.idx;
-    const ha = L.buildings[a.home];
-    const hb = L.buildings[b.home];
-    const room = (h) => (h ? h.beds.length - L.npcs.filter((r) => r.home === h.id && alive(r) && !r.migrated).length : -99);
-    // The one with less room moves in with the other (children too).
-    const [stay, move] = room(hb) > room(ha) ? [b, a] : [a, b];
-    if (stay.home !== null && stay.home !== undefined) {
-      const kids = L.npcs.filter((r) => alive(r) && r.age === 'child' && r.parents.includes(move.idx) && r.home === move.home);
-      for (const r of [move, ...kids]) {
-        r.home = stay.home;
-        r.household = stay.household;
-        r.bed = L.npcs.filter((q) => q.home === stay.home && alive(q)).length % Math.max(1, L.buildings[stay.home]?.beds.length || 1);
-      }
-    }
-    for (const r of [a, b]) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.3);
-    if (L.econ.festival !== undefined) L.econ.lastWedding = day;
-    ledger(L, day, `${a.name.first} ${a.name.last} and ${b.name.first} ${b.name.last} were married on the square. Half the town turned out.`);
+    sim.events.wedding(L, a, b, day);
     return [a, b];
   }
   return null;

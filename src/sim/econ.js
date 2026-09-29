@@ -957,12 +957,16 @@ function mayorReview(sim, L, day, rng) {
     r.calm = 0;
   }
   r.calm++;
-  if (e.treasury > pop * 50 && day - e.festival > 5 && rng.chance(0.35)) {
+  // Money to spare: a feast day, two days on (the cheer comes from going).
+  if (e.treasury > pop * 50 && day - e.festival > 5 && rng.chance(0.35) && !(sim && sim.events.upcoming(L).length)) {
     const spend = Math.round(e.treasury * 0.15);
     e.treasury -= spend;
     e.festival = day;
-    for (const rec of living) rec.mood = clamp(rec.mood + 0.12, 0, 1);
-    ledger(L, day, `A feast day was held in the square (¤${spend} from the treasury).`);
+    if (sim) sim.events.feast(L, day, spend);
+    else {
+      for (const rec of living) rec.mood = clamp(rec.mood + 0.12, 0, 1);
+      ledger(L, day, `A feast day was held in the square (¤${spend} from the treasury).`);
+    }
   }
   if (sim) sim.dailyCivic(L, day, rng);
 }

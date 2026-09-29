@@ -50,19 +50,20 @@ with the music off. `window.__game` exposes the running game.
 | --- | --- |
 | Move (tile by tile) | WASD / arrow keys, hold Shift to sprint |
 | Select belt slot | 1–9 or mouse wheel |
-| Interact (doors, chests, workbench, furnace, anvil, torches, beds, signs, wells…) | Click the block, or E / right-click |
+| Interact (doors, chests, workbench, furnace, anvil, trade benches, torches, beds, signs, posters, wells…) | Click the block, or F / right-click |
 | Mine | Hold left mouse on a block with a tool or an empty hand |
 | Place block | Select a block item and click (hold to keep placing) |
 | Rotate the block you're about to place | R |
+| Turn the camera a quarter turn | Q / E |
 | Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
 | Attack | Left-click a creature or person (a bow shoots arrows at range) |
 | Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
 | Sit | Click a chair, bench or stool; move to stand up |
 | Wait while seated | T, then pick 1–24 hours |
-| Raft | Hold a raft and right-click water; A/D turn, W paddles, S back-paddles, E steps ashore |
+| Raft | Hold a raft and right-click water; A/D turn, W paddles, S back-paddles, F steps ashore |
 | Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
-| Toss item | Q (Ctrl+Q throws the whole stack), or drag it out of a window |
-| Eat held food, or put on held armour and clothes | F or right-click |
+| Toss item | G (Ctrl+G throws the whole stack), or drag it out of a window |
+| Eat or drink what you hold, read a newspaper, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
 | Menu (save and load slots, settings, new game) | Esc |
@@ -503,6 +504,79 @@ longer history, which you can scroll with the mouse wheel or the arrow keys.
 The title screen has music once you click or press a key; browsers don't
 allow sound before that.
 
+**Turning the camera.** Q and E turn the view a quarter turn either way, so
+you can see behind buildings. Movement keys always move you across the screen,
+the minimap turns with the view (N marks north), and the placement arrow shows
+which way a block will face.
+
+**Pointing and building.** Whatever is drawn under the mouse is what you point
+at, down to the pixel: a lamp post, a person in front of a wall, or the top or
+front of a block. Blocks go onto the face you point at, and the tooltip says
+what your tool will do, whether it is in reach, and why a block can't go
+somewhere.
+
+**Belonging to a town.** As a citizen you count in the town's population (the
+notice board says "you among them"), and on the watch you count as one of its
+guards. Losing your citizenship costs the town a citizen. Joining the watch
+gives you a uniform in the civilization's colours (a tabard, a helmet and
+boots) to wear from your pack; the uniform is what protects you, and it goes
+back when you leave the watch. Night duty pays a quarter more than day duty.
+
+**Licences and workshops.** Every licence has a fee. The more a town needs a
+trade, the less it charges; citizens pay a quarter less, and joining the watch
+is free. Trades that need a building (tailor, herbalist, scribe, jeweller,
+baker, smith) cost more, and the builders put up a workshop for you on a free
+lot, with your bench inside.
+
+**Trade benches.** Each trade has its own bench, which only a licensed holder
+can use:
+- Tailor's loom: clothes dyed in seven colours, which add charisma so people
+  warm to you.
+- Herbalist's still: potions. Vigor gives blue hearts; Might, Swiftness,
+  Fortitude and Charm raise an ability for a few hours.
+- Scribe's desk: pick up to four stories from the town's record and news from
+  afar, and print copies of a newspaper on paper and ink. Hand them out when
+  you talk to people: they read it, talk about it, and may pay a coin.
+- Jeweller's bench: set a cut gem into a weapon or armour through a timing
+  game. Strike as the light passes each prong; slip three times and the gem
+  cracks. Each gem raises an ability, and on a blade it adds a gift: burning,
+  a faster swing, healing, dazzling or staggering.
+
+Wooden recipes take any kind of plank or log.
+
+**Born here.** Starting as a native gives you your family's surname, parents
+and brothers and sisters who treat you as family, and their house as your
+home. People think of you as one of their own, not a newcomer. The mayor can
+have a place of your own built, cheaper than for incomers.
+
+**Children** spend less time playing. They wander the streets or tag along with
+a parent at work, helping out.
+
+**Towns on the map** grow their icons as they grow: one cell for a village,
+two for a town, a block of four for a city, with a double outline once walled.
+
+**Weddings and feast days.** A wedding, a feast day or the celebration of a
+town growing is announced two days ahead on the notice board. The day before,
+someone goes round town putting up posters (a heart for a wedding, a sun for a
+feast) that you can read. On the day, the builders put up the set:
+- for a wedding, a flower arch, lanterns, a rug aisle and rows of benches;
+- for a feast, a ribboned maypole, laden tables, and bunting strung between
+  lantern posts.
+
+In the hour or so before it starts, guests drift in a few at a time: the
+couple and whoever leads it first, then the keen and the early risers, with
+the lazy and the scatterbrained just in time or a little late. Not everyone
+goes. Family and friends of the couple nearly always do, as do the outgoing
+and the cheerful. The shy, the gloomy, the grieving, the unwell, anyone in a
+low mood and most of the watch stay away, and they'll tell you why if you ask.
+
+At a wedding, family and friends take the benches, the priest (or the mayor)
+marries the couple under the arch, and everyone cheers. At a feast, people eat
+at the tables, the cooks serve, and dancers go round and round the maypole.
+Everyone who went is in better spirits afterwards, and turning up yourself
+earns you some goodwill. The next morning the builders take it all down and
+the posters come down.
+
 ## Code layout
 
 ```
@@ -538,6 +612,8 @@ src/
                        (repairs, new buildings, house expansions),
                        diplomacy (letters, roads, warnings), nomads, town
                        life (elections, weddings, coming of age, raids),
+                       events (posters, stages, guests for weddings and
+                       feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws
                        (public opinion, reviews, petitions), and the
                        Sim hub (reputation, renown, graves, mourning,

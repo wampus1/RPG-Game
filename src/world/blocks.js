@@ -244,6 +244,14 @@ bench('tackle_bench', 'fisher', 'Tackle Bench', { hardness: 0.7 });
 bench('sawbench', 'woodcutter', 'Sawhorse', { hardness: 0.8 });
 bench('potting_bench', 'farmer', 'Potting Bench', { hardness: 0.7 });
 bench('rock_crusher', 'miner', 'Rock Crusher', { tool: 'pick', hardness: 2 });
+// For weddings and feast days: posters put up around town the day before
+// (a wedding's has a heart, a feast's a sun: kept in the state bit), and
+// what the builders put up on the square for the day.
+def('poster', { ...sprite, interact: 'sign', tool: 'axe', hardness: 0.3, drop: null, label: 'Poster' });
+def('flower_arch', { ...sprite, solid: false, tall: true, tool: 'axe', hardness: 0.6, drop: null, label: 'Flower Arch' });
+def('maypole', { ...sprite, tall: true, tool: 'axe', hardness: 0.8, drop: null, label: 'Maypole' });
+def('bunting', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.2, drop: null, label: 'Bunting' });
+def('feast_table', { ...sprite, tool: 'axe', hardness: 0.7, drop: null, label: 'Feast Table' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

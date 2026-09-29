@@ -68,7 +68,15 @@ export function exchangeFor(a, b, game) {
   // Funerals to go to, weddings, births and other goings-on.
   const fun = (e.funerals || []).find((f) => f.s > sim.abs && f.s - sim.abs < 1440);
   if (fun) opts.push([`Are you going to ${fun.first}'s funeral tomorrow?`, 'Of course. We all should.']);
-  const ev = [...e.ledger].reverse().find((it) => it.day >= game.day - 2 && /married|born to|came of age|was chosen|has grown|feast/.test(it.text));
+  // A wedding or a feast coming up: is the other one going?
+  const soon = sim.events.upcoming(L).find((q) => q.day >= game.day && q.day <= game.day + 1 && !(q.couple && (q.couple.includes(ra.idx) || q.couple.includes(rb.idx))));
+  if (soon && ra.age !== 'child') {
+    const what = soon.kind === 'wedding' ? sim.events.title(L, soon).replace(/^the /, '') : soon.kind === 'fete' ? 'the celebration' : 'the feast';
+    const when = soon.day === game.day ? 'today' : 'tomorrow';
+    const yes = sim.events.going(L, soon, rb);
+    opts.push([`Are you going to ${what} ${when}?`, yes ? pick(rng, ['Wouldn\'t miss it!', 'Of course! I\'ve got my best clothes out.', 'Try and stop me.']) : pick(rng, ['I don\'t think so. Not really my thing.', 'Can\'t, I\'m afraid. Too much to do.', 'Maybe. We\'ll see how I feel.'])]);
+  }
+  const ev = [...e.ledger].reverse().find((it) => it.day >= game.day - 2 && /married|born to|came of age|was chosen|has grown|feast/.test(it.text) && !/to be married|declared a feast|will be held|called off/.test(it.text));
   if (ev) {
     if (/married/.test(ev.text)) opts.push(['What a lovely wedding that was.', 'I cried the whole way through.']);
     else if (/born to/.test(ev.text)) opts.push(['Have you seen the new baby?', 'Tiny thing. Loud, though!']);

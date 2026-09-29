@@ -239,3 +239,87 @@ test('born here: a family name, parents who treat you as their child, a home, an
     }
   }
 });
+
+// ------------------------------------------------------------ town events
+test('a wedding: posters the day before, an arch and benches on the day, guests drifting in, and all taken down after', async () => {
+  const { B } = await import('../src/world/blocks.js');
+  const { game, input, L } = start();
+  const w = game.world;
+  const E = game.sim.events;
+  const single = L.npcs.filter((r) => r.alive !== false && r.age === 'adult' && (r.partner === null || r.partner === undefined));
+  const a = single[0];
+  const b = single.find((q) => q.household !== a.household);
+  const ev = E.wedding(L, a, b, game.day);
+  assert.equal(ev.day, game.day + 2, 'two days off');
+  assert.ok(L.econ.ledger.some((it) => /are to be married/.test(it.text)));
+  const goTo = (day, min) => {
+    game.day = day;
+    game.minute = min;
+    for (let i = 0; i < 4; i++) game.update(0.6, input);
+  };
+  goTo(ev.day - 1, 7 * 60);
+  assert.ok(!ev.posters.length || ev.posters.every((q) => !q.up), 'no posters yet');
+  goTo(ev.day - 1, 14 * 60);
+  assert.ok(ev.posters.length >= 2, 'a few posters');
+  assert.ok(ev.posters.every((q) => w.getBlock(q.x, 6, q.z) === B.poster), 'up around town');
+  const t = game.signText(ev.posters[0].x, 6, ev.posters[0].z);
+  assert.ok(t.lines.some((l) => l.includes(a.name.last.toUpperCase())), 'the poster says whose wedding');
+  goTo(ev.day, 7 * 60 + 30);
+  assert.ok(ev.site && ev.blocks.length, 'somewhere to put it up');
+  assert.ok(game.sim.works.projects.some((p) => p.id === ev.stage && p.kind === 'stage'), 'the builders are on it');
+  // People set off at different times, some well before, some just in time.
+  const leave = ev.guests.map((g) => g.leave - ev.s);
+  assert.ok(Math.max(...leave) - Math.min(...leave) >= 30, `staggered (${Math.min(...leave)}..${Math.max(...leave)})`);
+  assert.ok(ev.guests.some((g) => g.role === 'couple') && ev.guests.some((g) => g.role === 'seat'));
+  goTo(ev.day, 14 * 60 + 40);
+  assert.ok(ev.blocks.every(([x, y, z, id]) => w.getBlock(x, y, z) === id), 'the arch and benches are up');
+  assert.ok(w.getBlock(...ev.blocks.find((q) => q[3] === B.flower_arch).slice(0, 3)) === B.flower_arch);
+  const going = ev.guests.filter((g) => g.set).map((g) => L.npcs[g.idx]);
+  assert.ok(going.length && going.every((r) => r.override && r.override.act === 'event'), 'on their way');
+  goTo(ev.day, 16 * 60 + 30);
+  assert.equal(a.partner, b.idx, 'wed');
+  assert.ok(L.econ.ledger.some((it) => /were married/.test(it.text)));
+  goTo(ev.day + 1, 20 * 60);
+  assert.equal(ev.state, 'done');
+  assert.ok(ev.blocks.every(([x, y, z]) => w.getBlock(x, y, z) === B.air), 'all taken down');
+  assert.ok(ev.posters.every((q) => w.getBlock(q.x, 6, q.z) !== B.poster), 'posters down');
+});
+
+test('not everyone goes: family and friends, the sociable and the cheerful do; the grieving and the gloomy stay home', () => {
+  const game = makeGame(12345);
+  const s = game.world.ow.settlements.find((q) => q.type === 'city');
+  const L = game.world.getLayout(s);
+  const E = game.sim.events;
+  const people = L.npcs.filter((r) => r.alive !== false && !r.away);
+  const [a, b] = people.filter((r) => r.age === 'adult' && r.job !== 'merchant' && (r.partner === null || r.partner === undefined));
+  const ev = { id: 7, kind: 'wedding', couple: [a.idx, b.idx], host: null };
+  const n = people.filter((r) => E.going(L, ev, r)).length;
+  assert.ok(n > people.length * 0.2 && n < people.length * 0.85, `${n} of ${people.length} going`);
+  // The same person, in different moods and natures.
+  const r = people.find((q) => q.age === 'adult' && q !== a && q !== b && !E.relation(L, q, a) && !E.relation(L, q, b) && q.job !== 'guard');
+  const base = { ...r, grief: [], traits: [], mood: 0.6, personality: { ...r.personality, sociability: 0.5 } };
+  const p0 = E.pull(L, ev, base);
+  assert.ok(E.pull(L, ev, { ...base, traits: ['outgoing', 'cheerful'] }) > p0, 'the outgoing are keener');
+  assert.ok(E.pull(L, ev, { ...base, traits: ['reserved', 'gloomy'] }) < p0, 'the reserved less so');
+  assert.ok(E.pull(L, ev, { ...base, mood: 0.15 }) < p0, 'a low mood keeps people home');
+  assert.ok(E.pull(L, ev, { ...base, grief: [{ rel: 'family' }] }) < p0 - 0.2, 'so does grief');
+  assert.ok(E.pull(L, ev, { ...base, partner: a.idx }) > p0 + 0.3, 'family always want to be there');
+  assert.equal(E.pull(L, ev, a), 1, 'the couple, of course');
+});
+
+test('feast days and a town\'s promotion are announced ahead, not held on the spot', async () => {
+  const { promote } = await import('../src/sim/growth.js');
+  const { game, L } = start();
+  const E = game.sim.events;
+  promote(game.sim, L, 'town', game.day);
+  const fete = E.upcoming(L).find((q) => q.kind === 'fete');
+  assert.ok(fete && fete.day === game.day + 2 && fete.tier === 'town');
+  assert.ok(L.econ.ledger.some((it) => /celebration .* will be held/.test(it.text)));
+  // One do a day: the feast goes to the next free day.
+  const feast = E.feast(L, game.day, 40);
+  assert.equal(feast.day, game.day + 3);
+  // What people say about it: whether they're going, and why not.
+  const npc = [...game.active.values()][0].npcs.find((q) => q.rec.age === 'adult' && q.rec.job !== 'mayor');
+  const r = respond(npc, game, 'life');
+  assert.ok(r.lines.some((l) => /celebration|feast/.test(l)), r.lines.join(' / '));
+});

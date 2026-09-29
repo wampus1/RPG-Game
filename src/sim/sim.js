@@ -15,6 +15,7 @@ import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
 import { Press } from './press.js';
+import { Events } from './events.js';
 import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
@@ -60,6 +61,7 @@ export class Sim {
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
     this.press = new Press(game, this);
+    this.events = new Events(game, this);
     this.works = new Works(game, this);
     this.diplomacy = new Diplomacy(game, this);
     this.nomads = new Nomads(game, this);
@@ -161,6 +163,7 @@ export class Sim {
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
+      this.events.update();
     }
     this.careers.update(dt);
     this.updateConfront();
@@ -810,6 +813,7 @@ export class Sim {
 
   hourly(L, h, day, hod, rng) {
     this.funeralsAndBurials(L);
+    this.events.hourly(L, h + 60);
     this.woundedPray(L, h, hod);
     // Snares near an active town catch things now and then.
     if (!this.game.active.has(L.settlement.id)) return;

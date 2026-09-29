@@ -70,6 +70,8 @@ export function describeActivity(e) {
     case 'home': return e.weather ? `home out of the ${e.weather === 'snow' ? 'snow' : e.weather === 'fog' ? 'fog' : 'rain'}` : 'at home';
     case 'mourn': return 'mourning at a grave';
     case 'funeral': return 'at a funeral';
+    case 'event': return e.role === 'couple' ? 'getting married' : e.kind === 'wedding' ? 'at a wedding' : e.role === 'dance' ? 'dancing round the maypole' : 'at the feast';
+    case 'poster': return e.mode === 'down' ? 'taking down posters' : 'putting up posters';
     case 'bury': return 'setting a gravestone';
     case 'pray': return 'praying for healing';
     case 'build': return e.label ? e.label : 'building a house';
