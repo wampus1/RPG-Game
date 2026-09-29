@@ -8,6 +8,8 @@ import { alive, ledger, DAY, setOverride } from './econ.js';
 import { deserted } from './civic.js';
 import { B } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
+// Builder-minutes to lay one tile of road between towns (from each end).
+const ROAD_MIN_PER_TILE = 20;
 
 // What a road may clear out of its way: plants and tree trunks.
 export const SOFT = new Set(['tall_grass', 'fern', 'bush', 'berry_bush', 'dead_bush', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white', 'flower_purple',
@@ -361,18 +363,44 @@ export class Diplomacy {
     return road;
   }
 
-  buildRoads() {
+  // The builders of both towns work toward each other from their own
+  // ends, a tile at a time through the working day (no stretch appears at
+  // once), and it's done when they meet.
+  buildRoads(now = this.sim.abs) {
     for (const r of this.roads) {
       if (r.done) continue;
-      const n = Math.min(r.tiles.length - r.built, 80);
+      if (r.fromA === undefined) {
+        r.fromA = r.built || 0;
+        r.fromB = 0;
+      }
+      if (r.last === undefined) r.last = now;
+      let work = 0;
+      for (let t = r.last; t < now;) {
+        const d0 = Math.floor(t / DAY) * DAY;
+        const a = Math.max(t, d0 + 420);
+        const b = Math.min(now, d0 + 1140);
+        if (b > a) work += b - a;
+        t = d0 + DAY;
+      }
+      r.last = now;
+      r.work = (r.work || 0) + work;
       const ops = [];
-      for (const [x, y, z, id] of r.tiles.slice(r.built, r.built + n)) {
+      const clear = (x, y, z, id) => {
         ops.push([x, y, z, id, 0]);
         // Clear brush and trunks off the way (only those, whenever it loads).
         for (let yy = y + 1; yy <= y + 6; yy++) ops.push([x, yy, z, B.air, 0, 'soft']);
+      };
+      while (r.work >= ROAD_MIN_PER_TILE && r.fromA + r.fromB < r.tiles.length) {
+        r.work -= ROAD_MIN_PER_TILE;
+        // Both ends at once, one tile each.
+        for (const end of ['A', 'B']) {
+          if (r.fromA + r.fromB >= r.tiles.length) break;
+          const i = end === 'A' ? r.fromA++ : r.tiles.length - 1 - r.fromB++;
+          clear(...r.tiles[i]);
+        }
       }
-      this.sim.setBlocks(ops.filter((op) => !this.game.world.regionAt(op[0], op[2]) || this.clearable(op)));
-      r.built += n;
+      r.built = r.fromA + r.fromB;
+      if (ops.length) this.sim.setBlocks(ops.filter((op) => !this.game.world.regionAt(op[0], op[2]) || this.clearable(op)));
       if (r.built >= r.tiles.length) {
         r.done = true;
         for (const [sa, sb] of [[r.a, r.b], [r.b, r.a]]) {
@@ -395,7 +423,8 @@ export class Diplomacy {
   roadCells() {
     const out = new Set();
     for (const r of this.roads) {
-      for (const [x, , z] of r.tiles.slice(0, r.built)) out.add(Math.floor(z / REGION_D) * 10000 + Math.floor(x / REGION_W));
+      const done = [...r.tiles.slice(0, r.fromA ?? r.built), ...(r.fromB ? r.tiles.slice(-r.fromB) : [])];
+      for (const [x, , z] of done) out.add(Math.floor(z / REGION_D) * 10000 + Math.floor(x / REGION_W));
     }
     return out;
   }
@@ -417,11 +446,7 @@ export class Diplomacy {
     const now = this.sim.abs;
     for (const q of this.letters) if (q.status === 'carried' && now >= q.arrive) this.deliver(q);
     this.courier(now);
-    const day = this.game.day;
-    if (this.day !== day) {
-      this.day = day;
-      this.buildRoads();
-    }
+    this.buildRoads(now);
     if (this.letters.length > 60) this.letters = this.letters.filter((q) => q.status !== 'delivered' || now - q.arrive < 3 * DAY);
   }
 

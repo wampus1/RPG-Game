@@ -4,6 +4,7 @@ import { LAWS, lawList } from '../sim/laws.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS } from '../world/items.js';
+import { gemText } from '../game/gems.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
 import { itemIcon } from '../render/sprites.js';
@@ -365,8 +366,7 @@ export class UI {
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
     const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
     if (d.stats) lines.push({ text: `${d.kind === 'armor' ? 'While worn' : 'While held'}: ${Object.entries(d.stats).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${STAT[k] || k}`).join(' ')}`, color: C.green });
-    const GIFT = { ember: 'strikes sometimes burn', swift: 'swings faster', leech: 'each hit mends you', gleam: 'a gleaming blade', stun: 'blows stagger beasts' };
-    if (d.socket) lines.push({ text: `Set with a ${GEMS[d.socket].name}${d.gift ? `: ${GIFT[d.gift]}` : ''}`, color: '#c0a0ff' });
+    if (d.socket) for (const t of wrap(gemText(slot.item), 44)) lines.push({ text: t, color: '#c0a0ff' });
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {
       const e = d.effect || {};

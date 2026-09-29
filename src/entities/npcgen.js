@@ -49,10 +49,15 @@ export const HOBBIES = {
 };
 
 // Job title, with a few settlement-dependent variants.
+// A merchant's standing (see shops.js).
+const MERCHANT_TITLES = [null, 'Peddler', 'Trader', 'Master Merchant'];
+
 export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
   if (rec.nomadBand !== undefined) return 'Nomad';
-  if (rec.visitor) return 'Traveling Merchant';
+  const tier = rec.visitor ? rec.visit && rec.visit.tier : rec.job === 'merchant' ? rec.tier : null;
+  if (rec.visitor) return tier ? `Traveling ${MERCHANT_TITLES[tier]}` : 'Traveling Merchant';
+  if (tier) return MERCHANT_TITLES[tier];
   return JOBS[rec.job]?.title || 'Villager';
 }
 

@@ -4,6 +4,7 @@
 // along as escorts, and friends who come along as companions.
 import { JOBS } from '../entities/npcgen.js';
 import { alive, ledger, setOverride, invAdd, st, STOCK } from './econ.js';
+import { equipFor } from './shops.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { ITEMS, tabardFor } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
@@ -113,6 +114,9 @@ export const NEEDS = {
 export const HOME_FOOD = ['bread', 'pie', 'cooked_fish', 'cooked_meat', 'apple', 'carrot', 'cabbage', 'berries'];
 
 export function wantsItem(job, item) {
+  // A guard will pay for a jewelled blade, bow or piece of armour.
+  const it = ITEMS[item];
+  if (job === 'guard' && it && it.socket && (NEEDS.guard.includes(it.base) || it.kind === 'weapon' || it.kind === 'armor')) return true;
   return (NEEDS[job] || []).includes(item) || HOME_FOOD.includes(item);
 }
 
@@ -870,8 +874,19 @@ export class Careers {
     // A trade's buyers are those whose own work needs it (a cook wants your
     // meat; a smith doesn't), or anyone, for plain food.
     let pickGood = null;
-    if (j.kind !== 'employee') {
-      const goods = PROFESSIONS[j.job].goods;
+    // A miner with a find from the rock face brings it to the jeweller.
+    if (j.kind === 'profession' && j.job === 'jeweller' && Math.random() < 0.4) {
+      const miners = cands.filter((q) => q.rec.job === 'miner');
+      if (miners.length) {
+        n = miners[Math.floor(Math.random() * miners.length)];
+        const inv = n.rec.inv || [];
+        const has = ['gem', 'gold_ore', 'gold_ingot'].find((k) => inv.some((q) => q && q.item === k && q.count > 0)) || (Math.random() < 0.6 ? 'gem' : 'gold_ore');
+        req = { kind: 'offer', item: has, count: 1, price: Math.max(1, Math.round(ITEMS[has].value * 0.75)) };
+      }
+    }
+    if (!req && j.kind !== 'employee') {
+      // (A jeweller's own jewelled pieces are for sale too: guards like them.)
+      const goods = [...PROFESSIONS[j.job].goods, ...(j.job === 'jeweller' ? p.inv.filter((q) => q && ITEMS[q.item]?.socket).map((q) => q.item) : [])];
       const mine = goods.filter((k) => countItem(p.inv, k) > 0);
       const pool = (mine.length ? mine : goods).filter((k) => cands.some((q) => wantsItem(q.rec.job, k)));
       if (!pool.length) {
@@ -882,7 +897,9 @@ export class Careers {
       const buyers = cands.filter((q) => wantsItem(q.rec.job, pickGood));
       n = buyers[Math.floor(Math.random() * buyers.length)];
     }
-    if (j.kind === 'employee') {
+    if (req) {
+      // (A miner's offer, settled above.)
+    } else if (j.kind === 'employee') {
       const biz = L.econ.biz[j.building];
       const have = Object.keys(biz.store).filter((k) => biz.store[k] > 0 && ITEMS[k] && k !== 'coin');
       const list = have.length ? have : STOCK[j.shop] || ['bread'];
@@ -906,12 +923,14 @@ export class Careers {
     c.arrived = true;
     const what = `${c.count} ${ITEMS[c.item].name.toLowerCase()}`;
     const j = this.job;
-    const line = c.kind === 'shop'
+    const line = c.kind === 'offer'
+      ? n.rng.pick([`Look what came out of the rock: ${what}. Yours for ¤${c.price}?`, `A jeweller, aren't you? I found ${what} down the mine. ¤${c.price}?`, `Fresh from the seam: ${what}. ¤${c.price} and it's yours.`])
+      : c.kind === 'shop'
       ? n.rng.pick([`Hello! I'd like ${what}, please.`, `Good day! Have you got ${what}?`, `${what}, please. Is that ¤${c.price}?`])
       : n.rng.pick([`You're the ${PROFESSIONS[j.job].title.toLowerCase()}, aren't you? I'd buy ${what} for ¤${c.price}.`, `Selling ${what}? I'll give you ¤${c.price}.`]);
     n.say(line, 5, '#ffe070');
     n.emoteShow('¤', '#ffe070', 3);
-    this.game.ui.msg(`${n.rec.name.first} wants to buy ${what} (¤${c.price}). Talk to them to trade.`, '#ffe070');
+    this.game.ui.msg(c.kind === 'offer' ? `${n.rec.name.first} the miner offers you ${what} (¤${c.price}). Talk to them to buy it.` : `${n.rec.name.first} wants to buy ${what} (¤${c.price}). Talk to them to trade.`, '#ffe070');
   }
 
   isCustomer(npc) {
@@ -927,7 +946,18 @@ export class Careers {
     const p = this.game.player;
     const L = npc.layout;
     const rec = npc.rec;
-    if (c.kind === 'shop') {
+    if (c.kind === 'offer') {
+      // You buy the miner's find.
+      if (countItem(p.inv, 'coin') < c.price) return { ok: false, reason: 'money' };
+      removeItem(p.inv, 'coin', c.price);
+      rec.coins = (rec.coins || 0) + c.price;
+      const inv = rec.inv || [];
+      const sl = inv.find((q) => q && q.item === c.item && q.count > 0);
+      if (sl) sl.count--;
+      const left = p.give(c.item, c.count);
+      if (left) this.game.spawnDrop(c.item, left, p.x, p.y, p.z, true);
+      c.paid = c.price;
+    } else if (c.kind === 'shop') {
       const biz = L.econ.biz[j.building];
       if ((biz.store[c.item] || 0) < c.count) {
         this.dismissCustomer('Out of stock? Pity.');
@@ -943,7 +973,8 @@ export class Careers {
       if (countItem(p.inv, c.item) < c.count) return { ok: false, reason: 'missing' };
       const price = Math.min(c.price, Math.max(0, rec.coins || 0));
       removeItem(p.inv, c.item, c.count);
-      invAdd(rec.inv, c.item, c.count);
+      // (A guard puts on or takes up what they bought.)
+      if (!equipFor(rec, c.item)) invAdd(rec.inv, c.item, c.count);
       rec.coins -= price;
       this.pay(price);
       c.paid = price;

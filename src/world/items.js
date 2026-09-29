@@ -146,7 +146,7 @@ export function registerSockets() {
     for (const [g, gd] of Object.entries(GEMS)) {
       const stats = { ...(base.stats || {}) };
       for (const [st, n] of Object.entries(gd.stats)) stats[st] = (stats[st] || 0) + n;
-      ITEMS[socketed(key, g)] = { ...base, key: socketed(key, g), name: `${base.name} (${gd.name})`, value: base.value + 40, stats, socket: g, base: key, gift: base.kind === 'armor' ? null : gd.gift };
+      ITEMS[socketed(key, g)] = { ...base, key: socketed(key, g), name: `${base.name} (${gd.name})`, value: base.value + 40, stats, socket: g, base: key };
     }
   }
 }
@@ -194,11 +194,11 @@ item('newspaper', { name: 'Newspaper', kind: 'misc', stack: 32, value: 2, newspa
 // delicate job: see the setting at a jeweller's bench). Each stone raises an
 // ability; set in a weapon, it also gives the blade a gift of its own.
 export const GEMS = {
-  ruby: { name: 'Ruby', color: '#e0304a', stats: { str: 1 }, gift: 'ember', about: 'Strength; blades sometimes burn' },
-  sapphire: { name: 'Sapphire', color: '#3060e0', stats: { agi: 1 }, gift: 'swift', about: 'Agility; blades swing faster' },
-  emerald: { name: 'Emerald', color: '#30c060', stats: { end: 1 }, gift: 'leech', about: 'Endurance; blades mend you as they strike' },
-  topaz: { name: 'Topaz', color: '#e8b830', stats: { cha: 1 }, gift: 'gleam', about: 'Charisma; a gleaming blade impresses' },
-  amethyst: { name: 'Amethyst', color: '#a050e0', stats: { end: 1 }, gift: 'stun', about: 'Endurance; blades stagger foes' },
+  ruby: { name: 'Ruby', color: '#e0304a', stats: { str: 1 }, about: 'Fire: a flaming swing, burning arrows, armour that sets attackers alight' },
+  sapphire: { name: 'Sapphire', color: '#3060e0', stats: { agi: 1 }, about: 'Frost: quicker blades and arrows that chill, armour that slows attackers' },
+  emerald: { name: 'Emerald', color: '#30c060', stats: { end: 1 }, about: 'Life: hits that mend you, armour that closes wounds' },
+  topaz: { name: 'Topaz', color: '#e8b830', stats: { cha: 1 }, about: 'Lightning: blows that arc, arrows that dazzle, armour that blinds attackers' },
+  amethyst: { name: 'Amethyst', color: '#a050e0', stats: { end: 1 }, about: 'Force: staggering blows and arrows, armour that turns blows back' },
 };
 for (const [k, g] of Object.entries(GEMS)) item(k, { name: g.name, kind: 'gem', stack: 16, value: 70, gem: true });
 

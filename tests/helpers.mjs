@@ -56,14 +56,13 @@ export function lotsReady(game, L, type = 'house_m', n = 1) {
   const fit = () => sim.roads.openLots(L).filter((q) => L.fits(q, type));
   for (let d = 0; d < 12 && fit().length < n; d++) {
     const plan = sim.roads.planStreet(L, L.lotSize(type));
-    if (plan) {
-      const p = sim.roads.startStreet(L, plan);
-      p.work = 1e9;
-      sim.works.advance(L, p, sim.abs);
-    } else {
+    if (plan) sim.works.finishNow(L, sim.roads.startStreet(L, plan));
+    else {
       const plot = L.openPlot(type);
       if (!plot || !sim.roads.addLot(L, plot, true)) break;
     }
+    // (And any path to a lot laid.)
+    for (const q of sim.works.projects) if (!q.done && q.sid === L.settlement.id && q.kind === 'path') sim.works.finishNow(L, q);
   }
   return fit();
 }

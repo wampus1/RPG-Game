@@ -10,6 +10,7 @@ import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
+import { planShopping, buyAt, setUpMerchants, tierOf, rollTier, tierGoods, MERCHANT_TIERS, restockStall } from './shops.js';
 import { townWeather, rainedRecently } from '../world/weather.js';
 
 export const DAY = 1440;
@@ -291,6 +292,8 @@ export function initEcon(L) {
     if (!t || !b || t === 'cook' || t === 'inn') continue;
     for (const k of STOCK[t] || []) if (ITEMS[k] && rng.chance(0.7)) st.add(b.store, k, rng.int(1, 3));
   }
+  // Merchants: peddlers, traders and master merchants, with stock to match.
+  setUpMerchants(L, rng);
   const k = kitchenOf(L);
   if (k) {
     st.add(k.store, 'stew', Math.round(rng.int(2, 5) * Math.max(0.4, wealth)));
@@ -592,7 +595,9 @@ export function entryStart(sim, L, rec, act, day, rng) {
 }
 
 // ------------------------------------------------------------ production
-const INCOME = { blacksmith: 4, tailor: 3, carpenter: 3, herbalist: 2, scholar: 2, merchant: 3, miner: 3, lumberjack: 2, laborer: 2, beggar: 0.5, priest: 1, innkeeper: 2, barkeep: 2, noble: 1 };
+const INCOME = { miner: 3, lumberjack: 2, laborer: 2, beggar: 0.5, priest: 1, innkeeper: 2, barkeep: 2, noble: 1 };
+// Trades that live by selling from a shop.
+const SELLS = new Set(['tailor', 'carpenter', 'herbalist', 'scholar', 'merchant']);
 const GOODS = {
   blacksmith: ['iron_ingot', 'iron_sword', 'stone_pickaxe', 'stone_axe', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_boots'],
   tailor: ['cloth', 'cloth', 'leather', 'rug_red', 'bed', 'linen_shirt', 'wool_trousers', 'leather_tunic'],
@@ -673,6 +678,8 @@ function produce(L, rec, rng) {
         const ore = rng.weighted([['cobblestone', 3], ['coal', 3], ['iron_ore', 2.5], ['gold_ore', 0.3]]);
         invAdd(rec.inv, ore, rng.int(1, 2));
       }
+      // Now and then a rough gem turns up in the rock (kept for a jeweller).
+      if (rng.chance(0.03)) invAdd(rec.inv, 'gem', 1);
       // Too much rubble to carry: leave it.
       const rubble = invCount(rec.inv, 'cobblestone');
       if (rubble > 16) invTake(rec.inv, 'cobblestone', rubble - 16);
@@ -683,18 +690,25 @@ function produce(L, rec, rng) {
       if (biz && st.count(biz.store, 'iron_ore') >= 1) {
         st.take(biz.store, 'iron_ore', 1);
         if (st.count(biz.store, 'coal')) st.take(biz.store, 'coal', 1);
+        // (Stock for the shelves: the money comes when somebody buys it.)
         st.add(biz.store, rng.chance(0.6) ? 'iron_ingot' : rng.pick(GOODS.blacksmith), 1);
-        biz.till += 3;
-        biz.earned += 3;
-      } else if (biz) {
-        biz.till += 1;
-        biz.earned += 1;
       }
       return;
     }
     case 'guard': case 'mayor': case 'child': case 'retired':
       return;
     default: {
+      // Shopkeepers and craftsmen make and stock their goods; they earn what
+      // they sell (see shops.js). Others are paid for their work.
+      if (SELLS.has(rec.job)) {
+        if (!biz && rec.job === 'merchant') restockStall(rec, rng);
+        const g = GOODS[rec.job] || STOCK[traderOf(rec)] || [];
+        if (biz && g.length && rng.chance(0.25)) {
+          const item = rng.pick(g);
+          if (ITEMS[item] && st.count(biz.store, item) < 6) st.add(biz.store, item, 1);
+        }
+        return;
+      }
       const base = INCOME[rec.job];
       if (!base) return;
       const inc = Math.round(base * rng.float(0.5, 1.5) * (0.6 + (sk.crafting + sk.trading) * 0.4) * Math.max(0.3, e.wealth));
@@ -835,7 +849,8 @@ function restock(L, rng) {
     for (const k of STOCK[t] || []) {
       if (!ITEMS[k] || st.count(b.store, k) >= 2 || !rng.chance(0.35)) continue;
       const cost = Math.max(1, Math.round(price(k) * 0.4));
-      if (b.till < cost + 10) break;
+      // (Keeping enough back for the wages.)
+      if (b.till < cost + 25) break;
       b.till -= cost;
       st.add(b.store, k, 1);
     }
@@ -975,7 +990,7 @@ function payWages(L, day) {
   for (const [id, b] of Object.entries(e.biz)) {
     const workers = L.npcs.filter((r) => alive(r) && !r.away && r.work && r.work.building === +id);
     if (!workers.length) continue;
-    const float = Math.min(35, 10 + Math.round(pop / 4));
+    const float = Math.min(20, 8 + Math.round(pop / 6));
     const pay = Math.max(0, b.till - float);
     if (!pay) continue;
     const each = Math.floor(pay / workers.length);
@@ -1099,7 +1114,8 @@ function tradeGoodsFor(L, rng) {
 export function packGoods(L, rec, rng) {
   const e = L.econ;
   const goods = {};
-  let budget = Math.round(rec.coins * 0.6);
+  const T = tierOf(rec);
+  let budget = Math.round(rec.coins * (T ? T.share : 0.6));
   for (const b of Object.values(e.biz)) {
     for (const [k, n] of Object.entries(b.store)) {
       if (MEAL_ITEMS.includes(k) || n < 2 || budget < price(k)) continue;
@@ -1111,6 +1127,8 @@ export function packGoods(L, rec, rng) {
     }
   }
   for (const k of tradeGoodsFor(L, rng).slice(0, 5)) if (ITEMS[k]) st.add(goods, k, rng.int(1, 4));
+  // A higher standing buys better wares to carry.
+  if (T) for (const [k, n] of Object.entries(tierGoods(rec.tier, rng))) st.add(goods, k, n);
   return goods;
 }
 
@@ -1167,6 +1185,11 @@ export function tickHour(sim, L, h) {
       entryStart(sim, L, rec, { entry: en, index: i, key: `${day}:${rest ? 'r' : 'w'}${i}` }, day, rng);
     }
     if (o && o.s >= h && o.s < h + 60) entryStart(sim, L, rec, { entry: o.entry, index: -1, key: `o${o.id}` }, day, rng);
+    // Off to the shops: where nobody's watching, it's bought when they go.
+    if (o && o.act === 'shop' && h + 60 > o.s && (!active || !rec.ent || rec.ent.dead)) {
+      buyAt(L, rec, o, day);
+      rec.override = null;
+    }
     const mid = activityFor(rec, day, hm + 30);
     if (mid.entry.act === 'work') produce(L, rec, rng);
   }
@@ -1177,7 +1200,10 @@ export function tickHour(sim, L, h) {
     dailyNeeds(sim, L, day, rng);
   }
   if (hod === 6) restock(L, rng);
-  if (hod === 7) shopForPantries(L, rng);
+  if (hod === 7) {
+    shopForPantries(L, rng);
+    planShopping(sim, L, day);
+  }
   if (hod === 8) collectTaxes(L, day);
   if (hod === 10) mayorReview(sim, L, day, rng);
   if (hod === 18) payWages(L, day);
@@ -1205,7 +1231,10 @@ export function simulateTo(sim, L, abs) {
 export function makeVisitor(from, rng, h, goods) {
   const style = from.style;
   const fam = familyName(rng, style);
+  const tier = rollTier(rng.int(0, 99));
+  for (const [k, n] of Object.entries(tierGoods(tier, rng))) st.add(goods, k, n);
   return {
+    tier,
     from: from.id,
     fromName: from.name,
     name: personName(rng, style, fam),
@@ -1213,7 +1242,7 @@ export function makeVisitor(from, rng, h, goods) {
     goods,
     arrive: h,
     leave: h + rng.int(5, 9) * 60,
-    coins: rng.int(20, 60),
+    coins: Math.round(MERCHANT_TIERS[tier].coins * rng.float(0.4, 0.8)),
     traded: false,
     earned: 0,
     id: `v${hash4(from.id, h, rng.int(0, 1e6))}`,

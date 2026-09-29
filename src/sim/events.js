@@ -230,9 +230,11 @@ export class Events {
     }
     if (ev.state === 'building') {
       // Not finished an hour before? Everyone pitches in.
+      // (Behind in a town you're in, they carry on as the guests arrive;
+      // elsewhere it's simply up.)
       const p = ev.stage !== null ? this.sim.works.projects.find((q) => q.id === ev.stage) : null;
       if (!p || p.done || now >= ev.s - 60) {
-        if (p && !p.done) this.sim.works.finishNow(L, p);
+        if (p && !p.done && !active) this.sim.works.finishNow(L, p);
         ev.state = 'ready';
       }
     }
@@ -480,13 +482,9 @@ export class Events {
     // Lower things first, so the posts stand before the bunting goes up.
     ev.blocks.sort((a, b) => a[1] - b[1]);
     const label = `putting up ${dsn.what} by the square for ${this.title(L, ev)}`;
-    if (active) {
-      const p = this.sim.works.add({ sid: L.settlement.id, kind: 'stage', blocks: ev.blocks, bounds: { x0: site.x0, z0: site.z0, x1: site.x1, z1: site.z1 }, label, ev: ev.id });
-      ev.stage = p.id;
-      return;
-    }
-    this.sim.setBlocks(ev.blocks.filter((op) => this.free(op)));
-    ledger(L, ev.day, `The builders put up ${dsn.what} by the square for ${this.title(L, ev)}.`);
+    // (Builders put it up piece by piece, here or while you're away.)
+    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'stage', blocks: ev.blocks, bounds: { x0: site.x0, z0: site.z0, x1: site.x1, z1: site.z1 }, label, ev: ev.id });
+    ev.stage = p.id;
   }
 
   free([x, y, z]) {
@@ -505,12 +503,8 @@ export class Events {
     ops.sort((a, b) => b[1] - a[1]);
     if (!ops.length) return;
     const dsn = DESIGNS[ev.site.key];
-    if (active) {
-      const p = this.sim.works.add({ sid: L.settlement.id, kind: 'strike', blocks: ops, bounds: { x0: ev.site.x0, z0: ev.site.z0, x1: ev.site.x1, z1: ev.site.z1 }, label: `taking down the ${dsn.what.replace(/^an? /, '')} by the square`, ev: ev.id });
-      ev.strike = p.id;
-      return;
-    }
-    this.sim.setBlocks(ops);
+    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'strike', blocks: ops, bounds: { x0: ev.site.x0, z0: ev.site.z0, x1: ev.site.x1, z1: ev.site.z1 }, label: `taking down the ${dsn.what.replace(/^an? /, '')} by the square`, ev: ev.id });
+    ev.strike = p.id;
   }
 
   // ------------------------------------------------------------ who goes
@@ -578,6 +572,8 @@ export class Events {
     const w = this.game.world;
     const standable = (x, z) => L.inside(x, z, 1) && ![M.BUILD, M.WALL, M.WATER, M.FIELD].includes(L.maskAt(x, z)) && (!w.regionAt(x, z) || w.findStandY(x, z, GROUND) === GROUND);
     const free = (list) => (list || []).map(pos).filter((q) => !taken.has(q.x * 65536 + q.z) && standable(q.x, q.z));
+    // At a wedding, those standing keep a little room round them.
+    const roomy = (x, z) => ev.kind !== 'wedding' || ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => taken.has((x + dx) * 65536 + z + dz));
     const rest = [];
     const couple = ev.couple ? ev.couple.map((i) => L.npcs[i]) : [];
     const close = (r) => couple.some((c) => this.relation(L, r, c) === 'family') ? 2 : couple.some((c) => this.relation(L, r, c) === 'friend') ? 1 : 0;
@@ -626,16 +622,16 @@ export class Events {
         [spot] = free(dsn.dine);
         if (spot) role = 'dine';
       }
-      if (!spot) [spot] = free(dsn.stand);
+      if (!spot) [spot] = free(dsn.stand).filter((q) => roomy(q.x, q.z));
       if (!spot) {
         // Somewhere round the edge.
-        for (let r2 = 1; r2 <= 4 && !spot; r2++) {
+        for (let r2 = 1; r2 <= (ev.kind === 'wedding' ? 7 : 4) && !spot; r2++) {
           for (let dz = -r2; dz <= dsn.d - 1 + r2 && !spot; dz++) {
             for (let dx = -r2; dx <= dsn.w - 1 + r2 && !spot; dx++) {
               if (dz > -r2 && dz < dsn.d - 1 + r2 && dx > -r2 && dx < dsn.w - 1 + r2) continue;
               const x = site.x0 + dx;
               const z = site.z0 + dz;
-              if (!taken.has(x * 65536 + z) && standable(x, z)) spot = { x, z, face: dz < 0 ? 0 : dx < 0 ? 3 : dx >= dsn.w ? 1 : 2 };
+              if (!taken.has(x * 65536 + z) && standable(x, z) && roomy(x, z)) spot = { x, z, face: dz < 0 ? 0 : dx < 0 ? 3 : dx >= dsn.w ? 1 : 2 };
             }
           }
         }

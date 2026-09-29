@@ -158,8 +158,12 @@ export class Roads {
   // Room for a lot here (and a tile clear round it, two from any house)?
   lotOk(L, r) {
     for (const q of L.buildings) if (q.x0 <= r.x1 + 2 && q.x1 >= r.x0 - 2 && q.z0 <= r.z1 + 2 && q.z1 >= r.z0 - 2) return false;
+    // (Its own sign, put up with the street, doesn't count against it.)
+    const sx = r.door ? r.door.x - DX[r.door.rot] : null;
+    const sz = r.door ? r.door.z - DZ[r.door.rot] : null;
     for (let z = r.z0 - 1; z <= r.z1 + 1; z++) {
       for (let x = r.x0 - 1; x <= r.x1 + 1; x++) {
+        if (x === sx && z === sz) continue;
         const ring = x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1;
         if (L.inside(x, z)) {
           const m = L.maskAt(x, z);
@@ -251,7 +255,12 @@ export class Roads {
   // The builders lay the stretch; the lots are marked out once it's done.
   startStreet(L, plan) {
     const s = L.settlement;
+    // The street, then each lot's doorstep and its sign, all by the builders.
     const ops = L.roadOps(plan.road);
+    for (const lot of plan.lots) {
+      ops.push(...L.roadOps(lot.step));
+      ops.push([lot.door.x - DX[lot.door.rot], GROUND, lot.door.z - DZ[lot.door.rot], B.sign, lot.door.rot]);
+    }
     const xs = plan.road.map((t) => t[0]);
     const zs = plan.road.map((t) => t[1]);
     const bounds = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
@@ -274,11 +283,16 @@ export class Roads {
     L.addSuburb(p.bounds);
     let n = 0;
     for (const lot of p.lots || []) {
-      if (!this.lotOk(L, lot)) continue;
+      if (!this.lotOk(L, lot)) {
+        // (Its sign comes down again.)
+        const [sx, sz] = [lot.door.x - DX[lot.door.rot], lot.door.z - DZ[lot.door.rot]];
+        const w = this.game.world;
+        if (!w.regionAt(sx, sz) || w.getBlock(sx, GROUND, sz) === B.sign) this.sim.setBlocks([[sx, GROUND, sz, B.air, 0]]);
+        continue;
+      }
       const plot = { id: L.plots.length, type: 'house_s', x0: lot.x0, z0: lot.z0, x1: lot.x1, z1: lot.z1, door: lot.door, outside: lot.outside, fringe: !L.inside(lot.x0, lot.z0) || !L.inside(lot.x1, lot.z1) };
       L.plots.push(plot);
       for (const [x, z] of lot.step) L.markRoad(x, z);
-      this.sim.setBlocks(L.roadOps(lot.step));
       plot.step = lot.step;
       this.addLot(L, plot, false);
       n++;
@@ -290,19 +304,22 @@ export class Roads {
   // A lot is claimed for the town: its footprint reserved, a sign put up
   // on it, and remembered for next time.
   addLot(L, plot, connect) {
+    const inX = plot.door.x - DX[plot.door.rot];
+    const inZ = plot.door.z - DZ[plot.door.rot];
+    const sign = [inX, GROUND, inZ, B.sign, plot.door.rot];
     // A lot marked out off the streets gets a path to its door first (no
-    // way to it, no lot).
+    // way to it, no lot), which the builders lay (and its sign) before
+    // anything goes up on it.
+    let path = null;
     if (connect && !this.roadside(L, plot)) {
-      const path = L.roadTo(plot);
+      path = L.roadTo(plot);
       if (!path.length) return null;
-      this.sim.setBlocks(L.roadOps(path));
       plot.step = path;
     }
     for (let z = plot.z0; z <= plot.z1; z++) for (let x = plot.x0; x <= plot.x1; x++) if (L.inside(x, z)) L.setMask(x, z, M.BUILD);
     L.addSuburb(plot);
-    const inX = plot.door.x - DX[plot.door.rot];
-    const inZ = plot.door.z - DZ[plot.door.rot];
-    this.sim.setBlocks([[inX, GROUND, inZ, B.sign, plot.door.rot]]);
+    if (path) this.pave(L, plot, [...L.roadOps(path), sign]);
+    else if (connect) this.sim.setBlocks([sign]);
     plot.signAt = { x: inX, y: GROUND, z: inZ };
     L.signs.push({ x: inX, y: GROUND, z: inZ, kind: 'plot', plot: plot.id });
     this.sim.works.registerPlot(L, plot, true);
@@ -314,22 +331,43 @@ export class Roads {
   // come down, say): a path to the door, and a sign.
   connect(L) {
     for (const plot of L.plots) {
-      if (!plot || plot.taken || this.roadside(L, plot)) continue;
+      if (!plot || plot.taken || plot.paving || this.roadside(L, plot)) continue;
       const path = L.roadTo(plot);
       if (!path.length) continue;
-      this.sim.setBlocks(L.roadOps(path));
       plot.step = path;
       const rec = (L.econ.openPlots || []).find((q) => q.id === plot.id);
       if (rec) rec.step = path;
+      const ops = L.roadOps(path);
       if (!plot.signAt) {
         const inX = plot.door.x - DX[plot.door.rot];
         const inZ = plot.door.z - DZ[plot.door.rot];
-        this.sim.setBlocks([[inX, GROUND, inZ, B.sign, plot.door.rot]]);
+        ops.push([inX, GROUND, inZ, B.sign, plot.door.rot]);
         plot.signAt = { x: inX, y: GROUND, z: inZ };
         if (rec) rec.signAt = plot.signAt;
         L.signs.push({ x: inX, y: GROUND, z: inZ, kind: 'plot', plot: plot.id });
       }
+      this.pave(L, plot, ops);
     }
+  }
+
+  // The builders lay a path (and put up the sign) to a lot: until it's
+  // done, nothing is built there.
+  pave(L, plot, ops) {
+    const xs = ops.map((o) => o[0]);
+    const zs = ops.map((o) => o[2]);
+    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'path', blocks: ops, bounds: { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) }, plot: plot.id, quiet: true, label: 'a path to a new lot' });
+    plot.paving = p.id;
+    const rec = (L.econ.openPlots || []).find((q) => q.id === plot.id);
+    if (rec) rec.paving = p.id;
+    return p;
+  }
+
+  // The path's down: the lot is ready.
+  paved(L, p) {
+    const plot = L.plots[p.plot];
+    if (plot) delete plot.paving;
+    const rec = (L.econ.openPlots || []).find((q) => q.id === p.plot);
+    if (rec) delete rec.paving;
   }
 
   // Laid out again after a reload: the streets back on the town's map.

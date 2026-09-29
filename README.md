@@ -491,6 +491,42 @@ is going up, when it was started, how far along it is and who is working on
 it; it comes down once the frame is up. New lots keep a couple of blocks
 clear of the houses already there, and their doors face the nearest street.
 
+Nothing appears out of thin air. Streets, doorsteps, lot signs, paths to new
+lots, city walls and the sets for weddings and feasts are all put in by the
+builders, block by block. In a town you're in, a block only goes in within
+reach of a builder, and the crew walks along the job as it goes. A wall goes
+up a stretch at a time round the town, and each stretch is finished before
+the next. A town's crew takes one job at a time: a wedding or feast set
+first, then whatever was started first. Roads between towns are laid a tile
+at a time from both ends during the working day, until they meet. While you
+sleep or wait, the work carries on at the usual pace.
+
+**Towns you've never seen.** Every town, including those in lands you haven't
+found yet, draws up its plans a few seconds into the game. From then on it
+grows, trades, lays streets, orders and builds buildings, and holds its
+weddings and feasts, whether or not you're there to see it.
+
+**Shops and shopping.** Shopkeepers, smiths, tailors, carpenters, herbalists,
+scholars and stallholders earn only what they sell. Their takings come from
+people who need what they stock, and those people walk to the shop or stall
+and buy it over the counter (you'll hear them ask for it, and the shopkeeper
+name the price). People shop for:
+- worn-out tools of their trade: a miner's pickaxe, a trapper's arrows, a
+  farmer's hoe, a fisher's line;
+- new clothes now and then, and something fine if they can afford it;
+- things for the house, bought by whoever keeps it;
+- salves when they're ill or hurt;
+- books and ink, for readers;
+- armour, and now and then something jewelled, for guards.
+
+Shops restock from outside suppliers and keep enough back for wages.
+
+**Merchants** come in three standings: peddlers, traders and master merchants.
+The better the merchant, the more they start with (a master merchant's stock
+includes gems, gold, fine clothes and jewelled weapons), the bigger their
+purse, and the more they make on a trading trip. Their standing shows as their
+title when you talk to them.
+
 **Blue hearts.** Drinking from a well or sleeping in a village bed gives you
 blue hearts on top of your red ones. They take damage first and break when
 the day ends.
@@ -520,7 +556,8 @@ allow sound before that.
 
 **Turning the camera.** Q and E turn the view a quarter turn either way, so
 you can see behind buildings. The world visibly swings round to the new view.
-Market stall canopies keep their stripes and colour whichever way you look. Movement keys always move you across the screen,
+Market stall canopies keep their stripes and colour whichever way you look.
+While the view turns, time and you stand still. Movement keys always move you across the screen,
 the minimap turns with the view (N marks north), and the placement arrow shows
 which way a block will face.
 
@@ -559,8 +596,23 @@ can use:
   you talk to people: they read it, talk about it, and may pay a coin.
 - Jeweller's bench: set a cut gem into a weapon or armour through a timing
   game. Strike as the light passes each prong; slip three times and the gem
-  cracks. Each gem raises an ability, and on a blade it adds a gift: burning,
-  a faster swing, healing, dazzling or staggering.
+  cracks. Each gem raises an ability, and what else it does depends on what
+  it's set in (see *Gems* below).
+
+**Gems.** A stone works differently in a blade, a bow or armour, and the same
+effects work for guards who carry jewelled gear:
+
+| Stone | In a blade | In a bow | In armour |
+| --- | --- | --- | --- |
+| Ruby | each swing throws a lick of flame a few paces ahead | arrows burst into flame where they land, scorching all around | whoever strikes you catches fire |
+| Sapphire | swings faster, and chills (slows) what it cuts | arrows fly faster and frost what they hit | whoever strikes you is chilled |
+| Emerald | each hit mends you a little | each arrow that strikes mends you | your wounds slowly close by themselves |
+| Topaz | hits sometimes leap as lightning to another foe | arrows call down a dazzling flash | attackers may be dazzled |
+| Amethyst | blows stagger and throw foes back | arrows knock their target back | part of every blow is turned back on the attacker |
+
+Guards with coin to spare buy jewelled pieces from master merchants, or from
+you if you're a jeweller. Miners who turn up a rough gem or some gold bring it
+to a jeweller to sell.
 
 Wooden recipes take any kind of plank or log.
 
@@ -568,6 +620,17 @@ Wooden recipes take any kind of plank or log.
 and brothers and sisters who treat you as family, and their house as your
 home. People think of you as one of their own, not a newcomer. The mayor can
 have a place of your own built, cheaper than for incomers.
+
+**Guards** don't walk through people: they push through crowds ("Make way!"),
+and a prisoner on their rope is pulled through after them.
+
+**In the cell overnight.** Locked up at night with the hearing in the morning,
+you can sleep on the cot until seven.
+
+**Names.** People, families (including trade surnames like Cooper and
+Fletcher), civilizations (a Sultanate, a Jarldom, the Free Cities...), taverns
+and shops (The Red Anvil, The Golden Crust...) are drawn from much bigger
+pools of names.
 
 **Children** spend less time playing. They wander the streets or tag along with
 a parent at work, helping out.
@@ -591,7 +654,9 @@ and the cheerful. The shy, the gloomy, the grieving, the unwell, anyone in a
 low mood and most of the watch stay away, and they'll tell you why if you ask.
 
 At a wedding, family and friends take the benches, the priest (or the mayor)
-marries the couple under the arch, and everyone cheers. At a feast, people eat
+marries the couple under the arch, and everyone cheers. Guests standing keep
+a little room around them, and it's a quiet affair: a remark now and then,
+one at a time. At a feast, people eat
 at the tables, the cooks serve, and dancers go round and round the maypole.
 Everyone who went is in better spirits afterwards, and turning up yourself
 earns you some goodwill. The next morning the builders take it all down and
@@ -642,7 +707,8 @@ src/
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), save slots,
-                       settings, voices, commands (the console),
+                       settings, voices, commands (the console), gems
+                       (what set stones do in blades, bows and armour),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
@@ -651,8 +717,10 @@ src/
                        (professions, shop work, customers, escorts,
                        companions), favours, civic upkeep (guards, supply
                        chains, housing, births, deserted towns), works
-                       (repairs, new buildings, house expansions), roads
-                       (new streets, lots, and what waits for a lot),
+                       (repairs, new buildings, house expansions, all
+                       placed where the builders stand), roads (new streets,
+                       lots, and what waits for a lot), shops (shopping,
+                       stalls, merchant standing),
                        diplomacy (letters, roads, warnings), nomads, town
                        life (elections, weddings, coming of age, raids),
                        events (posters, stages, guests for weddings and

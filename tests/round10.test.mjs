@@ -180,7 +180,7 @@ test('a scribe prints the news and hands it out; people read it and talk of it',
   assert.equal(countItem(p.inv, 'newspaper'), 3);
 });
 
-test('a jeweller sets a gem: stats and a gift for the blade', async () => {
+test('a jeweller sets a gem: stats and a stone that works by what it is set in', async () => {
   const { ITEMS } = await import('../src/world/items.js');
   const { game, p } = start();
   p.give('iron_sword', 1);
@@ -190,7 +190,7 @@ test('a jeweller sets a gem: stats and a gift for the blade', async () => {
   assert.equal(p.inv[i].item, 'iron_sword+ruby');
   assert.equal(countItem(p.inv, 'ruby'), 0);
   const it = ITEMS['iron_sword+ruby'];
-  assert.equal(it.gift, 'ember');
+  assert.equal(it.socket, 'ruby');
   assert.ok(it.stats.str >= 1);
   game.selectSlot(i);
   game.refreshBonus();

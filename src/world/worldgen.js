@@ -7,7 +7,7 @@ import {
 import { RNG, hash4, clamp, smoothstep } from '../util/rng.js';
 import { makeNoise2D, fbm } from '../util/noise.js';
 import { BIOMES, BIOME_STYLE } from './biomes.js';
-import { placeName, CIV_TITLES, CULTURES } from './names.js';
+import { placeName, civName, CULTURES } from './names.js';
 
 const SPLOTCH_STEP_X = 150;
 const SPLOTCH_STEP_Z = 96;
@@ -413,7 +413,7 @@ export class Overworld {
         color: CIV_COLORS[colorOrder[this.civs.length % CIV_COLORS.length]],
         prosperity: rng.float(0.3, 0.9),
       };
-      civ.name = `${rng.pick(CIV_TITLES)} of ${placeName(rng, style)}`;
+      civ.name = civName(rng, style);
       civ.people = CULTURES[style].label;
       this.civs.push(civ);
       const city = place('city', c.cx, c.cz, 2, 2, civ);

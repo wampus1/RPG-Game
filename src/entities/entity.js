@@ -53,7 +53,8 @@ export class Entity {
     this.fz = this.z;
     this.game.moveEntity(this, nx, ny, nz);
     this.moveT = 0;
-    this.moveDur = dur;
+    // (Chilled by frost: slower.)
+    this.moveDur = this.slowT > 0 ? dur * 1.7 : dur;
     this.inWater = this.game.world.isWaterAt(nx, ny, nz);
   }
 
@@ -78,10 +79,23 @@ export class Entity {
       this.emote.t -= dt;
       if (this.emote.t <= 0) this.emote = null;
     }
+    if (this.later) {
+      this.later.delay -= dt;
+      if (this.later.delay <= 0) {
+        const l = this.later;
+        this.later = null;
+        this.say(l.text, l.t, l.color);
+      }
+    }
   }
 
   say(text, t = 3, color) {
     this.bubble = { text, t, color };
+  }
+
+  // A reply a moment after someone else has spoken.
+  sayLater(text, delay = 1, t = 3, color) {
+    this.later = { text, delay, t, color };
   }
 
   emoteShow(ch, color = '#ffe070', t = 2) {

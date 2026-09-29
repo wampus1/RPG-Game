@@ -44,7 +44,21 @@ export const TRADE_BENCHES = {
   smith: ['anvil', 'grindstone', 'furnace'], baker: ['oven'], tailor: ['loom'], herbalist: ['alembic'], scribe: ['writing_desk'], jeweller: ['jeweler_bench'],
 };
 
-const TAVERN_NAMES = ['Prancing Pony', 'Rusty Tankard', 'Sleeping Dragon', 'Golden Goose', 'Laughing Wolf', 'Salted Eel', 'Crooked Crown', 'Drunken Owl', 'Hearth & Horn', 'Wandering Star'];
+const TAVERN_NAMES = ['Prancing Pony', 'Rusty Tankard', 'Sleeping Dragon', 'Golden Goose', 'Laughing Wolf', 'Salted Eel', 'Crooked Crown', 'Drunken Owl', 'Hearth & Horn', 'Wandering Star',
+  'Three Barrels', 'Merry Miller', 'Black Boar', 'Silver Stag', 'Thirsty Crow', 'Fiddler\'s Rest', 'Jolly Tinker', 'Red Lantern', 'Old Oak', 'Wayfarer\'s Welcome', 'Copper Pot', 'Singing Swan', 'Foaming Flagon', 'Bent Horseshoe', 'Sly Fox', 'Weary Traveller'];
+// Shops and halls with names of their own (the kind still shows on the board).
+const SHOP_NAMES = {
+  smithy: ['The Red Anvil', 'Ironside Forge', 'Hammer & Tongs', 'The Emberworks', 'The Bellows', 'Cinder & Iron', 'Stoutsteel Smithy', 'The Glowing Forge'],
+  shop: ['The Copper Kettle', 'Odds & Ends', 'Barrel & Basket', 'The Well-Stocked Shelf', 'Sundries & Supplies', 'The Corner Store', 'The Open Door', 'Provisions'],
+  bakery: ['The Golden Crust', 'The Warm Loaf', 'Flour & Fire', 'The Honey Bun', 'Rise & Shine Bakery', 'The Crusty Cob'],
+  temple: ['Temple of the Dawn', 'Shrine of the Hearth', 'Temple of the Seven Stars', 'Chapel of the Quiet Light', 'Temple of the Harvest', 'Sanctuary of the Well'],
+  library: ['Hall of Letters', 'The Inkwell Library', 'House of Scrolls', 'The Lantern Library'],
+  guardhouse: ['The Watchhouse', 'The Wardens\' Post', 'The Barracks', 'Guardhouse'],
+  tailor: ['Needle & Thread', 'The Silver Spool', 'The Stitchery', 'Fine Cloth & Fancy'],
+  workshop: ['The Sawhorse', 'Plane & Chisel', 'The Oak Bench', 'The Joinery'],
+  herbalist: ['The Green Remedy', 'Root & Leaf', 'Mortar & Pestle', 'The Healing Herb'],
+  townhall: ['Town Hall', 'Council Hall', 'Moot Hall', 'Guildhall'],
+};
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // The narrowest way through a town wall.
@@ -478,6 +492,7 @@ class Layout {
     const DZ = [1, 0, -1, 0];
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
+    else this.nameShop(bld);
     if (type === 'townhall' && this.settlement.type === 'village') bld.name = 'Village Hall';
     this.buildings.push(bld);
     return bld;
@@ -913,6 +928,8 @@ class Layout {
     };
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
+    else this.nameShop(bld);
+    if (type === 'townhall' && this.settlement.type === 'village') bld.name = 'Village Hall';
     return this.planBuilding(bld, rng);
   }
 
@@ -1115,9 +1132,14 @@ class Layout {
       }
     }
     const keep = (x, z) => wallAt.has(x * 65536 + z);
-    // Course by course, so the wall rises evenly all round.
+    // A stretch at a time, course by course, working round the town: the
+    // builders finish one bit before moving along to the next.
+    const W = b.x1 - b.x0;
+    const D = b.z1 - b.z0;
+    const round = (x, z) => (z === b.z0 ? x - b.x0 : x === b.x1 ? W + (z - b.z0) : z === b.z1 ? W + D + (b.x1 - x) : 2 * W + D + (b.z1 - z));
+    const stretch = (q) => Math.floor(round(q[0], q[2]) / 6);
     const kept = list.filter((q) => keep(q[0], q[2]));
-    kept.sort((a, c) => a[1] - c[1]);
+    kept.sort((a, c) => stretch(a) - stretch(c) || a[1] - c[1] || round(a[0], a[2]) - round(c[0], c[2]));
     return { list: kept, tiles: tiles.filter(([x, z]) => keep(x, z)), gates };
   }
 
@@ -1213,6 +1235,16 @@ class Layout {
       return true;
     }
     return false;
+  }
+
+  // A shop's own name (from its own seed: the town's layout doesn't change).
+  nameShop(b) {
+    const list = SHOP_NAMES[b.type];
+    if (!list) return;
+    const taken = new Set(this.buildings.map((q) => q.name));
+    const r = new RNG(hash4(this.settlement.seed, 0x5a0e, b.id, b.type.length));
+    const opts = list.filter((n) => !taken.has(n));
+    if (opts.length) b.name = r.pick(opts);
   }
 
   // ------------------------------------------------------------ construction
@@ -1312,6 +1344,13 @@ class Layout {
           if ((poor && rng.chance(0.06)) || (ruined && rng.chance(0.45))) continue;
           const rot = zs === ze ? 1 : z === zs ? 2 : 0;
           this.put(x, y, z, mats.roof, rot);
+        }
+      }
+      // The gable ends: wall right up under the roof, no gap between.
+      for (const x of [x0, x1]) {
+        for (let z = zs + 1; z <= ze - 1; z++) {
+          if (ruined && rng.chance(0.45)) continue;
+          this.put(x, y, z, mats.wall);
         }
       }
     }

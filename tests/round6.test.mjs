@@ -410,8 +410,7 @@ test('towns grow: new trades, a village becomes a town, a town a walled city', (
     // (A new building waits for a lot: the town lays a street for it.)
     game.sim.roads.daily(L, day);
     growth(game.sim, L, day);
-    for (const p of game.sim.works.projects) if (!p.done && p.sid === sid) p.work = 1e9;
-    game.sim.works.update();
+    for (const p of game.sim.works.projects) if (!p.done && p.sid === sid) game.sim.works.finishNow(L, p);
   }
   const added = L.buildings.map((b) => b.type).filter((t) => !types.has(t));
   assert.ok(added.length >= 1, `new buildings: ${added}`);
@@ -423,7 +422,10 @@ test('towns grow: new trades, a village becomes a town, a town a walled city', (
     if (r && r.wall) wall = r.wall;
   }
   assert.ok(wall, 'the new city builds a wall');
-  for (let i = 0; i < 20000 && !wall.done; i++) game.update(0.5, input);
+  // The builders raise it a stretch at a time (not all at once).
+  for (let i = 0; i < 3000 && !wall.done; i++) game.update(0.5, input);
+  assert.ok(wall.placed > 0 && !wall.done, `under way (${wall.placed}/${wall.total})`);
+  game.sim.works.finishNow(L, wall);
   assert.ok(wall.done && L.walled);
   const t = game.sim.works.built.find((q) => q.kind === 'wall').tiles[0];
   assert.equal(game.world.getBlock(t[0], GROUND + 1, t[1]), B.stone_bricks);
@@ -454,12 +456,10 @@ test('a walled city out of room pulls down part of its wall and builds beyond it
     const r = growth(game.sim, L, day);
     if (r && r.breach) breach = r.breach;
     if (r && r.building && L.plots[r.building.plot].fringe && !breach) {
-      for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) p.work = 1e9;
-      game.sim.works.update();
+      for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) game.sim.works.finishNow(L, p);
       break;
     }
-    for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) p.work = 1e9;
-    game.sim.works.update();
+    for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) game.sim.works.finishNow(L, p);
   }
   // Either a stretch of wall comes down, or (where a gate already opens
   // onto the free ground) the city builds out through the gate.
@@ -479,8 +479,7 @@ test('a walled city out of room pulls down part of its wall and builds beyond it
   for (let k = 0; k < 9; k++) {
     day++;
     growth(game.sim, L, day);
-    for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) p.work = 1e9;
-    game.sim.works.update();
+    for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) game.sim.works.finishNow(L, p);
   }
   const b = s.bounds;
   const out = L.buildings.find((q) => q.x1 < b.x0 || q.x0 > b.x1 || q.z1 < b.z0 || q.z0 > b.z1);

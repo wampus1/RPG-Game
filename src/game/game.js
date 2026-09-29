@@ -33,6 +33,7 @@ import { Playtime } from './playtime.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
+import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateFlames, tickStatus, swingMult, arrowSpeed } from './gems.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -489,6 +490,37 @@ export class Game {
     return null;
   }
 
+  // Someone (not asleep or sitting) standing on a tile.
+  npcAt(x, y, z) {
+    for (const yy of [y, y - 1, y + 1]) {
+      const e = this.occ.get(this.occKey(x, yy, z));
+      if (e && !e.dead && e.kind === 'npc' && !e.sleeping && !e.sitting) return e;
+    }
+    return null;
+  }
+
+  // Push someone out of the way: a step aside (never back where the pusher
+  // is, or onto the tile it's heading for). False if there's nowhere to go.
+  shove(e, by, keep = null) {
+    if (!e || e.dead || e.moving || e.sleeping || e.sitting) return false;
+    const dx = Math.sign(e.x - by.x);
+    const dz = Math.sign(e.z - by.z);
+    // Sideways first, then onward.
+    const opts = dx ? [[0, 1], [0, -1], [dx, 0]] : [[1, 0], [-1, 0], [0, dz || 1]];
+    for (const [ox, oz] of opts) {
+      const nx = e.x + ox;
+      const nz = e.z + oz;
+      if ((nx === by.x && nz === by.z) || (keep && nx === keep.x && nz === keep.z)) continue;
+      const ny = this.world.stepTarget(e.x, e.y, e.z, nx, nz, false);
+      if (ny < 0 || this.occupiedBySolid(nx, ny, nz, e) || this.npcAt(nx, ny, nz)) continue;
+      e.startMove(nx, ny, nz, 0.16);
+      e.path = null;
+      e.atGoal = false;
+      return true;
+    }
+    return false;
+  }
+
   isWanted(sid) {
     return (this.wanted.get(sid) || 0) > 0;
   }
@@ -883,6 +915,12 @@ export class Game {
       this.mining = null;
       return;
     }
+    // So does the camera swinging round: time and you stand still till it's done.
+    if (this.renderer.spin) {
+      this.cursor = null;
+      this.mining = null;
+      return;
+    }
     const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
@@ -932,6 +970,10 @@ export class Game {
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     for (const c of this.creatures) c.update(dt);
+    // Burning, chilled, dazzled; wounds an emerald closes.
+    this.dotHit = true;
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
+    this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) this.removeOcc(c);
       return !c.dead;
@@ -2074,7 +2116,8 @@ export class Game {
     const j = this.sim.justice.jail;
     const owner = this.sim.bedOwner(x, z);
     if (owner && owner.kind === 'jail') {
-      if (!j || j.phase !== 'serving') {
+      // (Locked up for the night before the hearing, you can sleep till morning.)
+      if (!j || (j.phase !== 'serving' && j.phase !== 'night')) {
         this.ui.msg(j ? 'Not now: the hearing isn\'t over.' : 'You\'d rather not sleep in a cell.', '#c8c8c8');
         return;
       }
@@ -2325,7 +2368,9 @@ export class Game {
   // ------------------------------------------------------------ arrows
   shoot(from, target, dmg) {
     const dist = Math.hypot(target.x - from.x, target.z - from.z);
-    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: 0.08 + dist * 0.045, dmg });
+    // (A set stone goes with the arrow: see gems.js.)
+    const gem = gemsOf(from).bow;
+    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: (0.08 + dist * 0.045) * arrowSpeed(from), dmg, gem });
     this.audio?.play('bow', from);
   }
 
@@ -2335,9 +2380,12 @@ export class Game {
       if (a.t < a.dur) continue;
       a.done = true;
       const t = a.target;
-      if (!t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1) this.damage(t, a.dmg, a.from);
+      const hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
+      if (hit) this.damage(t, a.dmg, a.from);
+      onArrowLand(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
+    updateFlames(this, dt);
   }
 
   // Fishing: cast into water, wait for a bite, reel it in.
@@ -2501,6 +2549,7 @@ export class Game {
     p.attackCd = 0.3;
     p.doAction(0.22);
     this.audio?.play('swing');
+    onSwing(this, p);
   }
 
   attack(target) {
@@ -2528,24 +2577,16 @@ export class Game {
       this.swing();
       return;
     }
-    // A set gem's gift: a sapphire swings quicker, a ruby sometimes burns,
-    // an emerald mends you, an amethyst staggers.
-    const gift = def && def.gift;
-    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * (gift === 'swift' ? 0.8 : 1);
+    // A set gem works by what it's set in (see gems.js): a sapphire blade
+    // swings quicker, a ruby throws flame, and so on.
+    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p);
     p.doAction(0.25);
     let dmg = (def && def.damage ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     const crit = Math.random() < 0.1;
     if (crit) dmg *= 1.8;
-    if (gift === 'ember' && Math.random() < 0.3) {
-      dmg += 3;
-      this.renderer.emit(target.x, target.y + 1, target.z, { n: 8, color: ['#ff6030', '#ffb040', '#fff0a0'], up: 35, life: 0.5, oy: -8 });
-    }
+    onSwing(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
-    if (gift === 'leech' && p.hp < p.maxHp) {
-      p.hp = Math.min(p.maxHp, p.hp + 1);
-      this.renderer.emit(p.x, p.y + 1, p.z, { n: 3, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.5, gravity: -10 });
-    }
-    if (gift === 'stun' && !target.dead && target.kind === 'creature') target.stunT = 1.2;
+    onBladeHit(this, p, target);
     // Knockback.
     const kx = Math.sign(target.x - p.x);
     const kz = Math.sign(target.z - p.z);
@@ -2591,6 +2632,8 @@ export class Game {
       }
     }
     target.hp -= amount;
+    // Jewelled armour answers a blow struck in close.
+    if (source && !this.dotHit) onStruck(this, target, source, amount);
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
     this.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: target.species === 'slime' ? ['#58c048', '#8ae070'] : target.kind === 'monster' ? ['#e8e4d4', '#b0aca0'] : ['#c82a2a', '#8a1a1a'], up: 30, speed: 50, life: 0.4, oy: -8 });

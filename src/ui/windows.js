@@ -17,6 +17,7 @@ import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { LAWS, lawList } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete, teleportTo } from '../game/commands.js';
+import { gemText } from '../game/gems.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -1872,8 +1873,10 @@ export class SettingWindow extends Window {
     g.text(16, 2, `${ITEMS[pc.key].name}${pc.ref.kind === 'equip' ? ' (worn)' : ''}`, C.white);
     g.text(3, 4, 'Stone (←→):', C.dim);
     g.text(16, 4, `${GEMS[gk].name} ×${countItem(this.game.player.inv, gk)}`, GEMS[gk].color);
-    g.text(3, 6, GEMS[gk].about + '.', C.fg);
     const res = ITEMS[socketed(pc.key, gk)];
+    // What this stone does in this piece (a blade, a bow or armour).
+    const said = res ? wrap(gemText(socketed(pc.key, gk)).replace(/^Set with an? \w+: /, ''), this.w - 6) : [GEMS[gk].about];
+    said.slice(0, 2).forEach((l, i) => g.text(3, 6 + i, l, C.fg));
     if (res) g.text(3, 8, `Makes: ${res.name}`, C.green);
     g.text(3, 10, 'Press SPACE as the needle passes each prong.', C.faint);
     g.text(3, 11, 'Three slips and the stone cracks.', C.faint);

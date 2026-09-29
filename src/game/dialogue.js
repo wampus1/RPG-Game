@@ -204,7 +204,7 @@ export function topicsFor(npc, game) {
   if (car.isCustomer(npc)) {
     const c = car.customer;
     const what = plural(c.item, c.count);
-    add('serve', c.kind === 'shop' ? `Here you are: ${what}. (¤${c.price})` : `Sell ${what} for ¤${c.price}.`);
+    add('serve', c.kind === 'shop' ? `Here you are: ${what}. (¤${c.price})` : c.kind === 'offer' ? `I'll buy ${what} for ¤${c.price}.` : `Sell ${what} for ¤${c.price}.`);
     add('turn_away', 'Sorry, not today.');
   }
   if (npc.hired) {
@@ -368,6 +368,11 @@ export function whereIs(L, other, game) {
     case 'travel': return 'setting off on the road';
     case 'play': return 'playing around the square';
     case 'study': return 'at their studies';
+    case 'shop': {
+      const b = act.seller !== undefined ? null : L.buildings[act.building];
+      if (act.seller !== undefined) return 'at the market stalls, buying something';
+      return b ? `gone to the ${bare(b.name)} for a ${String(act.item || 'few things').replace(/_/g, ' ')}` : 'out shopping';
+    }
     default: return 'around town somewhere';
   }
 }
@@ -1185,8 +1190,8 @@ function respondRaw(npc, game, id, arg) {
     }
     case 'serve': {
       const r = sim.careers.serveCustomer(npc);
-      if (!r.ok) return { lines: [r.reason === 'missing' ? 'You don\'t have that. Never mind, then.' : r.reason === 'stock' ? 'Out of stock? Pity. Another time.' : 'Hm?'], close: true };
-      return { lines: [r.kind === 'shop' ? pick(rng, ['Thank you kindly!', 'Just what I needed.']) : `Pleasure doing business! Here's ¤${r.paid}.`], close: true };
+      if (!r.ok) return { lines: [r.reason === 'missing' ? 'You don\'t have that. Never mind, then.' : r.reason === 'stock' ? 'Out of stock? Pity. Another time.' : r.reason === 'money' ? 'Short of coin? Another time, then.' : 'Hm?'], close: true };
+      return { lines: [r.kind === 'shop' ? pick(rng, ['Thank you kindly!', 'Just what I needed.']) : r.kind === 'offer' ? `A fair price. It's all yours.` : `Pleasure doing business! Here's ¤${r.paid}.`], close: true };
     }
     case 'conduct': {
       const r = sim.settleConfront(npc, arg || 'expel');

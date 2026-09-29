@@ -10,11 +10,15 @@ import { GROUND } from '../config.js';
 // announcing it comes down).
 const FRAME = 0.45;
 
-const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3, road: 1.6 };
+const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3, road: 1.6, path: 1.6 };
 // Put up for a wedding or a feast, and taken down again after.
 const TEMPORARY = new Set(['stage', 'strike']);
 // Plain lists of blocks round a patch of ground (not a building).
-const PLAIN = new Set(['stage', 'strike', 'road']);
+const PLAIN = new Set(['stage', 'strike', 'road', 'path']);
+// Work spread out over the ground (streets, paths, walls, sets): the
+// builders walk along it, and blocks only go in within their reach.
+const ALONG = new Set(['stage', 'strike', 'road', 'path', 'wall', 'breach']);
+const REACH = 4;
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
 const STRUCTURAL = (id) => {
   const b = BLOCKS[id];
@@ -29,7 +33,9 @@ export const EXPAND_COST = { house_s: 120, house_m: 220 };
 // already in place (clearing empty air, say) costs nothing, so the first
 // thing you see is walls going up, not minutes of nothing. Someone standing
 // where a block goes is asked to step aside (you get to wait for).
-export function placeSome(game, list, st, per, repair = false) {
+// (`near`, if given, says whether a block is within a builder's reach: the
+// work waits at the first one that isn't.)
+export function placeSome(game, list, st, per, repair = false, near = null) {
   const w = game.world;
   if (st.spent === undefined) st.spent = st.placed * per;
   if (!st.wait) st.wait = [];
@@ -73,7 +79,7 @@ export function placeSome(game, list, st, per, repair = false) {
   };
   st.wait = st.wait.filter((op) => {
     if (noop(op)) return false;
-    if (avail < per || inWay(op)) return true;
+    if (avail < per || (near && !near(op)) || inWay(op)) return true;
     take(op);
     return false;
   });
@@ -89,6 +95,7 @@ export function placeSome(game, list, st, per, repair = false) {
       continue;
     }
     if (avail < per) break;
+    if (near && !near(op)) break;
     st.placed++;
     if (inWay(op)) st.wait.push(op);
     else take(op);
@@ -262,8 +269,8 @@ export class Works {
     p.need = Math.max(60, Math.round(p.total * MIN_PER_BLOCK[p.kind]));
     this.projects.push(p);
     const L = this.sim.layoutOf(p.sid);
-    ledger(L, this.sim.today(), `Builders started ${p.label}.`);
-    if (this.game.active.has(p.sid)) this.assignSite(L, p, this.game.day, this.sim.abs);
+    if (!p.quiet) ledger(L, this.sim.today(), `Builders started ${p.label}.`);
+    if (this.game.active.has(p.sid)) this.staff(L, this.game.day, this.sim.abs);
     return p;
   }
 
@@ -279,7 +286,7 @@ export class Works {
   // An open lot with a street at its door (the streets module lays new
   // streets and lots as they're needed).
   freePlot(L, type = 'house_s', insideOnly = false) {
-    const open = L.plots.filter((q) => q && !q.taken && (!insideOnly || !q.fringe) && this.sim.roads.roadside(L, q));
+    const open = L.plots.filter((q) => q && !q.taken && !q.paving && (!insideOnly || !q.fringe) && this.sim.roads.roadside(L, q));
     const area = (q) => (q.x1 - q.x0 + 1) * (q.z1 - q.z0 + 1);
     // The smallest lot that will do...
     const ok = open.filter((q) => !L.fits || L.fits(q, type)).sort((a, b) => area(a) - area(b));
@@ -292,8 +299,8 @@ export class Works {
 
   // A lot marked out after founding: remembered so it's there after a reload.
   registerPlot(L, plot, quiet = false) {
-    const { id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step } = plot;
-    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step });
+    const { id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step, paving } = plot;
+    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step, paving });
     if (!quiet) ledger(L, this.sim.today(), 'The council marked out a new building lot.');
   }
 
@@ -387,9 +394,9 @@ export class Works {
   // How fast work goes. In a town you're in, it's the builders actually on
   // site who count (none there yet: barely anything happens); elsewhere the
   // town's crew is assumed to put in its hours.
-  crewRate(L, onJob, cap) {
+  crewRate(L, onJob, cap, away = false) {
     const crew = this.sim.builders(L);
-    if (this.game.active.has(L.settlement.id)) {
+    if (this.game.active.has(L.settlement.id) && !away) {
       const near = (r) => {
         const o = r.override;
         const sites = (o && (o.sites || (o.target ? [o.target] : null))) || [];
@@ -402,7 +409,20 @@ export class Works {
   }
 
   daily(L, day) {
-    for (const p of this.active(L.settlement.id)) this.assignSite(L, p, day, day * DAY + 420);
+    this.staff(L, day, day * DAY + 420);
+  }
+
+  // One job at a time for the town's crew: a do's set first (it has a
+  // day to be ready by), then whatever was begun first.
+  nextJob(L) {
+    const list = this.active(L.settlement.id).filter((p) => p.kind !== 'repair' || !this.active(L.settlement.id).some((q) => q.kind !== 'repair'));
+    list.sort((a, b) => TEMPORARY.has(b.kind) - TEMPORARY.has(a.kind) || a.id - b.id);
+    return list[0] || null;
+  }
+
+  staff(L, day, fromAbs) {
+    const p = this.nextJob(L);
+    if (p) this.assignSite(L, p, day, fromAbs);
   }
 
   // ------------------------------------------------------------ time
@@ -424,7 +444,10 @@ export class Works {
 
   advance(L, p, now) {
     {
-      const rate = this.crewRate(L, (r) => r.override && r.override.project === p.id, 1.6);
+      // (Time jumping ahead, asleep or waiting, the builders have been at it
+      // wherever it needed doing.)
+      const jump = now - p.last > 20;
+      const rate = this.crewRate(L, (r) => r.override && r.override.project === p.id, 1.6, jump);
       let t = p.last;
       let work = 0;
       while (t < now) {
@@ -442,7 +465,9 @@ export class Works {
         return;
       }
       // Repairs and stages only fill gaps: they never knock down what's there.
-      const batch = placeSome(this.game, plan.list, p, p.need / Math.max(1, plan.list.length), p.kind === 'repair' || p.kind === 'stage');
+      const per = p.need / Math.max(1, plan.list.length);
+      const near = ALONG.has(p.kind) && this.game.active.has(p.sid) && !jump ? this.reachOf(L, p, plan, per) : null;
+      const batch = placeSome(this.game, plan.list, p, per, p.kind === 'repair' || p.kind === 'stage', near);
       if (batch.length) {
         this.sim.setBlocks(batch);
         const g = this.game;
@@ -457,14 +482,75 @@ export class Works {
     }
   }
 
+  // In a town you're in, the builders on a spread-out job walk along it to
+  // where the work is, and a block only goes in beside one of them. (Out
+  // past the edge of town, or if they can't get to it for long, the work
+  // goes on regardless.)
+  reachOf(L, p, plan, per) {
+    const crew = L.npcs.filter((r) => r.override && r.override.project === p.id && r.ent && !r.ent.dead);
+    this.steer(L, p, plan, crew);
+    const b = L.bounds;
+    // (Stuck: a block at a time, not the lot at once.)
+    let spare = crew.length && p.work - (p.spent ?? p.placed * per) > per * 40 ? 1 : 0;
+    return ([x, , z]) => {
+      if (x < b.x0 - 24 || x > b.x1 + 24 || z < b.z0 - 24 || z > b.z1 + 24) return true;
+      if (crew.some((r) => Math.max(Math.abs(r.ent.x - x), Math.abs(r.ent.z - z)) <= REACH)) return true;
+      return spare-- > 0;
+    };
+  }
+
+  // Each builder goes to the next few blocks still to do, a little apart.
+  steer(L, p, plan, crew) {
+    if (!crew.length) return;
+    const now = this.sim.abs;
+    if (p.steerAt !== undefined && now - p.steerAt < 3) return;
+    p.steerAt = now;
+    const w = this.game.world;
+    const todo = [];
+    const pending = new Set();
+    for (let i = p.placed; i < plan.list.length && todo.length < 24; i++) {
+      const [x, y, z, id] = plan.list[i];
+      pending.add(x * 65536 + z);
+      if (w.regionAt(x, z) && w.getBlock(x, y, z) === id) continue;
+      if (!todo.some((q) => Math.max(Math.abs(q[0] - x), Math.abs(q[2] - z)) < 3)) todo.push(plan.list[i]);
+    }
+    for (const op of p.wait || []) if (!todo.length) todo.push(op);
+    if (!todo.length) return;
+    crew.forEach((r, i) => {
+      const [x, , z] = todo[i % todo.length];
+      const o = r.override;
+      const at = o.target;
+      if (at && Math.max(Math.abs(at.x - x), Math.abs(at.z - z)) <= 2) return;
+      // Somewhere to stand beside it that isn't about to be built on.
+      let spot = null;
+      for (let d = 1; d <= 3 && !spot; d++) {
+        for (const [dx, dz] of [[0, d], [0, -d], [d, 0], [-d, 0], [d, d], [-d, d], [d, -d], [-d, -d]]) {
+          const sx = x + dx;
+          const sz = z + dz;
+          if (pending.has(sx * 65536 + sz) && d < 3) continue;
+          if (!w.regionAt(sx, sz) || w.findStandY(sx, sz, GROUND) !== GROUND) continue;
+          spot = { x: sx, z: sz };
+          break;
+        }
+      }
+      if (!spot) return;
+      o.target = spot;
+      o.sites = [spot];
+      if (r.ent.act === 'build' || r.ent.activity) r.ent.activity = null;
+    });
+  }
+
   finish(L, p, plan, silent = false) {
     p.done = true;
     this.takeSignDown(L, p);
     const sim = this.sim;
     for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
+    // On to the next job.
+    if (this.game.active.has(p.sid) && !silent) this.staff(L, this.game.day, this.sim.abs);
     if (PLAIN.has(p.kind)) {
-      if (!silent) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
+      if (!silent && !p.quiet) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
       if (p.kind === 'road') sim.roads.streetDone(L, p);
+      if (p.kind === 'path') sim.roads.paved(L, p);
       return;
     }
     if (p.kind === 'wall' || p.kind === 'breach') {

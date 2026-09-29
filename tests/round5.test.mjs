@@ -222,7 +222,7 @@ test('towns hire and build what their trades depend on', () => {
     for (let d = 0; d < 12; d++) {
       // (New buildings wait for a lot: the town lays streets for them.)
       game.sim.roads.daily(L, d * 2);
-      for (const q of game.sim.works.projects) if (!q.done && q.sid === s.id && q.kind === 'road') { q.work = 1e9; game.sim.works.advance(L, q, game.sim.abs); }
+      for (const q of game.sim.works.projects) if (!q.done && q.sid === s.id && (q.kind === 'road' || q.kind === 'path')) game.sim.works.finishNow(L, q);
       const r = checkSupply(game.sim, L, d * 2);
       if (r && r.hired) hired++;
       if (r && r.building) built++;
@@ -263,11 +263,12 @@ test('mayors write to each other: aid, roads, and warnings about criminals', () 
   const o = d.neighbours(s)[0];
   const slow = d.travelHours(s, o);
   const road = d.startRoad(s, o);
-  for (let day = 0; day < 10 && !road.done; day++) {
-    d.day = null;
-    game.day++;
-    d.update();
-  }
+  // (Laid a tile at a time from both ends over the working days.)
+  const t0 = Math.ceil(game.sim.abs / 1440) * 1440 + 540;
+  d.buildRoads(t0);
+  d.buildRoads(t0 + 60 * 3);
+  assert.ok(!road.done && road.built > 0 && road.built < 30, 'a little at a time');
+  for (let day = 1; day <= 10 && !road.done; day++) d.buildRoads(t0 + day * 1440);
   assert.ok(road.done);
   assert.ok(d.travelHours(s, o) < slow);
   assert.ok(d.roadCells().size > 0, 'shown on the map');

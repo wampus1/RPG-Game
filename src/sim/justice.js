@@ -396,7 +396,9 @@ export class Justice {
     const path = findPath(game.world, p.x, p.y, p.z, x, y, z, { maxNodes: 400, near, partial: true });
     if (!path || !path.length) return false;
     const [nx, ny, nz] = path[0];
-    if (game.occupiedBySolid(nx, ny, nz, p)) return false;
+    // (Anyone in the way is pushed aside by the guard's rope.)
+    const blocker = game.occupiedBySolid(nx, ny, nz, p);
+    if (blocker && !(blocker.kind === 'npc' && (!this.escort || blocker !== this.escort.guard) && game.shove(blocker, p, this.escort ? { x: this.escort.guard.x, z: this.escort.guard.z } : null))) return false;
     const w = game.world;
     if (w.getBlock(nx, ny, nz) === B.door && !w.getState(nx, ny, nz)) game.setDoor(nx, ny, nz, true);
     p.face(nx, nz);

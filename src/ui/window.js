@@ -85,6 +85,7 @@ export function describeActivity(e) {
     case 'alarm': return 'answering the alarm bell';
     case 'camp': return 'looking the town over';
     case 'customer': return 'coming to buy from you';
+    case 'shop': return e.item ? `off to buy a ${e.item.replace(/_/g, ' ')}` : 'shopping';
     case 'confront': return 'looking for you';
     default: return e.act;
   }

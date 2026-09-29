@@ -13,6 +13,7 @@ import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
+import { swingMult, onSwing, onBladeHit } from '../game/gems.js';
 
 const EMOTES = {
   work: ['•', '#e8d8b0'], read: ['≡', '#a0c8ff'], study: ['≡', '#a0c8ff'], pray: ['†', '#ffe8a0'], music: ['♪', '#ff9ad0'],
@@ -313,6 +314,21 @@ export class NPC extends Entity {
         return target(e.target, { tag: 'repair', near: 1 });
       case 'customer': case 'confront':
         return null;
+      case 'shop': {
+        // Up to the stall on the square...
+        if (e.seller !== undefined) {
+          const sr = L.npcs[e.seller];
+          const at = sr && sr.ent && !sr.ent.dead ? sr.ent : sr && sr.work && sr.work.kind === 'spot' ? L.spots[sr.work.spot] : null;
+          return at ? { x: at.x, y: GROUND, z: at.z, near: 2, tag: 'shop', shop: true } : roadTile();
+        }
+        // ...or the counter, where whoever keeps the shop stands.
+        const b = L.buildings[e.building];
+        if (!b) return roadTile();
+        const w0 = b.work && b.work[0];
+        if (w0) return { x: w0.x, y: GROUND, z: w0.z, near: 2, tag: 'shop', shop: true };
+        const g = inBuilding(b);
+        return g ? { ...g, tag: 'shop', shop: true } : { x: b.inside.x, y: GROUND, z: b.inside.z, tag: 'shop', shop: true };
+      }
       case 'camp':
         // Nomads look the town over: the square, the streets, the houses.
         return rng.chance(0.5) ? plazaTile() : roadTile();
@@ -434,6 +450,7 @@ export class NPC extends Entity {
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;
+    if (this.shoveCd > 0) this.shoveCd -= dt;
     // Somehow up on a roof or a wall (nobody's meant to be): back down.
     this.roofT = (this.roofT || 0) - dt;
     if (this.roofT <= 0 && !this.moving) {
@@ -844,6 +861,7 @@ export class NPC extends Entity {
       this.rec.override = null;
       this.activity = null;
     }
+    if (g.shop && this.rec.override && this.rec.override.act === 'shop') this.game.sim.shopArrive(this);
     if (g.poster !== undefined && act === 'poster') this.putPoster(g);
     if (g.trap) this.checkSnare(g.trap);
     if (g.sell && this.rec.job === 'miner') {
@@ -1433,9 +1451,18 @@ export class NPC extends Entity {
     // Facing where it's all happening.
     if (this.goal && this.goal.face !== undefined && !this.sitting && this.rng.chance(dt * 0.3)) this.dir = this.goal.face;
     if (this.lineCd > 0 || this.distTo(game.player) > 16) return;
-    this.lineCd = this.rng.float(14, 32);
+    // A wedding is a quiet affair: guests speak up now and then, and only
+    // one at a time.
+    const wed = ev.kind === 'wedding';
+    this.lineCd = wed ? this.rng.float(40, 90) : this.rng.float(14, 32);
+    const now = game.ui.time || 0;
+    if (wed && now - (ev.talkT ?? -99) < 6) return;
     const lines = events.chatter(this.layout, ev, this.rec, act.role, t);
-    if (lines && lines.length && this.rng.chance(0.5)) this.say(this.rng.pick(lines), 2.8, ev.kind === 'wedding' ? '#ffd0e8' : undefined);
+    const keen = act.role === 'couple' || act.role === 'lead';
+    if (lines && lines.length && this.rng.chance(wed && !keen ? 0.25 : 0.5)) {
+      this.say(this.rng.pick(lines), 2.8, wed ? '#ffd0e8' : undefined);
+      ev.talkT = now;
+    }
   }
 
   mourn(act) {
@@ -1488,9 +1515,11 @@ export class NPC extends Entity {
     if (d <= 1) {
       this.face(c.x, c.z);
       if (this.attackCd <= 0) {
-        this.attackCd = 1.0;
+        this.attackCd = 1.0 * swingMult(this);
         this.doAction(0.3);
+        onSwing(this.game, this, c);
         this.game.damage(c, this.attackDamage(false), this);
+        onBladeHit(this.game, this, c);
       }
       return;
     }
@@ -1625,6 +1654,19 @@ export class NPC extends Entity {
     }
     this.blockT = 0;
     this.waitT = 0;
+    // A guard on the move doesn't walk through people: they're told to
+    // make way, and moved aside.
+    if (this.rec.job === 'guard' && !this.visit) {
+      const other = this.game.npcAt(nx, ny, nz);
+      if (other && other !== this && this.game.shove(other, this, this.path[this.pathI + 1] ? { x: this.path[this.pathI + 1][0], z: this.path[this.pathI + 1][2] } : null)) {
+        const urgent = this.state === 'escort' || this.state === 'fight' || this.state === 'alert';
+        if ((this.shoveCd || 0) <= 0 && (urgent || this.rng.chance(0.3))) {
+          this.shoveCd = 6;
+          this.say(this.state === 'escort' ? this.rng.pick(['Make way! Prisoner coming through!', 'Stand aside!', 'Out of the way, there!']) : urgent ? this.rng.pick(['Make way!', 'Move!']) : this.rng.pick(['Pardon me.', 'Coming through.']), 2);
+        }
+        if (this.rng.chance(0.3)) other.say(other.rng.pick(['Oi!', 'Sorry!', 'Watch it!', 'Oh! Excuse me.']), 1.6);
+      }
+    }
     // Validate the step is still possible (world may have changed).
     const ty = w.stepTarget(this.x, this.y, this.z, nx, nz, true);
     if (ty < 0 || Math.abs(nx - this.x) + Math.abs(nz - this.z) !== 1) {
@@ -1832,10 +1874,13 @@ export class NPC extends Entity {
     const reach = w && ITEMS[w].reach > 2 ? 2 : 1;
     if (d <= reach && Math.abs(t.y - this.y) <= 1) {
       this.face(t.x, t.z);
-      if (this.attackCd <= 0) {
-        this.attackCd = guard ? 0.75 : 1.0;
+      // (Dazzled by a topaz: not this moment.)
+      if (this.attackCd <= 0 && !(this.stunT > 0)) {
+        this.attackCd = (guard ? 0.75 : 1.0) * swingMult(this);
         this.doAction(0.3);
+        onSwing(game, this, t);
         game.damage(t, this.attackDamage(false), this);
+        onBladeHit(game, this, t);
       }
       return;
     }

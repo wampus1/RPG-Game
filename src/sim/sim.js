@@ -17,6 +17,7 @@ import { Favors } from './favors.js';
 import { Press } from './press.js';
 import { Events } from './events.js';
 import { Roads } from './roads.js';
+import { tierOf, MERCHANT_TIERS, buyAt } from './shops.js';
 import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
@@ -138,8 +139,21 @@ export class Sim {
 
   // Towns you've been to keep living while you're away: one at a time, a
   // day's worth at most per step, so the world moves on without a stall.
+  // Places you've never been (in lands you haven't found yet) live too:
+  // their plans are drawn up one every few seconds, and from then on they
+  // grow, build and trade like anywhere else.
   backgroundTick() {
-    const list = [...this.game.world.layouts.values()].filter((L) => L.econ && L.econ.lastAbs !== null && !this.game.active.has(L.settlement.id));
+    const world = this.game.world;
+    if (!this.allLaid) {
+      this.layT = (this.layT ?? 2) - 0.5;
+      if (this.layT <= 0) {
+        this.layT = 2;
+        const s = world.ow.settlements.find((q) => !world.layouts.has(q.id));
+        if (s) world.getLayout(s);
+        else this.allLaid = true;
+      }
+    }
+    const list = [...world.layouts.values()].filter((L) => L.econ && !this.game.active.has(L.settlement.id));
     if (!list.length) return;
     this.bgI = ((this.bgI || 0) + 1) % list.length;
     const L = list[this.bgI];
@@ -462,6 +476,35 @@ export class Sim {
     const after = Math.min(5, Math.floor(r.tradeV / 15));
     if (after > before) this.changeRep(npc, after - before);
     r.met = true;
+  }
+
+  // ------------------------------------------------------------ shopping
+  // Someone reached the counter: they ask for what they came for, the
+  // shopkeeper names the price, and it's theirs.
+  shopArrive(npc) {
+    const L = npc.layout;
+    const rec = npc.rec;
+    const o = rec.override;
+    const r = buyAt(L, rec, o, this.game.day);
+    rec.override = null;
+    npc.activity = null;
+    const keeper = o.seller !== undefined ? L.npcs[o.seller] : L.npcs.find((q) => alive(q) && q.work && q.work.building === o.building && q.ent && !q.ent.dead && q.ent.distTo(npc) < 10);
+    if (!r || r.none) {
+      npc.say(npc.rng.pick(['None left? Never mind.', 'Sold out, is it? Another day, then.']), 3);
+      return r;
+    }
+    const name = (ITEMS[r.item]?.name || r.item).toLowerCase();
+    if (r.poor) {
+      npc.say(npc.rng.pick([`How much? I'll come back for the ${name}.`, 'Ah. A bit dear for me today.']), 3);
+      return r;
+    }
+    npc.say(npc.rng.pick([`A ${name}, please.`, `I'll take the ${name}.`, `One ${name} for me, please.`, `I need a new ${name}.`]), 3);
+    npc.emoteShow?.('¤', '#ffe070', 2);
+    if (keeper && keeper.ent && !keeper.ent.dead) {
+      keeper.ent.face(npc.x, npc.z);
+      keeper.ent.sayLater?.(keeper.ent.rng.pick([`That's ¤${r.cost}. Thank you kindly!`, `¤${r.cost}, please. Mind how you go.`, `There you are. ¤${r.cost}.`]), 1.2, 3);
+    }
+    return r;
   }
 
   // ------------------------------------------------------------ trading
@@ -851,6 +894,8 @@ export class Sim {
   }
 
   hourly(L, h, day, hod, rng) {
+    // The builders are told where they're needed first thing.
+    if (hod === 6) this.works.daily(L, day);
     this.funeralsAndBurials(L);
     this.events.hourly(L, h + 60);
     this.woundedPray(L, h, hod);
@@ -1423,7 +1468,7 @@ export class Sim {
     const goods = packGoods(L, rec, rng);
     const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft });
     const visit = {
-      id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look,
+      id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look, tier: rec.tier,
       goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0,
       // The news from home goes along with the goods.
       news: notableNews(L, day - 5, 3),
@@ -1450,8 +1495,10 @@ export class Sim {
     const v = list.find((q) => q.id === t.visit);
     let earned = v ? v.earned : 0;
     if (!v || !v.traded) {
-      // Nobody watched the trip: assume the goods sold at a modest profit.
-      for (const [k, n] of Object.entries(t.goods)) earned += Math.round(price(k) * n * 1.25);
+      // Nobody watched the trip: the goods sold at a profit (the better
+      // the merchant, the better the price they get).
+      const f = tierOf(rec)?.profit ?? 1.25;
+      for (const [k, n] of Object.entries(t.goods)) earned += Math.round(price(k) * n * f);
     }
     rec.coins += earned;
     rec.earned += earned;
@@ -1530,9 +1577,10 @@ export class Sim {
       if (k && ['fish', 'raw_meat', 'carrot', 'cabbage', 'wheat', 'bread', 'cooked_fish'].includes(item)) buyer = k;
       else if (sb) buyer = sb;
       if (!buyer) continue;
-      const sell = Math.min(n, rng.int(1, Math.max(1, Math.ceil(n / 2))));
+      const T = MERCHANT_TIERS[v.tier || 1] || MERCHANT_TIERS[1];
+      const sell = Math.min(n, rng.int(1, Math.max(1, Math.ceil(n * (T.share + 0.1)))));
       for (let i = 0; i < sell; i++) {
-        const pr = Math.round(price(item) * 1.15);
+        const pr = Math.round(price(item) * (T.profit - 0.05));
         if (buyer.till < pr + 5) break;
         buyer.till -= pr;
         v.earned += pr;
@@ -1643,7 +1691,7 @@ export class Sim {
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, readEdition: r.readEdition, doneKey: r.doneKey,
-      hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
+      hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       ...(r.grown ? { hobbies: r.hobbies } : {}),
       // Someone who changed trade keeps their new one.
