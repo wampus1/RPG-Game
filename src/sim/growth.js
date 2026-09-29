@@ -105,7 +105,8 @@ export function growth(sim, L, day) {
   const works = sim.works;
   // Up a size, when the town has the people, the buildings and the purse.
   const t = TIERS[s.type];
-  if (t && people.length >= t.pop && L.buildings.filter((b) => !b.underConstruction).length >= t.buildings && e.treasury >= t.treasury && t.needs.every(has)) {
+  // (You count too, if you're a citizen.)
+  if (t && people.length + sim.playerCount(s.id) >= t.pop && L.buildings.filter((b) => !b.underConstruction).length >= t.buildings && e.treasury >= t.treasury && t.needs.every(has)) {
     return { promoted: promote(sim, L, t.next, day) };
   }
   // A new city walls itself in.

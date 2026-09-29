@@ -48,20 +48,21 @@ export class Renderer {
   }
 
   // World (x, z) to view (u, v), and back.
+  // (0 - a rather than -a, so there's never a negative zero.)
   toView(x, z) {
     switch (this.view) {
-      case 1: return [-z, x];
-      case 2: return [-x, -z];
-      case 3: return [z, -x];
+      case 1: return [0 - z, x];
+      case 2: return [0 - x, 0 - z];
+      case 3: return [z, 0 - x];
       default: return [x, z];
     }
   }
 
   toWorld(u, v) {
     switch (this.view) {
-      case 1: return [v, -u];
-      case 2: return [-u, -v];
-      case 3: return [-v, u];
+      case 1: return [v, 0 - u];
+      case 2: return [0 - u, 0 - v];
+      case 3: return [0 - v, u];
       default: return [u, v];
     }
   }

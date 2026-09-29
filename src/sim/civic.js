@@ -20,7 +20,7 @@ export function checkWatch(sim, L, day, rng) {
   if (deserted(s)) return null;
   const people = residents(L);
   if (!people.length) return null;
-  if (people.some((r) => r.job === 'guard')) return null;
+  if (people.some((r) => r.job === 'guard') || sim.playerGuard(s.id)) return null;
   let able = people.filter((r) => r.age === 'adult' && !r.away && r.job !== 'mayor');
   // The mayor serves only if there's truly no one else.
   if (!able.length) able = people.filter((r) => r.age === 'adult' && !r.away);

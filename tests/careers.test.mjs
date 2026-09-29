@@ -47,8 +47,14 @@ test('citizens can join the watch: kit, uniform, armor, patrol pay and a new tit
   assert.ok(offer.choices.some((c) => c.arg === 'take:guard'));
   respond(mayor, game, 'profession', 'take:guard');
   assert.equal(playerProfile(game).job, `Town Guard of ${L.settlement.name}`);
-  for (const k of ['iron_sword', 'bow', 'arrow', 'guard_badge']) assert.ok(countItem(p.inv, k) > 0, `kit has ${k}`);
-  assert.equal(p.look.outfit, 'guard');
+  for (const k of ['iron_sword', 'bow', 'arrow', 'guard_badge', 'guard_helm', 'guard_boots']) assert.ok(countItem(p.inv, k) > 0, `kit has ${k}`);
+  // The uniform comes in the pack, in the town's colours: put it on.
+  const tab = p.inv.findIndex((q) => q && q.item.startsWith('tabard_'));
+  assert.ok(tab >= 0, 'a tabard');
+  p.wear(tab);
+  p.wear(p.inv.findIndex((q) => q && q.item === 'guard_helm'));
+  assert.ok(String(p.look.gear.body).startsWith('tabard:'));
+  assert.equal(p.look.hat, 'helmet');
   const hp = p.hp;
   game.damage(p, 8, null);
   assert.ok(hp - p.hp < 8, 'the uniform softens blows');
@@ -64,7 +70,7 @@ test('citizens can join the watch: kit, uniform, armor, patrol pay and a new tit
   // A conviction here costs you the post and the uniform.
   game.sim.careers.onConviction(L.settlement.id);
   assert.equal(game.sim.careers.job, null);
-  assert.notEqual(p.look.outfit, 'guard');
+  assert.ok(!String(p.look.gear?.body || '').startsWith('tabard'), 'the uniform is handed back');
 });
 
 test('licensed trades: a fee, a premium on goods, and the town\'s fields and snares', () => {

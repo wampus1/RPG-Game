@@ -905,7 +905,8 @@ export class LedgerWindow extends Window {
     g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, '#f0e0c0');
     const m = mayorOf(L);
     const living = L.npcs.filter(alive);
-    const pop = living.length;
+    const you = game.sim.playerCount(s.id);
+    const pop = living.length + you;
     const coffers = e.treasury > pop * 35 ? 'overflowing' : e.treasury > pop * 15 ? 'healthy' : e.treasury > pop * 5 ? 'thin' : 'nearly empty';
     let y = 3;
     const row = (k, v, col = '#f0e0c0') => {
@@ -913,7 +914,7 @@ export class LedgerWindow extends Window {
       g.text(18, y++, v.slice(0, 40), col);
     };
     row(s.type === 'village' ? 'Elder' : 'Mayor', m ? `${m.name.first} ${m.name.last}` : '(none: the council governs)');
-    row('Population', `${pop}`);
+    row('Population', `${pop}${you ? ' (you among them)' : ''}${game.sim.playerGuard(s.id) ? ', you on the watch' : ''}`);
     row('Treasury', `¤${e.treasury} (${coffers})`, coffers === 'nearly empty' ? C.orange : '#f0e0c0');
     row('Taxes', `${Math.round(e.tax * 100)}% of earnings${e.taxY ? ` (¤${e.taxY} collected)` : ''}`);
     row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');

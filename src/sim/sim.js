@@ -309,6 +309,17 @@ export class Sim {
     return !!this.citizen && this.citizen.sid === sid;
   }
 
+  // You count among a town's people once you're a citizen, and among its
+  // watch once you're sworn in (so a town with you on the watch needn't
+  // press someone else into it, and losing you costs it a citizen).
+  playerCount(sid) {
+    return this.isCitizen(sid) ? 1 : 0;
+  }
+
+  playerGuard(sid) {
+    return this.careers && this.careers.isGuard(sid) ? 1 : 0;
+  }
+
   // NPCs who can see what happens at (x, z): close enough, looking that
   // way (anyone right beside you notices), with no wall or closed door in
   // between. Windows and open doors let them see through.
@@ -1090,9 +1101,9 @@ export class Sim {
     if (!c) return;
     const L = this.layoutOf(c.sid);
     this.citizen = null;
-    if (!quiet) this.game.ui.msg(`Your citizenship of ${L.settlement.name} was revoked (${reason}).`, '#ff7060');
+    if (!quiet) this.game.ui.msg(`Your citizenship of ${L.settlement.name} was revoked (${reason}). ${L.settlement.name} has one citizen fewer.`, '#ff7060');
     this.careers.onRevoke(c.sid);
-    ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}).`);
+    ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}). ${L.settlement.name} lost a citizen.`);
     const k = this.construction;
     if (k && k.sid === c.sid && !k.done) {
       k.cancelled = true;

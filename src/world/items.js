@@ -122,6 +122,19 @@ wear('iron_greaves', 'Iron Greaves', 'legs', 0.12, 60, 'plate');
 wear('wool_trousers', 'Wool Trousers', 'legs', 0.01, 8, 'cloth');
 wear('leather_boots', 'Leather Boots', 'feet', 0.03, 12, 'leather');
 wear('iron_boots', 'Iron Boots', 'feet', 0.06, 35, 'iron');
+// The watch's uniform, issued to anyone sworn in as a guard: a mail shirt
+// under a tabard in the colours of the civilization (plain red in a free
+// town), a helm and boots. A look written "kind:#colour" is tinted.
+export const TABARDS = { crimson: '#c8323c', azure: '#2f6fd0', verdant: '#3c9a48', gilded: '#e0b030', violet: '#8a4ab8', free: '#b03030' };
+for (const [k, c] of Object.entries(TABARDS)) wear(`tabard_${k}`, `${k[0].toUpperCase()}${k.slice(1)} Guard Tabard`, 'body', 0.16, 30, `tabard:${c}`, { uniform: true, noSell: true });
+wear('guard_helm', 'Guard Helm', 'head', 0.08, 25, 'helmet', { uniform: true, noSell: true });
+wear('guard_boots', 'Guard Boots', 'feet', 0.04, 12, 'iron', { uniform: true, noSell: true });
+
+// The tabard for a settlement's watch.
+export function tabardFor(s) {
+  const k = s && s.civ ? s.civ.color.name.toLowerCase() : 'free';
+  return TABARDS[k] ? `tabard_${k}` : 'tabard_free';
+}
 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });

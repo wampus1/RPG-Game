@@ -83,8 +83,8 @@ export class Diplomacy {
     const near = this.neighbours(s);
     if (!near.length) return null;
     const people = L.npcs.filter((r) => alive(r) && !r.migrated && !r.away);
-    const pop = people.length;
-    const guards = people.filter((r) => r.job === 'guard').length;
+    const pop = people.length + this.sim.playerCount(s.id);
+    const guards = people.filter((r) => r.job === 'guard').length + this.sim.playerGuard(s.id);
     const pick = (list) => list[Math.floor(rng.next() * Math.min(2, list.length))];
     let letter = null;
     const rec = this.sim.justice.recordOf(s.id);

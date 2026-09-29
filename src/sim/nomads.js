@@ -52,7 +52,7 @@ export class Nomads {
     const hungry = people.filter((r) => r.hungry >= 1).length;
     if (!people.length || hungry / people.length < 0.2 || meals > 4) score++;
     else reasons.push('hunger');
-    const guards = people.filter((r) => r.job === 'guard').length;
+    const guards = people.filter((r) => r.job === 'guard').length + this.sim.playerGuard(s.id);
     if (s.deserted || (guards >= 1 && e.recent.violence <= 2)) score++;
     else reasons.push('danger');
     if (e.tax <= 0.16) score++;

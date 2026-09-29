@@ -905,8 +905,8 @@ function mayorReview(sim, L, day, rng) {
   const m = mayorOf(L);
   const who = m ? `${s.type === 'village' ? 'Elder' : 'Mayor'} ${m.name.last}` : 'The council';
   const living = L.npcs.filter(alive);
-  const pop = living.length;
-  const guards = living.filter((r) => r.job === 'guard').length;
+  const pop = living.length + (sim ? sim.playerCount(s.id) : 0);
+  const guards = living.filter((r) => r.job === 'guard').length + (sim ? sim.playerGuard(s.id) : 0);
   const reserve = pop * 8 + guards * 15;
   if (e.treasury < reserve && e.tax < 0.3) {
     e.tax = Math.round(Math.min(0.3, e.tax + 0.02) * 100) / 100;

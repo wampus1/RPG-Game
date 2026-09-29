@@ -5,14 +5,14 @@
 import { JOBS } from '../entities/npcgen.js';
 import { alive, ledger, setOverride, invAdd, st, STOCK } from './econ.js';
 import { countItem, removeItem } from '../game/inventory.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, tabardFor } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 
 export const PROFESSIONS = {
   guard: {
     title: 'Town Guard', citizen: true, minOp: 10,
     kit: [['iron_sword', 1], ['bow', 1], ['arrow', 20], ['guard_badge', 1]],
-    pitch: 'Guards keep the peace from dawn to dusk. You\'d be paid for every hour on duty in town, plus a bounty for each beast put down near our walls.',
+    pitch: 'Guards keep the peace, by day and through the night. You\'d be paid for every hour on duty in town (the night watch pays a little more), plus a bounty for each beast put down near our walls. You\'ll be issued the watch\'s uniform: wear it with pride.',
   },
   trapper: {
     title: 'Trapper', fee: 8, minOp: -10, kit: [['bow', 1], ['arrow', 12], ['snare', 2]], goods: ['raw_meat', 'leather', 'feather'],
@@ -113,9 +113,16 @@ const ROLES = {
 };
 
 export const PREMIUM = 1.3;
-const GUARD_ARMOR = 0.25;
 const DUTY_START = 360;
 const DUTY_END = 1200;
+// The night watch (from the end of the day's duty until it starts again)
+// pays a quarter more an hour.
+const NIGHT_RATE = 1.25;
+
+// The watch's uniform for a town: tabard in its colours, helm and boots.
+export function guardUniform(s) {
+  return [[tabardFor(s), 1], ['guard_helm', 1], ['guard_boots', 1]];
+}
 const HIRE_HOURS = [4, 12, 24, 72];
 
 function buildingAt(L, x, z) {
@@ -182,8 +189,9 @@ export class Careers {
     return !!j && j.kind === 'profession' && j.job === job && j.sid === sid;
   }
 
+  // (A guard's protection is the uniform they wear.)
   armor() {
-    return this.isGuard() ? GUARD_ARMOR : 0;
+    return 0;
   }
 
   // Licensed trappers, fishers and farmers get a better price for their goods.
@@ -201,14 +209,13 @@ export class Careers {
     return npc.rec.work && npc.rec.work.building === j.building ? 0.85 : 1;
   }
 
+  // Guards used to be dressed automatically; now they wear the uniform
+  // they're issued. (Undo the old way on saves from before.)
   applyLook() {
     const p = this.game.player;
     if (!p) return;
     const base = p.baseLook || p.look;
-    if (this.isGuard()) {
-      if (!this.oldLook) this.oldLook = { outfit: base.outfit, hat: base.hat };
-      p.look = { ...base, outfit: 'guard', hat: 'helmet' };
-    } else if (this.oldLook) {
+    if (this.oldLook) {
       p.look = { ...base, ...this.oldLook };
       this.oldLook = null;
     }
@@ -226,9 +233,11 @@ export class Careers {
     if (!j || !p || p.restrained || this.sim.justice.jail) return out;
     const min = g.minute;
     const here = g.currentSettlement && g.currentSettlement.id === j.sid;
-    if (j.kind === 'profession' && j.job === 'guard' && here && min >= DUTY_START && min < DUTY_END) {
+    if (j.kind === 'profession' && j.job === 'guard' && here) {
       const walking = this.sim.abs - this.lastStep < 20;
-      out.push({ text: walking ? `On patrol · ${(j.duty / 60).toFixed(1)}h today` : 'On duty · walk your beat', color: walking ? '#80e070' : '#ffb060' });
+      const night = min < DUTY_START || min >= DUTY_END;
+      const h = ((night ? j.nightDuty || 0 : j.duty) / 60).toFixed(1);
+      out.push({ text: walking ? `${night ? 'Night watch' : 'On patrol'} · ${h}h${night ? '' : ' today'}` : night ? 'Night watch · walk your beat' : 'On duty · walk your beat', color: walking ? '#80e070' : '#ffb060' });
     }
     if (j.kind === 'employee' && min >= j.shift[0] && min < j.shift[1]) {
       const L = this.sim.layoutOf(j.sid);
@@ -246,7 +255,10 @@ export class Careers {
     if (!j) return [];
     if (j.kind === 'profession') {
       const out = [PROFESSIONS[j.job].pitch];
-      if (j.job === 'guard') out.push(`Patrol the town between ${clock(DUTY_START)} and ${clock(DUTY_END)}: time spent walking your beat is paid at ${clock(DUTY_END)}. On duty today: ${(j.duty / 60).toFixed(1)}h. Beasts slain: ${j.bounties}.`);
+      if (j.job === 'guard') {
+        out.push(`Patrol the town between ${clock(DUTY_START)} and ${clock(DUTY_END)}: time spent walking your beat is paid at ${clock(DUTY_END)}. The night watch (${clock(DUTY_END)}-${clock(DUTY_START)}) pays a quarter more an hour, paid at ${clock(DUTY_START)}.`);
+        out.push(`On duty today: ${(j.duty / 60).toFixed(1)}h; on the night watch: ${((j.nightDuty || 0) / 60).toFixed(1)}h. Beasts slain: ${j.bounties}.`);
+      }
       out.push(`Sworn in on day ${j.since}. Earned so far: ¤${j.earned}.`);
       return out;
     }
@@ -300,6 +312,15 @@ export class Careers {
         given.push({ item, count: n });
       }
     }
+    // Guards are issued the watch's uniform, to put on from the pack.
+    if (job === 'guard') {
+      for (const [item, n] of guardUniform(s)) {
+        const left = p.give(item, n);
+        if (left) g.spawnDrop(item, left, p.x, p.y, p.z, true);
+        given.push({ item, count: n });
+      }
+      this.job.uniform = true;
+    }
     this.job.kit = given;
     this.applyLook();
     const title = PROFESSIONS[job].title;
@@ -315,11 +336,13 @@ export class Careers {
     const L = this.sim.layoutOf(j.sid);
     if (L) {
       if (j.kind === 'profession' && j.job === 'guard' && j.duty > 0) this.payDuty(L, j);
+      if (j.kind === 'profession' && j.job === 'guard' && j.nightDuty > 0) this.payDuty(L, j, true);
       if (j.kind === 'employee' && j.tasks > 0) this.payWages(L, j);
     }
     this.job = null;
+    const back = j.kind === 'profession' ? this.returnUniform(j) : 0;
     const what = j.kind === 'profession' ? `your post as ${PROFESSIONS[j.job].title.toLowerCase()} of ${this.townName(j.sid)}` : `your job at the ${j.bname}`;
-    if (!quiet) this.game.ui.msg(reason ? `You lost ${what} (${reason}).` : `You left ${what}.`, reason ? '#ff9060' : '#e8e0a0');
+    if (!quiet) this.game.ui.msg(`${reason ? `You lost ${what} (${reason})` : `You left ${what}`}${back ? ' and handed back the uniform' : ''}.`, reason ? '#ff9060' : '#e8e0a0');
     if (L) ledger(L, this.game.day, `${this.game.playerName} ${reason ? 'was dismissed from' : 'left'} ${j.kind === 'profession' ? `the post of ${PROFESSIONS[j.job].title.toLowerCase()}` : `work at the ${j.bname}`}.`);
     this.applyLook();
   }
@@ -331,6 +354,14 @@ export class Careers {
     const j = this.job;
     const p = this.game.player;
     const kit = [...(j.kit && j.kit.length ? j.kit : []), { item: 'guard_badge', count: 1 }];
+    // The uniform comes off too, if you're wearing it.
+    for (const slot of ['head', 'body', 'legs', 'feet']) {
+      const worn = p.equip && p.equip[slot];
+      if (worn && ITEMS[worn]?.uniform && kit.some((q) => q.item === worn)) {
+        p.equip[slot] = null;
+        p.give(worn, 1);
+      }
+    }
     const held = this.sim.justice.held;
     const taken = [];
     const seen = new Set();
@@ -361,7 +392,32 @@ export class Careers {
 
   // A conviction or losing citizenship costs you your post in that town.
   onConviction(sid) {
-    if (this.job && this.job.sid === sid) this.resign('convicted of a crime');
+    if (this.isGuard(sid)) this.stripGuard('convicted of a crime');
+    else if (this.job && this.job.sid === sid) this.resign('convicted of a crime');
+  }
+
+  // The watch's uniform belongs to the watch: off your back and out of
+  // your pack when you leave it.
+  returnUniform(j) {
+    const p = this.game.player;
+    if (!p || !j || j.job !== 'guard') return 0;
+    const issued = new Set((j.kit || []).map((q) => q.item).filter((k) => ITEMS[k]?.uniform));
+    let n = 0;
+    for (const slot of ['head', 'body', 'legs', 'feet']) {
+      const worn = p.equip && p.equip[slot];
+      if (worn && issued.has(worn)) {
+        p.equip[slot] = null;
+        n++;
+      }
+    }
+    for (const k of issued) {
+      const c = countItem(p.inv, k);
+      if (c) {
+        removeItem(p.inv, k, c);
+        n += c;
+      }
+    }
+    return n;
   }
 
   onRevoke(sid) {
@@ -395,19 +451,22 @@ export class Careers {
     this.game.audio?.play('coin');
   }
 
-  payDuty(L, j) {
-    const hours = Math.min(10, j.duty / 60);
+  payDuty(L, j, night = false) {
+    const hours = Math.min(10, (night ? j.nightDuty || 0 : j.duty) / 60);
     const cond = L.settlement.condition;
-    const rate = cond === 'prosperous' ? 3 : cond === 'poor' ? 1.5 : 2;
+    const rate = (cond === 'prosperous' ? 3 : cond === 'poor' ? 1.5 : 2) * (night ? NIGHT_RATE : 1);
     const owed = Math.round(hours * rate);
-    j.duty = 0;
-    j.paidDay = this.game.day;
+    if (night) j.nightDuty = 0;
+    else {
+      j.duty = 0;
+      j.paidDay = this.game.day;
+    }
     if (owed <= 0) return 0;
     const paid = Math.max(0, Math.min(owed, Math.floor(L.econ.treasury)));
     L.econ.treasury -= paid;
     if (paid) this.pay(paid);
     j.earned += paid;
-    this.game.ui.msg(`Guard pay from ${L.settlement.name}: ¤${paid} for ${hours.toFixed(1)}h on duty.${paid < owed ? ' The treasury is short.' : ''}`, '#ffe070');
+    this.game.ui.msg(`${night ? 'Night watch' : 'Guard'} pay from ${L.settlement.name}: ¤${paid} for ${hours.toFixed(1)}h on duty.${paid < owed ? ' The treasury is short.' : ''}`, '#ffe070');
     return paid;
   }
 
@@ -899,8 +958,23 @@ export class Careers {
         j.dutyDay = day;
         j.duty = 0;
       }
-      if (awake && min >= DUTY_START && min < DUTY_END && within(L.bounds, p.x, p.z, 4) && this.sim.abs - this.lastStep < 20) j.duty += dm;
+      // Guards sworn in before uniforms were issued get theirs now.
+      if (!j.uniform) {
+        j.uniform = true;
+        const s = L.settlement;
+        for (const [item, n] of guardUniform(s)) {
+          const left = p.give(item, n);
+          if (left) g.spawnDrop(item, left, p.x, p.y, p.z, true);
+          (j.kit ||= []).push({ item, count: n });
+        }
+        g.ui.msg(`The watch of ${s.name} has issued you its uniform. Put it on from your pack.`, '#e8e0a0');
+      }
+      const onBeat = awake && within(L.bounds, p.x, p.z, 4) && this.sim.abs - this.lastStep < 20;
+      if (onBeat && min >= DUTY_START && min < DUTY_END) j.duty += dm;
+      else if (onBeat) j.nightDuty = (j.nightDuty || 0) + dm;
       if (min >= DUTY_END && j.duty > 0 && j.paidDay !== day) this.payDuty(L, j);
+      // The night watch is paid off in the morning.
+      if (min >= DUTY_START && min < DUTY_END && j.nightDuty > 0) this.payDuty(L, j, true);
       return;
     }
     const emp = L.npcs[j.employer];

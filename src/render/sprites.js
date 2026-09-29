@@ -71,11 +71,19 @@ function drawHumanoid(look, dir, frame) {
   if (outfit === 'hunter') shirt = hex(oc.tunic);
   // Worn armour and clothes change the colours underneath (and cover the
   // everyday outfit's details).
-  const gear = look.gear || {};
+  // Worn gear, as "kind" or "kind:#tint".
+  const gear0 = look.gear || {};
+  const gear = {};
+  const tint = {};
+  for (const k of Object.keys(gear0)) {
+    const [kind, t] = String(gear0[k]).split(':');
+    gear[k] = kind;
+    if (t) tint[k] = t;
+  }
   let shoesG = null;
-  if (gear.body && GEAR[gear.body]?.shirt) shirt = hex(GEAR[gear.body].shirt);
-  if (gear.legs && GEAR[gear.legs]?.pants) pants = hex(GEAR[gear.legs].pants);
-  if (gear.feet && GEAR[gear.feet]?.shoes) shoesG = hex(GEAR[gear.feet].shoes);
+  if (gear.body && (tint.body || GEAR[gear.body]?.shirt)) shirt = hex(gear.body === 'tabard' ? '#6a6a78' : tint.body || GEAR[gear.body].shirt);
+  if (gear.legs && (tint.legs || GEAR[gear.legs]?.pants)) pants = hex(tint.legs || GEAR[gear.legs].pants);
+  if (gear.feet && (tint.feet || GEAR[gear.feet]?.shoes)) shoesG = hex(tint.feet || GEAR[gear.feet].shoes);
   const skel = outfit === 'skeleton';
   const small = look.small;
   const sit = frame === 4;
@@ -170,9 +178,12 @@ function drawHumanoid(look, dir, frame) {
   // Armour details over the top.
   if (!skel) {
     const G = (x, y, w, h, c) => R(x, y, w, h, hex(c));
-    if (gear.body === 'chain') {
+    if (gear.body === 'chain' || gear.body === 'tabard') {
       for (let y = torsoY; y < torsoY + torsoH; y++) for (let x = tx; x < tx + tw; x++) S(x, y, hex((x + y) % 2 ? '#8a8a98' : '#6a6a78'));
       G(tx, legY - 1, tw, 1, '#5a4030');
+      // The watch's tabard over the mail, in the town's colours.
+      if (gear.body === 'tabard' && dir !== 2) G(side ? 7 : 6, torsoY, side ? 3 : 4, torsoH + 2, tint.body || '#b03030');
+      if (gear.body === 'tabard' && dir === 2) G(tx + 1, torsoY, tw - 2, torsoH, tint.body || '#b03030');
     } else if (gear.body === 'plate') {
       G(tx, torsoY, tw, 1, '#d8dce8');
       G(tx, torsoY + torsoH - 1, tw, 1, '#7a7c88');
@@ -206,7 +217,7 @@ function drawHumanoid(look, dir, frame) {
     }
   }
   // Arms.
-  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'guard' ? hex(oc.chain2) : shirtC;
+  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : shirtC;
   if (!side) {
     const swing = frame === 3 ? -2 : walk;
     R(3, torsoY + (swing > 0 ? -1 : 0), 1, torsoH - 1, armC);
@@ -928,8 +939,8 @@ function blockIcon(id) {
 // Worn things: a little picture of the piece in its colours.
 function armorIcon(it) {
   const p = new Px(16, 16);
-  const lk = it.look;
-  const col = {
+  const [lk, tintCol] = String(it.look).split(':');
+  const col = tintCol || {
     lcap: '#7a5232', helmet: '#9a9aa8', straw: '#e8c860', hood: '#6a4a2a', circlet: '#e0b830',
     leather: it.slot === 'feet' ? '#4a2e1a' : '#7a5232', chain: '#8a8a98', plate: '#a8aab8', linen: '#e8e0cc', coat: '#3a2a4a', cloth: '#4a4a6a', iron: '#8a8a98',
   }[lk] || '#888888';
@@ -961,6 +972,17 @@ function armorIcon(it) {
     if (lk === 'plate') p.rect(7, 4, 2, 8, hi);
     if (lk === 'leather') for (let y = 5; y < 12; y += 2) p.set(8, y, hex('#3a2414'));
     if (lk === 'coat') p.rect(7, 3, 2, 11, hex('#c8a030'));
+    if (lk === 'tabard') {
+      // Mail sleeves and a coloured tabard down the front.
+      const m = hex('#8a8a98');
+      p.rect(2, 3, 2, 6, m);
+      p.rect(12, 3, 2, 6, m);
+      p.rect(4, 3, 8, 10, m);
+      for (let y = 4; y < 13; y++) for (let x = 4; x < 12; x++) if ((x + y) % 2) p.set(x, y, hex('#6a6a78'));
+      p.rect(5, 3, 6, 11, c);
+      p.hline(5, 10, 3, hi);
+      p.rect(7, 6, 2, 3, hex('#f0e0a0'));
+    }
     p.hline(4, 11, 12, lo);
   } else if (it.slot === 'legs') {
     p.rect(4, 3, 8, 2, lo);

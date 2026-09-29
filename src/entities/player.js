@@ -16,9 +16,9 @@ export const BLUE_CAP = 6; // three blue hearts at most
 // `view` quarter turns (the renderer's toWorld, for directions).
 export function screenToWorld(du, dv, view) {
   switch (view) {
-    case 1: return [dv, -du];
-    case 2: return [-du, -dv];
-    case 3: return [-dv, du];
+    case 1: return [dv, 0 - du];
+    case 2: return [0 - du, 0 - dv];
+    case 3: return [0 - dv, du];
     default: return [du, dv];
   }
 }
