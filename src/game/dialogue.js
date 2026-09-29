@@ -3,6 +3,7 @@
 // other townsfolk, directions, small talk with questions back, favours,
 // jobs, professions, escorts, citizenship, the law...). Lines refer to
 // other people by name, never by gendered pronouns.
+import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
 import { MAP_W } from '../config.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
@@ -41,6 +42,10 @@ export function griefOf(rec) {
 
 // A short remark as the player walks past.
 export function greetLine(npc, game, rep, citizen) {
+  return speak(npc.rec, greetRaw(npc, game, rep, citizen), { first: true, warm: rep >= 35, cold: rep <= -25 });
+}
+
+function greetRaw(npc, game, rep, citizen) {
   const rng = npc.rng;
   const p = npc.rec.personality;
   const tw = timeWord(game.minute);
@@ -70,6 +75,11 @@ export function dialogueLine(npc, game, kind) {
 
 // First thing they say when you start talking.
 export function openingLine(npc, game) {
+  const op = game.sim ? game.sim.opinion(npc) : 0;
+  return speak(npc.rec, openingRaw(npc, game), { first: true, warm: op >= 35, cold: op <= -25 });
+}
+
+function openingRaw(npc, game) {
   const rec = npc.rec;
   const s = npc.settlement;
   const rng = npc.rng;
@@ -249,7 +259,7 @@ export function askMenu(npc, game) {
   if (!rec.visitor) out.push({ id: 'family', label: 'Your family' });
   out.push({ id: 'people', label: 'Someone you know...' });
   out.push({ id: 'directions', label: 'Where to find a place...' });
-  if (!npc.visit) out.push({ id: 'laws', label: rec.job === 'guard' ? 'Any trouble lately' : 'The laws and taxes' });
+  if (!npc.visit && rec.age !== 'child') out.push({ id: 'laws', label: rec.job === 'guard' ? 'Any trouble lately' : 'The laws and taxes' });
   return out;
 }
 
@@ -869,7 +879,17 @@ function answer(npc, game, arg) {
 }
 
 // The NPC's answer to a topic: { lines, choices, back, close, open, after }.
+// Everything a person says to you comes out in their own voice.
 export function respond(npc, game, id, arg) {
+  const r = respondRaw(npc, game, id, arg);
+  if (r && Array.isArray(r.lines) && game.sim) {
+    const op = game.sim.opinion(npc);
+    r.lines = speakAll(npc.rec, r.lines, { warm: op >= 35, cold: op <= -25 });
+  }
+  return r;
+}
+
+function respondRaw(npc, game, id, arg) {
   const rec = npc.rec;
   const L = npc.layout;
   const s = npc.settlement;
@@ -898,7 +918,7 @@ export function respond(npc, game, id, arg) {
         if (hb.length) facts.push(`When I'm not working, I'm usually ${hb[0].label}.`);
         const home = npc.homeBuilding();
         if (home && home.homeName) facts.push(`I live at ${home.homeName}.`);
-        if (rec.traits.length) facts.push(`People say I'm ${rec.traits[rec.traits.length - 1]}. Can't think why.`);
+        if (rec.traits.length) facts.push(`People say I'm ${traitWords([rec.traits[rec.traits.length - 1]])}. Can't think why.`);
         if (rec.skills) {
           const best = Object.entries(rec.skills).sort((a, b) => b[1] - a[1])[0];
           if (best && best[1] > 0.6) facts.push(`I'm good at ${best[0]}, if I say so myself.`);
@@ -914,7 +934,7 @@ export function respond(npc, game, id, arg) {
       const sk = rec.skills || {};
       if (rec.job === 'cook') lines.push(sk.cooking > 0.75 ? 'Folk come from miles around for my feasts.' : sk.cooking < 0.45 ? 'I\'m... still learning. Don\'t ask about the gruel.' : 'I cook a decent stew, if I say so myself.');
       else if (rec.job === 'trapper') lines.push(sk.hunting > 0.7 ? 'Bow, blade or snare, I always bring something home.' : 'Some days the woods are generous. Some days not.');
-      else if (rec.traits.length && tn !== 'cold') lines.push(`People say I'm ${rec.traits.slice(0, 2).join(' and ')}.`);
+      else if (rec.traits.length && tn !== 'cold') lines.push(`People say I'm ${traitWords(rec.traits.slice(0, 2))}.`);
       return { lines, choices: [{ id: 'work', label: 'What\'s your work like?' }, { id: 'family', label: 'Do you have family here?' }] };
     }
     case 'doing': {
@@ -949,7 +969,7 @@ export function respond(npc, game, id, arg) {
     }
     case 'work': return workTalk(npc, game);
     case 'news': return { lines: news(npc, game), choices: [{ id: 'news', label: 'Anything else?' }], back: 'Thanks.' };
-    case 'life': return { lines: lifeIn(npc, game) };
+    case 'life': return { lines: rec.age === 'child' ? kidLife(npc, game) : lifeIn(npc, game) };
     case 'family': {
       const lines = family(npc, game);
       const g = griefOf(rec);
@@ -1195,6 +1215,7 @@ export function respond(npc, game, id, arg) {
       return { lines: [pick(rng, [`From ${r.f.giverName}? How lovely!`, `${r.f.giverName} wrote to me? Let me see...`]), rec.personality.kindness > 0.5 ? 'Thank you for bringing it all this way.' : 'Thanks.', ...(r.paid ? [`(${r.f.giverName} left ¤${r.paid} for you.)`] : [])] };
     }
     case 'laws': {
+      if (rec.age === 'child') return { lines: ['Laws? That\'s grown-up stuff. Ask my mum.'] };
       const lines = [];
       lines.push(`Taxes here are ${Math.round(e.tax * 100)}% of earnings${sim.isCitizen(s.id) ? `, and citizens pay about ¤${sim.playerTax(npc.layout, 0).tax} a day, plus a share of what they earn here` : ''}.`);
       lines.push(e.fineScale > 1.1 ? 'Fines are steep lately: we\'ve had trouble.' : e.fineScale < 0.95 ? 'Fines are lenient. We believe in second chances.' : 'Break the law and you\'ll pay a fair fine, or sit in a cell.');
@@ -1424,6 +1445,25 @@ function news(npc, game) {
   // Only a place actually named goes on your map.
   for (const line of said) if (about.has(line)) revealTown(game, about.get(line));
   return said;
+}
+
+// Traits in a sentence: "brave and a night owl".
+function traitWords(list) {
+  return list.map((t) => (t.includes(' ') ? `${/^[aeiou]/.test(t) ? 'an' : 'a'} ${t}` : t)).join(' and ');
+}
+
+// Children see a town their own way.
+function kidLife(npc, game) {
+  const rng = npc.rng;
+  const L = npc.layout;
+  const kids = L.npcs.filter((r) => alive(r) && r.age === 'child' && r !== npc.rec).length;
+  return [pick(rng, [
+    kids ? `There's ${kids} of us kids here. We play tag and hide and seek behind the houses!` : 'There\'s nobody my age to play with. It\'s boring.',
+    'The best hiding place is behind the barrels. Don\'t tell anyone!',
+    'The tavern smells nice when they\'re cooking.',
+    'The guards let me hold a sword once. Well, nearly.',
+    'Lessons are boring. I\'d rather be fishing.',
+  ])];
 }
 
 function lifeIn(npc, game) {
