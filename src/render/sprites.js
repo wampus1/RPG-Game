@@ -781,6 +781,14 @@ function simpleIcon(key) {
       p.line(4, 9, 7, 12, '#6a5030');
       p.line(3, 13, 5, 11, HANDLE[1]);
       break;
+    case 'raft':
+      for (let i = 0; i < 5; i++) {
+        p.rect(2 + i * 2 + (i > 2 ? 1 : 0), 3 + (i % 2), 2, 10 - (i === 4 ? 1 : 0), ['#9a6a38', '#8a5c30', '#a8743e', '#8e602f', '#9c6c3a'][i]);
+        p.set(3 + i * 2 + (i > 2 ? 1 : 0), 6 + i, '#6a4420');
+      }
+      p.hline(2, 13, 5, '#d8c890');
+      p.hline(2, 13, 11, '#d8c890');
+      break;
     case 'fishing_rod':
       p.line(2, 14, 13, 2, HANDLE[0]);
       p.line(13, 2, 13, 11, '#e8e8f0');

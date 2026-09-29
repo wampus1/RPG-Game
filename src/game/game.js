@@ -24,6 +24,7 @@ import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
+import { launch as launchRaft, landing as raftLanding, floatable } from '../entities/raft.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
@@ -1179,6 +1180,11 @@ export class Game {
         return;
       }
     }
+    // A raft goes in the water, and you climb on.
+    if (held && held.raft && c && c.block && c.block.liquid && c.inReach && !this.player.raft) {
+      this.launchRaft(c.x, c.z);
+      return;
+    }
     if (held && held.fishing && c && c.block && c.block.liquid && c.inReach && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
       this.castLine(c);
       return;
@@ -1547,7 +1553,42 @@ export class Game {
     this.lightDirty = true;
   }
 
+  // Out onto the water.
+  launchRaft(x, z) {
+    const p = this.player;
+    if (!floatable(this.world, x, z)) {
+      this.ui.msg('The raft needs open water.', '#c8c8c8', true);
+      return false;
+    }
+    if (Math.hypot(x - p.x, z - p.z) > 2.5) {
+      this.ui.msg('Get closer to the water.', '#c8c8c8', true);
+      return false;
+    }
+    removeItem(p.inv, 'raft', 1);
+    launchRaft(this, x, z);
+    this.audio?.play('splash');
+    this.ui.msg('You push off on the raft. A/D turn, W paddles, S back-paddles, E to go ashore.', '#a0d8ff');
+    return true;
+  }
+
+  // Back onto dry land, the raft under your arm.
+  leaveRaft(force = false) {
+    const p = this.player;
+    if (!p.raft) return false;
+    const spot = raftLanding(p);
+    if (!spot && !force) {
+      this.ui.msg('No bank close enough to step onto.', '#c8c8c8', true);
+      return false;
+    }
+    p.raft = null;
+    if (spot) p.teleport(spot.x, spot.y, spot.z);
+    p.give('raft', 1);
+    this.audio?.play('step_grass');
+    return true;
+  }
+
   interactFront() {
+    if (this.player.raft) return this.leaveRaft();
     const c = this.cursor;
     if (c && c.entity && c.entity.kind === 'npc' && c.entity.distTo(this.player) <= 4) return this.talk(c.entity);
     if (c && c.block && c.block.interact && c.inReach) return this.interact(c.x, c.y, c.z);
@@ -2013,6 +2054,10 @@ export class Game {
   teleportPlayer(x, y, z) {
     const p = this.player;
     p.sitting = null;
+    if (p.raft) {
+      p.raft = null;
+      p.give('raft', 1);
+    }
     this.loadAround(x, z, true);
     const yy = this.world.canStand(x, y, z) ? y : this.world.findStandY(x, z, y);
     p.teleport(x, yy > 0 ? yy : y, z);
@@ -2597,6 +2642,8 @@ export class Game {
 
   respawn() {
     const p = this.player;
+    // The raft drifted off.
+    p.raft = null;
     p.dead = false;
     p.hp = p.maxHp;
     p.sitting = null;
@@ -2772,7 +2819,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, equip: p.equip, look: p.baseLook },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook },
       name: this.playerName,
       hero: this.hero || null,
       regions,
@@ -2799,6 +2846,7 @@ export class Game {
     this.loadAround(pd.x, pd.z, true);
     this.player = new Player(this, pd.x, pd.y, pd.z);
     if (pd.blue) this.player.blue = pd.blue;
+    if (pd.raft) this.player.raft = { ...pd.raft, v: 0 };
     if (pd.vigor) {
       this.player.vigor = pd.vigor;
       this.player.recalcMaxHp();

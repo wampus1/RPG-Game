@@ -1273,9 +1273,19 @@ export class Sim {
     dests.sort((a, b) => a.d - b.d);
     // Letters from the mayor decide where the merchant goes first.
     const pick = this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
-    const travel = this.diplomacy.travelHours(s, pick.o);
+    // Between two towns on the water, a merchant with a raft goes by river
+    // or along the coast: quicker than the road.
+    const wet = (q) => q.river || q.coast;
+    const byRaft = wet(s) && wet(pick.o) && (s.river === pick.o.river || s.coast === pick.o.coast);
+    const hasRaft = () => (rec.inv || []).some((q) => q && q.item === 'raft' && q.count > 0);
+    if (byRaft && !hasRaft() && rec.coins >= 20) {
+      rec.coins -= 16;
+      invAdd((rec.inv ||= []), 'raft', 1);
+    }
+    const raft = byRaft && hasRaft();
+    const travel = Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : 1)));
     const goods = packGoods(L, rec, rng);
-    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day });
+    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft });
     const visit = {
       id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look,
       goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0,
@@ -1288,7 +1298,7 @@ export class Sim {
     t.visit = visit.id;
     const mail = this.diplomacy.letters.filter((q) => q.from === s.id && q.to === pick.o.id && q.status === 'waiting').length;
     this.diplomacy.carry(s.id, pick.o.id, rec, t.arrive);
-    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name} with a pack of goods${mail ? ' and a letter from the mayor' : ''}.`);
+    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name}${raft ? ' by raft' : ''} with a pack of goods${mail ? ' and a letter from the mayor' : ''}.`);
     if (rec.ent && !rec.ent.dead) {
       // Walk out of town first, then vanish over the horizon.
       setOverride(rec, h, h + 180, 'travel', { place: 'road' });

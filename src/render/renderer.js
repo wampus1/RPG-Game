@@ -8,6 +8,14 @@ import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, SPR_PAD, SHEET_
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { Lighting } from './lighting.js';
+import { raftSprite, RAFT_BOX } from '../entities/raft.js';
+
+const makeCanvas = (w, h) => {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+};
 
 const CULL_SAME = new Set();
 
@@ -393,7 +401,13 @@ export class Renderer {
       ctx.drawImage(icon, sx + 4, Math.round(feetY - 9 + bob - air * LH));
       return;
     }
-    if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
+    let bob = 0;
+    if (e.raft) {
+      // The raft, turned to its heading pixel by pixel, bobbing on the water.
+      bob = Math.round(Math.sin(this.time * 2.2 + e.id) * 0.8);
+      const img = raftSprite(e.raft.ang, makeCanvas);
+      ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
+    } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     if (e.flash > 0) ctx.filter = 'brightness(3)';
     if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
@@ -409,9 +423,9 @@ export class Renderer {
         if (Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
         const sheet = humanoidSheet(e.look);
-        const frame = e.actionTimer > 0 ? 3 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
+        const frame = e.actionTimer > 0 ? 3 : e.raft ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = e.dir;
-        const top = feetY - CHAR_H + 1;
+        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0);
         if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
@@ -449,7 +463,7 @@ export class Renderer {
     const look = e.look || {};
     const small = look.small;
     const bob = e.moving ? (Math.floor(this.time * 7) % 2 ? -1 : 0) : 0;
-    const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
+    const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting || e.raft ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
     const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
     if (act > 0) {
       ctx.save();

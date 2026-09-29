@@ -1,11 +1,12 @@
 // The player: tile-by-tile movement, belt/inventory, mining, placing,
 // attacking and tossing items.
 import { Entity } from './entity.js';
-import { PLAYER_STEP_TIME, INV_SIZE } from '../config.js';
+import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS, WEAR_SLOTS, ARMOR_CAP } from '../world/items.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult } from '../game/hero.js';
+import { steer } from './raft.js';
 
 const BASE_HP = 20;
 export const VIGOR_CAP = 8;
@@ -125,6 +126,12 @@ export class Player extends Entity {
     return true;
   }
 
+  // On a raft you float with it, smoothly, sitting on top.
+  renderPos() {
+    if (this.raft) return { x: this.raft.x, y: GROUND, z: this.raft.z };
+    return super.renderPos();
+  }
+
   heldItem() {
     const s = this.inv[this.selected];
     return s ? s.item : null;
@@ -162,6 +169,11 @@ export class Player extends Entity {
     if (this.blue.hp > 0 && this.blue.day !== this.game.day) {
       this.blue = { hp: 0, day: this.game.day, from: [] };
       this.game.ui.msg('Your blue hearts fade with the new day.', '#80a8ff');
+    }
+    // Out on a raft: paddling, not walking.
+    if (this.raft) {
+      if (!this.dead && !blocked) steer(this, dt, input);
+      return;
     }
     if (this.dead || this.moving || blocked) return;
     // Most recently pressed held direction wins.

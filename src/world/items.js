@@ -96,6 +96,7 @@ item('hammer', { name: 'Smith Hammer', kind: 'tool', stack: 1, tool: 'pick', spe
 item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, damage: 1.5, reach: 1.5, cooldown: 0.5, value: 5 });
 item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
 item('water_bucket', { name: 'Bucket of Water', kind: 'tool', stack: 1, value: 4, bucket: true, water: 3 });
+item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
 item('arrow', { value: 1 });

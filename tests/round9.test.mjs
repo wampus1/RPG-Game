@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { DAY } from '../src/sim/econ.js';
+import { RNG } from '../src/util/rng.js';
 
 function start(seed = 12345, minute = 9 * 60) {
   const game = makeGame(seed);
@@ -125,4 +126,85 @@ test('a new building: the road goes in first, a sign stands on the site until th
   works.advance(L, p, game.sim.abs);
   assert.ok(p.signDown, 'the sign came down once the frame was up');
   assert.ok(!L.signs.some((q) => q.kind === 'works' && q.project === p.id));
+});
+
+test('rafts: crafted, launched onto water, paddled with tank controls, carried ashore', async () => {
+  const { RECIPES } = await import('../src/world/recipes.js');
+  const { STOCK } = await import('../src/sim/econ.js');
+  const { floatable, RAFT } = await import('../src/entities/raft.js');
+  assert.ok(RECIPES.some((r) => r.out === 'raft' || r.item === 'raft' || r.result === 'raft'), 'a recipe');
+  assert.ok(STOCK.fisher.includes('raft') && STOCK.carpenter.includes('raft'), 'for sale');
+  const { game, p, w } = start(12345, 12 * 60);
+  // Find open water with a bank beside it.
+  let spot = null;
+  for (let r = 1; r < 60 && !spot; r++) {
+    for (let dz = -r; dz <= r && !spot; dz++) {
+      for (let dx = -r; dx <= r && !spot; dx++) {
+        const x = p.x + dx;
+        const z = p.z + dz;
+        if (!floatable(w, x, z)) continue;
+        for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!w.isWaterAt(x + ax, 5, z + az) && w.canStand(x + ax, 6, z + az)) {
+            spot = { x, z, lx: x + ax, lz: z + az };
+            break;
+          }
+        }
+      }
+    }
+  }
+  assert.ok(spot, 'water near the start');
+  game.teleportPlayer(spot.lx, 6, spot.lz);
+  p.give('raft', 1);
+  assert.ok(game.launchRaft(spot.x, spot.z));
+  assert.ok(p.raft && !p.inv.some((s) => s && s.item === 'raft'));
+  // Holding W: speed builds up gradually, never past the top speed.
+  const keys = new Set(['KeyW']);
+  const input = { isDown: (k) => keys.has(k) };
+  p.raft.ang = 0;
+  p.update(0.1, input, false);
+  const v1 = p.raft.v;
+  for (let i = 0; i < 40; i++) p.update(0.1, input, false);
+  assert.ok(v1 > 0 && v1 < 0.5, `starts slow (${v1})`);
+  assert.ok(p.raft.v <= RAFT.max + 1e-9);
+  // Only ever on water.
+  assert.ok(floatable(w, Math.round(p.raft.x), Math.round(p.raft.z)));
+  // A and D turn it.
+  keys.clear();
+  keys.add('KeyA');
+  const a0 = p.raft.ang;
+  p.update(0.2, input, false);
+  assert.ok(p.raft.ang !== a0);
+  // Back to the launch spot, then ashore with the raft.
+  p.raft.x = spot.x;
+  p.raft.z = spot.z;
+  p.raft.v = 0;
+  game.moveEntity(p, spot.x, 6, spot.z);
+  assert.ok(game.leaveRaft());
+  assert.ok(!p.raft && p.inv.some((s) => s && s.item === 'raft'));
+  assert.ok(!w.isWaterAt(p.x, 5, p.z));
+});
+
+test('merchants between two waterside towns go by raft, and faster', () => {
+  const { game } = start(12345, 8 * 60);
+  const ow = game.world.ow;
+  const wet = ow.settlements.filter((s) => (s.river || s.coast) && !s.deserted && s.condition !== 'abandoned');
+  let done = false;
+  for (const s of wet) {
+    const L = game.sim.layoutOf(s.id);
+    const rec = L.npcs.find((r) => r.traveler);
+    if (!rec) continue;
+    rec.coins = 100;
+    const before = game.sim.diplomacy.travelHours;
+    game.sim.departMerchant(L, rec, game.sim.abs, game.day, new RNG(1));
+    if (!rec.trip || rec.trip.phase !== 'away') continue;
+    const dest = ow.settlements[rec.trip.dest];
+    const road = before.call(game.sim.diplomacy, s, dest);
+    if (rec.trip.raft) {
+      assert.ok(rec.trip.arrive - game.sim.abs < road * 60, 'quicker by water');
+      assert.ok(L.econ.ledger.some((it) => /by raft/.test(it.text)));
+      done = true;
+      break;
+    }
+  }
+  assert.ok(done, 'some waterside merchant took a raft');
 });
