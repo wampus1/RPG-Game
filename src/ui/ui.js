@@ -161,8 +161,8 @@ export class UI {
       if (this.modal) {
         // Clicking outside an inventory while holding an item throws it.
         if (ck.type === 'down' && this.cursorStack) {
-          const dx = ck.x - VIEW_W / 2;
-          const dz = ck.y - VIEW_H / 2;
+          // (A direction on screen, turned into one in the world.)
+          const [dx, dz] = game.renderer.toWorld ? game.renderer.toWorld(ck.x - VIEW_W / 2, ck.y - VIEW_H / 2) : [ck.x - VIEW_W / 2, ck.y - VIEW_H / 2];
           const l = Math.hypot(dx, dz) || 1;
           game.tossItem(this.cursorStack.item, ck.button === 2 ? 1 : this.cursorStack.count, dx / l, dz / l);
           if (ck.button === 2) {
@@ -298,8 +298,9 @@ export class UI {
     // Drifting Z's above the bed.
     const r = game.renderer;
     const b = sl.bed;
-    const sx = b.x * TILE - r.camX + 10;
-    const sy = b.z * TILE - b.y * LH - r.camY;
+    const bs = r.worldToScreen ? r.worldToScreen(b.x, b.y, b.z) : { x: b.x * TILE - r.camX, y: b.z * TILE - b.y * LH - r.camY };
+    const sx = bs.x + 10;
+    const sy = bs.y;
     for (let i = 0; i < 3; i++) {
       const t = (this.time * 0.6 + i / 3) % 1;
       ctx.globalAlpha = Math.sin(t * Math.PI) * k;
@@ -473,8 +474,10 @@ export class UI {
     const hd = p.heldDef();
     const rotatable = hd && hd.kind === 'block' && BLOCKS[hd.block].rotatable;
     g.text(rx + 1, BELT_Y + 2, 'ROT', C.dim);
-    g.text(rx + 5, BELT_Y + 2, ['↓ S', '← W', '↑ N', '→ E'][p.rot], rotatable ? C.hi : C.faint);
-    g.text(rx + 10, BELT_Y + 2, '[R]', C.faint);
+    // The arrow is how it will face on screen; the letter, which way that is.
+    const view = game.renderer.view || 0;
+    g.text(rx + 5, BELT_Y + 2, `${['↓', '←', '↑', '→'][p.rot]} ${['S', 'W', 'N', 'E'][(p.rot - view) & 3]}`, rotatable ? C.hi : C.faint);
+    g.text(rx + 10, BELT_Y + 2, '[R]  Q/E turn', C.faint);
     g.text(rx + 1, BELT_Y + 3, 'H help  TAB bag  M map', C.faint);
     // World hover tooltip.
     const c = game.cursor;
@@ -579,11 +582,21 @@ export class UI {
       if (b.interact) hints.push(`click ${interactVerb(b.interact)}`);
       if (isFinite(b.hardness) && !b.liquid) hints.push('hold mine');
       if (hints.length) lines.push({ text: hints.join(' · '), color: C.faint });
+      // Which tool breaks it best, and whether you're holding it.
+      if (isFinite(b.hardness) && !b.liquid && b.tool) {
+        const h = game.player.heldDef();
+        const good = h && h.tool === b.tool;
+        const name = { pick: 'pickaxe', axe: 'axe', shovel: 'shovel' }[b.tool] || b.tool;
+        lines.push({ text: good ? `${cap(name)} in hand: quick work` : `Best with a${/^[aeiou]/.test(name) ? 'n' : ''} ${name}${b.tool === 'pick' ? ' (slow by hand)' : ''}`, color: good ? C.green : C.dim });
+      } else if (!isFinite(b.hardness)) lines.push({ text: 'Can\'t be broken', color: C.faint });
+      if (!c.inReach) lines.push({ text: 'Too far away', color: C.red });
       if (game.mining && game.mining.x === c.x && game.mining.y === c.y && game.mining.z === c.z) {
         const n = Math.floor(game.mining.progress * 10);
         lines.push({ text: '[' + '▓'.repeat(n) + '░'.repeat(10 - n) + ']', color: C.orange });
       }
     }
+    // Holding something to place: say why it won't go there.
+    if (c.place && !c.place.ok && c.place.why) lines.push({ text: `Can't place: ${c.place.why}`, color: C.red });
     if (lines.length) this.tooltip = { lines };
   }
 
@@ -595,10 +608,14 @@ export class UI {
     const w = game.world;
     const W2 = cv.width >> 1;
     const H2 = cv.height >> 1;
+    const r = game.renderer;
+    const turn = (du, dv) => (r.toWorld ? r.toWorld(du, dv) : [du, dv]);
+    this.minimapView = r.view || 0;
     for (let y = 0; y < cv.height; y++) {
       for (let x = 0; x < cv.width; x++) {
-        const wx = p.x - W2 + x;
-        const wz = p.z - H2 + y;
+        const [ox, oz] = turn(x - W2, y - H2);
+        const wx = p.x + ox;
+        const wz = p.z + oz;
         const top = w.topAt(wx, wz);
         const i = (y * cv.width + x) * 4;
         if (top <= 0) {
@@ -620,8 +637,9 @@ export class UI {
       }
     }
     const dot = (wx, wz, col) => {
-      const x = wx - p.x + W2;
-      const y = wz - p.z + H2;
+      const [u, v] = r.toView ? r.toView(wx - p.x, wz - p.z) : [wx - p.x, wz - p.z];
+      const x = u + W2;
+      const y = v + H2;
       if (x < 0 || y < 0 || x >= cv.width || y >= cv.height) return;
       const i = (y * cv.width + x) * 4;
       img.data[i] = col[0];
@@ -637,6 +655,10 @@ export class UI {
     if (!this.minimapPos) return;
     const { x, y } = this.minimapPos;
     ctx.drawImage(this.minimap, x, y);
+    // Which way is north, however the camera is turned.
+    const nv = this.minimapView || 0;
+    const [nx, ny] = [[x + 39, y + 1], [x + 1, y + 16], [x + 39, y + 31], [x + 78, y + 16]][[0, 3, 2, 1][nv]];
+    drawText(ctx, 'N', nx, ny, '#ffe070', '#000');
     const blink = Math.floor(this.time * 3) % 2;
     ctx.fillStyle = blink ? '#ffffff' : '#ff4040';
     ctx.fillRect(x + 42 - 1, y + 20 - 1, 3, 3);

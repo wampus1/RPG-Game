@@ -37,17 +37,86 @@ export class Renderer {
     for (const b of BLOCKS) if (b.name.startsWith('leaves') || b.name === 'glass' || b.name === 'water' || b.name === 'ice') CULL_SAME.add(b.id);
     this.hidden = null;
     this.hiddenLevel = 99;
+    // Which way the camera looks, in quarter turns (Q and E turn it). The
+    // world is drawn in "view" coordinates (u across, v down the screen).
+    this.view = 0;
+    this.turnFade = 0;
+    // The mouse pointer, and whatever was drawn last under it.
+    this.mouse = null;
+    this.pick = null;
+    this.pickEnt = null;
+  }
+
+  // World (x, z) to view (u, v), and back.
+  toView(x, z) {
+    switch (this.view) {
+      case 1: return [-z, x];
+      case 2: return [-x, -z];
+      case 3: return [z, -x];
+      default: return [x, z];
+    }
+  }
+
+  toWorld(u, v) {
+    switch (this.view) {
+      case 1: return [v, -u];
+      case 2: return [-u, -v];
+      case 3: return [-v, u];
+      default: return [u, v];
+    }
+  }
+
+  // A facing (0 down the screen, 1 left, 2 up, 3 right) as it looks now.
+  viewDir(d) {
+    return (d + this.view) & 3;
+  }
+
+  // Turn the camera a quarter turn (+1 or -1).
+  turn(d) {
+    this.view = (this.view + d + 4) & 3;
+    this.camInit = false;
+    this.particles.length = 0;
+    this.floaters.length = 0;
+    this.lighting.samples = null;
+    this.turnFade = 0.22;
   }
 
   worldToScreen(fx, fy, fz) {
-    return { x: fx * TILE - this.camX, y: fz * TILE - fy * LH - this.camY };
+    const [u, v] = this.toView(fx, fz);
+    return { x: u * TILE - this.camX, y: v * TILE - fy * LH - this.camY };
   }
 
   // Screen pixel -> world (x,z) at a given layer y (top-face plane of that layer).
   screenToTile(sx, sy, y) {
-    const wx = sx + this.camX;
-    const wy = sy + this.camY + y * LH;
-    return { x: Math.floor(wx / TILE), z: Math.floor(wy / TILE) };
+    const u = Math.floor((sx + this.camX) / TILE);
+    const v = Math.floor((sy + this.camY + y * LH) / TILE);
+    const [x, z] = this.toWorld(u, v);
+    return { x, z };
+  }
+
+  // The world rectangle the screen can show (with a margin, in tiles).
+  visibleBox(margin = 2) {
+    const u0 = Math.floor(this.camX / TILE) - margin;
+    const u1 = Math.floor((this.camX + VIEW_W) / TILE) + margin;
+    const v0 = Math.floor((this.camY - SPR_H - LH) / TILE) - margin;
+    const v1 = Math.floor((this.camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + margin;
+    const a = this.toWorld(u0, v0);
+    const b = this.toWorld(u1, v1);
+    return { x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1]) };
+  }
+
+  // Is the mouse over an atlas image drawn at (dx, dy)? (Solid pixels only
+  // when `alphaTest`.)
+  under(s, dx, dy, w = s.w, h = s.h, alphaTest = true) {
+    const m = this.mouse;
+    if (!m) return false;
+    const px = m.x - dx;
+    const py = m.y - dy;
+    if (px < 0 || py < 0 || px >= w || py >= h) return false;
+    if (!alphaTest || !TEX.alpha) return true;
+    const sx = Math.floor(px * (s.w / w));
+    const sy = Math.floor(py * (s.h / h));
+    return TEX.alpha.data[(s.y + sy) * TEX.alpha.w + s.x + sx] > 40;
   }
 
   // ------------------------------------------------------------------ frame
@@ -57,9 +126,10 @@ export class Renderer {
     const world = game.world;
     const player = game.player;
     const rp = player.renderPos();
+    const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
-    const tx = rp.x * TILE + 8 - VIEW_W / 2;
-    const ty = rp.z * TILE - rp.y * LH + LH + 8 - VIEW_H / 2 - 10;
+    const tx = pu * TILE + 8 - VIEW_W / 2;
+    const ty = pv * TILE - rp.y * LH + LH + 8 - VIEW_H / 2 - 10;
     if (!this.camInit) {
       this.cx = tx;
       this.cy = ty;
@@ -79,6 +149,9 @@ export class Renderer {
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     this.computeCutaway(world, player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
+    this.pick = null;
+    this.pickEnt = null;
+    this.pickSeq = 0;
     this.drawWorld(game);
     this.drawProjectiles(game);
     this.drawRope(game);
@@ -91,6 +164,12 @@ export class Renderer {
       else this.drawBubble(ctx, b.text, b.x, b.y, b.color);
     }
     this.drawOverlays(game);
+    // A quick dip to black hides the jump when the camera turns.
+    if (this.turnFade > 0) {
+      ctx.fillStyle = `rgba(10,10,18,${Math.min(1, this.turnFade / 0.22) * 0.85})`;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      this.turnFade -= dt;
+    }
   }
 
   // ------------------------------------------------------------------ cutaway
@@ -157,20 +236,27 @@ export class Renderer {
     const zMax = Math.floor((camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + 1;
     const W = x1 - x0 + 1;
     const nRows = zMax - zMin + 2;
-    // Column cache: region + base index for every visible column.
+    // Column cache: region + base index for every visible column. Columns
+    // are laid out in view space (u across, v down); each maps to one world
+    // column however the camera is turned.
     const colR = new Array(W * nRows);
     const colB = new Int32Array(W * nRows);
     const colTop = new Int8Array(W * nRows);
+    const colWX = new Int32Array(W * nRows);
+    const colWZ = new Int32Array(W * nRows);
+    const view = this.view;
     for (let r = 0; r < nRows; r++) {
-      const z = zMin + r;
+      const v = zMin + r;
       for (let i = 0; i < W; i++) {
-        const x = x0 + i;
-        const reg = world.regionAt(x, z);
+        const [wx, wz] = this.toWorld(x0 + i, v);
+        const reg = world.regionAt(wx, wz);
         const ci = r * W + i;
         colR[ci] = reg;
+        colWX[ci] = wx;
+        colWZ[ci] = wz;
         if (reg) {
-          const lx = x - reg.x0;
-          const lz = z - reg.z0;
+          const lx = wx - reg.x0;
+          const lz = wz - reg.z0;
           colB[ci] = (lz * REGION_W + lx) * WORLD_Y;
           colTop[ci] = reg.top[lz * REGION_W + lx];
         } else colTop[ci] = -1;
@@ -186,7 +272,9 @@ export class Renderer {
     // Bucket entities by row.
     const buckets = new Map();
     for (const e of game.visibleEntities) {
-      const rp = e.renderPos();
+      const wp = e.renderPos();
+      const [u, v] = this.toView(wp.x, wp.z);
+      const rp = { x: u, y: wp.y, z: v };
       const row = Math.ceil(rp.z - 0.001);
       if (row < zMin || row > zMax) continue;
       let arr = buckets.get(row);
@@ -197,10 +285,13 @@ export class Renderer {
 
     const player = game.player;
     const prp = player.renderPos();
-    const psx = prp.x * TILE - camX;
-    const psy = prp.z * TILE - prp.y * LH + LH - camY;
+    const [ppu, ppv] = this.toView(prp.x, prp.z);
+    const psx = ppu * TILE - camX;
+    const psy = ppv * TILE - prp.y * LH + LH - camY;
     const pRect = { x0: psx - 6, x1: psx + 22, y0: psy - 20, y1: psy + 20 };
-    const pz = player.z;
+    const pz = this.toView(player.x, player.z)[1];
+    const mouse = this.mouse;
+    const cur = game.cursor;
     const pLayer = player.y;
     const waterFrame = Math.floor(this.time * 3) % WATER_FRAMES;
     const animFrame = Math.floor(this.time * 8);
@@ -227,20 +318,24 @@ export class Renderer {
             const id = getAt(ci, y);
             if (id === 0) continue;
             const x = x0 + i;
-            if (hid(x, y, z)) continue;
+            const wx = colWX[ci];
+            const wz = colWZ[ci];
+            if (hid(wx, y, wz)) continue;
             const b = BLOCKS[id];
             const sx = x * TILE - camX;
             let alpha = 1;
             if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
             if (alpha < 1) ctx.globalAlpha = alpha;
-            const v = hash4(x, y, z) % VARIANTS;
+            // Blocks faded out because they hide the player can be clicked through.
+            const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
+            const v = hash4(wx, y, wz) % VARIANTS;
             const render = b.render;
             if (render === 'cube' || render === 'liquid' || (render === 'door' && !(metaAt(ci, y) & META_STATE))) {
-              const rot = b.rotatable ? metaAt(ci, y) & META_ROT : 0;
+              const rot = b.rotatable ? ((metaAt(ci, y) & META_ROT) + view) & 3 : 0;
               // Top face.
               const above = getAt(ci, y + 1);
               const ab = BLOCKS[above];
-              const aboveHidden = hid(x, y + 1, z);
+              const aboveHidden = hid(wx, y + 1, wz);
               const showTop = aboveHidden || !(ab.opaque && ab.render === 'cube') && !(CULL_SAME.has(id) && above === id) && !(render === 'liquid' && ab.liquid);
               const liquid = render === 'liquid';
               if (showTop) {
@@ -248,6 +343,7 @@ export class Renderer {
                 const s = liquid ? tops[waterFrame] : tops[v % tops.length];
                 const oy = liquid ? 3 : 0;
                 ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
+                if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
                 if (!liquid && !aboveHidden) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
                 // Higher ground is a touch brighter so terraces read as height.
                 if (y > 6 && !liquid && b.opaque) {
@@ -265,32 +361,35 @@ export class Renderer {
               // Front face.
               const fr = getAt(frontBase + i, y);
               const fb = BLOCKS[fr];
-              const frontHidden = hid(x, y, z + 1);
+              const frontHidden = hid(colWX[frontBase + i], y, colWZ[frontBase + i]);
               const showFront = frontHidden || !(fb.opaque && fb.render === 'cube') && !(CULL_SAME.has(id) && fr === id) && !(liquid && fb.liquid);
               if (showFront && !(liquid && fb.solid)) {
                 const fronts = TEX.front[id * 4 + rot];
                 const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
                 ctx.drawImage(atlas, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
+                if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
               }
             } else if (render === 'door') {
-              const rot = metaAt(ci, y) & META_ROT;
+              const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
               const s = TEX.sprite[id * 4 + rot][0];
               ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+              if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
             } else if (render === 'sprite' || render === 'plant') {
               const meta = metaAt(ci, y);
-              const rot = b.rotatable ? meta & META_ROT : 0;
+              const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
               const arr = TEX.sprite[id * 4 + rot];
               const st = meta & META_STATE ? 1 : 0;
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
-              else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(x, z, 5) % 4 : v);
-              else idx = st * 4 + (animFrame + x + z) % 4;
+              else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
+              else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
               // Plants sway gently.
               ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+              if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
               // Hanging signs show what the building is.
               if (id === B.hanging_sign) {
-                const ic = game.signIcons && game.signIcons.get(`${x},${y},${z}`);
+                const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);
                 if (ic) ctx.drawImage(this.dropIcon(ic), sx + 3, sy + SPR_H - s.h + 4);
               }
             } else if (render === 'flat') {
@@ -299,11 +398,12 @@ export class Renderer {
               const below = getAt(ci, y - 1);
               const oy = BLOCKS[below].liquid ? 3 : 0;
               ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
+              if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
             } else if (render === 'fence') {
-              this.drawFence(ctx, world, x, y, z, sx, sy);
+              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
             }
             if (alpha < 1) ctx.globalAlpha = 1;
-            if (game.cursor && game.cursor.x === x && game.cursor.y === y && game.cursor.z === z) {
+            if (cur && cur.x === wx && cur.y === y && cur.z === wz) {
               this.cursorDrawList = { sx, sy, b };
             }
           }
@@ -335,11 +435,14 @@ export class Renderer {
   // Alpha a block is drawn with because it hides the player (1 = opaque).
   occlusionAlpha(x, y, z, player) {
     const rp = player.renderPos();
-    if (!(z >= player.z && z <= player.z + 7 && y >= player.y && (z > player.z || y > player.y + 1))) return 1;
-    const psx = rp.x * TILE - this.camX;
-    const psy = rp.z * TILE - rp.y * LH + LH - this.camY;
-    const sx = x * TILE - this.camX;
-    const sy = z * TILE - y * LH - this.camY;
+    const [u, v] = this.toView(x, z);
+    const pv = this.toView(player.x, player.z)[1];
+    if (!(v >= pv && v <= pv + 7 && y >= player.y && (v > pv || y > player.y + 1))) return 1;
+    const [pu, pvv] = this.toView(rp.x, rp.z);
+    const psx = pu * TILE - this.camX;
+    const psy = pvv * TILE - rp.y * LH + LH - this.camY;
+    const sx = u * TILE - this.camX;
+    const sy = v * TILE - y * LH - this.camY;
     if (!(sx + TILE > psx - 6 && sx < psx + 22 && sy + SPR_H > psy - 20 && sy < psy + 20)) return 1;
     return this.fadeFor(sx, sy, psx, psy);
   }
@@ -368,19 +471,27 @@ export class Renderer {
     }
   }
 
-  drawFence(ctx, world, x, y, z, sx, sy) {
+  // A fence post with rails to its neighbours (in view directions). Returns
+  // whether any drawn part is under the mouse, when asked.
+  drawFence(ctx, world, x, y, z, sx, sy, pickTest = false) {
     const f = TEX.misc.fence;
     const atlas = this.atlas;
-    const conn = (dx, dz) => {
+    const conn = (du, dv) => {
+      const [dx, dz] = this.toWorld(du, dv);
       const b = BLOCKS[world.getBlock(x + dx, y, z + dz)];
       return b.render === 'fence' || (b.opaque && b.render === 'cube') || b.render === 'door';
     };
-    const d = (s) => ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+    let hit = false;
+    const d = (s) => {
+      ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+      if (pickTest && !hit && this.under(s, sx, sy)) hit = true;
+    };
     if (conn(0, -1)) d(f.north);
     if (conn(-1, 0)) d(f.west);
     d(f.post);
     if (conn(1, 0)) d(f.east);
     if (conn(0, 1)) d(f.south);
+    return hit;
   }
 
   // ------------------------------------------------------------------ entities
@@ -405,7 +516,7 @@ export class Renderer {
     if (e.raft) {
       // The raft, turned to its heading pixel by pixel, bobbing on the water.
       bob = Math.round(Math.sin(this.time * 2.2 + e.id) * 0.8);
-      const img = raftSprite(e.raft.ang, makeCanvas);
+      const img = raftSprite(e.raft.ang - this.view * Math.PI / 2, makeCanvas);
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     if (e.flash > 0) ctx.filter = 'brightness(3)';
@@ -424,7 +535,7 @@ export class Renderer {
       } else {
         const sheet = humanoidSheet(e.look);
         const frame = e.actionTimer > 0 ? 3 : e.raft ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
-        const dir = e.dir;
+        const dir = this.viewDir(e.dir);
         const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0);
         if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
@@ -436,6 +547,12 @@ export class Renderer {
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
+    // Under the mouse? (The last thing drawn there is what you point at.)
+    const m = this.mouse;
+    if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead) {
+      const h = e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
+      if (m.x >= sx + 2 && m.x < sx + 14 && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
+    }
     // Health bar when hurt.
     if (e.hp !== undefined && e.hp < e.maxHp && e.kind !== 'player' && !e.sleeping) {
       const w = 12;
@@ -458,7 +575,7 @@ export class Renderer {
   // on the hand pixel of the sprite for the way they're facing.
   drawHeld(ctx, key, e, sx, top) {
     const icon = this.dropIcon(key);
-    const dir = e.dir;
+    const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
     const look = e.look || {};
     const small = look.small;
@@ -583,15 +700,20 @@ export class Renderer {
       if (!arr) buckets.set(row, (arr = []));
       arr.push({ deco, layer, rp: { y: order } });
     };
+    const tv0 = (x, z) => (this.toView ? this.toView(x, z) : [x, z]);
     for (const L of lines) {
-      const rp = L.e.renderPos();
+      const wp = L.e.renderPos();
+      const [ru, rv] = tv0(wp.x, wp.z);
+      const rp = { x: ru, y: wp.y, z: rv };
+      const [tu, tv] = tv0(L.t.x, L.t.z);
+      const T = { x: tu, y: L.t.y, z: tv };
       const row = Math.ceil(rp.z - 0.001);
       const layer = Math.ceil(rp.y - 0.001) + 1;
       const hx = rp.x * TILE + 8 - this.camX;
       const hy = rp.z * TILE - rp.y * LH + LH + 10 - this.camY - 12;
-      const bx = L.t.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
+      const bx = T.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
       const bob = Math.sin(this.time * 3 + L.t.x) * 0.8;
-      const by = L.t.z * TILE - L.t.y * LH - this.camY + 10 + bob + L.dip * 2;
+      const by = T.z * TILE - T.y * LH - this.camY + 10 + bob + L.dip * 2;
       const dx = Math.sign(bx - hx) || 1;
       const tx = hx + dx * 7;
       const ty = hy - 9;
@@ -606,7 +728,7 @@ export class Renderer {
       const pieces = new Map();
       for (let i = 1; i < n; i++) {
         const k = i / n;
-        const r = Math.round(rp.z + (L.t.z - rp.z) * k);
+        const r = Math.round(rp.z + (T.z - rp.z) * k);
         const px = Math.round(tx + (bx - tx) * k);
         const py = Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (L.dip > 0.6 ? 1 : 4));
         let pc = pieces.get(r);
@@ -620,7 +742,7 @@ export class Renderer {
         });
       }
       // Bobber (half under when something bites), floating on the water.
-      add(L.t.z, bLayer, 99, () => {
+      add(T.z, bLayer, 99, () => {
         const under = L.dip > 0.6;
         ctx.fillStyle = '#d02a2a';
         ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2 + (under ? 2 : 0), 3, under ? 1 : 2);
@@ -638,7 +760,8 @@ export class Renderer {
     const ctx = this.ctx;
     const at = (ent, dy) => {
       const rp = ent.renderPos();
-      return { x: rp.x * TILE + 8 - this.camX, y: rp.z * TILE - rp.y * LH + LH + 10 - this.camY - dy };
+      const [u, v] = this.toView(rp.x, rp.z);
+      return { x: u * TILE + 8 - this.camX, y: v * TILE - rp.y * LH + LH + 10 - this.camY - dy };
     };
     const a = at(e.guard, 11);
     const b = at(game.player, 10);
@@ -668,13 +791,11 @@ export class Renderer {
     const ctx = this.ctx;
     for (const a of game.projectiles || []) {
       const f = Math.min(1, a.t / a.dur);
-      const wx = a.x0 + (a.tx - a.x0) * f;
-      const wz = a.z0 + (a.tz - a.z0) * f;
+      const [wx, wz] = this.toView(a.x0 + (a.tx - a.x0) * f, a.z0 + (a.tz - a.z0) * f);
       const wy = a.y0 + (a.ty - a.y0) * f + Math.sin(f * Math.PI) * 0.4;
       const sx = Math.round(wx * TILE + 8 - this.camX);
       const sy = Math.round(wz * TILE - wy * LH + LH - this.camY);
-      const dx = a.tx - a.x0;
-      const dz = a.tz - a.z0;
+      const [dx, dz] = this.toView(a.tx - a.x0, a.tz - a.z0);
       const l = Math.hypot(dx, dz) || 1;
       const ux = dx / l;
       const uy = dz / l;
@@ -730,7 +851,8 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ fx
-  emit(x, y, z, opts) {
+  emit(wx, y, wz, opts) {
+    const [x, z] = this.toView(wx, wz);
     const n = opts.n || 6;
     for (let i = 0; i < n; i++) {
       this.particles.push({
@@ -749,8 +871,9 @@ export class Renderer {
     if (this.particles.length > 900) this.particles.splice(0, this.particles.length - 900);
   }
 
-  floatText(x, y, z, text, color = '#ff6060') {
+  floatText(wx, y, wz, text, color = '#ff6060') {
     if (this.noDamageNumbers && /^[-!]\d/.test(text)) return;
+    const [x, z] = this.toView(wx, wz);
     this.floaters.push({ x: x * TILE + 8, y: z * TILE - y * LH - 4, text, color, t: 0.9 });
   }
 
@@ -795,14 +918,12 @@ export class Renderer {
     const ctx = this.ctx;
     const c = game.cursor;
     if (!c) return;
-    const sx = c.x * TILE - this.camX;
-    const sy = c.z * TILE - c.y * LH - this.camY;
+    const { x: sx, y: sy } = this.worldToScreen(c.x, c.y, c.z);
     const pulse = 0.55 + Math.sin(this.time * 6) * 0.25;
     // Placement ghost.
     if (c.place) {
       const p = c.place;
-      const gx = p.x * TILE - this.camX;
-      const gy = p.z * TILE - p.y * LH - this.camY;
+      const { x: gx, y: gy } = this.worldToScreen(p.x, p.y, p.z);
       const b = BLOCKS[p.id];
       ctx.globalAlpha = 0.5;
       if (b.render === 'cube' || b.render === 'door') {

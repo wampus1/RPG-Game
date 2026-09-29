@@ -493,10 +493,9 @@ export class Game {
     const p = this.player;
     // Anything the camera can see must exist right now.
     const r = this.renderer;
-    const x0 = Math.floor((r.camX - 64) / TILE);
-    const x1 = Math.floor((r.camX + VIEW_W + 64) / TILE);
-    const z0 = Math.floor((r.camY - 48) / TILE);
-    const z1 = Math.floor((r.camY + VIEW_H + WORLD_Y * LH + 48) / TILE);
+    // (However the camera is turned: the box is in world tiles.)
+    const box = r.visibleBox ? r.visibleBox(4) : { x0: Math.floor((r.camX - 64) / TILE), x1: Math.floor((r.camX + VIEW_W + 64) / TILE), z0: Math.floor((r.camY - 48) / TILE), z1: Math.floor((r.camY + VIEW_H + WORLD_Y * LH + 48) / TILE) };
+    const { x0, x1, z0, z1 } = box;
     for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1], [p.x, p.z]]) {
       const rx = Math.floor(x / REGION_W);
       const rz = Math.floor(z / REGION_D);
@@ -922,9 +921,10 @@ export class Game {
     // Entities visible this frame.
     const p = this.player;
     const vis = [p];
-    for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < 22 && Math.abs(n.z - p.z) < 24) vis.push(n);
-    for (const c of this.creatures) if (Math.abs(c.x - p.x) < 22 && Math.abs(c.z - p.z) < 24) vis.push(c);
-    for (const d of this.drops) if (Math.abs(d.x - p.x) < 22 && Math.abs(d.z - p.z) < 24) vis.push(d);
+    // (Square, so turning the camera never leaves anyone out.)
+    for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < 26 && Math.abs(n.z - p.z) < 26) vis.push(n);
+    for (const c of this.creatures) if (Math.abs(c.x - p.x) < 26 && Math.abs(c.z - p.z) < 26) vis.push(c);
+    for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
     this.visibleEntities = vis;
     if (this.autosaveDue) {
       this.autosaveDue = false;
@@ -942,7 +942,16 @@ export class Game {
         if (n >= 1 && n <= BELT_SIZE) this.selectSlot(n - 1);
       }
       switch (code) {
+        // Q and E turn the camera a quarter turn either way.
         case 'KeyQ':
+        case 'KeyE':
+          if (this.renderer.turn) {
+            this.renderer.turn(code === 'KeyQ' ? 1 : -1);
+            this.mining = null;
+            this.audio?.play('select');
+          }
+          break;
+        case 'KeyG':
           this.toss(k.ctrl);
           break;
         case 'KeyT':
@@ -969,10 +978,10 @@ export class Game {
         case 'Space':
           if (this.fishing) hook(this);
           break;
-        case 'KeyE':
         case 'KeyF':
-          if (code === 'KeyF' && p.heldDef()?.kind === 'food') this.eat();
-          else if (code === 'KeyF' && p.heldDef()?.kind === 'armor') this.wearHeld();
+          if (p.raft) this.leaveRaft();
+          else if (p.heldDef()?.kind === 'food') this.eat();
+          else if (p.heldDef()?.kind === 'armor') this.wearHeld();
           else this.interactFront();
           break;
       }
@@ -1012,52 +1021,34 @@ export class Game {
       return;
     }
     const w = this.world;
-    const wx = mx + r.camX;
-    // Picking is offset half a block down so the block under the pointer is
-    // the one whose body you see there, not the one behind it.
-    const wy = my + r.camY - TILE / 2;
+    // The renderer notes the last thing it drew under the pointer, which is
+    // exactly what you see there: props by their actual pixels, a person
+    // in front of a wall, and never a block faded out to show you through it.
+    const drawn = r.pick !== undefined;
+    r.mouse = { x: mx, y: my };
     let hit = null;
     if (p.layerMode !== null) {
       const L = p.y + p.layerMode;
-      const x = Math.floor(wx / TILE);
-      const z = Math.floor((wy + L * LH) / TILE);
-      const id = w.getBlock(x, L, z);
-      hit = { x, y: L, z, face: 'top', id, fixed: true };
-    } else {
-      let bestKey = -Infinity;
-      const x = Math.floor(wx / TILE);
-      for (let y = WORLD_Y - 1; y >= 0; y--) {
-        const zt = Math.floor((wy + y * LH) / TILE);
-        const zf = Math.floor((wy + y * LH - 16) / TILE);
-        const frontIn = wy + y * LH - 16 - zf * TILE < LH;
-        for (const [z, face] of [[zt, 'top'], ...(frontIn ? [[zf, 'front']] : [])]) {
-          const id = w.getBlock(x, y, z);
-          if (id === B.air || r.isHidden(x, y, z)) continue;
-          // Blocks faded out because they hide the player can be clicked through.
-          if (r.occlusionAlpha(x, y, z, p) < 0.6) continue;
-          const b = BLOCKS[id];
-          if (b.render === 'plant' || b.render === 'sprite' || b.render === 'flat' || b.render === 'fence' || (b.render === 'door' && w.getState(x, y, z))) {
-            // Props: only the lower part of their cell counts.
-            if (face === 'top' && wy + y * LH - zt * TILE < 4 && b.render !== 'flat') continue;
-          }
-          const k = z * 64 + y + (face === 'front' ? 0.5 : 0);
-          if (k > bestKey) {
-            bestKey = k;
-            hit = { x, y, z, face, id };
-          }
-        }
-      }
-    }
-    // Entity under the cursor takes priority.
+      const t = r.screenToTile(mx, my, L);
+      hit = { x: t.x, y: L, z: t.z, face: 'top', id: w.getBlock(t.x, L, t.z), fixed: true };
+    } else if (drawn && r.pick && w.getBlock(r.pick.x, r.pick.y, r.pick.z) === r.pick.id) {
+      hit = { ...r.pick };
+    } else if (!drawn || r.pick) hit = this.pickGeometric(mx, my);
+    // Someone under the cursor, if they were drawn over the block there.
     let ent = null;
-    for (const e of this.visibleEntities) {
-      if (e === p || e.kind === 'item' || e.dead) continue;
-      const rp = e.renderPos();
-      const sx = rp.x * TILE - r.camX;
-      const feet = rp.z * TILE - rp.y * LH + LH - r.camY + 10;
-      const h = e.kind === 'creature' ? 14 : 24;
-      if (mx >= sx + 2 && mx < sx + 14 && my >= feet - h && my < feet + 2) {
-        if (!ent || rp.z > ent.rp.z) ent = { e, rp };
+    if (drawn) {
+      const pe = r.pickEnt;
+      if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e };
+    } else {
+      for (const e of this.visibleEntities) {
+        if (e === p || e.kind === 'item' || e.dead) continue;
+        const rp = e.renderPos();
+        const { x: sx, y: sy } = r.worldToScreen ? r.worldToScreen(rp.x, rp.y, rp.z) : { x: rp.x * TILE - r.camX, y: rp.z * TILE - rp.y * LH - r.camY };
+        const feet = sy + LH + 10;
+        const h = e.kind === 'creature' ? 14 : 24;
+        if (mx >= sx + 2 && mx < sx + 14 && my >= feet - h && my < feet + 2) {
+          if (!ent || rp.z > ent.rp.z) ent = { e, rp };
+        }
       }
     }
     const reach = (x, y, z) => Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= REACH && Math.abs(y - p.y) <= 4;
@@ -1082,13 +1073,66 @@ export class Game {
         let t;
         if (hit.fixed || (b.replaceable && hit.id !== B.air) || hit.id === B.air) t = { x: hit.x, y: hit.y, z: hit.z };
         else if (hit.face === 'top') t = { x: hit.x, y: hit.y + 1, z: hit.z };
-        else t = { x: hit.x, y: hit.y, z: hit.z + 1 };
-        const ok = this.canPlace(placeId, t.x, t.y, t.z) && reach(t.x, t.y, t.z);
+        else {
+          // In front of the face you're pointing at (towards the camera).
+          const [fx, fz] = r.toWorld ? r.toWorld(0, 1) : [0, 1];
+          t = { x: hit.x + fx, y: hit.y, z: hit.z + fz };
+        }
+        const why = !reach(t.x, t.y, t.z) ? 'too far' : this.placeProblem(placeId, t.x, t.y, t.z);
+        const ok = !why;
         // Seeds and carrots only offer to plant where they can grow.
-        if (ok || held.kind === 'block') c.place = { ...t, id: placeId, rot: p.rot, ok };
+        if (ok || held.kind === 'block') c.place = { ...t, id: placeId, rot: p.rot, ok, why };
       }
     }
     this.cursor = c;
+  }
+
+  // What the geometry says is under the pointer (used before the first
+  // frame is drawn, and when the world changed since): the front-most top
+  // or front face, in the order the renderer paints them.
+  pickGeometric(mx, my) {
+    const r = this.renderer;
+    const w = this.world;
+    const p = this.player;
+    const toW = (u, v) => (r.toWorld ? r.toWorld(u, v) : [u, v]);
+    const wx = mx + r.camX;
+    const wy = my + r.camY;
+    const u = Math.floor(wx / TILE);
+    let best = null;
+    let bestKey = -Infinity;
+    for (let y = WORLD_Y - 1; y >= 0; y--) {
+      const vt = Math.floor((wy + y * LH) / TILE);
+      const vf = Math.floor((wy + y * LH - 16) / TILE);
+      const frontIn = wy + y * LH - 16 - vf * TILE < LH;
+      for (const [v, face] of [[vt, 'top'], ...(frontIn ? [[vf, 'front']] : [])]) {
+        const [x, z] = toW(u, v);
+        const id = w.getBlock(x, y, z);
+        if (id === B.air || r.isHidden(x, y, z)) continue;
+        if (r.occlusionAlpha(x, y, z, p) < 0.6) continue;
+        const k = v * 64 + y + (face === 'front' ? 0.5 : 0);
+        if (k > bestKey) {
+          bestKey = k;
+          best = { x, y, z, face, id };
+        }
+      }
+    }
+    return best;
+  }
+
+  // Why a block can't go at (x, y, z), or null if it can.
+  placeProblem(id, x, y, z) {
+    const w = this.world;
+    if (y < 1 || y >= WORLD_Y - 1) return 'out of the world';
+    const cur = BLOCKS[w.getBlock(x, y, z)];
+    if (!(cur.replaceable || cur.id === B.air)) return 'something is there';
+    const b = BLOCKS[id];
+    if (b.solid && this.occupiedAny(x, y, z)) return 'someone is standing there';
+    if (!this.canPlace(id, x, y, z)) {
+      if (CROPS[id]) return 'needs farmland';
+      if (b.support) return 'needs something under it';
+      return 'no room';
+    }
+    return null;
   }
 
   attackReach() {
@@ -1520,7 +1564,8 @@ export class Game {
     const def = ITEMS[slot.item];
     const id = def.kind === 'block' ? def.block : def.plant;
     const b = BLOCKS[id];
-    const rot = b.rotatable ? p.rot : 0;
+    // The facing you chose is the one you see on screen.
+    const rot = b.rotatable ? (p.rot - (this.renderer.view || 0)) & 3 : 0;
     const w = this.world;
     w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
     if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
@@ -1567,7 +1612,7 @@ export class Game {
     removeItem(p.inv, 'raft', 1);
     launchRaft(this, x, z);
     this.audio?.play('splash');
-    this.ui.msg('You push off on the raft. A/D turn, W paddles, S back-paddles, E to go ashore.', '#a0d8ff');
+    this.ui.msg('You push off on the raft. A/D turn, W paddles, S back-paddles, F to go ashore.', '#a0d8ff');
     return true;
   }
 

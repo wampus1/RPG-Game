@@ -12,6 +12,17 @@ const BASE_HP = 20;
 export const VIGOR_CAP = 8;
 export const BLUE_CAP = 6; // three blue hearts at most
 
+// A step across the screen as a step in the world, for a camera turned by
+// `view` quarter turns (the renderer's toWorld, for directions).
+export function screenToWorld(du, dv, view) {
+  switch (view) {
+    case 1: return [dv, -du];
+    case 2: return [-du, -dv];
+    case 3: return [-dv, du];
+    default: return [du, dv];
+  }
+}
+
 const MOVE_KEYS = {
   KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
   KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0],
@@ -182,7 +193,8 @@ export class Player extends Entity {
     else for (const k in MOVE_KEYS) if (input.isDown(k)) d = MOVE_KEYS[k];
     if (!d) return;
     this.sitting = null;
-    const [dx, dz] = d;
+    // Keys move you across the screen, whichever way the camera is turned.
+    const [dx, dz] = screenToWorld(d[0], d[1], this.game.renderer?.view || 0);
     this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
     const nx = this.x + dx;
     const nz = this.z + dz;

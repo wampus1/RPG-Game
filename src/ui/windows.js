@@ -1186,9 +1186,10 @@ export class HelpWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'HOW TO PLAY' });
     const rows = [
       ['MOVE', 'WASD / Arrows (tile by tile) · SHIFT sprint'],
+      ['CAMERA', 'Q / E turn the view a quarter turn either way'],
       ['BELT', '1-9 or mouse wheel to select'],
       ['INTERACT', 'Click doors, chests, benches, beds, signs, snares...'],
-      ['', 'E: use what you point at / face · RMB also works'],
+      ['', 'F: use what you point at / face · RMB also works'],
       ['MINE', 'Hold LMB on a block with a tool or empty hand'],
       ['PLACE', 'Select a block, then click (hold to paint)'],
       ['ROTATE', 'R cycles facing for chairs, beds, doors, roofs...'],
@@ -1197,7 +1198,7 @@ export class HelpWindow extends Window {
       ['TALK', 'Right-click a villager, pick topics with 1-9'],
       ['SIT', 'Click a chair, bench or stool · move to stand'],
       ['SLEEP', 'Click a bed at night (yours, or your host\'s)'],
-      ['TOSS', 'Q throws one item · CTRL+Q the whole stack'],
+      ['TOSS', 'G throws one item · CTRL+G the whole stack'],
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
       ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],
@@ -1217,9 +1218,9 @@ export class HelpWindow extends Window {
       'Talk to the mayor in the town hall to become a citizen: a family',
       'takes you in while builders put up a house of your own.',
     ];
-    tips.forEach((t, i) => g.text(3, 19 + i, t, C.dim));
-    g.text(3, 30, 'Every world is generated from its seed: biomes, rivers,', C.faint);
-    g.text(3, 31, 'civilizations, towns and every villager\'s life story.', C.faint);
+    tips.forEach((t, i) => g.text(3, 20 + i, t, C.dim));
+    g.text(3, 31, 'Every world is generated from its seed: biomes, rivers,', C.faint);
+    g.text(3, 32, 'civilizations, towns and every villager\'s life story.', C.faint);
     g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
   }
 }

@@ -1492,7 +1492,14 @@ export function buildTextures() {
   atlasCanvas.width = ATLAS_COLS * SLOT_W;
   atlasCanvas.height = rows * SLOT_H;
   atlasCtx = atlasCanvas.getContext('2d');
-  for (const { px, slot } of pending) atlasCtx.putImageData(px.toImageData(), slot.x, slot.y);
+  // Which atlas pixels are solid, for picking whatever is drawn under the
+  // mouse pointer.
+  const alpha = new Uint8Array(atlasCanvas.width * atlasCanvas.height);
+  for (const { px, slot } of pending) {
+    atlasCtx.putImageData(px.toImageData(), slot.x, slot.y);
+    for (let y = 0; y < px.h; y++) for (let x = 0; x < px.w; x++) alpha[(slot.y + y) * atlasCanvas.width + slot.x + x] = px.d[(y * px.w + x) * 4 + 3];
+  }
+  TEX.alpha = { w: atlasCanvas.width, data: alpha };
   // Average colours for the minimap.
   for (const b of BLOCKS) {
     const t = TEX.top[b.id * 4] || TEX.sprite[b.id * 4];

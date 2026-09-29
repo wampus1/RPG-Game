@@ -72,11 +72,10 @@ export class Lighting {
     const sky = skyLight(game.minute);
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
-    // World-tile area that visible surfaces can belong to.
-    const x0 = Math.floor(r.camX / TILE) - 2;
-    const x1 = Math.floor((r.camX + VIEW_W) / TILE) + 2;
-    const z0 = Math.floor((r.camY - LH * 2) / TILE) - 2;
-    const z1 = Math.floor((r.camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + 2;
+    // World-tile area that visible surfaces can belong to (however the
+    // camera is turned).
+    const box = r.visibleBox ? r.visibleBox(2) : { x0: Math.floor(r.camX / TILE) - 2, x1: Math.floor((r.camX + VIEW_W) / TILE) + 2, z0: Math.floor((r.camY - LH * 2) / TILE) - 2, z1: Math.floor((r.camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + 2 };
+    const { x0, x1, z0, z1 } = box;
     this.scanTimer -= game.dt;
     const covers = (F) => F && x0 >= F.x0 && z0 >= F.z0 && x1 < F.x0 + F.W && z1 < F.z0 + F.D;
     if (this.scanTimer <= 0 || game.lightDirty || !covers(this.flood)) {
@@ -111,7 +110,7 @@ export class Lighting {
     const m0 = Math.floor(r.camY / TILE) - 1;
     const SW = Math.ceil(VIEW_W / TILE) + 3;
     const SH = Math.ceil(VIEW_H / TILE) + 3;
-    const hKey = r.hidden ? r.hidden.size * 7 + r.hiddenLevel : -1;
+    const hKey = (r.hidden ? r.hidden.size * 7 + r.hiddenLevel : -1) * 4 + (r.view || 0);
     if (!this.samples || this.samples.k0 !== k0 || this.samples.m0 !== m0 || this.samples.hKey !== hKey) {
       this.samples = { k0, m0, hKey, pts: this.sampleSurfaces(r, world, k0, m0, SW, SH) };
     }
@@ -168,8 +167,9 @@ export class Lighting {
           if (s.covered === undefined) s.covered = this.coveredAbove(world, s, r);
           if (s.covered) continue;
         }
-        const sx = s.x * TILE - r.camX + 8;
-        const sy = s.z * TILE - s.y * LH - r.camY + LH + 2;
+        const [su, sv] = r.toView ? r.toView(s.x, s.z) : [s.x, s.z];
+        const sx = su * TILE - r.camX + 8;
+        const sy = sv * TILE - s.y * LH - r.camY + LH + 2;
         if (sx < -40 || sy < -40 || sx > VIEW_W + 40 || sy > VIEW_H + 40) continue;
         const size = 20 + s.L * 3;
         ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08);
@@ -192,33 +192,39 @@ export class Lighting {
   // cell that lights it: {x, y, z, indoor}.
   sampleSurfaces(r, world, k0, m0, SW, SH) {
     const pts = new Array(SW * SH);
+    // Screen cells are in view space; the blocks looked up are in the world.
+    const W = (u, v) => (r.toWorld ? r.toWorld(u, v) : [u, v]);
     for (let m = 0; m < SH; m++) {
       for (let k = 0; k < SW; k++) {
         const wx = (k0 + k) * TILE + 8;
         const wy = (m0 + m) * TILE + 8;
-        const x = Math.floor(wx / TILE);
+        const u = Math.floor(wx / TILE);
         let best = null;
         let bestKey = -Infinity;
         for (let y = WORLD_Y - 1; y >= 0; y--) {
           const zt = Math.floor((wy + y * LH) / TILE);
           if (zt * 64 + y + 1 <= bestKey) break;
-          const idT = world.getBlock(x, y, zt);
-          if (idT !== B.air && !r.isHidden(x, y, zt) && BLOCKS[idT].render !== 'plant') {
+          const [tx, tz] = W(u, zt);
+          const idT = world.getBlock(tx, y, tz);
+          if (idT !== B.air && !r.isHidden(tx, y, tz) && BLOCKS[idT].render !== 'plant') {
             const key = zt * 64 + y;
             if (key > bestKey) {
               bestKey = key;
-              best = { x, y: y + 1, z: zt };
+              best = { x: tx, y: y + 1, z: tz };
             }
           }
           const rel = wy + y * LH - TILE;
           const zf = Math.floor(rel / TILE);
           if (rel - zf * TILE < LH) {
-            const idF = world.getBlock(x, y, zf);
-            if (idF !== B.air && !r.isHidden(x, y, zf) && BLOCKS[idF].render === 'cube') {
+            const [fx, fz] = W(u, zf);
+            const idF = world.getBlock(fx, y, fz);
+            if (idF !== B.air && !r.isHidden(fx, y, fz) && BLOCKS[idF].render === 'cube') {
               const key = zf * 64 + y + 0.5;
               if (key > bestKey) {
                 bestKey = key;
-                best = { x, y, z: zf + 1 };
+                // Lit from the air in front of the face (one row nearer).
+                const [ax, az] = W(u, zf + 1);
+                best = { x: ax, y, z: az };
               }
             }
           }
