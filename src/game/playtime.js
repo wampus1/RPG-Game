@@ -179,7 +179,7 @@ export class Playtime {
         caught.goal = null;
         caught.atGoal = true;
         it.say(pick(['You\'re it!', 'Tag! You\'re it!', 'Ha! You\'re it!']), 2, '#a0ffb0');
-        const t = this.tileIn(g, it, caught);
+        const t = this.tileIn(g, it, caught) || this.tileIn(g, null, caught);
         if (t) this.go(it, t.x, t.z);
         it.playPace = 0.62;
         return;

@@ -63,7 +63,7 @@ with the music off. `window.__game` exposes the running game.
 | Eat held food, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
-| Menu (save and load slots, music and CRT toggles, new game) | Esc |
+| Menu (save and load slots, settings, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
 
 ## What's in the world
@@ -410,16 +410,55 @@ awning up on posts so you can see who's selling. New lots and extensions keep
 clear of gates and the roads out of them. Weather covers wider areas, changes
 in six-hour spells and drifts slowly across the island.
 
+**Laws.** Every town has its own laws, from six: a weapons ban, a curfew
+(nobody in the streets from ten at night to five; guards send you home, then
+fine you), a tariff on outsiders, a game law (only licensed trappers hunt
+near town), a tree law (no felling in town) and an open market (cheaper
+prices). Each has townsfolk for and against it: trappers like the game law,
+barkeeps hate a curfew. Every morning the mayor weighs public feeling and
+what's been happening (violence, night-time trouble, poaching, felling, the
+state of the coffers) and may pass or repeal one. You can take a hand: ask
+the mayor to consider a petition, go round the town collecting signatures
+(people sign or refuse depending on their own views and what they think of
+you), and bring it back. Ask anyone about the laws and they'll tell you what
+they make of them.
+
+**Trades.** Licences depend on the size of the place: trapper, fisher,
+farmer, woodcutter and miner anywhere; herbalist, baker, smith and tailor in
+towns and cities; scribe and jeweller only in cities. Townsfolk come to buy
+only what their own work needs (a cook wants your meat, a smith your ore),
+or plain food for the table.
+
+**Voices.** Everyone speaks in their own consistent way: mayors, nobles and
+priests formally, miners and trappers roughly ("aye", "nothin'"), the
+hot-headed gruffly, the shy tersely, children brightly, with a word they
+call you by and habits they come back to. Townsfolk talk among themselves
+about their work, the laws (and argue), funerals, weddings and babies, the
+new mayor, the alarm bell, news from other towns, shared hobbies and old
+times. When someone dies, a relative carries a gravestone out to the
+graveyard a little later, and family and friends gather for the funeral the
+next afternoon, whatever else they had planned. Children don't always play
+games: they wander, stand about, sit on benches; in tag the tagger runs off
+shouting "You're it!" while the new one counts to three.
+
+**Settings.** Music and sound volume, the CRT effect with its curvature and
+glow, screen shake, damage numbers and window animations, from the title
+screen (O) or the menu, and remembered between games. The character screen
+has tabs (basics, looks, stats, skills, traits) with hats, beards and face
+details, clothes styles and patterns, shoes, stance, more colours and eleven
+starting kits.
+
 **Sound and music.** Footsteps that sound like what you walk on, chopping,
 chipping and harvesting, armour clanks, bows, buckets, the fishing reel and
 the bite, a bell, children squealing, chests, sleep and a fanfare for new
 titles; birds, crickets, owls, frogs, gulls, waves, wind and wolves by place
-and time of day, and rain that hisses while it lasts. The music is made up as
+and time of day. The music is made up as
 it plays and follows you: a theme for each biome (a pentatonic stroll on the
 plains, a Hijaz scale in the desert, a cold sparse tune on the tundra), one
 for villages, towns and cities (quieter at night) and taverns, an eerie one
 in ruins and abandoned places, a slow tolling one in graveyards, and battle
-music when beasts or the town guard come for you. Toggle it from the menu.
+music when beasts or the town guard come for you. Set its volume in the
+settings.
 
 ## Code layout
 
@@ -444,6 +483,7 @@ src/
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), save slots,
+                       settings, voices,
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
@@ -455,7 +495,8 @@ src/
                        (repairs, new buildings, house expansions),
                        diplomacy (letters, roads, warnings), nomads, town
                        life (elections, weddings, coming of age, raids),
-                       growth (materials, town sizes, walls), and the
+                       growth (materials, town sizes, walls), laws
+                       (public opinion, reviews, petitions), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

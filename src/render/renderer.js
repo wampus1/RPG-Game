@@ -60,7 +60,7 @@ export class Renderer {
     const k = 1 - Math.pow(0.0005, dt);
     this.cx += (tx - this.cx) * k;
     this.cy += (ty - this.cy) * k;
-    if (game.shake > 0) {
+    if (game.shake > 0 && !this.noShake) {
       this.cx += (Math.random() - 0.5) * game.shake * 3;
       this.cy += (Math.random() - 0.5) * game.shake * 3;
     }
@@ -734,6 +734,7 @@ export class Renderer {
   }
 
   floatText(x, y, z, text, color = '#ff6060') {
+    if (this.noDamageNumbers && /^[-!]\d/.test(text)) return;
     this.floaters.push({ x: x * TILE + 8, y: z * TILE - y * LH - 4, text, color, t: 0.9 });
   }
 

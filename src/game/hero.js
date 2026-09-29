@@ -51,16 +51,29 @@ export const KITS = {
   farmer: { name: 'Farmer', items: [['hoe', 1], ['seeds', 12], ['cabbage_seeds', 6], ['straw_hat', 1], ['wool_trousers', 1], ['bucket', 1], ['bread', 5]], coins: 20 },
   builder: { name: 'Builder', items: [['stone_pickaxe', 1], ['stone_axe', 1], ['stone_shovel', 1], ['planks', 32], ['cobblestone', 24], ['door', 2], ['workbench', 1], ['chest', 1], ['leather_cap', 1], ['bread', 3]], coins: 10 },
   merchant: { name: 'Merchant', items: [['dagger', 1], ['fine_coat', 1], ['wool_trousers', 1], ['bread', 3], ['torch', 4]], coins: 90 },
+  hunter: { name: 'Hunter', items: [['bow', 1], ['arrow', 24], ['dagger', 1], ['leather_cap', 1], ['leather_trousers', 1], ['cooked_meat', 3]], coins: 15 },
+  miner: { name: 'Miner', items: [['stone_pickaxe', 1], ['stone_shovel', 1], ['torch', 16], ['leather_cap', 1], ['leather_boots', 1], ['bread', 3]], coins: 15 },
+  scholar: { name: 'Scholar', items: [['book', 2], ['scroll', 3], ['lantern', 1], ['wool_hood', 1], ['linen_shirt', 1], ['bread', 3]], coins: 50 },
+  noble: { name: 'Minor Noble', items: [['iron_sword', 1], ['fine_coat', 1], ['gold_circlet', 1], ['leather_boots', 1], ['pie', 2]], coins: 140 },
+  castaway: { name: 'Nothing at all', items: [], coins: 0 },
 };
 // Everyone has these.
 export const COMMON_KIT = [['torch', 4], ['bread', 1]];
 
-export const SKINS = ['#f4d0b0', '#e8b48c', '#d49a6a', '#b07a4a', '#8a5a34', '#5a3a22'];
-export const HAIRS = ['#1e1612', '#3a2418', '#6e4424', '#a0642e', '#d8a048', '#e8d8a0', '#c8c8c8', '#a83a2a'];
+export const SKINS = ['#fbe0c8', '#f4d0b0', '#e8b48c', '#d8a47c', '#d49a6a', '#c0845a', '#b07a4a', '#9a6a40', '#8a5a34', '#6e4628', '#5a3a22', '#40281a'];
+export const HAIRS = ['#1e1612', '#3a2418', '#6e4424', '#8a5a30', '#a0642e', '#c87a3a', '#d8a048', '#e8d8a0', '#f0ecd8', '#c8c8c8', '#8a8a92', '#a83a2a', '#3a4a8a', '#6a3a7a', '#3a7a4a'];
 export const HAIR_STYLES = ['short', 'long', 'ponytail', 'bun', 'curly', 'spiky', 'mohawk', 'afro', 'braids', 'sidepart', 'topknot', 'pigtails', 'bald'];
-export const CLOTHES = ['#2f6f8f', '#8f2f3a', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#3a3a4a', '#e0dccc', '#a04a2a'];
-export const PANTS = ['#3a3a4a', '#4a3a2a', '#2a3a5a', '#5a5a5a', '#6a4a2e', '#2a2a2a'];
+export const CLOTHES = ['#2f6f8f', '#8f2f3a', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#3a3a4a', '#e0dccc', '#a04a2a', '#2a4a3a', '#8a3a6a', '#4a6aa8', '#c86a3a', '#6a6a6a', '#1e1e28'];
+export const PANTS = ['#3a3a4a', '#4a3a2a', '#2a3a5a', '#5a5a5a', '#6a4a2e', '#2a2a2a', '#3a4a2a', '#6a2a2a', '#c8b88a', '#4a2a4a'];
+export const SHOES = ['#2a1a10', '#4a2e1a', '#1a1a1e', '#6a4a2e', '#5a5a62', '#7a2a2a'];
 export const FACES = [null, 'beard', 'mustache', 'freckles', 'glasses', 'earring', 'scar', 'eyepatch'];
+// Facial hair and a detail can be combined.
+export const BEARDS = [false, true];
+export const DETAILS = [null, 'mustache', 'freckles', 'glasses', 'earring', 'scar', 'eyepatch'];
+export const HATS = [null, 'straw', 'cap', 'beret', 'bandana', 'wide', 'feather', 'scarf', 'flower', 'hood', 'fur'];
+export const PATTERNS = [null, 'stripes', 'collar', 'sash', 'buttons'];
+export const OUTFITS = ['plain', 'vest', 'hunter', 'plaid', 'noble', 'apron', 'fisher', 'farmer', 'robe_blue', 'robe_green', 'robe_white'];
+export const BUILDS = [false, true]; // stooped or upright
 
 export function pointsLeft(h) {
   const spent = STATS.reduce((n, s) => n + (h.stats[s.key] - STAT_BASE), 0);
@@ -87,8 +100,9 @@ export function randomHero(seed) {
     origin: rng.chance(0.5) ? 'crash' : 'native',
     kit: rng.pick(Object.keys(KITS)),
     look: {
-      skin: rng.pick(SKINS), hair: rng.pick(HAIRS), hairStyle: rng.pick(HAIR_STYLES), shirt: rng.pick(CLOTHES), pants: rng.pick(PANTS), shoes: '#2a1a10',
+      skin: rng.pick(SKINS), hair: rng.pick(HAIRS), hairStyle: rng.pick(HAIR_STYLES), shirt: rng.pick(CLOTHES), pants: rng.pick(PANTS),
       outfit: 'plain', accent: rng.pick(CLOTHES), hat: null, beard: face === 'beard', acc: face && face !== 'beard' ? face : null,
+      shoes: rng.pick(SHOES), pattern: rng.chance(0.4) ? rng.pick(PATTERNS.filter(Boolean)) : null,
     },
     stats: { str: STAT_BASE, agi: STAT_BASE, end: STAT_BASE, cha: STAT_BASE },
     specialties: rng.shuffle(Object.keys(SPECIALTIES)).slice(0, 2),
@@ -106,6 +120,7 @@ export function randomHero(seed) {
 export function normalizeHero(h) {
   const base = randomHero(1);
   const out = { ...base, ...h, look: { ...base.look, ...(h.look || {}) }, stats: { ...base.stats, ...(h.stats || {}) } };
+  out.look.hatColor = out.look.accent;
   out.specialties = (h.specialties || []).filter((k) => SPECIALTIES[k]).slice(0, 2);
   out.traits = (h.traits || []).filter((k) => TRAITS[k]).slice(0, 2);
   if (!ORIGINS[out.origin]) out.origin = 'crash';

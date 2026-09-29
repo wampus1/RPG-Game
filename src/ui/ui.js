@@ -212,12 +212,12 @@ export class UI {
       // closing on its own used to reopen itself every frame of the fade).
       if (w.state !== 'closing') w.update(dt, game);
       if (w.state === 'opening') {
-        w.p += dt / 0.24;
+        w.p += this.instantWindows ? 1 : dt / 0.24;
         if (w.p >= 1) {
           w.p = 1;
           w.state = 'open';
         }
-      } else if (w.state === 'closing') w.p -= dt / 0.17;
+      } else if (w.state === 'closing') w.p -= this.instantWindows ? 1 : dt / 0.17;
     }
     this.windows = this.windows.filter((w) => !(w.state === 'closing' && w.p <= 0));
     if (this.ko) this.ko.t += dt;

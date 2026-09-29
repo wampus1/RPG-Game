@@ -297,6 +297,12 @@ export class Music {
     this.voice.schedule(c.currentTime + 0.3);
   }
 
+  setVolume(v) {
+    this.volume = v;
+    this.enabled = v > 0;
+    if (this.bus) this.bus.gain.setTargetAtTime(v * 0.4, this.ctx.currentTime, 0.2);
+  }
+
   toggle() {
     this.enabled = !this.enabled;
     if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * 0.4 : 0, this.ctx.currentTime, 0.3);

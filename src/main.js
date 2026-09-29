@@ -6,7 +6,8 @@ import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game } from './game/game.js';
 import { UI } from './ui/ui.js';
-import { TitleWindow, HelpWindow, SaveSlotsWindow } from './ui/windows.js';
+import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow } from './ui/windows.js';
+import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
 import { SaveStore } from './game/saves.js';
 import { CharacterWindow } from './ui/create.js';
@@ -50,6 +51,10 @@ function browserStorage() {
   }
 }
 const store = new SaveStore(browserStorage());
+// Volumes and visuals, as the player left them.
+const settings = loadSettings(browserStorage());
+const applyAll = () => applySettings(settings, { audio, music, crt, renderer, ui });
+applyAll();
 
 // Save into a slot; says so (or why it couldn't).
 function saveTo(id, note) {
@@ -166,9 +171,15 @@ ui.hooks = {
     ui.closeAll();
     ui.open(new TitleWindow(ui, store));
   },
-  toggleMusic: () => ui.msg(`Music ${music.toggle() ? 'on' : 'off'}`, '#a0c8ff'),
+  settings: () => ui.open(new SettingsWindow(ui, settings)),
+  settingsChanged: (s) => {
+    applyAll();
+    saveSettings(browserStorage(), s);
+  },
   toggleCrt: () => {
-    crt.enabled = !crt.enabled;
+    settings.crt = !settings.crt;
+    applyAll();
+    saveSettings(browserStorage(), settings);
     ui.msg(`CRT effect ${crt.enabled ? 'on' : 'off'}`, '#a0c8ff');
   },
 };
@@ -182,7 +193,7 @@ if (params.has('autostart')) {
 }
 else ui.open(new TitleWindow(ui, store));
 if (params.has('nocrt')) crt.enabled = false;
-if (params.has('nomusic')) music.toggle();
+if (params.has('nomusic')) music.setVolume(0);
 
 const perf = (window.__perf = {});
 // Debug helper: teleport to a settlement by name, type or style.

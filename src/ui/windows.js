@@ -15,6 +15,7 @@ import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { LAWS, lawList } from '../sim/laws.js';
+import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -1170,8 +1171,7 @@ export class PauseWindow extends Window {
         this.close();
         this.ui.open(new HelpWindow(this.ui));
       }],
-      ['G', 'Toggle CRT effect', () => this.ui.hooks.toggleCrt && this.ui.hooks.toggleCrt()],
-      ['M', 'Music on/off', () => this.ui.hooks.toggleMusic && this.ui.hooks.toggleMusic()],
+      ['O', 'Settings', () => this.ui.hooks.settings && this.ui.hooks.settings()],
       ['N', 'New world', () => this.ui.hooks.newWorld && this.ui.hooks.newWorld()],
       ['T', 'Title screen', () => this.ui.hooks.title && this.ui.hooks.title()],
     ];
@@ -1293,6 +1293,51 @@ export class SaveSlotsWindow extends Window {
   }
 }
 
+// ---------------------------------------------------------------- settings
+export class SettingsWindow extends Window {
+  constructor(ui, settings) {
+    super(ui, 46, SETTING_ROWS.length * 2 + 6, { kind: 'settings' });
+    this.s = settings;
+    this.sel = 0;
+  }
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'SETTINGS' });
+    SETTING_ROWS.forEach((r, i) => {
+      const y = 2 + i * 2;
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, this.sel === i ? C.bgHi : hov ? '#3a3250' : undefined);
+      g.text(3, y, r.label, this.sel === i ? C.white : C.fg);
+      const v = this.s[r.key];
+      g.text(24, y, '◄', C.hi);
+      if (r.kind === 'bool') g.text(26, y, v ? 'On' : 'Off', v ? C.green : C.faint);
+      else g.text(26, y, `${'■'.repeat(v)}${'□'.repeat(r.max - v)}`, C.cyan);
+      g.text(this.w - 5, y, '►', C.hi);
+      this.hit(24, y, 2, 1, () => this.change(i, -1));
+      this.hit(this.w - 6, y, 3, 1, () => this.change(i, 1));
+      this.hit(2, y, 21, 1, () => {
+        this.sel = i;
+      });
+    });
+    g.center(this.h - 2, '↑↓ choose · ←→ change · ESC close', C.faint);
+  }
+  change(i, d) {
+    this.sel = i;
+    changeSetting(this.s, SETTING_ROWS[i].key, d);
+    this.ui.hooks.settingsChanged && this.ui.hooks.settingsChanged(this.s);
+    this.ui.audio?.play('select');
+  }
+  onKey(k) {
+    const n = SETTING_ROWS.length;
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
+    else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.change(this.sel, -1);
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD' || k.code === 'Enter' || k.code === 'Space') this.change(this.sel, 1);
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------- death
 export class DeathWindow extends Window {
   constructor(ui, cause) {
@@ -1371,6 +1416,7 @@ export class TitleWindow extends Window {
       ['N', 'New game (random world)'],
       ['S', 'New game from seed...'],
       ...(this.hasSave ? [['L', 'Load game...']] : []),
+      ['O', 'Settings'],
       ['H', 'How to play'],
     ];
     opts.forEach(([k, label], i) => {
@@ -1394,10 +1440,11 @@ export class TitleWindow extends Window {
     if (k === 'L' && this.hasSave) h.load && h.load();
     if (k === 'S' && h.askSeed) h.askSeed();
     if (k === 'H') this.ui.open(new HelpWindow(this.ui));
+    if (k === 'O' && h.settings) h.settings();
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
-    if (this.ui.find('help') || this.ui.find('saves') || this.ui.find('create')) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (this.ui.find('help') || this.ui.find('saves') || this.ui.find('create') || this.ui.find('settings')) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

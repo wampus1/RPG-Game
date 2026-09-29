@@ -22,6 +22,11 @@ export class Audio {
     window.addEventListener('keydown', unlock);
   }
 
+  setVolume(v) {
+    this.volume = v;
+    if (this.master) this.master.gain.value = v;
+  }
+
   makeNoise() {
     const b = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.5, this.ctx.sampleRate);
     const d = b.getChannelData(0);
