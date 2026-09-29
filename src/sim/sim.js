@@ -315,18 +315,40 @@ export class Sim {
     if (!a) return [];
     // A light step: people have to be closer to notice.
     if (heroHas(this.game.hero, 'sneak')) radius = Math.max(2, Math.round(radius * 0.7));
+    // It's harder to make things out in the dark.
+    const m = this.game.minute;
+    const dark = m < 330 || m >= 1230;
+    if (dark) radius = Math.max(3, Math.round(radius * 0.6));
     return a.npcs.filter((n) => {
       if (n.dead || n.sleeping || n === exclude || n.rec.away) return false;
-      if (Math.max(Math.abs(n.x - x), Math.abs(n.z - z)) > radius) return false;
-      return this.canSee(n, x, z);
+      const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
+      if (d > radius) return false;
+      if (!this.canSee(n, x, z)) return false;
+      return this.notices(n, d, radius, x, z);
     });
+  }
+
+  // Seeing isn't noticing: close by, anyone would; further off, and when
+  // they're busy with their own work or a meal, it's more of a chance. (Fixed
+  // for the same person, place and minute, so looking twice doesn't help.)
+  notices(n, d, radius, x, z) {
+    if (d <= 2) return true;
+    const guard = n.rec.job === 'guard' && !n.activity;
+    const busy = n.state === 'routine' && ['work', 'eat', 'hobby', 'play', 'forage', 'build', 'repair', 'pray', 'mourn', 'customer'].includes(n.activity);
+    let p = 1 - ((d - 2) / Math.max(1, radius - 1)) * 0.75;
+    if (busy) p *= 0.55;
+    if (guard) p = Math.min(1, p + 0.25);
+    if (n.state !== 'routine') p = Math.min(1, p + 0.2);
+    const r = (hash4(n.rec.idx, x * 31 + z, Math.floor(this.abs / 3), 0x5ee) % 1000) / 1000;
+    return r < p;
   }
 
   canSee(n, x, z, y = null) {
     const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
     if (d <= 1) return true;
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][n.dir || 0];
-    if ((x - n.x) * fx + (z - n.z) * fz < 0 && d > 2) return false;
+    // Roughly what's in front of them, not off to the side.
+    if (d > 2 && (x - n.x) * fx + (z - n.z) * fz < d * 0.4) return false;
     return this.lineOfSight(n.x, n.z, x, z, (y ?? n.y) + 1);
   }
 
@@ -1473,7 +1495,7 @@ export class Sim {
   serializeSettlement(L) {
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
-      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, doneKey: r.doneKey,
+      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       ...(r.grown ? { hobbies: r.hobbies } : {}),

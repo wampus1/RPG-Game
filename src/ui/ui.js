@@ -394,7 +394,7 @@ export class UI {
         if (j.phase === 'serving') {
           const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
           status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
-        } else status = 'IN JAIL · hearing soon';
+        } else status = j.phase === 'night' ? 'IN JAIL · hearing at dawn' : 'IN JAIL · hearing soon';
         col = C.orange;
       } else if (s && sim.justice.exiled.has(s.id)) {
         status = 'EXILED FROM HERE';

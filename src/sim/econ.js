@@ -1003,6 +1003,7 @@ export function packGoods(L, rec, rng) {
 function merchants(sim, L, h, day, hod, rng) {
   if (!sim) return;
   for (const rec of L.npcs) {
+    if (rec.errand && h >= rec.errand.ret && sim.diplomacy) sim.diplomacy.courierHome(L, rec, day);
     if (!rec.traveler || !alive(rec)) continue;
     const t = rec.trip || (rec.trip = { phase: 'home', since: day - 1 });
     const keen = sim.diplomacy ? Object.values(L.econ.relations || {}).reduce((m, r) => Math.max(m, r.trade || 0), 0) : 0;

@@ -184,16 +184,25 @@ export class Game {
 
   // Worth running to the bell? At night, with a threat about, and guards
   // asleep who'd come if they heard it.
-  alarmNeeded(guard, threat) {
+  // A guard deals with the threat first, and only rings a bell that's
+  // right there (ten paces); a citizen runs a little further to raise the
+  // watch, if the guards are asleep or nowhere near.
+  alarmNeeded(npc, threat, range = null) {
+    if (!threat) return false;
     const m = this.minute;
-    if (!(m < 360 || m >= 1200) || !threat) return false;
-    const L = guard.layout;
+    const L = npc.layout;
     const now = this.day * DAY + m;
     if (L.econ && L.econ.bellAt !== undefined && now - L.econ.bellAt < 40) return false;
-    const b = this.nearestBell(L, guard.x, guard.z);
-    if (!b || b.d > 36) return false;
+    const guard = npc.rec.job === 'guard';
+    const b = this.nearestBell(L, npc.x, npc.z);
+    if (!b || b.d > (range ?? (guard ? 10 : 20))) return false;
     const a = this.active.get(L.settlement.id);
-    return !!a && a.npcs.some((n) => n !== guard && !n.dead && n.rec.job === 'guard' && n.sleeping);
+    if (!a) return false;
+    const night = m < 360 || m >= 1200;
+    const asleep = a.npcs.some((n) => n !== npc && !n.dead && n.rec.job === 'guard' && n.sleeping);
+    const onIt = a.npcs.some((n) => n !== npc && !n.dead && n.rec.job === 'guard' && n.state === 'fight' && n.threat === threat);
+    if (guard) return (night && asleep) || range !== null;
+    return (night && asleep) || !onIt;
   }
 
   // Ring the bell at (x, z): every guard in town wakes and turns out, to
@@ -1831,7 +1840,7 @@ export class Game {
       this.ui.msg('Someone is already asleep in that bed.', '#c8c8c8');
       return;
     }
-    const jailed = j && j.phase === 'serving';
+    const jailed = j && (j.phase === 'serving' || j.phase === 'night');
     if (!jailed) p.spawn = { x: p.x, y: p.y, z: p.z };
     if (!jailed && !(h >= 20 || h < 5)) {
       this.ui.msg('You can only sleep at night. (spawn point set)', '#c8d8ff');
@@ -1839,7 +1848,7 @@ export class Game {
     }
     // Wake at dawn, or when the sentence ends.
     const now = this.day * DAY + this.minute;
-    let wake = jailed ? j.release : (h >= 20 ? (this.day + 1) * DAY + 360 : this.day * DAY + 360);
+    let wake = jailed && j.phase === 'serving' ? j.release : (h >= 20 ? (this.day + 1) * DAY + 420 : h < 7 ? this.day * DAY + 420 : (this.day + 1) * DAY + 420);
     if (jailed) wake = Math.min(wake, now + 16 * 60);
     this.sleep = { phase: 'in', t: 0, bed: { x, y, z }, from: { x: p.x, y: p.y, z: p.z }, wake, start: now, hp0: p.hp, jail: jailed };
     this.audio?.play('sleep');

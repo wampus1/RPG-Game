@@ -950,7 +950,8 @@ function respondRaw(npc, game, id, arg) {
       else if (act.act === 'trial') lines.push('There\'s to be a hearing at the jail.');
       else if (act.act === 'travel') {
         const q = sim.diplomacy.letters.find((m) => m.carrierIdx === rec.idx && m.from === s.id && m.status === 'carried');
-        lines.push(q ? `Off to ${sim.diplomacy.town(q.to).name} with my goods, and a letter from the mayor.` : 'Off on the road with my goods!');
+        if (rec.errand && q) lines.push(`The mayor's paying me to take a letter to ${sim.diplomacy.town(q.to).name}. Can't stop long!`);
+        else lines.push(q ? `Off to ${sim.diplomacy.town(q.to).name} with my goods, and a letter from the mayor.` : 'Off on the road with my goods!');
       }
       else if (act.act === 'visit') lines.push(`Selling wares from ${npc.visit ? npc.visit.fromName : 'afar'}. Have a look!`);
       else if (act.act === 'hobby' && HOBBIES[act.hobby]) lines.push(pick(rng, [`Nothing beats ${HOBBIES[act.hobby].label} after a long day.`, `I'm fond of ${HOBBIES[act.hobby].label}.`]));

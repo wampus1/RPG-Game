@@ -419,13 +419,19 @@ export class NPC extends Entity {
       case 'alarm':
         this.alarmRun(dt);
         break;
+      case 'retreat':
+        this.retreatRun(dt);
+        break;
     }
   }
 
-  // Off to the nearest bell to wake the rest of the watch.
-  startAlarm(threat) {
+  // Off to the nearest bell to wake the rest of the watch. After ringing,
+  // a guard fights (or, if badly hurt, falls back to the other guards); a
+  // citizen runs for safety.
+  startAlarm(threat, after = null) {
     const b = this.game.nearestBell(this.layout, this.x, this.z);
-    if (!b) return this.engage(threat);
+    this.afterAlarm = after || (this.rec.job === 'guard' ? 'fight' : 'flee');
+    if (!b) return this.afterBell(threat);
     this.state = 'alarm';
     this.threat = threat;
     this.bell = b;
@@ -434,7 +440,40 @@ export class NPC extends Entity {
     this.path = null;
     this.atGoal = false;
     this.releaseSpot();
-    this.say(this.rng.pick(['To the bell!', 'Raise the alarm!', 'I need the others. To the bell!']), 2.5, '#ffb080');
+    this.say(this.rng.pick(this.rec.job === 'guard' ? ['To the bell!', 'Raise the alarm!', 'I need the others. To the bell!'] : ['Ring the bell! Wake the guards!', 'Help! To the bell!']), 2.5, '#ffb080');
+  }
+
+  afterBell(t) {
+    const live = t && !t.dead;
+    if (this.afterAlarm === 'retreat') return this.startRetreat(t);
+    if (this.afterAlarm === 'flee') return live ? this.startFlee(t) : this.calmDown(true);
+    return live ? this.engage(t) : this.calmDown(true);
+  }
+
+  // A hurt guard falls back to the nearest of their comrades, then fights
+  // on beside them.
+  startRetreat(t) {
+    const buddy = this.game.npcs.filter((n) => n !== this && !n.dead && !n.sleeping && n.rec.job === 'guard' && n.layout === this.layout).sort((a, b) => a.distTo(this) - b.distTo(this))[0];
+    this.retreated = true;
+    if (!buddy) return t && !t.dead ? this.engage(t) : this.calmDown(true);
+    this.state = 'retreat';
+    this.threat = t;
+    this.buddy = buddy;
+    this.stateT = 0;
+    this.path = null;
+    this.say(this.rng.pick(['Fall back! I need help!', 'I\'m hurt! To me!', 'Help me hold them!']), 2.5, '#ffb080');
+  }
+
+  retreatRun() {
+    const b = this.buddy;
+    const t = this.threat;
+    if (!b || b.dead || this.stateT > 20 || this.followPath({ x: b.x, z: b.z }, 2)) {
+      this.buddy = null;
+      if (t && !t.dead) {
+        this.engage(t);
+        if (b && !b.dead && b.state === 'routine') b.engage(t);
+      } else this.calmDown(true);
+    }
   }
 
   alarmRun(dt) {
@@ -451,8 +490,7 @@ export class NPC extends Entity {
     }
     if (this.ringT > 1.6) {
       this.bell = null;
-      if (t && !t.dead) this.engage(t);
-      else this.calmDown(true);
+      this.afterBell(t);
     }
   }
 
@@ -1484,6 +1522,13 @@ export class NPC extends Entity {
   }
 
   startFlee(threat, line) {
+    // A townsperson running from a beast rings the alarm on the way, if a
+    // bell's near and the watch isn't already on it.
+    if (this.state !== 'alarm' && this.afterAlarm !== 'flee' && threat && threat.kind !== 'player' && threat.hostileNow && this.rec.job !== 'guard' && this.rec.age !== 'child' && !this.visit && this.game.alarmNeeded(this, threat)) {
+      this.afterAlarm = 'flee';
+      return this.startAlarm(threat, 'flee');
+    }
+    this.afterAlarm = null;
     this.state = 'flee';
     this.threat = threat;
     this.stateT = 0;
@@ -1553,6 +1598,13 @@ export class NPC extends Entity {
       return;
     }
     const d = this.distTo(t);
+    // Badly hurt: run for the bell to raise help (if one's near), then fall
+    // back to the other guards.
+    if (guard && this.hp < this.maxHp * 0.35 && !this.retreated) {
+      if (game.alarmNeeded(this, t, 30)) return this.startAlarm(t, 'retreat');
+      return this.startRetreat(t);
+    }
+    if (this.retreated && this.hp >= this.maxHp * 0.6) this.retreated = false;
     if (guard && t.kind === 'player') {
       // Waiting for an answer to "Halt!".
       if (this.haltT > 0) {

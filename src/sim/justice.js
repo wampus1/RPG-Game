@@ -377,7 +377,7 @@ export class Justice {
         g.say('In you go. The hearing will be soon.', 3);
         g.calmDown(true);
         this.jail = { sid: e.sid, phase: 'gather', t: 0, how: 'surrender', party: [], lines: [], li: 0, lt: 0, release: null, cellless: false, floor: this.floorOf(L) };
-        this.summon(L);
+        this.beginTrial(L);
         game.audio?.play('door');
         return;
       }
@@ -453,7 +453,7 @@ export class Justice {
     if (how === 'knockout') p.hp = Math.max(p.hp, 6);
     this.jail = { sid, phase: 'gather', t: 0, how, party: [], lines: [], li: 0, lt: 0, release: null, cellless: !jail, floor: jail ? this.floorOf(L) : null };
     if (!quick) game.ui.showKnockout?.(how, L.settlement.name, returned, weapons.length);
-    this.summon(L);
+    this.beginTrial(L);
   }
 
   // Open or shut the cell. (The bars above the door let you walk under.)
@@ -507,9 +507,29 @@ export class Justice {
     else if (owner && owner.kind === 'rec' && L.npcs[owner.id]) invAdd(L.npcs[owner.id].inv, item, n);
   }
 
-  // Leader, a guard and the witnesses come to the jail.
-  summon(L) {
-    const j = this.jail;
+  // The hearing waits for daylight, and for everyone who has to be there
+  // to be up; until then the prisoner stays in the cell.
+  beginTrial(L) {
+    if (this.trialReady(L)) {
+      this.jail.phase = 'gather';
+      this.jail.t = 0;
+      this.summon(L);
+      return;
+    }
+    this.jail.phase = 'night';
+    this.jail.t = 0;
+    this.game.ui.msg('You are locked in the cell for the night. The hearing will be held in the morning.', '#e8c080');
+  }
+
+  trialReady(L) {
+    const m = this.game.minute;
+    if (m < 420 || m >= 1260) return false;
+    // Past mid-morning nobody lies in any longer.
+    if (m >= 600) return true;
+    return this.partyOf(L).party.every((r) => !r.ent || r.ent.dead || !r.ent.sleeping);
+  }
+
+  partyOf(L) {
     const sid = L.settlement.id;
     const ok = (r) => r && alive(r) && !r.away && !r.visitor;
     const judge = mayorOf(L) && !mayorOf(L).away ? mayorOf(L) : L.npcs.find((r) => ok(r) && r.job === 'guard') || [...L.npcs].filter((r) => ok(r) && r.age !== 'child').sort((a, b) => (b.age === 'elder') - (a.age === 'elder'))[0];
@@ -522,6 +542,13 @@ export class Justice {
       }
     }
     const party = [judge, guard, ...wit.slice(0, 3)].filter(Boolean);
+    return { judge, guard, wit, party };
+  }
+
+  // Leader, a guard and the witnesses come to the jail.
+  summon(L) {
+    const j = this.jail;
+    const { judge, guard, wit, party } = this.partyOf(L);
     j.judge = judge ? judge.idx : null;
     j.guard = guard ? guard.idx : null;
     j.witnesses = wit.slice(0, 3).map((r) => r.idx);
@@ -596,7 +623,15 @@ export class Justice {
     const game = this.game;
     const L = this.sim.layoutOf(j.sid);
     j.t += dt;
-    if (j.phase === 'gather') {
+    if (j.phase === 'night') {
+      if (j.t > 2) {
+        j.t = 0;
+        if (this.trialReady(L)) {
+          game.ui.msg('Morning. The hearing is being called.', '#e8c080');
+          this.beginTrial(L);
+        }
+      }
+    } else if (j.phase === 'gather') {
       const target = L.jail ? L.jail.front : { x: L.plaza.cx, z: L.plaza.cz + 2 };
       const ents = j.party.map((i) => L.npcs[i]?.ent).filter((e) => e && !e.dead);
       const here = ents.filter((e) => e.atGoal || Math.max(Math.abs(e.x - target.x), Math.abs(e.z - target.z)) <= 2);
@@ -914,7 +949,7 @@ export class Justice {
 
   // ------------------------------------------------------------ save
   serialize() {
-    const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' ? 'serving' : 'gather', t: 0 } : null;
+    const j = this.jail ? { ...this.jail, lines: [], phase: this.jail.phase === 'serving' || this.jail.phase === 'night' ? this.jail.phase : 'gather', t: 0 } : null;
     return { pending: [...this.pending], record: [...this.record], exiled: [...this.exiled], jail: j, held: this.held, escortSid: this.escort ? this.escort.sid : null, unsolved: this.unsolved, sightings: [...this.sightings], repairs: this.repairs.map((r) => ({ sid: r.sid, at: r.at, floor: r.floor })) };
   }
 

@@ -336,6 +336,11 @@ test('alarm bells: more in bigger places, and the night watch rings them', () =>
     watch.wake();
   }
   assert.ok(guards.some((n) => n.sleeping), 'most of the watch asleep');
+  // A guard only breaks off to ring the bell when one is close at hand.
+  const bell = game.bellsOf(L)[0];
+  let spot = null;
+  for (let r = 2; r <= 6 && !spot; r++) for (const [dx, dz] of [[r, 0], [-r, 0], [0, r], [0, -r]]) if (!spot && game.world.isWalkable?.(bell.x + dx, GROUND, bell.z + dz) !== false && !game.world.getBlock(bell.x + dx, GROUND, bell.z + dz)) spot = { x: bell.x + dx, z: bell.z + dz };
+  if (spot) watch.teleport(spot.x, GROUND, spot.z);
   const c = new Creature(game, 'wolf', watch.x + 3, watch.y, watch.z);
   c.angry = true;
   game.creatures.push(c);

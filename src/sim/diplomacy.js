@@ -4,7 +4,7 @@
 // (or a courier, or you). The other mayor answers according to how the
 // towns get on and what they can spare, and the reply comes back the same
 // way. Warnings about a dangerous traveller travel the same roads.
-import { alive, ledger, DAY } from './econ.js';
+import { alive, ledger, DAY, setOverride } from './econ.js';
 import { deserted } from './civic.js';
 import { B } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
@@ -134,14 +134,64 @@ export class Diplomacy {
     }
   }
 
-  // Letters with no merchant going their way within two days go by courier.
+  // Letters with no merchant going their way soon go by courier: the mayor
+  // hires someone from town, who walks there, waits for any answer, and
+  // comes back to be paid. (A town with nobody spare or no money sends it
+  // with a passing stranger after two days.)
   courier(now) {
     for (const q of this.letters) {
-      if (q.status !== 'waiting' || now - q.written < 2 * DAY) continue;
+      if (q.status !== 'waiting' || now - q.written < 10 * 60) continue;
+      if (q.kind !== 'reply' && this.hireCourier(q, now)) continue;
+      if (now - q.written < 2 * DAY) continue;
       q.status = 'carried';
       q.carrier = 'a courier';
       q.arrive = now + this.travelHours(this.town(q.from), this.town(q.to)) * 60;
     }
+  }
+
+  hireCourier(q, now) {
+    const L = this.sim.layoutOf(q.from);
+    const hod = Math.floor((now % DAY) / 60);
+    if (!L || !L.econ || hod < 7 || hod >= 16) return false;
+    const mayor = L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away);
+    if (!mayor) return false;
+    const from = this.town(q.from);
+    const to = this.town(q.to);
+    const hours = this.travelHours(from, to);
+    const pay = 6 + Math.round(hours * 1.5);
+    if (L.econ.treasury < pay + 10) return false;
+    const busy = new Set(['mayor', 'guard', 'priest', 'merchant', 'cook', 'builder', 'blacksmith']);
+    const who = L.npcs
+      .filter((r) => alive(r) && r.age === 'adult' && !r.away && !r.leaving && !r.traveler && !r.errand && !r.visitor && !r.migrated && !busy.has(r.job) && !r.sick && (r.hp ?? 1) > (r.maxHp || 10) * 0.6)
+      .sort((a, b) => (a.job ? 1 : 0) - (b.job ? 1 : 0) || (a.coins || 0) - (b.coins || 0))[0];
+    if (!who) return false;
+    L.econ.treasury -= pay;
+    const arrive = now + hours * 60;
+    q.status = 'carried';
+    q.arrive = arrive;
+    q.carrier = `${who.name.first} ${who.name.last}`;
+    q.carrierIdx = who.idx;
+    q.courier = true;
+    // There and back, with a few hours' rest (and the answer) in between.
+    who.errand = { letter: q.id, dest: q.to, arrive, ret: arrive + (4 + hours) * 60, pay };
+    ledger(L, this.sim.today(), `${mayor.name.first} ${mayor.name.last} paid ${who.name.first} ${who.name.last} ¤${pay} to carry a letter to ${to.name}.`);
+    if (who.ent && !who.ent.dead) {
+      setOverride(who, now, now + 180, 'travel', { place: 'road', errand: true });
+      who.leaving = true;
+      who.ent.say(`A letter for ${to.name}? I'll see it gets there.`, 3);
+    } else who.away = true;
+    return true;
+  }
+
+  // A courier back from the road collects the pay.
+  courierHome(L, rec, day) {
+    const t = rec.errand;
+    rec.errand = null;
+    rec.away = false;
+    rec.leaving = false;
+    rec.coins = (rec.coins || 0) + t.pay;
+    const dest = this.town(t.dest);
+    ledger(L, day, `${rec.name.first} ${rec.name.last} came back from ${dest ? dest.name : 'the road'}, the mayor's letter delivered.`);
   }
 
   // The player offers to carry a waiting letter.
