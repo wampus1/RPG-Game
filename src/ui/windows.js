@@ -296,9 +296,10 @@ export class CraftWindow extends Window {
     // The scribe's desk prints; the jeweller's bench sets stones.
     const extra = this.station === 'scribe' ? ' [P] print a newspaper ' : this.station === 'jeweller' ? ' [S] set a gem ' : null;
     if (extra) {
-      const hov = this.hovering(this.w - extra.length - 2, 0, extra.length, 1);
-      g.text(this.w - extra.length - 2, 0, extra, hov ? C.white : C.hi, '#2a2230');
-      this.hit(this.w - extra.length - 2, 0, extra.length, 1, () => this.extra());
+      const ey = this.h - 3;
+      const hov = this.hovering(this.w - extra.length - 2, ey, extra.length, 1);
+      g.text(this.w - extra.length - 2, ey, extra, hov ? C.white : C.hi, '#2a2230');
+      this.hit(this.w - extra.length - 2, ey, extra.length, 1, () => this.extra());
     }
   }
   extra() {
@@ -1705,7 +1706,7 @@ export class SettingWindow extends Window {
   constructor(ui, game) {
     super(ui, 52, 22, { kind: 'setting' });
     this.game = game;
-    this.state = 'choose';
+    this.phase = 'choose';
     this.piece = 0;
     this.gem = 0;
   }
@@ -1725,7 +1726,7 @@ export class SettingWindow extends Window {
   draw(g, game) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
     g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'SET A GEM' });
-    if (this.state === 'choose') return this.drawChoose(g);
+    if (this.phase === 'choose') return this.drawChoose(g);
     this.drawRing(g);
   }
   drawChoose(g) {
@@ -1768,17 +1769,17 @@ export class SettingWindow extends Window {
       else g.put(x, y, '·', C.faint);
     }
     const [nx, ny] = at(Math.round(this.pos) % RING);
-    g.put(nx, ny, '●', C.white);
-    g.put(cx, cy, '◆', GEMS[this.set.gem].color);
-    g.center(cy + 8, this.state === 'done' ? 'Set! The stone sits true.' : this.state === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'✗'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.state === 'fail' ? C.red : this.state === 'done' ? C.green : C.fg);
-    if (this.state !== 'set') g.center(cy + 10, '[ENTER] close', C.faint);
+    g.put(nx, ny, '•', C.white);
+    g.put(cx, cy, '♦', GEMS[this.set.gem].color);
+    g.center(cy + 8, this.phase === 'done' ? 'Set! The stone sits true.' : this.phase === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'×'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.phase === 'fail' ? C.red : this.phase === 'done' ? C.green : C.fg);
+    if (this.phase !== 'set') g.center(cy + 10, '[ENTER] close', C.faint);
   }
   begin() {
     const pieces = this.pieces();
     const gems = this.gems();
     if (!pieces.length || !gems.length) return;
     this.set = { piece: pieces[this.piece], gem: gems[this.gem] };
-    this.state = 'set';
+    this.phase = 'set';
     this.pos = 0;
     this.speed = 7;
     this.slips = 0;
@@ -1786,7 +1787,7 @@ export class SettingWindow extends Window {
     this.ui.audio?.play('select');
   }
   update(dt) {
-    if (this.state !== 'set') return;
+    if (this.phase !== 'set') return;
     this.pos = (this.pos + dt * this.speed) % RING;
   }
   press() {
@@ -1806,7 +1807,7 @@ export class SettingWindow extends Window {
       this.speed += 2.5;
       this.ui.audio?.play('clang');
       if (this.pressed.every(Boolean)) {
-        this.state = 'done';
+        this.phase = 'done';
         this.game.setGem(this.set.piece.ref, this.set.gem);
       }
       return;
@@ -1814,14 +1815,14 @@ export class SettingWindow extends Window {
     this.slips++;
     this.ui.audio?.play('error');
     if (this.slips >= 3) {
-      this.state = 'fail';
+      this.phase = 'fail';
       removeItem(this.game.player.inv, this.set.gem, 1);
       this.ui.msg(`The ${GEMS[this.set.gem].name.toLowerCase()} cracked in the setting.`, C.red);
     }
   }
   onKey(k) {
     if (k.code === 'Escape') this.close();
-    else if (this.state === 'choose') {
+    else if (this.phase === 'choose') {
       const n = this.pieces().length;
       const m = this.gems().length;
       if (k.code === 'ArrowUp' || k.code === 'KeyW') this.piece = (this.piece + Math.max(1, n) - 1) % Math.max(1, n);
@@ -1829,7 +1830,7 @@ export class SettingWindow extends Window {
       else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.gem = (this.gem + Math.max(1, m) - 1) % Math.max(1, m);
       else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.gem = (this.gem + 1) % Math.max(1, m);
       else if (k.code === 'Enter') this.begin();
-    } else if (this.state === 'set') {
+    } else if (this.phase === 'set') {
       if (k.code === 'Space') this.press();
     } else if (k.code === 'Enter' || k.code === 'Space') this.close();
     return true;
