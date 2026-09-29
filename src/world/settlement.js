@@ -572,6 +572,9 @@ class Layout {
       for (const [w, d] of (SPECS[type] || SPECS.house_s).size) {
         const r = this.rectFor(c, w, d, 1 + (hash4(c.x, c.z, 3) % Math.max(1, w - 2)));
         if (!this.rectOk(r, false) || !this.gateClear(r, exits)) continue;
+        // Lots opened later keep a couple of blocks clear of the houses
+        // already there.
+        if (!sign && !this.clearAround(r, 3)) continue;
         const front = { x: c.x + c.dx, z: c.z + c.dz };
         const fm = this.maskAt(front.x, front.z);
         if (fm !== M.FREE && fm !== M.ROAD && fm !== M.YARD) continue;
@@ -600,8 +603,133 @@ class Layout {
     return null;
   }
 
+  // No other building (or lot) within `pad` tiles of a rectangle.
+  clearAround(r, pad) {
+    for (let z = r.z0 - pad; z <= r.z1 + pad; z++) {
+      for (let x = r.x0 - pad; x <= r.x1 + pad; x++) {
+        if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) continue;
+        if (this.inside(x, z) && this.maskAt(x, z) === M.BUILD) return false;
+      }
+    }
+    const near = (q) => q.x0 <= r.x1 + pad && q.x1 >= r.x0 - pad && q.z0 <= r.z1 + pad && q.z1 >= r.z0 - pad;
+    return !this.buildings.some(near) && !this.plots.some((q) => q && q !== r && near(q));
+  }
+
+  isRoadTile(x, z) {
+    if (this.outRoads && this.outRoads.has(x * 65536 + z)) return true;
+    if (!this.inside(x, z)) return false;
+    const m = this.maskAt(x, z);
+    return m === M.ROAD || m === M.PLAZA || m === M.BRIDGE;
+  }
+
+  // The street tile nearest a point (within `r`), or null.
+  nearestRoad(cx, cz, r = 16, skip = null) {
+    let best = null;
+    for (let z = cz - r; z <= cz + r; z++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (skip && skip(x, z)) continue;
+        if (!this.isRoadTile(x, z)) continue;
+        const d = Math.abs(x - cx) + Math.abs(z - cz);
+        if (!best || d < best.d) best = { x, z, d };
+      }
+    }
+    return best;
+  }
+
+  // Can a road be laid over this tile (open ground, no building, no wall)?
+  roadable(x, z, rect = null) {
+    if (rect && x >= rect.x0 && x <= rect.x1 && z >= rect.z0 && z <= rect.z1) return false;
+    if (this.inside(x, z)) {
+      const m = this.maskAt(x, z);
+      if (m !== M.FREE && m !== M.ROAD && m !== M.PLAZA && m !== M.BRIDGE) return false;
+    } else if (this.buildings.some((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1)) return false;
+    const c = this.col(x, z);
+    return !!c && c.h === SURFACE && c.water < 0;
+  }
+
+  // The nearest street a lot could actually be joined to (walking round
+  // walls and buildings, not through them).
+  reachableRoad(rect, max = 30) {
+    const key = (x, z) => x * 65536 + z;
+    const seen = new Set();
+    const queue = [];
+    for (let z = rect.z0 - 1; z <= rect.z1 + 1; z++) {
+      for (let x = rect.x0 - 1; x <= rect.x1 + 1; x++) {
+        const ring = x < rect.x0 || x > rect.x1 || z < rect.z0 || z > rect.z1;
+        // Not from the corners: a door can't face those.
+        const corner = (x === rect.x0 - 1 || x === rect.x1 + 1) && (z === rect.z0 - 1 || z === rect.z1 + 1);
+        if (!ring || corner) continue;
+        seen.add(key(x, z));
+        queue.push([x, z, 0]);
+      }
+    }
+    for (let i = 0; i < queue.length && i < 4000; i++) {
+      const [x, z, d] = queue[i];
+      if (this.isRoadTile(x, z)) return { x, z, d };
+      if (d >= max || !this.roadable(x, z, rect)) continue;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = key(x + dx, z + dz);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        queue.push([x + dx, z + dz, d + 1]);
+      }
+    }
+    return null;
+  }
+
+  // A way from a new lot's front step to the nearest street, laid before
+  // the house goes up: the tiles, from the lot outwards. Marked as road so
+  // nothing else is put on it.
+  roadTo(plot) {
+    const from = plot.outside;
+    if (!from) return [];
+    const ok = (x, z) => this.roadable(x, z, plot);
+    const key = (x, z) => x * 65536 + z;
+    const prev = new Map([[key(from.x, from.z), null]]);
+    const queue = [[from.x, from.z, 0]];
+    let end = null;
+    for (let i = 0; i < queue.length && i < 3000; i++) {
+      const [x, z, d] = queue[i];
+      if ((x !== from.x || z !== from.z) && this.isRoadTile(x, z)) {
+        end = [x, z];
+        break;
+      }
+      if (d >= 28) continue;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const nz = z + dz;
+        const k = key(nx, nz);
+        if (prev.has(k) || !ok(nx, nz)) continue;
+        prev.set(k, key(x, z));
+        queue.push([nx, nz, d + 1]);
+      }
+    }
+    if (!end) return [];
+    const tiles = [];
+    for (let k = prev.get(key(end[0], end[1])); k !== null && k !== undefined; k = prev.get(k)) tiles.push([Math.floor(k / 65536), k % 65536]);
+    tiles.reverse();
+    for (const [x, z] of tiles) this.markRoad(x, z);
+    return tiles;
+  }
+
+  markRoad(x, z) {
+    if (this.inside(x, z)) this.setMask(x, z, M.ROAD);
+    else (this.outRoads ||= new Set()).add(x * 65536 + z);
+  }
+
+  // Blocks for a road over the given tiles (plants in the way cleared).
+  roadOps(tiles) {
+    const ops = [];
+    for (const [x, z] of tiles) {
+      const c = this.col(x, z);
+      ops.push([x, SURFACE, z, c && c.water >= 0 ? B.planks : this.mats.road, 0]);
+      ops.push([x, Y0, z, B.air, 0, true]);
+    }
+    return ops;
+  }
+
   // A lot just outside the edge (on the flattened fringe) facing the town.
-  fringePlot(sign = true, reach = 7, flat = 0.05) {
+  fringePlot(sign = true, reach = 7, flat = 0.05, needRoad = true, spaced = true) {
     const b = this.bounds;
     const terrain = this.world.terrain;
     const p = this.plaza;
@@ -613,10 +741,11 @@ class Layout {
       // Later lots beyond the town's edge: never onto (or too far towards)
       // another town, or on top of what's been built out there already.
       if (!sign) {
-        if (Math.max(b.x0 - x, x - b.x1, b.z0 - z, z - b.z1) > 12) return false;
+        if (Math.max(b.x0 - x, x - b.x1, b.z0 - z, z - b.z1) > Math.max(12, reach + 1)) return false;
         const other = this.world.ow.settlementAt(x, z);
         if (other && other !== this.settlement) return false;
         if (this.builtNear(x, z, null)) return false;
+        if (this.outRoads && this.outRoads.has(x * 65536 + z)) return false;
       }
       const c = terrain.column(x, z, this.ctx, {});
       return c.h === SURFACE && c.water < 0 && c.flat >= flat;
@@ -632,11 +761,18 @@ class Layout {
     const exits = this.exits();
     for (const { x, z } of cands) {
       let ok = this.gateClear({ x0: x, z0: z, x1: x + 4, z1: z + 4 }, exits);
-      for (let dz = -1; dz <= 5 && ok; dz++) for (let dx = -1; dx <= 5 && ok; dx++) ok = tileOk(x + dx, z + dz);
+      // Lots marked out later stand a little further from their neighbours.
+      const pad = sign || !spaced ? 1 : 2;
+      for (let dz = -pad; dz <= 4 + pad && ok; dz++) for (let dx = -pad; dx <= 4 + pad && ok; dx++) ok = tileOk(x + dx, z + dz);
+      if (ok && !sign) ok = this.clearAround({ x0: x, z0: z, x1: x + 4, z1: z + 4 }, spaced ? 3 : 2);
       if (!ok) continue;
-      // Door on the side facing the plaza.
-      const dx = p.cx - (x + 2);
-      const dz = p.cz - (z + 2);
+      // Door on the side facing the nearest street (else the plaza), so a
+      // house beside a road running north-south faces east or west.
+      const rd = sign ? null : this.reachableRoad({ x0: x, z0: z, x1: x + 4, z1: z + 4 });
+      // A lot marked out later needs a way to the streets.
+      if (!sign && !rd && needRoad) continue;
+      const dx = (rd ? rd.x : p.cx) - (x + 2);
+      const dz = (rd ? rd.z : p.cz) - (z + 2);
       let door;
       if (Math.abs(dx) > Math.abs(dz)) door = dx > 0 ? { x: x + 4, z: z + 2, rot: 3 } : { x, z: z + 2, rot: 1 };
       else door = dz > 0 ? { x: x + 2, z: z + 4, rot: 0 } : { x: x + 2, z, rot: 2 };
@@ -859,7 +995,7 @@ class Layout {
   openPlot(type = 'house_s', insideOnly = false) {
     const rng = new RNG(hash4(this.settlement.seed, 0x7a0e, this.plots.length));
     const inner = (type !== 'house_s' && this.placePlot(rng, false, type)) || this.placePlot(rng, false);
-    return inner || (insideOnly ? null : this.fringePlot(false) || this.fringePlot(false, 12, 0));
+    return inner || (insideOnly ? null : this.fringePlot(false) || this.fringePlot(false, 12, 0) || this.fringePlot(false, 17, 0) || this.fringePlot(false, 12, 0, true, false));
   }
 
   // Is the town walled (from its founding as a city, or built since)?

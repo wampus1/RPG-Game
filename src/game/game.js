@@ -1777,6 +1777,25 @@ export class Game {
       if (L.jail && L.jail.building === b.id) lines.push('', 'Holding cells within.');
       return { title: 'SIGN', lines };
     }
+    if (sg && sg.kind === 'works') {
+      const pr = this.sim.works.projects.find((q) => q.id === sg.project);
+      if (pr) {
+        const pct = Math.round(this.sim.works.frameProgress(pr) * 100);
+        const crew = this.sim.builders(L).filter((r) => r.override && r.override.project === pr.id).map((r) => r.name.first);
+        const pl = L.plots[pr.plot];
+        const size = pl ? `${pl.x1 - pl.x0 + 1} by ${pl.z1 - pl.z0 + 1} paces` : '';
+        return {
+          title: 'SIGN',
+          lines: [
+            'UNDER CONSTRUCTION', '', `Here the council of ${s.name} is building`, `${pr.label}.`, '',
+            `Begun: day ${Math.floor(pr.start / DAY)}${size ? `   Plot: ${size}` : ''}`,
+            `Progress: ${pct}%${pr.road && pr.road.length ? `   (road first: ${pr.road.length} paces)` : ''}`,
+            crew.length ? `Builders: ${crew.slice(0, 4).join(', ')}` : 'Builders: the town crew',
+            '', 'Keep clear of the site. By order.',
+          ],
+        };
+      }
+    }
     if (sg && sg.kind === 'plot') {
       const pl = L.plots[sg.plot];
       return { title: 'SIGN', lines: ['LAND FOR NEW CITIZENS', '', pl && pl.taken ? 'This lot has been claimed.' : `Become a citizen of ${s.name}`, pl && pl.taken ? '' : 'at the town hall, and a home will', pl && pl.taken ? '' : 'be built for you here.'] };

@@ -446,13 +446,29 @@ test('a walled city out of room pulls down part of its wall and builds beyond it
     day++;
     const r = growth(game.sim, L, day);
     if (r && r.breach) breach = r.breach;
+    if (r && r.building && L.plots[r.building.plot].fringe && !breach) {
+      for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) p.work = 1e9;
+      game.sim.works.update();
+      break;
+    }
     for (const p of game.sim.works.projects) if (!p.done && p.sid === s.id) p.work = 1e9;
     game.sim.works.update();
   }
-  assert.ok(breach && breach.done, 'a breach in the wall');
-  const tiles = game.sim.works.built.find((q) => q.kind === 'breach').tiles;
-  assert.ok(tiles.length >= 3);
-  assert.ok(tiles.every(([x, z]) => game.world.getBlock(x, GROUND + 1, z) === B.air));
+  // Either a stretch of wall comes down, or (where a gate already opens
+  // onto the free ground) the city builds out through the gate.
+  const b0 = s.bounds;
+  const outside = () => L.buildings.find((q) => q.x1 < b0.x0 || q.x0 > b0.x1 || q.z1 < b0.z0 || q.z0 > b0.z1);
+  assert.ok((breach && breach.done) || outside(), 'a breach in the wall, or building beyond a gate');
+  if (breach) {
+    const tiles = game.sim.works.built.find((q) => q.kind === 'breach').tiles;
+    assert.ok(tiles.length >= 3);
+    assert.ok(tiles.every(([x, z]) => game.world.getBlock(x, GROUND + 1, z) === B.air));
+  } else {
+    const o = outside();
+    const pl = L.plots.find((q) => q && q.x0 === o.x0 && q.z0 === o.z0);
+    const w = game.sim.works.built.find((q) => q.plot === pl?.id && q.sid === s.id);
+    assert.ok(pl && w && w.road && w.road.length, 'with a road out to the streets');
+  }
   for (let k = 0; k < 9; k++) {
     day++;
     growth(game.sim, L, day);

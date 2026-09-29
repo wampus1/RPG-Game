@@ -4,6 +4,11 @@
 // in hours on site (visibly when the town is near, in bulk when it isn't).
 import { alive, ledger, setOverride, DAY, hasMaterials, useMaterials } from './econ.js';
 import { B, BLOCKS } from '../world/blocks.js';
+import { GROUND } from '../config.js';
+
+// How far along a new building is before its frame is up (and the sign
+// announcing it comes down).
+const FRAME = 0.45;
 
 const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1 };
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
@@ -11,6 +16,8 @@ const STRUCTURAL = (id) => {
   const b = BLOCKS[id];
   return b && id !== B.air && (b.render === 'cube' || b.render === 'door') && b.interact !== 'container';
 };
+
+const L0 = (works, p) => works.sim.layoutOf(p.sid);
 
 export const EXPAND_COST = { house_s: 120, house_m: 220 };
 
@@ -100,13 +107,73 @@ export class Works {
     if (this.plans.has(p.id)) return this.plans.get(p.id);
     const L = this.sim.layoutOf(p.sid);
     let plan = null;
-    if (p.kind === 'build') plan = L.typedBlueprint(L.plots[p.plot], p.type, p.bid);
+    if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid));
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
     else if (p.kind === 'repair') plan = { list: p.blocks };
     else if (p.kind === 'wall') plan = L.wallPlan();
     else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
     return plan;
+  }
+
+  // The road out to the street goes down first, then the building.
+  withRoad(L, p, plan) {
+    if (!plan || !p.road || !p.road.length) return plan;
+    const ops = L.roadOps(p.road);
+    p.roadOps = ops.length;
+    return { ...plan, list: [...ops, ...plan.list] };
+  }
+
+  // A sign on the site saying what's going up, whose it is and how far
+  // along; it comes down once the frame is up.
+  putSign(L, p) {
+    const plot = L.plots[p.plot];
+    if (!plot || p.sign) return;
+    const w = this.game.world;
+    const road = new Set((p.road || []).map(([x, z]) => x * 65536 + z));
+    const o = plot.outside || { x: plot.x0, z: plot.z0 };
+    let best = null;
+    for (let z = plot.z0 - 2; z <= plot.z1 + 2; z++) {
+      for (let x = plot.x0 - 2; x <= plot.x1 + 2; x++) {
+        if (x >= plot.x0 && x <= plot.x1 && z >= plot.z0 && z <= plot.z1) continue;
+        if (road.has(x * 65536 + z) || L.isRoadTile(x, z)) continue;
+        if (L.inside(x, z) && L.maskAt(x, z) !== 0 && L.maskAt(x, z) !== 6) continue;
+        const c = L.col(x, z);
+        if (!c || c.water >= 0) continue;
+        if (w.regionAt(x, z) && (w.getBlock(x, GROUND, z) !== B.air || !BLOCKS[w.getBlock(x, GROUND - 1, z)].solid)) continue;
+        const d = Math.abs(x - o.x) + Math.abs(z - o.z);
+        if (d >= 1 && (!best || d < best.d)) best = { x, z, d };
+      }
+    }
+    if (!best) return;
+    const rot = plot.door ? plot.door.rot : 0;
+    p.sign = { x: best.x, z: best.z, rot };
+    this.sim.setBlocks([[best.x, GROUND, best.z, B.sign, rot]]);
+    this.showSign(L, p);
+  }
+
+  showSign(L, p) {
+    if (!p.sign || p.signDown) return;
+    if (!L.signs.some((q) => q.kind === 'works' && q.project === p.id)) L.signs.push({ x: p.sign.x, y: GROUND, z: p.sign.z, kind: 'works', project: p.id });
+    this.game.refreshSigns?.();
+  }
+
+  takeSignDown(L, p) {
+    if (!p.sign || p.signDown) return;
+    p.signDown = true;
+    const w = this.game.world;
+    if (!w.regionAt(p.sign.x, p.sign.z) || w.getBlock(p.sign.x, GROUND, p.sign.z) === B.sign) this.sim.setBlocks([[p.sign.x, GROUND, p.sign.z, B.air, 0]]);
+    L.signs = L.signs.filter((q) => !(q.kind === 'works' && q.project === p.id));
+    this.game.refreshSigns?.();
+  }
+
+  // How far the building itself (not its road) has got.
+  // (By the work actually done: clearing air that's already clear is free.)
+  frameProgress(p) {
+    if (p.done) return 1;
+    const per = p.need / Math.max(1, p.total || 1);
+    const road = (p.roadOps || 0) * per;
+    return Math.max(0, Math.min(1, ((p.spent ?? p.placed * per) - road) / Math.max(1, p.need - road)));
   }
 
   // What a building should look like: its generated blocks, or the plan it
@@ -155,6 +222,7 @@ export class Works {
     p.start = p.last;
     const plan = this.planOf(p);
     p.total = plan.list.length;
+    if (p.kind === 'build') this.putSign(L0(this, p), p);
     p.need = Math.max(60, Math.round(p.total * MIN_PER_BLOCK[p.kind]));
     this.projects.push(p);
     const L = this.sim.layoutOf(p.sid);
@@ -203,11 +271,14 @@ export class Works {
     L.econ.short = null;
     plot.taken = true;
     const bid = L.buildings.length;
-    const plan = L.typedBlueprint(plot, type, bid);
-    plan.bld.underConstruction = true;
-    L.buildings.push(plan.bld);
-    L.claimFootprint(plan.bld);
-    const p = { sid: L.settlement.id, kind: 'build', bid, plot: plot.id, type, label: `a new ${plan.bld.name.replace(/^The /, '').toLowerCase()}${reason}` };
+    // The street reaches the lot before anything else.
+    const road = L.roadTo(plot);
+    const plan0 = L.typedBlueprint(plot, type, bid);
+    plan0.bld.underConstruction = true;
+    L.buildings.push(plan0.bld);
+    L.claimFootprint(plan0.bld);
+    const p = { sid: L.settlement.id, kind: 'build', bid, plot: plot.id, type, road, label: `a new ${plan0.bld.name.replace(/^The /, '').toLowerCase()}${reason}` };
+    const plan = this.withRoad(L, p, plan0);
     p.id = this.next;
     this.plans.set(p.id, plan);
     return this.add(p);
@@ -332,12 +403,14 @@ export class Works {
           if (Math.random() < 0.3) g.audio?.play('place');
         }
       }
+      if (p.kind === 'build' && p.sign && !p.signDown && this.frameProgress(p) >= FRAME) this.takeSignDown(L, p);
       if (p.placed >= plan.list.length && !p.wait.length) this.finish(L, p, plan);
     }
   }
 
   finish(L, p, plan, silent = false) {
     p.done = true;
+    this.takeSignDown(L, p);
     const sim = this.sim;
     for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
     if (p.kind === 'wall' || p.kind === 'breach') {
@@ -384,7 +457,7 @@ export class Works {
     for (const ch of plan.chimneys || []) if (!L.chimneys.includes(ch)) L.chimneys.push(ch);
     for (const sg of plan.signs || []) if (!L.signs.includes(sg)) L.signs.push(sg);
     this.plans.delete(`${L.settlement.id}:${b.id}:${b.rev || 0}`);
-    if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, plot: p.plot, type: p.type, bounds: p.bounds, rev: p.rev, from: b.planRef.from });
+    if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, plot: p.plot, type: p.type, bounds: p.bounds, rev: p.rev, from: b.planRef.from, road: p.road });
     if (!silent) {
       ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
       if (p.owner === 'player') {
@@ -425,6 +498,8 @@ export class Works {
       return;
     }
     if (q.kind === 'build') {
+      for (const [x, z] of q.road || []) L.markRoad(x, z);
+      if (!step.done) this.showSign(L, q);
       if (L.buildings[q.bid]) return;
       const plot = L.plots[q.plot];
       if (!plot) return;

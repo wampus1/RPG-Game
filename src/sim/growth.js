@@ -76,7 +76,8 @@ export function promote(sim, L, next, day) {
 // Where a walled city can break out: the edge tile nearest to open ground.
 function breachPoint(L, works) {
   const b = L.bounds;
-  const plot = L.fringePlot(false) || L.fringePlot(false, 12, 0);
+  // (The road will come in through the gap.)
+  const plot = L.fringePlot(false, 7, 0.05, false) || L.fringePlot(false, 12, 0, false) || L.fringePlot(false, 12, 0, false, false);
   if (!plot) return null;
   works.registerPlot(L, plot);
   const outside = plot.outside;
