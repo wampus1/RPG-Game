@@ -23,7 +23,36 @@ export class Playtime {
     return !n.dead && !n.sleeping && n.state === 'routine' && e && e.act === 'play' && e.place === 'play' && !n.rec.away && n.rec.age === 'child';
   }
 
+  // Children don't play games all the time: now and then they'd rather
+  // wander about, stand around, or sit down for a bit.
+  mood(n) {
+    const now = this.game.sim.abs;
+    if (n.playMood && now < n.moodUntil) return n.playMood;
+    const r = Math.random();
+    const was = n.playMood;
+    n.playMood = r < 0.45 ? 'game' : r < 0.7 ? 'wander' : r < 0.85 ? 'idle' : 'sit';
+    n.moodUntil = now + 20 + Math.random() * 40;
+    if (was && was !== n.playMood && !n.playing) {
+      n.goal = n.pickGoal(n.activity.entry);
+      n.atGoal = false;
+      n.path = null;
+    }
+    return n.playMood;
+  }
+
   update(dt) {
+    for (const a of this.game.active.values()) {
+      for (const n of a.npcs) {
+        if (n.rec.age !== 'child' || !this.free(n)) continue;
+        if (this.mood(n) !== 'game' && n.playing) {
+          const g = n.playing;
+          this.drop(g, n);
+          n.goal = n.pickGoal(n.activity.entry);
+          n.atGoal = false;
+          n.path = null;
+        }
+      }
+    }
     for (const g of this.games) this.step(g, dt);
     this.games = this.games.filter((g) => !g.over);
     this.t -= dt;
@@ -34,7 +63,7 @@ export class Playtime {
 
   // Two or more children out playing near each other start a game.
   gather(a) {
-    const free = a.npcs.filter((n) => !n.playing && this.free(n));
+    const free = a.npcs.filter((n) => !n.playing && this.free(n) && n.playMood === 'game');
     if (free.length < 2) return null;
     const first = pick(free);
     const group = free.filter((n) => dist(n, first) <= 20).slice(0, 5);
@@ -117,7 +146,14 @@ export class Playtime {
     }
     if (!g.members.includes(g.it)) g.it = pick(g.members);
     g.t += dt;
+    g.age = (g.age || 0) + dt;
     g.tick -= dt;
+    // Games run their course: everyone goes off to do something else.
+    if (g.age > (g.span || (g.span = 90 + Math.random() * 150))) {
+      for (const n of [...g.members]) n.moodUntil = 0;
+      this.end(g);
+      return;
+    }
     if (g.kind === 'tag') this.tag(g, dt);
     else this.hide(g, dt);
   }
@@ -131,19 +167,32 @@ export class Playtime {
     if (g.grace <= 0) {
       const caught = g.members.find((n) => n !== it && (n !== g.last || g.lastT <= 0) && dist(n, it) <= 1 && Math.abs(n.y - it.y) <= 1);
       if (caught) {
-        it.say(pick(['Tag! You\'re it!', 'Got you!', 'You\'re it!']), 2, '#a0ffb0');
-        caught.emoteShow('!', '#ffe070', 1.2);
-        if (Math.random() < 0.5) caught.say(pick(['No fair!', 'Aww!', 'I\'ll get you back!']), 1.8);
+        // The tagger shouts and runs for it; the new "it" counts to three.
         this.game.audio?.play('tag', caught);
+        caught.emoteShow('!', '#ffe070', 1.2);
         g.last = it;
-        g.lastT = 3;
+        g.lastT = 6;
         g.it = caught;
-        g.grace = 1.5;
+        g.grace = 3;
+        g.count = 0;
         caught.path = null;
         caught.goal = null;
         caught.atGoal = true;
+        it.say(pick(['You\'re it!', 'Tag! You\'re it!', 'Ha! You\'re it!']), 2, '#a0ffb0');
+        const t = this.tileIn(g, it, caught);
+        if (t) this.go(it, t.x, t.z);
+        it.playPace = 0.62;
         return;
       }
+    }
+    // Counting down before giving chase.
+    if (g.grace > 0) {
+      const k = Math.ceil(g.grace);
+      if (k !== g.count && k <= 3) {
+        g.count = k;
+        it.say(`${k}...`, 0.9, '#a0ffb0');
+      }
+      if (g.grace - dt <= 0) it.say(pick(['Here I come!', 'Ready or not!', 'Coming to get you!']), 1.5, '#a0ffb0');
     }
     if (g.tick > 0) return;
     g.tick = 0.5;

@@ -5,6 +5,7 @@
 // The same hour-by-hour rules run whether or not the player is nearby: an
 // active settlement is ticked as game time passes, and a distant one is
 // simply caught up (hour by hour, capped) the next time it's needed.
+import { foundingLaws, reviewLaws, LAWS, LAW_IDS } from './laws.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
@@ -240,12 +241,12 @@ export function initEcon(L) {
     treasury: Math.round(pop * 14 * wealth * typeF),
     tax: Math.round(clamp((s.condition === 'poor' ? 0.14 : s.condition === 'prosperous' ? 0.06 : 0.1) + rng.float(-0.02, 0.02), 0.02, 0.3) * 100) / 100,
     fineScale: vals.includes('martial') ? 1.25 : vals.includes('pious') ? 0.85 : 1,
-    laws: { armsBan: vals.includes('martial') || rng.chance(0.25) },
+    laws: { ...foundingLaws(s, new RNG(hash4(s.seed, 0x1a55)), vals), armsBan: vals.includes('martial') || rng.chance(0.25) },
     ledger: [],
     biz: {},
     pantry: {},
     lastAbs: null,
-    recent: { thefts: 0, violence: 0, deaths: 0, calm: 0 },
+    recent: { thefts: 0, violence: 0, deaths: 0, calm: 0, night: 0, poached: 0, felled: 0, raids: 0 },
     taxY: 0,
     unpaid: 0,
     festival: -99,
@@ -285,7 +286,7 @@ export function initEcon(L) {
   const m = mayorOf(L);
   ledger(L, 0, `${s.name} keeps ¤${e.treasury} in its coffers.`);
   ledger(L, 0, `Taxes stand at ${Math.round(e.tax * 100)}%${m ? `, by order of ${m.name.first} ${m.name.last}` : ''}.`);
-  if (e.laws.armsBan) ledger(L, 0, 'Law: no drawn weapons within the town.');
+  for (const id of LAW_IDS) if (e.laws[id]) ledger(L, 0, `Law: ${LAWS[id].desc}`);
   return e;
 }
 
@@ -946,19 +947,12 @@ function mayorReview(sim, L, day, rng) {
     ledger(L, day, `${who} raised fines after a spate of thefts.`);
     r.thefts = 0;
   }
-  if (r.violence >= 1 && !e.laws.armsBan) {
-    e.laws.armsBan = true;
-    ledger(L, day, `${who} forbade drawn weapons in town after the recent violence.`);
-    r.violence = 0;
-  }
+  // The town's laws: what people want, and what's been going on.
+  reviewLaws(L, day, who);
   if (r.calm >= 6 && e.fineScale > 1) {
     e.fineScale = Math.max(1, Math.round(e.fineScale * 0.85 * 100) / 100);
     ledger(L, day, `${who} eased fines: the streets have been calm.`);
     r.calm = 0;
-  }
-  if (r.calm >= 9 && e.laws.armsBan && !(s.civ && s.civ.values.includes('martial'))) {
-    e.laws.armsBan = false;
-    ledger(L, day, `${who} lifted the ban on drawn weapons.`);
   }
   r.calm++;
   if (e.treasury > pop * 50 && day - e.festival > 5 && rng.chance(0.35)) {

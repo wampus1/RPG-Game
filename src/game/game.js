@@ -29,6 +29,7 @@ import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
+import { lawOn } from '../sim/laws.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -1275,6 +1276,7 @@ export class Game {
       }
       if (LOGS.has(id) && this.isTreeLog(x, y, z)) {
         this.fellTree(x, y, z, drops);
+        if (byPlayer) this.checkFelling(x, z);
       } else {
         const meta = w.getMeta(x, y, z);
         w.setBlock(x, y, z, B.air);
@@ -1309,6 +1311,29 @@ export class Game {
     const L = this.world.getLayout(s);
     const b = buildingAt(L, x, z);
     if (b && !b.playerHome) this.sim.works.noteDamage(L, b);
+  }
+
+  // Hunting the town's game where a game law says only its trappers may.
+  checkPoaching(c) {
+    if (!c.S || c.hostileNow || (c.S.mode !== 'passive' && c.S.mode !== 'neutral') || c.species === 'chicken') return;
+    for (const s of this.world.ow.settlementsNear(c.x, c.z)) {
+      const a = this.active.get(s.id);
+      if (!a || !lawOn(a.layout, 'poaching') || this.sim.careers.licensed('trapper', s.id)) continue;
+      const b = a.layout.bounds;
+      if (c.x < b.x0 - 20 || c.x > b.x1 + 20 || c.z < b.z0 - 20 || c.z > b.z1 + 20) continue;
+      const wits = this.sim.witnesses(s.id, c.x, c.z, 10);
+      if (wits.length) this.sim.justice.commit(s.id, 'poaching', { witnesses: wits });
+      return;
+    }
+  }
+
+  // Felling trees in a town whose law protects them.
+  checkFelling(x, z) {
+    const s = this.world.ow.settlementAt(x, z);
+    const a = s && this.active.get(s.id);
+    if (!a || !lawOn(a.layout, 'felling')) return;
+    const wits = this.sim.witnesses(s.id, x, z, 9);
+    if (wits.length) this.sim.justice.commit(s.id, 'felling', { witnesses: wits });
   }
 
   // Harvesting a town's fields or gardens in front of people is theft.
@@ -2425,6 +2450,7 @@ export class Game {
       const npcKill = source && source.kind === 'npc' && source.rec && source.rec.inv;
       if (!npcKill) this.stats.kills++;
       if (source && source.kind === 'player') {
+        this.checkPoaching(e);
         this.sim.careers.onKill(e);
         this.sim.favors.onKill(e);
         if (e.hostileNow) this.rescued(e);

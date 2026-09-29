@@ -128,15 +128,21 @@ test('children play tag and hide-and-seek in the streets and round the houses', 
   const { game, input, a } = start(12345, 14 * 60);
   const kids = a.npcs.filter((n) => n.rec.age === 'child' && game.playtime.free(n));
   assert.ok(kids.length >= 2, 'children out playing');
+  for (const n of kids) {
+    n.playMood = 'game';
+    n.moodUntil = 1e12;
+  }
   // Tag: whoever is it catches someone.
   game.playtime.gather = () => null;
   const tag = game.playtime.start(a.layout, kids, 'tag');
+  tag.span = 1e9;
   const first = tag.it;
   for (let i = 0; i < 600 && tag.it === first; i++) game.update(0.1, input);
   assert.notEqual(tag.it, first, 'someone got tagged');
   game.playtime.end(tag);
   // Hide and seek: count, hide, get found.
   const hide = game.playtime.start(a.layout, kids, 'hide');
+  hide.span = 1e9;
   const seen = new Set();
   let found = 0;
   for (let i = 0; i < 1500 && !(seen.has('seek') && found); i++) {

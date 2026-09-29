@@ -10,6 +10,7 @@ import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
+import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
 
 const EMOTES = {
@@ -208,6 +209,8 @@ export class NPC extends Entity {
       const p = L.patrol[rng.int(0, L.patrol.length - 1)] || { x: L.plaza.cx, z: L.plaza.cz };
       return { x: p.x + rng.int(-2, 2), y: GROUND, z: p.z + rng.int(-2, 2), wander: true };
     };
+    // Law-abiding folk are indoors after curfew.
+    const curfew = () => lawOn(L, 'curfew') && (this.game.minute >= 1320 || this.game.minute < 300) && this.rec.job !== 'guard';
     const plazaTile = () => ({ x: rng.int(L.plaza.x0 + 1, L.plaza.x1 - 1), y: GROUND, z: rng.int(L.plaza.z0 + 1, L.plaza.z1 - 1), wander: true });
     const target = (t, extra = {}) => (t ? { x: t.x, y: GROUND, z: t.z, ...extra } : null);
     switch (e.act) {
@@ -228,6 +231,12 @@ export class NPC extends Entity {
       case 'study':
         return tagged('study') || inBuilding(buildingOf('temple'), 'pray') || plazaTile();
       case 'play': {
+        // A child who wants to sit finds a bench; one standing about stays put.
+        if (this.playMood === 'sit') {
+          const g = claim(L.spotsByTag('rest').filter((q) => q.seat));
+          if (g) return { ...g, stay: true };
+        }
+        if (this.playMood === 'idle') return { x: this.x, y: this.y, z: this.z, face: rng.int(0, 3), stay: true };
         // Out in the streets and round the houses as much as on the square.
         const r = rng.next();
         if (r < 0.25) return tagged('play') || plazaTile();
@@ -236,14 +245,18 @@ export class NPC extends Entity {
         return plazaTile();
       }
       case 'social':
+        if (curfew()) return inBuilding(home);
         if (e.place === 'tavern' || this.game.minute > 1140) return inBuilding(buildingOf('tavern'), 'social') || tagged('social') || plazaTile();
         return tagged(rng.chance(0.5) ? 'gossip' : 'social') || plazaTile();
       case 'wander':
+        if (curfew()) return inBuilding(home);
         return roadTile();
       case 'alarm':
         return target(e.target, { tag: 'alarm', near: 2 });
       case 'mourn': case 'funeral':
         return target(e.target, { face: 2, tag: e.act, near: e.act === 'funeral' ? 1 : 0 });
+      case 'bury':
+        return target(e.target, { face: 2, tag: 'bury', near: 1 });
       case 'build': {
         const sites = e.sites || [e.target];
         return target(sites[rng.int(0, sites.length - 1)], { tag: 'build', build: true });
@@ -690,6 +703,19 @@ export class NPC extends Entity {
     }
     if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) this.mealBubble = this.rec.lastMeal;
     if (act === 'trial') this.face(this.game.player.x, this.game.player.z);
+    // Setting the stone on a grave.
+    if (act === 'bury') {
+      const o = this.rec.override;
+      const gr = o && o.grave;
+      if (gr && this.game.sim.placeGrave(this.layout, gr.x, gr.z, this.rec)) {
+        this.face(gr.x, gr.z);
+        this.doAction(0.6);
+        this.game.renderer.emit(gr.x, GROUND, gr.z, { n: 8, color: ['#8a7a5a', '#6a5a3a'], up: 20, life: 0.5, oy: -4 });
+        this.say(this.rng.pick([`There. Rest now, ${(o.who || '').split(' ')[0]}.`, 'It\'s done.', `We'll not forget you, ${(o.who || '').split(' ')[0]}.`]), 3, '#b8c0e8');
+      }
+      this.rec.override = null;
+      this.activity = null;
+    }
     if (g.trap) this.checkSnare(g.trap);
     if (g.sell && this.rec.job === 'miner') {
       const n = this.game.sim.sellOre(this.layout, this.rec);
@@ -891,7 +917,7 @@ export class NPC extends Entity {
       if (p) this.say(this.rng.pick([`This ${b.name.replace(/^The /, '').toLowerCase()} needs fixing.`, 'Who did this? Right, back to work.']), 3);
       else if (this.rng.chance(0.3)) this.say(this.rng.pick(['Solid walls. Good.', 'That roof will hold.', 'Hm, needs a coat of paint.']), 2.5);
     }
-    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || act.act === 'play' || g.tag === 'farm' || g.inspect !== undefined) {
+    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || (act.act === 'play' && !g.stay) || g.tag === 'farm' || g.inspect !== undefined) {
       this.goal = (g.tag === 'farm' && act.act === 'work' && this.farmGoal()) || (act.act === 'work' ? this.workGoal() : this.pickGoal(act));
       this.atGoal = false;
       this.path = null;

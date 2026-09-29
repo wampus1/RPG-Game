@@ -26,15 +26,78 @@ export const PROFESSIONS = {
     title: 'Farmer', fee: 6, minOp: -10, kit: [['hoe', 1], ['seeds', 8], ['bucket', 1]], goods: ['wheat', 'carrot', 'cabbage', 'pumpkin'],
     pitch: 'You may work and harvest the town fields as your own, and our traders pay a premium for your crops. Fill a bucket at the well on dry days: wet soil grows crops twice as fast.',
   },
+  woodcutter: {
+    title: 'Woodcutter', fee: 6, minOp: -10, kit: [['stone_axe', 1]], goods: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_palm', 'log_willow', 'planks', 'stick'],
+    pitch: 'A licensed woodcutter supplies our carpenters and builders with timber, and gets a better price for it.',
+  },
+  miner: {
+    title: 'Miner', fee: 8, minOp: -10, kit: [['stone_pickaxe', 1], ['torch', 8]], goods: ['iron_ore', 'gold_ore', 'coal', 'cobblestone', 'gem'],
+    pitch: 'Our smiths and masons pay a premium for ore, coal and stone from a licensed miner.',
+  },
+  // Trades only a town (or bigger) has call for.
+  herbalist: {
+    title: 'Herbalist', tier: 'town', fee: 10, minOp: 0, kit: [['herb', 2]], goods: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue'],
+    pitch: 'Herbs, mushrooms and berries fetch a premium from our cooks and healers when a licensed herbalist gathers them.',
+  },
+  baker: {
+    title: 'Baker', tier: 'town', fee: 12, minOp: 0, kit: [['wheat', 6]], goods: ['bread', 'pie'],
+    pitch: 'A licensed baker may sell bread and pies in town: the tavern and every household are glad of them.',
+  },
+  smith: {
+    title: 'Smith', tier: 'town', fee: 20, minOp: 5, kit: [['hammer', 1], ['iron_ingot', 2]], goods: ['iron_ingot', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'hoe', 'lantern', 'iron_helmet', 'chainmail', 'iron_boots', 'iron_greaves', 'iron_breastplate'],
+    pitch: 'A licensed smith sells tools, blades and armour to our guards, builders, miners and farmers at a fair premium.',
+  },
+  tailor: {
+    title: 'Tailor', tier: 'town', fee: 16, minOp: 0, kit: [['string', 4], ['cloth', 3]], goods: ['cloth', 'linen_shirt', 'wool_trousers', 'wool_hood', 'leather_tunic', 'leather_boots', 'leather_cap', 'fine_coat'],
+    pitch: 'Licensed tailors sell clothes to the town: our better-off folk always want something new.',
+  },
+  // Only a city supports these.
+  scribe: {
+    title: 'Scribe', tier: 'city', fee: 25, minOp: 10, kit: [['book', 1], ['feather', 3]], goods: ['book', 'scroll'],
+    pitch: 'The scholars, the temple and the council buy books and scrolls from a licensed scribe.',
+  },
+  jeweller: {
+    title: 'Jeweller', tier: 'city', fee: 40, minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'],
+    pitch: 'Our nobles and merchants pay handsomely for gems, gold and fine things from a licensed jeweller.',
+  },
 };
 
-// What townsfolk come to buy from someone in each trade.
-const CUSTOMER_WANTS = {
-  guard: ['arrow', 'bread', 'raw_meat', 'leather'],
-  trapper: ['raw_meat', 'leather', 'feather'],
-  fisher: ['fish', 'cooked_fish'],
-  farmer: ['wheat', 'carrot', 'cabbage'],
+// Settlement sizes, smallest first: a licence needs a place at least this big.
+export const TIER_ORDER = ['village', 'town', 'city'];
+export function licensesFor(type) {
+  const t = Math.max(0, TIER_ORDER.indexOf(type));
+  return Object.keys(PROFESSIONS).filter((k) => TIER_ORDER.indexOf(PROFESSIONS[k].tier || 'village') <= t);
+}
+
+// What each trade needs for its work, and so will buy from you; plain food
+// any household buys.
+export const NEEDS = {
+  cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'wheat', 'mushroom', 'berries', 'pumpkin', 'herb', 'bread'],
+  innkeeper: ['raw_meat', 'fish', 'carrot', 'cabbage', 'bread', 'pie', 'mushroom'],
+  barkeep: ['wheat', 'berries', 'bread', 'apple'],
+  baker: ['wheat', 'berries', 'apple', 'pumpkin'],
+  blacksmith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'leather'],
+  tailor: ['leather', 'cloth', 'string', 'feather', 'wheat'],
+  carpenter: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_palm', 'log_willow', 'planks', 'stick'],
+  builder: ['planks', 'log_oak', 'log_pine', 'log_birch', 'cobblestone', 'stone', 'iron_pickaxe', 'iron_axe'],
+  herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue'],
+  priest: ['book', 'scroll', 'herb', 'linen_shirt'],
+  scholar: ['book', 'scroll', 'feather', 'gem'],
+  mayor: ['book', 'scroll', 'fine_coat', 'gold_circlet', 'gem'],
+  noble: ['gem', 'gold_ingot', 'gold_circlet', 'fine_coat', 'linen_shirt', 'book'],
+  merchant: ['gem', 'gold_ingot', 'leather', 'cloth', 'fine_coat'],
+  guard: ['iron_sword', 'iron_helmet', 'chainmail', 'iron_boots', 'iron_greaves', 'iron_breastplate', 'leather_boots'],
+  farmer: ['hoe', 'seeds', 'wool_trousers', 'straw_hat'],
+  miner: ['iron_pickaxe', 'torch', 'leather_cap'],
+  lumberjack: ['iron_axe', 'leather_boots'],
+  trapper: ['string', 'leather_tunic', 'leather_trousers'],
+  fisher: ['string', 'wool_hood'],
 };
+export const HOME_FOOD = ['bread', 'pie', 'cooked_fish', 'cooked_meat', 'apple', 'carrot', 'cabbage', 'berries'];
+
+export function wantsItem(job, item) {
+  return (NEEDS[job] || []).includes(item) || HOME_FOOD.includes(item);
+}
 
 // Goods a shop asks its helper to bring in.
 const SUPPLIES = {
@@ -203,6 +266,7 @@ export class Careers {
     const P = PROFESSIONS[job];
     const sim = this.sim;
     if (!P) return { ok: false, reason: 'unknown' };
+    if (!licensesFor(s.type).includes(job)) return { ok: false, reason: 'tier', tier: P.tier };
     if (sim.justice.exiled.has(s.id)) return { ok: false, reason: 'exiled' };
     if (sim.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
     if (P.citizen && !sim.isCitizen(s.id)) return { ok: false, reason: 'citizen' };
@@ -685,7 +749,7 @@ export class Careers {
       if (!n || n.dead || abs > c.until || !j) this.dismissCustomer(abs > c.until ? 'Never mind, then.' : null);
       return;
     }
-    if (!j || (j.kind === 'profession' && !CUSTOMER_WANTS[j.job])) return;
+    if (!j || (j.kind === 'profession' && !PROFESSIONS[j.job].goods)) return;
     if (this.nextCustomer === null) this.nextCustomer = abs + (j.kind === 'employee' ? 40 : 240) + Math.random() * 120;
     if (abs < this.nextCustomer) return;
     const min = g.minute;
@@ -703,8 +767,23 @@ export class Careers {
       this.nextCustomer = abs + 30;
       return;
     }
-    const n = cands[Math.floor(Math.random() * cands.length)];
+    let n = cands[Math.floor(Math.random() * cands.length)];
     let req;
+    // A trade's buyers are those whose own work needs it (a cook wants your
+    // meat; a smith doesn't), or anyone, for plain food.
+    let pickGood = null;
+    if (j.kind !== 'employee') {
+      const goods = PROFESSIONS[j.job].goods;
+      const mine = goods.filter((k) => countItem(p.inv, k) > 0);
+      const pool = (mine.length ? mine : goods).filter((k) => cands.some((q) => wantsItem(q.rec.job, k)));
+      if (!pool.length) {
+        this.nextCustomer = abs + 60;
+        return;
+      }
+      pickGood = pool[Math.floor(Math.random() * pool.length)];
+      const buyers = cands.filter((q) => wantsItem(q.rec.job, pickGood));
+      n = buyers[Math.floor(Math.random() * buyers.length)];
+    }
     if (j.kind === 'employee') {
       const biz = L.econ.biz[j.building];
       const have = Object.keys(biz.store).filter((k) => biz.store[k] > 0 && ITEMS[k] && k !== 'coin');
@@ -713,10 +792,8 @@ export class Careers {
       const count = 1 + Math.floor(Math.random() * 3);
       req = { kind: 'shop', item, count, price: Math.max(1, Math.round(ITEMS[item].value * 1.3)) * count };
     } else {
-      const goods = CUSTOMER_WANTS[j.job];
-      const mine = goods.filter((k) => countItem(p.inv, k) > 0);
-      const item = (mine.length ? mine : goods)[Math.floor(Math.random() * (mine.length || goods.length))];
-      const count = 1 + Math.floor(Math.random() * 3);
+      const item = pickGood;
+      const count = ITEMS[item].value >= 30 ? 1 : 1 + Math.floor(Math.random() * 3);
       req = { kind: 'buy', item, count, price: Math.max(1, Math.round(ITEMS[item].value)) * count };
     }
     this.customer = { sid: j.sid, idx: n.rec.idx, name: n.rec.name.first, ...req, until: abs + 90, arrived: false };

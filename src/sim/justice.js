@@ -11,12 +11,16 @@ import { jobTitle } from '../entities/npcgen.js';
 import { DAY, ledger, mayorOf, alive, st, setOverride, invAdd } from './econ.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { findPath } from '../entities/pathfind.js';
+import { lawOn } from './laws.js';
 
 export const CRIMES = {
   theft: { label: 'Theft', sev: 'minor', fine: 10 },
   vandalism: { label: 'Vandalism', sev: 'minor', fine: 15 },
   trespass: { label: 'Trespassing', sev: 'minor', fine: 10 },
   brandishing: { label: 'Brandishing a weapon', sev: 'minor', fine: 10 },
+  curfew: { label: 'Breaking the curfew', sev: 'minor', fine: 6 },
+  poaching: { label: 'Poaching', sev: 'minor', fine: 12 },
+  felling: { label: 'Felling a tree in town', sev: 'minor', fine: 10 },
   assault: { label: 'Assault', sev: 'moderate', fine: 40 },
   assault_guard: { label: 'Assaulting a guard', sev: 'moderate', fine: 60 },
   resisting: { label: 'Resisting arrest', sev: 'moderate', fine: 30 },
@@ -31,6 +35,9 @@ const SHOUTS = {
   vandalism: ['Stop wrecking our town! GUARDS!', 'Vandal! Guards!'],
   trespass: ['Intruder! GUARDS!', 'Get out of our house! Guards!'],
   brandishing: ['Halt! You were warned!'],
+  curfew: ['Curfew! You were told to get indoors!'],
+  poaching: ['Poacher! That game belongs to the town!', 'Guards! A poacher!'],
+  felling: ['Hey! You can\'t cut those down! Guards!', 'Leave our trees alone!'],
   assault: ['Leave them alone! GUARDS!', 'Help! Someone\'s being attacked!', 'GUARDS! Murder!'],
   assault_guard: ['They attacked a guard!', 'Guard down! Help!'],
   resisting: ['They\'re resisting!', 'Get them!'],
@@ -97,7 +104,11 @@ export class Justice {
     this.pending.set(sid, list);
     const r = L.econ.recent;
     if (type === 'theft' || type === 'vandalism' || type === 'trespass') r.thefts++;
-    else r.violence++;
+    else if (type === 'poaching') r.poached = (r.poached || 0) + 1;
+    else if (type === 'felling') r.felled = (r.felled || 0) + 1;
+    else if (type !== 'curfew') r.violence++;
+    const hm = game.minute;
+    if (hm >= 1320 || hm < 300) r.night = (r.night || 0) + 1;
     r.calm = 0;
     const hit = { minor: 6, moderate: 12, severe: 25 }[sev];
     for (const w of wits) this.sim.changeRep(w, -hit);
@@ -884,6 +895,21 @@ export class Justice {
         }
       }
     } else if (!held || held.kind !== 'weapon') this.brandish = null;
+    // Out in the streets after curfew (guards on duty and people heading
+    // into their own house excepted).
+    const late = m >= 1320 || m < 300;
+    if (lawOn(L, 'curfew') && late && !b && !this.sim.careers.isGuard(s.id) && !game.isWanted(s.id)) {
+      const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 6);
+      if (guard) {
+        if (!this.curfewT) {
+          this.curfewT = { t: 0 };
+          guard.say(`It's past curfew! Get indoors, or I'll have to fine you.`, 3.5, '#ffe070');
+        } else if ((this.curfewT.t += 1) >= 20 && !this.curfewT.done) {
+          this.curfewT.done = true;
+          this.commit(s.id, 'curfew', { witnesses: [guard] });
+        }
+      }
+    } else if (!late || b) this.curfewT = null;
   }
 
   // ------------------------------------------------------------ save
@@ -942,6 +968,9 @@ function testimony(c) {
     case 'trespass': return 'They crept into a house in the middle of the night!';
     case 'jailbreak': return 'They broke out of this very cell!';
     case 'brandishing': return 'Waving a weapon about after being told not to.';
+    case 'curfew': return 'Out in the streets in the dead of night, after curfew, and wouldn\'t go home.';
+    case 'poaching': return 'Hunting the town\'s game with no licence!';
+    case 'felling': return 'Chopping down the trees right here in town!';
     default: return 'I saw the whole thing.';
   }
 }

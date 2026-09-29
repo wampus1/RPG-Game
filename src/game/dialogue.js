@@ -10,7 +10,8 @@ import { ITEMS } from '../world/items.js';
 import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
-import { PROFESSIONS, clock, bare } from '../sim/careers.js';
+import { PROFESSIONS, clock, bare, licensesFor } from '../sim/careers.js';
+import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4 } from '../util/rng.js';
@@ -207,7 +208,12 @@ export function topicsFor(npc, game) {
     if (sim.isCitizen(s.id)) add('renounce', 'I renounce my citizenship.');
     else add('citizen', inHall ? `Make me a citizen of ${s.name}.` : 'How do I become a citizen?');
     add('profession', car.job && car.job.kind === 'profession' && car.job.sid === s.id ? 'About my post...' : 'I\'d like an official profession.');
+    const pet = sim.petition;
+    add('petition', pet && pet.sid === s.id ? `About my petition (${pet.signers.length} signature${pet.signers.length === 1 ? '' : 's'})...` : 'I\'d like to petition about a law.');
   }
+  // Out gathering signatures: anyone grown up in the town can sign.
+  const pet = sim.petition;
+  if (pet && pet.sid === s.id && rec.job !== 'mayor' && rec.age !== 'child' && !npc.visit && !rec.visitor && !pet.signers.includes(rec.idx) && !(pet.refused || []).includes(rec.idx)) add('sign', 'Would you sign my petition?');
   const home = sim.citizen && sim.citizen.sid === s.id && sim.citizen.home !== null && sim.citizen.home !== undefined ? npc.layout.buildings[sim.citizen.home] : null;
   if (home && !home.underConstruction && (rec.job === 'mayor' || rec.job === 'builder' || rec.job === 'carpenter')) add('expand', rec.job === 'mayor' ? 'I\'d like to enlarge my house.' : 'Could you enlarge my house?');
   if (car.employs(npc)) add('job', 'About my job here...');
@@ -461,8 +467,9 @@ function professionTalk(npc, game, arg) {
   }
   if (!arg) {
     return {
-      lines: [`${s.name} licenses a few trades. Which interests you?`],
-      choices: Object.entries(PROFESSIONS).map(([k, P]) => ({ id: 'profession', arg: `ask:${k}`, label: `${P.title}${P.citizen ? ' (citizens)' : ''}` })),
+      lines: [`${s.name} licenses ${s.type === 'city' ? 'all manner of' : s.type === 'town' ? 'a good few' : 'a few'} trades. Which interests you?`],
+      // A bigger place has call for more trades.
+      choices: licensesFor(s.type).map((k) => ({ id: 'profession', arg: `ask:${k}`, label: `${PROFESSIONS[k].title}${PROFESSIONS[k].citizen ? ' (citizens)' : ''}` })),
     };
   }
   const [what, key] = arg.split(':');
@@ -475,6 +482,7 @@ function professionTalk(npc, game, arg) {
         exiled: 'You were banished. Never.', crimes: 'Not while you have crimes to answer for.', citizen: `Only citizens of ${s.name} may serve on the watch.`,
         record: 'Not with a conviction on your record. The watch must be above reproach.', distrust: 'Frankly, I don\'t trust you with it. Earn some goodwill first.',
         already: `You already are our ${P.title.toLowerCase()}!`,
+        tier: `A ${s.type} like ours has no call for a licensed ${P.title.toLowerCase()}. Try a ${t.tier === 'city' ? 'city' : 'town'}.`,
       }[t.reason] || 'I can\'t do that.';
       return { lines: [P.pitch, why] };
     }
@@ -491,6 +499,49 @@ function professionTalk(npc, game, arg) {
   const got = r.given.length ? `Here: ${r.given.map((g) => plural(g.item, g.count)).join(', ')}.` : '';
   if (key === 'guard') return { lines: [`Raise your right hand... Welcome to the watch, ${name}!`, `${got} Wear the colours with pride.`.trim(), 'Patrol the streets from six to eight. The treasury pays for every hour.'] };
   return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got || 'Good luck out there.'].filter(Boolean) };
+}
+
+// Petitioning the mayor to pass or repeal a law: pick one, go round the
+// town for signatures, then bring it back.
+function petitionTalk(npc, game, arg) {
+  const sim = game.sim;
+  const L = npc.layout;
+  const s = npc.settlement;
+  const pet = sim.petition;
+  if (pet && pet.sid === s.id && !arg) {
+    const law = LAWS[pet.law];
+    const need = needed(L);
+    if (pet.signers.length < need) return { lines: [`To ${pet.enact ? 'pass' : 'repeal'} the ${law.name.toLowerCase()}? You have ${pet.signers.length} signature${pet.signers.length === 1 ? '' : 's'}; I'd want at least ${need} before the council considers it.`], choices: [{ id: 'petition', arg: 'drop', label: 'Forget the petition.' }], back: 'I\'ll gather more.' };
+    const d = decide(L, pet, sim.opinion(npc));
+    sim.petition = null;
+    if (!d.ok) {
+      ledger(L, game.day, `The council turned down ${game.playerName}'s petition to ${pet.enact ? 'pass' : 'repeal'} the ${law.name.toLowerCase()}.`);
+      return { lines: ['I\'ve read it, and I\'m sorry: I can\'t agree to this. Not while I\'m in office.'] };
+    }
+    L.econ.laws[pet.law] = pet.enact;
+    ledger(L, game.day, `At the petition of ${game.playerName} and ${pet.signers.length} townsfolk, the ${law.name.toLowerCase()} was ${pet.enact ? 'passed' : 'repealed'}.`);
+    sim.addRenown(s.id, 2, 'speaking for the town');
+    game.ui.msg(`${s.name}: the ${law.name.toLowerCase()} is ${pet.enact ? 'now law' : 'repealed'}.`, '#ffe070');
+    game.audio?.play('fanfare');
+    return { lines: [`${pet.signers.length} names... the town has spoken. So be it: the ${law.name.toLowerCase()} is ${pet.enact ? 'law from today' : 'no more'}.`] };
+  }
+  if (arg === 'drop') {
+    sim.petition = null;
+    return { lines: ['As you wish.'] };
+  }
+  if (arg && arg.startsWith('law:')) {
+    const [, id, dir] = arg.split(':');
+    const enact = dir === 'on';
+    if (sim.petition && sim.petition.sid !== s.id) sim.petition = null;
+    sim.petition = { sid: s.id, law: id, enact, signers: [], refused: [], day: game.day };
+    return { lines: [`Very well. Bring me a petition to ${enact ? 'pass' : 'repeal'} the ${LAWS[id].name.toLowerCase()} with at least ${needed(L)} names on it, and the council will consider it.`, '(Ask townsfolk to sign it.)'] };
+  }
+  if (!sim.isCitizen(s.id) && sim.opinion(npc) < 20) return { lines: ['The laws of this town are a matter for its people. Become a citizen, or earn our trust, first.'] };
+  return {
+    lines: ['Which law do you have in mind?'],
+    choices: LAW_IDS.map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })),
+    back: 'Never mind.',
+  };
 }
 
 // Asking the mayor (who may knock something off the price for a hard
@@ -1145,13 +1196,38 @@ export function respond(npc, game, id, arg) {
     }
     case 'laws': {
       const lines = [];
-      lines.push(`Taxes here are ${Math.round(e.tax * 100)}% of earnings${sim.isCitizen(s.id) ? `, and citizens pay about ¤${Math.max(1, Math.round(12 * e.tax))} a day` : ''}.`);
+      lines.push(`Taxes here are ${Math.round(e.tax * 100)}% of earnings${sim.isCitizen(s.id) ? `, and citizens pay about ¤${sim.playerTax(npc.layout, 0).tax} a day, plus a share of what they earn here` : ''}.`);
       lines.push(e.fineScale > 1.1 ? 'Fines are steep lately: we\'ve had trouble.' : e.fineScale < 0.95 ? 'Fines are lenient. We believe in second chances.' : 'Break the law and you\'ll pay a fair fine, or sit in a cell.');
-      if (e.laws.armsBan) lines.push('Drawn weapons are forbidden within the town. Keep your blade sheathed.');
+      const on = lawList(npc.layout);
+      if (on.length) lines.push(on.map((id) => LAWS[id].desc).join(' '));
+      else lines.push('Beyond that there are no special laws here.');
+      // And what they make of one of them.
+      const topic = on.length ? on[(game.day + rec.idx) % on.length] : LAW_IDS[(game.day + rec.idx) % LAW_IDS.length];
+      const view = stance(rec, topic);
+      const nm = LAWS[topic].name.toLowerCase();
+      if (rec.job !== 'mayor') {
+        if (lawOn(npc.layout, topic)) lines.push(view > 0.3 ? pick(rng, [`The ${nm}? Best thing the council ever did.`, `I'm all for the ${nm}.`]) : view < -0.3 ? pick(rng, [`Between you and me, the ${nm} is a nuisance.`, `I'd see the ${nm} gone tomorrow.`]) : `The ${nm}... I can take it or leave it.`);
+        else if (Math.abs(view) > 0.4) lines.push(view > 0 ? `If you ask me, we could do with a ${nm} here.` : `At least we've no ${nm}. I'd hate that.`);
+      }
       const r = sim.justice.recordOf(s.id);
       if (r.convictions) lines.push(`And you... you have ${r.convictions} conviction${r.convictions > 1 ? 's' : ''} here. Repeat offenders get exile, or worse.`);
       else if (rec.job === 'guard') lines.push(e.recent.thefts + e.recent.violence > 0 ? 'There\'s been some trouble lately. Keep your eyes open.' : 'Quiet as a graveyard. Just how I like it.');
-      return { lines };
+      return { lines: lines.slice(0, 4) };
+    }
+    case 'petition': return petitionTalk(npc, game, arg);
+    case 'sign': {
+      const p2 = sim.petition;
+      if (!p2 || p2.sid !== s.id) return { lines: ['A petition? Never heard of it.'] };
+      const law = LAWS[p2.law];
+      const what = `${p2.enact ? 'bring in' : 'do away with'} the ${law.name.toLowerCase()}`;
+      if (willSign(rec, p2.law, p2.enact, sim.opinion(npc))) {
+        p2.signers.push(rec.idx);
+        sim.changeRep(npc, 1);
+        const need = needed(npc.layout);
+        return { lines: [pick(rng, [`To ${what}? Gladly. Where do I sign?`, `Yes! It's about time someone did something.`, 'Give it here. There.']), p2.signers.length >= need ? '(You have enough signatures now. Take it to the mayor.)' : `(${p2.signers.length} of ${need} signatures.)`] };
+      }
+      (p2.refused ||= []).push(rec.idx);
+      return { lines: [stance(rec, p2.law) * (p2.enact ? 1 : -1) < 0 ? pick(rng, [`${what[0].toUpperCase()}${what.slice(1)}? Not on your life.`, 'I won\'t put my name to that.']) : pick(rng, ['I don\'t know you well enough to sign things for you.', 'Ask me again when I know you better.'])] };
     }
     case 'house': {
       const pr = sim.constructionProgress() || 0;

@@ -171,11 +171,15 @@ test('deaths fill the graveyard, which grows; family and friends mourn', () => {
   for (const r of dead) game.sim.recordDeath(L, r, 'old age', null);
   assert.ok(g.rows > rows || g.maxRows === rows, 'graveyard expanded');
   const slot = g.slots.find((q) => q.grave && q.grave.idx === dead[0].idx);
+  // The plot is kept; the stone goes in when the family bring it.
+  assert.notEqual(game.world.getBlock(slot.x, g.y, slot.z), B.gravestone);
+  assert.ok(L.econ.burials.some((b) => b.x === slot.x && b.z === slot.z && b.bearer !== null));
+  game.sim.placeGrave(L, slot.x, slot.z);
   assert.equal(game.world.getBlock(slot.x, g.y, slot.z), B.gravestone);
   assert.match(game.sim.graveText(slot.x, slot.z).join(' '), new RegExp(dead[0].name.first, 'i'));
   const mourner = L.npcs.find((r) => alive(r) && (r.grief || []).length);
   assert.ok(mourner, 'someone grieves');
-  assert.ok(L.npcs.some((r) => alive(r) && r.override && r.override.act === 'funeral'), 'a funeral is planned');
+  assert.ok(L.econ.funerals.length && L.econ.funerals[0].mourners.length, 'a funeral is planned');
   assert.ok(game.deadNpcs.get(L.settlement.id).has(dead[0].idx));
 });
 

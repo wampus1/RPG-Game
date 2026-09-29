@@ -1,5 +1,6 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
+import { LAWS, lawList } from '../sim/laws.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack } from '../world/items.js';
@@ -399,7 +400,7 @@ export class UI {
         col = C.green;
       } else if (s && game.active.has(s.id)) {
         const L = game.active.get(s.id).layout;
-        if (L.econ) status = `Taxes ${Math.round(L.econ.tax * 100)}%${L.econ.laws.armsBan ? ' · no weapons' : ''}`;
+        if (L.econ) status = `Taxes ${Math.round(L.econ.tax * 100)}%${lawList(L).slice(0, 2).map((id) => ` · ${LAWS[id].short}`).join('')}`;
       }
       let y = 3;
       if (status) {

@@ -126,6 +126,7 @@ export function raids(sim, L, day, rng) {
     return { driven: true };
   }
   e.recent.violence = (e.recent.violence || 0) + 1;
+  e.recent.raids = (e.recent.raids || 0) + 1;
   const victim = rng.chance(0.25) ? rng.pick(people.filter((r) => r.age !== 'child')) : null;
   if (victim && rng.chance(0.4)) {
     sim.recordDeath(L, victim, `an attack by ${beast}`, null, day);

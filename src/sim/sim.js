@@ -22,6 +22,7 @@ import { electMayor, weddings, comingOfAge, raids } from './life.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
+import { lawOn } from './laws.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
@@ -473,6 +474,9 @@ export class Sim {
     m *= tr.includes('generous') ? 0.95 : tr.includes('stingy') || tr.includes('shrewd') ? 1.06 : 1;
     m *= 1 + (e ? e.tax * 0.5 : 0);
     m *= priceMult(this.game.hero);
+    // Laws: outsiders pay the tariff; an open market takes a little off.
+    if (lawOn(npc.layout, 'tariff') && !this.isCitizen(s.id)) m *= 1.1;
+    if (lawOn(npc.layout, 'openMarket')) m *= 0.95;
     const op = this.opinion(npc);
     if (op <= -25) m *= 1.25;
     let d = 1;
@@ -547,10 +551,14 @@ export class Sim {
       for (const h of heirs) h.coins += each;
     } else L.econ.treasury += rec.coins;
     rec.coins = 0;
-    const slot = this.addGrave(L, rec, cause, day);
+    // The grave is dug and the stone set by one of the family a little
+    // while later (a friend, or the priest, if there's no one else).
+    const slot = this.addGrave(L, rec, cause, day, false);
     const name = `${rec.name.first} ${rec.name.last}`;
+    if (slot) this.scheduleBurial(L, rec, slot, day, name);
     const fam = new Set([rec.partner, ...rec.children, ...rec.parents].filter((i) => i !== null && i !== undefined));
     let k = 0;
+    const mourners = [];
     for (const o of L.npcs) {
       if (!alive(o) || o === rec) continue;
       let rel = null;
@@ -561,16 +569,18 @@ export class Sim {
       o.grief = o.grief || [];
       o.grief.push({ idx: rec.idx, name, first: rec.name.first, rel, until: day + (rel === 'family' ? 5 : rel === 'friend' ? 3 : 1), slot: slot ? { x: slot.x, z: slot.z } : null, cause, byPlayer: killer === 'player' });
       o.mood = clamp(o.mood - (rel === 'family' ? 0.35 : rel === 'friend' ? 0.2 : 0.08), 0, 1);
-      if (slot && rel !== 'acquaintance' && !o.away) {
-        const g = L.graveyard;
-        const tx = clamp(slot.x + ((k++ % 3) - 1), g.x + 1, g.x + g.W - 2);
-        setOverride(o, (day + 1) * DAY + 960, (day + 1) * DAY + 1020, 'funeral', { target: { x: tx, z: slot.z + 1 }, who: name });
-      }
+      if (slot && rel !== 'acquaintance' && !o.away) mourners.push({ idx: o.idx, x: clamp(slot.x + ((k++ % 3) - 1), L.graveyard.x + 1, L.graveyard.x + L.graveyard.W - 2) });
     }
     const priest = L.npcs.find((r) => r.job === 'priest' && alive(r) && !r.away);
-    if (priest && slot) setOverride(priest, (day + 1) * DAY + 950, (day + 1) * DAY + 1025, 'funeral', { target: { x: slot.x, z: slot.z + 1 }, who: name, officiant: true });
+    // The funeral: family and friends gather at the grave the next
+    // afternoon (the priest, if there is one, says the words).
+    if (slot) {
+      const f = { name, first: rec.name.first, x: slot.x, z: slot.z, s: (day + 1) * DAY + 960, e: (day + 1) * DAY + 1020, mourners, priest: priest ? priest.idx : null };
+      (L.econ.funerals ||= []).push(f);
+      L.econ.funerals = L.econ.funerals.filter((q) => q.e > this.abs - DAY);
+    }
     L.econ.recent.deaths++;
-    ledger(L, day, `${name}, ${jobTitle(rec, s).toLowerCase()}, died (${cause}).${slot ? ' Funeral tomorrow at 16:00.' : ''}`);
+    ledger(L, day, `${name}, ${jobTitle(rec, s).toLowerCase()}, died (${cause}).${slot ? ' The funeral is tomorrow at 16:00, by the graveyard.' : ''}`);
     if (rec.job === 'mayor') ledger(L, day, 'The council will govern until a new leader is chosen.');
     if (this.citizen && this.citizen.sid === s.id && this.citizen.host === rec.home) {
       // Hosting continues with the rest of the family, if any remain.
@@ -580,7 +590,66 @@ export class Sim {
     return slot;
   }
 
-  addGrave(L, rec, cause, day) {
+  // Who carries the stone out: family first, then a friend, the priest,
+  // or anyone grown up.
+  scheduleBurial(L, rec, slot, day, name) {
+    const ok = (r) => r && alive(r) && !r.away && r.age !== 'child' && r !== rec;
+    const fam = [rec.partner, ...rec.children, ...rec.parents].map((i) => (i === null || i === undefined ? null : L.npcs[i]));
+    const bearer = fam.find(ok) || L.npcs.find((r) => ok(r) && r.household === rec.household) || (rec.friends || []).map((i) => L.npcs[i]).find(ok)
+      || L.npcs.find((r) => ok(r) && r.job === 'priest') || L.npcs.find(ok);
+    const now = this.abs;
+    const hod = ((now % DAY) + DAY) % DAY;
+    // Not in the dead of night: first thing in the morning instead.
+    const due = hod >= 1260 || hod < 360 ? Math.floor((now + (hod >= 1260 ? DAY : 0)) / DAY) * DAY + 420 : now + 90 + Math.floor(Math.random() * 90);
+    const b = { name, x: slot.x, z: slot.z, due, bearer: bearer ? bearer.idx : null, done: false };
+    (L.econ.burials ||= []).push(b);
+    if (bearer) setOverride(bearer, due, due + 90, 'bury', { target: { x: slot.x, z: slot.z + 1 }, who: name, grave: { x: slot.x, z: slot.z } });
+    return b;
+  }
+
+  // The stone goes in.
+  placeGrave(L, x, z, by = null) {
+    const g = L.graveyard;
+    const slot = g && g.slots.find((q) => q.x === x && q.z === z);
+    const b = (L.econ.burials || []).find((q) => q.x === x && q.z === z && !q.done);
+    if (!slot || !slot.grave || !b) return false;
+    b.done = true;
+    delete slot.grave.pending;
+    this.setBlocks([[slot.x, g.y, slot.z, B.gravestone, 0]]);
+    ledger(L, this.simDay ?? this.game.day, `${by ? `${by.name.first} ${by.name.last}` : 'The family'} set a stone on ${b.name}'s grave.`);
+    L.econ.burials = L.econ.burials.filter((q) => !q.done);
+    return true;
+  }
+
+  // An hour before the funeral its guests' afternoon is kept free
+  // (anything else booked for them is put off); and the stones go in even if
+  // nobody could carry them.
+  gatherFuneral(L, f) {
+    const set = (r, extra) => {
+      if (!r || !alive(r) || r.away) return;
+      setOverride(r, f.s - (extra.officiant ? 10 : 0), f.e + (extra.officiant ? 5 : 0), 'funeral', { who: f.name, ...extra });
+      if (r.ent) r.ent.activity = null;
+    };
+    for (const m of f.mourners) set(L.npcs[m.idx], { target: { x: m.x, z: f.z + 1 } });
+    if (f.priest !== null && f.priest !== undefined) set(L.npcs[f.priest], { target: { x: f.x, z: f.z + 1 }, officiant: true });
+  }
+
+  funeralsAndBurials(L) {
+    const now = this.simNow ?? this.abs;
+    for (const b of L.econ.burials || []) if (!b.done && now > b.due + 150) this.placeGrave(L, b.x, b.z);
+    for (const f of L.econ.funerals || []) {
+      if (now < f.s - 60 || now > f.e) continue;
+      // Anyone whose plans got changed since is put back on the list.
+      for (const m of f.mourners) {
+        const r = L.npcs[m.idx];
+        if (r && alive(r) && !r.away && (!r.override || r.override.act !== 'funeral')) this.gatherFuneral(L, { ...f, mourners: [m], priest: null });
+      }
+      const p = f.priest !== null && f.priest !== undefined ? L.npcs[f.priest] : null;
+      if (p && alive(p) && (!p.override || p.override.act !== 'funeral')) this.gatherFuneral(L, { ...f, mourners: [] });
+    }
+  }
+
+  addGrave(L, rec, cause, day, place = true) {
     const g = L.graveyard;
     if (!g) return null;
     let slot = g.slots.find((q) => q.row < g.rows && !q.grave);
@@ -593,7 +662,8 @@ export class Sim {
     }
     if (!slot) return null;
     slot.grave = { name: `${rec.name.first} ${rec.name.last}`, title: jobTitle(rec, L.settlement), died: day, cause, idx: rec.idx, epitaph: epitaphFor(rec, L) };
-    this.setBlocks([[slot.x, g.y, slot.z, B.gravestone, 0]]);
+    if (place) this.setBlocks([[slot.x, g.y, slot.z, B.gravestone, 0]]);
+    else slot.grave.pending = true;
     return slot;
   }
 
@@ -688,6 +758,7 @@ export class Sim {
   }
 
   hourly(L, h, day, hod, rng) {
+    this.funeralsAndBurials(L);
     // Snares near an active town catch things now and then.
     if (!this.game.active.has(L.settlement.id)) return;
     const w = this.game.world;
@@ -1377,6 +1448,7 @@ export class Sim {
       nomads: this.nomads.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
+      petition: this.petition || null,
       // How towns have grown: their size now, and ground they've spread onto.
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null]),
       favors: this.favors.serialize(),
@@ -1437,6 +1509,7 @@ export class Sim {
     this.nomads.load(data.nomads);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
+    this.petition = data.petition || null;
     for (const [id, type, base, suburbs] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];
       if (!s) continue;

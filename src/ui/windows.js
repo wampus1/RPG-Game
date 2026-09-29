@@ -14,6 +14,7 @@ import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
+import { LAWS, lawList } from '../sim/laws.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -915,7 +916,8 @@ export class LedgerWindow extends Window {
     row('Treasury', `¤${e.treasury} (${coffers})`, coffers === 'nearly empty' ? C.orange : '#f0e0c0');
     row('Taxes', `${Math.round(e.tax * 100)}% of earnings${e.taxY ? ` (¤${e.taxY} collected)` : ''}`);
     row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');
-    row('Laws', e.laws.armsBan ? 'No drawn weapons in town' : 'No special laws');
+    const laws = lawList(L);
+    row('Laws', laws.length ? laws.map((id) => LAWS[id].name).join(', ') : 'No special laws');
     const hungry = living.filter((r) => r.hungry >= 1).length;
     row('Food', hungry ? `${hungry} going hungry` : 'Everyone is fed', hungry ? C.orange : C.green);
     const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
