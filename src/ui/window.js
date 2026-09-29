@@ -65,6 +65,7 @@ export function describeActivity(e) {
     case 'social': return 'socializing';
     case 'wander': return 'out for a walk';
     case 'play': return 'playing';
+    case 'help': return 'helping out';
     case 'study': return 'at lessons';
     case 'home': return e.weather ? `home out of the ${e.weather === 'snow' ? 'snow' : e.weather === 'fog' ? 'fog' : 'rain'}` : 'at home';
     case 'mourn': return 'mourning at a grave';

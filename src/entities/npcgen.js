@@ -414,27 +414,47 @@ function buildDay(npc, rng, avail, rest) {
     // Lessons come in classes, morning or afternoon, so the children
     // aren't all at their books (or all out playing) at once.
     const lunchC = 705 + rng.float(-35, 35);
+    // Children play for about seven tenths of their free time; the rest they
+    // spend wandering about town or helping a parent at work.
+    const kid = (s, e) => {
+      s = Math.round(s);
+      e = Math.round(e);
+      const len = e - s;
+      if (len < 40) {
+        push(s, e, 'play', 'play');
+        return;
+      }
+      const other = rng.chance(0.55) ? 'help' : 'wander';
+      const place = other === 'help' ? 'work' : 'town';
+      if (rng.chance(0.5)) {
+        push(s, s + len * 0.7, 'play', 'play');
+        push(s + len * 0.7, e, other, place);
+      } else {
+        push(s, s + len * 0.3, other, place);
+        push(s + len * 0.3, e, 'play', 'play');
+      }
+    };
     if (age === 'child' && !rest && avail.study) {
       const cls = rng.int(0, 2);
       if (cls < 2) {
         const s0 = 510 + cls * 45 + rng.float(-10, 10);
         push(t, s0, 'play', 'home');
         push(s0, Math.min(lunchC, s0 + 150), 'study', 'study');
-        push(Math.min(lunchC, s0 + 150), lunchC, 'play', 'play');
+        kid(Math.min(lunchC, s0 + 150), lunchC);
         push(lunchC, lunchC + 45, 'eat', 'home');
-        push(lunchC + 45, dinnerS, 'play', 'play');
+        kid(lunchC + 45, dinnerS);
       } else {
         const s1 = 810 + rng.float(-15, 15);
-        push(t, lunchC, 'play', 'play');
+        kid(t, lunchC);
         push(lunchC, lunchC + 45, 'eat', 'home');
-        push(lunchC + 45, s1, 'play', 'play');
+        kid(lunchC + 45, s1);
         push(s1, s1 + 140, 'study', 'study');
-        push(s1 + 140, dinnerS, 'play', 'play');
+        kid(s1 + 140, dinnerS);
       }
     } else if (age === 'child') {
-      push(t, lunchC, 'play', 'play');
+      kid(t, lunchC);
       push(lunchC, lunchC + 45, 'eat', 'home');
-      push(lunchC + 45, dinnerS, 'play', 'play');
+      kid(lunchC + 45, dinnerS);
     } else {
       const h1 = hobbies[0];
       const h2 = hobbies[1] || hobbies[0];

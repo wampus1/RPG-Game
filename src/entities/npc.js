@@ -253,6 +253,12 @@ export class NPC extends Entity {
       case 'wander':
         if (curfew()) return inBuilding(home);
         return roadTile();
+      case 'help': {
+        // Tagging along with Mum or Dad at work, else off round the town.
+        const par = this.workingParent();
+        if (!par) return roadTile();
+        return { x: par.x, y: par.y, z: par.z, near: 1, tag: 'help', helping: par.rec.idx };
+      }
       case 'alarm':
         return target(e.target, { tag: 'alarm', near: 2 });
       case 'mourn': case 'funeral':
@@ -305,6 +311,16 @@ export class NPC extends Entity {
       default:
         return inBuilding(home);
     }
+  }
+
+  // A parent of this child who is at work in town right now.
+  workingParent() {
+    for (const i of this.rec.parents || []) {
+      const r = this.layout.npcs[i];
+      const e = r && r.ent;
+      if (e && !e.dead && !e.sleeping && e.act === 'work' && e.state === 'routine' && e.layout === this.layout && r.job !== 'guard' && r.job !== 'miner') return e;
+    }
+    return null;
   }
 
   workGoal() {
@@ -685,6 +701,19 @@ export class NPC extends Entity {
         this.path = null;
       }
     }
+    // A child helping a parent keeps close by them as they work.
+    if (this.act === 'help' && this.goal && this.goal.helping !== undefined) {
+      const par = this.layout.npcs[this.goal.helping]?.ent;
+      if (!par || par.dead || par.act !== 'work') {
+        this.goal = this.pickGoal(this.activity.entry);
+        this.atGoal = false;
+        this.path = null;
+      } else if (Math.max(Math.abs(this.goal.x - par.x), Math.abs(this.goal.z - par.z)) > 2 && !par.moving) {
+        this.goal = { x: par.x, y: par.y, z: par.z, near: 1, tag: 'help', helping: this.goal.helping };
+        this.atGoal = false;
+        this.path = null;
+      }
+    }
     // Guards react to wanted players and nearby monsters (at night, running
     // to ring the alarm bell first if the rest of the watch is asleep).
     if (this.rec.job === 'guard' && !this.sleeping) {
@@ -887,6 +916,38 @@ export class NPC extends Entity {
       if (this.distTo(game.player) < 16) game.audio?.play('place', this);
       return;
     }
+    if (act.act === 'help' && g.helping !== undefined) {
+      const par = this.layout.npcs[g.helping]?.ent;
+      if (par && !par.dead) {
+        if (this.rng.chance(dt * 0.4)) this.face(par.x, par.z);
+        // Fetching and carrying, in a small way.
+        if (this.rng.chance(dt * 0.35)) this.doAction(0.25);
+        if (this.lineCd <= 0) {
+          this.lineCd = this.rng.float(25, 60);
+          if (this.rng.chance(0.45) && this.distTo(game.player) < 14) {
+            const mum = (this.rec.parents || []).indexOf(par.rec.idx) === 1 ? 'Dad' : 'Mum';
+            const job = par.rec.job;
+            const lines = {
+              farmer: ['I pulled up all the weeds, look!', `Can I carry the basket, ${mum}?`],
+              fisher: [`Did you catch one yet, ${mum}?`, 'I\'ll hold the net!'],
+              blacksmith: [`Can I work the bellows, ${mum}?`, 'It\'s so hot in here!'],
+              cook: [`Can I stir the pot, ${mum}?`, 'Is it ready yet? I\'m hungry.'],
+              baker: ['I\'m kneading the dough!', 'Can I have the burnt one?'],
+              merchant: ['Buy something, mister! Please?', 'I\'m minding the stall!'],
+              tailor: ['I threaded the needle all by myself!', 'Can you make me a hat?'],
+              carpenter: ['I\'m sweeping up the shavings.', 'Can I hammer one? Just one?'],
+              lumberjack: ['Timber!', 'I\'ll stack the logs.'],
+              trapper: ['I\'ll be really quiet, promise.', 'Are the rabbits asleep?'],
+              herbalist: ['This one smells like mint!', 'Is this the right flower?'],
+              innkeeper: ['I\'ll wipe the tables!', 'Can I pour one?'],
+              priest: ['I lit the candles!', 'Shh, people are praying.'],
+            }[job] || [`What do I do now, ${mum}?`, `I\'m helping ${mum}!`, 'Look, I did it!'];
+            this.say(this.rng.pick(lines), 2.5);
+            if (this.rng.chance(0.4)) par.say(this.rng.pick(['Good work, little one.', 'Careful with that!', 'That\'s it, just like that.', 'What would I do without you?']), 2.5);
+          }
+        }
+      }
+    }
     if (act.act === 'camp' && this.lineCd <= 0) {
       this.lineCd = this.rng.float(20, 45);
       if (this.rng.chance(0.5) && this.distTo(game.player) < 14) this.say(this.rng.pick(['Nice square.', 'Do you think they have room for us?', 'Smells like stew. A good sign.', 'Look at those houses...', 'I could get used to this.']), 3);
@@ -972,7 +1033,7 @@ export class NPC extends Entity {
       if (p) this.say(this.rng.pick([`This ${b.name.replace(/^The /, '').toLowerCase()} needs fixing.`, 'Who did this? Right, back to work.']), 3);
       else if (this.rng.chance(0.3)) this.say(this.rng.pick(['Solid walls. Good.', 'That roof will hold.', 'Hm, needs a coat of paint.']), 2.5);
     }
-    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || (act.act === 'play' && !g.stay) || g.tag === 'farm' || g.inspect !== undefined) {
+    if (g.patrol || g.wander || g.wanderIn || g.build || g.hunt || (act.act === 'play' && !g.stay) || g.tag === 'farm' || g.tag === 'help' || g.inspect !== undefined) {
       this.goal = (g.tag === 'farm' && act.act === 'work' && this.farmGoal()) || (act.act === 'work' ? this.workGoal() : this.pickGoal(act));
       this.atGoal = false;
       this.path = null;

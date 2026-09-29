@@ -5,6 +5,43 @@ export function makeSlots(n) {
   return new Array(n).fill(null);
 }
 
+// Ingredients any of several kinds will do for: planks of any wood, logs
+// of any tree. (A recipe asking for "planks" takes birch or dark planks too.)
+export const ANY = {
+  planks: ['planks', 'planks_birch', 'planks_dark'],
+  log: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_willow', 'log_palm'],
+};
+const ANY_NAMES = { planks: 'Planks (any wood)', log: 'Logs (any wood)' };
+
+export function kindsOf(key) {
+  return ANY[key] || [key];
+}
+
+export function anyName(key) {
+  return ANY_NAMES[key] || null;
+}
+
+export function countAny(slots, key) {
+  let n = 0;
+  for (const k of kindsOf(key)) n += countItem(slots, k);
+  return n;
+}
+
+// Take n of an ingredient, using up the plainest kind first. Returns what
+// was taken, as [[item, count]].
+export function removeAny(slots, key, n) {
+  const out = [];
+  for (const k of kindsOf(key)) {
+    if (n <= 0) break;
+    const c = Math.min(n, countItem(slots, k));
+    if (!c) continue;
+    removeItem(slots, k, c);
+    out.push([k, c]);
+    n -= c;
+  }
+  return out;
+}
+
 export function countItem(slots, key) {
   let n = 0;
   for (const s of slots) if (s && s.item === key) n += s.count;

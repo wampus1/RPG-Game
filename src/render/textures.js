@@ -819,16 +819,18 @@ const SPRITES = {
     return p.outline(OUT);
   },
   canopy(rot) {
-    // A thin striped cloth with a scalloped edge, up at the top of the cell.
+    // A thin striped cloth with a scalloped edge, low in its cell so that it
+    // rests on the tops of the stall's posts below.
     const col = ['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][rot & 3];
     const p = spr();
+    const top = LH;
     for (let x = 0; x < 16; x++) {
       const c = (x >> 2) % 2 ? '#f0ece0' : col;
-      p.vline(x, 0, 6, c);
-      p.set(x, 7, shade(hex(c), 0.8));
-      if (x % 4 < 2) p.set(x, 8, shade(hex(c), 0.8));
+      p.vline(x, top, top + 6, c);
+      p.set(x, top + 7, shade(hex(c), 0.8));
+      if (x % 4 < 2) p.set(x, top + 8, shade(hex(c), 0.8));
     }
-    p.hline(0, 15, 0, '#ffffff');
+    p.hline(0, 15, top, '#ffffff');
     return p;
   },
   bell(rot, st, f) {

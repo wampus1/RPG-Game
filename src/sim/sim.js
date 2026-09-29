@@ -273,6 +273,8 @@ export class Sim {
     const rec = npc.rec;
     const sid = this.repSidOf(npc);
     let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid) + opinionBonus(this.game.hero);
+    // Children don't hear what other towns' mayors write about you.
+    if (rec.age === 'child') v += this.diplomacy.penalty(sid);
     const c = this.citizen;
     if (c && c.sid === sid && c.host !== null && rec.home === c.host) v += 10;
     return clamp(Math.round(v), -100, 100);

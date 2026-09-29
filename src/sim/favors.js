@@ -4,15 +4,15 @@
 import { ITEMS } from '../world/items.js';
 import { alive, invAdd, ledger } from './econ.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { countItem, removeItem } from '../game/inventory.js';
+import { countItem, removeItem, countAny, removeAny, kindsOf } from '../game/inventory.js';
 
 const WANTS = {
   cook: [['raw_meat', 4], ['fish', 4], ['cabbage', 3]],
   innkeeper: [['raw_meat', 3], ['apple', 5]],
   barkeep: [['wheat', 6], ['apple', 5]],
   blacksmith: [['iron_ore', 4], ['coal', 6]],
-  carpenter: [['log_oak', 8], ['planks', 16]],
-  laborer: [['cobblestone', 16], ['log_oak', 6]],
+  carpenter: [['log', 8], ['planks', 16]],
+  laborer: [['cobblestone', 16], ['log', 6]],
   herbalist: [['herb', 3], ['mushroom', 4], ['flower_blue', 2]],
   baker: [['wheat', 6], ['berries', 6]],
   tailor: [['leather', 3], ['string', 4]],
@@ -40,6 +40,7 @@ const MAX_ACTIVE = 4;
 
 export function plural(item, n) {
   if (item === 'food') return 'something to eat';
+  if (item === 'log') return n === 1 ? 'a log' : `${n} logs`;
   const nm = ITEMS[item].name.toLowerCase();
   const mass = /(ore|meat|fish|wheat|coal|string|leather|cobblestone|bread|cloth)$/.test(nm);
   if (n === 1) return mass ? `some ${nm}` : `${/^[aeiou]/.test(nm) ? 'an' : 'a'} ${nm}`;
@@ -98,7 +99,7 @@ export class Favors {
     const rng = new RNG(hash4(rec.idx, s.seed, g.day, 0xfa7));
     const cands = [];
     if (rec.hungry >= 1) cands.push({ kind: 'fetch', item: 'food', count: 1, w: 4 });
-    for (const [item, count] of WANTS[rec.age === 'child' ? 'child' : rec.job] || []) if (ITEMS[item]) cands.push({ kind: 'fetch', item, count, w: 1 });
+    for (const [item, count] of WANTS[rec.age === 'child' ? 'child' : rec.job] || []) if (ITEMS[kindsOf(item)[0]]) cands.push({ kind: 'fetch', item, count, w: 1 });
     for (const h of rec.hobbies || []) {
       const it = HOBBY_ITEM[h];
       if (it && rec.age !== 'child' && !rec.equipment.items.some((i) => i.item === it)) cands.push({ kind: 'fetch', item: it, count: 1, w: 0.6, hobby: h });
@@ -125,7 +126,7 @@ export class Favors {
       }
     }
     const official = rec.job === 'guard' || rec.job === 'mayor';
-    const value = c.kind === 'fetch' ? (c.item === 'food' ? 3 : ITEMS[c.item].value * c.count) : c.kind === 'slay' ? c.count * 3 : 3;
+    const value = c.kind === 'fetch' ? (c.item === 'food' ? 3 : ITEMS[kindsOf(c.item)[0]].value * c.count) : c.kind === 'slay' ? c.count * 3 : 3;
     const purse = official && c.kind === 'slay' ? L.econ.treasury : rec.coins || 0;
     const mood = rec.traits.includes('generous') ? 1.3 : rec.traits.includes('stingy') ? 0.6 : 1;
     let coins = rec.age === 'child' ? 1 : Math.round((value * 1.4 + 3) * mood);
@@ -197,7 +198,7 @@ export class Favors {
     if (f.kind === 'slay') return { have: Math.min(f.kills, f.count), need: f.count };
     if (f.kind === 'deliver') return { have: 0, need: 1 };
     if (f.item === 'food') return { have: inv.reduce((n, s) => n + (s && ITEMS[s.item]?.kind === 'food' ? s.count : 0), 0) > 0 ? 1 : 0, need: 1 };
-    return { have: Math.min(countItem(inv, f.item), f.count), need: f.count };
+    return { have: Math.min(countAny(inv, f.item), f.count), need: f.count };
   }
 
   describe(f) {
@@ -222,8 +223,7 @@ export class Favors {
         rec.hungry = 0;
         rec.fed = (rec.fed || 0) + 1;
       } else {
-        removeItem(inv, f.item, f.count);
-        invAdd(rec.inv, f.item, f.count);
+        for (const [k, c] of removeAny(inv, f.item, f.count)) invAdd(rec.inv, k, c);
       }
     }
     const paid = this.complete(f, npc);

@@ -119,7 +119,7 @@ function openingRaw(npc, game) {
   }
   if (rep <= -25) return pick(rng, ['What do you want?', 'Make it quick.', 'Oh. It\'s you.']);
   const warns = sim.diplomacy.warnedBy(s.id);
-  if (!entry.met && warns.length && rep < 10) {
+  if (!entry.met && warns.length && rep < 10 && rec.age !== 'child') {
     entry.met = true;
     return pick(rng, [`We've heard about you from ${warns[0].fromName}. Behave yourself here.`, `${name}... ${warns[0].fromName} wrote to us about you. I'm watching you.`]);
   }
@@ -955,6 +955,11 @@ function respondRaw(npc, game, id, arg) {
         else lines.push(q ? `Off to ${sim.diplomacy.town(q.to).name} with my goods, and a letter from the mayor.` : 'Off on the road with my goods!');
       }
       else if (act.act === 'visit') lines.push(`Selling wares from ${npc.visit ? npc.visit.fromName : 'afar'}. Have a look!`);
+      else if (act.act === 'help') {
+        const par = npc.workingParent && npc.workingParent();
+        const who = par ? ((rec.parents || []).indexOf(par.rec.idx) === 1 ? 'Dad' : 'Mum') : null;
+        lines.push(par ? pick(rng, [`Helping ${who}! I'm really good at it.`, `${who} says I'm a big help. Mostly.`]) : pick(rng, ['Just walking about. Nobody needs my help.', 'Looking for something to do.']));
+      } else if (act.act === 'wander' && rec.age === 'child') lines.push(pick(rng, ['Exploring! There\'s a cat round the back of the tavern.', 'Just walking. Seeing what\'s what.']));
       else if (act.act === 'hobby' && HOBBIES[act.hobby]) lines.push(pick(rng, [`Nothing beats ${HOBBIES[act.hobby].label} after a long day.`, `I'm fond of ${HOBBIES[act.hobby].label}.`]));
       else if (act.act === 'work' && p.diligence < 0.3) lines.push(pick(rng, ['Don\'t tell anyone I\'m slacking off.', 'Is it quitting time yet?']));
       else if (act.act === 'work' && rec.job === 'cook') lines.push(pick(rng, ['Keeping the pot bubbling.', 'Cooking for half the town, as usual.']));

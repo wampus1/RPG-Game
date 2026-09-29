@@ -4,7 +4,7 @@ import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS, maxStack, WEAR_SLOTS } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
-import { addItem, removeItem, countItem } from '../game/inventory.js';
+import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
@@ -258,7 +258,7 @@ export class CraftWindow extends Window {
     this.recipes = recipesFor(station);
   }
   canCraft(inv, r) {
-    for (const [k, n] of Object.entries(r.in)) if (countItem(inv, k) < n) return false;
+    for (const [k, n] of Object.entries(r.in)) if (countAny(inv, k) < n) return false;
     return true;
   }
   draw(g, game) {
@@ -280,8 +280,8 @@ export class CraftWindow extends Window {
       g.text(6, y, name, ok ? C.hi : C.dim);
       g.text(6 + name.length + 1, y, r.n > 1 ? `x${r.n}` : '', C.dim);
       const ing = Object.entries(r.in).map(([key, n]) => {
-        const have = countItem(inv, key);
-        return { text: `${n} ${ITEMS[key]?.name || key}`, ok: have >= n };
+        const have = countAny(inv, key);
+        return { text: `${n} ${anyName(key) || ITEMS[key]?.name || key}`, ok: have >= n };
       });
       let xx = 6;
       for (const it of ing) {
@@ -299,7 +299,7 @@ export class CraftWindow extends Window {
     let made = 0;
     for (let t = 0; t < times; t++) {
       if (!this.canCraft(inv, r)) break;
-      for (const [k, n] of Object.entries(r.in)) removeItem(inv, k, n);
+      for (const [k, n] of Object.entries(r.in)) removeAny(inv, k, n);
       const left = addItem(inv, r.out, r.n);
       if (left) game.spawnDrop(r.out, left, game.player.x, game.player.y, game.player.z, true);
       made++;
@@ -980,13 +980,15 @@ export class MapWindow extends Window {
     const blink = Math.floor(this.ui.time * 3) % 2;
     let hover = null;
     const roads = game.sim.diplomacy.roadCells();
+    const icons = settlementIcons(game);
     for (let cz = 0; cz < MAP_H; cz++) {
       for (let cx = 0; cx < MAP_W; cx++) {
         const cell = ow.cell(cx, cz);
         const x = 2 + cx * 2;
         const y = 1 + cz;
         const known = ow.explored[cz * MAP_W + cx] || game.revealMap;
-        if (this.hovering(x, y, 2, 1)) hover = { cell, known };
+        const icon = icons.get(cz * 10000 + cx);
+        if (this.hovering(x, y, 2, 1)) hover = { cell, known, icon };
         if (!known) {
           g.text(x, y, '░░', '#2a2632', '#0e0c14');
           continue;
@@ -1006,22 +1008,16 @@ export class MapWindow extends Window {
             bg = '#1a4a8a';
           }
           if (this.civView && cell.civ !== null && ow.civs[cell.civ]) bg = shadeHex(ow.civs[cell.civ].color.hex, 0.45);
-          if (roads.has(cz * 10000 + cx) && cell.settlement === null) {
+          if (roads.has(cz * 10000 + cx) && cell.settlement === null && !icon) {
             ch = hf ? '─' : '═';
             fg = '#e8c890';
           }
           g.put(x + hf, y, ch, fg, bg);
         }
-        if (cell.settlement !== null) {
-          const s = ow.settlements[cell.settlement];
+        if (icon) {
+          const s = icon.s;
           const col = s.civ ? s.civ.color.hex : '#e8e8e8';
-          if (s.type === 'village') g.text(x, y, ' ⌂', '#fff4d0', shadeHex(col, 0.35));
-          else if (s.type === 'town') g.text(x, y, cx === s.cx ? '[■' : '■]', '#fff4d0', shadeHex(col, 0.5));
-          else {
-            const lx = cx - s.cx;
-            const lz = cz - s.cz;
-            g.text(x, y, lz === 0 ? (lx === 0 ? '╔═' : '═╗') : lx === 0 ? '╚═' : '═╝', '#fff4d0', shadeHex(col, 0.6));
-          }
+          g.text(x, y, icon.glyph, '#fff4d0', shadeHex(col, icon.shade));
           if (s.condition === 'abandoned' || s.deserted) g.text(x, y, ' †', '#a0a0a0', '#302830');
         }
         if (cx === pcx && cz === pcz && blink) g.put(x + ((p.x % REGION_W) >= REGION_W / 2 ? 1 : 0), y, '@', '#ffffff', '#c02020');
@@ -1033,15 +1029,15 @@ export class MapWindow extends Window {
       let info = `${BIOMES[c.biome].name}`;
       if (c.river) info += ' · river';
       if (c.lake) info += ' · lake';
-      if (c.settlement !== null) {
-        const s = ow.settlements[c.settlement];
+      if (hover.icon) {
+        const s = hover.icon.s;
         info = `${s.name} · ${cap(s.type)} · ${s.condition} · ${BIOMES[s.biome].name}`;
         g.text(2, y0 + 1, s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', s.civ ? s.civ.color.hex : C.dim);
       } else if (c.civ !== null && ow.civs[c.civ]) g.text(2, y0 + 1, `Territory of the ${ow.civs[c.civ].name}`, ow.civs[c.civ].color.hex);
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village  [■] town  ╔╗ city  ~ river  ═ road  † ruins  @ you', C.faint);
+    g.text(2, y0 + 2, '⌂ village  [■] town  ┌┐ city  ╔╗ walled city  ~ river  ═ road  † ruins', C.faint);
     const t = ` [V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, C.dim);
   }
@@ -1052,6 +1048,70 @@ export class MapWindow extends Window {
     }
     return false;
   }
+}
+
+// Where each place shows on the map, and how: a village is one square, a
+// town two, a city a block of four (with a double line once it has walls).
+// A place that has grown spreads into the squares next to it.
+const ICON_SIZE = { village: [1, 1], town: [2, 1], city: [2, 2] };
+function settlementIcons(game) {
+  const ow = game.world.ow;
+  const out = new Map();
+  const taken = (cx, cz, s) => {
+    const c = ow.cell(cx, cz);
+    if (!c) return true;
+    const o = out.get(cz * 10000 + cx);
+    return (c.settlement !== null && c.settlement !== s.id) || (o && o.s !== s) || c.biome === 'ocean';
+  };
+  const list = [...ow.settlements].sort((a, b) => (ICON_SIZE[b.type] || [1, 1])[0] * (ICON_SIZE[b.type] || [1, 1])[1] - (ICON_SIZE[a.type] || [1, 1])[0] * (ICON_SIZE[a.type] || [1, 1])[1]);
+  for (const s of list) {
+    const [w, h] = ICON_SIZE[s.type] || [1, 1];
+    // Start from the squares it was founded on, then grow sideways and down
+    // (or up and left if there's no room).
+    let x0 = s.cx;
+    let z0 = s.cz;
+    let cw = Math.min(w, s.cw || 1);
+    let ch = Math.min(h, s.cd || 1);
+    while (cw < w) {
+      if (!taken(x0 + cw, z0, s)) cw++;
+      else if (!taken(x0 - 1, z0, s)) {
+        x0--;
+        cw++;
+      } else break;
+    }
+    while (ch < h) {
+      let down = true;
+      let up = true;
+      for (let i = 0; i < cw; i++) {
+        if (taken(x0 + i, z0 + ch, s)) down = false;
+        if (taken(x0 + i, z0 - 1, s)) up = false;
+      }
+      if (down) ch++;
+      else if (up) {
+        z0--;
+        ch++;
+      } else break;
+    }
+    const L = game.world.layouts && game.world.layouts.get(s.id);
+    const walled = L ? L.walled : s.type === 'city' && !s.baseType;
+    for (let dz = 0; dz < ch; dz++) {
+      for (let dx = 0; dx < cw; dx++) {
+        let glyph;
+        let shade = 0.35;
+        if (cw === 1 && ch === 1) glyph = s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
+        else if (ch === 1) {
+          glyph = dx === 0 ? '[■' : '■]';
+          shade = 0.5;
+        } else {
+          const [tl, tr, bl, br] = walled ? ['╔═', '═╗', '╚═', '═╝'] : ['┌─', '─┐', '└─', '─┘'];
+          glyph = dz === 0 ? (dx === 0 ? tl : tr) : dx === 0 ? bl : br;
+          shade = 0.6;
+        }
+        out.set((z0 + dz) * 10000 + x0 + dx, { s, glyph, shade });
+      }
+    }
+  }
+  return out;
 }
 
 function shadeHex(hex, f) {

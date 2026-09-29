@@ -125,7 +125,10 @@ export function exchangeFor(a, b, game) {
     const name = game.playerName;
     const op = sim.opinion(a);
     const met = sim.repEntry(sid, ra.idx).met;
+    // Grown-ups have heard what other towns wrote about them; children haven't.
+    const warns = ra.age !== 'child' && rb.age !== 'child' ? sim.diplomacy.warnedBy(sid) : [];
     if (sim.justice.pendingIn(sid).length || sim.justice.recordOf(sid).convictions) opts.push([`That's ${name}. I heard they're trouble.`, 'Shh! Keep your voice down!']);
+    else if (warns.length && op < 10) opts.push([`That's ${name}. ${warns[0].fromName} wrote to the mayor about them.`, 'Then we\'ll keep an eye on them.']);
     else if (sim.careers.isGuard(sid)) opts.push([`${name} joined the watch, you know.`, 'About time we had more guards.']);
     else if (sim.isCitizen(sid)) opts.push([`${name} has settled in nicely.`, 'Seems a decent sort.']);
     else if (op >= 35) opts.push([`${name} is a good sort.`, 'Agreed.']);
