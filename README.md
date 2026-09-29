@@ -58,6 +58,8 @@ with the music off. `window.__game` exposes the running game.
 | Attack | Left-click a creature or person (a bow shoots arrows at range) |
 | Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
 | Sit | Click a chair, bench or stool; move to stand up |
+| Wait while seated | T, then pick 1–24 hours |
+| Raft | Hold a raft and right-click water; A/D turn, W paddles, S back-paddles, E steps ashore |
 | Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
 | Toss item | Q (Ctrl+Q throws the whole stack), or drag it out of a window |
 | Eat held food, or put on held armour and clothes | F or right-click |
@@ -459,6 +461,47 @@ for villages, towns and cities (quieter at night) and taverns, an eerie one
 in ruins and abandoned places, a slow tolling one in graveyards, and battle
 music when beasts or the town guard come for you. Set its volume in the
 settings.
+
+**Rafts.** Craft one at a workbench (planks, sticks and string) or buy one
+from a fisher or a carpenter. Push it out onto open water and climb on: it
+turns on the spot with A and D, picks up speed gradually as you paddle and
+drifts to a stop. It moves smoothly, not tile by tile, and the logs are
+turned pixel by pixel to face any heading, with you sitting on top. Merchants
+travelling between two towns on the same river or coast go by raft too,
+which is quicker than the road.
+
+**Towns building.** When a town puts up a new building, the builders lay a
+road from the lot to the nearest street first. A sign on the site says what
+is going up, when it was started, how far along it is and who is working on
+it; it comes down once the frame is up. New lots keep a couple of blocks
+clear of the houses already there, and their doors face the nearest street.
+
+**Blue hearts.** Drinking from a well or sleeping in a village bed gives you
+blue hearts on top of your red ones. They take damage first and break when
+the day ends.
+
+**Alarm bells and healing.** Townsfolk run to ring the alarm bell when
+something attacks. Guards deal with the threat themselves and only ring a
+bell that is within ten tiles. A badly hurt guard rings the bell if one is
+close, or falls back to the other guards. Wounded townsfolk heal by eating,
+or by praying at the temple, where a priest may bless them.
+
+**Morning hearings.** Arrested at night, you stay locked in the cell until
+morning, when the mayor, the guard and the witnesses are up. You can sleep on
+the cot while you wait. Witnesses are also harder to come by: it's harder to
+see in the dark, people further away often miss things, and people busy with
+work or a meal notice less.
+
+**Couriers.** A mayor with a letter and no merchant heading that way pays
+someone from town to take it. They walk it there and come back to collect
+their pay.
+
+**Weather and waiting.** Clear spells are longer. Deserts, savannas and
+beaches rarely see rain and never see snow. Weather moves faster when time
+is sped up, for example while sleeping or waiting. The notice board keeps a
+longer history, which you can scroll with the mouse wheel or the arrow keys.
+The title screen has music once you click or press a key; browsers don't
+allow sound before that.
 
 ## Code layout
 
