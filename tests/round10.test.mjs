@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGame, stubInput } from './helpers.mjs';
+import { makeGame, stubInput, lotsReady } from './helpers.mjs';
 import { respond } from '../src/game/dialogue.js';
 import { countItem, countAny, removeAny, makeSlots, addItem } from '../src/game/inventory.js';
 import { RECIPES } from '../src/world/recipes.js';
@@ -232,6 +232,7 @@ test('born here: a family name, parents who treat you as their child, a home, an
   const mayor = a && a.npcs.find((n) => n.rec.job === 'mayor');
   if (mayor) {
     game.player.give('coin', 500);
+    lotsReady(game, L, 'house_s');
     const t = game.sim.ownHomeTerms(mayor);
     if (t.ok) {
       assert.ok(game.sim.ownHome(mayor).ok);

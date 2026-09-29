@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGame, stubInput } from './helpers.mjs';
+import { makeGame, stubInput, lotsReady } from './helpers.mjs';
 import { DAY } from '../src/sim/econ.js';
 import { RNG } from '../src/util/rng.js';
 
@@ -90,7 +90,12 @@ test('a new building: the road goes in first, a sign stands on the site until th
   for (const q of L.plots) if (q) q.taken = true;
   L.econ.treasury = 5000;
   L.econ.stock = { wood: 999, stone: 999 };
-  const p = works.startBuilding(L, 'house_s', '');
+  // No lot free: it waits, and the town lays a new street with lots.
+  assert.equal(works.startBuilding(L, 'house_s', ''), null);
+  assert.ok(game.sim.roads.waiting(L, 'build', { type: 'house_s' }), 'waiting for a lot');
+  assert.ok(lotsReady(game, L, 'house_s').length, 'lots along a new street');
+  game.sim.roads.startWaiting(L);
+  const p = works.projects.find((q) => !q.done && q.sid === L.settlement.id && q.kind === 'build');
   assert.ok(p, 'a building was started');
   const plot = L.plots[p.plot];
   // Well clear of what's already there.

@@ -68,6 +68,7 @@ with the music off. `window.__game` exposes the running game.
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
 | Menu (save and load slots, settings, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
+| Command console (teleport, reveal the map, trigger events…) | ` or / |
 
 ## What's in the world
 
@@ -169,8 +170,8 @@ cook, and a cook needs farmers, trappers or fishers; a smith needs a miner, a
 baker a farmer, a carpenter a lumberjack, a tailor a trapper. When a link is
 missing the town retrains someone who can be spared, and when a building is
 missing (a tavern, a smithy, a bakery) the council pays for one and the
-builders put it up on an empty lot (marking out a new lot, on the edge of town
-if need be) and someone is hired to work it. If nobody can be spared, the
+builders put it up on an open lot (see *Streets and lots* below) and someone
+is hired to work it. If nobody can be spared, the
 mayor writes for settlers, and newcomers take the job. A forge with no rock to
 mine nearby gets its ore by cart from the town's merchants. Miners walk out to
 the rock with pickaxes and dig stone, coal and ore out of the face (or down
@@ -220,7 +221,8 @@ tell you where each one lies, who governs it and how the two towns get on.
 
 Traveling merchants carry the news both ways: what's happened in their home
 town goes with them, and they bring back word from where they've been. Ask
-around ("Any news?") or read it on the notice board under *News from afar*.
+around ("Any news?") or read it on the notice board under *News from afar*,
+where it fades as it goes stale and comes down after two days.
 Out in the country you may meet a merchant on the road between two towns
 (along the new road, if there is one), pack on their back, happy to trade
 from it before walking on.
@@ -314,7 +316,8 @@ lost, and gather for a funeral the next afternoon with the priest.
 
 **Citizenship.** Ask the mayor in the town hall to become a citizen. You're
 taken in by a family with a spare bed while the town's builders put up a
-cottage for you on an empty lot over the next day or two (you can watch it go
+cottage for you on an open lot with a street at its door (if none is free, it
+waits for the next one) over the next day or two (you can watch it go
 up, block by block, as soon as the builders are on site). While you stay with
 them, their home is yours: sleep in any free bed, use their chests. Citizens pay a little tax each day, get better prices and
 warmer greetings, and your profile reads "Citizen of ..." instead of
@@ -391,7 +394,9 @@ at the anvil, and are sold (and bought) by smiths, tailors and trappers.
 
 **Saves.** Five save slots and an autosave (written every morning at 7:00),
 each showing who, where and when; save or load from the menu, or pick up
-where you left off from the title screen.
+where you left off from the title screen. Games are compressed and kept in the
+browser's database, which has far more room than its small local storage, so
+saving doesn't fail on a big world. Older saves still load.
 
 **Town life, continued.** Children out playing find each other and start a
 game of **tag** (whoever's it chases the rest until they catch one) or
@@ -471,6 +476,15 @@ turned pixel by pixel to face any heading, with you sitting on top. Merchants
 travelling between two towns on the same river or coast go by raft too,
 which is quicker than the road.
 
+**Streets and lots.** Towns grow along their roads. When a town runs short of
+open lots, or something is waiting for one, its builders lay a new street
+(two tiles wide, a stretch at a time) out from the end of an existing one, and
+the town's ground grows to take it in. Lots are marked out along both sides,
+each a doorstep back from the street with a sign on it (read it to see the
+lot's size and what's waiting to be built). Every new building, including
+your workshop and your house, needs an open lot with a street at its door. If
+none is free, it waits its turn and goes up as soon as one is.
+
 **Towns building.** When a town puts up a new building, the builders lay a
 road from the lot to the nearest street first. A sign on the site says what
 is going up, when it was started, how far along it is and who is working on
@@ -505,15 +519,17 @@ The title screen has music once you click or press a key; browsers don't
 allow sound before that.
 
 **Turning the camera.** Q and E turn the view a quarter turn either way, so
-you can see behind buildings. Movement keys always move you across the screen,
+you can see behind buildings. The world visibly swings round to the new view.
+Market stall canopies keep their stripes and colour whichever way you look. Movement keys always move you across the screen,
 the minimap turns with the view (N marks north), and the placement arrow shows
 which way a block will face.
 
 **Pointing and building.** Whatever is drawn under the mouse is what you point
 at, down to the pixel: a lamp post, a person in front of a wall, or the top or
 front of a block. Blocks go onto the face you point at, and the tooltip says
-what your tool will do, whether it is in reach, and why a block can't go
-somewhere.
+what your tool will do and why a block can't go somewhere. An icon in it shows
+the tool that mines the block best, and its outline turns red when the block is
+out of reach.
 
 **Belonging to a town.** As a citizen you count in the town's population (the
 notice board says "you among them"), and on the watch you count as one of its
@@ -525,8 +541,12 @@ back when you leave the watch. Night duty pays a quarter more than day duty.
 **Licences and workshops.** Every licence has a fee. The more a town needs a
 trade, the less it charges; citizens pay a quarter less, and joining the watch
 is free. Trades that need a building (tailor, herbalist, scribe, jeweller,
-baker, smith) cost more, and the builders put up a workshop for you on a free
-lot, with your bench inside.
+baker, smith) cost more, and the builders put up a workshop for you on an open
+lot, with your bench inside. If no lot is free, the workshop is ordered and
+waits for the next one. Ask the mayor, or any builder or carpenter, "How's my
+workshop coming along?" (or your house): they'll tell you whether it's still
+waiting (and how far the new street has got), how far along it is and how many
+builders are on it.
 
 **Trade benches.** Each trade has its own bench, which only a licensed holder
 can use:
@@ -577,6 +597,28 @@ Everyone who went is in better spirits afterwards, and turning up yourself
 earns you some goodwill. The next morning the builders take it all down and
 the posters come down.
 
+## Command console
+
+Press **`** (or **/**) to open the command console. Type a command and press
+Enter; Tab completes a command name and the arrow keys go back through what
+you've typed. These are for exploring and testing, and they change your game.
+
+| Command | What it does |
+| --- | --- |
+| `help [command]` | lists the commands, or explains one |
+| `tp <town>` / `tp <x> <z>` / `tp home` | teleports you to a town (by name, or the start of one), a spot in the world, or your spawn |
+| `teleport [on\|off]` | while on, click anywhere you've seen on the world map (M) to go there |
+| `reveal [off]` | shows the whole world map |
+| `towns`, `where` | every place, nearest first; where you are |
+| `wedding [now] [town]` | two single grown-ups get engaged; the wedding is in two days, or within a few hours with `now` |
+| `feast [now] [town]`, `fete [now] [town]` | a feast day, or a celebration of the town |
+| `street [town]` | the builders lay out a new street with lots |
+| `finish [town]` | everything under construction there is finished at once |
+| `time <hh:mm>` / `time +<hours>` | waits until then (any key stops it) |
+| `give <item> [count]`, `coins <n>`, `heal` | items, money, health |
+
+Map teleporting and the revealed map are kept with your save.
+
 ## Code layout
 
 ```
@@ -600,7 +642,7 @@ src/
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), save slots,
-                       settings, voices,
+                       settings, voices, commands (the console),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
@@ -609,7 +651,8 @@ src/
                        (professions, shop work, customers, escorts,
                        companions), favours, civic upkeep (guards, supply
                        chains, housing, births, deserted towns), works
-                       (repairs, new buildings, house expansions),
+                       (repairs, new buildings, house expansions), roads
+                       (new streets, lots, and what waits for a lot),
                        diplomacy (letters, roads, warnings), nomads, town
                        life (elections, weddings, coming of age, raids),
                        events (posters, stages, guests for weddings and

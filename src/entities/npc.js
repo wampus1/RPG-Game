@@ -12,6 +12,7 @@ import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
+import { buildingAt } from '../sim/sim.js';
 
 const EMOTES = {
   work: ['•', '#e8d8b0'], read: ['≡', '#a0c8ff'], study: ['≡', '#a0c8ff'], pray: ['†', '#ffe8a0'], music: ['♪', '#ff9ad0'],
@@ -161,9 +162,11 @@ export class NPC extends Entity {
       return;
     }
     const w = this.game.world;
+    // Never onto a roof or the top of a wall: only ground level will do.
     const y = w.findStandY(t.x, t.z, t.y ?? GROUND);
-    if (y < 0 || this.game.occupiedBySolid(t.x, y, t.z, this)) t = this.homeTile();
-    this.teleport(t.x, w.findStandY(t.x, t.z, GROUND), t.z);
+    if (y < 0 || Math.abs(y - (t.y ?? GROUND)) > 1 || this.game.occupiedBySolid(t.x, y, t.z, this)) t = this.homeTile();
+    const ty = w.findStandY(t.x, t.z, t.y ?? GROUND);
+    this.teleport(t.x, ty > 0 ? ty : GROUND, t.z);
     this.atGoal = goal ? this.x === goal.x && this.z === goal.z : false;
   }
 
@@ -205,9 +208,20 @@ export class NPC extends Entity {
       const list = L.buildings.filter((b) => b.type === type);
       return list.length ? list[hash4(rec.idx, type.length) % list.length] : null;
     };
+    // Open ground: not a house, a wall or water (else the fallback).
+    const open = (x, z) => {
+      if (buildingAt(L, x, z)) return false;
+      const y = this.game.world.findStandY(x, z, GROUND);
+      return Math.abs(y - GROUND) <= 1 && !this.game.world.isWaterAt(x, y, z);
+    };
     const roadTile = () => {
       const p = L.patrol[rng.int(0, L.patrol.length - 1)] || { x: L.plaza.cx, z: L.plaza.cz };
-      return { x: p.x + rng.int(-2, 2), y: GROUND, z: p.z + rng.int(-2, 2), wander: true };
+      for (let i = 0; i < 4; i++) {
+        const x = p.x + rng.int(-2, 2);
+        const z = p.z + rng.int(-2, 2);
+        if (open(x, z)) return { x, y: GROUND, z, wander: true };
+      }
+      return { x: p.x, y: GROUND, z: p.z, wander: true };
     };
     // Law-abiding folk are indoors after curfew.
     const curfew = () => lawOn(L, 'curfew') && (this.game.minute >= 1320 || this.game.minute < 300) && this.rec.job !== 'guard';
@@ -240,7 +254,11 @@ export class NPC extends Entity {
         // Out in the streets and round the houses as much as on the square.
         const r = rng.next();
         if (r < 0.25) return tagged('play') || plazaTile();
-        if (r < 0.55 && home && home.outside) return { x: home.outside.x + rng.int(-3, 3), y: GROUND, z: home.outside.z + rng.int(-3, 3), wander: true };
+        if (r < 0.55 && home && home.outside) {
+          const x = home.outside.x + rng.int(-3, 3);
+          const z = home.outside.z + rng.int(-3, 3);
+          return open(x, z) ? { x, y: GROUND, z, wander: true } : { x: home.outside.x, y: GROUND, z: home.outside.z, wander: true };
+        }
         if (r < 0.85) return roadTile();
         return plazaTile();
       }
@@ -416,6 +434,12 @@ export class NPC extends Entity {
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;
+    // Somehow up on a roof or a wall (nobody's meant to be): back down.
+    this.roofT = (this.roofT || 0) - dt;
+    if (this.roofT <= 0 && !this.moving) {
+      this.roofT = 2;
+      if (this.y >= GROUND + 2 && this.rec.job !== 'guard' && this.layout.inside(this.x, this.z)) this.stepDown();
+    }
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.avoid) this.avoid.t -= dt;
     this.stateT += dt;
@@ -841,6 +865,8 @@ export class NPC extends Entity {
   showMeal(r) {
     if (!r || this.bubble) return;
     const key = r.item ? (r.q === 'terrible' || r.q === 'acceptable' || r.q === 'delightful' ? r.q : 'plain') : 'none';
+    // Only someone really going without complains of hunger.
+    if (key === 'none' && !r.starving) return;
     if (key === 'plain' && !this.rng.chance(0.3)) return;
     if (key === 'acceptable' && !this.rng.chance(0.4)) return;
     this.say(this.rng.pick(MEAL_LINES[key]), 3, key === 'none' || key === 'terrible' ? '#e0c080' : undefined);
@@ -852,6 +878,30 @@ export class NPC extends Entity {
     const b = this.bedTile;
     this.bedTile = null;
     if (b) this.stepOff(b.access ? [b.access] : []);
+  }
+
+  // Down from a roof or a wall top to the nearest open ground.
+  stepDown() {
+    const w = this.game.world;
+    const B0 = BLOCKS[w.getBlock(this.x, this.y - 1, this.z)];
+    // Only if it's a house (its walls or roof) they're standing on.
+    if (!(B0.render === 'cube' && (/roof|thatch/.test(B0.name) || buildingAt(this.layout, this.x, this.z)))) return false;
+    for (let r = 1; r <= 8; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const x = this.x + dx;
+          const z = this.z + dz;
+          if (w.canStand(x, GROUND, z) && !buildingAt(this.layout, x, z) && !this.game.occupiedBySolid(x, GROUND, z, this)) {
+            this.teleport(x, GROUND, z);
+            this.path = null;
+            this.atGoal = false;
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   // Move off a furniture tile onto the nearest free standable tile.
@@ -1103,7 +1153,10 @@ export class NPC extends Entity {
       rec.minedToday = 0;
     }
     if (rec.minedToday >= 24) return false;
-    const rock = (x, y, z) => ROCK.has(w.getBlock(x, y, z));
+    // Only rock that's open to the air on some side (never stone buried
+    // under the ground or behind other rock).
+    const open = (x, y, z) => [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].some(([a, b, c]) => !BLOCKS[w.getBlock(x + a, y + b, z + c)].solid);
+    const rock = (x, y, z) => ROCK.has(w.getBlock(x, y, z)) && open(x, y, z);
     let t = this.mineTarget;
     if (!t || !rock(t.x, t.y, t.z) || Math.max(Math.abs(t.x - this.x), Math.abs(t.z - this.z)) > 1) {
       t = null;
@@ -1112,6 +1165,8 @@ export class NPC extends Entity {
       const dys = this.y - 1 >= GROUND - 2 ? [0, 1, -1] : [0, 1];
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         for (const dy of dys) {
+          // Down into the ground only where it's open above (a pit's edge).
+          if (dy < 0 && BLOCKS[w.getBlock(this.x + dx, this.y, this.z + dz)].solid) continue;
           if (rock(this.x + dx, this.y + dy, this.z + dz)) {
             t = { x: this.x + dx, y: this.y + dy, z: this.z + dz, hits: 0 };
             break;

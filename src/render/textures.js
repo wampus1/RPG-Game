@@ -1097,19 +1097,39 @@ const SPRITES = {
     }
     return p.outline(OUT);
   },
-  canopy(rot) {
-    // A thin striped cloth with a scalloped edge, low in its cell so that it
-    // rests on the tops of the stall's posts below.
-    const col = ['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][rot & 3];
+  canopy(rot, st, f, rand, colour = 0) {
+    // A thin striped cloth over the back of a stall, low in its cell so it
+    // rests on the posts below, its scalloped edge hanging toward the
+    // customers. `rot` is the way the stall's front faces on screen (0 down,
+    // 1 left, 2 up, 3 right); the colour is kept separately.
+    const col = ['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][colour & 3];
+    const light = '#f0ece0';
     const p = spr();
     const top = LH;
-    for (let x = 0; x < 16; x++) {
-      const c = (x >> 2) % 2 ? '#f0ece0' : col;
-      p.vline(x, top, top + 6, c);
-      p.set(x, top + 7, shade(hex(c), 0.8));
-      if (x % 4 < 2) p.set(x, top + 8, shade(hex(c), 0.8));
+    if (rot === 0 || rot === 2) {
+      // Stripes across; the edge along the front (near or far side).
+      const y0 = rot === 0 ? top : top + 9;
+      const edge = rot === 0 ? y0 + 7 : y0 - 1;
+      for (let x = 0; x < 16; x++) {
+        const c = (x >> 2) % 2 ? light : col;
+        p.vline(x, y0, y0 + 6, c);
+        p.set(x, edge, shade(hex(c), 0.8));
+        if (x % 4 < 2) p.set(x, rot === 0 ? edge + 1 : edge - 1, shade(hex(c), 0.8));
+      }
+      p.hline(0, 15, rot === 0 ? y0 : y0 + 6, '#ffffff');
+    } else {
+      // Seen end on: the cloth runs down the screen with the stall, stripes
+      // across it, the edge down the side the customers stand on.
+      const x0 = rot === 1 ? 7 : 0;
+      const edge = rot === 1 ? x0 - 1 : x0 + 9;
+      for (let y = top; y < top + 16; y++) {
+        const c = ((y - top) >> 2) % 2 ? light : col;
+        p.hline(x0, x0 + 8, y, c);
+        p.set(edge, y, shade(hex(c), 0.8));
+        if ((y - top) % 4 < 2) p.set(rot === 1 ? edge - 1 : edge + 1, y, shade(hex(c), 0.8));
+      }
+      p.vline(rot === 1 ? x0 + 8 : x0, top, top + 15, '#ffffff');
     }
-    p.hline(0, 15, top, '#ffffff');
     return p;
   },
   bell(rot, st, f) {
@@ -1743,7 +1763,7 @@ export function buildTextures() {
         else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
-          const variants = name === 'rock' || name === 'bed' ? VARIANTS : 1;
+          const variants = name === 'rock' || name === 'bed' || name === 'canopy' ? VARIANTS : 1;
           // Layout: [state * 4 + frame] for animated props, or variants.
           for (let st = 0; st < 2; st++) {
             for (let f = 0; f < 4; f++) {

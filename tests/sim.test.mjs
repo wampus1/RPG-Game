@@ -202,7 +202,7 @@ test('becoming a citizen: a host family, builders and a finished house', () => {
   assert.ok(c.host !== null && c.hostBed, 'staying with a family');
   assert.equal(game.sim.bedOwner(c.hostBed.x, c.hostBed.z), null, 'the guest bed is yours');
   assert.ok(game.sim.construction && game.sim.builders(L).length >= 1);
-  for (let i = 0; i < 20000 && !game.sim.construction.done; i++) game.update(0.25, input);
+  for (let i = 0; i < 20000 && !(game.sim.construction && game.sim.construction.done); i++) game.update(0.25, input);
   assert.ok(game.sim.construction.done, 'house finished');
   assert.ok(game.day <= 4, `took until day ${game.day}`);
   const home = L.buildings[c.home];

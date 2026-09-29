@@ -130,14 +130,15 @@ export function growth(sim, L, day) {
       continue;
     }
     // A walled city with no room left inside breaks through its wall first.
-    if (L.walled && !L.plots.some((q) => q && !q.taken) && !works.freePlot(L, type, true)) {
+    if (L.walled && !works.freePlot(L, type, true) && !sim.roads.planStreet(L)) {
       const br = breachPoint(L, works);
       if (br && br.at) {
         e.treasury -= 40;
         return { breach: works.add({ sid: s.id, kind: 'breach', at: br.at, bid: L.buildings.length - 0.25, label: 'pulling down part of the wall' }) };
       }
     }
-    const p = works.startBuilding(L, type, why);
+    if (sim.roads.waiting(L, 'build', { type })) continue;
+    const p = works.startBuilding(L, type, why, false, coins);
     if (p) {
       e.treasury -= coins;
       return { building: p };

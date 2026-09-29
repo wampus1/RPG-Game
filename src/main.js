@@ -9,7 +9,7 @@ import { UI } from './ui/ui.js';
 import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow } from './ui/windows.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
-import { SaveStore } from './game/saves.js';
+import { SaveStore, openSaveDB } from './game/saves.js';
 import { CharacterWindow } from './ui/create.js';
 import { randomHero } from './game/hero.js';
 import { Music, musicMood } from './game/music.js';
@@ -51,6 +51,16 @@ function browserStorage() {
   }
 }
 const store = new SaveStore(browserStorage());
+// Games are kept in IndexedDB once it's open (it has room for many more
+// than browser storage's few megabytes); ask for it to be kept for good.
+openSaveDB().then((db) => {
+  store.db = db;
+});
+try {
+  window.navigator.storage?.persist?.();
+} catch {
+  // Not offered here.
+}
 // Volumes and visuals, as the player left them.
 const settings = loadSettings(browserStorage());
 const applyAll = () => applySettings(settings, { audio, music, crt, renderer, ui });
@@ -59,30 +69,32 @@ applyAll();
 // Save into a slot; says so (or why it couldn't).
 function saveTo(id, note) {
   if (!game) return false;
-  try {
-    store.save(id, game);
-    if (id !== 'auto') game.slot = id;
-    ui.msg(note, '#80e070');
-    audio.play('save');
-    return true;
-  } catch (e) {
+  const g = game;
+  const fail = (e) => {
     const full = e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''));
-    ui.msg(full ? 'Not enough room to save: delete an old save first.' : `Save failed: ${e.message}`, '#ff5a50');
+    ui.msg(full ? 'Not enough room to save: delete an old save first.' : `Save failed: ${e && e.message ? e.message : e}`, '#ff5a50');
     return false;
+  };
+  try {
+    return store.save(id, g).then(() => {
+      if (id !== 'auto') g.slot = id;
+      ui.msg(note, '#80e070');
+      audio.play('save');
+      return true;
+    }, fail);
+  } catch (e) {
+    return fail(e);
   }
 }
 
 function loadFrom(id) {
-  try {
-    const data = store.load(id);
+  store.load(id).then((data) => {
     if (!data) {
       ui.msg('That save is empty.', '#ff5a50');
       return;
     }
     startGame(null, data, id);
-  } catch (e) {
-    ui.msg('Load failed: ' + e.message, '#ff5a50');
-  }
+  }).catch((e) => ui.msg('Load failed: ' + e.message, '#ff5a50'));
 }
 
 function startGame(seed, save = null, slot = null, hero = null) {
@@ -146,7 +158,7 @@ ui.hooks = {
   saveSlot: (id) => {
     const ok = saveTo(id, `Game saved to slot ${id}.`);
     if (ok) ui.closeAll();
-    return ok;
+    return !!ok;
   },
   loadSlot: (id) => loadFrom(id),
   continue: () => {

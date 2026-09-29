@@ -14,7 +14,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       const k = normKey(e);
-      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'Backquote'].includes(k) || (e.ctrlKey && k === 'KeyQ')) e.preventDefault();
+      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'Backquote', 'Slash'].includes(k) || (e.ctrlKey && k === 'KeyQ')) e.preventDefault();
       if (!this.keys.has(k)) {
         this.pressed.push({ code: k, key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
         if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) this.lastMoveKey = k;

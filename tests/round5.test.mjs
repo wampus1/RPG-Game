@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGame, stubInput } from './helpers.mjs';
+import { makeGame, stubInput, lotsReady } from './helpers.mjs';
 import { World } from '../src/world/world.js';
 import { REGION_W, REGION_D } from '../src/config.js';
 import { B, BLOCKS } from '../src/world/blocks.js';
@@ -140,8 +140,11 @@ test('enlarging your house: the mayor gives good workers a discount, builders ch
   p.give('coin', 600);
   p.teleport(hall.inside.x, 6, hall.inside.z);
   game.currentSettlement = L.settlement;
+  // A roomy lot on a new street (the village's own are hemmed in).
+  for (const q of L.plots) if (q) q.taken = true;
+  assert.ok(lotsReady(game, L, 'house_m').length, 'a new street with lots');
   respond(mayor, game, 'citizen', 'yes');
-  for (let i = 0; i < 20000 && !game.sim.construction.done; i++) game.update(0.25, input);
+  for (let i = 0; i < 20000 && !(game.sim.construction && game.sim.construction.done); i++) game.update(0.25, input);
   assert.ok(game.sim.construction.done);
   assert.ok(topicsFor(mayor, game).some((t) => t.id === 'expand'));
   assert.ok(topicsFor(builder, game).some((t) => t.id === 'expand'));
@@ -217,6 +220,9 @@ test('towns hire and build what their trades depend on', () => {
     const L = w.getLayout(s);
     L.econ.treasury = 2000;
     for (let d = 0; d < 12; d++) {
+      // (New buildings wait for a lot: the town lays streets for them.)
+      game.sim.roads.daily(L, d * 2);
+      for (const q of game.sim.works.projects) if (!q.done && q.sid === s.id && q.kind === 'road') { q.work = 1e9; game.sim.works.advance(L, q, game.sim.abs); }
       const r = checkSupply(game.sim, L, d * 2);
       if (r && r.hired) hired++;
       if (r && r.building) built++;
@@ -301,6 +307,7 @@ test('you can carry a mayor\'s dispatch to another town for pay', () => {
 test('nomads camp, weigh up the town, and settle together', () => {
   const { game, input, sid, L, a } = start(12345, 8 * 60);
   const nm = game.sim.nomads;
+  lotsReady(game, L, 'house_m');
   const band = nm.arrive(L, game.day, always);
   band.arrive = game.sim.abs;
   band.decide = game.sim.abs + 200;
@@ -335,6 +342,7 @@ test('crowded families get a new house, and couples have children', () => {
   const hh = L.npcs.filter((r) => r.household === fam.household);
   for (const r of hh) r.home = null;
   L.econ.treasury = 400;
+  lotsReady(game, L, 'house_m');
   const p = checkHousing(game.sim, L, game.day);
   assert.ok(p && p.type === 'house_m');
   for (let i = 0; i < 20000 && !p.done; i++) game.update(0.5, input);

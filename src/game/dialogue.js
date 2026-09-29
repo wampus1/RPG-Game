@@ -8,7 +8,7 @@ import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
 import { MAP_W } from '../config.js';
 import { BUILDING_NAMES, TRADE_BENCHES } from '../world/settlement.js';
 import { ITEMS } from '../world/items.js';
-import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger } from '../sim/econ.js';
+import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger, freshRumours } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare, licensesFor, licenceFee } from '../sim/careers.js';
@@ -89,7 +89,7 @@ function openingRaw(npc, game) {
   const rep = sim.opinion(npc);
   const entry = sim.repEntry(s.id, rec.idx);
   const name = game.playerName;
-  if (npc.nomad) return pick(rng, [`Greetings. We're the ${rec.name.last}s, travellers. Is this a good place to live?`, 'Hello, friend. We\'re just passing through... or maybe not.', `The road's been long. What's ${s.name} like?`]);
+  if (npc.nomad) return pick(rng, [`Greetings. We're the ${rec.name.last}s, travellers. Is this a good place to live?`, 'Hello there. We\'re just passing through... or maybe not.', `The road's been long. What's ${s.name} like?`]);
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
     return cf.stage === 'expel'
@@ -108,7 +108,7 @@ function openingRaw(npc, game) {
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
   if (npc.caravan) return pick(rng, [`Well met on the road! ${rec.name.first} ${rec.name.last}, merchant of ${s.name}, on my way to ${npc.caravan.to}.`, `Hello there! Heading to ${npc.caravan.to} with a pack of goods. Care to trade?`]);
-  if (npc.visit) return pick(rng, [`Greetings, friend! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
+  if (npc.visit) return pick(rng, [`Greetings, traveller! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
   if (npc.hired) return npc.hired.companion ? pick(rng, [`What is it, ${name}?`, 'Yes, friend?', 'Need something?']) : pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
   const car = sim.careers;
   if (car.employs(npc)) {
@@ -128,8 +128,10 @@ function openingRaw(npc, game) {
     entry.met = true;
     return pick(rng, [`We've heard about you from ${warns[0].fromName}. Behave yourself here.`, `${name}... ${warns[0].fromName} wrote to us about you. I'm watching you.`]);
   }
-  // A town's Friend or Hero is known on sight.
-  const renown = sim.renownTitle(s.id);
+  // A town's Friend or Hero is known on sight (by its own people: someone
+  // from elsewhere owes you nothing yet).
+  const homeSid = sim.repSidOf(npc);
+  const renown = homeSid === s.id ? sim.renownTitle(s.id) : null;
   if (renown && rep > -25) {
     const hero = renown === 'Hero';
     if (!entry.met) {
@@ -241,8 +243,13 @@ export function topicsFor(npc, game) {
   else if (car.canEmploy(npc) && rep >= -10) add('job', `Could you use a hand at the ${bare(npc.layout.buildings[rec.work.building].name)}?`);
   if (rec.job === 'guard' && !npc.hired && !npc.visit) add('hire', 'I\'d like to hire you as an escort.');
   else if (!npc.hired && !npc.visit && rec.age === 'adult' && rep >= 60 && !car.escort) add('companion', 'Come travel with me for a while?');
-  const c = sim.construction;
-  if (c && c.sid === s.id && !c.done && !c.cancelled && (rec.job === 'mayor' || (rec.override && rec.override.act === 'build'))) add('house', 'How is my house coming?');
+  // Your workshop and your house, waiting for a lot or going up.
+  if (rec.job === 'mayor' || rec.job === 'builder' || rec.job === 'carpenter' || (rec.override && rec.override.act === 'build')) {
+    const yours = sim.roads.yours(npc.layout);
+    const shop = yours.some((o) => o.what === 'workshop');
+    const house = yours.some((o) => o.what === 'home');
+    if (shop || house) add('myworks', shop && house ? 'How are my workshop and house coming along?' : shop ? 'How\'s my workshop coming along?' : 'How is my house coming?');
+  }
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
   add('ask', 'Can I ask you about...');
@@ -525,6 +532,10 @@ function professionTalk(npc, game, arg) {
   game.ui.msg(`You are now ${P.title === 'Town Guard' ? 'a Town Guard' : `a licensed ${P.title.toLowerCase()}`} of ${s.name}!`, '#ffe070');
   game.audio?.play('coin');
   const got = r.given.length ? `Here: ${r.given.map((g) => plural(g.item, g.count)).join(', ')}.` : '';
+  if (r.building && r.building.queued) {
+    game.ui.msg(`Your workshop in ${s.name} will go up on the next free lot.`, '#ffe070');
+    return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got, 'There\'s no free lot for your workshop just now: the builders are laying out a new street, and yours goes up on the first lot that\'s ready. Ask me or a builder how it\'s coming along.'].filter(Boolean) };
+  }
   if (r.building) return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got, 'The builders will start on your workshop today: look for the sign on the site.'].filter(Boolean) };
   if (key === 'guard') return { lines: [`Raise your right hand... Welcome to the watch, ${name}!`, `${got} Wear the colours with pride.`.trim(), 'Patrol the streets from six to eight. The treasury pays for every hour.'] };
   return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got || 'Good luck out there.'].filter(Boolean) };
@@ -571,6 +582,31 @@ function petitionTalk(npc, game, arg) {
     choices: LAW_IDS.map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })),
     back: 'Never mind.',
   };
+}
+
+// How your workshop and house are coming along: waiting for a lot (and the
+// street being laid for one), or going up.
+function myWorksTalk(npc, game) {
+  const sim = game.sim;
+  const L = npc.layout;
+  const list = sim.roads.yours(L);
+  if (!list.length) return { lines: ['Nothing of yours on the books just now. If it\'s finished, go and have a look!'] };
+  const mayor = npc.rec.job === 'mayor';
+  const lines = [];
+  for (const o of list) {
+    const thing = o.what === 'workshop' ? 'your workshop' : 'your house';
+    const Thing = o.what === 'workshop' ? 'Your workshop' : 'Your house';
+    if (o.state === 'queued') {
+      const waited = Math.max(0, game.day - (o.since ?? game.day));
+      lines.push(`${Thing} is paid for and waiting on a lot${o.ahead ? ` (${o.ahead === 1 ? 'one thing is' : `${o.ahead} things are`} ahead of it)` : ', next in line'}${waited ? `: ${waited} day${waited === 1 ? '' : 's'} so far` : ''}.`);
+      lines.push(o.street !== null ? `A new street is being laid out, with lots along it${o.street ? `: about ${o.street}% of the way` : ' (work has just started)'}. Work on ${thing} starts once it's done.` : 'There\'s no lot free yet. More ground gets marked out any day now.');
+      continue;
+    }
+    const pct = o.pct;
+    lines.push(o.road ? `The path to ${thing} goes in first; then the walls go up.` : pct < 15 ? `The foundations of ${thing} ${pct ? `are going in (${pct}%)` : 'have only just begun'}.` : pct < 60 ? `The walls of ${thing} are going up: about ${pct}% done.` : pct < 100 ? `${Thing} is nearly there! Maybe ${pct}% done. The roof's next.` : `${Thing} is finished! Go and have a look.`);
+    if (pct < 100) lines.push(o.crew ? `${o.crew} ${mayor ? `builder${o.crew === 1 ? '' : 's'}` : 'of us'} on it, from seven till seven. A day or two yet, I'd say.` : 'There\'s nobody free to work on it just now, I\'m afraid.');
+  }
+  return { lines };
 }
 
 // Asking the mayor (who may knock something off the price for a hard
@@ -1097,15 +1133,16 @@ function respondRaw(npc, game, id, arg) {
     case 'citizen': return citizenTalk(npc, game, arg);
     case 'ownhome': {
       const t = sim.ownHomeTerms(npc);
-      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', land: 'There\'s no free land to build on just now, I\'m afraid. Stay with your family a while longer.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
+      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', queued: 'It\'s paid for: your house goes up on the next free lot. The builders are laying out a new street for it.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
       if (arg !== 'yes') {
         const kin = sim.citizen.native ? 'Leaving the family home at last? Good for you.' : 'A place of your own? Of course.';
-        return { lines: [kin, `The builders can put up a cottage on the free lot for ¤${t.fee}. It takes a day or two.`], choices: [{ id: 'ownhome', arg: 'yes', label: `Please do. (Pay ¤${t.fee})` }], back: 'I\'ll stay where I am for now.' };
+        const where = t.plot ? 'on the free lot' : 'on the next lot we mark out (there\'s none free this minute; a new street is on its way)';
+        return { lines: [kin, `The builders can put up a cottage ${where} for ¤${t.fee}. It takes a day or two once they start.`], choices: [{ id: 'ownhome', arg: 'yes', label: `Please do. (Pay ¤${t.fee})` }], back: 'I\'ll stay where I am for now.' };
       }
       const r = sim.ownHome(npc);
       if (!r.ok) return { lines: [r.reason === 'money' ? `You'll need ¤${r.fee} for the builders.` : 'Something went wrong with the paperwork.'] };
-      game.ui.msg('The builders will start on your cottage today.', '#ffe070');
-      return { lines: ['It\'s done: the builders start today. You can stay with your family until it\'s ready.'] };
+      game.ui.msg(r.queued ? 'Your cottage will go up on the next free lot.' : 'The builders will start on your cottage today.', '#ffe070');
+      return { lines: [r.queued ? 'It\'s paid for. As soon as there\'s a lot free, the builders start on it. You can stay with your family until then.' : 'It\'s done: the builders start today. You can stay with your family until it\'s ready.'] };
     }
     case 'renounce':
       if (arg === 'yes') {
@@ -1301,11 +1338,7 @@ function respondRaw(npc, game, id, arg) {
       (p2.refused ||= []).push(rec.idx);
       return { lines: [stance(rec, p2.law) * (p2.enact ? 1 : -1) < 0 ? pick(rng, [`${what[0].toUpperCase()}${what.slice(1)}? Not on your life.`, 'I won\'t put my name to that.']) : pick(rng, ['I don\'t know you well enough to sign things for you.', 'Ask me again when I know you better.'])] };
     }
-    case 'house': {
-      const pr = sim.constructionProgress() || 0;
-      const pct = Math.round(pr * 100);
-      return { lines: [pct < 15 ? 'We\'ve only just laid the foundations.' : pct < 60 ? `The walls are going up: about ${pct}% done.` : pct < 100 ? `Nearly there! Maybe ${pct}% done. The roof's next.` : 'It\'s finished! Go and have a look.', 'We work from seven till seven.'] };
-    }
+    case 'house': case 'myworks': return myWorksTalk(npc, game);
     case 'host': {
       if (mem.chat !== game.day) sim.chat(npc, 'kind');
       return { lines: [pick(rng, ['Nonsense, you\'re family now. The spare bed is yours.', 'Happy to have you. Just don\'t snore.', 'Stay as long as you need.'])] };
@@ -1341,7 +1374,7 @@ function citizenTalk(npc, game, arg) {
   }
   if (arg !== 'yes') {
     const lines = [`Citizenship of ${s.name} costs ${t.fee ? '¤' + t.fee : 'nothing, for a friend like you'}. Citizens pay a little tax each day.`];
-    lines.push(t.plot ? 'Our builders will raise a cottage for you on the empty lot. It takes a day or two.' : 'I\'m afraid we have no free land to build on, but you\'ll have a bed with one of our families.');
+    lines.push(t.plot ? 'Our builders will raise a cottage for you on the empty lot. It takes a day or two.' : 'There\'s no lot free just now, but the builders are laying out a new street: your cottage goes up on the first lot that\'s ready.');
     const host = sim.pickHost(L);
     if (host) lines.push(`Until then you'd stay with the ${host.family} family.`);
     return { lines, choices: [{ id: 'citizen', arg: 'yes', label: `Agreed. ${t.fee ? `(Pay ¤${t.fee})` : '(Free)'}` }], back: 'Let me think about it.' };
@@ -1351,6 +1384,7 @@ function citizenTalk(npc, game, arg) {
   const lines = [`Welcome, citizen ${game.playerName} of ${s.name}!`];
   if (r.host) lines.push(`You'll stay with the ${r.host.family} family for now. Their spare bed is yours.`);
   if (r.plot) lines.push('The builders will start on your cottage right away.');
+  else if (r.queued) lines.push('Your cottage goes up on the next free lot; the builders are laying out a new street.');
   game.ui.msg(`You are now a citizen of ${s.name}!`, '#ffe070');
   game.audio?.play('coin');
   return { lines };
@@ -1459,8 +1493,7 @@ function news(npc, game) {
   if (npc.visit && npc.visit.news && npc.visit.news.length) {
     return [`Back home in ${npc.visit.fromName}? ${lcNews(npc.visit.news[(npc.newsI = (npc.newsI || 0) + 1) % npc.visit.news.length])}`];
   }
-  for (const r of (e.rumours || []).slice(-3).reverse()) {
-    if (r.day < game.day - 8) continue;
+  for (const r of freshRumours(e, game.sim.now()).slice(-3).reverse()) {
     const line = pick(rng, [`Word from ${r.from}, by way of the merchants: ${lcNews(r.text)}`, `A merchant said that in ${r.from}, ${lcNews(r.text)}`]);
     items.push(line);
     if (byName(r.from)) about.set(line, byName(r.from));

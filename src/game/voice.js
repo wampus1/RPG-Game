@@ -75,7 +75,9 @@ export function speak(rec, text, { first = false, warm = false, cold = false } =
     } else t = `${v.filler} ${t}`;
   }
   if (v.tag && v.tag !== '.' && roll(rec, t, 2) < v.rate * 0.4 && /[a-z]\.$/.test(t) && t.length < 90) t = t.slice(0, -1) + v.tag;
-  const addr = cold && v.reg !== 'formal' ? 'stranger' : v.address;
+  // "Friend" is for people who like you; a stranger is a traveller to them.
+  let addr = cold && v.reg !== 'formal' ? 'stranger' : v.address;
+  if (!warm && addr && /friend/.test(addr)) addr = v.reg === 'chirpy' ? 'mister' : 'traveller';
   if (first && addr && !cold && (warm || v.reg !== 'gruff') && roll(rec, t, 3) < v.rate * 0.45 && /[.!?]$/.test(t) && t.length < 80 && !/,\s*\w+[.!?]$/.test(t)) {
     t = t.replace(/([.!?])$/, `, ${addr}$1`);
   }

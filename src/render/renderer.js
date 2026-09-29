@@ -2,12 +2,18 @@
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
 import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { Lighting } from './lighting.js';
+
+// A camera turn takes this long; the pictures swung round are big enough to
+// cover the screen at any angle (two screens across and two down, stitched).
+const SPIN_TIME = 0.38;
+const SNAP_W = Math.ceil(Math.hypot(VIEW_W, VIEW_H)) + 4;
+const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
 
 const makeCanvas = (w, h) => {
@@ -40,7 +46,9 @@ export class Renderer {
     // Which way the camera looks, in quarter turns (Q and E turn it). The
     // world is drawn in "view" coordinates (u across, v down the screen).
     this.view = 0;
-    this.turnFade = 0;
+    // A camera turn in progress: pictures of the scene before and after,
+    // spun about the player from one to the other.
+    this.spin = null;
     // The mouse pointer, and whatever was drawn last under it.
     this.mouse = null;
     this.pick = null;
@@ -72,14 +80,99 @@ export class Renderer {
     return (d + this.view) & 3;
   }
 
-  // Turn the camera a quarter turn (+1 or -1).
+  // Turn the camera a quarter turn (+1 or -1). What you saw is kept, to be
+  // swung round into the new view over the next few frames.
   turn(d) {
+    const game = this.game;
+    const from = game && this.ctx ? this.snapshot(game) : null;
     this.view = (this.view + d + 4) & 3;
     this.camInit = false;
     this.particles.length = 0;
     this.floaters.length = 0;
     this.lighting.samples = null;
-    this.turnFade = 0.22;
+    this.spin = from ? { from, to: null, d, t: 0, dur: SPIN_TIME } : null;
+  }
+
+  // Where the player's feet are on screen.
+  playerPoint(game) {
+    const rp = game.player.renderPos();
+    const [u, v] = this.toView(rp.x, rp.z);
+    return { x: u * TILE + 8 - this.camX, y: v * TILE - rp.y * LH + 8 - this.camY };
+  }
+
+  // A picture of the scene round the camera, larger than the screen so it
+  // can be turned without showing its edges: four views stitched together.
+  snapshot(game) {
+    const c = document.createElement('canvas');
+    c.width = SNAP_W;
+    c.height = SNAP_H;
+    const cx = c.getContext('2d');
+    cx.imageSmoothingEnabled = false;
+    const camX = this.camX;
+    const camY = this.camY;
+    const x0 = Math.round((VIEW_W - SNAP_W) / 2);
+    const y0 = Math.round((VIEW_H - SNAP_H) / 2);
+    for (const ox of [x0, x0 + SNAP_W - VIEW_W]) {
+      for (const oy of [y0, y0 + SNAP_H - VIEW_H]) {
+        this.camX = camX + ox;
+        this.camY = camY + oy;
+        this.drawScene(game, 0);
+        cx.drawImage(this.ctx.canvas, 0, 0, VIEW_W, VIEW_H, ox - x0, oy - y0, VIEW_W, VIEW_H);
+      }
+    }
+    this.camX = camX;
+    this.camY = camY;
+    const p = this.playerPoint(game);
+    return { canvas: c, px: p.x - x0, py: p.y - y0 };
+  }
+
+  // The turn itself: the old view swings away as the new one swings in.
+  drawSpin(game, dt) {
+    const sp = this.spin;
+    if (!sp.to) sp.to = this.snapshot(game);
+    sp.t += dt;
+    const k = Math.min(1, sp.t / sp.dur);
+    const e = k * k * (3 - 2 * k);
+    const ctx = this.ctx;
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    const at = this.playerPoint(game);
+    const q = (Math.PI / 2) * sp.d;
+    const draw = (shot, ang, alpha) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(at.x, at.y);
+      ctx.rotate(ang);
+      ctx.drawImage(shot.canvas, -shot.px, -shot.py);
+      ctx.restore();
+    };
+    draw(sp.from, q * e, 1);
+    draw(sp.to, -q * (1 - e), e);
+    if (k >= 1) this.spin = null;
+  }
+
+  // Everything in the world (not the pointer's highlights): the ground,
+  // buildings, people, light and speech.
+  drawScene(game, dt) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
+    this.bubbles = [];
+    this.pick = null;
+    this.pickEnt = null;
+    this.pickSeq = 0;
+    this.drawWorld(game);
+    this.drawProjectiles(game);
+    this.drawRope(game);
+    this.drawWeather(game, dt);
+    this.lighting.draw(this, game);
+    this.drawParticles(dt);
+    // Speech bubbles and emotes go on top of everything, roofs included.
+    for (const b of this.bubbles) {
+      if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
+      else this.drawBubble(ctx, b.text, b.x, b.y, b.color);
+    }
   }
 
   worldToScreen(fx, fy, fz) {
@@ -122,9 +215,8 @@ export class Renderer {
 
   // ------------------------------------------------------------------ frame
   render(game, dt) {
+    this.game = game;
     this.time += dt;
-    const ctx = this.ctx;
-    const world = game.world;
     const player = game.player;
     const rp = player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
@@ -145,32 +237,12 @@ export class Renderer {
     }
     this.camX = Math.round(this.cx);
     this.camY = Math.round(this.cy);
-
-    ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    this.computeCutaway(world, player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
-    this.bubbles = [];
-    this.pick = null;
-    this.pickEnt = null;
-    this.pickSeq = 0;
-    this.drawWorld(game);
-    this.drawProjectiles(game);
-    this.drawRope(game);
-    this.drawWeather(game, dt);
-    this.lighting.draw(this, game);
-    this.drawParticles(dt);
-    // Speech bubbles and emotes go on top of everything, roofs included.
-    for (const b of this.bubbles) {
-      if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
-      else this.drawBubble(ctx, b.text, b.x, b.y, b.color);
+    if (this.spin) {
+      this.drawSpin(game, dt);
+      return;
     }
+    this.drawScene(game, dt);
     this.drawOverlays(game);
-    // A quick dip to black hides the jump when the camera turns.
-    if (this.turnFade > 0) {
-      ctx.fillStyle = `rgba(10,10,18,${Math.min(1, this.turnFade / 0.22) * 0.85})`;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-      this.turnFade -= dt;
-    }
   }
 
   // ------------------------------------------------------------------ cutaway
@@ -383,6 +455,7 @@ export class Renderer {
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
               else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
+              else if (id === B.canopy) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
               else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
               // Plants sway gently.

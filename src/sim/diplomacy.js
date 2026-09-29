@@ -333,15 +333,25 @@ export class Diplomacy {
     let px = p0.x;
     let pz = p0.z;
     const inTown = (x, z) => [a, b].some((s) => x >= s.bounds.x0 && x <= s.bounds.x1 && z >= s.bounds.z0 && z <= s.bounds.z1);
+    // Two tiles wide: beside each tile along the way, another (below it on
+    // a road running east-west, beside it on one running north-south).
+    const across = Math.abs(p1.x - p0.x) >= Math.abs(p1.z - p0.z) ? [0, 1] : [1, 0];
+    const seen = new Set();
+    const lay = (cx, cz) => {
+      const k = cx * 65536 + cz;
+      if (seen.has(k) || inTown(cx, cz)) return;
+      seen.add(k);
+      const col = t.column(cx, cz, t.context(cx, cz, cx, cz), {});
+      if (col.water >= 0) tiles.push([cx, col.water, cz, B.planks]);
+      else tiles.push([cx, col.h, cz, B.path]);
+    };
     for (let i = 0; i <= steps; i++) {
       const x = Math.round(p0.x + ((p1.x - p0.x) * i) / steps);
       const z = Math.round(p0.z + ((p1.z - p0.z) * i) / steps);
       // Keep the path 4-connected so it can be walked.
       for (const [cx, cz] of x !== px && z !== pz ? [[x, pz], [x, z]] : [[x, z]]) {
-        if (inTown(cx, cz)) continue;
-        const col = t.column(cx, cz, t.context(cx, cz, cx, cz), {});
-        if (col.water >= 0) tiles.push([cx, col.water, cz, B.planks]);
-        else tiles.push([cx, col.h, cz, B.path]);
+        lay(cx, cz);
+        lay(cx + across[0], cz + across[1]);
       }
       px = x;
       pz = z;

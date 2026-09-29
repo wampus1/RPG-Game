@@ -15,7 +15,7 @@ import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { removeItem, makeSlots } from './inventory.js';
 import { mulberry32, hash4 } from '../util/rng.js';
-import { M } from '../world/settlement.js';
+import { M, BUILDING_NAMES } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
 import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
@@ -76,6 +76,8 @@ export class Game {
     this.active = new Map(); // settlement id -> { layout, npcs }
     this.deadNpcs = new Map(); // sid -> Set(idx)
     this.wanted = new Map();
+    // Console cheats (see commands.js).
+    this.cheats = { mapTeleport: false };
     this.vandal = new Map();
     this.saplings = [];
     this.pathBudget = 0;
@@ -620,6 +622,8 @@ export class Game {
       }
     }
     this.active.set(s.id, { layout, npcs });
+    this.sim.checkTownSigns(layout);
+    this.sim.roads.connect(layout);
     this.refreshSigns();
   }
 
@@ -975,7 +979,7 @@ export class Game {
         case 'KeyQ':
         case 'KeyE':
           if (this.renderer.turn) {
-            this.renderer.turn(code === 'KeyQ' ? 1 : -1);
+            this.renderer.turn(code === 'KeyQ' ? -1 : 1);
             this.mining = null;
             this.audio?.play('select');
           }
@@ -2016,7 +2020,19 @@ export class Game {
     }
     if (sg && sg.kind === 'plot') {
       const pl = L.plots[sg.plot];
-      return { title: 'SIGN', lines: ['LAND FOR NEW CITIZENS', '', pl && pl.taken ? 'This lot has been claimed.' : `Become a citizen of ${s.name}`, pl && pl.taken ? '' : 'at the town hall, and a home will', pl && pl.taken ? '' : 'be built for you here.'] };
+      if (!pl || pl.taken) return { title: 'SIGN', lines: ['LOT CLAIMED', '', 'Building will begin here shortly.'] };
+      const size = `${pl.x1 - pl.x0 + 1} by ${pl.z1 - pl.z0 + 1} paces`;
+      const q = L.econ ? this.sim.roads.queue(L) : [];
+      const next = q[0];
+      const what = next ? (next.kind === 'workshop' ? `${this.playerName}'s ${String(next.title || '').toLowerCase()} workshop`.replace(/ {2}/, ' ') : next.kind === 'home' ? `a cottage for ${this.playerName}` : `a new ${(BUILDING_NAMES[next.type] || next.type).toLowerCase()}`) : null;
+      return {
+        title: 'SIGN',
+        lines: [
+          'OPEN LOT', '', `Marked out by the council of ${s.name}.`, `Size: ${size}, with a street at its door.`, '',
+          what ? `Waiting for a lot: ${q.length}. Next: ${what}.` : 'Nothing is waiting to be built.',
+          '', `New citizens may have a home built here:`, 'ask at the town hall.',
+        ],
+      };
     }
     if (sg && sg.kind === 'graveyard') {
       const g = L.graveyard;
@@ -2138,11 +2154,12 @@ export class Game {
 
   // Sit and let the hours pass: time races until then, or until you're
   // disturbed (hurt, or a key pressed) or stand up.
-  startWait(hours) {
+  // (`anywhere`, from the command console: no need to sit down first.)
+  startWait(hours, anywhere = false) {
     const p = this.player;
-    if (!p.sitting || hours <= 0) return false;
-    this.waiting = { until: this.day * DAY + this.minute + hours * 60, hp: p.hp, t: 0, hours };
-    this.ui.msg(`You settle in to wait ${hours} hour${hours > 1 ? 's' : ''}.`, '#c8d8ff');
+    if ((!p.sitting && !anywhere) || hours <= 0) return false;
+    this.waiting = { until: this.day * DAY + this.minute + hours * 60, hp: p.hp, t: 0, hours, anywhere };
+    if (!anywhere) this.ui.msg(`You settle in to wait ${hours} hour${hours > 1 ? 's' : ''}.`, '#c8d8ff');
     return true;
   }
 
@@ -2157,10 +2174,10 @@ export class Game {
       this.sleepFast = 0;
       if (why) this.ui.msg(why, '#c8d8ff');
     };
-    if (!p.sitting || p.dead) return stop('You get up.');
+    if ((!p.sitting && !w.anywhere) || p.dead) return stop('You get up.');
     if (p.hp < w.hp) return stop('Something disturbs you!');
     if (pressed && pressed.some((k) => !['ShiftLeft', 'ShiftRight'].includes(k.code)) && w.t > 0.3) return stop('You stop waiting.');
-    if (left <= 0) return stop(`${w.hours} hour${w.hours > 1 ? 's' : ''} pass.`);
+    if (left <= 0) return stop(w.anywhere ? `It's ${String(Math.floor(this.minute / 60)).padStart(2, '0')}:${String(Math.floor(this.minute % 60)).padStart(2, '0')}.` : `${w.hours} hour${w.hours > 1 ? 's' : ''} pass.`);
     // Ease in, and slow down as the time comes.
     this.sleepFast = Math.max(1, Math.min(60, w.t * 30, left / 1.5));
   }
@@ -3018,6 +3035,7 @@ export class Game {
       wanted: [...this.wanted],
       crops: this.crops.serialize(),
       sim: this.sim.serialize(),
+      cheats: { ...this.cheats, reveal: !!this.revealMap },
     };
   }
 
@@ -3028,6 +3046,10 @@ export class Game {
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
     if (data.explored) this.world.ow.explored.set(data.explored);
     if (data.stats) this.stats = data.stats;
+    if (data.cheats) {
+      this.cheats = { ...this.cheats, mapTeleport: !!data.cheats.mapTeleport };
+      if (data.cheats.reveal) this.revealMap = true;
+    }
     if (data.sim) this.sim.load(data.sim);
     this.crops.load(data.crops);
     for (const [sid, t] of data.wanted || []) this.wanted.set(sid, t);

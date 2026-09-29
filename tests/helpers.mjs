@@ -48,3 +48,22 @@ export function stubInput() {
 export function makeGame(seed = 12345) {
   return new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI() });
 }
+
+// Lots ready to build on, the way a town gets them day by day: a new street
+// laid out (and finished by its builders) with lots along it.
+export function lotsReady(game, L, type = 'house_m', n = 1) {
+  const sim = game.sim;
+  const fit = () => sim.roads.openLots(L).filter((q) => L.fits(q, type));
+  for (let d = 0; d < 12 && fit().length < n; d++) {
+    const plan = sim.roads.planStreet(L, L.lotSize(type));
+    if (plan) {
+      const p = sim.roads.startStreet(L, plan);
+      p.work = 1e9;
+      sim.works.advance(L, p, sim.abs);
+    } else {
+      const plot = L.openPlot(type);
+      if (!plot || !sim.roads.addLot(L, plot, true)) break;
+    }
+  }
+  return fit();
+}

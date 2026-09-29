@@ -15,6 +15,9 @@ import { ZONE } from '../game/fishing.js';
 import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
 
+// The tool pictured for a block that wants one.
+const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
+
 export { Window, cap, describeActivity };
 
 export class UI {
@@ -142,6 +145,10 @@ export class UI {
           continue;
         case 'F3':
           this.debug = !this.debug;
+          continue;
+        case 'Backquote':
+        case 'Slash':
+          this.toggle('console', () => new W.ConsoleWindow(this));
           continue;
       }
       if (!this.modal) out.pressed.push(k);
@@ -323,16 +330,28 @@ export class UI {
 
   drawTooltip(ctx) {
     const t = this.tooltip;
-    const w = Math.max(...t.lines.map((l) => l.text.length)) + 2;
-    const h = t.lines.length + 2;
+    // Room on the right for a tool's picture (three characters by two rows).
+    const iconW = t.tool ? 4 : 0;
+    const w = Math.max(...t.lines.map((l) => l.text.length)) + 2 + iconW;
+    const h = Math.max(t.lines.length, t.tool ? 2 : 0) + 2;
     const g = new Grid(w, h);
-    g.box(0, 0, w, h, { bg: C.bg, fg: C.dim });
+    g.box(0, 0, w, h, { bg: C.bg, fg: t.far ? C.red : C.dim });
     t.lines.forEach((l, i) => g.text(1, i + 1, l.text, l.color || C.fg));
     let cx = Math.floor(this.mouse.x / CHAR_W) + 2;
     let cy = Math.floor(this.mouse.y / CHAR_H) + 1;
     if (cx + w > COLS) cx = Math.max(0, Math.floor(this.mouse.x / CHAR_W) - w - 1);
     if (cy + h > ROWS) cy = ROWS - h;
     drawGrid(ctx, g, cx, cy, 1, 0, this.time);
+    if (t.tool) {
+      const ic = itemIcon(t.tool.icon);
+      const x = (cx + w - iconW) * CHAR_W;
+      const y = (cy + 1) * CHAR_H;
+      if (t.tool.held) {
+        ctx.fillStyle = 'rgba(80,200,90,0.35)';
+        ctx.fillRect(x - 1, y - 1, 18, 18);
+      }
+      if (ic) ctx.drawImage(ic, x, y);
+    }
   }
 
   itemTooltip(slot) {
@@ -603,22 +622,28 @@ export class UI {
       if (b.interact) hints.push(`click ${interactVerb(b.interact)}`);
       if (isFinite(b.hardness) && !b.liquid) hints.push('hold mine');
       if (hints.length) lines.push({ text: hints.join(' · '), color: C.faint });
-      // Which tool breaks it best, and whether you're holding it.
+      // The tool that breaks it best is shown as a picture (marked when
+      // it's the one in your hand).
+      let tool = null;
       if (isFinite(b.hardness) && !b.liquid && b.tool) {
         const h = game.player.heldDef();
-        const good = h && h.tool === b.tool;
-        const name = { pick: 'pickaxe', axe: 'axe', shovel: 'shovel' }[b.tool] || b.tool;
-        lines.push({ text: good ? `${cap(name)} in hand: quick work` : `Best with a${/^[aeiou]/.test(name) ? 'n' : ''} ${name}${b.tool === 'pick' ? ' (slow by hand)' : ''}`, color: good ? C.green : C.dim });
+        const held = h && h.kind === 'tool' && h.tool === b.tool ? game.player.heldItem() : null;
+        tool = { icon: held || BEST_TOOL[b.tool], held: !!held };
       } else if (!isFinite(b.hardness)) lines.push({ text: 'Can\'t be broken', color: C.faint });
-      if (!c.inReach) lines.push({ text: 'Too far away', color: C.red });
       if (game.mining && game.mining.x === c.x && game.mining.y === c.y && game.mining.z === c.z) {
         const n = Math.floor(game.mining.progress * 10);
         lines.push({ text: '[' + '▓'.repeat(n) + '░'.repeat(10 - n) + ']', color: C.orange });
       }
+      // Out of reach: the box goes red.
+      this.tooltip = { lines, tool, far: !c.inReach };
     }
-    // Holding something to place: say why it won't go there.
-    if (c.place && !c.place.ok && c.place.why) lines.push({ text: `Can't place: ${c.place.why}`, color: C.red });
-    if (lines.length) this.tooltip = { lines };
+    // Holding something to place: say why it won't go there (too far shows
+    // as the red box too).
+    if (c.place && !c.place.ok && c.place.why) {
+      if (c.place.why !== 'too far') lines.push({ text: `Can't place: ${c.place.why}`, color: C.red });
+      else if (this.tooltip && this.tooltip.lines === lines) this.tooltip.far = true;
+    }
+    if (lines.length && !(this.tooltip && this.tooltip.lines === lines)) this.tooltip = { lines };
   }
 
   renderMinimap(game) {

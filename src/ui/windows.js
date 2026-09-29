@@ -8,7 +8,7 @@ import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '..
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
-import { STOCK, WANTS, st, mayorOf, alive, stockOf } from '../sim/econ.js';
+import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
@@ -16,6 +16,7 @@ import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { LAWS, lawList } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
+import { runCommand, complete, teleportTo } from '../game/commands.js';
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -539,7 +540,14 @@ export class GiftWindow extends Window {
     }[r.reaction];
     game.audio?.play('pickup');
     this.close();
-    this.ui.open(new DialogueWindow(this.ui, n, game, [...lines, `(${repLevel(game.sim.opinion(n)).label})`]));
+    // Back to the conversation you were having (not a second one on top).
+    const reply = [...lines, `(${repLevel(game.sim.opinion(n)).label})`];
+    const talk = this.ui.find('dialogue');
+    if (talk && talk.npc === n) talk.say(reply);
+    else {
+      if (talk) talk.close();
+      this.ui.open(new DialogueWindow(this.ui, n, game, reply));
+    }
   }
 }
 
@@ -958,10 +966,15 @@ export class LedgerWindow extends Window {
     // Every notice the board still holds, newest first: scroll back
     // through them with the wheel or the arrow keys.
     const lines = [];
-    const far = (e.rumours || []).slice().reverse();
+    // (News from afar comes down after two days, fading as it goes.)
+    const now = game.sim.now();
+    const far = freshRumours(e, now).reverse();
     if (far.length) {
       lines.push({ t: 'NEWS FROM AFAR', c: C.hi });
-      for (const r of far) for (const l of wrap(`${r.from}: ${r.text}`, this.w - 7)) lines.push({ t: l, c: C.cyan });
+      for (const r of far) {
+        const c = mixHex(C.cyan, '#3a4a4a', Math.min(0.85, rumourAge(r, now) * 1.1));
+        for (const l of wrap(`${r.from}: ${r.text}`, this.w - 7)) lines.push({ t: l, c });
+      }
       lines.push({ t: '', c: C.fg });
     }
     lines.push({ t: 'NOTICES', c: C.hi });
@@ -1065,8 +1078,35 @@ export class MapWindow extends Window {
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
     g.text(2, y0 + 2, '⌂ village  [■] town  ┌┐ city  ╔╗ walled city  ~ river  ═ road  † ruins', C.faint);
-    const t = ` [V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
-    g.text(this.w - t.length - 2, this.h - 1, t, C.dim);
+    const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
+    g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
+  }
+  // With map teleport on (the command console), a click takes you there.
+  onClick(ck, cx, cy, game) {
+    if (!game || !game.cheats?.mapTeleport || ck.button !== 0) return super.onClick(ck, cx, cy, game);
+    const mx = Math.floor((cx - 2) / 2);
+    const mz = cy - 1;
+    if (mx < 0 || mz < 0 || mx >= MAP_W || mz >= MAP_H) return true;
+    const ow = game.world.ow;
+    if (!ow.explored[mz * MAP_W + mx] && !game.revealMap) {
+      this.ui.msg('You can only teleport to places you have seen (or "reveal" the map).', '#ff9060');
+      return true;
+    }
+    const cell = ow.cell(mx, mz);
+    if (cell && cell.biome === 'ocean') {
+      this.ui.msg('That\'s the open sea.', '#ff9060');
+      return true;
+    }
+    // (To the square of a town, or the half of the square you clicked.)
+    const icon = settlementIcons(game).get(mz * 10000 + mx);
+    const s = icon ? icon.s : null;
+    const L = s ? game.sim.layoutOf(s.id) : null;
+    const x = L && L.plaza ? L.plaza.cx : mx * REGION_W + ((cx - 2) % 2 ? REGION_W * 0.75 : REGION_W * 0.25);
+    const z = L && L.plaza ? L.plaza.cz + 3 : mz * REGION_D + REGION_D / 2;
+    teleportTo(game, x, z);
+    this.ui.msg(s ? `Teleported to ${s.name}.` : 'Teleported.', '#c8d8ff');
+    this.close();
+    return true;
   }
   onKey(k) {
     if (k.code === 'KeyV') {
@@ -1139,6 +1179,14 @@ function settlementIcons(game) {
     }
   }
   return out;
+}
+
+// A colour part way (t, 0..1) from one to another.
+function mixHex(a, b, t) {
+  const p = parseInt(a.slice(1), 16);
+  const q = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((p >> sh) & 255) * (1 - t) + ((q >> sh) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
 function shadeHex(hex, f) {
@@ -1664,6 +1712,85 @@ export class PrintWindow extends Window {
 }
 
 // Reading the latest edition.
+// ---------------------------------------------------------------- console
+// Typed commands (see commands.js): teleporting, revealing the map,
+// making things happen. What it said, and what you typed, stay for next time.
+export class ConsoleWindow extends Window {
+  constructor(ui) {
+    super(ui, 76, 17, { kind: 'console', y: ROWS - 18 });
+    ui.consoleLog ||= ['Type a command and press [ENTER]. "help" lists them.'];
+    ui.consoleHistory ||= [];
+    this.text = '';
+    this.back = -1;
+    this.scroll = 0;
+  }
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, 'rgba(8,10,14,0.95)');
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(8,10,14,0.95)', double: true, title: 'COMMANDS' });
+    const lines = [];
+    for (const l of this.ui.consoleLog) for (const w of wrap(l.text ?? l, this.w - 4)) lines.push({ t: w, c: l.c || (String(l).startsWith('> ') ? C.hi : '#b8e0c0') });
+    const room = this.h - 4;
+    this.maxScroll = Math.max(0, lines.length - room);
+    this.scroll = Math.max(0, Math.min(this.scroll, this.maxScroll));
+    const end = lines.length - this.scroll;
+    lines.slice(Math.max(0, end - room), end).forEach((l, i) => g.text(2, 1 + i, l.t, l.c));
+    const blink = Math.floor(this.ui.time * 2) % 2 ? '█' : ' ';
+    const shown = `> ${this.text}`.slice(-(this.w - 5));
+    g.fill(1, this.h - 2, this.w - 2, 1, ' ', C.fg, '#141a22');
+    g.text(2, this.h - 2, shown + blink, C.white, '#141a22');
+    const foot = ' [TAB] complete  [↑↓] history  [ESC] close ';
+    g.text(this.w - foot.length - 2, this.h - 1, foot, C.faint);
+  }
+  run() {
+    const t = this.text.trim();
+    this.text = '';
+    this.back = -1;
+    this.scroll = 0;
+    if (!t) return;
+    const H = this.ui.consoleHistory;
+    if (H[H.length - 1] !== t) H.push(t);
+    if (H.length > 40) H.shift();
+    const log = this.ui.consoleLog;
+    log.push(`> ${t}`);
+    let out;
+    try {
+      out = runCommand(this.ui.game, t);
+    } catch (err) {
+      out = [{ text: `That went wrong: ${err.message}`, c: C.orange }];
+    }
+    log.push(...out);
+    while (log.length > 200) log.shift();
+    this.ui.audio?.play('select');
+    // Off to somewhere else: out of the way, to see it.
+    if (/^\/?tp\b/i.test(t) && out.some((l) => /^Teleported/.test(l))) this.close();
+  }
+  onWheel(d) {
+    this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll - Math.sign(d) * 3));
+  }
+  onKey(k) {
+    const H = this.ui.consoleHistory;
+    if (k.code === 'Escape' || (k.code === 'Backquote' && !this.text)) this.close();
+    else if (k.code === 'Enter' || k.code === 'NumpadEnter') this.run();
+    else if (k.code === 'Backspace') this.text = this.text.slice(0, -1);
+    else if (k.code === 'Tab') {
+      const c = complete(this.text);
+      if (c) this.text = c;
+    } else if (k.code === 'ArrowUp' && H.length) {
+      this.back = this.back < 0 ? H.length - 1 : Math.max(0, this.back - 1);
+      this.text = H[this.back];
+    } else if (k.code === 'ArrowDown' && this.back >= 0) {
+      this.back++;
+      if (this.back >= H.length) {
+        this.back = -1;
+        this.text = '';
+      } else this.text = H[this.back];
+    } else if (k.code === 'PageUp') this.onWheel(-1);
+    else if (k.code === 'PageDown') this.onWheel(1);
+    else if (k.key && k.key.length === 1 && !k.ctrl && this.text.length < 120) this.text += k.key;
+    return true;
+  }
+}
+
 export class NewsWindow extends Window {
   constructor(ui, game) {
     super(ui, 60, 22, { kind: 'news' });

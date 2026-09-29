@@ -148,14 +148,20 @@ export class Events {
   }
 
   // ------------------------------------------------------------ announcing
-  announce(L, kind, day, extra = {}) {
+  // (`soon`, from the command console: it starts then, today, instead.)
+  announce(L, kind, day, extra = {}, soon = null) {
     const e = L.econ;
     const id = (e.eventN = (e.eventN || 0) + 1);
     // One do a day: the next free day from the day after tomorrow.
     let d = day + 2;
     while (this.upcoming(L).some((q) => q.day === d)) d++;
+    let start = d * DAY + START[kind];
+    if (soon !== null) {
+      d = Math.floor(soon / DAY);
+      start = Math.ceil(Math.max(soon, d * DAY + BUILD_AT + 60) / 30) * 30;
+    }
     const ev = {
-      id, kind, day: d, s: d * DAY + START[kind], e: d * DAY + START[kind] + LENGTH[kind], state: 'announced',
+      id, kind, day: d, s: start, e: start + LENGTH[kind], state: 'announced',
       posters: [], crier: null, site: null, blocks: [], stage: null, strike: null, guests: null, came: 0, ...extra,
     };
     this.list(L).push(ev);
@@ -163,27 +169,27 @@ export class Events {
   }
 
   // Two people to be married, the day after tomorrow.
-  wedding(L, a, b, day) {
+  wedding(L, a, b, day, soon = null) {
     const officiant = L.npcs.find((r) => r.job === 'priest' && alive(r) && !r.away) || L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away);
-    const ev = this.announce(L, 'wedding', day, { couple: [a.idx, b.idx], host: officiant ? officiant.idx : null });
+    const ev = this.announce(L, 'wedding', day, { couple: [a.idx, b.idx], host: officiant ? officiant.idx : null }, soon);
     for (const r of [a, b]) r.mood = Math.min(1, (r.mood ?? 0.5) + 0.2);
-    ledger(L, day, `${name(a)} and ${name(b)} are to be married on the square on day ${ev.day} at ${hodStr(START.wedding)}. All are welcome.`);
+    ledger(L, day, `${name(a)} and ${name(b)} are to be married on the square on day ${ev.day} at ${hodStr(ev.s % DAY)}. All are welcome.`);
     return ev;
   }
 
   // The council's feast day, paid for from the treasury.
-  feast(L, day, spend) {
+  feast(L, day, spend, soon = null) {
     const mayor = L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away);
-    const ev = this.announce(L, 'feast', day, { host: mayor ? mayor.idx : null, spend });
-    ledger(L, day, `The council declared a feast day for day ${ev.day} (¤${spend} from the treasury): food, drink and dancing by the square from ${hodStr(START.feast)}.`);
+    const ev = this.announce(L, 'feast', day, { host: mayor ? mayor.idx : null, spend }, soon);
+    ledger(L, day, `The council declared a feast day for day ${ev.day}${spend ? ` (¤${spend} from the treasury)` : ''}: food, drink and dancing by the square from ${hodStr(ev.s % DAY)}.`);
     return ev;
   }
 
   // A village that's become a town (or a town a city) celebrates.
-  fete(L, day, tier) {
+  fete(L, day, tier, soon = null) {
     const mayor = L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away);
-    const ev = this.announce(L, 'fete', day, { host: mayor ? mayor.idx : null, tier });
-    ledger(L, day, `A celebration for ${L.settlement.name} becoming a ${tier} will be held by the square on day ${ev.day} from ${hodStr(START.fete)}.`);
+    const ev = this.announce(L, 'fete', day, { host: mayor ? mayor.idx : null, tier }, soon);
+    ledger(L, day, `A celebration for ${L.settlement.name} becoming a ${tier} will be held by the square on day ${ev.day} from ${hodStr(ev.s % DAY)}.`);
     return ev;
   }
 
@@ -395,7 +401,7 @@ export class Events {
     const ev = this.eventAtPoster(L, x, z);
     const s = L.settlement;
     if (!ev) return { title: 'POSTER', lines: ['A faded poster.', 'Whatever it was, it\'s over now.'] };
-    const when = `Day ${ev.day}, from ${hodStr(START[ev.kind])}, by the square.`;
+    const when = `Day ${ev.day}, from ${hodStr(ev.s % DAY)}, by the square.`;
     if (ev.kind === 'wedding') {
       const [a, b] = ev.couple.map((i) => L.npcs[i]);
       const lead = ev.host !== null && ev.host !== undefined ? L.npcs[ev.host] : null;

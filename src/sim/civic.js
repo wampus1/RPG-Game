@@ -237,13 +237,15 @@ export function checkSupply(sim, L, day) {
   for (const type of want) {
     if (L.buildings.some((b) => b.type === type)) continue;
     if (sim.works.projects.some((p) => !p.done && p.sid === s.id && p.kind === 'build')) break;
+    if (sim.roads.waiting(L, 'build', { type })) break;
     const cost = BUILD_COST[type];
     if (e.treasury < cost + 30) {
       e.wants = type;
       ledger(L, day, `The council wants a ${type} but the treasury can't pay for one.`);
       return { wanted: type };
     }
-    const p = sim.works.startBuilding(L, type, ', paid by the town');
+    // (No lot free: it waits for one, and is paid for when it starts.)
+    const p = sim.works.startBuilding(L, type, ', paid by the town', false, cost);
     if (!p) return null;
     e.treasury -= cost;
     e.wants = null;
@@ -316,7 +318,7 @@ export function checkHousing(sim, L, day) {
   const { homeless, packed } = crowding(L);
   if (homeless.length < 2 && !packed.length) return null;
   if (sim.works.projects.some((p) => !p.done && p.sid === s.id && p.kind === 'build')) return null;
-  if (L.econ.treasury < 200 || !sim.works.freePlot(L)) return null;
+  if (L.econ.treasury < 200 || !sim.works.freePlot(L, 'house_m')) return null;
   const p = sim.works.startBuilding(L, 'house_m', ', as families are short of room');
   if (p) L.econ.treasury -= 140;
   return p;

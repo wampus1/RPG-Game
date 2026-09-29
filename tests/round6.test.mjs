@@ -407,6 +407,8 @@ test('towns grow: new trades, a village becomes a town, a town a walled city', (
   const types = new Set(L.buildings.map((b) => b.type));
   for (let k = 0; k < 9; k++) {
     day++;
+    // (A new building waits for a lot: the town lays a street for it.)
+    game.sim.roads.daily(L, day);
     growth(game.sim, L, day);
     for (const p of game.sim.works.projects) if (!p.done && p.sid === sid) p.work = 1e9;
     game.sim.works.update();
@@ -448,6 +450,7 @@ test('a walled city out of room pulls down part of its wall and builds beyond it
   let breach = null;
   for (let k = 0; k < 30 && !breach; k++) {
     day++;
+    game.sim.roads.daily(L, day);
     const r = growth(game.sim, L, day);
     if (r && r.breach) breach = r.breach;
     if (r && r.building && L.plots[r.building.plot].fringe && !breach) {

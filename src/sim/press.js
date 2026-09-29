@@ -3,7 +3,7 @@
 // edition at their desk and prints copies to hand out. Everyone who reads
 // it knows the news, and some will talk about it.
 import { countItem, removeItem } from '../game/inventory.js';
-import { ledger } from './econ.js';
+import { ledger, freshRumours } from './econ.js';
 
 // Paper and ink for each run of copies.
 export const COPIES_PER_RUN = 4;
@@ -37,7 +37,7 @@ export class Press {
       if (!out.some((q) => q.text === it.text)) out.push({ text: it.text, day: it.day, from: L.settlement.name });
       if (out.length >= 12) break;
     }
-    for (const r of [...(e.rumours || [])].reverse().slice(0, 4)) out.push({ text: r.text, day: r.day ?? day, from: r.from, afar: true });
+    for (const r of freshRumours(e, this.sim.now()).reverse().slice(0, 4)) out.push({ text: r.text, day: r.day ?? day, from: r.from, afar: true });
     return out;
   }
 

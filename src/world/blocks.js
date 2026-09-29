@@ -228,7 +228,9 @@ def('cell_door_top', { opaque: false, solid: false, standable: false, tool: 'pic
 def('farmland_wet', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moist Farmland' });
 // A town's alarm bell: the watch rings it to raise the other guards.
 def('bell', { ...sprite, interact: 'bell', tool: 'pick', hardness: 4, drop: 'iron_ingot', label: 'Alarm Bell' });
-// A market stall's striped cloth canopy (its colour is kept in the rotation).
+// A market stall's striped cloth canopy: its rotation is the way the stall's
+// front faces, and its colour is kept in the bits above (see CANOPY_SHIFT).
+export const CANOPY_SHIFT = 3;
 def('canopy', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Stall Canopy' });
 // Trade benches: every licensed trade has its own to work at (its
 // `station` names the trade, and the recipes made there).

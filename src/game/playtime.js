@@ -111,7 +111,7 @@ export class Playtime {
       const z = (near ? near.z : a.cz) + Math.round((Math.random() * 2 - 1) * (near ? 4 : a.r));
       if (Math.max(Math.abs(x - a.cx), Math.abs(z - a.cz)) > a.r + 2) continue;
       const y = w.findStandY(x, z, a.y);
-      if (y <= 0 || Math.abs(y - a.y) > 2 || w.isWaterAt(x, y, z) || w.isWaterAt(x, y - 1, z) || buildingAt(g.L, x, z)) continue;
+      if (y <= 0 || Math.abs(y - a.y) > 1 || w.isWaterAt(x, y, z) || w.isWaterAt(x, y - 1, z) || buildingAt(g.L, x, z)) continue;
       const score = away ? Math.max(Math.abs(x - away.x), Math.abs(z - away.z)) : Math.random();
       if (!best || score > best.score) best = { x, y, z, score };
     }
@@ -120,7 +120,8 @@ export class Playtime {
 
   go(n, x, z, near = 0) {
     const y = this.game.world.findStandY(x, z, n.y);
-    if (y <= 0) return false;
+    // (Never up onto a wall or a roof.)
+    if (y <= 0 || Math.abs(y - n.y) > 1) return false;
     n.goal = { x, y, z, near, play: true };
     n.atGoal = false;
     n.path = null;

@@ -9,13 +9,14 @@ import { jobTitle } from '../entities/npcgen.js';
 import { graveyardFence } from '../world/settlement.js';
 import {
   initEcon, mayorOf, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
-  ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews,
+  ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews, freshRumours,
 } from './econ.js';
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
 import { Press } from './press.js';
 import { Events } from './events.js';
+import { Roads } from './roads.js';
 import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
@@ -62,6 +63,7 @@ export class Sim {
     this.favors = new Favors(game, this);
     this.press = new Press(game, this);
     this.events = new Events(game, this);
+    this.roads = new Roads(game, this);
     this.works = new Works(game, this);
     this.diplomacy = new Diplomacy(game, this);
     this.nomads = new Nomads(game, this);
@@ -113,10 +115,13 @@ export class Sim {
         this.works.applyRestore(L, st);
         continue;
       }
-      const plot = L.plots[c.plot];
-      if (plot) {
-        plot.taken = true;
+      const lot = L.plots[c.plot];
+      if (lot) {
+        lot.taken = true;
+        for (const [x, z] of c.road || []) L.markRoad(x, z);
+        const plot = c.rect && L.trimLot ? L.trimLot(lot, 'house_s') : lot;
         const bp = L.blueprint(plot, L.buildings.length);
+        if (c.road && c.road.length && !c.done) bp.list = [...L.roadOps(c.road), ...bp.list];
         c.bid = bp.bld.id;
         bp.bld.underConstruction = !c.done;
         L.buildings.push(bp.bld);
@@ -736,6 +741,35 @@ export class Sim {
     return ['A weathered gravestone.', 'The name has worn away.'];
   }
 
+  // The town's name signs by the roads in: one that's gone (built over, or
+  // knocked down) is put back, or set up again beside the road nearby.
+  checkTownSigns(L) {
+    if (L.settlement.deserted || !L.signSpot) return;
+    const w = this.game.world;
+    const clear = (x, z) => w.regionAt(x, z) && w.getBlock(x, GROUND, z) === B.air && w.getBlock(x, GROUND + 1, z) === B.air && BLOCKS[w.getBlock(x, GROUND - 1, z)].standable;
+    const list = L.signs.filter((q) => q.kind === 'entrance');
+    for (const pt of L.entrances) if (!list.some((q) => q.at && q.at.x === pt.x && q.at.z === pt.z) && !list.length) list.push({ kind: 'entrance', at: { x: pt.x, z: pt.z }, fresh: true });
+    for (const sg of list) {
+      if (!sg.fresh && !w.regionAt(sg.x, sg.z)) continue;
+      if (!sg.fresh && w.getBlock(sg.x, GROUND, sg.z) === B.sign) continue;
+      const at = sg.at || { x: sg.x, z: sg.z };
+      // Already one nearby (moved there before)? That's it.
+      let found = null;
+      for (let dz = -3; dz <= 3 && !found; dz++) for (let dx = -3; dx <= 3 && !found; dx++) if (w.regionAt(at.x + dx, at.z + dz) && w.getBlock(at.x + dx, GROUND, at.z + dz) === B.sign && !L.signs.some((q) => q !== sg && q.x === at.x + dx && q.z === at.z + dz)) found = { x: at.x + dx, z: at.z + dz };
+      if (!found) {
+        const t = !sg.fresh && clear(sg.x, sg.z) ? { x: sg.x, z: sg.z } : L.signSpot(at, clear);
+        if (!t) continue;
+        this.setBlocks([[t.x, GROUND, t.z, B.sign, 0]]);
+        found = t;
+      }
+      Object.assign(sg, { x: found.x, y: GROUND, z: found.z, at });
+      if (sg.fresh) {
+        delete sg.fresh;
+        L.signs.push(sg);
+      }
+    }
+  }
+
   // ------------------------------------------------------------ daily hooks
   dailySocial(L, day, rng) {
     for (const rec of L.npcs) {
@@ -763,6 +797,11 @@ export class Sim {
   }
 
   civicDay(L, day, rng) {
+    if (this.game.active.has(L.settlement.id)) this.checkTownSigns(L);
+    // Stale news from afar comes down off the board.
+    if (L.econ.rumours) L.econ.rumours = freshRumours(L.econ, this.now());
+    // New streets and lots, and whatever's been waiting for one.
+    this.roads.daily(L, day);
     checkWatch(this, L, day, rng);
     checkSupply(this, L, day);
     checkHousing(this, L, day);
@@ -923,21 +962,40 @@ export class Sim {
     this.changeRep(mayor, 5);
     ledger(L, day, `${this.game.playerName} became a citizen of ${s.name}.`);
     if (t.plot) this.buildHome(L, t.plot);
-    return { ok: true, fee: t.fee, host, plot: t.plot };
+    else this.roads.enqueue(L, { kind: 'home', type: 'house_s' });
+    return { ok: true, fee: t.fee, host, plot: t.plot, queued: !t.plot };
   }
 
-  // The builders put up a cottage of your own on a lot.
+  // A lot came free for the home you're waiting on.
+  startHome(L) {
+    const c = this.citizen;
+    const k = this.construction;
+    if (!c || c.sid !== L.settlement.id || (c.home !== null && c.home !== undefined) || (k && k.sid === c.sid && !k.done && !k.cancelled)) return null;
+    const plot = this.works.freePlot(L);
+    if (!plot) return null;
+    const b = this.buildHome(L, plot);
+    this.game.ui.msg(`A lot is free in ${L.settlement.name}: the builders have started on your home.`, '#ffe070');
+    return b;
+  }
+
+  // The builders put up a cottage of your own on a lot: the road to its door
+  // first (if it hasn't one), then the house.
   buildHome(L, plot) {
     const s = L.settlement;
     const day = this.game.day;
     plot.taken = true;
-    const bp = L.blueprint(plot, L.buildings.length);
+    L.signs = L.signs.filter((q) => !(q.kind === 'plot' && q.plot === plot.id));
+    const road = L.roadTo(plot);
+    // A cottage its own size on the lot (the rest is yard, room to grow).
+    const rect = L.trimLot ? L.trimLot(plot, 'house_s') : plot;
+    const bp = L.blueprint(rect, L.buildings.length);
+    if (road.length) bp.list = [...L.roadOps(road), ...bp.list];
     bp.bld.underConstruction = true;
     L.buildings.push(bp.bld);
     this.bp = { sid: s.id, bp };
-    this.construction = { sid: s.id, plot: plot.id, bid: bp.bld.id, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
+    this.construction = { sid: s.id, plot: plot.id, rect: rect !== plot ? { x0: rect.x0, z0: rect.z0, x1: rect.x1, z1: rect.z1 } : null, bid: bp.bld.id, road, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
     this.assignBuilders(L, day, this.abs);
-    ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
+    ledger(L, day, `Builders started on a cottage for ${this.game.playerName}${road.length ? ' (the path to it first)' : ''}.`);
     return bp.bld;
   }
 
@@ -951,8 +1009,9 @@ export class Sim {
     if (c.home !== null && c.home !== undefined) return { ok: false, reason: 'have' };
     const k = this.construction;
     if (k && k.sid === s.id && !k.done && !k.cancelled) return { ok: false, reason: 'building' };
+    // No lot free: you can still pay; the house goes up on the next one.
     const plot = this.works.freePlot(L);
-    if (!plot) return { ok: false, reason: 'land' };
+    if (this.roads.waiting(L, 'home')) return { ok: false, reason: 'queued' };
     const fee = Math.round(({ village: 40, town: 70, city: 110 }[s.type] || 60) * (c.native ? 0.75 : 1));
     return { ok: true, fee, plot };
   }
@@ -964,8 +1023,9 @@ export class Sim {
     if (countItem(p.inv, 'coin') < t.fee) return { ok: false, reason: 'money', fee: t.fee };
     removeItem(p.inv, 'coin', t.fee);
     mayor.layout.econ.treasury += t.fee;
-    this.buildHome(mayor.layout, t.plot);
-    return { ok: true, fee: t.fee };
+    if (t.plot) this.buildHome(mayor.layout, t.plot);
+    else this.roads.enqueue(mayor.layout, { kind: 'home', type: 'house_s' });
+    return { ok: true, fee: t.fee, queued: !t.plot };
   }
 
   // Your mother, father, brothers and sisters, if you were born here.
@@ -1250,9 +1310,11 @@ export class Sim {
     if (this.bp && this.bp.sid === c.sid) return this.bp.bp;
     const L = this.layoutOf(c.sid);
     if (this.bp && this.bp.sid === c.sid) return this.bp.bp;
-    const plot = L.plots[c.plot];
-    if (!plot) return null;
+    const lot = L.plots[c.plot];
+    if (!lot) return null;
+    const plot = c.rect ? { ...lot, ...c.rect } : lot;
     const bp = L.blueprint(plot, c.bid);
+    if (c.road && c.road.length) bp.list = [...L.roadOps(c.road), ...bp.list];
     L.buildings[c.bid] = bp.bld;
     this.bp = { sid: c.sid, bp };
     return bp;
@@ -1289,6 +1351,19 @@ export class Sim {
       }
     }
     if (c.placed >= bp.list.length && !c.wait.length) this.completeHouse(L, bp, false);
+  }
+
+  // (From the command console: the rest of your cottage goes up at once.)
+  finishHomeNow(L) {
+    const c = this.construction;
+    if (!c || c.done || c.cancelled) return;
+    const bp = this.blueprint();
+    if (!bp) return;
+    const rest = [...(c.wait || []), ...bp.list.slice(c.placed)];
+    if (rest.length) this.setBlocks(rest);
+    c.placed = bp.list.length;
+    c.wait = [];
+    this.completeHouse(L, bp, false);
   }
 
   completeHouse(L, bp, silent) {
@@ -1386,7 +1461,7 @@ export class Sim {
     ledger(L, day, `${rec.name.first} ${rec.name.last} came back from ${dest ? dest.name : 'the road'} (+¤${earned}).`);
     // ...with the news from there.
     const DL = dest && this.game.world.layouts.get(dest.id);
-    if (DL && DL.econ) hearNews(L, dest.name, notableNews(DL, day - 5, 3), day);
+    if (DL && DL.econ) hearNews(L, dest.name, notableNews(DL, day - 5, 3), day, this.now());
     this.importOre(L, rec, day);
   }
 
@@ -1421,7 +1496,7 @@ export class Sim {
     for (const v of list) {
       if (v.told || h < v.arrive) continue;
       v.told = true;
-      hearNews(L, v.fromName, v.news, Math.floor(h / DAY));
+      hearNews(L, v.fromName, v.news, Math.floor(h / DAY), h);
     }
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
@@ -1587,6 +1662,7 @@ export class Sim {
 
   applySettlement(L, sv) {
     Object.assign(L.econ, sv.econ);
+    this.roads.restore(L);
     for (const r of L.econ.openPlots || []) L.reopenPlot(r);
     sv.recs.forEach((d, i) => {
       if (L.npcs[i]) Object.assign(L.npcs[i], d);

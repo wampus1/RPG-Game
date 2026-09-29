@@ -10,9 +10,11 @@ import { GROUND } from '../config.js';
 // announcing it comes down).
 const FRAME = 0.45;
 
-const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3 };
+const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3, road: 1.6 };
 // Put up for a wedding or a feast, and taken down again after.
 const TEMPORARY = new Set(['stage', 'strike']);
+// Plain lists of blocks round a patch of ground (not a building).
+const PLAIN = new Set(['stage', 'strike', 'road']);
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
 const STRUCTURAL = (id) => {
   const b = BLOCKS[id];
@@ -111,7 +113,7 @@ export class Works {
     let plan = null;
     if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid, this.shopExtra(p)));
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
-    else if (p.kind === 'repair' || TEMPORARY.has(p.kind)) plan = { list: p.blocks };
+    else if (p.kind === 'repair' || PLAIN.has(p.kind)) plan = { list: p.blocks };
     else if (p.kind === 'wall') plan = L.wallPlan();
     else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
@@ -125,11 +127,16 @@ export class Works {
     return { trade: p.shop, playerShop: p.shop, name: p.shopName || `${this.game.playerName}'s Workshop` };
   }
 
-  // The town builds you a workshop for your trade (paid for by your licence).
-  startWorkshop(L, job, title) {
+  // The town builds you a workshop for your trade (paid for by your licence)
+  // on a lot with a street at its door; with none free, it waits for one.
+  startWorkshop(L, job, title, fromQueue = false) {
     const type = 'player_workshop';
     const plot = this.freePlot(L, type);
-    if (!plot) return null;
+    if (!plot) {
+      if (fromQueue) return null;
+      this.sim.roads.enqueue(L, { kind: 'workshop', type, job, title });
+      return { queued: true };
+    }
     plot.taken = true;
     const bid = L.buildings.length;
     const road = L.roadTo(plot);
@@ -269,33 +276,45 @@ export class Works {
     return this.add({ sid: L.settlement.id, kind: 'repair', bid: b.id, blocks: missing, label: `repairs to the ${b.name.replace(/^The /, '')}` });
   }
 
-  // A new work building on an empty lot, paid from the treasury.
-  // An empty lot, or a new one marked out when every lot is taken.
+  // An open lot with a street at its door (the streets module lays new
+  // streets and lots as they're needed).
   freePlot(L, type = 'house_s', insideOnly = false) {
-    const free = L.plots.find((q) => q && !q.taken);
-    if (free || !L.openPlot) return free || null;
-    const plot = L.openPlot(type, insideOnly);
-    if (!plot) return null;
-    this.registerPlot(L, plot);
-    return plot;
+    const open = L.plots.filter((q) => q && !q.taken && (!insideOnly || !q.fringe) && this.sim.roads.roadside(L, q));
+    const area = (q) => (q.x1 - q.x0 + 1) * (q.z1 - q.z0 + 1);
+    // The smallest lot that will do...
+    const ok = open.filter((q) => !L.fits || L.fits(q, type)).sort((a, b) => area(a) - area(b));
+    if (ok.length) return ok[0];
+    // ...or, in a town with no room for a bigger one anywhere, the biggest
+    // there is (the building makes do).
+    if (L.econ.cramped && L.econ.cramped[type]) return open.sort((a, b) => area(b) - area(a))[0] || null;
+    return null;
   }
 
   // A lot marked out after founding: remembered so it's there after a reload.
-  registerPlot(L, plot) {
-    const { id, type, x0, z0, x1, z1, door, outside, fringe } = plot;
-    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe });
-    ledger(L, this.sim.today(), 'The council marked out a new building lot.');
+  registerPlot(L, plot, quiet = false) {
+    const { id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step } = plot;
+    (L.econ.openPlots ||= []).push({ id, type, x0, z0, x1, z1, door, outside, fringe, signAt, step });
+    if (!quiet) ledger(L, this.sim.today(), 'The council marked out a new building lot.');
   }
 
   // A new building, if the town has the timber and stone for it (coin is
   // the caller's business).
-  startBuilding(L, type, reason = '') {
+  // No lot free: it waits its turn (with what it'll cost the town), and goes
+  // up on the first lot there is.
+  startBuilding(L, type, reason = '', fromQueue = false, cost = 0) {
     if (!hasMaterials(L, type)) {
       L.econ.short = type;
       return null;
     }
     const plot = this.freePlot(L, type);
-    if (!plot) return null;
+    if (!plot) {
+      if (!fromQueue) this.sim.roads.enqueue(L, { kind: 'build', type, reason, cost });
+      return null;
+    }
+    // (One waiting for this very kind of building needn't wait any more.)
+    const q = L.econ.buildQueue || [];
+    const w = q.findIndex((o) => o.kind === 'build' && o.type === type);
+    if (w >= 0 && !fromQueue) q.splice(w, 1);
     useMaterials(L, type);
     L.econ.short = null;
     plot.taken = true;
@@ -339,7 +358,7 @@ export class Works {
       const out = (plan ? plan.tiles : []).filter((t, i) => p.kind === 'breach' || i % 7 === 0).map(inward);
       return out.length ? out : [{ x: L.plaza.cx, z: L.plaza.cz }];
     }
-    const b = p.kind === 'build' ? L.plots[p.plot] : p.kind === 'expand' || TEMPORARY.has(p.kind) ? p.bounds : L.buildings[p.bid];
+    const b = p.kind === 'build' ? L.plots[p.plot] : p.kind === 'expand' || PLAIN.has(p.kind) ? p.bounds : L.buildings[p.bid];
     const out = [];
     for (let z = b.z0 - 1; z <= b.z1 + 1; z++) {
       for (let x = b.x0 - 1; x <= b.x1 + 1; x++) {
@@ -443,8 +462,9 @@ export class Works {
     this.takeSignDown(L, p);
     const sim = this.sim;
     for (const r of L.npcs) if (r.override && r.override.project === p.id) r.override = null;
-    if (TEMPORARY.has(p.kind)) {
+    if (PLAIN.has(p.kind)) {
       if (!silent) ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
+      if (p.kind === 'road') sim.roads.streetDone(L, p);
       return;
     }
     if (p.kind === 'wall' || p.kind === 'breach') {
@@ -542,7 +562,7 @@ export class Works {
     const sid = L.settlement.id;
     const steps = [
       ...this.built.filter((q) => q.sid === sid).map((q) => ({ bid: q.bid, q, done: true })),
-      ...this.projects.filter((p) => p.sid === sid && !p.done && p.kind !== 'repair' && !TEMPORARY.has(p.kind)).map((p) => ({ bid: p.bid, q: p, done: false })),
+      ...this.projects.filter((p) => p.sid === sid && !p.done && p.kind !== 'repair' && !PLAIN.has(p.kind)).map((p) => ({ bid: p.bid, q: p, done: false })),
     ].sort((a, b) => a.bid - b.bid || (a.done === b.done ? 0 : a.done ? -1 : 1));
     return steps;
   }

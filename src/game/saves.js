@@ -45,9 +45,64 @@ export function agoText(t, now = Date.now()) {
   return `${d} day${d > 1 ? 's' : ''} ago`;
 }
 
+// Where the games themselves go: IndexedDB when the browser has it (its room
+// grows with the free space on the device), gzipped where the browser can;
+// browser storage (a few megabytes for everything) otherwise. The slot list
+// always lives in browser storage.
+const DB_NAME = 'tessera';
+const DB_STORE = 'saves';
+
+export function openSaveDB(idb = globalThis.indexedDB) {
+  if (!idb) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let req;
+    try {
+      req = idb.open(DB_NAME, 1);
+    } catch {
+      resolve(null);
+      return;
+    }
+    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
+    req.onerror = () => resolve(null);
+    req.onblocked = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      const run = (mode, fn) => new Promise((res, rej) => {
+        const tx = db.transaction(DB_STORE, mode);
+        const r = fn(tx.objectStore(DB_STORE));
+        tx.oncomplete = () => res(r.result);
+        tx.onerror = () => rej(tx.error || r.error);
+        tx.onabort = () => rej(tx.error || r.error || new Error('aborted'));
+      });
+      resolve({
+        get: (k) => run('readonly', (os) => os.get(k)),
+        put: (k, v) => run('readwrite', (os) => os.put(v, k)),
+        del: (k) => run('readwrite', (os) => os.delete(k)),
+      });
+    };
+  });
+}
+
+async function pack(text) {
+  const { CompressionStream: Gzip, Blob: B, Response: R } = globalThis;
+  if (!Gzip || !B || !R) return { text };
+  const blob = await new R(new B([text]).stream().pipeThrough(new Gzip('gzip'))).blob();
+  return { gz: blob };
+}
+
+async function unpack(v) {
+  if (!v) return null;
+  if (typeof v === 'string') return v;
+  if (v.text) return v.text;
+  const { DecompressionStream: Gunzip, Response: R } = globalThis;
+  if (v.gz) return new R(v.gz.stream().pipeThrough(new Gunzip('gzip'))).text();
+  return null;
+}
+
 export class SaveStore {
-  constructor(storage) {
+  constructor(storage, db = null) {
     this.st = storage;
+    this.db = db;
     this.migrate();
   }
 
@@ -91,7 +146,7 @@ export class SaveStore {
 
   list() {
     const ix = this.index();
-    return SLOTS.map((id) => ({ id, meta: ix[id] && this.get(slotKey(id)) ? ix[id] : null }));
+    return SLOTS.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.get(slotKey(id))) ? ix[id] : null }));
   }
 
   has(id) {
@@ -109,25 +164,40 @@ export class SaveStore {
     return all[0] || null;
   }
 
-  // Throws if storage is full (the caller says so).
-  save(id, game) {
+  // Save a game (a snapshot taken at once; the writing may take a moment).
+  // Rejects with the reason if it couldn't be kept.
+  async save(id, game) {
     const data = JSON.stringify(game.serialize());
     const meta = metaOf(game);
-    this.st.setItem(slotKey(id), data);
+    meta.size = data.length;
+    if (this.db) {
+      await this.db.put(slotKey(id), await pack(data));
+      meta.db = true;
+      // An older copy in browser storage only takes up room now.
+      try {
+        this.st.removeItem(slotKey(id));
+      } catch {
+        // Fine.
+      }
+    } else this.st.setItem(slotKey(id), data);
     const ix = this.index();
     ix[id] = meta;
     this.writeIndex(ix);
     return meta;
   }
 
-  load(id) {
-    const raw = this.get(slotKey(id));
+  async load(id) {
+    const ix = this.index();
+    let raw = null;
+    if (this.db && ix[id] && ix[id].db) raw = await unpack(await this.db.get(slotKey(id)));
+    if (!raw) raw = this.get(slotKey(id));
     return raw ? JSON.parse(raw) : null;
   }
 
   remove(id) {
     try {
       this.st.removeItem(slotKey(id));
+      if (this.db) this.db.del(slotKey(id)).catch(() => {});
       const ix = this.index();
       delete ix[id];
       this.writeIndex(ix);

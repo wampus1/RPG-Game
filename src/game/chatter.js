@@ -1,7 +1,7 @@
 // Villagers talk among themselves: when two of them idle close together
 // near the player, one opens a short exchange about food, taxes, the
 // weather, the news, the dead, each other, or you.
-import { kitchenOf, st } from '../sim/econ.js';
+import { kitchenOf, st, freshRumours } from '../sim/econ.js';
 import { affinity, griefOf } from './dialogue.js';
 import { relationTo } from '../sim/favors.js';
 import { HOBBIES } from '../entities/npcgen.js';
@@ -93,7 +93,7 @@ export function exchangeFor(a, b, game) {
     const short = st.text.length > 60 ? `${st.text.slice(0, 57)}...` : st.text;
     opts.push([`Did you read ${ed.title}, ${B}?`, rb.readEdition === ed.id ? `The bit about "${short}"? Yes!` : 'No, what does it say?', rb.readEdition === ed.id ? 'Whatever next.' : `"${short}"`]);
   }
-  const rum = (e.rumours || [])[(e.rumours || []).length - 1];
+  const rum = freshRumours(e, sim.now()).pop();
   if (rum) opts.push([`A merchant from ${rum.from} was saying there's news over there.`, 'Oh? What sort of news?', `${rum.text.slice(0, 70)}${rum.text.length > 70 ? '...' : ''}`]);
   // A hobby they share.
   const both = (ra.hobbies || []).find((hk) => (rb.hobbies || []).includes(hk) && HOBBIES[hk]);

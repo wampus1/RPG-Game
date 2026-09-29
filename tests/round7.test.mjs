@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGame, stubInput, stubRenderer, stubUI } from './helpers.mjs';
+import { makeGame, stubInput, lotsReady, stubRenderer, stubUI } from './helpers.mjs';
 import { Game } from '../src/game/game.js';
 import { B, BLOCKS } from '../src/world/blocks.js';
 import { GROUND } from '../src/config.js';
@@ -100,7 +100,7 @@ test('taxes: citizens pay a head tax plus the rate on what they earned in town',
   assert.equal(game.sim.citizen.lastTax.earned, 40);
 });
 
-test('save slots: five of your own and an autosave, listed, loaded and deleted', () => {
+test('save slots: five of your own and an autosave, listed, loaded and deleted', async () => {
   const st = memStore();
   st.setItem('tessera-save-v1', JSON.stringify({ seed: 5, day: 3, minute: 600 }));
   const store = new SaveStore(st);
@@ -109,19 +109,19 @@ test('save slots: five of your own and an autosave, listed, loaded and deleted',
   assert.equal(st.getItem('tessera-save-v1'), null);
   const game = makeGame(12345);
   game.playerName = 'Tamsin';
-  store.save('3', game);
-  store.save('auto', game);
+  await store.save('3', game);
+  await store.save('auto', game);
   const list = store.list();
   assert.equal(list.find((q) => q.id === '3').meta.name, 'Tamsin');
   assert.ok(store.has('auto'));
   assert.ok(['3', 'auto'].includes(store.latest().id));
-  const data = store.load('3');
+  const data = await store.load('3');
   assert.equal(data.seed, 12345);
   const g2 = new Game({ seed: data.seed, renderer: game.renderer, audio: null, ui: game.ui, save: data });
   assert.equal(g2.playerName, 'Tamsin');
   store.remove('3');
   assert.ok(!store.has('3'));
-  assert.equal(store.load('3'), null);
+  assert.equal(await store.load('3'), null);
 });
 
 test('children play tag and hide-and-seek in the streets and round the houses', () => {
@@ -164,8 +164,11 @@ test('a builder who likes you knocks something off enlarging your house', () => 
   p.give('coin', 800);
   p.teleport(hall.inside.x, 6, hall.inside.z);
   game.currentSettlement = L.settlement;
+  // A roomy lot on a new street, with space to grow into.
+  for (const q of L.plots) if (q) q.taken = true;
+  lotsReady(game, L, 'house_m');
   respond(mayor, game, 'citizen', 'yes');
-  for (let i = 0; i < 40000 && !game.sim.construction.done; i++) game.update(0.25, input);
+  for (let i = 0; i < 40000 && !(game.sim.construction && game.sim.construction.done); i++) game.update(0.25, input);
   assert.ok(game.sim.construction.done);
   const full = game.sim.works.expansionTerms(L, L.buildings[game.sim.citizen.home]).cost;
   const e = game.sim.repEntry(sid, builder.rec.idx);
@@ -189,7 +192,7 @@ test('breaking bits of your own house bothers nobody', () => {
   p.teleport(hall.inside.x, 6, hall.inside.z);
   game.currentSettlement = L.settlement;
   respond(mayor, game, 'citizen', 'yes');
-  for (let i = 0; i < 40000 && !game.sim.construction.done; i++) game.update(0.25, input);
+  for (let i = 0; i < 40000 && !(game.sim.construction && game.sim.construction.done); i++) game.update(0.25, input);
   const home = L.buildings[game.sim.citizen.home];
   let wall = null;
   for (let x = home.x0; x <= home.x1 && !wall; x++) {

@@ -50,7 +50,11 @@ export const WANTS = {
 };
 
 export const MEAL_ITEMS = ['feast', 'stew', 'gruel'];
-export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9 };
+export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3 };
+// Plain cooked food the tavern also sells (cheaper than a hot meal).
+const SIMPLE_MEALS = ['cooked_fish', 'cooked_meat'];
+// What each food trade's staff may eat from their own stock.
+const STAFF_FOOD = { baker: ['pie', 'bread'], cook: ['stew', 'feast', 'gruel', 'cooked_fish', 'cooked_meat'], innkeeper: ['stew', 'feast', 'gruel', 'cooked_fish', 'cooked_meat', 'bread'], barkeep: ['stew', 'gruel', 'cooked_fish', 'bread'] };
 const PLAIN_FOOD = ['pie', 'cooked_meat', 'cooked_fish', 'bread', 'apple', 'carrot', 'cabbage', 'berries', 'coconut', 'mushroom'];
 const RAW_FOOD = ['raw_meat', 'fish'];
 const VEG = ['carrot', 'cabbage', 'mushroom', 'wheat'];
@@ -127,12 +131,23 @@ export function notableNews(L, sinceDay, max = 3) {
   return out;
 }
 
-// News from elsewhere, as heard from the merchants.
-export function hearNews(L, from, items, day) {
+// News from elsewhere, as heard from the merchants. It's posted on the
+// notice board and talked about for two days, fading as it goes stale.
+export const RUMOUR_DAYS = 2;
+const heardAt = (r) => r.at ?? r.day * DAY + 12 * 60;
+// How stale a piece of news is, from 0 (just heard) to 1 (gone).
+export function rumourAge(r, now) {
+  return Math.max(0, (now - heardAt(r)) / (RUMOUR_DAYS * DAY));
+}
+export function freshRumours(e, now) {
+  return (e.rumours || []).filter((r) => rumourAge(r, now) < 1);
+}
+export function hearNews(L, from, items, day, at = day * DAY + 12 * 60) {
   const e = L.econ;
+  e.rumours = freshRumours(e, at);
   if (!items || !items.length) return;
-  const known = new Set((e.rumours || []).map((r) => r.text));
-  e.rumours = [...(e.rumours || []), ...items.filter((t) => !known.has(t)).map((text) => ({ from, text, day }))].filter((r) => r.day >= day - 10).slice(-8);
+  const known = new Set(e.rumours.map((r) => r.text));
+  e.rumours = [...e.rumours, ...items.filter((t) => !known.has(t)).map((text) => ({ from, text, day, at }))].slice(-8);
 }
 
 export function mayorOf(L) {
@@ -419,7 +434,7 @@ export function buyMeal(L, rec, rng) {
   if (!k) return null;
   const who = payer(L, rec);
   const e = L.econ;
-  for (const m of who.coins > 20 ? MEAL_ITEMS : ['stew', 'gruel', 'feast']) {
+  for (const m of who.coins > 20 ? [...MEAL_ITEMS, ...SIMPLE_MEALS] : ['stew', 'cooked_fish', 'cooked_meat', 'gruel', 'feast']) {
     if (!st.count(k.store, m)) continue;
     const pr = Math.round(MEAL_PRICE[m] * (1 + e.tax * 0.5));
     if (who.coins < pr) continue;
@@ -428,6 +443,35 @@ export function buyMeal(L, rec, rng) {
     k.till += pr;
     k.earned += pr;
     return m;
+  }
+  return null;
+}
+
+// Staff of a bakery or a kitchen eat from its stock (a perk of the job).
+function staffMeal(L, rec) {
+  const list = STAFF_FOOD[rec.job];
+  const id = rec.work && rec.work.building;
+  if (!list || id === null || id === undefined) return null;
+  const biz = L.econ.biz[id] || (rec.job !== 'baker' ? kitchenOf(L) : null);
+  return biz ? takeFood(biz.store, false, list) : null;
+}
+
+// Someone with nothing to eat buys (or is given) part of a fisher's or a
+// trapper's catch, and cooks it.
+function buyCatch(L, rec) {
+  const who = payer(L, rec);
+  for (const o of L.npcs) {
+    if (o === rec || !alive(o) || o.away || !['fisher', 'trapper'].includes(o.job)) continue;
+    const raw = RAW_FOOD.find((k) => invCount(o.inv, k) > 2);
+    if (!raw) continue;
+    const pr = Math.max(1, price(raw) - 1);
+    if (who.coins >= pr) {
+      who.coins -= pr;
+      o.coins += pr;
+      o.earned += pr;
+    } else if ((o.personality?.kindness ?? 0.5) < 0.55) continue;
+    invTake(o.inv, raw, 1);
+    return raw;
   }
   return null;
 }
@@ -465,6 +509,10 @@ export function eatMeal(L, rec, place, day, rng, minute = 720) {
     item = takeFood(rec.inv, true, [...MEAL_ITEMS, ...PLAIN_FOOD]);
     if (item) source = 'own';
   }
+  if (!item) {
+    item = staffMeal(L, rec);
+    if (item) source = 'work';
+  }
   if (!item && pantry) {
     item = takeFood(pantry, false, [...MEAL_ITEMS, ...PLAIN_FOOD]);
     if (item) source = 'pantry';
@@ -482,9 +530,19 @@ export function eatMeal(L, rec, place, day, rng, minute = 720) {
     item = buyMeal(L, rec, rng) || buyBread(L, rec);
     if (item) source = 'bought';
   }
+  if (!item && !light) {
+    const raw = buyCatch(L, rec);
+    if (raw) {
+      item = homeCook(rec, raw, rng);
+      source = 'catch';
+    }
+  }
   if (!item && light) return { day, item: null, q: null, source: 'skipped', full: true };
   if (!item) {
-    rec.lastMeal = { day, item: null, q: null, source: null };
+    rec.missed = (rec.missed || 0) + 1;
+    // Really going without (not just a snack skipped after a good meal)?
+    const starving = (rec.hungry || 0) >= 1 || (!rec.fed && rec.missed >= 2);
+    rec.lastMeal = { day, item: null, q: null, source: null, starving };
     rec.mood = clamp(rec.mood - 0.04, 0, 1);
     return rec.lastMeal;
   }
@@ -596,6 +654,14 @@ function produce(L, rec, rng) {
         // A pot of stew feeds several people.
         st.add(k.store, meal, (raw === 'raw_meat' ? 3 : raw ? 2 : 1) + (raw && veg ? 1 : 0));
         sk.cooking = Math.min(1, sk.cooking + 0.002);
+      }
+      // Raw fish and meat don't keep: whatever the pots don't need is
+      // grilled and sold as it is.
+      for (const [raw, done] of [['fish', 'cooked_fish'], ['raw_meat', 'cooked_meat']]) {
+        const extra = Math.min(3, st.count(k.store, raw) - 4);
+        if (extra <= 0 || st.count(k.store, done) >= pop * 0.3 + 4) continue;
+        st.take(k.store, raw, extra);
+        st.add(k.store, done, extra);
       }
       return;
     }
@@ -777,12 +843,52 @@ function restock(L, rng) {
 }
 
 // ------------------------------------------------------------ daily
+// Each morning the catch comes home: fishers and trappers put what they
+// haven't sold in the family pantry, and someone in the house cooks the raw
+// fish and meat for the day (what's been lying about too long goes off).
+function homeKitchens(L, rng) {
+  const e = L.econ;
+  for (const b of L.buildings) {
+    const pan = e.pantry[b.id];
+    if (!pan) continue;
+    const members = L.npcs.filter((r) => r.home === b.id && alive(r) && !r.away && !r.migrated);
+    if (!members.length) continue;
+    for (const r of members) {
+      for (const raw of RAW_FOOD) {
+        const extra = invCount(r.inv, raw) - 2;
+        if (extra > 0) {
+          invTake(r.inv, raw, extra);
+          st.add(pan, raw, extra);
+        }
+      }
+    }
+    const cook = members.reduce((best, r) => ((r.skills?.cooking ?? 0.2) > (best.skills?.cooking ?? 0.2) ? r : best), members[0]);
+    let n = members.length * 2;
+    for (const raw of RAW_FOOD) {
+      while (n > 0 && st.count(pan, raw) > 0) {
+        st.take(pan, raw, 1);
+        st.add(pan, homeCook(cook, raw, rng), 1);
+        n--;
+      }
+      // More than the family could ever eat spoils.
+      const keep = members.length * 3;
+      if (st.count(pan, raw) > keep) st.take(pan, raw, st.count(pan, raw) - keep);
+    }
+    for (const done of ['cooked_fish', 'cooked_meat', 'gruel']) {
+      const keep = members.length * 4;
+      if (st.count(pan, done) > keep) st.take(pan, done, st.count(pan, done) - keep);
+    }
+  }
+}
+
 function dailyNeeds(sim, L, day, rng) {
+  homeKitchens(L, rng);
   for (const rec of L.npcs) {
     if (!alive(rec)) continue;
     if (rec.fed === 0 && !rec.away) rec.hungry++;
     else rec.hungry = 0;
     rec.fed = 0;
+    rec.missed = 0;
     rec.earnedY = rec.earned;
     rec.earned = 0;
     rec.forageResult = null;
@@ -919,23 +1025,27 @@ function mayorReview(sim, L, day, rng) {
   const hungry = living.filter((r) => r.hungry >= 1 && !r.away);
   if ((hungry.length >= Math.max(2, pop * 0.12) || hungry.some((r) => r.hungry >= 2)) && e.treasury > 25) {
     let spent = 0;
+    let fed = 0;
     const k = kitchenOf(L);
     for (const r of hungry) {
       if (e.treasury < 4) break;
-      if (r.home === null || r.home === undefined) continue;
-      const pan = e.pantry[r.home] || (e.pantry[r.home] = {});
-      const meal = k && st.take(k.store, 'stew', 1) ? 'stew' : 'bread';
-      st.add(pan, meal, 1);
-      // ...and sees that the one who went without actually eats it.
+      // A hot meal from the tavern if there is one (bread from passing
+      // traders if not), put in their own hands for their next meal...
+      const meal = (k && ['stew', 'gruel', 'cooked_fish', 'cooked_meat'].find((m) => st.take(k.store, m, 1))) || 'bread';
+      invAdd(r.inv, meal, 1);
+      // ...and the one who's gone longest without eats it straight away.
       if (r.hungry >= 2) {
-        st.take(pan, meal, 1);
+        invTake(r.inv, meal, 1);
         r.fed = Math.max(r.fed || 0, 1);
+        r.hungry = 1;
       }
       e.treasury -= 4;
-      if (k && meal === 'stew') k.till += 4;
+      if (k && meal !== 'bread') k.till += 4;
       spent += 4;
+      fed++;
     }
-    if (spent) ledger(L, day, `${who} paid ¤${spent} to feed ${hungry.length} hungry folk.`);
+    e.feeding = { day, fed, spent };
+    if (spent) ledger(L, day, `${who} paid ¤${spent} to feed ${fed} hungry ${fed === 1 ? 'person' : 'folk'}.`);
   }
   // A kitchen with no money to buy ingredients gets a small grant.
   const k = kitchenOf(L);
