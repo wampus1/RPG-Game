@@ -305,19 +305,38 @@ export class Game {
       const b = L.buildings.find((q) => q.residential && q.household && !q.playerHome && L.npcs.some((r) => r.home === q.id && alive(r)));
       if (b) host = { house: b, bed: b.beds[0] ? { x: b.beds[0].x, y: GROUND, z: b.beds[0].z } : null, family: b.family };
     }
-    sim.citizen = { sid: s.id, since: 1, host: host ? host.house.id : null, hostBed: host ? host.bed : null, home: null, taxDay: this.day, owed: 0, native: true };
+    // Your family: the grown-ups of the house are your parents, the children
+    // your brothers and sisters, and you share their name.
+    const members = host ? L.npcs.filter((r) => r.home === host.house.id && alive(r)) : [];
+    const grown = members.filter((r) => r.age !== 'child');
+    let parents = grown.filter((r) => r.age === 'adult' || r.age === 'elder').slice(0, 2);
+    if (parents.length === 2 && parents[0].partner !== parents[1].idx) parents = [parents[0]];
+    const siblings = members.filter((r) => r.age === 'child' || (!parents.includes(r) && parents.some((q) => (q.children || []).includes(r.idx))));
+    const family = host ? host.family || (parents[0] && parents[0].name.last) || null : null;
+    sim.citizen = {
+      sid: s.id, since: 1, host: host ? host.house.id : null, hostBed: host ? host.bed : null, home: null, taxDay: this.day, owed: 0, native: true,
+      family: { name: family, parents: parents.map((r) => r.idx), siblings: siblings.map((r) => r.idx) },
+    };
+    for (const r of parents) r.playerChild = true;
     for (const r of L.npcs) {
       if (!alive(r)) continue;
       const e = sim.repEntry(s.id, r.idx);
-      const family = host && r.home === host.house.id;
-      e.v = Math.max(e.v, family ? 70 : r.age === 'child' ? 30 : 40);
+      const kin = parents.includes(r) ? 85 : siblings.includes(r) ? 65 : host && r.home === host.house.id ? 70 : 0;
+      e.v = Math.max(e.v, kin || (r.age === 'child' ? 30 : 40));
       e.met = true;
+      e.known = true;
     }
     sim.renown.set(s.id, Math.max(sim.renown.get(s.id) || 0, RENOWN.friend));
     sim.areaCache.delete(s.id);
     this.hero.home = s.id;
-    this.hero.family = host ? host.family || null : null;
-    ledger(L, this.day, `${this.playerName}${this.hero.family ? ` of the ${this.hero.family} family` : ''} is back home in ${s.name}.`);
+    this.hero.family = family;
+    // Born into the family: their surname is yours.
+    if (family) {
+      const first = String(this.hero.name || this.playerName).split(' ')[0];
+      this.playerName = `${first} ${family}`;
+      this.hero.name = this.playerName;
+    }
+    ledger(L, this.day, `${this.playerName} is back home in ${s.name}${parents.length ? `, living with ${parents.map((r) => r.name.first).join(' and ')}` : ''}.`);
     return host;
   }
 
@@ -385,8 +404,9 @@ export class Game {
     const c = this.sim.citizen;
     if (h.origin === 'native' && c) {
       const L = this.sim.layoutOf(c.sid);
-      this.ui.msg(`Home again in ${L.settlement.name}${h.family ? `, with the ${h.family} family` : ''}. Everyone here knows you.`, '#ffe070');
-      this.ui.msg('Your family\'s beds and chests are yours to use until you have a house of your own.', '#a0c8ff');
+      const par = (c.family?.parents || []).map((i) => L.npcs[i]).filter(Boolean).map((r) => r.name.first);
+      this.ui.msg(`Home again in ${L.settlement.name}${par.length ? `, where ${par.join(' and ')} raised you` : ''}. Everyone here has known you all your life.`, '#ffe070');
+      this.ui.msg('Your family\'s house is your home: its beds and chests are yours too. The mayor can have a place of your own built, if you like.', '#a0c8ff');
     } else {
       this.ui.msg('You wake on wet sand. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
       this.ui.msg('Nobody on this island knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');

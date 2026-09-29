@@ -387,7 +387,9 @@ test('character creation: a shipwreck on the beach, or at home in a town that kn
   assert.equal(native.world.ow.settlementAt(native.player.x, native.player.z).id, c.sid);
   // Perks work: better prices for a haggler with charm.
   const g2 = reload(native);
-  assert.equal(g2.hero.name, 'Tamsin');
+  // Born into a family: you carry their name.
+  assert.equal(g2.hero.name, `Tamsin ${c.family.name}`);
+  assert.equal(g2.playerName, g2.hero.name);
   assert.equal(g2.player.maxHp, 26);
   assert.deepEqual(g2.player.equip, native.player.equip);
 });

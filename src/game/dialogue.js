@@ -97,6 +97,11 @@ function openingRaw(npc, game) {
       : `${name}, we need to talk. People keep coming to me about you: stealing, fighting, rudeness. As mayor I can't let it go on. Change your ways, or lose your citizenship.`;
   }
   if (game.isWanted(s.id) && rec.job !== 'guard') return pick(rng, ['I have nothing to say to the likes of you.', 'Guards! Someone help!', 'Please... just go.']);
+  // Your own family (if you were born here).
+  const kin = sim.familyOf(rec);
+  const first = name.split(' ')[0];
+  if (kin === 'parent' && rep > -20) return pick(rng, [`There you are, ${first}! Have you eaten?`, `Hello, love. Staying out of trouble?`, `${first}! Come here, let me look at you.`, `Home for supper tonight, ${first}? I'll set a place.`, 'My child! What do you need?']);
+  if (kin === 'sibling' && rep > -20) return rec.age === 'child' ? pick(rng, [`${first}! Will you play with me?`, 'Mum says you have to take me with you!', 'Guess what I found today!']) : pick(rng, [`Oh, it's you, ${first}.`, `Hey, ${first}! Mum was asking after you.`, 'Borrowed my things again, have you?']);
   if (rec.job === 'guard' && game.isWanted(s.id)) return 'You\'re wanted in this town. Come quietly, or else.';
   if (sim.justice.exiled.has(s.id)) return 'You were banished! Get out before the guards see you!';
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
@@ -147,6 +152,8 @@ function openingRaw(npc, game) {
       : sky === 'snow' ? pick(rng, ['Brr! Cold enough for you?', `${name}! Shake the snow off, come in.`])
         : pick(rng, ['Oh! You gave me a start, coming out of the fog like that.', 'Strange weather, this fog.']);
   }
+  // (Born and raised here, you're no newcomer.)
+  if (sim.isCitizen(s.id) && rep >= 10 && sim.citizen.native) return pick(rng, [`Morning, ${first}! How's the family?`, `Good ${tw}, ${first}. I remember when you were this high.`, `${first}! Tell your folks I said hello.`, `Good ${tw}, neighbour!`]);
   if (sim.isCitizen(s.id) && rep >= 10) return pick(rng, [`Hello again, ${name}! How's life treating our newest citizen?`, `Good ${tw}, neighbour!`, `${name}! What can I do for you?`]);
   if (rep >= 35) return pick(rng, [`${name}! Good to see you.`, `Ah, ${name}, my friend!`, `Always a pleasure, ${name}.`]);
   return pick(rng, [`Good ${tw}.`, 'Hello again.', `Yes, ${name}?`, 'Hm? What is it?']);
@@ -218,6 +225,7 @@ export function topicsFor(npc, game) {
     add('towns', 'Tell me about the neighbouring towns.');
     add('donate', `I'd like to help ${s.name} grow.`);
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
+    if (sim.isCitizen(s.id) && (sim.citizen.home === null || sim.citizen.home === undefined) && sim.citizen.host !== null) add('ownhome', 'I\'d like a place of my own.');
     if (sim.isCitizen(s.id)) add('renounce', 'I renounce my citizenship.');
     else add('citizen', inHall ? `Make me a citizen of ${s.name}.` : 'How do I become a citizen?');
     add('profession', car.job && car.job.kind === 'profession' && car.job.sid === s.id ? 'About my post...' : 'I\'d like an official profession.');
@@ -952,7 +960,7 @@ function respondRaw(npc, game, id, arg) {
       if (npc.hired) lines.push('Watching your back. What else?');
       else if (!act) lines.push('Just taking a breather.');
       else if (act.act === 'mourn' || act.act === 'funeral') lines.push(`I'm paying my respects to ${act.who || 'an old friend'}.`);
-      else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? `Building a house for our newest citizen: you, ${name}!` : 'Building. Mind the planks.');
+      else if (act.act === 'build') lines.push(act.label ? `Working on ${act.label}. Mind the planks.` : sim.citizen ? (sim.citizen.native ? `Building your own place, ${name.split(' ')[0]}! Leaving the nest at last, eh?` : `Building a house for our newest citizen: you, ${name}!`) : 'Building. Mind the planks.');
       else if (act.act === 'repair') lines.push('Patching up the jail. Someone made a right mess of it.');
       else if (act.act === 'home' && act.weather) lines.push(pick(rng, [`No sense working out in the ${act.weather === 'snow' ? 'snow' : act.weather === 'fog' ? 'fog' : 'rain'}. I'll catch up tomorrow.`, 'Staying dry. The work will keep.']));
       else if (act.act === 'forage') lines.push(rec.age === 'child' ? 'Looking for berries. We\'ve got nothing to eat at home...' : 'Out looking for food. Times are lean.');
@@ -1083,6 +1091,18 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid, npc) };
     }
     case 'citizen': return citizenTalk(npc, game, arg);
+    case 'ownhome': {
+      const t = sim.ownHomeTerms(npc);
+      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', land: 'There\'s no free land to build on just now, I\'m afraid. Stay with your family a while longer.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
+      if (arg !== 'yes') {
+        const kin = sim.citizen.native ? 'Leaving the family home at last? Good for you.' : 'A place of your own? Of course.';
+        return { lines: [kin, `The builders can put up a cottage on the free lot for ¤${t.fee}. It takes a day or two.`], choices: [{ id: 'ownhome', arg: 'yes', label: `Please do. (Pay ¤${t.fee})` }], back: 'I\'ll stay where I am for now.' };
+      }
+      const r = sim.ownHome(npc);
+      if (!r.ok) return { lines: [r.reason === 'money' ? `You'll need ¤${r.fee} for the builders.` : 'Something went wrong with the paperwork.'] };
+      game.ui.msg('The builders will start on your cottage today.', '#ffe070');
+      return { lines: ['It\'s done: the builders start today. You can stay with your family until it\'s ready.'] };
+    }
     case 'renounce':
       if (arg === 'yes') {
         sim.revoke('renounced');
@@ -1525,6 +1545,10 @@ function family(npc, game) {
   const rng = npc.rng;
   const home = rec.home !== null ? L.buildings[rec.home] : null;
   const lines = [];
+  const kin = game.sim.familyOf(rec);
+  const you = game.playerName.split(' ')[0];
+  if (kin === 'parent') lines.push(pick(rng, [`And you, ${you}: you'll always be my child, however big you get.`, `You know we're proud of you, ${you}. Don't let it go to your head.`]));
+  if (kin === 'sibling') lines.push(rec.age === 'child' ? `You're my big ${pick(rng, ['sibling', 'hero'])}, ${you}!` : pick(rng, [`You and me, ${you}: we'll always be family, like it or not.`, `Mum still likes you best, ${you}.`]));
   const g = griefOf(rec);
   if (g) lines.push(g.rel === 'family' ? `We lost ${g.first} ${g.cause ? `(${g.cause})` : ''}. The house is so quiet now.` : `My friend ${g.first} passed. I still can't believe it.`);
   if (rec.partner !== null && rec.partner !== undefined) {

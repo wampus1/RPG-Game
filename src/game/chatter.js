@@ -137,6 +137,7 @@ export function exchangeFor(a, b, game) {
     if (sim.justice.pendingIn(sid).length || sim.justice.recordOf(sid).convictions) opts.push([`That's ${name}. I heard they're trouble.`, 'Shh! Keep your voice down!']);
     else if (warns.length && op < 10) opts.push([`That's ${name}. ${warns[0].fromName} wrote to the mayor about them.`, 'Then we\'ll keep an eye on them.']);
     else if (sim.careers.isGuard(sid)) opts.push([`${name} joined the watch, you know.`, 'About time we had more guards.']);
+    else if (sim.isCitizen(sid) && sim.citizen.native) opts.push([`${name.split(' ')[0]} has grown up well.`, 'I remember them running about the square in nappies.'], [`There goes ${name.split(' ')[0]}. Takes after the family, that one.`, 'Doesn\'t everyone?']);
     else if (sim.isCitizen(sid)) opts.push([`${name} has settled in nicely.`, 'Seems a decent sort.']);
     else if (op >= 35) opts.push([`${name} is a good sort.`, 'Agreed.']);
     else if (op <= -25) opts.push([`Watch that one, ${B}.`, '*nods*']);

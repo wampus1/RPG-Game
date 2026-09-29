@@ -203,3 +203,39 @@ test('a jeweller sets a gem: stats and a gift for the blade', async () => {
   assert.ok(game.setGem({ kind: 'equip', slot: 'body' }, 'emerald'));
   assert.equal(p.equip.body, 'leather_tunic+emerald');
 });
+
+test('born here: a family name, parents who treat you as their child, a home, and a place of your own if you want it', async () => {
+  const { randomHero } = await import('../src/game/hero.js');
+  const { Game } = await import('../src/game/game.js');
+  const { stubRenderer, stubUI } = await import('./helpers.mjs');
+  const hero = { ...randomHero(7), name: 'Wren', origin: 'native' };
+  const game = new Game({ seed: 12345, renderer: stubRenderer(), audio: null, ui: stubUI(), hero });
+  const input = stubInput();
+  for (let i = 0; i < 20; i++) game.update(0.1, input);
+  const c = game.sim.citizen;
+  assert.ok(c && c.native && c.family);
+  assert.ok(c.family.name && game.playerName === `Wren ${c.family.name}`, `named ${game.playerName}`);
+  const L = game.sim.layoutOf(c.sid);
+  assert.ok(c.family.parents.length >= 1, 'parents');
+  const parent = L.npcs[c.family.parents[0]];
+  assert.equal(game.sim.familyOf(parent), 'parent');
+  assert.ok(game.sim.repEntry(c.sid, parent.idx).v >= 80, 'a parent\'s love');
+  // They greet you as their child.
+  const a = game.active.get(c.sid);
+  const pe = a && a.npcs.find((n) => n.rec === parent);
+  if (pe) {
+    const { openingLine } = await import('../src/game/dialogue.js');
+    const line = openingLine(pe, game);
+    assert.ok(/love|child|Wren|eaten|supper/.test(line), line);
+  }
+  // The mayor can have a place of your own built.
+  const mayor = a && a.npcs.find((n) => n.rec.job === 'mayor');
+  if (mayor) {
+    game.player.give('coin', 500);
+    const t = game.sim.ownHomeTerms(mayor);
+    if (t.ok) {
+      assert.ok(game.sim.ownHome(mayor).ok);
+      assert.ok(game.sim.construction && !game.sim.construction.done, 'the builders start on it');
+    }
+  }
+});

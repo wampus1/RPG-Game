@@ -918,17 +918,59 @@ export class Sim {
     if (host) for (const r of L.npcs) if (r.home === host.house.id && alive(r)) this.changeRep(r.ent || { rec: r, settlement: s }, 6);
     this.changeRep(mayor, 5);
     ledger(L, day, `${this.game.playerName} became a citizen of ${s.name}.`);
-    if (t.plot) {
-      t.plot.taken = true;
-      const bp = L.blueprint(t.plot, L.buildings.length);
-      bp.bld.underConstruction = true;
-      L.buildings.push(bp.bld);
-      this.bp = { sid: s.id, bp };
-      this.construction = { sid: s.id, plot: t.plot.id, bid: bp.bld.id, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
-      this.assignBuilders(L, day, this.abs);
-      ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
-    }
+    if (t.plot) this.buildHome(L, t.plot);
     return { ok: true, fee: t.fee, host, plot: t.plot };
+  }
+
+  // The builders put up a cottage of your own on a lot.
+  buildHome(L, plot) {
+    const s = L.settlement;
+    const day = this.game.day;
+    plot.taken = true;
+    const bp = L.blueprint(plot, L.buildings.length);
+    bp.bld.underConstruction = true;
+    L.buildings.push(bp.bld);
+    this.bp = { sid: s.id, bp };
+    this.construction = { sid: s.id, plot: plot.id, bid: bp.bld.id, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
+    this.assignBuilders(L, day, this.abs);
+    ledger(L, day, `Builders started on a cottage for ${this.game.playerName}.`);
+    return bp.bld;
+  }
+
+  // Born here and living with your family, you can ask the mayor for a
+  // place of your own (a fee toward the builders).
+  ownHomeTerms(mayor) {
+    const L = mayor.layout;
+    const s = L.settlement;
+    const c = this.citizen;
+    if (!c || c.sid !== s.id) return { ok: false, reason: 'citizen' };
+    if (c.home !== null && c.home !== undefined) return { ok: false, reason: 'have' };
+    const k = this.construction;
+    if (k && k.sid === s.id && !k.done && !k.cancelled) return { ok: false, reason: 'building' };
+    const plot = this.works.freePlot(L);
+    if (!plot) return { ok: false, reason: 'land' };
+    const fee = Math.round(({ village: 40, town: 70, city: 110 }[s.type] || 60) * (c.native ? 0.75 : 1));
+    return { ok: true, fee, plot };
+  }
+
+  ownHome(mayor) {
+    const t = this.ownHomeTerms(mayor);
+    if (!t.ok) return t;
+    const p = this.game.player;
+    if (countItem(p.inv, 'coin') < t.fee) return { ok: false, reason: 'money', fee: t.fee };
+    removeItem(p.inv, 'coin', t.fee);
+    mayor.layout.econ.treasury += t.fee;
+    this.buildHome(mayor.layout, t.plot);
+    return { ok: true, fee: t.fee };
+  }
+
+  // Your mother, father, brothers and sisters, if you were born here.
+  familyOf(rec) {
+    const c = this.citizen;
+    if (!c || !c.native || !c.family) return null;
+    if (c.family.parents.includes(rec.idx)) return 'parent';
+    if (c.family.siblings.includes(rec.idx)) return 'sibling';
+    return null;
   }
 
   // Send people from one town to live in another (guards and settlers
