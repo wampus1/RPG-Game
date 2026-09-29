@@ -253,12 +253,13 @@ test('market stalls are horizontal and nothing new is built by a gate', () => {
     assert.ok(stalls.length, `${s.name} has stalls`);
     for (const st of stalls) {
       const front = st.z + (st.face === 0 ? 1 : -1);
-      for (let dx = -1; dx <= 1; dx++) assert.equal(w.getBlock(st.x + dx, GROUND, front), B.counter, 'a counter three wide in front');
-      // Nothing over the stallholder's head but the raised awning.
+      for (let dx = 0; dx <= 1; dx++) assert.equal(w.getBlock(st.x + dx, GROUND, front), B.counter, 'two counters side by side in front');
+      // Nothing over the stallholder's head but the canopy up on its posts.
       assert.equal(w.getBlock(st.x, GROUND, st.z), B.air);
       assert.equal(w.getBlock(st.x, GROUND + 1, st.z), B.air);
-      assert.equal(w.getBlock(st.x, GROUND + 2, st.z), B.air);
-      assert.ok(BLOCKS[w.getBlock(st.x, GROUND + 3, st.z)].name.startsWith('awning'), 'the awning up high');
+      assert.equal(w.getBlock(st.x, GROUND + 2, st.z), B.canopy);
+      assert.equal(w.getBlock(st.x - 1, GROUND, st.z), B.fence);
+      assert.equal(w.getBlock(st.x + 2, GROUND, st.z), B.fence);
     }
     const exits = L.exits();
     assert.ok(exits.length, 'roads lead out');

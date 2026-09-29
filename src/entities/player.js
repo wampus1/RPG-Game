@@ -175,11 +175,13 @@ export class Player extends Entity {
       // Nudge past a villager who is just standing in the way.
       if (other.kind === 'npc' && (other.state === 'routine' || other.state === 'hired') && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
         this.pushT = (this.pushT || 0) + dt;
-        if (this.pushT < 0.35) return;
+        if (this.pushT < 0.1) return;
         this.pushT = 0;
+        // Squeeze past: you both slide, swapping places.
         const from = { x: this.x, y: this.y, z: this.z };
-        this.startMove(nx, ny, nz, PLAYER_STEP_TIME * 1.3);
-        other.teleport(from.x, from.y, from.z);
+        const dur = PLAYER_STEP_TIME * 1.15;
+        this.startMove(nx, ny, nz, dur);
+        other.startMove(from.x, from.y, from.z, dur);
         other.face(nx, nz);
         other.atGoal = false;
         other.path = null;

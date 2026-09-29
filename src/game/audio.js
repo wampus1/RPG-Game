@@ -127,24 +127,4 @@ export class Audio {
       case 'frog': this.tone(180, 0.08, 'square', 0.03, 60); this.tone(170, 0.08, 'square', 0.03, 60, 0.12); break;
     }
   }
-
-  // Steady rain: a soft hiss that follows the weather.
-  setRain(level) {
-    if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
-    const c = this.ctx;
-    if (!this.rain) {
-      const s = c.createBufferSource();
-      s.buffer = this.noiseBuf;
-      s.loop = true;
-      const f = c.createBiquadFilter();
-      f.type = 'lowpass';
-      f.frequency.value = 1400;
-      const g = c.createGain();
-      g.gain.value = 0;
-      s.connect(f).connect(g).connect(this.master);
-      s.start();
-      this.rain = g;
-    }
-    this.rain.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.09, c.currentTime, 0.8);
-  }
 }

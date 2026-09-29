@@ -308,8 +308,15 @@ test('nomads camp, weigh up the town, and settle together', () => {
   const ents = a.npcs.filter((n) => n.nomad);
   assert.equal(ents.length, band.people.length, 'the band walks in');
   assert.ok(topicsFor(ents[0], game).some((t) => t.id === 'nomad'));
+  // Only a citizen can vouch for the town.
+  assert.ok(!respond(ents[0], game, 'nomad').choices);
+  respond(ents[0], game, 'nomad', 'vouch');
+  assert.equal(band.vouched || 0, 0);
+  game.sim.citizen = { sid, since: 1, host: null, hostBed: null, home: null, taxDay: game.day, owed: 0 };
+  assert.ok(respond(ents[0], game, 'nomad').choices.some((c) => c.arg === 'vouch'));
   respond(ents[0], game, 'nomad', 'vouch');
   assert.ok(band.vouched > 0);
+  game.sim.citizen = null;
   L.econ.treasury += 400;
   for (let i = 0; i < 30000 && !band.done; i++) game.update(0.5, input);
   assert.ok(band.done && band.stayed, `they ${band.stayed ? 'stayed' : 'left'}`);

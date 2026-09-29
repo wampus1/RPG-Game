@@ -228,6 +228,8 @@ def('cell_door_top', { opaque: false, solid: false, standable: false, tool: 'pic
 def('farmland_wet', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moist Farmland' });
 // A town's alarm bell: the watch rings it to raise the other guards.
 def('bell', { ...sprite, interact: 'bell', tool: 'pick', hardness: 4, drop: 'iron_ingot', label: 'Alarm Bell' });
+// A market stall's striped cloth canopy (its colour is kept in the rotation).
+def('canopy', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Stall Canopy' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

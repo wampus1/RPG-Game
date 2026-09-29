@@ -207,7 +207,9 @@ export class UI {
     this.time += dt;
     this.game = game;
     for (const w of this.windows) {
-      w.update(dt, game);
+      // A window fading out is finished: it mustn't act again (a dialogue
+      // closing on its own used to reopen itself every frame of the fade).
+      if (w.state !== 'closing') w.update(dt, game);
       if (w.state === 'opening') {
         w.p += dt / 0.24;
         if (w.p >= 1) {

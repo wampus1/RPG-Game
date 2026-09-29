@@ -3,7 +3,7 @@
 // images are packed into a single atlas canvas.
 import { TILE, LH } from '../config.js';
 import { BLOCKS, CROPS } from '../world/blocks.js';
-import { Px, shade } from './pixel.js';
+import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 
 export const VARIANTS = 4;
@@ -817,6 +817,19 @@ const SPRITES = {
       p.set(8, 4 + fl[1], '#f8a830');
     }
     return p.outline(OUT);
+  },
+  canopy(rot) {
+    // A thin striped cloth with a scalloped edge, up at the top of the cell.
+    const col = ['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][rot & 3];
+    const p = spr();
+    for (let x = 0; x < 16; x++) {
+      const c = (x >> 2) % 2 ? '#f0ece0' : col;
+      p.vline(x, 0, 6, c);
+      p.set(x, 7, shade(hex(c), 0.8));
+      if (x % 4 < 2) p.set(x, 8, shade(hex(c), 0.8));
+    }
+    p.hline(0, 15, 0, '#ffffff');
+    return p;
   },
   bell(rot, st, f) {
     // A bronze bell under a little roof on two posts; it swings when rung.

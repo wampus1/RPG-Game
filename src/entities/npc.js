@@ -53,7 +53,7 @@ export class NPC extends Entity {
     this.threat = null;
     this.stateT = 0;
     this.attackCd = 0;
-    this.openedDoor = null;
+    this.openedDoors = []; // doors this person opened and must shut again
     this.sleeping = false;
     this.bedTile = null;
     this.greetCd = this.rng.float(8, 30);
@@ -369,13 +369,13 @@ export class NPC extends Entity {
     if (this.avoid) this.avoid.t -= dt;
     this.stateT += dt;
     this.rec.hp = this.hp;
+    this.closeDoorBehind();
     if (this.moving) return;
     // Someone you're talking to stands and listens.
     if (this.state === 'routine' && this.game.talkingTo === this && !this.sleeping) {
       this.face(this.game.player.x, this.game.player.z);
       return;
     }
-    this.closeDoorBehind();
     switch (this.state) {
       case 'routine':
         this.routine(dt);
@@ -1353,9 +1353,10 @@ export class NPC extends Entity {
       return false;
     }
     const feet = w.getBlock(nx, ty, nz);
-    if (feet === B.door && !w.getState(nx, ty, nz)) {
-      this.game.setDoor(nx, ty, nz, true);
-      this.openedDoor = { x: nx, y: ty, z: nz, passed: false };
+    if (feet === B.door) {
+      // Open it (or find it open) on the way through; shut it after.
+      if (!w.getState(nx, ty, nz)) this.game.setDoor(nx, ty, nz, true);
+      if (!this.openedDoors.some((d) => d.x === nx && d.z === nz)) this.openedDoors.push({ x: nx, y: ty, z: nz });
     }
     this.face(nx, nz);
     const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
@@ -1364,17 +1365,26 @@ export class NPC extends Entity {
     return false;
   }
 
+  // Everyone shuts the doors they open, once they (and anyone else) are
+  // clear of the doorway, whatever made them turn round or run off.
   closeDoorBehind() {
-    const d = this.openedDoor;
-    if (!d) return;
-    if (this.x === d.x && this.z === d.z) {
-      d.passed = true;
-      return;
-    }
-    if (d.passed || Math.abs(this.x - d.x) + Math.abs(this.z - d.z) > 1) {
-      if (!this.game.entityAt(d.x, d.y, d.z)) this.game.setDoor(d.x, d.y, d.z, false);
-      this.openedDoor = null;
-    }
+    if (!this.openedDoors.length) return;
+    const w = this.game.world;
+    this.openedDoors = this.openedDoors.filter((d) => {
+      if (w.getBlock(d.x, d.y, d.z) !== B.door || !w.getState(d.x, d.y, d.z)) return false;
+      const away = Math.abs(this.x - d.x) + Math.abs(this.z - d.z);
+      // Still in the doorway, just stepping out of it, or someone else in it.
+      if (away === 0 || (away === 1 && this.moving) || this.game.entityAt(d.x, d.y, d.z) || this.game.entityAt(d.x, d.y - 1, d.z)) return true;
+      this.game.setDoor(d.x, d.y, d.z, false);
+      return false;
+    });
+  }
+
+  // Leaving (or dying): no door left standing open behind them.
+  shutAllDoors() {
+    const w = this.game.world;
+    for (const d of this.openedDoors) if (w.getBlock(d.x, d.y, d.z) === B.door && w.getState(d.x, d.y, d.z) && !this.game.entityAt(d.x, d.y, d.z)) this.game.setDoor(d.x, d.y, d.z, false);
+    this.openedDoors = [];
   }
 
   // ------------------------------------------------------------ threats

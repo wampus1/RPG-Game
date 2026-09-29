@@ -142,14 +142,13 @@ export class Game {
   }
 
   // Birds by day, crickets and owls by night, waves on the shore, wind up
-  // high, frogs in the swamp, and the rain (all outdoors only).
+  // high and frogs in the swamp (all outdoors only).
   ambientSounds(dt) {
     const a = this.audio;
     if (!a) return;
     const b = this.buildingAtPlayer ? this.buildingAtPlayer() : null;
     const indoors = !!b && !b.underConstruction;
     const w = this.weather;
-    a.setRain?.(w && w.kind === 'rain' && !indoors ? 0.6 + (w.level || 0) * 0.4 : 0);
     this.ambT = (this.ambT ?? 3) - dt;
     if (this.ambT > 0 || indoors || this.sleep) return;
     this.ambT = 2 + Math.random() * 5;
@@ -800,6 +799,7 @@ export class Game {
 
   // Remove an NPC entity that walked out of town (merchants on the road).
   despawnNpc(n) {
+    n.shutAllDoors?.();
     n.releaseSpot();
     this.removeOcc(n);
     n.dead = true;

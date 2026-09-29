@@ -1712,13 +1712,16 @@ class Layout {
           const fz = z + dz;
           this.setMask(fx, fz, M.FIELD);
           const edge = dz === 0 || dz === d - 1 || dx === 0 || dx === w - 1;
-          const gate = dz === d - 1 && dx === Math.floor(w / 2);
+          const gx = Math.floor(w / 2);
+          const gate = dz === d - 1 && dx === gx;
           if (edge && !gate) {
             if (s.condition !== 'poor' || rng.chance(0.7)) this.put(fx, Y0, fz, B.fence);
             continue;
           }
           if (gate) continue;
-          const furrow = dx % 3 === 0;
+          // Furrows line up with the gate, and a path runs along inside the
+          // gate joining them all, so nobody is ever penned in by the crops.
+          const furrow = (((dx - gx) % 3) + 3) % 3 === 0 || dz === d - 2;
           this.put(fx, SURFACE, fz, furrow ? B.path : B.farmland);
           if (!furrow) {
             const id = crop === B.pumpkin && rng.chance(0.6) ? B.carrot_crop : crop;
@@ -1730,7 +1733,7 @@ class Layout {
       if (rng.chance(0.7)) {
         const sx = x + 1 + rng.int(0, w - 3);
         const sz = z + 1;
-        if (sx % 3 !== x % 3) this.put(sx, Y0, sz, B.scarecrow);
+        if ((((sx - x - Math.floor(w / 2)) % 3) + 3) % 3 !== 0 && d > 3) this.put(sx, Y0, sz, B.scarecrow);
       }
       this.fields.push(field);
       placed++;
@@ -1869,14 +1872,15 @@ class Layout {
       this.addSpot(x, z, rot, ['rest', 'read', 'smoke', 'social', 'sketch', 'music', 'stargaze'], { seat: true });
     }
     // Market stalls along the north and south edges of the plaza (towns &
-    // cities): a counter three wide with the stallholder behind it, and the
-    // awning up on two posts over their head, so you can see who's selling.
+    // cities): two counters with the stallholder behind, between a pair of
+    // low posts carrying a striped canopy just over their head.
     if (s.type !== 'village' && !ruined) {
       const awning = s.civ ? B[s.civ.color.awning] : B.awning_red;
+      const colour = [B.awning_red, B.awning_blue, B.awning_yellow, B.awning_green].indexOf(awning);
       // Along the edge of the square, or a row in where streets meet it.
       const spots = [];
       for (const depth of [0, 1]) {
-        for (let x = p.x0 + 2; x <= p.x1 - 2; x++) {
+        for (let x = p.x0 + 1; x <= p.x1 - 2; x++) {
           spots.push({ x, z: p.z0 + depth, dz: 1, depth });
           spots.push({ x, z: p.z1 - depth, dz: -1, depth });
         }
@@ -1887,27 +1891,27 @@ class Layout {
       let n = 0;
       for (const st of spots) {
         if (n >= (s.type === 'city' ? 4 : 2)) break;
-        if (placed.some((q) => q.dz === st.dz && Math.abs(q.x - st.x) < 6)) continue;
+        if (placed.some((q) => q.dz === st.dz && Math.abs(q.x - st.x) < 5)) continue;
         const back = st.z;
         const front = st.z + st.dz;
         const tiles = [[st.x, front + st.dz]];
-        for (let dx = -2; dx <= 2; dx++) tiles.push([st.x + dx, back]);
-        for (let dx = -1; dx <= 1; dx++) tiles.push([st.x + dx, front]);
+        for (let dx = -1; dx <= 2; dx++) tiles.push([st.x + dx, back]);
+        for (let dx = 0; dx <= 1; dx++) tiles.push([st.x + dx, front]);
         if (!tiles.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) continue;
         // The stallholder must be able to get in from behind, and the posts
         // never stand across a street coming into the square.
-        const behind = [-1, 0, 1].map((dx) => this.maskAt(st.x + dx, back - st.dz));
+        const behind = [0, 1].map((dx) => this.maskAt(st.x + dx, back - st.dz));
         if (st.depth === 0) {
-          if ([-2, 2].some((dx) => this.maskAt(st.x + dx, back - st.dz) === M.ROAD)) continue;
+          if ([-1, 2].some((dx) => this.maskAt(st.x + dx, back - st.dz) === M.ROAD)) continue;
           if (!behind.some((m) => m === M.FREE || m === M.YARD || m === M.ROAD)) continue;
         } else if (!behind.some((m) => m === M.PLAZA)) continue;
         placed.push(st);
-        for (let dx = -2; dx <= 2; dx++) this.put(st.x + dx, Y0 + 3, back, awning);
-        for (const dx of [-2, 2]) {
-          for (let y = Y0; y < Y0 + 3; y++) this.put(st.x + dx, y, back, B.fence);
+        for (let dx = -1; dx <= 2; dx++) this.put(st.x + dx, Y0 + 2, back, B.canopy, Math.max(0, colour));
+        for (const dx of [-1, 2]) {
+          for (let y = Y0; y < Y0 + 2; y++) this.put(st.x + dx, y, back, B.fence);
           this.setMask(st.x + dx, back, M.DECOR);
         }
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = 0; dx <= 1; dx++) {
           this.put(st.x + dx, Y0, front, B.counter);
           this.setMask(st.x + dx, front, M.DECOR);
         }

@@ -1043,7 +1043,8 @@ export function respond(npc, game, id, arg) {
       const b = npc.nomad;
       if (!b) return { lines: ['...'] };
       if (arg === 'vouch') {
-        const good = sim.isCitizen(s.id) || sim.areaMod(s.id) >= 0;
+        if (!sim.isCitizen(s.id)) return { lines: ['You don\'t live here, do you? No offence, but we\'ll ask someone who does.'] };
+        const good = sim.areaMod(s.id) >= 0;
         if (!b.vouchedBy) {
           b.vouchedBy = true;
           b.vouched += good ? 2 : 1;
@@ -1059,7 +1060,8 @@ export function respond(npc, game, id, arg) {
       const hours = Math.max(0, Math.round((b.decide - sim.abs) / 60));
       return {
         lines: [`${bits.join(', ')}.`, v.ok ? `We're leaning towards staying. We'll decide within ${hours || 1} hours.` : `We'll move on in ${hours || 1} hours unless something changes our minds.`],
-        choices: b.vouchedBy ? null : [{ id: 'nomad', arg: 'vouch', label: `You should stay! ${s.name} is a good place.` }],
+        // Only someone who lives here can vouch for the place.
+        choices: b.vouchedBy || !sim.isCitizen(s.id) ? null : [{ id: 'nomad', arg: 'vouch', label: `You should stay! ${s.name} is a good place.` }],
         back: 'Good luck, whatever you choose.',
       };
     }
@@ -1295,6 +1297,9 @@ function news(npc, game) {
   const rng = npc.rng;
   const e = L.econ;
   const items = [];
+  // Which town each line tells you about (only those get marked on your map).
+  const about = new Map();
+  const byName = (name) => game.world.ow.settlements.find((o) => o.name === name) || null;
   for (const it of [...e.ledger].reverse()) {
     if (it.day < game.day - 3 || it.day <= 0) continue;
     items.push(it.day === game.day ? `Today: ${it.text}` : `On day ${it.day}, ${/^(A|An|The|Taxes|Law|Builders)\b/.test(it.text) ? it.text.charAt(0).toLowerCase() + it.text.slice(1) : it.text}`);
@@ -1308,7 +1313,9 @@ function news(npc, game) {
   }
   for (const r of (e.rumours || []).slice(-3).reverse()) {
     if (r.day < game.day - 8) continue;
-    items.push(pick(rng, [`Word from ${r.from}, by way of the merchants: ${lcNews(r.text)}`, `A merchant said that in ${r.from}, ${lcNews(r.text)}`]));
+    const line = pick(rng, [`Word from ${r.from}, by way of the merchants: ${lcNews(r.text)}`, `A merchant said that in ${r.from}, ${lcNews(r.text)}`]);
+    items.push(line);
+    if (byName(r.from)) about.set(line, byName(r.from));
   }
   // Rumours about the wider world mark the place on your map.
   const others = game.world.ow.settlements.filter((o) => o.id !== s.id && !deserted(o));
@@ -1318,17 +1325,29 @@ function news(npc, game) {
     const dz = o.cz - s.cz;
     const dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'east' : 'west') : dz > 0 ? 'south' : 'north';
     const what = o.type === 'city' ? 'the great city of' : o.type === 'town' ? 'the town of' : 'a village called';
-    items.push(`There's ${what} ${o.name} to the ${dir}.${o.condition === 'prosperous' ? ' Rich folk there.' : o.condition === 'poor' ? ' Hard times there, I hear.' : ''}`);
-    revealTown(game, o);
+    const line = `There's ${what} ${o.name} to the ${dir}.${o.condition === 'prosperous' ? ' Rich folk there.' : o.condition === 'poor' ? ' Hard times there, I hear.' : ''}`;
+    items.push(line);
+    about.set(line, o);
   }
   const gone = game.world.ow.settlements.find((o) => o.deserted && o.id !== s.id);
-  if (gone && rng.chance(0.6)) items.push(`Did you hear? The people of ${gone.name} gave up and left. No guards, no one to protect them.`);
+  if (gone && rng.chance(0.6)) {
+    const line = `Did you hear? The people of ${gone.name} gave up and left. No guards, no one to protect them.`;
+    items.push(line);
+    about.set(line, gone);
+  }
   const ruins = game.world.ow.settlements.find((o) => o.condition === 'abandoned');
-  if (ruins && rng.chance(0.3)) items.push(`Folk say ${ruins.name} was abandoned. Might be treasure left behind...`);
+  if (ruins && rng.chance(0.3)) {
+    const line = `Folk say ${ruins.name} was abandoned. Might be treasure left behind...`;
+    items.push(line);
+    about.set(line, ruins);
+  }
   if (!items.length) items.push('Nothing much happens around here.');
   const i = (npc.newsI || 0) % items.length;
   npc.newsI = (npc.newsI || 0) + 1;
-  return [items[i], ...(items.length > 1 && i + 1 < items.length && rng.chance(0.5) ? [items[i + 1]] : [])];
+  const said = [items[i], ...(items.length > 1 && i + 1 < items.length && rng.chance(0.5) ? [items[i + 1]] : [])];
+  // Only a place actually named goes on your map.
+  for (const line of said) if (about.has(line)) revealTown(game, about.get(line));
+  return said;
 }
 
 function lifeIn(npc, game) {
