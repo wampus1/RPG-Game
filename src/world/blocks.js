@@ -230,6 +230,20 @@ def('farmland_wet', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moist
 def('bell', { ...sprite, interact: 'bell', tool: 'pick', hardness: 4, drop: 'iron_ingot', label: 'Alarm Bell' });
 // A market stall's striped cloth canopy (its colour is kept in the rotation).
 def('canopy', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Stall Canopy' });
+// Trade benches: every licensed trade has its own to work at (its
+// `station` names the trade, and the recipes made there).
+const bench = (name, station, label, extra = {}) => def(name, { ...sprite, interact: 'bench', station, tool: 'axe', hardness: 0.9, label, ...extra });
+bench('loom', 'tailor', 'Tailor\'s Loom');
+bench('alembic', 'herbalist', 'Herbalist\'s Still', { tool: 'pick', hardness: 1 });
+bench('writing_desk', 'scribe', 'Scribe\'s Desk');
+bench('jeweler_bench', 'jeweller', 'Jeweller\'s Bench', { tool: 'pick', hardness: 1.2 });
+bench('oven', 'baker', 'Baker\'s Oven', { tool: 'pick', hardness: 1.4, light: 6 });
+bench('grindstone', 'smith', 'Smith\'s Grindstone', { tool: 'pick', hardness: 1.5 });
+bench('tanning_rack', 'trapper', 'Tanning Rack', { hardness: 0.7 });
+bench('tackle_bench', 'fisher', 'Tackle Bench', { hardness: 0.7 });
+bench('sawbench', 'woodcutter', 'Sawhorse', { hardness: 0.8 });
+bench('potting_bench', 'farmer', 'Potting Bench', { hardness: 0.7 });
+bench('rock_crusher', 'miner', 'Rock Crusher', { tool: 'pick', hardness: 2 });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

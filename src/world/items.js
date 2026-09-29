@@ -130,11 +130,77 @@ for (const [k, c] of Object.entries(TABARDS)) wear(`tabard_${k}`, `${k[0].toUppe
 wear('guard_helm', 'Guard Helm', 'head', 0.08, 25, 'helmet', { uniform: true, noSell: true });
 wear('guard_boots', 'Guard Boots', 'feet', 0.04, 12, 'iron', { uniform: true, noSell: true });
 
+// Every weapon and piece of armour can carry one set gem: those are items of
+// their own ("iron_sword+ruby"), made here once everything else exists.
+export function socketed(base, gem) {
+  return `${base}+${gem}`;
+}
+export function canSocket(key) {
+  const it = ITEMS[key];
+  return !!it && !it.socket && !it.uniform && (it.kind === 'weapon' || it.kind === 'armor' || (it.kind === 'tool' && it.damage >= 3 && /_(sword|axe)$/.test(key)));
+}
+export function registerSockets() {
+  for (const key of Object.keys(ITEMS)) {
+    if (!canSocket(key)) continue;
+    const base = ITEMS[key];
+    for (const [g, gd] of Object.entries(GEMS)) {
+      const stats = { ...(base.stats || {}) };
+      for (const [st, n] of Object.entries(gd.stats)) stats[st] = (stats[st] || 0) + n;
+      ITEMS[socketed(key, g)] = { ...base, key: socketed(key, g), name: `${base.name} (${gd.name})`, value: base.value + 40, stats, socket: g, base: key, gift: base.kind === 'armor' ? null : gd.gift };
+    }
+  }
+}
+
 // The tabard for a settlement's watch.
 export function tabardFor(s) {
   const k = s && s.civ ? s.civ.color.name.toLowerCase() : 'free';
   return TABARDS[k] ? `tabard_${k}` : 'tabard_free';
 }
+
+// --- tailored clothes ------------------------------------------------------------
+// Dyed at a tailor's loom: good cloth, well cut and in a fine colour, and
+// people warm to you (each piece adds to your charisma while worn).
+export const DYES = { red: '#c83a32', blue: '#2f5fc0', yellow: '#d8a828', green: '#3c8a40', purple: '#7a3aa8', black: '#2e2a34', white: '#ece8dc' };
+export const DYE_FROM = { red: 'flower_red', blue: 'flower_blue', yellow: 'flower_yellow', green: 'herb', purple: 'flower_purple', black: 'coal', white: 'flower_white' };
+export const DYEABLE = { linen_shirt: 1, wool_trousers: 1, wool_hood: 1, fine_coat: 3 };
+for (const [g, cha] of Object.entries(DYEABLE)) {
+  const base = ITEMS[g];
+  const kind = String(base.look).split(':')[0];
+  for (const [c, hexc] of Object.entries(DYES)) {
+    wear(`${g}_${c}`, `${c[0].toUpperCase()}${c.slice(1)} ${base.name}`, base.slot, base.armor, base.value + 8 + cha * 4, `${kind}:${hexc}`, { stats: { cha }, tailored: true, dyed: c, dyeOf: g });
+  }
+}
+
+// --- potions --------------------------------------------------------------------
+// Brewed at an herbalist's still. Vigor gives extra (blue) hearts until the
+// day ends; the others raise one of your abilities for a few hours.
+const potion = (key, name, value, effect) => item(key, { name, kind: 'potion', stack: 8, value, effect });
+potion('potion_vigor', 'Draught of Vigor', 16, { blue: 4 });
+potion('potion_might', 'Potion of Might', 18, { stat: 'str', n: 2, hours: 3 });
+potion('potion_swiftness', 'Potion of Swiftness', 18, { stat: 'agi', n: 2, hours: 3 });
+potion('potion_fortitude', 'Potion of Fortitude', 18, { stat: 'end', n: 2, hours: 4 });
+potion('potion_charm', 'Philtre of Charm', 20, { stat: 'cha', n: 2, hours: 4 });
+potion('healing_salve', 'Healing Salve', 10, { heal: 8 });
+
+// --- the scribe's trade -----------------------------------------------------------
+item('paper', { value: 2 });
+item('ink', { name: 'Pot of Ink', value: 3, stack: 16 });
+// Printed at a scribe's desk from the events they've recorded: the latest
+// edition is what every copy says (see the Press in sim.js).
+item('newspaper', { name: 'Newspaper', kind: 'misc', stack: 32, value: 2, newspaper: true });
+
+// --- the jeweller's trade -----------------------------------------------------------
+// Cut from a rough gem, then set into a weapon or a piece of armour (a
+// delicate job: see the setting at a jeweller's bench). Each stone raises an
+// ability; set in a weapon, it also gives the blade a gift of its own.
+export const GEMS = {
+  ruby: { name: 'Ruby', color: '#e0304a', stats: { str: 1 }, gift: 'ember', about: 'Strength; blades sometimes burn' },
+  sapphire: { name: 'Sapphire', color: '#3060e0', stats: { agi: 1 }, gift: 'swift', about: 'Agility; blades swing faster' },
+  emerald: { name: 'Emerald', color: '#30c060', stats: { end: 1 }, gift: 'leech', about: 'Endurance; blades mend you as they strike' },
+  topaz: { name: 'Topaz', color: '#e8b830', stats: { cha: 1 }, gift: 'gleam', about: 'Charisma; a gleaming blade impresses' },
+  amethyst: { name: 'Amethyst', color: '#a050e0', stats: { end: 1 }, gift: 'stun', about: 'Endurance; blades stagger foes' },
+};
+for (const [k, g] of Object.entries(GEMS)) item(k, { name: g.name, kind: 'gem', stack: 16, value: 70, gem: true });
 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });
@@ -180,3 +246,6 @@ export function rollDrops(blockId, rand) {
   }
   return out;
 }
+
+// (Last, so every weapon and piece of armour above can take a gem.)
+registerSockets();

@@ -31,6 +31,7 @@ import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { lawOn } from '../sim/laws.js';
+import { PROFESSIONS } from '../sim/careers.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -839,7 +840,8 @@ export class Game {
         if (sg.kind !== 'building') continue;
         const b = layout.buildings[sg.building];
         if (!b) continue;
-        this.signIcons.set(`${sg.x},${sg.y},${sg.z}`, b.playerHome ? 'bed' : b.residential ? (b.type === 'manor' ? 'gem' : 'door') : ICON[b.type] || 'coin');
+        const TRADE_ICON = { smith: 'iron_sword', baker: 'bread', tailor: 'cloth', herbalist: 'potion_vigor', scribe: 'newspaper', jeweller: 'ruby' };
+        this.signIcons.set(`${sg.x},${sg.y},${sg.z}`, b.playerShop ? TRADE_ICON[b.playerShop] || 'coin' : b.playerHome ? 'bed' : b.residential ? (b.type === 'manor' ? 'gem' : 'door') : ICON[b.type] || 'coin');
       }
     }
   }
@@ -1711,6 +1713,17 @@ export class Game {
       case 'anvil':
         this.ui.openCrafting('anvil');
         break;
+      // A trade's own bench: only someone licensed in the trade can work it.
+      case 'bench': {
+        const st = BLOCKS[id].station;
+        if (!this.sim.careers.canUseBench(st)) {
+          const P = PROFESSIONS[st];
+          this.ui.msg(`Only a licensed ${P ? P.title.toLowerCase() : st} knows how to work the ${BLOCKS[id].label.replace(/^.*'s /, '').toLowerCase()}. (Ask a mayor about a licence.)`, '#c8c8c8', true);
+          break;
+        }
+        this.ui.openCrafting(st);
+        break;
+      }
       case 'torch': {
         const on = !w.getState(x, y, z);
         w.setState(x, y, z, on);
@@ -1776,6 +1789,8 @@ export class Game {
     if (!b) return null;
     const c = this.sim.citizen;
     if (b.playerHome) return c && c.home === b.id && c.sid === s.id ? { kind: 'mine', sid: s.id, label: 'yours' } : { kind: 'house', id: b.id, sid: s.id, label: 'not yours' };
+    // Your workshop is yours.
+    if (b.playerShop) return { kind: 'mine', sid: s.id, label: 'your workshop' };
     if (b.residential) {
       const host = this.sim.isGuest(s.id, b.id);
       return { kind: host ? 'host' : 'house', id: b.id, sid: s.id, label: b.family ? `${b.family} family${host ? ' (your hosts)' : ''}` : null, b };

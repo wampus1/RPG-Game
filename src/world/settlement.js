@@ -28,13 +28,20 @@ const SPECS = {
   herbalist: { size: [[6, 5], [6, 6]] },
   warehouse: { size: [[9, 6], [8, 6]] },
   barn: { size: [[7, 6], [8, 6]], tall: 3 },
+  // A licensed trade's own workshop, built for the player (never staffed).
+  player_workshop: { size: [[6, 5], [6, 6]] },
 };
 
 export const BUILDING_NAMES = {
   house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
-  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn',
+  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop',
+};
+
+// What a trade works at, in its workshop.
+export const TRADE_BENCHES = {
+  smith: ['anvil', 'grindstone', 'furnace'], baker: ['oven'], tailor: ['loom'], herbalist: ['alembic'], scribe: ['writing_desk'], jeweller: ['jeweler_bench'],
 };
 
 const TAVERN_NAMES = ['Prancing Pony', 'Rusty Tankard', 'Sleeping Dragon', 'Golden Goose', 'Laughing Wolf', 'Salted Eel', 'Crooked Crown', 'Drunken Owl', 'Hearth & Horn', 'Wandering Star'];
@@ -857,7 +864,7 @@ class Layout {
   }
 
   // A new work building on an empty lot (the town grows what it lacks).
-  typedBlueprint(plot, type, id) {
+  typedBlueprint(plot, type, id, extra = {}) {
     const rng = new RNG(hash4(this.settlement.seed, 0xb11d, plot.id, type.length));
     const DX = [0, -1, 0, 1];
     const DZ = [1, 0, -1, 0];
@@ -865,7 +872,7 @@ class Layout {
     const bld = {
       id, type, name: BUILDING_NAMES[type] || 'Workshop', x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, door: r.door, outside: r.outside,
       residential: !!SPECS[type]?.residential, beds: [], work: [], seats: [], free: [], household: null,
-      mats: this.buildingMats(type, rng), tall: 2, built: true, fringe: !!plot.fringe,
+      mats: this.buildingMats(type, rng), tall: 2, built: true, fringe: !!plot.fringe, ...extra,
     };
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
@@ -1415,15 +1422,28 @@ class Layout {
       }
       tryPlace(rugId, 'center', { solid: false });
       lamp();
+    } else if (t === 'player_workshop') {
+      // The trade's bench (or benches), a workbench, a chest and a lamp.
+      for (const name of TRADE_BENCHES[b.trade] || ['workbench']) {
+        const bt = tryPlace(B[name], 'north', { access: true, rot: 0 }) || tryPlace(B[name], 'wall', { access: true, rot: 'wall' });
+        if (bt && (name === 'furnace' || name === 'oven') && !b.mats.flat) this.chimney(b, bt);
+        if (bt) b.benches = [...(b.benches || []), { x: bt.x, z: bt.z, name }];
+      }
+      tryPlace(B.workbench, 'wall', { access: true });
+      const ch = tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      if (ch) b.chestPos = { x: ch.x, y: Y0, z: ch.z };
+      tryPlace(B.stool, 'wall', { solid: false });
+      lamp();
     } else if (t === 'shop' || t === 'warehouse' || t === 'tailor' || t === 'workshop' || t === 'herbalist' || t === 'bakery' || t === 'smithy') {
       if (t === 'smithy') {
         const forge = tryPlace(B.furnace, 'north', { access: true, rot: 0 });
         if (forge) this.chimney(b, forge);
         workAt(tryPlace(B.anvil, 'any', { access: true, near: forge || undefined }), ['work', 'smith']);
+        workAt(tryPlace(B.grindstone, 'wall', { access: true }), ['work', 'smith']);
         tryPlace(B.barrel, 'wall');
         tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
       } else if (t === 'bakery') {
-        const oven = tryPlace(B.furnace, 'north', { access: true, rot: 0 });
+        const oven = tryPlace(B.oven, 'north', { access: true, rot: 0 });
         if (oven) this.chimney(b, oven);
         workAt(oven);
         workAt(tryPlace(B.table, 'any', { access: true }));
@@ -1442,7 +1462,7 @@ class Layout {
         tryPlace(B.chest, 'wall', { access: true });
         for (const f of interior.filter((q) => !occ.has(key(q.x, q.z)) && !reserved.has(key(q.x, q.z))).slice(0, 3)) addWork(f.x, f.z, 0);
       } else if (t === 'tailor') {
-        workAt(tryPlace(B.workbench, 'north', { access: true }));
+        workAt(tryPlace(B.loom, 'north', { access: true }));
         workAt(tryPlace(B.table, 'any', { access: true }));
         tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
         tryPlace(rugId, 'center', { solid: false });
@@ -1452,7 +1472,8 @@ class Layout {
         tryPlace(B.crate, 'wall');
         tryPlace(B.chest, 'wall', { access: true });
       } else {
-        workAt(tryPlace(B.workbench, 'north', { access: true }));
+        // The herbalist's still, and a table for sorting what's gathered.
+        workAt(tryPlace(t === 'herbalist' ? B.alembic : B.workbench, 'north', { access: true }));
         workAt(tryPlace(B.table, 'any', { access: true }));
         tryPlace(B.barrel, 'wall');
         tryPlace(B.chest, 'wall', { access: true });
@@ -1481,6 +1502,8 @@ class Layout {
       tryPlace(B.torch, 'corner', { solid: false, lit: true });
     } else if (t === 'library') {
       for (let i = 0; i < 7; i++) tryPlace(B.bookshelf, i < 4 ? 'north' : 'wall', { rot: 'wall' });
+      // The scholar's desk, where the town's doings are written up.
+      workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study']);
       for (let i = 0; i < 2; i++) {
         const table = tryPlace(B.table, 'center', { access: true }) || tryPlace(B.table, 'any', { access: true });
         if (!table) break;

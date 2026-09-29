@@ -107,13 +107,40 @@ export class Works {
     if (this.plans.has(p.id)) return this.plans.get(p.id);
     const L = this.sim.layoutOf(p.sid);
     let plan = null;
-    if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid));
+    if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid, this.shopExtra(p)));
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
     else if (p.kind === 'repair') plan = { list: p.blocks };
     else if (p.kind === 'wall') plan = L.wallPlan();
     else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
     return plan;
+  }
+
+  // A workshop built for the player's trade: theirs, named for them, never
+  // staffed by the town.
+  shopExtra(p) {
+    if (!p.shop) return {};
+    return { trade: p.shop, playerShop: p.shop, name: p.shopName || `${this.game.playerName}'s Workshop` };
+  }
+
+  // The town builds you a workshop for your trade (paid for by your licence).
+  startWorkshop(L, job, title) {
+    const type = 'player_workshop';
+    const plot = this.freePlot(L, type);
+    if (!plot) return null;
+    plot.taken = true;
+    const bid = L.buildings.length;
+    const road = L.roadTo(plot);
+    const shopName = `${this.game.playerName}'s ${title} Workshop`;
+    const p = { sid: L.settlement.id, kind: 'build', bid, plot: plot.id, type, road, shop: job, shopName, owner: 'player', label: `${this.game.playerName}'s ${title.toLowerCase()} workshop` };
+    const plan0 = L.typedBlueprint(plot, type, bid, this.shopExtra(p));
+    plan0.bld.underConstruction = true;
+    L.buildings.push(plan0.bld);
+    L.claimFootprint(plan0.bld);
+    const plan = this.withRoad(L, p, plan0);
+    p.id = this.next;
+    this.plans.set(p.id, plan);
+    return this.add(p);
   }
 
   // The road out to the street goes down first, then the building.
@@ -434,7 +461,7 @@ export class Works {
     if (p.kind === 'build') {
       b.underConstruction = false;
       b.planRef = { kind: 'build', plot: p.plot, type: p.type };
-      if (!L.econ.biz[b.id] && !b.residential) L.econ.biz[b.id] = { till: 25, store: {}, earned: 0, earnedY: 0 };
+      if (!L.econ.biz[b.id] && !b.residential && !b.playerShop) L.econ.biz[b.id] = { till: 25, store: {}, earned: 0, earnedY: 0 };
     } else {
       const from = { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, type: b.type };
       // Old seats and spots of the smaller house go; the new ones come in.
@@ -457,14 +484,14 @@ export class Works {
     for (const ch of plan.chimneys || []) if (!L.chimneys.includes(ch)) L.chimneys.push(ch);
     for (const sg of plan.signs || []) if (!L.signs.includes(sg)) L.signs.push(sg);
     this.plans.delete(`${L.settlement.id}:${b.id}:${b.rev || 0}`);
-    if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, plot: p.plot, type: p.type, bounds: p.bounds, rev: p.rev, from: b.planRef.from, road: p.road });
+    if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, plot: p.plot, type: p.type, bounds: p.bounds, rev: p.rev, from: b.planRef.from, road: p.road, shop: p.shop, shopName: p.shopName });
     if (!silent) {
       ledger(L, this.sim.today(), `The builders finished ${p.label}.`);
       if (p.owner === 'player') {
-        this.game.ui.msg(`Your house in ${L.settlement.name} has been enlarged!`, '#ffe070');
+        this.game.ui.msg(p.shop ? `${p.shopName} in ${L.settlement.name} is finished: your bench is waiting.` : `Your house in ${L.settlement.name} has been enlarged!`, '#ffe070');
         this.game.audio?.play('coin');
       }
-      if (p.kind === 'build') sim.onBuilt?.(L, b);
+      if (p.kind === 'build' && !b.playerShop) sim.onBuilt?.(L, b);
     }
     this.game.refreshSigns?.();
   }
@@ -504,7 +531,7 @@ export class Works {
       const plot = L.plots[q.plot];
       if (!plot) return;
       plot.taken = true;
-      const plan = L.typedBlueprint(plot, q.type, L.buildings.length);
+      const plan = L.typedBlueprint(plot, q.type, L.buildings.length, this.shopExtra(q));
       L.buildings.push(plan.bld);
       L.claimFootprint(plan.bld);
       if (step.done) {

@@ -10,57 +10,74 @@ import { BLOCKS } from '../world/blocks.js';
 
 export const PROFESSIONS = {
   guard: {
-    title: 'Town Guard', citizen: true, minOp: 10,
+    title: 'Town Guard', citizen: true, minOp: 10, importance: 5,
     kit: [['iron_sword', 1], ['bow', 1], ['arrow', 20], ['guard_badge', 1]],
     pitch: 'Guards keep the peace, by day and through the night. You\'d be paid for every hour on duty in town (the night watch pays a little more), plus a bounty for each beast put down near our walls. You\'ll be issued the watch\'s uniform: wear it with pride.',
   },
   trapper: {
-    title: 'Trapper', fee: 8, minOp: -10, kit: [['bow', 1], ['arrow', 12], ['snare', 2]], goods: ['raw_meat', 'leather', 'feather'],
+    title: 'Trapper', importance: 4, bench: 'tanning_rack', minOp: -10, kit: [['bow', 1], ['arrow', 12], ['snare', 2]], goods: ['raw_meat', 'leather', 'feather'],
     pitch: 'A licensed trapper may empty the town\'s snares and hunt our woods, and the kitchen pays a premium for meat and hides.',
   },
   fisher: {
-    title: 'Fisher', fee: 6, minOp: -10, kit: [['fishing_rod', 1]], goods: ['fish', 'cooked_fish'],
+    title: 'Fisher', importance: 4, bench: 'tackle_bench', minOp: -10, kit: [['fishing_rod', 1]], goods: ['fish', 'cooked_fish'],
     pitch: 'Licensed fishers sell their catch to our kitchens and traders at a premium.',
   },
   farmer: {
-    title: 'Farmer', fee: 6, minOp: -10, kit: [['hoe', 1], ['seeds', 8], ['bucket', 1]], goods: ['wheat', 'carrot', 'cabbage', 'pumpkin'],
+    title: 'Farmer', importance: 5, bench: 'potting_bench', minOp: -10, kit: [['hoe', 1], ['seeds', 8], ['bucket', 1]], goods: ['wheat', 'carrot', 'cabbage', 'pumpkin'],
     pitch: 'You may work and harvest the town fields as your own, and our traders pay a premium for your crops. Fill a bucket at the well on dry days: wet soil grows crops twice as fast.',
   },
   woodcutter: {
-    title: 'Woodcutter', fee: 6, minOp: -10, kit: [['stone_axe', 1]], goods: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_palm', 'log_willow', 'planks', 'stick'],
+    title: 'Woodcutter', importance: 4, bench: 'sawbench', minOp: -10, kit: [['stone_axe', 1]], goods: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_palm', 'log_willow', 'planks', 'stick'],
     pitch: 'A licensed woodcutter supplies our carpenters and builders with timber, and gets a better price for it.',
   },
   miner: {
-    title: 'Miner', fee: 8, minOp: -10, kit: [['stone_pickaxe', 1], ['torch', 8]], goods: ['iron_ore', 'gold_ore', 'coal', 'cobblestone', 'gem'],
+    title: 'Miner', importance: 4, bench: 'rock_crusher', minOp: -10, kit: [['stone_pickaxe', 1], ['torch', 8]], goods: ['iron_ore', 'gold_ore', 'coal', 'cobblestone', 'gem'],
     pitch: 'Our smiths and masons pay a premium for ore, coal and stone from a licensed miner.',
   },
   // Trades only a town (or bigger) has call for.
   herbalist: {
-    title: 'Herbalist', tier: 'town', fee: 10, minOp: 0, kit: [['herb', 2]], goods: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue'],
+    title: 'Herbalist', tier: 'town', importance: 3, workshop: 'herbalist', minOp: 0, kit: [['herb', 2]], goods: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue'],
     pitch: 'Herbs, mushrooms and berries fetch a premium from our cooks and healers when a licensed herbalist gathers them.',
   },
   baker: {
-    title: 'Baker', tier: 'town', fee: 12, minOp: 0, kit: [['wheat', 6]], goods: ['bread', 'pie'],
+    title: 'Baker', tier: 'town', importance: 4, workshop: 'baker', minOp: 0, kit: [['wheat', 6]], goods: ['bread', 'pie'],
     pitch: 'A licensed baker may sell bread and pies in town: the tavern and every household are glad of them.',
   },
   smith: {
-    title: 'Smith', tier: 'town', fee: 20, minOp: 5, kit: [['hammer', 1], ['iron_ingot', 2]], goods: ['iron_ingot', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'hoe', 'lantern', 'iron_helmet', 'chainmail', 'iron_boots', 'iron_greaves', 'iron_breastplate'],
+    title: 'Smith', tier: 'town', importance: 4, workshop: 'smith', minOp: 5, kit: [['hammer', 1], ['iron_ingot', 2]], goods: ['iron_ingot', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'hoe', 'lantern', 'iron_helmet', 'chainmail', 'iron_boots', 'iron_greaves', 'iron_breastplate'],
     pitch: 'A licensed smith sells tools, blades and armour to our guards, builders, miners and farmers at a fair premium.',
   },
   tailor: {
-    title: 'Tailor', tier: 'town', fee: 16, minOp: 0, kit: [['string', 4], ['cloth', 3]], goods: ['cloth', 'linen_shirt', 'wool_trousers', 'wool_hood', 'leather_tunic', 'leather_boots', 'leather_cap', 'fine_coat'],
+    title: 'Tailor', tier: 'town', importance: 3, workshop: 'tailor', minOp: 0, kit: [['string', 4], ['cloth', 3]], goods: ['cloth', 'linen_shirt', 'wool_trousers', 'wool_hood', 'leather_tunic', 'leather_boots', 'leather_cap', 'fine_coat'],
     pitch: 'Licensed tailors sell clothes to the town: our better-off folk always want something new.',
   },
   // Only a city supports these.
   scribe: {
-    title: 'Scribe', tier: 'city', fee: 25, minOp: 10, kit: [['book', 1], ['feather', 3]], goods: ['book', 'scroll'],
+    title: 'Scribe', tier: 'city', importance: 2, workshop: 'scribe', minOp: 10, kit: [['book', 1], ['feather', 3]], goods: ['book', 'scroll'],
     pitch: 'The scholars, the temple and the council buy books and scrolls from a licensed scribe.',
   },
   jeweller: {
-    title: 'Jeweller', tier: 'city', fee: 40, minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'],
+    title: 'Jeweller', tier: 'city', importance: 1, workshop: 'jeweller', minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'],
     pitch: 'Our nobles and merchants pay handsomely for gems, gold and fine things from a licensed jeweller.',
   },
 };
+
+// What a licence costs: the more a town needs the trade, the cheaper (the
+// watch is sworn service, and free). A trade that needs a workshop costs a
+// good deal more, since the town builds you one. Bigger places charge more;
+// citizens pay a quarter less.
+const FEE_BY_IMPORTANCE = { 5: 4, 4: 12, 3: 28, 2: 50, 1: 80 };
+const WORKSHOP_FEE = 150;
+const TIER_FEE = { village: 0.8, town: 1, city: 1.5 };
+
+export function licenceFee(job, s, citizen, hasShop) {
+  const P = PROFESSIONS[job];
+  if (!P || job === 'guard') return { licence: 0, workshop: 0, total: 0 };
+  const k = TIER_FEE[s.type] || 1;
+  const licence = Math.round((FEE_BY_IMPORTANCE[P.importance] ?? 20) * k * (citizen ? 0.75 : 1));
+  const workshop = P.workshop && !hasShop ? Math.round((WORKSHOP_FEE + (5 - P.importance) * 25) * k) : 0;
+  return { licence, workshop, total: licence + workshop };
+}
 
 // Settlement sizes, smallest first: a licence needs a place at least this big.
 export const TIER_ORDER = ['village', 'town', 'city'];
@@ -285,8 +302,20 @@ export class Careers {
     if (P.citizen && sim.justice.recordOf(s.id).convictions) return { ok: false, reason: 'record' };
     if (sim.opinion(mayor) < P.minOp) return { ok: false, reason: 'distrust' };
     if (this.licensed(job, s.id)) return { ok: false, reason: 'already' };
-    const fee = P.citizen || sim.isCitizen(s.id) ? 0 : P.fee * (s.type === 'city' ? 2 : 1);
-    return { ok: true, fee, kit: !this.kits.has(`${s.id}:${job}`) };
+    const shop = this.workshopIn(L, job);
+    const f = licenceFee(job, s, sim.isCitizen(s.id), !!shop);
+    return { ok: true, fee: f.total, licenceFee: f.licence, workshopFee: f.workshop, shop, kit: !this.kits.has(`${s.id}:${job}`) };
+  }
+
+  // Your workshop for a trade in a town (built, or going up), if any.
+  workshopIn(L, job) {
+    return L.buildings.find((b) => b.playerShop === job) || null;
+  }
+
+  // Can you work this trade bench? (Anyone licensed in the trade, in any town.)
+  canUseBench(station) {
+    const j = this.job;
+    return !!j && j.kind === 'profession' && j.job === station;
   }
 
   takeProfession(mayor, job) {
@@ -302,6 +331,10 @@ export class Careers {
       L.econ.treasury += t.fee;
     }
     if (this.job) this.resign(null, true);
+    // A trade that needs a workshop gets one: the builders put it up.
+    const P0 = PROFESSIONS[job];
+    let building = null;
+    if (P0.workshop && !t.shop) building = this.sim.works.startWorkshop(L, job, P0.title);
     this.job = { kind: 'profession', job, sid: s.id, since: g.day, duty: 0, dutyDay: g.day, paidDay: -1, earned: 0, bounties: 0 };
     const given = [];
     if (t.kit) {
@@ -311,6 +344,12 @@ export class Careers {
         if (left) g.spawnDrop(item, left, p.x, p.y, p.z, true);
         given.push({ item, count: n });
       }
+    }
+    // Outdoor trades take their bench with them, to set up wherever they like.
+    if (P0.bench && t.kit) {
+      const left = p.give(P0.bench, 1);
+      if (left) g.spawnDrop(P0.bench, left, p.x, p.y, p.z, true);
+      given.push({ item: P0.bench, count: 1 });
     }
     // Guards are issued the watch's uniform, to put on from the pack.
     if (job === 'guard') {
@@ -326,7 +365,7 @@ export class Careers {
     const title = PROFESSIONS[job].title;
     ledger(L, g.day, `${g.playerName} was sworn in as ${/^[AEIOU]/.test(title) ? 'an' : 'a'} ${title.toLowerCase()} of ${s.name}.`);
     this.sim.changeRep(mayor, 3);
-    return { ok: true, fee: t.fee, given };
+    return { ok: true, fee: t.fee, given, building, shop: t.shop };
   }
 
   resign(reason, quiet = false) {

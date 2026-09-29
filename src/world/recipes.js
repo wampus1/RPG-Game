@@ -1,11 +1,27 @@
 // Crafting recipes grouped by the station they need.
 
+import { DYEABLE, DYES, DYE_FROM, GEMS } from './items.js';
+
 export const STATIONS = {
   hand: 'By Hand',
   workbench: 'Workbench',
   furnace: 'Furnace',
   anvil: 'Anvil',
+  // Trade benches (only someone licensed in the trade can work them).
+  tailor: 'Tailor\'s Loom',
+  herbalist: 'Herbalist\'s Still',
+  scribe: 'Scribe\'s Desk',
+  jeweller: 'Jeweller\'s Bench',
+  baker: 'Baker\'s Oven',
+  smith: 'Smith\'s Grindstone',
+  trapper: 'Tanning Rack',
+  fisher: 'Tackle Bench',
+  woodcutter: 'Sawhorse',
+  farmer: 'Potting Bench',
+  miner: 'Rock Crusher',
 };
+// Stations that belong to a trade.
+export const TRADE_STATIONS = new Set(['tailor', 'herbalist', 'scribe', 'jeweller', 'baker', 'smith', 'trapper', 'fisher', 'woodcutter', 'farmer', 'miner']);
 
 const R = [];
 function r(station, out, n, ingredients) {
@@ -115,9 +131,77 @@ r('anvil', 'iron_greaves', 1, { iron_ingot: 5, leather: 1 });
 r('anvil', 'iron_boots', 1, { iron_ingot: 3, leather: 1 });
 r('anvil', 'gold_circlet', 1, { gold_ingot: 2, gem: 1 });
 
+// --- the trade benches themselves (at a workbench) ------------------------------
+r('workbench', 'loom', 1, { planks: 6, stick: 4, string: 6 });
+r('workbench', 'alembic', 1, { cobblestone: 4, iron_ingot: 1, glass: 2 });
+r('workbench', 'writing_desk', 1, { planks: 5, stick: 2, feather: 1 });
+r('workbench', 'jeweler_bench', 1, { planks: 4, iron_ingot: 2, glass: 1 });
+r('workbench', 'oven', 1, { cobblestone: 6, clay: 4 });
+r('workbench', 'grindstone', 1, { cobblestone: 4, planks: 2, stick: 2 });
+r('workbench', 'tanning_rack', 1, { stick: 6, string: 2 });
+r('workbench', 'tackle_bench', 1, { planks: 3, stick: 2, string: 3 });
+r('workbench', 'sawbench', 1, { planks: 3, stick: 4, iron_ingot: 1 });
+r('workbench', 'potting_bench', 1, { planks: 4, stick: 2, dirt: 2 });
+r('workbench', 'rock_crusher', 1, { cobblestone: 8, stick: 2, iron_ingot: 1 });
+
+// --- what each trade makes at its bench -------------------------------------------
+// Tailors: dyed, well-cut clothes that win people over.
+for (const g of Object.keys(DYEABLE)) for (const c of Object.keys(DYES)) r('tailor', `${g}_${c}`, 1, { [g]: 1, [DYE_FROM[c]]: 2 });
+r('tailor', 'cloth', 2, { string: 3 });
+r('tailor', 'linen_shirt', 1, { cloth: 2 });
+r('tailor', 'fine_coat', 1, { cloth: 4, string: 2, gold_ingot: 1 });
+// Herbalists: potions for vigour and for a few hours' extra strength, speed,
+// endurance or charm; and salves.
+r('herbalist', 'potion_vigor', 1, { herb: 2, berries: 2, glass: 1 });
+r('herbalist', 'potion_might', 1, { herb: 1, mushroom: 2, glass: 1 });
+r('herbalist', 'potion_swiftness', 1, { herb: 1, feather: 2, glass: 1 });
+r('herbalist', 'potion_fortitude', 1, { herb: 1, mushroom: 1, berries: 1, glass: 1 });
+r('herbalist', 'potion_charm', 1, { flower_red: 1, flower_purple: 1, herb: 1, glass: 1 });
+r('herbalist', 'healing_salve', 2, { herb: 2, mushroom: 1 });
+// Scribes: paper and ink (newspapers are printed from the desk itself),
+// books and scrolls.
+r('scribe', 'paper', 3, { reeds: 3 });
+r('scribe', 'ink', 2, { coal: 1, berries: 1 });
+r('scribe', 'scroll', 2, { paper: 1, ink: 1 });
+r('scribe', 'book', 1, { paper: 3, leather: 1, ink: 1 });
+// Jewellers: rough gems cut into stones for setting (the setting itself is
+// done at the bench, carefully).
+for (const k of Object.keys(GEMS)) r('jeweller', k, 1, { gem: 1 });
+r('jeweller', 'gold_circlet', 1, { gold_ingot: 2, gem: 1 });
+// Bakers.
+r('baker', 'bread', 2, { wheat: 3 });
+r('baker', 'pie', 2, { berries: 3, wheat: 2 });
+r('baker', 'feast', 1, { bread: 1, cooked_meat: 1, cabbage: 1, apple: 1 });
+// Smiths: sharpening and fine work beyond the anvil.
+r('smith', 'dagger', 1, { iron_ingot: 1, leather: 1 });
+r('smith', 'iron_bars', 6, { iron_ingot: 2 });
+r('smith', 'lantern', 2, { iron_ingot: 1, torch: 2 });
+// Trappers.
+r('trapper', 'leather', 2, { raw_meat: 2 });
+r('trapper', 'arrow', 12, { stick: 2, feather: 2, cobblestone: 1 });
+r('trapper', 'snare', 3, { stick: 3, string: 2 });
+r('trapper', 'leather_tunic', 1, { leather: 4, string: 1 });
+// Fishers.
+r('fisher', 'fishing_rod', 1, { stick: 2, string: 1 });
+r('fisher', 'cooked_fish', 3, { fish: 3, coal: 1 });
+r('fisher', 'raft', 1, { planks: 4, stick: 2, string: 2 });
+// Woodcutters: more planks from a log than by hand.
+r('woodcutter', 'planks', 6, { log: 1 });
+r('woodcutter', 'stick', 8, { planks: 2 });
+r('woodcutter', 'fence', 6, { planks: 2, stick: 3 });
+// Farmers.
+r('farmer', 'seeds', 4, { wheat: 1 });
+r('farmer', 'cabbage_seeds', 3, { cabbage: 1 });
+r('farmer', 'hay_bale', 1, { wheat: 5 });
+// Miners: sorting ore out of rubble.
+r('miner', 'iron_ore', 1, { cobblestone: 8 });
+r('miner', 'coal', 2, { cobblestone: 6 });
+r('miner', 'sand', 4, { cobblestone: 2 });
+
 export const RECIPES = R;
 
 export function recipesFor(station) {
+  if (TRADE_STATIONS.has(station)) return R.filter((x) => x.station === station);
   // Hand recipes are available everywhere.
   return R.filter((x) => x.station === station || (station !== 'furnace' && station !== 'anvil' && x.station === 'hand'));
 }

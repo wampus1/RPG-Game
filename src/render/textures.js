@@ -804,6 +804,165 @@ const SPRITES = {
     p.hline(3, 12, 22, m[2]);
     return p.outline(OUT);
   },
+  // --- trade benches ---
+  loom() {
+    const p = spr();
+    const w = P.planks;
+    const d = P.planks_dark;
+    p.rect(1, 8, 2, 18, d[0]);
+    p.rect(13, 8, 2, 18, d[0]);
+    p.hline(1, 14, 8, d[1]);
+    p.rect(3, 9, 10, 1, w[1]);
+    for (let x = 4; x <= 11; x++) p.vline(x, 10, 16, x % 2 ? '#e8e0d0' : '#c8c0b0');
+    p.rect(3, 16, 10, 4, '#c83a32');
+    p.hline(3, 12, 17, '#e8a030');
+    p.hline(3, 12, 19, '#8a2a22');
+    p.rect(2, 20, 12, 2, w[2]);
+    p.rect(3, 24, 10, 1, d[1]);
+    return p.outline(OUT);
+  },
+  alembic() {
+    const p = spr();
+    p.rect(2, 20, 12, 6, '#6a6a72');
+    p.hline(2, 13, 20, '#8a8a94');
+    p.rect(5, 22, 3, 2, '#2a1a14');
+    p.set(6, 22, '#f8a030');
+    p.ellipse(6, 16, 4, 4, '#c87a3a');
+    p.set(4, 14, '#e8a060');
+    p.set(5, 13, '#e8a060');
+    p.rect(5, 9, 2, 4, '#b86a2a');
+    p.line(7, 9, 11, 12, '#b86a2a');
+    p.ellipse(12, 16, 2, 3, '#a8d8e8');
+    p.rect(11, 17, 3, 2, '#50c070');
+    p.set(12, 13, '#e8f4f8');
+    return p.outline(OUT);
+  },
+  writing_desk() {
+    const p = spr();
+    const d = P.planks_dark;
+    p.rect(1, 13, 14, 5, d[0]);
+    p.hline(1, 14, 13, shade(d[0], 1.25));
+    p.rect(1, 18, 14, 2, d[1]);
+    p.rect(2, 20, 2, 6, d[1]);
+    p.rect(12, 20, 2, 6, d[1]);
+    p.rect(2, 11, 7, 3, '#f0e8d0');
+    p.hline(3, 7, 12, '#8a7a6a');
+    p.rect(10, 11, 2, 2, '#1a1a2a');
+    p.line(11, 10, 14, 5, '#f4f4f4');
+    p.set(14, 5, '#d8d8e0');
+    return p.outline(OUT);
+  },
+  jeweler_bench() {
+    const p = spr();
+    const w = P.planks;
+    p.rect(1, 14, 14, 4, w[2]);
+    p.hline(1, 14, 14, shade(w[2], 1.15));
+    p.rect(1, 18, 14, 2, w[1]);
+    p.rect(2, 20, 2, 6, P.planks_dark[0]);
+    p.rect(12, 20, 2, 6, P.planks_dark[0]);
+    p.rect(2, 12, 3, 2, '#3a3a44');
+    p.set(7, 13, '#50c0e0');
+    p.set(9, 13, '#e05080');
+    p.set(11, 13, '#60e080');
+    p.vline(5, 6, 11, '#8a8a94');
+    p.hline(5, 9, 6, '#8a8a94');
+    p.rect(8, 7, 3, 2, '#f0d070');
+    return p.outline(OUT);
+  },
+  oven(rot, st, f) {
+    const p = spr();
+    const br = ['#a8503a', '#8a3e2e', '#c8684a'];
+    p.ellipse(8, 13, 7, 5, br[0]);
+    p.rect(1, 13, 14, 13, br[0]);
+    p.hline(3, 12, 9, br[2]);
+    for (let y = 15; y < 26; y += 3) p.hline(1, 14, y, br[1]);
+    p.rect(4, 17, 8, 6, '#2a1a14');
+    const fl = f % 2 ? ['#f8a030', '#e85a18'] : ['#e85a18', '#f8a030'];
+    p.rect(5, 20, 6, 3, fl[0]);
+    p.rect(6, 19, 4, 2, fl[1]);
+    p.rect(6, 5, 3, 4, '#6a6a72');
+    return p.outline(OUT);
+  },
+  grindstone() {
+    const p = spr();
+    p.rect(2, 22, 12, 4, P.planks_dark[0]);
+    p.rect(3, 18, 2, 5, P.planks_dark[1]);
+    p.rect(11, 18, 2, 5, P.planks_dark[1]);
+    p.ellipse(8, 15, 5, 5, '#9a9aa4');
+    p.ellipse(8, 15, 2, 2, '#6a6a72');
+    p.hline(3, 13, 15, '#b8b8c4');
+    p.line(13, 15, 15, 11, '#6a4a2e');
+    return p.outline(OUT);
+  },
+  tanning_rack() {
+    const p = spr();
+    const d = P.planks_dark;
+    p.rect(2, 6, 2, 20, d[0]);
+    p.rect(12, 6, 2, 20, d[0]);
+    p.hline(2, 13, 6, d[1]);
+    p.hline(2, 13, 22, d[1]);
+    p.ellipse(8, 14, 4, 6, '#a87850');
+    p.ellipse(8, 14, 2, 4, '#c89868');
+    for (const [x, y] of [[4, 8], [11, 8], [4, 20], [11, 20]]) p.set(x, y, '#d8c890');
+    return p.outline(OUT);
+  },
+  tackle_bench() {
+    const p = spr();
+    p.rect(1, 15, 14, 3, P.planks[1]);
+    p.hline(1, 14, 15, shade(P.planks[1], 1.2));
+    p.rect(2, 18, 2, 8, P.planks_dark[0]);
+    p.rect(12, 18, 2, 8, P.planks_dark[0]);
+    p.line(2, 14, 12, 4, '#7a5430');
+    p.vline(12, 4, 9, '#e8e8f0');
+    for (let x = 4; x < 9; x++) for (let y = 11; y < 15; y++) if ((x + y) % 2 === 0) p.set(x, y, '#c8c0a0');
+    p.rect(9, 12, 4, 3, '#6a8aa8');
+    p.set(10, 13, '#b8d0e8');
+    return p.outline(OUT);
+  },
+  sawbench() {
+    const p = spr();
+    const d = P.planks_dark[0];
+    p.line(2, 25, 6, 17, d);
+    p.line(6, 25, 2, 17, d);
+    p.line(10, 25, 14, 17, d);
+    p.line(14, 25, 10, 17, d);
+    p.rect(0, 14, 16, 3, '#8a6038');
+    p.hline(0, 15, 14, '#a8784a');
+    p.rect(0, 14, 1, 3, '#d8b078');
+    p.rect(15, 14, 1, 3, '#d8b078');
+    p.rect(5, 10, 7, 2, '#c0c0c8');
+    p.rect(11, 9, 3, 3, '#6a4a2e');
+    return p.outline(OUT);
+  },
+  potting_bench() {
+    const p = spr();
+    p.rect(1, 16, 14, 3, P.planks[2]);
+    p.hline(1, 14, 16, shade(P.planks[2], 1.15));
+    p.rect(2, 19, 2, 7, P.planks_dark[0]);
+    p.rect(12, 19, 2, 7, P.planks_dark[0]);
+    p.rect(2, 23, 12, 1, P.planks[1]);
+    for (const x of [2, 6, 10]) {
+      p.rect(x, 13, 3, 3, '#b8603a');
+      p.set(x + 1, 11, '#58a040');
+      p.set(x, 12, '#58a040');
+      p.set(x + 2, 12, '#78c050');
+    }
+    return p.outline(OUT);
+  },
+  rock_crusher() {
+    const p = spr();
+    const st = P.stone;
+    p.rect(2, 17, 12, 9, st[0]);
+    p.hline(2, 13, 17, st[2]);
+    for (let y = 20; y < 26; y += 3) p.hline(2, 13, y, st[1]);
+    p.rect(4, 18, 8, 2, '#3a3a40');
+    p.set(5, 18, '#8a8a94');
+    p.set(9, 18, '#b88a50');
+    p.rect(7, 7, 2, 11, '#6a4a2e');
+    p.rect(5, 5, 6, 3, '#5a5a62');
+    p.hline(5, 10, 5, '#7a7a84');
+    return p.outline(OUT);
+  },
   torch(rot, st, f) {
     const p = spr();
     p.rect(7, 14, 2, 12, '#7a5430');
@@ -1418,7 +1577,7 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
 const CUBE_ROT_FRONT = new Set(['bookshelf']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4 };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2 };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;

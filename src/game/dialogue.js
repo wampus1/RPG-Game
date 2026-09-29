@@ -6,12 +6,12 @@
 import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
 import { MAP_W } from '../config.js';
-import { BUILDING_NAMES } from '../world/settlement.js';
+import { BUILDING_NAMES, TRADE_BENCHES } from '../world/settlement.js';
 import { ITEMS } from '../world/items.js';
 import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
-import { PROFESSIONS, clock, bare, licensesFor } from '../sim/careers.js';
+import { PROFESSIONS, clock, bare, licensesFor, licenceFee } from '../sim/careers.js';
 import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
@@ -479,7 +479,10 @@ function professionTalk(npc, game, arg) {
     return {
       lines: [`${s.name} licenses ${s.type === 'city' ? 'all manner of' : s.type === 'town' ? 'a good few' : 'a few'} trades. Which interests you?`],
       // A bigger place has call for more trades.
-      choices: licensesFor(s.type).map((k) => ({ id: 'profession', arg: `ask:${k}`, label: `${PROFESSIONS[k].title}${PROFESSIONS[k].citizen ? ' (citizens)' : ''}` })),
+      choices: licensesFor(s.type).map((k) => {
+        const f = licenceFee(k, s, game.sim.isCitizen(s.id), !!car.workshopIn(npc.layout, k));
+        return { id: 'profession', arg: `ask:${k}`, label: `${PROFESSIONS[k].title}${PROFESSIONS[k].citizen ? ' (citizens)' : ''}${f.total ? ` · ¤${f.total}` : ' · free'}` };
+      }),
     };
   }
   const [what, key] = arg.split(':');
@@ -497,8 +500,10 @@ function professionTalk(npc, game, arg) {
       return { lines: [P.pitch, why] };
     }
     const lines = [P.pitch];
-    const kit = t.kit ? ` We'll give you ${P.kit.map(([it, n]) => plural(it, n)).join(', ')} to start.` : '';
-    lines.push(`${t.fee ? `The licence costs ¤${t.fee}.` : 'There\'s no fee.'}${kit}`);
+    const kitItems = [...P.kit, ...(P.bench ? [[P.bench, 1]] : [])];
+    const kit = t.kit && kitItems.length ? ` We'll give you ${kitItems.map(([it, n]) => plural(it, n)).join(', ')} to start.` : '';
+    const fees = t.fee ? `The licence costs ¤${t.licenceFee}${t.workshopFee ? `, and ¤${t.workshopFee} more: the builders will put up a workshop for you, with your own ${ITEMS[TRADE_BENCHES[key]?.[0]]?.name?.toLowerCase() || 'bench'}` : ''}${t.shop ? ' (you already have your workshop here)' : ''}.` : 'There\'s no fee: it\'s sworn service.';
+    lines.push(`${fees}${kit}`);
     if (j) lines.push(`You'd have to give up being ${car.title()}.`);
     return { lines, choices: [{ id: 'profession', arg: `take:${key}`, label: `I'll take it.${t.fee ? ` (Pay ¤${t.fee})` : ''}` }], back: 'Let me think about it.' };
   }
@@ -507,6 +512,7 @@ function professionTalk(npc, game, arg) {
   game.ui.msg(`You are now ${P.title === 'Town Guard' ? 'a Town Guard' : `a licensed ${P.title.toLowerCase()}`} of ${s.name}!`, '#ffe070');
   game.audio?.play('coin');
   const got = r.given.length ? `Here: ${r.given.map((g) => plural(g.item, g.count)).join(', ')}.` : '';
+  if (r.building) return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got, 'The builders will start on your workshop today: look for the sign on the site.'].filter(Boolean) };
   if (key === 'guard') return { lines: [`Raise your right hand... Welcome to the watch, ${name}!`, `${got} Wear the colours with pride.`.trim(), 'Patrol the streets from six to eight. The treasury pays for every hour.'] };
   return { lines: [`It's in the ledger. Welcome, ${P.title.toLowerCase()} ${name}!`, got || 'Good luck out there.'].filter(Boolean) };
 }
