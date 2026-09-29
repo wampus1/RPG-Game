@@ -3,7 +3,7 @@
 import { LAWS, lawList } from '../sim/laws.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
-import { ITEMS, maxStack } from '../world/items.js';
+import { ITEMS, maxStack, GEMS } from '../world/items.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
 import { itemIcon } from '../render/sprites.js';
@@ -344,6 +344,17 @@ export class UI {
     if (d.damage) lines.push({ text: `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
     if (d.kind === 'food') lines.push({ text: `Restores ${d.heal} HP [F/RMB]`, color: C.green });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
+    const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
+    if (d.stats) lines.push({ text: `${d.kind === 'armor' ? 'While worn' : 'While held'}: ${Object.entries(d.stats).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${STAT[k] || k}`).join(' ')}`, color: C.green });
+    const GIFT = { ember: 'strikes sometimes burn', swift: 'swings faster', leech: 'each hit mends you', gleam: 'a gleaming blade', stun: 'blows stagger beasts' };
+    if (d.socket) lines.push({ text: `Set with a ${GEMS[d.socket].name}${d.gift ? `: ${GIFT[d.gift]}` : ''}`, color: '#c0a0ff' });
+    if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
+    if (d.kind === 'potion') {
+      const e = d.effect || {};
+      const what = e.stat ? `${STAT[e.stat]} +${e.n} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health for today` : `Heals ${e.heal}`;
+      lines.push({ text: `${what} [F/RMB]`, color: '#c0a0ff' });
+    }
+    if (d.newspaper) lines.push({ text: 'Read it [F/RMB] · hand copies to people', color: C.dim });
     if (d.kind === 'block') {
       const b = BLOCKS[d.block];
       lines.push({ text: 'Placeable block' + (b.rotatable ? ' · [R] rotate' : ''), color: C.dim });
@@ -370,6 +381,16 @@ export class UI {
     const bh = Math.ceil(blue / 2);
     for (let i = 0; i < bh; i++) g.put(1 + hearts + i, 0, '♥', blue - i * 2 >= 2 ? '#58a8ff' : '#3868a8');
     g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
+    // Potions still working.
+    const nowAbs = game.day * 1440 + game.minute;
+    const buffs = (p.buffs || []).filter((q) => q.until > nowAbs);
+    if (buffs.length) {
+      const txt = buffs.map((q) => {
+        const left = Math.max(0, q.until - nowAbs);
+        return `${{ str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' }[q.stat]}+${q.n} ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
+      }).join('  ');
+      g.text(1, 3, txt.slice(0, 40), '#c0a0ff', 'rgba(10,8,16,0.55)');
+    }
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
     g.text(1, 1, `¤ ${coins}`, C.hi);
     const held = p.heldDef();
@@ -677,6 +698,10 @@ export class UI {
   }
   openWait() {
     this.open(new W.WaitWindow(this, this.game));
+  }
+  openNews() {
+    this.closeAll();
+    this.open(new W.NewsWindow(this, this.game));
   }
 
   openDialogue(npc) {

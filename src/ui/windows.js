@@ -2,7 +2,7 @@
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
-import { ITEMS, maxStack, WEAR_SLOTS } from '../world/items.js';
+import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
@@ -293,6 +293,31 @@ export class CraftWindow extends Window {
     }
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
     g.text(2, this.h - 1, ' click craft · SHIFT x5 · wheel scroll ', C.faint);
+    // The scribe's desk prints; the jeweller's bench sets stones.
+    const extra = this.station === 'scribe' ? ' [P] print a newspaper ' : this.station === 'jeweller' ? ' [S] set a gem ' : null;
+    if (extra) {
+      const hov = this.hovering(this.w - extra.length - 2, 0, extra.length, 1);
+      g.text(this.w - extra.length - 2, 0, extra, hov ? C.white : C.hi, '#2a2230');
+      this.hit(this.w - extra.length - 2, 0, extra.length, 1, () => this.extra());
+    }
+  }
+  extra() {
+    const game = this.ui.game;
+    if (this.station === 'scribe') {
+      const s = game.currentSettlement;
+      if (!s) {
+        this.ui.msg('There\'s no town here to write about.', C.dim);
+        return;
+      }
+      this.ui.open(new PrintWindow(this.ui, game, game.world.getLayout(s)));
+    } else if (this.station === 'jeweller') this.ui.open(new SettingWindow(this.ui, game));
+  }
+  onKey(k) {
+    if ((this.station === 'scribe' && k.code === 'KeyP') || (this.station === 'jeweller' && k.code === 'KeyS')) {
+      this.extra();
+      return true;
+    }
+    return false;
   }
   craft(r, game, times) {
     const inv = game.player.inv;
@@ -1564,3 +1589,249 @@ export class TitleWindow extends Window {
 }
 
 export { slotTable };
+
+// ---------------------------------------------------------------- the press
+// At a scribe's desk: pick the stories for an edition, then print it.
+export class PrintWindow extends Window {
+  constructor(ui, game, L) {
+    super(ui, 70, 24, { kind: 'print' });
+    this.game = game;
+    this.L = L;
+    this.stories = game.sim.press.stories(L);
+    this.picked = new Set(this.stories.slice(0, Math.min(3, this.stories.length)).map((_, i) => i));
+    this.sel = 0;
+    this.copies = 4;
+  }
+  draw(g, game) {
+    const press = game.sim.press;
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#14100c');
+    g.box(0, 0, this.w, this.h, { bg: '#14100c', double: true, title: 'PRINT A NEWSPAPER' });
+    g.center(1, press.mastheadFor(this.L.settlement).toUpperCase(), '#f0e0c0');
+    g.center(2, `Day ${game.day} · pick up to ${4} stories you've recorded`, C.dim);
+    if (!this.stories.length) g.center(6, 'Nothing on record yet: nothing has happened here lately.', C.faint);
+    this.stories.slice(0, 12).forEach((st, i) => {
+      const y = 4 + i;
+      const on = this.picked.has(i);
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, i === this.sel ? C.bgHi : hov ? '#3a3250' : undefined);
+      g.text(3, y, on ? '[x]' : '[ ]', on ? C.green : C.faint);
+      const tag = st.afar ? `(${st.from}) ` : '';
+      g.text(7, y, `${tag}${st.text}`.slice(0, this.w - 10), on ? C.white : C.fg);
+      this.hit(2, y, this.w - 4, 1, () => {
+        this.sel = i;
+        this.toggle(i);
+      });
+    });
+    const inv = game.player.inv;
+    const runs = Math.ceil(this.copies / 4);
+    const y2 = this.h - 5;
+    g.text(3, y2, `Copies: ◄ ${this.copies} ►   needs ${runs} paper and ${runs} ink (you have ${countItem(inv, 'paper')} and ${countItem(inv, 'ink')})`, press.canPrint(this.copies) ? C.fg : C.orange);
+    const ok = this.picked.size && press.canPrint(this.copies);
+    const hov = this.hovering(3, y2 + 2, 22, 1);
+    g.fill(3, y2 + 2, 22, 1, ' ', C.fg, ok ? (hov ? C.bgHi : '#2a2230') : '#1a1418');
+    g.text(4, y2 + 2, '[ENTER] Print edition', ok ? C.hi : C.faint);
+    this.hit(3, y2 + 2, 22, 1, () => this.print());
+    g.text(this.w - 36, this.h - 1, ' ↑↓ story · SPACE pick · ←→ copies ', C.faint);
+  }
+  toggle(i) {
+    if (this.picked.has(i)) this.picked.delete(i);
+    else if (this.picked.size < 4) this.picked.add(i);
+    this.ui.audio?.play('select');
+  }
+  print() {
+    const picks = [...this.picked].sort((a, b) => a - b).map((i) => this.stories[i]);
+    const ed = this.game.sim.press.print(this.L, picks, this.copies);
+    if (!ed) {
+      this.ui.audio?.play('error');
+      return;
+    }
+    this.ui.msg(`Printed ${this.copies} copies of ${ed.title}. Hand them out to people!`, C.green);
+    this.ui.audio?.play('craft');
+    this.close();
+  }
+  onKey(k) {
+    const n = Math.min(12, this.stories.length);
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % Math.max(1, n);
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % Math.max(1, n);
+    else if (k.code === 'Space') this.toggle(this.sel);
+    else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.copies = Math.max(4, this.copies - 4);
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.copies = Math.min(16, this.copies + 4);
+    else if (k.code === 'Enter') this.print();
+    return true;
+  }
+}
+
+// Reading the latest edition.
+export class NewsWindow extends Window {
+  constructor(ui, game) {
+    super(ui, 60, 22, { kind: 'news' });
+    this.closeOnOutside = true;
+    this.ed = game.sim.press.latest();
+  }
+  draw(g, game) {
+    const ed = this.ed;
+    g.fill(0, 0, this.w, this.h, ' ', '#2a2620', '#ece6d4');
+    g.box(0, 0, this.w, this.h, { bg: '#ece6d4', fg: '#2a2620', double: true });
+    if (!ed) {
+      g.center(8, 'The pages are blank.', '#5a5448');
+      return;
+    }
+    g.center(1, ed.title.toUpperCase(), '#1a1612');
+    g.center(2, '═'.repeat(this.w - 6), '#5a5448');
+    g.center(3, `Edition ${ed.id} · Day ${ed.day} · printed by ${ed.by}`, '#5a5448');
+    let y = 5;
+    for (const h of ed.headlines) {
+      const lines = wrap(`${h.afar ? `FROM ${h.from.toUpperCase()}: ` : ''}${h.text}`, this.w - 8);
+      lines.forEach((l, i) => g.text(4, y + i, l, i === 0 ? '#1a1612' : '#3a342c'));
+      y += lines.length + 1;
+      if (y > this.h - 3) break;
+    }
+    if (game.day - ed.day > 2) g.center(this.h - 2, '(yesterday\'s news by now)', '#8a8478');
+  }
+  onKey(k) {
+    if (k.code === 'Escape' || k.code === 'KeyF' || k.code === 'Enter') this.close();
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------- setting gems
+// At a jeweller's bench: choose a piece and a stone, then set it. The needle
+// runs round the setting; press SPACE as it passes each prong to press it
+// down over the stone. Three slips and the stone cracks.
+const RING = 24;
+const PRONGS = [3, 9, 15, 21];
+export class SettingWindow extends Window {
+  constructor(ui, game) {
+    super(ui, 52, 22, { kind: 'setting' });
+    this.game = game;
+    this.state = 'choose';
+    this.piece = 0;
+    this.gem = 0;
+  }
+  pieces() {
+    const p = this.game.player;
+    const out = [];
+    p.inv.forEach((s, i) => {
+      if (s && canSocket(s.item)) out.push({ ref: { kind: 'inv', i }, key: s.item });
+    });
+    for (const slot of WEAR_SLOTS) if (p.equip[slot] && canSocket(p.equip[slot])) out.push({ ref: { kind: 'equip', slot }, key: p.equip[slot] });
+    return out;
+  }
+  gems() {
+    const inv = this.game.player.inv;
+    return Object.keys(GEMS).filter((k) => countItem(inv, k) > 0);
+  }
+  draw(g, game) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'SET A GEM' });
+    if (this.state === 'choose') return this.drawChoose(g);
+    this.drawRing(g);
+  }
+  drawChoose(g) {
+    const pieces = this.pieces();
+    const gems = this.gems();
+    if (!pieces.length || !gems.length) {
+      g.center(6, !pieces.length ? 'You have nothing to set a stone in.' : 'You have no cut stones.', C.dim);
+      g.center(8, !gems.length ? 'Cut a rough gem at this bench first.' : 'Weapons and armour can take a gem.', C.faint);
+      return;
+    }
+    this.piece = Math.min(this.piece, pieces.length - 1);
+    this.gem = Math.min(this.gem, gems.length - 1);
+    const pc = pieces[this.piece];
+    const gk = gems[this.gem];
+    g.text(3, 2, 'Piece (↑↓):', C.dim);
+    g.text(16, 2, `${ITEMS[pc.key].name}${pc.ref.kind === 'equip' ? ' (worn)' : ''}`, C.white);
+    g.text(3, 4, 'Stone (←→):', C.dim);
+    g.text(16, 4, `${GEMS[gk].name} ×${countItem(this.game.player.inv, gk)}`, GEMS[gk].color);
+    g.text(3, 6, GEMS[gk].about + '.', C.fg);
+    const res = ITEMS[socketed(pc.key, gk)];
+    if (res) g.text(3, 8, `Makes: ${res.name}`, C.green);
+    g.text(3, 10, 'Press SPACE as the needle passes each prong.', C.faint);
+    g.text(3, 11, 'Three slips and the stone cracks.', C.faint);
+    const hov = this.hovering(3, 14, 22, 1);
+    g.fill(3, 14, 22, 1, ' ', C.fg, hov ? C.bgHi : '#2a2230');
+    g.text(4, 14, '[ENTER] Begin setting', C.hi);
+    this.hit(3, 14, 22, 1, () => this.begin());
+  }
+  drawRing(g) {
+    const cx = Math.floor(this.w / 2);
+    const cy = 9;
+    const at = (i) => {
+      const a = (i / RING) * Math.PI * 2 - Math.PI / 2;
+      return [cx + Math.round(Math.cos(a) * 12), cy + Math.round(Math.sin(a) * 6)];
+    };
+    for (let i = 0; i < RING; i++) {
+      const [x, y] = at(i);
+      const k = PRONGS.indexOf(i);
+      if (k >= 0) g.put(x, y, this.pressed[k] ? '■' : '▲', this.pressed[k] ? C.green : C.hi);
+      else g.put(x, y, '·', C.faint);
+    }
+    const [nx, ny] = at(Math.round(this.pos) % RING);
+    g.put(nx, ny, '●', C.white);
+    g.put(cx, cy, '◆', GEMS[this.set.gem].color);
+    g.center(cy + 8, this.state === 'done' ? 'Set! The stone sits true.' : this.state === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'✗'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.state === 'fail' ? C.red : this.state === 'done' ? C.green : C.fg);
+    if (this.state !== 'set') g.center(cy + 10, '[ENTER] close', C.faint);
+  }
+  begin() {
+    const pieces = this.pieces();
+    const gems = this.gems();
+    if (!pieces.length || !gems.length) return;
+    this.set = { piece: pieces[this.piece], gem: gems[this.gem] };
+    this.state = 'set';
+    this.pos = 0;
+    this.speed = 7;
+    this.slips = 0;
+    this.pressed = PRONGS.map(() => false);
+    this.ui.audio?.play('select');
+  }
+  update(dt) {
+    if (this.state !== 'set') return;
+    this.pos = (this.pos + dt * this.speed) % RING;
+  }
+  press() {
+    // The nearest unpressed prong within reach of the needle.
+    let best = -1;
+    let bd = 99;
+    PRONGS.forEach((q, k) => {
+      if (this.pressed[k]) return;
+      const d = Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q));
+      if (d < bd) {
+        bd = d;
+        best = k;
+      }
+    });
+    if (best >= 0 && bd <= 0.9) {
+      this.pressed[best] = true;
+      this.speed += 2.5;
+      this.ui.audio?.play('clang');
+      if (this.pressed.every(Boolean)) {
+        this.state = 'done';
+        this.game.setGem(this.set.piece.ref, this.set.gem);
+      }
+      return;
+    }
+    this.slips++;
+    this.ui.audio?.play('error');
+    if (this.slips >= 3) {
+      this.state = 'fail';
+      removeItem(this.game.player.inv, this.set.gem, 1);
+      this.ui.msg(`The ${GEMS[this.set.gem].name.toLowerCase()} cracked in the setting.`, C.red);
+    }
+  }
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (this.state === 'choose') {
+      const n = this.pieces().length;
+      const m = this.gems().length;
+      if (k.code === 'ArrowUp' || k.code === 'KeyW') this.piece = (this.piece + Math.max(1, n) - 1) % Math.max(1, n);
+      else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.piece = (this.piece + 1) % Math.max(1, n);
+      else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.gem = (this.gem + Math.max(1, m) - 1) % Math.max(1, m);
+      else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.gem = (this.gem + 1) % Math.max(1, m);
+      else if (k.code === 'Enter') this.begin();
+    } else if (this.state === 'set') {
+      if (k.code === 'Space') this.press();
+    } else if (k.code === 'Enter' || k.code === 'Space') this.close();
+    return true;
+  }
+}

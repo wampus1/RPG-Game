@@ -58,6 +58,11 @@ export class Creature extends Entity {
       return;
     }
     if (this.moving) return;
+    // Staggered by a blow (an amethyst-set blade).
+    if (this.stunT > 0) {
+      this.stunT -= dt;
+      return;
+    }
     this.thinkT -= dt;
     const game = this.game;
     if (this.hostileNow) {

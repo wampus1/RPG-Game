@@ -1,7 +1,7 @@
 // Procedural character, creature and item sprites.
 import { Px, hex, shade } from './pixel.js';
 import { TEX, SPR_H } from './textures.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, GEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 
@@ -864,6 +864,26 @@ function simpleIcon(key) {
       p.line(4, 7, 10, 9, '#5a3a1e');
       p.rect(10, 6, 3, 4, '#8a5a34');
       break;
+    case 'paper':
+      p.rect(4, 3, 8, 10, '#f0ead8');
+      p.hline(5, 10, 5, '#c8c0a8');
+      p.hline(5, 10, 7, '#c8c0a8');
+      p.hline(5, 9, 9, '#c8c0a8');
+      break;
+    case 'ink':
+      p.rect(5, 7, 6, 6, '#2a2a3a');
+      p.rect(6, 5, 4, 2, '#3a3a4a');
+      p.hline(6, 9, 8, '#4a4a6a');
+      break;
+    case 'newspaper':
+      p.rect(2, 3, 12, 10, '#ece6d4');
+      p.rect(3, 4, 10, 2, '#2a2630');
+      for (let y = 7; y < 12; y += 2) {
+        p.hline(3, 7, y, '#8a8478');
+        p.hline(9, 12, y, '#8a8478');
+      }
+      p.vline(8, 7, 12, '#c8c0b0');
+      break;
     default:
       p.rect(4, 4, 8, 8, '#ff00ff');
   }
@@ -1004,12 +1024,65 @@ function armorIcon(it) {
 }
 
 const iconCache = new Map();
+// A glass bottle with a coloured draught.
+function potionIcon(it) {
+  const p = new Px(16, 16);
+  const e = it.effect || {};
+  const col = e.blue ? '#58a8ff' : e.heal ? '#e05050' : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
+  if (e.heal) {
+    // A salve: a little pot.
+    p.rect(4, 7, 8, 6, '#c8b890');
+    p.rect(4, 6, 8, 2, hex(col));
+    p.hline(4, 11, 8, '#a89870');
+    return p.outline(OUT);
+  }
+  p.rect(7, 2, 2, 3, '#c8e0e8');
+  p.rect(6, 1, 4, 1, '#8a6a4a');
+  p.ellipse(8, 10, 4, 4, '#d8eef4');
+  p.ellipse(8, 11, 3, 2.5, hex(col));
+  p.set(6, 8, '#ffffff');
+  return p.outline(OUT);
+}
+
+// A cut stone.
+function gemIcon(it) {
+  const p = new Px(16, 16);
+  const g = GEMS[it.key] || { color: '#50c0e0' };
+  const c = hex(g.color);
+  p.rect(5, 5, 6, 2, shade(c, 1.3));
+  p.rect(4, 7, 8, 2, c);
+  p.rect(5, 9, 6, 1, shade(c, 0.8));
+  p.rect(6, 10, 4, 1, shade(c, 0.7));
+  p.rect(7, 11, 2, 1, shade(c, 0.6));
+  p.set(6, 5, '#ffffff');
+  return p.outline(OUT);
+}
+
 export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
   const it = ITEMS[key];
+  // A piece with a stone set in it: its own icon, with the gem glinting.
+  if (it && it.socket) {
+    const base = itemIcon(it.base);
+    c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const x = c.getContext('2d');
+    x.drawImage(base, 0, 0);
+    x.fillStyle = '#1c1622';
+    x.fillRect(10, 1, 5, 5);
+    x.fillStyle = GEMS[it.socket]?.color || '#50c0e0';
+    x.fillRect(11, 2, 3, 3);
+    x.fillStyle = '#ffffff';
+    x.fillRect(11, 2, 1, 1);
+    iconCache.set(key, c);
+    return c;
+  }
   let px;
   if (!it) px = simpleIcon('?');
+  else if (it.kind === 'potion') px = potionIcon(it);
+  else if (it.kind === 'gem') px = gemIcon(it);
   else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);
   else {
     const m = key.match(/^(wood|stone|iron|gold)_(pickaxe|axe|shovel|sword)$/);

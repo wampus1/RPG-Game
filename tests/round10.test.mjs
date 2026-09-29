@@ -121,3 +121,85 @@ test('the night watch pays a little more than the day', () => {
   void countItem;
   void p;
 });
+
+test('trade benches: only the licensed can work them; tailored clothes charm people', async () => {
+  const { recipesFor } = await import('../src/world/recipes.js');
+  const { ITEMS } = await import('../src/world/items.js');
+  const { game, a, L, p } = start();
+  const car = game.sim.careers;
+  assert.ok(!car.canUseBench('tailor'));
+  // The loom makes dyed clothes that add charisma.
+  const r = recipesFor('tailor').find((q) => q.out === 'linen_shirt_red');
+  assert.ok(r && r.in.linen_shirt && r.in.flower_red);
+  assert.ok(ITEMS.linen_shirt_red.stats.cha >= 1);
+  assert.ok(String(ITEMS.linen_shirt_red.look).startsWith('linen:'));
+  const npc = a.npcs.find((n) => n.rec.age === 'adult');
+  const before = game.sim.opinion(npc);
+  p.give('fine_coat_purple', 1);
+  p.wear(p.inv.findIndex((q) => q && q.item === 'fine_coat_purple'));
+  game.refreshBonus();
+  assert.ok(game.hero.bonus.cha >= 3, 'the coat adds charisma');
+  assert.ok(game.sim.opinion(npc) > before, 'people warm to you');
+  void L;
+});
+
+test('potions raise an ability for a few hours; vigor gives blue hearts', () => {
+  const { game, p } = start();
+  p.give('potion_might', 1);
+  game.selectSlot(p.inv.findIndex((q) => q && q.item === 'potion_might'));
+  assert.ok(game.drink());
+  assert.equal(game.hero.bonus.str, 2);
+  // Hours later, it wears off.
+  game.minute += 4 * 60;
+  game.refreshBonus();
+  assert.equal(game.hero.bonus.str || 0, 0);
+  p.give('potion_vigor', 1);
+  game.selectSlot(p.inv.findIndex((q) => q && q.item === 'potion_vigor'));
+  assert.ok(game.drink());
+  assert.ok(p.blue.hp >= 4);
+});
+
+test('a scribe prints the news and hands it out; people read it and talk of it', () => {
+  const { game, a, L, p } = start();
+  const press = game.sim.press;
+  L.econ.ledger.push({ day: game.day, text: 'A great fish was caught in the mill pond.' });
+  const stories = press.stories(L);
+  assert.ok(stories.some((q) => /great fish/.test(q.text)));
+  assert.equal(press.print(L, stories.slice(0, 2), 4), null, 'no paper, no ink');
+  p.give('paper', 1);
+  p.give('ink', 1);
+  const ed = press.print(L, stories.slice(0, 2), 4);
+  assert.ok(ed && ed.headlines.length === 2);
+  assert.equal(countItem(p.inv, 'newspaper'), 4);
+  const npc = a.npcs.find((n) => n.rec.age === 'adult' && n.rec.job !== 'mayor');
+  const op = game.sim.opinion(npc);
+  const r = respond(npc, game, 'paper');
+  assert.ok(r.lines.length);
+  assert.equal(npc.rec.readEdition, ed.id);
+  assert.ok(game.sim.opinion(npc) > op);
+  assert.equal(countItem(p.inv, 'newspaper'), 3);
+});
+
+test('a jeweller sets a gem: stats and a gift for the blade', async () => {
+  const { ITEMS } = await import('../src/world/items.js');
+  const { game, p } = start();
+  p.give('iron_sword', 1);
+  p.give('ruby', 1);
+  const i = p.inv.findIndex((q) => q && q.item === 'iron_sword');
+  assert.ok(game.setGem({ kind: 'inv', i }, 'ruby'));
+  assert.equal(p.inv[i].item, 'iron_sword+ruby');
+  assert.equal(countItem(p.inv, 'ruby'), 0);
+  const it = ITEMS['iron_sword+ruby'];
+  assert.equal(it.gift, 'ember');
+  assert.ok(it.stats.str >= 1);
+  game.selectSlot(i);
+  game.refreshBonus();
+  assert.equal(game.hero.bonus.str, 1, 'held, the ruby adds strength');
+  // Armour takes gems too.
+  p.give('leather_tunic', 1);
+  p.give('emerald', 1);
+  const j = p.inv.findIndex((q) => q && q.item === 'leather_tunic');
+  p.wear(j);
+  assert.ok(game.setGem({ kind: 'equip', slot: 'body' }, 'emerald'));
+  assert.equal(p.equip.body, 'leather_tunic+emerald');
+});

@@ -78,6 +78,13 @@ export function exchangeFor(a, b, game) {
     else if (/feast/.test(ev.text)) opts.push(['That feast! I\'m still full.', 'Me too. I regret nothing.']);
   }
   if (e.bellAt !== undefined && sim.abs - e.bellAt < 720) opts.push(['Did you hear the bell ring last night?', 'Nearly jumped out of my skin.', 'The watch saw them off, I heard.']);
+  // Talk of the latest newspaper, among those who've read it.
+  const ed = sim.press.latest();
+  if (ed && ra.readEdition === ed.id && ra.age !== 'child') {
+    const st = ed.headlines[(ra.idx + game.day) % ed.headlines.length];
+    const short = st.text.length > 60 ? `${st.text.slice(0, 57)}...` : st.text;
+    opts.push([`Did you read ${ed.title}, ${B}?`, rb.readEdition === ed.id ? `The bit about "${short}"? Yes!` : 'No, what does it say?', rb.readEdition === ed.id ? 'Whatever next.' : `"${short}"`]);
+  }
   const rum = (e.rumours || [])[(e.rumours || []).length - 1];
   if (rum) opts.push([`A merchant from ${rum.from} was saying there's news over there.`, 'Oh? What sort of news?', `${rum.text.slice(0, 70)}${rum.text.length > 70 ? '...' : ''}`]);
   // A hobby they share.

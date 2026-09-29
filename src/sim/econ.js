@@ -24,12 +24,12 @@ export const STOCK = {
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
   inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
-  tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots'],
+  tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots', 'linen_shirt_red', 'linen_shirt_blue', 'wool_hood_green', 'wool_trousers_black', 'fine_coat_purple'],
   carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft'],
-  herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue'],
+  herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness'],
   fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string', 'raft'],
   farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
-  scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern'],
+  scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern', 'paper', 'ink'],
   trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers'],
 };
 
@@ -40,12 +40,12 @@ export const WANTS = {
   baker: ['wheat', 'berries', 'apple', 'carrot'],
   inn: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'cooked_meat', 'cooked_fish'],
   cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'pumpkin', 'apple'],
-  tailor: ['string', 'leather', 'cloth', 'feather', 'wheat', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_trousers', 'leather_boots', 'leather_cap'],
+  tailor: ['string', 'leather', 'cloth', 'feather', 'wheat', ...['linen_shirt', 'wool_trousers', 'wool_hood', 'fine_coat'].flatMap((g) => ['red', 'blue', 'yellow', 'green', 'purple', 'black', 'white'].map((c) => `${g}_${c}`)), 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_trousers', 'leather_boots', 'leather_cap'],
   carpenter: ['log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow', 'planks', 'stick'],
-  herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'sapling', 'slime_gel'],
+  herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'sapling', 'slime_gel', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude', 'potion_charm', 'healing_salve'],
   fisher: ['string', 'reeds', 'fish'],
   farmer: ['seeds', 'bone', 'wheat', 'carrot', 'cabbage'],
-  scholar: ['book', 'scroll', 'gem', 'reeds', 'feather'],
+  scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper'],
   trapper: ['string', 'stick', 'feather', 'arrow', 'raw_meat', 'leather', 'bone'],
 };
 

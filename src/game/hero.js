@@ -131,7 +131,9 @@ export function normalizeHero(h) {
 
 // ------------------------------------------------------------------ effects
 export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k));
-const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE);
+// Your abilities, with whatever your clothes, set gems and potions add
+// (kept up to date by the game in h.bonus).
+const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0);
 
 export function damageMult(h) {
   return 1 + 0.1 * (stat(h, 'str') - STAT_BASE);
@@ -156,5 +158,7 @@ export function repGainMult(h) {
   return 1 + 0.12 * (stat(h, 'cha') - STAT_BASE);
 }
 export function opinionBonus(h) {
-  return (has(h, 'honest_face') ? 8 : 0) - (has(h, 'rude') ? 8 : 0);
+  // Well dressed (or charming for a few hours), people warm to you at once.
+  const dress = h && h.bonus ? Math.max(0, h.bonus.cha || 0) * 2 : 0;
+  return (has(h, 'honest_face') ? 8 : 0) - (has(h, 'rude') ? 8 : 0) + dress;
 }

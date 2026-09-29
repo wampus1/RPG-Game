@@ -204,6 +204,9 @@ export function topicsFor(npc, game) {
   }
   const letter = fav.letterFor(npc);
   if (letter) add('deliver', `I have a letter for you from ${letter.giverName}.`);
+  // Handing out the paper.
+  const ed = sim.press.latest();
+  if (ed && countItem(game.player.inv, 'newspaper') > 0 && rec.readEdition !== ed.id && !npc.hired) add('paper', `Care for a copy of ${ed.title}?`);
   const mine = fav.given(npc);
   if (mine) add('favor_check', mine.kind === 'deliver' ? `About your letter for ${mine.toName}...` : 'About your request...');
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
@@ -1087,6 +1090,17 @@ function respondRaw(npc, game, id, arg) {
       }
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
+    case 'paper': {
+      const r = sim.press.handOut(npc);
+      if (!r.ok) return { lines: [r.reason === 'read' ? 'I\'ve read that one already, thanks.' : 'A newspaper? You\'ve none left.'] };
+      const h = r.story.text.replace(/\.$/, '');
+      const react = rec.age === 'child'
+        ? pick(rng, ['Ooh, a newspaper! Are there pictures?', `"${h}"! I'm going to tell everyone!`])
+        : r.fresh
+          ? pick(rng, [`"${h}"... well I never! Thank you.`, `Let's see... "${h}". So that's what happened.`, `The ${r.ed.title}? Don't mind if I do.`])
+          : pick(rng, ['Bit old, this news, isn\'t it? Still, thank you.', 'I heard most of this already. Thanks all the same.']);
+      return { lines: [react, ...(r.paid ? [`(${rec.name.first} pays you ¤${r.paid} for it.)`] : [])] };
+    }
     case 'job': return jobTalk(npc, game, arg);
     case 'hire': return hireTalk(npc, game, arg);
     case 'escort': {

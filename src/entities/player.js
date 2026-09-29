@@ -117,13 +117,13 @@ export class Player extends Entity {
 
   // Blue hearts: extra health for the rest of the day (from a new well or
   // a night in a village), used up first and gone at midnight.
-  addBlue(n, key = null) {
+  addBlue(n, key = null, cap = BLUE_CAP) {
     const day = this.game.day;
     if (this.blue.day !== day) this.blue = { hp: 0, day, from: [] };
     if (key && this.blue.from.includes(key)) return 0;
     if (key) this.blue.from.push(key);
     const before = this.blue.hp;
-    this.blue.hp = Math.min(BLUE_CAP, this.blue.hp + n);
+    this.blue.hp = Math.max(this.blue.hp, Math.min(cap, this.blue.hp + n));
     return this.blue.hp - before;
   }
 

@@ -14,6 +14,7 @@ import {
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
 import { Favors } from './favors.js';
+import { Press } from './press.js';
 import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate, deserted } from './civic.js';
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
@@ -58,6 +59,7 @@ export class Sim {
     this.justice = new Justice(game, this);
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
+    this.press = new Press(game, this);
     this.works = new Works(game, this);
     this.diplomacy = new Diplomacy(game, this);
     this.nomads = new Nomads(game, this);
@@ -1512,13 +1514,14 @@ export class Sim {
       // How towns have grown: their size now, and ground they've spread onto.
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null]),
       favors: this.favors.serialize(),
+      press: this.press.serialize(),
     };
   }
 
   serializeSettlement(L) {
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
-      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, doneKey: r.doneKey,
+      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, readEdition: r.readEdition, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       ...(r.grown ? { hobbies: r.hobbies } : {}),
@@ -1581,6 +1584,7 @@ export class Sim {
     }
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
+    this.press.load(data.press);
   }
 }
 

@@ -6,7 +6,7 @@ import {
 } from '../config.js';
 import { World } from '../world/world.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
-import { ITEMS, rollDrops, itemForBlock } from '../world/items.js';
+import { ITEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
@@ -871,6 +871,12 @@ export class Game {
     const abs1 = this.day * DAY_MINUTES + this.minute;
     if (Math.floor((abs0 - AUTOSAVE_AT) / DAY_MINUTES) < Math.floor((abs1 - AUTOSAVE_AT) / DAY_MINUTES) && !this.player.dead) this.autosaveDue = true;
     if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel, uiRes.wheelShift);
+    // What you wear and hold, and the potions you've drunk.
+    this.bonusT = (this.bonusT || 0) - dt;
+    if (this.bonusT <= 0) {
+      this.bonusT = 0.5;
+      this.refreshBonus();
+    }
     this.player.update(dt, input, blocked);
     if (!blocked) this.updateCursor(input);
     else this.cursor = null;
@@ -983,6 +989,8 @@ export class Game {
         case 'KeyF':
           if (p.raft) this.leaveRaft();
           else if (p.heldDef()?.kind === 'food') this.eat();
+          else if (p.heldDef()?.kind === 'potion') this.drink();
+          else if (p.heldDef()?.newspaper) this.ui.openNews?.();
           else if (p.heldDef()?.kind === 'armor') this.wearHeld();
           else this.interactFront();
           break;
@@ -1137,6 +1145,85 @@ export class Game {
     return null;
   }
 
+  // What your clothes, set gems and potions add to your abilities (and the
+  // health that goes with endurance). Called when any of them change.
+  refreshBonus() {
+    const p = this.player;
+    if (!p) return;
+    // (Without a made character, base abilities, so bonuses still count.)
+    if (!this.hero) this.hero = { stats: {}, specialties: [], traits: [], anon: true };
+    const b = { str: 0, agi: 0, end: 0, cha: 0 };
+    const add = (stats) => {
+      for (const [k, n] of Object.entries(stats || {})) b[k] = (b[k] || 0) + n;
+    };
+    for (const slot of ['head', 'body', 'legs', 'feet']) add(ITEMS[p.equip[slot]]?.stats);
+    const held = p.heldDef();
+    if (held && held.kind !== 'armor') add(held.stats);
+    const now = this.day * DAY_MINUTES + this.minute;
+    p.buffs = (p.buffs || []).filter((q) => q.until > now);
+    for (const q of p.buffs) b[q.stat] = (b[q.stat] || 0) + q.n;
+    const before = JSON.stringify(this.hero.bonus || {});
+    this.hero.bonus = b;
+    if (before !== JSON.stringify(b)) {
+      p.hpBonus = hpBonus(this.hero);
+      p.recalcMaxHp();
+      this.sim.areaCache.clear();
+    }
+  }
+
+  // A jeweller sets a stone: the piece (in the pack, or worn) becomes the
+  // same piece with the gem in it.
+  setGem(ref, gem) {
+    const p = this.player;
+    if (countItem(p.inv, gem) <= 0) return false;
+    const key = ref.kind === 'inv' ? p.inv[ref.i]?.item : p.equip[ref.slot];
+    if (!key || !ITEMS[socketed(key, gem)]) return false;
+    removeItem(p.inv, gem, 1);
+    if (ref.kind === 'inv') p.inv[ref.i] = { item: socketed(key, gem), count: 1 };
+    else p.equip[ref.slot] = socketed(key, gem);
+    this.refreshBonus();
+    this.audio?.play('coin');
+    this.ui.msg(`${ITEMS[socketed(key, gem)].name}: the stone is set.`, '#c0a0ff');
+    return true;
+  }
+
+  // Drink a potion (or put on a salve) from the hand.
+  drink() {
+    const p = this.player;
+    const slot = p.inv[p.selected];
+    const d = slot && ITEMS[slot.item];
+    if (!d || d.kind !== 'potion') return false;
+    const e = d.effect || {};
+    const now = this.day * DAY_MINUTES + this.minute;
+    if (e.heal) {
+      if (p.hp >= p.maxHp) {
+        this.ui.msg('You\'re not hurt.', '#c8c8c8', true);
+        return false;
+      }
+      p.hp = Math.min(p.maxHp, p.hp + e.heal);
+    }
+    if (e.blue) {
+      p.blueSip = (p.blueSip || 0) + 1;
+      // (A draught can take you past what wells and beds give: up to ten.)
+      const got = p.addBlue(e.blue, `potion:${this.day}:${p.blueSip}`, 10);
+      if (!got) {
+        this.ui.msg('You can\'t hold any more vigour today.', '#c8c8c8', true);
+        return false;
+      }
+    }
+    if (e.stat) {
+      p.buffs = (p.buffs || []).filter((q) => q.stat !== e.stat || q.until <= now);
+      p.buffs.push({ stat: e.stat, n: e.n, until: now + e.hours * 60, name: d.name });
+    }
+    removeItem(p.inv, slot.item, 1);
+    this.refreshBonus();
+    this.audio?.play('eat');
+    this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#e8e0ff', '#a0c8ff', '#fff4c0'], up: 25, life: 0.7, gravity: -15 });
+    const what = e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
+    this.ui.msg(`${d.name}: ${what}.`, '#c0a0ff');
+    return true;
+  }
+
   attackReach() {
     const h = this.player.heldDef();
     if (h && h.ranged) return h.range;
@@ -1243,6 +1330,14 @@ export class Game {
     }
     if (held && held.kind === 'food') {
       this.eat();
+      return;
+    }
+    if (held && held.kind === 'potion') {
+      this.drink();
+      return;
+    }
+    if (held && held.newspaper && !(c && c.entity)) {
+      this.ui.openNews?.();
       return;
     }
     if (held && held.kind === 'armor') {
@@ -2394,12 +2489,24 @@ export class Game {
       this.swing();
       return;
     }
-    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero);
+    // A set gem's gift: a sapphire swings quicker, a ruby sometimes burns,
+    // an emerald mends you, an amethyst staggers.
+    const gift = def && def.gift;
+    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * (gift === 'swift' ? 0.8 : 1);
     p.doAction(0.25);
     let dmg = (def && def.damage ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     const crit = Math.random() < 0.1;
     if (crit) dmg *= 1.8;
+    if (gift === 'ember' && Math.random() < 0.3) {
+      dmg += 3;
+      this.renderer.emit(target.x, target.y + 1, target.z, { n: 8, color: ['#ff6030', '#ffb040', '#fff0a0'], up: 35, life: 0.5, oy: -8 });
+    }
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
+    if (gift === 'leech' && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + 1);
+      this.renderer.emit(p.x, p.y + 1, p.z, { n: 3, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.5, gravity: -10 });
+    }
+    if (gift === 'stun' && !target.dead && target.kind === 'creature') target.stunT = 1.2;
     // Knockback.
     const kx = Math.sign(target.x - p.x);
     const kz = Math.sign(target.z - p.z);
@@ -2879,7 +2986,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook },
       name: this.playerName,
       hero: this.hero || null,
       regions,
@@ -2906,6 +3013,7 @@ export class Game {
     this.loadAround(pd.x, pd.z, true);
     this.player = new Player(this, pd.x, pd.y, pd.z);
     if (pd.blue) this.player.blue = pd.blue;
+    if (pd.buffs) this.player.buffs = pd.buffs;
     if (pd.raft) this.player.raft = { ...pd.raft, v: 0 };
     if (pd.vigor) {
       this.player.vigor = pd.vigor;
