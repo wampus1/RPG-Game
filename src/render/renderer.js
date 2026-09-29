@@ -440,33 +440,35 @@ export class Renderer {
     if (e.emote && e.emote.t > 0) bubbles.push({ emote: true, text: e.emote.ch, x: sx + 5, y: feetY - 34 + Math.sin(this.time * 5) * 1.5, color: e.emote.color || '#ffe070' });
   }
 
+  // The item sits in the hand: its handle (near the icon's bottom-left)
+  // on the hand pixel of the sprite for the way they're facing.
   drawHeld(ctx, key, e, sx, top) {
     const icon = this.dropIcon(key);
     const dir = e.dir;
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
-    let hx;
-    let hy;
-    if (dir === 0) {
-      hx = sx + 10;
-      hy = top + 12;
-    } else if (dir === 2) {
-      hx = sx - 2;
-      hy = top + 11;
-    } else if (dir === 1) {
-      hx = sx - 1;
-      hy = top + 11;
-    } else {
-      hx = sx + 9;
-      hy = top + 11;
-    }
+    const look = e.look || {};
+    const small = look.small;
+    const bob = e.moving ? (Math.floor(this.time * 7) % 2 ? -1 : 0) : 0;
+    const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
+    const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
     if (act > 0) {
       ctx.save();
-      ctx.translate(hx + 4, hy + 6);
+      ctx.translate(hx, hy);
       const sign = dir === 1 ? -1 : 1;
       ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
-      ctx.drawImage(icon, -4, -8);
+      if (dir === 1) ctx.scale(-1, 1);
+      ctx.drawImage(icon, -2, -8);
       ctx.restore();
-    } else if (dir !== 2) ctx.drawImage(icon, hx, hy);
+      return;
+    }
+    if (dir === 2) return; // behind them
+    if (dir === 1) {
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(icon, -2, -7);
+      ctx.restore();
+    } else ctx.drawImage(icon, hx - 2, hy - 7);
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {

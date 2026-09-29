@@ -849,6 +849,7 @@ export class Game {
     }
     const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
+    else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
     this.minute += dt * GAME_MINUTES_PER_SECOND * (this.sleepFast || 1);
     if (this.minute >= DAY_MINUTES) {
@@ -933,6 +934,11 @@ export class Game {
       switch (code) {
         case 'KeyQ':
           this.toss(k.ctrl);
+          break;
+        case 'KeyT':
+          // Sitting down: let some hours go by.
+          if (p.sitting && !this.waiting) this.ui.openWait?.();
+          else if (!p.sitting) this.ui.msg('Sit down somewhere first (a chair, bench or stool) to wait.', '#c8c8c8', true);
           break;
         case 'KeyR':
           p.rot = (p.rot + 1) % 4;
@@ -1626,9 +1632,9 @@ export class Game {
         break;
       case 'well':
         if (this.useWell(x, y, z)) break;
-        if (p.addVigor('wells', `${x},${z}`)) {
+        if (p.addBlue(2, `well:${x},${z}`)) {
           p.hp = Math.min(p.maxHp, p.hp + 2);
-          this.ui.msg(`The water of this well is crisp and pure. You feel hardier. (+1 max HP, now ${p.maxHp})`, '#80e0ff');
+          this.ui.msg('The water of this well is crisp and pure. You feel hardier: a blue heart, until the day ends.', '#80e0ff');
           this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#80c8ff', '#e0f4ff'], up: 30, life: 0.7, gravity: -10 });
         } else {
           p.hp = Math.min(p.maxHp, p.hp + 2);
@@ -1884,6 +1890,35 @@ export class Game {
     }
   }
 
+  // Sit and let the hours pass: time races until then, or until you're
+  // disturbed (hurt, or a key pressed) or stand up.
+  startWait(hours) {
+    const p = this.player;
+    if (!p.sitting || hours <= 0) return false;
+    this.waiting = { until: this.day * DAY + this.minute + hours * 60, hp: p.hp, t: 0, hours };
+    this.ui.msg(`You settle in to wait ${hours} hour${hours > 1 ? 's' : ''}.`, '#c8d8ff');
+    return true;
+  }
+
+  updateWait(dt, pressed) {
+    const w = this.waiting;
+    const p = this.player;
+    w.t += dt;
+    const now = this.day * DAY + this.minute;
+    const left = w.until - now;
+    const stop = (why) => {
+      this.waiting = null;
+      this.sleepFast = 0;
+      if (why) this.ui.msg(why, '#c8d8ff');
+    };
+    if (!p.sitting || p.dead) return stop('You get up.');
+    if (p.hp < w.hp) return stop('Something disturbs you!');
+    if (pressed && pressed.some((k) => !['ShiftLeft', 'ShiftRight'].includes(k.code)) && w.t > 0.3) return stop('You stop waiting.');
+    if (left <= 0) return stop(`${w.hours} hour${w.hours > 1 ? 's' : ''} pass.`);
+    // Ease in, and slow down as the time comes.
+    this.sleepFast = Math.max(1, Math.min(60, w.t * 30, left / 1.5));
+  }
+
   wakeUp(early) {
     const sl = this.sleep;
     if (!sl || sl.phase === 'out') return;
@@ -1894,8 +1929,8 @@ export class Game {
     if (!early && !sl.jail) {
       // A night under a village roof: country air and a good bed.
       const s = this.world.ow.settlementAt(sl.bed.x, sl.bed.z);
-      if (s && s.type === 'village' && s.condition !== 'abandoned' && p.addVigor('villages', s.id)) {
-        this.ui.msg(`A night's sleep in ${s.name} leaves you hardier than before. (+1 max HP, now ${p.maxHp})`, '#a0ffa0');
+      if (s && s.type === 'village' && s.condition !== 'abandoned' && p.addBlue(2, `village:${s.id}`)) {
+        this.ui.msg(`A night's sleep in ${s.name} leaves you hardier: a blue heart for today.`, '#a0ffa0');
       }
       p.hp = p.maxHp;
       this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
@@ -1930,7 +1965,7 @@ export class Game {
     p.sitting = { x, y, z };
     this.stopPlayerActions();
     this.audio?.play('select');
-    this.ui.msg('You sit down. (move to stand up)', '#c8c8c8', true);
+    this.ui.msg('You sit down. (T to wait a while, move to stand up)', '#c8c8c8', true);
   }
 
   stopPlayerActions() {
@@ -2051,11 +2086,14 @@ export class Game {
   // it's the same weather the towns around you are having.
   updateWeather(dt) {
     const w = this.weather || (this.weather = { kind: 'clear', level: 0, t: 0 });
-    w.t -= dt;
+    // Sped-up time speeds the weather up with it.
+    const fast = this.sleepFast || 1;
+    w.t -= dt * fast;
     if (w.t <= 0) {
       w.t = 2;
       const p = this.player;
-      if (!this.biomeCache || Math.abs(this.biomeCache.x - p.x) + Math.abs(this.biomeCache.z - p.z) > 24) {
+      // (Where you stand now: never a stale biome, so no snow in a desert.)
+      if (!this.biomeCache || Math.abs(this.biomeCache.x - p.x) + Math.abs(this.biomeCache.z - p.z) > 2) {
         const col = this.world.terrain.column(p.x, p.z, this.world.terrain.context(p.x, p.z, p.x, p.z), {});
         this.biomeCache = { x: p.x, z: p.z, biome: col.biome };
       }
@@ -2068,7 +2106,7 @@ export class Game {
       w.seen = true;
     }
     const target = w.kind === 'clear' ? 0 : 1;
-    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), dt / 8);
+    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / 8);
   }
 
   // The weather over a town right now.
@@ -2260,6 +2298,19 @@ export class Game {
       this.combatWith = foe.kind === 'npc' ? 'guard' : 'monster';
     }
     if (armored) this.audio?.play('armor_hit', target);
+    // Blue hearts take the blow first.
+    if (target.kind === 'player' && target.blue && target.blue.hp > 0 && target.blue.day === this.day) {
+      const soak = Math.min(target.blue.hp, amount);
+      target.blue.hp -= soak;
+      amount -= soak;
+      if (target.blue.hp <= 0) this.ui.msg('Your blue hearts are gone.', '#80a8ff');
+      if (amount <= 0) {
+        target.flash = 0.12;
+        this.renderer.floatText(target.x, target.y + 2, target.z, `-${soak}`, '#80a8ff');
+        this.audio?.play('hurt', target);
+        return;
+      }
+    }
     target.hp -= amount;
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
@@ -2693,7 +2744,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, equip: p.equip, look: p.baseLook },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, equip: p.equip, look: p.baseLook },
       name: this.playerName,
       hero: this.hero || null,
       regions,
@@ -2719,6 +2770,7 @@ export class Game {
     const pd = data.player;
     this.loadAround(pd.x, pd.z, true);
     this.player = new Player(this, pd.x, pd.y, pd.z);
+    if (pd.blue) this.player.blue = pd.blue;
     if (pd.vigor) {
       this.player.vigor = pd.vigor;
       this.player.recalcMaxHp();

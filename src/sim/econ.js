@@ -111,7 +111,7 @@ export function traderOf(rec) {
 export function ledger(L, day, text) {
   const e = L.econ;
   e.ledger.push({ day, text });
-  if (e.ledger.length > 60) e.ledger.shift();
+  if (e.ledger.length > 200) e.ledger.shift();
 }
 
 // Stories worth passing on to another town (not the comings and goings of
@@ -390,6 +390,7 @@ function mealEffects(rec, item, rng) {
     rec.hp = rec.maxHp;
     rec.sick = false;
   }
+  if (rec.ent && !rec.ent.dead) rec.ent.hp = rec.hp ?? rec.ent.hp;
   return q;
 }
 
@@ -789,6 +790,7 @@ function dailyNeeds(sim, L, day, rng) {
       rec.hp = Math.max(1, (rec.hp ?? rec.maxHp) - 2);
       rec.mood = clamp(rec.mood - 0.12, 0, 1);
     } else if (!rec.sick) rec.hp = Math.min(rec.maxHp, (rec.hp ?? rec.maxHp) + 3);
+    if (rec.ent && !rec.ent.dead) rec.ent.hp = rec.hp;
     rec.sick = false;
     // Mood drifts back toward normal.
     rec.mood += (0.55 - rec.mood) * 0.15;

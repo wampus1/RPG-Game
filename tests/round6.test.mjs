@@ -40,22 +40,32 @@ function reload(game) {
 
 const always = { next: () => 0.1, chance: () => true, int: (a) => a, pick: (l) => l[0], shuffle: (l) => l, float: (a) => a };
 
-test('a new well and a night in a village bed each make you a little hardier', () => {
+test('a new well and a night in a village bed give blue hearts for the day', () => {
   const { game, L, p } = start(12345);
   const max = p.maxHp;
   const well = L.wells[0];
   assert.ok(well, 'the village has a well');
   game.interact(well.x, GROUND, well.z);
-  assert.equal(p.maxHp, max + 1);
+  assert.equal(p.maxHp, max, 'no permanent change');
+  assert.equal(p.blue.hp, 2, 'a blue heart');
   game.interact(well.x, GROUND, well.z);
-  assert.equal(p.maxHp, max + 1, 'only the first drink from each well');
+  assert.equal(p.blue.hp, 2, 'only once a day from each well');
+  // Blue hearts take the blow first.
+  const hp = p.hp;
+  game.damage(p, 1, null);
+  assert.equal(p.hp, hp);
+  assert.equal(p.blue.hp, 1);
   const bed = L.buildings.find((b) => b.residential && b.beds.length).beds[0];
   game.sleep = { phase: 'deep', t: 0, bed: { x: bed.x, y: GROUND, z: bed.z }, from: { x: p.x, y: p.y, z: p.z }, wake: 0, start: 0, hp0: p.hp, jail: false };
   game.wakeUp(false);
-  assert.equal(p.maxHp, max + 2, 'a night in the village');
+  assert.ok(p.blue.hp >= 2, 'a night in the village');
   assert.equal(p.hp, p.maxHp);
   const g2 = reload(game);
-  assert.equal(g2.player.maxHp, max + 2, 'kept after a reload');
+  assert.equal(g2.player.blue.hp, p.blue.hp, 'kept after a reload');
+  // Gone when the day ends.
+  game.day++;
+  p.update(0.01, { isDown: () => false, lastMoveKey: null }, true);
+  assert.equal(p.blue.hp, 0);
 });
 
 test('while you stay with a family, their beds and chests are yours to use', () => {

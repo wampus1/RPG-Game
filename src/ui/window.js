@@ -70,6 +70,7 @@ export function describeActivity(e) {
     case 'mourn': return 'mourning at a grave';
     case 'funeral': return 'at a funeral';
     case 'bury': return 'setting a gravestone';
+    case 'pray': return 'praying for healing';
     case 'build': return e.label ? e.label : 'building a house';
     case 'forage': return 'looking for food';
     case 'trial': return 'at a hearing';

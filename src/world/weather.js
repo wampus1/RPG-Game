@@ -20,17 +20,22 @@ function frac(seed, a, b, c) {
 }
 
 // 'clear' | 'rain' | 'snow' | 'fog' at tile (x, z) at absolute minute abs.
+// Dry places see rain far less often (and no fog), and snow only ever
+// falls where it's cold.
+const DRY = { desert: 0.08, savanna: 0.3, beach: 0.75, jungle: 1.2, swamp: 1.2 };
+
 export function weatherAt(seed, x, z, abs, biome) {
-  if (biome === 'desert') return 'clear';
+  const f = DRY[biome] ?? 1;
   const cx = Math.floor((x - abs * DRIFT_X) / CELL_W);
   const cz = Math.floor((z - abs * DRIFT_Z) / CELL_D);
   const spell = Math.floor(abs / SPELL);
   const front = frac(seed, cx, cz, Math.floor(spell / 3) * 7 + 0x51);
   const r = frac(seed, cx, cz, spell * 13 + 0x3b);
   const wet = COLD.has(biome) ? 'snow' : 'rain';
-  if (front < 0.3) return r < 0.8 ? wet : 'fog';
-  if (front < 0.42) return r < 0.6 ? 'fog' : 'clear';
-  return r < 0.1 ? wet : 'clear';
+  // Most of the time the sky is clear; a wet front passes now and then.
+  if (front < 0.2 * f) return r < 0.75 ? wet : f >= 0.7 ? 'fog' : 'clear';
+  if (front < 0.2 * f + 0.08 && f >= 0.7) return r < 0.35 ? 'fog' : 'clear';
+  return r < 0.04 * f ? wet : 'clear';
 }
 
 // The weather over a settlement.

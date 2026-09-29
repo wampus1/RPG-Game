@@ -18,8 +18,8 @@ export class Audio {
         }
       } else if (this.ctx.state === 'suspended') this.ctx.resume();
     };
-    window.addEventListener('mousedown', unlock);
-    window.addEventListener('keydown', unlock);
+    // Browsers only allow sound after the first click, tap or key press.
+    for (const ev of ['mousedown', 'pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, unlock);
   }
 
   setVolume(v) {

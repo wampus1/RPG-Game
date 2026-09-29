@@ -9,6 +9,7 @@ import { has as heroHas, stepMult } from '../game/hero.js';
 
 const BASE_HP = 20;
 export const VIGOR_CAP = 8;
+export const BLUE_CAP = 6; // three blue hearts at most
 
 const MOVE_KEYS = {
   KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1],
@@ -42,6 +43,7 @@ export class Player extends Entity {
     // Hardiness earned on the road: each new well drunk from and each
     // village slept in adds a little to your health (up to a limit each).
     this.vigor = { wells: [], villages: [] };
+    this.blue = { hp: 0, day: 0, from: [] };
   }
 
   // What people see: your own looks with your armour and clothes on top.
@@ -97,9 +99,20 @@ export class Player extends Entity {
   }
 
   recalcMaxHp() {
-    const v = this.vigor;
-    this.maxHp = Math.max(8, BASE_HP + (this.hpBonus || 0)) + Math.min(VIGOR_CAP, v.wells.length) + Math.min(VIGOR_CAP, v.villages.length);
+    this.maxHp = Math.max(8, BASE_HP + (this.hpBonus || 0));
     this.hp = Math.min(this.hp, this.maxHp);
+  }
+
+  // Blue hearts: extra health for the rest of the day (from a new well or
+  // a night in a village), used up first and gone at midnight.
+  addBlue(n, key = null) {
+    const day = this.game.day;
+    if (this.blue.day !== day) this.blue = { hp: 0, day, from: [] };
+    if (key && this.blue.from.includes(key)) return 0;
+    if (key) this.blue.from.push(key);
+    const before = this.blue.hp;
+    this.blue.hp = Math.min(BLUE_CAP, this.blue.hp + n);
+    return this.blue.hp - before;
   }
 
   // Returns true if this is a new source of hardiness (and still counts).
@@ -144,6 +157,11 @@ export class Player extends Entity {
     if (this.regenT > every && this.hp < this.maxHp && this.hp > 0) {
       this.regenT = 0;
       this.hp = Math.min(this.maxHp, this.hp + 1);
+    }
+    // The day ends: blue hearts break.
+    if (this.blue.hp > 0 && this.blue.day !== this.game.day) {
+      this.blue = { hp: 0, day: this.game.day, from: [] };
+      this.game.ui.msg('Your blue hearts fade with the new day.', '#80a8ff');
     }
     if (this.dead || this.moving || blocked) return;
     // Most recently pressed held direction wins.

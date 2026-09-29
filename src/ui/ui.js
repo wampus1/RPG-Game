@@ -364,7 +364,11 @@ export class UI {
       const v = p.hp - i * 2;
       g.put(1 + i, 0, v >= 1 ? '♥' : '♡', v >= 2 ? '#ff4a50' : v >= 1 ? '#a02830' : '#5a3a40');
     }
-    g.text(2 + hearts, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}`, C.dim);
+    // Blue hearts for today.
+    const blue = p.blue && p.blue.day === game.day ? p.blue.hp : 0;
+    const bh = Math.ceil(blue / 2);
+    for (let i = 0; i < bh; i++) g.put(1 + hearts + i, 0, '♥', blue - i * 2 >= 2 ? '#58a8ff' : '#3868a8');
+    g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
     g.text(1, 1, `¤ ${coins}`, C.hi);
     const held = p.heldDef();
@@ -649,6 +653,10 @@ export class UI {
     this.closeAll();
     this.open(new W.CraftWindow(this, station));
   }
+  openWait() {
+    this.open(new W.WaitWindow(this, this.game));
+  }
+
   openDialogue(npc) {
     this.closeAll();
     this.open(new W.DialogueWindow(this, npc, this.game));

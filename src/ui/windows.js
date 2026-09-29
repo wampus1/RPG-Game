@@ -928,35 +928,40 @@ export class LedgerWindow extends Window {
     const t = TIERS[s.type];
     if (t) row('Growth', `${pop}/${t.pop} people to become a ${t.next}`);
     y++;
-    g.text(3, y++, 'RECENT NOTICES', C.hi);
-    const far = (e.rumours || []).slice(-2).reverse();
-    const notes = [...e.ledger].reverse().slice(0, far.length ? 9 : 12);
-    for (const n of notes) {
-      const lines = wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 6);
-      for (const l of lines) {
-        if (y >= this.h - 2) break;
-        g.text(3, y++, l, '#e0d0b0');
-      }
+    // Every notice the board still holds, newest first: scroll back
+    // through them with the wheel or the arrow keys.
+    const lines = [];
+    const far = (e.rumours || []).slice().reverse();
+    if (far.length) {
+      lines.push({ t: 'NEWS FROM AFAR', c: C.hi });
+      for (const r of far) for (const l of wrap(`${r.from}: ${r.text}`, this.w - 7)) lines.push({ t: l, c: C.cyan });
+      lines.push({ t: '', c: C.fg });
     }
-    // What the merchants brought back from other towns.
-    if (far.length && y < this.h - 4) {
-      y++;
-      g.text(3, y++, 'NEWS FROM AFAR', C.hi);
-      for (const r of far) {
-        for (const l of wrap(`${r.from}: ${r.text}`, this.w - 6)) {
-          if (y >= this.h - 2) break;
-          g.text(3, y++, l, C.cyan);
-        }
-      }
+    lines.push({ t: 'NOTICES', c: C.hi });
+    for (const n of [...e.ledger].reverse()) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
+    const room = this.h - 2 - y;
+    this.maxScroll = Math.max(0, lines.length - room);
+    this.scroll = Math.max(0, Math.min(this.scroll || 0, this.maxScroll));
+    lines.slice(this.scroll, this.scroll + room).forEach((l, i) => g.text(3, y + i, l.t, l.c));
+    if (this.maxScroll) {
+      const bar = Math.max(1, Math.floor(room * room / lines.length));
+      const pos = Math.round((room - bar) * this.scroll / this.maxScroll);
+      for (let i = 0; i < room; i++) g.put(this.w - 3, y + i, i >= pos && i < pos + bar ? '█' : '│', i >= pos && i < pos + bar ? '#c8a878' : '#5a4a3a');
+      g.text(3, this.h - 1, ' wheel / ↑↓ scroll ', C.faint);
     }
     g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);
   }
+  onWheel(d) {
+    this.scroll = Math.max(0, Math.min(this.maxScroll || 0, (this.scroll || 0) + Math.sign(d) * 3));
+  }
   onKey(k) {
-    if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') {
-      this.close();
-      return true;
-    }
-    return false;
+    if (k.code === 'ArrowDown' || k.code === 'KeyS') this.scroll = Math.min(this.maxScroll || 0, (this.scroll || 0) + 1);
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.scroll = Math.max(0, (this.scroll || 0) - 1);
+    else if (k.code === 'PageDown') this.scroll = Math.min(this.maxScroll || 0, (this.scroll || 0) + 10);
+    else if (k.code === 'PageUp') this.scroll = Math.max(0, (this.scroll || 0) - 10);
+    else if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') this.close();
+    else return false;
+    return true;
   }
 }
 
@@ -1293,6 +1298,50 @@ export class SaveSlotsWindow extends Window {
   }
 }
 
+// ---------------------------------------------------------------- waiting
+export class WaitWindow extends Window {
+  constructor(ui, game) {
+    super(ui, 34, 9, { kind: 'wait' });
+    this.game = game;
+    this.hours = 1;
+  }
+  draw(g, game) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'WAIT' });
+    const m = Math.floor((game.minute + this.hours * 60) % 1440);
+    g.center(2, 'Wait for how long?', C.fg);
+    g.text(8, 4, '◄', C.hi);
+    g.center(4, `${this.hours} hour${this.hours > 1 ? 's' : ''}`, C.white);
+    g.text(this.w - 9, 4, '►', C.hi);
+    g.center(5, `(until ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')})`, C.dim);
+    this.hit(6, 4, 4, 1, () => this.change(-1));
+    this.hit(this.w - 10, 4, 4, 1, () => this.change(1));
+    const hov = this.hovering(9, 7, 16, 1);
+    g.fill(9, 7, 16, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
+    g.center(7, '[ENTER] Wait', hov ? C.white : C.hi);
+    this.hit(9, 7, 16, 1, () => this.go());
+  }
+  change(d) {
+    this.hours = Math.max(1, Math.min(24, this.hours + d));
+    this.ui.audio?.play('select');
+  }
+  go() {
+    this.close();
+    this.game.startWait(this.hours);
+  }
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.change(-1);
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.change(1);
+    else if (k.code === 'Enter' || k.code === 'Space') this.go();
+    else {
+      const d = /^Digit([1-9])$/.exec(k.code);
+      if (d) this.hours = Number(d[1]);
+    }
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------- settings
 export class SettingsWindow extends Window {
   constructor(ui, settings) {
@@ -1429,6 +1478,8 @@ export class TitleWindow extends Window {
       this.hit(x - 1, y, 40, 1, () => this.choose(k));
     });
     if (Math.floor(t * 2) % 2) g.center(this.h - 2, 'PRESS A KEY', C.faint);
+    const ctx = this.ui.audio && this.ui.audio.ctx;
+    if (!ctx || ctx.state !== 'running') g.center(this.h - 4, '♪ click anywhere for music and sound', C.dim);
   }
   update(dt) {
     this.t += dt;

@@ -634,6 +634,20 @@ export class Sim {
     if (f.priest !== null && f.priest !== undefined) set(L.npcs[f.priest], { target: { x: f.x, z: f.z + 1 }, officiant: true });
   }
 
+  // The badly hurt go to the temple to pray and be blessed (by day).
+  woundedPray(L, h, hod) {
+    if (hod < 7 || hod >= 20 || !this.game.active.has(L.settlement.id)) return;
+    const temple = L.buildings.find((b) => b.type === 'temple');
+    if (!temple) return;
+    for (const r of L.npcs) {
+      if (!alive(r) || r.away || r.override || r.job === 'guard' && r.ent && r.ent.state === 'fight') continue;
+      const hp = r.ent && !r.ent.dead ? r.ent.hp : r.hp ?? r.maxHp;
+      if (hp >= (r.maxHp || 12) * 0.6) continue;
+      setOverride(r, h, h + 90, 'pray', { place: 'temple', target: temple.inside });
+      if (r.ent) r.ent.activity = null;
+    }
+  }
+
   funeralsAndBurials(L) {
     const now = this.simNow ?? this.abs;
     for (const b of L.econ.burials || []) if (!b.done && now > b.due + 150) this.placeGrave(L, b.x, b.z);
@@ -759,6 +773,7 @@ export class Sim {
 
   hourly(L, h, day, hod, rng) {
     this.funeralsAndBurials(L);
+    this.woundedPray(L, h, hod);
     // Snares near an active town catch things now and then.
     if (!this.game.active.has(L.settlement.id)) return;
     const w = this.game.world;

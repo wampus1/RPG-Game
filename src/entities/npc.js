@@ -248,6 +248,8 @@ export class NPC extends Entity {
         if (curfew()) return inBuilding(home);
         if (e.place === 'tavern' || this.game.minute > 1140) return inBuilding(buildingOf('tavern'), 'social') || tagged('social') || plazaTile();
         return tagged(rng.chance(0.5) ? 'gossip' : 'social') || plazaTile();
+      case 'pray':
+        return inBuilding(buildingOf('temple'), 'pray') || target(e.target, { tag: 'pray' }) || inBuilding(home);
       case 'wander':
         if (curfew()) return inBuilding(home);
         return roadTile();
@@ -702,6 +704,21 @@ export class NPC extends Entity {
       return;
     }
     if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) this.mealBubble = this.rec.lastMeal;
+    // A meal does the wounded good.
+    if (act === 'eat' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 5);
+    // Prayers at the temple: the priest's blessing heals the hurt.
+    if (act === 'pray' && this.rec.override && this.rec.override.act === 'pray') {
+      const priest = this.game.npcs.find((n) => !n.dead && n.rec.job === 'priest' && n.layout === this.layout && n.distTo(this) <= 10 && !n.sleeping);
+      if (priest) {
+        this.hp = this.maxHp;
+        priest.face(this.x, this.z);
+        priest.say(priest.rng.pick([`Be blessed, ${this.rec.name.first}. Be whole.`, 'May the light mend you.', `Go in health, ${this.rec.name.first}.`]), 3, '#e8e0ff');
+      } else this.hp = Math.min(this.maxHp, this.hp + Math.ceil((this.maxHp - this.hp) / 2));
+      this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 8, color: ['#fff4c0', '#e8e0ff'], up: 20, life: 0.8, gravity: -12 });
+      this.rec.hp = this.hp;
+      this.rec.override = null;
+      this.activity = null;
+    }
     if (act === 'trial') this.face(this.game.player.x, this.game.player.z);
     // Setting the stone on a grave.
     if (act === 'bury') {
