@@ -1058,24 +1058,65 @@ function gemIcon(it) {
   return p.outline(OUT);
 }
 
+// A glow in the colour of a set stone, round the outline of a piece: a
+// bright rim a pixel out and a softer one beyond it.
+const glowCache = new Map();
+function glowOf(icon, color, tag) {
+  const k = `${tag}:${icon.width}:${color}`;
+  let g = glowCache.get(k);
+  if (g) return g;
+  const w = icon.width;
+  const h = icon.height;
+  const src = icon.getContext('2d').getImageData(0, 0, w, h).data;
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 40;
+  g = document.createElement('canvas');
+  g.width = w + 4;
+  g.height = h + 4;
+  const ctx = g.getContext('2d');
+  const out = ctx.createImageData(w + 4, h + 4);
+  const [r, gg, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  for (let y = -2; y < h + 2; y++) {
+    for (let x = -2; x < w + 2; x++) {
+      if (solid(x, y)) continue;
+      let d = 9;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (solid(x + dx, y + dy)) d = Math.min(d, Math.max(Math.abs(dx), Math.abs(dy)));
+      if (d > 2) continue;
+      const i = ((y + 2) * (w + 4) + x + 2) * 4;
+      out.data[i] = r;
+      out.data[i + 1] = gg;
+      out.data[i + 2] = b;
+      out.data[i + 3] = d === 1 ? 230 : 110;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  glowCache.set(k, g);
+  return g;
+}
+
+// Draw an item's icon; a jewelled one pulses with its stone's colour, with
+// a glint running round it.
+export function drawJewelled(ctx, icon, key, x, y, t = 0) {
+  const it = ITEMS[key];
+  if (it && it.socket && GEMS[it.socket]) {
+    const color = GEMS[it.socket].color;
+    const g = glowOf(icon, color, key);
+    const a = ctx.globalAlpha;
+    const phase = (key.length * 1.7) % 6;
+    ctx.globalAlpha = a * (0.35 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3.2 + phase)));
+    ctx.drawImage(g, x - 2, y - 2);
+    ctx.globalAlpha = a;
+  }
+  ctx.drawImage(icon, x, y);
+}
+
 export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
   const it = ITEMS[key];
-  // A piece with a stone set in it: its own icon, with the gem glinting.
+  // A piece with a stone set in it looks like the plain piece: the stone
+  // shows as a glow round it (see drawJewelled).
   if (it && it.socket) {
-    const base = itemIcon(it.base);
-    c = document.createElement('canvas');
-    c.width = 16;
-    c.height = 16;
-    const x = c.getContext('2d');
-    x.drawImage(base, 0, 0);
-    x.fillStyle = '#1c1622';
-    x.fillRect(10, 1, 5, 5);
-    x.fillStyle = GEMS[it.socket]?.color || '#50c0e0';
-    x.fillRect(11, 2, 3, 3);
-    x.fillStyle = '#ffffff';
-    x.fillRect(11, 2, 1, 1);
+    c = itemIcon(it.base);
     iconCache.set(key, c);
     return c;
   }

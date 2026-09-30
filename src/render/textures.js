@@ -1132,6 +1132,49 @@ const SPRITES = {
     }
     return p;
   },
+  tent(rot, st, f, rand, colour = 0) {
+    // A small A-frame tent of canvas on two poles. `rot` is the way its
+    // opening faces on screen (0 down, 1 left, 2 up, 3 right); a merchant's
+    // (the state bit) is striped, a nomad family's plain and weathered.
+    const col = hex(['#c8b890', '#a0503a', '#3a6a9a', '#8a6a48'][colour & 3]);
+    const stripe = '#f0ece0';
+    const p = spr();
+    const apex = 7;
+    const base = 27;
+    const half = (y) => ((y - apex) / (base - apex)) * 7.5;
+    for (let y = apex; y <= base; y++) {
+      const w = half(y);
+      for (let x = Math.ceil(7.5 - w); x <= Math.floor(7.5 + w); x++) {
+        // The side facing the light is paler; stripes run down a merchant's.
+        let c = x < 8 ? shade(col, 1.12) : shade(col, 0.88);
+        if (st && ((x + 1) >> 1) % 3 === 0) c = x < 8 ? stripe : shade(hex(stripe), 0.85);
+        if (!st && ((x * 7 + y * 3) % 11 === 0)) c = shade(col, 0.8);
+        p.set(x, y, c);
+      }
+    }
+    // Seams down the middle and along the hem.
+    p.vline(7, apex + 1, base, shade(col, 0.7));
+    p.hline(0, 15, base, shade(col, 0.6));
+    // The opening: facing you, a dark doorway with a flap tied back; to
+    // one side, a sliver of it on that edge.
+    const dark = '#1c1622';
+    if (rot === 0) {
+      for (let y = 17; y <= base - 1; y++) {
+        const w = ((y - 17) / (base - 17)) * 3.5;
+        for (let x = Math.ceil(7.5 - w); x <= Math.floor(7.5 + w); x++) p.set(x, y, dark);
+      }
+      p.line(9, 18, 12, 26, shade(col, 1.3));
+    } else if (rot === 1 || rot === 3) {
+      const x0 = rot === 1 ? 1 : 12;
+      for (let y = 20; y <= base - 1; y++) p.hline(x0, x0 + 2, y, dark);
+    }
+    // Ridge pole tips and guy ropes.
+    p.vline(7, apex - 3, apex, '#6a4a2a');
+    p.vline(8, apex - 3, apex, '#6a4a2a');
+    p.set(0, base + 0, '#6a4a2a');
+    p.set(15, base + 0, '#6a4a2a');
+    return p.outline(OUT);
+  },
   bell(rot, st, f) {
     // A bronze bell under a little roof on two posts; it swings when rung.
     const p = spr();
@@ -1763,7 +1806,7 @@ export function buildTextures() {
         else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
-          const variants = name === 'rock' || name === 'bed' || name === 'canopy' ? VARIANTS : 1;
+          const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' ? VARIANTS : 1;
           // Layout: [state * 4 + frame] for animated props, or variants.
           for (let st = 0; st < 2; st++) {
             for (let f = 0; f < 4; f++) {

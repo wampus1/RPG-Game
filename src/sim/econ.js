@@ -60,6 +60,32 @@ const PLAIN_FOOD = ['pie', 'cooked_meat', 'cooked_fish', 'bread', 'apple', 'carr
 const RAW_FOOD = ['raw_meat', 'fish'];
 const VEG = ['carrot', 'cabbage', 'mushroom', 'wheat'];
 
+// What a trade can always use more of (its raw materials): a cook takes all
+// the fish you bring, a smith all the ore. Anything else, a trader only
+// wants a few of: the more they already have, the less they'll pay, and in
+// the end they'll take no more (until they've sold some on).
+const LOGS = ['log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow'];
+export const ESSENTIAL = {
+  cook: [...RAW_FOOD, ...VEG, 'pumpkin', 'apple', 'berries'],
+  inn: [...RAW_FOOD, ...VEG, 'pumpkin', 'apple', 'berries'],
+  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'cobblestone'],
+  baker: ['wheat', 'berries', 'apple', 'carrot', 'pumpkin'],
+  tailor: ['string', 'leather', 'cloth', 'feather', 'wheat'],
+  carpenter: [...LOGS, 'planks', 'stick'],
+  herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'slime_gel'],
+  fisher: ['string', 'reeds'],
+  farmer: ['seeds', 'bone'],
+  scholar: ['paper', 'ink', 'feather', 'reeds'],
+  trapper: ['string', 'stick', 'feather'],
+};
+export const GLUT_FREE = 2; // they'll take this many at the full price
+export const GLUT_MAX = 8; // and no more once they have this many
+export function glutFactor(kind, item, have) {
+  if ((ESSENTIAL[kind] || []).includes(item)) return 1;
+  if (have >= GLUT_MAX) return 0;
+  return Math.max(0.15, 1 - 0.14 * Math.max(0, have - GLUT_FREE));
+}
+
 // ------------------------------------------------------------ helpers
 export function invCount(inv, item) {
   let n = 0;
@@ -113,10 +139,14 @@ export function traderOf(rec) {
   return JOBS[rec.job]?.trader || null;
 }
 
+// (Kept in order of the day: a town caught up after you've been away logs
+// its days as they come, and never ahead of what came before.)
 export function ledger(L, day, text) {
-  const e = L.econ;
-  e.ledger.push({ day, text });
-  if (e.ledger.length > 200) e.ledger.shift();
+  const list = L.econ.ledger;
+  let i = list.length;
+  while (i > 0 && list[i - 1].day > day) i--;
+  list.splice(i, 0, { day, text });
+  if (list.length > 200) list.shift();
 }
 
 // Stories worth passing on to another town (not the comings and goings of
@@ -840,6 +870,26 @@ function restock(L, rng) {
       st.add(bb.store, 'wheat', 1);
     }
   }
+  // What's piled up beyond what they can use goes to passing traders,
+  // a third of the surplus a day (so they'll buy it again in time).
+  const cleared = new Set();
+  for (const rec of L.npcs) {
+    if (!alive(rec)) continue;
+    const t = traderOf(rec);
+    if (!t) continue;
+    const b = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;
+    const store = b ? b.store : rec.stall;
+    if (!store || cleared.has(store)) continue;
+    cleared.add(store);
+    for (const [k, n] of Object.entries(store)) {
+      if (n <= GLUT_FREE + 1 || (ESSENTIAL[t] || []).includes(k) || (STOCK[t] || []).includes(k)) continue;
+      const off = Math.ceil((n - GLUT_FREE - 1) / 3);
+      st.take(store, k, off);
+      const got = Math.round(price(k) * 0.4 * off);
+      if (b) b.till += got;
+      else rec.coins += got;
+    }
+  }
   for (const rec of L.npcs) {
     if (!alive(rec)) continue;
     const t = traderOf(rec);
@@ -1146,12 +1196,24 @@ function merchants(sim, L, h, day, hod, rng) {
 }
 
 // ------------------------------------------------------------ deaths
+// Lives run much faster than in the real world: a child grows up in a few
+// weeks, a grown-up works for a few months before growing old, and old age
+// lasts a few weeks (the longer it's been, the likelier each night is the
+// last).
+export const CHILDHOOD = 24;
+export const ADULTHOOD = 96;
+export function oldAgeRisk(rec, day) {
+  if (rec.age !== 'elder') return 0;
+  const years = Math.max(0, day - (rec.elderSince ?? day));
+  return Math.min(0.3, 0.008 + 0.003 * years);
+}
+
 function mortality(sim, L, day, rng) {
   if (!sim) return;
   for (const rec of L.npcs) {
     if (!alive(rec) || rec.away) continue;
     let cause = null;
-    if (rec.age === 'elder' && rng.chance(0.0012)) cause = 'old age';
+    if (rec.age === 'elder' && !rec.visitor && rng.chance(oldAgeRisk(rec, day))) cause = 'old age';
     else if (rec.job === 'trapper' && rng.chance(0.0006)) cause = 'a hunting accident';
     else if (rec.hungry >= 5 && rng.chance(0.15)) cause = 'starvation';
     else if (rec.hp <= 1 && rec.sick && rng.chance(0.05)) cause = 'illness';

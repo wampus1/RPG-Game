@@ -7,7 +7,7 @@ import { ITEMS, maxStack, GEMS } from '../world/items.js';
 import { gemText } from '../game/gems.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
-import { itemIcon } from '../render/sprites.js';
+import { itemIcon, drawJewelled } from '../render/sprites.js';
 import { drawText } from '../render/font.js';
 import { addItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
@@ -262,7 +262,7 @@ export class UI {
     if (this.tooltip) this.drawTooltip(ctx);
     if (this.cursorStack) {
       const ic = itemIcon(this.cursorStack.item);
-      ctx.drawImage(ic, Math.round(this.mouse.x - 8), Math.round(this.mouse.y - 8));
+      drawJewelled(ctx, ic, this.cursorStack.item, Math.round(this.mouse.x - 8), Math.round(this.mouse.y - 8), this.time);
       if (this.cursorStack.count > 1) drawText(ctx, String(this.cursorStack.count), Math.round(this.mouse.x + 2), Math.round(this.mouse.y + 1), C.white, '#000');
     }
     if (this.fade > 0) {

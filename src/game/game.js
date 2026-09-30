@@ -969,7 +969,16 @@ export class Game {
     ambientChatter(this, dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
-    for (const c of this.creatures) c.update(dt);
+    // Beasts near you keep pace with racing time too (far off, they idle on).
+    const pp = this.player;
+    for (const c of this.creatures) {
+      const near = sub > 1 && Math.abs(c.x - pp.x) < 40 && Math.abs(c.z - pp.z) < 40;
+      if (!near) {
+        c.update(dt);
+        continue;
+      }
+      for (let k = 0; k < sub && !c.dead; k++) c.update(ndt);
+    }
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
     for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);

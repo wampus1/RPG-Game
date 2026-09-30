@@ -676,6 +676,30 @@ export function growUp(layout, rec, job, rng) {
   return rec;
 }
 
+// Hard, physical trades that elders give up; the rest keep at their work.
+export const RETIRE_FROM = ['guard', 'miner', 'lumberjack', 'builder', 'laborer', 'trapper', 'fisher', 'farmer'];
+
+// Someone grows old: grey hair, a stoop, less strength, an earlier bed,
+// and (from the hard trades) retirement.
+export function growOld(layout, rec, rng) {
+  rec.age = 'elder';
+  const grey = ['#d8d8d8', '#b0b0b0', '#f0f0f0', '#8a8a8a', '#c8c0b0'];
+  const look = { ...rec.look, hair: rng.pick(grey), stoop: true };
+  if (['mohawk', 'spiky', 'afro'].includes(look.hairStyle)) look.hairStyle = rng.pick(['short', 'bald', 'bun']);
+  rec.look = look;
+  rec.maxHp = 8;
+  rec.hp = Math.min(rec.hp ?? 8, 8);
+  rec.aged = true;
+  if (RETIRE_FROM.includes(rec.job)) {
+    if (rec.look.hat === 'helmet' || rec.look.hat === 'miner') rec.look = { ...rec.look, hat: null };
+    retrain(layout, rec, 'retired', rng);
+    rec.shift = 'day';
+    return true;
+  }
+  rec.schedule = makeSchedules(rec, rng, availOf(layout));
+  return false;
+}
+
 // A baby born to a couple in town.
 export function makeChild(layout, a, b, rng) {
   const s = layout.settlement;

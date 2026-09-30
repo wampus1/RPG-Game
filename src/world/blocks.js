@@ -254,6 +254,10 @@ def('flower_arch', { ...sprite, solid: false, tall: true, tool: 'axe', hardness:
 def('maypole', { ...sprite, tall: true, tool: 'axe', hardness: 0.8, drop: null, label: 'Maypole' });
 def('bunting', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.2, drop: null, label: 'Bunting' });
 def('feast_table', { ...sprite, tool: 'axe', hardness: 0.7, drop: null, label: 'Feast Table' });
+// A traveller's tent, pitched outside town by nomads and visiting merchants
+// while they stay: its rotation is the way the opening faces, its colour is
+// kept above (CANOPY_SHIFT), and the state bit marks a merchant's stripes.
+def('tent', { ...sprite, rotatable: true, tool: 'axe', hardness: 0.4, drop: 'cloth', label: 'Tent' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

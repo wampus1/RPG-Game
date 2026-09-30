@@ -624,8 +624,11 @@ export class TradeWindow extends Window {
     const hs = p.inv.findIndex((q, i) => q && this.hovering(40 + (i % 9) * 4, 3 + Math.floor(i / 9) * 3, 3, 2));
     if (hs >= 0 && p.inv[hs].item !== 'coin') {
       const k = p.inv[hs].item;
-      g.text(40, 16, this.wants(k, game) ? `They'll pay ¤${this.sellPrice(k, game)} each` : 'They don\'t want that.', this.wants(k, game) ? C.green : C.red);
-      if (this.wants(k, game) && game.sim.careers.sellFactor(this.npc, k) > 1) g.text(40, 17, '(licensed seller\'s premium)', C.cyan);
+      const pr = this.wants(k, game) ? this.sellPrice(k, game) : 0;
+      const glut = game.sim.sellGlut(this.npc, k);
+      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 ? C.green : C.red);
+      if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
+      else if (this.wants(k, game) && game.sim.careers.sellFactor(this.npc, k) > 1) g.text(40, 17, '(licensed seller\'s premium)', C.cyan);
     }
     const purse = sh ? sh.purse.get() : 0;
     g.text(40, 18, `Your coins: ¤${coins}`, C.hi);
@@ -671,23 +674,40 @@ export class TradeWindow extends Window {
       game.audio?.play('error');
       return;
     }
-    const pr = this.sellPrice(s.item, game);
-    let n = all ? s.count : 1;
-    n = Math.min(n, pr > 0 ? Math.floor(sh.purse.get() / pr) : n);
+    // One at a time: each one they take makes the next worth a little less
+    // (unless it's what their trade runs on), until they want no more.
+    const item = s.item;
+    const want = all ? s.count : 1;
+    let n = 0;
+    let paid = 0;
+    let why = null;
+    while (n < want) {
+      const pr = this.sellPrice(item, game);
+      if (pr <= 0) {
+        why = 'full';
+        break;
+      }
+      if (sh.purse.get() < pr) {
+        why = 'money';
+        break;
+      }
+      sh.purse.add(-pr);
+      st.add(sh.store, item, 1);
+      paid += pr;
+      n++;
+    }
     if (n <= 0) {
-      this.npc.say('I can\'t afford that right now.', 2);
+      this.npc.say(why === 'full' ? this.npc.rng.pick(['I\'ve got more of those than I can use.', 'No more of those, thanks. I\'m full up.', 'I couldn\'t sell another one.']) : 'I can\'t afford that right now.', 2.5);
       game.audio?.play('error');
       return;
     }
-    const item = s.item;
     s.count -= n;
     if (s.count <= 0) p.inv[i] = null;
-    st.add(sh.store, item, n);
-    sh.purse.add(-pr * n);
-    const left = p.give('coin', pr * n);
+    const left = p.give('coin', paid);
     if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
-    game.sim.noteTrade(this.npc, Math.ceil((pr * n) / 2));
+    game.sim.noteTrade(this.npc, Math.ceil(paid / 2));
     game.audio?.play('coin');
+    if (why === 'full') this.npc.say('That\'s all of those I can take.', 2.5);
   }
   onWheel(d) {
     this.scroll += Math.sign(d);
@@ -979,7 +999,9 @@ export class LedgerWindow extends Window {
       lines.push({ t: '', c: C.fg });
     }
     lines.push({ t: 'NOTICES', c: C.hi });
-    for (const n of [...e.ledger].reverse()) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
+    // Newest first (by the day each thing happened).
+    const notes = e.ledger.map((n, i) => ({ n, i })).sort((a, b) => b.n.day - a.n.day || b.i - a.i).map((q) => q.n);
+    for (const n of notes) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
     const room = this.h - 2 - y;
     this.maxScroll = Math.max(0, lines.length - room);
     this.scroll = Math.max(0, Math.min(this.scroll || 0, this.maxScroll));

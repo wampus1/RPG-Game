@@ -329,9 +329,13 @@ export class NPC extends Entity {
         const g = inBuilding(b);
         return g ? { ...g, tag: 'shop', shop: true } : { x: b.inside.x, y: GROUND, z: b.inside.z, tag: 'shop', shop: true };
       }
-      case 'camp':
-        // Nomads look the town over: the square, the streets, the houses.
+      case 'camp': {
+        // Nomads: at their tents outside town (putting them up first), or
+        // looking the town over: the square, the streets, the houses.
+        const camp = this.nomad && this.game.sim.camps.get(`n:${this.nomad.id}`);
+        if (camp && (camp.placed < camp.ops.length || rng.chance(0.45))) return this.campTile(camp);
         return rng.chance(0.5) ? plazaTile() : roadTile();
+      }
       case 'watch':
         return target(e.target, { tag: 'watch', near: 2 });
       case 'sell':
@@ -348,6 +352,10 @@ export class NPC extends Entity {
         return { x: best.x, y: GROUND, z: best.z, near: 1, leave: true };
       }
       case 'visit': {
+        // A merchant's tent first, and back to it for the night.
+        const camp = this.visit && this.game.sim.camps.get(`v:${this.visit.id}`);
+        const late = this.game.minute >= 19 * 60 || this.game.minute < 7 * 60;
+        if (camp && (camp.placed < camp.ops.length || late)) return this.campTile(camp);
         const stalls = L.spotsByTag('shop');
         return claim(stalls) || { ...plazaTile(), face: 0, visit: true };
       }
@@ -375,6 +383,18 @@ export class NPC extends Entity {
       if (e && !e.dead && !e.sleeping && e.act === 'work' && e.state === 'routine' && e.layout === this.layout && r.job !== 'guard' && r.job !== 'miner') return e;
     }
     return null;
+  }
+
+  // Somewhere to stand by a camp's tents.
+  campTile(camp) {
+    const rng = this.rng;
+    for (let i = 0; i < 6; i++) {
+      const x = camp.stand.x + rng.int(-1, 1);
+      const z = camp.stand.z + rng.int(-1, 1);
+      const y = this.game.world.findStandY(x, z, GROUND);
+      if (Math.abs(y - GROUND) <= 1 && !this.game.world.isWaterAt(x, y, z)) return { x, y: GROUND, z, near: 1, tag: 'camp', wander: true };
+    }
+    return { x: camp.stand.x, y: GROUND, z: camp.stand.z, near: 1, tag: 'camp' };
   }
 
   workGoal() {
@@ -1046,6 +1066,8 @@ export class NPC extends Entity {
       this.lineCd = this.rng.float(20, 45);
       if (this.rng.chance(0.5) && this.distTo(game.player) < 14) this.say(this.rng.pick(['Nice square.', 'Do you think they have room for us?', 'Smells like stew. A good sign.', 'Look at those houses...', 'I could get used to this.']), 3);
     }
+    // Evening: a visiting merchant packs up the stall for the tent.
+    if (act.act === 'visit' && this.visit && (this.game.minute >= 19 * 60 || this.game.minute < 7 * 60) && this.goal && this.goal.tag !== 'camp' && this.game.sim.camps.get(`v:${this.visit.id}`)) this.activity = null;
     if (act.act === 'visit' && this.lineCd <= 0 && this.rec.visit) {
       this.lineCd = this.rng.float(15, 35);
       const v = this.rec.visit;

@@ -179,11 +179,15 @@ into a quarry pit), sell the ore to the smithy, and in towns with more than
 three guards one of them goes along to keep watch. Families short of room get
 a new house from the council, couples with a spare bed have children now and
 then, and comfortably-off households pay to have their homes enlarged.
-Now and then a band of **nomads** camps on the square and weighs the place up:
+Now and then a band of **nomads** pitches its tents (and lights a fire) on
+open ground just outside town, by one of the roads in, and weighs the place up:
 room for the whole family, full bellies, safety, fair taxes, and whether anyone
 put in a good word (you can). They settle and take up the work the town lacks,
 or move on; if all that stops them is a roof, the council may build them one.
-A nomad family can even bring a deserted town back to life.
+A nomad family can even bring a deserted town back to life. Either way, the
+tents come down when they've made up their minds. Visiting merchants camp the
+same way for their stay: a striped tent, a crate and a barrel of stock. Where
+you can see it, the tents go up a piece at a time with one of the party there.
 
 Places grow. Building takes **timber and stone** as well as coin: lumberjacks,
 miners and labourers fill the council's stores, and when they run low the
@@ -206,6 +210,18 @@ children come of age and take up the family trade (or what the town lacks),
 and in the night beasts come to the edge of town, driven off by the watch,
 or not, if there's no watch to speak of. People who've gone hungry two days
 running forage, bake their own wheat into bread, or are fed by the council.
+
+**Growing up and growing old.** Lives run much faster than in the real world.
+A child grows up in about three and a half weeks of game days. A grown-up
+works for three to four months before growing old: their hair greys and they
+stoop and slow down. Elders give up the hard trades (guards, miners,
+lumberjacks, builders, labourers, trappers, fishers and farmers), and the town
+finds someone else for the work. Shopkeepers, priests and mayors keep at it.
+Old age comes to everyone in the end. It usually takes a few weeks, and each
+night the chance gets higher. The notice board notes who is getting on in
+years, and the dead are buried and mourned as usual. All of this happens in
+every town, including ones you've never visited, and the towns keep their
+numbers up with weddings, babies and newcomers.
 
 Mayors write to each other by the hands of traveling merchants (or a courier,
 or you, for a fee): asking for money when the treasury runs low, for guards or
@@ -232,7 +248,8 @@ doorway, and whoever you're talking to (or trading with) stops to listen.
 Voices inside a building stay inside: you only see what people say indoors
 when you're in there with them, or near an open door. About a third of the
 guards in a town of three or more keep the night watch. While you sleep and
-time races, everyone else keeps pace.
+time races, everyone else keeps pace, and so do the animals and monsters
+within forty tiles or so of you (further off, they carry on as normal).
 
 **Weather** is the same for everyone: rain, snow and fog come and go over each
 part of the world in spells of a few hours, whether you're there or not.
@@ -521,6 +538,15 @@ name the price). People shop for:
 
 Shops restock from outside suppliers and keep enough back for wages.
 
+**Selling to traders.** A trader doesn't want a heap of one thing. Once
+they have a couple of something, each one you sell them pays a little less,
+and at eight they won't take any more. The trade window tells you when
+they're getting full up. A little of the surplus goes to passing traders
+each day, so in time they'll buy again. This doesn't apply to the goods
+their trade runs on: a cook or innkeeper takes all the fish, meat and
+vegetables you bring, a smith all the ore, coal and ingots, a carpenter all
+the logs and planks, a tailor all the leather and cloth, and so on.
+
 **Merchants** come in three standings: peddlers, traders and master merchants.
 The better the merchant, the more they start with (a master merchant's stock
 includes gems, gold, fine clothes and jewelled weapons), the bigger their
@@ -597,7 +623,9 @@ can use:
 - Jeweller's bench: set a cut gem into a weapon or armour through a timing
   game. Strike as the light passes each prong; slip three times and the gem
   cracks. Each gem raises an ability, and what else it does depends on what
-  it's set in (see *Gems* below).
+  it's set in (see *Gems* below). Jewelled gear looks like the plain piece,
+  wrapped in a pulsing glow the colour of its stone, in your pack and in hand.
+  Worn jewelled armour gives off a faint shimmer, on you or a guard.
 
 **Gems.** A stone works differently in a blade, a bow or armour, and the same
 effects work for guards who carry jewelled gear:
@@ -721,8 +749,10 @@ src/
                        placed where the builders stand), roads (new streets,
                        lots, and what waits for a lot), shops (shopping,
                        stalls, merchant standing),
-                       diplomacy (letters, roads, warnings), nomads, town
-                       life (elections, weddings, coming of age, raids),
+                       diplomacy (letters, roads, warnings), nomads, camps
+                       (tents for nomads and visiting merchants), town
+                       life (elections, weddings, growing up and growing
+                       old, raids),
                        events (posters, stages, guests for weddings and
                        feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws

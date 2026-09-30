@@ -4,9 +4,10 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
+import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting } from './lighting.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
@@ -215,6 +216,7 @@ export class Renderer {
 
   // ------------------------------------------------------------------ frame
   render(game, dt) {
+    this.frameDt = dt;
     this.game = game;
     this.time += dt;
     const player = game.player;
@@ -455,7 +457,7 @@ export class Renderer {
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
               else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
-              else if (id === B.canopy) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+              else if (id === B.canopy || id === B.tent) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
               else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
               // Plants sway gently.
@@ -583,7 +585,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
       const icon = this.dropIcon(e.item);
       const air = e.air || 0;
-      ctx.drawImage(icon, sx + 4, Math.round(feetY - 9 + bob - air * LH));
+      drawJewelled(ctx, icon, e.item, sx + 4, Math.round(feetY - 9 + bob - air * LH), this.time);
       return;
     }
     let bob = 0;
@@ -618,6 +620,17 @@ export class Renderer {
         } else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         const held = e.heldItem ? e.heldItem() : null;
         if (held) this.drawHeld(ctx, held, e, sx, top);
+        // Jewelled armour: a shimmer of its stone's colour now and then.
+        const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
+        const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
+        if (stone && !this.spin) {
+          e.shimmerT = (e.shimmerT || 0) - (this.frameDt || 0.016);
+          if (e.shimmerT <= 0) {
+            e.shimmerT = 0.35 + Math.random() * 0.3;
+            const rp = e.renderPos();
+            this.emit(rp.x + (Math.random() - 0.5) * 0.6, rp.y + 0.6 + Math.random() * 0.8, rp.z, { n: 1, color: [GEMS[stone].color, '#ffffff'], up: 8, speed: 6, life: 0.7, gravity: -6 });
+          }
+        }
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
@@ -662,7 +675,7 @@ export class Renderer {
       const sign = dir === 1 ? -1 : 1;
       ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
       if (dir === 1) ctx.scale(-1, 1);
-      ctx.drawImage(icon, -2, -8);
+      drawJewelled(ctx, icon, key, -2, -8, this.time);
       ctx.restore();
       return;
     }
@@ -671,9 +684,9 @@ export class Renderer {
       ctx.save();
       ctx.translate(hx, hy);
       ctx.scale(-1, 1);
-      ctx.drawImage(icon, -2, -7);
+      drawJewelled(ctx, icon, key, -2, -7, this.time);
       ctx.restore();
-    } else ctx.drawImage(icon, hx - 2, hy - 7);
+    } else drawJewelled(ctx, icon, key, hx - 2, hy - 7, this.time);
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {

@@ -10,7 +10,7 @@ import { weatherAt, townWeather } from '../src/world/weather.js';
 import { castLine, hook, updateFishing } from '../src/game/fishing.js';
 import { placeSome } from '../src/sim/works.js';
 import { growth, promote } from '../src/sim/growth.js';
-import { electMayor, weddings, comingOfAge, raids } from '../src/sim/life.js';
+import { electMayor, weddings, comingOfAge, aging, raids } from '../src/sim/life.js';
 import { Renderer } from '../src/render/renderer.js';
 import { World } from '../src/world/world.js';
 import { RNG } from '../src/util/rng.js';
@@ -362,7 +362,10 @@ test('life goes on: a new mayor is chosen, couples marry, children grow up, beas
   for (let t = (day + 2) * 1440 + 660; t <= ev.e + 60; t += 60) game.sim.events.hourly(L, t);
   assert.ok(pair && pair[0].partner === pair[1].idx && pair[0].home === pair[1].home);
   const kids = L.npcs.filter((r) => r.age === 'child' && alive(r)).length;
-  const grown = comingOfAge(game.sim, L, day + 400);
+  // (Everyone's birthday is settled the first time the town's days are
+  // counted; a childhood is a few weeks.)
+  aging(game.sim, L, day);
+  const grown = comingOfAge(game.sim, L, day + 30);
   assert.ok(grown && grown.age === 'adult' && grown.job !== 'child' && !grown.look.small);
   assert.equal(L.npcs.filter((r) => r.age === 'child' && alive(r)).length, kids - 1);
   const raid = raids(game.sim, L, day + 2, always);

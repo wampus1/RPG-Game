@@ -122,7 +122,9 @@ export class Nomads {
       if (!L) continue;
       if (now >= b.arrive && !b.announced) {
         b.announced = true;
-        ledger(L, g.day, `A band of nomads, the ${b.family} family, is camped by the square.`);
+        // Tents outside town for the stay: one for every two of them.
+        this.sim.camps.pitch(L, `n:${b.id}`, 'nomad', Math.min(3, Math.ceil(b.people.length / 2)), b.decide + 7 * DAY, b.id);
+        ledger(L, this.sim.today(), `A band of nomads, the ${b.family} family, has camped outside town.`);
       }
       if (now >= b.arrive && now < b.decide && g.active.has(b.sid) && (!b.ents || b.ents.every((e) => e.dead))) b.ents = g.spawnNomads ? g.spawnNomads(L, b) : null;
       if (b.houseProject !== undefined) {
@@ -140,11 +142,13 @@ export class Nomads {
           b.houseProject = p.id;
           b.houseBid = p.bid;
           b.decide = now + 6 * DAY;
-          ledger(L, g.day, `The council is building a cottage for the ${b.family} nomads, who will wait for it.`);
+          ledger(L, this.sim.today(), `The council is building a cottage for the ${b.family} nomads, who will wait for it.`);
           continue;
         }
       }
       b.done = true;
+      // The tents come down, whichever way they decide.
+      this.sim.camps.strike(`n:${b.id}`);
       const ents = b.ents || [];
       b.ents = null;
       if (v.ok) {
@@ -155,7 +159,7 @@ export class Nomads {
       } else {
         b.stayed = false;
         const why = { 'no room': 'there was no room for them', hunger: 'too many were going hungry', danger: 'it didn\'t feel safe', taxes: 'the taxes were too high' }[v.reasons[0]] || 'it wasn\'t for them';
-        ledger(L, g.day, `The ${b.family} nomads moved on: ${why}.`);
+        ledger(L, this.sim.today(), `The ${b.family} nomads moved on: ${why}.`);
         g.nomadsLeave?.(ents);
       }
     }

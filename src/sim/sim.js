@@ -9,7 +9,7 @@ import { jobTitle } from '../entities/npcgen.js';
 import { graveyardFence } from '../world/settlement.js';
 import {
   initEcon, mayorOf, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
-  ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews, freshRumours,
+  ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews, freshRumours, glutFactor,
 } from './econ.js';
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
@@ -22,7 +22,8 @@ import { checkWatch, checkSupply, checkHousing, births, staffBuilding, relocate,
 import { Works, placeSome } from './works.js';
 import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
-import { electMayor, weddings, comingOfAge, raids } from './life.js';
+import { Camps } from './camps.js';
+import { electMayor, weddings, comingOfAge, aging, raids } from './life.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
@@ -68,6 +69,7 @@ export class Sim {
     this.works = new Works(game, this);
     this.diplomacy = new Diplomacy(game, this);
     this.nomads = new Nomads(game, this);
+    this.camps = new Camps(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -179,6 +181,7 @@ export class Sim {
       this.works.update();
       this.diplomacy.update();
       this.nomads.update();
+      this.camps.update(0.5, (c) => this.campers(c));
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
@@ -478,6 +481,14 @@ export class Sim {
     r.met = true;
   }
 
+  // Who a camp belongs to (to put it up, they have to be there).
+  campers(c) {
+    const id = c.key.slice(2);
+    if (c.key[0] === 'n') return (this.nomads.bands.find((b) => String(b.id) === id) || {}).ents || [];
+    const e = this.visitorEnts.get(id);
+    return e ? [e] : [];
+  }
+
   // ------------------------------------------------------------ shopping
   // Someone reached the counter: they ask for what they came for, the
   // shopkeeper names the price, and it's theirs.
@@ -587,12 +598,23 @@ export class Sim {
 
   // What a trader pays you for an item. A licensed professional's premium
   // always shows, even on cheap goods where rounding would swallow it.
+  // Fewer coins the more of it they already have (0: they won't take any
+  // more), unless it's what their trade runs on.
   sellPrice(npc, k) {
     const op = this.opinion(npc);
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero);
+    const sh = this.shopOf(npc);
+    const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
+    if (glut <= 0) return 0;
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut;
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
+  }
+
+  // How keen they are to take more of something (1 = full price).
+  sellGlut(npc, k) {
+    const sh = this.shopOf(npc);
+    return sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
   }
 
   // ------------------------------------------------------------ deaths
@@ -831,12 +853,13 @@ export class Sim {
     this.simNow = Math.min(this.abs, day * DAY + 600);
     try {
       this.civicDay(L, day, rng);
+      // Building work in a town caught up from afar moves on with its days
+      // (and what gets finished is noted on the day it was).
+      this.works.catchUp(L, Math.min(this.abs, (day + 1) * DAY));
     } finally {
       this.simDay = null;
       this.simNow = null;
     }
-    // Building work in a town caught up from afar moves on with its days.
-    this.works.catchUp(L, Math.min(this.abs, (day + 1) * DAY));
   }
 
   civicDay(L, day, rng) {
@@ -849,6 +872,7 @@ export class Sim {
     checkSupply(this, L, day);
     checkHousing(this, L, day);
     births(this, L, day, rng);
+    aging(this, L, day);
     electMayor(this, L, day);
     weddings(this, L, day, rng);
     comingOfAge(this, L, day);
@@ -1539,10 +1563,12 @@ export class Sim {
     const sid = L.settlement.id;
     const list = this.visits.get(sid) || [];
     for (const v of list) if (!v.traded && h >= v.arrive) this.visitTrade(L, v, rng);
-    // A merchant arriving tells what's happening back home.
+    // A merchant arriving tells what's happening back home (and pitches a
+    // tent outside town for the stay).
     for (const v of list) {
       if (v.told || h < v.arrive) continue;
       v.told = true;
+      if (h < v.leave) this.camps.pitch(L, `v:${v.id}`, 'merchant', 1, v.leave + 30, hash4(sid, v.arrive, 0xc4));
       hearNews(L, v.fromName, v.news, Math.floor(h / DAY), h);
     }
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
@@ -1562,7 +1588,7 @@ export class Sim {
       const OL = this.game.world.layouts.get(from.id);
       v.news = OL && OL.econ ? notableNews(OL, this.game.day - 5, 2) : [];
       this.visits.set(sid, [...this.visits.get(sid), v]);
-      ledger(L, this.game.day, `A traveling merchant, ${v.name.first} ${v.name.last} of ${from.name}, arrived in town.`);
+      ledger(L, Math.floor(h / DAY), `A traveling merchant, ${v.name.first} ${v.name.last} of ${from.name}, arrived in town.`);
     }
   }
 
@@ -1677,6 +1703,7 @@ export class Sim {
       works: this.works.serialize(),
       diplomacy: this.diplomacy.serialize(),
       nomads: this.nomads.serialize(),
+      camps: this.camps.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
@@ -1704,7 +1731,7 @@ export class Sim {
       // People who moved here from elsewhere: whole records.
       extra: L.npcs.slice(L.baseN ?? L.npcs.length).map(({ ent, ...r }) => (void ent, r)),
       graves: L.graveyard ? { rows: L.graveyard.rows, slots: L.graveyard.slots.map((s) => s.grave) } : null,
-      plots: L.plots.map((p) => !!p.taken),
+      plots: L.plots.map((p) => !!(p && p.taken)),
     };
   }
 
@@ -1740,6 +1767,7 @@ export class Sim {
     this.works.load(data.works);
     this.diplomacy.load(data.diplomacy);
     this.nomads.load(data.nomads);
+    this.camps.load(data.camps);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;

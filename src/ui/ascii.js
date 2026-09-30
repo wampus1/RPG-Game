@@ -4,7 +4,7 @@
 // threshold and flickers through noise glyphs before settling.
 import { CHAR_W, CHAR_H } from '../config.js';
 import { drawChar, drawText } from '../render/font.js';
-import { itemIcon } from '../render/sprites.js';
+import { itemIcon, drawJewelled } from '../render/sprites.js';
 import { hash4 } from '../util/rng.js';
 
 export const C = {
@@ -176,7 +176,7 @@ export function drawGrid(ctx, g, ox, oy, p = 1, seed = 0, time = 0) {
     for (const ic of g.icons) {
       const px = (ox + ic.x) * CHAR_W + ic.px;
       const py = (oy + ic.y) * CHAR_H + ic.py;
-      ctx.drawImage(itemIcon(ic.key), px, py);
+      drawJewelled(ctx, itemIcon(ic.key), ic.key, px, py, time);
       if (ic.count > 1) {
         const s = ic.count > 999 ? '999' : String(ic.count);
         drawText(ctx, s, px + 17 - s.length * CHAR_W, py + 9, C.white, '#000');

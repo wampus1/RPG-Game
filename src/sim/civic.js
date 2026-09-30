@@ -335,10 +335,11 @@ export function births(sim, L, day, rng) {
     if (!b || !alive(b) || b.away || b.age !== 'adult' || a.idx > b.idx || a.home !== b.home || a.home === null) continue;
     const house = L.buildings[a.home];
     if (!house) continue;
-    const kids = a.children.filter((i) => L.npcs[i] && alive(L.npcs[i])).length;
+    // (Grown-up children don't count: they're off living their own lives.)
+    const kids = a.children.filter((i) => L.npcs[i] && alive(L.npcs[i]) && L.npcs[i].age === 'child').length;
     if (kids >= 3) continue;
     const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
-    if (!rng.chance(living < house.beds.length ? 0.02 : 0.004)) continue;
+    if (!rng.chance(living < house.beds.length ? 0.05 : 0.03)) continue;
     const r = makeChild(L, a, b, new RNG(hash4(a.idx, b.idx, day, 0xba8e)));
     r.idx = L.npcs.length;
     r.id = `${s.id}:${r.idx}`;
