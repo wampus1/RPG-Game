@@ -63,6 +63,7 @@ with the music off. `window.__game` exposes the running game.
 | Raft | Hold a raft and right-click water; A/D turn, W paddles, S back-paddles, F steps ashore |
 | Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
 | Toss item | G (Ctrl+G throws the whole stack), or drag it out of a window |
+| Set what you hold down on the ground (it stays until you mine it back up) | B (Ctrl+B sets down the whole stack) |
 | Eat or drink what you hold, read a newspaper, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
@@ -672,7 +673,9 @@ allow sound before that.
 **Turning the camera.** Q and E turn the view a quarter turn either way, so
 you can see behind buildings. The world visibly swings round to the new view.
 Market stall canopies keep their stripes and colour whichever way you look.
-While the view turns, time and you stand still. Movement keys always move you across the screen,
+While the view turns, time and you stand still. The HUD, the weather and
+people's speech bubbles stay upright while the world swings round under them.
+Movement keys always move you across the screen,
 the minimap turns with the view (N marks north), and the placement arrow shows
 which way a block will face.
 
@@ -761,9 +764,23 @@ one of its streets actually runs into it.
 town growing is announced two days ahead on the notice board. The day before,
 someone goes round town putting up posters (a heart for a wedding, a sun for a
 feast) that you can read. On the day, the builders put up the set:
-- for a wedding, a flower arch, lanterns, a rug aisle and rows of benches;
-- for a feast, a ribboned maypole, laden tables, and bunting strung between
-  lantern posts.
+- for a wedding, a flower arch, lights, a rug aisle and rows of benches;
+- for a feast, laden tables, bunting strung between posts, and something to
+  dance round. What that is depends on the people:
+
+| People | Dance round | Lights | Colours and banners |
+| --- | --- | --- | --- |
+| Valeborn | a ribboned maypole | lanterns | red, gold, blue and green; a gold star on red |
+| Nordvolk | a bonfire | torches | blue, white and red; a white cross on blue |
+| Sunreach | a lantern post in a ring of rugs | lanterns | gold, crimson, teal and indigo; a crescent on crimson |
+| Verdani | a fire pit, with flowers where people stand | torches | orange, green, pink and yellow; zigzags on green |
+| Kharduum | an anvil | lanterns | dark red, gold and iron grey; a hammer on red |
+
+The builders also go all round town: bunting strung across the streets from
+house to house, banners by the doors of the hall, the tavern and the temple and
+at the roads in (more for a town's own celebration), all in the town's
+colours. A wedding's are white and pink, with flowers at the couple's door.
+The more a town has grown, the more of it they dress.
 
 In the hour or so before it starts, guests drift in a few at a time: the
 couple and whoever leads it first, then the keen and the early risers, with
@@ -780,6 +797,74 @@ at the tables, the cooks serve, and dancers go round and round the maypole.
 Everyone who went is in better spirits afterwards, and turning up yourself
 earns you some goodwill. The next morning the builders take it all down and
 the posters come down.
+
+**Outings.** Now and then someone in town decides to go and see another town of
+the realm, more often when there's a wedding, a feast or a celebration on
+there. They ask a friend or two along (their partner, family and friends first),
+and the watch usually sends a guard with them. The mayor and the people the town
+can't do without (the guards, the cook, the herbalist, the priest, the smith, the
+builders) rarely go, and never more than about a fifth of a town is away at once.
+They take the town's wagon and horses if they're free, and otherwise walk.
+Where you're a citizen and the one planning it likes you, they come and ask you
+along: say yes and they'll wait for you by the road out of town when it's time to
+go. At the other end they stay for the do (or a day), look round the town, go to
+the tavern of an evening and tie their horses at the hitching post. Back home
+they talk about it to the ones who went with them and to the ones who didn't, and
+they'll tell you about it if you ask. Once in a while someone liked the place so
+much that they pack up and move there.
+
+**Horses and wagons.** A town keeps a few horses and, once it has a carpenter
+with timber and coin, a wagon or two (a village one or two horses, a city up to
+six and three wagons). An animal handler (taken on from the labourers, farmers
+or anyone else the town has plenty of) breaks in wild horses; wild horses graze
+the plains and savanna. They stand tied to a hitching post by the road into
+town, with the wagons beside them. The town's merchants take a wagon (more goods,
+quicker) or a horse (quicker still) when one is free, as do townsfolk on an
+outing. Riders and drivers get down when they reach their camp or their
+destination, and tie their horses to a post with a lead.
+
+**Trading companies.** Three companies of traders wander the roads and never
+settle anywhere. Each has a banner on its wagons' canvas and on its horses'
+saddle cloths, one or two wagons pulled by horses, a trader or two, a driver and
+a guard on horseback. They travel by day. At night they pitch a striped tent by
+the roadside, light a fire, park the wagons and tie up the horses, and set off
+again at first light. Reaching a town, they camp outside it for a day or two and
+trade: their goods from far away go to the shop, the smith, the tailor and the
+herbalist and to townsfolk with coin to spare, and they buy food and the
+town's produce for the road. You can trade with them, and ask where they're
+bound, about the company and about the road.
+
+**Nomads** turn up a little more often, and some bands travel with a plain
+wagon and a horse or two, with no banners.
+
+**Breaking away.** A town far from its capital that pays its tribute and gets
+little back grows restless, and more so under a harsh ruler, a high tax floor or
+a hostile realm next door. The notice board shows how much support there is for
+leaving. When enough people want it, the town declares itself a free state,
+with its own colours on the map, and its old realm counts it as hostile. A town
+close enough to another realm's border may swear itself to that realm instead,
+which its old realm takes even worse.
+
+**Walls and gates.** City gates have real gates. They stand open by day. At
+night a guard on watch shuts them ("Closing the gates for the night!") and opens
+them again for anyone who needs to pass. From inside you can lift the bar
+yourself; from outside, with no guard nearby, the gate stays barred till morning.
+When a walled city has grown past its walls, the builders put up a new ring of
+wall round the houses outside, with gates where the roads go through.
+
+**Herbalists** are fairly common in villages and towns as well as cities. Outside
+cities they sell herbs and salves, not potions. Townsfolk who are ill or hurt go
+to them to be tended.
+
+**Setting things down.** You can put what you're holding down on the ground (B).
+It stays where it is: walking over it doesn't pick it up, and it doesn't get in
+anyone's way. Mine it to take it back. Townsfolk do the same now and then (a
+tool set down by a hobby, an adventurer's bow by the campfire) and come back for
+it. Taking something that isn't yours is theft if someone sees.
+
+**Bigger towns.** Villages and towns start with a few more people and a few more
+guards, and a place needs more people (26 for a town, 50 for a city), buildings
+and money to move up a size.
 
 ## Command console
 
@@ -842,8 +927,13 @@ src/
                        stalls, merchant standing),
                        diplomacy (letters, roads, warnings), realms
                        (capitals, rulers, decrees, tribute, aid, relations
-                       between realms), adventurers, nomads, camps
-                       (tents for nomads, merchants and adventurers), town
+                       between realms, breaking away), adventurers,
+                       nomads, camps (tents for nomads, merchants,
+                       adventurers and trading companies), stables
+                       (horses, wagons, animal handlers), caravans (the
+                       wandering trading companies and their road
+                       camps), outings (townsfolk visiting other towns
+                       in small groups), town
                        life (elections, weddings, growing up and growing
                        old, raids),
                        events (posters, stages, guests for weddings and

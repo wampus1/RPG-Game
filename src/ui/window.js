@@ -70,7 +70,7 @@ export function describeActivity(e) {
     case 'home': return e.weather ? `home out of the ${e.weather === 'snow' ? 'snow' : e.weather === 'fog' ? 'fog' : 'rain'}` : 'at home';
     case 'mourn': return 'mourning at a grave';
     case 'funeral': return 'at a funeral';
-    case 'event': return e.role === 'couple' ? 'getting married' : e.kind === 'wedding' ? 'at a wedding' : e.role === 'dance' ? 'dancing round the maypole' : 'at the feast';
+    case 'event': return e.role === 'couple' ? 'getting married' : e.kind === 'wedding' ? 'at a wedding' : e.role === 'dance' ? 'dancing' : e.kind === 'fete' ? 'at the celebration' : 'at the feast';
     case 'poster': return e.mode === 'down' ? 'taking down posters' : 'putting up posters';
     case 'bury': return 'setting a gravestone';
     case 'pray': return 'praying for healing';
@@ -78,7 +78,8 @@ export function describeActivity(e) {
     case 'forage': return 'looking for food';
     case 'trial': return 'at a hearing';
     case 'travel': return 'leaving on a journey';
-    case 'visit': return 'selling wares';
+    case 'visit': return e.place === 'guest' ? 'visiting' : 'selling wares';
+    case 'adventure': return e.place === 'camp' ? 'at camp' : e.place === 'market' ? 'at the market' : e.place === 'tavern' ? 'at the tavern' : e.place === 'train' ? 'sparring with the watch' : 'about town';
     case 'sell': return 'selling the catch';
     case 'repair': return 'repairing the jail';
     case 'watch': return 'guarding a miner';

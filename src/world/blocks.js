@@ -258,6 +258,18 @@ def('feast_table', { ...sprite, tool: 'axe', hardness: 0.7, drop: null, label: '
 // while they stay: its rotation is the way the opening faces, its colour is
 // kept above (CANOPY_SHIFT), and the state bit marks a merchant's stripes.
 def('tent', { ...sprite, rotatable: true, tool: 'axe', hardness: 0.4, drop: 'cloth', label: 'Tent' });
+// City gates: two leaves of heavy timber in a gateway through the wall.
+// The lower half stops you when shut (the state bit is open); the upper
+// half is only there to look at.
+def('city_gate', { ...sprite, solid: true, rotatable: true, interact: 'gate', tool: 'axe', hardness: 4, drop: 'planks', label: 'City Gate', support: false });
+def('city_gate_top', { ...sprite, solid: false, rotatable: true, interact: 'gate', tool: 'axe', hardness: 4, drop: null, label: 'City Gate', support: false });
+// Something set down on the ground (what it is lives in game.placed): no
+// collision, and you take it back by mining it, not by walking over it.
+def('placed_item', { solid: false, opaque: false, render: 'placed', standable: false, support: true, hardness: 0.1, drop: [], label: 'Set down' });
+// A banner on a pole, put up round town for a do. Its colours and mark are
+// the town's own (the colour bits above CANOPY_SHIFT and the state bit pick
+// one of eight: see DECOR_PALETTES); bunting takes its colours the same way.
+def('festival_banner', { ...sprite, solid: false, tool: 'axe', hardness: 0.3, drop: null, label: 'Banner' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

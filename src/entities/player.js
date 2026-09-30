@@ -209,6 +209,14 @@ export class Player extends Entity {
         }
         return;
       }
+      // A shut city gate: see whether you'll be let through.
+      if (BLOCKS[id].interact === 'gate' && BLOCKS[id].solid && !w.getState(nx, yy, nz)) {
+        if (this.bumpT <= 0) {
+          this.game.useGate(nx, yy, nz);
+          this.bumpT = 1.5;
+        }
+        return;
+      }
     }
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
     if (ny < 0) return;

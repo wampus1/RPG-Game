@@ -17,6 +17,7 @@ import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4 } from '../util/rng.js';
 import { authority, rulerTitle } from '../sim/realms.js';
+import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { rainedRecently } from '../world/weather.js';
 
@@ -97,6 +98,12 @@ function openingRaw(npc, game) {
       ? pick(rng, [`A local! Maybe you can tell me: is ${s.name}'s tavern any good?`, `Well met. ${s.name} treating you well?`, 'Hail. Don\'t mind me, just passing through.'])
       : pick(rng, ['Another wanderer! Well met, friend.', 'Hail, traveller. Long road?', 'Ha, I know that look: you\'ve slept under the stars too.']);
   }
+  if (npc.company) {
+    const g = npc.company;
+    const where = npc.caravan ? (npc.caravan.camp ? 'Pull up a log by the fire, friend.' : `On our way to ${npc.caravan.to}.`) : `We're camped outside ${s.name} for a day or so.`;
+    if (rec.role === 'guard') return pick(rng, [`Easy, now. You're near ${g.name}'s wagons.`, `Hold there. ...Ah, just a traveller. Go on, then.`, `Keep your hands where I can see them, friend. Nothing personal.`]);
+    return pick(rng, [`Well met! ${rec.name.first} ${rec.name.last}, of ${g.name}. ${where}`, `Customers! Come, come: goods from every corner of the land. ${where}`, `Ah, hello there. ${where}`]);
+  }
   if (npc.nomad) return pick(rng, [`Greetings. We're the ${rec.name.last}s, travellers. Is this a good place to live?`, 'Hello there. We\'re just passing through... or maybe not.', `The road's been long. What's ${s.name} like?`]);
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
@@ -115,7 +122,23 @@ function openingRaw(npc, game) {
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
+  // Townsfolk on an outing: on the road, or there.
+  const o = rec.trip && rec.trip.outing ? sim.outings.get(rec.trip.outing) : null;
+  if (npc.caravan && rec.trip && rec.trip.outing) {
+    if (o && o.withPlayer) return pick(rng, [`Not far now, ${name.split(' ')[0]}!`, 'My feet are killing me. Worth it, though.', `Glad you came along, ${name.split(' ')[0]}.`]);
+    return pick(rng, [`Hello! We're off to ${npc.caravan.to}${o && o.ev ? ` for ${o.ev.title}` : ''}.`, `On our way to ${npc.caravan.to}, from ${s.name}. Lovely day for it.`]);
+  }
+  if (npc.visit && npc.visit.guest) {
+    const ev = npc.visit.ev;
+    return pick(rng, ev ? [`We came all the way from ${npc.visit.fromName} for ${ev.title}!`, `Hello! Just visiting from ${npc.visit.fromName}, for ${ev.title}.`] : [`Hello! Just visiting from ${npc.visit.fromName}.`, `${s.name}'s bigger than I thought. We're from ${npc.visit.fromName}, just looking around.`, 'Visiting! Is the tavern here any good?']);
+  }
   if (npc.caravan) return pick(rng, [`Well met on the road! ${rec.name.first} ${rec.name.last}, merchant of ${s.name}, on my way to ${npc.caravan.to}.`, `Hello there! Heading to ${npc.caravan.to} with a pack of goods. Care to trade?`]);
+  // Just back from a trip, and full of it.
+  const tm = rec.tripMem;
+  if (tm && game.day - tm.day <= 2 && rep > -25 && rng.chance(0.4)) {
+    if (tm.player) return pick(rng, [`${name.split(' ')[0]}! Wasn't ${tm.dest} something?`, `That trip to ${tm.dest}, eh? We should go again.`]);
+    return pick(rng, [`Oh, hello! I've just got back from ${tm.dest}.`, `Back from ${tm.dest}, and my own bed never felt so good.`]);
+  }
   if (npc.visit) return pick(rng, [`Greetings, traveller! ${rec.name.first} ${rec.name.last}, merchant of ${npc.visit.fromName}.`, `Ah, a customer! Just in from ${npc.visit.fromName}.`]);
   if (npc.hired) return npc.hired.companion ? pick(rng, [`What is it, ${name}?`, 'Yes, friend?', 'Need something?']) : pick(rng, ['Yes, boss?', 'Something the matter?', 'I\'m listening.']);
   const car = sim.careers;
@@ -202,6 +225,16 @@ export function topicsFor(npc, game) {
     add('bye', 'Goodbye.');
     return out;
   }
+  if (npc.company) {
+    if (rep > -40) add('trade', rec.role === 'guard' ? 'Can I see your wares?' : 'Let\'s trade.');
+    add('co_route', 'Where are you headed?');
+    add('co_company', 'Tell me about your company.');
+    add('co_road', 'Any news from the road?');
+    add('who', 'Who are you?');
+    add('gift', 'I have a gift for you.');
+    add('bye', 'Goodbye.');
+    return out;
+  }
   if (npc.nomad) {
     add('nomad', 'Are you thinking of settling here?');
     add('who', 'Where do you come from?');
@@ -210,7 +243,15 @@ export function topicsFor(npc, game) {
     add('bye', 'Goodbye.');
     return out;
   }
-  const trader = npc.visit || JOBS[rec.job]?.trader || rec.job === 'cook';
+  const trader = npc.visit ? !npc.visit.guest : JOBS[rec.job]?.trader || rec.job === 'cook';
+  // A trip they're planning, and asking you on.
+  const trip = rec.visitor ? null : sim.outings.tripOf(rec, s.id);
+  if (trip && trip.phase === 'planned' && trip.lead === rec.idx && (trip.player === 'ask' || trip.asked) && trip.player !== 'joined' && trip.player !== 'declined') {
+    const to = game.world.ow.settlements[trip.dest];
+    out.push({ id: 'trip', arg: 'yes', label: `I'd love to come to ${to.name}!` });
+    out.push({ id: 'trip', arg: 'no', label: 'Not this time, thanks.' });
+  } else if (trip && trip.phase === 'planned' && trip.player === 'joined') add('trip_when', 'When do we leave?');
+  if (rec.tripMem && game.day - rec.tripMem.day <= 6 && rec.age !== 'child') add('trip_tell', `How was ${rec.tripMem.dest}?`);
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
     if (cf.stage === 'expel') add('conduct', '...I understand.');
@@ -323,6 +364,10 @@ function realmTalk(npc, game) {
     else if (!here && R.share >= 0.12) lines.push(p.kindness < 0.4 ? `A ${Math.round(R.share * 100)}% share of our taxes goes to ${capS ? capS.name : 'the capital'}. Robbery, I call it.` : `A fair bit of our taxes goes to ${capS ? capS.name : 'the capital'}. I hope they spend it well.`);
     else lines.push(pick(rng, [`A steady hand, ${who}.`, `We could do worse than ${ruler.name.first} ${ruler.name.last}.`, `I don't think about the capital much. It's a long way off.`]));
   } else lines.push(`The ${realmName} has no ruler just now. Everyone's waiting to hear who's next.`);
+  // Talk of breaking away (or of when they did).
+  const ind = npc.layout.econ.independence ?? -1;
+  if (civ.freed && civ.capital === s.id) lines.push(pick(rng, [`We answer to nobody now: free of the ${(game.world.ow.civs[civ.freed.from]?.name || 'old realm').replace(/^The /, '')} since day ${Math.max(1, civ.freed.day)}.`, 'Free! And we mean to stay that way.']));
+  else if (R.capital !== s.id && ind > 0.1) lines.push(ind > 0.3 ? pick(rng, ['Between us: half the town wants to go it alone. Maybe more.', `We pay ${capS ? capS.name : 'the capital'} and get nothing back. People are talking.`]) : 'Some say we\'d do better on our own. Talk, mostly.');
   if (R.decrees.armsBan && !npc.layout.econ.laws.armsBan) lines.push(`${who[0].toUpperCase() + who.slice(1)} forbids drawn weapons in every town of the realm, mind.`);
   // The neighbours.
   const others = (game.world.ow.civs || []).filter((o) => o !== civ);
@@ -338,6 +383,89 @@ function realmTalk(npc, game) {
   const home = sim.citizen ? game.world.ow.settlements[sim.citizen.sid] : null;
   if (home && home.civ && home.civ !== civ && sim.realms.standing(civ, home.civ) === 'hostile') lines.push(`You're of the ${home.civ.name.replace(/^The /, '')}, aren't you? Hm.`);
   return { lines: lines.slice(0, 4) };
+}
+
+// A trip to another town: being asked along, when you're leaving, and
+// how it went (the do, the place, and who they went with).
+function tripTalk(npc, game, id, arg) {
+  const rec = npc.rec;
+  const s = npc.settlement;
+  const sim = game.sim;
+  const rng = npc.rng;
+  const first = game.playerName.split(' ')[0];
+  if (id === 'trip' || id === 'trip_when') {
+    const t = sim.outings.tripOf(rec, s.id);
+    if (!t || t.phase !== 'planned') return { lines: ['We\'ve already gone! Well... you know what I mean.'] };
+    const to = game.world.ow.settlements[t.dest];
+    const when = leavingWhen(t, game.day);
+    if (id === 'trip' && arg === 'no') {
+      sim.outings.answer(t, false);
+      return { lines: [pick(rng, ['Oh, that\'s a shame. Another time, then!', 'Fair enough. I\'ll bring you back something.', 'Next time, then. I\'ll hold you to it!'])] };
+    }
+    if (id === 'trip') {
+      sim.outings.answer(t, true);
+      sim.changeRep(npc, 3);
+      return { lines: [`Wonderful! We leave ${when}, from the road out of town.`, `Don't be late, ${first}. We'll wait a little, but not all day!`] };
+    }
+    return { lines: [`${when[0].toUpperCase()}${when.slice(1)}, from the road out of town. ${to.name}, here we come!`] };
+  }
+  const tm = rec.tripMem;
+  if (!tm) return { lines: ['Hm?'] };
+  const L = npc.layout;
+  const others = (tm.with || []).map((i) => L.npcs[i]).filter(Boolean).map((r) => r.name.first);
+  const TL = game.world.layouts.get(tm.sid);
+  const sights = TL ? ['temple', 'library', 'smithy', 'tavern', 'jeweler', 'townhall'].filter((k) => TL.buildings.some((b) => b.type === k)) : [];
+  const sight = sights.length ? rng.pick(sights) : null;
+  const lines = [];
+  if (tm.ev === 'wedding') lines.push(pick(rng, [`Beautiful! ${cap(tm.title)}: I cried, I don't mind saying.`, `${cap(tm.title)} was lovely. And the dancing after!`]));
+  else if (tm.ev === 'feast') lines.push(pick(rng, [`The feast! I've never eaten so much in my life.`, `${tm.dest} knows how to throw a feast, I'll give them that.`]));
+  else if (tm.ev === 'fete') lines.push(pick(rng, [`What a party! The whole of ${tm.dest} was out celebrating.`, `They're so proud of their town. And they should be.`]));
+  else lines.push(pick(rng, [`${tm.dest}? Busier than here. Nice enough, though.`, `Lovely. Quite different from ${s.name}.`, `I liked it. I'd go again.`]));
+  if (sight) lines.push(pick(rng, [`You should see their ${sight}. We've nothing like it.`, `Their ${sight}'s a fine one. Made me a bit jealous.`]));
+  if (tm.player) lines.push(pick(rng, [`But you know, you were there! Wasn't it grand, ${first}?`, `Good to have you along, ${first}.`]));
+  else if (others.length) lines.push(`${listNames(others)} came too. ${pick(rng, ['We laughed the whole way back.', 'Never again on the same wagon, though!', 'Good company makes the road shorter.'])}`);
+  return { lines: lines.slice(0, 3) };
+}
+
+// Talk with one of a trading company: where they're bound, the company
+// itself (how long on the road, how many wagons) and what they've heard.
+function companyTalk(npc, game, id) {
+  const g = npc.company;
+  const rec = npc.rec;
+  const s = npc.settlement;
+  const rng = npc.rng;
+  const ow = game.world.ow;
+  const next = ow.settlements[g.dest];
+  const prev = ow.settlements[g.seen[g.seen.length - (g.state === 'stay' ? 2 : 1)]];
+  const boss = g.members.find((m) => m.role === 'trader');
+  switch (id) {
+    case 'who':
+      return { lines: [rec.role === 'guard' ? `${rec.name.first} ${rec.name.last}. I keep ${g.name} and its wagons safe on the road.` : rec.role === 'driver' ? `${rec.name.first} ${rec.name.last}. I drive the second wagon, and mind the horses.` : `${rec.name.first} ${rec.name.last}, trader. ${boss && boss.name.first === rec.name.first ? 'This is my company.' : `I ride with ${boss ? boss.name.first : 'the company'}.`}`,
+        pick(rng, ['We don\'t stop anywhere for long. That\'s the trade.', 'Home? The wagon\'s home.', 'Every town wants something the last one had.'])] };
+    case 'co_route': {
+      if (g.state === 'stay' && next) {
+        const here = g.at === s.id;
+        return { lines: [here ? `We'll stay a day or two, and then on to wherever the road takes us.` : `${next.name}, and then who knows.`, pick(rng, ['Go where the coin is, that\'s the rule.', 'We follow the market, not a map.'])] };
+      }
+      return { lines: [next ? `To ${next.name}${next.civ && next.civ !== s.civ ? `, in the ${next.civ.name.replace(/^The /, '')}` : ''}. ${npc.caravan && npc.caravan.camp ? 'We\'ll be off at first light.' : 'We should make it by nightfall, or the next.'}` : 'Onward. There\'s always another town.'] };
+    }
+    case 'co_company':
+      return { lines: [`${g.name[0].toUpperCase()}${g.name.slice(1)}: ${g.wagons} wagon${g.wagons > 1 ? 's' : ''}, ${g.members.length} of us, and horses to pull it all.`,
+        g.stays > 3 ? `We've traded in ${g.stays} towns since I've been keeping count.` : 'We\'re not long on this stretch of road.',
+        pick(rng, ['Look for the banner on the wagons: that\'s us.', 'We don\'t settle. Never have.', 'We camp by the road at night: cheaper than any inn.'])] };
+    case 'co_road': {
+      const lines = [];
+      if (prev && prev.id !== s.id) {
+        const PL = game.world.layouts.get(prev.id);
+        const news = PL && PL.econ ? PL.econ.ledger.slice(-12).filter((l) => !/^Law:|keeps ¤|Taxes stand/.test(l.text)) : [];
+        lines.push(`We came from ${prev.name}.`);
+        if (news.length) lines.push(`Last we heard there: ${news[news.length - 1].text}`);
+      }
+      lines.push(pick(rng, ['Wolves took one of our horses last winter. We ride closer together now.', 'Roads are better than they were. Towns build them for trade, and trade is us.', 'Bandits? Not with our guard along.']));
+      return { lines: lines.slice(0, 3) };
+    }
+  }
+  return { lines: ['Hm?'] };
 }
 
 // Talk with an adventurer. A citizen is a local to them (they'll ask about
@@ -615,6 +743,7 @@ function workTalk(npc, game) {
   const s = npc.settlement;
   const J = JOBS[rec.job];
   if (npc.hired) return { lines: [`Right now my work is keeping you alive, ${game.playerName}.`] };
+  if (npc.visit && npc.visit.guest) return { lines: [`Back in ${npc.visit.fromName} I'm a ${jobTitle(rec, npc.homeLayout.settlement).toLowerCase()}. Today I'm on holiday!`] };
   if (npc.visit) return { lines: [`I buy cheap in ${npc.visit.fromName} and sell dear wherever I go. Mostly.`, 'The road is long, but the coin is good.'] };
   if (rec.age === 'child') return { lines: [pick(rng, ['Work? I\'m a kid! I play!', 'When I grow up I want to be a guard!', 'I help at home, sometimes.'])] };
   if (rec.job === 'retired') return { lines: ['I\'ve done my share of work, thank you very much.', 'Now I tend to my own business, and everyone else\'s.'] };
@@ -1139,8 +1268,18 @@ function respondRaw(npc, game, id, arg) {
     case 'adv_duel':
     case 'adv_tip':
       return adventurerTalk(npc, game, id, arg);
+    case 'co_route':
+    case 'co_company':
+    case 'co_road':
+      return companyTalk(npc, game, id);
+    case 'trip':
+    case 'trip_when':
+    case 'trip_tell':
+      return tripTalk(npc, game, id, arg);
     case 'who': {
       if (npc.adventurer) return adventurerTalk(npc, game, 'who');
+      if (npc.company) return companyTalk(npc, game, 'who');
+      if (npc.visit && npc.visit.guest) return { lines: [`${rec.name.first} ${rec.name.last}, from ${npc.visit.fromName}. ${jobTitle(rec, npc.homeLayout.settlement)} there, when I'm at home.`, npc.visit.ev ? `We came for ${npc.visit.ev.title}.` : 'Just visiting, seeing how the other half live.'] };
       if (npc.visit) return { lines: [`${rec.name.first} ${rec.name.last}, traveling merchant from ${npc.visit.fromName}. I carry goods between there and the towns around it.`] };
       if (npc.nomad) return { lines: [`${rec.name.first} ${rec.name.last}. We come from everywhere and nowhere: the ${rec.name.last}s have been on the road for years.`, rec.age === 'child' ? 'I was born in a wagon!' : 'We\'re looking for somewhere to put down roots.'] };
       if (rec.age === 'child') return { lines: [pick(rng, [`I'm ${rec.name.first}! I'm ${6 + (rec.idx % 7)}!`, `I'm ${rec.name.first}. Wanna play tag?`, `My name's ${rec.name.first}!`])] };
@@ -1668,7 +1807,7 @@ function news(npc, game) {
     items.push(it.day === game.day ? `Today: ${it.text}` : `On day ${it.day}, ${/^(A|An|The|Taxes|Law|Builders)\b/.test(it.text) ? it.text.charAt(0).toLowerCase() + it.text.slice(1) : it.text}`);
     if (items.length >= 4) break;
   }
-  const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
+  const visits = (game.sim.visits.get(s.id) || []).filter((v) => !v.guest && game.sim.abs >= v.arrive && game.sim.abs < v.leave);
   if (visits.length) items.push(`A merchant from ${visits[0].fromName} is in town, selling on the square.`);
   // News from other towns, as the merchants tell it.
   if (npc.visit && npc.visit.news && npc.visit.news.length) {

@@ -112,7 +112,7 @@ test('more names: surnames of trades and families, civilization titles of their 
 });
 
 test('builders lay a street where they stand, not all at once; walls go up a stretch at a time', () => {
-  const { game, L } = start(7);
+  const { game, L } = start(4);
   const sim = game.sim;
   const plan = sim.roads.planStreet(L);
   assert.ok(plan, 'room for a street');

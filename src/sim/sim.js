@@ -26,6 +26,9 @@ import { Camps } from './camps.js';
 import { electMayor, weddings, comingOfAge, aging, raids } from './life.js';
 import { Realms } from './realms.js';
 import { Adventurers } from './adventurers.js';
+import { Stables } from './stables.js';
+import { Caravans } from './caravans.js';
+import { Outings } from './outings.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
@@ -74,6 +77,9 @@ export class Sim {
     this.camps = new Camps(game, this);
     this.realms = new Realms(game, this);
     this.adventurers = new Adventurers(game, this);
+    this.stables = new Stables(game, this);
+    this.caravans = new Caravans(game, this);
+    this.outings = new Outings(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -187,6 +193,9 @@ export class Sim {
       this.nomads.update();
       this.camps.update(0.5, (c) => this.campers(c));
       this.adventurers.update();
+      this.caravans.update();
+      this.caravans.syncEnts();
+      this.outings.update();
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
@@ -494,6 +503,7 @@ export class Sim {
       const a = this.adventurers.ents.get(Number(id));
       return a ? [a] : [];
     }
+    if (c.key[0] === 'c') return [...this.caravans.ents].filter(([k]) => k.startsWith(`${id}:`)).map(([, e]) => e);
     const e = this.visitorEnts.get(id);
     return e ? [e] : [];
   }
@@ -518,6 +528,19 @@ export class Sim {
       npc.say(npc.rng.pick([`How much? I'll come back for the ${name}.`, 'Ah. A bit dear for me today.']), 3);
       return r;
     }
+    // At the herbalist's for their hurts: tended to, not just sold a jar.
+    const b = L.buildings[o.building];
+    if (o.need === 'remedy' && b && b.type === 'herbalist') {
+      npc.say(npc.rng.pick(['Something for this, please. It\'s been getting worse.', 'Can you look at this for me?', 'I\'ve not been well...']), 3);
+      npc.hp = npc.maxHp;
+      this.game.renderer.emit(npc.x, npc.y + 1, npc.z, { n: 8, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.8, gravity: -12 });
+      if (keeper && keeper.ent && !keeper.ent.dead) {
+        keeper.ent.face(npc.x, npc.z);
+        keeper.ent.doAction?.(0.4);
+        keeper.ent.sayLater?.(keeper.ent.rng.pick([`Hold still, this'll sting. There: ¤${r.cost}.`, `Rub this in twice a day. ¤${r.cost}.`, `You'll mend. That's ¤${r.cost}.`]), 1.2, 3.5);
+      }
+      return r;
+    }
     npc.say(npc.rng.pick([`A ${name}, please.`, `I'll take the ${name}.`, `One ${name} for me, please.`, `I need a new ${name}.`]), 3);
     npc.emoteShow?.('¤', '#ffe070', 2);
     if (keeper && keeper.ent && !keeper.ent.dead) {
@@ -536,6 +559,11 @@ export class Sim {
     // A merchant met on the road sells from the pack they're carrying.
     if (npc.caravan && rec.trip && rec.trip.goods) {
       return { store: rec.trip.goods, purse: { get: () => rec.coins, add: (n) => { rec.coins += n; } }, kind: 'general', wants: null };
+    }
+    // A trading company sells from its wagons.
+    if (rec.caravanTrader !== undefined) {
+      const g = this.caravans.get(rec.caravanTrader);
+      return g ? this.caravans.shop(g) : null;
     }
     // An adventurer trades from their pack.
     if (rec.adventurer !== undefined) {
@@ -912,6 +940,8 @@ export class Sim {
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
+    this.stables.daily(L, day, rng);
+    this.outings.daily(L, day);
     growth(this, L, day);
     this.works.daily(L, day);
     this.checkConduct(L, day);
@@ -955,6 +985,7 @@ export class Sim {
     this.funeralsAndBurials(L);
     this.events.hourly(L, h + 60);
     this.woundedPray(L, h, hod);
+    this.outings.hourly(L, h, day);
     // Snares near an active town catch things now and then.
     if (!this.game.active.has(L.settlement.id)) return;
     const w = this.game.world;
@@ -1526,12 +1557,17 @@ export class Sim {
       invAdd((rec.inv ||= []), 'raft', 1);
     }
     const raft = byRaft && hasRaft();
-    const travel = Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : 1)));
+    // Overland, a wagon (and a horse to pull it) if the town has one free,
+    // or a horse to ride: quicker, and a wagon carries more.
+    const mount = raft ? null : this.stables.take(L, 'wagon');
+    if (mount) mount.banner = s.civ ? s.civ.color.hex : '#b03030';
+    const travel = Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : mount ? (mount.kind === 'horse' ? 0.65 : 0.75) : 1)));
     const goods = packGoods(L, rec, rng);
-    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft });
+    if (mount && mount.kind === 'wagon') for (const [k, n] of Object.entries(goods)) goods[k] = n + Math.ceil(n / 2);
+    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft, mount });
     const visit = {
       id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look, tier: rec.tier,
-      goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0,
+      goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0, mount,
       // The news from home goes along with the goods.
       news: notableNews(L, day - 5, 3),
     };
@@ -1541,7 +1577,7 @@ export class Sim {
     t.visit = visit.id;
     const mail = this.diplomacy.letters.filter((q) => q.from === s.id && q.to === pick.o.id && q.status === 'waiting').length;
     this.diplomacy.carry(s.id, pick.o.id, rec, t.arrive);
-    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name}${raft ? ' by raft' : ''} with a pack of goods${mail ? ' and a letter from the mayor' : ''}.`);
+    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name}${raft ? ' by raft' : mount ? (mount.kind === 'wagon' ? ' with the town wagon' : ' on horseback') : ''} with ${mount && mount.kind === 'wagon' ? 'a wagonload' : 'a pack'} of goods${mail ? ' and a letter from the mayor' : ''}.`);
     if (rec.ent && !rec.ent.dead) {
       // Walk out of town first, then vanish over the horizon.
       setOverride(rec, h, h + 180, 'travel', { place: 'road' });
@@ -1564,6 +1600,8 @@ export class Sim {
     }
     rec.coins += earned;
     rec.earned += earned;
+    // The horse (and wagon) back in the town's stable.
+    if (t.mount) this.stables.giveBack(t.mount);
     rec.trip = { phase: 'home', since: day };
     this.visits.set(t.dest, list.filter((q) => q.id !== t.visit));
     const dest = this.game.world.ow.settlements[t.dest];
@@ -1606,7 +1644,7 @@ export class Sim {
     for (const v of list) {
       if (v.told || h < v.arrive) continue;
       v.told = true;
-      if (h < v.leave) this.camps.pitch(L, `v:${v.id}`, 'merchant', 1, v.leave + 30, hash4(sid, v.arrive, 0xc4));
+      if (h < v.leave && !v.guest) this.camps.pitch(L, `v:${v.id}`, 'merchant', 1, v.leave + 30, hash4(sid, v.arrive, 0xc4), { mounts: v.mount ? [v.mount] : [] });
       hearNews(L, v.fromName, v.news, Math.floor(h / DAY), h);
     }
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
@@ -1705,7 +1743,9 @@ export class Sim {
           const b = centre(to);
           pos = { x: Math.round(a.x + (b.x - a.x) * f), z: Math.round(a.z + (b.z - a.z) * f) };
         }
-        out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, target: centre(to) });
+        // (Townsfolk on an outing you're part of walk right beside you.)
+        const o = t.outing ? this.outings.get(t.outing) : null;
+        out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, target: centre(to), mount: t.mount || null, outing: t.outing || null, close: !!(o && o.withPlayer) });
       }
     }
     // Adventurers on their way from one town to the next.
@@ -1728,6 +1768,8 @@ export class Sim {
       }
       out.push({ key: `adv:${a.id}:${a.departAt}`, rec: this.adventurers.roadRec(a, L), L, from, to, pos, target: centre(to), adv: a });
     }
+    // The trading companies, riding and driving their wagons (or camped).
+    out.push(...this.caravans.roadTravellers());
     return out;
   }
 
@@ -1774,6 +1816,8 @@ export class Sim {
       camps: this.camps.serialize(),
       realms: this.realms.serialize(),
       adventurers: this.adventurers.serialize(),
+      caravans: this.caravans.serialize(),
+      outings: this.outings.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
@@ -1790,7 +1834,7 @@ export class Sim {
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, readEdition: r.readEdition, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
-      born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor,
+      born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor, outing: r.outing, tripMem: r.tripMem,
       ...(r.grown ? { hobbies: r.hobbies } : {}),
       // Grown old (grey, stooped, slower), whether or not they retired.
       ...(r.aged || r.ruler !== undefined ? { look: r.look, maxHp: r.maxHp, schedule: r.schedule } : {}),
@@ -1843,6 +1887,8 @@ export class Sim {
     this.camps.load(data.camps);
     this.realms.load(data.realms);
     this.adventurers.load(data.adventurers);
+    this.caravans.load(data.caravans);
+    this.outings.load(data.outings);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;

@@ -66,7 +66,9 @@ export function needsOf(L, rec) {
   if (TOOLS[rec.job]) out.push({ key: 'tool', items: TOOLS[rec.job], every: 6 });
   out.push({ key: 'clothes', items: CLOTHES[rec.job] || PLAIN_CLOTHES, every: 15 });
   if (['noble', 'mayor', 'merchant'].includes(rec.job) || traits.includes('proud') || traits.includes('vain')) out.push({ key: 'fine', items: FINE_CLOTHES, every: 10, spare: 50 });
-  if (rec.sick || (rec.hp !== undefined && rec.maxHp && rec.hp < rec.maxHp) || rec.age === 'elder') out.push({ key: 'remedy', items: REMEDY, every: rec.sick ? 2 : 8 });
+  // (Badly hurt or sick: off to the herbalist's soon.)
+  const hurt = rec.hp !== undefined && rec.maxHp && rec.hp < rec.maxHp * 0.6;
+  if (rec.sick || (rec.hp !== undefined && rec.maxHp && rec.hp < rec.maxHp) || rec.age === 'elder') out.push({ key: 'remedy', items: REMEDY, every: rec.sick || hurt ? 1 : 8 });
   if (['scholar', 'priest', 'mayor', 'noble'].includes(rec.job) || (rec.hobbies || []).includes('reading') || traits.includes('bookish')) out.push({ key: 'reading', items: READING, every: 9 });
   if (keepsHouse(L, rec)) out.push({ key: 'house', items: HOUSE, every: 12 });
   if (rec.job === 'guard') {

@@ -48,7 +48,7 @@ export class Camps {
         const top = world.getBlock(x, GROUND, z);
         const below = world.getBlock(x, GROUND - 1, z);
         if (below === B.path || below === B.planks) return false;
-        if (top !== B.air && !SOFT.has(blockName(top))) return false;
+        if (top !== B.air && !SOFT.has(top)) return false;
       }
       return true;
     };
@@ -68,17 +68,25 @@ export class Camps {
   }
 
   // Set up camp: `tents` tents in a row facing town, and a fire (nomads,
-  // adventurers) or a crate and a barrel of stock (a merchant).
-  pitch(L, key, kind, tents, until, salt = 0) {
+  // adventurers) or a crate and a barrel of stock (a merchant; a trading
+  // company has a crate and a fire).
+  // `extra.mounts`: wagons and horses that came with them ({ kind: 'wagon'
+  // or 'horse', coat, banner }): the wagons stand beside the tents, the
+  // horses tied to a hitching post.
+  pitch(L, key, kind, tents, until, salt = 0, extra = {}) {
     if (this.get(key)) return this.get(key);
     const ents = L.entrances && L.entrances.length ? L.entrances : [{ x: L.plaza.cx, z: L.plaza.cz }];
     const entrance = ents[salt % ents.length];
-    const w = Math.max(3, tents * 2 - 1);
-    const at = this.site(L, entrance, w, 2, salt);
+    const mounts = extra.mounts || [];
+    const nWagons = mounts.filter((m) => m.kind === 'wagon').length;
+    const base = Math.max(3, tents * 2 - 1);
+    const w = base + (mounts.length ? 2 + nWagons * 2 : 0);
+    const at = this.site(L, entrance, w, mounts.length ? 3 : 2, salt);
     if (!at) return null;
     // Opening toward town.
     const face = DX.findIndex((dx, r) => dx === -at.out[0] && DZ[r] === -at.out[1]);
-    const merchant = kind === 'merchant';
+    // Traders (a visiting merchant, a trading company) have striped canvas.
+    const merchant = kind === 'merchant' || kind === 'caravan';
     const colour = merchant ? hash4(salt, 7) % 3 + 1 : hash4(salt, 3) % 2 === 0 ? 0 : 3;
     const meta = (face & 3) | (merchant ? META_STATE : 0) | (colour << CANOPY_SHIFT);
     const pos = (i, j) => [at.x + at.lat[0] * i + at.out[0] * j, at.z + at.lat[1] * i + at.out[1] * j];
@@ -92,12 +100,36 @@ export class Camps {
       ops.push([cx, GROUND, cz, B.crate, 0]);
       const [bx, bz] = pos(2, 1);
       if (tents < 2) ops.push([bx, GROUND, bz, B.barrel, 0]);
+      // A company on the road keeps a fire going, too.
+      if (kind === 'caravan') {
+        const [fx, fz] = pos(0, 0);
+        ops.push([fx, GROUND, fz, B.campfire, META_STATE]);
+      }
     } else {
       const [fx, fz] = pos(Math.max(0, tents - 1), 0);
       ops.push([fx, GROUND, fz, B.campfire, META_STATE]);
     }
     const [sx, sz] = pos(Math.max(0, tents - 1), -1);
-    const camp = { key, sid: L.settlement.id, kind, ops, placed: 0, until, stand: { x: sx, z: sz }, struck: false };
+    const camp = { key, sid: L.settlement.id, kind, ops, placed: 0, until, stand: { x: sx, z: sz }, out: at.out, struck: false, horses: [], wagons: [] };
+    if (mounts.length) {
+      // A hitching post, the horses round it, the wagons beyond.
+      const [px, pz] = pos(base + 1, 1);
+      ops.push([px, GROUND, pz, B.fence, 0]);
+      const post = { x: px, y: GROUND, z: pz };
+      const spots = [pos(base + 1, 0), pos(base + 1, 2), pos(base, 2), pos(base + 2, 2)];
+      let h = 0;
+      let wi = 0;
+      for (const m of mounts) {
+        const [hx, hz] = spots[h % spots.length];
+        camp.horses.push({ key: `${key}:h${h}`, x: hx, z: hz, coat: m.coat || 0, banner: m.banner || null, post });
+        h++;
+        if (m.kind === 'wagon') {
+          const [wx, wz] = pos(base + 3 + wi * 2, 1);
+          camp.wagons.push({ key: `${key}:w${wi}`, x: wx, z: wz, face: 1, banner: m.banner || null });
+          wi++;
+        }
+      }
+    }
     this.list.push(camp);
     // Out of sight: it's simply up.
     if (!this.game.active.has(camp.sid)) this.raise(camp, camp.ops.length);
@@ -171,8 +203,3 @@ export class Camps {
   }
 }
 
-let names = null;
-function blockName(id) {
-  if (!names) names = Object.fromEntries(Object.entries(B).map(([k, v]) => [v, k]));
-  return names[id];
-}

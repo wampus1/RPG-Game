@@ -11,6 +11,9 @@ export const SPECIES = {
   deer: { name: 'Deer', hp: 8, dmg: 0, step: 0.24, mode: 'passive', drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.7]] },
   rabbit: { name: 'Rabbit', hp: 3, dmg: 0, step: 0.22, mode: 'passive', drops: [['raw_meat', 1, 1, 1]] },
   chicken: { name: 'Chicken', hp: 3, dmg: 0, step: 0.4, mode: 'passive', drops: [['feather', 1, 2, 1], ['raw_meat', 1, 1, 0.6]], tame: true },
+  // Wild on open grassland (animal handlers tame them); a town's or a
+  // trader's stand tied to a fence with a lead.
+  horse: { name: 'Horse', hp: 14, dmg: 0, step: 0.3, mode: 'passive', drops: [['leather', 1, 3, 1], ['raw_meat', 1, 3, 1]], tame: true },
 };
 
 const SKELETON_LOOK = {
@@ -68,6 +71,15 @@ export class Creature extends Entity {
     if (this.hostileNow) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
       if (this.target) return this.chase(dt);
+    } else if (this.tie) {
+      // Tied to a post: shifting about on the end of the lead, no further.
+      if (this.thinkT <= 0) {
+        this.thinkT = this.rng.float(2, 6);
+        const [dx, dz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][this.rng.int(0, 3)];
+        if (Math.max(Math.abs(this.x + dx - this.tie.x), Math.abs(this.z + dz - this.tie.z)) <= 1) this.tryStep(this.x + dx, this.z + dz, this.S.step * 2);
+        else this.face(this.x + dx, this.z + dz);
+      }
+      return;
     } else if (this.S.mode === 'passive') {
       const t = game.nearestThreatTo(this, 5);
       if (t) {

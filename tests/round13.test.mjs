@@ -24,7 +24,7 @@ const reload = (game) => {
 };
 
 test('selling: the more of a thing a trader has, the less they pay, until they want no more', () => {
-  const { game, a } = start();
+  const { game, a } = start(4);
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   const sh = game.sim.shopOf(smith);
   // A book is no use to a smith: each one they already have takes the price down.
@@ -50,7 +50,7 @@ test('selling: the more of a thing a trader has, the less they pay, until they w
 });
 
 test('selling: a trader\'s glut clears over a few days, and they buy again', () => {
-  const { game, a, L } = start();
+  const { game, a, L } = start(4);
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   const sh = game.sim.shopOf(smith);
   sh.store.book = GLUT_MAX;

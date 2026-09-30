@@ -10,8 +10,8 @@ import { deserted } from './civic.js';
 
 // What it takes to go up a size.
 export const TIERS = {
-  village: { next: 'town', pop: 20, buildings: 9, treasury: 250, needs: ['tavern'] },
-  town: { next: 'city', pop: 42, buildings: 18, treasury: 700, needs: ['tavern', 'smithy'] },
+  village: { next: 'town', pop: 26, buildings: 10, treasury: 280, needs: ['tavern'] },
+  town: { next: 'city', pop: 50, buildings: 20, treasury: 760, needs: ['tavern', 'smithy'] },
 };
 // Trades a place of each size should have (beyond what the supply chain
 // already asks for).
@@ -116,6 +116,27 @@ export function growth(sim, L, day) {
       e.treasury -= WALL_COST.coins;
       stockOf(L).stone -= WALL_COST.stone;
       return { wall: works.add({ sid: s.id, kind: 'wall', bid: L.buildings.length - 0.5, label: 'the new city wall' }) };
+    }
+  }
+  // A walled city with streets and houses outside its wall rings them with
+  // a new one (the old wall stays as an inner ring).
+  if (s.type === 'city' && L.walled && !works.active(s.id).some((p) => p.kind === 'wall') && e.treasury >= WALL_COST.coins + 150 && stockOf(L).stone >= WALL_COST.stone) {
+    const cur = e.wallRect || L.bounds;
+    const outside = L.buildings.filter((b) => !b.underConstruction && (b.x1 < cur.x0 || b.x0 > cur.x1 || b.z1 < cur.z0 || b.z0 > cur.z1));
+    if (outside.length >= 2) {
+      const r = { x0: cur.x0, z0: cur.z0, x1: cur.x1, z1: cur.z1 };
+      for (const b of outside) {
+        r.x0 = Math.min(r.x0, b.x0 - 3);
+        r.z0 = Math.min(r.z0, b.z0 - 3);
+        r.x1 = Math.max(r.x1, b.x1 + 3);
+        r.z1 = Math.max(r.z1, b.z1 + 3);
+      }
+      const plan = r.x1 - r.x0 < 140 && r.z1 - r.z0 < 140 ? L.outerWallPlan(r) : null;
+      if (plan && plan.tiles.length >= 8) {
+        e.treasury -= WALL_COST.coins;
+        stockOf(L).stone -= WALL_COST.stone;
+        return { wall: works.add({ sid: s.id, kind: 'wall', rect: r, bid: L.buildings.length - 0.5, label: 'a new wall round the outer streets' }) };
+      }
     }
   }
   // Room for everyone, and a bed or two to spare for newcomers.

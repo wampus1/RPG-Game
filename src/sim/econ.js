@@ -34,6 +34,14 @@ export const STOCK = {
   trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers'],
 };
 
+// What a trader keeps in stock here: an herbalist outside a city deals in
+// herbs and salves, not potions.
+export function stockFor(L, t) {
+  const list = STOCK[t] || [];
+  if (t === 'herbalist' && L && L.settlement && L.settlement.type !== 'city') return list.filter((k) => !k.startsWith('potion_'));
+  return list;
+}
+
 // Which items each trade will buy from the player.
 export const WANTS = {
   general: null, // anything
@@ -322,7 +330,7 @@ export function initEcon(L) {
     const t = traderOf(rec);
     const b = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;
     if (!t || !b || t === 'cook' || t === 'inn') continue;
-    for (const k of STOCK[t] || []) if (ITEMS[k] && rng.chance(0.7)) st.add(b.store, k, rng.int(1, 3));
+    for (const k of stockFor(L, t)) if (ITEMS[k] && rng.chance(0.7)) st.add(b.store, k, rng.int(1, 3));
   }
   // Merchants: peddlers, traders and master merchants, with stock to match.
   setUpMerchants(L, rng);
@@ -634,7 +642,7 @@ const GOODS = {
   blacksmith: ['iron_ingot', 'iron_sword', 'stone_pickaxe', 'stone_axe', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_boots'],
   tailor: ['cloth', 'cloth', 'leather', 'rug_red', 'bed', 'linen_shirt', 'wool_trousers', 'leather_tunic'],
   carpenter: ['planks', 'chair', 'stool', 'table', 'chest', 'barrel', 'door'],
-  herbalist: ['herb', 'herb', 'mushroom', 'sapling'],
+  herbalist: ['herb', 'herb', 'mushroom', 'sapling', 'healing_salve'],
   scholar: ['book', 'scroll'],
   miner: ['coal', 'coal', 'iron_ore', 'cobblestone'],
   lumberjack: ['log_oak', 'planks', 'stick'],
@@ -898,7 +906,7 @@ function restock(L, rng) {
     if (!t || t === 'cook' || t === 'inn' || t === 'trapper' || t === 'fisher' || t === 'farmer') continue;
     const b = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;
     if (!b) continue;
-    for (const k of STOCK[t] || []) {
+    for (const k of stockFor(L, t)) {
       if (!ITEMS[k] || st.count(b.store, k) >= 2 || !rng.chance(0.35)) continue;
       const cost = Math.max(1, Math.round(price(k) * 0.4));
       // (Keeping enough back for the wages.)

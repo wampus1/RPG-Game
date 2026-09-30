@@ -538,6 +538,113 @@ export function creatureSheet(kind, variant = 0) {
   return c;
 }
 
+// ---------------------------------------------------------------- horses & wagons
+export const HORSE_COATS = ['#8a5a34', '#a0602e', '#3a3034', '#a8a8a8', '#e0dcd0', '#6a4a2a'];
+export const HORSE_W = 24;
+export const HORSE_H = 18;
+
+// A horse from the side, facing left (the renderer flips it): `coat` an
+// index into HORSE_COATS, `banner` a trade banner's colour on the saddle
+// cloth (null for none), `frame` 0 standing, 1-2 walking.
+export function horseSprite(frame, coat = 0, banner = null) {
+  const key = `h:${frame}:${coat}:${banner || ''}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(HORSE_W, HORSE_H);
+  const base = hex(HORSE_COATS[coat % HORSE_COATS.length]);
+  const dark = shade(base, 0.7);
+  const light = shade(base, 1.18);
+  const mane = coat === 4 ? hex('#c8c0b0') : hex('#2a2024');
+  // Legs (walking: pairs swap).
+  const w = frame === 0 ? 0 : frame === 1 ? 1 : -1;
+  for (const [x, o] of [[8, w], [10, -w], [16, w], [18, -w]]) {
+    p.rect(x + o, 12, 1, 5, dark);
+    p.set(x + o, 17, '#1a1420');
+  }
+  // Body, belly shade, back highlight.
+  p.ellipse(13, 9, 7, 3.5, base);
+  p.hline(8, 18, 12, dark);
+  p.hline(9, 17, 6, light);
+  // Neck and head (to the left), ears, eye, muzzle.
+  p.line(7, 8, 4, 3, base);
+  p.line(8, 8, 5, 3, base);
+  p.line(6, 8, 3, 4, base);
+  p.rect(1, 2, 4, 3, base);
+  p.rect(0, 4, 2, 2, dark);
+  p.set(4, 1, dark);
+  p.set(3, 3, '#1a1420');
+  // Mane down the neck, tail behind.
+  p.line(5, 2, 8, 7, mane);
+  p.line(20, 8, 22, 13, mane);
+  p.set(21, 8, mane);
+  // Saddle cloth: a trader's banner colours, with a gold coin sewn on.
+  if (banner) {
+    const b = hex(banner);
+    p.rect(10, 6, 7, 5, b);
+    p.hline(10, 16, 11, shade(b, 0.7));
+    p.set(13, 8, '#f0d040');
+    p.set(13, 9, '#c8a020');
+  }
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
+export const WAGON_W = 30;
+export const WAGON_H = 22;
+
+// A covered wagon from the side (pulled to the left): a trader's has its
+// banner on the canvas; a nomad family's is plain, patched and weathered.
+export function wagonSprite(banner = null, frame = 0) {
+  const key = `w:${banner || ''}:${frame}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(WAGON_W, WAGON_H);
+  const wood = hex('#7a5430');
+  const woodD = shade(wood, 0.7);
+  const canvas = banner ? hex('#ece4cc') : hex('#c8bc9c');
+  // The canvas hood on its hoops.
+  for (let x = 4; x <= 26; x++) {
+    const top = 2 + Math.round(Math.abs(x - 15) > 8 ? (Math.abs(x - 15) - 8) * 1.2 : 0);
+    for (let y = top; y <= 11; y++) p.set(x, y, (x - 4) % 6 === 0 ? shade(canvas, 0.82) : canvas);
+  }
+  if (banner) {
+    const b = hex(banner);
+    p.rect(10, 4, 11, 6, b);
+    p.hline(10, 20, 10, shade(b, 0.7));
+    // A pair of scales, the traders' mark.
+    p.hline(13, 17, 6, '#f0d040');
+    p.vline(15, 5, 8, '#f0d040');
+    p.set(13, 7, '#f0d040');
+    p.set(17, 7, '#f0d040');
+  } else {
+    // Patches on an old hood.
+    p.rect(8, 5, 3, 3, shade(canvas, 0.75));
+    p.rect(19, 7, 4, 2, hex('#8a6a48'));
+  }
+  // The bed, and the shafts out front.
+  p.rect(2, 11, 26, 4, wood);
+  p.hline(2, 27, 11, shade(wood, 1.2));
+  p.hline(2, 27, 14, woodD);
+  p.line(0, 13, 3, 13, woodD);
+  // Wheels (the spokes turn as it rolls).
+  for (const cx of [7, 23]) {
+    p.ellipse(cx, 17, 4, 4, woodD);
+    p.ellipse(cx, 17, 2.5, 2.5, wood);
+    p.set(cx, 17, '#2a2024');
+    if (frame % 2) {
+      p.set(cx - 1, 16, woodD);
+      p.set(cx + 1, 18, woodD);
+    } else {
+      p.set(cx + 1, 16, woodD);
+      p.set(cx - 1, 18, woodD);
+    }
+  }
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
 // ---------------------------------------------------------------- items
 const TIER = { wood: ['#a07a4a', '#7a5a34'], stone: ['#9a9aa4', '#6a6a74'], iron: ['#d8d8e4', '#9a9aa8'], gold: ['#f0d040', '#b89820'] };
 const HANDLE = ['#8a6038', '#5e4024'];

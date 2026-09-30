@@ -206,7 +206,7 @@ test('guards may bear arms, lose the post on trial, and for insulting the mayor'
 });
 
 test('companions, favour cooldowns, customers and discounts', () => {
-  const { game, input, a, p } = start(7, 9 * 60);
+  const { game, input, a, p } = start(4, 9 * 60);
   const car = game.sim.careers;
   const friend = a.npcs.find((n) => n.rec.age === 'adult' && !['guard', 'mayor'].includes(n.rec.job) && !(n.rec.grief || []).length);
   assert.ok(!topicsFor(friend, game).some((t) => t.id === 'companion'));

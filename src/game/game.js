@@ -61,6 +61,13 @@ export class Game {
     };
     this.signIcons = new Map();
     this.projectiles = [];
+    // Things set down on the ground: "x,y,z" -> { item, count, owner }.
+    this.placed = new Map();
+    // Wagons standing still, and horses tied up: by what they belong to.
+    this.props = new Map();
+    this.tied = new Map();
+    // Trading companies' night camps by the road near you: key -> camp.
+    this.roadCamp = new Map();
     this.sleep = null;
     const nrng = new RNG(hash4(this.seed, 0x9a3e));
     const pstyle = this.world.ow.spawnSettlement ? this.world.ow.spawnSettlement.style : 'vale';
@@ -730,12 +737,15 @@ export class Game {
       if (!rec || !alive(rec) || (rec.ent && !rec.ent.dead)) return null;
       rec.visit = visit;
       const now = this.day * DAY + this.minute;
-      setOverride(rec, now, visit.leave + 240, 'visit', { place: 'market' });
+      setOverride(rec, now, visit.leave + 240, 'visit', { place: visit.guest ? 'guest' : 'market' });
     } else rec = visitorRecord(visit, idx, L.settlement.id);
     const e = L.entrances[idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
-    const spot = this.findFreeSpot(e.x, e.z, GROUND);
+    // On a town horse or driving its wagon: up to the camp first.
+    const ride = visit.mount ? this.rideInSpot(this.sim.camps.get(`v:${visit.id}`)) : null;
+    const spot = ride || this.findFreeSpot(e.x, e.z, GROUND);
     const n = new NPC(this, rec, L);
     n.visit = visit;
+    if (ride) n.mount = visit.mount;
     if (origin) {
       n.originLayout = origin;
       n.repSid = origin.settlement.id;
@@ -765,16 +775,32 @@ export class Game {
       if (n && !n.dead) {
         n.caravan.tx = tr.target.x;
         n.caravan.tz = tr.target.z;
+        // Off the horses and wagons for the night; back up in the morning.
+        if (tr.company) {
+          n.caravan.camp = tr.camp;
+          n.caravan.campKey = tr.company && tr.camped ? `rc:${tr.company.id}:${tr.company.departAt}` : null;
+          if (!!n.mount !== !!tr.mount) {
+            n.mount = tr.mount;
+            if (!tr.mount) n.say(n.rng.pick(['Whoa, there. We stop here.', 'Make camp! Tie the horses.', 'That\'s enough road for one day.']), 3);
+          }
+        }
         const far = Math.max(Math.abs(n.x - p.x), Math.abs(n.z - p.z)) > 40;
         const arrived = ow.settlementAt(n.x, n.z) === tr.to;
         if (far || arrived) this.endCaravan(tr.key, n);
         continue;
       }
-      if (inTown || d > 26 || d < 8 || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
+      if (inTown || d > 26 || d < (tr.close ? 2 : 8) || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
       const spot = this.findFreeSpot(tr.pos.x, tr.pos.z, this.world.findStandY(tr.pos.x, tr.pos.z, GROUND));
       if (!spot || ow.settlementAt(spot.x, spot.z)) continue;
       const m = new NPC(this, tr.rec, tr.L);
       m.caravan = { tx: tr.target.x, tz: tr.target.z, to: tr.to.name, from: tr.from.name };
+      // On horseback, or up on a wagon.
+      if (tr.mount) m.mount = tr.mount;
+      if (tr.company) {
+        m.company = tr.company;
+        m.caravan.camp = tr.camp;
+        m.caravan.campKey = tr.camped ? `rc:${tr.company.id}:${tr.company.departAt}` : null;
+      }
       if (tr.adv) {
         m.adventurer = tr.adv;
         this.sim.adventurers.ents.set(tr.adv.id, m);
@@ -811,9 +837,13 @@ export class Game {
       };
       // The family walks in together by one road.
       const e = L.entrances[band.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
-      const spot = this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
+      // (With a wagon and horses, they drive and ride up to their camp.)
+      const mounts = band.mounts || [];
+      const ride = i < mounts.length && p.age === 'adult' ? this.rideInSpot(this.sim.camps.get(`n:${band.id}`), i) : null;
+      const spot = ride || this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
       const n = new NPC(this, rec, L);
       n.nomad = band;
+      if (ride) n.mount = { kind: mounts[i].kind, coat: mounts[i].coat || 0, banner: null };
       n.teleport(spot.x, spot.y, spot.z);
       rec.ent = n;
       a.npcs.push(n);
@@ -839,6 +869,119 @@ export class Game {
     a.npcs.push(n);
     this.npcs.push(n);
     return n;
+  }
+
+  // Riding in: a little way out beyond a camp that's only just going up
+  // (they come in off the road and get down there), or null.
+  rideInSpot(camp, i = 0) {
+    if (!camp || camp.placed >= camp.ops.length || !camp.out) return null;
+    const x = camp.stand.x + camp.out[0] * 8 + (camp.out[1] ? i : 0);
+    const z = camp.stand.z + camp.out[1] * 8 + (camp.out[0] ? i : 0);
+    if (!this.world.regionAt(x, z) || this.world.ow.settlementAt(x, z)) return null;
+    const y = this.world.findStandY(x, z, GROUND);
+    return y > 0 ? this.findFreeSpot(x, z, y) : null;
+  }
+
+  // One of a trading company, staying at their camp outside a town you're
+  // in (by their tents, or just in by the road).
+  spawnCaravanner(L, g, i, rec) {
+    const a = this.active.get(L.settlement.id);
+    if (!a || (rec.ent && !rec.ent.dead)) return null;
+    const camp = this.sim.camps.get(`c:${g.id}`);
+    const e = camp ? camp.stand : L.entrances[g.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+    // Just in: they ride up to their camp and get down there.
+    const ride = this.rideInSpot(camp, i);
+    const spot = ride || this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
+    if (!spot) return null;
+    const n = new NPC(this, rec, L);
+    n.company = g;
+    const m = g.members[i];
+    if (ride && (m.mount === 'horse' || m.wagon !== undefined)) n.mount = { kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat || 0, banner: g.banner };
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
+    a.npcs.push(n);
+    this.npcs.push(n);
+    return n;
+  }
+
+  // A trading company's night by the road: a striped tent and a fire off
+  // to one side of the way, the wagons standing, the horses tied to a post.
+  pitchRoadCamp(key, pos, g) {
+    if (this.roadCamp.has(key)) return this.roadCamp.get(key);
+    const w = this.world;
+    const ow = w.ow;
+    if (!w.regionAt(pos.x, pos.z)) return null;
+    // Level, dry, open ground at height `y` (the road's own, near enough).
+    const y0 = w.findStandY(pos.x, pos.z, null);
+    const clear = (x, z, y) => {
+      if (ow.settlementAt(x, z) || !w.regionAt(x, z)) return false;
+      if (w.findStandY(x, z, y) !== y) return false;
+      const below = w.getBlock(x, y - 1, z);
+      if (below === B.path || below === B.planks || w.isWaterAt(x, y - 1, z) || !BLOCKS[below].solid) return false;
+      const top = w.getBlock(x, y, z);
+      return top === B.air || !BLOCKS[top].solid;
+    };
+    // A patch beside the road: tent, fire, post in a row, the wagons behind.
+    let at = null;
+    for (let r = 2; r <= 6 && !at; r++) {
+      for (const [dx, dz] of [[0, r], [0, -r], [r, 0], [-r, 0], [r, r], [-r, r], [r, -r], [-r, -r]]) {
+        const x = pos.x + dx;
+        const z = pos.z + dz;
+        const y = w.findStandY(x, z, y0 > 0 ? y0 : null);
+        if (y <= 0) continue;
+        if ([0, 1, 2, 3, 4].every((k) => [-1, 0, 1].every((j) => clear(x + k, z + j, y)))) {
+          at = { x, y, z };
+          break;
+        }
+      }
+    }
+    if (!at) return null;
+    const Y = at.y;
+    const colour = hash4(g.id, 0x7e) % 3 + 1;
+    const ops = [
+      [at.x, Y, at.z, B.tent, 0 | META_STATE | (colour << 3)],
+      [at.x + 1, Y, at.z + 1, B.campfire, META_STATE],
+      [at.x + 3, Y, at.z, B.fence, 0],
+    ];
+    const was = ops.map(([x, y, z]) => [x, y, z, w.getBlock(x, y, z), w.getMeta(x, y, z)]);
+    for (const [x, y, z, id, meta] of ops) w.setBlock(x, y, z, id, meta);
+    this.lightDirty = true;
+    const post = { x: at.x + 3, y: Y, z: at.z };
+    const camp = { key, ops, was, fire: { x: at.x + 1, y: Y, z: at.z + 1 }, horses: [], wagons: [] };
+    const spots = [[4, 0], [4, 1], [3, 1], [2, 0]];
+    let h = 0;
+    let wi = 0;
+    for (const m of g.members) {
+      if (m.mount !== 'horse' && m.wagon === undefined) continue;
+      const [sx, sz] = spots[h % spots.length];
+      camp.horses.push({ key: `${key}:h${h}`, x: at.x + sx, y: Y, z: at.z + sz, coat: m.coat || 0, banner: g.banner, post });
+      h++;
+      if (m.wagon !== undefined) {
+        camp.wagons.push({ key: `${key}:w${wi}`, x: at.x + 1 + wi * 2, y: Y, z: at.z - 1, face: 1, banner: g.banner });
+        wi++;
+      }
+    }
+    this.roadCamp.set(key, camp);
+    return camp;
+  }
+
+  // Struck in the morning (or out of sight): only what's still as they
+  // left it comes down.
+  strikeRoadCamp(key) {
+    const camp = this.roadCamp.get(key);
+    this.roadCamp.delete(key);
+    if (!camp) return;
+    const w = this.world;
+    camp.ops.forEach(([x, y, z, id], i) => {
+      if (!w.regionAt(x, z)) {
+        this.sim.setBlocks([[x, y, z, B.air, 0]]);
+        return;
+      }
+      if (w.getBlock(x, y, z) !== id) return;
+      const [, , , was, meta] = camp.was[i] || [];
+      w.setBlock(x, y, z, was && !BLOCKS[was]?.solid ? was : B.air, was ? meta || 0 : 0);
+    });
+    this.lightDirty = true;
   }
 
   // A friendly bout with an adventurer: first down to a quarter of their
@@ -1057,6 +1200,8 @@ export class Game {
     }
     ambientChatter(this, dt);
     this.updateDuel();
+    this.updateGates(dt);
+    this.syncStanding(dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     // Beasts near you keep pace with racing time too (far off, they idle on).
@@ -1074,7 +1219,10 @@ export class Game {
     for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
-      if (c.dead) this.removeOcc(c);
+      if (c.dead) {
+        this.removeOcc(c);
+        if (c.standKey) this.tied.delete(c.standKey);
+      }
       return !c.dead;
     });
     for (const d of this.drops) d.update(dt);
@@ -1099,6 +1247,7 @@ export class Game {
     for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < 26 && Math.abs(n.z - p.z) < 26) vis.push(n);
     for (const c of this.creatures) if (Math.abs(c.x - p.x) < 26 && Math.abs(c.z - p.z) < 26) vis.push(c);
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
+    for (const q of this.props.values()) if (Math.abs(q.x - p.x) < 28 && Math.abs(q.z - p.z) < 28) vis.push(q);
     this.visibleEntities = vis;
     if (this.autosaveDue) {
       this.autosaveDue = false;
@@ -1127,6 +1276,9 @@ export class Game {
           break;
         case 'KeyG':
           this.toss(k.ctrl);
+          break;
+        case 'KeyB':
+          this.setDownHeld(k.ctrl);
           break;
         case 'KeyT':
           // Sitting down: let some hours go by.
@@ -1217,7 +1369,7 @@ export class Game {
       if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e };
     } else {
       for (const e of this.visibleEntities) {
-        if (e === p || e.kind === 'item' || e.dead) continue;
+        if (e === p || e.kind === 'item' || e.kind === 'prop' || e.dead) continue;
         const rp = e.renderPos();
         const { x: sx, y: sy } = r.worldToScreen ? r.worldToScreen(rp.x, rp.y, rp.z) : { x: rp.x * TILE - r.camX, y: rp.z * TILE - rp.y * LH - r.camY };
         const feet = sy + LH + 10;
@@ -1591,6 +1743,13 @@ export class Game {
       if (w.getBlock(x, bottomY + 1, z) === B.door_top) w.setBlock(x, bottomY + 1, z, B.air);
       drops.push({ item: 'door', count: 1 });
       y = bottomY;
+    } else if (id === B.placed_item) {
+      // Taken back up. Someone else's things are theirs, though.
+      const got = this.takePlaced(x, y, z);
+      if (got) {
+        drops.push({ item: got.item, count: got.count });
+        if (byPlayer && got.owner) this.tookPlaced(x, z, got);
+      }
     } else {
       if (b.interact === 'container') {
         const slots = w.getContainer(x, y, z);
@@ -1627,6 +1786,32 @@ export class Game {
       this.checkVandalism(x, y, z, b);
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
+    }
+  }
+
+  // You picked up something a townsperson set down: that's theft, if anyone
+  // (the owner included) sees it.
+  tookPlaced(x, z, got) {
+    if (got.owner.adv !== undefined) {
+      // An adventurer's bow from beside their fire: they'll want it back.
+      const e = this.sim.adventurers.ents.get(got.owner.adv);
+      if (e && !e.dead && e.distTo(this.player) <= 10) {
+        e.putDown = null;
+        e.say('That\'s MINE. Hand it back, now.', 3, '#ff9080');
+        e.engage(this.player);
+      }
+      return;
+    }
+    const L = this.sim.layoutOf(got.owner.sid);
+    const rec = L && L.npcs[got.owner.idx];
+    if (!L || !rec) return;
+    const sid = got.owner.sid;
+    const wits = this.sim.witnesses(sid, x, z, 8);
+    const name = ITEMS[got.item]?.name || got.item;
+    if (wits.length) {
+      const owner = rec.ent && !rec.ent.dead && wits.includes(rec.ent) ? rec.ent : null;
+      if (owner) owner.say(owner.rng.pick([`Hey! That's my ${name.toLowerCase()}!`, 'Put that back!', 'Thief!']), 3, '#ffb080');
+      this.sim.justice.commit(sid, 'theft', { witnesses: wits, value: Math.max(1, Math.round((ITEMS[got.item]?.value || 1) * got.count)), items: [{ item: got.item, count: got.count }], desc: `Taking ${rec.name.first} ${rec.name.last}'s ${name.toLowerCase()}`, owner: { kind: 'rec', id: rec.idx }, victimNpc: owner });
     }
   }
 
@@ -1848,6 +2033,175 @@ export class Game {
     this.renderer.emit(t.x, t.y, t.z, { n: 4, color: this.blockColor(id), up: 15, life: 0.3, oy: -2 });
   }
 
+  // ------------------------------------------------------------ horses & wagons
+  // What stands still near you: the town's horses at their hitching post
+  // (and its wagons beside them), and at camps outside town the traders'
+  // and nomads' horses tied up by their wagons. They come and go with you.
+  syncStanding(dt) {
+    this.standT = (this.standT || 0) - dt;
+    if (this.standT > 0) return;
+    this.standT = 1;
+    const want = new Map();
+    const add = (sp) => want.set(sp.key, sp);
+    const now = this.sim.abs;
+    for (const { layout: L } of this.active.values()) {
+      const st = this.sim.stables.standing(L);
+      if (st) {
+        for (const h of st.horses) add({ ...h, type: 'horse' });
+        for (const w of st.wagons) add({ ...w, type: 'wagon' });
+      }
+      // Visitors from other towns tie their horses up at the post here too.
+      const guests = (this.sim.visits.get(L.settlement.id) || []).filter((v) => v.guest && v.mount && now >= v.arrive && now < v.leave);
+      const post = guests.length ? this.sim.stables.hitch(L) : null;
+      if (post) {
+        guests.forEach((v, i) => {
+          const [dx, dz] = [[1, -1], [-1, -1], [2, -1], [-2, -1], [2, 0]][i % 5];
+          add({ key: `guest:${v.id}`, type: 'horse', x: post.x + dx, z: post.z + dz, coat: v.mount.coat || 0, banner: v.mount.banner || null, post });
+          if (v.mount.kind === 'wagon') add({ key: `guestw:${v.id}`, type: 'wagon', x: post.x - 3, z: post.z + 2 + i * 2, face: 1, banner: v.mount.banner || null });
+        });
+      }
+    }
+    for (const c of this.sim.camps.list) {
+      if (c.struck || c.placed < c.ops.length) continue;
+      for (const h of c.horses || []) add({ ...h, type: 'horse' });
+      for (const w of c.wagons || []) add({ ...w, type: 'wagon' });
+    }
+    for (const sp of this.sim.caravans ? this.sim.caravans.roadStanding() : []) add(sp);
+    const p = this.player;
+    for (const [k, sp] of want) {
+      if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
+      const y = this.world.findStandY(sp.x, sp.z, sp.y ?? GROUND);
+      if (y < 0) continue;
+      if (sp.type === 'wagon') {
+        if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + this.props.size, x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
+      } else if (!this.tied.has(k) || this.tied.get(k).dead) {
+        if (this.entityAt(sp.x, y, sp.z)) continue;
+        const c = new Creature(this, 'horse', sp.x, y, sp.z, sp.coat || 0);
+        c.tie = sp.post ? { x: sp.post.x, y: sp.post.y ?? GROUND, z: sp.post.z } : null;
+        c.banner = sp.banner || null;
+        c.standKey = k;
+        this.addCreature(c);
+        this.tied.set(k, c);
+      }
+    }
+    for (const k of [...this.props.keys()]) if (!want.has(k)) this.props.delete(k);
+    for (const [k, c] of [...this.tied]) {
+      if (want.has(k) && !c.dead) continue;
+      if (!c.dead) {
+        c.dead = true;
+        this.removeOcc(c);
+      }
+      this.tied.delete(k);
+    }
+  }
+
+  // ------------------------------------------------------------ city gates
+  // The whole gateway a gate tile belongs to (its leaves side by side).
+  gateway(x, z) {
+    const w = this.world;
+    const y = GROUND;
+    if (w.getBlock(x, y, z) !== B.city_gate) return [];
+    const out = [];
+    const seen = new Set();
+    const q = [[x, z]];
+    while (q.length && out.length < 12) {
+      const [cx, cz] = q.pop();
+      const k = cx * 65536 + cz;
+      if (seen.has(k) || w.getBlock(cx, y, cz) !== B.city_gate) continue;
+      seen.add(k);
+      out.push({ x: cx, z: cz });
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) q.push([cx + dx, cz + dz]);
+    }
+    return out;
+  }
+
+  setGate(x, z, open) {
+    const w = this.world;
+    const tiles = this.gateway(x, z);
+    if (!open && tiles.some((t) => this.occupiedAny(t.x, GROUND, t.z))) return false;
+    for (const t of tiles) {
+      w.setState(t.x, GROUND, t.z, open);
+      if (w.getBlock(t.x, GROUND + 1, t.z) === B.city_gate_top) w.setState(t.x, GROUND + 1, t.z, open);
+    }
+    if (tiles.length && Math.max(Math.abs(x - this.player.x), Math.abs(z - this.player.z)) < 16) this.audio?.play('door');
+    this.lightDirty = true;
+    return tiles.length > 0;
+  }
+
+  isNight() {
+    return this.minute >= 21 * 60 || this.minute < 6 * 60;
+  }
+
+  // A guard of the watch near a gateway (awake, and not busy fighting).
+  gateGuard(x, z, r = 12) {
+    return this.npcs.find((n) => !n.dead && n.rec.job === 'guard' && !n.sleeping && n.state !== 'fight' && Math.max(Math.abs(n.x - x), Math.abs(n.z - z)) <= r) || null;
+  }
+
+  // You at a gate: shut by night, a guard nearby lets you through; from
+  // inside the walls you can lift the bar yourself.
+  useGate(x, y, z) {
+    const w = this.world;
+    const by = w.getBlock(x, y, z) === B.city_gate_top ? y - 1 : y;
+    const open = w.getState(x, by, z);
+    if (open) return this.setGate(x, z, false);
+    if (!this.isNight()) return this.setGate(x, z, true);
+    const g = this.gateGuard(x, z);
+    const s = this.world.ow.settlementAt(x, z);
+    const L = s ? this.world.layouts.get(s.id) : null;
+    const b = L ? L.econ.wallRect || L.bounds : null;
+    const p = this.player;
+    const inside = b && p.x > b.x0 && p.x < b.x1 && p.z > b.z0 && p.z < b.z1;
+    if (g && !(s && this.isWanted(s.id))) {
+      g.face(x, z);
+      g.say(g.rng.pick(['Hold on, I\'ll let you through.', 'Late to be out. In you come.', 'Opening up! Mind the gap.']), 3);
+      this.setGate(x, z, true);
+      this.gateHeld = { x, z, until: this.sim.abs + 20 };
+      return true;
+    }
+    if (inside) {
+      this.ui.msg('You lift the bar and swing the gate open.', '#c8c8c8');
+      this.setGate(x, z, true);
+      this.gateHeld = { x, z, until: this.sim.abs + 20 };
+      return true;
+    }
+    this.ui.msg('The gate is barred for the night, and there\'s nobody on watch to open it.', '#ffb080', true);
+    this.audio?.play('error');
+    return false;
+  }
+
+  // Once a second: gates open at dawn; at night the watch shuts them (and
+  // opens them again for whoever needs to pass).
+  updateGates(dt) {
+    this.gateT = (this.gateT || 0) - dt;
+    if (this.gateT > 0) return;
+    this.gateT = 1;
+    const w = this.world;
+    const night = this.isNight();
+    const now = this.sim.abs;
+    for (const { layout: L } of this.active.values()) {
+      if (!L.gates || !L.gates.length) continue;
+      const done = new Set();
+      for (const g of L.gates) {
+        if (done.has(g.x * 65536 + g.z) || !w.regionAt(g.x, g.z) || w.getBlock(g.x, GROUND, g.z) !== B.city_gate) continue;
+        const tiles = this.gateway(g.x, g.z);
+        for (const t of tiles) done.add(t.x * 65536 + t.z);
+        const open = w.getState(g.x, GROUND, g.z);
+        const held = this.gateHeld && tiles.some((t) => t.x === this.gateHeld.x && t.z === this.gateHeld.z) && now < this.gateHeld.until;
+        // Someone passing through (or about to): hold it open for them.
+        const busy = [this.player, ...this.npcs].some((e) => !e.dead && tiles.some((t) => Math.max(Math.abs(e.x - t.x), Math.abs(e.z - t.z)) <= 1));
+        if (!night && !open) this.setGate(g.x, g.z, true);
+        else if (night && open && !held && !busy) {
+          const guard = this.gateGuard(g.x, g.z, 16);
+          if (!guard) continue;
+          if (this.setGate(g.x, g.z, false) && L.gateCall !== this.day) {
+            L.gateCall = this.day;
+            guard.say(guard.rng.pick(['Closing the gates for the night!', 'Gates shut! Nobody in or out without the watch.']), 3, '#ffe070');
+          }
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------------ interactions
   setDoor(x, y, z, open) {
     const w = this.world;
@@ -1924,6 +2278,9 @@ export class Game {
         this.setDoor(x, y, z, !open);
         break;
       }
+      case 'gate':
+        this.useGate(x, y, z);
+        break;
       case 'container': {
         const slots = w.getContainer(x, y, z);
         this.audio?.play('chest');
@@ -2584,6 +2941,52 @@ export class Game {
     return d;
   }
 
+  // Set what you hold down on the ground where you're pointing (or just in
+  // front of you). It stays put until someone mines it back up.
+  setDownHeld(all) {
+    const p = this.player;
+    const slot = p.inv[p.selected];
+    if (!slot) return false;
+    const c = this.cursor;
+    const spots = [];
+    if (c && c.x !== undefined && Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z)) <= 4) spots.push([c.x, c.z]);
+    spots.push([p.x + [0, -1, 0, 1][p.dir], p.z + [1, 0, -1, 0][p.dir]], [p.x, p.z]);
+    for (const [x, z] of spots) {
+      const y = this.world.findStandY(x, z, p.y);
+      if (Math.abs(y - p.y) > 2) continue;
+      if (!this.setDown(x, y, z, slot.item, all ? slot.count : 1, null)) continue;
+      slot.count -= all ? slot.count : 1;
+      if (slot.count <= 0) p.inv[p.selected] = null;
+      p.doAction(0.25);
+      this.audio?.play('place');
+      return true;
+    }
+    this.ui.msg('There\'s nowhere clear to set that down.', '#c8c8c8', true);
+    return false;
+  }
+
+  // Put something on the ground at (x, y, z): an empty spot with solid
+  // ground under it. `owner` is who it belongs to ({ sid, idx } for
+  // townsfolk; null for you).
+  setDown(x, y, z, item, count = 1, owner = null) {
+    const w = this.world;
+    if (!ITEMS[item] || count <= 0 || !w.regionAt(x, z)) return false;
+    if (w.getBlock(x, y, z) !== B.air || !BLOCKS[w.getBlock(x, y - 1, z)].solid) return false;
+    w.setBlock(x, y, z, B.placed_item);
+    this.placed.set(`${x},${y},${z}`, { item, count, owner });
+    return true;
+  }
+
+  // Pick something set down back up (townsfolk collecting their own).
+  takePlaced(x, y, z) {
+    const k = `${x},${y},${z}`;
+    const got = this.placed.get(k);
+    if (!got) return null;
+    this.placed.delete(k);
+    if (this.world.getBlock(x, y, z) === B.placed_item) this.world.setBlock(x, y, z, B.air);
+    return got;
+  }
+
   toss(all) {
     const p = this.player;
     const slot = p.inv[p.selected];
@@ -3097,14 +3500,14 @@ export class Game {
       else species = r < 0.7 ? 'slime' : 'skeleton';
     } else {
       const opts = {
-        plains: ['rabbit', 'deer', 'rabbit', 'boar'], forest: ['deer', 'boar', 'rabbit', 'wolf'], taiga: ['deer', 'wolf', 'rabbit'],
-        tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit'], jungle: ['boar', 'slime', 'deer'], swamp: ['slime', 'boar'],
+        plains: ['rabbit', 'deer', 'rabbit', 'boar', 'horse'], forest: ['deer', 'boar', 'rabbit', 'wolf'], taiga: ['deer', 'wolf', 'rabbit'],
+        tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit', 'horse'], jungle: ['boar', 'slime', 'deer'], swamp: ['slime', 'boar'],
         desert: ['rabbit'], mountain: ['boar', 'rabbit'], beach: ['rabbit'],
       }[biome] || ['rabbit'];
       species = opts[Math.floor(Math.random() * opts.length)];
       if (species === 'wolf' && Math.random() < 0.6) species = 'deer';
     }
-    const variant = Math.floor(Math.random() * 3);
+    const variant = Math.floor(Math.random() * (species === 'horse' ? 6 : 3));
     this.addCreature(new Creature(this, species, x, y, z, variant));
     if (SPECIES[species].packs && Math.random() < 0.6) {
       const y2 = this.world.findStandY(x + 1, z, y);
@@ -3207,6 +3610,8 @@ export class Game {
       wanted: [...this.wanted],
       crops: this.crops.serialize(),
       sim: this.sim.serialize(),
+      placed: [...this.placed],
+      roadCamps: [...this.roadCamp],
       cheats: { ...this.cheats, reveal: !!this.revealMap },
     };
   }
@@ -3223,6 +3628,8 @@ export class Game {
       if (data.cheats.reveal) this.revealMap = true;
     }
     if (data.sim) this.sim.load(data.sim);
+    this.placed = new Map(data.placed || []);
+    this.roadCamp = new Map(data.roadCamps || []);
     this.crops.load(data.crops);
     for (const [sid, t] of data.wanted || []) this.wanted.set(sid, t);
     const pd = data.player;

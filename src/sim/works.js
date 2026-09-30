@@ -121,7 +121,7 @@ export class Works {
     if (p.kind === 'build') plan = this.withRoad(L, p, L.typedBlueprint(L.plots[p.plot], p.type, p.bid, this.shopExtra(p)));
     else if (p.kind === 'expand') plan = L.rebuildPlan(L.buildings[p.bid], p.bounds, p.rev);
     else if (p.kind === 'repair' || PLAIN.has(p.kind)) plan = { list: p.blocks };
-    else if (p.kind === 'wall') plan = L.wallPlan();
+    else if (p.kind === 'wall') plan = p.rect ? L.outerWallPlan(p.rect) : L.wallPlan();
     else if (p.kind === 'breach') plan = L.breachPlan(p.at);
     if (plan) this.plans.set(p.id, plan);
     return plan;
@@ -557,10 +557,13 @@ export class Works {
       L.applyWall(plan.tiles, p.kind === 'breach');
       if (p.kind === 'wall') {
         L.econ.walled = true;
+        if (p.rect) L.econ.wallRect = p.rect;
         for (const g of plan.gates) if (!L.gates.some((q) => q.x === g.x && q.z === g.z)) L.gates.push(g);
+        // The gates hung in the gateways.
+        this.sim.setBlocks(L.gateBlocks(plan.gates));
       }
       if (!this.built.some((q) => q.id === p.id)) this.built.push({ id: p.id, sid: p.sid, kind: p.kind, bid: p.bid, tiles: plan.tiles });
-      if (!silent) ledger(L, this.sim.today(), p.kind === 'wall' ? `The builders finished the new city wall round ${L.settlement.name}.` : `A stretch of the city wall was pulled down so ${L.settlement.name} can grow beyond it.`);
+      if (!silent) ledger(L, this.sim.today(), p.kind === 'wall' ? (p.rect ? `The builders finished the new outer wall round ${L.settlement.name}'s outer streets.` : `The builders finished the new city wall round ${L.settlement.name}.`) : `A stretch of the city wall was pulled down so ${L.settlement.name} can grow beyond it.`);
       return;
     }
     if (p.kind === 'repair') {

@@ -52,6 +52,13 @@ export function authority(civ) {
 }
 
 export const STANDING = { friendly: 20, hostile: -20 };
+// Colours for realms born by breaking away.
+const FREE_COLORS = [
+  { name: 'Teal', hex: '#2a9a9a', awning: 'awning_blue', rug: 'rug_blue' },
+  { name: 'Umber', hex: '#9a6a3a', awning: 'awning_yellow', rug: 'rug_red' },
+  { name: 'Rose', hex: '#c86a8a', awning: 'awning_red', rug: 'rug_red' },
+  { name: 'Slate', hex: '#6a7a8a', awning: 'awning_blue', rug: 'rug_blue' },
+];
 export const TRIBUTE = { min: 0.06, max: 0.16 };
 const TAX_FLOORS = [0, 0.04, 0.06, 0.08, 0.1];
 const WALL_AID = { coins: 300, stone: 60 };
@@ -65,6 +72,8 @@ export class Realms {
   constructor(game, sim) {
     this.game = game;
     this.sim = sim;
+    this.extraCivs = []; // realms born since the world began (free states)
+    this.allegiance = []; // [town id, realm id], in the order they changed
     this.state = {}; // civ id -> realm
     this.rel = {}; // "a:b" (a < b) -> { score, trade, contested, incidents }
     this.relDay = null;
@@ -161,8 +170,8 @@ export class Realms {
   }
 
   recOf(p) {
-    if (!p) return null;
-    const L = this.game.world.layouts.get(p.sid);
+    if (!p || !this.game.world.ow.settlements[p.sid]) return null;
+    const L = this.game.world.layouts.get(p.sid) || this.sim.layoutOf(p.sid);
     return L ? L.npcs[p.idx] || null : null;
   }
 
@@ -375,8 +384,127 @@ export class Realms {
     capL.econ.treasury += n;
     L.econ.tributeY = n;
     L.econ.tributeDay = day;
+    L.econ.tributeWeek = (L.econ.tributeWeek || 0) + n;
     R.tribute += n;
     return n;
+  }
+
+  // ------------------------------------------------------------ secession
+  // Once a week a town weighs what it pays the capital against what it
+  // gets back, how far off the capital is, and what's been decreed. Unrest
+  // builds; when most of the town is for going it alone two weeks running,
+  // it breaks away: free, or (near the border) to the neighbouring realm.
+  unrestWeekly(L, day, rng) {
+    const s = L.settlement;
+    const civ = this.civOf(s);
+    const e = L.econ;
+    const R = this.realm(civ);
+    const people = residents(L);
+    const pop = people.length;
+    const paid = e.tributeWeek || 0;
+    e.tributeWeek = 0;
+    const got = R.aid.filter((a) => a.sid === s.id && day - a.day <= 7).reduce((n, a) => n + (a.amount || 40), 0);
+    const capS = this.game.world.ow.settlements[R.capital];
+    const far = capS ? Math.hypot(capS.cx - s.cx, capS.cz - s.cz) : 0;
+    const ruler = this.ruler(civ);
+    let push = (paid - got) / Math.max(20, pop * 3);
+    push += far > 9 ? 0.4 : far > 6 ? 0.15 : 0;
+    push += R.decrees.taxFloor >= 0.08 ? 0.3 : R.decrees.taxFloor ? 0.1 : 0;
+    push += R.share >= 0.13 ? 0.3 : 0;
+    push -= got > 0 ? 0.6 : 0;
+    push -= ruler ? ((ruler.personality?.kindness ?? 0.5) - 0.5) * 0.4 : 0;
+    e.unrest = Math.max(0, (e.unrest || 0) * 0.85 + push);
+    e.independence = this.support(L);
+    e.secedeVotes = e.independence > 0.3 ? (e.secedeVotes || 0) + 1 : 0;
+    if (e.secedeVotes === 1) ledger(L, day, `There's talk in ${s.name} of breaking away from the ${civ.name}.`);
+    if (e.secedeVotes >= 2 && pop >= 12) return this.secede(L, day, rng);
+    return null;
+  }
+
+  // How much of the town would go it alone (-1 none of it, 1 all of it).
+  support(L) {
+    const e = L.econ;
+    const adults = residents(L).filter((r) => r.age !== 'child' && r.ruler === undefined);
+    if (!adults.length) return 0;
+    const lean = (r) => {
+      const p = r.personality || {};
+      const n = ((hash4(r.idx, 0x5ece) % 1000) / 1000 - 0.5) * 0.3;
+      return clamp((e.unrest || 0) * 0.3 + ((p.bravery ?? 0.5) - 0.5) * 0.5 + (0.5 - (p.kindness ?? 0.5)) * 0.2 - 0.3 + n + (r.job === 'mayor' ? 0.1 : r.job === 'noble' ? -0.2 : 0), -1, 1);
+    };
+    return adults.reduce((n, r) => n + lean(r), 0) / adults.length;
+  }
+
+  // The nearest other realm with a town within reach of this one.
+  neighbourRealm(s) {
+    let best = null;
+    for (const o of this.game.world.ow.settlements) {
+      if (!o.civ || o.civ === s.civ || deserted(o) || o.condition === 'abandoned') continue;
+      const d = Math.hypot(o.cx - s.cx, o.cz - s.cz);
+      if (d <= 7 && (!best || d < best.d)) best = { civ: o.civ, d };
+    }
+    return best ? best.civ : null;
+  }
+
+  // The break: free (a realm of its own, and the old one hostile), or
+  // (to = a neighbouring realm) sworn to another, which the old realm
+  // takes harder still.
+  secede(L, day, rng, to = undefined) {
+    const s = L.settlement;
+    const old = this.civOf(s);
+    if (!old || this.realm(old).capital === s.id) return null;
+    if (to === undefined) {
+      const near = this.neighbourRealm(s);
+      to = near && this.standing(old, near) !== 'friendly' && rng.chance(0.5) ? near : null;
+    }
+    const members = this.memberLayouts(old).filter((q) => q !== L);
+    const civ = to || this.freeCiv(s, old);
+    this.join(s, civ);
+    this.allegiance.push([s.id, civ.id]);
+    L.econ.secedeVotes = 0;
+    L.econ.unrest = 0;
+    L.econ.independence = null;
+    if (to) {
+      this.shift(old, to, -60, day);
+      const text = `${s.name} has renounced the ${old.name} and sworn itself to the ${to.name}!`;
+      for (const T of [...members, L, ...this.memberLayouts(to).filter((q) => q !== L)]) ledger(T, day, text);
+    } else {
+      const r = this.relation(old, civ);
+      r.score = -45;
+      r.standing = this.standingOf(r.score);
+      for (const T of members) ledger(T, day, `${s.name} has declared itself free of the ${old.name}. Treason, says ${authority(old)}.`);
+      ledger(L, day, `${s.name} has declared its independence from the ${old.name}! It is now the ${civ.name.replace(/^The /, '')}.`);
+    }
+    for (const r of residents(L)) r.mood = clamp((r.mood ?? 0.5) + 0.1, 0, 1);
+    return { civ, from: old, joined: !!to };
+  }
+
+  freeCiv(s, old) {
+    const ow = this.game.world.ow;
+    const id = ow.civs.length;
+    const civ = {
+      id, style: old.style, values: (old.values || []).slice(), color: FREE_COLORS[id % FREE_COLORS.length], prosperity: old.prosperity || 0.5,
+      name: `The ${s.name} Free State`, people: old.people, capital: s.id, freed: { from: old.id, day: this.sim.today() },
+    };
+    ow.civs.push(civ);
+    this.extraCivs.push(civ);
+    this.realm(civ);
+    return civ;
+  }
+
+  // A town under a new banner: its ground on the map goes with it.
+  join(s, civ) {
+    const ow = this.game.world.ow;
+    const old = s.civ;
+    s.civ = civ;
+    const members = ow.settlements.filter((o) => o.civ === old && o !== s);
+    for (let cz = s.cz - 5; cz <= s.cz + 5; cz++) {
+      for (let cx = s.cx - 5; cx <= s.cx + 5; cx++) {
+        const c = ow.cell(cx, cz);
+        if (!c || (old && c.civ !== old.id && c.settlement !== s.id)) continue;
+        const mine = Math.hypot(s.cx - cx, s.cz - cz);
+        if (c.settlement === s.id || members.every((o) => Math.hypot(o.cx - cx, o.cz - cz) > mine)) c.civ = civ.id;
+      }
+    }
   }
 
   // ------------------------------------------------------------ aid
@@ -609,6 +737,7 @@ export class Realms {
     const R = this.realm(civ);
     if ((day + civ.id) % 7 === 3 || !this.game.world.ow.settlements[R.capital] || deserted(this.game.world.ow.settlements[R.capital])) this.pickCapital(civ, day);
     if (R.capital === s.id) this.court(civ, L, day, rng);
+    else if ((day + s.id) % 7 === 0 && this.unrestWeekly(L, day, rng)) return;
     // The realm's least tax holds in every town.
     const floor = R.decrees.taxFloor;
     if (floor && L.econ.tax < floor) {
@@ -619,12 +748,21 @@ export class Realms {
 
   // ------------------------------------------------------------ save
   serialize() {
-    return { state: this.state, rel: this.rel };
+    return { state: this.state, rel: this.rel, extraCivs: this.extraCivs, allegiance: this.allegiance };
   }
 
   load(d) {
     this.state = (d && d.state) || {};
     this.rel = (d && d.rel) || {};
+    // Realms born since, and towns that changed sides, in the same order.
+    const ow = this.game.world.ow;
+    this.extraCivs = [];
+    for (const c of (d && d.extraCivs) || []) {
+      if (!ow.civs[c.id]) ow.civs[c.id] = c;
+      this.extraCivs.push(ow.civs[c.id]);
+    }
+    this.allegiance = (d && d.allegiance) || [];
+    for (const [sid, cid] of this.allegiance) if (ow.settlements[sid] && ow.civs[cid]) this.join(ow.settlements[sid], ow.civs[cid]);
     for (const civ of this.civs) if (this.state[civ.id]) civ.decrees = this.state[civ.id].decrees;
   }
 }

@@ -992,6 +992,8 @@ export class LedgerWindow extends Window {
       const dec = [d.taxFloor ? `tax at least ${Math.round(d.taxFloor * 100)}%` : null, d.armsBan ? 'no weapons' : null,
         ...d.tariffOn.map((id) => `tariff on the ${game.world.ow.civs[id]?.name.replace(/^The /, '') || '?'}`)].filter(Boolean);
       row('Decrees', dec.length ? dec.join(', ') : 'none');
+      if (R.capital !== s.id && (e.independence ?? -1) > 0) row('Unrest', `${Math.round(Math.min(1, (e.independence + 1) / 2) * 100)}% for breaking away${e.secedeVotes ? ': talk of it everywhere' : ''}`, e.secedeVotes ? C.orange : '#f0e0c0');
+      if (civ.freed) row('Freedom', `free of the ${game.world.ow.civs[civ.freed.from]?.name.replace(/^The /, '') || '?'} since day ${Math.max(1, civ.freed.day)}`, C.green);
       const aid = (e.royalAid || []).slice(-1)[0];
       if (R.capital !== s.id) row('Tribute', `${Math.round(R.share * 100)}% of taxes to the capital${e.tributeY ? ` (¤${e.tributeY})` : ''}${aid ? `; help: ${aid.kind === 'guard' ? 'a guard' : aid.kind === 'road' ? 'a road' : aid.kind === 'wall' ? 'a wall' : '¤' + aid.amount}` : ''}`);
       else row('Tribute', `¤${R.tribute} received from the realm`);
@@ -1332,6 +1334,7 @@ export class HelpWindow extends Window {
       ['SIT', 'Click a chair, bench or stool · move to stand'],
       ['SLEEP', 'Click a bed at night (yours, or your host\'s)'],
       ['TOSS', 'G throws one item · CTRL+G the whole stack'],
+      ['SET DOWN', 'B sets one down · CTRL+B the stack · mine it back up'],
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
       ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],

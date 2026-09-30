@@ -20,11 +20,17 @@ export class Nomads {
   arrive(L, day, rng) {
     const s = L.settlement;
     if (s.condition === 'abandoned' || this.bands.some((b) => b.sid === s.id && !b.done)) return null;
-    if (!rng.chance(s.deserted ? 0.05 : 0.06)) return null;
+    if (!rng.chance(s.deserted ? 0.1 : 0.12)) return null;
     const r = new RNG(hash4(s.seed, day, 0x40ad));
     const band = makeNomadBand(r, r.int(2, 5));
     const now = day * DAY + 540 + r.int(0, 300);
     const b = { id: this.next++, sid: s.id, arrive: now, decide: now + STAY_HOURS * 60, family: band.family, style: band.style, people: band.people, done: false, vouched: 0 };
+    // Some bands travel with a plain wagon and a horse or two (no banners:
+    // they're nobody's traders).
+    if (r.chance(0.4)) {
+      b.mounts = [{ kind: 'wagon', coat: r.int(0, 5), banner: null }];
+      if (band.people.length > 3) b.mounts.push({ kind: 'horse', coat: r.int(0, 5), banner: null });
+    }
     this.bands.push(b);
     return b;
   }
@@ -123,7 +129,7 @@ export class Nomads {
       if (now >= b.arrive && !b.announced) {
         b.announced = true;
         // Tents outside town for the stay: one for every two of them.
-        this.sim.camps.pitch(L, `n:${b.id}`, 'nomad', Math.min(3, Math.ceil(b.people.length / 2)), b.decide + 7 * DAY, b.id);
+        this.sim.camps.pitch(L, `n:${b.id}`, 'nomad', Math.min(3, Math.ceil(b.people.length / 2)), b.decide + 7 * DAY, b.id, { mounts: b.mounts || [] });
         ledger(L, this.sim.today(), `A band of nomads, the ${b.family} family, has camped outside town.`);
       }
       if (now >= b.arrive && now < b.decide && g.active.has(b.sid) && (!b.ents || b.ents.every((e) => e.dead))) b.ents = g.spawnNomads ? g.spawnNomads(L, b) : null;

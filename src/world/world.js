@@ -177,7 +177,7 @@ export class World {
     if (y < 1 || y >= WORLD_Y - 1) return false;
     const feet = BLOCKS[this.getBlock(x, y, z)];
     // Doors are passable when open (NPCs path through closed ones and open them).
-    if (feet.solid && !(feet.interact === 'door' && (allowDoors || this.getState(x, y, z)))) return false;
+    if (feet.solid && !((feet.interact === 'door' || feet.interact === 'gate') && (allowDoors || this.getState(x, y, z)))) return false;
     const head = BLOCKS[this.getBlock(x, y + 1, z)];
     if (head.solid || head.liquid) return false;
     const below = BLOCKS[this.getBlock(x, y - 1, z)];

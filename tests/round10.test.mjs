@@ -209,7 +209,7 @@ test('born here: a family name, parents who treat you as their child, a home, an
   const { Game } = await import('../src/game/game.js');
   const { stubRenderer, stubUI } = await import('./helpers.mjs');
   const hero = { ...randomHero(7), name: 'Wren', origin: 'native' };
-  const game = new Game({ seed: 12345, renderer: stubRenderer(), audio: null, ui: stubUI(), hero });
+  const game = new Game({ seed: 4, renderer: stubRenderer(), audio: null, ui: stubUI(), hero });
   const input = stubInput();
   for (let i = 0; i < 20; i++) game.update(0.1, input);
   const c = game.sim.citizen;

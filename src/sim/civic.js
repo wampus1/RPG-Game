@@ -224,10 +224,15 @@ export function checkSupply(sim, L, day) {
   for (const link of LINKS) {
     if (!link.who.some(has) || link.needs.some(has)) continue;
     const job = link.needs.find(can);
-    if (job) return { hired: hireInto(sim, L, job, day, link.why), job };
+    // (Nobody to spare: the rest of the town's needs still get looked at.)
+    const r = job ? hireInto(sim, L, job, day, link.why) : null;
+    if (r) return { hired: r, job };
   }
   // Towns and cities keep a builder.
-  if (s.type !== 'village' && !has('builder')) return { hired: hireInto(sim, L, 'builder', day, 'the town needs someone to build and mend'), job: 'builder' };
+  if (s.type !== 'village' && !has('builder')) {
+    const r = hireInto(sim, L, 'builder', day, 'the town needs someone to build and mend');
+    if (r) return { hired: r, job: 'builder' };
+  }
   // Buildings the town lacks: a tavern anywhere big enough, a smithy in
   // towns and cities, a bakery in cities.
   const want = [];

@@ -31,6 +31,8 @@ export const JOBS = {
   child: { title: 'Child' },
   retired: { title: 'Retiree' },
   adventurer: { title: 'Adventurer', outfit: 'hunter' },
+  handler: { title: 'Animal Handler', place: 'farm', start: 420, end: 1080, tools: ['wheat'], outfit: 'farmer' },
+  caravanner: { title: 'Caravan Trader', outfit: 'vest' },
 };
 
 export const HOBBIES = {
@@ -57,6 +59,7 @@ export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
   if (rec.nomadBand !== undefined) return 'Nomad';
   if (rec.adventurer !== undefined) return ADVENTURER_TITLES[rec.advLevel || 1];
+  if (rec.caravanTrader !== undefined) return { trader: 'Caravan Trader', driver: 'Wagon Driver', guard: 'Caravan Guard' }[rec.role] || 'Caravan Trader';
   const tier = rec.visitor ? rec.visit && rec.visit.tier : rec.job === 'merchant' ? rec.tier : null;
   if (rec.visitor) return tier ? `Traveling ${MERCHANT_TITLES[tier]}` : 'Traveling Merchant';
   if (tier) return MERCHANT_TITLES[tier];
@@ -80,7 +83,7 @@ export function planPopulation(s, rng) {
     for (let i = rng.int(4, 7); i > 0; i--) households.push({ kind: 'ghost', members: new Array(rng.int(1, 4)).fill({ age: 'adult' }) });
     return { households, jobs: rng.shuffle(['innkeeper', 'priest', 'blacksmith', 'farmer']).slice(0, 2), target: 0 };
   }
-  let target = { village: rng.int(10, 18), town: rng.int(24, 36), city: rng.int(60, 84) }[s.type];
+  let target = { village: rng.int(13, 21), town: rng.int(28, 40), city: rng.int(60, 84) }[s.type];
   target *= { prosperous: 1.15, normal: 1, poor: 0.78 }[s.condition] || 1;
   if (has('agrarian') && s.type === 'village') target *= 1.12;
   if (has('mercantile') && s.type !== 'village') target *= 1.08;
@@ -121,10 +124,12 @@ export function planPopulation(s, rng) {
   const scale = (v, n, t, c) => (T === 'village' ? v : T === 'town' ? t : c) + (n ? n : 0);
   const poor = s.condition === 'poor';
   if (T === 'village') add('farmer', 2);
-  const guardCap = Math.max(1, Math.round(adults * (T === 'village' ? 0.2 : 0.18)));
-  add('guard', Math.min(guardCap, Math.round(scale(rng.int(1, 2), 0, rng.int(3, 4), rng.int(7, 10)) * (has('martial') ? 1.5 : 1) * (poor ? 0.7 : 1))));
+  const guardCap = Math.max(2, Math.round(adults * (T === 'village' ? 0.25 : 0.2)));
+  add('guard', Math.min(guardCap, Math.round(scale(rng.int(2, 3), 0, rng.int(4, 5), rng.int(7, 10)) * (has('martial') ? 1.5 : 1) * (poor ? 0.75 : 1))));
   add('mayor', 1);
   add('cook', T === 'city' ? 2 : 1);
+  // (An herbalist, when there is one, is among the first a place keeps.)
+  const herbAt = jobs.length;
   if (T !== 'village') add('builder', T === 'city' ? 2 : 1);
   add('trapper', T === 'village' ? 1 : rng.int(1, 2));
   if (T !== 'village') add('farmer', T === 'city' ? 3 : 2);
@@ -138,7 +143,7 @@ export function planPopulation(s, rng) {
   if (T === 'city') add('noble', rng.int(2, 3));
   if (T !== 'village') add('tailor', 1);
   if (T !== 'village' || has('artisan')) add('carpenter', 1);
-  if (rng.chance(T === 'village' ? 0.4 : 0.7)) add('herbalist', 1);
+  if (rng.chance(T === 'village' ? 0.45 : 0.7)) jobs.splice(herbAt, 0, 'herbalist');
   if (s.river || s.lake || s.coast) add('fisher', Math.round(scale(rng.int(1, 2), 0, 2, 3) * (has('seafaring') ? 2 : 1)));
   if (['forest', 'taiga', 'jungle'].includes(s.biome)) add('lumberjack', T === 'city' ? 2 : 1);
   if (s.nearMountain) add('miner', rng.int(1, T === 'village' ? 2 : 3));
@@ -761,6 +766,17 @@ export function makeNomadBand(rng, size) {
   });
   for (const a of adults.slice(0, 2)) out[a].children = out.map((r, i) => (r.age === 'child' ? i : -1)).filter((i) => i >= 0);
   return { style, family: fam, people: out };
+}
+
+// Someone who lives on the road with a trading company: a trader, a
+// driver or a guard (armed). A family name is shared when given.
+export function makeTraveller(rng, style, role, family = null) {
+  const job = role === 'guard' ? 'guard' : 'merchant';
+  const { p, traits } = makePersonality(rng, null, job, 'adult');
+  const look = makeLook(rng, style, 'adult', job, null);
+  look.outfit = role === 'guard' ? 'guard' : role === 'driver' ? rng.pick(['vest', 'plain', 'hunter']) : rng.pick(['vest', 'noble', 'plain']);
+  look.hat = role === 'guard' ? 'helmet' : rng.pick(['feather', 'cap', 'hood', null, 'straw']);
+  return { name: personName(rng, style, family || familyName(rng, style)), look, personality: p, traits: ['well-traveled', ...traits.slice(0, 2)], role };
 }
 
 // ------------------------------------------------------------ adventurers

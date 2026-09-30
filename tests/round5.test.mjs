@@ -82,7 +82,7 @@ test('saving someone from a beast earns their thanks, their family\'s and renown
 });
 
 test('builders mend damage, enlarge houses and put up new buildings', () => {
-  const { game, input, sid, L, w } = start(7, 8 * 60);
+  const { game, input, sid, L, w } = start(4, 8 * 60);
   const works = game.sim.works;
   assert.ok(game.sim.builders(L).length >= 1, 'someone to do the building');
   // A hole in a wall is found and mended.

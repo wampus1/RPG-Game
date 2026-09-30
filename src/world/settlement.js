@@ -325,6 +325,21 @@ class Layout {
       }
       this.put(cx, Y0 + 5, cz, B.lantern, META_STATE);
     }
+    // Real gates in the gateways (open by day), under a lintel.
+    for (const [x, y, z, id, meta] of this.gateBlocks(this.gates)) this.put(x, y, z, id, meta);
+  }
+
+  // The blocks of the gates for gateway tiles: two leaves high, facing
+  // across the wall, with the wall carried over the top.
+  gateBlocks(gates) {
+    const b = this.bounds;
+    const out = [];
+    for (const g of gates) {
+      const rot = g.rot ?? (g.x === b.x0 || g.x === b.x1 ? 1 : 0);
+      // (Open to the sky above, so the gate shows from any side.)
+      out.push([g.x, Y0, g.z, B.city_gate, rot | META_STATE], [g.x, Y0 + 1, g.z, B.city_gate_top, rot | META_STATE]);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------ roads
@@ -1080,13 +1095,13 @@ class Layout {
       const m = this.maskAt(x, z);
       return m === M.FREE || m === M.YARD || (m === M.DECOR && !this.onStreet(x, z));
     };
-    const visit = (x, z) => {
+    const visit = (x, z, rot = 0) => {
       const k = x * 65536 + z;
       if (seen.has(k)) return;
       seen.add(k);
       const m = this.maskAt(x, z);
       if (m === M.ROAD || m === M.BRIDGE || m === M.PLAZA) {
-        gates.push({ x, z });
+        gates.push({ x, z, rot });
         return;
       }
       if (!ok(x, z)) return;
@@ -1097,12 +1112,12 @@ class Layout {
       if ((x + z) % 2 === 0) list.push([x, Y0 + 3, z, B.stone_bricks, 0]);
     };
     for (let x = b.x0; x <= b.x1; x++) {
-      visit(x, b.z0);
-      visit(x, b.z1);
+      visit(x, b.z0, 0);
+      visit(x, b.z1, 0);
     }
     for (let z = b.z0; z <= b.z1; z++) {
-      visit(b.x0, z);
-      visit(b.x1, z);
+      visit(b.x0, z, 1);
+      visit(b.x1, z, 1);
     }
     // A road through the wall gets a proper gateway (four tiles at least),
     // not a hole the width of the road.
@@ -1125,7 +1140,7 @@ class Layout {
           if (!wallAt.has(kk)) continue;
           wallAt.delete(kk);
           open.add(kk);
-          gates.push({ x, z });
+          gates.push({ x, z, rot: g.rot });
           if (sgn > 0) hi++;
           else lo++;
         }
@@ -1141,6 +1156,53 @@ class Layout {
     const kept = list.filter((q) => keep(q[0], q[2]));
     kept.sort((a, c) => stretch(a) - stretch(c) || a[1] - c[1] || round(a[0], a[2]) - round(c[0], c[2]));
     return { list: kept, tiles: tiles.filter(([x, z]) => keep(x, z)), gates };
+  }
+
+  // A city that has spread beyond its wall rings the new streets with a
+  // wider one (`r`, a rectangle round them all): the old wall stays as the
+  // inner ring. Roads through it get gates; buildings, water and other
+  // towns' ground are left alone.
+  outerWallPlan(r) {
+    const list = [];
+    const tiles = [];
+    const gates = [];
+    const seen = new Set();
+    const other = (x, z) => {
+      const o = this.world.ow.settlementAt(x, z);
+      return o && o !== this.settlement;
+    };
+    const blocked = (x, z) => this.buildings.some((bd) => x >= bd.x0 - 1 && x <= bd.x1 + 1 && z >= bd.z0 - 1 && z <= bd.z1 + 1);
+    const visit = (x, z, rot) => {
+      const k = x * 65536 + z;
+      if (seen.has(k)) return;
+      seen.add(k);
+      if (this.isRoadTile(x, z) || (this.inside(x, z) && this.maskAt(x, z) === M.BRIDGE)) {
+        gates.push({ x, z, rot });
+        return;
+      }
+      if (this.inside(x, z)) {
+        const m = this.maskAt(x, z);
+        if (m !== M.FREE && m !== M.YARD) return;
+      } else if (blocked(x, z) || other(x, z)) return;
+      const c = this.col(x, z);
+      if (!c || c.water >= 0 || c.h !== SURFACE) return;
+      tiles.push([x, z]);
+      for (let y = Y0; y < Y0 + 3; y++) list.push([x, y, z, B.stone_bricks, 0]);
+      if ((x + z) % 2 === 0) list.push([x, Y0 + 3, z, B.stone_bricks, 0]);
+    };
+    for (let x = r.x0; x <= r.x1; x++) {
+      visit(x, r.z0, 0);
+      visit(x, r.z1, 0);
+    }
+    for (let z = r.z0; z <= r.z1; z++) {
+      visit(r.x0, z, 1);
+      visit(r.x1, z, 1);
+    }
+    const W = r.x1 - r.x0;
+    const D = r.z1 - r.z0;
+    const round = (x, z) => (z === r.z0 ? x - r.x0 : x === r.x1 ? W + (z - r.z0) : z === r.z1 ? W + D + (r.x1 - x) : 2 * W + D + (r.z1 - z));
+    list.sort((a, c) => Math.floor(round(a[0], a[2]) / 6) - Math.floor(round(c[0], c[2]) / 6) || a[1] - c[1] || round(a[0], a[2]) - round(c[0], c[2]));
+    return { list, tiles, gates };
   }
 
   // Pull down a stretch of wall (five tiles) around an edge tile: a new way

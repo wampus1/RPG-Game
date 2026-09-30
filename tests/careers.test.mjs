@@ -9,8 +9,8 @@ import { exchangeFor } from '../src/game/chatter.js';
 import { playerProfile } from '../src/ui/windows.js';
 
 // Seed 7 starts next to a village with two guards and a smithy.
-function start(minute = 9 * 60) {
-  const game = makeGame(7);
+function start(minute = 9 * 60, seed = 7) {
+  const game = makeGame(seed);
   const input = stubInput();
   game.minute = minute;
   for (let i = 0; i < 20; i++) game.update(0.1, input);
@@ -90,7 +90,8 @@ test('licensed trades: a fee, a premium on goods, and the town\'s fields and sna
 });
 
 test('working at a shop: chores, customers, the shop\'s chests, pay for work done, getting fired', () => {
-  const { game, input, a, L, p } = start(7 * 60);
+  // (A town with a smithy.)
+  const { game, input, a, L, p } = start(7 * 60, 4);
   const car = game.sim.careers;
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   assert.ok(car.canEmploy(smith));

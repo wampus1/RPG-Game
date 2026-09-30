@@ -4,7 +4,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -113,18 +113,25 @@ export class Renderer {
     const camY = this.camY;
     const x0 = Math.round((VIEW_W - SNAP_W) / 2);
     const y0 = Math.round((VIEW_H - SNAP_H) / 2);
+    // (Speech and the weather aren't part of the picture: they're drawn
+    // upright over the turn, see drawSpin.)
+    const bubbles = new Map();
     for (const ox of [x0, x0 + SNAP_W - VIEW_W]) {
       for (const oy of [y0, y0 + SNAP_H - VIEW_H]) {
         this.camX = camX + ox;
         this.camY = camY + oy;
-        this.drawScene(game, 0);
+        this.drawScene(game, 0, true);
         cx.drawImage(this.ctx.canvas, 0, 0, VIEW_W, VIEW_H, ox - x0, oy - y0, VIEW_W, VIEW_H);
+        for (const b of this.bubbles) {
+          const q = { ...b, x: b.x + ox - x0, y: b.y + oy - y0 };
+          bubbles.set(`${b.text}|${Math.round(q.x)}|${Math.round(q.y)}`, q);
+        }
       }
     }
     this.camX = camX;
     this.camY = camY;
     const p = this.playerPoint(game);
-    return { canvas: c, px: p.x - x0, py: p.y - y0 };
+    return { canvas: c, px: p.x - x0, py: p.y - y0, bubbles: [...bubbles.values()] };
   }
 
   // The turn itself: the old view swings away as the new one swings in.
@@ -149,12 +156,32 @@ export class Renderer {
     };
     draw(sp.from, q * e, 1);
     draw(sp.to, -q * (1 - e), e);
+    // The weather, and what people are saying, stay upright: the words
+    // travel round with whoever's speaking.
+    this.drawWeather(game, dt);
+    const words = (shot, ang, alpha) => {
+      if (alpha <= 0.02) return;
+      const c = Math.cos(ang);
+      const s = Math.sin(ang);
+      ctx.globalAlpha = alpha;
+      for (const b of shot.bubbles || []) {
+        const dx = b.x - shot.px;
+        const dy = b.y - shot.py;
+        const x = Math.round(at.x + dx * c - dy * s);
+        const y = Math.round(at.y + dx * s + dy * c);
+        if (b.emote) drawText(ctx, b.text, x, y, b.color, '#000');
+        else this.drawBubble(ctx, b.text, x, y, b.color);
+      }
+      ctx.globalAlpha = 1;
+    };
+    words(sp.from, q * e, 1 - e);
+    words(sp.to, -q * (1 - e), e);
     if (k >= 1) this.spin = null;
   }
 
   // Everything in the world (not the pointer's highlights): the ground,
   // buildings, people, light and speech.
-  drawScene(game, dt) {
+  drawScene(game, dt, snap = false) {
     const ctx = this.ctx;
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -165,10 +192,10 @@ export class Renderer {
     this.pickSeq = 0;
     this.drawWorld(game);
     this.drawProjectiles(game);
-    this.drawRope(game);
-    this.drawWeather(game, dt);
+    if (!snap) this.drawWeather(game, dt);
     this.lighting.draw(this, game);
     this.drawParticles(dt);
+    if (snap) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
     for (const b of this.bubbles) {
       if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
@@ -357,6 +384,7 @@ export class Renderer {
       arr.push({ e, rp, layer: Math.ceil(rp.y - 0.001) + 1 });
     }
     this.fishingDecos(game, buckets, zMin, zMax);
+    this.leadDecos(game, buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();
@@ -457,7 +485,7 @@ export class Renderer {
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
               else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
-              else if (id === B.canopy || id === B.tent) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+              else if (id === B.canopy || id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
               else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
               // Plants sway gently.
@@ -467,6 +495,19 @@ export class Renderer {
               if (id === B.hanging_sign) {
                 const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);
                 if (ic) ctx.drawImage(this.dropIcon(ic), sx + 3, sy + SPR_H - s.h + 4);
+              }
+            } else if (render === 'placed') {
+              // Something set down: lying on the ground, a little shadow under it.
+              const got = game.placed && game.placed.get(`${wx},${y},${wz}`);
+              if (got) {
+                const sh = TEX.misc.shadow;
+                ctx.globalAlpha = 0.6 * (alpha < 1 ? alpha : 1);
+                ctx.drawImage(atlas, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
+                ctx.globalAlpha = alpha < 1 ? alpha : 1;
+                const icon = itemIcon(got.item);
+                drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time);
+                if (got.count > 1) drawText(ctx, String(got.count), sx + 10, sy + SPR_H - 6, '#ffffff', '#000');
+                if (pickable && this.under(null, sx, sy + SPR_H - 16, 16, 14, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
               }
             } else if (render === 'flat') {
               const arr = TEX.sprite[id * 4];
@@ -547,6 +588,57 @@ export class Renderer {
     }
   }
 
+  // Which way something seen side-on faces on screen (left, or right):
+  // going up or down the screen, it keeps the way it last faced.
+  sideOf(e) {
+    const d = this.viewDir(e.dir);
+    if (d === 1) e.sideLeft = true;
+    else if (d === 3) e.sideLeft = false;
+    return e.sideLeft !== false;
+  }
+
+  drawSide(ctx, img, x, y, left) {
+    if (left) {
+      ctx.drawImage(img, Math.round(x), Math.round(y));
+      return;
+    }
+    ctx.save();
+    ctx.translate(Math.round(x) + img.width, Math.round(y));
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+
+  // Under a rider: a horse; under a driver: the wagon, its horse out in
+  // front. Returns how far up the rider sits.
+  drawMount(ctx, e, m, sx, feetY) {
+    const left = this.sideOf(e);
+    const moving = e.moving;
+    const f = moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
+    const horse = horseSprite(f, m.coat || 0, m.banner || null);
+    if (m.kind === 'horse') {
+      this.drawSide(ctx, horse, sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+      return 9;
+    }
+    // A wagon: the driver on the bench at the front, the horse ahead.
+    const dx = left ? -1 : 1;
+    const wx = sx + 8 - WAGON_W / 2 - dx * 8;
+    this.drawSide(ctx, wagonSprite(m.banner || null, moving ? Math.floor(this.time * 5) : 0), wx, feetY - WAGON_H + 1, left);
+    this.drawSide(ctx, horse, sx + 8 - HORSE_W / 2 + dx * 16, feetY - HORSE_H + 1, left);
+    return 8;
+  }
+
+  // A wagon standing still: its hood, wheels and banner.
+  drawProp(ctx, e, sx, feetY) {
+    if (e.type !== 'wagon') return;
+    const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
+    const sh = TEX.misc.shadow;
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 6, feetY - 4, 28, 8);
+    ctx.globalAlpha = 1;
+    this.drawSide(ctx, wagonSprite(e.banner || null, 0), sx + 8 - WAGON_W / 2, feetY - WAGON_H + 1, left);
+  }
+
   // A fence post with rails to its neighbours (in view directions). Returns
   // whether any drawn part is under the mouse, when asked.
   drawFence(ctx, world, x, y, z, sx, sy, pickTest = false) {
@@ -588,6 +680,11 @@ export class Renderer {
       drawJewelled(ctx, icon, e.item, sx + 4, Math.round(feetY - 9 + bob - air * LH), this.time);
       return;
     }
+    // A wagon standing still (at a camp or outside town).
+    if (e.kind === 'prop') {
+      this.drawProp(ctx, e, sx, feetY);
+      return;
+    }
     let bob = 0;
     if (e.raft) {
       // The raft, turned to its heading pixel by pixel, bobbing on the water.
@@ -596,7 +693,12 @@ export class Renderer {
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     if (e.flash > 0) ctx.filter = 'brightness(3)';
-    if (e.kind === 'creature') {
+    if (e.kind === 'creature' && e.species === 'horse') {
+      // A horse, bigger than the rest: side on, turned the way it's going.
+      const left = this.sideOf(e);
+      const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
+      this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+    } else if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
       const frames = sheet.width / 32;
       const f = e.moving ? Math.floor(this.time * 6) % frames : 0;
@@ -610,9 +712,14 @@ export class Renderer {
         if (Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
         const sheet = humanoidSheet(e.look);
-        const frame = e.actionTimer > 0 ? 3 : e.raft ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
-        const dir = this.viewDir(e.dir);
-        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0);
+        // On horseback, or up on a wagon's bench: the beast (and the wagon)
+        // first, the rider sitting up on top.
+        const mount = e.mount && !e.sleeping ? e.mount : null;
+        let lift = 0;
+        if (mount) lift = this.drawMount(ctx, e, mount, sx, feetY);
+        const frame = e.actionTimer > 0 && !mount ? 3 : e.raft || mount ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
+        const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
+        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift;
         if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
@@ -841,36 +948,62 @@ export class Renderer {
     }
   }
 
-  drawRope(game) {
-    const e = game.sim && game.sim.justice.escort;
-    if (!e || !e.guard) return;
+  // Leads and ropes (a guard's rope to a prisoner's wrists, a horse tied
+  // to a fence): drawn with the world in depth order like a fishing line,
+  // a row at a time, so whatever stands in front of them hides them.
+  leadDecos(game, buckets, zMin, zMax) {
     const ctx = this.ctx;
-    const at = (ent, dy) => {
-      const rp = ent.renderPos();
-      const [u, v] = this.toView(rp.x, rp.z);
-      return { x: u * TILE + 8 - this.camX, y: v * TILE - rp.y * LH + LH + 10 - this.camY - dy };
+    const leads = [];
+    const esc = game.sim && game.sim.justice.escort;
+    if (esc && esc.guard && !esc.guard.dead) leads.push({ a: esc.guard, b: game.player, ah: 11, bh: 10, wrists: true });
+    for (const c of game.visibleEntities || []) if (c.kind === 'creature' && c.tie && !c.dead) leads.push({ a: c, b: c.tie, ah: 11, bh: 13, head: true });
+    const add = (row, layer, order, deco) => {
+      if (row < zMin || row > zMax) return;
+      let arr = buckets.get(row);
+      if (!arr) buckets.set(row, (arr = []));
+      arr.push({ deco, layer, rp: { y: order } });
     };
-    const a = at(e.guard, 11);
-    const b = at(game.player, 10);
-    const n = 12;
-    const sag = 4 + Math.sin(this.time * 3) * 0.8;
-    let px = a.x;
-    let py = a.y;
-    for (let i = 1; i <= n; i++) {
-      const t = i / n;
-      const x = a.x + (b.x - a.x) * t;
-      const y = a.y + (b.y - a.y) * t + Math.sin(t * Math.PI) * sag;
-      ctx.fillStyle = '#3a2a18';
-      ctx.fillRect(Math.round(x), Math.round(y) + 1, 1, 1);
-      ctx.fillStyle = '#c8a064';
-      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-      if (Math.abs(x - px) > 1) ctx.fillRect(Math.round((x + px) / 2), Math.round((y + py) / 2), 1, 1);
-      px = x;
-      py = y;
+    const end = (q, h, head) => {
+      const rp = q.renderPos ? q.renderPos() : q;
+      const [u, v] = this.toView(rp.x, rp.z);
+      let x = u * TILE + 8 - this.camX;
+      // (A horse's lead runs from its head.)
+      if (head) x += q.sideLeft === false ? 9 : -9;
+      return { x, y: v * TILE - rp.y * LH + LH + 10 - this.camY - h, row: Math.ceil(v - 0.001), layer: Math.ceil(rp.y - 0.001) + 1 };
+    };
+    for (const L of leads) {
+      const A = end(L.a, L.ah, L.head);
+      const B = end(L.b, L.bh, false);
+      const n = 14;
+      const sag = 4 + Math.sin(this.time * 3) * 0.8;
+      const pieces = new Map();
+      for (let i = 0; i <= n; i++) {
+        const k = i / n;
+        const r = Math.round(A.row + (B.row - A.row) * k);
+        const px = Math.round(A.x + (B.x - A.x) * k);
+        const py = Math.round(A.y + (B.y - A.y) * k + Math.sin(k * Math.PI) * sag);
+        let pc = pieces.get(r);
+        if (!pc) pieces.set(r, (pc = { pts: [], layer: Math.round(A.layer + (B.layer - A.layer) * k) }));
+        pc.pts.push(px, py);
+      }
+      for (const [r, pc] of pieces) {
+        add(r, pc.layer, 99, () => {
+          for (let i = 0; i < pc.pts.length; i += 2) {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(pc.pts[i], pc.pts[i + 1] + 1, 1, 1);
+            ctx.fillStyle = '#c8a064';
+            ctx.fillRect(pc.pts[i], pc.pts[i + 1], 1, 1);
+            if (i >= 2 && Math.abs(pc.pts[i] - pc.pts[i - 2]) > 1) ctx.fillRect(Math.round((pc.pts[i] + pc.pts[i - 2]) / 2), Math.round((pc.pts[i + 1] + pc.pts[i - 1]) / 2), 1, 1);
+          }
+        });
+      }
+      if (L.wrists) {
+        add(B.row, B.layer, 99.5, () => {
+          ctx.fillStyle = '#c8a064';
+          ctx.fillRect(Math.round(B.x) - 2, Math.round(B.y) - 1, 5, 2);
+        });
+      }
     }
-    // Bound wrists.
-    ctx.fillStyle = '#c8a064';
-    ctx.fillRect(Math.round(b.x) - 2, Math.round(b.y) - 1, 5, 2);
   }
 
   // Arrows in flight.

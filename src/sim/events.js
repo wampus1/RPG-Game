@@ -6,13 +6,37 @@
 // before it starts: the ones who want to go, which depends on whose do it
 // is, what they're like and how they feel. The next morning it all comes
 // down again.
+// Each people does it its own way (a maypole in the vales, a bonfire in
+// the north, a lantern post and rugs in the south, a fire pit in the
+// jungle, an anvil to dance round under the mountain), in its own colours,
+// and the builders hang bunting across the streets between the houses and
+// put up banners by the hall, the tavern and the roads in, all over town.
 import { alive, ledger, setOverride, DAY } from './econ.js';
-import { B, BLOCKS, META_STATE } from '../world/blocks.js';
+import { B, BLOCKS, META_STATE, CANOPY_SHIFT } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { hash4, clamp } from '../util/rng.js';
 
-export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table'].map((k) => B[k]));
+export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
+
+// How each people dresses a do: what the dancers go round, what lights it,
+// and its colours (see DECOR_PALETTES; a wedding's are white and pink).
+const LIT_ = META_STATE;
+export const STYLES = {
+  vale: { palette: 0, centre: [['maypole']], centreWord: 'a maypole', light: ['lantern', LIT_] },
+  north: { palette: 1, centre: [['campfire', LIT_]], centreWord: 'a bonfire', light: ['torch', LIT_] },
+  sun: { palette: 2, centre: [['fence'], ['lantern', LIT_]], centreWord: 'a lantern post', light: ['lantern', LIT_], rugs: ['rug_red', 'rug_blue'] },
+  wild: { palette: 3, centre: [['campfire', LIT_]], centreWord: 'a fire pit', light: ['torch', LIT_], flowers: ['flower_red', 'flower_yellow', 'flower_purple'] },
+  high: { palette: 4, centre: [['anvil']], centreWord: 'an anvil to dance round', light: ['lantern', LIT_] },
+};
+export const WEDDING_PALETTE = 5;
+export function styleOf(s) {
+  return STYLES[s && s.style] || STYLES.vale;
+}
+// A colour for bunting or a banner (rotation kept for bunting).
+export function decorMeta(palette, rot = 0) {
+  return (rot & 3) | ((palette & 3) << CANOPY_SHIFT) | (palette >= 4 ? META_STATE : 0);
+}
 
 // When things happen (minutes into the day).
 const START = { wedding: 900, feast: 960, fete: 960 };
@@ -404,6 +428,7 @@ export class Events {
     const s = L.settlement;
     if (!ev) return { title: 'POSTER', lines: ['A faded poster.', 'Whatever it was, it\'s over now.'] };
     const when = `Day ${ev.day}, from ${hodStr(ev.s % DAY)}, by the square.`;
+    const round = styleOf(s).centreWord.replace(/^an? /, 'the ').replace(/ to dance round$/, '');
     if (ev.kind === 'wedding') {
       const [a, b] = ev.couple.map((i) => L.npcs[i]);
       const lead = ev.host !== null && ev.host !== undefined ? L.npcs[ev.host] : null;
@@ -416,9 +441,9 @@ export class Events {
       };
     }
     if (ev.kind === 'fete') {
-      return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', 'round the maypole.', '', when, '', `By order of the council of ${s.name}.`] };
+      return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', `round ${round}.`, '', when, '', `By order of the council of ${s.name}.`] };
     }
-    return { title: 'POSTER', lines: ['FEAST DAY!', '', `The council of ${s.name} invites all`, 'to eat, drink and dance', 'round the maypole.', '', when, '', 'Free food for everyone!'] };
+    return { title: 'POSTER', lines: ['FEAST DAY!', '', `The council of ${s.name} invites all`, 'to eat, drink and dance', `round ${round}.`, '', when, '', 'Free food for everyone!'] };
   }
 
   // ------------------------------------------------------------ the stage
@@ -474,17 +499,155 @@ export class Events {
   }
 
   build(L, ev, active) {
+    void active;
     const site = this.findSite(L, ev.kind);
     ev.site = site;
-    if (!site) return;
-    const dsn = DESIGNS[site.key];
-    ev.blocks = dsn.blocks.map(([dx, dy, dz, k, meta = 0]) => [site.x0 + dx, GROUND + dy, site.z0 + dz, B[k], meta]);
-    // Lower things first, so the posts stand before the bunting goes up.
-    ev.blocks.sort((a, b) => a[1] - b[1]);
-    const label = `putting up ${dsn.what} by the square for ${this.title(L, ev)}`;
+    const look = styleOf(L.settlement);
+    const palette = ev.kind === 'wedding' ? WEDDING_PALETTE : look.palette;
+    const stage = [];
+    if (site) {
+      const dsn = DESIGNS[site.key];
+      for (const [dx, dy, dz, k, meta = 0] of this.dress(dsn, look, palette)) stage.push([site.x0 + dx, GROUND + dy, site.z0 + dz, B[k], meta]);
+      // Lower things first, so the posts stand before the bunting goes up.
+      stage.sort((a, b) => a[1] - b[1]);
+    }
+    // ...then round town.
+    const decor = this.decorFor(L, ev, palette, stage);
+    ev.blocks = [...stage, ...decor];
+    ev.decorN = decor.length;
+    if (!ev.blocks.length) return;
+    const what = site ? this.what(site.key, look) : null;
+    const label = `putting up ${what ? `${what} by the square${decor.length ? ', and more all round town,' : ''}` : 'bunting and banners round town'} for ${this.title(L, ev)}`;
+    const pz = L.plaza;
+    const bounds = site ? { x0: site.x0, z0: site.z0, x1: site.x1, z1: site.z1 } : { x0: pz.x0, z0: pz.z0, x1: pz.x1, z1: pz.z1 };
     // (Builders put it up piece by piece, here or while you're away.)
-    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'stage', blocks: ev.blocks, bounds: { x0: site.x0, z0: site.z0, x1: site.x1, z1: site.z1 }, label, ev: ev.id });
+    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'stage', blocks: ev.blocks, bounds, label, ev: ev.id });
     ev.stage = p.id;
+  }
+
+  // What goes up on the square, the way these people do it.
+  what(key, look) {
+    return DESIGNS[key].what.replace('a maypole', look.centreWord);
+  }
+
+  dress(dsn, look, palette) {
+    const out = [];
+    for (const [dx, dy, dz, k, meta = 0] of dsn.blocks) {
+      if (k === 'maypole') look.centre.forEach(([ck, cm = 0], i) => out.push([dx, dy + i, dz, ck, cm]));
+      else if (k === 'lantern') out.push([dx, dy, dz, look.light[0], look.light[1] ?? 0]);
+      else if (k === 'bunting') out.push([dx, dy, dz, 'bunting', decorMeta(palette, meta)]);
+      else out.push([dx, dy, dz, k, meta]);
+    }
+    // Rugs laid round the dancers in the south; flowers where people
+    // stand in the jungle.
+    if (dsn.ring && look.rugs) RING.forEach(([rx, rz], i) => out.push([dsn.ring.dx + rx, 0, dsn.ring.dz + rz, look.rugs[i % look.rugs.length]]));
+    if (dsn.stand && look.flowers) dsn.stand.slice(0, 4).forEach((q, i) => out.push([q.dx, 0, q.dz, look.flowers[i % look.flowers.length]]));
+    return out;
+  }
+
+  // All over town: bunting strung across the streets from house to house,
+  // and banners by the doors of the hall, the tavern and the temple and at
+  // the roads in (more for a town's own celebration). A wedding's are
+  // white and pink, with flowers at the couple's door.
+  decorFor(L, ev, palette, stage) {
+    const w = this.game.world;
+    const s = L.settlement;
+    const tier = { village: 0, town: 1, city: 2 }[s.type] ?? 0;
+    const strings = [3, 6, 10][tier];
+    const banners = [3, 5, 8][tier] + (ev.kind === 'fete' ? 3 : 0);
+    const used = new Set(stage.map(([x, , z]) => x * 65536 + z));
+    if (ev.site) for (let z = ev.site.z0 - 1; z <= ev.site.z1 + 1; z++) for (let x = ev.site.x0 - 1; x <= ev.site.x1 + 1; x++) used.add(x * 65536 + z);
+    const blocked = new Set([M.BUILD, M.WALL, M.WATER, M.FIELD]);
+    const air = (x, y, z) => !w.regionAt(x, z) || w.getBlock(x, y, z) === B.air;
+    const open = (x, z, high = false) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && !used.has(x * 65536 + z) && (high ? air(x, GROUND + 2, z) : air(x, GROUND, z) && air(x, GROUND + 1, z));
+    const wallAt = (x, z) => L.maskAt(x, z) === M.BUILD && (!w.regionAt(x, z) || (BLOCKS[w.getBlock(x, GROUND + 2, z)] || {}).solid);
+    const out = [];
+    // Strings across the street: a straight run of open air at head
+    // height with a house wall at each end.
+    const spans = [];
+    const seen = new Set();
+    for (let z = L.bounds.z0; z <= L.bounds.z1; z++) {
+      for (let x = L.bounds.x0; x <= L.bounds.x1; x++) {
+        if (!L.isRoadTile(x, z)) continue;
+        for (const [ax, az, rot] of [[1, 0, 0], [0, 1, 1]]) {
+          let a = 0;
+          let b = 0;
+          while (a < 6 && open(x - ax * (a + 1), z - az * (a + 1), true)) a++;
+          while (b < 6 && open(x + ax * (b + 1), z + az * (b + 1), true)) b++;
+          const len = a + b + 1;
+          if (len < 2 || len > 7 || !open(x, z, true)) continue;
+          if (!wallAt(x - ax * (a + 1), z - az * (a + 1)) || !wallAt(x + ax * (b + 1), z + az * (b + 1))) continue;
+          const x0 = x - ax * a;
+          const z0 = z - az * a;
+          const key = `${x0},${z0},${rot}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const tiles = [];
+          for (let k = 0; k < len; k++) tiles.push([x0 + ax * k, z0 + az * k]);
+          spans.push({ tiles, rot, cx: x0 + (ax * (len - 1)) / 2, cz: z0 + (az * (len - 1)) / 2 });
+        }
+      }
+    }
+    const pz = L.plaza;
+    const jitter = (q) => hash4(s.seed, ev.id, Math.round(q.cx), Math.round(q.cz)) % 7;
+    spans.sort((a, b) => Math.hypot(a.cx - pz.cx, a.cz - pz.cz) + jitter(a) - (Math.hypot(b.cx - pz.cx, b.cz - pz.cz) + jitter(b)));
+    const chosen = [];
+    for (const sp of spans) {
+      if (chosen.length >= strings) break;
+      if (chosen.some((q) => Math.hypot(q.cx - sp.cx, q.cz - sp.cz) < 6)) continue;
+      chosen.push(sp);
+      for (const [x, z] of sp.tiles) {
+        out.push([x, GROUND + 2, z, B.bunting, decorMeta(palette, sp.rot)]);
+      }
+    }
+    // Banners beside the doors that matter, and at the roads in.
+    const spots = [];
+    for (const t of ['townhall', 'tavern', 'temple', 'shop', 'guardhouse', 'library']) {
+      const b = L.buildings.find((q) => q.type === t && q.outside && !q.underConstruction);
+      if (b) spots.push(b.outside);
+    }
+    for (const e of L.entrances || []) spots.push(e);
+    const bmeta = decorMeta(palette);
+    let n = 0;
+    for (const at of spots) {
+      if (n >= banners) break;
+      for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [-2, 1], [1, 2], [-1, 2]]) {
+        const x = at.x + dx;
+        const z = at.z + dz;
+        if (!open(x, z) || L.isRoadTile(x, z) || L.spots.some((q) => q.x === x && q.z === z)) continue;
+        out.push([x, GROUND, z, B.festival_banner, bmeta]);
+        used.add(x * 65536 + z);
+        n++;
+        break;
+      }
+    }
+    // Flowers at the couple's door.
+    if (ev.couple) {
+      const home = L.buildings[L.npcs[ev.couple[0]]?.home];
+      if (home && home.outside) {
+        let f = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [1, 1], [-1, 1]]) {
+          const x = home.outside.x + dx;
+          const z = home.outside.z + dz;
+          if (f >= 2 || !open(x, z) || L.isRoadTile(x, z)) continue;
+          out.push([x, GROUND, z, f ? B.flower_red : B.flower_white, 0]);
+          used.add(x * 65536 + z);
+          f++;
+        }
+      }
+    }
+    // In the order someone would walk round putting it up, from the square.
+    const order = [];
+    let cur = { x: pz.cx, z: pz.cz };
+    const left = out.slice();
+    while (left.length) {
+      let bi = 0;
+      for (let i = 1; i < left.length; i++) if (Math.abs(left[i][0] - cur.x) + Math.abs(left[i][2] - cur.z) < Math.abs(left[bi][0] - cur.x) + Math.abs(left[bi][2] - cur.z)) bi = i;
+      const [op] = left.splice(bi, 1);
+      order.push(op);
+      cur = { x: op[0], z: op[2] };
+    }
+    return order;
   }
 
   free([x, y, z]) {
@@ -498,12 +661,20 @@ export class Events {
     ev.strike = -1;
     if (!ev.blocks.length) return;
     const w = this.game.world;
-    const ops = ev.blocks.filter(([x, y, z, id]) => !w.regionAt(x, z) || w.getBlock(x, y, z) === id).map(([x, y, z]) => [x, y, z, B.air, 0]);
-    // Top first: bunting and lanterns before the posts under them.
+    const still = ([x, y, z, id]) => !w.regionAt(x, z) || w.getBlock(x, y, z) === id;
+    const down = ([x, y, z]) => [x, y, z, B.air, 0];
+    const n = ev.blocks.length - (ev.decorN || 0);
+    // Top first on the square: bunting and lanterns before the posts under
+    // them. Then round town the way it went up.
+    const ops = ev.blocks.slice(0, n).filter(still).map(down);
     ops.sort((a, b) => b[1] - a[1]);
+    ops.push(...ev.blocks.slice(n).filter(still).map(down));
     if (!ops.length) return;
-    const dsn = DESIGNS[ev.site.key];
-    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'strike', blocks: ops, bounds: { x0: ev.site.x0, z0: ev.site.z0, x1: ev.site.x1, z1: ev.site.z1 }, label: `taking down the ${dsn.what.replace(/^an? /, '')} by the square`, ev: ev.id });
+    const look = styleOf(L.settlement);
+    const pz = L.plaza;
+    const bounds = ev.site ? { x0: ev.site.x0, z0: ev.site.z0, x1: ev.site.x1, z1: ev.site.z1 } : { x0: pz.x0, z0: pz.z0, x1: pz.x1, z1: pz.z1 };
+    const label = ev.site ? `taking down the ${this.what(ev.site.key, look).replace(/^an? /, '')} by the square${ev.decorN ? ', and the bunting round town' : ''}` : 'taking down the bunting round town';
+    const p = this.sim.works.add({ sid: L.settlement.id, kind: 'strike', blocks: ops, bounds, label, ev: ev.id });
     ev.strike = p.id;
   }
 
@@ -874,7 +1045,7 @@ export class Events {
       if (t < 0) return child ? ['Is it starting yet?', 'I\'m bored...', 'Will there be cake?'] : ['I do love a wedding.', 'Isn\'t it lovely?', `${a} looks so happy.`, 'Who made the arch? Gorgeous.', 'Nearly time!', `I always knew ${a} and ${b} would end up together.`];
       return child ? ['Cake!', 'Can we go home now?', 'Yuck, kissing.'] : ['To the happy couple!', 'What a lovely ceremony.', 'I cried the whole way through.', 'They make a fine pair.', 'Pass the cake!'];
     }
-    if (t < 0) return ['Smells wonderful!', 'Save me a place!', 'Is the music starting?', 'Look at the maypole!'];
+    if (t < 0) return ['Smells wonderful!', 'Save me a place!', 'Is the music starting?', `Look at ${styleOf(L.settlement).centreWord.replace(/^an? /, 'the ').replace(/ to dance round$/, '')}!`, 'Look at all the bunting!'];
     if (role === 'serve') return ['Who\'s hungry?', 'Plenty more where that came from!', 'Mind, it\'s hot!', 'Bread\'s fresh this morning.'];
     if (role === 'dine') return ['Pass the bread!', 'This roast is wonderful.', 'Another tankard over here!', 'I\'ll never eat again. Until supper.'];
     if (role === 'lead') return ['Enjoy yourselves, everyone!', 'A fine turnout!', `Good people, ${town}.`];

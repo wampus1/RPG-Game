@@ -721,6 +721,62 @@ function spr(h = SPR_H) {
   return new Px(16, h);
 }
 
+// A city gate: shut, heavy planks banded with iron, filling the gateway;
+// open, the leaves folded back against the posts. Seen side-on (rot 1, 3),
+// a board edge down the middle, or nothing but the posts.
+function gateSprite(rot, open, upper) {
+  const p = spr();
+  const wood = '#6e4c2c';
+  const dark = '#4a3018';
+  const iron = '#3e3e46';
+  const front = rot === 0 || rot === 2;
+  if (!open) {
+    if (front) {
+      for (let y = upper ? 8 : 12; y <= 27; y++) for (let x = 0; x < 16; x++) p.set(x, y, x % 4 === 3 ? dark : wood);
+      if (upper) for (let x = 0; x < 16; x++) p.set(x, 8, shade(hex(wood), 1.25));
+      p.hline(0, 15, upper ? 14 : 16, iron);
+      p.hline(0, 15, 24, iron);
+      if (!upper) {
+        p.set(7, 20, '#c8a040');
+        p.set(8, 20, '#c8a040');
+      }
+    } else {
+      // Edge on: the thickness of the leaves, planked and banded.
+      const top = upper ? 4 : 2;
+      p.rect(4, top, 8, 28 - top, wood);
+      p.vline(6, top, 27, dark);
+      p.vline(9, top, 27, dark);
+      p.hline(4, 11, upper ? 10 : 12, iron);
+      p.hline(4, 11, upper ? 22 : 22, iron);
+      if (upper) for (let x = 4; x <= 11; x += 2) p.set(x, top - 1, wood);
+    }
+  } else if (front) {
+    p.rect(0, upper ? 8 : 10, 2, upper ? 20 : 18, dark);
+    p.rect(14, upper ? 8 : 10, 2, upper ? 20 : 18, dark);
+    p.vline(1, upper ? 8 : 10, 27, wood);
+    p.vline(14, upper ? 8 : 10, 27, wood);
+  } else {
+    p.rect(7, upper ? 4 : 2, 2, 3, dark);
+    p.rect(7, 24, 2, 3, dark);
+  }
+  return p.outline(OUT);
+}
+
+// Colours for what's put up round town for a do: the flags on the bunting,
+// and the cloth, trim and mark of the banners. By the people's culture
+// (0 Valeborn, 1 Nordvolk, 2 Sunreach, 3 Verdani, 4 Kharduum), and 5 for a
+// wedding. (Kept in a block's colour bits and state bit.)
+export const DECOR_PALETTES = [
+  { flags: ['#c83a32', '#e0b030', '#3264c0', '#3c9a48'], cloth: '#b83028', trim: '#e0b030', mark: 'star' },
+  { flags: ['#2e5eb8', '#f0ece0', '#b8322e', '#7a8a9a'], cloth: '#2a4a8a', trim: '#f0ece0', mark: 'cross' },
+  { flags: ['#e0b030', '#a82a4a', '#2aa8a0', '#4a3a9a'], cloth: '#a82a4a', trim: '#e0b030', mark: 'crescent' },
+  { flags: ['#e05a20', '#3cb848', '#d03aa0', '#f0d040'], cloth: '#2e8a3a', trim: '#f0d040', mark: 'zigzag' },
+  { flags: ['#8a2020', '#c89a28', '#5a5e66', '#2a2a30'], cloth: '#6a1a1a', trim: '#c89a28', mark: 'hammer' },
+  { flags: ['#ffffff', '#ff9ad0', '#f8e0e8', '#e8b0c8'], cloth: '#f4f0ec', trim: '#ff9ad0', mark: 'heart' },
+  { flags: ['#c83a32', '#e0b030', '#3264c0', '#3c9a48'], cloth: '#b83028', trim: '#e0b030', mark: 'star' },
+  { flags: ['#c83a32', '#e0b030', '#3264c0', '#3c9a48'], cloth: '#b83028', trim: '#e0b030', mark: 'star' },
+];
+
 const SPRITES = {
   chest(rot, st, f, rand) {
     const p = spr();
@@ -1037,10 +1093,11 @@ const SPRITES = {
     p.rect(5, 37, 6, 2, P.planks_dark[0]);
     return p.outline(OUT);
   },
-  bunting(rot) {
-    // A string of little flags hung between posts at head height.
+  bunting(rot, st, f, rand, colour = 0) {
+    // A string of little flags hung between posts at head height (or right
+    // across a street), in the town's colours.
     const p = spr();
-    const cols = ['#c83a32', '#e0b030', '#3264c0', '#3c9a48'];
+    const cols = DECOR_PALETTES[(st ? 4 : 0) + (colour & 3)].flags;
     const line = '#e8e0cc';
     if (rot === 0 || rot === 2) {
       const sag = (x) => 12 + Math.round(Math.sin((Math.PI * x) / 15) * 2);
@@ -1174,6 +1231,67 @@ const SPRITES = {
     p.set(0, base + 0, '#6a4a2a');
     p.set(15, base + 0, '#6a4a2a');
     return p.outline(OUT);
+  },
+  festival_banner(rot, st, f, rand, colour = 0) {
+    // A tall pole with a banner hung from a crossbar, swallow-tailed, with
+    // the mark and colours of the town's people (a wedding's white and pink
+    // with a heart).
+    const pal = DECOR_PALETTES[(st ? 4 : 0) + (colour & 3)];
+    const p = spr();
+    const wood = P.planks_dark;
+    p.vline(3, 2, 27, wood[0]);
+    p.vline(4, 2, 27, wood[2]);
+    p.rect(3, 0, 2, 2, pal.trim);
+    p.hline(2, 13, 3, wood[1]);
+    const cloth = hex(pal.cloth);
+    const x0 = 5;
+    const x1 = 13;
+    for (let y = 4; y <= 22; y++) {
+      for (let x = x0; x <= x1; x++) {
+        // Swallow-tailed at the bottom.
+        if (y > 18 && Math.abs(x - 9) < y - 18) continue;
+        const edge = x === x0 || x === x1 || y === 4;
+        p.set(x, y, edge ? pal.trim : x > 10 ? shade(cloth, 0.85) : pal.cloth);
+      }
+    }
+    const m = pal.trim;
+    if (pal.mark === 'cross') {
+      p.rect(8, 5, 2, 14, pal.flags[1]);
+      p.rect(6, 10, 7, 2, pal.flags[1]);
+    } else if (pal.mark === 'crescent') {
+      p.ellipse(9, 11, 3, 3, m);
+      p.ellipse(10, 10, 2.4, 2.4, pal.cloth);
+      p.set(12, 8, m);
+      for (let x = x0; x <= x1; x += 2) p.set(x, 23, m);
+    } else if (pal.mark === 'zigzag') {
+      for (let x = x0 + 1; x < x1; x++) {
+        p.set(x, 8 + (x % 2), pal.flags[0]);
+        p.set(x, 12 + (x % 2), pal.flags[2]);
+        p.set(x, 16 + (x % 2), pal.flags[3]);
+      }
+    } else if (pal.mark === 'hammer') {
+      p.rect(7, 8, 5, 2, m);
+      p.rect(9, 10, 1, 6, m);
+      p.rect(7, 16, 5, 1, shade(hex(m), 0.8));
+    } else if (pal.mark === 'heart') {
+      p.rect(7, 9, 2, 2, m);
+      p.rect(10, 9, 2, 2, m);
+      p.rect(7, 11, 5, 2, m);
+      p.rect(8, 13, 3, 1, m);
+      p.set(9, 14, m);
+    } else {
+      // A star.
+      p.rect(8, 8, 3, 7, m);
+      p.rect(6, 10, 7, 3, m);
+      p.set(9, 7, m);
+    }
+    return p.outline(OUT);
+  },
+  city_gate(rot, st) {
+    return gateSprite(rot, st, false);
+  },
+  city_gate_top(rot, st) {
+    return gateSprite(rot, st, true);
   },
   bell(rot, st, f) {
     // A bronze bell under a little roof on two posts; it swings when rung.
@@ -1806,7 +1924,7 @@ export function buildTextures() {
         else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
-          const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' ? VARIANTS : 1;
+          const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' || name === 'bunting' || name === 'festival_banner' ? VARIANTS : 1;
           // Layout: [state * 4 + frame] for animated props, or variants.
           for (let st = 0; st < 2; st++) {
             for (let f = 0; f < 4; f++) {

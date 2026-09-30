@@ -7,6 +7,7 @@ import { relationTo } from '../sim/favors.js';
 import { HOBBIES } from '../entities/npcgen.js';
 import { LAWS, lawList, stance } from '../sim/laws.js';
 import { speak } from './voice.js';
+import { TRIP_TALK_DAYS } from '../sim/outings.js';
 
 const CHATTY = new Set(['social', 'hobby', 'wander', 'eat', 'home', 'play', 'work', 'visit']);
 
@@ -55,6 +56,19 @@ export function exchangeFor(a, b, game) {
     baker: [['Fresh bread this morning!', 'I could smell it from my bed.']],
   }[ra.job];
   if (jobTalk) opts.push(...jobTalk);
+  // Just back from a trip: to those who went too, and those who didn't.
+  const tm = ra.tripMem;
+  if (tm && game.day - tm.day <= TRIP_TALK_DAYS && ra.age !== 'child') {
+    const went = (tm.with || []).includes(rb.idx);
+    const talk = went
+      ? [`Still thinking about ${tm.dest}, ${B}.`, pick(rng, ['Me too. I\'d go back tomorrow.', 'My feet haven\'t forgiven me yet.', tm.ev ? `What a ${tm.ev === 'wedding' ? 'wedding' : 'party'} that was!` : 'Good trip, that.'])]
+      : [`You should have come to ${tm.dest}, ${B}!`, pick(rng, ['Next time, maybe. What was it like?', 'Someone had to stay and mind things.', 'So I keep hearing! Go on, then.']), pick(rng, [`Busy! And ${tm.ev ? 'the do was wonderful' : 'the people were friendly'}.`, 'Bigger than here. Louder, too.', tm.player ? `${game.playerName.split(' ')[0]} came along, you know.` : 'You\'d have loved it.'])];
+    opts.push(talk, talk);
+  }
+  const tb = rb.tripMem;
+  if (tb && game.day - tb.day <= TRIP_TALK_DAYS && ra.age !== 'child' && !(tb.with || []).includes(ra.idx)) {
+    opts.push([`${B}! How was ${tb.dest}?`, pick(rng, ['Wonderful. I\'ll tell you all about it.', 'Tiring! But I\'m glad I went.', tb.ev === 'feast' ? 'I ate enough for a week.' : 'Different. Good different.'])]);
+  }
   // The laws: they may well not agree.
   const laws = lawList(L);
   if (laws.length && ra.age !== 'child') {

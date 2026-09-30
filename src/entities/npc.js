@@ -74,7 +74,7 @@ export class NPC extends Entity {
   }
 
   get title() {
-    if (this.visit) return 'Traveling Merchant';
+    if (this.visit) return this.visit.guest ? 'Visitor' : 'Traveling Merchant';
     if (this.nomad) return 'Nomad';
     return jobTitle(this.rec, this.settlement);
   }
@@ -86,11 +86,22 @@ export class NPC extends Entity {
 
   get homeName() {
     if (this.nomad) return `the ${this.nomad.family} band`;
+    if (this.company) return this.company.name;
     if (this.adventurer) {
       const civ = this.adventurer.home !== null && this.adventurer.home !== undefined ? this.game.world.ow.civs[this.adventurer.home] : null;
       return civ ? `the ${civ.name.replace(/^The /, '')}` : 'the open road';
     }
     return this.visit ? this.visit.fromName : this.settlement.name;
+  }
+
+  // The camp outside town they belong to, if any.
+  myCamp() {
+    const camps = this.game.sim.camps;
+    if (this.nomad) return camps.get(`n:${this.nomad.id}`);
+    if (this.company) return camps.get(`c:${this.company.id}`);
+    if (this.adventurer) return camps.get(`a:${this.adventurer.id}`);
+    if (this.visit) return camps.get(`v:${this.visit.id}`);
+    return null;
   }
 
   // Their house in the town they're in now (none when visiting).
@@ -110,7 +121,7 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
-    if (this.caravan) return this.adventurer ? this.weapon() : 'crate';
+    if (this.caravan) return this.adventurer || (this.company && this.rec.role === 'guard') || (this.rec.trip && this.rec.trip.outing && this.rec.job === 'guard') ? this.weapon() : this.company || this.mount || (this.rec.trip && this.rec.trip.outing) ? null : 'crate';
     if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
     if (this.prey) return this.weapon();
     const a = this.activity?.entry;
@@ -341,7 +352,7 @@ export class NPC extends Entity {
       case 'adventure': {
         // An adventurer's day: their tent, the market, the streets, the
         // tavern, and wherever the watch trains.
-        const camp = this.adventurer && this.game.sim.camps.get(`a:${this.adventurer.id}`);
+        const camp = this.adventurer ? this.game.sim.camps.get(`a:${this.adventurer.id}`) : this.company ? this.game.sim.camps.get(`c:${this.company.id}`) : null;
         // (Paid to stand watch: the streets all night instead.)
         const night = this.game.minute >= 1260 || this.game.minute < 360;
         if (e.place === 'camp' && this.adventurer && this.adventurer.guard === L.settlement.id && night) return roadTile();
@@ -379,6 +390,23 @@ export class NPC extends Entity {
         return { x: best.x, y: GROUND, z: best.z, near: 1, leave: true };
       }
       case 'visit': {
+        // Visiting from another town of the realm: the do they came for,
+        // the square and the streets, the tavern of an evening.
+        if (this.visit && this.visit.guest) {
+          const sim = this.game.sim;
+          const ev = sim.events.upcoming(L).find((q) => q.site && (q.state === 'on' || q.state === 'ready' || q.state === 'building') && sim.abs >= q.s - 60);
+          if (ev) {
+            const st = ev.site;
+            const k = hash4(this.rec.idx, ev.id, 0x9e) % 1000;
+            const w = st.x1 - st.x0 + 5;
+            const x = st.x0 - 2 + (k % w);
+            const z = (k >> 4) % 2 ? st.z0 - 2 : st.z1 + 2;
+            return { x, y: GROUND, z, near: 2, tag: 'event', face: z < st.z0 ? 0 : 2 };
+          }
+          const m = this.game.minute;
+          if (m >= 18 * 60 || m < 7 * 60) return inBuilding(buildingOf('tavern'), rng.chance(0.5) ? 'drink' : 'eat') || tagged('social') || plazaTile();
+          return rng.chance(0.45) ? plazaTile() : rng.chance(0.5) ? roadTile() : claim(L.spotsByTag('shop')) || tagged('social') || plazaTile();
+        }
         // A merchant's tent first, and back to it for the night.
         const camp = this.visit && this.game.sim.camps.get(`v:${this.visit.id}`);
         const late = this.game.minute >= 19 * 60 || this.game.minute < 7 * 60;
@@ -430,6 +458,11 @@ export class NPC extends Entity {
         who.say(who.rng.pick(['No!', 'Go on, then what?', 'Ha! I don\'t believe it.', 'Tell us another!']), 2.5);
       }
       return;
+    }
+    // By the fire at night, the bow is laid down beside them.
+    if (act.place === 'camp' && !this.putDown && (game.minute >= 1260 || game.minute < 360) && this.rng.chance(dt * 0.2)) {
+      const bow = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
+      if (bow) this.putDownNear(bow.item);
     }
     if (this.rng.chance(dt * 0.05)) this.dir = this.rng.int(0, 3);
   }
@@ -631,6 +664,41 @@ export class NPC extends Entity {
   releaseSpot() {
     if (this.spot && this.spot.claim === this.id) this.spot.claim = null;
     this.spot = null;
+    this.collectPutDown();
+  }
+
+  // ------------------------------------------------------------ setting things down
+  // Put something down beside them for a while (a tool while they chat, a
+  // bow by the campfire overnight). It's theirs: they take it back when
+  // they move on, and notice if it's gone.
+  putDownNear(item) {
+    if (this.putDown || !item || !ITEMS[item]) return false;
+    const game = this.game;
+    const owner = this.adventurer ? { adv: this.adventurer.id } : { sid: this.layout.settlement.id, idx: this.rec.idx };
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]]) {
+      const x = this.x + dx;
+      const z = this.z + dz;
+      if (game.occupiedBySolid?.(x, this.y, z, this)) continue;
+      if (game.setDown(x, this.y, z, item, 1, owner)) {
+        this.putDown = { x, y: this.y, z, item };
+        this.face(x, z);
+        this.doAction(0.3);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  collectPutDown() {
+    const pd = this.putDown;
+    if (!pd || !this.game.placed) return;
+    this.putDown = null;
+    const got = this.game.placed.get(`${pd.x},${pd.y},${pd.z}`);
+    if (got && got.item === pd.item && got.owner) {
+      this.game.takePlaced(pd.x, pd.y, pd.z);
+      return;
+    }
+    if (!this.dead && !this.sleeping) this.say(this.rng.pick([`Where's my ${(ITEMS[pd.item]?.name || pd.item).toLowerCase()}? I left it right here!`, 'Has anyone seen my things?', 'Someone\'s taken my ' + (ITEMS[pd.item]?.name || pd.item).toLowerCase() + '!']), 3, '#ffb080');
   }
 
   // ------------------------------------------------------------ update
@@ -652,6 +720,18 @@ export class NPC extends Entity {
     this.rec.hp = this.hp;
     this.closeDoorBehind();
     if (this.moving) return;
+    // Ridden in to camp: down off the horse (or the wagon) once there.
+    if (this.mount && this.state !== 'caravan') {
+      const camp = this.myCamp();
+      if (!camp || Math.max(Math.abs(camp.stand.x - this.x), Math.abs(camp.stand.z - this.z)) <= 3 || this.state === 'fight' || this.state === 'flee') {
+        this.mount = null;
+        // (One of them says so.)
+        if (camp && !camp.greeted) {
+          camp.greeted = true;
+          this.say(this.rng.pick(['Whoa, whoa. Here we are.', 'Easy, girl. We\'re here.', 'Tie them up by the post.']), 2.5);
+        }
+      }
+    }
     // Someone you're talking to stands and listens.
     if (this.state === 'routine' && this.game.talkingTo === this && !this.sleeping) {
       this.face(this.game.player.x, this.game.player.z);
@@ -840,6 +920,16 @@ export class NPC extends Entity {
     const c = this.caravan;
     if (!c) {
       this.state = 'routine';
+      return;
+    }
+    // Camped for the night by the road: round the fire, not going anywhere.
+    if (c.camp) {
+      const rc = c.campKey && this.game.roadCamp.get(c.campKey);
+      const at = rc ? rc.fire : c.camp;
+      if (Math.max(Math.abs(at.x - this.x), Math.abs(at.z - this.z)) > 2) {
+        const box = { x0: Math.min(this.x, at.x) - 6, z0: Math.min(this.z, at.z) - 6, x1: Math.max(this.x, at.x) + 6, z1: Math.max(this.z, at.z) + 6 };
+        if (this.stateT < 20) this.followPath({ x: at.x, y: this.y, z: at.z }, 2, box);
+      } else if (!this.moving && this.rng.chance(0.02)) this.face(at.x, at.z);
       return;
     }
     const d = Math.hypot(c.tx - this.x, c.tz - this.z) || 1;
@@ -1155,6 +1245,11 @@ export class NPC extends Entity {
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
     if (act.act === 'adventure') return this.adventureAt(act, dt);
+    // Taking it easy outdoors: the tools of their trade set down for a while.
+    if (act.act === 'hobby' && !this.putDown && this.rec.job !== 'guard' && this.rng.chance(dt * 0.01) && !buildingAt(this.layout, this.x, this.z)) {
+      const t = this.rec.equipment.tool;
+      if (t && ITEMS[t] && ITEMS[t].kind === 'tool') this.putDownNear(t);
+    }
     if (act.act === 'trial') {
       if (this.rng.chance(dt * 0.3)) this.face(game.player.x, game.player.z);
       return;
@@ -1866,6 +1961,9 @@ export class NPC extends Entity {
       return false;
     }
     const feet = w.getBlock(nx, ty, nz);
+    // A shut city gate: townsfolk know how to lift the bar (the watch shuts
+    // it again behind them).
+    if (feet === B.city_gate && !w.getState(nx, ty, nz)) this.game.setGate(nx, nz, true);
     if (feet === B.door) {
       // Open it (or find it open) on the way through; shut it after.
       if (!w.getState(nx, ty, nz)) this.game.setDoor(nx, ty, nz, true);
@@ -1873,7 +1971,9 @@ export class NPC extends Entity {
     }
     this.face(nx, nz);
     const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
-    this.startMove(nx, ty, nz, this.step * pace * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    // In the saddle (or up on a wagon): quicker than walking.
+    const ride = this.mount ? (this.mount.kind === 'wagon' ? 0.75 : 0.65) : 1;
+    this.startMove(nx, ty, nz, this.step * pace * ride * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;
   }
