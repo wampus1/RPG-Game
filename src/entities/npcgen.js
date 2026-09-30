@@ -30,6 +30,7 @@ export const JOBS = {
   beggar: { title: 'Beggar', place: 'plaza', start: 480, end: 1140, tools: [], outfit: 'rags' },
   child: { title: 'Child' },
   retired: { title: 'Retiree' },
+  adventurer: { title: 'Adventurer', outfit: 'hunter' },
 };
 
 export const HOBBIES = {
@@ -55,6 +56,7 @@ const MERCHANT_TITLES = [null, 'Peddler', 'Trader', 'Master Merchant'];
 export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
   if (rec.nomadBand !== undefined) return 'Nomad';
+  if (rec.adventurer !== undefined) return ADVENTURER_TITLES[rec.advLevel || 1];
   const tier = rec.visitor ? rec.visit && rec.visit.tier : rec.job === 'merchant' ? rec.tier : null;
   if (rec.visitor) return tier ? `Traveling ${MERCHANT_TITLES[tier]}` : 'Traveling Merchant';
   if (tier) return MERCHANT_TITLES[tier];
@@ -759,6 +761,45 @@ export function makeNomadBand(rng, size) {
   });
   for (const a of adults.slice(0, 2)) out[a].children = out.map((r, i) => (r.age === 'child' ? i : -1)).filter((i) => i >= 0);
   return { style, family: fam, people: out };
+}
+
+// ------------------------------------------------------------ adventurers
+export const ADVENTURER_TITLES = { 1: 'Adventurer', 2: 'Seasoned Adventurer', 3: 'Renowned Adventurer' };
+const ADV_GEMS = ['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst'];
+
+// An adventurer: someone who lives on the road, going from realm to realm,
+// armed and armoured well beyond any townsfolk (a renowned one in jewelled
+// gear). `level` 1-3.
+export function makeAdventurer(rng, style, level) {
+  const { p, traits } = makePersonality(rng, null, 'guard', 'adult');
+  p.bravery = Math.max(p.bravery, 0.75);
+  p.sociability = clamp(p.sociability + 0.1, 0, 1);
+  const tr = ['well-traveled', ...traits.filter((t) => t !== 'timid')].slice(0, 3);
+  if (!tr.includes('brave')) tr.push('brave');
+  const look = makeLook(rng, style, 'adult', 'adventurer', null);
+  look.outfit = rng.pick(['hunter', 'hunter', 'guard', 'vest']);
+  look.accent = rng.pick(['#c83a32', '#2a4a7a', '#3a6a3a', '#6a4a8a', '#c89030', '#2a2a2a']);
+  const gem = () => rng.pick(ADV_GEMS);
+  const set = (base, chance) => (rng.chance(chance) ? `${base}+${gem()}` : base);
+  // Moderate gear for a new hand, jewelled for a renowned one.
+  const weapon = level >= 3 ? set(rng.pick(['iron_sword', 'gold_sword']), 1) : level === 2 ? set('iron_sword', 0.5) : rng.pick(['iron_sword', 'stone_sword', 'iron_axe', 'spear']);
+  const bow = level >= 2 || rng.chance(0.4) ? set('bow', level >= 3 ? 0.6 : 0.15) : null;
+  const wear = level >= 3
+    ? { head: set('iron_helmet', 0.3), body: set(rng.pick(['chainmail', 'iron_breastplate']), 0.7), legs: 'iron_greaves', feet: 'iron_boots' }
+    : level === 2
+      ? { head: rng.pick(['iron_helmet', 'leather_cap']), body: set('chainmail', 0.35), legs: rng.pick(['iron_greaves', 'leather_trousers']), feet: 'leather_boots' }
+      : { head: rng.chance(0.5) ? 'leather_cap' : null, body: 'leather_tunic', legs: 'leather_trousers', feet: 'leather_boots' };
+  for (const k of Object.keys(wear)) if (!wear[k] || !ITEMS[wear[k]]) delete wear[k];
+  look.hat = wear.head && wear.head.startsWith('iron_helmet') ? 'helmet' : wear.head ? 'hood' : rng.pick(['hood', null, 'feather']);
+  if (wear.body && !wear.body.startsWith('leather')) look.outfit = 'guard';
+  return {
+    name: personName(rng, style, familyName(rng, style)), style, look, personality: p, traits: tr,
+    gear: { weapon: ITEMS[weapon] ? weapon : 'iron_sword', bow: bow && ITEMS[bow] ? bow : null, wear },
+    maxHp: 26 + level * 8 + rng.int(0, 4),
+    // How often they slip a blow, turn an arrow aside.
+    dodge: 0.22 + level * 0.07 + rng.float(0, 0.06),
+    deflect: 0.3 + level * 0.1 + rng.float(0, 0.08),
+  };
 }
 
 // A synthetic record for a traveling merchant visiting from elsewhere.

@@ -13,7 +13,7 @@ import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
-import { swingMult, onSwing, onBladeHit } from '../game/gems.js';
+import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
   work: ['•', '#e8d8b0'], read: ['≡', '#a0c8ff'], study: ['≡', '#a0c8ff'], pray: ['†', '#ffe8a0'], music: ['♪', '#ff9ad0'],
@@ -86,6 +86,10 @@ export class NPC extends Entity {
 
   get homeName() {
     if (this.nomad) return `the ${this.nomad.family} band`;
+    if (this.adventurer) {
+      const civ = this.adventurer.home !== null && this.adventurer.home !== undefined ? this.game.world.ow.civs[this.adventurer.home] : null;
+      return civ ? `the ${civ.name.replace(/^The /, '')}` : 'the open road';
+    }
     return this.visit ? this.visit.fromName : this.settlement.name;
   }
 
@@ -106,7 +110,7 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
-    if (this.caravan) return 'crate';
+    if (this.caravan) return this.adventurer ? this.weapon() : 'crate';
     if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
     if (this.prey) return this.weapon();
     const a = this.activity?.entry;
@@ -124,6 +128,11 @@ export class NPC extends Entity {
   }
 
   weapon() {
+    // (An adventurer with the bow out, keeping their distance.)
+    if (this.drawnBow) {
+      const b = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
+      if (b) return b.item;
+    }
     const t = this.rec.equipment.tool;
     if (t && ITEMS[t] && (ITEMS[t].kind === 'weapon' || ITEMS[t].kind === 'tool')) return t;
     const w = this.rec.equipment.items.find((i) => ITEMS[i.item]?.kind === 'weapon');
@@ -140,7 +149,7 @@ export class NPC extends Entity {
   attackDamage(ranged = false) {
     const w = ranged ? this.weapon() : this.meleeWeapon();
     const base = w ? ITEMS[w].damage : 1.5;
-    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? 1.2 : 1) * (this.rec.age === 'child' ? 0.4 : 1)));
+    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? 1.2 : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1)));
   }
 
   canShoot() {
@@ -329,6 +338,24 @@ export class NPC extends Entity {
         const g = inBuilding(b);
         return g ? { ...g, tag: 'shop', shop: true } : { x: b.inside.x, y: GROUND, z: b.inside.z, tag: 'shop', shop: true };
       }
+      case 'adventure': {
+        // An adventurer's day: their tent, the market, the streets, the
+        // tavern, and wherever the watch trains.
+        const camp = this.adventurer && this.game.sim.camps.get(`a:${this.adventurer.id}`);
+        // (Paid to stand watch: the streets all night instead.)
+        const night = this.game.minute >= 1260 || this.game.minute < 360;
+        if (e.place === 'camp' && this.adventurer && this.adventurer.guard === L.settlement.id && night) return roadTile();
+        if (e.place === 'camp') return camp ? this.campTile(camp) : plazaTile();
+        if (e.place === 'market') return claim(L.spotsByTag('shop')) || plazaTile();
+        if (e.place === 'tavern') return inBuilding(buildingOf('tavern'), rng.chance(0.5) ? 'drink' : 'eat') || tagged('social') || plazaTile();
+        if (e.place === 'train') {
+          const t = tagged('train');
+          if (t) return { ...t, tag: 'train' };
+          const g = L.npcs.find((r) => r.job === 'guard' && r.ent && !r.ent.dead && !r.ent.sleeping);
+          return g ? { x: g.ent.x + 1, y: GROUND, z: g.ent.z, near: 1, tag: 'train' } : roadTile();
+        }
+        return roadTile();
+      }
       case 'camp': {
         // Nomads: at their tents outside town (putting them up first), or
         // looking the town over: the square, the streets, the houses.
@@ -373,6 +400,146 @@ export class NPC extends Entity {
       default:
         return inBuilding(home);
     }
+  }
+
+  // An adventurer at their haunts: a bout with the watch, tales at the
+  // tavern, a look over the market stalls.
+  adventureAt(act, dt) {
+    const game = this.game;
+    if (act.place === 'train') {
+      const g = game.npcs.find((n) => !n.dead && n.layout === this.layout && n.rec.job === 'guard' && n.state === 'routine' && !n.sleeping && n.distTo(this) <= 3);
+      if (g && this.rng.chance(dt * 1.4)) {
+        this.face(g.x, g.z);
+        g.face(this.x, this.z);
+        (this.rng.chance(0.5) ? this : g).doAction(0.3);
+        game.audio?.play('hit', this);
+        if (this.lineCd <= 0) {
+          this.lineCd = this.rng.float(12, 30);
+          (this.rng.chance(0.5) ? this : g).say(this.rng.pick(['Keep your guard up!', 'Again!', 'Ha! Too slow.', 'Watch the feet...', 'Good one!']), 2.2);
+        }
+      }
+      return;
+    }
+    if (act.place === 'tavern' && this.lineCd <= 0) {
+      this.lineCd = this.rng.float(18, 40);
+      const near = game.npcs.filter((n) => !n.dead && n !== this && n.layout === this.layout && n.state === 'routine' && !n.sleeping && n.distTo(this) <= 4);
+      if (near.length) {
+        this.say(this.rng.pick(['...and then the whole pack turned on us!', 'You should see the mountains past the border.', 'Three days in the swamp, and not a dry boot.', 'Biggest wolf I ever saw. Nearly had my arm.', 'The capital? All banners and bad ale.']), 3.5);
+        const who = this.rng.pick(near);
+        who.face(this.x, this.z);
+        who.say(who.rng.pick(['No!', 'Go on, then what?', 'Ha! I don\'t believe it.', 'Tell us another!']), 2.5);
+      }
+      return;
+    }
+    if (this.rng.chance(dt * 0.05)) this.dir = this.rng.int(0, 3);
+  }
+
+  // ------------------------------------------------------------ adventurers in a fight
+  // Slip a blow and roll clear (to get some room for the bow, or a breath).
+  tryDodge(source) {
+    const adv = this.adventurer;
+    if (!adv || this.dodgeCd > 0 || this.stunT > 0 || this.sleeping || this.moving) return false;
+    if (Math.random() >= adv.dodge * (this.slowT > 0 ? 0.5 : 1)) return false;
+    this.dodgeCd = 1.4;
+    this.game.renderer.floatText(this.x, this.y + 2, this.z, 'dodge', '#c8e8ff');
+    this.rollAway(source);
+    return true;
+  }
+
+  rollAway(from) {
+    const game = this.game;
+    const dx = Math.sign(this.x - from.x);
+    const dz = Math.sign(this.z - from.z);
+    // Straight back, or to the side if the way back's blocked.
+    const tries = [[dx || this.rng.pick([-1, 1]), dz], [dz, -dx], [-dz, dx]];
+    for (const [ax, az] of tries) {
+      let x = this.x;
+      let z = this.z;
+      let y = this.y;
+      for (let i = 0; i < 2; i++) {
+        const nx = x + ax;
+        const nz = z + az;
+        const ny = game.world.stepTarget(x, y, z, nx, nz, false);
+        if (ny < 0 || game.occupiedBySolid(nx, ny, nz, this)) break;
+        x = nx;
+        z = nz;
+        y = ny;
+      }
+      if (x !== this.x || z !== this.z) {
+        game.renderer.emit(this.x, this.y, this.z, { n: 6, color: ['#c8b890', '#8a7a5a'], up: 15, life: 0.35, oy: -2 });
+        this.startMove(x, y, z, 0.16);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Turn an arrow aside: it flies off and lands wide.
+  tryDeflect(a) {
+    const adv = this.adventurer;
+    if (!adv || this.stunT > 0 || this.sleeping) return false;
+    if (Math.random() >= adv.deflect) return false;
+    const dx = a.tx - a.x0;
+    const dz = a.tz - a.z0;
+    const len = Math.hypot(dx, dz) || 1;
+    const side = Math.random() < 0.5 ? 1 : -1;
+    a.tx += Math.round((-dz / len) * 2 * side);
+    a.tz += Math.round((dx / len) * 2 * side);
+    this.face(a.x0, a.z0);
+    this.doAction(0.2);
+    this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 6, color: ['#ffffff', '#fff0a0', '#c8c8d8'], up: 30, speed: 60, life: 0.25, oy: -8 });
+    this.game.renderer.floatText(this.x, this.y + 2, this.z, 'deflect', '#fff0a0');
+    this.game.audio?.play('armor_hit', this);
+    return true;
+  }
+
+  // The stones they carry, called up in earnest: a ring of fire, a burst of
+  // frost, a second wind, a thunderclap, a shockwave.
+  useArt(t) {
+    const game = this.game;
+    const g = gemsOf(this);
+    const stone = g.blade || g.bow || g.armor[0];
+    if (!stone) return false;
+    const foes = [t, ...game.creatures.filter((c) => !c.dead && c !== t && c.hostileNow && Math.max(Math.abs(c.x - this.x), Math.abs(c.z - this.z)) <= 2)];
+    const near = (e) => Math.max(Math.abs(e.x - this.x), Math.abs(e.z - this.z)) <= 2;
+    const fx = (color, n = 18) => game.renderer.emit(this.x, this.y + 1, this.z, { n, color, up: 40, speed: 90, life: 0.6, oy: -6 });
+    if (stone === 'emerald') {
+      if (this.hp > this.maxHp * 0.6) return false;
+      mend(game, this, Math.round(this.maxHp * 0.3));
+      this.say('Not yet...', 2, '#a0ffa0');
+      fx(['#60e080', '#c0ffc0']);
+      return true;
+    }
+    if (!near(t)) return false;
+    this.doAction(0.45);
+    if (stone === 'ruby') {
+      this.say('Burn!', 1.5, '#ffb060');
+      fx(['#ff6030', '#ffb040', '#fff0a0'], 24);
+      for (const e of foes) if (near(e)) {
+        game.damage(e, 2, this);
+        burn(game, e, this, 3);
+      }
+    } else if (stone === 'sapphire') {
+      this.say('Freeze!', 1.5, '#a0d8ff');
+      fx(['#a0d8ff', '#e0f4ff', '#60a0ff'], 24);
+      for (const e of foes) if (near(e)) {
+        game.damage(e, 1, this);
+        chill(e, 3.5);
+      }
+    } else if (stone === 'topaz') {
+      this.say('Thunder!', 1.5, '#fff8a0');
+      game.renderer.emit(t.x, t.y + 2, t.z, { n: 14, color: ['#fff8a0', '#ffe040', '#ffffff'], up: 60, life: 0.35, oy: -14 });
+      game.damage(t, 4, this);
+      stun(t, 1.5);
+    } else if (stone === 'amethyst') {
+      this.say('Back!', 1.5, '#e0c0ff');
+      fx(['#c080ff', '#e0c0ff'], 20);
+      game.damage(t, 2, this);
+      knockBack(game, this, t, 3);
+      stun(t, 1);
+    }
+    game.shake = Math.min(1, (game.shake || 0) + (t === game.player ? 0.3 : 0));
+    return true;
   }
 
   // A parent of this child who is at work in town right now.
@@ -478,6 +645,8 @@ export class NPC extends Entity {
       if (this.y >= GROUND + 2 && this.rec.job !== 'guard' && this.layout.inside(this.x, this.z)) this.stepDown();
     }
     if (this.attackCd > 0) this.attackCd -= dt;
+    if (this.dodgeCd > 0) this.dodgeCd -= dt;
+    if (this.artCd > 0) this.artCd -= dt;
     if (this.avoid) this.avoid.t -= dt;
     this.stateT += dt;
     this.rec.hp = this.hp;
@@ -985,6 +1154,7 @@ export class NPC extends Entity {
     }
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
+    if (act.act === 'adventure') return this.adventureAt(act, dt);
     if (act.act === 'trial') {
       if (this.rng.chance(dt * 0.3)) this.face(game.player.x, game.player.z);
       return;
@@ -1742,6 +1912,13 @@ export class NPC extends Entity {
     const p = this.rec.personality;
     const beast = threat.kind === 'creature' || threat.kind === 'monster';
     const guardsExist = this.game.guardsOf(this.settlement.id).length > 0;
+    // An adventurer takes on any beast, and anyone who goes for them; a
+    // quarrel between you and the townsfolk is none of their business.
+    if (this.adventurer) {
+      if (witnessed && threat.kind === 'player') return;
+      if (this.state !== 'fight') this.say(this.rng.pick(threat.kind === 'player' ? ['Big mistake.', 'You want a fight? You\'ve got one.', 'Draw, then!'] : ['Leave this one to me!', 'Stand back, folks!', 'Come on, then!']), 2.5, '#ffb080');
+      return this.engage(threat);
+    }
     const close = victim && victim.rec && (this.rec.partner === victim.rec.idx || this.rec.children.includes(victim.rec.idx) || this.rec.parents.includes(victim.rec.idx) || (this.rec.friends || []).includes(victim.rec.idx));
     if (this.rec.job === 'guard') return this.engage(threat);
     if (this.rec.age === 'child') return this.startFlee(threat, witnessed ? null : '!!');
@@ -1882,6 +2059,34 @@ export class NPC extends Entity {
         return;
       }
     }
+    if (this.adventurer) {
+      // A salve when it's going badly.
+      if (this.hp < this.maxHp * 0.4 && this.stateT - (this.salveT ?? -99) > 15 && invCount(this.rec.inv || [], 'healing_salve') > 0) {
+        invTake(this.rec.inv, 'healing_salve', 1);
+        this.salveT = this.stateT;
+        this.hp = Math.min(this.maxHp, this.hp + 10);
+        this.say('*gulps a salve*', 1.5, '#a0ffa0');
+        game.renderer.emit(this.x, this.y + 1, this.z, { n: 6, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.5, gravity: -10 });
+        return;
+      }
+      if (this.artCd <= 0 && d <= 3 && this.useArt(t)) {
+        this.artCd = 9;
+        return;
+      }
+      // Bow out at a distance, blade up close.
+      const bow = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
+      this.drawnBow = !!(bow && d >= 3 && invCount(this.rec.inv || [], 'arrow') > 0);
+      if (this.drawnBow && d <= 8 && Math.abs(t.y - this.y) <= 2) {
+        this.face(t.x, t.z);
+        if (this.attackCd <= 0) {
+          this.attackCd = 1.1;
+          this.doAction(0.3);
+          invTake(this.rec.inv, 'arrow', 1);
+          game.shoot(this, t, this.attackDamage(true));
+        }
+        return;
+      }
+    }
     if (this.canShoot() && d >= 2 && d <= 6 && Math.abs(t.y - this.y) <= 2) {
       this.face(t.x, t.z);
       if (this.attackCd <= 0) {
@@ -1898,7 +2103,7 @@ export class NPC extends Entity {
       this.face(t.x, t.z);
       // (Dazzled by a topaz: not this moment.)
       if (this.attackCd <= 0 && !(this.stunT > 0)) {
-        this.attackCd = (guard ? 0.75 : 1.0) * swingMult(this);
+        this.attackCd = (guard ? 0.75 : this.adventurer ? 0.7 : 1.0) * swingMult(this);
         this.doAction(0.3);
         onSwing(game, this, t);
         game.damage(t, this.attackDamage(false), this);
@@ -1914,6 +2119,7 @@ export class NPC extends Entity {
   }
 
   calmDown(silent = false) {
+    this.drawnBow = false;
     this.state = this.hired ? 'hired' : 'routine';
     this.threat = null;
     this.path = null;

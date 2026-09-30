@@ -48,6 +48,8 @@ export const WANTS = {
   farmer: ['seeds', 'bone', 'wheat', 'carrot', 'cabbage'],
   scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper'],
   trapper: ['string', 'stick', 'feather', 'arrow', 'raw_meat', 'leather', 'bone'],
+  adventurer: ['arrow', 'bow', 'bread', 'stew', 'feast', 'cooked_meat', 'cooked_fish', 'apple', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude',
+    'iron_sword', 'gold_sword', 'spear', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'leather_boots', 'leather_cap', 'gem', 'torch', 'leather', 'bone', 'raw_meat'],
 };
 
 export const MEAL_ITEMS = ['feast', 'stew', 'gruel'];
@@ -1082,7 +1084,7 @@ function mayorReview(sim, L, day, rng) {
   if (e.treasury < reserve && e.tax < 0.3) {
     e.tax = Math.round(Math.min(0.3, e.tax + 0.02) * 100) / 100;
     ledger(L, day, `${who} raised taxes to ${Math.round(e.tax * 100)}%: the coffers are thin.`);
-  } else if (e.treasury > pop * 35 && e.tax > 0.04) {
+  } else if (e.treasury > pop * 35 && e.tax > 0.04 && e.tax - 0.02 >= (sim && sim.realms ? sim.realms.taxFloor(s) : 0) - 1e-9) {
     e.tax = Math.round(Math.max(0.02, e.tax - 0.02) * 100) / 100;
     ledger(L, day, `${who} lowered taxes to ${Math.round(e.tax * 100)}%.`);
   }
@@ -1266,7 +1268,11 @@ export function tickHour(sim, L, h) {
     shopForPantries(L, rng);
     planShopping(sim, L, day);
   }
-  if (hod === 8) collectTaxes(L, day);
+  if (hod === 8) {
+    collectTaxes(L, day);
+    // (and the realm's share goes to the capital)
+    if (sim && sim.realms) sim.realms.tribute(L, day);
+  }
   if (hod === 10) mayorReview(sim, L, day, rng);
   if (hod === 18) payWages(L, day);
   if (hod === 3) mortality(sim, L, day, rng);

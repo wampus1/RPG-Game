@@ -16,6 +16,7 @@ import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from 
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4 } from '../util/rng.js';
+import { authority, rulerTitle } from '../sim/realms.js';
 import { countItem, removeItem } from './inventory.js';
 import { rainedRecently } from '../world/weather.js';
 
@@ -89,6 +90,13 @@ function openingRaw(npc, game) {
   const rep = sim.opinion(npc);
   const entry = sim.repEntry(s.id, rec.idx);
   const name = game.playerName;
+  if (npc.adventurer) {
+    if (game.duel && game.duel.npc === npc) return 'Talk later. Fight now!';
+    // A citizen is a local to them; someone who belongs nowhere, one of their own.
+    return sim.citizen
+      ? pick(rng, [`A local! Maybe you can tell me: is ${s.name}'s tavern any good?`, `Well met. ${s.name} treating you well?`, 'Hail. Don\'t mind me, just passing through.'])
+      : pick(rng, ['Another wanderer! Well met, friend.', 'Hail, traveller. Long road?', 'Ha, I know that look: you\'ve slept under the stars too.']);
+  }
   if (npc.nomad) return pick(rng, [`Greetings. We're the ${rec.name.last}s, travellers. Is this a good place to live?`, 'Hello there. We\'re just passing through... or maybe not.', `The road's been long. What's ${s.name} like?`]);
   const cf = sim.confront;
   if (cf && cf.arrived && cf.idx === rec.idx && cf.sid === s.id) {
@@ -173,6 +181,27 @@ export function topicsFor(npc, game) {
   const wanted = game.isWanted(s.id);
   const out = [];
   const add = (id, label) => out.push({ id, label });
+  if (npc.adventurer) {
+    const adv = npc.adventurer;
+    if (game.duel && game.duel.npc === npc) {
+      add('bye', '(Step back)');
+      return out;
+    }
+    if (rep > -40) add('trade', 'Let\'s trade.');
+    add('adv_road', 'Any tales from the road?');
+    if (sim.citizen) {
+      add('adv_why', `What brings you to ${s.name}?`);
+      if (sim.citizen.sid === s.id && adv.guard !== s.id) add('adv_guard', `Would you stand watch over ${s.name} tonight? (¤30)`);
+    } else {
+      if (!adv.swapped) add('adv_swap', 'Swap stories, one traveller to another.');
+      add('adv_duel', 'Fancy a friendly bout?');
+      add('adv_tip', 'Know anywhere worth a look?');
+    }
+    add('who', 'Who are you?');
+    add('gift', 'I have a gift for you.');
+    add('bye', 'Goodbye.');
+    return out;
+  }
   if (npc.nomad) {
     add('nomad', 'Are you thinking of settling here?');
     add('who', 'Where do you come from?');
@@ -263,6 +292,143 @@ export function topicsFor(npc, game) {
   return out;
 }
 
+// The realm: who rules it, what they've decreed, what the town pays and
+// gets back, and what folk make of the other realms (and of you, if you're
+// a citizen of one of them).
+function realmTalk(npc, game) {
+  const rec = npc.rec;
+  const s = npc.settlement;
+  const civ = s.civ;
+  const sim = game.sim;
+  const rng = npc.rng;
+  const R = sim.realms.realm(civ);
+  const realmName = civ.name.replace(/^The /, '');
+  const capS = game.world.ow.settlements[R.capital];
+  const ruler = sim.realms.ruler(civ);
+  const who = authority(civ);
+  const lines = [];
+  const p = rec.personality || {};
+  if (rec.ruler === civ.id) {
+    lines.push(`I am ${rulerTitle(civ)} of the ${realmName}, since day ${Math.max(1, R.since ?? 1)}.`);
+    lines.push(R.decrees.taxFloor ? `Every town pays at least ${Math.round(R.decrees.taxFloor * 100)}% in taxes, and a share comes here. It all goes back out, to the towns that need it.` : 'The towns send a share of their taxes here, and it goes back out to those that need it.');
+  } else if (rec.councillor === civ.id) {
+    lines.push(`I sit on the council of the ${realmName}. ${ruler ? `Speaker ${ruler.name.first} ${ruler.name.last} leads us.` : 'We are choosing a new speaker.'}`);
+  } else if (ruler) {
+    const here = capS && capS.id === s.id;
+    lines.push(`We're the ${realmName}. ${sim.realms.rulerName(civ)} ${here ? 'rules from right here' : `rules from ${capS ? capS.name : 'the capital'}`}.`);
+    // What they make of the ruler: generous or grasping, by how much goes
+    // to the capital and what comes back.
+    const aid = (npc.layout.econ.royalAid || []).slice(-1)[0];
+    if (aid && game.day - aid.day < 20) lines.push(pick(rng, [`${who[0].toUpperCase() + who.slice(1)} paid for ${aid.kind === 'road' ? 'our road' : aid.kind === 'wall' ? 'our wall' : aid.kind === 'guard' ? 'a guard for us' : 'a good deal here'} lately. Can't complain.`, `Say what you like about ${who}, they didn't forget us when we needed it.`]));
+    else if (!here && R.share >= 0.12) lines.push(p.kindness < 0.4 ? `A ${Math.round(R.share * 100)}% share of our taxes goes to ${capS ? capS.name : 'the capital'}. Robbery, I call it.` : `A fair bit of our taxes goes to ${capS ? capS.name : 'the capital'}. I hope they spend it well.`);
+    else lines.push(pick(rng, [`A steady hand, ${who}.`, `We could do worse than ${ruler.name.first} ${ruler.name.last}.`, `I don't think about the capital much. It's a long way off.`]));
+  } else lines.push(`The ${realmName} has no ruler just now. Everyone's waiting to hear who's next.`);
+  if (R.decrees.armsBan && !npc.layout.econ.laws.armsBan) lines.push(`${who[0].toUpperCase() + who.slice(1)} forbids drawn weapons in every town of the realm, mind.`);
+  // The neighbours.
+  const others = (game.world.ow.civs || []).filter((o) => o !== civ);
+  const o = others.sort((a, b) => Math.abs(sim.realms.relation(civ, b).score) - Math.abs(sim.realms.relation(civ, a).score))[0];
+  if (o) {
+    const st = sim.realms.standing(civ, o);
+    const on = o.name.replace(/^The /, '');
+    const tariff = R.decrees.tariffOn.includes(o.id);
+    lines.push(st === 'hostile' ? pick(rng, [`And the ${on}? Don't get me started. ${tariff ? 'Their merchants pay a tariff here now, and good.' : 'Nothing but trouble.'}`, `We don't deal with the ${on} if we can help it.`])
+      : st === 'friendly' ? pick(rng, [`The ${on} are good neighbours. Their merchants are always welcome.`, `We get on well with the ${on}.`])
+        : pick(rng, [`The ${on}... we keep an eye on them, and they on us.`, `Can't say I trust the ${on}, but trade is trade.`]));
+  }
+  const home = sim.citizen ? game.world.ow.settlements[sim.citizen.sid] : null;
+  if (home && home.civ && home.civ !== civ && sim.realms.standing(civ, home.civ) === 'hostile') lines.push(`You're of the ${home.civ.name.replace(/^The /, '')}, aren't you? Hm.`);
+  return { lines: lines.slice(0, 4) };
+}
+
+// Talk with an adventurer. A citizen is a local to them (they'll ask about
+// the place, and take pay to stand watch over it); someone who belongs
+// nowhere is a fellow traveller (stories swapped, places worth a look, a
+// friendly bout for a wager).
+function adventurerTalk(npc, game, id, arg) {
+  const adv = npc.adventurer;
+  const rec = npc.rec;
+  const s = npc.settlement;
+  const sim = game.sim;
+  const rng = npc.rng;
+  const ow = game.world.ow;
+  const p = game.player;
+  const home = adv.home !== null && adv.home !== undefined ? ow.civs[adv.home] : null;
+  const next = ow.settlements[adv.dest] && adv.dest !== s.id ? ow.settlements[adv.dest] : null;
+  const prev = ow.settlements[adv.seen[adv.seen.length - 2]];
+  switch (id) {
+    case 'who':
+      return { lines: [`${rec.name.first} ${rec.name.last}. ${home ? `Born in the ${home.name.replace(/^The /, '')}, but the road's my home now.` : 'No realm to call my own: the road is home.'}`,
+        adv.level >= 3 ? `You may have heard of me. ${adv.stays} towns, and more beasts than I care to count.` : adv.level === 2 ? 'A few years on the road. I can handle myself.' : 'Still new to this life, if I\'m honest. It suits me.'] };
+    case 'adv_road': {
+      const lines = [];
+      if (prev) {
+        const PL = game.world.layouts.get(prev.id);
+        const news = PL && PL.econ ? PL.econ.ledger.slice(-12).filter((l) => !/^Law:|keeps ¤|Taxes stand/.test(l.text)) : [];
+        lines.push(`I came here from ${prev.name}${prev.civ && prev.civ !== s.civ ? `, over in the ${prev.civ.name.replace(/^The /, '')}` : ''}.`);
+        if (news.length) lines.push(`When I left: ${news[news.length - 1 - (rng.int(0, Math.min(2, news.length - 1)))].text}`);
+      }
+      const civs = ow.civs || [];
+      if (civs.length >= 2) {
+        const [a, b] = rng.shuffle(civs.slice()).slice(0, 2);
+        const st = sim.realms.standing(a, b);
+        lines.push(st === 'hostile' ? `Mind yourself between the ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')}: no love lost there.` : st === 'friendly' ? `The ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} are thick as thieves these days.` : `The ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} eye each other like cats.`);
+      }
+      lines.push(pick(rng, ['Beasts are bolder on the roads than they were.', 'Found a gem in a wolf\'s den once. Don\'t ask.', 'Every town\'s tavern swears its stew is the best. They\'re all wrong.']));
+      return { lines: lines.slice(0, 3) };
+    }
+    case 'adv_why':
+      return { lines: [`Trade, rest, and a bed that isn't rocks. ${next ? `I'm for ${next.name} next.` : 'Then on to wherever the road goes.'}`,
+        pick(rng, [`${s.name} seems a decent sort of place. Your watch could use more steel, mind.`, `What's the best thing to eat around here? I've had enough dried meat for a lifetime.`, `Is it true what they say about your ${s.type === 'village' ? 'elder' : 'mayor'}?`])] };
+    case 'adv_guard': {
+      if (countItem(p.inv, 'coin') < 30) return { lines: ['Thirty coin, friend. I don\'t stand in the cold for less.'] };
+      removeItem(p.inv, 'coin', 30);
+      npc.rec.coins = (npc.rec.coins || 0) + 30;
+      adv.coins = npc.rec.coins;
+      adv.guard = s.id;
+      adv.leave = Math.max(adv.leave, sim.abs + 18 * 60);
+      sim.changeRep(npc, 5);
+      ledger(npc.layout, game.day, `${rec.name.first} ${rec.name.last}, an adventurer, is standing watch over ${s.name}, paid by ${game.playerName}.`);
+      return { lines: ['Done. Nothing with claws gets past me tonight.', 'I\'ll stay on an extra night for it, too.'] };
+    }
+    case 'adv_swap': {
+      if (adv.swapped) return { lines: ['We\'ve swapped our best already!'] };
+      adv.swapped = true;
+      sim.changeRep(npc, 8);
+      // A place they've been, now on your map.
+      const far = ow.settlements.filter((o) => o.id !== s.id && !ow.explored[o.cz * MAP_W + o.cx]);
+      const o = far.length ? far[rng.int(0, far.length - 1)] : null;
+      if (o) ow.markExplored(Math.floor((o.cx + 0.5) * 64), Math.floor((o.cz + 0.5) * 36), 1);
+      return { lines: [pick(rng, ['Ha! You got lost in a fog on a bridge? That\'s nothing...', 'Your turn. Mine starts with a bear and ends with a very angry miller.']),
+        o ? `If you're ever out that way, ${o.name} is worth the walk: ${o.type === 'city' ? 'a proper city' : o.type === 'town' ? 'a fair-sized town' : 'a quiet village'}${o.civ ? ` of the ${o.civ.name.replace(/^The /, '')}` : ''}. (${o.name} is now on your map.)` : 'You\'ve been everywhere I have, I think!'] };
+    }
+    case 'adv_tip': {
+      // Somewhere beasts are troubling people: work for a blade.
+      const troubled = [...game.world.layouts.values()].filter((L) => L.econ && L.settlement.id !== s.id && (L.econ.recent.raids || 0) > 0 && !deserted(L.settlement));
+      const t = troubled.length ? troubled[rng.int(0, troubled.length - 1)].settlement : null;
+      if (t) {
+        ow.markExplored(Math.floor((t.cx + 0.5) * 64), Math.floor((t.cz + 0.5) * 36), 1);
+        return { lines: [`Beasts have been raiding ${t.name}. They'd be glad of a blade, and they pay.`, `(${t.name} is marked on your map.)`] };
+      }
+      return { lines: [pick(rng, ['Deep stone under the mountains: iron, gold, gems. And things that live in the dark.', 'The forests are full of game this season. And wolves that think the same.', 'Quiet everywhere, lately. Too quiet for my purse.'])] };
+    }
+    case 'adv_duel': {
+      if (arg) {
+        const w = Number(arg);
+        if (countItem(p.inv, 'coin') < w) return { lines: ['You\'ll need the coin to back it, friend.'] };
+        game.startDuel(npc, w);
+        return { lines: ['Ha! Ready yourself.'], close: true };
+      }
+      if (npc.hp < npc.maxHp * 0.6) return { lines: ['Not today. I\'m still nursing the last one.'] };
+      const coins = countItem(p.inv, 'coin');
+      const choices = [10, 25, 50].filter((w) => w <= coins).map((w) => ({ id: 'adv_duel', arg: String(w), label: `For ¤${w}.` }));
+      choices.push({ id: 'bye', label: 'Maybe another time.' });
+      return { lines: [adv.level >= 3 ? 'A bout? With me? Bold. I don\'t go easy.' : 'A friendly bout? I\'m game. First to a quarter of their strength yields.', 'What\'s the purse?'], choices };
+    }
+    default:
+      return { lines: ['...'] };
+  }
+}
+
 // The "ask about..." submenu.
 export function askMenu(npc, game) {
   const rec = npc.rec;
@@ -278,6 +444,7 @@ export function askMenu(npc, game) {
   out.push({ id: 'people', label: 'Someone you know...' });
   out.push({ id: 'directions', label: 'Where to find a place...' });
   if (!npc.visit && rec.age !== 'child') out.push({ id: 'laws', label: rec.job === 'guard' ? 'Any trouble lately' : 'The laws and taxes' });
+  if (!npc.visit && rec.age !== 'child' && s.civ) out.push({ id: 'realm', label: rec.ruler === s.civ.id ? 'Your reign' : `The ${s.civ.name.replace(/^The /, '')} and its ruler` });
   return out;
 }
 
@@ -965,7 +1132,15 @@ function respondRaw(npc, game, id, arg) {
   switch (id) {
     case 'ask':
       return { lines: [tn === 'warm' ? 'Ask away!' : tn === 'cold' ? 'What now?' : pick(rng, ['Hm? What about?', 'Sure, what is it?'])], choices: askMenu(npc, game) };
+    case 'adv_road':
+    case 'adv_why':
+    case 'adv_guard':
+    case 'adv_swap':
+    case 'adv_duel':
+    case 'adv_tip':
+      return adventurerTalk(npc, game, id, arg);
     case 'who': {
+      if (npc.adventurer) return adventurerTalk(npc, game, 'who');
       if (npc.visit) return { lines: [`${rec.name.first} ${rec.name.last}, traveling merchant from ${npc.visit.fromName}. I carry goods between there and the towns around it.`] };
       if (npc.nomad) return { lines: [`${rec.name.first} ${rec.name.last}. We come from everywhere and nowhere: the ${rec.name.last}s have been on the road for years.`, rec.age === 'child' ? 'I was born in a wagon!' : 'We\'re looking for somewhere to put down roots.'] };
       if (rec.age === 'child') return { lines: [pick(rng, [`I'm ${rec.name.first}! I'm ${6 + (rec.idx % 7)}!`, `I'm ${rec.name.first}. Wanna play tag?`, `My name's ${rec.name.first}!`])] };
@@ -1328,6 +1503,7 @@ function respondRaw(npc, game, id, arg) {
       else if (rec.job === 'guard') lines.push(e.recent.thefts + e.recent.violence > 0 ? 'There\'s been some trouble lately. Keep your eyes open.' : 'Quiet as a graveyard. Just how I like it.');
       return { lines: lines.slice(0, 4) };
     }
+    case 'realm': return realmTalk(npc, game);
     case 'petition': return petitionTalk(npc, game, arg);
     case 'sign': {
       const p2 = sim.petition;

@@ -775,6 +775,10 @@ export class Game {
       if (!spot || ow.settlementAt(spot.x, spot.z)) continue;
       const m = new NPC(this, tr.rec, tr.L);
       m.caravan = { tx: tr.target.x, tz: tr.target.z, to: tr.to.name, from: tr.from.name };
+      if (tr.adv) {
+        m.adventurer = tr.adv;
+        this.sim.adventurers.ents.set(tr.adv.id, m);
+      }
       m.state = 'caravan';
       m.teleport(spot.x, spot.y, spot.z);
       tr.rec.ent = m;
@@ -817,6 +821,91 @@ export class Game {
       out.push(n);
     });
     return out;
+  }
+
+  // An adventurer staying in a town you're in: by their tent, or just
+  // arriving by the road in.
+  spawnAdventurer(L, adv, rec) {
+    const a = this.active.get(L.settlement.id);
+    if (!a) return null;
+    const camp = this.sim.camps.get(`a:${adv.id}`);
+    const e = camp ? camp.stand : L.entrances[adv.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
+    const spot = this.findFreeSpot(e.x, e.z, GROUND);
+    if (!spot) return null;
+    const n = new NPC(this, rec, L);
+    n.adventurer = adv;
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
+    a.npcs.push(n);
+    this.npcs.push(n);
+    return n;
+  }
+
+  // A friendly bout with an adventurer: first down to a quarter of their
+  // strength loses, and pays the wager. No crime in it, for either of you.
+  startDuel(npc, wager) {
+    this.duel = { npc, wager, start: this.sim.abs };
+    npc.engage(this.player);
+    npc.say(npc.rng.pick(['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 2.5, '#ffe070');
+    this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
+  }
+
+  endDuel(result) {
+    const d = this.duel;
+    this.duel = null;
+    if (!d) return;
+    const n = d.npc;
+    const p = this.player;
+    if (!n.dead) n.calmDown(true);
+    const adv = n.adventurer;
+    if (result === 'won') {
+      const pay = Math.min(d.wager, n.rec.coins || 0);
+      n.rec.coins -= pay;
+      if (adv) adv.coins = n.rec.coins;
+      if (pay) {
+        const left = p.give('coin', pay);
+        if (left) this.spawnDrop('coin', left, p.x, p.y, p.z, true);
+      }
+      n.say(n.rng.pick(['Well fought! You have my respect.', 'Ha! You got me. Fair and square.', 'I yield! Where did you learn that?']), 3.5, '#a0ffa0');
+      this.ui.msg(`You won the bout with ${n.name}${pay ? ` and ¤${pay}` : ''}.`, '#a0ffa0');
+      this.sim.changeRep(n, 15);
+      if (adv) adv.beaten = (adv.beaten || 0) + 1;
+    } else {
+      const owe = Math.min(d.wager, countItem(p.inv, 'coin'));
+      if (owe) removeItem(p.inv, 'coin', owe);
+      n.rec.coins = (n.rec.coins || 0) + owe;
+      if (adv) adv.coins = n.rec.coins;
+      n.say(result === 'fled' ? 'Walking away? Then the purse is mine.' : n.rng.pick(['A good bout! Better luck next time.', 'Not bad at all. Keep at it.', 'You\'ll get me one day.']), 3.5);
+      this.ui.msg(result === 'fled' ? `You walked away from the bout and forfeit ¤${owe}.` : `${n.name} won the bout${owe ? `: you pay ¤${owe}` : ''}.`, '#ffb080');
+      this.sim.changeRep(n, result === 'fled' ? -5 : 5);
+    }
+  }
+
+  updateDuel() {
+    const d = this.duel;
+    if (!d) return;
+    const n = d.npc;
+    if (n.dead) this.duel = null;
+    else if (this.player.dead || n.distTo(this.player) > 14 || this.sim.abs - d.start > 90) this.endDuel('fled');
+    else if (n.state !== 'fight') n.engage(this.player);
+  }
+
+  spared(n) {
+    const p = this.player;
+    const take = Math.floor(countItem(p.inv, 'coin') * 0.25);
+    if (take) removeItem(p.inv, 'coin', take);
+    n.rec.coins = (n.rec.coins || 0) + take;
+    if (n.adventurer) n.adventurer.coins = n.rec.coins;
+    n.calmDown(true);
+    n.face(p.x, p.z);
+    n.say(n.rng.pick(['Stay down. I\'ve no wish to kill you.', 'That\'s enough. Think twice next time.', 'Yield! ...There. Go and lick your wounds.']), 4, '#ffb080');
+    this.ui.msg(`${n.name} beat you, and let you live${take ? `, taking ¤${take} for the trouble` : ''}.`, '#ff9080');
+    this.shake = Math.min(1, this.shake + 0.5);
+  }
+
+  removeAdventurer(n) {
+    if (this.duel && this.duel.npc === n) this.duel = null;
+    this.despawnNpc(n);
   }
 
   // The band settles: the travellers become townsfolk on the spot.
@@ -967,6 +1056,7 @@ export class Game {
       }
     }
     ambientChatter(this, dt);
+    this.updateDuel();
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     // Beasts near you keep pace with racing time too (far off, they idle on).
@@ -2389,7 +2479,9 @@ export class Game {
       if (a.t < a.dur) continue;
       a.done = true;
       const t = a.target;
-      const hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
+      let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
+      // An adventurer turns the arrow aside with a blade.
+      if (hit && t.adventurer && t.tryDeflect && t.tryDeflect(a)) hit = false;
       if (hit) this.damage(t, a.dmg, a.from);
       onArrowLand(this, a, hit);
     }
@@ -2609,6 +2701,10 @@ export class Game {
 
   damage(target, amount, source, crit = false) {
     if (target.dead) return;
+    // An adventurer slips a blow and rolls clear.
+    if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
+    const duel = this.duel;
+    const inDuel = !!(duel && duel.npc && !duel.npc.dead && ((target === duel.npc && source === this.player) || (target === this.player && source === duel.npc)));
     let armored = false;
     if (target.kind === 'npc' && target.rec.equipment.armor) {
       amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
@@ -2640,6 +2736,14 @@ export class Game {
         return;
       }
     }
+    // A friendly bout ends when one of you is down to a quarter.
+    if (inDuel && target.hp - amount <= Math.ceil(target.maxHp * 0.25)) {
+      target.hp = Math.max(1, Math.min(target.hp, Math.ceil(target.maxHp * 0.25)));
+      if (target.rec) target.rec.hp = target.hp;
+      target.flash = 0.12;
+      this.endDuel(target === duel.npc ? 'won' : 'lost');
+      return;
+    }
     target.hp -= amount;
     // Jewelled armour answers a blow struck in close.
     if (source && !this.dotHit) onStruck(this, target, source, amount);
@@ -2665,10 +2769,18 @@ export class Game {
     // Violence against villagers is a crime; witnesses react.
     if (target.kind === 'npc' && source) {
       target.onHurt(source);
-      if (source.kind === 'player' && target.hp > 0) this.crime(target);
+      if (inDuel) {
+        // (A bout both agreed to is no crime.)
+      } else if (source.kind === 'player' && target.hp > 0) this.crime(target);
       else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
     if (target.hp <= 0) {
+      // An adventurer spares you (and helps themselves to your purse).
+      if (target.kind === 'player' && source && source.adventurer) {
+        target.hp = 1;
+        this.spared(source);
+        return;
+      }
       // The town subdues lawbreakers rather than killing them (unless exiled).
       if (target.kind === 'player' && source && source.kind === 'npc' && !source.visit && !source.hired && !this.sim.justice.exiled.has(source.settlement.id)) {
         target.hp = 1;
@@ -2793,6 +2905,14 @@ export class Game {
       for (const it of rec.equipment.items) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
       for (const it of rec.inv || []) this.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
       if (e.visit) for (const [k, n] of Object.entries(e.visit.goods)) this.spawnDrop(k, n, e.x, e.y, e.z, true);
+      // An adventurer's armour and pack too.
+      if (rec.adventurer !== undefined) {
+        for (const k of Object.values(rec.wear || {})) if (k) this.spawnDrop(k, 1, e.x, e.y, e.z, true);
+        const adv = this.sim.adventurers.get(rec.adventurer);
+        if (adv) for (const [k, n] of Object.entries(adv.pack)) if (n > 0) this.spawnDrop(k, n, e.x, e.y, e.z, true);
+        this.sim.adventurers.died(rec.adventurer, source && source.kind === 'player' ? 'slain' : 'killed');
+        if (this.duel && this.duel.npc === e) this.duel = null;
+      }
       rec.inv = [];
       const coins = rec.coins || 0;
       if (coins) this.spawnDrop('coin', coins, e.x, e.y, e.z, true);
@@ -2817,7 +2937,7 @@ export class Game {
       } else this.ui.msg(`${e.name} the ${e.title} was killed!`, '#ff9080');
       // Family and friends who see it are devastated.
       const a = this.active.get(sid);
-      if (a && !e.visit) for (const n of a.npcs) {
+      if (a && !e.visit && rec.adventurer === undefined) for (const n of a.npcs) {
         if (n.dead || n === e || n.distTo(e) > 16) continue;
         const r = n.rec;
         const fam = r.partner === rec.idx || r.children.includes(rec.idx) || r.parents.includes(rec.idx) || r.household === rec.household;

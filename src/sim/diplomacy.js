@@ -230,6 +230,10 @@ export class Diplomacy {
       r.arrive = this.sim.abs + this.travelHours(to, from) * 60;
       return r;
     };
+    // A town of a hostile realm won't help (or trade closer, or build a road).
+    const realms = this.sim.realms;
+    const hostile = realms && from.civ && to.civ && from.civ !== to.civ && realms.standing(from.civ, to.civ) === 'hostile';
+    if (hostile && ['aid', 'guards', 'settlers', 'trade', 'road'].includes(q.kind)) return reply('no', {}, `${to.name} refused ${from.name}'s letter: the ${from.civ.name} are no friends of ours.`);
     switch (q.kind) {
       case 'aid': {
         const can = T.econ.treasury > Math.max(150, people.length * 12) && toRel.trust >= -10;
@@ -262,6 +266,8 @@ export class Diplomacy {
       case 'gift':
         T.econ.treasury += q.payload.amount;
         toRel.trust += 15;
+        // (A gift across a border warms the realms a little too.)
+        if (realms && from.civ && to.civ && from.civ !== to.civ) realms.shift(from.civ, to.civ, 3, day);
         ledger(T, day, `${from.name} sent a gift of ¤${q.payload.amount}. Relations are warm.`);
         return null;
       case 'trade':

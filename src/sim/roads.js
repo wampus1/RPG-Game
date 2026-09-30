@@ -7,7 +7,7 @@
 import { ledger } from './econ.js';
 import { M } from '../world/settlement.js';
 import { B } from '../world/blocks.js';
-import { GROUND } from '../config.js';
+import { GROUND, REGION_W, REGION_D } from '../config.js';
 import { hash4 } from '../util/rng.js';
 import { SOFT } from './diplomacy.js';
 
@@ -281,6 +281,7 @@ export class Roads {
     const e = L.econ;
     (e.streets ||= []).push(p.road);
     L.addSuburb(p.bounds);
+    reachWith(L.settlement, p.road);
     let n = 0;
     for (const lot of p.lots || []) {
       if (!this.lotOk(L, lot)) {
@@ -372,6 +373,18 @@ export class Roads {
 
   // Laid out again after a reload: the streets back on the town's map.
   restore(L) {
-    for (const road of L.econ.streets || []) for (const [x, z] of road) L.markRoad(x, z);
+    for (const road of L.econ.streets || []) {
+      for (const [x, z] of road) L.markRoad(x, z);
+      reachWith(L.settlement, road);
+    }
   }
+}
+
+// The squares of the world map a town's streets have reached (its own
+// squares from the start, and any a new street runs into).
+export function reachWith(s, road) {
+  const set = new Set(s.reach || []);
+  const n = set.size;
+  for (const [x, z] of road) set.add(Math.floor(z / REGION_D) * 10000 + Math.floor(x / REGION_W));
+  if (set.size !== n) s.reach = [...set];
 }

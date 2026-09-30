@@ -24,6 +24,8 @@ import { Diplomacy, SOFT } from './diplomacy.js';
 import { Nomads } from './nomads.js';
 import { Camps } from './camps.js';
 import { electMayor, weddings, comingOfAge, aging, raids } from './life.js';
+import { Realms } from './realms.js';
+import { Adventurers } from './adventurers.js';
 import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
@@ -70,6 +72,8 @@ export class Sim {
     this.diplomacy = new Diplomacy(game, this);
     this.nomads = new Nomads(game, this);
     this.camps = new Camps(game, this);
+    this.realms = new Realms(game, this);
+    this.adventurers = new Adventurers(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -182,6 +186,7 @@ export class Sim {
       this.diplomacy.update();
       this.nomads.update();
       this.camps.update(0.5, (c) => this.campers(c));
+      this.adventurers.update();
       this.syncVisitors();
       this.areaCache.clear();
       this.favors.update();
@@ -485,6 +490,10 @@ export class Sim {
   campers(c) {
     const id = c.key.slice(2);
     if (c.key[0] === 'n') return (this.nomads.bands.find((b) => String(b.id) === id) || {}).ents || [];
+    if (c.key[0] === 'a') {
+      const a = this.adventurers.ents.get(Number(id));
+      return a ? [a] : [];
+    }
     const e = this.visitorEnts.get(id);
     return e ? [e] : [];
   }
@@ -527,6 +536,11 @@ export class Sim {
     // A merchant met on the road sells from the pack they're carrying.
     if (npc.caravan && rec.trip && rec.trip.goods) {
       return { store: rec.trip.goods, purse: { get: () => rec.coins, add: (n) => { rec.coins += n; } }, kind: 'general', wants: null };
+    }
+    // An adventurer trades from their pack.
+    if (rec.adventurer !== undefined) {
+      const a = this.adventurers.get(rec.adventurer);
+      return a ? this.adventurers.shop(a) : null;
     }
     if (npc.visit || rec.visitor) {
       const v = npc.visit || rec.visit;
@@ -576,6 +590,13 @@ export class Sim {
     // Laws: outsiders pay the tariff; an open market takes a little off.
     if (lawOn(npc.layout, 'tariff') && !this.isCitizen(s.id)) m *= 1.1;
     if (lawOn(npc.layout, 'openMarket')) m *= 0.95;
+    // A citizen of another realm: its tariff, and how the realms get on.
+    const home = this.citizen ? this.game.world.ow.settlements[this.citizen.sid] : null;
+    if (home && home.civ && s.civ && home.civ !== s.civ) {
+      if (this.realms.tariffOn(s, home)) m *= 1.1;
+      const st = this.realms.standing(s.civ, home.civ);
+      m *= st === 'hostile' ? 1.1 : st === 'friendly' ? 0.97 : 1;
+    }
     const op = this.opinion(npc);
     if (op <= -25) m *= 1.25;
     let d = 1;
@@ -587,6 +608,11 @@ export class Sim {
     if (this.isCitizen(s.id)) {
       d *= 0.92;
       reasons.push('citizen');
+    }
+    // One traveller to another (you're no one's citizen): a better deal.
+    if (rec.adventurer !== undefined && !this.citizen) {
+      d *= 0.9;
+      reasons.push('fellow traveller');
     }
     const staff = this.careers.discount(npc);
     if (staff < 1) {
@@ -620,6 +646,11 @@ export class Sim {
   // ------------------------------------------------------------ deaths
   recordDeath(L, rec, cause, killer, when = null) {
     if (!alive(rec)) return null;
+    // A merchant of another realm killed here by one of the realm's own
+    // citizens (you, if you are one): their realm takes it badly.
+    const v0 = rec.visit;
+    const mine = this.citizen && this.game.world.ow.settlements[this.citizen.sid]?.civ === L.settlement.civ;
+    if (v0 && v0.from !== undefined && killer === 'player' && mine) this.realms.merchantHarmed(L.settlement, this.game.world.ow.settlements[v0.from], 'killed', when ?? this.game.day);
     if (rec.visitor) {
       rec.alive = false;
       for (const [sid, list] of this.visits) this.visits.set(sid, list.filter((v) => v !== rec.visit));
@@ -877,6 +908,7 @@ export class Sim {
     weddings(this, L, day, rng);
     comingOfAge(this, L, day);
     raids(this, L, day, rng);
+    this.realms.daily(L, day, rng);
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
@@ -1475,6 +1507,12 @@ export class Sim {
       .map((o) => ({ o, d: Math.hypot(o.cx - s.cx, o.cz - s.cz) }))
       .filter((q) => q.d < 16);
     if (!dests.length) return;
+    // Nobody takes their wares into a hostile realm; a friendly one is
+    // worth the longer road.
+    const feel = (o) => (s.civ && o.civ && s.civ !== o.civ ? this.realms.standing(s.civ, o.civ) : null);
+    const open = dests.filter((q) => feel(q.o) !== 'hostile');
+    if (open.length) dests.splice(0, dests.length, ...open);
+    for (const q of dests) q.d -= feel(q.o) === 'friendly' ? 3 : 0;
     dests.sort((a, b) => a.d - b.d);
     // Letters from the mayor decide where the merchant goes first.
     const pick = this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
@@ -1577,7 +1615,7 @@ export class Sim {
     if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07)) {
       const ow = this.game.world.ow;
       const s = L.settlement;
-      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18) || []);
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18 && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile')) || []);
       if (!from) return;
       const goods = {};
       const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
@@ -1595,6 +1633,10 @@ export class Sim {
   visitTrade(L, v, rng) {
     v.traded = true;
     const e = L.econ;
+    const from = this.game.world.ow.settlements[v.from];
+    // A realm that charges this merchant's realm a tariff takes its cut.
+    const tariff = from && this.realms.tariffOn(L.settlement, from) ? 0.15 : 0;
+    const before = v.earned;
     const k = kitchenOf(L);
     const shop = L.buildings.find((b) => b.type === 'shop');
     const sb = shop ? e.biz[shop.id] : null;
@@ -1609,11 +1651,17 @@ export class Sim {
         const pr = Math.round(price(item) * (T.profit - 0.05));
         if (buyer.till < pr + 5) break;
         buyer.till -= pr;
-        v.earned += pr;
-        v.coins += pr;
+        const cut = Math.round(pr * tariff);
+        e.treasury += cut;
+        v.earned += pr - cut;
+        v.coins += pr - cut;
         st.take(v.goods, item, 1);
         st.add(buyer.store, item, 1);
       }
+    }
+    if (from) {
+      this.realms.noteTrade(from, L.settlement, v.earned - before);
+      this.realms.welcome(L, from, Math.floor((v.arrive || this.abs) / DAY), rng);
     }
   }
 
@@ -1660,6 +1708,26 @@ export class Sim {
         out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, target: centre(to) });
       }
     }
+    // Adventurers on their way from one town to the next.
+    for (const a of this.adventurers.list) {
+      if (a.dead || a.state !== 'road' || a.from === null || a.from === undefined || a.departAt === undefined || now < a.departAt || now >= a.arrive) continue;
+      const from = ow.settlements[a.from];
+      const to = ow.settlements[a.dest];
+      const L = to && this.game.world.layouts.get(to.id);
+      if (!from || !to || !L || !L.econ) continue;
+      const f = (now - a.departAt) / Math.max(1, a.arrive - a.departAt);
+      const road = this.diplomacy.roads.find((r) => r.done && ((r.a === from.id && r.b === to.id) || (r.a === to.id && r.b === from.id)));
+      let pos;
+      if (road && road.tiles && road.tiles.length) {
+        const tile = road.tiles[Math.max(0, Math.min(road.tiles.length - 1, Math.floor((road.a === from.id ? f : 1 - f) * (road.tiles.length - 1))))];
+        pos = { x: tile[0], z: tile[2] };
+      } else {
+        const p0 = centre(from);
+        const p1 = centre(to);
+        pos = { x: Math.round(p0.x + (p1.x - p0.x) * f), z: Math.round(p0.z + (p1.z - p0.z) * f) };
+      }
+      out.push({ key: `adv:${a.id}:${a.departAt}`, rec: this.adventurers.roadRec(a, L), L, from, to, pos, target: centre(to), adv: a });
+    }
     return out;
   }
 
@@ -1704,11 +1772,13 @@ export class Sim {
       diplomacy: this.diplomacy.serialize(),
       nomads: this.nomads.serialize(),
       camps: this.camps.serialize(),
+      realms: this.realms.serialize(),
+      adventurers: this.adventurers.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
       // How towns have grown: their size now, and ground they've spread onto.
-      grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null]),
+      grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
       press: this.press.serialize(),
     };
@@ -1720,7 +1790,10 @@ export class Sim {
       lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, readEdition: r.readEdition, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
+      born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor,
       ...(r.grown ? { hobbies: r.hobbies } : {}),
+      // Grown old (grey, stooped, slower), whether or not they retired.
+      ...(r.aged || r.ruler !== undefined ? { look: r.look, maxHp: r.maxHp, schedule: r.schedule } : {}),
       // Someone who changed trade keeps their new one.
       ...(r.retrained ? { retrained: true, job: r.job, work: r.work, equipment: r.equipment, look: r.look, maxHp: r.maxHp, schedule: r.schedule, shift: r.shift } : {}),
     });
@@ -1768,10 +1841,12 @@ export class Sim {
     this.diplomacy.load(data.diplomacy);
     this.nomads.load(data.nomads);
     this.camps.load(data.camps);
+    this.realms.load(data.realms);
+    this.adventurers.load(data.adventurers);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;
-    for (const [id, type, base, suburbs] of data.grown || []) {
+    for (const [id, type, base, suburbs, reach] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];
       if (!s) continue;
       if (type !== base) {
@@ -1779,6 +1854,7 @@ export class Sim {
         s.type = type;
       }
       if (suburbs) s.suburbs = suburbs;
+      if (reach) s.reach = reach;
     }
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);

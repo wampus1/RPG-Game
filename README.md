@@ -223,6 +223,95 @@ years, and the dead are buried and mourned as usual. All of this happens in
 every town, including ones you've never visited, and the towns keep their
 numbers up with weddings, babies and newcomers.
 
+**Realms.** Each civilization is ruled from its capital, its largest city,
+by a ruler who lives there like anyone else. What they're called depends on
+the realm: a monarch (a jarl, a thane, a sultan, an emir, a caliph, a satrap,
+a protector...), a council of three under its speaker, or a high elder.
+Rulers grow old and die like everyone else. A monarch is succeeded by their
+eldest grown child, or by a noble of the court. A council fills its empty
+seat, and a high elder's place goes to the eldest in the capital. The news
+goes up on every notice board in the realm. If another city clearly
+outgrows the capital, the court moves there.
+
+The ruler reviews the realm once a week and may issue a decree every town
+must keep on top of its own laws:
+
+- a least tax, when the realm is short;
+- a weapons ban, when there's trouble across the realm (always, in a martial
+  realm);
+- a tariff on a hostile realm's merchants, who then pay a cut of their sales
+  to the town.
+
+Every town sends a share of its morning taxes to the capital (less under a
+kind ruler, more under a hard one). Every other day the capital spends some
+of it on a poorer town of the realm. It sends coin for a watch that can't be
+paid, or a guard from its own watch where there's none. It can also pay for a
+road to the capital, a wall for a town that beasts keep raiding, or coin for
+an empty treasury. The notice board shows the realm, its ruler, the decrees,
+the tribute and any help received. You can also ask people about the realm
+and its ruler.
+
+**Relations between realms.** Two realms are friendly, wary or hostile.
+Several things move them:
+
+- trade between their merchants warms them;
+- towns of both reaching for the same land cools them (a border dispute goes
+  up on both notice boards);
+- merchants jeered and short-changed in the other realm's markets cool them;
+- a merchant killed by one of the other realm's citizens cools them a lot;
+- tariffs rankle;
+- gifts between towns across the border warm them.
+
+Relations drift back toward where they started (realms that value the same
+things start on better terms).
+
+Hostility has consequences. Merchants won't take their wares into a hostile
+realm, towns refuse its letters, the ruler brings in a tariff, and a citizen
+of a hostile realm pays more at the market.
+
+**Adventurers** travel from realm to realm, a handful of them in the world at
+any time. In each place they stop they pitch a tent and light a fire just
+outside town for a day or two. They sell what the road gave them (hides,
+bone, ore, a gem now and then) to the shops, subject to the same stock
+limits, and buy meals, salves, arrows and better armour from the smithy.
+Each day they leave their mark on the town:
+
+- tales at the tavern;
+- a bout with the watch;
+- beasts hunted down (for a bounty, if the treasury can pay);
+- bread for the hungry;
+- driving off a night raid.
+
+In a town you're in you'll see them at the market, walking the streets,
+sparring with the guards or holding forth at the tavern. You can also meet
+them on the road between towns.
+
+Adventurers are far better armed than townsfolk. They carry decent iron, and
+the renowned ones wear jewelled armour and carry a jewelled blade and bow.
+They are hard to beat in a fight:
+
+- they slip blows and roll clear;
+- they turn arrows aside with a blade;
+- they keep their distance with a bow;
+- they drink a salve when it's going badly;
+- they call up their stones in earnest: a ring of fire, a burst of frost, a
+  second wind, a thunderclap or a shockwave.
+
+Attack one and lose, and they'll let you live, but take a quarter of your
+purse. Kill one and their gear is yours, though in town it's murder like any
+other.
+
+How they treat you depends on who you are:
+
+- **You're a citizen somewhere:** you're a local to them. They ask about the
+  place, and for ¤30 they'll stay an extra night and stand watch over your
+  town.
+- **You belong nowhere:** they treat you as one of their own. You can swap
+  stories (a place they've been goes on your map), ask for somewhere worth a
+  look (a town beasts are troubling), challenge them to a friendly bout for a
+  wager, and get a traveller's discount when you trade. A bout is no crime:
+  it ends when one of you is down to a quarter of your strength.
+
 Mayors write to each other by the hands of traveling merchants (or a courier,
 or you, for a fee): asking for money when the treasury runs low, for guards or
 settlers, sending gifts to cool neighbours, proposing closer trade (more
@@ -665,6 +754,8 @@ a parent at work, helping out.
 
 **Towns on the map** grow their icons as they grow: one cell for a village,
 two for a town, a block of four for a city, with a double outline once walled.
+A town that has grown only spreads into a neighbouring square of the map once
+one of its streets actually runs into it.
 
 **Weddings and feast days.** A wedding, a feast day or the celebration of a
 town growing is announced two days ahead on the notice board. The day before,
@@ -749,8 +840,10 @@ src/
                        placed where the builders stand), roads (new streets,
                        lots, and what waits for a lot), shops (shopping,
                        stalls, merchant standing),
-                       diplomacy (letters, roads, warnings), nomads, camps
-                       (tents for nomads and visiting merchants), town
+                       diplomacy (letters, roads, warnings), realms
+                       (capitals, rulers, decrees, tribute, aid, relations
+                       between realms), adventurers, nomads, camps
+                       (tents for nomads, merchants and adventurers), town
                        life (elections, weddings, growing up and growing
                        old, raids),
                        events (posters, stages, guests for weddings and

@@ -47,7 +47,14 @@ export const LAWS = {
 export const LAW_IDS = Object.keys(LAWS);
 
 export function lawOn(L, id) {
-  return !!(L && L.econ && L.econ.laws && L.econ.laws[id]);
+  return !!(L && L.econ && L.econ.laws && L.econ.laws[id]) || byDecree(L, id);
+}
+
+// A law the realm's ruler has decreed for every town (whatever the town
+// itself decides).
+export function byDecree(L, id) {
+  const d = L && L.settlement && L.settlement.civ && L.settlement.civ.decrees;
+  return !!(d && id === 'armsBan' && d.armsBan);
 }
 
 // One person's view of a law: -1 (dead against) to 1 (all for it).

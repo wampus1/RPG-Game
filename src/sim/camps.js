@@ -67,8 +67,8 @@ export class Camps {
     return null;
   }
 
-  // Set up camp: `tents` tents in a row facing town, and a fire (nomads) or
-  // a crate and a barrel of stock (a merchant).
+  // Set up camp: `tents` tents in a row facing town, and a fire (nomads,
+  // adventurers) or a crate and a barrel of stock (a merchant).
   pitch(L, key, kind, tents, until, salt = 0) {
     if (this.get(key)) return this.get(key);
     const ents = L.entrances && L.entrances.length ? L.entrances : [{ x: L.plaza.cx, z: L.plaza.cz }];

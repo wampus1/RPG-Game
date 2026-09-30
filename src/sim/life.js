@@ -148,6 +148,13 @@ export function raids(sim, L, day, rng) {
   if (!people.length) return null;
   const guards = people.filter((r) => r.job === 'guard' && r.age === 'adult');
   const e = L.econ;
+  // An adventurer in town (one paid to stand watch, for certain) sees them off.
+  const advs = sim.adventurers ? sim.adventurers.here(s.id) : [];
+  const hero = advs.find((a) => a.guard === s.id) || (advs.length && rng.chance(0.5) ? advs[0] : null);
+  if (hero) {
+    ledger(L, day, `${beast[0].toUpperCase()}${beast.slice(1)} came to the edge of town in the night; ${hero.name.first} ${hero.name.last}, an adventurer staying in town, drove ${beast.startsWith('a ') ? 'it' : 'them'} off.`);
+    return { driven: true, by: hero };
+  }
   if (guards.length && (guards.length >= 2 || rng.chance(0.6))) {
     const g = rng.pick(guards);
     if (rng.chance(0.3)) g.hp = Math.max(4, (g.hp ?? 24) - rng.int(4, 10));

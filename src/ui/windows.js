@@ -14,7 +14,7 @@ import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
-import { LAWS, lawList } from '../sim/laws.js';
+import { LAWS, lawList, byDecree } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete, teleportTo } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
@@ -585,6 +585,11 @@ export class TradeWindow extends Window {
     const sh = this.shop(game);
     if (!sh || k === 'coin' || ITEMS[k].noSell) return false;
     const w = WANTS[sh.kind];
+    // An adventurer will look at any weapon, armour or food you have.
+    if (sh.kind === 'adventurer') {
+      const it = ITEMS[k];
+      if (it && (it.socket || it.kind === 'weapon' || it.kind === 'armor' || it.kind === 'food')) return true;
+    }
     return w === null || w === undefined ? true : w.includes(k);
   }
   draw(g, game) {
@@ -974,11 +979,32 @@ export class LedgerWindow extends Window {
     row('Taxes', `${Math.round(e.tax * 100)}% of earnings${e.taxY ? ` (¤${e.taxY} collected)` : ''}`);
     row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');
     const laws = lawList(L);
-    row('Laws', laws.length ? laws.map((id) => LAWS[id].name).join(', ') : 'No special laws');
+    row('Laws', laws.length ? laws.map((id) => LAWS[id].name + (byDecree(L, id) && !L.econ.laws[id] ? ' (realm)' : '')).join(', ') : 'No special laws');
+    // The realm: who rules it and from where, what they've decreed, what
+    // this town sends the capital (or gets from it), and the neighbours.
+    const civ = s.civ;
+    const R = civ ? game.sim.realms.realm(civ) : null;
+    if (R) {
+      const capS = game.world.ow.settlements[R.capital];
+      const rn = game.sim.realms.rulerName(civ);
+      row('Realm', R.capital === s.id ? `Capital: ${rn || 'no ruler yet'}` : `${rn || 'Ruled'} from ${capS ? capS.name : '?'}`);
+      const d = R.decrees;
+      const dec = [d.taxFloor ? `tax at least ${Math.round(d.taxFloor * 100)}%` : null, d.armsBan ? 'no weapons' : null,
+        ...d.tariffOn.map((id) => `tariff on the ${game.world.ow.civs[id]?.name.replace(/^The /, '') || '?'}`)].filter(Boolean);
+      row('Decrees', dec.length ? dec.join(', ') : 'none');
+      const aid = (e.royalAid || []).slice(-1)[0];
+      if (R.capital !== s.id) row('Tribute', `${Math.round(R.share * 100)}% of taxes to the capital${e.tributeY ? ` (¤${e.tributeY})` : ''}${aid ? `; help: ${aid.kind === 'guard' ? 'a guard' : aid.kind === 'road' ? 'a road' : aid.kind === 'wall' ? 'a wall' : '¤' + aid.amount}` : ''}`);
+      else row('Tribute', `¤${R.tribute} received from the realm`);
+      game.world.ow.civs.filter((o) => o !== civ).forEach((o, i) => {
+        const st = game.sim.realms.standing(civ, o);
+        row(i ? '' : 'Relations', `${st}: ${o.name.replace(/^The /, '')}`, st === 'hostile' ? C.orange : st === 'friendly' ? C.green : '#f0e0c0');
+      });
+    }
     const hungry = living.filter((r) => r.hungry >= 1).length;
     row('Food', hungry ? `${hungry} going hungry` : 'Everyone is fed', hungry ? C.orange : C.green);
     const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
-    if (visits.length) row('Visitors', `Merchant from ${visits[0].fromName}`);
+    const advs = game.sim.adventurers.here(s.id);
+    if (visits.length || advs.length) row('Visitors', [visits.length ? `Merchant from ${visits[0].fromName}` : null, advs.length ? `${advs.length === 1 ? `${advs[0].name.first} ${advs[0].name.last}, adventurer` : `${advs.length} adventurers`}` : null].filter(Boolean).join('; '));
     const k = stockOf(L);
     row('Stores', `${k.wood} timber, ${k.stone} stone${e.short ? ` (short for a ${BUILDING_NAMES[e.short]?.toLowerCase() || e.short})` : ''}`, e.short ? C.orange : '#f0e0c0');
     const t = TIERS[s.type];
@@ -1142,20 +1168,29 @@ export class MapWindow extends Window {
 
 // Where each place shows on the map, and how: a village is one square, a
 // town two, a city a block of four (with a double line once it has walls).
-// A place that has grown spreads into the squares next to it.
+// A place that has grown spreads into the squares next to it, but only once
+// its streets have actually reached them.
 const ICON_SIZE = { village: [1, 1], town: [2, 1], city: [2, 2] };
-function settlementIcons(game) {
+export function reachedCells(s) {
+  const out = new Set();
+  for (let cz = s.cz; cz < s.cz + (s.cd || 1); cz++) for (let cx = s.cx; cx < s.cx + (s.cw || 1); cx++) out.add(cz * 10000 + cx);
+  for (const k of s.reach || []) out.add(k);
+  return out;
+}
+export function settlementIcons(game) {
   const ow = game.world.ow;
   const out = new Map();
+  let reach = null;
   const taken = (cx, cz, s) => {
     const c = ow.cell(cx, cz);
-    if (!c) return true;
+    if (!c || !reach.has(cz * 10000 + cx)) return true;
     const o = out.get(cz * 10000 + cx);
     return (c.settlement !== null && c.settlement !== s.id) || (o && o.s !== s) || c.biome === 'ocean';
   };
   const list = [...ow.settlements].sort((a, b) => (ICON_SIZE[b.type] || [1, 1])[0] * (ICON_SIZE[b.type] || [1, 1])[1] - (ICON_SIZE[a.type] || [1, 1])[0] * (ICON_SIZE[a.type] || [1, 1])[1]);
   for (const s of list) {
     const [w, h] = ICON_SIZE[s.type] || [1, 1];
+    reach = reachedCells(s);
     // Start from the squares it was founded on, then grow sideways and down
     // (or up and left if there's no room).
     let x0 = s.cx;

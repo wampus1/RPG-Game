@@ -1941,6 +1941,26 @@ class Layout {
     return sg;
   }
 
+  // Where the notice board goes: on the square, by a corner if one's free,
+  // otherwise the nearest open spot to one, along the edge.
+  boardSpot(ok) {
+    const p = this.plaza;
+    if (!p) return null;
+    const corners = [[p.x0, p.z0], [p.x1, p.z0], [p.x0, p.z1], [p.x1, p.z1]];
+    let best = null;
+    for (let z = p.z0; z <= p.z1; z++) {
+      for (let x = p.x0; x <= p.x1; x++) {
+        if (!ok(x, z)) continue;
+        // Not in the way of a street coming into the square.
+        if (DIRS4.some(([ax, az]) => this.maskAt(x + ax, z + az) === M.ROAD)) continue;
+        const edge = Math.min(x - p.x0, p.x1 - x, z - p.z0, p.z1 - z);
+        const d = Math.min(...corners.map(([cx, cz]) => Math.abs(cx - x) + Math.abs(cz - z))) + edge * 4;
+        if (!best || d < best.d) best = { x, z, d };
+      }
+    }
+    return best;
+  }
+
   signSpot(pt, ok = () => true) {
     let best = null;
     for (let r = 1; r <= 3 && !best; r++) {
@@ -2283,9 +2303,9 @@ class Layout {
         n++;
       }
     }
-    // Notice board.
-    const nb = { x: p.x0, z: p.z0 };
-    if (this.maskAt(nb.x, nb.z) === M.PLAZA) {
+    // Notice board: a corner of the square, or the nearest free spot to one.
+    const nb = this.boardSpot((x, z) => this.maskAt(x, z) === M.PLAZA && !this.at(x, Y0, z));
+    if (nb) {
       this.put(nb.x, Y0, nb.z, B.notice_board);
       this.setMask(nb.x, nb.z, M.DECOR);
       this.signs.push({ x: nb.x, y: Y0, z: nb.z, kind: 'board' });

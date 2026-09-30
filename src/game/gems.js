@@ -107,14 +107,14 @@ export function stun(e, secs = 1) {
   e.stunT = Math.max(e.stunT || 0, secs);
 }
 
-function mend(game, e, n = 1) {
+export function mend(game, e, n = 1) {
   if (!e || e.dead || e.hp >= e.maxHp) return;
   e.hp = Math.min(e.maxHp, e.hp + n);
   if (e.rec) e.rec.hp = e.hp;
   game.renderer.emit(e.x, e.y + 1, e.z, { n: 3, color: LIFE, up: 20, life: 0.5, gravity: -10 });
 }
 
-function knockBack(game, attacker, t, tiles = 1) {
+export function knockBack(game, attacker, t, tiles = 1) {
   const kx = Math.sign(t.x - attacker.x);
   const kz = Math.sign(t.z - attacker.z);
   if (t.moving || t.dead || t.sleeping || (!kx && !kz)) return;

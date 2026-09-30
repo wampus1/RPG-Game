@@ -920,7 +920,7 @@ export class Justice {
     } else this.trespass = null;
     const held = p.heldDef();
     // Guards of the town may carry arms where others may not.
-    if (L.econ.laws.armsBan && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id)) {
+    if (lawOn(L, 'armsBan') && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id)) {
       const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 5);
       if (guard) {
         if (!this.brandish) {
