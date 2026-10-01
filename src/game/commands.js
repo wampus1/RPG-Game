@@ -3,6 +3,7 @@
 import { ITEMS } from '../world/items.js';
 import { GROUND, REGION_W, REGION_D, WORLD_TILES_W, WORLD_TILES_D, DAY_MINUTES } from '../config.js';
 import { alive, DAY } from '../sim/econ.js';
+import { RNG, hash4 } from '../util/rng.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -20,7 +21,19 @@ export const COMMANDS = {
   give: { args: '<item> [count]', about: 'Put something in your pack (by its key or name).' },
   coins: { args: '<count>', about: 'Add coins to your purse.' },
   heal: { args: '', about: 'Restore your health.' },
+  god: { args: '[on|off]', about: 'Nothing can hurt you while it\'s on.' },
+  skip: { args: '<days>', about: 'Fast-forward the world so many days (up to 120): towns, realms and wars all carry on.' },
+  war: { args: '[realm] [on <realm>] | list | peace', about: 'Start a war: the first realm (yours, or the one you\'re in) declares war on the second. "list" names the realms; "peace" ends the wars of the realm you\'re in.' },
 };
+
+// A realm by name (or part of it).
+function civArg(game, q) {
+  q = String(q || '').trim().toLowerCase().replace(/^the /, '');
+  if (!q) return null;
+  const civs = game.world.ow.civs.filter((c) => game.sim.realms.members(c).length);
+  const nm = (c) => c.name.toLowerCase().replace(/^the /, '');
+  return civs.find((c) => nm(c) === q) || civs.find((c) => nm(c).startsWith(q)) || civs.find((c) => nm(c).includes(q)) || null;
+}
 
 const hod = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
 
@@ -212,6 +225,53 @@ export function runCommand(game, text) {
     case 'heal':
       p.hp = p.maxHp;
       return ['You feel fully restored.'];
+    case 'god': {
+      const on = words[0] ? !/^(off|no|0|false)$/i.test(words[0]) : !game.cheats.god;
+      game.cheats.god = on;
+      if (on) p.hp = p.maxHp;
+      return [on ? 'God mode on: nothing can hurt you.' : 'God mode off.'];
+    }
+    case 'skip':
+    case 'ff': {
+      const n = Math.round(Number(words[0]));
+      if (!(n >= 1 && n <= 120)) return ['skip <days> (1 to 120)'];
+      if (!game.skipDays(n)) return ['You can\'t do that just now (asleep, in a cell or a fight).'];
+      return [`Fast-forwarding ${n} day${n === 1 ? '' : 's'}...`];
+    }
+    case 'war': {
+      const W = sim.war;
+      const civs = ow.civs.filter((c) => sim.realms.members(c).length);
+      if (!words.length || words[0] === 'list') {
+        return ['Realms:', ...civs.map((c) => `${c.name.replace(/^The /, '')}${W.atWar(c) ? ' (at war)' : ''}`), 'war <realm> on <realm>, or war <realm> to set your own (or this town\'s) realm on it.'];
+      }
+      const here = (game.currentSettlement || ow.settlementAt(p.x, p.z))?.civ || W.playerCiv();
+      if (words[0] === 'peace') {
+        const civ = words[1] ? civArg(game, words.slice(1).join(' ')) : here;
+        const w = civ && W.warOf(civ);
+        if (!w) return [civ ? `The ${civ.name.replace(/^The /, '')} are at peace.` : 'Which realm? (war peace <realm>)'];
+        W.peace(w, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)), null, false);
+        return ['Peace is made.'];
+      }
+      const text = words.join(' ');
+      const m = /^(.*?)\s+(?:on|vs|against|with)\s+(.*)$/i.exec(text);
+      const a = m ? civArg(game, m[1]) : here;
+      const b = civArg(game, m ? m[2] : text);
+      if (!a) return ['You\'re not in a realm: name both ("war <realm> on <realm>").'];
+      if (!b) return [`No realm called "${m ? m[2] : text}". Try "war list".`];
+      if (a === b) return ['A realm can\'t go to war with itself (try a rebellion).'];
+      if (W.enemies(a, b)) return ['They\'re already at war.'];
+      if (W.atWar(a) || W.atWar(b)) {
+        // (Someone's already at war: they make peace there first.)
+        for (const c of [a, b]) {
+          const w0 = W.warOf(c);
+          if (w0) W.peace(w0, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)), null, false);
+        }
+      }
+      if (sim.politics.allied(a, b)) sim.politics.breakAlliance(a, b, game.day, 'war is coming', -30);
+      sim.realms.shift(a, b, -100, game.day);
+      W.declare(a, b, { k: 'whim', text: 'an old grudge' }, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)));
+      return [`The ${a.name.replace(/^The /, '')} declare war on the ${b.name.replace(/^The /, '')}.`];
+    }
     default:
       return [`Unknown command "${cmd}". Type "help".`];
   }

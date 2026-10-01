@@ -16,12 +16,13 @@ import { TECHS, TECH_IDS } from '../sim/tech.js';
 import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
-import { hash4 } from '../util/rng.js';
+import { hash4, RNG } from '../util/rng.js';
 import { authority, rulerTitle } from '../sim/realms.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { rainedRecently } from '../world/weather.js';
-import { festivalName, customsTalk } from '../sim/culture.js';
+import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
+import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
 
 function pick(rng, arr) {
@@ -328,6 +329,7 @@ export function topicsFor(npc, game) {
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
   add('ask', 'Can I ask you about...');
+  add('chat', rec.age === 'child' ? 'What are you up to?' : 'How are things?');
   if (!mine && !npc.hired && !npc.visit) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
   const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
   add('kind', (rec.idx + game.day) % 2 ? '(Compliment them)' : '(Ask how they\'re doing)');
@@ -795,7 +797,13 @@ function workTalk(npc, game) {
     lines.push(`I sell my ${what} to the tavern kitchen and the traders.${hours}`);
     lines.push((rec.earnedY || 0) > 20 ? 'It\'s been a good season, thank the stars.' : 'Pays little, but it\'s honest.');
     if (!car.licensed(rec.job, s.id)) lines.push(`Fancy the ${rec.job}'s life? The mayor hands out licences.`);
-  } else if (rec.job === 'priest') lines.push(`The temple is open to all.${hours}`, 'A blessing costs a small donation.');
+  } else if (rec.job === 'priest') {
+    // Each faith its own: what its clergy are called, what it prizes, how
+    // it sees off the dead, and its sacred beast.
+    const f = religionOf(s);
+    if (f) lines.push(`I'm the ${f.clergy} here. ${f.faith[0].toUpperCase()}${f.faith.slice(1)} prizes ${f.virtue} above all else.${hours}`, `Our dead are given ${f.rite}, and ${f.beast} is sacred to ${f.god}. A blessing costs a small donation.`);
+    else lines.push(`The temple is open to all.${hours}`, 'A blessing costs a small donation.');
+  }
   else if (rec.job === 'beggar') lines.push('Work? Nobody will have me. Spare a coin?');
   else {
     lines.push(`${p.diligence > 0.65 ? 'I love my work.' : p.diligence < 0.3 ? 'Work is work. I\'d rather be doing anything else.' : 'It pays the bills.'}${hours}`);
@@ -1403,6 +1411,14 @@ function respondRaw(npc, game, id, arg) {
     }
     case 'history': return { lines: rec.age === 'child' ? [`Gran says ${game.sim.history.legend(npc.layout)}`, 'Spooky, right?'] : game.sim.history.talk(npc.layout, rng), back: 'Fascinating.' };
     case 'life': return { lines: rec.age === 'child' ? kidLife(npc, game) : lifeIn(npc, game) };
+    case 'chat': {
+      // Whatever's on their mind, in their own way of putting it.
+      const r2 = new RNG(hash4(rec.idx, Math.floor(game.sim.abs / 7), (npc.chatN = (npc.chatN || 0) + 1)));
+      const ctx = talkContext(game, npc.visit ? game.world.ow.settlements[npc.visit.from] || s : s);
+      const lines = [smallTalk(rec, r2, ctx)];
+      if (r2.chance(0.55)) lines.push(smallTalk(rec, r2, ctx));
+      return { lines, choices: [{ id: 'chat', label: 'Go on.' }], back: 'Well, take care.' };
+    }
     case 'family': {
       const lines = family(npc, game);
       const g = griefOf(rec);
@@ -2044,3 +2060,20 @@ export function conversation(npc, game) {
 }
 
 export { BUILDING_NAMES, DAY };
+
+// What a place gives someone to talk about (for small talk: see markov.js).
+export function talkContext(game, s) {
+  const r = s ? religionOf(s) : null;
+  const c = s ? cuisineOf(s) : null;
+  const w = game.weatherIn ? game.weatherIn(s) : 'clear';
+  return {
+    culture: (s && (s.civ ? s.civ.style : s.style)) || 'vale',
+    town: s ? s.name : 'this town',
+    god: r ? r.god : 'the gods',
+    feast: s ? festivalName(s) : 'the feast',
+    dish: c ? c.word.split(' and ')[0] : 'stew',
+    drink: c ? c.drink : 'ale',
+    realm: s && s.civ ? `the ${s.civ.name.replace(/^The /, '')}` : 'the council',
+    weather: { rain: 'rain', snow: 'snow', fog: 'fog', storm: 'storm' }[w] || 'fine weather',
+  };
+}

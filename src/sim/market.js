@@ -166,7 +166,56 @@ export class Market {
         if (Math.abs(m[k]) < 0.03) delete m[k];
       }
       this.steady(L, day);
+      this.adapt(L, day, rng, towns);
     }
+  }
+
+  // What's short changes what's made. Farmers sow more of the crop that's
+  // dear (or, in a famine, whatever fills a belly soonest); a smith whose
+  // iron has got dear sends out for it to wherever it's cheap, or turns to
+  // mending and stone tools till it comes, and with iron cheap turns to
+  // arms and armour, which sell for more.
+  adapt(L, day, rng, towns) {
+    const e = L.econ;
+    const s = L.settlement;
+    const crops = e.crops || [];
+    const hungry = L.npcs.filter((r) => alive(r) && !r.away && (r.hungry || 0) >= 1).length / Math.max(1, L.npcs.filter((r) => alive(r) && !r.away).length);
+    if (crops.length > 1) {
+      const worst = crops.map((k) => ({ k, v: this.level(L, k) })).sort((a, b) => a.v - b.v)[0];
+      const famine = hungry > 0.2;
+      const want = worst.v < -0.35 ? worst.k : famine ? (crops.includes('wheat') ? 'wheat' : crops[0]) : null;
+      if (want && e.cropFocus !== want) {
+        e.cropFocus = want;
+        e.cropFocusDay = day;
+        const what = { wheat: 'wheat', carrot: 'carrots', cabbage: 'cabbages' }[want] || want;
+        ledger(L, day, famine && worst.v >= -0.35
+          ? `With so many going hungry, the farmers of ${s.name} are turning every spare row over to ${what}.`
+          : `The farmers of ${s.name} are sowing ${what}: there aren't enough to go round, and they fetch a good price.`);
+      } else if (!want && e.cropFocus && day - (e.cropFocusDay || 0) > 6) e.cropFocus = null;
+    }
+    const smithy = L.buildings.find((b) => b.type === 'smithy' && e.biz && e.biz[b.id] && !b.cold);
+    const biz = smithy && e.biz[smithy.id];
+    if (!biz || !L.npcs.some((r) => alive(r) && r.job === 'blacksmith')) return;
+    const ore = (biz.store && biz.store.iron_ore) || 0;
+    // (Out of ore three days running counts as short, too.)
+    e.noOre = ore > 0 ? 0 : (e.noOre || 0) + 1;
+    const dear = this.level(L, 'iron_ore') < -0.3 || e.noOre >= 3;
+    const was = e.smithMode || null;
+    if (dear) {
+      // Wherever it's cheapest, within a few days' cart.
+      const O = towns.filter((q) => q !== L && Math.hypot(q.settlement.cx - s.cx, q.settlement.cz - s.cz) <= 10).sort((a, b) => this.level(b, 'iron_ore') - this.level(a, 'iron_ore'))[0];
+      const smith = L.npcs.find((r) => alive(r) && r.job === 'blacksmith');
+      if (O && (biz.till || 0) >= 24 && rng.chance(0.5)) {
+        biz.till -= 24;
+        biz.store.iron_ore = ore + 4;
+        this.of(O).iron_ore = clamp((this.of(O).iron_ore || 0) - 0.2, -1.5, 1.5);
+        this.of(L).iron_ore = clamp((this.of(L).iron_ore || 0) + 0.25, -1.5, 1.5);
+        ledger(L, day, `${smith.name.first} ${smith.name.last} has sent to ${O.settlement.name} for iron: it's cheaper there than here.`);
+        e.smithMode = null;
+      } else e.smithMode = 'mend';
+    } else e.smithMode = this.level(L, 'iron_ore') > 0.35 ? 'arms' : null;
+    if (e.smithMode !== was && e.smithMode === 'mend') ledger(L, day, `The forge in ${s.name} is short of iron: the smith is mending pots and making stone tools to get by.`);
+    if (e.smithMode !== was && e.smithMode === 'arms') ledger(L, day, `Iron's cheap in ${s.name}: the smith is turning out swords and mail.`);
   }
 
   // Weeks of something coming in: the town builds to use it.
@@ -186,6 +235,7 @@ export class Market {
       const queued = () => (e.buildQueue || []).some((o) => o.kind === 'build' && o.type === b.type);
       const building = works.projects.some((p) => !p.done && p.sid === s.id && p.type === b.type) || queued();
       if (building || have >= (CAP[s.type] || 1) || e.treasury < 140) continue;
+      if (this.sim.tech && !this.sim.tech.allows(s, 'building', b.type)) continue;
       // (With no lot free yet, it waits for the next street to be laid.)
       const p = works.startBuilding(L, b.type, `, for all the ${b.word} coming in`, false, 90);
       if (!p && !queued()) continue;

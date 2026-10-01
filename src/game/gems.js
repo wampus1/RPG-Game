@@ -317,9 +317,10 @@ export function tickStatus(game, e, dt) {
     }
   }
   if (e.kind === 'player' || e.kind === 'npc') {
-    e.regenT = (e.regenT || 0) - dt;
-    if (e.regenT <= 0) {
-      e.regenT = 10;
+    // (Its own clock: the player's natural regeneration keeps another.)
+    e.gemMendT = (e.gemMendT || 0) - dt;
+    if (e.gemMendT <= 0) {
+      e.gemMendT = 10;
       if (gemsOf(e).armor.includes('emerald')) mend(game, e, 1);
     }
   }

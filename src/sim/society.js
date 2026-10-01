@@ -58,7 +58,42 @@ export class Society {
     this.careers(L, day, rng);
     this.hearts(L, day, rng);
     this.moves(L, day, rng);
+    this.fortunes(L, day, rng);
     L.econ.socSeen = true;
+  }
+
+  // Those who went off to seek their fortune: what became of them, once
+  // it's had time to (the merchants are seen to on the roads; see sim.js).
+  fortunes(L, day, rng) {
+    for (const r of L.npcs) {
+      const f = r.life && r.life.fortune;
+      if (!f || f.done || !f.fate || f.fate === 'merchant' || !alive(r) || r.migrated || day < (f.at ?? 1e9)) continue;
+      f.done = day;
+      const home = this.sim.layoutOf(f.home);
+      const hs = home && home.settlement;
+      const here = L.settlement.name;
+      const nm = fullName(r);
+      if (f.fate === 'settled') {
+        if (home && home.econ) ledger(home, day, `A letter from ${nm}: they've made a life for themselves in ${here}, and won't be coming home.`);
+        ledger(L, day, `${nm} has settled in ${here} for good.`);
+      } else if (f.fate === 'lost') {
+        r.migrated = true;
+        r.away = true;
+        if (home && home.econ) ledger(home, day, `No word from ${nm} since they left to seek their fortune. Folk in ${hs.name} have begun to fear the worst.`);
+      } else if (home && home.econ && !hs.deserted) {
+        const rich = f.fate === 'rich';
+        r.coins = rich ? (r.coins || 0) + rng.int(140, 320) : Math.min(r.coins || 0, rng.int(0, 4));
+        const back = this.sim.sendPeople(L, [r], home, rich ? 'home again, and rich' : 'home again, with nothing');
+        for (const m of back) {
+          m.traveler = false;
+          if (rich) lifeOf(m).wealth = 'made';
+          else if (m.job !== 'beggar' && rng.chance(0.4)) retrain(home, m, 'beggar', rng);
+        }
+        ledger(home, day, rich
+          ? `${nm} has come home to ${hs.name} from ${here}, rich! There's talk of them buying a business.`
+          : `${nm} has come home to ${hs.name}, thinner and poorer, with nothing to show for their travels.`);
+      }
+    }
   }
 
   // A rare few have a vice (the same ones, always: it's who they are).
@@ -353,11 +388,17 @@ export class Society {
       if (who && far.length) {
         const T = this.sim.layoutOf(rng.pick(far).id);
         const moved = this.sim.sendPeople(L, [who], T, 'to seek their fortune');
+        // How it turns out is anyone's guess: a merchant on the roads
+        // (who visits home in time), a life made out there, home again
+        // with empty pockets (or full ones), or never heard of again.
+        const fate = rng.weighted([['merchant', 3], ['settled', 2], ['poor', 2], ['rich', 1], ['lost', 1.2]]);
         for (const m of moved) {
-          m.traveler = true;
-          m.tier = 'peddler';
+          if (fate === 'merchant') {
+            m.traveler = true;
+            m.tier = 'peddler';
+          }
           m.coins = (m.coins || 0) + 30;
-          m.life = { ...(m.life || {}), fortune: { home: L.settlement.id, since: day } };
+          m.life = { ...(m.life || {}), fortune: { home: L.settlement.id, since: day, fate, at: day + rng.int(10, 30) } };
         }
         ledger(L, day, `${fullName(who)} has left ${L.settlement.name} to seek their fortune.`);
         this.gone(L, who, 'fortune', T.settlement.name, day);

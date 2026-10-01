@@ -469,6 +469,15 @@ export class War {
     const reb = this.rebels[b.id];
     if (reb && reb.lord === a.id && day - reb.day <= 40) out.push({ k: 'yoke', text: 'a vassal that threw off its rule' });
     if (g.filter((d) => d.kind === 'pact').length >= 2) out.push({ k: 'pact', text: 'broken promises' });
+    // A warlord takes any quarrel over the border as cause enough.
+    const amb = realms.ambition ? realms.ambition(a, day) : null;
+    if (amb === 'warlord' && g.some((d) => d.kind === 'border') && !out.some((q) => q.k === 'land')) out.push({ k: 'land', text: 'the land between them, which its warlord ruler covets' });
+    // A holy war, for the faithful under a foreign yoke (see religion.js).
+    const hw = this.sim.religion && this.sim.religion.holyCause(a, b, amb, day);
+    if (hw) out.push(hw);
+    // Starving, beside a neighbour's full granaries.
+    const hf = this.sim.hardship && this.sim.hardship.hungryFor(a, b);
+    if (hf) out.push({ k: 'farmland', text: `the farmland round ${hf.field.settlement.name}, with ${hf.from.settlement.name} starving` });
     return out;
   }
 
@@ -483,7 +492,8 @@ export class War {
         const r = realms.relation(a, b);
         const why = this.reasons(a, b, day);
         this.seen[this.key(a, b)] = Math.max(this.seen[this.key(a, b)] || 0, r.incidents - 2);
-        if (r.score > -30 || !why.length) continue;
+        // (Hunger doesn't wait for a quarrel: cool relations will do.)
+        if (r.score > (why.some((q) => q.k === 'farmland') ? 5 : -30) || !why.length) continue;
         const ratio = this.politics.strength(a) / Math.max(1, this.politics.strength(b));
         if (ratio < (why.some((q) => q.k === 'rebels' || q.k === 'yoke') ? 0.6 : 0.8)) continue;
         const p = ruler.personality || {};
@@ -1314,8 +1324,20 @@ export class War {
   // Battles and raids to mark on the world map: [{ x, z, kind, label }].
   markers() {
     const out = [];
+    const now = this.sim.abs;
     for (const w of this.wars) {
       if (w.plan) out.push({ x: w.plan.site.x, z: w.plan.site.z, kind: 'battle', label: `${w.plan.name} (tomorrow)` });
+      // The attackers on the march, out of their town toward the field
+      // over the day before (the defenders wait at home).
+      if (w.plan && !w.plan.naval) {
+        const from = this.ow.settlements[w.plan.atk];
+        const civ = this.civ(w.plan.attacker === 'a' ? w.plan.ca : w.plan.cb);
+        if (from && civ) {
+          const c = centreOf(from);
+          const f = Math.max(0, Math.min(1, (now - (w.plan.at - DAY)) / DAY));
+          out.push({ x: c.x + (w.plan.site.x - c.x) * f, z: c.z + (w.plan.site.z - c.z) * f, kind: 'army', color: civ.color.hex, label: `The ${plain(civ)} army, marching on ${this.ow.settlements[w.plan.def]?.name || 'the enemy'}` });
+        }
+      }
       for (const b of w.battles.slice(-3)) out.push({ x: b.site.x, z: b.site.z, kind: 'field', label: b.name });
     }
     for (const r of this.raids) {
@@ -1562,6 +1584,7 @@ export class War {
       });
       live.sides[side] = { civ, tactic: t, ents, start: ents.length, broken: false, hates: false, sign };
     }
+    this.fieldMercs(live, w);
     if (!live.sides.a.ents.length || !live.sides.b.ents.length) {
       for (const s of Object.values(live.sides)) for (const e of s.ents) this.game.despawnNpc(e);
       return false;
@@ -1579,6 +1602,48 @@ export class War {
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
     g.audio?.play('alarm');
     return true;
+  }
+
+  // Bandits paid to fight: their own knot of them out on the flank, hooded
+  // and in no colours, fighting for the coin, and off the moment the day
+  // looks lost (see warrior.js).
+  fieldMercs(live, w) {
+    const B0 = this.sim.bandits;
+    if (!B0) return;
+    const g = this.game;
+    const { centre: c, axis: ax, perp } = live;
+    for (const side of ['a', 'b']) {
+      const S = live.sides[side];
+      if (!S) continue;
+      let k = 0;
+      for (const band of B0.live().filter((b) => b.hired && b.hired.war === w.id && b.hired.side === side)) {
+        const L = g.world.layouts.get(band.near) || (S.ents[0] && S.ents[0].layout);
+        if (!L || !L.econ) continue;
+        for (const m of band.members.slice(0, 6)) {
+          const flank = (k % 2 ? -1 : 1) * (9 + Math.floor(k / 2));
+          const x = Math.round(c.x + ax.x * 13 * S.sign + perp.x * flank);
+          const z = Math.round(c.z + ax.z * 13 * S.sign + perp.z * flank);
+          if (!g.world.regionAt(x, z)) continue;
+          const y = g.world.findStandY(x, z, GROUND);
+          if (y <= 0) continue;
+          const spot = g.findFreeSpot(x, z, y);
+          if (!spot) continue;
+          const e = this.spawnAt(B0.recFor(band, m, L), L, spot, side, 'battle', {
+            war: w.id, role: 'wing', levy: false, home: { x: c.x + ax.x * 45 * S.sign, z: c.z + ax.z * 45 * S.sign }, form: { x: spot.x, z: spot.z }, phase: 'form',
+            merc: band.id, band: band.id, member: m.id,
+          });
+          e.warband.civ = S.civ ? S.civ.id : null;
+          B0.ents.set(`${band.id}:${m.id}`, e);
+          e.look = { ...e.rec.look, hat: 'hood', gear: { ...(e.rec.look.gear || {}) } };
+          S.ents.push(e);
+          S.start++;
+          S.mercs = (S.mercs || 0) + 1;
+          k++;
+        }
+        band.fought = (band.fought || 0) + 1;
+      }
+      if (k) g.ui.msg(`${k} hired swords stand out on the ${plain(S.civ)} flank.`, '#d8b080');
+    }
   }
 
   // A short wall of logs two high in front of the line, with stakes at
@@ -1737,7 +1802,7 @@ export class War {
     const taken = { a: 0, b: 0 };
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
       if (n.dead || !n.down) continue;
-      if (s !== winner && victor && this.takePrisoner(n.rec, n.layout, victor, day, L.plan.name)) taken[s]++;
+      if (s !== winner && victor && !n.warband?.merc && this.takePrisoner(n.rec, n.layout, victor, day, L.plan.name)) taken[s]++;
       else this.wake(n);
     }
     // Those who fought here already counted; the rest of each army by the

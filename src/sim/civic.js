@@ -63,7 +63,7 @@ export function migrate(sim, L, day) {
     sim.careers.returning.push({ sid: to.id, idx: n.idx, at: now + Math.round(dist(to) * 25) + 60 });
   }
   for (const r of people) {
-    r.migrated = to.id;
+    r.migrated = `s${to.id}`;
     if (r.ent && !r.ent.dead) {
       // Walk out of town with their belongings.
       r.leaving = true;
@@ -92,7 +92,7 @@ export function relocate(sim, L, people, T, why) {
     sim.careers.returning.push({ sid: T.settlement.id, idx: n.idx, at: now + Math.round(dist * 25) + 60 });
   }
   for (const r of people) {
-    r.migrated = T.settlement.id;
+    r.migrated = `s${T.settlement.id}`;
     if (r.ent && !r.ent.dead) {
       r.leaving = true;
       setOverride(r, now, now + 600, 'travel', { place: 'road' });
@@ -172,11 +172,13 @@ const LINKS = [
   { who: ['innkeeper', 'barkeep'], needs: ['cook'], why: 'the tavern needs a cook' },
 ];
 const BUILD_COST = { tavern: 180, smithy: 150, bakery: 120, workshop: 120 };
-const WORKERS = { tavern: 'cook', smithy: 'blacksmith', bakery: 'baker', workshop: 'carpenter', shop: 'merchant', library: 'scholar', tailor: 'tailor', temple: 'priest', herbalist: 'herbalist' };
+const WORKERS = { tavern: 'cook', smithy: 'blacksmith', bakery: 'baker', workshop: 'carpenter', shop: 'merchant', library: 'scholar', study: 'researcher', tailor: 'tailor', temple: 'priest', herbalist: 'herbalist' };
 // People least missed when they change trade.
 const SPARE = ['laborer', 'beggar', 'farmer', 'lumberjack', 'fisher', 'trapper', 'merchant', 'noble'];
 
 function hireInto(sim, L, job, day, why) {
+  // (Nobody takes up a trade the realm doesn't know yet.)
+  if (sim.tech && !sim.tech.allows(L.settlement, 'job', job)) return null;
   const people = residents(L).filter((r) => r.age === 'adult' && !r.away && !r.hired);
   const count = (j) => people.filter((r) => r.job === j).length;
   const cand = people.filter((r) => {
@@ -238,7 +240,7 @@ export function checkSupply(sim, L, day) {
   // towns and cities, a bakery in cities.
   const want = [];
   if (people.length >= 12) want.push('tavern');
-  if (s.type !== 'village') want.push('smithy');
+  if (s.type !== 'village' && (!sim.tech || sim.tech.allows(s, 'building', 'smithy'))) want.push('smithy');
   if (s.type === 'city') want.push('bakery');
   for (const type of want) {
     if (L.buildings.some((b) => b.type === type)) continue;
@@ -269,7 +271,7 @@ export function staffBuilding(sim, L, b, day) {
   if (L.npcs.some((r) => alive(r) && r.job === job && r.work && r.work.building === b.id)) return null;
   // Someone who put up the money for it runs it themselves.
   const owner = L.npcs.find((r) => alive(r) && !r.migrated && r.life && r.life.opening === b.type);
-  if (owner) {
+  if (owner && (!sim.tech || sim.tech.allows(L.settlement, 'job', job))) {
     owner.life.opening = null;
     if (owner.job !== job) retrain(L, owner, job, new RNG(hash4(L.settlement.seed, owner.idx, day, 0x09e2)));
     if (!owner.work || owner.work.building !== b.id) owner.work = { ...(owner.work || {}), kind: 'building', building: b.id };
@@ -356,7 +358,7 @@ export function births(sim, L, day, rng) {
     if (kids >= 3) continue;
     const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
     // (Aqueducts: clean water, more children.)
-    const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.35 : 1;
+    const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1;
     if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
     const r = makeChild(L, a, b, new RNG(hash4(a.idx, b.idx, day, 0xba8e)));
     r.idx = L.npcs.length;

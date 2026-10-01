@@ -32,6 +32,9 @@ const SPECS = {
   stables: { size: [[9, 6], [8, 6]], tall: 3 },
   // Where the realm's researchers study (see tech.js).
   academy: { size: [[9, 6], [8, 6]], tall: 3, civic: true },
+  // A village's (or a small town's) place of learning: a room of books
+  // and a desk, so even the smallest free town can work out something new.
+  study: { size: [[6, 5], [6, 6]] },
   // Cells for prisoners of war: a stockade (a few) and, once the realm has
   // learned to build them, a great prison (many). See war.js.
   stockade: { size: [[9, 6], [9, 6]], civic: true },
@@ -44,7 +47,7 @@ export const BUILDING_NAMES = {
   house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
-  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy',
+  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy', study: 'Scholar\'s Study',
   stockade: 'Stockade', prison: 'Prison',
 };
 
@@ -67,6 +70,7 @@ const SHOP_NAMES = {
   workshop: ['The Sawhorse', 'Plane & Chisel', 'The Oak Bench', 'The Joinery'],
   herbalist: ['The Green Remedy', 'Root & Leaf', 'Mortar & Pestle', 'The Healing Herb'],
   townhall: ['Town Hall', 'Council Hall', 'Moot Hall', 'Guildhall'],
+  study: ['The Quiet Room', 'House of Questions', 'The Candle & Quill', 'The Little Library'],
 };
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -1393,6 +1397,94 @@ class Layout {
     this.furnish(b, rng);
     // Exterior touches.
     this.exterior(b, rng);
+    if (!ruined) this.cultureTouches(b, poor);
+  }
+
+  // Each people builds its own way, beyond what it builds with:
+  //   northerners carve horns on the gable ends of their longhouses and
+  //     keep their windows small and shuttered;
+  //   the sun peoples hang striped awnings over their doors and keep pots
+  //     of flowers up on their flat roofs;
+  //   the wild folk let their thatch hang out well past the walls, grow
+  //     vines up them, and set a carved post by the door;
+  //   highlanders raise stone pinnacles at the corners of their roofs;
+  //   the vale folk keep window boxes of flowers.
+  // (Its own dice, so the rest of the town comes out the same.)
+  cultureTouches(b, poor) {
+    const rng = new RNG(hash4(this.settlement.seed >>> 0, b.id, 0xc17e));
+    const { x0, z0, x1, z1, mats, door } = b;
+    const style = mats.style;
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    const rot = door.rot;
+    const o = b.outside;
+    const px = DZ[rot] !== 0 ? 1 : 0;
+    const pz = DX[rot] !== 0 ? 1 : 0;
+    const sides = [1, -1].map((sg) => ({ x: o.x + px * sg, z: o.z + pz * sg }));
+    const open = (x, z) => [M.FREE, M.YARD].includes(this.maskAt(x, z)) && this.inside(x, z, 0);
+    const clearAbove = (x, z) => this.maskAt(x, z) !== M.BUILD && this.maskAt(x, z) !== M.WALL && !(x === o.x && z === o.z);
+    const depth = z1 - z0 + 1;
+    const layers = Math.ceil(depth / 2);
+    const top = b.roofBase + layers - 1;
+    // The windows: every other tile along the walls at the window row.
+    const windows = [];
+    for (let x = x0 + 1; x < x1; x++) for (const z of [z0, z1]) if ((x - x0) % 2 === 0) windows.push({ x, z, ox: x, oz: z === z0 ? z - 1 : z + 1 });
+    for (let z = z0 + 1; z < z1; z++) for (const x of [x0, x1]) if ((z - z0) % 2 === 0) windows.push({ x, z, ox: x === x0 ? x - 1 : x + 1, oz: z });
+    const isDoorish = (q) => Math.abs(q.x - door.x) + Math.abs(q.z - door.z) <= 1;
+    if (style === 'north' && !mats.flat) {
+      // Crossed horns on the ridge at either gable end.
+      const zr = z0 + layers - 1;
+      for (const x of [x0, x1]) this.put(x, top + 1, zr, mats.corner === B.cobblestone ? B.log_wall : mats.corner);
+      // Shutters on some windows.
+      for (const q of windows) if (!isDoorish(q) && rng.chance(0.4)) this.put(q.x, Y0 + 1, q.z, B.planks_dark);
+    } else if (style === 'sun') {
+      // An awning over the door.
+      const cloth = rng.pick([B.awning_red, B.awning_blue, B.awning_yellow, B.awning_green]);
+      for (const sd of sides) if (clearAbove(sd.x, sd.z)) this.put(sd.x, Y0 + 2, sd.z, cloth);
+      // Pots of flowers along the parapet.
+      if (mats.flat && !poor) {
+        const flowers = [B.flower_red, B.flower_yellow, B.flower_purple, B.fern];
+        for (let x = x0 + 1; x < x1; x++) {
+          for (const z of [z0 + 1, z1 - 1]) if (rng.chance(0.18)) this.put(x, b.roofBase + 1, z, rng.pick(flowers));
+        }
+      }
+    } else if (style === 'wild') {
+      // The thatch overhangs the gable ends.
+      if (!mats.flat) {
+        for (let k = 0; k < layers; k++) {
+          const zs = z0 + k;
+          const ze = z1 - k;
+          for (const x of [x0 - 1, x1 + 1]) {
+            for (const z of zs === ze ? [zs] : [zs, ze]) {
+              if (!clearAbove(x, z)) continue;
+              this.put(x, b.roofBase + k, z, mats.roof, zs === ze ? 1 : z === zs ? 2 : 0);
+            }
+          }
+        }
+      }
+      // Vines up the walls (you can push through them).
+      for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.3)) this.put(q.ox, Y0 + 1, q.oz, B.leaves_jungle);
+      // A carved post by the door.
+      const sd = sides.find((p) => this.maskAt(p.x, p.z) === M.YARD);
+      if (sd && (b.residential || SPECS[b.type]?.civic) && rng.chance(0.6)) {
+        this.put(sd.x, Y0, sd.z, B.log_jungle);
+        this.put(sd.x, Y0 + 1, sd.z, B.log_jungle);
+        this.put(sd.x, Y0 + 2, sd.z, rng.chance(0.5) ? B.pumpkin : B.log_jungle);
+        this.setMask(sd.x, sd.z, M.DECOR);
+      }
+    } else if (style === 'high' && !mats.flat) {
+      // Stone pinnacles at the corners.
+      for (const x of [x0, x1]) {
+        for (const z of [z0, z1]) {
+          this.put(x, b.roofBase, z, mats.corner);
+          this.put(x, b.roofBase + 1, z, mats.corner);
+        }
+      }
+    } else if (style === 'vale' && b.residential && !poor) {
+      // Window boxes.
+      const f = rng.pick([B.flower_red, B.flower_yellow, B.flower_white, B.flower_blue, B.flower_purple]);
+      for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.55)) this.put(q.ox, Y0, q.oz, f);
+    }
   }
 
   decay(id, rng) {
@@ -1712,13 +1804,15 @@ class Layout {
       }
       b.work.push(...b.seats.filter((q) => q.tags.includes('work')));
       lamp();
-    } else if (t === 'academy') {
+    } else if (t === 'academy' || t === 'study') {
       // Shelves of learning, desks for the researchers, a still for the
-      // experiments, a table with charts spread on it.
-      for (let i = 0; i < 4; i++) tryPlace(B.bookshelf, 'north', { rot: 0 });
+      // experiments, a table with charts spread on it. (A study: a couple
+      // of shelves and a desk.)
+      const big = t === 'academy';
+      for (let i = 0; i < (big ? 4 : 2); i++) tryPlace(B.bookshelf, 'north', { rot: 0 });
       workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study', 'research']);
-      workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study', 'research']);
-      workAt(tryPlace(B.alembic, 'wall', { access: true }), ['work', 'research']);
+      if (big) workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study', 'research']);
+      if (big) workAt(tryPlace(B.alembic, 'wall', { access: true }), ['work', 'research']);
       const table = tryPlace(B.table, 'center', { access: true });
       if (table) {
         this.put(table.x, Y0 + 1, table.z, B.lantern, lit);
@@ -2645,7 +2739,7 @@ class Layout {
       case 'stables':
         return true; // (the horses at the hitching post, till there are stables)
       case 'academy':
-        return this.buildings.some((b) => (b.type === 'academy' || b.type === 'library') && b.work.length + b.seats.length > 0);
+        return this.buildings.some((b) => (b.type === 'academy' || b.type === 'library' || b.type === 'study') && b.work.length + b.seats.length > 0);
       case 'shop':
         return this.buildings.some((b) => b.type === 'shop') || this.spotsByTag('market').length > 0;
       default:
@@ -2668,7 +2762,7 @@ class Layout {
     if (J.place === 'farm') return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
     // (Researchers study at the library till the academy's built.)
     if (J.place === 'academy' && !this.buildings.some((b) => b.type === 'academy' && !b.underConstruction)) {
-      const lib = this.buildings.find((b) => b.type === 'library' && b.work.length);
+      const lib = this.buildings.find((b) => (b.type === 'library' || b.type === 'study') && !b.underConstruction && b.work.length);
       if (lib) return { kind: 'building', building: lib.id };
     }
     if (J.place === 'stables' && !this.buildings.some((b) => b.type === 'stables' && !b.underConstruction)) return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };

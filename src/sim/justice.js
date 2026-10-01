@@ -303,6 +303,8 @@ export class Justice {
     guard.threat = null;
     guard.path = null;
     guard.releaseSpot();
+    // Sat down (or across the room): up, and over to your side first.
+    this.guardBeside(guard);
     guard.face(p.x, p.z);
     guard.say(weapons.length ? 'I\'ll take those. Hands out.' : 'Hands out. Come along.', 3);
     game.ui.msg(`${guard.name} ${weapons.length ? `takes your ${listItems(weapons)}, ` : ''}ties your hands and leads you to the jail.`, '#ffb080');
@@ -388,6 +390,26 @@ export class Justice {
     return returned;
   }
 
+  // The guard steps up beside you (getting up off a bench, or round a
+  // table), so the walk to the cells can start.
+  guardBeside(g) {
+    const game = this.game;
+    const p = game.player;
+    g.spot = null;
+    g.atGoal = false;
+    if (g.distTo(p) <= 1 && Math.abs(g.y - p.y) <= 1 && !g.moving) return false;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = p.x + dx;
+      const z = p.z + dz;
+      const y = game.world.findStandY(x, z, p.y);
+      if (y < 0 || Math.abs(y - p.y) > 1 || game.occupiedBySolid(x, y, z, g)) continue;
+      g.teleport(x, y, z);
+      g.face(p.x, p.z);
+      return true;
+    }
+    return false;
+  }
+
   // Each frame of an escort: the guard walks, the prisoner is pulled along.
   updateEscort(dt) {
     const e = this.escort;
@@ -405,7 +427,22 @@ export class Justice {
       game.wanted.set(e.sid, Math.max(game.wanted.get(e.sid) || 0, 1e9));
       return;
     }
-    if (e.t > 120) {
+    // Nobody getting anywhere (the guard boxed in, or the way blocked):
+    // the guard comes round to you and tries again; failing that, it's
+    // straight to the cells.
+    const key = `${g.x},${g.z},${p.x},${p.z}`;
+    if (key !== e.lastKey) {
+      e.lastKey = key;
+      e.still = 0;
+    } else e.still = (e.still || 0) + dt;
+    if (e.phase === 'walk' && e.still > 5) {
+      e.still = 0;
+      e.unstuck = (e.unstuck || 0) + 1;
+      g.path = null;
+      this.guardBeside(g);
+      if (e.unstuck >= 3) e.t = 999;
+    }
+    if (e.t > 90) {
       // Taking too long (stuck somewhere): march straight to the cell.
       g.calmDown(true);
       this.escort = null;

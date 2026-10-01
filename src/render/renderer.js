@@ -70,6 +70,11 @@ export class Renderer {
     }
   }
 
+  // A direction in the world, as it points on screen.
+  toViewDir(dx, dz) {
+    return this.toView(dx, dz);
+  }
+
   toWorld(u, v) {
     switch (this.view) {
       case 1: return [v, 0 - u];
@@ -736,6 +741,9 @@ export class Renderer {
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     if (e.flash > 0) ctx.filter = 'brightness(3)';
+    // Rolling: low, quick, half a blur.
+    const rolling = e.kind === 'player' && e.rollT > 0;
+    if (rolling) ctx.globalAlpha = 0.55;
     if (e.kind === 'creature' && e.species === 'horse') {
       // A horse, bigger than the rest: side on, turned the way it's going.
       const left = this.sideOf(e);
@@ -791,6 +799,7 @@ export class Renderer {
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
+    if (rolling) ctx.globalAlpha = 1;
     // On fire, dazed, chilled.
     if (!e.dead && !this.spin && e.kind !== 'item') {
       const tall = e.kind !== 'creature' || e.species === 'horse';
@@ -813,6 +822,28 @@ export class Renderer {
       ctx.fillRect(sx + 2, by, w + 2, 3);
       ctx.fillStyle = f > 0.75 && Math.floor(this.time * 8) % 2 ? '#ff5040' : f > 0.5 ? '#f08a30' : '#e8c060';
       ctx.fillRect(sx + 3, by + 1, Math.max(1, Math.round(w * f)), 1);
+    }
+    // Winding up to strike: a red "!" over them, louder as it comes.
+    if (e.windup && !e.dead && !e.windup.dash) {
+      const f = Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur));
+      const big = e.kind !== 'creature' || e.species === 'horse';
+      const col = f > 0.7 ? (Math.floor(this.time * 14) % 2 ? '#ffffff' : '#ff3030') : '#ff6040';
+      drawText(ctx, '!', sx + 6, feetY - (big ? 40 : 26) - Math.round(f * 2), col, '#000');
+    }
+    // Your guard up: a pale arc on the side you face; a flash on a parry.
+    if (e.kind === 'player' && e.blocking) {
+      const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][e.dir] || [0, 1];
+      const [vx, vz] = this.toViewDir ? this.toViewDir(fx, fz) : [fx, fz];
+      ctx.fillStyle = e.blockT < 0.3 ? 'rgba(255,240,160,0.85)' : 'rgba(160,200,255,0.6)';
+      const cx = sx + 8 + vx * 8;
+      const cy = feetY - 12 + vz * 5;
+      if (vx) ctx.fillRect(cx - 1, cy - 7, 2, 12);
+      else ctx.fillRect(cx - 6, cy - 1, 12, 2);
+    }
+    // A heavy blow ready to let fly.
+    if (e.kind === 'player' && game && game.charging && game.charging.ready && Math.floor(this.time * 10) % 2) {
+      ctx.fillStyle = 'rgba(255,220,120,0.7)';
+      ctx.fillRect(sx + 3, feetY - 30, 10, 1);
     }
     // Health bar when hurt.
     if (e.hp !== undefined && e.hp < e.maxHp && e.kind !== 'player' && !e.sleeping) {
@@ -1366,8 +1397,47 @@ export class Renderer {
   }
 
   // Cursor highlight, placement ghost and mining cracks.
+  // Blows coming: the ground they'll land on, reddening as the swing
+  // comes round; a bow's line of aim.
+  drawTelegraphs(game) {
+    const ctx = this.ctx;
+    const p = game.player;
+    const near = (e) => Math.abs(e.x - p.x) < 24 && Math.abs(e.z - p.z) < 18;
+    for (const e of [...game.npcs, ...game.creatures]) {
+      if (e.dead || !near(e)) continue;
+      const w = e.windup;
+      if (w && !w.dash) {
+        const f = Math.min(1, w.t / Math.max(0.05, w.dur));
+        for (const t of w.tiles) {
+          const { x: sx, y: sy } = this.worldToScreen(t.x, (w.y ?? e.y) - 1, t.z);
+          ctx.fillStyle = `rgba(255,${Math.round(90 - f * 60)},${Math.round(60 - f * 40)},${0.12 + f * 0.33})`;
+          ctx.fillRect(sx + 1, sy + 1, 14, 14);
+          if (f > 0.75 && Math.floor(this.time * 16) % 2) {
+            ctx.fillStyle = 'rgba(255,240,200,0.5)';
+            ctx.fillRect(sx + 1, sy + 1, 14, 1);
+            ctx.fillRect(sx + 1, sy + 14, 14, 1);
+          }
+        }
+      }
+      const a = e.aim;
+      if (a && a.target) {
+        const f = Math.min(1, a.t / a.dur);
+        const s0 = this.worldToScreen(e.x, e.y, e.z);
+        const s1 = this.worldToScreen(a.tx, a.target.y ?? e.y, a.tz);
+        ctx.fillStyle = `rgba(255,120,80,${0.25 + f * 0.5})`;
+        const n = 12;
+        for (let i = 1; i < n; i++) {
+          if (i % 2) continue;
+          const k = i / n;
+          ctx.fillRect(Math.round(s0.x + 8 + (s1.x - s0.x) * k), Math.round(s0.y - 2 + (s1.y - s0.y) * k), 2, 2);
+        }
+      }
+    }
+  }
+
   drawOverlays(game) {
     const ctx = this.ctx;
+    this.drawTelegraphs(game);
     const c = game.cursor;
     if (!c) return;
     const { x: sx, y: sy } = this.worldToScreen(c.x, c.y, c.z);

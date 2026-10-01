@@ -8,7 +8,7 @@ import { World } from '../world/world.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
-import { Player } from '../entities/player.js';
+import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
 import { ItemDrop } from '../entities/itemdrop.js';
@@ -20,7 +20,9 @@ import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
 import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
-import { alive, invAdd, DAY, setOverride, ledger } from '../sim/econ.js';
+import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
+import { tickFires } from './fire.js';
+import { shieldOf, facing, playerTick, roll, spend, COST, interrupt, knock, canBlock } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -47,7 +49,7 @@ const START_KIT = [
 ];
 
 export class Game {
-  constructor({ seed, renderer, audio, ui, save = null, hero = null }) {
+  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false }) {
     this.seed = seed >>> 0;
     this.renderer = renderer;
     // A new world starts with north up (a saved one as you left it).
@@ -62,6 +64,9 @@ export class Game {
     this.world = new World(this.seed);
     this.world.onChange = (x, y, z, o, n) => this.onBlockChange(x, y, z, o, n);
     this.sim = new Sim(this);
+    // (For testing: a world where everything is already known, from the
+    // first town laid out.)
+    if (learned) this.sim.tech.cheat = true;
     this.world.onLayout = (L) => this.sim.attach(L);
     this.crops = new CropGrowth(this);
     this.playtime = new Playtime(this);
@@ -695,6 +700,8 @@ export class Game {
     this.sim.checkTownSigns(layout);
     // How the town's doing shows: banners up, or windows boarded.
     if (layout.econ) this.sim.prosperity.dress(layout);
+    // (And whatever's new that has settled in since you were last here.)
+    if (layout.econ) this.sim.tech.integrate(layout, this.day, true);
     this.sim.roads.connect(layout);
     this.refreshSigns();
   }
@@ -797,11 +804,15 @@ export class Game {
     if (this.caravanT > 0 || this.sleep) return;
     this.caravanT = 1;
     if (!this.caravans) this.caravans = new Map();
+    // (Those who've already ridden in: not sent back down the road to do it
+    // again while their journey catches up with them.)
+    if (!this.caravanIn) this.caravanIn = new Set();
     const p = this.player;
     const ow = this.world.ow;
     const live = new Set();
     for (const tr of this.sim.travellers()) {
       live.add(tr.key);
+      if (this.caravanIn.has(`${tr.key}>${tr.to.id}`)) continue;
       const n = this.caravans.get(tr.key);
       const inTown = ow.settlementAt(tr.pos.x, tr.pos.z);
       const d = Math.max(Math.abs(tr.pos.x - p.x), Math.abs(tr.pos.z - p.z));
@@ -820,6 +831,7 @@ export class Game {
         }
         const far = Math.max(Math.abs(n.x - p.x), Math.abs(n.z - p.z)) > 40;
         const arrived = ow.settlementAt(n.x, n.z) === tr.to;
+        if (arrived) this.caravanIn.add(`${tr.key}>${tr.to.id}`);
         if (far || arrived) this.endCaravan(tr.key, n);
         continue;
       }
@@ -849,6 +861,7 @@ export class Game {
       this.caravans.set(tr.key, m);
     }
     for (const [k, n] of this.caravans) if (!live.has(k) || n.dead) this.endCaravan(k, n);
+    for (const k of this.caravanIn) if (!live.has(k.split('>')[0])) this.caravanIn.delete(k);
   }
 
   // Builders out on a road between towns: when you're near the end they're
@@ -1232,10 +1245,48 @@ export class Game {
     }
   }
 
+  // ------------------------------------------------------------ fast-forward
+  // Days go by (from the command console): every town lives them out as
+  // it would while you're away, a few hours of the world each frame.
+  skipDays(n) {
+    if (this.sleep || this.skipping || this.sim.justice.jail || this.sim.justice.escort || this.player.dead || this.sim.war.live) return false;
+    for (const s of [...this.active.keys()].map((id) => this.world.ow.settlements[id])) this.deactivate(s);
+    this.skipping = { left: n * 24, total: n * 24, day0: this.day };
+    this.waiting = null;
+    return true;
+  }
+
+  updateSkip() {
+    const sk = this.skipping;
+    const sim = this.sim;
+    for (let h = 0; h < 6 && sk.left > 0; h++, sk.left--) {
+      this.minute += 60;
+      if (this.minute >= DAY_MINUTES) {
+        this.minute -= DAY_MINUTES;
+        this.day++;
+      }
+      for (const L of this.world.layouts.values()) if (L.econ) simulateTo(sim, L, sim.abs);
+      // (Everything that keeps its own days: realms, wars, bandits, markets.)
+      sim.tickT = 0;
+      sim.update(0.5);
+    }
+    const done = sk.total - sk.left;
+    if (done % 24 === 0 || !sk.left) this.ui.msg(`Day ${this.day}...`, '#c8d8ff', true);
+    if (sk.left > 0) return;
+    this.skipping = null;
+    this.player.hp = this.player.maxHp;
+    this.updateSettlements(true);
+    this.ui.msg(`${this.day - sk.day0} day${this.day - sk.day0 === 1 ? '' : 's'} pass. It's day ${this.day}.`, '#ffe8a0');
+  }
+
   // ------------------------------------------------------------ main update
   update(dt, input) {
     this.dt = dt;
     this.pathBudget = 5;
+    if (this.skipping) {
+      input.consume();
+      return this.updateSkip();
+    }
     const ev = input.consume();
     const uiRes = this.ui.handle(ev, input, this);
     // The pause menu freezes the world; other windows let it keep living.
@@ -1270,6 +1321,8 @@ export class Game {
       this.refreshBonus();
     }
     this.player.update(dt, input, blocked);
+    playerTick(this, this.player, dt, input, blocked);
+    this.input = input;
     if (!blocked) this.updateCursor(input);
     else this.cursor = null;
     if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
@@ -1401,6 +1454,7 @@ export class Game {
           break;
         case 'Space':
           if (this.fishing) hook(this);
+          else roll(this, p, this.heldMove());
           break;
         case 'KeyF':
           if (p.raft) this.leaveRaft();
@@ -1656,10 +1710,26 @@ export class Game {
       this.pending = null;
       return;
     }
+    // Holding the button on a foe winds up a heavy blow; let go to strike
+    // (a quick click is an ordinary one).
+    const ch = this.charging;
+    if (ch) {
+      ch.t += dt;
+      if (ch.t >= 0.45 && !ch.ready) {
+        ch.ready = true;
+        this.audio?.play('select');
+      }
+      if (!input.mouse.down || ch.target.dead) {
+        this.charging = null;
+        if (!ch.target.dead) this.attack(ch.target, ch.ready);
+      }
+    }
     for (const ck of clicks) {
       if (ck.type === 'down' && ck.button === 0) {
         if (c && c.entity) {
-          this.attack(c.entity);
+          const melee = !(p.heldDef() && p.heldDef().ranged) && c.entity.kind !== 'prop';
+          if (melee && p.attackCd <= 0) this.charging = { target: c.entity, t: 0, ready: false };
+          else this.attack(c.entity);
           this.pending = null;
           continue;
         }
@@ -1709,6 +1779,9 @@ export class Game {
       hook(this);
       return;
     }
+    // In a fight (or with nothing to use it on), the right button raises
+    // your guard instead (held: see combat.js).
+    if (canBlock(this, p) && (this.combatT > 0 || !c || (!c.entity && !(c.block && c.block.interact && c.inReach)))) return;
     if (c && c.entity && c.entity.kind === 'npc' && c.entity.distTo(p) <= 4) {
       this.talk(c.entity);
       return;
@@ -2536,7 +2609,7 @@ export class Game {
         // A researcher at a desk in the academy (or library): the study.
         const b = buildingAt(this.sim.layoutOf(this.currentSettlement?.id) || { buildings: [] }, x, z);
         const cj = this.sim.careers.job;
-        if (st === 'scribe' && b && (b.type === 'academy' || b.type === 'library') && cj && cj.kind === 'profession' && cj.job === 'researcher') {
+        if (st === 'scribe' && b && (b.type === 'academy' || b.type === 'library' || b.type === 'study') && cj && cj.kind === 'profession' && cj.job === 'researcher') {
           if (cj.sid !== this.currentSettlement.id) {
             this.ui.msg('You study for another town. (Ask its mayor, or resign and take the post here.)', '#c8c8c8', true);
             break;
@@ -2569,9 +2642,9 @@ export class Game {
       case 'well':
         if (this.useWell(x, y, z)) break;
         // (Only a realm that has learned to keep its wells clean.)
-        if (this.sim.tech.has(this.world.ow.settlementAt(x, z), 'wells') && p.addBlue(2, `well:${x},${z}`)) {
-          p.hp = Math.min(p.maxHp, p.hp + 2);
-          this.ui.msg('The water of this well is crisp and pure. You feel hardier: a blue heart, until the day ends.', '#80e0ff');
+        if (this.sim.tech.has(this.world.ow.settlementAt(x, z), 'wells') && p.addBlue(3, `well:${x},${z}`)) {
+          p.hp = Math.min(p.maxHp, p.hp + 4);
+          this.ui.msg('The water of this well is crisp and pure. You feel hardier: blue hearts, until the day ends.', '#80e0ff');
           this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#80c8ff', '#e0f4ff'], up: 30, life: 0.7, gravity: -10 });
         } else {
           p.hp = Math.min(p.maxHp, p.hp + 2);
@@ -2584,7 +2657,9 @@ export class Game {
         else {
           this.lastPrayDay = this.day;
           p.hp = p.maxHp;
-          this.ui.msg('A warm light washes over you. Fully healed!', '#ffe8a0');
+          // (The devout are heard a little more kindly.)
+          const blessed = heroHas(this.hero, 'devout') ? p.addBlue(4, 'altar') : 0;
+          this.ui.msg(`A warm light washes over you. Fully healed!${blessed ? ` (+${blessed} blue hearts)` : ''}`, '#ffe8a0');
           this.renderer.emit(p.x, p.y + 1, p.z, { n: 20, color: ['#fff4c0', '#ffe070'], up: 40, life: 1, gravity: -20 });
         }
         break;
@@ -3066,11 +3141,22 @@ export class Game {
       let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
       // An adventurer turns the arrow aside with a blade.
       if (hit && t.adventurer && t.tryDeflect && t.tryDeflect(a)) hit = false;
+      // Rolled under it, or caught it on a shield.
+      if (hit && t.kind === 'player' && t.rollT > 0) {
+        hit = false;
+        this.renderer.floatText(t.x, t.y + 2, t.z, 'dodged', '#c8e8ff');
+      }
+      if (hit && t.kind === 'player' && t.blocking && shieldOf(t) && facing(t, a.from)) {
+        hit = false;
+        this.renderer.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');
+        this.audio?.play('armor_hit', t);
+      }
       if (hit) this.damage(t, a.dmg, a.from);
       onArrowLand(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
     updateFlames(this, dt);
+    tickFires(this, dt);
   }
 
   // Fishing: cast into water, wait for a bite, reel it in.
@@ -3123,7 +3209,10 @@ export class Game {
       this.ui.msg('You\'re not hungry.', '#c8c8c8');
       return;
     }
-    const heal = def.heal + (heroHas(this.hero, 'healer') ? 2 : 0);
+    // (An iron stomach gets as much from raw meat as from a roast.)
+    const iron = heroHas(this.hero, 'iron_stomach');
+    const raw = iron ? ITEMS[{ raw_meat: 'cooked_meat', fish: 'cooked_fish' }[slot.item]] : null;
+    const heal = Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0);
     p.hp = Math.min(p.maxHp, p.hp + heal);
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
@@ -3307,10 +3396,22 @@ export class Game {
     onSwing(this, p);
   }
 
-  attack(target) {
+  // Which way the movement keys are held (in world terms), or null.
+  heldMove() {
+    const input = this.input;
+    if (!input || !input.isDown) return null;
+    const KEYS = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+    let d = null;
+    if (input.lastMoveKey && input.isDown(input.lastMoveKey)) d = KEYS[input.lastMoveKey];
+    else for (const k in KEYS) if (input.isDown(k)) d = KEYS[k];
+    if (!d) return null;
+    return screenToWorld(d[0], d[1], this.renderer?.view || 0);
+  }
+
+  attack(target, heavy = false) {
     const p = this.player;
     if (target.kind === 'prop') return this.swing();
-    if (p.attackCd > 0 || target.dead) return;
+    if (p.attackCd > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
     const def = p.heldDef();
     const reach = this.attackReach();
     p.face(target.x, target.z);
@@ -3326,7 +3427,8 @@ export class Game {
       removeItem(p.inv, 'arrow', 1);
       p.attackCd = def.cooldown;
       p.doAction(0.3);
-      this.shoot(p, target, Math.round(def.damage * (Math.random() < 0.12 ? 1.8 : 1)));
+      const mark = heroHas(this.hero, 'marksman');
+      this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)));
       return;
     }
     if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1) {
@@ -3334,28 +3436,41 @@ export class Game {
       return;
     }
     // A set gem works by what it's set in (see gems.js): a sapphire blade
-    // swings quicker, a ruby throws flame, and so on.
-    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p);
-    p.doAction(0.25);
+    // swings quicker, a ruby throws flame, and so on. Each swing costs
+    // stamina: winded, you swing slower and weaker (so flailing away
+    // doesn't pay; timing does).
+    const fresh = spend(p, heavy ? COST.heavy : COST.attack);
+    p.blocking = false;
+    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p) * (fresh ? 1 : 1.7) * (heavy ? 1.5 : 1);
+    p.doAction(heavy ? 0.35 : 0.25);
     let dmg = (def && def.damage ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) + (heroHas(this.hero, 'brawler') ? 1 : 0);
-    const crit = Math.random() < 0.1;
-    if (crit) dmg *= 1.8;
+    if (!fresh) dmg *= 0.6;
+    if (heavy) dmg *= 1.8;
+    // Straight back at them after a parry: a sure, hard blow.
+    const riposte = p.riposte > 0;
+    const crit = riposte || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
+    if (crit) dmg *= riposte ? 2 : 1.8;
+    if (riposte) {
+      p.riposte = 0;
+      this.renderer.floatText(target.x, target.y + 2.4, target.z, 'riposte!', '#ffe070');
+    }
+    // Caught mid-swing: knocked off their stroke (always, with a heavy
+    // blow or a riposte; usually, with a plain one).
+    if (target.windup && (heavy || riposte || Math.random() < 0.65)) {
+      interrupt(target, heavy ? 0.9 : 0.5);
+      this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
+    }
     onSwing(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
     onBladeHit(this, p, target);
-    // Knockback.
-    const kx = Math.sign(target.x - p.x);
-    const kz = Math.sign(target.z - p.z);
-    if (!target.moving && target.hp > 0 && (kx || kz) && !target.sleeping) {
-      const nx = target.x + (Math.abs(kx) >= Math.abs(kz) ? kx : 0);
-      const nz = target.z + (Math.abs(kx) >= Math.abs(kz) ? 0 : kz);
-      const ny = this.world.stepTarget(target.x, target.y, target.z, nx, nz, false);
-      if (ny >= 0 && !this.occupiedBySolid(nx, ny, nz, target)) target.startMove(nx, ny, nz, 0.12);
-    }
+    // Knockback (two paces for a heavy blow).
+    if (!target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, heavy ? 2 : 1);
   }
 
   damage(target, amount, source, crit = false) {
     if (target.dead || target.down) return;
+    // (God mode, from the command console.)
+    if (target.kind === 'player' && this.cheats.god) return;
     // An adventurer slips a blow and rolls clear.
     if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
     const duel = this.duel;
@@ -3447,7 +3562,7 @@ export class Game {
       } else if (target.warband && target.warband.foe) {
         // (Nor is fighting raiders, or soldiers in a battle.)
         if (source.kind === 'player') this.sim.war.onStruck(target);
-        if (target.warband.kind === 'bandit') this.sim.bandits.onHurt(target);
+        if (target.warband.kind === 'bandit' || target.warband.merc) this.sim.bandits.onHurt(target);
       } else if (source.kind === 'player' && target.hp > 0) this.crime(target);
       else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
@@ -3614,7 +3729,7 @@ export class Game {
       if (e.warband) {
         this.sim.recordDeath(e.originLayout || L, rec, cause, null);
         this.sim.war.onDeath(e, source);
-        if (e.warband.kind === 'bandit') this.sim.bandits.onKilled(e, source);
+        if (e.warband.kind === 'bandit' || e.warband.merc) this.sim.bandits.onKilled(e, source);
         if (byPlayer) this.stats.kills++;
         const civ = e.warband.civ !== null && e.warband.civ !== undefined ? this.world.ow.civs[e.warband.civ] : null;
         // (The first few by name; the rest are counted at the end.)
@@ -3661,10 +3776,12 @@ export class Game {
       }
       // Died on fire (or just after): the meat comes off it roasted.
       const roasted = e.burnT !== undefined && e.burnT > -1.5;
+      // (A tracker knows how to dress a carcass.)
+      const dress = source && source.kind === 'player' && heroHas(this.hero, 'tracker');
       for (const [drop, min, max, chance] of e.S.drops) {
-        if (Math.random() > chance) continue;
+        if (Math.random() > (dress && (drop === 'raw_meat' || drop === 'leather') ? Math.min(1, chance + 0.3) : chance)) continue;
         const item = roasted && drop === 'raw_meat' ? 'cooked_meat' : drop;
-        const n = min + Math.floor(Math.random() * (max - min + 1));
+        const n = min + Math.floor(Math.random() * (max - min + 1)) + (dress && (drop === 'raw_meat' || drop === 'leather') ? 1 : 0);
         if (npcKill) invAdd(source.rec.inv, item, n);
         else this.spawnDrop(item, n, e.x, e.y, e.z, true);
       }
@@ -3929,7 +4046,7 @@ export class Game {
     if (data.explored) this.world.ow.explored.set(data.explored);
     if (data.stats) this.stats = data.stats;
     if (data.cheats) {
-      this.cheats = { ...this.cheats, mapTeleport: !!data.cheats.mapTeleport };
+      this.cheats = { ...this.cheats, mapTeleport: !!data.cheats.mapTeleport, god: !!data.cheats.god };
       if (data.cheats.reveal) this.revealMap = true;
     }
     if (data.sim) this.sim.load(data.sim);

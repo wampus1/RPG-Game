@@ -94,7 +94,7 @@ export class Outings {
   }
 
   // Who goes, how, and when.
-  plan(L, dest, ev, day, rng, now = null) {
+  plan(L, dest, ev, day, rng, now = null, opts = {}) {
     const s = L.settlement;
     const room = this.room(L);
     if (room < 2) return null;
@@ -116,7 +116,7 @@ export class Outings {
       }
       return list[list.length - 1] || null;
     };
-    const lead = weighted(cands.filter((r) => r.job !== 'guard'), keen);
+    const lead = opts.lead && this.free(opts.lead) ? opts.lead : weighted(cands.filter((r) => r.job !== 'guard'), keen);
     if (!lead) return null;
     // A friend or two (their partner and family first).
     const close = (r) => (lead.partner === r.idx ? 4 : lead.household != null && lead.household === r.household ? 2.5 : (lead.friends || []).includes(r.idx) || (r.friends || []).includes(lead.idx) ? 3 : 1);
@@ -150,7 +150,7 @@ export class Outings {
     if (c && c.sid === s.id && this.sim.repEntry(s.id, lead.idx).v + this.sim.areaMod(s.id) >= 30 && !this.game.isWanted(s.id)) t.player = 'ask';
     this.list.push(t);
     const others = comps.map((r) => r.name.first);
-    ledger(L, day, `${full(lead)} is off to ${dest.name}${t.ev ? ` for ${t.ev.title}` : ' to see the place'}${others.length ? `, with ${listNames(others)}` : ''}${guard ? ` (${guard.name.first} of the watch is going along)` : ''}.`);
+    ledger(L, day, `${full(lead)} is off to ${dest.name}${opts.why ? ` ${opts.why.replace(/ in [^,]+$/, '')}` : t.ev ? ` for ${t.ev.title}` : ' to see the place'}${others.length ? `, with ${listNames(others)}` : ''}${guard ? ` (${guard.name.first} of the watch is going along)` : ''}.`);
     return t;
   }
 

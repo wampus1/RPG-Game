@@ -110,7 +110,10 @@ for (const [tier, [speed, dmg]] of Object.entries(TIERS)) {
 item('steel_sword', { name: 'Steel Sword', kind: 'weapon', stack: 1, damage: 9, reach: 1.7, cooldown: 0.4, value: 48 });
 item('spear', { name: 'Iron Spear', kind: 'weapon', stack: 1, damage: 5, reach: 2.6, cooldown: 0.65, value: 20 });
 item('club', { name: 'Wooden Club', kind: 'weapon', stack: 1, damage: 3, reach: 1.4, cooldown: 0.5, value: 3 });
+// A fire-hardened point: what a watch carries before it has a forge.
+item('wooden_spear', { name: 'Wooden Spear', kind: 'weapon', stack: 1, damage: 3.5, reach: 2.6, cooldown: 0.65, value: 5 });
 item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3, cooldown: 0.3, value: 10 });
+item('mace', { name: 'Iron Mace', kind: 'weapon', stack: 1, damage: 4.5, reach: 1.4, cooldown: 0.6, value: 22 });
 item('hammer', { name: 'Smith Hammer', kind: 'tool', stack: 1, tool: 'pick', speed: 2.5, damage: 3, reach: 1.4, cooldown: 0.5, value: 12 });
 item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, damage: 1.5, reach: 1.5, cooldown: 0.5, value: 5 });
 item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
@@ -128,7 +131,7 @@ item('arrow', { value: 1 });
 // --- armour & clothes ----------------------------------------------------------
 // Worn in one of four places. `armor` is the share of each blow it takes
 // off (the pieces add up, to at most 60%); `look` is how it shows on you.
-export const WEAR_SLOTS = ['head', 'body', 'legs', 'feet'];
+export const WEAR_SLOTS = ['head', 'body', 'legs', 'feet', 'shield'];
 export const ARMOR_CAP = 0.6;
 const wear = (key, name, slot, armor, value, look, extra = {}) => item(key, { name, kind: 'armor', stack: 1, slot, armor, value, look, ...extra });
 wear('leather_cap', 'Leather Cap', 'head', 0.04, 10, 'lcap');
@@ -146,6 +149,11 @@ wear('iron_greaves', 'Iron Greaves', 'legs', 0.12, 60, 'plate');
 wear('wool_trousers', 'Wool Trousers', 'legs', 0.01, 8, 'cloth');
 wear('leather_boots', 'Leather Boots', 'feet', 0.03, 12, 'leather');
 wear('iron_boots', 'Iron Boots', 'feet', 0.06, 35, 'iron');
+// Shields go on the other arm: nothing off a blow you don't see coming,
+// most of one you do (hold the right mouse button to raise it).
+wear('wooden_shield', 'Wooden Shield', 'shield', 0, 14, 'wood', { block: 0.7 });
+wear('iron_shield', 'Iron Shield', 'shield', 0, 45, 'iron', { block: 0.88 });
+wear('round_shield', 'Painted Round Shield', 'shield', 0, 26, 'round', { block: 0.78 });
 // The watch's uniform, issued to anyone sworn in as a guard: a mail shirt
 // under a tabard in the colours of the civilization (plain red in a free
 // town), a helm and boots. A look written "kind:#colour" is tinted.

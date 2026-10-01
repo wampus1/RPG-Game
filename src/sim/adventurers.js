@@ -314,9 +314,19 @@ export class Adventurers {
       ledger(L, day, `${nm}, an adventurer passing through, paid for bread for ${n} hungry folk.`);
     } else if (kind === 'spar') {
       const g = rng.pick(guards);
-      const won = rng.chance(0.25 + (g.personality?.bravery || 0.5) * 0.2 - a.level * 0.05);
-      g.mood = clamp((g.mood ?? 0.5) + (won ? 0.15 : 0.05), 0, 1);
-      ledger(L, day, won ? `Guard ${g.name.first} ${g.name.last} bested ${nm} in a friendly bout. The watch is still cheering.` : `${nm} sparred with the watch and put Guard ${g.name.first} ${g.name.last} on the ground, twice.`);
+      // An even match, mostly: the guard's drill and nerve against the
+      // adventurer's road-won skill (and the luck of the day).
+      const gs = 1 + (g.drilled ? 0.35 : 0) + (g.personality?.bravery ?? 0.5) * 0.5 + (this.sim.tech?.has(s, 'drill') ? 0.15 : 0);
+      const as = 0.9 + a.level * 0.3;
+      const roll = (gs - as) * 0.6 + rng.float(-1, 1);
+      const gn = `Guard ${g.name.first} ${g.name.last}`;
+      g.mood = clamp((g.mood ?? 0.5) + (roll > 0 ? 0.15 : 0.05), 0, 1);
+      const line = roll > 0.6 ? rng.pick([`${gn} bested ${nm} in a friendly bout. The watch is still cheering.`, `${nm} challenged the watch, and ${gn} had them in the dirt in three passes.`, `${gn} took ${nm}'s blade off them in a sparring match. ${nm} bought the drinks.`])
+        : roll > 0.1 ? rng.pick([`${gn} edged a hard-fought bout against ${nm}.`, `${nm} and ${gn} sparred till both could barely stand; the watch gave it to ${g.name.first}.`])
+          : roll > -0.1 ? rng.pick([`${nm} and ${gn} sparred to a draw. Neither will hear otherwise.`, `A long bout between ${nm} and ${gn}, called a draw when the light went.`])
+            : roll > -0.6 ? rng.pick([`${nm} got the better of ${gn} in a close bout.`, `${nm} sparred with the watch and just about beat ${gn}.`])
+              : rng.pick([`${nm} sparred with the watch and put ${gn} on the ground, twice.`, `${nm} made short work of ${gn} in a friendly bout. The watch went quiet.`, `${gn} lasted a minute against ${nm}, no more.`]);
+      ledger(L, day, line);
     } else {
       const far = this.game.world.ow.settlements[a.seen[a.seen.length - 2] ?? a.from];
       cheer(8, 0.06);

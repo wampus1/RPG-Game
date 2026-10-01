@@ -22,12 +22,12 @@ const MAX_CATCHUP = 45 * DAY;
 // What each kind of trader deals in (also what their shop restocks).
 export const STOCK = {
   general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket'],
-  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'steel_sword'],
+  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'mace', 'dagger', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'iron_shield', 'steel_sword'],
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
   inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice', 'ale'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
   tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots', 'linen_shirt_red', 'linen_shirt_blue', 'wool_hood_green', 'wool_trousers_black', 'fine_coat_purple'],
-  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft'],
+  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft', 'wooden_shield', 'round_shield'],
   herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness'],
   fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string', 'raft'],
   farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
@@ -265,6 +265,7 @@ export const MATERIALS = {
   shop: [20, 14], library: [26, 22], tailor: [18, 10], guardhouse: [14, 30], temple: [20, 40], herbalist: [16, 8], warehouse: [24, 12],
   stables: [26, 6],
   academy: [28, 24],
+  study: [12, 6],
   stockade: [16, 30],
   prison: [30, 70],
 };
@@ -693,7 +694,7 @@ function produce(L, rec, rng) {
     case 'farmer':
       // Moist fields (recent rain, or water carried from the well) yield more.
       // (Watermills: more from the same fields.)
-      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.25 : 1))) invAdd(rec.inv, rng.pick(e.crops), rng.int(1, 3));
+      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.5 : 1))) invAdd(rec.inv, e.cropFocus && e.crops.includes(e.cropFocus) && rng.chance(0.6) ? e.cropFocus : rng.pick(e.crops), rng.int(1, 3));
       return;
     case 'baker': {
       if (!biz) return;
@@ -751,12 +752,15 @@ function produce(L, rec, rng) {
     }
     case 'blacksmith': {
       // Iron ore and coal make ingots and tools; without them the forge idles.
+      // (With iron cheap they turn to arms and armour, which sell dear;
+      // with none, to mending and stone tools, which need little.)
       if (biz && st.count(biz.store, 'iron_ore') >= 1) {
         st.take(biz.store, 'iron_ore', 1);
         if (st.count(biz.store, 'coal')) st.take(biz.store, 'coal', 1);
         // (Stock for the shelves: the money comes when somebody buys it.)
-        st.add(biz.store, rng.chance(0.6) ? 'iron_ingot' : rng.pick(GOODS.blacksmith), 1);
-      }
+        const arms = e.smithMode === 'arms' && rng.chance(0.6);
+        st.add(biz.store, arms ? rng.pick(['iron_sword', 'spear', 'mace', 'iron_shield', 'iron_helmet', 'chainmail']) : rng.chance(0.6) ? 'iron_ingot' : rng.pick(GOODS.blacksmith), 1);
+      } else if (biz && e.smithMode === 'mend' && rng.chance(0.4)) st.add(biz.store, rng.pick(['stone_axe', 'stone_pickaxe', 'stone_sword', 'hoe']), 1);
       return;
     }
     case 'guard': case 'mayor': case 'child': case 'retired':
@@ -1062,7 +1066,7 @@ function collectTaxes(L, day) {
     total += t;
   }
   // (Bookkeeping: nothing slips through the ledgers.)
-  if (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'bookkeeping')) total = Math.round(total * 1.1);
+  if (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'bookkeeping')) total = Math.round(total * 1.2);
   e.treasury += total;
   e.taxY = total;
   e.taxDay = day;

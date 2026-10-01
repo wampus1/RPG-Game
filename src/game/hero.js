@@ -24,6 +24,15 @@ export const SPECIALTIES = {
   farmer: { name: 'Green Thumb', about: 'Harvests give an extra crop.' },
   sneak: { name: 'Light Step', about: 'People have to be closer to notice what you get up to.' },
   healer: { name: 'Herbalist', about: 'Food and herbs heal you 2 HP more.' },
+  duelist: { name: 'Duelist', about: 'A wider moment to parry, and more of your blows strike true.' },
+  shieldbearer: { name: 'Shield Wall', about: 'Blocking with a shield costs less breath and stops more of the blow.' },
+  marksman: { name: 'Marksman', about: 'Your arrows hit 2 harder and find a weak spot more often.' },
+  tracker: { name: 'Tracker', about: 'Beasts you bring down give more meat and hide; you spot bandit camps from further off.' },
+  tinker: { name: 'Tinker', about: 'Making things at a bench, one time in four you save a material.' },
+  cook: { name: 'Cook', about: 'Cooking at a fire or oven, you often get an extra portion.' },
+  scholar: { name: 'Scholar', about: 'Half again as much comes of your study at a research table.' },
+  rider: { name: 'Horseman', about: 'Horses and wagons go a fifth faster under you.' },
+  sailor: { name: 'Sailor', about: 'You paddle a raft faster and turn it more sharply.' },
 };
 
 export const TRAITS = {
@@ -32,10 +41,20 @@ export const TRAITS = {
   swimmer: { name: 'Strong Swimmer', about: 'Water doesn\'t slow you down.' },
   lucky: { name: 'Lucky', about: 'Better finds on the end of a fishing line.' },
   early_riser: { name: 'Early Riser', about: 'You heal quickly in the morning hours.' },
+  nimble: { name: 'Nimble', about: 'A dodge roll costs half the breath and carries you further.' },
+  tireless: { name: 'Tireless', about: '+30 stamina, and it comes back quicker.' },
+  sure_footed: { name: 'Sure-Footed', about: 'Heavy blows don\'t stagger you or knock you back.' },
+  iron_stomach: { name: 'Iron Stomach', about: 'Every meal heals 1 more; raw food does you as much good as cooked.' },
+  devout: { name: 'Devout', about: 'Priests and the devout think well of you; a prayer at an altar adds blue hearts too.' },
+  silver_tongue: { name: 'Silver Tongue', about: 'People warm to you a quarter faster.' },
   // Flaws: each gives a stat point back.
   frail: { name: 'Frail', about: '-4 health (+1 stat point).', flaw: true },
   rude: { name: 'Blunt', about: 'People like you a little less (+1 stat point).', flaw: true },
   slow: { name: 'Heavy-Footed', about: 'You walk a little slower (+1 stat point).', flaw: true },
+  clumsy: { name: 'Clumsy', about: 'Rolling and blocking cost a third more breath (+1 stat point).', flaw: true },
+  short_winded: { name: 'Short of Breath', about: '-30 stamina (+1 stat point).', flaw: true },
+  outlander: { name: 'Outlander', about: 'Traders charge you 8% more, wherever you go (+1 stat point).', flaw: true },
+  notorious: { name: 'Notorious', about: 'Your face is known: people notice what you get up to from further off (+1 stat point).', flaw: true },
 };
 
 export const ORIGINS = {
@@ -152,10 +171,14 @@ export function hpBonus(h) {
 }
 // Multiplies what you pay (below 1 is better); sell prices divide by it.
 export function priceMult(h) {
-  return (1 - 0.03 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'haggler') ? 0.92 : 1);
+  return (1 - 0.03 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'haggler') ? 0.92 : 1) * (has(h, 'outlander') ? 1.08 : 1);
 }
 export function repGainMult(h) {
-  return 1 + 0.12 * (stat(h, 'cha') - STAT_BASE);
+  return (1 + 0.12 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'silver_tongue') ? 1.25 : 1);
+}
+// Breath for blocking, rolling and swinging.
+export function staminaBonus(h) {
+  return (has(h, 'tireless') ? 30 : 0) - (has(h, 'short_winded') ? 30 : 0);
 }
 export function opinionBonus(h) {
   // Well dressed (or charming for a few hours), people warm to you at once.

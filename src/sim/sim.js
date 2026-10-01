@@ -40,6 +40,9 @@ import { Customs } from './culture.js';
 import { History } from './history.js';
 import { Society } from './society.js';
 import { Bandits } from './bandits.js';
+import { Founding } from './founding.js';
+import { Hardship } from './hardship.js';
+import { Religion } from './religion.js';
 import { Market } from './market.js';
 import { Prosperity } from './prosperity.js';
 
@@ -121,6 +124,9 @@ export class Sim {
     this.history = new History(game, this);
     this.society = new Society(game, this);
     this.bandits = new Bandits(game, this);
+    this.founding = new Founding(game, this);
+    this.hardship = new Hardship(game, this);
+    this.religion = new Religion(game, this);
     this.market = new Market(game, this);
     this.prosperity = new Prosperity(game, this);
     this.bp = null;
@@ -154,6 +160,9 @@ export class Sim {
     if (dead) for (const i of dead) if (L.npcs[i]) L.npcs[i].alive = false;
     const sv = this.saved && this.saved.get(sid);
     if (sv) this.applySettlement(L, sv);
+    // (A new town keeps to what its realm knows from the first: no forge
+    // lit without the know-how, and the watch armed to match.)
+    else if (this.tech) this.tech.enforce(L, 0);
     if (L.econ.deserted !== undefined) L.settlement.deserted = true;
     // A village that has grown into a town (or a town into a city).
     const s0 = L.settlement;
@@ -249,6 +258,8 @@ export class Sim {
       this.customs.tick();
       this.society.tick(0.5);
       this.bandits.update(0.5);
+      this.founding.update();
+      this.religion.update();
       this.market.update();
     }
     this.war.update(dt);
@@ -365,6 +376,8 @@ export class Sim {
     const rec = npc.rec;
     const sid = this.repSidOf(npc);
     let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid) + opinionBonus(this.game.hero);
+    // The devout get on with priests and the pious.
+    if (heroHas(this.game.hero, 'devout') && (rec.job === 'priest' || (rec.traits || []).includes('devout'))) v += 15;
     // Children don't hear what other towns' mayors write about you.
     if (rec.age === 'child') v += this.diplomacy.penalty(sid);
     const c = this.citizen;
@@ -420,6 +433,8 @@ export class Sim {
     if (!a) return [];
     // A light step: people have to be closer to notice.
     if (heroHas(this.game.hero, 'sneak')) radius = Math.max(2, Math.round(radius * 0.7));
+    // (A face everyone knows.)
+    if (heroHas(this.game.hero, 'notorious')) radius = Math.round(radius * 1.25);
     // It's harder to make things out in the dark.
     const m = this.game.minute;
     const dark = m < 330 || m >= 1230;
@@ -1030,6 +1045,7 @@ export class Sim {
     weddings(this, L, day, rng);
     comingOfAge(this, L, day);
     raids(this, L, day, rng);
+    this.hardship.daily(L, day);
     this.realms.daily(L, day, rng);
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
@@ -1660,7 +1676,7 @@ export class Sim {
     // Letters from the mayor decide where the merchant goes first; one who
     // left home to seek their fortune goes back to visit, in time.
     const f = rec.life && rec.life.fortune;
-    const homeS = f && !f.back && day - f.since >= 15 ? ow.settlements[f.home] : null;
+    const homeS = f && !f.back && (!f.fate || f.fate === 'merchant') && day - f.since >= 15 ? ow.settlements[f.home] : null;
     const homeQ = homeS && !deserted(homeS) && feel(homeS) !== 'hostile' && !this.war.unsafe(homeS) ? { o: homeS, d: Math.hypot(homeS.cx - s.cx, homeS.cz - s.cz) } : null;
     const pick = homeQ || this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
     if (homeQ) {
@@ -1883,6 +1899,8 @@ export class Sim {
     }
     // The trading companies, riding and driving their wagons (or camped).
     out.push(...this.caravans.roadTravellers());
+    // Settlers on their way to found a village.
+    out.push(...this.founding.roadTravellers());
     return out;
   }
 
@@ -1932,6 +1950,8 @@ export class Sim {
       caravans: this.caravans.serialize(),
       outings: this.outings.serialize(),
       bandits: this.bandits.serialize(),
+      founding: this.founding.serialize(),
+      religion: this.religion.serialize(),
       market: this.market.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
@@ -1996,6 +2016,9 @@ export class Sim {
 
   load(data) {
     if (!data) return;
+    // (Villages founded since the world began go back on the map first.)
+    this.founding.load(data.founding);
+    this.religion.load(data.religion);
     this.saved = new Map((data.settlements || []).map((s) => [s.sid, s]));
     this.rep = new Map(data.rep || []);
     this.visits = new Map(data.visits || []);

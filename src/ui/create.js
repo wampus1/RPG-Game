@@ -211,20 +211,29 @@ export class CharacterWindow extends Window {
       });
     } else {
       const list = tab === 'skills' ? h.specialties : h.traits;
-      g.text(3, 6, tab === 'skills' ? 'Pick two specialties.' : 'Up to two traits. Flaws (orange) give a stat point back.', C.dim);
+      g.text(3, 6, tab === 'skills' ? 'Pick two specialties.' : 'Up to two traits; flaws (orange) give a point back.', C.dim);
+      // Two columns; what the one you're on does, underneath.
+      const per = Math.ceil(rows.length / 2);
       rows.forEach((r, j) => {
-        const y = 8 + j * 3;
-        const { sel, i } = rowAt(r, 2, y, 50);
+        const col = j < per ? 0 : 1;
+        const x = 2 + col * 25;
+        const y = 8 + (j % per) * 2;
+        const { sel, i } = rowAt(r, x, y, 24);
         const on = list.includes(r.key);
         const flaw = r.type === 'trait' && TRAITS[r.key].flaw;
-        g.text(3, y, on ? '[x]' : '[ ]', on ? C.green : C.faint);
-        g.text(7, y, r.label, sel ? C.white : on ? (flaw ? C.orange : C.fg) : flaw ? '#a87050' : C.dim);
-        g.text(7, y + 1, r.about.slice(0, 45), C.faint);
-        this.hit(2, y, 50, 2, () => {
+        g.text(x + 1, y, on ? '[x]' : '[ ]', on ? C.green : C.faint);
+        g.text(x + 5, y, r.label.slice(0, 19), sel ? C.white : on ? (flaw ? C.orange : C.fg) : flaw ? '#a87050' : C.dim);
+        this.hit(x, y, 24, 1, () => {
           this.sel = i;
           this.change(r, 1);
         });
       });
+      const cur = hovAbout || rows[this.sel];
+      if (cur) {
+        const y0 = 9 + per * 2;
+        g.text(3, y0, cur.label, C.cyan);
+        wrap(cur.about, 48).slice(0, 2).forEach((l, i) => g.text(3, y0 + 1 + i, l, C.dim));
+      }
     }
 
     // The preview, and what the line you're on does.

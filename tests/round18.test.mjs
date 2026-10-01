@@ -169,8 +169,9 @@ test('dice are thrown onto the table as little cubes that roll and come to rest 
 
 // ------------------------------------------------------------ the tech tree
 test('four branches of seven: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
-  assert.equal(TECH_IDS.length, 28);
-  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, 7);
+  // (Seven a branch; Engineering an eighth, its second root: metalworking.)
+  assert.equal(TECH_IDS.length, 29);
+  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, b === 'engineering' ? 8 : 7);
   const game = world();
   const T = game.sim.tech;
   const s = game.world.ow.settlements.find((q) => q.civ && q.type === 'town');
@@ -185,9 +186,12 @@ test('four branches of seven: potions, master merchants, jewellers, steel and we
   assert.ok(stockFor(L, 'smith').includes('steel_sword'));
   // Guards re-equipped.
   T.learn(s, 'drill', game.day);
+  T.learn(s, 'metalworking', game.day);
   T.daily(L, game.day, new RNG(1));
-  const g = people(L).find((r) => r.job === 'guard');
-  assert.ok(g.drilled && g.equipment.tool === 'steel_sword');
+  // (Steel for the swordsmen; a spear or an axe stays what it is.)
+  const guards = people(L).filter((r) => r.job === 'guard');
+  assert.ok(guards.length && guards.every((g) => g.drilled));
+  assert.ok(guards.filter((g) => /sword/.test(g.equipment.tool)).every((g) => g.equipment.tool === 'steel_sword'));
   // Townsfolk wake hardier from proper beds (hospitality).
   T.learn(s, 'hospitality', game.day);
   T.daily(L, game.day + 1, new RNG(2));
@@ -225,7 +229,7 @@ test('the mayor shows the tree, and the study minigame records an insight for th
   const tw = new TechWindow(ui, game, s);
   const { g, texts } = grid();
   tw.draw(g, game);
-  assert.ok(texts.some((t) => /of 28 learned/.test(t)), 'the count');
+  assert.ok(texts.some((t) => /of 29 learned/.test(t)), 'the count');
   tw.focus('bookkeeping');
   const g2 = grid();
   tw.draw(g2.g, game);
@@ -465,6 +469,8 @@ test('war needs a reason; allies are called (or the alliance breaks); battles ki
   c.values = b.values.slice();
   P.ally(b, c, game.day);
   R.shift(c, a, 100 - R.relation(c, a).score, game.day);
+  // (A ruler with some fire in them.)
+  R.ruler(a).personality = { ...(R.ruler(a).personality || {}), temper: 0.8, kindness: 0.3 };
   for (let i = 0; i < 40 && !W.wars.length; i++) W.considerWars([a, b], game.day, new RNG(100 + i));
   assert.equal(W.wars.length, 1, 'war declared');
   const w = W.wars[0];

@@ -224,7 +224,7 @@ test('gems: what a stone does depends on what it is set in, for you or a guard',
   // Emerald armour closes a wound, slowly.
   p.equip.body = 'chainmail+emerald';
   p.hp = p.maxHp - 3;
-  p.regenT = 0;
+  p.gemMendT = 0;
   tickStatus(game, p, 0.1);
   assert.equal(p.hp, p.maxHp - 2);
   // A guard with a sapphire sword chills what they cut.

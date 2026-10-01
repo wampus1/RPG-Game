@@ -218,6 +218,15 @@ function drawHumanoid(look, dir, frame) {
   }
   // Arms.
   const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : shirtC;
+  // A shield on the off arm (on the back, seen from behind).
+  const shieldAt = (sx0, sy0) => {
+    const kind = gear.shield;
+    const face = hex(tint.shield || (kind === 'iron' ? '#9a9aa8' : kind === 'round' ? '#b83a32' : '#8a5a2a'));
+    const rim = hex(kind === 'iron' ? '#c8c8d4' : '#5a3a1a');
+    R(sx0, sy0, 4, 5, rim);
+    R(sx0 + 1, sy0 + 1, 2, 3, face);
+    if (kind === 'round') S(sx0 + 1, sy0 + 2, hex('#e8d8a0'));
+  };
   if (!side) {
     const swing = frame === 3 ? -2 : walk;
     R(3, torsoY + (swing > 0 ? -1 : 0), 1, torsoH - 1, armC);
@@ -229,6 +238,11 @@ function drawHumanoid(look, dir, frame) {
     R(ax, torsoY + 1, 2, torsoH - 2, shade(armC, 0.9));
     R(ax, torsoY + torsoH - 1, 2, 1, skinC);
     if (frame === 3) R(2, torsoY + 2, 3, 2, skinC);
+  }
+  if (gear.shield && !sit) {
+    if (dir === 0) shieldAt(1, torsoY + 1);
+    else if (dir === 2) shieldAt(6, torsoY);
+    else shieldAt(1, torsoY + 1);
   }
   // Head.
   const hx = side ? 4 : 4;
@@ -1044,9 +1058,23 @@ function simpleIcon(key) {
       p.set(13, 2, '#f4f4ff');
       p.set(14, 3, '#9a9aa8');
       break;
+    case 'wooden_spear':
+      p.line(2, 14, 12, 4, HANDLE[0]);
+      p.line(12, 4, 14, 2, '#5a3a1e');
+      p.set(14, 2, '#3a2412');
+      break;
     case 'club':
       p.line(3, 13, 9, 7, HANDLE[0]);
       p.ellipse(11, 5, 3, 3, '#7a5430');
+      break;
+    case 'mace':
+      p.line(3, 13, 9, 7, HANDLE[1]);
+      p.ellipse(11, 5, 3, 3, '#8a8a98');
+      p.set(11, 1, '#c8c8d4');
+      p.set(14, 5, '#c8c8d4');
+      p.set(11, 8, '#c8c8d4');
+      p.set(8, 5, '#c8c8d4');
+      p.set(10, 4, '#d8d8e4');
       break;
     case 'dagger':
       p.line(6, 10, 12, 4, '#d8d8e4');
@@ -1265,6 +1293,25 @@ function armorIcon(it) {
       p.rect(7, 6, 2, 3, hex('#f0e0a0'));
     }
     p.hline(4, 11, 12, lo);
+  } else if (it.slot === 'shield') {
+    // A shield, face on.
+    const face = lk === 'round' ? hex('#b83a32') : c;
+    const rim = lk === 'iron' ? hex('#c8c8d4') : hex('#5a3a1a');
+    if (lk === 'round') {
+      p.ellipse(8, 8, 6, 6, rim);
+      p.ellipse(8, 8, 5, 5, face);
+      p.rect(7, 3, 2, 11, hex('#e8d8a0'));
+      p.rect(3, 7, 11, 2, hex('#e8d8a0'));
+      p.ellipse(8, 8, 1, 1, rim);
+    } else {
+      p.rect(3, 2, 10, 9, rim);
+      p.rect(4, 3, 8, 8, face);
+      p.rect(5, 11, 6, 2, rim);
+      p.rect(6, 11, 4, 1, face);
+      p.rect(7, 13, 2, 1, rim);
+      if (lk === 'iron') p.rect(7, 3, 2, 9, hi);
+      else for (let y = 3; y < 11; y += 2) p.hline(4, 11, y, lo);
+    }
   } else if (it.slot === 'legs') {
     p.rect(4, 3, 8, 2, lo);
     p.rect(4, 5, 3, 9, c);

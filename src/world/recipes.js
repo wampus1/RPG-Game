@@ -37,6 +37,7 @@ r('hand', 'torch', 4, { stick: 1, coal: 1 });
 r('hand', 'workbench', 1, { planks: 4 });
 r('hand', 'campfire', 1, { stick: 3, cobblestone: 2 });
 r('hand', 'club', 1, { stick: 1, planks: 2 });
+r('workbench', 'wooden_spear', 1, { stick: 3 });
 
 // Leather and cloth, sewn by hand.
 r('hand', 'leather_cap', 1, { leather: 2, string: 1 });
@@ -54,6 +55,8 @@ r('workbench', 'wood_pickaxe', 1, { planks: 3, stick: 2 });
 r('workbench', 'wood_axe', 1, { planks: 3, stick: 2 });
 r('workbench', 'wood_shovel', 1, { planks: 1, stick: 2 });
 r('workbench', 'wood_sword', 1, { planks: 2, stick: 1 });
+r('workbench', 'wooden_shield', 1, { planks: 4, leather: 1 });
+r('workbench', 'round_shield', 1, { planks: 3, leather: 1, cloth: 1 });
 r('workbench', 'stone_pickaxe', 1, { cobblestone: 3, stick: 2 });
 r('workbench', 'stone_axe', 1, { cobblestone: 3, stick: 2 });
 r('workbench', 'stone_shovel', 1, { cobblestone: 1, stick: 2 });
@@ -121,6 +124,8 @@ for (const t of ['iron', 'gold']) {
 }
 r('anvil', 'spear', 1, { iron_ingot: 2, stick: 3 });
 r('anvil', 'dagger', 1, { iron_ingot: 1, stick: 1 });
+r('anvil', 'mace', 1, { iron_ingot: 3, stick: 1 });
+r('anvil', 'iron_shield', 1, { iron_ingot: 5, planks: 2 });
 r('anvil', 'hammer', 1, { iron_ingot: 2, stick: 2 });
 r('anvil', 'hoe', 1, { iron_ingot: 1, stick: 2 });
 r('anvil', 'lantern', 1, { iron_ingot: 1, torch: 1 });

@@ -4,6 +4,7 @@ import { CHAR_W, CHAR_H } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { TECHS, BRANCHES } from '../sim/tech.js';
+import { has as heroHas } from '../game/hero.js';
 import { itemIcon } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
 
@@ -192,7 +193,7 @@ export class TechWindow extends Window {
     if (stt === 'done') line(when ? `Learned on day ${Math.max(1, when.day)}` : 'Known from of old', C.green);
     else if (stt === 'current') line(`Being studied: ${bar(st.progress / t.cost, 10)} ${pct(st.progress, t.cost)}%`, C.hi);
     else if (stt === 'open') line('Can be studied next', C.fg);
-    else line(`Needs ${t.req.filter((k) => !st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')} first`, C.orange);
+    else line(`Needs ${[...t.req, ...(t.also || [])].filter((k) => !st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')} first`, C.orange);
     y++;
     line(t.desc, C.white);
     y++;
@@ -455,7 +456,7 @@ export class ResearchWindow extends Window {
       this.ui.audio?.play('error');
       return;
     }
-    const pts = 4 + Math.round(this.candle * 4);
+    const pts = Math.round((4 + Math.round(this.candle * 4)) * (heroHas(game.hero, 'scholar') ? 1.5 : 1));
     const T = game.sim.tech;
     const st = T.stateOf(this.s);
     const was = st.current;

@@ -9,6 +9,7 @@ import { ITEMS } from '../world/items.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { removeItem, countItem, addItem } from './inventory.js';
 import { letGo } from './leads.js';
+import { has as heroHas } from './hero.js';
 
 // What a horse will come to you for.
 export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage']);
@@ -291,7 +292,7 @@ export class Riding {
   // How much quicker you go (step time multiplier).
   pace() {
     const m = this.game.player.mount;
-    return !m ? 1 : m.kind === 'horse' ? 0.55 : 0.7;
+    return (!m ? 1 : m.kind === 'horse' ? 0.55 : 0.7) * (m && heroHas(this.game.hero, 'rider') ? 0.82 : 1);
   }
 
   // Your horses wander a little: keep track of where they are.

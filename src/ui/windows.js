@@ -5,6 +5,7 @@ import { C, wrap } from './ascii.js';
 import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
+import { has as heroHas } from '../game/hero.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
@@ -116,7 +117,7 @@ export class InventoryWindow extends Window {
     g.text(40, 1, 'Worn', C.dim);
     WEAR_SLOTS.forEach((k, j) => {
       const sx = 40;
-      const sy = 2 + j * 4;
+      const sy = 2 + j * 3;
       const hov = this.hovering(sx, sy, 3, 2);
       g.box(sx - 1, sy - 1, 5, 4, { fg: C.faint });
       g.fill(sx, sy, 3, 2, ' ', C.fg, hov ? 'rgba(70,60,90,0.95)' : 'rgba(26,22,34,0.95)');
@@ -126,7 +127,7 @@ export class InventoryWindow extends Window {
         if (hov) this.ui.itemTooltip({ item: p.equip[k], count: 1 });
       } else g.text(sx + 1, sy, '·', C.faint);
       g.text(sx + 5, sy, cap(k), it ? C.fg : C.faint);
-      g.text(sx + 5, sy + 1, it ? (it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', C.dim);
+      g.text(sx + 5, sy + 1, it ? (it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', C.dim);
       this.hit(sx, sy, 3, 2, () => this.wearClick(p, k));
     });
     g.text(40, 18, `Armour ${Math.round(p.armorValue() * 100)}%`, C.cyan);
@@ -326,17 +327,28 @@ export class CraftWindow extends Window {
   craft(r, game, times) {
     const inv = game.player.inv;
     let made = 0;
+    const saved = [];
     for (let t = 0; t < times; t++) {
       if (!this.canCraft(inv, r)) break;
-      for (const [k, n] of Object.entries(r.in)) removeAny(inv, k, n);
-      const left = addItem(inv, r.out, r.n);
+      const used = [];
+      for (const [k, n] of Object.entries(r.in)) used.push(...removeAny(inv, k, n));
+      // A cook gets more out of the pot; a tinker wastes less.
+      const food = ITEMS[r.out]?.kind === 'food';
+      const extra = food && heroHas(game.hero, 'cook') && Math.random() < 0.35 ? 1 : 0;
+      const left = addItem(inv, r.out, r.n + extra);
       if (left) game.spawnDrop(r.out, left, game.player.x, game.player.y, game.player.z, true);
+      if (extra) saved.push(`an extra ${ITEMS[r.out].name}`);
+      if (!food && heroHas(game.hero, 'tinker') && Math.random() < 0.25) {
+        const back = used.length ? used[Math.floor(Math.random() * used.length)][0] : null;
+        if (back && ITEMS[back] && !addItem(inv, back, 1)) saved.push(`a ${ITEMS[back].name}`);
+      }
       made++;
     }
     if (made) {
       game.audio?.play('craft');
       game.stats.crafted += made;
       this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * made}`, C.green);
+      if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
     } else game.audio?.play('error');
   }
   onWheel(d) {
@@ -1065,6 +1077,8 @@ export class LedgerWindow extends Window {
       for (const b of wanted) {
         const band = game.sim.bandits.get(b.band);
         const at = band && band.camp ? `, camped ${game.sim.bandits.where(band, this.L.settlement)}` : '';
+        // (Read it here: the camp goes on your map.)
+        if (band && band.camp) game.sim.bandits.learnOf(band, `the notice board in ${this.L.settlement.name}`);
         for (const l of wrap(`${b.name[0].toUpperCase()}${b.name.slice(1)} (${band ? band.members.length : '?'})${at}. ¤${b.perHead} a head, paid at the town hall.`, this.w - 7)) lines.push({ t: l, c: '#f0c090' });
       }
       lines.push({ t: '', c: C.fg });
@@ -1072,7 +1086,21 @@ export class LedgerWindow extends Window {
     lines.push({ t: 'NOTICES', c: C.hi });
     const notes = e.ledger.map((n, i) => ({ n, i })).sort((a, b) => b.n.day - a.n.day || b.i - a.i).map((q) => q.n);
     if (!notes.length) lines.push({ t: 'Nothing posted yet.', c: C.dim });
-    for (const n of notes) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
+    // A rule between the days; the everyday comings and goings fainter
+    // than the news that matters.
+    let lastDay = null;
+    for (const n of notes) {
+      const d = Math.max(1, n.day);
+      if (d !== lastDay) {
+        const label = ` Day ${d}${d === game.day ? ' (today)' : d === game.day - 1 ? ' (yesterday)' : ''} `;
+        const side = Math.max(2, Math.floor((this.w - 7 - label.length) / 2));
+        if (lastDay !== null) lines.push({ t: '', c: C.fg });
+        lines.push({ t: `${'─'.repeat(side)}${label}${'─'.repeat(side)}`, c: '#8a7a5a' });
+        lastDay = d;
+      }
+      const minor = newsWeight(n.text) < 1;
+      for (const l of wrap(n.text, this.w - 7)) lines.push({ t: l, c: minor ? '#8e826c' : '#e8d8b8' });
+    }
     if (far.length) {
       lines.push({ t: '', c: C.fg });
       lines.push({ t: 'NEWS FROM AFAR', c: C.hi });
@@ -1192,10 +1220,18 @@ export class MapWindow extends Window {
     // Wars and raids: tomorrow's battlefield, the fields fought over
     // lately, and towns expecting raiders.
     let mark = null;
+    const seen = (cx, cz) => cx >= 0 && cz >= 0 && cx < MAP_W && cz < MAP_H && (ow.explored[cz * MAP_W + cx] || game.revealMap);
+    this.armies = [];
     for (const m of game.sim.war.markers()) {
       const cx = Math.floor(m.x / REGION_W);
       const cz = Math.floor(m.z / REGION_D);
-      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || !(ow.explored[cz * MAP_W + cx] || game.revealMap)) continue;
+      if (!seen(cx, cz)) continue;
+      // (Armies on the march are drawn finer, below.)
+      if (m.kind === 'army') {
+        this.armies.push(m);
+        if (this.hovering(2 + cx * 2, 1 + cz, 2, 1)) mark = m;
+        continue;
+      }
       const x = 2 + cx * 2 + (m.kind === 'raid' ? 0 : (m.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
       const y = 1 + cz;
       if (m.kind !== 'raid' && icons.has(cz * 10000 + cx)) continue;
@@ -1203,6 +1239,15 @@ export class MapWindow extends Window {
         if (blink) g.put(x, y, '!', '#ffffff', '#c03020');
       } else g.put(x, y, 'X', m.kind === 'battle' ? '#ffffff' : '#ff9080', m.kind === 'battle' ? (blink ? '#c02020' : '#801818') : '#3a1a1a');
       if (this.hovering(x, y, 1, 1)) mark = m;
+    }
+    // Bandit camps you've heard of (or seen the smoke of).
+    for (const c of game.sim.bandits ? game.sim.bandits.knownCamps() : []) {
+      const cx = Math.floor(c.x / REGION_W);
+      const cz = Math.floor(c.z / REGION_D);
+      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || icons.has(cz * 10000 + cx)) continue;
+      const x = 2 + cx * 2 + ((c.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
+      g.put(x, 1 + cz, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10');
+      if (this.hovering(x, 1 + cz, 1, 1)) mark = { label: `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}` };
     }
     const y0 = MAP_H + 2;
     if (hover && hover.known) {
@@ -1213,13 +1258,17 @@ export class MapWindow extends Window {
       if (hover.icon) {
         const s = hover.icon.s;
         info = `${s.name} · ${cap(s.type)} · ${s.condition} · ${BIOMES[s.biome].name}`;
+        const L = game.world.layouts.get(s.id);
+        const rd = L && L.econ && L.econ.raidedDay;
+        if (rd !== undefined && rd !== null && game.day - rd <= 3) info += game.day === rd ? ' · raided today' : ` · raided ${game.day - rd} day${game.day - rd === 1 ? '' : 's'} ago`;
         g.text(2, y0 + 1, s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', s.civ ? s.civ.color.hex : C.dim);
       } else if (c.civ !== null && ow.civs[c.civ]) g.text(2, y0 + 1, `Territory of the ${ow.civs[c.civ].name}`, ow.civs[c.civ].color.hex);
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
       if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
+    if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village [■] town ┌┐ city ╔╗ walls ~ river ─ road † ruin X battle ! raid', C.faint);
+    g.text(2, y0 + 2, '⌂ village [■] town ┌┐ city ─ road † ruin X battle ! raid ▲ bandits', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
   }
@@ -1259,6 +1308,58 @@ export class MapWindow extends Window {
           ctx.fillRect(mx - t / 2, my - t / 2, t, t);
         }
       }
+    }
+    // Where something on the map is, in pixels.
+    const at = (x, z) => ({ x: ox + (2 + (x / REGION_W) * 2) * CHAR_W, y: oy + (1 + z / REGION_D) * CHAR_H });
+    const time = this.ui.time;
+    // Smoke still rising over a town raided these last days.
+    for (const s of ow.settlements) {
+      const L = game.world.layouts.get(s.id);
+      const rd = L && L.econ ? L.econ.raidedDay : undefined;
+      if (rd === undefined || rd === null || game.day - rd > 3 || !known(s.cx, s.cz)) continue;
+      const fresh = 1 - (game.day - rd) / 4;
+      const mx = ox + (2 + s.cx * 2) * CHAR_W + w / 2;
+      const my = oy + (1 + s.cz) * CHAR_H + 2;
+      if (game.day - rd <= 1) {
+        ctx.fillStyle = `rgba(255,140,40,${0.35 + 0.25 * Math.sin(time * 9)})`;
+        ctx.fillRect(mx - 2, my - 1, 4, 2);
+      }
+      for (let i = 0; i < 4; i++) {
+        const ph = (time * 0.45 + i / 4 + s.id * 0.13) % 1;
+        const r = 1.5 + ph * 3.5;
+        ctx.fillStyle = `rgba(${game.day === rd ? '70,66,62' : '130,126,120'},${(1 - ph) * 0.55 * fresh})`;
+        ctx.beginPath();
+        ctx.arc(mx + Math.sin(ph * 5 + i) * 2 + ph * 3, my - ph * 16, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Goods on the move: merchants and caravans along the roads (a few).
+    this.tradeT = (this.tradeT || 0) - 1;
+    if (this.tradeT <= 0 || !this.trade) {
+      this.tradeT = 20;
+      this.trade = game.sim.travellers().filter((tr) => tr.pos && (tr.company || (tr.rec && (tr.rec.traveler || tr.rec.job === 'merchant')))).slice(0, 14).map((tr) => ({ x: tr.pos.x, z: tr.pos.z }));
+    }
+    for (const t of this.trade) {
+      const cx = Math.floor(t.x / REGION_W);
+      const cz = Math.floor(t.z / REGION_D);
+      if (!known(cx, cz) || icons.has(cz * 10000 + cx)) continue;
+      const q = at(t.x, t.z);
+      ctx.fillStyle = 'rgba(40,24,8,0.8)';
+      ctx.fillRect(Math.round(q.x) - 2, Math.round(q.y) - 2, 4, 4);
+      ctx.fillStyle = Math.floor(time * 2 + t.x) % 2 ? '#ffe080' : '#f0c040';
+      ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 2, 2);
+    }
+    // Armies on the march: a banner in their colours, a column behind.
+    for (const m of this.armies || []) {
+      const q = at(m.x, m.z);
+      const bx = Math.round(q.x);
+      const by = Math.round(q.y);
+      ctx.fillStyle = 'rgba(30,20,20,0.85)';
+      for (let i = 1; i <= 3; i++) ctx.fillRect(bx - i * 3, by + 1, 2, 2);
+      ctx.fillRect(bx, by - 8, 1, 10);
+      ctx.fillStyle = m.color || '#c03030';
+      const wave = Math.round(Math.sin(time * 6) * 0.6);
+      ctx.fillRect(bx + 1, by - 8 + wave, 5, 3);
     }
     ctx.restore();
   }
@@ -1981,6 +2082,16 @@ export class PrintWindow extends Window {
 }
 
 // Reading the latest edition.
+// How much a line of a town's news matters: everyday comings and goings
+// (merchants in and out, the treasury, the taxes, who's moved house) are
+// shown fainter than raids, wars, crimes, deaths and the like.
+const MINOR_NEWS = /arrived in town|set out for|came back from|merchant|in its coffers|taxes stand|stand at \d+%|wages|moved into|is coming from|set the scholars|is selling|bought|sold|has gone to start again|by order of|delivered|letter/i;
+const MAJOR_NEWS = /war|raid|battle|killed|murder|died|fire|famine|exiled|bandit|statue|crowned|rules|sacked|plague|holy|pilgrim|revolt|riot|founded|settlers|siege|surrender/i;
+export function newsWeight(text) {
+  if (MAJOR_NEWS.test(text)) return 2;
+  return MINOR_NEWS.test(text) ? 0 : 1;
+}
+
 // ---------------------------------------------------------------- console
 // Typed commands (see commands.js): teleporting, revealing the map,
 // making things happen. What it said, and what you typed, stay for next time.
@@ -2032,6 +2143,7 @@ export class ConsoleWindow extends Window {
     this.ui.audio?.play('select');
     // Off to somewhere else: out of the way, to see it.
     if (/^\/?tp\b/i.test(t) && out.some((l) => /^Teleported/.test(l))) this.close();
+    if (/^\/?(skip|ff)\b/i.test(t) && out.some((l) => /^Fast-forwarding/.test(l))) this.close();
   }
   onWheel(d) {
     this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll - Math.sign(d) * 3));

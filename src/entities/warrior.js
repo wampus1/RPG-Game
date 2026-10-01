@@ -7,8 +7,10 @@
 // them, and fall back when badly hurt; the watch rides out on horseback to
 // meet raiders in the fields.
 
+import { GROUND } from '../config.js';
 import { B } from '../world/blocks.js';
 import { FIRESIDE } from '../sim/bandits.js';
+import { ignite, roofTarget, nearestBurnable } from '../game/fire.js';
 
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
 
@@ -233,7 +235,8 @@ function bandit(n, wb, dt) {
     }
   }
   if (wb.phase === 'raid') {
-    if (goTo(n, wb.goal.x, wb.goal.z, 3) || n.stateT > 90) {
+    // (Close enough: the middle of the square is often the well.)
+    if (goTo(n, wb.goal.x, wb.goal.z, 3) || Math.max(Math.abs(n.x - wb.goal.x), Math.abs(n.z - wb.goal.z)) <= 4 || n.stateT > 90) {
       wb.phase = 'loot';
       wb.lootT = 0;
       n.say(n.rng.pick(['Grab what you can!', 'The strongbox! Quick!', 'Fill your sacks!']), 2.5, '#ffb080');
@@ -242,17 +245,116 @@ function bandit(n, wb, dt) {
   }
   if (wb.phase === 'loot') {
     wb.lootT += dt;
+    // Each has a job: the torch-bearers set roofs alight, the rest go
+    // through the houses for what's in the chests, and between times
+    // they're at the strongbox.
+    if (wb.job === undefined) wb.job = wb.torch ? 'burn' : n.rng.chance(0.6) ? 'chest' : 'box';
+    if (wb.job === 'burn' && raidBurn(n, wb, dt)) return;
+    if (wb.job === 'chest' && raidChest(n, wb, dt)) return;
     if (!n.moving && n.rng.chance(dt * 2)) {
       n.doAction(0.3);
       g.renderer.emit(n.x, n.y + 1, n.z, { n: 2, color: ['#ffe070', '#e8c060'], up: 18, speed: 14, life: 0.4, gravity: 120 });
       if (n.rng.chance(0.5)) g.sim.bandits?.grab(n, 3);
     }
-    if (wb.lootT > 12) {
+    if (wb.lootT > 18) {
       wb.phase = 'flee';
       n.stateT = 0;
       n.say(n.rng.pick(['We have it! Away!', 'Back to the hills!', 'Go, go!']), 2.5, '#ffb080');
     }
   }
+}
+
+// A torch onto the nearest roof that'll burn (thrown from a few paces).
+function raidBurn(n, wb, dt) {
+  const g = n.game;
+  const L = g.sim.layoutOf(wb.town);
+  if (!L || (wb.burned || 0) >= 2) return false;
+  if (!wb.burnAt) {
+    const bs = L.buildings.filter((b) => !b.underConstruction && b.x0 !== undefined && b.type !== 'temple' && Math.max(Math.abs(b.door.x - n.x), Math.abs(b.door.z - n.z)) < 16);
+    bs.sort((a, b) => Math.hypot(a.door.x - n.x, a.door.z - n.z) - Math.hypot(b.door.x - n.x, b.door.z - n.z));
+    for (const b of bs.slice(0, 4)) {
+      const t = roofTarget(g, b, n.x, n.z);
+      if (t) {
+        wb.burnAt = t;
+        wb.burnT = 0;
+        break;
+      }
+    }
+    // (Stone and slate won't take: a haystack or a fence will do.)
+    if (!wb.burnAt) wb.burnAt = nearestBurnable(g, n.x, n.y, n.z, 10);
+    if (!wb.burnAt) {
+      wb.burned = 9;
+      return false;
+    }
+    wb.burnT = 0;
+  }
+  const t = wb.burnAt;
+  wb.burnT += dt;
+  if (Math.max(Math.abs(t.x - n.x), Math.abs(t.z - n.z)) > 3 && wb.burnT < 10) {
+    goTo(n, t.x, t.z, 3);
+    return true;
+  }
+  // Up it goes.
+  n.face(t.x, t.z);
+  n.doAction(0.35);
+  for (let i = 1; i <= 5; i++) {
+    const f = i / 6;
+    g.renderer.emit(n.x + (t.x - n.x) * f, n.y + 1.5 + Math.sin(f * Math.PI) * 1.5 + (t.y - n.y) * f * 0.6, n.z + (t.z - n.z) * f, { n: 1, color: ['#ffb040', '#ffe080'], up: 4, speed: 4, life: 0.3, gravity: 0, glow: true });
+  }
+  if (ignite(g, t.x, t.y, t.z, 'bandits')) {
+    const R = g.sim.bandits && g.sim.bandits.raiding;
+    if (R) R.fires = (R.fires || 0) + 1;
+    if (n.rng.chance(0.6)) n.say(n.rng.pick(['Burn it!', 'Let it burn!', 'Light \'em up!']), 2, '#ff9060');
+    // Townsfolk who see it cry out.
+    const by = g.npcs.find((q) => !q.dead && !q.warband && q.state === 'routine' && q.distTo(n) < 12);
+    if (by) by.say(by.rng.pick(['Fire! FIRE!', 'They\'re burning the houses!', 'Water! Get water!']), 2.5, '#ffb080');
+  }
+  wb.burned = (wb.burned || 0) + 1;
+  wb.burnAt = null;
+  return true;
+}
+
+// Into a house for whatever's in the chests.
+function raidChest(n, wb, dt) {
+  const g = n.game;
+  const L = g.sim.layoutOf(wb.town);
+  if (!L || (wb.robbed || 0) >= 2) return false;
+  const w = g.world;
+  if (!wb.chestAt) {
+    const homes = L.buildings.filter((b) => !b.underConstruction && b.x0 !== undefined && (b.residential || b.type === 'shop' || b.type === 'warehouse') && Math.hypot(b.door.x - n.x, b.door.z - n.z) < 20);
+    homes.sort((a, b) => Math.hypot(a.door.x - n.x, a.door.z - n.z) - Math.hypot(b.door.x - n.x, b.door.z - n.z));
+    for (const b of homes.slice(0, 5)) {
+      for (let z = b.z0 + 1; z < b.z1 && !wb.chestAt; z++) {
+        for (let x = b.x0 + 1; x < b.x1; x++) {
+          if (w.regionAt(x, z) && w.getBlock(x, GROUND, z) === B.chest) {
+            wb.chestAt = { x, z, b: b.id };
+            break;
+          }
+        }
+      }
+      if (wb.chestAt) break;
+    }
+    wb.chestT = 0;
+    if (!wb.chestAt) {
+      wb.robbed = 9;
+      return false;
+    }
+  }
+  const c = wb.chestAt;
+  wb.chestT += dt;
+  if (Math.max(Math.abs(c.x - n.x), Math.abs(c.z - n.z)) > 1 && wb.chestT < 15) {
+    goTo(n, c.x, c.z, 1);
+    return true;
+  }
+  if (wb.chestT < 15) {
+    n.face(c.x, c.z);
+    n.doAction(0.4);
+    const took = g.sim.bandits?.lootChest(n, c.x, GROUND, c.z, L) || 0;
+    if (took && n.rng.chance(0.6)) n.say(n.rng.pick(['Mine now!', 'Look at this lot!', 'Into the sack!']), 2, '#ffb080');
+  }
+  wb.robbed = (wb.robbed || 0) + 1;
+  wb.chestAt = null;
+  return true;
 }
 
 // ------------------------------------------------------------ riders
@@ -280,6 +382,28 @@ function soldier(n, wb, dt) {
   const side = L.sides[wb.side];
   const other = L.sides[wb.side === 'a' ? 'b' : 'a'];
   const s = side.sign;
+  // Hired swords: in it for the coin. If their side's being cut down
+  // faster than the other, or they've taken a beating, they're off (a
+  // whole band at once, more often than not).
+  if (wb.merc && L.t > 12) {
+    const up = (S) => S.ents.filter((q) => !q.dead && !q.down && q.warband && q.warband.phase !== 'flee').length / Math.max(1, S.start);
+    const losing = up(side) < up(other) * 0.8 || up(side) < 0.55 || n.hp < n.maxHp * 0.45;
+    if (losing && n.rng.chance(dt * 0.35)) {
+      for (const q of side.ents) {
+        if (q === n || !q.warband || q.warband.merc !== wb.merc || q.dead || q.down || q.warband.phase === 'flee' || !n.rng.chance(0.7)) continue;
+        q.warband.phase = 'flee';
+      }
+      wb.phase = 'flee';
+      n.say(n.rng.pick(['This isn\'t worth the coin!', 'We\'re not dying for you lot!', 'Pay\'s not enough for this! Away!', 'Every man for himself!']), 2.5, '#ffb080');
+      const band = g.sim.bandits?.get(wb.merc);
+      if (band && !band.deserted) {
+        band.deserted = true;
+        const civ = side.civ;
+        if (civ) g.sim.realms.proclaim?.(civ, g.day, `${band.name} took the realm's coin and ran from the field.`);
+      }
+      return leave(n, wb, dt);
+    }
+  }
   const ax = L.axis;
   const perp = L.perp;
   const c = L.centre;

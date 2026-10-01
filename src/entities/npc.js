@@ -14,6 +14,7 @@ import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
+import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
@@ -2072,8 +2073,9 @@ export class NPC extends Entity {
       if (near) game.audio?.play('break', this);
       return true;
     }
-    if (bare && invCount(this.rec.inv, CROPS[this.fieldCrop(bare.x, bare.z)].seed) > 0) {
-      const id = this.fieldCrop(bare.x, bare.z);
+    const sow = bare ? this.sowCrop(bare.x, bare.z) : null;
+    if (bare && invCount(this.rec.inv, CROPS[sow].seed) > 0) {
+      const id = sow;
       const seed = CROPS[id].seed;
       invTake(this.rec.inv, seed, 1);
       this.face(bare.x, bare.z);
@@ -2158,6 +2160,16 @@ export class NPC extends Entity {
     this.fishKey = key;
     this.fishTile = t;
     return t;
+  }
+
+  // What to sow at (x, z): what grows there, unless the town's short of
+  // something else (then every other row of it, seed permitting).
+  sowCrop(x, z) {
+    const base = this.fieldCrop(x, z);
+    const foc = this.layout.econ && this.layout.econ.cropFocus;
+    const id = foc ? B[`${foc}_crop`] : undefined;
+    if (id === undefined || id === base || !CROPS[id] || (x + z) % 2) return base;
+    return invCount(this.rec.inv, CROPS[id].seed) > 0 ? id : base;
   }
 
   // What grows in the field at (x, z).
@@ -2644,6 +2656,8 @@ export class NPC extends Entity {
   fight(dt) {
     const t = this.threat;
     const game = this.game;
+    // Mid-swing: the blow comes (or doesn't) before anything else.
+    if (this.windup && tickAttack(game, this, dt)) return;
     if (this.hired && (this.distTo(game.player) > 14 || !t || t.kind === 'player')) {
       this.calmDown(true);
       return;
@@ -2704,36 +2718,27 @@ export class NPC extends Entity {
       this.drawnBow = !!(bow && d >= 3 && invCount(this.rec.inv || [], 'arrow') > 0);
       if (this.drawnBow && d <= 8 && Math.abs(t.y - this.y) <= 2) {
         this.face(t.x, t.z);
-        if (this.attackCd <= 0) {
-          this.attackCd = 1.1;
-          this.doAction(0.3);
-          invTake(this.rec.inv, 'arrow', 1);
-          game.shoot(this, t, this.attackDamage(true));
-        }
+        if (this.aimShot(t, dt, 1.1)) return;
         return;
       }
     }
     if (this.canShoot() && d >= 2 && d <= 6 && Math.abs(t.y - this.y) <= 2) {
       this.face(t.x, t.z);
-      if (this.attackCd <= 0) {
-        this.attackCd = 1.5;
-        this.doAction(0.3);
-        invTake(this.rec.inv, 'arrow', 1);
-        game.shoot(this, t, this.attackDamage(true));
-      }
+      this.aimShot(t, dt, 1.5);
       return;
     }
-    const w = this.meleeWeapon();
-    const reach = w && ITEMS[w].reach > 2 ? 2 : 1;
-    if (d <= reach && Math.abs(t.y - this.y) <= 1) {
+    // Each weapon its own way: a spear thrusts from two paces, an axe
+    // chops slow and heavy, a dagger stabs twice (see combat.js). The blow
+    // is wound up first, so it can be seen coming.
+    const st = styleOf(this);
+    const reach = st.reach;
+    if (inReach(this, t, st)) {
       this.face(t.x, t.z);
       // (Dazzled by a topaz: not this moment.)
-      if (this.attackCd <= 0 && !(this.stunT > 0)) {
-        this.attackCd = (guard ? 0.75 : this.adventurer ? 0.7 : 1.0) * swingMult(this);
-        this.doAction(0.3);
+      if (this.attackCd <= 0 && !(this.stunT > 0) && beginAttack(game, this, t, st)) {
         onSwing(game, this, t);
-        game.damage(t, this.attackDamage(false), this);
-        onBladeHit(game, this, t);
+        this.windup.onHit = () => onBladeHit(game, this, t);
+        this.windup.dur *= swingMult(this) * (guard ? 0.95 : this.adventurer ? 0.9 : 1.05);
       }
       return;
     }
@@ -2741,11 +2746,30 @@ export class NPC extends Entity {
       this.chaseSet = this.stateT;
       this.path = null;
     }
-    this.followPath({ x: t.x, y: t.y, z: t.z }, reach);
+    this.followPath({ x: t.x, y: t.y, z: t.z }, st.thrust ? 1 : reach);
+  }
+
+  // Drawing a bow: a moment taking aim (a line to where it'll go shows
+  // it), then the arrow flies.
+  aimShot(t, dt, cd) {
+    if (this.attackCd > 0) return false;
+    if (!this.aim || this.aim.target !== t) this.aim = { t: 0, dur: 0.7, target: t, tx: t.x, tz: t.z };
+    this.aim.t += dt;
+    this.aim.tx = t.x;
+    this.aim.tz = t.z;
+    if (this.aim.t < this.aim.dur) return true;
+    this.aim = null;
+    this.attackCd = cd;
+    this.doAction(0.3);
+    invTake(this.rec.inv, 'arrow', 1);
+    this.game.shoot(this, t, this.attackDamage(true));
+    return false;
   }
 
   calmDown(silent = false) {
+    this.aim = null;
     this.drawnBow = false;
+    this.windup = null;
     this.state = this.warband ? 'warband' : this.hired ? 'hired' : 'routine';
     this.threat = null;
     this.path = null;

@@ -27,9 +27,82 @@ const FOUNDERS = {
   high: ['Balin', 'Dagna', 'Durin', 'Helga', 'Thrain', 'Brunhild', 'Gimra', 'Orsik'],
 };
 const EPITHETS = ['the Elder', 'the Founder', 'Oakheart', 'the Bold', 'Longstride', 'the Wise', 'Ironhand', 'the Wanderer', 'Hearthkeeper', 'of the Old Road'];
-const CAME = ['over the hills', 'up the river', 'across the sea', 'out of the east', 'down from the high passes', 'fleeing a hard winter', 'following a wandering star'];
+// Each people's own: epithets, how founders came, what haunts the hills,
+// the places stories are told of, and the things that happen to them.
+const STYLE_EPITHETS = {
+  vale: ['the Ploughman', 'Goodwife', 'the Miller', 'Applecheek', 'the Shepherd'],
+  north: ['Bloodaxe', 'the Far-Sailing', 'Wolfskin', 'the Unbowed', 'Ice-Beard'],
+  sun: ['the Star-Reader', 'of the Seven Wells', 'the Caravaneer', 'the Patient', 'Gold-Hand'],
+  wild: ['Jaguar-Eye', 'the Rain-Bringer', 'Feather-Crowned', 'Who-Walks-Softly', 'the Root-Keeper'],
+  high: ['Stonefist', 'the Delver', 'Forge-Born', 'Deepdelver', 'Oakenshield'],
+};
+const STYLE_CAME = {
+  vale: ['over the hills with their sheep', 'up the river on a barge of seed corn', 'from the old kingdom after the war', 'looking for good black earth'],
+  north: ['across the sea in three longships', 'over the ice in the hungry winter', 'following the whales down the coast', 'exiled from a jarl\'s hall'],
+  sun: ['with a caravan of forty camels', 'following a star across the sands', 'from the drowned city on the coast', 'seeking a well that never dries'],
+  wild: ['when the old forest city fell', 'following the jaguar\'s tracks', 'paddling down the great river', 'led by a dream of the Rain-Lord'],
+  high: ['up from the deep halls below', 'over the high passes before the snows', 'following a seam of silver', 'driven out of the old mountain by fire'],
+};
+const STYLE_BEASTS = {
+  vale: ['a great white stag', 'a black dog with eyes like lamps', 'a lady in grey', 'a headless rider'],
+  north: ['a wolf as big as a horse', 'a draugr that walks the shore', 'a serpent in the deep water', 'a troll under the bridge'],
+  sun: ['a djinn in the old well', 'a sand-wyrm', 'a veiled woman who asks for water', 'a lion with a man\'s face'],
+  wild: ['a jaguar that walks like a man', 'a feathered serpent', 'the weeping woman of the river', 'a spirit in the great tree'],
+  high: ['a wyrm under the hill', 'a stone giant', 'the lost miners\' lanterns', 'a goat with golden horns'],
+};
+const STYLE_PLACES = {
+  vale: ['the old well', 'the mill race', 'the crossroads', 'the churchyard yew'],
+  north: ['the burial mound', 'the old longhouse', 'the sea cliffs', 'the standing stones'],
+  sun: ['the dry well', 'the old caravanserai', 'the dunes', 'the star tower'],
+  wild: ['the old pyramid', 'the cenote', 'the great tree', 'the overgrown ballcourt'],
+  high: ['the old mine', 'the deep stair', 'the cairn on the peak', 'the sealed door'],
+};
+// What befalls each people (and its land) in the years.
+const STYLE_EVENTS = {
+  vale: [
+    (s) => `A great fair was held in ${s.name}, and folk came from three valleys to sell their wool.`,
+    () => 'The blight took the apple orchards; it was ten years before they bore again.',
+    (s) => `A saint was said to have healed the lame at the well of ${s.name}. Pilgrims still come.`,
+    () => 'The harvest was so great the barns would not hold it, and the surplus fed the whole valley through the next winter.',
+  ],
+  north: [
+    () => 'Raiders from over the sea burned the boathouses; the town rowed out after them and took back the stolen cattle.',
+    () => 'The Long Winter: the sea froze to the horizon, and men walked to the islands on the ice.',
+    (s) => `A whale beached at ${s.name}, and fed the town through a hungry spring.`,
+    () => 'A jarl\'s feud split the town for a generation, and ended with a wedding.',
+  ],
+  sun: [
+    () => 'The great drought: the wells ran dry, and the town lived on what the caravans brought.',
+    (s) => `A star-reader of ${s.name} foretold an eclipse to the hour, and was made chief of the council.`,
+    () => 'A sandstorm buried the old market; it was dug out again stall by stall.',
+    () => 'Spice traders from the far south came, and the town grew rich on pepper and saffron.',
+  ],
+  wild: [
+    () => 'The rains failed for three years, until the shaman danced for nine days without rest.',
+    () => 'A fever came up from the river and took the young and old alike.',
+    (s) => `The jungle swallowed half of ${s.name} while its people were away at war; it was cut back by hand.`,
+    () => 'A great flood carried away the old shrine, and the god was said to be angry.',
+  ],
+  high: [
+    () => 'A mine collapsed, and forty were lost; their names are cut into the deep stair.',
+    () => 'An avalanche came down in the night and buried the lower houses.',
+    (s) => `A vein of silver was struck under ${s.name}, and the town was rich for a lifetime.`,
+    () => 'The forges burned day and night for a year to arm the realm against the lowlanders.',
+  ],
+};
+// What a realm's values bring.
+const VALUE_EVENTS = {
+  martial: (s) => `The men and women of ${s.name} marched to war, and fewer came home; a stone on the square names the dead.`,
+  mercantile: (s) => `The merchants' guild of ${s.name} was chartered, and the market moved inside the walls.`,
+  pious: (s) => `A holy relic was brought to ${s.name} in a procession that lasted three days.`,
+  scholarly: (s) => `A school was founded in ${s.name}, and its masters' books are copied to this day.`,
+  agrarian: () => 'New ploughs came, and the fields were doubled in a single season.',
+  seafaring: () => 'A ship of the town sailed beyond the edge of the charts, and came home a year later laden with spices.',
+  artisan: (s) => `The craftsmen of ${s.name} made a clock for the town hall that still keeps time.`,
+};
 const BEASTS = ['a great white stag', 'a wolf as big as a horse', 'a serpent in the deep water', 'a wyrm under the hill', 'a headless rider', 'a lady in grey', 'a bear that walks like a man'];
 const PLACES = ['the old well', 'the graveyard', 'the hill road', 'the mill race', 'the ruined tower', 'the crossroads'];
+const CAME = ['over the hills', 'up the river', 'across the sea', 'out of the east', 'down from the high passes', 'fleeing a hard winter', 'following a wandering star'];
 
 // Recent news worth writing into a town's history (from its ledger).
 const NOTABLE = /Battle of|raided|raiders|burned|sacked|is named Hero|statue|crowned|now rules|is a (town|city) now|became a (town|city)|swore|broke away|made peace|declared war|opens its gates|taken by|bandits|exiled|founded|plague|great fire|are no more|opened the doors of their own|week after week/i;
@@ -54,11 +127,27 @@ export class History {
     const now = yearOf(this.game.day);
     const age = s.type === 'city' ? rng.int(280, 520) : s.type === 'town' ? rng.int(110, 300) : rng.int(35, 150);
     const founded = now - age;
-    const founder = `${rng.pick(FOUNDERS[style] || FOUNDERS.vale)} ${rng.pick(EPITHETS)}`;
+    const founder = `${rng.pick(FOUNDERS[style] || FOUNDERS.vale)} ${rng.pick(rng.chance(0.6) ? STYLE_EPITHETS[style] || EPITHETS : EPITHETS)}`;
     const entries = [];
     const at = (lo, hi) => founded + Math.round(age * rng.float(lo, hi));
-    entries.push({ y: founded, text: `${s.name} was founded by ${founder}, who came ${rng.pick(CAME)} with ${rng.int(3, 12)} families.`, kind: 'founded' });
+    // (A village settlers founded in your own time: its true story.)
+    if (s.founding || L.econ.foundedBy) {
+      const from = this.game.world.ow.settlements[(s.founding || L.econ.foundedBy).from];
+      const y = yearOf((s.founding || L.econ.foundedBy).day);
+      L.econ.foundedBy = s.founding || L.econ.foundedBy;
+      const first = L.npcs.find((r) => r.age === 'adult');
+      const who = first ? `${first.name.first} ${first.name.last}` : 'settlers';
+      return { founded: y, founder: who, famous: 'being new', legend: `${who} chose this spot because a ${rng.pick(['hawk', 'deer', 'crow', 'fox'])} crossed their path here.`, entries: [{ y, text: `${s.name} was founded by settlers from ${from ? from.name : 'afar'}, led by ${who}.`, kind: 'founded' }], scanned: 0 };
+    }
+    entries.push({ y: founded, text: `${s.name} was founded by ${founder}, who came ${rng.pick(rng.chance(0.7) ? STYLE_CAME[style] || CAME : CAME)} with ${rng.int(3, 12)} families.`, kind: 'founded' });
     const pool = [];
+    // The people's own troubles and glories, and its realm's.
+    for (const f of rng.shuffle((STYLE_EVENTS[style] || []).slice()).slice(0, 2)) pool.push(() => ({ y: at(0.1, 0.95), text: f(s), kind: 'lore' }));
+    for (const v of (s.civ ? s.civ.values || [] : []).slice(0, 2)) if (VALUE_EVENTS[v]) pool.push(() => ({ y: at(0.5, 0.97), text: VALUE_EVENTS[v](s), kind: 'realm' }));
+    if (s.biome === 'desert') pool.push(() => ({ y: at(0.1, 0.9), text: 'A year without rain: the date palms died, and were planted again.', kind: 'drought' }));
+    if (s.biome === 'tundra' || s.biome === 'taiga') pool.push(() => ({ y: at(0.1, 0.9), text: 'Wolves came down out of the forest in the dead of winter, and the watch kept the fires lit for a month.', kind: 'winter' }));
+    if (s.biome === 'swamp') pool.push(() => ({ y: at(0.1, 0.9), text: 'A fog lay on the fen for forty days, and boats that went out into it never came back.', kind: 'fog' }));
+    if (s.coast) pool.push(() => ({ y: at(0.1, 0.9), text: 'A ship broke up on the rocks in a storm; the town took in the sailors, and some never left.', kind: 'wreck' }));
     if (s.type !== 'village') pool.push(() => ({ y: at(0.2, 0.6), text: `Most of ${s.name} burned in the Great Fire, and was built again ${s.type === 'city' ? 'in stone' : 'by the next summer'}.`, kind: 'fire' }));
     if (s.river || s.lake || s.coast) pool.push(() => ({ y: at(0.1, 0.8), text: `The ${s.coast ? 'sea came over the harbour wall' : s.river ? 'river burst its banks' : 'lake rose'} and took the old mill and half the fields.`, kind: 'flood' }));
     pool.push(() => ({ y: at(0.3, 0.9), text: 'The coughing sickness took one in five. The graveyard was doubled that year.', kind: 'plague' }));
@@ -67,7 +156,7 @@ export class History {
     pool.push(() => ({ y: at(0.2, 0.95), text: 'A hungry winter: the snow lay till spring, and the town ate its seed corn.', kind: 'famine' }));
     pool.push(() => ({ y: at(0.1, 0.9), text: `A star with a burning tail hung over ${s.name} for nine nights.`, kind: 'omen' }));
     if (s.civ) pool.push(() => ({ y: at(0.6, 0.98), text: `${s.name} swore itself to the ${s.civ.name.replace(/^The /, '')}.`, kind: 'realm' }));
-    for (const f of rng.shuffle(pool).slice(0, s.type === 'city' ? 4 : s.type === 'town' ? 3 : 2)) entries.push(f());
+    for (const f of rng.shuffle(pool).slice(0, s.type === 'city' ? 6 : s.type === 'town' ? 4 : 3)) entries.push(f());
     entries.sort((a, b) => a.y - b.y);
     // Known for.
     const c = cuisineOf(s);
@@ -80,12 +169,17 @@ export class History {
     known.push(`its ${c.word.split(' and ')[0]}`);
     if (!(/ale|mead|beer/.test(c.drink) && religionOf(s).taboos.includes('no_drink'))) known.push(`its ${c.drink}`);
     const famous = rng.pick(known);
+    const places = rng.chance(0.7) ? STYLE_PLACES[style] || PLACES : PLACES;
+    const beasts = rng.chance(0.7) ? STYLE_BEASTS[style] || BEASTS : BEASTS;
+    const faith = religionOf(s);
     const legend = rng.pick([
-      `${founder}'s ghost walks ${rng.pick(PLACES)} on ${religionOf(s).holyName} nights.`,
-      `${rng.pick(BEASTS)} lives out past ${rng.pick(PLACES)}. Folk who go looking don't come back the same.`,
-      `There's gold buried under ${rng.pick(PLACES)}, from before the town was even here.`,
+      `${founder}'s ghost walks ${rng.pick(places)} on ${faith.holyName} nights.`,
+      `${rng.pick(beasts)} lives out past ${rng.pick(places)}. Folk who go looking don't come back the same.`,
+      `There's gold buried under ${rng.pick(places)}, from before the town was even here.`,
       `the old statue on the square weeps on the day ${founder} died.`,
       `${founder} never died at all, and sleeps under the hill till ${s.name} needs them again.`,
+      `${faith.god} once walked through ${s.name} in the shape of ${faith.beast}, and blessed the house that fed them.`,
+      `whoever drinks from ${rng.pick(places)} at midnight on ${faith.feast} sees their true love's face.`,
     ]);
     return { founded, founder, famous, legend, entries, scanned: 0 };
   }

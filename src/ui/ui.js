@@ -399,6 +399,16 @@ export class UI {
     const bh = Math.ceil(blue / 2);
     for (let i = 0; i < bh; i++) g.put(1 + hearts + i, 0, '♥', blue - i * 2 >= 2 ? '#58a8ff' : '#3868a8');
     g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
+    // Stamina (shown when it's been spent): a bar under the hearts.
+    const sm = p.maxStamina || 100;
+    if (p.stamina !== undefined && p.stamina < sm - 0.5) {
+      const n = 10;
+      const f = Math.max(0, p.stamina) / sm;
+      for (let i = 0; i < n; i++) {
+        const full = i < Math.round(f * n);
+        g.put(14 + i, 1, full ? '■' : '▪', !full ? '#5a5040' : f < 0.25 ? '#ff9040' : '#e8d060');
+      }
+    }
     // Potions still working.
     const nowAbs = game.day * 1440 + game.minute;
     const buffs = (p.buffs || []).filter((q) => q.until > nowAbs);
@@ -412,7 +422,8 @@ export class UI {
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
     g.text(1, 1, `¤ ${coins}`, C.hi);
     const held = p.heldDef();
-    if (held) g.text(8, 1, held.name.slice(0, 15), C.fg);
+    if (held && !(p.stamina < sm - 0.5)) g.text(8, 1, held.name.slice(0, 15), C.fg);
+    else if (held) g.text(8, 1, held.name.slice(0, 5), C.fg);
     const s = game.currentSettlement;
     let loc;
     if (s) loc = `${s.name} · ${cap(s.type)}`;

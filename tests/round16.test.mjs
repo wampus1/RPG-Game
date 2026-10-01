@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeGame, stubInput, lotsReady } from './helpers.mjs';
-import { stockOf } from '../src/sim/econ.js';
+import { stockOf, setOverride } from '../src/sim/econ.js';
 import { B } from '../src/world/blocks.js';
 import { GROUND } from '../src/config.js';
 import { funeralSpots } from '../src/sim/sim.js';
@@ -88,6 +88,9 @@ test('a guard on watch comes over after curfew, warns you, then fines you', () =
   assert.ok(guard, 'a night watchman');
   for (const n of a.npcs) if (n.rec.job === 'guard' && n !== guard) n.sleeping = true;
   guard.teleport(x + 6, w.findStandY(x + 6, z, GROUND), z);
+  // (Standing their post, rather than walking off on their rounds.)
+  setOverride(guard.rec, game.sim.abs, game.sim.abs + 600, 'watch', { target: { x: x + 6, z } });
+  guard.activity = null;
   let warned = false;
   for (let i = 0; i < 400 && !J(game, sid).length; i++) {
     game.update(0.1, input);

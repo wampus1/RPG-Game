@@ -56,7 +56,9 @@ with the music off. `window.__game` exposes the running game.
 | Rotate the block you're about to place | R |
 | Turn the camera a quarter turn | Q / E |
 | Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
-| Attack | Left-click a creature or person (a bow shoots arrows at range) |
+| Attack | Left-click a creature or person (a bow shoots arrows at range); hold the click for a heavy blow |
+| Block / parry | Hold right mouse with a shield (or a weapon) in a fight; raise it just as a blow lands to parry |
+| Dodge roll | Space (in the way you're moving, or facing) |
 | Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
 | Sit | Click a chair, bench or stool; move to stand up |
 | Wait while seated | T, then pick 1–24 hours |
@@ -1192,6 +1194,98 @@ beggars on the square and a quiet tavern, and its tune goes slow and minor.
 Each people's music has its own sound, and it all changes back as the town's
 luck does.
 
+**Fighting.** Nobody strikes in an instant: every blow is wound up first (a
+red "!" over the attacker and the ground it will hit lit red), so you can see
+it coming. Roll clear with Space, take it on a shield (hold the right mouse;
+raise it just as it lands to parry and leave them reeling for a riposte), or
+hit them first and knock them off their stroke. Blocking, rolling and swinging
+cost breath (the bar under your hearts); run out and your guard breaks. Hold
+the click for a slow, heavy blow. Each beast fights its own way (wolves lunge,
+slimes slam the ground all round, skeletons hack twice, a boar lowers its head
+and charges), and so does each weapon (a spear reaches two paces, an axe
+chops slow and heavy, a mace staggers, a dagger stabs twice). The watch
+carries all sorts: swords and shields, spears, axes, maces, bows (where the
+realm has learned archery).
+
+**Who you are.** Seventeen specialties and eighteen traits on the character
+screen, among them Duelist, Shield Wall, Marksman, Tracker, Tinker, Cook,
+Scholar, Horseman and Sailor; Nimble, Tireless, Sure-Footed, Iron Stomach,
+Devout and Silver Tongue; and flaws such as Clumsy, Short of Breath, Outlander
+and Notorious, each of which gives a stat point back.
+
+**Talk.** Ask anyone "How are things?" and they make small talk out of word
+chains built from their people's way of speaking (northerners say aye and
+bairns; southerners call you cousin), their own manner (formal, rough, chirpy,
+terse) and their quirks (pious, gloomy, superstitious, gossipy). Folk in the
+street chatter the same way.
+
+**Building styles.** Northern longhouses have horns on their gable ends and
+shuttered windows; southern houses hang striped awnings over the door and
+keep pots of flowers on their flat roofs; forest folk let their thatch
+overhang the walls, grow vines up them and set carved posts by the door;
+highlanders raise stone pinnacles at the corners of their roofs; the vale
+folk keep window boxes.
+
+**What a realm knows.** Nothing the tree hasn't unlocked: no forge or
+blacksmith without Metalworking (an early step, which smithing peoples start
+with; elsewhere the watch carries wooden spears, clubs and stone), no bows in
+the watch without Archery, no steel without Steelworking. Every town has
+somewhere to study (a small Scholar's Study if nothing better) and at least
+one researcher, so free towns learn too; the mayor spends coin, timber and
+stone fitting it out, three times over, and each makes the study faster. The
+perks are stronger, and some show once they've settled in (days later, the
+capital first): a square paved in stone (masonry), gravelled lanes and cobbled
+streets (surveying), helms on the watch (drill), archery butts (archery), hay
+stacked by the barns (watermills), children with their books (schools), guild
+awnings over the shops (guild charters).
+
+**The world map.** Smoke rises over a town raided in the last few days; a
+bandit camp shows once someone has told you of it (or you've seen its smoke;
+a Tracker from further off); armies march toward tomorrow's battlefield under
+their banner; and a few gold specks move along the roads where the merchants
+are.
+
+**Raids.** Bandits on a raid go through the houses for the chests, throw
+torches onto roofs that will burn (a haystack or a fence, if the roofs are
+slate), and leave the town marked as raided. Fire spreads a little, burns
+away what it catches, and rain puts it out sooner. A band hired for a war
+stands on the flank of the battle in no colours, and runs the moment the day
+looks lost.
+
+**Hard times and good ones.** Farmers sow whatever's short (or whatever fills
+a belly, in a famine); a smith out of iron sends to wherever it's cheap, or
+mends pots and makes stone tools till it comes, and turns to swords and mail
+when iron's cheap. Those who leave to seek their fortune may become merchants
+who visit home, settle far away, come home rich, come home with nothing, or
+never be heard of again. Famine and long poverty send families away in waves
+to better-off towns, bring crowds to the town hall, drive the desperate to the
+bandits, and give a starving realm a reason to go to war over its neighbour's
+fields. Now and then a crowded town sends a few families out to found a
+village: you can follow them down the road and over the wilds, see them pitch
+their tents and watch their builder raise the first houses; it goes on the
+map like any other village.
+
+**Rulers with a dream.** Some rulers (not all) chase one: a merchant prince
+builds roads twice as fast and market halls in every town; a zealot sends
+missionaries over the border and forces the faith on what the realm
+conquers; a warlord takes any border quarrel as cause for war.
+
+**Faiths.** Each faith has its own clergy (godi, shamans, forge-priests,
+star-readers...), a virtue it prizes, its own way with the dead (pyres, boats,
+cairns, burial, a tree planted over them) and a sacred beast; new taboos too
+(mushrooms, digging near a mountain town, harming the sacred beast). Faiths
+travel the roads with the merchants until a town turns; a conquered town keeps
+its old gods unless its new masters force their own on it, and then it
+resents the new taboos for weeks (and a realm of the old faith has cause for a
+holy war). The devout go on pilgrimage to their faith's holy city.
+
+**Histories.** A town's past fits its people: northern towns remember raiders
+from over the sea and the Long Winter, southern ones droughts, star-readers and
+caravans, forest towns fevers and floods, mountain towns mine collapses and
+silver strikes; its realm's values add their own (a war memorial, a guild
+charter, a holy relic). Founders, legends and haunted places are each
+people's own.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1211,6 +1305,9 @@ you've typed. These are for exploring and testing, and they change your game.
 | `finish [town]` | everything under construction there is finished at once |
 | `time <hh:mm>` / `time +<hours>` | waits until then (any key stops it) |
 | `give <item> [count]`, `coins <n>`, `heal` | items, money, health |
+| `god [on\|off]` | nothing can hurt you (the console no longer does this by itself) |
+| `skip <days>` (or `ff`) | fast-forwards that many days (1–120), the whole world living them |
+| `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
 
 Map teleporting and the revealed map are kept with your save.
 
@@ -1242,7 +1339,10 @@ src/
                        research (the tech tree and the study minigame)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
-                       hero (character creation and perks), save slots,
+                       hero (character creation and perks), combat (wind-
+                       ups, blocks, parries, rolls, stamina, weapon and beast
+                       styles), markov (word-chain small talk), fire
+                       (burning roofs and haystacks), save slots,
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
                        riding (your own horses and wagons, and a town's
@@ -1290,7 +1390,11 @@ src/
                        moving away), bandits (camps, robberies, raids,
                        bounties, hired bands), market (regional prices
                        and supply-driven building), prosperity (how a
-                       town is doing and how that shows), and the
+                       town is doing and how that shows), hardship
+                       (famine and poverty, migration waves, unrest),
+                       founding (settlers and new villages), religion
+                       (faiths spreading, conquest, missions, holy wars,
+                       pilgrimages), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

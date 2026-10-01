@@ -14,6 +14,8 @@ import { alive, ledger } from './econ.js';
 import { makeAdventurer } from '../entities/npcgen.js';
 import { CULTURES } from '../world/names.js';
 import { BIOMES } from '../world/biomes.js';
+import { has as heroHas } from '../game/hero.js';
+import { ITEMS } from '../world/items.js';
 
 const ADJ = ['Black', 'Red', 'Grey', 'Hollow', 'Crooked', 'Ash', 'Iron', 'Night', 'Wolf', 'Bramble', 'Rook', 'Bone'];
 const NOUN = ['Hand', 'Hounds', 'Knives', 'Crows', 'Brotherhood', 'Company', 'Gang', 'Blades', 'Hoods', 'Wolves'];
@@ -161,6 +163,8 @@ export class Bandits {
     this.strikeCamp(band);
     if (!this.placeCamp(band, s, rng)) return false;
     band.moved = day;
+    // (What you'd heard of where they were is out of date now.)
+    band.known = false;
     const L = this.game.world.layouts.get(s.id);
     if (L && L.econ) ledger(L, day, `Smoke's been seen out past ${s.name}: ${band.name} have made a new camp.`);
     return true;
@@ -186,7 +190,23 @@ export class Bandits {
       this.syncT = 1;
       this.sync();
       this.checkRaid();
+      // Their smoke, spotted from a hilltop (a tracker spots it from
+      // further off): the camp goes on your map.
+      const far = heroHas(this.game.hero, 'tracker') ? 110 : 45;
+      for (const b of this.live()) if (!b.known && this.seen(b, far)) this.learnOf(b, null);
     }
+  }
+
+  // You've heard where they're camped (or seen it): it goes on your map.
+  learnOf(band, from = null) {
+    if (!band || !band.camp || band.known) return;
+    band.known = true;
+    band.knownFrom = from;
+  }
+
+  // The camps you know of, for the map.
+  knownCamps() {
+    return this.live().filter((b) => b.known && b.camp).map((b) => ({ x: b.camp.x, z: b.camp.z, name: b.name, n: b.members.length, hired: !!b.hired, from: b.knownFrom }));
   }
 
   daily(day, rng) {
@@ -266,8 +286,9 @@ export class Bandits {
       const take = Math.min(70, Math.round(L.econ.treasury * 0.25));
       L.econ.treasury -= take;
       band.loot += take;
-      ledger(L, day, `${band.name} raided ${L.settlement.name} in the night and got away with ¤${take}.`);
+      ledger(L, day, `${band.name} raided ${L.settlement.name} in the night and got away with ¤${take}${rng.chance(0.5) ? ', and set a barn alight on their way out' : ''}.`);
       if (L.econ.recent) L.econ.recent.raids = (L.econ.recent.raids || 0) + 1;
+      L.econ.raidedDay = day;
       this.postBounty(L, band, 40, day);
       return { won: true, take };
     }
@@ -319,6 +340,7 @@ export class Bandits {
     const out = [];
     const bands = this.nearBands(L);
     for (const b of bands.slice(0, 2)) {
+      this.learnOf(b, s.name);
       out.push(`${b.name[0].toUpperCase()}${b.name.slice(1)}: ${b.members.length} of them, camped ${this.where(b, s)}.${b.hired ? ' Hired swords now, they say.' : ''}`);
     }
     const bt = this.bountiesIn(L);
@@ -418,6 +440,7 @@ export class Bandits {
     const sched = [{ s: 0, e: 1440, act: 'adventure', place: 'camp' }];
     return {
       id: `b${band.id}:${m.id}`, idx: 7000 + band.id * 20 + (m.id % 20), sid: L.settlement.id, visitor: true, bandit: band.id, member: m.id,
+      banditChief: band.members[0] === m, hiredSword: !!band.hired,
       name: m.name, age: 'adult', job: 'bandit', home: null, bed: 0, household: null,
       partner: null, children: [], parents: [], friends: [], personality: m.personality, traits: m.traits,
       hobbies: [], look: m.look, alive: true, shift: 'day', restDay: -1,
@@ -509,6 +532,38 @@ export class Bandits {
     return take;
   }
 
+  // A family's chest gone through: a few things into the sack (and the
+  // family know whose doing it was).
+  lootChest(n, x, y, z, L) {
+    const slots = this.game.world.getContainer(x, y, z);
+    if (!slots) return 0;
+    const full = slots.map((q, i) => (q ? i : -1)).filter((i) => i >= 0);
+    let took = 0;
+    let worth = 0;
+    for (const i of n.rng.shuffle(full).slice(0, 3)) {
+      const q = slots[i];
+      const k = Math.max(1, Math.ceil(q.count / 2));
+      worth += (ITEMS[q.item]?.value || 1) * k;
+      q.count -= k;
+      if (q.count <= 0) slots[i] = null;
+      took += k;
+    }
+    if (!took) return 0;
+    const R = this.raiding;
+    if (R) {
+      R.looted = (R.looted || 0) + 1;
+      R.take += Math.round(worth / 2);
+    }
+    const band = this.get(n.warband?.band);
+    if (band) band.loot += Math.round(worth / 2);
+    const b = L && L.buildings.find((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
+    const who = b && b.residential ? L.npcs.find((r) => alive(r) && r.home === b.id && r.age === 'adult') : null;
+    if (L && who) ledger(L, this.game.day, `Bandits broke into the ${who.name.last} house and emptied their chest.`);
+    this.game.renderer.emit(x, y + 1, z, { n: 6, color: ['#c8a060', '#8a6a40', '#ffe070'], up: 22, speed: 20, life: 0.5, gravity: 120 });
+    this.game.audio?.play('chest', { x, y, z });
+    return took;
+  }
+
   // The raid you watched is over once the last of them is gone (or down).
   checkRaid() {
     const R = this.raiding;
@@ -523,8 +578,12 @@ export class Bandits {
     const name = band ? band.name : R.name;
     if (band) band.loot += R.take;
     const lost = R.n - (band ? band.members.length : 0);
-    ledger(L, this.game.day, R.take ? `${name} raided ${L.settlement.name} and got away with ¤${R.take}.` : `${name} came raiding ${L.settlement.name}, and went away with nothing${lost > 0 ? `, leaving ${lost} of their own dead` : ''}.`);
+    const burnt = R.fires ? ` They set ${R.fires > 1 ? 'fires' : 'a fire'} as they went.` : '';
+    const homes = R.looted ? ` ${R.looted > 1 ? `${R.looted} homes were` : 'A home was'} broken into.` : '';
+    ledger(L, this.game.day, (R.take ? `${name} raided ${L.settlement.name} and got away with ¤${R.take}.` : `${name} came raiding ${L.settlement.name}, and went away with nothing${lost > 0 ? `, leaving ${lost} of their own dead` : ''}.`) + burnt + homes);
     if (L.econ.recent) L.econ.recent.raids = (L.econ.recent.raids || 0) + 1;
+    // (Got in, took, burned: the place has been raided.)
+    if (R.take || R.fires || R.looted) L.econ.raidedDay = this.game.day;
     if (band) this.postBounty(L, band, R.take ? 40 : 20, this.game.day);
     if (this.game.active.has(R.sid)) this.game.ui.msg(R.take ? `${name[0].toUpperCase()}${name.slice(1)} got away with ¤${R.take}.` : `${name[0].toUpperCase()}${name.slice(1)} have been driven off.`, R.take ? '#ffb080' : '#a0e0a0');
   }

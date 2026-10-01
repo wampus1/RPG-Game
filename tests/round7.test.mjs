@@ -92,6 +92,9 @@ test('taxes: citizens pay a head tax plus the rate on what they earned in town',
   game.sim.careers.pay(40);
   assert.equal(game.sim.citizen.earned, 40);
   const coins = countItem(p.inv, 'coin');
+  // (Nothing else spent today: the study already fitted out and paid for.)
+  L.econ.labLevel = 3;
+  game.sim.tech.daily = () => null;
   const treasury = L.econ.treasury;
   game.sim.dailyCivic(L, game.day + 1, new RNG(5));
   const paid = coins - countItem(p.inv, 'coin');

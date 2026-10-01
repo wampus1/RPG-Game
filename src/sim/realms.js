@@ -294,7 +294,58 @@ export class Realms {
     }
     if ((day + civ.id) % 7 === 0) this.decree(civ, day, rng);
     if (day % 2 === 0) this.aid(civ, L, day);
-    if ((day + civ.id) % 3 === 0) this.roadWorks(civ, L, day);
+    // (A merchant prince lays roads twice as often.)
+    if ((day + civ.id) % 3 === 0 || (this.ambition(civ, day) === 'merchant' && (day + civ.id) % 3 === 1)) this.roadWorks(civ, L, day);
+    if ((day + civ.id) % 5 === 2) this.pursue(civ, L, day, rng);
+  }
+
+  // ------------------------------------------------------------ ambitions
+  // Some rulers (not all) have a dream they chase: a merchant prince wants
+  // roads and markets; a zealot wants the faith carried everywhere; a
+  // warlord wants a war. It's decided once, by who they are, and the court
+  // hears of it.
+  ambition(civ, day = this.sim.today()) {
+    const r = this.ruler(civ);
+    if (!r) return null;
+    if (r.ambition !== undefined) return r.ambition;
+    const p = r.personality || {};
+    const vals = civ.values || [];
+    const roll = (hash4(r.idx, civ.id, 0xa3b1) % 1000) / 1000;
+    const score = {
+      merchant: (vals.includes('mercantile') ? 0.4 : 0) + (p.diligence ?? 0.5) * 0.5 + ((r.traits || []).includes('shrewd') || (r.traits || []).includes('thrifty') ? 0.3 : 0),
+      zealot: (vals.includes('pious') ? 0.5 : 0) + ((r.traits || []).includes('devout') ? 0.5 : 0) + (0.5 - (p.kindness ?? 0.5)) * 0.4,
+      warlord: (vals.includes('martial') ? 0.4 : 0) + (p.temper ?? 0.5) * 0.5 + (p.bravery ?? 0.5) * 0.4,
+    };
+    const best = Object.entries(score).sort((a, b) => b[1] - a[1])[0];
+    // (Most just rule.)
+    r.ambition = roll < 0.45 && best[1] > 0.55 ? best[0] : null;
+    if (r.ambition) {
+      const title = shortTitle(civ);
+      const text = {
+        merchant: `${title} ${fullName(r)} means to make the ${civ.name.replace(/^The /, '')} rich: roads between every town, and a market in each.`,
+        zealot: `${title} ${fullName(r)} has sworn to carry the faith to every corner of the land, and beyond its borders.`,
+        warlord: `${title} ${fullName(r)} talks of little but war and glory. The neighbours had best watch their borders.`,
+      }[r.ambition];
+      this.proclaim(civ, day, text);
+    }
+    return r.ambition;
+  }
+
+  // Chasing it: a market for a town without one; missionaries over the
+  // border (see religion.js); a warlord's quarrels (see war.js).
+  pursue(civ, capL, day, rng) {
+    const a = this.ambition(civ, day);
+    if (a === 'merchant') {
+      const L = this.memberLayouts(civ).find((q) => q.settlement.type !== 'village' && !q.buildings.some((b) => b.type === 'shop')
+        && !this.sim.works.projects.some((pq) => !pq.done && pq.sid === q.settlement.id && pq.type === 'shop'));
+      if (L && capL.econ.treasury >= 220) {
+        const pq = this.sim.works.startBuilding(L, 'shop', `, paid for by ${shortTitle(civ).toLowerCase()} ${fullName(this.ruler(civ))}`, false, 120);
+        if (pq) {
+          capL.econ.treasury -= 120;
+          ledger(L, day, `A market hall is going up in ${L.settlement.name}, paid for by the crown.`);
+        }
+      }
+    } else if (a === 'zealot' && this.sim.religion) this.sim.religion.mission(civ, day, rng);
   }
 
   // ------------------------------------------------------------ roads
@@ -561,6 +612,8 @@ export class Realms {
     const ow = this.game.world.ow;
     const old = s.civ;
     s.civ = civ;
+    // (Its gods don't change with its banner; see religion.js.)
+    if (this.sim.religion && old && old !== civ) this.sim.religion.onConquest(s, old, civ, this.sim.today());
     const members = ow.settlements.filter((o) => o.civ === old && o !== s);
     for (let cz = s.cz - 5; cz <= s.cz + 5; cz++) {
       for (let cx = s.cx - 5; cx <= s.cx + 5; cx++) {

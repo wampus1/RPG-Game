@@ -167,7 +167,9 @@ export class Player extends Entity {
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
     // Slow natural regeneration: faster when sitting or well fed.
-    this.regenT += dt;
+    // (Only counting while there's something to heal: a blow taken at full
+    // health doesn't mend in an instant.)
+    this.regenT = this.hp < this.maxHp ? this.regenT + dt : 0;
     if (this.wellFed > 0) this.wellFed -= dt;
     const g = this.game;
     const morning = g.minute >= 300 && g.minute < 600 && heroHas(g.hero, 'early_riser');
@@ -187,6 +189,8 @@ export class Player extends Entity {
       return;
     }
     if (this.dead || this.moving || blocked) return;
+    // Mid-roll, or staggered (a heavy blow, a broken guard): no steering.
+    if (this.rollT > 0 || this.stunT > 0 || this.guardBroken > 0) return;
     // Most recently pressed held direction wins.
     let d = null;
     if (input.lastMoveKey && input.isDown(input.lastMoveKey)) d = MOVE_KEYS[input.lastMoveKey];
@@ -252,7 +256,9 @@ export class Player extends Entity {
     const swim = water && !heroHas(this.game.hero, 'swimmer') ? 1.9 : 1;
     // In the saddle or on the wagon's bench: quicker (and no sprinting).
     const ride = this.mount ? this.game.riding.pace() : 1;
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount ? 0.62 : 1) * ride * swim * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    // (Shield up: a slow, careful step, and no running.)
+    const guard = this.blocking ? 1.7 : 1;
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? 0.62 : 1) * ride * swim * guard * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

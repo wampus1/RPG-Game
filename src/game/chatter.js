@@ -9,6 +9,8 @@ import { HOBBIES } from '../entities/npcgen.js';
 import { LAWS, lawList, stance } from '../sim/laws.js';
 import { speak } from './voice.js';
 import { TRIP_TALK_DAYS } from '../sim/outings.js';
+import { smallTalk } from './markov.js';
+import { talkContext } from './dialogue.js';
 
 const CHATTY = new Set(['social', 'hobby', 'wander', 'eat', 'home', 'play', 'work', 'visit']);
 
@@ -172,6 +174,10 @@ export function exchangeFor(a, b, game) {
     else if (!met) opts.push(['Who\'s the stranger?', 'No idea. A traveler, I think.']);
   }
   opts.push([`${tw}, ${B}!`, `${tw}, ${Aname}.`], ['How\'s the family?', 'Can\'t complain. You?', 'Same old.'], ['Nice day for it.', 'It is, isn\'t it?']);
+  // Idle talk, each in their own manner (see markov.js): the more of it,
+  // the less like a script it sounds.
+  const ctx = talkContext(game, a.settlement);
+  for (let i = 0; i < 2; i++) opts.push([smallTalk(ra, rng, ctx), rng.chance(0.5) ? smallTalk(rb, rng, ctx) : pick(rng, ['True enough.', 'Mm.', 'If you say so.', 'You\'re telling me.', 'Ha! Too right.', 'I suppose.'])]);
   return pick(rng, opts);
 }
 

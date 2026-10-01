@@ -37,13 +37,25 @@ export const PATTERN = { vale: 'buttons', north: 'collar', sun: 'sash', wild: 's
 
 // The old gods of each people, and the bits a realm's faith is made of.
 const GODS = {
-  vale: { gods: ['the Green Mother', 'the Hearth-Father', 'Saint Aldwyn of the Lamp', 'the Harvest Queen', 'the Shepherd of Stars'], faith: ['the Old Hearth', 'the Way of the Seasons', 'the Church of the Bright Lamp', 'the Green Faith'], feast: ['Harvest Home', 'May Morning', 'Lamplight Eve', 'Sheaf Day'], symbol: ['a wheat sheaf', 'a lit lamp', 'an oak leaf', 'a crook'] },
-  north: { gods: ['the All-Father', 'the Wolf of Winter', 'the Sea-Mother', 'Thunderer Asvald', 'the Raven of Night'], faith: ['the Old Gods of the Ice', 'the Raven Rite', 'the Hall of the Drowned', 'the Frost Creed'], feast: ['Midwinter Blot', 'Sunreturn', 'the Night of Ravens', 'Shiprest'], symbol: ['a raven', 'a hammer', 'a longship prow', 'a wolf head'] },
-  sun: { gods: ['the One Light', 'the Sun-Crowned', 'the Well of Stars', 'the Veiled Moon', 'the Keeper of Waters'], faith: ['the Faith of the Lamp', 'the Path of Noon', 'the Order of the Well', 'the Way of the Veil'], feast: ['Lantern Night', 'the Feast of Noon', 'Starwell Eve', 'the Night of Veils'], symbol: ['a crescent', 'a sun disc', 'a water jar', 'an eight-pointed star'] },
-  wild: { gods: ['the Feathered Serpent', 'the Rain-Lord', 'the Jaguar of Night', 'the Maize Mother', 'the Smoking Mirror'], faith: ['the Serpent Rites', 'the Way of Maize', 'the Rain Covenant', 'the Jaguar Mysteries'], feast: ['the Rain Dance', 'the Green Maize Feast', 'the Night of the Jaguar', 'the Feather Day'], symbol: ['a feathered serpent', 'a maize cob', 'a jaguar mask', 'a rain glyph'] },
-  high: { gods: ['the Deep Smith', 'the Stone Mother', 'the Anvil-King', 'the Lantern in the Dark', 'the Ore-Father'], faith: ['the Forge Creed', 'the Halls of the Deep', 'the Covenant of Stone', 'the Lantern Rite'], feast: ['Forge Day', 'the Delving', 'Lanternmoot', 'Hammerfast'], symbol: ['an anvil', 'a pick and hammer', 'a mountain', 'a lantern'] },
+  vale: { gods: ['the Green Mother', 'the Hearth-Father', 'Saint Aldwyn of the Lamp', 'the Harvest Queen', 'the Shepherd of Stars', 'the Lady of the Well', 'the Twin Saints of the Bridge'], faith: ['the Old Hearth', 'the Way of the Seasons', 'the Church of the Bright Lamp', 'the Green Faith', 'the Holy Well', 'the Brotherhood of the Plough'], feast: ['Harvest Home', 'May Morning', 'Lamplight Eve', 'Sheaf Day', 'Well-Dressing Day', 'Plough Monday'], symbol: ['a wheat sheaf', 'a lit lamp', 'an oak leaf', 'a crook', 'a well-bucket', 'a bridge'] },
+  north: { gods: ['the All-Father', 'the Wolf of Winter', 'the Sea-Mother', 'Thunderer Asvald', 'the Raven of Night', 'the Bear-Who-Sleeps', 'the Norn of Threads'], faith: ['the Old Gods of the Ice', 'the Raven Rite', 'the Hall of the Drowned', 'the Frost Creed', 'the Bear Cult', 'the Weavers of Fate'], feast: ['Midwinter Blot', 'Sunreturn', 'the Night of Ravens', 'Shiprest', 'the Bear-Waking', 'the Long Night'], symbol: ['a raven', 'a hammer', 'a longship prow', 'a wolf head', 'a bear claw', 'a spindle'] },
+  sun: { gods: ['the One Light', 'the Sun-Crowned', 'the Well of Stars', 'the Veiled Moon', 'the Keeper of Waters', 'the Scarab of Dawn', 'the Lion of the Dunes'], faith: ['the Faith of the Lamp', 'the Path of Noon', 'the Order of the Well', 'the Way of the Veil', 'the Dawn Mysteries', 'the Pride of the Lion'], feast: ['Lantern Night', 'the Feast of Noon', 'Starwell Eve', 'the Night of Veils', 'the Scarab Rising', 'the Lion\'s Feast'], symbol: ['a crescent', 'a sun disc', 'a water jar', 'an eight-pointed star', 'a scarab', 'a lion\'s mane'] },
+  wild: { gods: ['the Feathered Serpent', 'the Rain-Lord', 'the Jaguar of Night', 'the Maize Mother', 'the Smoking Mirror', 'the Hummingbird of War', 'the Grandmother Tree'], faith: ['the Serpent Rites', 'the Way of Maize', 'the Rain Covenant', 'the Jaguar Mysteries', 'the Root and Branch', 'the Hummingbird Oath'], feast: ['the Rain Dance', 'the Green Maize Feast', 'the Night of the Jaguar', 'the Feather Day', 'the Root Festival', 'the Flower War'], symbol: ['a feathered serpent', 'a maize cob', 'a jaguar mask', 'a rain glyph', 'a hummingbird', 'a great tree'] },
+  high: { gods: ['the Deep Smith', 'the Stone Mother', 'the Anvil-King', 'the Lantern in the Dark', 'the Ore-Father', 'the Silent Ancestors', 'the Goat of the Peaks'], faith: ['the Forge Creed', 'the Halls of the Deep', 'the Covenant of Stone', 'the Lantern Rite', 'the Ancestor Hall', 'the Way of the Peaks'], feast: ['Forge Day', 'the Delving', 'Lanternmoot', 'Hammerfast', 'the Remembering', 'the Goat-Run'], symbol: ['an anvil', 'a pick and hammer', 'a mountain', 'a lantern', 'an ancestor stone', 'a goat\'s horn'] },
 };
 export const DAY_NAMES = ['Moonday', 'Ashday', 'Woden\'s Day', 'Thunderday', 'Freyday', 'Starday', 'Sunday'];
+
+// What sets one faith apart from the next: what it prizes most, what its
+// clergy are called, how it sees off its dead, and the beast it holds
+// sacred.
+const VIRTUES = ['charity', 'courage', 'hard work', 'learning', 'silence', 'hospitality', 'honesty', 'patience'];
+const CLERGY = {
+  vale: ['priest', 'vicar', 'hearth-keeper', 'well-warden'], north: ['godi', 'seer', 'skald-priest', 'rune-reader'], sun: ['imam of the lamp', 'star-reader', 'veiled one', 'keeper of the well'],
+  wild: ['shaman', 'rain-caller', 'jaguar priest', 'tree-speaker'], high: ['forge-priest', 'lorekeeper', 'stone-singer', 'ancestor-speaker'],
+};
+const RITES = ['burial in the graveyard', 'a pyre on the hill', 'a boat on the water', 'a cairn of stones', 'a tree planted over them'];
+const STYLE_RITES = { vale: [0, 0, 4], north: [1, 2, 3], sun: [0, 3], wild: [4, 1], high: [3, 0] };
+const BEASTS = { vale: ['the hare', 'the owl', 'the deer'], north: ['the wolf', 'the raven', 'the bear'], sun: ['the camel', 'the hawk', 'the lion'], wild: ['the jaguar', 'the hummingbird', 'the serpent'], high: ['the goat', 'the eagle', 'the bear'] };
 
 // Customs and taboos: what the faithful don't do (and what folk say when
 // you do). `test` names the check in Customs.
@@ -55,14 +67,17 @@ export const TABOOS = {
   no_hunting: { rule: 'kill no beast near the town', test: 'hunt', remark: ['You killed it? Here? The beasts are under the god\'s eye.', 'Blood on the holy ground...'] },
   sacred_trees: { rule: 'fell no tree near the town', test: 'fell', remark: ['That tree was older than your grandmother!', 'The trees are sacred here!'] },
   temple_arms: { rule: 'bear no weapon in a house of the gods', test: 'temple', remark: ['A blade in the temple? Out!', 'Leave your weapon at the door.'] },
+  no_mushroom: { rule: 'eat no mushroom (they belong to the dead)', test: 'eat', remark: ['That\'s food of the dead!', 'Spit it out! The dead\'ll want that back.'] },
+  sacred_beast: { rule: 'harm no beast the god holds sacred', test: 'hunt', remark: ['You killed one of the god\'s own!', 'That beast was sacred!'] },
+  no_digging: { rule: 'break no stone near the town (the mountain is the god\'s bones)', test: 'dig', remark: ['You\'re cutting into the god\'s own bones!', 'Leave the stone be!'] },
 };
 // Which taboos each people's gods tend to ask for.
 const LEANS = {
   vale: ['holy_rest', 'temple_arms', 'sacred_trees'],
   north: ['temple_arms', 'holy_rest', 'sacred_trees'],
   sun: ['no_drink', 'no_meat', 'no_fish', 'temple_arms', 'holy_rest'],
-  wild: ['no_hunting', 'sacred_trees', 'no_meat'],
-  high: ['holy_rest', 'temple_arms', 'no_drink'],
+  wild: ['no_hunting', 'sacred_trees', 'no_meat', 'no_mushroom', 'sacred_beast'],
+  high: ['holy_rest', 'temple_arms', 'no_drink', 'no_digging'],
 };
 
 // A string's hash (for a realm's name: the same faith every time).
@@ -77,7 +92,9 @@ const pickBy = (list, h) => list[h % list.length];
 // A realm's faith (a free town keeps the folk ways of its people).
 export function religionOf(s) {
   if (!s) return null;
-  const civ = s.civ || null;
+  // (A town may keep another realm's faith: one it was conquered from,
+  // or one carried to it by merchants and missionaries.)
+  const civ = s.faithCiv !== undefined ? s.faithCiv : s.civ || null;
   const style = (civ ? civ.style : s.style) || 'vale';
   const G = GODS[style] || GODS.vale;
   const seed = civ ? strHash(`${civ.name}:${civ.id}`) : hash4(s.seed >>> 0, 0x6f1c);
@@ -104,7 +121,17 @@ export function religionOf(s) {
     holyName: DAY_NAMES[holy],
     feast: `${pickBy(G.feast, h(6))}`,
     taboos,
+    key: civ ? `c${civ.id}` : `f${style}`,
+    virtue: pickBy(VIRTUES, h(7)),
+    clergy: pickBy(CLERGY[style] || CLERGY.vale, h(8)),
+    rite: RITES[pickBy(STYLE_RITES[style] || [0], h(9))],
+    beast: pickBy(BEASTS[style] || BEASTS.vale, h(10)),
   };
+}
+
+// The faith a realm keeps (for missionaries and holy wars).
+export function realmFaith(civ) {
+  return civ ? religionOf({ civ, style: civ.style, seed: civ.id }) : null;
 }
 
 // The feast day's name, for posters and talk.
@@ -125,6 +152,7 @@ export function forbiddenFood(s, item) {
   if (r.taboos.includes('no_meat') && MEATY.has(item)) return 'no_meat';
   if (r.taboos.includes('no_fish') && FISHY.has(item)) return 'no_fish';
   if (r.taboos.includes('no_drink') && DRINKS.has(item)) return 'no_drink';
+  if (r.taboos.includes('no_mushroom') && /mushroom/.test(item)) return 'no_mushroom';
   return null;
 }
 
@@ -213,6 +241,7 @@ export class Customs {
     const s = this.near(x, z);
     if (!s) return;
     if (/^log_/.test(block)) this.breach(s, 'sacred_trees', x, z);
+    if (/stone|ore|cobble/.test(block) && !/brick/.test(block)) this.breach(s, 'no_digging', x, z);
     if (isHolyDay(s, this.game.day) && this.game.world.ow.settlementAt(x, z)) this.breach(s, 'holy_rest', x, z);
   }
 
@@ -220,6 +249,9 @@ export class Customs {
     if (!creature || creature.kind !== 'creature' || creature.hostileNow) return;
     const s = this.near(creature.x, creature.z, 16);
     if (s) this.breach(s, 'no_hunting', creature.x, creature.z);
+    // The god's own beast, anywhere near.
+    const r = s ? religionOf(s) : null;
+    if (r && r.taboos.includes('sacred_beast') && r.beast.includes(creature.species)) this.breach(s, 'sacred_beast', creature.x, creature.z);
   }
 
   // Each second or so: a weapon in hand in a temple.

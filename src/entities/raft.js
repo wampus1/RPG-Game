@@ -4,6 +4,7 @@
 // rather than tile by tile; the rider sits on top.
 import { SURFACE, GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
+import { has as heroHas } from '../game/hero.js';
 
 export const RAFT = {
   accel: 1.8, // tiles/s² while paddling
@@ -58,11 +59,13 @@ export function steer(p, dt, input) {
   const left = down('KeyA', 'ArrowLeft');
   const right = down('KeyD', 'ArrowRight');
   // Turning: a little slower at full tilt.
-  const turn = RAFT.turn * (1 - Math.min(0.4, Math.abs(r.v) / RAFT.max * 0.4));
+  // (A sailor gets more out of each stroke.)
+  const sail = p.kind === 'player' && heroHas(p.game.hero, 'sailor') ? 1.35 : 1;
+  const turn = RAFT.turn * sail * (1 - Math.min(0.4, Math.abs(r.v) / (RAFT.max * sail) * 0.4));
   if (left) r.ang += turn * dt;
   if (right) r.ang -= turn * dt;
   r.ang = ((r.ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-  if (fwd) r.v = Math.min(RAFT.max, r.v + RAFT.accel * dt);
+  if (fwd) r.v = Math.min(RAFT.max * sail, r.v + RAFT.accel * sail * dt);
   else if (backK) r.v = Math.max(-RAFT.back, r.v - RAFT.accel * 1.3 * dt);
   else r.v *= Math.max(0, 1 - RAFT.drag * dt);
   if (Math.abs(r.v) < 0.02 && !fwd && !backK) r.v = 0;

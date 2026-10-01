@@ -3,6 +3,7 @@ import { Entity } from './entity.js';
 import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
+import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
@@ -61,8 +62,10 @@ export class Creature extends Entity {
       this.dead = true;
       return;
     }
+    // Winding up a blow (or charging): nothing else till it's thrown.
+    if (this.windup && tickAttack(this.game, this, dt)) return;
     if (this.moving) return;
-    // Staggered by a blow (an amethyst-set blade).
+    // Staggered by a blow (an amethyst-set blade, or a parry).
     if (this.stunT > 0) {
       this.stunT -= dt;
       return;
@@ -76,10 +79,7 @@ export class Creature extends Entity {
       // Tied up, and in a temper: snapping at anyone who comes too close.
       const t = game.findPrey(this, 2);
       if (t && this.distTo(t) <= 1 && Math.abs(t.y - this.y) <= 1 && this.attackCd <= 0) {
-        this.face(t.x, t.z);
-        this.attackCd = 1.2;
-        this.doAction(0.3);
-        game.damage(t, this.S.dmg, this);
+        beginAttack(game, this, t, { ...styleOf(this), charge: false, reach: 1 });
         return;
       }
     }
@@ -135,13 +135,15 @@ export class Creature extends Entity {
   chase(dt) {
     const t = this.target;
     const d = this.distTo(t);
+    const st = styleOf(this);
+    // In reach: wind up a blow (each kind its own way: see combat.js).
+    if (inReach(this, t, st) && (d <= 1 || st.lunge || st.charge)) {
+      this.face(t.x, t.z);
+      if (this.attackCd <= 0) beginAttack(this.game, this, t, st);
+      if (d <= 1) return;
+    }
     if (d <= 1 && Math.abs(t.y - this.y) <= 1) {
       this.face(t.x, t.z);
-      if (this.attackCd <= 0) {
-        this.attackCd = 1.0;
-        this.doAction(0.3);
-        this.game.damage(t, this.S.dmg, this);
-      }
       return;
     }
     if (!this.path || this.pathI >= this.path.length || this.thinkT <= 0) {

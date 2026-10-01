@@ -212,12 +212,13 @@ test('raiders knocked down in town are dragged to the cells, and prisoners sit i
 
 // ------------------------------------------------------------ the tree
 test('the tree: four branches of seven, two lines each joining at the last step, new arts with real effects', () => {
-  assert.equal(TECH_IDS.length, 28);
+  assert.equal(TECH_IDS.length, 29);
   for (const b of ['economy', 'warfare', 'society', 'engineering']) {
     const ids = TECH_IDS.filter((k) => TECHS[k].branch === b);
-    assert.equal(ids.length, 7);
+    // (Engineering has two roots: masonry, and metalworking beside it.)
+    assert.equal(ids.length, b === 'engineering' ? 8 : 7);
     const root = ids.filter((k) => !TECHS[k].req.length);
-    assert.equal(root.length, 1, 'one root');
+    assert.equal(root.length, b === 'engineering' ? 2 : 1, 'its roots');
     const cap = ids.find((k) => TECHS[k].tier === 5);
     assert.ok(cap, 'a last step');
     for (const k of ids) for (const r of TECHS[k].req) assert.equal(TECHS[r].branch, b, 'needs only its own branch');

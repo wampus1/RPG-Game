@@ -184,10 +184,12 @@ test('a camp you walk up to: they warn you off, then set on you; one brought dow
   p.teleport(f.x + 7, GROUND, f.z);
   run(game, input, 20);
   assert.ok(ents.some((n) => n.warband.warned), 'warned off first');
-  const hp0 = p.hp;
-  run(game, input, 80);
-  assert.ok(ents.some((n) => n.threat === p), 'then they come for you');
-  void hp0;
+  let came = false;
+  for (let i = 0; i < 80 && !came; i++) {
+    run(game, input, 1);
+    came = ents.some((n) => n.threat === p);
+  }
+  assert.ok(came, 'then they come for you');
   const n0 = band.members.length;
   game.damage(ents[0], 999, p);
   assert.ok(ents[0].dead);

@@ -7,7 +7,7 @@ import { ITEMS } from '../world/items.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
-  guard: { title: 'Guard', place: 'guardhouse', start: 360, end: 1080, tools: ['spear', 'iron_sword'], outfit: 'guard' },
+  guard: { title: 'Guard', place: 'guardhouse', start: 360, end: 1080, tools: ['spear', 'iron_sword', 'iron_sword', 'iron_axe', 'mace', 'bow'], outfit: 'guard' },
   innkeeper: { title: 'Innkeeper', place: 'tavern', start: 600, end: 1400, tools: [], outfit: 'apron', trader: 'inn' },
   cook: { title: 'Cook', place: 'tavern', start: 420, end: 1260, tools: ['ladle'], outfit: 'baker', trader: 'cook' },
   barkeep: { title: 'Barkeep', place: 'tavern', start: 660, end: 1380, tools: [], outfit: 'apron' },
@@ -62,6 +62,7 @@ export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
   if (rec.job === 'guard' && rec.life && rec.life.rank) return `${rec.life.rank} of the Watch`;
   if (rec.nomadBand !== undefined) return 'Nomad';
+  if (rec.bandit !== undefined) return rec.banditChief ? 'Bandit Chief' : rec.hiredSword ? 'Sellsword' : 'Bandit';
   if (rec.adventurer !== undefined) return ADVENTURER_TITLES[rec.advLevel || 1];
   if (rec.caravanTrader !== undefined) return { trader: 'Caravan Trader', driver: 'Wagon Driver', guard: 'Caravan Guard' }[rec.role] || 'Caravan Trader';
   const tier = rec.visitor ? rec.visit && rec.visit.tier : rec.job === 'merchant' ? rec.tier : null;
@@ -81,6 +82,9 @@ export function workplaceTypeFor(job) {
 export function planPopulation(s, rng) {
   const vals = s.civ ? s.civ.values : [];
   const has = (v) => vals.includes(v);
+  // A village just being founded: nobody yet (the settlers come with
+  // their own records), nothing built but its square.
+  if (s.founding) return { households: [], jobs: [], target: 0 };
   if (s.condition === 'abandoned') {
     // Empty homes (for ruins) but nobody lives there any more.
     const households = [];
@@ -321,6 +325,14 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   if (job === 'trapper') {
     items.push({ item: rng.chance(0.5) ? 'stone_sword' : 'iron_sword', count: 1 }, { item: 'arrow', count: rng.int(8, 16) });
   }
+  // The watch: each guard their own weapon (and their own way of fighting
+  // with it); archers keep a dagger for close work; a sword or a mace goes
+  // with a shield, most of the time.
+  let shield = null;
+  if (job === 'guard') {
+    if (tool === 'bow') items.push({ item: 'arrow', count: rng.int(12, 24) }, { item: 'dagger', count: 1 });
+    if ((tool === 'iron_sword' || tool === 'mace') && rng.chance(0.7)) shield = cond === 'prosperous' && rng.chance(0.6) ? 'iron_shield' : rng.chance(0.5) ? 'round_shield' : 'wooden_shield';
+  }
   let hobbyItem = null;
   for (const h of hobbies) {
     let it = HOBBIES[h].item;
@@ -334,7 +346,7 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   const wealth = { prosperous: 1.6, normal: 1, poor: 0.5 }[cond] || 1;
   const base = { noble: 60, mayor: 40, merchant: 30, blacksmith: 20, innkeeper: 18, cook: 14, scholar: 14, beggar: 1 }[job] ?? (age === 'child' ? 1 : 8);
   const coins = Math.max(0, Math.round(base * wealth * rng.float(0.5, 1.5)));
-  return { tool, hobbyItem, items, coins, armor: job === 'guard' ? 0.35 : 0 };
+  return { tool, hobbyItem, items, coins, armor: job === 'guard' ? 0.35 : 0, shield };
 }
 
 // ---------------------------------------------------------------- schedules
@@ -531,13 +543,29 @@ export function availOf(layout) {
   };
 }
 
+// A shield on their arm (or none).
+export function withShield(look, shield) {
+  const gear = { ...(look.gear || {}) };
+  if (shield && ITEMS[shield]) gear.shield = ITEMS[shield].look;
+  else delete gear.shield;
+  return Object.keys(gear).length ? { ...look, gear } : { ...look, gear: undefined };
+}
+
 // Give someone a new trade: workplace, tools, clothes and a new routine.
 export function retrain(layout, rec, job, rng) {
   rec.job = job;
   rec.work = layout.assignWork(rec, rng);
   const eq = equipmentFor(rng, job, rec.hobbies, layout.settlement.condition, rec.age);
-  rec.equipment = { ...rec.equipment, tool: eq.tool, armor: eq.armor, items: [...eq.items.filter((i) => ITEMS[i.item]?.kind === 'weapon' || i.item === eq.tool), ...(rec.equipment?.items || []).filter((i) => ITEMS[i.item]?.kind !== 'weapon')] };
-  const look = { ...rec.look, outfit: JOBS[job]?.outfit || 'plain' };
+  rec.equipment = { ...rec.equipment, tool: eq.tool, armor: eq.armor, shield: eq.shield, items: [...eq.items.filter((i) => ITEMS[i.item]?.kind === 'weapon' || i.item === eq.tool || i.item === 'arrow'), ...(rec.equipment?.items || []).filter((i) => ITEMS[i.item]?.kind !== 'weapon')] };
+  const look = withShield({ ...rec.look, outfit: JOBS[job]?.outfit || 'plain' }, eq.shield);
+  // (An archer's quiver.)
+  const quiver = eq.items.find((i) => i.item === 'arrow');
+  if (quiver) {
+    rec.inv ||= [];
+    const have = rec.inv.find((q) => q && q.item === 'arrow');
+    if (have) have.count += quiver.count;
+    else rec.inv.push({ item: 'arrow', count: quiver.count });
+  }
   if (job === 'guard') {
     look.hat = 'helmet';
     rec.maxHp = 24;
@@ -625,7 +653,7 @@ export function generateNPCs(layout, plan, seed) {
       };
       npc.hobbies = pickHobbies(rng, p, civ, avail, m.age);
       npc.equipment = equipmentFor(rng, job, npc.hobbies, s.condition, m.age);
-      npc.look = makeLook(rng, style, m.age, job, civ);
+      npc.look = withShield(makeLook(rng, style, m.age, job, civ), npc.equipment.shield);
       npc.maxHp = job === 'guard' ? 24 : m.age === 'child' ? 6 : m.age === 'elder' ? 8 : 12;
       npc.hp = npc.maxHp;
       npc.work = layout.assignWork(npc, rng);

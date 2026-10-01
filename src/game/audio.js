@@ -82,6 +82,8 @@ export class Audio {
       case 'coin': this.tone(988, 0.07, 'square', 0.1); this.tone(1318, 0.12, 'square', 0.1, 0, 0.06); break;
       case 'door': this.tone(180, 0.12, 'sawtooth', 0.08, -60); this.noise(0.08, 0.08, 400); break;
       case 'swing': this.noise(0.08, 0.1, 2200); break;
+      case 'parry': this.tone(1760, 0.1, 'triangle', 0.12); this.tone(2350, 0.18, 'triangle', 0.09, 0, 0.04); this.noise(0.05, 0.12, 3000); break;
+      case 'roll': this.noise(0.18, 0.09, 700); break;
       case 'hit': this.noise(0.1, 0.25, 800); this.tone(200, 0.08, 'square', 0.12, -120); break;
       case 'hurt': this.tone(300, 0.2, 'square', 0.18, -200); break;
       case 'death': this.tone(400, 0.5, 'triangle', 0.2, -350); break;
