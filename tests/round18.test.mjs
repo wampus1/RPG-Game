@@ -138,18 +138,32 @@ test('an ale is set down, drunk, and left as an empty mug to clear away', () => 
   assert.ok(MESS.has('empty_mug'));
 });
 
-test('dice are thrown onto the table and land showing their faces', () => {
+test('dice are thrown onto the table as little cubes that roll and come to rest on the numbers thrown', async () => {
   const { game, L, p } = start();
-  const tosses = [];
-  game.renderer.toss = (o) => tosses.push(o);
+  const throws = [];
+  game.renderer.rollDice = (o) => throws.push(o);
   const n = game.npcs.find((q) => !q.dead && q.layout === L && q.rec.age === 'adult');
   n.teleport(p.x + 1, p.y, p.z);
   n.atGoal = true;
   actFx(n, { act: 'hobby', hobby: 'dice' }, game, 10);
-  assert.equal(tosses.length, 2, 'two dice');
-  for (const t of tosses) {
-    assert.equal(t.kind, 'dice');
-    assert.ok(t.face >= 1 && t.face <= 6);
+  assert.equal(throws.length, 1);
+  const faces = throws[0].faces;
+  assert.ok(faces.length >= 2 && faces.length <= 3, 'two or three dice');
+  assert.ok(faces.every((f) => f >= 1 && f <= 6));
+  // The dice themselves: thrown, bouncing, rolling, settling flat.
+  const { throwDice, stepDice } = await import('../src/render/dice.js');
+  const to = { x: 10, y: 7, z: 10, oy: 2 };
+  const dice = throwDice({ x: 10, y: 6, z: 11 }, to, faces);
+  for (let i = 0; i < 400 && !dice.every((d) => d.still); i++) stepDice(dice, 1 / 60);
+  for (const [i, d] of dice.entries()) {
+    assert.ok(d.still, 'came to rest');
+    assert.ok(d.bounced >= 1, 'bounced on landing');
+    assert.ok(Math.abs(d.x - 10) <= 0.5 && Math.abs(d.z - 10) <= 0.5, 'still on the table');
+    // Flat, with the thrown number on top.
+    const up = [0, 1, 2].find((k) => d.R[1][k] !== 0);
+    assert.ok(d.R.every((r) => r.every((v) => v === 0 || Math.abs(v) === 1)), 'square to the table');
+    assert.equal(d.labels[up][d.R[1][up] > 0 ? 0 : 1], faces[i]);
+    for (const p2 of d.labels) assert.equal(p2[0] + p2[1], 7, 'opposite sides add to seven');
   }
 });
 

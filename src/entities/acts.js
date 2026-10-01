@@ -188,20 +188,24 @@ function diceTick(n, dt) {
   n.face(t.x, t.z);
   n.doAction(0.4);
   if (!near(n)) return;
-  const a = n.rng.int(1, 6);
-  const b = n.rng.int(1, 6);
-  const to = { x: t.x, y: t.floor ? t.y : t.y + 1, z: t.z, oy: t.floor ? 6 : 2 };
-  game.renderer.toss?.({ from: { x: n.x, y: n.y, z: n.z, oy: -6 }, to, kind: 'dice', face: a, dx: -3, dur: 0.5, rest: 3.5 });
-  game.renderer.toss?.({ from: { x: n.x, y: n.y, z: n.z, oy: -6 }, to, kind: 'dice', face: b, dx: 3, dur: 0.6, rest: 3.4 });
+  // Two dice (three, now and then), thrown onto the table to roll.
+  const faces = Array.from({ length: n.rng.chance(0.35) ? 3 : 2 }, () => n.rng.int(1, 6));
+  // (Where they come to rest on screen, below the layer above: a table top
+  // sits lower than a full block; on the floor, where feet stand.)
+  const to = { x: t.x, y: t.floor ? t.y : t.y + 1, z: t.z, oy: t.floor ? 10 : 15 };
+  game.renderer.rollDice?.({ from: { x: n.x, y: n.y, z: n.z }, to, faces });
   game.audio?.play('dig', n);
-  const total = a + b;
-  const line = a === b && a === 1 ? 'Snake eyes!' : a === b && a === 6 ? 'Double sixes!' : a === b ? `Doubles! ${a} and ${b}!` : total >= 10 ? `${total}! Pay up!` : total <= 4 ? `${total}... curse it.` : null;
-  if (line && n.rng.chance(0.7)) n.sayLater?.(line, 0.7, 2.5);
+  const total = faces.reduce((m, f) => m + f, 0);
+  const same = faces.every((f) => f === faces[0]);
+  const many = faces.length === 3;
+  const line = same && many ? `Triple ${faces[0]}s!` : same && faces[0] === 1 ? 'Snake eyes!' : same && faces[0] === 6 ? 'Double sixes!' : same ? `Doubles! ${faces[0]} and ${faces[1]}!`
+    : total >= (many ? 15 : 10) ? `${total}! Pay up!` : total <= (many ? 6 : 4) ? `${total}... curse it.` : null;
+  if (line && n.rng.chance(0.7)) n.sayLater?.(line, 1.4, 2.5);
   // The others at the table watch it land, and cheer or groan.
   for (const q of game.npcs) {
     if (q === n || q.dead || q.sleeping || q.layout !== n.layout || q.distTo(n) > 2.5 || !q.atGoal) continue;
     q.face(t.x, t.z);
-    if (line && q.rng.chance(0.4)) q.sayLater?.(q.rng.pick(total >= 10 ? ['Lucky dog!', 'Again!', 'Hah!'] : ['Hard luck.', 'My turn!', 'Ha!']), 1.4, 2.2);
+    if (line && q.rng.chance(0.4)) q.sayLater?.(q.rng.pick(total >= (many ? 15 : 10) ? ['Lucky dog!', 'Again!', 'Hah!'] : ['Hard luck.', 'My turn!', 'Ha!']), 1.4, 2.2);
   }
 }
 

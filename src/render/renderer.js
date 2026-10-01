@@ -10,6 +10,7 @@ import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
+import { throwDice, stepDice, drawDie } from './dice.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -388,6 +389,7 @@ export class Renderer {
     }
     this.fishingDecos(game, buckets, zMin, zMax);
     this.leadDecos(game, buckets, zMin, zMax);
+    this.diceDecos(buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();
@@ -830,27 +832,21 @@ export class Renderer {
     const bob = e.moving ? (Math.floor(this.time * 7) % 2 ? -1 : 0) : 0;
     const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting || e.raft ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
     const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
-    // (The grip is the bottom-left of the picture.)
+    // (The grip is the bottom-left of the picture; held things are drawn at
+    // three fifths size, in proportion to the hand holding them.)
     const gx = -3;
     const gy = -13;
+    const S = 0.6;
+    if (act <= 0 && dir === 2) return; // behind them
+    ctx.save();
+    ctx.translate(hx, hy);
     if (act > 0) {
-      ctx.save();
-      ctx.translate(hx, hy);
       const sign = dir === 1 ? -1 : 1;
       ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
-      if (dir === 1) ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, gx, gy, this.time, true);
-      ctx.restore();
-      return;
     }
-    if (dir === 2) return; // behind them
-    if (dir === 1) {
-      ctx.save();
-      ctx.translate(hx, hy);
-      ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, gx, gy, this.time, true);
-      ctx.restore();
-    } else drawJewelled(ctx, icon, key, hx + gx, hy + gy, this.time, true);
+    ctx.scale(dir === 1 ? -S : S, S);
+    drawJewelled(ctx, icon, key, gx, gy, this.time, true);
+    ctx.restore();
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
@@ -1185,6 +1181,31 @@ export class Renderer {
       t: 0, dur: o.dur || 0.55, rest: o.rest ?? 3, kind: o.kind || 'dice', face: o.face || 1, spin: Math.random() * 6, item: o.item || null, h: o.h ?? 14,
     });
     if (this.tosses.length > 40) this.tosses.shift();
+  }
+
+  // Dice thrown onto a table: real little cubes (see dice.js).
+  rollDice(o) {
+    this.dice = (this.dice || []).concat(throwDice(o.from, o.to, o.faces || [o.face || 1]));
+    if (this.dice.length > 24) this.dice.splice(0, this.dice.length - 24);
+  }
+
+  // Each die goes into the row it's over and is drawn there, in depth order
+  // with the world (like someone standing there).
+  diceDecos(buckets, zMin, zMax) {
+    const list = this.dice;
+    if (!list || !list.length) return;
+    stepDice(list, this.frameDt || 0.016);
+    this.dice = list.filter((d) => d.fade > 0);
+    const ctx = this.ctx;
+    const tv = (x, z) => this.toView(x, z);
+    for (const d of this.dice) {
+      const [u, v] = this.toView(d.x, d.z);
+      const row = Math.ceil(v - 0.001);
+      if (row < zMin || row > zMax) continue;
+      let arr = buckets.get(row);
+      if (!arr) buckets.set(row, (arr = []));
+      arr.push({ deco: () => drawDie(ctx, d, u, v, this.camX, this.camY, tv), layer: Math.ceil(d.base - 0.001) + 1, rp: { y: d.base } });
+    }
   }
 
   drawTosses(dt) {
