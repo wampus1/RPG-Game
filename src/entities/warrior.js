@@ -7,7 +7,10 @@
 // them, and fall back when badly hurt; the watch rides out on horseback to
 // meet raiders in the fields.
 
+import { B } from '../world/blocks.js';
+
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
+
 
 export function warTick(n, dt) {
   const wb = n.warband;
@@ -15,7 +18,9 @@ export function warTick(n, dt) {
     n.state = 'routine';
     return;
   }
+  if (wb.phase === 'down') return;
   if (wb.kind === 'sortie') return ride(n, wb);
+  if (wb.kind === 'escape') return leave(n, wb, dt);
   if (wb.kind === 'raid') return raider(n, wb, dt);
   return soldier(n, wb, dt);
 }
@@ -35,7 +40,7 @@ function nearest(n, list, r = 99) {
   let best = null;
   let bd = r + 1;
   for (const t of list) {
-    if (!t || t.dead) continue;
+    if (!t || t.dead || t.down) continue;
     const d = n.distTo(t);
     if (d < bd) {
       best = t;
@@ -57,7 +62,9 @@ function leave(n, wb, dt) {
   const g = n.game;
   const h = wb.home;
   wb.leaveT = (wb.leaveT || 0) + dt;
-  if (!h || far(n, h.x, h.z) <= 2 || n.distTo(g.player) > 34 || wb.leaveT > 60) {
+  if (!h || far(n, h.x, h.z) <= 2 || n.distTo(g.player) > 34 || wb.leaveT > (wb.kind === 'escape' ? 120 : 60)) {
+    // (An escaping prisoner out of sight has got away.)
+    if (wb.kind === 'escape') n.escaped = true;
     g.despawnNpc(n);
     return;
   }
@@ -267,3 +274,44 @@ export function warBonus(n) {
   return wb.ambush !== undefined && L.t < wb.ambush ? base * 1.35 : base;
 }
 
+
+// ------------------------------------------------------------ prisoners
+// A prisoner of war in a cell: standing at the bars by day, lying on the
+// cot by night, calling out now and then. Very rarely, in the dark, one
+// forces the cell door and runs for it (the watch goes after them).
+export function captiveTick(n, dt) {
+  const c = n.captive;
+  const g = n.game;
+  if (!c) return;
+  const m = g.minute;
+  const night = m < 360 || m >= 1260;
+  if (night !== !!n.sleeping) {
+    n.sleeping = night;
+    if (night && c.bed) n.teleport(c.bed.x, c.y, c.bed.z);
+    else if (!night) n.teleport(c.stand.x, c.y, c.stand.z);
+  }
+  if (!night) {
+    if (!n.moving && n.rng.chance(dt * 0.3)) n.face(c.front.x, c.front.z);
+    if (n.distTo(g.player) <= 6 && n.rng.chance(dt * 0.04)) {
+      const civ = n.rec && n.settlement.civ ? n.settlement.civ.name.replace(/^The /, '') : null;
+      n.say(n.rng.pick(['Let me out of here!', 'When are they trading us back?', 'Water... please.', 'My people will come for me.', civ ? `The ${civ} won't forget this.` : 'You can\'t keep me here forever.']), 2.5);
+    }
+    return;
+  }
+  // A break for it.
+  if (!n.rng.chance(dt * 0.0006)) return;
+  const w = g.world;
+  if (c.door && w.getBlock(c.door.x, c.y, c.door.z) === B.cell_door) w.setBlock(c.door.x, c.y, c.door.z, B.cell_door_open, 0);
+  g.renderer.emit(c.door.x, c.y + 1, c.door.z, { n: 8, color: ['#8a8a98', '#5a5a68'], up: 20, speed: 30, life: 0.5 });
+  g.audio?.play('break', n);
+  const town = c.p ? g.world.ow.settlements[c.p.at] : null;
+  const b = town ? town.bounds : null;
+  const home = b ? { x: n.x < (b.x0 + b.x1) / 2 ? b.x0 - 20 : b.x1 + 20, z: Math.round((b.z0 + b.z1) / 2) } : { x: n.x + 40, z: n.z };
+  n.sleeping = false;
+  n.state = 'warband';
+  n.warband = { kind: 'escape', foe: true, phase: 'flee', home, civ: n.settlement.civ ? n.settlement.civ.id : null, prisoner: c.p ? c.p.id : null };
+  n.hostileNow = true;
+  n.captive = null;
+  n.say('Now! Run!', 2, '#ffb080');
+  if (town && g.currentSettlement === town) g.ui.msg(`A prisoner has broken out of the cells!`, '#ffb080');
+}

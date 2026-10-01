@@ -3,82 +3,366 @@
 import { CHAR_W, CHAR_H } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
-import { TECHS, BRANCHES, branchTechs } from '../sim/tech.js';
+import { TECHS, BRANCHES } from '../sim/tech.js';
+import { itemIcon } from '../render/sprites.js';
+import { drawText, textWidth } from '../render/font.js';
 
 const pct = (a, b) => Math.max(0, Math.min(100, Math.floor((a / Math.max(1, b)) * 100)));
 const bar = (f, n) => '█'.repeat(Math.round(f * n)) + '░'.repeat(n - Math.round(f * n));
 
 // ---------------------------------------------------------------- the tree
+// The realm's learning as a map: its crest in the middle and four paths
+// running out from it (Economy north, Warfare east, Law & Society south,
+// Engineering west), each splitting in two and joining again at its last
+// step. Every step is an icon on the path: point at it to see what it does,
+// click it to fly in close with the details at the side. The wheel zooms,
+// dragging moves the map.
+const DIRS = { economy: [0, -1], warfare: [1, 0], society: [0, 1], engineering: [-1, 0] };
+const LEG = 50; // distance between steps along a path (at zoom 1)
+const SPREAD = 30; // how far a side line sits off the path
+const NODE = 11; // node radius
+const PANEL = 30; // side panel width (characters)
+
+// Where each step sits on the map (zoom 1, origin at the crest).
+export function techPos(id) {
+  const t = TECHS[id];
+  const [dx, dz] = DIRS[t.branch];
+  const along = 26 + t.tier * LEG;
+  return { x: dx * along - dz * t.side * SPREAD, y: dz * along + dx * t.side * SPREAD };
+}
+
 export class TechWindow extends Window {
   constructor(ui, game, s) {
-    super(ui, 80, 32, { kind: 'tech' });
+    super(ui, 85, 36, { kind: 'tech', x: 0, y: 0 });
     this.game = game;
     this.s = s;
-    this.closeOnOutside = true;
-    this.col = 0;
-    this.row = 0;
+    this.closeOnOutside = false;
+    this.cam = { x: 0, y: 0, z: 0.85 };
+    this.goal = { x: 0, y: 0, z: 0.85 };
+    this.sel = null;
+    this.hover = null;
+    this.drag = null;
+    this.t = 0;
+    const st = game.sim.tech.stateOf(s);
+    // Open on what's being studied, if anything.
+    if (st && st.current) this.focus(st.current, 1.1);
+  }
+  // The map's area on screen, in pixels.
+  area() {
+    const panel = this.sel ? PANEL : 0;
+    return { x0: (this.x + 1) * CHAR_W, y0: (this.y + 3) * CHAR_H, x1: (this.x + this.w - 1 - panel) * CHAR_W, y1: (this.y + this.h - 2) * CHAR_H };
+  }
+  toScreen(p) {
+    const a = this.area();
+    const z = this.cam.z;
+    return { x: Math.round((a.x0 + a.x1) / 2 + (p.x - this.cam.x) * z), y: Math.round((a.y0 + a.y1) / 2 + (p.y - this.cam.y) * z) };
+  }
+  toMap(sx, sy) {
+    const a = this.area();
+    return { x: this.cam.x + (sx - (a.x0 + a.x1) / 2) / this.cam.z, y: this.cam.y + (sy - (a.y0 + a.y1) / 2) / this.cam.z };
+  }
+  // The step under the mouse.
+  nodeAt(mx, my) {
+    const a = this.area();
+    if (mx < a.x0 || mx >= a.x1 || my < a.y0 || my >= a.y1) return null;
+    let best = null;
+    for (const id of Object.keys(TECHS)) {
+      const q = this.toScreen(techPos(id));
+      const d = Math.hypot(q.x - mx, q.y - my);
+      if (d <= NODE * this.cam.z + 3 && (!best || d < best.d)) best = { id, d };
+    }
+    return best ? best.id : null;
+  }
+  focus(id, z = 1.6) {
+    const p = techPos(id);
+    this.sel = id;
+    this.goal = { x: p.x, y: p.y, z };
+  }
+  status(st, id) {
+    if (st.done.includes(id)) return 'done';
+    if (st.current === id) return 'current';
+    return this.game.sim.tech.ready(st, id) ? 'open' : 'locked';
+  }
+  update(dt) {
+    this.t += dt;
+    // The view eases toward where it's going.
+    const k = Math.min(1, dt * 8);
+    if (!this.drag) {
+      this.cam.x += (this.goal.x - this.cam.x) * k;
+      this.cam.y += (this.goal.y - this.cam.y) * k;
+    }
+    this.cam.z += (this.goal.z - this.cam.z) * k;
+    // Dragging the map about (a press that barely moves is a click).
+    const m = this.ui.mouse;
+    if (!m) return;
+    if (m.down && this.drag) {
+      const dx = m.x - this.drag.x;
+      const dy = m.y - this.drag.y;
+      this.drag.moved = Math.max(this.drag.moved, Math.abs(dx) + Math.abs(dy));
+      this.cam.x = this.drag.cx - dx / this.cam.z;
+      this.cam.y = this.drag.cy - dy / this.cam.z;
+      this.goal.x = this.cam.x;
+      this.goal.y = this.cam.y;
+    } else if (!m.down) {
+      if (this.drag && this.drag.moved < 4) {
+        const id = this.nodeAt(m.x, m.y);
+        if (id) this.focus(id, Math.max(1.5, this.goal.z));
+        else this.sel = null;
+        this.ui.audio?.play('select');
+      }
+      this.drag = null;
+    }
+  }
+  // A press on the map: the start of a drag (or, if it hardly moves, a
+  // click on a step).
+  onClick(ck) {
+    const a = this.area();
+    if (ck.button === 0 && ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cy: this.cam.y, moved: 0 };
+    return true;
+  }
+  onWheel(d) {
+    const m = this.ui.mouse;
+    const z0 = this.goal.z;
+    const z1 = Math.max(0.5, Math.min(2.6, z0 * (d > 0 ? 1 / 1.18 : 1.18)));
+    // Zoom toward the mouse.
+    if (m) {
+      const before = this.toMap(m.x, m.y);
+      this.goal.z = z1;
+      const a = this.area();
+      this.goal.x = before.x - (m.x - (a.x0 + a.x1) / 2) / z1;
+      this.goal.y = before.y - (m.y - (a.y0 + a.y1) / 2) / z1;
+    } else this.goal.z = z1;
+  }
+  onKey(k) {
+    const step = 40 / this.goal.z;
+    if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.goal.x -= step;
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.goal.x += step;
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.goal.y -= step;
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.goal.y += step;
+    else if (k.code === 'Equal' || k.code === 'NumpadAdd') this.goal.z = Math.min(2.6, this.goal.z * 1.18);
+    else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.goal.z = Math.max(0.5, this.goal.z / 1.18);
+    else if (k.code === 'Home' || k.code === 'Space') this.goal = { x: 0, y: 0, z: 0.85 };
+    else if (k.code === 'Enter') this.close();
+    else return false;
+    return true;
   }
   draw(g, game) {
     const s = this.s;
     const T = game.sim.tech;
     const st = T.stateOf(s);
     const civ = s.civ;
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(16,14,24,0.96)', double: true, title: 'WHAT THE REALM KNOWS' });
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(10,9,16,0.97)', double: true, title: 'WHAT THE REALM KNOWS' });
     const who = T.leaderOf(s);
     const realm = civ ? civ.name.replace(/^The /, '') : `free town of ${s.name}`;
-    g.center(1, `${realm.toUpperCase()}${who ? ` · ${who.name.first} ${who.name.last} decides` : ''}`, '#f0e0c0');
-    if (st.current) {
-      const t = TECHS[st.current];
-      const f = st.progress / t.cost;
-      g.text(3, 3, 'Studying:', C.dim);
-      g.text(13, 3, t.name, C.hi);
-      g.text(13 + t.name.length + 2, 3, `${bar(f, 20)} ${pct(st.progress, t.cost)}%`, '#c8a060');
-    } else g.text(3, 3, st.done.length >= 20 ? 'Everything there is to know, the scholars know.' : 'Nothing under study just now.', C.dim);
-    g.text(3, 4, `${st.done.length} of 20 learned`, C.faint);
-    // Four columns, five steps down each.
-    const cw = 19;
-    BRANCHES.forEach((b, ci) => {
-      const x = 2 + ci * cw;
-      g.text(x + 1, 6, b.name.toUpperCase().slice(0, cw - 2), b.color);
-      branchTechs(b.id).forEach((k, ri) => {
-        const y = 8 + ri * 4;
-        const t = TECHS[k];
-        const done = st.done.includes(k);
-        const cur = st.current === k;
-        const pre = T.prereq(k);
-        const open = !pre || st.done.includes(pre);
-        const sel = this.col === ci && this.row === ri;
-        const hov = this.hovering(x, y, cw - 1, 2);
-        if (hov) {
-          this.col = ci;
-          this.row = ri;
+    g.center(1, `${realm.toUpperCase()}${who ? ` · ${who.name.first} ${who.name.last} decides what is studied` : ''}`, '#f0e0c0');
+    const cur = st.current ? TECHS[st.current] : null;
+    g.text(2, 2, cur ? `Studying ${cur.name} ${bar(st.progress / cur.cost, 12)} ${pct(st.progress, cur.cost)}%` : 'Nothing under study', cur ? '#c8a060' : C.dim);
+    const n = `${st.done.length} of ${Object.keys(TECHS).length} learned`;
+    g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, C.faint);
+    g.text(2, this.h - 1, ' wheel zoom · drag to move · click a step · arrows pan · ESC close ', C.faint);
+    // Hover: what it is.
+    const m = this.ui.mouse;
+    this.hover = m ? this.nodeAt(m.x, m.y) : null;
+    if (this.hover && !this.drag) {
+      const t = TECHS[this.hover];
+      const stt = this.status(st, this.hover);
+      const lines = [{ text: t.name, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: stt === 'done' ? C.green : stt === 'current' ? C.hi : stt === 'open' ? C.fg : C.dim }];
+      for (const l of wrap(t.desc, 36)) lines.push({ text: l, color: C.white });
+      this.ui.tooltip = { lines };
+    }
+    // The side panel for the step picked.
+    if (!this.sel) return;
+    const id = this.sel;
+    const t = TECHS[id];
+    const x0 = this.w - 1 - PANEL;
+    g.fill(x0, 3, PANEL, this.h - 5, ' ', C.fg, 'rgba(20,18,30,0.98)');
+    for (let y = 3; y < this.h - 2; y++) g.put(x0, y, '│', C.faint);
+    let y = 4;
+    const line = (txt, col = C.fg) => {
+      for (const l of wrap(txt, PANEL - 3)) {
+        if (y < this.h - 3) g.text(x0 + 2, y, l, col);
+        y++;
+      }
+    };
+    line(t.name.toUpperCase(), BRANCH_COLOR[t.branch]);
+    line(`${BRANCH_NAME[t.branch]} · step ${t.tier}`, C.dim);
+    y++;
+    const stt = this.status(st, id);
+    const when = (st.log || []).find((q) => q.id === id);
+    if (stt === 'done') line(when ? `Learned on day ${Math.max(1, when.day)}` : 'Known from of old', C.green);
+    else if (stt === 'current') line(`Being studied: ${bar(st.progress / t.cost, 10)} ${pct(st.progress, t.cost)}%`, C.hi);
+    else if (stt === 'open') line('Can be studied next', C.fg);
+    else line(`Needs ${t.req.filter((k) => !st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')} first`, C.orange);
+    y++;
+    line(t.desc, C.white);
+    y++;
+    line(t.lore, C.dim);
+    y++;
+    line(`Study needed: ${t.cost}`, C.faint);
+    const next = Object.keys(TECHS).filter((k) => TECHS[k].req.includes(id));
+    if (next.length) line(`Leads to: ${next.map((k) => TECHS[k].name).join(', ')}`, C.faint);
+    g.text(x0 + 2, this.h - 3, '[click away] close', C.faint);
+  }
+  drawPixels(ctx, game) {
+    const st = game.sim.tech.stateOf(this.s);
+    const a = this.area();
+    const z = this.cam.z;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+    ctx.clip();
+    ctx.fillStyle = '#0c0a12';
+    ctx.fillRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+    // The backdrop: faint rings and spokes about the crest.
+    const o = this.toScreen({ x: 0, y: 0 });
+    ctx.strokeStyle = 'rgba(120,110,150,0.12)';
+    ctx.lineWidth = 1;
+    for (const r of [60, 130, 200, 270, 340]) {
+      ctx.beginPath();
+      ctx.arc(o.x + 0.5, o.y + 0.5, r * z, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(120,110,150,0.07)';
+    for (let i = 0; i < 16; i++) {
+      const ang = (i / 16) * Math.PI * 2 + Math.PI / 16;
+      ctx.beginPath();
+      ctx.moveTo(o.x + Math.cos(ang) * 40 * z, o.y + Math.sin(ang) * 40 * z);
+      ctx.lineTo(o.x + Math.cos(ang) * 380 * z, o.y + Math.sin(ang) * 380 * z);
+      ctx.stroke();
+    }
+    // The paths: from each step back to what it needs (the roots to the
+    // crest). Bright where it's known, a dotted trail where it could be
+    // studied, faint and grey beyond.
+    const ids = Object.keys(TECHS);
+    for (const id of ids) {
+      const t = TECHS[id];
+      const to = this.toScreen(techPos(id));
+      const froms = t.req.length ? t.req.map((k) => this.toScreen(techPos(k))) : [o];
+      const stt = this.status(st, id);
+      const col = BRANCH_COLOR[t.branch];
+      for (const f of froms) {
+        if (stt === 'done') {
+          ctx.strokeStyle = hexA(col, 0.25);
+          ctx.lineWidth = Math.max(3, 5 * z);
+          line(ctx, f, to);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = Math.max(1, 2 * z);
+          line(ctx, f, to);
+        } else {
+          ctx.setLineDash([2, 3]);
+          ctx.strokeStyle = stt === 'locked' ? 'rgba(140,140,160,0.35)' : hexA(col, stt === 'current' ? 0.9 : 0.6);
+          ctx.lineWidth = 1;
+          line(ctx, f, to);
+          ctx.setLineDash([]);
         }
-        const bg = sel ? 'rgba(70,60,40,0.95)' : done ? 'rgba(30,50,30,0.9)' : cur ? 'rgba(60,50,20,0.9)' : 'rgba(26,22,32,0.9)';
-        g.fill(x, y, cw - 1, 2, ' ', C.fg, bg);
-        const mark = done ? '■' : cur ? '►' : open ? '·' : ' ';
-        const col = done ? C.green : cur ? C.hi : open ? C.fg : C.faint;
-        g.text(x, y, `${mark} ${t.name}`.slice(0, cw - 1), col);
-        g.text(x + 2, y + 1, done ? 'learned' : cur ? `${bar(st.progress / t.cost, 8)} ${pct(st.progress, t.cost)}%` : `tier ${t.tier}`, done ? '#5a9a4a' : cur ? '#c8a060' : C.faint);
-        if (ri < 4) g.text(x + 8, y + 2, '│', done ? '#5a9a4a' : C.faint);
-        if (ri < 4) g.text(x + 8, y + 3, '▼', done ? '#5a9a4a' : C.faint);
-      });
-    });
-    // What the one picked does.
-    const k = branchTechs(BRANCHES[this.col].id)[this.row];
-    const t = TECHS[k];
-    const lines = wrap(`${t.name}: ${t.desc}`, this.w - 6);
-    lines.slice(0, 2).forEach((l, i) => g.text(3, this.h - 4 + i, l, C.white));
-    g.text(3, this.h - 1, ' arrows look · [ESC] close ', C.faint);
+      }
+    }
+    // The crest in the middle: the realm's colour, a ring, a cross-hair.
+    const civ = this.s.civ;
+    const crest = civ ? civ.color.hex : '#c8b070';
+    const R = Math.max(8, 16 * z);
+    ctx.fillStyle = '#16121e';
+    circle(ctx, o.x, o.y, R + 3);
+    ctx.fillStyle = hexA(crest, 0.85);
+    circle(ctx, o.x, o.y, R);
+    ctx.strokeStyle = '#f0d890';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(o.x + 0.5, o.y + 0.5, R + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      ctx.beginPath();
+      ctx.moveTo(o.x + 0.5 + dx * (R + 3), o.y + 0.5 + dy * (R + 3));
+      ctx.lineTo(o.x + 0.5 + dx * (R + 10), o.y + 0.5 + dy * (R + 10));
+      ctx.stroke();
+    }
+    // The realm's letter on its crest.
+    const letter = ((civ ? civ.name.replace(/^The /, '') : this.s.name)[0] || '?').toUpperCase();
+    drawText(ctx, letter, Math.round(o.x - textWidth(letter) / 2) + 1, o.y - 3, '#fff4d0', '#000');
+    // Branch names at the far end of each path.
+    for (const b of BRANCHES) {
+      const [dx, dy] = DIRS[b.id];
+      const q = this.toScreen({ x: dx * (26 + 6 * LEG), y: dy * (26 + 6 * LEG) });
+      const name = b.name.toUpperCase();
+      drawText(ctx, name, Math.round(q.x - textWidth(name) / 2), q.y - 3, b.color, '#000');
+    }
+    // The steps.
+    for (const id of ids) {
+      const t = TECHS[id];
+      const q = this.toScreen(techPos(id));
+      const stt = this.status(st, id);
+      const col = BRANCH_COLOR[t.branch];
+      const r = Math.max(6, NODE * z);
+      const sel = this.sel === id;
+      const hov = this.hover === id;
+      // A glow behind what's known (and what's picked).
+      if (stt === 'done' || sel || stt === 'current') {
+        ctx.fillStyle = hexA(stt === 'done' ? col : '#fff4c0', 0.18 + (sel ? 0.12 : 0));
+        circle(ctx, q.x, q.y, r + 5);
+      }
+      ctx.fillStyle = stt === 'done' ? shade(col, 0.35) : '#14111c';
+      circle(ctx, q.x, q.y, r);
+      // The ring: solid where it's known, pulsing on what's studied now.
+      ctx.lineWidth = sel || hov ? 2 : 1;
+      ctx.strokeStyle = stt === 'locked' ? 'rgba(150,150,170,0.5)' : stt === 'current' ? `rgba(255,236,160,${0.6 + 0.4 * Math.sin(this.t * 4)})` : col;
+      ctx.beginPath();
+      ctx.arc(q.x + 0.5, q.y + 0.5, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // Progress round the rim of the one being studied.
+      if (stt === 'current') {
+        ctx.strokeStyle = '#ffe070';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(q.x + 0.5, q.y + 0.5, r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.progress / t.cost));
+        ctx.stroke();
+      }
+      // The icon.
+      const ic = itemIcon(t.icon);
+      if (ic) {
+        const sz = Math.max(8, Math.round(16 * Math.min(1.6, z)));
+        ctx.globalAlpha = stt === 'locked' ? 0.35 : 1;
+        ctx.drawImage(ic, Math.round(q.x - sz / 2), Math.round(q.y - sz / 2), sz, sz);
+        ctx.globalAlpha = 1;
+      }
+      // Learned: a little check; the name underneath when close enough.
+      if (stt === 'done') {
+        ctx.fillStyle = '#7ae070';
+        ctx.fillRect(q.x + r - 3, q.y - r, 3, 3);
+      }
+      if (z >= 1.3 || sel || hov) {
+        const nm = t.name;
+        drawText(ctx, nm, Math.round(q.x - textWidth(nm) / 2), q.y + r + 3, stt === 'locked' ? '#8a8a98' : '#f0e8d8', '#000');
+      }
+    }
+    ctx.restore();
   }
-  onKey(k) {
-    if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.col = (this.col + 3) % 4;
-    else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.col = (this.col + 1) % 4;
-    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.row = (this.row + 4) % 5;
-    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.row = (this.row + 1) % 5;
-    else if (k.code === 'Enter' || k.code === 'Space') this.close();
-    else return false;
-    return true;
-  }
+}
+
+const STATUS = { done: 'Learned', current: 'Being studied now', open: 'Can be studied next', locked: 'Not yet within reach' };
+const BRANCH_COLOR = Object.fromEntries(BRANCHES.map((b) => [b.id, b.color]));
+const BRANCH_NAME = Object.fromEntries(BRANCHES.map((b) => [b.id, b.name]));
+
+function line(ctx, a, b) {
+  ctx.beginPath();
+  ctx.moveTo(a.x + 0.5, a.y + 0.5);
+  ctx.lineTo(b.x + 0.5, b.y + 0.5);
+  ctx.stroke();
+}
+
+function circle(ctx, x, y, r) {
+  ctx.beginPath();
+  ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${Math.round((n >> 16) * k)},${Math.round(((n >> 8) & 255) * k)},${Math.round((n & 255) * k)})`;
 }
 
 // ---------------------------------------------------------------- the desk

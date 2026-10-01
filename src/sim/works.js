@@ -459,7 +459,7 @@ export class Works {
       }
       p.last = now;
       // (Masons who know their trade build a quarter faster.)
-      p.work += work * rate * (this.sim.tech && this.sim.tech.has(L.settlement, 'masonry') ? 1.25 : 1);
+      p.work += work * rate * (this.sim.tech && this.sim.tech.has(L.settlement, 'masonry') ? 1.25 : 1) * (this.sim.tech && this.sim.tech.has(L.settlement, 'cranes') ? 1.2 : 1);
       const plan = this.planOf(p);
       if (!plan) {
         p.done = true;

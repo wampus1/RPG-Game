@@ -14,7 +14,7 @@ import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { actFx, finishDrink, MESS } from './acts.js';
-import { warTick, warBonus } from './warrior.js';
+import { warTick, warBonus, captiveTick } from './warrior.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -128,6 +128,7 @@ export class NPC extends Entity {
     if (this.sleeping) return null;
     if (this.state === 'roadwork') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
     // Raiders come with torches lit; soldiers and riders with blades out.
+    if (this.state === 'captive' || this.down) return null;
     if (this.state === 'warband') return this.warband && this.warband.torch && this.warband.phase !== 'flee' ? 'torch' : this.weapon();
     if (this.caravan) return this.adventurer || (this.company && this.rec.role === 'guard') || (this.rec.trip && this.rec.trip.outing && this.rec.job === 'guard') ? this.weapon() : this.company || this.mount || (this.rec.trip && this.rec.trip.outing) ? null : 'crate';
     if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
@@ -153,6 +154,8 @@ export class NPC extends Entity {
       const b = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
       if (b) return b.item;
     }
+    // (Called up in a levy: a spear, whatever their trade.)
+    if (this.warband && this.warband.levy) return 'spear';
     const t = this.rec.equipment.tool;
     if (t && ITEMS[t] && (ITEMS[t].kind === 'weapon' || ITEMS[t].kind === 'tool')) return t;
     const w = this.rec.equipment.items.find((i) => ITEMS[i.item]?.kind === 'weapon');
@@ -677,21 +680,24 @@ export class NPC extends Entity {
 
   // ------------------------------------------------------------ meals and wares
   // A clear spot on a table or counter within `r` of them, to set something on.
+  // (The spot right in front of them first, then to either hand, then
+  // anything else in reach: not off to the side when there's room ahead.)
   surfaceNear(r = 1) {
     const w = this.game.world;
     const placed = this.game.placed;
-    for (let d = 1; d <= r; d++) {
-      for (let dz = -d; dz <= d; dz++) {
-        for (let dx = -d; dx <= d; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== d) continue;
-          const x = this.x + dx;
-          const z = this.z + dz;
-          const below = w.getBlock(x, this.y, z);
-          if (below !== B.table && below !== B.counter) continue;
-          if (w.getBlock(x, this.y + 1, z) !== B.air || placed.has(`${x},${this.y + 1},${z}`)) continue;
-          return { x, y: this.y + 1, z };
-        }
-      }
+    const fx = [0, -1, 0, 1][this.dir] || 0;
+    const fz = [1, 0, -1, 0][this.dir] || 0;
+    const offs = [];
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx || dz) offs.push([dx, dz]);
+    const rank = ([dx, dz]) => Math.max(Math.abs(dx), Math.abs(dz)) * 10 - (dx * fx + dz * fz) * 3 + (Math.abs(dx) + Math.abs(dz));
+    offs.sort((a, b) => rank(a) - rank(b));
+    for (const [dx, dz] of offs) {
+      const x = this.x + dx;
+      const z = this.z + dz;
+      const below = w.getBlock(x, this.y, z);
+      if (below !== B.table && below !== B.counter) continue;
+      if (w.getBlock(x, this.y + 1, z) !== B.air || placed.has(`${x},${this.y + 1},${z}`)) continue;
+      return { x, y: this.y + 1, z };
     }
     return null;
   }
@@ -916,6 +922,8 @@ export class NPC extends Entity {
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;
+    // Knocked down in a fight: lying there till it's over.
+    if (this.down) return;
     if (this.shoveCd > 0) this.shoveCd -= dt;
     // Somehow up on a roof or a wall (nobody's meant to be): back down.
     this.roofT = (this.roofT || 0) - dt;
@@ -979,6 +987,9 @@ export class NPC extends Entity {
         break;
       case 'warband':
         warTick(this, dt);
+        break;
+      case 'captive':
+        captiveTick(this, dt);
         break;
       case 'alarm':
         this.alarmRun(dt);
@@ -2409,6 +2420,11 @@ export class NPC extends Entity {
     const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !lawful && this.stateT > 25);
     if (tooFar || this.stateT > 90 || (t && t.kind === 'player' && justice.jail)) {
       this.calmDown();
+      return;
+    }
+    // (Someone knocked down is out of the fight.)
+    if (t.down) {
+      this.calmDown(true);
       return;
     }
     const d = this.distTo(t);

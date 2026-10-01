@@ -168,9 +168,9 @@ test('dice are thrown onto the table as little cubes that roll and come to rest 
 });
 
 // ------------------------------------------------------------ the tech tree
-test('four branches of five: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
-  assert.equal(TECH_IDS.length, 20);
-  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, 5);
+test('four branches of seven: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
+  assert.equal(TECH_IDS.length, 28);
+  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, 7);
   const game = world();
   const T = game.sim.tech;
   const s = game.world.ow.settlements.find((q) => q.civ && q.type === 'town');
@@ -225,8 +225,11 @@ test('the mayor shows the tree, and the study minigame records an insight for th
   const tw = new TechWindow(ui, game, s);
   const { g, texts } = grid();
   tw.draw(g, game);
-  assert.ok(texts.some((t) => /ECONOMY/.test(t)) && texts.some((t) => /WARFARE/.test(t)), 'four columns');
-  assert.ok(texts.some((t) => /Bookkeeping/.test(t)));
+  assert.ok(texts.some((t) => /of 28 learned/.test(t)), 'the count');
+  tw.focus('bookkeeping');
+  const g2 = grid();
+  tw.draw(g2.g, game);
+  assert.ok(g2.texts.some((t) => /BOOKKEEPING/.test(t)), 'the side panel');
   const T = game.sim.tech;
   T.stateOf(s).current = 'masonry';
   T.stateOf(s).progress = 0;
@@ -379,7 +382,7 @@ test('hostile realms send small raiding parties at night; merchants keep off the
   // Reckoned up (you're not there).
   const out = W.resolveRaid(raid, TL, game.sim.layoutOf(from.id), new RNG(4));
   assert.ok(['plundered', 'repelled'].includes(out.result));
-  assert.ok(recs.every((r) => !alive(r) || (!r.away && r.raid === undefined)), 'home again');
+  assert.ok(recs.every((r) => !alive(r) || r.captive || (!r.away && r.raid === undefined)), 'home again (or taken prisoner)');
   assert.ok(game.sim.realms.relation(a, b).score < r0, 'relations sour');
   assert.equal(W.raidLog.length, 1);
   assert.ok(TL.econ.recent.raids >= 1);

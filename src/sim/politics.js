@@ -378,7 +378,9 @@ export class Politics {
         if (this.lordOf(a) === b || this.lordOf(b) === a) continue;
         // Enemies of the same realm make easier friends.
         const common = civs.find((c) => c !== a && c !== b && ((war && war.enemies(a, c) && war.enemies(b, c)) || (realms.standing(a, c) === 'hostile' && realms.standing(b, c) === 'hostile')));
-        const need = common ? ALLY_AT - 18 : ALLY_AT;
+        // (Embassies: envoys at each other's courts make friends sooner.)
+        const envoys = this.sim.tech.has(a, 'embassies') || this.sim.tech.has(b, 'embassies') ? 10 : 0;
+        const need = (common ? ALLY_AT - 18 : ALLY_AT) - envoys;
         if (r.score < need) continue;
         const why = this.clash(a, b);
         const k = this.key(a, b);

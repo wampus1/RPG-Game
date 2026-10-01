@@ -7,7 +7,7 @@
 // Renderer.diceDecos), so a wall or a person in front hides them.
 import { TILE, LH } from '../config.js';
 
-const SIZE = 0.3; // edge, in tiles (about 5 pixels)
+const SIZE = 0.24; // edge, in tiles (about 4 pixels)
 const HALF = SIZE / 2;
 const GRAVITY = 14; // layers per second per second
 const K = LH / TILE; // how much of a vertical step shows on screen, per tile of depth

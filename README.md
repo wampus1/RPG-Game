@@ -967,22 +967,28 @@ straight down, or round a corner. Every town starts with a builder, and takes
 another on if it loses theirs. When a ruler or a mayor dies, someone always
 takes their place.
 
-**What the realm knows.** Every realm (and every free town) works down a tree of
-learning, four branches of five steps each, each step needing the one before:
+**What the realm knows.** Every realm (and every free town) works through a
+tree of learning: four branches of seven arts, each starting from one root,
+splitting into two lines and joining again at a capstone that needs both. An
+art needs the one before it on its line.
 
-| Economy | Warfare | Law & Society | Engineering |
-| --- | --- | --- | --- |
-| Bookkeeping: taxes bring in a tenth more | Drilled Watch: guards are tougher and hit harder | Written Law: the ruler may set how many stand watch | Masonry: building goes a quarter faster |
-| Guild Charters: master merchants | Archery: guards carry bows | Alchemy: potions | Clean Wells: blue hearts from wells |
-| Gemcraft: jewellers can be licensed | Cavalry: the watch rides out, armies field riders | Hospitality: blue hearts from beds, for townsfolk too | Surveying: roads built half again as fast |
-| Caravan Law: merchants travel faster and are harried less | Field Fortifications: log walls in battle, town walls sooner | Conscription: elders and children may be drafted | Watermills: fields yield more |
-| Banking: treasuries earn interest | Steelworking: steel swords for the watch and for sale | Schools: research a quarter faster | Fortification: walled towns hold far better |
+| Branch | Root | One line | The other line | Capstone |
+| --- | --- | --- | --- | --- |
+| Economy | Bookkeeping: taxes bring in a tenth more | Guild Charters (master merchants) → Gemcraft (jewellers, jewelled gear) → Banking (treasuries earn interest) | Market Days (merchants come nearly twice as often) → Caravan Law (merchants travel faster and are harried less) | Trade League: trade warms relations half again as fast, tariffs rankle half as much |
+| Warfare | Drilled Watch: guards are tougher and hit harder | Archery (guards carry bows) → Cavalry (the watch rides out, armies field riders) | Muster Rolls (levies half again as large) → Field Fortifications (log walls in battle, town walls sooner) | Steelworking (steel swords), then Siegecraft: a won battle takes the town behind it far more often, capitals too |
+| Law & Society | Written Law: the ruler sets how many stand watch | Alchemy (potions) → Hospitality (blue hearts from beds) → Schools (research a quarter faster) | Prisons (a great prison for the capital, fewer escapes) → Conscription (elders and children may be drafted) | Embassies: alliances come easier, wars are declared half as often |
+| Engineering | Masonry: building goes a quarter faster | Clean Wells (blue hearts from wells) → Watermills (fields yield more) → Aqueducts (more children born) | Surveying (roads half again as fast) → Cranes (building faster still) | Fortification: walled towns hold far better |
 
 Some realms start with a first step their culture holds dear. The ruler (a free
 town's mayor) chooses what's studied next: their own leanings, their people's,
 and what's going on (raids and war call for arms, an empty treasury for trade,
-unrest for law). Ask a mayor "What are our scholars studying?" to see the tree
-and how far along they are.
+unrest for law). Ask a mayor "What are our scholars studying?" to see the tree:
+the four branches run out from the realm's crest in the middle, each art an
+icon. Hover one to see what it does, scroll (or +/-) to zoom, drag (or the
+arrow keys) to look around, and click an art to fly to it and open a side panel
+with what it does, its story, how much study it needs and what it leads to.
+Learned arts glow, the one being studied shows how far along it is, Home or
+Space brings the view back to the middle, and Esc closes the tree.
 
 **Research.** The study is done by researchers at an academy (scholars at the
 library help a little before there is one). A realm's capital, and later its
@@ -1047,6 +1053,30 @@ stand with the town at their backs). Plans beat other plans, and the ground
 favours some. The soldiers are real people from real towns, and those who fall
 are buried at home. A decisive win can take the town behind the field.
 
+**How big an army is.** Each side can call on its watch (the garrisons of its
+towns, a few left at home) and a levy of its grown folk (bigger in martial
+realms and with Muster Rolls, smaller among merchants and scholars), so a large
+realm with a big watch can field far more than a small one. How many actually
+march is the leader's call: at least a third of what they could raise, more for
+an all-out assault or a pincer, fewer to hold ground or fall back, more when
+they're defending their own fields or brave by nature, fewer when the war has
+worn them down or they're badly outnumbered. Levies carry spears. The battle
+report says how strong each side was and who led it.
+
+**Prisoners.** Not everyone who falls in a battle or a raid dies: many are
+knocked out, and those left lying on the field when their side loses are taken
+prisoner. Captives are marched to the captor's capital and locked in a cell in
+the jail. When the cells run out, the capital builds a stockade, or with the
+Prisons art (Law & Society) a great prison with room for scores. You can visit
+them: by day they sit in their cells and will talk, at night they sleep. Two
+realms holding each other's people trade them, prisoner for prisoner; a realm
+with coin to spare buys its people back (¤40 a head, more readily from a kind
+ruler and once the fighting's over); and captives from a realm the captor isn't
+at war with (raiders caught after a raid, say) are let go after ten days or so. A rare prisoner
+picks the lock at night and runs for home; the watch gives chase, and a crowded
+stockade leaks more than a prison. When peace is made everyone held is set
+free.
+
 If you're nearby, the battle is fought out in front of you: two lines in their
 realms' colours, wings swinging round, walls going up, the hurt falling back,
 and the side that breaks running for home. You can join in, on either side.
@@ -1101,7 +1131,8 @@ src/
                        creature, item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
-                       arcs, lightning, shock rings, burning), lighting, crt
+                       arcs, lightning, shock rings, burning), dice (rolling
+                       3D dice on tables), lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
@@ -1141,7 +1172,9 @@ src/
                        academies, researchers), politics (borders,
                        alliances, merging, vassals, disputes, the size of
                        the watch, the draft), war (raids between realms,
-                       wars, battles and tactics, fought live near you),
+                       wars, armies and levies, battles and tactics,
+                       fought live near you, prisoners, cells,
+                       exchanges, ransoms and escapes),
                        events (posters, stages, guests for weddings and
                        feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws

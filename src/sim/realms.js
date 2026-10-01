@@ -639,8 +639,10 @@ export class Realms {
     const b = this.civOf(hostS);
     if (!a || !b || a === b || coins <= 0) return;
     const r = this.relation(a, b);
+    // (A trade league: every bargain counts for more.)
+    const league = this.sim.tech && (this.sim.tech.has(a, 'trade_league') || this.sim.tech.has(b, 'trade_league')) ? 1.5 : 1;
     r.trade += coins;
-    r.tradeWeek += coins;
+    r.tradeWeek += coins * league;
   }
 
   // How a merchant from another realm is treated in town: welcomed where
@@ -722,8 +724,9 @@ export class Realms {
         r.contested = now;
         by -= now.length * 0.4;
         // Tariffs rankle.
-        if (this.realm(a).decrees.tariffOn.includes(b.id)) by -= 0.3;
-        if (this.realm(b).decrees.tariffOn.includes(a.id)) by -= 0.3;
+        const sore = this.sim.tech && (this.sim.tech.has(a, 'trade_league') || this.sim.tech.has(b, 'trade_league')) ? 0.15 : 0.3;
+        if (this.realm(a).decrees.tariffOn.includes(b.id)) by -= sore;
+        if (this.realm(b).decrees.tariffOn.includes(a.id)) by -= sore;
         // Slowly back toward the old footing.
         const base = (a.values || []).filter((v) => (b.values || []).includes(v)).length * 14 - 4;
         by += (base - r.score) * 0.02;

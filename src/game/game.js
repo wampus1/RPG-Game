@@ -3098,7 +3098,7 @@ export class Game {
       return;
     }
     // People in the middle of something urgent don't stop to chat.
-    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!' }[npc.state];
+    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!', captive: npc.rng.pick(['Come to gloat?', 'Get me out of here...', 'Tell my family I\'m alive.', 'When are they trading us back?']), down: null }[npc.state];
     if (busy !== undefined) {
       if (busy) npc.say(busy, 2);
       return;
@@ -3299,7 +3299,7 @@ export class Game {
   }
 
   damage(target, amount, source, crit = false) {
-    if (target.dead) return;
+    if (target.dead || target.down) return;
     // An adventurer slips a blow and rolls clear.
     if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
     const duel = this.duel;
@@ -3399,6 +3399,9 @@ export class Game {
         this.sim.justice.knockout(source.settlement.id);
         return;
       }
+      // A soldier, raider or escaping prisoner may only be knocked down
+      // (to be carried off as a prisoner, or get up when it's over).
+      if (target.kind === 'npc' && this.sim.war.knockDown(target)) return;
       this.kill(target, source);
     }
   }
@@ -3456,7 +3459,7 @@ export class Game {
     // Raiders in (or at the edge of) town.
     const mine = guard.settlement.civ ? guard.settlement.civ.id : -1;
     for (const n of this.npcs) {
-      if (n.dead || !n.warband || n.warband.kind !== 'raid' || n.warband.civ === mine || n.warband.phase === 'flee') continue;
+      if (n.dead || n.down || !n.warband || !(n.warband.kind === 'raid' || n.warband.kind === 'escape') || n.warband.civ === mine || (n.warband.phase === 'flee' && n.warband.kind !== 'escape')) continue;
       if (guard.distTo(n) <= (watching ? 14 : 12)) return n;
     }
     for (const c of this.creatures) {

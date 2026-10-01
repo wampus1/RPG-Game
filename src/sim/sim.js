@@ -1725,7 +1725,7 @@ export class Sim {
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
     const hod = Math.floor((h % DAY) / 60);
-    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07)) {
+    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1))) {
       const ow = this.game.world.ow;
       const s = L.settlement;
       if (this.war.unsafe(s)) return;
@@ -1917,7 +1917,7 @@ export class Sim {
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor, outing: r.outing, tripMem: r.tripMem,
-      drafted: r.drafted, raid: r.raid, soldier: r.soldier,
+      drafted: r.drafted, raid: r.raid, soldier: r.soldier, captive: r.captive,
       // A drilled guard keeps the toughness drill gave them.
       ...(r.drilled ? { drilled: true, maxHp: r.maxHp } : {}),
       ...(r.grown ? { hobbies: r.hobbies } : {}),

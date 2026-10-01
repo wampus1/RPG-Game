@@ -739,7 +739,7 @@ export class Renderer {
       if (e.sleeping) {
         const head = this.headFor(e);
         ctx.drawImage(head, sx + 2, floorY - 1);
-        if (Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
+        if (!e.down && Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
         const sheet = humanoidSheet(e.look);
         // On horseback, or up on a wagon's bench: the beast (and the wagon)
@@ -833,10 +833,10 @@ export class Renderer {
     const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting || e.raft ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
     const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
     // (The grip is the bottom-left of the picture; held things are drawn at
-    // three fifths size, in proportion to the hand holding them.)
+    // four fifths size, in proportion to the hand holding them.)
     const gx = -3;
     const gy = -13;
-    const S = 0.6;
+    const S = 0.8;
     if (act <= 0 && dir === 2) return; // behind them
     ctx.save();
     ctx.translate(hx, hy);
@@ -1130,7 +1130,25 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ fx
+  // Under a roof you can see (not one cut away because you're inside):
+  // anything going on in there is out of sight.
+  roofed(wx, y, wz) {
+    const world = this.game && this.game.world;
+    if (!world) return false;
+    const x = Math.round(wx);
+    const z = Math.round(wz);
+    const y0 = Math.floor(y) + 1;
+    for (let yy = y0; yy < Math.min(WORLD_Y, y0 + 14); yy++) {
+      const id = world.getBlock(x, yy, z);
+      if (id === B.air || BLOCKS[id].render !== 'cube' || BLOCKS[id].name.startsWith('leaves')) continue;
+      return !this.isHidden(x, yy, z);
+    }
+    return false;
+  }
+
   emit(wx, y, wz, opts) {
+    // (Smoke, sparks and crumbs indoors stay indoors.)
+    if (this.roofed(wx, y, wz)) return;
     const [x, z] = this.toView(wx, wz);
     const n = opts.n || 6;
     for (let i = 0; i < n; i++) {
@@ -1173,6 +1191,7 @@ export class Renderer {
 
   // Something thrown that lands and lies a moment (dice on a table).
   toss(o) {
+    if (this.roofed(o.from.x, o.from.y, o.from.z) && this.roofed(o.to.x, o.to.y, o.to.z)) return;
     const [x0, z0] = this.toView(o.from.x, o.from.z);
     const [x1, z1] = this.toView(o.to.x, o.to.z);
     (this.tosses ||= []).push({

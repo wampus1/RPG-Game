@@ -27,6 +27,8 @@ import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { REGION_W, REGION_D, GROUND } from '../config.js';
 import { B } from '../world/blocks.js';
+import { authority } from './realms.js';
+import { breachFor } from './growth.js';
 
 export const TACTICS = {
   line: { name: 'a frontal assault', verb: 'charged straight at them' },
@@ -47,6 +49,11 @@ const MATCH = {
   feint: { line: 1.25, flank: 1.15, pincer: 1.25, hold: 0.8, works: 0.8, feint: 1, retreat: 1 },
   retreat: { line: 0.8, flank: 0.75, pincer: 0.7, hold: 0.9, works: 0.9, feint: 0.85, retreat: 1 },
 };
+// How many a side brings onto the field when you're there to see it (the
+// rest fight on, counted, out of sight).
+const LIVE_MAX = 16;
+// Who's never called up in a levy (the realm can't spare them).
+const LEVY_EXEMPT = new Set(['mayor', 'noble', 'priest', 'researcher', 'herbalist', 'innkeeper', 'barkeep', 'blacksmith', 'merchant', 'scholar', 'child', 'retired', 'beggar']);
 const WOODED = new Set(['forest', 'taiga', 'jungle', 'swamp']);
 const OPEN = new Set(['plains', 'desert', 'savanna', 'tundra', 'beach']);
 const FEATURE = { forest: 'Woods', taiga: 'Pines', jungle: 'Thicket', swamp: 'Fen', mountain: 'Pass', desert: 'Sands', savanna: 'Grass', tundra: 'Waste', beach: 'Strand', plains: 'Field' };
@@ -78,6 +85,9 @@ export class War {
     this.nextId = 1;
     this.lastDay = null; // (set on the first tick: the game's clock isn't running yet)
     this.live = null; // a raid or battle being fought out near you
+    this.prisoners = []; // { id, sid, idx, civ, by, at, day, how, name }
+    this.captiveEnts = new Map(); // prisoner id -> NPC in a cell (when you're there)
+    this.syncT = 0;
     this.liveT = 0;
   }
 
@@ -161,6 +171,11 @@ export class War {
     for (const r of this.raids.slice()) if (r.state === 'march' && now >= r.at) this.strike(r);
     for (const w of this.wars.slice()) if (w.plan && now >= w.plan.at && !w.plan.live) this.battle(w, w.plan);
     if (this.live) this.liveTick(dt);
+    this.syncT -= dt;
+    if (this.syncT <= 0) {
+      this.syncT = 1;
+      this.syncCaptives();
+    }
   }
 
   warDay(day, rng) {
@@ -169,6 +184,7 @@ export class War {
     if (day % 7 === 3) this.considerWars(civs, day, rng);
     for (const w of this.wars.slice()) this.warTick(w, day, rng);
     for (const k of Object.keys(this.truces)) if (this.truces[k] <= day) delete this.truces[k];
+    this.prisonersDay(day, rng);
     this.raidLog = this.raidLog.filter((q) => day - q.day <= 40);
   }
 
@@ -346,8 +362,15 @@ export class War {
     // A defender may fall too.
     const fallen = !win || !hurt.length || !rng.chance(0.2) ? null : hurt[0];
     if (fallen) this.sim.recordDeath(TL, fallen, `killed by raiders of the ${plain(a)}`, null, day);
-    for (const r of lost) this.sim.recordDeath(FL, r, `fell raiding ${TL.settlement.name}`, null, day);
-    return this.endRaid(raid, { result: win ? 'plundered' : 'repelled', lost, loot, hurt, fallen, rode: this.ridesOut(TL) });
+    // (Some of those who fell were only knocked down, and are dragged off
+    // to the cells.)
+    const holder = TL.settlement.civ || null;
+    const taken = [];
+    for (const r of lost) {
+      if (rng.chance(0.4) && this.takePrisoner(r, FL, holder, day, `raiding ${TL.settlement.name}`, holder ? null : TL.settlement.id)) taken.push(r);
+      else this.sim.recordDeath(FL, r, `fell raiding ${TL.settlement.name}`, null, day);
+    }
+    return this.endRaid(raid, { result: win ? 'plundered' : 'repelled', lost, taken, loot, hurt, fallen, rode: this.ridesOut(TL) });
   }
 
   endRaid(raid, out) {
@@ -361,7 +384,7 @@ export class War {
     // Home again (those who made it).
     for (const r of this.partyRecs(raid)) {
       delete r.raid;
-      r.away = false;
+      if (!r.captive) r.away = false;
     }
     if (out.result === 'called off' || !TL || !FL) return out;
     if (FL.econ && out.loot) FL.econ.treasury += out.loot;
@@ -376,8 +399,8 @@ export class War {
       ledger(TL, day, `Raiders of the ${plain(a)} struck ${ts} in the night and got away with ¤${out.loot} and stores${out.hurt && out.hurt.length ? `; ${fullName(out.hurt[0])} was ${out.fallen ? 'killed' : 'hurt'}` : ''}.${out.lost.length ? ` ${out.lost.length} of them fell.` : ''}`);
       ledger(FL, day, `Our raiders came back from ${ts} with ¤${out.loot}.${out.lost.length ? ` ${names(out.lost)} did not come home.` : ''}`);
     } else {
-      ledger(TL, day, `Raiders of the ${plain(a)} came over the fields in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell.` : ''}`);
-      ledger(FL, day, `Our raid on ${ts} was beaten back.${out.lost.length ? ` ${names(out.lost)} did not come home.` : ''}`);
+      ledger(TL, day, `Raiders of the ${plain(a)} came over the fields in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
+      ledger(FL, day, `Our raid on ${ts} was beaten back.${out.lost.length ? ` ${names(out.lost)} did not come home${out.taken && out.taken.length ? ` (${names(out.taken)} taken prisoner)` : ''}.` : ''}`);
     }
     if (a && b) {
       this.realms.shift(a, b, out.result === 'plundered' ? -10 : -6, day);
@@ -423,7 +446,9 @@ export class War {
         const ratio = this.politics.strength(a) / Math.max(1, this.politics.strength(b));
         if (ratio < (why.some((q) => q.k === 'rebels' || q.k === 'yoke') ? 0.6 : 0.8)) continue;
         const p = ruler.personality || {};
-        const chance = clamp(0.12 + why.length * 0.1 + ((p.temper ?? 0.5) - 0.5) * 0.3 - ((p.kindness ?? 0.5) - 0.5) * 0.3, 0.03, 0.6);
+        // (Embassies: envoys talk first; war half as often.)
+        const talk = this.sim.tech.has(a, 'embassies') ? 0.5 : 1;
+        const chance = clamp(0.12 + why.length * 0.1 + ((p.temper ?? 0.5) - 0.5) * 0.3 - ((p.kindness ?? 0.5) - 0.5) * 0.3, 0.03, 0.6) * talk;
         if (!rng.chance(chance)) continue;
         this.declare(a, b, why[0], day, rng);
         break;
@@ -549,10 +574,12 @@ export class War {
     return { x: Math.round(a.x + ux * t), z: Math.round(a.z + uz * t) };
   }
 
-  // Who marches: from each realm on a side, part of the watch of its towns
-  // near the front (allies send fewer). Soldiers with no record (towns
-  // not yet laid out) are counted but not named.
-  muster(w, side, plan) {
+  // Who could march: from each realm on a side, the watch of its towns,
+  // less a garrison left at home (the capital keeps a third; a town the
+  // enemy is marching on sends everyone). Towns far from the front send
+  // half, allies a little less. Soldiers with no record (towns not yet laid
+  // out) are counted but not named.
+  pool(w, side, plan) {
     const near = this.ow.settlements[side === plan.attacker ? plan.atk : plan.def];
     const out = { recs: [], extra: 0, civs: [] };
     for (const id of w[side]) {
@@ -561,20 +588,79 @@ export class War {
       const lead = id === w.lead[side];
       out.civs.push(civ);
       for (const s of this.realms.members(civ)) {
-        if (Math.hypot(s.cx - near.cx, s.cz - near.cz) > (lead ? 12 : 16)) continue;
+        const d = Math.hypot(s.cx - near.cx, s.cz - near.cz);
+        if (d > 24) continue;
+        const share = (d > 14 ? 0.5 : 1) * (lead ? 1 : 0.6);
         const L = this.game.world.layouts.get(s.id);
         if (!L || !L.econ) {
-          out.extra += Math.round(({ city: 6, town: 3, village: 1 }[s.type] || 1) * (lead ? 0.5 : 0.3));
+          out.extra += Math.round(({ city: 8, town: 4, village: 1 }[s.type] || 1) * share);
           continue;
         }
-        const g = residents(L).filter((r) => r.job === 'guard' && r.ruler === undefined && r.raid === undefined && r.soldier === undefined)
+        const g = residents(L).filter((r) => r.job === 'guard' && r.ruler === undefined && r.raid === undefined && r.soldier === undefined && r.captive === undefined)
           .sort((x, y) => (y.drilled ? 1 : 0) - (x.drilled ? 1 : 0) || y.personality.bravery - x.personality.bravery);
-        const keep = s.id === near.id && side !== plan.attacker ? 0 : 1;
-        const n = Math.min(g.length - keep, Math.max(1, Math.round(g.length * (lead ? 0.55 : 0.35))));
-        for (const r of g.slice(0, Math.max(0, n))) out.recs.push({ r, L });
+        const keep = s.id === near.id && side !== plan.attacker ? 0 : this.realms.isCapital(s) ? Math.max(1, Math.ceil(g.length / 3)) : 1;
+        const n = Math.max(0, Math.round((g.length - keep) * share));
+        for (const r of g.slice(0, n)) out.recs.push({ r, L, d });
+        // The levy: a share of the able-bodied (more from a martial people,
+        // fewer from merchants and scholars), with spears.
+        const vals = civ.values || [];
+        const rate = (0.25 + (vals.includes('martial') ? 0.1 : 0) - (vals.includes('mercantile') || vals.includes('scholarly') ? 0.06 : 0)) * share * (this.sim.tech.has(s, 'muster') ? 1.5 : 1);
+        const able = residents(L).filter((r) => r.age === 'adult' && r.job !== 'guard' && !LEVY_EXEMPT.has(r.job) && r.ruler === undefined && r.councillor === undefined
+          && r.raid === undefined && r.soldier === undefined && r.captive === undefined && !r.trip?.phase?.startsWith('away'))
+          .sort((x, y) => y.personality.bravery - x.personality.bravery);
+        for (const r of able.slice(0, Math.round(able.length * rate))) out.recs.push({ r, L, d: d + 0.5, levy: true });
       }
     }
+    out.recs.sort((x, y) => x.d - y.d);
     return out;
+  }
+
+  // How many the leader sends of what could march: at least a third (and
+  // a few), all of them at most. The plan decides most of it (a pincer
+  // wants numbers, a fortified line or a withdrawal far fewer); then the
+  // realm's ways (martial peoples send more, merchants and scholars fewer),
+  // the ruler's nerve, whether it's their own town at their backs, how
+  // tired of it all they are, and how strong the enemy is.
+  commit(w, side, pool, tactic, ratio, plan) {
+    const total = pool.recs.length + pool.extra;
+    if (!total) return { recs: [], extra: 0, civs: pool.civs, total, min: 0, max: 0 };
+    const min = Math.min(total, Math.max(3, Math.round(total * 0.35 + 1)));
+    const civ = this.civ(w.lead[side]);
+    const ruler = civ && this.realms.ruler(civ);
+    const p = (ruler && ruler.personality) || {};
+    const vals = (civ && civ.values) || [];
+    let f = { line: 0.65, flank: 0.7, pincer: 0.85, hold: 0.5, works: 0.45, feint: 0.6, retreat: 0.3 }[tactic] ?? 0.6;
+    f += vals.includes('martial') ? 0.15 : 0;
+    f -= vals.includes('mercantile') ? 0.08 : 0;
+    f -= vals.includes('scholarly') ? 0.05 : 0;
+    f -= vals.includes('pious') || vals.includes('agrarian') ? 0.03 : 0;
+    f += ((p.bravery ?? 0.5) - 0.5) * 0.3;
+    f += side !== plan.attacker ? 0.1 : 0;
+    f -= (w.weary[w.lead[side]] || 0) * 0.2;
+    f += ratio < 0.8 ? 0.1 : 0;
+    const n = Math.max(min, Math.min(total, Math.round(min + (total - min) * clamp(f, 0, 1))));
+    const recs = pool.recs.slice(0, Math.min(n, pool.recs.length));
+    return { recs, extra: Math.min(pool.extra, n - recs.length), civs: pool.civs, total, min, max: total };
+  }
+
+  // Both armies raised: the plans first (on what each side could field),
+  // then how many each sends.
+  raise(w, plan, rng) {
+    const PA = this.pool(w, 'a', plan);
+    const PB = this.pool(w, 'b', plan);
+    const qa = this.armyPower(PA, 'a', w);
+    const qb = this.armyPower(PB, 'b', w);
+    plan.ta = plan.ta || this.chooseTactic(w, 'a', qa, qb, plan, rng);
+    plan.tb = plan.tb || this.chooseTactic(w, 'b', qb, qa, plan, rng);
+    const A = this.commit(w, 'a', PA, plan.ta, qa / Math.max(0.5, qb), plan);
+    const Bm = this.commit(w, 'b', PB, plan.tb, qb / Math.max(0.5, qa), plan);
+    plan.sent = { a: [A.recs.length + A.extra, A.total], b: [Bm.recs.length + Bm.extra, Bm.total] };
+    return { A, B: Bm };
+  }
+
+  // (Kept for older callers: everyone who'd march.)
+  muster(w, side, plan) {
+    return this.pool(w, side, plan);
   }
 
   // How each captain means to fight.
@@ -628,8 +714,7 @@ export class War {
   battle(w, plan) {
     if (!this.live && this.nearPlayer(plan.site, 70) && this.startLiveBattle(w, plan)) return null;
     const rng = new RNG(hash4(w.id, plan.at, 0xba7));
-    const A = this.muster(w, 'a', plan);
-    const Bm = this.muster(w, 'b', plan);
+    const { A, B: Bm } = this.raise(w, plan, rng);
     return this.fight(w, plan, A, Bm, rng, null);
   }
 
@@ -686,8 +771,12 @@ export class War {
     // A handful a side is a skirmish, not a battle.
     const small = nA + nB < 6;
     if (small) plan.name = plan.name.replace(/^the Battle of /, 'the Skirmish at ');
-    const fallA = this.casualties(A, fa, plan, day, rng);
-    const fallB = this.casualties(Bm, fb, plan, day, rng);
+    // (The beaten side's fallen are partly taken alive, by the victors.)
+    const victor = this.civ(w.lead[winner]);
+    const fallA = this.casualties(A, fa, plan, day, rng, winner === 'b' ? victor : null);
+    const fallB = this.casualties(Bm, fb, plan, day, rng, winner === 'a' ? victor : null);
+    fallA.taken += live ? live.takenA || 0 : 0;
+    fallB.taken += live ? live.takenB || 0 : 0;
     fallA.n += live ? live.deadA : 0;
     fallB.n += live ? live.deadB : 0;
     const decisive = ratio >= 1.5 && (winner === 'a' ? tb : ta) !== 'retreat';
@@ -704,7 +793,7 @@ export class War {
     // Soldiers home again.
     for (const { r } of [...A.recs, ...Bm.recs]) {
       if (r.soldier !== undefined) delete r.soldier;
-      r.away = false;
+      if (!r.captive) r.away = false;
     }
     // The news, everywhere on both sides.
     const ca = this.civ(w.lead.a);
@@ -720,8 +809,17 @@ export class War {
     const ground = (t) => (t === 'hold' ? ` on ${GROUND_TEXT[plan.biome] || 'a low rise'}` : '');
     const lw = winner === 'a' ? fallA.n : fallB.n;
     const ll = winner === 'a' ? fallB.n : fallA.n;
-    const toll = !lw && !ll ? 'no one fell on either side' : !lw ? `${ll} of the ${plain(Lz)} fell, and none of theirs` : `${ll} of the ${plain(Lz)} fell, ${lw} of the ${plain(W)}`;
-    const text = `${plan.name[0].toUpperCase()}${plan.name.slice(1)}: the ${plain(W)}${capt(winner === 'a' ? A : Bm)} ${TACTICS[wt].verb}${ground(wt)}; the ${plain(Lz)} ${TACTICS[lt].verb}${ground(lt)}. `
+    const tk = winner === 'a' ? fallB.taken : fallA.taken;
+    const taken = tk ? ` (${tk} of them taken prisoner)` : '';
+    const toll = !lw && !ll ? 'no one fell on either side' : !lw ? `${ll} of the ${plain(Lz)} fell${taken}, and none of theirs` : `${ll} of the ${plain(Lz)} fell${taken}, ${lw} of the ${plain(W)}`;
+    const sent = plan.sent ? (k) => (plan.sent[k] ? ` (${plan.sent[k][0]} strong` : '') : null;
+    const capt0 = (army, k) => {
+      const c = army.recs.map((q) => q.r).filter((r) => alive(r) && !r.captive).sort((x, y) => y.personality.bravery - x.personality.bravery)[0];
+      const n = sent ? sent(k) : '';
+      return n ? `${n}${c ? `, led by ${fullName(c)}` : ''})` : c ? ` (led by ${fullName(c)})` : '';
+    };
+    void capt;
+    const text = `${plan.name[0].toUpperCase()}${plan.name.slice(1)}: the ${plain(W)}${capt0(winner === 'a' ? A : Bm, winner)} ${TACTICS[wt].verb}${ground(wt)}; the ${plain(Lz)}${capt0(winner === 'a' ? Bm : A, winner === 'a' ? 'b' : 'a')} ${TACTICS[lt].verb}${ground(lt)}. `
       + `The ${plain(W)} ${decisive ? 'won the day decisively' : lt === 'retreat' ? 'held the field' : 'carried the day'}: ${toll}.`;
     for (const id of [...w.a, ...w.b]) {
       const c = this.civ(id);
@@ -734,21 +832,33 @@ export class War {
       const s = this.ow.settlements[plan.def];
       const civ = this.civ(winner === 'a' ? plan.ca : plan.cb);
       const cap = s && s.civ && this.realms.isCapital(s);
-      if (s && civ && s.civ && s.civ !== civ && (!cap || Math.abs(w.score) >= 80) && rng.chance(small ? 0.3 : cap ? 0.5 : 0.6)) this.capture(w, s, civ, day, plan.name);
+      // (Siegecraft: ladders and rams take towns, capitals sooner.)
+      const siege = civ && this.sim.tech.has(civ, 'siegecraft');
+      if (s && civ && s.civ && s.civ !== civ && (!cap || Math.abs(w.score) >= (siege ? 50 : 80)) && rng.chance(Math.min(0.95, (small ? 0.3 : cap ? 0.5 : 0.6) + (siege ? 0.25 : 0)))) this.capture(w, s, civ, day, plan.name);
     }
     return rec;
   }
 
   // The fallen: real people of the towns that sent them.
-  casualties(army, frac, plan, day, rng) {
+  // (Of a beaten side's fallen, some are only knocked down, and the victors
+  // carry them off as prisoners.)
+  casualties(army, frac, plan, day, rng, captor = null) {
     // (A fraction of a soldier is a soldier, now and then.)
     const x = (army.recs.length + army.extra) * frac;
     const n = Math.floor(x) + (rng.chance(x - Math.floor(x)) ? 1 : 0);
     const named = rng.shuffle(army.recs.slice()).slice(0, Math.min(army.recs.length, n));
-    for (const { r, L } of named) if (alive(r)) this.sim.recordDeath(L, r, `fell at ${plan.name}`, null, day);
+    let taken = 0;
+    for (const { r, L } of named) {
+      if (!alive(r)) continue;
+      if (captor && rng.chance(0.4) && this.takePrisoner(r, L, captor, day, plan.name)) {
+        taken++;
+        continue;
+      }
+      this.sim.recordDeath(L, r, `fell at ${plan.name}`, null, day);
+    }
     army.extra = Math.max(0, army.extra - (n - named.length));
     for (const { r } of army.recs) if (alive(r)) r.hp = Math.max(4, (r.hp ?? 12) - rng.int(0, 10));
-    return { n, named: named.map((q) => q.r) };
+    return { n, taken, named: named.map((q) => q.r) };
   }
 
   capture(w, s, civ, day, how) {
@@ -915,6 +1025,7 @@ export class War {
       if (c && this.realms.members(c).length) this.realms.proclaim(c, day, text);
     }
     w.over = { day, terms, victor: V ? V.id : null, text };
+    this.freeAll(w, day);
     this.past.push(w);
     if (this.past.length > 6) this.past.shift();
     const here = this.game.currentSettlement;
@@ -935,6 +1046,10 @@ export class War {
     for (const r of L.npcs) {
       if (r.raid !== undefined && !this.raids.some((q) => q.id === r.raid)) {
         delete r.raid;
+        r.away = false;
+      }
+      if (r.captive && !this.prisoners.some((q) => q.id === r.captive.id)) {
+        delete r.captive;
         r.away = false;
       }
       if (r.soldier !== undefined && !(this.live && this.live.w && this.live.w.id === r.soldier)) {
@@ -963,6 +1078,10 @@ export class War {
     }
     const truces = Object.entries(this.truces).filter(([k, d]) => d > this.game.day && k.split(':').map(Number).includes(civ.id));
     if (truces.length) out.push(`Truce with the ${truces.map(([k]) => plain(this.civ(k.split(':').map(Number).find((q) => q !== civ.id)))).join(', ')}`);
+    // Prisoners: theirs held by us, ours held by others.
+    const ours = this.prisoners.filter((p) => p.by === civ.id).length;
+    const theirs = this.prisoners.filter((p) => p.civ === civ.id).length;
+    if (ours || theirs) out.push(`Prisoners: ${ours} held in our cells${theirs ? `, ${theirs} of ours held abroad` : ''}`);
     return out;
   }
 
@@ -1069,13 +1188,12 @@ export class War {
   // plan; the battle ends when one side breaks.
   startLiveBattle(w, plan) {
     const rng = new RNG(hash4(w.id, plan.at, 0xba7));
-    const A = this.muster(w, 'a', plan);
-    const Bm = this.muster(w, 'b', plan);
-    if (!A.recs.length || !Bm.recs.length) return false;
-    const pa = this.armyPower(A, 'a', w);
-    const pb = this.armyPower(Bm, 'b', w);
-    plan.ta = this.chooseTactic(w, 'a', pa, pb, plan, rng);
-    plan.tb = this.chooseTactic(w, 'b', pb, pa, plan, rng);
+    const { A, B: Bm } = this.raise(w, plan, rng);
+    if (!A.recs.length || !Bm.recs.length) {
+      plan.ta = null;
+      plan.tb = null;
+      return false;
+    }
     const sa = this.ow.settlements[plan.attacker === 'a' ? plan.atk : plan.def];
     const sb = this.ow.settlements[plan.attacker === 'a' ? plan.def : plan.atk];
     const ca = centreOf(sa);
@@ -1092,16 +1210,21 @@ export class War {
       const civ = this.civ(w.lead[side]);
       const s0 = side === 'a' ? sa : sb;
       const cav = tech.has(s0, 'cavalry');
-      const list = army.recs.slice(0, 9);
+      const list = army.recs.slice(0, LIVE_MAX);
       const ents = [];
       const n = list.length;
+      const wide = Math.min(n, 9);
       list.forEach(({ r, L }, i) => {
-        // The line, ten paces back from the middle of the field.
-        const off = (i - (n - 1) / 2) * 2;
-        const x = Math.round(c.x + ax.x * 11 * sign + perp.x * off);
-        const z = Math.round(c.z + ax.z * 11 * sign + perp.z * off);
+        // The line, ten paces back from the middle of the field (a second
+        // rank two paces behind the first).
+        const rank = Math.floor(i / wide);
+        const k = i % wide;
+        const inRank = Math.min(wide, n - rank * wide);
+        const off = (k - (inRank - 1) / 2) * 2 + rank;
+        const x = Math.round(c.x + ax.x * (11 + rank * 2) * sign + perp.x * off);
+        const z = Math.round(c.z + ax.z * (11 + rank * 2) * sign + perp.z * off);
         const role = t === 'pincer' ? (i % 3 === 0 ? 'left' : i % 3 === 1 ? 'right' : 'centre') : t === 'flank' ? (i < Math.ceil(n * 0.4) ? 'wing' : 'centre') : 'centre';
-        const e = this.spawn(r, L, x, z, side, 'battle', { war: w.id, role, home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' });
+        const e = this.spawn(r, L, x, z, side, 'battle', { war: w.id, role, levy: r.job !== 'guard', home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' });
         if (!e) return;
         r.soldier = w.id;
         r.away = true;
@@ -1164,7 +1287,7 @@ export class War {
   raidTick(L) {
     const g = this.game;
     const raid = L.raid;
-    const up = L.ents.filter((n) => !n.dead && g.npcs.includes(n));
+    const up = L.ents.filter((n) => !n.dead && !n.down && g.npcs.includes(n));
     // Riders who've reached the fight get down and fight on foot.
     for (const n of L.riders) {
       if (n.dead || n.state !== 'warband') continue;
@@ -1189,8 +1312,18 @@ export class War {
       }
     }
     if (up.length && L.t < 300) return;
-    // Over: reckon it up from what happened.
-    const lost = this.partyRecs(raid).filter((r) => !alive(r));
+    // Over: those knocked down are dragged off to the cells; reckon up the
+    // rest from what happened.
+    const day = Math.floor(this.sim.abs / DAY);
+    const holder = L.TL.settlement.civ || null;
+    const taken = [];
+    for (const n of L.ents) {
+      if (n.dead || !n.down) continue;
+      if (this.takePrisoner(n.rec, L.FL, holder, day, `raiding ${L.TL.settlement.name}`, holder ? null : L.TL.settlement.id)) taken.push(n.rec);
+      else this.wake(n);
+    }
+    this.wakeDowned();
+    const lost = [...this.partyRecs(raid).filter((r) => !alive(r)), ...taken];
     const dead = raid.party.map((p) => this.game.world.layouts.get(p.sid)?.npcs[p.idx]).filter((r) => r && !alive(r));
     for (const n of L.riders) if (!n.dead && n.state === 'warband') {
       n.mount = null;
@@ -1200,7 +1333,8 @@ export class War {
     this.live = null;
     const loot = Math.min(L.loot, L.TL.econ.treasury);
     L.TL.econ.treasury -= loot;
-    const out = this.endRaid(raid, { result: loot > 0 ? 'plundered' : 'repelled', lost: [...new Set([...lost, ...dead])], loot, hurt: [], rode: L.riders.length > 0 });
+    const out = this.endRaid(raid, { result: loot > 0 ? 'plundered' : 'repelled', lost: [...new Set([...lost, ...dead])], taken, loot, hurt: [], rode: L.riders.length > 0 });
+    if (taken.length) g.ui.msg(`${taken.length} of the raiders ${taken.length > 1 ? 'were' : 'was'} dragged off to the cells.`, '#ffe070');
     g.ui.msg(loot > 0 ? `The raiders got away with ¤${loot}.` : `The raiders have been driven off!`, loot > 0 ? '#ffb080' : '#a0e0a0');
     return out;
   }
@@ -1221,7 +1355,7 @@ export class War {
         g.renderer.emit(x, y, z, { n: 4, color: ['#8a6a3a', '#5a4022'], up: 16, speed: 20, life: 0.4 });
       }
     }
-    const standing = (s) => L.sides[s].ents.filter((n) => !n.dead && g.npcs.includes(n) && n.warband && n.warband.phase !== 'flee');
+    const standing = (s) => L.sides[s].ents.filter((n) => !n.dead && !n.down && g.npcs.includes(n) && n.warband && n.warband.phase !== 'flee');
     for (const s of ['a', 'b']) {
       const side = L.sides[s];
       const up = standing(s);
@@ -1250,6 +1384,7 @@ export class War {
   }
 
   endLiveBattle(L, ua, ub) {
+    const g = this.game;
     L.done = true;
     const pa = L.sides.a.start;
     const pb = L.sides.b.start;
@@ -1259,6 +1394,16 @@ export class War {
     const fb = deadB / Math.max(1, pb);
     const winner = L.sides.a.broken ? 'b' : L.sides.b.broken ? 'a' : ua.length / Math.max(1, pa) >= ub.length / Math.max(1, pb) ? 'a' : 'b';
     const ratio = Math.max(0.2, (winner === 'a' ? ua.length / Math.max(1, pa) : ub.length / Math.max(1, pb))) / Math.max(0.2, (winner === 'a' ? ub.length / Math.max(1, pb) : ua.length / Math.max(1, pa)));
+    // The beaten side's wounded, lying on the field, are taken prisoner;
+    // the victors' get up and go home.
+    const day = Math.floor(this.sim.abs / DAY);
+    const victor = L.sides[winner].civ;
+    const taken = { a: 0, b: 0 };
+    for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
+      if (n.dead || !n.down) continue;
+      if (s !== winner && victor && this.takePrisoner(n.rec, n.layout, victor, day, L.plan.name)) taken[s]++;
+      else this.wake(n);
+    }
     // Those who fought here already counted; the rest of each army by the
     // same measure.
     const strip = (army, side) => {
@@ -1268,17 +1413,16 @@ export class War {
     const A = strip(L.A, 'a');
     const Bm = strip(L.B, 'b');
     const rng = new RNG(hash4(L.w.id, L.plan.at, 0xe0d));
-    this.fight(L.w, L.plan, A, Bm, rng, { winner, ratio, fa, fb, deadA, deadB, na: pa, nb: pb });
+    this.fight(L.w, L.plan, A, Bm, rng, { winner, ratio, fa: fa + taken.a / Math.max(1, pa), fb: fb + taken.b / Math.max(1, pb), deadA: deadA + taken.a, deadB: deadB + taken.b, takenA: taken.a, takenB: taken.b, na: pa, nb: pb });
     // Soldiers who walked off the field are home again.
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
       if (n.rec.soldier !== undefined) delete n.rec.soldier;
-      n.rec.away = false;
-      if (!n.dead && n.warband) {
+      if (!n.rec.captive) n.rec.away = false;
+      if (!n.dead && n.warband && g.npcs.includes(n)) {
         n.warband.phase = s === winner ? 'won' : 'flee';
         if (s === winner && n.rng.chance(0.6)) n.say(n.rng.pick(['Victory!', 'They run!', 'The field is ours!', 'Huzzah!']), 2.5, '#a0e0a0');
       }
     }
-    const g = this.game;
     g.ui.msg(`The ${plain(L.sides[winner].civ)} ${winner === 'a' ? (L.sides.b.broken ? 'broke' : 'beat') : (L.sides.a.broken ? 'broke' : 'beat')} the ${plain(L.sides[winner === 'a' ? 'b' : 'a'].civ)} at ${L.plan.name}.`, '#ffe070');
     // You fought for one side: they remember it.
     for (const s of ['a', 'b']) {
@@ -1287,6 +1431,55 @@ export class War {
       const home = this.ow.settlements[s === L.plan.attacker ? L.plan.atk : L.plan.def];
       if (home && s === winner) this.sim.addRenown(home.id, 6, `fighting at ${L.plan.name}`);
     }
+  }
+
+  // Back on their feet after being knocked down.
+  wake(n) {
+    n.down = false;
+    n.sleeping = false;
+    n.hp = Math.max(n.hp, Math.ceil(n.maxHp * 0.2));
+    if (n.warband) n.warband.phase = 'flee';
+  }
+
+  wakeDowned() {
+    for (const n of this.game.npcs) if (n.down && !n.dead && !n.warband) {
+      n.down = false;
+      n.sleeping = false;
+      n.hp = Math.max(n.hp, Math.ceil(n.maxHp * 0.2));
+      n.calmDown(true);
+    }
+  }
+
+  // Knocked down, not killed (sometimes): a soldier, raider or escaping
+  // prisoner who'll be carried off (or get up) when it's over.
+  knockDown(n) {
+    const wb = n.warband;
+    const chance = !wb ? 0 : wb.kind === 'escape' ? 0.7 : wb.kind === 'raid' ? 0.5 : wb.kind === 'battle' ? 0.45 : 0;
+    // (The town's own defenders are only knocked out in a raid, never killed.)
+    const defender = !wb && this.live && this.live.kind === 'raid' && n.layout === this.live.TL && n.rec.job === 'guard';
+    if (!defender && !(Math.random() < chance)) return false;
+    n.hp = 1;
+    n.down = true;
+    n.sleeping = true;
+    n.threat = null;
+    n.path = null;
+    if (wb) {
+      wb.phase = 'down';
+      n.state = 'warband';
+    } else n.state = 'down';
+    n.mount = null;
+    n.say(n.rng.pick(['Ugh...', 'Argh!', '...', 'Oof!']), 1.5, '#ffb080');
+    // An escaping prisoner caught again: back to the cells.
+    if (wb && wb.kind === 'escape') {
+      const p = this.prisoners.find((q) => q.id === wb.prisoner);
+      if (p) {
+        this.captiveEnts.delete(p.id);
+        this.game.despawnNpc(n);
+        const L = this.game.world.layouts.get(p.at);
+        if (L && L.econ) ledger(L, this.game.day, `${p.name} broke out of the cells, but was brought down and locked up again.`);
+      }
+    }
+    return true;
   }
 
   clearWorks(L) {
@@ -1323,14 +1516,235 @@ export class War {
     const L = this.live;
     if (n.warband && n.warband.kind === 'raid' && L && L.kind === 'raid') return `fell raiding ${L.TL.settlement.name}`;
     if (n.warband && n.warband.kind === 'battle' && L && L.plan) return `fell at ${L.plan.name}`;
+    if (n.warband && n.warband.kind === 'escape') return 'killed escaping from the cells';
     return 'fell in a skirmish';
+  }
+
+  // ------------------------------------------------------------ prisoners
+  // Taken alive: off to the captor's capital (a free town keeps its own),
+  // into a cell. False when there's nowhere to take them.
+  takePrisoner(rec, L, by, day, how, at = null) {
+    if (!rec || !alive(rec) || rec.captive) return false;
+    const cap = at !== null ? this.ow.settlements[at] : by ? this.realms.capitalOf(by) : null;
+    if (!cap || deserted(cap)) return false;
+    const p = {
+      id: this.nextId++, sid: L.settlement.id, idx: rec.idx, civ: L.settlement.civ ? L.settlement.civ.id : null, by: by ? by.id : null,
+      at: cap.id, day, how, name: fullName(rec),
+    };
+    this.prisoners.push(p);
+    rec.captive = { id: p.id, by: p.by, at: cap.id, day };
+    rec.away = true;
+    delete rec.soldier;
+    delete rec.raid;
+    rec.hp = Math.max(4, rec.hp ?? 4);
+    if (rec.ent && !rec.ent.dead) this.game.despawnNpc(rec.ent);
+    this.makeRoom(cap, day);
+    return p;
+  }
+
+  held(sid) {
+    return this.prisoners.filter((p) => p.at === sid);
+  }
+
+  recOfPrisoner(p) {
+    const L = this.sim.layoutOf(p.sid);
+    return L ? L.npcs[p.idx] || null : null;
+  }
+
+  // Two to a cell: the town's own lock-up, and any stockade or prison.
+  capacity(L) {
+    if (!L) return 0;
+    const built = (q) => L.buildings[q.building] && !L.buildings[q.building].underConstruction;
+    return (L.jail ? 2 : 0) + L.prisonCells.filter(built).length * 2;
+  }
+
+  // Too many to hold: a stockade goes up (a prison, once the realm knows
+  // how to build one).
+  makeRoom(capS, day) {
+    const L = this.sim.layoutOf(capS.id);
+    if (!L || !L.econ) return null;
+    if (this.held(capS.id).length <= this.capacity(L)) return null;
+    const works = this.sim.works;
+    if (works.projects.some((q) => !q.done && q.sid === capS.id && (q.type === 'stockade' || q.type === 'prison'))) return null;
+    const big = this.sim.tech.has(capS, 'prisons') && !L.buildings.some((b) => b.type === 'prison');
+    const type = big ? 'prison' : 'stockade';
+    const cost = big ? 220 : 90;
+    if (L.econ.treasury < cost + 20) return null;
+    const q = works.startBuilding(L, type, ', to hold prisoners of war', false, cost) || breachFor(this.sim, L, type);
+    if (q && q.kind === 'breach') {
+      ledger(L, day, `The cells are full, and there's no room inside the walls: a stretch of the wall is coming down to build beyond it.`);
+      return q;
+    }
+    if (q) {
+      L.econ.treasury -= cost;
+      ledger(L, day, big ? `The cells are full: work has begun on a great prison for ${capS.name}.` : `The cells are full: a stockade is going up to hold the prisoners.`);
+    }
+    return q;
+  }
+
+  release(p, how, day) {
+    this.prisoners = this.prisoners.filter((q) => q !== p);
+    const ent = this.captiveEnts.get(p.id);
+    if (ent && !ent.dead && this.game.npcs.includes(ent)) this.game.despawnNpc(ent);
+    this.captiveEnts.delete(p.id);
+    const r = this.recOfPrisoner(p);
+    if (!r || !alive(r)) return null;
+    delete r.captive;
+    r.away = false;
+    const at = this.ow.settlements[p.at];
+    const L = this.game.world.layouts.get(p.sid);
+    const days = Math.max(1, day - p.day);
+    const how2 = { exchanged: 'exchanged for prisoners of ours', ransomed: 'ransomed', released: 'set free', escaped: 'escaped', peace: 'freed at the peace' }[how] || how;
+    if (L && L.econ) ledger(L, day, `${p.name} is home after ${days} day${days > 1 ? 's' : ''} as a prisoner in ${at ? at.name : 'the enemy\'s cells'} (${how2}).`);
+    return r;
+  }
+
+  // Each day: escapes (more when the cells are crowded, fewer from a real
+  // prison), exchanges and ransoms between realms holding each other's
+  // people, and, between realms not at war, prisoners let go.
+  prisonersDay(day, rng) {
+    for (const p of this.prisoners.slice()) {
+      const r = this.recOfPrisoner(p);
+      if (!r || !alive(r)) {
+        this.prisoners = this.prisoners.filter((q) => q !== p);
+        continue;
+      }
+      const at = this.ow.settlements[p.at];
+      const L = at && this.sim.layoutOf(at.id);
+      if (!L || !L.econ || deserted(at)) {
+        this.release(p, 'escaped', day);
+        continue;
+      }
+      if (this.captiveEnts.has(p.id)) continue; // (you're there: it happens on the ground)
+      const crowded = this.held(at.id).length > this.capacity(L);
+      const prison = L.buildings.some((b) => b.type === 'prison' && !b.underConstruction);
+      const chance = (0.008 + (crowded ? 0.025 : 0) + ((r.personality?.bravery ?? 0.5) - 0.5) * 0.01) * (prison ? 0.3 : 1);
+      if (rng.chance(chance)) {
+        if (rng.chance(0.45)) {
+          ledger(L, day, `${p.name} tried to break out of the cells, and was caught.`);
+          continue;
+        }
+        ledger(L, day, `${p.name}, a prisoner, broke out of the cells and got away!`);
+        this.release(p, 'escaped', day);
+      }
+    }
+    if (day % 7 === 2) this.bargain(day, rng);
+  }
+
+  // Realms that hold each other's people swap them, one for one; one with
+  // coin to spare buys its own back; and a captor at peace with them lets
+  // them go after a while (sooner with a kind ruler).
+  bargain(day, rng) {
+    const C = this.ow.civs;
+    const groups = new Map();
+    for (const p of this.prisoners) {
+      const k = `${p.by}>${p.civ}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    }
+    const done = new Set();
+    for (const [k, mine] of groups) {
+      const [by, of] = k.split('>');
+      const back = groups.get(`${of}>${by}`);
+      if (back && !done.has(k)) {
+        done.add(k);
+        done.add(`${of}>${by}`);
+        const n = Math.min(mine.length, back.length);
+        if (n && rng.chance(0.45)) {
+          for (const p of [...mine.slice(0, n), ...back.slice(0, n)]) this.release(p, 'exchanged', day);
+          const a = C[by];
+          const b = C[of];
+          if (a && b) for (const c of [a, b]) this.realms.proclaim(c, day, `The ${plain(a)} and the ${plain(b)} exchanged prisoners: ${n} for ${n}.`);
+          continue;
+        }
+      }
+      const captor = by === 'null' ? null : C[by];
+      const home = of === 'null' ? null : C[of];
+      // Ransom.
+      const homeCap = home && this.realms.capitalOf(home);
+      const HL = homeCap && this.game.world.layouts.get(homeCap.id);
+      const ruler = home && this.realms.ruler(home);
+      const price = 40;
+      const fighting = captor && home && this.enemies(captor, home);
+      if (HL && HL.econ && HL.econ.treasury > 160 + price && rng.chance((fighting ? 0.1 : 0.25) + (ruler?.personality?.kindness ?? 0.5) * (fighting ? 0.2 : 0.3))) {
+        const n = Math.min(mine.length, 3, Math.floor((HL.econ.treasury - 160) / price));
+        if (n > 0) {
+          const at = this.ow.settlements[mine[0].at];
+          const AL = at && this.game.world.layouts.get(at.id);
+          HL.econ.treasury -= n * price;
+          if (AL && AL.econ) AL.econ.treasury += n * price;
+          for (const p of mine.slice(0, n)) this.release(p, 'ransomed', day);
+          ledger(HL, day, `${authority(home)[0].toUpperCase()}${authority(home).slice(1)} paid ¤${n * price} to buy back ${n} of our people held ${captor ? `by the ${plain(captor)}` : `in ${at ? at.name : 'a free town'}`}.`);
+          continue;
+        }
+      }
+      // Let go, at peace, after a while.
+      const atWar = captor && home && this.enemies(captor, home);
+      if (!atWar) {
+        const kind = captor ? (this.realms.ruler(captor)?.personality?.kindness ?? 0.5) : 0.5;
+        for (const p of mine) if (day - p.day >= 10 && rng.chance(0.15 + kind * 0.35)) this.release(p, 'released', day);
+      }
+    }
+  }
+
+  // Peace: everyone held on either side goes home.
+  freeAll(w, day) {
+    const side = new Set([...w.a, ...w.b]);
+    for (const p of this.prisoners.slice()) if (side.has(p.by) && side.has(p.civ)) this.release(p, 'peace', day);
+  }
+
+  // When you're in a town holding prisoners: there they are, in the cells.
+  syncCaptives() {
+    const g = this.game;
+    for (const [id, n] of this.captiveEnts) {
+      const p = this.prisoners.find((q) => q.id === id);
+      if (n.dead || !g.npcs.includes(n)) {
+        this.captiveEnts.delete(id);
+        // Got clean away while you watched.
+        if (p && n.escaped) this.release(p, 'escaped', g.day);
+        continue;
+      }
+      if (!p || !g.active.has(p.at)) {
+        g.despawnNpc(n);
+        this.captiveEnts.delete(id);
+      }
+    }
+    for (const [sid, a] of g.active) {
+      const list = this.held(sid);
+      if (!list.length) continue;
+      const L = a.layout;
+      const slots = [];
+      const jailFree = L.jail && !(this.sim.justice.jail && this.sim.justice.jail.sid === sid);
+      if (jailFree) slots.push({ stand: L.jail.stand, bed: L.jail.bed, door: L.jail.door, front: L.jail.front }, { stand: L.jail.bed, bed: L.jail.bed, door: L.jail.door, front: L.jail.front });
+      for (const c of L.prisonCells) {
+        const b = L.buildings[c.building];
+        if (!b || b.underConstruction) continue;
+        slots.push({ stand: c.tiles[1], bed: c.tiles[0], door: c.door, front: c.front }, { stand: c.tiles[0], bed: c.tiles[0], door: c.door, front: c.front });
+      }
+      list.forEach((p, i) => {
+        if (this.captiveEnts.has(p.id) || i >= slots.length) return;
+        const r = this.recOfPrisoner(p);
+        const HL = this.game.world.layouts.get(p.sid);
+        if (!r || !HL || (r.ent && !r.ent.dead)) return;
+        const slot = slots[i];
+        // (The watch has the door fixed and locked again.)
+        if (slot.door && g.world.getBlock(slot.door.x, GROUND, slot.door.z) === B.cell_door_open) g.world.setBlock(slot.door.x, GROUND, slot.door.z, B.cell_door, 0);
+        const y = g.world.findStandY(slot.stand.x, slot.stand.z, GROUND);
+        if (y <= 0) return;
+        const n = g.spawnWarrior(r, HL, { x: slot.stand.x, y, z: slot.stand.z });
+        n.state = 'captive';
+        n.captive = { ...slot, p, y };
+        n.look = { ...r.look, hat: null };
+        this.captiveEnts.set(p.id, n);
+      });
+    }
   }
 
   // ------------------------------------------------------------ save
   serialize() {
     return {
       wars: this.wars, past: this.past, raids: this.raids, raidLog: this.raidLog, truces: this.truces, cd: this.cd,
-      rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay,
+      rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay, prisoners: this.prisoners,
     };
   }
 
@@ -1348,6 +1762,7 @@ export class War {
     this.seen = d.seen || {};
     this.nextId = d.nextId || 1;
     this.lastDay = d.lastDay ?? this.lastDay;
+    this.prisoners = d.prisoners || [];
   }
 }
 

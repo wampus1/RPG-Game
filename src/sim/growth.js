@@ -74,6 +74,20 @@ export function promote(sim, L, next, day) {
 }
 
 // Where a walled city can break out: the edge tile nearest to open ground.
+// A walled town that needs room for a building it can't fit inside (an
+// academy, cells for prisoners) pulls down a stretch of its wall to build
+// out beyond it. The breach project, or null when there's room (or a
+// breach is already going).
+export function breachFor(sim, L, type) {
+  const works = sim.works;
+  if (!L.walled || works.freePlot(L, type, true) || sim.roads.planStreet(L)) return null;
+  if (works.active(L.settlement.id).some((p) => p.kind === 'breach')) return null;
+  const br = breachPoint(L, works);
+  if (!br || !br.at) return null;
+  L.econ.treasury -= 40;
+  return works.add({ sid: L.settlement.id, kind: 'breach', at: br.at, bid: L.buildings.length - 0.25, label: 'pulling down part of the wall' });
+}
+
 function breachPoint(L, works) {
   const b = L.bounds;
   // (The road will come in through the gap.)

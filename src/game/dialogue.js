@@ -12,7 +12,7 @@ import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger, fresh
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare, licensesFor, licenceFee } from '../sim/careers.js';
-import { TECHS } from '../sim/tech.js';
+import { TECHS, TECH_IDS } from '../sim/tech.js';
 import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
@@ -809,7 +809,7 @@ function researchTalk(npc, game) {
   const lines = [cur
     ? `${boss === 'I' ? 'I have' : `${boss[0].toUpperCase()}${boss.slice(1)} has`} set the scholars to ${cur.name.toLowerCase()}: ${cur.desc.charAt(0).toLowerCase()}${cur.desc.slice(1)} They're ${Math.floor((st.progress / cur.cost) * 100)}% of the way there.`
     : 'Our scholars have nothing to study just now.',
-  `We know ${st.done.length} of the twenty arts so far. Here, see for yourself.`];
+  `We know ${st.done.length} of the ${TECH_IDS.length} arts so far. Here, see for yourself.`];
   return { lines, open: 'tech' };
 }
 

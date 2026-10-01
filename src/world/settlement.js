@@ -32,6 +32,10 @@ const SPECS = {
   stables: { size: [[9, 6], [8, 6]], tall: 3 },
   // Where the realm's researchers study (see tech.js).
   academy: { size: [[9, 6], [8, 6]], tall: 3, civic: true },
+  // Cells for prisoners of war: a stockade (a few) and, once the realm has
+  // learned to build them, a great prison (many). See war.js.
+  stockade: { size: [[9, 6], [9, 6]], civic: true },
+  prison: { size: [[13, 8], [12, 8]], tall: 3, civic: true },
   // A licensed trade's own workshop, built for the player (never staffed).
   player_workshop: { size: [[6, 5], [6, 6]] },
 };
@@ -41,6 +45,7 @@ export const BUILDING_NAMES = {
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
   herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy',
+  stockade: 'Stockade', prison: 'Prison',
 };
 
 // What a trade works at, in its workshop.
@@ -99,6 +104,7 @@ class Layout {
     this.bells = []; // alarm bells the watch rings at night
     this.graveyard = null;
     this.jail = null;
+    this.prisonCells = []; // cells for prisoners of war
     this.plaza = null;
     this.npcs = [];
     this.collect = null;
@@ -1741,6 +1747,15 @@ class Layout {
       tryPlace(rugId, 'center', { solid: false });
       lamp();
       lamp();
+    } else if (t === 'stockade' || t === 'prison') {
+      // Rows of cells along the long walls, a corridor between, a guard's
+      // table and stool by the door.
+      this.cellRows(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 }, t === 'prison' ? 10 : 3);
+      const table = tryPlace(B.table, 'any', { access: true });
+      if (table) seat(['work', 'rest'], table);
+      lamp();
+      if (t === 'prison') lamp();
+      b.work.push(...b.seats);
     } else if (t === 'guardhouse') {
       const table = tryPlace(B.table, 'center', { access: true });
       if (table) {
@@ -1850,6 +1865,42 @@ class Layout {
       this.jail = { building: b.id, cell, bed: cell[0], stand: cell[1], door, front, y: Y0, blocks };
       return;
     }
+  }
+
+  // Cells two tiles long against the north and south walls, each behind a
+  // row of bars with a barred door, the corridor down the middle left
+  // clear. Every cell is listed for the prisoners of war to be put in.
+  cellRows(b, f, max) {
+    const { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 } = f;
+    let made = 0;
+    for (const [row, front] of [[iz0, 1], [iz1, -1]]) {
+      for (let x = ix0; x + 1 <= ix1 && made < max; x += 3) {
+        const cell = [{ x, z: row }, { x: x + 1, z: row }];
+        const bars = [{ x, z: row + front }];
+        const door = { x: x + 1, z: row + front };
+        const side = x + 2 <= ix1 ? [{ x: x + 2, z: row }, { x: x + 2, z: row + front }] : [];
+        const aisle = { x: x + 1, z: row + 2 * front };
+        const solid = [...cell, ...bars, door, ...side];
+        if (!solid.every((q) => isIn(q.x, q.z) && !occ.has(key(q.x, q.z)) && !reserved.has(key(q.x, q.z)))) continue;
+        if (!isIn(aisle.x, aisle.z) || occ.has(key(aisle.x, aisle.z))) continue;
+        for (const q of solid) occ.add(key(q.x, q.z));
+        if (!connected()) {
+          for (const q of solid) occ.delete(key(q.x, q.z));
+          continue;
+        }
+        reserved.add(key(aisle.x, aisle.z));
+        for (const q of [...bars, ...side]) {
+          this.put(q.x, Y0, q.z, B.iron_bars);
+          this.put(q.x, Y0 + 1, q.z, B.iron_bars);
+        }
+        this.put(door.x, Y0, door.z, B.cell_door);
+        this.put(door.x, Y0 + 1, door.z, B.cell_door_top);
+        this.put(cell[0].x, Y0, cell[0].z, B.bed, 1);
+        this.prisonCells.push({ building: b.id, tiles: cell, door, front: aisle, y: Y0 });
+        made++;
+      }
+    }
+    return made;
   }
 
   chimney(b, t) {

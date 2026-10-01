@@ -345,7 +345,9 @@ export function births(sim, L, day, rng) {
     const kids = a.children.filter((i) => L.npcs[i] && alive(L.npcs[i]) && L.npcs[i].age === 'child').length;
     if (kids >= 3) continue;
     const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
-    if (!rng.chance(living < house.beds.length ? 0.05 : 0.03)) continue;
+    // (Aqueducts: clean water, more children.)
+    const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.35 : 1;
+    if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
     const r = makeChild(L, a, b, new RNG(hash4(a.idx, b.idx, day, 0xba8e)));
     r.idx = L.npcs.length;
     r.id = `${s.id}:${r.idx}`;
