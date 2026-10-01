@@ -1,6 +1,7 @@
 // Villagers talk among themselves: when two of them idle close together
 // near the player, one opens a short exchange about food, taxes, the
 // weather, the news, the dead, each other, or you.
+import { gossipLines } from '../sim/society.js';
 import { kitchenOf, st, freshRumours } from '../sim/econ.js';
 import { affinity, griefOf } from './dialogue.js';
 import { relationTo } from '../sim/favors.js';
@@ -144,6 +145,11 @@ export function exchangeFor(a, b, game) {
   else if (w === 'fog') opts.push(['Can\'t see a thing in this fog.', 'Mind you don\'t walk into the well.']);
   const news = [...e.ledger].reverse().find((it) => it.day >= game.day - 1 && it.day > 0);
   if (news) opts.push([`Did you hear? ${news.text}`, pick(rng, ['No! Really?', 'I heard. Can you believe it?', 'Everyone\'s talking about it.'])]);
+  // Who's fallen out with whom (see society.js).
+  const gossip = gossipLines(L).filter((t) => !t.includes(ra.name.first) && !t.includes(rb.name.first) && !t.includes(ra.name.last) && !t.includes(rb.name.last));
+  if (gossip.length && rng.chance(0.5)) opts.push([pick(rng, gossip), pick(rng, ['You don\'t say.', 'I heard the same.', 'Shh, they\'ll hear you!', 'Some people.'])]);
+  // Old stories, now and then (word of mouth: see history.js).
+  if (sim.history && rng.chance(0.25)) opts.push([`They say ${sim.history.legend(L)}`, pick(rng, ['Old wives\' tales.', 'My gran swore it was true.', 'Don\'t say that after dark!'])]);
   const visits = (sim.visits.get(L.settlement.id) || []).filter((v) => sim.abs >= v.arrive && sim.abs < v.leave);
   if (visits.length) opts.push([`There's a merchant from ${visits[0].fromName} on the square.`, 'I might have a look later.']);
   if (ra.job === rb.job && ra.job !== 'retired') opts.push(['Busy day?', 'Never ends.'], ['Think we\'ll finish early today?', 'Ha! Dream on.']);

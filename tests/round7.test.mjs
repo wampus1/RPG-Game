@@ -427,7 +427,8 @@ test('the music follows where you are and what you are doing', () => {
   const { game, input, p } = start(12345, 12 * 60);
   const s = game.currentSettlement;
   assert.ok(s);
-  assert.equal(musicMood(game), s.type === 'village' ? 'village' : s.type);
+  // (The town's people's own sound and how it's doing follow the '@'.)
+  assert.equal(musicMood(game).split('@')[0], s.type === 'village' ? 'village' : s.type);
   game.minute = 23 * 60;
   assert.match(musicMood(game), /:night$/);
   game.minute = 12 * 60;

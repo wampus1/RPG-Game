@@ -16,6 +16,7 @@ import { B, BLOCKS, META_STATE, CANOPY_SHIFT } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { hash4, clamp } from '../util/rng.js';
+import { festivalName, religionOf } from './culture.js';
 
 export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
 
@@ -168,7 +169,7 @@ export class Events {
       const [a, b] = ev.couple.map((i) => L.npcs[i]);
       return `the wedding of ${a.name.first} and ${b.name.first}`;
     }
-    return ev.kind === 'fete' ? `the celebration of ${L.settlement.name} becoming a ${ev.tier}` : 'the feast day';
+    return ev.kind === 'fete' ? `the celebration of ${L.settlement.name} becoming a ${ev.tier}` : festivalName(L.settlement);
   }
 
   // ------------------------------------------------------------ announcing
@@ -205,7 +206,7 @@ export class Events {
   feast(L, day, spend, soon = null) {
     const mayor = L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away);
     const ev = this.announce(L, 'feast', day, { host: mayor ? mayor.idx : null, spend }, soon);
-    ledger(L, day, `The council declared a feast day for day ${ev.day}${spend ? ` (¤${spend} from the treasury)` : ''}: food, drink and dancing by the square from ${hodStr(ev.s % DAY)}.`);
+    ledger(L, day, `The council declared ${festivalName(L.settlement)} for day ${ev.day}${spend ? ` (¤${spend} from the treasury)` : ''}: food, drink and dancing by the square from ${hodStr(ev.s % DAY)}.`);
     return ev;
   }
 
@@ -443,7 +444,7 @@ export class Events {
     if (ev.kind === 'fete') {
       return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', `round ${round}.`, '', when, '', `By order of the council of ${s.name}.`] };
     }
-    return { title: 'POSTER', lines: ['FEAST DAY!', '', `The council of ${s.name} invites all`, 'to eat, drink and dance', `round ${round}.`, '', when, '', 'Free food for everyone!'] };
+    return { title: 'POSTER', lines: [`${festivalName(s).toUpperCase()}!`, `(in honour of ${religionOf(s).god})`, `The council of ${s.name} invites all`, 'to eat, drink and dance', `round ${round}.`, '', when, '', 'Free food for everyone!'] };
   }
 
   // ------------------------------------------------------------ the stage
@@ -883,7 +884,7 @@ export class Events {
     }
     if (ev.kind !== 'wedding') {
       L.econ.lastFeast = ev.day;
-      ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `The feast day by the square drew ${came} people.`);
+      ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `${festivalName(L.settlement)} by the square drew ${came} people.`);
     }
     // You came along: they won't forget it.
     if (ev.playerCame) {

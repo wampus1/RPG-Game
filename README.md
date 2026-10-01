@@ -1115,6 +1115,83 @@ badly beaten, service to the victor, paying tribute every week until it's
 strong enough (or angry enough) to throw the yoke off. The notice board shows
 your realm's allies, lord or vassals, its war and how it's going.
 
+**By raft.** Raiders don't only come over the border. A realm with a town on
+the sea, a lake or a river can put a party on rafts and strike a town on the
+water much further off (beyond any border). The rafts are sighted a night or
+two before; if you're there, you see them paddle in off the water, drag
+themselves up the bank and make for the square. An army bound for a town far
+over the water goes by raft too.
+
+**Peoples and their ways.** Each people cooks its own food: herb pottage and
+apple tart in the vales, fish chowder and smoked herring in the north, spiced
+lentils and flatbread in the south, maize tamales and hot cocoa in the
+jungle, goulash and oatcakes in the mountains. Taverns cook the hot dish and
+bakers bake the rest. They dress in their own colours and patterns, build
+in their own stone and timber, and hold their own feasts (Harvest Home,
+Midwinter Blot, Lantern Night, the Rain Dance, Forge Day and more).
+
+**Faith.** Every realm has a faith of its own, with its own god, symbol, holy
+day and feast; a free town keeps the folk ways of its people. Each faith
+asks something of the faithful: no meat, no fish, no strong drink, no work
+on the holy day, no hunting near town, no felling the old trees, no weapon in
+a temple. Break a custom in front of people and they think a little less of
+you (and say so), but it isn't a crime. Ask anyone about their faith and
+customs, and nothing a faith forbids is ever on its tavern's menu.
+
+**History and legends.** Every town has a past: who founded it and when,
+fires, floods, sieges, plagues and omens, what it's famous for, and the old
+story told round the fire. It's cut on the plaque by the statue on the square,
+written in the library's books, and told by anyone you ask (children tell the
+ghost story). What happens now goes into it: raids, battles, a new ruler, a
+town become a city, bandits seen off. A hero of the town gets a statue on the
+square (you, when you're named Hero; the bravest soldier of a decisive
+battle; whoever stood out in a fight you were drafted into).
+
+**Crime among the townsfolk.** A rare few have a vice: light fingers, a short
+temper, no love for the laws. Now and then they act on it in front of you: a
+purse lifted, a brawl in the street, a rant on the square against the taxes.
+Whoever sees it shouts, the nearest guard comes, takes them in and walks
+them to the cells, and the mayor hears it in the morning: a fine, a day or
+two in the cells, or, for a third offence, exile. The exiled take to the road
+as adventurers, start again in another realm, go off with the nomads, or join
+the bandits.
+
+**Bandits.** Exiles and outlaws band together in the wilds: a ring of tents and
+a fire well away from any town. They rob merchants on the road, raid weak
+villages by night (fought out in front of you if you're there), and move camp
+every week or so. Go too near their fire and they warn you off, then set on
+you. The towns they hurt put a price on their heads, posted under WANTED on
+the notice board; bring one down and claim it from the mayor, and rid a town
+of a whole band for its gratitude. Adventurers go after the bounties too. A
+realm losing a war, with coin to spare, may hire a hungry band to fight for
+it.
+
+**Markets.** Sell a flood of something in one town, or buy it all up, and its
+price moves there and, over the next days, in the towns round about. The
+trade window says when something's cheap or dear here, the notice board lists
+what's going cheap and what's short, and folk mention it. Merchants come to
+buy up what's cheap and carry it where it's dear (and prefer to take their
+goods where they're short), which evens it out; left alone, a market settles.
+Keep a town supplied with something for weeks and it builds to use it: steady
+iron brings a new smithy, timber a workshop, grain a bakery, cloth and leather
+a tailor's, herbs an herbalist's (if the stone, timber and coin are there).
+
+**Lives.** People change jobs, take up a trade the town lacks, open a shop of
+their own with their savings (and run it), go out of business when trade dries
+up (CLOSED on the sign), get made Captain of the Watch, or leave to seek their
+fortune and turn up years later as a merchant visiting home. There are
+affairs, partings, families feuding and shopkeepers who can't stand each other;
+the gossips will tell you, and feuding neighbours have words when they pass.
+People move for work, for love, or for a better mayor.
+
+**Good times and bad.** A thriving town (coin in the coffers, people fed and
+cheerful, shops open) hangs banners in its colours by the hall, the tavern and
+the temple; its streets and its tavern are busy and its music quick and
+bright. A struggling one boards up the windows of its poorer houses, has
+beggars on the square and a quiet tavern, and its tune goes slow and minor.
+Each people's music has its own sound, and it all changes back as the town's
+luck does.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1205,7 +1282,15 @@ src/
                        events (posters, stages, guests for weddings and
                        feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws
-                       (public opinion, reviews, petitions), and the
+                       (public opinion, reviews, petitions), culture
+                       (cuisine, dress, faiths, feasts, customs and
+                       taboos), history (town histories, legends,
+                       statues), society (vices, crimes and trials among
+                       the townsfolk, exile, careers, affairs and feuds,
+                       moving away), bandits (camps, robberies, raids,
+                       bounties, hired bands), market (regional prices
+                       and supply-driven building), prosperity (how a
+                       town is doing and how that shows), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

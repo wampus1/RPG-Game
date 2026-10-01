@@ -267,6 +267,16 @@ export function staffBuilding(sim, L, b, day) {
   const job = WORKERS[b.type];
   if (!job) return null;
   if (L.npcs.some((r) => alive(r) && r.job === job && r.work && r.work.building === b.id)) return null;
+  // Someone who put up the money for it runs it themselves.
+  const owner = L.npcs.find((r) => alive(r) && !r.migrated && r.life && r.life.opening === b.type);
+  if (owner) {
+    owner.life.opening = null;
+    if (owner.job !== job) retrain(L, owner, job, new RNG(hash4(L.settlement.seed, owner.idx, day, 0x09e2)));
+    if (!owner.work || owner.work.building !== b.id) owner.work = { ...(owner.work || {}), kind: 'building', building: b.id };
+    owner.life.owns = b.id;
+    ledger(L, day, `${owner.name.first} ${owner.name.last} has opened the doors of their own ${b.name.replace(/^The /, '').toLowerCase()}.`);
+    return owner;
+  }
   const r = hireInto(sim, L, job, day, `the new ${b.name.replace(/^The /, '').toLowerCase()} needed staff`);
   if (!r) {
     // Nobody to spare: the town looks for newcomers to take it on.

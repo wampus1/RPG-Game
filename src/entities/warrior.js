@@ -8,6 +8,7 @@
 // meet raiders in the fields.
 
 import { B } from '../world/blocks.js';
+import { FIRESIDE } from '../sim/bandits.js';
 
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
 
@@ -22,6 +23,7 @@ export function warTick(n, dt) {
   if (wb.kind === 'sortie') return ride(n, wb);
   if (wb.kind === 'escape') return leave(n, wb, dt);
   if (wb.kind === 'raid') return raider(n, wb, dt);
+  if (wb.kind === 'bandit') return bandit(n, wb, dt);
   return soldier(n, wb, dt);
 }
 
@@ -79,8 +81,12 @@ function raider(n, wb, dt) {
   if (wb.phase === 'flee') return leave(n, wb, dt);
   if (!L || L.kind !== 'raid' || L.raid.id !== wb.raid) {
     wb.phase = 'flee';
+    wb.land = null;
+    n.raft = null;
     return;
   }
+  // Still out on the water: paddling in.
+  if (wb.land) return paddleIn(n, wb, dt);
   if (n.hp < n.maxHp * 0.35) {
     wb.phase = 'flee';
     n.stateT = 0;
@@ -126,6 +132,125 @@ function raider(n, wb, dt) {
       wb.phase = 'flee';
       n.stateT = 0;
       n.say(n.rng.pick(['We have it! Away!', 'Back to the horses!', 'Go, go!']), 2.5, '#ffb080');
+    }
+  }
+}
+
+// In off the water on a raft, a tile at a time, and out onto the shore.
+function paddleIn(n, wb, dt) {
+  const ld = wb.land;
+  if (ld.wait > 0) {
+    ld.wait -= dt;
+    return;
+  }
+  if (n.moving) return;
+  const t = ld.tiles[ld.i];
+  if (!t) {
+    wb.land = null;
+    n.raft = null;
+    n.inWater = false;
+    if (n.rng.chance(0.5)) n.say(n.rng.pick(['Ashore! Go, go!', 'Up the bank!', 'Leave the rafts!']), 2, '#ffb080');
+    return;
+  }
+  // (Someone in the way: wait for them.)
+  if (n.game.occupiedBySolid(t.x, t.y, t.z, n)) return;
+  ld.i++;
+  n.face(t.x, t.z);
+  n.startMove(t.x, t.y, t.z, n.step * (t.water ? 1.6 : 1));
+  if (t.water) {
+    const ang = [0, -Math.PI / 2, Math.PI, Math.PI / 2][n.dir] ?? 0;
+    n.raft = n.raft || { ang };
+    n.raft.ang = ang;
+    n.inWater = true;
+  } else {
+    n.raft = null;
+    n.inWater = false;
+  }
+}
+
+// ------------------------------------------------------------ bandits
+// Round the fire at their camp out in the wilds (anyone who comes too
+// close is told to hand over their purse, and cut down if they won't), or
+// in over the fields on a raid: for the square and the strongbox, past the
+// watch, and away with what they can carry.
+function bandit(n, wb, dt) {
+  const g = n.game;
+  const pl = g.player;
+  if (wb.torch && wb.phase !== 'camp' && n.rng.chance(0.3)) g.renderer.emit(n.x, n.y + 1.6, n.z, { n: 1, color: ['#ffb040', '#ff7020', '#ffe080'], up: 14, speed: 4, life: 0.35, gravity: -30, oy: -14 });
+  if (wb.phase === 'flee') return leave(n, wb, dt);
+  if (n.hp < n.maxHp * 0.3) {
+    // (Away from you, out of sight, to lick their wounds.)
+    if (wb.phase === 'camp') wb.home = { x: Math.round(n.x + (Math.sign(n.x - pl.x) || 1) * 30), z: Math.round(n.z + (Math.sign(n.z - pl.z) || 1) * 30) };
+    wb.phase = 'flee';
+    n.stateT = 0;
+    g.sim.bandits?.fled(n);
+    n.say(n.rng.pick(['Enough! I\'m off!', 'Not worth dying for!', 'Scatter!']), 2, '#ffb080');
+    return;
+  }
+  const d = pl.dead || pl.down || Math.abs(pl.y - n.y) > 2 ? 99 : n.distTo(pl);
+  const close = d <= 6;
+  if (wb.phase === 'camp') {
+    const h = wb.home;
+    // Come too near the fire: warned off first, then set on (a few
+    // moments to think better of it).
+    if (d <= 10 && n.threat !== pl) {
+      wb.warnT = (wb.warnT || 0) + dt;
+      if (!wb.warned) {
+        wb.warned = true;
+        n.face(pl.x, pl.z);
+        n.say(n.rng.pick(['Your purse or your life!', 'Wrong road, friend.', 'Nobody comes to our fire uninvited.', 'Keep walking, stranger.']), 3, '#ff9080');
+      }
+    } else if (d > 14) {
+      wb.warnT = 0;
+      wb.warned = false;
+    }
+    if (n.threat === pl || d <= 3 || (wb.warnT || 0) > 5) {
+      if (n.threat !== pl && n.rng.chance(0.5)) n.say(n.rng.pick(['Get them!', 'You were warned!', 'Take everything they\'ve got!']), 2, '#ff9080');
+      n.threat = pl;
+      return strike(n, pl, dt);
+    }
+    // Idling round the fire.
+    const [ox, oz] = FIRESIDE[n.rec.idx % FIRESIDE.length];
+    if (far(n, h.x, h.z) > 4) return void goTo(n, h.x + ox, h.z + oz, 1);
+    if (!n.moving && n.rng.chance(dt * 0.15)) n.face(h.x, h.z);
+    if (!n.moving && n.rng.chance(dt * 0.02) && n.distTo(pl) <= 14) n.say(n.rng.pick(['Pass the meat.', 'Quiet night.', 'Merchant comes by tomorrow, they say.', 'I miss home.', 'Who\'s on watch?']), 2.5);
+    return;
+  }
+  // On a raid: whoever stands in the way (the watch, anyone with a blade
+  // out, you if you're close).
+  const town = wb.town;
+  const foes = g.npcs.filter((q) => !q.dead && !q.down && q !== n && !(q.warband && q.warband.kind === 'bandit') && q.settlement && q.settlement.id === town && (q.rec.job === 'guard' || (q.state === 'fight' && q.threat === n)));
+  if (!pl.dead && (n.threat === pl || close)) foes.push(pl);
+  const t = nearest(n, foes, 5);
+  if (t) return strike(n, t, dt);
+  const a = g.active.get(town);
+  if (a) {
+    wb.seen ||= new Set();
+    for (const q of a.npcs) {
+      if (q.dead || q.state !== 'routine' || wb.seen.has(q) || q.distTo(n) > 6) continue;
+      wb.seen.add(q);
+      q.react(n, false);
+    }
+  }
+  if (wb.phase === 'raid') {
+    if (goTo(n, wb.goal.x, wb.goal.z, 3) || n.stateT > 90) {
+      wb.phase = 'loot';
+      wb.lootT = 0;
+      n.say(n.rng.pick(['Grab what you can!', 'The strongbox! Quick!', 'Fill your sacks!']), 2.5, '#ffb080');
+    }
+    return;
+  }
+  if (wb.phase === 'loot') {
+    wb.lootT += dt;
+    if (!n.moving && n.rng.chance(dt * 2)) {
+      n.doAction(0.3);
+      g.renderer.emit(n.x, n.y + 1, n.z, { n: 2, color: ['#ffe070', '#e8c060'], up: 18, speed: 14, life: 0.4, gravity: 120 });
+      if (n.rng.chance(0.5)) g.sim.bandits?.grab(n, 3);
+    }
+    if (wb.lootT > 12) {
+      wb.phase = 'flee';
+      n.stateT = 0;
+      n.say(n.rng.pick(['We have it! Away!', 'Back to the hills!', 'Go, go!']), 2.5, '#ffb080');
     }
   }
 }

@@ -84,6 +84,18 @@ food('pie', 7, 10, 'Berry Pie');
 // Tavern meals: a cook's skill decides which one comes out of the pot.
 food('gruel', 2, 3, 'Burnt Gruel', { quality: 'terrible', meal: true });
 food('feast', 12, 15, 'Savory Feast', { quality: 'delightful', meal: true });
+// Each people's own dishes (see culture.js): a hot pot from the tavern,
+// and something to carry.
+food('pottage', 6, 6, 'Herb Pottage', { quality: 'acceptable', region: 'vale' });
+food('apple_tart', 4, 6, 'Apple Tart', { region: 'vale' });
+food('chowder', 7, 7, 'Fish Chowder', { quality: 'acceptable', region: 'north' });
+food('smoked_fish', 4, 5, 'Smoked Herring', { region: 'north' });
+food('spiced_lentils', 6, 6, 'Spiced Lentils', { quality: 'acceptable', region: 'sun' });
+food('flatbread', 4, 5, 'Flatbread and Dates', { region: 'sun' });
+food('tamales', 6, 7, 'Maize Tamales', { quality: 'acceptable', region: 'wild' });
+food('cocoa', 3, 5, 'Cup of Cocoa', { region: 'wild' });
+food('goulash', 7, 7, 'Mountain Goulash', { quality: 'acceptable', region: 'high' });
+food('oatcakes', 4, 4, 'Oatcakes', { region: 'high' });
 
 // --- tools & weapons -----------------------------------------------------------
 const TIERS = { wood: [2, 1], stone: [3.2, 2], iron: [5, 3], gold: [7, 2] };

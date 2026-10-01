@@ -25,7 +25,7 @@
 import { alive, ledger, stockOf, DAY } from './econ.js';
 import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
-import { REGION_W, REGION_D, GROUND } from '../config.js';
+import { REGION_W, REGION_D, GROUND, SURFACE } from '../config.js';
 import { B } from '../world/blocks.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
@@ -68,6 +68,7 @@ const darken = (hex) => {
   const c = (v) => Math.round(v * 0.6).toString(16).padStart(2, '0');
   return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
 };
+const wet = (s) => !!(s.coast || s.river || s.lake);
 export const centreOf = (s) => ({ x: Math.floor((s.cx + (s.cw || 1) / 2) * REGION_W), z: Math.floor((s.cz + (s.cd || 1) / 2) * REGION_D) });
 
 export class War {
@@ -210,14 +211,20 @@ export class War {
         const r = realms.relation(a, b);
         const war = this.enemies(a, b);
         if (r.standing !== 'hostile' && !war) continue;
-        const pairs = this.borderPairs(a, b, 10);
+        // Over the border by land; or, with no border near, by raft over
+        // the water (sea, lake or river to sea, lake or river) from much
+        // further off.
+        const land = this.borderPairs(a, b, 10);
+        const sea = this.seaPairs(a, b, 28);
+        const naval = !!sea.length && (!land.length || rng.chance(0.35));
+        const pairs = naval ? sea : land;
         if (!pairs.length) continue;
         const temper = (ruler.personality?.temper ?? 0.5) + 0.5;
-        const p = (0.04 + (r.score <= -50 ? 0.03 : 0) + (war ? 0.05 : 0) + ((a.values || []).includes('martial') ? 0.02 : 0)) * temper;
+        const p = (0.04 + (r.score <= -50 ? 0.03 : 0) + (war ? 0.05 : 0) + ((a.values || []).includes('martial') ? 0.02 : 0)) * temper * (naval ? 0.6 : 1);
         if (!rng.chance(p)) continue;
         // From whichever border town can spare the most fighters.
         let done = null;
-        for (const [s, o] of pairs) if ((done = this.planRaid(a, b, s, o, day, rng))) break;
+        for (const [s, o] of pairs) if ((done = this.planRaid(a, b, s, o, day, rng, naval))) break;
         if (done) break;
       }
     }
@@ -256,12 +263,30 @@ export class War {
     return out.sort((x, y) => y.g - x.g || x.d - y.d).map((q) => [q.s, q.o]);
   }
 
+  // Towns of `a` on the water (the sea, a lake, a river) with a town of
+  // `b` on the water beyond reach by land but within `max` squares:
+  // raiders can go by raft.
+  seaPairs(a, b, max) {
+    const out = [];
+    for (const s of this.realms.members(a)) {
+      if (!wet(s) || !this.laid(s)) continue;
+      let best = null;
+      for (const o of this.realms.members(b)) {
+        if (!wet(o) || !this.laid(o)) continue;
+        const d = Math.hypot(s.cx - o.cx, s.cz - o.cz);
+        if (d > 10 && d <= max && (!best || d < best.d)) best = { o, d };
+      }
+      if (best) out.push({ s, o: best.o, d: best.d });
+    }
+    return out.sort((x, y) => x.d - y.d).map((q) => [q.s, q.o]);
+  }
+
   laid(s) {
     const L = this.game.world.layouts.get(s.id);
     return !!(L && L.econ);
   }
 
-  planRaid(a, b, from, to, day, rng) {
+  planRaid(a, b, from, to, day, rng, naval = false) {
     const FL = this.game.world.layouts.get(from.id);
     const TL = this.game.world.layouts.get(to.id);
     if (!FL || !TL) return null;
@@ -273,9 +298,11 @@ export class War {
     const party = [...guards.slice(0, Math.max(0, guards.length - 1)), ...bold].slice(0, n);
     if (party.length < 2) return null;
     const id = this.nextId++;
-    // At night: they come in the dark hours.
-    const at = day * DAY + 21 * 60 + rng.int(30, 240);
-    const raid = { id, civ: a.id, foe: b.id, from: from.id, to: to.id, at, party: party.map((r) => ({ sid: from.id, idx: r.idx })), state: 'march', day };
+    // At night: they come in the dark hours (by raft, a night or two later:
+    // it's a long way round by water).
+    const far = naval ? Math.min(2, Math.floor(Math.hypot(from.cx - to.cx, from.cz - to.cz) / 12)) : 0;
+    const at = (day + far) * DAY + 21 * 60 + rng.int(30, 240);
+    const raid = { id, civ: a.id, foe: b.id, from: from.id, to: to.id, at, party: party.map((r) => ({ sid: from.id, idx: r.idx })), state: 'march', day, naval };
     for (const r of party) {
       r.raid = id;
       r.away = true;
@@ -286,8 +313,13 @@ export class War {
     // Word on the road: riders seen. Merchants stay home.
     TL.econ.raidAlert = at + 12 * 60;
     FL.econ.raidAlert = Math.max(FL.econ.raidAlert || 0, at);
-    ledger(TL, day, `Riders of the ${plain(a)} have been seen near the border. Merchants are keeping off the roads, and the watch is on edge.`);
-    ledger(FL, day, `A party of ${party.length} rode out toward the ${plain(b)} border.`);
+    if (naval) {
+      ledger(TL, day, `Rafts of the ${plain(a)} have been sighted ${to.coast ? 'off the coast' : to.river ? 'on the river' : 'out on the lake'}. Merchants are staying home, and the watch is on edge.`);
+      ledger(FL, day, `A party of ${party.length} put out on rafts, bound for ${to.name} of the ${plain(b)}.`);
+    } else {
+      ledger(TL, day, `Riders of the ${plain(a)} have been seen near the border. Merchants are keeping off the roads, and the watch is on edge.`);
+      ledger(FL, day, `A party of ${party.length} rode out toward the ${plain(b)} border.`);
+    }
     return raid;
   }
 
@@ -405,10 +437,10 @@ export class War {
     const ts = TL.settlement.name;
     const names = (list) => list.map((r) => r.name.first).join(list.length > 2 ? ', ' : ' and ');
     if (out.result === 'plundered') {
-      ledger(TL, day, `Raiders of the ${plain(a)} struck ${ts} in the night and got away with ¤${out.loot} and stores${out.hurt && out.hurt.length ? `; ${fullName(out.hurt[0])} was ${out.fallen ? 'killed' : 'hurt'}` : ''}.${out.lost.length ? ` ${out.lost.length} of them fell.` : ''}`);
+      ledger(TL, day, `Raiders of the ${plain(a)} ${raid.naval ? `came ashore by raft at ${ts}` : `struck ${ts}`} in the night and got away with ¤${out.loot} and stores${out.hurt && out.hurt.length ? `; ${fullName(out.hurt[0])} was ${out.fallen ? 'killed' : 'hurt'}` : ''}.${out.lost.length ? ` ${out.lost.length} of them fell.` : ''}`);
       ledger(FL, day, `Our raiders came back from ${ts} with ¤${out.loot}.${out.lost.length ? ` ${names(out.lost)} did not come home.` : ''}`);
     } else {
-      ledger(TL, day, `Raiders of the ${plain(a)} came over the fields in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
+      ledger(TL, day, `Raiders of the ${plain(a)} came ${raid.naval ? 'ashore by raft' : 'over the fields'} in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
       ledger(FL, day, `Our raid on ${ts} was beaten back.${out.lost.length ? ` ${names(out.lost)} did not come home${out.taken && out.taken.length ? ` (${names(out.taken)} taken prisoner)` : ''}.` : ''}`);
     }
     if (a && b) {
@@ -546,8 +578,12 @@ export class War {
     const biome = cell ? cell.biome : 'plains';
     const name = `the Battle of ${def.name} ${cell && cell.river ? 'Ford' : FEATURE[biome] || 'Field'}`;
     const at = (day + 1) * DAY + 10 * 60 + rng.int(-60, 90);
-    w.plan = { at, site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id };
-    const text = `The armies of the ${plain(best.ca)} and the ${plain(best.cb)} are gathering. They will meet outside ${def.name} tomorrow morning.`;
+    // A long way off, over the water: the attackers come by raft.
+    const naval = best.d > 14 && wet(atk) && wet(def);
+    w.plan = { at, site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id, naval };
+    const ac = attacker === 'a' ? best.ca : best.cb;
+    const text = naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders tomorrow morning.`
+      : `The armies of the ${plain(best.ca)} and the ${plain(best.cb)} are gathering. They will meet outside ${def.name} tomorrow morning.`;
     for (const s of [def, atk]) {
       const L = this.game.world.layouts.get(s.id);
       if (L && L.econ) ledger(L, day, text);
@@ -631,7 +667,7 @@ export class War {
 
   // Did you do your part? On the field for a good while, or in the thick of
   // it, or carried off it.
-  reckonDraft(L) {
+  reckonDraft(L, winner = null) {
     const d = L.plan.draft;
     if (!d || d.state !== 'called') return;
     const p = this.game.player;
@@ -647,6 +683,8 @@ export class War {
       }
       if (this.sim.citizen) this.sim.addRenown(this.sim.citizen.sid, 3 + Math.min(6, d.hits), `answering the call at ${L.plan.name}`);
       if (!p.down) this.game.ui.msg(`You did your part at ${L.plan.name}${CL && CL.econ ? `: the ${plain(civ)} pay you ¤${pay} for it` : ''}.`, '#a0e0a0');
+      // In the thick of it, and the day won: a statue back home.
+      if (winner === d.side && d.hits >= 4 && this.sim.citizen && this.sim.history) this.sim.history.raiseStatue(this.sim.layoutOf(this.sim.citizen.sid), this.game.playerName, `fighting in the front rank at ${L.plan.name}`, Math.floor(this.sim.abs / DAY), 'player');
     } else this.desert(L.w, L.plan);
   }
 
@@ -781,6 +819,8 @@ export class War {
         for (const r of able.slice(0, Math.round(able.length * rate))) out.recs.push({ r, L, d: d + 0.5, levy: true });
       }
     }
+    // Bandits paid to fight for them.
+    out.extra += this.sim.bandits ? this.sim.bandits.hiredFor(w, side) : 0;
     out.recs.sort((x, y) => x.d - y.d);
     return out;
   }
@@ -1001,6 +1041,17 @@ export class War {
       if (c) this.realms.proclaim(c, day, text);
     }
     rec.text = text;
+    // A great victory has its hero: the boldest of the winners who came
+    // through it, with a statue on their own town's square.
+    if (decisive && ratio >= 1.8) {
+      const army = winner === 'a' ? A : Bm;
+      const hero = army.recs.filter((q) => alive(q.r) && q.r.age === 'adult' && !q.r.captive).sort((x, y) => (y.r.personality?.bravery ?? 0) - (x.r.personality?.bravery ?? 0))[0];
+      if (hero && this.sim.history) {
+        hero.r.life = { ...(hero.r.life || {}), hero: plan.name };
+        this.sim.history.raiseStatue(hero.L, fullName(hero.r), `standing firmest at ${plan.name}`, day);
+        rec.hero = fullName(hero.r);
+      }
+    }
     // A decisive win takes the town behind the field (a capital only near
     // the war's end).
     if (decisive && winner === plan.attacker) {
@@ -1287,6 +1338,11 @@ export class War {
     if (y <= 0) return null;
     const spot = g.findFreeSpot(x, z, y);
     if (!spot) return null;
+    return this.spawnAt(rec, L, spot, side, kind, extra);
+  }
+
+  spawnAt(rec, L, spot, side, kind, extra = {}) {
+    const g = this.game;
     if (rec.ent && !rec.ent.dead) g.despawnNpc(rec.ent);
     const n = g.spawnWarrior(rec, L, spot);
     const civ = L.settlement.civ;
@@ -1327,16 +1383,30 @@ export class War {
         break;
       }
     }
-    if (!from) return false;
     const ents = [];
-    party.forEach((r, i) => {
-      const n = this.spawn(r, FL, from.x + ((i % 3) - 1) * 2, from.z + Math.floor(i / 3) * 2, 'raider', 'raid', { raid: raid.id, home: from, goal: { x: TL.plaza.cx, z: TL.plaza.cz }, phase: 'advance', torch: i % 2 === 0 });
-      if (n) ents.push(n);
-    });
+    // By raft: out on the water off the town, paddling in to the shore.
+    const sea = raid.naval ? this.landing(TL, f) : null;
+    if (sea) {
+      const used = new Set();
+      party.forEach((r, i) => {
+        const at = sea.starts.find((q) => !used.has(q)) || sea.starts[0];
+        used.add(at);
+        const n = this.spawnAt(r, FL, { x: at.x, y: GROUND, z: at.z }, 'raider', 'raid', { raid: raid.id, home: at.path[at.path.length - 1], goal: { x: TL.plaza.cx, z: TL.plaza.cz }, phase: 'advance', torch: i % 2 === 0, land: { tiles: at.path, i: 0, wait: i * 0.6 } });
+        if (!n) return;
+        n.raft = { ang: Math.atan2(-(at.path[0].z - at.z), at.path[0].x - at.x) };
+        n.inWater = true;
+        ents.push(n);
+      });
+    } else if (from) {
+      party.forEach((r, i) => {
+        const n = this.spawn(r, FL, from.x + ((i % 3) - 1) * 2, from.z + Math.floor(i / 3) * 2, 'raider', 'raid', { raid: raid.id, home: from, goal: { x: TL.plaza.cx, z: TL.plaza.cz }, phase: 'advance', torch: i % 2 === 0 });
+        if (n) ents.push(n);
+      });
+    }
     if (!ents.length) return false;
     // (Woken by the shouting, if you're asleep in town.)
     if (g.sleep && g.sleep.phase !== 'out') g.wakeUp(true);
-    g.ui.msg(`Raiders of the ${plain(this.civ(raid.civ))} are attacking ${TL.settlement.name}!`, '#ff7060');
+    g.ui.msg(sea ? `Raiders of the ${plain(this.civ(raid.civ))} are coming ashore by raft at ${TL.settlement.name}!` : `Raiders of the ${plain(this.civ(raid.civ))} are attacking ${TL.settlement.name}!`, '#ff7060');
     g.audio?.play('alarm');
     // The watch rides out.
     const riders = [];
@@ -1357,6 +1427,87 @@ export class War {
     this.live = { kind: 'raid', raid, TL, FL, ents, riders, t: 0, loot: 0, start: ents.length };
     raid.live = true;
     return true;
+  }
+
+  // Where raiders on rafts come in: open water off the town (on the side
+  // they come from, as near as can be), each with a way in to the shore.
+  landing(TL, f) {
+    const w = this.game.world;
+    const t = centreOf(TL.settlement);
+    const bd = TL.settlement.bounds;
+    const base = Math.atan2(f.z - t.z, f.x - t.x);
+    const all = [];
+    for (let z = bd.z0 - 24; z <= bd.z1 + 24; z += 2) {
+      for (let x = bd.x0 - 24; x <= bd.x1 + 24; x += 2) {
+        if (!w.regionAt(x, z) || !w.isWaterAt(x, SURFACE, z)) continue;
+        const path = this.paddleIn(x, z, t);
+        if (!path) continue;
+        const da = Math.abs(((Math.atan2(z - t.z, x - t.x) - base + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        all.push({ x, z, path, score: da * 10 + path.length * 0.3 });
+      }
+    }
+    if (!all.length) return null;
+    all.sort((p, q) => p.score - q.score);
+    const best = all[0];
+    // Side by side along the water (each with its own way in), or the
+    // nearest other good places to put in.
+    const horiz = Math.abs(t.x - best.x) < Math.abs(t.z - best.z);
+    const starts = [best];
+    for (const k of [1, -1, 2, -2, 3, -3, 4, -4]) {
+      const x = best.x + (horiz ? k : 0);
+      const z = best.z + (horiz ? 0 : k);
+      if (!w.regionAt(x, z) || !w.isWaterAt(x, SURFACE, z)) continue;
+      const path = this.paddleIn(x, z, t);
+      if (path) starts.push({ x, z, path });
+    }
+    for (const q of all) if (starts.length < 6 && q !== best && Math.max(Math.abs(q.x - best.x), Math.abs(q.z - best.z)) <= 10) starts.push(q);
+    // (Narrow water: the rest put in just behind, and follow the first in.)
+    const wetAt = (x, z) => w.regionAt(x, z) && w.isWaterAt(x, SURFACE, z);
+    for (const [ux, uz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const via = [];
+      for (let k = 1; k <= 2 && starts.length < 6; k++) {
+        const x = best.x + ux * k;
+        const z = best.z + uz * k;
+        if (!wetAt(x, z) || starts.some((q) => q.x === x && q.z === z)) break;
+        const back = [...via].reverse();
+        starts.push({ x, z, path: [...back, { x: best.x, y: GROUND, z: best.z, water: true }, ...best.path] });
+        via.push({ x, y: GROUND, z, water: true });
+      }
+    }
+    return { starts };
+  }
+
+  // Straight in toward the middle of town, a tile at a time: some open
+  // water, then a bank low enough to step out on.
+  paddleIn(x, z, t) {
+    const w = this.game.world;
+    const dx = t.x - x;
+    const dz = t.z - z;
+    const n = Math.max(Math.abs(dx), Math.abs(dz));
+    if (!n) return null;
+    const tiles = [];
+    let px = x;
+    let pz = z;
+    let wet = 0;
+    for (let k = 1; k <= 30; k++) {
+      const nx = Math.round(x + (dx * k) / n);
+      const nz = Math.round(z + (dz * k) / n);
+      for (const [tx, tz] of nx !== px && nz !== pz ? [[nx, pz], [nx, nz]] : [[nx, nz]]) {
+        if (!w.regionAt(tx, tz)) return null;
+        if (w.isWaterAt(tx, SURFACE, tz)) {
+          wet++;
+          tiles.push({ x: tx, y: GROUND, z: tz, water: true });
+        } else {
+          const y = w.findStandY(tx, tz, GROUND);
+          if (y <= 0 || Math.abs(y - GROUND) > 1 || wet < 3) return null;
+          tiles.push({ x: tx, y, z: tz });
+          return tiles;
+        }
+        px = tx;
+        pz = tz;
+      }
+    }
+    return null;
   }
 
   // Two armies drawn up facing each other; each side fights its captain's
@@ -1610,7 +1761,7 @@ export class War {
     }
     g.ui.msg(`The ${plain(L.sides[winner].civ)} ${winner === 'a' ? (L.sides.b.broken ? 'broke' : 'beat') : (L.sides.a.broken ? 'broke' : 'beat')} the ${plain(L.sides[winner === 'a' ? 'b' : 'a'].civ)} at ${L.plan.name}.`, '#ffe070');
     // Called up: did you do your part? And if you fell, where you wake.
-    this.reckonDraft(L);
+    this.reckonDraft(L, winner);
     this.afterDown(L, winner);
     // You fought for one side: they remember it.
     for (const s of ['a', 'b']) {
@@ -1640,11 +1791,12 @@ export class War {
 
   // Knocked down, not killed (sometimes): a soldier, raider or escaping
   // prisoner who'll be carried off (or get up) when it's over.
-  knockDown(n) {
+  knockDown(n, source = null) {
     const wb = n.warband;
     const chance = !wb ? 0 : wb.kind === 'escape' ? 0.7 : wb.kind === 'raid' ? 0.5 : wb.kind === 'battle' ? 0.45 : 0;
-    // (The town's own defenders are only knocked out in a raid, never killed.)
-    const defender = !wb && this.live && this.live.kind === 'raid' && n.layout === this.live.TL && n.rec.job === 'guard';
+    // (The town's own defenders are only knocked out in a raid, never killed;
+    // bandits are after purses, and leave the folk they cut down groaning.)
+    const defender = !wb && ((this.live && this.live.kind === 'raid' && n.layout === this.live.TL && n.rec.job === 'guard') || (source && source.warband && source.warband.kind === 'bandit'));
     if (!defender && !(Math.random() < chance)) return false;
     n.hp = 1;
     n.down = true;
@@ -1707,6 +1859,7 @@ export class War {
     if (n.warband && n.warband.kind === 'raid' && L && L.kind === 'raid') return `fell raiding ${L.TL.settlement.name}`;
     if (n.warband && n.warband.kind === 'battle' && L && L.plan) return `fell at ${L.plan.name}`;
     if (n.warband && n.warband.kind === 'escape') return 'killed escaping from the cells';
+    if (n.warband && n.warband.kind === 'bandit') return 'killed, an outlaw';
     return 'fell in a skirmish';
   }
 

@@ -693,6 +693,8 @@ export class Game {
     }
     this.active.set(s.id, { layout, npcs });
     this.sim.checkTownSigns(layout);
+    // How the town's doing shows: banners up, or windows boarded.
+    if (layout.econ) this.sim.prosperity.dress(layout);
     this.sim.roads.connect(layout);
     this.refreshSigns();
   }
@@ -1896,6 +1898,7 @@ export class Game {
     this.flowWater(x, y, z);
     if (byPlayer) {
       this.stats.mined++;
+      this.sim.customs.onBreak(b.name, x, z);
       this.checkVandalism(x, y, z, b);
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
@@ -2599,8 +2602,15 @@ export class Game {
         this.ui.openSign(this.sim.graveText(x, z), 'GRAVESTONE');
         break;
       case 'statue': {
+        // A hero's statue, or the old one with the town's history cut on
+        // the plaque at its foot.
         const s = this.world.ow.settlementAt(x, z);
-        this.ui.msg(s && s.civ ? `A statue honoring the founders of the ${s.civ.name.replace(/^The /, '')}.` : 'A weathered statue of a forgotten hero.', '#e8e0c8');
+        if (!s) {
+          this.ui.msg('A weathered statue of a forgotten hero.', '#e8e0c8');
+          break;
+        }
+        const t = this.sim.history.statueText(this.world.getLayout(s), x, z);
+        this.ui.openSign(t.lines, t.title);
         break;
       }
     }
@@ -2693,6 +2703,9 @@ export class Game {
       }
       const lines = [b.name.toUpperCase(), ''];
       const st2 = staff(b);
+      if (e.biz && e.biz[b.id] && e.biz[b.id].closed) return { title: 'SIGN', lines: [b.name.toUpperCase(), '', 'CLOSED', '', 'Shut for want of trade.'] };
+      const own = living.find((r) => r.life && r.life.owns === b.id);
+      if (own) lines.push(`Proprietor: ${own.name.first} ${own.name.last}`);
       if (b.type === 'tavern') {
         const k = e.biz[b.id];
         const menu = k ? ['feast', 'stew', 'gruel'].filter((m) => k.store[m]).map((m) => ITEMS[m].name) : [];
@@ -2770,6 +2783,12 @@ export class Game {
       ['BESTIARY', 'Slimes crawl out when the sun sets.', 'Skeletons fear the dawn.', 'Wolves hunt in the dark forests. Travel in daylight.'],
       ['POEMS OF THE ROAD', 'O traveler, the road is long,', 'the lanterns warm, the ale is strong.', 'Rest in beds and heed the bell.'],
     ];
+    // In a town's own shelves: its history, often as not.
+    const here = ow.settlementAt(x, z);
+    if (here && rand() < 0.45) {
+      const L = this.world.getLayout(here);
+      return [`A HISTORY OF ${here.name.toUpperCase()}`, ...this.sim.history.lines(L, 10)];
+    }
     return books[Math.floor(rand() * books.length)];
   }
 
@@ -3115,6 +3134,8 @@ export class Game {
     else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
     if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
     this.ui.msg(`${slot.item === 'ale' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP)`, '#80e070');
+    // (Not everywhere eats everything: see culture.js.)
+    this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
     // meal keeps you going for a while.
     if (def.quality === 'terrible' && Math.random() < 0.35) {
@@ -3133,7 +3154,7 @@ export class Game {
       return;
     }
     // People in the middle of something urgent don't stop to chat.
-    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!', captive: npc.rng.pick(['Come to gloat?', 'Get me out of here...', 'Tell my family I\'m alive.', 'When are they trading us back?']), down: null }[npc.state];
+    const busy = { crime: null, arresting: 'Not now! I\'m after someone.', arrested: npc.rng.pick(['Help me!', 'It wasn\'t me!']), toCell: null, jailed: npc.rng.pick(['Come to gawk?', 'Got a file in a loaf of bread?', 'I didn\'t do it.']), flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!', captive: npc.rng.pick(['Come to gloat?', 'Get me out of here...', 'Tell my family I\'m alive.', 'When are they trading us back?']), down: null }[npc.state];
     if (busy !== undefined) {
       if (busy) npc.say(busy, 2);
       return;
@@ -3388,6 +3409,14 @@ export class Game {
       this.endDuel(target === duel.npc ? 'won' : 'lost');
       return;
     }
+    // A brawl between townsfolk: bruises, not bodies.
+    if (target.kind === 'npc' && source && source.kind === 'npc' && (source.brawl || target.brawl) && target.hp - amount <= 1) {
+      target.hp = 1;
+      target.flash = 0.12;
+      for (const n of [target, source]) if (n.state === 'fight') n.calmDown(true);
+      target.say?.(target.rng.pick(['Enough! Enough!', 'I yield!']), 2);
+      return;
+    }
     target.hp -= amount;
     // Jewelled armour answers a blow struck in close.
     if (source && !this.dotHit) onStruck(this, target, source, amount);
@@ -3418,6 +3447,7 @@ export class Game {
       } else if (target.warband && target.warband.foe) {
         // (Nor is fighting raiders, or soldiers in a battle.)
         if (source.kind === 'player') this.sim.war.onStruck(target);
+        if (target.warband.kind === 'bandit') this.sim.bandits.onHurt(target);
       } else if (source.kind === 'player' && target.hp > 0) this.crime(target);
       else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
@@ -3436,7 +3466,7 @@ export class Game {
       }
       // A soldier, raider or escaping prisoner may only be knocked down
       // (to be carried off as a prisoner, or get up when it's over).
-      if (target.kind === 'npc' && this.sim.war.knockDown(target)) return;
+      if (target.kind === 'npc' && this.sim.war.knockDown(target, source)) return;
       // So may you, on a battlefield.
       if (target.kind === 'player' && this.sim.war.downPlayer(source)) return;
       this.kill(target, source);
@@ -3496,7 +3526,7 @@ export class Game {
     // Raiders in (or at the edge of) town.
     const mine = guard.settlement.civ ? guard.settlement.civ.id : -1;
     for (const n of this.npcs) {
-      if (n.dead || n.down || !n.warband || !(n.warband.kind === 'raid' || n.warband.kind === 'escape') || n.warband.civ === mine || (n.warband.phase === 'flee' && n.warband.kind !== 'escape')) continue;
+      if (n.dead || n.down || !n.warband || !(n.warband.kind === 'raid' || n.warband.kind === 'escape' || n.warband.kind === 'bandit') || n.warband.civ === mine || (n.warband.phase === 'flee' && n.warband.kind !== 'escape')) continue;
       if (guard.distTo(n) <= (watching ? 14 : 12)) return n;
     }
     for (const c of this.creatures) {
@@ -3554,6 +3584,8 @@ export class Game {
       return;
     }
     this.audio?.play('death', e);
+    // A beast killed by the town where the faith forbids it.
+    if (e.kind === 'creature' && source && source.kind === 'player') this.sim.customs.onKill(e);
     if (e.kind === 'npc') {
       e.releaseSpot();
       const L = e.layout;
@@ -3582,6 +3614,7 @@ export class Game {
       if (e.warband) {
         this.sim.recordDeath(e.originLayout || L, rec, cause, null);
         this.sim.war.onDeath(e, source);
+        if (e.warband.kind === 'bandit') this.sim.bandits.onKilled(e, source);
         if (byPlayer) this.stats.kills++;
         const civ = e.warband.civ !== null && e.warband.civ !== undefined ? this.world.ow.civs[e.warband.civ] : null;
         // (The first few by name; the rest are counted at the end.)

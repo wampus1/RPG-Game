@@ -578,10 +578,10 @@ export class TradeWindow extends Window {
     return keys;
   }
   price(k, game) {
-    return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceFactor(this.npc)));
+    return game.sim.buyPrice(this.npc, k);
   }
   basePrice(k, game) {
-    return Math.max(1, Math.round(ITEMS[k].value * game.sim.priceParts(this.npc).base));
+    return game.sim.buyPrice(this.npc, k, false);
   }
   sellPrice(k, game) {
     return game.sim.sellPrice(this.npc, k);
@@ -637,7 +637,10 @@ export class TradeWindow extends Window {
       const pr = this.wants(k, game) ? this.sellPrice(k, game) : 0;
       const glut = game.sim.sellGlut(this.npc, k);
       g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 ? C.green : C.red);
+      const mf = game.sim.market.factor(this.npc.layout, k);
       if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
+      else if (this.wants(k, game) && pr > 0 && mf < 0.9) g.text(40, 17, '(plenty about round here: cheap)', C.orange);
+      else if (this.wants(k, game) && pr > 0 && mf > 1.1) g.text(40, 17, '(short round here: a good price)', C.green);
       else if (this.wants(k, game) && game.sim.careers.sellFactor(this.npc, k) > 1) g.text(40, 17, '(licensed seller\'s premium)', C.cyan);
     }
     const purse = sh ? sh.purse.get() : 0;
@@ -671,6 +674,7 @@ export class TradeWindow extends Window {
     if (bought) {
       game.audio?.play('coin');
       game.sim.noteTrade(this.npc, spent);
+      game.sim.market.trade(this.npc.layout, k, -bought, 'player');
       this.npc.say(this.npc.rng.pick(['Pleasure doing business!', 'Thank you kindly.', 'Enjoy!', 'Come again!']), 2);
     } else game.audio?.play('error');
   }
@@ -716,6 +720,7 @@ export class TradeWindow extends Window {
     const left = p.give('coin', paid);
     if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
     game.sim.noteTrade(this.npc, Math.ceil(paid / 2));
+    game.sim.market.trade(this.npc.layout, item, n, 'player');
     game.audio?.play('coin');
     if (why === 'full') this.npc.say('That\'s all of those I can take.', 2.5);
   }
@@ -1036,6 +1041,8 @@ export class LedgerWindow extends Window {
     const advs = game.sim.adventurers.here(s.id);
     if (visits.length || advs.length) row('Visitors', [visits.length ? `Merchant from ${visits[0].fromName}` : null, advs.length ? `${advs.length === 1 ? `${advs[0].name.first} ${advs[0].name.last}, adventurer` : `${advs.length} adventurers`}` : null].filter(Boolean).join('; '));
     const k = stockOf(L);
+    const mk = game.sim.market.notes(L, 3);
+    if (mk.length) row('Market', mk.map((q) => q.text).join('; '), '#f0e0c0');
     row('Stores', `${k.wood} timber, ${k.stone} stone${e.short ? ` (short for a ${BUILDING_NAMES[e.short]?.toLowerCase() || e.short})` : ''}`, e.short ? C.orange : '#f0e0c0');
     const t = TIERS[s.type];
     if (t) row('Growth', `${pop}/${t.pop} people to become a ${t.next}`);
@@ -1051,6 +1058,17 @@ export class LedgerWindow extends Window {
     const lines = [];
     const now = game.sim.now();
     const far = freshRumours(e, now).reverse();
+    // Wanted: the bands the council has put a price on.
+    const wanted = game.sim.bandits ? game.sim.bandits.bountiesIn(this.L) : [];
+    if (wanted.length) {
+      lines.push({ t: 'WANTED', c: C.orange });
+      for (const b of wanted) {
+        const band = game.sim.bandits.get(b.band);
+        const at = band && band.camp ? `, camped ${game.sim.bandits.where(band, this.L.settlement)}` : '';
+        for (const l of wrap(`${b.name[0].toUpperCase()}${b.name.slice(1)} (${band ? band.members.length : '?'})${at}. ¤${b.perHead} a head, paid at the town hall.`, this.w - 7)) lines.push({ t: l, c: '#f0c090' });
+      }
+      lines.push({ t: '', c: C.fg });
+    }
     lines.push({ t: 'NOTICES', c: C.hi });
     const notes = e.ledger.map((n, i) => ({ n, i })).sort((a, b) => b.n.day - a.n.day || b.i - a.i).map((q) => q.n);
     if (!notes.length) lines.push({ t: 'Nothing posted yet.', c: C.dim });

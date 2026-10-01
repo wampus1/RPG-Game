@@ -12,6 +12,7 @@ import { JOBS, activityAt } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { planShopping, buyAt, setUpMerchants, tierOf, rollTier, tierGoods, MERCHANT_TIERS, restockStall } from './shops.js';
 import { townWeather, rainedRecently } from '../world/weather.js';
+import { dishesOf, forbiddenFood } from './culture.js';
 
 export const DAY = 1440;
 // How far back a town's story is caught up when you return (towns you've
@@ -38,7 +39,14 @@ export const STOCK = {
 // the realm knows alchemy (herbs and salves otherwise), smiths forge steel
 // only where it knows steelworking.
 export function stockFor(L, t) {
-  const list = STOCK[t] || [];
+  let list = STOCK[t] || [];
+  // The kitchens and ovens of each people make its own dishes, and nothing
+  // its faith forbids.
+  const s = L && L.settlement;
+  if (s && (t === 'inn' || t === 'cook' || t === 'baker')) {
+    const [hot, carry] = dishesOf(s);
+    list = (t === 'baker' ? [...list, carry] : [hot, carry, ...list]).filter((k) => !forbiddenFood(s, k));
+  }
   if (t === 'herbalist' && L && L.settlement && !(L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'alchemy'))) return list.filter((k) => !k.startsWith('potion_'));
   // Steel only from a realm whose smiths know how.
   if (t === 'smith' && !(L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'steel'))) return list.filter((k) => k !== 'steel_sword');
@@ -64,7 +72,7 @@ export const WANTS = {
 };
 
 export const MEAL_ITEMS = ['feast', 'stew', 'gruel'];
-export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3 };
+export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3, pottage: 5, chowder: 5, spiced_lentils: 5, tamales: 5, goulash: 6 };
 // Plain cooked food the tavern also sells (cheaper than a hot meal).
 const SIMPLE_MEALS = ['cooked_fish', 'cooked_meat'];
 // What each food trade's staff may eat from their own stock.
@@ -344,6 +352,10 @@ export function initEcon(L) {
   const k = kitchenOf(L);
   if (k) {
     st.add(k.store, 'stew', Math.round(rng.int(2, 5) * Math.max(0.4, wealth)));
+    // (and the dish the place is known for)
+    const [hot, carry] = dishesOf(s);
+    if (!forbiddenFood(s, hot)) st.add(k.store, hot, rng.int(1, 3));
+    if (!forbiddenFood(s, carry)) st.add(k.store, carry, rng.int(0, 2));
     st.add(k.store, 'raw_meat', rng.int(1, 3));
     if (rng.chance(0.4)) st.add(k.store, 'feast', 1);
     if (s.condition === 'poor') st.add(k.store, 'gruel', rng.int(1, 3));
@@ -484,8 +496,9 @@ export function buyMeal(L, rec, rng) {
   if (!k) return null;
   const who = payer(L, rec);
   const e = L.econ;
-  for (const m of who.coins > 20 ? [...MEAL_ITEMS, ...SIMPLE_MEALS] : ['stew', 'cooked_fish', 'cooked_meat', 'gruel', 'feast']) {
-    if (!st.count(k.store, m)) continue;
+  const hot = dishesOf(L.settlement)[0];
+  for (const m of who.coins > 20 ? [hot, ...MEAL_ITEMS, ...SIMPLE_MEALS] : [hot, 'stew', 'cooked_fish', 'cooked_meat', 'gruel', 'feast']) {
+    if (!st.count(k.store, m) || forbiddenFood(L.settlement, m)) continue;
     const pr = Math.round(MEAL_PRICE[m] * (1 + e.tax * 0.5));
     if (who.coins < pr) continue;
     st.take(k.store, m, 1);
@@ -694,7 +707,8 @@ function produce(L, rec, rng) {
       const k = kitchenOf(L) || biz;
       if (!k) return;
       const pop = L.npcs.length;
-      const meals = MEAL_ITEMS.reduce((a, m) => a + st.count(k.store, m), 0);
+      const hot = dishesOf(L.settlement)[0];
+      const meals = [...MEAL_ITEMS, hot].reduce((a, m) => a + st.count(k.store, m), 0);
       for (let n = 0; n < 3 && meals + n * 2 < pop * 0.7 + 4; n++) {
         const raw = st.count(k.store, 'raw_meat') ? 'raw_meat' : st.count(k.store, 'fish') ? 'fish' : null;
         const veg = VEG.find((v) => st.count(k.store, v) > 0);
@@ -703,7 +717,9 @@ function produce(L, rec, rng) {
         if (veg) st.take(k.store, veg, 1);
         // Skill decides whether the pot turns out terrible, fine or delightful.
         const roll = sk.cooking * 0.75 + rng.float(0, 0.45) + (raw && veg ? 0.08 : 0) - (raw ? 0 : 0.15);
-        const meal = roll < 0.38 ? 'gruel' : roll < 0.84 ? 'stew' : 'feast';
+        let meal = roll < 0.38 ? 'gruel' : roll < 0.84 ? (rng.chance(0.45) ? hot : 'stew') : 'feast';
+        // (Nothing the faith forbids goes in the pot.)
+        if (forbiddenFood(L.settlement, meal)) meal = forbiddenFood(L.settlement, hot) ? 'stew' : hot;
         // A pot of stew feeds several people.
         st.add(k.store, meal, (raw === 'raw_meat' ? 3 : raw ? 2 : 1) + (raw && veg ? 1 : 0));
         sk.cooking = Math.min(1, sk.cooking + 0.002);

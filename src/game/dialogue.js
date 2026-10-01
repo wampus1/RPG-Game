@@ -21,6 +21,8 @@ import { authority, rulerTitle } from '../sim/realms.js';
 import { listNames, leavingWhen } from '../sim/outings.js';
 import { countItem, removeItem } from './inventory.js';
 import { rainedRecently } from '../world/weather.js';
+import { festivalName, customsTalk } from '../sim/culture.js';
+import { gossipLines } from '../sim/society.js';
 
 function pick(rng, arr) {
   return arr[Math.floor(rng.next() * arr.length)];
@@ -297,6 +299,7 @@ export function topicsFor(npc, game) {
     if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
     add('towns', 'Tell me about the neighbouring towns.');
     add('research', 'What are our scholars studying?');
+    if (sim.bandits.claimable(npc.layout).total) add('bounty', 'I\'ve come for the bounty.');
     add('donate', `I'd like to help ${s.name} grow.`);
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
     if (sim.isCitizen(s.id) && (sim.citizen.home === null || sim.citizen.home === undefined) && sim.citizen.host !== null) add('ownhome', 'I\'d like a place of my own.');
@@ -592,6 +595,9 @@ export function askMenu(npc, game) {
   out.push({ id: 'people', label: 'Someone you know...' });
   out.push({ id: 'directions', label: 'Where to find a place...' });
   if (!npc.visit && rec.age !== 'child') out.push({ id: 'laws', label: rec.job === 'guard' ? 'Any trouble lately' : 'The laws and taxes' });
+  if (rec.age !== 'child') out.push({ id: 'customs', label: 'Your faith and customs' });
+  if (!npc.visit && !rec.visitor) out.push({ id: 'history', label: `The history of ${s.name}` });
+  if (rec.age !== 'child' && game.sim.bandits && (game.sim.bandits.bountiesIn(npc.layout).length || game.sim.bandits.nearBands(npc.layout).length)) out.push({ id: 'bandits', label: 'Bandits about?' });
   if (!npc.visit && rec.age !== 'child' && s.civ) out.push({ id: 'realm', label: rec.ruler === s.civ.id ? 'Your reign' : `The ${s.civ.name.replace(/^The /, '')} and its ruler` });
   return out;
 }
@@ -1390,6 +1396,12 @@ function respondRaw(npc, game, id, arg) {
     }
     case 'work': return workTalk(npc, game);
     case 'news': return { lines: news(npc, game), choices: [{ id: 'news', label: 'Anything else?' }], back: 'Thanks.' };
+    case 'customs': {
+      // (A visitor tells of home.)
+      const home = npc.visit ? game.world.ow.settlements[npc.visit.from] || s : s;
+      return { lines: customsTalk(home), back: 'Thanks.' };
+    }
+    case 'history': return { lines: rec.age === 'child' ? [`Gran says ${game.sim.history.legend(npc.layout)}`, 'Spooky, right?'] : game.sim.history.talk(npc.layout, rng), back: 'Fascinating.' };
     case 'life': return { lines: rec.age === 'child' ? kidLife(npc, game) : lifeIn(npc, game) };
     case 'family': {
       const lines = family(npc, game);
@@ -1509,6 +1521,13 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
     case 'research': return researchTalk(npc, game);
+    case 'bandits': return { lines: game.sim.bandits.talk(npc.layout, rng), back: 'I\'ll keep my eyes open.' };
+    case 'bounty': {
+      const r = game.sim.bandits.claim(npc.layout);
+      if (!r) return { lines: ['Bounty? I\'ve no record of you bringing anyone in.'] };
+      game.audio?.play('coin');
+      return { lines: [`Here: ¤${r.pay}, as promised. The roads are safer for it.`].concat(r.owed > 0 ? [`(The town owes you ¤${r.owed} more, but the strongbox is empty.)`] : []) };
+    }
     case 'paper': {
       const r = sim.press.handOut(npc);
       if (!r.ok) return { lines: [r.reason === 'read' ? 'I\'ve read that one already, thanks.' : 'A newspaper? You\'ve none left.'] };
@@ -1848,6 +1867,15 @@ function news(npc, game) {
   }
   const visits = (game.sim.visits.get(s.id) || []).filter((v) => !v.guest && game.sim.abs >= v.arrive && game.sim.abs < v.leave);
   if (visits.length) items.push(`A merchant from ${visits[0].fromName} is in town, selling on the square.`);
+  // What's cheap and what's dear on the market.
+  const mk = game.sim.market && game.sim.market.talk(L, rng);
+  if (mk) items.push(mk);
+  // The gossips have more to tell (about anyone but themselves).
+  const me = npc.rec;
+  if (!npc.visit && (me.personality.sociability > 0.5 || (me.traits || []).includes('gossipy'))) {
+    const gl = gossipLines(L).filter((t) => !t.includes(me.name.first) && !t.includes(me.name.last));
+    if (gl.length) items.push(`Between you and me: ${pick(rng, gl)}`);
+  }
   // News from other towns, as the merchants tell it.
   if (npc.visit && npc.visit.news && npc.visit.news.length) {
     return [`Back home in ${npc.visit.fromName}? ${lcNews(npc.visit.news[(npc.newsI = (npc.newsI || 0) + 1) % npc.visit.news.length])}`];
@@ -1943,7 +1971,7 @@ function plansLine(npc, game, { ev, going, when }) {
   const rec = npc.rec;
   const rng = npc.rng;
   const sim = game.sim;
-  const what = ev.kind === 'wedding' ? `${sim.events.title(L, ev).replace(/^the /, '')}` : ev.kind === 'fete' ? 'the celebration' : 'the feast day';
+  const what = ev.kind === 'wedding' ? `${sim.events.title(L, ev).replace(/^the /, '')}` : ev.kind === 'fete' ? 'the celebration' : festivalName(L.settlement);
   if (ev.couple && ev.couple.includes(rec.idx)) {
     const other = L.npcs[ev.couple.find((i) => i !== rec.idx)];
     return pick(rng, [`I'm getting married ${when}! To ${other.name.first}! You'll come, won't you?`, `${when[0].toUpperCase()}${when.slice(1)} I marry ${other.name.first}. I can hardly sleep for thinking of it.`]);
@@ -1974,8 +2002,8 @@ function eventLine(npc, game, act) {
   }
   if (act.role === 'dance') return 'Dancing! Come on, join in!';
   if (act.role === 'serve') return 'Serving at the feast. Hungry?';
-  if (act.role === 'lead') return ev.kind === 'fete' ? `Celebrating! ${town} is a ${ev.tier} now.` : 'It\'s the feast day! I hope you\'re hungry.';
-  return ev.kind === 'fete' ? `We're celebrating: ${town} is a ${ev.tier} now!` : 'It\'s the feast day! Grab a plate.';
+  if (act.role === 'lead') return ev.kind === 'fete' ? `Celebrating! ${town} is a ${ev.tier} now.` : `It's ${festivalName(npc.settlement)}! I hope you're hungry.`;
+  return ev.kind === 'fete' ? `We're celebrating: ${town} is a ${ev.tier} now!` : `It's ${festivalName(npc.settlement)}! Grab a plate.`;
 }
 
 function family(npc, game) {

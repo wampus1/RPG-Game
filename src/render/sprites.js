@@ -910,6 +910,53 @@ function simpleIcon(key) {
       p.ellipse(8, 9, 5, 3, '#d8a050');
       p.ellipse(8, 8, 3, 1, '#a02a4a');
       break;
+    // The regional dishes: a bowl of something hot, or a bite to carry.
+    case 'pottage': case 'chowder': case 'spiced_lentils': case 'goulash': {
+      const top = { pottage: '#7a9a3a', chowder: '#e8dcc0', spiced_lentils: '#c87a2a', goulash: '#8a2a1a' }[key];
+      p.ellipse(8, 10, 5, 3, '#8a6a48');
+      p.hline(4, 12, 11, '#6a4a2e');
+      p.ellipse(8, 9, 4, 1, top);
+      p.set(6, 9, key === 'chowder' ? '#c8b080' : '#f0e0a0');
+      p.set(10, 9, key === 'goulash' ? '#c8702a' : '#f8f0d8');
+      break;
+    }
+    case 'apple_tart':
+      p.ellipse(8, 10, 5, 2, '#c8883a');
+      p.ellipse(8, 9, 4, 1, '#e8c060');
+      p.set(6, 9, '#a8c040');
+      p.set(9, 9, '#a8c040');
+      break;
+    case 'smoked_fish':
+      p.ellipse(7, 8, 4, 2, '#a86a2a');
+      p.line(11, 8, 14, 6, '#7a4a1a');
+      p.line(11, 8, 14, 10, '#7a4a1a');
+      p.hline(4, 9, 8, '#c8883a');
+      break;
+    case 'flatbread':
+      p.ellipse(8, 9, 6, 3, '#e8c890');
+      p.set(6, 8, '#c8a060');
+      p.set(10, 10, '#c8a060');
+      p.set(7, 11, '#5a2a1a');
+      p.set(11, 8, '#5a2a1a');
+      break;
+    case 'tamales':
+      p.ellipse(6, 9, 3, 2, '#c8b060');
+      p.ellipse(10, 10, 3, 2, '#b8a050');
+      p.vline(6, 7, 11, '#8a7a3a');
+      p.vline(10, 8, 12, '#8a7a3a');
+      break;
+    case 'cocoa':
+      p.rect(5, 7, 6, 7, '#e8e0d0');
+      p.rect(5, 7, 6, 1, '#5a2a1a');
+      p.rect(11, 9, 2, 3, '#c8c0b0');
+      p.set(7, 5, '#f8f0e8');
+      p.set(9, 4, '#f8f0e8');
+      break;
+    case 'oatcakes':
+      p.ellipse(7, 10, 4, 2, '#d8b070');
+      p.ellipse(9, 8, 4, 2, '#e0bc80');
+      p.set(8, 8, '#b08a4a');
+      break;
     case 'saddle':
       p.ellipse(8, 9, 6, 3, '#6a3a1c');
       p.rect(3, 6, 2, 4, '#4a2812');

@@ -36,6 +36,12 @@ import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
 import { lawOn } from './laws.js';
+import { Customs } from './culture.js';
+import { History } from './history.js';
+import { Society } from './society.js';
+import { Bandits } from './bandits.js';
+import { Market } from './market.js';
+import { Prosperity } from './prosperity.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
@@ -111,6 +117,12 @@ export class Sim {
     this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
     this.outings = new Outings(game, this);
+    this.customs = new Customs(game, this);
+    this.history = new History(game, this);
+    this.society = new Society(game, this);
+    this.bandits = new Bandits(game, this);
+    this.market = new Market(game, this);
+    this.prosperity = new Prosperity(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -234,6 +246,10 @@ export class Sim {
       this.favors.update();
       this.events.update();
       this.politics.update();
+      this.customs.tick();
+      this.society.tick(0.5);
+      this.bandits.update(0.5);
+      this.market.update();
     }
     this.war.update(dt);
     this.careers.update(dt);
@@ -717,10 +733,16 @@ export class Sim {
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut;
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
+  }
+
+  // What a trader asks for an item: their prices, and the market's.
+  buyPrice(npc, k, discounted = true) {
+    const f = discounted ? this.priceFactor(npc) : this.priceParts(npc).base;
+    return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k)));
   }
 
   // How keen they are to take more of something (1 = full price).
@@ -991,6 +1013,9 @@ export class Sim {
   }
 
   civicDay(L, day, rng) {
+    this.history.daily(L, day);
+    this.society.daily(L, day);
+    this.prosperity.daily(L, day);
     if (this.game.active.has(L.settlement.id)) this.checkTownSigns(L);
     // Stale news from afar comes down off the board.
     if (L.econ.rumours) L.econ.rumours = freshRumours(L.econ, this.now());
@@ -1271,6 +1296,8 @@ export class Sim {
     this.game.audio?.play('fanfare');
     const L = this.layoutOf(sid);
     if (L && L.econ) ledger(L, this.game.day, `${this.game.playerName} is named ${now} of ${s.name}.`);
+    // A Hero of the town gets a statue on the square.
+    if (now === 'Hero' && L && L.econ) this.history.raiseStatue(L, this.game.playerName, why, this.game.day, 'player');
     return now;
   }
 
@@ -1619,9 +1646,28 @@ export class Sim {
     if (!open.length) return;
     dests.splice(0, dests.length, ...open);
     for (const q of dests) q.d -= feel(q.o) === 'friendly' ? 3 : 0;
+    // What they're carrying is worth more where it's short: the longer road
+    // there is worth it.
+    const goods = packGoods(L, rec, rng);
+    for (const q of dests) {
+      const DL = this.game.world.layouts.get(q.o.id);
+      if (!DL || !DL.econ || !DL.econ.market) continue;
+      let pull = 0;
+      for (const [k, n] of Object.entries(goods)) pull -= this.market.level(DL, k) * Math.min(n, 6);
+      q.d -= clamp(pull * 0.6, -3, 4);
+    }
     dests.sort((a, b) => a.d - b.d);
-    // Letters from the mayor decide where the merchant goes first.
-    const pick = this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
+    // Letters from the mayor decide where the merchant goes first; one who
+    // left home to seek their fortune goes back to visit, in time.
+    const f = rec.life && rec.life.fortune;
+    const homeS = f && !f.back && day - f.since >= 15 ? ow.settlements[f.home] : null;
+    const homeQ = homeS && !deserted(homeS) && feel(homeS) !== 'hostile' && !this.war.unsafe(homeS) ? { o: homeS, d: Math.hypot(homeS.cx - s.cx, homeS.cz - s.cz) } : null;
+    const pick = homeQ || this.diplomacy.preferredDest(s.id, dests) || dests[Math.min(dests.length - 1, rng.int(0, Math.min(3, dests.length - 1)))];
+    if (homeQ) {
+      f.back = day;
+      const HL = this.game.world.layouts.get(homeS.id);
+      if (HL && HL.econ) ledger(HL, day, `${rec.name.first} ${rec.name.last}, who left ${homeS.name} to seek their fortune, is coming home to visit: a merchant of ${s.name} now!`);
+    }
     // Between two towns on the water, a merchant with a raft goes by river
     // or along the coast: quicker than the road.
     const wet = (q) => q.river || q.coast;
@@ -1637,7 +1683,6 @@ export class Sim {
     const mount = raft ? null : this.stables.take(L, 'wagon');
     if (mount) mount.banner = s.civ ? s.civ.color.hex : '#b03030';
     const travel = Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : mount ? (mount.kind === 'horse' ? 0.65 : 0.75) : 1)));
-    const goods = packGoods(L, rec, rng);
     if (mount && mount.kind === 'wagon') for (const [k, n] of Object.entries(goods)) goods[k] = n + Math.ceil(n / 2);
     const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft, mount });
     const visit = {
@@ -1671,7 +1716,12 @@ export class Sim {
       // Nobody watched the trip: the goods sold at a profit (the better
       // the merchant, the better the price they get).
       const f = tierOf(rec)?.profit ?? 1.25;
-      for (const [k, n] of Object.entries(t.goods)) earned += Math.round(price(k) * n * f);
+      const DL0 = this.game.world.layouts.get(t.dest);
+      for (const [k, n] of Object.entries(t.goods)) {
+        earned += Math.round(price(k) * n * f * (DL0 ? this.market.factor(DL0, k) : 1));
+        // (What they sold there is that much more of it about.)
+        if (DL0 && DL0.econ) this.market.trade(DL0, k, n * 0.3);
+      }
     }
     rec.coins += earned;
     rec.earned += earned;
@@ -1881,6 +1931,8 @@ export class Sim {
       adventurers: this.adventurers.serialize(),
       caravans: this.caravans.serialize(),
       outings: this.outings.serialize(),
+      bandits: this.bandits.serialize(),
+      market: this.market.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
@@ -1901,7 +1953,9 @@ export class Sim {
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor, outing: r.outing, tripMem: r.tripMem,
-      drafted: r.drafted, raid: r.raid, soldier: r.soldier, captive: r.captive,
+      drafted: r.drafted, raid: r.raid, soldier: r.soldier, captive: r.captive, walkHome: r.walkHome,
+      // Ranks, vices, feuds, affairs, time in the cells, fortunes sought.
+      life: r.life,
       // A drilled guard keeps the toughness drill gave them.
       ...(r.drilled ? { drilled: true, maxHp: r.maxHp } : {}),
       ...(r.grown ? { hobbies: r.hobbies } : {}),
@@ -1958,6 +2012,8 @@ export class Sim {
     this.adventurers.load(data.adventurers);
     this.caravans.load(data.caravans);
     this.outings.load(data.outings);
+    this.bandits.load(data.bandits);
+    this.market.load(data.market);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;

@@ -1,5 +1,6 @@
 // NPC generation: population planning for a settlement, households/families,
 // jobs, personality, hobbies, equipment, appearance and daily schedules.
+import { CLOTHES, PATTERN } from '../sim/culture.js';
 import { RNG, clamp, hash4 } from '../util/rng.js';
 import { personName, familyName } from '../world/names.js';
 import { ITEMS } from '../world/items.js';
@@ -59,6 +60,7 @@ const MERCHANT_TITLES = [null, 'Peddler', 'Trader', 'Master Merchant'];
 
 export function jobTitle(rec, s) {
   if (rec.job === 'mayor' && s && s.type === 'village') return 'Village Elder';
+  if (rec.job === 'guard' && rec.life && rec.life.rank) return `${rec.life.rank} of the Watch`;
   if (rec.nomadBand !== undefined) return 'Nomad';
   if (rec.adventurer !== undefined) return ADVENTURER_TITLES[rec.advLevel || 1];
   if (rec.caravanTrader !== undefined) return { trader: 'Caravan Trader', driver: 'Wagon Driver', guard: 'Caravan Guard' }[rec.role] || 'Caravan Trader';
@@ -191,7 +193,8 @@ function makeLook(rng, style, age, job, civ) {
   if (age === 'elder' && ['mohawk', 'spiky', 'afro'].includes(hairStyle)) hairStyle = rng.pick(['short', 'bald', 'bun']);
   const look = {
     skin, hair, hairStyle,
-    shirt: rng.pick(CLOTH),
+    // (Each people dresses in its own colours: see culture.js.)
+    shirt: rng.pick(CLOTHES[style] || CLOTH),
     pants: rng.pick(PANTS),
     shoes: rng.pick(['#2a1a10', '#3a2a1a', '#1a1a1a', '#5a3a1a']),
     outfit: JOBS[job]?.outfit || 'plain',
@@ -212,7 +215,7 @@ function makeLook(rng, style, age, job, civ) {
     look.hat = rng.pick(age === 'child' ? ['flower', 'bandana'] : ['beret', 'bandana', 'wide', 'flower', 'beret']);
     look.hatColor = rng.pick(HAT_COLORS);
   }
-  if (rng.chance(0.4)) look.pattern = rng.pick(['stripes', 'sash', 'collar', 'buttons']);
+  if (rng.chance(0.4)) look.pattern = rng.pick([PATTERN[style] || 'buttons', PATTERN[style] || 'stripes', 'stripes', 'sash', 'collar', 'buttons']);
   // Glasses, earrings, freckles, moustaches, old scars.
   const accs = age === 'child' ? [['freckles', 3], ['glasses', 1]]
     : [['glasses', job === 'scholar' || job === 'priest' || age === 'elder' ? 5 : 1.5], ['earring', 1.5], ['freckles', age === 'elder' ? 0 : 1.2],

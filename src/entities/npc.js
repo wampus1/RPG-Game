@@ -13,6 +13,7 @@ import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
+import { fortuneOf } from '../sim/prosperity.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
@@ -295,15 +296,26 @@ export class NPC extends Entity {
         if (r < 0.85) return roadTile();
         return plazaTile();
       }
-      case 'social':
+      case 'social': {
         if (curfew()) return inBuilding(home);
-        if (e.place === 'tavern' || this.game.minute > 1140) return inBuilding(buildingOf('tavern'), 'social') || tagged('social') || plazaTile();
+        // Hard times: no coin for the tavern, and most stay in.
+        const luck = fortuneOf(L);
+        const day = this.game.day;
+        if (luck === 'struggling' && hash4(rec.idx, day, 0x7a3) % 10 < 6) return inBuilding(home);
+        if (e.place === 'tavern' || this.game.minute > 1140 || (luck === 'thriving' && hash4(rec.idx, day, 0x7a4) % 3 === 0)) return inBuilding(buildingOf('tavern'), 'social') || tagged('social') || plazaTile();
         return tagged(rng.chance(0.5) ? 'gossip' : 'social') || plazaTile();
+      }
       case 'pray':
         return inBuilding(buildingOf('temple'), 'pray') || target(e.target, { tag: 'pray' }) || inBuilding(home);
-      case 'wander':
+      case 'wander': {
         if (curfew()) return inBuilding(home);
+        // Busy streets and a full square in good times; folk keep to
+        // their doors in bad.
+        const luck = fortuneOf(L);
+        if (luck === 'thriving' && rng.chance(0.4)) return plazaTile();
+        if (luck === 'struggling' && rng.chance(0.4) && home && home.outside) return { x: home.outside.x, y: GROUND, z: home.outside.z, wander: true };
         return roadTile();
+      }
       case 'help': {
         // Tagging along with Mum or Dad at work, else off round the town.
         const par = this.workingParent();
@@ -993,6 +1005,22 @@ export class NPC extends Entity {
         break;
       case 'captive':
         captiveTick(this, dt);
+        break;
+      // Townsfolk on the wrong side of the law (see society.js).
+      case 'crime':
+        this.game.sim.society.crimeTick(this, dt);
+        break;
+      case 'arresting':
+        this.game.sim.society.arrestTick(this, dt);
+        break;
+      case 'arrested':
+        this.game.sim.society.arrestedTick(this, dt);
+        break;
+      case 'toCell':
+        this.game.sim.society.toCellTick(this, dt);
+        break;
+      case 'jailed':
+        this.game.sim.society.jailedTick(this, dt);
         break;
       case 'alarm':
         this.alarmRun(dt);

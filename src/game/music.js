@@ -6,6 +6,7 @@
 // graveyard, another biome, or a fight) the old theme fades out as the
 // new one fades in. Nights are slower and quieter.
 import { mulberry32 } from '../util/rng.js';
+import { townMusic } from '../sim/prosperity.js';
 
 const SCALES = {
   major: [0, 2, 4, 5, 7, 9, 11],
@@ -69,7 +70,7 @@ export function musicMood(game) {
     if (s.condition === 'abandoned' || s.deserted) return 'ruins';
     const b = game.buildingAtPlayer ? game.buildingAtPlayer() : null;
     if (b && b.type === 'tavern' && !night) return 'tavern';
-    const kind = s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village';
+    const kind = (s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village') + townMusic(L);
     return night ? `${kind}:night` : kind;
   }
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
@@ -77,15 +78,51 @@ export function musicMood(game) {
   return night ? `${t}:night` : t;
 }
 
+// Each people plays its own way; a thriving town's tune is quick and
+// bright, a struggling one's slow and in a minor key.
+const CULTURE_SOUND = {
+  vale: {},
+  north: { scale: 'dorian', root: -2, bpmX: 0.9, drums: 'soft', fifths: true, lead: 'triangle' },
+  sun: { scale: 'hijaz', root: 2, drums: 'hand', swing: 0.1 },
+  wild: { scale: 'lydian', root: 4, drums: 'tribal', arp: true },
+  high: { scale: 'mixo', root: -5, bpmX: 0.92, drums: 'march', fifths: true, pad: true },
+};
+const DARKER = { major: 'minor', mixo: 'dorian', lydian: 'dorian', hijaz: 'phrygian', dorian: 'phrygian', penta: 'minpenta' };
+export function flavourTheme(T, style, fortune) {
+  const c = CULTURE_SOUND[style] || {};
+  if (c.scale) T.scale = c.scale;
+  if (c.root) T.root += c.root;
+  if (c.bpmX) T.bpm *= c.bpmX;
+  for (const k of ['drums', 'fifths', 'lead', 'swing', 'arp', 'pad']) if (c[k] !== undefined) T[k] = c[k];
+  if (fortune === 'thriving') {
+    T.bpm *= 1.08;
+    T.density = Math.min(0.9, T.density + 0.08);
+    T.arp = true;
+    if (!T.drums) T.drums = 'light';
+  } else if (fortune === 'struggling') {
+    T.scale = DARKER[T.scale] || T.scale;
+    T.bpm *= 0.82;
+    T.density *= 0.65;
+    T.drums = T.drums ? 'soft' : null;
+    T.lead = 'sine';
+    T.pad = true;
+    T.detune = 8;
+  }
+  return T;
+}
+
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 // One playing theme: its own gain node, scheduled a little ahead.
 class Voice {
   constructor(music, key) {
-    const [name, variant] = key.split(':');
+    const [full, variant] = key.split(':');
+    const [name, flavour] = full.split('@');
     this.m = music;
     this.key = key;
     this.T = { ...THEMES[name] };
+    // A town's own people's sound, and how it's doing.
+    if (flavour) flavourTheme(this.T, ...flavour.split('.'));
     if (variant === 'night') {
       this.T.bpm *= 0.78;
       this.T.density *= 0.6;
