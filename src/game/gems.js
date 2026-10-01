@@ -111,7 +111,21 @@ export function mend(game, e, n = 1) {
   if (!e || e.dead || e.hp >= e.maxHp) return;
   e.hp = Math.min(e.maxHp, e.hp + n);
   if (e.rec) e.rec.hp = e.hp;
-  game.renderer.emit(e.x, e.y + 1, e.z, { n: 3, color: LIFE, up: 20, life: 0.5, gravity: -10 });
+  // Little green crosses rising, and a glow at their feet.
+  game.renderer.emit(e.x, e.y + 1, e.z, { n: 4, color: LIFE, up: 16, speed: 14, life: 0.8, gravity: -14, shape: 'plus', oy: -4 });
+  game.renderer.effect?.({ type: 'ring', wx: e.x, wy: e.y, wz: e.z, r0: 2, r1: 9, color: LIFE, life: 0.6, oy: 4, flat: 0.45 });
+}
+
+// Frost: a ring of rime spreading out, and glinting ice.
+function frostBurst(game, t) {
+  game.renderer.effect?.({ type: 'ring', wx: t.x, wy: t.y, wz: t.z, r0: 3, r1: 13, color: FROST, life: 0.5, oy: 3, flat: 0.5 });
+  game.renderer.emit(t.x, t.y + 1, t.z, { n: 7, color: FROST, up: 18, speed: 36, life: 0.55, oy: -6, shape: 'star', gravity: 20 });
+}
+
+// Force: a violet shock ring and dust thrown up.
+function forceBurst(game, t) {
+  game.renderer.effect?.({ type: 'ring', wx: t.x, wy: t.y, wz: t.z, r0: 2, r1: 16, color: FORCE, life: 0.4, oy: -6, flat: 0.8, thick: 2 });
+  game.renderer.emit(t.x, t.y, t.z, { n: 6, color: ['#a89880', '#c8b8a0'], up: 10, speed: 40, life: 0.4, oy: 2 });
 }
 
 export function knockBack(game, attacker, t, tiles = 1) {
@@ -138,34 +152,65 @@ export function swingMult(e) {
   return gemsOf(e).blade === 'sapphire' ? 0.8 : 1;
 }
 
-// A swing, whether or not it lands: a ruby blade throws flame ahead.
+// A swing, whether or not it lands: a ruby blade throws an arc of flame
+// the way it's swung (toward the mouse, for you; at their foe, for anyone
+// else). It sweeps out a few paces, and whoever it catches is set alight.
 export function onSwing(game, attacker, main = null) {
   const g = gemsOf(attacker);
   if (g.blade !== 'ruby') return;
-  const DX = [0, -1, 0, 1];
-  const DZ = [1, 0, -1, 0];
-  const dx = DX[attacker.dir] ?? 0;
-  const dz = DZ[attacker.dir] ?? 1;
-  (game.flames ||= []).push({ from: attacker, main, x: attacker.x, y: attacker.y, z: attacker.z, dx, dz, n: 0, t: 0 });
+  let ang = null;
+  if (attacker.kind === 'player' && game.aimAngle) ang = game.aimAngle();
+  if (ang === null && main && !main.dead) ang = Math.atan2(main.z - attacker.z, main.x - attacker.x);
+  if (ang === null) {
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    ang = Math.atan2(DZ[attacker.dir] ?? 1, DX[attacker.dir] ?? 0);
+  }
+  const dx = Math.cos(ang);
+  const dz = Math.sin(ang);
+  // As far as it can go before a wall stops it.
+  let range = 3.4;
+  for (let d = 1; d <= 3; d++) {
+    const x = Math.round(attacker.x + dx * d);
+    const z = Math.round(attacker.z + dz * d);
+    // (A step up it licks over; a wall stops it.)
+    if (BLOCKS[game.world.getBlock(x, attacker.y, z)]?.solid && BLOCKS[game.world.getBlock(x, attacker.y + 1, z)]?.solid) {
+      range = d - 0.3;
+      break;
+    }
+  }
+  (game.flames ||= []).push({ from: attacker, main, x: attacker.x, y: attacker.y, z: attacker.z, ang, r: 0.4, range, hit: new Set() });
+  game.renderer.effect?.({ type: 'arc', wx: attacker.x, wy: attacker.y, wz: attacker.z, dx, dz, range, life: 0.5, oy: -8 });
+  game.audio?.play('fire', attacker);
 }
 
-// Flames from ruby blades travel a tile at a time and scorch the first foe.
+// Who a ruby's flame may catch: for you, anyone in its path (so mind where
+// you swing it in town); for anyone else, only what they're fighting.
+function flameCatches(game, attacker, e, main) {
+  if (!e || e.dead || e === attacker || e.hired || e.kind === 'item') return false;
+  if (attacker.kind === 'player') return e.kind === 'creature' || e.kind === 'npc';
+  return foeOf(game, attacker, e, main);
+}
+
+// The arc spreads out a pace at a time, catching whoever is in its sweep.
 export function updateFlames(game, dt) {
   if (!game.flames || !game.flames.length) return;
   for (const f of game.flames) {
-    f.t -= dt;
-    if (f.t > 0) continue;
-    f.t = 0.07;
-    f.n++;
-    f.x += f.dx;
-    f.z += f.dz;
-    game.renderer.emit(f.x, f.y + 1, f.z, { n: 5, color: FIRE, up: 25, life: 0.35, oy: -6 });
-    const hit = around(game, f.x, f.z, 0).find((e) => foeOf(game, f.from, e, f.main));
-    if (hit) {
-      game.damage(hit, 2, f.from);
-      burn(game, hit, f.from, 2);
-      f.done = true;
-    } else if (f.n >= 4 || !game.world.regionAt(f.x, f.z) || BLOCKS[game.world.getBlock(f.x, f.y, f.z)]?.solid) f.done = true;
+    f.r += dt * 9;
+    const R = Math.min(f.r, f.range);
+    for (const e of around(game, f.x, f.z, Math.ceil(R))) {
+      if (f.hit.has(e) || !flameCatches(game, f.from, e, f.main)) continue;
+      const d = Math.hypot(e.x - f.x, e.z - f.z);
+      if (d > R || d < 0.5) continue;
+      let da = Math.abs(Math.atan2(e.z - f.z, e.x - f.x) - f.ang);
+      if (da > Math.PI) da = Math.PI * 2 - da;
+      if (da > 1.0) continue;
+      f.hit.add(e);
+      game.damage(e, 2, f.from);
+      burn(game, e, f.from, 3);
+      game.renderer.emit(e.x, e.y + 1, e.z, { n: 8, color: FIRE, up: 30, speed: 30, life: 0.45, oy: -6 });
+    }
+    if (f.r >= f.range) f.done = true;
   }
   game.flames = game.flames.filter((f) => !f.done);
 }
@@ -176,18 +221,20 @@ export function onBladeHit(game, attacker, target) {
   if (!g || target.dead) return;
   if (g === 'sapphire') {
     chill(target, 2);
-    game.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: FROST, up: 20, life: 0.5, oy: -6 });
+    frostBurst(game, target);
   } else if (g === 'emerald') mend(game, attacker, 1);
   else if (g === 'topaz' && Math.random() < 0.35) {
     const next = around(game, target.x, target.z, 3).find((e) => e !== target && foeOf(game, attacker, e, null));
     if (next) {
+      game.renderer.effect?.({ type: 'bolt', wx: target.x, wy: target.y, wz: target.z, tx: next.x, ty: next.y, tz: next.z, life: 0.35, oy: -10 });
       game.renderer.emit(next.x, next.y + 1, next.z, { n: 8, color: BOLT, up: 40, life: 0.3, oy: -10 });
       game.damage(next, 2, attacker);
+      stun(next, 0.6);
     }
   } else if (g === 'amethyst') {
     stun(target, 1.2);
     knockBack(game, attacker, target, 2);
-    game.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: FORCE, up: 20, life: 0.4, oy: -6 });
+    forceBurst(game, target);
   }
 }
 
@@ -203,6 +250,7 @@ export function onArrowLand(game, a, hit) {
   const shooter = a.from;
   const t = a.target;
   if (g === 'ruby') {
+    game.renderer.effect?.({ type: 'blast', wx: Math.round(a.tx), wy: a.ty, wz: Math.round(a.tz), r1: 18, life: 0.6, oy: 2 });
     game.renderer.emit(a.tx, a.ty, a.tz, { n: 14, color: FIRE, up: 40, speed: 50, life: 0.6, oy: -6 });
     for (const e of around(game, Math.round(a.tx), Math.round(a.tz), 1)) {
       if (!foeOf(game, shooter, e, t)) continue;
@@ -211,15 +259,19 @@ export function onArrowLand(game, a, hit) {
     }
     game.audio?.play('fire', t);
   } else if (!hit || t.dead) return;
-  else if (g === 'sapphire') chill(t, 3);
-  else if (g === 'emerald') mend(game, shooter, 1);
+  else if (g === 'sapphire') {
+    chill(t, 3);
+    frostBurst(game, t);
+  } else if (g === 'emerald') mend(game, shooter, 1);
   else if (g === 'topaz') {
+    game.renderer.effect?.({ type: 'bolt', from: 'sky', wx: t.x, wy: t.y, wz: t.z, tx: t.x, ty: t.y, tz: t.z, life: 0.4, oy: -4 });
     game.renderer.emit(t.x, t.y + 2, t.z, { n: 10, color: BOLT, up: 50, life: 0.3, oy: -14 });
     game.damage(t, 2, shooter);
     stun(t, 1);
   } else if (g === 'amethyst') {
     knockBack(game, shooter, t, 2);
     stun(t, 0.6);
+    forceBurst(game, t);
   }
 }
 
@@ -229,12 +281,17 @@ export function onStruck(game, wearer, attacker, amount) {
   const close = Math.max(Math.abs(attacker.x - wearer.x), Math.abs(attacker.z - wearer.z)) <= 2;
   if (!close) return;
   for (const g of gemsOf(wearer).armor) {
-    if (g === 'ruby') burn(game, attacker, wearer, 2);
-    else if (g === 'sapphire') chill(attacker, 2);
-    else if (g === 'topaz' && Math.random() < 0.25) {
+    if (g === 'ruby') {
+      burn(game, attacker, wearer, 2);
+      game.renderer.emit(attacker.x, attacker.y + 1, attacker.z, { n: 8, color: FIRE, up: 30, speed: 30, life: 0.45, oy: -6 });
+    } else if (g === 'sapphire') {
+      chill(attacker, 2);
+      frostBurst(game, attacker);
+    } else if (g === 'topaz' && Math.random() < 0.25) {
       stun(attacker, 1);
-      game.renderer.emit(wearer.x, wearer.y + 1, wearer.z, { n: 8, color: BOLT, up: 30, life: 0.3, oy: -8 });
+      game.renderer.effect?.({ type: 'bolt', wx: wearer.x, wy: wearer.y, wz: wearer.z, tx: attacker.x, ty: attacker.y, tz: attacker.z, life: 0.3, oy: -10 });
     } else if (g === 'amethyst' && !attacker.thorned) {
+      forceBurst(game, attacker);
       // (No endless back-and-forth between two thorny coats.)
       attacker.thorned = true;
       game.damage(attacker, Math.max(1, Math.round(amount * 0.3)), wearer);
@@ -254,7 +311,6 @@ export function tickStatus(game, e, dt) {
     e.burnTick = (e.burnTick || 0) - dt;
     if (e.burnTick <= 0) {
       e.burnTick = 1;
-      game.renderer.emit(e.x, e.y + 1, e.z, { n: 4, color: FIRE, up: 30, life: 0.4, oy: -8 });
       // (Water puts it out.)
       if (e.inWater) e.burnT = 0;
       else game.damage(e, 1, e.burnSrc || null);

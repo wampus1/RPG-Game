@@ -540,104 +540,143 @@ export function creatureSheet(kind, variant = 0) {
 
 // ---------------------------------------------------------------- horses & wagons
 export const HORSE_COATS = ['#8a5a34', '#a0602e', '#3a3034', '#a8a8a8', '#e0dcd0', '#6a4a2a'];
-export const HORSE_W = 24;
-export const HORSE_H = 18;
+export const HORSE_W = 30;
+export const HORSE_H = 22;
 
 // A horse from the side, facing left (the renderer flips it): `coat` an
 // index into HORSE_COATS, `banner` a trade banner's colour on the saddle
-// cloth (null for none), `frame` 0 standing, 1-2 walking.
-export function horseSprite(frame, coat = 0, banner = null) {
-  const key = `h:${frame}:${coat}:${banner || ''}`;
+// cloth (null for none), `saddle` a riding saddle of its own, `frame` 0
+// standing, 1-2 walking.
+export function horseSprite(frame, coat = 0, banner = null, saddle = false) {
+  const key = `h:${frame}:${coat}:${banner || ''}:${saddle ? 1 : 0}`;
   let c = sheetCache.get(key);
   if (c) return c;
   const p = new Px(HORSE_W, HORSE_H);
   const base = hex(HORSE_COATS[coat % HORSE_COATS.length]);
-  const dark = shade(base, 0.7);
-  const light = shade(base, 1.18);
-  const mane = coat === 4 ? hex('#c8c0b0') : hex('#2a2024');
-  // Legs (walking: pairs swap).
+  const dark = shade(base, 0.68);
+  const light = shade(base, 1.2);
+  const mane = coat === 4 ? hex('#c8c0b0') : coat === 3 ? hex('#e8e8e8') : hex('#2a2024');
+  const hoof = '#1a1420';
+  // Legs, the far pair darker (walking: they swing in turn).
   const w = frame === 0 ? 0 : frame === 1 ? 1 : -1;
-  for (const [x, o] of [[8, w], [10, -w], [16, w], [18, -w]]) {
-    p.rect(x + o, 12, 1, 5, dark);
-    p.set(x + o, 17, '#1a1420');
+  for (const [x, o, far] of [[9, w, true], [11, -w, false], [20, -w, true], [22, w, false]]) {
+    const c2 = far ? dark : base;
+    p.rect(x + o, 14, 2, 6, c2);
+    p.set(x + o + (far ? 0 : 1), 16, shade(c2, 0.85));
+    p.rect(x + o, 20, 2, 1, hoof);
   }
-  // Body, belly shade, back highlight.
-  p.ellipse(13, 9, 7, 3.5, base);
-  p.hline(8, 18, 12, dark);
-  p.hline(9, 17, 6, light);
-  // Neck and head (to the left), ears, eye, muzzle.
-  p.line(7, 8, 4, 3, base);
-  p.line(8, 8, 5, 3, base);
-  p.line(6, 8, 3, 4, base);
-  p.rect(1, 2, 4, 3, base);
-  p.rect(0, 4, 2, 2, dark);
-  p.set(4, 1, dark);
-  p.set(3, 3, '#1a1420');
-  // Mane down the neck, tail behind.
-  p.line(5, 2, 8, 7, mane);
-  p.line(20, 8, 22, 13, mane);
-  p.set(21, 8, mane);
+  // Barrel of a body, a rounded chest and rump, light along the back.
+  p.ellipse(16, 11, 8.5, 4, base);
+  p.ellipse(9.5, 11, 3, 3.5, base);
+  p.ellipse(22.5, 10.5, 3, 3.5, base);
+  p.hline(11, 22, 7, light);
+  p.hline(10, 22, 14, dark);
+  p.hline(12, 20, 15, dark);
+  // Neck rising to the head, ears pricked, a white blaze on some.
+  for (let k = 0; k < 7; k++) p.rect(8 - k * 0.6, 9 - k, 3, 2, base);
+  p.rect(1, 1, 6, 4, base);
+  p.rect(0, 4, 4, 2, shade(base, 0.85));
+  p.set(0, 5, hoof);
+  p.set(5, 0, dark);
+  p.set(6, 0, dark);
+  p.set(4, 2, '#1a1420');
+  if (coat % 3 === 1) p.vline(2, 1, 4, '#f0ece0');
+  // Mane down the crest of the neck, a full tail.
+  for (let k = 0; k < 7; k++) p.set(7 - Math.round(k * 0.6) + 2, 2 + k, mane);
+  for (let k = 0; k < 7; k++) p.set(8 - Math.round(k * 0.6) + 2, 2 + k, mane);
+  p.line(25, 8, 27, 12, mane);
+  p.line(26, 8, 28, 15, mane);
+  p.line(27, 9, 27, 16, mane);
   // Saddle cloth: a trader's banner colours, with a gold coin sewn on.
   if (banner) {
     const b = hex(banner);
-    p.rect(10, 6, 7, 5, b);
-    p.hline(10, 16, 11, shade(b, 0.7));
-    p.set(13, 8, '#f0d040');
-    p.set(13, 9, '#c8a020');
+    p.rect(12, 7, 8, 6, b);
+    p.hline(12, 19, 12, shade(b, 0.7));
+    p.set(16, 9, '#f0d040');
+    p.set(16, 10, '#c8a020');
+  }
+  // A riding saddle: leather seat, pommel and cantle, a stirrup down.
+  if (saddle) {
+    const lea = hex('#6a3a1c');
+    p.rect(13, 6, 6, 3, lea);
+    p.set(12, 5, shade(lea, 1.2));
+    p.rect(18, 4, 2, 3, shade(lea, 0.8));
+    p.hline(13, 18, 6, shade(lea, 1.3));
+    p.vline(15, 9, 13, '#3a2a1a');
+    p.hline(14, 16, 14, '#a8a8b0');
   }
   c = toCanvas(p.outline(OUT));
   sheetCache.set(key, c);
   return c;
 }
 
-export const WAGON_W = 30;
-export const WAGON_H = 22;
+export const WAGON_W = 38;
+export const WAGON_H = 26;
+// Where the driver sits (from the wagon's left, pulled to the left) and
+// how high; where passengers sit in the bed behind.
+export const WAGON_SEAT = { x: 9, lift: 9 };
+export const WAGON_BED = [{ x: 18, lift: 8 }, { x: 25, lift: 8 }, { x: 31, lift: 8 }];
 
-// A covered wagon from the side (pulled to the left): a trader's has its
-// banner on the canvas; a nomad family's is plain, patched and weathered.
-export function wagonSprite(banner = null, frame = 0) {
-  const key = `w:${banner || ''}:${frame}`;
+// A wagon from the side (pulled to the left): a driver's bench at the
+// front, and a covered bed behind: a trader's has its banner on the
+// canvas; a nomad family's is plain, patched and weathered; a plain cart
+// (`hood` false) is open for passengers.
+export function wagonSprite(banner = null, frame = 0, hood = true) {
+  const key = `w:${banner || ''}:${frame}:${hood ? 1 : 0}`;
   let c = sheetCache.get(key);
   if (c) return c;
   const p = new Px(WAGON_W, WAGON_H);
   const wood = hex('#7a5430');
   const woodD = shade(wood, 0.7);
+  const woodL = shade(wood, 1.2);
   const canvas = banner ? hex('#ece4cc') : hex('#c8bc9c');
-  // The canvas hood on its hoops.
-  for (let x = 4; x <= 26; x++) {
-    const top = 2 + Math.round(Math.abs(x - 15) > 8 ? (Math.abs(x - 15) - 8) * 1.2 : 0);
-    for (let y = top; y <= 11; y++) p.set(x, y, (x - 4) % 6 === 0 ? shade(canvas, 0.82) : canvas);
-  }
-  if (banner) {
-    const b = hex(banner);
-    p.rect(10, 4, 11, 6, b);
-    p.hline(10, 20, 10, shade(b, 0.7));
-    // A pair of scales, the traders' mark.
-    p.hline(13, 17, 6, '#f0d040');
-    p.vline(15, 5, 8, '#f0d040');
-    p.set(13, 7, '#f0d040');
-    p.set(17, 7, '#f0d040');
-  } else {
-    // Patches on an old hood.
-    p.rect(8, 5, 3, 3, shade(canvas, 0.75));
-    p.rect(19, 7, 4, 2, hex('#8a6a48'));
-  }
-  // The bed, and the shafts out front.
-  p.rect(2, 11, 26, 4, wood);
-  p.hline(2, 27, 11, shade(wood, 1.2));
-  p.hline(2, 27, 14, woodD);
-  p.line(0, 13, 3, 13, woodD);
-  // Wheels (the spokes turn as it rolls).
-  for (const cx of [7, 23]) {
-    p.ellipse(cx, 17, 4, 4, woodD);
-    p.ellipse(cx, 17, 2.5, 2.5, wood);
-    p.set(cx, 17, '#2a2024');
-    if (frame % 2) {
-      p.set(cx - 1, 16, woodD);
-      p.set(cx + 1, 18, woodD);
+  // The hood on its hoops, over the back of the bed (the front is open,
+  // with the bench).
+  if (hood) {
+    for (let x = 14; x <= 36; x++) {
+      const top = 2 + Math.round(Math.abs(x - 25) > 9 ? (Math.abs(x - 25) - 9) * 1.3 : 0);
+      for (let y = top; y <= 13; y++) p.set(x, y, (x - 14) % 6 === 0 ? shade(canvas, 0.82) : canvas);
+    }
+    p.vline(14, 5, 13, shade(canvas, 0.7));
+    if (banner) {
+      const b = hex(banner);
+      p.rect(19, 5, 12, 7, b);
+      p.hline(19, 30, 11, shade(b, 0.7));
+      // A pair of scales, the traders' mark.
+      p.hline(22, 28, 7, '#f0d040');
+      p.vline(25, 6, 10, '#f0d040');
+      p.set(22, 9, '#f0d040');
+      p.set(28, 9, '#f0d040');
     } else {
-      p.set(cx + 1, 16, woodD);
-      p.set(cx - 1, 18, woodD);
+      p.rect(18, 6, 3, 3, shade(canvas, 0.75));
+      p.rect(29, 8, 4, 2, hex('#8a6a48'));
+    }
+  } else {
+    // Open sides, a rail round the bed.
+    p.hline(14, 36, 10, woodL);
+    for (let x = 14; x <= 36; x += 4) p.vline(x, 10, 13, wood);
+  }
+  // The bench at the front, with its back rest.
+  p.rect(6, 11, 7, 2, woodL);
+  p.vline(12, 7, 12, wood);
+  p.vline(13, 7, 12, woodD);
+  // The bed, and the shafts out front.
+  p.rect(4, 13, 33, 5, wood);
+  p.hline(4, 36, 13, woodL);
+  p.hline(4, 36, 17, woodD);
+  for (let x = 8; x <= 34; x += 6) p.vline(x, 14, 16, woodD);
+  p.line(0, 15, 4, 15, woodD);
+  p.line(0, 16, 4, 16, wood);
+  // Wheels (the spokes turn as it rolls).
+  for (const cx of [9, 30]) {
+    p.ellipse(cx, 20.5, 5, 5, woodD);
+    p.ellipse(cx, 20.5, 3.5, 3.5, wood);
+    p.ellipse(cx, 20.5, 2, 2, woodD);
+    p.set(cx, 20, '#2a2024');
+    const a = (frame % 4) * (Math.PI / 4);
+    for (let k = 0; k < 4; k++) {
+      const t = a + (k * Math.PI) / 2;
+      p.set(Math.round(cx + Math.cos(t) * 3), Math.round(20.5 + Math.sin(t) * 3), woodL);
     }
   }
   c = toCanvas(p.outline(OUT));
@@ -852,6 +891,30 @@ function simpleIcon(key) {
     case 'pie':
       p.ellipse(8, 9, 5, 3, '#d8a050');
       p.ellipse(8, 8, 3, 1, '#a02a4a');
+      break;
+    case 'saddle':
+      p.ellipse(8, 9, 6, 3, '#6a3a1c');
+      p.rect(3, 6, 2, 4, '#4a2812');
+      p.rect(12, 5, 2, 4, '#8a5028');
+      p.hline(4, 12, 8, '#9a6034');
+      p.vline(8, 11, 14, '#3a2a1a');
+      p.hline(7, 9, 14, '#a8a8b0');
+      break;
+    case 'wagon':
+      p.rect(2, 4, 12, 5, '#ece4cc');
+      p.vline(5, 4, 8, '#c8bc9c');
+      p.vline(9, 4, 8, '#c8bc9c');
+      p.rect(1, 9, 14, 2, '#7a5430');
+      p.ellipse(4, 12, 2, 2, '#4a3018');
+      p.ellipse(12, 12, 2, 2, '#4a3018');
+      break;
+    case 'dirty_dish':
+      p.ellipse(8, 11, 6, 2, '#d8d4c8');
+      p.ellipse(8, 10, 4, 1, '#b8b0a0');
+      p.set(6, 10, '#7a5a3a');
+      p.set(9, 11, '#8a6a42');
+      p.set(10, 10, '#6a4a2e');
+      p.line(11, 6, 13, 10, '#a8a8b0');
       break;
     case 'gruel':
       p.ellipse(8, 10, 5, 3, '#5a5046');
@@ -1168,8 +1231,8 @@ function gemIcon(it) {
 // A glow in the colour of a set stone, round the outline of a piece: a
 // bright rim a pixel out and a softer one beyond it.
 const glowCache = new Map();
-function glowOf(icon, color, tag) {
-  const k = `${tag}:${icon.width}:${color}`;
+function glowOf(icon, color, tag, thin = false) {
+  const k = `${tag}:${icon.width}:${color}:${thin}`;
   let g = glowCache.get(k);
   if (g) return g;
   const w = icon.width;
@@ -1187,12 +1250,12 @@ function glowOf(icon, color, tag) {
       if (solid(x, y)) continue;
       let d = 9;
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (solid(x + dx, y + dy)) d = Math.min(d, Math.max(Math.abs(dx), Math.abs(dy)));
-      if (d > 2) continue;
+      if (d > (thin ? 1 : 2)) continue;
       const i = ((y + 2) * (w + 4) + x + 2) * 4;
       out.data[i] = r;
       out.data[i + 1] = gg;
       out.data[i + 2] = b;
-      out.data[i + 3] = d === 1 ? 230 : 110;
+      out.data[i + 3] = thin ? 170 : d === 1 ? 230 : 110;
     }
   }
   ctx.putImageData(out, 0, 0);
@@ -1202,11 +1265,13 @@ function glowOf(icon, color, tag) {
 
 // Draw an item's icon; a jewelled one pulses with its stone's colour, with
 // a glint running round it.
-export function drawJewelled(ctx, icon, key, x, y, t = 0) {
+// A jewelled piece with its stone's glow round it: a broad glow in your pack
+// (`thin` false), a slighter one out in the world.
+export function drawJewelled(ctx, icon, key, x, y, t = 0, thin = false) {
   const it = ITEMS[key];
   if (it && it.socket && GEMS[it.socket]) {
     const color = GEMS[it.socket].color;
-    const g = glowOf(icon, color, key);
+    const g = glowOf(icon, color, key, thin);
     const a = ctx.globalAlpha;
     const phase = (key.length * 1.7) % 6;
     ctx.globalAlpha = a * (0.35 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3.2 + phase)));
@@ -1247,3 +1312,36 @@ export function itemIcon(key) {
 
 export { toCanvas };
 export const SPRITE_FRAME_H = SPR_H;
+
+// A faint outline of a stone's colour round one frame of a sheet (someone
+// in jewelled armour), one pixel wide.
+const frameGlows = new WeakMap();
+export function frameGlow(sheet, fx, fy, w, h, color) {
+  let m = frameGlows.get(sheet);
+  if (!m) frameGlows.set(sheet, (m = new Map()));
+  const k = `${fx}:${fy}:${color}`;
+  let g = m.get(k);
+  if (g) return g;
+  const src = sheet.getContext('2d').getImageData(fx, fy, w, h).data;
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 40;
+  g = document.createElement('canvas');
+  g.width = w + 2;
+  g.height = h + 2;
+  const ctx = g.getContext('2d');
+  const out = ctx.createImageData(w + 2, h + 2);
+  const [r, gg, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  for (let y = -1; y <= h; y++) {
+    for (let x = -1; x <= w; x++) {
+      if (solid(x, y)) continue;
+      if (!(solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) continue;
+      const i = ((y + 1) * (w + 2) + x + 1) * 4;
+      out.data[i] = r;
+      out.data[i + 1] = gg;
+      out.data[i + 2] = b;
+      out.data[i + 3] = 200;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  m.set(k, g);
+  return g;
+}

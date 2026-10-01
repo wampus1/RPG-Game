@@ -76,7 +76,7 @@ export class Creature extends Entity {
       if (this.thinkT <= 0) {
         this.thinkT = this.rng.float(2, 6);
         const [dx, dz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][this.rng.int(0, 3)];
-        if (Math.max(Math.abs(this.x + dx - this.tie.x), Math.abs(this.z + dz - this.tie.z)) <= 1) this.tryStep(this.x + dx, this.z + dz, this.S.step * 2);
+        if (Math.max(Math.abs(this.x + dx - this.tie.x), Math.abs(this.z + dz - this.tie.z)) <= (this.tieR ?? 1)) this.tryStep(this.x + dx, this.z + dz, this.S.step * 2);
         else this.face(this.x + dx, this.z + dz);
       }
       return;

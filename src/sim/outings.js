@@ -221,7 +221,11 @@ export class Outings {
         mounts[r.idx] = m;
       }
     }
-    const slow = Math.max(...going.map((r) => (!mounts[r.idx] ? 1 : mounts[r.idx].kind === 'wagon' ? 0.75 : 0.65)));
+    // Whoever has nothing to ride climbs up into the back of the wagon.
+    const wagon = going.find((r) => mounts[r.idx] && mounts[r.idx].kind === 'wagon');
+    const riders = wagon ? going.filter((r) => !mounts[r.idx]).slice(0, 3) : [];
+    if (wagon) mounts[wagon.idx].riders = riders.map((r) => r.look);
+    const slow = Math.max(...going.map((r) => (riders.includes(r) ? 0.75 : !mounts[r.idx] ? 1 : mounts[r.idx].kind === 'wagon' ? 0.75 : 0.65)));
     const hours = Math.max(2, Math.round(this.sim.diplomacy.travelHours(s, dest) * slow));
     t.arrive = h + hours * 60;
     // For a do: till it's over (and set off in the morning, if that's at
@@ -241,7 +245,7 @@ export class Outings {
         news: i === 0 ? notableNews(L, day - 5, 3) : [], ev: t.ev,
       };
       list.push(visit);
-      r.trip = { phase: 'away', dest: dest.id, depart: h, arrive: visit.arrive, ret: t.ret, visit: visit.id, mount, outing: t.id };
+      r.trip = { phase: 'away', dest: dest.id, depart: h, arrive: visit.arrive, ret: t.ret, visit: visit.id, mount, outing: t.id, ...(riders.includes(r) ? { passenger: true } : {}) };
       if (r.ent && !r.ent.dead) {
         setOverride(r, h, h + 180, 'travel', { place: 'road' });
         r.leaving = true;
@@ -251,8 +255,8 @@ export class Outings {
     this.sim.visits.set(dest.id, list);
     t.went = going.map((r) => r.idx);
     t.phase = 'out';
-    const wagon = Object.values(mounts).some((m) => m.kind === 'wagon');
-    const how = wagon ? ' in the town wagon' : Object.keys(mounts).length ? ' on horseback' : ' on foot';
+    const byWagon = Object.values(mounts).some((m) => m.kind === 'wagon');
+    const how = byWagon ? ' in the town wagon' : Object.keys(mounts).length ? ' on horseback' : ' on foot';
     ledger(L, day, `${listNames(going.map((r) => r.name.first))} set off for ${dest.name}${how}${t.withPlayer ? `, with ${g.playerName}` : ''}.`);
     if (t.withPlayer) g.ui.msg(`You set off for ${dest.name} with ${listNames(going.map((r) => r.name.first))}.`, '#a0e0ff');
     else if (t.player === 'left' && g.active.has(s.id)) g.ui.msg(`${lead.name.first} and the others gave up waiting and left for ${dest.name} without you.`, '#c8c8c8');

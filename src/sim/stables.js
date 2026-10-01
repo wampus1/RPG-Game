@@ -2,8 +2,9 @@
 // (one now and then, up to what the town can keep); a carpenter builds
 // wagons when there's timber and coin. The town's merchants and anyone
 // travelling take them out on the road (a horse to ride, or a wagon and a
-// horse to pull it) and bring them home again. At home the horses stand
-// tied to a hitching post by the road in, with the wagons beside them.
+// horse to pull it) and bring them home again. At home the horses stand in
+// their stalls in the town's stables (tied to a hitching post by the road
+// in, till it has some), with the wagons out front.
 import { alive, ledger, stockOf } from './econ.js';
 import { retrain } from '../entities/npcgen.js';
 import { GROUND } from '../config.js';
@@ -64,6 +65,14 @@ export class Stables {
       return { hired: pick };
     }
     let out = null;
+    // Horses enough to want a proper roof over them: the town builds stables.
+    if (st.horses >= 2 && !this.stablesOf(L, true) && L.econ.treasury >= 200 && rng.chance(0.2) && !this.sim.works.projects.some((p) => !p.done && p.sid === s.id && p.type === 'stables')) {
+      const p = this.sim.works.startBuilding(L, 'stables', ', for the town\'s horses', false, 140);
+      if (p) {
+        L.econ.treasury -= 140;
+        out = { stables: p };
+      }
+    }
     if (st.horses < cap.horses && rng.chance(0.25)) {
       st.horses++;
       ledger(L, day, `${handler.name.first} ${handler.name.last} caught and broke in a wild horse. ${s.name} keeps ${st.horses} now.`);
@@ -131,21 +140,40 @@ export class Stables {
     return null;
   }
 
-  // What stands at the hitching post now: horses (tied) and wagons.
+  // The town's stables (built and finished), if it has them.
+  stablesOf(L, any = false) {
+    return L.buildings.find((b) => b.type === 'stables' && (any || (!b.underConstruction && b.stalls && b.stalls.length))) || null;
+  }
+
+  // What stands where now: horses in their stalls (or tied at the hitching
+  // post) and the wagons.
   standing(L) {
     const st = this.of(L);
     const horses = Math.max(0, st.horses - st.horsesOut);
     const wagons = Math.max(0, st.wagons - st.wagonsOut);
     if (!horses && !wagons) return null;
-    const post = this.hitch(L);
-    if (!post) return null;
+    const sb = this.stablesOf(L);
+    let inStalls = 0;
     const out = { horses: [], wagons: [] };
+    if (sb) {
+      sb.stalls.slice(0, horses).forEach((q, i) => out.horses.push({ key: `town:${L.settlement.id}:h${i}`, x: q.x, z: q.z, coat: hash4(L.settlement.seed, i, 0xc0a7) % 6, post: { x: q.x, y: GROUND, z: q.z }, stall: true }));
+      inStalls = out.horses.length;
+      const o = sb.outside;
+      const DX = [0, -1, 0, 1];
+      const DZ = [1, 0, -1, 0];
+      const side = [DZ[sb.door.rot], DX[sb.door.rot]];
+      for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: o.x + side[0] * (3 + i * 3), z: o.z + side[1] * (3 + i * 3), face: 1 });
+      // (More horses than stalls: the rest tied up at the post.)
+      if (horses <= inStalls) return out;
+    }
+    const post = this.hitch(L);
+    if (!post) return sb ? out : null;
     const around = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
-    for (let i = 0; i < Math.min(horses, 4); i++) {
-      const [dx, dz] = around[i];
+    for (let i = inStalls; i < Math.min(horses, inStalls + 4); i++) {
+      const [dx, dz] = around[i - inStalls];
       out.horses.push({ key: `town:${L.settlement.id}:h${i}`, x: post.x + dx, z: post.z + dz, coat: hash4(L.settlement.seed, i, 0xc0a7) % 6, post });
     }
-    for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: post.x + 2 + i * 2, z: post.z + 2, face: 1 });
+    if (!sb) for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: post.x + 2 + i * 2, z: post.z + 2, face: 1 });
     return out;
   }
 }

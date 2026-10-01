@@ -34,6 +34,9 @@ const MEAL_LINES = {
   none: ['*stomach growls*', 'Nothing to eat today...', 'I\'m so hungry...'],
 };
 
+// Who serves the meals at the tavern, and clears up after.
+const TIDIERS = new Set(['barkeep', 'innkeeper', 'cook']);
+
 export class NPC extends Entity {
   constructor(game, rec, layout) {
     super(game, 0, 0, 0);
@@ -321,7 +324,7 @@ export class NPC extends Entity {
         return { x: q.x, y: GROUND, z: q.z, near: 1, tag: 'poster', poster: i };
       }
       case 'mourn': case 'funeral':
-        return target(e.target, { face: 2, tag: e.act, near: e.act === 'funeral' ? 1 : 0 });
+        return target(e.target, { face: 2, tag: e.act, near: 0 });
       case 'bury':
         return target(e.target, { face: 2, tag: 'bury', near: 1 });
       case 'build': {
@@ -458,11 +461,6 @@ export class NPC extends Entity {
         who.say(who.rng.pick(['No!', 'Go on, then what?', 'Ha! I don\'t believe it.', 'Tell us another!']), 2.5);
       }
       return;
-    }
-    // By the fire at night, the bow is laid down beside them.
-    if (act.place === 'camp' && !this.putDown && (game.minute >= 1260 || game.minute < 360) && this.rng.chance(dt * 0.2)) {
-      const bow = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
-      if (bow) this.putDownNear(bow.item);
     }
     if (this.rng.chance(dt * 0.05)) this.dir = this.rng.int(0, 3);
   }
@@ -665,6 +663,166 @@ export class NPC extends Entity {
     if (this.spot && this.spot.claim === this.id) this.spot.claim = null;
     this.spot = null;
     this.collectPutDown();
+    this.finishMeal();
+    this.packWares();
+  }
+
+  // ------------------------------------------------------------ meals and wares
+  // A clear spot on a table or counter within `r` of them, to set something on.
+  surfaceNear(r = 1) {
+    const w = this.game.world;
+    const placed = this.game.placed;
+    for (let d = 1; d <= r; d++) {
+      for (let dz = -d; dz <= d; dz++) {
+        for (let dx = -d; dx <= d; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== d) continue;
+          const x = this.x + dx;
+          const z = this.z + dz;
+          const below = w.getBlock(x, this.y, z);
+          if (below !== B.table && below !== B.counter) continue;
+          if (w.getBlock(x, this.y + 1, z) !== B.air || placed.has(`${x},${this.y + 1},${z}`)) continue;
+          return { x, y: this.y + 1, z };
+        }
+      }
+    }
+    return null;
+  }
+
+  // Sat down to a meal they've paid for at the tavern: the barkeep (or the
+  // cook) brings it to the table.
+  serveMeal() {
+    const game = this.game;
+    const L = this.layout;
+    const m = this.rec.lastMeal;
+    if (this.meal || !m || !m.item || m.day !== game.day || !ITEMS[m.item]) return;
+    const b = buildingAt(L, this.x, this.z);
+    if (!b || b.type !== 'tavern') return;
+    const at = this.surfaceNear(2);
+    if (!at || !game.setDown(at.x, at.y, at.z, m.item, 1, { sid: L.settlement.id, idx: this.rec.idx, name: this.name })) return;
+    game.placed.get(`${at.x},${at.y},${at.z}`).meal = true;
+    this.meal = { ...at, item: m.item };
+    const keeper = game.npcs.find((n) => !n.dead && !n.sleeping && n.layout === L && TIDIERS.has(n.rec.job) && n.distTo(this) <= 12);
+    if (keeper) {
+      keeper.face(at.x, at.z);
+      keeper.doAction(0.3);
+      keeper.sayLater?.(keeper.rng.pick([`Here you are, ${this.rec.name.first}.`, 'Mind, it\'s hot.', 'Enjoy!', 'Fresh from the pot.']), 0.3, 2.5);
+    }
+    game.renderer.emit(at.x, at.y, at.z, { n: 3, color: ['#f0f0f0', '#d8d8d8'], up: 12, speed: 4, gravity: -10, life: 0.9, oy: 4 });
+  }
+
+  // Done eating: what's left is a dirty dish for someone to clear.
+  finishMeal() {
+    const m = this.meal;
+    if (!m) return;
+    this.meal = null;
+    const placed = this.game.placed;
+    const k = `${m.x},${m.y},${m.z}`;
+    const got = placed && placed.get(k);
+    if (got && got.item === m.item && got.meal) placed.set(k, { item: 'dirty_dish', count: 1, owner: { mess: true, sid: this.layout.settlement.id } });
+  }
+
+  // Clearing tables: to the nearest dirty dish in the building, and away
+  // with it.
+  tidyUp(dt) {
+    const game = this.game;
+    const L = this.layout;
+    if (this.tidying) {
+      const t = this.tidying;
+      const got = game.placed.get(`${t.x},${t.y},${t.z}`);
+      if (!got || got.item !== 'dirty_dish' || this.stateT > 30) {
+        this.tidying = null;
+        this.activity = null;
+        return false;
+      }
+      if (Math.max(Math.abs(t.x - this.x), Math.abs(t.z - this.z)) <= 1) {
+        this.face(t.x, t.z);
+        this.doAction(0.3);
+        game.takePlaced(t.x, t.y, t.z);
+        this.tidying = null;
+        if (this.rng.chance(0.3)) this.say(this.rng.pick(['Another one...', 'Would it kill them to bring it to the bar?', 'There we are.']), 2.2);
+        this.activity = null;
+        return true;
+      }
+      this.followPath({ x: t.x, y: this.y, z: t.z }, 1);
+      return true;
+    }
+    this.tidyT = (this.tidyT || 0) - dt;
+    if (this.tidyT > 0) return false;
+    this.tidyT = 3;
+    const b = buildingAt(L, this.x, this.z);
+    if (!b) return false;
+    let best = null;
+    for (const [k, got] of game.placed) {
+      if (got.item !== 'dirty_dish' || !got.owner || !got.owner.mess) continue;
+      const [x, y, z] = k.split(',').map(Number);
+      if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue;
+      const d = Math.abs(x - this.x) + Math.abs(z - this.z);
+      if (!best || d < best.d) best = { x, y, z, d };
+    }
+    if (!best) return false;
+    this.tidying = best;
+    this.stateT = 0;
+    this.path = null;
+    return true;
+  }
+
+  // A merchant's stock, and where it's kept (a shop's shelves, or a
+  // visiting merchant's pack).
+  wareStock() {
+    if (this.visit && !this.visit.guest) return { store: this.visit.goods, display: { sid: this.layout.settlement.id, visit: this.visit.id } };
+    const w = this.rec.work;
+    if (this.rec.job !== 'merchant' || !w || w.building == null) return null;
+    const biz = this.layout.econ.biz[w.building];
+    return biz ? { store: biz.store, display: { sid: this.layout.settlement.id, bid: w.building } } : null;
+  }
+
+  // What they have out on show now.
+  shownWares() {
+    const out = [];
+    for (const [k, got] of this.game.placed) {
+      if (!got.display || !got.owner || got.owner.idx !== this.rec.idx || got.owner.sid !== this.layout.settlement.id) continue;
+      const [x, y, z] = k.split(',').map(Number);
+      if (Math.max(Math.abs(x - this.x), Math.abs(z - this.z)) > 4) continue;
+      out.push({ x, y, z, got });
+    }
+    return out;
+  }
+
+  // Set out a thing or two they have plenty of on the counter beside them
+  // (still theirs to sell; take it, and it's stealing).
+  showWares(dt) {
+    if (!this.atGoal || this.moving) return;
+    this.wareT = (this.wareT || 0) - dt;
+    if (this.wareT > 0) return;
+    this.wareT = this.rng.float(4, 9);
+    const w = this.wareStock();
+    if (!w) return;
+    const shown = this.shownWares();
+    // Sold out of something on show: off the counter it comes.
+    for (const q of shown) {
+      if ((w.store[q.got.item] || 0) <= 0) {
+        this.game.takePlaced(q.x, q.y, q.z);
+        this.doAction(0.25);
+      }
+    }
+    if (shown.length >= 2) return;
+    const have = Object.entries(w.store).filter(([k, n]) => n >= 2 && ITEMS[k] && k !== 'coin' && !shown.some((q) => q.got.item === k));
+    if (!have.length) return;
+    const [item] = this.rng.pick(have);
+    const at = this.surfaceNear(2);
+    if (!at) return;
+    const home = this.homeLayout.settlement.id;
+    const owner = { sid: this.layout.settlement.id, idx: this.rec.idx, name: this.name, ...(home !== this.layout.settlement.id ? { home } : {}) };
+    if (!this.game.setDown(at.x, at.y, at.z, item, 1, owner)) return;
+    this.game.placed.get(`${at.x},${at.y},${at.z}`).display = w.display;
+    this.face(at.x, at.z);
+    this.doAction(0.3);
+  }
+
+  // Packing up: the wares on show go back in the stock.
+  packWares() {
+    if (!this.game.placed || !this.game.placed.size) return;
+    for (const q of this.shownWares()) this.game.takePlaced(q.x, q.y, q.z);
   }
 
   // ------------------------------------------------------------ setting things down
@@ -1026,7 +1184,8 @@ export class NPC extends Entity {
       }
     }
     // A guard watching over a miner goes where they go, and home with them.
-    if (this.act === 'watch') {
+    // (Keeping an eye on you after curfew is a watch of another kind.)
+    if (this.act === 'watch' && !(this.rec.override && this.rec.override.curfew)) {
       const o = this.rec.override;
       const ward = o && this.layout.npcs[o.ward];
       const we = ward && ward.ent;
@@ -1110,7 +1269,10 @@ export class NPC extends Entity {
       this.game.despawnNpc(this);
       return;
     }
-    if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) this.mealBubble = this.rec.lastMeal;
+    if (act === 'eat' && this.rec.lastMeal && this.rec.lastMeal.day === this.game.day) {
+      this.mealBubble = this.rec.lastMeal;
+      this.serveMeal();
+    }
     // A meal does the wounded good.
     if (act === 'eat' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 5);
     // Prayers at the temple: the priest's blessing heals the hurt.
@@ -1245,11 +1407,15 @@ export class NPC extends Entity {
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
     if (act.act === 'adventure') return this.adventureAt(act, dt);
-    // Taking it easy outdoors: the tools of their trade set down for a while.
-    if (act.act === 'hobby' && !this.putDown && this.rec.job !== 'guard' && this.rng.chance(dt * 0.01) && !buildingAt(this.layout, this.x, this.z)) {
-      const t = this.rec.equipment.tool;
-      if (t && ITEMS[t] && ITEMS[t].kind === 'tool') this.putDownNear(t);
+    // A meal on the table: tucking in.
+    if (this.meal && act.act === 'eat' && this.rng.chance(dt * 0.5)) {
+      this.face(this.meal.x, this.meal.z);
+      this.doAction(0.2);
     }
+    // Behind the bar: clearing away what people leave.
+    if (act.act === 'work' && TIDIERS.has(this.rec.job) && this.tidyUp(dt)) return;
+    // At the counter or the stall: a few wares set out where people can see.
+    if (act.act === 'work' || act.act === 'visit') this.showWares(dt);
     if (act.act === 'trial') {
       if (this.rng.chance(dt * 0.3)) this.face(game.player.x, game.player.z);
       return;

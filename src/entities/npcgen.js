@@ -31,7 +31,7 @@ export const JOBS = {
   child: { title: 'Child' },
   retired: { title: 'Retiree' },
   adventurer: { title: 'Adventurer', outfit: 'hunter' },
-  handler: { title: 'Animal Handler', place: 'farm', start: 420, end: 1080, tools: ['wheat'], outfit: 'farmer' },
+  handler: { title: 'Animal Handler', place: 'stables', start: 420, end: 1080, tools: ['wheat'], outfit: 'farmer' },
   caravanner: { title: 'Caravan Trader', outfit: 'vest' },
 };
 

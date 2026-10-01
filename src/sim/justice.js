@@ -92,12 +92,17 @@ export class Justice {
     const seen = (info.circumstantial || []).filter((i) => L.npcs[i] && alive(L.npcs[i]));
     if (!wits.length && !seen.length && !info.known) return null;
     const s = L.settlement;
+    // Taking several things from the same place in one go is one theft.
+    if (type === 'theft') {
+      const prev = this.sameTheft(this.pending.get(sid) || [], info, game.day * DAY + game.minute, (c) => c.day * DAY + c.minute);
+      if (prev) return this.addToTheft(prev, info, wits, L, sid);
+    }
     let sev = info.sev || def.sev;
     if (type === 'theft' && (info.value || 0) >= 25) sev = 'moderate';
     const crime = {
       type, sev, desc: info.desc || def.label, victim: info.victim || null, value: info.value || 0, items: info.items || null, owner: info.owner || null,
       witnesses: wits.filter((n) => !n.visit && !n.rec.visitor).map((n) => n.rec.idx), guardSaw: wits.some((n) => n.rec.job === 'guard') || !!info.known, day: game.day, minute: Math.floor(game.minute),
-      seen, at: info.at || null, when: info.when ?? null, suspected: !wits.length && !info.known,
+      seen, at: info.at || null, when: info.when ?? null, suspected: !wits.length && !info.known, bid: info.bid ?? undefined,
     };
     const list = this.pending.get(sid) || [];
     list.push(crime);
@@ -131,8 +136,50 @@ export class Justice {
   // who was seen nearby around that time.
   unseen(sid, info) {
     const now = this.sim.abs;
+    if (info.type === 'theft') {
+      const prev = this.sameTheft(this.unsolved.filter((u) => u.sid === sid), info, now, (u) => u.t);
+      if (prev) {
+        prev.value += info.value || 0;
+        prev.items = mergeItems(prev.items, info.items);
+        prev.desc = theftDesc(prev.desc, prev.items);
+        prev.discoverAt = Math.max(prev.discoverAt, now + 10);
+        return;
+      }
+    }
     const delay = info.type === 'murder' ? 8 + Math.random() * 30 : 20 + Math.random() * 70;
     this.unsolved.push({ sid, ...info, t: now, discoverAt: now + delay });
+  }
+
+  // A theft from the same owner (or building) within the hour or so.
+  sameTheft(list, info, now, when) {
+    const key = (o) => (o ? `${o.kind}:${o.id}` : null);
+    const k = key(info.owner);
+    return list.find((c) => c.type === 'theft' && now - when(c) <= 90 && ((k && key(c.owner) === k) || (info.bid !== undefined && info.bid !== null && c.bid === info.bid))) || null;
+  }
+
+  // One more thing taken: added to the same theft (anyone new who saw it
+  // counts as a witness to the whole thing).
+  addToTheft(c, info, wits, L, sid) {
+    const game = this.game;
+    c.value += info.value || 0;
+    c.items = mergeItems(c.items, info.items);
+    c.desc = theftDesc(c.desc, c.items);
+    if (c.value >= 25 && c.sev === 'minor') c.sev = 'moderate';
+    if (info.bid !== undefined && c.bid === undefined) c.bid = info.bid;
+    const fresh = wits.filter((n) => !n.visit && !n.rec.visitor && !c.witnesses.includes(n.rec.idx));
+    const hit = { minor: 6, moderate: 12, severe: 25 }[c.sev];
+    for (const n of fresh) {
+      c.witnesses.push(n.rec.idx);
+      this.sim.changeRep(n, -hit);
+    }
+    if (wits.some((n) => n.rec.job === 'guard')) c.guardSaw = true;
+    if (wits.length) c.suspected = false;
+    if (fresh.length && !info.quiet) fresh[0].say(fresh[0].rng.pick(['And again!', 'Stop, thief!', 'Put that back!']), 3, '#ff9080');
+    game.wanted.set(sid, Math.max(game.wanted.get(sid) || 0, c.sev === 'minor' ? 240 : 1e9));
+    if (fresh.length) game.alertGuards(sid, game.player, fresh[0], true);
+    this.sim.areaCache.delete(sid);
+    void L;
+    return c;
   }
 
   // Remember who saw the player where (checked about once a second).
@@ -933,20 +980,74 @@ export class Justice {
       }
     } else if (!held || held.kind !== 'weapon') this.brandish = null;
     // Out in the streets after curfew (guards on duty and people heading
-    // into their own house excepted).
+    // into their own house excepted): a guard on watch who sees you comes
+    // over, tells you to get indoors, and fines you if you don't.
     const late = m >= 1320 || m < 300;
-    if (lawOn(L, 'curfew') && late && !b && !this.sim.careers.isGuard(s.id) && !game.isWanted(s.id)) {
-      const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 6);
+    if (lawOn(L, 'curfew') && late) this.curfewWatch(a, L, p, b);
+    else this.curfewT = null;
+  }
+
+  curfewWatch(a, L, p, b) {
+    const game = this.game;
+    const s = L.settlement;
+    const now = this.sim.abs;
+    const onWatch = (n) => n.rec.job === 'guard' && !n.dead && !n.sleeping && (n.state === 'routine' || n.state === 'curfew');
+    // The player.
+    if (!b && !this.sim.careers.isGuard(s.id) && !game.isWanted(s.id)) {
+      const c = this.curfewT;
+      let guard = c && c.guard && onWatch(c.guard) ? c.guard : null;
+      if (!guard) guard = this.sim.witnesses(s.id, p.x, p.z, 12).find(onWatch) || null;
       if (guard) {
-        if (!this.curfewT) {
-          this.curfewT = { t: 0 };
-          guard.say(`It's past curfew! Get indoors, or I'll have to fine you.`, 3.5, '#ffe070');
-        } else if ((this.curfewT.t += 1) >= 20 && !this.curfewT.done) {
-          this.curfewT.done = true;
+        const d = guard.distTo(p);
+        if (!this.curfewT || this.curfewT.guard !== guard) this.curfewT = { t: 0, guard, warned: false, done: false };
+        const ct = this.curfewT;
+        // Over to you first (and, once they've warned you, they stay and
+        // keep an eye on you till you're indoors).
+        if (!ct.done && (d > 3 || ct.warned)) {
+          setOverride(guard.rec, now, now + 15, 'watch', { target: { x: p.x, z: p.z }, curfew: true });
+          if (guard.activity && guard.activity.entry.act !== 'watch') guard.activity = null;
+          else if (guard.goal && Math.abs(guard.goal.x - p.x) + Math.abs(guard.goal.z - p.z) > 2) guard.activity = null;
+        }
+        if (d <= 4 && !ct.warned) {
+          ct.warned = true;
+          guard.face(p.x, p.z);
+          guard.say(guard.rng.pick(['It\'s past curfew! Get indoors, or I\'ll have to fine you.', 'Curfew! Off the streets, now.', 'You there! Home with you. It\'s past ten.']), 3.5, '#ffe070');
+        } else if (ct.warned && !ct.done && (ct.t += 1) >= 20 && d <= 8) {
+          ct.done = true;
+          guard.say('I warned you.', 2.5, '#ffb080');
           this.commit(s.id, 'curfew', { witnesses: [guard] });
+          if (guard.rec.override && guard.rec.override.curfew) guard.rec.override = null;
         }
       }
-    } else if (!late || b) this.curfewT = null;
+    } else if (b && this.curfewT) {
+      // Indoors: that's all they wanted (and next time is a new warning).
+      const g = this.curfewT.guard;
+      if (g && g.rec.override && g.rec.override.curfew) {
+        g.rec.override = null;
+        g.activity = null;
+      }
+      this.curfewT = null;
+    }
+    // Townsfolk still out: sent home.
+    this.curfewSent ||= new Map();
+    for (const g of a.npcs) {
+      if (!onWatch(g)) continue;
+      for (const n of a.npcs) {
+        if (n === g || n.dead || n.sleeping || n.rec.job === 'guard' || n.state !== 'routine' || n.hired) continue;
+        if (Math.max(Math.abs(n.x - g.x), Math.abs(n.z - g.z)) > 6 || L.buildings.some((q) => n.x >= q.x0 && n.x <= q.x1 && n.z >= q.z0 && n.z <= q.z1)) continue;
+        if ((this.curfewSent.get(n) || -1e9) > now - 60) continue;
+        if (!this.sim.canSee(g, n.x, n.z)) continue;
+        this.curfewSent.set(n, now);
+        g.say(g.rng.pick([`${n.rec.name.first}! Curfew. Home with you.`, 'Off the streets, you. It\'s late.', 'Curfew! Indoors, please.']), 3, '#ffe070');
+        n.sayLater?.(n.rng.pick(['Yes, yes, I\'m going.', 'Just on my way home!', 'Sorry, officer.']), 1.4, 2.5);
+        n.face(g.x, g.z);
+        if (!n.visit && !n.nomad && !n.adventurer && !n.company) {
+          setOverride(n.rec, now, now + 120, 'home', {});
+          n.activity = null;
+        }
+        break;
+      }
+    }
   }
 
   // ------------------------------------------------------------ save
@@ -1013,3 +1114,21 @@ function testimony(c) {
 }
 
 export { DAY };
+
+// Items taken, with the same things added together.
+function mergeItems(a, b) {
+  const out = (a || []).map((q) => ({ ...q }));
+  for (const q of b || []) {
+    const had = out.find((o) => o.item === q.item);
+    if (had) had.count += q.count;
+    else out.push({ ...q });
+  }
+  return out;
+}
+
+// "Stealing 3 Bread, 2 Apple and more from the Golden Crust".
+function theftDesc(desc, items) {
+  const from = (desc || '').match(/ from .*$/);
+  const what = items.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`);
+  return `Stealing ${what.slice(0, 2).join(', ')}${what.length > 2 ? ' and more' : ''}${from ? from[0] : ''}`;
+}

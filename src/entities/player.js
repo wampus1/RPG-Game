@@ -193,6 +193,11 @@ export class Player extends Entity {
     else for (const k in MOVE_KEYS) if (input.isDown(k)) d = MOVE_KEYS[k];
     if (!d) return;
     this.sitting = null;
+    // Sat in the back of a wagon: moving climbs you down.
+    if (this.inWagon) {
+      this.game.riding.climbOut();
+      return;
+    }
     // Keys move you across the screen, whichever way the camera is turned.
     const [dx, dz] = screenToWorld(d[0], d[1], this.game.renderer?.view || 0);
     this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
@@ -245,7 +250,9 @@ export class Player extends Entity {
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
     const swim = water && !heroHas(this.game.hero, 'swimmer') ? 1.9 : 1;
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint ? 0.62 : 1) * swim * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    // In the saddle or on the wagon's bench: quicker (and no sprinting).
+    const ride = this.mount ? this.game.riding.pace() : 1;
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount ? 0.62 : 1) * ride * swim * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

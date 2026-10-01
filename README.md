@@ -66,6 +66,8 @@ with the music off. `window.__game` exposes the running game.
 | Set what you hold down on the ground (it stays until you mine it back up) | B (Ctrl+B sets down the whole stack) |
 | Eat or drink what you hold, read a newspaper, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
+| Horses | Right-click a wild horse holding an apple, carrot, wheat, berries or cabbage to win it over; right-click your horse holding a saddle to saddle it, then again to ride; F gets down |
+| Wagons | Hold a wagon and right-click the ground to set it down; right-click your horse near it to hitch it, then the wagon to drive; right-click anyone's wagon to climb in the back (move to climb out) |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
 | Menu (save and load slots, settings, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
@@ -713,22 +715,30 @@ can use:
   afar, and print copies of a newspaper on paper and ink. Hand them out when
   you talk to people: they read it, talk about it, and may pay a coin.
 - Jeweller's bench: set a cut gem into a weapon or armour through a timing
-  game. Strike as the light passes each prong; slip three times and the gem
-  cracks. Each gem raises an ability, and what else it does depends on what
+  game under a loupe: the stone sits in a gold collet with four claws round
+  it, and a gleam of light runs round the rim. Press as the gleam crosses a
+  claw and the pusher bends it down over the stone; each slip puts a crack
+  through the stone, and a third shatters it. Each gem raises an ability, and what else it does depends on what
   it's set in (see *Gems* below). Jewelled gear looks like the plain piece,
-  wrapped in a pulsing glow the colour of its stone, in your pack and in hand.
-  Worn jewelled armour gives off a faint shimmer, on you or a guard.
+  wrapped in a pulsing glow the colour of its stone (a thinner one out in the
+  world than in your pack). Worn jewelled armour has a faint glow round its
+  outline, on you or a guard.
 
 **Gems.** A stone works differently in a blade, a bow or armour, and the same
 effects work for guards who carry jewelled gear:
 
 | Stone | In a blade | In a bow | In armour |
 | --- | --- | --- | --- |
-| Ruby | each swing throws a lick of flame a few paces ahead | arrows burst into flame where they land, scorching all around | whoever strikes you catches fire |
+| Ruby | each swing throws an arc of flame toward the mouse pointer (at their foe, for a guard); it spreads a few paces and sets alight whoever it catches, so mind where you swing it in town | arrows burst into flame where they land, scorching all around | whoever strikes you catches fire |
 | Sapphire | swings faster, and chills (slows) what it cuts | arrows fly faster and frost what they hit | whoever strikes you is chilled |
 | Emerald | each hit mends you a little | each arrow that strikes mends you | your wounds slowly close by themselves |
 | Topaz | hits sometimes leap as lightning to another foe | arrows call down a dazzling flash | attackers may be dazzled |
 | Amethyst | blows stagger and throw foes back | arrows knock their target back | part of every blow is turned back on the attacker |
+
+Each ability shows: flame arcs, frost rings, green crosses for mending, lightning
+between foes, violet shock rings. Anything on fire burns with animated flames,
+embers and smoke; a stunned foe has stars circling its head, and a chilled one
+sparkles with frost.
 
 Guards with coin to spare buy jewelled pieces from master merchants, or from
 you if you're a jeweller. Miners who turn up a rough gem or some gold bring it
@@ -821,7 +831,21 @@ the plains and savanna. They stand tied to a hitching post by the road into
 town, with the wagons beside them. The town's merchants take a wagon (more goods,
 quicker) or a horse (quicker still) when one is free, as do townsfolk on an
 outing. Riders and drivers get down when they reach their camp or their
-destination, and tie their horses to a post with a lead.
+destination, and tie their horses to a post with a lead. Townsfolk on an outing
+ride in the back of the wagon. Once a town has two horses and money to spare it
+builds stables, with a stall for each horse; the handler works there, and the
+wagons stand out front. Until then the horses are tied to the hitching post.
+
+**Your own horse.** Wild horses on the plains and savanna can be won over with
+food: offer two to four apples, carrots, wheat, berries or cabbages and it's
+yours. Put a saddle on it (made at a workbench) and you can ride it, a good deal
+quicker than on foot. F gets you down, and it waits where you leave it.
+
+**Your own wagon.** A wagon is made at a workbench. Set it down, bring a horse of
+yours close and right-click the horse to back it into the shafts (or ride up to
+the wagon and right-click it). Then right-click the wagon to take the reins.
+Anyone's wagon, yours or a town's or a trader's, you can climb into the back of
+and sit a while.
 
 **Trading companies.** Three companies of traders wander the roads and never
 settle anywhere. Each has a banner on its wagons' canvas and on its horses'
@@ -847,7 +871,7 @@ which its old realm takes even worse.
 
 **Walls and gates.** City gates have real gates. They stand open by day. At
 night a guard on watch shuts them ("Closing the gates for the night!") and opens
-them again for anyone who needs to pass. From inside you can lift the bar
+them again for anyone who needs to pass, closing them about five seconds after. From inside you can lift the bar
 yourself; from outside, with no guard nearby, the gate stays barred till morning.
 When a walled city has grown past its walls, the builders put up a new ring of
 wall round the houses outside, with gates where the roads go through.
@@ -858,9 +882,30 @@ to them to be tended.
 
 **Setting things down.** You can put what you're holding down on the ground (B).
 It stays where it is: walking over it doesn't pick it up, and it doesn't get in
-anyone's way. Mine it to take it back. Townsfolk do the same now and then (a
-tool set down by a hobby, an adventurer's bow by the campfire) and come back for
-it. Taking something that isn't yours is theft if someone sees.
+anyone's way. Mine it to take it back. Pointing at it shows what it is and whose.
+Something on a table or counter sits on top of it, so it's drawn above
+neighbouring blocks that are lower down.
+
+Townsfolk only set things down for a reason. At the tavern a barkeep, innkeeper
+or cook brings a meal to the table for someone who's paid for one. They sit and
+eat a while and leave a dirty dish, which the staff come round and clear. A
+merchant sets out a thing or two they have plenty of on the counter beside them.
+It's still for sale, and they take it off when it sells out. Taking something
+that isn't yours (someone's dinner, a piece off the counter) is theft if someone
+sees, and a piece taken off a merchant's counter is gone from their stock. If
+nobody sees, the merchant notices it's missing later.
+
+**Thefts add up.** Several things taken from the same building (or the same
+owner) within an hour or so count as one theft of all of it, not a string of
+separate ones.
+
+**Curfew.** Where there's a curfew, a guard on night watch who sees you out in
+the streets after ten comes over and tells you to get indoors. If you're still
+out a little later, they fine you. Guards also send townsfolk still out after
+curfew home.
+
+**Funerals.** Mourners stand spread out along the graveyard paths and just
+outside the gate, a pace apart, with the priest at the foot of the grave.
 
 **Bigger towns.** Villages and towns start with a few more people and a few more
 guards, and a place needs more people (26 for a town, 50 for a city), buildings
@@ -903,7 +948,8 @@ src/
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), creature, item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
-                       pixel art), renderer (oblique painter), lighting, crt
+                       pixel art), renderer (oblique painter), fx (flame
+                       arcs, lightning, shock rings, burning), lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
@@ -913,6 +959,7 @@ src/
                        hero (character creation and perks), save slots,
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
+                       riding (your own horses and wagons),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,

@@ -138,7 +138,8 @@ test('city gates open by day and a guard shuts them at night', () => {
   assert.ok(guard, 'the watch is about');
   guard.teleport(g.x + 2, GROUND, g.z + 2);
   guard.sleeping = false;
-  tick(game, input, 30, 0.1);
+  // (Anyone let through, the watch shuts it again a few seconds after.)
+  tick(game, input, 80, 0.1);
   assert.equal(w.getState(g.x, GROUND, g.z), false, 'shut at night');
   assert.equal(w.canStand(g.x, GROUND, g.z, false), false, 'a shut gate stops you');
 });

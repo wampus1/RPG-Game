@@ -47,6 +47,31 @@ export function repLevel(v) {
   return { label: 'Trusted', color: '#ffe070' };
 }
 
+// Where people stand at a funeral: the foot of the grave first (for whoever
+// says the words), then spots along the graveyard's paths and out past its
+// gate, each with a clear pace round it where there's room.
+export function funeralSpots(L, gx, gz, n, ok = () => true) {
+  const g = L.graveyard;
+  if (!g) return [{ x: gx, z: gz + 1 }];
+  const south = g.z + 2 * g.rows + 1;
+  const graves = new Set(g.slots.map((q) => q.x * 65536 + q.z));
+  const cands = [];
+  for (let z = g.z + 1; z < south; z++) for (let x = g.x + 1; x <= g.x + g.W - 2; x++) if (!graves.has(x * 65536 + z)) cands.push({ x, z });
+  for (let z = south + 1; z <= south + 3; z++) for (let x = g.x - 1; x <= g.x + g.W; x++) cands.push({ x, z, outside: true });
+  const d = (q) => Math.hypot(q.x - gx, (q.z - gz - 1) * 1.2) + (q.outside ? 1.5 : 0);
+  cands.sort((a, b) => d(a) - d(b));
+  const out = [{ x: gx, z: gz + 1 }];
+  for (let i = cands.length - 1; i >= 0; i--) if (!ok(cands[i].x, cands[i].z)) cands.splice(i, 1);
+  for (const gap of [2, 1]) {
+    for (const q of cands) {
+      if (out.length >= n) return out;
+      if (out.some((o) => Math.max(Math.abs(o.x - q.x), Math.abs(o.z - q.z)) < gap)) continue;
+      out.push(q);
+    }
+  }
+  return out;
+}
+
 export function buildingAt(L, x, z) {
   for (const b of L.buildings) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return b;
   return null;
@@ -550,6 +575,20 @@ export class Sim {
     return r;
   }
 
+  // A merchant's display piece taken (stolen): one fewer in their stock.
+  displayTaken(d, item, n = 1) {
+    if (!d) return;
+    let store = null;
+    if (d.visit !== undefined) {
+      const v = (this.visits.get(d.sid) || []).find((q) => q.id === d.visit);
+      store = v ? v.goods : null;
+    } else if (d.bid !== undefined) {
+      const L = this.layoutOf(d.sid);
+      store = L && L.econ && L.econ.biz[d.bid] ? L.econ.biz[d.bid].store : null;
+    }
+    if (store) st.take(store, item, Math.min(n, st.count(store, item)));
+  }
+
   // ------------------------------------------------------------ trading
   // The shelf an NPC sells from and the purse they pay with.
   shopOf(npc) {
@@ -726,7 +765,6 @@ export class Sim {
     const name = `${rec.name.first} ${rec.name.last}`;
     if (slot) this.scheduleBurial(L, rec, slot, day, name);
     const fam = new Set([rec.partner, ...rec.children, ...rec.parents].filter((i) => i !== null && i !== undefined));
-    let k = 0;
     const mourners = [];
     for (const o of L.npcs) {
       if (!alive(o) || o === rec) continue;
@@ -738,7 +776,19 @@ export class Sim {
       o.grief = o.grief || [];
       o.grief.push({ idx: rec.idx, name, first: rec.name.first, rel, until: day + (rel === 'family' ? 5 : rel === 'friend' ? 3 : 1), slot: slot ? { x: slot.x, z: slot.z } : null, cause, byPlayer: killer === 'player' });
       o.mood = clamp(o.mood - (rel === 'family' ? 0.35 : rel === 'friend' ? 0.2 : 0.08), 0, 1);
-      if (slot && rel !== 'acquaintance' && !o.away) mourners.push({ idx: o.idx, x: clamp(slot.x + ((k++ % 3) - 1), L.graveyard.x + 1, L.graveyard.x + L.graveyard.W - 2) });
+      if (slot && rel !== 'acquaintance' && !o.away) mourners.push({ idx: o.idx, x: slot.x, z: slot.z + 1 });
+    }
+    // Room to stand: the priest at the foot of the grave, everyone else a
+    // pace apart along the paths and out past the gate.
+    if (slot) {
+      const w = this.game.world;
+      const open = (x, z) => !w.regionAt(x, z) || w.findStandY(x, z, GROUND) === GROUND;
+      const spots = funeralSpots(L, slot.x, slot.z, mourners.length + 1, open);
+      mourners.forEach((m, i) => {
+        const q = spots[i + 1] || spots[spots.length - 1];
+        m.x = q.x;
+        m.z = q.z;
+      });
     }
     const priest = L.npcs.find((r) => r.job === 'priest' && alive(r) && !r.away);
     // The funeral: family and friends gather at the grave the next
@@ -799,7 +849,7 @@ export class Sim {
       setOverride(r, f.s - (extra.officiant ? 10 : 0), f.e + (extra.officiant ? 5 : 0), 'funeral', { who: f.name, ...extra });
       if (r.ent) r.ent.activity = null;
     };
-    for (const m of f.mourners) set(L.npcs[m.idx], { target: { x: m.x, z: f.z + 1 } });
+    for (const m of f.mourners) set(L.npcs[m.idx], { target: { x: m.x, z: m.z ?? f.z + 1 } });
     if (f.priest !== null && f.priest !== undefined) set(L.npcs[f.priest], { target: { x: f.x, z: f.z + 1 }, officiant: true });
   }
 
@@ -1716,7 +1766,8 @@ export class Sim {
       const home = L.settlement;
       for (const rec of L.npcs) {
         const t = rec.trip;
-        if (!t || t.phase !== 'away' || !alive(rec)) continue;
+        // (Riding in the back of someone's wagon: drawn with it.)
+        if (!t || t.phase !== 'away' || !alive(rec) || t.passenger) continue;
         const dest = ow.settlements[t.dest];
         if (!dest) continue;
         const v = (this.visits.get(t.dest) || []).find((q) => q.id === t.visit);

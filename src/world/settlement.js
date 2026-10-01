@@ -28,6 +28,8 @@ const SPECS = {
   herbalist: { size: [[6, 5], [6, 6]] },
   warehouse: { size: [[9, 6], [8, 6]] },
   barn: { size: [[7, 6], [8, 6]], tall: 3 },
+  // Stalls for the town's horses, hay and a trough (see stables.js).
+  stables: { size: [[9, 6], [8, 6]], tall: 3 },
   // A licensed trade's own workshop, built for the player (never staffed).
   player_workshop: { size: [[6, 5], [6, 6]] },
 };
@@ -36,7 +38,7 @@ export const BUILDING_NAMES = {
   house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
-  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop',
+  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables',
 };
 
 // What a trade works at, in its workshop.
@@ -273,7 +275,7 @@ class Layout {
       floor = type === 'temple' ? B.marble : B.stone_bricks;
       if (!flat) roof = cold ? B.roof_snow : rng.chance(0.3) ? B.roof_green : B.roof_slate;
     }
-    if (type === 'barn') {
+    if (type === 'barn' || type === 'stables') {
       wall = style === 'sun' ? B.adobe : B.planks;
       corner = style === 'sun' ? B.adobe : B.log_oak;
       floor = B.dirt;
@@ -537,7 +539,7 @@ class Layout {
     if (jc('herbalist')) count('herbalist');
     if (jc('laborer')) count('warehouse', Math.max(1, Math.ceil(jc('laborer') / 4)));
     if (jc('farmer')) count('barn', s.type === 'village' ? 1 : Math.ceil(jc('farmer') / 5));
-    let civicOrder = ['townhall', 'temple', 'tavern', 'shop', 'library', 'smithy', 'bakery', 'guardhouse', 'tailor', 'workshop', 'herbalist', 'warehouse', 'barn'];
+    let civicOrder = ['townhall', 'temple', 'tavern', 'shop', 'library', 'smithy', 'bakery', 'guardhouse', 'tailor', 'workshop', 'herbalist', 'warehouse', 'barn', 'stables'];
     if (s.type === 'village') {
       // Villages only support a handful of trades.
       const keep = new Set(['tavern', 'barn', 'townhall']);
@@ -1719,6 +1721,33 @@ class Layout {
       tryPlace(B.bed, 'wall', { access: true, rot: 'wall' });
       lamp();
       b.work.push(...b.seats);
+    } else if (t === 'stables') {
+      // A row of stalls along the wall furthest from the door, a rail
+      // between each; hay, a trough and the tack chest.
+      const d = (q) => Math.abs(q.x - b.inside.x) + Math.abs(q.z - b.inside.z);
+      const rows = [interior.filter((q) => q.z === iz0), interior.filter((q) => q.z === iz1), interior.filter((q) => q.x === ix0), interior.filter((q) => q.x === ix1)];
+      const far = (r) => r.reduce((m, q) => m + d(q), 0) / r.length;
+      const back = rows.filter((r) => r.length >= 3).sort((a, c) => far(c) - far(a))[0] || rows[0];
+      b.stalls = [];
+      back.forEach((q, i) => {
+        if (reserved.has(key(q.x, q.z))) return;
+        if (i % 2 === 1) {
+          occ.add(key(q.x, q.z));
+          if (!connected()) {
+            occ.delete(key(q.x, q.z));
+            return;
+          }
+          this.put(q.x, Y0, q.z, B.fence);
+        } else {
+          reserved.add(key(q.x, q.z));
+          b.stalls.push({ x: q.x, z: q.z });
+        }
+      });
+      for (let i = 0; i < 3; i++) tryPlace(B.hay_bale, 'wall');
+      tryPlace(B.barrel, 'wall');
+      tryPlace(B.chest, 'wall', { access: true });
+      lamp();
+      for (const f of interior.filter((q) => !occ.has(key(q.x, q.z)) && !reserved.has(key(q.x, q.z))).slice(0, 2)) addWork(f.x, f.z, 0);
     } else if (t === 'barn') {
       for (let i = 0; i < 6; i++) tryPlace(B.hay_bale, 'wall');
       tryPlace(B.barrel, 'wall');
@@ -2531,6 +2560,8 @@ class Layout {
         return this.spotsByTag(job === 'lumberjack' ? 'chop' : job === 'miner' ? 'mine' : 'hunt').length > 0;
       case 'guardhouse':
         return true; // guards patrol even without a guardhouse
+      case 'stables':
+        return true; // (the horses at the hitching post, till there are stables)
       case 'shop':
         return this.buildings.some((b) => b.type === 'shop') || this.spotsByTag('market').length > 0;
       default:
@@ -2551,6 +2582,7 @@ class Layout {
       return { kind: 'patrol', building: gh.length ? rng.pick(gh).id : null, post };
     }
     if (J.place === 'farm') return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
+    if (J.place === 'stables' && !this.buildings.some((b) => b.type === 'stables' && !b.underConstruction)) return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
     if (J.place === 'dock') return { kind: 'tag', tag: 'fish' };
     if (J.place === 'plaza') return { kind: 'plaza' };
     if (J.place === 'rounds') return { kind: 'rounds' };

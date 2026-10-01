@@ -608,16 +608,25 @@ export class UI {
           lines.push({ text: `Opinion: ${lvl.label}`, color: lvl.color });
         }
         lines.push({ text: 'RMB talk · LMB attack', color: C.faint });
+      } else if (e.kind === 'prop') {
+        lines.push({ text: e.own ? 'Your wagon' : 'Wagon', color: C.hi });
+        lines.push({ text: e.own ? (e.horse ? 'RMB drive' : 'needs a horse in the shafts') : 'RMB climb in', color: C.faint });
       } else {
-        lines.push({ text: e.name || e.species, color: e.hostileNow ? C.red : C.green });
+        const horse = e.species === 'horse';
+        lines.push({ text: horse ? (e.own ? 'Your horse' : e.tie ? (e.banner ? 'A trader\'s horse' : 'A town horse') : 'Wild horse') : e.name || e.species, color: e.hostileNow ? C.red : C.green });
         lines.push({ text: `${Math.max(0, e.hp)}/${e.maxHp} HP`, color: C.dim });
+        if (horse && !e.tie) lines.push({ text: e.own ? (e.saddled ? 'RMB ride' : 'RMB with a saddle to saddle up') : 'RMB with food to win it over', color: C.faint });
       }
     } else if (c.block && c.block.id !== B.air) {
       const b = c.block;
       let label = b.label;
       if (b.interact === 'door') label += game.world.getState(c.x, c.y, c.z) ? ' (open)' : ' (closed)';
       if (b.interact === 'torch') label += game.world.getState(c.x, c.y, c.z) ? ' (lit)' : ' (out)';
+      // Something set down: what it is (and whose).
+      const got = b.id === B.placed_item && game.placed ? game.placed.get(`${c.x},${c.y},${c.z}`) : null;
+      if (got) label = `${ITEMS[got.item]?.name || got.item}${got.count > 1 ? ` x${got.count}` : ''}${game.placedOwnerName ? game.placedOwnerName(got) : ''}`;
       lines.push({ text: label, color: c.inReach ? C.hi : C.dim });
+      if (got && got.meal && got.eating) lines.push({ text: 'someone\'s meal', color: C.faint });
       const hints = [];
       if (b.interact) hints.push(`click ${interactVerb(b.interact)}`);
       if (isFinite(b.hardness) && !b.liquid) hints.push('hold mine');

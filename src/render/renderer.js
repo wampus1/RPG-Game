@@ -4,11 +4,12 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting } from './lighting.js';
+import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -37,6 +38,7 @@ export class Renderer {
     this.camY = 0;
     this.time = 0;
     this.particles = [];
+    this.fx = [];
     this.floaters = [];
     this.lighting = new Lighting();
     this.dropIcons = new Map();
@@ -194,6 +196,7 @@ export class Renderer {
     this.drawProjectiles(game);
     if (!snap) this.drawWeather(game, dt);
     this.lighting.draw(this, game);
+    drawEffects(this, this.ctx, dt);
     this.drawParticles(dt);
     if (snap) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
@@ -423,7 +426,9 @@ export class Renderer {
             const x = x0 + i;
             const wx = colWX[ci];
             const wz = colWZ[ci];
-            if (hid(wx, y, wz)) continue;
+            // (Something set down belongs with what it's set on: it shows
+            // whenever that does, a cut-away roof or not.)
+            if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) continue;
             const b = BLOCKS[id];
             const sx = x * TILE - camX;
             let alpha = 1;
@@ -505,7 +510,7 @@ export class Renderer {
                 ctx.drawImage(atlas, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
                 ctx.globalAlpha = alpha < 1 ? alpha : 1;
                 const icon = itemIcon(got.item);
-                drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time);
+                drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time, true);
                 if (got.count > 1) drawText(ctx, String(got.count), sx + 10, sy + SPR_H - 6, '#ffffff', '#000');
                 if (pickable && this.under(null, sx, sy + SPR_H - 16, 16, 14, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
               }
@@ -615,28 +620,49 @@ export class Renderer {
     const left = this.sideOf(e);
     const moving = e.moving;
     const f = moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
-    const horse = horseSprite(f, m.coat || 0, m.banner || null);
+    const horse = horseSprite(f, m.coat || 0, m.banner || null, !!m.saddle);
     if (m.kind === 'horse') {
       this.drawSide(ctx, horse, sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
-      return 9;
+      return 12;
     }
-    // A wagon: the driver on the bench at the front, the horse ahead.
-    const dx = left ? -1 : 1;
-    const wx = sx + 8 - WAGON_W / 2 - dx * 8;
-    this.drawSide(ctx, wagonSprite(m.banner || null, moving ? Math.floor(this.time * 5) : 0), wx, feetY - WAGON_H + 1, left);
-    this.drawSide(ctx, horse, sx + 8 - HORSE_W / 2 + dx * 16, feetY - HORSE_H + 1, left);
-    return 8;
+    // A wagon: the driver on the bench at the front, the horse ahead,
+    // anyone riding along sat in the back.
+    this.drawWagonAt(ctx, sx + 8, feetY, left, m, moving ? Math.floor(this.time * 5) : 0, horse);
+    return WAGON_SEAT.lift;
   }
 
-  // A wagon standing still: its hood, wheels and banner.
+  // A wagon with its bench at screen x `cx` (so a driver sat there is
+  // centred on it), its horse in the shafts (if `horse`), and passengers.
+  drawWagonAt(ctx, cx, feetY, left, m, frame = 0, horse = null) {
+    const wx = left ? cx - WAGON_SEAT.x - 1 : cx - (WAGON_W - WAGON_SEAT.x) + 1;
+    const wy = feetY - WAGON_H + 1;
+    const hood = m.hood !== false;
+    if (horse) this.drawSide(ctx, horse, left ? wx - HORSE_W + 7 : wx + WAGON_W - 7, feetY - HORSE_H + 1, left);
+    // Passengers behind the canvas side, their heads and shoulders showing.
+    const riders = m.riders || [];
+    riders.forEach((look, i) => {
+      const seat = WAGON_BED[i % WAGON_BED.length];
+      const px = left ? wx + seat.x : wx + WAGON_W - 1 - seat.x;
+      const sheet = humanoidSheet(look);
+      const top = feetY - CHAR_H + 1 - seat.lift - (hood ? 2 : 0);
+      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, 14, px - 8, top - SPR_PAD, CHAR_W, 14);
+    });
+    this.drawSide(ctx, wagonSprite(m.banner || null, frame, hood && !riders.length), wx, wy, left);
+  }
+
+  // A wagon standing still: its hood, wheels and banner (and whoever's
+  // sitting in it).
   drawProp(ctx, e, sx, feetY) {
     if (e.type !== 'wagon') return;
     const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
     const sh = TEX.misc.shadow;
     ctx.globalAlpha = 0.6;
-    ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 6, feetY - 4, 28, 8);
+    ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 10, feetY - 4, 36, 8);
     ctx.globalAlpha = 1;
-    this.drawSide(ctx, wagonSprite(e.banner || null, 0), sx + 8 - WAGON_W / 2, feetY - WAGON_H + 1, left);
+    this.drawWagonAt(ctx, sx + 8, feetY, left, { banner: e.banner, riders: e.riders || [], hood: e.hood }, 0, e.horse ? horseSprite(0, e.horse.coat || 0, null, !!e.horse.saddle) : null);
+    // Under the mouse? (To climb in.)
+    const m = this.mouse;
+    if (m && m.x >= sx - 10 && m.x < sx + 26 && m.y >= feetY - WAGON_H && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
   }
 
   // A fence post with rails to its neighbours (in view directions). Returns
@@ -670,6 +696,8 @@ export class Renderer {
     if (sx < -32 || sx > VIEW_W + 32 || feetY < -40 || feetY > VIEW_H + 40) return;
     const sh = TEX.misc.shadow;
     const inWater = e.inWater;
+    // Sat in the back of a wagon: drawn with it (see drawProp).
+    if (e.inWagon) return;
     if (e.kind === 'item') {
       const bob = Math.sin(this.time * 4 + e.id) * 1.5;
       ctx.globalAlpha = 0.7;
@@ -677,7 +705,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
       const icon = this.dropIcon(e.item);
       const air = e.air || 0;
-      drawJewelled(ctx, icon, e.item, sx + 4, Math.round(feetY - 9 + bob - air * LH), this.time);
+      drawJewelled(ctx, icon, e.item, sx + 4, Math.round(feetY - 9 + bob - air * LH), this.time, true);
       return;
     }
     // A wagon standing still (at a camp or outside town).
@@ -697,7 +725,7 @@ export class Renderer {
       // A horse, bigger than the rest: side on, turned the way it's going.
       const left = this.sideOf(e);
       const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
-      this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+      this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null, !!e.saddled), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
     } else if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
       const frames = sheet.width / 32;
@@ -720,6 +748,15 @@ export class Renderer {
         const frame = e.actionTimer > 0 && !mount ? 3 : e.raft || mount ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
         const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift;
+        // Jewelled armour: a faint glow of its stone's colour round them.
+        const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
+        const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
+        if (stone && !inWater) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (0.3 + 0.25 * (0.5 + 0.5 * Math.sin(this.time * 2.4 + e.id)));
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, GEMS[stone].color), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a;
+        }
         if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
@@ -727,13 +764,11 @@ export class Renderer {
         } else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         const held = e.heldItem ? e.heldItem() : null;
         if (held) this.drawHeld(ctx, held, e, sx, top);
-        // Jewelled armour: a shimmer of its stone's colour now and then.
-        const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
-        const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
+        // ...and a glint of it now and then.
         if (stone && !this.spin) {
           e.shimmerT = (e.shimmerT || 0) - (this.frameDt || 0.016);
           if (e.shimmerT <= 0) {
-            e.shimmerT = 0.35 + Math.random() * 0.3;
+            e.shimmerT = 0.6 + Math.random() * 0.6;
             const rp = e.renderPos();
             this.emit(rp.x + (Math.random() - 0.5) * 0.6, rp.y + 0.6 + Math.random() * 0.8, rp.z, { n: 1, color: [GEMS[stone].color, '#ffffff'], up: 8, speed: 6, life: 0.7, gravity: -6 });
           }
@@ -741,6 +776,12 @@ export class Renderer {
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
+    // On fire, dazed, chilled.
+    if (!e.dead && !this.spin && e.kind !== 'item') {
+      const tall = e.kind !== 'creature' || e.species === 'horse';
+      if (e.burnT > 0) drawBurning(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
+      if (e.stunT > 0 || e.slowT > 0) drawStatus(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
+    }
     // Under the mouse? (The last thing drawn there is what you point at.)
     const m = this.mouse;
     if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead) {
@@ -782,7 +823,7 @@ export class Renderer {
       const sign = dir === 1 ? -1 : 1;
       ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
       if (dir === 1) ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, -2, -8, this.time);
+      drawJewelled(ctx, icon, key, -2, -8, this.time, true);
       ctx.restore();
       return;
     }
@@ -791,9 +832,9 @@ export class Renderer {
       ctx.save();
       ctx.translate(hx, hy);
       ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, -2, -7, this.time);
+      drawJewelled(ctx, icon, key, -2, -7, this.time, true);
       ctx.restore();
-    } else drawJewelled(ctx, icon, key, hx - 2, hy - 7, this.time);
+    } else drawJewelled(ctx, icon, key, hx - 2, hy - 7, this.time, true);
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
@@ -956,7 +997,7 @@ export class Renderer {
     const leads = [];
     const esc = game.sim && game.sim.justice.escort;
     if (esc && esc.guard && !esc.guard.dead) leads.push({ a: esc.guard, b: game.player, ah: 11, bh: 10, wrists: true });
-    for (const c of game.visibleEntities || []) if (c.kind === 'creature' && c.tie && !c.dead) leads.push({ a: c, b: c.tie, ah: 11, bh: 13, head: true });
+    for (const c of game.visibleEntities || []) if (c.kind === 'creature' && c.tie && !c.dead && c.tieR !== 0) leads.push({ a: c, b: c.tie, ah: 14, bh: 13, head: true });
     const add = (row, layer, order, deco) => {
       if (row < zMin || row > zMax) return;
       let arr = buckets.get(row);
@@ -968,7 +1009,7 @@ export class Renderer {
       const [u, v] = this.toView(rp.x, rp.z);
       let x = u * TILE + 8 - this.camX;
       // (A horse's lead runs from its head.)
-      if (head) x += q.sideLeft === false ? 9 : -9;
+      if (head) x += q.sideLeft === false ? 12 : -12;
       return { x, y: v * TILE - rp.y * LH + LH + 10 - this.camY - h, row: Math.ceil(v - 0.001), layer: Math.ceil(rp.y - 0.001) + 1 };
     };
     for (const L of leads) {
@@ -1086,9 +1127,15 @@ export class Renderer {
         color: Array.isArray(opts.color) ? opts.color[Math.floor(Math.random() * opts.color.length)] : opts.color,
         size: opts.size ?? 1,
         glow: !!opts.glow,
+        shape: opts.shape,
       });
     }
     if (this.particles.length > 900) this.particles.splice(0, this.particles.length - 900);
+  }
+
+  // A gem's work, a burst of fire, a bolt of lightning (see fx.js).
+  effect(o) {
+    return addEffect(this, o);
   }
 
   floatText(wx, y, wz, text, color = '#ff6060') {
@@ -1116,7 +1163,17 @@ export class Renderer {
       if (sx < -4 || sy < -4 || sx > VIEW_W || sy > VIEW_H) continue;
       ctx.globalAlpha = Math.min(1, p.life / (p.max * 0.5));
       ctx.fillStyle = p.color;
-      ctx.fillRect(sx, sy, p.size, p.size);
+      if (p.shape === 'plus') {
+        ctx.fillRect(sx, sy - 1, 1, 3);
+        ctx.fillRect(sx - 1, sy, 3, 1);
+      } else if (p.shape === 'star') {
+        ctx.fillRect(sx, sy, 1, 1);
+        ctx.globalAlpha *= 0.6;
+        ctx.fillRect(sx - 1, sy, 1, 1);
+        ctx.fillRect(sx + 1, sy, 1, 1);
+        ctx.fillRect(sx, sy - 1, 1, 1);
+        ctx.fillRect(sx, sy + 1, 1, 1);
+      } else ctx.fillRect(sx, sy, p.size, p.size);
     }
     ctx.globalAlpha = 1;
     for (let i = this.floaters.length - 1; i >= 0; i--) {

@@ -60,6 +60,8 @@ item('slime_gel', { value: 3 });
 item('feather', { value: 1 });
 item('book', { kind: 'misc', stack: 16, value: 10 });
 item('coin', { name: 'Gold Coin', kind: 'misc', stack: 999, value: 1 });
+// What's left of a tavern meal, waiting to be cleared away.
+item('dirty_dish', { name: 'Dirty Dish', kind: 'misc', stack: 16, value: 0 });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
@@ -97,6 +99,9 @@ item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, d
 item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
 item('water_bucket', { name: 'Bucket of Water', kind: 'tool', stack: 1, value: 4, bucket: true, water: 3 });
 item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
+// Tack for a horse of your own, and a wagon for it to pull.
+item('saddle', { name: 'Saddle', kind: 'misc', stack: 1, value: 35 });
+item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
 item('arrow', { value: 1 });

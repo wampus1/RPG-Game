@@ -1337,6 +1337,7 @@ export class HelpWindow extends Window {
       ['SET DOWN', 'B sets one down · CTRL+B the stack · mine it back up'],
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
+      ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
       ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {
@@ -1354,7 +1355,7 @@ export class HelpWindow extends Window {
       'Talk to the mayor in the town hall to become a citizen: a family',
       'takes you in while builders put up a house of your own.',
     ];
-    tips.forEach((t, i) => g.text(3, 20 + i, t, C.dim));
+    tips.forEach((t, i) => g.text(3, 3 + rows.length + i, t, C.dim));
     g.text(3, 31, 'Every world is generated from its seed: biomes, rivers,', C.faint);
     g.text(3, 32, 'civilizations, towns and every villager\'s life story.', C.faint);
     g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
@@ -1945,24 +1946,154 @@ export class SettingWindow extends Window {
     g.text(4, 14, '[ENTER] Begin setting', C.hi);
     this.hit(3, 14, 22, 1, () => this.begin());
   }
+  // (The bench itself is drawn in pixels: see drawPixels.)
   drawRing(g) {
-    const cx = Math.floor(this.w / 2);
     const cy = 9;
-    const at = (i) => {
-      const a = (i / RING) * Math.PI * 2 - Math.PI / 2;
-      return [cx + Math.round(Math.cos(a) * 12), cy + Math.round(Math.sin(a) * 6)];
+    g.center(1, `${ITEMS[this.set.piece.key].name} · ${GEMS[this.set.gem].name}`, C.dim);
+    g.center(cy + 9, this.phase === 'done' ? 'Set! The stone sits true.' : this.phase === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'×'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.phase === 'fail' ? C.red : this.phase === 'done' ? C.green : C.fg);
+    g.center(cy + 11, this.phase === 'set' ? 'SPACE as the gleam crosses a claw' : '[ENTER] close', C.faint);
+  }
+  // Under the loupe: the stone in its gold collet, four claws standing up
+  // round it, and a gleam of light running round the rim. Press as it
+  // crosses a claw and the pusher bends it down over the stone; miss, and
+  // a crack runs through the stone.
+  drawPixels(ctx) {
+    if (this.phase === 'choose' || !this.set) return;
+    const W = this.w * CHAR_W;
+    const ox = this.x * CHAR_W;
+    const oy = this.y * CHAR_H;
+    const cx = ox + Math.floor(W / 2);
+    const cy = oy + 9 * CHAR_H + 2;
+    const t = this.t || 0;
+    const px = (x, y, c, w = 1, h = 1) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(Math.round(x), Math.round(y), w, h);
     };
-    for (let i = 0; i < RING; i++) {
-      const [x, y] = at(i);
-      const k = PRONGS.indexOf(i);
-      if (k >= 0) g.put(x, y, this.pressed[k] ? '■' : '▲', this.pressed[k] ? C.green : C.hi);
-      else g.put(x, y, '·', C.faint);
+    const gem = GEMS[this.set.gem];
+    const col = gem.color;
+    const shade = (hex, f) => {
+      const n = parseInt(hex.slice(1), 16);
+      const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+      const gg = Math.min(255, Math.round(((n >> 8) & 255) * f));
+      const b = Math.min(255, Math.round((n & 255) * f));
+      return `rgb(${r},${gg},${b})`;
+    };
+    // The loupe: a round pool of light on dark velvet, a brass rim.
+    const R = 54;
+    for (let y = -R; y <= R; y++) {
+      const half = Math.floor(Math.sqrt(R * R - y * y));
+      const d = Math.abs(y) / R;
+      ctx.fillStyle = `rgb(${Math.round(40 - d * 18)},${Math.round(30 - d * 14)},${Math.round(48 - d * 20)})`;
+      ctx.fillRect(cx - half, cy + y, half * 2 + 1, 1);
     }
-    const [nx, ny] = at(Math.round(this.pos) % RING);
-    g.put(nx, ny, '•', C.white);
-    g.put(cx, cy, '♦', GEMS[this.set.gem].color);
-    g.center(cy + 8, this.phase === 'done' ? 'Set! The stone sits true.' : this.phase === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'×'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.phase === 'fail' ? C.red : this.phase === 'done' ? C.green : C.fg);
-    if (this.phase !== 'set') g.center(cy + 10, '[ENTER] close', C.faint);
+    for (let a = 0; a < Math.PI * 2; a += 0.012) {
+      const x = cx + Math.cos(a) * R;
+      const y = cy + Math.sin(a) * R;
+      px(x, y, a > Math.PI ? '#c8a050' : '#8a6a30', 2, 2);
+    }
+    // Gold collet round the stone.
+    const ring = 24;
+    for (let a = 0; a < Math.PI * 2; a += 0.02) {
+      const lit = Math.cos(a + 2.2) * 0.5 + 0.5;
+      for (let r = ring - 3; r <= ring; r++) px(cx + Math.cos(a) * r, cy + Math.sin(a) * r, shade('#d8a838', 0.6 + lit * 0.7));
+    }
+    // The stone: a faceted octagon, lighter to the top left.
+    const crackT = this.phase === 'fail' ? Math.min(1, (t - (this.failAt || 0)) * 2) : 0;
+    if (crackT < 1) {
+      const S = 17;
+      for (let y = -S; y <= S; y++) {
+        for (let x = -S; x <= S; x++) {
+          if (Math.abs(x) + Math.abs(y) > S * 1.45 || Math.abs(x) > S || Math.abs(y) > S) continue;
+          const facet = (x < 0 ? 0 : 1) + (y < 0 ? 0 : 2) + (Math.abs(x) + Math.abs(y) < S * 0.55 ? 4 : 0);
+          const f = [1.35, 1.05, 0.9, 0.65, 1.55, 1.2, 1.1, 0.85][facet];
+          px(cx + x, cy + y, shade(col, f));
+        }
+      }
+      // Glints turning slowly on the facets.
+      for (let i = 0; i < 3; i++) {
+        const a = t * 0.8 + i * 2.1;
+        const gx = cx + Math.cos(a) * 8 - 3;
+        const gy = cy + Math.sin(a) * 6 - 4;
+        const k = 0.5 + 0.5 * Math.sin(t * 3 + i);
+        ctx.globalAlpha = 0.5 + 0.5 * k;
+        px(gx, gy, '#ffffff');
+        px(gx - 1, gy, '#ffffff', 1, 1);
+        px(gx + 1, gy, '#ffffff', 1, 1);
+        px(gx, gy - 1, '#ffffff', 1, 1);
+        px(gx, gy + 1, '#ffffff', 1, 1);
+        ctx.globalAlpha = 1;
+      }
+      // Cracks from each slip.
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      (this.cracks || []).forEach((c) => {
+        let x = cx + c.x0;
+        let y = cy + c.y0;
+        for (let k = 0; k < c.len; k++) {
+          x += c.dx + (Math.sin(k * 1.7 + c.x0) > 0.6 ? 1 : 0);
+          y += c.dy;
+          ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+        }
+      });
+    }
+    // Claws, standing up (pale), or bent down over the stone (bright).
+    const at = (i, r) => {
+      const a = (i / RING) * Math.PI * 2 - Math.PI / 2;
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, a];
+    };
+    PRONGS.forEach((q, k) => {
+      const near = this.phase === 'set' && !this.pressed[k] && Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q)) <= 0.9;
+      const bend = this.pressed[k] ? Math.min(1, (t - (this.pressAt?.[k] ?? -9)) * 6) : 0;
+      const [ax, ay, a] = at(q, ring - 2);
+      const len = 9;
+      // Out from the rim when standing; folded in over the stone's edge.
+      const dir = 1 - bend * 2;
+      for (let s2 = 0; s2 < len; s2++) {
+        const r = s2 * dir;
+        const w = s2 < 3 ? 3 : 2;
+        px(ax + Math.cos(a) * r - 1, ay + Math.sin(a) * r - 1, near ? '#fff4b0' : bend ? '#f0c848' : '#b89040', w, w);
+      }
+      if (near) {
+        ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 20);
+        px(ax - 4, ay - 4, '#fff0a0', 8, 8);
+        ctx.globalAlpha = 1;
+      }
+    });
+    // The gleam running round the rim, with its tail.
+    if (this.phase === 'set') {
+      for (let k = 0; k < 10; k++) {
+        const [gx, gy] = at(this.pos - k * 0.12, ring + 4);
+        ctx.globalAlpha = (1 - k / 10) * 0.9;
+        px(gx - 1, gy - 1, k === 0 ? '#ffffff' : '#ffe890', k === 0 ? 3 : 2, k === 0 ? 3 : 2);
+      }
+      ctx.globalAlpha = 1;
+      // The pusher, following the gleam from outside, thrusting on a press.
+      const thrust = Math.max(0, (this.pushT || 0) / 0.15);
+      const [tx, ty, ta] = at(this.pos, ring + 20 - thrust * 8);
+      for (let s2 = 0; s2 < 14; s2++) px(tx + Math.cos(ta) * s2 - 1, ty + Math.sin(ta) * s2 - 1, s2 < 3 ? '#d8d8e0' : '#6a4a2a', 2, 2);
+    }
+    // Sparks from each claw pressed home, and the stone's pieces if it split.
+    for (const f of this.fx || []) {
+      ctx.globalAlpha = Math.max(0, f.life / f.max);
+      px(cx + f.x, cy + f.y, f.c, f.s || 1, f.s || 1);
+    }
+    ctx.globalAlpha = 1;
+    // Done: the stone glows in its setting.
+    if (this.phase === 'done') {
+      const k = 0.4 + 0.3 * Math.sin(t * 4);
+      ctx.globalAlpha = k * 0.5;
+      for (let r = 18; r < 30; r += 2) {
+        for (let a = 0; a < Math.PI * 2; a += 0.08) px(cx + Math.cos(a) * r, cy + Math.sin(a) * r, col);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  burst(x, y, colors, n = 10, speed = 40) {
+    this.fx ||= [];
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = speed * (0.4 + Math.random() * 0.6);
+      this.fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 10, life: 0.5 + Math.random() * 0.4, max: 0.9, c: colors[i % colors.length], s: Math.random() < 0.3 ? 2 : 1 });
+    }
   }
   begin() {
     const pieces = this.pieces();
@@ -1977,6 +2108,15 @@ export class SettingWindow extends Window {
     this.ui.audio?.play('select');
   }
   update(dt) {
+    this.t = (this.t || 0) + dt;
+    if (this.pushT > 0) this.pushT -= dt;
+    for (const f of this.fx || []) {
+      f.life -= dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vy += 60 * dt;
+    }
+    if (this.fx) this.fx = this.fx.filter((f) => f.life > 0);
     if (this.phase !== 'set') return;
     this.pos = (this.pos + dt * this.speed) % RING;
   }
@@ -1992,20 +2132,36 @@ export class SettingWindow extends Window {
         best = k;
       }
     });
+    this.pushT = 0.15;
+    const claw = (k) => {
+      const a = (PRONGS[k] / RING) * Math.PI * 2 - Math.PI / 2;
+      return [Math.cos(a) * 22, Math.sin(a) * 22];
+    };
     if (best >= 0 && bd <= 0.9) {
       this.pressed[best] = true;
+      (this.pressAt ||= [])[best] = this.t || 0;
       this.speed += 2.5;
       this.ui.audio?.play('clang');
+      const [x, y] = claw(best);
+      this.burst(x, y, ['#fff4b0', '#ffd040', '#ffffff'], 12, 45);
       if (this.pressed.every(Boolean)) {
         this.phase = 'done';
+        this.endAt = this.t || 0;
+        this.burst(0, 0, [GEMS[this.set.gem].color, '#ffffff', '#fff4b0'], 30, 70);
         this.game.setGem(this.set.piece.ref, this.set.gem);
       }
       return;
     }
     this.slips++;
     this.ui.audio?.play('error');
+    // A crack runs through the stone.
+    (this.cracks ||= []).push({ x0: Math.round(Math.random() * 10 - 5), y0: -12 + Math.round(Math.random() * 6), dx: Math.random() < 0.5 ? 0.5 : -0.5, dy: 1, len: 14 + Math.round(Math.random() * 8) });
+    this.burst(0, 0, ['#ffffff', '#c8c8d0'], 5, 25);
     if (this.slips >= 3) {
       this.phase = 'fail';
+      this.failAt = this.t || 0;
+      this.endAt = this.failAt;
+      this.burst(0, 0, [GEMS[this.set.gem].color, '#ffffff', GEMS[this.set.gem].color], 40, 80);
       removeItem(this.game.player.inv, this.set.gem, 1);
       this.ui.msg(`The ${GEMS[this.set.gem].name.toLowerCase()} cracked in the setting.`, C.red);
     }
@@ -2022,7 +2178,7 @@ export class SettingWindow extends Window {
       else if (k.code === 'Enter') this.begin();
     } else if (this.phase === 'set') {
       if (k.code === 'Space') this.press();
-    } else if (k.code === 'Enter' || k.code === 'Space') this.close();
+    } else if ((k.code === 'Enter' || k.code === 'Space') && (this.t || 0) - (this.endAt || 0) > 0.6) this.close();
     return true;
   }
 }

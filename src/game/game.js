@@ -30,6 +30,7 @@ import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
+import { Riding } from './riding.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
@@ -68,6 +69,8 @@ export class Game {
     this.tied = new Map();
     // Trading companies' night camps by the road near you: key -> camp.
     this.roadCamp = new Map();
+    // Your own horses and wagons.
+    this.riding = new Riding(this);
     this.sleep = null;
     const nrng = new RNG(hash4(this.seed, 0x9a3e));
     const pstyle = this.world.ow.spawnSettlement ? this.world.ow.spawnSettlement.style : 'vale';
@@ -1615,6 +1618,19 @@ export class Game {
       this.talk(c.entity);
       return;
     }
+    // Horses: tempt, tame, saddle, ride; wagons: drive yours, sit in anyone's.
+    if (c && c.entity && c.entity.kind === 'creature' && c.entity.species === 'horse') {
+      this.riding.useHorse(c.entity);
+      return;
+    }
+    if (c && c.entity && c.entity.kind === 'prop' && c.entity.type === 'wagon') {
+      this.riding.useWagon(c.entity);
+      return;
+    }
+    if (held && held.key === 'wagon' && c && c.block && c.inReach && c.face === 'top') {
+      this.riding.placeWagon(c.x, c.y + 1, c.z);
+      return;
+    }
     if (c && c.block && c.inReach && c.block.interact) {
       this.interact(c.x, c.y, c.z);
       return;
@@ -1792,9 +1808,12 @@ export class Game {
   // You picked up something a townsperson set down: that's theft, if anyone
   // (the owner included) sees it.
   tookPlaced(x, z, got) {
-    if (got.owner.adv !== undefined) {
+    const o = got.owner;
+    // A dirty dish nobody wants.
+    if (o.mess) return;
+    if (o.adv !== undefined) {
       // An adventurer's bow from beside their fire: they'll want it back.
-      const e = this.sim.adventurers.ents.get(got.owner.adv);
+      const e = this.sim.adventurers.ents.get(o.adv);
       if (e && !e.dead && e.distTo(this.player) <= 10) {
         e.putDown = null;
         e.say('That\'s MINE. Hand it back, now.', 3, '#ff9080');
@@ -1802,17 +1821,35 @@ export class Game {
       }
       return;
     }
-    const L = this.sim.layoutOf(got.owner.sid);
-    const rec = L && L.npcs[got.owner.idx];
-    if (!L || !rec) return;
-    const sid = got.owner.sid;
+    const sid = o.sid;
+    const L = this.sim.layoutOf(sid);
+    if (!L) return;
+    const HL = o.home !== undefined ? this.sim.layoutOf(o.home) : L;
+    const rec = HL && HL.npcs[o.idx];
+    const who = o.name || (rec ? `${rec.name.first} ${rec.name.last}` : 'someone');
+    const ent = rec && rec.ent && !rec.ent.dead ? rec.ent : null;
+    // A merchant's display piece: gone from their stock too.
+    if (got.display) this.sim.displayTaken(got.display, got.item, got.count);
     const wits = this.sim.witnesses(sid, x, z, 8);
     const name = ITEMS[got.item]?.name || got.item;
     if (wits.length) {
-      const owner = rec.ent && !rec.ent.dead && wits.includes(rec.ent) ? rec.ent : null;
-      if (owner) owner.say(owner.rng.pick([`Hey! That's my ${name.toLowerCase()}!`, 'Put that back!', 'Thief!']), 3, '#ffb080');
-      this.sim.justice.commit(sid, 'theft', { witnesses: wits, value: Math.max(1, Math.round((ITEMS[got.item]?.value || 1) * got.count)), items: [{ item: got.item, count: got.count }], desc: `Taking ${rec.name.first} ${rec.name.last}'s ${name.toLowerCase()}`, owner: { kind: 'rec', id: rec.idx }, victimNpc: owner });
+      const owner = ent && wits.includes(ent) ? ent : null;
+      if (owner) owner.say(owner.rng.pick(got.meal ? ['Oi! That\'s my dinner!', 'Hey, I was eating that!'] : [`Hey! That's my ${name.toLowerCase()}!`, 'Put that back!', 'Thief!']), 3, '#ffb080');
+      const value = Math.max(1, Math.round((ITEMS[got.item]?.value || 1) * got.count));
+      this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: [{ item: got.item, count: got.count }], desc: got.display ? `Stealing ${name} from ${who}'s display` : got.meal ? `Taking ${who}'s meal` : `Taking ${who}'s ${name.toLowerCase()}`, owner: { kind: 'rec', id: o.idx }, victimNpc: owner, bid: buildingAt(L, x, z)?.id ?? null });
+    } else if (got.display) {
+      // Nobody saw: the merchant notices it's gone later.
+      const value = Math.max(1, Math.round((ITEMS[got.item]?.value || 1) * got.count));
+      this.sim.justice.unseen(sid, { type: 'theft', x, z, value, items: [{ item: got.item, count: got.count }], desc: `Stealing ${name} from ${who}'s display`, owner: { kind: 'rec', id: o.idx }, ownerName: who, bid: buildingAt(L, x, z)?.id ?? null });
     }
+  }
+
+  // Whose something set down is (for the tooltip).
+  placedOwnerName(got) {
+    const o = got && got.owner;
+    if (!o || o.mess) return '';
+    if (o.name) return got.display ? ` (${o.name.split(' ')[0]}'s wares)` : ` (${o.name.split(' ')[0]}'s)`;
+    return '';
   }
 
   // Knocking a hole in a town building: the builders will come and fix it.
@@ -2067,24 +2104,37 @@ export class Game {
       for (const w of c.wagons || []) add({ ...w, type: 'wagon' });
     }
     for (const sp of this.sim.caravans ? this.sim.caravans.roadStanding() : []) add(sp);
+    this.riding.update();
+    for (const sp of this.riding.standing()) add(sp);
     const p = this.player;
     for (const [k, sp] of want) {
       if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
       const y = this.world.findStandY(sp.x, sp.z, sp.y ?? GROUND);
       if (y < 0) continue;
       if (sp.type === 'wagon') {
-        if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + this.props.size, x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
+        if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
+        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null });
       } else if (!this.tied.has(k) || this.tied.get(k).dead) {
         if (this.entityAt(sp.x, y, sp.z)) continue;
         const c = new Creature(this, 'horse', sp.x, y, sp.z, sp.coat || 0);
         c.tie = sp.post ? { x: sp.post.x, y: sp.post.y ?? GROUND, z: sp.post.z } : null;
+        if (sp.stall) c.tieR = 0;
         c.banner = sp.banner || null;
         c.standKey = k;
+        // One of yours: loose, not tied.
+        if (sp.own) {
+          c.own = sp.own;
+          c.saddled = !!sp.saddled;
+          c.tie = null;
+        }
         this.addCreature(c);
         this.tied.set(k, c);
       }
     }
     for (const k of [...this.props.keys()]) if (!want.has(k)) this.props.delete(k);
+    // You, sat in the back of one.
+    for (const q of this.props.values()) q.riders = p.inWagon === q ? [p.look] : [];
+    if (p.inWagon && !this.props.has([...this.props].find(([, q]) => q === p.inWagon)?.[0])) p.inWagon = null;
     for (const [k, c] of [...this.tied]) {
       if (want.has(k) && !c.dead) continue;
       if (!c.dead) {
@@ -2119,6 +2169,7 @@ export class Game {
     const w = this.world;
     const tiles = this.gateway(x, z);
     if (!open && tiles.some((t) => this.occupiedAny(t.x, GROUND, t.z))) return false;
+    if (open && this.isNight()) for (const t of tiles) (this.gateOpened ||= new Map()).set(t.x * 65536 + t.z, this.gateClock || 0);
     for (const t of tiles) {
       w.setState(t.x, GROUND, t.z, open);
       if (w.getBlock(t.x, GROUND + 1, t.z) === B.city_gate_top) w.setState(t.x, GROUND + 1, t.z, open);
@@ -2155,13 +2206,11 @@ export class Game {
       g.face(x, z);
       g.say(g.rng.pick(['Hold on, I\'ll let you through.', 'Late to be out. In you come.', 'Opening up! Mind the gap.']), 3);
       this.setGate(x, z, true);
-      this.gateHeld = { x, z, until: this.sim.abs + 20 };
       return true;
     }
     if (inside) {
       this.ui.msg('You lift the bar and swing the gate open.', '#c8c8c8');
       this.setGate(x, z, true);
-      this.gateHeld = { x, z, until: this.sim.abs + 20 };
       return true;
     }
     this.ui.msg('The gate is barred for the night, and there\'s nobody on watch to open it.', '#ffb080', true);
@@ -2172,12 +2221,16 @@ export class Game {
   // Once a second: gates open at dawn; at night the watch shuts them (and
   // opens them again for whoever needs to pass).
   updateGates(dt) {
+    // (Seconds, not game minutes: the watch shuts up about five seconds
+    // after letting someone through.)
+    this.gateClock = (this.gateClock || 0) + dt;
     this.gateT = (this.gateT || 0) - dt;
     if (this.gateT > 0) return;
-    this.gateT = 1;
+    this.gateT = 0.5;
     const w = this.world;
     const night = this.isNight();
-    const now = this.sim.abs;
+    const now = this.gateClock;
+    this.gateOpened ||= new Map();
     for (const { layout: L } of this.active.values()) {
       if (!L.gates || !L.gates.length) continue;
       const done = new Set();
@@ -2186,9 +2239,10 @@ export class Game {
         const tiles = this.gateway(g.x, g.z);
         for (const t of tiles) done.add(t.x * 65536 + t.z);
         const open = w.getState(g.x, GROUND, g.z);
-        const held = this.gateHeld && tiles.some((t) => t.x === this.gateHeld.x && t.z === this.gateHeld.z) && now < this.gateHeld.until;
-        // Someone passing through (or about to): hold it open for them.
-        const busy = [this.player, ...this.npcs].some((e) => !e.dead && tiles.some((t) => Math.max(Math.abs(e.x - t.x), Math.abs(e.z - t.z)) <= 1));
+        const opened = Math.max(...tiles.map((t) => this.gateOpened.get(t.x * 65536 + t.z) ?? -1e9));
+        const held = now - opened < 5;
+        // Someone in the gateway itself: wait for them to be through.
+        const busy = [this.player, ...this.npcs].some((e) => !e.dead && tiles.some((t) => e.x === t.x && e.z === t.z));
         if (!night && !open) this.setGate(g.x, g.z, true);
         else if (night && open && !held && !busy) {
           const guard = this.gateGuard(g.x, g.z, 16);
@@ -2251,6 +2305,8 @@ export class Game {
 
   interactFront() {
     if (this.player.raft) return this.leaveRaft();
+    if (this.player.mount) return this.riding.dismount();
+    if (this.player.inWagon) return this.riding.climbOut();
     const c = this.cursor;
     if (c && c.entity && c.entity.kind === 'npc' && c.entity.distTo(this.player) <= 4) return this.talk(c.entity);
     if (c && c.block && c.block.interact && c.inReach) return this.interact(c.x, c.y, c.z);
@@ -2441,11 +2497,11 @@ export class Game {
     const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
     if (!wits.length) {
       // Nobody saw. The owners will notice later...
-      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.label });
+      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, bid: owner.id, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.label });
       return false;
     }
     const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
-    this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
+    this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, bid: owner.id, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
     return true;
   }
 
@@ -3047,6 +3103,24 @@ export class Game {
   }
 
   // ------------------------------------------------------------ combat
+  // Which way the mouse is from you, as an angle in the world (x, z), or
+  // null with no mouse over the view.
+  aimAngle() {
+    const r = this.renderer;
+    const m = r && r.mouse;
+    if (!m || !r.toView) return null;
+    const p = this.player;
+    const rp = p.renderPos ? p.renderPos() : p;
+    const [u, v] = r.toView(rp.x, rp.z);
+    const px = u * TILE + 8 - r.camX;
+    const py = v * TILE - rp.y * LH + LH - 2 - r.camY;
+    const du = m.x - px;
+    const dv = m.y - py;
+    if (Math.abs(du) + Math.abs(dv) < 2) return null;
+    const [dx, dz] = r.toWorld(du, dv);
+    return Math.atan2(dz, dx);
+  }
+
   swing() {
     const p = this.player;
     if (p.attackCd > 0) return;
@@ -3058,6 +3132,7 @@ export class Game {
 
   attack(target) {
     const p = this.player;
+    if (target.kind === 'prop') return this.swing();
     if (p.attackCd > 0 || target.dead) return;
     const def = p.heldDef();
     const reach = this.attackReach();
@@ -3600,7 +3675,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
       name: this.playerName,
       hero: this.hero || null,
       regions,
@@ -3612,6 +3687,7 @@ export class Game {
       sim: this.sim.serialize(),
       placed: [...this.placed],
       roadCamps: [...this.roadCamp],
+      riding: this.riding.serialize(),
       cheats: { ...this.cheats, reveal: !!this.revealMap },
     };
   }
@@ -3630,6 +3706,7 @@ export class Game {
     if (data.sim) this.sim.load(data.sim);
     this.placed = new Map(data.placed || []);
     this.roadCamp = new Map(data.roadCamps || []);
+    this.riding.load(data.riding);
     this.crops.load(data.crops);
     for (const [sid, t] of data.wanted || []) this.wanted.set(sid, t);
     const pd = data.player;
@@ -3638,6 +3715,7 @@ export class Game {
     if (pd.blue) this.player.blue = pd.blue;
     if (pd.buffs) this.player.buffs = pd.buffs;
     if (pd.raft) this.player.raft = { ...pd.raft, v: 0 };
+    if (pd.mount) this.player.mount = pd.mount;
     if (pd.vigor) {
       this.player.vigor = pd.vigor;
       this.player.recalcMaxHp();

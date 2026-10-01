@@ -252,6 +252,7 @@ export function initRec(rec, rng) {
 export const MATERIALS = {
   house_s: [12, 6], house_m: [20, 10], house_l: [30, 16], tavern: [30, 20], smithy: [20, 30], bakery: [18, 16], workshop: [26, 8],
   shop: [20, 14], library: [26, 22], tailor: [18, 10], guardhouse: [14, 30], temple: [20, 40], herbalist: [16, 8], warehouse: [24, 12],
+  stables: [26, 6],
 };
 const STOCK_CAP = 300;
 
