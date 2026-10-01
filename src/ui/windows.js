@@ -957,29 +957,36 @@ export class LedgerWindow extends Window {
     this.s = s;
     this.L = L;
     this.closeOnOutside = true;
+    // Two sides to the board: the town's own business, and its news.
+    this.tab = 'town';
+    this.scrolls = { town: 0, news: 0 };
   }
-  draw(g, game) {
+  setTab(t) {
+    if (t === this.tab) return;
+    this.scrolls[this.tab] = this.scroll || 0;
+    this.tab = t;
+    this.scroll = this.scrolls[t] || 0;
+    this.ui.audio?.play('select');
+  }
+  // The town's business: who runs it, its money, laws and realm.
+  townLines(game) {
     const { s, L } = this;
     const e = L.econ;
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(40,30,20,0.96)', double: true, title: 'NOTICE BOARD' });
-    g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, '#f0e0c0');
+    const out = [];
+    const row = (k, v, col = '#f0e0c0') => out.push({ k, t: v, c: col });
     const m = mayorOf(L);
     const living = L.npcs.filter(alive);
     const you = game.sim.playerCount(s.id);
     const pop = living.length + you;
     const coffers = e.treasury > pop * 35 ? 'overflowing' : e.treasury > pop * 15 ? 'healthy' : e.treasury > pop * 5 ? 'thin' : 'nearly empty';
-    let y = 3;
-    const row = (k, v, col = '#f0e0c0') => {
-      g.text(3, y, k, C.dim);
-      g.text(18, y++, v.slice(0, 40), col);
-    };
     row(s.type === 'village' ? 'Elder' : 'Mayor', m ? `${m.name.first} ${m.name.last}` : '(none: the council governs)');
     row('Population', `${pop}${you ? ' (you among them)' : ''}${game.sim.playerGuard(s.id) ? ', you on the watch' : ''}`);
     row('Treasury', `¤${e.treasury} (${coffers})`, coffers === 'nearly empty' ? C.orange : '#f0e0c0');
     row('Taxes', `${Math.round(e.tax * 100)}% of earnings${e.taxY ? ` (¤${e.taxY} collected)` : ''}`);
     row('Fines', e.fineScale > 1.05 ? `harsh (×${e.fineScale})` : e.fineScale < 0.95 ? `lenient (×${e.fineScale})` : 'standard');
     const laws = lawList(L);
-    row('Laws', laws.length ? laws.map((id) => LAWS[id].name + (byDecree(L, id) && !L.econ.laws[id] ? ' (realm)' : '')).join(', ') : 'No special laws');
+    if (!laws.length) row('Laws', 'No special laws');
+    laws.forEach((id, i) => row(i ? '' : 'Laws', LAWS[id].name + (byDecree(L, id) && !L.econ.laws[id] ? ' (realm)' : '')));
     // The realm: who rules it and from where, what they've decreed, what
     // this town sends the capital (or gets from it), and the neighbours.
     const civ = s.civ;
@@ -1011,35 +1018,65 @@ export class LedgerWindow extends Window {
     row('Stores', `${k.wood} timber, ${k.stone} stone${e.short ? ` (short for a ${BUILDING_NAMES[e.short]?.toLowerCase() || e.short})` : ''}`, e.short ? C.orange : '#f0e0c0');
     const t = TIERS[s.type];
     if (t) row('Growth', `${pop}/${t.pop} people to become a ${t.next}`);
-    y++;
-    // Every notice the board still holds, newest first: scroll back
-    // through them with the wheel or the arrow keys.
+    // (Long values wrap onto the lines below.)
     const lines = [];
-    // (News from afar comes down after two days, fading as it goes.)
+    for (const r of out) wrap(r.t, this.w - 23).forEach((l, i) => lines.push({ k: i ? '' : r.k, t: l, c: r.c }));
+    return lines;
+  }
+  // The town's news: what's happened here, newest first, and news from
+  // other towns (which comes down after two days, fading as it goes).
+  newsLines(game) {
+    const e = this.L.econ;
+    const lines = [];
     const now = game.sim.now();
     const far = freshRumours(e, now).reverse();
+    lines.push({ t: 'NOTICES', c: C.hi });
+    const notes = e.ledger.map((n, i) => ({ n, i })).sort((a, b) => b.n.day - a.n.day || b.i - a.i).map((q) => q.n);
+    if (!notes.length) lines.push({ t: 'Nothing posted yet.', c: C.dim });
+    for (const n of notes) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
     if (far.length) {
+      lines.push({ t: '', c: C.fg });
       lines.push({ t: 'NEWS FROM AFAR', c: C.hi });
       for (const r of far) {
         const c = mixHex(C.cyan, '#3a4a4a', Math.min(0.85, rumourAge(r, now) * 1.1));
         for (const l of wrap(`${r.from}: ${r.text}`, this.w - 7)) lines.push({ t: l, c });
       }
-      lines.push({ t: '', c: C.fg });
     }
-    lines.push({ t: 'NOTICES', c: C.hi });
-    // Newest first (by the day each thing happened).
-    const notes = e.ledger.map((n, i) => ({ n, i })).sort((a, b) => b.n.day - a.n.day || b.i - a.i).map((q) => q.n);
-    for (const n of notes) for (const l of wrap(`Day ${Math.max(1, n.day)}: ${n.text}`, this.w - 7)) lines.push({ t: l, c: '#e0d0b0' });
-    const room = this.h - 2 - y;
+    return lines;
+  }
+  draw(g, game) {
+    const { s } = this;
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(40,30,20,0.96)', double: true, title: 'NOTICE BOARD' });
+    g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name.replace(/^The /, '') : 'free folk'}`, '#f0e0c0');
+    // The tabs.
+    const tabs = [['town', ' TOWN '], ['news', ' NEWS ']];
+    let tx = Math.floor(this.w / 2) - 8;
+    for (const [id, label] of tabs) {
+      const on = this.tab === id;
+      const hov = this.hovering(tx, 3, label.length, 1);
+      g.fill(tx, 3, label.length, 1, ' ', C.fg, on ? '#6a5030' : hov ? '#4a3a26' : '#2e2418');
+      g.text(tx, 3, label, on ? C.hi : hov ? '#f0e0c0' : C.dim);
+      this.hit(tx, 3, label.length, 1, () => this.setTab(id));
+      tx += label.length + 3;
+    }
+    for (let x = 2; x < this.w - 2; x++) g.put(x, 4, '─', '#5a4a3a');
+    const y = 5;
+    const lines = this.tab === 'town' ? this.townLines(game) : this.newsLines(game);
+    const room = this.h - 1 - y;
     this.maxScroll = Math.max(0, lines.length - room);
     this.scroll = Math.max(0, Math.min(this.scroll || 0, this.maxScroll));
-    lines.slice(this.scroll, this.scroll + room).forEach((l, i) => g.text(3, y + i, l.t, l.c));
+    lines.slice(this.scroll, this.scroll + room).forEach((l, i) => {
+      if (l.k !== undefined) {
+        g.text(3, y + i, l.k, C.dim);
+        g.text(18, y + i, l.t, l.c);
+      } else g.text(3, y + i, l.t, l.c);
+    });
     if (this.maxScroll) {
       const bar = Math.max(1, Math.floor(room * room / lines.length));
       const pos = Math.round((room - bar) * this.scroll / this.maxScroll);
       for (let i = 0; i < room; i++) g.put(this.w - 3, y + i, i >= pos && i < pos + bar ? '█' : '│', i >= pos && i < pos + bar ? '#c8a878' : '#5a4a3a');
-      g.text(3, this.h - 1, ' wheel / ↑↓ scroll ', C.faint);
     }
+    g.text(3, this.h - 1, ` ←→ / TAB switch${this.maxScroll ? ' · ↑↓ scroll' : ''} `, C.faint);
     g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);
   }
   onWheel(d) {
@@ -1050,6 +1087,9 @@ export class LedgerWindow extends Window {
     else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.scroll = Math.max(0, (this.scroll || 0) - 1);
     else if (k.code === 'PageDown') this.scroll = Math.min(this.maxScroll || 0, (this.scroll || 0) + 10);
     else if (k.code === 'PageUp') this.scroll = Math.max(0, (this.scroll || 0) - 10);
+    else if (k.code === 'ArrowLeft' || k.code === 'KeyA' || k.code === 'Digit1') this.setTab('town');
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD' || k.code === 'Digit2') this.setTab('news');
+    else if (k.code === 'Tab') this.setTab(this.tab === 'town' ? 'news' : 'town');
     else if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') this.close();
     else return false;
     return true;
@@ -1070,8 +1110,8 @@ export class MapWindow extends Window {
     const pcz = Math.floor(p.z / REGION_D);
     const blink = Math.floor(this.ui.time * 3) % 2;
     let hover = null;
-    const roads = game.sim.diplomacy.roadCells();
     const icons = settlementIcons(game);
+    this.icons = icons;
     for (let cz = 0; cz < MAP_H; cz++) {
       for (let cx = 0; cx < MAP_W; cx++) {
         const cell = ow.cell(cx, cz);
@@ -1099,10 +1139,6 @@ export class MapWindow extends Window {
             bg = '#1a4a8a';
           }
           if (this.civView && cell.civ !== null && ow.civs[cell.civ]) bg = shadeHex(ow.civs[cell.civ].color.hex, 0.45);
-          if (roads.has(cz * 10000 + cx) && cell.settlement === null && !icon) {
-            ch = hf ? '─' : '═';
-            fg = '#e8c890';
-          }
           g.put(x + hf, y, ch, fg, bg);
         }
         if (icon) {
@@ -1128,9 +1164,40 @@ export class MapWindow extends Window {
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village  [■] town  ┌┐ city  ╔╗ walled city  ~ river  ═ road  † ruins', C.faint);
+    g.text(2, y0 + 2, '⌂ village  [■] town  ┌┐ city  ╔╗ walled city  ~ river  ─ road  † ruins', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
+  }
+  // The roads between towns, drawn over the land as a faint line along
+  // the way they really go (only what's built, and only where you've been).
+  drawPixels(ctx, game) {
+    if (!game) return;
+    const ow = game.world.ow;
+    const icons = this.icons || settlementIcons(game);
+    const ox = this.x * CHAR_W;
+    const oy = this.y * CHAR_H;
+    const open = (x, z) => {
+      const cx = Math.floor(x / REGION_W);
+      const cz = Math.floor(z / REGION_D);
+      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) return false;
+      return (ow.explored[cz * MAP_W + cx] || game.revealMap) && !icons.has(cz * 10000 + cx);
+    };
+    const at = (x, z) => [ox + (2 + ((x + 0.5) / REGION_W) * 2) * CHAR_W, oy + (1 + (z + 0.5) / REGION_D) * CHAR_H];
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(236,206,150,0.6)';
+    for (const pts of roadLines(game.sim.diplomacy.roads, open)) {
+      ctx.beginPath();
+      pts.forEach(([x, z], i) => {
+        const [px, py] = at(x, z);
+        if (i) ctx.lineTo(px, py);
+        else ctx.moveTo(px, py);
+      });
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   // With map teleport on (the command console), a click takes you there.
   onClick(ck, cx, cy, game) {
@@ -1173,6 +1240,33 @@ export class MapWindow extends Window {
 // A place that has grown spreads into the squares next to it, but only once
 // its streets have actually reached them.
 const ICON_SIZE = { village: [1, 1], town: [2, 1], city: [2, 2] };
+// Each road as runs of points along one lane of it (built stretches only,
+// broken wherever \`open\` says the map doesn't show it).
+export function roadLines(roads, open = () => true, every = 6) {
+  const out = [];
+  for (const r of roads) {
+    const n = r.tiles.length;
+    const fa = r.fromA ?? r.built ?? 0;
+    const fb = r.fromB || 0;
+    const built = (i) => r.done || i < fa || i >= n - fb;
+    let run = [];
+    const flush = () => {
+      if (run.length > 1) out.push(run);
+      run = [];
+    };
+    for (let i = 0; i < n; i += 2) {
+      const [x, , z] = r.tiles[i];
+      if (!built(i) || !open(x, z)) {
+        flush();
+        continue;
+      }
+      if (!run.length || i % every === 0 || i + 2 >= n) run.push([x, z]);
+    }
+    flush();
+  }
+  return out;
+}
+
 export function reachedCells(s) {
   const out = new Set();
   for (let cz = s.cz; cz < s.cz + (s.cd || 1); cz++) for (let cx = s.cx; cx < s.cx + (s.cw || 1); cx++) out.add(cz * 10000 + cx);
@@ -1314,7 +1408,7 @@ export class BannerWindow extends Window {
 // ---------------------------------------------------------------- help
 export class HelpWindow extends Window {
   constructor(ui) {
-    super(ui, 76, 35, { kind: 'help' });
+    super(ui, 76, 36, { kind: 'help' });
     this.closeOnOutside = true;
   }
   draw(g) {
@@ -1338,6 +1432,7 @@ export class HelpWindow extends Window {
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
       ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
+      ['LEAD', 'Hold a lead, RMB an animal · RMB a fence to tie it up'],
       ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {
@@ -1356,8 +1451,8 @@ export class HelpWindow extends Window {
       'takes you in while builders put up a house of your own.',
     ];
     tips.forEach((t, i) => g.text(3, 3 + rows.length + i, t, C.dim));
-    g.text(3, 31, 'Every world is generated from its seed: biomes, rivers,', C.faint);
-    g.text(3, 32, 'civilizations, towns and every villager\'s life story.', C.faint);
+    g.text(3, this.h - 3, 'Every world is generated from its seed: biomes, rivers,', C.faint);
+    g.text(3, this.h - 2, 'civilizations, towns and every villager\'s life story.', C.faint);
     g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
   }
 }

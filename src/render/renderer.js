@@ -788,6 +788,17 @@ export class Renderer {
       const h = e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
       if (m.x >= sx + 2 && m.x < sx + 14 && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
     }
+    // Straining at a lead: how near it is to breaking free.
+    if (e.strain > 0 && (e.leadBy || e.leadTied) && !e.dead) {
+      const w = 12;
+      const f = Math.min(1, e.strain);
+      const big = e.kind !== 'creature' || e.species === 'horse';
+      const by = feetY - (big ? (e.hp < e.maxHp ? 33 : 29) : 17);
+      ctx.fillStyle = '#2a1e14';
+      ctx.fillRect(sx + 2, by, w + 2, 3);
+      ctx.fillStyle = f > 0.75 && Math.floor(this.time * 8) % 2 ? '#ff5040' : f > 0.5 ? '#f08a30' : '#e8c060';
+      ctx.fillRect(sx + 3, by + 1, Math.max(1, Math.round(w * f)), 1);
+    }
     // Health bar when hurt.
     if (e.hp !== undefined && e.hp < e.maxHp && e.kind !== 'player' && !e.sleeping) {
       const w = 12;
@@ -997,7 +1008,13 @@ export class Renderer {
     const leads = [];
     const esc = game.sim && game.sim.justice.escort;
     if (esc && esc.guard && !esc.guard.dead) leads.push({ a: esc.guard, b: game.player, ah: 11, bh: 10, wrists: true });
-    for (const c of game.visibleEntities || []) if (c.kind === 'creature' && c.tie && !c.dead && c.tieR !== 0) leads.push({ a: c, b: c.tie, ah: 14, bh: 13, head: true });
+    // (A horse's lead from its head; a smaller beast's from its neck.)
+    const neck = (c) => (c.species === 'horse' ? 14 : c.species === 'skeleton' ? 11 : 5);
+    for (const c of game.visibleEntities || []) {
+      if ((c.kind !== 'creature' && c.kind !== 'monster') || c.dead) continue;
+      if (c.tie && c.tieR !== 0) leads.push({ a: c, b: c.tie, ah: neck(c), bh: 13, head: c.species === 'horse' });
+      else if (c.leadBy && !c.leadBy.dead) leads.push({ a: c, b: c.leadBy, ah: neck(c), bh: 9, head: c.species === 'horse' });
+    }
     const add = (row, layer, order, deco) => {
       if (row < zMin || row > zMax) return;
       let arr = buckets.get(row);

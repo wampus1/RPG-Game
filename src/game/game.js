@@ -13,7 +13,7 @@ import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
-import { removeItem, makeSlots } from './inventory.js';
+import { removeItem, makeSlots, addItem } from './inventory.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { M, BUILDING_NAMES } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
@@ -31,6 +31,7 @@ import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { Riding } from './riding.js';
+import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
@@ -48,6 +49,13 @@ export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null }) {
     this.seed = seed >>> 0;
     this.renderer = renderer;
+    // A new world starts with north up (a saved one as you left it).
+    if (renderer) {
+      renderer.view = save && Number.isInteger(save.view) ? save.view & 3 : 0;
+      renderer.spin = null;
+      renderer.camInit = false;
+      if (renderer.lighting) renderer.lighting.samples = null;
+    }
     this.audio = audio;
     this.ui = ui;
     this.world = new World(this.seed);
@@ -1618,6 +1626,9 @@ export class Game {
       this.talk(c.entity);
       return;
     }
+    // Leads: one on a beast, off it, or tie what you're leading to a post.
+    if (c && c.entity && canLead(c.entity) && leadUse(this, c.entity, held ? held.key : null)) return;
+    if (c && c.block && c.inReach && isPost(c.block.id) && leading(this).length && tieLeads(this, c.x, c.y, c.z)) return;
     // Horses: tempt, tame, saddle, ride; wagons: drive yours, sit in anyone's.
     if (c && c.entity && c.entity.kind === 'creature' && c.entity.species === 'horse') {
       this.riding.useHorse(c.entity);
@@ -1793,6 +1804,7 @@ export class Game {
       }
     }
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
+    this.freeTied(x, y, z);
     this.renderer.emit(x, y, z, { n: 10, color: this.blockColor(id), up: 45, speed: 60, life: 0.6, oy: -6 });
     this.audio?.play(b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
     this.popUnsupported(x, y + 1, z);
@@ -1803,6 +1815,32 @@ export class Game {
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
     }
+  }
+
+  // The post something was tied to is gone: off it goes. (A town's or a
+  // trader's horse turns up back at its post after half a day or so.)
+  freeTied(x, y, z) {
+    let n = 0;
+    for (const c of this.creatures) {
+      if (c.dead || !c.tie || c.tieR === 0 || c.tie.x !== x || c.tie.z !== z || Math.abs((c.tie.y ?? y) - y) > 1) continue;
+      c.tie = null;
+      c.tieR = undefined;
+      c.loose = true;
+      // One you tied there yourself: the lead's left lying by the post.
+      if (c.leadTied) {
+        c.leadTied = false;
+        c.strain = 0;
+        this.spawnDrop('lead', 1, x, y, z, true);
+      }
+      if (c.standKey && !c.own) {
+        this.tied.delete(c.standKey);
+        (this.looseKeys ||= new Map()).set(c.standKey, this.sim.abs + 720);
+      }
+      c.thinkT = 0;
+      n++;
+    }
+    if (n && Math.max(Math.abs(x - this.player.x), Math.abs(z - this.player.z)) < 16) this.ui.msg(n > 1 ? 'The animals pull free of the broken post!' : 'Loose! It pulls free of the broken post.', '#ffe070');
+    return n;
   }
 
   // You picked up something a townsperson set down: that's theft, if anyone
@@ -2107,19 +2145,36 @@ export class Game {
     this.riding.update();
     for (const sp of this.riding.standing()) add(sp);
     const p = this.player;
+    // Got loose from a broken post: wandering, till someone fetches it back.
+    for (const [k, until] of this.looseKeys || []) {
+      if (now < until && want.has(k)) continue;
+      this.looseKeys.delete(k);
+      for (const c of this.creatures) {
+        if (c.dead || c.own || c.standKey !== k || !c.loose) continue;
+        c.dead = true;
+        this.removeOcc(c);
+      }
+    }
     for (const [k, sp] of want) {
+      if (this.looseKeys && this.looseKeys.has(k)) continue;
       if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
       const y = this.world.findStandY(sp.x, sp.z, sp.y ?? GROUND);
       if (y < 0) continue;
       if (sp.type === 'wagon') {
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
         Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null });
-      } else if (!this.tied.has(k) || this.tied.get(k).dead) {
+      } else if (this.tied.has(k) && !this.tied.get(k).dead) {
+        // (Saddled by the handler while you watched.)
+        const c = this.tied.get(k);
+        if (!c.own) c.saddled = !!sp.saddled;
+      } else {
         if (this.entityAt(sp.x, y, sp.z)) continue;
         const c = new Creature(this, 'horse', sp.x, y, sp.z, sp.coat || 0);
         c.tie = sp.post ? { x: sp.post.x, y: sp.post.y ?? GROUND, z: sp.post.z } : null;
         if (sp.stall) c.tieR = 0;
         c.banner = sp.banner || null;
+        c.saddled = !!sp.saddled;
+        if (sp.town !== undefined) c.town = { sid: sp.town, idx: sp.idx };
         c.standKey = k;
         // One of yours: loose, not tied.
         if (sp.own) {
@@ -2448,7 +2503,7 @@ export class Game {
         break;
       case 'statue': {
         const s = this.world.ow.settlementAt(x, z);
-        this.ui.msg(s && s.civ ? `A statue honoring the founders of the ${s.civ.name}.` : 'A weathered statue of a forgotten hero.', '#e8e0c8');
+        this.ui.msg(s && s.civ ? `A statue honoring the founders of the ${s.civ.name.replace(/^The /, '')}.` : 'A weathered statue of a forgotten hero.', '#e8e0c8');
         break;
       }
     }
@@ -3435,8 +3490,11 @@ export class Game {
         this.sim.favors.onKill(e);
         if (e.hostileNow) this.rescued(e);
       }
-      for (const [item, min, max, chance] of e.S.drops) {
+      // Died on fire (or just after): the meat comes off it roasted.
+      const roasted = e.burnT !== undefined && e.burnT > -1.5;
+      for (const [drop, min, max, chance] of e.S.drops) {
         if (Math.random() > chance) continue;
+        const item = roasted && drop === 'raw_meat' ? 'cooked_meat' : drop;
         const n = min + Math.floor(Math.random() * (max - min + 1));
         if (npcKill) invAdd(source.rec.inv, item, n);
         else this.spawnDrop(item, n, e.x, e.y, e.z, true);
@@ -3688,6 +3746,8 @@ export class Game {
       placed: [...this.placed],
       roadCamps: [...this.roadCamp],
       riding: this.riding.serialize(),
+      leadsOut: leadsOut(this),
+      view: this.renderer.view || 0,
       cheats: { ...this.cheats, reveal: !!this.revealMap },
     };
   }
@@ -3722,6 +3782,8 @@ export class Game {
     }
     this.player.hp = pd.hp;
     this.player.inv = pd.inv;
+    // (Animals aren't kept in a save: any leads out on them come back.)
+    if (data.leadsOut > 0) addItem(this.player.inv, 'lead', data.leadsOut);
     this.player.selected = pd.selected;
     this.player.spawn = pd.spawn;
     if (pd.equip) this.player.equip = { head: null, body: null, legs: null, feet: null, ...pd.equip };

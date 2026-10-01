@@ -11,7 +11,7 @@ import { ITEMS, rollDrops } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
-import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak } from '../sim/econ.js';
+import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
@@ -766,6 +766,51 @@ export class NPC extends Entity {
     return true;
   }
 
+  // The animal handler saddles the town's horses, one at a time.
+  tendHorses(dt) {
+    const game = this.game;
+    const L = this.layout;
+    const sid = L.settlement.id;
+    const st = game.sim.stables.of(L);
+    if (this.tending) {
+      const c = this.tending;
+      if (c.dead || c.saddled || c.own || !c.town || c.town.idx !== (st.saddled || 0) || this.stateT > 30) {
+        this.tending = null;
+        this.activity = null;
+        return false;
+      }
+      if (Math.max(Math.abs(c.x - this.x), Math.abs(c.z - this.z)) <= 1) {
+        const k = stockOf(L);
+        if ((k.leather || 0) >= 2) k.leather -= 2;
+        else if (L.econ.treasury >= 20) L.econ.treasury -= 12;
+        this.face(c.x, c.z);
+        this.doAction(0.5);
+        c.saddled = true;
+        st.saddled = (st.saddled || 0) + 1;
+        game.audio?.play('equip', this);
+        if (this.rng.chance(0.5)) this.say(this.rng.pick(['There you go, girl.', 'Stand still, you.', 'Easy... nearly done.', 'That\'s you ready for the road.']), 2.5);
+        this.tending = null;
+        this.activity = null;
+        return true;
+      }
+      this.followPath({ x: c.x, y: this.y, z: c.z }, 1);
+      return true;
+    }
+    this.tendT = (this.tendT || 0) - dt;
+    if (this.tendT > 0) return false;
+    this.tendT = 6;
+    const next = st.saddled || 0;
+    if (next >= st.horses) return false;
+    const k = stockOf(L);
+    if ((k.leather || 0) < 2 && L.econ.treasury < 20) return false;
+    const c = game.creatures.find((q) => !q.dead && !q.own && q.town && q.town.sid === sid && q.town.idx === next && !q.saddled && Math.max(Math.abs(q.x - this.x), Math.abs(q.z - this.z)) <= 16);
+    if (!c) return false;
+    this.tending = c;
+    this.stateT = 0;
+    this.path = null;
+    return true;
+  }
+
   // A merchant's stock, and where it's kept (a shop's shelves, or a
   // visiting merchant's pack).
   wareStock() {
@@ -890,8 +935,9 @@ export class NPC extends Entity {
         }
       }
     }
-    // Someone you're talking to stands and listens.
-    if (this.state === 'routine' && this.game.talkingTo === this && !this.sleeping) {
+    // Someone you're talking to stands and listens (on the road too: an
+    // adventurer or a trader met on the way stops for you).
+    if ((this.state === 'routine' || this.state === 'caravan') && this.game.talkingTo === this && !this.sleeping) {
       this.face(this.game.player.x, this.game.player.z);
       return;
     }
@@ -1414,6 +1460,8 @@ export class NPC extends Entity {
     }
     // Behind the bar: clearing away what people leave.
     if (act.act === 'work' && TIDIERS.has(this.rec.job) && this.tidyUp(dt)) return;
+    // Minding the town's horses: a saddle on any that hasn't one.
+    if (act.act === 'work' && this.rec.job === 'handler' && this.tendHorses(dt)) return;
     // At the counter or the stall: a few wares set out where people can see.
     if (act.act === 'work' || act.act === 'visit') this.showWares(dt);
     if (act.act === 'trial') {

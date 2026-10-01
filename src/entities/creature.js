@@ -2,6 +2,7 @@
 import { Entity } from './entity.js';
 import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { leadTick } from '../game/leads.js';
 
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
@@ -68,11 +69,32 @@ export class Creature extends Entity {
     }
     this.thinkT -= dt;
     const game = this.game;
-    if (this.hostileNow) {
+    // On a lead: pulled along after whoever holds it (or straining to
+    // break free of it).
+    if ((this.leadBy || this.leadTied) && leadTick(this, dt)) return;
+    if (this.hostileNow && this.tie) {
+      // Tied up, and in a temper: snapping at anyone who comes too close.
+      const t = game.findPrey(this, 2);
+      if (t && this.distTo(t) <= 1 && Math.abs(t.y - this.y) <= 1 && this.attackCd <= 0) {
+        this.face(t.x, t.z);
+        this.attackCd = 1.2;
+        this.doAction(0.3);
+        game.damage(t, this.S.dmg, this);
+        return;
+      }
+    }
+    if (this.hostileNow && !this.tie) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
       if (this.target) return this.chase(dt);
     } else if (this.tie) {
-      // Tied to a post: shifting about on the end of the lead, no further.
+      // Tied to a post: shifting about on the end of the lead, no further
+      // (and back in to the post if it's further off than that).
+      const far = Math.max(Math.abs(this.x - this.tie.x), Math.abs(this.z - this.tie.z)) > (this.tieR ?? 1);
+      if (far && !this.moving) {
+        const sx = Math.sign(this.tie.x - this.x);
+        const sz = Math.sign(this.tie.z - this.z);
+        if ((sx && this.tryStep(this.x + sx, this.z, this.S.step)) || (sz && this.tryStep(this.x, this.z + sz, this.S.step))) return;
+      }
       if (this.thinkT <= 0) {
         this.thinkT = this.rng.float(2, 6);
         const [dx, dz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][this.rng.int(0, 3)];

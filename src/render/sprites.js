@@ -908,6 +908,15 @@ function simpleIcon(key) {
       p.ellipse(4, 12, 2, 2, '#4a3018');
       p.ellipse(12, 12, 2, 2, '#4a3018');
       break;
+    case 'lead':
+      // A coil of rope with a loop at the end.
+      p.ellipse(7, 9, 4, 3, '#a87c48');
+      p.ellipse(7, 9, 2, 1, '#2a1e14');
+      p.ellipse(7, 8, 4, 3, '#c8a064');
+      p.ellipse(7, 8, 2, 1, '#2a1e14');
+      p.line(11, 8, 13, 12, '#c8a064');
+      p.ellipse(13, 13, 1, 1, '#d8b478');
+      break;
     case 'dirty_dish':
       p.ellipse(8, 11, 6, 2, '#d8d4c8');
       p.ellipse(8, 10, 4, 1, '#b8b0a0');

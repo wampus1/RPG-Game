@@ -1,6 +1,5 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
-import { LAWS, lawList } from '../sim/laws.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS } from '../world/items.js';
@@ -443,10 +442,8 @@ export class UI {
       } else if (cz && s && cz.sid === s.id) {
         status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : cz.host !== null ? `Citizen · guest of the ${sim.hostName() || ''}s`.slice(0, 24) : 'Citizen';
         col = C.green;
-      } else if (s && game.active.has(s.id)) {
-        const L = game.active.get(s.id).layout;
-        if (L.econ) status = `Taxes ${Math.round(L.econ.tax * 100)}%${lawList(L).slice(0, 2).map((id) => ` · ${LAWS[id].short}`).join('')}`;
       }
+      // (A town's taxes and laws are on its notice board, not up here.)
       let y = 3;
       if (status) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
@@ -615,7 +612,15 @@ export class UI {
         const horse = e.species === 'horse';
         lines.push({ text: horse ? (e.own ? 'Your horse' : e.tie ? (e.banner ? 'A trader\'s horse' : 'A town horse') : 'Wild horse') : e.name || e.species, color: e.hostileNow ? C.red : C.green });
         lines.push({ text: `${Math.max(0, e.hp)}/${e.maxHp} HP`, color: C.dim });
-        if (horse && !e.tie) lines.push({ text: e.own ? (e.saddled ? 'RMB ride' : 'RMB with a saddle to saddle up') : 'RMB with food to win it over', color: C.faint });
+        // On a lead (yours, or tied up), and how near it is to pulling free.
+        if (e.leadBy === game.player) lines.push({ text: e.strain > 0 ? `On your lead · straining ${Math.round(Math.min(1, e.strain) * 100)}%` : 'On your lead', color: e.strain > 0.6 ? C.orange : C.cyan });
+        else if (e.leadTied) lines.push({ text: e.strain > 0 ? `Tied up · straining ${Math.round(Math.min(1, e.strain) * 100)}%` : 'Tied up by you', color: e.strain > 0.6 ? C.orange : C.cyan });
+        else if (e.loose && e.standKey) lines.push({ text: 'Loose from its post', color: C.orange });
+        if (e.leadBy === game.player) lines.push({ text: 'RMB let go · RMB a fence to tie up', color: C.faint });
+        else if (e.leadTied) lines.push({ text: 'RMB take up the lead', color: C.faint });
+        else if (horse && !e.tie) lines.push({ text: e.own ? (e.saddled ? 'RMB ride' : 'RMB with a saddle to saddle up') : e.loose ? 'someone\'s horse' : 'RMB with food to win it over', color: C.faint });
+        else if (horse && e.town && !e.own && game.sim && game.sim.isCitizen(e.town.sid)) lines.push({ text: 'RMB untie and take out (citizen)', color: C.faint });
+        if (game.player.heldItem() === 'lead' && !e.tie && !e.leadBy) lines.push({ text: 'RMB put a lead on it', color: C.faint });
       }
     } else if (c.block && c.block.id !== B.air) {
       const b = c.block;

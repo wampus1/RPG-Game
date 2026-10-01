@@ -7,7 +7,8 @@
 // traders' are theirs, not yours.
 import { ITEMS } from '../world/items.js';
 import { B, BLOCKS } from '../world/blocks.js';
-import { removeItem, countItem } from './inventory.js';
+import { removeItem, countItem, addItem } from './inventory.js';
+import { letGo } from './leads.js';
 
 // What a horse will come to you for.
 export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage']);
@@ -52,8 +53,12 @@ export class Riding {
     const held = p.heldItem();
     const say = (t, col = '#c8c8c8') => g.ui.msg(t, col, true);
     if (c.distTo(p) > 3) return say('Get a little closer.');
-    // Someone else's.
-    if (c.tie && !c.own) return say(c.banner ? 'A trader\'s horse, tied up by their camp. Not yours.' : 'One of the town\'s horses. Not yours to take.');
+    // Someone else's (though a citizen may take one of the town's out).
+    if ((c.tie || c.loose) && !c.own && !c.leadBy) {
+      if (c.town && g.sim.isCitizen(c.town.sid)) return this.borrow(c);
+      if (c.loose) return say(c.town ? 'One of the town\'s horses, loose from its post. Not yours.' : 'Someone\'s horse, loose from its post. Not yours.');
+      return say(c.banner ? 'A trader\'s horse, tied up by their camp. Not yours.' : c.town ? 'One of the town\'s horses. Only its citizens may take one out.' : 'Not yours to take.');
+    }
     if (!c.own) {
       // Wild: tempt it with food.
       if (!held || !HORSE_FOOD.has(held)) {
@@ -83,6 +88,8 @@ export class Riding {
       g.renderer.emit(c.x, c.y + 1, c.z, { n: 3, color: ['#ff8098', '#ffc0d0'], up: 18, life: 0.8, gravity: -12, shape: 'plus' });
       return say('Your horse munches happily.', '#e8e0a0');
     }
+    // One of the town's, brought back with no saddle on: in it goes.
+    if (c.own.town && !c.own.saddled && this.giveBack(c.own)) return true;
     // Hitch it to a wagon of yours close by.
     const w = this.wagons.find((q) => !q.horse && Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) <= 4);
     if (w && !c.own.saddled) return this.hitch(w, c.own, c);
@@ -103,12 +110,61 @@ export class Riding {
     return true;
   }
 
+  // One of the town's horses, untied and taken out by a citizen. It's
+  // yours to ride till you bring it back to the stables (or the post).
+  borrow(c) {
+    const g = this.game;
+    const L = g.sim.layoutOf(c.town.sid);
+    if (!L) return false;
+    g.sim.stables.lend(L, c.town.idx);
+    const h = { id: this.next++, x: c.x, y: c.y, z: c.z, coat: c.variant || 0, saddled: !!c.saddled, town: { ...c.town, saddled: !!c.saddled } };
+    this.horses.push(h);
+    if (c.standKey) g.tied.delete(c.standKey);
+    if (c.standKey && g.looseKeys) g.looseKeys.delete(c.standKey);
+    c.loose = false;
+    c.own = h;
+    c.tie = null;
+    c.tieR = undefined;
+    c.standKey = `own:h${h.id}`;
+    g.tied.set(c.standKey, c);
+    g.audio?.play('equip');
+    g.ui.msg(h.saddled ? 'You untie one of the town\'s horses. Right-click to ride it; bring it back to the stables when you\'re done.' : 'You untie one of the town\'s horses. It has no saddle yet (put one of yours on to ride it).', '#a0e0a0');
+    return true;
+  }
+
+  // Where a town's horses are kept: its stables' door, or the post.
+  homeOf(h) {
+    const g = this.game;
+    const L = h.town ? g.sim.layoutOf(h.town.sid) : null;
+    if (!L) return null;
+    const sb = g.sim.stables.stablesOf(L);
+    return { L, at: sb ? sb.outside || sb.door : L.econ.hitch };
+  }
+
+  // Back home with one of the town's: the handler takes it in.
+  giveBack(h) {
+    const g = this.game;
+    const home = this.homeOf(h);
+    if (!home || !home.at) return false;
+    const p = g.player;
+    if (Math.max(Math.abs(p.x - home.at.x), Math.abs(p.z - home.at.z)) > 10) return false;
+    g.sim.stables.giveBackLent(home.L, h.town.idx);
+    this.horses = this.horses.filter((q) => q !== h);
+    for (const c of g.creatures) if (c.own === h) this.remove(c);
+    // (Your own saddle comes off again.)
+    if (h.saddled && !h.town.saddled) {
+      addItem(p.inv, 'saddle', 1);
+      g.ui.msg('You take your saddle off and hand the horse back to the stables.', '#c8e0ff');
+    } else g.ui.msg('You hand the horse back to the stables.', '#c8e0ff');
+    return true;
+  }
+
   mountHorse(c) {
     const g = this.game;
     const p = g.player;
     const h = c.own;
     p.sitting = null;
-    p.mount = { kind: 'horse', coat: h.coat, saddle: true, horseId: h.id };
+    p.mount = { kind: 'horse', coat: h.coat, saddle: true, horseId: h.id, town: !!h.town };
     p.teleport(c.x, c.y, c.z);
     this.remove(c);
     g.ui.msg('You swing up into the saddle. (F to get down.)', '#a0e0a0');
@@ -118,6 +174,8 @@ export class Riding {
 
   remove(c) {
     const g = this.game;
+    // (Up in the saddle: the lead comes off and back to your pack.)
+    if (c.leadBy === g.player || c.leadTied) letGo(g, c, true);
     c.dead = true;
     g.removeOcc?.(c);
     if (c.standKey) g.tied.delete(c.standKey);
@@ -204,6 +262,8 @@ export class Riding {
     if (m.kind === 'horse') {
       const h = this.horse(m.horseId);
       if (h) Object.assign(h, { x: p.x, y: p.y, z: p.z });
+      // Ridden back to the stables: it goes back in.
+      if (h && h.town) this.giveBack(h);
     } else {
       const w = this.wagon(m.wagonId);
       if (w) Object.assign(w, { x: p.x, y: p.y, z: p.z, face: p.dir === 3 || p.sideLeft === false ? 3 : 1 });

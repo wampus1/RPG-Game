@@ -67,6 +67,7 @@ with the music off. `window.__game` exposes the running game.
 | Eat or drink what you hold, read a newspaper, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Horses | Right-click a wild horse holding an apple, carrot, wheat, berries or cabbage to win it over; right-click your horse holding a saddle to saddle it, then again to ride; F gets down |
+| Leads | Make one from 3 string. Right-click an animal holding a lead to lead it; right-click a fence while leading to tie it up; right-click it again to let go (the lead comes back) |
 | Wagons | Hold a wagon and right-click the ground to set it down; right-click your horse near it to hitch it, then the wagon to drive; right-click anyone's wagon to climb in the back (move to climb out) |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
 | Menu (save and load slots, settings, new game) | Esc |
@@ -159,7 +160,9 @@ children) go out foraging and hunting instead. The mayor (a village elder in
 villages) reviews the books each morning: raising or lowering taxes, paying for
 bread for the hungry, raising fines after thefts, banning drawn weapons after
 violence, and throwing a feast day when the coffers are full. The notice board
-on the square shows the treasury, taxes, laws and recent events. A town that
+on the square has two tabs (←/→ or Tab, or click them). **Town** shows the
+treasury, taxes, laws and the realm. **News** shows recent events and news
+from other towns. (Taxes and laws aren't on the HUD; check the board.) A town that
 loses all its guards asks one of its able adults to take up the spear; if
 nobody is left who can, its people pack up and move to another settlement
 (their own civilization's if they can), and the place stands deserted. Traveling
@@ -607,7 +610,12 @@ reach of a builder, and the crew walks along the job as it goes. A wall goes
 up a stretch at a time round the town, and each stretch is finished before
 the next. A town's crew takes one job at a time: a wedding or feast set
 first, then whatever was started first. Roads between towns are laid a tile
-at a time from both ends during the working day, until they meet. While you
+at a time from both ends during the working day, until they meet. A road
+starts at the end of one of the town's main streets (in a city, at one of
+its gates), runs straight out for a stretch, then heads across country. On
+the world map a road is a thin, faint line along the way it really runs,
+drawn over the land, and only the stretches built so far and in places
+you've seen. While you
 sleep or wait, the work carries on at the usual pace.
 
 **Towns you've never seen.** Every town, including those in lands you haven't
@@ -679,7 +687,8 @@ While the view turns, time and you stand still. The HUD, the weather and
 people's speech bubbles stay upright while the world swings round under them.
 Movement keys always move you across the screen,
 the minimap turns with the view (N marks north), and the placement arrow shows
-which way a block will face.
+which way a block will face. A new world always starts with north up; a saved
+game keeps the view you left it in.
 
 **Pointing and building.** Whatever is drawn under the mouse is what you point
 at, down to the pixel: a lamp post, a person in front of a wall, or the top or
@@ -841,6 +850,29 @@ food: offer two to four apples, carrots, wheat, berries or cabbages and it's
 yours. Put a saddle on it (made at a workbench) and you can ride it, a good deal
 quicker than on foot. F gets you down, and it waits where you leave it.
 
+**Town horses.** The animal handler saddles the town's horses one by one
+(with leather from the stores, or bought in). As a citizen you can right-click
+one of the town's horses to untie it and take it out. If it's saddled, ride
+it; if not, you can put your own saddle on. Get down near its stables or
+hitching post and it goes back in (your own saddle comes back to you). Anyone
+else is told to keep their hands off. If you break the post a horse or any
+other animal is tied to, it pulls free and wanders off. A town's or a
+trader's horse turns up back at its post about half a day later.
+
+**Leads.** A lead (3 string, by hand) goes on any animal or beast: hold it
+and right-click the creature. It follows you about. Right-click a fence post
+to tie it there, and right-click it again to take it back on the lead or let
+it go. Calm animals never break free. A beast that wants a fight (a wolf, a
+slime, a skeleton, a boar you've angered) strains against it. A bar over its
+head fills up, and after about 14 seconds (20 for an angry boar) it snaps the
+lead and comes for you. While it's tied up it bites anyone who stands too
+close. If you get too far ahead, the lead slips out of your hand. Animals
+aren't kept in a save, so any leads on them come back to your pack when you
+load.
+
+**Cooking with fire.** Meat from a beast that dies while it's on fire (from
+a ruby blade, a ruby arrow or a ruby-set armour's flames) drops already roasted.
+
 **Your own wagon.** A wagon is made at a workbench. Set it down, bring a horse of
 yours close and right-click the horse to back it into the shafts (or ride up to
 the wagon and right-click it). Then right-click the wagon to take the reins.
@@ -959,7 +991,8 @@ src/
                        hero (character creation and perks), save slots,
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
-                       riding (your own horses and wagons),
+                       riding (your own horses and wagons, and a town's
+                       horse taken out by a citizen), leads,
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,

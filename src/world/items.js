@@ -102,6 +102,8 @@ item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
 // Tack for a horse of your own, and a wagon for it to pull.
 item('saddle', { name: 'Saddle', kind: 'misc', stack: 1, value: 35 });
 item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });
+// A rope lead, to lead an animal about or tie it up at a fence.
+item('lead', { name: 'Lead', kind: 'misc', stack: 8, value: 6 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
 item('arrow', { value: 1 });

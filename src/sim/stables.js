@@ -78,6 +78,17 @@ export class Stables {
       ledger(L, day, `${handler.name.first} ${handler.name.last} caught and broke in a wild horse. ${s.name} keeps ${st.horses} now.`);
       out = { horse: true };
     }
+    // A saddle for a horse that hasn't one (leather from the stores, or
+    // bought in).
+    if ((st.saddled || 0) < st.horses && rng.chance(0.5)) {
+      const k0 = stockOf(L);
+      if ((k0.leather || 0) >= 2) k0.leather -= 2;
+      else if (L.econ.treasury >= 20) L.econ.treasury -= 12;
+      else return out;
+      st.saddled = (st.saddled || 0) + 1;
+      ledger(L, day, `${handler.name.first} ${handler.name.last} saddled one of the town's horses.`);
+      out = { ...(out || {}), saddled: true };
+    }
     const carp = people.find((r) => r.job === 'carpenter');
     const k = stockOf(L);
     if (carp && st.wagons < Math.min(cap.wagons, Math.ceil(st.horses / 2)) && k.wood >= 10 && L.econ.treasury >= 40 && rng.chance(0.2)) {
@@ -98,13 +109,14 @@ export class Stables {
     const wagons = st.wagons - st.wagonsOut;
     if (horses <= 0) return null;
     const coat = hash4(L.settlement.seed, st.horsesOut, 0xc0a7) % 6;
+    const saddle = (st.saddled || 0) > st.horsesOut;
     if (want === 'wagon' && wagons > 0) {
       st.horsesOut++;
       st.wagonsOut++;
-      return { kind: 'wagon', coat, from: L.settlement.id };
+      return { kind: 'wagon', coat, from: L.settlement.id, saddle };
     }
     st.horsesOut++;
-    return { kind: 'horse', coat, from: L.settlement.id };
+    return { kind: 'horse', coat, from: L.settlement.id, saddle };
   }
 
   giveBack(mount) {
@@ -152,28 +164,49 @@ export class Stables {
     const horses = Math.max(0, st.horses - st.horsesOut);
     const wagons = Math.max(0, st.wagons - st.wagonsOut);
     if (!horses && !wagons) return null;
+    // Each horse keeps its own place (a stall, or a spot at the post), so
+    // one taken out by a townsperson leaves a gap rather than everyone
+    // shuffling along.
+    const lent = new Set(st.lent || []);
+    const idx = [];
+    for (let i = 0; idx.length < horses && i < st.horses + lent.size + 2; i++) if (!lent.has(i)) idx.push(i);
     const sb = this.stablesOf(L);
-    let inStalls = 0;
+    const stalls = sb ? sb.stalls.length : 0;
+    const post = idx.some((i) => i >= stalls) || (!sb && wagons) ? this.hitch(L) : null;
     const out = { horses: [], wagons: [] };
+    const around = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
+    const saddled = st.saddled || 0;
+    for (const i of idx) {
+      const base = { key: `town:${L.settlement.id}:h${i}`, coat: hash4(L.settlement.seed, i, 0xc0a7) % 6, idx: i, town: L.settlement.id, saddled: i < saddled };
+      if (i < stalls) {
+        const q = sb.stalls[i];
+        out.horses.push({ ...base, x: q.x, z: q.z, post: { x: q.x, y: GROUND, z: q.z }, stall: true });
+      } else if (post && i - stalls < around.length) {
+        const [dx, dz] = around[i - stalls];
+        out.horses.push({ ...base, x: post.x + dx, z: post.z + dz, post });
+      }
+    }
     if (sb) {
-      sb.stalls.slice(0, horses).forEach((q, i) => out.horses.push({ key: `town:${L.settlement.id}:h${i}`, x: q.x, z: q.z, coat: hash4(L.settlement.seed, i, 0xc0a7) % 6, post: { x: q.x, y: GROUND, z: q.z }, stall: true }));
-      inStalls = out.horses.length;
       const o = sb.outside;
       const DX = [0, -1, 0, 1];
       const DZ = [1, 0, -1, 0];
       const side = [DZ[sb.door.rot], DX[sb.door.rot]];
       for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: o.x + side[0] * (3 + i * 3), z: o.z + side[1] * (3 + i * 3), face: 1 });
-      // (More horses than stalls: the rest tied up at the post.)
-      if (horses <= inStalls) return out;
-    }
-    const post = this.hitch(L);
-    if (!post) return sb ? out : null;
-    const around = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
-    for (let i = inStalls; i < Math.min(horses, inStalls + 4); i++) {
-      const [dx, dz] = around[i - inStalls];
-      out.horses.push({ key: `town:${L.settlement.id}:h${i}`, x: post.x + dx, z: post.z + dz, coat: hash4(L.settlement.seed, i, 0xc0a7) % 6, post });
-    }
-    if (!sb) for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: post.x + 2 + i * 2, z: post.z + 2, face: 1 });
-    return out;
+    } else if (post) for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: post.x + 2 + i * 2, z: post.z + 2, face: 1 });
+    return out.horses.length || out.wagons.length ? out : null;
+  }
+
+  // A citizen takes one of the town's horses out (and brings it back).
+  lend(L, i) {
+    const st = this.of(L);
+    st.lent = [...new Set([...(st.lent || []), i])];
+    st.horsesOut++;
+  }
+
+  giveBackLent(L, i) {
+    const st = this.of(L);
+    if (!(st.lent || []).includes(i)) return;
+    st.lent = st.lent.filter((q) => q !== i);
+    st.horsesOut = Math.max(0, st.horsesOut - 1);
   }
 }

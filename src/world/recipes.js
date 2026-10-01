@@ -83,6 +83,7 @@ r('workbench', 'fishing_rod', 1, { stick: 3, string: 2 });
 r('workbench', 'bucket', 1, { planks: 3, string: 1 });
 r('workbench', 'raft', 1, { planks: 6, stick: 2, string: 3 });
 r('workbench', 'saddle', 1, { leather: 4, string: 2, iron_ingot: 1 });
+r('hand', 'lead', 1, { string: 3 });
 r('workbench', 'wagon', 1, { planks: 16, stick: 4, iron_ingot: 2, cloth: 3 });
 r('workbench', 'rug_red', 2, { cloth: 2 });
 r('workbench', 'rug_blue', 2, { cloth: 2 });

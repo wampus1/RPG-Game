@@ -126,6 +126,20 @@ class Layout {
     const b = this.bounds;
     return x >= b.x0 + inset && x <= b.x1 - inset && z >= b.z0 + inset && z <= b.z1 - inset;
   }
+  // Where a road out of town starts: the ends of its main streets (for a
+  // city, its gateways), each with the way out of town from there.
+  roadEnds() {
+    let ents = this.entrances.length ? this.entrances : [{ x: this.plaza.cx, z: this.plaza.cz }];
+    if (this.gates && this.gates.length) {
+      const g = ents.filter((e) => this.gates.some((q) => Math.abs(q.x - e.x) + Math.abs(q.z - e.z) <= 3));
+      if (g.length) ents = g;
+    } else if (this.settlement.type === 'city') ents = ents.slice(0, 4);
+    const b = this.bounds;
+    return ents.map((e) => {
+      const d = [[e.x - b.x0, -1, 0], [b.x1 - e.x, 1, 0], [e.z - b.z0, 0, -1], [b.z1 - e.z, 0, 1]].reduce((m, q) => (q[0] < m[0] ? q : m));
+      return { x: e.x, z: e.z, dx: d[1], dz: d[2] };
+    });
+  }
   put(x, y, z, id, meta = 0) {
     if (this.collect) {
       this.collect.push([x, y, z, id, meta]);

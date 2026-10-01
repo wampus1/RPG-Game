@@ -166,7 +166,7 @@ export class Realms {
       R.ruler = null;
       R.council = [];
     }
-    this.proclaim(civ, day, `The seat of the ${civ.name} has moved to ${to.name}, now the realm's largest city.`);
+    this.proclaim(civ, day, `The seat of the ${civ.name.replace(/^The /, '')} has moved to ${to.name}, now the realm's largest city.`);
   }
 
   recOf(p) {
@@ -193,7 +193,7 @@ export class Realms {
     const next = this.successor(civ, L, null);
     if (!next) return null;
     const r = this.crown(civ, L, next.rec, this.sim.today(), null);
-    ledger(L, this.sim.today(), `${shortTitle(civ)} ${fullName(r)} rules the ${civ.name} from ${capS.name}.`);
+    ledger(L, this.sim.today(), `${shortTitle(civ)} ${fullName(r)} rules the ${civ.name.replace(/^The /, '')} from ${capS.name}.`);
     return r;
   }
 
@@ -270,9 +270,9 @@ export class Realms {
         const oldName = cur ? fullName(cur) : null;
         const why = { heir: 'eldest child', noble: 'the noble chosen by the court', council: 'chosen by the council', eldest: 'the eldest in', chosen: 'chosen by the people of' }[next.why];
         this.crown(civ, L, next.rec, day, first ? null : (nm) => (next.why === 'eldest' || next.why === 'chosen'
-          ? `${title} ${oldName} is dead. ${nm}, ${why} ${L.settlement.name}, now leads the ${civ.name}.`
-          : `${title} ${oldName} is dead. ${nm}, ${why}${next.why === 'heir' ? ` of ${oldName.split(' ')[0]}` : ''}, now leads the ${civ.name}.`));
-        if (first) ledger(L, day, `${title} ${fullName(next.rec)} rules the ${civ.name} from ${L.settlement.name}.`);
+          ? `${title} ${oldName} is dead. ${nm}, ${why} ${L.settlement.name}, now leads the ${civ.name.replace(/^The /, '')}.`
+          : `${title} ${oldName} is dead. ${nm}, ${why}${next.why === 'heir' ? ` of ${oldName.split(' ')[0]}` : ''}, now leads the ${civ.name.replace(/^The /, '')}.`));
+        if (first) ledger(L, day, `${title} ${fullName(next.rec)} rules the ${civ.name.replace(/^The /, '')} from ${L.settlement.name}.`);
         else for (const r of residents(L)) r.mood = clamp((r.mood ?? 0.5) - 0.08, 0, 1);
       }
     }
@@ -289,7 +289,7 @@ export class Realms {
         if (!pick) break;
         pick.councillor = civ.id;
         R.council.push({ sid: L.settlement.id, idx: pick.idx });
-        if (R.since !== day) ledger(L, day, `${fullName(pick)} took a seat on the council of the ${civ.name}.`);
+        if (R.since !== day) ledger(L, day, `${fullName(pick)} took a seat on the council of the ${civ.name.replace(/^The /, '')}.`);
       }
     }
     if ((day + civ.id) % 7 === 0) this.decree(civ, day, rng);
@@ -315,7 +315,7 @@ export class Realms {
     // ruler) lifts it (never in a martial realm).
     if (!d.armsBan && violence >= 3 + (p.bravery ?? 0.5) * 3) {
       d.armsBan = true;
-      this.proclaim(civ, day, `By decree of ${who}: drawn weapons are forbidden in every town of the ${civ.name}.`);
+      this.proclaim(civ, day, `By decree of ${who}: drawn weapons are forbidden in every town of the ${civ.name.replace(/^The /, '')}.`);
       return 'armsBan';
     }
     if (d.armsBan && violence === 0 && !(civ.values || []).includes('martial') && rng.chance(0.3 + (p.bravery ?? 0.5) * 0.4)) {
@@ -345,7 +345,7 @@ export class Realms {
     const flush = capL && capL.econ.treasury > residents(capL).length * 40;
     if (i < TAX_FLOORS.length - 1 && (poor * 2 > towns.length || (capL && capL.econ.treasury < residents(capL).length * 10)) && (p.kindness ?? 0.5) < 0.8) {
       d.taxFloor = TAX_FLOORS[i + 1];
-      this.proclaim(civ, day, `By decree of ${who}: no town of the ${civ.name} may tax less than ${Math.round(d.taxFloor * 100)}%.`);
+      this.proclaim(civ, day, `By decree of ${who}: no town of the ${civ.name.replace(/^The /, '')} may tax less than ${Math.round(d.taxFloor * 100)}%.`);
       return 'taxFloor';
     }
     if (i > 0 && flush && rng.chance(0.3 + (p.kindness ?? 0.5) * 0.5)) {
@@ -416,7 +416,7 @@ export class Realms {
     e.unrest = Math.max(0, (e.unrest || 0) * 0.85 + push);
     e.independence = this.support(L);
     e.secedeVotes = e.independence > 0.3 ? (e.secedeVotes || 0) + 1 : 0;
-    if (e.secedeVotes === 1) ledger(L, day, `There's talk in ${s.name} of breaking away from the ${civ.name}.`);
+    if (e.secedeVotes === 1) ledger(L, day, `There's talk in ${s.name} of breaking away from the ${civ.name.replace(/^The /, '')}.`);
     if (e.secedeVotes >= 2 && pop >= 12) return this.secede(L, day, rng);
     return null;
   }

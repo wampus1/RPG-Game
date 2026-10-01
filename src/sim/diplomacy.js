@@ -327,43 +327,56 @@ export class Diplomacy {
     if (this.roads.some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))) return null;
     const LA = this.sim.layoutOf(a.id);
     const LB = this.sim.layoutOf(b.id);
+    // From the end of a main street (a city's gateway), whichever faces the
+    // other town best.
     const ends = (L, other) => {
-      const ents = L.entrances.length ? L.entrances : [{ x: L.plaza.cx, z: L.plaza.cz }];
       const ox = (other.bounds.x0 + other.bounds.x1) / 2;
       const oz = (other.bounds.z0 + other.bounds.z1) / 2;
-      return ents.reduce((m, q) => (Math.hypot(q.x - ox, q.z - oz) < Math.hypot(m.x - ox, m.z - oz) ? q : m));
+      return L.roadEnds().reduce((m, q) => (Math.hypot(q.x + q.dx * 8 - ox, q.z + q.dz * 8 - oz) < Math.hypot(m.x + m.dx * 8 - ox, m.z + m.dz * 8 - oz) ? q : m));
     };
-    const p0 = ends(LA, b);
-    const p1 = ends(LB, a);
+    const e0 = ends(LA, b);
+    const e1 = ends(LB, a);
     const t = this.game.world.terrain;
     const tiles = [];
-    const steps = Math.max(Math.abs(p1.x - p0.x), Math.abs(p1.z - p0.z));
-    let px = p0.x;
-    let pz = p0.z;
     const inTown = (x, z) => [a, b].some((s) => x >= s.bounds.x0 && x <= s.bounds.x1 && z >= s.bounds.z0 && z <= s.bounds.z1);
+    const seen = new Set();
+    const lay = (cx, cz, across) => {
+      for (const [x, z] of [[cx, cz], [cx + across[0], cz + across[1]]]) {
+        const k = x * 65536 + z;
+        if (seen.has(k) || inTown(x, z)) continue;
+        seen.add(k);
+        const col = t.column(x, z, t.context(x, z, x, z), {});
+        if (col.water >= 0) tiles.push([x, col.water, z, B.planks]);
+        else tiles.push([x, col.h, z, B.path]);
+      }
+    };
     // Two tiles wide: beside each tile along the way, another (below it on
     // a road running east-west, beside it on one running north-south).
-    const across = Math.abs(p1.x - p0.x) >= Math.abs(p1.z - p0.z) ? [0, 1] : [1, 0];
-    const seen = new Set();
-    const lay = (cx, cz) => {
-      const k = cx * 65536 + cz;
-      if (seen.has(k) || inTown(cx, cz)) return;
-      seen.add(k);
-      const col = t.column(cx, cz, t.context(cx, cz, cx, cz), {});
-      if (col.water >= 0) tiles.push([cx, col.water, cz, B.planks]);
-      else tiles.push([cx, col.h, cz, B.path]);
-    };
-    for (let i = 0; i <= steps; i++) {
-      const x = Math.round(p0.x + ((p1.x - p0.x) * i) / steps);
-      const z = Math.round(p0.z + ((p1.z - p0.z) * i) / steps);
-      // Keep the path 4-connected so it can be walked.
-      for (const [cx, cz] of x !== px && z !== pz ? [[x, pz], [x, z]] : [[x, z]]) {
-        lay(cx, cz);
-        lay(cx + across[0], cz + across[1]);
+    const walk = (p0, p1) => {
+      const steps = Math.max(Math.abs(p1.x - p0.x), Math.abs(p1.z - p0.z));
+      const across = Math.abs(p1.x - p0.x) >= Math.abs(p1.z - p0.z) ? [0, 1] : [1, 0];
+      let px = p0.x;
+      let pz = p0.z;
+      for (let i = 0; i <= steps; i++) {
+        const x = Math.round(p0.x + ((p1.x - p0.x) * i) / Math.max(1, steps));
+        const z = Math.round(p0.z + ((p1.z - p0.z) * i) / Math.max(1, steps));
+        // Keep the path 4-connected so it can be walked.
+        for (const [cx, cz] of x !== px && z !== pz ? [[x, pz], [x, z]] : [[x, z]]) lay(cx, cz, across);
+        px = x;
+        pz = z;
       }
-      px = x;
-      pz = z;
-    }
+    };
+    // Straight out of the gate for a stretch, then across the country, and
+    // straight in at the other end.
+    const out = (e, B0) => {
+      const n = Math.max(0, e.dx < 0 ? e.x - B0.x0 : e.dx > 0 ? B0.x1 - e.x : e.dz < 0 ? e.z - B0.z0 : B0.z1 - e.z) + 6;
+      return { x: e.x + e.dx * n, z: e.z + e.dz * n };
+    };
+    const q0 = out(e0, a.bounds);
+    const q1 = out(e1, b.bounds);
+    walk(e0, q0);
+    walk(q0, q1);
+    walk(q1, e1);
     const road = { a: a.id, b: b.id, tiles, built: 0, done: false, start: this.game.day };
     this.roads.push(road);
     return road;
