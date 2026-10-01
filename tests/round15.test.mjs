@@ -75,7 +75,8 @@ test('a town can break away (hostile) or swear to a neighbouring realm (worse)',
 
 // ------------------------------------------------------------ herbalists
 test('herbalists appear in some villages (herbs, no potions) and tend the sick', () => {
-  const game = makeGame(4242);
+  // (Potions need a realm that has learned alchemy: none has, at the start.)
+  const game = makeGame(4242, { learned: false });
   let villages = 0;
   let withHerb = 0;
   for (const s of game.world.ow.settlements) {

@@ -267,7 +267,7 @@ test('mayors write to each other: aid, roads, and warnings about criminals', () 
   const t0 = Math.ceil(game.sim.abs / 1440) * 1440 + 540;
   d.buildRoads(t0);
   d.buildRoads(t0 + 60 * 3);
-  assert.ok(!road.done && road.built > 0 && road.built < 30, 'a little at a time');
+  assert.ok(!road.done && road.built > 0 && road.built < 45, 'a little at a time');
   for (let day = 1; day <= 10 && !road.done; day++) d.buildRoads(t0 + day * 1440);
   assert.ok(road.done);
   assert.ok(d.travelHours(s, o) < slow);

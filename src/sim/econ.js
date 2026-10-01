@@ -21,9 +21,9 @@ const MAX_CATCHUP = 45 * DAY;
 // What each kind of trader deals in (also what their shop restocks).
 export const STOCK = {
   general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket'],
-  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots'],
+  smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'steel_sword'],
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
-  inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice'],
+  inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice', 'ale'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
   tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots', 'linen_shirt_red', 'linen_shirt_blue', 'wool_hood_green', 'wool_trousers_black', 'fine_coat_purple'],
   carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft'],
@@ -34,11 +34,14 @@ export const STOCK = {
   trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers'],
 };
 
-// What a trader keeps in stock here: an herbalist outside a city deals in
-// herbs and salves, not potions.
+// What a trader keeps in stock here: herbalists brew potions only where
+// the realm knows alchemy (herbs and salves otherwise), smiths forge steel
+// only where it knows steelworking.
 export function stockFor(L, t) {
   const list = STOCK[t] || [];
-  if (t === 'herbalist' && L && L.settlement && L.settlement.type !== 'city') return list.filter((k) => !k.startsWith('potion_'));
+  if (t === 'herbalist' && L && L.settlement && !(L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'alchemy'))) return list.filter((k) => !k.startsWith('potion_'));
+  // Steel only from a realm whose smiths know how.
+  if (t === 'smith' && !(L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'steel'))) return list.filter((k) => k !== 'steel_sword');
   return list;
 }
 
@@ -253,6 +256,7 @@ export const MATERIALS = {
   house_s: [12, 6], house_m: [20, 10], house_l: [30, 16], tavern: [30, 20], smithy: [20, 30], bakery: [18, 16], workshop: [26, 8],
   shop: [20, 14], library: [26, 22], tailor: [18, 10], guardhouse: [14, 30], temple: [20, 40], herbalist: [16, 8], warehouse: [24, 12],
   stables: [26, 6],
+  academy: [28, 24],
 };
 const STOCK_CAP = 300;
 
@@ -673,7 +677,8 @@ function produce(L, rec, rng) {
       return;
     case 'farmer':
       // Moist fields (recent rain, or water carried from the well) yield more.
-      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1))) invAdd(rec.inv, rng.pick(e.crops), rng.int(1, 3));
+      // (Watermills: more from the same fields.)
+      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.25 : 1))) invAdd(rec.inv, rng.pick(e.crops), rng.int(1, 3));
       return;
     case 'baker': {
       if (!biz) return;
@@ -1038,6 +1043,8 @@ function collectTaxes(L, day) {
     b.till -= t;
     total += t;
   }
+  // (Bookkeeping: nothing slips through the ledgers.)
+  if (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'bookkeeping')) total = Math.round(total * 1.1);
   e.treasury += total;
   e.taxY = total;
   e.taxDay = day;

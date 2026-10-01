@@ -330,12 +330,12 @@ export class Realms {
       const on = d.tariffOn.includes(o.id);
       if (!on && st === 'hostile') {
         d.tariffOn.push(o.id);
-        this.proclaim(civ, day, `By decree of ${who}: merchants of the ${o.name} pay a tariff on all they sell here.`);
+        this.proclaim(civ, day, `By decree of ${who}: merchants of the ${o.name.replace(/^The /, '')} pay a tariff on all they sell here.`);
         return 'tariff';
       }
       if (on && st === 'friendly') {
         d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
-        this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${o.name}.`);
+        this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${o.name.replace(/^The /, '')}.`);
         return 'tariff';
       }
     }
@@ -413,6 +413,8 @@ export class Realms {
     push += R.share >= 0.13 ? 0.3 : 0;
     push -= got > 0 ? 0.6 : 0;
     push -= ruler ? ((ruler.personality?.kindness ?? 0.5) - 0.5) * 0.4 : 0;
+    // A long war wears on everyone.
+    push += this.sim.war ? this.sim.war.weariness(civ) * 0.5 : 0;
     e.unrest = Math.max(0, (e.unrest || 0) * 0.85 + push);
     e.independence = this.support(L);
     e.secedeVotes = e.independence > 0.3 ? (e.secedeVotes || 0) + 1 : 0;
@@ -465,14 +467,14 @@ export class Realms {
     L.econ.independence = null;
     if (to) {
       this.shift(old, to, -60, day);
-      const text = `${s.name} has renounced the ${old.name} and sworn itself to the ${to.name}!`;
+      const text = `${s.name} has renounced the ${old.name.replace(/^The /, '')} and sworn itself to the ${to.name.replace(/^The /, '')}!`;
       for (const T of [...members, L, ...this.memberLayouts(to).filter((q) => q !== L)]) ledger(T, day, text);
     } else {
       const r = this.relation(old, civ);
       r.score = -45;
       r.standing = this.standingOf(r.score);
-      for (const T of members) ledger(T, day, `${s.name} has declared itself free of the ${old.name}. Treason, says ${authority(old)}.`);
-      ledger(L, day, `${s.name} has declared its independence from the ${old.name}! It is now the ${civ.name.replace(/^The /, '')}.`);
+      for (const T of members) ledger(T, day, `${s.name} has declared itself free of the ${old.name.replace(/^The /, '')}. Treason, says ${authority(old)}.`);
+      ledger(L, day, `${s.name} has declared its independence from the ${old.name.replace(/^The /, '')}! It is now the ${civ.name.replace(/^The /, '')}.`);
     }
     for (const r of residents(L)) r.mood = clamp((r.mood ?? 0.5) + 0.1, 0, 1);
     return { civ, from: old, joined: !!to };
@@ -483,7 +485,7 @@ export class Realms {
     const id = ow.civs.length;
     const civ = {
       id, style: old.style, values: (old.values || []).slice(), color: FREE_COLORS[id % FREE_COLORS.length], prosperity: old.prosperity || 0.5,
-      name: `The ${s.name} Free State`, people: old.people, capital: s.id, freed: { from: old.id, day: this.sim.today() },
+      name: `The ${s.name.replace(/^The /, '')} Free State`, people: old.people, capital: s.id, freed: { from: old.id, day: this.sim.today() },
     };
     ow.civs.push(civ);
     this.extraCivs.push(civ);
@@ -538,7 +540,7 @@ export class Realms {
       if (guards(thin) === 0 && capGuards.length > 3) {
         const g = capGuards.sort((a, b) => b.personality.sociability - a.personality.sociability)[0];
         this.sim.sendPeople(capL, [g], thin, `sent by ${who}`);
-        return note(thin, 'guard', `${Who} sent ${fullName(g)} of the ${capS.name} watch to guard ${thin.settlement.name}.`);
+        return note(thin, 'guard', `${Who} sent ${fullName(g)} of the ${capS.name.replace(/^The /, '')} watch to guard ${thin.settlement.name}.`);
       }
       const amount = Math.min(Math.round(spare * 0.4), 30 + pop(thin) * 3);
       if (amount >= 20) {
@@ -620,9 +622,9 @@ export class Realms {
     if (now !== r.standing) {
       const was = r.standing;
       r.standing = now;
-      const text = now === 'friendly' ? `The ${a.name} and the ${b.name} are on friendly terms now.`
-        : now === 'hostile' ? `Relations between the ${a.name} and the ${b.name} have soured: the two realms are hostile.`
-          : was === 'hostile' ? `The quarrel between the ${a.name} and the ${b.name} has cooled.` : `The ${a.name} and the ${b.name} are wary of each other now.`;
+      const text = now === 'friendly' ? `The ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} are on friendly terms now.`
+        : now === 'hostile' ? `Relations between the ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} have soured: the two realms are hostile.`
+          : was === 'hostile' ? `The quarrel between the ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} has cooled.` : `The ${a.name.replace(/^The /, '')} and the ${b.name.replace(/^The /, '')} are wary of each other now.`;
       if (day !== null && day !== undefined) {
         this.proclaim(a, day, text);
         this.proclaim(b, day, text);
@@ -650,11 +652,11 @@ export class Realms {
     const st = this.standing(a, b);
     const e = hostL.econ;
     const risk = (st === 'hostile' ? 0.35 : st === 'wary' ? 0.12 : 0.03) + Math.min(0.2, (e.recent.violence || 0) * 0.05) - (hostL.npcs.some((r) => r.job === 'guard' && alive(r)) ? 0.04 : 0);
-    if (rng.chance(Math.max(0, risk))) {
+    if (rng.chance(Math.max(0, risk) * (this.sim.tech && this.sim.tech.has(fromS, 'caravan_law') ? 0.4 : 1))) {
       this.shift(a, b, -3, day);
-      ledger(hostL, day, `A merchant of the ${b.name} was jeered and short-changed in the market.`);
+      ledger(hostL, day, `A merchant of the ${b.name.replace(/^The /, '')} was jeered and short-changed in the market.`);
       const FL = this.game.world.layouts.get(fromS.id);
-      if (FL && FL.econ) ledger(FL, day, `Our merchant came back from ${hostL.settlement.name} complaining of ill treatment by the ${a.name}.`);
+      if (FL && FL.econ) ledger(FL, day, `Our merchant came back from ${hostL.settlement.name} complaining of ill treatment by the ${a.name.replace(/^The /, '')}.`);
       return 'harried';
     }
     this.shift(a, b, st === 'friendly' ? 0.8 : 0.4, null);
@@ -671,7 +673,7 @@ export class Realms {
     const by = { killed: -14, robbed: -6, attacked: -5 }[kind] ?? -4;
     this.shift(a, b, by, day);
     const L = this.game.world.layouts.get(fromS.id);
-    if (L && L.econ && kind === 'killed') ledger(L, day, `One of our merchants was killed in ${hostS.name}, a town of the ${a.name}. People are angry.`);
+    if (L && L.econ && kind === 'killed') ledger(L, day, `One of our merchants was killed in ${hostS.name}, a town of the ${a.name.replace(/^The /, '')}. People are angry.`);
   }
 
   // Towns of two realms whose streets reach towards the same ground.
@@ -713,6 +715,8 @@ export class Realms {
             const L = this.game.world.layouts.get(sid);
             if (L && L.econ) ledger(L, day, text);
           }
+          // (A border dispute, as the realms remember it.)
+          if (this.sim.politics) this.sim.politics.disputes.push({ a: a.id, b: b.id, kind: 'border', day, text });
           by -= 6;
         }
         r.contested = now;

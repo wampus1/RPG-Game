@@ -13,6 +13,8 @@ import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
+import { actFx, finishDrink, MESS } from './acts.js';
+import { warTick, warBonus } from './warrior.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -124,11 +126,15 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
+    if (this.state === 'roadwork') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
+    // Raiders come with torches lit; soldiers and riders with blades out.
+    if (this.state === 'warband') return this.warband && this.warband.torch && this.warband.phase !== 'flee' ? 'torch' : this.weapon();
     if (this.caravan) return this.adventurer || (this.company && this.rec.role === 'guard') || (this.rec.trip && this.rec.trip.outing && this.rec.job === 'guard') ? this.weapon() : this.company || this.mount || (this.rec.trip && this.rec.trip.outing) ? null : 'crate';
     if (this.state === 'fight') return (this.threat && this.distTo(this.threat) <= 1.5 && this.meleeWeapon()) || this.weapon();
     if (this.prey) return this.weapon();
     const a = this.activity?.entry;
     if (!a) return null;
+    if (this.snackItem) return this.snackItem;
     if (a.act === 'build' || a.act === 'repair') return 'hammer';
     if ((a.act === 'forage' || a.act === 'hunt') && this.atGoal) return this.weapon();
     if (a.act === 'work' && this.rec.job === 'farmer' && (this.rec.water || 0) > 0) return 'water_bucket';
@@ -163,7 +169,7 @@ export class NPC extends Entity {
   attackDamage(ranged = false) {
     const w = ranged ? this.weapon() : this.meleeWeapon();
     const base = w ? ITEMS[w].damage : 1.5;
-    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? 1.2 : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1)));
+    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? (this.rec.drilled ? 1.4 : 1.2) : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1) * (this.warband ? warBonus(this) : 1)));
   }
 
   canShoot() {
@@ -664,6 +670,8 @@ export class NPC extends Entity {
     this.spot = null;
     this.collectPutDown();
     this.finishMeal();
+    finishDrink(this);
+    this.cooking = null;
     this.packWares();
   }
 
@@ -729,7 +737,7 @@ export class NPC extends Entity {
     if (this.tidying) {
       const t = this.tidying;
       const got = game.placed.get(`${t.x},${t.y},${t.z}`);
-      if (!got || got.item !== 'dirty_dish' || this.stateT > 30) {
+      if (!got || !MESS.has(got.item) || this.stateT > 30) {
         this.tidying = null;
         this.activity = null;
         return false;
@@ -753,7 +761,7 @@ export class NPC extends Entity {
     if (!b) return false;
     let best = null;
     for (const [k, got] of game.placed) {
-      if (got.item !== 'dirty_dish' || !got.owner || !got.owner.mess) continue;
+      if (!MESS.has(got.item) || !got.owner || !got.owner.mess) continue;
       const [x, y, z] = k.split(',').map(Number);
       if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue;
       const d = Math.abs(x - this.x) + Math.abs(z - this.z);
@@ -924,7 +932,7 @@ export class NPC extends Entity {
     this.closeDoorBehind();
     if (this.moving) return;
     // Ridden in to camp: down off the horse (or the wagon) once there.
-    if (this.mount && this.state !== 'caravan') {
+    if (this.mount && this.state !== 'caravan' && this.state !== 'warband') {
       const camp = this.myCamp();
       if (!camp || Math.max(Math.abs(camp.stand.x - this.x), Math.abs(camp.stand.z - this.z)) <= 3 || this.state === 'fight' || this.state === 'flee') {
         this.mount = null;
@@ -965,6 +973,12 @@ export class NPC extends Entity {
         break;
       case 'caravan':
         this.caravanWalk(dt);
+        break;
+      case 'roadwork':
+        this.roadWork(dt);
+        break;
+      case 'warband':
+        warTick(this, dt);
         break;
       case 'alarm':
         this.alarmRun(dt);
@@ -1147,6 +1161,48 @@ export class NPC extends Entity {
     const lg = this.leaveGoal;
     const box = { x0: Math.min(this.x, lg.x) - 8, z0: Math.min(this.z, lg.z) - 8, x1: Math.max(this.x, lg.x) + 8, z1: Math.max(this.z, lg.z) + 8 };
     this.followPath(lg, 1, box);
+  }
+
+  // Out on a road between towns: at the end of what's laid, digging out the
+  // next stretch (it goes down as the work's done: see diplomacy).
+  roadWork(dt) {
+    const c = this.crew;
+    const D = this.game.sim.diplomacy;
+    const f = c && D.frontier(c.road, c.end);
+    if (!f) {
+      this.game.despawnNpc(this);
+      return;
+    }
+    // Stand just short of it (side by side, if there are two of you).
+    const r = c.road;
+    const back = r.tiles[c.end === 'A' ? Math.max(0, f.i - 2 - c.slot * 2) : Math.min(r.tiles.length - 1, f.i + 2 + c.slot * 2)] || [f.x, f.y, f.z];
+    const d = Math.max(Math.abs(this.x - f.x), Math.abs(this.z - f.z));
+    if (d > 2) {
+      const box = { x0: Math.min(this.x, back[0]) - 8, z0: Math.min(this.z, back[2]) - 8, x1: Math.max(this.x, back[0]) + 8, z1: Math.max(this.z, back[2]) + 8 };
+      if (!this.followPath({ x: back[0], y: back[1] + 1, z: back[2] }, 1, box) && this.stateT > 6) {
+        // (Stuck: step in beside it.)
+        const sp = this.game.findFreeSpot(f.x, f.z, f.y + 1);
+        if (sp) this.teleport(sp.x, sp.y, sp.z);
+        this.stateT = 0;
+      }
+      return;
+    }
+    this.stateT = 0;
+    this.face(f.x, f.z);
+    // Dig, and the dirt flies.
+    this.digT = (this.digT || this.rng.float(0, 0.8)) - dt;
+    if (this.digT <= 0) {
+      this.digT = this.rng.float(0.7, 1.2);
+      this.doAction(0.35);
+      const g = this.game;
+      g.renderer.emit(f.x, f.y + 1, f.z, { n: 4, color: ['#8a6a44', '#6a5034', '#a8885c'], up: 26, speed: 26, life: 0.5, gravity: 60, oy: -2 });
+      if (this.distTo(g.player) < 14 && this.rng.chance(0.4)) g.audio?.play(this.rng.chance(0.5) ? 'dig' : 'stone', this);
+      if (this.lineCd <= 0 && this.rng.chance(0.06)) {
+        this.lineCd = this.rng.float(20, 50);
+        const to = D.town(c.end === 'A' ? r.b : r.a);
+        this.say(this.rng.pick(['Another stretch done.', `${to ? to.name : 'The next town'}'s that way. Long way yet.`, 'Mind the hole!', 'Back\'s killing me.', 'Pass the shovel.', 'Keep it straight, now.']), 3);
+      }
+    }
   }
 
   // Heading home down the road after a job, then gone.
@@ -1453,11 +1509,9 @@ export class NPC extends Entity {
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
     if (act.act === 'adventure') return this.adventureAt(act, dt);
-    // A meal on the table: tucking in.
-    if (this.meal && act.act === 'eat' && this.rng.chance(dt * 0.5)) {
-      this.face(this.meal.x, this.meal.z);
-      this.doAction(0.2);
-    }
+    // Looking busy at it: food going down, the drink, the dice, the pot on
+    // the fire, notes off the lute (see acts.js).
+    if (actFx(this, act, g, dt)) return;
     // Behind the bar: clearing away what people leave.
     if (act.act === 'work' && TIDIERS.has(this.rec.job) && this.tidyUp(dt)) return;
     // Minding the town's horses: a saddle on any that hasn't one.
@@ -2223,6 +2277,13 @@ export class NPC extends Entity {
       if (witnessed) return;
       this.wake();
     }
+    // Raiders and soldiers: whoever goes for them, they fight.
+    if (this.warband) {
+      if (threat.kind === 'player') this.game.sim.war.onStruck(this);
+      if (this.warband.kind === 'sortie') this.warband = null;
+      if (this.mount && this.warband) this.mount = null;
+      return this.engage(threat);
+    }
     const p = this.rec.personality;
     const beast = threat.kind === 'creature' || threat.kind === 'monster';
     const guardsExist = this.game.guardsOf(this.settlement.id).length > 0;
@@ -2358,7 +2419,7 @@ export class NPC extends Entity {
       return this.startRetreat(t);
     }
     if (this.retreated && this.hp >= this.maxHp * 0.6) this.retreated = false;
-    if (guard && t.kind === 'player') {
+    if (guard && t.kind === 'player' && !this.warband) {
       // Waiting for an answer to "Halt!".
       if (this.haltT > 0) {
         this.haltT -= dt;
@@ -2434,13 +2495,13 @@ export class NPC extends Entity {
 
   calmDown(silent = false) {
     this.drawnBow = false;
-    this.state = this.hired ? 'hired' : 'routine';
+    this.state = this.warband ? 'warband' : this.hired ? 'hired' : 'routine';
     this.threat = null;
     this.path = null;
     this.activity = null;
     this.fleeGoal = null;
     this.haltT = 0;
-    if (!silent && this.rng.chance(0.5)) this.say(this.rng.pick(['Phew...', 'That was close.', '*sigh*', 'Is it over?']), 2);
+    if (!silent && !this.warband && this.rng.chance(0.5)) this.say(this.rng.pick(['Phew...', 'That was close.', '*sigh*', 'Is it over?']), 2);
   }
 
   onHurt(attacker) {

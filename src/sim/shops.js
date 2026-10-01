@@ -227,6 +227,11 @@ export function setUpMerchants(L, rng) {
   for (const rec of L.npcs) {
     if (rec.job !== 'merchant' || rec.tier) continue;
     rec.tier = rollTier(hash4(L.settlement.seed, rec.idx, 0x7e7));
+    // (A master merchant's standing needs the guilds' charter behind it.)
+    if (rec.tier > 2 && L.sim && L.sim.tech && !L.sim.tech.has(L.settlement, 'guilds')) {
+      rec.tier = 2;
+      rec.master = true;
+    }
     const T = MERCHANT_TIERS[rec.tier];
     rec.coins = Math.max(rec.coins || 0, Math.round(T.coins * rng.float(0.8, 1.3)));
     const biz = rec.work && rec.work.building != null ? e.biz[rec.work.building] : null;

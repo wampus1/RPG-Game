@@ -12,6 +12,7 @@ import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger, fresh
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare, licensesFor, licenceFee } from '../sim/careers.js';
+import { TECHS } from '../sim/tech.js';
 import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
@@ -295,6 +296,7 @@ export function topicsFor(npc, game) {
     if (mine.length && countItem(game.player.inv, 'dispatch')) add('dispatch', `I bring a letter from ${dip.town(mine[0].from).name}.`);
     if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
     add('towns', 'Tell me about the neighbouring towns.');
+    add('research', 'What are our scholars studying?');
     add('donate', `I'd like to help ${s.name} grow.`);
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
     if (sim.isCitizen(s.id) && (sim.citizen.home === null || sim.citizen.home === undefined) && sim.citizen.host !== null) add('ownhome', 'I\'d like a place of my own.');
@@ -364,6 +366,24 @@ function realmTalk(npc, game) {
     else if (!here && R.share >= 0.12) lines.push(p.kindness < 0.4 ? `A ${Math.round(R.share * 100)}% share of our taxes goes to ${capS ? capS.name : 'the capital'}. Robbery, I call it.` : `A fair bit of our taxes goes to ${capS ? capS.name : 'the capital'}. I hope they spend it well.`);
     else lines.push(pick(rng, [`A steady hand, ${who}.`, `We could do worse than ${ruler.name.first} ${ruler.name.last}.`, `I don't think about the capital much. It's a long way off.`]));
   } else lines.push(`The ${realmName} has no ruler just now. Everyone's waiting to hear who's next.`);
+  // A war (how it's going, and what it's costing), an alliance, a lord.
+  const war = sim.war.warOf(civ);
+  if (war) {
+    const side = sim.war.sideOf(war, civ);
+    const foe = (game.world.ow.civs[war.lead[side === 'a' ? 'b' : 'a']]?.name || 'the enemy').replace(/^The /, '');
+    const sc = side === 'a' ? war.score : -war.score;
+    const tired = (war.weary[civ.id] || 0) > 0.5;
+    const last = war.battles[war.battles.length - 1];
+    lines.push(sc >= 30 ? pick(rng, [`We're winning the war with the ${foe}. ${last ? `You heard about ${last.name}?` : ''}`.trim(), `The ${foe} will be suing for peace soon, mark my words.`])
+      : sc <= -30 ? pick(rng, [`The war with the ${foe} is going badly. ${tired ? 'Everyone\'s sick of it.' : 'We need every arm we can get.'}`, `I pray the ${foe} don't come this far.`])
+        : pick(rng, [`We're at war with the ${foe}, over ${war.why}. ${tired ? 'It\'s dragged on too long.' : 'Neither side has the upper hand yet.'}`, `War with the ${foe}. ${war.plan ? `They say the armies meet outside ${game.world.ow.settlements[war.plan.def]?.name || 'the border'} tomorrow.` : 'Every few days, another battle.'}`]));
+    if (R.decrees.draft === 'all' && rng.chance(0.6)) lines.push('They\'ve even put spears in the children\'s hands. It isn\'t right.');
+  } else {
+    const lord = sim.politics.lordOf(civ);
+    const allies = sim.politics.allies(civ);
+    if (lord) lines.push(pick(rng, [`Since the war, we pay tribute to the ${lord.name.replace(/^The /, '')}. Every week, like clockwork.`, `We serve the ${lord.name.replace(/^The /, '')} now. ${p.bravery > 0.6 ? 'Not forever, though.' : 'Better than more fighting.'}`]));
+    else if (allies.length && rng.chance(0.7)) lines.push(`We're sworn allies with the ${allies[0].name.replace(/^The /, '')}. ${pick(rng, ['Good friends to have.', 'Trade\'s never been better.', 'Let anyone try us now.'])}`);
+  }
   // Talk of breaking away (or of when they did).
   const ind = npc.layout.econ.independence ?? -1;
   if (civ.freed && civ.capital === s.id) lines.push(pick(rng, [`We answer to nobody now: free of the ${(game.world.ow.civs[civ.freed.from]?.name || 'old realm').replace(/^The /, '')} since day ${Math.max(1, civ.freed.day)}.`, 'Free! And we mean to stay that way.']));
@@ -778,6 +798,21 @@ function workTalk(npc, game) {
   return { lines: lines.slice(0, 3), choices: choices.length ? choices : null };
 }
 
+// The mayor on what the realm's scholars are at (and the tree of it all).
+function researchTalk(npc, game) {
+  const s = npc.settlement;
+  const T = game.sim.tech;
+  const st = T.stateOf(s);
+  const who = T.leaderOf(s);
+  const boss = s.civ ? (who && who.ruler !== undefined && who !== npc.rec ? `${who.name.first} ${who.name.last}` : 'the court') : 'I';
+  const cur = st.current ? TECHS[st.current] : null;
+  const lines = [cur
+    ? `${boss === 'I' ? 'I have' : `${boss[0].toUpperCase()}${boss.slice(1)} has`} set the scholars to ${cur.name.toLowerCase()}: ${cur.desc.charAt(0).toLowerCase()}${cur.desc.slice(1)} They're ${Math.floor((st.progress / cur.cost) * 100)}% of the way there.`
+    : 'Our scholars have nothing to study just now.',
+  `We know ${st.done.length} of the twenty arts so far. Here, see for yourself.`];
+  return { lines, open: 'tech' };
+}
+
 // Talking to the mayor about the professions the town licenses.
 function professionTalk(npc, game, arg) {
   const s = npc.settlement;
@@ -816,6 +851,8 @@ function professionTalk(npc, game, arg) {
         exiled: 'You were banished. Never.', crimes: 'Not while you have crimes to answer for.', citizen: `Only citizens of ${s.name} may serve on the watch.`,
         record: 'Not with a conviction on your record. The watch must be above reproach.', distrust: 'Frankly, I don\'t trust you with it. Earn some goodwill first.',
         already: `You already are our ${P.title.toLowerCase()}!`,
+        tech: `Nobody in the realm knows the craft yet: our scholars would have to master ${TECHS[t.tech]?.name.toLowerCase() || 'it'} first.`,
+        nowhere: 'We have nowhere for you to do it: no academy, not even a library.',
         tier: `A ${s.type} like ours has no call for a licensed ${P.title.toLowerCase()}. Try a ${t.tier === 'city' ? 'city' : 'town'}.`,
       }[t.reason] || 'I can\'t do that.';
       return { lines: [P.pitch, why] };
@@ -1470,6 +1507,7 @@ function respondRaw(npc, game, id, arg) {
       }
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
+    case 'research': return researchTalk(npc, game);
     case 'paper': {
       const r = sim.press.handOut(npc);
       if (!r.ok) return { lines: [r.reason === 'read' ? 'I\'ve read that one already, thanks.' : 'A newspaper? You\'ve none left.'] };

@@ -30,6 +30,8 @@ const SPECS = {
   barn: { size: [[7, 6], [8, 6]], tall: 3 },
   // Stalls for the town's horses, hay and a trough (see stables.js).
   stables: { size: [[9, 6], [8, 6]], tall: 3 },
+  // Where the realm's researchers study (see tech.js).
+  academy: { size: [[9, 6], [8, 6]], tall: 3, civic: true },
   // A licensed trade's own workshop, built for the player (never staffed).
   player_workshop: { size: [[6, 5], [6, 6]] },
 };
@@ -38,7 +40,7 @@ export const BUILDING_NAMES = {
   house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
-  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables',
+  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy',
 };
 
 // What a trade works at, in its workshop.
@@ -1704,6 +1706,21 @@ class Layout {
       }
       b.work.push(...b.seats.filter((q) => q.tags.includes('work')));
       lamp();
+    } else if (t === 'academy') {
+      // Shelves of learning, desks for the researchers, a still for the
+      // experiments, a table with charts spread on it.
+      for (let i = 0; i < 4; i++) tryPlace(B.bookshelf, 'north', { rot: 0 });
+      workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study', 'research']);
+      workAt(tryPlace(B.writing_desk, 'wall', { access: true }), ['work', 'read', 'study', 'research']);
+      workAt(tryPlace(B.alembic, 'wall', { access: true }), ['work', 'research']);
+      const table = tryPlace(B.table, 'center', { access: true });
+      if (table) {
+        this.put(table.x, Y0 + 1, table.z, B.lantern, lit);
+        seat(['read', 'study', 'work', 'research'], table);
+        seat(['read', 'study'], table);
+      }
+      b.work.push(...b.seats.filter((q) => q.tags.includes('work')));
+      lamp();
     } else if (t === 'townhall') {
       const table = tryPlace(B.table, 'center', { access: true });
       if (table) {
@@ -2576,6 +2593,8 @@ class Layout {
         return true; // guards patrol even without a guardhouse
       case 'stables':
         return true; // (the horses at the hitching post, till there are stables)
+      case 'academy':
+        return this.buildings.some((b) => (b.type === 'academy' || b.type === 'library') && b.work.length + b.seats.length > 0);
       case 'shop':
         return this.buildings.some((b) => b.type === 'shop') || this.spotsByTag('market').length > 0;
       default:
@@ -2596,6 +2615,11 @@ class Layout {
       return { kind: 'patrol', building: gh.length ? rng.pick(gh).id : null, post };
     }
     if (J.place === 'farm') return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
+    // (Researchers study at the library till the academy's built.)
+    if (J.place === 'academy' && !this.buildings.some((b) => b.type === 'academy' && !b.underConstruction)) {
+      const lib = this.buildings.find((b) => b.type === 'library' && b.work.length);
+      if (lib) return { kind: 'building', building: lib.id };
+    }
     if (J.place === 'stables' && !this.buildings.some((b) => b.type === 'stables' && !b.underConstruction)) return { kind: 'tag', tag: 'farm', building: this.buildings.find((b) => b.type === 'barn')?.id ?? null };
     if (J.place === 'dock') return { kind: 'tag', tag: 'fish' };
     if (J.place === 'plaza') return { kind: 'plaza' };

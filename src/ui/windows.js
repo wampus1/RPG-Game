@@ -7,6 +7,7 @@ import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
+import { TechWindow } from './research.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
@@ -402,6 +403,10 @@ export class DialogueWindow extends Window {
     game.audio?.play('select');
     if (r.open === 'trade') return this.ui.openTrade(n);
     if (r.open === 'gift') return this.ui.open(new GiftWindow(this.ui, n));
+    if (r.open === 'tech') {
+      this.ui.open(new TechWindow(this.ui, game, n.settlement));
+      return;
+    }
     this.choices = r.choices && r.choices.length ? r.choices : null;
     this.back = this.choices ? (r.back === undefined ? '(Never mind)' : r.back) : null;
     this.page = 0;
@@ -998,7 +1003,12 @@ export class LedgerWindow extends Window {
       const d = R.decrees;
       const dec = [d.taxFloor ? `tax at least ${Math.round(d.taxFloor * 100)}%` : null, d.armsBan ? 'no weapons' : null,
         ...d.tariffOn.map((id) => `tariff on the ${game.world.ow.civs[id]?.name.replace(/^The /, '') || '?'}`)].filter(Boolean);
+      if (d.watch && d.watch !== 'standard') dec.push(d.watch === 'heavy' ? 'a heavy watch' : 'a light watch');
+      if (d.draft && d.draft !== 'none') dec.push(d.draft === 'all' ? 'elders and children drafted' : 'elders drafted');
       row('Decrees', dec.length ? dec.join(', ') : 'none');
+      // Allies, lords and vassals; a war, and how it goes.
+      game.sim.politics.summary(civ).forEach((t, i) => row(i ? '' : 'Pacts', t, C.green));
+      game.sim.war.summary(civ).forEach((t, i) => row(i ? '' : 'War', t, i ? '#f0e0c0' : C.orange));
       if (R.capital !== s.id && (e.independence ?? -1) > 0) row('Unrest', `${Math.round(Math.min(1, (e.independence + 1) / 2) * 100)}% for breaking away${e.secedeVotes ? ': talk of it everywhere' : ''}`, e.secedeVotes ? C.orange : '#f0e0c0');
       if (civ.freed) row('Freedom', `free of the ${game.world.ow.civs[civ.freed.from]?.name.replace(/^The /, '') || '?'} since day ${Math.max(1, civ.freed.day)}`, C.green);
       const aid = (e.royalAid || []).slice(-1)[0];
@@ -1009,6 +1019,7 @@ export class LedgerWindow extends Window {
         row(i ? '' : 'Relations', `${st}: ${o.name.replace(/^The /, '')}`, st === 'hostile' ? C.orange : st === 'friendly' ? C.green : '#f0e0c0');
       });
     }
+    if ((e.raidAlert || 0) > game.sim.abs) row('Warning', 'Raiders have been seen nearby. Merchants are keeping off the roads.', C.orange);
     const hungry = living.filter((r) => r.hungry >= 1).length;
     row('Food', hungry ? `${hungry} going hungry` : 'Everyone is fed', hungry ? C.orange : C.green);
     const visits = (game.sim.visits.get(s.id) || []).filter((v) => game.sim.abs >= v.arrive && game.sim.abs < v.leave);
@@ -1150,6 +1161,21 @@ export class MapWindow extends Window {
         if (cx === pcx && cz === pcz && blink) g.put(x + ((p.x % REGION_W) >= REGION_W / 2 ? 1 : 0), y, '@', '#ffffff', '#c02020');
       }
     }
+    // Wars and raids: tomorrow's battlefield, the fields fought over
+    // lately, and towns expecting raiders.
+    let mark = null;
+    for (const m of game.sim.war.markers()) {
+      const cx = Math.floor(m.x / REGION_W);
+      const cz = Math.floor(m.z / REGION_D);
+      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || !(ow.explored[cz * MAP_W + cx] || game.revealMap)) continue;
+      const x = 2 + cx * 2 + (m.kind === 'raid' ? 0 : (m.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
+      const y = 1 + cz;
+      if (m.kind !== 'raid' && icons.has(cz * 10000 + cx)) continue;
+      if (m.kind === 'raid') {
+        if (blink) g.put(x, y, '!', '#ffffff', '#c03020');
+      } else g.put(x, y, 'X', m.kind === 'battle' ? '#ffffff' : '#ff9080', m.kind === 'battle' ? (blink ? '#c02020' : '#801818') : '#3a1a1a');
+      if (this.hovering(x, y, 1, 1)) mark = m;
+    }
     const y0 = MAP_H + 2;
     if (hover && hover.known) {
       const c = hover.cell;
@@ -1162,40 +1188,49 @@ export class MapWindow extends Window {
         g.text(2, y0 + 1, s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', s.civ ? s.civ.color.hex : C.dim);
       } else if (c.civ !== null && ow.civs[c.civ]) g.text(2, y0 + 1, `Territory of the ${ow.civs[c.civ].name}`, ow.civs[c.civ].color.hex);
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
+      if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village  [■] town  ┌┐ city  ╔╗ walled city  ~ river  ─ road  † ruins', C.faint);
+    g.text(2, y0 + 2, '⌂ village [■] town ┌┐ city ╔╗ walls ~ river ─ road † ruin X battle ! raid', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
   }
-  // The roads between towns, drawn over the land as a faint line along
-  // the way they really go (only what's built, and only where you've been).
+  // The roads between towns, drawn over the land as a line through each
+  // map square they pass: straight across, straight up, or round a corner
+  // (as the road really runs). Only what's built, and only where you've
+  // been; town squares keep their icons, the road running up to them.
   drawPixels(ctx, game) {
     if (!game) return;
     const ow = game.world.ow;
     const icons = this.icons || settlementIcons(game);
     const ox = this.x * CHAR_W;
     const oy = this.y * CHAR_H;
-    const open = (x, z) => {
-      const cx = Math.floor(x / REGION_W);
-      const cz = Math.floor(z / REGION_D);
-      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) return false;
-      return (ow.explored[cz * MAP_W + cx] || game.revealMap) && !icons.has(cz * 10000 + cx);
-    };
-    const at = (x, z) => [ox + (2 + ((x + 0.5) / REGION_W) * 2) * CHAR_W, oy + (1 + (z + 0.5) / REGION_D) * CHAR_H];
+    const known = (cx, cz) => cx >= 0 && cz >= 0 && cx < MAP_W && cz < MAP_H && (ow.explored[cz * MAP_W + cx] || game.revealMap);
+    const links = roadCellLinks(game.sim.diplomacy.roads);
+    const w = CHAR_W * 2;
+    const h = CHAR_H;
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(236,206,150,0.6)';
-    for (const pts of roadLines(game.sim.diplomacy.roads, open)) {
-      ctx.beginPath();
-      pts.forEach(([x, z], i) => {
-        const [px, py] = at(x, z);
-        if (i) ctx.lineTo(px, py);
-        else ctx.moveTo(px, py);
-      });
-      ctx.stroke();
+    for (const [k, dirs] of links) {
+      const cx = k % 10000;
+      const cz = Math.floor(k / 10000);
+      if (!known(cx, cz) || icons.has(k)) continue;
+      const mx = Math.round(ox + (2 + cx * 2) * CHAR_W + w / 2);
+      const my = Math.round(oy + (1 + cz) * CHAR_H + h / 2);
+      // A dark edge under a pale line, so it reads on any ground.
+      for (const [col, t] of [['rgba(40,28,16,0.55)', 4], ['rgba(238,212,160,0.9)', 2]]) {
+        ctx.fillStyle = col;
+        for (const d of dirs) {
+          // From the middle of the square out to the edge it leaves by.
+          if (d === 'E') ctx.fillRect(mx - t / 2, my - t / 2, w / 2 + t / 2, t);
+          else if (d === 'W') ctx.fillRect(mx - w / 2, my - t / 2, w / 2 + t / 2, t);
+          else if (d === 'S') ctx.fillRect(mx - t / 2, my - t / 2, t, h / 2 + t / 2);
+          else ctx.fillRect(mx - t / 2, my - h / 2, t, h / 2 + t / 2);
+        }
+        if (dirs.size === 1) {
+          // A road that stops here (still being built): a dot at the end.
+          ctx.fillRect(mx - t / 2, my - t / 2, t, t);
+        }
+      }
     }
     ctx.restore();
   }
@@ -1263,6 +1298,54 @@ export function roadLines(roads, open = () => true, every = 6) {
       if (!run.length || i % every === 0 || i + 2 >= n) run.push([x, z]);
     }
     flush();
+  }
+  return out;
+}
+
+// Which way out of each map square the built roads go (N, S, E, W), from
+// the order the road's tiles run in. A step across a corner goes round it.
+export function roadCellLinks(roads) {
+  const out = new Map();
+  const link = (a, b) => {
+    const ax = a % 10000;
+    const az = Math.floor(a / 10000);
+    const bx = b % 10000;
+    const bz = Math.floor(b / 10000);
+    const d = bx > ax ? 'E' : bx < ax ? 'W' : bz > az ? 'S' : 'N';
+    const back = { E: 'W', W: 'E', S: 'N', N: 'S' }[d];
+    if (!out.has(a)) out.set(a, new Set());
+    if (!out.has(b)) out.set(b, new Set());
+    out.get(a).add(d);
+    out.get(b).add(back);
+  };
+  for (const r of roads) {
+    const n = r.tiles.length;
+    const fa = r.fromA ?? r.built ?? 0;
+    const fb = r.fromB || 0;
+    const built = (i) => r.done || i < fa || i >= n - fb;
+    let prev = null;
+    for (let i = 0; i < n; i += 2) {
+      if (!built(i)) {
+        prev = null;
+        continue;
+      }
+      const [x, , z] = r.tiles[i];
+      const k = Math.floor(z / REGION_D) * 10000 + Math.floor(x / REGION_W);
+      if (prev !== null && prev !== k) {
+        const px = prev % 10000;
+        const pz = Math.floor(prev / 10000);
+        const cx = k % 10000;
+        const cz = Math.floor(k / 10000);
+        if (Math.abs(cx - px) + Math.abs(cz - pz) === 1) link(prev, k);
+        else if (Math.abs(cx - px) <= 1 && Math.abs(cz - pz) <= 1) {
+          const mid = pz * 10000 + cx;
+          link(prev, mid);
+          link(mid, k);
+        }
+      }
+      if (prev === null && !out.has(k)) out.set(k, new Set());
+      prev = k;
+    }
   }
   return out;
 }
@@ -1433,6 +1516,7 @@ export class HelpWindow extends Window {
       ['FISH', 'Hold a fishing rod and right-click water'],
       ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
       ['LEAD', 'Hold a lead, RMB an animal · RMB a fence to tie it up'],
+      ['STUDY', 'Researcher at a desk: A/D turn rings · W/S pick · SPACE'],
       ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {

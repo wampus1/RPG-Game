@@ -19,6 +19,7 @@ import { M, BUILDING_NAMES } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
 import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
+import { ResearchWindow } from '../ui/research.js';
 import { alive, invAdd, DAY, setOverride, ledger } from '../sim/econ.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
@@ -825,6 +826,43 @@ export class Game {
     for (const [k, n] of this.caravans) if (!live.has(k) || n.dead) this.endCaravan(k, n);
   }
 
+  // Builders out on a road between towns: when you're near the end they're
+  // working on, there they are, digging the next stretch.
+  updateRoadCrews(dt) {
+    this.crewT = (this.crewT || 0) - dt;
+    if (this.crewT > 0 || this.sleep) return;
+    this.crewT = 1;
+    const p = this.player;
+    const D = this.sim.diplomacy;
+    const want = new Set();
+    for (const r of D.roads) {
+      if (r.done) continue;
+      const k = `${r.a}:${r.b}`;
+      for (const end of ['A', 'B']) {
+        const f = D.frontier(r, end);
+        if (!f || Math.max(Math.abs(f.x - p.x), Math.abs(f.z - p.z)) > 40 || !this.world.regionAt(f.x, f.z)) continue;
+        const L = this.sim.layoutOf(end === 'A' ? r.a : r.b);
+        if (!L) continue;
+        const crew = L.npcs.filter((rec) => rec.roadwork && rec.roadwork.k === k && rec.roadwork.end === end && alive(rec));
+        crew.forEach((rec, i) => {
+          want.add(rec);
+          if (rec.ent && !rec.ent.dead) return;
+          // On the stretch already laid, just short of the end.
+          const t = r.tiles[end === 'A' ? Math.max(0, f.i - 2 - i * 2) : Math.min(r.tiles.length - 1, f.i + 2 + i * 2)] || [f.x, f.y, f.z];
+          const spot = this.findFreeSpot(t[0], t[2], t[1] + 1);
+          if (!spot) return;
+          const n = new NPC(this, rec, L);
+          n.state = 'roadwork';
+          n.crew = { road: r, end, slot: i };
+          n.teleport(spot.x, spot.y, spot.z);
+          rec.ent = n;
+          this.npcs.push(n);
+        });
+      }
+    }
+    for (const n of this.npcs) if (!n.dead && n.state === 'roadwork' && !want.has(n.rec)) this.despawnNpc(n);
+  }
+
   endCaravan(key, n) {
     this.caravans.delete(key);
     if (n && !n.dead) {
@@ -878,6 +916,17 @@ export class Game {
     n.teleport(spot.x, spot.y, spot.z);
     rec.ent = n;
     a.npcs.push(n);
+    this.npcs.push(n);
+    return n;
+  }
+
+  // A raider or a soldier, come for a fight (see war.js): out in the
+  // fields, belonging to no town you're in.
+  spawnWarrior(rec, L, spot) {
+    const n = new NPC(this, rec, L);
+    n.state = 'warband';
+    n.teleport(spot.x, spot.y, spot.z);
+    rec.ent = n;
     this.npcs.push(n);
     return n;
   }
@@ -1247,6 +1296,7 @@ export class Game {
     this.playtime.update(dt);
     this.updateBells(dt);
     this.updateCaravans(dt);
+    this.updateRoadCrews(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 4);
@@ -2445,6 +2495,17 @@ export class Game {
       // A trade's own bench: only someone licensed in the trade can work it.
       case 'bench': {
         const st = BLOCKS[id].station;
+        // A researcher at a desk in the academy (or library): the study.
+        const b = buildingAt(this.sim.layoutOf(this.currentSettlement?.id) || { buildings: [] }, x, z);
+        const cj = this.sim.careers.job;
+        if (st === 'scribe' && b && (b.type === 'academy' || b.type === 'library') && cj && cj.kind === 'profession' && cj.job === 'researcher') {
+          if (cj.sid !== this.currentSettlement.id) {
+            this.ui.msg('You study for another town. (Ask its mayor, or resign and take the post here.)', '#c8c8c8', true);
+            break;
+          }
+          this.ui.open(new ResearchWindow(this.ui, this, this.currentSettlement));
+          break;
+        }
         if (!this.sim.careers.canUseBench(st)) {
           const P = PROFESSIONS[st];
           this.ui.msg(`Only a licensed ${P ? P.title.toLowerCase() : st} knows how to work the ${BLOCKS[id].label.replace(/^.*'s /, '').toLowerCase()}. (Ask a mayor about a licence.)`, '#c8c8c8', true);
@@ -2469,7 +2530,8 @@ export class Game {
         break;
       case 'well':
         if (this.useWell(x, y, z)) break;
-        if (p.addBlue(2, `well:${x},${z}`)) {
+        // (Only a realm that has learned to keep its wells clean.)
+        if (this.sim.tech.has(this.world.ow.settlementAt(x, z), 'wells') && p.addBlue(2, `well:${x},${z}`)) {
           p.hp = Math.min(p.maxHp, p.hp + 2);
           this.ui.msg('The water of this well is crisp and pure. You feel hardier: a blue heart, until the day ends.', '#80e0ff');
           this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#80c8ff', '#e0f4ff'], up: 30, life: 0.7, gravity: -10 });
@@ -2800,10 +2862,10 @@ export class Game {
     sl.early = early;
     const p = this.player;
     if (!early && !sl.jail) {
-      // A night under a village roof: country air and a good bed.
+      // A night in a proper bed (where the realm knows hospitality).
       const s = this.world.ow.settlementAt(sl.bed.x, sl.bed.z);
-      if (s && s.type === 'village' && s.condition !== 'abandoned' && p.addBlue(2, `village:${s.id}`)) {
-        this.ui.msg(`A night's sleep in ${s.name} leaves you hardier: a blue heart for today.`, '#a0ffa0');
+      if (s && s.condition !== 'abandoned' && this.sim.tech.has(s, 'hospitality') && p.addBlue(2, `bed:${s.id}`)) {
+        this.ui.msg(`A night's sleep in a good ${s.name} bed leaves you hardier: a blue heart for today.`, '#a0ffa0');
       }
       p.hp = p.maxHp;
       this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
@@ -3013,7 +3075,11 @@ export class Game {
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.3);
     this.audio?.play('eat');
-    this.ui.msg(`Ate ${def.name}. (+${heal} HP)`, '#80e070');
+    // Crumbs (or foam) everywhere.
+    if (slot.item === 'ale') this.renderer.emit(p.x, p.y + 1, p.z, { n: 5, color: ['#f4ecd8', '#ffffff', '#e8c060'], shape: 'drop', up: 10, speed: 12, gravity: 120, life: 0.5, oy: -2 });
+    else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
+    if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
+    this.ui.msg(`${slot.item === 'ale' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP)`, '#80e070');
     // Meal quality matters: bad cooking can turn your stomach, a delightful
     // meal keeps you going for a while.
     if (def.quality === 'terrible' && Math.random() < 0.35) {
@@ -3032,7 +3098,7 @@ export class Game {
       return;
     }
     // People in the middle of something urgent don't stop to chat.
-    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null }[npc.state];
+    const busy = { flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!' }[npc.state];
     if (busy !== undefined) {
       if (busy) npc.say(busy, 2);
       return;
@@ -3257,6 +3323,16 @@ export class Game {
     }
     if (armored) this.audio?.play('armor_hit', target);
     // Blue hearts take the blow first.
+    // A townsperson who slept in a proper bed (hospitality) shrugs off the
+    // first knocks of the day.
+    // (They still feel it, and react: only the hurt is spared.)
+    const nb = target.kind === 'npc' && target.rec && target.rec.blue;
+    let blueSoak = 0;
+    if (nb && nb.hp > 0 && nb.day === this.day) {
+      blueSoak = Math.min(nb.hp, amount);
+      nb.hp -= blueSoak;
+      amount -= blueSoak;
+    }
     if (target.kind === 'player' && target.blue && target.blue.hp > 0 && target.blue.day === this.day) {
       const soak = Math.min(target.blue.hp, amount);
       target.blue.hp -= soak;
@@ -3281,7 +3357,7 @@ export class Game {
     // Jewelled armour answers a blow struck in close.
     if (source && !this.dotHit) onStruck(this, target, source, amount);
     target.flash = 0.12;
-    this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount}`, target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
+    this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount || blueSoak}`, amount <= 0 && blueSoak ? '#80a8ff' : target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
     this.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: target.species === 'slime' ? ['#58c048', '#8ae070'] : target.kind === 'monster' ? ['#e8e4d4', '#b0aca0'] : ['#c82a2a', '#8a1a1a'], up: 30, speed: 50, life: 0.4, oy: -8 });
     this.audio?.play(target.kind === 'player' ? 'hurt' : 'hit', target);
     if (target.kind === 'player') {
@@ -3304,6 +3380,9 @@ export class Game {
       target.onHurt(source);
       if (inDuel) {
         // (A bout both agreed to is no crime.)
+      } else if (target.warband && target.warband.foe) {
+        // (Nor is fighting raiders, or soldiers in a battle.)
+        if (source.kind === 'player') this.sim.war.onStruck(target);
       } else if (source.kind === 'player' && target.hp > 0) this.crime(target);
       else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
@@ -3315,7 +3394,7 @@ export class Game {
         return;
       }
       // The town subdues lawbreakers rather than killing them (unless exiled).
-      if (target.kind === 'player' && source && source.kind === 'npc' && !source.visit && !source.hired && !this.sim.justice.exiled.has(source.settlement.id)) {
+      if (target.kind === 'player' && source && source.kind === 'npc' && !source.visit && !source.hired && !source.warband && !this.sim.justice.exiled.has(source.settlement.id)) {
         target.hp = 1;
         this.sim.justice.knockout(source.settlement.id);
         return;
@@ -3374,6 +3453,12 @@ export class Game {
     if (!jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid)) && !p.dead && guard.distTo(p) <= 12 && this.sim.canSee(guard, p.x, p.z, p.y)) return p;
     const b = guard.settlement.bounds;
     const watching = guard.act === 'watch';
+    // Raiders in (or at the edge of) town.
+    const mine = guard.settlement.civ ? guard.settlement.civ.id : -1;
+    for (const n of this.npcs) {
+      if (n.dead || !n.warband || n.warband.kind !== 'raid' || n.warband.civ === mine || n.warband.phase === 'flee') continue;
+      if (guard.distTo(n) <= (watching ? 14 : 12)) return n;
+    }
     for (const c of this.creatures) {
       if (c.dead || !c.hostileNow) continue;
       if (guard.distTo(c) > (watching ? 11 : 9)) continue;
@@ -3451,9 +3536,20 @@ export class Game {
       if (coins) this.spawnDrop('coin', coins, e.x, e.y, e.z, true);
       rec.coins = 0;
       const byPlayer = source && source.kind === 'player';
-      const cause = byPlayer ? 'slain' : source ? `killed by a ${(source.name || 'beast').toLowerCase()}` : 'misadventure';
+      const cause = e.warband ? this.sim.war.cause(e) : byPlayer ? 'slain' : source ? `killed by a ${(source.name || 'beast').toLowerCase()}` : 'misadventure';
       rec.ent = null;
-      this.sim.recordDeath(e.originLayout || L, rec, cause, byPlayer ? 'player' : null);
+      // A raider or a soldier fallen in a fight: war, not murder.
+      if (e.warband) {
+        this.sim.recordDeath(e.originLayout || L, rec, cause, null);
+        this.sim.war.onDeath(e, source);
+        if (byPlayer) this.stats.kills++;
+        const civ = e.warband.civ !== null && e.warband.civ !== undefined ? this.world.ow.civs[e.warband.civ] : null;
+        // (The first few by name; the rest are counted at the end.)
+        const live = this.sim.war.live;
+        if (live) live.told = (live.told || 0) + 1;
+        if ((!live || live.told <= 3) && Math.max(Math.abs(e.x - this.player.x), Math.abs(e.z - this.player.z)) < 24) this.ui.msg(`${e.name}${civ ? ` of the ${civ.name.replace(/^The /, '')}` : ''} has fallen.`, '#ff9080');
+        return;
+      }
       if (byPlayer) {
         this.stats.kills++;
         this.ui.msg(`${e.name} the ${e.title} has died.`, '#ff7060');

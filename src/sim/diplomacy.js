@@ -8,12 +8,16 @@ import { alive, ledger, DAY, setOverride } from './econ.js';
 import { deserted } from './civic.js';
 import { B } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
+import { MinHeap } from '../util/heap.js';
+import { hash4 } from '../util/rng.js';
 // Builder-minutes to lay one tile of road between towns (from each end).
 const ROAD_MIN_PER_TILE = 20;
 
 // What a road may clear out of its way: plants and tree trunks.
 export const SOFT = new Set(['tall_grass', 'fern', 'bush', 'berry_bush', 'dead_bush', 'flower_red', 'flower_yellow', 'flower_blue', 'flower_white', 'flower_purple',
-  'mushroom_red', 'mushroom_brown', 'herb', 'rock', 'log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow', 'cactus', 'sapling'].map((k) => B[k]).filter((v) => v !== undefined));
+  'mushroom_red', 'mushroom_brown', 'herb', 'rock', 'log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow', 'cactus', 'sapling',
+  // (and the leaves over it: a road through a wood is a cut through the trees)
+  'leaves_oak', 'leaves_birch', 'leaves_pine', 'leaves_palm', 'leaves_jungle', 'leaves_acacia', 'leaves_willow', 'leaves_snowy'].map((k) => B[k]).filter((v) => v !== undefined));
 
 const KINDS = {
   aid: 'asking for money for the treasury',
@@ -56,7 +60,9 @@ export class Diplomacy {
   // Hours for a letter (or merchant) to go from one town to another.
   travelHours(a, b) {
     const road = this.roads.some((r) => r.done && ((r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id)));
-    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1));
+    // (Caravan law: protected roads, quicker going.)
+    const law = this.sim.tech && (this.sim.tech.has(a, 'caravan_law') || this.sim.tech.has(b, 'caravan_law'));
+    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1));
   }
 
   neighbours(s, max = 14) {
@@ -233,7 +239,7 @@ export class Diplomacy {
     // A town of a hostile realm won't help (or trade closer, or build a road).
     const realms = this.sim.realms;
     const hostile = realms && from.civ && to.civ && from.civ !== to.civ && realms.standing(from.civ, to.civ) === 'hostile';
-    if (hostile && ['aid', 'guards', 'settlers', 'trade', 'road'].includes(q.kind)) return reply('no', {}, `${to.name} refused ${from.name}'s letter: the ${from.civ.name} are no friends of ours.`);
+    if (hostile && ['aid', 'guards', 'settlers', 'trade', 'road'].includes(q.kind)) return reply('no', {}, `${to.name} refused ${from.name}'s letter: the ${from.civ.name.replace(/^The /, '')} are no friends of ours.`);
     switch (q.kind) {
       case 'aid': {
         const can = T.econ.treasury > Math.max(150, people.length * 12) && toRel.trust >= -10;
@@ -375,22 +381,133 @@ export class Diplomacy {
     const q0 = out(e0, a.bounds);
     const q1 = out(e1, b.bounds);
     walk(e0, q0);
-    walk(q0, q1);
+    // Across country it winds: round lakes and hills, along the easier
+    // ground, with a turn here and there (a stretch at a time).
+    const pts = this.route(q0, q1, [a, b]);
+    for (let i = 1; i < pts.length; i++) walk(pts[i - 1], pts[i]);
     walk(q1, e1);
     const road = { a: a.id, b: b.id, tiles, built: 0, done: false, start: this.game.day };
     this.roads.push(road);
     return road;
   }
 
+  // The way across country between two points: a search over the land in
+  // steps of a few paces, where water, steep ground and other towns cost
+  // more, the lie of the land (a gentle noise) bends it, and every turn
+  // costs a little (so it runs straight a while, then turns). Returns the
+  // corners of the way, start and end included.
+  route(p0, p1, towns = []) {
+    const G = 4;
+    const t = this.game.world.terrain;
+    const dx = p1.x - p0.x;
+    const dz = p1.z - p0.z;
+    const dist = Math.max(Math.abs(dx), Math.abs(dz));
+    if (dist < G * 2) return [p0, p1];
+    const m = Math.max(3, Math.ceil((dist * 0.3) / G));
+    const gx1 = Math.round(dx / G);
+    const gz1 = Math.round(dz / G);
+    const x0 = Math.min(0, gx1) - m;
+    const x1 = Math.max(0, gx1) + m;
+    const z0 = Math.min(0, gz1) - m;
+    const z1 = Math.max(0, gz1) + m;
+    const W = x1 - x0 + 1;
+    const ctx = t.context(p0.x + x0 * G, p0.z + z0 * G, p0.x + x1 * G, p0.z + z1 * G);
+    const seed = this.game.seed;
+    const others = this.game.world.ow.settlements.filter((o) => !towns.includes(o));
+    const cache = new Map();
+    const land = (i, j) => {
+      const k = (j - z0) * W + (i - x0);
+      let v = cache.get(k);
+      if (v) return v;
+      const x = p0.x + i * G;
+      const z = p0.z + j * G;
+      const col = t.column(x, z, ctx, {});
+      const town = others.some((o) => x >= o.bounds.x0 - 2 && x <= o.bounds.x1 + 2 && z >= o.bounds.z0 - 2 && z <= o.bounds.z1 + 2);
+      // A smooth bend to the land (a few steps across), so the way meanders.
+      const fx = (i + 1000) / 5;
+      const fz = (j + 1000) / 5;
+      const ix = Math.floor(fx);
+      const iz = Math.floor(fz);
+      const h = (a, b) => (hash4(seed, a, b, 0x40ad) % 1000) / 1000;
+      const sx = fx - ix;
+      const sz = fz - iz;
+      const top = h(ix, iz) + (h(ix + 1, iz) - h(ix, iz)) * sx;
+      const bot = h(ix, iz + 1) + (h(ix + 1, iz + 1) - h(ix, iz + 1)) * sx;
+      v = { h: col.h, water: col.water >= 0, town, bend: top + (bot - top) * sz };
+      cache.set(k, v);
+      return v;
+    };
+    const key = (i, j, d) => ((j - z0) * W + (i - x0)) * 5 + d;
+    const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const heap = new MinHeap();
+    const best = new Map();
+    const from = new Map();
+    const start = key(0, 0, 4);
+    best.set(start, 0);
+    heap.push([0, 0, 4], Math.abs(gx1) + Math.abs(gz1));
+    let end = null;
+    let n = 0;
+    while (heap.size && n++ < 40000) {
+      const [i, j, d] = heap.pop();
+      const k = key(i, j, d);
+      if (i === gx1 && j === gz1) {
+        end = k;
+        break;
+      }
+      const g = best.get(k);
+      const here = land(i, j);
+      for (let q = 0; q < 4; q++) {
+        const ni = i + DIRS[q][0];
+        const nj = j + DIRS[q][1];
+        if (ni < x0 || ni > x1 || nj < z0 || nj > z1) continue;
+        const L = land(ni, nj);
+        if (L.town) continue;
+        let c = 1 + L.bend * 1.6 + Math.min(6, Math.abs(L.h - here.h) * 0.9) + (L.water ? 7 : 0);
+        if (d !== 4 && d !== q) c += 1.4;
+        const nk = key(ni, nj, q);
+        const ng = g + c;
+        if (ng < (best.get(nk) ?? Infinity)) {
+          best.set(nk, ng);
+          from.set(nk, k);
+          heap.push([ni, nj, q], ng + Math.abs(gx1 - ni) + Math.abs(gz1 - nj));
+        }
+      }
+    }
+    if (end === null) return [p0, p1];
+    // Back from the end, keeping only the corners.
+    const cells = [];
+    for (let k = end; k !== undefined; k = from.get(k)) {
+      const c = Math.floor(k / 5);
+      cells.push([(c % W) + x0, Math.floor(c / W) + z0]);
+    }
+    cells.reverse();
+    const out = [p0];
+    for (let i = 1; i < cells.length - 1; i++) {
+      const [a0, b0] = cells[i - 1];
+      const [a1, b1] = cells[i];
+      const [a2, b2] = cells[i + 1];
+      if (a1 - a0 !== a2 - a1 || b1 - b0 !== b2 - b1) out.push({ x: p0.x + a1 * G, z: p0.z + b1 * G });
+    }
+    // (The search ends on the step nearest the far point: a short last leg.)
+    out.push({ x: p0.x + gx1 * G, z: p0.z + gz1 * G });
+    if (out[out.length - 1].x !== p1.x || out[out.length - 1].z !== p1.z) out.push({ x: out[out.length - 1].x, z: p1.z }, p1);
+    return out;
+  }
+
   // The builders of both towns work toward each other from their own
   // ends, a tile at a time through the working day (no stretch appears at
-  // once), and it's done when they meet.
+  // once), and it's done when they meet. Each end goes at the pace of its
+  // own town's builders (none, and that end waits).
   buildRoads(now = this.sim.abs) {
     for (const r of this.roads) {
       if (r.done) continue;
       if (r.fromA === undefined) {
         r.fromA = r.built || 0;
         r.fromB = 0;
+      }
+      if (r.workA === undefined) {
+        r.workA = (r.work || 0) / 2;
+        r.workB = (r.work || 0) / 2;
       }
       if (r.last === undefined) r.last = now;
       let work = 0;
@@ -402,18 +519,20 @@ export class Diplomacy {
         t = d0 + DAY;
       }
       r.last = now;
-      r.work = (r.work || 0) + work;
       const ops = [];
       const clear = (x, y, z, id) => {
         ops.push([x, y, z, id, 0]);
         // Clear brush and trunks off the way (only those, whenever it loads).
-        for (let yy = y + 1; yy <= y + 6; yy++) ops.push([x, yy, z, B.air, 0, 'soft']);
+        for (let yy = y + 1; yy <= y + 9; yy++) ops.push([x, yy, z, B.air, 0, 'soft']);
       };
-      while (r.work >= ROAD_MIN_PER_TILE && r.fromA + r.fromB < r.tiles.length) {
-        r.work -= ROAD_MIN_PER_TILE;
-        // Both ends at once, one tile each.
-        for (const end of ['A', 'B']) {
-          if (r.fromA + r.fromB >= r.tiles.length) break;
+      for (const end of ['A', 'B']) {
+        const sid = end === 'A' ? r.a : r.b;
+        const n = this.crewSize(sid);
+        if (!n) continue;
+        const k = `work${end}`;
+        r[k] += work * (n > 1 ? 1.4 : 1) * this.roadPace(sid);
+        while (r[k] >= ROAD_MIN_PER_TILE && r.fromA + r.fromB < r.tiles.length) {
+          r[k] -= ROAD_MIN_PER_TILE;
           const i = end === 'A' ? r.fromA++ : r.tiles.length - 1 - r.fromB++;
           clear(...r.tiles[i]);
         }
@@ -427,6 +546,70 @@ export class Diplomacy {
           this.rel(L, sb).road = true;
           ledger(L, this.game.day, `The road to ${this.town(sb).name} is finished. Travel there is twice as quick.`);
         }
+      }
+    }
+  }
+
+  // The town's builders (two at most go out on a road).
+  roadCrew(sid) {
+    const L = this.sim.layoutOf(sid);
+    if (!L || deserted(L.settlement)) return [];
+    return L.npcs.filter((r) => alive(r) && r.job === 'builder' && r.age === 'adult' && !r.migrated).slice(0, 2);
+  }
+
+  crewSize(sid) {
+    return this.roadCrew(sid).length;
+  }
+
+  // Surveyors (a realm that has learned to) lay a road quicker.
+  roadPace(sid) {
+    const s = this.town(sid);
+    return this.sim.tech && this.sim.tech.has(s, 'surveying') ? 1.5 : 1;
+  }
+
+  // Where a road's end is being built now: the next tile from that end.
+  frontier(r, end) {
+    if (r.done || r.fromA + r.fromB >= r.tiles.length) return null;
+    const i = end === 'A' ? r.fromA : r.tiles.length - 1 - r.fromB;
+    const t = r.tiles[i];
+    return t ? { x: t[0], y: t[1], z: t[2], i } : null;
+  }
+
+  // Through the working day, the builders on a road go out to it (and are
+  // off the town's streets), and come home of an evening.
+  crews(now = this.sim.abs) {
+    const m = now % DAY;
+    const out = m >= 450 && m < 1050;
+    const wanted = new Map();
+    if (out) {
+      for (const r of this.roads) {
+        if (r.done) continue;
+        const k = `${r.a}:${r.b}`;
+        for (const end of ['A', 'B']) for (const rec of this.roadCrew(end === 'A' ? r.a : r.b)) if (!wanted.has(rec)) wanted.set(rec, { k, end });
+      }
+    }
+    for (const [rec, job] of wanted) {
+      if (rec.roadwork) continue;
+      if (rec.away || rec.leaving || rec.trip || rec.errand || rec.sick) continue;
+      const L = this.sim.layoutOf(Number(job.end === 'A' ? job.k.split(':')[0] : job.k.split(':')[1]));
+      rec.roadwork = job;
+      if (rec.ent && !rec.ent.dead && L && this.game.active.has(L.settlement.id)) {
+        // Off out of town with their shovels.
+        setOverride(rec, now, now + Math.max(30, 1050 - m), 'travel', { place: 'road' });
+        rec.ent.activity = null;
+        rec.leaving = true;
+      } else rec.away = true;
+    }
+    // Home again (or the road's done).
+    for (const L of this.game.world.layouts.values()) {
+      if (!L.econ) continue;
+      for (const rec of L.npcs) {
+        if (!rec.roadwork || wanted.has(rec)) continue;
+        if (rec.ent && !rec.ent.dead && rec.ent.state === 'roadwork') this.game.despawnNpc(rec.ent);
+        rec.roadwork = null;
+        rec.away = false;
+        rec.leaving = false;
+        if (rec.override && rec.override.act === 'travel') rec.override = null;
       }
     }
   }
@@ -466,6 +649,7 @@ export class Diplomacy {
     for (const q of this.letters) if (q.status === 'carried' && now >= q.arrive) this.deliver(q);
     this.courier(now);
     this.buildRoads(now);
+    this.crews(now);
     if (this.letters.length > 60) this.letters = this.letters.filter((q) => q.status !== 'delivered' || now - q.arrive < 3 * DAY);
   }
 

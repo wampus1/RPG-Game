@@ -4,7 +4,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -509,7 +509,7 @@ export class Renderer {
                 ctx.globalAlpha = 0.6 * (alpha < 1 ? alpha : 1);
                 ctx.drawImage(atlas, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
                 ctx.globalAlpha = alpha < 1 ? alpha : 1;
-                const icon = itemIcon(got.item);
+                const icon = got.bites ? bittenIcon(got.item, got.bites) : itemIcon(got.item);
                 drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time, true);
                 if (got.count > 1) drawText(ctx, String(got.count), sx + 10, sy + SPR_H - 6, '#ffffff', '#000');
                 if (pickable && this.under(null, sx, sy + SPR_H - 16, 16, 14, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
@@ -819,8 +819,10 @@ export class Renderer {
 
   // The item sits in the hand: its handle (near the icon's bottom-left)
   // on the hand pixel of the sprite for the way they're facing.
+  // What someone holds, at full size (the item's own picture, not the
+  // little one dropped items use), its grip in their hand.
   drawHeld(ctx, key, e, sx, top) {
-    const icon = this.dropIcon(key);
+    const icon = itemIcon(key);
     const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
     const look = e.look || {};
@@ -828,13 +830,16 @@ export class Renderer {
     const bob = e.moving ? (Math.floor(this.time * 7) % 2 ? -1 : 0) : 0;
     const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting || e.raft ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
     const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
+    // (The grip is the bottom-left of the picture.)
+    const gx = -3;
+    const gy = -13;
     if (act > 0) {
       ctx.save();
       ctx.translate(hx, hy);
       const sign = dir === 1 ? -1 : 1;
       ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
       if (dir === 1) ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, -2, -8, this.time, true);
+      drawJewelled(ctx, icon, key, gx, gy, this.time, true);
       ctx.restore();
       return;
     }
@@ -843,9 +848,9 @@ export class Renderer {
       ctx.save();
       ctx.translate(hx, hy);
       ctx.scale(-1, 1);
-      drawJewelled(ctx, icon, key, -2, -7, this.time, true);
+      drawJewelled(ctx, icon, key, gx, gy, this.time, true);
       ctx.restore();
-    } else drawJewelled(ctx, icon, key, hx - 2, hy - 7, this.time, true);
+    } else drawJewelled(ctx, icon, key, hx + gx, hy + gy, this.time, true);
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
@@ -1136,8 +1141,8 @@ export class Renderer {
       this.particles.push({
         x: x * TILE + (opts.spreadX ?? 8) * (Math.random() - 0.5) * 2 + 8,
         y: z * TILE - y * LH + LH + (opts.oy ?? 0) + (Math.random() - 0.5) * (opts.spreadY ?? 6),
-        vx: (Math.random() - 0.5) * (opts.speed ?? 40),
-        vy: -(opts.up ?? 30) * (0.5 + Math.random()),
+        vx: opts.vx !== undefined ? opts.vx * (0.9 + Math.random() * 0.2) : (Math.random() - 0.5) * (opts.speed ?? 40),
+        vy: opts.vy !== undefined ? opts.vy * (0.9 + Math.random() * 0.2) : -(opts.up ?? 30) * (0.5 + Math.random()),
         g: opts.gravity ?? 90,
         life: (opts.life ?? 0.6) * (0.6 + Math.random() * 0.6),
         max: opts.life ?? 0.6,
@@ -1145,9 +1150,88 @@ export class Renderer {
         size: opts.size ?? 1,
         glow: !!opts.glow,
         shape: opts.shape,
+        grow: opts.grow || 0,
+        // A crumb of an item's own picture (food being eaten, and so on).
+        chunk: opts.chunk ? this.chunkOf(opts.chunk) : null,
       });
     }
     if (this.particles.length > 900) this.particles.splice(0, this.particles.length - 900);
+  }
+
+  // A crumb's worth of an item's picture: a few pixels from somewhere solid
+  // in it (for food being eaten, wood chips off a log...).
+  chunkOf(key) {
+    const img = itemIcon(key);
+    this.opaque ||= new Map();
+    let pts = this.opaque.get(key);
+    if (!pts) {
+      pts = [];
+      const d = img.getContext('2d').getImageData(0, 0, 16, 16).data;
+      for (let y = 0; y < 15; y++) for (let x = 0; x < 15; x++) if (d[(y * 16 + x) * 4 + 3] > 200 && d[((y + 1) * 16 + x + 1) * 4 + 3] > 200) pts.push([x, y]);
+      this.opaque.set(key, pts);
+    }
+    if (!pts.length) return null;
+    const [x, y] = pts[Math.floor(Math.random() * pts.length)];
+    return { img, x, y, w: Math.random() < 0.4 ? 1 : 2 };
+  }
+
+  // Something thrown that lands and lies a moment (dice on a table).
+  toss(o) {
+    const [x0, z0] = this.toView(o.from.x, o.from.z);
+    const [x1, z1] = this.toView(o.to.x, o.to.z);
+    (this.tosses ||= []).push({
+      ax: x0 * TILE + 8, ay: z0 * TILE - o.from.y * LH + LH + (o.from.oy ?? -10),
+      bx: x1 * TILE + 8 + (o.dx || 0), by: z1 * TILE - o.to.y * LH + LH + (o.to.oy ?? 2),
+      t: 0, dur: o.dur || 0.55, rest: o.rest ?? 3, kind: o.kind || 'dice', face: o.face || 1, spin: Math.random() * 6, item: o.item || null, h: o.h ?? 14,
+    });
+    if (this.tosses.length > 40) this.tosses.shift();
+  }
+
+  drawTosses(dt) {
+    const ctx = this.ctx;
+    const list = this.tosses || [];
+    const PIPS = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [0, 1], [0, 2], [2, 0], [2, 1], [2, 2]] };
+    for (let i = list.length - 1; i >= 0; i--) {
+      const d = list[i];
+      d.t += dt;
+      if (d.t > d.dur + d.rest) {
+        list.splice(i, 1);
+        continue;
+      }
+      const k = Math.min(1, d.t / d.dur);
+      // An arc, and a bounce at the end.
+      const bounce = k < 1 ? Math.sin(k * Math.PI) * d.h : Math.max(0, Math.sin((d.t - d.dur) * 18) * 2 * Math.exp(-(d.t - d.dur) * 8));
+      const x = Math.round(d.ax + (d.bx - d.ax) * k - this.camX);
+      const y = Math.round(d.ay + (d.by - d.ay) * k - bounce - this.camY);
+      const fade = d.t > d.dur + d.rest - 0.4 ? (d.dur + d.rest - d.t) / 0.4 : 1;
+      ctx.globalAlpha = Math.max(0, fade);
+      if (d.kind === 'coin') {
+        // A coin flipped across: gold, catching the light as it turns.
+        const edge = Math.floor(d.t * 16) % 2;
+        ctx.fillStyle = '#a07818';
+        ctx.fillRect(x - 1, y, edge ? 1 : 3, 2);
+        ctx.fillStyle = '#ffe070';
+        ctx.fillRect(x - 1, y - 1, edge ? 1 : 3, 2);
+        if (!edge) {
+          ctx.fillStyle = '#fff8d0';
+          ctx.fillRect(x, y - 1, 1, 1);
+        }
+        continue;
+      }
+      if (d.kind === 'item' && d.item) {
+        ctx.drawImage(this.dropIcon(d.item), x - 4, y - 6);
+        continue;
+      }
+      // Tumbling: a face at random each frame until it lands.
+      const face = k < 1 ? 1 + (Math.floor(d.t * 20 + d.spin) % 6) : d.face;
+      ctx.fillStyle = '#2a1e14';
+      ctx.fillRect(x - 1, y - 1, 5, 5);
+      ctx.fillStyle = '#f4ecd8';
+      ctx.fillRect(x - 1, y - 1, 4, 4);
+      ctx.fillStyle = '#b02a2a';
+      for (const [px, py] of PIPS[face]) ctx.fillRect(x - 1 + Math.min(3, px * 1.5) | 0, y - 1 + Math.min(3, py * 1.5) | 0, 1, 1);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // A gem's work, a burst of fire, a bolt of lightning (see fx.js).
@@ -1180,7 +1264,24 @@ export class Renderer {
       if (sx < -4 || sy < -4 || sx > VIEW_W || sy > VIEW_H) continue;
       ctx.globalAlpha = Math.min(1, p.life / (p.max * 0.5));
       ctx.fillStyle = p.color;
-      if (p.shape === 'plus') {
+      if (p.chunk) {
+        const c = p.chunk;
+        ctx.drawImage(c.img, c.x, c.y, c.w, c.w, sx, sy, c.w, c.w);
+      } else if (p.shape === 'note') {
+        // ♪ in three pixels' width.
+        ctx.fillRect(sx + 2, sy - 4, 1, 5);
+        ctx.fillRect(sx, sy, 2, 2);
+        ctx.fillRect(sx + 3, sy - 4, 1, 1);
+        ctx.fillRect(sx + 4, sy - 3, 1, 1);
+      } else if (p.shape === 'puff') {
+        // A soft round puff that spreads as it rises and fades.
+        const r = Math.max(1, Math.round(p.size + p.grow * (1 - p.life / p.max)));
+        ctx.globalAlpha *= 0.55;
+        ctx.fillRect(sx - r + 1, sy - r, r * 2 - 1, r * 2 + 1);
+        ctx.fillRect(sx - r, sy - r + 1, r * 2 + 1, r * 2 - 1);
+      } else if (p.shape === 'drop') {
+        ctx.fillRect(sx, sy, 1, 2);
+      } else if (p.shape === 'plus') {
         ctx.fillRect(sx, sy - 1, 1, 3);
         ctx.fillRect(sx - 1, sy, 3, 1);
       } else if (p.shape === 'star') {
@@ -1193,6 +1294,7 @@ export class Renderer {
       } else ctx.fillRect(sx, sy, p.size, p.size);
     }
     ctx.globalAlpha = 1;
+    this.drawTosses(dt);
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i];
       f.t -= dt;

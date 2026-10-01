@@ -685,7 +685,7 @@ export function wagonSprite(banner = null, frame = 0, hood = true) {
 }
 
 // ---------------------------------------------------------------- items
-const TIER = { wood: ['#a07a4a', '#7a5a34'], stone: ['#9a9aa4', '#6a6a74'], iron: ['#d8d8e4', '#9a9aa8'], gold: ['#f0d040', '#b89820'] };
+const TIER = { wood: ['#a07a4a', '#7a5a34'], stone: ['#9a9aa4', '#6a6a74'], iron: ['#d8d8e4', '#9a9aa8'], gold: ['#f0d040', '#b89820'], steel: ['#b8c8e0', '#6a7a98'] };
 const HANDLE = ['#8a6038', '#5e4024'];
 
 function toolIcon(kind, tier) {
@@ -916,6 +916,23 @@ function simpleIcon(key) {
       p.ellipse(7, 8, 2, 1, '#2a1e14');
       p.line(11, 8, 13, 12, '#c8a064');
       p.ellipse(13, 13, 1, 1, '#d8b478');
+      break;
+    case 'ale':
+    case 'empty_mug':
+      // A wooden tankard, a head of foam on a full one.
+      p.rect(4, 6, 7, 8, '#8a5a30');
+      p.vline(5, 6, 13, '#a87444');
+      p.hline(4, 10, 9, '#5a3a1c');
+      p.hline(4, 10, 12, '#5a3a1c');
+      p.rect(11, 8, 2, 1, '#6a4422');
+      p.rect(12, 8, 1, 4, '#6a4422');
+      p.rect(11, 11, 2, 1, '#6a4422');
+      if (key === 'ale') {
+        p.rect(4, 4, 7, 2, '#f4ecd8');
+        p.set(5, 3, '#f4ecd8');
+        p.set(8, 3, '#ffffff');
+        p.set(10, 6, '#e8c060');
+      } else p.rect(5, 6, 5, 1, '#3a2614');
       break;
     case 'dirty_dish':
       p.ellipse(8, 11, 6, 2, '#d8d4c8');
@@ -1290,6 +1307,31 @@ export function drawJewelled(ctx, icon, key, x, y, t = 0, thin = false) {
   ctx.drawImage(icon, x, y);
 }
 
+// Food with bites taken out of it (1-3): bites nibbled from the edges in.
+const bitten = new Map();
+export function bittenIcon(key, bites) {
+  const k = `${key}:${bites}`;
+  let c = bitten.get(k);
+  if (c) return c;
+  const src = itemIcon(key);
+  c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 16;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, 16, 16);
+  const d = img.data;
+  // Round bites out of the right-hand side, one a little further in each time.
+  for (let b = 0; b < Math.min(3, bites); b++) {
+    const cx = 13 - b * 3;
+    const cy = 6 + ((b * 5) % 6);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= 6) d[(y * 16 + x) * 4 + 3] = 0;
+  }
+  ctx.putImageData(img, 0, 0);
+  bitten.set(k, c);
+  return c;
+}
+
 export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
@@ -1307,7 +1349,7 @@ export function itemIcon(key) {
   else if (it.kind === 'gem') px = gemIcon(it);
   else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);
   else {
-    const m = key.match(/^(wood|stone|iron|gold)_(pickaxe|axe|shovel|sword)$/);
+    const m = key.match(/^(wood|stone|iron|gold|steel)_(pickaxe|axe|shovel|sword)$/);
     if (m) px = toolIcon(m[2], m[1]);
     else if (key === 'hoe') px = toolIcon('hoe', 'iron');
     else if (key === 'hammer') px = toolIcon('hammer', 'iron');

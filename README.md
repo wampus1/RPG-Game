@@ -69,6 +69,7 @@ with the music off. `window.__game` exposes the running game.
 | Horses | Right-click a wild horse holding an apple, carrot, wheat, berries or cabbage to win it over; right-click your horse holding a saddle to saddle it, then again to ride; F gets down |
 | Leads | Make one from 3 string. Right-click an animal holding a lead to lead it; right-click a fence while leading to tie it up; right-click it again to let go (the lead comes back) |
 | Wagons | Hold a wagon and right-click the ground to set it down; right-click your horse near it to hitch it, then the wagon to drive; right-click anyone's wagon to climb in the back (move to climb out) |
+| Research (as a licensed researcher, at a writing desk in an academy or library) | A/D or ←/→ turn the selected ring, W/S or ↑/↓ pick a ring, Space records the insight once all three marks line up |
 | Inventory / crafting / map / journal / help | Tab, C, M, J, H |
 | Menu (save and load slots, settings, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
@@ -647,15 +648,17 @@ their trade runs on: a cook or innkeeper takes all the fish, meat and
 vegetables you bring, a smith all the ore, coal and ingots, a carpenter all
 the logs and planks, a tailor all the leather and cloth, and so on.
 
-**Merchants** come in three standings: peddlers, traders and master merchants.
+**Merchants** come in three standings: peddlers, traders and master merchants
+(master merchants only from a realm with Guild Charters).
 The better the merchant, the more they start with (a master merchant's stock
 includes gems, gold, fine clothes and jewelled weapons), the bigger their
 purse, and the more they make on a trading trip. Their standing shows as their
 title when you talk to them.
 
-**Blue hearts.** Drinking from a well or sleeping in a village bed gives you
-blue hearts on top of your red ones. They take damage first and break when
-the day ends.
+**Blue hearts.** Drinking from a well (where the realm knows Clean Wells) or
+sleeping in a town's bed (where it knows Hospitality) gives you blue hearts on
+top of your red ones. They take damage first and break when the day ends.
+Townsfolk who sleep in proper beds wake with them too.
 
 **Alarm bells and healing.** Townsfolk run to ring the alarm bell when
 something attacks. Guards deal with the threat themselves and only ring a
@@ -909,7 +912,8 @@ When a walled city has grown past its walls, the builders put up a new ring of
 wall round the houses outside, with gates where the roads go through.
 
 **Herbalists** are fairly common in villages and towns as well as cities. Outside
-cities they sell herbs and salves, not potions. Townsfolk who are ill or hurt go
+cities they sell herbs and salves, not potions (and nobody brews potions until
+the realm has learned Alchemy). Townsfolk who are ill or hurt go
 to them to be tended.
 
 **Setting things down.** You can put what you're holding down on the ground (B).
@@ -942,6 +946,119 @@ outside the gate, a pace apart, with the priest at the foot of the grave.
 **Bigger towns.** Villages and towns start with a few more people and a few more
 guards, and a place needs more people (26 for a town, 50 for a city), buildings
 and money to move up a size.
+
+**Busy hands.** You can see what people are doing. Dice players throw two real
+dice onto the table and cheer or groan at the faces. Food goes down a bite at a
+time: the plate's picture gets smaller and crumbs and chunks of the food fall
+off it (you get them too when you eat). At the tavern the barkeep pours, a mug
+of ale is set down in front of whoever's drinking, foam flies with every sip,
+and when they're done an empty mug is left on the table for the staff to clear.
+Cooks go back and forth to the hearth or oven with the pot on and steam
+rising, and someone at home puts breakfast on of a morning. Smiths throw
+sparks, carpenters sawdust, bakers flour; pipes smoke, lutes give off notes,
+scribes blot ink. Merchants toss the coin and hand over what you bought.
+
+**Roads between towns** don't run straight. They find a way across the land,
+with bends and corners, and they're built a stretch at a time by the builders
+of the towns at each end, working out from both. Go to the end of a road being
+built during working hours and you'll find the crew there, digging. On the world
+map a road shows as a line through each square it crosses: straight across,
+straight down, or round a corner. Every town starts with a builder, and takes
+another on if it loses theirs. When a ruler or a mayor dies, someone always
+takes their place.
+
+**What the realm knows.** Every realm (and every free town) works down a tree of
+learning, four branches of five steps each, each step needing the one before:
+
+| Economy | Warfare | Law & Society | Engineering |
+| --- | --- | --- | --- |
+| Bookkeeping: taxes bring in a tenth more | Drilled Watch: guards are tougher and hit harder | Written Law: the ruler may set how many stand watch | Masonry: building goes a quarter faster |
+| Guild Charters: master merchants | Archery: guards carry bows | Alchemy: potions | Clean Wells: blue hearts from wells |
+| Gemcraft: jewellers can be licensed | Cavalry: the watch rides out, armies field riders | Hospitality: blue hearts from beds, for townsfolk too | Surveying: roads built half again as fast |
+| Caravan Law: merchants travel faster and are harried less | Field Fortifications: log walls in battle, town walls sooner | Conscription: elders and children may be drafted | Watermills: fields yield more |
+| Banking: treasuries earn interest | Steelworking: steel swords for the watch and for sale | Schools: research a quarter faster | Fortification: walled towns hold far better |
+
+Some realms start with a first step their culture holds dear. The ruler (a free
+town's mayor) chooses what's studied next: their own leanings, their people's,
+and what's going on (raids and war call for arms, an empty treasury for trade,
+unrest for law). Ask a mayor "What are our scholars studying?" to see the tree
+and how far along they are.
+
+**Research.** The study is done by researchers at an academy (scholars at the
+library help a little before there is one). A realm's capital, and later its
+cities, build an academy once they can afford it and take researchers on. You
+can be one too: ask the mayor for the researcher's licence (a town or city with
+an academy or library). At a writing desk there, an astrolabe of three brass
+rings turns slowly, each with a marked glyph. Turn the selected ring with
+A/D or the arrows (the ring inside it turns half as far the other way), pick a
+ring with W/S, and when all three marks sit under the pointer, press Space to
+write the insight down before the candle burns out. Each one moves the work on
+and the town pays you for it.
+
+**Borders.** A realm's land on the map grows as it grows (more people, a
+bigger watch, more learning, a full treasury) and shrinks when it loses towns
+or wears itself out in a war. Land next to its own towns that a neighbour holds
+is wanted most: a stronger realm sets boundary stones there, which is a border
+dispute, and sometimes takes the land. A free village surrounded by a realm's
+land may swear itself to it. Press V on the map to see the territories.
+
+**Alliances.** Realms on good terms swear alliances, unless their ways clash
+(the pious won't stand beside a people who put books above the gods, war-chiefs
+won't bind themselves to shopkeepers, farmers and sea-traders can't agree on
+anything, and a free state hasn't forgiven the realm it broke away from).
+Enemies of the same realm make friends more easily. Allies grow closer, but an
+ally's tariff on your merchants is a broken promise, and an alliance that sours
+far enough is broken. A small realm long allied to a much larger one of like
+mind may join it outright.
+
+**The watch and the draft.** Towns keep their watch up, taking people on when
+it runs short. Once laws are written down, the ruler decides how big the watch
+is: a light watch in quiet, poor times, a heavy one (a quarter of the grown
+folk) when raids come or war is on. A realm that knows Conscription, losing a
+war, can draft the elders, and in a desperate one the children too. Draftees
+keep day hours, and go home when the draft ends.
+
+**Raids.** Hostile realms send small raiding parties over the border at night:
+three to five of the watch and the boldest of a border town, after coin and
+stores, not land. Riders are seen on the road beforehand: merchants and
+caravans keep away from the town, and the notice board warns of it. The watch
+turns out, and rides out on horseback to meet them where the town keeps horses
+or the realm knows Cavalry. If you're in town, the raid happens in front of you:
+raiders in their realm's dark colours, hooded, some with torches, come in over
+the fields making for the square, fight whoever stands in their way, grab what
+they can and run. Townsfolk scatter and ring the bell. Fighting raiders is no
+crime. A raided town builds its wall sooner (for less, with Field
+Fortifications), and every raid sours the two realms further.
+
+**War** is rare and needs a reason: land the two keep quarrelling over, raid
+after raid, merchants beaten and robbed, a town that broke away to be brought
+back, a vassal that threw off its lord, broken promises. The two realms must
+already hate each other, and the attacker must think it can win. A realm at war
+calls on its allies (one that won't come breaks the alliance) and its vassals.
+
+Every few days the armies meet near the front, out in the fields before
+whichever town is on the back foot. It's announced the day before in the towns
+on both sides and marked on the map with an X. Each side's captain picks a plan:
+a frontal assault, a flanking attack (better with cavalry, on open ground), a
+pincer when they have the numbers, holding good ground (woods, rocks, a ford), a
+fortified line of log walls and stakes (Field Fortifications), a feigned retreat
+that turns on the chasers, or, badly outnumbered, falling back (or making a
+stand with the town at their backs). Plans beat other plans, and the ground
+favours some. The soldiers are real people from real towns, and those who fall
+are buried at home. A decisive win can take the town behind the field.
+
+If you're nearby, the battle is fought out in front of you: two lines in their
+realms' colours, wings swinging round, walls going up, the hurt falling back,
+and the side that breaks running for home. You can join in, on either side.
+
+Wars wear realms down. Every week, every lost battle, adds to the weariness,
+which makes towns restless: some break away, and a town near the front on the
+losing side may open its gates to the enemy. Allies on a losing side may make
+their own peace, or betray it and go over to the enemy. In the end the wearier
+side sues for peace: a truce and nothing won, a town ceded and coin paid, or,
+badly beaten, service to the victor, paying tribute every week until it's
+strong enough (or angry enough) to throw the yoke off. The notice board shows
+your realm's allies, lord or vassals, its war and how it's going.
 
 ## Command console
 
@@ -978,14 +1095,18 @@ src/
                        buildings, interiors, walls), weather, loot,
                        region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
-                       schedules, families), creature, item drops, A* pathing
+                       schedules, families), acts (what people look like
+                       doing things: dice, meals, drinks, cooking), warrior
+                       (raiders, soldiers and riders on the ground),
+                       creature, item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
-                       save slots), create (the character screen)
+                       save slots), create (the character screen),
+                       research (the tech tree and the study minigame)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), save slots,
@@ -1005,7 +1126,8 @@ src/
                        placed where the builders stand), roads (new streets,
                        lots, and what waits for a lot), shops (shopping,
                        stalls, merchant standing),
-                       diplomacy (letters, roads, warnings), realms
+                       diplomacy (letters, winding roads and their road
+                       crews, warnings), realms
                        (capitals, rulers, decrees, tribute, aid, relations
                        between realms, breaking away), adventurers,
                        nomads, camps (tents for nomads, merchants,
@@ -1015,7 +1137,11 @@ src/
                        camps), outings (townsfolk visiting other towns
                        in small groups), town
                        life (elections, weddings, growing up and growing
-                       old, raids),
+                       old, beast raids), tech (the tree of learning,
+                       academies, researchers), politics (borders,
+                       alliances, merging, vassals, disputes, the size of
+                       the watch, the draft), war (raids between realms,
+                       wars, battles and tactics, fought live near you),
                        events (posters, stages, guests for weddings and
                        feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws

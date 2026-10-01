@@ -109,13 +109,17 @@ export function growth(sim, L, day) {
   if (t && people.length + sim.playerCount(s.id) >= t.pop && L.buildings.filter((b) => !b.underConstruction).length >= t.buildings && e.treasury >= t.treasury && t.needs.every(has)) {
     return { promoted: promote(sim, L, t.next, day) };
   }
-  // A new city walls itself in.
-  if (s.type === 'city' && !L.walled && e.treasury >= WALL_COST.coins + 100 && stockOf(L).stone >= WALL_COST.stone) {
+  // A new city walls itself in; so does a town that's been raided (or is
+  // near a war), sooner and for less (less still with field fortification).
+  const threatened = s.type === 'town' && ((e.raidedDay !== undefined && day - e.raidedDay <= 40) || (sim.war && sim.war.front(s)));
+  const cost = threatened ? Math.round(WALL_COST.coins * (sim.tech.has(s, 'fieldworks') ? 0.55 : 0.75)) : WALL_COST.coins;
+  if ((s.type === 'city' || threatened) && !L.walled && e.treasury >= cost + (threatened ? 40 : 100) && stockOf(L).stone >= WALL_COST.stone * (threatened ? 0.6 : 1)) {
     const plan = L.wallPlan();
     if (plan.tiles.length) {
-      e.treasury -= WALL_COST.coins;
-      stockOf(L).stone -= WALL_COST.stone;
-      return { wall: works.add({ sid: s.id, kind: 'wall', bid: L.buildings.length - 0.5, label: 'the new city wall' }) };
+      e.treasury -= cost;
+      stockOf(L).stone -= Math.round(WALL_COST.stone * (threatened ? 0.6 : 1));
+      if (threatened) ledger(L, day, `${e.raidedDay !== undefined && day - e.raidedDay <= 40 ? 'After the raids' : 'With war so near'}, the council of ${s.name} means to wall the town in.`);
+      return { wall: works.add({ sid: s.id, kind: 'wall', bid: L.buildings.length - 0.5, label: threatened ? 'a wall against raiders' : 'the new city wall' }) };
     }
   }
   // A walled city with streets and houses outside its wall rings them with

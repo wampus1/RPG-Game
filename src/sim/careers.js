@@ -53,12 +53,18 @@ export const PROFESSIONS = {
     pitch: 'Licensed tailors sell clothes to the town: our better-off folk always want something new.',
   },
   // Only a city supports these.
+  // Study for the realm at its academy (or library): every insight you
+  // bring from the desk moves its research on, and is paid for.
+  researcher: {
+    title: 'Researcher', tier: 'town', importance: 3, minOp: 5, kit: [['book', 1], ['ink', 1]], needs: ['academy', 'library'],
+    pitch: 'The realm\'s scholars could use another sharp mind. Sit at a desk in our academy (or the library) and work at the problems they set: every insight you bring moves the realm\'s research along, and the town pays ¤6 for each.',
+  },
   scribe: {
     title: 'Scribe', tier: 'city', importance: 2, workshop: 'scribe', minOp: 10, kit: [['book', 1], ['feather', 3]], goods: ['book', 'scroll'],
     pitch: 'The scholars, the temple and the council buy books and scrolls from a licensed scribe.',
   },
   jeweller: {
-    title: 'Jeweller', tier: 'city', importance: 1, workshop: 'jeweller', minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'],
+    title: 'Jeweller', tier: 'city', importance: 1, workshop: 'jeweller', minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'], tech: 'gemcraft',
     pitch: 'Our nobles and merchants pay handsomely for gems, gold and fine things from a licensed jeweller.',
   },
 };
@@ -306,6 +312,10 @@ export class Careers {
     if (P.citizen && sim.justice.recordOf(s.id).convictions) return { ok: false, reason: 'record' };
     if (sim.opinion(mayor) < P.minOp) return { ok: false, reason: 'distrust' };
     if (this.licensed(job, s.id)) return { ok: false, reason: 'already' };
+    // Some trades need the realm to know how (gemcraft for a jeweller), or
+    // somewhere to do them (an academy or library for a researcher).
+    if (P.tech && sim.tech && !sim.tech.has(s, P.tech)) return { ok: false, reason: 'tech', tech: P.tech };
+    if (P.needs && !L.buildings.some((b) => P.needs.includes(b.type) && !b.underConstruction)) return { ok: false, reason: 'nowhere' };
     const shop = this.workshopIn(L, job);
     const f = licenceFee(job, s, sim.isCitizen(s.id), !!shop);
     return { ok: true, fee: f.total, licenceFee: f.licence, workshopFee: f.workshop, shop, kit: !this.kits.has(`${s.id}:${job}`) };

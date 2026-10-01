@@ -74,6 +74,9 @@ food('mushroom', 1, 1);
 food('bread', 4, 4);
 food('raw_meat', 1, 3, 'Raw Meat');
 food('cooked_meat', 6, 7, 'Roast Meat');
+// Poured at the tavern (and left as an empty mug on the table after).
+food('ale', 2, 4, 'Mug of Ale');
+item('empty_mug', { name: 'Empty Mug', kind: 'misc', stack: 16, value: 0 });
 food('fish', 1, 3, 'Raw Fish');
 food('cooked_fish', 5, 6, 'Grilled Fish');
 food('stew', 7, 8, 'Hearty Stew', { quality: 'acceptable', meal: true });
@@ -91,6 +94,8 @@ for (const [tier, [speed, dmg]] of Object.entries(TIERS)) {
   item(`${tier}_shovel`, { name: `${t} Shovel`, kind: 'tool', stack: 1, tool: 'shovel', speed, damage: 1 + dmg * 0.5, reach: 1.5, cooldown: 0.45, value: 3 * speed });
   item(`${tier}_sword`, { name: `${t} Sword`, kind: 'weapon', stack: 1, damage: 3 + dmg * 1.5, reach: 1.6, cooldown: 0.42, value: 6 * speed });
 }
+// Forged by smiths of a realm that knows steelworking (see tech.js).
+item('steel_sword', { name: 'Steel Sword', kind: 'weapon', stack: 1, damage: 9, reach: 1.7, cooldown: 0.4, value: 48 });
 item('spear', { name: 'Iron Spear', kind: 'weapon', stack: 1, damage: 5, reach: 2.6, cooldown: 0.65, value: 20 });
 item('club', { name: 'Wooden Club', kind: 'weapon', stack: 1, damage: 3, reach: 1.4, cooldown: 0.5, value: 3 });
 item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3, cooldown: 0.3, value: 10 });

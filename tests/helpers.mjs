@@ -45,8 +45,13 @@ export function stubInput() {
   };
 }
 
-export function makeGame(seed = 12345) {
-  return new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI() });
+// (Older rounds' tests were written before realms had to learn things:
+// everything is known there, as it used to be. Pass learned: false for a
+// world that has to research.)
+export function makeGame(seed = 12345, { learned = true } = {}) {
+  const game = new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI() });
+  game.sim.tech.cheat = learned;
+  return game;
 }
 
 // Lots ready to build on, the way a town gets them day by day: a new street

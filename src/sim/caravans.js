@@ -129,7 +129,9 @@ export class Caravans {
   }
 
   nextStop(g, rng, here) {
-    const cands = this.places().filter((s) => s !== here && Math.hypot(s.cx - here.cx, s.cz - here.cz) < 22);
+    // (Not where raiders are about, or a war is being fought.)
+    const war = this.sim.war;
+    const cands = this.places().filter((s) => s !== here && Math.hypot(s.cx - here.cx, s.cz - here.cz) < 22 && !(war && war.unsafe(s)));
     if (!cands.length) return this.places().find((s) => s !== here) || here;
     const score = (s) => (g.seen.includes(s.id) ? -5 : 0) + (s.type === 'city' ? 2 : s.type === 'town' ? 1 : 0) - Math.hypot(s.cx - here.cx, s.cz - here.cz) * 0.1 + rng.float(0, 3);
     return cands.reduce((m, s) => (score(s) > score(m) ? s : m));

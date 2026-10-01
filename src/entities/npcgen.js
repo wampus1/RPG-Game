@@ -15,6 +15,8 @@ export const JOBS = {
   priest: { title: 'Priest', place: 'temple', start: 420, end: 1140, tools: ['prayer_beads'], outfit: 'robe_white' },
   baker: { title: 'Baker', place: 'bakery', start: 300, end: 840, tools: ['bread'], outfit: 'baker', trader: 'baker' },
   scholar: { title: 'Scholar', place: 'library', start: 540, end: 1080, tools: ['book'], outfit: 'robe_blue', trader: 'scholar' },
+  // Studying for the realm at its academy (at the library, till there is one).
+  researcher: { title: 'Researcher', place: 'academy', start: 510, end: 1110, tools: ['book'], outfit: 'robe_blue', trader: 'scholar' },
   mayor: { title: 'Mayor', place: 'townhall', start: 540, end: 1020, tools: ['ledger'], outfit: 'noble' },
   noble: { title: 'Noble', place: 'manor', start: 600, end: 960, tools: ['dagger'], outfit: 'noble' },
   tailor: { title: 'Tailor', place: 'tailor', start: 480, end: 1050, tools: ['cloth'], outfit: 'vest', trader: 'tailor' },
@@ -127,10 +129,11 @@ export function planPopulation(s, rng) {
   const guardCap = Math.max(2, Math.round(adults * (T === 'village' ? 0.25 : 0.2)));
   add('guard', Math.min(guardCap, Math.round(scale(rng.int(2, 3), 0, rng.int(4, 5), rng.int(7, 10)) * (has('martial') ? 1.5 : 1) * (poor ? 0.75 : 1))));
   add('mayor', 1);
+  // (Every place has a builder, villages too: roads and repairs need one.)
+  add('builder', T === 'city' ? 2 : 1);
   add('cook', T === 'city' ? 2 : 1);
   // (An herbalist, when there is one, is among the first a place keeps.)
   const herbAt = jobs.length;
-  if (T !== 'village') add('builder', T === 'city' ? 2 : 1);
   add('trapper', T === 'village' ? 1 : rng.int(1, 2));
   if (T !== 'village') add('farmer', T === 'city' ? 3 : 2);
   if (T !== 'village' || rng.chance(0.4)) add('innkeeper', 1);

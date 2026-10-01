@@ -27,6 +27,9 @@ import { electMayor, weddings, comingOfAge, aging, raids } from './life.js';
 import { Realms } from './realms.js';
 import { Adventurers } from './adventurers.js';
 import { Stables } from './stables.js';
+import { Tech } from './tech.js';
+import { Politics } from './politics.js';
+import { War } from './war.js';
 import { Caravans } from './caravans.js';
 import { Outings } from './outings.js';
 import { growth } from './growth.js';
@@ -103,6 +106,9 @@ export class Sim {
     this.realms = new Realms(game, this);
     this.adventurers = new Adventurers(game, this);
     this.stables = new Stables(game, this);
+    this.tech = new Tech(game, this);
+    this.politics = new Politics(game, this);
+    this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
     this.outings = new Outings(game, this);
     this.bp = null;
@@ -127,6 +133,8 @@ export class Sim {
 
   // ------------------------------------------------------------ layouts
   attach(L) {
+    // (The town's own books can ask what its realm knows.)
+    Object.defineProperty(L, 'sim', { value: this, enumerable: false, configurable: true, writable: true });
     initEcon(L);
     L.baseN = L.npcs.length;
     const sid = L.settlement.id;
@@ -225,7 +233,9 @@ export class Sim {
       this.areaCache.clear();
       this.favors.update();
       this.events.update();
+      this.politics.update();
     }
+    this.war.update(dt);
     this.careers.update(dt);
     this.updateConfront();
     this.justice.update(dt);
@@ -569,8 +579,17 @@ export class Sim {
     npc.say(npc.rng.pick([`A ${name}, please.`, `I'll take the ${name}.`, `One ${name} for me, please.`, `I need a new ${name}.`]), 3);
     npc.emoteShow?.('¤', '#ffe070', 2);
     if (keeper && keeper.ent && !keeper.ent.dead) {
-      keeper.ent.face(npc.x, npc.z);
-      keeper.ent.sayLater?.(keeper.ent.rng.pick([`That's ¤${r.cost}. Thank you kindly!`, `¤${r.cost}, please. Mind how you go.`, `There you are. ¤${r.cost}.`]), 1.2, 3);
+      const k = keeper.ent;
+      // Coin over the counter one way, the goods the other.
+      if (npc.distTo(this.game.player) < 22) {
+        npc.doAction?.(0.3);
+        k.doAction?.(0.3);
+        this.game.renderer.toss?.({ from: { x: npc.x, y: npc.y, z: npc.z, oy: -8 }, to: { x: k.x, y: k.y, z: k.z, oy: -8 }, kind: 'coin', dur: 0.45, rest: 0, h: 10 });
+        this.game.renderer.toss?.({ from: { x: k.x, y: k.y, z: k.z, oy: -8 }, to: { x: npc.x, y: npc.y, z: npc.z, oy: -8 }, kind: 'item', item: r.item, dur: 0.6, rest: 0, h: 8 });
+        this.game.audio?.play('coin', npc);
+      }
+      k.face(npc.x, npc.z);
+      k.sayLater?.(k.rng.pick([`That's ¤${r.cost}. Thank you kindly!`, `¤${r.cost}, please. Mind how you go.`, `There you are. ¤${r.cost}.`]), 1.2, 3);
     }
     return r;
   }
@@ -991,6 +1010,9 @@ export class Sim {
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
     this.stables.daily(L, day, rng);
+    this.tech.daily(L, day, rng);
+    this.politics.townDay(L, day, rng);
+    this.war.townDay(L, day, rng);
     this.outings.daily(L, day);
     growth(this, L, day);
     this.works.daily(L, day);
@@ -1591,8 +1613,11 @@ export class Sim {
     // Nobody takes their wares into a hostile realm; a friendly one is
     // worth the longer road.
     const feel = (o) => (s.civ && o.civ && s.civ !== o.civ ? this.realms.standing(s.civ, o.civ) : null);
-    const open = dests.filter((q) => feel(q.o) !== 'hostile');
-    if (open.length) dests.splice(0, dests.length, ...open);
+    // (Nor down a road raiders are riding, or toward a war.)
+    if (this.war.unsafe(s)) return;
+    const open = dests.filter((q) => feel(q.o) !== 'hostile' && !this.war.unsafe(q.o));
+    if (!open.length) return;
+    dests.splice(0, dests.length, ...open);
     for (const q of dests) q.d -= feel(q.o) === 'friendly' ? 3 : 0;
     dests.sort((a, b) => a.d - b.d);
     // Letters from the mayor decide where the merchant goes first.
@@ -1703,13 +1728,16 @@ export class Sim {
     if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07)) {
       const ow = this.game.world.ow;
       const s = L.settlement;
-      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18 && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile')) || []);
+      if (this.war.unsafe(s)) return;
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18 && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
       if (!from) return;
       const goods = {};
       const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
       if (from.coast || from.river) opts.push('fish', 'cooked_fish');
       for (const k of rng.shuffle(opts).slice(0, 6)) if (ITEMS[k]) st.add(goods, k, k === 'gem' ? 1 : rng.int(1, 4));
       const v = makeVisitor(from, rng, h, goods);
+      // (Master merchants come only from realms with guild charters.)
+      if (v.tier > 2 && !this.tech.has(from, 'guilds')) v.tier = 2;
       v.traded = true;
       const OL = this.game.world.layouts.get(from.id);
       v.news = OL && OL.econ ? notableNews(OL, this.game.day - 5, 2) : [];
@@ -1876,16 +1904,22 @@ export class Sim {
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
       press: this.press.serialize(),
+      tech: this.tech.serialize(),
+      politics: this.politics.serialize(),
+      war: this.war.serialize(),
     };
   }
 
   serializeSettlement(L) {
     const pickRec = (r) => ({
       coins: r.coins, inv: r.inv, skills: r.skills, fed: r.fed, hungry: r.hungry, mood: r.mood, earned: r.earned, earnedY: r.earnedY,
-      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, readEdition: r.readEdition, doneKey: r.doneKey,
+      lastMeal: r.lastMeal, grief: r.grief, override: r.override, away: r.away, leaving: r.leaving, trip: r.trip, errand: r.errand, roadwork: r.roadwork || null, readEdition: r.readEdition, doneKey: r.doneKey,
       hp: r.hp, alive: r.alive, traveler: r.traveler, sick: r.sick, deathDay: r.deathDay, cause: r.cause, stall: r.stall, snares: r.snares, tier: r.tier, shopDue: r.shopDue, wear: r.wear, gems: r.gems,
       migrated: r.migrated, home: r.home, bed: r.bed, household: r.household, children: r.children, partner: r.partner, age: r.age, grown: r.grown,
       born: r.born, span: r.span, elderSince: r.elderSince, aged: r.aged, ruler: r.ruler, councillor: r.councillor, outing: r.outing, tripMem: r.tripMem,
+      drafted: r.drafted, raid: r.raid, soldier: r.soldier,
+      // A drilled guard keeps the toughness drill gave them.
+      ...(r.drilled ? { drilled: true, maxHp: r.maxHp } : {}),
       ...(r.grown ? { hobbies: r.hobbies } : {}),
       // Grown old (grey, stooped, slower), whether or not they retired.
       ...(r.aged || r.ruler !== undefined ? { look: r.look, maxHp: r.maxHp, schedule: r.schedule } : {}),
@@ -1956,6 +1990,10 @@ export class Sim {
     for (const sid of this.deserted) if (this.game.world.ow.settlements[sid]) this.game.world.ow.settlements[sid].deserted = true;
     this.favors.load(data.favors);
     this.press.load(data.press);
+    this.tech.load(data.tech);
+    // (After the realms: the map's borders as they stood.)
+    this.politics.load(data.politics);
+    this.war.load(data.war);
   }
 }
 

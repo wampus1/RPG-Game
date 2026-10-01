@@ -228,8 +228,9 @@ export function checkSupply(sim, L, day) {
     const r = job ? hireInto(sim, L, job, day, link.why) : null;
     if (r) return { hired: r, job };
   }
-  // Towns and cities keep a builder.
-  if (s.type !== 'village' && !has('builder')) {
+  // Every place keeps a builder (a village too: someone has to mend things
+  // and lay its roads).
+  if (!has('builder')) {
     const r = hireInto(sim, L, 'builder', day, 'the town needs someone to build and mend');
     if (r) return { hired: r, job: 'builder' };
   }
