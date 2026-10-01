@@ -930,8 +930,18 @@ export class JournalWindow extends Window {
       any = true;
       para(`${car.townName(sid)}: ${r.convictions} conviction${r.convictions > 1 ? 's' : ''}${sim.justice.exiled.has(sid) ? ' · BANISHED' : ''}`, C.orange);
     }
+    // A deserter: one line for the whole realm, not a line a town.
+    const flee = sim.war.deserters || {};
+    const realmOf = (sid) => game.world.ow.settlements[sid]?.civ;
+    for (const [cid, d] of Object.entries(flee)) {
+      const civ = game.world.ow.civs.find((c) => String(c.id) === cid) || sim.realms.extraCivs?.find((c) => String(c.id) === cid);
+      any = true;
+      para(`DESERTER of the ${civ ? civ.name.replace(/^The /, '') : 'realm'} (${d.battle}): wanted in all its towns!`, C.red);
+    }
     for (const sid of game.wanted.keys()) {
       if (!game.isWanted(sid)) continue;
+      const civ = realmOf(sid);
+      if (civ && flee[civ.id] && !sim.justice.pendingIn(sid).some((c) => c.type !== 'desertion')) continue;
       any = true;
       para(`Wanted in ${car.townName(sid)}!`, C.red);
     }

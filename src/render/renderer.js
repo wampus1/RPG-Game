@@ -8,7 +8,7 @@ import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frame
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
-import { Lighting } from './lighting.js';
+import { Lighting, skyLight } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 
@@ -116,8 +116,8 @@ export class Renderer {
     const camY = this.camY;
     const x0 = Math.round((VIEW_W - SNAP_W) / 2);
     const y0 = Math.round((VIEW_H - SNAP_H) / 2);
-    // (Speech and the weather aren't part of the picture: they're drawn
-    // upright over the turn, see drawSpin.)
+    // (Speech and falling rain or snow aren't part of the picture: they're
+    // drawn upright over the turn, see drawSpin.)
     const bubbles = new Map();
     for (const ox of [x0, x0 + SNAP_W - VIEW_W]) {
       for (const oy of [y0, y0 + SNAP_H - VIEW_H]) {
@@ -159,9 +159,11 @@ export class Renderer {
     };
     draw(sp.from, q * e, 1);
     draw(sp.to, -q * (1 - e), e);
-    // The weather, and what people are saying, stay upright: the words
-    // travel round with whoever's speaking.
-    this.drawWeather(game, dt);
+    // The falling rain and snow, and what people are saying, stay upright:
+    // the words travel round with whoever's speaking. (The fog and the grey
+    // of a wet day are in the pictures, under the night like always, so the
+    // turn doesn't wash the dark out.)
+    this.drawWeather(game, dt, 'drops');
     const words = (shot, ang, alpha) => {
       if (alpha <= 0.02) return;
       const c = Math.cos(ang);
@@ -195,7 +197,7 @@ export class Renderer {
     this.pickSeq = 0;
     this.drawWorld(game);
     this.drawProjectiles(game);
-    if (!snap) this.drawWeather(game, dt);
+    this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.lighting.draw(this, game);
     drawEffects(this, this.ctx, dt);
     this.drawParticles(dt);
@@ -640,16 +642,27 @@ export class Renderer {
     const wy = feetY - WAGON_H + 1;
     const hood = m.hood !== false;
     if (horse) this.drawSide(ctx, horse, left ? wx - HORSE_W + 7 : wx + WAGON_W - 7, feetY - HORSE_H + 1, left);
-    // Passengers behind the canvas side, their heads and shoulders showing.
+    // Passengers in the bed (under the canvas, its sides rolled up for
+    // them, on a covered wagon): heads and shoulders showing over the side.
     const riders = m.riders || [];
-    riders.forEach((look, i) => {
+    const sat = (front) => riders.forEach((look, i) => {
       const seat = WAGON_BED[i % WAGON_BED.length];
       const px = left ? wx + seat.x : wx + WAGON_W - 1 - seat.x;
       const sheet = humanoidSheet(look);
-      const top = feetY - CHAR_H + 1 - seat.lift - (hood ? 2 : 0);
+      const top = front ? wy + SPR_PAD - 5 : feetY - CHAR_H + 1 - seat.lift;
       ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, 14, px - 8, top - SPR_PAD, CHAR_W, 14);
     });
-    this.drawSide(ctx, wagonSprite(m.banner || null, frame, hood && !riders.length), wx, wy, left);
+    if (!hood) sat(false);
+    this.drawSide(ctx, wagonSprite(m.banner || null, frame, hood ? (riders.length ? 'open' : true) : false), wx, wy, left);
+    if (hood && riders.length) {
+      // In under the canvas, seen through the rolled-up side.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(left ? wx + 15 : wx + WAGON_W - 36, wy + 5, 21, 7);
+      ctx.clip();
+      sat(true);
+      ctx.restore();
+    }
   }
 
   // A wagon standing still: its hood, wheels and banner (and whoever's
@@ -1088,23 +1101,26 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ weather
-  drawWeather(game, dt) {
+  // part: 'tint' (the fog, the grey of an overcast day), 'drops' (rain or
+  // snow falling) or 'all'. Normally it all goes under the light, so the night
+  // darkens it; over a camera turn the drops are drawn on top of the lit
+  // pictures, so they're shaded by the sky by hand.
+  drawWeather(game, dt, part = 'all') {
     const w = game.weather;
     if (!w || w.level <= 0.01) return;
     const ctx = this.ctx;
     const indoor = this.hidden !== null;
     if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 220 }, () => ({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, s: 0.6 + Math.random() * 0.8 }));
     const n = Math.floor(this.weatherDrops.length * w.level * (indoor ? 0.25 : 1));
-    if (w.kind === 'fog') {
-      ctx.fillStyle = `rgba(190,200,210,${0.28 * w.level})`;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-      return;
-    }
     const rain = w.kind === 'rain';
-    // Overcast tint.
-    ctx.fillStyle = rain ? `rgba(40,50,70,${0.18 * w.level})` : `rgba(200,210,230,${0.1 * w.level})`;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = rain ? 'rgba(170,190,230,0.55)' : 'rgba(245,248,255,0.9)';
+    if (part !== 'drops') {
+      ctx.fillStyle = w.kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${0.18 * w.level})` : `rgba(200,210,230,${0.1 * w.level})`;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
+    if (part === 'tint' || w.kind === 'fog') return;
+    const lit = part === 'drops' ? skyLight(game.minute) : [1, 1, 1];
+    const tone = (r, g, b, a) => `rgba(${Math.round(r * Math.max(0.25, lit[0]))},${Math.round(g * Math.max(0.25, lit[1]))},${Math.round(b * Math.max(0.3, lit[2]))},${a})`;
+    ctx.fillStyle = rain ? tone(170, 190, 230, 0.55) : tone(245, 248, 255, 0.9);
     for (let i = 0; i < n; i++) {
       const d = this.weatherDrops[i];
       if (rain) {

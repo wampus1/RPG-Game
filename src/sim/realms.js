@@ -294,6 +294,69 @@ export class Realms {
     }
     if ((day + civ.id) % 7 === 0) this.decree(civ, day, rng);
     if (day % 2 === 0) this.aid(civ, L, day);
+    if ((day + civ.id) % 3 === 0) this.roadWorks(civ, L, day);
+  }
+
+  // ------------------------------------------------------------ roads
+  // The realm ties itself together: the capital pays for a road at a time,
+  // first from the capital out to each of its towns, then between towns of
+  // the realm that sit near each other, and then to the nearest town of a
+  // friendly neighbour. (Every realm does this, however far from you.)
+  roadWorks(civ, capL, day) {
+    const dip = this.sim.diplomacy;
+    const mine = new Set(this.members(civ).map((s) => s.id));
+    const building = dip.roads.filter((r) => !r.done && (mine.has(r.a) || mine.has(r.b))).length;
+    const big = mine.size >= 6;
+    if (building >= (big ? 2 : 1)) return null;
+    const spare = capL.econ.treasury - residents(capL).length * 15;
+    const COST = 120;
+    if (spare < COST) return null;
+    const capS = capL.settlement;
+    const linked = (a, b) => dip.roads.some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id));
+    const near = (a, b) => dip.dist(a, b);
+    const towns = this.members(civ).filter((s) => s !== capS);
+    let pair = null;
+    // 1. Capital to its towns, nearest first.
+    const out = towns.filter((s) => !linked(capS, s) && near(capS, s) < 12).sort((a, b) => near(capS, a) - near(capS, b))[0];
+    if (out) pair = [capS, out];
+    // 2. Neighbouring towns of the realm.
+    if (!pair) {
+      let best = null;
+      for (const a of towns) {
+        for (const b of towns) {
+          if (a.id >= b.id || linked(a, b) || near(a, b) >= 8) continue;
+          if (!best || near(a, b) < near(best[0], best[1])) best = [a, b];
+        }
+      }
+      pair = best;
+    }
+    // 3. Over the border, to a friend.
+    if (!pair) {
+      let best = null;
+      for (const a of [capS, ...towns]) {
+        for (const b of this.game.world.ow.settlements) {
+          if (mine.has(b.id) || deserted(b) || b.condition === 'abandoned' || linked(a, b) || near(a, b) >= 9) continue;
+          const other = this.civOf(b);
+          if (other && (this.standing(civ, other) !== 'friendly' || this.sim.war?.enemies?.(civ, other))) continue;
+          if (!best || near(a, b) < near(best[0], best[1])) best = [a, b];
+        }
+      }
+      pair = best;
+    }
+    if (!pair) return null;
+    const [a, b] = pair;
+    if (!dip.startRoad(a, b)) return null;
+    capL.econ.treasury -= COST;
+    const LA = this.sim.layoutOf(a.id);
+    const LB = this.sim.layoutOf(b.id);
+    if (LA && LA.econ) dip.rel(LA, b.id).road = true;
+    if (LB && LB.econ) dip.rel(LB, a.id).road = true;
+    const who = authority(civ);
+    const Who = who[0].toUpperCase() + who.slice(1);
+    const text = `${Who} is paying for a road from ${a.name} to ${b.name}. The builders start from both ends.`;
+    ledger(capL, day, text);
+    for (const L of [LA, LB]) if (L && L.econ && L !== capL) ledger(L, day, text);
+    return { a: a.id, b: b.id };
   }
 
   // ------------------------------------------------------------ decrees

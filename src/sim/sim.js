@@ -1811,20 +1811,12 @@ export class Sim {
           to = home;
           f = (now - v.leave) / Math.max(1, t.ret - v.leave);
         } else continue;
-        const road = this.diplomacy.roads.find((r) => r.done && ((r.a === from.id && r.b === to.id) || (r.a === to.id && r.b === from.id)));
-        let pos;
-        if (road && road.tiles && road.tiles.length) {
-          const i = Math.floor((road.a === from.id ? f : 1 - f) * (road.tiles.length - 1));
-          const tile = road.tiles[Math.max(0, Math.min(road.tiles.length - 1, i))];
-          pos = { x: tile[0], z: tile[2] };
-        } else {
-          const a = centre(from);
-          const b = centre(to);
-          pos = { x: Math.round(a.x + (b.x - a.x) * f), z: Math.round(a.z + (b.z - a.z) * f) };
-        }
+        // Down the road, or the long way round by land.
+        const way = this.diplomacy.way(from, to);
+        const pos = this.diplomacy.wayAt(way, f * way.len);
         // (Townsfolk on an outing you're part of walk right beside you.)
         const o = t.outing ? this.outings.get(t.outing) : null;
-        out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, target: centre(to), mount: t.mount || null, outing: t.outing || null, close: !!(o && o.withPlayer) });
+        out.push({ key: `${home.id}:${rec.idx}`, rec, L, from, to, pos, way, target: centre(to), mount: t.mount || null, outing: t.outing || null, close: !!(o && o.withPlayer) });
       }
     }
     // Adventurers on their way from one town to the next.
@@ -1835,17 +1827,9 @@ export class Sim {
       const L = to && this.game.world.layouts.get(to.id);
       if (!from || !to || !L || !L.econ) continue;
       const f = (now - a.departAt) / Math.max(1, a.arrive - a.departAt);
-      const road = this.diplomacy.roads.find((r) => r.done && ((r.a === from.id && r.b === to.id) || (r.a === to.id && r.b === from.id)));
-      let pos;
-      if (road && road.tiles && road.tiles.length) {
-        const tile = road.tiles[Math.max(0, Math.min(road.tiles.length - 1, Math.floor((road.a === from.id ? f : 1 - f) * (road.tiles.length - 1))))];
-        pos = { x: tile[0], z: tile[2] };
-      } else {
-        const p0 = centre(from);
-        const p1 = centre(to);
-        pos = { x: Math.round(p0.x + (p1.x - p0.x) * f), z: Math.round(p0.z + (p1.z - p0.z) * f) };
-      }
-      out.push({ key: `adv:${a.id}:${a.departAt}`, rec: this.adventurers.roadRec(a, L), L, from, to, pos, target: centre(to), adv: a });
+      const way = this.diplomacy.way(from, to);
+      const pos = this.diplomacy.wayAt(way, f * way.len);
+      out.push({ key: `adv:${a.id}:${a.departAt}`, rec: this.adventurers.roadRec(a, L), L, from, to, pos, way, target: centre(to), adv: a });
     }
     // The trading companies, riding and driving their wagons (or camped).
     out.push(...this.caravans.roadTravellers());

@@ -337,7 +337,12 @@ around ("Any news?") or read it on the notice board under *News from afar*,
 where it fades as it goes stale and comes down after two days.
 Out in the country you may meet a merchant on the road between two towns
 (along the new road, if there is one), pack on their back, happy to trade
-from it before walking on.
+from it before walking on. Travellers keep to the land: down the road where
+one's finished, otherwise the long way round lakes and rivers. Someone on foot
+with no way round pushes a raft out and paddles across; a rider or a wagon
+looks hard for a way round first and fords the river only if there isn't one.
+Townsfolk visiting another town just look about: only merchants cry their
+wares.
 
 Furniture, barrels and other props are never placed where they'd block a
 doorway, and whoever you're talking to (or trading with) stops to listen.
@@ -686,8 +691,9 @@ allow sound before that.
 **Turning the camera.** Q and E turn the view a quarter turn either way, so
 you can see behind buildings. The world visibly swings round to the new view.
 Market stall canopies keep their stripes and colour whichever way you look.
-While the view turns, time and you stand still. The HUD, the weather and
-people's speech bubbles stay upright while the world swings round under them.
+While the view turns, time and you stand still. The HUD, falling rain and snow
+and people's speech bubbles stay upright while the world swings round under
+them; fog and the grey of a wet day turn with it, dimmed by the night as ever.
 Movement keys always move you across the screen,
 the minimap turns with the view (N marks north), and the placement arrow shows
 which way a block will face. A new world always starts with north up; a saved
@@ -880,7 +886,8 @@ a ruby blade, a ruby arrow or a ruby-set armour's flames) drops already roasted.
 yours close and right-click the horse to back it into the shafts (or ride up to
 the wagon and right-click it). Then right-click the wagon to take the reins.
 Anyone's wagon, yours or a town's or a trader's, you can climb into the back of
-and sit a while.
+and sit a while. A covered wagon keeps its canvas up over you, with the sides
+rolled up so you (and anyone else riding in the back) can be seen.
 
 **Trading companies.** Three companies of traders wander the roads and never
 settle anywhere. Each has a banner on its wagons' canvas and on its horses'
@@ -961,7 +968,13 @@ scribes blot ink. Merchants toss the coin and hand over what you bought.
 **Roads between towns** don't run straight. They find a way across the land,
 with bends and corners, and they're built a stretch at a time by the builders
 of the towns at each end, working out from both. Go to the end of a road being
-built during working hours and you'll find the crew there, digging. On the world
+built during working hours and you'll find the crew there, digging. They walk
+out from town to it in the morning and back along it in the evening (and when
+it's finished), never just appearing or vanishing where you can see. Every
+realm pays for its roads from the capital, however far it is from you: out
+from the capital to each of its towns first, then between its towns, then to
+a friendly neighbour. Free towns on good terms with a neighbour ask for one by
+letter. On the world
 map a road shows as a line through each square it crosses: straight across,
 straight down, or round a corner. Every town starts with a builder, and takes
 another on if it loses theirs. When a ruler or a mayor dies, someone always
@@ -1052,6 +1065,18 @@ that turns on the chasers, or, badly outnumbered, falling back (or making a
 stand with the town at their backs). Plans beat other plans, and the ground
 favours some. The soldiers are real people from real towns, and those who fall
 are buried at home. A decisive win can take the town behind the field.
+
+**Called up.** If you're a citizen of a realm at war, you're called to its
+battles: when one is planned you're told where and when (it's marked on your
+map), and reminded within the hour. Be on the field when it starts and stay in
+the fight (the other side knows which line you're in), and the realm pays you
+for it. Stay away, or leave the field, and you're named a deserter, wanted in
+every town of the realm until you answer for it in one of them (the charge is
+then dropped everywhere). Locked up at the time? You're excused. Fall in the
+battle and you may only be knocked senseless: you lie there till it's over, and
+if your side loses you wake up a prisoner of war in a cell in the enemy's
+capital, your weapons taken. They let you go after a few days, or at the
+peace, or you can try to break out.
 
 **How big an army is.** Each side can call on its watch (the garrisons of its
 towns, a few left at home) and a levy of its grown folk (bigger in martial
@@ -1158,8 +1183,9 @@ src/
                        lots, and what waits for a lot), shops (shopping,
                        stalls, merchant standing),
                        diplomacy (letters, winding roads and their road
-                       crews, warnings), realms
-                       (capitals, rulers, decrees, tribute, aid, relations
+                       crews, travellers' ways by land, warnings), realms
+                       (capitals, rulers, decrees, tribute, aid, roads the
+                       realm pays for, relations
                        between realms, breaking away), adventurers,
                        nomads, camps (tents for nomads, merchants,
                        adventurers and trading companies), stables
@@ -1174,7 +1200,8 @@ src/
                        the watch, the draft), war (raids between realms,
                        wars, armies and levies, battles and tactics,
                        fought live near you, prisoners, cells,
-                       exchanges, ransoms and escapes),
+                       exchanges, ransoms and escapes, you called up,
+                       deserting, taken prisoner),
                        events (posters, stages, guests for weddings and
                        feasts), the press (newspapers),
                        growth (materials, town sizes, walls), laws

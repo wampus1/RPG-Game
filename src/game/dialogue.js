@@ -1367,6 +1367,7 @@ function respondRaw(npc, game, id, arg) {
         else if (rec.trip && rec.trip.raft) lines.push(`Taking my raft to ${sim.diplomacy.town(rec.trip.dest).name}. Beats walking, and the goods stay dry. Mostly.`);
         else lines.push(q ? `Off to ${sim.diplomacy.town(q.to).name} with my goods, and a letter from the mayor.` : 'Off on the road with my goods!');
       }
+      else if (act.act === 'visit' && npc.visit && npc.visit.guest) lines.push(`Just visiting from ${npc.visit.fromName}. Seeing the sights.`);
       else if (act.act === 'visit') lines.push(`Selling wares from ${npc.visit ? npc.visit.fromName : 'afar'}. Have a look!`);
       else if (act.act === 'help') {
         const par = npc.workingParent && npc.workingParent();

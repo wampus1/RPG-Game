@@ -119,7 +119,9 @@ export class Diplomacy {
       const friends = near.filter((o) => this.rel(L, o.id).trust >= 15);
       const o = friends.length ? pick(friends) : null;
       if (o && this.rel(L, o.id).trade < 3 && rng.chance(0.5)) letter = this.write(s, o, 'trade');
-      else if (o && this.rel(L, o.id).trade >= 2 && !this.rel(L, o.id).road && e.treasury >= 200 && this.dist(o, s) < 9) letter = this.write(s, o, 'road');
+      // (A town on good terms with a neighbour, and with the coin, asks
+      // for a road to it; a realm's towns get theirs from the capital too.)
+      else if (o && !this.rel(L, o.id).road && e.treasury >= 160 && this.dist(o, s) < 9 && !this.roads.some((r) => (r.a === s.id && r.b === o.id) || (r.a === o.id && r.b === s.id))) letter = this.write(s, o, 'road');
     }
     if (letter) e.lastLetter = day;
     return letter;
@@ -284,7 +286,7 @@ export class Diplomacy {
         }
         return reply('no', {}, `${to.name} turned down closer trade with ${from.name}.`);
       case 'road':
-        if (toRel.trust >= 15 && T.econ.treasury >= 150) {
+        if (toRel.trust >= 10 && T.econ.treasury >= 120) {
           T.econ.treasury -= 100;
           toRel.road = true;
           this.startRoad(from, to);
@@ -396,7 +398,7 @@ export class Diplomacy {
   // more, the lie of the land (a gentle noise) bends it, and every turn
   // costs a little (so it runs straight a while, then turns). Returns the
   // corners of the way, start and end included.
-  route(p0, p1, towns = []) {
+  route(p0, p1, towns = [], wet = 7) {
     const G = 4;
     const t = this.game.world.terrain;
     const dx = p1.x - p0.x;
@@ -437,6 +439,20 @@ export class Diplomacy {
       cache.set(k, v);
       return v;
     };
+    // (A traveller's way also looks between the steps, for a stream there.)
+    const edges = new Map();
+    const between = (i, j, ni, nj) => {
+      if (wet <= 7) return false;
+      const k = ((j + nj - z0 * 2) * (W * 2 + 1) + (i + ni - x0 * 2)) | 0;
+      let v = edges.get(k);
+      if (v === undefined) {
+        const x = Math.round(p0.x + ((i + ni) * G) / 2);
+        const z = Math.round(p0.z + ((j + nj) * G) / 2);
+        v = t.column(x, z, ctx, {}).water >= 0;
+        edges.set(k, v);
+      }
+      return v;
+    };
     const key = (i, j, d) => ((j - z0) * W + (i - x0)) * 5 + d;
     const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     const heap = new MinHeap();
@@ -462,7 +478,7 @@ export class Diplomacy {
         if (ni < x0 || ni > x1 || nj < z0 || nj > z1) continue;
         const L = land(ni, nj);
         if (L.town) continue;
-        let c = 1 + L.bend * 1.6 + Math.min(6, Math.abs(L.h - here.h) * 0.9) + (L.water ? 7 : 0);
+        let c = 1 + L.bend * 1.6 + Math.min(6, Math.abs(L.h - here.h) * 0.9) + (L.water ? wet : 0) + (between(i, j, ni, nj) ? wet / 2 : 0);
         if (d !== 4 && d !== q) c += 1.4;
         const nk = key(ni, nj, q);
         const ng = g + c;
@@ -492,6 +508,76 @@ export class Diplomacy {
     out.push({ x: p0.x + gx1 * G, z: p0.z + gz1 * G });
     if (out[out.length - 1].x !== p1.x || out[out.length - 1].z !== p1.z) out.push({ x: out[out.length - 1].x, z: p1.z }, p1);
     return out;
+  }
+
+  // ------------------------------------------------------------ the way
+  // How a traveller goes from town a to town b: down the road if one's
+  // finished, else across country by land, round lakes and rivers (only a
+  // crossing there's no way round goes over water). A list of points from
+  // a's middle to b's, with the distance along it at each.
+  way(a, b) {
+    const road = this.roads.find((r) => r.done && r.tiles && r.tiles.length && ((r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id)));
+    const k = `${a.id}>${b.id}${road ? 'r' : ''}`;
+    if (!this.ways) this.ways = new Map();
+    let w = this.ways.get(k);
+    if (w) return w;
+    const centre = (s) => ({ x: Math.floor((s.bounds.x0 + s.bounds.x1) / 2), z: Math.floor((s.bounds.z0 + s.bounds.z1) / 2) });
+    const c0 = centre(a);
+    const c1 = centre(b);
+    // (Working a way out across country takes a moment: one at a time, and
+    // until it's ready, the straight line will do.)
+    const busy = !road && (this.wayBudget ?? 1) <= 0;
+    if (busy) return { pts: [c0, c1], at: [0, Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1], len: Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1, road: false, rough: true };
+    if (!road) this.wayBudget = (this.wayBudget ?? 1) - 1;
+    let pts;
+    if (road) {
+      // (A road's tiles go two abreast: one of each pair is enough.)
+      const tl = road.a === a.id ? road.tiles : road.tiles.slice().reverse();
+      pts = [c0];
+      for (const t of tl) {
+        const q = pts[pts.length - 1];
+        if (Math.abs(t[0] - q.x) + Math.abs(t[2] - q.z) >= 2) pts.push({ x: t[0], z: t[2] });
+      }
+      pts.push(c1);
+    } else pts = this.route(c0, c1, [a, b], 40);
+    const at = [0];
+    for (let i = 1; i < pts.length; i++) at.push(at[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+    w = { pts, at, len: at[at.length - 1] || 1, road: !!road };
+    this.ways.set(k, w);
+    if (this.ways.size > 200) this.ways.delete(this.ways.keys().next().value);
+    return w;
+  }
+
+  // The point a distance s along a way.
+  wayAt(w, s) {
+    const { pts, at } = w;
+    s = Math.max(0, Math.min(w.len, s));
+    let i = 1;
+    while (i < pts.length - 1 && at[i] < s) i++;
+    const seg = at[i] - at[i - 1] || 1;
+    const f = Math.max(0, Math.min(1, (s - at[i - 1]) / seg));
+    return { x: Math.round(pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f), z: Math.round(pts[i - 1].z + (pts[i].z - pts[i - 1].z) * f) };
+  }
+
+  // How far along a way the point nearest (x, z) is.
+  wayNear(w, x, z) {
+    const { pts, at } = w;
+    let best = 0;
+    let bd = Infinity;
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1].x;
+      const az = pts[i - 1].z;
+      const dx = pts[i].x - ax;
+      const dz = pts[i].z - az;
+      const L2 = dx * dx + dz * dz || 1;
+      const f = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+      const d = Math.hypot(ax + dx * f - x, az + dz * f - z);
+      if (d < bd) {
+        bd = d;
+        best = at[i - 1] + (at[i] - at[i - 1]) * f;
+      }
+    }
+    return best;
   }
 
   // The builders of both towns work toward each other from their own
@@ -569,8 +655,11 @@ export class Diplomacy {
 
   // Where a road's end is being built now: the next tile from that end.
   frontier(r, end) {
-    if (r.done || r.fromA + r.fromB >= r.tiles.length) return null;
-    const i = end === 'A' ? r.fromA : r.tiles.length - 1 - r.fromB;
+    // (A road just begun hasn't had its first stretch reckoned yet.)
+    const fa = r.fromA ?? r.built ?? 0;
+    const fb = r.fromB ?? 0;
+    if (r.done || fa + fb >= r.tiles.length) return null;
+    const i = end === 'A' ? fa : r.tiles.length - 1 - fb;
     const t = r.tiles[i];
     return t ? { x: t[0], y: t[1], z: t[2], i } : null;
   }
@@ -590,26 +679,47 @@ export class Diplomacy {
     }
     for (const [rec, job] of wanted) {
       if (rec.roadwork) continue;
-      if (rec.away || rec.leaving || rec.trip || rec.errand || rec.sick) continue;
-      const L = this.sim.layoutOf(Number(job.end === 'A' ? job.k.split(':')[0] : job.k.split(':')[1]));
+      if (rec.away || rec.leaving || rec.trip || rec.errand || rec.sick || rec.walkHome) continue;
+      const sid = Number(job.end === 'A' ? job.k.split(':')[0] : job.k.split(':')[1]);
+      const L = this.sim.layoutOf(sid);
+      const road = this.roads.find((r) => `${r.a}:${r.b}` === job.k);
       rec.roadwork = job;
-      if (rec.ent && !rec.ent.dead && L && this.game.active.has(L.settlement.id)) {
-        // Off out of town with their shovels.
-        setOverride(rec, now, now + Math.max(30, 1050 - m), 'travel', { place: 'road' });
-        rec.ent.activity = null;
-        rec.leaving = true;
-      } else rec.away = true;
+      rec.away = true;
+      const a = L && this.game.active.get(L.settlement.id);
+      const n = rec.ent;
+      if (n && !n.dead && a && road) {
+        // Off out of town with their shovels, and on down the road to
+        // the end of it (walking every step).
+        const slot = this.roadCrew(sid).indexOf(rec);
+        n.state = 'roadwork';
+        n.crew = { road, end: job.end, slot: Math.max(0, slot) };
+        n.activity = null;
+        n.goal = null;
+        n.path = null;
+        n.sleeping = false;
+        n.releaseSpot?.();
+        const at = a.npcs.indexOf(n);
+        if (at >= 0) a.npcs.splice(at, 1);
+      }
     }
-    // Home again (or the road's done).
+    // Home again (or the road's done): walking back, if you can see them.
     for (const L of this.game.world.layouts.values()) {
       if (!L.econ) continue;
       for (const rec of L.npcs) {
+        const n = rec.ent && !rec.ent.dead ? rec.ent : null;
+        // (Home by now, wherever they were walking.)
+        if (rec.walkHome && !n) {
+          rec.walkHome = false;
+          rec.away = false;
+        }
         if (!rec.roadwork || wanted.has(rec)) continue;
-        if (rec.ent && !rec.ent.dead && rec.ent.state === 'roadwork') this.game.despawnNpc(rec.ent);
         rec.roadwork = null;
-        rec.away = false;
         rec.leaving = false;
         if (rec.override && rec.override.act === 'travel') rec.override = null;
+        if (n && n.state === 'roadwork') {
+          n.state = 'roadhome';
+          rec.walkHome = true;
+        } else rec.away = false;
       }
     }
   }
@@ -646,6 +756,7 @@ export class Diplomacy {
   // ------------------------------------------------------------ time
   update() {
     const now = this.sim.abs;
+    this.wayBudget = 1;
     for (const q of this.letters) if (q.status === 'carried' && now >= q.arrive) this.deliver(q);
     this.courier(now);
     this.buildRoads(now);

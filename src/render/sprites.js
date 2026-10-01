@@ -620,9 +620,10 @@ export const WAGON_BED = [{ x: 18, lift: 8 }, { x: 25, lift: 8 }, { x: 31, lift:
 // A wagon from the side (pulled to the left): a driver's bench at the
 // front, and a covered bed behind: a trader's has its banner on the
 // canvas; a nomad family's is plain, patched and weathered; a plain cart
-// (`hood` false) is open for passengers.
+// (`hood` false) is open for passengers. With people riding in the back
+// (`hood` 'open'), the canvas stays up over them with its sides rolled up.
 export function wagonSprite(banner = null, frame = 0, hood = true) {
-  const key = `w:${banner || ''}:${frame}:${hood ? 1 : 0}`;
+  const key = `w:${banner || ''}:${frame}:${hood === 'open' ? 2 : hood ? 1 : 0}`;
   let c = sheetCache.get(key);
   if (c) return c;
   const p = new Px(WAGON_W, WAGON_H);
@@ -632,7 +633,24 @@ export function wagonSprite(banner = null, frame = 0, hood = true) {
   const canvas = banner ? hex('#ece4cc') : hex('#c8bc9c');
   // The hood on its hoops, over the back of the bed (the front is open,
   // with the bench).
-  if (hood) {
+  if (hood === 'open') {
+    // The roof of the canvas, its sides rolled up to a bundle under the
+    // eaves, and the hoops down to the bed.
+    for (let x = 14; x <= 36; x++) {
+      const top = 1 + Math.round(Math.abs(x - 25) > 9 ? (Math.abs(x - 25) - 9) * 0.8 : 0);
+      for (let y = top; y <= 3; y++) p.set(x, y, (x - 14) % 6 === 0 ? shade(canvas, 0.82) : canvas);
+      p.set(x, 4, shade(canvas, x % 3 ? 0.72 : 0.62));
+      // (The shade under the canvas, where the passengers sit.)
+      for (let y = 5; y <= 11; y++) p.set(x, y, '#3a2c22');
+    }
+    for (const x of [14, 25, 36]) p.vline(x, 5, 12, woodD);
+    if (banner) {
+      const b = hex(banner);
+      p.rect(21, 1, 9, 3, b);
+      p.hline(23, 27, 2, '#f0d040');
+    }
+    p.hline(14, 36, 12, woodL);
+  } else if (hood) {
     for (let x = 14; x <= 36; x++) {
       const top = 2 + Math.round(Math.abs(x - 25) > 9 ? (Math.abs(x - 25) - 9) * 1.3 : 0);
       for (let y = top; y <= 13; y++) p.set(x, y, (x - 14) % 6 === 0 ? shade(canvas, 0.82) : canvas);

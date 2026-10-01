@@ -3,7 +3,7 @@
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
 import { Entity } from './entity.js';
-import { NPC_STEP_TIME, GROUND } from '../config.js';
+import { NPC_STEP_TIME, GROUND, SURFACE } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
 import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
@@ -126,7 +126,7 @@ export class NPC extends Entity {
 
   heldItem() {
     if (this.sleeping) return null;
-    if (this.state === 'roadwork') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
+    if (this.state === 'roadwork' || this.state === 'roadhome') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
     // Raiders come with torches lit; soldiers and riders with blades out.
     if (this.state === 'captive' || this.down) return null;
     if (this.state === 'warband') return this.warband && this.warband.torch && this.warband.phase !== 'flee' ? 'torch' : this.weapon();
@@ -828,7 +828,7 @@ export class NPC extends Entity {
   // A merchant's stock, and where it's kept (a shop's shelves, or a
   // visiting merchant's pack).
   wareStock() {
-    if (this.visit && !this.visit.guest) return { store: this.visit.goods, display: { sid: this.layout.settlement.id, visit: this.visit.id } };
+    if (this.visit) return this.visit.guest ? null : { store: this.visit.goods, display: { sid: this.layout.settlement.id, visit: this.visit.id } };
     const w = this.rec.work;
     if (this.rec.job !== 'merchant' || !w || w.building == null) return null;
     const biz = this.layout.econ.biz[w.building];
@@ -984,6 +984,9 @@ export class NPC extends Entity {
         break;
       case 'roadwork':
         this.roadWork(dt);
+        break;
+      case 'roadhome':
+        this.roadHome(dt);
         break;
       case 'warband':
         warTick(this, dt);
@@ -1145,7 +1148,7 @@ export class NPC extends Entity {
 
   // A merchant on the road between towns, pack on their back: a stretch at
   // a time towards where they're going.
-  caravanWalk() {
+  caravanWalk(dt) {
     const c = this.caravan;
     if (!c) {
       this.state = 'routine';
@@ -1161,17 +1164,130 @@ export class NPC extends Entity {
       } else if (!this.moving && this.rng.chance(0.02)) this.face(at.x, at.z);
       return;
     }
-    const d = Math.hypot(c.tx - this.x, c.tz - this.z) || 1;
+    // Out on the water, crossing.
+    if (c.cross) {
+      this.crossWater(c);
+      return;
+    }
+    // Getting nowhere (a cliff, a thicket): look further afield for the way
+    // round, a bit wider each time.
+    const here = `${this.x},${this.z}`;
+    if (this.moving || here !== c.lastAt) {
+      c.lastAt = here;
+      c.stillT = 0;
+    } else c.stillT = (c.stillT || 0) + (dt || 0);
+    // Stuck at the water's edge with no way round even looking wide: across
+    // it (a raft on foot; a horse or a wagon fords, as a last resort).
+    if (c.stillT > 3 && (c.reach || 0) >= (this.mount ? 2 : 0) && this.leaveGoal && this.planCrossing(c)) return;
+    if (c.stillT > 6) {
+      c.reach = Math.min(3, (c.reach || 0) + 1);
+      c.stillT = 0;
+      this.leaveGoal = null;
+      this.pathFails = 0;
+      this.waitT = 0;
+    } else if (c.reach && c.stillT === 0 && this.rng.chance(0.002)) c.reach--;
+    const reach = c.reach || 0;
     const g = this.leaveGoal;
     if (!g || Math.max(Math.abs(g.x - this.x), Math.abs(g.z - this.z)) <= 1 || this.stateT > 25) {
-      const k = Math.min(12, d);
-      this.leaveGoal = { x: Math.round(this.x + ((c.tx - this.x) / d) * k), y: this.y, z: Math.round(this.z + ((c.tz - this.z) / d) * k) };
+      if (c.way) {
+        // Along the way (the road, or round the water by land): a stretch
+        // further on from wherever on it they are.
+        const D = this.game.sim.diplomacy;
+        const q = D.wayAt(c.way, D.wayNear(c.way, this.x, this.z) + 10 + reach * 8);
+        this.leaveGoal = { x: q.x, y: this.y, z: q.z };
+      } else {
+        const d = Math.hypot(c.tx - this.x, c.tz - this.z) || 1;
+        const k = Math.min(12, d);
+        this.leaveGoal = { x: Math.round(this.x + ((c.tx - this.x) / d) * k), y: this.y, z: Math.round(this.z + ((c.tz - this.z) / d) * k) };
+      }
       this.stateT = 0;
       this.path = null;
     }
     const lg = this.leaveGoal;
-    const box = { x0: Math.min(this.x, lg.x) - 8, z0: Math.min(this.z, lg.z) - 8, x1: Math.max(this.x, lg.x) + 8, z1: Math.max(this.z, lg.z) + 8 };
+    const m = 12 + reach * 10;
+    const box = { x0: Math.min(this.x, lg.x) - m, z0: Math.min(this.z, lg.z) - m, x1: Math.max(this.x, lg.x) + m, z1: Math.max(this.z, lg.z) + m, nodes: 2500 * (1 + reach * 2) };
     this.followPath(lg, 1, box);
+    this.paddle();
+  }
+
+  // A crossing: the tiles from here straight toward where they're going,
+  // over the water to the first dry land on the far side.
+  planCrossing(c) {
+    const w = this.game.world;
+    const g = this.leaveGoal;
+    const dx = g.x - this.x;
+    const dz = g.z - this.z;
+    const n = Math.max(Math.abs(dx), Math.abs(dz));
+    if (!n) return false;
+    const tiles = [];
+    let px = this.x;
+    let pz = this.z;
+    let wet = false;
+    for (let k = 1; k <= 60; k++) {
+      const x = Math.round(this.x + (dx * k) / n);
+      const z = Math.round(this.z + (dz * k) / n);
+      // (4-connected, a tile at a time.)
+      for (const [tx, tz] of x !== px && z !== pz ? [[x, pz], [x, z]] : [[x, z]]) {
+        const water = w.isWaterAt(tx, SURFACE, tz);
+        const y = w.findStandY(tx, tz, GROUND);
+        if (water) {
+          wet = true;
+          tiles.push({ x: tx, y: GROUND, z: tz, water: true });
+        } else if (y > 0 && Math.abs(y - (tiles.length ? tiles[tiles.length - 1].y : this.y)) <= 1) {
+          tiles.push({ x: tx, y, z: tz });
+          if (wet) {
+            c.cross = { tiles, i: 0 };
+            c.stillT = 0;
+            this.path = null;
+            if (this.distTo(this.game.player) < 16 && this.lineCd <= 0) {
+              this.lineCd = 20;
+              this.say(this.mount ? this.rng.pick(['No bridge for miles. Across we go!', 'Easy, girl. It\'s only water.']) : this.rng.pick(['Nothing for it but the raft.', 'Out with the raft, then.', 'Hold the goods up high!']), 3);
+            }
+            return true;
+          }
+        } else return false;
+        px = tx;
+        pz = tz;
+      }
+    }
+    return false;
+  }
+
+  // Paddling (or fording) across, a tile at a time; on dry land again, on
+  // their way.
+  crossWater(c) {
+    const cr = c.cross;
+    if (this.moving) return;
+    const t = cr.tiles[cr.i];
+    if (!t) {
+      c.cross = null;
+      this.leaveGoal = null;
+      this.raft = null;
+      return;
+    }
+    // (Someone in the way: wait for them.)
+    if (this.game.occupiedBySolid(t.x, t.y, t.z, this)) return;
+    cr.i++;
+    this.face(t.x, t.z);
+    this.startMove(t.x, t.y, t.z, this.step * (t.water ? (this.mount ? 2.2 : 1.6) : 1));
+    if (t.water && !this.mount) {
+      const ang = [0, -Math.PI / 2, Math.PI, Math.PI / 2][this.dir] ?? 0;
+      this.raft = this.raft || { ang };
+      this.raft.ang = ang;
+    } else this.raft = null;
+    if (t.water) this.inWater = true;
+  }
+
+  // On foot and out on the water (a crossing with no way round): on a raft.
+  paddle() {
+    const on = this.inWater && !this.mount && !this.dead;
+    if (!on) {
+      if (this.raft) this.raft = null;
+      return;
+    }
+    const ang = [0, -Math.PI / 2, Math.PI, Math.PI / 2][this.dir] ?? 0;
+    if (!this.raft) this.raft = { ang };
+    else this.raft.ang += ((((ang - this.raft.ang) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI) * 0.2;
   }
 
   // Out on a road between towns: at the end of what's laid, digging out the
@@ -1181,21 +1297,20 @@ export class NPC extends Entity {
     const D = this.game.sim.diplomacy;
     const f = c && D.frontier(c.road, c.end);
     if (!f) {
-      this.game.despawnNpc(this);
+      // The road's done (or the day is): home along it, on foot.
+      this.state = 'roadhome';
+      this.rec.walkHome = true;
       return;
     }
     // Stand just short of it (side by side, if there are two of you).
     const r = c.road;
-    const back = r.tiles[c.end === 'A' ? Math.max(0, f.i - 2 - c.slot * 2) : Math.min(r.tiles.length - 1, f.i + 2 + c.slot * 2)] || [f.x, f.y, f.z];
-    const d = Math.max(Math.abs(this.x - f.x), Math.abs(this.z - f.z));
-    if (d > 2) {
-      const box = { x0: Math.min(this.x, back[0]) - 8, z0: Math.min(this.z, back[2]) - 8, x1: Math.max(this.x, back[0]) + 8, z1: Math.max(this.z, back[2]) + 8 };
-      if (!this.followPath({ x: back[0], y: back[1] + 1, z: back[2] }, 1, box) && this.stateT > 6) {
-        // (Stuck: step in beside it.)
-        const sp = this.game.findFreeSpot(f.x, f.z, f.y + 1);
-        if (sp) this.teleport(sp.x, sp.y, sp.z);
-        this.stateT = 0;
-      }
+    const bi = c.end === 'A' ? Math.max(0, f.i - 2 - c.slot * 2) : Math.min(r.tiles.length - 1, f.i + 2 + c.slot * 2);
+    const back = r.tiles[bi] || [f.x, f.y, f.z];
+    const d = Math.max(Math.abs(this.x - back[0]), Math.abs(this.z - back[2]));
+    if (d > 1) {
+      // Out along the road to it (never a hop: walking, the long way if
+      // need be).
+      this.alongRoad(r, bi, dt);
       return;
     }
     this.stateT = 0;
@@ -1214,6 +1329,92 @@ export class NPC extends Entity {
         this.say(this.rng.pick(['Another stretch done.', `${to ? to.name : 'The next town'}'s that way. Long way yet.`, 'Mind the hole!', 'Back\'s killing me.', 'Pass the shovel.', 'Keep it straight, now.']), 3);
       }
     }
+  }
+
+  // Walking a road between towns toward its tile `toI`: a stretch at a
+  // time from wherever on it they are (and onto it first, from town).
+  alongRoad(r, toI, dt) {
+    const c = this.crew;
+    const n = r.tiles.length;
+    const lo = c.at === undefined ? 0 : Math.max(0, c.at - 40);
+    const hi = c.at === undefined ? n - 1 : Math.min(n - 1, c.at + 40);
+    let bi = toI;
+    let bd = Infinity;
+    for (let k = lo; k <= hi; k++) {
+      const t = r.tiles[k];
+      const dd = Math.abs(t[0] - this.x) + Math.abs(t[2] - this.z);
+      if (dd < bd) {
+        bd = dd;
+        bi = k;
+      }
+    }
+    c.at = bi;
+    // Getting nowhere: look wider for the way.
+    const here = `${this.x},${this.z}`;
+    if (this.moving || here !== c.lastAt) {
+      c.lastAt = here;
+      c.stillT = 0;
+    } else c.stillT = (c.stillT || 0) + (dt || 0);
+    if (c.stillT > 5) {
+      c.reach = Math.min(3, (c.reach || 0) + 1);
+      c.stillT = 0;
+      this.path = null;
+      this.pathFails = 0;
+      this.waitT = 0;
+    }
+    const reach = c.reach || 0;
+    // The next stretch (onto the road at the near end first, from town).
+    let goal = c.goal;
+    if (!goal || goal.to !== toI || Math.max(Math.abs(goal.x - this.x), Math.abs(goal.z - this.z)) <= 1 || !this.path) {
+      const t = bd > 6 ? r.tiles[bi] : r.tiles[bi + Math.sign(toI - bi) * Math.min(12, Math.abs(toI - bi))];
+      goal = c.goal = { x: t[0], y: t[1] + 1, z: t[2], to: toI };
+      this.path = null;
+    }
+    const m = 10 + reach * 10;
+    const box = { x0: Math.min(this.x, goal.x) - m, z0: Math.min(this.z, goal.z) - m, x1: Math.max(this.x, goal.x) + m, z1: Math.max(this.z, goal.z) + m, nodes: 2500 * (1 + reach) };
+    return this.followPath(goal, 1, box);
+  }
+
+  // Home from a day on the road (or the road's finished): back along it
+  // into town, one of the townsfolk again (or, out of sight of you and with
+  // the town not about you, home the quiet way).
+  roadHome(dt) {
+    const c = this.crew;
+    const g = this.game;
+    const p = g.player;
+    const L = this.layout;
+    const home = L.settlement;
+    const a = g.active.get(home.id);
+    const seen = Math.abs(p.x - this.x) <= 20 && Math.abs(p.z - this.z) <= 14;
+    const finish = () => {
+      this.rec.walkHome = false;
+      this.rec.away = false;
+    };
+    if (!seen && !a) {
+      finish();
+      g.despawnNpc(this);
+      return;
+    }
+    const b = home.bounds;
+    if (this.x >= b.x0 && this.x <= b.x1 && this.z >= b.z0 && this.z <= b.z1 && a) {
+      finish();
+      this.state = 'routine';
+      this.crew = null;
+      this.activity = null;
+      this.goal = null;
+      this.path = null;
+      if (!a.npcs.includes(this)) a.npcs.push(this);
+      return;
+    }
+    const r = c && c.road;
+    const homeI = c && c.end === 'B' ? (r ? r.tiles.length - 1 : 0) : 0;
+    const t = r && r.tiles[homeI];
+    if (!t || Math.abs(t[0] - this.x) + Math.abs(t[2] - this.z) <= 3) {
+      // Off the end of the road: in through the gate to the square.
+      this.followPath({ x: L.plaza.cx, y: GROUND, z: L.plaza.cz }, 2);
+      return;
+    }
+    this.alongRoad(r, homeI, dt);
   }
 
   // Heading home down the road after a job, then gone.
@@ -1612,10 +1813,12 @@ export class NPC extends Entity {
     }
     // Evening: a visiting merchant packs up the stall for the tent.
     if (act.act === 'visit' && this.visit && (this.game.minute >= 19 * 60 || this.game.minute < 7 * 60) && this.goal && this.goal.tag !== 'camp' && this.game.sim.camps.get(`v:${this.visit.id}`)) this.activity = null;
-    if (act.act === 'visit' && this.lineCd <= 0 && this.rec.visit) {
+    // (Only a merchant cries their wares: a guest in town just looks about.)
+    const v = this.visit || this.rec.visit;
+    if (act.act === 'visit' && this.lineCd <= 0 && v) {
       this.lineCd = this.rng.float(15, 35);
-      const v = this.rec.visit;
-      if (this.rng.chance(0.6)) this.say(this.rng.pick([`Fine goods from ${v.fromName}!`, 'Rare wares! Come and see!', 'Traded all the way from the coast!', 'Best prices this side of the river!']), 3, '#ffe070');
+      if (!v.guest && this.rng.chance(0.6)) this.say(this.rng.pick([`Fine goods from ${v.fromName}!`, 'Rare wares! Come and see!', 'Traded all the way from the coast!', 'Best prices this side of the river!']), 3, '#ffe070');
+      else if (v.guest && this.rng.chance(0.25) && this.distTo(game.player) < 14) this.say(this.rng.pick([`Not like home in ${v.fromName}, is it?`, 'What a square!', 'Where do they get their bread, I wonder?', 'We should come here more often.']), 3);
     }
     // Trappers set new snares on their hunting grounds.
     if (g.hunt && act.act === 'work' && this.rec.job === 'trapper' && this.rng.chance(dt * 0.08) && this.laySnare()) return;
@@ -2189,7 +2392,11 @@ export class NPC extends Entity {
       const w0 = this.game.world;
       const av = this.avoid && this.avoid.t > 0 ? this.avoid : null;
       const blocked = av ? (x, z) => x === av.x && z === av.z : null;
-      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: localBox ? 2500 : 5000, partial: true, blocked });
+      // (Horses and wagons go round water; a traveller on foot would sooner
+      // go round too, and takes a raft across when there's no way round.)
+      const dry = !!this.mount && this.pathFails < 2;
+      const wet = this.state === 'caravan' && this.pathFails < 2 ? 16 : 4;
+      const p = findPath(w0, this.x, this.y, this.z, goal.x, goal.y ?? this.y, goal.z, { box, near, maxNodes: localBox ? localBox.nodes || 2500 : 5000, partial: true, blocked, dry, wet });
       if (!p || !p.length) {
         if (BLOCKS[w0.getBlock(this.x, this.y, this.z)].solid) this.stepOff();
         this.pathFails++;

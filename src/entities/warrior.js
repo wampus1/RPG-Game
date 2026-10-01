@@ -176,7 +176,7 @@ function soldier(n, wb, dt) {
     return;
   }
   const foes = other.ents.filter((q) => !q.dead && g.npcs.includes(q) && q.warband && q.warband.phase !== 'flee');
-  if (side.hates && !g.player.dead) foes.push(g.player);
+  if (side.hates && !g.player.dead && !g.player.down) foes.push(g.player);
   const t = nearest(n, foes);
   if (!t) {
     if (!n.moving && n.rng.chance(dt)) n.face(c.x - ax.x * s * 10, c.z - ax.z * s * 10);

@@ -10,6 +10,10 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
   const box = opts.box; // {x0,z0,x1,z1}
   const blocked = opts.blocked; // (x,z) => bool
   const near = opts.near || 0; // accept any node within this Chebyshev distance
+  // Water: wading costs this much more a step (`dry`: not at all, for
+  // horses and wagons).
+  const wet = opts.wet ?? 4;
+  const dry = !!opts.dry;
   const key = (x, y, z) => ((x & 0xfff) << 16) | ((z & 0xfff) << 4) | y;
   const h = (x, z) => (Math.abs(x - tx) + Math.abs(z - tz)) * 0.62;
   const open = new MinHeap();
@@ -45,7 +49,10 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       const floor = world.getBlock(nx, ny - 1, nz);
       const feet = BLOCKS[world.getBlock(nx, ny, nz)];
       let cost = ROAD_BLOCKS.has(floor) ? 0.65 : 1;
-      if (feet.liquid) cost += 4;
+      if (feet.liquid) {
+        if (dry) continue;
+        cost += wet;
+      }
       if (feet.interact === 'door') cost += 0.4;
       if (ny !== y) cost += 0.3;
       const ng = gc + cost;

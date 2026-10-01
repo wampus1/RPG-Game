@@ -425,7 +425,11 @@ test('raiders on the ground: the watch fights them, and killing a raider is no c
   assert.ok(raiders.every((n) => /^tabard:/.test(n.look.gear.body)), 'in their realm\'s colours');
   // You cut one down: no crime, no charge.
   const r0 = raiders[0];
+  // (A blow can just knock a raider out; this one's a killing blow.)
+  const kd = W.knockDown;
+  W.knockDown = () => false;
   game.damage(r0, 999, p);
+  W.knockDown = kd;
   assert.ok(r0.dead);
   assert.equal(game.sim.justice.pendingIn(to.id).length, 0);
   assert.ok(!game.isWanted(to.id));

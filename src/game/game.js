@@ -469,7 +469,7 @@ export class Game {
   moveEntity(e, nx, ny, nz) {
     if (e.solid !== false) {
       const k = this.occKey(e.x, e.y, e.z);
-      if (this.occ.get(k) === e) this.occ.delete(k);
+      if (this.occ.get(k) === e) this.vacate(k, e);
       e.x = nx;
       e.y = ny;
       e.z = nz;
@@ -484,7 +484,25 @@ export class Game {
 
   removeOcc(e) {
     const k = this.occKey(e.x, e.y, e.z);
-    if (this.occ.get(k) === e) this.occ.delete(k);
+    if (this.occ.get(k) === e) this.vacate(k, e);
+  }
+
+  // `e` leaves a tile. Townsfolk can share one (a group walking in file, a
+  // crowd at a stall), and only one of them is on the map: whoever's still
+  // standing there takes the place, so they don't go see-through.
+  vacate(k, e) {
+    this.occ.delete(k);
+    const { x, y, z } = e;
+    for (const list of [this.npcs, this.creatures]) {
+      for (const o of list || []) {
+        if (o !== e && !o.dead && o.solid !== false && o.x === x && o.y === y && o.z === z) {
+          this.occ.set(k, o);
+          return;
+        }
+      }
+    }
+    const p = this.player;
+    if (p && p !== e && !p.dead && p.x === x && p.y === y && p.z === z) this.occ.set(k, p);
   }
 
   entityAt(x, y, z) {
@@ -650,7 +668,8 @@ export class Game {
     const dead = this.deadNpcs.get(s.id) || new Set();
     const npcs = [];
     for (const rec of layout.npcs) {
-      if (dead.has(rec.idx) || !alive(rec) || rec.away) continue;
+      // (Someone already about, walking home along a road, joins when in.)
+      if (dead.has(rec.idx) || !alive(rec) || rec.away || (rec.ent && !rec.ent.dead)) continue;
       if (rec.leaving) {
         rec.leaving = false;
         rec.away = true;
@@ -787,6 +806,7 @@ export class Game {
       if (n && !n.dead) {
         n.caravan.tx = tr.target.x;
         n.caravan.tz = tr.target.z;
+        n.caravan.way = tr.way || null;
         // Off the horses and wagons for the night; back up in the morning.
         if (tr.company) {
           n.caravan.camp = tr.camp;
@@ -802,10 +822,13 @@ export class Game {
         continue;
       }
       if (inTown || d > 26 || d < (tr.close ? 2 : 8) || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
-      const spot = this.findFreeSpot(tr.pos.x, tr.pos.z, this.world.findStandY(tr.pos.x, tr.pos.z, GROUND));
+      // (On the ground: not up on a ruin's walls or a rock.)
+      const t = this.world.terrain;
+      const col = t.column(tr.pos.x, tr.pos.z, t.context(tr.pos.x, tr.pos.z, tr.pos.x, tr.pos.z), {});
+      const spot = this.findFreeSpot(tr.pos.x, tr.pos.z, col.water >= 0 ? this.world.findStandY(tr.pos.x, tr.pos.z, GROUND) : col.h + 1);
       if (!spot || ow.settlementAt(spot.x, spot.z)) continue;
       const m = new NPC(this, tr.rec, tr.L);
-      m.caravan = { tx: tr.target.x, tz: tr.target.z, to: tr.to.name, from: tr.from.name };
+      m.caravan = { tx: tr.target.x, tz: tr.target.z, way: tr.way || null, to: tr.to.name, from: tr.from.name };
       // On horseback, or up on a wagon.
       if (tr.mount) m.mount = tr.mount;
       if (tr.company) {
@@ -847,20 +870,32 @@ export class Game {
         crew.forEach((rec, i) => {
           want.add(rec);
           if (rec.ent && !rec.ent.dead) return;
-          // On the stretch already laid, just short of the end.
-          const t = r.tiles[end === 'A' ? Math.max(0, f.i - 2 - i * 2) : Math.min(r.tiles.length - 1, f.i + 2 + i * 2)] || [f.x, f.y, f.z];
+          // On the stretch already laid, just short of the end; or, if you'd
+          // see them appear there, further back toward home, out of sight,
+          // and they walk up.
+          const n0 = r.tiles.length;
+          const back = end === 'A' ? -1 : 1;
+          let k = end === 'A' ? Math.max(0, f.i - 2 - i * 2) : Math.min(n0 - 1, f.i + 2 + i * 2);
+          const seen = (q) => Math.abs(q[0] - p.x) <= 19 && Math.abs(q[2] - p.z) <= 13;
+          while (r.tiles[k] && seen(r.tiles[k]) && k + back >= 0 && k + back < n0) k += back;
+          const t = r.tiles[k] || [f.x, f.y, f.z];
+          if (seen(t)) return;
           const spot = this.findFreeSpot(t[0], t[2], t[1] + 1);
-          if (!spot) return;
+          if (!spot || seen([spot.x, 0, spot.z])) return;
           const n = new NPC(this, rec, L);
           n.state = 'roadwork';
-          n.crew = { road: r, end, slot: i };
+          n.crew = { road: r, end, slot: i, at: k };
           n.teleport(spot.x, spot.y, spot.z);
           rec.ent = n;
           this.npcs.push(n);
         });
       }
     }
-    for (const n of this.npcs) if (!n.dead && n.state === 'roadwork' && !want.has(n.rec)) this.despawnNpc(n);
+    // (Crews out of sight with nothing to do near you go on unseen.)
+    for (const n of this.npcs) {
+      if (n.dead || n.state !== 'roadwork' || want.has(n.rec)) continue;
+      if (Math.abs(n.x - p.x) > 20 || Math.abs(n.z - p.z) > 14) this.despawnNpc(n);
+    }
   }
 
   endCaravan(key, n) {
@@ -1213,7 +1248,7 @@ export class Game {
       this.mining = null;
       return;
     }
-    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained;
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
@@ -3402,6 +3437,8 @@ export class Game {
       // A soldier, raider or escaping prisoner may only be knocked down
       // (to be carried off as a prisoner, or get up when it's over).
       if (target.kind === 'npc' && this.sim.war.knockDown(target)) return;
+      // So may you, on a battlefield.
+      if (target.kind === 'player' && this.sim.war.downPlayer(source)) return;
       this.kill(target, source);
     }
   }

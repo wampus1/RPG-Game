@@ -51,6 +51,21 @@ export function placeSome(game, list, st, per, repair = false, near = null) {
     if (e.kind === 'player') return true;
     const spot = clearSpot(x, z, e.y);
     if (!spot) return true;
+    // A step aside if it's next door; a builder never hops further (the
+    // block waits while they walk off it).
+    const step = Math.abs(spot.x - e.x) + Math.abs(spot.z - e.z) === 1 && Math.abs(spot.y - e.y) <= 1;
+    if (e.moving) return true;
+    if (step && e.startMove) {
+      e.startMove(spot.x, spot.y, spot.z, 0.25);
+      if (e.path) e.path = null;
+      return false;
+    }
+    if (e.kind === 'npc' && e.rec && e.rec.job === 'builder') {
+      e.path = null;
+      e.goal = null;
+      e.idleT = 0;
+      return true;
+    }
     e.teleport(spot.x, spot.y, spot.z);
     return false;
   };

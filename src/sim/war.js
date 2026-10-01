@@ -86,6 +86,7 @@ export class War {
     this.lastDay = null; // (set on the first tick: the game's clock isn't running yet)
     this.live = null; // a raid or battle being fought out near you
     this.prisoners = []; // { id, sid, idx, civ, by, at, day, how, name }
+    this.deserters = {}; // civ id -> { day, war, battle } (you, who didn't come)
     this.captiveEnts = new Map(); // prisoner id -> NPC in a cell (when you're there)
     this.syncT = 0;
     this.liveT = 0;
@@ -170,6 +171,14 @@ export class War {
     const now = this.sim.abs;
     for (const r of this.raids.slice()) if (r.state === 'march' && now >= r.at) this.strike(r);
     for (const w of this.wars.slice()) if (w.plan && now >= w.plan.at && !w.plan.live) this.battle(w, w.plan);
+    // Called up: a word when it's close (if you're nowhere near the field).
+    for (const w of this.wars) {
+      const d = w.plan && w.plan.draft;
+      if (!d || d.state !== 'called' || d.warned || now < w.plan.at - 90) continue;
+      d.warned = true;
+      if (!this.nearPlayer(w.plan.site, 60)) this.game.ui.msg(`${w.plan.name[0].toUpperCase()}${w.plan.name.slice(1)} starts within the hour, and you're expected in the line!`, '#ff9060');
+    }
+    if (this.game.player.down && !(this.live && this.live.kind === 'battle' && !this.live.done)) this.wakePlayer('You come to.');
     if (this.live) this.liveTick(dt);
     this.syncT -= dt;
     if (this.syncT <= 0) {
@@ -545,7 +554,168 @@ export class War {
     }
     const here = this.game.currentSettlement;
     if (here && (here === def || here === atk)) this.game.ui.msg(`${text} (It's marked on your map.)`, '#ffb080');
+    this.callUp(w, w.plan, day);
     return w.plan;
+  }
+
+  // ------------------------------------------------------------ you, called up
+  // The realm you're a citizen of, if any.
+  playerCiv() {
+    const c = this.sim.citizen;
+    const s = c ? this.ow.settlements[c.sid] : null;
+    return s && s.civ ? s.civ : null;
+  }
+
+  // A citizen of a realm at war is called to its battles: be on the field
+  // when it starts, and stay in the fight.
+  callUp(w, plan, day) {
+    const me = this.playerCiv();
+    if (!me) return null;
+    const side = w.a.includes(me.id) ? 'a' : w.b.includes(me.id) ? 'b' : null;
+    if (!side) return null;
+    plan.draft = { side, civ: me.id, state: 'called', present: 0, hits: 0 };
+    const foe = this.civ(w.lead[side === 'a' ? 'b' : 'a']);
+    const L = this.sim.layoutOf(this.sim.citizen.sid);
+    ledger(L, day, `${this.game.playerName} is called up to fight for the ${plain(me)} at ${plan.name}.`);
+    this.game.ui.msg(`Called to arms! As a citizen of the ${plain(me)} you must fight ${foe ? `the ${plain(foe)} ` : ''}at ${plan.name}, tomorrow morning (it's marked on your map). Stay away and you'll be named a deserter.`, '#ff9060');
+    this.game.audio?.play('alarm');
+    return plan.draft;
+  }
+
+  // Can't come (locked up, or already in a fight elsewhere): excused.
+  excused() {
+    const J = this.sim.justice;
+    return !!(J.jail || J.escort || this.game.player.dead);
+  }
+
+  // Never came, or left the field: a deserter, wanted in every town of the
+  // realm until it's answered for.
+  desert(w, plan) {
+    const d = plan.draft;
+    if (!d || d.state !== 'called') return null;
+    d.state = 'deserted';
+    const civ = this.civ(d.civ);
+    if (!civ) return null;
+    const day = Math.floor(this.sim.abs / DAY);
+    this.deserters[civ.id] = { day, war: w.id, battle: plan.name };
+    const J = this.sim.justice;
+    for (const s of this.realms.members(civ)) J.commit(s.id, 'desertion', { known: true, quiet: true, silent: true, desc: `Deserting the ${plain(civ)} at ${plan.name}` });
+    const cap = this.realms.capitalOf(civ);
+    const CL = cap && this.game.world.layouts.get(cap.id);
+    if (CL && CL.econ) ledger(CL, day, `${this.game.playerName} never came to ${plan.name}, and is named a deserter.`);
+    this.game.ui.msg(`You weren't at ${plan.name}. The ${plain(civ)} name you a deserter: you're wanted in every one of its towns.`, '#ff5050');
+    this.game.audio?.play('alarm');
+    return true;
+  }
+
+  // Answered for (tried in one of its towns): the charge is dropped in the
+  // rest of the realm.
+  pardonDesertion(civ) {
+    if (!civ) return;
+    delete this.deserters[civ.id];
+    const J = this.sim.justice;
+    const g = this.game;
+    for (const s of this.realms.members(civ)) {
+      const list = J.pendingIn(s.id).filter((c) => c.type !== 'desertion');
+      if (list.length) J.pending.set(s.id, list);
+      else {
+        J.pending.delete(s.id);
+        g.wanted.delete(s.id);
+      }
+    }
+  }
+
+  isDeserter(civ) {
+    return !!(civ && this.deserters[civ.id]);
+  }
+
+  // Did you do your part? On the field for a good while, or in the thick of
+  // it, or carried off it.
+  reckonDraft(L) {
+    const d = L.plan.draft;
+    if (!d || d.state !== 'called') return;
+    const p = this.game.player;
+    if (d.present >= 20 || d.hits > 0 || p.down) {
+      d.state = 'served';
+      const civ = this.civ(d.civ);
+      const cap = civ && this.realms.capitalOf(civ);
+      const CL = cap && this.game.world.layouts.get(cap.id);
+      const pay = 15 + Math.min(25, d.hits * 5);
+      if (CL && CL.econ && CL.econ.treasury >= pay && !p.down) {
+        CL.econ.treasury -= pay;
+        p.give('coin', pay);
+      }
+      if (this.sim.citizen) this.sim.addRenown(this.sim.citizen.sid, 3 + Math.min(6, d.hits), `answering the call at ${L.plan.name}`);
+      if (!p.down) this.game.ui.msg(`You did your part at ${L.plan.name}${CL && CL.econ ? `: the ${plain(civ)} pay you ¤${pay} for it` : ''}.`, '#a0e0a0');
+    } else this.desert(L.w, L.plan);
+  }
+
+  // Knocked senseless on the field (by a soldier, in a battle you're in):
+  // you lie there till it's over, like anyone else who falls.
+  downPlayer(source) {
+    const L = this.live;
+    const g = this.game;
+    const p = g.player;
+    if (!L || L.kind !== 'battle' || L.done || p.down || !source || !source.warband) return false;
+    if (Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) > 45) return false;
+    const rng = new RNG(hash4(g.seed, Math.floor(this.sim.abs), p.hp, 0xd0e));
+    if (!rng.chance(0.6)) return false;
+    p.hp = 1;
+    p.down = true;
+    p.sleeping = true;
+    L.playerFoe = source.warband.side;
+    g.stopPlayerActions?.();
+    for (const n of g.npcs) if (n.threat === p && !n.warband) n.calmDown?.(true);
+    g.ui.msg('You\'re knocked senseless...', '#ff7060');
+    return true;
+  }
+
+  // Coming to after the battle: on your feet if your side held the field,
+  // a prisoner if it didn't.
+  afterDown(L, winner) {
+    const p = this.game.player;
+    if (!p.down) return;
+    const d = L.plan.draft;
+    const mine = d ? d.side : L.playerFoe === 'a' ? 'b' : L.playerFoe === 'b' ? 'a' : winner;
+    if (winner === mine || !this.capturePlayer(L.sides[winner].civ, L.plan)) this.wakePlayer(winner === mine ? 'You come to on the field. It\'s ours.' : 'You come to on an empty field. Nobody came for you.');
+  }
+
+  wakePlayer(text) {
+    const p = this.game.player;
+    p.down = false;
+    p.sleeping = false;
+    p.hp = Math.max(p.hp, Math.ceil(p.maxHp * 0.3));
+    if (text) this.game.ui.msg(text, '#e8c080');
+  }
+
+  // Taken: marched to the victor's capital and locked in a cell, till
+  // they trade you back, ransom you, peace comes, or you break out.
+  capturePlayer(by, plan) {
+    const g = this.game;
+    const J = this.sim.justice;
+    const p = g.player;
+    const cap = by ? this.realms.capitalOf(by) : null;
+    if (!cap || J.jail || deserted(cap)) return false;
+    const L = this.sim.layoutOf(cap.id);
+    p.down = false;
+    p.sleeping = false;
+    J.confiscateWeapons(cap.id);
+    g.advanceTime(180);
+    if (L.jail) {
+      g.teleportPlayer(L.jail.stand.x, L.jail.y, L.jail.stand.z);
+      J.setCellDoor(L, false);
+    } else g.teleportPlayer(L.plaza.cx + 1, GROUND, L.plaza.cz + 1);
+    p.hp = Math.max(p.hp, Math.ceil(p.maxHp * 0.4));
+    const days = 2 + (hash4(g.seed, plan.at, 0x9e1) % 3);
+    const me = this.playerCiv();
+    J.jail = {
+      sid: cap.id, phase: 'serving', t: 0, how: 'captured', pow: { by: by.id, civ: me ? me.id : null, battle: plan.name }, party: [], lines: [], li: 0, lt: 0,
+      release: this.sim.abs + days * DAY, cellless: !L.jail, floor: L.jail ? J.floorOf(L) : null, guard: null, judge: null,
+    };
+    const day = Math.floor(this.sim.abs / DAY);
+    ledger(L, day, `${g.playerName} was taken at ${plan.name} and is held in the cells.`);
+    g.ui.msg(`Taken prisoner at ${plan.name}! The ${plain(by)} hold you in a cell in ${cap.name}. They'll let you go in a few days, or trade you for one of theirs, or at the peace... or you could break out.`, '#ffb080');
+    return true;
   }
 
   // Out past the edge of a town, toward another: dry land, a fair way out.
@@ -713,6 +883,11 @@ export class War {
   // The battle (reckoned up, or begun on the ground if you're near).
   battle(w, plan) {
     if (!this.live && this.nearPlayer(plan.site, 70) && this.startLiveBattle(w, plan)) return null;
+    // Called up, and nowhere near the field.
+    if (plan.draft && plan.draft.state === 'called') {
+      if (this.excused() || this.live) plan.draft.state = 'excused';
+      else this.desert(w, plan);
+    }
     const rng = new RNG(hash4(w.id, plan.at, 0xba7));
     const { A, B: Bm } = this.raise(w, plan, rng);
     return this.fight(w, plan, A, Bm, rng, null);
@@ -1245,6 +1420,11 @@ export class War {
     plan.live = true;
     this.live = live;
     const g = this.game;
+    // Called up: the other side knows which line you're in.
+    if (plan.draft && plan.draft.state === 'called') {
+      live.sides[plan.draft.side === 'a' ? 'b' : 'a'].hates = true;
+      g.ui.msg(`You're with the ${plain(live.sides[plan.draft.side].civ)}. Into the line, and stay in the fight!`, '#ffb080');
+    }
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
     g.audio?.play('alarm');
     return true;
@@ -1280,7 +1460,12 @@ export class War {
     if (this.liveT > 0) return;
     this.liveT = 0.25;
     if (L.kind === 'raid') this.raidTick(L);
-    else this.battleTick(L);
+    else {
+      const d = L.plan && L.plan.draft;
+      const p = this.game.player;
+      if (d && !L.done && !p.dead && !p.down && Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) <= 30) d.present += 0.25;
+      this.battleTick(L);
+    }
   }
 
   // The raid on the ground: over when the raiders are all down or gone.
@@ -1424,6 +1609,9 @@ export class War {
       }
     }
     g.ui.msg(`The ${plain(L.sides[winner].civ)} ${winner === 'a' ? (L.sides.b.broken ? 'broke' : 'beat') : (L.sides.a.broken ? 'broke' : 'beat')} the ${plain(L.sides[winner === 'a' ? 'b' : 'a'].civ)} at ${L.plan.name}.`, '#ffe070');
+    // Called up: did you do your part? And if you fell, where you wake.
+    this.reckonDraft(L);
+    this.afterDown(L, winner);
     // You fought for one side: they remember it.
     for (const s of ['a', 'b']) {
       const o = s === 'a' ? 'b' : 'a';
@@ -1509,6 +1697,8 @@ export class War {
     if (L.kind === 'battle') {
       const s = n.warband.side;
       if (L.sides[s]) L.sides[s].hates = true;
+      const d = L.plan && L.plan.draft;
+      if (d && d.state === 'called' && s !== d.side) d.hits++;
     }
   }
 
@@ -1691,6 +1881,9 @@ export class War {
   freeAll(w, day) {
     const side = new Set([...w.a, ...w.b]);
     for (const p of this.prisoners.slice()) if (side.has(p.by) && side.has(p.civ)) this.release(p, 'peace', day);
+    // (You too, if they have you.)
+    const J = this.sim.justice;
+    if (J.jail && J.jail.pow && side.has(J.jail.pow.by)) J.release('peace');
   }
 
   // When you're in a town holding prisoners: there they are, in the cells.
@@ -1744,7 +1937,7 @@ export class War {
   serialize() {
     return {
       wars: this.wars, past: this.past, raids: this.raids, raidLog: this.raidLog, truces: this.truces, cd: this.cd,
-      rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay, prisoners: this.prisoners,
+      rebels: this.rebels, seen: this.seen, nextId: this.nextId, lastDay: this.lastDay, prisoners: this.prisoners, deserters: this.deserters,
     };
   }
 
@@ -1763,6 +1956,7 @@ export class War {
     this.nextId = d.nextId || 1;
     this.lastDay = d.lastDay ?? this.lastDay;
     this.prisoners = d.prisoners || [];
+    this.deserters = d.deserters || {};
   }
 }
 

@@ -26,6 +26,7 @@ export const CRIMES = {
   resisting: { label: 'Resisting arrest', sev: 'moderate', fine: 30 },
   jailbreak: { label: 'Escaping jail', sev: 'moderate', fine: 60 },
   murder: { label: 'Murder', sev: 'severe', fine: 250 },
+  desertion: { label: 'Desertion', sev: 'severe', fine: 120 },
 };
 export const SEV_RANK = { minor: 1, moderate: 2, severe: 3 };
 const HOURLY_RATE = 5; // coins of fine worked off per hour in a cell
@@ -43,6 +44,7 @@ const SHOUTS = {
   resisting: ['They\'re resisting!', 'Get them!'],
   jailbreak: ['The prisoner\'s escaping!', 'Jailbreak! Stop them!'],
   murder: ['MURDER! Murder in the streets!', 'They killed them! GUARDS!'],
+  desertion: ['Deserter! Seize them!', 'There\'s the one who ran from the war!'],
 };
 
 export class Justice {
@@ -123,7 +125,7 @@ export class Justice {
     game.wanted.set(sid, Math.max(game.wanted.get(sid) || 0, sev === 'minor' ? 240 : 1e9));
     const shouter = wits.find((n) => n.state === 'routine' || n.rec.job === 'guard') || wits[0];
     if (!info.quiet && shouter) shouter.say(shouter.rng.pick(SHOUTS[type] || SHOUTS.assault), 3.2, '#ff9080');
-    if (!was) {
+    if (!was && !info.silent) {
       game.ui.msg(wits.length ? `${def.label} witnessed! You are wanted in ${s.name}.` : info.known ? `${def.label}: you are wanted in ${s.name}.` : `You are suspected of ${lcFirst(describe(crime))} in ${s.name}!`, '#ff5050');
       game.audio?.play('alarm');
     }
@@ -813,6 +815,8 @@ export class Justice {
     this.pending.delete(v.sid);
     this.resisted.delete(v.sid);
     if (v.proven.length && this.sim.isCitizen(v.sid)) this.sim.revoke('convicted of a crime');
+    // Answered for desertion here: the charge is dropped across the realm.
+    if (v.proven.some((c) => c.type === 'desertion')) this.sim.war.pardonDesertion(L.settlement.civ);
     if (v.proven.length) this.sim.careers.onConviction(v.sid);
     for (const c of v.proven) {
       // Victims and witnesses feel a little better once justice is done.
@@ -835,10 +839,16 @@ export class Justice {
     const L = this.sim.layoutOf(j.sid);
     this.dismissParty(L);
     this.setCellDoor(L, true);
-    const guard = j.guard !== null ? L.npcs[j.guard] : null;
+    const guard = j.guard !== null && j.guard !== undefined ? L.npcs[j.guard] : null;
     if (guard && guard.ent && !guard.ent.dead) guard.ent.say(why === 'acquitted' ? 'Off you go, then.' : 'You\'re free to go. Behave yourself.', 3);
     this.returnWeapons(this.forfeit);
     this.forfeit = false;
+    // A prisoner of war: let go, traded back, or freed by the peace.
+    if (j.pow) {
+      game.ui.msg(why === 'peace' ? 'Peace is made, and the prisoners are let go: you are free.' : why === 'exchanged' ? 'You\'re traded back for one of theirs. You are free.' : 'They\'ve no more use for you: the cell door opens. You are free.', '#80e070');
+      this.jail = null;
+      return { released: true };
+    }
     game.ui.msg(why === 'acquitted' ? 'Nothing could be proven. You are free to go.' : why === 'paid' ? 'Fine paid. You are free to go.' : 'Your time is served. You are free.', '#80e070');
     this.jail = null;
     return { released: true };

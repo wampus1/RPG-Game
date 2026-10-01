@@ -431,7 +431,8 @@ export class UI {
         status = 'RESTRAINED · led to jail';
         col = C.orange;
       } else if (j) {
-        if (j.phase === 'serving') {
+        if (j.pow) status = 'PRISONER OF WAR';
+        else if (j.phase === 'serving') {
           const left = Math.max(0, j.release - (game.day * 1440 + game.minute));
           status = `JAILED ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}m left`;
         } else status = j.phase === 'night' ? 'IN JAIL · hearing at dawn' : 'IN JAIL · hearing soon';
@@ -439,6 +440,12 @@ export class UI {
       } else if (s && sim.justice.exiled.has(s.id)) {
         status = 'EXILED FROM HERE';
         col = C.red;
+      } else if (s && sim.war.isDeserter(s.civ)) {
+        status = 'DESERTER · WANTED HERE';
+        col = C.red;
+      } else if (game.player.down) {
+        status = 'KNOCKED OUT';
+        col = C.orange;
       } else if (cz && s && cz.sid === s.id) {
         status = cz.home !== null && cz.home !== undefined ? 'Citizen · home built' : cz.host !== null ? `Citizen · guest of the ${sim.hostName() || ''}s`.slice(0, 24) : 'Citizen';
         col = C.green;

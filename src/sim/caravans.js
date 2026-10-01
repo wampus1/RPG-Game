@@ -299,18 +299,11 @@ export class Caravans {
     const out = [];
     const centre = (s) => ({ x: Math.floor((s.cx + s.cw / 2) * 64), z: Math.floor((s.cz + s.cd / 2) * 36) });
     for (const r of this.onTheRoad()) {
-      const road = this.sim.diplomacy.roads.find((q) => q.done && ((q.a === r.from.id && q.b === r.to.id) || (q.a === r.to.id && q.b === r.from.id)));
-      let pos;
-      if (road && road.tiles && road.tiles.length) {
-        const i = Math.floor((road.a === r.from.id ? r.f : 1 - r.f) * (road.tiles.length - 1));
-        const t = road.tiles[Math.max(0, Math.min(road.tiles.length - 1, i))];
-        pos = { x: t[0], z: t[2] };
-      } else {
-        const a = centre(r.from);
-        const b = centre(r.to);
-        pos = { x: Math.round(a.x + (b.x - a.x) * r.f), z: Math.round(a.z + (b.z - a.z) * r.f) };
-      }
-      out.push({ ...r, pos, target: centre(r.to) });
+      // Down the road, or the long way round by land (wagons don't swim).
+      const D = this.sim.diplomacy;
+      const way = D.way(r.from, r.to);
+      const pos = D.wayAt(way, r.f * way.len);
+      out.push({ ...r, pos, way, target: centre(r.to) });
     }
     return out;
   }
@@ -357,8 +350,10 @@ export class Caravans {
     for (const r of this.roadSpots()) {
       const L = this.game.world.layouts.get(r.to.id) || this.sim.layoutOf(r.to.id);
       if (!L || !L.econ) continue;
-      const dx = Math.sign(r.target.x - r.pos.x);
-      const dz = Math.sign(r.target.z - r.pos.z);
+      // (In file behind the lead wagon, along the way.)
+      const ahead = this.sim.diplomacy.wayAt(r.way, r.f * r.way.len + 4);
+      const dx = Math.sign(ahead.x - r.pos.x);
+      const dz = Math.sign(ahead.z - r.pos.z);
       r.g.members.forEach((m, i) => {
         const back = i * 2;
         const pos = r.camped ? { x: r.pos.x + (i % 2 ? 2 : -2), z: r.pos.z + (i >> 1) * 2 - 1 } : { x: r.pos.x - dx * back, z: r.pos.z - dz * back };
