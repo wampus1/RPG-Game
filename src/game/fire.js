@@ -52,6 +52,11 @@ export function tickFires(game, dt) {
     if (f.t >= f.life) {
       fires.splice(i, 1);
       game.sim.setBlocks([[f.x, f.y, f.z, B.air, 0]]);
+      // (The town's builders will see to it.)
+      const s = game.world.ow.settlementAt(f.x, f.z);
+      const L = s && game.world.layouts.get(s.id);
+      const b = L && L.buildings.find((q) => q.x0 !== undefined && f.x >= q.x0 && f.x <= q.x1 && f.z >= q.z0 && f.z <= q.z1);
+      if (b && game.sim.works) game.sim.works.noteDamage(L, b);
       game.renderer.emit(f.x, f.y + 0.5, f.z, { n: 6, color: ['#3a3634', '#5a5450', '#ff7020'], up: 20, speed: 18, life: 0.8, gravity: 30 });
       game.audio?.play('break', { x: f.x, y: f.y, z: f.z });
     }
