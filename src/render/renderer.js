@@ -272,8 +272,8 @@ export class Renderer {
     this.cx += (tx - this.cx) * k;
     this.cy += (ty - this.cy) * k;
     if (game.shake > 0 && !this.noShake) {
-      this.cx += (Math.random() - 0.5) * game.shake * 3;
-      this.cy += (Math.random() - 0.5) * game.shake * 3;
+      this.cx += (Math.random() - 0.5) * game.shake * 5;
+      this.cy += (Math.random() - 0.5) * game.shake * 5;
     }
     this.camX = Math.round(this.cx);
     this.camY = Math.round(this.cy);
@@ -283,6 +283,39 @@ export class Renderer {
     }
     this.drawScene(game, dt);
     this.drawOverlays(game);
+    this.drawFlashes(game, dt);
+  }
+
+  // The whole view lit for an instant (a parry's crack of light).
+  flashScreen(color = '#ffffff', dur = 0.2) {
+    this.flash = { color, t: dur, dur };
+  }
+
+  // Hurt: the screen reddens at the edges, and fades back. A flash of
+  // light over everything.
+  drawFlashes(game, dt) {
+    const ctx = this.ctx;
+    const h = game.hurtFlash || 0;
+    if (h > 0.01) {
+      const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, Math.min(VIEW_W, VIEW_H) * 0.25, VIEW_W / 2, VIEW_H / 2, Math.max(VIEW_W, VIEW_H) * 0.62);
+      g.addColorStop(0, 'rgba(200,0,0,0)');
+      g.addColorStop(1, `rgba(210,10,10,${Math.min(0.7, h * 0.65)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillStyle = `rgba(255,30,30,${Math.min(0.22, h * 0.18)})`;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
+    const f = this.flash;
+    if (f) {
+      f.t -= dt;
+      if (f.t <= 0) this.flash = null;
+      else {
+        ctx.globalAlpha = Math.min(0.75, (f.t / f.dur) * 0.75);
+        ctx.fillStyle = f.color;
+        ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   // ------------------------------------------------------------------ cutaway
@@ -710,7 +743,7 @@ export class Renderer {
 
   // ------------------------------------------------------------------ entities
   drawEntity(ctx, e, rp, game) {
-    const sx = Math.round(rp.x * TILE - this.camX);
+    let sx = Math.round(rp.x * TILE - this.camX);
     const floorY = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY); // top of floor face
     const feetY = floorY + 10 - (e.hop || 0);
     if (sx < -32 || sx > VIEW_W + 32 || feetY < -40 || feetY > VIEW_H + 40) return;
@@ -755,7 +788,8 @@ export class Renderer {
       const f = e.moving ? Math.floor(this.time * 6) % frames : 0;
       const flip = e.dir === 3 ? frames : 0;
       const hop = e.species === 'slime' ? Math.abs(Math.sin(this.time * 6 + e.id)) * 3 : 0;
-      ctx.drawImage(sheet, (f + flip) * 16, 0, 16, 16, sx, Math.round(feetY - 15 - hop), 16, 16);
+      const lu = this.bodyLunge(e, this.viewDir(e.dir));
+      ctx.drawImage(sheet, (f + flip) * 16, 0, 16, 16, sx + lu.x, Math.round(feetY - 15 - hop + lu.y), 16, 16);
     } else {
       if (e.sleeping) {
         const head = this.headFor(e);
@@ -770,7 +804,14 @@ export class Renderer {
         if (mount) lift = this.drawMount(ctx, e, mount, sx, feetY);
         const frame = e.actionTimer > 0 && !mount ? 3 : e.raft || mount ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
-        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift;
+        // Thrown into a blow: leaning back to wind up, lunging into it.
+        const lu = mount || e.sitting ? { x: 0, y: 0 } : this.bodyLunge(e, dir);
+        const sx0 = sx;
+        sx += lu.x;
+        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift + lu.y;
+        // (A second blade, on the far side of them, goes behind.)
+        const offKey = e.offhandItem ? e.offhandItem() : null;
+        if (offKey && (dir === 1 || dir === 3)) this.drawHeld(ctx, offKey, e, sx, top, true);
         // Jewelled armour: a faint glow of its stone's colour round them.
         const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
         const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
@@ -787,6 +828,8 @@ export class Renderer {
         } else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         const held = e.heldItem ? e.heldItem() : null;
         if (held) this.drawHeld(ctx, held, e, sx, top);
+        if (offKey && dir === 0) this.drawHeld(ctx, offKey, e, sx, top, true);
+        sx = sx0;
         // ...and a glint of it now and then.
         if (stone && !this.spin) {
           e.shimmerT = (e.shimmerT || 0) - (this.frameDt || 0.016);
@@ -867,7 +910,7 @@ export class Renderer {
   // on the hand pixel of the sprite for the way they're facing.
   // What someone holds, at full size (the item's own picture, not the
   // little one dropped items use), its grip in their hand.
-  drawHeld(ctx, key, e, sx, top) {
+  drawHeld(ctx, key, e, sx, top, off = false) {
     const icon = itemIcon(key);
     const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
@@ -875,22 +918,104 @@ export class Renderer {
     const small = look.small;
     const bob = e.moving ? (Math.floor(this.time * 7) % 2 ? -1 : 0) : 0;
     const hy = top + (small ? 6 : 0) + (look.stoop ? 1 : 0) + (e.sitting || e.raft ? 4 : 0) + 8 + (small ? 4 : 6) - 1 + bob;
-    const hx = sx + (dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
+    // The off hand is the other side of them (the far side, side on).
+    const hx = sx + (off ? (dir === 0 ? 3 : dir === 1 ? 9 : dir === 3 ? 6 : 12) : dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
     // (The grip is the bottom-left of the picture; held things are drawn at
     // four fifths size, in proportion to the hand holding them.)
     const gx = -3;
     const gy = -13;
     const S = 0.8;
-    if (act <= 0 && dir === 2) return; // behind them
+    const mir = off && dir === 0 ? true : dir === 1;
+    const pose = this.swingPose(e, dir, off, mir);
+    if (!pose && act <= 0 && dir === 2) return; // behind them
+    if (off && !pose && dir === 2) return;
     ctx.save();
-    ctx.translate(hx, hy);
-    if (act > 0) {
+    ctx.translate(hx + (pose ? pose.dx : 0), hy + (pose ? pose.dy : 0));
+    let ang = 0;
+    if (pose) ang = pose.ang;
+    else if (act > 0 && !off) {
       const sign = dir === 1 ? -1 : 1;
-      ctx.rotate(sign * (1 - act) * 2.2 - sign * 1.1);
+      ang = sign * (1 - act) * 2.2 - sign * 1.1;
     }
-    ctx.scale(dir === 1 ? -S : S, S);
+    // A smear of light behind the edge as it comes round.
+    if (pose && pose.smear > 0) {
+      const base = mir ? -Math.PI * 0.75 : -Math.PI * 0.25;
+      const a0 = base + pose.a0;
+      const a1 = base + ang;
+      const R = pose.heavy ? 13 : 11;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(255,255,255,${0.35 * pose.smear})`;
+      ctx.lineWidth = pose.heavy ? 5 : 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, R - 2, Math.min(a0, a1), Math.max(a0, a1));
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255,248,210,${0.8 * pose.smear})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, R, Math.min(a0, a1), Math.max(a0, a1));
+      ctx.stroke();
+    }
+    ctx.rotate(ang);
+    ctx.scale(mir ? -S : S, S);
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
     ctx.restore();
+  }
+
+  // How a weapon's held through a blow: drawn far back and trembling as
+  // it's wound up, then whipped round in a wide arc (or jabbed straight
+  // out, for a thrust), the body thrown in after it. Null: just held.
+  swingPose(e, dir, off, mir) {
+    const sg = mir ? -1 : 1;
+    const w = e.windup && !e.windup.dash ? e.windup : e.swing || null;
+    if (w && !off && w.st) {
+      const f = Math.min(1, w.t / Math.max(0.05, w.dur));
+      const k = 1 - (1 - f) * (1 - f);
+      const st = w.st;
+      if (st.thrust || st.lunge) return { ang: sg * (0.55 + 0.25 * k), dx: -sg * 3 * k, dy: -k, smear: 0 };
+      const back = st.heavy ? 2.7 : 2.1;
+      let ang = -sg * (0.3 + back * k);
+      if (f > 0.65) ang += (Math.random() - 0.5) * 0.22;
+      return { ang, dx: -sg * k, dy: -2 * k, smear: 0 };
+    }
+    const s = e.strike;
+    if (!s || !!s.off !== !!off) return null;
+    const prog = Math.min(1, s.t / s.dur);
+    const st = s.st || {};
+    if (st.thrust || st.flurry || st.lunge) {
+      const k = prog < 0.3 ? prog / 0.3 : Math.max(0, 1 - (prog - 0.3) / 0.7);
+      return { ang: sg * 0.75, dx: sg * (dir === 0 || dir === 2 ? 2 : 7) * k, dy: dir === 0 ? 3 * k : dir === 2 ? -3 * k : 0, smear: 0 };
+    }
+    const back = st.heavy ? 2.7 : 2.1;
+    const fwd = st.heavy ? 2.3 : 1.8;
+    const k = 1 - Math.pow(1 - Math.min(1, prog / 0.28), 3);
+    const a0 = -sg * (0.3 + back);
+    const ang = a0 + sg * (0.3 + back + fwd) * k;
+    return { ang, a0, dx: sg * 2 * (prog < 0.28 ? k : Math.max(0, 1 - (prog - 0.28) / 0.72)), dy: 0, smear: prog < 0.6 ? 1 - prog / 0.6 : 0, heavy: !!st.heavy };
+  }
+
+  // The body behind a blow: leaning back to wind up (trembling at the
+  // last), lunging forward into it. Also keeps the blow's clock.
+  bodyLunge(e, dir) {
+    const side = dir === 1 ? -1 : dir === 3 ? 1 : 0;
+    const vert = dir === 0 ? 1 : dir === 2 ? -1 : 0;
+    const s = e.strike;
+    if (s) {
+      s.t += this.frameDt || 0.016;
+      if (s.t >= s.dur) e.strike = null;
+    }
+    const w = e.windup && !e.windup.dash ? e.windup : e.swing || null;
+    if (w && w.dur > 0) {
+      const f = Math.min(1, w.t / Math.max(0.05, w.dur));
+      const shiver = f > 0.75 && Math.floor(this.time * 30) % 2 ? 1 : 0;
+      return { x: -side * Math.round(f * (w.st && w.st.heavy ? 2 : 1)) + (side ? 0 : shiver), y: -vert * Math.round(f) };
+    }
+    if (e.strike && !e.strike.off) {
+      const prog = Math.min(1, e.strike.t / e.strike.dur);
+      const k = prog < 0.25 ? prog / 0.25 : Math.max(0, 1 - (prog - 0.25) / 0.75);
+      const n = e.strike.st && e.strike.st.heavy ? 4 : 3;
+      return { x: Math.round(side * n * k), y: Math.round(vert * 2 * k) };
+    }
+    return { x: 0, y: 0 };
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
@@ -1122,12 +1247,25 @@ export class Renderer {
       const l = Math.hypot(dx, dz) || 1;
       const ux = dx / l;
       const uy = dz / l;
-      ctx.fillStyle = '#8a6038';
-      for (let i = 0; i < 5; i++) ctx.fillRect(Math.round(sx - ux * i), Math.round(sy - uy * i * 0.75), 1, 1);
+      // A sling stone: a grey pellet, a streak behind it.
+      if (a.kind === 'stone') {
+        ctx.fillStyle = 'rgba(200,200,200,0.4)';
+        for (let i = 1; i < 4; i++) ctx.fillRect(Math.round(sx - ux * i * 1.5), Math.round(sy - uy * i * 1.1), 1, 1);
+        ctx.fillStyle = '#8a8a90';
+        ctx.fillRect(sx, sy, 2, 2);
+        continue;
+      }
+      // A javelin: long, and arcing high.
+      const len = a.kind === 'javelin' ? 9 : a.kind === 'bolt' ? 4 : 5;
+      const lift = a.kind === 'javelin' ? Math.round(Math.sin(f * Math.PI) * 6) : 0;
+      ctx.fillStyle = a.kind === 'javelin' ? '#b08a54' : a.kind === 'bolt' ? '#5e3a1c' : '#8a6038';
+      for (let i = 0; i < len; i++) ctx.fillRect(Math.round(sx - ux * i), Math.round(sy - lift - uy * i * 0.75), 1, 1);
       ctx.fillStyle = '#e0e0e8';
-      ctx.fillRect(Math.round(sx + ux), Math.round(sy + uy * 0.75), 1, 1);
-      ctx.fillStyle = '#f0f0f0';
-      ctx.fillRect(Math.round(sx - ux * 5), Math.round(sy - uy * 3.75), 1, 1);
+      ctx.fillRect(Math.round(sx + ux), Math.round(sy - lift + uy * 0.75), 1, 1);
+      if (a.kind !== 'javelin') {
+        ctx.fillStyle = a.kind === 'bolt' ? '#c8b890' : '#f0f0f0';
+        ctx.fillRect(Math.round(sx - ux * len), Math.round(sy - uy * (len - 1) * 0.75), 1, 1);
+      }
     }
   }
 

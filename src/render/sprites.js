@@ -1081,6 +1081,128 @@ function simpleIcon(key) {
       p.line(4, 9, 7, 12, '#6a5030');
       p.line(3, 13, 5, 11, HANDLE[1]);
       break;
+    case 'short_sword':
+      for (let i = 0; i < 6; i++) {
+        p.set(6 + i, 10 - i, '#d8d8e4');
+        p.set(7 + i, 10 - i, '#9a9aa8');
+      }
+      p.set(12, 4, '#f4f4ff');
+      p.line(3, 9, 7, 13, '#7a6040');
+      p.line(4, 12, 2, 14, HANDLE[1]);
+      p.set(1, 15, '#c8a040');
+      break;
+    case 'sabre':
+      // A curved blade, a brass hilt.
+      for (let i = 0; i < 9; i++) {
+        const bow = Math.round(Math.sin((i / 8) * Math.PI) * 1.5);
+        p.set(5 + i, 10 - i - bow, '#e0e0ec');
+        p.set(5 + i, 11 - i - bow, '#9a9aa8');
+      }
+      p.line(3, 9, 6, 12, '#c8a040');
+      p.set(6, 13, '#c8a040');
+      p.line(4, 12, 2, 14, HANDLE[1]);
+      break;
+    case 'hand_axe':
+      p.line(3, 14, 10, 7, HANDLE[0]);
+      p.line(4, 14, 11, 7, HANDLE[1]);
+      p.rect(9, 3, 3, 4, '#c8c8d4');
+      p.rect(11, 2, 2, 6, '#9a9aa8');
+      p.set(12, 2, '#f4f4ff');
+      break;
+    case 'flail':
+      p.line(2, 14, 7, 9, HANDLE[0]);
+      p.line(3, 14, 8, 9, HANDLE[1]);
+      for (let i = 0; i < 3; i++) p.set(8 + i, 8 - i, '#8a8a98');
+      p.ellipse(12, 4, 2, 2, '#7a7a88');
+      p.set(12, 1, '#c8c8d4');
+      p.set(15, 4, '#c8c8d4');
+      p.set(9, 4, '#c8c8d4');
+      p.set(12, 7, '#c8c8d4');
+      p.set(11, 3, '#d8d8e4');
+      break;
+    case 'quarterstaff':
+      p.line(1, 15, 14, 1, '#9a6a3a');
+      p.line(2, 15, 15, 1, '#6a4422');
+      p.set(4, 12, '#4a3018');
+      p.set(11, 5, '#4a3018');
+      break;
+    case 'greatsword':
+      // Long and broad: a two-handed grip and a wide cross-guard.
+      for (let i = 0; i < 11; i++) {
+        p.set(4 + i, 11 - i, '#e0e0ec');
+        p.set(5 + i, 11 - i, '#b0b0c0');
+        p.set(4 + i, 10 - i, '#c8c8d8');
+      }
+      p.set(15, 0, '#ffffff');
+      p.line(1, 9, 6, 14, '#8a7050');
+      p.line(1, 10, 5, 14, '#5a4428');
+      p.line(3, 12, 0, 15, HANDLE[1]);
+      break;
+    case 'battle_axe':
+      p.line(1, 15, 11, 5, HANDLE[0]);
+      p.line(2, 15, 12, 5, HANDLE[1]);
+      // A wide double bit.
+      p.rect(9, 1, 2, 9, '#9a9aa8');
+      p.rect(11, 1, 4, 4, '#d8d8e4');
+      p.rect(12, 0, 3, 1, '#c8c8d4');
+      p.rect(6, 2, 3, 4, '#c8c8d4');
+      p.set(14, 1, '#ffffff');
+      break;
+    case 'warhammer':
+      p.line(1, 15, 10, 6, HANDLE[0]);
+      p.line(2, 15, 11, 6, HANDLE[1]);
+      p.rect(8, 1, 7, 4, '#7a7a88');
+      p.hline(8, 14, 1, '#b0b0bc');
+      p.rect(14, 2, 1, 2, '#5a5a66');
+      p.set(7, 3, '#5a5a66');
+      break;
+    case 'halberd':
+      p.line(1, 15, 13, 3, HANDLE[0]);
+      p.line(2, 15, 14, 3, HANDLE[1]);
+      p.line(13, 3, 15, 0, '#e0e0ec');
+      // The axe blade on one side, a hook on the other.
+      p.rect(10, 2, 2, 5, '#c8c8d4');
+      p.rect(9, 3, 1, 3, '#9a9aa8');
+      p.set(14, 6, '#9a9aa8');
+      p.set(15, 7, '#9a9aa8');
+      break;
+    case 'longbow':
+      for (let i = 0; i < 15; i++) p.set(3 + Math.round(Math.sin((i / 14) * Math.PI) * 5), 1 + i, i % 7 === 0 ? '#4a3018' : '#7a5028');
+      p.vline(3, 1, 15, '#e8e4d8');
+      p.rect(6, 7, 2, 2, '#c8a060');
+      break;
+    case 'crossbow':
+      // The stock, the bow across it, a bolt laid ready.
+      p.line(3, 13, 11, 5, '#8a5a30');
+      p.line(4, 13, 12, 5, '#5e3a1c');
+      p.line(6, 2, 14, 10, '#9a9aa8');
+      p.line(6, 2, 7, 1, '#c8c8d4');
+      p.line(14, 10, 15, 9, '#c8c8d4');
+      p.line(7, 3, 13, 9, '#e8e4d8');
+      p.set(12, 4, '#d8d8e4');
+      p.set(2, 14, '#3a2414');
+      break;
+    case 'bolt':
+      p.line(3, 13, 12, 4, '#7a5028');
+      p.line(11, 4, 13, 2, '#9a9aa8');
+      p.set(13, 2, '#e0e0e8');
+      p.set(3, 12, '#c8b890');
+      p.set(4, 14, '#c8b890');
+      break;
+    case 'sling':
+      p.line(2, 3, 8, 10, '#a08050');
+      p.line(13, 2, 9, 10, '#a08050');
+      p.ellipse(9, 11, 2, 1.5, '#7a5a34');
+      p.set(9, 10, '#9a9aa4');
+      p.set(2, 3, '#5e4024');
+      break;
+    case 'javelin':
+      p.line(1, 15, 13, 3, '#b08a54');
+      p.line(13, 3, 15, 1, '#d8d8e4');
+      p.set(14, 1, '#f4f4ff');
+      p.set(5, 11, '#8a3a2a');
+      p.set(6, 10, '#8a3a2a');
+      break;
     case 'raft':
       for (let i = 0; i < 5; i++) {
         p.rect(2 + i * 2 + (i > 2 ? 1 : 0), 3 + (i % 2), 2, 10 - (i === 4 ? 1 : 0), ['#9a6a38', '#8a5c30', '#a8743e', '#8e602f', '#9c6c3a'][i]);
@@ -1336,7 +1458,7 @@ const iconCache = new Map();
 function potionIcon(it) {
   const p = new Px(16, 16);
   const e = it.effect || {};
-  const col = e.blue ? '#58a8ff' : e.heal ? '#e05050' : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
+  const col = e.blue ? '#58a8ff' : e.heal ? '#e05050' : e.combat ? { breath: '#f0e060', wind: '#70f0c0', fury: '#d01838', haste: '#d8d8ff' }[e.combat] : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
   if (e.heal) {
     // A salve: a little pot.
     p.rect(4, 7, 8, 6, '#c8b890');
@@ -1346,6 +1468,15 @@ function potionIcon(it) {
   }
   p.rect(7, 2, 2, 3, '#c8e0e8');
   p.rect(6, 1, 4, 1, '#8a6a4a');
+  // (A fighting draught comes in a squat flask, a bubble or two in it.)
+  if (e.combat) {
+    p.rect(4, 6, 8, 8, '#d8eef4');
+    p.rect(5, 8, 6, 5, hex(col));
+    p.set(7, 10, '#ffffff');
+    p.set(9, 9, '#ffffff');
+    p.set(5, 6, '#ffffff');
+    return p.outline(OUT);
+  }
   p.ellipse(8, 10, 4, 4, '#d8eef4');
   p.ellipse(8, 11, 3, 2.5, hex(col));
   p.set(6, 8, '#ffffff');

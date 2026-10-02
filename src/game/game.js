@@ -22,7 +22,7 @@ import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
 import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
 import { tickFires } from './fire.js';
-import { shieldOf, facing, playerTick, roll, spend, COST, interrupt, knock, canBlock } from './combat.js';
+import { shieldOf, facing, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -736,7 +736,8 @@ export class Game {
         if (!alive(rec) || rec.away || rec.leaving || (rec.ent && !rec.ent.dead)) continue;
         if (this.deadNpcs.get(sid)?.has(rec.idx)) continue;
         const e = L.entrances[rec.idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
-        const spot = this.findFreeSpot(e.x, e.z, GROUND);
+        const at = this.sim.landed?.(`h${sid}:${rec.idx}`);
+        const spot = (at && this.findFreeSpot(at.x, at.z, at.y)) || this.findFreeSpot(e.x, e.z, GROUND);
         const n = new NPC(this, rec, L);
         n.teleport(spot.x, spot.y, spot.z);
         rec.ent = n;
@@ -782,10 +783,12 @@ export class Game {
     const e = L.entrances[idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
     // On a town horse or driving its wagon: up to the camp first.
     const ride = visit.mount ? this.rideInSpot(this.sim.camps.get(`v:${visit.id}`)) : null;
-    const spot = ride || this.findFreeSpot(e.x, e.z, GROUND);
+    // (Just walked in off the road with you: right where they are.)
+    const at = this.sim.landed?.(`v${visit.id}`);
+    const spot = (at && this.findFreeSpot(at.x, at.z, at.y)) || ride || this.findFreeSpot(e.x, e.z, GROUND);
     const n = new NPC(this, rec, L);
     n.visit = visit;
-    if (ride) n.mount = visit.mount;
+    if (at ? at.mount && visit.mount : ride) n.mount = visit.mount;
     if (origin) {
       n.originLayout = origin;
       n.repSid = origin.settlement.id;
@@ -817,6 +820,8 @@ export class Game {
       const inTown = ow.settlementAt(tr.pos.x, tr.pos.z);
       const d = Math.max(Math.abs(tr.pos.x - p.x), Math.abs(tr.pos.z - p.z));
       if (n && !n.dead) {
+        n.tr = tr;
+        n.lateT = 0;
         n.caravan.tx = tr.target.x;
         n.caravan.tz = tr.target.z;
         n.caravan.way = tr.way || null;
@@ -831,8 +836,11 @@ export class Game {
         }
         const far = Math.max(Math.abs(n.x - p.x), Math.abs(n.z - p.z)) > 40;
         const arrived = ow.settlementAt(n.x, n.z) === tr.to;
-        if (arrived) this.caravanIn.add(`${tr.key}>${tr.to.id}`);
-        if (far || arrived) this.endCaravan(tr.key, n);
+        if (arrived) {
+          this.caravanLanded(tr, n);
+          continue;
+        }
+        if (far) this.endCaravan(tr.key, n);
         continue;
       }
       if (inTown || d > 26 || d < (tr.close ? 2 : 8) || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
@@ -855,13 +863,54 @@ export class Game {
         this.sim.adventurers.ents.set(tr.adv.id, m);
       }
       m.state = 'caravan';
+      m.tr = tr;
       m.teleport(spot.x, spot.y, spot.z);
       tr.rec.ent = m;
       this.npcs.push(m);
       this.caravans.set(tr.key, m);
     }
-    for (const [k, n] of this.caravans) if (!live.has(k) || n.dead) this.endCaravan(k, n);
+    for (const [k, n] of this.caravans) {
+      if (live.has(k) && !n.dead) continue;
+      // Their journey's reckoning has them in town already, but here they
+      // are in front of you, still on the way: they walk on in (for a
+      // while; a group that's lost its way is let go).
+      const tr = n.tr;
+      n.lateT = (n.lateT || 0) + 1;
+      const near = Math.max(Math.abs(n.x - p.x), Math.abs(n.z - p.z)) <= 40;
+      if (!n.dead && tr && near && n.lateT < 150 && !tr.to.deserted) {
+        if (ow.settlementAt(n.x, n.z) === tr.to) this.caravanLanded(tr, n);
+        continue;
+      }
+      this.endCaravan(k, n);
+    }
     for (const k of this.caravanIn) if (!live.has(k.split('>')[0])) this.caravanIn.delete(k);
+  }
+
+  // Someone you've followed down the road walks into the town they were
+  // going to: whatever their journey's reckoning says, they're here now,
+  // and whoever they are in town (a trader at the company's camp, a
+  // merchant at the market, a villager home again) carries on from this
+  // very spot. (No vanishing at the gate.)
+  caravanLanded(tr, n) {
+    this.caravanIn.add(`${tr.key}>${tr.to.id}`);
+    const at = { x: n.x, y: n.y, z: n.z, mount: n.mount || null };
+    // (The rest of a company, riding in behind, with them.)
+    if (tr.company) {
+      this.sim.landing ||= new Map();
+      for (const [k2, n2] of this.caravans) {
+        if (k2 === tr.key || !k2.startsWith(`car:${tr.company.id}:`) || n2.dead) continue;
+        this.sim.landing.set(`c${tr.company.id}:${k2.split(':')[2]}`, { x: n2.x, y: n2.y, z: n2.z, mount: n2.mount || null, t: this.sim.abs });
+        this.caravanIn.add(`${k2}>${tr.to.id}`);
+        this.endCaravan(k2, n2);
+      }
+    }
+    this.endCaravan(tr.key, n);
+    const kind = this.sim.arriveEarly(tr, at);
+    if (kind === 'company') this.sim.caravans.syncEnts();
+    else if (kind === 'visit') this.sim.syncVisitors();
+    else if (kind === 'adventurer') this.sim.adventurers.syncEnts();
+    else if (kind === 'home' || kind === 'settler') this.respawnReturning();
+    return kind;
   }
 
   // Builders out on a road between towns: when you're near the end they're
@@ -959,7 +1008,8 @@ export class Game {
     if (!a) return null;
     const camp = this.sim.camps.get(`a:${adv.id}`);
     const e = camp ? camp.stand : L.entrances[adv.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
-    const spot = this.findFreeSpot(e.x, e.z, GROUND);
+    const at = this.sim.landed?.(`a${adv.id}`);
+    const spot = (at && this.findFreeSpot(at.x, at.z, at.y)) || this.findFreeSpot(e.x, e.z, GROUND);
     if (!spot) return null;
     const n = new NPC(this, rec, L);
     n.adventurer = adv;
@@ -1001,12 +1051,14 @@ export class Game {
     const e = camp ? camp.stand : L.entrances[g.id % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
     // Just in: they ride up to their camp and get down there.
     const ride = this.rideInSpot(camp, i);
-    const spot = ride || this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
+    // (Ridden in off the road with you: right where they are.)
+    const at = this.sim.landed?.(`c${g.id}:${i}`);
+    const spot = (at && this.findFreeSpot(at.x, at.z, at.y)) || ride || this.findFreeSpot(e.x + (i % 2), e.z + (i >> 1), GROUND);
     if (!spot) return null;
     const n = new NPC(this, rec, L);
     n.company = g;
     const m = g.members[i];
-    if (ride && (m.mount === 'horse' || m.wagon !== undefined)) n.mount = { kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat || 0, banner: g.banner };
+    if ((at ? at.mount : ride) && (m.mount === 'horse' || m.wagon !== undefined)) n.mount = { kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat || 0, banner: g.banner };
     n.teleport(spot.x, spot.y, spot.z);
     rec.ent = n;
     a.npcs.push(n);
@@ -1301,6 +1353,16 @@ export class Game {
       this.mining = null;
       return;
     }
+    // A blow that lands hard holds the moment (hit-stop); a parry slows
+    // the world for a breath after.
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+      dt *= 0.05;
+    } else if (this.slowMo > 0) {
+      this.slowMo -= dt;
+      dt *= this.slowMoScale || 0.35;
+    }
+    this.dt = dt;
     const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down;
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
@@ -1389,7 +1451,8 @@ export class Game {
     this.updateRoadCrews(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
-    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 4);
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.2);
+    if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
     if (this.audio) this.audio.listener = this.player;
     // Entities visible this frame.
     const p = this.player;
@@ -1631,7 +1694,7 @@ export class Game {
     if (held && held.kind !== 'armor') add(held.stats);
     const now = this.day * DAY_MINUTES + this.minute;
     p.buffs = (p.buffs || []).filter((q) => q.until > now);
-    for (const q of p.buffs) b[q.stat] = (b[q.stat] || 0) + q.n;
+    for (const q of p.buffs) if (q.stat) b[q.stat] = (b[q.stat] || 0) + q.n;
     const before = JSON.stringify(this.hero.bonus || {});
     this.hero.bonus = b;
     if (before !== JSON.stringify(b)) {
@@ -1685,11 +1748,17 @@ export class Game {
       p.buffs = (p.buffs || []).filter((q) => q.stat !== e.stat || q.until <= now);
       p.buffs.push({ stat: e.stat, n: e.n, until: now + e.hours * 60, name: d.name });
     }
+    // For a fight (see combat.buffOf).
+    if (e.combat) {
+      p.buffs = (p.buffs || []).filter((q) => q.combat !== e.combat || q.until <= now);
+      p.buffs.push({ combat: e.combat, n: e.n, until: now + e.hours * 60, name: d.name });
+      if (e.combat === 'breath') p.stamina = (p.stamina || 0) + e.n;
+    }
     removeItem(p.inv, slot.item, 1);
     this.refreshBonus();
     this.audio?.play('eat');
     this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#e8e0ff', '#a0c8ff', '#fff4c0'], up: 25, life: 0.7, gravity: -15 });
-    const what = e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
+    const what = e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.combat ? `${combatBuffText(e)} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
     this.ui.msg(`${d.name}: ${what}.`, '#c0a0ff');
     return true;
   }
@@ -3124,12 +3193,15 @@ export class Game {
   }
 
   // ------------------------------------------------------------ arrows
-  shoot(from, target, dmg) {
+  // `kind`: an arrow (or a crossbow bolt, a sling stone, a javelin: a
+  // javelin is left lying where it falls, to be picked up again).
+  shoot(from, target, dmg, kind = 'arrow') {
     const dist = Math.hypot(target.x - from.x, target.z - from.z);
     // (A set stone goes with the arrow: see gems.js.)
     const gem = gemsOf(from).bow;
-    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: (0.08 + dist * 0.045) * arrowSpeed(from), dmg, gem });
-    this.audio?.play('bow', from);
+    const pace = { bolt: 0.7, stone: 0.85, javelin: 1.35 }[kind] || 1;
+    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: (0.08 + dist * 0.045) * arrowSpeed(from) * pace, dmg, gem, kind });
+    this.audio?.play(kind === 'stone' || kind === 'javelin' ? 'swing' : 'bow', from);
   }
 
   updateProjectiles(dt) {
@@ -3146,12 +3218,20 @@ export class Game {
         hit = false;
         this.renderer.floatText(t.x, t.y + 2, t.z, 'dodged', '#c8e8ff');
       }
+      // (A crossbow bolt goes through a shield, mostly.)
       if (hit && t.kind === 'player' && t.blocking && shieldOf(t) && facing(t, a.from)) {
-        hit = false;
+        if (a.kind === 'bolt') a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
+        else hit = false;
         this.renderer.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');
+        this.renderer.emit(t.x, t.y + 1.1, t.z, { n: 5, color: ['#ffffff', '#ffe8a0'], up: 20, speed: 40, life: 0.25, glow: true });
         this.audio?.play('armor_hit', t);
       }
       if (hit) this.damage(t, a.dmg, a.from);
+      // A javelin lies where it fell.
+      if (a.kind === 'javelin' && a.from && a.from.kind === 'player' && Math.random() < 0.8) {
+        const y = this.world.findStandY(Math.round(a.tx), Math.round(a.tz), Math.round(a.ty));
+        if (y > 0) this.spawnDrop('javelin', 1, Math.round(a.tx), y, Math.round(a.tz));
+      }
       onArrowLand(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
@@ -3411,24 +3491,34 @@ export class Game {
   attack(target, heavy = false) {
     const p = this.player;
     if (target.kind === 'prop') return this.swing();
-    if (p.attackCd > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
+    if (p.attackCd > 0 || p.swing || p.commitT > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
     const def = p.heldDef();
     const reach = this.attackReach();
+    const quick = 1 / (1 + buffOf(this, 'haste'));
     p.face(target.x, target.z);
     p.sitting = null;
     if (def && def.ranged) {
       if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach) return this.swing();
-      if (countItem(p.inv, 'arrow') <= 0) {
-        this.ui.msg('You have no arrows.', '#ffb080', true);
+      // Arrows for a bow, bolts for a crossbow, stones for a sling; a
+      // javelin is its own.
+      const ammo = def.ammo || 'arrow';
+      if (countItem(p.inv, ammo) <= 0) {
+        this.ui.msg(ammo === 'cobblestone' ? 'You have no stones to sling.' : `You have no ${ITEMS[ammo].name.toLowerCase()}s.`, '#ffb080', true);
         this.audio?.play('error');
         p.attackCd = 0.4;
         return;
       }
-      removeItem(p.inv, 'arrow', 1);
-      p.attackCd = def.cooldown;
+      if (def.thrown) {
+        const s = p.inv[p.selected];
+        s.count--;
+        if (s.count <= 0) p.inv[p.selected] = null;
+      } else removeItem(p.inv, ammo, 1);
+      p.attackCd = def.cooldown * quick;
       p.doAction(0.3);
+      if (def.thrown) strikeAnim(p, STYLES.spear);
       const mark = heroHas(this.hero, 'marksman');
-      this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)));
+      const kind = def.thrown ? 'javelin' : ammo === 'bolt' ? 'bolt' : ammo === 'cobblestone' ? 'stone' : 'arrow';
+      this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (1 + buffOf(this, 'fury')) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)), kind);
       return;
     }
     if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1) {
@@ -3436,20 +3526,39 @@ export class Game {
       return;
     }
     // A set gem works by what it's set in (see gems.js): a sapphire blade
-    // swings quicker, a ruby throws flame, and so on. Each swing costs
-    // stamina: winded, you swing slower and weaker (so flailing away
-    // doesn't pay; timing does).
-    const fresh = spend(p, heavy ? COST.heavy : COST.attack);
+    // swings quicker, a ruby throws flame, and so on. Each blow costs
+    // stamina (a point for a punch, more for heavier arms): winded, you
+    // swing slower and weaker, so flailing away doesn't pay; timing does.
+    // The blow's wound up first, and lands when it comes round (see
+    // combat.playerSwing).
+    const st = styleOf(p);
+    const fresh = spend(p, staminaCost(st, heavy));
     p.blocking = false;
-    p.attackCd = (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p) * (fresh ? 1 : 1.7) * (heavy ? 1.5 : 1);
+    const s = playerSwing(this, p, target, heavy, () => this.landBlow(target, heavy, fresh, st));
+    p.attackCd = s.dur + (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p) * (fresh ? 1 : 1.7) * (heavy ? 1.5 : 1) * quick;
+  }
+
+  // Your blow comes round: home, if they're still there.
+  landBlow(target, heavy, fresh, st) {
+    const p = this.player;
+    const def = p.heldDef();
+    strikeAnim(p, heavy ? { ...st, heavy: true } : st);
     p.doAction(heavy ? 0.35 : 0.25);
-    let dmg = (def && def.damage ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) + (heroHas(this.hero, 'brawler') ? 1 : 0);
+    const reach = this.attackReach();
+    if (target.dead || target.down || Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1 || target.rollT > 0) {
+      // Stepped back out of it (or rolled under it): a whiff.
+      this.audio?.play('swing');
+      onSwing(this, p);
+      if (!target.dead) this.renderer.floatText(target.x, target.y + 2, target.z, 'miss', '#a8a8b0');
+      return false;
+    }
+    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     if (!fresh) dmg *= 0.6;
     if (heavy) dmg *= 1.8;
     // Straight back at them after a parry: a sure, hard blow.
     const riposte = p.riposte > 0;
     const crit = riposte || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
-    if (crit) dmg *= riposte ? 2 : 1.8;
+    if (crit) dmg *= riposte ? 2.2 : 1.8;
     if (riposte) {
       p.riposte = 0;
       this.renderer.floatText(target.x, target.y + 2.4, target.z, 'riposte!', '#ffe070');
@@ -3463,8 +3572,60 @@ export class Game {
     onSwing(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
     onBladeHit(this, p, target);
-    // Knockback (two paces for a heavy blow).
-    if (!target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, heavy ? 2 : 1);
+    this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
+    // Knockback (two paces for a heavy blow); with a second blade coming,
+    // after that one.
+    const off = offhandOf(p);
+    const shove = heavy || st === STYLES.maul ? 2 : 1;
+    if (!off && !target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, shove);
+    // A sweep catches whoever else is in front of you.
+    if (st.sweep) {
+      for (const e of this.foesOn(sweepTiles(p, target), p)) {
+        if (e === target) continue;
+        this.damage(e, Math.max(1, Math.round(dmg * 0.7)), p);
+        this.impact(e, 1, st);
+        if (!e.moving && e.hp > 0) knock(this, p, e, 1);
+      }
+    }
+    // The blade in your other hand, hard on the heels of the first.
+    if (off && !target.dead) p.offSwing = { t: 0.15, land: () => this.landOff(target, off, shove) };
+    return true;
+  }
+
+  // The off hand's blow (see landBlow).
+  landOff(target, off, shove = 1) {
+    const p = this.player;
+    strikeAnim(p, STYLES[weaponStyle(off)], true);
+    this.audio?.play('swing');
+    const it = ITEMS[off];
+    const reach = Math.max(1, Math.floor(it.reach || 1.4));
+    if (target.dead || target.down || Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || target.rollT > 0) return false;
+    spend(p, Math.max(1, Math.round(staminaCost(STYLES[weaponStyle(off)]) / 2)));
+    const dmg = it.damage * 0.75 * damageMult(this.hero) * (1 + buffOf(this, 'fury'));
+    this.damage(target, Math.max(1, Math.round(dmg)), p);
+    this.impact(target, 1, STYLES[weaponStyle(off)]);
+    if (!target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, shove);
+    return true;
+  }
+
+  // Foes of `by` standing on any of those tiles.
+  foesOn(tiles, by) {
+    const on = (e) => tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - by.y) <= 1;
+    const out = [];
+    for (const c of this.creatures) if (!c.dead && on(c) && (c.hostileNow || c.target === by)) out.push(c);
+    for (const n of this.npcs) if (!n.dead && !n.down && on(n) && ((n.state === 'fight' && n.threat === by) || (n.warband && n.warband.foe))) out.push(n);
+    return out;
+  }
+
+  // A blow that lands: it holds the moment an instant (harder for a heavy
+  // one), sparks and spatters, and the screen jolts.
+  impact(target, power = 1, st = null) {
+    const r = this.renderer;
+    this.hitStop = Math.max(this.hitStop || 0, power > 1 ? 0.085 : 0.045);
+    this.shake = Math.min(1.6, (this.shake || 0) + (power > 1 ? 0.4 : 0.16));
+    r.emit(target.x, target.y + 1.1, target.z, { n: power > 1 ? 10 : 5, color: ['#ffffff', '#fff4c0', '#ffd080'], up: 30, speed: power > 1 ? 90 : 60, life: 0.22, glow: true, gravity: 60 });
+    if (st && (st.heavy || st.stagger)) r.emit(target.x, target.y, target.z, { n: 5, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
+    if (power > 1) r.effect?.({ type: 'ring', wx: target.x, wy: target.y, wz: target.z, r0: 2, r1: 12, color: '#fff0c0', life: 0.25, oy: -12, flat: 0.6 });
   }
 
   damage(target, amount, source, crit = false) {
@@ -3540,7 +3701,10 @@ export class Game {
     this.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: target.species === 'slime' ? ['#58c048', '#8ae070'] : target.kind === 'monster' ? ['#e8e4d4', '#b0aca0'] : ['#c82a2a', '#8a1a1a'], up: 30, speed: 50, life: 0.4, oy: -8 });
     this.audio?.play(target.kind === 'player' ? 'hurt' : 'hit', target);
     if (target.kind === 'player') {
-      this.shake = Math.min(1, this.shake + 0.4);
+      // It hurts: the screen jolts, and reddens at the edges.
+      this.shake = Math.min(1.6, this.shake + 0.6 + Math.min(0.5, amount * 0.06));
+      this.hurtFlash = Math.min(1, (this.hurtFlash || 0) + 0.55 + Math.min(0.35, amount * 0.05));
+      this.hitStop = Math.max(this.hitStop || 0, 0.05);
       if (source && source.name) this.ui.msg(`${source.name} hits you for ${amount}!`, '#ff7060', true);
     }
     // Hitting your employer ends the job on the spot.

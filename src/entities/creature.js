@@ -135,7 +135,7 @@ export class Creature extends Entity {
   chase(dt) {
     const t = this.target;
     const d = this.distTo(t);
-    const st = styleOf(this);
+    const st = styleOf(this, true);
     // In reach: wind up a blow (each kind its own way: see combat.js).
     if (inReach(this, t, st) && (d <= 1 || st.lunge || st.charge)) {
       this.face(t.x, t.z);

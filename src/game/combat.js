@@ -1,61 +1,123 @@
 // How a fight goes, blow by blow. Nobody strikes in an instant: every
 // attacker winds up first (a red "!" over them, and the ground they'll hit
 // lit up red), so there's a moment to get out of the way, get a shield up,
-// or hit them first and knock them off their stroke. Each beast and each
-// weapon has its own way of fighting:
+// or hit them first and knock them off their stroke. You too: a quick jab
+// with a fist, a long haul back with a greatsword, and once it's started
+// you're committed to it. Each beast and each weapon has its own way:
 //   a sword: a quick, honest cut;
 //   a spear: a thrust that reaches two paces, in a straight line;
 //   an axe: a slow, heavy chop that half breaks a guard;
 //   a club or a mace: a blow that leaves you reeling;
 //   a dagger: fast, and twice;
-//   wolves lunge in from a pace off; slimes slam the ground all round;
-//   skeletons hack twice; a boar lowers its head and charges.
+//   a flail: round the edge of a shield;
+//   a staff, a greatsword, a battle axe: a sweep across everything in front;
+//   a war hammer: slow, and it flattens you;
+//   a halberd: a long hewing thrust;
+//   wolves lunge in from a pace off (or snap, close in); slimes slam the
+//   ground all round; skeletons hack twice (or bash); a boar charges.
+// Bare hands: a jab, or now and then a big swing from the shoulder.
 //
-// You fight with stamina: every swing, every roll, every blow taken on a
-// shield costs some, and it comes back when you ease off. Hold the mouse
-// on a foe for a heavy blow; hold the right button to block (a shield
-// takes most of it, a blade a little), and raise it just as the blow
-// lands to parry and leave them open; SPACE rolls you clear.
-import { ITEMS } from '../world/items.js';
+// A second weapon in the off hand (where a shield would go) strikes again
+// on the heels of the first; a two-handed one leaves no hand for either.
+// The watch fights hard: a guard follows you if you only step aside, and
+// will string two or three blows together.
+//
+// You fight with stamina, counted in points: a punch costs one, a blade
+// two, heavier arms more; every roll and every blow taken on a shield
+// costs some too, and it comes back slowly when you ease off. Hold the
+// mouse on a foe for a heavy blow; hold the right button to block (a
+// shield takes most of it, a blade a little), and raise it just as the
+// blow lands to parry: they're left reeling for a few seconds. SPACE rolls
+// you clear.
+import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { has as heroHas, staminaBonus } from './hero.js';
 
+// windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
+// but feel); cost: stamina points a blow.
 export const STYLES = {
-  fist: { name: 'punch', windup: 0.4, recover: 0.7, reach: 1, mult: 1 },
-  sword: { name: 'cut', windup: 0.42, recover: 0.6, reach: 1, mult: 1 },
-  spear: { name: 'thrust', windup: 0.55, recover: 0.85, reach: 2, mult: 1.05, thrust: true },
-  axe: { name: 'chop', windup: 0.75, recover: 1.0, reach: 1, mult: 1.45, heavy: true },
-  club: { name: 'blow', windup: 0.6, recover: 0.8, reach: 1, mult: 1.1, stagger: 0.6 },
-  dagger: { name: 'stab', windup: 0.26, recover: 0.5, reach: 1, mult: 0.7, flurry: 2 },
+  fist: { name: 'punch', windup: 0.4, recover: 0.7, reach: 1, mult: 1, cost: 1, pw: 0.07 },
+  haymaker: { name: 'haymaker', windup: 0.66, recover: 0.95, reach: 1, mult: 1.6, stagger: 0.45, cost: 1, pw: 0.07 },
+  sword: { name: 'cut', windup: 0.42, recover: 0.6, reach: 1, mult: 1, cost: 2, pw: 0.13 },
+  spear: { name: 'thrust', windup: 0.55, recover: 0.85, reach: 2, mult: 1.05, thrust: true, cost: 3, pw: 0.2 },
+  axe: { name: 'chop', windup: 0.75, recover: 1.0, reach: 1, mult: 1.45, heavy: true, cost: 3, pw: 0.24 },
+  club: { name: 'blow', windup: 0.6, recover: 0.8, reach: 1, mult: 1.1, stagger: 0.6, cost: 3, pw: 0.2 },
+  dagger: { name: 'stab', windup: 0.26, recover: 0.5, reach: 1, mult: 0.7, flurry: 2, cost: 2, pw: 0.08 },
+  flail: { name: 'whirl', windup: 0.68, recover: 0.9, reach: 1, mult: 1.2, stagger: 0.4, pierce: 0.35, cost: 3, pw: 0.24 },
+  staff: { name: 'sweep', windup: 0.45, recover: 0.65, reach: 1, mult: 0.95, stagger: 0.3, sweep: true, cost: 2, pw: 0.15 },
+  great: { name: 'cleave', windup: 0.88, recover: 1.15, reach: 1, mult: 1.3, heavy: true, sweep: true, cost: 5, pw: 0.36 },
+  maul: { name: 'crush', windup: 0.92, recover: 1.2, reach: 1, mult: 1.2, heavy: true, stagger: 1.0, pierce: 0.25, cost: 5, pw: 0.38 },
+  halberd: { name: 'hew', windup: 0.78, recover: 1.05, reach: 2, mult: 1.15, thrust: true, heavy: true, cost: 4, pw: 0.3 },
   bite: { name: 'lunge', windup: 0.38, recover: 0.95, reach: 2, mult: 1, lunge: true },
+  snap: { name: 'snap', windup: 0.24, recover: 0.6, reach: 1, mult: 0.6 },
   slam: { name: 'slam', windup: 0.65, recover: 1.0, reach: 1, mult: 1.2, area: true },
   bone: { name: 'hack', windup: 0.5, recover: 0.85, reach: 1, mult: 0.85, flurry: 2 },
+  bash: { name: 'bash', windup: 0.72, recover: 0.9, reach: 1, mult: 1.3, stagger: 0.5 },
   gore: { name: 'charge', windup: 0.85, recover: 1.5, reach: 5, mult: 1.6, charge: true },
 };
 
 const SPECIES_STYLE = { wolf: 'bite', slime: 'slam', skeleton: 'bone', boar: 'gore' };
+// (Now and then, another way: a wolf snaps close in, a skeleton bashes.)
+const SPECIES_ALT = { wolf: ['snap', 0.4], skeleton: ['bash', 0.3] };
 
 // Which way a weapon fights.
 export function weaponStyle(key) {
   if (!key) return 'fist';
   const k = String(key).split('+')[0];
-  if (/spear|pitchfork|halberd/.test(k)) return 'spear';
+  if (ITEMS[k] && ITEMS[k].style) return ITEMS[k].style;
+  if (/spear|pitchfork|halberd|javelin/.test(k)) return 'spear';
   if (/axe/.test(k)) return 'axe';
   if (/club|mace|hammer|pickaxe|shovel|hoe/.test(k)) return 'club';
   if (/dagger|knife/.test(k)) return 'dagger';
-  if (/sword/.test(k)) return 'sword';
+  if (/sword|sabre/.test(k)) return 'sword';
   return ITEMS[k] && ITEMS[k].kind === 'weapon' ? 'sword' : 'fist';
 }
 
-export function styleOf(e) {
-  if (e.kind === 'creature' || e.kind === 'monster') return STYLES[SPECIES_STYLE[e.species]] || STYLES.bite;
-  return STYLES[weaponStyle(e.meleeWeapon ? e.meleeWeapon() : null)];
+// The weapon in someone's fighting hand.
+export function mainWeapon(e) {
+  if (e.kind === 'player') return e.heldItem ? e.heldItem() : null;
+  return e.meleeWeapon ? e.meleeWeapon() : null;
 }
 
-// A shield's stats (what's worn on the arm).
+// How they fight now. `pick`: choosing the next blow (a beast or a
+// bare-handed brawler may mix it up).
+export function styleOf(e, pick = false) {
+  if (e.kind === 'creature' || e.kind === 'monster') {
+    const alt = SPECIES_ALT[e.species];
+    if (pick && alt && e.rng && e.rng.chance(alt[1])) return STYLES[alt[0]];
+    return STYLES[SPECIES_STYLE[e.species]] || STYLES.bite;
+  }
+  const w = mainWeapon(e);
+  const k = weaponStyle(w && ITEMS[w] && !ITEMS[w].ranged ? w : null);
+  if (k === 'fist' && pick && e.kind !== 'player' && e.rng && e.rng.chance(0.3)) return STYLES.haymaker;
+  return STYLES[k];
+}
+
+// How slow a weapon is beside others of its kind (1: middling).
+export function heftOf(e) {
+  const w = mainWeapon(e);
+  return (w && ITEMS[w] && ITEMS[w].heft) || 1;
+}
+
+// A shield's stats (what's worn on the arm): none with a two-handed weapon
+// out (it's slung on the back), nor with a blade on that arm instead.
 export function shieldOf(e) {
   const k = e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield;
   const it = k && ITEMS[k];
-  return it && it.block ? it : null;
+  if (!it || !it.block) return null;
+  return twoHanded(mainWeapon(e)) ? null : it;
+}
+
+// A second weapon carried in the off hand (where a shield would be), if
+// the main hand leaves room for it.
+export function offhandOf(e) {
+  const k = e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield;
+  if (!offhandable(k)) return null;
+  const main = mainWeapon(e);
+  const m = main && ITEMS[main];
+  if (twoHanded(main) || (m && m.ranged)) return null;
+  // (Not with a pick or a shovel in the other hand: a fighting hand.)
+  if (m && m.kind !== 'weapon') return null;
+  return k;
 }
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
@@ -76,6 +138,13 @@ export function facing(v, a) {
   return fx * dx + fz * dz > 0 || (dx === 0 && dz === 0);
 }
 
+// The arc a sweep cuts in front of someone: the tile ahead and those to
+// either side of it.
+export function sweepTiles(a, target) {
+  const [hx, hz] = headingTo(a, target);
+  return [{ x: a.x + hx, z: a.z + hz }, { x: a.x + hx - hz, z: a.z + hz + hx }, { x: a.x + hx + hz, z: a.z + hz - hx }];
+}
+
 // The ground a blow will land on.
 function tilesFor(a, target, st) {
   const out = [];
@@ -88,9 +157,10 @@ function tilesFor(a, target, st) {
     for (let k = 1; k <= st.reach; k++) out.push({ x: a.x + hx * k, z: a.z + hz * k });
     return out;
   }
-  if (st.lunge) {
-    out.push({ x: target.x, z: target.z });
-    return out;
+  if (st.sweep) {
+    const arc = sweepTiles(a, target);
+    if (!arc.some((t) => t.x === target.x && t.z === target.z)) arc.push({ x: target.x, z: target.z });
+    return arc;
   }
   out.push({ x: target.x, z: target.z });
   return out;
@@ -105,20 +175,29 @@ export function inReach(a, target, st = styleOf(a)) {
   return d <= st.reach;
 }
 
-// Wind up a blow at the target. False if one's already coming.
-export function beginAttack(game, a, target, st = styleOf(a)) {
+// Wind up a blow at the target. False if one's already coming. `opts`:
+// combo (that many more blows to follow), press (a chance they follow
+// you if you only step aside).
+export function beginAttack(game, a, target, st = styleOf(a), opts = null) {
   if (a.windup || (a.attackCd || 0) > 0 || (a.stunT || 0) > 0) return false;
   a.face(target.x, target.z);
   // (A boar too close to charge just gores.)
   if (st.charge && Math.max(Math.abs(target.x - a.x), Math.abs(target.z - a.z)) <= 1) st = { ...st, charge: false, reach: 1, windup: 0.5, mult: 1.1 };
   const tiles = tilesFor(a, target, st);
-  a.windup = { t: 0, dur: st.windup * (a.slowT > 0 ? 1.3 : 1), st, target, tiles, y: a.y, heading: headingTo(a, target) };
-  if (st.heavy || st.charge) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!']) || 'Hrah!', 0.6, '#ff9080');
+  // Heavier arms come round slower; lighter ones quicker.
+  const dur = st.windup * heftOf(a) * (a.slowT > 0 ? 1.3 : 1);
+  a.windup = { t: 0, dur, st, target, tiles, y: a.y, heading: headingTo(a, target), combo: (opts && opts.combo) || 0, press: (opts && opts.press) || 0 };
+  if (st.heavy || st.charge || st === STYLES.haymaker) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!', 'Hyaah!']) || 'Hrah!', 0.6, '#ff9080');
   return true;
 }
 
 // Interrupted mid-swing (hit hard, or parried): no blow this time.
 export function interrupt(a, stun = 0.5) {
+  if (a.swing) {
+    a.swing = null;
+    a.stunT = Math.max(a.stunT || 0, stun);
+    return true;
+  }
   if (!a.windup) return false;
   a.windup = null;
   a.stunT = Math.max(a.stunT || 0, stun);
@@ -148,6 +227,29 @@ export function tickAttack(game, a, dt) {
     w.flurried = (w.flurried || 1) + 1;
     w.t = w.dur - 0.22;
     w.tiles = tilesFor(a, w.target, w.st);
+    return true;
+  }
+  // The blade in the other hand, hard on the heels of the first.
+  const off = !w.offDone && !w.off && !a.dead && offhandOf(a);
+  if (off) {
+    w.offDone = true;
+    w.off = off;
+    w.t = w.dur - 0.18;
+    w.tiles = tilesFor(a, w.target, STYLES[weaponStyle(off)]);
+    return true;
+  }
+  // Another, and another: a guard who won't let up.
+  const t = w.target;
+  if (w.combo > 0 && t && !t.dead && !t.down && !a.dead && Math.max(Math.abs(t.x - a.x), Math.abs(t.z - a.z)) <= w.st.reach + 1) {
+    w.combo--;
+    w.off = null;
+    w.offDone = false;
+    w.flurried = 0;
+    w.t = 0;
+    w.dur = w.st.windup * heftOf(a) * 0.55;
+    a.face(t.x, t.z);
+    w.heading = headingTo(a, t);
+    w.tiles = tilesFor(a, t, w.st);
     return true;
   }
   a.windup = null;
@@ -198,8 +300,15 @@ function victimsAt(game, a, tiles) {
   return out;
 }
 
+// The blow, as it's drawn (see renderer.swingPose).
+export function strikeAnim(e, st, off = false) {
+  e.strike = { t: 0, dur: st && st.heavy ? 0.4 : 0.3, st: st || STYLES.fist, off };
+}
+
 function strike(game, a, w) {
-  a.doAction?.(0.3);
+  const st = w.off ? STYLES[weaponStyle(w.off)] : w.st;
+  strikeAnim(a, st, !!w.off);
+  if (!w.off) a.doAction?.(0.3);
   game.audio?.play('swing', a);
   // A lunge: a bound forward, then the bite.
   if (w.st.lunge && w.target && !w.target.dead) {
@@ -216,38 +325,49 @@ function strike(game, a, w) {
     // (Only if they're still within a bound of it.)
     if (d > 2) return;
   }
-  for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, w.st);
+  // Pressing in: stepped aside? They follow you (a guard, a soldier) and
+  // strike where you are now. Rolling still gets you clear.
+  const t = w.target;
+  if (w.press && t && !t.dead && !(t.rollT > 0) && !w.tiles.some((q) => q.x === t.x && q.z === t.z) && a.rng && a.rng.chance(w.press)) {
+    const d = Math.max(Math.abs(t.x - a.x), Math.abs(t.z - a.z));
+    if (d === 2 && !a.moving) {
+      const [hx, hz] = headingTo(a, t);
+      const ny = game.world.stepTarget(a.x, a.y, a.z, a.x + hx, a.z + hz, false);
+      if (ny >= 0 && !game.occupiedBySolid(a.x + hx, ny, a.z + hz, a)) a.startMove(a.x + hx, ny, a.z + hz, 0.08);
+    }
+    if (d <= 2) {
+      a.face(t.x, t.z);
+      w.tiles = [{ x: t.x, z: t.z }];
+    }
+  }
+  for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, st, w.off ? { weapon: w.off } : null);
 }
 
-// A blow lands (or doesn't).
-export function resolveHit(game, a, v, st) {
+// A blow lands (or doesn't). `opts.weapon`: struck with that (the off
+// hand's blade) rather than the main one.
+export function resolveHit(game, a, v, st, opts = null) {
   if (v.dead || v.down) return 'none';
   const text = (s, c) => game.renderer.floatText(v.x, v.y + 2, v.z, s, c);
   // Rolled clear.
   if (v.rollT > 0) {
     text('dodged', '#c8e8ff');
+    game.renderer.emit(v.x, v.y + 0.3, v.z, { n: 5, color: ['#c8e8ff', '#ffffff'], up: 10, speed: 30, life: 0.3 });
     return 'dodged';
   }
-  let amount = baseDamage(a) * st.mult;
+  let amount = (opts && opts.weapon ? offDamage(a, opts.weapon) : baseDamage(a)) * st.mult;
   const sh = shieldOf(v);
   // A shield (or a blade) up toward the blow.
-  const guarding = v.kind === 'player' ? v.blocking : sh && v.state === 'fight' && v.rng && v.rng.chance(v.rec && v.rec.job === 'guard' ? 0.4 : 0.25);
+  const guarding = v.kind === 'player' ? v.blocking : sh && v.state === 'fight' && v.rng && v.rng.chance(v.rec && v.rec.job === 'guard' ? 0.45 : 0.25);
   if (guarding && facing(v, a)) {
-    // Up just as it came: parried, and they're left wide open.
+    // Up just as it came: parried, and they're left reeling.
     const hero = v.kind === 'player' ? game.hero : null;
-    if (v.kind === 'player' && v.blockT !== undefined && v.blockT < (heroHas(hero, 'duelist') ? 0.45 : 0.3) && !st.charge) {
-      text('PARRY!', '#ffe070');
-      game.audio?.play('parry', v);
-      interrupt(a, 1.1);
-      a.stunT = Math.max(a.stunT || 0, 1.1);
-      v.riposte = 1.2;
-      v.stamina = Math.min(v.maxStamina || 100, (v.stamina || 0) + 10);
-      game.renderer.emit(v.x, v.y + 1.2, v.z, { n: 10, color: ['#fff8c0', '#ffe070', '#ffffff'], up: 25, speed: 50, life: 0.35 });
+    if (v.kind === 'player' && v.blockT !== undefined && v.blockT < parryWindow(game) && !st.charge) {
+      parried(game, v, a);
       return 'parried';
     }
     const wall = sh && heroHas(hero, 'shieldbearer');
-    const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0)));
-    const cost = (6 + amount * 3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1);
+    const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0)));
+    const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1);
     if (v.kind === 'player') {
       if ((v.stamina || 0) >= cost) {
         v.stamina -= cost;
@@ -260,11 +380,15 @@ export function resolveHit(game, a, v, st) {
         v.guardBroken = 1.0;
         amount *= 0.75;
         text('guard broken!', '#ff9060');
+        game.shake = Math.min(1.4, (game.shake || 0) + 0.5);
       }
     } else {
       amount *= 1 - power;
       text('blocked', '#a0c8ff');
     }
+    // Sparks off the shield (or the blade).
+    game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
+    if (v.kind === 'player') game.shake = Math.min(1.4, (game.shake || 0) + 0.25);
     game.audio?.play('armor_hit', v);
   }
   amount = Math.max(guarding ? 0 : 1, Math.round(amount));
@@ -280,11 +404,55 @@ export function resolveHit(game, a, v, st) {
   return amount > 0 ? 'hit' : 'blocked';
 }
 
+// How soon before the blow a raised guard turns it into a parry.
+export function parryWindow(game) {
+  return heroHas(game.hero, 'duelist') ? 0.38 : 0.25;
+}
+
+// A parry: the blow turned aside at the last instant with a crack of
+// steel. The world holds its breath; they reel back, dazed for a few
+// seconds and wide open; you've a moment for a riposte.
+export function parried(game, v, a) {
+  const r = game.renderer;
+  r.floatText(v.x, v.y + 2.6, v.z, 'PARRY!', '#ffe070');
+  game.audio?.play('parry', v);
+  game.audio?.play('armor_hit', v);
+  interrupt(a, 2.8);
+  a.stunT = Math.max(a.stunT || 0, 2.6 + Math.random() * 0.6);
+  a.windup = null;
+  a.attackCd = Math.max(a.attackCd || 0, 1.2);
+  knock(game, v, a, 1);
+  v.riposte = 1.6;
+  v.stamina = Math.min(v.maxStamina || MAX_STAMINA, (v.stamina || 0) + 2);
+  // Hit-stop, then a breath of slow motion.
+  game.hitStop = Math.max(game.hitStop || 0, 0.16);
+  game.slowMo = Math.max(game.slowMo || 0, 0.55);
+  game.slowMoScale = 0.3;
+  game.shake = Math.min(1.6, (game.shake || 0) + 1.0);
+  r.flashScreen?.('#fff4c8', 0.22);
+  const mx = (v.x + a.x) / 2;
+  const mz = (v.z + a.z) / 2;
+  r.emit(mx, v.y + 1.2, mz, { n: 26, color: ['#ffffff', '#fff8c0', '#ffe070', '#ffb040'], up: 40, speed: 110, life: 0.45, glow: true, gravity: 120 });
+  r.emit(mx, v.y + 1.2, mz, { n: 8, color: ['#ffffff', '#ffe070'], up: 20, speed: 40, life: 0.8, shape: 'star', glow: true, gravity: -10 });
+  r.effect?.({ type: 'ring', wx: mx, wy: v.y, wz: mz, r0: 2, r1: 24, color: '#ffe070', life: 0.45, oy: -14, flat: 0.55, thick: 2 });
+  r.effect?.({ type: 'ring', wx: mx, wy: v.y, wz: mz, r0: 1, r1: 12, color: '#ffffff', life: 0.3, oy: -14, flat: 0.55, thick: 1 });
+  a.say?.(a.rng?.pick?.(['Urgh!', 'What?!', 'Agh!', 'Nngh!']) || 'Agh!', 1.2, '#ffd0a0');
+}
+
 // How hard their blows land (before the weapon's way of fighting).
 function baseDamage(a) {
   if (a.kind === 'npc' && a.attackDamage) return a.attackDamage(false);
   if (a.S) return a.S.dmg;
   return 2;
+}
+
+// The off hand's blade: a little lighter than the main hand's.
+function offDamage(a, key) {
+  const it = ITEMS[key];
+  const main = baseDamage(a);
+  const mw = mainWeapon(a);
+  const ratio = it && mw && ITEMS[mw] && ITEMS[mw].damage ? it.damage / ITEMS[mw].damage : 1;
+  return Math.max(1, main * ratio * 0.75);
 }
 
 // Knocked back a pace or two.
@@ -305,24 +473,58 @@ export function knock(game, a, v, n = 1) {
     z += dz;
     y = ny;
   }
-  if ((x !== v.x || z !== v.z) && !v.moving) v.startMove(x, y, z, 0.12 * n);
+  if ((x !== v.x || z !== v.z) && !v.moving) {
+    v.startMove(x, y, z, 0.12 * n);
+    // (Dust kicked up where they're shoved.)
+    game.renderer.emit(v.x, v.y, v.z, { n: 4, color: ['#a89878', '#8a7a5a'], up: 6, speed: 18, life: 0.4, oy: 6, shape: 'puff' });
+  }
 }
 
 // ------------------------------------------------------------ the player
-export const MAX_STAMINA = 100;
-export const COST = { swing: 7, attack: 12, heavy: 24, roll: 26 };
+export const MAX_STAMINA = 10;
+export const COST = { fist: 1, roll: 3 };
+
+// A potion still working: how much it gives (0 if none).
+export function buffOf(game, k) {
+  const p = game.player;
+  if (!p || !p.buffs) return 0;
+  const now = game.day * 1440 + game.minute;
+  let n = 0;
+  for (const q of p.buffs) if (q.combat === k && q.until > now) n = Math.max(n, q.n);
+  return n;
+}
+
+// What a fighting potion does, in words.
+export function combatBuffText(e) {
+  return { breath: `+${e.n} stamina`, wind: `stamina back ${Math.round(e.n * 100)}% faster`, fury: `blows ${Math.round(e.n * 100)}% harder`, haste: `blows ${Math.round(e.n * 100)}% quicker` }[e.combat] || '';
+}
+
+// Stamina points a blow costs you.
+export function staminaCost(st, heavy = false) {
+  return (st.cost || 2) * (heavy ? 2 : 1);
+}
 
 // Each frame: stamina back when you ease off, the block held or dropped,
-// the roll carried through.
+// the roll carried through, your own swing coming round.
 export function playerTick(game, p, dt, input, blocked) {
-  p.maxStamina = MAX_STAMINA + (game.hero && game.hero.stats ? (game.hero.stats.end || 0) * 6 : 0) + staminaBonus(game.hero);
+  p.maxStamina = MAX_STAMINA + (game.hero && game.hero.stats ? (game.hero.stats.end || 0) * 0.6 : 0) + staminaBonus(game.hero) / 10 + buffOf(game, 'breath');
   if (p.stamina === undefined) p.stamina = p.maxStamina;
   p.restT = (p.restT || 0) + dt;
   if (p.riposte > 0) p.riposte -= dt;
   if (p.guardBroken > 0) p.guardBroken -= dt;
   if (p.rollT > 0) p.rollT -= dt;
   if (p.rollCd > 0) p.rollCd -= dt;
-  const want = !blocked && input && input.mouse && input.mouse.rdown && canBlock(game, p) && !(p.guardBroken > 0) && !(p.rollT > 0);
+  if (p.commitT > 0) p.commitT -= dt;
+  if (p.swing) tickSwing(game, p, dt);
+  if (p.offSwing) {
+    p.offSwing.t -= dt;
+    if (p.offSwing.t <= 0) {
+      const o = p.offSwing;
+      p.offSwing = null;
+      if (!p.dead && !(p.stunT > 0)) o.land();
+    }
+  }
+  const want = !blocked && input && input.mouse && input.mouse.rdown && canBlock(game, p) && !(p.guardBroken > 0) && !(p.rollT > 0) && !p.swing && !(p.commitT > 0);
   if (want && !p.blocking) {
     p.blocking = true;
     p.blockT = 0;
@@ -343,14 +545,17 @@ export function playerTick(game, p, dt, input, blocked) {
     }
     if (best && !p.moving) p.face(best.x, best.z);
   }
-  // (Back faster standing still behind a shield than swinging away.)
-  if (p.restT > 0.6) p.stamina = Math.min(p.maxStamina, p.stamina + dt * (p.blocking ? 12 : p.moving ? 22 : 32) * (heroHas(game.hero, 'tireless') ? 1.4 : 1));
+  // (Back faster standing still behind a shield than swinging away; and
+  // slowly at that.)
+  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind'));
+  if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
+  if (p.stamina > p.maxStamina) p.stamina = Math.max(p.maxStamina, p.stamina - dt * 2);
 }
 
 // A shield on the arm, or a blade in hand, to take a blow on.
 export function canBlock(game, p) {
   const h = p.heldDef && p.heldDef();
-  return !!(shieldOf(p) || (h && (h.kind === 'weapon' || (h.kind === 'tool' && h.damage >= 3)) && !h.ranged));
+  return !!(shieldOf(p) || offhandOf(p) || (h && (h.kind === 'weapon' || (h.kind === 'tool' && h.damage >= 3)) && !h.ranged));
 }
 
 export function spend(p, n) {
@@ -360,9 +565,41 @@ export function spend(p, n) {
   return had >= n;
 }
 
+// Your blow, begun: a wind-up by the weight of what's in your hand (none
+// to speak of with a fist, a long haul back with a war hammer), then it
+// lands, wherever they are by then. Once begun, you're committed: no
+// stepping away, no rolling out of it.
+export function playerSwing(game, p, target, heavy, land) {
+  const st = styleOf(p);
+  const quick = 1 / (1 + buffOf(game, 'haste'));
+  const dur = st.pw * heftOf(p) * (heavy ? 0.6 : 1) * quick;
+  p.swing = { t: 0, dur, target, heavy, st, land };
+  p.blocking = false;
+  p.sitting = null;
+  if (dur <= 0.001) tickSwing(game, p, 0);
+  return p.swing;
+}
+
+function tickSwing(game, p, dt) {
+  const s = p.swing;
+  if (!s) return;
+  if (p.dead || p.stunT > 0 || p.down || p.guardBroken > 0) {
+    p.swing = null;
+    return;
+  }
+  s.t += dt;
+  if (s.t < s.dur) return;
+  p.swing = null;
+  // (A moment's follow-through before you can move again.)
+  p.commitT = 0.06 + s.st.pw * 0.6;
+  s.land();
+}
+
 // SPACE: a roll in the way you're going (or facing), clear of a blow.
 export function roll(game, p, dirv = null) {
-  if (p.rollCd > 0 || p.moving || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping) return false;
+  if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0) return false;
+  // (Mid-stride is fine: the roll carries on from where you are.)
+  const from = p.moving ? p.renderPos() : null;
   const cost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * (heroHas(game.hero, 'clumsy') ? 1.35 : 1);
   if ((p.stamina ?? MAX_STAMINA) < cost * 0.6) {
     game.ui.msg('Too winded to roll.', '#c8c8c8', true);
@@ -392,7 +629,12 @@ export function roll(game, p, dirv = null) {
   game.audio?.play('roll', p);
   game.renderer.emit(p.x, p.y, p.z, { n: 6, color: ['#a89878', '#8a7a5a'], up: 6, speed: 20, life: 0.4, oy: 6, shape: 'puff' });
   if (n) {
-    p.startMove(x, y, z, 0.16 * n);
+    p.startMove(x, y, z, 0.16 * n + (from ? 0.06 : 0));
+    if (from) {
+      p.fx = from.x;
+      p.fy = from.y;
+      p.fz = from.z;
+    }
     game.onPlayerStep(x, y, z, false);
   }
   return true;

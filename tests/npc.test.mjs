@@ -112,6 +112,9 @@ test('attacking a villager makes people fight, flee or call guards', () => {
   game.player.teleport(victim.x + 1, victim.y, victim.z);
   game.player.attackCd = 0;
   game.attack(victim);
+  // (The blow is wound up first, then lands: before they can walk off.)
+  if (game.player.swing) game.player.swing.t = game.player.swing.dur;
+  game.update(0.01, input);
   assert.ok(['fight', 'flee', 'alert'].includes(victim.state), victim.state);
   assert.ok(game.isWanted(victim.settlement.id));
   for (let i = 0; i < 40; i++) game.update(0.1, input);

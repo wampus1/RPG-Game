@@ -2,7 +2,7 @@
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
-import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed } from '../world/items.js';
+import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
@@ -126,8 +126,10 @@ export class InventoryWindow extends Window {
         g.icon(sx, sy, p.equip[k], 0);
         if (hov) this.ui.itemTooltip({ item: p.equip[k], count: 1 });
       } else g.text(sx + 1, sy, '·', C.faint);
-      g.text(sx + 5, sy, cap(k), it ? C.fg : C.faint);
-      g.text(sx + 5, sy + 1, it ? (it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', C.dim);
+      // (The shield arm: a shield, or a second blade to fight with.)
+      const slung = k === 'shield' && it && twoHanded(p.heldItem());
+      g.text(sx + 5, sy, k === 'shield' ? (it && it.kind === 'weapon' ? 'Off hand' : 'Shield') : cap(k), it ? C.fg : C.faint);
+      g.text(sx + 5, sy + 1, slung ? 'slung (2-hand)' : it ? (it.kind === 'weapon' ? `dmg ${it.damage}` : it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', slung ? C.orange : C.dim);
       this.hit(sx, sy, 3, 2, () => this.wearClick(p, k));
     });
     g.text(40, 18, `Armour ${Math.round(p.armorValue() * 100)}%`, C.cyan);
@@ -158,8 +160,10 @@ export class InventoryWindow extends Window {
     const cs = ui.cursorStack;
     if (cs) {
       const it = ITEMS[cs.item];
-      if (!it || it.kind !== 'armor' || it.slot !== k) {
+      const fits = it && ((it.kind === 'armor' && it.slot === k) || (k === 'shield' && offhandable(cs.item)));
+      if (!fits) {
         ui.audio?.play('error');
+        if (it && it.kind === 'weapon' && k === 'shield') ui.msg(it.hands === 2 ? 'That takes both hands.' : 'That\'s no weapon for the off hand.', '#c8c8c8', true);
         return;
       }
       const old = p.equip[k];
@@ -179,6 +183,14 @@ export class InventoryWindow extends Window {
     // Right-click (or shift-click) armour to put it on.
     if ((ck.button === 2 || ck.shift) && p.inv[i] && ITEMS[p.inv[i].item]?.kind === 'armor' && !this.ui.cursorStack) {
       if (p.wear(i)) this.ui.audio?.play('equip');
+      return;
+    }
+    // Right-click a one-handed blade: into the off hand, to fight with two.
+    if (ck.button === 2 && p.inv[i] && offhandable(p.inv[i].item) && !this.ui.cursorStack) {
+      if (p.wear(i)) {
+        this.ui.audio?.play('equip');
+        this.ui.msg(`${ITEMS[p.equip.shield].name} in your off hand.`, '#c8e0ff', true);
+      }
       return;
     }
     if (ck.shift && p.inv[i]) {
@@ -1337,7 +1349,26 @@ export class MapWindow extends Window {
     this.tradeT = (this.tradeT || 0) - 1;
     if (this.tradeT <= 0 || !this.trade) {
       this.tradeT = 20;
-      this.trade = game.sim.travellers().filter((tr) => tr.pos && (tr.company || (tr.rec && (tr.rec.traveler || tr.rec.job === 'merchant')))).slice(0, 14).map((tr) => ({ x: tr.pos.x, z: tr.pos.z }));
+      // (Where they really are, when they're out on the road near you; one
+      // mark for a whole company, at its lead wagon.)
+      const ents = game.caravans || new Map();
+      const marks = new Map();
+      const add = (k, x, z, live) => {
+        const m = marks.get(k);
+        if (!m || (live && !m.live)) marks.set(k, { x, z, live });
+      };
+      for (const tr of game.sim.travellers()) {
+        if (!tr.pos || !(tr.company || (tr.rec && (tr.rec.traveler || tr.rec.job === 'merchant')))) continue;
+        const n = ents.get(tr.key);
+        const live = n && !n.dead;
+        add(tr.company ? `g${tr.company.id}` : tr.key, live ? n.x : tr.pos.x, live ? n.z : tr.pos.z, live);
+      }
+      // (And those still riding in, whose journey's reckoning has them there.)
+      for (const [k, n] of ents) {
+        if (n.dead || !n.tr || !(n.tr.company || n.tr.rec.traveler || n.tr.rec.job === 'merchant')) continue;
+        add(n.tr.company ? `g${n.tr.company.id}` : k, n.x, n.z, true);
+      }
+      this.trade = [...marks.values()].sort((a, b) => b.live - a.live).slice(0, 14);
     }
     for (const t of this.trade) {
       const cx = Math.floor(t.x / REGION_W);

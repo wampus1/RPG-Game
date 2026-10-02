@@ -1847,6 +1847,68 @@ export class Sim {
     }
   }
 
+  // Someone you've watched walk all the way into town ahead of their
+  // journey's reckoning (see game.updateCaravans): they're here now, not
+  // gone off the road to turn up again later. `at` is where they stand (and
+  // what they ride), for whoever they become in town to carry on from.
+  arriveEarly(tr, at) {
+    const now = this.abs;
+    const day = Math.floor(now / DAY);
+    this.landing ||= new Map();
+    if (tr.company) {
+      const g = tr.company;
+      const i = Number(tr.key.split(':')[2]);
+      this.landing.set(`c${g.id}:${i}`, { ...at, t: now });
+      if (g.state === 'road') this.caravans.arriveAt(g, new RNG(hash4(g.id, Math.floor(now / 60), 0xca)));
+      return 'company';
+    }
+    if (tr.adv) {
+      const a = tr.adv;
+      this.landing.set(`a${a.id}`, { ...at, t: now });
+      if (a.state === 'road') {
+        a.arrive = Math.min(a.arrive, now);
+        this.adventurers.arriveAt(a, a.dest, new RNG(hash4(a.id, Math.floor(now / 60), 0xa1)));
+      }
+      return 'adventurer';
+    }
+    if (tr.settler !== undefined) {
+      const p = this.founding.parties.find((q) => q.id === tr.settler);
+      this.landing.set(`h${tr.L.settlement.id}:${tr.rec.idx}`, { ...at, t: now });
+      if (p && p.stage === 'travel') {
+        p.arrive = Math.min(p.arrive, now);
+        this.founding.advance(p, day);
+      }
+      return 'settler';
+    }
+    const t = tr.rec.trip;
+    if (tr.to.id !== tr.L.settlement.id) {
+      if (!t || t.phase !== 'away' || tr.to.id !== t.dest) return null;
+      // In at the far town: the visit starts now.
+      const v = (this.visits.get(t.dest) || []).find((q) => q.id === t.visit);
+      if (v && v.arrive > now) v.arrive = now;
+      if (t.arrive > now) t.arrive = now;
+      if (v) this.landing.set(`v${v.id}`, { ...at, t: now });
+      return 'visit';
+    }
+    // Home again.
+    this.landing.set(`h${tr.L.settlement.id}:${tr.rec.idx}`, { ...at, t: now });
+    if (!t || t.phase !== 'away') return 'home';
+    if (t.outing !== undefined && t.outing !== null) {
+      const o = this.outings.get(t.outing);
+      if (o && o.phase === 'out') this.outings.home(tr.L, o, now, day);
+    } else if (t.ret > now) this.returnMerchant(tr.L, tr.rec, day);
+    return 'home';
+  }
+
+  // Where someone who just walked in (above) stands, once (and only while
+  // it's fresh).
+  landed(key) {
+    const at = this.landing && this.landing.get(key);
+    if (!at) return null;
+    this.landing.delete(key);
+    return this.abs - at.t <= 30 ? at : null;
+  }
+
   // Spawn / retire visiting merchant entities in active settlements.
   // Merchants out on the road right now: where they are between towns
   // (along the road, if one has been built) and where they're heading.

@@ -104,16 +104,30 @@ for (const [tier, [speed, dmg]] of Object.entries(TIERS)) {
   item(`${tier}_pickaxe`, { name: `${t} Pickaxe`, kind: 'tool', stack: 1, tool: 'pick', speed, damage: 1 + dmg * 0.5, reach: 1.5, cooldown: 0.45, value: 4 * speed });
   item(`${tier}_axe`, { name: `${t} Axe`, kind: 'tool', stack: 1, tool: 'axe', speed, damage: 2 + dmg, reach: 1.5, cooldown: 0.55, value: 4 * speed });
   item(`${tier}_shovel`, { name: `${t} Shovel`, kind: 'tool', stack: 1, tool: 'shovel', speed, damage: 1 + dmg * 0.5, reach: 1.5, cooldown: 0.45, value: 3 * speed });
-  item(`${tier}_sword`, { name: `${t} Sword`, kind: 'weapon', stack: 1, damage: 3 + dmg * 1.5, reach: 1.6, cooldown: 0.42, value: 6 * speed });
+  item(`${tier}_sword`, { name: `${t} Sword`, kind: 'weapon', stack: 1, damage: 3 + dmg * 1.5, reach: 1.6, cooldown: 0.42, value: 6 * speed, heft: tier === 'stone' ? 1.1 : tier === 'gold' ? 0.95 : 1 });
 }
 // Forged by smiths of a realm that knows steelworking (see tech.js).
-item('steel_sword', { name: 'Steel Sword', kind: 'weapon', stack: 1, damage: 9, reach: 1.7, cooldown: 0.4, value: 48 });
+item('steel_sword', { name: 'Steel Sword', kind: 'weapon', stack: 1, damage: 9, reach: 1.7, cooldown: 0.4, value: 48, heft: 0.9 });
 item('spear', { name: 'Iron Spear', kind: 'weapon', stack: 1, damage: 5, reach: 2.6, cooldown: 0.65, value: 20 });
 item('club', { name: 'Wooden Club', kind: 'weapon', stack: 1, damage: 3, reach: 1.4, cooldown: 0.5, value: 3 });
 // A fire-hardened point: what a watch carries before it has a forge.
 item('wooden_spear', { name: 'Wooden Spear', kind: 'weapon', stack: 1, damage: 3.5, reach: 2.6, cooldown: 0.65, value: 5 });
 item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3, cooldown: 0.3, value: 10 });
-item('mace', { name: 'Iron Mace', kind: 'weapon', stack: 1, damage: 4.5, reach: 1.4, cooldown: 0.6, value: 22 });
+item('mace', { name: 'Iron Mace', kind: 'weapon', stack: 1, damage: 4.5, reach: 1.4, cooldown: 0.6, value: 22, heft: 1.15 });
+// More arms. One-handed ones leave the other arm free for a shield, or a
+// second blade; two-handed ones (`hands: 2`) take both, so no shield and
+// nothing in the off hand while one's out. `heft` is how slow it is to
+// swing beside others of its kind (1: middling), and `style` how it's
+// fought with, where the name doesn't say (see combat.js).
+item('short_sword', { name: 'Short Sword', kind: 'weapon', stack: 1, damage: 4, reach: 1.4, cooldown: 0.34, value: 16, heft: 0.82 });
+item('sabre', { name: 'Curved Sabre', kind: 'weapon', stack: 1, damage: 5.5, reach: 1.6, cooldown: 0.38, value: 32, heft: 0.9 });
+item('hand_axe', { name: 'Hand Axe', kind: 'weapon', stack: 1, damage: 5, reach: 1.4, cooldown: 0.5, value: 14, heft: 0.85 });
+item('flail', { name: 'Iron Flail', kind: 'weapon', stack: 1, damage: 5.5, reach: 1.5, cooldown: 0.62, value: 28, style: 'flail' });
+item('quarterstaff', { name: 'Quarterstaff', kind: 'weapon', stack: 1, damage: 3.5, reach: 1.8, cooldown: 0.45, value: 6, hands: 2, style: 'staff' });
+item('greatsword', { name: 'Greatsword', kind: 'weapon', stack: 1, damage: 10, reach: 1.8, cooldown: 0.85, value: 72, hands: 2, style: 'great' });
+item('battle_axe', { name: 'Battle Axe', kind: 'weapon', stack: 1, damage: 11, reach: 1.6, cooldown: 0.95, value: 60, hands: 2, style: 'great', heft: 1.1 });
+item('warhammer', { name: 'War Hammer', kind: 'weapon', stack: 1, damage: 9, reach: 1.6, cooldown: 0.9, value: 55, hands: 2, style: 'maul' });
+item('halberd', { name: 'Halberd', kind: 'weapon', stack: 1, damage: 8, reach: 2.6, cooldown: 0.85, value: 50, hands: 2, style: 'halberd' });
 item('hammer', { name: 'Smith Hammer', kind: 'tool', stack: 1, tool: 'pick', speed: 2.5, damage: 3, reach: 1.4, cooldown: 0.5, value: 12 });
 item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, damage: 1.5, reach: 1.5, cooldown: 0.5, value: 5 });
 item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
@@ -125,8 +139,17 @@ item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });
 // A rope lead, to lead an animal about or tie it up at a fence.
 item('lead', { name: 'Lead', kind: 'misc', stack: 8, value: 6 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
-item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15 });
+item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15, hands: 2 });
 item('arrow', { value: 1 });
+// Further, harder or cheaper than a hunting bow: a longbow (far and hard,
+// slow to draw), a crossbow (bolts that punch through; slow to wind), a
+// sling (river stones, or any cobble), and javelins (thrown, and picked up
+// again where they land).
+item('longbow', { name: 'Longbow', kind: 'weapon', stack: 1, damage: 6, reach: 1.2, range: 11, ranged: true, cooldown: 1.25, value: 34, hands: 2 });
+item('crossbow', { name: 'Crossbow', kind: 'weapon', stack: 1, damage: 9, reach: 1.2, range: 10, ranged: true, cooldown: 1.9, value: 58, hands: 2, ammo: 'bolt' });
+item('bolt', { name: 'Crossbow Bolt', value: 2 });
+item('sling', { name: 'Sling', kind: 'weapon', stack: 1, damage: 3, reach: 1.2, range: 7, ranged: true, cooldown: 0.75, value: 6, ammo: 'cobblestone' });
+item('javelin', { name: 'Javelin', kind: 'weapon', stack: 6, damage: 7, reach: 1.2, range: 7, ranged: true, thrown: true, cooldown: 1.0, value: 9, ammo: 'javelin' });
 
 // --- armour & clothes ----------------------------------------------------------
 // Worn in one of four places. `armor` is the share of each blow it takes
@@ -169,7 +192,20 @@ export function socketed(base, gem) {
 }
 export function canSocket(key) {
   const it = ITEMS[key];
-  return !!it && !it.socket && !it.uniform && (it.kind === 'weapon' || it.kind === 'armor' || (it.kind === 'tool' && it.damage >= 3 && /_(sword|axe)$/.test(key)));
+  return !!it && !it.socket && !it.uniform && !it.thrown && (it.kind === 'weapon' || it.kind === 'armor' || (it.kind === 'tool' && it.damage >= 3 && /_(sword|axe)$/.test(key)));
+}
+
+// Two hands to hold it (no shield, nothing in the off hand).
+export function twoHanded(key) {
+  const it = key && ITEMS[key];
+  return !!it && it.hands === 2;
+}
+
+// Can it be carried in the off hand, a second blade where a shield would
+// be? (One-handed, and for close work.)
+export function offhandable(key) {
+  const it = key && ITEMS[key];
+  return !!it && it.kind === 'weapon' && !it.ranged && it.hands !== 2;
 }
 export function registerSockets() {
   for (const key of Object.keys(ITEMS)) {
@@ -213,6 +249,13 @@ potion('potion_swiftness', 'Potion of Swiftness', 18, { stat: 'agi', n: 2, hours
 potion('potion_fortitude', 'Potion of Fortitude', 18, { stat: 'end', n: 2, hours: 4 });
 potion('potion_charm', 'Philtre of Charm', 20, { stat: 'cha', n: 2, hours: 4 });
 potion('healing_salve', 'Healing Salve', 10, { heal: 8 });
+// For a fight, an hour or three: deeper breath (more stamina), a second
+// wind (it comes back faster), a fury (harder blows) and quicksilver (quicker
+// ones).
+potion('potion_breath', 'Tonic of Deep Breath', 22, { combat: 'breath', n: 5, hours: 3 });
+potion('potion_wind', 'Second Wind Elixir', 22, { combat: 'wind', n: 0.8, hours: 3 });
+potion('potion_fury', 'Berserker\'s Brew', 26, { combat: 'fury', n: 0.35, hours: 2 });
+potion('potion_haste', 'Quicksilver Draught', 26, { combat: 'haste', n: 0.35, hours: 2 });
 
 // --- the scribe's trade -----------------------------------------------------------
 item('paper', { value: 2 });

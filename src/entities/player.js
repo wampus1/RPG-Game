@@ -3,7 +3,8 @@
 import { Entity } from './entity.js';
 import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
-import { ITEMS, WEAR_SLOTS, ARMOR_CAP } from '../world/items.js';
+import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable } from '../world/items.js';
+import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult } from '../game/hero.js';
 import { steer } from './raft.js';
@@ -60,7 +61,9 @@ export class Player extends Entity {
 
   // What people see: your own looks with your armour and clothes on top.
   get look() {
-    const key = WEAR_SLOTS.map((k) => this.equip[k] || '').join('|');
+    // (A two-handed weapon out: the shield's slung on the back, out of sight.)
+    const slung = twoHanded(this.heldItem());
+    const key = WEAR_SLOTS.map((k) => this.equip[k] || '').join('|') + (slung ? '|2h' : '');
     if (this._look && this._lookBase === this.baseLook && this._lookKey === key) return this._look;
     const gear = {};
     let hat = this.baseLook.hat;
@@ -68,6 +71,7 @@ export class Player extends Entity {
       const it = this.equip[k] && ITEMS[this.equip[k]];
       if (!it) continue;
       if (k === 'head') hat = it.look;
+      else if (k === 'shield' && (!it.block || slung)) continue;
       else gear[k] = it.look;
     }
     this._look = Object.keys(gear).length ? { ...this.baseLook, hat, gear } : { ...this.baseLook, hat };
@@ -94,11 +98,13 @@ export class Player extends Entity {
   wear(i) {
     const s = this.inv[i];
     const it = s && ITEMS[s.item];
-    if (!it || it.kind !== 'armor') return null;
-    const old = this.equip[it.slot];
-    this.equip[it.slot] = s.item;
+    // (A one-handed blade can go in the off hand, where a shield would.)
+    const slot = it && it.kind === 'armor' ? it.slot : offhandable(s && s.item) ? 'shield' : null;
+    if (!slot) return null;
+    const old = this.equip[slot];
+    this.equip[slot] = s.item;
     this.inv[i] = old ? { item: old, count: 1 } : s.count > 1 ? { item: s.item, count: s.count - 1 } : null;
-    return it.slot;
+    return slot;
   }
 
   // Take off what's worn in a place, into the pack (if there's room).
@@ -153,6 +159,11 @@ export class Player extends Entity {
     return k ? ITEMS[k] : null;
   }
 
+  // A second blade carried in the off hand (see combat.offhandOf).
+  offhandItem() {
+    return this.sleeping || this.raft ? null : offhandOf(this);
+  }
+
   get lightLevel() {
     const k = this.heldItem();
     return k === 'torch' ? 11 : k === 'lantern' ? 12 : k === 'campfire' ? 8 : 0;
@@ -190,7 +201,8 @@ export class Player extends Entity {
     }
     if (this.dead || this.moving || blocked) return;
     // Mid-roll, or staggered (a heavy blow, a broken guard): no steering.
-    if (this.rollT > 0 || this.stunT > 0 || this.guardBroken > 0) return;
+    // (Nor while a blow of your own is coming round: you're committed.)
+    if (this.rollT > 0 || this.stunT > 0 || this.guardBroken > 0 || this.swing || this.commitT > 0) return;
     // Most recently pressed held direction wins.
     let d = null;
     if (input.lastMoveKey && input.isDown(input.lastMoveKey)) d = MOVE_KEYS[input.lastMoveKey];

@@ -15,7 +15,7 @@ import { makeAdventurer } from '../entities/npcgen.js';
 import { CULTURES } from '../world/names.js';
 import { BIOMES } from '../world/biomes.js';
 import { has as heroHas } from '../game/hero.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, offhandable } from '../world/items.js';
 
 const ADJ = ['Black', 'Red', 'Grey', 'Hollow', 'Crooked', 'Ash', 'Iron', 'Night', 'Wolf', 'Bramble', 'Rook', 'Bone'];
 const NOUN = ['Hand', 'Hounds', 'Knives', 'Crows', 'Brotherhood', 'Company', 'Gang', 'Blades', 'Hoods', 'Wolves'];
@@ -74,7 +74,7 @@ export class Bandits {
     return {
       id: rng.int(1, 1e9), name, personality, traits: traits || [],
       look: { ...look, hat: 'hood', outfit: rng.pick(['hunter', 'rags', 'vest']), accent: '#3a2a2a' },
-      weapon: weapon || rng.pick(['iron_sword', 'stone_sword', 'iron_axe', 'spear', 'club']),
+      weapon: weapon || rng.pick(['iron_sword', 'stone_sword', 'iron_axe', 'spear', 'club', 'hand_axe', 'short_sword', 'flail', 'quarterstaff', 'battle_axe']),
       maxHp: 18 + rng.int(0, 6), hp: 18,
     };
   }
@@ -444,7 +444,8 @@ export class Bandits {
       name: m.name, age: 'adult', job: 'bandit', home: null, bed: 0, household: null,
       partner: null, children: [], parents: [], friends: [], personality: m.personality, traits: m.traits,
       hobbies: [], look: m.look, alive: true, shift: 'day', restDay: -1,
-      equipment: { tool: m.weapon, hobbyItem: null, items: [{ item: m.weapon, count: 1 }], coins: 0, armor: 0.1 },
+      // (Some fight with a knife or a hatchet in the other hand too.)
+      equipment: { tool: m.weapon, hobbyItem: null, items: [{ item: m.weapon, count: 1 }], coins: 0, armor: 0.1, shield: m.id % 4 === 0 && offhandable(m.weapon) ? (m.id % 8 === 0 ? 'hand_axe' : 'dagger') : null },
       maxHp: m.maxHp, hp: Math.max(1, m.hp), work: { kind: 'none' }, schedule: { work: sched, rest: sched },
       coins: 3 + (m.id % 9), inv: [], skills: { trading: 0.1, cooking: 0.2, hunting: 0.6, fishing: 0.1, farming: 0, building: 0.1, crafting: 0.2 },
       fed: 1, hungry: 0, mood: 0.5, grief: [], override: null, away: false, doneKey: null,

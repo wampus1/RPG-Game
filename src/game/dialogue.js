@@ -24,6 +24,7 @@ import { rainedRecently } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
 import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
+import { fortuneOf } from '../sim/prosperity.js';
 
 function pick(rng, arr) {
   return arr[Math.floor(rng.next() * arr.length)];
@@ -872,7 +873,7 @@ function professionTalk(npc, game, arg) {
       return { lines: [P.pitch, why] };
     }
     const lines = [P.pitch];
-    const kitItems = [...P.kit, ...(P.bench ? [[P.bench, 1]] : [])];
+    const kitItems = [...(car.kitFor ? car.kitFor(key, npc.layout.settlement) : P.kit), ...(P.bench ? [[P.bench, 1]] : [])];
     const kit = t.kit && kitItems.length ? ` We'll give you ${kitItems.map(([it, n]) => plural(it, n)).join(', ')} to start.` : '';
     const fees = t.fee ? `The licence costs ¤${t.licenceFee}${t.workshopFee ? `, and ¤${t.workshopFee} more: the builders will put up a workshop for you, with your own ${ITEMS[TRADE_BENCHES[key]?.[0]]?.name?.toLowerCase() || 'bench'}` : ''}${t.shop ? ' (you already have your workshop here)' : ''}.` : 'There\'s no fee: it\'s sworn service.';
     lines.push(`${fees}${kit}`);
@@ -2066,6 +2067,27 @@ export function talkContext(game, s) {
   const r = s ? religionOf(s) : null;
   const c = s ? cuisineOf(s) : null;
   const w = game.weatherIn ? game.weatherIn(s) : 'clear';
+  const L = s && game.world ? game.world.layouts.get(s.id) : null;
+  const sim = game.sim;
+  // What's dear and what's cheap on the market just now.
+  const notes = L && L.econ && sim && sim.market ? sim.market.notes(L, 4) : [];
+  const short = notes.find((q) => q.v < 0);
+  const lots = notes.find((q) => q.v > 0);
+  // The nearest other town (for talk of cousins and roads).
+  const ow = game.world && game.world.ow;
+  let other = null;
+  if (s && ow) {
+    let bd = Infinity;
+    for (const q of ow.settlements) {
+      if (q === s || q.deserted || q.condition === 'abandoned') continue;
+      const d = Math.hypot(q.cx - s.cx, q.cz - s.cz);
+      if (d < bd) {
+        bd = d;
+        other = q.name;
+      }
+    }
+  }
+  const m = game.minute ?? 720;
   return {
     culture: (s && (s.civ ? s.civ.style : s.style)) || 'vale',
     town: s ? s.name : 'this town',
@@ -2075,5 +2097,14 @@ export function talkContext(game, s) {
     drink: c ? c.drink : 'ale',
     realm: s && s.civ ? `the ${s.civ.name.replace(/^The /, '')}` : 'the council',
     weather: { rain: 'rain', snow: 'snow', fog: 'fog', storm: 'storm' }[w] || 'fine weather',
+    wkind: { rain: 'rain', snow: 'snow', fog: 'fog', storm: 'storm' }[w] || 'fine',
+    time: m < 300 || m >= 1320 ? 'night' : m < 660 ? 'morning' : m >= 1050 ? 'evening' : null,
+    L,
+    other,
+    scarce: short ? short.name : null,
+    plenty: lots ? lots.name : null,
+    fortune: L && sim && sim.prosperity ? fortuneOf(L) : null,
+    famine: !!(L && L.econ && (L.econ.famineDays || 0) >= 4),
+    war: !!(s && s.civ && sim && sim.war && sim.war.atWar && sim.war.atWar(s.civ)),
   };
 }

@@ -14,7 +14,7 @@ import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
-import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
+import { beginAttack, tickAttack, inReach, styleOf, offhandOf } from '../game/combat.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
@@ -150,6 +150,13 @@ export class NPC extends Entity {
     return null;
   }
 
+  // A second blade in the off hand, shown when there's fighting to do.
+  offhandItem() {
+    const h = this.heldItem();
+    if (!h || !ITEMS[h] || ITEMS[h].kind !== 'weapon' || ITEMS[h].ranged) return null;
+    return offhandOf(this);
+  }
+
   weapon() {
     // (An adventurer with the bow out, keeping their distance.)
     if (this.drawnBow) {
@@ -174,7 +181,7 @@ export class NPC extends Entity {
   attackDamage(ranged = false) {
     const w = ranged ? this.weapon() : this.meleeWeapon();
     const base = w ? ITEMS[w].damage : 1.5;
-    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? (this.rec.drilled ? 1.4 : 1.2) : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1) * (this.warband ? warBonus(this) : 1)));
+    return Math.max(1, Math.round(base * (this.rec.job === 'guard' ? (this.rec.drilled ? 1.55 : 1.35) : this.adventurer ? 1.3 : 1) * (this.rec.age === 'child' ? 0.4 : 1) * (this.warband ? warBonus(this) : 1)));
   }
 
   canShoot() {
@@ -2730,15 +2737,23 @@ export class NPC extends Entity {
     // Each weapon its own way: a spear thrusts from two paces, an axe
     // chops slow and heavy, a dagger stabs twice (see combat.js). The blow
     // is wound up first, so it can be seen coming.
-    const st = styleOf(this);
+    const st = styleOf(this, true);
     const reach = st.reach;
     if (inReach(this, t, st)) {
       this.face(t.x, t.z);
-      // (Dazzled by a topaz: not this moment.)
-      if (this.attackCd <= 0 && !(this.stunT > 0) && beginAttack(game, this, t, st)) {
+      // (Dazzled by a topaz: not this moment.) The watch fights hard: a
+      // guard strings blows together now and then, and won't be shaken
+      // off by a step aside (see combat.js); so do soldiers, a little.
+      const drilled = guard && this.rec.drilled;
+      const soldier = this.warband && !this.warband.levy;
+      const combo = guard ? (this.rng.chance(drilled ? 0.5 : 0.38) ? this.rng.int(1, drilled ? 2 : 1) + (this.rng.chance(0.25) ? 1 : 0) : 0)
+        : soldier || this.adventurer ? (this.rng.chance(0.25) ? 1 : 0) : 0;
+      const press = guard ? (drilled ? 0.75 : 0.6) : soldier ? 0.4 : this.adventurer ? 0.5 : 0;
+      if (this.attackCd <= 0 && !(this.stunT > 0) && beginAttack(game, this, t, st, { combo, press })) {
         onSwing(game, this, t);
         this.windup.onHit = () => onBladeHit(game, this, t);
-        this.windup.dur *= swingMult(this) * (guard ? 0.95 : this.adventurer ? 0.9 : 1.05);
+        this.windup.dur *= swingMult(this) * (guard ? 0.88 : this.adventurer ? 0.9 : 1.05);
+        if (combo && this.rng.chance(0.4)) this.say(this.rng.pick(['Have at you!', 'Yield!', 'Stand and fight!', 'Hah!']), 1, '#ffd0a0');
       }
       return;
     }

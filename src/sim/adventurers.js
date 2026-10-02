@@ -9,7 +9,7 @@
 import { alive, ledger, DAY, st, price, kitchenOf, invCount, glutFactor, MEAL_ITEMS, setOverride } from './econ.js';
 import { deserted } from './civic.js';
 import { makeAdventurer } from '../entities/npcgen.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, offhandable } from '../world/items.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { CULTURES } from '../world/names.js';
 
@@ -406,7 +406,8 @@ export class Adventurers {
       name: a.name, age: 'adult', job: 'adventurer', home: null, bed: 0, household: null,
       partner: null, children: [], parents: [], friends: [], personality: a.personality, traits: a.traits,
       hobbies: [], look: a.look, alive: true, shift: 'day', restDay: -1,
-      equipment: { tool: a.gear.weapon, hobbyItem: null, items, coins: 0, armor: ARMOR(a.gear.wear) },
+      // (One in three fights with a second blade.)
+      equipment: { tool: a.gear.weapon, hobbyItem: null, items, coins: 0, armor: ARMOR(a.gear.wear), shield: a.id % 3 === 0 && offhandable(a.gear.weapon) ? (a.level >= 2 ? 'short_sword' : 'dagger') : null },
       wear: a.gear.wear, maxHp: a.maxHp, hp: Math.max(1, Math.round(a.hp)), work: { kind: 'none' }, schedule: { work: sched, rest: sched },
       coins: a.coins, inv: a.arrows ? [{ item: 'arrow', count: a.arrows }, { item: 'healing_salve', count: st.count(a.pack, 'healing_salve') }].filter((q) => q.count) : [],
       skills: { trading: 0.6, cooking: 0.3, hunting: 0.8, fishing: 0.3, farming: 0.1, building: 0.2, crafting: 0.4 },

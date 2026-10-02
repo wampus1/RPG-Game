@@ -7,7 +7,7 @@ import { ITEMS } from '../world/items.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
-  guard: { title: 'Guard', place: 'guardhouse', start: 360, end: 1080, tools: ['spear', 'iron_sword', 'iron_sword', 'iron_axe', 'mace', 'bow'], outfit: 'guard' },
+  guard: { title: 'Guard', place: 'guardhouse', start: 360, end: 1080, tools: ['spear', 'iron_sword', 'iron_sword', 'iron_axe', 'mace', 'bow', 'halberd', 'sabre', 'short_sword', 'flail', 'greatsword', 'hand_axe'], outfit: 'guard' },
   innkeeper: { title: 'Innkeeper', place: 'tavern', start: 600, end: 1400, tools: [], outfit: 'apron', trader: 'inn' },
   cook: { title: 'Cook', place: 'tavern', start: 420, end: 1260, tools: ['ladle'], outfit: 'baker', trader: 'cook' },
   barkeep: { title: 'Barkeep', place: 'tavern', start: 660, end: 1380, tools: [], outfit: 'apron' },
@@ -329,9 +329,13 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   // with it); archers keep a dagger for close work; a sword or a mace goes
   // with a shield, most of the time.
   let shield = null;
+  // (Or a second blade on the shield arm, to fight with two; and never a
+  // shield with arms that want both hands.)
   if (job === 'guard') {
     if (tool === 'bow') items.push({ item: 'arrow', count: rng.int(12, 24) }, { item: 'dagger', count: 1 });
-    if ((tool === 'iron_sword' || tool === 'mace') && rng.chance(0.7)) shield = cond === 'prosperous' && rng.chance(0.6) ? 'iron_shield' : rng.chance(0.5) ? 'round_shield' : 'wooden_shield';
+    const oneHand = ['iron_sword', 'mace', 'sabre', 'short_sword', 'flail', 'hand_axe'].includes(tool);
+    if (oneHand && rng.chance(0.7)) shield = cond === 'prosperous' && rng.chance(0.6) ? 'iron_shield' : rng.chance(0.5) ? 'round_shield' : 'wooden_shield';
+    else if (oneHand && rng.chance(0.6)) shield = rng.pick(['dagger', 'short_sword', 'hand_axe']);
   }
   let hobbyItem = null;
   for (const h of hobbies) {
@@ -546,7 +550,8 @@ export function availOf(layout) {
 // A shield on their arm (or none).
 export function withShield(look, shield) {
   const gear = { ...(look.gear || {}) };
-  if (shield && ITEMS[shield]) gear.shield = ITEMS[shield].look;
+  // (A blade in the off hand isn't worn: it's drawn in the hand.)
+  if (shield && ITEMS[shield] && ITEMS[shield].block) gear.shield = ITEMS[shield].look;
   else delete gear.shield;
   return Object.keys(gear).length ? { ...look, gear } : { ...look, gear: undefined };
 }

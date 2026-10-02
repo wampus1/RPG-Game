@@ -42,7 +42,7 @@ export const TRAITS = {
   lucky: { name: 'Lucky', about: 'Better finds on the end of a fishing line.' },
   early_riser: { name: 'Early Riser', about: 'You heal quickly in the morning hours.' },
   nimble: { name: 'Nimble', about: 'A dodge roll costs half the breath and carries you further.' },
-  tireless: { name: 'Tireless', about: '+30 stamina, and it comes back quicker.' },
+  tireless: { name: 'Tireless', about: '+3 stamina, and it comes back quicker.' },
   sure_footed: { name: 'Sure-Footed', about: 'Heavy blows don\'t stagger you or knock you back.' },
   iron_stomach: { name: 'Iron Stomach', about: 'Every meal heals 1 more; raw food does you as much good as cooked.' },
   devout: { name: 'Devout', about: 'Priests and the devout think well of you; a prayer at an altar adds blue hearts too.' },
@@ -52,7 +52,7 @@ export const TRAITS = {
   rude: { name: 'Blunt', about: 'People like you a little less (+1 stat point).', flaw: true },
   slow: { name: 'Heavy-Footed', about: 'You walk a little slower (+1 stat point).', flaw: true },
   clumsy: { name: 'Clumsy', about: 'Rolling and blocking cost a third more breath (+1 stat point).', flaw: true },
-  short_winded: { name: 'Short of Breath', about: '-30 stamina (+1 stat point).', flaw: true },
+  short_winded: { name: 'Short of Breath', about: '-3 stamina (+1 stat point).', flaw: true },
   outlander: { name: 'Outlander', about: 'Traders charge you 8% more, wherever you go (+1 stat point).', flaw: true },
   notorious: { name: 'Notorious', about: 'Your face is known: people notice what you get up to from further off (+1 stat point).', flaw: true },
 };

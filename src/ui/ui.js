@@ -4,6 +4,7 @@ import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from 
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS } from '../world/items.js';
 import { gemText } from '../game/gems.js';
+import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
 import { itemIcon, drawJewelled } from '../render/sprites.js';
@@ -360,7 +361,11 @@ export class UI {
     if (!d) return;
     const lines = [{ text: d.name + (slot.count > 1 ? ` x${slot.count}` : ''), color: C.hi }];
     if (d.kind === 'tool') lines.push({ text: `${cap(d.tool === 'pick' ? 'pickaxe' : d.tool || 'tool')} · speed ${d.speed}`, color: C.cyan });
-    if (d.damage) lines.push({ text: `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
+    if (d.damage) lines.push({ text: d.ranged ? `Damage ${d.damage} · range ${d.range}` : `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
+    if (d.kind === 'weapon') {
+      const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}` : null;
+      lines.push({ text: `${d.hands === 2 ? 'Two-handed (no shield)' : d.ranged ? 'One-handed' : 'One-handed · RMB in pack: off hand'}${ammo ? ` · ${ammo}` : ''}`, color: C.dim });
+    }
     if (d.kind === 'food') lines.push({ text: `Restores ${d.heal} HP [F/RMB]`, color: C.green });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
     const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
@@ -369,7 +374,7 @@ export class UI {
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {
       const e = d.effect || {};
-      const what = e.stat ? `${STAT[e.stat]} +${e.n} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health for today` : `Heals ${e.heal}`;
+      const what = e.stat ? `${STAT[e.stat]} +${e.n} for ${e.hours} hours` : e.combat ? `${combatBuffText(e)} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health for today` : `Heals ${e.heal}`;
       lines.push({ text: `${what} [F/RMB]`, color: '#c0a0ff' });
     }
     if (d.newspaper) lines.push({ text: 'Read it [F/RMB] · hand copies to people', color: C.dim });
@@ -399,14 +404,17 @@ export class UI {
     const bh = Math.ceil(blue / 2);
     for (let i = 0; i < bh; i++) g.put(1 + hearts + i, 0, '♥', blue - i * 2 >= 2 ? '#58a8ff' : '#3868a8');
     g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
-    // Stamina (shown when it's been spent): a bar under the hearts.
-    const sm = p.maxStamina || 100;
-    if (p.stamina !== undefined && p.stamina < sm - 0.5) {
-      const n = 10;
-      const f = Math.max(0, p.stamina) / sm;
+    // Stamina (shown when it's been spent): a pip for each point, under
+    // the hearts; the one filling back up glows dimmer.
+    const sm = p.maxStamina || 10;
+    if (p.stamina !== undefined && p.stamina < sm - 0.05) {
+      const n = Math.min(18, Math.ceil(sm));
+      const v = Math.max(0, p.stamina);
+      const low = v < Math.max(2, sm * 0.25);
+      g.fill(13, 1, n + 2, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
       for (let i = 0; i < n; i++) {
-        const full = i < Math.round(f * n);
-        g.put(14 + i, 1, full ? '■' : '▪', !full ? '#5a5040' : f < 0.25 ? '#ff9040' : '#e8d060');
+        const part = Math.max(0, Math.min(1, v - i));
+        g.put(14 + i, 1, part >= 1 ? '■' : part > 0 ? '▪' : '·', part >= 1 ? (low ? '#ff9040' : '#e8d060') : part > 0 ? '#9a8a40' : '#5a5040');
       }
     }
     // Potions still working.
@@ -415,14 +423,15 @@ export class UI {
     if (buffs.length) {
       const txt = buffs.map((q) => {
         const left = Math.max(0, q.until - nowAbs);
-        return `${{ str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' }[q.stat]}+${q.n} ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
+        const what = q.combat ? { breath: `STA+${q.n}`, wind: 'REGEN', fury: 'FURY', haste: 'HASTE' }[q.combat] : `${{ str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' }[q.stat]}+${q.n}`;
+        return `${what} ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
       }).join('  ');
       g.text(1, 3, txt.slice(0, 40), '#c0a0ff', 'rgba(10,8,16,0.55)');
     }
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
     g.text(1, 1, `¤ ${coins}`, C.hi);
     const held = p.heldDef();
-    if (held && !(p.stamina < sm - 0.5)) g.text(8, 1, held.name.slice(0, 15), C.fg);
+    if (held && !(p.stamina < sm - 0.05)) g.text(8, 1, held.name.slice(0, 15), C.fg);
     else if (held) g.text(8, 1, held.name.slice(0, 5), C.fg);
     const s = game.currentSettlement;
     let loc;

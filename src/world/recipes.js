@@ -97,6 +97,9 @@ r('workbench', 'stool', 2, { planks: 1, stick: 2 });
 r('workbench', 'hanging_sign', 1, { planks: 2, stick: 1, string: 1 });
 r('workbench', 'snare', 1, { stick: 2, string: 2 });
 r('workbench', 'bow', 1, { stick: 3, string: 3 });
+r('workbench', 'longbow', 1, { stick: 5, string: 4 });
+r('workbench', 'sling', 1, { string: 3, leather: 1 });
+r('workbench', 'quarterstaff', 1, { planks: 2, stick: 2 });
 r('workbench', 'arrow', 8, { stick: 1, feather: 1, cobblestone: 1 });
 
 // --- furnace --------------------------------------------------------------------
@@ -125,6 +128,17 @@ for (const t of ['iron', 'gold']) {
 r('anvil', 'spear', 1, { iron_ingot: 2, stick: 3 });
 r('anvil', 'dagger', 1, { iron_ingot: 1, stick: 1 });
 r('anvil', 'mace', 1, { iron_ingot: 3, stick: 1 });
+r('anvil', 'short_sword', 1, { iron_ingot: 1, stick: 1, leather: 1 });
+r('anvil', 'sabre', 1, { iron_ingot: 3, stick: 1, leather: 1 });
+r('anvil', 'hand_axe', 1, { iron_ingot: 2, stick: 1 });
+r('anvil', 'flail', 1, { iron_ingot: 3, stick: 1, string: 2 });
+r('anvil', 'greatsword', 1, { iron_ingot: 5, stick: 2, leather: 1 });
+r('anvil', 'battle_axe', 1, { iron_ingot: 5, stick: 3 });
+r('anvil', 'warhammer', 1, { iron_ingot: 5, stick: 3 });
+r('anvil', 'halberd', 1, { iron_ingot: 4, stick: 4 });
+r('anvil', 'crossbow', 1, { iron_ingot: 2, planks: 3, string: 3 });
+r('anvil', 'bolt', 8, { iron_ingot: 1, stick: 2, feather: 1 });
+r('anvil', 'javelin', 3, { iron_ingot: 1, stick: 3 });
 r('anvil', 'iron_shield', 1, { iron_ingot: 5, planks: 2 });
 r('anvil', 'hammer', 1, { iron_ingot: 2, stick: 2 });
 r('anvil', 'hoe', 1, { iron_ingot: 1, stick: 2 });
@@ -166,6 +180,10 @@ r('herbalist', 'potion_swiftness', 1, { herb: 1, feather: 2, glass: 1 });
 r('herbalist', 'potion_fortitude', 1, { herb: 1, mushroom: 1, berries: 1, glass: 1 });
 r('herbalist', 'potion_charm', 1, { flower_red: 1, flower_purple: 1, herb: 1, glass: 1 });
 r('herbalist', 'healing_salve', 2, { herb: 2, mushroom: 1 });
+r('herbalist', 'potion_breath', 1, { herb: 1, berries: 2, feather: 1, glass: 1 });
+r('herbalist', 'potion_wind', 1, { herb: 2, apple: 1, glass: 1 });
+r('herbalist', 'potion_fury', 1, { mushroom: 2, raw_meat: 1, glass: 1 });
+r('herbalist', 'potion_haste', 1, { herb: 1, feather: 2, slime_gel: 1, glass: 1 });
 // Scribes: paper and ink (newspapers are printed from the desk itself),
 // books and scrolls.
 r('scribe', 'paper', 3, { reeds: 3 });
@@ -182,6 +200,9 @@ r('baker', 'pie', 2, { berries: 3, wheat: 2 });
 r('baker', 'feast', 1, { bread: 1, cooked_meat: 1, cabbage: 1, apple: 1 });
 // Smiths: sharpening and fine work beyond the anvil.
 r('smith', 'dagger', 1, { iron_ingot: 1, leather: 1 });
+r('smith', 'short_sword', 1, { iron_ingot: 1, leather: 1 });
+r('smith', 'sabre', 1, { iron_ingot: 2, leather: 1 });
+r('smith', 'greatsword', 1, { iron_ingot: 4, leather: 1 });
 r('smith', 'iron_bars', 6, { iron_ingot: 2 });
 r('smith', 'lantern', 2, { iron_ingot: 1, torch: 2 });
 // Trappers.

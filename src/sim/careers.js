@@ -8,6 +8,10 @@ import { equipFor } from './shops.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { ITEMS, tabardFor } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
+import { RNG, hash4 } from '../util/rng.js';
+
+// The arms a guard may be issued.
+export const GUARD_ARMS = ['iron_sword', 'spear', 'mace', 'iron_axe', 'halberd', 'sabre', 'short_sword', 'flail', 'hand_axe', 'greatsword'];
 
 export const PROFESSIONS = {
   guard: {
@@ -332,6 +336,17 @@ export class Careers {
     return !!j && j.kind === 'profession' && j.job === station;
   }
 
+  // What you're given to start. A guard gets whatever arms the watch has
+  // to hand that day (a blade, a spear, an axe, a halberd...), as the
+  // town's smiths can make them; the rest, the trade's own kit.
+  kitFor(job, s) {
+    const P = PROFESSIONS[job];
+    if (job !== 'guard' || !s) return P.kit;
+    const rng = new RNG(hash4(s.id, this.game.day, this.game.seed >>> 0, 0x6a7d));
+    const arm = this.sim.tech.armFor ? this.sim.tech.armFor(s, rng.pick(GUARD_ARMS)) : rng.pick(GUARD_ARMS);
+    return P.kit.map(([it, n]) => [it === 'iron_sword' ? arm : it, n]);
+  }
+
   takeProfession(mayor, job) {
     const t = this.professionTerms(mayor, job);
     if (!t.ok) return t;
@@ -353,7 +368,7 @@ export class Careers {
     const given = [];
     if (t.kit) {
       this.kits.add(`${s.id}:${job}`);
-      for (const [item, n] of PROFESSIONS[job].kit) {
+      for (const [item, n] of this.kitFor(job, s)) {
         const left = p.give(item, n);
         if (left) g.spawnDrop(item, left, p.x, p.y, p.z, true);
         given.push({ item, count: n });

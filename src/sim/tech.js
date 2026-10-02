@@ -80,6 +80,14 @@ const LEAN = {
 };
 // A first step some realms already have at the start.
 const STARTS = { martial: 'drill', mercantile: 'bookkeeping', scholarly: 'codex', artisan: 'masonry', pious: 'codex', agrarian: 'masonry', seafaring: 'bookkeeping' };
+// What each people leans toward knowing (on top of what its realm holds
+// dear): the highlanders build and forge, the northerners fight, the
+// southerners trade, the forest peoples heal and keep the law of the
+// tribe, the valley folk farm and build.
+const CULTURE_LEAN = {
+  high: { engineering: 1.5, warfare: 1 }, north: { warfare: 1.5, engineering: 0.5 }, sun: { economy: 1.5, society: 0.5 },
+  wild: { society: 1.2, engineering: 0.5 }, vale: { engineering: 1, economy: 0.8 },
+};
 // Who has worked iron since before anyone remembers: highlanders and
 // northerners, and any people that holds arms or craft dear. (Everyone
 // else lights their first forge once they've learned how.)
@@ -92,7 +100,10 @@ export const GATES = {
   job: { blacksmith: 'metalworking', jeweller: 'gemcraft' },
 };
 // The watch's arms, with and without a forge to make them.
-const PRIMITIVE = { iron_sword: 'stone_sword', steel_sword: 'stone_sword', gold_sword: 'stone_sword', iron_axe: 'stone_axe', spear: 'wooden_spear', mace: 'club', iron_shield: 'wooden_shield' };
+const PRIMITIVE = {
+  iron_sword: 'stone_sword', steel_sword: 'stone_sword', gold_sword: 'stone_sword', iron_axe: 'stone_axe', spear: 'wooden_spear', mace: 'club', iron_shield: 'wooden_shield',
+  short_sword: 'stone_sword', sabre: 'stone_sword', greatsword: 'stone_sword', hand_axe: 'stone_axe', battle_axe: 'stone_axe', halberd: 'wooden_spear', flail: 'club', warhammer: 'club', crossbow: 'bow',
+};
 
 
 // Who can be spared for the academy.
@@ -124,8 +135,31 @@ export class Tech {
       const civ = s.civ || (s.values ? s : null);
       for (const v of civ ? civ.values || [] : []) if (STARTS[v] && !st.done.includes(STARTS[v])) st.done.push(STARTS[v]);
       if (this.startsSmithing(s, civ)) st.done.push('metalworking');
+      if (civ) this.startingPerks(civ, st);
     }
     return st;
+  }
+
+  // A realm starts out knowing a few things already: one to seven steps of
+  // the tree (more for a big realm of cities, fewer for a handful of
+  // villages), chosen mostly by its people and what it holds dear, and a
+  // little by chance. Nothing past the middle of the tree.
+  startingPerks(civ, st) {
+    const ow = this.game.world && this.game.world.ow;
+    if (!ow) return;
+    const towns = ow.settlements.filter((q) => q.civ === civ && !q.deserted);
+    const size = towns.reduce((n, q) => n + (q.type === 'city' ? 3 : q.type === 'town' ? 2 : 1), 0);
+    const rng = new RNG(hash4(this.game.seed >>> 0, civ.id, 0x7ec5));
+    const want = Math.max(1, Math.min(7, 1 + Math.round(size / 3) + rng.int(-1, 1)));
+    const lean = {};
+    for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
+    for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
+    while (st.done.length < want) {
+      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && TECHS[k].req.every((r) => st.done.includes(r)) && TECHS[k].also.every((r) => st.done.includes(r)));
+      if (!open.length) break;
+      st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[TECHS[k].branch] || 0) * 1.5) / TECHS[k].tier])));
+    }
+    st.start = st.done.length;
   }
 
   // Born knowing how to work iron? (A free town: if it had a forge going
@@ -263,6 +297,14 @@ export class Tech {
     }
   }
 
+  // A weapon as this town's smiths can make it: wood and stone without a
+  // forge, steel for a sword where they know steelworking.
+  armFor(s, key) {
+    if (!this.has(s, 'metalworking')) return PRIMITIVE[key] || key;
+    if (key === 'iron_sword' && this.has(s, 'steel')) return 'steel_sword';
+    return key;
+  }
+
   // A guard's kit, by what the realm knows: drilled (tougher), a bow
   // (archery), a steel blade (steel).
   equipGuard(L, r) {
@@ -306,7 +348,7 @@ export class Tech {
     }
     // Steel for the swordsmen (an axe or a mace stays an axe or a mace).
     if (metal && this.has(s, 'steel') && (eq.tool === 'iron_sword' || eq.tool === 'stone_sword')) swap(eq.tool, 'steel_sword');
-    if (r.look && r.look.gear && eq.shield && ITEMS[eq.shield]) r.look.gear.shield = ITEMS[eq.shield].look;
+    if (r.look && r.look.gear && eq.shield && ITEMS[eq.shield] && ITEMS[eq.shield].block) r.look.gear.shield = ITEMS[eq.shield].look;
     if (r.ent && !r.ent.dead && r.look) r.ent.look = r.look;
     if (r.ent && !r.ent.dead) {
       r.ent.maxHp = r.maxHp;

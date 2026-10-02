@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { ITEMS } from '../src/world/items.js';
 import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { topicsFor, respond } from '../src/game/dialogue.js';
@@ -47,7 +48,9 @@ test('citizens can join the watch: kit, uniform, armor, patrol pay and a new tit
   assert.ok(offer.choices.some((c) => c.arg === 'take:guard'));
   respond(mayor, game, 'profession', 'take:guard');
   assert.equal(playerProfile(game).job, `Town Guard of ${L.settlement.name}`);
-  for (const k of ['iron_sword', 'bow', 'arrow', 'guard_badge', 'guard_helm', 'guard_boots']) assert.ok(countItem(p.inv, k) > 0, `kit has ${k}`);
+  for (const k of ['bow', 'arrow', 'guard_badge', 'guard_helm', 'guard_boots']) assert.ok(countItem(p.inv, k) > 0, `kit has ${k}`);
+  // (Arms from the watch's rack: a sword, or a spear, an axe, a halberd...)
+  assert.ok(p.inv.some((q) => q && ITEMS[q.item] && ITEMS[q.item].kind === 'weapon' && !ITEMS[q.item].ranged), 'kit has a weapon');
   // The uniform comes in the pack, in the town's colours: put it on.
   const tab = p.inv.findIndex((q) => q && q.item.startsWith('tabard_'));
   assert.ok(tab >= 0, 'a tabard');

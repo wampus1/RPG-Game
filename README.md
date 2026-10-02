@@ -56,8 +56,9 @@ with the music off. `window.__game` exposes the running game.
 | Rotate the block you're about to place | R |
 | Turn the camera a quarter turn | Q / E |
 | Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
-| Attack | Left-click a creature or person (a bow shoots arrows at range); hold the click for a heavy blow |
-| Block / parry | Hold right mouse with a shield (or a weapon) in a fight; raise it just as a blow lands to parry |
+| Attack | Left-click a creature or person (a bow, crossbow or sling shoots at range; a javelin is thrown); hold the click for a heavy blow |
+| Fight with two blades | Right-click a one-handed weapon in your pack to carry it in the off hand (where a shield goes) |
+| Block / parry | Hold right mouse with a shield (or a weapon) in a fight; raise it just before a blow lands to parry |
 | Dodge roll | Space (in the way you're moving, or facing) |
 | Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
 | Sit | Click a chair, bench or stool; move to stand up |
@@ -1196,16 +1197,54 @@ luck does.
 
 **Fighting.** Nobody strikes in an instant: every blow is wound up first (a
 red "!" over the attacker and the ground it will hit lit red), so you can see
-it coming. Roll clear with Space, take it on a shield (hold the right mouse;
-raise it just as it lands to parry and leave them reeling for a riposte), or
-hit them first and knock them off their stroke. Blocking, rolling and swinging
-cost breath (the bar under your hearts); run out and your guard breaks. Hold
-the click for a slow, heavy blow. Each beast fights its own way (wolves lunge,
-slimes slam the ground all round, skeletons hack twice, a boar lowers its head
-and charges), and so does each weapon (a spear reaches two paces, an axe
-chops slow and heavy, a mace staggers, a dagger stabs twice). The watch
-carries all sorts: swords and shields, spears, axes, maces, bows (where the
-realm has learned archery).
+it coming. Your own blows too: barely a moment with a fist, a long haul back
+with a war hammer, and once a swing has started you're committed to it (no
+stepping away, no rolling out of it); if they've moved off by the time it
+comes round, it whiffs. Roll clear with Space (on the move too), take it on a
+shield (hold the right mouse), or hit them first and knock them off their
+stroke. Raise your guard in the last instant before a blow lands and it's a
+parry: a crack of light, the world holds still a moment and slows, sparks fly,
+and they reel back dazed for a few seconds, wide open to a riposte.
+
+Stamina is counted in points (about ten, more with Endurance; the pips under
+your hearts): a punch costs one, a blade two, heavier arms three to five, a
+heavy blow twice that; rolling and taking blows on a shield cost some too, and
+it comes back slowly when you ease off. Run out and your guard breaks.
+
+Blows land with weight: the moment holds for an instant on a hit, sparks and
+dust fly, the target's knocked back, and the swing itself is drawn big (the
+weapon hauled back and trembling, then whipped round in a wide arc with a smear
+of light, or jabbed straight out; the body lunges in after it). Take a hit
+yourself and the screen jolts and reddens at the edges.
+
+Each weapon fights its own way: a sword cuts, a spear or halberd thrusts two
+paces, an axe chops slow and heavy, a mace or flail staggers (a flail swings
+round the edge of a shield), a dagger stabs twice, a quarterstaff, greatsword
+or battle axe sweeps everything in front of you, a war hammer flattens. Heavier
+arms come round slower, for enemies as for you. Two-handed arms (greatsword,
+battle axe, war hammer, halberd, quarterstaff, and every bow and crossbow)
+leave no hand for a shield: it's slung on your back while one's out. A
+one-handed blade can go in the shield arm instead, for a second blow hard on
+the heels of the first; some guards, bandits and adventurers fight that way
+too. At range: a hunting bow, a longbow (further, harder, slower), a crossbow
+(bolts that punch through a raised shield), a sling (it throws any cobble) and
+javelins (thrown, and left lying to be picked up). Smiths forge the new arms;
+the trapper sells slings and longbows, the carpenter quarterstaves.
+
+Each beast fights its own way (wolves lunge, or snap quickly close in; slimes
+slam the ground all round; skeletons hack twice or bash; a boar lowers its head
+and charges), and someone fighting bare-handed jabs, or now and then throws a
+big swing from the shoulder. The watch is hard to beat: guards hit harder,
+string two or three blows together, and if you only step aside as a blow comes
+they follow you and strike where you are (roll, or block). They carry all
+sorts: swords and shields, sabres, spears and halberds, axes, maces and flails,
+greatswords, bows (where the realm has learned archery). Sworn in as a guard
+yourself, you're issued whatever the watch's rack has that day.
+
+**Potions for a fight.** Herbalists (where the realm knows alchemy) brew a
+Tonic of Deep Breath (more stamina), a Second Wind Elixir (it comes back
+faster), Berserker's Brew (harder blows) and a Quicksilver Draught (quicker
+ones), each good for two or three hours.
 
 **Who you are.** Seventeen specialties and eighteen traits on the character
 screen, among them Duelist, Shield Wall, Marksman, Tracker, Tinker, Cook,
@@ -1213,11 +1252,21 @@ Scholar, Horseman and Sailor; Nimble, Tireless, Sure-Footed, Iron Stomach,
 Devout and Silver Tongue; and flaws such as Clumsy, Short of Breath, Outlander
 and Notorious, each of which gives a stat point back.
 
-**Talk.** Ask anyone "How are things?" and they make small talk out of word
-chains built from their people's way of speaking (northerners say aye and
-bairns; southerners call you cousin), their own manner (formal, rough, chirpy,
-terse) and their quirks (pious, gloomy, superstitious, gossipy). Folk in the
-street chatter the same way.
+**Talk.** Ask anyone "How are things?" and they make small talk that's
+made up as it's said, about what's around them: the weather (when it's foul,
+everyone's talking about it), their own trade, their partner and children by
+name, the neighbour who never gave the ladder back, what's dear or cheap on the
+market, hard times or good ones, a war, the next feast, the town down the road.
+Underneath is a phrase grammar (sentence frames with choices in them, so a few
+dozen frames make thousands of sentences) and, for each kind of speaker and
+each topic, a word chain trained on what the frames make, so it finds new
+sentences without gluing half a line about rain to half a line about bread;
+lines that trail off or repeat themselves are thrown back. One thought leads to
+another now and then ("Mind you, ..."). Then it's said in their people's way
+(northerners say aye and bairns; southerners call you cousin), their own manner
+(formal, rough, chirpy, terse, gruff) and their quirks (pious, gloomy,
+superstitious, gossipy, nosy, stingy, absent-minded...). Folk in the street
+chatter the same way.
 
 **Building styles.** Northern longhouses have horns on their gable ends and
 shuttered windows; southern houses hang striped awnings over the door and
@@ -1238,6 +1287,21 @@ capital first): a square paved in stone (masonry), gravelled lanes and cobbled
 streets (surveying), helms on the watch (drill), archery butts (archery), hay
 stacked by the barns (watermills), children with their books (schools), guild
 awnings over the shops (guild charters).
+
+Every realm starts out knowing something already: one to seven steps of the
+tree, more for a big realm of cities, fewer for a handful of villages, chosen
+mostly by its people (highlanders build and forge, northerners fight,
+southerners trade, forest peoples keep law and healing, valley folk farm and
+build) and what it holds dear, a little by chance; nothing past the middle of
+the tree.
+
+**Travellers you follow.** Follow a trading company (or a merchant, an
+adventurer, settlers, townsfolk on an outing) down the road and into the town
+they're bound for, and they arrive there with you: the company makes camp, the
+merchant sets up at the market, the villager goes home, from the spot where
+they walked in, even if their journey's reckoning had them arriving later (or
+earlier). The world map marks a trader where they really are when they're on
+the road near you, one mark per company.
 
 **The world map.** Smoke rises over a town raided in the last few days; a
 bandit camp shows once someone has told you of it (or you've seen its smoke;
