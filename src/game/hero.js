@@ -40,7 +40,7 @@ export const TRAITS = {
   tough: { name: 'Tough', about: '+4 health.' },
   swimmer: { name: 'Strong Swimmer', about: 'Water doesn\'t slow you down.' },
   lucky: { name: 'Lucky', about: 'Better finds on the end of a fishing line.' },
-  early_riser: { name: 'Early Riser', about: 'You heal quickly in the morning hours.' },
+  early_riser: { name: 'Early Riser', about: 'In the morning hours your breath comes back twice as fast.' },
   nimble: { name: 'Nimble', about: 'A dodge roll costs half the breath and carries you further.' },
   tireless: { name: 'Tireless', about: '+3 stamina, and it comes back quicker.' },
   sure_footed: { name: 'Sure-Footed', about: 'Heavy blows don\'t stagger you or knock you back.' },

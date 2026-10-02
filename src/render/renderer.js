@@ -38,6 +38,7 @@ export class Renderer {
     this.camX = 0;
     this.camY = 0;
     this.time = 0;
+    this.wobbles = new Map();
     this.particles = [];
     this.fx = [];
     this.floaters = [];
@@ -258,6 +259,12 @@ export class Renderer {
     this.frameDt = dt;
     this.game = game;
     this.time += dt;
+    if (this.wobbles.size) {
+      for (const [k, w] of this.wobbles) {
+        w.t += dt;
+        if (w.t >= w.dur) this.wobbles.delete(k);
+      }
+    }
     const player = game.player;
     const rp = player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
@@ -566,8 +573,17 @@ export class Renderer {
               else if (id === B.canopy || id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
               else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
-              // Plants sway gently.
-              ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+              // (A training dummy just struck rocks on its post.)
+              const wob = id === B.training_dummy && this.wobbles.size ? this.wobbles.get(`${wx},${y},${wz}`) : null;
+              if (wob) {
+                const k = wob.t / wob.dur;
+                const a = Math.sin(wob.t * 34) * 0.2 * wob.amp * (1 - k) * (1 - k);
+                ctx.save();
+                ctx.translate(sx + 8, sy + SPR_H - 1);
+                ctx.rotate(a);
+                ctx.drawImage(atlas, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
+                ctx.restore();
+              } else ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
               if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
               // Hanging signs show what the building is.
               if (id === B.hanging_sign) {
@@ -891,13 +907,20 @@ export class Renderer {
       const hop = e.species === 'slime' ? Math.abs(Math.sin(this.time * 6 + e.id)) * 3 : 0;
       const lu = this.bodyLunge(e, this.viewDir(e.dir));
       ctx.drawImage(sheet, (f + flip) * 16, 0, 16, 16, sx + lu.x, Math.round(feetY - 15 - hop + lu.y), 16, 16);
+      // Just fed on someone's breath (a ghoul): it glows with it a while.
+      if (e.fedT > 0) {
+        e.fedT -= this.frameDt || 0.016;
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * Math.min(1, e.fedT) * (0.55 + 0.35 * Math.sin(this.time * 18));
+        ctx.drawImage(frameGlow(sheet, (f + flip) * 16, 0, 16, 16, '#9cf0b0'), sx + lu.x - 1, Math.round(feetY - 16 - hop + lu.y));
+        ctx.globalAlpha = a;
+      }
     } else {
       if (e.sleeping) {
         const head = this.headFor(e);
         ctx.drawImage(head, sx + 2, floorY - 1);
         if (!e.down && Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
-        const sheet = humanoidSheet(e.look);
         // On horseback, or up on a wagon's bench: the beast (and the wagon)
         // first, the rider sitting up on top.
         const mount = e.mount && !e.sleeping ? e.mount : null;
@@ -905,6 +928,12 @@ export class Renderer {
         if (mount) lift = this.drawMount(ctx, e, mount, sx, feetY);
         const frame = e.actionTimer > 0 && !mount ? 3 : e.raft || mount ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
+        // Guard up: the shield comes off the arm and up in front of them
+        // (see drawRaisedShield); the blade's held across instead.
+        if (e.guardT > 0) e.guardT -= this.frameDt || 0.016;
+        const guard = !rolling && !mount && !inWater && this.guarding(e);
+        const raised = guard && dir !== 2 ? this.raisedShield(e) : null;
+        const sheet = humanoidSheet(raised ? this.unshielded(e.look) : e.look);
         // Thrown into a blow: leaning back to wind up, lunging into it.
         const lu = mount || e.sitting ? { x: 0, y: 0 } : this.bodyLunge(e, dir);
         const sx0 = sx;
@@ -912,7 +941,7 @@ export class Renderer {
         const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift + lu.y;
         // (A second blade, on the far side of them, goes behind.)
         const offKey = e.offhandItem ? e.offhandItem() : null;
-        if (offKey && (dir === 1 || dir === 3) && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true);
+        if (offKey && (dir === 1 || dir === 3) && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, this.guarding(e));
         // Jewelled armour: a faint glow of its stone's colour round them.
         const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
         const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
@@ -929,8 +958,12 @@ export class Renderer {
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         const held = e.heldItem && !rolling ? e.heldItem() : null;
-        if (held) this.drawHeld(ctx, held, e, sx, top);
-        if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true);
+        // (Side on, a raised shield is in front of the blade; face on, the
+        // blade's held over it, ready.)
+        if (raised && dir !== 0) this.drawHeld(ctx, held, e, sx, top, false, guard);
+        if (raised) this.drawRaisedShield(ctx, e, raised, dir, sx, top);
+        if (held && !(raised && dir !== 0)) this.drawHeld(ctx, held, e, sx, top, false, guard);
+        if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, guard);
         sx = sx0;
         // ...and a glint of it now and then.
         if (stone && !this.spin) {
@@ -974,15 +1007,17 @@ export class Renderer {
       const col = f > 0.7 ? (Math.floor(this.time * 14) % 2 ? '#ffffff' : '#ff3030') : '#ff6040';
       drawText(ctx, '!', sx + 6, feetY - (big ? 40 : 26) - Math.round(f * 2), col, '#000');
     }
-    // Your guard up: a pale arc on the side you face; a flash on a parry.
+    // Your guard up: a pale arc on the side you face (gold while a blow
+    // met now would be parried).
     if (e.kind === 'player' && e.blocking) {
       const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][e.dir] || [0, 1];
       const [vx, vz] = this.toViewDir ? this.toViewDir(fx, fz) : [fx, fz];
-      ctx.fillStyle = e.blockT < 0.3 ? 'rgba(255,240,160,0.85)' : 'rgba(160,200,255,0.6)';
-      const cx = sx + 8 + vx * 8;
-      const cy = feetY - 12 + vz * 5;
-      if (vx) ctx.fillRect(cx - 1, cy - 7, 2, 12);
-      else ctx.fillRect(cx - 6, cy - 1, 12, 2);
+      const parryT = game && game.parryWindow ? game.parryWindow() : 0.2;
+      ctx.fillStyle = e.blockT < parryT ? 'rgba(255,240,160,0.85)' : 'rgba(160,200,255,0.45)';
+      const cx = sx + 8 + vx * 9;
+      const cy = feetY - 12 + vz * 6;
+      if (vx) ctx.fillRect(cx - 1, cy - 7, 1, 12);
+      else ctx.fillRect(cx - 6, cy, 12, 1);
     }
     // A heavy blow ready to let fly.
     if (e.kind === 'player' && game && game.charging && game.charging.ready && Math.floor(this.time * 10) % 2) {
@@ -1007,11 +1042,65 @@ export class Renderer {
     if (e.emote && e.emote.t > 0) bubbles.push({ emote: true, text: e.emote.ch, x: sx + 5, y: feetY - 34 + Math.sin(this.time * 5) * 1.5, color: e.emote.color || '#ffe070' });
   }
 
+  // Is their guard up? (Yours while you hold it; theirs a moment after a
+  // blow's taken on it.)
+  guarding(e) {
+    return e.kind === 'player' ? !!e.blocking : e.guardT > 0;
+  }
+
+  // The shield on their arm, if it can be raised (none with a two-handed
+  // weapon out: it's slung on their back).
+  raisedShield(e) {
+    const k = e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield;
+    const it = k && ITEMS[k];
+    if (!it || !it.block) return null;
+    const main = e.heldItem ? e.heldItem() : e.rec && e.rec.equipment && e.rec.equipment.weapon;
+    const m = main && ITEMS[main];
+    if (m && m.hands === 2) return null;
+    return k;
+  }
+
+  // Their look without the shield on the arm (it's up in front instead).
+  unshielded(look) {
+    const c = (this._unshielded ||= new WeakMap());
+    let v = c.get(look);
+    if (!v) {
+      v = look.gear ? { ...look, gear: { ...look.gear, shield: undefined } } : look;
+      c.set(look, v);
+    }
+    return v;
+  }
+
+  // A shield up: face on, square in front of the chest; side on, edge on
+  // out in front. It jolts back when a blow lands on it, and its rim
+  // shines while a blow met now would be parried.
+  drawRaisedShield(ctx, e, key, dir, sx, top) {
+    const icon = itemIcon(key);
+    const jolt = e.shieldJolt > 0 ? Math.round(e.shieldJolt * 10) : 0;
+    if (e.shieldJolt > 0) e.shieldJolt -= this.frameDt || 0.016;
+    const small = e.look && e.look.small ? 5 : 0;
+    const y = top + 7 + small;
+    const parryT = e.kind === 'player' && this.game && this.game.parryWindow ? this.game.parryWindow() : 0;
+    const shine = e.kind === 'player' && e.blockT < parryT;
+    const draw = (x, w, h) => {
+      ctx.drawImage(icon, 0, 0, 16, 16, x, y + (dir === 0 ? jolt : 0), w, h);
+      if (shine) {
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(this.time * 40);
+        ctx.drawImage(frameGlow(icon, 0, 0, 16, 16, '#fff4b0'), x - 1, y - 1 + (dir === 0 ? jolt : 0), w + 2, h + 2);
+        ctx.globalAlpha = 1;
+      }
+    };
+    if (dir === 0) draw(sx + 2, 12, 12);
+    else if (dir === 3) draw(sx + 10 - jolt, 6, 12);
+    else if (dir === 1) draw(sx + jolt, 6, 12);
+  }
+
   // The item sits in the hand: its handle (near the icon's bottom-left)
   // on the hand pixel of the sprite for the way they're facing.
   // What someone holds, at full size (the item's own picture, not the
   // little one dropped items use), its grip in their hand.
-  drawHeld(ctx, key, e, sx, top, off = false) {
+  drawHeld(ctx, key, e, sx, top, off = false, guard = false) {
+    if (!key) return;
     const icon = itemIcon(key);
     const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
@@ -1027,7 +1116,7 @@ export class Renderer {
     const gy = -13;
     const S = 0.8;
     const mir = off && dir === 0 ? true : dir === 1;
-    const pose = this.swingPose(e, dir, off, mir);
+    const pose = this.swingPose(e, dir, off, mir) || (guard ? this.guardPose(e, dir, off, mir) : null);
     if (!pose && act <= 0 && dir === 2) return; // behind them
     if (off && !pose && dir === 2) return;
     ctx.save();
@@ -1061,6 +1150,19 @@ export class Renderer {
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
     ctx.restore();
     if (!off && e.bowDraw && (dir === 1 || dir === 3)) this.drawNocked(ctx, e, dir, hx, hy);
+  }
+
+  // A blade held up to take a blow: across the chest face on (two blades
+  // crossed), upright in front side on; with a shield up, held back, ready.
+  guardPose(e, dir, off, mir) {
+    const sg = mir ? -1 : 1;
+    const it = ITEMS[(e.heldItem && e.heldItem()) || ''];
+    if (it && it.kind !== 'weapon' && !(it.kind === 'tool' && it.damage >= 3)) return null;
+    const jolt = e.shieldJolt > 0 ? e.shieldJolt * 6 : 0;
+    if (this.raisedShield(e)) return off ? null : { ang: -sg * 0.9, dx: -sg * 1, dy: -3, smear: 0 };
+    if (dir === 0) return { ang: -sg * 2.05, dx: -sg * 4, dy: -4 + jolt, smear: 0 };
+    if (dir === 2) return null;
+    return { ang: -sg * 0.5, dx: sg * 2 - sg * jolt, dy: -4, smear: 0 };
   }
 
   // How a weapon's held through a blow: drawn far back and trembling as
@@ -1652,6 +1754,11 @@ export class Renderer {
   // A gem's work, a burst of fire, a bolt of lightning (see fx.js).
   effect(o) {
     return addEffect(this, o);
+  }
+
+  // Something struck that rocks where it stands (a training dummy).
+  wobble(x, y, z, amp = 1) {
+    this.wobbles.set(`${x},${y},${z}`, { t: 0, dur: 0.6 + 0.15 * amp, amp });
   }
 
   floatText(wx, y, wz, text, color = '#ff6060') {

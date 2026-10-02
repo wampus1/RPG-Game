@@ -143,6 +143,34 @@ export class Audio {
       case 'portal': this.tone(440, 0.4, 'sine', 0.08, 440); this.tone(660, 0.45, 'triangle', 0.05, 660, 0.08); this.noise(0.3, 0.05, 5000); break;
       // A ship's horn, low and long.
       case 'horn': this.tone(110, 0.9, 'sawtooth', 0.06, 8); this.tone(165, 0.9, 'triangle', 0.04, 6); break;
+      // Breath torn out of you: a hollow inward rush.
+      case 'drain': this.noise(0.35, 0.08, 900); this.tone(520, 0.35, 'sine', 0.05, -380); break;
+      // The stones: ice cracking shut, a void's swallow, a mirror's ring,
+      // moonlight's chime, a wet blood-red cut, thunder close by.
+      case 'freeze': this.noise(0.12, 0.12, 5200); this.tone(1900, 0.2, 'triangle', 0.05, -900, 0.04); break;
+      case 'void': this.tone(90, 0.5, 'sine', 0.14, -50); this.tone(180, 0.45, 'sawtooth', 0.03, -150); this.noise(0.35, 0.05, 300, 0.05); break;
+      case 'reflect': this.tone(2200, 0.14, 'triangle', 0.08, 600); this.tone(3300, 0.2, 'sine', 0.05, 0, 0.05); break;
+      case 'moon': this.tone(880, 0.5, 'sine', 0.06, 220); this.tone(1320, 0.6, 'sine', 0.04, 330, 0.08); this.tone(1760, 0.5, 'sine', 0.025, 0, 0.16); break;
+      case 'bleed': this.noise(0.1, 0.12, 1300); this.tone(240, 0.12, 'sine', 0.05, -120, 0.02); break;
+      case 'thunder': this.noise(0.9, 0.3, 160); this.noise(0.4, 0.18, 900, 0.02); this.tone(60, 0.8, 'sine', 0.2, -20); break;
+      // Underground: a lever, a gate grinding, a trap's click and its dart,
+      // stone crumbling away, something heavy walking, a hum of old power,
+      // a lift going down, runes waking, a beam of light.
+      case 'lever': this.tone(260, 0.06, 'square', 0.08, -90); this.noise(0.08, 0.1, 900, 0.04); break;
+      case 'gate': for (let i = 0; i < 6; i++) this.noise(0.09, 0.08, 300 + i * 20, i * 0.09); this.tone(90, 0.6, 'sawtooth', 0.03, -10); break;
+      case 'click': this.tone(1800, 0.02, 'square', 0.06); this.tone(1200, 0.02, 'square', 0.05, 0, 0.03); break;
+      case 'dart': this.noise(0.08, 0.1, 4200); this.tone(900, 0.06, 'triangle', 0.04, -500); break;
+      case 'crumble': for (let i = 0; i < 5; i++) this.noise(0.12, 0.12, 250 + Math.random() * 300, i * 0.06); break;
+      case 'stomp': this.tone(55, 0.22, 'sine', 0.22, -20); this.noise(0.12, 0.14, 180); break;
+      case 'hum': this.tone(110, 0.8, 'sawtooth', 0.02, 0); this.tone(220, 0.8, 'sine', 0.025, 4); break;
+      case 'lift': this.tone(140, 1.4, 'sawtooth', 0.03, -60); this.tone(70, 1.4, 'sine', 0.06, -20); this.noise(1.2, 0.03, 600); break;
+      case 'rune': this.tone(660, 0.3, 'triangle', 0.05, 330); this.tone(990, 0.4, 'sine', 0.04, 495, 0.1); break;
+      case 'beam': this.tone(1400, 0.35, 'sawtooth', 0.03, -700); this.noise(0.3, 0.05, 6000); break;
+      case 'charge': this.tone(200, 0.6, 'sawtooth', 0.03, 900); break;
+      case 'boom': this.tone(48, 0.6, 'sine', 0.3, -20); this.noise(0.5, 0.3, 220); this.noise(0.3, 0.2, 1200, 0.05); break;
+      case 'secret': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.05, 0, i * 0.09)); break;
+      case 'creak': this.tone(130, 0.5, 'sawtooth', 0.025, 40); this.tone(170, 0.4, 'sawtooth', 0.02, -30, 0.2); break;
+      case 'scream': this.tone(700, 0.4, 'sawtooth', 0.04, 300); this.tone(900, 0.35, 'square', 0.02, -200, 0.1); break;
     }
   }
 }

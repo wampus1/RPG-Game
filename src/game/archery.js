@@ -261,6 +261,9 @@ export function arrowStrikes(game, a, t) {
     }
   }
   if (shield) {
+    // (Up it comes, and jolts with the hit.)
+    t.shieldJolt = 0.18;
+    if (t.kind !== 'player') t.guardT = 0.8;
     // (A crossbow bolt goes through a shield, mostly.)
     if (a.kind === 'bolt' && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
     else hit = false;

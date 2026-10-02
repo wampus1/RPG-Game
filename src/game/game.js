@@ -29,7 +29,7 @@ import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
-import { playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
+import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -177,6 +177,8 @@ export class Game {
         this.player.give('coin', 25);
       }
     }
+    // (Up since this morning.)
+    if (this.player.awakeSince === undefined) this.player.awakeSince = this.day * DAY_MINUTES + this.minute;
     this.loadAround(this.player.x, this.player.z, true);
     this.updateSettlements(true);
     ow.markExplored(this.player.x, this.player.z, 2);
@@ -1129,7 +1131,7 @@ export class Game {
       if (ow.settlementAt(x, z) || !w.regionAt(x, z)) return false;
       if (w.findStandY(x, z, y) !== y) return false;
       const below = w.getBlock(x, y - 1, z);
-      if (below === B.path || below === B.planks || w.isWaterAt(x, y - 1, z) || !BLOCKS[below].solid) return false;
+      if (below === B.path || below === B.flagstone || below === B.planks || w.isWaterAt(x, y - 1, z) || !BLOCKS[below].solid) return false;
       const top = w.getBlock(x, y, z);
       return top === B.air || !BLOCKS[top].solid;
     };
@@ -1390,6 +1392,7 @@ export class Game {
     if (sk.left > 0) return;
     this.skipping = null;
     this.player.hp = this.player.maxHp;
+    this.player.awakeSince = this.day * DAY_MINUTES + this.minute;
     this.updateSettlements(true);
     this.ui.msg(`${this.day - sk.day0} day${this.day - sk.day0 === 1 ? '' : 's'} pass. It's day ${this.day}.`, '#ffe8a0');
   }
@@ -1482,6 +1485,7 @@ export class Game {
     }
     ambientChatter(this, dt);
     this.updateDuel();
+    this.updateDummy(dt);
     this.updateGates(dt);
     this.syncStanding(dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
@@ -3200,6 +3204,13 @@ export class Game {
     sl.t = 0;
     sl.early = early;
     const p = this.player;
+    // A real sleep (the night through, or four hours of it at least) and
+    // the tiredness of days without one is gone.
+    const slept = this.day * DAY + this.minute - sl.start;
+    if (!early || slept >= 240) {
+      if (p.sleepless > 0) this.ui.msg('You\'ve slept it off: your stamina is back to full measure.', '#c090ff');
+      p.awakeSince = this.day * DAY + this.minute;
+    }
     if (!early && !sl.jail) {
       // A night in a proper bed (where the realm knows hospitality).
       const s = this.world.ow.settlementAt(sl.bed.x, sl.bed.z);
@@ -3680,7 +3691,9 @@ export class Game {
 
   // A swing at the air in front of you (a weapon in hand, nothing under
   // the mouse to hit): turned toward the mouse, wound up and committed like
-  // any blow, and it lands on whatever foe is in front of you by then.
+  // any blow, and it lands on whoever's standing there by then (foe or
+  // not: a blade swung at a passer-by is an assault), or on a training
+  // dummy. A blade in the other hand follows it round, as ever.
   swingAt() {
     const p = this.player;
     if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) return false;
@@ -3689,32 +3702,136 @@ export class Game {
       this.swing();
       return false;
     }
+    // Eight ways: toward the mouse (the diagonals too).
+    let [dx, dz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
     const ang = this.aimAngle();
     if (ang !== null) {
       const ax = Math.cos(ang);
       const az = Math.sin(ang);
       if (Math.abs(ax) >= Math.abs(az)) p.face(p.x + Math.sign(ax), p.z);
       else p.face(p.x, p.z + Math.sign(az));
+      dx = Math.round(ax);
+      dz = Math.round(az);
     }
     const st = styleOf(p);
     const fresh = spend(p, staminaCost(st));
     p.sitting = null;
+    const tilesNow = (style) => {
+      const ahead = { x: p.x + dx, y: p.y, z: p.z + dz };
+      if (style.sweep) {
+        const arc = sweepTiles(p, ahead);
+        if (!arc.some((t) => t.x === ahead.x && t.z === ahead.z)) arc.push(ahead);
+        return arc;
+      }
+      const reach = style.thrust ? style.reach : 1;
+      return [...Array(reach).keys()].map((k) => ({ x: p.x + dx * (k + 1), z: p.z + dz * (k + 1) }));
+    };
     const s = playerSwing(this, p, null, false, () => {
-      const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
-      const ahead = { x: p.x + fx, y: p.y, z: p.z + fz };
-      const reach = st.thrust ? st.reach : 1;
-      const tiles = st.sweep ? sweepTiles(p, ahead) : [...Array(reach).keys()].map((k) => ({ x: p.x + fx * (k + 1), z: p.z + fz * (k + 1) }));
-      const foe = this.foesOn(tiles, p)[0] || this.creatures.find((q) => !q.dead && q.species !== 'horse' && !q.leadBy && !q.leadTied && !q.tie && tiles.some((t) => t.x === q.x && t.z === q.z) && Math.abs(q.y - p.y) <= 1);
+      const tiles = tilesNow(st);
+      const foe = this.struckOn(tiles, p)[0];
       if (foe) return this.landBlow(foe, false, fresh, st);
-      // (Nothing there: a whoosh through the air.)
       strikeAnim(p, st);
       p.doAction(0.25);
-      this.audio?.play('swing');
+      // (Nothing there but the air, or a straw man to take it.)
+      const dummy = this.dummyOn(tiles, p);
+      if (dummy) {
+        const { dmg, crit } = this.blowDamage(false, fresh, st);
+        this.hitDummy(dummy, dmg, crit, st);
+      } else this.audio?.play('swing');
       onSwing(this, p);
+      const off = offhandOf(p);
+      if (off) p.offSwing = { t: 0.15, land: () => this.offAir(off, tilesNow) };
       return false;
     });
     p.attackCd = s.dur + (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p) * (fresh ? 1 : 1.7) / (1 + buffOf(this, 'haste'));
     return true;
+  }
+
+  // The second blade, after a swing at the air: whoever's there now (or
+  // the dummy again), or just the air.
+  offAir(off, tilesNow) {
+    const p = this.player;
+    const ost = STYLES[weaponStyle(off)];
+    const tiles = tilesNow(ost);
+    const foe = this.struckOn(tiles, p)[0];
+    if (foe) return this.landOff(foe, off, 1);
+    strikeAnim(p, ost, true);
+    const dummy = this.dummyOn(tiles, p);
+    if (dummy) {
+      spend(p, Math.max(1, Math.round(staminaCost(ost) / 2)));
+      const dmg = Math.max(1, Math.round(ITEMS[off].damage * 0.75 * damageMult(this.hero) * (1 + buffOf(this, 'fury'))));
+      this.hitDummy(dummy, dmg, false, ost);
+    } else this.audio?.play('swing');
+    return false;
+  }
+
+  // How soon before a blow a raised guard turns it into a parry.
+  parryWindow() {
+    return parryWindow(this);
+  }
+
+  // Who a blow at those tiles could hurt: a foe first, else anyone at all
+  // standing there (not the beast you're sat on).
+  struckOn(tiles, by) {
+    const foes = this.foesOn(tiles, by);
+    if (foes.length) return foes;
+    const on = (e) => tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - by.y) <= 1;
+    const out = [];
+    for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
+    for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
+    return out;
+  }
+
+  // A training dummy on those tiles (where a blow would catch it).
+  dummyOn(tiles, by) {
+    for (const t of tiles) {
+      for (const y of [by.y, by.y + 1, by.y - 1]) if (this.world.getBlock(t.x, y, t.z) === B.training_dummy) return { x: t.x, y, z: t.z };
+    }
+    return null;
+  }
+
+  // A blow on a dummy: it rocks on its post, straw flies, and it shows
+  // what that blow would have done (and, once you ease off, the run of
+  // them all together).
+  hitDummy(at, dmg, crit, st) {
+    const r = this.renderer;
+    const heavy = !!(st && st.heavy);
+    r.wobble?.(at.x, at.y, at.z, heavy || crit ? 1.6 : 1);
+    r.floatText(at.x, at.y + 2.2, at.z, crit ? `${dmg}!` : String(dmg), crit ? '#ffe070' : '#ffffff');
+    r.emit(at.x, at.y + 1, at.z, { n: heavy ? 9 : 6, color: ['#e8cc70', '#d0b050', '#a88a3a'], up: 26, speed: 46, gravity: 120, life: 0.55, oy: -10 });
+    this.audio?.play('hit', at);
+    this.hitStop = Math.max(this.hitStop || 0, heavy || crit ? 0.06 : 0.03);
+    this.shake = Math.min(1, (this.shake || 0) + (heavy ? 0.18 : 0.06));
+    const key = `${at.x},${at.y},${at.z}`;
+    const log = this.dummyLog && this.dummyLog.key === key ? this.dummyLog : (this.dummyLog = { key, at, total: 0, n: 0, best: 0, t0: this.sim.abs });
+    log.total += dmg;
+    log.n++;
+    log.best = Math.max(log.best, dmg);
+    log.idle = 0;
+    return true;
+  }
+
+  // Eased off the dummy: the tally of that run of blows.
+  updateDummy(dt) {
+    const log = this.dummyLog;
+    if (!log) return;
+    log.idle += dt;
+    if (log.idle < 1.8) return;
+    this.dummyLog = null;
+    if (log.n < 2) return;
+    this.renderer.floatText(log.at.x, log.at.y + 2.8, log.at.z, `${log.total} in ${log.n} blows`, '#a0e0ff');
+  }
+
+  // How hard a blow of yours lands (and whether it's a telling one).
+  blowDamage(heavy, fresh, st) {
+    const p = this.player;
+    const def = p.heldDef();
+    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) + (heroHas(this.hero, 'brawler') ? 1 : 0);
+    if (!fresh) dmg *= 0.6;
+    if (heavy) dmg *= 1.8;
+    const crit = Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
+    if (crit) dmg *= 1.8;
+    return { dmg: Math.max(1, Math.round(dmg)), crit };
   }
 
   // Which way the movement keys are held (in world terms), or null.
@@ -4455,7 +4572,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
       name: this.playerName,
       hero: this.hero || null,
       regions,
@@ -4503,6 +4620,7 @@ export class Game {
       this.player.recalcMaxHp();
     }
     this.player.hp = pd.hp;
+    this.player.awakeSince = pd.awake ?? data.day * DAY_MINUTES + data.minute;
     this.player.inv = pd.inv;
     // (Animals aren't kept in a save: any leads out on them come back.)
     if (data.leadsOut > 0) addItem(this.player.inv, 'lead', data.leadsOut);

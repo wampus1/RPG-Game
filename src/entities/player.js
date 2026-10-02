@@ -10,6 +10,14 @@ import { has as heroHas, stepMult } from '../game/hero.js';
 import { steer } from './raft.js';
 
 const BASE_HP = 20;
+
+// Breath a running stride costs: a little whole (a long run on fresh legs),
+// rising steeply with your wounds (half your health gone, it's six times
+// as much; near dead, a dozen strides and you're done).
+export function sprintCost(p) {
+  const hurt = Math.max(0, 1 - Math.max(0, p.hp) / Math.max(1, p.maxHp));
+  return 0.025 + 0.3 * Math.pow(hurt, 1.3);
+}
 export const VIGOR_CAP = 8;
 export const BLUE_CAP = 6; // three blue hearts at most
 
@@ -177,18 +185,17 @@ export class Player extends Entity {
     this.updateBase(dt);
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
-    // Slow natural regeneration: faster when sitting or well fed.
-    // (Only counting while there's something to heal: a blow taken at full
-    // health doesn't mend in an instant.)
-    this.regenT = this.hp < this.maxHp ? this.regenT + dt : 0;
-    if (this.wellFed > 0) this.wellFed -= dt;
-    const g = this.game;
-    const morning = g.minute >= 300 && g.minute < 600 && heroHas(g.hero, 'early_riser');
-    const every = (this.wellFed > 0 ? 2.5 : 6) / (this.sitting ? 2 : 1) / (morning ? 2 : 1);
-    if (this.regenT > every && this.hp < this.maxHp && this.hp > 0) {
-      this.regenT = 0;
-      this.hp = Math.min(this.maxHp, this.hp + 1);
-    }
+    // No wound closes on its own: food, potions, a herbalist, a night's
+    // sleep (or a stone) mend you. Only a delightful meal keeps on doing
+    // you good a while after (a heart every few seconds while it lasts).
+    if (this.wellFed > 0) {
+      this.wellFed -= dt;
+      this.regenT = this.hp < this.maxHp ? this.regenT + dt : 0;
+      if (this.regenT > (this.sitting ? 2 : 4) && this.hp < this.maxHp && this.hp > 0) {
+        this.regenT = 0;
+        this.hp = Math.min(this.maxHp, this.hp + 1);
+      }
+    } else this.regenT = 0;
     // The day ends: blue hearts break.
     if (this.blue.hp > 0 && this.blue.day !== this.game.day) {
       this.blue = { hp: 0, day: this.game.day, from: [] };
@@ -263,7 +270,14 @@ export class Player extends Entity {
       return;
     }
     this.pushT = 0;
-    const sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight');
+    // Running costs breath: hardly any whole, and the more you're hurt, the
+    // quicker it goes (out of breath, you can only walk).
+    let sprint = (input.isDown('ShiftLeft') || input.isDown('ShiftRight')) && !this.mount && !this.blocking;
+    if (sprint && (this.stamina ?? 10) < 0.4) sprint = false;
+    if (sprint) {
+      this.stamina = Math.max(0, (this.stamina ?? 10) - sprintCost(this));
+      this.restT = 0;
+    }
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
     const swim = water && !heroHas(this.game.hero, 'swimmer') ? 1.9 : 1;

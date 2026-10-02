@@ -357,7 +357,7 @@ export class Diplomacy {
         seen.add(k);
         const col = t.column(x, z, t.context(x, z, x, z), {});
         if (col.water >= 0) tiles.push([x, col.water, z, B.planks]);
-        else tiles.push([x, col.h, z, B.path]);
+        else tiles.push([x, col.h, z, col.surf === B.sand ? B.flagstone : B.path]);
       }
     };
     // Two tiles wide: beside each tile along the way, another (below it on
@@ -729,7 +729,7 @@ export class Diplomacy {
   // Only the ground itself, plants and tree trunks give way to a road.
   clearable([x, y, z, id]) {
     const cur = this.game.world.getBlock(x, y, z);
-    if (id !== B.air) return cur !== B.planks && cur !== B.path;
+    if (id !== B.air) return cur !== B.planks && cur !== B.path && cur !== B.flagstone;
     return SOFT.has(cur);
   }
 

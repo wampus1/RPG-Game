@@ -47,7 +47,7 @@ export class Camps {
       if (world.regionAt(x, z)) {
         const top = world.getBlock(x, GROUND, z);
         const below = world.getBlock(x, GROUND - 1, z);
-        if (below === B.path || below === B.planks) return false;
+        if (below === B.path || below === B.flagstone || below === B.planks) return false;
         if (top !== B.air && !SOFT.has(top)) return false;
       }
       return true;

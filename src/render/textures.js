@@ -30,6 +30,7 @@ const P = {
   mud: ['#5a4630', '#45351f', '#6e5a40'],
   ice: ['#80b4c8', '#6a9cb4', '#a4ccdc'],
   path: ['#9a7a52', '#7e6242', '#b09066'],
+  flagstone: ['#a65e3c', '#6e3c26', '#c07a54'],
   farmland: ['#5e4028', '#4a3020', '#6e4c30'],
   farmland_wet: ['#3e2a1a', '#2e1e12', '#4a3322'],
   planks: ['#b08850', '#8e6a3a', '#c8a064'],
@@ -328,6 +329,12 @@ function cubeTop(name, v, rand, rot) {
         p.set(x, y + 1, oc[0]);
         if (rand() < 0.6) p.set(x + 1, y + 1, oc[0]);
       }
+      return p;
+    }
+    case 'flagstone': {
+      // Big irregular slabs with dark grout, a little sand blown in.
+      cobble(p, pal, rand, 4);
+      for (let i = 0; i < 5; i++) p.set(rand() * 16, rand() * 16, '#d2b46c');
       return p;
     }
     case 'path': {

@@ -253,6 +253,12 @@ class Layout {
       road = B.path;
       if (plaza === B.stone_bricks) plaza = B.cobblestone;
     }
+    // On sand, a dirt track or sandstone paving is all but invisible: the
+    // lanes are laid with baked clay slabs instead.
+    if (s.biome === 'desert' || (hot && s.style === 'sun')) {
+      if (road === B.path || road === B.sandstone || road === B.gravel) road = B.flagstone;
+      if (plaza === B.sandstone) plaza = B.flagstone;
+    }
     return { road, plaza, cold, hot };
   }
 

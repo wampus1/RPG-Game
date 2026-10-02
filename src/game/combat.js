@@ -56,7 +56,7 @@ export const STYLES = {
   gore: { name: 'charge', windup: 0.85, recover: 1.5, reach: 5, mult: 1.6, charge: true },
   // A ghoul's three quick rakes (each taken on a shield costs half again the
   // breath), and its spring from two paces off; a wisp's sting, up close.
-  rake: { name: 'rake', windup: 0.32, recover: 0.95, reach: 1, mult: 0.55, flurry: 3, drain: 1.5 },
+  rake: { name: 'rake', windup: 0.32, recover: 0.95, reach: 1, mult: 0.55, flurry: 3, drain: 1.3 },
   pounce: { name: 'pounce', windup: 0.5, recover: 1.0, reach: 2, mult: 1.0, lunge: true },
   sting: { name: 'sting', windup: 0.3, recover: 0.8, reach: 1, mult: 0.6 },
 };
@@ -414,13 +414,19 @@ export function resolveHit(game, a, v, st, opts = null) {
       amount *= 1 - power;
       text('blocked', '#a0c8ff');
     }
-    // Sparks off the shield (or the blade); and its stone at work.
+    // Sparks off the shield (or the blade); and its stone at work. (It
+    // jolts back on the arm; theirs stays up a moment after.)
+    v.shieldJolt = 0.18;
+    if (v.kind !== 'player') v.guardT = 0.7;
     game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
     if (!(v.guardBroken > 0)) onBlock(game, v, a, false);
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
   amount = Math.max(guarding ? 0 : 1, Math.round(amount));
+  // A ghoul's rake drinks your breath, whether it lands or not: a stream of
+  // it torn out of you and into its mouth, and it's the stronger for it.
+  if (st.drain && v.kind === 'player' && !v.dead) siphonBreath(game, a, v, guarding && amount === 0 ? 0.5 : 0.9);
   if (amount > 0) {
     game.damage(v, amount, a);
     if (a.windup && a.windup.onHit) a.windup.onHit();
@@ -431,6 +437,26 @@ export function resolveHit(game, a, v, st, opts = null) {
   if (st.stagger && amount > 0 && !v.dead) v.stunT = Math.max(v.stunT || 0, v.kind === 'player' ? st.stagger * 0.5 : st.stagger);
   if ((st.charge || st.heavy) && amount > 0 && !v.dead) knock(game, a, v, st.charge ? 2 : 1);
   return amount > 0 ? 'hit' : 'blocked';
+}
+
+// Breath torn out of someone (a ghoul's feeding): it shows going.
+export function siphonBreath(game, a, v, n) {
+  const had = v.stamina ?? MAX_STAMINA;
+  const took = Math.min(had, n);
+  if (took <= 0.05) return 0;
+  v.stamina = had - took;
+  v.restT = 0;
+  v.drainFlash = 0.8;
+  const r = game.renderer;
+  r.effect?.({ type: 'siphon', wx: v.x, wy: v.y + 1.1, wz: v.z, tx: a.x, ty: a.y + 0.9, tz: a.z, life: 0.65, oy: -6, n: 18, amp: 5, color: ['#c8ffd0', '#7ce0a0', '#ffffff', '#4aa070'] });
+  r.emit(v.x, v.y + 1.2, v.z, { n: 5, color: ['#c8ffd0', '#7ce0a0'], up: 14, speed: 18, gravity: -10, life: 0.5, oy: -8 });
+  r.floatText(v.x, v.y + 1.6, v.z, `-${Math.round(took * 10) / 10} stamina`, '#9cf0b0');
+  // (Fed: a little of its own strength back, and its eyes burn brighter.)
+  a.fedT = 1.6;
+  if (a.hp < a.maxHp) a.hp = Math.min(a.maxHp, a.hp + 1);
+  r.emit(a.x, a.y + 1.3, a.z, { n: 4, color: ['#c8ffd0', '#ffffff'], up: 8, speed: 10, gravity: -16, life: 0.6, oy: -10, glow: true });
+  game.audio?.play('drain', v);
+  return took;
 }
 
 // How soon before the blow a raised guard turns it into a parry.
@@ -536,8 +562,21 @@ export function staminaCost(st, heavy = false) {
 
 // Each frame: stamina back when you ease off, the block held or dropped,
 // the roll carried through, your own swing coming round.
+// Days gone without a proper sleep (each one a point off your breath until
+// you sleep it off).
+export function sleepless(game, p) {
+  if (p.awakeSince === undefined) return 0;
+  const now = game.day * 1440 + game.minute;
+  return Math.max(0, Math.min(6, Math.floor((now - p.awakeSince) / 1440)));
+}
+
 export function playerTick(game, p, dt, input, blocked) {
-  p.maxStamina = MAX_STAMINA + (game.hero && game.hero.stats ? (game.hero.stats.end || 0) * 0.6 : 0) + staminaBonus(game.hero) / 10 + buffOf(game, 'breath');
+  const tired = sleepless(game, p);
+  if (tired !== (p.sleepless || 0)) {
+    if (tired > (p.sleepless || 0)) game.ui.msg(`${tired === 1 ? 'A whole day' : `${tired} days`} without sleep: your max stamina is down ${tired} until you sleep it off.`, '#c090ff');
+    p.sleepless = tired;
+  }
+  p.maxStamina = Math.max(2, MAX_STAMINA + (game.hero && game.hero.stats ? (game.hero.stats.end || 0) * 0.6 : 0) + staminaBonus(game.hero) / 10 + buffOf(game, 'breath') - tired);
   if (p.stamina === undefined) p.stamina = p.maxStamina;
   p.restT = (p.restT || 0) + dt;
   if (p.riposte > 0) p.riposte -= dt;
@@ -578,7 +617,8 @@ export function playerTick(game, p, dt, input, blocked) {
   }
   // (Back faster standing still behind a shield than swinging away; and
   // slowly at that.)
-  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p);
+  const morning = game.minute >= 300 && game.minute < 600 && heroHas(game.hero, 'early_riser');
+  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1);
   if (p.rollStrike > 0) p.rollStrike -= dt;
   if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
   if (p.stamina > p.maxStamina) p.stamina = Math.max(p.maxStamina, p.stamina - dt * 2);

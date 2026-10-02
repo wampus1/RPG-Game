@@ -406,16 +406,26 @@ export class UI {
     g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
     // Stamina (shown when it's been spent): a pip for each point, under
     // the hearts; the one filling back up glows dimmer.
+    // (Days without sleep cost a pip each: shown struck out in violet,
+    // with what's wrong spelled out under them, until you sleep.)
     const sm = p.maxStamina || 10;
-    if (p.stamina !== undefined && p.stamina < sm - 0.05) {
+    const tired = p.sleepless || 0;
+    if (p.stamina !== undefined && (p.stamina < sm - 0.05 || tired > 0 || p.drainFlash > 0)) {
       const n = Math.min(18, Math.ceil(sm));
       const v = Math.max(0, p.stamina);
       const low = v < Math.max(2, sm * 0.25);
-      g.fill(13, 1, n + 2, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+      const lost = Math.min(18 - n, tired);
+      g.fill(13, 1, n + lost + 2, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+      // (Breath being torn out of you: the pips flash a sick green.)
+      const drained = p.drainFlash > 0;
+      if (drained) p.drainFlash -= game.dt || 0.016;
       for (let i = 0; i < n; i++) {
         const part = Math.max(0, Math.min(1, v - i));
-        g.put(14 + i, 1, part >= 1 ? '■' : part > 0 ? '▪' : '·', part >= 1 ? (low ? '#ff9040' : '#e8d060') : part > 0 ? '#9a8a40' : '#5a5040');
+        const full = drained ? (Math.floor(this.time * 12) % 2 ? '#9cf0b0' : '#4aa070') : low ? '#ff9040' : '#e8d060';
+        g.put(14 + i, 1, part >= 1 ? '■' : part > 0 ? '▪' : '·', part >= 1 ? full : part > 0 ? (drained ? '#3a7050' : '#9a8a40') : '#5a5040');
       }
+      const blink = Math.floor(performance.now() / 600) % 2 === 0;
+      for (let i = 0; i < lost; i++) g.put(14 + n + i, 1, '×', blink ? '#c070ff' : '#8a50c0');
     }
     // Potions still working.
     const nowAbs = game.day * 1440 + game.minute;
@@ -479,6 +489,11 @@ export class UI {
       for (const l of sim.careers.hudLines()) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, l.text.slice(0, 24), l.color);
+      }
+      // No sleep for a day or more: it shows, until you sleep it off.
+      if (tired > 0) {
+        g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, `SLEEPLESS ${tired}d · -${tired} STAMINA`, Math.floor(this.time * 1.5) % 2 ? '#c090ff' : '#a070e0');
       }
     }
     // Clock + minimap panel.

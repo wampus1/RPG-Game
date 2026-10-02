@@ -69,7 +69,7 @@ export function musicMood(game) {
     }
     if (s.condition === 'abandoned' || s.deserted) return 'ruins';
     const b = game.buildingAtPlayer ? game.buildingAtPlayer() : null;
-    if (b && b.type === 'tavern' && !night) return 'tavern';
+    if (b && b.type === 'tavern') return night ? 'tavern:night' : 'tavern';
     const kind = (s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village') + townMusic(L);
     return night ? `${kind}:night` : kind;
   }
@@ -111,6 +111,25 @@ export function flavourTheme(T, style, fortune) {
   return T;
 }
 
+// Every tune has a night version: slower, sparser, a dreamier mode, the
+// drums down to a heartbeat (or gone), a soft pad under it all and a
+// faint high shimmer now and then. (Whatever the people's own drums: a
+// sun town's hand drums and a high town's march quieten too.)
+const NIGHT_SCALE = { major: 'lydian', mixo: 'dorian', hijaz: 'phrygian', penta: 'minpenta' };
+const NIGHT_DRUMS = { light: 'soft', hand: 'soft', tribal: 'soft', march: null, soft: null };
+export function nightTheme(T) {
+  T.bpm *= 0.74;
+  T.density *= 0.55;
+  T.lead = T.lead === 'square' ? 'triangle' : 'sine';
+  if (T.drums in NIGHT_DRUMS) T.drums = NIGHT_DRUMS[T.drums];
+  T.scale = NIGHT_SCALE[T.scale] || T.scale;
+  T.pad = true;
+  T.arp = false;
+  T.swing = 0;
+  T.night = true;
+  return T;
+}
+
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 // One playing theme: its own gain node, scheduled a little ahead.
@@ -123,13 +142,7 @@ class Voice {
     this.T = { ...THEMES[name] };
     // A town's own people's sound, and how it's doing.
     if (flavour) flavourTheme(this.T, ...flavour.split('.'));
-    if (variant === 'night') {
-      this.T.bpm *= 0.78;
-      this.T.density *= 0.6;
-      this.T.lead = 'sine';
-      this.T.drums = this.T.drums === 'light' ? 'soft' : this.T.drums === 'soft' ? null : this.T.drums;
-      this.T.pad = true;
-    }
+    if (variant === 'night') nightTheme(this.T);
     const c = music.ctx;
     this.out = c.createGain();
     this.out.gain.setValueAtTime(0.0001, c.currentTime);
@@ -276,6 +289,8 @@ class Voice {
     if (T.toll && s % 32 === 0) {
       for (const [m, v] of [[1, 0.12], [2.76, 0.05], [5.4, 0.02]]) this.tone(midi(this.T.root - 12) * m, t, 3.5, 'sine', v);
     }
+    // (By night, a faint shimmer high over it every other bar.)
+    if (T.night && b === 0 && bar % 2 === 1) this.tone(midi(this.note(chord + 4, 2)), t + sd * 2, sd * 10, 'sine', 0.025);
     this.drums(s, t);
     // New tunes every so often, so a long walk isn't one loop.
     if (s % 128 === 127) this.phrases = [this.phrase(), this.rand() < 0.5 ? this.phrases[1] : this.phrase()];

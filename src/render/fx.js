@@ -96,6 +96,9 @@ export function drawEffects(r, ctx, dt) {
     else if (f.type === 'bolt') drawBolt(r, ctx, f, k, ox, oy);
     else if (f.type === 'ring') drawRing(ctx, f, k, ox, oy);
     else if (f.type === 'blast') drawBlast(r, ctx, f, k, ox, oy, dt);
+    else if (f.type === 'siphon') drawSiphon(ctx, f, k, ox, oy);
+    else if (f.type === 'beam') drawBeam(ctx, f, k, ox, oy);
+    else if (f.type === 'wave') drawWave(r, ctx, f, k, ox, oy, dt);
   }
   ctx.globalAlpha = 1;
 }
@@ -194,6 +197,64 @@ function drawRing(ctx, f, k, ox, oy) {
     ctx.fillStyle = colors[i % colors.length];
     ctx.fillRect(Math.round(f.cx + Math.cos(a) * R + ox), Math.round(f.cy + Math.sin(a) * R * (f.flat ?? 0.6) + oy), f.thick ?? 1, f.thick ?? 1);
   }
+}
+
+// Something drawn out of one and into another (breath a ghoul steals,
+// life a stone drinks): a stream of motes along a wavering line, from
+// (cx, cy) to (ex, ey), thickest in the middle of its run.
+function drawSiphon(ctx, f, k, ox, oy) {
+  const n = f.n ?? 16;
+  const colors = Array.isArray(f.color) ? f.color : [f.color || '#a0ffb0'];
+  const dx = f.ex - f.cx;
+  const dy = f.ey - f.cy;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const px = -dy / len;
+  const py = dx / len;
+  for (let i = 0; i < n; i++) {
+    const ph = k * 1.7 - (i / n) * 0.7;
+    if (ph < 0 || ph > 1) continue;
+    const wob = Math.sin(ph * Math.PI) * (f.amp ?? 5) * Math.sin(ph * 9 + i * 1.7 + f.seed);
+    const x = f.cx + dx * ph + px * wob;
+    const y = f.cy + dy * ph + py * wob - Math.sin(ph * Math.PI) * 6;
+    ctx.globalAlpha = Math.min(1, (1 - Math.abs(ph - 0.5) * 1.6)) * 0.95;
+    ctx.fillStyle = colors[i % colors.length];
+    const sz = i % 3 === 0 ? 2 : 1;
+    ctx.fillRect(Math.round(x + ox), Math.round(y + oy), sz, sz);
+  }
+}
+
+// A straight beam of light from (cx, cy) to (ex, ey): a hot core and a
+// soft halo, flickering, narrowing as it fades.
+function drawBeam(ctx, f, k, ox, oy) {
+  const dx = f.ex - f.cx;
+  const dy = f.ey - f.cy;
+  const len = Math.max(1, Math.round(Math.hypot(dx, dy)));
+  const w = Math.max(1, Math.round((f.width ?? 3) * (1 - k * 0.7)));
+  const flick = 0.75 + Math.random() * 0.25;
+  for (const [ww, col, a] of [[w + 2, f.halo || '#ff4040', 0.35], [w, f.color || '#ffd0d0', 0.9], [1, '#ffffff', 1]]) {
+    ctx.globalAlpha = a * (1 - k) * flick;
+    ctx.fillStyle = col;
+    for (let q = 0; q <= len; q += 1) ctx.fillRect(Math.round(f.cx + (dx * q) / len + ox - (ww >> 1)), Math.round(f.cy + (dy * q) / len + oy - (ww >> 1)), ww, ww);
+  }
+}
+
+// A crescent of light thrown along the ground (a moonstone's cut), or any
+// travelling wave: from (cx, cy) toward angle `ang`, `range` pixels.
+function drawWave(r, ctx, f, k, ox, oy, dt) {
+  const d = (f.range ?? 64) * k;
+  const x = f.cx + Math.cos(f.ang) * d;
+  const y = f.cy + Math.sin(f.ang) * d * 0.75;
+  const colors = Array.isArray(f.color) ? f.color : [f.color || '#e8f0ff'];
+  const R = 9;
+  for (let a = -1.2; a <= 1.2; a += 0.06) {
+    const t = Math.abs(a) / 1.2;
+    const rr = R * (1 - t * 0.25);
+    ctx.globalAlpha = (1 - k * 0.8) * (1 - t * 0.7);
+    ctx.fillStyle = colors[Math.floor((a + 1.2) * 5) % colors.length];
+    const th = t < 0.5 ? 2 : 1;
+    ctx.fillRect(Math.round(x + Math.cos(f.ang + a) * rr + ox), Math.round(y + Math.sin(f.ang + a) * rr * 0.75 + oy), th, th);
+  }
+  if (Math.random() < dt * 30) spark(r, x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 6, colors[0], { vx: 0, vy: -6, g: 0, life: 0.4, shape: 'star' });
 }
 
 // A burst of flame where a ruby arrow lands: a ring of tongues thrown out.

@@ -274,6 +274,9 @@ def('festival_banner', { ...sprite, solid: false, tool: 'axe', hardness: 0.3, dr
 // slow violet swirl; dark when cut off from the rest of its realm's.
 def('portal', { ...sprite, tall: true, interact: 'portal', tool: 'pick', hardness: 9, light: 11, drop: null, label: 'Portal' });
 def('portal_dark', { ...sprite, tall: true, interact: 'portal', tool: 'pick', hardness: 9, drop: null, label: 'Dark Portal' });
+// Sun-baked clay slabs laid as a path: the lanes of towns in the sand,
+// where a dirt track would vanish into the dunes.
+def('flagstone', { tool: 'pick', hardness: 0.8, drop: 'cobblestone', label: 'Flagstone Path' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -290,7 +293,7 @@ export function isOpaque(id) {
 }
 
 // Block ids that count as a road for pathfinding cost / settlement logic.
-export const ROAD_BLOCKS = new Set([B.path, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark]);
+export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark]);
 export const LOGS = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow'].map((w) => B[`log_${w}`]),
 );
