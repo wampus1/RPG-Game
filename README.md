@@ -42,7 +42,8 @@ screen (and the character screen; add `&origin=crash` or `&origin=native` for
 a random character with that origin), `&time=1320` starts at 22:00,
 `&goto=city` (or a settlement name, a style like `sun`, or `abandoned`)
 teleports you there, `&nocrt` starts with the CRT effect off and `&nomusic`
-with the music off. `window.__game` exposes the running game.
+with the music off; `&nointro` skips a new character's opening scene.
+`window.__game` exposes the running game.
 
 ## Controls
 
@@ -58,6 +59,10 @@ with the music off. `window.__game` exposes the running game.
 | Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
 | Attack | Left-click a creature or person (a bow, crossbow or sling shoots at range; a javelin is thrown); hold the click for a heavy blow |
 | Fight with two blades | Right-click a one-handed weapon in your pack to carry it in the off hand (where a shield goes) |
+| Carry a light in the off hand | Right-click a torch, lantern or the Everlight in your pack (it goes where a shield would) |
+| Use a Kavorent gadget, or fit an Alloy Edge or Plating | Right-click with it in hand |
+| Set down a relic | Hold it and click the ground; click it again to take it up |
+| Skip an opening scene | Enter |
 | Block / parry | Hold right mouse with a shield (or a weapon) in a fight; raise it just before a blow lands to parry |
 | Dodge roll | Space (in the way you're moving, or facing) |
 | Talk | Right-click a villager, then pick topics with 1–9 (T trade, G gift) |
@@ -1447,6 +1452,126 @@ the same day they're called, a few hours on, and begin as soon as both lines
 are drawn up. Soldiers walk up to their places and off again afterwards;
 nobody appears or vanishes in front of you.
 
+## Round 26: old places, the Kavorent, and where you come from
+
+**Openings.** A new character's story opens with where they come from.
+*Castaways* begin on the deck of the ship that brought them, out on open
+water at sundown: walk the deck (WASD) and talk to the crew (F): the captain
+at the wheel, the first mate, the navigator, the cook, the deckhands, the
+lookout, a scholar bound for the Kavorent spires, the cabin child. Each has a
+few things to say and to be asked, and between them they'll tell you where
+you're bound and why you were aboard (it depends on what you brought). Then
+the wind rises: cloud comes over, the rain starts, then it pours slantwise;
+lightning walks over the sea, the crew run about shouting, seas come over
+the rail, until a bolt strikes the mainmast, the canvas burns, the deck
+heaves and everything goes black. A few lines in the dark, and you wake on
+the beach. *Natives* watch their home town build itself up out of the bare
+ground as its history is told year by year (the hall and the square first,
+then outward street by street, each house rising floor by floor, the walls
+last), then see it as it is today, its people about their day, and the
+camera comes down at their family's door. Enter skips either.
+
+**Old places.** The world is bigger now (40 by 29 regions), and in its wilds
+are the places of its past: barrows (sealed doors in the turf), collapsed
+mines (shafts), drowned crypts (sinkholes in ruined chapels), bandit
+holdouts (cave mouths), and the Kavorent spires. Every one has a story (who
+was laid in the barrow and when; how many were lost when the mine fell in;
+how the crypt drowned; whose band holed up in the caves) told in the history
+of the town nearest it. You find them by wandering, or ask anyone in town
+about "old places round here" and they'll tell you one (and mark it on your
+map). Going in takes you to a place apart, made as you reach each floor and
+kept as you leave it: two to four floors of rooms and corridors built from
+hand-made room kits (guard rooms, ossuaries, flooded halls, shrines,
+collapsed passages, galleries, store rooms, and more of each kind's own),
+dressed in the stone of the people who made them, linked by stairs and
+ladders. Nothing down there runs while you're away.
+
+**Below ground.** It's dark down there: torches matter, and you can set your
+own as you go (and carry one in your off hand, as anyone can). Wisps light
+their rooms; kill one and it's darker. Skeleton patrols with mixed arms,
+ghouls that wait in niches or burst out of coffins when you come close,
+drowned things in the black water, and things you won't see on the surface.
+Traps and puzzles: pressure plates that set off arrow slits; levers that
+open gates elsewhere on the floor; cracked floors that drop you a level;
+weak walls with hidden rooms behind; three braziers to light; a flooded
+hall a lever drains; and one sealed room a floor, opened only by the sigil
+its captain carries. Once its master is dead, a place is done, and its way
+in falls shut behind you. You find old coin (a fair price anywhere), old
+blueprints (bring them to a mayor: coin, renown, and a push to whatever the
+scholars are studying), and relics.
+
+**Relics.** Set one down and a circle of turning runes lights the ground
+round it, in its colour: a Hearthstone closes everyone's wounds near it,
+slowly; a Vigil Lamp keeps night things out of its circle and burns the dead
+in it; a War Totem makes blows struck near it land a fifth harder; a Warding
+Idol makes them land a fifth lighter; a Windcharm brings breath back twice
+as fast; a Seed of Plenty grows the crops near it twice as fast. Take them
+up again any time.
+
+**The Kavorent.** A people before people, not human, whose works make
+today's realms look like children's toys. What's left on the surface are
+their spires: five-by-five pillars taller than anything, with runes rising
+up the middle of each face, fading and coming again. Set a cut stone in the
+hollow of a face and it opens on a lift down into the ruin: an utterly vast
+place of dark alloy seamed with cold light, a good few days to see all of,
+ruined but not dead. Its makers' guardians still keep it, each in its own
+way, and they work together: sentinel drones that hang back and fire beams
+down a line at you, wardens whose shields turn any blow from the front (and
+shelter the drones and menders beside them), menders that weld their hurt
+kin back together, arc mites that swarm, golems that stand dormant till
+you're close, a Prime in its foundry, and at the bottom the Overseer,
+shielded while the power nodes round its hall still burn. Their traps: emitters firing across a hall in turn, walls of light
+that drop for the plate that matches a console's glyph, plates to tread in
+the order shown, rings of power nodes to put out, vaults under glyph seals.
+Their loot is mostly Kavorent Scrap (it sells well, and a smith or a furnace
+turns it into iron), Gem Shards (five of a colour fuse into a stone, four at
+a jeweller's), now and then a Kavorent Core (one to four in a whole ruin),
+and rarely their gear: the Phase Blade (it slips past shields and armour),
+the Arc Lance (each thrust throws a lance of light four paces), the Pulse
+Caster (it needs no ammunition, only breath), carapace, visor, greaves,
+treads, the Aegis Projector (a wall of light no arrow gets through), the
+Blink Shard, the Mending Cell, the Field Projector, the Lodestar, the
+Everlight, and Alloy Edges and Plating that better a weapon or armour for
+good.
+
+**The Ancient Technology Tree.** Give a Kavorent Core to a mayor: a good
+deal of coin and a lot of standing, and the realm's scholars begin to learn
+the Kavorent's arts. With a core in hand (or once you've given one), the
+council's tree has a second page (T): the Ancient Technology Tree, rings of
+glowing seals round a turning core, nothing like the realm's own tree. Its
+arts cost one to four cores, and some need others first: the Growth Lattice
+(crops grow twice as fast under lattices of alloy), Coldfire Lamps (cold
+light along every street; night things keep further off), the Glyph Archive
+(research twice as fast), the Alloy Forge (the watch's arms edged with
+alloy), the Mending Spring (a basin by the well that closes your wounds;
+nobody in town stays sick), Ward Pylons (round the town's edge, striking
+anything that comes at it), the Kavorent Panoply (every guard in carapace and
+visor), the Storm Engine (battles open with lightning falling on the enemy
+line) and the Skyward Beacon (a pillar of light from the capital, seen for
+days around; trade booms). Every town of the realm puts them up.
+
+**Adventurers below.** Adventurers go down into old places on their own or
+in bands, whether you're there or not: they come back stronger, with old
+coin and better, or don't come back at all (their gear waits where they
+fell). What they bring up they set in their blades or wear. The bravest go
+into Kavorent ruins and, rarely, bring a town a core. Places they've been
+are lighter of loot and of guards when you get there.
+
+**Fighting, and the body.** A swing at the air lands on whoever's standing
+there, foe or not (and a blade in the other hand follows it round). Training
+dummies rock and show each blow's damage, and a tally of a run of blows.
+Raising a shield or a blade brings it up across you. Wounds no longer close
+on their own: food, sleep, potions, herbalists and stones mend you. Each day
+you go without sleep takes a point off your stamina (shown on the HUD) until
+you sleep it off. Sprinting costs little breath when you're whole, and much
+more the more you're hurt. A ghoul feeding on your breath is plain to see.
+
+**Stones.** Every stone works its own way set in a shield. Three new rare
+stones: onyx (shadow: blows echoed by your shade, arrows that split, armour
+that slips you out of sight), moonstone (moonlight: crescents thrown off the
+blade, arrows that mark, armour that wards you) and bloodstone (blood:
+wounds that bleed, and armour that hits harder the nearer you are to death).
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1484,7 +1609,10 @@ src/
                        worldgen (world map), terrain (per-column sampling),
                        regiongen (tiles), trees, settlement (layouts,
                        buildings, interiors, walls), weather, loot,
-                       region/world storage
+                       sites (old places on the map: barrows, mines,
+                       crypts, holdouts, Kavorent spires), dungeongen
+                       (floors from room kits), voyage (the ship in the
+                       castaway's opening), region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), acts (what people look like
                        doing things: dice, meals, drinks, cooking), warrior
@@ -1493,13 +1621,17 @@ src/
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling
-                       3D dice on tables), lighting, crt
+                       3D dice on tables), dungeontex + dungeonart (the
+                       stone and alloy below ground), oldplaces (spire
+                       runes, beacons, relic circles), lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
                        save slots), create (the character screen),
                        research (the tech tree and the study minigame),
-                       portal (where an arch can take you)
+                       ancient (the Ancient Technology Tree), crewtalk
+                       (talking to the ship's crew), portal (where an
+                       arch can take you)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), combat (wind-
@@ -1517,7 +1649,11 @@ src/
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
                        riding (your own horses and wagons, and a town's
-                       horse taken out by a citizen), leads,
+                       horse taken out by a citizen), leads, dungeon
+                       (being down below: floors, traps, puzzles), relics,
+                       kavtech (the Kavorent's gear and gadgets),
+                       cutscene (the openings: the ship and the storm,
+                       the hometown's history),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
@@ -1567,7 +1703,9 @@ src/
                        (harbours and voyages), portals, labor (prison
                        labour), religion
                        (faiths spreading, conquest, missions, holy wars,
-                       pilgrimages), and the
+                       pilgrimages), dungeons (old places' records,
+                       rumours, adventurers' delves), ancient (the
+                       Kavorent's arts in each realm), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)
