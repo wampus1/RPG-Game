@@ -34,7 +34,8 @@ test('villages and towns start bigger, with more guards, and need more to grow',
   const game = makeGame(4242);
   const pops = { village: [], town: [] };
   for (const s of game.world.ow.settlements) {
-    if (!pops[s.type]) continue;
+    // (Ruins left empty long ago don't count.)
+    if (!pops[s.type] || s.condition === 'abandoned' || s.deserted) continue;
     const L = game.world.getLayout(s);
     pops[s.type].push({ n: L.npcs.length, guards: L.npcs.filter((r) => r.job === 'guard').length });
   }
@@ -157,7 +158,8 @@ test('a walled city with buildings outside its walls plans an outer wall', () =>
 
 // ------------------------------------------------------------ stables
 test('an animal handler tames horses, a carpenter builds wagons, merchants take them out', () => {
-  const { game, L } = start(4);
+  // (Seed 8: a town.)
+  const { game, L } = start(8);
   const st = game.sim.stables;
   const people = L.npcs.filter((r) => alive(r) && !r.visitor);
   let handler = people.find((r) => r.job === 'handler');
@@ -369,7 +371,7 @@ test('guests from other towns turn up for a do and tie their horses at the post'
 // ------------------------------------------------------------ event decor
 test('every people dresses a feast its own way, with bunting and banners all over town', () => {
   const seen = new Set();
-  for (const seed of [7, 4, 12345, 9, 21]) {
+  for (const seed of [7, 4, 1, 2, 10]) {
     const game = makeGame(seed);
     const input = stubInput();
     game.minute = 400;

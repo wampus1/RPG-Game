@@ -363,7 +363,7 @@ export class UI {
     if (d.kind === 'tool') lines.push({ text: `${cap(d.tool === 'pick' ? 'pickaxe' : d.tool || 'tool')} · speed ${d.speed}`, color: C.cyan });
     if (d.damage) lines.push({ text: d.ranged ? `Damage ${d.damage} · range ${d.range}` : `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
     if (d.kind === 'weapon') {
-      const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}` : null;
+      const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? (d.ammo === 'none' ? 'no ammunition: draws stamina' : `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}`) : null;
       lines.push({ text: `${d.hands === 2 ? 'Two-handed (no shield)' : d.ranged ? 'One-handed' : 'One-handed · RMB in pack: off hand'}${ammo ? ` · ${ammo}` : ''}`, color: C.dim });
     }
     if (d.kind === 'food') lines.push({ text: `Restores ${d.heal} HP [F/RMB]`, color: C.green });

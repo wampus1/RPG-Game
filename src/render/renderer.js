@@ -1655,6 +1655,22 @@ export class Renderer {
         ctx.fillRect(sx - 1, gsy - lift - 2, 2, 2);
         continue;
       }
+      // A Kavorent pulse: a bolt of cold light, a long fading tail, sparks
+      // shed as it goes.
+      if (a.kind === 'pulse') {
+        for (let i = 1; i < 9; i++) {
+          ctx.fillStyle = `rgba(90,216,240,${0.5 - i * 0.05})`;
+          ctx.fillRect(Math.round(sx - ux * i * 1.6) - 1, Math.round(sy - uy * i * 1.2) - 1, 3, 3);
+        }
+        ctx.fillStyle = 'rgba(168,244,255,0.45)';
+        ctx.fillRect(sx - 3, sy - 3, 7, 7);
+        ctx.fillStyle = '#c8fbff';
+        ctx.fillRect(sx - 2, sy - 2, 5, 5);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx - 1, sy - 1, 3, 3);
+        if (Math.random() < 0.3) this.particles.push({ x: sx + this.camX, y: sy + this.camY, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20, g: 0, life: 0.3, max: 0.3, color: '#a8f4ff', size: 1, glow: true, grow: 0, chunk: null });
+        continue;
+      }
       // A sling stone: a grey pellet, a streak behind it.
       if (a.kind === 'stone') {
         ctx.fillStyle = 'rgba(200,200,200,0.4)';

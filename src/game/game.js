@@ -30,6 +30,7 @@ import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, fly
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
+import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront } from '../entities/monsters.js';
 import { siteAt } from '../world/sites.js';
@@ -1501,6 +1502,8 @@ export class Game {
     this.updateProjectiles(dt);
     updateHazards(this, dt);
     updateRelics(this, dt);
+    updateKavTech(this, dt);
+    this.sim.ancient.update(dt);
     if (this.dungeon) this.dungeon.update(dt);
     updateEngines(this, dt);
     this.wildlife.update(dt);
@@ -1965,6 +1968,9 @@ export class Game {
       hook(this);
       return;
     }
+    // The Kavorent's things: used whatever else is about.
+    if (held && held.kind === 'gadget' && useGadget(this, held)) return;
+    if (held && held.kind === 'enhancer' && fitEnhancer(this, held)) return;
     // In a fight (or with nothing to use it on), the right button raises
     // your guard instead (held: see combat.js).
     if (canBlock(this, p) && (this.combatT > 0 || !c || (!c.entity && !(c.block && c.block.interact && c.inReach)))) return;
@@ -3826,6 +3832,7 @@ export class Game {
     p.doAction(0.22);
     this.audio?.play('swing');
     onSwing(this, p);
+    lanceThrust(this, p);
   }
 
   // A swing at the air in front of you (a weapon in hand, nothing under
@@ -3878,6 +3885,7 @@ export class Game {
         this.hitDummy(dummy, dmg, crit, st);
       } else this.audio?.play('swing');
       onSwing(this, p);
+      lanceThrust(this, p);
       const off = offhandOf(p);
       if (off) p.offSwing = { t: 0.15, land: () => this.offAir(off, tilesNow) };
       return false;
@@ -4008,7 +4016,15 @@ export class Game {
       // Arrows for a bow, bolts for a crossbow, stones for a sling; a
       // javelin is its own.
       const ammo = def.ammo || 'arrow';
-      if (countItem(p.inv, ammo) <= 0) {
+      // (The Pulse Caster: no ammunition, a breath of stamina a shot.)
+      if (ammo === 'none') {
+        if ((p.stamina ?? 0) < 1.5) {
+          this.ui.msg('Too winded to charge the caster.', '#ffb080', true);
+          p.attackCd = 0.4;
+          return;
+        }
+        spend(p, 1.5);
+      } else if (countItem(p.inv, ammo) <= 0) {
         this.ui.msg(ammo === 'cobblestone' ? 'You have no stones to sling.' : `You have no ${ITEMS[ammo].name.toLowerCase()}s.`, '#ffb080', true);
         this.audio?.play('error');
         p.attackCd = 0.4;
@@ -4018,12 +4034,12 @@ export class Game {
         const s = p.inv[p.selected];
         s.count--;
         if (s.count <= 0) p.inv[p.selected] = null;
-      } else removeItem(p.inv, ammo, 1);
+      } else if (ammo !== 'none') removeItem(p.inv, ammo, 1);
       p.attackCd = def.cooldown * quick;
       p.doAction(0.3);
       if (def.thrown) strikeAnim(p, STYLES.spear);
       const mark = heroHas(this.hero, 'marksman');
-      const kind = def.thrown ? 'javelin' : ammo === 'bolt' ? 'bolt' : ammo === 'cobblestone' ? 'stone' : 'arrow';
+      const kind = def.thrown ? 'javelin' : ammo === 'none' ? 'pulse' : ammo === 'bolt' ? 'bolt' : ammo === 'cobblestone' ? 'stone' : 'arrow';
       this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (1 + buffOf(this, 'fury')) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)), kind);
       return;
     }
@@ -4055,6 +4071,7 @@ export class Game {
       // Stepped back out of it (or rolled under it): a whiff.
       this.audio?.play('swing');
       onSwing(this, p);
+      lanceThrust(this, p);
       if (!target.dead) this.renderer.floatText(target.x, target.y + 2, target.z, 'miss', '#a8a8b0');
       return false;
     }
@@ -4082,6 +4099,7 @@ export class Game {
       this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
     }
     onSwing(this, p, target);
+    lanceThrust(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
     onBladeHit(this, p, target, { dmg, heavy, crit });
     this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
@@ -4161,13 +4179,15 @@ export class Game {
     const duel = this.duel;
     const inDuel = !!(duel && duel.npc && !duel.npc.dead && ((target === duel.npc && source === this.player) || (target === this.player && source === duel.npc)));
     let armored = false;
+    // (A Phase Blade goes through armour as if it weren't all there.)
+    const phase = source && !this.dotHit ? pierceOf(source) : 0;
     if (target.kind === 'npc' && target.rec.equipment.armor) {
-      amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor)));
+      amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor * (1 - phase))));
       armored = true;
     }
     if (target.kind === 'player') {
       // Your armour, and the watch's mail if you wear the colours.
-      const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue());
+      const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue()) * (1 - phase);
       if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
       armored = a >= 0.1;
     }
@@ -4607,10 +4627,11 @@ export class Game {
     // (Nor near a vigil lamp, at night.)
     if (night && nearRelic(this, x, z, 'vigil', 10)) return;
     const ow = this.world.ow;
-    // Night creatures keep their distance from lived-in places.
-    const margin = night ? 14 : 6;
+    // Night creatures keep their distance from lived-in places (and far
+    // from a town lit by coldfire lamps).
     for (const s of ow.settlementsNear(x, z)) {
       const b = s.bounds;
+      const margin = night ? (this.sim.ancient.has(s, 'lamps') ? 34 : 14) : 6;
       if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned' && !s.deserted) return;
     }
     const y = this.world.findStandY(x, z, p.y);
@@ -4729,6 +4750,16 @@ export class Game {
 
   // ------------------------------------------------------------ save
   serialize() {
+    // (Fields of light thrown up are only for the moment: not kept.)
+    dropFields(this);
+    try {
+      return this.serializeAll();
+    } finally {
+      raiseFields(this);
+    }
+  }
+
+  serializeAll() {
     const regions = [];
     for (const v of this.world.saved.values()) regions.push(v);
     for (const r of this.world.regions.values()) if (r.modified) regions.push(r.serialize());

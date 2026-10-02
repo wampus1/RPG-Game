@@ -158,13 +158,26 @@ export class CropGrowth {
       e.last = now;
       if (gap > 90) e.bonus = (e.bonus || 0) + this.wetEstimate(e, now - gap, now);
       else if (gap > 0 && w.getBlock(e.x, e.y - 1, e.z) === B.farmland_wet) e.bonus = (e.bonus || 0) + gap;
-      // (And twice again in a seed of plenty's circle.)
+      // (And twice again in a seed of plenty's circle, or under a realm's
+      // growth lattices.)
       if (gap > 0 && relicGrowth(this.game, e.x, e.y, e.z)) e.bonus = (e.bonus || 0) + gap;
+      if (gap > 0 && this.latticed(e)) e.bonus = (e.bonus || 0) + gap;
       const want = this.stageOf(e);
       const meta = w.getMeta(e.x, e.y, e.z);
       if (cropStage(meta) < want) w.setMeta(e.x, e.y, e.z, (meta & ~META_AGE) | cropMeta(id, want));
       if (want >= CROPS[id].stages - 1) this.list.delete(k);
     }
+  }
+
+  // In a town whose realm has the Growth Lattice?
+  latticed(e) {
+    const A = this.game.sim && this.game.sim.ancient;
+    if (!A) return false;
+    if (e.sid === undefined) {
+      const s = this.game.world.ow.settlementAt(e.x, e.z);
+      e.sid = s ? s.id : -1;
+    }
+    return e.sid >= 0 && A.has(this.game.world.ow.settlements[e.sid], 'lattice');
   }
 
   // What breaking a crop gives: seeds back if it wasn't ready, the full

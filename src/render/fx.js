@@ -271,11 +271,12 @@ function drawGhost(r, ctx, f, k, ox, oy) {
   const y = Math.round(f.cy + 10 - CHAR_H + 1 + oy);
   const a = ctx.globalAlpha;
   ctx.globalAlpha = (f.strike ? 0.65 : 0.5) * (1 - k);
-  ctx.filter = 'brightness(0.35) sepia(1) hue-rotate(220deg) saturate(2.5)';
+  // (Shadow-purple by default; a blink's after-image is cold blue.)
+  ctx.filter = f.filter || 'brightness(0.35) sepia(1) hue-rotate(220deg) saturate(2.5)';
   ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, x, y - SPR_PAD, CHAR_W, SHEET_H);
   ctx.filter = 'none';
   ctx.globalAlpha = (1 - k) * 0.8;
-  ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#9a6ad8'), x - 1, y - SPR_PAD - 1);
+  ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, f.glow || '#9a6ad8'), x - 1, y - SPR_PAD - 1);
   ctx.globalAlpha = a;
 }
 

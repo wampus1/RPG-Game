@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGame, stubInput } from './helpers.mjs';
+import { lotsReady, makeGame, stubInput } from './helpers.mjs';
 import { World } from '../src/world/world.js';
 import { Overworld } from '../src/world/worldgen.js';
 import { simulateTo, alive, kitchenOf, st, DAY } from '../src/sim/econ.js';
@@ -193,6 +193,8 @@ test('becoming a citizen: a host family, builders and a finished house', () => {
   p.give('coin', 100);
   p.teleport(hall.inside.x, 6, hall.inside.z);
   game.currentSettlement = L.settlement;
+  // (A lot ready for the cottage, as the town's streets would give it.)
+  lotsReady(game, L, 'house_s');
   assert.ok(topicsFor(mayor, game).some((t) => t.id === 'citizen'));
   const offer = respond(mayor, game, 'citizen');
   assert.ok(offer.choices && offer.choices.some((o) => o.arg === 'yes'));

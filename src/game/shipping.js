@@ -43,6 +43,8 @@ export function updateShips(game, dt) {
       for (const idx of v.crew) {
         const rec = L.npcs[idx];
         if (!rec || !rec.ent || rec.ent.dead) continue;
+        // (Off to sea instead: they'll miss the wedding, or the feast.)
+        for (const ev of game.sim.events.upcoming(L)) for (const g of ev.guests || []) if (g.idx === idx) g.set = false;
         setOverride(rec, now, now + 240, 'travel', { place: 'dock', target: site.end });
         rec.ent.activity = null;
         rec.ent.goal = null;

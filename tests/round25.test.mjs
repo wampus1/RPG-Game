@@ -137,7 +137,8 @@ test('a guard on duty walking past notices you breaking into a house', () => {
 });
 
 test('merchants set out their dearest goods', () => {
-  const { game, L } = start();
+  // (Seed 8: a town with a shop.)
+  const { game, L } = start(8);
   const m = game.npcs.find((n) => n.rec.job === 'merchant' && n.wareStock && n.wareStock());
   assert.ok(m, 'a merchant');
   // Behind a counter in the shop (or any table in town).
@@ -386,7 +387,7 @@ test('new things in the night: ghouls rake three times over, wisps throw cold fi
 // ------------------------------------------------------------ gems
 test('a stone in a shield works when it turns a blow; one in armour when you roll', () => {
   const { game, p } = start();
-  assert.match(gemText(socketed('iron_shield', 'amethyst')), /throws whoever struck it back/);
+  assert.match(gemText(socketed('iron_shield', 'amethyst')), /Bulwark: a parry throws every foe/);
   assert.match(gemText(socketed('iron_helmet', 'sapphire')), /rolling takes less breath/);
   // An amethyst shield throws them back.
   p.equip.shield = socketed('iron_shield', 'amethyst');
@@ -395,23 +396,21 @@ test('a stone in a shield works when it turns a blow; one in armour when you rol
   const x0 = w.x;
   onBlock(game, p, w, false);
   assert.ok(w.x !== x0 || w.moving, 'thrown back');
-  // A sapphire shield makes parries a little easier.
-  const base = parryWindow(game);
+  // (Round 26: each shield stone its own way.) A sapphire shield ices
+  // over with each blow it turns; the third freezes the attacker solid.
   p.equip.shield = socketed('iron_shield', 'sapphire');
-  assert.ok(parryWindow(game) > base);
-  // A blow on a raised emerald shield costs half the breath.
-  const wolf = dummy(game, p, -1, 0);
-  p.face(wolf.x, wolf.z);
-  p.blocking = true;
-  p.blockT = 5;
-  p.stamina = 10;
-  p.equip.shield = 'iron_shield';
-  resolveHit(game, wolf, p, STYLES.bite);
-  const plain = 10 - p.stamina;
-  p.stamina = 10;
+  const ice = dummy(game, p, 0, 1);
+  for (let i = 0; i < 3; i++) onBlock(game, p, ice, false);
+  assert.ok(ice.frozenT > 0, 'frozen solid');
+  // An emerald shield gathers what it turns as light, to mend you later.
   p.equip.shield = socketed('iron_shield', 'emerald');
-  resolveHit(game, wolf, p, STYLES.bite);
-  assert.ok(10 - p.stamina < plain, 'less breath');
+  const wolf = dummy(game, p, -1, 0);
+  p.wardStore = 0;
+  onBlock(game, p, wolf, false, 3);
+  assert.ok(p.wardStore > 0, 'light gathered');
+  void parryWindow;
+  void resolveHit;
+  void STYLES;
 });
 
 // ------------------------------------------------------------ wildlife

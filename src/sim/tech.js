@@ -393,7 +393,8 @@ export class Tech {
     }
     if (!st.current) this.choose(s, day, new RNG(hash4(day, s.id, 0x7ec)));
     if (!st.current) return null;
-    const pts = n * (this.has(s, 'schools') ? 1.4 : 1);
+    // (The Glyph Archive: the Kavorent's own records to read.)
+    const pts = n * (this.has(s, 'schools') ? 1.4 : 1) * (this.sim.ancient && this.sim.ancient.has(s, 'archive') ? 2 : 1);
     st.progress += pts;
     if (s.cx !== undefined) {
       const c = (this.contrib[s.id] ||= {});

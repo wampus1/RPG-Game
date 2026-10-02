@@ -141,7 +141,8 @@ test('builders put up walls straight away: empty air to clear costs no time', ()
 
 test('a licensed professional always gets a better price for their goods', () => {
   const { game, sid, a } = start(12345);
-  const n = a.npcs.find((q) => !q.dead && q.rec.age === 'adult');
+  // (Someone who'd buy wheat at all.)
+  const n = a.npcs.find((q) => !q.dead && q.rec.age === 'adult' && game.sim.sellPrice(q, 'wheat') > 0);
   const normal = game.sim.sellPrice(n, 'wheat');
   game.sim.careers.job = { kind: 'profession', job: 'farmer', sid };
   const lic = game.sim.sellPrice(n, 'wheat');
@@ -382,7 +383,8 @@ test('life goes on: a new mayor is chosen, couples marry, children grow up, beas
 
 test('nobody starves in a big city over three weeks away', () => {
   const game = makeGame(12345);
-  const s = game.world.ow.settlements.find((q) => q.name === 'Haycross');
+  // (A walled city.)
+  const s = game.world.ow.settlements.find((q) => q.type === 'city' && game.world.getLayout(q).walled);
   const L = game.world.getLayout(s);
   const causes = [];
   const rd = game.sim.recordDeath.bind(game.sim);
@@ -442,10 +444,11 @@ test('towns grow: new trades, a village becomes a town, a town a walled city', (
 });
 
 test('a walled city out of room pulls down part of its wall and builds beyond it', () => {
-  const game = makeGame(12345);
+  const game = makeGame(4242);
   const input = stubInput();
   game.minute = 8 * 60;
-  const s = game.world.ow.settlements.find((q) => q.name === 'Haycross');
+  // (A walled city with little room left inside.)
+  const s = game.world.ow.settlements.find((q) => q.name === 'Wilbrook');
   visit(game, input, s);
   const L = game.world.getLayout(s);
   assert.ok(L.walled);

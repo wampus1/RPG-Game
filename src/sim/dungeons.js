@@ -343,7 +343,7 @@ export class Dungeons {
   giveCores(L, n, by) {
     const e = L.econ;
     e.cores = (e.cores || 0) + n;
-    if (this.sim.ancient) this.sim.ancient.addCores(L.settlement, n);
+    if (this.sim.ancient) this.sim.ancient.addCores(L, n);
     ledger(L, Math.floor(this.sim.abs / DAY), `${by} brought ${n === 1 ? 'a Kavorent core' : `${n} Kavorent cores`} to ${L.settlement.name}. The scholars can talk of nothing else.`);
   }
 

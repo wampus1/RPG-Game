@@ -325,6 +325,12 @@ def('kav_node', { ...sprite, interact: 'kav_node', hardness: Infinity, drop: nul
 def('kav_seal', { ...sprite, tall: true, solid: true, interact: 'sealed', hardness: Infinity, drop: null, light: 4, label: 'Vault Seal' });
 def('kav_cache', { ...sprite, interact: 'container', hardness: Infinity, drop: null, light: 3, label: 'Kavorent Cache' });
 def('kav_emitter', { hardness: Infinity, drop: null, rotatable: true, light: 4, label: 'Emitter' });
+// What a realm that has learned the Kavorent's arts puts up in its towns
+// (see sim/ancient.js): cold lamps along the streets, ward pylons round the
+// edge, a basin of mending light by the well.
+def('kav_lamp', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, light: 12, label: 'Coldfire Lamp' });
+def('kav_pylon', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, light: 8, label: 'Ward Pylon' });
+def('kav_basin', { ...sprite, solid: true, hardness: Infinity, drop: null, light: 9, label: 'Mending Spring' });
 // A relic set down: its power reaches all round it (see game/relics.js).
 def('relic', { ...sprite, interact: 'relic', tool: 'pick', hardness: 1, drop: null, light: 6, label: 'Relic' });
 

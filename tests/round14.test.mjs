@@ -55,7 +55,12 @@ test('every town has its notice board on the square', () => {
 
 test('the map: a town spreads into the squares its streets reach, and a place that has grown shows its bigger mark', () => {
   const game = makeGame(12345);
-  const s = game.world.ow.settlements.find((q) => q.type === 'village');
+  // (A village with open land to its east, for its streets to reach.)
+  const open = (q) => {
+    const c = game.world.ow.cell(q.cx + 1, q.cz);
+    return c && c.settlement === null && c.biome !== 'ocean';
+  };
+  const s = game.world.ow.settlements.find((q) => q.type === 'village' && open(q)) || game.world.ow.settlements.find((q) => q.type === 'village');
   const cells = (q) => [...settlementIcons(game)].filter(([, v]) => v.s === q).map(([k]) => k);
   assert.equal(cells(s).length, 1, 'a village: its one square');
   // Grown into a city: its city mark, on open ground beside it (round 24:
@@ -161,7 +166,8 @@ test('realms: towns pay tribute to the capital, and the capital helps its poorer
 });
 
 test('realms: decrees every town keeps (a least tax, a weapons ban)', () => {
-  const { game, sid } = start();
+  // (Seed 1: a village that belongs to a realm.)
+  const { game, sid } = start(1);
   const R = game.sim.realms;
   const L = game.sim.layoutOf(sid);
   const civ = L.settlement.civ;

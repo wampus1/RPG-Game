@@ -23,6 +23,7 @@ import { addHazard, lineTiles } from '../entities/monsters.js';
 import { countItem, removeItem } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
+import { dropFields, raiseFields } from './kavtech.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Kinds of block a dungeon handles itself (see Game.interact).
@@ -84,6 +85,8 @@ export class DungeonRun {
     game.world.setInstance(null);
     game.dungeon = null;
     game.hazards = [];
+    game.bulwarks = [];
+    game.lodestar = null;
     game.projectiles = [];
     if (this.stash) {
       game.creatures = this.stash.creatures.filter((c) => !c.dead);
@@ -224,9 +227,12 @@ export class DungeonRun {
   // dead), for when you're back.
   saveFloor() {
     if (!this.data) return;
+    // (Not a Field Projector's wall: that's only for the moment.)
+    dropFields(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
     this.rec.floors[this.floor] = { regions, state: this.state };
+    raiseFields(this.game);
   }
 
   // Off this floor: its things go (they're kept, or will be made again).

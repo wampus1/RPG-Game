@@ -235,8 +235,10 @@ test('born here: a family name, parents who treat you as their child, a home, an
     lotsReady(game, L, 'house_s');
     const t = game.sim.ownHomeTerms(mayor);
     if (t.ok) {
-      assert.ok(game.sim.ownHome(mayor).ok);
-      assert.ok(game.sim.construction && !game.sim.construction.done, 'the builders start on it');
+      const r = game.sim.ownHome(mayor);
+      assert.ok(r.ok);
+      // (On a lot that's ready, at once; or first in line for the next.)
+      assert.ok(r.queued || (game.sim.construction && !game.sim.construction.done), 'the builders start on it');
     }
   }
 });
@@ -244,7 +246,8 @@ test('born here: a family name, parents who treat you as their child, a home, an
 // ------------------------------------------------------------ town events
 test('a wedding: posters the day before, an arch and benches on the day, guests drifting in, and all taken down after', async () => {
   const { B } = await import('../src/world/blocks.js');
-  const { game, input, L } = start();
+  // (Seed 8: a town, with plenty of people to marry.)
+  const { game, input, L } = start(8);
   const w = game.world;
   const E = game.sim.events;
   const single = L.npcs.filter((r) => r.alive !== false && r.age === 'adult' && (r.partner === null || r.partner === undefined));

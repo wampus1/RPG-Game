@@ -152,7 +152,8 @@ test('news from afar: posted for two days, fading, then gone', async () => {
 
 test('streets: a town with no lots lays a two-wide street, marks lots with signs, and what waited is built', () => {
   const game = makeGame(7);
-  const { s, L } = town(game);
+  // (A town with open ground beside it for a street and its lots.)
+  const { s, L } = town(game, (q) => q.name === 'Ashstead');
   const sim = game.sim;
   for (const p of L.plots) if (p) p.taken = true;
   // Nothing to build on: the new house waits its turn.
@@ -267,8 +268,10 @@ test('the command console: teleport, reveal the map, and make a wedding happen',
   const { game, input } = start(7);
   const out = (t) => runCommand(game, t).join(' ');
   assert.match(out('help'), /tp <town>/);
-  const far = game.world.ow.settlements.find((q) => q.name === 'Wynfield');
-  assert.match(out('tp wynf'), /Teleported to Wynfield/);
+  // (Somewhere you're not: a lived-in town with a plain name.)
+  const far = game.world.ow.settlements.find((q) => q.condition !== 'abandoned' && !game.active.has(q.id) && /^[A-Za-z]+$/.test(q.name));
+  const name = far.name;
+  assert.match(out(`tp ${name.slice(0, 5).toLowerCase()}`), new RegExp(`Teleported to ${name}`));
   assert.ok(game.world.ow.settlementAt(game.player.x, game.player.z) === far);
   for (let i = 0; i < 10; i++) game.update(0.1, input);
   assert.ok(game.active.has(far.id), 'the town comes to life around you');
@@ -279,8 +282,8 @@ test('the command console: teleport, reveal the map, and make a wedding happen',
   out('teleport on');
   assert.ok(game.cheats.mapTeleport);
   // A wedding in a couple of hours, today.
-  const said = out('wedding now wynfield');
-  assert.match(said, /are to be married in Wynfield: day \d+/);
+  const said = out(`wedding now ${name.toLowerCase()}`);
+  assert.match(said, new RegExp(`are to be married in ${name}: day \\d+`));
   const L = game.sim.layoutOf(far.id);
   const ev = L.econ.events.find((q) => q.kind === 'wedding');
   assert.equal(ev.day, game.day);

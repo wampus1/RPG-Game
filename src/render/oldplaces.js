@@ -30,6 +30,17 @@ export function drawOldPlaces(r, game, dt) {
       const rec = game.sim.dungeons.get(s.id);
       spireRunes(r, ctx, game, s, rec, dt);
     }
+    // A realm's Skyward Beacon (see sim/ancient.js): a pillar of light from
+    // its capital up into the sky.
+    r.beaconT = (r.beaconT || 0) - dt;
+    if (r.beaconT <= 0 || !r.beaconList) {
+      r.beaconT = 2;
+      r.beaconList = game.sim.ancient ? game.sim.ancient.beacons() : [];
+    }
+    for (const b of r.beaconList) {
+      if (Math.abs(b.x - p.x) > 40 || Math.abs(b.z - p.z) > 40) continue;
+      beacon(r, ctx, b);
+    }
   }
   relicCircles(r, ctx, game);
 }
@@ -83,6 +94,37 @@ function spireRunes(r, ctx, game, s, rec, dt) {
   ctx.fillStyle = '#5ad8f0';
   ctx.fillRect(x + 2, yBottom - height, 2, height);
   ctx.globalAlpha = 1;
+}
+
+function beacon(r, ctx, b) {
+  const [u, v] = r.toView(b.x, b.z);
+  const x = u * TILE + 8 - r.camX;
+  const yb = v * TILE - 5 * LH + LH - r.camY;
+  const t = r.time;
+  const w = 7 + Math.sin(t * 2) * 1.5;
+  ctx.save();
+  for (const [k, a] of [[3.2, 0.1], [1.8, 0.18], [1, 0.5], [0.35, 0.85]]) {
+    const g = ctx.createLinearGradient(0, yb, 0, -40);
+    g.addColorStop(0, `rgba(200,251,255,${a})`);
+    g.addColorStop(1, `rgba(90,216,240,${a * 0.25})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(Math.round(x - w * k), -40, Math.round(w * k * 2), yb + 40);
+  }
+  // Motes of light climbing it.
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 8; i++) {
+    const k = ((t * 0.35 + i / 8) % 1);
+    ctx.globalAlpha = Math.sin(k * Math.PI) * 0.9;
+    ctx.fillRect(Math.round(x - w + ((i * 37) % (w * 2))), Math.round(yb - k * (yb + 40)), 2, 2);
+  }
+  // Its pool of light on the ground.
+  ctx.globalAlpha = 0.35 + 0.1 * Math.sin(t * 3);
+  const gl = ctx.createRadialGradient(x, yb, 2, x, yb, 40);
+  gl.addColorStop(0, 'rgba(200,251,255,0.9)');
+  gl.addColorStop(1, 'rgba(90,216,240,0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(x - 40, yb - 20, 80, 40);
+  ctx.restore();
 }
 
 // A relic's reach, on the ground round it.

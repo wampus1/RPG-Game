@@ -9,6 +9,7 @@ import { has as heroHas } from '../game/hero.js';
 import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
+import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
@@ -433,6 +434,11 @@ export class DialogueWindow extends Window {
     if (r.open === 'gift') return this.ui.open(new GiftWindow(this.ui, n));
     if (r.open === 'tech') {
       this.ui.open(new TechWindow(this.ui, game, n.settlement));
+      return;
+    }
+    if (r.open === 'ancient') {
+      const ui = this.ui;
+      ui.open(new AncientWindow(ui, game, n.settlement, () => new TechWindow(ui, game, n.settlement)));
       return;
     }
     this.choices = r.choices && r.choices.length ? r.choices : null;

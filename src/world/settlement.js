@@ -2481,12 +2481,21 @@ class Layout {
         if (c.water >= 0 || c.h > SURFACE + 1) continue;
         if (['forest', 'taiga', 'jungle'].includes(c.biome)) chop.push({ x, z });
         hunt.push({ x, z });
-        const n = t.column(x + 3, z, this.ctx, {});
-        if (c.h === SURFACE && (n.h >= SURFACE + 2 || c.biome === 'mountain')) mine.push({ x, z });
+        // (Beside a rise tall enough to show bare rock at its foot: under a
+        // low one's turf there's only earth. Facing it.)
+        if (c.h === SURFACE) {
+          for (const [dx, dz] of DIRS4) {
+            const n = t.column(x + dx * 3, z + dz * 3, this.ctx, {});
+            if (n.water < 0 && (n.h >= SURFACE + 3 || (c.biome === 'mountain' && n.h >= SURFACE + 2))) {
+              mine.push({ x, z, face: dirOf(dx, dz) });
+              break;
+            }
+          }
+        }
       }
     }
     for (const p of rng.shuffle(chop).slice(0, 6)) this.addSpot(p.x, p.z, 0, ['chop'], { wild: true });
-    for (const p of rng.shuffle(mine).slice(0, 4)) this.addSpot(p.x, p.z, 3, ['mine'], { wild: true });
+    for (const p of rng.shuffle(mine).slice(0, 4)) this.addSpot(p.x, p.z, p.face ?? 3, ['mine'], { wild: true });
     let traps = 0;
     for (const p of rng.shuffle(hunt).slice(0, 7)) {
       const near = Math.max(b.x0 - p.x, p.x - b.x1, b.z0 - p.z, p.z - b.z1) <= 10;

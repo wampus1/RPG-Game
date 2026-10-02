@@ -180,7 +180,14 @@ export class Camps {
         continue;
       }
       const who = members ? members(camp) : [];
-      const near = who.some((e) => e && !e.dead && Math.max(Math.abs(e.x - camp.stand.x), Math.abs(e.z - camp.stand.z)) <= 4);
+      const near = who.some((e) => e && !e.dead && Math.max(Math.abs(e.x - camp.stand.x), Math.abs(e.z - camp.stand.z)) <= 10);
+      // (Nobody about it for a good while (gone into town, or never came
+      // that way): it went up while you weren't looking.)
+      if (!near) {
+        camp.waited = (camp.waited || 0) + PITCH_EVERY;
+        if (camp.waited >= PITCH_EVERY * 3) this.raise(camp, camp.ops.length);
+        continue;
+      }
       if (near) {
         const op = camp.ops[camp.placed];
         this.raise(camp, 1);

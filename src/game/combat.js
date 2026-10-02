@@ -399,7 +399,9 @@ export function resolveHit(game, a, v, st, opts = null) {
       return 'parried';
     }
     const wall = sh && heroHas(hero, 'shieldbearer');
-    const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0)));
+    // (A Phase Blade's edge is never quite where the shield is.)
+    const phase = ITEMS[(opts && opts.weapon) || mainWeapon(a)]?.pierce || 0;
+    const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0) - phase * 0.7));
     const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1) * blockCostMult(v) * (st.drain || 1);
     const before = amount;
     if (v.kind === 'player') {

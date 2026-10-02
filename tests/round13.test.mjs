@@ -24,7 +24,7 @@ const reload = (game) => {
 };
 
 test('selling: the more of a thing a trader has, the less they pay, until they want no more', () => {
-  const { game, a } = start(4);
+  const { game, a } = start(8);
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   const sh = game.sim.shopOf(smith);
   // A book is no use to a smith: each one they already have takes the price down.
@@ -50,7 +50,7 @@ test('selling: the more of a thing a trader has, the less they pay, until they w
 });
 
 test('selling: a trader\'s glut clears over a few days, and they buy again', () => {
-  const { game, a, L } = start(4);
+  const { game, a, L } = start(8);
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   const sh = game.sim.shopOf(smith);
   sh.store.book = GLUT_MAX;
@@ -190,16 +190,21 @@ test('in a town nobody has seen, the years go by all the same', () => {
   // The farthest place from where you are: you've never been anywhere near.
   const home = game.world.ow.settlements.find((s) => s.id === sid);
   const dist = (s) => Math.hypot(s.cx - home.cx, s.cz - home.cz);
-  const far = game.world.ow.settlements.filter((s) => s.condition !== 'abandoned').sort((a, b) => dist(b) - dist(a))[0];
-  assert.ok(!game.active.has(far.id));
-  const L = game.sim.layoutOf(far.id);
-  const kids = new Set(L.npcs.filter((r) => r.age === 'child').map((r) => r.idx));
+  // (The three farthest: whatever each happens to be like, between them
+  // there are children, grown-ups and old folk.)
+  const far = game.world.ow.settlements.filter((s) => s.condition !== 'abandoned').sort((a, b) => dist(b) - dist(a)).slice(0, 3);
+  const Ls = far.map((s) => {
+    assert.ok(!game.active.has(s.id));
+    return game.sim.layoutOf(s.id);
+  });
+  const kids = new Set(Ls.flatMap((L) => L.npcs.filter((r) => r.age === 'child').map((r) => `${L.settlement.id}:${r.idx}`)));
   for (let d = 5; d <= 60; d += 5) {
     game.day = d;
-    simulateTo(game.sim, L, d * DAY);
+    for (const L of Ls) simulateTo(game.sim, L, d * DAY);
   }
-  assert.ok(L.npcs.some((r) => kids.has(r.idx) && r.age === 'adult'), 'children grew up');
-  assert.ok(L.npcs.some((r) => r.aged), 'grown-ups grew old');
-  assert.ok(L.npcs.some((r) => r.cause === 'old age'), 'and some passed away');
-  assert.ok(L.npcs.some((r) => r.born > 0 && alive(r)), 'and babies were born');
+  const all = Ls.flatMap((L) => L.npcs.map((r) => ({ r, k: `${L.settlement.id}:${r.idx}` })));
+  assert.ok(all.some(({ r, k }) => kids.has(k) && r.age === 'adult'), 'children grew up');
+  assert.ok(all.some(({ r }) => r.aged), 'grown-ups grew old');
+  assert.ok(all.some(({ r }) => r.cause === 'old age'), 'and some passed away');
+  assert.ok(all.some(({ r }) => r.born > 0 && alive(r)), 'and babies were born');
 });

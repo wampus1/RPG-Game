@@ -94,7 +94,7 @@ test('licensed trades: a fee, a premium on goods, and the town\'s fields and sna
 
 test('working at a shop: chores, customers, the shop\'s chests, pay for work done, getting fired', () => {
   // (A town with a smithy.)
-  const { game, input, a, L, p } = start(7 * 60, 4);
+  const { game, input, a, L, p } = start(7 * 60, 8);
   const car = game.sim.careers;
   const smith = a.npcs.find((n) => n.rec.job === 'blacksmith');
   assert.ok(car.canEmploy(smith));

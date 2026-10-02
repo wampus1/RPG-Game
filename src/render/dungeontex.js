@@ -557,6 +557,46 @@ export const DSPRITES = {
     p.rect(7, 16, 2, 4, KAV.glow);
     return p.outline(OUT);
   },
+  // A realm's coldfire lamp: a slim alloy post, a lens of cold light on top
+  // that breathes slowly.
+  kav_lamp(rot, st, f) {
+    const p = spr(TALL);
+    p.rect(7, 12, 2, 28, KAV.plate);
+    p.vline(7, 12, 39, KAV.edge);
+    p.rect(5, 36, 6, 4, KAV.dark);
+    p.hline(5, 10, 36, KAV.edge);
+    const g = [KAV.glow, '#c8fbff', KAV.glow, KAV.seam][f % 4];
+    p.rect(5, 4, 6, 8, KAV.dark);
+    p.rect(6, 5, 4, 6, g);
+    p.set(7, 6, '#ffffff');
+    p.hline(4, 11, 3, KAV.plate);
+    p.hline(4, 11, 12, KAV.plate);
+    return p.outline(OUT);
+  },
+  // A ward pylon: three tapering alloy blades round a core that crackles.
+  kav_pylon(rot, st, f) {
+    const p = spr(TALL);
+    for (let y = 8; y < 40; y++) {
+      const w = Math.round(1 + (y - 8) / 10);
+      p.hline(3, 3 + w, y, KAV.plate);
+      p.hline(12 - w, 12, y, KAV.plate);
+    }
+    p.rect(6, 4, 4, 34, KAV.dark);
+    p.vline(8, 6, 36, f % 2 ? KAV.glow : KAV.seam);
+    p.rect(6, 2, 4, 4, f % 2 ? '#ffffff' : KAV.glow);
+    for (let i = 0; i < 3; i++) p.set(5 + ((f + i * 3) % 6), 10 + i * 9, KAV.rune);
+    return p.outline(OUT);
+  },
+  // The mending spring: a low basin of alloy brimming with light.
+  kav_basin(rot, st, f) {
+    const p = spr();
+    p.rect(1, 18, 14, 8, KAV.plate);
+    p.hline(1, 14, 18, KAV.edge);
+    p.rect(2, 16, 12, 3, KAV.dark);
+    for (let x = 3; x < 13; x++) p.set(x, 17, (x + f) % 3 ? KAV.glow : '#ffffff');
+    for (let i = 0; i < 3; i++) p.set(4 + ((i * 4 + f * 2) % 9), 12 - ((f + i) % 4), '#c8fbff');
+    return p.outline(OUT);
+  },
   relic(rot, st, f) {
     const p = spr();
     // A short plinth of old stone, the relic floating over it.
@@ -570,4 +610,4 @@ export const DSPRITES = {
     return p.outline(OUT);
   },
 };
-export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4 };
+export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4 };

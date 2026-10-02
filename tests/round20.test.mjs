@@ -66,7 +66,7 @@ test('two people on one tile: when one walks off, the other still blocks the way
 });
 
 test('travellers go round water by land, and down a finished road', () => {
-  const game = world(777);
+  const game = world(12345);
   const D = game.sim.diplomacy;
   const ss = game.world.ow.settlements;
   let best = null;
@@ -108,12 +108,13 @@ test('travellers go round water by land, and down a finished road', () => {
 });
 
 test('a traveller on the road walks the way round the lake, with dry feet', () => {
-  const game = world(777);
+  const game = world(12345);
   const D = game.sim.diplomacy;
   const input = stubInput();
   const ss = game.world.ow.settlements;
-  const a = ss.find((s) => s.name === 'Zaresh');
-  const b = ss.find((s) => s.name === 'Harim');
+  // (Two towns with a bay between them.)
+  const a = ss.find((s) => s.name === 'Durcrag');
+  const b = ss.find((s) => s.name === 'Durhall');
   assert.ok(a && b);
   D.wayBudget = 1;
   const w = D.way(a, b);

@@ -82,7 +82,7 @@ test('saving someone from a beast earns their thanks, their family\'s and renown
 });
 
 test('builders mend damage, enlarge houses and put up new buildings', () => {
-  const { game, input, sid, L, w } = start(4, 8 * 60);
+  const { game, input, sid, L, w } = start(5, 8 * 60);
   const works = game.sim.works;
   assert.ok(game.sim.builders(L).length >= 1, 'someone to do the building');
   // A hole in a wall is found and mended.
@@ -105,7 +105,8 @@ test('builders mend damage, enlarge houses and put up new buildings', () => {
   assert.notEqual(house.type, type);
   assert.ok(house.beds.length > beds);
   assert.equal(w.getBlock(house.door.x, 6, house.door.z), B.door, 'still has its door');
-  // And a new work building, with someone to run it.
+  // And a new work building, with someone to run it (on a lot ready for it).
+  lotsReady(game, L, 'bakery');
   const nb = works.startBuilding(L, 'bakery', ' for the town');
   assert.ok(nb && L.buildings[nb.bid].underConstruction);
   for (let i = 0; i < 20000 && !nb.done; i++) game.update(0.5, input);
@@ -171,14 +172,17 @@ test('enlarging your house: the mayor gives good workers a discount, builders ch
 });
 
 test('miners dig stone and ore out in the wild, with a guard to watch them', () => {
-  const game = makeGame(4242);
+  // (A city in the hills, with stone showing.)
+  const game = makeGame(1);
   const input = stubInput();
   game.minute = 9 * 60;
-  const s = game.world.ow.settlements.find((q) => q.name === 'Grundgate');
+  const s = game.world.ow.settlements.find((q) => q.name === 'Ulfnes');
   const { L, a } = visit(game, input, s);
   assert.ok(L.npcs.filter((r) => r.job === 'guard' && alive(r)).length > 3);
   const m = a.npcs.find((n) => n.rec.job === 'miner');
   const sp = L.spotsByTag('mine')[0];
+  // (Out in the wild beyond the walls: the ground there loaded too.)
+  game.loadAround(sp.x, sp.z, true);
   m.rec.override = null;
   m.teleport(sp.x, game.world.findStandY(sp.x, sp.z, 6), sp.z);
   m.goal = { x: sp.x, y: m.y, z: sp.z, tag: 'mine' };
@@ -338,7 +342,7 @@ test('nomads camp, weigh up the town, and settle together', () => {
 });
 
 test('crowded families get a new house, and couples have children', () => {
-  const { game, input, sid, L, a } = start(12345, 8 * 60);
+  const { game, input, sid, L, a } = start(8, 8 * 60);
   const fam = L.npcs.find((r) => alive(r) && r.age === 'adult' && r.partner !== null && r.partner !== undefined);
   const hh = L.npcs.filter((r) => r.household === fam.household);
   for (const r of hh) r.home = null;

@@ -7,7 +7,7 @@
 // simply caught up (hour by hour, capped) the next time it's needed.
 import { foundingLaws, reviewLaws, LAWS, LAW_IDS } from './laws.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, GEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { planShopping, buyAt, setUpMerchants, tierOf, rollTier, tierGoods, MERCHANT_TIERS, restockStall } from './shops.js';
@@ -55,9 +55,13 @@ export function stockFor(L, t) {
 }
 
 // Which items each trade will buy from the player.
+// Kavorent crystal shards, every colour.
+const SHARD_KEYS = Object.keys(GEMS).map((g) => `shard_${g}`);
 export const WANTS = {
   general: null, // anything
-  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'gem', 'cobblestone', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots'],
+  // (Smiths take Kavorent scrap too, to work into iron; old coin for its
+  // silver; and shards of crystal, for a jeweller they know.)
+  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'gem', 'cobblestone', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'kav_scrap', 'old_coin', ...SHARD_KEYS],
   baker: ['wheat', 'berries', 'apple', 'carrot'],
   inn: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'cooked_meat', 'cooked_fish'],
   cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'pumpkin', 'apple'],
@@ -66,7 +70,7 @@ export const WANTS = {
   herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'sapling', 'slime_gel', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude', 'potion_charm', 'healing_salve', 'potion_breath', 'potion_wind', 'potion_fury', 'potion_haste'],
   fisher: ['string', 'reeds', 'fish'],
   farmer: ['seeds', 'bone', 'wheat', 'carrot', 'cabbage'],
-  scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper'],
+  scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper', 'old_blueprint', 'old_coin', ...SHARD_KEYS],
   trapper: ['string', 'stick', 'feather', 'arrow', 'raw_meat', 'leather', 'bone'],
   adventurer: ['arrow', 'bow', 'bread', 'stew', 'feast', 'cooked_meat', 'cooked_fish', 'apple', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude', 'potion_breath', 'potion_fury', 'potion_haste',
     'iron_sword', 'gold_sword', 'spear', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'leather_boots', 'leather_cap', 'gem', 'torch', 'leather', 'bone', 'raw_meat'],
@@ -90,7 +94,7 @@ const LOGS = ['log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log
 export const ESSENTIAL = {
   cook: [...RAW_FOOD, ...VEG, 'pumpkin', 'apple', 'berries'],
   inn: [...RAW_FOOD, ...VEG, 'pumpkin', 'apple', 'berries'],
-  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'cobblestone'],
+  smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'cobblestone', 'kav_scrap'],
   baker: ['wheat', 'berries', 'apple', 'carrot', 'pumpkin'],
   tailor: ['string', 'leather', 'cloth', 'feather', 'wheat'],
   carpenter: [...LOGS, 'planks', 'stick'],
@@ -757,7 +761,12 @@ function produce(L, rec, rng) {
       // Iron ore and coal make ingots and tools; without them the forge idles.
       // (With iron cheap they turn to arms and armour, which sell dear;
       // with none, to mending and stone tools, which need little.)
-      if (biz && st.count(biz.store, 'iron_ore') >= 1) {
+      // (Kavorent scrap first, if anyone's brought some: it takes a long
+      // heat, but there's good iron in it, and plenty.)
+      if (biz && st.count(biz.store, 'kav_scrap') >= 1 && rng.chance(0.5)) {
+        st.take(biz.store, 'kav_scrap', 1);
+        st.add(biz.store, 'iron_ingot', 2);
+      } else if (biz && st.count(biz.store, 'iron_ore') >= 1) {
         st.take(biz.store, 'iron_ore', 1);
         if (st.count(biz.store, 'coal')) st.take(biz.store, 'coal', 1);
         // (Stock for the shelves: the money comes when somebody buys it.)

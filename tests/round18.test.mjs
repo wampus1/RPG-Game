@@ -41,6 +41,9 @@ function world(seed = 12345, opts = { learned: false }) {
 
 const people = (L) => L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
 const plainCivs = (game) => game.world.ow.civs;
+// (Realms with towns, the strongest first: a realm that starts a war has
+// to think it can win one.)
+const strongFirst = (game) => game.world.ow.civs.filter((c) => game.sim.realms.members(c).length).sort((x, y) => game.sim.politics.strength(y) - game.sim.politics.strength(x));
 
 // A text-grid stand-in that remembers what was written on it.
 function grid() {
@@ -88,8 +91,8 @@ test('a road between towns winds, shows on the map square by square, and is buil
   const game = world(12345, { learned: true });
   const ss = game.world.ow.settlements;
   const D = game.sim.diplomacy;
-  const a = ss.find((s) => s.name === 'Magdeep');
-  const b = ss.find((s) => s.name === 'Orngate');
+  const a = ss.find((s) => s.name === 'Haahar');
+  const b = ss.find((s) => s.name === 'Rasesh');
   const r = D.startRoad(a, b);
   assert.ok(r && r.tiles.length > 20);
   // Not a straight line: it changes heading again and again.
@@ -188,11 +191,13 @@ test('four branches of a dozen: potions, master merchants, jewellers, steel and 
   // Guards re-equipped.
   T.learn(s, 'drill', game.day);
   T.learn(s, 'metalworking', game.day);
+  // (Steel for the swordsmen; a spear, an axe, a sabre or a greatsword
+  // stays what it is.)
+  const swords = people(L).filter((r) => r.job === 'guard' && ['iron_sword', 'stone_sword'].includes(r.equipment.tool));
   T.daily(L, game.day, new RNG(1));
-  // (Steel for the swordsmen; a spear or an axe stays what it is.)
   const guards = people(L).filter((r) => r.job === 'guard');
   assert.ok(guards.length && guards.every((g) => g.drilled));
-  assert.ok(guards.filter((g) => /sword/.test(g.equipment.tool)).every((g) => g.equipment.tool === 'steel_sword'));
+  assert.ok(swords.every((g) => g.equipment.tool === 'steel_sword'));
   // Townsfolk wake hardier from proper beds (hospitality).
   T.learn(s, 'hospitality', game.day);
   T.daily(L, game.day + 1, new RNG(2));
@@ -304,7 +309,10 @@ test('a small realm long allied to a big one joins it', () => {
   const game = world();
   const P = game.sim.politics;
   const R = game.sim.realms;
-  const [big, , small] = plainCivs(game);
+  // (The strongest realm, and one small enough to be swallowed by it.)
+  const civs = plainCivs(game).filter((c) => R.members(c).length);
+  const big = civs.slice().sort((x, y) => P.strength(y) - P.strength(x))[0];
+  const small = civs.find((c) => c !== big && P.townsOf(c).length <= 2 && P.strength(c) <= P.strength(big) * 0.6);
   small.values = big.values.slice();
   P.ally(big, small, game.day - 40);
   P.alliances[0].since = game.day - 40;
@@ -362,10 +370,20 @@ test('a town short of guards takes people on (the watch no longer dwindles away)
 });
 
 // ------------------------------------------------------------ raids
+// (The two nearest towns of different realms, the one riding out with a
+// watch of three or more.)
 function hostilePair(game) {
-  const ss = game.world.ow.settlements;
-  const from = ss.find((s) => s.name === 'Bramham');
-  const to = ss.find((s) => s.name === 'Orngate');
+  const ss = game.world.ow.settlements.filter((s) => s.civ && s.condition !== 'abandoned');
+  let best = null;
+  for (const from of ss) {
+    if (people(game.sim.layoutOf(from.id)).filter((r) => r.job === 'guard').length < 3) continue;
+    for (const to of ss) {
+      if (from.civ === to.civ) continue;
+      const d = Math.hypot(from.cx - to.cx, from.cz - to.cz);
+      if (!best || d < best.d) best = { from, to, d };
+    }
+  }
+  const { from, to } = best;
   game.sim.realms.shift(from.civ, to.civ, -90, game.day);
   return { from, to, a: from.civ, b: to.civ };
 }
@@ -442,7 +460,8 @@ test('raiders on the ground: the watch fights them, and killing a raider is no c
   assert.ok(/raiding/.test(r0.rec.cause || ''), r0.rec.cause);
   // The watch goes for the rest.
   tick(game, input, 40, 0.25);
-  const guardsOn = game.npcs.filter((n) => !n.dead && n.rec.job === 'guard' && n.layout === L && n.threat && n.threat.warband);
+  // (Gone for them, or turned out with the town's side of the fight.)
+  const guardsOn = game.npcs.filter((n) => !n.dead && n.rec.job === 'guard' && n.layout === L && ((n.threat && n.threat.warband) || n.state === 'warband'));
   assert.ok(guardsOn.length || raiders.slice(1).some((n) => n.dead || n.warband.phase === 'flee'), 'the watch turns out');
   // Over in the end, and reckoned up.
   for (let i = 0; i < 160 && W.live; i++) game.update(0.5, input);
@@ -458,7 +477,7 @@ test('war needs a reason; allies are called (or the alliance breaks); battles ki
   const W = game.sim.war;
   const P = game.sim.politics;
   const R = game.sim.realms;
-  const [a, b, c] = plainCivs(game);
+  const [a, b, c] = strongFirst(game);
   R.shift(a, b, -100, game.day);
   // Hostile, but no grievance: no war.
   for (let i = 0; i < 20; i++) W.considerWars([a, b], game.day + i * 7, new RNG(i));
@@ -504,7 +523,7 @@ test('a beaten realm sues for peace and serves the victor; a truce follows; a va
   const game = world();
   const W = game.sim.war;
   const P = game.sim.politics;
-  const [a, b] = plainCivs(game);
+  const [a, b] = strongFirst(game);
   game.sim.realms.shift(a, b, -100, game.day);
   const w = W.declare(a, b, { k: 'raids', text: 'the raids on its towns' }, game.day, new RNG(1));
   w.score = 110;
@@ -551,7 +570,9 @@ test('a battle near you is fought out on the ground: lines, a plan each, log wal
   const W = game.sim.war;
   const ss = game.world.ow.settlements;
   const home = L.settlement;
-  const foeTown = ss.find((s) => s.name === 'Bramham');
+  // (The nearest town of another realm.)
+  const dist = (s) => Math.hypot(s.cx - home.cx, s.cz - home.cz);
+  const foeTown = ss.filter((s) => s.civ && s.civ !== home.civ && s.condition !== 'abandoned').sort((x, y) => dist(x) - dist(y))[0];
   const [a, b] = [home.civ, foeTown.civ];
   game.sim.realms.shift(a, b, -100, game.day);
   const w = W.declare(a, b, { k: 'land', text: 'the land between them' }, game.day, new RNG(2));

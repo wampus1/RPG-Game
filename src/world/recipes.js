@@ -118,6 +118,18 @@ r('furnace', 'stew', 1, { cooked_meat: 1, carrot: 1, mushroom: 1 });
 r('furnace', 'pie', 1, { berries: 3, wheat: 2 });
 r('furnace', 'feast', 1, { cooked_meat: 2, cooked_fish: 1, bread: 1, cabbage: 1 });
 
+// --- the Kavorent's ------------------------------------------------------------
+// Shards of their crystal grow back into one when pressed together (five
+// of a colour make a stone; a jeweller, who knows how to coax them, needs
+// only four). Their scrap is the hardest thing there is to work, but a
+// furnace can get iron out of it, and a smith twice as much.
+for (const g of Object.keys(GEMS)) {
+  r('hand', g, 1, { [`shard_${g}`]: 5 });
+  r('jeweller', g, 1, { [`shard_${g}`]: 4 });
+}
+r('furnace', 'iron_ingot', 1, { kav_scrap: 2, coal: 1 });
+r('smith', 'iron_ingot', 2, { kav_scrap: 1 });
+
 // --- anvil ----------------------------------------------------------------------
 for (const t of ['iron', 'gold']) {
   r('anvil', `${t}_pickaxe`, 1, { [`${t}_ingot`]: 3, stick: 2 });

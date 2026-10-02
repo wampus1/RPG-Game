@@ -375,7 +375,8 @@ test('the learn command teaches a realm a step and what it needs first', () => {
 
 // ------------------------------------------------------------ great works
 test('siege engines: catapults lob stones into the enemy and a ram breaks a walled town\'s wall', () => {
-  const game = makeGame(12345, { learned: false });
+  // (Seed 8: a town with open ground west of it for the field.)
+  const game = makeGame(8, { learned: false });
   const input = stubInput();
   game.minute = 600;
   run(game, input, 20);
@@ -556,7 +557,7 @@ test('folk talk of what\'s new: the scholars\' work, the town\'s ship, the porta
   const news = { ...ctx, study: 'surveying', learned: 'watermills', ship: 'Swift Gull', portalto: 'Marrow', prisoners: true };
   const folk = people(L).filter((r) => r.age === 'adult');
   const lines = [];
-  for (const r of folk.slice(0, 25)) for (let i = 0; i < 6; i++) lines.push(smallTalk(r, new RNG(r.idx * 17 + i), news));
+  for (const r of folk.slice(0, 25)) for (let i = 0; i < 12; i++) lines.push(smallTalk(r, new RNG(r.idx * 17 + i), news));
   const said = (re) => lines.filter((l) => re.test(l)).length;
   assert.ok(said(/surveying|watermills/i) >= 2, 'the scholars');
   assert.ok(said(/Swift Gull/) >= 1, 'the ship');

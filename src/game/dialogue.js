@@ -301,6 +301,10 @@ export function topicsFor(npc, game) {
     if (dip.waitingFrom(s.id).length) add('mail', 'Any letters I could carry for you?');
     add('towns', 'Tell me about the neighbouring towns.');
     add('research', 'What are our scholars studying?');
+    // Treasures from below: a Kavorent core for the realm's scholars, old
+    // plans for its builders.
+    if (countItem(game.player.inv, 'kav_core')) add('give_core', 'I\'ve brought something from a Kavorent ruin.');
+    if (countItem(game.player.inv, 'old_blueprint')) add('give_plans', 'I found some old plans you might want.');
     if (sim.bandits.claimable(npc.layout).total) add('bounty', 'I\'ve come for the bounty.');
     add('donate', `I'd like to help ${s.name} grow.`);
     const inHall = game.buildingAtPlayer()?.type === 'townhall';
@@ -600,6 +604,7 @@ export function askMenu(npc, game) {
   if (!npc.visit && rec.age !== 'child') out.push({ id: 'laws', label: rec.job === 'guard' ? 'Any trouble lately' : 'The laws and taxes' });
   if (rec.age !== 'child') out.push({ id: 'customs', label: 'Your faith and customs' });
   if (!npc.visit && !rec.visitor) out.push({ id: 'history', label: `The history of ${s.name}` });
+  if (rec.age !== 'child') out.push({ id: 'oldplaces', label: 'Old places round here' });
   if (rec.age !== 'child' && game.sim.bandits && (game.sim.bandits.bountiesIn(npc.layout).length || game.sim.bandits.nearBands(npc.layout).length)) out.push({ id: 'bandits', label: 'Bandits about?' });
   if (!npc.visit && rec.age !== 'child' && s.civ) out.push({ id: 'realm', label: rec.ruler === s.civ.id ? 'Your reign' : `The ${s.civ.name.replace(/^The /, '')} and its ruler` });
   return out;
@@ -826,6 +831,78 @@ function researchTalk(npc, game) {
     : 'Our scholars have nothing to study just now.',
   `We know ${st.done.length} of the ${TECH_IDS.length} arts so far. Here, see for yourself.`];
   return { lines, open: 'tech' };
+}
+
+// A Kavorent core handed to a mayor: a fortune for you, renown, and the
+// realm's scholars set to the Kavorent's arts (the Ancient Technology Tree).
+function coreTalk(npc, game) {
+  const s = npc.settlement;
+  const L = npc.layout;
+  const sim = game.sim;
+  const p = game.player;
+  const n = countItem(p.inv, 'kav_core');
+  if (!n) return { lines: ['Brought what? I don\'t see anything.'] };
+  removeItem(p.inv, 'kav_core', n);
+  const pay = Math.min(Math.max(0, Math.floor(L.econ.treasury * 0.5)), 220 * n) + 60 * n;
+  L.econ.treasury = Math.max(0, L.econ.treasury - (pay - 60 * n));
+  p.give('coin', pay);
+  sim.ancient.addCores(L, n, 'you');
+  sim.addRenown(s.id, 8 * n, 'bringing a Kavorent core');
+  sim.changeRep(npc, 20);
+  game.audio?.play('fanfare');
+  game.renderer.emit(npc.x, npc.y + 1.4, npc.z, { n: 24, color: ['#5ad8f0', '#c8fbff', '#ffffff'], up: 40, speed: 40, life: 0.9, glow: true });
+  const st = sim.ancient.stateOf(s);
+  return {
+    lines: [
+      `Is that... gods. ${n === 1 ? 'A core' : `${n} cores`} from the old ones, and still alight.`,
+      `Take ¤${pay}: it's not what ${n === 1 ? 'it\'s' : 'they\'re'} worth, but it's what we can spare. Our scholars will want to see this at once.`,
+      `(The realm has ${st.cores} core${st.cores === 1 ? '' : 's'} to study now.)`,
+    ],
+    choices: [{ id: 'ancient_view', label: 'Show me what the realm could learn from it.' }],
+  };
+}
+
+// Old plans for the town's builders and thinkers: coin, renown, and a push
+// to whatever the scholars are studying.
+function plansTalk(npc, game) {
+  const s = npc.settlement;
+  const L = npc.layout;
+  const sim = game.sim;
+  const p = game.player;
+  const n = countItem(p.inv, 'old_blueprint');
+  if (!n) return { lines: ['Plans? Where?'] };
+  removeItem(p.inv, 'old_blueprint', n);
+  const pay = 35 * n;
+  L.econ.treasury = Math.max(0, L.econ.treasury - Math.min(L.econ.treasury, pay / 2));
+  p.give('coin', pay);
+  sim.addRenown(s.id, 2 * n, 'bringing old plans to the scholars');
+  sim.changeRep(npc, 6 * n);
+  const T = sim.tech;
+  const st = T.stateOf(s);
+  const cur = st && st.current ? TECHS[st.current] : null;
+  if (cur) st.progress = Math.min(cur.cost - 1, st.progress + cur.cost * 0.12 * n);
+  ledger(L, game.day, `${game.playerName} brought the council old plans from below; the scholars are poring over them.`);
+  return {
+    lines: [
+      `Plans for works nobody's built in a hundred years! Here: ¤${pay}, and the town's thanks.`,
+      cur ? `Our scholars are on ${cur.name.toLowerCase()}; these will speed them on.` : 'Our scholars will make something of them, mark my words.',
+    ],
+  };
+}
+
+// Asked about old places near by: one they know of (marked on your map).
+function oldPlacesTalk(npc, game) {
+  const rec = npc.rec;
+  const sim = game.sim;
+  const told = (sim.toldOld ||= new Map());
+  const k = `${npc.settlement.id}:${rec.idx}`;
+  if (told.get(k) === game.day) return { lines: [pick(npc.rng, ['That\'s all I know of, I\'m afraid.', 'I\'ve told you all I know.', 'Ask someone else; I\'ve no more tales.'])] };
+  told.set(k, game.day);
+  const q = sim.dungeons.rumour(npc.layout, npc.rng);
+  if (!q) return { lines: [pick(npc.rng, ['Old places? None round here that I know of.', 'Nothing like that near here, thank the gods.', 'I keep to the roads. Couldn\'t tell you.'])] };
+  sim.dungeons.mark(q.d, `${q.d.name.charAt(0).toUpperCase()}${q.d.name.slice(1)} is marked on your map.`);
+  const warn = q.d.cleared ? ' Someone beat it, they say.' : q.d.type === 'kavorent' ? ' Don\'t go near it.' : '';
+  return { lines: [q.line + warn] };
 }
 
 // Talking to the mayor about the professions the town licenses.
@@ -1538,6 +1615,10 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
     case 'research': return researchTalk(npc, game);
+    case 'give_core': return coreTalk(npc, game);
+    case 'ancient_view': return { lines: ['Come, see. The scholars have drawn it out already.'], open: 'ancient' };
+    case 'give_plans': return plansTalk(npc, game);
+    case 'oldplaces': return oldPlacesTalk(npc, game);
     case 'bandits': return { lines: game.sim.bandits.talk(npc.layout, rng), back: 'I\'ll keep my eyes open.' };
     case 'bounty': {
       const r = game.sim.bandits.claim(npc.layout);

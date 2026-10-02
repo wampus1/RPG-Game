@@ -49,6 +49,7 @@ import { Portals } from './portals.js';
 import { Labor } from './labor.js';
 import { Prosperity } from './prosperity.js';
 import { Dungeons } from './dungeons.js';
+import { Ancient } from './ancient.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
@@ -108,6 +109,7 @@ export class Sim {
     this.areaCache = new Map();
     // (Before anything that tells of the past: the old places have a part in it.)
     this.dungeons = new Dungeons(game, this);
+    this.ancient = new Ancient(game, this);
     this.justice = new Justice(game, this);
     this.careers = new Careers(game, this);
     this.favors = new Favors(game, this);
@@ -1069,6 +1071,7 @@ export class Sim {
     this.familyExpansions(L, day, rng);
     this.stables.daily(L, day, rng);
     this.tech.daily(L, day, rng);
+    this.ancient.townDay(L, day, rng);
     this.ships.daily(L, day, rng);
     this.portals.daily(L, day);
     this.labor.daily(L, day, rng);
@@ -2050,6 +2053,7 @@ export class Sim {
       realms: this.realms.serialize(),
       adventurers: this.adventurers.serialize(),
       dungeons: this.dungeons.serialize(),
+      ancient: this.ancient.serialize(),
       caravans: this.caravans.serialize(),
       outings: this.outings.serialize(),
       bandits: this.bandits.serialize(),
@@ -2139,6 +2143,7 @@ export class Sim {
     this.realms.load(data.realms);
     this.adventurers.load(data.adventurers);
     this.dungeons.load(data.dungeons);
+    this.ancient.load(data.ancient);
     this.caravans.load(data.caravans);
     this.outings.load(data.outings);
     this.bandits.load(data.bandits);

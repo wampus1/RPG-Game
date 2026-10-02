@@ -22,6 +22,7 @@
 import { beginAttack, styleOf, knock, STYLES } from '../game/combat.js';
 import { burn, chill, stun, mend } from '../game/gems.js';
 import { BLOCKS } from '../world/blocks.js';
+import { pierceOf } from '../game/kavtech.js';
 
 // --------------------------------------------------------------- species
 // (Merged into creature.js's SPECIES.) `under`: lives below ground (no
@@ -717,7 +718,8 @@ export function guardFront(game, target, source, amount) {
   if (target.S.shieldBlock || target.species === 'warden') {
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][target.dir] || [0, 1];
     const front = fx * Math.sign(source.x - target.x) + fz * Math.sign(source.z - target.z) > 0;
-    const chance = target.species === 'warden' ? 0.9 : target.S.shieldBlock;
+    // (Less often against a Phase Blade.)
+    const chance = (target.species === 'warden' ? 0.9 : target.S.shieldBlock) * (1 - pierceOf(source));
     if (front && Math.random() < chance && !(target.stunT > 0)) {
       target.guardT = 0.7;
       target.shieldJolt = 0.18;
@@ -727,7 +729,7 @@ export function guardFront(game, target, source, amount) {
       return Math.round(amount * 0.15);
     }
   }
-  if (target.S.armoured && !(target.exposedT > 0)) amount = Math.max(1, Math.round(amount * 0.5));
+  if (target.S.armoured && !(target.exposedT > 0)) amount = Math.max(1, Math.round(amount * (0.5 + 0.5 * pierceOf(source))));
   else if (target.exposedT > 0) amount = Math.round(amount * 1.8);
   if (target.armourT > 0) amount = Math.max(1, Math.round(amount * 0.35));
   if (target.S.dodge && Math.random() < target.S.dodge && !(target.stunT > 0) && !target.moving) {

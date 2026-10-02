@@ -243,7 +243,8 @@ test('a realm sends raiders by raft to a town on the water beyond reach by land'
 });
 
 test('raiders by raft paddle in off the water and come ashore', () => {
-  const { game, input, L } = start(12345, {}, 22 * 60);
+  // (Seed 1: a village by the water.)
+  const { game, input, L } = start(1, {}, 22 * 60);
   const W = game.sim.war;
   const t = L.settlement;
   const foe = game.world.ow.civs.find((c) => c !== t.civ);
@@ -266,7 +267,8 @@ test('selling a flood of something drops its price there, and nearby; buying it 
   const M = game.sim.market;
   const towns = laid(game);
   const L = towns[0];
-  const near = towns.filter((O) => O !== L && Math.hypot(O.settlement.cx - L.settlement.cx, O.settlement.cz - L.settlement.cz) <= 8);
+  // (Neighbours with a market: not a ruin left empty.)
+  const near = towns.filter((O) => O !== L && O.settlement.condition !== 'abandoned' && Math.hypot(O.settlement.cx - L.settlement.cx, O.settlement.cz - L.settlement.cz) <= 8);
   assert.ok(near.length);
   M.trade(L, 'iron_ingot', 20, 'player');
   assert.ok(M.factor(L, 'iron_ingot') < 0.8);

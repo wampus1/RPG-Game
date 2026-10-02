@@ -17,6 +17,7 @@ import { countItem, removeItem } from './inventory.js';
 import { gemsOf, arrowSpeed, splitShot, mirrorShot } from './gems.js';
 import { has as heroHas, cooldownMult } from './hero.js';
 import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './combat.js';
+import { aegisUp } from './kavtech.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -26,7 +27,8 @@ export const drawable = (def) => !!(def && def.ranged && !def.thrown);
 // How long a full draw takes, what it costs (stamina points over the draw),
 // and what holding it costs each second: by weapon (anything else draws
 // like a hunting bow).
-const DRAW = { bow: [0.75, 1, 0.5], longbow: [1.05, 2, 0.7], crossbow: [1.2, 2, 0], sling: [0.6, 1, 0.35] };
+// (The Kavorent's caster has nothing to pull: it charges from your breath.)
+const DRAW = { bow: [0.75, 1, 0.5], longbow: [1.05, 2, 0.7], crossbow: [1.2, 2, 0], sling: [0.6, 1, 0.35], kav_caster: [0.55, 2, 0.5] };
 export function drawSpec(key) {
   const base = (ITEMS[key] && ITEMS[key].base) || key;
   const [full, cost, hold] = DRAW[base] || DRAW.bow;
@@ -45,7 +47,7 @@ export function beginDraw(game) {
   const def = ITEMS[key];
   if (!drawable(def) || p.bowDraw || p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead || p.down) return false;
   const ammo = def.ammo || 'arrow';
-  if (countItem(p.inv, ammo) <= 0) {
+  if (ammo !== 'none' && countItem(p.inv, ammo) <= 0) {
     game.ui.msg(`You have no ${ammoName(ammo)}.`, '#ffb080', true);
     game.audio?.play('error');
     p.attackCd = 0.4;
@@ -114,11 +116,13 @@ export function releaseDraw(game, scale = 1) {
   p.bowDraw = null;
   const def = ITEMS[d.key];
   if (!def || d.power < MIN_DRAW) return false;
-  if (countItem(p.inv, d.ammo) <= 0) return false;
-  removeItem(p.inv, d.ammo, 1);
+  if (d.ammo !== 'none') {
+    if (countItem(p.inv, d.ammo) <= 0) return false;
+    removeItem(p.inv, d.ammo, 1);
+  }
   const power = Math.min(1, d.power * scale);
   const mark = heroHas(game.hero, 'marksman');
-  const kind = d.ammo === 'bolt' ? 'bolt' : d.ammo === 'cobblestone' ? 'stone' : 'arrow';
+  const kind = d.ammo === 'none' ? 'pulse' : d.ammo === 'bolt' ? 'bolt' : d.ammo === 'cobblestone' ? 'stone' : 'arrow';
   let dmg = (def.damage + (mark ? 2 : 0)) * (0.3 + 0.7 * power) * (1 + buffOf(game, 'fury'));
   // (A clean loose at full draw, now and then: it flies true and deep.)
   if (power >= 0.98 && Math.random() < (mark ? 0.22 : 0.12)) dmg *= 1.6;
@@ -188,7 +192,7 @@ export function shootAimed(game, from, aim, o) {
       break;
     }
   }
-  const pace = { bolt: 0.7, stone: 0.85, javelin: 1.35 }[o.kind] || 1;
+  const pace = { bolt: 0.7, stone: 0.85, javelin: 1.35, pulse: 0.55 }[o.kind] || 1;
   const a = {
     from, target: null, aimed: true, ux, uz, end, k: 0.5,
     x0: from.x, y0: y, z0: from.z, tx: from.x + ux * end, ty: y - 0.6, tz: from.z + uz * end,
@@ -196,7 +200,7 @@ export function shootAimed(game, from, aim, o) {
     dmg: o.dmg, gem: gemsOf(from).bow, kind: o.kind, head: !!aim.head, aimAt: aim.at || null,
   };
   game.projectiles.push(a);
-  game.audio?.play(o.kind === 'stone' || o.kind === 'javelin' ? 'swing' : 'bow', from);
+  game.audio?.play(o.kind === 'pulse' ? 'beam' : o.kind === 'stone' || o.kind === 'javelin' ? 'swing' : 'bow', from);
   // (An onyx bow: two shades of it either side.)
   splitShot(game, from, aim, o, shootAimed);
   return a;
@@ -254,7 +258,9 @@ export function arrowStrikes(game, a, t) {
   // carrying one and facing the archer, as often as not.
   const from = a.from || { x: a.x0, z: a.z0 };
   let shield = false;
-  if (hit && t.kind === 'player' && t.blocking && shieldOf(t) && facing(t, from)) shield = true;
+  // (The Aegis's wall of light stops them from any side.)
+  const aegis = t.kind === 'player' && aegisUp(t);
+  if (hit && t.kind === 'player' && t.blocking && shieldOf(t) && (facing(t, from) || aegis)) shield = true;
   else if (hit && t.kind === 'npc' && !t.sleeping && shieldOf(t)) {
     const toward = facing(t, from);
     if (Math.random() < (toward ? 0.8 : 0.2)) {
@@ -269,10 +275,11 @@ export function arrowStrikes(game, a, t) {
     // (A moonstone shield sends it straight back; a crossbow bolt goes
     // through any other, mostly.)
     if (mirrorShot(game, t, a, t.kind === 'player' && t.blockT !== undefined && t.blockT < 0.3)) hit = false;
-    else if (a.kind === 'bolt' && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
+    else if (a.kind === 'bolt' && !aegis && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
     else hit = false;
     r.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');
-    r.emit(t.x, t.y + 1.1, t.z, { n: 5, color: ['#ffffff', '#ffe8a0'], up: 20, speed: 40, life: 0.25, glow: true });
+    r.emit(t.x, t.y + 1.1, t.z, { n: 5, color: aegis ? ['#ffffff', '#5ad8f0', '#c8fbff'] : ['#ffffff', '#ffe8a0'], up: 20, speed: 40, life: 0.25, glow: true });
+    if (aegis) r.effect?.({ type: 'ring', wx: t.x, wy: t.y + 1, wz: t.z, r0: 8, r1: 16, color: ['#5ad8f0', '#e0fbff'], life: 0.3, oy: -10, flat: 0.8 });
     game.audio?.play('armor_hit', t);
   }
   if (!hit) return false;

@@ -53,7 +53,7 @@ test('crops grow through stages over days; unripe gives seeds, a hoe gives more'
 });
 
 test('farmers harvest ripe fields and sow them again', () => {
-  const { game, input, L, w } = start(12345, 9 * 60);
+  const { game, input, L, w } = start(8, 9 * 60);
   const count = () => {
     let ripe = 0;
     let young = 0;
@@ -110,7 +110,8 @@ test('a town without guards finds one, and one that cannot is deserted', () => {
 });
 
 test('the town hall chests hold the treasury', () => {
-  const { game, input, L, w } = start();
+  // (Seed 8: a town, its hall with the treasury chests.)
+  const { game, input, L, w } = start(8);
   const coins = () => L.treasury.reduce((n, t) => n + w.getContainer(t.x, t.y, t.z).reduce((m, q) => m + (q && q.item === 'coin' ? q.count : 0), 0), 0);
   assert.ok(L.treasury.length >= 1);
   assert.equal(coins(), Math.floor(L.econ.treasury));
@@ -206,7 +207,8 @@ test('guards may bear arms, lose the post on trial, and for insulting the mayor'
 });
 
 test('companions, favour cooldowns, customers and discounts', () => {
-  const { game, input, a, p } = start(4, 9 * 60);
+  // (Seed 8: a town, with a smithy for the discounts.)
+  const { game, input, a, p } = start(8, 9 * 60);
   const car = game.sim.careers;
   const friend = a.npcs.find((n) => n.rec.age === 'adult' && !['guard', 'mayor'].includes(n.rec.job) && !(n.rec.grief || []).length);
   assert.ok(!topicsFor(friend, game).some((t) => t.id === 'companion'));

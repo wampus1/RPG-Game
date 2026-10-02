@@ -362,6 +362,8 @@ export class War {
     if (tech.has(s, 'steel')) p *= 1.15;
     if (tech.has(s, 'archery')) p *= 1.08;
     if (tech.has(s, 'longbows') || tech.has(s, 'crossbows')) p *= 1.05;
+    // (The Kavorent's arts: alloy blades, the storm engine.)
+    if (this.sim.ancient) p *= this.sim.ancient.power(s);
     p *= clamp((r.hp ?? r.maxHp ?? 12) / Math.max(1, r.maxHp ?? 12), 0.4, 1);
     return p;
   }
@@ -2037,6 +2039,7 @@ export class War {
     const ua = standing('a');
     const ub = standing('b');
     workEngines(this, L, 0.25);
+    stormEngine(this, L);
     // The lines drawn up (most of each side in its place, or long enough
     // waiting for stragglers): it begins.
     if (!L.go) {
@@ -2050,7 +2053,10 @@ export class War {
     // (Nobody's come to blows for a long while, one side never having got
     // here, or both dug in and waiting: it's over, and it goes by numbers.)
     if (L.go && !L.done) {
-      if (ua.some((x) => ub.some((y) => Math.max(Math.abs(x.x - y.x), Math.abs(x.z - y.z)) <= 8))) L.contactT = L.t;
+      // (Coming to blows: close enough to strike, and able to; lines drawn
+      // up within sight of each other and doing nothing don't count.)
+      const able = (n) => !(n.stunT > 0) && !n.down;
+      if (ua.some((x) => able(x) && ub.some((y) => able(y) && Math.max(Math.abs(x.x - y.x), Math.abs(x.z - y.z)) <= 2))) L.contactT = L.t;
       if (L.t - (L.contactT ?? L.goT ?? L.t) > 50) L.standoff = true;
     }
     if (!L.done && (L.sides.a.broken || L.sides.b.broken || L.standoff || L.t > 180 + (L.goT || 0) || !ua.length || !ub.length)) this.endLiveBattle(L, ua, ub);
@@ -2498,6 +2504,35 @@ export class War {
     this.lastDay = d.lastDay ?? this.lastDay;
     this.prisoners = d.prisoners || [];
     this.deserters = d.deserters || {};
+  }
+}
+
+// A realm with the Storm Engine: for the first half-minute of a battle,
+// lightning falls on the enemy's line every few seconds.
+function stormEngine(war, L) {
+  if (!L.go || L.done || L.t - (L.goT || 0) > 30) return;
+  const g = war.game;
+  const A = war.sim.ancient;
+  if (!A) return;
+  for (const [side, foe] of [['a', 'b'], ['b', 'a']]) {
+    const civ = L.sides[side].civ;
+    const s = civ && war.sim.realms.members(civ)[0];
+    if (!s || !A.has(s, 'storm')) continue;
+    L.stormT = L.stormT || {};
+    L.stormT[side] = (L.stormT[side] ?? 1) - 0.25;
+    if (L.stormT[side] > 0) continue;
+    L.stormT[side] = 3;
+    const targets = L.sides[foe].ents.filter((n) => !n.dead && !n.down && g.npcs.includes(n));
+    if (!targets.length) continue;
+    const t = targets[Math.floor(Math.random() * targets.length)];
+    g.renderer.effect?.({ type: 'bolt', from: 'sky', wx: t.x, wy: t.y, wz: t.z, tx: t.x, ty: t.y, tz: t.z, life: 0.45, oy: -4 });
+    g.renderer.emit(t.x, t.y + 0.5, t.z, { n: 14, color: ['#ffffff', '#c8fbff', '#5ad8f0'], up: 40, speed: 60, life: 0.4, glow: true });
+    g.audio?.play('thunder', t);
+    g.shake = Math.min(1, (g.shake || 0) + 0.3);
+    g.dotHit = true;
+    g.damage(t, 8, null);
+    g.dotHit = false;
+    for (const n of targets) if (n !== t && Math.abs(n.x - t.x) <= 1 && Math.abs(n.z - t.z) <= 1) n.stunT = Math.max(n.stunT || 0, 1.2);
   }
 }
 

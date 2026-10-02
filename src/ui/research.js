@@ -7,6 +7,7 @@ import { TECHS, BRANCHES, reqIds, rivalsOf } from '../sim/tech.js';
 import { has as heroHas } from '../game/hero.js';
 import { itemIcon } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
+import { AncientWindow, canSeeAncient } from './ancient.js';
 
 const pct = (a, b) => Math.max(0, Math.min(100, Math.floor((a / Math.max(1, b)) * 100)));
 const bar = (f, n) => '█'.repeat(Math.round(f * n)) + '░'.repeat(n - Math.round(f * n));
@@ -147,8 +148,18 @@ export class TechWindow extends Window {
     else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.goal.z = Math.max(0.5, this.goal.z / 1.18);
     else if (k.code === 'Home' || k.code === 'Space') this.goal = { x: 0, y: 0, z: 0.85 };
     else if (k.code === 'Enter') this.close();
+    else if (k.code === 'KeyT' && canSeeAncient(this.game, this.s)) this.openAncient();
     else return false;
     return true;
+  }
+  // Over to the Ancient Technology (with a way back).
+  openAncient() {
+    const ui = this.ui;
+    const game = this.game;
+    const s = this.s;
+    this.close();
+    ui.open(new AncientWindow(ui, game, s, () => new TechWindow(ui, game, s)));
+    ui.audio?.play('rune');
   }
   draw(g, game) {
     const s = this.s;
@@ -164,6 +175,14 @@ export class TechWindow extends Window {
     const n = `${st.done.length} of ${Object.keys(TECHS).length} learned`;
     g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, C.faint);
     g.text(2, this.h - 1, ' wheel zoom · drag to move · click a step · arrows pan · ESC close ', C.faint);
+    // With a Kavorent core in hand: the other tree, the Kavorent's.
+    if (canSeeAncient(game, s)) {
+      const label = ' ◆ ANCIENT TECHNOLOGY [T] ';
+      const bx = this.w - label.length - 2;
+      const hov = this.hovering(bx, this.h - 1, label.length, 1);
+      g.text(bx, this.h - 1, label, hov ? '#000000' : '#7ae0ff', hov ? '#7ae0ff' : '#0e2a38');
+      this.hit(bx, this.h - 1, label.length, 1, () => this.openAncient());
+    }
     // Hover: what it is.
     const m = this.ui.mouse;
     this.hover = m ? this.nodeAt(m.x, m.y) : null;
