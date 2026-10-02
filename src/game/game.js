@@ -31,7 +31,7 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
-import { spireOpening } from './scenes.js';
+import { spireOpening, bossTint } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
@@ -2884,6 +2884,8 @@ export class Game {
       this.useOldPlace(x, y, z, b);
       return;
     }
+    // (Below ground, a chest might have teeth.)
+    if (b.interact === 'container' && this.dungeon && this.dungeon.wakeMimic(x, y, z)) return;
     if (b.interact === 'container' && this.dungeon && this.dungeon.locked(x, z)) {
       this.ui.msg('Sealed by a glyph lock. The console in this room knows how it opens.', '#5ad8f0');
       return;
@@ -3157,8 +3159,10 @@ export class Game {
     const out = [];
     const near = (e) => Math.abs(e.x - p.x) < 22 && Math.abs(e.z - p.z) < 18;
     for (const c of this.creatures) {
-      if (c.dead || !c.S.light || !near(c) || c.burrowed || c.submerged) continue;
-      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: c.S.light, cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo });
+      // (A master of an old place sheds its own light, in its own colour.)
+      const master = (c.S.boss || c.species === 'saint_shade') && c.inst;
+      if (c.dead || !(c.S.light || master) || !near(c) || c.burrowed || c.submerged) continue;
+      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null });
     }
     for (const n of this.npcs) {
       if (n.dead || !near(n)) continue;
@@ -4746,14 +4750,17 @@ export class Game {
   playerDied(source) {
     const p = this.player;
     this.audio?.play('death');
+    // Down below: what you found there (and half your coin) is left where
+    // you fell (see DungeonRun.spill).
+    const spilled = this.dungeon && this.dungeon.carried ? this.dungeon.spill() : null;
     // Drop some coins.
-    const coinSlot = p.inv.findIndex((s) => s && s.item === 'coin');
+    const coinSlot = this.dungeon && this.dungeon.carried ? -1 : p.inv.findIndex((s) => s && s.item === 'coin');
     if (coinSlot >= 0) {
       const lost = Math.ceil(p.inv[coinSlot].count / 2);
       removeItem(p.inv, 'coin', lost);
       this.spawnDrop('coin', lost, p.x, p.y, p.z, true);
     }
-    this.ui.openDeath(source ? source.name || 'something' : 'misfortune');
+    this.ui.openDeath(source ? source.name || 'something' : 'misfortune', spilled ? (spilled.length ? 'pack' : 'none') : null);
   }
 
   respawn() {
@@ -5039,6 +5046,7 @@ export class Game {
       const run = new DungeonRun(this, rec);
       run.surface = dg.surface || { x: rec.x, y: GROUND, z: rec.z + 3 };
       run.stash = { creatures: [], drops: [] };
+      run.carried = dg.carried || null;
       this.dungeon = run;
       run.open(dg.floor, { x: dg.x, z: dg.z });
     } else if (this.world.inInstance(pd.x)) {

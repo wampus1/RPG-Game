@@ -369,6 +369,21 @@ def('void_bloom', { ...dressing, hardness: 0.05, light: 4, drop: null, label: 'V
 def('glow_crystal', { ...dressing, tool: 'pick', hardness: 0.6, light: 5, drop: [{ item: 'kav_scrap', chance: 0.15 }], label: 'Weird Crystals' });
 def('tendril', { ...dressing, tall: true, hardness: 0.1, light: 2, drop: null, label: 'Tendril' });
 def('eye_stalk', { ...dressing, hardness: 0.1, drop: null, label: 'Watcher Stalk' });
+// The Kavorent's halls dressed to overawe you: sentinels taller than you
+// are, black monoliths crawling with glyphs, light-screens, conduits, the
+// husks of fallen constructs, and vents breathing in the floor.
+def('kav_statue', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, light: 2, label: 'Sentinel' });
+def('kav_monolith', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, light: 5, label: 'Glyph Monolith' });
+def('kav_holo', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, light: 4, label: 'Light-Screen' });
+def('kav_conduit', { ...sprite, solid: true, hardness: Infinity, drop: null, light: 3, label: 'Conduit' });
+def('kav_husk', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 3, drop: [{ item: 'kav_scrap', chance: 0.5 }], label: 'Fallen Construct' });
+def('kav_vent', { ...dressing, hardness: Infinity, drop: null, label: 'Vent' });
+// Your pack, left where you fell below ground (what you'd found down there).
+def('satchel', { ...sprite, solid: false, interact: 'container', hardness: Infinity, drop: null, light: 3, label: 'Your Fallen Pack' });
+// A row of spikes in a passage's floor that come up in their turn; an old
+// idol that blesses whoever lays a hand on it, once (lit till then).
+def('spikes', { ...dressing, hardness: Infinity, drop: null, label: 'Spike Trap' });
+def('idol', { ...sprite, solid: true, interact: 'idol', hardness: Infinity, drop: null, light: 6, lightWhenState: true, label: 'Old Idol' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

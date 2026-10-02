@@ -232,6 +232,33 @@ function broodMother(frame) {
   return p.outline(OUT);
 }
 
+// A mimic: a chest, until you reach for it. The lid gapes on teeth, a
+// tongue lolls out.
+function mimic(frame) {
+  const p = new Px(16, 16);
+  const w = hex('#7a5232');
+  const dk = shade(w, 0.62);
+  const iron = '#5a5a64';
+  const o = frame % 2 ? 2 : 0;
+  p.rect(3, 6 - o, 10, 3 + o, '#3a0a10');
+  p.rect(2, 9, 12, 6, w);
+  p.hline(2, 13, 9, dk);
+  p.vline(5, 9, 14, iron);
+  p.vline(10, 9, 14, iron);
+  for (let x = 3; x < 13; x += 2) {
+    p.set(x, 8, '#f0e8d0');
+    p.set(x + 1, 6 - o, '#f0e8d0');
+  }
+  p.rect(2, 3 - o, 12, 3, w);
+  p.hline(2, 13, 3 - o, shade(w, 1.25));
+  p.vline(5, 3 - o, 5 - o, iron);
+  p.vline(10, 3 - o, 5 - o, iron);
+  p.set(3, 4 - o, '#ffe040');
+  p.set(7, 4 - o, '#ffe040');
+  if (o) p.line(4, 9, 1, 12, '#c84050');
+  return p.outline(OUT);
+}
+
 // An egg sac: a pale lump of webbing, something moving inside.
 function eggSac(frame) {
   const p = new Px(16, 16);
@@ -283,6 +310,7 @@ export const DUNGEON_CREATURES = {
   broodling: { frames: 2, draw: (f) => broodling(f) },
   barrow_hound: { frames: 2, draw: (f) => barrowHound(f) },
   rat: { frames: 2, draw: (f) => rat(f) },
+  mimic: { frames: 2, draw: (f) => mimic(f) },
   crawler: { frames: 2, draw: (f) => crawler(f) },
   moth: { frames: 2, draw: (f) => moth(f) },
   drone: { frames: 2, draw: (f) => drone(f) },

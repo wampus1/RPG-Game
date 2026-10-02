@@ -34,6 +34,8 @@ export { BOSS_TITLES };
 export const MONSTER_SPECIES = {
   wight: { light: 2, name: 'Barrow Wight', hp: 26, dmg: 4, step: 0.42, mode: 'hostile', aggro: 9, humanoid: true, look: 'wight', arms: 'iron_sword', under: true, undead: true, brain: 'wight', drops: [['bone', 1, 3, 1], ['old_coin', 1, 2, 0.35]] },
   skel_captain: { name: 'Skeleton Captain', hp: 30, dmg: 4, step: 0.36, mode: 'hostile', aggro: 10, humanoid: true, look: 'captain', arms: 'iron_sword', shield: 'wooden_shield', shieldBlock: 0.5, under: true, undead: true, brain: 'captain', drops: [['bone', 2, 4, 1], ['old_coin', 1, 3, 0.8]] },
+  // A chest that isn't (see DungeonRun.wakeMimic): what was in it, it drops.
+  mimic: { name: 'Mimic', hp: 34, dmg: 6, step: 0.3, mode: 'hostile', aggro: 12, under: true, style: 'bite', drops: [] },
   rat: { name: 'Crypt Rat', hp: 3, dmg: 1, step: 0.2, mode: 'hostile', aggro: 9, under: true, packs: true, style: 'snap', drops: [['raw_meat', 1, 1, 0.3]] },
   drowned: { name: 'Drowned One', hp: 16, dmg: 3, step: 0.34, mode: 'hostile', aggro: 7, humanoid: true, look: 'drowned', under: true, undead: true, brain: 'drowned', style: 'grab', drops: [['old_coin', 1, 2, 0.3], ['bone', 1, 2, 0.5]] },
   crawler: { name: 'Tunnel Crawler', hp: 22, dmg: 4, step: 0.3, mode: 'hostile', aggro: 10, under: true, brain: 'crawler', style: 'bite', drops: [['leather', 1, 2, 0.6], ['iron_ore', 1, 2, 0.4]] },

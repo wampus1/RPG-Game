@@ -25,8 +25,8 @@ import { gemText } from '../game/gems.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
 // peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
-const OLD_COIN_WANDERING = 100;
-const OLD_COIN_SHOP = 30;
+export const OLD_COIN_WANDERING = 100;
+export const OLD_COIN_SHOP = 30;
 
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
@@ -2020,15 +2020,26 @@ export class SettingsWindow extends Window {
 
 // ---------------------------------------------------------------- death
 export class DeathWindow extends Window {
-  constructor(ui, cause) {
-    super(ui, 44, 9, { kind: 'death' });
+  constructor(ui, cause, below = null) {
+    super(ui, 44, below === 'pack' ? 10 : 9, { kind: 'death' });
     this.cause = cause;
+    this.below = below;
   }
   draw(g) {
     g.box(0, 0, this.w, this.h, { bg: 'rgba(40,6,8,0.95)', double: true, fg: C.red });
     g.center(2, 'YOU HAVE FALLEN', C.red);
     g.center(3, `Slain by ${this.cause}`, C.fg);
-    g.center(5, 'You dropped half your coins.', C.dim);
+    if (this.below === 'pack') {
+      // (See DungeonRun.spill.)
+      g.center(5, 'What you found below, and half your coin,', C.dim);
+      g.center(6, 'lie in your pack where you fell.', C.dim);
+    } else g.center(5, this.below === 'none' ? 'You lost nothing down here.' : 'You dropped half your coins.', C.dim);
+    if (this.below === 'pack') {
+      const hv = this.hovering(12, 8, 20, 1);
+      g.center(8, '[R] Rise again', hv ? C.hi : C.fg);
+      this.hit(0, 8, this.w, 1, (ck, gm) => this.respawn(gm));
+      return;
+    }
     const hov = this.hovering(12, 7, 20, 1);
     g.center(7, '[R] Rise again', hov ? C.hi : C.fg);
     this.hit(0, 7, this.w, 1, (ck, gm) => this.respawn(gm));

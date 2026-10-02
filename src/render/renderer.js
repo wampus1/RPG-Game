@@ -12,6 +12,7 @@ import { Lighting, skyLight } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
+import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -41,6 +42,52 @@ const HELD_FLAMES = {
 // this far it points straight down, or straight up.
 const THRUST_DOWN = Math.PI * 0.75;
 const THRUST_UP = -Math.PI * 0.25;
+
+// Which blocks are the Kavorent's own (recoloured floor by floor).
+let KAV_TINTED = null;
+function kavTinted() {
+  if (!KAV_TINTED) {
+    KAV_TINTED = new Uint8Array(BLOCKS.length);
+    for (let id = 0; id < BLOCKS.length; id++) if (BLOCKS[id].name.startsWith('kav_')) KAV_TINTED[id] = 1;
+  }
+  return KAV_TINTED;
+}
+
+// Turn the colours in some pixels: the bright ones' hue by `turn` degrees,
+// the dull ones (the alloy) to a dark of the ruin's light's new hue, and
+// how much colour there is by `sat`.
+const KAV_HUE = 191;
+function recolour(d, turn, sat) {
+  const hp = (p, q, t) => {
+    t = (t + 1) % 1;
+    return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p;
+  };
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const r = d[i] / 255;
+    const g = d[i + 1] / 255;
+    const b = d[i + 2] / 255;
+    const mx = Math.max(r, g, b);
+    const mn = Math.min(r, g, b);
+    const dd = mx - mn;
+    if (dd < 0.02) continue;
+    const l = (mx + mn) / 2;
+    let s = l > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+    let h = mx === r ? (g - b) / dd + (g < b ? 6 : 0) : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+    h *= 60;
+    if (dd < 0.2) {
+      h = KAV_HUE + turn;
+      s *= 0.8;
+    } else h += turn;
+    h = (((h % 360) + 360) % 360) / 360;
+    s = Math.min(1, s * sat);
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    d[i] = Math.round(hp(p, q, h + 1 / 3) * 255);
+    d[i + 1] = Math.round(hp(p, q, h) * 255);
+    d[i + 2] = Math.round(hp(p, q, h - 1 / 3) * 255);
+  }
+}
 
 export class Renderer {
   constructor(canvas) {
@@ -487,6 +534,41 @@ export class Renderer {
     return this.hidden !== null && y >= this.hiddenLevel && this.hidden.has(x * 65536 + z);
   }
 
+  // The atlas with a Kavorent floor's blocks turned to its colour (the
+  // ruin's cyan light turned amber, violet, crimson..., the dark alloy
+  // tinged with it). Made when a floor's first seen; the last one kept.
+  kavAtlasFor(pal) {
+    if (this.kavAt && this.kavAt.name === pal.name) return this.kavAt.canvas;
+    const src = this.atlas;
+    const c = this.kavAt ? this.kavAt.canvas : document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(src, 0, 0);
+    const done = new Set();
+    const tinted = kavTinted();
+    for (let id = 0; id < BLOCKS.length; id++) {
+      if (tinted[id] !== 1) continue;
+      for (let rot = 0; rot < 4; rot++) {
+        for (const list of [TEX.top[id * 4 + rot], TEX.front[id * 4 + rot], TEX.sprite[id * 4 + rot]]) {
+          for (const s of list || []) {
+            const key = s.x * 65536 + s.y;
+            if (done.has(key)) continue;
+            done.add(key);
+            const w = s.w || 16;
+            const h = s.h || 16;
+            const img = g.getImageData(s.x, s.y, w, h);
+            recolour(img.data, pal.hue, pal.sat ?? 1);
+            g.putImageData(img, s.x, s.y);
+          }
+        }
+      }
+    }
+    this.kavAt = { name: pal.name, canvas: c };
+    return c;
+  }
+
   // ------------------------------------------------------------------ world
   drawWorld(game) {
     const ctx = this.ctx;
@@ -536,7 +618,9 @@ export class Renderer {
     // Bucket entities by row.
     const buckets = new Map();
     const cut = game.cutscene;
-    for (const e of game.visibleEntities) {
+    // (A master coming apart is still seen, a moment: see scenes.js.)
+    const ghost = game.scene && game.scene.ghost && game.scene.ghost.dead ? [game.scene.ghost] : [];
+    for (const e of ghost.length ? [...game.visibleEntities, ...ghost] : game.visibleEntities) {
       if (cut && cut.hides(e)) continue;
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
@@ -564,6 +648,9 @@ export class Renderer {
     const pLayer = player.y;
     const waterFrame = Math.floor(this.time * 3) % WATER_FRAMES;
     const animFrame = Math.floor(this.time * 8);
+    // (A Kavorent floor's own blocks, in its own colour.)
+    const kpal = game.dungeon && game.dungeon.kav ? game.dungeon.pal : null;
+    const kAt = kpal && (kpal.hue || kpal.sat !== 1) ? this.kavAtlasFor(kpal) : null;
     const hidden = this.hidden;
     const hLevel = this.hiddenLevel;
     // (A town not yet built, in the native's opening: see cutscene.js.)
@@ -600,6 +687,7 @@ export class Renderer {
             // whenever that does, a cut-away roof or not.)
             if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) continue;
             const b = BLOCKS[id];
+            const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
             const sx = x * TILE - camX;
             let alpha = 1;
             if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
@@ -620,7 +708,7 @@ export class Renderer {
                 const tops = TEX.top[id * 4 + rot];
                 const s = liquid ? tops[waterFrame] : tops[v % tops.length];
                 const oy = liquid ? 3 : 0;
-                ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
+                ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
                 if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
                 if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
                 // Higher ground is a touch brighter so terraces read as height.
@@ -644,13 +732,13 @@ export class Renderer {
               if (showFront && !(liquid && fb.solid)) {
                 const fronts = TEX.front[id * 4 + rot];
                 const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
-                ctx.drawImage(atlas, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
+                ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
                 if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
               }
             } else if (render === 'door') {
               const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
               const s = TEX.sprite[id * 4 + rot][0];
-              ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+              ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
               if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
             } else if (render === 'sprite' || render === 'plant') {
               const meta = metaAt(ci, y);
@@ -671,9 +759,9 @@ export class Renderer {
                 ctx.save();
                 ctx.translate(sx + 8, sy + SPR_H - 1);
                 ctx.rotate(a);
-                ctx.drawImage(atlas, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
+                ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
                 ctx.restore();
-              } else ctx.drawImage(atlas, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+              } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
               if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
               // Hanging signs show what the building is.
               if (id === B.hanging_sign) {
@@ -686,7 +774,7 @@ export class Renderer {
               if (got) {
                 const sh = TEX.misc.shadow;
                 ctx.globalAlpha = 0.6 * (alpha < 1 ? alpha : 1);
-                ctx.drawImage(atlas, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
+                ctx.drawImage(atl, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
                 ctx.globalAlpha = alpha < 1 ? alpha : 1;
                 const icon = got.bites ? bittenIcon(got.item, got.bites) : itemIcon(got.item);
                 drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time, true);
@@ -699,7 +787,7 @@ export class Renderer {
               const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : v % arr.length];
               const below = getAt(ci, y - 1);
               const oy = BLOCKS[below].liquid ? 3 : 0;
-              ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
+              ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
               if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
             } else if (render === 'fence') {
               if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
@@ -975,12 +1063,24 @@ export class Renderer {
       return;
     }
     let bob = 0;
+    // A master of an old place: drawn bigger, and grander (see bossart.js).
+    const master = drawnAsMaster(e);
     if (e.raft) {
       // The raft, turned to its heading pixel by pixel, bobbing on the water.
       bob = Math.round(Math.sin(this.time * 2.2 + e.id) * 0.8);
       const img = raftSprite(e.raft.ang - this.view * Math.PI / 2, makeCanvas);
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
+    } else if (master) {
+      if (!e.burrowed) drawBossUnder(this, ctx, e, sx, feetY);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
+    // (A master coming apart: see scenes.js, bossDefeat.)
+    const a00 = ctx.globalAlpha;
+    if (e.dying !== undefined) {
+      const k = e.dying;
+      ctx.globalAlpha = a00 * Math.max(0, 1 - k * k);
+      ctx.filter = `brightness(${1 + k * 2.5 + (Math.floor(this.time * 20) % 2) * k})`;
+      sx += Math.round((Math.random() - 0.5) * 3 * k);
+    }
     if (e.flash > 0) ctx.filter = 'brightness(3)';
     // Rolling: a tumble, head over heels, with a blur of afterimages.
     const rolling = e.kind === 'player' && e.rollT > 0 && !e.mount && !e.raft;
@@ -990,6 +1090,8 @@ export class Renderer {
       const left = this.sideOf(e);
       const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
       this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null, !!e.saddled), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+    } else if (master && e.kind === 'creature' && drawBossBody(this, ctx, e, sx, feetY, game, (q) => creatureSheet(q.species, q.variant || 0))) {
+      // (Drawn: see bossart.js.)
     } else if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
       // (Square frames: 16 across, or 32 for something great.)
@@ -1027,6 +1129,14 @@ export class Renderer {
         ctx.drawImage(head, sx + 2, floorY - 1);
         if (!e.down && Math.floor(this.time * 1.5 + e.id) % 3 === 0) drawText(ctx, 'z', sx + 12, floorY - 8 - (this.time * 4 % 4), '#c8d8ff');
       } else {
+        // (A master stands half as tall again, breathing.)
+        const bk = master ? bossScale(e, this.time) : null;
+        if (bk) {
+          ctx.save();
+          ctx.translate(sx + 8, feetY);
+          ctx.scale(bk.x, bk.y);
+          ctx.translate(-(sx + 8), -feetY);
+        }
         // On horseback, or up on a wagon's bench: the beast (and the wagon)
         // first, the rider sitting up on top.
         const mount = e.mount && !e.sleeping ? e.mount : null;
@@ -1095,6 +1205,13 @@ export class Renderer {
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        // (A master's edge lit in its colour; white as a blow comes.)
+        if (bk && !rolling && !inWater) {
+          const wind = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
+          ctx.globalAlpha = a0 * Math.min(1, 0.35 + 0.2 * Math.sin(this.time * 3 + (e.id || 0)) + wind * 0.5);
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, wind > 0.6 && Math.floor(this.time * 12) % 2 ? '#ffffff' : bossTint(e)[0]), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a0;
+        }
         if (shade) ctx.filter = 'none';
         // A ward of moonlight round you: a pale ring, turning.
         if (e.moonWard) {
@@ -1123,9 +1240,14 @@ export class Renderer {
             this.emit(rp.x + (Math.random() - 0.5) * 0.6, rp.y + 0.6 + Math.random() * 0.8, rp.z, { n: 1, color: [GEMS[stone].color, '#ffffff'], up: 8, speed: 6, life: 0.7, gravity: -6 });
           }
         }
+        if (bk) ctx.restore();
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
+    if (e.dying !== undefined) {
+      ctx.filter = 'none';
+      ctx.globalAlpha = a00;
+    }
     // On fire, dazed, chilled.
     if (!e.dead && !this.spin && e.kind !== 'item') {
       const tall = e.kind !== 'creature' || e.species === 'horse';
@@ -1136,8 +1258,8 @@ export class Renderer {
     const m = this.mouse;
     if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead && !e.burrowed) {
       const big = e.kind === 'creature' && e.S && e.S.big;
-      const h = big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
-      const w = big ? 12 : 0;
+      const h = (big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24) * (master ? BOSS_SCALE : 1);
+      const w = (big ? 12 : 0) + (master ? 6 : 0);
       if (m.x >= sx + 2 - w && m.x < sx + 14 + w && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
     }
     // Straining at a lead: how near it is to breaking free.
@@ -1156,7 +1278,7 @@ export class Renderer {
       const f = Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur));
       const big = e.kind !== 'creature' || e.species === 'horse';
       const col = f > 0.7 ? (Math.floor(this.time * 14) % 2 ? '#ffffff' : '#ff3030') : '#ff6040';
-      drawText(ctx, '!', sx + 6, feetY - (big ? 40 : 26) - Math.round(f * 2), col, '#000');
+      drawText(ctx, '!', sx + 6, feetY - Math.round((big ? 40 : 26) * (master ? BOSS_SCALE : 1)) - Math.round(f * 2), col, '#000');
     }
     // Your guard up: a pale arc on the side you face (gold while a blow
     // met now would be parried).

@@ -63,10 +63,28 @@ export const DTYPES = {
     name: 'Kavorent Ruin', wall: B.kav_wall, floor: B.kav_floor, alt: B.kav_floor, beam: null, regions: [3, 3], floors: [6, 6],
     kits: ['hall', 'lab', 'gallery_k', 'field', 'plates', 'hangar', 'archive', 'reactor', 'hall', 'collapse_k', 'lab', 'hangar'],
     mobs: [['drone', 4], ['warden', 2], ['mender', 2], ['mite', 2], ['golem', 1]], bosses: ['overseer'], torches: 0,
-    shapes: { rect: 4, octagon: 1, cross: 1 }, wiggle: 0, decor: [],
-    dark: [0.06, 0.075, 0.11], motes: ['#5ad8f0', '#c8fbff'], ambient: ['hum'],
+    // Halls made to overawe: sentinels, conduits, the husks of what fell,
+    // vents breathing in the floor, light-screens, monoliths.
+    shapes: { rect: 4, octagon: 1, cross: 1 }, wiggle: 0, decor: [['kav_conduit', 3], ['kav_vent', 3], ['kav_husk', 2], ['kav_holo', 1], ['kav_statue', 1], ['kav_monolith', 1]],
+    dark: [0.15, 0.18, 0.25], motes: ['#5ad8f0', '#c8fbff'], ambient: ['hum', 'pulse', 'hum', 'drone'],
   },
 };
+
+// Each floor of a Kavorent ruin lit its own colour, deeper and stranger the
+// further down: how far the light's hue is turned from the ruin's own cyan
+// (and how much colour is left in it), the dark, the tint of what's lit,
+// the glow round a light, and the motes in the air.
+export const KAV_FLOORS = [
+  { name: 'cyan', hue: 0, sat: 1, dark: [0.15, 0.18, 0.25], tint: [0.72, 0.94, 1.1], glow: [140, 230, 255], motes: ['#5ad8f0', '#c8fbff'] },
+  { name: 'violet', hue: 80, sat: 1, dark: [0.17, 0.13, 0.25], tint: [0.94, 0.76, 1.12], glow: [200, 150, 255], motes: ['#b07aff', '#e6d0ff'] },
+  { name: 'amber', hue: -150, sat: 1, dark: [0.22, 0.16, 0.1], tint: [1.12, 0.9, 0.62], glow: [255, 190, 100], motes: ['#ffb040', '#ffe0a0'] },
+  { name: 'verdant', hue: -55, sat: 1, dark: [0.11, 0.2, 0.14], tint: [0.74, 1.1, 0.84], glow: [120, 255, 170], motes: ['#5aff9a', '#d0ffe0'] },
+  { name: 'crimson', hue: 160, sat: 1.1, dark: [0.22, 0.09, 0.11], tint: [1.14, 0.72, 0.74], glow: [255, 110, 120], motes: ['#ff5a6a', '#ffc8d0'] },
+  { name: 'pale', hue: -140, sat: 0.3, dark: [0.19, 0.19, 0.21], tint: [1.06, 1.02, 0.96], glow: [255, 240, 210], motes: ['#ffffff', '#ffe8a0'] },
+];
+export function kavFloor(n) {
+  return KAV_FLOORS[Math.max(0, n) % KAV_FLOORS.length];
+}
 
 // --------------------------------------------------------------- layout
 // A floor's plan before it's built: rooms and passages on a grid.
@@ -627,7 +645,7 @@ export function buildFloor(rec, n) {
   const b = new Builder(W, D);
   const out = {
     W, D, x0: b.x0, z0: b.z0, rooms: R, spawns: [], levers: [], plates: [], cracks: [], braziers: [], drains: [], nodes: [], consoles: [],
-    fields: [], emitters: [], seals: [], weak: [], coffins: [], ambush: [], relicAt: null, notes: [], gongs: [], kegs: [],
+    fields: [], emitters: [], seals: [], weak: [], coffins: [], ambush: [], relicAt: null, notes: [], gongs: [], kegs: [], mimics: [], spikes: [],
   };
   const wall = T.wall;
   // Rock everywhere; the floor of each open tile; the walls round it.
@@ -678,9 +696,15 @@ export function buildFloor(rec, n) {
   const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D };
   for (const r of R) dress(ctx, r);
   for (const r of R) decorate(ctx, r);
+  // An old idol somewhere, its blessing waiting for whoever finds it.
+  if (!big && rng.chance(0.55)) {
+    const rooms = R.filter((r) => !['entry', 'boss', 'vault', 'exit'].includes(r.kit) && !r.sealed);
+    if (rooms.length) placeIn(ctx, rng.pick(rooms), B.idol, META_STATE, true);
+  }
   // (Dig through it or go round: there's always a way between a room's doors.)
   for (const r of R) ensureWays(ctx, r);
   passageDecor(ctx);
+  spikeRuns(ctx);
   // Secrets: a hidden room behind a crumbling wall, a trapped passage or two.
   hiddenRoom(ctx);
   trapPassages(ctx);
@@ -782,8 +806,11 @@ function chestIn(ctx, r, rich = 1, block = B.chest, extra = []) {
   const at = placeIn(ctx, r, block, rng.int(0, 3), true);
   if (!at) return null;
   b.container(at.x, FY, at.z, fill(rng, block === B.chest ? 18 : 9, [...lootFor(rec.type, tierOf(ctx), rng, rich), ...extra]));
+  // (Deeper down, now and then, a chest that isn't: see DungeonRun.wakeMimic.)
+  if (block === B.chest && !ctx.big && ctx.n >= 1 && r.kit !== 'boss' && rng.chance(MIMIC_CHANCE)) ctx.out.mimics.push({ x: b.x0 + at.x, z: at.z });
   return at;
 }
+export const MIMIC_CHANCE = 0.14;
 
 const RELIC_KEYS = Object.keys(RELICS);
 
@@ -1056,11 +1083,17 @@ function dress(ctx, r) {
         b.set(x, FY, z, B.kav_wall);
         b.set(x, FY + 1, z, B.kav_glow);
       }
+      // Sentinels along the far wall, a monolith at either end.
+      for (let x = r.x0 + 1; x <= r.x1 - 1; x += 3) {
+        if (!own(ctx.plan, r, x, r.z0) || doorBlocked(ctx.plan, r, x, r.z0) || b.get(x, FY, r.z0) !== B.air) continue;
+        b.set(x, FY, r.z0, x === r.x0 + 1 || x + 3 > r.x1 - 1 ? B.kav_monolith : B.kav_statue);
+      }
       group('drone', 1, 2);
       group('warden', 0, 1);
       break;
     case 'lab':
       for (let i = 0; i < 2; i++) placeIn(ctx, r, B.kav_console, 0, true);
+      for (let i = 0; i < 2; i++) placeIn(ctx, r, B.kav_holo, 0, true);
       chestIn(ctx, r, 1, B.kav_cache);
       group('mender', 1, 2);
       group('drone', 1, 1);
@@ -1068,10 +1101,15 @@ function dress(ctx, r) {
     case 'archive':
       for (let x = r.x0; x <= r.x1; x += 2) if (own(ctx.plan, r, x, r.z0) && !doorBlocked(ctx.plan, r, x, r.z0)) b.set(x, FY, r.z0, B.kav_glow);
       chestIn(ctx, r, 1.2, B.kav_cache, [['old_blueprint', 1]]);
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kav_holo, 0, true);
+      placeIn(ctx, r, B.kav_monolith, 0, true);
       group('drone', 1, 2);
       break;
     case 'hangar':
-      // A golem (or two) standing dormant, a mender or two tending it.
+      // A golem (or two) standing dormant, a mender or two tending it; the
+      // husks of others round the walls, and vents in the floor.
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kav_husk, rng.int(0, 3), true);
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kav_vent);
       group('golem', 1, n >= 3 ? 2 : 1);
       group('mender', 1, 2);
       group('mite', 1, 3);
@@ -1163,7 +1201,7 @@ function dress(ctx, r) {
 // A way kept clear across a room, from each of its doorways to the first:
 // whatever's been put in the way (rubble, pillars, the room's dressing) is
 // cleared along the cheapest line, sparing chests and the like if it can.
-const KEEP = new Set(['chest', 'coffin', 'sarcophagus', 'kav_cache', 'altar', 'lever', 'relic', 'brazier', 'kav_node', 'kav_console', 'gong']);
+const KEEP = new Set(['chest', 'coffin', 'sarcophagus', 'kav_cache', 'altar', 'lever', 'relic', 'brazier', 'kav_node', 'kav_console', 'gong', 'idol']);
 function ensureWays(ctx, r) {
   const { plan, b } = ctx;
   const doors = doorways(plan, r).filter((d) => own(plan, r, d.x, d.z));
@@ -1204,7 +1242,7 @@ function ensureWays(ctx, r) {
 // --------------------------------------------------------------- dressing
 // Each kind of place dressed in its own things (see DTYPES.decor): a few to
 // a room, by its size; the solid ones against the walls, out of the way.
-const WALLWARD = new Set(['urn', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'weapon_rack', 'powder_keg', 'war_banner', 'hanging_chains', 'roots', 'candles']);
+const WALLWARD = new Set(['urn', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'weapon_rack', 'powder_keg', 'war_banner', 'hanging_chains', 'roots', 'candles', 'kav_conduit', 'kav_statue', 'kav_holo', 'kav_monolith', 'kav_husk']);
 function decorate(ctx, r) {
   const { rng, T, plan, b } = ctx;
   if (!T.decor || !T.decor.length || r.kit === 'vault' || r.kit === 'hidden' || r.kit === 'boss') return;
@@ -1251,6 +1289,38 @@ function passageDecor(ctx) {
   }
 }
 
+// Spikes across a passage or two: two or three in a row, each coming up a
+// beat after the one before (time it, and go through between).
+function spikeRuns(ctx) {
+  const { rng, plan, b, out, big } = ctx;
+  if (big) return;
+  const n = rng.int(1, 3);
+  for (let k = 0, tries = 0; k < n && tries < 120; tries++) {
+    const x = rng.int(2, plan.W - 3);
+    const z = rng.int(2, plan.D - 3);
+    const i = z * plan.W + x;
+    if (!plan.corr[i] || plan.room[i] >= 0 || b.get(x, FY, z) !== B.air) continue;
+    const alongX = plan.at(x + 1, z) && plan.at(x - 1, z) && !plan.at(x, z + 1) && !plan.at(x, z - 1);
+    const alongZ = plan.at(x, z + 1) && plan.at(x, z - 1) && !plan.at(x + 1, z) && !plan.at(x - 1, z);
+    if (!alongX && !alongZ) continue;
+    const len = rng.int(2, 3);
+    const phase = rng.float(0, SPIKE_CYCLE);
+    let placed = 0;
+    for (let j = 0; j < len; j++) {
+      const sx = alongX ? x + j : x;
+      const sz = alongZ ? z + j : z;
+      const si = sz * plan.W + sx;
+      if (!plan.corr[si] || plan.room[si] >= 0 || b.get(sx, FY, sz) !== B.air) break;
+      b.set(sx, FY, sz, B.spikes);
+      out.spikes.push({ x: b.x0 + sx, z: sz, phase: phase + j * 0.3 });
+      placed++;
+    }
+    if (placed) k++;
+  }
+}
+// How long a spike takes to come round (down, a rattle, up).
+export const SPIKE_CYCLE = 3.2;
+
 // The master's hall, fitted out for it: standing stones round a barrow
 // king's, pillars and candles in a crypt's, stalagmites and glowing fungus
 // in a mine's, banners and powder kegs in a holdout's; and a throne at the
@@ -1258,7 +1328,6 @@ function passageDecor(ctx) {
 function bossHall(ctx, r, boss) {
   const { rng, b, plan, T, rec } = ctx;
   const type = rec.type;
-  if (type === 'kavorent') return;
   const put = (x, z, id, meta = 0, high = false) => {
     if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || doorBlocked(plan, r, x, z)) return false;
     if (Math.abs(x - r.cx) <= 1 && Math.abs(z - r.cz) <= 1) return false;
@@ -1287,6 +1356,16 @@ function bossHall(ctx, r, boss) {
     for (let k = 0; k < 3; k++) placeIn(ctx, r, B.rubble, rng.int(0, 1), false);
     if (boss === 'foreman') for (let k = 0; k < 3; k++) placeIn(ctx, r, B.powder_keg, 0, true);
     if (boss === 'brood_mother') for (let k = 0; k < 10; k++) placeIn(ctx, r, B.cobweb, rng.int(0, 1), false);
+  } else if (type === 'kavorent') {
+    // The Overseer's hall: sentinels ranked down both sides, monoliths
+    // between them, conduits along the back wall.
+    for (let z = r.z0 + 1; z <= r.z1 - 1; z += 2) {
+      const id = (z - r.z0) % 4 === 1 ? B.kav_statue : B.kav_monolith;
+      put(r.x0, z, id);
+      put(r.x1, z, id);
+    }
+    for (let x = r.x0 + 2; x <= r.x1 - 2; x += 2) put(x, back.z < r.cz ? r.z0 : r.z1, B.kav_conduit);
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.kav_vent);
   } else if (type === 'holdout') {
     for (let k = 0; k < 4; k++) placeIn(ctx, r, B.war_banner, 0, true);
     for (let k = 0; k < 2; k++) placeIn(ctx, r, B.weapon_rack, 0, true);

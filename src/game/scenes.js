@@ -10,6 +10,9 @@ import { VIEW_W, VIEW_H } from '../config.js';
 import { drawText, textWidth } from '../render/font.js';
 import { FY } from '../world/dungeongen.js';
 import { BLOCKS } from '../world/blocks.js';
+import { bossTint } from '../render/bossart.js';
+
+export { bossTint };
 
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (k) => Math.max(0, Math.min(1, k));
@@ -177,7 +180,7 @@ export function bossDefeat(game, run, boss) {
   const at = { x: boss.x, y: boss.y, z: boss.z };
   const tint = bossTint(boss);
   return {
-    kind: 'boss_down', t: 0, dur: 4.2, lock: true, at, tint,
+    kind: 'boss_down', t: 0, dur: 4.2, lock: true, at, tint, ghost: boss,
     mood: null,
     timeScale(t) {
       return t < 1.6 ? 0.18 : t < 2.4 ? 0.5 : 1;
@@ -196,6 +199,9 @@ export function bossDefeat(game, run, boss) {
         g.audio?.play('roar', at);
         g.audio?.play('sting');
       }
+      // (It's drawn a while yet, flickering white and fading: see
+      // Renderer.drawEntity.)
+      boss.dying = clamp01(this.t / 2);
       // Coming apart: its light pouring out of it.
       if (this.t < 2.2 && Math.random() < 0.9) r.emit(at.x + (Math.random() - 0.5), at.y + 0.5 + Math.random() * 1.6, at.z + (Math.random() - 0.5), { n: 2, color: tint, up: 30, speed: 30, life: 0.9, glow: true, gravity: -30 });
       if (this.t >= 1.7 && !this.flashed) {
@@ -215,16 +221,4 @@ export function bossDefeat(game, run, boss) {
       letterbox(ctx, this, null);
     },
   };
-}
-
-// The colours a master shines in (its aura, its end).
-const TINTS = {
-  barrow_king: ['#a0e8ff', '#e0f8ff'], mound_witch: ['#a0ff70', '#3a5a2a'], huntsman: ['#80e8ff', '#c8fbff'],
-  worm: ['#c8a070', '#8a6a4a'], foreman: ['#ffb040', '#ff7020'], brood_mother: ['#c83a30', '#8ac040'],
-  priest: ['#80c8e0', '#c8e8f8'], horror: ['#e8e0c8', '#ff4030'], hollow_saint: ['#c8a0ff', '#ffffff'],
-  warlord: ['#ff6040', '#ffb080'], twins: ['#ff5040', '#c8c0b8'], twin_b: ['#c8c0b8', '#ff5040'], poisoner: ['#a8e040', '#e8ff90'],
-  overseer: ['#5ad8f0', '#ffffff'], prime: ['#ff9050', '#5ad8f0'],
-};
-export function bossTint(c) {
-  return TINTS[c.species] || ['#ffe070', '#ffffff'];
 }

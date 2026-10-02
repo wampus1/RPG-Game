@@ -1675,6 +1675,88 @@ heartbeat when you're nearly dead, bones on bone, arrows thudding into the
 ground, wings, urns shattering, gongs, fuses, the gate slamming, a roar
 and a sting as a master wakes, a victory.
 
+## Round 28: the spire wakes
+
+**The spire.** A Kavorent spire throws a beacon up into the sky from its
+top: a column of light with bands climbing it and rings going out. The
+ground round it (sixteen paces out) is blighted: the turf violet, the
+trees' leaves gone purple, and strange things grow there (voidblooms that
+open and close, clusters of glowing crystal, tendrils taller than you with
+lights at their tips, watcher stalks whose eyes turn to follow you), with
+violet motes drifting up. Its keystones (four of them round the door) have
+a hollow cut in them the shape of a gem. As you come near, the camera draws
+back to take it in and a dark, alien song plays. Set a cut stone in the
+hollow and it opens in a scene: bars come in at the top and bottom of the
+screen, the music swells, the camera rises toward the top of the spire,
+the door's face comes apart into light, the runes up its sides wake in
+every colour and change faster and faster, and then the beacon bursts to
+full force with a flash and a boom. The runes on its sides no longer show
+once you're inside it.
+
+**Kavorent floors.** Each of a ruin's six floors is lit its own colour:
+cyan, then violet, amber, green, crimson and, at the bottom, a pale gold.
+The light in the alloy, the glow round every light, the tint of what's lit
+and the motes in the air all take the floor's colour. The halls are a good
+deal less dark than before. They're dressed to overawe you: sentinels of
+alloy twice your height with blades of light, black monoliths with glyphs
+climbing them, light-screens throwing a turning glyph into the air,
+bundles of conduits with pulses running along them, the husks of fallen
+constructs, and vents in the floor that breathe out steam. Halls have
+ranks of sentinels; the Overseer's hall has them down both sides, with
+monoliths between and conduits along the back. The machinery breathes and
+sparks round you (vents puffing and hissing, sparks off the monoliths and
+screens, conduits spitting), with deep pulses of sound. The sentinel drone
+no longer has a haze of light over its face.
+
+**The masters.** Every master is drawn half as big again, breathing, with
+its own colour pooled on the floor round it, a ring of signs turning in
+the pool (faster when it's badly hurt), a rim of its light round its body
+(white as a blow comes), motes coming off it (embers among them when it's
+badly hurt), and a glow of its colour that lights the dark round it. Three
+of them walk on legs of their own: the Brood Mother on eight hairy legs,
+the Ossuary Horror on six legs of bone with a skull at each knee, and the
+Overseer on four alloy legs with glowing joints, its great eye turned on
+you. Each foot stays planted where it falls, and steps only when the body
+has gone too far from it, half the legs at a time; heavy feet thud and
+raise dust. They have new bodies too: the Brood Mother's banded abdomen
+with its red hourglass and her working fangs, the Horror's heap of the
+dead with red light through its ribs, the Overseer's great ring of alloy.
+The Hollow Saint's images look just as she does. Masters are tougher:
+30% more health and 15% harder blows.
+
+**Two scenes.** The first time you go into a master's hall, the camera goes
+to it as it wakes, the hall's fires catching one after another, then a
+roar and a shockwave, and back to you (nothing moves while it plays). When
+it falls, the world slows to a crawl, the camera goes to it as it flickers
+white and comes apart in its own light, then a flash, rings of light, a
+boom and the fanfare.
+
+**What you find below.** Anything you find in an old place isn't yours
+until you've brought it back up. Die down there and it all spills out
+where you fall (half your coin with it) into your pack, left lying on that
+floor, glinting so you can find it; go back down for it (you're told when
+you come near it). Climb out alive and it's yours for good. The HUD shows
+how many things you're carrying that you'd lose. (A place you've beaten and
+that's shut behind you takes nothing from you.)
+
+**New below ground.** Some chests, deeper down, have teeth: reach for one and
+it wakes as a mimic, and gives up what it held when you kill it. Rows of
+spikes in some passages come up in turn (a rattle and a puff of grit first):
+time it and go through between. An old idol stands in some floors with its
+eyes burning: lay a hand on it for a blessing (an hour of harder blows,
+quicker swings or quicker breath, or your wounds closed), once. Cracked
+floors that give way are gone.
+
+**Fixes and smaller things.** Peddlers and merchants on the road change up
+to a hundred old coins a day (a shop in town, thirty); the trade window
+says how many more they'll take today. A spear thrust north or south now
+points the way it goes, and thrusting north it's drawn behind you, not over
+your head. The holdout's cave mouth is cut into its rock face in the rock's
+own texture, at the right height. Enemies close by find new paths sooner
+(and as soon as you move). With no room in your pack, things on the ground
+are no longer drawn toward you. A wisp outside can no longer lob its light
+into a building.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1729,8 +1811,10 @@ src/
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling
                        3D dice on tables), dungeontex + dungeonart (the
-                       stone and alloy below ground), oldplaces (spire
-                       runes, beacons, relic circles), lighting, crt
+                       stone and alloy below ground), bossart (the masters
+                       drawn big: auras, rims of light, walking legs),
+                       oldplaces (spire runes, beacons, relic circles),
+                       lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
@@ -1760,7 +1844,9 @@ src/
                        (being down below: floors, traps, puzzles), relics,
                        kavtech (the Kavorent's gear and gadgets),
                        cutscene (the openings: the ship and the storm,
-                       the hometown's history),
+                       the hometown's history), scenes (short scenes in
+                       the middle of things: a spire opening, a master
+                       waking and falling),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,

@@ -14,24 +14,29 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
-import { buildFloor, FY, DTYPES } from '../world/dungeongen.js';
+import { buildFloor, FY, DTYPES, kavFloor, SPIKE_CYCLE } from '../world/dungeongen.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { Creature } from '../entities/creature.js';
 import { addHazard, lineTiles, areaTiles, BOSS_TITLES } from '../entities/monsters.js';
-import { countItem, removeItem } from './inventory.js';
+import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
 import { dropFields, raiseFields } from './kavtech.js';
+import { bossEntrance, bossDefeat } from './scenes.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
 // older way is made afresh rather than patched onto a new plan.
-const FLOOR_GEN = 2;
+const FLOOR_GEN = 3;
+// How much tougher a floor's master is than its kind (its health, its
+// blows).
+export const BOSS_HP = 1.3;
+export const BOSS_DMG = 1.15;
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol']);
 
 export class DungeonRun {
   constructor(game, rec) {
@@ -55,6 +60,12 @@ export class DungeonRun {
     return this.rec.type === 'kavorent';
   }
 
+  // This floor's colours (each of a Kavorent ruin's floors is lit its own;
+  // see KAV_FLOORS).
+  get pal() {
+    return this.kav ? kavFloor(this.floor) : null;
+  }
+
   // ------------------------------------------------------------ going down
   // From the surface: everything up there is put by (the beasts about you,
   // the birds), and you're on the first floor.
@@ -62,6 +73,9 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     this.surface = { x: p.x, y: p.y, z: p.z };
+    // (What you came down with: anything more you find below isn't yours
+    // for keeps till you've brought it back up. See unbound.)
+    this.carried = Object.fromEntries(holdings(p));
     this.rec.entered = true;
     this.rec.known = true;
     // (What was about you up there waits where it was.)
@@ -87,6 +101,9 @@ export class DungeonRun {
   // apart is gone, and what was up there comes back.
   leave(to = null) {
     const game = this.game;
+    // Up and out alive with what you found: it's yours now.
+    if (!game.player.dead && this.unbound().length) game.ui.msg('Up in the daylight, what you found below is yours to keep.', '#ffe070');
+    this.carried = null;
     this.saveFloor();
     this.clearFloor();
     game.world.setInstance(null);
@@ -149,6 +166,12 @@ export class DungeonRun {
     game.world.setInstance({ regions: data.regions, floor: n, maxY: FY });
     // First time down here: adventurers have been before you, perhaps.
     if (!saved) this.firstVisit();
+    // Your own pack, where you fell (told as you come near it).
+    const pk = this.rec.pack;
+    if (pk && pk.floor === n) {
+      if (game.world.getBlock(pk.x, FY, pk.z) === B.satchel) this.notes = [...(this.notes || []).filter((q) => !q.pack), { x: pk.x, z: pk.z, floor: n, pack: true, text: 'Your pack, where you fell. What you found is still in it.' }];
+      else this.rec.pack = null;
+    }
     // The relic on the sealed vault's plinth (what kind it is, remembered).
     const ra = data.relicAt;
     if (ra && game.world.getBlock(ra.x, FY, ra.z) === B.relic && !relicAt(game, ra.x, FY, ra.z)) {
@@ -282,6 +305,7 @@ export class DungeonRun {
   // dead), for when you're back.
   saveFloor() {
     if (!this.data) return;
+    this.settleMimics();
     // (Not a Field Projector's wall: that's only for the moment.)
     dropFields(this.game);
     const regions = [];
@@ -335,7 +359,12 @@ export class DungeonRun {
     c.home = { x, z };
     if (o.ambush) c.dormant = 2;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
-    if (o.boss) c.isBoss = true;
+    // (A master's a good deal harder than what it rules.)
+    if (o.boss) {
+      c.isBoss = true;
+      c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP);
+      c.dmgMult *= BOSS_DMG;
+    }
     game.addCreature(c);
     return c;
   }
@@ -410,10 +439,11 @@ export class DungeonRun {
     if (br && !this.rec.cleared && !this.fight && p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1) this.bossFight();
     if (this.fight) this.updateFight(dt);
     this.placeDangers(dt);
+    this.spikesTick(dt);
     this.ambience(dt);
     // Notes left (an adventurer's remains): told as you come near.
     for (const nt of this.notes || []) {
-      if (nt.told || Math.abs(nt.x - p.x) > 3 || Math.abs(nt.z - p.z) > 3) continue;
+      if (nt.told || (nt.floor !== undefined && nt.floor !== this.floor) || Math.abs(nt.x - p.x) > 3 || Math.abs(nt.z - p.z) > 3) continue;
       nt.told = true;
       game.ui.msg(nt.text, '#c8b8a0');
     }
@@ -452,10 +482,15 @@ export class DungeonRun {
     const lead = boss[0];
     const T = BOSS_TITLES[lead.species] || {};
     this.fight = { boss, name: T.name || lead.S.name, title: T.title || '', t: 0, frac: 1, trail: 1, hitT: -9, away: 0 };
-    game.audio?.play('roar', lead);
     game.audio?.play('sting');
     if (T.taunt) lead.say?.(T.taunt, 3.5, '#ff9080');
     game.renderer.flashScreen?.('#400000', 0.35);
+    // (The camera goes to it as it wakes, and its fires catch: see scenes.js.
+    // Only the first time you come in: after, it's straight to it.)
+    if (!this.metBoss && !game.scene) {
+      this.metBoss = true;
+      game.scene = bossEntrance(game, this, boss);
+    } else game.audio?.play('roar', lead);
   }
 
   updateFight(dt) {
@@ -499,7 +534,8 @@ export class DungeonRun {
     }
     if (this.fight) this.fallen = { name: this.fight.name, t: 0 };
     this.fight = null;
-    game.audio?.play('victory');
+    // (Its fall's scene plays the fanfare itself.)
+    if (!(game.scene && game.scene.kind === 'boss_down')) game.audio?.play('victory');
   }
 
   // ------------------------------------------------------------ its dangers
@@ -598,12 +634,13 @@ export class DungeonRun {
       const sounds = this.T.ambient || ['drip'];
       game.audio?.play(sounds[Math.floor(Math.random() * sounds.length)]);
     }
+    if (this.kav) this.kavAir(dt);
     this.moteT -= dt;
     if (this.moteT > 0) return;
     this.moteT = 0.12;
     const x = p.x + Math.round((Math.random() - 0.5) * 22);
     const z = p.z + Math.round((Math.random() - 0.5) * 14);
-    const c = this.T.motes || ['#8a8a8a'];
+    const c = this.pal?.motes || this.T.motes || ['#8a8a8a'];
     switch (this.rec.type) {
       case 'barrow':
         // Mist, low along the floor.
@@ -622,7 +659,47 @@ export class DungeonRun {
         game.renderer.emit(x, FY + 1.8, z, { n: 1, color: Math.random() < 0.15 ? ['#ff9030', '#ffd070'] : c, up: 4, speed: 4, gravity: -4, life: 1.8, shape: 'puff', glow: Math.random() < 0.15 });
         break;
       default:
-        if (Math.random() < 0.4) game.renderer.emit(x, FY + 1, z, { n: 1, color: c, up: 8, speed: 10, life: 0.6, glow: true });
+        // Motes of the floor's own light, rising slow; and now and then a
+        // haze of it along the floor.
+        if (Math.random() < 0.55) game.renderer.emit(x, FY + 0.4 + Math.random(), z, { n: 1, color: c, up: 5, speed: 4, gravity: -5, life: 1.8, glow: true });
+        if (Math.random() < 0.12) game.renderer.emit(x, FY + 0.1, z, { n: 1, color: [c[0]], up: 1, speed: 4, life: 2.6, oy: 6, shape: 'puff', gravity: -1 });
+    }
+  }
+
+  // A Kavorent floor's machinery breathing round you: vents puffing, the
+  // monoliths and light-screens shedding sparks, conduits spitting now and
+  // then. (What's near is looked for twice a second.)
+  kavAir(dt) {
+    const game = this.game;
+    const p = game.player;
+    const c = this.pal.motes;
+    this.kavScanT = (this.kavScanT || 0) - dt;
+    if (this.kavScanT <= 0) {
+      this.kavScanT = 0.5;
+      const got = [];
+      const w = game.world;
+      for (let z = p.z - 8; z <= p.z + 8; z++) {
+        for (let x = p.x - 13; x <= p.x + 13; x++) {
+          const id = w.getBlock(x, FY, z);
+          if (id === B.kav_vent || id === B.kav_monolith || id === B.kav_holo || id === B.kav_conduit || id === B.kav_statue) got.push({ x, z, id });
+        }
+      }
+      this.kavNear = got;
+    }
+    for (const q of this.kavNear || []) {
+      const r = Math.random();
+      if (q.id === B.kav_vent) {
+        if (r < dt * 3) game.renderer.emit(q.x, FY + 0.15, q.z, { n: 1, color: ['#d8e4ec', '#9aa8b8', c[1]], up: 14, speed: 3, gravity: -10, life: 1.3, shape: 'puff' });
+        if (r < dt * 0.06 && Math.abs(q.x - p.x) + Math.abs(q.z - p.z) < 6) game.audio?.play('hiss');
+      } else if (q.id === B.kav_monolith) {
+        if (r < dt * 2) game.renderer.emit(q.x, FY + 1 + Math.random() * 1.6, q.z, { n: 1, color: c, up: 6, speed: 3, gravity: -8, life: 1.2, glow: true });
+      } else if (q.id === B.kav_holo) {
+        if (r < dt * 1.5) game.renderer.emit(q.x, FY + 1.8, q.z, { n: 2, color: c, up: 2, speed: 9, life: 0.4, glow: true });
+      } else if (q.id === B.kav_statue) {
+        if (r < dt * 0.6) game.renderer.emit(q.x, FY + 2.3, q.z, { n: 1, color: c, up: 2, speed: 2, gravity: -2, life: 1.6, glow: true });
+      } else if (r < dt * 0.35) {
+        game.renderer.emit(q.x, FY + 0.6, q.z, { n: 6, color: ['#ffffff', c[0]], up: 12, speed: 26, gravity: 90, life: 0.45, glow: true });
+      }
     }
   }
 
@@ -733,6 +810,9 @@ export class DungeonRun {
     const w = game.world;
     const p = game.player;
     switch (b.interact) {
+      case 'idol':
+        this.blessing(x, z);
+        return true;
       case 'stairs':
         if (b.id === B.stairs_up) this.changeFloor(-1);
         else this.changeFloor(1);
@@ -911,6 +991,11 @@ export class DungeonRun {
   onKill(e) {
     const game = this.game;
     if (e.spawnId !== undefined && !this.state.killed.includes(e.spawnId)) this.state.killed.push(e.spawnId);
+    // A mimic: what was in it spills out.
+    if (e.mimicLoot) {
+      for (const it of e.mimicLoot) game.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
+      e.mimicLoot = null;
+    }
     if (e.carries) {
       game.spawnDrop(e.carries, 1, e.x, e.y, e.z, true);
       game.ui.msg(e.carries === 'sigil' ? `${e.S.name} drops a bronze sigil.` : `${e.S.name} drops a glyph key.`, '#ffe070');
@@ -924,6 +1009,8 @@ export class DungeonRun {
     }
     if (e.isBoss && master && !this.rec.cleared) {
       game.sim.dungeons.cleared(this.rec, 'you');
+      // Its fall: the world slowed, the camera on it as it comes apart.
+      if (!game.scene) game.scene = bossDefeat(game, this, e);
       this.endFight(true);
       // (Every master of an old place keeps a relic about it.)
       if (!this.kav) {
@@ -931,8 +1018,6 @@ export class DungeonRun {
         game.spawnDrop(`relic_${keys[Math.floor(Math.random() * keys.length)]}`, 1, e.x, e.y, e.z, true);
       }
       game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070');
-      game.renderer.flashScreen?.('#fff4c8', 0.4);
-      game.shake = 1.2;
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.
       for (const c of game.creatures) {
@@ -952,8 +1037,214 @@ export class DungeonRun {
   serialize() {
     this.saveFloor();
     const p = this.game.player;
-    return { id: this.rec.id, floor: this.floor, x: p.x, z: p.z, surface: this.surface };
+    return { id: this.rec.id, floor: this.floor, x: p.x, z: p.z, surface: this.surface, carried: this.carried || null };
   }
+
+  // ------------------------------------------------------------ spikes
+  // Each spike comes round in its turn: down a while, a rattle (a puff of
+  // grit, a click if you're near), then up; anyone standing on it as it
+  // comes up, or who steps onto it while it's up, is hurt.
+  spikesTick(dt) {
+    const game = this.game;
+    const w = game.world;
+    const p = game.player;
+    const list = this.data.spikes || [];
+    if (!list.length) return;
+    const dmg = Math.round(4 + this.floor + (this.rec.level || 1));
+    this.spikeHit = this.spikeHit || new Map();
+    for (const [e, t] of this.spikeHit) if (t - dt <= 0) this.spikeHit.delete(e);
+    else this.spikeHit.set(e, t - dt);
+    for (const sp of list) {
+      if (Math.abs(sp.x - p.x) > 20 || Math.abs(sp.z - p.z) > 14) continue;
+      if (w.getBlock(sp.x, FY, sp.z) !== B.spikes) continue;
+      const ph = (this.t + sp.phase) % SPIKE_CYCLE;
+      const up = ph > SPIKE_CYCLE - 1;
+      const warn = !up && ph > SPIKE_CYCLE - 1.45;
+      if (warn && !sp.warned) {
+        sp.warned = true;
+        game.renderer.emit(sp.x, FY + 0.05, sp.z, { n: 4, color: ['#8a8478', '#5a5650'], up: 8, speed: 10, life: 0.4, shape: 'puff' });
+        if (Math.abs(sp.x - p.x) + Math.abs(sp.z - p.z) < 7) game.audio?.play('click', sp);
+      }
+      if (up !== w.getState(sp.x, FY, sp.z)) {
+        w.setState(sp.x, FY, sp.z, up);
+        if (up) {
+          sp.warned = false;
+          if (Math.abs(sp.x - p.x) + Math.abs(sp.z - p.z) < 9) game.audio?.play('spikes', sp);
+        }
+      }
+      if (!up) continue;
+      for (const e of [p, ...game.creatures]) {
+        if (!e || e.dead || e.burrowed || e.S?.floats || e.x !== sp.x || e.z !== sp.z || this.spikeHit.has(e)) continue;
+        if (e !== p && (e.S?.construct || e.isBoss)) continue;
+        this.spikeHit.set(e, 0.9);
+        game.damage(e, e === p ? dmg : Math.round(dmg * 1.5), null);
+        game.renderer.emit(e.x, FY + 0.4, e.z, { n: 8, color: ['#c82a2a', '#e8e0d0'], up: 30, speed: 30, life: 0.5 });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ the idol
+  // Lay a hand on it: one blessing, chosen by it (strength in your arm,
+  // speed in your feet, breath in your lungs, or your wounds closed), and
+  // its eyes go dark.
+  blessing(x, z) {
+    const game = this.game;
+    const w = game.world;
+    const p = game.player;
+    if (!w.getState(x, FY, z)) {
+      game.ui.msg('The idol\'s eyes are dark. Whatever it had to give, it\'s given.', '#a8a098');
+      return;
+    }
+    w.setState(x, FY, z, false);
+    game.lightDirty = true;
+    const now = game.day * 1440 + game.minute;
+    const pick = BLESSINGS[hash4(this.rec.seed, x, z, this.floor) % BLESSINGS.length];
+    if (pick.heal) {
+      p.hp = p.maxHp;
+      game.renderer.flashScreen?.('#a0ffb0', 0.3);
+    } else {
+      p.buffs = (p.buffs || []).filter((q) => q.combat !== pick.combat || q.until <= now);
+      p.buffs.push({ combat: pick.combat, n: pick.n, until: now + 60, name: pick.name });
+    }
+    game.ui.msg(`You lay a hand on the idol. ${pick.text}`, '#ffe070', true);
+    game.audio?.play('secret');
+    game.renderer.emit(x, FY + 1.2, z, { n: 24, color: ['#ffe070', '#ffffff', '#ffc040'], up: 40, speed: 40, life: 0.9, glow: true });
+    game.renderer.emit(p.x, p.y + 1, p.z, { n: 16, color: ['#ffe070', '#ffffff'], up: 30, speed: 20, life: 0.8, glow: true, gravity: -20 });
+  }
+
+  // ------------------------------------------------------------ mimics
+  // A chest you reach for that has teeth: it wakes (what was in it in its
+  // belly, to spill when it dies). Returns whether it was one.
+  wakeMimic(x, y, z) {
+    const game = this.game;
+    const w = game.world;
+    if (y !== FY || w.getBlock(x, FY, z) !== B.chest) return false;
+    const m = (this.data.mimics || []).find((q) => q.x === x && q.z === z);
+    const key = `${x},${z}`;
+    this.state.mimics = this.state.mimics || [];
+    if (!m || this.state.mimics.includes(key)) return false;
+    this.state.mimics.push(key);
+    const loot = (w.getContainer(x, FY, z) || []).filter(Boolean).map((q) => ({ ...q }));
+    w.setBlock(x, FY, z, B.air);
+    const c = this.spawn('mimic', x, FY, z);
+    c.mimicLoot = loot;
+    c.mimicHome = { x, z };
+    c.target = game.player;
+    c.attackCd = 0.4;
+    game.ui.msg('The chest has teeth!', '#ff9060', true);
+    game.audio?.play('roar', c);
+    game.shake = Math.max(game.shake || 0, 0.5);
+    game.renderer.emit(x, FY + 0.6, z, { n: 14, color: ['#7a5232', '#f0e8d0', '#c84050'], up: 30, speed: 40, life: 0.6 });
+    return true;
+  }
+
+  // Off the floor with a mimic still about: it settles back into a chest
+  // where it was (what it held back in it) to wait for you again.
+  settleMimics() {
+    const game = this.game;
+    for (const c of game.creatures) {
+      if (c.dead || c.species !== 'mimic' || !c.mimicHome) continue;
+      const { x, z } = c.mimicHome;
+      if (game.world.getBlock(x, FY, z) !== B.air) continue;
+      game.world.setBlock(x, FY, z, B.chest, 0);
+      const slots = game.world.getContainer(x, FY, z);
+      slots.fill(null);
+      for (const it of c.mimicLoot || []) addItem(slots, it.item, it.count);
+      this.state.mimics = (this.state.mimics || []).filter((k) => k !== `${x},${z}`);
+      c.mimicHome = null;
+    }
+  }
+
+  // ------------------------------------------------------------ what you found
+  // What you've found down here and still have about you (more of a thing
+  // than you came down with): [item, how many].
+  unbound() {
+    if (!this.carried) return [];
+    const out = [];
+    for (const [k, n] of holdings(this.game.player)) {
+      const d = n - (this.carried[k] || 0);
+      if (d > 0) out.push([k, d]);
+    }
+    return out;
+  }
+
+  // Fallen down here: what you found comes out of your pack (off your back,
+  // out of your hands), and half your coin with it, and it lies where you
+  // fell in a pack of its own, kept with the floor for when you come back
+  // for it. (Not in a place that's beaten and shut behind you: nothing
+  // down there keeps it from you.) What's in it: [item, how many].
+  spill() {
+    const game = this.game;
+    const p = game.player;
+    if (this.rec.cleared && !this.kav) return [];
+    const out = [];
+    for (const [k, n] of this.unbound()) {
+      let left = n;
+      const inv = Math.min(left, countItem(p.inv, k));
+      if (inv > 0) {
+        removeItem(p.inv, k, inv);
+        left -= inv;
+      }
+      for (const slot of Object.keys(p.equip || {})) {
+        if (left > 0 && p.equip[slot] === k) {
+          p.equip[slot] = null;
+          left--;
+        }
+      }
+      if (n - left > 0) out.push([k, n - left]);
+    }
+    const coins = countItem(p.inv, 'coin');
+    if (coins > 0) {
+      const lost = Math.ceil(coins / 2);
+      removeItem(p.inv, 'coin', lost);
+      const c = out.find((q) => q[0] === 'coin');
+      if (c) c[1] += lost;
+      else out.push(['coin', lost]);
+    }
+    this.dropPack(out, p.x, p.z);
+    return out;
+  }
+
+  // A pack on the floor near (x, z), with these in it.
+  dropPack(items, x, z) {
+    if (!items.length) return null;
+    const w = this.game.world;
+    let at = null;
+    for (let r = 0; r <= 3 && !at; r++) {
+      for (let dz = -r; dz <= r && !at; dz++) {
+        for (let dx = -r; dx <= r && !at; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          if (w.getBlock(x + dx, FY, z + dz) === B.air && BLOCKS[w.getBlock(x + dx, FY - 1, z + dz)].solid) at = { x: x + dx, z: z + dz };
+        }
+      }
+    }
+    if (!at) at = { x, z };
+    w.setBlock(at.x, FY, at.z, B.satchel, 0);
+    const slots = w.getContainer(at.x, FY, at.z);
+    for (const [k, n] of items) {
+      while (!canAdd(slots, k, n)) slots.push(...new Array(9).fill(null));
+      addItem(slots, k, n);
+    }
+    this.rec.pack = { floor: this.floor, x: at.x, z: at.z };
+    this.game.ui.msg(`What you found down here spills out where you fall. Your pack's still there, floor ${this.floor + 1} of ${this.rec.name}.`, '#ffb080', true);
+    return at;
+  }
+}
+
+// What an old idol might give (an hour of it).
+const BLESSINGS = [
+  { combat: 'fury', n: 0.3, name: 'Idol\'s Might', text: 'Strength floods your arm. (An hour of harder blows.)' },
+  { combat: 'haste', n: 0.3, name: 'Idol\'s Speed', text: 'Your feet feel light. (An hour of quicker swings.)' },
+  { combat: 'wind', n: 0.8, name: 'Idol\'s Breath', text: 'Your lungs fill deep. (An hour of quicker breath.)' },
+  { heal: true, text: 'Warmth runs through you, and your wounds close.' },
+];
+
+// What's about you, thing by thing: in your pack, worn, in your hands.
+export function holdings(p) {
+  const m = new Map();
+  for (const s of p.inv) if (s) m.set(s.item, (m.get(s.item) || 0) + s.count);
+  for (const k of Object.values(p.equip || {})) if (k) m.set(k, (m.get(k) || 0) + 1);
+  return m;
 }
 
 function cap(s) {

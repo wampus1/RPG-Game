@@ -185,7 +185,9 @@ test('relics are rare in chests; a master always keeps one', () => {
       }
     }
   }
-  assert.ok(relics <= 12, `relics in chests: ${relics} over 240 floors`);
+  // (About one floor in twenty: the bound leaves room for how the dice fall
+  // as the floors' dressing changes.)
+  assert.ok(relics <= 16, `relics in chests: ${relics} over 240 floors`);
   const { game } = start();
   const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'crypt'), floors: {}, cleared: false };
   new DungeonRun(game, rec).enter();

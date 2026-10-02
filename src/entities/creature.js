@@ -117,6 +117,9 @@ export class Creature extends Entity {
     // Waiting in a niche, or switched off, till something comes near (see
     // game/dungeon.js).
     if (this.dormant) return;
+    // Held where they are while a scene plays out (a master waking, or
+    // falling: see game/scenes.js).
+    if (this.inst && this.game.scene && this.game.scene.lock) return;
     // Winding up a blow (or charging): nothing else till it's thrown.
     if (this.windup && tickAttack(this.game, this, dt)) return;
     if (this.moving) return;

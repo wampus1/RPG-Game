@@ -591,6 +591,12 @@ export class UI {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, `SLEEPLESS ${tired}d · -${tired} STAMINA`, Math.floor(this.time * 1.5) % 2 ? '#c090ff' : '#a070e0');
       }
+      // Below ground: what you've found there isn't yours till you're out.
+      const ub = dg && dg.unbound ? dg.unbound().length : 0;
+      if (ub) {
+        g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, `${ub} FOUND · LOST IF YOU FALL`.slice(0, 24), '#ffb080');
+      }
     }
     // Clock + minimap panel.
     const bx = COLS - 17;
@@ -929,9 +935,9 @@ export class UI {
     this.closeAll();
     this.open(new W.TextWindow(this, lines[0], lines.slice(1), true));
   }
-  openDeath(cause) {
+  openDeath(cause, below = null) {
     this.closeAll();
-    this.open(new W.DeathWindow(this, cause));
+    this.open(new W.DeathWindow(this, cause, below));
   }
 }
 

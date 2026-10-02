@@ -40,6 +40,22 @@ export class Lighting {
     this.eflood = null;
   }
 
+  // The glow round a Kavorent light, in its floor's colour.
+  palGlow(pal) {
+    if (!this.palGlows) this.palGlows = new Map();
+    let g = this.palGlows.get(pal.name);
+    if (!g) this.palGlows.set(pal.name, (g = this.makeGlow(pal.glow)));
+    return g;
+  }
+
+  // A glow in any colour (a master's own: see Game.entityLights).
+  tintGlow(hex) {
+    if (!this.tintGlows) this.tintGlows = new Map();
+    let g = this.tintGlows.get(hex);
+    if (!g) this.tintGlows.set(hex, (g = this.makeGlow([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)))));
+    return g;
+  }
+
   makeGlow(rgb = null) {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
@@ -79,7 +95,9 @@ export class Lighting {
     const below = !!game.dungeon;
     // (Each kind of place its own dark: a barrow's earthy, a mine's warm, a
     // crypt's cold blue, a holdout's smoky red.)
-    const sky = below ? (game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
+    // (Each of a Kavorent ruin's floors is lit its own colour.)
+    const pal = below ? game.dungeon.pal : null;
+    const sky = below ? (pal?.dark || game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the
@@ -141,7 +159,7 @@ export class Lighting {
       this.canvas.height = SH;
     }
     // (The Kavorent's halls are lit cold.)
-    const tint = below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
+    const tint = pal ? pal.tint : below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
     const img = this.ctx.createImageData(SW, SH);
     const px = img.data;
     const lightAt = (G, s) => {
@@ -201,7 +219,7 @@ export class Lighting {
         if (sx < -40 || sy < -40 || sx > (r.vw || VIEW_W) + 40 || sy > (r.vh || VIEW_H) + 40) continue;
         const size = 20 + s.L * 3;
         ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08) * (s.dim ?? 1);
-        ctx.drawImage(s.cold ? this.coldGlow : this.glow, sx - size / 2, sy - size / 2, size, size);
+        ctx.drawImage(s.tint ? this.tintGlow(s.tint) : s.cold ? (pal ? this.palGlow(pal) : this.coldGlow) : this.glow, sx - size / 2, sy - size / 2, size, size);
       }
       ctx.restore();
     }

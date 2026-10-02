@@ -3,7 +3,7 @@
 import { mulberry32, hash4 } from '../util/rng.js';
 import { ITEMS } from './items.js';
 
-export const CONTAINER_SIZE = { chest: 18, barrel: 9, crate: 9 };
+export const CONTAINER_SIZE = { chest: 18, barrel: 9, crate: 9, satchel: 27 };
 
 const TABLES = {
   house: [['bread', 3, 1, 3], ['apple', 3, 1, 4], ['coin', 3, 2, 12], ['cloth', 1, 1, 2], ['torch', 2, 2, 5], ['carrot', 2, 1, 4], ['stick', 1, 2, 6], ['book', 0.4, 1, 1], ['pie', 0.5, 1, 1], ['wood_sword', 0.2, 1, 1], ['seeds', 1, 2, 6]],

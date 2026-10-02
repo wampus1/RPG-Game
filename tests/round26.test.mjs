@@ -201,6 +201,17 @@ test('a cut stone offered to a Kavorent spire opens the face you stand at', () =
   p.inv[0] = { item: 'ruby', count: 1 };
   p.selected = 0;
   game.offerToSpire(rec);
+  // (It opens partway through its scene: see scenes.js.)
+  assert.equal(game.scene && game.scene.kind, 'spire');
+  for (let i = 0; i < 200 && game.scene; i++) {
+    const sc = game.scene;
+    sc.t += 0.05;
+    sc.update?.(game, 0.05);
+    if (sc.t >= sc.dur) {
+      sc.end?.(game);
+      game.scene = null;
+    }
+  }
   assert.equal(rec.spire.open, 0);
   assert.equal(p.inv[0], null);
 });

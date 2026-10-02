@@ -194,6 +194,9 @@ export class Audio {
       case 'crumble': for (let i = 0; i < 5; i++) this.noise(0.12, 0.12, 250 + Math.random() * 300, i * 0.06); break;
       case 'stomp': this.tone(55, 0.22, 'sine', 0.22, -20); this.noise(0.12, 0.14, 180); break;
       case 'hum': this.tone(110, 0.8, 'sawtooth', 0.02, 0); this.tone(220, 0.8, 'sine', 0.025, 4); break;
+      // A vent breathing out; a deep pulse through the Kavorent's floors.
+      case 'hiss': this.noise(0.7, 0.025, 3800); this.noise(0.5, 0.015, 1600, 0.1); break;
+      case 'pulse': this.tone(55, 1.2, 'sine', 0.07, 0); this.tone(82.5, 1.0, 'triangle', 0.02, 0, 0.05); break;
       case 'lift': this.tone(140, 1.4, 'sawtooth', 0.03, -60); this.tone(70, 1.4, 'sine', 0.06, -20); this.noise(1.2, 0.03, 600); break;
       case 'rune': this.tone(660, 0.3, 'triangle', 0.05, 330); this.tone(990, 0.4, 'sine', 0.04, 495, 0.1); break;
       case 'beam': this.tone(1400, 0.35, 'sawtooth', 0.03, -700); this.noise(0.3, 0.05, 6000); break;
@@ -213,6 +216,10 @@ export class Audio {
       case 'bones': for (let i = 0; i < 4; i++) this.tone(900 + Math.random() * 500, 0.03, 'square', 0.04, -300, i * 0.04); break;
       case 'shatter': this.noise(0.15, 0.2, 3200); for (let i = 0; i < 3; i++) this.tone(2400 + Math.random() * 1600, 0.05, 'triangle', 0.04, 0, 0.03 + i * 0.04); break;
       case 'thud': this.tone(90, 0.1, 'sine', 0.14, -40); this.noise(0.06, 0.1, 400); break;
+      // A metal foot coming down.
+      // Spikes shooting up out of the floor.
+      case 'spikes': this.noise(0.08, 0.14, 3800); this.tone(1400, 0.06, 'square', 0.03, -600); this.tone(180, 0.1, 'sawtooth', 0.04, -60, 0.02); break;
+      case 'clank': this.tone(70, 0.18, 'sine', 0.14, -20); this.tone(340, 0.07, 'square', 0.03, -140); this.noise(0.05, 0.07, 2600); break;
       case 'flap': for (let i = 0; i < 4; i++) this.noise(0.04, 0.06, 900, i * 0.07); break;
       // A master's lair: the gate slamming shut, a roar, the bar's sting.
       case 'gate_slam': this.tone(60, 0.5, 'sine', 0.3, -25); this.noise(0.35, 0.3, 300); for (let i = 0; i < 4; i++) this.noise(0.06, 0.08, 1800, 0.15 + i * 0.05); break;
