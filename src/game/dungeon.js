@@ -27,6 +27,9 @@ import { restamp } from '../world/sites.js';
 import { dropFields, raiseFields } from './kavtech.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
+// Which way floors are laid out (see dungeongen.js). A floor kept from an
+// older way is made afresh rather than patched onto a new plan.
+const FLOOR_GEN = 2;
 // Kinds of block a dungeon handles itself (see Game.interact).
 export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate']);
 
@@ -138,7 +141,8 @@ export class DungeonRun {
     const game = this.game;
     this.floor = n;
     const data = buildFloor(this.rec, n);
-    const saved = this.rec.floors[n];
+    const kept = this.rec.floors[n];
+    const saved = kept && kept.gen === FLOOR_GEN ? kept : null;
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
@@ -282,7 +286,7 @@ export class DungeonRun {
     dropFields(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
-    this.rec.floors[this.floor] = { regions, state: this.state };
+    this.rec.floors[this.floor] = { regions, state: this.state, gen: FLOOR_GEN };
     raiseFields(this.game);
   }
 
