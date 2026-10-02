@@ -412,17 +412,25 @@ export function drawStatus(r, ctx, e, sx, feetY, tall, dt) {
 // aim and a swelling light at its source; then the beam itself, a red
 // sheath round a white core, pulses running down it, a flare where it
 // leaves and a burning splash where it ends.
+// A beam's colours, outside in (see laser.js `hue`): the Overseer's red;
+// the Hollow Saint's grave-light; a Prime's overload.
+const BEAM_HUES = {
+  red: ['#ff1808', '#ff4020', '#ff9060', '#ffe0c8', '#ff6040', '#ff8060', '#ffb060'],
+  grave: ['#5a18c8', '#8a40ff', '#c8a0ff', '#f0e0ff', '#a070ff', '#c090ff', '#e0c8ff'],
+  arc: ['#0868c8', '#20a8ff', '#5ad8f0', '#e0fbff', '#40c0ff', '#60d0ff', '#a0f0ff'],
+};
 export function drawLasers(r, ctx, game) {
   if (!game.lasers || !game.lasers.length) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const L of game.lasers) {
     if (!L.end) continue;
+    const H = BEAM_HUES[L.hue] || BEAM_HUES.red;
     const o = L.by;
     const rp = o.renderPos ? o.renderPos() : o;
     const [u, v] = r.toView(rp.x, rp.z);
     const sx = u * TILE - r.camX + 8;
-    const sy = v * TILE - rp.y * LH + LH - r.camY - (o.species === 'overseer' ? 30 : o.kind === 'player' ? 14 : 10);
+    const sy = v * TILE - rp.y * LH + LH - r.camY - (o.species === 'overseer' ? 30 : o.foot ? 24 : o.isBoss ? 20 : o.kind === 'player' ? 14 : 10);
     const [eu, ev] = r.toView(L.end.x, L.end.z);
     const ex = eu * TILE - r.camX + 8;
     const ey = ev * TILE - L.y * LH + LH - r.camY - 2;
@@ -448,17 +456,17 @@ export function drawLasers(r, ctx, game) {
     if (L.t < L.charge) {
       const k = L.t / L.charge;
       ctx.setLineDash([3, 3]);
-      line(1, '#ff4030', (0.25 + 0.5 * k) * (0.7 + 0.3 * Math.sin(r.time * 30)));
+      line(1, H[1], (0.25 + 0.5 * k) * (0.7 + 0.3 * Math.sin(r.time * 30)));
       ctx.setLineDash([]);
-      glow(sx, sy, (4 + 12 * k) * W * 1.4, '#ff6040', 0.5 + 0.4 * k);
+      glow(sx, sy, (4 + 12 * k) * W * 1.4, H[4], 0.5 + 0.4 * k);
       glow(sx, sy, (2 + 5 * k) * W, '#ffffff', 0.8);
       continue;
     }
     const flick = 0.85 + Math.random() * 0.15;
-    line(16 * W, '#ff1808', 0.16 * flick);
-    line(10 * W, '#ff4020', 0.35 * flick);
-    line(6 * W, '#ff9060', 0.7 * flick);
-    line(3 * W, '#ffe0c8', 0.95);
+    line(16 * W, H[0], 0.16 * flick);
+    line(10 * W, H[1], 0.35 * flick);
+    line(6 * W, H[2], 0.7 * flick);
+    line(3 * W, H[3], 0.95);
     line(1.4 * W, '#ffffff', 1);
     // Pulses running down it.
     const len = Math.hypot(ex - sx, ey - sy);
@@ -469,8 +477,8 @@ export function drawLasers(r, ctx, game) {
       glow(px, py, 6 * W, '#ffffff', 0.5);
     }
     if (len > 4) {
-      glow(sx, sy, 14 * W, '#ff8060', 0.9);
-      glow(ex, ey, (12 + Math.random() * 4) * W, '#ffb060', 0.9);
+      glow(sx, sy, 14 * W, H[5], 0.9);
+      glow(ex, ey, (12 + Math.random() * 4) * W, H[6], 0.9);
       glow(ex, ey, 5 * W, '#ffffff', 1);
     }
   }
@@ -530,4 +538,184 @@ export function drawKavSpikes(r, ctx, game) {
     ctx.restore();
     ctx.globalAlpha = 1;
   }
+}
+
+// The Overseer's shield: a dome of light round it, its cells lit by a
+// sweep running round it, its rim breathing (a ripple where an arrow
+// glanced off it); and from each of its sentinels a crackling thread of
+// light onto the dome, pulses running down it, a lens of light turning
+// under the sentinel. Down (its sentinels gone): a broken rim flickering,
+// now and then, till it's back.
+export function drawShields(r, ctx, game) {
+  const list = game.creatures.filter((c) => c.species === 'overseer' && !c.dead && (c.sentinels || c.shieldDownT > 0));
+  if (!list.length) return;
+  const at = (e, lift) => {
+    const rp = e.renderPos ? e.renderPos() : e;
+    const [u, v] = r.toView(rp.x, rp.z);
+    return { x: u * TILE - r.camX + 8, y: v * TILE - rp.y * LH + LH - r.camY - lift };
+  };
+  const t = r.time;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const c of list) {
+    const live = (c.sentinels || []).filter((s) => !s.dead && s.sentinel === c);
+    const o = at(c, 32);
+    if (!live.length) {
+      // Down: a broken rim, flickering.
+      if (c.shieldDownT > 0 && Math.random() < 0.25) {
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = '#5ad8f0';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 5]);
+        ctx.beginPath();
+        ctx.ellipse(o.x, o.y, 30, 29, 0, Math.random() * 6, Math.random() * 6 + 3);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      continue;
+    }
+    const grow = Math.min(1, (c.shieldUpT || 0) / 0.5);
+    const k = 1 - (1 - grow) ** 3;
+    const rx = 30 * k;
+    const ry = 29 * k;
+    if (rx < 2) continue;
+    // The dome: its body of light, deeper at the rim.
+    const g = ctx.createRadialGradient(o.x, o.y, ry * 0.2, o.x, o.y, rx);
+    g.addColorStop(0, 'rgba(90,216,240,0.02)');
+    g.addColorStop(0.75, 'rgba(90,216,240,0.08)');
+    g.addColorStop(1, 'rgba(160,244,255,0.28)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(o.x, o.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Its cells, lit as the sweep goes round.
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(o.x, o.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    const sweep = (t * 1.6) % (Math.PI * 2);
+    const hs = 6;
+    for (let row = -6; row <= 6; row++) {
+      for (let col = -6; col <= 6; col++) {
+        const cx = o.x + col * hs * 1.5;
+        const cy = o.y + row * hs * 0.87 * 2 + (col % 2 ? hs * 0.87 : 0);
+        const dx = (cx - o.x) / rx;
+        const dy = (cy - o.y) / ry;
+        const d = dx * dx + dy * dy;
+        if (d > 1.05) continue;
+        const ang = Math.atan2(dy, dx);
+        const off = Math.abs(Math.atan2(Math.sin(ang - sweep), Math.cos(ang - sweep)));
+        const lit = Math.max(0, 1 - off / 0.9) * 0.55 + d * 0.18 + (Math.sin(t * 3 + col * 1.7 + row * 2.3) > 0.93 ? 0.4 : 0);
+        if (lit < 0.06) continue;
+        ctx.globalAlpha = Math.min(0.7, lit);
+        ctx.strokeStyle = lit > 0.45 ? '#e0fbff' : '#5ad8f0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i <= 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const px = Math.round(cx + Math.cos(a) * hs * 0.92);
+          const py = Math.round(cy + Math.sin(a) * hs * 0.92);
+          if (i) ctx.lineTo(px, py);
+          else ctx.moveTo(px, py);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // The rim, breathing.
+    ctx.globalAlpha = 0.55 + 0.2 * Math.sin(t * 4);
+    ctx.strokeStyle = '#a0f4ff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(o.x, o.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    // Where an arrow glanced off it: a ripple there.
+    if (c.shieldHit) {
+      const h = c.shieldHit;
+      const e = h.t / 0.5;
+      const [vu, vv] = r.toView(Math.cos(h.ang), Math.sin(h.ang));
+      const sa = Math.atan2(vv * 0.95, vu);
+      ctx.globalAlpha = (1 - e) * 0.95;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(o.x, o.y, rx * (1 + e * 0.12), ry * (1 + e * 0.12), 0, sa - 0.5 - e * 0.8, sa + 0.5 + e * 0.8);
+      ctx.stroke();
+    }
+    // Its sentinels' threads of light onto it.
+    for (const s of live) {
+      const q = at(s, 7);
+      const ang = Math.atan2(q.y - o.y, q.x - o.x);
+      const ex = o.x + Math.cos(ang) * rx;
+      const ey = o.y + Math.sin(ang) * ry;
+      const len = Math.hypot(ex - q.x, ey - q.y);
+      // A lens of light turning under the sentinel.
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = '#5ad8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(q.x, q.y + 8, 8, 3, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        const a = t * 3 + (i / 3) * Math.PI * 2;
+        ctx.fillStyle = '#e0fbff';
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(Math.round(q.x + Math.cos(a) * 8), Math.round(q.y + 8 + Math.sin(a) * 3), 1, 1);
+      }
+      const gq = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, 9);
+      gq.addColorStop(0, 'rgba(200,251,255,0.7)');
+      gq.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = gq;
+      ctx.fillRect(q.x - 9, q.y - 9, 18, 18);
+      if (len < 4) continue;
+      // The thread: a soft band, and a jagged bright core.
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = '#5ad8f0';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(q.x, q.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#c8fbff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(q.x, q.y);
+      const n = Math.max(3, Math.round(len / 8));
+      const nx = -(ey - q.y) / len;
+      const ny = (ex - q.x) / len;
+      for (let i = 1; i < n; i++) {
+        const f = i / n;
+        const j = (Math.random() - 0.5) * 4;
+        ctx.lineTo(q.x + (ex - q.x) * f + nx * j, q.y + (ey - q.y) * f + ny * j);
+      }
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      // Pulses running down it onto the dome.
+      for (let i = 0; i < 3; i++) {
+        const f = (t * 1.4 + i / 3 + s.id * 0.13) % 1;
+        const px = q.x + (ex - q.x) * f;
+        const py = q.y + (ey - q.y) * f;
+        const gp = ctx.createRadialGradient(px, py, 0, px, py, 4);
+        gp.addColorStop(0, 'rgba(255,255,255,0.9)');
+        gp.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = gp;
+        ctx.fillRect(px - 4, py - 4, 8, 8);
+      }
+      // Where it meets the dome: a bright knot.
+      const gk = ctx.createRadialGradient(ex, ey, 0, ex, ey, 6);
+      gk.addColorStop(0, 'rgba(224,251,255,0.95)');
+      gk.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gk;
+      ctx.fillRect(ex - 6, ey - 6, 12, 12);
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }

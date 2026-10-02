@@ -7,6 +7,7 @@
 // new one fades in. Nights are slower and quieter.
 import { mulberry32 } from '../util/rng.js';
 import { townMusic } from '../sim/prosperity.js';
+import { fightPhase } from '../entities/tempo.js';
 
 const SCALES = {
   major: [0, 2, 4, 5, 7, 9, 11],
@@ -58,30 +59,34 @@ export const THEMES = {
   dungeon_kavorent: { root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], lead: 'sine', pad: true, arp: true, drums: null, density: 0.3, detune: 22 },
   fight_kavorent: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
   // ...and each its own fight, and its own master's: a barrow's bell
-  // tolling under the drums, a mine's hammering, a crypt's organ at a
-  // gallop, a holdout's war drums, the Kavorent's scale turned savage.
+  // tolling under the drums, a mine's hammering, a crypt's organ, a
+  // holdout's war drums, the Kavorent's scale turned savage. A master's is
+  // grand and dark (`grand`): a low drone under it all, a choir breathing
+  // in each bar, brass stabs, timpani, a deep bell with a tritone ringing
+  // in it; and it climbs as the fight does, through the master's phases
+  // (see bossLevel).
   dungeon_barrow_fight: { root: 50, scale: 'phrygian', bpm: 138, prog: [0, 1, 5, 0], lead: 'square', drums: 'battle', density: 0.74, drive: true, toll: true },
-  dungeon_barrow_boss: { root: 47, scale: 'phrygian', bpm: 150, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'square', drums: 'battle', density: 0.86, drive: true, toll: true, organ: true },
+  dungeon_barrow_boss: { root: 45, scale: 'phrygian', bpm: 118, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'square', drums: 'grand', density: 0.6, toll: true, organ: true, grand: true, choir: true, brass: true },
   dungeon_mine_fight: { root: 48, scale: 'minor', bpm: 142, prog: [0, 6, 5, 6], lead: 'square', drums: 'tribal', density: 0.72, drive: true, fifths: true },
-  dungeon_mine_boss: { root: 45, scale: 'harmonic', bpm: 154, prog: [0, 6, 5, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.84, drive: true, fifths: true },
+  dungeon_mine_boss: { root: 43, scale: 'harmonic', bpm: 122, prog: [0, 6, 5, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.62, fifths: true, grand: true, brass: true, choir: true },
   dungeon_crypt_fight: { root: 52, scale: 'harmonic', bpm: 132, prog: [0, 5, 1, 4], lead: 'square', drums: 'march', density: 0.7, drive: true, organ: true },
-  dungeon_crypt_boss: { root: 52, scale: 'harmonic', bpm: 146, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.85, drive: true, organ: true, toll: true, detune: 8 },
+  dungeon_crypt_boss: { root: 45, scale: 'harmonic', bpm: 114, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.58, organ: true, toll: true, detune: 8, grand: true, choir: true },
   dungeon_holdout_fight: { root: 55, scale: 'dorian', bpm: 150, prog: [0, 6, 0, 4], lead: 'square', drums: 'tribal', density: 0.78, drive: true, swing: 0.1 },
-  dungeon_holdout_boss: { root: 55, scale: 'phrygian', bpm: 160, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'battle', density: 0.86, drive: true },
+  dungeon_holdout_boss: { root: 46, scale: 'phrygian', bpm: 126, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'grand', density: 0.64, grand: true, brass: true },
   dungeon_kavorent_fight: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
   // A Kavorent spire: near it, a slow wrong music in a scale nobody uses;
   // as one opens, it gathers and swells; open, it rings.
   spire: { root: 49, scale: 'alien', bpm: 48, prog: [0, 1, 5, 2], lead: 'sine', pad: true, drums: null, density: 0.16, detune: 28, arp: true },
   spire_swell: { root: 49, scale: 'alien', bpm: 92, prog: [0, 1, 0, 1, 5, 2, 5, 3], lead: 'square', pad: true, organ: true, drums: 'tribal', density: 0.62, drive: true, detune: 18, arp: true },
   spire_open: { root: 54, scale: 'whole', bpm: 64, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, drums: null, density: 0.34, detune: 22 },
-  dungeon_kavorent_boss: { root: 54, scale: 'whole', bpm: 152, prog: [0, 1, 3, 2, 0, 4, 3, 1], lead: 'square', drums: 'battle', density: 0.86, drive: true, arp: true, detune: 14 },
+  dungeon_kavorent_boss: { root: 42, scale: 'alien', bpm: 116, prog: [0, 1, 3, 2, 0, 4, 3, 1], lead: 'square', drums: 'grand', density: 0.6, arp: true, detune: 14, grand: true, choir: true, brass: true },
   // The openings: an old town's story, slow and warm; a shanty on deck;
   // the storm; and the cold after.
   history: { root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], lead: 'triangle', pad: true, arp: true, drums: null, density: 0.42 },
   voyage: { root: 62, scale: 'dorian', bpm: 110, prog: [0, 3, 0, 4], lead: 'square', drums: 'light', density: 0.62, swing: 0.3 },
   storm: { root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], lead: 'square', drums: 'battle', density: 0.74, drive: true, detune: 10 },
   wreck: { root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.14 },
-  fight_boss: { root: 50, scale: 'harmonic', bpm: 156, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.85, drive: true, organ: true },
+  fight_boss: { root: 45, scale: 'harmonic', bpm: 120, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.6, organ: true, grand: true, choir: true, brass: true },
 };
 
 // What the music should be right now.
@@ -100,7 +105,7 @@ export function musicMood(game) {
       // (Below ground: a master's hall, or the place's own fight music.)
       if (game.dungeon) {
         const ty = game.dungeon.rec.type;
-        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss`;
+        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss:p${fightPhase(game.dungeon.fight)}`;
         return `dungeon_${ty}_fight`;
       }
       return 'fight_monsters';
@@ -114,7 +119,7 @@ export function musicMood(game) {
   }
   // Down below (no nights there): its master's fight, once begun, even
   // between blows.
-  if (game.dungeon) return game.dungeon.fight ? `dungeon_${game.dungeon.rec.type}_boss` : `dungeon_${game.dungeon.rec.type}`;
+  if (game.dungeon) return game.dungeon.fight ? `dungeon_${game.dungeon.rec.type}_boss:p${fightPhase(game.dungeon.fight)}` : `dungeon_${game.dungeon.rec.type}`;
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;
   if (s) {
@@ -189,6 +194,13 @@ export function nightTheme(T) {
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
+// A master's fight's phase, from a theme's variant ('p1' to 'p3'; 0 for
+// any other).
+export function bossLevel(variant) {
+  const m = /^p([1-3])$/.exec(variant || '');
+  return m ? +m[1] : 0;
+}
+
 // One playing theme: its own gain node, scheduled a little ahead.
 class Voice {
   constructor(music, key) {
@@ -200,6 +212,10 @@ class Voice {
     // A town's own people's sound, and how it's doing.
     if (flavour) flavourTheme(this.T, ...flavour.split('.'));
     if (variant === 'night') nightTheme(this.T);
+    // A master's fight, and how far into it (its phase: see bossLevel).
+    this.level = bossLevel(variant) || 1;
+    this.lv = this.level;
+    this.base = this.T.density;
     const c = music.ctx;
     this.out = c.createGain();
     this.out.gain.setValueAtTime(0.0001, c.currentTime);
@@ -213,7 +229,25 @@ class Voice {
   }
 
   get stepDur() {
-    return 60 / this.T.bpm / 4;
+    return 60 / (this.T.bpm * (1 + 0.09 * (this.lv - 1))) / 4;
+  }
+
+  // The fight's moved into a new phase: the same tune, climbing to it over
+  // a few bars (quicker, busier, more of it playing), with a swell and a
+  // roll of the timpani into it.
+  retune(key) {
+    this.key = key;
+    const n = bossLevel(key.split(':')[1]) || 1;
+    if (n === this.level) return;
+    const up = n > this.level;
+    this.level = n;
+    if (up && this.m.ctx) {
+      const t = this.next;
+      const sd = this.stepDur;
+      this.riser(t, sd * 16);
+      for (let i = 0; i < 8; i++) this.timp(midi(this.T.root - 12), t + sd * 8 + i * sd, 0.1 + i * 0.05);
+    }
+    this.phrases = [this.phrase(), this.phrase()];
   }
 
   // A two-bar melody: rhythm and scale steps, leaning on chord tones.
@@ -222,9 +256,10 @@ class Voice {
     const r = this.rand;
     const out = [];
     let deg = Math.floor(r() * 3) * 2;
+    const dens = Math.min(0.95, (this.base ?? T.density) + 0.11 * ((this.level || 1) - 1));
     for (let s = 0; s < 32; s++) {
       const strong = s % 4 === 0;
-      const p = strong ? T.density + 0.2 : s % 2 === 0 ? T.density * 0.7 : T.density * 0.3;
+      const p = strong ? dens + 0.2 : s % 2 === 0 ? dens * 0.7 : dens * 0.3;
       if (r() > p) continue;
       const move = r() < 0.6 ? (r() < 0.5 ? -1 : 1) : r() < 0.5 ? -2 : 2;
       deg = Math.max(-2, Math.min(9, deg + move));
@@ -273,6 +308,83 @@ class Voice {
     s.stop(t + dur + 0.02);
   }
 
+  // A long note that breathes in and out: through a filter, slow to come
+  // (a drone, a choir).
+  swell(freq, t, dur, type, vol, cutoff = 1200, attack = 0.3, detune = 0) {
+    const c = this.m.ctx;
+    const o = c.createOscillator();
+    const f = c.createBiquadFilter();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (detune) o.detune.setValueAtTime((this.rand() - 0.5) * detune * 2, t);
+    f.type = 'lowpass';
+    f.frequency.value = cutoff;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + dur * attack);
+    g.gain.setValueAtTime(vol, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  // A brass stab: a chord, bright and short.
+  stab(freqs, t, dur, vol) {
+    const c = this.m.ctx;
+    for (const fq of freqs) {
+      const o = c.createOscillator();
+      const f = c.createBiquadFilter();
+      const g = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(fq, t);
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(2200, t);
+      f.frequency.exponentialRampToValueAtTime(500, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(f).connect(g).connect(this.out);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+  }
+
+  // A timpani: a deep skin struck, its pitch sagging as it rings.
+  timp(freq, t, vol = 0.4) {
+    const c = this.m.ctx;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq * 1.5, t);
+    o.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + 0.75);
+    this.hit(t, 160, 0.12, vol * 0.5);
+  }
+
+  // A swell of noise rising into a new phase.
+  riser(t, dur) {
+    const c = this.m.ctx;
+    const s = c.createBufferSource();
+    s.buffer = this.m.noise;
+    s.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(400, t);
+    f.frequency.exponentialRampToValueAtTime(6000, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + dur * 0.95);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
+    s.connect(f).connect(g).connect(this.out);
+    s.start(t);
+    s.stop(t + dur + 0.15);
+  }
+
   kick(t, vol = 0.5) {
     const c = this.m.ctx;
     const o = c.createOscillator();
@@ -287,9 +399,27 @@ class Voice {
   }
 
   drums(s, t) {
-    const d = this.T.drums;
+    // (A master's: heavy and slow to begin, then driving, then savage, as
+    // the fight climbs.)
+    const d = this.T.grand ? (this.lv < 1.6 ? 'grand' : this.lv < 2.5 ? 'battle' : 'fury') : this.T.drums;
     const b = s % 16;
     if (!d) return;
+    if (d === 'grand') {
+      if (b === 0) this.kick(t, 0.65);
+      if (b === 6 || b === 10) this.kick(t, 0.32);
+      if (b === 8) {
+        this.hit(t, 900, 0.28, 0.24);
+        this.hit(t, 200, 0.3, 0.2);
+      }
+      if (b % 4 === 2) this.hit(t, 8000, 0.03, 0.04);
+      return;
+    }
+    if (d === 'fury') {
+      if ([0, 3, 6, 8, 11, 14].includes(b)) this.kick(t, b % 8 === 0 ? 0.6 : 0.42);
+      if (b === 4 || b === 12) this.hit(t, 1500, 0.14, 0.24);
+      this.hit(t, 9500, 0.02, b % 2 ? 0.05 : 0.09);
+      return;
+    }
     if (d === 'soft') {
       if (b === 0) this.kick(t, 0.25);
       if (b % 4 === 2) this.hit(t, 7000, 0.03, 0.04);
@@ -320,8 +450,11 @@ class Voice {
     const chord = T.prog[bar % T.prog.length];
     const sd = this.stepDur;
     // Bass.
-    if (T.drive ? b % 2 === 0 : b === 0 || b === 8 || (T.bpm > 100 && b === 12)) {
-      this.tone(midi(this.note(chord, -2)), t, sd * (T.drive ? 1.8 : 3.5), 'triangle', 0.22);
+    const drive = T.drive || (T.grand && this.lv >= 1.6);
+    // (Eased toward the fight's phase, a little each step.)
+    if (this.lv !== this.level) this.lv += Math.sign(this.level - this.lv) * Math.min(Math.abs(this.level - this.lv), sd * 0.3);
+    if (drive ? b % 2 === 0 : b === 0 || b === 8 || (T.bpm > 100 && b === 12)) {
+      this.tone(midi(this.note(chord, -2)), t, sd * (drive ? 1.8 : 3.5), 'triangle', 0.22);
       if (T.fifths && b === 0) this.tone(midi(this.note(chord + 4, -2)), t, sd * 7, 'triangle', 0.12);
     }
     // Pad (or organ) chord, once a bar.
@@ -340,8 +473,13 @@ class Voice {
     for (const n of ph) {
       if (n.s !== ps) continue;
       const sw = T.swing && ps % 2 === 1 ? sd * T.swing : 0;
-      this.tone(midi(this.note(n.deg + chord * (this.rand() < 0.3 ? 1 : 0), 1)), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
+      const nt = this.note(n.deg + chord * (this.rand() < 0.3 ? 1 : 0), 1);
+      this.tone(midi(nt), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
+      // (Desperate: the tune doubled an octave up, shrill over it all.)
+      if (T.grand && this.lv >= 2.5) this.tone(midi(nt + 12), t + sw, sd * n.len * 0.8, 'square', 0.025);
     }
+    // A master's: grand and dark.
+    if (T.grand) this.grandLayers(s, t, bar, b, chord, sd);
     // A slow bell in the graveyard.
     if (T.toll && s % 32 === 0) {
       for (const [m, v] of [[1, 0.12], [2.76, 0.05], [5.4, 0.02]]) this.tone(midi(this.T.root - 12) * m, t, 3.5, 'sine', v);
@@ -351,6 +489,26 @@ class Voice {
     this.drums(s, t);
     // New tunes every so often, so a long walk isn't one loop.
     if (s % 128 === 127) this.phrases = [this.phrase(), this.rand() < 0.5 ? this.phrases[1] : this.phrase()];
+  }
+
+  // Under a master's fight: a low drone, a choir breathing in each bar,
+  // brass stabs (more of them as it climbs), timpani on the bar and rolling
+  // into every fourth, and a deep bell with a tritone in it now and then.
+  grandLayers(s, t, bar, b, chord, sd) {
+    const T = this.T;
+    const lv = this.lv;
+    if (b === 0 && bar % 2 === 0) {
+      this.swell(midi(T.root - 24), t, sd * 32, 'sawtooth', 0.07, 240, 0.35);
+      this.swell(midi(T.root - 17), t, sd * 32, 'sawtooth', 0.035, 240, 0.35);
+    }
+    if (T.choir && b === 0) for (const k of [0, 2, 4, 7]) this.swell(midi(this.note(chord + k, -1)), t, sd * 16, 'triangle', 0.03 + 0.012 * (lv - 1), 1500, 0.3, 14);
+    if (T.brass || lv >= 1.6) {
+      const at = b === 0 || (lv >= 1.6 && b === 10) || (lv >= 2.5 && (b === 6 || b === 14));
+      if (at) this.stab([0, 2, 4].map((k) => midi(this.note(chord + k, -1))), t, sd * (b === 0 ? 3 : 1.6), b === 0 ? 0.05 : 0.035);
+    }
+    if (b === 0) this.timp(midi(T.root - 12 + (bar % 2 ? 7 : 0)), t, 0.42);
+    if (bar % 4 === 3 && b >= 12) this.timp(midi(T.root - 12), t, 0.12 + (b - 12) * 0.07);
+    if (s % 64 === 0) for (const [m, v] of [[1, 0.1], [1.414, 0.05], [2.76, 0.03], [5.4, 0.012]]) this.tone(midi(T.root - 12) * m, t, 4.5, 'sine', v);
   }
 
   schedule(until) {
@@ -427,6 +585,12 @@ export class Music {
       return;
     }
     if (mood === this.voice.key) {
+      this.want = null;
+      return;
+    }
+    // (A master's fight into a new phase: the same tune, climbing.)
+    if (mood.split(':')[0] === this.voice.key.split(':')[0] && bossLevel(mood.split(':')[1]) && bossLevel(this.voice.key.split(':')[1])) {
+      this.voice.retune(mood);
       this.want = null;
       return;
     }

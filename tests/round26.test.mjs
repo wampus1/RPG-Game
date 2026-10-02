@@ -143,8 +143,11 @@ test('the bigger world has old places of every kind, each with a reason to be th
   for (const t of ['barrow', 'mine', 'crypt', 'holdout', 'kavorent']) assert.ok(all.some((d) => d.type === t), t);
   for (const d of all) {
     assert.ok(d.name && d.origin && d.origin.text.length > 30, d.name);
-    assert.ok(d.depth >= DTYPES[d.type].floors[0] && d.depth <= DTYPES[d.type].floors[1]);
-    if (d.type !== 'kavorent') assert.ok(d.depth >= 2 && d.depth <= 4);
+    // (Round 30: most one to three floors, a mine now and then a fourth;
+    // a Kavorent ruin four.)
+    assert.ok(d.depth >= DTYPES[d.type].floors[0] && d.depth <= DTYPES[d.type].floors[1] + (d.type === 'mine' ? 1 : 0));
+    if (d.type !== 'kavorent') assert.ok(d.depth >= 1 && d.depth <= 4);
+    else assert.equal(d.depth, 4);
   }
 });
 
@@ -164,10 +167,10 @@ test('floors are made from room kits stitched together, with ways up and down', 
     }
     assert.ok(kits.size >= 4, `${t}: ${[...kits]}`);
   }
-  // (A Kavorent ruin dwarfs the rest.)
+  // (A Kavorent ruin dwarfs the rest, if less than it did.)
   const kav = game.sim.dungeons.all.find((d) => d.type === 'kavorent');
   const bar = game.sim.dungeons.all.find((d) => d.type === 'barrow');
-  assert.ok(buildFloor(kav, 0).rooms.length > buildFloor(bar, 0).rooms.length * 1.5);
+  assert.ok(buildFloor(kav, 0).rooms.length > buildFloor(bar, 0).rooms.length * 1.2);
 });
 
 test('going down into an old place and back up: a place apart, kept as you left it', () => {

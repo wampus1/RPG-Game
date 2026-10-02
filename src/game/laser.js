@@ -5,7 +5,8 @@
 // the floor alight where it passes (see monsters.groundFire). Drawn by
 // fx.drawLasers.
 import { lineTiles, groundFire } from '../entities/monsters.js';
-import { burn } from './gems.js';
+import { burn, chill } from './gems.js';
+import { footTiles } from '../entities/footprint.js';
 
 // `o`: { by, ang, aim() (the angle it's turned toward, or null), turn
 // (radians a second), len, charge, dur, dmg, tick, width (1: three paces
@@ -15,6 +16,7 @@ export function startLaser(game, o) {
   const L = {
     by: o.by, ang: o.ang, aim: o.aim || null, turn: o.turn ?? 0.35, len: o.len ?? 16, charge: o.charge ?? 1.2, dur: o.dur ?? 5, dmg: o.dmg ?? 4, tick: o.tick ?? 0.3,
     width: o.width ?? 1, foes: o.foes || 'player', fire: o.fire !== false, t: 0, acc: 0, fireT: 0.3, beamT: 0, tiles: [], end: null, y: o.by.y,
+    hue: o.hue || 'red', chill: o.chill || 0,
   };
   (game.lasers ||= []).push(L);
   game.audio?.play('charge', o.by);
@@ -60,7 +62,7 @@ export function updateLasers(game, dt) {
       // Gathering: sparks rising round it.
       if (Math.random() < dt * 40) {
         const a = Math.random() * Math.PI * 2;
-        r.emit(o.x + Math.cos(a) * 0.9, o.y + 0.6 + Math.random() * 1.6, o.z + Math.sin(a) * 0.9, { n: 1, color: ['#ff6040', '#ffd0b0', '#ffffff'], up: 14, speed: 6, gravity: -10, life: 0.5, glow: true });
+        r.emit(o.x + Math.cos(a) * 0.9, o.y + 0.6 + Math.random() * 1.6, o.z + Math.sin(a) * 0.9, { n: 1, color: L.hue === 'grave' ? ['#a070ff', '#e0c8ff', '#ffffff'] : L.hue === 'arc' ? ['#40c0ff', '#e0fbff', '#ffffff'] : ['#ff6040', '#ffd0b0', '#ffffff'], up: 14, speed: 6, gravity: -10, life: 0.5, glow: true });
       }
       continue;
     }
@@ -82,10 +84,11 @@ export function updateLasers(game, dt) {
       const keys = new Set(widen(L.tiles, L.width, L.ang).map((q) => q.x * 65536 + q.z));
       const targets = L.foes === 'player' ? [game.player, ...game.npcs] : game.creatures.filter((c) => c.hostileNow || c.S?.mode === 'hostile');
       for (const e of targets) {
-        if (!e || e === o || e.dead || e.down || e.burrowed || Math.abs(e.y - o.y) > 1.5 || !keys.has(e.x * 65536 + e.z)) continue;
+        if (!e || e === o || e.dead || e.down || e.burrowed || Math.abs(e.y - o.y) > 1.5 || !footTiles(e).some((q) => keys.has(q.x * 65536 + q.z))) continue;
         if (e.kind === 'player' && e.rollT > 0) continue;
         game.damage(e, L.dmg, o);
-        burn(game, e, o, 1.5);
+        if (L.chill) chill(e, L.chill);
+        else burn(game, e, o, 1.5);
       }
     }
     // And the floor left alight behind it.
@@ -97,7 +100,7 @@ export function updateLasers(game, dt) {
         groundFire(game, q.x, q.z, o.y, o, L.foes !== 'player', 1);
       }
     }
-    if (Math.random() < dt * 30) r.emit(L.end.x, o.y + 0.4, L.end.z, { n: 2, color: ['#ffffff', '#ffd060', '#ff6030'], up: 30, speed: 50, life: 0.4, glow: true });
+    if (Math.random() < dt * 30) r.emit(L.end.x, o.y + 0.4, L.end.z, { n: 2, color: L.hue === 'grave' ? ['#ffffff', '#c8a0ff', '#8a40ff'] : L.hue === 'arc' ? ['#ffffff', '#a0f0ff', '#20a8ff'] : ['#ffffff', '#ffd060', '#ff6030'], up: 30, speed: 50, life: 0.4, glow: true });
   }
   game.lasers = game.lasers.filter((L) => !L.done);
 }

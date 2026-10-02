@@ -18,6 +18,8 @@ import { gemsOf, arrowSpeed, splitShot, mirrorShot } from './gems.js';
 import { has as heroHas, cooldownMult } from './hero.js';
 import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './combat.js';
 import { aegisUp } from './kavtech.js';
+import { covers } from '../entities/footprint.js';
+import { shielded } from '../entities/monsters.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -230,7 +232,7 @@ function victimAt(game, a, x, z) {
   if (x === a.x0 && z === a.z0) return null;
   const y = a.y0 - 1;
   for (const e of [game.player, ...game.npcs, ...game.creatures]) {
-    if (!e || e === a.from || e.dead || e.down || e.x !== x || e.z !== z || Math.abs(e.y - y) > 1) continue;
+    if (!e || e === a.from || e.dead || e.down || !covers(e, x, z) || Math.abs(e.y - y) > 1) continue;
     return e;
   }
   return null;
@@ -249,6 +251,22 @@ function headChance(from) {
 export function arrowStrikes(game, a, t) {
   const r = game.renderer;
   let hit = true;
+  // The Overseer's shield (held up by its sentinels): arrows, bolts and
+  // stones glance off it in a ripple of light. (A blade goes through.)
+  if (t.species === 'overseer' && shielded(t)) {
+    const fx = a.from ? a.from.x : a.x0;
+    const fz = a.from ? a.from.z : a.z0;
+    const ang = Math.atan2(fz - t.z, fx - t.x);
+    t.shieldHit = { t: 0, ang };
+    const hx = t.x + Math.cos(ang) * 1.8;
+    const hz = t.z + Math.sin(ang) * 1.8;
+    r.emit(hx, t.y + 1.6, hz, { n: 12, color: ['#ffffff', '#c8fbff', '#5ad8f0'], up: 30, speed: 70, life: 0.35, glow: true });
+    r.effect?.({ type: 'ring', wx: hx, wy: t.y + 1.4, wz: hz, r0: 2, r1: 14, color: ['#c8fbff', '#5ad8f0'], life: 0.3, oy: -12, flat: 0.8 });
+    r.floatText(t.x, t.y + 3.4, t.z, 'deflected', '#5ad8f0');
+    game.audio?.play('armor_hit', t);
+    game.audio?.play('hum', t);
+    return false;
+  }
   // An adventurer turns the arrow aside with a blade.
   if (t.adventurer && t.tryDeflect && t.tryDeflect(a)) hit = false;
   // Rolled under it.

@@ -4,7 +4,7 @@ import { makeGame, stubInput } from './helpers.mjs';
 import { Creature } from '../src/entities/creature.js';
 import { ITEMS } from '../src/world/items.js';
 import { B, BLOCKS } from '../src/world/blocks.js';
-import { buildFloor, DTYPES, FY, SEALED } from '../src/world/dungeongen.js';
+import { buildFloor, DTYPES, FY, SEALED, BENCHED } from '../src/world/dungeongen.js';
 import { DungeonRun } from '../src/game/dungeon.js';
 import { Region } from '../src/world/region.js';
 import { BOSS_TITLES, addZone, kegBlast } from '../src/entities/monsters.js';
@@ -314,7 +314,8 @@ test('three masters to each kind of place, every one named and titled', () => {
       const f = buildFloor(recOf(type, s * 211), 2);
       for (const sp of f.spawns) if (sp.boss) seen.add(sp.species);
     }
-    for (const b of DTYPES[type].bosses) {
+    // (Bar those benched for now: see dungeongen.BENCHED.)
+    for (const b of DTYPES[type].bosses.filter((k) => !BENCHED.has(k))) {
       assert.ok(seen.has(b), `${type}: ${b} comes up`);
       assert.ok(BOSS_TITLES[b] && BOSS_TITLES[b].name && BOSS_TITLES[b].title);
     }
@@ -342,7 +343,8 @@ test('the master waits behind its gate; in you go, the gate comes down, and it c
   assert.ok(d.fight, 'the fight begins');
   assert.equal(game.world.getBlock(g.x, FY, g.z), B.boss_gate, 'the gate crashes down');
   assert.equal(boss.waiting, false);
-  assert.equal(musicMood(game), 'dungeon_barrow_boss');
+  // (Round 30: with the fight's phase on it, the first to begin with.)
+  assert.equal(musicMood(game), 'dungeon_barrow_boss:p1');
   // Out the gate (heaved up), and well away: it stays in its hall.
   game.world.setBlock(g.x, FY, g.z, B.boss_gate_open, g.rot);
   p.teleport(g.x + g.ox * 3, FY, g.z + g.oz * 3);

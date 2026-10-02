@@ -15,6 +15,7 @@ import * as W from './windows.js';
 import { ZONE } from '../game/fishing.js';
 import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
+import { MARKS, fightPhase } from '../entities/tempo.js';
 
 // The tool pictured for a block that wants one.
 const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
@@ -350,9 +351,31 @@ export class UI {
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.fillRect(x0, by, fw, 6);
     }
-    // Quarter marks.
-    ctx.fillStyle = 'rgba(10,4,6,0.7)';
-    for (const q of [0.25, 0.5, 0.75]) ctx.fillRect(x0 + Math.round(W * q), by, 1, 6);
+    // Its phases: a notch at each mark (lit once it's past it), the phase
+    // it's in by the bar's end, and a flash across it as it turns.
+    const ph = fightPhase(f);
+    for (const q of MARKS) {
+      const mx = x0 + Math.round(W * q);
+      const past = f.frac <= q;
+      ctx.fillStyle = 'rgba(10,4,6,0.85)';
+      ctx.fillRect(mx, by, 1, 6);
+      ctx.fillStyle = past ? '#ffb040' : '#8a6a50';
+      ctx.fillRect(mx - 1, by - 3, 3, 2);
+      ctx.fillRect(mx, by - 4, 1, 1);
+      ctx.fillRect(mx - 1, by + 7, 3, 2);
+      ctx.fillRect(mx, by + 9, 1, 1);
+    }
+    const roman = ['', 'I', 'II', 'III'][ph];
+    drawText(ctx, roman, x0 + W + 9, by - 1, ph >= 3 ? '#ff5040' : ph >= 2 ? '#ffb040' : '#c8a060', '#000');
+    const pt = f.phaseT ?? 9;
+    if (pt < 0.8) {
+      ctx.fillStyle = `rgba(255,${ph >= 3 ? 80 : 180},60,${(1 - pt / 0.8) * 0.8})`;
+      ctx.fillRect(x0 - 3, by - 2, W + 6, 10);
+      const word = ph >= 3 ? 'DESPERATE' : 'ENRAGED';
+      ctx.globalAlpha = 1 - pt / 0.8;
+      drawText(ctx, word, Math.round(x0 + W / 2 - textWidth(word) / 2), by + 20, ph >= 3 ? '#ff5040' : '#ffb040', '#000');
+      ctx.globalAlpha = 1;
+    }
     // The title under it.
     if (f.title) {
       ctx.globalAlpha = Math.min(1, Math.max(0, (f.t - 0.6) * 2));

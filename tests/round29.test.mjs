@@ -83,7 +83,12 @@ function overseerFight(game, p) {
   playScene(game);
   const c = game.creatures.find((q) => q.species === 'overseer');
   for (const q of game.creatures) if (q !== c) q.dormant = 99;
-  c.callCd = c.beamCd = c.gridCd = 999;
+  // (Round 30: no sentinels called, and nothing else in the way of its
+  // works; worn down far enough to have them all.)
+  c.callCd = c.beamCd = c.gridCd = c.sentCd = 999;
+  c.hp = Math.floor(c.maxHp * 0.3);
+  c.phaseSeen = 3;
+  c.gapT = 0;
   return { rec, d, c };
 }
 

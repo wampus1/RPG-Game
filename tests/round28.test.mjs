@@ -225,7 +225,7 @@ test('into a master\'s hall: a scene as it wakes (nothing moves till it\'s done)
   assert.ok(d.fight);
   assert.equal(game.scene && game.scene.kind, 'boss_in');
   assert.ok(game.scene.lock);
-  assert.match(musicMood(game), /_boss$/);
+  assert.match(musicMood(game), /_boss(:p[1-3])?$/);
   const boss = game.creatures.find((c) => c.isBoss && !c.dead);
   const at = { x: boss.x, z: boss.z };
   run(game, input, 10);

@@ -20,7 +20,8 @@ import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { Creature } from '../entities/creature.js';
-import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud } from '../entities/monsters.js';
+import { fits, fitNear } from '../entities/footprint.js';
+import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud, sentinelDown } from '../entities/monsters.js';
 import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
@@ -30,7 +31,7 @@ import { bossEntrance, bossDefeat } from './scenes.js';
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
 // older way is made afresh rather than patched onto a new plan.
-const FLOOR_GEN = 3;
+const FLOOR_GEN = 4;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
 export const BOSS_HP = 1.3;
@@ -63,7 +64,7 @@ export class DungeonRun {
   // This floor's colours (each of a Kavorent ruin's floors is lit its own;
   // see KAV_FLOORS).
   get pal() {
-    return this.kav ? kavFloor(this.floor) : null;
+    return this.kav ? kavFloor(this.floor, this.rec.depth) : null;
   }
 
   // ------------------------------------------------------------ going down
@@ -189,6 +190,15 @@ export class DungeonRun {
       const y = game.world.findStandY(s.x, s.z, FY);
       const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
+      // (A great master stood where all of it fits: never half in a wall.)
+      if (c && c.foot && !fits(game, c, c.x, c.y, c.z, true)) {
+        const f = fitNear(game, c, c.x, c.z, c.y, 8);
+        if (f) {
+          game.removeOcc(c);
+          c.teleport(f.x, f.y, f.z);
+          game.moveEntity(c, f.x, f.y, f.z);
+        }
+      }
       // (The master keeps to its hall, and waits there till you come in.)
       if (c && s.boss && data.bossRoom) {
         c.leash = data.bossRoom;
@@ -433,18 +443,6 @@ export class DungeonRun {
       const tiles = lineTiles(game, { x: em.x, y: FY, z: em.z }, to, em.len + 1);
       addHazard(game, { tiles, y: FY, dur: 1.0, dmg: Math.round(3 + this.floor * 0.6), kind: 'beam', from: { x: em.x, z: em.z }, to: tiles[tiles.length - 1] || to, color: [255, 70, 50], trap: true });
     }
-    // Power nodes put out come back on (in the Overseer's hall).
-    for (const nd of this.data.nodes) {
-      if (!nd.boss || !nd.offT) continue;
-      nd.offT -= dt;
-      if (nd.offT <= 0 && !this.bossDead()) {
-        nd.offT = 0;
-        game.world.setState(nd.x, FY, nd.z, true);
-        game.renderer.emit(nd.x, FY + 1, nd.z, { n: 8, color: ['#5af0c8', '#ffffff'], up: 20, life: 0.5, glow: true });
-        game.ui.msg('A power node flares back to life!', '#5ad8f0', true);
-        game.audio?.play('hum', nd);
-      }
-    }
     // Into the master's hall: the gate comes down behind you, and it wakes.
     const br = this.data.bossRoom;
     if (br && !this.rec.cleared && !this.fight && p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1) this.bossFight();
@@ -509,6 +507,7 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     f.t += dt;
+    f.phaseT = (f.phaseT ?? 9) + dt;
     const alive = f.boss.filter((c) => !c.dead);
     const max = f.boss.reduce((n, c) => n + c.maxHp, 0);
     const frac = max ? alive.reduce((n, c) => n + Math.max(0, c.hp), 0) / max : 0;
@@ -723,13 +722,6 @@ export class DungeonRun {
         game.renderer.emit(q.x, FY + 0.6, q.z, { n: 6, color: ['#ffffff', c[0]], up: 12, speed: 26, gravity: 90, life: 0.45, glow: true });
       }
     }
-  }
-
-  // Overseer shield: how many of its hall's nodes still burn.
-  liveNodes() {
-    let n = 0;
-    for (const nd of this.data.nodes) if (nd.boss && this.game.world.getState(nd.x, FY, nd.z)) n++;
-    return n;
   }
 
   // ------------------------------------------------------------ stepping
@@ -985,11 +977,6 @@ export class DungeonRun {
         game.renderer.emit(x, FY + 1, z, { n: 14, color: ['#5af0c8', '#ffffff', '#fff8a0'], up: 30, speed: 50, life: 0.5, glow: true });
         game.damage(p, 1, null);
         for (const nd of this.data.nodes) {
-          if (nd.boss && nd.x === x && nd.z === z) {
-            nd.offT = 15;
-            const left = this.liveNodes();
-            game.ui.msg(left ? `A power node goes dark. ${left} still burn${left === 1 ? 's' : ''}.` : 'The last node dies: the Overseer\'s shield flickers out!', left ? '#5ad8f0' : '#ffe070');
-          }
           if (nd.set && nd.set.some((q) => q.x === x && q.z === z) && nd.set.every((q) => !w.getState(q.x, FY, q.z)) && !this.state.solved[`rx${x},${z}`]) {
             for (const q of nd.set) this.state.solved[`rx${q.x},${q.z}`] = true;
             for (const f of nd.field || []) for (const yy of [FY, FY + 1]) if (w.getBlock(f.x, yy, f.z) === B.kav_field) w.setBlock(f.x, yy, f.z, B.air);
@@ -1013,6 +1000,17 @@ export class DungeonRun {
   onKill(e) {
     const game = this.game;
     if (e.spawnId !== undefined && !this.state.killed.includes(e.spawnId)) this.state.killed.push(e.spawnId);
+    // One of the Overseer's sentinels: the last of them, and its shield
+    // breaks. (The Overseer gone: its sentinels go dark and fall.)
+    if (e.sentinel) sentinelDown(game, e);
+    if (e.species === 'overseer' && e.sentinels) {
+      for (const s of e.sentinels) {
+        if (s.dead) continue;
+        s.sentinel = null;
+        game.renderer.emit(s.x, s.y + 1.2, s.z, { n: 10, color: ['#5ad8f0', '#8a8478'], up: 20, speed: 30, life: 0.6, glow: true });
+        game.kill(s, null);
+      }
+    }
     // One the blight was in: it bursts into a cloud of spores.
     if (e.infected && !e.sporeless) sporeCloud(game, e, 1, null);
     // A mimic: what was in it spills out.

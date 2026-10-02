@@ -48,6 +48,8 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       const breach = ny < 0 && opts.through && opts.through(nx, y, nz);
       if (breach) ny = y;
       if (ny < 0) continue;
+      // (Room for the whole of something big: see entities/footprint.js.)
+      if (opts.clear && !opts.clear(nx, ny, nz)) continue;
       const nk = key(nx, ny, nz);
       const floor = world.getBlock(nx, ny - 1, nz);
       const feet = BLOCKS[world.getBlock(nx, ny, nz)];

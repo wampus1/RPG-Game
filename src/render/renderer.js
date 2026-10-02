@@ -9,7 +9,7 @@ import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting, skyLight } from './lighting.js';
-import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpikes } from './fx.js';
+import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpikes, drawShields } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
@@ -279,6 +279,7 @@ export class Renderer {
     drawEffects(this, this.ctx, dt);
     drawKavSpikes(this, this.ctx, game);
     drawLasers(this, this.ctx, game);
+    drawShields(this, this.ctx, game);
     this.drawParticles(dt);
     this.drawAim(game);
     if (snap || this.zoomK !== 1) return;
@@ -1130,11 +1131,13 @@ export class Renderer {
           ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#c070ff'), cx - 1, cy - 1);
           ctx.globalAlpha = a;
         }
-        // Its shield up (a warden's cover, a golem's plates): a pale rim of light.
-        if (e.armourT > 0 || e.shieldUp) {
+        // Its shield up (a warden's cover, a golem's plates): a pale rim of
+        // light. (One of the Overseer's sentinels, holding up its shield:
+        // bright, and pulsing.)
+        if (e.armourT > 0 || e.shieldUp || e.sentinel) {
           const a = ctx.globalAlpha;
-          ctx.globalAlpha = a * (0.45 + 0.25 * Math.sin(this.time * 10));
-          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#5ad8f0'), cx - 1, cy - 1);
+          ctx.globalAlpha = a * (e.sentinel ? 0.7 + 0.3 * Math.sin(this.time * 6) : 0.45 + 0.25 * Math.sin(this.time * 10));
+          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, e.sentinel ? '#c8fbff' : '#5ad8f0'), cx - 1, cy - 1);
           ctx.globalAlpha = a;
         }
       }
@@ -2208,6 +2211,16 @@ export class Renderer {
       } else if (p.shape === 'plus') {
         ctx.fillRect(sx, sy - 1, 1, 3);
         ctx.fillRect(sx - 1, sy, 3, 1);
+      } else if (p.shape === 'shard') {
+        // A sliver of something broken (a shield of light), tumbling.
+        const k = Math.floor((p.life * 12 + p.x) % 3);
+        if (k === 0) ctx.fillRect(sx, sy - 1, 1, 3);
+        else if (k === 1) ctx.fillRect(sx - 1, sy, 3, 1);
+        else {
+          ctx.fillRect(sx, sy, 1, 1);
+          ctx.fillRect(sx + 1, sy - 1, 1, 1);
+          ctx.fillRect(sx - 1, sy + 1, 1, 1);
+        }
       } else if (p.shape === 'star') {
         ctx.fillRect(sx, sy, 1, 1);
         ctx.globalAlpha *= 0.6;

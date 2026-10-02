@@ -1809,6 +1809,92 @@ smoothly and gradually (starting further out) rather than in steps, and the
 world stays sharp while it does; the same goes for the masters' scenes,
 which were blurred before.
 
+## Round 30: masters in three acts
+
+**Big masters are as big as they look.** The Overseer, the Ossuary Horror,
+the Brood Mother, the Deep Worm and a Prime Golem now fill three paces
+across, as they're drawn. They never stand where a wall would cut into them
+(nor charge, lunge, rush, come up out of the floor or drop from the ceiling
+into one), nothing walks into them, and nothing shoves them about. A blow,
+an arrow or a beam anywhere on that ground lands on them, and you're in
+reach a pace from their edge, not their middle. (The others,
+drawn half as big again as you, are still one pace.)
+
+**Masters keep moving.** A master no longer stands about: if it's done
+nothing and gone nowhere for a moment, it moves somewhere new to fight
+from: round you, at the range it likes (close for the brutes, a few paces
+off for the Priest, the Witch, the Saint, the Overseer), shuffling about
+if there's nowhere better. And it takes a breath between its attacks (a
+little shorter as it's worn down), so they come one after another and never
+all at once. A master never loses you in the dark of its own hall.
+
+**Three phases.** Every master fights in three phases: whole, worn (a third
+of its health gone) and desperate (two thirds gone). As it crosses each mark
+it roars, the ground jolts out from it (you're thrown back), the screen
+flashes, ENRAGED or DESPERATE flares over it and across its bar, and it
+brings out an attack or two it was holding back. Its bar has a notch at
+each mark and shows its phase (I, II, III) at the end:
+- *The Barrow King*: worn, his crown of frost and grave-blades bursting up
+  in three lines toward you; desperate, a wraith's step through a cold mist
+  to your back, blade first.
+- *The Mound Witch*: worn, her tether and her dead husbands; desperate, a
+  ring of hexes closing in on you, and more of her hexes.
+- *Foreman Gask*: worn, the roof brought down and three charges at a time;
+  desperate, a chain of charges laid to you, going off one after another,
+  and the roof down both ways at once.
+- *The Brood Mother*: worn, up into the dark and down onto you; desperate,
+  webs three at a time and venom left where she goes.
+- *The Deep Worm*: worn, the roof shaken down and a tremor racing along the
+  floor to you; desperate, down again almost as soon as it's up, and acid
+  in threes.
+- *The Drowned Priest*: worn, the whirlpool; desperate, the tide from two
+  sides at once and his cold thrown in threes.
+- *The Ossuary Horror*: worn, spikes of bone four ways and the dead's hands
+  up out of the floor to hold you; desperate, spikes eight ways and a nova
+  of bone rolling out from it.
+- *The Hollow Saint*: worn, consecrated ground and her images; desperate, a
+  beam of violet grave-light turned slowly after you (it chills).
+- *The Bandit Warlord*: worn, his war cry; desperate, a wall of fire across
+  the hall and fire pots in threes.
+- *Rook and Wren*: worn, the swap, and Wren's knives four at a time;
+  desperate, Rook's earthshaker and Wren's shadow dance (here, there, a
+  knife from each).
+- *Mother Nettle*: worn, her smoke, and flasks in pairs; desperate, a bloom
+  of poison opening out round her, and flasks in threes.
+- *The Prime Golem*: worn, the beam from its core and its mites; desperate,
+  an overload of beams four ways and then the four between.
+- *The Overseer*: whole, its beams, walls of force and spikes; worn, the
+  rush, the grid, its beams fanned in threes, and menders; desperate, the
+  great beam and arc mites.
+
+**Grander, darker music, climbing with the fight.** Every master's theme is
+slower and heavier to begin with, in a darker key: a low drone under it all,
+a choir breathing in each bar, brass stabs, timpani on the bar and rolling
+into every fourth, and a deep bell with a tritone ringing in it. As the
+master moves into each phase the same tune climbs over a few bars rather
+than cutting to another (a swell and a timpani roll into it): quicker,
+busier, the drums driving and then savage, more brass, and at the last the
+tune doubled an octave up.
+
+**The Overseer's sentinels.** The Overseer's shield is held up by its
+sentinels now, not by power nodes (those are gone from its hall): it calls
+three at once (never more), each taking a post round it with a pulsing rim
+of light, a lens turning under it, and a crackling thread of light from it
+onto the shield, a dome of hexagonal cells round the Overseer with a sweep
+running round it. The shield turns arrows, bolts, stones and pulses (they
+glance off in a ripple of light); a blade goes straight through. Kill all
+three sentinels and the shield shatters, and stays down for a good while
+(fourteen seconds or so) before it can call three more.
+
+**Smaller places.** Most old places now go one to three floors down (a mine
+now and then a fourth), and their floors are laid out a little tighter. A
+Kavorent ruin goes four floors down (its colours cyan, violet, amber and,
+at the bottom, the pale gold), its floors a good deal tighter, with fewer
+rooms, one foundry with its Prime Golem, and three vaults. The Prime Golem
+has three quarters the health it had. Burial rooms have two or three rows of
+coffins down the middle, never more than eight, rather than a field of them.
+The Pale Huntsman doesn't come up as a master for now.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1857,8 +1943,11 @@ src/
                        (raiders, soldiers and riders on the ground),
                        creature, monsters (what lives below ground, its
                        ways of fighting, hazards and lingering ground),
-                       bosses (the masters of the old places), item
-                       drops, A* pathing
+                       bosses (the masters of the old places), footprint
+                       (the great masters filling three paces across),
+                       tempo (a master's phases, its breath between
+                       attacks, never standing about), item drops, A*
+                       pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling

@@ -124,7 +124,7 @@ export function bossEntrance(game, run, boss) {
   return {
     kind: 'boss_in', t: 0, dur: 3.6, lock: true, boss, run,
     get mood() {
-      return `dungeon_${run.rec.type}_boss`;
+      return `dungeon_${run.rec.type}_boss:p1`;
     },
     get zoom() {
       return 1 - 0.18 * ease(clamp01((this.t - 0.4) / 1)) * (1 - ease(clamp01((this.t - 2.8) / 0.8)));

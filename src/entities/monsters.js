@@ -26,6 +26,8 @@ import { pierceOf } from '../game/kavtech.js';
 import { BOSS_SPECIES, BOSS_TITLES, bossBrains } from './bosses.js';
 import { startLaser } from '../game/laser.js';
 import { GAME_MINUTES_PER_SECOND } from '../config.js';
+import { onTiles, fits, fitNear, footTiles } from './footprint.js';
+import { phaseOf, ready, used } from './tempo.js';
 
 export { BOSS_TITLES };
 
@@ -56,7 +58,7 @@ export const MONSTER_SPECIES = {
   mender: { light: 2, name: 'Mender', hp: 4, dmg: 1, step: 0.24, mode: 'hostile', aggro: 12, under: true, construct: true, brain: 'mender', style: 'snap', drops: [['kav_scrap', 1, 1, 0.8]] },
   golem: { light: 3, name: 'Kavorent Golem', hp: 40, dmg: 7, step: 0.6, mode: 'hostile', aggro: 11, big: true, under: true, construct: true, armoured: true, brain: 'golem', style: 'slam', drops: [['kav_scrap', 3, 6, 1]] },
   mite: { light: 2, name: 'Arc Mite', hp: 3, dmg: 5, step: 0.22, mode: 'hostile', aggro: 12, under: true, construct: true, packs: true, brain: 'mite', drops: [['kav_scrap', 1, 1, 0.3]] },
-  prime: { light: 5, name: 'Prime Golem', hp: 170, dmg: 8, step: 0.58, mode: 'hostile', aggro: 14, big: true, under: true, construct: true, armoured: true, boss: true, brain: 'golem', style: 'slam', drops: [['kav_scrap', 6, 10, 1], ['kav_core', 1, 1, 1]] },
+  prime: { light: 5, name: 'Prime Golem', hp: 128, dmg: 8, step: 0.58, mode: 'hostile', aggro: 14, big: true, under: true, construct: true, armoured: true, boss: true, brain: 'golem', style: 'slam', drops: [['kav_scrap', 6, 10, 1], ['kav_core', 1, 1, 1]] },
   overseer: { light: 9, name: 'The Overseer', hp: 320, dmg: 6, step: 0.5, mode: 'hostile', aggro: 18, big: true, floats: true, anim: true, under: true, construct: true, boss: true, brain: 'overseer', drops: [['kav_scrap', 4, 8, 1], ['overseer_eye', 1, 1, 1]] },
   // (And the other masters: see bosses.js.)
   ...BOSS_SPECIES,
@@ -91,7 +93,7 @@ export function updateHazards(game, dt) {
 
 function fireHazard(game, h) {
   const r = game.renderer;
-  const on = (e) => !e.dead && !e.down && !e.burrowed && h.tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - h.y) <= 1;
+  const on = (e) => !e.dead && !e.down && !e.burrowed && onTiles(e, h.tiles) && Math.abs(e.y - h.y) <= 1;
   const hit = [];
   for (const e of [game.player, ...game.npcs, ...game.creatures]) {
     if (!e || !on(e) || e === h.by) continue;
@@ -237,7 +239,7 @@ function updateZones(game, dt) {
       z.done = true;
       continue;
     }
-    const at = (e) => !e.dead && !e.down && !e.burrowed && Math.abs(e.y - z.y) <= 1 && z.tiles.some((q) => q.x === e.x && q.z === e.z);
+    const at = (e) => !e.dead && !e.down && !e.burrowed && Math.abs(e.y - z.y) <= 1 && onTiles(e, z.tiles);
     // (Fire set by your own hand burns what's hostile too.)
     const inside = [p, ...game.npcs, ...(z.all ? game.creatures.filter((c) => c !== z.by && !c.S?.floats && (c.hostileNow || c.S?.mode === 'hostile')) : [])].filter((e) => e !== z.by && at(e));
     // A fire spreads, once, to a pace or two beside it.
@@ -508,185 +510,343 @@ export const BRAINS = {
   },
 
   // ------------------------------------------------ the masters
+  // Each in three phases (see tempo.js): whole, worn, desperate, each
+  // bringing out an attack or two it held back; a breath between its
+  // attacks (ready/used), never all at once.
   // The Barrow King: a greatsword, a slam that shakes the barrow, the cold
-  // stare, and the dead called up round him as he weakens.
+  // stare, a spectral charge, and the dead called up round him as he
+  // weakens; worn, his crown of frost and the grave-blades bursting up in
+  // lines toward you; desperate, a wraith's step to your back, blade first.
   barrowKing(c, dt) {
     const game = c.game;
     const t = c.target;
+    const ph = phaseOf(c);
     phaseSummons(c, [0.66, 0.33], () => {
       for (let i = 0; i < 3; i++) summon(game, i === 0 ? 'wight' : 'skeleton', c, 3, { level: c.level });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'RISE!', '#a0e8ff');
       game.audio?.play('scream', c);
     });
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
     // A spectral charge down a line at you.
     c.chargeCd = (c.chargeCd ?? 6) - dt;
-    if (t && c.chargeCd <= 0 && dist(c, t) >= 3 && dist(c, t) <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
+    if (ready(c) && c.chargeCd <= 0 && d >= 3 && d <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
       c.chargeCd = 9;
+      used(c);
       beginAttack(game, c, t, { ...STYLES.gore, reach: 6, mult: 1.3, windup: 0.9 });
       c.say?.('Kneel!', 1.2, '#a0e8ff');
       return true;
     }
-    // His crown of frost: rings of cold rolling out from him (hurt).
-    c.crownCd = (c.crownCd ?? 4) - dt;
-    if (t && c.crownCd <= 0 && c.hp / c.maxHp < 0.6 && !c.windup) {
+    // (Worn) His crown of frost: rings of cold rolling out from him.
+    c.crownCd = (c.crownCd ?? 3) - dt;
+    if (ph >= 2 && ready(c) && c.crownCd <= 0 && !c.windup) {
       c.crownCd = 11;
+      used(c, 0.6);
       for (let r = 1; r <= 4; r++) {
         const tiles = areaTiles(c.x, c.z, r).filter((q) => Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) === r);
-        addHazard(game, { by: c, tiles, y: c.y, dur: 0.9 + r * 0.45, dmg: Math.round(3 * (c.dmgMult || 1)), chill: 2.5, kind: 'cold', color: COLORS.cold });
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.9 + r * 0.45, dmg: Math.round(3 * mult(c)), chill: 2.5, kind: 'cold', color: COLORS.cold });
       }
       game.renderer.floatText(c.x, c.y + 3, c.z, 'the cold of the grave!', '#a0e8ff');
       c.stunT = 0.8;
       return true;
     }
+    // (Worn) Grave-blades: three lines of spectral swords bursting up out
+    // of the floor, one after another, fanned at you.
+    c.bladeCd = (c.bladeCd ?? 5) - dt;
+    if (ph >= 2 && ready(c) && c.bladeCd <= 0 && d >= 2 && d <= 9 && !c.windup) {
+      c.bladeCd = 9;
+      used(c);
+      const ang = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const s of [-0.45, 0, 0.45]) {
+        const to = { x: c.x + Math.cos(ang + s) * 9, z: c.z + Math.sin(ang + s) * 9 };
+        lineTiles(game, c, to, 9).forEach((q, k) => addHazard(game, { by: c, tiles: [q], y: c.y, dur: 0.75 + k * 0.1, dmg: Math.round(4 * mult(c)), chill: 1.2, kind: 'erupt', color: COLORS.cold, quiet: k % 2 === 1 }));
+      }
+      c.doAction?.(0.4);
+      c.say?.('Blades of my fathers!', 1.6, '#a0e8ff');
+      game.audio?.play('freeze', c);
+      c.stunT = 0.6;
+      return true;
+    }
+    // (Desperate) A wraith's step: gone in a cold mist, and at your back.
+    c.stepCd = (c.stepCd ?? 4) - dt;
+    if (ph >= 3 && ready(c) && c.stepCd <= 0 && d >= 2 && !c.windup) {
+      const back = { x: t.x - (t.dir === 1 ? -1 : t.dir === 3 ? 1 : 0), z: t.z - (t.dir === 0 ? 1 : t.dir === 2 ? -1 : 0) };
+      const y = game.world.findStandY(back.x, back.z, c.y);
+      if (y === c.y && game.world.canStand(back.x, y, back.z) && !game.occupiedBySolid(back.x, y, back.z, c) && withinLeash(c, back.x, back.z)) {
+        c.stepCd = 8;
+        used(c);
+        game.renderer.emit(c.x, c.y + 1, c.z, { n: 18, color: ['#a0e8ff', '#e0f8ff', '#ffffff'], up: 30, speed: 40, life: 0.6, glow: true });
+        addZone(game, { tiles: areaTiles(c.x, c.z, 1), y: c.y, life: 3, kind: 'mist', tick: 0.6, chill: 1.2, color: [160, 210, 240], puff: ['#a0c8e0', '#e0f0ff'] });
+        c.teleport(back.x, y, back.z);
+        c.path = null;
+        game.renderer.emit(c.x, c.y + 1, c.z, { n: 18, color: ['#a0e8ff', '#e0f8ff', '#ffffff'], up: 30, speed: 40, life: 0.6, glow: true });
+        game.audio?.play('void', c);
+        c.face(t.x, t.z);
+        beginAttack(game, c, t, { ...styleOf(c), windup: 0.55, mult: 1.4 });
+        c.say?.('Behind you.', 1.4, '#a0e8ff');
+        return true;
+      }
+    }
     if (bossSlam(c, dt, 1, 1.1, 6, 9)) return true;
-    return BRAINS.wight(c, dt);
+    // (The cold stare, his own, in its turn.)
+    if (!ready(c)) return false;
+    const before = c.gazeCd;
+    const r = BRAINS.wight(c, dt);
+    if (r && c.gazeCd > (before ?? 0)) used(c);
+    return r;
   },
 
   // A heaving mound of bones: slams, a storm of bones flung down round you,
-  // and it sheds the dead as it's broken up.
+  // and it sheds the dead as it's broken up; worn, spikes of bone bursting
+  // out along the floor four ways and the dead's hands up out of the floor
+  // to hold you; desperate, the spikes all eight ways and a nova of bone
+  // rolling out from it.
   horror(c, dt) {
     const game = c.game;
     const t = c.target;
+    const ph = phaseOf(c);
     phaseSummons(c, [0.75, 0.5, 0.25], () => {
-      for (let i = 0; i < 2; i++) summon(game, i ? 'rat' : 'skeleton', c, 2, { level: c.level });
+      for (let i = 0; i < 2; i++) summon(game, i ? 'rat' : 'skeleton', c, 3, { level: c.level });
       game.renderer.emit(c.x, c.y + 1, c.z, { n: 20, color: ['#d8d0b8', '#a8a088'], up: 40, speed: 60, gravity: 200, life: 0.7 });
     });
-    // Spikes of bone, bursting up along the floor from it, four ways.
-    c.spikeCd = (c.spikeCd ?? 7) - dt;
-    if (t && !c.windup && c.spikeCd <= 0) {
+    if (!t || t.dead) return false;
+    const reach = 1 + (c.foot || 0);
+    // (Worn) Spikes of bone, bursting up along the floor from it.
+    c.spikeCd = (c.spikeCd ?? 4) - dt;
+    if (ph >= 2 && ready(c) && !c.windup && c.spikeCd <= 0) {
       c.spikeCd = 10;
-      const diag = Math.random() < 0.5;
-      for (const [dx, dz] of diag ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        for (let k = 1; k <= 7; k++) addHazard(game, { by: c, tiles: [{ x: c.x + dx * k, z: c.z + dz * k }], y: c.y, dur: 0.8 + k * 0.12, dmg: Math.round(4 * (c.dmgMult || 1)), kind: 'erupt', color: [230, 220, 190], quiet: k > 1 });
+      used(c, 0.4);
+      const ways = ph >= 3 ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] : Math.random() < 0.5 ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [dx, dz] of ways) {
+        for (let k = reach; k <= reach + 7; k++) addHazard(game, { by: c, tiles: [{ x: c.x + dx * k, z: c.z + dz * k }], y: c.y, dur: 0.8 + (k - reach) * 0.12, dmg: Math.round(4 * mult(c)), kind: 'erupt', color: [230, 220, 190], quiet: k > reach });
       }
       c.stunT = 0.9;
       return true;
     }
-    c.stormCd = (c.stormCd ?? 4) - dt;
-    if (t && !c.windup && c.stormCd <= 0 && dist(c, t) <= 9) {
-      c.stormCd = 6;
-      const tiles = [];
-      for (let i = 0; i < 7; i++) tiles.push({ x: t.x + Math.round((Math.random() - 0.5) * 5), z: t.z + Math.round((Math.random() - 0.5) * 5) });
+    // (Worn) The dead's hands up out of the floor round you: they hold.
+    c.handsCd = (c.handsCd ?? 6) - dt;
+    if (ph >= 2 && ready(c) && !c.windup && c.handsCd <= 0 && dist(c, t) <= 10) {
+      c.handsCd = 12;
+      used(c);
+      const tiles = areaTiles(t.x, t.z, 2).filter((q) => Math.random() < 0.45 && withinLeash(c, q.x, q.z));
       tiles.push({ x: t.x, z: t.z });
-      addHazard(game, { by: c, tiles, dur: 1.2, dmg: Math.round(4 * (c.dmgMult || 1)), kind: 'rocks', color: COLORS.blow });
+      addHazard(game, { by: c, tiles, y: t.y, dur: 1.0, dmg: Math.round(2 * mult(c)), kind: 'erupt', color: [200, 190, 160], onFire: (g) => addZone(g, { tiles, y: t.y, life: 4, kind: 'web', root: 1.0, slow: true, color: [210, 200, 170] }) });
+      game.renderer.floatText(t.x, t.y + 2.6, t.z, 'hands from below!', '#e8e0c8');
+      game.audio?.play('scream', c);
+      return false;
+    }
+    // (Desperate) A nova of bone: rings bursting up, outward from it.
+    c.novaCd = (c.novaCd ?? 3) - dt;
+    if (ph >= 3 && ready(c) && !c.windup && c.novaCd <= 0) {
+      c.novaCd = 11;
+      used(c, 0.5);
+      for (let r = reach; r <= reach + 5; r++) {
+        const tiles = areaTiles(c.x, c.z, r).filter((q) => Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) === r && (r % 2 === 0 || Math.random() < 0.7));
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.8 + (r - reach) * 0.3, dmg: Math.round(5 * mult(c)), kind: 'erupt', color: [255, 90, 60], quiet: r > reach });
+      }
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'THE OSSUARY BURSTS', '#ff6040');
+      game.shake = Math.min(1.4, (game.shake || 0) + 0.5);
+      c.stunT = 1.0;
+      return true;
+    }
+    c.stormCd = (c.stormCd ?? 3) - dt;
+    if (ready(c) && !c.windup && c.stormCd <= 0 && dist(c, t) <= 9) {
+      c.stormCd = ph >= 2 ? 5 : 6;
+      used(c);
+      const tiles = [];
+      for (let i = 0; i < 7 + ph * 2; i++) tiles.push({ x: t.x + Math.round((Math.random() - 0.5) * 5), z: t.z + Math.round((Math.random() - 0.5) * 5) });
+      tiles.push({ x: t.x, z: t.z });
+      addHazard(game, { by: c, tiles, dur: 1.2, dmg: Math.round(4 * mult(c)), kind: 'rocks', color: COLORS.blow });
       return false;
     }
     return bossSlam(c, dt, 1, 1.0, 5, 7);
   },
 
-  // The Deep Worm: under, and up beneath you (wider than any crawler), and
-  // the roof coming down where it's been.
+  // The Deep Worm: under, and up beneath you (wider than any crawler), acid
+  // spat up out of its maw; worn, the roof coming down where it's been and
+  // a tremor racing along the floor to you; desperate, it barely stays up
+  // between bursts, and comes up wider.
   worm(c, dt) {
     const game = c.game;
     const t = c.target;
-    c.roofCd = (c.roofCd ?? 6) - dt;
-    if (t && c.roofCd <= 0 && !c.burrowed) {
-      c.roofCd = 8;
-      const tiles = [];
-      for (let i = 0; i < 6; i++) tiles.push({ x: t.x + Math.round((Math.random() - 0.5) * 7), z: t.z + Math.round((Math.random() - 0.5) * 7) });
-      addHazard(game, { by: c, tiles, dur: 1.3, dmg: Math.round(5 * (c.dmgMult || 1)), stun: 0.5, kind: 'rocks', color: COLORS.earth });
-      game.renderer.floatText(t.x, t.y + 3, t.z, 'the roof shakes!', '#e0c8a0');
-    }
+    const ph = phaseOf(c);
     phaseSummons(c, [0.5], () => {
-      for (let i = 0; i < 2; i++) summon(game, 'crawler', c, 3, { level: c.level });
+      for (let i = 0; i < 2; i++) summon(game, 'crawler', c, 4, { level: c.level });
     });
-    // Acid, spat up out of its maw: it pools where it lands.
-    c.spitCd = (c.spitCd ?? 4) - dt;
-    if (t && c.spitCd <= 0 && !c.burrowed && dist(c, t) >= 2 && dist(c, t) <= 9) {
-      c.spitCd = 7;
-      for (let k = 0; k < 2; k++) {
-        lob(game, c, t.x + (k ? Math.round((Math.random() - 0.5) * 4) : 0), t.z + (k ? Math.round((Math.random() - 0.5) * 4) : 0), {
-          tint: [170, 220, 60],
-          onLand: (g, x, z, y) => {
-            addZone(g, { tiles: areaTiles(x, z, 1), y, life: 6, kind: 'poison', tick: 0.6, dmg: 1, by: c, color: COLORS.poison, puff: ['#8ac040', '#c8f070'] });
-            g.renderer.emit(x, y + 0.5, z, { n: 12, color: ['#8ac040', '#c8f070'], up: 20, speed: 30, gravity: 160, life: 0.6 });
-            g.audio?.play('splash', { x, z });
-          },
+    if (t && !t.dead && !c.burrowed) {
+      // (Worn) The roof shaken down round you.
+      c.roofCd = (c.roofCd ?? 3) - dt;
+      if (ph >= 2 && ready(c) && c.roofCd <= 0) {
+        c.roofCd = 8;
+        used(c);
+        const tiles = [];
+        for (let i = 0; i < 6 + ph * 2; i++) tiles.push({ x: t.x + Math.round((Math.random() - 0.5) * 7), z: t.z + Math.round((Math.random() - 0.5) * 7) });
+        addHazard(game, { by: c, tiles, dur: 1.3, dmg: Math.round(5 * mult(c)), stun: 0.5, kind: 'rocks', color: COLORS.earth });
+        game.renderer.floatText(t.x, t.y + 3, t.z, 'the roof shakes!', '#e0c8a0');
+        game.audio?.play('rumble', c);
+      }
+      // (Worn) A tremor racing along the floor from it to you.
+      c.quakeCd = (c.quakeCd ?? 5) - dt;
+      if (ph >= 2 && ready(c) && c.quakeCd <= 0 && dist(c, t) >= 3 && !c.windup) {
+        c.quakeCd = 9;
+        used(c);
+        const path = lineTiles(game, c, t, 12);
+        path.forEach((q, k) => {
+          if (k < (c.foot || 0)) return;
+          addHazard(game, { by: c, tiles: [q, { x: q.x + 1, z: q.z }, { x: q.x - 1, z: q.z }, { x: q.x, z: q.z + 1 }, { x: q.x, z: q.z - 1 }].filter((p) => withinLeash(c, p.x, p.z)), y: c.y, dur: 0.6 + k * 0.09, dmg: Math.round(5 * mult(c)), knock: 1, from: { x: c.x, z: c.z }, kind: 'erupt', color: COLORS.earth, quiet: k % 3 !== 0 });
         });
+        game.audio?.play('rumble', c);
+        game.shake = Math.min(1.2, (game.shake || 0) + 0.3);
+        c.stunT = 0.7;
+        return true;
+      }
+      // Acid, spat up out of its maw: it pools where it lands.
+      c.spitCd = (c.spitCd ?? 3) - dt;
+      if (ready(c) && c.spitCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 9) {
+        c.spitCd = ph >= 3 ? 5 : 7;
+        used(c);
+        for (let k = 0; k < (ph >= 3 ? 3 : 2); k++) {
+          lob(game, c, t.x + (k ? Math.round((Math.random() - 0.5) * 4) : 0), t.z + (k ? Math.round((Math.random() - 0.5) * 4) : 0), {
+            tint: [170, 220, 60],
+            onLand: (g, x, z, y) => {
+              addZone(g, { tiles: areaTiles(x, z, 1), y, life: 6, kind: 'poison', tick: 0.6, dmg: 1, by: c, color: COLORS.poison, puff: ['#8ac040', '#c8f070'] });
+              g.renderer.emit(x, y + 0.5, z, { n: 12, color: ['#8ac040', '#c8f070'], up: 20, speed: 30, gravity: 160, life: 0.6 });
+              g.audio?.play('splash', { x, z });
+            },
+          });
+        }
       }
     }
-    return BRAINS.crawler(c, dt);
+    // Under, and up beneath you. (Desperate: down again almost as soon as
+    // it's up.)
+    if (ph >= 3 && c.digCd > 3) c.digCd = 3;
+    if (!c.burrowed && !ready(c)) return false;
+    const was = c.burrowed;
+    const r = BRAINS.crawler(c, dt);
+    if (!was && c.burrowed) used(c, 0.5);
+    return r;
   },
 
   // The Drowned Priest: keeps off, throws cold, sends the tide across the
-  // floor, and calls the drowned up out of the water.
+  // floor, and calls the drowned up out of the water; worn, a whirlpool
+  // where you stand; desperate, the tide from both sides at once, and his
+  // cold thrown in threes.
   priest(c, dt) {
     const game = c.game;
     const t = c.target;
+    const ph = phaseOf(c);
     phaseSummons(c, [0.7, 0.4], () => {
       for (let i = 0; i < 3; i++) summon(game, 'drowned', c, 4, { level: c.level, color: ['#80b8d8', '#c8e8f8'] });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'from the deep, come!', '#a0e8d0');
     });
-    // A whirlpool where you stand: it drags you in toward its eye.
-    c.whirlCd = (c.whirlCd ?? 9) - dt;
-    if (t && c.whirlCd <= 0 && c.hp / c.maxHp < 0.75) {
+    if (!t || t.dead) return false;
+    // (Worn) A whirlpool where you stand: it drags you in toward its eye.
+    c.whirlCd = (c.whirlCd ?? 3) - dt;
+    if (ph >= 2 && ready(c) && c.whirlCd <= 0) {
       c.whirlCd = 13;
+      used(c);
       const eye = { x: t.x, z: t.z };
       addZone(game, { tiles: areaTiles(eye.x, eye.z, 2, true), y: t.y, life: 6, kind: 'whirl', tick: 0.55, dmg: 1, pull: eye, by: c, color: [80, 150, 200], puff: ['#80b8d8', '#c8e8f8'] });
       game.renderer.floatText(t.x, t.y + 2.6, t.z, 'the black water swirls!', '#80c8e0');
       game.audio?.play('splash', c);
     }
-    c.tideCd = (c.tideCd ?? 5) - dt;
-    if (t && c.tideCd <= 0) {
-      c.tideCd = 7;
-      // A wave rolling across: a row of the floor, then the next.
-      for (let k = -2; k <= 2; k++) {
-        const tiles = [];
-        for (let dx = -6; dx <= 6; dx++) tiles.push({ x: t.x + dx, z: t.z + k });
-        addHazard(game, { by: c, tiles, dur: 1.1 + (k + 2) * 0.25, dmg: 2, chill: 2, knock: 1, from: { x: t.x, z: t.z - 3 }, kind: 'cold', color: COLORS.cold });
+    // The tide, rolling across: a row of the floor, then the next (and,
+    // desperate, from the other side too).
+    c.tideCd = (c.tideCd ?? 4) - dt;
+    if (ready(c) && c.tideCd <= 0) {
+      c.tideCd = ph >= 3 ? 8 : 7;
+      used(c, 0.4);
+      const ways = ph >= 3 ? [[0, -1], [-1, 0]] : [[0, -1]];
+      for (const [ax, az] of ways) {
+        for (let k = -2; k <= 2; k++) {
+          const tiles = [];
+          for (let s = -6; s <= 6; s++) tiles.push(az ? { x: t.x + s, z: t.z + k } : { x: t.x + k, z: t.z + s });
+          addHazard(game, { by: c, tiles, dur: 1.1 + (k + 2) * 0.25 + (ax ? 0.6 : 0), dmg: 2, chill: 2, knock: 1, from: { x: t.x + ax * 3, z: t.z + az * 3 }, kind: 'cold', color: COLORS.cold });
+        }
       }
+      if (ph >= 3) game.renderer.floatText(c.x, c.y + 3, c.z, 'DROWN!', '#80c8e0');
       game.audio?.play('splash', c);
     }
     c.castCd = (c.castCd ?? 2) - dt;
-    if (t && c.castCd <= 0 && dist(c, t) <= 9 && !c.windup) {
+    if (ready(c) && c.castCd <= 0 && dist(c, t) <= 9 && !c.windup) {
       c.castCd = 2.6;
-      game.lobOrb(c, t.x, t.y, t.z, Math.round(3 * (c.dmgMult || 1)));
+      used(c);
+      const n = ph >= 3 ? 3 : 1;
+      for (let k = 0; k < n; k++) game.lobOrb(c, t.x + (k ? Math.round((Math.random() - 0.5) * 3) : 0), t.y, t.z + (k ? Math.round((Math.random() - 0.5) * 3) : 0), Math.round(3 * mult(c)));
       c.doAction?.(0.3);
     }
     // Hangs back, out of reach.
-    if (t && dist(c, t) <= 2 && !c.moving) {
+    if (dist(c, t) <= 2 && !c.moving) {
       const sx = Math.sign(c.x - t.x) || 1;
       const sz = Math.sign(c.z - t.z) || 1;
       if (c.tryStep(c.x + sx, c.z, c.S.step) || c.tryStep(c.x, c.z + sz, c.S.step)) return true;
     }
-    return !!t && dist(c, t) > 1;
+    return dist(c, t) > 1;
   },
 
-  // The Bandit Warlord: a war hammer, fire pots thrown at you, and the
-  // holdout's archers called in when it goes badly.
+  // The Bandit Warlord: a war hammer, a charge shield first, fire pots
+  // thrown at you; worn, his war cry, and the holdout's archers called in;
+  // desperate, a wall of fire across the hall, and pots in threes.
   warlord(c, dt) {
     const game = c.game;
     const t = c.target;
+    const ph = phaseOf(c);
     phaseSummons(c, [0.5], () => {
       for (let i = 0; i < 2; i++) summon(game, 'holdout_archer', c, 5, { level: c.level, color: ['#c8a070', '#8a6a4a'] });
       c.say?.('To me! Shoot them down!', 3, '#ff9070');
     });
-    // A war cry: his own come on quicker, and he hits harder a while.
-    c.cryCd = (c.cryCd ?? 8) - dt;
-    if (t && c.cryCd <= 0 && !c.windup) {
+    if (c.furyT > 0) {
+      c.furyT -= dt;
+      if (Math.random() < dt * 8) game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 1, color: ['#ff4030', '#ffb080'], up: 14, life: 0.4, oy: -8 });
+    }
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // (Worn) A war cry: his own come on quicker, and he hits harder a while.
+    c.cryCd = (c.cryCd ?? 2) - dt;
+    if (ph >= 2 && ready(c) && c.cryCd <= 0 && !c.windup) {
       c.cryCd = 16;
+      used(c);
       c.furyT = 6;
       for (const o of allies(game, c, 10)) o.hasteT = 6;
       c.say?.('Holdout! With me!', 2, '#ff9070');
       game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 3, r1: 50, color: ['#ff6040', '#ffb080'], life: 0.7, oy: 4, flat: 0.5 });
       game.audio?.play('horn', c);
     }
-    if (c.furyT > 0) {
-      c.furyT -= dt;
-      if (Math.random() < dt * 8) game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 1, color: ['#ff4030', '#ffb080'], up: 14, life: 0.4, oy: -8 });
+    // (Desperate) A wall of fire across the hall, between him and you.
+    c.wallCd = (c.wallCd ?? 3) - dt;
+    if (ph >= 3 && ready(c) && c.wallCd <= 0 && d >= 2 && !c.windup) {
+      c.wallCd = 12;
+      used(c, 0.4);
+      const mx = Math.round((c.x + t.x) / 2);
+      const mz = Math.round((c.z + t.z) / 2);
+      const across = Math.abs(t.x - c.x) >= Math.abs(t.z - c.z);
+      const tiles = [];
+      for (let k = -5; k <= 5; k++) {
+        const q = across ? { x: mx, z: mz + k } : { x: mx + k, z: mz };
+        if (withinLeash(c, q.x, q.z)) tiles.push(q);
+      }
+      addHazard(game, { by: c, tiles, y: c.y, dur: 1.0, dmg: 3, burn: 2, kind: 'fire', center: { x: mx, z: mz }, color: COLORS.fire, onFire: (g) => {
+        for (const q of tiles) groundFire(g, q.x, q.z, c.y, c, false, 0);
+      } });
+      c.say?.('Burn it all!', 1.6, '#ff9070');
+      c.doAction?.(0.4);
     }
     // A charge, shield first, down a line.
     c.bashCd = (c.bashCd ?? 6) - dt;
-    if (t && c.bashCd <= 0 && dist(c, t) >= 3 && dist(c, t) <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
+    if (ready(c) && c.bashCd <= 0 && d >= 3 && d <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
       c.bashCd = 9;
+      used(c);
       beginAttack(game, c, t, { ...STYLES.gore, reach: 6, mult: c.furyT > 0 ? 1.6 : 1.2, windup: 0.9 });
       return true;
     }
-    c.potCd = (c.potCd ?? 4) - dt;
-    if (t && c.potCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 8 && !c.windup) {
+    c.potCd = (c.potCd ?? 3) - dt;
+    if (ready(c) && c.potCd <= 0 && d >= 2 && d <= 8 && !c.windup) {
       c.potCd = 6;
-      const tiles = areaTiles(t.x, t.z, 1);
-      addHazard(game, { by: c, tiles, dur: 1.1, dmg: 3, burn: 3, kind: 'fire', center: { x: t.x, z: t.z }, color: COLORS.fire });
+      used(c);
+      for (let k = 0; k < (ph >= 3 ? 3 : 1); k++) {
+        const at = k ? { x: t.x + Math.round((Math.random() - 0.5) * 4), z: t.z + Math.round((Math.random() - 0.5) * 4) } : { x: t.x, z: t.z };
+        addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), dur: 1.1 + k * 0.2, dmg: 3, burn: 3, kind: 'fire', center: at, color: COLORS.fire });
+      }
       c.say?.(Math.random() < 0.5 ? 'Burn!' : 'Catch!', 1.2, '#ffb080');
       c.doAction?.(0.3);
       game.renderer.emit(c.x, c.y + 1.5, c.z, { n: 6, color: ['#ff9030', '#ffe070'], up: 20, life: 0.4 });
@@ -700,6 +860,8 @@ export const BRAINS = {
   drone(c, dt) {
     const game = c.game;
     const t = c.target;
+    // (One of the Overseer's sentinels, holding up its shield.)
+    if (c.sentinel && sentinelTick(c, dt)) return true;
     if (!t || t.dead) return false;
     wardenCover(c);
     c.beamCd = (c.beamCd ?? 1.5 + Math.random() * 2) - dt;
@@ -789,7 +951,10 @@ export const BRAINS = {
   },
 
   // A golem: a slam that shakes the hall (open to a blow for a moment
-  // after: its core shows), a charge down a line.
+  // after: its core shows), a charge down a line. A Prime (a foundry's
+  // master) in its phases: whole, the slam and the charge; worn, a beam
+  // from its core and mites called up; desperate, an overload: beams
+  // thrown out four ways from it, turned an eighth, and again.
   golem(c, dt) {
     const game = c.game;
     const t = c.target;
@@ -797,26 +962,51 @@ export const BRAINS = {
       c.exposedT -= dt;
       if (Math.random() < dt * 10) game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 1, color: ['#5ad8f0', '#ffffff'], up: 10, speed: 10, life: 0.4, glow: true, oy: -10 });
     }
-    if (c.species === 'prime') {
+    const prime = c.species === 'prime';
+    const gate = (k) => !prime || !c.isBoss || ready(c) || k;
+    const ph = prime ? phaseOf(c) : 1;
+    if (prime) {
       phaseSummons(c, [0.6, 0.3], () => {
         for (let i = 0; i < 3; i++) summon(game, 'mite', c, 3, { level: c.level, color: ['#fff8a0', '#5ad8f0'] });
       });
-      c.beamCd = (c.beamCd ?? 4) - dt;
-      if (t && c.beamCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 9 && sees(game, c, t) && !c.windup) {
+      // (Worn) A beam from its core, down a line at you.
+      c.beamCd = (c.beamCd ?? 2) - dt;
+      if (t && ph >= 2 && gate() && c.beamCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 10 && sees(game, c, t) && !c.windup) {
         c.beamCd = 6;
-        const tiles = lineTiles(game, c, t, 10);
+        if (c.isBoss) used(c);
+        const tiles = lineTiles(game, c, t, 11).slice(c.foot || 0);
         addHazard(game, { by: c, tiles, dur: 1.1, dmg: Math.round(5 * (c.dmgMult || 1)), kind: 'beam', from: { x: c.x, z: c.z }, to: tiles[tiles.length - 1] || t, color: COLORS.blow, width: 4 });
         c.stunT = 1.2;
         return true;
       }
+      // (Desperate) Overload: beams out four ways, then the four between.
+      c.overCd = (c.overCd ?? 3) - dt;
+      if (t && ph >= 3 && gate() && c.overCd <= 0 && !c.windup) {
+        c.overCd = 10;
+        if (c.isBoss) used(c, 1);
+        const r0 = (c.foot || 0) + 1;
+        for (const [k, set] of [[0, [[1, 0], [-1, 0], [0, 1], [0, -1]]], [1, [[1, 1], [1, -1], [-1, 1], [-1, -1]]]]) {
+          for (const [dx, dz] of set) {
+            const to = { x: c.x + dx * 12, z: c.z + dz * 12 };
+            const tiles = lineTiles(game, c, to, 12).filter((q) => Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) >= r0);
+            if (tiles.length) addHazard(game, { by: c, tiles, dur: 1.2 + k * 0.9, dmg: Math.round(5 * (c.dmgMult || 1)), kind: 'beam', from: { x: c.x, z: c.z }, to: tiles[tiles.length - 1], color: COLORS.kav, beamColor: '#e0fbff', halo: '#5ad8f0', width: 3 });
+          }
+        }
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'OVERLOAD', '#5ad8f0');
+        game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 4, r1: 40, color: ['#5ad8f0', '#ffffff'], life: 0.6, oy: 4, flat: 0.5, thick: 2 });
+        game.audio?.play('charge', c);
+        c.stunT = 2.2;
+        return true;
+      }
     }
     c.chargeCd = (c.chargeCd ?? 5) - dt;
-    if (t && c.chargeCd <= 0 && dist(c, t) >= 3 && dist(c, t) <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
+    if (t && gate() && c.chargeCd <= 0 && dist(c, t) >= 3 + (c.foot || 0) && dist(c, t) <= 6 + (c.foot || 0) && (Math.abs(t.x - c.x) <= (c.foot || 0) || Math.abs(t.z - c.z) <= (c.foot || 0)) && !c.windup) {
       c.chargeCd = 8;
+      if (prime && c.isBoss) used(c);
       beginAttack(game, c, t, { ...STYLES.gore, reach: 6, mult: 1.2, windup: 1.0 });
       return true;
     }
-    return bossSlam(c, dt, 1, 1.2, c.species === 'prime' ? 8 : 6, 6, () => {
+    return bossSlam(c, dt, 1, 1.2, prime ? 8 : 6, 6, () => {
       c.exposedT = 2.5;
       game.renderer.floatText(c.x, c.y + 3, c.z, 'core exposed!', '#5ad8f0');
     });
@@ -835,64 +1025,92 @@ export const BRAINS = {
     return false;
   },
 
-  // The Overseer: shielded while the power nodes round its hall burn (put
-  // them out: see game/dungeon.js), drones called in, a sweeping beam, the
-  // grid of the floor lit and fired as it weakens; and its great works, one
-  // after another (see OVERSEER below): walls of force thrown up round you,
-  // a rush across the hall that ends in a slam, a ring of spikes shot out,
-  // drawn back up and swung round it, and the great beam.
+  // The Overseer: its shield (turning arrows and bolts, nothing else) is
+  // thrown up round it by its sentinels, three drones called down at once
+  // to hold it (see SENTINELS below): kill all three and it's down a good
+  // while before it can call more. Its sweeping beam, and its great works
+  // one after another (see OVERSEER below): whole, walls of force thrown up
+  // round you and a ring of spikes shot out, drawn up and swung round it;
+  // worn, a rush across the hall that ends in a slam, the grid of the floor
+  // lit and fired, its beams fanned in threes, menders called; desperate,
+  // the great beam, and arc mites.
   overseer(c, dt) {
     const game = c.game;
     const t = c.target;
-    const nodes = game.dungeon ? game.dungeon.liveNodes() : 0;
-    c.shieldUp = nodes > 0;
+    const ph = phaseOf(c);
+    c.shieldUp = shielded(c);
     if (c.act) {
       overseerAct(c, dt);
       return true;
     }
     if (!t || t.dead) return true;
-    const frac = c.hp / c.maxHp;
-    c.callCd = (c.callCd ?? 6) - dt;
-    if (c.callCd <= 0) {
-      c.callCd = frac < 0.33 ? 11 : 16;
-      summon(game, frac < 0.33 ? 'mite' : 'drone', c, 4, { level: c.level });
-      if (frac < 0.66) summon(game, frac < 0.33 ? 'mite' : 'mender', c, 4, { level: c.level });
+    // Its sentinels called down (three at once; never more), when none are
+    // left and its shield's had time to come back.
+    c.sentCd = (c.sentCd ?? 0) - dt;
+    if (!c.shieldUp && !(c.shieldDownT > 0) && c.sentCd <= 0 && ready(c)) {
+      c.sentCd = 4;
+      if (callSentinels(c)) {
+        used(c, 0.6);
+        return true;
+      }
     }
-    // Its great works, in turn (quicker as it weakens).
+    // (Worn) Its menders, and (desperate) its arc mites, called in.
+    c.callCd = (c.callCd ?? 6) - dt;
+    if (ph >= 2 && c.callCd <= 0 && ready(c)) {
+      c.callCd = ph >= 3 ? 11 : 16;
+      const menders = game.creatures.filter((o) => !o.dead && o.species === 'mender' && o.leash === c.leash).length;
+      if (ph >= 3) for (let i = 0; i < 2; i++) summon(game, 'mite', c, 5, { level: c.level });
+      else if (menders < 2) summon(game, 'mender', c, 5, { level: c.level });
+      for (const o of game.creatures) if (!o.dead && !o.leash && (o.species === 'mite' || o.species === 'mender') && dist(o, c) <= 6) o.leash = c.leash;
+    }
+    // Its great works, in turn (each phase bringing out more of them).
     c.workCd = (c.workCd ?? 3.5) - dt;
-    if (c.workCd <= 0 && !c.windup) {
-      c.workI = ((c.workI ?? Math.floor(Math.random() * WORKS.length)) + 1) % WORKS.length;
-      let k = WORKS[c.workI];
-      if (k === 'rush' && (dist(c, t) < 3 || dist(c, t) > 10)) k = 'spikes';
+    if (c.workCd <= 0 && !c.windup && ready(c)) {
+      const open = WORKS.filter((k) => WORK_PHASE[k] <= ph);
+      let i = c.workI ?? Math.floor(Math.random() * WORKS.length);
+      let k = null;
+      for (let n = 0; n < WORKS.length && !k; n++) {
+        i = (i + 1) % WORKS.length;
+        if (open.includes(WORKS[i])) k = WORKS[i];
+      }
+      c.workI = i;
+      if (k === 'rush' && (dist(c, t) < 3 + (c.foot || 0) || dist(c, t) > 11)) k = 'spikes';
       const ok = OVERSEER[k](c);
-      c.workCd = ok ? (frac < 0.4 ? 4.5 : 6.5) : 1;
-      if (ok) return true;
+      c.workCd = ok ? (ph >= 3 ? 4 : ph >= 2 ? 5 : 6.5) : 1;
+      if (ok) {
+        used(c, 0.5);
+        return true;
+      }
     }
     c.beamCd = (c.beamCd ?? 3) - dt;
-    if (c.beamCd <= 0 && sees(game, c, t)) {
-      c.beamCd = frac < 0.33 ? 3.4 : 4.8;
-      // Three beams fanned at you.
+    if (c.beamCd <= 0 && sees(game, c, t) && ready(c)) {
+      c.beamCd = ph >= 3 ? 3.4 : 4.8;
+      used(c);
+      // Beams at you (fanned in threes, once it's worn).
       const ang = Math.atan2(t.z - c.z, t.x - c.x);
-      for (const s of frac < 0.66 ? [-0.35, 0, 0.35] : [0]) {
+      for (const s of ph >= 2 ? [-0.35, 0, 0.35] : [0]) {
         const to = { x: c.x + Math.cos(ang + s) * 12, z: c.z + Math.sin(ang + s) * 12 };
-        const tiles = lineTiles(game, c, to, 12);
-        addHazard(game, { by: c, tiles, dur: 1.0, dmg: 5, kind: 'beam', from: { x: c.x, z: c.z }, to: tiles[tiles.length - 1] || to, color: COLORS.blow, width: 4 });
+        const tiles = lineTiles(game, c, to, 12).slice(c.foot || 0);
+        if (tiles.length) addHazard(game, { by: c, tiles, dur: 1.0, dmg: 5, kind: 'beam', from: { x: c.x, z: c.z }, to: tiles[tiles.length - 1] || to, color: COLORS.blow, width: 4 });
       }
       game.audio?.play('charge', c);
+      return true;
     }
-    c.gridCd = (c.gridCd ?? 8) - dt;
-    if (frac < 0.66 && c.gridCd <= 0) {
+    // (Worn) The grid: every other row of the hall, then the rows between.
+    c.gridCd = (c.gridCd ?? 4) - dt;
+    if (ph >= 2 && c.gridCd <= 0 && ready(c)) {
       c.gridCd = 14;
-      // Every other row of the hall, then the rows between.
+      used(c, 0.8);
       for (let k = -8; k <= 8; k++) {
         const tiles = [];
-        for (let dx = -10; dx <= 10; dx++) tiles.push({ x: c.x + dx, z: c.z + k });
-        addHazard(game, { by: c, tiles, dur: 1.4 + (Math.abs(k) % 2) * 1.2, dmg: 4, kind: 'beam', from: { x: c.x - 10, z: c.z + k }, to: { x: c.x + 10, z: c.z + k }, color: COLORS.kav, beamColor: '#e0fbff', halo: '#5ad8f0', width: 2 });
+        for (let dx = -10; dx <= 10; dx++) if (withinLeash(c, c.x + dx, c.z + k)) tiles.push({ x: c.x + dx, z: c.z + k });
+        if (tiles.length) addHazard(game, { by: c, tiles, dur: 1.4 + (Math.abs(k) % 2) * 1.2, dmg: 4, kind: 'beam', from: tiles[0], to: tiles[tiles.length - 1], color: COLORS.kav, beamColor: '#e0fbff', halo: '#5ad8f0', width: 2 });
       }
       game.renderer.floatText(c.x, c.y + 3, c.z, 'GRID ALIGNING', '#5ad8f0');
+      return true;
     }
     // Drifts to keep its distance.
-    if (!c.moving && dist(c, t) <= 3) {
+    if (!c.moving && dist(c, t) <= 3 + (c.foot || 0)) {
       const sx = Math.sign(c.x - t.x) || 1;
       const sz = Math.sign(c.z - t.z) || 1;
       c.tryStep(c.x + sx, c.z, c.S.step) || c.tryStep(c.x, c.z + sz, c.S.step);
@@ -901,8 +1119,129 @@ export const BRAINS = {
   },
 };
 
+// ------------------------------------------------------------ its sentinels
+// Three drones called down out of the dark at once, each to a post round
+// the Overseer, and each throwing a thread of light onto it: together they
+// hold up its shield, a dome of light that turns arrows and bolts (a blade
+// goes through). Kill all three and the shield breaks, and stays down a
+// good while (SHIELD_DOWN) before it can call more.
+export const SENTINELS = 3;
+export const SHIELD_DOWN = 14;
+
+// Shielded: one of its sentinels still holding it up.
+export function shielded(c) {
+  return !!(c && !c.dead && c.sentinels && c.sentinels.some((s) => !s.dead && s.sentinel === c));
+}
+
+function callSentinels(c) {
+  const game = c.game;
+  const r = game.renderer;
+  const posts = [];
+  const a0 = Math.random() * Math.PI * 2;
+  for (let i = 0; i < SENTINELS; i++) {
+    const want = a0 + (i / SENTINELS) * Math.PI * 2;
+    let spot = null;
+    for (let k = 0; k < 10 && !spot; k++) {
+      const a = want + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.25;
+      for (const rad of [4.5, 3.5, 5.5]) {
+        const x = Math.round(c.x + Math.cos(a) * rad);
+        const z = Math.round(c.z + Math.sin(a) * rad);
+        if (!withinLeash(c, x, z)) continue;
+        const y = game.world.findStandY(x, z, c.y);
+        if (y !== c.y || !game.world.canStand(x, y, z) || game.occupiedAny(x, y, z) || posts.some((q) => q.x === x && q.z === z)) continue;
+        spot = { x, y, z, a };
+        break;
+      }
+    }
+    if (spot) posts.push(spot);
+  }
+  if (!posts.length) return false;
+  c.sentinels = [];
+  for (const q of posts) {
+    const s = game.spawnMonster('drone', q.x, q.y, q.z, { level: c.level });
+    if (!s) continue;
+    s.sentinel = c;
+    s.postA = q.a;
+    s.leash = c.leash;
+    s.target = c.target;
+    s.beamCd = 2 + Math.random() * 2;
+    c.sentinels.push(s);
+    r.effect?.({ type: 'beam', wx: c.x, wy: c.y + 2, wz: c.z, tx: q.x, ty: q.y + 1, tz: q.z, life: 0.5, oy: -8, color: '#e0fbff', halo: '#5ad8f0', width: 2 });
+    r.effect?.({ type: 'ring', wx: q.x, wy: q.y, wz: q.z, r0: 2, r1: 22, color: ['#5ad8f0', '#ffffff'], life: 0.5, oy: 4, flat: 0.5, thick: 2 });
+    r.emit(q.x, q.y + 1.2, q.z, { n: 14, color: ['#5ad8f0', '#c8fbff', '#ffffff'], up: 30, speed: 40, life: 0.6, glow: true });
+  }
+  if (!c.sentinels.length) return false;
+  c.shieldUpT = 0;
+  c.shieldUp = true;
+  r.floatText(c.x, c.y + 3.6, c.z, 'SENTINELS DEPLOYED', '#5ad8f0');
+  if (game.dungeon && game.dungeon.fight) game.ui.msg('Three sentinels take up their posts: the Overseer\'s shield is up (it turns arrows; a blade goes through).', '#5ad8f0', true);
+  game.audio?.play('charge', c);
+  game.audio?.play('hum', c);
+  c.stunT = 0.8;
+  return true;
+}
+
+// A sentinel's gone: the last of them, and the shield breaks.
+export function sentinelDown(game, s) {
+  const c = s.sentinel;
+  s.sentinel = null;
+  if (!c || c.dead || shielded(c)) return;
+  const r = game.renderer;
+  c.shieldDownT = SHIELD_DOWN;
+  c.sentCd = 2;
+  c.shieldUp = false;
+  c.shieldBreakT = 0;
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    r.emit(c.x + Math.cos(a) * 1.8, c.y + 1.2 + Math.random() * 1.6, c.z + Math.sin(a) * 1.8, { n: 1, color: ['#5ad8f0', '#c8fbff', '#ffffff'], up: 30, speed: 70, gravity: 90, life: 0.8, glow: true, shape: 'shard' });
+  }
+  r.effect?.({ type: 'ring', wx: c.x, wy: c.y + 1, wz: c.z, r0: 18, r1: 70, color: ['#c8fbff', '#5ad8f0'], life: 0.6, oy: -16, flat: 0.7, thick: 3 });
+  r.floatText(c.x, c.y + 3.6, c.z, 'SHIELD DOWN', '#ffe070');
+  game.ui.msg('The last sentinel falls: the Overseer\'s shield shatters! (It can\'t call more for a while.)', '#ffe070', true);
+  game.audio?.play('shatter', c);
+  game.audio?.play('boom', c);
+  game.shake = Math.min(1.4, (game.shake || 0) + 0.6);
+  c.stunT = Math.max(c.stunT || 0, 1.2);
+}
+
+// A sentinel at its post: its post turning slowly round the Overseer, a
+// thread of light from it to the shield (see fx.drawShields), and its
+// beam at you between times.
+function sentinelTick(c, dt) {
+  const game = c.game;
+  const m = c.sentinel;
+  if (!m || m.dead) {
+    c.sentinel = null;
+    return false;
+  }
+  c.postA = (c.postA || 0) + dt * 0.18;
+  const t = c.target;
+  if (Math.random() < dt * 6) game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 1, color: ['#5ad8f0', '#ffffff'], up: 6, speed: 10, life: 0.4, glow: true });
+  c.beamCd = (c.beamCd ?? 3) - dt;
+  if (t && !t.dead && c.beamCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 9 && sees(game, c, t) && !c.windup) {
+    c.beamCd = 4.5 + Math.random() * 1.5;
+    c.face(t.x, t.z);
+    const tiles = lineTiles(game, c, t, 9);
+    addHazard(game, { by: c, tiles, dur: 1.0, dmg: Math.round(3 * (c.dmgMult || 1)), kind: 'beam', from: { x: c.x, z: c.z }, to: tiles[tiles.length - 1] || t, color: COLORS.blow });
+    c.stunT = 1.05;
+    game.audio?.play('charge', c);
+    return true;
+  }
+  if (c.moving) return true;
+  const px = Math.round(m.x + Math.cos(c.postA) * 4.5);
+  const pz = Math.round(m.z + Math.sin(c.postA) * 4.5);
+  if (Math.max(Math.abs(px - c.x), Math.abs(pz - c.z)) >= 2) {
+    const sx = Math.sign(px - c.x);
+    const sz = Math.sign(pz - c.z);
+    if (!(sx && c.tryStep(c.x + sx, c.z, c.S.step * 1.2)) && !(sz && c.tryStep(c.x, c.z + sz, c.S.step * 1.2))) c.postA += 0.4;
+  }
+  return true;
+}
+
 // ------------------------------------------------------------ the Overseer's works
 const WORKS = ['fields', 'rush', 'spikes', 'laser'];
+// The phase each comes out in (see tempo.js).
+const WORK_PHASE = { fields: 1, spikes: 1, rush: 2, laser: 3 };
 const mult = (c) => c.dmgMult || 1;
 const OVERSEER = {
   // Walls of force thrown up round you (two, three as it weakens), their
@@ -960,9 +1299,21 @@ const OVERSEER = {
     if (d < 3 || d > 10 || !sees(game, c, t)) return false;
     const reach = Math.min(12, Math.ceil(d * 1.3) + 1);
     const to = { x: c.x + ((t.x - c.x) / Math.max(1, d)) * reach, z: c.z + ((t.z - c.z) / Math.max(1, d)) * reach };
-    const path = lineTiles(game, c, to, reach).filter((q) => withinLeash(c, q.x, q.z));
+    // (As far down it as all of it fits: it stops short of a wall.)
+    const path = [];
+    for (const q of lineTiles(game, c, to, reach)) {
+      if (!withinLeash(c, q.x, q.z) || !fits(game, c, q.x, c.y, q.z, true)) break;
+      path.push(q);
+    }
     if (path.length < 2) return false;
-    addHazard(game, { by: c, tiles: path, dur: 0.95, dmg: 0, kind: 'lane', color: COLORS.blow });
+    // (Its lane as wide as it is.)
+    const lane = [];
+    const seen = new Set();
+    for (const q of path) for (const f of footTiles(c, q.x, q.z)) if (!seen.has(f.x * 65536 + f.z)) {
+      seen.add(f.x * 65536 + f.z);
+      lane.push(f);
+    }
+    addHazard(game, { by: c, tiles: lane, dur: 0.95, dmg: 0, kind: 'lane', color: COLORS.blow });
     c.act = { kind: 'rush', t: 0, path, i: 0, step: 0, hit: new Set() };
     c.face(t.x, t.z);
     game.renderer.floatText(c.x, c.y + 3.4, c.z, 'CHARGING', '#ff6040');
@@ -1054,18 +1405,25 @@ function overseerAct(c, dt) {
     while (a.step <= 0 && a.i < a.path.length) {
       a.step += 0.045;
       const q = a.path[a.i++];
-      // Whoever's in its way, struck and flung aside.
-      for (const e of [game.player, ...game.npcs]) {
-        if (!e || e.dead || e.x !== q.x || e.z !== q.z || a.hit.has(e)) continue;
+      // Whoever's under it there, struck and flung aside (off the lane).
+      const hx = Math.sign(q.x - c.x);
+      for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+        if (!e || e === c || e.dead || a.hit.has(e) || Math.max(Math.abs(e.x - q.x), Math.abs(e.z - q.z)) > (c.foot || 0) || Math.abs(e.y - c.y) > 1) continue;
+        if (e.kind !== 'player' && e.kind !== 'npc' && !e.sentinel && e.S?.construct) continue;
         a.hit.add(e);
         if (e.kind === 'player' && e.rollT > 0) continue;
-        game.damage(e, Math.round(6 * mult(c)), c);
-        knock(game, c, e, 2);
+        if (e.kind === 'player' || e.kind === 'npc') game.damage(e, Math.round(6 * mult(c)), c);
+        // (Sideways: which side of its line they stand.)
+        const side = hx ? Math.sign(e.z - q.z) || (Math.random() < 0.5 ? 1 : -1) : Math.sign(e.x - q.x) || (Math.random() < 0.5 ? 1 : -1);
+        knock(game, hx ? { x: e.x, z: e.z - side } : { x: e.x - side, z: e.z }, e, 2);
       }
-      if (game.entityAt?.(q.x, c.y, q.z)) continue;
+      // (Someone it couldn't fling clear, or a wall: there it stops.)
+      if (!fits(game, c, q.x, c.y, q.z) || game.occupiedBySolid(q.x, c.y, q.z, c)) {
+        a.i = a.path.length;
+        break;
+      }
       r.emit(c.x, c.y + 1.4, c.z, { n: 3, color: ['#5ad8f0', '#c8fbff', '#ff6040'], up: 4, speed: 8, life: 0.35, glow: true });
       c.teleport(q.x, c.y, q.z);
-      game.moveEntity(c, q.x, c.y, q.z);
     }
     if (a.i >= a.path.length) {
       // The slam where it stops.
@@ -1328,8 +1686,11 @@ function surface(c) {
   c.burrowed = false;
   c.erupting = false;
   c.solid = true;
-  // (Somewhere free to come up.)
-  if (game.occupiedBySolid(c.x, c.y, c.z, c)) {
+  // (Somewhere free to come up: room for all of it, for a great master.)
+  if (c.foot) {
+    const s = fitNear(game, c, c.x, c.z, c.y, 8);
+    if (s) c.teleport(s.x, s.y, s.z);
+  } else if (game.occupiedBySolid(c.x, c.y, c.z, c)) {
     const s = game.findFreeSpot(c.x, c.z, c.y);
     if (s) c.teleport(s.x, s.y, s.z);
   }
@@ -1343,10 +1704,13 @@ function bossSlam(c, dt, r, windup, dmg, every, after = null) {
   const game = c.game;
   const t = c.target;
   c.slamCd = (c.slamCd ?? 2) - dt;
-  if (!t || t.dead || c.windup || c.slamCd > 0 || dist(c, t) > r + 1) return false;
+  // (A big one's slam reaches a pace past its body.)
+  const R = r + (c.foot || (c.S.big ? 1 : 0));
+  if (!t || t.dead || c.windup || c.slamCd > 0 || dist(c, t) > Math.max(R, r + 1) || (c.isBoss && !ready(c))) return false;
   c.slamCd = every;
-  const tiles = areaTiles(c.x, c.z, r + (c.S.big ? 1 : 0));
-  addHazard(game, { by: c, tiles, dur: windup, dmg: Math.round(dmg * (c.dmgMult || 1)), knock: 2, stun: 0.3, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: r + (c.S.big ? 1 : 0), kind: 'slam', color: COLORS.blow, onFire: after ? () => after() : null });
+  if (c.isBoss) used(c);
+  const tiles = areaTiles(c.x, c.z, R);
+  addHazard(game, { by: c, tiles, dur: windup, dmg: Math.round(dmg * (c.dmgMult || 1)), knock: 2, stun: 0.3, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: R, kind: 'slam', color: COLORS.blow, onFire: after ? () => after() : null });
   c.stunT = windup + 0.15;
   c.say?.(Math.random() < 0.5 ? 'Hrraaagh!' : 'Graaah!', 0.8, '#ff9080');
   game.renderer.floatText(c.x, c.y + 3, c.z, '!', '#ff5040');
@@ -1397,12 +1761,6 @@ export function guardFront(game, target, source, amount) {
   const r = game.renderer;
   if (target.burrowed) return 0;
   if (target.submerged) return 0;
-  if (target.species === 'overseer' && target.shieldUp) {
-    r.floatText(target.x, target.y + 3, target.z, 'shielded', '#5ad8f0');
-    r.effect?.({ type: 'ring', wx: target.x, wy: target.y + 1, wz: target.z, r0: 10, r1: 18, color: ['#5ad8f0', '#e0fbff'], life: 0.3, oy: -10, flat: 0.8 });
-    game.audio?.play('armor_hit', target);
-    return 0;
-  }
   if (target.S.shieldBlock || target.species === 'warden') {
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][target.dir] || [0, 1];
     const front = fx * Math.sign(source.x - target.x) + fz * Math.sign(source.z - target.z) > 0;

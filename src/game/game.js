@@ -11,6 +11,7 @@ import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
+import { covers, onTiles, apart } from '../entities/footprint.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { removeItem, makeSlots, addItem, canAdd } from './inventory.js';
@@ -563,7 +564,20 @@ export class Game {
   }
 
   entityAt(x, y, z) {
-    return this.occ.get(this.occKey(x, y, z)) || null;
+    return this.occ.get(this.occKey(x, y, z)) || this.bigAt(x, y, z, null);
+  }
+
+  // One of the great masters filling that tile (not `self`; nor one you're
+  // already standing under the edge of, so you can always get out from
+  // beside it).
+  bigAt(x, y, z, self) {
+    if (!this.bigs || !this.bigs.length) return null;
+    for (const b of this.bigs) {
+      if (b === self || b.dead || b.burrowed || b.solid === false || Math.abs(b.y - y) > 1 || !covers(b, x, z)) continue;
+      if (self && self.x !== undefined && covers(b, self.x, self.z)) continue;
+      return b;
+    }
+    return null;
   }
 
   // Is the tile blocked for `self`? NPCs pass through each other; nothing
@@ -577,6 +591,8 @@ export class Game {
       if (self && self.kind === 'npc' && e.sleeping) continue;
       return e;
     }
+    const big = this.bigAt(x, y, z, self);
+    if (big) return big;
     // Moving entities also reserve the tile they're leaving.
     if (self && self.kind === 'player') {
       for (const n of this.npcs) if (!n.dead && n.moving && n.fx === x && n.fz === z && Math.abs(n.fy - y) <= 1 && n.moveT < 0.5) return n;
@@ -1594,6 +1610,9 @@ export class Game {
     updateLabor(this, dt);
     // Beasts near you keep pace with racing time too (far off, they idle on).
     const pp = this.player;
+    // (The great masters, who fill more than the one tile: see
+    // entities/footprint.js.)
+    this.bigs = this.creatures.filter((c) => c.foot && !c.dead);
     for (const c of this.creatures) {
       const near = sub > 1 && Math.abs(c.x - pp.x) < 40 && Math.abs(c.z - pp.z) < 40;
       if (!near) {
@@ -1809,7 +1828,7 @@ export class Game {
       c.entity = ent.e;
       // (How far up them the pointer is: 1 at the top of the head.)
       c.entUp = ent.up ?? 0.5;
-      c.inReach = Math.max(Math.abs(ent.e.x - p.x), Math.abs(ent.e.z - p.z)) <= this.attackReach();
+      c.inReach = apart(p, ent.e) <= this.attackReach();
     }
     if (hit) {
       c.x = hit.x;
@@ -2559,7 +2578,7 @@ export class Game {
       const e = this.occ.get(this.occKey(x, yy, z));
       if (e && !e.dead) return true;
     }
-    return false;
+    return !!this.bigAt(x, y, z, null);
   }
 
   tryPlace(t) {
@@ -3777,7 +3796,7 @@ export class Game {
         continue;
       }
       const t = a.target;
-      let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
+      let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1 + (t.foot || 0);
       // Turned aside, rolled under, taken on a shield, or home (see
       // archery.js).
       if (hit) hit = arrowStrikes(this, a, t);
@@ -4135,7 +4154,7 @@ export class Game {
   struckOn(tiles, by) {
     const foes = this.foesOn(tiles, by);
     if (foes.length) return foes;
-    const on = (e) => tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - by.y) <= 1;
+    const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
     for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
@@ -4226,7 +4245,7 @@ export class Game {
     p.face(target.x, target.z);
     p.sitting = null;
     if (def && def.ranged) {
-      if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach) return this.swing();
+      if (apart(p, target) > reach) return this.swing();
       // Arrows for a bow, bolts for a crossbow, stones for a sling; a
       // javelin is its own.
       const ammo = def.ammo || 'arrow';
@@ -4257,7 +4276,7 @@ export class Game {
       this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (1 + buffOf(this, 'fury')) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)), kind);
       return;
     }
-    if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1) {
+    if (apart(p, target) > reach || Math.abs(target.y - p.y) > 1) {
       this.swing();
       return;
     }
@@ -4281,7 +4300,7 @@ export class Game {
     strikeAnim(p, heavy ? { ...st, heavy: true } : st);
     p.doAction(heavy ? 0.35 : 0.25);
     const reach = this.attackReach();
-    if (target.dead || target.down || Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || Math.abs(target.y - p.y) > 1 || target.rollT > 0) {
+    if (target.dead || target.down || apart(p, target) > reach || Math.abs(target.y - p.y) > 1 || target.rollT > 0) {
       // Stepped back out of it (or rolled under it): a whiff.
       this.audio?.play('swing');
       onSwing(this, p);
@@ -4343,7 +4362,7 @@ export class Game {
     this.audio?.play('swing');
     const it = ITEMS[off];
     const reach = Math.max(1, Math.floor(it.reach || 1.4));
-    if (target.dead || target.down || Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || target.rollT > 0) return false;
+    if (target.dead || target.down || apart(p, target) > reach || target.rollT > 0) return false;
     spend(p, Math.max(1, Math.round(staminaCost(STYLES[weaponStyle(off)]) / 2)));
     const dmg = it.damage * 0.75 * damageMult(this.hero) * (1 + buffOf(this, 'fury')) * rageMult(p);
     this.damage(target, Math.max(1, Math.round(dmg)), p);
@@ -4354,7 +4373,7 @@ export class Game {
 
   // Foes of `by` standing on any of those tiles.
   foesOn(tiles, by) {
-    const on = (e) => tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - by.y) <= 1;
+    const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     for (const c of this.creatures) if (!c.dead && on(c) && (c.hostileNow || c.target === by)) out.push(c);
     for (const n of this.npcs) if (!n.dead && !n.down && on(n) && ((n.state === 'fight' && n.threat === by) || (n.warband && n.warband.foe))) out.push(n);
@@ -4819,6 +4838,7 @@ export class Game {
   addCreature(c) {
     this.creatures.push(c);
     this.moveEntity(c, c.x, c.y, c.z);
+    if (c.foot) (this.bigs ||= []).push(c);
   }
 
   spawning(dt) {
@@ -5063,7 +5083,8 @@ export class Game {
       run.stash = { creatures: [], drops: [] };
       run.carried = dg.carried || null;
       this.dungeon = run;
-      run.open(dg.floor, { x: dg.x, z: dg.z });
+      // (Fewer floors than it had when you saved: the deepest there is now.)
+      run.open(Math.min(dg.floor, rec.depth - 1), { x: dg.x, z: dg.z });
     } else if (this.world.inInstance(pd.x)) {
       // (A dungeon that's gone: up top, at your bed.)
       const s = this.player.spawn;

@@ -82,14 +82,15 @@ export class Dungeons {
       const far = spawn ? Math.hypot(spawn.cx - s.cx, (spawn.cz - s.cz) * 1.4) : 10;
       const rec = {
         id: s.id, type: s.type, x: s.x, z: s.z, h: s.h, cx: s.cx, cz: s.cz, seed: s.seed,
-        depth: rng.int(T.floors[0], T.floors[1]),
+        // (Now and then a mine's dug deeper than most: a fourth floor.)
+        depth: rng.int(T.floors[0], T.floors[1]) + (s.type === 'mine' && (s.seed >>> 0) % 7 === 0 ? 1 : 0),
         level: s.type === 'kavorent' ? 4 : clamp(1 + Math.floor(far / 8), 1, 3),
         known: false, seen: false, entered: false, cleared: false, clearedBy: null, clearedDay: null,
         floors: {}, weakened: 0, looted: 0, delves: 0, fallen: [], spire: null,
       };
       rec.vaultFloor = rng.int(0, rec.depth - 1);
       // (A Kavorent ruin has three vaults, each under its glyph seal.)
-      if (s.type === 'kavorent') rec.vaults = [1, 3, 5];
+      if (s.type === 'kavorent') rec.vaults = [1, 2, 3];
       const y = yearOf(this.game.day) - rng.int(40, 400);
       const tn = town ? town.name : null;
       if (s.type === 'barrow') {

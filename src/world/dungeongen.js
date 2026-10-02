@@ -22,9 +22,11 @@ const WALL_H = 2; // how high the walls show
 // --------------------------------------------------------------- kinds
 // Each kind of place: its stone, its floors, the rooms it's made of, who
 // lives there, how deep it goes and who rules it.
+// (Masters kept out of their halls for now: none of them comes up.)
+export const BENCHED = new Set(['huntsman']);
 export const DTYPES = {
   barrow: {
-    name: 'Barrow', wall: B.barrow_stone, floor: B.barrow_earth, alt: B.crypt_floor, beam: null, regions: [2, 2], floors: [2, 3],
+    name: 'Barrow', wall: B.barrow_stone, floor: B.barrow_earth, alt: B.crypt_floor, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['guard', 'ossuary', 'burial', 'shrine', 'burial', 'collapsed', 'pillared', 'trap', 'treasure', 'guard'],
     mobs: [['skeleton', 4], ['wight', 2], ['ghoul', 2], ['rat', 1], ['moth', 1]], bosses: ['barrow_king', 'mound_witch', 'huntsman'], torches: 0.25,
     // Round chambers under the mound, passages that wander a little; urns of
@@ -33,7 +35,7 @@ export const DTYPES = {
     dark: [0.08, 0.085, 0.068], motes: ['#8a9a8a', '#b8c0b0'], ambient: ['whisper', 'drip', 'wind_low'],
   },
   mine: {
-    name: 'Mine', wall: B.mine_rock, floor: B.gravel, alt: B.stone, beam: B.mine_beam, regions: [2, 2], floors: [2, 4],
+    name: 'Mine', wall: B.mine_rock, floor: B.gravel, alt: B.stone, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
     kits: ['gallery', 'gallery', 'camp', 'flooded', 'collapsed', 'collapsed', 'shaft', 'trap', 'treasure', 'gallery'],
     mobs: [['crawler', 3], ['rat', 3], ['skeleton', 1], ['moth', 2], ['slime', 1]], bosses: ['worm', 'foreman', 'brood_mother'], torches: 0.2,
     // Ragged caverns and long galleries joined by winding drifts; carts and
@@ -42,7 +44,7 @@ export const DTYPES = {
     dark: [0.085, 0.068, 0.05], motes: ['#8a7a5a', '#6a5a40'], ambient: ['rumble', 'skitter', 'drip', 'tink'],
   },
   crypt: {
-    name: 'Crypt', wall: B.crypt_brick, floor: B.crypt_floor, alt: B.stone_bricks, beam: null, regions: [2, 2], floors: [2, 3],
+    name: 'Crypt', wall: B.crypt_brick, floor: B.crypt_floor, alt: B.stone_bricks, beam: null, regions: [2, 2], floors: [1, 3],
     kits: ['flooded', 'flooded', 'burial', 'ossuary', 'shrine', 'pillared', 'trap', 'library', 'treasure', 'burial'],
     mobs: [['drowned', 3], ['skeleton', 2], ['ghoul', 2], ['rat', 2], ['wisp', 1]], bosses: ['priest', 'horror', 'hollow_saint'], torches: 0.3,
     // Laid out by masons: eight-sided halls and cross-shaped chapels on
@@ -51,7 +53,7 @@ export const DTYPES = {
     dark: [0.055, 0.068, 0.11], motes: ['#7ac8b0', '#a0e8d0'], ambient: ['drip', 'chains', 'drone', 'whisper'],
   },
   holdout: {
-    name: 'Holdout', wall: B.cave_rock, floor: B.dirt, alt: B.path, beam: B.mine_beam, regions: [2, 2], floors: [2, 3],
+    name: 'Holdout', wall: B.cave_rock, floor: B.dirt, alt: B.path, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
     kits: ['bunks', 'cache', 'watch', 'kitchen', 'cells', 'collapsed', 'trap', 'bunks', 'watch', 'treasure'],
     mobs: [['cutthroat', 4], ['holdout_archer', 3], ['rat', 1], ['wolf', 1]], bosses: ['warlord', 'twins', 'poisoner'], torches: 0.7,
     // Caves somebody's made a home of: rooms walled off square, racks of
@@ -60,7 +62,7 @@ export const DTYPES = {
     dark: [0.09, 0.066, 0.058], motes: ['#8a8078', '#5a5450'], ambient: ['crackle', 'creak', 'voices'],
   },
   kavorent: {
-    name: 'Kavorent Ruin', wall: B.kav_wall, floor: B.kav_floor, alt: B.kav_floor, beam: null, regions: [3, 3], floors: [6, 6],
+    name: 'Kavorent Ruin', wall: B.kav_wall, floor: B.kav_floor, alt: B.kav_floor, beam: null, regions: [3, 3], floors: [4, 4],
     kits: ['hall', 'lab', 'gallery_k', 'field', 'plates', 'hangar', 'archive', 'reactor', 'hall', 'collapse_k', 'lab', 'hangar'],
     mobs: [['drone', 4], ['warden', 2], ['mender', 2], ['mite', 2], ['golem', 1]], bosses: ['overseer'], torches: 0,
     // Halls made to overawe: sentinels, conduits, the husks of what fell,
@@ -84,7 +86,10 @@ export const KAV_FLOORS = [
   { name: 'crimson', hue: 160, sat: 1.1, dark: [0.22, 0.09, 0.11], tint: [1.14, 0.72, 0.74], glow: [255, 110, 120], motes: ['#ff5a6a', '#ffc8d0'] },
   { name: 'pale', hue: -140, sat: 0.3, dark: [0.19, 0.19, 0.21], tint: [1.06, 1.02, 0.96], glow: [255, 240, 210], motes: ['#ffffff', '#ffe8a0'] },
 ];
-export function kavFloor(n) {
+// (The bottom floor, the Overseer's, always the pale gold, however deep
+// the ruin goes.)
+export function kavFloor(n, depth = 0) {
+  if (depth && n === depth - 1) return KAV_FLOORS[KAV_FLOORS.length - 1];
   return KAV_FLOORS[Math.max(0, n) % KAV_FLOORS.length];
 }
 
@@ -130,6 +135,8 @@ const KIT_SHAPES = {
   burial: ['rect'], pillared: ['rect', 'octagon'], library: ['rect'], cells: ['rect'], watch: ['rect'], trap: ['rect'], shrine: ['round', 'octagon', 'cross'],
   reactor: ['rect'], foundry: ['rect'], plates: ['rect'], field: ['rect'], gallery_k: ['rect'], lab: ['rect', 'hex', 'diamond', 'teeth', 'octagon'], archive: ['rect', 'hex', 'teeth', 'zigzag'],
 };
+// The most coffins laid in one burial room.
+export const COFFINS_MAX = 8;
 // Rooms with one way in, and only one: the sealed vault, the master's
 // hall, a treasure room behind its gate.
 export const SEALED = new Set(['vault', 'boss', 'treasure']);
@@ -637,6 +644,12 @@ function lootFor(type, tier, rng, rich = 1) {
   return out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
 }
 
+// How much of its regions a floor's plan takes up (across, and down).
+export const FIT = [0.88, 0.86];
+export const FIT_KAV = [0.8, 0.8];
+// The Kavorent floor with a foundry on it (and its Prime Golem).
+export const FOUNDRY_FLOOR = 2;
+
 // How good a floor's loot runs: its number down, and a little for how hard
 // the place is.
 function tierOf(ctx) {
@@ -650,20 +663,24 @@ export function buildFloor(rec, n) {
   const T = DTYPES[rec.type];
   const rng = new RNG(hash4(rec.seed >>> 0, n, 0xd06e));
   const big = rec.type === 'kavorent';
-  const W = T.regions[0] * REGION_W;
-  const D = T.regions[1] * REGION_D;
+  // (Laid out inside its regions, not right to their edges: the old
+  // places a little tighter than they were, a Kavorent ruin's floors a good
+  // deal tighter. The rest is rock.)
+  const fit = big ? FIT_KAV : FIT;
+  const W = Math.floor(T.regions[0] * REGION_W * fit[0]);
+  const D = Math.floor(T.regions[1] * REGION_D * fit[1]);
   const last = n === rec.depth - 1;
   // The rooms this floor's made of (the last has its master's hall).
   let kits = rng.shuffle([...T.kits]);
-  const count = big ? 18 + rng.int(0, 5) : 9 + rng.int(0, 3);
+  const count = big ? 14 + rng.int(0, 3) : 8 + rng.int(0, 2);
   while (kits.length < count) kits.push(rng.pick(T.kits));
   kits = kits.slice(0, count);
   if (last) kits[0] = 'boss';
   // (The sealed vault: one in the whole dungeon, on its floor; a Kavorent
-  // ruin has three, and on its middle floors a foundry where a Prime Golem
-  // stands waiting.)
+  // ruin has three, and on one of its middle floors a foundry where a Prime
+  // Golem stands waiting.)
   if (rec.vaults ? rec.vaults.includes(n) : n === rec.vaultFloor) kits.push('vault');
-  if (big && (n === 2 || n === 4)) kits.push('foundry');
+  if (big && n === FOUNDRY_FLOOR) kits.push('foundry');
   const plan = layout(rng, W, D, kits, big, T);
   const R = plan.rooms;
   const entry = R[0];
@@ -889,7 +906,7 @@ function dress(ctx, r) {
         }
         if (own(ctx.plan, r, tx, tz) && !doorBlocked(ctx.plan, r, tx, tz) && b.get(tx, FY, tz) === B.air) b.set(tx, FY, tz, big ? B.kav_glow : B.brazier, META_STATE);
       }
-      const boss = rng.pick(T.bosses);
+      const boss = rng.pick(T.bosses.filter((k) => !BENCHED.has(k)));
       out.spawns.push({ id: out.spawns.length, species: boss, x: b.x0 + r.cx, z: r.cz, room: r.id, boss: true });
       // (The Twins: two of them, one bar between them.)
       if (boss === 'twins') out.spawns.push({ id: out.spawns.length, species: 'twin_b', x: b.x0 + r.cx + 2, z: r.cz, room: r.id, boss: true, twin: true });
@@ -900,14 +917,8 @@ function dress(ctx, r) {
         out.bossGate = { x: b.x0 + r.door.x, z: r.door.z, rot: r.door.oz ? 0 : 1, ox: r.door.ox, oz: r.door.oz };
       }
       bossHall(ctx, r, boss);
-      if (big) {
-        // Four power nodes round the Overseer's hall: while they burn, it's
-        // shielded.
-        for (const [x, z] of [[r.x0 + 2, r.z0 + 2], [r.x1 - 2, r.z0 + 2], [r.x0 + 2, r.z1 - 2], [r.x1 - 2, r.z1 - 2]]) {
-          b.set(x, FY, z, B.kav_node, META_STATE);
-          out.nodes.push({ x: b.x0 + x, z, boss: true });
-        }
-      }
+      // (The Overseer's shield is its sentinels' doing now: see
+      // monsters.js, not power nodes round its hall.)
       // What it guards.
       const rich = big ? 3 : 2.5;
       // (The Overseer itself carries the ruin's great core.)
@@ -962,10 +973,21 @@ function dress(ctx, r) {
       break;
     }
     case 'burial': {
-      // Coffins in rows. Some hold grave goods; some hold something else.
-      for (let z = r.z0 + 1; z <= r.z1 - 1; z += 2) {
-        for (let x = r.x0 + 1; x <= r.x1 - 1; x += 3) {
-          if (b.get(x, FY, z) !== B.air || doorBlocked(ctx.plan, r, x, z)) continue;
+      // Coffins in rows (two, or three in a long hall, down its middle, and
+      // never more than a few to a row). Some hold grave goods; some hold
+      // something else.
+      const rows = [r.cz - 1, r.cz + 2, ...(r.z1 - r.z0 >= 10 ? [r.cz - 4] : [])].filter((z) => z > r.z0 && z < r.z1);
+      const most = Math.min(COFFINS_MAX, 3 + Math.floor(((r.x1 - r.x0) * (r.z1 - r.z0)) / 30));
+      const cols = [];
+      for (let x = r.x0 + 2; x <= r.x1 - 2; x += 3) cols.push(x);
+      const per = Math.max(2, Math.ceil(most / rows.length));
+      const mid = cols.slice(Math.max(0, Math.floor((cols.length - per) / 2)), Math.max(0, Math.floor((cols.length - per) / 2)) + per);
+      let laid = 0;
+      for (const z of rows) {
+        for (const x of mid) {
+          if (laid >= most) break;
+          if (b.get(x, FY, z) !== B.air || doorBlocked(ctx.plan, r, x, z) || !own(ctx.plan, r, x, z)) continue;
+          laid++;
           const sarc = rec.type !== 'barrow' && rng.chance(0.15);
           b.set(x, FY, z, sarc ? B.sarcophagus : B.coffin, rng.chance(0.5) ? 1 : 3);
           const ghoul = rng.chance(0.3);

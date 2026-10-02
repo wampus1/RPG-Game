@@ -5,6 +5,8 @@ import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach } from './monsters.js';
+import { apart, fits } from './footprint.js';
+import { bossClock, drift } from './tempo.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
 
@@ -67,6 +69,8 @@ export class Creature extends Entity {
     this.home = { x, z };
     this.fleeFrom = null;
     this.angry = false;
+    // (The great masters fill three paces across: see footprint.js.)
+    this.foot = S.boss && S.big ? 1 : 0;
     if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] : SKELETON_LOOK;
     if (species === 'skeleton') {
       let r = this.rng.next();
@@ -106,6 +110,9 @@ export class Creature extends Entity {
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;
+    // A master's breath between attacks, and its phases (see tempo.js).
+    const master = this.isBoss && this.inst && !this.dormant && !this.waiting;
+    if (master && !(this.game.scene && this.game.scene.lock)) bossClock(this, dt);
     if (this.hasteT > 0) this.hasteT -= dt;
     if (this.attackCd > 0) this.attackCd -= dt * (this.hasteT > 0 ? 1.6 : 1);
     // Night monsters burn away in daylight.
@@ -141,7 +148,9 @@ export class Creature extends Entity {
         return;
       }
     }
-    // (Lost you in the shadows a moment: it casts about.)
+    // (Lost you in the shadows a moment: it casts about. Not a master, in
+    // its own hall: it knows where you are.)
+    if (master && this.lostT > 0) this.lostT = 0;
     if (this.lostT > 0 && this.target === game.player) this.target = null;
     if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
@@ -149,8 +158,13 @@ export class Creature extends Entity {
       if (this.isBoss && this.inst && bossBreach(this, dt)) return;
       // Changed by the blight (see monsters.js, blightTick).
       if (this.infected && blightTick(this, dt)) return;
-      // Its own way of fighting (see monsters.js), if it has one.
-      if (this.S.brain && BRAINS[this.S.brain](this, dt)) return;
+      // Its own way of fighting (see monsters.js), if it has one. (A master
+      // never stands about long: see tempo.drift.)
+      if (this.S.brain && BRAINS[this.S.brain](this, dt)) {
+        if (master && !this.moving) drift(this, dt);
+        return;
+      }
+      if (master && drift(this, dt)) return;
       // (Those that fight from afar: a skeleton with a bow, a wisp.)
       if (this.target && (this.species === 'wisp' || this.arms === 'bow' || this.S.ranged) && this.keepOff(dt)) return;
       if (this.target) return this.chase(dt);
@@ -201,6 +215,8 @@ export class Creature extends Entity {
     const w = this.game.world;
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
     if (ny < 0 || this.game.occupiedBySolid(nx, ny, nz, this)) return false;
+    // (A great master only where all of it fits: never half into a wall.)
+    if (this.foot && !fits(this.game, this, nx, ny, nz)) return false;
     // Wildlife avoids settlements' insides and deep water.
     if (w.isWaterAt(nx, ny, nz) && this.species !== 'slime') return false;
     this.face(nx, nz);
@@ -210,7 +226,8 @@ export class Creature extends Entity {
 
   chase(dt) {
     const t = this.target;
-    const d = this.distTo(t);
+    // (Edge to edge, for a great master.)
+    const d = this.foot ? apart(this, t) : this.distTo(t);
     const st = styleOf(this, true);
     // In reach: wind up a blow (each kind its own way: see combat.js).
     if (inReach(this, t, st) && (d <= 1 || st.lunge || st.charge || st.thrust)) {
@@ -234,7 +251,9 @@ export class Creature extends Entity {
       // monsters.bossBreach.)
       const placed = this.isBoss && this.inst && this.game.dungeon && this.game.dungeon.placed;
       const through = placed && placed.size ? (x, y, z) => placed.has(`${x},${y},${z}`) || placed.has(`${x},${y + 1},${z}`) : null;
-      this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1, partial: true, through });
+      const big = this.foot;
+      const clear = big ? (x, y, z) => fits(this.game, this, x, y, z, true) : null;
+      this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through, clear });
       this.pathI = 0;
       if (!this.path || !this.path.length) {
         this.path = null;

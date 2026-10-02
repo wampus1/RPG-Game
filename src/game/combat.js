@@ -33,6 +33,7 @@ import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { has as heroHas, staminaBonus } from './hero.js';
 import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
+import { onTiles, apart, fits } from '../entities/footprint.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -177,6 +178,7 @@ function withinReach(a, tiles, reach) {
 }
 
 function tilesFor(a, target, st) {
+  if (a.foot) return bigTiles(a, target, st);
   const out = [];
   if (st.area) {
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) out.push({ x: a.x + dx, z: a.z + dz });
@@ -196,12 +198,32 @@ function tilesFor(a, target, st) {
   return out;
 }
 
-// Close enough to start a blow at them?
+// A great master's blows (see entities/footprint.js): off the whole of the
+// side it's facing, as far out from its edge as the blow reaches (all the
+// way round it for a blow that sweeps the ground about it).
+function bigTiles(a, target, st) {
+  const r = a.foot;
+  const out = [];
+  if (st.area) {
+    for (let dz = -r - 1; dz <= r + 1; dz++) for (let dx = -r - 1; dx <= r + 1; dx++) if (Math.max(Math.abs(dx), Math.abs(dz)) === r + 1) out.push({ x: a.x + dx, z: a.z + dz });
+    return out;
+  }
+  const [hx, hz] = headingTo(a, target);
+  const reach = st.charge ? 1 : Math.max(1, Math.floor(st.reach || 1));
+  for (let k = 1; k <= reach; k++) {
+    for (let j = -r - (st.sweep ? 1 : 0); j <= r + (st.sweep ? 1 : 0); j++) out.push({ x: a.x + hx * (r + k) - hz * j, z: a.z + hz * (r + k) + hx * j });
+  }
+  return out;
+}
+
+// Close enough to start a blow at them? (Edge to edge, for a great master.)
 export function inReach(a, target, st = styleOf(a)) {
   if (!target || target.dead || Math.abs(target.y - a.y) > 1) return false;
-  const d = Math.max(Math.abs(target.x - a.x), Math.abs(target.z - a.z));
-  if (st.charge) return d >= 2 && d <= st.reach && (target.x === a.x || target.z === a.z);
-  if (st.thrust) return d <= st.reach && (d <= 1 || target.x === a.x || target.z === a.z);
+  const d = apart(a, target);
+  const w = (a.foot || 0) + (target.foot || 0);
+  const inLine = Math.abs(target.x - a.x) <= w || Math.abs(target.z - a.z) <= w;
+  if (st.charge) return d >= 2 && d <= st.reach && inLine;
+  if (st.thrust) return d <= st.reach && (d <= 1 || inLine);
   return d <= st.reach;
 }
 
@@ -298,14 +320,16 @@ function dashTick(game, a, w, dt) {
   }
   const nx = a.x + hx;
   const nz = a.z + hz;
-  const victim = victimsAt(game, a, [{ x: nx, z: nz }])[0];
+  const r = a.foot || 0;
+  const front = r ? bigTiles(a, { x: a.x + hx * 9, z: a.z + hz * 9 }, { reach: 1 }) : [{ x: nx, z: nz }];
+  const victim = victimsAt(game, a, front)[0];
   if (victim) {
     d.hit = true;
     resolveHit(game, a, victim, w.st);
     return true;
   }
   const ny = game.world.stepTarget(a.x, a.y, a.z, nx, nz, false);
-  if (ny < 0 || game.occupiedBySolid(nx, ny, nz, a)) {
+  if (ny < 0 || game.occupiedBySolid(nx, ny, nz, a) || (r && !fits(game, a, nx, ny, nz)) || (a.leash && (nx < a.leash.x0 || nx > a.leash.x1 || nz < a.leash.z0 || nz > a.leash.z1))) {
     // Into a wall (or a tree): stunned for a moment.
     d.hit = true;
     a.stunT = 0.8;
@@ -321,7 +345,7 @@ function dashTick(game, a, w, dt) {
 // Whoever's standing on those tiles (that a blow from `a` could hurt).
 function victimsAt(game, a, tiles) {
   const out = [];
-  const on = (e) => tiles.some((t) => t.x === e.x && t.z === e.z) && Math.abs(e.y - a.y) <= 1;
+  const on = (e) => onTiles(e, tiles) && Math.abs(e.y - a.y) <= 1;
   const p = game.player;
   const target = a.windup && a.windup.target;
   if (!p.dead && on(p) && (target === p || a.hostileNow || a.threat === p || a.kind === 'creature' || a.kind === 'monster')) out.push(p);
@@ -349,9 +373,9 @@ function strike(game, a, w) {
       const nx = a.x + hx;
       const nz = a.z + hz;
       const ny = game.world.stepTarget(a.x, a.y, a.z, nx, nz, false);
-      if (ny >= 0 && !game.occupiedBySolid(nx, ny, nz, a)) a.startMove(nx, ny, nz, 0.08);
+      if (ny >= 0 && !game.occupiedBySolid(nx, ny, nz, a) && (!a.foot || fits(game, a, nx, ny, nz))) a.startMove(nx, ny, nz, 0.08);
     }
-    w.tiles = [{ x: t.x, z: t.z }];
+    if (!a.foot) w.tiles = [{ x: t.x, z: t.z }];
     // (Only if they're still within a bound of it.)
     if (d > 2) return;
   }
@@ -363,15 +387,16 @@ function strike(game, a, w) {
     if (d === 2 && !a.moving) {
       const [hx, hz] = headingTo(a, t);
       const ny = game.world.stepTarget(a.x, a.y, a.z, a.x + hx, a.z + hz, false);
-      if (ny >= 0 && !game.occupiedBySolid(a.x + hx, ny, a.z + hz, a)) a.startMove(a.x + hx, ny, a.z + hz, 0.08);
+      if (ny >= 0 && !game.occupiedBySolid(a.x + hx, ny, a.z + hz, a) && (!a.foot || fits(game, a, a.x + hx, ny, a.z + hz))) a.startMove(a.x + hx, ny, a.z + hz, 0.08);
     }
-    if (d <= 2) {
+    if (d <= 2 && !a.foot) {
       a.face(t.x, t.z);
       w.tiles = [{ x: t.x, z: t.z }];
     }
   }
-  // (However they've turned, a blow reaches as far as it reaches.)
-  if (!w.st.area && !w.st.charge) w.tiles = withinReach(a, w.tiles, w.st.lunge ? 1 : st.reach);
+  // (However they've turned, a blow reaches as far as it reaches. A great
+  // master's lands where it was shown coming, off its front.)
+  if (!a.foot && !w.st.area && !w.st.charge) w.tiles = withinReach(a, w.tiles, w.st.lunge ? 1 : st.reach);
   for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, st, w.off ? { weapon: w.off } : null);
 }
 
@@ -531,6 +556,8 @@ function offDamage(a, key) {
 // Knocked back a pace or two.
 export function knock(game, a, v, n = 1) {
   if (v.kind === 'player' && (v.raft || v.mount)) return;
+  // (Nothing shoves one of the great masters about.)
+  if (v.foot) return;
   const kx = sgn(v.x - a.x);
   const kz = sgn(v.z - a.z);
   if (!kx && !kz) return;
