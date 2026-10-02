@@ -12,8 +12,9 @@ import { ANCIENT, ANCIENT_IDS } from '../sim/ancient.js';
 import { countItem } from '../game/inventory.js';
 
 const PANEL = 30;
-const RING = 72; // ring spacing, px
-const SEAL = 13;
+const RX = 68; // ring spacing across, px
+const RY = 36; // and up and down
+const SEAL = 11;
 
 // Can the player see it at all? (Only with a core in hand, or having given
 // the realm one.)
@@ -55,13 +56,13 @@ export class AncientWindow extends Window {
   }
   centre() {
     const a = this.area();
-    return { x: Math.round((a.x0 + a.x1) / 2), y: Math.round((a.y0 + a.y1) / 2) + 6 };
+    return { x: Math.round((a.x0 + a.x1) / 2), y: Math.round((a.y0 + a.y1) / 2) + 2 };
   }
   pos(id) {
     const A = ANCIENT[id];
     const o = this.centre();
     const ang = ((A.ang - 90) * Math.PI) / 180 + Math.sin(this.t * 0.05) * 0.02;
-    return { x: Math.round(o.x + Math.cos(ang) * A.ring * RING * 1.25), y: Math.round(o.y + Math.sin(ang) * A.ring * RING * 0.82) };
+    return { x: Math.round(o.x + Math.cos(ang) * A.ring * RX), y: Math.round(o.y + Math.sin(ang) * A.ring * RY) };
   }
   status(st, id) {
     if (st.done.includes(id)) return 'done';
@@ -117,10 +118,10 @@ export class AncientWindow extends Window {
     const s = this.s;
     const A = game.sim.ancient;
     const st = A.stateOf(s);
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(4,6,14,0.98)', double: true, title: '◆ ANCIENT TECHNOLOGY ◆', fg: '#5ad8f0' });
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(4,6,14,0.98)', double: true, title: '♦ ANCIENT TECHNOLOGY ♦', fg: '#5ad8f0' });
     const realm = s.civ ? s.civ.name.replace(/^The /, '') : `free town of ${s.name}`;
     g.center(1, `${realm.toUpperCase()} · WHAT THE KAVORENT LEFT`, '#a8f4ff');
-    const cores = `Cores held: ${'◆'.repeat(Math.min(12, st.cores))}${st.cores > 12 ? `+${st.cores - 12}` : ''}${st.cores ? '' : 'none'}`;
+    const cores = `Cores held: ${'♦'.repeat(Math.min(12, st.cores))}${st.cores > 12 ? `+${st.cores - 12}` : ''}${st.cores ? '' : 'none'}`;
     g.text(2, 2, cores, st.cores ? '#7ae0ff' : C.dim);
     const n = `${st.done.length} of ${ANCIENT_IDS.length} mastered`;
     g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, '#3a8aa0');
@@ -164,7 +165,7 @@ export class AncientWindow extends Window {
     if (stt === 'afford') {
       const bx = x0 + 2;
       const by = this.h - 4;
-      const label = ` ◆ PUT IT TO THE COUNCIL ◆ `;
+      const label = ` ♦ PUT IT TO THE COUNCIL ♦ `;
       const hov = this.hovering(bx, by, label.length, 1);
       g.text(bx, by, label, hov ? '#000000' : '#a8f4ff', hov ? '#7ae0ff' : '#0e3040');
       this.hit(bx, by, label.length, 1, () => this.commission());
@@ -204,7 +205,7 @@ export class AncientWindow extends Window {
       ctx.setLineDash([2 + r, 5]);
       ctx.lineDashOffset = -t * (6 - r) * (r % 2 ? 1 : -1);
       ctx.beginPath();
-      ctx.ellipse(o.x + 0.5, o.y + 0.5, r * RING * 1.25, r * RING * 0.82, 0, 0, Math.PI * 2);
+      ctx.ellipse(o.x + 0.5, o.y + 0.5, r * RX, r * RY, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }

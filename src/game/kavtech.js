@@ -61,7 +61,7 @@ export function lanceThrust(game, a, main = null) {
     for (const e of foes) {
       if (hit.has(e) || e.dead || e.down || e.x !== x || e.z !== z || Math.abs(e.y - a.y) > 1) continue;
       // (Yours catches what's fighting, or would: never the townsfolk.)
-      const foe = e.kind === 'creature' ? e.hostileNow || e.S.mode === 'hostile' || e.target === a : e.threat === a || e.hostile || e.bandit;
+      const foe = e.kind === 'creature' || e.kind === 'monster' ? e.hostileNow || e.target === a : e.threat === a || e.hostile || e.bandit;
       if (!foe) continue;
       hit.add(e);
       game.damage(e, dmg, a);

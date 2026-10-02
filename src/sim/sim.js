@@ -94,6 +94,12 @@ export function buildingAt(L, x, z) {
   return null;
 }
 
+// May a set-block op go in over `cur`? A soft op ('air': or empty ground)
+// gives way to anything built there in the meantime.
+function fits(cur, soft) {
+  return !soft || SOFT.has(cur) || (soft === 'air' && cur === B.air);
+}
+
 export class Sim {
   constructor(game) {
     this.game = game;
@@ -328,7 +334,7 @@ export class Sim {
     for (const op of ops) {
       const [x, y, z, id, meta = 0, soft] = op;
       if (w.regionAt(x, z)) {
-        if (!soft || SOFT.has(w.getBlock(x, y, z))) w.setBlock(x, y, z, id, meta);
+        if (fits(w.getBlock(x, y, z), soft)) w.setBlock(x, y, z, id, meta);
       } else {
         const key = w.regionKey(Math.floor(x / 64), Math.floor(z / 36));
         if (!this.pending.has(key)) this.pending.set(key, []);
@@ -343,7 +349,7 @@ export class Sim {
     const ops = this.pending.get(key);
     if (!ops) return;
     this.pending.delete(key);
-    for (const [x, y, z, id, meta, soft] of ops) if (!soft || SOFT.has(w.getBlock(x, y, z))) w.setBlock(x, y, z, id, meta);
+    for (const [x, y, z, id, meta, soft] of ops) if (fits(w.getBlock(x, y, z), soft)) w.setBlock(x, y, z, id, meta);
   }
 
   // ------------------------------------------------------------ reputation

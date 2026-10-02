@@ -177,7 +177,7 @@ export class TechWindow extends Window {
     g.text(2, this.h - 1, ' wheel zoom · drag to move · click a step · arrows pan · ESC close ', C.faint);
     // With a Kavorent core in hand: the other tree, the Kavorent's.
     if (canSeeAncient(game, s)) {
-      const label = ' ◆ ANCIENT TECHNOLOGY [T] ';
+      const label = ' ♦ ANCIENT TECHNOLOGY [T] ';
       const bx = this.w - label.length - 2;
       const hov = this.hovering(bx, this.h - 1, label.length, 1);
       g.text(bx, this.h - 1, label, hov ? '#000000' : '#7ae0ff', hov ? '#7ae0ff' : '#0e2a38');

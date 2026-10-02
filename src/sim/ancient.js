@@ -128,16 +128,16 @@ export class Ancient {
       return true;
     };
     if (id === 'lattice') {
-      for (const f of L.fields || []) for (const [x, z] of [[f.x0 - 1, f.z0 - 1], [f.x1 + 1, f.z1 + 1]]) ops.push([x, 6, z, B.kav_lamp, 0, true]);
+      for (const f of L.fields || []) for (const [x, z] of [[f.x0 - 1, f.z0 - 1], [f.x1 + 1, f.z1 + 1]]) ops.push([x, 6, z, B.kav_lamp, 0, 'air']);
     } else if (id === 'lamps') {
-      // Along the streets, every eighth tile or so, at the roadside.
-      let n = 0;
+      // Along the streets at the roadside, six paces or so apart.
+      const lit = [];
       const b = L.bounds;
-      for (let z = b.z0 + 2; z <= b.z1 - 2 && n < 18; z += 3) {
-        for (let x = b.x0 + 2; x <= b.x1 - 2 && n < 18; x += 3) {
-          if (((x * 7 + z * 13) & 7) !== 0 || L.isRoadTile(x, z)) continue;
+      for (let z = b.z0 + 1; z <= b.z1 - 1 && lit.length < 24; z++) {
+        for (let x = b.x0 + 1; x <= b.x1 - 1 && lit.length < 24; x++) {
+          if (L.isRoadTile(x, z) || lit.some((q) => Math.max(Math.abs(q.x - x), Math.abs(q.z - z)) < 6)) continue;
           if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => L.isRoadTile(x + dx, z + dz))) continue;
-          if (put(x, z, B.kav_lamp)) n++;
+          if (put(x, z, B.kav_lamp)) lit.push({ x, z });
         }
       }
     } else if (id === 'archive') {
@@ -147,13 +147,13 @@ export class Ancient {
       for (const w of (L.wells || []).slice(0, 2)) {
         for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
           if (L.isRoadTile(w.x + dx, w.z + dz) && L.maskAt(w.x + dx, w.z + dz) !== M.PLAZA) continue;
-          ops.push([w.x + dx, 6, w.z + dz, B.kav_basin, 0, true]);
+          ops.push([w.x + dx, 6, w.z + dz, B.kav_basin, 0, 'air']);
           this.placesOf(L).springs.push({ x: w.x + dx, z: w.z + dz });
           break;
         }
       }
       if (!this.placesOf(L).springs.length && L.plaza) {
-        ops.push([L.plaza.x0, 6, L.plaza.z0, B.kav_basin, 0, true]);
+        ops.push([L.plaza.x0, 6, L.plaza.z0, B.kav_basin, 0, 'air']);
         this.placesOf(L).springs.push({ x: L.plaza.x0, z: L.plaza.z0 });
       }
     } else if (id === 'wards') {
@@ -266,7 +266,7 @@ export class Ancient {
         L.wardT = (L.wardT || 0) - 0.5;
         if (L.wardT > 0) continue;
         for (const py of this.placesOf(L).pylons) {
-          const hostile = (e) => (e.kind === 'creature' ? e.S.mode === 'hostile' && !e.tame : !!(e.hostileNow && (e.bandit || (e.warband && e.rec && e.rec.sid !== s.id))));
+          const hostile = (e) => (e.kind === 'creature' || e.kind === 'monster' ? e.S.mode === 'hostile' && !e.tame : !!(e.hostileNow && (e.bandit || (e.warband && e.rec && e.rec.sid !== s.id))));
           const foe = [...game.creatures, ...game.npcs].find((e) => !e.dead && !e.down && Math.abs(e.x - py.x) <= 7 && Math.abs(e.z - py.z) <= 7 && hostile(e));
           if (!foe) continue;
           L.wardT = 1.5;
