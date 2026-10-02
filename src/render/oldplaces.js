@@ -6,6 +6,7 @@
 // power.
 import { TILE, LH, WORLD_Y } from '../config.js';
 import { RELICS } from '../world/items.js';
+import { spireDissolve } from '../game/scenes.js';
 
 // Little glyphs, 4 wide and 5 tall (bit rows).
 const GLYPHS = [
@@ -28,6 +29,7 @@ export function drawOldPlaces(r, game, dt) {
     for (const s of game.world.sites || []) {
       if (s.type !== 'kavorent' || s.x === undefined || Math.abs(s.x - p.x) > 40 || Math.abs(s.z - p.z) > 34) continue;
       const rec = game.sim.dungeons.get(s.id);
+      spireBeacon(r, ctx, game, s, rec);
       spireRunes(r, ctx, game, s, rec, dt);
     }
     // A realm's Skyward Beacon (see sim/ancient.js): a pillar of light from
@@ -48,6 +50,9 @@ export function drawOldPlaces(r, game, dt) {
 // The middle column of the spire face turned toward you: runes rising.
 function spireRunes(r, ctx, game, s, rec, dt) {
   if (rec && rec.cleared) return;
+  // (Not while you're inside it: its faces are round you, not before you.)
+  const p = game.player;
+  if (Math.abs(p.x - s.x) <= 2 && Math.abs(p.z - s.z) <= 2) return;
   // Which of its faces is toward the camera.
   const [fx, fz] = r.toWorld ? r.toWorld(0, 1) : [0, 1];
   const [wx0, wz0] = r.toWorld ? r.toWorld(0, 0) : [0, 0];
@@ -68,32 +73,138 @@ function spireRunes(r, ctx, game, s, rec, dt) {
     if (flare.t > 4) r.spireFlare = null;
   }
   const t = r.time;
-  const n = 6;
-  for (let i = 0; i < n; i++) {
-    // Each rises from the foot to the top, brightening, flickering, then
-    // fading out as it climbs; drawn twice the size of a letter, with a
-    // haze of light round it.
-    const speed = flare ? 70 : open ? 16 : 9;
-    const k = ((t * speed + (i * height) / n) % height) / height;
-    const y = Math.round(yBottom - k * height - 12);
-    const flick = Math.sin(t * 5.3 + i * 2.1) > 0.82 ? 0.35 : 1;
-    const a = (flare ? 1 : open ? 0.9 : 0.75) * Math.sin(k * Math.PI) * (0.75 + 0.25 * Math.sin(t * 3 + i)) * flick;
-    if (a <= 0.02) continue;
-    const g = (i * 5 + Math.floor(t * 0.4 + i)) % GLYPHS.length;
-    ctx.globalAlpha = a * 0.22;
-    ctx.fillStyle = '#5ad8f0';
-    ctx.fillRect(x - 5, y - 4, 16, 18);
-    ctx.globalAlpha = a * 0.4;
-    ctx.fillRect(x - 2, y - 2, 12, 14);
-    ctx.globalAlpha = a;
-    ctx.fillStyle = flare ? '#ffffff' : '#c8fbff';
-    glyph(ctx, g, x - 1, y, 2);
+  // (Its opening: see scenes.js. The runes quicken and burn every colour,
+  // across the whole face.)
+  const sc = game.scene && game.scene.kind === 'spire' && game.scene.rec.id === s.id ? game.scene : null;
+  const wake = sc ? Math.min(1, sc.t / sc.BURST_AT) : 0;
+  const many = sc || flare;
+  const cols = many ? [-24, 0, 24] : [0];
+  const n = many ? 8 : 6;
+  for (const cx of cols) {
+    for (let i = 0; i < n; i++) {
+      // Each rises from the foot to the top, brightening, flickering, then
+      // fading out as it climbs; drawn twice the size of a letter, with a
+      // haze of light round it.
+      const speed = sc ? 12 + 90 * wake * wake : flare ? 70 : open ? 16 : 9;
+      const k = ((t * speed + (i * height) / n + cx * 7) % height) / height;
+      const y = Math.round(yBottom - k * height - 12);
+      const flick = Math.sin(t * 5.3 + i * 2.1 + cx) > 0.82 ? 0.35 : 1;
+      const a = (many ? 1 : open ? 0.9 : 0.75) * Math.sin(k * Math.PI) * (0.75 + 0.25 * Math.sin(t * 3 + i)) * flick;
+      if (a <= 0.02) continue;
+      const g = (i * 5 + Math.floor(t * (sc ? 3 + 12 * wake : 0.4) + i)) % GLYPHS.length;
+      const col = many ? RUNE_COLOURS[(i + Math.floor(t * (2 + 14 * wake)) + (cx > 0 ? 2 : cx < 0 ? 4 : 0)) % RUNE_COLOURS.length] : '#5ad8f0';
+      ctx.globalAlpha = a * 0.22;
+      ctx.fillStyle = col;
+      ctx.fillRect(x + cx - 5, y - 4, 16, 18);
+      ctx.globalAlpha = a * 0.4;
+      ctx.fillRect(x + cx - 2, y - 2, 12, 14);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = flare && !sc ? '#ffffff' : many ? '#ffffff' : '#c8fbff';
+      glyph(ctx, g, x + cx - 1, y, 2);
+    }
   }
+  // The keystone in the face toward you: its hollow breathing faint light
+  // (blazing in the stone's colour as one's set in it).
+  const kv = r.toView(tx, tz);
+  const kx = kv[0] * TILE + 8 - r.camX;
+  const ky = kv[1] * TILE - (s.h + 1) * LH - r.camY + TILE + 5;
+  const kg = sc ? 0.6 + 0.4 * Math.sin(t * 20) : 0.25 + 0.15 * Math.sin(t * 2.2);
+  const kc = sc && sc.gemColor ? sc.gemColor : '#5ad8f0';
+  const glow = ctx.createRadialGradient(kx, ky, 0, kx, ky, sc ? 18 : 9);
+  glow.addColorStop(0, kc);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = kg;
+  ctx.fillStyle = glow;
+  ctx.fillRect(kx - 18, ky - 18, 36, 36);
+  // The doorway's face coming apart into light (see scenes.js).
+  if (sc) doorDissolve(r, ctx, sc, s);
   // A faint seam of light down the face's middle.
   ctx.globalAlpha = (flare ? 0.5 : 0.18) + 0.08 * Math.sin(t * 2);
   ctx.fillStyle = '#5ad8f0';
   ctx.fillRect(x + 2, yBottom - height, 2, height);
   ctx.globalAlpha = 1;
+}
+
+const RUNE_COLOURS = ['#5ad8f0', '#ff70d0', '#ffe070', '#7affb0', '#b080ff', '#ff9050'];
+
+// The beacon at a spire's crown: a column of light up into the sky (faint
+// while it's shut, strong once it's open, blinding as it bursts open),
+// bands of light climbing it, and rings sent out from the top.
+function spireBeacon(r, ctx, game, s, rec) {
+  if (rec && rec.cleared) return;
+  const open = rec && rec.spire && rec.spire.open !== null && rec.spire.open !== undefined;
+  const sc = game.scene && game.scene.kind === 'spire' && game.scene.rec.id === s.id ? game.scene : null;
+  const flare = r.spireFlare && r.spireFlare.id === s.id ? r.spireFlare : null;
+  const t = r.time;
+  let I = open ? 0.85 : 0.45;
+  if (sc && !sc.burst) I = 0.45 + 0.55 * Math.min(1, sc.t / sc.BURST_AT) * (0.8 + 0.2 * Math.sin(t * 30));
+  if (flare) I = Math.max(I, 2.2 - flare.t * 0.35);
+  const [u, v] = r.toView(s.x, s.z);
+  const x = u * TILE + 8 - r.camX;
+  const yTop = v * TILE - (WORLD_Y - 1) * LH - r.camY + 8;
+  if (yTop < -20 || x < -120 || x > r.vw + 120) return;
+  ctx.save();
+  const w = (5 + 4 * I) * (1 + 0.08 * Math.sin(t * 3));
+  for (const [k, a] of [[3.4, 0.08], [2, 0.16], [1, 0.42], [0.35, 0.9]]) {
+    const g = ctx.createLinearGradient(0, yTop, 0, -40);
+    g.addColorStop(0, `rgba(200,251,255,${Math.min(1, a * I)})`);
+    g.addColorStop(1, `rgba(90,216,240,${Math.min(1, a * I) * 0.2})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(Math.round(x - w * k), -40, Math.round(w * k * 2), yTop + 40);
+  }
+  // Bands of light climbing it.
+  const speed = sc ? 2.5 : open ? 1.1 : 0.45;
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 3; i++) {
+    const k = (t * speed + i / 3) % 1;
+    ctx.globalAlpha = Math.min(1, (1 - k) * I * 0.8);
+    ctx.fillRect(Math.round(x - w * 0.8), Math.round(yTop - k * (yTop + 40)), Math.round(w * 1.6), 3);
+  }
+  // Rings sent out from the crown.
+  const every = sc ? 0.6 : open ? 1.6 : 3.2;
+  for (let i = 0; i < 2; i++) {
+    const k = ((t / every + i * 0.5) % 1);
+    ctx.globalAlpha = (1 - k) * Math.min(1, I) * 0.7;
+    ctx.strokeStyle = sc && sc.gemColor ? sc.gemColor : '#c8fbff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, yTop, 6 + k * 70 * Math.min(1.6, I), 2 + k * 24 * Math.min(1.6, I), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // Its light pooled at the crown.
+  ctx.globalAlpha = Math.min(1, 0.5 * I);
+  const gl = ctx.createRadialGradient(x, yTop, 2, x, yTop, 18 + 26 * I);
+  gl.addColorStop(0, 'rgba(255,255,255,0.95)');
+  gl.addColorStop(0.4, 'rgba(160,240,255,0.5)');
+  gl.addColorStop(1, 'rgba(90,216,240,0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(x - 60, yTop - 60, 120, 120);
+  ctx.restore();
+}
+
+// The doorway's face (two courses of the spire's alloy) coming apart into
+// light as the spire opens: specks of it gone a few at a time, each one
+// flaring as it goes.
+function doorDissolve(r, ctx, sc, s) {
+  const k = spireDissolve(sc);
+  if (k <= 0 || k >= 1) return;
+  const [du, dv] = r.toView(sc.door.x, sc.door.z);
+  const [cu, cv] = r.toView(s.x, s.z);
+  // (Only the face toward you shows coming apart.)
+  if (!(dv > cv && du === cu)) return;
+  const x0 = du * TILE - r.camX;
+  const y0 = dv * TILE - (s.h + 2) * LH - r.camY + TILE;
+  ctx.globalAlpha = 1;
+  for (let py = 0; py < LH * 2; py++) {
+    for (let px = 0; px < TILE; px++) {
+      const n = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000 / 1000;
+      if (n < k) continue;
+      const edge = n < k + 0.08;
+      const seam = px === 7 || px === 8;
+      ctx.fillStyle = edge ? (n < k + 0.03 ? '#ffffff' : '#5ad8f0') : seam ? '#1c1a2a' : py % LH === 0 ? '#3c3a58' : '#2a2840';
+      ctx.fillRect(x0 + px, y0 + py, 1, 1);
+    }
+  }
 }
 
 function beacon(r, ctx, b) {

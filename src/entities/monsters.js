@@ -47,7 +47,7 @@ export const MONSTER_SPECIES = {
   priest: { name: 'The Drowned Priest', hp: 100, dmg: 4, step: 0.4, mode: 'hostile', aggro: 14, humanoid: true, look: 'priest', under: true, undead: true, boss: true, brain: 'priest', drops: [['old_coin', 4, 10, 1], ['gold_ingot', 1, 2, 1]] },
   warlord: { name: 'The Bandit Warlord', hp: 120, dmg: 6, step: 0.42, mode: 'hostile', aggro: 14, humanoid: true, look: 'warlord', arms: 'warhammer', under: true, boss: true, brain: 'warlord', drops: [['coin', 12, 30, 1], ['gold_ingot', 1, 2, 1]] },
   // The Kavorent's constructs.
-  drone: { light: 4, name: 'Sentinel Drone', hp: 14, dmg: 3, step: 0.34, mode: 'hostile', aggro: 12, floats: true, under: true, construct: true, brain: 'drone', style: 'sting', drops: [['kav_scrap', 1, 2, 0.8]] },
+  drone: { light: 4, noHalo: true, name: 'Sentinel Drone', hp: 14, dmg: 3, step: 0.34, mode: 'hostile', aggro: 12, floats: true, under: true, construct: true, brain: 'drone', style: 'sting', drops: [['kav_scrap', 1, 2, 0.8]] },
   warden: { name: 'Warden', hp: 34, dmg: 4, step: 0.44, mode: 'hostile', aggro: 11, humanoid: true, look: 'warden', arms: 'mace', shield: 'kav_aegis', under: true, construct: true, brain: 'warden', drops: [['kav_scrap', 2, 3, 1]] },
   mender: { light: 2, name: 'Mender', hp: 8, dmg: 1, step: 0.24, mode: 'hostile', aggro: 12, under: true, construct: true, brain: 'mender', style: 'snap', drops: [['kav_scrap', 1, 1, 0.8]] },
   golem: { light: 3, name: 'Kavorent Golem', hp: 80, dmg: 7, step: 0.6, mode: 'hostile', aggro: 11, big: true, under: true, construct: true, armoured: true, brain: 'golem', style: 'slam', drops: [['kav_scrap', 3, 6, 1]] },

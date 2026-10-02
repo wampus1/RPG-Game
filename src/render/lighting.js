@@ -84,7 +84,7 @@ export class Lighting {
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the
     // camera is turned).
-    const box = r.visibleBox ? r.visibleBox(2) : { x0: Math.floor(r.camX / TILE) - 2, x1: Math.floor((r.camX + VIEW_W) / TILE) + 2, z0: Math.floor((r.camY - LH * 2) / TILE) - 2, z1: Math.floor((r.camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + 2 };
+    const box = r.visibleBox ? r.visibleBox(2) : { x0: Math.floor(r.camX / TILE) - 2, x1: Math.floor((r.camX + (r.vw || VIEW_W)) / TILE) + 2, z0: Math.floor((r.camY - LH * 2) / TILE) - 2, z1: Math.floor((r.camY + (r.vh || VIEW_H) + (WORLD_Y - 1) * LH) / TILE) + 2 };
     const { x0, x1, z0, z1 } = box;
     this.scanTimer -= game.dt;
     const covers = (F) => F && x0 >= F.x0 && z0 >= F.z0 && x1 < F.x0 + F.W && z1 < F.z0 + F.D;
@@ -119,8 +119,8 @@ export class Lighting {
     // Screen-aligned sample grid (aligned to world pixels so it is stable).
     const k0 = Math.floor(r.camX / TILE) - 1;
     const m0 = Math.floor(r.camY / TILE) - 1;
-    const SW = Math.ceil(VIEW_W / TILE) + 3;
-    const SH = Math.ceil(VIEW_H / TILE) + 3;
+    const SW = Math.ceil((r.vw || VIEW_W) / TILE) + 3;
+    const SH = Math.ceil((r.vh || VIEW_H) / TILE) + 3;
     const hKey = (r.hidden ? r.hidden.size * 7 + r.hiddenLevel : -1) * 4 + (r.view || 0);
     if (!this.samples || this.samples.k0 !== k0 || this.samples.m0 !== m0 || this.samples.hKey !== hKey) {
       this.samples = { k0, m0, hKey, pts: this.sampleSurfaces(r, world, k0, m0, SW, SH) };
@@ -188,6 +188,9 @@ export class Lighting {
       for (const s of glowSources) {
         if (s.x < x0 - 2 || s.x > x1 + 2 || s.z < z0 - 2 || s.z > z1 + 2) continue;
         if (r.isHidden(s.x, s.y, s.z)) continue;
+        // (Some light the room without a haze over themselves: a drone's
+        // own eye would wash out the look of it.)
+        if (s.noHalo) continue;
         if (!s.player) {
           if (s.covered === undefined) s.covered = this.coveredAbove(world, s, r);
           if (s.covered) continue;
@@ -195,7 +198,7 @@ export class Lighting {
         const [su, sv] = r.toView ? r.toView(s.x, s.z) : [s.x, s.z];
         const sx = su * TILE - r.camX + 8;
         const sy = sv * TILE - s.y * LH - r.camY + LH + 2;
-        if (sx < -40 || sy < -40 || sx > VIEW_W + 40 || sy > VIEW_H + 40) continue;
+        if (sx < -40 || sy < -40 || sx > (r.vw || VIEW_W) + 40 || sy > (r.vh || VIEW_H) + 40) continue;
         const size = 20 + s.L * 3;
         ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08) * (s.dim ?? 1);
         ctx.drawImage(s.cold ? this.coldGlow : this.glow, sx - size / 2, sy - size / 2, size, size);

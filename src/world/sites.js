@@ -104,11 +104,13 @@ export function siteBlocks(s, state = {}) {
   const rng = new RNG(hash4(s.seed, 0x51e));
   if (s.type === 'kavorent') {
     clear(7);
-    // Dead, scorched ground round it, and fallen alloy.
-    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+    // Blighted ground round it (see blight, for further out), fallen
+    // alloy, and the strange things that grow in it.
+    for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
       if (Math.abs(dx) <= 2 && Math.abs(dz) <= 2) continue;
-      if (rng.chance(0.5)) put(dx, h, dz, rng.chance(0.5) ? B.gravel : B.grass_dry);
-      if (rng.chance(0.08)) put(dx, h + 1, dz, B.kav_debris);
+      put(dx, h, dz, rng.chance(0.25) ? B.gravel : B.grass_void);
+      if (rng.chance(0.07)) put(dx, h + 1, dz, B.kav_debris);
+      else if (rng.chance(0.12)) put(dx, h + 1, dz, GROWTHS[rng.int(0, GROWTHS.length - 1)], rng.int(0, 3));
     }
     // The spire: five square, up as far as the world goes; hollow at the
     // foot round a lift.
@@ -122,6 +124,9 @@ export function siteBlocks(s, state = {}) {
       }
     }
     put(0, h, 0, B.kav_lift);
+    // A keystone in each face at the height of your hand, with a hollow in
+    // it the shape of a cut stone.
+    for (const [ox, oz] of [[0, 2], [-2, 0], [0, -2], [2, 0]]) put(ox, h + 1, oz, B.kav_keystone);
     // An opened side: a doorway, two high.
     const side = state.open;
     if (side !== undefined && side !== null) {
@@ -200,12 +205,53 @@ export function siteBlocks(s, state = {}) {
     if (d < 0.8) put(dx, h + 2, dz, B.cave_rock);
     if (d < 0.45) put(dx, h + 3, dz, B.cave_rock);
   }
-  put(0, h + 1, 1, B.cave_mouth);
-  put(0, h + 2, 1, B.air);
+  // (The way in set into the face itself, flush with the rock round it.)
+  put(0, h + 1, 0, B.cave_mouth);
+  put(0, h + 2, 0, B.air);
   for (let dx = -3; dx <= 3; dx++) if (Math.abs(dx) > 1) put(dx, h + 1, 3, B.fence);
   put(2, h + 1, 2, B.campfire);
   for (let dz = 1; dz <= 4; dz++) put(0, h, dz, B.path);
   return out;
+}
+
+// What grows in a spire's blight.
+const GROWTHS = [B.void_bloom, B.void_bloom, B.glow_crystal, B.tendril, B.eye_stalk];
+const GRASSY = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.dirt]);
+export const BLIGHT_R = 16;
+
+// The Kavorent's blight round a spire, out past the cleared ground: the
+// turf and the trees gone violet, the flowers turned to strange growths,
+// and more of them the nearer you come.
+function blight(region, s) {
+  for (let lz = 0; lz < REGION_D; lz++) {
+    for (let lx = 0; lx < REGION_W; lx++) {
+      const x = region.x0 + lx;
+      const z = region.z0 + lz;
+      const d = Math.hypot(x - s.x, z - s.z);
+      if (d > BLIGHT_R + 3 || d < 7) continue;
+      if (d > BLIGHT_R - 2 + ((hash4(x, z, s.seed, 0xb1) % 100) / 100) * 5) continue;
+      const roll = (hash4(x, z, s.seed, 0xb2) % 1000) / 1000;
+      for (let y = WORLD_Y - 1; y >= 1; y--) {
+        const id = region.get(lx, y, lz);
+        if (id === B.air) continue;
+        const b = BLOCKS[id];
+        if (b.name.startsWith('leaves_')) {
+          region.set(lx, y, lz, B.leaves_void);
+          continue;
+        }
+        if (b.render === 'plant') {
+          region.set(lx, y, lz, roll < 0.45 ? GROWTHS[Math.floor(roll * 100) % GROWTHS.length] : B.air);
+          continue;
+        }
+        if (!b.solid) continue;
+        if (!GRASSY.has(id)) break;
+        region.set(lx, y, lz, B.grass_void);
+        const near = 1 - d / BLIGHT_R;
+        if (y + 1 < WORLD_Y && region.get(lx, y + 1, lz) === B.air && roll < 0.04 + near * 0.1) region.set(lx, y + 1, lz, GROWTHS[Math.floor(roll * 997) % GROWTHS.length], Math.floor(roll * 40) % 4);
+        break;
+      }
+    }
+  }
 }
 
 // Write the bits of every site that fall in a region (when it's made).
@@ -221,6 +267,12 @@ export function stampSites(world, region) {
       if (x < x0 || z < z0 || x >= x0 + REGION_W || z >= z0 + REGION_D || y < 0 || y >= WORLD_Y) continue;
       region.set(x - x0, y, z - z0, id, meta);
     }
+  }
+  // (The blight reaches further than any site's own ground.)
+  for (const s of sites) {
+    if (s.type !== 'kavorent' || s.x === undefined) continue;
+    if (Math.abs(s.x - (x0 + REGION_W / 2)) > REGION_W / 2 + BLIGHT_R + 3 || Math.abs(s.z - (z0 + REGION_D / 2)) > REGION_D / 2 + BLIGHT_R + 3) continue;
+    blight(region, s);
   }
 }
 

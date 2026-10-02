@@ -13,7 +13,7 @@ import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
-import { removeItem, makeSlots, addItem } from './inventory.js';
+import { removeItem, makeSlots, addItem, canAdd } from './inventory.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { M, BUILDING_NAMES } from '../world/settlement.js';
 import { BIOMES } from '../world/biomes.js';
@@ -31,6 +31,8 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
+import { spireOpening } from './scenes.js';
+import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast } from '../entities/monsters.js';
@@ -508,8 +510,10 @@ export class Game {
     return h >= 6 && h < 19.5;
   }
 
-  requestPathBudget() {
-    if (this.pathBudget <= 0) return false;
+  // (Something close to you and after you may go over the frame's
+  // budget a little: it's the one you'd notice standing still.)
+  requestPathBudget(urgent = false) {
+    if (this.pathBudget <= (urgent ? -3 : 0)) return false;
     this.pathBudget--;
     return true;
   }
@@ -1491,6 +1495,18 @@ export class Game {
         return;
       }
     }
+    // A short scene playing (a spire opening, a master rising or falling:
+    // see scenes.js): on the real clock; it may hold you still and slow
+    // the world.
+    const sc = this.scene;
+    if (sc) {
+      sc.t += dt;
+      sc.update?.(this, dt);
+      if (sc.t >= sc.dur) {
+        sc.end?.(this);
+        if (this.scene === sc) this.scene = null;
+      } else if (sc.timeScale) dt *= sc.timeScale(sc.t);
+    }
     // A blow that lands hard holds the moment (hit-stop); a parry slows
     // the world for a breath after.
     if (this.hitStop > 0) {
@@ -1501,7 +1517,7 @@ export class Game {
       dt *= this.slowMoScale || 0.35;
     }
     this.dt = dt;
-    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable);
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable) || (!!this.scene && this.scene.lock);
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
@@ -1609,6 +1625,9 @@ export class Game {
     this.updateRoadCrews(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
+    // The camera: drawn back near a spire, or wherever a scene takes it.
+    const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
+    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : 1 + 0.32 * nearSpire;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.6);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
     // Mended (by anything: a meal, a potion, a spring, a stone): a soft green
@@ -1740,9 +1759,7 @@ export class Game {
       this.cursor = null;
       return;
     }
-    const mx = input.mouse.x;
-    const my = input.mouse.y;
-    if (this.ui.hitTest(mx, my)) {
+    if (this.ui.hitTest(input.mouse.x, input.mouse.y)) {
       this.cursor = null;
       return;
     }
@@ -1751,6 +1768,11 @@ export class Game {
     // exactly what you see there: props by their actual pixels, a person
     // in front of a wall, and never a block faded out to show you through it.
     const drawn = r.pick !== undefined;
+    // (The world's picture may be drawn back, bigger than the view: the
+    // pointer in its own pixels.)
+    const zk = r.zoomK || 1;
+    const mx = input.mouse.x * zk;
+    const my = input.mouse.y * zk;
     r.mouse = { x: mx, y: my };
     let hit = null;
     if (p.layerMode !== null) {
@@ -3081,14 +3103,30 @@ export class Game {
     const slot = p.inv[p.selected];
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
-    this.sim.dungeons.openSpire(rec, side);
-    this.renderer.spireFlare = { id: rec.id, t: 0 };
     this.renderer.emit(p.x, p.y + 1.2, p.z, { n: 20, color: [GEMS_COLOR(held), '#ffffff', '#5ad8f0'], up: 40, speed: 50, life: 0.8, glow: true });
-    this.renderer.flashScreen?.('#c8fbff', 0.35);
-    this.shake = 0.8;
-    this.audio?.play('rune');
-    this.audio?.play('gate');
-    this.ui.msg(`You set the ${it.name.toLowerCase()} in the hollow. It sinks in; the runes blaze up the whole height of the spire, and with a sound like a held breath let go, its face slides open.`, '#c8fbff');
+    this.ui.msg(`You set the ${it.name.toLowerCase()} in the hollow.`, '#c8fbff');
+    // (The rest is a scene: see scenes.js.)
+    this.scene = spireOpening(this, rec, side, GEMS_COLOR(held));
+  }
+
+  // Near a Kavorent spire: the camera drawn back to take it in, and the
+  // blight's motes drifting about you. Returns how near (0 far, 1 at it).
+  spireNearness(dt) {
+    const p = this.player;
+    let best = null;
+    for (const s of this.world.sites || []) {
+      if (s.type !== 'kavorent' || s.x === undefined) continue;
+      const d = Math.hypot(s.x - p.x, s.z - p.z);
+      if (d < BLIGHT_R + 6 && (!best || d < best.d)) best = { s, d };
+    }
+    this.nearSpire = best ? best.s : null;
+    if (!best) return 0;
+    const k = Math.max(0, Math.min(1, (BLIGHT_R + 6 - best.d) / 12));
+    // (Violet motes in the blight, rising.)
+    if (best.d < BLIGHT_R && Math.random() < dt * 12) {
+      this.renderer.emit(p.x + (Math.random() - 0.5) * 18, p.y + Math.random() * 0.5, p.z + (Math.random() - 0.5) * 12, { n: 1, color: ['#b070e0', '#e090ff', '#5ad8f0'], up: 8, speed: 4, life: 2.2, glow: true, gravity: -6 });
+    }
+    return k;
   }
 
   // A relic set down, taken up again.
@@ -3120,7 +3158,7 @@ export class Game {
     const near = (e) => Math.abs(e.x - p.x) < 22 && Math.abs(e.z - p.z) < 18;
     for (const c of this.creatures) {
       if (c.dead || !c.S.light || !near(c) || c.burrowed || c.submerged) continue;
-      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: c.S.light, cold: !!(c.S.construct || c.species === 'wisp') });
+      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: c.S.light, cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo });
     }
     for (const n of this.npcs) {
       if (n.dead || !near(n)) continue;
@@ -3619,11 +3657,28 @@ export class Game {
     this.projectiles.push({ from, target: null, x0: from.x, y0: from.y + 1.5, z0: from.z, tx, ty, tz, t: 0, dur: 0.9 + dist * 0.05, dmg, kind: 'orb', arc: 1 + dist * 0.12 });
   }
 
+  // Something solid overhead (a roof, a ceiling) within a few paces.
+  roofed(x, y, z) {
+    for (let k = 2; k <= 6; k++) {
+      const b = BLOCKS[this.world.getBlock(x, y + k, z)];
+      if (b && b.solid && b.opaque) return true;
+    }
+    return false;
+  }
+
   // Where it bursts: whoever's there and round it is burnt with cold and
-  // slowed (unless they rolled clear).
+  // slowed (unless they rolled clear). (Thrown from out in the open at
+  // someone under a roof, it bursts on the roof.)
   orbLands(a) {
     const x = Math.round(a.tx);
     const z = Math.round(a.tz);
+    if (a.from && !this.roofed(a.from.x, a.from.y, a.from.z) && this.roofed(x, Math.round(a.ty), z)) {
+      let ry = Math.round(a.ty) + 2;
+      while (ry < Math.round(a.ty) + 7 && !BLOCKS[this.world.getBlock(x, ry, z)].solid) ry++;
+      this.renderer.emit(x + 0.5, ry + 1, z + 0.5, { n: 12, color: ['#80d0ff', '#c0f0ff', '#ffffff'], up: 20, speed: 30, life: 0.5, glow: true });
+      this.audio?.play('impact', { x, y: ry, z });
+      return;
+    }
     const y = this.world.regionAt(x, z) ? this.world.findStandY(x, z, Math.round(a.ty)) : a.ty;
     for (const e of [this.player, ...this.npcs, ...this.creatures]) {
       if (e.dead || e.down || e === a.from || (e.S && e.S.night) || Math.max(Math.abs(e.x - x), Math.abs(e.z - z)) > 1 || Math.abs(e.y - y) > 2) continue;
@@ -3924,6 +3979,8 @@ export class Game {
       const dz = d.pz - (p.z + 0.5);
       const dist = Math.hypot(dx, dz);
       if (Math.abs(d.py - p.y) > 1.5 || dist > 1.6) continue;
+      // (No room for it: it stays where it lies.)
+      if (!canAdd(p.inv, d.item, 1)) continue;
       if (dist > 0.6) {
         // Gentle magnet.
         d.px -= dx * 0.2;

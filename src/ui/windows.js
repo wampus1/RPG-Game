@@ -23,6 +23,11 @@ import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete, teleportTo } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 
+// How much old coin a merchant will change in a day: one on the road (a
+// peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
+const OLD_COIN_WANDERING = 100;
+const OLD_COIN_SHOP = 30;
+
 // ---------------------------------------------------------------- slot tables
 function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
   const rows = Math.ceil(count / cols);
@@ -620,6 +625,16 @@ export class TradeWindow extends Window {
   sellPrice(k, game) {
     return game.sim.sellPrice(this.npc, k);
   }
+  // How much more old coin they'll change today: a peddler or any
+  // merchant on the road, up to a hundred (they've the whole world to
+  // spend it in); a shop in town, a few dozen.
+  oldRoom(game) {
+    const rec = this.npc.rec || (this.npc.rec = {});
+    const wandering = !!(this.npc.visit || rec.visitor || this.npc.caravan || rec.caravanTrader !== undefined);
+    const cap = wandering ? OLD_COIN_WANDERING : OLD_COIN_SHOP;
+    if (!rec.oldTaken || rec.oldTaken.day !== game.day) rec.oldTaken = { day: game.day, n: 0 };
+    return Math.max(0, cap - rec.oldTaken.n);
+  }
   wants(k, game) {
     const sh = this.shop(game);
     if (!sh || k === 'coin' || ITEMS[k].noSell) return false;
@@ -673,7 +688,9 @@ export class TradeWindow extends Window {
       const pr = this.wants(k, game) ? this.sellPrice(k, game) : 0;
       const glut = game.sim.sellGlut(this.npc, k);
       const lot = ITEMS[k].exchange;
-      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : lot ? `They'll change them: ¤${pr} for every ${lot}` : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 ? C.green : C.red);
+      const room = lot ? this.oldRoom(game) : 0;
+      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : lot ? (room >= lot ? `They'll change them: ¤${pr} for every ${lot}` : 'They\'ve changed all they will today.') : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 && (!lot || room >= lot) ? C.green : C.red);
+      if (lot && room >= lot) g.text(40, 17, `(up to ${room} more today)`, C.faint);
       const mf = game.sim.market.factor(this.npc.layout, k);
       if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
       else if (this.wants(k, game) && pr > 0 && mf < 0.9) g.text(40, 17, '(plenty about round here: cheap)', C.orange);
@@ -735,7 +752,13 @@ export class TradeWindow extends Window {
       game.audio?.play('error');
       return;
     }
-    const want = all ? s.count - (s.count % lot) : lot;
+    const room = ITEMS[item].exchange ? this.oldRoom(game) : Infinity;
+    if (room < lot) {
+      this.npc.say('I\'ve changed all the old coin I can carry today.', 2.5);
+      game.audio?.play('error');
+      return;
+    }
+    const want = Math.min(all ? s.count - (s.count % lot) : lot, room - (room % lot));
     let n = 0;
     let paid = 0;
     let why = null;
@@ -761,6 +784,7 @@ export class TradeWindow extends Window {
     }
     s.count -= n;
     if (s.count <= 0) p.inv[i] = null;
+    if (ITEMS[item].exchange) this.npc.rec.oldTaken.n += n;
     const left = p.give('coin', paid);
     if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
     game.sim.noteTrade(this.npc, Math.ceil(paid / 2));

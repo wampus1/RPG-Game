@@ -359,6 +359,16 @@ def('boss_gate', { ...sprite, tall: true, solid: true, interact: 'boss_gate', ro
 def('boss_gate_open', { ...sprite, tall: true, solid: false, interact: 'boss_gate', rotatable: true, hardness: Infinity, drop: null, label: 'Great Gate (Raised)' });
 def('kav_gate', { ...sprite, tall: true, solid: true, interact: 'boss_gate', rotatable: true, hardness: Infinity, drop: null, light: 4, label: 'Hall Door' });
 def('gong', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: null, label: 'Alarm Gong' });
+// A Kavorent spire's keystone (a hollow in it the shape of a cut stone),
+// and the blight round a spire: the turf and the trees gone violet, and
+// what grows in it.
+def('kav_keystone', { interact: 'kav_pillar', hardness: Infinity, drop: null, light: 3, label: 'Keystone' });
+def('grass_void', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Blighted Turf' });
+def('leaves_void', { ...leaves(), drop: [{ item: 'stick', chance: 0.1 }], label: 'Blighted Leaves' });
+def('void_bloom', { ...dressing, hardness: 0.05, light: 4, drop: null, label: 'Voidbloom' });
+def('glow_crystal', { ...dressing, tool: 'pick', hardness: 0.6, light: 5, drop: [{ item: 'kav_scrap', chance: 0.15 }], label: 'Weird Crystals' });
+def('tendril', { ...dressing, tall: true, hardness: 0.1, light: 2, drop: null, label: 'Tendril' });
+def('eye_stalk', { ...dressing, hardness: 0.1, drop: null, label: 'Watcher Stalk' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

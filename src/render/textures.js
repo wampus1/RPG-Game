@@ -21,6 +21,7 @@ const P = {
   grass_dry: ['#b0a448', '#8c8236', '#c8bc60', '#d8cc78'],
   grass_jungle: ['#2e9a3a', '#22782c', '#44b850', '#5cd060'],
   grass_taiga: ['#5a7a4a', '#465e3a', '#6e9058', '#8a6a44'],
+  grass_void: ['#5a3a7a', '#422a5e', '#7a4ea0', '#b070e0'],
   dirt: ['#7a5436', '#5e3f28', '#946842', '#a8a098'],
   sand: ['#d2b46c', '#b99a58', '#e0c682'],
   snow: ['#b4bcc8', '#98a4b6', '#c4ccd8'],
@@ -70,6 +71,7 @@ const LEAF = {
   acacia: ['#7a9a2e', '#5e7a22', '#98b440'],
   willow: ['#6a9a5a', '#527a46', '#86b474'],
   snowy: ['#2e5e3e', '#224a30', '#c4ccd8'],
+  void: ['#5e2e82', '#421e5e', '#9050c0'],
 };
 
 // --- atlas ------------------------------------------------------------------
@@ -254,7 +256,7 @@ function cubeTop(name, v, rand, rot) {
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
-    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': {
+    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': case 'grass_void': {
       speckle(p, pal, rand, 0.35);
       for (let i = 0; i < 10; i++) {
         const x = Math.floor(rand() * 16);
@@ -263,6 +265,8 @@ function cubeTop(name, v, rand, rot) {
         p.set(x, y + 1, pal[2]);
       }
       if (name === 'grass_taiga') for (let i = 0; i < 6; i++) p.set(rand() * 16, rand() * 16, pal[3]);
+      // (Blighted: a glint of something cold in it.)
+      if (name === 'grass_void') for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * 16, '#5ad8f0');
       return p;
     }
     case 'dirt': {
@@ -517,7 +521,7 @@ function cubeFront(name, v, rand, rot) {
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
-    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': {
+    case 'grass': case 'grass_lush': case 'grass_dry': case 'grass_jungle': case 'grass_taiga': case 'grass_void': {
       speckle(p, P.dirt, rand, 0.3);
       for (let x = 0; x < 16; x++) {
         const d = 2 + (rand() < 0.4 ? 1 : 0) + (rand() < 0.15 ? 2 : 0);

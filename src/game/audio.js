@@ -49,6 +49,24 @@ export class Audio {
     o.stop(t + dur + 0.02);
   }
 
+  // A note that grows rather than fades (and its pitch climbing with it),
+  // cut off at the end.
+  swell(freq, dur, type = 'sine', vol = 0.2, slide = 0, delay = 0) {
+    const c = this.ctx;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    g.gain.setValueAtTime(0.0005, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.95);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + dur + 0.08);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.1);
+  }
+
   noise(dur, vol = 0.3, freq = 1200, delay = 0) {
     const c = this.ctx;
     const t = c.currentTime + delay;
@@ -209,6 +227,8 @@ export class Audio {
       case 'voices': for (let i = 0; i < 4; i++) this.tone(140 + Math.random() * 90, 0.18, 'sawtooth', 0.008, Math.random() * 40 - 20, i * 0.22); break;
       case 'wind_low': this.noise(2.4, 0.03, 220); break;
       case 'fuse': this.noise(1.0, 0.05, 5200); break;
+      // A long swell, rising (a spire waking).
+      case 'riser': [55, 82.5, 110, 165, 220].forEach((f, i) => this.swell(f, 3.0, i % 2 ? 'sawtooth' : 'sine', i % 2 ? 0.035 : 0.07, f * 1.5, 0)); this.noise(3.0, 0.03, 1600); break;
     }
   }
 }

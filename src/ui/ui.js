@@ -258,8 +258,10 @@ export class UI {
     }
     // A master's fight: its name and its life across the top of the screen.
     if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.drawBossBar(ctx, game);
-    // An opening scene's letterbox, titles and captions (under any window).
+    // An opening scene's letterbox, titles and captions (under any window);
+    // a short scene's bars and words (see scenes.js).
     if (game && game.cutscene) game.cutscene.draw(ctx);
+    if (game && game.scene && game.scene.draw) game.scene.draw(ctx, game);
     for (const w of this.windows) {
       w.grid.clear();
       w.hits = [];

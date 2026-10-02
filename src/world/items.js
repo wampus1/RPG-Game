@@ -31,6 +31,7 @@ const NOT_ITEMS = new Set([
   'kav_emitter', 'relic', 'kav_lamp', 'kav_pylon', 'kav_basin', 'sail', 'helm',
   'cobweb', 'urn', 'candles', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'glowshroom', 'weapon_rack', 'war_banner', 'hanging_chains',
   'powder_keg', 'roots', 'rubble', 'bone_throne', 'boss_gate', 'boss_gate_open', 'kav_gate', 'gong',
+  'kav_keystone', 'void_bloom', 'glow_crystal', 'tendril', 'eye_stalk', 'leaves_void',
 ]);
 
 const BLOCK_VALUES = {

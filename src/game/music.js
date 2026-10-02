@@ -20,6 +20,8 @@ const SCALES = {
   penta: [0, 2, 4, 7, 9],
   minpenta: [0, 3, 5, 7, 10],
   whole: [0, 2, 4, 6, 8, 10],
+  // (Nobody's: the Kavorent's.)
+  alien: [0, 1, 4, 5, 6, 10],
 };
 
 // root: MIDI note; prog: chord roots as scale degrees; density: how busy
@@ -67,6 +69,11 @@ export const THEMES = {
   dungeon_holdout_fight: { root: 55, scale: 'dorian', bpm: 150, prog: [0, 6, 0, 4], lead: 'square', drums: 'tribal', density: 0.78, drive: true, swing: 0.1 },
   dungeon_holdout_boss: { root: 55, scale: 'phrygian', bpm: 160, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'battle', density: 0.86, drive: true },
   dungeon_kavorent_fight: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  // A Kavorent spire: near it, a slow wrong music in a scale nobody uses;
+  // as one opens, it gathers and swells; open, it rings.
+  spire: { root: 49, scale: 'alien', bpm: 48, prog: [0, 1, 5, 2], lead: 'sine', pad: true, drums: null, density: 0.16, detune: 28, arp: true },
+  spire_swell: { root: 49, scale: 'alien', bpm: 92, prog: [0, 1, 0, 1, 5, 2, 5, 3], lead: 'square', pad: true, organ: true, drums: 'tribal', density: 0.62, drive: true, detune: 18, arp: true },
+  spire_open: { root: 54, scale: 'whole', bpm: 64, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, drums: null, density: 0.34, detune: 22 },
   dungeon_kavorent_boss: { root: 54, scale: 'whole', bpm: 152, prog: [0, 1, 3, 2, 0, 4, 3, 1], lead: 'square', drums: 'battle', density: 0.86, drive: true, arp: true, detune: 14 },
   // The openings: an old town's story, slow and warm; a shanty on deck;
   // the storm; and the cold after.
@@ -82,6 +89,7 @@ export function musicMood(game) {
   const p = game.player;
   if (!p) return 'title';
   if (game.cutscene && game.cutscene.mood) return game.cutscene.mood;
+  if (game.scene && game.scene.mood) return game.scene.mood;
   // A fight: guards after you, or beasts at your throat.
   if (!p.dead) {
     const guards = game.npcs.some((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);
@@ -97,6 +105,12 @@ export function musicMood(game) {
       }
       return 'fight_monsters';
     }
+  }
+  // Near a Kavorent spire (not one whose ruin is beaten).
+  if (!game.dungeon && game.nearSpire) {
+    const s = game.nearSpire;
+    const rec = game.sim.dungeons.get?.(s.id);
+    if (Math.hypot(s.x - p.x, s.z - p.z) < 20 && !(rec && rec.cleared)) return rec && rec.spire && rec.spire.open !== null && rec.spire.open !== undefined ? 'spire_open' : 'spire';
   }
   // Down below (no nights there): its master's fight, once begun, even
   // between blows.

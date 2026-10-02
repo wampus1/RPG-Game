@@ -681,10 +681,8 @@ export function buildFloor(rec, n) {
   // (Dig through it or go round: there's always a way between a room's doors.)
   for (const r of R) ensureWays(ctx, r);
   passageDecor(ctx);
-  // Secrets: a hidden room behind a crumbling wall, cracked floors (not on
-  // the bottom floor), a trapped passage or two.
+  // Secrets: a hidden room behind a crumbling wall, a trapped passage or two.
   hiddenRoom(ctx);
-  if (!last) crackedFloors(ctx);
   trapPassages(ctx);
   // A gate somewhere, and the lever that lifts it in another room.
   leverGate(ctx);
@@ -1355,25 +1353,6 @@ function hiddenRoom(ctx) {
     return room;
   }
   return null;
-}
-
-// Patches of cracked floor (in passages, mostly): step on them and you go
-// through, to the floor below.
-function crackedFloors(ctx) {
-  const { rng, plan, b, out, big } = ctx;
-  if (big) return;
-  const tiles = [];
-  for (let z = 1; z < plan.D - 1; z++) for (let x = 1; x < plan.W - 1; x++) if (plan.corr[z * plan.W + x]) tiles.push({ x, z });
-  for (let k = 0; k < 2 && tiles.length; k++) {
-    const c = tiles[rng.int(0, tiles.length - 1)];
-    for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const x = c.x + dx;
-      const z = c.z + dz;
-      if (!plan.at(x, z) || b.get(x, FY, z) !== B.air || !rng.chance(dx || dz ? 0.6 : 1)) continue;
-      b.set(x, FY - 1, z, B.cracked_floor);
-      out.cracks.push({ x: b.x0 + x, z });
-    }
-  }
 }
 
 // Passages with loose flagstones in them, and arrow slits in the walls

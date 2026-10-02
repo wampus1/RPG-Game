@@ -215,9 +215,14 @@ export class Creature extends Entity {
       this.face(t.x, t.z);
       return;
     }
-    if (!this.path || this.pathI >= this.path.length || this.thinkT <= 0) {
-      this.thinkT = 0.8;
-      if (!this.game.requestPathBudget()) return;
+    // (Close in, it keeps its way to you fresh: a quarter of a second near,
+    // longer the further off.)
+    const near = d <= 7;
+    const moved = this.pathGoal && (this.pathGoal.x !== t.x || this.pathGoal.z !== t.z);
+    if (!this.path || this.pathI >= this.path.length || this.thinkT <= 0 || (near && moved && this.thinkT < 0.55)) {
+      this.thinkT = near ? 0.25 : d <= 14 ? 0.5 : 0.8;
+      if (!this.game.requestPathBudget(near)) return;
+      this.pathGoal = { x: t.x, z: t.z };
       this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1, partial: true });
       this.pathI = 0;
       if (!this.path || !this.path.length) {
@@ -264,8 +269,10 @@ export class Creature extends Entity {
     }
     if (d > (wisp ? 8 : 9)) return false;
     if (this.castT > 0 || Math.abs(t.y - this.y) > 2) return true;
-    // (Only with a clear line to them.)
+    // (Only with a clear line to them; and a wisp's fire comes down from
+    // above, so nobody under a roof it isn't under itself.)
     if (!game.sim.lineOfSight(this.x, this.z, t.x, t.z, this.y + 1)) return false;
+    if (wisp && game.roofed(t.x, t.y, t.z) && !game.roofed(this.x, this.y, this.z)) return true;
     this.aiming = { t: wisp ? 0.9 : 0.75, x: t.x, y: t.y, z: t.z };
     this.drawnBow = !wisp;
     this.face(t.x, t.z);

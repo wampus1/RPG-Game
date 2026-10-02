@@ -105,7 +105,7 @@ export function dungeonTop(name, v, rand) {
       }
       return p;
     }
-    case 'kav_pillar': case 'kav_wall': {
+    case 'kav_pillar': case 'kav_wall': case 'kav_keystone': {
       p.fill(KAV.plate);
       // Panels: a fine grid of seams, a dim etched hex here and there.
       for (let i = 0; i < 16; i++) {
@@ -244,6 +244,29 @@ export function dungeonFront(name, v, rand, rot) {
     case 'stairs_down': case 'sinkhole': case 'mine_shaft': case 'rubble_seal':
       speckle(p, ['#5a4e44', '#463c34', '#6a5e52'], rand, 0.3);
       return frontify(p, 0.8);
+    case 'kav_keystone': {
+      // The keystone: the spire's face, and a hollow cut in it the shape of
+      // a cut stone (table, crown and point), rimmed in faint light.
+      p.fill(KAV.plate);
+      p.hline(0, 15, 0, KAV.edge);
+      p.hline(0, 15, LH - 1, KAV.deep);
+      const gem = [[5, 10, 1], [4, 11, 2], [3, 12, 3], [3, 12, 4], [4, 11, 5], [5, 10, 6], [6, 9, 7], [7, 8, 8], [7, 8, 9]];
+      for (const [a, b2, y] of gem) {
+        p.hline(a, b2, y, '#0c0a16');
+        p.set(a - 1, y, '#6e6cb0');
+        p.set(b2 + 1, y, '#3a3870');
+      }
+      p.hline(5, 10, 0, '#8a88d0');
+      // (Its facets, cut in the dark.)
+      p.line(5, 1, 3, 4, '#2a2848');
+      p.line(10, 1, 12, 4, '#2a2848');
+      p.hline(3, 12, 3, '#22203e');
+      p.line(3, 4, 7, 9, '#22203e');
+      p.line(12, 4, 8, 9, '#22203e');
+      p.set(6, 2, '#5ad8f0');
+      p.set(7, 10, KAV.seam);
+      return p;
+    }
     case 'kav_pillar': case 'kav_wall': {
       p.fill(KAV.plate);
       // Tall panels with a thin seam of cold light between them.
@@ -482,14 +505,32 @@ export const DSPRITES = {
     for (const x of [3, 6, 9, 12]) p.set(x, 4, '#c8b890');
     return p.outline(OUT);
   },
+  // The way into a holdout: cut into the outcrop's own rock (its top and
+  // two courses of its face, the same stone round it), an arch of dark in
+  // the lower course, ragged at the rim and blacker the deeper in.
   cave_mouth() {
     const p = spr(TALL);
-    const rock = ['#6a5e52', '#4a4038', '#7e7264'];
-    for (let y = 2; y < 40; y++) for (let x = 0; x < 16; x++) p.set(x, y, rock[(x * 7 + y * 3) % 5 === 0 ? 1 : 0]);
-    p.ellipse(8, 30, 6, 12, '#0a0806');
-    p.rect(2, 30, 12, 10, '#0a0806');
-    p.hline(0, 15, 2, rock[2]);
-    return p.outline(OUT);
+    let s = 0x2c41;
+    const rand = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    p.blit(dungeonTop('cave_rock', 0, rand), 0, 0);
+    p.blit(dungeonFront('cave_rock', 0, rand, 0), 0, 16);
+    p.blit(dungeonFront('cave_rock', 1, rand, 0), 0, 16 + LH);
+    const inside = (x, y) => {
+      const dx = (x - 7.5) / 5.6;
+      return y >= 39 ? Math.abs(dx) <= 1 : y >= 29 ? Math.abs(dx) <= 1 : dx * dx + ((y - 29) / 9) ** 2 <= 1;
+    };
+    for (let y = 18; y < 40; y++) {
+      for (let x = 0; x < 16; x++) {
+        if (!inside(x, y)) {
+          // (The rim: lighter where the rock was worn round the way in.)
+          if (inside(x + 1, y) || inside(x - 1, y) || inside(x, y + 1)) p.set(x, y, (x + y) % 3 ? '#8a7e6e' : '#a09482');
+          continue;
+        }
+        const edge = !inside(x + 1, y) || !inside(x - 1, y) || !inside(x, y - 1) || !inside(x + 2, y) || !inside(x - 2, y);
+        p.set(x, y, edge ? '#241c16' : y < 26 ? '#120e0a' : '#070504');
+      }
+    }
+    return p;
   },
   kav_door(rot, st, f) {
     const p = spr(TALL);
@@ -881,4 +922,60 @@ Object.assign(DSPRITES, {
     return p.outline(OUT);
   },
 });
-export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2 };
+// The blight's growths (see sites.js, blight).
+Object.assign(DSPRITES, {
+  // A voidbloom: a pale stem, a bulb of violet light that opens and shuts.
+  void_bloom(rot, st, f) {
+    const p = spr();
+    const sway = [0, 1, 0, -1][f % 4];
+    p.line(8, 26, 8 + sway, 14, '#4a3a5a');
+    p.line(8, 22, 5, 19, '#3a2e48');
+    p.set(4, 18, '#7a4ea0');
+    const open = f % 4 === 1 || f % 4 === 2;
+    p.ellipse(8 + sway, 11, open ? 4 : 3, 3, '#7a3aa0');
+    p.ellipse(8 + sway, 11, open ? 2 : 1, 2, '#e090ff');
+    p.set(8 + sway, 10, '#ffffff');
+    if (open) for (const dx of [-4, 4]) p.set(8 + sway + dx, 8, '#c070ff');
+    return p.outline(OUT);
+  },
+  // A cluster of crystals, violet and cold, lit from inside.
+  glow_crystal(rot, st, f) {
+    const p = spr();
+    const c = ['#8a4ee0', '#5a2e9a', '#d0a0ff'];
+    for (const [x, h, w] of rot % 2 ? [[4, 12, 2], [8, 16, 3], [12, 9, 2]] : [[3, 9, 2], [7, 14, 3], [11, 11, 2]]) {
+      for (let y = 0; y < h; y++) {
+        const ww = Math.max(0, Math.round(w * (1 - y / (h + 2))));
+        p.hline(x - ww, x + ww, 25 - y, y % 3 ? c[0] : c[1]);
+      }
+      p.vline(x, 26 - h, 25, c[2]);
+      if ((f + x) % 3 === 0) p.set(x, 25 - h, '#ffffff');
+    }
+    return p.outline(OUT);
+  },
+  // A tendril: a twisting stalk taller than you, a light at its tip.
+  tendril(rot, st, f) {
+    const p = spr(TALL);
+    let x = 8;
+    for (let y = 39; y > 4; y--) {
+      x = 8 + Math.round(Math.sin(y / 5 + f * 0.7 + rot) * 2.2);
+      p.set(x, y, y % 4 ? '#3a2a4e' : '#5a3e72');
+      if (y > 26) p.set(x + 1, y, '#2a1e3a');
+    }
+    p.ellipse(x, 4, 2, 2, '#c070ff');
+    p.set(x, 4, '#ffffff');
+    return p.outline(OUT);
+  },
+  // A watcher stalk: an eye on a stem, that turns to look about.
+  eye_stalk(rot, st, f) {
+    const p = spr();
+    p.line(8, 26, 8, 15, '#4a3a5a');
+    p.line(8, 24, 11, 21, '#3a2e48');
+    p.ellipse(8, 11, 4, 4, '#e8dce8');
+    const look = [-1, 0, 1, 0][f % 4];
+    p.ellipse(8 + look, 11, 2, 2, '#8a2ad0');
+    p.set(8 + look, 11, '#0a0610');
+    p.set(6, 9, '#ffffff');
+    return p.outline(OUT);
+  },
+});
+export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2, void_bloom: 4, glow_crystal: 3, tendril: 4, eye_stalk: 4 };

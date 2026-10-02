@@ -37,11 +37,24 @@ const HELD_FLAMES = {
   kav_everlight: { x: 8, y: 7, r: 8, glow: 'rgba(140,240,255,0.9)', ember: 0.1, colors: ['#a8f4ff', '#ffffff'] },
 };
 
+// A held thing's picture points up and to the right from its grip; turned
+// this far it points straight down, or straight up.
+const THRUST_DOWN = Math.PI * 0.75;
+const THRUST_UP = -Math.PI * 0.25;
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
+    this.mainCtx = this.ctx;
+    // The size of the world's picture (the view, or bigger when the camera's
+    // drawn back: see render).
+    this.vw = VIEW_W;
+    this.vh = VIEW_H;
+    this.zoom = 1;
+    this.zoomGoal = 1;
+    this.zoomK = 1;
     buildTextures();
     this.atlas = TEX.atlas;
     this.camX = 0;
@@ -129,17 +142,17 @@ export class Renderer {
     cx.imageSmoothingEnabled = false;
     const camX = this.camX;
     const camY = this.camY;
-    const x0 = Math.round((VIEW_W - SNAP_W) / 2);
-    const y0 = Math.round((VIEW_H - SNAP_H) / 2);
+    const x0 = Math.round((this.vw - SNAP_W) / 2);
+    const y0 = Math.round((this.vh - SNAP_H) / 2);
     // (Speech and falling rain or snow aren't part of the picture: they're
     // drawn upright over the turn, see drawSpin.)
     const bubbles = new Map();
-    for (const ox of [x0, x0 + SNAP_W - VIEW_W]) {
-      for (const oy of [y0, y0 + SNAP_H - VIEW_H]) {
+    for (const ox of [x0, x0 + SNAP_W - this.vw]) {
+      for (const oy of [y0, y0 + SNAP_H - this.vh]) {
         this.camX = camX + ox;
         this.camY = camY + oy;
         this.drawScene(game, 0, true);
-        cx.drawImage(this.ctx.canvas, 0, 0, VIEW_W, VIEW_H, ox - x0, oy - y0, VIEW_W, VIEW_H);
+        cx.drawImage(this.ctx.canvas, 0, 0, this.vw, this.vh, ox - x0, oy - y0, this.vw, this.vh);
         for (const b of this.bubbles) {
           const q = { ...b, x: b.x + ox - x0, y: b.y + oy - y0 };
           bubbles.set(`${b.text}|${Math.round(q.x)}|${Math.round(q.y)}`, q);
@@ -161,7 +174,7 @@ export class Renderer {
     const e = k * k * (3 - 2 * k);
     const ctx = this.ctx;
     ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillRect(0, 0, this.vw, this.vh);
     const at = this.playerPoint(game);
     const q = (Math.PI / 2) * sp.d;
     const draw = (shot, ang, alpha) => {
@@ -204,7 +217,7 @@ export class Renderer {
   drawScene(game, dt, snap = false) {
     const ctx = this.ctx;
     ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillRect(0, 0, this.vw, this.vh);
     if (game.cutscene && game.cutscene.noCutaway) this.hidden = null;
     else this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
@@ -219,7 +232,7 @@ export class Renderer {
     drawEffects(this, this.ctx, dt);
     this.drawParticles(dt);
     this.drawAim(game);
-    if (snap) return;
+    if (snap || this.zoomK !== 1) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
     for (const b of this.bubbles) {
       if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
@@ -243,9 +256,9 @@ export class Renderer {
   // The world rectangle the screen can show (with a margin, in tiles).
   visibleBox(margin = 2) {
     const u0 = Math.floor(this.camX / TILE) - margin;
-    const u1 = Math.floor((this.camX + VIEW_W) / TILE) + margin;
+    const u1 = Math.floor((this.camX + this.vw) / TILE) + margin;
     const v0 = Math.floor((this.camY - SPR_H - LH) / TILE) - margin;
-    const v1 = Math.floor((this.camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + margin;
+    const v1 = Math.floor((this.camY + this.vh + (WORLD_Y - 1) * LH) / TILE) + margin;
     const a = this.toWorld(u0, v0);
     const b = this.toWorld(u1, v1);
     return { x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1]) };
@@ -266,7 +279,54 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ frame
+  // The camera drawn back (near a Kavorent spire, say): the world drawn
+  // bigger off screen, then shrunk into the view (speech kept sharp over
+  // it). A turn of the camera is instant while it's drawn back.
   render(game, dt) {
+    const goal = this.zoomGoal || 1;
+    this.zoom += (goal - this.zoom) * Math.min(1, dt * 1.4);
+    if (Math.abs(this.zoom - goal) < 0.004) this.zoom = goal;
+    const z = Math.round(this.zoom * 32) / 32;
+    const main = this.mainCtx;
+    if (z !== 1) {
+      this.spin = null;
+      const vw = Math.round(VIEW_W * z);
+      const vh = Math.round(VIEW_H * z);
+      if (!this.zcanvas) this.zcanvas = document.createElement('canvas');
+      if (this.zcanvas.width !== vw || this.zcanvas.height !== vh) {
+        this.zcanvas.width = vw;
+        this.zcanvas.height = vh;
+      }
+      this.ctx = this.zcanvas.getContext('2d');
+      this.ctx.imageSmoothingEnabled = false;
+      this.vw = vw;
+      this.vh = vh;
+    } else {
+      this.ctx = main;
+      this.vw = VIEW_W;
+      this.vh = VIEW_H;
+    }
+    // (Re-centred on the same spot as the picture grows.)
+    if (this.zoomK !== z && this.camInit) {
+      this.cx -= (VIEW_W * z - VIEW_W * this.zoomK) / 2;
+      this.cy -= (VIEW_H * z - VIEW_H * this.zoomK) / 2;
+    }
+    this.zoomK = z;
+    this.renderFrame(game, dt);
+    if (z !== 1) {
+      main.imageSmoothingEnabled = true;
+      main.imageSmoothingQuality = 'high';
+      main.drawImage(this.zcanvas, 0, 0, this.vw, this.vh, 0, 0, VIEW_W, VIEW_H);
+      main.imageSmoothingEnabled = false;
+      for (const b of this.bubbles || []) {
+        if (b.emote) drawText(main, b.text, Math.round(b.x / z), Math.round(b.y / z), b.color, '#000');
+        else this.drawBubble(main, b.text, b.x / z, b.y / z, b.color);
+      }
+      this.ctx = main;
+    }
+  }
+
+  renderFrame(game, dt) {
     this.frameDt = dt;
     this.game = game;
     this.time += dt;
@@ -278,11 +338,11 @@ export class Renderer {
     }
     const player = game.player;
     // (An opening scene moves the camera its own way: see cutscene.js.)
-    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : player.renderPos();
+    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
-    const tx = pu * TILE + 8 - VIEW_W / 2;
-    const ty = pv * TILE - rp.y * LH + LH + 8 - VIEW_H / 2 - 10;
+    const tx = pu * TILE + 8 - this.vw / 2;
+    const ty = pv * TILE - rp.y * LH + LH + 8 - this.vh / 2 - 10;
     if (!this.camInit) {
       this.cx = tx;
       this.cy = ty;
@@ -346,21 +406,21 @@ export class Renderer {
     const ctx = this.ctx;
     const hl = game.healFlash || 0;
     if (hl > 0.01) {
-      const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, Math.min(VIEW_W, VIEW_H) * 0.32, VIEW_W / 2, VIEW_H / 2, Math.max(VIEW_W, VIEW_H) * 0.62);
+      const g = ctx.createRadialGradient(this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.32, this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.62);
       g.addColorStop(0, 'rgba(80,220,90,0)');
       g.addColorStop(1, `rgba(90,230,110,${Math.min(0.42, hl * 0.6)})`);
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillRect(0, 0, this.vw, this.vh);
     }
     const h = game.hurtFlash || 0;
     if (h > 0.01) {
-      const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, Math.min(VIEW_W, VIEW_H) * 0.25, VIEW_W / 2, VIEW_H / 2, Math.max(VIEW_W, VIEW_H) * 0.62);
+      const g = ctx.createRadialGradient(this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.25, this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.62);
       g.addColorStop(0, 'rgba(200,0,0,0)');
       g.addColorStop(1, `rgba(210,10,10,${Math.min(0.7, h * 0.65)})`);
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillRect(0, 0, this.vw, this.vh);
       ctx.fillStyle = `rgba(255,30,30,${Math.min(0.22, h * 0.18)})`;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillRect(0, 0, this.vw, this.vh);
     }
     const f = this.flash;
     if (f) {
@@ -369,7 +429,7 @@ export class Renderer {
       else {
         ctx.globalAlpha = Math.min(0.75, (f.t / f.dur) * 0.75);
         ctx.fillStyle = f.color;
-        ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+        ctx.fillRect(0, 0, this.vw, this.vh);
         ctx.globalAlpha = 1;
       }
     }
@@ -435,9 +495,9 @@ export class Renderer {
     const camX = this.camX;
     const camY = this.camY;
     const x0 = Math.floor(camX / TILE) - 1;
-    const x1 = Math.floor((camX + VIEW_W) / TILE) + 1;
+    const x1 = Math.floor((camX + this.vw) / TILE) + 1;
     const zMin = Math.floor((camY - SPR_H - LH) / TILE) - 1;
-    const zMax = Math.floor((camY + VIEW_H + (WORLD_Y - 1) * LH) / TILE) + 1;
+    const zMax = Math.floor((camY + this.vh + (WORLD_Y - 1) * LH) / TILE) + 1;
     const W = x1 - x0 + 1;
     const nRows = zMax - zMin + 2;
     // Column cache: region + base index for every visible column. Columns
@@ -525,7 +585,7 @@ export class Renderer {
       const fadeRow = z >= pz && z <= pz + 7;
       for (let y = 0; y < WORLD_Y; y++) {
         const sy = z * TILE - y * LH - camY;
-        if (sy < VIEW_H + 4 && sy + SPR_H + LH > -4) {
+        if (sy < this.vh + 4 && sy + SPR_H + LH > -4) {
           const fadeLayer = fadeRow && y >= pLayer && (z > pz || y > pLayer + 1);
           for (let i = 0; i < W; i++) {
             const ci = rowBase + i;
@@ -894,7 +954,7 @@ export class Renderer {
     let sx = Math.round(rp.x * TILE - this.camX);
     const floorY = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY); // top of floor face
     const feetY = floorY + 10 - (e.hop || 0);
-    if (sx < -32 || sx > VIEW_W + 32 || feetY < -40 || feetY > VIEW_H + 40) return;
+    if (sx < -32 || sx > this.vw + 32 || feetY < -40 || feetY > this.vh + 40) return;
     const sh = TEX.misc.shadow;
     const inWater = e.inWater;
     // Sat in the back of a wagon: drawn with it (see drawProp).
@@ -988,6 +1048,11 @@ export class Renderer {
         // (A second blade, on the far side of them, goes behind.)
         const offKey = e.offhandItem ? e.offhandItem() : null;
         if (offKey && (dir === 1 || dir === 3) && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, this.guarding(e));
+        // (Facing away, what's in the hand is in front of them: behind
+        // them, as we see it, so it's drawn first.)
+        const held = e.heldItem && !rolling ? e.heldItem() : null;
+        const heldBehind = dir === 2 && !raised;
+        if (held && heldBehind) this.drawHeld(ctx, held, e, sx, top, false, guard);
         // Jewelled armour: a faint glow of its stone's colour round them.
         const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
         const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
@@ -1041,12 +1106,11 @@ export class Renderer {
           ctx.stroke();
           ctx.globalAlpha = a0;
         }
-        const held = e.heldItem && !rolling ? e.heldItem() : null;
         // (Side on, a raised shield is in front of the blade; face on, the
         // blade's held over it, ready.)
         if (raised && dir !== 0) this.drawHeld(ctx, held, e, sx, top, false, guard);
         if (raised) this.drawRaisedShield(ctx, e, raised, dir, sx, top);
-        if (held && !(raised && dir !== 0)) this.drawHeld(ctx, held, e, sx, top, false, guard);
+        if (held && !(raised && dir !== 0) && !heldBehind) this.drawHeld(ctx, held, e, sx, top, false, guard);
         if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, guard);
         if (shade) ctx.globalAlpha = a0;
         sx = sx0;
@@ -1314,7 +1378,13 @@ export class Renderer {
       const f = Math.min(1, w.t / Math.max(0.05, w.dur));
       const k = 1 - (1 - f) * (1 - f);
       const st = w.st;
-      if (st.thrust || st.lunge) return { ang: sg * (0.55 + 0.25 * k), dx: -sg * 3 * k, dy: -k, smear: 0 };
+      // (A thrust drawn back along the line it'll go: down at you face on,
+      // up and away from you facing off.)
+      if (st.thrust || st.lunge) {
+        if (dir === 0) return { ang: THRUST_DOWN, dx: 0, dy: -2 * k, smear: 0 };
+        if (dir === 2) return { ang: THRUST_UP, dx: 0, dy: 2 * k, smear: 0 };
+        return { ang: sg * (0.55 + 0.25 * k), dx: -sg * 3 * k, dy: -k, smear: 0 };
+      }
       const back = st.heavy ? 2.7 : 2.1;
       let ang = -sg * (0.3 + back * k);
       if (f > 0.65) ang += (Math.random() - 0.5) * 0.22;
@@ -1326,7 +1396,10 @@ export class Renderer {
     const st = s.st || {};
     if (st.thrust || st.flurry || st.lunge) {
       const k = prog < 0.3 ? prog / 0.3 : Math.max(0, 1 - (prog - 0.3) / 0.7);
-      return { ang: sg * 0.75, dx: sg * (dir === 0 || dir === 2 ? 2 : 7) * k, dy: dir === 0 ? 3 * k : dir === 2 ? -3 * k : 0, smear: 0 };
+      // (Jabbed straight out the way they face: down, up, or to the side.)
+      if (dir === 0) return { ang: THRUST_DOWN, dx: 0, dy: 6 * k, smear: 0 };
+      if (dir === 2) return { ang: THRUST_UP, dx: 0, dy: -6 * k, smear: 0 };
+      return { ang: sg * 0.75, dx: sg * 7 * k, dy: 0, smear: 0 };
     }
     const back = st.heavy ? 2.7 : 2.1;
     const fwd = st.heavy ? 2.3 : 1.8;
@@ -1744,13 +1817,13 @@ export class Renderer {
     const ctx = this.ctx;
     const indoor = this.hidden !== null;
     // (A storm at sea drives twice the rain, slanting with the wind.)
-    if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 440 }, () => ({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, s: 0.6 + Math.random() * 0.8 }));
+    if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 440 }, () => ({ x: Math.random() * this.vw, y: Math.random() * this.vh, s: 0.6 + Math.random() * 0.8 }));
     const n = Math.min(this.weatherDrops.length, Math.floor(220 * w.level * (indoor ? 0.25 : 1)));
     const wind = w.wind || 1;
     const rain = w.kind === 'rain';
     if (part !== 'drops') {
       ctx.fillStyle = w.kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(0.34, 0.18 * w.level)})` : `rgba(200,210,230,${0.1 * w.level})`;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillRect(0, 0, this.vw, this.vh);
     }
     if (part === 'tint' || w.kind === 'fog') return;
     const lit = part === 'drops' ? skyLight(game.minute) : [1, 1, 1];
@@ -1766,7 +1839,7 @@ export class Renderer {
           const k = Math.round(wind - 1);
           for (let q = 0; q < 4; q++) ctx.fillRect(Math.round(d.x + ((3 - q) * k) / 3), Math.round(d.y) + q, 1, 1);
         } else ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
-        if (d.y > VIEW_H * (0.3 + d.s * 0.5) && Math.random() < 0.08) {
+        if (d.y > this.vh * (0.3 + d.s * 0.5) && Math.random() < 0.08) {
           ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 4, 3, 1);
           d.y = -4;
         }
@@ -1775,12 +1848,12 @@ export class Renderer {
         d.x += Math.sin(this.time * 1.5 + i) * dt * 12;
         ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s > 1.1 ? 2 : 1, d.s > 1.1 ? 2 : 1);
       }
-      if (d.y > VIEW_H) {
+      if (d.y > this.vh) {
         d.y = -4;
-        d.x = Math.random() * VIEW_W;
+        d.x = Math.random() * this.vw;
       }
-      if (d.x < -4) d.x += VIEW_W + 4;
-      if (d.x > VIEW_W + 4) d.x -= VIEW_W + 4;
+      if (d.x < -4) d.x += this.vw + 4;
+      if (d.x > this.vw + 4) d.x -= this.vw + 4;
     }
   }
 
@@ -1961,7 +2034,7 @@ export class Renderer {
       p.y += p.vy * dt;
       const sx = Math.round(p.x - this.camX);
       const sy = Math.round(p.y - this.camY);
-      if (sx < -4 || sy < -4 || sx > VIEW_W || sy > VIEW_H) continue;
+      if (sx < -4 || sy < -4 || sx > this.vw || sy > this.vh) continue;
       ctx.globalAlpha = Math.min(1, p.life / (p.max * 0.5));
       ctx.fillStyle = p.color;
       if (p.chunk) {
