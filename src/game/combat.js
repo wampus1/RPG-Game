@@ -31,7 +31,7 @@
 // you clear.
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { has as heroHas, staminaBonus } from './hero.js';
-import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll } from './gems.js';
+import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -379,6 +379,7 @@ export function resolveHit(game, a, v, st, opts = null) {
   // Rolled clear.
   if (v.rollT > 0) {
     text('dodged', '#c8e8ff');
+    onDodge(game, v);
     game.renderer.emit(v.x, v.y + 0.3, v.z, { n: 5, color: ['#c8e8ff', '#ffffff'], up: 10, speed: 30, life: 0.3 });
     return 'dodged';
   }
@@ -396,11 +397,16 @@ export function resolveHit(game, a, v, st, opts = null) {
     const wall = sh && heroHas(hero, 'shieldbearer');
     const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0)));
     const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1) * blockCostMult(v) * (st.drain || 1);
+    const before = amount;
     if (v.kind === 'player') {
       if ((v.stamina || 0) >= cost) {
         v.stamina -= cost;
         amount *= 1 - power;
         text('blocked', '#a0c8ff');
+      } else if (bloodPrice(game, v)) {
+        // (A bloodstone shield takes it in blood instead, and holds.)
+        v.stamina = 0;
+        amount *= 1 - power;
       } else {
         // Too tired to hold it: the guard's broken and you stagger.
         v.stamina = 0;
@@ -419,7 +425,7 @@ export function resolveHit(game, a, v, st, opts = null) {
     v.shieldJolt = 0.18;
     if (v.kind !== 'player') v.guardT = 0.7;
     game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
-    if (!(v.guardBroken > 0)) onBlock(game, v, a, false);
+    if (!(v.guardBroken > 0)) onBlock(game, v, a, false, before - amount);
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
@@ -620,6 +626,7 @@ export function playerTick(game, p, dt, input, blocked) {
   const morning = game.minute >= 300 && game.minute < 600 && heroHas(game.hero, 'early_riser');
   const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1);
   if (p.rollStrike > 0) p.rollStrike -= dt;
+  tickGuard(game, p, dt);
   if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
   if (p.stamina > p.maxStamina) p.stamina = Math.max(p.maxStamina, p.stamina - dt * 2);
 }

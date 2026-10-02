@@ -951,12 +951,38 @@ export class Renderer {
           ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, GEMS[stone].color), sx - 1, top - SPR_PAD - 1);
           ctx.globalAlpha = a;
         }
+        // Gone into shadow (onyx): you're half there, dusk-violet.
+        const shade = e.shadeT > 0;
+        const a0 = ctx.globalAlpha;
+        if (shade) {
+          ctx.globalAlpha = a0 * 0.4;
+          ctx.filter = 'brightness(0.4) sepia(1) hue-rotate(220deg) saturate(2)';
+        }
+        // Wounded in bloodstone armour: a red pulse round you, the deeper
+        // the wounds, the stronger.
+        const rage = e.kind === 'player' && !shade && e.hp < e.maxHp * 0.6 && worn.some((k) => k && ITEMS[k] && ITEMS[k].socket === 'bloodstone');
+        if (rage) {
+          ctx.globalAlpha = a0 * (0.35 + 0.4 * (1 - e.hp / e.maxHp)) * (0.6 + 0.4 * Math.sin(this.time * 7));
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#ff3040'), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a0;
+        }
         if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        if (shade) ctx.filter = 'none';
+        // A ward of moonlight round you: a pale ring, turning.
+        if (e.moonWard) {
+          ctx.globalAlpha = a0 * (0.5 + 0.3 * Math.sin(this.time * 6));
+          ctx.strokeStyle = '#e8f0ff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(sx + 8, top + 12, 11, 14, 0, this.time * 2, this.time * 2 + Math.PI * 1.6);
+          ctx.stroke();
+          ctx.globalAlpha = a0;
+        }
         const held = e.heldItem && !rolling ? e.heldItem() : null;
         // (Side on, a raised shield is in front of the blade; face on, the
         // blade's held over it, ready.)
@@ -964,6 +990,7 @@ export class Renderer {
         if (raised) this.drawRaisedShield(ctx, e, raised, dir, sx, top);
         if (held && !(raised && dir !== 0)) this.drawHeld(ctx, held, e, sx, top, false, guard);
         if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, guard);
+        if (shade) ctx.globalAlpha = a0;
         sx = sx0;
         // ...and a glint of it now and then.
         if (stone && !this.spin) {
@@ -981,7 +1008,7 @@ export class Renderer {
     if (!e.dead && !this.spin && e.kind !== 'item') {
       const tall = e.kind !== 'creature' || e.species === 'horse';
       if (e.burnT > 0) drawBurning(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
-      if (e.stunT > 0 || e.slowT > 0) drawStatus(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
+      if (e.stunT > 0 || e.slowT > 0 || e.frozenT > 0 || e.bleedT > 0 || e.markT > 0) drawStatus(this, ctx, e, sx, feetY, tall, this.frameDt || 0.016);
     }
     // Under the mouse? (The last thing drawn there is what you point at.)
     const m = this.mouse;
@@ -1090,9 +1117,39 @@ export class Renderer {
         ctx.globalAlpha = 1;
       }
     };
-    if (dir === 0) draw(sx + 2, 12, 12);
-    else if (dir === 3) draw(sx + 10 - jolt, 6, 12);
-    else if (dir === 1) draw(sx + jolt, 6, 12);
+    if (dir === 0) {
+      draw(sx + 1, 14, 14);
+      return;
+    }
+    // Side on: the shield's edge, its face showing a sliver, the boss
+    // standing out from it.
+    const it = ITEMS[key];
+    const lk = String((it && it.look) || 'wood').split(':')[0];
+    const rim = lk === 'iron' ? '#c8c8d4' : '#5a3a1a';
+    const face = lk === 'round' ? '#b83a32' : lk === 'iron' ? '#9a9aa8' : '#8a5a2a';
+    const x = dir === 3 ? sx + 11 - jolt : sx + 2 + jolt;
+    const out = dir === 3 ? 1 : -1;
+    ctx.fillStyle = '#1c1622';
+    ctx.fillRect(x - 1, y - 1, 5, 15);
+    ctx.fillStyle = rim;
+    ctx.fillRect(x, y, 3, 13);
+    ctx.fillStyle = face;
+    ctx.fillRect(x + (out > 0 ? 1 : 0), y + 1, 2, 11);
+    ctx.fillStyle = lk === 'iron' ? '#ffffff' : '#c8a070';
+    ctx.fillRect(x + (out > 0 ? 3 : -1), y + 5, 1, 3);
+    if (shine) {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(this.time * 40);
+      ctx.fillStyle = '#fff4b0';
+      ctx.fillRect(x - 1, y - 1, 5, 1);
+      ctx.fillRect(x - 1, y + 13, 5, 1);
+      ctx.fillRect(x + (out > 0 ? 3 : -1), y - 1, 1, 15);
+      ctx.globalAlpha = 1;
+    }
+    // (Its set stone glints on the boss.)
+    if (it && it.socket && GEMS[it.socket]) {
+      ctx.fillStyle = GEMS[it.socket].color;
+      ctx.fillRect(x + 1, y + 6, 1, 1);
+    }
   }
 
   // The item sits in the hand: its handle (near the icon's bottom-left)
@@ -1160,7 +1217,7 @@ export class Renderer {
     if (it && it.kind !== 'weapon' && !(it.kind === 'tool' && it.damage >= 3)) return null;
     const jolt = e.shieldJolt > 0 ? e.shieldJolt * 6 : 0;
     if (this.raisedShield(e)) return off ? null : { ang: -sg * 0.9, dx: -sg * 1, dy: -3, smear: 0 };
-    if (dir === 0) return { ang: -sg * 2.05, dx: -sg * 4, dy: -4 + jolt, smear: 0 };
+    if (dir === 0) return { ang: -sg * 1.42, dx: -sg * 3, dy: jolt, smear: 0 };
     if (dir === 2) return null;
     return { ang: -sg * 0.5, dx: sg * 2 - sg * jolt, dy: -4, smear: 0 };
   }
@@ -1550,7 +1607,13 @@ export class Renderer {
       // A javelin: long, and arcing high.
       const len = a.kind === 'javelin' ? 9 : a.kind === 'bolt' ? 4 : 5;
       const lift = a.kind === 'javelin' ? Math.round(Math.sin(f * Math.PI) * 6) : 0;
-      ctx.fillStyle = a.kind === 'javelin' ? '#b08a54' : a.kind === 'bolt' ? '#5e3a1c' : '#8a6038';
+      // (A shade's arrow, split off an onyx bow, is dusk-violet; one a
+      // moonstone shield sent back trails moonlight.)
+      if (a.shadow || a.reflected) {
+        ctx.fillStyle = a.shadow ? 'rgba(154,106,216,0.45)' : 'rgba(232,240,255,0.5)';
+        for (let i = 2; i < len + 4; i++) ctx.fillRect(Math.round(sx - ux * i), Math.round(sy - lift - uy * i * 0.75), 1, 1);
+      }
+      ctx.fillStyle = a.shadow ? '#5a3a88' : a.kind === 'javelin' ? '#b08a54' : a.kind === 'bolt' ? '#5e3a1c' : '#8a6038';
       for (let i = 0; i < len; i++) ctx.fillRect(Math.round(sx - ux * i), Math.round(sy - lift - uy * i * 0.75), 1, 1);
       ctx.fillStyle = '#e0e0e8';
       ctx.fillRect(Math.round(sx + ux), Math.round(sy - lift + uy * 0.75), 1, 1);

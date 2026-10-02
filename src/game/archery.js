@@ -14,7 +14,7 @@
 import { ITEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { countItem, removeItem } from './inventory.js';
-import { gemsOf, arrowSpeed } from './gems.js';
+import { gemsOf, arrowSpeed, splitShot, mirrorShot } from './gems.js';
 import { has as heroHas, cooldownMult } from './hero.js';
 import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './combat.js';
 
@@ -197,6 +197,8 @@ export function shootAimed(game, from, aim, o) {
   };
   game.projectiles.push(a);
   game.audio?.play(o.kind === 'stone' || o.kind === 'javelin' ? 'swing' : 'bow', from);
+  // (An onyx bow: two shades of it either side.)
+  splitShot(game, from, aim, o, shootAimed);
   return a;
 }
 
@@ -264,8 +266,10 @@ export function arrowStrikes(game, a, t) {
     // (Up it comes, and jolts with the hit.)
     t.shieldJolt = 0.18;
     if (t.kind !== 'player') t.guardT = 0.8;
-    // (A crossbow bolt goes through a shield, mostly.)
-    if (a.kind === 'bolt' && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
+    // (A moonstone shield sends it straight back; a crossbow bolt goes
+    // through any other, mostly.)
+    if (mirrorShot(game, t, a, t.kind === 'player' && t.blockT !== undefined && t.blockT < 0.3)) hit = false;
+    else if (a.kind === 'bolt' && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
     else hit = false;
     r.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');
     r.emit(t.x, t.y + 1.1, t.z, { n: 5, color: ['#ffffff', '#ffe8a0'], up: 20, speed: 40, life: 0.25, glow: true });

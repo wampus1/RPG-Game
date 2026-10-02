@@ -174,7 +174,10 @@ export class Player extends Entity {
 
   get lightLevel() {
     const k = this.heldItem();
-    return k === 'torch' ? 11 : k === 'lantern' ? 12 : k === 'campfire' ? 8 : 0;
+    const held = k === 'torch' ? 11 : k === 'lantern' ? 12 : k === 'campfire' ? 8 : 0;
+    // (Moonstone in your armour: a soft light all your own.)
+    const moon = WEAR_SLOTS.some((s) => s !== 'shield' && this.equip[s] && ITEMS[this.equip[s]]?.socket === 'moonstone') ? 8 : 0;
+    return Math.max(held, moon);
   }
 
   give(key, count) {

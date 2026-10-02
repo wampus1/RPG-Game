@@ -276,8 +276,13 @@ export const GEMS = {
   emerald: { name: 'Emerald', color: '#30c060', stats: { end: 1 }, about: 'Life: hits that mend you, armour that closes wounds' },
   topaz: { name: 'Topaz', color: '#e8b830', stats: { cha: 1 }, about: 'Lightning: blows that arc, arrows that dazzle, armour that blinds attackers' },
   amethyst: { name: 'Amethyst', color: '#a050e0', stats: { end: 1 }, about: 'Force: staggering blows and arrows, armour that turns blows back' },
+  // Rarer stones (one rough gem in several cuts to one of these): `color`
+  // is the light they give off, `body` the stone itself.
+  onyx: { name: 'Onyx', color: '#9a6ad8', body: '#241c30', stats: { agi: 1 }, rare: true, about: 'Shadow: blows echoed by your shade, arrows that split, armour that slips you out of sight' },
+  moonstone: { name: 'Moonstone', color: '#bcd8ff', body: '#e4ecf6', stats: { cha: 1 }, rare: true, about: 'Moonlight: crescents of light thrown off your blade, arrows that mark, armour that glows and wards you' },
+  bloodstone: { name: 'Bloodstone', color: '#e83848', body: '#2c5236', stats: { str: 1 }, rare: true, about: 'Blood: wounds that bleed, and armour that hits harder the closer you are to death' },
 };
-for (const [k, g] of Object.entries(GEMS)) item(k, { name: g.name, kind: 'gem', stack: 16, value: 70, gem: true });
+for (const [k, g] of Object.entries(GEMS)) item(k, { name: g.name, kind: 'gem', stack: 16, value: g.rare ? 110 : 70, gem: true });
 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });

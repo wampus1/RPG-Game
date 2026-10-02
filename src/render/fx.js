@@ -4,6 +4,7 @@
 // Positions are in view pixels (like particles), so they sit on the world
 // as the camera moves.
 import { TILE, LH } from '../config.js';
+import { humanoidSheet, frameGlow, CHAR_W, CHAR_H, SHEET_H, SPR_PAD } from './sprites.js';
 
 // ------------------------------------------------------------ flame frames
 // A little tongue of flame, four frames of flicker, in two sizes.
@@ -99,6 +100,8 @@ export function drawEffects(r, ctx, dt) {
     else if (f.type === 'siphon') drawSiphon(ctx, f, k, ox, oy);
     else if (f.type === 'beam') drawBeam(ctx, f, k, ox, oy);
     else if (f.type === 'wave') drawWave(r, ctx, f, k, ox, oy, dt);
+    else if (f.type === 'ghost') drawGhost(r, ctx, f, k, ox, oy);
+    else if (f.type === 'void') drawVoid(r, ctx, f, k, ox, oy, dt);
   }
   ctx.globalAlpha = 1;
 }
@@ -257,6 +260,52 @@ function drawWave(r, ctx, f, k, ox, oy, dt) {
   if (Math.random() < dt * 30) spark(r, x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 6, colors[0], { vx: 0, vy: -6, g: 0, life: 0.4, shape: 'star' });
 }
 
+// A shade of someone (onyx): their shape in dusk-violet, half there, a
+// rim of violet light round it, fading (lunging in, for an echoed blow).
+function drawGhost(r, ctx, f, k, ox, oy) {
+  if (!f.look) return;
+  const sheet = humanoidSheet(f.look);
+  const dir = r.viewDir ? r.viewDir(f.dir ?? 0) : f.dir ?? 0;
+  const frame = f.strike ? 3 : 0;
+  const x = Math.round(f.cx - 8 + ox);
+  const y = Math.round(f.cy + 10 - CHAR_H + 1 + oy);
+  const a = ctx.globalAlpha;
+  ctx.globalAlpha = (f.strike ? 0.65 : 0.5) * (1 - k);
+  ctx.filter = 'brightness(0.35) sepia(1) hue-rotate(220deg) saturate(2.5)';
+  ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, x, y - SPR_PAD, CHAR_W, SHEET_H);
+  ctx.filter = 'none';
+  ctx.globalAlpha = (1 - k) * 0.8;
+  ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#9a6ad8'), x - 1, y - SPR_PAD - 1);
+  ctx.globalAlpha = a;
+}
+
+// A void (onyx): a black well in the ground with a violet rim, motes
+// spiralling down into it; it swells open, holds, and snaps shut.
+function drawVoid(r, ctx, f, k, ox, oy, dt) {
+  const open = k < 0.15 ? k / 0.15 : k > 0.85 ? (1 - k) / 0.15 : 1;
+  const R = 4 + 14 * open;
+  const cx = f.cx + ox;
+  const cy = f.cy + oy;
+  for (let i = 3; i >= 0; i--) {
+    const rr = R * (1 - i * 0.2);
+    ctx.globalAlpha = 0.25 + i * 0.18;
+    ctx.fillStyle = ['#000000', '#0e0818', '#1e1030', '#3a2060'][i];
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rr, rr * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The rim, and motes spinning in.
+  const n = 18;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + f.t * 3.5;
+    const rr = R * (1.05 - ((f.t * 1.5 + i / n) % 1) * 0.8);
+    ctx.globalAlpha = 0.85 * open;
+    ctx.fillStyle = i % 3 ? '#9a6ad8' : '#e0d0ff';
+    ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.45), 1, 1);
+  }
+  if (Math.random() < dt * 12) spark(r, cx - ox + (Math.random() - 0.5) * R * 2, cy - oy - 6, '#5a3a88', { vx: 0, vy: 8, g: 0, life: 0.4, size: 1 });
+}
+
 // A burst of flame where a ruby arrow lands: a ring of tongues thrown out.
 function drawBlast(r, ctx, f, k, ox, oy, dt) {
   const R = 4 + (f.r1 ?? 18) * Math.sqrt(k);
@@ -302,7 +351,38 @@ export function drawBurning(r, ctx, e, sx, feetY, tall, dt) {
 
 // Stars round the head of someone dazed; frost on someone chilled.
 export function drawStatus(r, ctx, e, sx, feetY, tall, dt) {
-  if (e.stunT > 0) {
+  // Frozen solid: a block of ice round them, glinting.
+  if (e.frozenT > 0) {
+    const h = tall ? 26 : 15;
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = '#a8dcff';
+    ctx.fillRect(sx + 1, feetY - h, 14, h + 1);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#e8f8ff';
+    ctx.fillRect(sx + 1, feetY - h, 14, 1);
+    ctx.fillRect(sx + 1, feetY - h, 1, h + 1);
+    ctx.fillRect(sx + 3, feetY - h + 3, 1, 4);
+    ctx.fillStyle = '#5a9ad0';
+    ctx.fillRect(sx + 14, feetY - h + 1, 1, h);
+    ctx.fillRect(sx + 2, feetY, 13, 1);
+    ctx.globalAlpha = a;
+  }
+  // Bleeding: drops falling off them, more the more wounds.
+  if (e.bleedT > 0 && Math.random() < dt * 5 * (e.bleedN || 1)) {
+    const [u, v] = r.toView(e.renderPos().x, e.renderPos().z);
+    spark(r, u * TILE + 4 + Math.random() * 8, v * TILE - e.renderPos().y * LH + LH - 4 - Math.random() * (tall ? 14 : 6), Math.random() < 0.5 ? '#c82030' : '#e84050', { vx: 0, vy: 10, g: 180, life: 0.45, size: 1 });
+  }
+  // Marked by moonlight: a crescent over their head.
+  if (e.markT > 0) {
+    const top = feetY - (tall ? 34 : 22) + Math.round(Math.sin(r.time * 3) * 1);
+    ctx.fillStyle = '#e8f0ff';
+    for (const [x, y] of [[6, 0], [7, 0], [5, 1], [5, 2], [5, 3], [6, 4], [7, 4]]) ctx.fillRect(sx + x + 1, top + y, 1, 1);
+    ctx.fillStyle = '#bcd8ff';
+    ctx.fillRect(sx + 7, top + 1, 1, 1);
+    ctx.fillRect(sx + 7, top + 3, 1, 1);
+  }
+  if (e.stunT > 0 && !(e.frozenT > 0)) {
     const top = feetY - (tall ? 27 : 16);
     for (let i = 0; i < 3; i++) {
       const a = r.time * 5 + (i * Math.PI * 2) / 3;

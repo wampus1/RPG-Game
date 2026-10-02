@@ -820,7 +820,7 @@ export function makeTraveller(rng, style, role, family = null) {
 
 // ------------------------------------------------------------ adventurers
 export const ADVENTURER_TITLES = { 1: 'Adventurer', 2: 'Seasoned Adventurer', 3: 'Renowned Adventurer' };
-const ADV_GEMS = ['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst'];
+const ADV_GEMS = ['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst', 'ruby', 'sapphire', 'emerald', 'topaz', 'amethyst', 'onyx', 'moonstone', 'bloodstone'];
 
 // An adventurer: someone who lives on the road, going from realm to realm,
 // armed and armoured well beyond any townsfolk (a renowned one in jewelled

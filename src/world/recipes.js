@@ -192,7 +192,8 @@ r('scribe', 'scroll', 2, { paper: 1, ink: 1 });
 r('scribe', 'book', 1, { paper: 3, leather: 1, ink: 1 });
 // Jewellers: rough gems cut into stones for setting (the setting itself is
 // done at the bench, carefully).
-for (const k of Object.keys(GEMS)) r('jeweller', k, 1, { gem: 1 });
+// (The rarer stones take three rough gems' worth of cutting.)
+for (const k of Object.keys(GEMS)) r('jeweller', k, 1, { gem: GEMS[k].rare ? 3 : 1 });
 r('jeweller', 'gold_circlet', 1, { gold_ingot: 2, gem: 1 });
 // Bakers.
 r('baker', 'bread', 2, { wheat: 3 });

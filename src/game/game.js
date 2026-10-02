@@ -45,7 +45,7 @@ import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.j
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
-import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateFlames, tickStatus, swingMult, arrowSpeed } from './gems.js';
+import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -1507,7 +1507,7 @@ export class Game {
     }
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
-    for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) {
@@ -3448,7 +3448,7 @@ export class Game {
       onArrowLand(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
-    updateFlames(this, dt);
+    updateGemFx(this, dt);
     tickFires(this, dt);
   }
 
@@ -3826,7 +3826,7 @@ export class Game {
   blowDamage(heavy, fresh, st) {
     const p = this.player;
     const def = p.heldDef();
-    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) + (heroHas(this.hero, 'brawler') ? 1 : 0);
+    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) * rageMult(p) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     if (!fresh) dmg *= 0.6;
     if (heavy) dmg *= 1.8;
     const crit = Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
@@ -3919,7 +3919,7 @@ export class Game {
       if (!target.dead) this.renderer.floatText(target.x, target.y + 2, target.z, 'miss', '#a8a8b0');
       return false;
     }
-    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) + (heroHas(this.hero, 'brawler') ? 1 : 0);
+    let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) * rageMult(p) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     if (!fresh) dmg *= 0.6;
     if (heavy) dmg *= 1.8;
     // Straight back at them after a parry (or, with a topaz in your armour,
@@ -3944,7 +3944,7 @@ export class Game {
     }
     onSwing(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
-    onBladeHit(this, p, target);
+    onBladeHit(this, p, target, { dmg, heavy, crit });
     this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
     // Knockback (two paces for a heavy blow); with a second blade coming,
     // after that one.
@@ -3974,7 +3974,7 @@ export class Game {
     const reach = Math.max(1, Math.floor(it.reach || 1.4));
     if (target.dead || target.down || Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > reach || target.rollT > 0) return false;
     spend(p, Math.max(1, Math.round(staminaCost(STYLES[weaponStyle(off)]) / 2)));
-    const dmg = it.damage * 0.75 * damageMult(this.hero) * (1 + buffOf(this, 'fury'));
+    const dmg = it.damage * 0.75 * damageMult(this.hero) * (1 + buffOf(this, 'fury')) * rageMult(p);
     this.damage(target, Math.max(1, Math.round(dmg)), p);
     this.impact(target, 1, STYLES[weaponStyle(off)]);
     if (!target.moving && target.hp > 0 && !target.sleeping) knock(this, p, target, shove);
@@ -4007,6 +4007,10 @@ export class Game {
     if (target.kind === 'player' && this.cheats.god) return;
     // An adventurer slips a blow and rolls clear.
     if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
+    // Onyx armour: the blow goes through them like smoke.
+    if (!this.dotHit && evade(this, target, source)) return;
+    // Marked by moonlight: every blow a third harder.
+    if (target.markT > 0) amount = Math.round(amount * 1.33);
     const duel = this.duel;
     const inDuel = !!(duel && duel.npc && !duel.npc.dead && ((target === duel.npc && source === this.player) || (target === this.player && source === duel.npc)));
     let armored = false;
@@ -4037,6 +4041,11 @@ export class Game {
       blueSoak = Math.min(nb.hp, amount);
       nb.hp -= blueSoak;
       amount -= blueSoak;
+    }
+    // A ward of moonlight catches what would have felled you.
+    if (target.kind === 'player') {
+      amount = moonWard(this, target, amount);
+      if (amount <= 0) return;
     }
     if (target.kind === 'player' && target.blue && target.blue.hp > 0 && target.blue.day === this.day) {
       const soak = Math.min(target.blue.hp, amount);
@@ -4195,7 +4204,8 @@ export class Game {
     const p = this.player;
     let best = null;
     let bd = range + 1;
-    if (!p.dead && c.distTo(p) <= range && Math.abs(p.y - c.y) <= 2) {
+    // (Not you while you're gone into shadow.)
+    if (!p.dead && !(p.shadeT > 0) && c.distTo(p) <= range && Math.abs(p.y - c.y) <= 2) {
       best = p;
       bd = c.distTo(p);
     }
@@ -4228,6 +4238,7 @@ export class Game {
   }
 
   kill(e, source) {
+    onKill(this, e, source);
     e.dead = true;
     this.removeOcc(e);
     this.renderer.emit(e.x, e.y + 1, e.z, { n: 16, color: e.kind === 'npc' || e.kind === 'player' ? ['#c82a2a', '#e8e0d0', '#8a1a1a'] : ['#e8e0d0', '#a8a098'], up: 50, speed: 70, life: 0.8, oy: -8 });

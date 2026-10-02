@@ -107,7 +107,9 @@ export class Creature extends Entity {
         return;
       }
     }
-    if (this.hostileNow && !this.tie) {
+    // (Lost you in the shadows a moment: it casts about.)
+    if (this.lostT > 0 && this.target === game.player) this.target = null;
+    if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
       // (Those that fight from afar: a skeleton with a bow, a wisp.)
       if (this.target && (this.species === 'wisp' || this.arms === 'bow') && this.keepOff(dt)) return;

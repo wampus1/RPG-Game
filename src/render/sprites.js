@@ -1756,6 +1756,27 @@ function potionIcon(it) {
 function gemIcon(it) {
   const p = new Px(16, 16);
   const g = GEMS[it.key] || { color: '#50c0e0' };
+  // The rarer stones are cut their own ways: onyx a black cabochon with a
+  // violet gleam, moonstone a pearly round with light inside it,
+  // bloodstone a dark green stone flecked with red.
+  if (it.key === 'onyx' || it.key === 'moonstone' || it.key === 'bloodstone') {
+    const b = hex(g.body);
+    p.ellipse(8, 8, 4.5, 3.6, b);
+    p.ellipse(8, 9, 4, 2.6, shade(b, 0.8));
+    p.ellipse(8, 7.2, 3.4, 2.2, shade(b, it.key === 'moonstone' ? 1.04 : 1.2));
+    if (it.key === 'onyx') {
+      p.rect(5, 6, 3, 1, hex('#9a6ad8'));
+      p.set(6, 5, hex('#d8c0ff'));
+    } else if (it.key === 'moonstone') {
+      p.ellipse(8, 8, 2.2, 1.6, hex('#bcd8ff'));
+      p.set(9, 7, '#ffffff');
+      p.set(6, 6, '#ffffff');
+    } else {
+      for (const [x, y] of [[6, 7], [9, 8], [10, 6], [7, 10], [5, 9]]) p.set(x, y, hex('#e83848'));
+      p.set(6, 6, '#c8f0d0');
+    }
+    return p.outline(OUT);
+  }
   const c = hex(g.color);
   p.rect(5, 5, 6, 2, shade(c, 1.3));
   p.rect(4, 7, 8, 2, c);
