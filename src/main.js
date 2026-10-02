@@ -284,6 +284,8 @@ function step(now) {
     step.musicErr = true;
   }
   const t4 = performance.now();
+  // (The camera drawn back: the world goes to the screen on its own, finer.)
+  crt.world = game ? renderer.layer || null : null;
   crt.present(now / 1000);
   perf.crt = (perf.crt || 0) * 0.95 + (performance.now() - t4) * 0.05;
 }

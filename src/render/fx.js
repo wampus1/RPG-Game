@@ -406,3 +406,128 @@ export function drawStatus(r, ctx, e, sx, feetY, tall, dt) {
     }
   }
 }
+
+// ------------------------------------------------------------ the great beam
+// Each great beam (see game/laser.js): while it gathers, a thin line of
+// aim and a swelling light at its source; then the beam itself, a red
+// sheath round a white core, pulses running down it, a flare where it
+// leaves and a burning splash where it ends.
+export function drawLasers(r, ctx, game) {
+  if (!game.lasers || !game.lasers.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const L of game.lasers) {
+    if (!L.end) continue;
+    const o = L.by;
+    const rp = o.renderPos ? o.renderPos() : o;
+    const [u, v] = r.toView(rp.x, rp.z);
+    const sx = u * TILE - r.camX + 8;
+    const sy = v * TILE - rp.y * LH + LH - r.camY - (o.species === 'overseer' ? 30 : o.kind === 'player' ? 14 : 10);
+    const [eu, ev] = r.toView(L.end.x, L.end.z);
+    const ex = eu * TILE - r.camX + 8;
+    const ey = ev * TILE - L.y * LH + LH - r.camY - 2;
+    const W = L.width >= 1 ? 1 : 0.6;
+    const line = (w, col, a) => {
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    };
+    const glow = (x, y, rad, col, a) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, col);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = a;
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    };
+    if (L.t < L.charge) {
+      const k = L.t / L.charge;
+      ctx.setLineDash([3, 3]);
+      line(1, '#ff4030', (0.25 + 0.5 * k) * (0.7 + 0.3 * Math.sin(r.time * 30)));
+      ctx.setLineDash([]);
+      glow(sx, sy, (4 + 12 * k) * W * 1.4, '#ff6040', 0.5 + 0.4 * k);
+      glow(sx, sy, (2 + 5 * k) * W, '#ffffff', 0.8);
+      continue;
+    }
+    const flick = 0.85 + Math.random() * 0.15;
+    line(16 * W, '#ff1808', 0.16 * flick);
+    line(10 * W, '#ff4020', 0.35 * flick);
+    line(6 * W, '#ff9060', 0.7 * flick);
+    line(3 * W, '#ffe0c8', 0.95);
+    line(1.4 * W, '#ffffff', 1);
+    // Pulses running down it.
+    const len = Math.hypot(ex - sx, ey - sy);
+    for (let i = 0; i < 6; i++) {
+      const k = (r.time * 2.6 + i / 6) % 1;
+      const px = sx + (ex - sx) * k;
+      const py = sy + (ey - sy) * k;
+      glow(px, py, 6 * W, '#ffffff', 0.5);
+    }
+    if (len > 4) {
+      glow(sx, sy, 14 * W, '#ff8060', 0.9);
+      glow(ex, ey, (12 + Math.random() * 4) * W, '#ffb060', 0.9);
+      glow(ex, ey, 5 * W, '#ffffff', 1);
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// The Overseer's spikes: shards of alloy flying out, standing in the floor,
+// crackling as its pull takes them, swung round it on threads of light.
+export function drawKavSpikes(r, ctx, game) {
+  const list = game.kavSpikes;
+  if (!list || !list.length) return;
+  for (const s of list) {
+    if (s.gone) continue;
+    const o = s.by;
+    const [u, v] = r.toView(s.x, s.z);
+    const y0 = o ? o.y : 0;
+    const x = u * TILE - r.camX + 8;
+    const y = v * TILE - y0 * LH + LH - r.camY + 4 - s.h * LH;
+    const [ou, ov] = r.toView(o.x, o.z);
+    const cx = ou * TILE - r.camX + 8;
+    const cy = ov * TILE - y0 * LH + LH - r.camY - 30;
+    const ang = s.state === 'orbit' ? Math.atan2(y - cy, x - cx) + Math.PI / 2 : s.state === 'stuck' || s.state === 'charged' ? -Math.PI / 2 : Math.atan2(y - cy, x - cx);
+    // Threads of its pull, jagged and flickering.
+    if (s.state === 'charged' || s.state === 'orbit' || s.state === 'return') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35 + Math.random() * 0.4;
+      ctx.strokeStyle = Math.random() < 0.5 ? '#5ad8f0' : '#c8fbff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      const n = 6;
+      for (let i = 1; i < n; i++) ctx.lineTo(cx + ((x - cx) * i) / n + (Math.random() - 0.5) * 6, cy + ((y - cy) * i) / n + (Math.random() - 0.5) * 6);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.rotate(ang);
+    // A shadow of it, when it's up.
+    ctx.fillStyle = '#1c1622';
+    ctx.fillRect(-2, -7, 4, 13);
+    ctx.fillStyle = '#4a4870';
+    ctx.fillRect(-1, -6, 2, 11);
+    ctx.fillStyle = s.state === 'stuck' ? '#8a88a8' : '#c8fbff';
+    ctx.fillRect(-1, -6, 1, 9);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1, -7, 1, 2);
+    if (s.state !== 'stuck') {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#5ad8f0';
+      ctx.fillRect(-3, -8, 6, 15);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+}

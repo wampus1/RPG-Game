@@ -36,6 +36,7 @@ import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast } from '../entities/monsters.js';
+import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
@@ -1581,6 +1582,7 @@ export class Game {
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     updateHazards(this, dt);
+    updateLasers(this, dt);
     updateRelics(this, dt);
     updateKavTech(this, dt);
     this.sim.ancient.update(dt);
@@ -1628,6 +1630,8 @@ export class Game {
     // The camera: drawn back near a spire, or wherever a scene takes it.
     const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
     this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : 1 + 0.32 * nearSpire;
+    // (A scene's zoom is its own smooth curve: taken as it comes.)
+    this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.6);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
     // Mended (by anything: a meal, a potion, a spring, a stone): a soft green
@@ -2574,6 +2578,11 @@ export class Game {
     w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
     if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
     if (id === B.door) w.setBlock(t.x, t.y + 1, t.z, B.door_top, rot);
+    // (Below ground, what you build is noted: a master smashes through it.)
+    if (this.dungeon) {
+      this.dungeon.notePlaced(t.x, t.y, t.z);
+      if (id === B.door) this.dungeon.notePlaced(t.x, t.y + 1, t.z);
+    }
     if (b.interact === 'container') {
       const r = w.regionAt(t.x, t.z);
       const idx = ((t.z - r.z0) * REGION_W + (t.x - r.x0)) * WORLD_Y + t.y;
@@ -3115,15 +3124,21 @@ export class Game {
   // blight's motes drifting about you. Returns how near (0 far, 1 at it).
   spireNearness(dt) {
     const p = this.player;
+    const rp = p.renderPos ? p.renderPos() : p;
+    // (Drawn back gradually: from well out past the blight's edge, all the
+    // way in to a few paces from its door, eased at both ends.)
+    const far = BLIGHT_R + 14;
+    const near = 5;
     let best = null;
     for (const s of this.world.sites || []) {
       if (s.type !== 'kavorent' || s.x === undefined) continue;
-      const d = Math.hypot(s.x - p.x, s.z - p.z);
-      if (d < BLIGHT_R + 6 && (!best || d < best.d)) best = { s, d };
+      const d = Math.hypot(s.x - rp.x, s.z - rp.z);
+      if (d < far && (!best || d < best.d)) best = { s, d };
     }
     this.nearSpire = best ? best.s : null;
     if (!best) return 0;
-    const k = Math.max(0, Math.min(1, (BLIGHT_R + 6 - best.d) / 12));
+    const q = Math.max(0, Math.min(1, (far - best.d) / (far - near)));
+    const k = q * q * (3 - 2 * q);
     // (Violet motes in the blight, rising.)
     if (best.d < BLIGHT_R && Math.random() < dt * 12) {
       this.renderer.emit(p.x + (Math.random() - 0.5) * 18, p.y + Math.random() * 0.5, p.z + (Math.random() - 0.5) * 12, { n: 1, color: ['#b070e0', '#e090ff', '#5ad8f0'], up: 8, speed: 4, life: 2.2, glow: true, gravity: -6 });

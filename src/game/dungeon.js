@@ -20,7 +20,7 @@ import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { Creature } from '../entities/creature.js';
-import { addHazard, lineTiles, areaTiles, BOSS_TITLES } from '../entities/monsters.js';
+import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud } from '../entities/monsters.js';
 import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
@@ -163,6 +163,8 @@ export class DungeonRun {
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
+    // (What you've built down here: a master will smash through it.)
+    this.placed = new Set(this.state.placed || []);
     game.world.setInstance({ regions: data.regions, floor: n, maxY: FY });
     // First time down here: adventurers have been before you, perhaps.
     if (!saved) this.firstVisit();
@@ -185,7 +187,7 @@ export class DungeonRun {
       if (!s.boss && !s.key && (hash4(this.rec.seed, n, s.id) % 100) / 100 < this.rec.weakened * 0.8) continue;
       if (this.rec.cleared && s.boss) continue;
       const y = game.world.findStandY(s.x, s.z, FY);
-      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush });
+      const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush, infected: s.infected });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
       // (The master keeps to its hall, and waits there till you come in.)
       if (c && s.boss && data.bossRoom) {
@@ -306,6 +308,7 @@ export class DungeonRun {
   saveFloor() {
     if (!this.data) return;
     this.settleMimics();
+    if (this.state && this.placed) this.state.placed = [...this.placed];
     // (Not a Field Projector's wall: that's only for the moment.)
     dropFields(this.game);
     const regions = [];
@@ -327,6 +330,9 @@ export class DungeonRun {
     game.zones = [];
     game.projectiles = [];
     game.flames = [];
+    game.lasers = [];
+    game.kavSpikes = [];
+    game.fireTiles = null;
     for (const n of game.npcs) if (n.inDungeon) game.despawnNpc?.(n);
   }
 
@@ -359,6 +365,11 @@ export class DungeonRun {
     c.home = { x, z };
     if (o.ambush) c.dormant = 2;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
+    // (Changed by the blight: see monsters.js, blightTick.)
+    if (o.infected) {
+      c.infected = true;
+      c.maxHp = c.hp = Math.round(c.maxHp * 1.25);
+    }
     // (A master's a good deal harder than what it rules.)
     if (o.boss) {
       c.isBoss = true;
@@ -673,6 +684,17 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     const c = this.pal.motes;
+    // In a room the blight's got into: its spores in the air, a whisper, and
+    // (the first time) word of what's changed here.
+    const bl = (this.data.blighted || []).find((q) => p.x >= q.x0 && p.x <= q.x1 && p.z >= q.z0 && p.z <= q.z1);
+    if (bl) {
+      if (Math.random() < dt * 9) game.renderer.emit(p.x + (Math.random() - 0.5) * 14, FY + 0.2 + Math.random() * 1.5, p.z + (Math.random() - 0.5) * 9, { n: 1, color: ['#b070e0', '#e090ff', '#7a3aa0'], up: 5, speed: 3, gravity: -5, life: 2, glow: true });
+      if (Math.random() < dt * 0.08) game.audio?.play('whisper');
+      if (!bl.told) {
+        bl.told = true;
+        game.ui.msg('The blight has got in here: the alloy veined violet, strange things growing. What lives here has changed.', '#e090ff');
+      }
+    }
     this.kavScanT = (this.kavScanT || 0) - dt;
     if (this.kavScanT <= 0) {
       this.kavScanT = 0.5;
@@ -991,6 +1013,8 @@ export class DungeonRun {
   onKill(e) {
     const game = this.game;
     if (e.spawnId !== undefined && !this.state.killed.includes(e.spawnId)) this.state.killed.push(e.spawnId);
+    // One the blight was in: it bursts into a cloud of spores.
+    if (e.infected && !e.sporeless) sporeCloud(game, e, 1, null);
     // A mimic: what was in it spills out.
     if (e.mimicLoot) {
       for (const it of e.mimicLoot) game.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
@@ -1027,8 +1051,9 @@ export class DungeonRun {
       }
       if (this.kav) {
         game.ui.msg('The ruin\'s hum dies away. Somewhere above, the runes on the spire go out.', '#5ad8f0');
-        game.spawnDrop('kav_core', 1, e.x, e.y, e.z, true);
-        this.rec.cores = Math.max(0, (this.rec.cores ?? 4) - 1);
+        // (Two cores in it, and its Eye: see its drops.)
+        game.spawnDrop('kav_core', 2, e.x, e.y, e.z, true);
+        this.rec.cores = Math.max(0, (this.rec.cores ?? 4) - 2);
       }
     }
   }
@@ -1038,6 +1063,11 @@ export class DungeonRun {
     this.saveFloor();
     const p = this.game.player;
     return { id: this.rec.id, floor: this.floor, x: p.x, z: p.z, surface: this.surface, carried: this.carried || null };
+  }
+
+  // A block you've set down here.
+  notePlaced(x, y, z) {
+    (this.placed ||= new Set()).add(`${x},${y},${z}`);
   }
 
   // ------------------------------------------------------------ spikes

@@ -43,7 +43,10 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       const nz = z + dz;
       if (box && (nx < box.x0 || nx > box.x1 || nz < box.z0 || nz > box.z1)) continue;
       if (blocked && blocked(nx, nz) && !(nx === tx && nz === tz)) continue;
-      const ny = world.stepTarget(x, y, z, nx, nz, true);
+      let ny = world.stepTarget(x, y, z, nx, nz, true);
+      // (A master's way goes through what you've built: see opts.through.)
+      const breach = ny < 0 && opts.through && opts.through(nx, y, nz);
+      if (breach) ny = y;
       if (ny < 0) continue;
       const nk = key(nx, ny, nz);
       const floor = world.getBlock(nx, ny - 1, nz);
@@ -55,6 +58,7 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       }
       if (feet.interact === 'door') cost += 0.4;
       if (ny !== y) cost += 0.3;
+      if (breach) cost += 1.5;
       const ng = gc + cost;
       if (g.has(nk) && g.get(nk) <= ng) continue;
       g.set(nk, ng);

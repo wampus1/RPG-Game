@@ -458,6 +458,15 @@ export function dungeonIcon(key, it) {
       for (let x = 2; x < 14; x++) p.set(x, 4 + Math.round(Math.abs(x - 8) * 0.3), K.seam);
       p.vline(8, 5, 8, K.glow);
       return p.outline(OUT);
+    case 'overseer_eye':
+      p.ellipse(8, 8, 6, 6, K.plate);
+      p.ellipse(8, 8, 5, 5, K.edge);
+      p.ellipse(8, 8, 4, 4, '#160810');
+      p.ellipse(8, 8, 3, 3, '#c81a28');
+      p.ellipse(8, 8, 1.6, 1.6, K.red);
+      p.set(7, 7, '#ffe0e0');
+      for (const [x, y] of [[8, 1], [15, 8], [8, 15], [1, 8]]) p.set(x, y, K.seam);
+      return p.outline(OUT);
     case 'kav_lodestar':
       p.ellipse(8, 8, 5, 5, K.plate);
       p.ellipse(8, 8, 4, 4, '#24223a');

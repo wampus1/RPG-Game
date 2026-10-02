@@ -7,6 +7,7 @@
 import { ITEMS, enhanced, canEnhance } from '../world/items.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { mainWeapon } from './combat.js';
+import { startLaser } from './laser.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -97,11 +98,24 @@ export function useGadget(game, def) {
   else if (k === 'kav_mender') ok = mendCell(game, p);
   else if (k === 'kav_bulwark') ok = bulwark(game, p);
   else if (k === 'kav_lodestar') ok = lodestar(game, p);
+  else if (k === 'overseer_eye') ok = overseerEye(game, p);
   else if (k === 'kav_everlight') {
     game.ui.msg('The Everlight needs nothing doing: hold it, or carry it in your off hand (right-click it in your pack), and it lights the way.', '#a8f4ff');
     return true;
   }
   if (ok && def.charge) p.gadgetCd[k] = now + def.charge;
+  return true;
+}
+
+// The Overseer's Eye: its great beam, out of your hands, turned after
+// where you point (see game/laser.js) for four seconds.
+function overseerEye(game, p) {
+  if ((game.lasers || []).some((L) => L.by === p)) return false;
+  startLaser(game, {
+    by: p, ang: strikeAngle(game, p, null), aim: () => strikeAngle(game, p, null), turn: 4, len: 12, charge: 0.45, dur: 4, dmg: 5, tick: 0.25, width: 0.6, foes: 'monsters', fire: true,
+  });
+  p.slowT = Math.max(p.slowT || 0, 4.4);
+  game.ui.msg('The Eye opens, and its light pours out of your hands.', '#ff9070');
   return true;
 }
 

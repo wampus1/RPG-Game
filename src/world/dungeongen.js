@@ -65,7 +65,9 @@ export const DTYPES = {
     mobs: [['drone', 4], ['warden', 2], ['mender', 2], ['mite', 2], ['golem', 1]], bosses: ['overseer'], torches: 0,
     // Halls made to overawe: sentinels, conduits, the husks of what fell,
     // vents breathing in the floor, light-screens, monoliths.
-    shapes: { rect: 4, octagon: 1, cross: 1 }, wiggle: 0, decor: [['kav_conduit', 3], ['kav_vent', 3], ['kav_husk', 2], ['kav_holo', 1], ['kav_statue', 1], ['kav_monolith', 1]],
+    // (Their builders' rooms were never square for long: diamonds, stars,
+    // hexes, wheels with spokes, crescents, saw-edged halls, wedges, zigzags.)
+    shapes: { rect: 2, octagon: 1, cross: 1, diamond: 2, star: 1, hex: 2, wheel: 1, crescent: 1, teeth: 2, wedge: 1, zigzag: 1 }, wiggle: 0, decor: [['kav_conduit', 3], ['kav_vent', 3], ['kav_husk', 2], ['kav_holo', 1], ['kav_statue', 1], ['kav_monolith', 1]],
     dark: [0.15, 0.18, 0.25], motes: ['#5ad8f0', '#c8fbff'], ambient: ['hum', 'pulse', 'hum', 'drone'],
   },
 };
@@ -126,7 +128,7 @@ const KIT_SIZE = {
 const KIT_SHAPES = {
   entry: ['rect'], exit: ['rect', 'octagon'], vault: ['rect'], treasure: ['rect', 'octagon'], boss: ['octagon', 'rect', 'round'],
   burial: ['rect'], pillared: ['rect', 'octagon'], library: ['rect'], cells: ['rect'], watch: ['rect'], trap: ['rect'], shrine: ['round', 'octagon', 'cross'],
-  reactor: ['rect'], foundry: ['rect'], plates: ['rect'], field: ['rect'], gallery_k: ['rect'], lab: ['rect'], archive: ['rect'],
+  reactor: ['rect'], foundry: ['rect'], plates: ['rect'], field: ['rect'], gallery_k: ['rect'], lab: ['rect', 'hex', 'diamond', 'teeth', 'octagon'], archive: ['rect', 'hex', 'teeth', 'zigzag'],
 };
 // Rooms with one way in, and only one: the sealed vault, the master's
 // hall, a treasure room behind its gate.
@@ -144,6 +146,7 @@ function pickShape(kit, T, rng, w, d) {
   const fixed = KIT_SHAPES[kit];
   let sh = fixed ? rng.pick(fixed) : rng.weighted(Object.entries(T.shapes || { rect: 1 }));
   if ((sh === 'cross' && (w < 7 || d < 7)) || (sh === 'round' && (w < 5 || d < 5)) || (sh === 'ell' && (w < 6 || d < 6))) sh = 'rect';
+  if (ODD.has(sh) && (w < 7 || d < 7)) sh = 'octagon';
   return sh;
 }
 
@@ -154,6 +157,15 @@ function pickShape(kit, T, rng, w, d) {
 //   cross    four arms off a middle
 //   ell      an L: one corner left as rock
 //   cave     a ragged blob, worked out of the living rock
+// and the Kavorent's odder ones:
+//   diamond  a lozenge, its points on the walls' middles
+//   star     four points, curved in between
+//   hex      six-sided
+//   wheel    a ring round a hub, four spokes across
+//   crescent a moon bitten out of one side
+//   teeth    a hall whose walls are notched like a saw
+//   wedge    narrow at one end, wide at the other
+//   zigzag   two halves set off from each other, joined in the middle
 // (The middle's always open, so the passages meet; and it's all one piece.)
 function makeMask(r, rng) {
   const w = r.x1 - r.x0 + 1;
@@ -177,6 +189,28 @@ function makeMask(r, rng) {
         const ez = q < 2 ? z < cz - 0.5 : z > cz + 0.5;
         on = !(ex && ez);
       } else if (r.shape === 'cave') on = blobs.some((b) => ((x - b.x) / b.rx) ** 2 + ((z - b.z) / b.rz) ** 2 <= 1 + rng.float(-0.15, 0.15));
+      else if (r.shape === 'diamond') on = Math.abs(dx) + Math.abs(dz) <= 1.1;
+      else if (r.shape === 'star') on = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dz)) <= 1.12;
+      else if (r.shape === 'hex') on = Math.abs(dz) <= 0.98 && Math.abs(dx) + Math.abs(dz) * 0.55 <= 1.04;
+      else if (r.shape === 'wheel') {
+        const rr = Math.sqrt(dx * dx + dz * dz);
+        on = (rr >= 0.6 && rr <= 1.05) || rr <= 0.3 || Math.abs(x - cx) < 0.6 || Math.abs(z - cz) < 0.6;
+      } else if (r.shape === 'crescent') {
+        const ox = dx - (q % 2 ? 0.8 : -0.8);
+        on = dx * dx + dz * dz <= 1.05 && ox * ox + dz * dz >= 0.5;
+      } else if (r.shape === 'teeth') {
+        const ex = Math.min(x, w - 1 - x);
+        const ez = Math.min(z, d - 1 - z);
+        on = !(ex === 0 && (z + q) % 3 === 0) && !(ez === 0 && (x + q) % 3 === 0) && ex + ez > 0;
+      } else if (r.shape === 'wedge') {
+        const along = q < 2 ? dz : dx;
+        const across = q < 2 ? dx : dz;
+        on = Math.abs(across) <= ((q % 2 ? -along : along) + 1.15) / 2;
+      } else if (r.shape === 'zigzag') {
+        const a = q % 2 ? dx : dz;
+        const b = q % 2 ? dz : dx;
+        on = a < 0 ? (q < 2 ? b <= 0.35 : b >= -0.35) : q < 2 ? b >= -0.35 : b <= 0.35;
+      }
       m[z * w + x] = on ? 1 : 0;
     }
   }
@@ -208,6 +242,8 @@ function makeMask(r, rng) {
   for (let i = 0; i < m.length; i++) if (!seen[i]) m[i] = 0;
   return m;
 }
+
+const ODD = new Set(['diamond', 'star', 'hex', 'wheel', 'crescent', 'teeth', 'wedge', 'zigzag']);
 
 function inMask(r, x, z) {
   if (x < r.x0 || z < r.z0 || x > r.x1 || z > r.z1) return false;
@@ -645,7 +681,7 @@ export function buildFloor(rec, n) {
   const b = new Builder(W, D);
   const out = {
     W, D, x0: b.x0, z0: b.z0, rooms: R, spawns: [], levers: [], plates: [], cracks: [], braziers: [], drains: [], nodes: [], consoles: [],
-    fields: [], emitters: [], seals: [], weak: [], coffins: [], ambush: [], relicAt: null, notes: [], gongs: [], kegs: [], mimics: [], spikes: [],
+    fields: [], emitters: [], seals: [], weak: [], coffins: [], ambush: [], relicAt: null, notes: [], gongs: [], kegs: [], mimics: [], spikes: [], blighted: [],
   };
   const wall = T.wall;
   // Rock everywhere; the floor of each open tile; the walls round it.
@@ -696,6 +732,14 @@ export function buildFloor(rec, n) {
   const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D };
   for (const r of R) dress(ctx, r);
   for (const r of R) decorate(ctx, r);
+  // In a Kavorent ruin, rooms the blight's got into (more of them deeper
+  // down): see blightRoom.
+  if (big) {
+    for (const r of R) {
+      if (['entry', 'exit', 'boss', 'vault', 'hidden'].includes(r.kit) || r.sealed) continue;
+      if (rng.chance(BLIGHT_ROOM + n * 0.02)) blightRoom(ctx, r);
+    }
+  }
   // An old idol somewhere, its blessing waiting for whoever finds it.
   if (!big && rng.chance(0.55)) {
     const rooms = R.filter((r) => !['entry', 'boss', 'vault', 'exit'].includes(r.kit) && !r.sealed);
@@ -1287,6 +1331,35 @@ function passageDecor(ctx) {
       else if (rng.chance(0.015)) b.set(x, FY, z, B.rubble, rng.int(0, 1));
     }
   }
+}
+
+// A room the blight's got into, from one spot spreading: the floor veined
+// violet, the walls round it too, its strange growths come up through the
+// floor, and what lives there changed by it (see monsters.js, blight).
+export const BLIGHT_ROOM = 0.05;
+const GROWTHS = [B.void_bloom, B.void_bloom, B.glow_crystal, B.tendril, B.eye_stalk];
+function blightRoom(ctx, r) {
+  const { rng, b, plan, out } = ctx;
+  r.blight = true;
+  const ox = rng.int(r.x0, r.x1);
+  const oz = rng.int(r.z0, r.z1);
+  const reach = Math.max(r.x1 - r.x0, r.z1 - r.z0) * rng.float(0.75, 1.15);
+  for (let z = r.z0 - 1; z <= r.z1 + 1; z++) {
+    for (let x = r.x0 - 1; x <= r.x1 + 1; x++) {
+      if (Math.hypot(x - ox, z - oz) + rng.float(-1.5, 1.5) > reach) continue;
+      if (own(plan, r, x, z)) {
+        if (b.get(x, FY - 1, z) === B.kav_floor) b.set(x, FY - 1, z, B.blight_floor);
+        if (b.get(x, FY, z) === B.air && !doorBlocked(plan, r, x, z) && rng.chance(0.13)) b.set(x, FY, z, rng.pick(GROWTHS));
+      } else if (!plan.at(x, z)) {
+        for (const y of [FY, FY + 1]) if (b.get(x, y, z) === B.kav_wall && rng.chance(0.7)) b.set(x, y, z, B.blight_wall);
+      }
+    }
+  }
+  const before = out.spawns.length;
+  spawnIn(ctx, r, pickMob(ctx), rng.int(1, 2));
+  for (const s of out.spawns) if (s.room === r.id && !s.boss && !s.guardian && !s.key) s.infected = true;
+  if (out.spawns.length === before) spawnIn(ctx, r, 'drone', 1, { infected: true });
+  out.blighted.push({ x0: b.x0 + r.x0, z0: r.z0, x1: b.x0 + r.x1, z1: r.z1 });
 }
 
 // Spikes across a passage or two: two or three in a row, each coming up a

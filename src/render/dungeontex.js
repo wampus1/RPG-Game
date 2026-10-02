@@ -118,6 +118,26 @@ export function dungeonTop(name, v, rand) {
       if (name === 'kav_wall' && v === 3) randomWalk(p, rand, 4, 4, 9, KAV.deep);
       return p;
     }
+    case 'blight_floor': {
+      // The ruin's floor gone over to the blight: violet veins through it,
+      // a few of them lit.
+      p.fill('#261c34');
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (y % 4 === 0 || (x + (Math.floor(y / 4) % 2) * 4) % 8 === 0) p.set(x, y, '#30243f');
+      for (let i = 0; i < 3; i++) randomWalk(p, rand, rand() * 16, rand() * 16, 9, i ? '#5a2a7a' : '#7a3aa0');
+      for (let i = 0; i < 2 + v % 2; i++) p.set(rand() * 16, rand() * 16, rand() < 0.5 ? '#c070ff' : '#e0a0ff');
+      return p;
+    }
+    case 'blight_wall': {
+      p.fill('#2a2236');
+      for (let i = 0; i < 16; i++) {
+        p.set(i, 0, '#3e3254');
+        p.set(0, i, '#3e3254');
+      }
+      p.hline(1, 15, 8, '#1e1828');
+      randomWalk(p, rand, 4 + rand() * 8, 4 + rand() * 8, 12, '#6a2e8a');
+      if (v % 2 === 0) p.set(3 + rand() * 10, 3 + rand() * 10, '#d090ff');
+      return p;
+    }
     case 'kav_floor': {
       p.fill('#24223a');
       // Hexagonal tiles, their seams faintly alight.
@@ -280,6 +300,26 @@ export function dungeonFront(name, v, rand, rot) {
       if (name === 'kav_wall' && v === 3) randomWalk(p, rand, 3, 2, 8, KAV.deep);
       return p;
     }
+    case 'blight_wall': {
+      p.fill('#2a2236');
+      p.hline(0, 15, 0, '#3e3254');
+      p.hline(0, 15, LH - 1, '#140e1c');
+      // Veins running down it, a drop of light at the end of one.
+      for (let i = 0; i < 2; i++) {
+        let x = Math.floor(rand() * 14) + 1;
+        for (let y = 1; y < LH - 1; y++) {
+          p.set(x, y, '#6a2e8a');
+          if (rand() < 0.3) x += rand() < 0.5 ? 1 : -1;
+        }
+        if (i === 0 && v % 2 === 0) p.set(x, LH - 2, '#d090ff');
+      }
+      return p;
+    }
+    case 'blight_floor':
+      p.fill('#221a30');
+      p.hline(0, 15, 0, '#3a2a52');
+      p.hline(0, 15, LH - 1, '#140e1c');
+      return p;
     case 'kav_floor': case 'kav_lift': case 'kav_debris':
       p.fill('#24223a');
       p.hline(0, 15, 0, KAV.edge);

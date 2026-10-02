@@ -384,6 +384,10 @@ def('satchel', { ...sprite, solid: false, interact: 'container', hardness: Infin
 // idol that blesses whoever lays a hand on it, once (lit till then).
 def('spikes', { ...dressing, hardness: Infinity, drop: null, label: 'Spike Trap' });
 def('idol', { ...sprite, solid: true, interact: 'idol', hardness: Infinity, drop: null, light: 6, lightWhenState: true, label: 'Old Idol' });
+// Where the blight's got into a Kavorent ruin: its floor and walls veined
+// violet (see dungeongen.js, blightRoom).
+def('blight_floor', { hardness: Infinity, drop: null, label: 'Blighted Alloy' });
+def('blight_wall', { hardness: Infinity, drop: null, label: 'Blighted Alloy' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

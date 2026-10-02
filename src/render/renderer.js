@@ -9,7 +9,7 @@ import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting, skyLight } from './lighting.js';
-import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
+import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpikes } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
@@ -277,6 +277,8 @@ export class Renderer {
     this.lighting.draw(this, game);
     drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
+    drawKavSpikes(this, this.ctx, game);
+    drawLasers(this, this.ctx, game);
     this.drawParticles(dt);
     this.drawAim(game);
     if (snap || this.zoomK !== 1) return;
@@ -326,19 +328,33 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ frame
-  // The camera drawn back (near a Kavorent spire, say): the world drawn
-  // bigger off screen, then shrunk into the view (speech kept sharp over
-  // it). A turn of the camera is instant while it's drawn back.
+  // The camera drawn back (near a Kavorent spire, say, or in a scene): the
+  // world drawn on a bigger picture of its own, which goes to the screen
+  // apart from the view (see CRT.present), every one of its pixels sharp;
+  // the view keeps only what's over it (speech, the UI). The camera eases
+  // in and out like a spring, without overshooting; a scene's own zoom is
+  // taken as it comes. A turn of the camera is instant while it's drawn back.
   render(game, dt) {
     const goal = this.zoomGoal || 1;
-    this.zoom += (goal - this.zoom) * Math.min(1, dt * 1.4);
-    if (Math.abs(this.zoom - goal) < 0.004) this.zoom = goal;
-    const z = Math.round(this.zoom * 32) / 32;
+    if (this.zoomSnap) {
+      this.zoom = goal;
+      this.zoomV = 0;
+    } else {
+      const w = 2.4;
+      this.zoomV = (this.zoomV || 0) + ((goal - this.zoom) * w * w - 2 * w * (this.zoomV || 0)) * dt;
+      this.zoom += this.zoomV * dt;
+      if (Math.abs(this.zoom - goal) < 0.0015 && Math.abs(this.zoomV) < 0.002) {
+        this.zoom = goal;
+        this.zoomV = 0;
+      }
+    }
     const main = this.mainCtx;
-    if (z !== 1) {
+    const vw = Math.round(VIEW_W * this.zoom);
+    const vh = Math.round(VIEW_H * this.zoom);
+    const pw = this.vw || VIEW_W;
+    const ph = this.vh || VIEW_H;
+    if (vw !== VIEW_W || vh !== VIEW_H) {
       this.spin = null;
-      const vw = Math.round(VIEW_W * z);
-      const vh = Math.round(VIEW_H * z);
       if (!this.zcanvas) this.zcanvas = document.createElement('canvas');
       if (this.zcanvas.width !== vw || this.zcanvas.height !== vh) {
         this.zcanvas.width = vw;
@@ -354,17 +370,17 @@ export class Renderer {
       this.vh = VIEW_H;
     }
     // (Re-centred on the same spot as the picture grows.)
-    if (this.zoomK !== z && this.camInit) {
-      this.cx -= (VIEW_W * z - VIEW_W * this.zoomK) / 2;
-      this.cy -= (VIEW_H * z - VIEW_H * this.zoomK) / 2;
+    if (this.camInit && (this.vw !== pw || this.vh !== ph)) {
+      this.cx -= (this.vw - pw) / 2;
+      this.cy -= (this.vh - ph) / 2;
     }
-    this.zoomK = z;
+    const z = this.vw / VIEW_W;
+    this.zoomK = this.vw === VIEW_W && this.vh === VIEW_H ? 1 : z;
     this.renderFrame(game, dt);
-    if (z !== 1) {
-      main.imageSmoothingEnabled = true;
-      main.imageSmoothingQuality = 'high';
-      main.drawImage(this.zcanvas, 0, 0, this.vw, this.vh, 0, 0, VIEW_W, VIEW_H);
-      main.imageSmoothingEnabled = false;
+    this.layer = null;
+    if (this.zoomK !== 1) {
+      this.layer = this.zcanvas;
+      main.clearRect(0, 0, VIEW_W, VIEW_H);
       for (const b of this.bubbles || []) {
         if (b.emote) drawText(main, b.text, Math.round(b.x / z), Math.round(b.y / z), b.color, '#000');
         else this.drawBubble(main, b.text, b.x / z, b.y / z, b.color);
@@ -1107,6 +1123,13 @@ export class Renderer {
       // (Burrowed: only the churned earth shows, moving.)
       if (!e.burrowed) {
         ctx.drawImage(sheet, (f + flip) * sz, 0, sz, sz, cx, cy, sz, sz);
+        // The blight in it: a faint violet edge, breathing.
+        if (e.infected) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (0.35 + 0.2 * Math.sin(this.time * 3 + (e.id || 0)));
+          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#c070ff'), cx - 1, cy - 1);
+          ctx.globalAlpha = a;
+        }
         // Its shield up (a warden's cover, a golem's plates): a pale rim of light.
         if (e.armourT > 0 || e.shieldUp) {
           const a = ctx.globalAlpha;
@@ -1205,6 +1228,12 @@ export class Renderer {
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        // (The blight in it: a faint violet edge.)
+        if (e.infected && !rolling && !inWater) {
+          ctx.globalAlpha = a0 * (0.35 + 0.2 * Math.sin(this.time * 3 + (e.id || 0)));
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#c070ff'), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a0;
+        }
         // (A master's edge lit in its colour; white as a blow comes.)
         if (bk && !rolling && !inWater) {
           const wind = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
@@ -2241,6 +2270,23 @@ export class Renderer {
           }
         } else if (z.kind === 'caltrops') {
           for (let i = 0; i < 4; i++) ctx.fillRect(sx + 3 + ((i * 5 + t.x * 3) % 10), sy + 3 + ((i * 7 + t.z * 5) % 10), 2, 1);
+        } else if (z.kind === 'fire') {
+          // Flames licking up off the floor.
+          for (let i = 0; i < 3; i++) {
+            const k = (this.time * 3 + i * 0.37 + t.x * 0.31 + t.z * 0.17) % 1;
+            const fx = sx + 3 + ((i * 5 + t.x * 7 + t.z) % 10);
+            const h = Math.round(2 + 4 * Math.sin(k * Math.PI));
+            ctx.fillStyle = `rgba(255,${120 + Math.round(k * 100)},40,${0.85 * fade})`;
+            ctx.fillRect(fx, sy + 12 - h, 2, h);
+            ctx.fillStyle = `rgba(255,240,160,${0.8 * fade})`;
+            ctx.fillRect(fx, sy + 12 - Math.max(1, h - 2), 1, Math.max(1, h - 2));
+          }
+        } else if (z.kind === 'spores') {
+          // Spores drifting up off it.
+          for (let i = 0; i < 3; i++) {
+            const k = (this.time * 0.6 + i / 3 + (t.x * 7 + t.z * 3) * 0.13) % 1;
+            ctx.fillRect(sx + 2 + ((i * 5 + t.x * 3) % 12), sy + 13 - Math.floor(k * 12), 1, 1);
+          }
         } else if (z.kind === 'poison' || z.kind === 'acid') {
           const k = Math.floor(this.time * 3 + t.x + t.z) % 4;
           ctx.fillRect(sx + 3 + k * 2, sy + 4 + ((k * 3) % 7), 2, 2);

@@ -32,7 +32,7 @@ const NOT_ITEMS = new Set([
   'cobweb', 'urn', 'candles', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'glowshroom', 'weapon_rack', 'war_banner', 'hanging_chains',
   'powder_keg', 'roots', 'rubble', 'bone_throne', 'boss_gate', 'boss_gate_open', 'kav_gate', 'gong',
   'kav_keystone', 'void_bloom', 'glow_crystal', 'tendril', 'eye_stalk', 'leaves_void',
-  'kav_statue', 'kav_monolith', 'kav_holo', 'kav_conduit', 'kav_husk', 'kav_vent', 'satchel', 'spikes', 'idol',
+  'kav_statue', 'kav_monolith', 'kav_holo', 'kav_conduit', 'kav_husk', 'kav_vent', 'satchel', 'spikes', 'idol', 'blight_floor', 'blight_wall',
 ]);
 
 const BLOCK_VALUES = {
@@ -353,6 +353,7 @@ gadget('kav_everlight', 'Everlight', 180, 'A cold, steady light that never goes 
 gadget('kav_mender', 'Mending Cell', 300, 'Use it to mend 12 health over a few seconds. Three uses; it fills again each dawn.', { uses: 3 });
 gadget('kav_bulwark', 'Field Projector', 340, 'Use it to throw up a wall of light in front of you for eight seconds: nothing gets through.', { charge: 20 });
 gadget('kav_lodestar', 'Lodestar', 160, 'Use it and it points the way: below ground, to the way down; above, to the nearest place of old stone you haven\'t yet beaten.', { charge: 2 });
+gadget('overseer_eye', 'The Overseer\'s Eye', 900, 'The great eye of the Kavorent\'s last warden, still burning. Use it and its beam pours out toward where you point for four seconds, burning all it touches and setting the floor alight; then it must gather itself again (half a minute).', { charge: 30, light: 4 });
 // Fittings: set into a weapon, or a piece of armour, for good.
 item('kav_edge', { name: 'Alloy Edge', kind: 'enhancer', stack: 4, value: 220, kav: true, fits: 'weapon', about: 'Fit it to a weapon (use it with the weapon in your belt): +3 to every blow, for good.' });
 item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 240, kav: true, fits: 'armor', about: 'Fit it to a piece of armour you wear (use it): it turns a twentieth more of each blow, and adds a point of endurance.' });

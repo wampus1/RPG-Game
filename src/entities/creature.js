@@ -4,7 +4,7 @@ import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
-import { MONSTER_SPECIES, BRAINS } from './monsters.js';
+import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach } from './monsters.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
 
@@ -145,6 +145,10 @@ export class Creature extends Entity {
     if (this.lostT > 0 && this.target === game.player) this.target = null;
     if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
+      // A master through whatever you've built in its way.
+      if (this.isBoss && this.inst && bossBreach(this, dt)) return;
+      // Changed by the blight (see monsters.js, blightTick).
+      if (this.infected && blightTick(this, dt)) return;
       // Its own way of fighting (see monsters.js), if it has one.
       if (this.S.brain && BRAINS[this.S.brain](this, dt)) return;
       // (Those that fight from afar: a skeleton with a bow, a wisp.)
@@ -226,7 +230,11 @@ export class Creature extends Entity {
       this.thinkT = near ? 0.25 : d <= 14 ? 0.5 : 0.8;
       if (!this.game.requestPathBudget(near)) return;
       this.pathGoal = { x: t.x, z: t.z };
-      this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1, partial: true });
+      // (A master goes straight through what you've built below: see
+      // monsters.bossBreach.)
+      const placed = this.isBoss && this.inst && this.game.dungeon && this.game.dungeon.placed;
+      const through = placed && placed.size ? (x, y, z) => placed.has(`${x},${y},${z}`) || placed.has(`${x},${y + 1},${z}`) : null;
+      this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1, partial: true, through });
       this.pathI = 0;
       if (!this.path || !this.path.length) {
         this.path = null;
@@ -235,7 +243,12 @@ export class Creature extends Entity {
     }
     const [nx, , nz] = this.path[this.pathI];
     if (this.tryStep(nx, nz, this.stepTime())) this.pathI++;
-    else this.path = null;
+    else {
+      // (Something you've built in a master's way: it's next for smashing.)
+      const placed = this.isBoss && this.game.dungeon && this.game.dungeon.placed;
+      if (placed && [this.y, this.y + 1].some((y) => placed.has(`${nx},${y},${nz}`))) this.breachAt = { x: nx, z: nz };
+      this.path = null;
+    }
   }
 
   // Fighting from a distance: back off if they come close, close in if

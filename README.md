@@ -1757,6 +1757,58 @@ own texture, at the right height. Enemies close by find new paths sooner
 are no longer drawn toward you. A wisp outside can no longer lob its light
 into a building.
 
+## Round 29: the blight below, and the Overseer's works
+
+**Stranger halls.** Kavorent ruins have far more oddly shaped rooms:
+diamonds, four-pointed stars, hexagons, wheels (a ring round a hub with
+spokes across), crescents, rooms with toothed walls, wedges and zigzags,
+among the old rectangles, octagons and crosses. Labs and archives take
+some of the new shapes too.
+
+**Blighted rooms.** On each Kavorent floor a room or a few (more the deeper
+you go) has been got into by the violet blight from the surface: its floor
+gone violet with veins of light, the blight's growths coming up through it,
+much of the alloy round it eaten through, spores drifting and a whisper
+when you walk in. The constructs in it are infected: they glow faintly
+violet round their edges, are a quarter tougher, and fight differently. An
+infected drone blinks to your side; an infected warden or golem lashes out
+with a tendril that drags you to it and slows you; an infected mender
+heals its infected kin (and itself); an infected mite bursts in a cloud of
+spores, and any infected thing that dies leaves one behind.
+
+**The Overseer's works.** Besides its beams and its grid, the Overseer now
+cycles through four works, faster once it's badly hurt. *Force walls*: it
+marks out two or three lines near you, then raises walls of light along
+them that change the hall for a while before they fade. *The rush*: a red
+lane marks where it means to go, then it charges down it, throwing aside
+anyone in its way, and ends in a slam that knocks back everything round
+it (and leaves it dazed a moment). *Spikes*: it fires a ring of alloy
+spikes into the floor, charges them with lightning and pulls them up into
+a ring that swings round it, cutting anyone it passes, before they fly
+back to it. *The great beam*: it draws in light, then pours out a long,
+slow-turning beam, three paces wide, that follows you for several seconds
+and leaves the floor burning behind it (fire that spreads a little and
+dies down after a few seconds).
+
+**Masters break through.** Every master smashes through blocks you've
+placed in an old place: in its way while it chases you, or when it's been
+held up behind them, it comes for the wall and breaks it apart.
+
+**Spoils.** The Overseer drops two Kavorent cores, four to eight scrap and
+**the Overseer's Eye**; the Prime Golem (the guardian standing in a Kavorent
+foundry) drops a core. Use the Eye and the Overseer's beam pours from you
+for a few seconds, turning after your aim, burning the hostile things on its
+line and setting the floor alight; it then needs thirty seconds to
+recharge.
+
+**Lighter constructs.** The Kavorent's ordinary constructs (drones, wardens,
+menders, golems and mites) have about half the health they had.
+
+**A clearer view.** Coming toward a spire, the camera now draws back
+smoothly and gradually (starting further out) rather than in steps, and the
+world stays sharp while it does; the same goes for the masters' scenes,
+which were blurred before.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1842,7 +1894,8 @@ src/
                        riding (your own horses and wagons, and a town's
                        horse taken out by a citizen), leads, dungeon
                        (being down below: floors, traps, puzzles), relics,
-                       kavtech (the Kavorent's gear and gadgets),
+                       kavtech (the Kavorent's gear and gadgets), laser
+                       (the great beam: the Overseer's and its Eye's),
                        cutscene (the openings: the ship and the storm,
                        the hometown's history), scenes (short scenes in
                        the middle of things: a spire opening, a master

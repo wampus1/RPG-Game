@@ -16,6 +16,10 @@ const FRAG = `#version 300 es
 precision highp float;
 uniform sampler2D uSharp;
 uniform sampler2D uSoft;
+uniform sampler2D uWSharp;
+uniform sampler2D uWSoft;
+uniform float uLayered;
+uniform float uWLod;
 uniform vec2 uSrc;
 uniform vec2 uOut;
 uniform float uTime;
@@ -31,20 +35,33 @@ vec2 curve(vec2 uv) {
   return uv * 0.5 + 0.5;
 }
 
+// The frame: one picture, or (the camera drawn back) the world, drawn
+// finer than the view, under the view's own layer (the UI, premultiplied).
+vec3 at(vec2 uv) {
+  vec4 t = texture(uSharp, uv);
+  if (uLayered < 0.5) return t.rgb;
+  return texture(uWSharp, uv).rgb * (1.0 - t.a) + t.rgb;
+}
+vec3 soft(vec2 uv, float lod) {
+  vec4 t = textureLod(uSoft, uv, lod);
+  if (uLayered < 0.5) return t.rgb;
+  return textureLod(uWSoft, uv, lod + uWLod).rgb * (1.0 - t.a) + t.rgb;
+}
+
 void main() {
   vec2 uv = curve(vUv);
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   // Slight horizontal beam blur + chromatic fringing.
   float px = 1.0 / uSrc.x;
   vec3 col;
-  col.r = texture(uSharp, uv + vec2(px * 0.35, 0.0)).r;
-  col.g = texture(uSharp, uv).g;
-  col.b = texture(uSharp, uv - vec2(px * 0.35, 0.0)).b;
-  col = mix(col, texture(uSharp, uv + vec2(px * 0.5, 0.0)).rgb, 0.18);
+  col.r = at(uv + vec2(px * 0.35, 0.0)).r;
+  col.g = at(uv).g;
+  col.b = at(uv - vec2(px * 0.35, 0.0)).b;
+  col = mix(col, at(uv + vec2(px * 0.5, 0.0)), 0.18);
   // Bloom from blurred mip levels: bright pixels glow.
-  vec3 b1 = textureLod(uSoft, uv, 1.5).rgb;
-  vec3 b2 = textureLod(uSoft, uv, 3.0).rgb;
-  vec3 b3 = textureLod(uSoft, uv, 4.5).rgb;
+  vec3 b1 = soft(uv, 1.5);
+  vec3 b2 = soft(uv, 3.0);
+  vec3 b3 = soft(uv, 4.5);
   vec3 bloom = max(b1 - 0.62, 0.0) * 0.55 + max(b2 - 0.52, 0.0) * 0.5 + max(b3 - 0.45, 0.0) * 0.4;
   col += bloom * uGlow;
   col += b3 * 0.035 * uGlow;
@@ -132,8 +149,16 @@ export class CRT {
     gl.samplerParameteri(this.soft, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.samplerParameteri(this.soft, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.samplerParameteri(this.soft, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // The world's own picture, when it's drawn apart from the view (see
+    // Renderer.render): a pixel to start with.
+    this.wtex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.wtex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    gl.generateMipmap(gl.TEXTURE_2D);
     this.u = {};
-    for (const n of ['uSharp', 'uSoft', 'uSrc', 'uOut', 'uTime', 'uCurve', 'uGlow']) this.u[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uSharp', 'uSoft', 'uWSharp', 'uWSoft', 'uLayered', 'uWLod', 'uSrc', 'uOut', 'uTime', 'uCurve', 'uGlow']) this.u[n] = gl.getUniformLocation(prog, n);
   }
 
   // Map a point on the output canvas (CSS px) to source pixel coordinates,
@@ -155,16 +180,21 @@ export class CRT {
     return { x: u * VIEW_W, y: v * VIEW_H };
   }
 
+  // `this.world`, when set: the world drawn apart from the view, finer than
+  // it (the camera drawn back); the view is then only what's over it.
   present(time) {
+    const world = this.world || null;
     if (!this.gl) {
       const ctx = this.ctx2d;
       ctx.imageSmoothingEnabled = false;
+      if (world) ctx.drawImage(world, 0, 0, this.out.width, this.out.height);
       ctx.drawImage(this.src, 0, 0, this.out.width, this.out.height);
       return;
     }
     const gl = this.gl;
     gl.viewport(0, 0, this.out.width, this.out.height);
     gl.useProgram(this.prog);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.src);
@@ -173,8 +203,23 @@ export class CRT {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.bindSampler(1, this.soft);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.wtex);
+    if (world) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, world);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    }
+    gl.bindSampler(2, this.sharp);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.wtex);
+    gl.bindSampler(3, this.soft);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.uniform1i(this.u.uSharp, 0);
     gl.uniform1i(this.u.uSoft, 1);
+    gl.uniform1i(this.u.uWSharp, 2);
+    gl.uniform1i(this.u.uWSoft, 3);
+    gl.uniform1f(this.u.uLayered, world ? 1 : 0);
+    gl.uniform1f(this.u.uWLod, world ? Math.log2(world.width / VIEW_W) : 0);
     gl.uniform2f(this.u.uSrc, VIEW_W, VIEW_H);
     gl.uniform2f(this.u.uOut, this.out.width, this.out.height);
     gl.uniform1f(this.u.uTime, time);
