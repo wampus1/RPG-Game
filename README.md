@@ -1572,6 +1572,109 @@ that slips you out of sight), moonstone (moonlight: crescents thrown off the
 blade, arrows that mark, armour that wards you) and bloodstone (blood:
 wounds that bleed, and armour that hits harder the nearer you are to death).
 
+## Round 27: deeper down
+
+**Floors.** Rooms come in every shape and size now: plain halls, round
+chambers, eight-sided halls with their corners cut away, cross-shaped
+chapels, L-shaped rooms and ragged caverns, from cramped closets to great
+halls. Each kind of place keeps to its own: a barrow's chambers are round
+and its passages wander a little; a mine is all caverns and long galleries
+joined by twisting drifts; a crypt is laid out by masons, eight-sided halls
+and cross-shaped chapels on straight passages; a holdout is caves walled off
+square. Passages are routed round the rooms, turning square, rather than
+scraping along their walls. The sealed vault, a treasure room and the
+master's hall each have exactly one way in, so a sigil door is a single
+door across its passage, facing the right way. There's always a way across
+a room between its doorways (rubble, pillars and fittings are cleared from
+the line if they'd block it). Each place has its own fittings: urns, roots
+and cobwebs in a barrow; stalagmites, glowing fungus, ore carts and powder
+kegs in a mine; candles, statues, chains and heaped skulls in a crypt;
+weapon racks, war banners, powder kegs and alarm gongs in a holdout. Below
+ground nobody climbs onto the fittings or the bookshelves, or up onto the
+walls. A floor that gives way drops you into the nearest room on the floor
+below (never into rock or onto a wall, nor into the master's hall).
+
+**Their own dangers.** In a mine the roof comes down now and then where you
+stand (dust trickles first: move). In a barrow the dead reach up out of the
+earth for your ankles (roll free). In a crypt a cold draught snuffs your
+flame for a moment. In a holdout, whoever spots you runs to strike the
+nearest gong, and the whole place comes for you (break the gongs first).
+A powder keg broken open, or caught by fire, goes up and sets off any keg
+near it, hurting whoever's close, theirs or yours. Each place has its own
+dark, its own sounds (drips and whispers, a mine's groans and scuttling, a
+crypt's chains, a holdout's fires and far-off voices) and its own motes in
+the air (barrow mist, falling grit, pale ghost-lights, smoke and embers).
+
+**Music.** Every kind of place has three tunes: one for exploring, one for
+a fight, and one for its master.
+
+**The masters.** The master's hall is behind a great gate. Open it and go
+in, and it crashes down behind you. The master wakes, and its name and
+title drop in across the top of the screen with its health bar: red, with
+a pale trail that catches up after each blow, a white flash as a blow
+lands, and a pulse when it's nearly done. When it falls you see
+VANQUISHED, the gate grinds up, and it leaves you a relic. A master never
+leaves its hall; get out and stay out a few seconds and it settles back
+to wait (a little healed). Each kind of place has three masters, one
+chosen at random:
+- *Barrow*: **the Barrow King** (now also a spectral charge, and rings of
+  grave-cold rolling out from him), **the Mound Witch** (blinks away when
+  you close in, leaving a chilling mist; sets hexes kindling round you;
+  ties a thread of your life to hers that you must break by getting away
+  or out of her sight; raises wights), **the Pale Huntsman** (his barrow
+  hounds, volleys of three arrows, snares set where you'll step, and a
+  mark that doubles it all).
+- *Mine*: **the Deep Worm** (now also spits pools of acid), **Foreman
+  Gask** (throws fizzing blasting charges, brings the roof down across the
+  hall and leaves the rock where it fell, calls his dead miners back to
+  work), **the Brood Mother** (webs that hold you, venom that pools, egg
+  sacs that hatch broodlings unless you burst them, and she climbs up into
+  the dark and drops onto you).
+- *Crypt*: **the Drowned Priest** (now also a whirlpool that drags you
+  in), **the Ossuary Horror** (now also spikes of bone bursting along the
+  floor four ways), **the Hollow Saint** (splits into images of herself and
+  trades places with one, throws grave-light in threes, and consecrates her
+  hall's floor one square in two, then the other half).
+- *Holdout*: **the Bandit Warlord** (now also a war cry and a shield
+  charge), **the Twins** (Rook and Wren, together, one bar between them:
+  Rook's hammer and charge, Wren's knives and Wren behind you while Rook
+  winds up; they swap places when Rook is hurt; when one falls the other
+  goes berserk), **Mother Nettle** (flasks that leave the floor poisoned,
+  caltrops when you crowd her, and smoke she steps out of behind you).
+Lingering dangers (poison, webs, snares, caltrops, whirlpools, mist,
+smoke) are drawn on the floor in their colour while they last.
+
+**Loot.** The first floor's chests are poor (odds and ends, a coin or two),
+and they get better the deeper you go: potions and ingots, then gold,
+gems and good steel. A chest holds only a few kinds of thing, and far
+fewer coins than before. Relics are rare in chests now; every master
+(outside the Kavorent's ruins) keeps one. Old coin is worth half a gold
+piece: any merchant changes them, two for one.
+
+**Adventurers.** Nobody goes down into the old places in the first twelve
+days, and after that bands go far less often. Only a place already worn
+down by three bands can lose its master to them, and even then rarely.
+
+**Fixes and smaller things.** Agility gives a little more stamina. The
+Deep Mines and Catapults upgrades have icons. Labels on the tech tree no
+longer overlap (each tries below, above, then further out; the one you
+point at always shows). The world map shows a square's name when you
+point at it. The HUD has the stamina bar under the health bar, with coins,
+what you hold and where you are below it. The journal scrolls (wheel,
+arrows, W/S, Page Up/Down). Bird nests are rarer. A beast hit by an arrow
+runs from whoever shot it. Waking from a bed in a house puts you beside
+the bed, not on the roof. A torch in the off hand is held upright in your
+hand. A shield on your arm no longer stops you eating, drinking or using
+things. A duel counts down ("Three... Two... One... Fight!") before your
+opponent comes at you, unless you swing first. Hot dishes (stews,
+chowder, pottage, goulash, tamales, cocoa, ale) give a little health at
+once and more over the next several seconds, more in all than food that
+mends at once (the tooltip says how much, and how long). Healing flashes
+the screen's edges green. More sounds: eating, gulping, healing, a
+heartbeat when you're nearly dead, bones on bone, arrows thudding into the
+ground, wings, urns shattering, gongs, fuses, the gate slamming, a roar
+and a sting as a master wakes, a victory.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1611,13 +1714,17 @@ src/
                        buildings, interiors, walls), weather, loot,
                        sites (old places on the map: barrows, mines,
                        crypts, holdouts, Kavorent spires), dungeongen
-                       (floors from room kits), voyage (the ship in the
+                       (floors from room kits: shaped rooms, routed
+                       passages, sealed rooms, dressing), voyage (the ship in the
                        castaway's opening), region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), acts (what people look like
                        doing things: dice, meals, drinks, cooking), warrior
                        (raiders, soldiers and riders on the ground),
-                       creature, item drops, A* pathing
+                       creature, monsters (what lives below ground, its
+                       ways of fighting, hazards and lingering ground),
+                       bosses (the masters of the old places), item
+                       drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling

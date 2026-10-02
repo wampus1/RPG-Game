@@ -129,7 +129,8 @@ test('more skills and traits to choose from, each with a use', () => {
   assert.ok(Object.values(TRAITS).filter((t) => t.flaw).length >= 6, 'flaws too');
   const h = normalizeHero({ specialties: ['duelist', 'marksman'], traits: ['tireless', 'outlander'] });
   assert.deepEqual(h.specialties, ['duelist', 'marksman']);
-  assert.equal(staminaBonus(h), 30);
+  // (Tireless is worth thirty tenths of breath, on top of what agility gives.)
+  assert.equal(staminaBonus(h) - staminaBonus(normalizeHero({ ...h, traits: ['outlander'] })), 30);
   assert.ok(priceMult(h) > priceMult(normalizeHero({ traits: [] })), 'an outlander pays more');
   assert.ok(repGainMult(normalizeHero({ traits: ['silver_tongue'] })) > repGainMult(normalizeHero({ traits: [] })));
 });
