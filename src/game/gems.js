@@ -32,10 +32,29 @@ export const GEM_EFFECTS = {
   },
 };
 
+// In a shield, a stone works when the shield turns a blow (and more so
+// when it parries one); in armour, as well as what it does when you're
+// struck, when you roll and catch your breath.
+export const SHIELD_EFFECTS = {
+  ruby: 'a blow it turns singes whoever struck it (a parry sets them alight)',
+  sapphire: 'parries come a little easier, and a blow it turns chills whoever struck it',
+  emerald: 'turning a blow takes half the breath, and mends you a little',
+  topaz: 'a parry dazzles them twice as long, and a blow it turns may dazzle them',
+  amethyst: 'a blow it turns throws whoever struck it back a pace',
+};
+export const ROLL_EFFECTS = {
+  ruby: 'a roll leaves a burst of flame where you were',
+  sapphire: 'rolling takes less breath',
+  emerald: 'your breath comes back quicker',
+  topaz: 'a blow struck straight out of a roll lands hard and true',
+  amethyst: 'rolling past someone knocks them aside',
+};
+
 // Which way a set piece of gear works.
 export function gearKind(key) {
   const it = ITEMS[key];
   if (!it) return null;
+  if (it.block) return 'shield';
   if (it.kind === 'armor') return 'armor';
   if (it.ranged) return 'bow';
   return 'blade';
@@ -44,7 +63,16 @@ export function gearKind(key) {
 export function gemText(key) {
   const it = ITEMS[key];
   if (!it || !it.socket) return null;
-  return `Set with a ${GEMS[it.socket].name}: ${GEM_EFFECTS[it.socket][gearKind(key)]}`;
+  const k = gearKind(key);
+  if (k === 'shield') return `Set with a ${GEMS[it.socket].name}: ${SHIELD_EFFECTS[it.socket]}`;
+  return `Set with a ${GEMS[it.socket].name}: ${GEM_EFFECTS[it.socket][k]}${k === 'armor' ? `; ${ROLL_EFFECTS[it.socket]}` : ''}`;
+}
+
+// The stone in someone's shield, if it's a shield they carry.
+export function shieldGem(e) {
+  const k = e && (e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield);
+  const it = k && ITEMS[k];
+  return it && it.block ? it.socket || null : null;
 }
 
 // The stones someone carries into a fight: in the blade they swing, the
@@ -53,7 +81,8 @@ export function gemsOf(e) {
   if (!e) return { blade: null, bow: null, armor: [] };
   if (e.kind === 'player') {
     const held = e.heldDef ? e.heldDef() : null;
-    const armor = Object.values(e.equip || {}).map((k) => k && ITEMS[k] && ITEMS[k].socket).filter(Boolean);
+    // (A shield's stone works its own way: see onBlock.)
+    const armor = Object.entries(e.equip || {}).filter(([slot]) => slot !== 'shield').map(([, k]) => k && ITEMS[k] && ITEMS[k].socket).filter(Boolean);
     return { blade: held && !held.ranged ? held.socket || null : null, bow: held && held.ranged ? held.socket || null : null, armor };
   }
   if (e.kind === 'npc') {
@@ -273,6 +302,73 @@ export function onArrowLand(game, a, hit) {
     stun(t, 0.6);
     forceBurst(game, t);
   }
+}
+
+// A blow turned on a shield (`parry`: at the last instant): its stone at
+// work on whoever struck.
+export function onBlock(game, v, a, parry = false) {
+  const g = shieldGem(v);
+  if (!g || !a || a.dead) return;
+  if (g === 'ruby' && (parry || Math.random() < 0.35)) {
+    burn(game, a, v, parry ? 3 : 2);
+    game.renderer.emit(a.x, a.y + 1, a.z, { n: 8, color: FIRE, up: 30, speed: 30, life: 0.45, oy: -6 });
+  } else if (g === 'sapphire') {
+    chill(a, parry ? 3 : 1.5);
+    frostBurst(game, a);
+  } else if (g === 'emerald') {
+    v.gemMendT2 = (v.gemMendT2 || 0);
+    if (parry || game.sim.abs - v.gemMendT2 >= 2) {
+      v.gemMendT2 = game.sim.abs;
+      mend(game, v, 1);
+    }
+  } else if (g === 'topaz' && (parry || Math.random() < 0.25)) {
+    stun(a, parry ? 2.6 : 0.6);
+    game.renderer.effect?.({ type: 'bolt', wx: v.x, wy: v.y, wz: v.z, tx: a.x, ty: a.y, tz: a.z, life: 0.3, oy: -10 });
+  } else if (g === 'amethyst') {
+    forceBurst(game, a);
+    knockBack(game, v, a, parry ? 2 : 1);
+  }
+}
+
+// What a parry window gains from a stone (sapphire, in a shield).
+export function parryBonus(e) {
+  return shieldGem(e) === 'sapphire' ? 0.06 : 0;
+}
+
+// How much breath turning a blow costs (an emerald shield: half).
+export function blockCostMult(e) {
+  return shieldGem(e) === 'emerald' ? 0.5 : 1;
+}
+
+// A roll's cost, and how fast breath comes back, by the armour's stones.
+export function rollCostMult(e) {
+  return gemsOf(e).armor.includes('sapphire') ? 0.7 : 1;
+}
+export function breathMult(e) {
+  return gemsOf(e).armor.includes('emerald') ? 1.25 : 1;
+}
+
+// A roll, done (from where to where, past whom): the armour's stones.
+export function onRoll(game, p, from, past) {
+  const g = gemsOf(p).armor;
+  if (g.includes('ruby')) {
+    game.renderer.effect?.({ type: 'blast', wx: from.x, wy: from.y, wz: from.z, r1: 14, life: 0.5, oy: 2 });
+    game.renderer.emit(from.x, from.y + 0.5, from.z, { n: 12, color: FIRE, up: 30, speed: 30, life: 0.5, oy: -4 });
+    for (const e of around(game, from.x, from.z, 1)) {
+      if (e === p || !(e.kind === 'creature' || e.kind === 'monster' || (e.kind === 'npc' && e.state === 'fight' && e.threat === p) || (e.warband && e.hostileNow))) continue;
+      burn(game, e, p, 2);
+    }
+  }
+  if (g.includes('amethyst')) {
+    for (const e of past) {
+      if (e.dead || e === p) continue;
+      knockBack(game, p, e, 1);
+      stun(e, 0.4);
+      forceBurst(game, e);
+    }
+  }
+  // (A blow straight out of it: hard and true.)
+  if (g.includes('topaz')) p.rollStrike = 1.1;
 }
 
 // Someone wearing jewelled armour has been struck (in close).

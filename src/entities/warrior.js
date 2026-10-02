@@ -44,6 +44,40 @@ function goTo(n, x, z, near = 1) {
   return done;
 }
 
+// Held up on the way somewhere (no path, or one too long to find) and out
+// of your sight: on along the way all the same, a stretch at a time, never
+// where you could see it happen. True if it moved them.
+function hopOn(n, wb, x, z, dt) {
+  const g = n.game;
+  const d = far(n, x, z);
+  if (d <= 2) return false;
+  if (wb.bestD === undefined || d < wb.bestD - 0.5) {
+    wb.bestD = d;
+    wb.heldT = 0;
+    return false;
+  }
+  wb.heldT = (wb.heldT || 0) + dt;
+  if (wb.heldT < 5 || g.inSight(n.x, n.z, 2)) return false;
+  const len = Math.hypot(x - n.x, z - n.z) || 1;
+  const ux = (x - n.x) / len;
+  const uz = (z - n.z) / len;
+  for (let k = Math.min(12, Math.floor(len) - 1); k >= 3; k--) {
+    const sx = Math.round(n.x + ux * k);
+    const sz = Math.round(n.z + uz * k);
+    if (g.inSight(sx, sz, 2) || !g.world.regionAt(sx, sz)) continue;
+    const y = g.world.findStandY(sx, sz, n.y);
+    if (y <= 0 || Math.abs(y - n.y) > 3 || g.world.isWaterAt(sx, y, sz)) continue;
+    const spot = g.findFreeSpot(sx, sz, y);
+    if (!spot || g.inSight(spot.x, spot.z, 2)) continue;
+    n.teleport(spot.x, spot.y, spot.z);
+    n.path = null;
+    wb.heldT = 0;
+    wb.bestD = far(n, x, z);
+    return true;
+  }
+  return false;
+}
+
 function nearest(n, list, r = 99) {
   let best = null;
   let bd = r + 1;
@@ -389,8 +423,9 @@ function march(n, wb, dt) {
   const wide = (wb.slot || 0) % 2 ? 1 : -1;
   const tx = m.x - m.dx * back - m.dz * wide;
   const tz = m.z - m.dz * back + m.dx * wide;
-  if (far(n, tx, tz) > 1) goTo(n, tx, tz, 1);
-  else if (!n.moving && n.rng.chance(dt * 0.5)) n.face(Math.round(n.x + m.dx * 3), Math.round(n.z + m.dz * 3));
+  if (far(n, tx, tz) > 1) {
+    if (!hopOn(n, wb, tx, tz, dt)) goTo(n, tx, tz, 1);
+  } else if (!n.moving && n.rng.chance(dt * 0.5)) n.face(Math.round(n.x + m.dx * 3), Math.round(n.z + m.dz * 3));
   if (!wb.slot && n.rng.chance(dt * 0.04)) n.say(n.rng.pick(['Keep in step!', 'Close up there!', 'March!', 'Not far now.', 'Eyes front!']), 2, '#ffe070');
 }
 
@@ -508,7 +543,7 @@ function soldier(n, wb, dt) {
       return strike(n, t, dt);
     }
     if (far(n, wb.form.x, wb.form.z) > 1 && wb.marchT < 45) {
-      goTo(n, wb.form.x, wb.form.z, 1);
+      if (!hopOn(n, wb, wb.form.x, wb.form.z, dt)) goTo(n, wb.form.x, wb.form.z, 1);
       return;
     }
     wb.phase = 'form';

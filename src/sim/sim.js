@@ -460,11 +460,13 @@ export class Sim {
   // for the same person, place and minute, so looking twice doesn't help.)
   notices(n, d, radius, x, z) {
     if (d <= 2) return true;
-    const guard = n.rec.job === 'guard' && !n.activity;
-    const busy = n.state === 'routine' && ['work', 'eat', 'hobby', 'play', 'forage', 'build', 'repair', 'pray', 'mourn', 'customer'].includes(n.activity);
-    let p = 1 - ((d - 2) / Math.max(1, radius - 1)) * 0.75;
-    if (busy) p *= 0.55;
-    if (guard) p = Math.min(1, p + 0.25);
+    const act = n.activity && n.activity.entry ? n.activity.entry.act : null;
+    // (The watch on duty is looking out for exactly this.)
+    const guard = n.rec.job === 'guard' && (!act || act === 'work' || act === 'patrol' || act === 'guard');
+    const busy = !guard && n.state === 'routine' && ['work', 'eat', 'hobby', 'play', 'forage', 'build', 'repair', 'pray', 'mourn', 'customer'].includes(act);
+    let p = 1 - ((d - 2) / Math.max(1, radius - 1)) * 0.7;
+    if (busy) p *= 0.6;
+    if (guard) p = Math.min(1, p + 0.35);
     if (n.state !== 'routine') p = Math.min(1, p + 0.2);
     const r = (hash4(n.rec.idx, x * 31 + z, Math.floor(this.abs / 3), 0x5ee) % 1000) / 1000;
     return r < p;
@@ -474,8 +476,9 @@ export class Sim {
     const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
     if (d <= 1) return true;
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][n.dir || 0];
-    // Roughly what's in front of them, not off to the side.
-    if (d > 2 && (x - n.x) * fx + (z - n.z) * fz < d * 0.4) return false;
+    // Roughly what's in front of them (close by, out of the corner of an
+    // eye too), not behind.
+    if (d > 2 && (x - n.x) * fx + (z - n.z) * fz < d * (d <= 4 ? -0.1 : 0.3)) return false;
     return this.lineOfSight(n.x, n.z, x, z, (y ?? n.y) + 1);
   }
 

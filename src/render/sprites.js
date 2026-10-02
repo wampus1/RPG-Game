@@ -526,7 +526,108 @@ function quadruped(frame, pal, kind) {
   return p.outline(OUT);
 }
 
+// A ghoul, side on (facing left): hunched low on long arms, grey-green
+// and bony along the spine, eyes like coals; frame 1 reaches forward.
+function ghoul(frame) {
+  const p = new Px(16, 16);
+  const skin = hex('#7a9478');
+  const dark = shade(skin, 0.68);
+  const pale = shade(skin, 1.22);
+  const reach = frame % 2;
+  // The hunched back and haunches.
+  p.ellipse(9.5, 8.5, 4.5, 3.2, skin);
+  p.ellipse(12, 10, 2.5, 2.5, skin);
+  p.hline(7, 12, 6, pale);
+  for (let x = 7; x <= 12; x += 2) p.set(x, 5, dark);
+  // Hind legs folded under it, long arms down to the ground.
+  p.rect(11, 12, 1, 3, dark);
+  p.rect(13, 11, 1, 4, dark);
+  p.line(6, 9, 4 - reach, 14, skin);
+  p.line(7, 9, 6 - reach, 14, dark);
+  p.set(3 - reach, 14, dark);
+  p.set(5 - reach, 15, dark);
+  // The head thrust low and forward, a gash of a mouth, burning eyes.
+  p.ellipse(4, 8.5 + reach * 0.5, 2.5, 2, skin);
+  p.hline(2, 4, 10 + reach, '#3a2224');
+  p.set(2, 8 + reach, '#ff6030');
+  p.set(4, 8 + reach, '#ffb040');
+  p.set(5, 6, dark);
+  return p.outline(OUT);
+}
+
+// A will-o'-the-wisp: a hanging ball of pale blue fire with a tail of it
+// trailing below, bobbing (no outline: it's light).
+function wisp(frame) {
+  const p = new Px(16, 16);
+  const bob = frame % 2;
+  const cy = 5 + bob;
+  p.ellipse(8, cy, 4.5, 4.5, hex('#80c8ff'), 70);
+  p.ellipse(8, cy, 3, 3, hex('#a0dcff'), 150);
+  p.ellipse(8, cy, 1.6, 1.6, hex('#f0fcff'), 255);
+  for (let k = 0; k < 4; k++) p.set(8 + (k % 2 ? 1 : -1) * (bob ? 1 : 0), cy + 4 + k, hex('#a0dcff'), 160 - k * 35);
+  p.set(7, cy + 6, hex('#80c8ff'), 90);
+  p.set(9, cy + 7, hex('#80c8ff'), 70);
+  return p;
+}
+
+// Farm beasts, side on (facing left).
+function farmBeast(frame, kind, variant = 0) {
+  const p = new Px(16, 16);
+  const walk = frame % 2;
+  if (kind === 'pig') {
+    const pink = hex(['#f0a8a8', '#e8b8a0', '#c89090'][variant % 3]);
+    const dark = shade(pink, 0.72);
+    p.ellipse(9, 10, 5.5, 3.2, pink);
+    p.hline(5, 13, 7, shade(pink, 1.1));
+    p.rect(1, 8, 4, 4, pink);
+    p.rect(0, 9, 1, 2, dark);
+    p.set(0, 9, '#5a3030');
+    p.set(2, 9, '#1a1420');
+    p.set(3, 7, dark);
+    p.set(4, 7, dark);
+    for (const x of [5 + walk, 7 - walk, 11 + walk, 13 - walk]) p.rect(x, 13, 1, 2, dark);
+    p.set(15, 8, pink);
+    p.set(14, 7, pink);
+  } else if (kind === 'sheep') {
+    const wool = hex(['#f0ece0', '#e0dccc', '#8a8078'][variant % 3]);
+    const face = hex('#3a3434');
+    p.ellipse(9, 9.5, 5.2, 3.8, wool);
+    for (const [x, y] of [[6, 6], [9, 5], [12, 6], [13, 9], [5, 11]]) p.set(x, y, shade(wool, 1.08));
+    for (const [x, y] of [[8, 8], [11, 10], [7, 11]]) p.set(x, y, shade(wool, 0.88));
+    p.rect(1, 7, 3, 4, face);
+    p.set(1, 8, '#e8e0d0');
+    p.set(4, 7, face);
+    for (const x of [5 + walk, 7 - walk, 11 + walk, 13 - walk]) p.rect(x, 13, 1, 2, face);
+  } else {
+    // A cow: black and white, or brown.
+    const brown = variant % 3 === 2;
+    const hide = hex(brown ? '#8a5a34' : '#f0ece4');
+    const patch = hex(brown ? '#5a3a20' : '#2a2428');
+    p.rect(3, 6, 11, 6, hide);
+    p.hline(3, 13, 6, shade(hide, 1.08));
+    if (!brown) {
+      p.rect(6, 7, 3, 2, patch);
+      p.rect(10, 9, 2, 2, patch);
+      p.set(12, 7, patch);
+    }
+    p.rect(0, 4, 4, 5, hide);
+    p.rect(0, 7, 2, 2, hex('#e8a8a0'));
+    p.set(1, 5, '#1a1420');
+    p.set(0, 3, '#e8e0c8');
+    p.set(3, 3, '#e8e0c8');
+    p.set(9, 12, hex('#e8a8a0'));
+    for (const x of [4 + walk, 6 - walk, 11 + walk, 13 - walk]) p.rect(x, 12, 1, 3, shade(hide, 0.7));
+    p.line(14, 7, 15, 11, patch);
+  }
+  return p.outline(OUT);
+}
+
 export const CREATURE_LOOKS = {
+  ghoul: { frames: 2, draw: (f) => ghoul(f) },
+  wisp: { frames: 2, draw: (f) => wisp(f) },
+  pig: { frames: 2, draw: (f, v) => farmBeast(f, 'pig', v) },
+  sheep: { frames: 2, draw: (f, v) => farmBeast(f, 'sheep', v) },
+  cow: { frames: 2, draw: (f, v) => farmBeast(f, 'cow', v) },
   slime: { frames: 2, draw: (f, v) => slime(f, ['#58c048', '#4a8ae0', '#c04ad0'][v % 3]) },
   wolf: { frames: 2, draw: (f) => quadruped(f, ['#6a6a74', '#4a4a54', '#8a8a94'], 'wolf') },
   boar: { frames: 2, draw: (f) => quadruped(f, ['#6a4a34', '#4a3224', '#8a6448'], 'boar') },

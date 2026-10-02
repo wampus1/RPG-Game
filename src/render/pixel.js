@@ -87,10 +87,10 @@ export class Px {
       }
     }
   }
-  ellipse(cx, cy, rx, ry, c) {
+  ellipse(cx, cy, rx, ry, c, a = 255) {
     for (let y = -ry; y <= ry; y++) {
       for (let x = -rx; x <= rx; x++) {
-        if ((x * x) / (rx * rx + 0.3) + (y * y) / (ry * ry + 0.3) <= 1) this.set(cx + x, cy + y, c);
+        if ((x * x) / (rx * rx + 0.3) + (y * y) / (ry * ry + 0.3) <= 1) this.set(cx + x, cy + y, c, a);
       }
     }
   }

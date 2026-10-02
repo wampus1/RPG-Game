@@ -206,6 +206,7 @@ export class Renderer {
     this.lighting.draw(this, game);
     drawEffects(this, this.ctx, dt);
     this.drawParticles(dt);
+    this.drawAim(game);
     if (snap) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
     for (const b of this.bubbles) {
@@ -459,6 +460,7 @@ export class Renderer {
     this.fishingDecos(game, buckets, zMin, zMax);
     this.leadDecos(game, buckets, zMin, zMax);
     this.diceDecos(buckets, zMin, zMax);
+    game.wildlife?.decos(this, buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();
@@ -952,7 +954,7 @@ export class Renderer {
     const m = this.mouse;
     if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead) {
       const h = e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
-      if (m.x >= sx + 2 && m.x < sx + 14 && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
+      if (m.x >= sx + 2 && m.x < sx + 14 && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
     }
     // Straining at a lead: how near it is to breaking free.
     if (e.strain > 0 && (e.leadBy || e.leadTied) && !e.dead) {
@@ -1058,6 +1060,7 @@ export class Renderer {
     ctx.scale(mir ? -S : S, S);
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
     ctx.restore();
+    if (!off && e.bowDraw && (dir === 1 || dir === 3)) this.drawNocked(ctx, e, dir, hx, hy);
   }
 
   // How a weapon's held through a blow: drawn far back and trembling as
@@ -1333,6 +1336,57 @@ export class Renderer {
     }
   }
 
+  // Drawing a bow: a line of dots the way you're aiming, as far as the
+  // arrow would carry at this draw, a mark at the end once it's fully
+  // drawn.
+  drawAim(game) {
+    const p = game.player;
+    const d = p && p.bowDraw;
+    if (!d || !d.aim || this.spin) return;
+    const ctx = this.ctx;
+    const rp = p.renderPos();
+    let dx = d.aim.x - p.x;
+    let dz = d.aim.z - p.z;
+    const len = Math.hypot(dx, dz) || 1;
+    dx /= len;
+    dz /= len;
+    const full = d.power >= 1;
+    const at = (k) => {
+      const [u, v] = this.toView(rp.x + dx * k, rp.z + dz * k);
+      return [Math.round(u * TILE + 8 - this.camX), Math.round(v * TILE - (rp.y + 1) * LH + LH - this.camY)];
+    };
+    const steps = Math.max(1, Math.floor((d.range || 4) * 2));
+    for (let i = 2; i <= steps; i++) {
+      const [sx, sy] = at(i / 2);
+      const a = (full ? 0.95 : 0.5 + 0.35 * d.power) * (1 - (i / steps) * 0.45);
+      ctx.fillStyle = `rgba(16,12,20,${a * 0.7})`;
+      ctx.fillRect(sx - 1, sy + 1, 3, 1);
+      ctx.fillStyle = full ? `rgba(255,228,140,${a})` : `rgba(240,240,240,${a})`;
+      ctx.fillRect(sx - 1, sy, 3, 1);
+    }
+    if (full) {
+      const [ex, ey] = at(d.range || 4);
+      ctx.fillStyle = 'rgba(255,232,160,0.9)';
+      ctx.fillRect(ex - 2, ey, 5, 1);
+      ctx.fillRect(ex, ey - 2, 1, 5);
+    }
+  }
+
+  // An arrow on the string, drawn back as far as the bow is (trembling if
+  // a full draw's held too long). Side on only.
+  drawNocked(ctx, e, dir, hx, hy) {
+    const d = e.bowDraw;
+    const s = dir === 1 ? -1 : 1;
+    const pull = Math.round(4 * d.power);
+    const y = hy - 5 + (d.power >= 1 && d.t - d.full > 1.2 && Math.random() < 0.5 ? 1 : 0);
+    ctx.fillStyle = '#8a6038';
+    for (let i = -pull; i < 6 - pull; i++) ctx.fillRect(hx + s * i, y, 1, 1);
+    ctx.fillStyle = '#e0e0e8';
+    ctx.fillRect(hx + s * (6 - pull), y, 1, 1);
+    ctx.fillStyle = 'rgba(240,240,230,0.85)';
+    ctx.fillRect(hx - s * pull, y - 2, 1, 5);
+  }
+
   // Arrows in flight.
   drawProjectiles(game) {
     const ctx = this.ctx;
@@ -1361,6 +1415,26 @@ export class Renderer {
         ctx.fillRect(sx - 2, gsy - lift - 3, 2, 2);
         ctx.fillStyle = '#3a3a42';
         ctx.fillRect(sx + 1, gsy - lift, 1, 1);
+        continue;
+      }
+      // A wisp's ball of cold fire: lobbed in a glowing arc, a pale ring on
+      // the ground where it'll burst.
+      if (a.kind === 'orb') {
+        const gy = a.y0 + (a.ty - a.y0) * f;
+        const [lx, lz] = this.toView(a.tx, a.tz);
+        const ex = Math.round(lx * TILE + 8 - this.camX);
+        const ey = Math.round(lz * TILE - a.ty * LH + LH - this.camY);
+        ctx.fillStyle = `rgba(128,208,255,${0.25 + f * 0.35})`;
+        ctx.fillRect(ex - 5, ey - 1, 10, 1);
+        ctx.fillRect(ex - 3, ey - 2, 6, 3);
+        const gsy = Math.round(wz * TILE - gy * LH + LH - this.camY);
+        const lift = Math.round(Math.sin(f * Math.PI) * a.arc * LH);
+        ctx.fillStyle = 'rgba(128,200,255,0.35)';
+        ctx.fillRect(sx - 3, gsy - lift - 4, 6, 6);
+        ctx.fillStyle = '#c0ecff';
+        ctx.fillRect(sx - 2, gsy - lift - 3, 4, 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx - 1, gsy - lift - 2, 2, 2);
         continue;
       }
       // A sling stone: a grey pellet, a streak behind it.

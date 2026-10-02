@@ -31,6 +31,7 @@
 // you clear.
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { has as heroHas, staminaBonus } from './hero.js';
+import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll } from './gems.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -39,25 +40,31 @@ export const STYLES = {
   haymaker: { name: 'haymaker', windup: 0.66, recover: 0.95, reach: 1, mult: 1.6, stagger: 0.45, cost: 1, pw: 0.07 },
   sword: { name: 'cut', windup: 0.42, recover: 0.6, reach: 1, mult: 1, cost: 2, pw: 0.13 },
   spear: { name: 'thrust', windup: 0.55, recover: 0.85, reach: 2, mult: 1.05, thrust: true, cost: 3, pw: 0.2 },
-  axe: { name: 'chop', windup: 0.75, recover: 1.0, reach: 1, mult: 1.45, heavy: true, cost: 3, pw: 0.24 },
+  axe: { name: 'chop', windup: 0.75, recover: 1.0, reach: 1, mult: 1.45, heavy: true, cost: 3, pw: 0.27 },
   club: { name: 'blow', windup: 0.6, recover: 0.8, reach: 1, mult: 1.1, stagger: 0.6, cost: 3, pw: 0.2 },
   dagger: { name: 'stab', windup: 0.26, recover: 0.5, reach: 1, mult: 0.7, flurry: 2, cost: 2, pw: 0.08 },
-  flail: { name: 'whirl', windup: 0.68, recover: 0.9, reach: 1, mult: 1.2, stagger: 0.4, pierce: 0.35, cost: 3, pw: 0.24 },
+  flail: { name: 'whirl', windup: 0.68, recover: 0.9, reach: 1, mult: 1.2, stagger: 0.4, pierce: 0.35, cost: 3, pw: 0.27 },
   staff: { name: 'sweep', windup: 0.45, recover: 0.65, reach: 1, mult: 0.95, stagger: 0.3, sweep: true, cost: 2, pw: 0.15 },
-  great: { name: 'cleave', windup: 0.88, recover: 1.15, reach: 1, mult: 1.3, heavy: true, sweep: true, cost: 5, pw: 0.36 },
-  maul: { name: 'crush', windup: 0.92, recover: 1.2, reach: 1, mult: 1.2, heavy: true, stagger: 1.0, pierce: 0.25, cost: 5, pw: 0.38 },
-  halberd: { name: 'hew', windup: 0.78, recover: 1.05, reach: 2, mult: 1.15, thrust: true, heavy: true, cost: 4, pw: 0.3 },
+  great: { name: 'cleave', windup: 0.88, recover: 1.15, reach: 1, mult: 1.3, heavy: true, sweep: true, cost: 5, pw: 0.42 },
+  maul: { name: 'crush', windup: 0.92, recover: 1.2, reach: 1, mult: 1.2, heavy: true, stagger: 1.0, pierce: 0.25, cost: 5, pw: 0.44 },
+  halberd: { name: 'hew', windup: 0.78, recover: 1.05, reach: 2, mult: 1.15, thrust: true, heavy: true, cost: 4, pw: 0.34 },
   bite: { name: 'lunge', windup: 0.38, recover: 0.95, reach: 2, mult: 1, lunge: true },
   snap: { name: 'snap', windup: 0.24, recover: 0.6, reach: 1, mult: 0.6 },
   slam: { name: 'slam', windup: 0.65, recover: 1.0, reach: 1, mult: 1.2, area: true },
   bone: { name: 'hack', windup: 0.5, recover: 0.85, reach: 1, mult: 0.85, flurry: 2 },
   bash: { name: 'bash', windup: 0.72, recover: 0.9, reach: 1, mult: 1.3, stagger: 0.5 },
   gore: { name: 'charge', windup: 0.85, recover: 1.5, reach: 5, mult: 1.6, charge: true },
+  // A ghoul's three quick rakes (each taken on a shield costs half again the
+  // breath), and its spring from two paces off; a wisp's sting, up close.
+  rake: { name: 'rake', windup: 0.32, recover: 0.95, reach: 1, mult: 0.55, flurry: 3, drain: 1.5 },
+  pounce: { name: 'pounce', windup: 0.5, recover: 1.0, reach: 2, mult: 1.0, lunge: true },
+  sting: { name: 'sting', windup: 0.3, recover: 0.8, reach: 1, mult: 0.6 },
 };
 
-const SPECIES_STYLE = { wolf: 'bite', slime: 'slam', skeleton: 'bone', boar: 'gore' };
-// (Now and then, another way: a wolf snaps close in, a skeleton bashes.)
-const SPECIES_ALT = { wolf: ['snap', 0.4], skeleton: ['bash', 0.3] };
+const SPECIES_STYLE = { wolf: 'bite', slime: 'slam', skeleton: 'bone', boar: 'gore', ghoul: 'rake', wisp: 'sting' };
+// (Now and then, another way: a wolf snaps close in, a skeleton bashes, a
+// ghoul springs.)
+const SPECIES_ALT = { wolf: ['snap', 0.4], skeleton: ['bash', 0.3], ghoul: ['pounce', 0.35] };
 
 // Which way a weapon fights.
 export function weaponStyle(key) {
@@ -82,6 +89,10 @@ export function mainWeapon(e) {
 // bare-handed brawler may mix it up).
 export function styleOf(e, pick = false) {
   if (e.kind === 'creature' || e.kind === 'monster') {
+    // A skeleton fights the way of what it picked up (a sword cuts, an axe
+    // chops, a spear thrusts; a bow-skeleton up close bashes with it).
+    if (e.arms && e.arms !== 'bow' && !(pick && e.rng && e.rng.chance(0.2))) return STYLES[weaponStyle(e.arms)] || STYLES.bone;
+    if (e.arms === 'bow') return STYLES.bash;
     const alt = SPECIES_ALT[e.species];
     if (pick && alt && e.rng && e.rng.chance(alt[1])) return STYLES[alt[0]];
     return STYLES[SPECIES_STYLE[e.species]] || STYLES.bite;
@@ -146,6 +157,21 @@ export function sweepTiles(a, target) {
 }
 
 // The ground a blow will land on.
+// A tile as far toward another as a blow can reach (no further: a blow
+// aimed at someone out of reach lands at the edge of it, and whiffs).
+function reachToward(a, t, reach) {
+  const r = Math.max(1, Math.floor(reach || 1));
+  return { x: a.x + Math.max(-r, Math.min(r, t.x - a.x)), z: a.z + Math.max(-r, Math.min(r, t.z - a.z)) };
+}
+function withinReach(a, tiles, reach) {
+  const out = [];
+  for (const t of tiles) {
+    const q = reachToward(a, t, reach);
+    if (!out.some((o) => o.x === q.x && o.z === q.z)) out.push(q);
+  }
+  return out;
+}
+
 function tilesFor(a, target, st) {
   const out = [];
   if (st.area) {
@@ -160,9 +186,9 @@ function tilesFor(a, target, st) {
   if (st.sweep) {
     const arc = sweepTiles(a, target);
     if (!arc.some((t) => t.x === target.x && t.z === target.z)) arc.push({ x: target.x, z: target.z });
-    return arc;
+    return withinReach(a, arc, st.reach);
   }
-  out.push({ x: target.x, z: target.z });
+  out.push(reachToward(a, target, st.reach));
   return out;
 }
 
@@ -340,6 +366,8 @@ function strike(game, a, w) {
       w.tiles = [{ x: t.x, z: t.z }];
     }
   }
+  // (However they've turned, a blow reaches as far as it reaches.)
+  if (!w.st.area && !w.st.charge) w.tiles = withinReach(a, w.tiles, w.st.lunge ? 1 : st.reach);
   for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, st, w.off ? { weapon: w.off } : null);
 }
 
@@ -367,7 +395,7 @@ export function resolveHit(game, a, v, st, opts = null) {
     }
     const wall = sh && heroHas(hero, 'shieldbearer');
     const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0)));
-    const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1);
+    const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1) * blockCostMult(v) * (st.drain || 1);
     if (v.kind === 'player') {
       if ((v.stamina || 0) >= cost) {
         v.stamina -= cost;
@@ -386,8 +414,9 @@ export function resolveHit(game, a, v, st, opts = null) {
       amount *= 1 - power;
       text('blocked', '#a0c8ff');
     }
-    // Sparks off the shield (or the blade).
+    // Sparks off the shield (or the blade); and its stone at work.
     game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
+    if (!(v.guardBroken > 0)) onBlock(game, v, a, false);
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
@@ -406,7 +435,7 @@ export function resolveHit(game, a, v, st, opts = null) {
 
 // How soon before the blow a raised guard turns it into a parry.
 export function parryWindow(game) {
-  return heroHas(game.hero, 'duelist') ? 0.38 : 0.25;
+  return (heroHas(game.hero, 'duelist') ? 0.3 : 0.2) + parryBonus(game.player);
 }
 
 // A parry: the blow turned aside at the last instant with a crack of
@@ -419,6 +448,7 @@ export function parried(game, v, a) {
   game.audio?.play('armor_hit', v);
   interrupt(a, 2.8);
   a.stunT = Math.max(a.stunT || 0, 2.6 + Math.random() * 0.6);
+  onBlock(game, v, a, true);
   a.windup = null;
   a.attackCd = Math.max(a.attackCd || 0, 1.2);
   knock(game, v, a, 1);
@@ -548,7 +578,8 @@ export function playerTick(game, p, dt, input, blocked) {
   }
   // (Back faster standing still behind a shield than swinging away; and
   // slowly at that.)
-  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind'));
+  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p);
+  if (p.rollStrike > 0) p.rollStrike -= dt;
   if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
   if (p.stamina > p.maxStamina) p.stamina = Math.max(p.maxStamina, p.stamina - dt * 2);
 }
@@ -598,10 +629,11 @@ function tickSwing(game, p, dt) {
 
 // SPACE: a roll in the way you're going (or facing), clear of a blow.
 export function roll(game, p, dirv = null) {
-  if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0) return false;
+  // (Not with an arrow on the string, drawing or holding it.)
+  if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
   // (Mid-stride is fine: the roll carries on from where you are.)
   const from = p.moving ? p.renderPos() : null;
-  const cost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * (heroHas(game.hero, 'clumsy') ? 1.35 : 1);
+  const cost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * (heroHas(game.hero, 'clumsy') ? 1.35 : 1) * rollCostMult(p);
   if ((p.stamina ?? MAX_STAMINA) < cost * 0.6) {
     game.ui.msg('Too winded to roll.', '#c8c8c8', true);
     return false;
@@ -617,6 +649,8 @@ export function roll(game, p, dirv = null) {
   // Low and quick, under a swing and past whoever's in the way (you can't
   // end up on top of them, so on a pace further if that's free).
   let land = null;
+  const start = { x: p.x, y: p.y, z: p.z };
+  const past = [];
   for (let i = 0; i < far + 2; i++) {
     const ny = w.stepTarget(x, y, z, x + dx, z + dz, false);
     if (ny < 0 || w.isWaterAt(x + dx, ny, z + dz)) break;
@@ -625,6 +659,10 @@ export function roll(game, p, dirv = null) {
     y = ny;
     n++;
     if (!game.occupiedBySolid(x, y, z, p)) land = { x, y, z, n };
+    else {
+      const e = game.entityAt ? game.entityAt(x, y, z) : null;
+      if (e && e !== p) past.push(e);
+    }
     if (n >= far && land && land.n === n) break;
   }
   spend(p, cost);
@@ -649,5 +687,8 @@ export function roll(game, p, dirv = null) {
     }
     game.onPlayerStep(land.x, land.y, land.z, false);
   }
+  // (The armour's stones: flame left behind, those rolled past thrown
+  // aside, a blow straight out of it.)
+  onRoll(game, p, start, land ? past.filter((e) => Math.abs(e.x - start.x) + Math.abs(e.z - start.z) < land.n) : []);
   return true;
 }

@@ -114,6 +114,9 @@ export class Audio {
       case 'equip': this.noise(0.08, 0.12, 1400); this.tone(700, 0.05, 'triangle', 0.05, 200, 0.05); break;
       case 'armor_hit': this.tone(1100 + Math.random() * 300, 0.1, 'square', 0.06, -300); this.noise(0.06, 0.12, 3200); break;
       case 'bow': this.tone(220, 0.12, 'triangle', 0.12, 180); this.noise(0.05, 0.05, 4000); break;
+      case 'draw': this.tone(110, 0.3, 'sawtooth', 0.025, 70); this.noise(0.22, 0.03, 700); break;
+      case 'chirp': for (let i = 0; i < 3; i++) this.tone(2400 + Math.random() * 600, 0.04, 'sine', 0.025, 900, i * 0.07); break;
+      case 'hoot': this.tone(330, 0.32, 'sine', 0.05, -30); this.tone(300, 0.5, 'sine', 0.045, -40, 0.42); break;
       case 'bell':
         for (const [m, v, d] of [[1, 0.2, 2.2], [2.76, 0.08, 1.4], [5.4, 0.04, 0.9], [8.9, 0.02, 0.5]]) this.tone(392 * m, d, 'sine', v);
         for (const [m, v, d] of [[1, 0.14, 1.8], [2.76, 0.05, 1.1]]) this.tone(392 * m, d, 'sine', v, 0, 0.55);

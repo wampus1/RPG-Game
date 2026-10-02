@@ -1234,15 +1234,58 @@ too. At range: a hunting bow, a longbow (further, harder, slower), a crossbow
 javelins (thrown, and left lying to be picked up). Smiths forge the new arms;
 the trapper sells slings and longbows, the carpenter quarterstaves.
 
+**Shooting.** Hold the mouse button to draw a bow (wind a sling, crank a
+crossbow), aim with the mouse, and let go to loose: the arrow flies the way
+you aimed and strikes the first thing in its way (a wall stops it). A dotted
+line shows where it will go and how far, turning gold at full draw; a full
+draw flies further and hits harder, and one let go too early is let down
+again (you keep the arrow). Drawing slows your step and costs a little
+breath, holding a full draw more (a cocked crossbow holds for free), and
+there's no rolling with an arrow on the string; right-click lets it down.
+Aim at someone's head and an arrow that takes them there strikes half as hard
+again; archers can do the same to you. Anyone carrying a shield and facing
+the archer turns most arrows (crossbow bolts often go through). A bow never
+digs; a javelin is thrown at once, where you aim.
+
 Each beast fights its own way (wolves lunge, or snap quickly close in; slimes
-slam the ground all round; skeletons hack twice or bash; a boar lowers its head
-and charges), and someone fighting bare-handed jabs, or now and then throws a
-big swing from the shoulder. The watch is hard to beat: guards hit harder,
-string two or three blows together, and if you only step aside as a blow comes
-they follow you and strike where you are (roll, or block). They carry all
-sorts: swords and shields, sabres, spears and halberds, axes, maces and flails,
-greatswords, bows (where the realm has learned archery). Sworn in as a guard
-yourself, you're issued whatever the watch's rack has that day.
+slam the ground all round; a boar lowers its head and charges), and someone
+fighting bare-handed jabs, or now and then throws a big swing from the
+shoulder. Skeletons carry what they found: a sword, an axe, a spear, a club,
+or a bow (and keep their distance with it, loosing arrows). At night there
+are worse things: ghouls, quick and low in twos and threes, that rake three
+times from one wind-up (each stroke taken on a shield costs breath; roll or
+parry rather than hide) or spring at you from two paces off; and
+will-o'-the-wisps, drifting lights that keep away from you and lob balls of
+cold fire where you stand, marked on the ground before they burst (keep
+moving, and run them down; they flit off when you get close). The watch is
+hard to beat: guards hit harder, string two or three blows together (each
+reaching only as far as their weapon does), and if you only step aside as a
+blow comes they follow you and strike where you are (roll, or block). They
+carry all sorts: swords and shields, sabres, spears and halberds, axes, maces
+and flails, greatswords, bows (where the realm has learned archery). Sworn in
+as a guard yourself, you're issued whatever the watch's rack has that day.
+
+**Stones in a fight.** A gem set in a shield works when the shield turns a
+blow (and more so on a parry): a ruby singes whoever struck it, a sapphire
+chills them and makes parrying a touch easier, an emerald halves the breath a
+block costs and mends you a little, a topaz may dazzle them, an amethyst
+throws them back a pace. One set in armour works when you roll as well: a
+ruby leaves a burst of flame where you were, a sapphire makes rolling cheaper,
+an emerald brings your breath back quicker, a topaz makes the first blow out
+of a roll a sure, hard one, and an amethyst knocks aside whoever you roll
+past.
+
+**Dice.** With dice in hand, right-click to throw them on the table in front
+of you (or the floor), like anyone in a tavern. Someone at the table who
+plays may take you on: they throw after you, and the higher throw takes a
+coin off the other.
+
+**Wildlife.** Butterflies over the grass on a fine day; songbirds nesting in
+the crowns of the trees, flitting down to peck about and off again if you
+come close (and asleep in the nest at night); owls on the branches after
+dark, hooting, eyes catching the light, gliding from tree to tree. Pigs,
+sheep and cows graze out on the grass, and every farming town keeps a few by
+its fields.
 
 **Potions for a fight.** Herbalists (where the realm knows alchemy) brew a
 Tonic of Deep Breath (more stamina), a Second Wind Elixir (it comes back
@@ -1461,8 +1504,12 @@ src/
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), combat (wind-
                        ups, blocks, parries, rolls, stamina, weapon and beast
-                       styles), markov (small talk: what's on their
-                       mind and how they say it), talk/ (the corpus of
+                       styles), archery (drawing, aiming and loosing;
+                       arrows striking, blocked and in the head),
+                       dicegame (your throws, and a coin on it), wildlife
+                       (butterflies, nesting birds, owls), markov (small
+                       talk: what's on their mind and how they say it),
+                       talk/ (the corpus of
                        sentence frames, the phrase grammar and the word
                        chains), engines (siege engines in battle), shipping
                        (great ships on the water), fire

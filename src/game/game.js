@@ -26,7 +26,10 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateLabor } from '../sim/labor.js';
-import { shieldOf, facing, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
+import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
+import { throwDice, tickDice } from './dicegame.js';
+import { Wildlife } from './wildlife.js';
+import { playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -82,6 +85,8 @@ export class Game {
     this.projectiles = [];
     // Siege engines (and other great wooden things) about the place.
     this.engines = [];
+    // Butterflies, songbirds and owls round you (see wildlife.js).
+    this.wildlife = new Wildlife(this);
     // Things set down on the ground: "x,y,z" -> { item, count, owner }.
     this.placed = new Map();
     // Wagons standing still, and horses tied up: by what they belong to.
@@ -707,6 +712,21 @@ export class Game {
         const z = f.z1 + 2;
         const y = this.world.findStandY(x, z, GROUND);
         if (y > 0 && !this.entityAt(x, y, z)) this.addCreature(new Creature(this, 'chicken', x, y, z));
+      }
+      // And the town's beasts by the far field: pigs, sheep, a cow (always
+      // the same mix for the same town).
+      const rr = new RNG(hash4(s.id, s.seed >>> 0, 0x91f));
+      const f2 = layout.fields[layout.fields.length - 1];
+      const n = 2 + rr.int(0, 2);
+      for (let i = 0; i < n; i++) {
+        const kind = ['pig', 'sheep', 'sheep', 'cow'][rr.int(0, 3)];
+        const x = f2.x1 + 2 + (i % 2);
+        const z = f2.z0 + i;
+        const y = this.world.findStandY(x, z, GROUND);
+        if (y <= 0 || this.entityAt(x, y, z) || this.world.isWaterAt(x, y, z)) continue;
+        const c = new Creature(this, kind, x, y, z, rr.int(0, 2));
+        c.livestock = s.id;
+        this.addCreature(c);
       }
     }
     this.active.set(s.id, { layout, npcs, since: this.sim.abs });
@@ -1342,6 +1362,7 @@ export class Game {
     for (const q of this.npcs) if (!q.dead) this.despawnNpc(q);
     this.npcs = this.npcs.filter((q) => !q.dead);
     this.engines = [];
+    this.wildlife.clear();
     if (this.shipProps) this.shipProps.clear();
     this.skipping = { left: n * 24, total: n * 24, day0: this.day };
     this.waiting = null;
@@ -1431,6 +1452,13 @@ export class Game {
     else this.cursor = null;
     if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
     else this.mining = null;
+    tickDice(this, dt);
+    // An arrow on the string: the pull, and the aim (a window opened over
+    // it lets it down).
+    if (this.player.bowDraw) {
+      if (blocked) cancelDraw(this);
+      else tickDraw(this, dt, !!input.mouse.down);
+    }
     this.streamRegions();
     if (Math.random() < 0.05) this.updateSettlements();
     this.world.ow.markExplored(this.player.x, this.player.z, 1);
@@ -1459,6 +1487,7 @@ export class Game {
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     updateEngines(this, dt);
+    this.wildlife.update(dt);
     updateShips(this, dt);
     sailShips(this, dt);
     updateLabor(this, dt);
@@ -1628,7 +1657,7 @@ export class Game {
     let ent = null;
     if (drawn) {
       const pe = r.pickEnt;
-      if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e };
+      if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e, up: pe.up };
     } else {
       for (const e of this.visibleEntities) {
         if (e === p || e.kind === 'item' || e.kind === 'prop' || e.dead) continue;
@@ -1637,7 +1666,7 @@ export class Game {
         const feet = sy + LH + 10;
         const h = e.kind === 'creature' ? 14 : 24;
         if (mx >= sx + 2 && mx < sx + 14 && my >= feet - h && my < feet + 2) {
-          if (!ent || rp.z > ent.rp.z) ent = { e, rp };
+          if (!ent || rp.z > ent.rp.z) ent = { e, rp, up: (feet - my) / h };
         }
       }
     }
@@ -1645,6 +1674,8 @@ export class Game {
     const c = { mx, my };
     if (ent) {
       c.entity = ent.e;
+      // (How far up them the pointer is: 1 at the top of the head.)
+      c.entUp = ent.up ?? 0.5;
       c.inReach = Math.max(Math.abs(ent.e.x - p.x), Math.abs(ent.e.z - p.z)) <= this.attackReach();
     }
     if (hit) {
@@ -1842,6 +1873,16 @@ export class Game {
     }
     for (const ck of clicks) {
       if (ck.type === 'down' && ck.button === 0) {
+        // A bow (sling, crossbow) in hand: hold to draw, aim with the mouse,
+        // let go to loose; a javelin's thrown where you aim. (A door or a
+        // chest still opens with a click.)
+        const rd = p.heldDef();
+        if (rd && rd.ranged) {
+          if (c && !c.entity && c.block && c.block.interact && c.inReach) this.pending = { x: c.x, y: c.y, z: c.z, t: 0 };
+          else if (drawable(rd)) beginDraw(this);
+          else throwAimed(this);
+          continue;
+        }
         if (c && c.entity) {
           const melee = !(p.heldDef() && p.heldDef().ranged) && c.entity.kind !== 'prop';
           if (melee && p.attackCd <= 0) this.charging = { target: c.entity, t: 0, ready: false };
@@ -1871,7 +1912,13 @@ export class Game {
         }
         this.pending = null;
         this.mining = null;
+        if (p.bowDraw) releaseDraw(this);
       } else if (ck.type === 'down' && ck.button === 2) {
+        // (Drawn, and thought better of it: let down.)
+        if (p.bowDraw) {
+          cancelDraw(this);
+          continue;
+        }
         this.rightClick();
       }
     }
@@ -1885,7 +1932,7 @@ export class Game {
           this.tryPlace(c.place);
           this.placeRepeat = 0.22;
         }
-      } else if (c.block && c.inReach && !(held && held.kind === 'weapon') && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
+      } else if (c.block && c.inReach && !(held && held.kind === 'weapon') && !p.bowDraw && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
         this.mineTick(dt, c);
       } else this.mining = null;
     } else {
@@ -1909,6 +1956,8 @@ export class Game {
       this.talk(c.entity);
       return;
     }
+    // Dice in hand: a throw (on the table there, or one beside you).
+    if (held && held.key === 'dice' && throwDice(this)) return;
     // Leads: one on a beast, off it, or tie what you're leading to a post.
     if (c && c.entity && canLead(c.entity) && leadUse(this, c.entity, held ? held.key : null)) return;
     if (c && c.block && c.inReach && isPost(c.block.id) && leading(this).length && tieLeads(this, c.x, c.y, c.z)) return;
@@ -2187,7 +2236,7 @@ export class Game {
 
   // Hunting the town's game where a game law says only its trappers may.
   checkPoaching(c) {
-    if (!c.S || c.hostileNow || (c.S.mode !== 'passive' && c.S.mode !== 'neutral') || c.species === 'chicken') return;
+    if (!c.S || c.hostileNow || (c.S.mode !== 'passive' && c.S.mode !== 'neutral') || c.species === 'chicken' || c.livestock !== undefined) return;
     for (const s of this.world.ow.settlementsNear(c.x, c.z)) {
       const a = this.active.get(s.id);
       if (!a || !lawOn(a.layout, 'poaching') || this.sim.careers.licensed('trapper', s.id)) continue;
@@ -2322,6 +2371,14 @@ export class Game {
     if (here.some((q) => q.playerHome && c && c.sid === s.id && c.home === q.id)) return;
     const civic = here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5 || EVENT_BLOCKS.has(b.id);
     if (!civic || b.render === 'plant') return;
+    // The noise of it: anyone near enough to hear (awake) turns to look.
+    for (const n of this.active.get(s.id).npcs) {
+      if (n.dead || n.sleeping || n.state !== 'routine' || n.sitting || n.moving) continue;
+      const d = Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
+      if (d > (n.rec.job === 'guard' ? 6 : 4) || d < 1) continue;
+      n.face(x, z);
+      if (d > 2 && n.rng.chance(0.4)) n.emoteShow('?', '#c8c8c8', 1.2);
+    }
     const wits = this.sim.witnesses(s.id, x, z, 7).filter((n) => n.state === 'routine');
     const witness = wits[0];
     if (!witness) return;
@@ -3095,9 +3152,26 @@ export class Game {
   startWait(hours, anywhere = false) {
     const p = this.player;
     if ((!p.sitting && !anywhere) || hours <= 0) return false;
+    // (Not with a fight going on around you.)
+    const live = this.sim.war.live;
+    if (live && !live.done && this.sim.war.nearPlayer(live.centre || { x: p.x, z: p.z }, 60)) {
+      this.ui.msg('Not with fighting going on around you.', '#ffb080');
+      return false;
+    }
     this.waiting = { until: this.day * DAY + this.minute + hours * 60, hp: p.hp, t: 0, hours, anywhere };
     if (!anywhere) this.ui.msg(`You settle in to wait ${hours} hour${hours > 1 ? 's' : ''}.`, '#c8d8ff');
     return true;
+  }
+
+  // Something's happening right here (a raid, a battle): time stops
+  // racing, and you're up if you were asleep.
+  disturb(why = null) {
+    if (this.sleep && this.sleep.phase !== 'out') this.wakeUp(true);
+    if (this.waiting) {
+      this.waiting = null;
+      this.sleepFast = 0;
+      if (why) this.ui.msg(why, '#c8d8ff');
+    }
   }
 
   updateWait(dt, pressed) {
@@ -3278,6 +3352,32 @@ export class Game {
     this.audio?.play('catapult', from);
   }
 
+  // A wisp's ball of cold fire, lobbed to burst where it lands.
+  lobOrb(from, tx, ty, tz, dmg) {
+    const dist = Math.hypot(tx - from.x, tz - from.z);
+    this.projectiles.push({ from, target: null, x0: from.x, y0: from.y + 1.5, z0: from.z, tx, ty, tz, t: 0, dur: 0.9 + dist * 0.05, dmg, kind: 'orb', arc: 1 + dist * 0.12 });
+  }
+
+  // Where it bursts: whoever's there and round it is burnt with cold and
+  // slowed (unless they rolled clear).
+  orbLands(a) {
+    const x = Math.round(a.tx);
+    const z = Math.round(a.tz);
+    const y = this.world.regionAt(x, z) ? this.world.findStandY(x, z, Math.round(a.ty)) : a.ty;
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) {
+      if (e.dead || e.down || e === a.from || (e.S && e.S.night) || Math.max(Math.abs(e.x - x), Math.abs(e.z - z)) > 1 || Math.abs(e.y - y) > 2) continue;
+      if (e.kind === 'player' && e.rollT > 0) {
+        this.renderer.floatText(e.x, e.y + 2, e.z, 'dodged', '#c8e8ff');
+        continue;
+      }
+      this.damage(e, Math.max(1, Math.round(a.dmg * (e.x === x && e.z === z ? 1 : 0.6))), a.from);
+      e.slowT = Math.max(e.slowT || 0, 2);
+    }
+    this.renderer.emit(x + 0.5, y + 0.6, z + 0.5, { n: 16, color: ['#80d0ff', '#c0f0ff', '#ffffff'], up: 30, speed: 40, life: 0.7, glow: true, gravity: -10 });
+    this.renderer.effect?.({ type: 'ring', wx: x, wy: y, wz: z, r0: 2, r1: 16, color: ['#80d0ff', '#e0f8ff'], life: 0.45, oy: 3, flat: 0.5 });
+    this.audio?.play('impact', { x, y, z });
+  }
+
   // Where it comes down: everyone close by is hurt, dust and splinters fly.
   boulderLands(a) {
     const x = Math.round(a.tx);
@@ -3298,37 +3398,42 @@ export class Game {
   }
 
   updateProjectiles(dt) {
+    // (A javelin lies where it fell.)
+    const javelin = (a) => {
+      if (a.kind !== 'javelin' || !a.from || a.from.kind !== 'player' || Math.random() >= 0.8) return;
+      const y = this.world.findStandY(Math.round(a.tx), Math.round(a.tz), Math.round(a.ty));
+      if (y > 0) this.spawnDrop('javelin', 1, Math.round(a.tx), y, Math.round(a.tz));
+    };
     for (const a of this.projectiles) {
       a.t += dt;
+      // Loosed where you aimed: the first thing in its way, or the ground.
+      if (a.aimed) {
+        const v = flyAimed(this, a);
+        if (v || a.t >= a.dur) {
+          a.done = true;
+          const hit = !!v && arrowStrikes(this, a, v);
+          a.target = v || null;
+          javelin(a);
+          onArrowLand(this, a, hit);
+        }
+        continue;
+      }
       if (a.t < a.dur) continue;
       a.done = true;
       if (a.kind === 'boulder') {
         this.boulderLands(a);
         continue;
       }
+      if (a.kind === 'orb') {
+        this.orbLands(a);
+        continue;
+      }
       const t = a.target;
       let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
-      // An adventurer turns the arrow aside with a blade.
-      if (hit && t.adventurer && t.tryDeflect && t.tryDeflect(a)) hit = false;
-      // Rolled under it, or caught it on a shield.
-      if (hit && t.kind === 'player' && t.rollT > 0) {
-        hit = false;
-        this.renderer.floatText(t.x, t.y + 2, t.z, 'dodged', '#c8e8ff');
-      }
-      // (A crossbow bolt goes through a shield, mostly.)
-      if (hit && t.kind === 'player' && t.blocking && shieldOf(t) && facing(t, a.from)) {
-        if (a.kind === 'bolt') a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
-        else hit = false;
-        this.renderer.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');
-        this.renderer.emit(t.x, t.y + 1.1, t.z, { n: 5, color: ['#ffffff', '#ffe8a0'], up: 20, speed: 40, life: 0.25, glow: true });
-        this.audio?.play('armor_hit', t);
-      }
-      if (hit) this.damage(t, a.dmg, a.from);
-      // A javelin lies where it fell.
-      if (a.kind === 'javelin' && a.from && a.from.kind === 'player' && Math.random() < 0.8) {
-        const y = this.world.findStandY(Math.round(a.tx), Math.round(a.tz), Math.round(a.ty));
-        if (y > 0) this.spawnDrop('javelin', 1, Math.round(a.tx), y, Math.round(a.tz));
-      }
+      // Turned aside, rolled under, taken on a shield, or home (see
+      // archery.js).
+      if (hit) hit = arrowStrikes(this, a, t);
+      javelin(a);
       onArrowLand(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
@@ -3700,9 +3805,15 @@ export class Game {
     let dmg = (def && def.damage && !def.ranged ? def.damage : 1 + Math.random() * 1.2) * damageMult(this.hero) * (1 + buffOf(this, 'fury')) + (heroHas(this.hero, 'brawler') ? 1 : 0);
     if (!fresh) dmg *= 0.6;
     if (heavy) dmg *= 1.8;
-    // Straight back at them after a parry: a sure, hard blow.
+    // Straight back at them after a parry (or, with a topaz in your armour,
+    // straight out of a roll): a sure, hard blow.
     const riposte = p.riposte > 0;
-    const crit = riposte || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
+    const fromRoll = !riposte && p.rollStrike > 0;
+    if (fromRoll) {
+      p.rollStrike = 0;
+      this.renderer.floatText(target.x, target.y + 2.4, target.z, 'out of the roll!', '#fff8a0');
+    }
+    const crit = riposte || fromRoll || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
     if (crit) dmg *= riposte ? 2.2 : 1.8;
     if (riposte) {
       p.riposte = 0;
@@ -4047,6 +4158,9 @@ export class Game {
         if ((!live || live.told <= 3) && Math.max(Math.abs(e.x - this.player.x), Math.abs(e.z - this.player.z)) < 24) this.ui.msg(`${e.name}${civ ? ` of the ${civ.name.replace(/^The /, '')}` : ''} has fallen.`, '#ff9080');
         return;
       }
+      // Dead, for good: mourned, buried, and never back (asleep in bed or
+      // out in the street).
+      this.sim.recordDeath(e.originLayout || L, rec, cause, byPlayer ? 'player' : null);
       if (byPlayer) {
         this.stats.kills++;
         this.ui.msg(`${e.name} the ${e.title} has died.`, '#ff7060');
@@ -4224,13 +4338,15 @@ export class Game {
     let species = null;
     if (night) {
       const r = Math.random();
-      if ((biome === 'forest' || biome === 'taiga') && r < 0.35) species = 'wolf';
-      else species = r < 0.7 ? 'slime' : 'skeleton';
+      if ((biome === 'forest' || biome === 'taiga') && r < 0.3) species = 'wolf';
+      // (Wisps over marsh and through the woods.)
+      else if ((biome === 'swamp' || biome === 'jungle' || biome === 'forest') && r < 0.48) species = 'wisp';
+      else species = r < 0.45 ? 'slime' : r < 0.72 ? 'skeleton' : r < 0.88 ? 'ghoul' : 'wisp';
     } else {
       const opts = {
-        plains: ['rabbit', 'deer', 'rabbit', 'boar', 'horse'], forest: ['deer', 'boar', 'rabbit', 'wolf'], taiga: ['deer', 'wolf', 'rabbit'],
-        tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit', 'horse'], jungle: ['boar', 'slime', 'deer'], swamp: ['slime', 'boar'],
-        desert: ['rabbit'], mountain: ['boar', 'rabbit'], beach: ['rabbit'],
+        plains: ['rabbit', 'deer', 'rabbit', 'boar', 'horse', 'sheep', 'cow'], forest: ['deer', 'boar', 'rabbit', 'wolf', 'pig'], taiga: ['deer', 'wolf', 'rabbit', 'sheep'],
+        tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit', 'horse', 'cow'], jungle: ['boar', 'slime', 'deer', 'pig'], swamp: ['slime', 'boar'],
+        desert: ['rabbit'], mountain: ['boar', 'rabbit', 'sheep'], beach: ['rabbit'],
       }[biome] || ['rabbit'];
       species = opts[Math.floor(Math.random() * opts.length)];
       if (species === 'wolf' && Math.random() < 0.6) species = 'deer';
@@ -4290,6 +4406,12 @@ export class Game {
         if (Math.abs(c.x - this.player.x) > 22 || Math.abs(c.z - this.player.z) > 22) continue;
         if (Math.random() < 0.35) r.emit(c.x, c.y, c.z, { n: 1, color: ['#8a8a92', '#a8a8b0', '#6a6a72'], up: 10, speed: 8, gravity: -6, life: 2.4, size: 2, oy: -2 });
       }
+    }
+    // Wisps: sparks of cold light falling away from them.
+    for (const c of this.creatures) {
+      if (c.species !== 'wisp' || c.dead || Math.abs(c.x - this.player.x) > 20 || Math.abs(c.z - this.player.z) > 20 || Math.random() > 0.35) continue;
+      const rp = c.renderPos();
+      r.emit(rp.x + 0.3 + Math.random() * 0.4, rp.y + 1.2, rp.z + 0.5, { n: 1, color: ['#80d0ff', '#c0f0ff', '#ffffff'], up: -4, speed: 6, gravity: 6, life: 0.9, glow: true });
     }
     // Portals alight: motes of violet drifting up out of the arch.
     for (const q of Object.values(this.sim.portals.list)) {

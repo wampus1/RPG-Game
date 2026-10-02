@@ -1647,8 +1647,9 @@ export class War {
       });
     }
     if (!ents.length) return false;
-    // (Woken by the shouting, if you're asleep in town.)
-    if (g.sleep && g.sleep.phase !== 'out') g.wakeUp(true);
+    // (Woken by the shouting, if you're asleep in town; and no more
+    // waiting about while they're here.)
+    g.disturb?.('Shouts and running feet: you stop waiting.');
     g.ui.msg(sea ? `Raiders of the ${plain(this.civ(raid.civ))} are coming ashore by raft at ${TL.settlement.name}!` : `Raiders of the ${plain(this.civ(raid.civ))} are attacking ${TL.settlement.name}!`, '#ff7060');
     g.audio?.play('alarm');
     // The watch rides out.
@@ -1799,16 +1800,13 @@ export class War {
           // Already about (marched here, or out of the town nearby): into
           // the line from where they are.
           e = this.enlist(r.ent, side, 'battle', { ...cfg, phase: 'march' });
-        } else if (this.game.inSight(x, z, 2)) {
-          // In view of you: they come up from behind their lines.
-          let bx = x;
-          let bz = z;
-          for (let k = 0; k < 40 && this.game.inSight(bx, bz, 1); k += 2) {
-            bx = Math.round(bx + ax.x * 2 * sign);
-            bz = Math.round(bz + ax.z * 2 * sign);
-          }
-          e = this.game.inSight(bx, bz, 1) ? null : this.spawn(r, L, bx, bz, side, 'battle', { ...cfg, phase: 'march' });
-        } else e = this.spawn(r, L, x, z, side, 'battle', cfg);
+        } else if (!this.game.inSight(x, z, 2)) e = this.spawn(r, L, x, z, side, 'battle', cfg);
+        // In view of you (or off the edge of the world that's about): they
+        // come up from behind their lines, or in from the side.
+        if (!e && !(r.ent && !r.ent.dead)) {
+          const q = this.offstage(x, z, ax, perp, sign);
+          e = q ? this.spawn(r, L, q.x, q.z, side, 'battle', { ...cfg, phase: 'march' }) : null;
+        }
         if (!e) return;
         r.soldier = w.id;
         r.away = true;
@@ -1841,7 +1839,27 @@ export class War {
     }
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
     g.audio?.play('alarm');
+    g.disturb?.('Drums and horns: you stop waiting.');
     return true;
+  }
+
+  // Somewhere out of your sight (and in the world that's about) to bring a
+  // soldier on from, nearest their place in the line: back behind it, or
+  // in from one side.
+  offstage(x, z, ax, perp, sign) {
+    const g = this.game;
+    const ok = (q) => g.world.regionAt(q.x, q.z) && !g.inSight(q.x, q.z, 1) && g.world.findStandY(q.x, q.z, GROUND) > 0;
+    for (let k = 2; k <= 60; k += 2) {
+      const q = { x: Math.round(x + ax.x * k * sign), z: Math.round(z + ax.z * k * sign) };
+      if (ok(q)) return q;
+    }
+    for (let k = 10; k <= 40; k += 3) {
+      for (const sd of [1, -1]) {
+        const q = { x: Math.round(x + perp.x * k * sd), z: Math.round(z + perp.z * k * sd) };
+        if (ok(q)) return q;
+      }
+    }
+    return null;
   }
 
   // Bandits paid to fight: their own knot of them out on the flank, hooded
@@ -2029,7 +2047,13 @@ export class War {
         g.audio?.play('alarm');
       }
     }
-    if (!L.done && (L.sides.a.broken || L.sides.b.broken || L.t > 180 + (L.goT || 0) || !ua.length || !ub.length)) this.endLiveBattle(L, ua, ub);
+    // (Nobody's come to blows for a long while, one side never having got
+    // here, or both dug in and waiting: it's over, and it goes by numbers.)
+    if (L.go && !L.done) {
+      if (ua.some((x) => ub.some((y) => Math.max(Math.abs(x.x - y.x), Math.abs(x.z - y.z)) <= 8))) L.contactT = L.t;
+      if (L.t - (L.contactT ?? L.goT ?? L.t) > 50) L.standoff = true;
+    }
+    if (!L.done && (L.sides.a.broken || L.sides.b.broken || L.standoff || L.t > 180 + (L.goT || 0) || !ua.length || !ub.length)) this.endLiveBattle(L, ua, ub);
     // Afterwards: everyone walks off (and is gone once out of sight); the
     // walls come down when the field's empty, or you've gone.
     if (L.done) {

@@ -216,7 +216,8 @@ export class Player extends Entity {
     }
     // Keys move you across the screen, whichever way the camera is turned.
     const [dx, dz] = screenToWorld(d[0], d[1], this.game.renderer?.view || 0);
-    this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
+    // (Drawing a bow, you keep facing your mark as you step.)
+    if (!this.bowDraw) this.dir = dx < 0 ? 1 : dx > 0 ? 3 : dz < 0 ? 2 : 0;
     const nx = this.x + dx;
     const nz = this.z + dz;
     const w = this.game.world;
@@ -270,8 +271,9 @@ export class Player extends Entity {
     const ride = this.mount ? this.game.riding.pace() : 1;
     // (Shield up: a slow, careful step, and no running.)
     const guard = this.blocking ? 1.7 : 1;
-    // (Just up out of a roll: a little slower for a moment.)
-    const recover = this.rollRecover > 0 ? 1.45 : 1;
+    // (Just up out of a roll: a little slower for a moment. An arrow on
+    // the string: careful steps.)
+    const recover = (this.rollRecover > 0 ? 1.45 : 1) * (this.bowDraw ? 1.6 : 1);
     this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? 0.62 : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);

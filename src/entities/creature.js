@@ -16,7 +16,22 @@ export const SPECIES = {
   // Wild on open grassland (animal handlers tame them); a town's or a
   // trader's stand tied to a fence with a lead.
   horse: { name: 'Horse', hp: 14, dmg: 0, step: 0.3, mode: 'passive', drops: [['leather', 1, 3, 1], ['raw_meat', 1, 3, 1]], tame: true },
+  // Night things. A ghoul: quick, low to the ground, in twos and threes; it
+  // rakes three times at once (each stroke taken on a shield costs breath),
+  // or springs from two paces off: roll, or parry, rather than hide.
+  ghoul: { name: 'Ghoul', hp: 10, dmg: 2, step: 0.22, mode: 'hostile', aggro: 10, drops: [['bone', 1, 2, 0.8], ['coin', 1, 3, 0.4]], night: true, packs: true },
+  // A will-o'-the-wisp: a drifting light that keeps its distance and lobs
+  // balls of cold fire where you stand (they burst where they land, and
+  // chill): keep moving, and run it down; it flits off if you get close.
+  wisp: { name: 'Will-o\'-the-Wisp', hp: 6, dmg: 3, step: 0.3, mode: 'hostile', aggro: 12, drops: [['coin', 1, 3, 0.6]], night: true, floats: true },
+  // Farm beasts, out on the grass and kept in town (see game.spawning).
+  pig: { name: 'Pig', hp: 8, dmg: 0, step: 0.42, mode: 'passive', drops: [['raw_meat', 2, 3, 1], ['leather', 1, 1, 0.3]], tame: true },
+  sheep: { name: 'Sheep', hp: 7, dmg: 0, step: 0.4, mode: 'passive', drops: [['raw_meat', 1, 2, 1], ['string', 1, 3, 0.8]], tame: true },
+  cow: { name: 'Cow', hp: 12, dmg: 0, step: 0.5, mode: 'passive', drops: [['raw_meat', 2, 4, 1], ['leather', 1, 2, 0.8]], tame: true },
 };
+
+// What a skeleton picked up (and so how it fights: see combat.styleOf).
+const SKELETON_ARMS = [['stone_sword', 0.3], ['hand_axe', 0.2], ['wooden_spear', 0.15], ['club', 0.15], ['bow', 0.2]];
 
 const SKELETON_LOOK = {
   skin: '#e8e4d4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#d8d4c4', pants: '#c8c4b4', shoes: '#c8c4b4', outfit: 'skeleton', accent: '#e8e4d4',
@@ -42,10 +57,19 @@ export class Creature extends Entity {
     this.fleeFrom = null;
     this.angry = false;
     if (S.humanoid) this.look = SKELETON_LOOK;
+    if (species === 'skeleton') {
+      let r = this.rng.next();
+      this.arms = SKELETON_ARMS.find(([, w]) => (r -= w) <= 0)?.[0] || 'stone_sword';
+    }
   }
 
   heldItem() {
-    return this.species === 'skeleton' ? 'stone_sword' : null;
+    return this.species === 'skeleton' ? this.arms || 'stone_sword' : null;
+  }
+
+  // What it fights with up close (a skeleton's bow: it clubs you with it).
+  meleeWeapon() {
+    return this.species === 'skeleton' && this.arms !== 'bow' ? this.arms || 'stone_sword' : null;
   }
 
   get hostileNow() {
@@ -85,6 +109,8 @@ export class Creature extends Entity {
     }
     if (this.hostileNow && !this.tie) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
+      // (Those that fight from afar: a skeleton with a bow, a wisp.)
+      if (this.target && (this.species === 'wisp' || this.arms === 'bow') && this.keepOff(dt)) return;
       if (this.target) return this.chase(dt);
     } else if (this.tie) {
       // Tied to a post: shifting about on the end of the lead, no further
@@ -137,7 +163,7 @@ export class Creature extends Entity {
     const d = this.distTo(t);
     const st = styleOf(this, true);
     // In reach: wind up a blow (each kind its own way: see combat.js).
-    if (inReach(this, t, st) && (d <= 1 || st.lunge || st.charge)) {
+    if (inReach(this, t, st) && (d <= 1 || st.lunge || st.charge || st.thrust)) {
       this.face(t.x, t.z);
       if (this.attackCd <= 0) beginAttack(this.game, this, t, st);
       if (d <= 1) return;
@@ -159,6 +185,53 @@ export class Creature extends Entity {
     const [nx, , nz] = this.path[this.pathI];
     if (this.tryStep(nx, nz, this.S.step)) this.pathI++;
     else this.path = null;
+  }
+
+  // Fighting from a distance: back off if they come close, close in if
+  // they're far, and in between, shoot (a skeleton's bow: drawn a moment,
+  // then loosed) or throw cold fire (a wisp: it gathers, then flies). True
+  // if that's what it's doing; false to fight close instead.
+  keepOff(dt) {
+    const t = this.target;
+    const game = this.game;
+    const d = this.distTo(t);
+    const wisp = this.species === 'wisp';
+    this.castT = (this.castT ?? this.rng.float(1, 2.5)) - dt;
+    // Gathering itself: the shot comes when it's ready.
+    if (this.aiming) {
+      this.aiming.t -= dt;
+      this.face(t.x, t.z);
+      if (this.aiming.t > 0) return true;
+      const a = this.aiming;
+      this.aiming = null;
+      this.drawnBow = false;
+      this.castT = wisp ? this.rng.float(3.5, 5) : this.rng.float(2.4, 3.4);
+      if (wisp) game.lobOrb(this, a.x, a.y, a.z, this.S.dmg);
+      else if (d <= 9) game.shoot(this, t, 3, 'arrow');
+      this.doAction(0.3);
+      return true;
+    }
+    // Too close: away (a skeleton with nowhere to go clubs you).
+    if (d <= (wisp ? 3 : 2)) {
+      const dx = Math.sign(this.x - t.x) || (this.rng.chance(0.5) ? 1 : -1);
+      const dz = Math.sign(this.z - t.z) || (this.rng.chance(0.5) ? 1 : -1);
+      const opts = this.rng.chance(0.5) ? [[dx, 0], [0, dz], [dx, dz]] : [[0, dz], [dx, 0], [dx, dz]];
+      if (!this.moving) for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * (wisp ? 0.6 : 0.9))) return true;
+      return !wisp ? false : true;
+    }
+    if (d > (wisp ? 8 : 9)) return false;
+    if (this.castT > 0 || Math.abs(t.y - this.y) > 2) return true;
+    // (Only with a clear line to them.)
+    if (!game.sim.lineOfSight(this.x, this.z, t.x, t.z, this.y + 1)) return false;
+    this.aiming = { t: wisp ? 0.9 : 0.75, x: t.x, y: t.y, z: t.z };
+    this.drawnBow = !wisp;
+    this.face(t.x, t.z);
+    if (wisp) {
+      // (Where it'll come down, glowing on the ground.)
+      game.renderer.effect?.({ type: 'ring', wx: t.x, wy: t.y, wz: t.z, r0: 10, r1: 3, color: ['#80d0ff', '#c0f0ff'], life: 1.0, oy: 4, flat: 0.5 });
+      game.audio?.play('portal', this);
+    }
+    return true;
   }
 
   onHurt(attacker) {

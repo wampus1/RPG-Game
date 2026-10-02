@@ -882,8 +882,8 @@ export class NPC extends Entity {
     return out;
   }
 
-  // Set out a thing or two they have plenty of on the counter beside them
-  // (still theirs to sell; take it, and it's stealing).
+  // Set out a thing or two of their best on the counter beside them (still
+  // theirs to sell; take it, and it's stealing).
   showWares(dt) {
     if (!this.atGoal || this.moving) return;
     this.wareT = (this.wareT || 0) - dt;
@@ -899,10 +899,19 @@ export class NPC extends Entity {
         this.doAction(0.25);
       }
     }
-    if (shown.length >= 2) return;
-    const have = Object.entries(w.store).filter(([k, n]) => n >= 2 && ITEMS[k] && k !== 'coin' && !shown.some((q) => q.got.item === k));
+    // (Their dearest goods, to catch the eye: the best of what they have
+    // more than one of, now and then the next best.)
+    const worth = (k) => ITEMS[k].value || 0;
+    const have = Object.entries(w.store).filter(([k, n]) => n >= 2 && ITEMS[k] && k !== 'coin' && !shown.some((q) => q.got.item === k)).sort((a, b) => worth(b[0]) - worth(a[0]));
     if (!have.length) return;
-    const [item] = this.rng.pick(have);
+    if (shown.length >= 2) {
+      // A full counter: the cheapest piece makes way for something much
+      // finer, if there is something.
+      const cheap = shown.filter((q) => (w.store[q.got.item] || 0) > 0).sort((a, b) => worth(a.got.item) - worth(b.got.item))[0];
+      if (!cheap || worth(have[0][0]) < worth(cheap.got.item) * 1.5 + 1) return;
+      this.game.takePlaced(cheap.x, cheap.y, cheap.z);
+    }
+    const [item] = have.length > 1 && this.rng.chance(0.25) ? have[1] : have[0];
     const at = this.surfaceNear(2);
     if (!at) return;
     const home = this.homeLayout.settlement.id;
@@ -2660,8 +2669,15 @@ export class NPC extends Entity {
       this.path = null;
     }
     if (this.followPath(this.fleeGoal, 1)) {
-      this.dir = this.rng.int(0, 3);
-      if (this.rng.chance(0.1)) this.emoteShow('!', '#ffe070', 1);
+      // Safe for now: cowering with an eye on the way it came from, and a
+      // nervous look round now and then (not a spin on the spot).
+      this.lookT = (this.lookT || 0) - dt;
+      if (this.lookT <= 0) {
+        this.lookT = this.rng.float(0.9, 2.2);
+        if (this.rng.chance(0.6)) this.face(t.x, t.z);
+        else this.dir = this.rng.int(0, 3);
+      }
+      if (this.rng.chance(dt * 0.3)) this.emoteShow('!', '#ffe070', 1);
     }
   }
 

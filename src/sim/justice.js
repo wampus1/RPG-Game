@@ -320,10 +320,16 @@ export class Justice {
       const s = p.inv[i];
       if (!s) continue;
       const d = ITEMS[s.item];
-      if (d && (d.kind === 'weapon' || s.item === 'arrow')) {
+      if (d && (d.kind === 'weapon' || s.item === 'arrow' || s.item === 'bolt')) {
         taken.push({ item: s.item, count: s.count });
         p.inv[i] = null;
       }
+    }
+    // (And the blade in your off hand.)
+    const off = p.equip && p.equip.shield;
+    if (off && ITEMS[off] && ITEMS[off].kind === 'weapon') {
+      taken.push({ item: off, count: 1, slot: 'shield' });
+      p.equip.shield = null;
     }
     const prev = this.held && this.held.sid === sid ? this.held.items : this.held ? (this.stashWeapons(this.sim.layoutOf(this.held.sid)), []) : [];
     if (taken.length || prev.length) this.held = { sid, items: [...prev, ...taken] };
@@ -345,6 +351,11 @@ export class Justice {
       return;
     }
     for (const it of h.items) {
+      // (The off-hand blade back where it was, if that hand's still free.)
+      if (it.slot === 'shield' && p.equip && !p.equip.shield) {
+        p.equip.shield = it.item;
+        continue;
+      }
       const left = p.give(it.item, it.count);
       if (left) game.spawnDrop(it.item, left, p.x, p.y, p.z, true);
     }
