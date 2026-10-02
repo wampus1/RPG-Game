@@ -30,6 +30,7 @@ import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, fly
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
+import { startIntro } from './cutscene.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront } from '../entities/monsters.js';
@@ -62,7 +63,7 @@ const START_KIT = [
 ];
 
 export class Game {
-  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false }) {
+  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false }) {
     this.seed = seed >>> 0;
     this.renderer = renderer;
     // A new world starts with north up (a saved one as you left it).
@@ -192,7 +193,12 @@ export class Game {
     this.loadAround(this.player.x, this.player.z, true);
     this.updateSettlements(true);
     ow.markExplored(this.player.x, this.player.z, 2);
-    if (this.hero && !save) this.introduce();
+    // A new story opens with a scene of where you come from (see
+    // cutscene.js), or straight in.
+    if (this.hero && !save) {
+      if (intro) startIntro(this);
+      else this.introduce();
+    }
   }
 
   // Birds by day, crickets and owls by night, waves on the shore, wind up
@@ -1429,6 +1435,18 @@ export class Game {
       this.mining = null;
       return;
     }
+    // An opening scene playing (see cutscene.js): it goes first. Mostly
+    // it's to be watched (the world carries on, but you can't act); at sea
+    // you can walk the deck and talk.
+    const cut = this.cutscene;
+    if (cut) {
+      cut.update(dt, uiRes.pressed);
+      if (this.cutscene === cut && !cut.live) {
+        this.cursor = null;
+        this.mining = null;
+        return;
+      }
+    }
     // A blow that lands hard holds the moment (hit-stop); a parry slows
     // the world for a breath after.
     if (this.hitStop > 0) {
@@ -1439,7 +1457,7 @@ export class Game {
       dt *= this.slowMoScale || 0.35;
     }
     this.dt = dt;
-    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down;
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable);
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
@@ -1475,7 +1493,9 @@ export class Game {
     this.streamRegions();
     if (Math.random() < 0.05) this.updateSettlements();
     this.world.ow.markExplored(this.player.x, this.player.z, 1);
-    this.sim.update(dt);
+    // (At sea, before the story starts, the island waits.)
+    const atSea = !!this.cutscene && this.cutscene.kind === 'ship';
+    if (!atSea) this.sim.update(dt);
     this.respawnT = (this.respawnT || 0) - dt;
     if (this.respawnT <= 0) {
       this.respawnT = 2;
@@ -1506,7 +1526,7 @@ export class Game {
     this.sim.ancient.update(dt);
     if (this.dungeon) this.dungeon.update(dt);
     updateEngines(this, dt);
-    this.wildlife.update(dt);
+    if (!atSea) this.wildlife.update(dt);
     updateShips(this, dt);
     sailShips(this, dt);
     updateLabor(this, dt);
@@ -1557,8 +1577,9 @@ export class Game {
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
     for (const q of this.props.values()) if (Math.abs(q.x - p.x) < 28 && Math.abs(q.z - p.z) < 28) vis.push(q);
     for (const q of this.engines) if (Math.abs(q.x - p.x) < 30 && Math.abs(q.z - p.z) < 30) vis.push(q);
+    if (this.cutscene && this.cutscene.actors) for (const a of this.cutscene.actors) if (!a.dead) vis.push(a);
     this.visibleEntities = vis;
-    if (this.autosaveDue) {
+    if (this.autosaveDue && !this.cutscene) {
       this.autosaveDue = false;
       if (this.autosave) this.autosave();
     }
@@ -1569,6 +1590,7 @@ export class Game {
     const p = this.player;
     for (const k of pressed) {
       const code = k.code;
+      if (this.cutscene && !this.cutscene.allowKey(code)) continue;
       if (code.startsWith('Digit')) {
         const n = parseInt(code.slice(5), 10);
         if (n >= 1 && n <= BELT_SIZE) this.selectSlot(n - 1);
@@ -1615,7 +1637,8 @@ export class Game {
           else roll(this, p, this.heldMove());
           break;
         case 'KeyF':
-          if (p.raft) this.leaveRaft();
+          if (this.cutscene) this.interactFront();
+          else if (p.raft) this.leaveRaft();
           else if (p.heldDef()?.kind === 'food') this.eat();
           else if (p.heldDef()?.kind === 'potion') this.drink();
           else if (p.heldDef()?.newspaper) this.ui.openNews?.();
@@ -1870,6 +1893,12 @@ export class Game {
   handleMouse(dt, clicks, input) {
     const p = this.player;
     const c = this.cursor;
+    // On board ship (the opening): only talk (to whoever you point at).
+    if (this.cutscene) {
+      for (const ck of clicks) if (ck.type === 'down' && ck.button === 2 && c && c.entity && c.entity.kind === 'crew' && c.entity.distTo(p) <= 4) this.cutscene.talk(c.entity);
+      this.mining = null;
+      return;
+    }
     // Reeling in a fish: the mouse button pulls the line, nothing else.
     if (this.fishing && this.fishing.phase === 'reel') {
       this.mining = null;
@@ -2723,6 +2752,20 @@ export class Game {
   }
 
   interactFront() {
+    // (Aboard ship in the opening: the crew are all there is to talk to.)
+    if (this.cutscene) {
+      const c = this.cursor;
+      const p = this.player;
+      if (c && c.entity && c.entity.kind === 'crew' && c.entity.distTo(p) <= 4) return this.cutscene.talk(c.entity);
+      const D = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir];
+      for (const yy of [p.y, p.y + 1, p.y - 1]) {
+        const e = this.entityAt(p.x + D[0], yy, p.z + D[1]);
+        if (e && e.kind === 'crew') return this.cutscene.talk(e);
+      }
+      const near = (this.cutscene.actors || []).filter((q) => !q.dead && q.distTo(p) <= 2).sort((a, b) => a.distTo(p) - b.distTo(p))[0];
+      if (near) this.cutscene.talk(near);
+      return;
+    }
     if (this.player.raft) return this.leaveRaft();
     if (this.player.mount) return this.riding.dismount();
     if (this.player.inWagon) return this.riding.climbOut();
@@ -3565,6 +3608,13 @@ export class Game {
           const hit = !!v && arrowStrikes(this, a, v);
           a.target = v || null;
           javelin(a);
+          if (a.kind === 'pulse') {
+            // (It bursts where it ends, on whoever or whatever it met.)
+            const ex = a.x0 + (a.tx - a.x0);
+            const ez = a.z0 + (a.tz - a.z0);
+            this.renderer.emit(ex, a.ty + 0.4, ez, { n: 12, color: ['#c8fbff', '#5ad8f0', '#ffffff'], up: 26, speed: 46, life: 0.4, glow: true, gravity: -6 });
+            this.renderer.effect?.({ type: 'ring', wx: Math.round(ex), wy: a.ty - 0.6, wz: Math.round(ez), r0: 1, r1: 10, color: ['#5ad8f0', '#e0fcff'], life: 0.3, oy: -6, flat: 0.6 });
+          }
           onArrowLand(this, a, hit);
         }
         continue;
@@ -3604,6 +3654,11 @@ export class Game {
   // Weather drifts between clear skies, rain, snow (in cold places) and fog;
   // it's the same weather the towns around you are having.
   updateWeather(dt) {
+    // (An opening scene brings its own.)
+    if (this.cutscene && this.cutscene.weather) {
+      this.weather = this.cutscene.weather;
+      return;
+    }
     // (No weather below ground.)
     if (this.dungeon) {
       this.weather = null;
@@ -4603,8 +4658,8 @@ export class Game {
   }
 
   spawning(dt) {
-    // (Below ground, nothing wanders in from outside.)
-    if (this.dungeon) return;
+    // (Below ground, nothing wanders in from outside; nor while a story opens.)
+    if (this.dungeon || this.cutscene) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     this.spawnT = 2.5;

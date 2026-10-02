@@ -120,6 +120,8 @@ export class Ancient {
 
   // What learning it puts up in a town (or changes in its people).
   apply(L, id) {
+    const pl = this.placesOf(L);
+    if (!(pl.applied ||= []).includes(id)) pl.applied.push(id);
     const ops = [];
     const put = (x, z, block) => {
       if (L.maskAt(x, z) !== M.FREE && L.maskAt(x, z) !== M.DECOR && L.maskAt(x, z) !== M.YARD) return false;
@@ -148,20 +150,19 @@ export class Ancient {
         for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
           if (L.isRoadTile(w.x + dx, w.z + dz) && L.maskAt(w.x + dx, w.z + dz) !== M.PLAZA) continue;
           ops.push([w.x + dx, 6, w.z + dz, B.kav_basin, 0, 'air']);
-          this.placesOf(L).springs.push({ x: w.x + dx, z: w.z + dz });
+          pl.springs.push({ x: w.x + dx, z: w.z + dz });
           break;
         }
       }
-      if (!this.placesOf(L).springs.length && L.plaza) {
+      if (!pl.springs.length && L.plaza) {
         ops.push([L.plaza.x0, 6, L.plaza.z0, B.kav_basin, 0, 'air']);
-        this.placesOf(L).springs.push({ x: L.plaza.x0, z: L.plaza.z0 });
+        pl.springs.push({ x: L.plaza.x0, z: L.plaza.z0 });
       }
     } else if (id === 'wards') {
       // At the corners and the middles of the town's edge.
       const b = L.bounds;
       const mx = Math.round((b.x0 + b.x1) / 2);
       const mz = Math.round((b.z0 + b.z1) / 2);
-      const pl = this.placesOf(L);
       pl.pylons = [];
       for (const [x, z] of [[b.x0 + 1, b.z0 + 1], [b.x1 - 1, b.z0 + 1], [b.x0 + 1, b.z1 - 1], [b.x1 - 1, b.z1 - 1], [mx + 3, b.z0 + 1], [mx + 3, b.z1 - 1], [b.x0 + 1, mz + 3], [b.x1 - 1, mz + 3]]) {
         for (let k = 0; k < 4; k++) {
@@ -224,6 +225,9 @@ export class Ancient {
       const open = ANCIENT_IDS.filter((id) => this.ready(st, id) && ANCIENT[id].cost <= st.cores);
       if (open.length && rng.chance(0.35)) this.buy(s, rng.pick(open));
     }
+    // (A town new to the realm, or laid out since, catches up.)
+    const pl = this.placesOf(L);
+    for (const id of st.done) if (!(pl.applied || []).includes(id)) this.apply(L, id);
     if (this.has(s, 'forge') || this.has(s, 'panoply')) this.equipGuards(L);
     if (this.has(s, 'spring')) for (const r of L.npcs) if (r.sick) r.sick = 0;
     if (this.has(s, 'beacon')) L.econ.treasury += Math.round(4 + L.npcs.length * 0.25);

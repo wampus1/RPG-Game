@@ -55,6 +55,12 @@ export const THEMES = {
   dungeon_holdout: { root: 55, scale: 'dorian', bpm: 84, prog: [0, 6, 0, 4], lead: 'triangle', drums: 'hand', density: 0.4, swing: 0.15 },
   dungeon_kavorent: { root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], lead: 'sine', pad: true, arp: true, drums: null, density: 0.3, detune: 22 },
   fight_kavorent: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  // The openings: an old town's story, slow and warm; a shanty on deck;
+  // the storm; and the cold after.
+  history: { root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], lead: 'triangle', pad: true, arp: true, drums: null, density: 0.42 },
+  voyage: { root: 62, scale: 'dorian', bpm: 110, prog: [0, 3, 0, 4], lead: 'square', drums: 'light', density: 0.62, swing: 0.3 },
+  storm: { root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], lead: 'square', drums: 'battle', density: 0.74, drive: true, detune: 10 },
+  wreck: { root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.14 },
   fight_boss: { root: 50, scale: 'harmonic', bpm: 156, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.85, drive: true, organ: true },
 };
 
@@ -62,6 +68,7 @@ export const THEMES = {
 export function musicMood(game) {
   const p = game.player;
   if (!p) return 'title';
+  if (game.cutscene && game.cutscene.mood) return game.cutscene.mood;
   // A fight: guards after you, or beasts at your throat.
   if (!p.dead) {
     const guards = game.npcs.some((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);

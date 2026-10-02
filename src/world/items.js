@@ -28,7 +28,7 @@ const NOT_ITEMS = new Set([
   'pressure_plate', 'arrow_slit', 'lever', 'portcullis', 'portcullis_up', 'cracked_floor', 'weak_wall', 'sealed_door', 'stairs_down',
   'stairs_up', 'brazier', 'barrow_door', 'sinkhole', 'mine_shaft', 'cave_mouth', 'rubble_seal', 'kav_pillar', 'kav_door', 'kav_lift',
   'kav_wall', 'kav_floor', 'kav_glow', 'kav_debris', 'kav_field', 'kav_console', 'kav_plate', 'kav_node', 'kav_seal', 'kav_cache',
-  'kav_emitter', 'relic', 'kav_lamp', 'kav_pylon', 'kav_basin',
+  'kav_emitter', 'relic', 'kav_lamp', 'kav_pylon', 'kav_basin', 'sail', 'helm',
 ]);
 
 const BLOCK_VALUES = {

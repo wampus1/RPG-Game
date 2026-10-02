@@ -333,6 +333,9 @@ def('kav_pylon', { ...sprite, tall: true, solid: true, hardness: Infinity, drop:
 def('kav_basin', { ...sprite, solid: true, hardness: Infinity, drop: null, light: 9, label: 'Mending Spring' });
 // A relic set down: its power reaches all round it (see game/relics.js).
 def('relic', { ...sprite, interact: 'relic', tool: 'pick', hardness: 1, drop: null, light: 6, label: 'Relic' });
+// The ship you sailed on (see voyage.js): its canvas and its wheel.
+def('sail', { tool: 'axe', hardness: 0.4, drop: 'cloth', label: 'Sailcloth' });
+def('helm', { ...sprite, solid: true, hardness: 1, tool: 'axe', drop: null, label: 'Ship\'s Wheel' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

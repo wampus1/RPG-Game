@@ -1,7 +1,7 @@
 // World renderer: draws the voxel grid in an oblique 3/4 projection using
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
-import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
+import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
 import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK } from './sprites.js';
@@ -205,7 +205,8 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
+    if (game.cutscene && game.cutscene.noCutaway) this.hidden = null;
+    else this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
     this.pick = null;
     this.pickEnt = null;
@@ -276,7 +277,8 @@ export class Renderer {
       }
     }
     const player = game.player;
-    const rp = player.renderPos();
+    // (An opening scene moves the camera its own way: see cutscene.js.)
+    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
     const tx = pu * TILE + 8 - VIEW_W / 2;
@@ -413,6 +415,7 @@ export class Renderer {
   }
 
   isHidden(x, y, z) {
+    if (this.veil && this.game && this.veil.veiled(x, y, z, this.game.world.getBlock(x, y, z))) return true;
     return this.hidden !== null && y >= this.hiddenLevel && this.hidden.has(x * 65536 + z);
   }
 
@@ -464,7 +467,9 @@ export class Renderer {
 
     // Bucket entities by row.
     const buckets = new Map();
+    const cut = game.cutscene;
     for (const e of game.visibleEntities) {
+      if (cut && cut.hides(e)) continue;
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
       const rp = { x: u, y: wp.y, z: v };
@@ -493,7 +498,13 @@ export class Renderer {
     const animFrame = Math.floor(this.time * 8);
     const hidden = this.hidden;
     const hLevel = this.hiddenLevel;
-    const hid = (x, y, z) => hidden !== null && y >= hLevel && hidden.has(x * 65536 + z);
+    // (A town not yet built, in the native's opening: see cutscene.js.)
+    const veil = cut && cut.veiled ? cut : null;
+    this.veil = veil;
+    const cutAway = (x, y, z) => hidden !== null && y >= hLevel && hidden.has(x * 65536 + z);
+    const hid = veil
+      ? (x, y, z) => (hidden !== null && y >= hLevel && hidden.has(x * 65536 + z)) || veil.veiled(x, y, z, world.getBlock(x, y, z))
+      : (x, y, z) => hidden !== null && y >= hLevel && hidden.has(x * 65536 + z);
     this.cursorDrawList = null;
 
     for (let r = 0; r < nRows - 1; r++) {
@@ -511,11 +522,12 @@ export class Renderer {
           for (let i = 0; i < W; i++) {
             const ci = rowBase + i;
             if (y >= colTop[ci]) continue;
-            const id = getAt(ci, y);
+            let id = getAt(ci, y);
             if (id === 0) continue;
             const x = x0 + i;
             const wx = colWX[ci];
             const wz = colWZ[ci];
+            if (veil !== null && y === SURFACE) id = veil.groundAt(wx, y, wz, id);
             // (Something set down belongs with what it's set on: it shows
             // whenever that does, a cut-away roof or not.)
             if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) continue;
@@ -542,13 +554,13 @@ export class Renderer {
                 const oy = liquid ? 3 : 0;
                 ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
                 if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
-                if (!liquid && !aboveHidden) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
+                if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
                 // Higher ground is a touch brighter so terraces read as height.
                 if (y > 6 && !liquid && b.opaque) {
                   ctx.fillStyle = `rgba(255,250,235,${Math.min(0.16, (y - 6) * 0.028)})`;
                   ctx.fillRect(sx, sy, 16, 16);
                 }
-                if (aboveHidden && b.opaque) {
+                if (aboveHidden && b.opaque && (veil === null || cutAway(wx, y + 1, wz))) {
                   // Cut-away wall tops read like a floor-plan section.
                   ctx.fillStyle = 'rgba(16,12,24,0.62)';
                   ctx.fillRect(sx, sy, 16, 16);
@@ -1658,17 +1670,26 @@ export class Renderer {
       // A Kavorent pulse: a bolt of cold light, a long fading tail, sparks
       // shed as it goes.
       if (a.kind === 'pulse') {
-        for (let i = 1; i < 9; i++) {
-          ctx.fillStyle = `rgba(90,216,240,${0.5 - i * 0.05})`;
-          ctx.fillRect(Math.round(sx - ux * i * 1.6) - 1, Math.round(sy - uy * i * 1.2) - 1, 3, 3);
+        const fl = 0.85 + Math.random() * 0.15;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 1; i < 16; i++) {
+          const k = 1 - i / 16;
+          ctx.fillStyle = `rgba(90,216,240,${0.55 * k * fl})`;
+          const w = i < 6 ? 3 : 2;
+          ctx.fillRect(Math.round(sx - ux * i * 1.7) - (w >> 1), Math.round(sy - uy * i * 1.25) - (w >> 1), w, w);
         }
-        ctx.fillStyle = 'rgba(168,244,255,0.45)';
-        ctx.fillRect(sx - 3, sy - 3, 7, 7);
+        const glow = ctx.createRadialGradient(sx + 0.5, sy + 0.5, 0, sx + 0.5, sy + 0.5, 10);
+        glow.addColorStop(0, `rgba(168,244,255,${0.7 * fl})`);
+        glow.addColorStop(1, 'rgba(90,216,240,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(sx - 10, sy - 10, 21, 21);
+        ctx.restore();
         ctx.fillStyle = '#c8fbff';
         ctx.fillRect(sx - 2, sy - 2, 5, 5);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx - 1, sy - 1, 3, 3);
-        if (Math.random() < 0.3) this.particles.push({ x: sx + this.camX, y: sy + this.camY, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20, g: 0, life: 0.3, max: 0.3, color: '#a8f4ff', size: 1, glow: true, grow: 0, chunk: null });
+        if (Math.random() < 0.5) this.particles.push({ x: sx + this.camX, y: sy + this.camY, vx: (Math.random() - 0.5) * 24, vy: (Math.random() - 0.5) * 24, g: 0, life: 0.35, max: 0.35, color: '#a8f4ff', size: 1, glow: true, grow: 0, chunk: null });
         continue;
       }
       // A sling stone: a grey pellet, a streak behind it.
@@ -1709,11 +1730,13 @@ export class Renderer {
     if (!w || w.level <= 0.01) return;
     const ctx = this.ctx;
     const indoor = this.hidden !== null;
-    if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 220 }, () => ({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, s: 0.6 + Math.random() * 0.8 }));
-    const n = Math.floor(this.weatherDrops.length * w.level * (indoor ? 0.25 : 1));
+    // (A storm at sea drives twice the rain, slanting with the wind.)
+    if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 440 }, () => ({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, s: 0.6 + Math.random() * 0.8 }));
+    const n = Math.min(this.weatherDrops.length, Math.floor(220 * w.level * (indoor ? 0.25 : 1)));
+    const wind = w.wind || 1;
     const rain = w.kind === 'rain';
     if (part !== 'drops') {
-      ctx.fillStyle = w.kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${0.18 * w.level})` : `rgba(200,210,230,${0.1 * w.level})`;
+      ctx.fillStyle = w.kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(0.34, 0.18 * w.level)})` : `rgba(200,210,230,${0.1 * w.level})`;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     }
     if (part === 'tint' || w.kind === 'fog') return;
@@ -1724,8 +1747,12 @@ export class Renderer {
       const d = this.weatherDrops[i];
       if (rain) {
         d.y += dt * 260 * d.s;
-        d.x -= dt * 60 * d.s;
-        ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
+        d.x -= dt * 60 * d.s * wind;
+        if (wind > 1.5) {
+          // (Driven slantwise.)
+          const k = Math.round(wind - 1);
+          for (let q = 0; q < 4; q++) ctx.fillRect(Math.round(d.x + ((3 - q) * k) / 3), Math.round(d.y) + q, 1, 1);
+        } else ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
         if (d.y > VIEW_H * (0.3 + d.s * 0.5) && Math.random() < 0.08) {
           ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 4, 3, 1);
           d.y = -4;

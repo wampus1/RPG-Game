@@ -200,6 +200,8 @@ export function shootAimed(game, from, aim, o) {
     dmg: o.dmg, gem: gemsOf(from).bow, kind: o.kind, head: !!aim.head, aimAt: aim.at || null,
   };
   game.projectiles.push(a);
+  // (A pulse leaves the caster in a flash of cold light.)
+  if (o.kind === 'pulse') game.renderer.emit(from.x + ux * 0.6, y - 0.1, from.z + uz * 0.6, { n: 8, color: ['#ffffff', '#a8f4ff', '#5ad8f0'], up: 10, speed: 30, life: 0.25, glow: true, gravity: 0 });
   game.audio?.play(o.kind === 'pulse' ? 'beam' : o.kind === 'stone' || o.kind === 'javelin' ? 'swing' : 'bow', from);
   // (An onyx bow: two shades of it either side.)
   splitShot(game, from, aim, o, shootAimed);

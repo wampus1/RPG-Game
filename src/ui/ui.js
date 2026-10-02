@@ -119,6 +119,11 @@ export class UI {
         continue;
       }
       if (top && top.kind === 'title') continue;
+      // (An opening scene playing: only a few of the usual keys.)
+      if (game.cutscene && !game.cutscene.allowUi(k.code)) {
+        if (!this.modal) out.pressed.push(k);
+        continue;
+      }
       switch (k.code) {
         case 'Escape':
           if (top && top.modal) this.close(top);
@@ -251,6 +256,8 @@ export class UI {
       drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
       if (this.hudP > 0.8) this.drawMinimapImage(ctx);
     }
+    // An opening scene's letterbox, titles and captions (under any window).
+    if (game && game.cutscene) game.cutscene.draw(ctx);
     for (const w of this.windows) {
       w.grid.clear();
       w.hits = [];

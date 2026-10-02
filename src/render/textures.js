@@ -283,6 +283,13 @@ function cubeTop(name, v, rand, rot) {
       for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#8e9cb4');
       return p;
     }
+    case 'sail': {
+      speckle(p, ['#ece4d0', '#dcd3bc', '#f6f0e2'], rand, 0.16);
+      for (let x = 3; x < 16; x += 5) p.vline(x, 0, LH - 1, '#c8bc9c');
+      p.hline(0, 15, LH - 1, '#b8ac8c');
+      for (let i = 0; i < 2; i++) p.set(rand() * 16, rand() * LH, '#c0b494');
+      return p;
+    }
     case 'stone': case 'bedrock': {
       const sp = name === 'bedrock' ? ['#3a3a40', '#26262c', '#4e4e56'] : pal;
       speckle(p, sp, rand, 0.22);
@@ -426,6 +433,13 @@ function cubeTop(name, v, rand, rot) {
       const col = { awning_red: '#c83a32', awning_blue: '#3264c0', awning_yellow: '#e0b030', awning_green: '#3c9a48' }[name];
       for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) p.set(x, y, Math.floor(x / 2) % 2 ? '#f0e8d8' : col);
       for (let x = 0; x < 16; x++) p.set(x, 0, shade(col, 1.2));
+      return p;
+    }
+    case 'sail': {
+      // Sailcloth: pale canvas in seamed strips, weathered here and there.
+      speckle(p, ['#e8e0cc', '#d8cfb8', '#f2ecdc'], rand, 0.18);
+      for (let x = 3; x < 16; x += 5) p.vline(x, 0, 15, '#c4b898');
+      for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * 16, '#b8ac8c');
       return p;
     }
     case 'cactus': case 'counter_top': return speckle(p, ['#4a9a3a', '#387a2c', '#62b44a'], rand, 0.2);
@@ -1361,6 +1375,26 @@ const SPRITES = {
     p.set(bx, 17 + (st ? f % 2 : 0), '#5a4a30');
     p.hline(1, 4, 27, '#6a6a72');
     p.hline(11, 14, 27, '#6a6a72');
+    return p.outline(OUT);
+  },
+  helm() {
+    // A ship's wheel on its post: a rim of dark wood, eight spokes with
+    // handles through it, a brass boss in the middle.
+    const p = spr();
+    const wood = P.planks_dark;
+    p.rect(7, 20, 2, 8, wood[0]);
+    p.hline(5, 10, 27, wood[1]);
+    const cx = 7.5;
+    const cy = 15;
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      for (let r = 1; r <= 7; r++) p.set(Math.round(cx + Math.cos(ang) * r), Math.round(cy + Math.sin(ang) * r), r > 5 ? wood[2] : wood[1]);
+    }
+    for (let a = 0; a < 40; a++) {
+      const ang = (a / 40) * Math.PI * 2;
+      p.set(Math.round(cx + Math.cos(ang) * 5), Math.round(cy + Math.sin(ang) * 5), wood[0]);
+    }
+    p.rect(7, 14, 2, 2, '#d8a840');
     return p.outline(OUT);
   },
   lantern(rot, st, f) {

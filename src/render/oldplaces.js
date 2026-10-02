@@ -142,24 +142,51 @@ function relicCircles(r, ctx, game) {
     const t = r.time;
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + q.x);
     ctx.save();
-    // The ring, and a fainter one inside it.
+    // A wash of its colour over the ground it reaches.
+    const wash = ctx.createRadialGradient(cx, cy, rad * 0.2, cx, cy, rad);
+    wash.addColorStop(0, 'rgba(0,0,0,0)');
+    wash.addColorStop(0.75, R.color);
+    wash.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.07 + pulse * 0.05;
+    ctx.fillStyle = wash;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.fill();
+    // The ring (with a soft glow under it), and a fainter one inside it.
     ctx.strokeStyle = R.color;
-    ctx.globalAlpha = 0.35 + pulse * 0.25;
+    ctx.globalAlpha = 0.18 + pulse * 0.12;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.6 + pulse * 0.3;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.globalAlpha = 0.15 + pulse * 0.1;
+    ctx.globalAlpha = 0.25 + pulse * 0.15;
     ctx.beginPath();
-    ctx.arc(cx, cy, rad - 5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rad - 6, 0, Math.PI * 2);
     ctx.stroke();
-    // Runes round it, turning.
+    // A brighter arc sweeping round the ring.
+    const sw = t * 1.3 + q.z;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, sw, sw + 0.6);
+    ctx.stroke();
+    // Runes round it, turning; and a few nearer in, turning the other way.
     ctx.fillStyle = R.color;
     const n = 12;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + t * 0.25;
-      ctx.globalAlpha = 0.45 + 0.4 * Math.sin(t * 3 + i * 1.7);
-      glyph(ctx, (i + q.x) % GLYPHS.length, Math.round(cx + Math.cos(a) * (rad - 2.5) - 2), Math.round(cy + Math.sin(a) * (rad - 2.5) - 2));
+      ctx.globalAlpha = 0.6 + 0.35 * Math.sin(t * 3 + i * 1.7);
+      glyph(ctx, (i + q.x) % GLYPHS.length, Math.round(cx + Math.cos(a) * (rad - 3) - 2), Math.round(cy + Math.sin(a) * (rad - 3) - 2));
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - t * 0.4;
+      ctx.globalAlpha = 0.35 + 0.3 * Math.sin(t * 2 + i);
+      glyph(ctx, (i * 3 + q.z) % GLYPHS.length, Math.round(cx + Math.cos(a) * rad * 0.45 - 2), Math.round(cy + Math.sin(a) * rad * 0.45 - 2));
     }
     // A glow under the relic itself.
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14);

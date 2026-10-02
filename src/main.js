@@ -70,6 +70,11 @@ applyAll();
 function saveTo(id, note) {
   if (!game) return false;
   const g = game;
+  // (Not in the middle of the opening scene: there's nothing to keep yet.)
+  if (g.cutscene) {
+    ui.msg('The story hasn\'t begun yet: you can save once it has.', '#ffb080');
+    return false;
+  }
   const fail = (e) => {
     const full = e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''));
     ui.msg(full ? 'Not enough room to save: delete an old save first.' : `Save failed: ${e && e.message ? e.message : e}`, '#ff5a50');
@@ -105,18 +110,20 @@ function startGame(seed, save = null, slot = null, hero = null) {
   // Let the loading text paint before the heavy generation work.
   setTimeout(() => {
     const t0 = performance.now();
-    game = new Game({ seed: s, renderer, audio, ui, save, hero });
+    // (A new character's story opens with a scene of where they're from;
+    // ?nointro goes straight in.)
+    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') });
     game.crt = crt;
     game.slot = slot && slot !== 'auto' ? slot : null;
     game.autosave = () => saveTo('auto', `Autosaved (day ${game.day}, 7:00).`);
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
-    ui.showHud = true;
+    ui.showHud = !game.cutscene;
     ui.hudP = 0;
     ui.lastSettlement = undefined;
     hideLoading();
     if (!save && !hero) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
-    ui.msg('Press H for help.', '#a0c8ff');
+    if (!game.cutscene) ui.msg('Press H for help.', '#a0c8ff');
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;
     if (params.has('goto')) window.__goto(params.get('goto'));
