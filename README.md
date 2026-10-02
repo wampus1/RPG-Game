@@ -1200,7 +1200,10 @@ red "!" over the attacker and the ground it will hit lit red), so you can see
 it coming. Your own blows too: barely a moment with a fist, a long haul back
 with a war hammer, and once a swing has started you're committed to it (no
 stepping away, no rolling out of it); if they've moved off by the time it
-comes round, it whiffs. Roll clear with Space (on the move too), take it on a
+comes round, it whiffs. With a weapon in hand a click always swings (at the
+air, if nothing's there; it never digs). Roll clear with Space (on the move
+too): a quick tumble, faster than running, that carries you past someone in
+your way, then a moment's slower step as you find your feet. Take it on a
 shield (hold the right mouse), or hit them first and knock them off their
 stroke. Raise your guard in the last instant before a blow lands and it's a
 parry: a crack of light, the world holds still a moment and slows, sparks fly,
@@ -1256,12 +1259,18 @@ and Notorious, each of which gives a stat point back.
 made up as it's said, about what's around them: the weather (when it's foul,
 everyone's talking about it), their own trade, their partner and children by
 name, the neighbour who never gave the ladder back, what's dear or cheap on the
-market, hard times or good ones, a war, the next feast, the town down the road.
+market, hard times or good ones, a war, the next feast, the town down the road,
+what the scholars are working on and what they've just mastered, the town's
+ship, where the portal on the square goes, the prisoners out at the quarry,
+aches and cures, the goat that got out, old stories, chores.
 Underneath is a phrase grammar (sentence frames with choices in them, so a few
-dozen frames make thousands of sentences) and, for each kind of speaker and
-each topic, a word chain trained on what the frames make, so it finds new
-sentences without gluing half a line about rain to half a line about bread;
-lines that trail off or repeat themselves are thrown back. One thought leads to
+hundred frames make many thousands of sentences) and word chains trained on
+what the frames make: everyone's talk on a topic is learned once and shared,
+and each kind of speaker (their people, manner, quirks and trade) adds a small
+chain of their own on top, so it finds new sentences without gluing half a
+line about rain to half a line about bread; lines that trail off or repeat
+themselves are thrown back. (The talk itself lives in game/talk/corpus.js:
+adding lines is adding frames.) One thought leads to
 another now and then ("Mind you, ..."). Then it's said in their people's way
 (northerners say aye and bairns; southerners call you cousin), their own manner
 (formal, rough, chirpy, terse, gruff) and their quirks (pious, gloomy,
@@ -1350,6 +1359,51 @@ silver strikes; its realm's values add their own (a war memorial, a guild
 charter, a holy relic). Founders, legends and haunted places are each
 people's own.
 
+**Choices on the tree.** The tree has 48 steps, and seven of them come in
+pairs where a realm must choose: free trade or customs houses, banking or
+guild monopolies, a shield wall or great weapons, longbows or crossbows,
+clemency or iron law, schools or apprenticeships, aqueducts or granaries.
+Learning one side bars the other for good (crossed through on the tree), so
+realms grow apart; rulers lean to the side that suits their people and their
+temper. Every step says exactly what it does ("Taxes bring in 20% more in
+every town"). Work on a step that gets barred, or that's put aside, isn't
+lost: it's kept, and picked up again if it can be.
+
+**A town's share.** Each town's study counts toward its realm's, and the town
+remembers what it put in. When it changes banner (taken in war, sworn to
+another realm, or breaking free) it loses whatever its new realm doesn't know,
+but its work goes with it: a town that did a fifth of the work on
+metalworking brings a fifth of metalworking to its new realm (all of it, and
+the realm learns it there and then).
+
+**Great works.** The far ends of the tree:
+- *Battering rams and catapults.* Armies bring them to battle: catapults
+  behind the line, each with a crew, lobbing stones into the enemy (they
+  fall where they're aimed, and hurt whoever's there; roll clear), and a ram
+  rolled up to the wall of a walled town. If the attackers carry the field
+  and take the town, you see the ram go on to the wall and break through; the
+  town's builders mend the breach later. You can hack an engine to pieces.
+- *Trade ships.* A town on a river or the coast builds a pier and a great
+  ship. Up to five of its merchants sail together to ports abroad, faster
+  than by road and with three times the goods; you see them walk the pier,
+  the ship cast off and sail out of sight, and come home days later with a
+  good profit for the town.
+- *Portals.* Every town of the realm raises an arch on its square. Step
+  through (a small fare if you're not of the realm) to any other town of the
+  realm; merchants, visitors and armies use them too. A town taken by another
+  realm goes dark: its arch is closed to its old realm (and lights again if
+  its new masters know the art).
+- *Prison labour.* By day the prisoners go out to quarry stone and cut wood
+  for the town, one guard for every two (as many as can be spared; none,
+  and they stay in the cells). Each day worked takes two off a sentence, and
+  prisoners of war go home after eight days' work.
+
+**Wars on the ground.** An army on the march is where the map shows it:
+mustering in its town, then a column on the road to the field. Battles come
+the same day they're called, a few hours on, and begin as soon as both lines
+are drawn up. Soldiers walk up to their places and off again afterwards;
+nobody appears or vanishes in front of you.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1372,6 +1426,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `god [on\|off]` | nothing can hurt you (the console no longer does this by itself) |
 | `skip <days>` (or `ff`) | fast-forwards that many days (1–120), the whole world living them |
 | `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
+| `learn <step> [realm]`, `learn all [realm]`, `learn list` | a realm (yours, the one you're in, or one named at the end) learns a step of the tree at once, with whatever it needs first ("learn portals", "learn trade ships"); `all` learns everything it can (one side of each choice); `list` names the steps |
 
 Map teleporting and the revealed map are kept with your save.
 
@@ -1400,12 +1455,17 @@ src/
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
                        save slots), create (the character screen),
-                       research (the tech tree and the study minigame)
+                       research (the tech tree and the study minigame),
+                       portal (where an arch can take you)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), combat (wind-
                        ups, blocks, parries, rolls, stamina, weapon and beast
-                       styles), markov (word-chain small talk), fire
+                       styles), markov (small talk: what's on their
+                       mind and how they say it), talk/ (the corpus of
+                       sentence frames, the phrase grammar and the word
+                       chains), engines (siege engines in battle), shipping
+                       (great ships on the water), fire
                        (burning roofs and haystacks), save slots,
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
@@ -1456,7 +1516,9 @@ src/
                        and supply-driven building), prosperity (how a
                        town is doing and how that shows), hardship
                        (famine and poverty, migration waves, unrest),
-                       founding (settlers and new villages), religion
+                       founding (settlers and new villages), ships
+                       (harbours and voyages), portals, labor (prison
+                       labour), religion
                        (faiths spreading, conquest, missions, holy wars,
                        pilgrimages), and the
                        Sim hub (reputation, renown, graves, mourning,

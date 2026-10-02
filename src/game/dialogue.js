@@ -2088,6 +2088,14 @@ export function talkContext(game, s) {
     }
   }
   const m = game.minute ?? 720;
+  // What's new: what the realm's scholars are at and what they've lately
+  // mastered, the town's ship, where its portal goes, the prisoners out at
+  // work today.
+  const day = game.day ?? 0;
+  const tech = s && sim && sim.tech ? sim.tech.stateOf(s) : null;
+  const lately = tech ? [...tech.log].reverse().find((q) => day - q.day <= 10 && TECHS[q.id]) : null;
+  const port = s && sim && sim.ships ? sim.ships.ports[s.id] : null;
+  const gate = s && sim && sim.portals ? sim.portals.network(s.id)[0] : null;
   return {
     culture: (s && (s.civ ? s.civ.style : s.style)) || 'vale',
     town: s ? s.name : 'this town',
@@ -2106,5 +2114,10 @@ export function talkContext(game, s) {
     fortune: L && sim && sim.prosperity ? fortuneOf(L) : null,
     famine: !!(L && L.econ && (L.econ.famineDays || 0) >= 4),
     war: !!(s && s.civ && sim && sim.war && sim.war.atWar && sim.war.atWar(s.civ)),
+    study: tech && tech.current && TECHS[tech.current] ? TECHS[tech.current].name.toLowerCase() : null,
+    learned: lately ? TECHS[lately.id].name.toLowerCase() : null,
+    ship: port && port.state === 'docked' ? port.name : null,
+    portalto: gate && ow ? ow.settlements[gate.sid].name : null,
+    prisoners: !!(L && L.econ && L.econ.labor && L.econ.labor.day === day),
   };
 }

@@ -28,7 +28,7 @@ import { RNG, hash4, clamp } from '../util/rng.js';
 import { REGION_W, REGION_D, GROUND, SURFACE } from '../config.js';
 import { B } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
-import { fieldEngines, workEngines, endEngines } from '../game/engines.js';
+import { fieldEngines, workEngines, endEngines, ramming } from '../game/engines.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
 
@@ -1141,10 +1141,21 @@ export class War {
         this.capture(w, s, civ, day, plan.name);
         // (Where a ram did it: a breach in the wall, to be mended; unless
         // you saw it knocked in already.)
-        if (ram && DL && DL.walled && !(DL.econ.breached && DL.econ.breached.day === day)) this.breach(DL, plan);
+        if (ram && DL && DL.walled && !(DL.econ.breached && DL.econ.breached.day === day) && !(this.live && this.live.ramComing && this.live.plan === plan)) this.breach(DL, plan);
       }
     }
     return rec;
+  }
+
+  // A ram that was to break into the town its side took, and never got
+  // there (stuck, or you've gone): the wall's broken in all the same.
+  settleRams(L) {
+    for (const e of L.engines || []) {
+      if (!e.after || e.phase === 'breached') continue;
+      e.done = true;
+      const DL = this.game.world.layouts.get(e.town);
+      if (DL && DL.econ && DL.walled && !(DL.econ.breached && DL.econ.breached.day === this.sim.today())) this.breach(DL, L.plan, e.wall);
+    }
   }
 
   // A ram's work: the stretch of wall nearest the field knocked in, three
@@ -2025,19 +2036,24 @@ export class War {
       L.after = (L.after || 0) + 0.25;
       const left = [...L.sides.a.ents, ...L.sides.b.ents].filter((n) => !n.dead && g.npcs.includes(n));
       const far = !this.nearPlayer(L.centre, 90);
+      // (A ram still on its way to the wall: its crew stay with it.)
+      const rams = ramming(L);
+      const crew = (n) => rams && n.warband && n.warband.role === 'crew';
       if (L.after > 40) {
         for (const n of left) {
+          if (crew(n)) continue;
           if (!g.inSight(n.x, n.z, 2)) g.despawnNpc(n);
           else if (n.warband && n.warband.phase !== 'flee' && n.warband.phase !== 'won' && !n.down) n.warband.phase = 'flee';
         }
       }
       // (Done with the field after a while either way: anyone still in view
       // walks off on their own, and is gone once out of sight.)
-      if (!left.length || far || L.after > 45) {
+      if (!left.length || far || L.after > (rams ? 150 : 45)) {
         for (const n of left) {
           if (far || !g.inSight(n.x, n.z, 2)) g.despawnNpc(n);
           else if (n.warband && n.warband.phase !== 'won') n.warband.phase = 'flee';
         }
+        this.settleRams(L);
         for (const q of L.walls) if (q.up) g.renderer.emit(q.op[0], q.op[1], q.op[2], { n: 3, color: ['#8a6a3a', '#5a4022'], up: 14, speed: 18, life: 0.4 });
         this.clearWorks(L);
         this.live = null;
@@ -2048,7 +2064,6 @@ export class War {
   endLiveBattle(L, ua, ub) {
     const g = this.game;
     L.done = true;
-    endEngines(L);
     const pa = L.sides.a.start;
     const pb = L.sides.b.start;
     const deadA = L.sides.a.ents.filter((n) => n.dead && !alive(n.rec)).length;
@@ -2086,11 +2101,18 @@ export class War {
     const A = strip(L.A, 'a');
     const Bm = strip(L.B, 'b');
     const rng = new RNG(hash4(L.w.id, L.plan.at, 0xe0d));
+    // (The attackers' ram, if they win, goes on to break the wall of the
+    // town they take: you see it done, rather than the wall just falling.)
+    L.ramComing = winner === L.plan.attacker && (L.engines || []).some((e) => e.type === 'ram' && e.side === winner && e.wall && !e.broken && e.phase !== 'stuck' && e.phase !== 'breached');
     this.fight(L.w, L.plan, A, Bm, rng, { winner, ratio, fa: fa + taken.a / Math.max(1, pa), fb: fb + taken.b / Math.max(1, pb), deadA: deadA + taken.a, deadB: deadB + taken.b, takenA: taken.a, takenB: taken.b, na: pa, nb: pb });
+    const def = this.ow.settlements[L.plan.def];
+    endEngines(L, L.ramComing && def && def.civ === L.sides[winner].civ ? winner : null);
     // Soldiers who walked off the field are home again.
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
       if (n.rec.soldier !== undefined) delete n.rec.soldier;
       if (!n.rec.captive) n.rec.away = false;
+      // (Except the ram's crew, still at work.)
+      if (n.warband && n.warband.role === 'crew' && !n.dead) continue;
       if (!n.dead && n.warband && g.npcs.includes(n)) {
         n.warband.phase = s === winner ? 'won' : 'flee';
         if (s === winner && n.rng.chance(0.6)) n.say(n.rng.pick(['Victory!', 'They run!', 'The field is ours!', 'Huzzah!']), 2.5, '#a0e0a0');

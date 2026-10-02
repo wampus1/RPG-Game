@@ -200,7 +200,9 @@ export function workEngines(war, live, dt) {
     if (e.broken || e.done) continue;
     const S = live.sides[e.side];
     const other = live.sides[e.side === 'a' ? 'b' : 'a'];
-    const over = live.done || S.broken;
+    // (Over, unless it's a ram going on to the wall of a town its side has
+    // just taken.)
+    const over = (live.done && !e.after) || S.broken;
     e.crew = e.crew.filter((n) => !n.dead && g.npcs.includes(n));
     // Rolled up from behind the lines to where it's to stand.
     if (e.phase === 'roll') {
@@ -230,7 +232,7 @@ export function workEngines(war, live, dt) {
     }
     // The ram: for the wall, once it's begun; battering when it's there.
     if (e.type === 'ram') {
-      if (!live.go || !e.wall) continue;
+      if ((!live.go && !e.after) || !e.wall) continue;
       const at = Math.max(Math.abs(e.x - e.wall.x), Math.abs(e.z - e.wall.z));
       if (e.phase === 'wait') e.phase = 'go';
       if (e.phase === 'go') {
@@ -241,7 +243,8 @@ export function workEngines(war, live, dt) {
           continue;
         }
         if (e.moving || !e.manned()) continue;
-        if (!step(g, e, { x: e.wall.x, y: e.y, z: e.wall.z }, 0.9)) {
+        // (At a run: a log on wheels, a crew heaving at it.)
+        if (!step(g, e, { x: e.wall.x, y: e.y, z: e.wall.z }, 0.6)) {
           e.stuck = (e.stuck || 0) + dt;
           if (e.stuck > 10) e.phase = 'stuck';
         } else e.stuck = 0;
@@ -251,14 +254,14 @@ export function workEngines(war, live, dt) {
         if (!e.manned()) continue;
         e.cd -= dt;
         if (e.cd > 0) continue;
-        e.cd = 1.5;
+        e.cd = 1.3;
         e.fireT = 0.5;
         e.hits++;
         for (const n of e.crew) if (!n.moving) n.doAction(0.3);
         g.renderer.emit(e.wall.x + 0.5, GROUND + 1, e.wall.z + 0.5, { n: 8, color: ['#8a8a8a', '#6a625a', '#b8b0a0'], up: 20, speed: 24, life: 0.6, gravity: 40 });
         g.audio?.play('impact', { x: e.wall.x, y: GROUND, z: e.wall.z });
         if (g.inSight(e.wall.x, e.wall.z, 2)) g.shake = Math.min(1.3, (g.shake || 0) + 0.18);
-        if (e.hits >= 6) {
+        if (e.hits >= 5) {
           const DL = g.world.layouts.get(e.town);
           if (DL && DL.econ) {
             war.breach(DL, live.plan, e.wall);
@@ -266,17 +269,30 @@ export function workEngines(war, live, dt) {
             g.ui.msg(`The ram has broken through the wall of ${s ? s.name : 'the town'}!`, '#ff9060');
           }
           e.phase = 'breached';
+          if (e.after) e.done = true;
         }
       }
     }
   }
 }
 
-// Over: they stay where they stand (and go once you're out of sight).
-export function endEngines(live) {
-  for (const e of live.engines || []) e.done = true;
-  for (const e of live.engines || []) for (const n of e.crew) if (n.warband && n.warband.role === 'crew') n.warband.role = 'centre';
+// Over: they stay where they stand (and go once you're out of sight). A
+// ram whose side has taken the town (`taker`) goes on to its wall and
+// breaks in, its crew with it.
+export function endEngines(live, taker = null) {
+  for (const e of live.engines || []) {
+    if (taker && e.type === 'ram' && e.side === taker && e.wall && !e.broken && e.phase !== 'stuck' && e.phase !== 'breached') {
+      e.after = true;
+      if (e.phase !== 'batter') e.phase = 'go';
+      continue;
+    }
+    e.done = true;
+    for (const n of e.crew) if (n.warband && n.warband.role === 'crew') n.warband.role = 'centre';
+  }
 }
+
+// A ram still under way: on its way to the wall, or at it.
+export const ramming = (live) => (live.engines || []).some((e) => e.after && !e.done && !e.broken && e.phase !== 'stuck');
 
 // One tile toward a spot (round what's in the way): false when it's there,
 // or can't get any nearer.

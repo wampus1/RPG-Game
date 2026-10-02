@@ -468,8 +468,14 @@ function soldier(n, wb, dt) {
   // till it's wrecked or done with (a foe right on them gets a fight).
   if (wb.role === 'crew') {
     const e = (L.engines || []).find((q) => q.id === wb.engine);
-    if (!e || e.broken || e.done || e.phase === 'stuck' || e.phase === 'breached') wb.role = 'centre';
-    else {
+    if (!e || e.broken || e.done || e.phase === 'stuck' || e.phase === 'breached') {
+      wb.role = 'centre';
+      // (The field won and the ram's work done: off home with the rest.)
+      if (L.done) {
+        wb.phase = 'won';
+        return;
+      }
+    } else {
       if (t && n.distTo(t) <= 1) {
         wb.phase = 'fight';
         return strike(n, t, dt);

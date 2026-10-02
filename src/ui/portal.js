@@ -13,7 +13,10 @@ export class PortalWindow extends Window {
     const here = game.world.ow.settlements[sid];
     const dests = P.network(sid).map((q) => ({ q, s: game.world.ow.settlements[q.sid] }))
       .sort((a, b) => Math.hypot(a.s.cx - here.cx, a.s.cz - here.cz) - Math.hypot(b.s.cx - here.cx, b.s.cz - here.cz));
-    super(ui, 46, Math.max(9, 8 + dests.length), { kind: 'portal' });
+    // (Wide enough for the realm's name and the furthest town's.)
+    const realm = here.civ ? here.civ.name.replace(/^The /, '') : '';
+    const wide = Math.max(`Through to another town of the ${realm}`.length + 6, ...dests.map(({ s }) => s.name.length + 30));
+    super(ui, Math.min(72, Math.max(46, wide)), Math.max(9, 9 + dests.length), { kind: 'portal' });
     this.game = game;
     this.sid = sid;
     this.dests = dests;
@@ -39,9 +42,10 @@ export class PortalWindow extends Window {
       return;
     }
     const fare = P.fareFor(this.sid);
-    g.center(2, `Through to another town of the ${here.civ.name.replace(/^The /, '')}${fare ? ` (¤${fare})` : ' (free to its citizens)'}:`, C.fg);
+    g.center(2, `Through to another town of the ${here.civ.name.replace(/^The /, '')}`, C.fg);
+    g.center(3, fare ? `¤${fare} to the keeper (free to the realm's own folk)` : 'Free to the realm\'s own folk', C.dim);
     this.dests.forEach(({ s }, i) => {
-      const y = 4 + i;
+      const y = 5 + i;
       const on = i === this.sel || this.hovering(2, y, this.w - 4, 1);
       if (this.hovering(2, y, this.w - 4, 1)) this.sel = i;
       g.fill(2, y, this.w - 4, 1, ' ', C.fg, on ? C.bgHi : '#100c1c');
