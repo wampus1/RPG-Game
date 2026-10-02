@@ -53,21 +53,22 @@ test('every town has its notice board on the square', () => {
   }
 });
 
-test('the map: a town only spreads into a square once its streets reach it', () => {
+test('the map: a town spreads into the squares its streets reach, and a place that has grown shows its bigger mark', () => {
   const game = makeGame(12345);
   const s = game.world.ow.settlements.find((q) => q.type === 'village');
   const cells = (q) => [...settlementIcons(game)].filter(([, v]) => v.s === q).map(([k]) => k);
-  // Grown into a city on paper, but it hasn't built beyond its square yet.
+  assert.equal(cells(s).length, 1, 'a village: its one square');
+  // Grown into a city: its city mark, on open ground beside it (round 24:
+  // a grown town reads as what it is now, streets or no).
   s.baseType = 'village';
   s.type = 'city';
-  assert.equal(cells(s).length, 1);
-  // A street runs into the square next door.
+  assert.ok(cells(s).length > 1, 'a city now');
+  // A street runs into the square next door: it's part of the town.
   const east = s.cx + 1;
   const ok = game.world.ow.cell(east, s.cz) && game.world.ow.cell(east, s.cz).settlement === null;
   if (ok) {
     reachWith(s, [[(east) * 64 + 3, s.cz * 36 + 10]]);
-    assert.ok(cells(s).includes(s.cz * 10000 + east), 'now it shows there');
-    assert.equal(cells(s).length, 2);
+    assert.ok(cells(s).includes(s.cz * 10000 + east), 'it shows there');
   }
   // It's remembered in a save.
   const g2 = reload(game);
@@ -192,6 +193,9 @@ test('relations between realms: hostility brings tariffs, refusals and wary merc
   const { game } = start();
   const R = game.sim.realms;
   const [a, b] = game.world.ow.civs;
+  // (A realm that trades freely never sets tariffs: this one doesn't.)
+  game.sim.tech.cheat = false;
+  game.sim.tech.stateOf(a).done = game.sim.tech.stateOf(a).done.filter((k) => k !== 'free_trade');
   const r = R.relation(a, b);
   assert.ok(['friendly', 'wary', 'hostile'].includes(r.standing));
   R.shift(a, b, -200, game.day);

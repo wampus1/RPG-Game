@@ -168,10 +168,11 @@ test('dice are thrown onto the table as little cubes that roll and come to rest 
 });
 
 // ------------------------------------------------------------ the tech tree
-test('four branches of seven: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
-  // (Seven a branch; Engineering an eighth, its second root: metalworking.)
-  assert.equal(TECH_IDS.length, 29);
-  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, b === 'engineering' ? 8 : 7);
+test('four branches of a dozen: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
+  // (Round 24: eleven to thirteen a branch, with choices and great works.)
+  assert.equal(TECH_IDS.length, 48);
+  const counts = { economy: 12, warfare: 13, society: 11, engineering: 12 };
+  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, counts[b]);
   const game = world();
   const T = game.sim.tech;
   const s = game.world.ow.settlements.find((q) => q.civ && q.type === 'town');
@@ -229,7 +230,7 @@ test('the mayor shows the tree, and the study minigame records an insight for th
   const tw = new TechWindow(ui, game, s);
   const { g, texts } = grid();
   tw.draw(g, game);
-  assert.ok(texts.some((t) => /of 29 learned/.test(t)), 'the count');
+  assert.ok(texts.some((t) => new RegExp(`of ${TECH_IDS.length} learned`).test(t)), 'the count');
   tw.focus('bookkeeping');
   const g2 = grid();
   tw.draw(g2.g, game);

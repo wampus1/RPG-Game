@@ -211,17 +211,17 @@ test('raiders knocked down in town are dragged to the cells, and prisoners sit i
 });
 
 // ------------------------------------------------------------ the tree
-test('the tree: four branches of seven, two lines each joining at the last step, new arts with real effects', () => {
-  assert.equal(TECH_IDS.length, 29);
+test('the tree: four branches, lines that join again, new arts with real effects', () => {
+  assert.equal(TECH_IDS.length, 48);
   for (const b of ['economy', 'warfare', 'society', 'engineering']) {
     const ids = TECH_IDS.filter((k) => TECHS[k].branch === b);
+    assert.ok(ids.length >= 11);
     // (Engineering has two roots: masonry, and metalworking beside it.)
-    assert.equal(ids.length, b === 'engineering' ? 8 : 7);
     const root = ids.filter((k) => !TECHS[k].req.length);
     assert.equal(root.length, b === 'engineering' ? 2 : 1, 'its roots');
-    const cap = ids.find((k) => TECHS[k].tier === 5);
+    const cap = ids.find((k) => TECHS[k].tier >= 5);
     assert.ok(cap, 'a last step');
-    for (const k of ids) for (const r of TECHS[k].req) assert.equal(TECHS[r].branch, b, 'needs only its own branch');
+    for (const k of ids) for (const r of TECHS[k].req.flat()) assert.equal(TECHS[r].branch, b, 'needs only its own branch');
   }
   assert.ok(TECHS.trade_league.req.length === 2 && TECHS.embassies.req.length === 2 && TECHS.fortress.req.length === 2);
   const game = world();
@@ -291,6 +291,6 @@ test('the tree window: steps on the map, zoom with the wheel, drag to move, clic
   const g = new Proxy({}, { get: () => (...args) => { for (const x of args) if (typeof x === 'string' && x.length > 1) texts.push(x); } });
   tw.draw(g, game);
   assert.ok(texts.some((t) => t === 'ALCHEMY'));
-  assert.ok(texts.some((t) => /Herbalists brew potions/.test(t)));
+  assert.ok(texts.some((t) => /Herbalists brew and sell/.test(t)));
   assert.ok(texts.some((t) => /Needs Written Law|Can be studied|Learned|Known/.test(t)));
 });

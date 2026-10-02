@@ -8,6 +8,7 @@
 // meet raiders in the fields.
 
 import { GROUND } from '../config.js';
+import { ITEMS, ammoOf } from '../world/items.js';
 import { B } from '../world/blocks.js';
 import { FIRESIDE } from '../sim/bandits.js';
 import { ignite, roofTarget, nearestBurnable } from '../game/fire.js';
@@ -24,6 +25,9 @@ export function warTick(n, dt) {
   if (wb.phase === 'down') return;
   if (wb.kind === 'sortie') return ride(n, wb);
   if (wb.kind === 'escape') return leave(n, wb, dt);
+  // (A prisoner being led off the field.)
+  if (wb.kind === 'led') return leave(n, wb, dt);
+  if (wb.kind === 'march') return march(n, wb, dt);
   if (wb.kind === 'raid') return raider(n, wb, dt);
   if (wb.kind === 'bandit') return bandit(n, wb, dt);
   return soldier(n, wb, dt);
@@ -61,15 +65,23 @@ function strike(n, t, dt) {
   if (n.state !== 'warband' && n.state !== 'fight') n.state = 'warband';
 }
 
-// Off home: out of sight, out of the world.
+// Off home: out of sight, out of the world (never in front of you: home,
+// but still in view, they keep walking on, away from you).
 function leave(n, wb, dt) {
   const g = n.game;
   const h = wb.home;
   wb.leaveT = (wb.leaveT || 0) + dt;
-  if (!h || far(n, h.x, h.z) <= 2 || n.distTo(g.player) > 34 || wb.leaveT > (wb.kind === 'escape' ? 120 : 60)) {
+  const done = !h || far(n, h.x, h.z) <= 2 || n.distTo(g.player) > 34 || wb.leaveT > (wb.kind === 'escape' ? 120 : 60);
+  if (done && !g.inSight(n.x, n.z, 2)) {
     // (An escaping prisoner out of sight has got away.)
     if (wb.kind === 'escape') n.escaped = true;
     g.despawnNpc(n);
+    return;
+  }
+  if (done) {
+    const p = g.player;
+    if (!wb.away || far(n, wb.away.x, wb.away.z) <= 2) wb.away = { x: Math.round(n.x + (Math.sign(n.x - p.x) || 1) * 14), z: Math.round(n.z + (Math.sign(n.z - p.z) || 1) * 14) };
+    goTo(n, wb.away.x, wb.away.z, 1);
     return;
   }
   goTo(n, h.x, h.z, 1);
@@ -357,6 +369,31 @@ function raidChest(n, wb, dt) {
   return true;
 }
 
+// ------------------------------------------------------------ the march
+// On the way to a battle: in file behind the head of the column, at its
+// pace (see war.marchPos), toward the field.
+function march(n, wb, dt) {
+  const g = n.game;
+  const W = g.sim.war;
+  const w = W.wars.find((q) => q.id === wb.war);
+  const plan = w && w.plan;
+  if (wb.phase === 'flee' || !plan) {
+    wb.phase = 'flee';
+    return leave(n, wb, dt);
+  }
+  // (The battle's begun: war.startLiveBattle puts them in the line.)
+  if (plan.live) return;
+  const m = W.marchPos(plan);
+  if (!m) return;
+  const back = 2 + (wb.slot || 0) * 1.6;
+  const wide = (wb.slot || 0) % 2 ? 1 : -1;
+  const tx = m.x - m.dx * back - m.dz * wide;
+  const tz = m.z - m.dz * back + m.dx * wide;
+  if (far(n, tx, tz) > 1) goTo(n, tx, tz, 1);
+  else if (!n.moving && n.rng.chance(dt * 0.5)) n.face(Math.round(n.x + m.dx * 3), Math.round(n.z + m.dz * 3));
+  if (!wb.slot && n.rng.chance(dt * 0.04)) n.say(n.rng.pick(['Keep in step!', 'Close up there!', 'March!', 'Not far now.', 'Eyes front!']), 2, '#ffe070');
+}
+
 // ------------------------------------------------------------ riders
 function ride(n, wb) {
   goTo(n, wb.goal.x, wb.goal.z, 2);
@@ -427,6 +464,49 @@ function soldier(n, wb, dt) {
   const foes = other.ents.filter((q) => !q.dead && g.npcs.includes(q) && q.warband && q.warband.phase !== 'flee');
   if (side.hates && !g.player.dead && !g.player.down) foes.push(g.player);
   const t = nearest(n, foes);
+  // Working a siege engine: beside a catapult, behind a ram pushing it,
+  // till it's wrecked or done with (a foe right on them gets a fight).
+  if (wb.role === 'crew') {
+    const e = (L.engines || []).find((q) => q.id === wb.engine);
+    if (!e || e.broken || e.done || e.phase === 'stuck' || e.phase === 'breached') wb.role = 'centre';
+    else {
+      if (t && n.distTo(t) <= 1) {
+        wb.phase = 'fight';
+        return strike(n, t, dt);
+      }
+      const k = Math.max(0, e.crew.indexOf(n));
+      let fx;
+      let fz;
+      if (e.type === 'ram' && e.wall) {
+        const dx = Math.sign(e.wall.x - e.x);
+        const dz = Math.sign(e.wall.z - e.z);
+        const alongX = Math.abs(e.wall.x - e.x) >= Math.abs(e.wall.z - e.z);
+        fx = e.x - (alongX ? dx || 1 : 0) + (alongX ? 0 : k % 2 ? 1 : -1);
+        fz = e.z - (alongX ? 0 : dz || 1) + (alongX ? (k % 2 ? 1 : -1) : 0);
+      } else {
+        fx = Math.round(e.x + ax.x * s + perp.x * (1 + k));
+        fz = Math.round(e.z + ax.z * s + perp.z * (1 + k));
+      }
+      if (far(n, fx, fz) > 0) goTo(n, fx, fz, 0);
+      else if (!n.moving && e.face) n.face(e.face.x, e.face.z);
+      if (wb.phase === 'march' || wb.phase === 'form' || wb.phase === 'move') wb.phase = 'crew';
+      return;
+    }
+  }
+  // Coming up to take their place in the line (from the town, the march,
+  // or from behind the lines): walking, not appearing there.
+  if (wb.phase === 'march') {
+    wb.marchT = (wb.marchT || 0) + dt;
+    if (t && n.distTo(t) <= 2) {
+      wb.phase = 'fight';
+      return strike(n, t, dt);
+    }
+    if (far(n, wb.form.x, wb.form.z) > 1 && wb.marchT < 45) {
+      goTo(n, wb.form.x, wb.form.z, 1);
+      return;
+    }
+    wb.phase = 'form';
+  }
   if (!t) {
     if (!n.moving && n.rng.chance(dt)) n.face(c.x - ax.x * s * 10, c.z - ax.z * s * 10);
     return;
@@ -436,11 +516,12 @@ function soldier(n, wb, dt) {
     x: foes.reduce((m, q) => m + q.x, 0) / foes.length,
     z: foes.reduce((m, q) => m + q.z, 0) / foes.length,
   };
-  // Drawn up: a breath before it starts.
+  // Drawn up: waiting for both lines to form, then a breath before it
+  // starts.
   if (wb.phase === 'form') {
-    if (L.t < 3) {
-      n.face(t.x, t.z);
-      if (n.rng.chance(dt * 0.4)) n.say(n.rng.pick(['Steady...', 'Hold the line!', 'Shields up!', 'For the realm!', 'Here they come!']), 1.8, '#ffe070');
+    if (!L.go || L.t - (L.goT || 0) < 1.5) {
+      if (!n.moving) n.face(t.x, t.z);
+      if (n.rng.chance(dt * 0.3)) n.say(n.rng.pick(['Steady...', 'Hold the line!', 'Shields up!', 'For the realm!', 'Here they come!']), 1.8, '#ffe070');
       return;
     }
     wb.phase = 'move';
@@ -448,7 +529,8 @@ function soldier(n, wb, dt) {
   const tac = side.tactic;
   const dug = tac === 'hold' || tac === 'works';
   // Bows out at a distance (on foot), blades up close.
-  const bow = n.rec.equipment.items.some((i) => i.item === 'bow') && (n.rec.inv || []).some((q) => q && q.item === 'arrow' && q.count > 0);
+  const bw = n.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
+  const bow = !!bw && (n.rec.inv || []).some((q) => q && q.item === ammoOf(bw.item) && q.count > 0);
   n.drawnBow = !!(bow && d >= 3 && !n.mount);
   // Close enough: fight it out, whatever the plan (bows at range).
   if (wb.phase === 'fight' || d <= (dug ? 3 : 2) || (n.canShoot() && d <= 6 && d >= 2)) {
@@ -534,11 +616,18 @@ export function captiveTick(n, dt) {
   if (!c) return;
   const m = g.minute;
   const night = m < 360 || m >= 1260;
-  if (night !== !!n.sleeping) {
-    n.sleeping = night;
-    if (night && c.bed) n.teleport(c.bed.x, c.y, c.bed.z);
-    else if (!night) n.teleport(c.stand.x, c.y, c.stand.z);
+  // Over to the cot at night, up to the bars by day: a step or two (only
+  // moved in a blink when you can't see the cell).
+  const to = night ? c.bed : c.stand;
+  if (to && (n.x !== to.x || n.z !== to.z)) {
+    if (n.sleeping) n.sleeping = false;
+    if (!n.moving) {
+      if (!g.inSight(n.x, n.z, 2)) n.teleport(to.x, c.y, to.z);
+      else n.startMove(to.x, c.y, to.z, 0.55 * Math.max(1, Math.abs(to.x - n.x) + Math.abs(to.z - n.z)));
+    }
+    return;
   }
+  if (night !== !!n.sleeping) n.sleeping = night;
   if (!night) {
     if (!n.moving && n.rng.chance(dt * 0.3)) n.face(c.front.x, c.front.z);
     if (n.distTo(g.player) <= 6 && n.rng.chance(dt * 0.04)) {

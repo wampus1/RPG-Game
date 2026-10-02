@@ -1,13 +1,14 @@
 // What a realm knows. Every realm (and every free town on its own) works
 // its way out along four branches of learning: Economy, Warfare, Law &
-// Society and Engineering, seven steps each: a root, two lines that split
-// from it, and a last step that needs both. The
-// ruler (a free town's mayor) chooses what the scholars study next, after
-// their own leanings and the realm's troubles; researchers at an academy
-// (scholars at the library, before there is one) do the work a little at a
-// time, every day. What's learned changes how the realm lives: new trades
-// and goods, guards better drilled and armed, laws it may pass, buildings
-// that go up faster, roads laid quicker.
+// Society and Engineering. Each starts from a root and splits into lines;
+// some steps are choices (learn one and its rivals are barred for good, so
+// no two realms end up knowing quite the same things), and a few are great
+// works: trade ships, siege engines, prison labour, portals. The ruler (a
+// free town's mayor) chooses what the scholars study next, after their own
+// leanings and the realm's troubles; researchers at an academy (scholars at
+// the library, before there is one) do the work a little at a time, every
+// day. Each town's share of that work is remembered: a town that changes
+// banner takes it along to its new realm.
 import { alive, ledger, stockOf } from './econ.js';
 import { retrain } from '../entities/npcgen.js';
 import { breachFor } from './growth.js';
@@ -25,53 +26,80 @@ export const BRANCHES = [
 ];
 
 // What each step costs, in study (a researcher at an academy puts in about
-// 4 a day): the first steps take days, the last ones months.
-const COST = [0, 80, 140, 220, 320, 450];
+// 4 a day): the first steps take days, the great works months.
+const COST = [0, 80, 140, 220, 320, 450, 600];
 
-// Each branch starts from one root and splits in two lines, which join
-// again at the last step. `side` places a step to the left (-1) or right
-// (1) of the branch's line on the tree; `req` lists what must be known
-// first (all of it); `icon` is the item drawn for it.
-// (`also`: needed too, from another branch; not drawn on the tree.)
-const T = (branch, tier, side, req, icon, name, desc, lore, also = []) => ({ branch, tier, side, req, icon, name, desc, lore, also, cost: COST[tier] });
+// A step: its branch; how far out (`tier`: what it costs) and to which side
+// of the branch's line it sits (-2 to 2); what must be known first (`req`:
+// all of it, where a list inside it means any one of those); the item drawn
+// for it; its name; and exactly what it does. Options: `also` (needed too,
+// from another branch: not drawn on the tree), `excl` (a choice: learning
+// one step of the group bars the others for good), `big` (a great work).
+const T = (branch, tier, side, req, icon, name, desc, o = {}) => ({
+  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier],
+});
 export const TECHS = {
   // Economy
-  bookkeeping: T('economy', 1, 0, [], 'ledger', 'Bookkeeping', 'Every town collects a fifth more in taxes.', 'Ledgers and tallies: no coin goes uncounted.'),
-  guilds: T('economy', 2, -1, ['bookkeeping'], 'coin', 'Guild Charters', 'Master merchants set up shop, with gems, gold and fine goods; in time the shops hang out guild awnings.', 'The great merchant houses band together under charter.'),
-  markets: T('economy', 2, 1, ['bookkeeping'], 'apple', 'Market Days', 'Travelling merchants come to town nearly twice as often.', 'A day each week when the square fills with stalls from far and wide.'),
-  gemcraft: T('economy', 3, -1, ['guilds'], 'gem', 'Gemcraft', 'Jewellers may be licensed, and guards buy jewelled gear.', 'The cutting and setting of stones.'),
-  caravan_law: T('economy', 3, 1, ['markets'], 'lantern', 'Caravan Law', 'Merchants travel a fifth faster and are harried far less abroad.', 'Protected roads, and a law that answers for those who travel them.'),
-  banking: T('economy', 4, -1, ['gemcraft'], 'gold_ingot', 'Banking', 'Treasuries earn interest every week (a twentieth, up to ¤120).', 'Coin that sits in the vault should work for its keep.'),
-  trade_league: T('economy', 5, 0, ['banking', 'caravan_law'], 'scroll', 'Trade League', 'Trade warms relations half again as fast; tariffs rankle half as much.', 'Bound by contracts, not swords: every partner a friend.'),
+  bookkeeping: T('economy', 1, 0, [], 'ledger', 'Bookkeeping', 'Taxes bring in 20% more in every town.'),
+  guilds: T('economy', 2, -1, ['bookkeeping'], 'hanging_sign', 'Guild Charters', 'Merchants can rise to master (gems, gold and fine goods), and master merchants visit from abroad. Shops hang out guild awnings.'),
+  markets: T('economy', 2, 1, ['bookkeeping'], 'apple', 'Market Days', 'Travelling merchants come to town 80% more often.'),
+  gemcraft: T('economy', 3, -1, ['guilds'], 'gem', 'Gemcraft', 'Jewellers can be licensed: they cut gems and set them in weapons and armour.'),
+  free_trade: T('economy', 3, 0.5, ['markets'], 'cloth', 'Free Trade', 'No tariffs, ever: travelling merchants come 40% more often, and trade with other realms warms relations 50% faster.', { excl: 'tolls' }),
+  customs: T('economy', 3, 1.5, ['markets'], 'crate', 'Customs Houses', 'Every merchant from another realm pays ¤6 into the treasury of each town they trade in.', { excl: 'tolls' }),
+  banking: T('economy', 4, -1.5, ['gemcraft'], 'gold_ingot', 'Banking', 'Every town\'s treasury earns 5% interest a week (up to ¤120).', { excl: 'coffers' }),
+  monopolies: T('economy', 4, -0.5, ['gemcraft'], 'chest', 'Guild Monopolies', 'Shops and workshops earn 25% more; everything you buy in the realm costs 10% more.', { excl: 'coffers' }),
+  caravan_law: T('economy', 4, 1, [['free_trade', 'customs']], 'lantern', 'Caravan Law', 'Merchants travel 20% faster, and are harried abroad 60% less often.'),
+  mint: T('economy', 5, -1, [['banking', 'monopolies']], 'coin', 'Royal Mint', 'Each week the capital mints ¤25 for every town in the realm (up to ¤250).'),
+  trade_ships: T('economy', 5, 1, ['caravan_law'], 'raft', 'Trade Ships', 'Towns by a river or the sea build a harbour and a great ship. Up to five merchants sail together to ports abroad, three times as fast as by road, carrying three times the goods: ¤60 to ¤200 for the town each voyage.', { big: true }),
+  trade_league: T('economy', 6, 0, [['banking', 'monopolies'], 'caravan_law'], 'scroll', 'Trade League', 'Trade warms relations 50% faster; tariffs sour them half as much.'),
   // Warfare
-  drill: T('warfare', 1, 0, [], 'iron_sword', 'Drilled Watch', 'Guards train together: tougher, they hit harder, and in time they wear proper helms.', 'Up at dawn, shields locked, again and again.'),
-  archery: T('warfare', 2, -1, ['drill'], 'bow', 'Archery', 'Guards carry bows and shoot from range; butts go up by the guardhouse.', 'Butts on the green, and every guard made to use them.'),
-  muster: T('warfare', 2, 1, ['drill'], 'spear', 'Muster Rolls', 'Levies are half again as large: more of the realm marches to war.', 'Every able hand written down, and called when needed.'),
-  cavalry: T('warfare', 3, -1, ['archery'], 'saddle', 'Cavalry', 'The watch rides out to meet raiders; armies field riders.', 'Horse and rider as one.'),
-  fieldworks: T('warfare', 3, 1, ['muster'], 'iron_shovel', 'Field Fortifications', 'Log walls and stakes in battle; towns raise walls sooner.', 'Dig in, and let them come to you.'),
-  steel: T('warfare', 4, 0, ['cavalry', 'fieldworks'], 'steel_sword', 'Steelworking', 'Steel swords for the watch, and for sale.', 'Iron, carbon and a hotter forge.', ['metalworking']),
-  siegecraft: T('warfare', 5, 0, ['steel'], 'iron_pickaxe', 'Siegecraft', 'A won battle takes the town behind it far more often (capitals too).', 'Ladders, rams and sappers: no wall is the end of it.'),
+  drill: T('warfare', 1, 0, [], 'iron_sword', 'Drilled Watch', 'Guards get +6 health and 20% more strength in battle; they wear helmets once it settles in.'),
+  archery: T('warfare', 2, -1, ['drill'], 'bow', 'Archery', 'Every guard carries a bow and 12 arrows; armies are 8% stronger. Archery butts go up by the guardhouse.'),
+  muster: T('warfare', 2, 1, ['drill'], 'spear', 'Muster Rolls', 'Levies for war are 50% larger.'),
+  shieldwall: T('warfare', 3, -1.5, ['archery'], 'iron_shield', 'Shield Wall', 'Every guard carries a shield (no two-handed weapons); armies defending are 15% stronger, and so is the watch against raids.', { excl: 'arms' }),
+  greatweapons: T('warfare', 3, -0.5, ['archery'], 'greatsword', 'Great Weapons', 'Guards fight two-handed (greatswords, battle axes, war hammers, halberds; iron needed); armies attacking are 15% stronger, and so are raiders.', { excl: 'arms' }),
+  cavalry: T('warfare', 3, 0.5, ['muster'], 'saddle', 'Cavalry', 'The watch always rides out against raiders (+20% defence, 2 extra horses); armies are 10% stronger and can flank.'),
+  fieldworks: T('warfare', 3, 1.5, ['muster'], 'iron_shovel', 'Field Fortifications', 'Armies can dig in behind log walls and stakes; a town under threat builds its walls for 55% of the cost (not 75%).'),
+  longbows: T('warfare', 4, -1.5, [['shieldwall', 'greatweapons']], 'longbow', 'Longbowmen', 'Guards\' bows become longbows (range 11, damage 6); armies are 5% stronger.', { excl: 'bows' }),
+  crossbows: T('warfare', 4, -0.5, [['shieldwall', 'greatweapons']], 'crossbow', 'Crossbowmen', 'Guards\' bows become crossbows with bolts (damage 9, slow to reload); armies are 5% stronger.', { excl: 'bows' }),
+  steel: T('warfare', 4, 1, ['cavalry', 'fieldworks'], 'steel_sword', 'Steelworking', 'Smiths sell steel swords, and every guard\'s sword is steel; armies are 15% stronger.', { also: ['metalworking'] }),
+  siegecraft: T('warfare', 5, 0.5, ['steel'], 'iron_pickaxe', 'Siegecraft', 'A decisive victory takes the town behind the field 25% more often, and a capital once the war is half won (not four-fifths).'),
+  rams: T('warfare', 6, 0, ['siegecraft'], 'log_oak', 'Battering Rams', 'Armies bring a ram: a walled town gives its defenders nothing against capture (walls otherwise make it 40% less likely), and in battle the ram rolls up and knocks a breach in the wall.', { big: true }),
+  catapults: T('warfare', 6, 1, ['siegecraft'], 'rock', 'Catapults', 'Armies bring catapults that hurl stones into the enemy\'s ranks: the other side fights 12% weaker, and in battle you\'ll see the stones fall (8 damage where they land).', { big: true }),
   // Law & Society
-  codex: T('society', 1, 0, [], 'book', 'Written Law', 'The realm may set how many of its people stand watch.', 'Laws written down, and the same for everyone.'),
-  alchemy: T('society', 2, -1, ['codex'], 'potion_vigor', 'Alchemy', 'Herbalists brew potions of vigour, might and swiftness.', 'Stills and retorts, and patience.'),
-  prisons: T('society', 2, 1, ['codex'], 'iron_bars', 'Prisons', 'A great prison for the capital: room for scores of captives, and far fewer escape.', 'Stone, iron, and gaolers who don\'t sleep.'),
-  hospitality: T('society', 3, -1, ['alchemy'], 'bed', 'Hospitality', 'A night in a proper bed leaves you (and townsfolk too) hardier for the day.', 'Clean sheets, soft straw, a warm room.'),
-  conscription: T('society', 3, 1, ['prisons'], 'iron_helmet', 'Conscription', 'The realm may draft elders, and even the young, into the watch.', 'In a hard war, everyone serves.'),
-  schools: T('society', 4, -1, ['hospitality'], 'paper', 'Schools', 'Children learn their letters (you\'ll see them about with their books): all research goes 40% faster.', 'Slates and chalk in every town.'),
-  embassies: T('society', 5, 0, ['schools', 'conscription'], 'dispatch', 'Embassies', 'Alliances come easier, and wars are declared only half as often.', 'An envoy at every court, talking before anyone draws steel.'),
+  codex: T('society', 1, 0, [], 'book', 'Written Law', 'The ruler can set the size of the watch: one in ten grown folk in quiet times, one in four in war.'),
+  alchemy: T('society', 2, -1, ['codex'], 'potion_vigor', 'Alchemy', 'Herbalists brew and sell potions (vigour, might, swiftness and more).'),
+  prisons: T('society', 2, 1, ['codex'], 'iron_bars', 'Prisons', 'When the capital\'s cells are full it builds a great prison instead of a stockade; prisoners escape 70% less often.'),
+  hospitality: T('society', 3, -1, ['alchemy'], 'bed', 'Hospitality', 'A night in a town bed gives you 2 blue hearts for the day; townsfolk wake with 2 extra health too.'),
+  clemency: T('society', 3, 0.5, ['prisons'], 'prayer_beads', 'Clemency', 'Jail terms are halved (yours too), and unrest fades twice as fast.', { excl: 'justice' }),
+  ironlaw: T('society', 3, 1.5, ['prisons'], 'guard_badge', 'Iron Law', 'Fines are 50% higher (yours too); townsfolk commit crimes 30% less often.', { excl: 'justice' }),
+  schools: T('society', 4, -1.5, ['hospitality'], 'paper', 'Schools', 'All study goes 40% faster. Children go about with their books.', { excl: 'learning' }),
+  apprenticeships: T('society', 4, -0.5, ['hospitality'], 'workbench', 'Apprenticeships', 'Shops and workshops earn 30% more.', { excl: 'learning' }),
+  conscription: T('society', 4, 1.5, [['clemency', 'ironlaw']], 'iron_helmet', 'Conscription', 'In a losing war the ruler can draft elders into the watch, and in a desperate one children too.'),
+  prison_labor: T('society', 5, 1, [['clemency', 'ironlaw']], 'stone_pickaxe', 'Prison Labour', 'By day, prisoners quarry stone and cut wood for the town (2 to 3 each a day), watched by whatever guards can be spared (one for every two prisoners; none when the watch is thin). Each day worked takes two days off a sentence; prisoners of war go home after 8 days\' work.', { big: true }),
+  embassies: T('society', 6, 0, [['schools', 'apprenticeships'], 'conscription'], 'dispatch', 'Embassies', 'Alliances need 10 less goodwill, and the realm declares war half as often.'),
   // Engineering
-  masonry: T('engineering', 1, -1, [], 'stone_bricks', 'Masonry', 'Buildings and walls go up a third faster, and in time the town paves its square in stone.', 'Dressed stone, true corners.'),
-  metalworking: T('engineering', 1, 1, [], 'anvil', 'Metalworking', 'Forges and blacksmiths; the watch carries iron instead of wood and stone.', 'Bellows, tongs and an anvil: ore becomes iron, iron becomes blades.'),
-  wells: T('engineering', 2, -1, ['masonry'], 'water_bucket', 'Clean Wells', 'A drink from a town well heals more and leaves you hardier for the day.', 'Lined shafts and clean water.'),
-  surveying: T('engineering', 2, 1, ['masonry'], 'iron_shovel', 'Surveying', 'Roads laid out properly and built half again as fast; in time the town\'s dirt lanes are gravelled and its streets cobbled.', 'Chains, stakes and a good eye.'),
-  mills: T('engineering', 3, -1, ['wells'], 'wheat', 'Watermills', 'Mills grind the grain: fields yield half as much again, and hay is stacked by the barns.', 'The river does the work.'),
-  cranes: T('engineering', 3, 1, ['surveying'], 'hammer', 'Cranes', 'Builders lift more: building goes nearly a third faster still.', 'Treadwheels and pulleys to raise the heavy stones.'),
-  aqueducts: T('engineering', 4, -1, ['mills'], 'bucket', 'Aqueducts', 'Clean water piped in: many more children are born in every town.', 'Arches across the valley, water to every street.'),
-  fortress: T('engineering', 5, 0, ['cranes', 'aqueducts'], 'cobblestone', 'Fortification', 'Towers and gatehouses: walled towns hold far better against raids and sieges.', 'Walls that do not fall.'),
+  masonry: T('engineering', 1, -1, [], 'stone_bricks', 'Masonry', 'Buildings and walls go up 35% faster; in time the town paves its square in dressed stone.'),
+  metalworking: T('engineering', 1, 1, [], 'anvil', 'Metalworking', 'Forges and blacksmiths can work; the watch carries iron instead of wood and stone.'),
+  wells: T('engineering', 2, -1.5, ['masonry'], 'water_bucket', 'Clean Wells', 'A drink from a town well heals 4 and gives 3 blue hearts for the day (instead of healing 2).'),
+  surveying: T('engineering', 2, -0.5, ['masonry'], 'iron_shovel', 'Surveying', 'Roads are built 50% faster; in time the town\'s lanes are gravelled and its streets cobbled.'),
+  mining: T('engineering', 2, 1, ['metalworking'], 'coal_ore', 'Deep Mines', 'Miners dig 50% more stone and ore, and find gems twice as often.'),
+  mills: T('engineering', 3, -1.5, ['wells'], 'wheat', 'Watermills', 'Farms yield 50% more grain; hay is stacked by the barns.'),
+  cranes: T('engineering', 3, -0.5, ['surveying'], 'hammer', 'Cranes', 'Building goes 30% faster (on top of masonry).'),
+  lodestones: T('engineering', 3, 1, ['mining'], 'iron_ore', 'Lodestones', 'Compasses: merchants, letters, settlers and armies travel between towns 15% faster.'),
+  aqueducts: T('engineering', 4, -2, ['mills'], 'bucket', 'Aqueducts', '60% more children are born in every town.', { excl: 'harvest' }),
+  granaries: T('engineering', 4, -1, ['mills'], 'barrel', 'Granaries', 'A famine takes 6 hungry days to set in (not 4), and hunger stirs half the unrest.', { excl: 'harvest' }),
+  fortress: T('engineering', 5, -0.75, ['cranes', ['aqueducts', 'granaries']], 'cobblestone', 'Fortification', 'Towers and gatehouses: a walled town adds +2 defence against raids (on top of its walls\' +1.5), and capture is a further 25% less likely.'),
+  portals: T('engineering', 6, 1, ['lodestones'], 'portal', 'Portals', 'Each town of the realm raises a portal on its square. Step through to any other portal of the same realm; merchants and soldiers use them too. A town taken by another realm is cut off: its portal goes dark.', { big: true }),
 };
 
 export const TECH_IDS = Object.keys(TECHS);
 export const branchTechs = (b) => TECH_IDS.filter((k) => TECHS[k].branch === b).sort((x, y) => TECHS[x].tier - TECHS[y].tier || TECHS[x].side - TECHS[y].side);
+// What a step needs, flattened (a choice of several counts each of them).
+export const reqIds = (id) => TECHS[id].req.flat();
+// The other steps of the same choice (learning this bars them).
+export const rivalsOf = (id) => (TECHS[id] && TECHS[id].excl ? TECH_IDS.filter((k) => k !== id && TECHS[k].excl === TECHS[id].excl) : []);
+const met = (done, r) => (Array.isArray(r) ? r.some((k) => done.includes(k)) : done.includes(r));
 
 // What a realm leans toward knowing first, by what it holds dear.
 const LEAN = {
@@ -88,6 +116,25 @@ const CULTURE_LEAN = {
   high: { engineering: 1.5, warfare: 1 }, north: { warfare: 1.5, engineering: 0.5 }, sun: { economy: 1.5, society: 0.5 },
   wild: { society: 1.2, engineering: 0.5 }, vale: { engineering: 1, economy: 0.8 },
 };
+// Which side of a choice suits whom: a realm's values and people, and its
+// ruler's temper (`kind`: the kindly lean that way; `hard`: the harsh).
+const FIT = {
+  free_trade: { values: ['mercantile', 'seafaring'], kind: 1 },
+  customs: { values: ['martial', 'agrarian'], hard: 1 },
+  banking: { values: ['mercantile', 'scholarly'] },
+  monopolies: { values: ['artisan'], styles: ['high'], hard: 0.5 },
+  shieldwall: { values: ['pious', 'agrarian'], styles: ['vale'], kind: 0.6 },
+  greatweapons: { values: ['martial'], styles: ['north'], hard: 1 },
+  longbows: { styles: ['wild', 'vale'], values: ['agrarian'] },
+  crossbows: { styles: ['high', 'sun'], values: ['artisan', 'mercantile'] },
+  clemency: { values: ['pious', 'scholarly'], kind: 1.5 },
+  ironlaw: { values: ['martial'], hard: 1.5 },
+  schools: { values: ['scholarly', 'pious'] },
+  apprenticeships: { values: ['artisan', 'mercantile'], styles: ['high'] },
+  aqueducts: { styles: ['sun', 'vale'], values: ['scholarly'] },
+  granaries: { values: ['agrarian'], styles: ['north', 'high'] },
+};
+
 // Who has worked iron since before anyone remembers: highlanders and
 // northerners, and any people that holds arms or craft dear. (Everyone
 // else lights their first forge once they've learned how.)
@@ -106,6 +153,10 @@ const PRIMITIVE = {
 };
 
 
+// A shield wall's arms (one hand free for the shield), and great weapons.
+const ONE_HANDED = { greatsword: 'iron_sword', battle_axe: 'iron_axe', warhammer: 'mace', halberd: 'spear', quarterstaff: 'club' };
+const TWO_HANDED = { iron_sword: 'greatsword', steel_sword: 'greatsword', short_sword: 'greatsword', sabre: 'greatsword', iron_axe: 'battle_axe', hand_axe: 'battle_axe', mace: 'warhammer', flail: 'warhammer', spear: 'halberd' };
+
 // Who can be spared for the academy.
 const SPARE = { laborer: 1, farmer: 3, scholar: 1, merchant: 2, fisher: 3 };
 
@@ -113,7 +164,9 @@ export class Tech {
   constructor(game, sim) {
     this.game = game;
     this.sim = sim;
-    this.state = {}; // key -> { done, current, progress, log }
+    this.state = {}; // key -> { done, current, progress, banked, log }
+    // What each town has put into its realm's study: town id -> step -> points.
+    this.contrib = {};
     // (For testing: everything known everywhere.)
     this.cheat = false;
   }
@@ -131,12 +184,15 @@ export class Tech {
     if (!k) return null;
     let st = this.state[k];
     if (!st) {
-      st = this.state[k] = { done: [], current: null, progress: 0, log: [] };
+      st = this.state[k] = { done: [], current: null, progress: 0, banked: {}, log: [] };
       const civ = s.civ || (s.values ? s : null);
       for (const v of civ ? civ.values || [] : []) if (STARTS[v] && !st.done.includes(STARTS[v])) st.done.push(STARTS[v]);
       if (this.startsSmithing(s, civ)) st.done.push('metalworking');
-      if (civ) this.startingPerks(civ, st);
+      // (A state just broken away starts from what its towns bring it: see
+      // changeHands.)
+      if (civ && !civ.freed) this.startingPerks(civ, st);
     }
+    st.banked ||= {};
     return st;
   }
 
@@ -155,9 +211,9 @@ export class Tech {
     for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
     for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
     while (st.done.length < want) {
-      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && TECHS[k].req.every((r) => st.done.includes(r)) && TECHS[k].also.every((r) => st.done.includes(r)));
+      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && this.ready(st, k));
       if (!open.length) break;
-      st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[TECHS[k].branch] || 0) * 1.5) / TECHS[k].tier])));
+      st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[TECHS[k].branch] || 0) * 1.5) * this.fit(civ, null, k) / TECHS[k].tier])));
     }
     st.start = st.done.length;
   }
@@ -183,18 +239,53 @@ export class Tech {
     return !!st && st.done.includes(id);
   }
 
-  // What must be known first.
+  // What must be known first (a list inside it: any one of those).
   prereqs(id) {
     return TECHS[id] ? TECHS[id].req : [];
   }
 
   // (The first of them, for anything that only wants one.)
   prereq(id) {
-    return this.prereqs(id)[0] || null;
+    const r = this.prereqs(id)[0];
+    return Array.isArray(r) ? r[0] : r || null;
+  }
+
+  // Barred: the realm chose another side of this choice.
+  barred(st, id) {
+    return rivalsOf(id).some((k) => st.done.includes(k));
   }
 
   ready(st, id) {
-    return [...this.prereqs(id), ...(TECHS[id].also || [])].every((k) => st.done.includes(k));
+    return this.prereqs(id).every((r) => met(st.done, r)) && (TECHS[id].also || []).every((k) => st.done.includes(k)) && !this.barred(st, id);
+  }
+
+  // How far along a step is (what's under study now, or put by for later).
+  progressOn(st, id) {
+    if (st.done.includes(id)) return TECHS[id].cost;
+    return st.current === id ? st.progress : (st.banked && st.banked[id]) || 0;
+  }
+
+  // How well one side of a choice suits a realm (and its ruler): 1 for
+  // anything that isn't a choice.
+  fit(civ, ruler, id) {
+    const f = FIT[id];
+    let w = 1;
+    if (f) {
+      w = 0.6;
+      for (const v of (civ && civ.values) || []) if ((f.values || []).includes(v)) w += 0.8;
+      if (civ && (f.styles || []).includes(civ.style)) w += 0.7;
+      const p = (ruler && ruler.personality) || {};
+      if (f.kind) w += ((p.kindness ?? 0.5) - 0.5) * 2 * f.kind;
+      if (f.hard) w += ((p.temper ?? 0.5) - 0.5) * 2 * f.hard;
+      w = Math.max(0.15, w);
+    }
+    // (Ships want a harbour to sail from.)
+    if (id === 'trade_ships' && civ) {
+      const ow = this.game.world && this.game.world.ow;
+      const ports = ow ? ow.settlements.filter((q) => q.civ === civ && !q.deserted && (q.coast || q.river)).length : 0;
+      w *= ports ? 1 + Math.min(1, ports * 0.3) : 0.1;
+    }
+    return w;
   }
 
   available(s) {
@@ -238,31 +329,76 @@ export class Tech {
     w.warfare += Math.min(3, raids * 0.6) + (this.sim.war && civ && this.sim.war.atWar(civ) ? 4 : 0);
     if (towns.some((L) => L.econ.treasury < 60)) w.economy += 1.5;
     if (towns.some((L) => (L.econ.unrest || 0) > 1)) w.society += 1.5;
-    // Cheaper steps first, mostly.
-    const score = (k) => w[TECHS[k].branch] * (1.4 - TECHS[k].tier * 0.15) * (0.6 + rng.next() * 0.8);
-    const pick = opts.reduce((m, k) => (score(k) > score(m) ? k : m));
+    // Cheaper steps first, mostly (and what's half done already); for a
+    // choice, the side that suits the realm. (A great work is worth the wait.)
+    const score = (k) => w[TECHS[k].branch] * Math.max(0.25, 1.4 - TECHS[k].tier * 0.15) * this.fit(civ, r, k)
+      * (TECHS[k].big ? 1.3 : 1) * (1 + Math.min(1, (st.banked[k] || 0) / TECHS[k].cost)) * (0.6 + rng.next() * 0.8);
+    const scored = opts.map((k) => [k, score(k)]);
+    const pick = scored.reduce((m, q) => (q[1] > m[1] ? q : m))[0];
     st.current = pick;
-    st.progress = st.progress || 0;
+    // (Picking up where the scholars left off, if they've been at it before.)
+    st.progress = (st.progress || 0) + (st.banked[pick] || 0);
+    delete st.banked[pick];
     const who = r ? `${r.name.first} ${r.name.last}` : 'The council';
     this.announce(s, day, `${who} has set the scholars to study ${TECHS[pick].name.toLowerCase()}.`);
     return pick;
   }
 
+  // The realm itself (given a realm, or one of its towns), or null for a
+  // free town.
+  civOf(s) {
+    return s.civ || (s.values !== undefined || s.people !== undefined ? s : null);
+  }
+
   announce(s, day, text) {
-    if (s.civ) this.sim.realms.proclaim(s.civ, day, text);
+    const civ = this.civOf(s);
+    if (civ) this.sim.realms.proclaim(civ, day, text);
     else {
       const L = this.sim.layoutOf(s.id);
       if (L && L.econ) ledger(L, day, text);
     }
   }
 
-  // A day's study (or an insight of yours) toward what's being learned.
+  // Learned at once, and whatever it needs first (the first side of any
+  // choice that's still open): for the console. Returns what was learned.
+  learnWithPrereqs(s, id, day) {
+    const st = this.stateOf(s);
+    const out = [];
+    const go = (k, depth = 0) => {
+      if (st.done.includes(k) || depth > 12) return true;
+      if (this.barred(st, k)) return false;
+      for (const r of [...this.prereqs(k), ...(TECHS[k].also || [])]) {
+        const opts = Array.isArray(r) ? r : [r];
+        if (opts.some((q) => st.done.includes(q))) continue;
+        if (!opts.some((q) => go(q, depth + 1))) return false;
+      }
+      if (this.learn(s, k, day)) out.push(k);
+      return true;
+    };
+    go(id);
+    return out;
+  }
+
+  // A day's study (or an insight of yours) toward what's being learned,
+  // put down to the town where it was done.
   addPoints(s, n, day) {
     const st = this.stateOf(s);
     if (!st || n <= 0) return null;
+    // (Known already, or barred by a choice made since: put by, and on to
+    // something else.)
+    if (st.current && (st.done.includes(st.current) || this.barred(st, st.current))) {
+      if (!st.done.includes(st.current)) st.banked[st.current] = (st.banked[st.current] || 0) + st.progress;
+      st.current = null;
+      st.progress = 0;
+    }
     if (!st.current) this.choose(s, day, new RNG(hash4(day, s.id, 0x7ec)));
     if (!st.current) return null;
-    st.progress += n * (this.has(s, 'schools') ? 1.4 : 1);
+    const pts = n * (this.has(s, 'schools') ? 1.4 : 1);
+    st.progress += pts;
+    if (s.cx !== undefined) {
+      const c = (this.contrib[s.id] ||= {});
+      c[st.current] = Math.round(((c[st.current] || 0) + pts) * 10) / 10;
+    }
     const t = TECHS[st.current];
     if (st.progress >= t.cost) {
       st.progress -= t.cost;
@@ -276,7 +412,15 @@ export class Tech {
     if (!st || st.done.includes(id)) return null;
     st.done.push(id);
     st.log.push({ id, day });
+    delete st.banked[id];
     if (st.current === id) st.current = null;
+    // (A choice made: whatever was under study on another side of it is
+    // put by, for good.)
+    if (st.current && this.barred(st, st.current)) {
+      st.banked[st.current] = (st.banked[st.current] || 0) + st.progress;
+      st.current = null;
+      st.progress = 0;
+    }
     const t = TECHS[id];
     this.announce(s, day, `The scholars have mastered ${t.name.toLowerCase()}! ${t.desc}`);
     this.applyNow(s, id);
@@ -286,7 +430,8 @@ export class Tech {
 
   // What changes the moment it's known.
   applyNow(s, id) {
-    const towns = s.civ ? this.sim.realms.memberLayouts(s.civ) : [this.sim.layoutOf(s.id)].filter(Boolean);
+    const civ = this.civOf(s);
+    const towns = civ ? this.sim.realms.memberLayouts(civ) : [this.sim.layoutOf(s.id)].filter(Boolean);
     for (const L of towns) {
       for (const r of L.npcs) {
         if (!alive(r)) continue;
@@ -342,13 +487,39 @@ export class Tech {
       for (const [to, from] of Object.entries(r.unforged)) swap(to, from === 'gold_sword' ? 'iron_sword' : from);
       delete r.unforged;
     }
-    if (this.has(s, 'archery') && !eq.items.some((i) => i.item === 'bow')) {
+    if (this.has(s, 'archery') && !eq.items.some((i) => ITEMS[i.item]?.ranged) && !ITEMS[eq.tool]?.ranged) {
       eq.items.push({ item: 'bow', count: 1 });
       (r.inv ||= []).push({ item: 'arrow', count: 12 });
     }
     // Steel for the swordsmen (an axe or a mace stays an axe or a mace).
     if (metal && this.has(s, 'steel') && (eq.tool === 'iron_sword' || eq.tool === 'stone_sword')) swap(eq.tool, 'steel_sword');
-    if (r.look && r.look.gear && eq.shield && ITEMS[eq.shield] && ITEMS[eq.shield].block) r.look.gear.shield = ITEMS[eq.shield].look;
+    // How the watch fights: a shield on every arm (and a weapon for one
+    // hand), or a great weapon in both.
+    if (this.has(s, 'shieldwall')) {
+      const one = ONE_HANDED[eq.tool];
+      if (one) swap(eq.tool, metal ? one : PRIMITIVE[one] || one);
+      if (!eq.shield && !ITEMS[eq.tool]?.ranged) eq.shield = metal ? 'iron_shield' : 'wooden_shield';
+    } else if (this.has(s, 'greatweapons') && metal && TWO_HANDED[eq.tool]) {
+      swap(eq.tool, TWO_HANDED[eq.tool]);
+      eq.shield = null;
+    }
+    // Their bows: longbows, or crossbows and bolts.
+    const bowTo = this.has(s, 'longbows') ? 'longbow' : this.has(s, 'crossbows') ? 'crossbow' : null;
+    if (bowTo) {
+      for (const i of eq.items) if (ITEMS[i.item]?.ranged && i.item !== bowTo) i.item = bowTo;
+      if (ITEMS[eq.tool]?.ranged && eq.tool !== bowTo) eq.tool = bowTo;
+      if (bowTo === 'crossbow' && r.inv) {
+        const arrows = r.inv.filter((q) => q && q.item === 'arrow').reduce((n, q) => n + q.count, 0);
+        if (arrows) {
+          r.inv = r.inv.filter((q) => !q || q.item !== 'arrow');
+          r.inv.push({ item: 'bolt', count: arrows });
+        }
+      }
+    }
+    if (r.look && r.look.gear) {
+      if (eq.shield && ITEMS[eq.shield] && ITEMS[eq.shield].block) r.look.gear.shield = ITEMS[eq.shield].look;
+      else if (!eq.shield && r.look.gear.shield) delete r.look.gear.shield;
+    }
     if (r.ent && !r.ent.dead && r.look) r.ent.look = r.look;
     if (r.ent && !r.ent.dead) {
       r.ent.maxHp = r.maxHp;
@@ -451,6 +622,13 @@ export class Tech {
     if (pts) out.learned = this.addPoints(s, pts, day);
     // Weekly: a little interest on the treasury (banking).
     if (day % 7 === 0 && this.has(s, 'banking')) L.econ.treasury += Math.min(120, Math.round(L.econ.treasury * 0.05));
+    // Weekly: the royal mint strikes coin, at the capital.
+    if (day % 7 === 0 && s.civ && this.has(s, 'mint') && this.sim.realms.isCapital(s)) {
+      const n = this.sim.realms.members(s.civ).filter((q) => !q.deserted).length;
+      const coin = Math.min(250, 25 * n);
+      L.econ.treasury += coin;
+      out.minted = coin;
+    }
     // A night in a proper bed: townsfolk wake hardier (hospitality).
     if (this.has(s, 'hospitality')) for (const r of people) if (r.home !== null && r.home !== undefined) r.blue = { day, hp: 2 };
     // Guards keep up with what the realm knows.
@@ -548,21 +726,75 @@ export class Tech {
     }
   }
 
-  // When a town changes hands (or a free state is born): it knows what its
-  // new realm knows; a new realm starts with what its towns knew.
+  // Two realms made one: the bigger knows all the smaller knew, and takes
+  // up its half-done work.
   inherit(toCiv, fromS) {
     const from = this.stateOf(fromS);
     const st = this.stateOf(toCiv);
     for (const k of from.done) if (!st.done.includes(k)) st.done.push(k);
+    const part = { ...from.banked, ...(from.current ? { [from.current]: from.progress } : {}) };
+    for (const [k, n] of Object.entries(part)) {
+      if (st.done.includes(k) || n <= 0) continue;
+      if (st.current === k) st.progress = Math.max(st.progress, n);
+      else st.banked[k] = Math.max(st.banked[k] || 0, n);
+    }
+  }
+
+  // A town under a new banner (taken in war, sworn to another realm, or
+  // free): it knows only what its new realm knows, but the work it put into
+  // its old realm's study goes with it. Whatever the new realm hasn't
+  // learned, it's that much further along with: a town that did a fifth of
+  // the work on metalworking brings a fifth of metalworking. (All of it, if
+  // the town did it all: the realm learns it there and then.)
+  changeHands(s, old, day = this.sim.today ? this.sim.today() : 0) {
+    const mine = this.contrib[s.id];
+    if (!mine || !s.civ) return [];
+    const st = this.stateOf(s);
+    const out = [];
+    for (const [id, pts] of Object.entries(mine)) {
+      const t = TECHS[id];
+      if (!t || pts < 1 || st.done.includes(id)) continue;
+      const before = this.progressOn(st, id);
+      const after = before + pts;
+      if (after >= t.cost && this.ready(st, id)) {
+        if (st.current === id) {
+          st.current = null;
+          st.progress = 0;
+        }
+        out.push({ id, learned: true });
+        this.learn(s, id, day);
+        continue;
+      }
+      const to = Math.min(t.cost - 1, after);
+      if (to <= before) continue;
+      if (st.current === id) st.progress = to;
+      else st.banked[id] = to;
+      out.push({ id, pct: Math.round((to / t.cost) * 100), share: Math.round(((to - before) / t.cost) * 100) });
+    }
+    if (out.length) {
+      const names = out.map((q) => TECHS[q.id].name.toLowerCase());
+      const text = `The scholars of ${s.name} bring their work with them: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.`;
+      this.announce(s, day, text);
+      void old;
+    }
+    return out;
+  }
+
+  // What a town has put into a step (points, and the share of its cost).
+  contribution(s, id) {
+    const n = (this.contrib[s.id] && this.contrib[s.id][id]) || 0;
+    return { n, pct: TECHS[id] ? Math.round((n / TECHS[id].cost) * 100) : 0 };
   }
 
   // ------------------------------------------------------------ save
   serialize() {
-    return { state: this.state };
+    return { state: this.state, contrib: this.contrib };
   }
 
   load(d) {
     this.state = (d && d.state) || {};
+    this.contrib = (d && d.contrib) || {};
+    for (const st of Object.values(this.state)) st.banked ||= {};
   }
 }
 

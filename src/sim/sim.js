@@ -44,6 +44,9 @@ import { Founding } from './founding.js';
 import { Hardship } from './hardship.js';
 import { Religion } from './religion.js';
 import { Market } from './market.js';
+import { Ships } from './ships.js';
+import { Portals } from './portals.js';
+import { Labor } from './labor.js';
 import { Prosperity } from './prosperity.js';
 
 // Deeds needed for a town to call you its Friend, or its Hero.
@@ -116,6 +119,9 @@ export class Sim {
     this.adventurers = new Adventurers(game, this);
     this.stables = new Stables(game, this);
     this.tech = new Tech(game, this);
+    this.ships = new Ships(game, this);
+    this.portals = new Portals(game, this);
+    this.labor = new Labor(game, this);
     this.politics = new Politics(game, this);
     this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
@@ -249,6 +255,7 @@ export class Sim {
       this.adventurers.update();
       this.caravans.update();
       this.caravans.syncEnts();
+      this.ships.update();
       this.outings.update();
       this.syncVisitors();
       this.areaCache.clear();
@@ -707,6 +714,8 @@ export class Sim {
     // Laws: outsiders pay the tariff; an open market takes a little off.
     if (lawOn(npc.layout, 'tariff') && !this.isCitizen(s.id)) m *= 1.1;
     if (lawOn(npc.layout, 'openMarket')) m *= 0.95;
+    // (Guild monopolies: the guilds set the prices.)
+    if (this.tech.has(s, 'monopolies')) m *= 1.1;
     // A citizen of another realm: its tariff, and how the realms get on.
     const home = this.citizen ? this.game.world.ow.settlements[this.citizen.sid] : null;
     if (home && home.civ && s.civ && home.civ !== s.civ) {
@@ -1052,6 +1061,9 @@ export class Sim {
     this.familyExpansions(L, day, rng);
     this.stables.daily(L, day, rng);
     this.tech.daily(L, day, rng);
+    this.ships.daily(L, day, rng);
+    this.portals.daily(L, day);
+    this.labor.daily(L, day, rng);
     this.politics.townDay(L, day, rng);
     this.war.townDay(L, day, rng);
     this.outings.daily(L, day);
@@ -1693,14 +1705,17 @@ export class Sim {
       rec.coins -= 16;
       invAdd((rec.inv ||= []), 'raft', 1);
     }
-    const raft = byRaft && hasRaft();
+    // Through the realm's portals, where there are portals at both ends:
+    // there within the hour.
+    const portal = this.portals.linked(s, pick.o) ? this.portals.of(s.id) : null;
+    const raft = !portal && byRaft && hasRaft();
     // Overland, a wagon (and a horse to pull it) if the town has one free,
     // or a horse to ride: quicker, and a wagon carries more.
-    const mount = raft ? null : this.stables.take(L, 'wagon');
+    const mount = raft || portal ? null : this.stables.take(L, 'wagon');
     if (mount) mount.banner = s.civ ? s.civ.color.hex : '#b03030';
-    const travel = Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : mount ? (mount.kind === 'horse' ? 0.65 : 0.75) : 1)));
+    const travel = portal ? 1 : Math.max(2, Math.round(this.diplomacy.travelHours(s, pick.o) * (raft ? 0.7 : mount ? (mount.kind === 'horse' ? 0.65 : 0.75) : 1)));
     if (mount && mount.kind === 'wagon') for (const [k, n] of Object.entries(goods)) goods[k] = n + Math.ceil(n / 2);
-    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft, mount });
+    const t = (rec.trip = { phase: 'away', dest: pick.o.id, depart: h, arrive: h + travel * 60, ret: 0, goods, earned: 0, since: day, raft, mount, portal: !!portal });
     const visit = {
       id: `m${s.id}:${rec.idx}:${h}`, from: s.id, fromName: s.name, fromIdx: rec.idx, name: rec.name, style: s.style, look: rec.look, tier: rec.tier,
       goods, arrive: t.arrive, leave: t.arrive + rng.int(6, 10) * 60, coins: Math.max(10, rec.coins), traded: false, earned: 0, mount,
@@ -1713,10 +1728,20 @@ export class Sim {
     t.visit = visit.id;
     const mail = this.diplomacy.letters.filter((q) => q.from === s.id && q.to === pick.o.id && q.status === 'waiting').length;
     this.diplomacy.carry(s.id, pick.o.id, rec, t.arrive);
-    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name}${raft ? ' by raft' : mount ? (mount.kind === 'wagon' ? ' with the town wagon' : ' on horseback') : ''} with ${mount && mount.kind === 'wagon' ? 'a wagonload' : 'a pack'} of goods${mail ? ' and a letter from the mayor' : ''}.`);
+    ledger(L, day, `${rec.name.first} ${rec.name.last} set out for ${pick.o.name}${portal ? ' through the portal' : raft ? ' by raft' : mount ? (mount.kind === 'wagon' ? ' with the town wagon' : ' on horseback') : ''} with ${mount && mount.kind === 'wagon' ? 'a wagonload' : 'a pack'} of goods${mail ? ' and a letter from the mayor' : ''}.`);
+    if (portal) {
+      // (Out of the other arch when they get there, and out of this one
+      // when they're home again.)
+      visit.portal = true;
+      const far = this.portals.of(pick.o.id);
+      this.landing ||= new Map();
+      this.landing.set(`v${visit.id}`, { x: far.front.x, y: GROUND, z: far.front.z, t: t.arrive });
+      this.landing.set(`h${s.id}:${rec.idx}`, { x: portal.front.x, y: GROUND, z: portal.front.z, t: t.ret });
+    }
     if (rec.ent && !rec.ent.dead) {
-      // Walk out of town first, then vanish over the horizon.
-      setOverride(rec, h, h + 180, 'travel', { place: 'road' });
+      // Walk out of town first (or into the portal), then vanish over the
+      // horizon.
+      setOverride(rec, h, h + 180, 'travel', portal ? { place: 'portal', target: { x: portal.x, z: portal.z } } : { place: 'road' });
       rec.leaving = true;
     } else rec.away = true;
   }
@@ -1785,13 +1810,19 @@ export class Sim {
     for (const v of list) {
       if (v.told || h < v.arrive) continue;
       v.told = true;
+      // (Customs houses: a merchant of another realm pays at the gate.)
+      const vf = v.from !== undefined ? this.game.world.ow.settlements[v.from] : null;
+      if (vf && vf.civ && L.settlement.civ && vf.civ !== L.settlement.civ && this.tech.has(L.settlement, 'customs')) {
+        L.econ.treasury += 6;
+        L.econ.customs = (L.econ.customs || 0) + 6;
+      }
       if (h < v.leave && !v.guest) this.camps.pitch(L, `v:${v.id}`, 'merchant', 1, v.leave + 30, hash4(sid, v.arrive, 0xc4), { mounts: v.mount ? [v.mount] : [] });
       hearNews(L, v.fromName, v.news, Math.floor(h / DAY), h);
     }
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
     const hod = Math.floor((h % DAY) / 60);
-    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1))) {
+    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1) * (this.tech.has(L.settlement, 'free_trade') ? 1.4 : 1))) {
       const ow = this.game.world.ow;
       const s = L.settlement;
       if (this.war.unsafe(s)) return;
@@ -1922,8 +1953,9 @@ export class Sim {
       const home = L.settlement;
       for (const rec of L.npcs) {
         const t = rec.trip;
-        // (Riding in the back of someone's wagon: drawn with it.)
-        if (!t || t.phase !== 'away' || !alive(rec) || t.passenger) continue;
+        // (Riding in the back of someone's wagon: drawn with it; at sea,
+        // aboard a ship.)
+        if (!t || t.phase !== 'away' || !alive(rec) || t.passenger || t.ship !== undefined || t.portal) continue;
         const dest = ow.settlements[t.dest];
         if (!dest) continue;
         const v = (this.visits.get(t.dest) || []).find((q) => q.id === t.visit);
@@ -2023,6 +2055,8 @@ export class Sim {
       favors: this.favors.serialize(),
       press: this.press.serialize(),
       tech: this.tech.serialize(),
+      ships: this.ships.serialize(),
+      portals: this.portals.serialize(),
       politics: this.politics.serialize(),
       war: this.war.serialize(),
     };
@@ -2116,6 +2150,8 @@ export class Sim {
     this.favors.load(data.favors);
     this.press.load(data.press);
     this.tech.load(data.tech);
+    this.ships.load(data.ships);
+    this.portals.load(data.portals);
     // (After the realms: the map's borders as they stood.)
     this.politics.load(data.politics);
     this.war.load(data.war);

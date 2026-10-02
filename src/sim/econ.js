@@ -739,13 +739,15 @@ function produce(L, rec, rng) {
     case 'miner': {
       // Out at the rock face: stone, coal and ore (a little gold if lucky),
       // and blocks of stone for the town's builders.
-      if (rng.chance(0.5)) gather(L, 'stone', 1);
-      if (rng.chance(0.55 * (0.6 + (sk.building || 0.3)))) {
+      // (Deep mines: half as much again, and more gems.)
+      const deep = L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mining');
+      if (rng.chance(deep ? 0.75 : 0.5)) gather(L, 'stone', 1);
+      if (rng.chance(0.55 * (0.6 + (sk.building || 0.3)) * (deep ? 1.5 : 1))) {
         const ore = rng.weighted([['cobblestone', 3], ['coal', 3], ['iron_ore', 2.5], ['gold_ore', 0.3]]);
         invAdd(rec.inv, ore, rng.int(1, 2));
       }
       // Now and then a rough gem turns up in the rock (kept for a jeweller).
-      if (rng.chance(0.03)) invAdd(rec.inv, 'gem', 1);
+      if (rng.chance(deep ? 0.06 : 0.03)) invAdd(rec.inv, 'gem', 1);
       // Too much rubble to carry: leave it.
       const rubble = invCount(rec.inv, 'cobblestone');
       if (rubble > 16) invTake(rec.inv, 'cobblestone', rubble - 16);
@@ -780,7 +782,10 @@ function produce(L, rec, rng) {
       }
       const base = INCOME[rec.job];
       if (!base) return;
-      const inc = Math.round(base * rng.float(0.5, 1.5) * (0.6 + (sk.crafting + sk.trading) * 0.4) * Math.max(0.3, e.wealth));
+      // (Guild monopolies and apprenticeships: the trades earn more.)
+      const T = L.sim && L.sim.tech;
+      const guild = T ? (T.has(L.settlement, 'monopolies') ? 1.25 : 1) * (T.has(L.settlement, 'apprenticeships') ? 1.3 : 1) : 1;
+      const inc = Math.round(base * rng.float(0.5, 1.5) * (0.6 + (sk.crafting + sk.trading) * 0.4) * Math.max(0.3, e.wealth) * guild);
       if (biz) {
         biz.till += inc;
         biz.earned += inc;

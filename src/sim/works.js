@@ -10,14 +10,14 @@ import { GROUND } from '../config.js';
 // announcing it comes down).
 const FRAME = 0.45;
 
-const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3, road: 1.6, path: 1.6 };
+const MIN_PER_BLOCK = { repair: 3, build: 4, expand: 3.5, wall: 1.2, breach: 1, stage: 6, strike: 3, road: 1.6, path: 1.6, mend: 2.5, dock: 3, portal: 240 };
 // Put up for a wedding or a feast, and taken down again after.
 const TEMPORARY = new Set(['stage', 'strike']);
 // Plain lists of blocks round a patch of ground (not a building).
-const PLAIN = new Set(['stage', 'strike', 'road', 'path']);
+const PLAIN = new Set(['stage', 'strike', 'road', 'path', 'mend', 'dock', 'portal']);
 // Work spread out over the ground (streets, paths, walls, sets): the
 // builders walk along it, and blocks only go in within their reach.
-const ALONG = new Set(['stage', 'strike', 'road', 'path', 'wall', 'breach']);
+const ALONG = new Set(['stage', 'strike', 'road', 'path', 'wall', 'breach', 'mend', 'dock']);
 const REACH = 4;
 // Blocks a repair restores: walls, roofs, floors, windows and doors.
 const STRUCTURAL = (id) => {

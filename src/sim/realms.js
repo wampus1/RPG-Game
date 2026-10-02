@@ -437,12 +437,18 @@ export class Realms {
       this.proclaim(civ, day, `${cap(who)} has lifted the realm's weapons ban.`);
       return 'armsBan';
     }
-    // Tariffs follow how the realms get on.
+    // Tariffs follow how the realms get on (none at all, where trade is free).
+    const free = this.sim.tech && this.sim.tech.has(civ, 'free_trade');
     for (const o of this.civs) {
       if (o === civ) continue;
       const st = this.standing(civ, o);
       const on = d.tariffOn.includes(o.id);
-      if (!on && st === 'hostile') {
+      if (on && free) {
+        d.tariffOn = d.tariffOn.filter((q) => q !== o.id);
+        this.proclaim(civ, day, `${cap(who)} has lifted the tariff on merchants of the ${o.name.replace(/^The /, '')}: the realm trades freely now.`);
+        return 'tariff';
+      }
+      if (!on && st === 'hostile' && !free) {
         d.tariffOn.push(o.id);
         this.proclaim(civ, day, `By decree of ${who}: merchants of the ${o.name.replace(/^The /, '')} pay a tariff on all they sell here.`);
         return 'tariff';
@@ -529,7 +535,8 @@ export class Realms {
     push -= ruler ? ((ruler.personality?.kindness ?? 0.5) - 0.5) * 0.4 : 0;
     // A long war wears on everyone.
     push += this.sim.war ? this.sim.war.weariness(civ) * 0.5 : 0;
-    e.unrest = Math.max(0, (e.unrest || 0) * 0.85 + push);
+    // (Clemency: grievances forgiven sooner.)
+    e.unrest = Math.max(0, (e.unrest || 0) * (this.sim.tech && this.sim.tech.has(s, 'clemency') ? 0.7 : 0.85) + push);
     e.independence = this.support(L);
     e.secedeVotes = e.independence > 0.3 ? (e.secedeVotes || 0) + 1 : 0;
     if (e.secedeVotes === 1) ledger(L, day, `There's talk in ${s.name} of breaking away from the ${civ.name.replace(/^The /, '')}.`);
@@ -614,6 +621,10 @@ export class Realms {
     s.civ = civ;
     // (Its gods don't change with its banner; see religion.js.)
     if (this.sim.religion && old && old !== civ) this.sim.religion.onConquest(s, old, civ, this.sim.today());
+    // (Nor does the study it's done: see tech.js.)
+    if (this.sim.tech && old !== civ && civ) this.sim.tech.changeHands(s, old, this.sim.today());
+    // (Its portal answers to its new realm, if any: see portals.js.)
+    if (this.sim.portals && old !== civ) this.sim.portals.changeHands(s, old, this.sim.today());
     const members = ow.settlements.filter((o) => o.civ === old && o !== s);
     for (let cz = s.cz - 5; cz <= s.cz + 5; cz++) {
       for (let cx = s.cx - 5; cx <= s.cx + 5; cx++) {
@@ -757,8 +768,10 @@ export class Realms {
     const r = this.relation(a, b);
     // (A trade league: every bargain counts for more.)
     const league = this.sim.tech && (this.sim.tech.has(a, 'trade_league') || this.sim.tech.has(b, 'trade_league')) ? 1.5 : 1;
+    // (Free trade: no tolls to haggle over.)
+    const free = this.sim.tech && (this.sim.tech.has(a, 'free_trade') || this.sim.tech.has(b, 'free_trade')) ? 1.5 : 1;
     r.trade += coins;
-    r.tradeWeek += coins * league;
+    r.tradeWeek += coins * league * free;
   }
 
   // How a merchant from another realm is treated in town: welcomed where

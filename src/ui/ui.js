@@ -632,6 +632,15 @@ export class UI {
           lines.push({ text: `Opinion: ${lvl.label}`, color: lvl.color });
         }
         lines.push({ text: 'RMB talk · LMB attack', color: C.faint });
+      } else if (e.kind === 'prop' && e.type === 'ship') {
+        lines.push({ text: `The ${e.name}`, color: C.hi });
+        const s = game.world.ow.settlements[e.sid];
+        lines.push({ text: `Trade ship of ${s ? s.name : 'a port'}`, color: C.cyan });
+        lines.push({ text: e.phase === 'out' ? 'putting out to sea' : e.phase === 'in' ? 'coming in to the pier' : 'tied up at the pier', color: C.dim });
+      } else if (e.kind === 'prop' && (e.type === 'catapult' || e.type === 'ram')) {
+        lines.push({ text: e.type === 'ram' ? 'Battering ram' : 'Catapult', color: C.hi });
+        lines.push({ text: e.broken ? 'wrecked' : `${Math.max(0, e.hp)}/${e.maxHp} timber`, color: e.broken ? C.dim : C.orange });
+        if (!e.broken) lines.push({ text: 'LMB hack at it (an axe is best)', color: C.faint });
       } else if (e.kind === 'prop') {
         lines.push({ text: e.own ? 'Your wagon' : 'Wagon', color: C.hi });
         lines.push({ text: e.own ? (e.horse ? 'RMB drive' : 'needs a horse in the shafts') : 'RMB climb in', color: C.faint });

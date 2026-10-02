@@ -132,6 +132,14 @@ export class Audio {
       case 'wave': this.noise(1.2, 0.05, 500); break;
       case 'wind': this.noise(1.6, 0.04, 350); break;
       case 'frog': this.tone(180, 0.08, 'square', 0.03, 60); this.tone(170, 0.08, 'square', 0.03, 60, 0.12); break;
+      // Siege engines: a heavy thud (a stone landing, a ram on a wall), the
+      // creak and whip of a catapult's arm.
+      case 'impact': this.tone(70, 0.3, 'sine', 0.3, -40); this.noise(0.25, 0.3, 260); break;
+      case 'catapult': this.tone(160, 0.18, 'sawtooth', 0.06, -80); this.noise(0.22, 0.12, 1600, 0.12); break;
+      // A portal: a rising shimmer.
+      case 'portal': this.tone(440, 0.4, 'sine', 0.08, 440); this.tone(660, 0.45, 'triangle', 0.05, 660, 0.08); this.noise(0.3, 0.05, 5000); break;
+      // A ship's horn, low and long.
+      case 'horn': this.tone(110, 0.9, 'sawtooth', 0.06, 8); this.tone(165, 0.9, 'triangle', 0.04, 6); break;
     }
   }
 }

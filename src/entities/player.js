@@ -270,7 +270,9 @@ export class Player extends Entity {
     const ride = this.mount ? this.game.riding.pace() : 1;
     // (Shield up: a slow, careful step, and no running.)
     const guard = this.blocking ? 1.7 : 1;
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? 0.62 : 1) * ride * swim * guard * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    // (Just up out of a roll: a little slower for a moment.)
+    const recover = this.rollRecover > 0 ? 1.45 : 1;
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? 0.62 : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

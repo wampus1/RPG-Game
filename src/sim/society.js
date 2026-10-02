@@ -131,6 +131,8 @@ export class Society {
       let rate = v.rate;
       if (lf.vice === 'rioter') rate = this.grievance(L) ? 0.08 : 0.005;
       if ((r.mood ?? 0.5) < 0.3) rate *= 1.5;
+      // (Iron law: the stocks on the square give pause.)
+      if (this.sim.tech && this.sim.tech.has(L.settlement, 'ironlaw')) rate *= 0.7;
       if (!rng.chance(rate)) continue;
       // Where you can see it: it happens in front of you, some time today.
       if (active && r.ent && !r.ent.dead) lf.plan = { type: v.crime, at: day * DAY + rng.int(9 * 60, 19 * 60) };
@@ -176,14 +178,15 @@ export class Society {
         this.exile(L, r, day, rng, what);
         continue;
       }
-      const fine = Math.round(FINES[crime] * (e.fineScale || 1));
+      const fine = Math.round(FINES[crime] * (e.fineScale || 1) * (this.sim.tech && this.sim.tech.has(L.settlement, 'ironlaw') ? 1.5 : 1));
       if ((r.coins || 0) >= fine) {
         r.coins -= fine;
         e.treasury += fine;
         ledger(L, day, `${fullName(r)} was fined ¤${fine} for ${what}.`);
         this.release(L, r);
       } else {
-        const days = sev;
+        // (Clemency: half the time, rounded up.)
+        const days = this.sim.tech && this.sim.tech.has(L.settlement, 'clemency') ? Math.ceil(sev / 2) : sev;
         lf.jailUntil = (day + days) * DAY + 8 * 60;
         ledger(L, day, `${fullName(r)} couldn't pay, and will spend ${days} day${days > 1 ? 's' : ''} in the cells for ${what}.`);
         const n = r.ent;

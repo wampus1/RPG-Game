@@ -250,6 +250,9 @@ export class History {
     const p = L.plaza;
     const w = this.game.world;
     const taken = new Set(e.statues.map((q) => `${q.x},${q.z}`));
+    // (Nor where the portal stands.)
+    const portal = this.sim.portals && this.sim.portals.of(L.settlement.id);
+    if (portal) taken.add(`${portal.x},${portal.z}`);
     let at = null;
     for (let r = 2; r <= 7 && !at; r++) {
       for (let dz = -r; dz <= r && !at; dz++) {

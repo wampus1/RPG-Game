@@ -3,7 +3,7 @@
 import { CHAR_W, CHAR_H } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
-import { TECHS, BRANCHES } from '../sim/tech.js';
+import { TECHS, BRANCHES, reqIds, rivalsOf } from '../sim/tech.js';
 import { has as heroHas } from '../game/hero.js';
 import { itemIcon } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
@@ -14,10 +14,11 @@ const bar = (f, n) => '█'.repeat(Math.round(f * n)) + '░'.repeat(n - Math.ro
 // ---------------------------------------------------------------- the tree
 // The realm's learning as a map: its crest in the middle and four paths
 // running out from it (Economy north, Warfare east, Law & Society south,
-// Engineering west), each splitting in two and joining again at its last
-// step. Every step is an icon on the path: point at it to see what it does,
-// click it to fly in close with the details at the side. The wheel zooms,
-// dragging moves the map.
+// Engineering west), each splitting into lines. A choice is two steps side
+// by side, crossed through between them: learn one and the other is barred.
+// The great works sit in gold rings. Every step is an icon on the path:
+// point at it to see what it does, click it to fly in close with the details
+// at the side. The wheel zooms, dragging moves the map.
 const DIRS = { economy: [0, -1], warfare: [1, 0], society: [0, 1], engineering: [-1, 0] };
 const LEG = 50; // distance between steps along a path (at zoom 1)
 const SPREAD = 30; // how far a side line sits off the path
@@ -82,7 +83,9 @@ export class TechWindow extends Window {
   status(st, id) {
     if (st.done.includes(id)) return 'done';
     if (st.current === id) return 'current';
-    return this.game.sim.tech.ready(st, id) ? 'open' : 'locked';
+    const T = this.game.sim.tech;
+    if (T.barred(st, id)) return 'barred';
+    return T.ready(st, id) ? 'open' : 'locked';
   }
   update(dt) {
     this.t += dt;
@@ -167,8 +170,10 @@ export class TechWindow extends Window {
     if (this.hover && !this.drag) {
       const t = TECHS[this.hover];
       const stt = this.status(st, this.hover);
-      const lines = [{ text: t.name, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: stt === 'done' ? C.green : stt === 'current' ? C.hi : stt === 'open' ? C.fg : C.dim }];
+      const lines = [{ text: `${t.name}${t.big ? ' ★' : ''}`, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: STATUS_COLOR[stt] }];
       for (const l of wrap(t.desc, 36)) lines.push({ text: l, color: C.white });
+      const rivals = rivalsOf(this.hover);
+      if (rivals.length && stt !== 'barred' && stt !== 'done') lines.push({ text: `A choice: bars ${rivals.map((k) => TECHS[k].name).join(', ')}`, color: C.orange });
       this.ui.tooltip = { lines };
     }
     // The side panel for the step picked.
@@ -186,21 +191,35 @@ export class TechWindow extends Window {
       }
     };
     line(t.name.toUpperCase(), BRANCH_COLOR[t.branch]);
-    line(`${BRANCH_NAME[t.branch]} · step ${t.tier}`, C.dim);
+    line(`${BRANCH_NAME[t.branch]} · step ${t.tier}${t.big ? ' · a great work' : ''}`, t.big ? '#ffd870' : C.dim);
     y++;
     const stt = this.status(st, id);
     const when = (st.log || []).find((q) => q.id === id);
+    const rivals = rivalsOf(id);
     if (stt === 'done') line(when ? `Learned on day ${Math.max(1, when.day)}` : 'Known from of old', C.green);
     else if (stt === 'current') line(`Being studied: ${bar(st.progress / t.cost, 10)} ${pct(st.progress, t.cost)}%`, C.hi);
+    else if (stt === 'barred') line(`Barred: the realm chose ${rivals.filter((k) => st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')}`, C.red);
     else if (stt === 'open') line('Can be studied next', C.fg);
-    else line(`Needs ${[...t.req, ...(t.also || [])].filter((k) => !st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')} first`, C.orange);
+    else {
+      const need = [...t.req, ...(t.also || [])].filter((r) => (Array.isArray(r) ? !r.some((k) => st.done.includes(k)) : !st.done.includes(r)))
+        .map((r) => (Array.isArray(r) ? r.map((k) => TECHS[k].name).join(' or ') : TECHS[r].name));
+      line(`Needs ${need.join(' and ')} first`, C.orange);
+    }
+    // (Work put by for later: studied before, or brought by a town.)
+    const kept = stt !== 'done' && stt !== 'current' ? (st.banked && st.banked[id]) || 0 : 0;
+    if (kept >= 1) line(`Already ${pct(kept, t.cost)}% studied ${bar(kept / t.cost, 8)}`, '#c8a060');
     y++;
     line(t.desc, C.white);
     y++;
-    line(t.lore, C.dim);
-    y++;
+    if (rivals.length && stt !== 'barred' && stt !== 'done') {
+      line(`A choice: learning it bars ${rivals.map((k) => TECHS[k].name).join(' and ')} for good.`, C.orange);
+      y++;
+    }
     line(`Study needed: ${t.cost}`, C.faint);
-    const next = Object.keys(TECHS).filter((k) => TECHS[k].req.includes(id));
+    // What this town has put into it (it keeps that, whatever banner it's under).
+    const mine = T.contribution(this.s, id);
+    if (mine.n >= 1) line(`${this.s.name}'s share of the work: ${Math.round(mine.n)} (${mine.pct}%)`, C.faint);
+    const next = Object.keys(TECHS).filter((k) => reqIds(k).includes(id));
     if (next.length) line(`Leads to: ${next.map((k) => TECHS[k].name).join(', ')}`, C.faint);
     g.text(x0 + 2, this.h - 3, '[click away] close', C.faint);
   }
@@ -218,7 +237,7 @@ export class TechWindow extends Window {
     const o = this.toScreen({ x: 0, y: 0 });
     ctx.strokeStyle = 'rgba(120,110,150,0.12)';
     ctx.lineWidth = 1;
-    for (const r of [60, 130, 200, 270, 340]) {
+    for (const r of [60, 130, 200, 270, 340, 410]) {
       ctx.beginPath();
       ctx.arc(o.x + 0.5, o.y + 0.5, r * z, 0, Math.PI * 2);
       ctx.stroke();
@@ -228,7 +247,7 @@ export class TechWindow extends Window {
       const ang = (i / 16) * Math.PI * 2 + Math.PI / 16;
       ctx.beginPath();
       ctx.moveTo(o.x + Math.cos(ang) * 40 * z, o.y + Math.sin(ang) * 40 * z);
-      ctx.lineTo(o.x + Math.cos(ang) * 380 * z, o.y + Math.sin(ang) * 380 * z);
+      ctx.lineTo(o.x + Math.cos(ang) * 440 * z, o.y + Math.sin(ang) * 440 * z);
       ctx.stroke();
     }
     // The paths: from each step back to what it needs (the roots to the
@@ -238,11 +257,17 @@ export class TechWindow extends Window {
     for (const id of ids) {
       const t = TECHS[id];
       const to = this.toScreen(techPos(id));
-      const froms = t.req.length ? t.req.map((k) => this.toScreen(techPos(k))) : [o];
+      const froms = t.req.length ? reqIds(id).map((k) => this.toScreen(techPos(k))) : [o];
       const stt = this.status(st, id);
       const col = BRANCH_COLOR[t.branch];
       for (const f of froms) {
-        if (stt === 'done') {
+        if (stt === 'barred') {
+          ctx.setLineDash([1, 4]);
+          ctx.strokeStyle = 'rgba(160,80,80,0.3)';
+          ctx.lineWidth = 1;
+          line(ctx, f, to);
+          ctx.setLineDash([]);
+        } else if (stt === 'done') {
           ctx.strokeStyle = hexA(col, 0.25);
           ctx.lineWidth = Math.max(3, 5 * z);
           line(ctx, f, to);
@@ -256,6 +281,34 @@ export class TechWindow extends Window {
           line(ctx, f, to);
           ctx.setLineDash([]);
         }
+      }
+    }
+    // The choices: the two (or more) sides crossed through between them.
+    const seen = new Set();
+    for (const id of ids) {
+      const ex = TECHS[id].excl;
+      if (!ex || seen.has(ex)) continue;
+      seen.add(ex);
+      const group = ids.filter((k) => TECHS[k].excl === ex);
+      const ps = group.map((k) => this.toScreen(techPos(k)));
+      const chosen = group.some((k) => st.done.includes(k));
+      ctx.setLineDash([3, 2]);
+      ctx.strokeStyle = chosen ? 'rgba(200,90,80,0.5)' : 'rgba(240,150,90,0.85)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < ps.length; i++) line(ctx, ps[i - 1], ps[i]);
+      ctx.setLineDash([]);
+      for (let i = 1; i < ps.length; i++) {
+        const mx = Math.round((ps[i - 1].x + ps[i].x) / 2);
+        const my = Math.round((ps[i - 1].y + ps[i].y) / 2);
+        ctx.fillStyle = '#0c0a12';
+        circle(ctx, mx, my, 4);
+        ctx.strokeStyle = chosen ? '#a05048' : '#f0a060';
+        ctx.beginPath();
+        ctx.moveTo(mx - 2 + 0.5, my - 2 + 0.5);
+        ctx.lineTo(mx + 2 + 0.5, my + 2 + 0.5);
+        ctx.moveTo(mx + 2 + 0.5, my - 2 + 0.5);
+        ctx.lineTo(mx - 2 + 0.5, my + 2 + 0.5);
+        ctx.stroke();
       }
     }
     // The crest in the middle: the realm's colour, a ring, a cross-hair.
@@ -283,7 +336,7 @@ export class TechWindow extends Window {
     // Branch names at the far end of each path.
     for (const b of BRANCHES) {
       const [dx, dy] = DIRS[b.id];
-      const q = this.toScreen({ x: dx * (26 + 6 * LEG), y: dy * (26 + 6 * LEG) });
+      const q = this.toScreen({ x: dx * (26 + 7 * LEG), y: dy * (26 + 7 * LEG) });
       const name = b.name.toUpperCase();
       drawText(ctx, name, Math.round(q.x - textWidth(name) / 2), q.y - 3, b.color, '#000');
     }
@@ -293,7 +346,7 @@ export class TechWindow extends Window {
       const q = this.toScreen(techPos(id));
       const stt = this.status(st, id);
       const col = BRANCH_COLOR[t.branch];
-      const r = Math.max(6, NODE * z);
+      const r = Math.max(6, NODE * z * (t.big ? 1.25 : 1));
       const sel = this.sel === id;
       const hov = this.hover === id;
       // A glow behind what's known (and what's picked).
@@ -301,14 +354,32 @@ export class TechWindow extends Window {
         ctx.fillStyle = hexA(stt === 'done' ? col : '#fff4c0', 0.18 + (sel ? 0.12 : 0));
         circle(ctx, q.x, q.y, r + 5);
       }
-      ctx.fillStyle = stt === 'done' ? shade(col, 0.35) : '#14111c';
+      ctx.fillStyle = stt === 'done' ? shade(col, 0.35) : stt === 'barred' ? '#1c1012' : '#14111c';
       circle(ctx, q.x, q.y, r);
       // The ring: solid where it's known, pulsing on what's studied now.
       ctx.lineWidth = sel || hov ? 2 : 1;
-      ctx.strokeStyle = stt === 'locked' ? 'rgba(150,150,170,0.5)' : stt === 'current' ? `rgba(255,236,160,${0.6 + 0.4 * Math.sin(this.t * 4)})` : col;
+      ctx.strokeStyle = stt === 'locked' ? 'rgba(150,150,170,0.5)' : stt === 'barred' ? 'rgba(170,70,60,0.7)' : stt === 'current' ? `rgba(255,236,160,${0.6 + 0.4 * Math.sin(this.t * 4)})` : col;
       ctx.beginPath();
       ctx.arc(q.x + 0.5, q.y + 0.5, r, 0, Math.PI * 2);
       ctx.stroke();
+      // A great work: a second ring, in gold.
+      if (t.big) {
+        ctx.strokeStyle = stt === 'barred' ? 'rgba(170,70,60,0.5)' : stt === 'done' ? '#ffd870' : 'rgba(255,216,112,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(q.x + 0.5, q.y + 0.5, r + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Work put by on it (studied before, or brought by a town that changed
+      // banner): a dim arc of how far along it is.
+      const kept = stt !== 'done' && stt !== 'current' ? (st.banked && st.banked[id]) || 0 : 0;
+      if (kept >= 1) {
+        ctx.strokeStyle = 'rgba(200,160,96,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(q.x + 0.5, q.y + 0.5, r + (t.big ? 6 : 3), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, kept / t.cost));
+        ctx.stroke();
+      }
       // Progress round the rim of the one being studied.
       if (stt === 'current') {
         ctx.strokeStyle = '#ffe070';
@@ -321,9 +392,21 @@ export class TechWindow extends Window {
       const ic = itemIcon(t.icon);
       if (ic) {
         const sz = Math.max(8, Math.round(16 * Math.min(1.6, z)));
-        ctx.globalAlpha = stt === 'locked' ? 0.35 : 1;
+        ctx.globalAlpha = stt === 'locked' ? 0.35 : stt === 'barred' ? 0.25 : 1;
         ctx.drawImage(ic, Math.round(q.x - sz / 2), Math.round(q.y - sz / 2), sz, sz);
         ctx.globalAlpha = 1;
+      }
+      // Barred: struck through.
+      if (stt === 'barred') {
+        ctx.strokeStyle = 'rgba(220,80,70,0.85)';
+        ctx.lineWidth = Math.max(1, 1.5 * Math.min(1.6, z));
+        const k = r * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(q.x - k + 0.5, q.y - k + 0.5);
+        ctx.lineTo(q.x + k + 0.5, q.y + k + 0.5);
+        ctx.moveTo(q.x + k + 0.5, q.y - k + 0.5);
+        ctx.lineTo(q.x - k + 0.5, q.y + k + 0.5);
+        ctx.stroke();
       }
       // Learned: a little check; the name underneath when close enough.
       if (stt === 'done') {
@@ -332,14 +415,15 @@ export class TechWindow extends Window {
       }
       if (z >= 1.3 || sel || hov) {
         const nm = t.name;
-        drawText(ctx, nm, Math.round(q.x - textWidth(nm) / 2), q.y + r + 3, stt === 'locked' ? '#8a8a98' : '#f0e8d8', '#000');
+        drawText(ctx, nm, Math.round(q.x - textWidth(nm) / 2), q.y + r + 3, stt === 'locked' ? '#8a8a98' : stt === 'barred' ? '#a06058' : '#f0e8d8', '#000');
       }
     }
     ctx.restore();
   }
 }
 
-const STATUS = { done: 'Learned', current: 'Being studied now', open: 'Can be studied next', locked: 'Not yet within reach' };
+const STATUS = { done: 'Learned', current: 'Being studied now', open: 'Can be studied next', locked: 'Not yet within reach', barred: 'Barred: the realm chose otherwise' };
+const STATUS_COLOR = { done: C.green, current: C.hi, open: C.fg, locked: C.dim, barred: C.red };
 const BRANCH_COLOR = Object.fromEntries(BRANCHES.map((b) => [b.id, b.color]));
 const BRANCH_NAME = Object.fromEntries(BRANCHES.map((b) => [b.id, b.name]));
 

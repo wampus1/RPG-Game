@@ -27,6 +27,8 @@ import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { REGION_W, REGION_D, GROUND, SURFACE } from '../config.js';
 import { B } from '../world/blocks.js';
+import { M } from '../world/settlement.js';
+import { fieldEngines, workEngines, endEngines } from '../game/engines.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
 
@@ -70,6 +72,14 @@ const darken = (hex) => {
 };
 const wet = (s) => !!(s.coast || s.river || s.lake);
 export const centreOf = (s) => ({ x: Math.floor((s.cx + (s.cw || 1) / 2) * REGION_W), z: Math.floor((s.cz + (s.cd || 1) / 2) * REGION_D) });
+// When a battle's due, said as folk would say it.
+function whenText(at, now) {
+  const d = Math.floor(at / DAY) - Math.floor(now / DAY);
+  const m = at % DAY;
+  const part = m < 12 * 60 ? 'morning' : m < 17 * 60 ? 'afternoon' : 'evening';
+  if (d <= 0) return at - now <= 120 ? 'within the hour or two' : `this ${part}`;
+  return d === 1 ? `tomorrow ${part}` : `in ${d} days`;
+}
 
 export class War {
   constructor(game, sim) {
@@ -89,6 +99,7 @@ export class War {
     this.prisoners = []; // { id, sid, idx, civ, by, at, day, how, name }
     this.deserters = {}; // civ id -> { day, war, battle } (you, who didn't come)
     this.captiveEnts = new Map(); // prisoner id -> NPC in a cell (when you're there)
+    this.columns = new Map(); // war id -> { w, ents } (an army on the march, near you)
     this.syncT = 0;
     this.liveT = 0;
   }
@@ -185,6 +196,7 @@ export class War {
     if (this.syncT <= 0) {
       this.syncT = 1;
       this.syncCaptives();
+      this.syncMarch();
     }
   }
 
@@ -349,6 +361,7 @@ export class War {
     if (r.drilled) p *= 1.2;
     if (tech.has(s, 'steel')) p *= 1.15;
     if (tech.has(s, 'archery')) p *= 1.08;
+    if (tech.has(s, 'longbows') || tech.has(s, 'crossbows')) p *= 1.05;
     p *= clamp((r.hp ?? r.maxHp ?? 12) / Math.max(1, r.maxHp ?? 12), 0.4, 1);
     return p;
   }
@@ -363,6 +376,8 @@ export class War {
     d += advs.length * 1.5;
     if (L.walled) d += 1.5 + (tech.has(s, 'fortress') ? 2 : 0);
     if (this.ridesOut(L)) d *= 1.2;
+    // (A shield wall at the gate.)
+    if (tech.has(s, 'shieldwall')) d *= 1.15;
     return d;
   }
 
@@ -377,7 +392,8 @@ export class War {
     const day = Math.floor(raid.at / DAY);
     const a = this.civ(raid.civ);
     const party = this.partyRecs(raid);
-    const atk = party.reduce((n, r) => n + this.soldierPower(r, FL.settlement), 0) * (this.sim.tech.has(FL.settlement, 'cavalry') ? 1.1 : 1);
+    const atk = party.reduce((n, r) => n + this.soldierPower(r, FL.settlement), 0) * (this.sim.tech.has(FL.settlement, 'cavalry') ? 1.1 : 1)
+      * (this.sim.tech.has(FL.settlement, 'greatweapons') ? 1.15 : 1);
     const def = this.defence(TL);
     const win = rng.chance(atk / (atk + def * 1.1 + 0.5));
     const lost = [];
@@ -510,7 +526,7 @@ export class War {
   declare(a, b, why, day, rng) {
     const w = {
       id: this.nextId++, a: [a.id], b: [b.id], lead: { a: a.id, b: b.id }, reason: why.k, why: why.text, start: day,
-      score: 0, weary: { [a.id]: 0, [b.id]: 0 }, battles: [], plan: null, next: day + 1, joined: [],
+      score: 0, weary: { [a.id]: 0, [b.id]: 0 }, battles: [], plan: null, next: day, joined: [],
     };
     this.wars.push(w);
     const text = `War! The ${plain(a)} has declared war on the ${plain(b)} over ${why.text}.`;
@@ -587,13 +603,33 @@ export class War {
     const cell = this.ow.cell(Math.floor(site.x / REGION_W), Math.floor(site.z / REGION_D));
     const biome = cell ? cell.biome : 'plains';
     const name = `the Battle of ${def.name} ${cell && cell.river ? 'Ford' : FEATURE[biome] || 'Field'}`;
-    const at = (day + 1) * DAY + 10 * 60 + rng.int(-60, 90);
-    // A long way off, over the water: the attackers come by raft.
-    const naval = best.d > 14 && wet(atk) && wet(def);
-    w.plan = { at, site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id, naval };
+    // The same morning (or a few hours from now, if that's already gone):
+    // the attackers muster, then march out in time to meet the defenders.
+    const now = this.sim.abs;
+    let at = day * DAY + 9 * 60 + rng.int(-60, 90);
+    if (at < now + 180) at = Math.round(now + 180 + rng.int(0, 120));
     const ac = attacker === 'a' ? best.ca : best.cb;
-    const text = naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders tomorrow morning.`
-      : `The armies of the ${plain(best.ca)} and the ${plain(best.cb)} are gathering. They will meet outside ${def.name} tomorrow morning.`;
+    // (Through the realm's portals: they muster at the arch nearest the
+    // field, and march from there.)
+    const P = this.sim.portals;
+    let via = null;
+    if (P) {
+      for (const q of Object.values(P.list)) {
+        const s = this.ow.settlements[q.sid];
+        if (!P.open(q.sid) || s.civ !== ac || s.id === atk.id) continue;
+        const d0 = Math.hypot(site.x - centreOf(atk).x, site.z - centreOf(atk).z);
+        const d1 = Math.hypot(site.x - centreOf(s).x, site.z - centreOf(s).z);
+        if (d1 < d0 - 20 && (!via || d1 < via.d)) via = { s, d: d1 };
+      }
+    }
+    const from = centreOf(via ? via.s : atk);
+    const march = clamp(Math.round(Math.hypot(site.x - from.x, site.z - from.z) * 0.7), 40, 600);
+    // A long way off, over the water: the attackers come by raft.
+    const naval = !via && best.d > 14 && wet(atk) && wet(def);
+    w.plan = { at, depart: Math.max(now, at - march), site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id, naval, via: via ? via.s.id : undefined };
+    const when = whenText(at, now);
+    const text = naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders ${when}.`
+      : `The armies of the ${plain(best.ca)} and the ${plain(best.cb)} are gathering. They will meet outside ${def.name} ${when}.`;
     for (const s of [def, atk]) {
       const L = this.game.world.layouts.get(s.id);
       if (L && L.econ) ledger(L, day, text);
@@ -868,8 +904,8 @@ export class War {
   raise(w, plan, rng) {
     const PA = this.pool(w, 'a', plan);
     const PB = this.pool(w, 'b', plan);
-    const qa = this.armyPower(PA, 'a', w);
-    const qb = this.armyPower(PB, 'b', w);
+    const qa = this.armyPower(PA, 'a', w, plan);
+    const qb = this.armyPower(PB, 'b', w, plan);
     plan.ta = plan.ta || this.chooseTactic(w, 'a', qa, qb, plan, rng);
     plan.tb = plan.tb || this.chooseTactic(w, 'b', qb, qa, plan, rng);
     const A = this.commit(w, 'a', PA, plan.ta, qa / Math.max(0.5, qb), plan);
@@ -943,22 +979,47 @@ export class War {
     return this.fight(w, plan, A, Bm, rng, null);
   }
 
-  armyPower(army, side, w) {
+  armyPower(army, side, w, plan = null) {
     let n = army.extra * 1.1;
     for (const { r, L } of army.recs) n += this.soldierPower(r, L.settlement);
     const civ = this.civ(w.lead[side]);
     const tech = this.sim.tech;
     const s = this.realms.capitalOf(civ);
     if (s && tech.has(s, 'cavalry')) n *= 1.1;
+    if (plan) {
+      // How the realm fights: shields locked to hold, great weapons to
+      // break through.
+      const attacking = plan.attacker === side;
+      if (s && attacking && tech.has(s, 'greatweapons')) n *= 1.15;
+      if (s && !attacking && tech.has(s, 'shieldwall')) n *= 1.15;
+      // (Under the other side's catapults: stones falling all the while.)
+      if (this.engines(plan, side === 'a' ? 'b' : 'a').catapults) n *= 0.88;
+    }
     return n * (1 - Math.min(0.4, (w.weary[w.lead[side]] || 0) * 0.3));
+  }
+
+  // What siege engines a side brings to a battle: catapults (wherever its
+  // realm has learned to build them) and a ram (when there's a walled town
+  // to break into: the attackers', against the defending town).
+  engines(plan, side) {
+    const civ = this.civ(side === 'a' ? plan.ca : plan.cb);
+    const s = civ && this.realms.capitalOf(civ);
+    const tech = this.sim.tech;
+    if (!s) return { catapults: 0, ram: false };
+    const def = this.ow.settlements[plan.def];
+    const DL = def && this.game.world.layouts.get(def.id);
+    return {
+      catapults: tech.has(s, 'catapults') ? 1 : 0,
+      ram: plan.attacker === side && tech.has(s, 'rams') && !!(DL && DL.walled),
+    };
   }
 
   // Reckon up a battle. `live` (from one fought on the ground) gives the
   // share of each side that fell, and who held the field.
   fight(w, plan, A, Bm, rng, live) {
     const day = Math.floor(plan.at / DAY);
-    const pa = this.armyPower(A, 'a', w);
-    const pb = this.armyPower(Bm, 'b', w);
+    const pa = this.armyPower(A, 'a', w, plan);
+    const pb = this.armyPower(Bm, 'b', w, plan);
     const ta = plan.ta || this.chooseTactic(w, 'a', pa, pb, plan, rng);
     const tb = plan.tb || this.chooseTactic(w, 'b', pb, pa, plan, rng);
     let winner;
@@ -1014,7 +1075,7 @@ export class War {
     w.battles.push(rec);
     if (w.battles.length > 12) w.battles.shift();
     w.plan = null;
-    w.next = day + 2 + rng.int(0, 1);
+    w.next = day + 1 + rng.int(0, 1);
     // Soldiers home again.
     for (const { r } of [...A.recs, ...Bm.recs]) {
       if (r.soldier !== undefined) delete r.soldier;
@@ -1068,11 +1129,65 @@ export class War {
       const s = this.ow.settlements[plan.def];
       const civ = this.civ(winner === 'a' ? plan.ca : plan.cb);
       const cap = s && s.civ && this.realms.isCapital(s);
-      // (Siegecraft: ladders and rams take towns, capitals sooner.)
+      // (Siegecraft: ladders and sappers take towns, capitals sooner.)
       const siege = civ && this.sim.tech.has(civ, 'siegecraft');
-      if (s && civ && s.civ && s.civ !== civ && (!cap || Math.abs(w.score) >= (siege ? 50 : 80)) && rng.chance(Math.min(0.95, (small ? 0.3 : cap ? 0.5 : 0.6) + (siege ? 0.25 : 0)))) this.capture(w, s, civ, day, plan.name);
+      // (Walls make it harder, towers harder still; a ram breaks through
+      // them all but the towers.)
+      const DL = s && this.game.world.layouts.get(s.id);
+      const ram = civ && this.sim.tech.has(civ, 'rams');
+      const towers = s && this.sim.tech.has(s, 'fortress');
+      const walls = DL && DL.walled ? (ram ? 1 : 0.6) * (towers ? 0.75 : 1) : 1;
+      if (s && civ && s.civ && s.civ !== civ && (!cap || Math.abs(w.score) >= (siege ? 50 : 80)) && rng.chance(Math.min(0.95, ((small ? 0.3 : cap ? 0.5 : 0.6) + (siege ? 0.25 : 0)) * walls))) {
+        this.capture(w, s, civ, day, plan.name);
+        // (Where a ram did it: a breach in the wall, to be mended; unless
+        // you saw it knocked in already.)
+        if (ram && DL && DL.walled && !(DL.econ.breached && DL.econ.breached.day === day)) this.breach(DL, plan);
+      }
     }
     return rec;
+  }
+
+  // A ram's work: the stretch of wall nearest the field knocked in, three
+  // paces wide (the town's builders mend it in time). Returns the tiles.
+  breach(L, plan, at = null) {
+    const b = L.bounds;
+    const f = at || plan.site;
+    let best = null;
+    for (let z = b.z0 - 12; z <= b.z1 + 12; z++) {
+      for (let x = b.x0 - 12; x <= b.x1 + 12; x++) {
+        if (L.maskAt(x, z) !== M.WALL) continue;
+        const d = Math.hypot(x - f.x, z - f.z);
+        if (!best || d < best.d) best = { x, z, d };
+      }
+    }
+    if (!best) return [];
+    // Along the wall from there, both ways.
+    const along = L.maskAt(best.x + 1, best.z) === M.WALL || L.maskAt(best.x - 1, best.z) === M.WALL ? [1, 0] : [0, 1];
+    const tiles = [[best.x, best.z]];
+    for (const k of [1, -1]) {
+      const x = best.x + along[0] * k;
+      const z = best.z + along[1] * k;
+      if (L.maskAt(x, z) === M.WALL) tiles.push([x, z]);
+    }
+    const down = [];
+    const up = [];
+    for (const [x, z] of tiles) {
+      for (let y = GROUND + 3; y >= GROUND; y--) down.push([x, y, z, B.air, 0]);
+      for (let y = GROUND; y < GROUND + 3; y++) up.push([x, y, z, B.stone_bricks, 0]);
+      if ((x + z) % 2 === 0) up.push([x, GROUND + 3, z, B.stone_bricks, 0]);
+    }
+    this.sim.setBlocks(down);
+    const g = this.game;
+    if (g.active.has(L.settlement.id)) {
+      for (const [x, z] of tiles) g.renderer.emit(x + 0.5, GROUND + 1, z + 0.5, { n: 14, color: ['#8a8a8a', '#6a625a', '#b8b0a0'], up: 30, speed: 30, life: 1.1, gravity: 40 });
+      g.audio?.play('break', { x: best.x, y: GROUND, z: best.z });
+      if (g.inSight(best.x, best.z, 2)) g.shake = Math.min(1.3, (g.shake || 0) + 0.5);
+    }
+    L.econ.breached = { tiles, day: this.sim.today() };
+    const xs = tiles.map((t) => t[0]);
+    const zs = tiles.map((t) => t[1]);
+    this.sim.works.add({ sid: L.settlement.id, kind: 'mend', blocks: up, bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.3, label: 'mending the breach in the wall' });
+    return tiles;
   }
 
   // The fallen: real people of the towns that sent them.
@@ -1326,16 +1441,17 @@ export class War {
     const out = [];
     const now = this.sim.abs;
     for (const w of this.wars) {
-      if (w.plan) out.push({ x: w.plan.site.x, z: w.plan.site.z, kind: 'battle', label: `${w.plan.name} (tomorrow)` });
-      // The attackers on the march, out of their town toward the field
-      // over the day before (the defenders wait at home).
-      if (w.plan && !w.plan.naval) {
+      if (w.plan) out.push({ x: w.plan.site.x, z: w.plan.site.z, kind: 'battle', label: `${w.plan.name} (${whenText(w.plan.at, now)})` });
+      // The attackers: mustering at home, then on the march to the field
+      // (the defenders wait at home). They're on the ground where the map
+      // says, when you're near enough to see them (see syncMarch).
+      if (w.plan && !w.plan.naval && !w.plan.live) {
+        const m = this.marchPos(w.plan);
         const from = this.ow.settlements[w.plan.atk];
         const civ = this.civ(w.plan.attacker === 'a' ? w.plan.ca : w.plan.cb);
-        if (from && civ) {
-          const c = centreOf(from);
-          const f = Math.max(0, Math.min(1, (now - (w.plan.at - DAY)) / DAY));
-          out.push({ x: c.x + (w.plan.site.x - c.x) * f, z: c.z + (w.plan.site.z - c.z) * f, kind: 'army', color: civ.color.hex, label: `The ${plain(civ)} army, marching on ${this.ow.settlements[w.plan.def]?.name || 'the enemy'}` });
+        if (m && from && civ) {
+          const to = this.ow.settlements[w.plan.def]?.name || 'the enemy';
+          out.push({ x: m.x, z: m.z, kind: 'army', color: civ.color.hex, label: m.f <= 0 ? `The ${plain(civ)} army, mustering at ${from.name} to march on ${to}` : `The ${plain(civ)} army, marching on ${to}` });
         }
       }
       for (const b of w.battles.slice(-3)) out.push({ x: b.site.x, z: b.site.z, kind: 'field', label: b.name });
@@ -1345,6 +1461,99 @@ export class War {
       if (s) out.push({ ...centreOf(s), kind: 'raid', label: `Raiders expected at ${s.name}` });
     }
     return out;
+  }
+
+  // Where the attackers are on their march: mustering in their town until
+  // they set out, then along the way to the field at a steady pace. `f`
+  // how far along; (dx, dz) the way they're heading.
+  marchPos(plan) {
+    const from = this.ow.settlements[plan.via ?? plan.atk];
+    if (!from) return null;
+    const c = centreOf(from);
+    const now = this.sim.abs;
+    const dep = plan.depart ?? plan.at - DAY;
+    const f = clamp((now - dep) / Math.max(1, plan.at - dep), 0, 1);
+    const d = Math.hypot(plan.site.x - c.x, plan.site.z - c.z) || 1;
+    return { x: c.x + (plan.site.x - c.x) * f, z: c.z + (plan.site.z - c.z) * f, f, dx: (plan.site.x - c.x) / d, dz: (plan.site.z - c.z) / d };
+  }
+
+  // The army on the march, on the ground when you're near it: a column of
+  // the soldiers going to fight, in file behind the head of it, walking
+  // where the map shows them (and out of sight again when you've gone).
+  syncMarch() {
+    const g = this.game;
+    const now = this.sim.abs;
+    const want = new Set();
+    for (const w of this.wars) {
+      const plan = w.plan;
+      if (!plan || plan.naval || plan.live || now >= plan.at || (this.live && this.live.kind === 'battle')) continue;
+      const m = this.marchPos(plan);
+      // (Still mustering in town: they're there as the town's own folk.)
+      if (!m || m.f <= 0 || !this.nearPlayer(m, 34)) continue;
+      want.add(w.id);
+      let col = this.columns.get(w.id);
+      if (!col) this.columns.set(w.id, (col = { w, ents: [], tried: false }));
+      if (col.tried) continue;
+      col.tried = true;
+      const rng = new RNG(hash4(w.id, plan.at, 0xba7));
+      const { A, B: Bm } = this.raise(w, plan, rng);
+      const side = plan.attacker;
+      const army = side === 'a' ? A : Bm;
+      let i = 0;
+      for (const { r, L } of army.recs) {
+        if (i >= 10) break;
+        if (r.ent && !r.ent.dead) continue;
+        const back = 2 + i * 1.6;
+        const wide = i % 2 ? 1 : -1;
+        let x = Math.round(m.x - m.dx * back - m.dz * wide);
+        let z = Math.round(m.z - m.dz * back + m.dx * wide);
+        // (Never out of thin air in front of you: further back down the
+        // road, and they catch up.)
+        for (let k = 0; k < 40 && g.inSight(x, z, 1); k += 2) {
+          x = Math.round(x - m.dx * 2);
+          z = Math.round(z - m.dz * 2);
+        }
+        if (g.inSight(x, z, 1)) continue;
+        const e = this.spawn(r, L, x, z, side, 'march', { war: w.id, slot: i, foe: false, home: centreOf(this.ow.settlements[plan.atk]) });
+        if (!e) continue;
+        e.hostileNow = false;
+        e.step = Math.max(e.step, 0.45);
+        col.ents.push(e);
+        i++;
+      }
+    }
+    // A column you've left behind (or one that's become a battle): off out
+    // of sight, and gone.
+    for (const [id, col] of this.columns) {
+      if (want.has(id)) continue;
+      col.ents = col.ents.filter((e) => {
+        if (e.dead || !e.warband || e.warband.kind !== 'march') return false;
+        if (!g.inSight(e.x, e.z, 2)) {
+          g.despawnNpc(e);
+          return false;
+        }
+        return true;
+      });
+      if (!col.ents.length) this.columns.delete(id);
+    }
+  }
+
+  // Someone already about (a townsman in the street, a soldier who marched
+  // here) takes up their place in the line where they stand: nobody
+  // vanishes from one place to appear in another.
+  enlist(n, side, kind, extra) {
+    const L = n.layout;
+    const civ = L.settlement.civ;
+    n.releaseSpot?.();
+    n.state = 'warband';
+    n.activity = null;
+    n.path = null;
+    n.sleeping = false;
+    n.warband = { kind, side, civ: civ ? civ.id : null, foe: true, ...extra };
+    n.hostileNow = true;
+    const col = civ ? civ.color.hex : '#7a6a5a';
+    n.look = { ...n.rec.look, hat: kind === 'raid' ? 'hood' : 'helmet', gear: { ...(n.rec.look.gear || {}), body: `tabard:${kind === 'raid' ? darken(col) : col}` } };
+    return n;
   }
 
   // ------------------------------------------------------------ on the ground
@@ -1396,11 +1605,12 @@ export class War {
       if (x < bd.x0 || x > bd.x1 || z < bd.z0 || z > bd.z1) break;
       k += 2;
     }
-    // Out in the fields on their side (or as near it as the world's loaded).
+    // Out in the fields on their side, out of your sight (or as near it as
+    // the world's loaded).
     let from = null;
-    for (const out of [16, 10, 4]) {
+    for (const out of [16, 22, 28, 34, 10, 4]) {
       const q = { x: Math.round(t.x + ux * (k + out)), z: Math.round(t.z + uz * (k + out)) };
-      if (this.game.world.regionAt(q.x, q.z)) {
+      if (this.game.world.regionAt(q.x, q.z) && (!this.game.inSight(q.x, q.z, 3) || out <= 10)) {
         from = q;
         break;
       }
@@ -1551,7 +1761,7 @@ export class War {
     const ax = { x: (ca.x - cb.x) / d, z: (ca.z - cb.z) / d };
     const perp = { x: -ax.z, z: ax.x };
     const c = plan.site;
-    const live = { kind: 'battle', w, plan, A, B: Bm, t: 0, axis: ax, perp, centre: c, sides: {}, walls: [], done: false };
+    const live = { kind: 'battle', w, plan, A, B: Bm, t: 0, axis: ax, perp, centre: c, sides: {}, walls: [], done: false, go: false };
     for (const [side, army, t] of [['a', A, plan.ta], ['b', Bm, plan.tb]]) {
       const sign = side === 'a' ? 1 : -1;
       const tech = this.sim.tech;
@@ -1572,7 +1782,22 @@ export class War {
         const x = Math.round(c.x + ax.x * (11 + rank * 2) * sign + perp.x * off);
         const z = Math.round(c.z + ax.z * (11 + rank * 2) * sign + perp.z * off);
         const role = t === 'pincer' ? (i % 3 === 0 ? 'left' : i % 3 === 1 ? 'right' : 'centre') : t === 'flank' ? (i < Math.ceil(n * 0.4) ? 'wing' : 'centre') : 'centre';
-        const e = this.spawn(r, L, x, z, side, 'battle', { war: w.id, role, levy: r.job !== 'guard', home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' });
+        const cfg = { war: w.id, role, levy: r.job !== 'guard', home: { x: c.x + ax.x * 40 * sign, z: c.z + ax.z * 40 * sign }, form: { x, z }, phase: 'form' };
+        let e = null;
+        if (r.ent && !r.ent.dead) {
+          // Already about (marched here, or out of the town nearby): into
+          // the line from where they are.
+          e = this.enlist(r.ent, side, 'battle', { ...cfg, phase: 'march' });
+        } else if (this.game.inSight(x, z, 2)) {
+          // In view of you: they come up from behind their lines.
+          let bx = x;
+          let bz = z;
+          for (let k = 0; k < 40 && this.game.inSight(bx, bz, 1); k += 2) {
+            bx = Math.round(bx + ax.x * 2 * sign);
+            bz = Math.round(bz + ax.z * 2 * sign);
+          }
+          e = this.game.inSight(bx, bz, 1) ? null : this.spawn(r, L, bx, bz, side, 'battle', { ...cfg, phase: 'march' });
+        } else e = this.spawn(r, L, x, z, side, 'battle', cfg);
         if (!e) return;
         r.soldier = w.id;
         r.away = true;
@@ -1591,8 +1816,12 @@ export class War {
     }
     // Log walls and stakes, thrown up in front of a side that digs in.
     for (const side of ['a', 'b']) if (live.sides[side].tactic === 'works') this.raiseWorks(live, side);
+    // Catapults behind the lines, and a ram, where the realms have them.
+    fieldEngines(this, live);
     plan.live = true;
     this.live = live;
+    // (A column that marched here is part of it now.)
+    this.columns.delete(w.id);
     const g = this.game;
     // Called up: the other side knows which line you're in.
     if (plan.draft && plan.draft.state === 'called') {
@@ -1623,13 +1852,20 @@ export class War {
           const flank = (k % 2 ? -1 : 1) * (9 + Math.floor(k / 2));
           const x = Math.round(c.x + ax.x * 13 * S.sign + perp.x * flank);
           const z = Math.round(c.z + ax.z * 13 * S.sign + perp.z * flank);
-          if (!g.world.regionAt(x, z)) continue;
-          const y = g.world.findStandY(x, z, GROUND);
+          // (In view of you: they come up from behind, out of sight.)
+          let sx = x;
+          let sz = z;
+          for (let q = 0; q < 40 && g.inSight(sx, sz, 1); q += 2) {
+            sx = Math.round(sx + ax.x * 2 * S.sign);
+            sz = Math.round(sz + ax.z * 2 * S.sign);
+          }
+          if (!g.world.regionAt(sx, sz) || g.inSight(sx, sz, 1)) continue;
+          const y = g.world.findStandY(sx, sz, GROUND);
           if (y <= 0) continue;
-          const spot = g.findFreeSpot(x, z, y);
+          const spot = g.findFreeSpot(sx, sz, y);
           if (!spot) continue;
           const e = this.spawnAt(B0.recFor(band, m, L), L, spot, side, 'battle', {
-            war: w.id, role: 'wing', levy: false, home: { x: c.x + ax.x * 45 * S.sign, z: c.z + ax.z * 45 * S.sign }, form: { x: spot.x, z: spot.z }, phase: 'form',
+            war: w.id, role: 'wing', levy: false, home: { x: c.x + ax.x * 45 * S.sign, z: c.z + ax.z * 45 * S.sign }, form: { x, z }, phase: sx === x && sz === z ? 'form' : 'march',
             merc: band.id, band: band.id, member: m.id,
           });
           e.warband.civ = S.civ ? S.civ.id : null;
@@ -1771,13 +2007,38 @@ export class War {
     }
     const ua = standing('a');
     const ub = standing('b');
-    if (!L.done && (L.sides.a.broken || L.sides.b.broken || L.t > 180 || !ua.length || !ub.length)) this.endLiveBattle(L, ua, ub);
-    // Afterwards: everyone gone (or the field left), the walls come down.
+    workEngines(this, L, 0.25);
+    // The lines drawn up (most of each side in its place, or long enough
+    // waiting for stragglers): it begins.
+    if (!L.go) {
+      const formed = (list) => list.filter((n) => n.warband.phase !== 'march').length >= Math.ceil(list.length * 0.75);
+      if ((formed(ua) && formed(ub)) || L.t > 25) {
+        L.go = true;
+        L.goT = L.t;
+        g.audio?.play('alarm');
+      }
+    }
+    if (!L.done && (L.sides.a.broken || L.sides.b.broken || L.t > 180 + (L.goT || 0) || !ua.length || !ub.length)) this.endLiveBattle(L, ua, ub);
+    // Afterwards: everyone walks off (and is gone once out of sight); the
+    // walls come down when the field's empty, or you've gone.
     if (L.done) {
       L.after = (L.after || 0) + 0.25;
       const left = [...L.sides.a.ents, ...L.sides.b.ents].filter((n) => !n.dead && g.npcs.includes(n));
-      if (!left.length || L.after > 40 || !this.nearPlayer(L.centre, 90)) {
-        for (const n of left) g.despawnNpc(n);
+      const far = !this.nearPlayer(L.centre, 90);
+      if (L.after > 40) {
+        for (const n of left) {
+          if (!g.inSight(n.x, n.z, 2)) g.despawnNpc(n);
+          else if (n.warband && n.warband.phase !== 'flee' && n.warband.phase !== 'won' && !n.down) n.warband.phase = 'flee';
+        }
+      }
+      // (Done with the field after a while either way: anyone still in view
+      // walks off on their own, and is gone once out of sight.)
+      if (!left.length || far || L.after > 45) {
+        for (const n of left) {
+          if (far || !g.inSight(n.x, n.z, 2)) g.despawnNpc(n);
+          else if (n.warband && n.warband.phase !== 'won') n.warband.phase = 'flee';
+        }
+        for (const q of L.walls) if (q.up) g.renderer.emit(q.op[0], q.op[1], q.op[2], { n: 3, color: ['#8a6a3a', '#5a4022'], up: 14, speed: 18, life: 0.4 });
         this.clearWorks(L);
         this.live = null;
       }
@@ -1787,6 +2048,7 @@ export class War {
   endLiveBattle(L, ua, ub) {
     const g = this.game;
     L.done = true;
+    endEngines(L);
     const pa = L.sides.a.start;
     const pb = L.sides.b.start;
     const deadA = L.sides.a.ents.filter((n) => n.dead && !alive(n.rec)).length;
@@ -1802,8 +2064,18 @@ export class War {
     const taken = { a: 0, b: 0 };
     for (const s of ['a', 'b']) for (const n of L.sides[s].ents) {
       if (n.dead || !n.down) continue;
-      if (s !== winner && victor && !n.warband?.merc && this.takePrisoner(n.rec, n.layout, victor, day, L.plan.name)) taken[s]++;
-      else this.wake(n);
+      if (s !== winner && victor && !n.warband?.merc && this.takePrisoner(n.rec, n.layout, victor, day, L.plan.name, null, true)) {
+        taken[s]++;
+        // Hauled up and led off by the victors (to the cells, out of
+        // sight), not gone in a blink.
+        n.down = false;
+        n.sleeping = false;
+        n.hp = Math.max(n.hp, 2);
+        n.warband = { ...n.warband, kind: 'led', phase: 'flee', foe: false, home: L.sides[winner].ents.find((q) => q.warband)?.warband.home || n.warband.home };
+        n.hostileNow = false;
+        n.restrained = true;
+        n.say(n.rng.pick(['I yield...', 'Mercy!', 'Easy, easy...', 'Alright, alright.']), 2, '#c8c8c8');
+      } else this.wake(n);
     }
     // Those who fought here already counted; the rest of each army by the
     // same measure.
@@ -1931,7 +2203,7 @@ export class War {
   // ------------------------------------------------------------ prisoners
   // Taken alive: off to the captor's capital (a free town keeps its own),
   // into a cell. False when there's nowhere to take them.
-  takePrisoner(rec, L, by, day, how, at = null) {
+  takePrisoner(rec, L, by, day, how, at = null, keep = false) {
     if (!rec || !alive(rec) || rec.captive) return false;
     const cap = at !== null ? this.ow.settlements[at] : by ? this.realms.capitalOf(by) : null;
     if (!cap || deserted(cap)) return false;
@@ -1945,7 +2217,7 @@ export class War {
     delete rec.soldier;
     delete rec.raid;
     rec.hp = Math.max(4, rec.hp ?? 4);
-    if (rec.ent && !rec.ent.dead) this.game.despawnNpc(rec.ent);
+    if (rec.ent && !rec.ent.dead && !keep) this.game.despawnNpc(rec.ent);
     this.makeRoom(cap, day);
     return p;
   }
@@ -2002,7 +2274,7 @@ export class War {
     const at = this.ow.settlements[p.at];
     const L = this.game.world.layouts.get(p.sid);
     const days = Math.max(1, day - p.day);
-    const how2 = { exchanged: 'exchanged for prisoners of ours', ransomed: 'ransomed', released: 'set free', escaped: 'escaped', peace: 'freed at the peace' }[how] || how;
+    const how2 = { exchanged: 'exchanged for prisoners of ours', ransomed: 'ransomed', released: 'set free', escaped: 'escaped', peace: 'freed at the peace', worked: 'set free, having worked off their captivity' }[how] || how;
     if (L && L.econ) ledger(L, day, `${p.name} is home after ${days} day${days > 1 ? 's' : ''} as a prisoner in ${at ? at.name : 'the enemy\'s cells'} (${how2}).`);
     return r;
   }
@@ -2132,16 +2404,21 @@ export class War {
         if (!b || b.underConstruction) continue;
         slots.push({ stand: c.tiles[1], bed: c.tiles[0], door: c.door, front: c.front }, { stand: c.tiles[0], bed: c.tiles[0], door: c.door, front: c.front });
       }
+      // (Only out of view, or as the town comes into being round you.)
+      const fresh = a.since === undefined || this.sim.abs - a.since <= 2;
       list.forEach((p, i) => {
         if (this.captiveEnts.has(p.id) || i >= slots.length) return;
         const r = this.recOfPrisoner(p);
         const HL = this.game.world.layouts.get(p.sid);
         if (!r || !HL || (r.ent && !r.ent.dead)) return;
         const slot = slots[i];
+        if (!fresh && g.inSight(slot.stand.x, slot.stand.z, 1)) return;
         // (The watch has the door fixed and locked again.)
         if (slot.door && g.world.getBlock(slot.door.x, GROUND, slot.door.z) === B.cell_door_open) g.world.setBlock(slot.door.x, GROUND, slot.door.z, B.cell_door, 0);
-        const y = g.world.findStandY(slot.stand.x, slot.stand.z, GROUND);
-        if (y <= 0) return;
+        // (On the cell floor: the one by the cot isn't to be found up on
+        // the roof above it.)
+        let y = g.world.findStandY(slot.stand.x, slot.stand.z, GROUND);
+        if (y <= 0 || Math.abs(y - GROUND) > 1) y = GROUND;
         const n = g.spawnWarrior(r, HL, { x: slot.stand.x, y, z: slot.stand.z });
         n.state = 'captive';
         n.captive = { ...slot, p, y };

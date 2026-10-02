@@ -270,6 +270,10 @@ def('placed_item', { solid: false, opaque: false, render: 'placed', standable: f
 // the town's own (the colour bits above CANOPY_SHIFT and the state bit pick
 // one of eight: see DECOR_PALETTES); bunting takes its colours the same way.
 def('festival_banner', { ...sprite, solid: false, tool: 'axe', hardness: 0.3, drop: null, label: 'Banner' });
+// A portal (see sim/portals.js): a stone arch, its middle alight with a
+// slow violet swirl; dark when cut off from the rest of its realm's.
+def('portal', { ...sprite, tall: true, interact: 'portal', tool: 'pick', hardness: 9, light: 11, drop: null, label: 'Portal' });
+def('portal_dark', { ...sprite, tall: true, interact: 'portal', tool: 'pick', hardness: 9, drop: null, label: 'Dark Portal' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

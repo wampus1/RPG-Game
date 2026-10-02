@@ -788,9 +788,11 @@ export class Justice {
     let fine = 0;
     for (const c of proven) fine += CRIMES[c.type].fine + (c.type === 'theft' ? c.value * 2 : 0);
     const mercy = judge ? 1.15 - judge.personality.kindness * 0.3 : 1;
-    fine = Math.round(fine * e.fineScale * mercy * (this.sim.isCitizen(j.sid) ? 0.9 : 1) * (j.how === 'surrender' ? 0.85 : 1));
+    // (Iron law: dearer fines; clemency: shorter terms.)
+    const T = this.sim.tech;
+    fine = Math.round(fine * e.fineScale * mercy * (this.sim.isCitizen(j.sid) ? 0.9 : 1) * (j.how === 'surrender' ? 0.85 : 1) * (T && T.has(s, 'ironlaw') ? 1.5 : 1));
     const coins = countItem(this.game.player.inv, 'coin');
-    const hours = clamp(Math.ceil(fine / HOURLY_RATE), 2, 72);
+    const hours = clamp(Math.ceil((fine / HOURLY_RATE) * (T && T.has(s, 'clemency') ? 0.5 : 1)), 2, 72);
     return {
       sid: j.sid, town: s.name, judgeName: judge ? `${judge.name.first} ${judge.name.last}` : 'The council', judgeTitle: judge ? jobTitle(judge, s) : 'Council',
       charges, proven, fine, hours, coins, canPay: coins >= fine, sentence, citizen: this.sim.isCitizen(j.sid), pleaded: false, prior,

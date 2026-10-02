@@ -716,6 +716,174 @@ export function wagonSprite(banner = null, frame = 0, hood = true) {
   return c;
 }
 
+// ---------------------------------------------------------------- siege engines
+// A catapult from the side, throwing to the left: a wheeled bed, an A-frame
+// with a padded crossbar, and the arm on its axle at the back. Cocked
+// (frame 0) the arm lies back along the bed, its sling cup loaded with a
+// stone; loosed (2) it slams up against the crossbar; 1 is halfway.
+export const CATAPULT_W = 40;
+export const CATAPULT_H = 34;
+export function catapultSprite(frame = 0, banner = null) {
+  const key = `cat:${frame}:${banner || ''}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(CATAPULT_W, CATAPULT_H);
+  const wood = hex('#7a5430');
+  const woodD = shade(wood, 0.68);
+  const woodL = shade(wood, 1.22);
+  const rope = hex('#c8b080');
+  // The bed.
+  p.rect(4, 22, 32, 4, wood);
+  p.hline(4, 35, 22, woodL);
+  p.hline(4, 35, 25, woodD);
+  // The A-frame and its crossbar (padded with a sack).
+  p.line(12, 22, 17, 8, woodD);
+  p.line(22, 22, 17, 8, woodD);
+  p.line(13, 22, 18, 8, wood);
+  p.line(23, 22, 18, 8, wood);
+  p.rect(14, 7, 8, 2, woodL);
+  p.rect(15, 5, 6, 2, rope);
+  // The arm, from its axle at the back of the bed.
+  const ax = 29;
+  const ay = 21;
+  const ang = [Math.PI * 0.94, Math.PI * 0.72, Math.PI * 0.55][Math.max(0, Math.min(2, frame))];
+  const len = 22;
+  const ex = Math.round(ax + Math.cos(ang) * len);
+  const ey = Math.round(ay - Math.sin(ang) * len);
+  p.line(ax, ay, ex, ey, woodL);
+  p.line(ax + 1, ay, ex + 1, ey, woodD);
+  // The cup at its end, with a stone in it while cocked.
+  p.rect(ex - 2, ey - 2, 4, 3, woodD);
+  if (frame === 0) p.rect(ex - 1, ey - 3, 3, 2, hex('#9a9aa4'));
+  // The winch and its rope, back to the arm.
+  p.ellipse(33, 21, 2, 2, woodD);
+  if (frame === 0) p.line(33, 20, ex + 1, ey + 1, rope);
+  // Wheels.
+  for (const cx of [9, 31]) {
+    p.ellipse(cx, 28, 4.5, 4.5, woodD);
+    p.ellipse(cx, 28, 3, 3, wood);
+    p.set(cx, 28, '#2a2024');
+  }
+  // The realm's pennant on a staff at the back.
+  if (banner) {
+    p.vline(37, 6, 22, woodD);
+    p.rect(38, 6, 2, 4, hex(banner));
+  }
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
+// A battering ram from the side, its head to the left: a log with an iron
+// cap slung on chains inside a wheeled shed, roofed with wet hides against
+// fire. `frame` swings the log back (-2) and forward (2).
+export const RAM_W = 46;
+export const RAM_H = 26;
+export function ramSprite(frame = 0, banner = null) {
+  const key = `ram:${frame}:${banner || ''}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(RAM_W, RAM_H);
+  const wood = hex('#6e4c2c');
+  const woodD = shade(wood, 0.66);
+  const woodL = shade(wood, 1.2);
+  const hide = hex('#8a6a4a');
+  // The log (behind the shed's front post), swung on its chains.
+  const off = Math.max(-3, Math.min(3, frame));
+  p.rect(2 + off, 12, 34, 4, hex('#8a6438'));
+  p.hline(2 + off, 35 + off, 12, woodL);
+  p.hline(2 + off, 35 + off, 15, woodD);
+  // Its iron head.
+  p.rect(0 + off, 11, 4, 6, hex('#8a8a96'));
+  p.vline(0 + off, 12, 15, hex('#c8c8d4'));
+  // The shed: posts, a sloped roof of hides.
+  for (const x of [8, 22, 38]) p.vline(x, 6, 20, woodD);
+  for (let x = 6; x <= 41; x++) {
+    const top = 2 + Math.round(Math.abs(x - 23) * 0.12);
+    for (let y = top; y <= top + 3; y++) p.set(x, y, (x + y) % 5 === 0 ? shade(hide, 0.8) : hide);
+  }
+  p.hline(6, 41, 6, shade(hide, 0.6));
+  // Chains from the roof beam to the log.
+  for (const x of [14, 30]) for (let y = 7; y < 12; y += 2) p.set(x + Math.round(off / 2), y, hex('#a0a0aa'));
+  // The bed and wheels.
+  p.rect(6, 19, 36, 3, wood);
+  p.hline(6, 41, 19, woodL);
+  for (const cx of [12, 36]) {
+    p.ellipse(cx, 22, 3.5, 3.5, woodD);
+    p.ellipse(cx, 22, 2, 2, wood);
+  }
+  if (banner) {
+    p.vline(42, 0, 6, woodD);
+    p.rect(43, 0, 2, 3, hex(banner));
+  }
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
+// A trade ship from the side, her bow to the left: a long dark hull with a
+// raised stem and stern, a row of shields along the rail in the realm's
+// colours, one mast and a great square sail (furled on its yard while she's
+// tied up), a pennant at the masthead.
+export const SHIP_W = 76;
+export const SHIP_H = 58;
+export const SHIP_DECK = 38;
+export function shipSprite(banner = null, sail = true) {
+  const key = `ship:${banner || ''}:${sail ? 1 : 0}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(SHIP_W, SHIP_H);
+  const wood = hex('#6a4426');
+  const woodD = shade(wood, 0.62);
+  const woodL = shade(wood, 1.25);
+  const col = banner ? hex(banner) : hex('#b03030');
+  const cloth = hex('#ece4cc');
+  // The hull: a long curve, deepest amidships, stem and stern swept up.
+  for (let x = 2; x <= 73; x++) {
+    const u = (x - 37.5) / 35.5;
+    const top = SHIP_DECK - Math.round(Math.pow(Math.abs(u), 3) * 12);
+    const bottom = SHIP_DECK + 10 - Math.round(Math.pow(Math.abs(u), 2) * 9);
+    for (let y = top; y <= bottom; y++) p.set(x, y, y === top ? woodL : y >= bottom - 1 ? woodD : (y - top) % 3 === 0 ? shade(wood, 0.85) : wood);
+  }
+  // A carved stem post, and the stern's.
+  p.line(2, 26, 5, 30, woodL);
+  p.line(73, 26, 70, 30, woodL);
+  // Shields along the rail.
+  for (let x = 12; x <= 62; x += 7) {
+    p.ellipse(x, SHIP_DECK + 2, 2.5, 2.5, x % 2 ? col : shade(col, 0.8));
+    p.set(x, SHIP_DECK + 2, hex('#e0d090'));
+  }
+  // The mast and its yard.
+  p.vline(37, 4, SHIP_DECK, woodD);
+  p.vline(38, 4, SHIP_DECK, wood);
+  p.hline(18, 57, 8, woodD);
+  if (sail) {
+    // The sail, full of wind: the realm's colour in broad stripes.
+    for (let y = 9; y <= 30; y++) {
+      const bulge = Math.round(Math.sin(((y - 9) / 21) * Math.PI) * 3);
+      for (let x = 19 - bulge; x <= 56 - bulge; x++) {
+        const stripe = Math.floor((x + bulge - 19) / 6) % 2 === 0;
+        p.set(x, y, stripe ? col : cloth);
+      }
+    }
+    p.hline(19, 56, 30, shade(cloth, 0.7));
+  } else {
+    // Furled: a bundle along the yard.
+    p.rect(19, 9, 38, 3, cloth);
+    p.hline(19, 56, 11, shade(cloth, 0.7));
+    for (let x = 22; x <= 54; x += 8) p.vline(x, 9, 11, shade(col, 0.9));
+  }
+  // Rigging to stem and stern.
+  p.line(37, 5, 4, 27, hex('#4a3a2a'));
+  p.line(38, 5, 71, 27, hex('#4a3a2a'));
+  // The pennant.
+  p.rect(39, 1, 6, 2, col);
+  p.set(45, 2, col);
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
 // ---------------------------------------------------------------- items
 const TIER = { wood: ['#a07a4a', '#7a5a34'], stone: ['#9a9aa4', '#6a6a74'], iron: ['#d8d8e4', '#9a9aa8'], gold: ['#f0d040', '#b89820'], steel: ['#b8c8e0', '#6a7a98'] };
 const HANDLE = ['#8a6038', '#5e4024'];

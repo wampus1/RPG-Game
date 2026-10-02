@@ -4,6 +4,7 @@ import { ITEMS } from '../world/items.js';
 import { GROUND, REGION_W, REGION_D, WORLD_TILES_W, WORLD_TILES_D, DAY_MINUTES } from '../config.js';
 import { alive, DAY } from '../sim/econ.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { TECHS, BRANCHES } from '../sim/tech.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -24,6 +25,7 @@ export const COMMANDS = {
   god: { args: '[on|off]', about: 'Nothing can hurt you while it\'s on.' },
   skip: { args: '<days>', about: 'Fast-forward the world so many days (up to 120): towns, realms and wars all carry on.' },
   war: { args: '[realm] [on <realm>] | list | peace', about: 'Start a war: the first realm (yours, or the one you\'re in) declares war on the second. "list" names the realms; "peace" ends the wars of the realm you\'re in.' },
+  learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
 // A realm by name (or part of it).
@@ -119,6 +121,45 @@ export function runCommand(game, text) {
   const p = game.player;
   const ow = game.world.ow;
   switch (cmd) {
+    case 'learn': {
+      const T = sim.tech;
+      const all = Object.keys(TECHS);
+      const first = (words[0] || '').toLowerCase();
+      if (!first) return ['learn <step> | all | list [realm]: e.g. "learn portals", "learn trade ships".'];
+      if (first === 'list') return ['The steps of the tree:', ...BRANCHES.map((b) => `${b.name}: ${all.filter((k) => TECHS[k].branch === b.id).map((k) => k).join(', ')}`)];
+      // (Which realm: named at the end, or yours, or the one you're in.)
+      const here = game.currentSettlement || ow.settlementAt(p.x, p.z);
+      const mine = sim.citizen ? ow.settlements[sim.citizen.sid] : null;
+      let civ = null;
+      let rest = words;
+      for (let i = 1; i < words.length && !civ; i++) {
+        const c = civArg(game, words.slice(i).join(' '));
+        if (c) {
+          civ = c;
+          rest = words.slice(0, i);
+        }
+      }
+      civ ||= (mine && mine.civ) || (here && here.civ) || null;
+      if (!civ) return ['There\'s no realm here to teach: name one at the end ("war list" names them).'];
+      const q = rest.join(' ').toLowerCase().replace(/[_-]/g, ' ').trim();
+      if (q === 'all') {
+        const st = T.stateOf(civ);
+        let n = 0;
+        for (let pass = 0; pass < 8; pass++) {
+          for (const k of all.sort((a, b) => TECHS[a].tier - TECHS[b].tier)) if (!st.done.includes(k) && T.ready(st, k) && T.learn(civ, k, game.day)) n++;
+        }
+        return [`The ${civ.name.replace(/^The /, '')} has learned ${n} more step${n === 1 ? '' : 's'} (${st.done.length} of ${all.length}; the other side of each choice is barred).`];
+      }
+      const id = all.find((k) => k.replace(/_/g, ' ') === q) || all.find((k) => TECHS[k].name.toLowerCase() === q)
+        || all.find((k) => TECHS[k].name.toLowerCase().startsWith(q) || k.startsWith(q.replace(/ /g, '_'))) || all.find((k) => TECHS[k].name.toLowerCase().includes(q));
+      if (!id) return [`No step called "${q}": "learn list" names them.`];
+      const st = T.stateOf(civ);
+      if (st.done.includes(id)) return [`The ${civ.name.replace(/^The /, '')} knows ${TECHS[id].name} already.`];
+      if (T.barred(st, id)) return [`The ${civ.name.replace(/^The /, '')} chose otherwise: ${TECHS[id].name} is barred to it.`];
+      const got = T.learnWithPrereqs(civ, id, game.day);
+      if (!got.includes(id)) return [`Couldn't learn ${TECHS[id].name}: something it needs is barred.`];
+      return [`The ${civ.name.replace(/^The /, '')} has learned ${got.map((k) => TECHS[k].name).join(', ')}.`, TECHS[id].desc];
+    }
     case 'help':
     case '?': {
       if (words[0] && COMMANDS[words[0]]) {

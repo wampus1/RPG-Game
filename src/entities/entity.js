@@ -36,7 +36,8 @@ export class Entity {
   renderPos() {
     if (this.moveT >= 1) return { x: this.x, y: this.y, z: this.z };
     const t = this.moveT;
-    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    // (Most moves ease in and out; a roll bursts away and slows at the end.)
+    const e = this.moveEase === 'out' ? 1 - Math.pow(1 - t, 3) : t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     const dy = this.y - this.fy;
     // Climbing steps arc up a little; drops fall at the end.
     const yArc = dy > 0 ? Math.min(1, t * 1.6) * dy : dy < 0 ? (t > 0.45 ? (t - 0.45) / 0.55 : 0) * dy : 0;
@@ -51,6 +52,7 @@ export class Entity {
     this.fx = this.x;
     this.fy = this.y;
     this.fz = this.z;
+    this.moveEase = null;
     this.game.moveEntity(this, nx, ny, nz);
     this.moveT = 0;
     // (Chilled by frost: slower.)

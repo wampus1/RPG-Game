@@ -715,6 +715,42 @@ function doorOpenSprite(rot, upper) {
 }
 
 // --- sprites (16 x SPR_H, or TALL_H) --------------------------------------------
+function portalArch(lit) {
+  const p = spr(TALL_H);
+  const s = ['#a8a4b4', '#7a7688', '#c8c4d4'];
+  // The field between the pillars.
+  for (let y = 7; y <= 37; y++) {
+    for (let x = 3; x <= 12; x++) {
+      if (!lit) {
+        p.set(x, y, (x * 7 + y * 3) % 11 === 0 ? '#3a3448' : '#1c1826');
+        continue;
+      }
+      // A spiral about the middle: bands of violet and blue, a white heart.
+      const dx = x - 7.5;
+      const dy = (y - 22) * 0.45;
+      const r = Math.hypot(dx, dy);
+      const a = Math.atan2(dy, dx);
+      const band = Math.floor((a / (Math.PI * 2)) * 6 + r * 0.9 + 12) % 3;
+      p.set(x, y, r < 1.2 ? '#ffffff' : ['#9a60e8', '#6a80f0', '#c890ff'][band]);
+    }
+  }
+  // The pillars, block by block.
+  for (const x0 of [0, 13]) {
+    p.rect(x0, 6, 3, 32, s[0]);
+    p.vline(x0, 6, 37, s[2]);
+    for (let y = 10; y < 38; y += 6) p.hline(x0, x0 + 2, y, s[1]);
+  }
+  // The arch, and its keystone.
+  p.rect(0, 3, 16, 4, s[0]);
+  p.hline(0, 15, 3, s[2]);
+  p.hline(1, 14, 6, s[1]);
+  p.rect(6, 1, 4, 4, lit ? '#e0c8ff' : s[1]);
+  p.hline(6, 9, 1, s[2]);
+  // A step at its foot.
+  p.rect(0, 37, 16, 1, s[1]);
+  return p.outline(OUT);
+}
+
 const FLOOR = LH; // y where the cell floor begins inside a prop frame
 
 function spr(h = SPR_H) {
@@ -1419,6 +1455,14 @@ const SPRITES = {
     p.vline(8, 11, 20, '#c8b890');
     p.rect(7, 20, 3, 3, '#7a7a82');
     return p.outline(OUT);
+  },
+  // A portal: two dressed-stone pillars and a keystone arch, a swirl of
+  // violet light between them (or, cut off, a dull dark glass).
+  portal() {
+    return portalArch(true);
+  },
+  portal_dark() {
+    return portalArch(false);
   },
   altar() {
     const p = spr();

@@ -246,7 +246,7 @@ export function tickAttack(game, a, dt) {
     w.offDone = false;
     w.flurried = 0;
     w.t = 0;
-    w.dur = w.st.windup * heftOf(a) * 0.55;
+    w.dur = w.st.windup * heftOf(a) * 0.75;
     a.face(t.x, t.z);
     w.heading = headingTo(a, t);
     w.tiles = tilesFor(a, t, w.st);
@@ -380,7 +380,7 @@ export function resolveHit(game, a, v, st, opts = null) {
         v.guardBroken = 1.0;
         amount *= 0.75;
         text('guard broken!', '#ff9060');
-        game.shake = Math.min(1.4, (game.shake || 0) + 0.5);
+        game.shake = Math.min(1.2, (game.shake || 0) + 0.4);
       }
     } else {
       amount *= 1 - power;
@@ -388,7 +388,7 @@ export function resolveHit(game, a, v, st, opts = null) {
     }
     // Sparks off the shield (or the blade).
     game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
-    if (v.kind === 'player') game.shake = Math.min(1.4, (game.shake || 0) + 0.25);
+    if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
   amount = Math.max(guarding ? 0 : 1, Math.round(amount));
@@ -428,7 +428,7 @@ export function parried(game, v, a) {
   game.hitStop = Math.max(game.hitStop || 0, 0.16);
   game.slowMo = Math.max(game.slowMo || 0, 0.55);
   game.slowMoScale = 0.3;
-  game.shake = Math.min(1.6, (game.shake || 0) + 1.0);
+  game.shake = Math.min(1.3, (game.shake || 0) + 0.8);
   r.flashScreen?.('#fff4c8', 0.22);
   const mx = (v.x + a.x) / 2;
   const mz = (v.z + a.z) / 2;
@@ -513,6 +513,7 @@ export function playerTick(game, p, dt, input, blocked) {
   if (p.riposte > 0) p.riposte -= dt;
   if (p.guardBroken > 0) p.guardBroken -= dt;
   if (p.rollT > 0) p.rollT -= dt;
+  if (p.rollRecover > 0) p.rollRecover -= dt;
   if (p.rollCd > 0) p.rollCd -= dt;
   if (p.commitT > 0) p.commitT -= dt;
   if (p.swing) tickSwing(game, p, dt);
@@ -613,29 +614,40 @@ export function roll(game, p, dirv = null) {
   let y = p.y;
   let n = 0;
   const far = heroHas(game.hero, 'nimble') ? 3 : 2;
-  for (let i = 0; i < far; i++) {
+  // Low and quick, under a swing and past whoever's in the way (you can't
+  // end up on top of them, so on a pace further if that's free).
+  let land = null;
+  for (let i = 0; i < far + 2; i++) {
     const ny = w.stepTarget(x, y, z, x + dx, z + dz, false);
-    if (ny < 0 || game.occupiedBySolid(x + dx, ny, z + dz, p) || w.isWaterAt(x + dx, ny, z + dz)) break;
+    if (ny < 0 || w.isWaterAt(x + dx, ny, z + dz)) break;
     x += dx;
     z += dz;
     y = ny;
     n++;
+    if (!game.occupiedBySolid(x, y, z, p)) land = { x, y, z, n };
+    if (n >= far && land && land.n === n) break;
   }
   spend(p, cost);
-  p.rollT = 0.42 + (far - 2) * 0.1;
+  p.rollT = 0.36 + (far - 2) * 0.08;
+  p.rollDur = p.rollT;
   p.rollCd = 0.75;
+  // (A breath to find your feet again after: a little slower for a moment.)
+  p.rollRecover = p.rollT + 0.32;
+  p.rollDir = [dx, dz];
   p.blocking = false;
   p.sitting = null;
   game.audio?.play('roll', p);
-  game.renderer.emit(p.x, p.y, p.z, { n: 6, color: ['#a89878', '#8a7a5a'], up: 6, speed: 20, life: 0.4, oy: 6, shape: 'puff' });
-  if (n) {
-    p.startMove(x, y, z, 0.16 * n + (from ? 0.06 : 0));
+  game.renderer.emit(p.x, p.y, p.z, { n: 8, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
+  if (land) {
+    // Fast: twice a run's pace, quickest at the start.
+    p.startMove(land.x, land.y, land.z, 0.075 * land.n + (from ? 0.04 : 0));
+    p.moveEase = 'out';
     if (from) {
       p.fx = from.x;
       p.fy = from.y;
       p.fz = from.z;
     }
-    game.onPlayerStep(x, y, z, false);
+    game.onPlayerStep(land.x, land.y, land.z, false);
   }
   return true;
 }

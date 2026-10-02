@@ -32,11 +32,14 @@ export class Hardship {
     const hungry = hungerShare(L);
     e.famineDays = hungry > 0.2 ? (e.famineDays || 0) + 1 : Math.max(0, (e.famineDays || 0) - 2);
     e.poorDays = fortuneOf(L) === 'struggling' ? (e.poorDays || 0) + 1 : Math.max(0, (e.poorDays || 0) - 1);
-    const famine = e.famineDays >= 4;
+    // (Granaries: the stores hold out longer, and feed the poorest first.)
+    const granary = this.sim.tech && this.sim.tech.has(s, 'granaries');
+    const onset = granary ? 6 : 4;
+    const famine = e.famineDays >= onset;
     const poor = e.poorDays >= 8;
-    if (e.famineDays === 4) ledger(L, day, `Famine in ${s.name}: the stores are bare, and families are going to bed hungry.`);
+    if (e.famineDays === onset) ledger(L, day, `Famine in ${s.name}: the stores are bare, and families are going to bed hungry.`);
     // Tempers rise while it lasts (and cool slowly after).
-    if (famine || poor) e.unrest = clamp((e.unrest || 0) + (famine ? 0.25 : 0.1), 0, 3);
+    if (famine || poor) e.unrest = clamp((e.unrest || 0) + (famine ? 0.25 : 0.1) * (granary ? 0.5 : 1), 0, 3);
     const out = {};
     if (!famine && !poor) return out;
     // A crowd at the town hall.

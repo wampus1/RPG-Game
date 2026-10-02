@@ -148,6 +148,8 @@ item('arrow', { value: 1 });
 item('longbow', { name: 'Longbow', kind: 'weapon', stack: 1, damage: 6, reach: 1.2, range: 11, ranged: true, cooldown: 1.25, value: 34, hands: 2 });
 item('crossbow', { name: 'Crossbow', kind: 'weapon', stack: 1, damage: 9, reach: 1.2, range: 10, ranged: true, cooldown: 1.9, value: 58, hands: 2, ammo: 'bolt' });
 item('bolt', { name: 'Crossbow Bolt', value: 2 });
+// What a bow (or crossbow, or sling) shoots.
+export const ammoOf = (key) => (key && ITEMS[key] && ITEMS[key].ammo) || 'arrow';
 item('sling', { name: 'Sling', kind: 'weapon', stack: 1, damage: 3, reach: 1.2, range: 7, ranged: true, cooldown: 0.75, value: 6, ammo: 'cobblestone' });
 item('javelin', { name: 'Javelin', kind: 'weapon', stack: 6, damage: 7, reach: 1.2, range: 7, ranged: true, thrown: true, cooldown: 1.0, value: 9, ammo: 'javelin' });
 

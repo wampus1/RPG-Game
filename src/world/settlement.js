@@ -221,7 +221,19 @@ class Layout {
     }
   }
   col(x, z) {
-    if (!this.inside(x, z)) return this.world.terrain.column(x, z, this.ctx, {});
+    if (!this.inside(x, z)) {
+      // (The ground round the edge, looked at over and over as the town
+      // hunts for lots: worked out once a tile.)
+      this.outCols ||= new Map();
+      const k = x * 65536 + z;
+      let c = this.outCols.get(k);
+      if (!c) {
+        c = this.world.terrain.column(x, z, this.ctx, {});
+        if (this.outCols.size > 40000) this.outCols.clear();
+        this.outCols.set(k, c);
+      }
+      return c;
+    }
     return this.cols[(z - this.bounds.z0) * this.W + (x - this.bounds.x0)];
   }
 
@@ -833,7 +845,6 @@ class Layout {
     const e = side - 1;
     const h = Math.floor(side / 2);
     const b = this.bounds;
-    const terrain = this.world.terrain;
     const p = this.plaza;
     const tileOk = (x, z) => {
       if (this.inside(x, z)) {
@@ -849,7 +860,7 @@ class Layout {
         if (this.builtNear(x, z, null)) return false;
         if (this.outRoads && this.outRoads.has(x * 65536 + z)) return false;
       }
-      const c = terrain.column(x, z, this.ctx, {});
+      const c = this.col(x, z);
       return c.h === SURFACE && c.water < 0 && c.flat >= flat;
     };
     const cands = [];
@@ -2143,13 +2154,12 @@ class Layout {
       }
       // Last resort: just outside the edge, on the flattened fringe.
       if (!best && W === 5 && maxRows === 2) {
-        const terrain = this.world.terrain;
         const tileOk = (x, z) => {
           if (this.inside(x, z)) {
             const m = this.maskAt(x, z);
             return m === M.FREE || m === M.YARD;
           }
-          const c = terrain.column(x, z, this.ctx, {});
+          const c = this.col(x, z);
           return c.h === SURFACE && c.water < 0 && c.flat > 0.6;
         };
         for (let z = b.z0 - D - 2; z <= b.z1 + 2 && !best; z++) {

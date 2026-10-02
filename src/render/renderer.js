@@ -4,7 +4,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -272,8 +272,8 @@ export class Renderer {
     this.cx += (tx - this.cx) * k;
     this.cy += (ty - this.cy) * k;
     if (game.shake > 0 && !this.noShake) {
-      this.cx += (Math.random() - 0.5) * game.shake * 5;
-      this.cy += (Math.random() - 0.5) * game.shake * 5;
+      this.cx += (Math.random() - 0.5) * game.shake * 4;
+      this.cy += (Math.random() - 0.5) * game.shake * 4;
     }
     this.camX = Math.round(this.cx);
     this.camY = Math.round(this.cy);
@@ -284,6 +284,35 @@ export class Renderer {
     this.drawScene(game, dt);
     this.drawOverlays(game);
     this.drawFlashes(game, dt);
+  }
+
+  // A dodge roll: curled up and spinning over the ground (the way you're
+  // rolling), ghosts of you trailing behind, dust kicked up.
+  drawTumble(ctx, e, sheet, dir, sx, top) {
+    const prog = Math.max(0, Math.min(1, 1 - e.rollT / Math.max(0.05, e.rollDur || 0.36)));
+    const [vx] = e.rollDir && this.toViewDir ? this.toViewDir(e.rollDir[0], e.rollDir[1]) : [1, 0];
+    const sign = vx < 0 ? -1 : 1;
+    const trail = (e.rollTrail ||= []);
+    trail.push({ x: sx, y: top });
+    if (trail.length > 5) trail.shift();
+    const cy = SHEET_H * 0.62;
+    const draw = (x, y, ang, alpha, sc) => {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.translate(x + CHAR_W / 2, y - SPR_PAD + cy + 2);
+      ctx.rotate(ang);
+      ctx.scale(sc, sc);
+      ctx.drawImage(sheet, 4 * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, -CHAR_W / 2, -cy, CHAR_W, SHEET_H);
+      ctx.restore();
+    };
+    // (Spun fast at first, settling as it slows.)
+    const spin = sign * (1 - Math.pow(1 - prog, 2)) * Math.PI * 2;
+    for (let i = 0; i < trail.length - 1; i++) draw(trail[i].x, trail[i].y, spin - sign * (trail.length - 1 - i) * 0.7, 0.12 + i * 0.07, 0.82);
+    draw(sx, top, spin, 1, 0.86);
+    if (Math.random() < 0.5 && !this.spin) {
+      const rp = e.renderPos();
+      this.emit(rp.x, rp.y, rp.z, { n: 1, color: ['#a89878', '#8a7a5a'], up: 6, speed: 12, life: 0.35, oy: 7, shape: 'puff', grow: 1 });
+    }
   }
 
   // The whole view lit for an instant (a parry's crack of light).
@@ -706,6 +735,8 @@ export class Renderer {
   // A wagon standing still: its hood, wheels and banner (and whoever's
   // sitting in it).
   drawProp(ctx, e, sx, feetY) {
+    if (e.type === 'catapult' || e.type === 'ram') return this.drawEngine(ctx, e, sx, feetY);
+    if (e.type === 'ship') return this.drawShip(ctx, e, sx, feetY);
     if (e.type !== 'wagon') return;
     const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
     const sh = TEX.misc.shadow;
@@ -716,6 +747,74 @@ export class Renderer {
     // Under the mouse? (To climb in.)
     const m = this.mouse;
     if (m && m.x >= sx - 10 && m.x < sx + 26 && m.y >= feetY - WAGON_H && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
+  }
+
+  // A siege engine, side on, turned toward the enemy: a catapult's arm
+  // cocked, swinging up, thrown; a ram's log swung back and driven in.
+  // Wrecked, it lies dark and still.
+  drawEngine(ctx, e, sx, feetY) {
+    const left = this.sideOf(e);
+    const sh = TEX.misc.shadow;
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 12, feetY - 4, 40, 9);
+    ctx.globalAlpha = 1;
+    let img;
+    let w;
+    let h;
+    if (e.type === 'catapult') {
+      const f = e.broken ? 2 : e.fireT > 0.45 ? 2 : e.fireT > 0 ? 1 : 0;
+      img = catapultSprite(f, e.banner);
+      w = CATAPULT_W;
+      h = CATAPULT_H;
+    } else {
+      // (Back, then in hard: the log's swing over half a second.)
+      const t = e.fireT;
+      const off = e.broken ? 0 : t > 0.3 ? 3 : t > 0 ? -3 : e.moving ? Math.round(Math.sin(this.time * 6)) : 0;
+      img = ramSprite(off, e.banner);
+      w = RAM_W;
+      h = RAM_H;
+    }
+    const x = sx + 8 - Math.round(w / 2);
+    const y = feetY - h + 3;
+    if (e.broken) ctx.filter = 'brightness(0.45) saturate(0.4)';
+    else if (e.flash > 0) ctx.filter = 'brightness(2.2)';
+    this.drawSide(ctx, img, x, y, left);
+    ctx.filter = 'none';
+    // Under the mouse? (To hack at it.)
+    const m = this.mouse;
+    if (m && m.x >= x && m.x < x + w && m.y >= y && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
+  }
+
+  // A trade ship on the water, side on, bobbing: her sail furled at the
+  // pier and set under way; whoever's aboard along the rail; foam at her
+  // bow when she's moving.
+  drawShip(ctx, e, sx, feetY) {
+    const left = this.sideOf(e);
+    const bob = Math.round(Math.sin(this.time * 1.4 + e.id) * 1.2);
+    const x = sx + 8 - Math.round(SHIP_W / 2);
+    const y = feetY - SHIP_H + 12 + bob;
+    // Her shadow on the water.
+    ctx.fillStyle = 'rgba(10,30,60,0.35)';
+    ctx.fillRect(x + 6, feetY + 3, SHIP_W - 12, 3);
+    this.drawSide(ctx, shipSprite(e.banner, !!e.sail), x, y, left);
+    // Those aboard: heads and shoulders above the rail.
+    (e.riders || []).forEach((look, i) => {
+      const sheet = humanoidSheet(look);
+      const px = x + (left ? 24 + i * 7 : SHIP_W - 24 - i * 7);
+      const top = y + SHIP_DECK - 9;
+      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, 12, px - 8, top - SPR_PAD, CHAR_W, 12);
+    });
+    if (e.moving) {
+      ctx.fillStyle = 'rgba(240,248,255,0.8)';
+      const bow = left ? x + 3 : x + SHIP_W - 4;
+      const stern = left ? x + SHIP_W - 6 : x + 5;
+      for (let k = 0; k < 4; k++) {
+        ctx.fillRect(bow + (left ? -k : k), feetY + 1 + ((k + Math.floor(this.time * 8)) % 3), 1, 1);
+        ctx.fillRect(stern + (left ? k * 2 : -k * 2), feetY + 2 + (k % 2), 2, 1);
+      }
+    }
+    const m = this.mouse;
+    if (m && m.x >= x && m.x < x + SHIP_W && m.y >= y && m.y < feetY + 4) this.pickEnt = { e, seq: ++this.pickSeq };
   }
 
   // A fence post with rails to its neighbours (in view directions). Returns
@@ -774,9 +873,9 @@ export class Renderer {
       ctx.drawImage(img, sx + 8 - RAFT_BOX / 2, floorY + 8 - RAFT_BOX / 2 + bob);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
     if (e.flash > 0) ctx.filter = 'brightness(3)';
-    // Rolling: low, quick, half a blur.
-    const rolling = e.kind === 'player' && e.rollT > 0;
-    if (rolling) ctx.globalAlpha = 0.55;
+    // Rolling: a tumble, head over heels, with a blur of afterimages.
+    const rolling = e.kind === 'player' && e.rollT > 0 && !e.mount && !e.raft;
+    if (!rolling && e.rollTrail) e.rollTrail = null;
     if (e.kind === 'creature' && e.species === 'horse') {
       // A horse, bigger than the rest: side on, turned the way it's going.
       const left = this.sideOf(e);
@@ -811,7 +910,7 @@ export class Renderer {
         const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift + lu.y;
         // (A second blade, on the far side of them, goes behind.)
         const offKey = e.offhandItem ? e.offhandItem() : null;
-        if (offKey && (dir === 1 || dir === 3)) this.drawHeld(ctx, offKey, e, sx, top, true);
+        if (offKey && (dir === 1 || dir === 3) && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true);
         // Jewelled armour: a faint glow of its stone's colour round them.
         const worn = e.kind === 'player' ? Object.values(e.equip || {}) : e.rec ? Object.values(e.rec.wear || {}) : [];
         const stone = worn.map((k) => k && ITEMS[k] && ITEMS[k].socket).find(Boolean);
@@ -825,10 +924,11 @@ export class Renderer {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
-        } else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
-        const held = e.heldItem ? e.heldItem() : null;
+        } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
+        else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        const held = e.heldItem && !rolling ? e.heldItem() : null;
         if (held) this.drawHeld(ctx, held, e, sx, top);
-        if (offKey && dir === 0) this.drawHeld(ctx, offKey, e, sx, top, true);
+        if (offKey && dir === 0 && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true);
         sx = sx0;
         // ...and a glint of it now and then.
         if (stone && !this.spin) {
@@ -842,7 +942,6 @@ export class Renderer {
       }
     }
     if (e.flash > 0) ctx.filter = 'none';
-    if (rolling) ctx.globalAlpha = 1;
     // On fire, dazed, chilled.
     if (!e.dead && !this.spin && e.kind !== 'item') {
       const tall = e.kind !== 'creature' || e.species === 'horse';
@@ -1247,6 +1346,23 @@ export class Renderer {
       const l = Math.hypot(dx, dz) || 1;
       const ux = dx / l;
       const uy = dz / l;
+      // A catapult's stone: high in the air, its shadow on the ground
+      // racing to where it'll land.
+      if (a.kind === 'boulder') {
+        const gy = a.y0 + (a.ty - a.y0) * f;
+        const gsy = Math.round(wz * TILE - gy * LH + LH - this.camY);
+        const lift = Math.round(Math.sin(f * Math.PI) * a.arc * LH);
+        ctx.fillStyle = `rgba(0,0,0,${0.15 + f * 0.25})`;
+        const r = 2 + Math.round(f * 2);
+        ctx.fillRect(sx - r, gsy - 1, r * 2, 2);
+        ctx.fillStyle = '#6a6a72';
+        ctx.fillRect(sx - 2, gsy - lift - 3, 4, 4);
+        ctx.fillStyle = '#9a9aa4';
+        ctx.fillRect(sx - 2, gsy - lift - 3, 2, 2);
+        ctx.fillStyle = '#3a3a42';
+        ctx.fillRect(sx + 1, gsy - lift, 1, 1);
+        continue;
+      }
       // A sling stone: a grey pellet, a streak behind it.
       if (a.kind === 'stone') {
         ctx.fillStyle = 'rgba(200,200,200,0.4)';

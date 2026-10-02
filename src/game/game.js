@@ -20,8 +20,12 @@ import { BIOMES } from '../world/biomes.js';
 import { TEX } from '../render/textures.js';
 import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
+import { PortalWindow } from '../ui/portal.js';
 import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
 import { tickFires } from './fire.js';
+import { updateEngines, hitEngine } from './engines.js';
+import { updateShips, sailShips } from './shipping.js';
+import { updateLabor } from '../sim/labor.js';
 import { shieldOf, facing, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
@@ -76,6 +80,8 @@ export class Game {
     };
     this.signIcons = new Map();
     this.projectiles = [];
+    // Siege engines (and other great wooden things) about the place.
+    this.engines = [];
     // Things set down on the ground: "x,y,z" -> { item, count, owner }.
     this.placed = new Map();
     // Wagons standing still, and horses tied up: by what they belong to.
@@ -532,6 +538,13 @@ export class Game {
     return null;
   }
 
+  // Could you see a tile from where you stand (whichever way the camera's
+  // turned)? Anything that appears or vanishes should do it out of sight.
+  inSight(x, z, margin = 0) {
+    const p = this.player;
+    return Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= 18 + margin;
+  }
+
   // Someone (not asleep or sitting) standing on a tile.
   npcAt(x, y, z) {
     for (const yy of [y, y - 1, y + 1]) {
@@ -696,7 +709,7 @@ export class Game {
         if (y > 0 && !this.entityAt(x, y, z)) this.addCreature(new Creature(this, 'chicken', x, y, z));
       }
     }
-    this.active.set(s.id, { layout, npcs });
+    this.active.set(s.id, { layout, npcs, since: this.sim.abs });
     this.sim.checkTownSigns(layout);
     // How the town's doing shows: banners up, or windows boarded.
     if (layout.econ) this.sim.prosperity.dress(layout);
@@ -735,8 +748,20 @@ export class Game {
       for (const rec of L.npcs) {
         if (!alive(rec) || rec.away || rec.leaving || (rec.ent && !rec.ent.dead)) continue;
         if (this.deadNpcs.get(sid)?.has(rec.idx)) continue;
-        const e = L.entrances[rec.idx % Math.max(1, L.entrances.length)] || { x: L.plaza.cx, z: L.plaza.cz };
         const at = this.sim.landed?.(`h${sid}:${rec.idx}`);
+        // In by a road you can't see from where you stand (and if you can
+        // see them all, in a little while: nobody steps out of thin air).
+        const ents = L.entrances.length ? L.entrances : [{ x: L.plaza.cx, z: L.plaza.cz }];
+        const first = rec.idx % ents.length;
+        let e = null;
+        for (let k = 0; k < ents.length && !e; k++) {
+          const q = ents[(first + k) % ents.length];
+          if (!this.inSight(q.x, q.z, 1)) e = q;
+        }
+        rec.backT = (rec.backT || 0) + 2;
+        if (!e && !at && rec.backT < 60) continue;
+        e ||= ents[first];
+        rec.backT = 0;
         const spot = (at && this.findFreeSpot(at.x, at.z, at.y)) || this.findFreeSpot(e.x, e.z, GROUND);
         const n = new NPC(this, rec, L);
         n.teleport(spot.x, spot.y, spot.z);
@@ -794,6 +819,11 @@ export class Game {
       n.repSid = origin.settlement.id;
     }
     n.teleport(spot.x, spot.y, spot.z);
+    // (Out of the portal on the square, in a flash of violet.)
+    if (at && visit.portal) {
+      this.renderer.emit(spot.x + 0.5, spot.y + 1, spot.z + 0.5, { n: 14, color: ['#c080ff', '#80c0ff', '#ffffff'], up: 30, speed: 30, life: 0.7, gravity: -15 });
+      this.audio?.play('portal', n);
+    }
     rec.ent = n;
     a.npcs.push(n);
     this.npcs.push(n);
@@ -1303,8 +1333,20 @@ export class Game {
   skipDays(n) {
     if (this.sleep || this.skipping || this.sim.justice.jail || this.sim.justice.escort || this.player.dead || this.sim.war.live) return false;
     for (const s of [...this.active.keys()].map((id) => this.world.ow.settlements[id])) this.deactivate(s);
+    // Everyone else about (travellers on the road, road crews, soldiers,
+    // bandits by their camp) goes off about their business too, rather than
+    // standing frozen where they were while the days go by: whoever's near
+    // when it's over turns up again then.
+    for (const k of [...(this.caravans || new Map()).keys()]) this.endCaravan(k, this.caravans.get(k));
+    if (this.caravanIn) this.caravanIn.clear();
+    for (const q of this.npcs) if (!q.dead) this.despawnNpc(q);
+    this.npcs = this.npcs.filter((q) => !q.dead);
+    this.engines = [];
+    if (this.shipProps) this.shipProps.clear();
     this.skipping = { left: n * 24, total: n * 24, day0: this.day };
     this.waiting = null;
+    this.mining = null;
+    this.charging = null;
     return true;
   }
 
@@ -1416,6 +1458,10 @@ export class Game {
     this.syncStanding(dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
+    updateEngines(this, dt);
+    updateShips(this, dt);
+    sailShips(this, dt);
+    updateLabor(this, dt);
     // Beasts near you keep pace with racing time too (far off, they idle on).
     const pp = this.player;
     for (const c of this.creatures) {
@@ -1451,7 +1497,7 @@ export class Game {
     this.updateRoadCrews(dt);
     this.updateWeather(dt);
     this.ambientFx(dt);
-    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.2);
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.6);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
     if (this.audio) this.audio.listener = this.player;
     // Entities visible this frame.
@@ -1462,6 +1508,7 @@ export class Game {
     for (const c of this.creatures) if (Math.abs(c.x - p.x) < 26 && Math.abs(c.z - p.z) < 26) vis.push(c);
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
     for (const q of this.props.values()) if (Math.abs(q.x - p.x) < 28 && Math.abs(q.z - p.z) < 28) vis.push(q);
+    for (const q of this.engines) if (Math.abs(q.x - p.x) < 30 && Math.abs(q.z - p.z) < 30) vis.push(q);
     this.visibleEntities = vis;
     if (this.autosaveDue) {
       this.autosaveDue = false;
@@ -1803,10 +1850,17 @@ export class Game {
           continue;
         }
         const held = p.heldDef();
-        if (c && c.place && (held.kind === 'block' || held.plant) && !(c.block && c.block.interact)) {
+        if (c && c.place && held && (held.kind === 'block' || held.plant) && !(c.block && c.block.interact)) {
           this.tryPlace(c.place);
           this.placeRepeat = 0.25;
           this.pending = null;
+          continue;
+        }
+        // A weapon in hand doesn't dig: it swings, at whatever's in front
+        // of you (doors and chests still open with a click).
+        if (held && held.kind === 'weapon') {
+          if (c && c.block && c.block.interact && c.inReach) this.pending = { x: c.x, y: c.y, z: c.z, t: 0 };
+          else this.swingAt();
           continue;
         }
         if (c && c.block && c.inReach) this.pending = { x: c.x, y: c.y, z: c.z, t: 0 };
@@ -1831,7 +1885,7 @@ export class Game {
           this.tryPlace(c.place);
           this.placeRepeat = 0.22;
         }
-      } else if (c.block && c.inReach && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
+      } else if (c.block && c.inReach && !(held && held.kind === 'weapon') && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
         this.mineTick(dt, c);
       } else this.mining = null;
     } else {
@@ -2745,6 +2799,19 @@ export class Game {
       case 'grave':
         this.ui.openSign(this.sim.graveText(x, z), 'GRAVESTONE');
         break;
+      case 'portal': {
+        // A portal: where it can take you (see ui/portal.js).
+        const s = this.world.ow.settlementAt(x, z);
+        const q = s && this.sim.portals.of(s.id);
+        if (!q || q.x !== x || q.z !== z) {
+          this.ui.msg('An old stone arch. Nothing stirs in it.', '#a8a0c8');
+          break;
+        }
+        this.ui.closeAll();
+        this.ui.open(new PortalWindow(this.ui, this, s.id));
+        this.audio?.play('portal', this.player);
+        break;
+      }
       case 'statue': {
         // A hero's statue, or the old one with the town's history cut on
         // the plaque at its foot.
@@ -3204,11 +3271,41 @@ export class Game {
     this.audio?.play(kind === 'stone' || kind === 'javelin' ? 'swing' : 'bow', from);
   }
 
+  // A catapult's stone, lobbed high to come down where it's aimed.
+  lob(from, tx, ty, tz, dmg) {
+    const dist = Math.hypot(tx - from.x, tz - from.z);
+    this.projectiles.push({ from, target: null, x0: from.x, y0: from.y + 2, z0: from.z, tx, ty, tz, t: 0, dur: 1.4 + dist * 0.035, dmg, kind: 'boulder', arc: 2 + dist * 0.28 });
+    this.audio?.play('catapult', from);
+  }
+
+  // Where it comes down: everyone close by is hurt, dust and splinters fly.
+  boulderLands(a) {
+    const x = Math.round(a.tx);
+    const z = Math.round(a.tz);
+    const y = this.world.regionAt(x, z) ? this.world.findStandY(x, z, Math.round(a.ty)) : a.ty;
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) {
+      if (e.dead || e.down || Math.max(Math.abs(e.x - x), Math.abs(e.z - z)) > 1 || Math.abs(e.y - y) > 2) continue;
+      // (Rolled clear of it.)
+      if (e.kind === 'player' && e.rollT > 0) {
+        this.renderer.floatText(e.x, e.y + 2, e.z, 'dodged', '#c8e8ff');
+        continue;
+      }
+      this.damage(e, Math.max(1, Math.round(a.dmg * (e.x === x && e.z === z ? 1 : 0.6))), null);
+    }
+    this.renderer.emit(x + 0.5, y + 0.3, z + 0.5, { n: 18, color: ['#8a8a8a', '#6a5a48', '#a89878', '#5a4a3a'], up: 34, speed: 44, life: 0.9, gravity: 40 });
+    this.audio?.play('impact', { x, y, z });
+    if (this.inSight(x, z, 0)) this.shake = Math.min(1.3, (this.shake || 0) + 0.3);
+  }
+
   updateProjectiles(dt) {
     for (const a of this.projectiles) {
       a.t += dt;
       if (a.t < a.dur) continue;
       a.done = true;
+      if (a.kind === 'boulder') {
+        this.boulderLands(a);
+        continue;
+      }
       const t = a.target;
       let hit = !t.dead && Math.max(Math.abs(t.x - a.tx), Math.abs(t.z - a.tz)) <= 1;
       // An adventurer turns the arrow aside with a blade.
@@ -3476,6 +3573,45 @@ export class Game {
     onSwing(this, p);
   }
 
+  // A swing at the air in front of you (a weapon in hand, nothing under
+  // the mouse to hit): turned toward the mouse, wound up and committed like
+  // any blow, and it lands on whatever foe is in front of you by then.
+  swingAt() {
+    const p = this.player;
+    if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) return false;
+    const def = p.heldDef();
+    if (def && def.ranged) {
+      this.swing();
+      return false;
+    }
+    const ang = this.aimAngle();
+    if (ang !== null) {
+      const ax = Math.cos(ang);
+      const az = Math.sin(ang);
+      if (Math.abs(ax) >= Math.abs(az)) p.face(p.x + Math.sign(ax), p.z);
+      else p.face(p.x, p.z + Math.sign(az));
+    }
+    const st = styleOf(p);
+    const fresh = spend(p, staminaCost(st));
+    p.sitting = null;
+    const s = playerSwing(this, p, null, false, () => {
+      const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
+      const ahead = { x: p.x + fx, y: p.y, z: p.z + fz };
+      const reach = st.thrust ? st.reach : 1;
+      const tiles = st.sweep ? sweepTiles(p, ahead) : [...Array(reach).keys()].map((k) => ({ x: p.x + fx * (k + 1), z: p.z + fz * (k + 1) }));
+      const foe = this.foesOn(tiles, p)[0] || this.creatures.find((q) => !q.dead && q.species !== 'horse' && !q.leadBy && !q.leadTied && !q.tie && tiles.some((t) => t.x === q.x && t.z === q.z) && Math.abs(q.y - p.y) <= 1);
+      if (foe) return this.landBlow(foe, false, fresh, st);
+      // (Nothing there: a whoosh through the air.)
+      strikeAnim(p, st);
+      p.doAction(0.25);
+      this.audio?.play('swing');
+      onSwing(this, p);
+      return false;
+    });
+    p.attackCd = s.dur + (def && def.cooldown ? def.cooldown : 0.4) * cooldownMult(this.hero) * swingMult(p) * (fresh ? 1 : 1.7) / (1 + buffOf(this, 'haste'));
+    return true;
+  }
+
   // Which way the movement keys are held (in world terms), or null.
   heldMove() {
     const input = this.input;
@@ -3490,6 +3626,15 @@ export class Game {
 
   attack(target, heavy = false) {
     const p = this.player;
+    // (A siege engine: hacked at, like any timber.)
+    if (target.kind === 'prop' && (target.type === 'catapult' || target.type === 'ram')) {
+      if (p.attackCd > 0 || p.swing) return;
+      if (Math.max(Math.abs(target.x - p.x), Math.abs(target.z - p.z)) > 2) return this.swing();
+      p.face(target.x, target.z);
+      this.swing();
+      hitEngine(this, target, Math.max(2, Math.round((p.heldDef()?.damage || 2) * (p.heldDef()?.tool === 'axe' ? 2 : 1))));
+      return;
+    }
     if (target.kind === 'prop') return this.swing();
     if (p.attackCd > 0 || p.swing || p.commitT > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
     const def = p.heldDef();
@@ -3622,7 +3767,7 @@ export class Game {
   impact(target, power = 1, st = null) {
     const r = this.renderer;
     this.hitStop = Math.max(this.hitStop || 0, power > 1 ? 0.085 : 0.045);
-    this.shake = Math.min(1.6, (this.shake || 0) + (power > 1 ? 0.4 : 0.16));
+    this.shake = Math.min(1.3, (this.shake || 0) + (power > 1 ? 0.3 : 0.12));
     r.emit(target.x, target.y + 1.1, target.z, { n: power > 1 ? 10 : 5, color: ['#ffffff', '#fff4c0', '#ffd080'], up: 30, speed: power > 1 ? 90 : 60, life: 0.22, glow: true, gravity: 60 });
     if (st && (st.heavy || st.stagger)) r.emit(target.x, target.y, target.z, { n: 5, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
     if (power > 1) r.effect?.({ type: 'ring', wx: target.x, wy: target.y, wz: target.z, r0: 2, r1: 12, color: '#fff0c0', life: 0.25, oy: -12, flat: 0.6 });
@@ -3702,7 +3847,7 @@ export class Game {
     this.audio?.play(target.kind === 'player' ? 'hurt' : 'hit', target);
     if (target.kind === 'player') {
       // It hurts: the screen jolts, and reddens at the edges.
-      this.shake = Math.min(1.6, this.shake + 0.6 + Math.min(0.5, amount * 0.06));
+      this.shake = Math.min(1.3, this.shake + 0.45 + Math.min(0.4, amount * 0.05));
       this.hurtFlash = Math.min(1, (this.hurtFlash || 0) + 0.55 + Math.min(0.35, amount * 0.05));
       this.hitStop = Math.max(this.hitStop || 0, 0.05);
       if (source && source.name) this.ui.msg(`${source.name} hits you for ${amount}!`, '#ff7060', true);
@@ -4145,6 +4290,11 @@ export class Game {
         if (Math.abs(c.x - this.player.x) > 22 || Math.abs(c.z - this.player.z) > 22) continue;
         if (Math.random() < 0.35) r.emit(c.x, c.y, c.z, { n: 1, color: ['#8a8a92', '#a8a8b0', '#6a6a72'], up: 10, speed: 8, gravity: -6, life: 2.4, size: 2, oy: -2 });
       }
+    }
+    // Portals alight: motes of violet drifting up out of the arch.
+    for (const q of Object.values(this.sim.portals.list)) {
+      if (!q.lit || !this.active.has(q.sid) || Math.abs(q.x - this.player.x) > 20 || Math.abs(q.z - this.player.z) > 20) continue;
+      if (Math.random() < 0.6) r.emit(q.x + 0.3 + Math.random() * 0.4, GROUND + 0.4 + Math.random() * 1.2, q.z + 0.5, { n: 1, color: ['#c890ff', '#9a60e8', '#a0c0ff', '#ffffff'], up: 12, speed: 6, gravity: -8, life: 1.2, glow: true });
     }
     if (!this.isDay()) {
       for (const s of r.lighting.sources) {

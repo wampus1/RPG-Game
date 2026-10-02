@@ -62,7 +62,9 @@ export class Diplomacy {
     const road = this.roads.some((r) => r.done && ((r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id)));
     // (Caravan law: protected roads, quicker going.)
     const law = this.sim.tech && (this.sim.tech.has(a, 'caravan_law') || this.sim.tech.has(b, 'caravan_law'));
-    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1));
+    // (Lodestones: compasses keep everyone on the shortest way.)
+    const lode = this.sim.tech && (this.sim.tech.has(a, 'lodestones') || this.sim.tech.has(b, 'lodestones'));
+    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1) * (lode ? 0.85 : 1));
   }
 
   neighbours(s, max = 14) {

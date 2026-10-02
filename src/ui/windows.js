@@ -1280,7 +1280,7 @@ export class MapWindow extends Window {
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village [■] town ┌┐ city ─ road † ruin X battle ! raid ▲ bandits', C.faint);
+    g.text(2, y0 + 2, '⌂ village [■] town ┌┐╔╗ city ─ road † ruin X battle ! raid ▲ bandits', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
   }
@@ -1520,9 +1520,12 @@ export function settlementIcons(game) {
   const ow = game.world.ow;
   const out = new Map();
   let reach = null;
+  // (A place that's grown a size has its bigger mark: into the squares it
+  // has spread onto if it can, else onto open ground beside it.)
+  let spill = false;
   const taken = (cx, cz, s) => {
     const c = ow.cell(cx, cz);
-    if (!c || !reach.has(cz * 10000 + cx)) return true;
+    if (!c || (!spill && !reach.has(cz * 10000 + cx))) return true;
     const o = out.get(cz * 10000 + cx);
     return (c.settlement !== null && c.settlement !== s.id) || (o && o.s !== s) || c.biome === 'ocean';
   };
@@ -1530,6 +1533,7 @@ export function settlementIcons(game) {
   for (const s of list) {
     const [w, h] = ICON_SIZE[s.type] || [1, 1];
     reach = reachedCells(s);
+    spill = !!s.baseType && s.baseType !== s.type;
     // Start from the squares it was founded on, then grow sideways and down
     // (or up and left if there's no room).
     let x0 = s.cx;
@@ -1564,8 +1568,9 @@ export function settlementIcons(game) {
         let shade = 0.35;
         if (cw === 1 && ch === 1) glyph = s.type === 'village' ? ' ⌂' : s.type === 'town' ? '[]' : '▓▓';
         else if (ch === 1) {
-          glyph = dx === 0 ? '[■' : '■]';
-          shade = 0.5;
+          // (A city squeezed onto one row still reads as a city.)
+          glyph = s.type === 'city' ? (dx === 0 ? '╠▓' : '▓╣') : dx === 0 ? '[■' : '■]';
+          shade = s.type === 'city' ? 0.6 : 0.5;
         } else {
           const [tl, tr, bl, br] = walled ? ['╔═', '═╗', '╚═', '═╝'] : ['┌─', '─┐', '└─', '─┘'];
           glyph = dz === 0 ? (dx === 0 ? tl : tr) : dx === 0 ? bl : br;

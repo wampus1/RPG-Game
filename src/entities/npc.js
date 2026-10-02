@@ -7,7 +7,7 @@ import { NPC_STEP_TIME, GROUND, SURFACE } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
 import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
-import { ITEMS, rollDrops } from '../world/items.js';
+import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
@@ -17,6 +17,7 @@ import { fortuneOf } from '../sim/prosperity.js';
 import { beginAttack, tickAttack, inReach, styleOf, offhandOf } from '../game/combat.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
+import { laborTick } from '../sim/labor.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -129,6 +130,8 @@ export class NPC extends Entity {
   heldItem() {
     if (this.sleeping) return null;
     if (this.state === 'roadwork' || this.state === 'roadhome') return this.crew && this.crew.slot % 2 ? 'stone_pickaxe' : 'iron_shovel';
+    // (A prisoner on the work gang: a pick or an axe.)
+    if (this.state === 'labor') return this.labor ? this.labor.tool : null;
     // Raiders come with torches lit; soldiers and riders with blades out.
     if (this.state === 'captive' || this.down) return null;
     if (this.state === 'warband') return this.warband && this.warband.torch && this.warband.phase !== 'flee' ? 'torch' : this.weapon();
@@ -186,7 +189,15 @@ export class NPC extends Entity {
 
   canShoot() {
     const w = this.weapon();
-    return w && ITEMS[w].ranged && invCount(this.rec.inv || [], 'arrow') > 0;
+    return w && ITEMS[w].ranged && invCount(this.rec.inv || [], ammoOf(w)) > 0;
+  }
+
+  // Loose what's drawn: an arrow, or a crossbow's bolt.
+  loose(t, dmg) {
+    const w = this.weapon();
+    const ammo = ammoOf(w);
+    invTake(this.rec.inv, ammo, 1);
+    this.game.shoot(this, t, dmg, ammo === 'bolt' ? 'bolt' : 'arrow');
   }
 
   // ------------------------------------------------------------ placement
@@ -416,6 +427,10 @@ export class NPC extends Entity {
         return s ? { x: s.x, y: s.y, z: s.z, face: s.face, tag: 'forage', hunt: true, trap: s.trap } : roadTile();
       }
       case 'travel': {
+        // Off by ship: out along the pier, and aboard.
+        if (e.place === 'dock' && e.target) return { x: e.target.x, y: GROUND, z: e.target.z, near: 0, leave: true };
+        // ...or through the portal on the square: up to the arch, and in.
+        if (e.place === 'portal' && e.target) return { x: e.target.x, y: GROUND, z: e.target.z, near: 1, leave: true, portal: true };
         const ents = L.entrances.length ? L.entrances : [{ x: L.bounds.x0 + 1, z: L.plaza.cz }];
         let best = ents[0];
         for (const q of ents) if (Math.abs(q.x - this.x) + Math.abs(q.z - this.z) < Math.abs(best.x - this.x) + Math.abs(best.z - this.z)) best = q;
@@ -1014,6 +1029,9 @@ export class NPC extends Entity {
       case 'captive':
         captiveTick(this, dt);
         break;
+      case 'labor':
+        laborTick(this, dt);
+        break;
       // Townsfolk on the wrong side of the law (see society.js).
       case 'crime':
         this.game.sim.society.crimeTick(this, dt);
@@ -1535,7 +1553,7 @@ export class NPC extends Entity {
     }
     // A guard watching over a miner goes where they go, and home with them.
     // (Keeping an eye on you after curfew is a watch of another kind.)
-    if (this.act === 'watch' && !(this.rec.override && this.rec.override.curfew)) {
+    if (this.act === 'watch' && !(this.rec.override && (this.rec.override.curfew || this.rec.override.labor))) {
       const o = this.rec.override;
       const ward = o && this.layout.npcs[o.ward];
       const we = ward && ward.ent;
@@ -1615,7 +1633,12 @@ export class NPC extends Entity {
     const g = this.goal;
     const act = this.act;
     if (g.leave) {
-      // Out on the road: gone until they come back.
+      // Out on the road: gone until they come back. (Into a portal: in a
+      // flash of violet.)
+      if (g.portal) {
+        this.game.renderer.emit(this.x + 0.5, this.y + 1, this.z + 0.5, { n: 14, color: ['#c080ff', '#80c0ff', '#ffffff'], up: 30, speed: 30, life: 0.7, gravity: -15 });
+        this.game.audio?.play('portal', this);
+      }
       this.game.despawnNpc(this);
       return;
     }
@@ -2323,8 +2346,7 @@ export class NPC extends Entity {
       if (this.attackCd <= 0) {
         this.attackCd = 1.6;
         this.doAction(0.3);
-        invTake(this.rec.inv, 'arrow', 1);
-        this.game.shoot(this, c, this.attackDamage(true));
+        this.loose(c, this.attackDamage(true));
       }
       return;
     }
@@ -2722,7 +2744,7 @@ export class NPC extends Entity {
       }
       // Bow out at a distance, blade up close.
       const bow = this.rec.equipment.items.find((i) => ITEMS[i.item]?.ranged);
-      this.drawnBow = !!(bow && d >= 3 && invCount(this.rec.inv || [], 'arrow') > 0);
+      this.drawnBow = !!(bow && d >= 3 && invCount(this.rec.inv || [], ammoOf(bow.item)) > 0);
       if (this.drawnBow && d <= 8 && Math.abs(t.y - this.y) <= 2) {
         this.face(t.x, t.z);
         if (this.aimShot(t, dt, 1.1)) return;
@@ -2774,10 +2796,11 @@ export class NPC extends Entity {
     this.aim.tz = t.z;
     if (this.aim.t < this.aim.dur) return true;
     this.aim = null;
-    this.attackCd = cd;
+    // (A crossbow takes longer to wind again.)
+    const w = this.weapon();
+    this.attackCd = cd * (w && ITEMS[w].cooldown ? Math.max(1, ITEMS[w].cooldown / 0.9) : 1);
     this.doAction(0.3);
-    invTake(this.rec.inv, 'arrow', 1);
-    this.game.shoot(this, t, this.attackDamage(true));
+    this.loose(t, this.attackDamage(true));
     return false;
   }
 

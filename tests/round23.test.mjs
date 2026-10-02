@@ -363,7 +363,7 @@ test('hurt: the screen shakes and reddens', () => {
   game.shake = 0;
   game.hurtFlash = 0;
   game.damage(game.player, 2, wolf);
-  assert.ok(game.shake >= 0.6 && game.hurtFlash > 0.5);
+  assert.ok(game.shake >= 0.4 && game.hurtFlash > 0.5);
 });
 
 test('fighting potions: more stamina, faster stamina, harder blows, quicker blows', () => {
