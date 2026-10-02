@@ -18,10 +18,16 @@ export const SCREEN_TILES_H = VIEW_H / TILE; // 18
 export const REGION_W = SCREEN_TILES_W * 2; // 64 tiles
 export const REGION_D = SCREEN_TILES_H * 2; // 36 tiles
 export const WORLD_Y = 16; // number of vertical layers
-export const MAP_W = 36; // world map width in regions
-export const MAP_H = 26; // world map height in regions
+export const MAP_W = 40; // world map width in regions
+export const MAP_H = 29; // world map height in regions
 export const WORLD_TILES_W = MAP_W * REGION_W;
 export const WORLD_TILES_D = MAP_H * REGION_D;
+// Places apart from the island (a dungeon's floor, the deck of a ship at
+// sea) are laid out far off to the east, past the edge of the map, in
+// regions of their own that only exist while you're there: see
+// World.inst. Region x indices from INST_RX on belong to them.
+export const INST_RX = 2000;
+export const INST_X0 = INST_RX * REGION_W;
 
 // Standing level on flat ground: the surface block sits at GROUND-1 and
 // creatures stand (feet) at GROUND. Water surfaces sit flush with the ground.

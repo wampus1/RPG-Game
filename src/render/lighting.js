@@ -23,6 +23,10 @@ export function skyLight(minute) {
   return night;
 }
 
+// Below ground there's no sky at all: what you see is what's lit.
+const DARK = [0.075, 0.07, 0.095];
+const DARK_KAV = [0.06, 0.075, 0.11];
+
 export class Lighting {
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -32,16 +36,19 @@ export class Lighting {
     this.flood = null;
     this.samples = null;
     this.glow = this.makeGlow();
+    this.coldGlow = this.makeGlow([140, 230, 255]);
+    this.eflood = null;
   }
 
-  makeGlow() {
+  makeGlow(rgb = null) {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
     const g = c.getContext('2d');
     const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grd.addColorStop(0, 'rgba(255,190,110,0.55)');
-    grd.addColorStop(0.35, 'rgba(255,150,70,0.22)');
-    grd.addColorStop(1, 'rgba(255,120,40,0)');
+    const [r, gg, b] = rgb || [255, 190, 110];
+    grd.addColorStop(0, `rgba(${r},${gg},${b},0.55)`);
+    grd.addColorStop(0.35, `rgba(${r},${Math.round(gg * 0.8)},${Math.round(b * 0.65)},0.22)`);
+    grd.addColorStop(1, `rgba(${r},${Math.round(gg * 0.6)},${Math.round(b * 0.35)},0)`);
     g.fillStyle = grd;
     g.fillRect(0, 0, 64, 64);
     return c;
@@ -58,7 +65,7 @@ export class Lighting {
           const b = BLOCKS[id];
           if (!b.light) continue;
           if (b.lightWhenState && !(world.getMeta(x, y, z) & META_STATE)) continue;
-          out.push({ x, y, z, L: b.light });
+          out.push({ x, y, z, L: b.light, cold: b.name.startsWith('kav_') });
         }
       }
     }
@@ -69,7 +76,8 @@ export class Lighting {
     const world = game.world;
     const ctx = r.ctx;
     const player = game.player;
-    const sky = skyLight(game.minute);
+    const below = !!game.dungeon;
+    const sky = below ? (game.dungeon.kav ? DARK_KAV : DARK) : skyLight(game.minute);
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the
@@ -96,9 +104,10 @@ export class Lighting {
       }
       game.lightDirty = false;
     }
-    if (dayFull && !indoor) return;
-    // The player always carries a faint light so they stay visible at night.
-    const pl = Math.max(player.lightLevel, 4);
+    if (dayFull && !indoor && !below) return;
+    // The player always carries a faint light so they stay visible at night
+    // (fainter below ground: down there, a torch matters).
+    const pl = Math.max(player.lightLevel, below ? 3 : 4);
     const pKey = `${player.x},${player.y},${player.z},${pl}`;
     if (!this.pflood || this.pflood.key !== pKey) {
       const R = pl;
@@ -114,6 +123,14 @@ export class Lighting {
     if (!this.samples || this.samples.k0 !== k0 || this.samples.m0 !== m0 || this.samples.hKey !== hKey) {
       this.samples = { k0, m0, hKey, pts: this.sampleSurfaces(r, world, k0, m0, SW, SH) };
     }
+    // Lights that move: torches carried, wisps, the Kavorent's constructs.
+    const ents = game.entityLights ? game.entityLights() : [];
+    const eKey = ents.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';');
+    if (!this.eflood || this.eflood.key !== eKey || this.eflood.x0 !== this.flood.x0 || this.eflood.z0 !== this.flood.z0) {
+      const F0 = this.flood;
+      this.eflood = ents.length ? { key: eKey, x0: F0.x0, z0: F0.z0, W: F0.W, D: F0.D, ...this.floodFill(world, ents, F0.x0, F0.z0, F0.W, F0.D) } : { key: eKey, x0: F0.x0, z0: F0.z0, W: 0, D: 0 };
+    }
+    const EF = this.eflood;
     const F = this.flood;
     const PF = this.pflood;
     const pts = this.samples.pts;
@@ -121,6 +138,8 @@ export class Lighting {
       this.canvas.width = SW;
       this.canvas.height = SH;
     }
+    // (The Kavorent's halls are lit cold.)
+    const tint = below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
     const img = this.ctx.createImageData(SW, SH);
     const px = img.data;
     const lightAt = (G, s) => {
@@ -138,13 +157,16 @@ export class Lighting {
       let amb = 1;
       let t = 0;
       if (s) {
-        t = Math.max(lightAt(F, s), lightAt(PF, s));
-        if (s.indoor) amb = 0.58;
+        t = Math.max(lightAt(F, s), lightAt(PF, s), EF.W ? lightAt(EF, s) : 0);
+        if (s.indoor && !below) amb = 0.58;
+        // (Below ground, what light there is carries: a torch's circle is
+        // warm and clear, and the dark beyond it the darker for it.)
+        if (below) t = Math.min(1.15, t * 1.4);
       }
       const o = i * 4;
-      px[o] = Math.min(255, (sky[0] * amb + t * 1.05) * 255);
-      px[o + 1] = Math.min(255, (sky[1] * amb + t * 0.78) * 255);
-      px[o + 2] = Math.min(255, (sky[2] * amb + t * 0.46) * 255);
+      px[o] = Math.min(255, (sky[0] * amb + t * tint[0]) * 255);
+      px[o + 1] = Math.min(255, (sky[1] * amb + t * tint[1]) * 255);
+      px[o + 2] = Math.min(255, (sky[2] * amb + t * tint[2]) * 255);
       px[o + 3] = 255;
     }
     this.ctx.putImageData(img, 0, 0);
@@ -159,7 +181,8 @@ export class Lighting {
     if (dark > 0.15) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const glowSources = player.lightLevel > 4 ? [...this.sources, { x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true }] : this.sources;
+      const mine = player.lightLevel > 4 ? [{ x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true, cold: player.heldLightKind && player.heldLightKind() === 'cold' }] : [];
+      const glowSources = [...this.sources, ...mine, ...ents.map((q) => ({ ...q, player: true }))];
       for (const s of glowSources) {
         if (s.x < x0 - 2 || s.x > x1 + 2 || s.z < z0 - 2 || s.z > z1 + 2) continue;
         if (r.isHidden(s.x, s.y, s.z)) continue;
@@ -172,8 +195,8 @@ export class Lighting {
         const sy = sv * TILE - s.y * LH - r.camY + LH + 2;
         if (sx < -40 || sy < -40 || sx > VIEW_W + 40 || sy > VIEW_H + 40) continue;
         const size = 20 + s.L * 3;
-        ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08);
-        ctx.drawImage(this.glow, sx - size / 2, sy - size / 2, size, size);
+        ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08) * (s.dim ?? 1);
+        ctx.drawImage(s.cold ? this.coldGlow : this.glow, sx - size / 2, sy - size / 2, size, size);
       }
       ctx.restore();
     }

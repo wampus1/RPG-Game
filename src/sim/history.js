@@ -157,6 +157,8 @@ export class History {
     pool.push(() => ({ y: at(0.1, 0.9), text: `A star with a burning tail hung over ${s.name} for nine nights.`, kind: 'omen' }));
     if (s.civ) pool.push(() => ({ y: at(0.6, 0.98), text: `${s.name} swore itself to the ${s.civ.name.replace(/^The /, '')}.`, kind: 'realm' }));
     for (const f of rng.shuffle(pool).slice(0, s.type === 'city' ? 6 : s.type === 'town' ? 4 : 3)) entries.push(f());
+    // The old places near it: what happened there, and when.
+    for (const d of this.sim.dungeons ? this.sim.dungeons.forTown(s.id) : []) entries.push({ y: d.origin.y, text: d.origin.short.replace(/^\w/, (ch) => ch.toUpperCase()), kind: 'dungeon' });
     entries.sort((a, b) => a.y - b.y);
     // Known for.
     const c = cuisineOf(s);

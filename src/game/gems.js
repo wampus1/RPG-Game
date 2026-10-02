@@ -93,7 +93,7 @@ export function gemText(key) {
 export function shieldGem(e) {
   const k = e && (e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield);
   const it = k && ITEMS[k];
-  return it && it.block ? it.socket || null : null;
+  return it && it.block && it.kind === 'armor' ? it.socket || null : null;
 }
 
 // The stones someone carries into a fight: in the blade they swing, the

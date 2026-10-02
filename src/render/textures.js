@@ -5,6 +5,7 @@ import { TILE, LH } from '../config.js';
 import { BLOCKS, CROPS } from '../world/blocks.js';
 import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
+import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -248,6 +249,8 @@ function straw(p, pal, rand, rot = 0) {
 
 // --- cube faces -------------------------------------------------------------
 function cubeTop(name, v, rand, rot) {
+  const dt = dungeonTop(name, v, rand, rot);
+  if (dt) return dt;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -495,6 +498,8 @@ function leavesTex(p, pal, rand, snowy, front = false) {
 }
 
 function cubeFront(name, v, rand, rot) {
+  const df = dungeonFront(name, v, rand, rot);
+  if (df) return df;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -1660,6 +1665,7 @@ const SPRITES = {
 
 // --- plants -------------------------------------------------------------------
 function plantSprite(name, v, rand) {
+  if (name === 'bones') return bonesSprite(v, rand);
   const p = spr();
   const base = 25;
   const blade = (x, h, c, lean = 0) => {
@@ -1861,6 +1867,8 @@ function cropSprite(name, stage, stages, rand) {
 }
 
 function flatSprite(name, v, rand) {
+  const dfl = dungeonFlat(name, v, rand);
+  if (dfl) return dfl;
   const p = new Px(16, 16);
   if (name === 'lily_pad') {
     p.ellipse(7 + (v % 2), 8, 5, 4, '#3e8a2e');
@@ -1928,8 +1936,10 @@ function crackOverlay(stage) {
 
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
-const CUBE_ROT_FRONT = new Set(['bookshelf']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2 };
+const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, ...DANIM };
+Object.assign(SPRITES, DSPRITES);
+export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;

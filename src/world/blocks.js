@@ -278,6 +278,56 @@ def('portal_dark', { ...sprite, tall: true, interact: 'portal', tool: 'pick', ha
 // where a dirt track would vanish into the dunes.
 def('flagstone', { tool: 'pick', hardness: 0.8, drop: 'cobblestone', label: 'Flagstone Path' });
 
+// --- below ground ---------------------------------------------------------------
+// Dungeons (see world/dungeongen.js and game/dungeon.js): the stone of each
+// kind of place, and what's down there with it. Walls are slow to dig
+// through (a dungeon is a maze for a reason); a few things give way.
+def('barrow_stone', { tool: 'pick', hardness: 6, drop: 'cobblestone', label: 'Barrow Stones' });
+def('barrow_earth', { tool: 'shovel', hardness: 3, drop: 'dirt', label: 'Packed Earth' });
+def('crypt_brick', { tool: 'pick', hardness: 7, drop: 'cobblestone', label: 'Crypt Bricks' });
+def('crypt_floor', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Crypt Flagstones' });
+def('mine_rock', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Deep Rock' });
+def('mine_beam', { tool: 'axe', hardness: 4, drop: 'planks', label: 'Pit Props' });
+def('cave_rock', { tool: 'pick', hardness: 5, drop: 'cobblestone', label: 'Cave Rock' });
+def('bones', { ...plant, drop: [{ item: 'bone', chance: 0.6 }], label: 'Old Bones' });
+def('coffin', { ...sprite, solid: true, interact: 'coffin', rotatable: true, tool: 'axe', hardness: 2, drop: 'planks', label: 'Coffin' });
+def('sarcophagus', { ...sprite, solid: true, interact: 'coffin', rotatable: true, hardness: Infinity, drop: null, label: 'Sarcophagus' });
+def('pressure_plate', { solid: false, opaque: false, render: 'flat', standable: false, support: true, hardness: 2, tool: 'pick', drop: null, label: 'Loose Flagstone' });
+def('arrow_slit', { tool: 'pick', hardness: 8, rotatable: true, drop: 'cobblestone', label: 'Arrow Slit' });
+def('lever', { ...sprite, solid: false, interact: 'lever', rotatable: true, hardness: Infinity, drop: null, label: 'Lever' });
+def('portcullis', { ...sprite, tall: true, solid: true, interact: 'portcullis', rotatable: true, hardness: Infinity, drop: null, label: 'Iron Gate' });
+def('portcullis_up', { ...sprite, tall: true, solid: false, interact: 'portcullis', rotatable: true, hardness: Infinity, drop: null, label: 'Raised Gate' });
+def('cracked_floor', { tool: 'pick', hardness: 0.6, drop: 'cobblestone', label: 'Cracked Flagstones' });
+def('weak_wall', { tool: 'pick', hardness: 0.8, drop: 'cobblestone', label: 'Crumbling Wall' });
+def('sealed_door', { ...sprite, tall: true, solid: true, interact: 'sealed', rotatable: true, hardness: Infinity, drop: null, label: 'Sealed Door' });
+def('stairs_down', { interact: 'stairs', hardness: Infinity, drop: null, label: 'Stairs Down' });
+def('stairs_up', { ...sprite, solid: false, interact: 'stairs', rotatable: true, hardness: Infinity, drop: null, label: 'Stairs Up' });
+def('brazier', { ...sprite, interact: 'brazier', light: 10, lightWhenState: true, hardness: 2, tool: 'pick', drop: null, label: 'Brazier' });
+// The ways in from above: a door in a barrow mound, a sinkhole, a mine's
+// shaft, a cave's mouth. (Fallen in, once what's below is beaten.)
+def('barrow_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Barrow Door' });
+def('sinkhole', { interact: 'dungeon', hardness: Infinity, drop: null, label: 'Sinkhole' });
+def('mine_shaft', { interact: 'dungeon', hardness: Infinity, drop: null, label: 'Mine Shaft' });
+def('cave_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Cave Mouth' });
+def('rubble_seal', { hardness: Infinity, drop: null, label: 'Fallen-In Entrance', interact: 'dungeon' });
+// The Kavorent's: their spires, and the halls under them.
+def('kav_pillar', { interact: 'kav_pillar', hardness: Infinity, drop: null, label: 'Kavorent Spire' });
+def('kav_door', { ...sprite, tall: true, solid: false, interact: 'kav_lift', hardness: Infinity, drop: null, light: 6, label: 'Open Spire' });
+def('kav_lift', { interact: 'kav_lift', hardness: Infinity, drop: null, light: 6, label: 'Lift Platform' });
+def('kav_wall', { hardness: Infinity, drop: null, label: 'Kavorent Alloy' });
+def('kav_floor', { hardness: Infinity, drop: null, label: 'Kavorent Floor' });
+def('kav_glow', { hardness: Infinity, drop: null, light: 7, label: 'Light Seam' });
+def('kav_debris', { tool: 'pick', hardness: 2.5, drop: [{ item: 'kav_scrap', chance: 0.3 }, { item: 'cobblestone', chance: 0.5 }], label: 'Fallen Alloy' });
+def('kav_field', { solid: true, opaque: false, render: 'sprite', standable: false, support: false, tall: true, hardness: Infinity, drop: null, light: 6, label: 'Force Wall' });
+def('kav_console', { ...sprite, interact: 'kav_console', hardness: Infinity, drop: null, light: 4, label: 'Glyph Console' });
+def('kav_plate', { solid: false, opaque: false, render: 'flat', standable: false, support: true, hardness: Infinity, drop: null, light: 3, label: 'Glyph Plate' });
+def('kav_node', { ...sprite, interact: 'kav_node', hardness: Infinity, drop: null, light: 5, label: 'Power Node' });
+def('kav_seal', { ...sprite, tall: true, solid: true, interact: 'sealed', hardness: Infinity, drop: null, light: 4, label: 'Vault Seal' });
+def('kav_cache', { ...sprite, interact: 'container', hardness: Infinity, drop: null, light: 3, label: 'Kavorent Cache' });
+def('kav_emitter', { hardness: Infinity, drop: null, rotatable: true, light: 4, label: 'Emitter' });
+// A relic set down: its power reaches all round it (see game/relics.js).
+def('relic', { ...sprite, interact: 'relic', tool: 'pick', hardness: 1, drop: null, light: 6, label: 'Relic' });
+
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
 }

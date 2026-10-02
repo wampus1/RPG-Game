@@ -23,6 +23,12 @@ const NOT_ITEMS = new Set([
   'gem_ore', 'wheat_crop', 'carrot_crop', 'cabbage_crop', 'tall_grass', 'fern', 'bush',
   'berry_bush', 'dead_bush', 'reeds', 'mushroom_red', 'mushroom_brown', 'herb', 'rock',
   'cobweb', 'well', 'altar', 'statue', 'campfire', 'gravestone', 'cell_door', 'cell_door_open', 'cell_door_top', 'farmland_wet', 'bell', 'canopy',
+  // (What's built into dungeons stays there.)
+  'barrow_stone', 'barrow_earth', 'crypt_brick', 'crypt_floor', 'mine_rock', 'mine_beam', 'cave_rock', 'bones', 'coffin', 'sarcophagus',
+  'pressure_plate', 'arrow_slit', 'lever', 'portcullis', 'portcullis_up', 'cracked_floor', 'weak_wall', 'sealed_door', 'stairs_down',
+  'stairs_up', 'brazier', 'barrow_door', 'sinkhole', 'mine_shaft', 'cave_mouth', 'rubble_seal', 'kav_pillar', 'kav_door', 'kav_lift',
+  'kav_wall', 'kav_floor', 'kav_glow', 'kav_debris', 'kav_field', 'kav_console', 'kav_plate', 'kav_node', 'kav_seal', 'kav_cache',
+  'kav_emitter', 'relic',
 ]);
 
 const BLOCK_VALUES = {
@@ -209,6 +215,11 @@ export function offhandable(key) {
   const it = key && ITEMS[key];
   return !!it && it.kind === 'weapon' && !it.ranged && it.hands !== 2;
 }
+// A light carried in the off hand (where a shield or second blade would
+// be): a torch, a lantern, the Kavorent's Everlight.
+export function offhandLight(key) {
+  return key === 'torch' || key === 'lantern' || key === 'kav_everlight';
+}
 export function registerSockets() {
   for (const key of Object.keys(ITEMS)) {
     if (!canSocket(key)) continue;
@@ -283,6 +294,59 @@ export const GEMS = {
   bloodstone: { name: 'Bloodstone', color: '#e83848', body: '#2c5236', stats: { str: 1 }, rare: true, about: 'Blood: wounds that bleed, and armour that hits harder the closer you are to death' },
 };
 for (const [k, g] of Object.entries(GEMS)) item(k, { name: g.name, kind: 'gem', stack: 16, value: g.rare ? 110 : 70, gem: true });
+// Shards of crystal from the Kavorent's halls, in each stone's colour.
+export const SHARD_GEMS = Object.keys(GEMS);
+for (const k of SHARD_GEMS) item(`shard_${k}`, { name: `${GEMS[k].name} Shard`, kind: 'shard', stack: 64, value: GEMS[k].rare ? 22 : 13, shard: k, color: GEMS[k].color, about: `Five fuse into a whole ${GEMS[k].name.toLowerCase()} at a jeweller's bench (or a jeweller will buy them).` });
+
+// --- from below ---------------------------------------------------------------------
+// What dungeons give up (see world/dungeongen.js): old coin (good silver,
+// if an odd stamp), plans for things nobody's built in a hundred years, a
+// sigil for a sealed door, and relics: things of power that work on all
+// round them wherever they're set down (see game/relics.js).
+item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 5, about: 'Stamped with kings nobody remembers. Any merchant will take them, for the silver.' });
+item('old_blueprint', { name: 'Old Blueprint', kind: 'misc', stack: 8, value: 30, about: 'Plans for works long forgotten. A mayor would pay well for them, and the town\'s builders and thinkers would learn from them.' });
+item('sigil', { name: 'Bronze Sigil', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'The key to a sealed door, down below.' });
+item('kav_key', { name: 'Glyph Key', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'A shard of light in a frame of alloy: it opens a Kavorent vault.' });
+// A relic's power, and the colour of its circle.
+export const RELICS = {
+  hearth: { name: 'Hearthstone', color: '#ffb050', about: 'Wounds close a little, slowly, for everyone near it.' },
+  vigil: { name: 'Vigil Lamp', color: '#fff0a0', about: 'No night thing comes within its circle, and the dead are weakened near it.' },
+  breath: { name: 'Windcharm', color: '#70f0c8', about: 'Breath comes back twice as fast to everyone near it.' },
+  ward: { name: 'Warding Idol', color: '#70a8ff', about: 'Blows land a fifth lighter on everyone near it.' },
+  fury: { name: 'War Totem', color: '#ff5050', about: 'Blows struck near it land a fifth harder.' },
+  harvest: { name: 'Seed of Plenty', color: '#90e050', about: 'Crops near it grow twice as fast.' },
+};
+for (const [k, r] of Object.entries(RELICS)) item(`relic_${k}`, { name: r.name, kind: 'relic', stack: 1, value: 90, relic: k, plant: B.relic, color: r.color, about: `${r.about} (Set it down to use it; pick it up again any time.)` });
+
+// --- the Kavorent's ---------------------------------------------------------------
+// Scrap of their alloy (a smith can make iron of it, and good iron), the
+// cores that powered their halls (a mayor will pay a fortune for one: the
+// town's thinkers can learn from it what nobody else alive knows), and
+// shards of crystal in a gem's colours (five fuse into a whole stone).
+item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 14, about: 'Dark, light, unbelievably hard. A smith can work it into iron.' });
+item('kav_core', { name: 'Kavorent Core', kind: 'misc', stack: 8, value: 450, about: 'A heavy sphere with a slow light turning inside it. Give it to a mayor: with it, a realm can begin to learn the Kavorent\'s arts.' });
+// (Their shards are made with the stones, above.)
+// The rarest finds: their arms and armour, things they made to carry, and
+// fittings that make what you have better than it was.
+item('kav_blade', { name: 'Phase Blade', kind: 'weapon', stack: 1, damage: 10, reach: 1.7, cooldown: 0.36, value: 380, heft: 0.8, pierce: 0.6, kav: true, about: 'Its edge is never quite where it seems: it slips past shields and through armour.' });
+item('kav_lance', { name: 'Arc Lance', kind: 'weapon', stack: 1, damage: 9, reach: 2.6, cooldown: 0.7, value: 420, hands: 2, style: 'halberd', kav: true, lance: true, about: 'Each thrust throws a lance of light that strikes everything in a line, four paces out.' });
+item('kav_caster', { name: 'Pulse Caster', kind: 'weapon', stack: 1, damage: 6, reach: 1.2, range: 10, ranged: true, cooldown: 0.6, value: 460, hands: 2, ammo: 'none', kav: true, about: 'Needs no arrows: it draws on your breath, and looses bolts of light.' });
+const kwear = (key, name, slot, armor, value, extra = {}) => item(key, { name, kind: 'armor', stack: 1, slot, armor, value, look: 'kav', kav: true, ...extra });
+kwear('kav_visor', 'Kavorent Visor', 'head', 0.12, 260, { stats: { cha: 1 }, about: 'You see in the dark a little, wearing it.' });
+kwear('kav_carapace', 'Kavorent Carapace', 'body', 0.28, 520, { stats: { end: 2 }, about: 'Light as cloth, hard as nothing forged.' });
+kwear('kav_greaves', 'Kavorent Greaves', 'legs', 0.14, 300, { stats: { agi: 1 } });
+kwear('kav_treads', 'Kavorent Treads', 'feet', 0.07, 220, { stats: { agi: 1 }, about: 'Your steps are quicker and make no sound.' });
+kwear('kav_aegis', 'Aegis Projector', 'shield', 0, 480, { block: 0.95, about: 'Raised, it throws up a wall of light: arrows go no further.' });
+// Gadgets: used from your belt (F, or the right mouse button).
+const gadget = (key, name, value, about, extra = {}) => item(key, { name, kind: 'gadget', stack: 1, value, about, kav: true, ...extra });
+gadget('kav_blink', 'Blink Shard', 320, 'Use it and you\'re six paces away, toward where you point, in an instant. It takes a few seconds to gather itself again.', { charge: 4 });
+gadget('kav_everlight', 'Everlight', 180, 'A cold, steady light that never goes out. Hold it, or carry it in your off hand.', { light: 13 });
+gadget('kav_mender', 'Mending Cell', 300, 'Use it to mend 12 health over a few seconds. Three uses; it fills again each dawn.', { uses: 3 });
+gadget('kav_bulwark', 'Field Projector', 340, 'Use it to throw up a wall of light in front of you for eight seconds: nothing gets through.', { charge: 20 });
+gadget('kav_lodestar', 'Lodestar', 160, 'Use it and it points the way: below ground, to the way down; above, to the nearest place of old stone you haven\'t yet beaten.', { charge: 2 });
+// Fittings: set into a weapon, or a piece of armour, for good.
+item('kav_edge', { name: 'Alloy Edge', kind: 'enhancer', stack: 4, value: 220, kav: true, fits: 'weapon', about: 'Fit it to a weapon (use it with the weapon in your belt): +3 to every blow, for good.' });
+item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 240, kav: true, fits: 'armor', about: 'Fit it to a piece of armour you wear (use it): it turns a twentieth more of each blow, and adds a point of endurance.' });
 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });
@@ -327,6 +391,28 @@ export function rollDrops(blockId, rand) {
     if (count > 0 && ITEMS[e.item]) out.push({ item: e.item, count });
   }
   return out;
+}
+
+// A weapon or a piece of armour with a Kavorent fitting set into it (its
+// own key, like a set stone: "iron_sword+edge"), made here for everything
+// that can take one. (Before the stones, so a fitted piece can take one too.)
+export function enhanced(key, kind) {
+  return `${key}+${kind}`;
+}
+export function canEnhance(key, kind) {
+  const it = ITEMS[key];
+  if (!it || it.socket || it.enhanced || it.uniform || it.thrown) return false;
+  if (kind === 'edge') return it.kind === 'weapon' && !it.ranged;
+  if (kind === 'plating') return it.kind === 'armor' && it.slot !== 'shield' && it.armor > 0;
+  return false;
+}
+for (const key of Object.keys(ITEMS)) {
+  for (const kind of ['edge', 'plating']) {
+    if (!canEnhance(key, kind)) continue;
+    const b = ITEMS[key];
+    const extra = kind === 'edge' ? { damage: b.damage + 3 } : { armor: Math.round((b.armor + 0.05) * 100) / 100, stats: { ...(b.stats || {}), end: ((b.stats || {}).end || 0) + 1 } };
+    ITEMS[enhanced(key, kind)] = { ...b, key: enhanced(key, kind), name: `${b.name} (${kind === 'edge' ? 'Alloy-Edged' : 'Alloy-Plated'})`, value: b.value + 120, enhanced: kind, base: key, ...extra };
+  }
 }
 
 // (Last, so every weapon and piece of armour above can take a gem.)

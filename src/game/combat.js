@@ -31,6 +31,7 @@
 // you clear.
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { has as heroHas, staminaBonus } from './hero.js';
+import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
@@ -89,6 +90,8 @@ export function mainWeapon(e) {
 // bare-handed brawler may mix it up).
 export function styleOf(e, pick = false) {
   if (e.kind === 'creature' || e.kind === 'monster') {
+    // (Its own way of striking, if it has one.)
+    if (e.S && e.S.style && !e.arms) return STYLES[e.S.style];
     // A skeleton fights the way of what it picked up (a sword cuts, an axe
     // chops, a spear thrusts; a bow-skeleton up close bashes with it).
     if (e.arms && e.arms !== 'bow' && !(pick && e.rng && e.rng.chance(0.2))) return STYLES[weaponStyle(e.arms)] || STYLES.bone;
@@ -114,7 +117,8 @@ export function heftOf(e) {
 export function shieldOf(e) {
   const k = e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield;
   const it = k && ITEMS[k];
-  if (!it || !it.block) return null;
+  // (A torch in that hand is no shield, for all a block item has a `block`.)
+  if (!it || !it.block || it.kind !== 'armor') return null;
   return twoHanded(mainWeapon(e)) ? null : it;
 }
 
@@ -436,6 +440,11 @@ export function resolveHit(game, a, v, st, opts = null) {
   if (amount > 0) {
     game.damage(v, amount, a);
     if (a.windup && a.windup.onHit) a.windup.onHit();
+    // (A grab: held fast, till you roll free.)
+    if (st.grab && v.kind === 'player' && !v.dead) {
+      v.grabbedT = 1.4;
+      text('grabbed! (roll free)', '#80d0c0');
+    }
   }
   else game.audio?.play('armor_hit', v);
   // A heavy blow staggers (not if you're sure on your feet).
@@ -504,7 +513,7 @@ export function parried(game, v, a) {
 // How hard their blows land (before the weapon's way of fighting).
 function baseDamage(a) {
   if (a.kind === 'npc' && a.attackDamage) return a.attackDamage(false);
-  if (a.S) return a.S.dmg;
+  if (a.S) return a.S.dmg * (a.dmgMult || 1);
   return 2;
 }
 
@@ -624,7 +633,7 @@ export function playerTick(game, p, dt, input, blocked) {
   // (Back faster standing still behind a shield than swinging away; and
   // slowly at that.)
   const morning = game.minute >= 300 && game.minute < 600 && heroHas(game.hero, 'early_riser');
-  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1);
+  const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1) * relicBreath(game, p);
   if (p.rollStrike > 0) p.rollStrike -= dt;
   tickGuard(game, p, dt);
   if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
@@ -678,6 +687,10 @@ function tickSwing(game, p, dt) {
 export function roll(game, p, dirv = null) {
   // (Not with an arrow on the string, drawing or holding it.)
   if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
+  if (p.grabbedT > 0) {
+    p.grabbedT = 0;
+    game.renderer.floatText(p.x, p.y + 2.4, p.z, 'wrenched free!', '#c8e8ff');
+  }
   // (Mid-stride is fine: the roll carries on from where you are.)
   const from = p.moving ? p.renderPos() : null;
   const cost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * (heroHas(game.hero, 'clumsy') ? 1.35 : 1) * rollCostMult(p);

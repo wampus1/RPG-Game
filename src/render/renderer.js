@@ -11,6 +11,7 @@ import { ITEMS, GEMS } from '../world/items.js';
 import { Lighting, skyLight } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
+import { drawOldPlaces } from './oldplaces.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -27,6 +28,14 @@ const makeCanvas = (w, h) => {
 };
 
 const CULL_SAME = new Set();
+
+// Lights carried in the hand: where the flame sits in the item's picture,
+// its glow, and how often an ember flies off it.
+const HELD_FLAMES = {
+  torch: { x: 8, y: 3, r: 7, glow: 'rgba(255,190,90,0.9)', ember: 0.18, colors: ['#ffd070', '#ff9a40', '#fff0b0'] },
+  lantern: { x: 8, y: 8, r: 6, glow: 'rgba(255,210,120,0.8)', ember: 0.04, colors: ['#ffe0a0'] },
+  kav_everlight: { x: 8, y: 7, r: 8, glow: 'rgba(140,240,255,0.9)', ember: 0.1, colors: ['#a8f4ff', '#ffffff'] },
+};
 
 export class Renderer {
   constructor(canvas) {
@@ -205,6 +214,7 @@ export class Renderer {
     this.drawProjectiles(game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.lighting.draw(this, game);
+    drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
     this.drawParticles(dt);
     this.drawAim(game);
@@ -605,7 +615,8 @@ export class Renderer {
               }
             } else if (render === 'flat') {
               const arr = TEX.sprite[id * 4];
-              const s = arr[v % arr.length];
+              // (A glyph plate shows its own glyph.)
+              const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : v % arr.length];
               const below = getAt(ci, y - 1);
               const oy = BLOCKS[below].liquid ? 3 : 0;
               ctx.drawImage(atlas, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
@@ -901,18 +912,33 @@ export class Renderer {
       this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null, !!e.saddled), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
     } else if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
-      const frames = sheet.width / 32;
-      const f = e.moving ? Math.floor(this.time * 6) % frames : 0;
+      // (Square frames: 16 across, or 32 for something great.)
+      const sz = sheet.height;
+      const frames = sheet.width / (sz * 2);
+      // (Floating things bob through their frames whether moving or not.)
+      const f = e.moving || (e.S && (e.S.floats || e.S.anim)) ? Math.floor(this.time * 6) % frames : 0;
       const flip = e.dir === 3 ? frames : 0;
       const hop = e.species === 'slime' ? Math.abs(Math.sin(this.time * 6 + e.id)) * 3 : 0;
       const lu = this.bodyLunge(e, this.viewDir(e.dir));
-      ctx.drawImage(sheet, (f + flip) * 16, 0, 16, 16, sx + lu.x, Math.round(feetY - 15 - hop + lu.y), 16, 16);
+      const cx = sx + 8 - sz / 2 + lu.x;
+      const cy = Math.round(feetY - sz + 1 - hop + lu.y - (e.burrowed ? sz : 0) + (e.rise || 0));
+      // (Burrowed: only the churned earth shows, moving.)
+      if (!e.burrowed) {
+        ctx.drawImage(sheet, (f + flip) * sz, 0, sz, sz, cx, cy, sz, sz);
+        // Its shield up (a warden's cover, a golem's plates): a pale rim of light.
+        if (e.armourT > 0 || e.shieldUp) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (0.45 + 0.25 * Math.sin(this.time * 10));
+          ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#5ad8f0'), cx - 1, cy - 1);
+          ctx.globalAlpha = a;
+        }
+      }
       // Just fed on someone's breath (a ghoul): it glows with it a while.
       if (e.fedT > 0) {
         e.fedT -= this.frameDt || 0.016;
         const a = ctx.globalAlpha;
         ctx.globalAlpha = a * Math.min(1, e.fedT) * (0.55 + 0.35 * Math.sin(this.time * 18));
-        ctx.drawImage(frameGlow(sheet, (f + flip) * 16, 0, 16, 16, '#9cf0b0'), sx + lu.x - 1, Math.round(feetY - 16 - hop + lu.y));
+        ctx.drawImage(frameGlow(sheet, (f + flip) * sz, 0, sz, sz, '#9cf0b0'), cx - 1, cy - 1);
         ctx.globalAlpha = a;
       }
     } else {
@@ -966,7 +992,19 @@ export class Renderer {
           ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#ff3040'), sx - 1, top - SPR_PAD - 1);
           ctx.globalAlpha = a0;
         }
-        if (inWater) {
+        if (e.submerged) {
+          // Under black water: rings spreading, two pale eyes.
+          const k = (this.time * 0.8 + e.id * 0.37) % 1;
+          ctx.strokeStyle = `rgba(200,230,240,${0.45 * (1 - k)})`;
+          ctx.beginPath();
+          ctx.ellipse(sx + 8, feetY - 3, 3 + k * 6, 1 + k * 2, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          if (Math.floor(this.time * 0.7 + e.id) % 3 === 0) {
+            ctx.fillStyle = '#c8ffd0';
+            ctx.fillRect(sx + 6, feetY - 4, 1, 1);
+            ctx.fillRect(sx + 9, feetY - 4, 1, 1);
+          }
+        } else if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
@@ -1012,9 +1050,11 @@ export class Renderer {
     }
     // Under the mouse? (The last thing drawn there is what you point at.)
     const m = this.mouse;
-    if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead) {
-      const h = e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
-      if (m.x >= sx + 2 && m.x < sx + 14 && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
+    if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead && !e.burrowed) {
+      const big = e.kind === 'creature' && e.S && e.S.big;
+      const h = big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24;
+      const w = big ? 12 : 0;
+      if (m.x >= sx + 2 - w && m.x < sx + 14 + w && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
     }
     // Straining at a lead: how near it is to breaking free.
     if (e.strain > 0 && (e.leadBy || e.leadTied) && !e.dead) {
@@ -1080,7 +1120,7 @@ export class Renderer {
   raisedShield(e) {
     const k = e.kind === 'player' ? e.equip && e.equip.shield : e.rec && e.rec.equipment && e.rec.equipment.shield;
     const it = k && ITEMS[k];
-    if (!it || !it.block) return null;
+    if (!it || !it.block || it.kind !== 'armor') return null;
     const main = e.heldItem ? e.heldItem() : e.rec && e.rec.equipment && e.rec.equipment.weapon;
     const m = main && ITEMS[main];
     if (m && m.hands === 2) return null;
@@ -1205,6 +1245,25 @@ export class Renderer {
     ctx.rotate(ang);
     ctx.scale(mir ? -S : S, S);
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
+    // A flame carried: embers off its head now and then, and a flicker of
+    // brightness round it (the Everlight a steady cold shimmer).
+    if (HELD_FLAMES[key] && !(e.snuffT > 0)) {
+      const fl = HELD_FLAMES[key];
+      const m = ctx.getTransform();
+      const tip = { x: m.a * (gx + fl.x) + m.c * (gy + fl.y) + m.e, y: m.b * (gx + fl.x) + m.d * (gy + fl.y) + m.f };
+      const k = 0.75 + 0.25 * Math.sin(this.time * 17 + (e.x || 0) * 3) * Math.sin(this.time * 7.3);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const g = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, fl.r);
+      g.addColorStop(0, fl.glow);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.35 * k;
+      ctx.fillStyle = g;
+      ctx.fillRect(tip.x - fl.r, tip.y - fl.r, fl.r * 2, fl.r * 2);
+      ctx.globalAlpha = 1;
+      if (Math.random() < fl.ember * (this.frameDt || 0.016) * 60 && this.particles.length < 800) {
+        this.particles.push({ x: tip.x + this.camX + (Math.random() - 0.5) * 2, y: tip.y + this.camY, vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 14, g: -6, life: 0.5 + Math.random() * 0.5, max: 0.8, color: fl.colors[Math.floor(Math.random() * fl.colors.length)], size: 1, glow: true, grow: 0, chunk: null });
+      }
+    }
     ctx.restore();
     if (!off && e.bowDraw && (dir === 1 || dir === 3)) this.drawNocked(ctx, e, dir, hx, hy);
   }
@@ -1901,6 +1960,35 @@ export class Renderer {
     const ctx = this.ctx;
     const p = game.player;
     const near = (e) => Math.abs(e.x - p.x) < 24 && Math.abs(e.z - p.z) < 18;
+    // Hazards coming (a slam, a beam, a dart, rocks from the roof): the
+    // ground they'll strike, in their colour, brighter and flashing as the
+    // moment comes.
+    for (const h of game.hazards || []) {
+      const f = Math.min(1, h.t / Math.max(0.05, h.dur));
+      const [cr, cg, cb] = h.color || [255, 70, 50];
+      const flash = f > 0.7 && Math.floor(this.time * 16) % 2;
+      for (const t of h.tiles) {
+        if (!near(t)) continue;
+        const { x: sx, y: sy } = this.worldToScreen(t.x, (h.y ?? p.y) - 1, t.z);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.1 + f * 0.32})`;
+        ctx.fillRect(sx + 1, sy + 1, 14, 14);
+        if (flash) {
+          ctx.fillStyle = 'rgba(255,248,220,0.55)';
+          ctx.fillRect(sx + 1, sy + 1, 14, 1);
+          ctx.fillRect(sx + 1, sy + 14, 14, 1);
+          ctx.fillRect(sx + 1, sy + 1, 1, 14);
+          ctx.fillRect(sx + 14, sy + 1, 1, 14);
+        }
+      }
+      // (A beam's line, thin and growing as it gathers.)
+      if (h.kind === 'beam' && h.from && h.to && f < 1) {
+        const a = this.worldToScreen(h.from.x, h.y ?? p.y, h.from.z);
+        const b = this.worldToScreen(h.to.x, h.y ?? p.y, h.to.z);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.3 + f * 0.5})`;
+        const n = Math.max(2, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+        for (let i = 0; i <= n * f; i++) ctx.fillRect(Math.round(a.x + 8 + ((b.x - a.x) * i) / n), Math.round(a.y + 2 + ((b.y - a.y) * i) / n), 1, 1);
+      }
+    }
     for (const e of [...game.npcs, ...game.creatures]) {
       if (e.dead || !near(e)) continue;
       const w = e.windup;

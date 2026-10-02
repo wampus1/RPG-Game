@@ -45,6 +45,17 @@ export const THEMES = {
   graveyard: { root: 52, scale: 'harmonic', bpm: 52, prog: [0, 5, 3, 4], lead: 'sine', pad: true, organ: true, drums: null, density: 0.2, toll: true },
   fight_monsters: { root: 57, scale: 'harmonic', bpm: 148, prog: [0, 5, 6, 4], lead: 'square', drums: 'battle', density: 0.8, drive: true },
   fight_guards: { root: 55, scale: 'phrygian', bpm: 136, prog: [0, 1, 0, 6], lead: 'square', drums: 'march', density: 0.72, drive: true },
+  // Below ground: each kind of place its own dread. A barrow's slow bell,
+  // a mine's dripping dark, a crypt's organ under water, a bandits' den
+  // with its drums, and the Kavorent's halls in a scale no living people
+  // use, glittering and wrong.
+  dungeon_barrow: { root: 50, scale: 'phrygian', bpm: 54, prog: [0, 1, 5, 0], lead: 'sine', pad: true, drums: null, density: 0.2, toll: true, detune: 10 },
+  dungeon_mine: { root: 48, scale: 'minor', bpm: 64, prog: [0, 6, 5, 6], lead: 'triangle', pad: true, drums: 'soft', density: 0.24, fifths: true },
+  dungeon_crypt: { root: 52, scale: 'harmonic', bpm: 50, prog: [0, 5, 1, 4], lead: 'sine', pad: true, organ: true, drums: null, density: 0.18, detune: 14 },
+  dungeon_holdout: { root: 55, scale: 'dorian', bpm: 84, prog: [0, 6, 0, 4], lead: 'triangle', drums: 'hand', density: 0.4, swing: 0.15 },
+  dungeon_kavorent: { root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], lead: 'sine', pad: true, arp: true, drums: null, density: 0.3, detune: 22 },
+  fight_kavorent: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  fight_boss: { root: 50, scale: 'harmonic', bpm: 156, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.85, drive: true, organ: true },
 };
 
 // What the music should be right now.
@@ -56,8 +67,18 @@ export function musicMood(game) {
     const guards = game.npcs.some((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);
     if (guards) return 'fight_guards';
     const beasts = game.creatures.some((c) => !c.dead && c.hostileNow && c.target === p && c.distTo(p) < 12);
-    if (beasts || (game.combatT || 0) > 0) return game.combatWith === 'guard' ? 'fight_guards' : 'fight_monsters';
+    if (beasts || (game.combatT || 0) > 0) {
+      if (game.combatWith === 'guard') return 'fight_guards';
+      // (Below ground: a master's hall, or the Kavorent's guardians.)
+      if (game.dungeon) {
+        if (game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return 'fight_boss';
+        if (game.dungeon.kav) return 'fight_kavorent';
+      }
+      return 'fight_monsters';
+    }
   }
+  // Down below (no nights there).
+  if (game.dungeon) return `dungeon_${game.dungeon.rec.type}`;
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;
   if (s) {

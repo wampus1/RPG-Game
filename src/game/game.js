@@ -6,7 +6,7 @@ import {
 } from '../config.js';
 import { World } from '../world/world.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
-import { ITEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
+import { ITEMS, GEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
@@ -29,6 +29,10 @@ import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
+import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
+import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
+import { updateHazards, guardFront } from '../entities/monsters.js';
+import { siteAt } from '../world/sites.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
@@ -49,6 +53,7 @@ import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickSt
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
+const GEMS_COLOR = (k) => (ITEMS[k] && ITEMS[k].gem && GEMS[k] ? GEMS[k].color : '#ffffff');
 
 const START_KIT = [
   ['wood_pickaxe', 1], ['wood_axe', 1], ['wood_sword', 1], ['torch', 12], ['planks', 32],
@@ -87,6 +92,10 @@ export class Game {
     this.engines = [];
     // Butterflies, songbirds and owls round you (see wildlife.js).
     this.wildlife = new Wildlife(this);
+    // Down in a dungeon (see dungeon.js), and blows on their way (hazards:
+    // see monsters.js).
+    this.dungeon = null;
+    this.hazards = [];
     // Things set down on the ground: "x,y,z" -> { item, count, owner }.
     this.placed = new Map();
     // Wagons standing still, and horses tied up: by what they belong to.
@@ -194,7 +203,7 @@ export class Game {
     const indoors = !!b && !b.underConstruction;
     const w = this.weather;
     this.ambT = (this.ambT ?? 3) - dt;
-    if (this.ambT > 0 || indoors || this.sleep) return;
+    if (this.ambT > 0 || indoors || this.sleep || this.dungeon) return;
     this.ambT = 2 + Math.random() * 5;
     const biome = this.biomeCache ? this.biomeCache.biome : 'plains';
     const day = this.isDay();
@@ -1353,7 +1362,7 @@ export class Game {
   // Days go by (from the command console): every town lives them out as
   // it would while you're away, a few hours of the world each frame.
   skipDays(n) {
-    if (this.sleep || this.skipping || this.sim.justice.jail || this.sim.justice.escort || this.player.dead || this.sim.war.live) return false;
+    if (this.sleep || this.skipping || this.sim.justice.jail || this.sim.justice.escort || this.player.dead || this.sim.war.live || this.dungeon) return false;
     for (const s of [...this.active.keys()].map((id) => this.world.ow.settlements[id])) this.deactivate(s);
     // Everyone else about (travellers on the road, road crews, soldiers,
     // bandits by their camp) goes off about their business too, rather than
@@ -1490,6 +1499,9 @@ export class Game {
     this.syncStanding(dt);
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
+    updateHazards(this, dt);
+    updateRelics(this, dt);
+    if (this.dungeon) this.dungeon.update(dt);
     updateEngines(this, dt);
     this.wildlife.update(dt);
     updateShips(this, dt);
@@ -2444,6 +2456,7 @@ export class Game {
       r.containers.set(idx, makeSlots(CONTAINER_SIZE[b.name] || 9));
     }
     if (id === B.sapling) this.saplings.push({ x: t.x, y: t.y, z: t.z, t: 90 + Math.random() * 120 });
+    if (def.relic) setRelic(this, t.x, t.y, t.z, def.relic);
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.2);
@@ -2728,6 +2741,19 @@ export class Game {
     const b = BLOCKS[id];
     const p = this.player;
     p.face(x, z);
+    // The old places' doors, stairs, levers and the like.
+    if (DUNGEON_INTERACTS.has(b.interact)) {
+      this.useOldPlace(x, y, z, b);
+      return;
+    }
+    if (b.interact === 'container' && this.dungeon && this.dungeon.locked(x, z)) {
+      this.ui.msg('Sealed by a glyph lock. The console in this room knows how it opens.', '#5ad8f0');
+      return;
+    }
+    if (b.interact === 'relic') {
+      this.takeRelic(x, y, z);
+      return;
+    }
     switch (b.interact) {
       case 'door': {
         const open = w.getState(x, y, z);
@@ -2886,6 +2912,114 @@ export class Game {
         break;
       }
     }
+  }
+
+  // ------------------------------------------------------------ old places
+  // A dungeon's way in (or a spire, or anything inside one: see dungeon.js).
+  useOldPlace(x, y, z, b) {
+    const p = this.player;
+    if (this.dungeon) {
+      this.dungeon.interact(x, y, z, b);
+      return;
+    }
+    const site = siteAt(this.world, x, z, 4);
+    const rec = site ? this.sim.dungeons.get(site.id) : null;
+    if (!rec) return;
+    if (Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) > 3) {
+      this.ui.msg('Closer.', '#c8c8c8', true);
+      return;
+    }
+    if (b.interact === 'kav_pillar') {
+      this.offerToSpire(rec);
+      return;
+    }
+    if (b.interact === 'kav_lift' && !(rec.spire && rec.spire.open !== null && rec.spire.open !== undefined)) return;
+    if (rec.cleared && rec.type !== 'kavorent') {
+      this.ui.msg('The way down has fallen in. There\'s nothing more for anyone down there.', '#c8c8c8');
+      return;
+    }
+    if (this.sim.war.live || this.sim.justice.escort) {
+      this.ui.msg('Not now.', '#c8c8c8');
+      return;
+    }
+    rec.known = true;
+    new DungeonRun(this, rec).enter();
+  }
+
+  // A cut stone offered to a Kavorent spire: the face you stand at opens.
+  offerToSpire(rec) {
+    const p = this.player;
+    if (rec.spire && rec.spire.open !== null && rec.spire.open !== undefined) {
+      this.ui.msg('The spire stands open. Its lift waits inside.', '#5ad8f0');
+      return;
+    }
+    const held = p.heldItem();
+    const it = held && ITEMS[held];
+    if (!it || !it.gem) {
+      this.ui.msg('Runes crawl up the face of the spire, brighten, and fade. At the height of your hand there is a hollow in it, the size and shape of a cut stone.', '#5ad8f0');
+      return;
+    }
+    const dx = p.x - rec.x;
+    const dz = p.z - rec.z;
+    const side = Math.abs(dx) > Math.abs(dz) ? (dx < 0 ? 1 : 3) : dz < 0 ? 2 : 0;
+    const slot = p.inv[p.selected];
+    slot.count--;
+    if (slot.count <= 0) p.inv[p.selected] = null;
+    this.sim.dungeons.openSpire(rec, side);
+    this.renderer.spireFlare = { id: rec.id, t: 0 };
+    this.renderer.emit(p.x, p.y + 1.2, p.z, { n: 20, color: [GEMS_COLOR(held), '#ffffff', '#5ad8f0'], up: 40, speed: 50, life: 0.8, glow: true });
+    this.renderer.flashScreen?.('#c8fbff', 0.35);
+    this.shake = 0.8;
+    this.audio?.play('rune');
+    this.audio?.play('gate');
+    this.ui.msg(`You set the ${it.name.toLowerCase()} in the hollow. It sinks in; the runes blaze up the whole height of the spire, and with a sound like a held breath let go, its face slides open.`, '#c8fbff');
+  }
+
+  // A relic set down, taken up again.
+  takeRelic(x, y, z) {
+    const r = relicAt(this, x, y, z);
+    this.world.setBlock(x, y, z, B.air);
+    if (r) this.relics.delete(`${x},${y},${z}`);
+    const key = relicItem(r ? r.kind : null);
+    const left = this.player.give(key, 1);
+    if (left) this.spawnDrop(key, 1, x, y, z, true);
+    this.renderer.emit(x, y + 0.5, z, { n: 12, color: [ITEMS[key].color, '#ffffff'], up: 20, speed: 20, life: 0.5, glow: true });
+    this.ui.msg(`You take up the ${ITEMS[key].name}. Its circle of runes goes out.`, '#e0c890');
+    this.audio?.play('pickup');
+  }
+
+  // Something below ground, made (or summoned) and set loose.
+  spawnMonster(species, x, y, z, opts = {}) {
+    if (this.dungeon) return this.dungeon.spawn(species, x, y, z, opts);
+    const c = new Creature(this, species, x, y, z);
+    this.addCreature(c);
+    return c;
+  }
+
+  // Lights that move about (for the lighting): torches carried after dark,
+  // wisps, the Kavorent's constructs. (A few, the nearest.)
+  entityLights() {
+    const p = this.player;
+    const out = [];
+    const near = (e) => Math.abs(e.x - p.x) < 22 && Math.abs(e.z - p.z) < 18;
+    for (const c of this.creatures) {
+      if (c.dead || !c.S.light || !near(c) || c.burrowed || c.submerged) continue;
+      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: c.S.light, cold: !!(c.S.construct || c.species === 'wisp') });
+    }
+    for (const n of this.npcs) {
+      if (n.dead || !near(n)) continue;
+      const held = n.heldItem ? n.heldItem() : null;
+      const off = n.offhandItem ? n.offhandItem() : null;
+      if (held === 'torch' || off === 'torch') out.push({ x: n.x, y: n.y, z: n.z, L: 9 });
+    }
+    out.sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.z - p.z) - (Math.abs(b.x - p.x) + Math.abs(b.z - p.z)));
+    return out.slice(0, 10);
+  }
+
+  // Where you are on the world map (down below: where the way in is).
+  mapPos() {
+    if (this.dungeon) return { x: this.dungeon.rec.x, z: this.dungeon.rec.z };
+    return { x: this.player.x, z: this.player.z };
   }
 
   // Who a container belongs to: a household, a business, the player.
@@ -3092,7 +3226,7 @@ export class Game {
       return;
     }
     const jailed = j && (j.phase === 'serving' || j.phase === 'night');
-    if (!jailed) p.spawn = { x: p.x, y: p.y, z: p.z };
+    if (!jailed && !this.dungeon) p.spawn = { x: p.x, y: p.y, z: p.z };
     if (!jailed && !(h >= 20 || h < 5)) {
       this.ui.msg('You can only sleep at night. (spawn point set)', '#c8d8ff');
       return;
@@ -3464,6 +3598,11 @@ export class Game {
   // Weather drifts between clear skies, rain, snow (in cold places) and fog;
   // it's the same weather the towns around you are having.
   updateWeather(dt) {
+    // (No weather below ground.)
+    if (this.dungeon) {
+      this.weather = null;
+      return;
+    }
     const w = this.weather || (this.weather = { kind: 'clear', level: 0, t: 0 });
     // Sped-up time speeds the weather up with it.
     const fast = this.sleepFast || 1;
@@ -4009,6 +4148,14 @@ export class Game {
     if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
     // Onyx armour: the blow goes through them like smoke.
     if (!this.dotHit && evade(this, target, source)) return;
+    // Below ground: a warden's shield, a golem's plates, something burrowed
+    // or under the water (see monsters.js).
+    if (target.S && source && !this.dotHit) {
+      amount = guardFront(this, target, source, amount);
+      if (amount <= 0) return;
+    }
+    // Relics set down near by: a ward, a war totem, a vigil lamp.
+    amount = relicDamage(this, target, source, amount);
     // Marked by moonlight: every blow a third harder.
     if (target.markT > 0) amount = Math.round(amount * 1.33);
     const duel = this.duel;
@@ -4239,6 +4386,7 @@ export class Game {
 
   kill(e, source) {
     onKill(this, e, source);
+    if (this.dungeon && e.inst) this.dungeon.onKill(e);
     e.dead = true;
     this.removeOcc(e);
     this.renderer.emit(e.x, e.y + 1, e.z, { n: 16, color: e.kind === 'npc' || e.kind === 'player' ? ['#c82a2a', '#e8e0d0', '#8a1a1a'] : ['#e8e0d0', '#a8a098'], up: 50, speed: 70, life: 0.8, oy: -8 });
@@ -4393,6 +4541,8 @@ export class Game {
 
   respawn() {
     const p = this.player;
+    // (Dead down below: you wake up above, and what you dropped stays down there.)
+    if (this.dungeon) this.dungeon.leave();
     // The raft drifted off.
     p.raft = null;
     p.dead = false;
@@ -4433,6 +4583,8 @@ export class Game {
   }
 
   spawning(dt) {
+    // (Below ground, nothing wanders in from outside.)
+    if (this.dungeon) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     this.spawnT = 2.5;
@@ -4452,6 +4604,8 @@ export class Game {
     const x = Math.round(p.x + Math.cos(a) * dist);
     const z = Math.round(p.z + Math.sin(a) * dist * 0.8);
     if (!this.world.regionAt(x, z)) return;
+    // (Nor near a vigil lamp, at night.)
+    if (night && nearRelic(this, x, z, 'vigil', 10)) return;
     const ow = this.world.ow;
     // Night creatures keep their distance from lived-in places.
     const margin = night ? 14 : 6;
@@ -4562,6 +4716,7 @@ export class Game {
   }
 
   onPlayerStep(x, y, z, water) {
+    if (this.dungeon) this.dungeon.onStep(x, y, z);
     this.audio?.play(water ? 'splash' : stepSound(BLOCKS[this.world.getBlock(x, y - 1, z)]));
     this.sim.careers.onStep();
     if (water) this.renderer.emit(x, y, z, { n: 4, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.4, oy: -2 });
@@ -4586,6 +4741,10 @@ export class Game {
       player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
       name: this.playerName,
       hero: this.hero || null,
+      // (Down below: where, and the floor as it stands. Before the sim's
+      // records are written, which keep it.)
+      dungeon: this.dungeon ? this.dungeon.serialize() : null,
+      relics: serializeRelics(this),
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: Array.from(this.world.ow.explored),
@@ -4615,6 +4774,7 @@ export class Game {
     }
     if (data.sim) this.sim.load(data.sim);
     this.placed = new Map(data.placed || []);
+    loadRelics(this, data.relics);
     this.roadCamp = new Map(data.roadCamps || []);
     this.riding.load(data.riding);
     this.crops.load(data.crops);
@@ -4644,6 +4804,21 @@ export class Game {
     this.applyHero();
     this.moveEntity(this.player, pd.x, pd.y, pd.z);
     this.sim.careers.applyLook();
+    // Saved down below: back down there.
+    const dg = data.dungeon;
+    const rec = dg ? this.sim.dungeons.get(dg.id) : null;
+    if (rec) {
+      const run = new DungeonRun(this, rec);
+      run.surface = dg.surface || { x: rec.x, y: GROUND, z: rec.z + 3 };
+      run.stash = { creatures: [], drops: [] };
+      this.dungeon = run;
+      run.open(dg.floor, { x: dg.x, z: dg.z });
+    } else if (this.world.inInstance(pd.x)) {
+      // (A dungeon that's gone: up top, at your bed.)
+      const s = this.player.spawn;
+      this.loadAround(s.x, s.z, true);
+      this.player.teleport(s.x, s.y, s.z);
+    }
   }
 }
 

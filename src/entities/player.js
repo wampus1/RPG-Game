@@ -3,7 +3,7 @@
 import { Entity } from './entity.js';
 import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
-import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable } from '../world/items.js';
+import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable, offhandLight } from '../world/items.js';
 import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult } from '../game/hero.js';
@@ -79,7 +79,7 @@ export class Player extends Entity {
       const it = this.equip[k] && ITEMS[this.equip[k]];
       if (!it) continue;
       if (k === 'head') hat = it.look;
-      else if (k === 'shield' && (!it.block || slung)) continue;
+      else if (k === 'shield' && (!it.block || it.kind !== 'armor' || slung)) continue;
       else gear[k] = it.look;
     }
     this._look = Object.keys(gear).length ? { ...this.baseLook, hat, gear } : { ...this.baseLook, hat };
@@ -107,7 +107,7 @@ export class Player extends Entity {
     const s = this.inv[i];
     const it = s && ITEMS[s.item];
     // (A one-handed blade can go in the off hand, where a shield would.)
-    const slot = it && it.kind === 'armor' ? it.slot : offhandable(s && s.item) ? 'shield' : null;
+    const slot = it && it.kind === 'armor' ? it.slot : offhandable(s && s.item) || offhandLight(s && s.item) ? 'shield' : null;
     if (!slot) return null;
     const old = this.equip[slot];
     this.equip[slot] = s.item;
@@ -168,13 +168,43 @@ export class Player extends Entity {
   }
 
   // A second blade carried in the off hand (see combat.offhandOf).
+  // Or a light carried there: a torch, a lantern, the Everlight.
   offhandItem() {
-    return this.sleeping || this.raft ? null : offhandOf(this);
+    if (this.sleeping || this.raft) return null;
+    const blade = offhandOf(this);
+    if (blade) return blade;
+    const k = this.equip && this.equip.shield;
+    return offhandLight(k) && !twoHanded(this.heldItem()) && !this.submerged ? k : null;
+  }
+
+  // A torch (or lantern) in either hand: what kind of light you carry
+  // ('fire' can be snuffed; the Kavorent's 'cold' light can't).
+  heldLightKind() {
+    const keys = [this.heldItem(), this.equip && this.equip.shield];
+    if (keys.includes('kav_everlight')) return 'cold';
+    if (keys.some((k) => k === 'torch' || k === 'lantern' || k === 'campfire')) return this.snuffT > 0 ? null : 'fire';
+    return null;
+  }
+
+  // A torch put out (a gloom moth): dark a while, till it catches again.
+  snuff(secs = 6) {
+    if (this.heldLightKind() !== 'fire') return false;
+    this.snuffT = secs;
+    this.game.renderer.emit(this.x, this.y + 1.4, this.z, { n: 8, color: ['#5a5058', '#3a3438', '#8a8088'], up: 16, speed: 10, gravity: -14, life: 1, shape: 'puff', oy: -8 });
+    this.game.ui.msg('Your torch gutters out!', '#c8b0a0', true);
+    this.game.audio?.play('torch', this);
+    this.game.lightDirty = true;
+    return true;
   }
 
   get lightLevel() {
     const k = this.heldItem();
-    const held = k === 'torch' ? 11 : k === 'lantern' ? 12 : k === 'campfire' ? 8 : 0;
+    const off = this.equip && this.equip.shield;
+    const lamp = (q) => (q === 'torch' ? 11 : q === 'lantern' ? 12 : q === 'campfire' ? 8 : q === 'kav_everlight' ? 13 : 0);
+    // (A torch snuffed out gives nothing till it catches again; the
+    // Everlight never goes out.)
+    const fire = (q) => (this.snuffT > 0 && q !== 'kav_everlight' ? 0 : lamp(q));
+    const held = Math.max(fire(k), fire(off));
     // (Moonstone in your armour: a soft light all your own.)
     const moon = WEAR_SLOTS.some((s) => s !== 'shield' && this.equip[s] && ITEMS[this.equip[s]]?.socket === 'moonstone') ? 8 : 0;
     return Math.max(held, moon);
@@ -188,6 +218,13 @@ export class Player extends Entity {
     this.updateBase(dt);
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
+    if (this.snuffT > 0) {
+      this.snuffT -= dt;
+      if (this.snuffT <= 0) {
+        this.game.ui.msg('Your torch catches again.', '#ffd080', true);
+        this.game.lightDirty = true;
+      }
+    }
     // No wound closes on its own: food, potions, a herbalist, a night's
     // sleep (or a stone) mend you. Only a delightful meal keeps on doing
     // you good a while after (a heart every few seconds while it lasts).
@@ -210,6 +247,11 @@ export class Player extends Entity {
       return;
     }
     if (this.dead || this.moving || blocked) return;
+    // Held fast (a drowned one's grab): no walking off, only rolling free.
+    if (this.grabbedT > 0) {
+      this.grabbedT -= dt;
+      return;
+    }
     // Mid-roll, or staggered (a heavy blow, a broken guard): no steering.
     // (Nor while a blow of your own is coming round: you're committed.)
     if (this.rollT > 0 || this.stunT > 0 || this.guardBroken > 0 || this.swing || this.commitT > 0) return;

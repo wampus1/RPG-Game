@@ -4,6 +4,7 @@ import { TEX, SPR_H } from './textures.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
+import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 
 const OUT = '#1c1622';
 export const CHAR_W = 16;
@@ -50,6 +51,8 @@ const GEAR = {
   linen: { shirt: '#e8e0cc' },
   cloth: { pants: '#4a4a6a' },
   iron: { shoes: '#8a8a98' },
+  // The Kavorent's: dark alloy, seamed with cold light.
+  kav: { shirt: '#2a2840', pants: '#24223a', shoes: '#1c1a2a' },
 };
 
 function drawHumanoid(look, dir, frame) {
@@ -200,6 +203,20 @@ function drawHumanoid(look, dir, frame) {
       if (dir !== 2) G(7, torsoY, 2, torsoH + 3, '#c8a030');
       G(tx, torsoY, tw, 1, '#c8a030');
     } else if (gear.body === 'linen' && dir === 0) G(tx + 2, torsoY, tw - 4, 1, '#c8c0a8');
+    else if (gear.body === 'kav') {
+      G(tx, torsoY, tw, 1, '#4a4870');
+      if (dir !== 2) {
+        G(side ? 7 : 7, torsoY + 1, 2, torsoH - 1, '#24223a');
+        G(side ? 8 : 7, torsoY + 2, 1, torsoH - 3, '#5ad8f0');
+      } else G(tx + 1, torsoY + 3, tw - 2, 1, '#5ad8f0');
+    }
+    if (gear.legs === 'kav' && !sit) {
+      const ky = legY + Math.floor(legH / 2);
+      if (!side) {
+        G(5, ky, 3, 1, '#5ad8f0');
+        G(8, ky, 3, 1, '#5ad8f0');
+      } else G(6, ky, 4, 1, '#5ad8f0');
+    }
     if (gear.legs === 'plate') {
       const ky = legY + Math.floor(legH / 2);
       if (!side) {
@@ -316,6 +333,17 @@ function drawHumanoid(look, dir, frame) {
     S(hx - 1 + 0, hy + 4, skinC);
     if (look.beard && !skel) R(hx, hy + 5, 4, 2, hairC);
   }
+  // Eyes that burn in the dark (the dead, the drowned, constructs).
+  if (look.eyes) {
+    const ec = hex(look.eyes);
+    if (look.visor) {
+      if (dir === 0) R(hx + 1, hy + 4, 6, 1, ec);
+      else if (side) R(hx, hy + 4, 3, 1, ec);
+    } else if (dir === 0) {
+      S(hx + 2, hy + 4, ec);
+      S(hx + 5, hy + 4, ec);
+    } else if (side) S(hx + 1, hy + 4, ec);
+  }
   // Face details and accessories.
   const acc = look.acc;
   if (acc && !skel) {
@@ -414,6 +442,13 @@ function drawHumanoid(look, dir, frame) {
         H(hx, hy - 1, 8, 3, '#7a5232');
         H(hx, hy + 1, 8, 1, '#5a3a1e');
         if (side) H(hx + 7, hy + 2, 1, 3, '#7a5232');
+        break;
+      case 'kav':
+        H(hx, hy - 1, 8, 4, '#2a2840');
+        H(hx, hy - 1, 8, 1, '#4a4870');
+        H(hx + 3, hy - 2, 2, 1, '#5ad8f0');
+        if (dir === 0) H(hx + 1, hy + 3, 6, 1, '#5ad8f0');
+        else if (side) H(hx, hy + 3, 3, 1, '#5ad8f0');
         break;
       case 'hood':
         H(hx - 1, hy - 1, 10, 3, '#6a4a2a');
@@ -636,17 +671,21 @@ export const CREATURE_LOOKS = {
   chicken: { frames: 2, draw: (f) => quadruped(f, ['#f4f0e8', '#c8c0b0', '#ffffff'], 'chicken') },
 };
 
+Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES);
+
 // Creature sheet: frames in a row; left-facing, renderer flips for right.
+// (Square frames: 16 across, or 32 for the great ones.)
 export function creatureSheet(kind, variant = 0) {
   const key = `c:${kind}:${variant}`;
   let c = sheetCache.get(key);
   if (c) return c;
   const L = CREATURE_LOOKS[kind];
-  const sheet = new Px(16 * L.frames * 2, 16);
+  const sz = L.size || 16;
+  const sheet = new Px(sz * L.frames * 2, sz);
   for (let f = 0; f < L.frames; f++) {
     const img = L.draw(f, variant);
-    sheet.blit(img, f * 16, 0);
-    sheet.blit(img, (L.frames + f) * 16, 0, true);
+    sheet.blit(img, f * sz, 0);
+    sheet.blit(img, (L.frames + f) * sz, 0, true);
   }
   c = toCanvas(sheet);
   sheetCache.set(key, c);
@@ -1877,7 +1916,16 @@ export function itemIcon(key) {
     return c;
   }
   let px;
-  if (!it) px = simpleIcon('?');
+  // (A Kavorent fitting: the piece's own picture, a seam of light along it.)
+  const dIcon = it && !it.enhanced ? dungeonIcon(key, it) : null;
+  if (it && it.enhanced) {
+    const base = itemIcon(it.base);
+    const d = base.getContext('2d').getImageData(0, 0, 16, 16).data;
+    const bp = new Px(16, 16);
+    for (let i = 0; i < 256; i++) if (d[i * 4 + 3]) bp.set(i % 16, Math.floor(i / 16), [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], d[i * 4 + 3]);
+    px = edgeOverlay(bp);
+  } else if (dIcon) px = dIcon;
+  else if (!it) px = simpleIcon('?');
   else if (it.kind === 'potion') px = potionIcon(it);
   else if (it.kind === 'gem') px = gemIcon(it);
   else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);

@@ -6,6 +6,7 @@ import { B, BLOCKS } from './blocks.js';
 import { BIOMES } from './biomes.js';
 import { TREE_BUILDERS, TREE_MARGIN } from './trees.js';
 import { Region } from './region.js';
+import { stampSites } from './sites.js';
 
 const GREEN = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.mud, B.dirt]);
 const SANDY = new Set([B.sand, B.sandstone, B.gravel]);
@@ -157,6 +158,9 @@ export function generateRegion(world, rx, rz) {
       region.set(lx, p[i + 1], lz, p[i + 3], p[i + 4]);
     }
   }
+
+  // 6. The old places' ways in (dungeons, the Kavorent's spires).
+  stampSites(world, region);
 
   region.recomputeTops();
   return region;

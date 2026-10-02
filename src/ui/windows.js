@@ -2,7 +2,7 @@
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
-import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable } from '../world/items.js';
+import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable, offhandLight } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
@@ -13,6 +13,7 @@ import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
+import { DTYPES } from '../world/dungeongen.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
@@ -128,8 +129,9 @@ export class InventoryWindow extends Window {
       } else g.text(sx + 1, sy, '·', C.faint);
       // (The shield arm: a shield, or a second blade to fight with.)
       const slung = k === 'shield' && it && twoHanded(p.heldItem());
-      g.text(sx + 5, sy, k === 'shield' ? (it && it.kind === 'weapon' ? 'Off hand' : 'Shield') : cap(k), it ? C.fg : C.faint);
-      g.text(sx + 5, sy + 1, slung ? 'slung (2-hand)' : it ? (it.kind === 'weapon' ? `dmg ${it.damage}` : it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', slung ? C.orange : C.dim);
+      const lamp = k === 'shield' && it && offhandLight(p.equip[k]);
+      g.text(sx + 5, sy, k === 'shield' ? (it && (it.kind === 'weapon' || lamp) ? 'Off hand' : 'Shield') : cap(k), it ? C.fg : C.faint);
+      g.text(sx + 5, sy + 1, slung ? 'slung (2-hand)' : lamp ? 'lights the way' : it ? (it.kind === 'weapon' ? `dmg ${it.damage}` : it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', slung ? C.orange : C.dim);
       this.hit(sx, sy, 3, 2, () => this.wearClick(p, k));
     });
     g.text(40, 18, `Armour ${Math.round(p.armorValue() * 100)}%`, C.cyan);
@@ -160,7 +162,7 @@ export class InventoryWindow extends Window {
     const cs = ui.cursorStack;
     if (cs) {
       const it = ITEMS[cs.item];
-      const fits = it && ((it.kind === 'armor' && it.slot === k) || (k === 'shield' && offhandable(cs.item)));
+      const fits = it && ((it.kind === 'armor' && it.slot === k) || (k === 'shield' && (offhandable(cs.item) || offhandLight(cs.item))));
       if (!fits) {
         ui.audio?.play('error');
         if (it && it.kind === 'weapon' && k === 'shield') ui.msg(it.hands === 2 ? 'That takes both hands.' : 'That\'s no weapon for the off hand.', '#c8c8c8', true);
@@ -170,6 +172,7 @@ export class InventoryWindow extends Window {
       p.equip[k] = cs.item;
       ui.cursorStack = old ? { item: old, count: 1 } : cs.count > 1 ? { item: cs.item, count: cs.count - 1 } : null;
       ui.audio?.play('equip');
+      this.ui.game.lightDirty = true;
       return;
     }
     if (p.equip[k]) {
@@ -186,7 +189,8 @@ export class InventoryWindow extends Window {
       return;
     }
     // Right-click a one-handed blade: into the off hand, to fight with two.
-    if (ck.button === 2 && p.inv[i] && offhandable(p.inv[i].item) && !this.ui.cursorStack) {
+    // (Or a torch, to light the way with a blade still in the other.)
+    if (ck.button === 2 && p.inv[i] && (offhandable(p.inv[i].item) || offhandLight(p.inv[i].item)) && !this.ui.cursorStack) {
       if (p.wear(i)) {
         this.ui.audio?.play('equip');
         this.ui.msg(`${ITEMS[p.equip.shield].name} in your off hand.`, '#c8e0ff', true);
@@ -1176,6 +1180,7 @@ export class LedgerWindow extends Window {
 }
 
 // ---------------------------------------------------------------- world map
+const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║' };
 export class MapWindow extends Window {
   constructor(ui) {
     super(ui, MAP_W * 2 + 4, MAP_H + 6, { kind: 'map' });
@@ -1184,7 +1189,8 @@ export class MapWindow extends Window {
   draw(g, game) {
     const ow = game.world.ow;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'WORLD MAP' });
-    const p = game.player;
+    // (Below ground, you're where its way in is.)
+    const p = game.mapPos ? game.mapPos() : game.player;
     const pcx = Math.floor(p.x / REGION_W);
     const pcz = Math.floor(p.z / REGION_D);
     const blink = Math.floor(this.ui.time * 3) % 2;
@@ -1261,6 +1267,24 @@ export class MapWindow extends Window {
       g.put(x, 1 + cz, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10');
       if (this.hovering(x, 1 + cz, 1, 1)) mark = { label: `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}` };
     }
+    // Old places: those you've found, or been told of. A barrow's mound, a
+    // mine's headframe, a crypt's sinkhole, a cave mouth; a Kavorent spire
+    // pale blue and flickering. (Grey once beaten.)
+    for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
+      if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
+      const cx = Math.floor(d.x / REGION_W);
+      const cz = Math.floor(d.z / REGION_D);
+      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || icons.has(cz * 10000 + cx)) continue;
+      const x = 2 + cx * 2 + ((d.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
+      const kav = d.type === 'kavorent';
+      const glyph = OLD_PLACE_GLYPH[d.type] || '∩';
+      const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : '#f0d8a0';
+      g.put(x, 1 + cz, glyph, fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16');
+      if (this.hovering(x, 1 + cz, 1, 1)) {
+        const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
+        mark = { label: `${cap(d.name)} (${DTYPES[d.type].name}) · ${what}`, color: kav ? '#7ae0ff' : '#f0d8a0' };
+      }
+    }
     const y0 = MAP_H + 2;
     if (hover && hover.known) {
       const c = hover.cell;
@@ -1276,11 +1300,11 @@ export class MapWindow extends Window {
         g.text(2, y0 + 1, s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', s.civ ? s.civ.color.hex : C.dim);
       } else if (c.civ !== null && ow.civs[c.civ]) g.text(2, y0 + 1, `Territory of the ${ow.civs[c.civ].name}`, ow.civs[c.civ].color.hex);
       g.text(2, y0, info.slice(0, this.w - 4), C.hi);
-      if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
+      if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
-    if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), '#ff9080');
+    if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
     else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village [■] town ┌┐╔╗ city ─ road † ruin X battle ! raid ▲ bandits', C.faint);
+    g.text(2, y0 + 2, '⌂ village [■] town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
   }

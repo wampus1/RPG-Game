@@ -153,11 +153,31 @@ export class NPC extends Entity {
     return null;
   }
 
-  // A second blade in the off hand, shown when there's fighting to do.
+  // A second blade in the off hand, shown when there's fighting to do; or,
+  // out and about after dark, a torch.
   offhandItem() {
     const h = this.heldItem();
-    if (!h || !ITEMS[h] || ITEMS[h].kind !== 'weapon' || ITEMS[h].ranged) return null;
-    return offhandOf(this);
+    const blade = !h || !ITEMS[h] || ITEMS[h].kind !== 'weapon' || ITEMS[h].ranged ? null : offhandOf(this);
+    if (blade) return blade;
+    return h !== 'torch' && !(h && ITEMS[h] && ITEMS[h].hands === 2) && this.carriesTorch() ? 'torch' : null;
+  }
+
+  // Out after dark (a guard on the watch, a traveller on the road, anyone
+  // walking the streets), not under a roof and not abed: a torch in hand.
+  carriesTorch() {
+    const g = this.game;
+    const k = Math.floor(g.minute);
+    if (this._torchAt === k) return this._torch;
+    this._torchAt = k;
+    let t = false;
+    const night = g.minute < 330 || g.minute >= 1230;
+    if (night && !this.sleeping && !this.down && this.state !== 'captive' && this.state !== 'labor' && !this.rec.equipment?.shield) {
+      const out = !this.layout || !buildingAt(this.layout, this.x, this.z);
+      const about = this.caravan || this.rec.job === 'guard' || this.moving || this.state === 'fight' || this.state === 'alert';
+      t = out && about && (hash4(this.rec.idx || 0, 0x70c) % 3 !== 0 || this.rec.job === 'guard' || this.caravan);
+    }
+    this._torch = t;
+    return t;
   }
 
   weapon() {

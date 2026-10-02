@@ -8,6 +8,7 @@ import { RNG, hash4, clamp, smoothstep } from '../util/rng.js';
 import { makeNoise2D, fbm } from '../util/noise.js';
 import { BIOMES, BIOME_STYLE } from './biomes.js';
 import { placeName, civName, CULTURES } from './names.js';
+import { genSites } from './sites.js';
 
 const SPLOTCH_STEP_X = 150;
 const SPLOTCH_STEP_Z = 96;
@@ -36,6 +37,8 @@ export class Overworld {
     this.genRivers();
     this.genLakes();
     this.genCivsAndSettlements();
+    // The old places: dungeons, and the Kavorent's spires.
+    this.sites = genSites(this);
     this.explored = new Uint8Array(MAP_W * MAP_H);
   }
 

@@ -167,6 +167,8 @@ export class Adventurers {
     const home = a.home !== null ? ow.civs[a.home] : null;
     ledger(L, Math.floor(now / DAY), `${this.title(a)} ${a.name.first} ${a.name.last}${home ? ` of the ${home.name.replace(/^The /, '')}` : ''} has pitched a tent outside town.`);
     this.trade(a, L, rng);
+    // (And whatever they brought up from below goes on them.)
+    this.sim.dungeons?.improveGear(a, L);
   }
 
   depart(a, rng) {
@@ -199,7 +201,7 @@ export class Adventurers {
   }
 
   title(a) {
-    return { 1: 'The adventurer', 2: 'The seasoned adventurer', 3: 'The renowned adventurer' }[a.level] || 'The adventurer';
+    return { 1: 'The adventurer', 2: 'The seasoned adventurer', 3: 'The renowned adventurer', 4: 'The famed adventurer', 5: 'The legendary adventurer' }[a.level] || 'The adventurer';
   }
 
   // Market business: sell what the road gave them, buy what the road needs.

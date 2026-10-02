@@ -4,6 +4,7 @@
 import { B, BLOCKS, CROPS, cropStage, cropMeta, META_AGE, isFarmland } from '../world/blocks.js';
 import { REGION_W, REGION_D, WORLD_Y } from '../config.js';
 import { weatherAt, SPELL } from '../world/weather.js';
+import { relicGrowth } from './relics.js';
 
 const WET_HOURS = 24; // how long soaked soil stays moist once the rain stops
 
@@ -157,6 +158,8 @@ export class CropGrowth {
       e.last = now;
       if (gap > 90) e.bonus = (e.bonus || 0) + this.wetEstimate(e, now - gap, now);
       else if (gap > 0 && w.getBlock(e.x, e.y - 1, e.z) === B.farmland_wet) e.bonus = (e.bonus || 0) + gap;
+      // (And twice again in a seed of plenty's circle.)
+      if (gap > 0 && relicGrowth(this.game, e.x, e.y, e.z)) e.bonus = (e.bonus || 0) + gap;
       const want = this.stageOf(e);
       const meta = w.getMeta(e.x, e.y, e.z);
       if (cropStage(meta) < want) w.setMeta(e.x, e.y, e.z, (meta & ~META_AGE) | cropMeta(id, want));

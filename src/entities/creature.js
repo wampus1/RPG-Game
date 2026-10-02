@@ -4,6 +4,9 @@ import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
+import { MONSTER_SPECIES, BRAINS } from './monsters.js';
+import { MONSTER_LOOKS } from '../render/dungeonart.js';
+import { ITEMS } from '../world/items.js';
 
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
@@ -23,11 +26,13 @@ export const SPECIES = {
   // A will-o'-the-wisp: a drifting light that keeps its distance and lobs
   // balls of cold fire where you stand (they burst where they land, and
   // chill): keep moving, and run it down; it flits off if you get close.
-  wisp: { name: 'Will-o\'-the-Wisp', hp: 6, dmg: 3, step: 0.3, mode: 'hostile', aggro: 12, drops: [['coin', 1, 3, 0.6]], night: true, floats: true },
+  wisp: { name: 'Will-o\'-the-Wisp', hp: 6, dmg: 3, step: 0.3, mode: 'hostile', aggro: 12, drops: [['coin', 1, 3, 0.6]], night: true, floats: true, light: 7 },
   // Farm beasts, out on the grass and kept in town (see game.spawning).
   pig: { name: 'Pig', hp: 8, dmg: 0, step: 0.42, mode: 'passive', drops: [['raw_meat', 2, 3, 1], ['leather', 1, 1, 0.3]], tame: true },
   sheep: { name: 'Sheep', hp: 7, dmg: 0, step: 0.4, mode: 'passive', drops: [['raw_meat', 1, 2, 1], ['string', 1, 3, 0.8]], tame: true },
   cow: { name: 'Cow', hp: 12, dmg: 0, step: 0.5, mode: 'passive', drops: [['raw_meat', 2, 4, 1], ['leather', 1, 2, 0.8]], tame: true },
+  // (And what lives below ground: see monsters.js.)
+  ...MONSTER_SPECIES,
 };
 
 // What a skeleton picked up (and so how it fights: see combat.styleOf).
@@ -56,20 +61,36 @@ export class Creature extends Entity {
     this.home = { x, z };
     this.fleeFrom = null;
     this.angry = false;
-    if (S.humanoid) this.look = SKELETON_LOOK;
+    if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] : SKELETON_LOOK;
     if (species === 'skeleton') {
       let r = this.rng.next();
       this.arms = SKELETON_ARMS.find(([, w]) => (r -= w) <= 0)?.[0] || 'stone_sword';
     }
+    if (S.arms) this.arms = S.arms;
+    // (A shield on its arm, drawn there and raised to take a blow.)
+    if (S.shield) {
+      this.shieldKey = S.shield;
+      this.look = { ...this.look, gear: { ...(this.look.gear || {}), shield: String(ITEMS[S.shield]?.look || 'wood').split(':')[0] } };
+    }
   }
 
   heldItem() {
-    return this.species === 'skeleton' ? this.arms || 'stone_sword' : null;
+    return this.arms || null;
   }
 
   // What it fights with up close (a skeleton's bow: it clubs you with it).
   meleeWeapon() {
-    return this.species === 'skeleton' && this.arms !== 'bow' ? this.arms || 'stone_sword' : null;
+    return this.arms && this.arms !== 'bow' ? this.arms : null;
+  }
+
+  // A second blade in its other hand (a cutthroat's).
+  offhandItem() {
+    return this.S.offhand || null;
+  }
+
+  // How long a step takes it (quicker rallied, slower chilled).
+  stepTime() {
+    return this.S.step * (this.hasteT > 0 ? 0.7 : 1) * (this.slowT > 0 ? 1.4 : 1);
   }
 
   get hostileNow() {
@@ -79,13 +100,17 @@ export class Creature extends Entity {
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;
-    if (this.attackCd > 0) this.attackCd -= dt;
+    if (this.hasteT > 0) this.hasteT -= dt;
+    if (this.attackCd > 0) this.attackCd -= dt * (this.hasteT > 0 ? 1.6 : 1);
     // Night monsters burn away in daylight.
-    if (this.S.night && this.game.isDay() && this.rng.chance(dt * 0.08)) {
+    if (this.S.night && !this.inst && this.game.isDay() && this.rng.chance(dt * 0.08)) {
       this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 10, color: ['#c8c8c8', '#8a8a8a'], up: 30, life: 0.8 });
       this.dead = true;
       return;
     }
+    // Waiting in a niche, or switched off, till something comes near (see
+    // game/dungeon.js).
+    if (this.dormant) return;
     // Winding up a blow (or charging): nothing else till it's thrown.
     if (this.windup && tickAttack(this.game, this, dt)) return;
     if (this.moving) return;
@@ -111,8 +136,10 @@ export class Creature extends Entity {
     if (this.lostT > 0 && this.target === game.player) this.target = null;
     if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
+      // Its own way of fighting (see monsters.js), if it has one.
+      if (this.S.brain && BRAINS[this.S.brain](this, dt)) return;
       // (Those that fight from afar: a skeleton with a bow, a wisp.)
-      if (this.target && (this.species === 'wisp' || this.arms === 'bow') && this.keepOff(dt)) return;
+      if (this.target && (this.species === 'wisp' || this.arms === 'bow' || this.S.ranged) && this.keepOff(dt)) return;
       if (this.target) return this.chase(dt);
     } else if (this.tie) {
       // Tied to a post: shifting about on the end of the lead, no further
@@ -185,7 +212,7 @@ export class Creature extends Entity {
       }
     }
     const [nx, , nz] = this.path[this.pathI];
-    if (this.tryStep(nx, nz, this.S.step)) this.pathI++;
+    if (this.tryStep(nx, nz, this.stepTime())) this.pathI++;
     else this.path = null;
   }
 

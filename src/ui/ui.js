@@ -382,7 +382,8 @@ export class UI {
       const b = BLOCKS[d.block];
       lines.push({ text: 'Placeable block' + (b.rotatable ? ' · [R] rotate' : ''), color: C.dim });
     }
-    if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
+    if (d.relic) lines.push({ text: 'Set it down to use it', color: C.green });
+    else if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
     lines.push({ text: `Value ¤${d.value}`, color: C.dim });
     this.tooltip = { lines };
   }
@@ -443,14 +444,17 @@ export class UI {
     const held = p.heldDef();
     if (held && !(p.stamina < sm - 0.05)) g.text(8, 1, held.name.slice(0, 15), C.fg);
     else if (held) g.text(8, 1, held.name.slice(0, 5), C.fg);
-    const s = game.currentSettlement;
+    const s = game.dungeon ? null : game.currentSettlement;
     let loc;
-    if (s) loc = `${s.name} · ${cap(s.type)}`;
+    // (Below ground: which place, and how deep.)
+    const dg = game.dungeon;
+    if (dg) loc = `${dg.kav ? 'Ruin' : cap(dg.T.name)} · Floor ${dg.floor + 1}/${dg.rec.depth}`;
+    else if (s) loc = `${s.name} · ${cap(s.type)}`;
     else {
       const col = game.world.terrain.column(p.x, p.z, game.world.terrain.context(p.x, p.z, p.x, p.z), {});
       loc = BIOMES[col.biome].name;
     }
-    g.text(1, 2, loc.slice(0, 22), s ? C.cyan : C.green);
+    g.text(1, 2, loc.slice(0, 22), dg ? (dg.kav ? '#7ae0ff' : '#d8b878') : s ? C.cyan : C.green);
     const sim = game.sim;
     if (sim) {
       const j = sim.justice.jail;

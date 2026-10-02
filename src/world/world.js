@@ -1,6 +1,6 @@
 // The World owns the overworld map, lazily generated regions, settlement
 // layouts, and exposes block access in global tile coordinates.
-import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H } from '../config.js';
+import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
@@ -8,12 +8,16 @@ import { generateRegion } from './regiongen.js';
 import { Region } from './region.js';
 import { buildLayout } from './settlement.js';
 import { rollContainerLoot } from './loot.js';
+import { settleSites } from './sites.js';
 
 export class World {
   constructor(seed) {
     this.seed = seed >>> 0;
     this.ow = new Overworld(this.seed);
     this.terrain = new Terrain(this.ow);
+    // The old places, each at its exact spot (see sites.js).
+    this.sites = this.ow.sites;
+    settleSites(this, this.sites);
     this.regions = new Map();
     this.saved = new Map(); // serialized modified regions awaiting reload
     this.layouts = new Map();
@@ -22,6 +26,21 @@ export class World {
     this.onRegionLoad = null; // (region) => void
     this._lastKey = -1;
     this._lastRegion = null;
+    // A place apart (a dungeon floor, a ship at sea): its own regions, out
+    // past the map's edge, kept only while you're there.
+    this.inst = null; // { regions: Map(rx * 4096 + rz -> Region), ... }
+  }
+
+  // Open a place apart: its regions (already made) take over the space
+  // beyond the map.
+  setInstance(inst) {
+    this.inst = inst;
+    this._lastKey = -1;
+    this._lastRegion = null;
+  }
+
+  inInstance(x) {
+    return Math.floor(x / REGION_W) >= INST_RX;
   }
 
   regionKey(rx, rz) {
@@ -81,7 +100,7 @@ export class World {
   regionAt(x, z) {
     const rx = Math.floor(x / REGION_W);
     const rz = Math.floor(z / REGION_D);
-    if (rx < 0 || rz < 0 || rx >= MAP_W || rz >= MAP_H) return null;
+    if (rx < 0 || rz < 0 || rx >= MAP_W || rz >= MAP_H) return rx >= INST_RX && rz >= 0 && this.inst ? this.inst.regions.get(rx * 4096 + rz) || null : null;
     const key = rz * MAP_W + rx;
     if (key === this._lastKey) return this._lastRegion;
     const r = this.regions.get(key) || null;
@@ -161,6 +180,9 @@ export class World {
     if (!r) return null;
     const i = ((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y;
     let c = r.containers.get(i);
+    // (Opened below ground: that floor's kept as it now is, so what's taken
+    // stays taken.)
+    if (c && r.rx >= INST_RX) r.modified = true;
     if (!c) {
       const s = this.ow.settlementAt(x, z);
       c = rollContainerLoot(this, x, y, z, BLOCKS[r.blocks[i]].name, s);
