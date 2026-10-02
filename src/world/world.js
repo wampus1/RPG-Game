@@ -1,6 +1,6 @@
 // The World owns the overworld map, lazily generated regions, settlement
 // layouts, and exposes block access in global tile coordinates.
-import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX } from '../config.js';
+import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX, INST_X0 } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
@@ -197,6 +197,8 @@ export class World {
   // not liquid. Below: standable surface.
   canStand(x, y, z, allowDoors = false) {
     if (y < 1 || y >= WORLD_Y - 1) return false;
+    // (Below ground, nobody climbs up onto the fittings, or the walls.)
+    if (this.inst && this.inst.maxY !== undefined && y > this.inst.maxY && x >= INST_X0) return false;
     const feet = BLOCKS[this.getBlock(x, y, z)];
     // Doors are passable when open (NPCs path through closed ones and open them).
     if (feet.solid && !((feet.interact === 'door' || feet.interact === 'gate') && (allowDoors || this.getState(x, y, z)))) return false;

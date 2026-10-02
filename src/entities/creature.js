@@ -35,6 +35,12 @@ export const SPECIES = {
   ...MONSTER_SPECIES,
 };
 
+// Inside the bounds something's held to (a master, its hall).
+export function inLeash(c, x, z) {
+  const L = c.leash;
+  return !L || (x >= L.x0 && x <= L.x1 && z >= L.z0 && z <= L.z1);
+}
+
 // What a skeleton picked up (and so how it fights: see combat.styleOf).
 const SKELETON_ARMS = [['stone_sword', 0.3], ['hand_axe', 0.2], ['wooden_spear', 0.15], ['club', 0.15], ['bow', 0.2]];
 
@@ -158,12 +164,18 @@ export class Creature extends Entity {
       }
       return;
     } else if (this.S.mode === 'passive') {
-      const t = game.nearestThreatTo(this, 5);
+      // Hurt (an arrow from afar as much as a blow): off, away from
+      // whoever did it, for a good while; otherwise shy of anyone close.
+      if (this.fleeT > 0) this.fleeT -= dt;
+      const scared = this.fleeT > 0 && this.fleeFrom && !this.fleeFrom.dead && this.distTo(this.fleeFrom) < 24;
+      const t = scared ? this.fleeFrom : game.nearestThreatTo(this, 5);
       if (t) {
         const dx = Math.sign(this.x - t.x) || (this.rng.chance(0.5) ? 1 : -1);
         const dz = Math.sign(this.z - t.z) || (this.rng.chance(0.5) ? 1 : -1);
         const opts = this.rng.chance(0.5) ? [[dx, 0], [0, dz]] : [[0, dz], [dx, 0]];
-        for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * 0.7)) return;
+        for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * (scared ? 0.55 : 0.7))) return;
+        // (Cornered on the way it wants: any way but toward them.)
+        if (scared) for (const [ox, oz] of [[dz, dx], [-dz, -dx]]) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * 0.6)) return;
       }
     }
     if (this.thinkT <= 0) {
@@ -177,6 +189,8 @@ export class Creature extends Entity {
   }
 
   tryStep(nx, nz, dur) {
+    // (A master keeps to its hall.)
+    if (this.leash && !inLeash(this, nx, nz)) return false;
     const w = this.game.world;
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
     if (ny < 0 || this.game.occupiedBySolid(nx, ny, nz, this)) return false;
@@ -268,6 +282,10 @@ export class Creature extends Entity {
       this.angry = true;
       this.target = attacker;
     } else if (this.S.mode === 'hostile') this.target = attacker;
-    else this.thinkT = 0;
+    else {
+      this.thinkT = 0;
+      this.fleeFrom = attacker;
+      this.fleeT = 7;
+    }
   }
 }

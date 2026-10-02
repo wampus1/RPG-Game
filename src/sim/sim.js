@@ -769,6 +769,8 @@ export class Sim {
   // Fewer coins the more of it they already have (0: they won't take any
   // more), unless it's what their trade runs on.
   sellPrice(npc, k) {
+    // (Old coin's changed at a fixed rate, by the lot: see TradeWindow.sell.)
+    if (ITEMS[k]?.exchange) return Math.max(1, Math.round(ITEMS[k].value * ITEMS[k].exchange));
     const op = this.opinion(npc);
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;

@@ -55,6 +55,19 @@ export const THEMES = {
   dungeon_holdout: { root: 55, scale: 'dorian', bpm: 84, prog: [0, 6, 0, 4], lead: 'triangle', drums: 'hand', density: 0.4, swing: 0.15 },
   dungeon_kavorent: { root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], lead: 'sine', pad: true, arp: true, drums: null, density: 0.3, detune: 22 },
   fight_kavorent: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  // ...and each its own fight, and its own master's: a barrow's bell
+  // tolling under the drums, a mine's hammering, a crypt's organ at a
+  // gallop, a holdout's war drums, the Kavorent's scale turned savage.
+  dungeon_barrow_fight: { root: 50, scale: 'phrygian', bpm: 138, prog: [0, 1, 5, 0], lead: 'square', drums: 'battle', density: 0.74, drive: true, toll: true },
+  dungeon_barrow_boss: { root: 47, scale: 'phrygian', bpm: 150, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'square', drums: 'battle', density: 0.86, drive: true, toll: true, organ: true },
+  dungeon_mine_fight: { root: 48, scale: 'minor', bpm: 142, prog: [0, 6, 5, 6], lead: 'square', drums: 'tribal', density: 0.72, drive: true, fifths: true },
+  dungeon_mine_boss: { root: 45, scale: 'harmonic', bpm: 154, prog: [0, 6, 5, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.84, drive: true, fifths: true },
+  dungeon_crypt_fight: { root: 52, scale: 'harmonic', bpm: 132, prog: [0, 5, 1, 4], lead: 'square', drums: 'march', density: 0.7, drive: true, organ: true },
+  dungeon_crypt_boss: { root: 52, scale: 'harmonic', bpm: 146, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'battle', density: 0.85, drive: true, organ: true, toll: true, detune: 8 },
+  dungeon_holdout_fight: { root: 55, scale: 'dorian', bpm: 150, prog: [0, 6, 0, 4], lead: 'square', drums: 'tribal', density: 0.78, drive: true, swing: 0.1 },
+  dungeon_holdout_boss: { root: 55, scale: 'phrygian', bpm: 160, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'battle', density: 0.86, drive: true },
+  dungeon_kavorent_fight: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  dungeon_kavorent_boss: { root: 54, scale: 'whole', bpm: 152, prog: [0, 1, 3, 2, 0, 4, 3, 1], lead: 'square', drums: 'battle', density: 0.86, drive: true, arp: true, detune: 14 },
   // The openings: an old town's story, slow and warm; a shanty on deck;
   // the storm; and the cold after.
   history: { root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], lead: 'triangle', pad: true, arp: true, drums: null, density: 0.42 },
@@ -76,16 +89,18 @@ export function musicMood(game) {
     const beasts = game.creatures.some((c) => !c.dead && c.hostileNow && c.target === p && c.distTo(p) < 12);
     if (beasts || (game.combatT || 0) > 0) {
       if (game.combatWith === 'guard') return 'fight_guards';
-      // (Below ground: a master's hall, or the Kavorent's guardians.)
+      // (Below ground: a master's hall, or the place's own fight music.)
       if (game.dungeon) {
-        if (game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return 'fight_boss';
-        if (game.dungeon.kav) return 'fight_kavorent';
+        const ty = game.dungeon.rec.type;
+        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss`;
+        return `dungeon_${ty}_fight`;
       }
       return 'fight_monsters';
     }
   }
-  // Down below (no nights there).
-  if (game.dungeon) return `dungeon_${game.dungeon.rec.type}`;
+  // Down below (no nights there): its master's fight, once begun, even
+  // between blows.
+  if (game.dungeon) return game.dungeon.fight ? `dungeon_${game.dungeon.rec.type}_boss` : `dungeon_${game.dungeon.rec.type}`;
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;
   if (s) {

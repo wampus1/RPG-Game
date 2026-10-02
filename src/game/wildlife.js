@@ -54,7 +54,9 @@ export class Wildlife {
     const nests = [];
     for (let z = p.z - SCAN; z <= p.z + SCAN; z++) {
       for (let x = p.x - SCAN; x <= p.x + SCAN; x++) {
-        if (hash4(x, z, g.seed >>> 0, 0x6e57) % 19 !== 0 || !w.regionAt(x, z)) continue;
+        // (Nests are scarce: a few in a wood, none crowded together.)
+        if (hash4(x, z, g.seed >>> 0, 0x6e57) % 67 !== 0 || !w.regionAt(x, z)) continue;
+        if (nests.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < 8)) continue;
         const key = `${x},${z}`;
         if (keep.has(key)) {
           nests.push(keep.get(key));
@@ -74,9 +76,9 @@ export class Wildlife {
         for (let k = 0; k < 1 + (h % 2); k++) n.birds.push(this.bird(n, 'song', BIRDS[(h >> (3 + k)) % BIRDS.length]));
         if (h % 3 === 0) n.owl = this.bird(n, 'owl', '#8a6a48');
         nests.push(n);
-        if (nests.length >= 14) break;
+        if (nests.length >= 5) break;
       }
-      if (nests.length >= 14) break;
+      if (nests.length >= 5) break;
     }
     this.nests = nests;
     this.birds = nests.flatMap((n) => [...n.birds, ...(n.owl ? [n.owl] : [])]);
@@ -119,7 +121,8 @@ export class Wildlife {
         // Pecking about (a hop now and then); off if you come close.
         if (near <= 3) {
           this.fly(b, { x: b.nest.x + 0.5, y: b.nest.y, z: b.nest.z + 0.5 }, 0.9);
-          if (near <= 12) g.audio?.play('chirp', { x: b.x, y: b.y, z: b.z });
+          g.audio?.play('chirp', { x: b.x, y: b.y, z: b.z });
+          g.audio?.play('flap', { x: b.x, y: b.y, z: b.z });
           return;
         }
         if (Math.random() < dt * 0.6) {

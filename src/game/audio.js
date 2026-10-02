@@ -92,7 +92,20 @@ export class Audio {
       case 'ui_open': this.tone(440, 0.05, 'square', 0.06, 400); break;
       case 'ui_close': this.tone(700, 0.05, 'square', 0.06, -350); break;
       case 'select': this.tone(880, 0.03, 'square', 0.05); break;
-      case 'eat': this.noise(0.06, 0.15, 700); this.noise(0.06, 0.15, 600, 0.1); break;
+      // Three crunchy bites, then a swallow.
+      case 'eat':
+        for (let i = 0; i < 3; i++) {
+          this.noise(0.05, 0.16, 900 + Math.random() * 700, i * 0.13);
+          this.noise(0.03, 0.08, 2600 + Math.random() * 800, i * 0.13 + 0.01);
+        }
+        this.tone(180, 0.09, 'sine', 0.07, -60, 0.42);
+        break;
+      // Drinking: two gulps.
+      case 'gulp': this.tone(240, 0.08, 'sine', 0.1, -120); this.noise(0.05, 0.05, 500, 0.02); this.tone(220, 0.09, 'sine', 0.1, -110, 0.2); this.noise(0.05, 0.05, 450, 0.22); break;
+      // Mended: a soft rising chime.
+      case 'heal': this.tone(660, 0.18, 'sine', 0.05, 220); this.tone(990, 0.25, 'sine', 0.035, 330, 0.08); break;
+      // Close to death: your heart in your ears.
+      case 'heartbeat': this.tone(55, 0.12, 'sine', 0.22, -15); this.tone(50, 0.14, 'sine', 0.16, -15, 0.18); break;
       case 'alarm': this.tone(880, 0.15, 'square', 0.1); this.tone(660, 0.15, 'square', 0.1, 0, 0.16); break;
       case 'torch': this.noise(0.2, 0.1, 2500); break;
       case 'error': this.tone(120, 0.1, 'square', 0.1); break;
@@ -171,6 +184,31 @@ export class Audio {
       case 'secret': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.05, 0, i * 0.09)); break;
       case 'creak': this.tone(130, 0.5, 'sawtooth', 0.025, 40); this.tone(170, 0.4, 'sawtooth', 0.02, -30, 0.2); break;
       case 'scream': this.tone(700, 0.4, 'sawtooth', 0.04, 300); this.tone(900, 0.35, 'square', 0.02, -200, 0.1); break;
+      // Below ground, the places' own sounds: water dripping somewhere,
+      // the earth groaning, a whisper on cold air, chains, old power.
+      case 'drip': { const f = 1400 + Math.random() * 900; this.tone(f, 0.05, 'sine', 0.05, -f * 0.5); this.tone(f * 0.6, 0.18, 'sine', 0.015, 0, 0.06); break; }
+      case 'rumble': this.noise(1.8, 0.06, 90); this.tone(38, 1.6, 'sine', 0.08, -6); break;
+      case 'whisper': for (let i = 0; i < 3; i++) this.noise(0.5, 0.025, 2400 + Math.random() * 1800, i * 0.35); break;
+      case 'chains': for (let i = 0; i < 5; i++) this.tone(2200 + Math.random() * 900, 0.04, 'triangle', 0.025, 0, i * 0.06 + Math.random() * 0.03); break;
+      case 'drone': this.tone(73, 2.2, 'sawtooth', 0.012, 2); this.tone(110, 2.2, 'sine', 0.02, -3); break;
+      case 'skitter': for (let i = 0; i < 6; i++) this.noise(0.02, 0.05, 3000 + Math.random() * 2000, i * 0.03); break;
+      case 'bones': for (let i = 0; i < 4; i++) this.tone(900 + Math.random() * 500, 0.03, 'square', 0.04, -300, i * 0.04); break;
+      case 'shatter': this.noise(0.15, 0.2, 3200); for (let i = 0; i < 3; i++) this.tone(2400 + Math.random() * 1600, 0.05, 'triangle', 0.04, 0, 0.03 + i * 0.04); break;
+      case 'thud': this.tone(90, 0.1, 'sine', 0.14, -40); this.noise(0.06, 0.1, 400); break;
+      case 'flap': for (let i = 0; i < 4; i++) this.noise(0.04, 0.06, 900, i * 0.07); break;
+      // A master's lair: the gate slamming shut, a roar, the bar's sting.
+      case 'gate_slam': this.tone(60, 0.5, 'sine', 0.3, -25); this.noise(0.35, 0.3, 300); for (let i = 0; i < 4; i++) this.noise(0.06, 0.08, 1800, 0.15 + i * 0.05); break;
+      case 'roar': this.noise(1.1, 0.22, 240); this.tone(95, 1.1, 'sawtooth', 0.08, -45); this.tone(140, 0.9, 'square', 0.03, -70, 0.05); break;
+      case 'sting': [220, 233, 208].forEach((f, i) => this.tone(f, 0.6, 'sawtooth', 0.05, 0, i * 0.02)); this.tone(55, 0.9, 'sine', 0.18, -10); break;
+      case 'victory': [392, 494, 587, 784, 988].forEach((f, i) => this.tone(f, i === 4 ? 0.6 : 0.14, 'square', 0.07, 0, i * 0.11)); break;
+      // The deep places' own: a holdout's gong, a pick far off, a fire's
+      // crackle, voices you can't make out, a low wind in a barrow; a fuse.
+      case 'gong': [196, 247, 294].forEach((f, i) => this.tone(f, 2.4, 'sine', 0.09 - i * 0.02, -4)); this.noise(0.2, 0.12, 1200); break;
+      case 'tink': { const f = 2600 + Math.random() * 600; for (let i = 0; i < 3; i++) this.tone(f, 0.05, 'triangle', 0.02, 0, i * 0.55); break; }
+      case 'crackle': for (let i = 0; i < 8; i++) this.noise(0.02, 0.04, 2000 + Math.random() * 3000, Math.random() * 0.8); break;
+      case 'voices': for (let i = 0; i < 4; i++) this.tone(140 + Math.random() * 90, 0.18, 'sawtooth', 0.008, Math.random() * 40 - 20, i * 0.22); break;
+      case 'wind_low': this.noise(2.4, 0.03, 220); break;
+      case 'fuse': this.noise(1.0, 0.05, 5200); break;
     }
   }
 }

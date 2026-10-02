@@ -236,6 +236,21 @@ export class Player extends Entity {
         this.hp = Math.min(this.maxHp, this.hp + 1);
       }
     } else this.regenT = 0;
+    // A hot meal working through you: a heart at a time.
+    const sh = this.slowHeal;
+    if (sh && sh.left > 0 && this.hp > 0 && !this.dead) {
+      sh.acc += sh.rate * dt;
+      while (sh.acc >= 1 && sh.left > 0) {
+        sh.acc -= 1;
+        sh.left -= 1;
+        if (this.hp < this.maxHp) {
+          this.hp = Math.min(this.maxHp, this.hp + 1);
+          this.quietHeal = true;
+          this.game.renderer.emit(this.x, this.y + 1.2, this.z, { n: 3, color: ['#80e070', '#c0ffa0'], up: 14, speed: 6, gravity: -8, life: 0.7, glow: true });
+        }
+      }
+      if (sh.left <= 0) this.slowHeal = null;
+    }
     // The day ends: blue hearts break.
     if (this.blue.hp > 0 && this.blue.day !== this.game.day) {
       this.blue = { hp: 0, day: this.game.day, from: [] };

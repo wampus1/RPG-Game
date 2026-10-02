@@ -359,7 +359,8 @@ export class TechWindow extends Window {
       const name = b.name.toUpperCase();
       drawText(ctx, name, Math.round(q.x - textWidth(name) / 2), q.y - 3, b.color, '#000');
     }
-    // The steps.
+    // The steps (their names are placed after, so none lands on another).
+    const labels = [];
     for (const id of ids) {
       const t = TECHS[id];
       const q = this.toScreen(techPos(id));
@@ -432,12 +433,50 @@ export class TechWindow extends Window {
         ctx.fillStyle = '#7ae070';
         ctx.fillRect(q.x + r - 3, q.y - r, 3, 3);
       }
-      if (z >= 1.3 || sel || hov) {
-        const nm = t.name;
-        drawText(ctx, nm, Math.round(q.x - textWidth(nm) / 2), q.y + r + 3, stt === 'locked' ? '#8a8a98' : stt === 'barred' ? '#a06058' : '#f0e8d8', '#000');
+      labels.push({ id, name: t.name, x: q.x, y: q.y, r, pri: sel || hov ? 2 : stt === 'current' ? 1 : 0, show: z >= 1.3 || sel || hov, color: stt === 'locked' ? '#8a8a98' : stt === 'barred' ? '#a06058' : '#f0e8d8' });
+    }
+    placeLabels(ctx, labels);
+    ctx.restore();
+  }
+}
+
+// Names under the steps, placed so none covers another (or another step):
+// under its step if there's room, else over it, else broken over two lines;
+// a name with nowhere to go is left off (it shows when you point at it).
+// The one you point at or picked always shows, on a dark slip.
+function placeLabels(ctx, labels) {
+  const taken = labels.map((l) => ({ x0: l.x - l.r, y0: l.y - l.r, x1: l.x + l.r, y1: l.y + l.r, id: l.id }));
+  const hits = (b, self) => taken.some((t) => t.id !== self && b.x0 < t.x1 && b.x1 > t.x0 && b.y0 < t.y1 && b.y1 > t.y0);
+  const box = (lines, cx, top) => {
+    const w = Math.max(...lines.map((s) => textWidth(s)));
+    return { x0: cx - w / 2 - 1, y0: top - 1, x1: cx + w / 2 + 1, y1: top + lines.length * 9 };
+  };
+  const order = labels.filter((l) => l.show).sort((a, b) => b.pri - a.pri);
+  for (const l of order) {
+    const words = l.name.split(' ');
+    const half = Math.ceil(words.length / 2);
+    const two = words.length > 1 ? [words.slice(0, half).join(' '), words.slice(half).join(' ')] : null;
+    const tries = [
+      { lines: [l.name], top: l.y + l.r + 3 },
+      { lines: [l.name], top: l.y - l.r - 11 },
+      ...(two ? [{ lines: two, top: l.y + l.r + 3 }, { lines: two, top: l.y - l.r - 20 }] : []),
+    ];
+    let pick = null;
+    for (const t of tries) {
+      const b = box(t.lines, l.x, t.top);
+      if (!hits(b, l.id)) {
+        pick = { ...t, b };
+        break;
       }
     }
-    ctx.restore();
+    if (!pick && l.pri < 2) continue;
+    if (!pick) pick = { ...tries[0], b: box(tries[0].lines, l.x, tries[0].top) };
+    if (l.pri >= 2) {
+      ctx.fillStyle = 'rgba(10,8,16,0.85)';
+      ctx.fillRect(Math.round(pick.b.x0) - 1, Math.round(pick.b.y0), Math.round(pick.b.x1 - pick.b.x0) + 2, Math.round(pick.b.y1 - pick.b.y0) + 1);
+    }
+    pick.lines.forEach((s, i) => drawText(ctx, s, Math.round(l.x - textWidth(s) / 2), Math.round(pick.top + i * 9), l.color, '#000'));
+    taken.push({ ...pick.b, id: `${l.id}:label` });
   }
 }
 

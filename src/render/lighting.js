@@ -77,7 +77,9 @@ export class Lighting {
     const ctx = r.ctx;
     const player = game.player;
     const below = !!game.dungeon;
-    const sky = below ? (game.dungeon.kav ? DARK_KAV : DARK) : skyLight(game.minute);
+    // (Each kind of place its own dark: a barrow's earthy, a mine's warm, a
+    // crypt's cold blue, a holdout's smoky red.)
+    const sky = below ? (game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the

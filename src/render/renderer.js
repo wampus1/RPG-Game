@@ -344,6 +344,14 @@ export class Renderer {
   // light over everything.
   drawFlashes(game, dt) {
     const ctx = this.ctx;
+    const hl = game.healFlash || 0;
+    if (hl > 0.01) {
+      const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, Math.min(VIEW_W, VIEW_H) * 0.32, VIEW_W / 2, VIEW_H / 2, Math.max(VIEW_W, VIEW_H) * 0.62);
+      g.addColorStop(0, 'rgba(80,220,90,0)');
+      g.addColorStop(1, `rgba(90,230,110,${Math.min(0.42, hl * 0.6)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
     const h = game.hurtFlash || 0;
     if (h > 0.01) {
       const g = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, Math.min(VIEW_W, VIEW_H) * 0.25, VIEW_W / 2, VIEW_H / 2, Math.max(VIEW_W, VIEW_H) * 0.62);
@@ -1220,9 +1228,12 @@ export class Renderer {
     // The off hand is the other side of them (the far side, side on).
     const hx = sx + (off ? (dir === 0 ? 3 : dir === 1 ? 9 : dir === 3 ? 6 : 12) : dir === 0 ? 12 : dir === 1 ? 7 : dir === 3 ? 8 : 3);
     // (The grip is the bottom-left of the picture; held things are drawn at
-    // four fifths size, in proportion to the hand holding them.)
-    const gx = -3;
-    const gy = -13;
+    // four fifths size, in proportion to the hand holding them. A light is
+    // held upright by the foot of its stem, which is the middle of the
+    // picture, so it sits in the hand rather than beside it.)
+    const upright = !!HELD_FLAMES[key];
+    const gx = upright ? -7.5 : -3;
+    const gy = upright ? -12 : -13;
     const S = 0.8;
     const mir = off && dir === 0 ? true : dir === 1;
     const pose = this.swingPose(e, dir, off, mir) || (guard ? this.guardPose(e, dir, off, mir) : null);
@@ -1654,14 +1665,16 @@ export class Renderer {
         const [lx, lz] = this.toView(a.tx, a.tz);
         const ex = Math.round(lx * TILE + 8 - this.camX);
         const ey = Math.round(lz * TILE - a.ty * LH + LH - this.camY);
-        ctx.fillStyle = `rgba(128,208,255,${0.25 + f * 0.35})`;
+        // (Tinted, for a flask or a charge or grave-light.)
+        const [tr, tg, tb] = a.tint || [128, 208, 255];
+        ctx.fillStyle = `rgba(${tr},${tg},${tb},${0.25 + f * 0.35})`;
         ctx.fillRect(ex - 5, ey - 1, 10, 1);
         ctx.fillRect(ex - 3, ey - 2, 6, 3);
         const gsy = Math.round(wz * TILE - gy * LH + LH - this.camY);
         const lift = Math.round(Math.sin(f * Math.PI) * a.arc * LH);
-        ctx.fillStyle = 'rgba(128,200,255,0.35)';
+        ctx.fillStyle = `rgba(${tr},${tg},${tb},0.35)`;
         ctx.fillRect(sx - 3, gsy - lift - 4, 6, 6);
-        ctx.fillStyle = '#c0ecff';
+        ctx.fillStyle = a.tint ? `rgb(${Math.min(255, tr + 60)},${Math.min(255, tg + 60)},${Math.min(255, tb + 60)})` : '#c0ecff';
         ctx.fillRect(sx - 2, gsy - lift - 3, 4, 4);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx - 1, gsy - lift - 2, 2, 2);
@@ -2003,6 +2016,46 @@ export class Renderer {
     const ctx = this.ctx;
     const p = game.player;
     const near = (e) => Math.abs(e.x - p.x) < 24 && Math.abs(e.z - p.z) < 18;
+    // Ground that stays bad (see monsters.addZone): tinted while it lasts,
+    // each kind marked its own way, fading as it goes.
+    for (const z of game.zones || []) {
+      const [cr, cg, cb] = z.color || [200, 200, 200];
+      const fade = Math.min(1, (z.life - z.t) / 1.2) * Math.min(1, z.t / 0.3);
+      for (const t of z.tiles) {
+        if (!near(t)) continue;
+        const { x: sx, y: sy } = this.worldToScreen(t.x, (z.y ?? p.y) - 1, t.z);
+        const wob = 0.05 * Math.sin(this.time * 3 + t.x * 1.3 + t.z * 0.7);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.2 + wob) * fade})`;
+        ctx.fillRect(sx + 1, sy + 1, 14, 14);
+        ctx.fillStyle = `rgba(${Math.min(255, cr + 60)},${Math.min(255, cg + 60)},${Math.min(255, cb + 60)},${0.65 * fade})`;
+        if (z.kind === 'web') {
+          for (let i = 0; i < 14; i += 2) {
+            ctx.fillRect(sx + 1 + i, sy + 1 + i, 1, 1);
+            ctx.fillRect(sx + 14 - i, sy + 1 + i, 1, 1);
+          }
+          ctx.fillRect(sx + 1, sy + 8, 14, 1);
+          ctx.fillRect(sx + 8, sy + 1, 1, 14);
+        } else if (z.kind === 'snare') {
+          // A pair of iron jaws, open.
+          ctx.fillStyle = `rgba(150,150,160,${0.9 * fade})`;
+          ctx.fillRect(sx + 4, sy + 6, 8, 1);
+          ctx.fillRect(sx + 4, sy + 10, 8, 1);
+          for (let i = 0; i < 4; i++) {
+            ctx.fillRect(sx + 4 + i * 2, sy + 7, 1, 1);
+            ctx.fillRect(sx + 5 + i * 2, sy + 9, 1, 1);
+          }
+        } else if (z.kind === 'caltrops') {
+          for (let i = 0; i < 4; i++) ctx.fillRect(sx + 3 + ((i * 5 + t.x * 3) % 10), sy + 3 + ((i * 7 + t.z * 5) % 10), 2, 1);
+        } else if (z.kind === 'poison' || z.kind === 'acid') {
+          const k = Math.floor(this.time * 3 + t.x + t.z) % 4;
+          ctx.fillRect(sx + 3 + k * 2, sy + 4 + ((k * 3) % 7), 2, 2);
+          ctx.fillRect(sx + 10 - k, sy + 10 - k, 1, 1);
+        } else if (z.kind === 'whirl' && z.pull) {
+          const a = this.time * 4 + (t.x - z.pull.x) + (t.z - z.pull.z);
+          ctx.fillRect(sx + 7 + Math.round(Math.cos(a) * 5), sy + 7 + Math.round(Math.sin(a) * 5), 2, 1);
+        }
+      }
+    }
     // Hazards coming (a slam, a beam, a dart, rocks from the roof): the
     // ground they'll strike, in their colour, brighter and flashing as the
     // moment comes.

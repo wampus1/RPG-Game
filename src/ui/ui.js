@@ -8,7 +8,7 @@ import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
 import { itemIcon, drawJewelled } from '../render/sprites.js';
-import { drawText } from '../render/font.js';
+import { drawText, textWidth } from '../render/font.js';
 import { addItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
@@ -256,6 +256,8 @@ export class UI {
       drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
       if (this.hudP > 0.8) this.drawMinimapImage(ctx);
     }
+    // A master's fight: its name and its life across the top of the screen.
+    if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.drawBossBar(ctx, game);
     // An opening scene's letterbox, titles and captions (under any window).
     if (game && game.cutscene) game.cutscene.draw(ctx);
     for (const w of this.windows) {
@@ -278,6 +280,83 @@ export class UI {
     }
     if (game && game.sleep) this.drawSleep(ctx, game);
     if (this.ko) this.drawKnockout(ctx);
+  }
+
+  // The master's bar: it drops in from the top as the fight begins, the
+  // name spelled out a letter at a time, the bar filling; red, with a pale
+  // trail behind each blow that catches up a moment later, a white flash
+  // as it lands, a pulse when it's nearly done. When it falls: its name,
+  // struck through, and VANQUISHED.
+  drawBossBar(ctx, game) {
+    const dg = game.dungeon;
+    const f = dg.fight;
+    const W = 220;
+    const x0 = 176;
+    if (!f) {
+      const fl = dg.fallen;
+      fl.t += game.dt || 0.016;
+      if (fl.t > 4) {
+        dg.fallen = null;
+        return;
+      }
+      const a = Math.min(1, fl.t * 2) * Math.min(1, (4 - fl.t) * 1.5);
+      ctx.globalAlpha = a;
+      const word = 'VANQUISHED';
+      drawText(ctx, word, Math.round(x0 + W / 2 - textWidth(word) / 2), 14, '#ffe070', '#3a2000');
+      const nw = textWidth(fl.name);
+      const nx = Math.round(x0 + W / 2 - nw / 2);
+      drawText(ctx, fl.name, nx, 24, '#a89878', '#000');
+      ctx.fillStyle = '#c83a30';
+      ctx.fillRect(nx - 2, 27, Math.round((nw + 4) * Math.min(1, fl.t * 1.5)), 1);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const intro = Math.min(1, f.t / 1.4);
+    const ease = 1 - (1 - intro) ** 3;
+    const y = Math.round(-26 + ease * 36);
+    // Name, a letter at a time.
+    const name = f.name.toUpperCase();
+    const shown = name.slice(0, Math.ceil(name.length * Math.min(1, f.t / 0.9)));
+    const nx = Math.round(x0 + W / 2 - textWidth(name) / 2);
+    drawText(ctx, shown, nx, y, '#f0e0c0', '#2a0808');
+    // The frame.
+    const by = y + 10;
+    ctx.fillStyle = 'rgba(10,4,6,0.85)';
+    ctx.fillRect(x0 - 3, by - 2, W + 6, 10);
+    ctx.fillStyle = '#6a5040';
+    ctx.fillRect(x0 - 3, by - 2, W + 6, 1);
+    ctx.fillRect(x0 - 3, by + 7, W + 6, 1);
+    ctx.fillStyle = '#c8a060';
+    for (const ex of [x0 - 6, x0 + W + 2]) {
+      ctx.fillRect(ex, by + 1, 4, 4);
+      ctx.fillRect(ex + 1, by, 2, 6);
+    }
+    // The bar: its trail, its life, a flash where the last blow landed.
+    const frac = Math.max(0, f.frac) * ease;
+    const trail = Math.max(frac, f.trail * ease);
+    ctx.fillStyle = '#e8d0a0';
+    ctx.fillRect(x0, by, Math.round(W * trail), 6);
+    const low = f.frac < 0.25 ? 0.5 + 0.5 * Math.sin(this.time * 9) : 1;
+    const fw = Math.round(W * frac);
+    ctx.fillStyle = `rgb(${Math.round(150 + 60 * low)},${Math.round(20 + 14 * low)},${Math.round(20 + 10 * low)})`;
+    ctx.fillRect(x0, by, fw, 6);
+    ctx.fillStyle = 'rgba(255,140,110,0.8)';
+    ctx.fillRect(x0, by, fw, 1);
+    ctx.fillStyle = 'rgba(60,0,0,0.6)';
+    ctx.fillRect(x0, by + 5, fw, 1);
+    if (f.t - f.hitT < 0.12) {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillRect(x0, by, fw, 6);
+    }
+    // Quarter marks.
+    ctx.fillStyle = 'rgba(10,4,6,0.7)';
+    for (const q of [0.25, 0.5, 0.75]) ctx.fillRect(x0 + Math.round(W * q), by, 1, 6);
+    // The title under it.
+    if (f.title) {
+      ctx.globalAlpha = Math.min(1, Math.max(0, (f.t - 0.6) * 2));
+      drawText(ctx, f.title, Math.round(x0 + W / 2 - textWidth(f.title) / 2), by + 10, '#a89878', '#000');
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Night falls gently: the world dims, a clock races toward dawn, and the
@@ -373,7 +452,7 @@ export class UI {
       const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? (d.ammo === 'none' ? 'no ammunition: draws stamina' : `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}`) : null;
       lines.push({ text: `${d.hands === 2 ? 'Two-handed (no shield)' : d.ranged ? 'One-handed' : 'One-handed · RMB in pack: off hand'}${ammo ? ` · ${ammo}` : ''}`, color: C.dim });
     }
-    if (d.kind === 'food') lines.push({ text: `Restores ${d.heal} HP [F/RMB]`, color: C.green });
+    if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.heal} HP [F/RMB]`, color: C.green });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
     const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
     if (d.stats) lines.push({ text: `${d.kind === 'armor' ? 'While worn' : 'While held'}: ${Object.entries(d.stats).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${STAT[k] || k}`).join(' ')}`, color: C.green });
@@ -391,7 +470,7 @@ export class UI {
     }
     if (d.relic) lines.push({ text: 'Set it down to use it', color: C.green });
     else if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
-    lines.push({ text: `Value ¤${d.value}`, color: C.dim });
+    lines.push({ text: d.exchange ? `Value ¤1 for ${d.exchange}` : `Value ¤${d.value}`, color: C.dim });
     this.tooltip = { lines };
   }
 
@@ -400,8 +479,9 @@ export class UI {
     const g = this.hudGrid;
     g.clear();
     const p = game.player;
-    // Hearts & coins.
-    g.fill(0, 0, 25, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
+    // Hearts; under them your stamina; then coins and what you hold; then
+    // where you are (each on its own row, so nothing covers anything).
+    g.fill(0, 0, 25, 4, ' ', C.fg, 'rgba(10,8,16,0.55)');
     const hearts = Math.ceil(p.maxHp / 2);
     for (let i = 0; i < hearts; i++) {
       const v = p.hp - i * 2;
@@ -411,29 +491,32 @@ export class UI {
     const blue = p.blue && p.blue.day === game.day ? p.blue.hp : 0;
     const bh = Math.ceil(blue / 2);
     for (let i = 0; i < bh; i++) g.put(1 + hearts + i, 0, '♥', blue - i * 2 >= 2 ? '#58a8ff' : '#3868a8');
-    g.text(2 + hearts + bh, 0, `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`, C.dim);
-    // Stamina (shown when it's been spent): a pip for each point, under
-    // the hearts; the one filling back up glows dimmer.
+    const hpText = `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}${blue ? `+${blue}` : ''}`;
+    g.text(2 + hearts + bh, 0, hpText, C.dim);
+    // (A hot meal still doing you good: a green cross, pulsing.)
+    if (p.slowHeal && p.slowHeal.left > 0) g.put(3 + hearts + bh + hpText.length, 0, '+', Math.floor(this.time * 3) % 2 ? '#80e070' : '#4a9a40');
+    // Stamina: a pip for each point, right under the hearts; the one
+    // filling back up glows dimmer (and all of them, when they're full).
     // (Days without sleep cost a pip each: shown struck out in violet,
     // with what's wrong spelled out under them, until you sleep.)
     const sm = p.maxStamina || 10;
     const tired = p.sleepless || 0;
-    if (p.stamina !== undefined && (p.stamina < sm - 0.05 || tired > 0 || p.drainFlash > 0)) {
-      const n = Math.min(18, Math.ceil(sm));
+    if (p.stamina !== undefined) {
+      const n = Math.min(20, Math.ceil(sm));
       const v = Math.max(0, p.stamina);
       const low = v < Math.max(2, sm * 0.25);
-      const lost = Math.min(18 - n, tired);
-      g.fill(13, 1, n + lost + 2, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+      const lost = Math.min(23 - n, tired);
+      const rest = v >= sm - 0.05 && !tired && !(p.drainFlash > 0);
       // (Breath being torn out of you: the pips flash a sick green.)
       const drained = p.drainFlash > 0;
       if (drained) p.drainFlash -= game.dt || 0.016;
       for (let i = 0; i < n; i++) {
         const part = Math.max(0, Math.min(1, v - i));
-        const full = drained ? (Math.floor(this.time * 12) % 2 ? '#9cf0b0' : '#4aa070') : low ? '#ff9040' : '#e8d060';
-        g.put(14 + i, 1, part >= 1 ? '■' : part > 0 ? '▪' : '·', part >= 1 ? full : part > 0 ? (drained ? '#3a7050' : '#9a8a40') : '#5a5040');
+        const full = drained ? (Math.floor(this.time * 12) % 2 ? '#9cf0b0' : '#4aa070') : low ? '#ff9040' : rest ? '#a89848' : '#e8d060';
+        g.put(1 + i, 1, part >= 1 ? '■' : part > 0 ? '▪' : '·', part >= 1 ? full : part > 0 ? (drained ? '#3a7050' : '#9a8a40') : '#5a5040');
       }
       const blink = Math.floor(performance.now() / 600) % 2 === 0;
-      for (let i = 0; i < lost; i++) g.put(14 + n + i, 1, '×', blink ? '#c070ff' : '#8a50c0');
+      for (let i = 0; i < lost; i++) g.put(1 + n + i, 1, '×', blink ? '#c070ff' : '#8a50c0');
     }
     // Potions still working.
     const nowAbs = game.day * 1440 + game.minute;
@@ -444,13 +527,13 @@ export class UI {
         const what = q.combat ? { breath: `STA+${q.n}`, wind: 'REGEN', fury: 'FURY', haste: 'HASTE' }[q.combat] : `${{ str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' }[q.stat]}+${q.n}`;
         return `${what} ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
       }).join('  ');
-      g.text(1, 3, txt.slice(0, 40), '#c0a0ff', 'rgba(10,8,16,0.55)');
+      g.text(1, 4, txt.slice(0, 40), '#c0a0ff', 'rgba(10,8,16,0.55)');
     }
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
-    g.text(1, 1, `¤ ${coins}`, C.hi);
+    const ct = `¤ ${coins}`;
+    g.text(1, 2, ct, C.hi);
     const held = p.heldDef();
-    if (held && !(p.stamina < sm - 0.05)) g.text(8, 1, held.name.slice(0, 15), C.fg);
-    else if (held) g.text(8, 1, held.name.slice(0, 5), C.fg);
+    if (held) g.text(3 + ct.length, 2, held.name.slice(0, 21 - ct.length), C.fg);
     const s = game.dungeon ? null : game.currentSettlement;
     let loc;
     // (Below ground: which place, and how deep.)
@@ -461,7 +544,7 @@ export class UI {
       const col = game.world.terrain.column(p.x, p.z, game.world.terrain.context(p.x, p.z, p.x, p.z), {});
       loc = BIOMES[col.biome].name;
     }
-    g.text(1, 2, loc.slice(0, 22), dg ? (dg.kav ? '#7ae0ff' : '#d8b878') : s ? C.cyan : C.green);
+    g.text(1, 3, loc.slice(0, 23), dg ? (dg.kav ? '#7ae0ff' : '#d8b878') : s ? C.cyan : C.green);
     const sim = game.sim;
     if (sim) {
       const j = sim.justice.jail;
@@ -492,7 +575,7 @@ export class UI {
         col = C.green;
       }
       // (A town's taxes and laws are on its notice board, not up here.)
-      let y = 3;
+      let y = buffs.length ? 5 : 4;
       if (status) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, status.slice(0, 24), col);

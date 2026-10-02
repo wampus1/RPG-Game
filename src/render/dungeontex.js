@@ -610,4 +610,275 @@ export const DSPRITES = {
     return p.outline(OUT);
   },
 };
-export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4 };
+Object.assign(DSPRITES, {
+  // Cobwebs strung across a corner.
+  cobweb(rot) {
+    const p = spr();
+    const c = '#dcdce6';
+    const ox = rot % 2 ? 15 : 0;
+    const sx = rot % 2 ? -1 : 1;
+    for (let k = 0; k < 4; k++) p.line(ox, 4 + k * 2, ox + sx * (12 - k * 3), 4, c);
+    for (let k = 1; k < 4; k++) p.line(ox + sx * k * 3, 4, ox, 4 + k * 4, c);
+    for (let i = 3; i < p.d.length; i += 4) if (p.d[i]) p.d[i] = 140;
+    for (let y = 4; y < 20; y += 3) p.set(ox + sx, y, '#ffffff', 170);
+    return p;
+  },
+  // A clay urn of ashes, lidded.
+  urn(rot) {
+    const p = spr();
+    const c = rot % 2 ? ['#8a5a3a', '#6a4028', '#a87048'] : ['#7a6a58', '#5a4a3c', '#9a8a74'];
+    p.ellipse(8, 20, 5, 5, c[0]);
+    p.rect(5, 12, 6, 4, c[0]);
+    p.rect(4, 11, 8, 2, c[2]);
+    p.rect(6, 9, 4, 2, c[1]);
+    p.hline(4, 12, 19, c[1]);
+    p.vline(5, 15, 23, c[2]);
+    p.hline(5, 11, 25, c[1]);
+    return p.outline(OUT);
+  },
+  // Stubs of candles, guttering.
+  candles(rot, st, f) {
+    const p = spr();
+    const spots = [[4, 22, 5], [8, 24, 7], [11, 21, 4], [6, 25, 3]];
+    for (const [x, y, h] of spots) {
+      p.rect(x, y - h, 2, h, '#e8e0c8');
+      p.set(x, y - h, '#c8c0a8');
+      const fl = (f + x) % 3 === 0 ? -1 : 0;
+      p.set(x, y - h - 1 + fl, '#ffe070');
+      p.set(x, y - h - 2 + fl, '#ff9030');
+    }
+    p.rect(3, 25, 11, 1, '#c8c0a8');
+    return p;
+  },
+  // A knight of old, worn by the damp.
+  statue() {
+    const p = spr(TALL);
+    p.rect(3, 34, 10, 6, STONE[1]);
+    p.hline(3, 12, 34, STONE[2]);
+    p.rect(5, 16, 6, 18, STONE[0]);
+    p.rect(4, 17, 8, 6, STONE[0]);
+    p.vline(5, 16, 33, STONE[2]);
+    p.ellipse(8, 11, 3, 4, STONE[0]);
+    p.rect(6, 10, 4, 1, STONE[1]);
+    // The sword it holds, point down.
+    p.vline(12, 12, 34, STONE[2]);
+    p.hline(10, 14, 16, STONE[2]);
+    for (let i = 0; i < 6; i++) p.set(4 + ((i * 5) % 8), 18 + i * 3, '#4a6a3a');
+    return p.outline(OUT);
+  },
+  skull_pile() {
+    const p = spr();
+    const b = ['#d8d0b8', '#a8a088', '#f0ead8'];
+    for (const [x, y] of [[2, 21], [6, 22], [10, 21], [4, 17], [8, 17], [6, 13]]) {
+      p.rect(x, y, 4, 4, b[0]);
+      p.hline(x + 1, x + 2, y + 4, b[1]);
+      p.set(x + 1, y + 1, '#2a2622');
+      p.set(x + 3, y + 1, '#2a2622');
+      p.set(x, y, b[2]);
+    }
+    return p.outline(OUT);
+  },
+  // An ore cart, left on its rails with a last load in it.
+  mine_cart() {
+    const p = spr();
+    p.rect(1, 15, 14, 8, '#5a4a3a');
+    p.rect(2, 16, 12, 6, '#4a3a2c');
+    p.hline(1, 14, 15, '#7a6a58');
+    for (const x of [1, 14]) p.vline(x, 15, 22, IRON[0]);
+    p.rect(3, 12, 10, 4, '#3a3a40');
+    for (const [x, y, c] of [[4, 12, '#c8a040'], [8, 11, '#8a8a90'], [11, 12, '#2a2a2e'], [6, 13, '#c87a3a']]) p.rect(x, y, 2, 2, c);
+    p.ellipse(4, 24, 2, 2, IRON[1]);
+    p.ellipse(12, 24, 2, 2, IRON[1]);
+    p.hline(0, 15, 26, '#6a5a4a');
+    return p.outline(OUT);
+  },
+  stalagmite(rot) {
+    const p = spr();
+    const c = rot % 2 ? ['#6a5e52', '#4a4038', '#8a7e70'] : ['#5e5a56', '#403c38', '#7e7a74'];
+    for (let y = 6; y <= 25; y++) {
+      const w = Math.round(1 + (y - 6) * 0.3);
+      p.hline(8 - w, 8 + w, y, c[0]);
+      p.set(8 - w, y, c[2]);
+      p.set(8 + w, y, c[1]);
+    }
+    p.rect(11, 18, 3, 8, c[1]);
+    p.set(12, 17, c[1]);
+    return p.outline(OUT);
+  },
+  // Glowcaps: a clump of pale toadstools that light the dark blue-green.
+  glowshroom(rot, st, f) {
+    const p = spr();
+    const g = f % 2 ? '#a0f8e0' : '#7ae8d0';
+    for (const [x, y, r] of [[4, 21, 2], [9, 19, 3], [12, 23, 2]]) {
+      p.vline(x, y, 25, '#d8e8e0');
+      p.ellipse(x, y - 1, r, r - 1 || 1, g);
+      p.set(x - 1, y - 2, '#ffffff');
+    }
+    return p;
+  },
+  weapon_rack() {
+    const p = spr();
+    const w = P.planks_dark;
+    p.rect(1, 12, 14, 2, w[1]);
+    p.rect(1, 22, 14, 2, w[1]);
+    p.vline(1, 12, 25, w[0]);
+    p.vline(14, 12, 25, w[0]);
+    // Spears and a sword leaning in it.
+    for (const x of [4, 7, 10]) {
+      p.vline(x, 4, 24, '#6a4a2a');
+      p.rect(x - 1, 2, 3, 3, IRON[2]);
+    }
+    p.vline(12, 8, 24, IRON[2]);
+    p.hline(11, 13, 18, '#8a6a30');
+    return p.outline(OUT);
+  },
+  war_banner(rot, st, f) {
+    const p = spr(TALL);
+    p.vline(3, 2, 39, '#5a3a20');
+    p.rect(2, 1, 3, 2, '#c8a040');
+    const sway = f % 2;
+    for (let y = 4; y < 26; y++) {
+      const ragged = y > 22 ? (y + 2) % 3 === 0 : false;
+      p.hline(4, 13 + (y > 14 ? sway : 0) - (ragged ? 3 : 0), y, '#8a2a24');
+    }
+    p.hline(4, 13, 4, '#a83a30');
+    // A crude skull daubed on it.
+    p.rect(7, 10, 4, 4, '#e8e0c8');
+    p.set(8, 11, '#3a1a14');
+    p.set(10, 11, '#3a1a14');
+    p.hline(8, 9, 14, '#e8e0c8');
+    return p.outline(OUT);
+  },
+  hanging_chains(rot, st, f) {
+    const p = spr(TALL);
+    const sway = f % 2 ? 1 : 0;
+    for (const [x, len] of [[4, 22], [9, 30], [13, 16]]) {
+      for (let y = 0; y < len; y++) p.set(x + (y > len / 2 ? sway : 0), y, y % 2 ? IRON[0] : IRON[2]);
+      if (len > 20) p.rect(x - 1 + sway, len, 3, 2, IRON[1]);
+    }
+    return p;
+  },
+  powder_keg() {
+    const p = spr();
+    p.rect(3, 12, 10, 14, '#6a4a2c');
+    p.rect(2, 15, 12, 8, '#7a5a34');
+    for (const y of [13, 18, 24]) p.hline(2, 13, y, IRON[1]);
+    p.rect(5, 16, 6, 4, '#2a2620');
+    p.set(6, 17, '#e8e0c8');
+    p.set(8, 17, '#e8e0c8');
+    p.set(7, 18, '#e8e0c8');
+    // A fuse.
+    p.line(8, 12, 10, 8, '#c8b080');
+    p.set(10, 7, '#ff9030');
+    return p.outline(OUT);
+  },
+  roots(rot, st, f) {
+    const p = spr(TALL);
+    const c = ['#4a3420', '#6a4a2c', '#3a2614'];
+    for (const [x, len] of [[3, 18], [7, 26], [11, 14], [13, 22]]) {
+      let cx = x;
+      for (let y = 0; y < len; y++) {
+        if (y % 5 === 4) cx += (x + y + f) % 2 ? 1 : -1;
+        p.set(cx, y, c[y % 3 === 0 ? 1 : 0]);
+        if (y < len / 2) p.set(cx + 1, y, c[2]);
+      }
+    }
+    return p;
+  },
+  rubble(rot) {
+    const p = spr();
+    const c = ['#6a665e', '#4a4640', '#8a867c'];
+    const spots = rot % 2 ? [[3, 22, 3], [8, 23, 4], [11, 20, 2], [6, 19, 2]] : [[2, 23, 3], [7, 21, 3], [12, 23, 2], [9, 24, 2]];
+    for (const [x, y, r] of spots) {
+      p.ellipse(x, y, r, r - 1 || 1, c[0]);
+      p.set(x - 1, y - 1, c[2]);
+      p.set(x + 1, y + 1, c[1]);
+    }
+    return p.outline(OUT);
+  },
+  bone_throne() {
+    const p = spr(TALL);
+    const b = ['#d8d0b8', '#a8a088', '#f0ead8'];
+    p.rect(2, 26, 12, 14, b[1]);
+    p.rect(3, 6, 10, 22, b[0]);
+    p.rect(1, 22, 14, 5, b[1]);
+    // Skulls along its back, and horns at the top.
+    for (const x of [4, 8, 12]) {
+      p.rect(x - 1, 8, 3, 3, b[2]);
+      p.set(x - 1, 9, '#2a2622');
+      p.set(x + 1, 9, '#2a2622');
+    }
+    p.line(3, 6, 1, 1, b[2]);
+    p.line(12, 6, 14, 1, b[2]);
+    for (let y = 13; y < 22; y += 3) p.hline(4, 11, y, b[1]);
+    p.rect(4, 22, 8, 2, '#5a1a1a');
+    return p.outline(OUT);
+  },
+  // The master's gate: heavy iron, a skull boss in the middle of it.
+  boss_gate(rot) {
+    const p = spr(TALL);
+    const front = rot === 0 || rot === 2;
+    if (!front) {
+      p.rect(5, 0, 6, 40, IRON[1]);
+      p.vline(7, 0, 39, IRON[2]);
+      p.vline(9, 0, 39, IRON[0]);
+      return p.outline(OUT);
+    }
+    p.rect(0, 0, 16, 40, IRON[1]);
+    for (let x = 1; x < 16; x += 3) p.vline(x, 1, 39, IRON[0]);
+    for (const y of [4, 14, 26, 36]) p.hline(0, 15, y, IRON[2]);
+    p.ellipse(8, 20, 4, 4, '#2a2a30');
+    p.rect(6, 18, 5, 4, '#d8d0b8');
+    p.set(7, 19, '#2a0a0a');
+    p.set(9, 19, '#2a0a0a');
+    p.hline(7, 9, 22, '#d8d0b8');
+    for (let x = 1; x < 16; x += 3) p.set(x, 39, '#a8a8b4');
+    return p.outline(OUT);
+  },
+  boss_gate_open(rot) {
+    const p = spr(TALL);
+    const front = rot === 0 || rot === 2;
+    if (front) {
+      p.rect(0, 0, 16, 7, IRON[1]);
+      for (let x = 1; x < 16; x += 3) {
+        p.vline(x, 0, 8, IRON[0]);
+        p.set(x, 9, '#a8a8b4');
+      }
+      p.hline(0, 15, 4, IRON[2]);
+    } else p.rect(5, 0, 6, 8, IRON[1]);
+    return p.outline(OUT);
+  },
+  kav_gate(rot, st, f) {
+    const p = spr(TALL);
+    const front = rot === 0 || rot === 2;
+    if (!front) {
+      p.rect(5, 0, 6, 40, KAV.plate);
+      p.vline(8, 0, 39, f % 2 ? KAV.glow : KAV.seam);
+      return p.outline(OUT);
+    }
+    p.rect(0, 0, 16, 40, KAV.plate);
+    p.rect(1, 1, 14, 38, '#24223a');
+    p.vline(8, 1, 38, KAV.dark);
+    for (let y = 4; y < 38; y += 6) {
+      p.hline(2, 6, y, (y / 6 + f) % 2 ? KAV.seam : KAV.edge);
+      p.hline(10, 14, y, (y / 6 + f + 1) % 2 ? KAV.seam : KAV.edge);
+    }
+    p.ellipse(8, 20, 3, 3, f % 2 ? '#ff6050' : '#c83a30');
+    return p.outline(OUT);
+  },
+  gong(rot, st, f) {
+    const p = spr();
+    const w = P.planks_dark;
+    p.vline(2, 6, 25, w[1]);
+    p.vline(13, 6, 25, w[1]);
+    p.hline(1, 14, 6, w[0]);
+    p.hline(1, 14, 7, w[1]);
+    p.vline(8, 7, 9, '#5a5a5a');
+    p.ellipse(8, 16, 5, 6, st ? '#f0c860' : '#c8a040');
+    p.ellipse(8, 16, 3, 4, '#a88030');
+    p.set(6, 13, '#fff0a0');
+    p.set(8, 16, '#e8c060');
+    return p.outline(OUT);
+  },
+});
+export const DANIM = { brazier: 3, kav_door: 2, kav_field: 3, kav_console: 4, kav_node: 2, kav_seal: 4, relic: 4, kav_lamp: 4, kav_pylon: 2, kav_basin: 4, candles: 3, glowshroom: 2, war_banner: 2, hanging_chains: 2, roots: 2, kav_gate: 2 };

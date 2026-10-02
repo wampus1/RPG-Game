@@ -7,7 +7,7 @@ import { personName, familyName, CULTURES } from '../world/names.js';
 
 export const STATS = [
   { key: 'str', name: 'Strength', about: 'Harder blows; quicker digging and chopping.' },
-  { key: 'agi', name: 'Agility', about: 'Quicker on your feet and with a blade.' },
+  { key: 'agi', name: 'Agility', about: 'Quicker on your feet and with a blade, and a little more stamina.' },
   { key: 'end', name: 'Endurance', about: 'More health: 2 HP a point.' },
   { key: 'cha', name: 'Charm', about: 'Better prices; people warm to you faster.' },
 ];
@@ -177,8 +177,10 @@ export function repGainMult(h) {
   return (1 + 0.12 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'silver_tongue') ? 1.25 : 1);
 }
 // Breath for blocking, rolling and swinging.
+// (In tenths of a point. Light on your feet, you've a little more breath:
+// four tenths for every point of agility above the base.)
 export function staminaBonus(h) {
-  return (has(h, 'tireless') ? 30 : 0) - (has(h, 'short_winded') ? 30 : 0);
+  return (has(h, 'tireless') ? 30 : 0) - (has(h, 'short_winded') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE);
 }
 export function opinionBonus(h) {
   // Well dressed (or charming for a few hours), people warm to you at once.

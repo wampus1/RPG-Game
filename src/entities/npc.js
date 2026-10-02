@@ -1015,6 +1015,13 @@ export class NPC extends Entity {
         }
       }
     }
+    // A bout agreed: squaring up to you, guard raised, till it begins (see
+    // Game.updateDuel).
+    if (this.duelReady > 0) {
+      this.face(this.game.player.x, this.game.player.z);
+      this.guardT = 0.3;
+      return;
+    }
     // Someone you're talking to stands and listens (on the road too: an
     // adventurer or a trader met on the way stops for you).
     if ((this.state === 'routine' || this.state === 'caravan') && this.game.talkingTo === this && !this.sleeping) {

@@ -222,7 +222,9 @@ export class Dungeons {
     for (const a of adv.list) {
       if (a.dead || a.state !== 'stay' || now >= a.leave - 120) continue;
       const rng = new RNG(hash4(a.id, hour, 0xde1));
-      if (!rng.chance(0.012 + a.level * 0.004)) continue;
+      // (Rarely, and not in the first days: the old places are for the
+      // player to find first, mostly.)
+      if (now < DAY * 12 || !rng.chance(0.003 + a.level * 0.0012)) continue;
       const here = ow.settlements[a.at];
       if (!here) continue;
       // Somewhere they could hope to come back from.
@@ -270,7 +272,7 @@ export class Dungeons {
       // Into their packs: old coin, and (luck permitting) better.
       for (const m of party) {
         m.coins += rng.int(20, 60) * d.level;
-        st.add(m.pack, 'old_coin', rng.int(6, 20));
+        st.add(m.pack, 'old_coin', rng.int(3, 10));
         if (rng.chance(0.35)) st.add(m.pack, rng.pick(['gem', 'gold_ingot', 'ruby', 'sapphire', 'emerald', 'topaz', 'amethyst']), 1);
         if (kav) {
           st.add(m.pack, 'kav_scrap', rng.int(3, 9));
@@ -284,7 +286,8 @@ export class Dungeons {
         }
       }
       // The master slain, now and then (more likely with a strong band).
-      const slew = rng.chance(clamp(odds - 0.35, 0.05, 0.6)) && !(kav && rng.chance(0.6));
+      // (Only once the place has been worn down by a few bands before.)
+      const slew = d.delves >= 3 && rng.chance(clamp(odds - 0.55, 0.02, 0.2)) && !(kav && rng.chance(0.7));
       if (slew) this.cleared(d, list(names));
       // A Kavorent core (or two), for a town: rare.
       let cores = 0;

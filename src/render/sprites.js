@@ -31,6 +31,9 @@ const OUTFIT_COLORS = {
   robe_white: { robe: '#e8e4dc', trim: '#c8a030' },
   robe_blue: { robe: '#3a4a8a', trim: '#c8a030' },
   robe_green: { robe: '#4a6a3a', trim: '#a8c070' },
+  robe_witch: { robe: '#2e2c24', trim: '#6a8a3a' },
+  robe_saint: { robe: '#dcd8cc', trim: '#8a6ad8' },
+  robe_poison: { robe: '#3a4a2a', trim: '#a8c040' },
   noble: { trim: '#e0b030' },
   fisher: { vest: '#4a5a6a' },
   farmer: { overall: '#4a6a9a' },
@@ -1594,6 +1597,39 @@ function simpleIcon(key) {
       p.rect(6, 5, 4, 2, '#3a3a4a');
       p.hline(6, 9, 8, '#4a4a6a');
       break;
+    // (For the tree of learning: a catapult with its stone up, and a mine
+    // cart heaped with ore.)
+    case 'catapult': {
+      const w = ['#8a6038', '#5e4024', '#b08050'];
+      p.hline(2, 13, 12, w[1]);
+      p.hline(3, 12, 11, w[0]);
+      p.line(5, 11, 8, 6, w[0]);
+      p.line(11, 11, 8, 6, w[0]);
+      p.line(8, 7, 3, 2, w[2]);
+      p.ellipse(3, 2, 1.6, 1.6, '#8a8a90');
+      p.set(2, 1, '#c8c8d0');
+      for (const cx of [4, 11]) {
+        p.ellipse(cx, 13, 1.8, 1.8, '#3a2a1a');
+        p.set(cx, 13, '#8a6038');
+      }
+      break;
+    }
+    case 'mine_cart': {
+      p.rect(3, 7, 10, 5, '#6a6a72');
+      p.hline(3, 12, 7, '#9a9aa4');
+      p.vline(3, 7, 11, '#8a8a94');
+      p.ellipse(6, 6, 2.5, 1.6, '#2a2a30');
+      p.ellipse(10, 6, 2.2, 1.4, '#3a3a40');
+      p.set(6, 5, '#d8d8e4');
+      p.set(10, 5, '#e0a050');
+      p.set(8, 6, '#c8c8d0');
+      for (const cx of [5, 11]) {
+        p.ellipse(cx, 13, 1.6, 1.6, '#2a2a2a');
+        p.set(cx, 13, '#8a8a94');
+      }
+      p.hline(1, 14, 15, '#5e4024');
+      break;
+    }
     case 'newspaper':
       p.rect(2, 3, 12, 10, '#ece6d4');
       p.rect(3, 4, 10, 2, '#2a2630');
@@ -1925,7 +1961,7 @@ export function itemIcon(key) {
     for (let i = 0; i < 256; i++) if (d[i * 4 + 3]) bp.set(i % 16, Math.floor(i / 16), [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], d[i * 4 + 3]);
     px = edgeOverlay(bp);
   } else if (dIcon) px = dIcon;
-  else if (!it) px = simpleIcon('?');
+  else if (!it) px = simpleIcon(key);
   else if (it.kind === 'potion') px = potionIcon(it);
   else if (it.kind === 'gem') px = gemIcon(it);
   else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);

@@ -645,7 +645,18 @@ export function playerTick(game, p, dt, input, blocked) {
 // A shield on the arm, or a blade in hand, to take a blow on.
 export function canBlock(game, p) {
   const h = p.heldDef && p.heldDef();
+  // (Something in hand that the right button uses (food, a potion, a
+  // gadget, a bucket...): it's used, shield or no shield.)
+  if (usedByHand(h)) return false;
   return !!(shieldOf(p) || offhandOf(p) || (h && (h.kind === 'weapon' || (h.kind === 'tool' && h.damage >= 3)) && !h.ranged));
+}
+
+const HAND_USED = new Set(['bucket', 'water_bucket', 'hoe', 'dice', 'wagon', 'lead', 'saddle', 'raft', 'fishing_rod']);
+export function usedByHand(h) {
+  if (!h) return false;
+  if (['food', 'potion', 'gadget', 'enhancer', 'relic'].includes(h.kind)) return true;
+  if (h.kind === 'armor' && !h.block) return true;
+  return !!(h.newspaper || h.raft || h.fishing || HAND_USED.has(h.key));
 }
 
 export function spend(p, n) {

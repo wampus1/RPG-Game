@@ -29,6 +29,8 @@ const NOT_ITEMS = new Set([
   'stairs_up', 'brazier', 'barrow_door', 'sinkhole', 'mine_shaft', 'cave_mouth', 'rubble_seal', 'kav_pillar', 'kav_door', 'kav_lift',
   'kav_wall', 'kav_floor', 'kav_glow', 'kav_debris', 'kav_field', 'kav_console', 'kav_plate', 'kav_node', 'kav_seal', 'kav_cache',
   'kav_emitter', 'relic', 'kav_lamp', 'kav_pylon', 'kav_basin', 'sail', 'helm',
+  'cobweb', 'urn', 'candles', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'glowshroom', 'weapon_rack', 'war_banner', 'hanging_chains',
+  'powder_keg', 'roots', 'rubble', 'bone_throne', 'boss_gate', 'boss_gate_open', 'kav_gate', 'gong',
 ]);
 
 const BLOCK_VALUES = {
@@ -102,6 +104,11 @@ food('tamales', 6, 7, 'Maize Tamales', { quality: 'acceptable', region: 'wild' }
 food('cocoa', 3, 5, 'Cup of Cocoa', { region: 'wild' });
 food('goulash', 7, 7, 'Mountain Goulash', { quality: 'acceptable', region: 'high' });
 food('oatcakes', 4, 4, 'Oatcakes', { region: 'high' });
+// Hot dishes from the pot (and a warm cup) do their good slowly: a little
+// at once, the rest over the next while, and more in all than anything
+// eaten cold. [now, over time, seconds it takes]
+const SLOW = { stew: [2, 10, 20], pottage: [1, 9, 18], chowder: [2, 10, 20], spiced_lentils: [1, 9, 18], goulash: [2, 10, 20], tamales: [2, 7, 14], cocoa: [0, 6, 12], ale: [1, 3, 8] };
+for (const [k, [now, over, secs]] of Object.entries(SLOW)) Object.assign(ITEMS[k], { heal: now + over, now, regen: over, regenT: secs });
 
 // --- tools & weapons -----------------------------------------------------------
 const TIERS = { wood: [2, 1], stone: [3.2, 2], iron: [5, 3], gold: [7, 2] };
@@ -303,7 +310,7 @@ for (const k of SHARD_GEMS) item(`shard_${k}`, { name: `${GEMS[k].name} Shard`, 
 // if an odd stamp), plans for things nobody's built in a hundred years, a
 // sigil for a sealed door, and relics: things of power that work on all
 // round them wherever they're set down (see game/relics.js).
-item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 5, about: 'Stamped with kings nobody remembers. Any merchant will take them, for the silver.' });
+item('old_coin', { name: 'Old Coins', kind: 'misc', stack: 64, value: 0.5, exchange: 2, about: 'Stamped with kings nobody remembers. Any merchant will change them: two of them for a gold coin.' });
 item('old_blueprint', { name: 'Old Blueprint', kind: 'misc', stack: 8, value: 30, about: 'Plans for works long forgotten. A mayor would pay well for them, and the town\'s builders and thinkers would learn from them.' });
 item('sigil', { name: 'Bronze Sigil', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'The key to a sealed door, down below.' });
 item('kav_key', { name: 'Glyph Key', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'A shard of light in a frame of alloy: it opens a Kavorent vault.' });

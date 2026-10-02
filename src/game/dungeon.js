@@ -17,9 +17,10 @@
 import { buildFloor, FY, DTYPES } from '../world/dungeongen.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, RELICS } from '../world/items.js';
+import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { Creature } from '../entities/creature.js';
-import { addHazard, lineTiles } from '../entities/monsters.js';
+import { addHazard, lineTiles, areaTiles, BOSS_TITLES } from '../entities/monsters.js';
 import { countItem, removeItem } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
@@ -27,7 +28,7 @@ import { dropFields, raiseFields } from './kavtech.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Kinds of block a dungeon handles itself (see Game.interact).
-export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node']);
+export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate']);
 
 export class DungeonRun {
   constructor(game, rec) {
@@ -42,6 +43,9 @@ export class DungeonRun {
     this.plateOn = new Map();
     this.crumble = null;
     this.dripT = 2;
+    this.fight = null;
+    this.hazardT = 20;
+    this.moteT = 0;
   }
 
   get kav() {
@@ -85,6 +89,7 @@ export class DungeonRun {
     game.world.setInstance(null);
     game.dungeon = null;
     game.hazards = [];
+    game.zones = [];
     game.bulwarks = [];
     game.lodestar = null;
     game.projectiles = [];
@@ -137,9 +142,15 @@ export class DungeonRun {
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
-    game.world.setInstance({ regions: data.regions, floor: n });
+    game.world.setInstance({ regions: data.regions, floor: n, maxY: FY });
     // First time down here: adventurers have been before you, perhaps.
     if (!saved) this.firstVisit();
+    // The relic on the sealed vault's plinth (what kind it is, remembered).
+    const ra = data.relicAt;
+    if (ra && game.world.getBlock(ra.x, FY, ra.z) === B.relic && !relicAt(game, ra.x, FY, ra.z)) {
+      if (!game.relics) game.relics = new Map();
+      game.relics.set(`${ra.x},${FY},${ra.z}`, { x: ra.x, y: FY, z: ra.z, kind: ra.kind, r: RELIC_R, inst: placeTag(game) });
+    }
     // Who's still about.
     for (const s of data.spawns) {
       if (this.state.killed.includes(s.id)) continue;
@@ -149,6 +160,12 @@ export class DungeonRun {
       const y = game.world.findStandY(s.x, s.z, FY);
       const c = this.spawn(s.species, s.x, y > 0 ? y : FY, s.z, { id: s.id, boss: s.boss, key: s.key, ambush: s.ambush });
       if (c && s.species === 'golem' && !s.boss) c.dormant = 5;
+      // (The master keeps to its hall, and waits there till you come in.)
+      if (c && s.boss && data.bossRoom) {
+        c.leash = data.bossRoom;
+        c.waiting = true;
+        c.dormant = 1;
+      }
       // (A foundry's Prime: standing still till you're well inside.)
       if (c && s.guardian) {
         c.dormant = 6;
@@ -160,7 +177,7 @@ export class DungeonRun {
     let at;
     if (arrive === 'top') at = { x: data.up.x, z: data.up.z + 1 };
     else if (arrive === 'bottom') at = data.down ? { x: data.down.x + 1, z: data.down.z } : data.entry;
-    else at = arrive;
+    else at = this.landing(arrive.x, arrive.z);
     const y = game.world.findStandY(at.x, at.z, FY);
     const spot = game.world.canStand(at.x, y, at.z) && !game.occupiedBySolid(at.x, y, at.z, game.player) ? { x: at.x, y, z: at.z } : game.findFreeSpot(at.x, at.z, FY);
     game.player.teleport(spot.x, spot.y, spot.z);
@@ -169,6 +186,40 @@ export class DungeonRun {
     this.plateOn.clear();
     this.crumble = null;
     this.arriveT = 1;
+    this.fight = null;
+    // (A gate left up on a master still living comes down again.)
+    const g = data.bossGate;
+    if (g && !this.rec.cleared && game.world.getBlock(g.x, FY, g.z) === B.boss_gate_open) game.world.setBlock(g.x, FY, g.z, B.boss_gate, g.rot);
+  }
+
+  // Where you come down, through a floor that gave way above: the nearest
+  // floor of a room to the spot (never the top of a wall, nor solid rock;
+  // nor the master's hall, nor a sealed vault).
+  landing(x, z) {
+    const d = this.data;
+    const P = d.plan;
+    const game = this.game;
+    const lx = x - d.x0;
+    let best = null;
+    for (let r = 0; r < 40 && !best; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const tx = lx + dx;
+          const tz = z + dz;
+          if (tx < 1 || tz < 1 || tx >= P.W - 1 || tz >= P.D - 1) continue;
+          const ri = P.room[tz * P.W + tx];
+          if (ri < 0) continue;
+          const room = d.rooms[ri];
+          if (!room || room.sealed || room.kit === 'hidden') continue;
+          const wx = d.x0 + tx;
+          if (game.world.getBlock(wx, FY, tz) !== B.air || !game.world.canStand(wx, FY, tz) || game.occupiedBySolid(wx, FY, tz, game.player)) continue;
+          const dd = dx * dx + dz * dz;
+          if (!best || dd < best.dd) best = { x: wx, z: tz, dd };
+        }
+      }
+    }
+    return best ? { x: best.x, z: best.z } : d.entry;
   }
 
   // The first time a floor's opened: chests adventurers have been at are
@@ -245,6 +296,7 @@ export class DungeonRun {
     game.creatures = [];
     game.drops = [];
     game.hazards = [];
+    game.zones = [];
     game.projectiles = [];
     game.flames = [];
     for (const n of game.npcs) if (n.inDungeon) game.despawnNpc?.(n);
@@ -293,6 +345,10 @@ export class DungeonRun {
     // The dead stirring as you pass; golems waking.
     for (const c of game.creatures) {
       if (!c.dormant || c.dead) continue;
+      if (c.waiting) {
+        if (c.hp < c.maxHp) this.bossFight();
+        continue;
+      }
       const d = Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z));
       if (d <= c.dormant || c.hp < c.maxHp) {
         c.dormant = 0;
@@ -345,13 +401,12 @@ export class DungeonRun {
         game.audio?.play('hum', nd);
       }
     }
-    // Water dripping in the dark.
-    this.dripT -= dt;
-    if (this.dripT <= 0) {
-      this.dripT = 3 + Math.random() * 6;
-      if (!this.kav) game.audio?.play(Math.random() < 0.7 ? 'pour' : 'creak');
-      else game.audio?.play('hum');
-    }
+    // Into the master's hall: the gate comes down behind you, and it wakes.
+    const br = this.data.bossRoom;
+    if (br && !this.rec.cleared && !this.fight && p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1) this.bossFight();
+    if (this.fight) this.updateFight(dt);
+    this.placeDangers(dt);
+    this.ambience(dt);
     // Notes left (an adventurer's remains): told as you come near.
     for (const nt of this.notes || []) {
       if (nt.told || Math.abs(nt.x - p.x) > 3 || Math.abs(nt.z - p.z) > 3) continue;
@@ -362,6 +417,209 @@ export class DungeonRun {
 
   bossDead() {
     return this.rec.cleared;
+  }
+
+  // ------------------------------------------------------------ the master
+  // Into its hall: the gate crashes down behind you, it wakes (its name
+  // across the top of the screen), and the music turns.
+  bossFight() {
+    if (this.fight || this.rec.cleared) return;
+    const game = this.game;
+    const p = game.player;
+    const boss = game.creatures.filter((c) => c.isBoss && !c.dead && c.leash);
+    if (!boss.length) return;
+    const g = this.data.bossGate;
+    if (g && !(p.x === g.x && p.z === g.z)) {
+      const cur = game.world.getBlock(g.x, FY, g.z);
+      if (cur !== B.boss_gate && cur !== B.kav_gate) {
+        game.world.setBlock(g.x, FY, g.z, this.kav ? B.kav_gate : B.boss_gate, g.rot);
+        game.audio?.play('gate_slam', { x: g.x, z: g.z });
+        game.renderer.emit(g.x, FY + 1, g.z, { n: 18, color: ['#8a8478', '#5a5650'], up: 20, speed: 50, life: 0.7, shape: 'puff' });
+        game.ui.msg('The gate crashes down behind you!', '#ff9060', true);
+      }
+    }
+    game.shake = Math.min(1.4, (game.shake || 0) + 0.9);
+    for (const c of boss) {
+      c.waiting = false;
+      c.dormant = 0;
+      c.target = p;
+      c.face(p.x, p.z);
+    }
+    const lead = boss[0];
+    const T = BOSS_TITLES[lead.species] || {};
+    this.fight = { boss, name: T.name || lead.S.name, title: T.title || '', t: 0, frac: 1, trail: 1, hitT: -9, away: 0 };
+    game.audio?.play('roar', lead);
+    game.audio?.play('sting');
+    if (T.taunt) lead.say?.(T.taunt, 3.5, '#ff9080');
+    game.renderer.flashScreen?.('#400000', 0.35);
+  }
+
+  updateFight(dt) {
+    const f = this.fight;
+    const game = this.game;
+    const p = game.player;
+    f.t += dt;
+    const alive = f.boss.filter((c) => !c.dead);
+    const max = f.boss.reduce((n, c) => n + c.maxHp, 0);
+    const frac = max ? alive.reduce((n, c) => n + Math.max(0, c.hp), 0) / max : 0;
+    if (frac < f.frac - 1e-6) f.hitT = f.t;
+    f.frac = frac;
+    // (The pale trail behind the bar catches up a moment after each blow.)
+    if (f.t - f.hitT > 0.5) f.trail = Math.max(f.frac, f.trail - dt * 0.45);
+    if (!alive.length) return;
+    // Out of its hall a while (back out the gate, or up the stairs): it
+    // settles to wait for you again.
+    const br = this.data.bossRoom;
+    const inside = p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1;
+    f.away = inside || p.dead ? 0 : f.away + dt;
+    if (f.away > 5) {
+      for (const c of alive) {
+        c.waiting = true;
+        c.dormant = 1;
+        c.target = null;
+        c.hp = Math.min(c.maxHp, c.hp + Math.round(c.maxHp * 0.25));
+      }
+      this.fight = null;
+      game.ui.msg('Behind you, the thing in the hall settles back to wait.', '#c8b8a0');
+    }
+  }
+
+  // It's dead: the gate grinds up of itself, and the hall's quiet.
+  endFight() {
+    const game = this.game;
+    const g = this.data.bossGate;
+    if (g) {
+      const cur = game.world.getBlock(g.x, FY, g.z);
+      if (cur === B.boss_gate || cur === B.kav_gate) game.world.setBlock(g.x, FY, g.z, cur === B.kav_gate ? B.air : B.boss_gate_open, g.rot);
+      game.audio?.play('gate', { x: g.x, z: g.z });
+    }
+    if (this.fight) this.fallen = { name: this.fight.name, t: 0 };
+    this.fight = null;
+    game.audio?.play('victory');
+  }
+
+  // ------------------------------------------------------------ its dangers
+  // What each kind of place does to you, besides its dead and its beasts:
+  //   a mine's roof comes down (dust trickles first: move);
+  //   a barrow's dead reach up out of the earth for your ankles;
+  //   a crypt's cold draughts gutter your light to nothing a moment;
+  //   a holdout's gongs rouse the whole place when one of them sees you.
+  placeDangers(dt) {
+    const game = this.game;
+    const p = game.player;
+    const type = this.rec.type;
+    if (p.dead || this.arriveT > 0) return;
+    // Gongs: whoever's after you strikes the nearest.
+    if (type === 'holdout') {
+      for (const c of game.creatures) {
+        if (c.dead || c.target !== p || c.rang || c.isBoss) continue;
+        const gong = this.data.gongs.find((q) => !q.rung && Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) <= 9 && game.world.getBlock(q.x, FY, q.z) === B.gong);
+        c.rang = true;
+        if (gong) this.ringGong(gong, c);
+      }
+    }
+    // (Not in the master's hall, not in the first room.)
+    if (this.fight || this.rec.cleared) return;
+    this.hazardT -= dt;
+    if (this.hazardT > 0) return;
+    this.hazardT = 22 + Math.random() * 22;
+    const dmg = 3 + this.floor + (this.rec.level || 1);
+    if (type === 'mine') {
+      // The roof: dust first, then the rocks, round where you stand.
+      const tiles = areaTiles(p.x + Math.round(Math.random() * 2 - 1), p.z + Math.round(Math.random() * 2 - 1), 1).filter(() => Math.random() < 0.75);
+      tiles.push({ x: p.x, z: p.z });
+      for (const t of tiles) game.renderer.emit(t.x, FY + 2.4, t.z, { n: 3, color: ['#8a7a5a', '#6a5a40'], up: -10, speed: 6, gravity: 120, life: 0.9, oy: -10 });
+      addHazard(game, { tiles, y: FY, dur: 1.6, dmg, stun: 0.4, kind: 'rocks', color: [200, 150, 90], trap: true });
+      game.audio?.play('rumble');
+      game.shake = Math.min(1, (game.shake || 0) + 0.35);
+      if (!this.toldRoof) game.ui.msg('Dust trickles from the roof... (it\'s coming down: move!)', '#e0c8a0', true);
+      this.toldRoof = true;
+    } else if (type === 'barrow') {
+      // Hands up out of the earth, where you stand and round it.
+      const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.35)];
+      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#c8d0c0', '#8a9a8a'], up: 8, speed: 6, life: 1.1, oy: 6, shape: 'puff' });
+      addHazard(game, { tiles, y: FY, dur: 1.3, dmg: Math.round(dmg * 0.6), chill: 2, kind: 'cold', color: [150, 170, 160], trap: true, onFire: (g, h, hit) => {
+        for (const e of hit) {
+          if (e !== p) continue;
+          p.grabbedT = 1.2;
+          game.renderer.floatText(p.x, p.y + 2.4, p.z, 'grasped! (roll free)', '#a0c8b0');
+        }
+        for (const t of h.tiles) game.renderer.emit(t.x, FY + 0.4, t.z, { n: 4, color: ['#e8e4d4', '#a8a088'], up: 30, speed: 20, life: 0.5, oy: 2 });
+      } });
+      game.audio?.play('whisper');
+      if (!this.toldHands) game.ui.msg('The earth stirs under your feet... (something reaches up: move!)', '#a0c8b0', true);
+      this.toldHands = true;
+    } else if (type === 'crypt' && p.heldLightKind && p.heldLightKind() === 'fire') {
+      // A cold draught: your flame bows, and goes out a moment.
+      p.snuff?.(2.5);
+      game.audio?.play('wind');
+      game.audio?.play('whisper');
+      game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 12, color: ['#a0d8ff', '#e0f4ff'], up: 4, speed: 40, life: 0.8, shape: 'puff' });
+      game.ui.msg(this.toldDraught ? 'Another cold draught...' : 'A cold draught moans through the crypt, and your flame gutters out!', '#a0c8e0', true);
+      this.toldDraught = true;
+    }
+  }
+
+  // A gong struck: the whole holdout knows you're here.
+  ringGong(gong, by) {
+    const game = this.game;
+    const p = game.player;
+    gong.rung = true;
+    game.world.setState(gong.x, FY, gong.z, true);
+    game.audio?.play('gong', gong);
+    game.renderer.effect?.({ type: 'ring', wx: gong.x, wy: FY + 1, wz: gong.z, r0: 4, r1: 60, color: ['#f0c860', '#ffffff'], life: 0.9, oy: -6, flat: 0.5 });
+    game.renderer.floatText(gong.x, FY + 2.4, gong.z, 'BONG!', '#f0c860');
+    by.say?.('Alarm! To arms!', 2.5, '#ff9070');
+    let n = 0;
+    for (const c of game.creatures) {
+      if (c.dead || c.isBoss || c.waiting || Math.max(Math.abs(c.x - gong.x), Math.abs(c.z - gong.z)) > 24) continue;
+      c.dormant = 0;
+      c.target = p;
+      c.rang = true;
+      n++;
+    }
+    game.ui.msg(`A gong booms through the holdout: ${n > 1 ? 'they all know you\'re here!' : 'they know you\'re here!'}`, '#ffb080', true);
+  }
+
+  // ------------------------------------------------------------ the air
+  // How the place sounds and moves round you: its own noises now and then
+  // (drips and whispers in a barrow, a mine's groans and scuttling, a
+  // crypt's chains, a holdout's fires), and its own motes in the dark.
+  ambience(dt) {
+    const game = this.game;
+    const p = game.player;
+    this.dripT -= dt;
+    if (this.dripT <= 0) {
+      this.dripT = 4 + Math.random() * 7;
+      const sounds = this.T.ambient || ['drip'];
+      game.audio?.play(sounds[Math.floor(Math.random() * sounds.length)]);
+    }
+    this.moteT -= dt;
+    if (this.moteT > 0) return;
+    this.moteT = 0.12;
+    const x = p.x + Math.round((Math.random() - 0.5) * 22);
+    const z = p.z + Math.round((Math.random() - 0.5) * 14);
+    const c = this.T.motes || ['#8a8a8a'];
+    switch (this.rec.type) {
+      case 'barrow':
+        // Mist, low along the floor.
+        game.renderer.emit(x, FY + 0.1, z, { n: 1, color: c, up: 2, speed: 5, life: 2.4, oy: 6, shape: 'puff', gravity: -2 });
+        break;
+      case 'mine':
+        // Grit sifting down from the roof.
+        if (Math.random() < 0.6) game.renderer.emit(x, FY + 2.6, z, { n: 1, color: c, up: -4, speed: 2, gravity: 60, life: 1.2, oy: -10 });
+        break;
+      case 'crypt':
+        // Pale motes drifting up, like breath.
+        game.renderer.emit(x, FY + 0.6, z, { n: 1, color: c, up: 6, speed: 3, gravity: -6, life: 2.2, glow: true });
+        break;
+      case 'holdout':
+        // Smoke from the fires, and an ember now and then.
+        game.renderer.emit(x, FY + 1.8, z, { n: 1, color: Math.random() < 0.15 ? ['#ff9030', '#ffd070'] : c, up: 4, speed: 4, gravity: -4, life: 1.8, shape: 'puff', glow: Math.random() < 0.15 });
+        break;
+      default:
+        if (Math.random() < 0.4) game.renderer.emit(x, FY + 1, z, { n: 1, color: c, up: 8, speed: 10, life: 0.6, glow: true });
+    }
   }
 
   // Overseer shield: how many of its hall's nodes still burn.
@@ -513,6 +771,28 @@ export class DungeonRun {
       case 'portcullis':
         game.ui.msg('The iron gate won\'t budge. There must be a lever somewhere.', '#c8c8c8');
         return true;
+      case 'boss_gate': {
+        const g = this.data.bossGate;
+        const shut = b.id !== B.boss_gate_open;
+        const open = b.id === B.kav_gate ? B.air : B.boss_gate_open;
+        if (!shut) {
+          game.ui.msg('The great gate stands open.', '#c8c8c8');
+          return true;
+        }
+        // (From inside, with its master alive: heaved up, slowly, and only
+        // while it isn't looking.)
+        const inside = !!g && (p.x - g.x) * g.ox + (p.z - g.z) * g.oz < 0;
+        if (inside && this.fight && this.fight.boss.some((c) => !c.dead && c.target === p && c.distTo(p) < 5)) {
+          game.ui.msg('You can\'t get the gate up with that thing on your back!', '#ff9060', true);
+          game.audio?.play('error');
+          return true;
+        }
+        w.setBlock(x, FY, z, open, g ? g.rot : 0);
+        game.audio?.play('gate', { x, z });
+        game.shake = Math.min(1, (game.shake || 0) + 0.25);
+        game.ui.msg(this.rec.cleared ? 'The gate grinds up.' : inside ? 'You heave the great gate up, and it holds.' : 'The great gate grinds up. Beyond it, something waits in the dark.', '#e0c890');
+        return true;
+      }
       case 'sealed': {
         const key = b.id === B.kav_seal ? 'kav_key' : 'sigil';
         if (countItem(p.inv, key) <= 0) {
@@ -568,7 +848,7 @@ export class DungeonRun {
           game.audio?.play('secret');
           const item = set.relic || 'old_blueprint';
           game.spawnDrop(item, 1, set.reward.x, FY, set.reward.z, true);
-          if (!set.relic) game.spawnDrop('old_coin', 12, set.reward.x, FY, set.reward.z, true);
+          if (!set.relic) game.spawnDrop('old_coin', 4, set.reward.x, FY, set.reward.z, true);
           game.renderer.effect?.({ type: 'ring', wx: set.reward.x, wy: FY, wz: set.reward.z, r0: 2, r1: 26, color: ['#ffe070', '#ffffff'], life: 0.8, oy: 4, flat: 0.5 });
         }
         return true;
@@ -631,14 +911,31 @@ export class DungeonRun {
       game.spawnDrop(e.carries, 1, e.x, e.y, e.z, true);
       game.ui.msg(e.carries === 'sigil' ? `${e.S.name} drops a bronze sigil.` : `${e.S.name} drops a glyph key.`, '#ffe070');
     }
-    if (e.isBoss && (e.species === this.T.boss || e.species === this.T.altBoss) && !this.rec.cleared) {
+    const masters = this.data.spawns.filter((s) => s.boss);
+    const master = e.spawnId !== undefined && masters.some((s) => s.id === e.spawnId);
+    // (Two of them: the one left takes it hard.)
+    if (master && !masters.every((s) => this.state.killed.includes(s.id))) {
+      for (const c of game.creatures) if (!c.dead && c.isBoss && c !== e) bossRage(game, c, e);
+      return;
+    }
+    if (e.isBoss && master && !this.rec.cleared) {
       game.sim.dungeons.cleared(this.rec, 'you');
+      this.endFight(true);
+      // (Every master of an old place keeps a relic about it.)
+      if (!this.kav) {
+        const keys = Object.keys(RELICS);
+        game.spawnDrop(`relic_${keys[Math.floor(Math.random() * keys.length)]}`, 1, e.x, e.y, e.z, true);
+      }
       game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070');
-      game.audio?.play('fanfare');
       game.renderer.flashScreen?.('#fff4c8', 0.4);
       game.shake = 1.2;
-      // The rest of the place's things lose heart (the dead fall still).
-      for (const c of game.creatures) if (!c.dead && c !== e && (c.S.undead || c.S.construct) && Math.max(Math.abs(c.x - e.x), Math.abs(c.z - e.z)) < 20) c.stunT = 3;
+      // The rest of the place's things lose heart (the dead fall still);
+      // its images and its brood go with it.
+      for (const c of game.creatures) {
+        if (c.dead || c === e) continue;
+        if (c.master === e || c.species === 'egg_sac') game.kill(c, null);
+        else if ((c.S.undead || c.S.construct) && Math.max(Math.abs(c.x - e.x), Math.abs(c.z - e.z)) < 20) c.stunT = 3;
+      }
       if (this.kav) {
         game.ui.msg('The ruin\'s hum dies away. Somewhere above, the runes on the spire go out.', '#5ad8f0');
         game.spawnDrop('kav_core', 1, e.x, e.y, e.z, true);
@@ -657,6 +954,17 @@ export class DungeonRun {
 
 function cap(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+// One of the Twins down: the other in a fury (quicker, harder).
+function bossRage(game, c, fallen) {
+  c.raged = true;
+  c.hasteT = 9999;
+  c.dmgMult = (c.dmgMult || 1) * 1.35;
+  c.say?.(`${fallen.S.name.split(' ').pop()}! You'll pay for that!`, 3, '#ff7060');
+  game.renderer.emit(c.x, c.y + 1.5, c.z, { n: 18, color: ['#ff4030', '#ffb080'], up: 30, speed: 50, life: 0.7 });
+  game.audio?.play('roar', c);
+  game.shake = Math.min(1.2, (game.shake || 0) + 0.5);
 }
 
 export { BLOCKS, META_STATE };

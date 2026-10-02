@@ -33,7 +33,7 @@ import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
-import { updateHazards, guardFront } from '../entities/monsters.js';
+import { updateHazards, guardFront, kegBlast } from '../entities/monsters.js';
 import { siteAt } from '../world/sites.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
@@ -470,8 +470,26 @@ export class Game {
     }
   }
 
-  // Nearest standable tile to (x, z), searching outward in rings.
+  // Nearest standable tile to (x, z), searching outward in rings: first on
+  // the level of `hint` (or a step off it), so someone getting out of a bed
+  // indoors stands on the floor by it and not up on the roof over the wall;
+  // only then anywhere in each column.
   findFreeSpot(x, z, hint) {
+    if (hint !== null && hint !== undefined) {
+      const w = this.world;
+      for (let r = 0; r < 6; r++) {
+        for (let dz = -r; dz <= r; dz++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+            for (const dy of [0, 1, -1]) {
+              const y = hint + dy;
+              if (!w.canStand(x + dx, y, z + dz) || w.isWaterAt(x + dx, y, z + dz) || this.occupiedBySolid(x + dx, y, z + dz, this.player)) continue;
+              return { x: x + dx, y, z: z + dz };
+            }
+          }
+        }
+      }
+    }
     for (let r = 0; r < 12; r++) {
       for (let dz = -r; dz <= r; dz++) {
         for (let dx = -r; dx <= r; dx++) {
@@ -1216,11 +1234,23 @@ export class Game {
 
   // A friendly bout with an adventurer: first down to a quarter of their
   // strength loses, and pays the wager. No crime in it, for either of you.
+  // They take a few seconds to square up (counting it down) before they
+  // come at you, unless you swing first.
   startDuel(npc, wager) {
     this.duel = { npc, wager, start: this.sim.abs };
-    npc.engage(this.player);
-    npc.say(npc.rng.pick(['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 2.5, '#ffe070');
+    npc.duelReady = 3;
+    npc.face(this.player.x, this.player.z);
+    npc.say(npc.rng.pick(['On guard!', 'Let\'s see what you\'ve got.', 'Don\'t hold back!']), 1.4, '#ffe070');
     this.ui.msg(`A friendly bout with ${npc.name}: the first down to a quarter of their strength loses. Wager: ¤${wager}.`, '#ffe070');
+    this.audio?.play('draw', npc);
+  }
+
+  // The bout's on now (the count's done, or you've swung).
+  duelBegins() {
+    const d = this.duel;
+    if (!d || !(d.npc.duelReady > 0)) return;
+    d.npc.duelReady = 0;
+    d.npc.engage(this.player);
   }
 
   endDuel(result) {
@@ -1260,7 +1290,21 @@ export class Game {
     const n = d.npc;
     if (n.dead) this.duel = null;
     else if (this.player.dead || n.distTo(this.player) > 14 || this.sim.abs - d.start > 90) this.endDuel('fled');
-    else if (n.state !== 'fight') n.engage(this.player);
+    else if (n.duelReady > 0) {
+      // Squaring up: guard raised, counting down.
+      const before = Math.ceil(n.duelReady);
+      n.duelReady -= this.dt || 0.016;
+      const after = Math.ceil(n.duelReady);
+      if (after !== before && after > 0) {
+        n.say(['', 'One...', 'Two...', 'Three...'][after] || '', 0.8, '#ffe070');
+        this.audio?.play('select', n);
+      }
+      if (n.duelReady <= 0) {
+        n.say('Fight!', 1.2, '#ffb060');
+        this.audio?.play('clang', n);
+        this.duelBegins();
+      }
+    } else if (n.state !== 'fight') n.engage(this.player);
   }
 
   spared(n) {
@@ -1567,6 +1611,27 @@ export class Game {
     this.ambientFx(dt);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.6);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
+    // Mended (by anything: a meal, a potion, a spring, a stone): a soft green
+    // at the edges of the screen.
+    const hpNow = this.player.hp;
+    // (A hot meal's slow mending, a heart at a time, only a glimmer.)
+    if (this.lastHp !== undefined && hpNow > this.lastHp && !this.sleep && !this.player.dead) {
+      const quiet = this.player.quietHeal;
+      if (!quiet && !(this.healFlash > 0.15)) this.audio?.play('heal');
+      this.healFlash = Math.min(0.8, (this.healFlash || 0) + (quiet ? 0.12 : 0.38 + Math.min(0.3, (hpNow - this.lastHp) * 0.05)));
+    }
+    this.player.quietHeal = false;
+    this.lastHp = hpNow;
+    // Near death: your heart pounding (faster the closer it is).
+    const frac = hpNow / Math.max(1, this.player.maxHp);
+    if (frac <= 0.25 && hpNow > 0 && !this.player.dead && !this.sleep) {
+      this.beatT = (this.beatT ?? 0) - dt;
+      if (this.beatT <= 0) {
+        this.beatT = 0.7 + frac * 2.4;
+        this.audio?.play('heartbeat');
+      }
+    }
+    if (this.healFlash > 0) this.healFlash = Math.max(0, this.healFlash - dt * 1.1);
     if (this.audio) this.audio.listener = this.player;
     // Entities visible this frame.
     const p = this.player;
@@ -1876,7 +1941,7 @@ export class Game {
     }
     removeItem(p.inv, slot.item, 1);
     this.refreshBonus();
-    this.audio?.play('eat');
+    this.audio?.play('gulp');
     this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#e8e0ff', '#a0c8ff', '#fff4c0'], up: 25, life: 0.7, gravity: -15 });
     const what = e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.combat ? `${combatBuffText(e)} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
     this.ui.msg(`${d.name}: ${what}.`, '#c0a0ff');
@@ -2189,7 +2254,9 @@ export class Game {
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
     this.freeTied(x, y, z);
     this.renderer.emit(x, y, z, { n: 10, color: this.blockColor(id), up: 45, speed: 60, life: 0.6, oy: -6 });
-    this.audio?.play(b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
+    this.audio?.play(id === B.urn || id === B.skull_pile ? 'shatter' : b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
+    // (A powder keg broken open goes up.)
+    if (id === B.powder_keg) kegBlast(this, x, y, z);
     this.popUnsupported(x, y + 1, z);
     this.flowWater(x, y, z);
     if (byPlayer) {
@@ -3608,6 +3675,7 @@ export class Game {
           const hit = !!v && arrowStrikes(this, a, v);
           a.target = v || null;
           javelin(a);
+          if (!v && a.kind !== 'pulse') this.audio?.play('thud', { x: a.tx, z: a.tz });
           if (a.kind === 'pulse') {
             // (It bursts where it ends, on whoever or whatever it met.)
             const ex = a.x0 + (a.tx - a.x0);
@@ -3626,7 +3694,12 @@ export class Game {
         continue;
       }
       if (a.kind === 'orb') {
-        this.orbLands(a);
+        if (a.onLand) {
+          const x = Math.round(a.tx);
+          const z = Math.round(a.tz);
+          const y = this.world.regionAt(x, z) ? this.world.findStandY(x, z, Math.round(a.ty)) : a.ty;
+          a.onLand(this, x, z, y > 0 ? y : a.ty);
+        } else this.orbLands(a);
         continue;
       }
       const t = a.target;
@@ -3705,17 +3778,24 @@ export class Game {
     // (An iron stomach gets as much from raw meat as from a roast.)
     const iron = heroHas(this.hero, 'iron_stomach');
     const raw = iron ? ITEMS[{ raw_meat: 'cooked_meat', fish: 'cooked_fish' }[slot.item]] : null;
-    const heal = Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0);
+    const bonus = (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0);
+    // (A hot dish: a little now, the rest over a while; see Player.update.)
+    const heal = def.regen ? def.now + bonus : Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + bonus;
     p.hp = Math.min(p.maxHp, p.hp + heal);
+    if (def.regen) {
+      const h = p.slowHeal && p.slowHeal.left > 0 ? p.slowHeal : (p.slowHeal = { left: 0, rate: 0, acc: 0 });
+      h.left += def.regen;
+      h.rate = Math.max(h.rate, def.regen / def.regenT);
+    }
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.3);
-    this.audio?.play('eat');
+    this.audio?.play(slot.item === 'ale' || slot.item === 'cocoa' ? 'gulp' : 'eat');
     // Crumbs (or foam) everywhere.
     if (slot.item === 'ale') this.renderer.emit(p.x, p.y + 1, p.z, { n: 5, color: ['#f4ecd8', '#ffffff', '#e8c060'], shape: 'drop', up: 10, speed: 12, gravity: 120, life: 0.5, oy: -2 });
     else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
     if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
-    this.ui.msg(`${slot.item === 'ale' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP)`, '#80e070');
+    this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${def.regen ? `, and ${def.regen} more over ${def.regenT}s` : ''})`, '#80e070');
     // (Not everywhere eats everything: see culture.js.)
     this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
@@ -3881,6 +3961,7 @@ export class Game {
   }
 
   swing() {
+    this.duelBegins();
     const p = this.player;
     if (p.attackCd > 0) return;
     p.attackCd = 0.3;
@@ -3896,6 +3977,7 @@ export class Game {
   // not: a blade swung at a passer-by is an assault), or on a training
   // dummy. A blade in the other hand follows it round, as ever.
   swingAt() {
+    this.duelBegins();
     const p = this.player;
     if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) return false;
     const def = p.heldDef();
@@ -4049,6 +4131,7 @@ export class Game {
   }
 
   attack(target, heavy = false) {
+    this.duelBegins();
     const p = this.player;
     // (A siege engine: hacked at, like any timber.)
     if (target.kind === 'prop' && (target.type === 'catapult' || target.type === 'ram')) {
@@ -4304,6 +4387,8 @@ export class Game {
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount || blueSoak}`, amount <= 0 && blueSoak ? '#80a8ff' : target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
     this.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: target.species === 'slime' ? ['#58c048', '#8ae070'] : target.kind === 'monster' ? ['#e8e4d4', '#b0aca0'] : ['#c82a2a', '#8a1a1a'], up: 30, speed: 50, life: 0.4, oy: -8 });
     this.audio?.play(target.kind === 'player' ? 'hurt' : 'hit', target);
+    // (Old bones rattle when struck.)
+    if (target.species && /skeleton|bone|lich|revenant/.test(target.species)) this.audio?.play('bones', target);
     if (target.kind === 'player') {
       // It hurts: the screen jolts, and reddens at the edges.
       this.shake = Math.min(1.3, this.shake + 0.45 + Math.min(0.4, amount * 0.05));

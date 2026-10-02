@@ -65,7 +65,7 @@ export const TECHS = {
   steel: T('warfare', 4, 1, ['cavalry', 'fieldworks'], 'steel_sword', 'Steelworking', 'Smiths sell steel swords, and every guard\'s sword is steel; armies are 15% stronger.', { also: ['metalworking'] }),
   siegecraft: T('warfare', 5, 0.5, ['steel'], 'iron_pickaxe', 'Siegecraft', 'A decisive victory takes the town behind the field 25% more often, and a capital once the war is half won (not four-fifths).'),
   rams: T('warfare', 6, 0, ['siegecraft'], 'log_oak', 'Battering Rams', 'Armies bring a ram: a walled town gives its defenders nothing against capture (walls otherwise make it 40% less likely), and in battle the ram rolls up and knocks a breach in the wall.', { big: true }),
-  catapults: T('warfare', 6, 1, ['siegecraft'], 'rock', 'Catapults', 'Armies bring catapults that hurl stones into the enemy\'s ranks: the other side fights 12% weaker, and in battle you\'ll see the stones fall (8 damage where they land).', { big: true }),
+  catapults: T('warfare', 6, 1, ['siegecraft'], 'catapult', 'Catapults', 'Armies bring catapults that hurl stones into the enemy\'s ranks: the other side fights 12% weaker, and in battle you\'ll see the stones fall (8 damage where they land).', { big: true }),
   // Law & Society
   codex: T('society', 1, 0, [], 'book', 'Written Law', 'The ruler can set the size of the watch: one in ten grown folk in quiet times, one in four in war.'),
   alchemy: T('society', 2, -1, ['codex'], 'potion_vigor', 'Alchemy', 'Herbalists brew and sell potions (vigour, might, swiftness and more).'),
@@ -83,7 +83,7 @@ export const TECHS = {
   metalworking: T('engineering', 1, 1, [], 'anvil', 'Metalworking', 'Forges and blacksmiths can work; the watch carries iron instead of wood and stone.'),
   wells: T('engineering', 2, -1.5, ['masonry'], 'water_bucket', 'Clean Wells', 'A drink from a town well heals 4 and gives 3 blue hearts for the day (instead of healing 2).'),
   surveying: T('engineering', 2, -0.5, ['masonry'], 'iron_shovel', 'Surveying', 'Roads are built 50% faster; in time the town\'s lanes are gravelled and its streets cobbled.'),
-  mining: T('engineering', 2, 1, ['metalworking'], 'coal_ore', 'Deep Mines', 'Miners dig 50% more stone and ore, and find gems twice as often.'),
+  mining: T('engineering', 2, 1, ['metalworking'], 'mine_cart', 'Deep Mines', 'Miners dig 50% more stone and ore, and find gems twice as often.'),
   mills: T('engineering', 3, -1.5, ['wells'], 'wheat', 'Watermills', 'Farms yield 50% more grain; hay is stacked by the barns.'),
   cranes: T('engineering', 3, -0.5, ['surveying'], 'hammer', 'Cranes', 'Building goes 30% faster (on top of masonry).'),
   lodestones: T('engineering', 3, 1, ['mining'], 'iron_ore', 'Lodestones', 'Compasses: merchants, letters, settlers and armies travel between towns 15% faster.'),

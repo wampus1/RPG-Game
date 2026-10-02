@@ -21,28 +21,31 @@
 // off when the time's up. Traps use them too (see game/dungeon.js).
 import { beginAttack, styleOf, knock, STYLES } from '../game/combat.js';
 import { burn, chill, stun, mend } from '../game/gems.js';
-import { BLOCKS } from '../world/blocks.js';
+import { BLOCKS, B as BLOCKS_ID } from '../world/blocks.js';
 import { pierceOf } from '../game/kavtech.js';
+import { BOSS_SPECIES, BOSS_TITLES, bossBrains } from './bosses.js';
+
+export { BOSS_TITLES };
 
 // --------------------------------------------------------------- species
 // (Merged into creature.js's SPECIES.) `under`: lives below ground (no
 // burning away by day). `style`: how it strikes up close. `big`: drawn 32
 // square. `construct`: one of the Kavorent's. `boss`: a master of its place.
 export const MONSTER_SPECIES = {
-  wight: { light: 2, name: 'Barrow Wight', hp: 26, dmg: 4, step: 0.42, mode: 'hostile', aggro: 9, humanoid: true, look: 'wight', arms: 'iron_sword', under: true, undead: true, brain: 'wight', drops: [['bone', 1, 3, 1], ['old_coin', 1, 5, 0.7]] },
-  skel_captain: { name: 'Skeleton Captain', hp: 30, dmg: 4, step: 0.36, mode: 'hostile', aggro: 10, humanoid: true, look: 'captain', arms: 'iron_sword', shield: 'wooden_shield', shieldBlock: 0.5, under: true, undead: true, brain: 'captain', drops: [['bone', 2, 4, 1], ['old_coin', 2, 8, 1]] },
+  wight: { light: 2, name: 'Barrow Wight', hp: 26, dmg: 4, step: 0.42, mode: 'hostile', aggro: 9, humanoid: true, look: 'wight', arms: 'iron_sword', under: true, undead: true, brain: 'wight', drops: [['bone', 1, 3, 1], ['old_coin', 1, 2, 0.35]] },
+  skel_captain: { name: 'Skeleton Captain', hp: 30, dmg: 4, step: 0.36, mode: 'hostile', aggro: 10, humanoid: true, look: 'captain', arms: 'iron_sword', shield: 'wooden_shield', shieldBlock: 0.5, under: true, undead: true, brain: 'captain', drops: [['bone', 2, 4, 1], ['old_coin', 1, 3, 0.8]] },
   rat: { name: 'Crypt Rat', hp: 3, dmg: 1, step: 0.2, mode: 'hostile', aggro: 9, under: true, packs: true, style: 'snap', drops: [['raw_meat', 1, 1, 0.3]] },
-  drowned: { name: 'Drowned One', hp: 16, dmg: 3, step: 0.34, mode: 'hostile', aggro: 7, humanoid: true, look: 'drowned', under: true, undead: true, brain: 'drowned', style: 'grab', drops: [['old_coin', 1, 4, 0.6], ['bone', 1, 2, 0.5]] },
+  drowned: { name: 'Drowned One', hp: 16, dmg: 3, step: 0.34, mode: 'hostile', aggro: 7, humanoid: true, look: 'drowned', under: true, undead: true, brain: 'drowned', style: 'grab', drops: [['old_coin', 1, 2, 0.3], ['bone', 1, 2, 0.5]] },
   crawler: { name: 'Tunnel Crawler', hp: 22, dmg: 4, step: 0.3, mode: 'hostile', aggro: 10, under: true, brain: 'crawler', style: 'bite', drops: [['leather', 1, 2, 0.6], ['iron_ore', 1, 2, 0.4]] },
   moth: { name: 'Gloom Moth', hp: 4, dmg: 1, step: 0.26, mode: 'hostile', aggro: 12, under: true, floats: true, brain: 'moth', style: 'snap', drops: [] },
-  cutthroat: { name: 'Holdout Cutthroat', hp: 15, dmg: 3, step: 0.3, mode: 'hostile', aggro: 9, humanoid: true, look: 'cutthroat', arms: 'dagger', offhand: 'dagger', dodge: 0.2, under: true, drops: [['coin', 3, 12, 1], ['old_coin', 1, 3, 0.3]] },
-  holdout_archer: { name: 'Holdout Archer', hp: 11, dmg: 3, step: 0.32, mode: 'hostile', aggro: 11, humanoid: true, look: 'holdout_archer', arms: 'bow', ranged: true, under: true, drops: [['arrow', 3, 8, 1], ['coin', 2, 8, 1]] },
+  cutthroat: { name: 'Holdout Cutthroat', hp: 15, dmg: 3, step: 0.3, mode: 'hostile', aggro: 9, humanoid: true, look: 'cutthroat', arms: 'dagger', offhand: 'dagger', dodge: 0.2, under: true, drops: [['coin', 1, 5, 0.8], ['old_coin', 1, 1, 0.2]] },
+  holdout_archer: { name: 'Holdout Archer', hp: 11, dmg: 3, step: 0.32, mode: 'hostile', aggro: 11, humanoid: true, look: 'holdout_archer', arms: 'bow', ranged: true, under: true, drops: [['arrow', 3, 8, 1], ['coin', 1, 4, 0.7]] },
   // The masters of their places.
-  barrow_king: { name: 'The Barrow King', hp: 110, dmg: 6, step: 0.46, mode: 'hostile', aggro: 14, humanoid: true, look: 'wight_king', arms: 'greatsword', under: true, undead: true, boss: true, brain: 'barrowKing', drops: [['old_coin', 10, 25, 1], ['gold_ingot', 1, 3, 1]] },
-  horror: { name: 'The Ossuary Horror', hp: 120, dmg: 5, step: 0.6, mode: 'hostile', aggro: 14, big: true, under: true, undead: true, boss: true, brain: 'horror', style: 'slam', drops: [['bone', 6, 12, 1], ['old_coin', 8, 20, 1]] },
+  barrow_king: { name: 'The Barrow King', hp: 110, dmg: 6, step: 0.46, mode: 'hostile', aggro: 14, humanoid: true, look: 'wight_king', arms: 'greatsword', under: true, undead: true, boss: true, brain: 'barrowKing', drops: [['old_coin', 4, 10, 1], ['gold_ingot', 1, 2, 1]] },
+  horror: { name: 'The Ossuary Horror', hp: 120, dmg: 5, step: 0.6, mode: 'hostile', aggro: 14, big: true, under: true, undead: true, boss: true, brain: 'horror', style: 'slam', drops: [['bone', 6, 12, 1], ['old_coin', 4, 10, 1]] },
   worm: { name: 'The Deep Worm', hp: 130, dmg: 6, step: 0.4, mode: 'hostile', aggro: 16, big: true, under: true, boss: true, brain: 'worm', style: 'bite', drops: [['gem', 2, 4, 1], ['gold_ore', 3, 6, 1], ['iron_ore', 4, 8, 1]] },
-  priest: { name: 'The Drowned Priest', hp: 100, dmg: 4, step: 0.4, mode: 'hostile', aggro: 14, humanoid: true, look: 'priest', under: true, undead: true, boss: true, brain: 'priest', drops: [['old_coin', 8, 20, 1], ['gold_ingot', 1, 2, 1]] },
-  warlord: { name: 'The Bandit Warlord', hp: 120, dmg: 6, step: 0.42, mode: 'hostile', aggro: 14, humanoid: true, look: 'warlord', arms: 'warhammer', under: true, boss: true, brain: 'warlord', drops: [['coin', 30, 70, 1], ['gold_ingot', 1, 3, 1]] },
+  priest: { name: 'The Drowned Priest', hp: 100, dmg: 4, step: 0.4, mode: 'hostile', aggro: 14, humanoid: true, look: 'priest', under: true, undead: true, boss: true, brain: 'priest', drops: [['old_coin', 4, 10, 1], ['gold_ingot', 1, 2, 1]] },
+  warlord: { name: 'The Bandit Warlord', hp: 120, dmg: 6, step: 0.42, mode: 'hostile', aggro: 14, humanoid: true, look: 'warlord', arms: 'warhammer', under: true, boss: true, brain: 'warlord', drops: [['coin', 12, 30, 1], ['gold_ingot', 1, 2, 1]] },
   // The Kavorent's constructs.
   drone: { light: 4, name: 'Sentinel Drone', hp: 14, dmg: 3, step: 0.34, mode: 'hostile', aggro: 12, floats: true, under: true, construct: true, brain: 'drone', style: 'sting', drops: [['kav_scrap', 1, 2, 0.8]] },
   warden: { name: 'Warden', hp: 34, dmg: 4, step: 0.44, mode: 'hostile', aggro: 11, humanoid: true, look: 'warden', arms: 'mace', shield: 'kav_aegis', under: true, construct: true, brain: 'warden', drops: [['kav_scrap', 2, 3, 1]] },
@@ -51,12 +54,14 @@ export const MONSTER_SPECIES = {
   mite: { light: 2, name: 'Arc Mite', hp: 5, dmg: 5, step: 0.22, mode: 'hostile', aggro: 12, under: true, construct: true, packs: true, brain: 'mite', drops: [['kav_scrap', 1, 1, 0.3]] },
   prime: { light: 5, name: 'Prime Golem', hp: 170, dmg: 8, step: 0.58, mode: 'hostile', aggro: 14, big: true, under: true, construct: true, armoured: true, boss: true, brain: 'golem', style: 'slam', drops: [['kav_scrap', 6, 10, 1]] },
   overseer: { light: 9, name: 'The Overseer', hp: 320, dmg: 6, step: 0.5, mode: 'hostile', aggro: 18, big: true, floats: true, anim: true, under: true, construct: true, boss: true, brain: 'overseer', drops: [['kav_scrap', 8, 14, 1]] },
+  // (And the other masters: see bosses.js.)
+  ...BOSS_SPECIES,
 };
 
 // A strike that grabs and holds you (the drowned): roll to break free.
 STYLES.grab = { name: 'grab', windup: 0.6, recover: 1.0, reach: 1, mult: 0.8, grab: true };
 
-const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216, 240], earth: [200, 150, 90], fire: [255, 140, 40], void: [160, 100, 220] };
+const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216, 240], earth: [200, 150, 90], fire: [255, 140, 40], void: [160, 100, 220], poison: [130, 200, 60] };
 
 // --------------------------------------------------------------- hazards
 // Something coming down on that ground in `dur` seconds (see the header).
@@ -68,6 +73,7 @@ export function addHazard(game, h) {
 }
 
 export function updateHazards(game, dt) {
+  updateZones(game, dt);
   if (!game.hazards || !game.hazards.length) return;
   for (const h of game.hazards) {
     h.t += dt;
@@ -130,9 +136,46 @@ function fireHazard(game, h) {
   } else if (h.kind === 'cold') {
     for (const t of h.tiles) r.emit(t.x, h.y + 0.6, t.z, { n: 3, color: ['#a0d8ff', '#e0f4ff'], up: 12, speed: 20, life: 0.6, shape: 'star', oy: -4 });
     game.audio?.play('freeze', mid);
+  } else if (h.kind === 'hex') {
+    // A hex going off: a ring of violet fire, and sparks.
+    const [cr, cg, cb] = h.color || COLORS.void;
+    const col = `rgb(${cr},${cg},${cb})`;
+    if (h.tiles.length <= 12) r.effect?.({ type: 'ring', wx: (h.center || mid).x, wy: h.y, wz: (h.center || mid).z, r0: 3, r1: 22, color: [col, '#ffffff'], life: 0.4, oy: 3, flat: 0.5, thick: 2 });
+    for (const t of h.tiles) if (h.tiles.length <= 12 || Math.random() < 0.15) r.emit(t.x, h.y + 0.3, t.z, { n: 2, color: [col, '#ffffff'], up: 24, speed: 14, life: 0.5, glow: true });
+    if (!h.quiet || Math.random() < 0.5) game.audio?.play('void', mid);
+  } else if (h.kind === 'acid') {
+    for (const t of h.tiles) r.emit(t.x, h.y + 0.4, t.z, { n: 3, color: ['#8ac040', '#c8f070', '#5a8a2a'], up: 20, speed: 20, gravity: 160, life: 0.5 });
+    game.audio?.play('splash', mid);
   }
   if (h.onFire) h.onFire(game, h, hit);
+  // (Fire or a blast on a powder keg sets it off.)
+  if (h.kind === 'fire' || h.kind === 'burst' || h.kind === 'blast') {
+    for (const t of h.tiles) if (game.world.getBlock(t.x, h.y, t.z) === BLOCKS_ID.powder_keg) kegBlast(game, t.x, h.y, t.z, 0.5);
+  }
   return hit;
+}
+
+// A powder keg going up: its fuse fizzes a moment (run), then a blast all
+// round it that hurts anyone, theirs or yours, and sets off any keg near.
+export function kegBlast(game, x, y, z, fuse = 1.4) {
+  if (game.world.getBlock(x, y, z) === BLOCKS_ID.powder_keg) game.world.setBlock(x, y, z, BLOCKS_ID.air);
+  game.audio?.play('fuse', { x, z });
+  game.renderer.emit(x, y + 0.8, z, { n: 8, color: ['#ffe070', '#ff9030'], up: 20, speed: 30, life: 0.4, glow: true });
+  addHazard(game, {
+    tiles: areaTiles(x, z, 2, true), y, dur: fuse, dmg: 9, burn: 2, knock: 2, from: { x, z: z + 0.001 }, center: { x, z }, kind: 'blast', color: [255, 140, 40], trap: true,
+    onFire: () => {
+      game.renderer.effect?.({ type: 'blast', wx: x, wy: y, wz: z, r1: 36, life: 0.7, oy: 2 });
+      game.renderer.emit(x, y + 1, z, { n: 30, color: ['#ff9030', '#ffe070', '#5a5048', '#3a3430'], up: 60, speed: 90, gravity: 120, life: 0.9 });
+      game.audio?.play('boom', { x, z });
+      game.shake = Math.min(1.5, (game.shake || 0) + 0.9);
+      game.lightDirty = true;
+    },
+  });
+}
+
+function withinLeash(c, x, z) {
+  const L = c.leash;
+  return !L || (x >= L.x0 && x <= L.x1 && z >= L.z0 && z <= L.z1);
 }
 
 // A straight line of ground from one spot toward another, stopping at a
@@ -159,6 +202,104 @@ function solidAt(game, x, y, z) {
   const b = BLOCKS[game.world.getBlock(x, y, z)];
   const b2 = BLOCKS[game.world.getBlock(x, y + 1, z)];
   return !!(b && b.solid && b.opaque) && !!(b2 && b2.solid);
+}
+
+// ------------------------------------------------------------- zones
+// Ground that stays bad a while: poison pooled, webs, a snare, caltrops, a
+// whirlpool, mist, smoke. Drawn over the floor in its colour while it
+// lasts (see renderer.drawTelegraphs); does its harm to whoever's in it:
+//   tick/dmg   harm every `tick` seconds while you're in it
+//   chill      and cold, with it
+//   pull       drawn a pace toward that spot each tick (a whirlpool)
+//   root       stuck a moment on stepping in (roll free)
+//   once       gone once it's sprung (a snare), its `dmg` dealt
+//   step       harm for every pace taken in it (caltrops)
+//   slow       slower going while in it
+export function addZone(game, z) {
+  z.t = 0;
+  z.acc = 0;
+  z.y ??= game.player.y;
+  (game.zones ||= []).push(z);
+  return z;
+}
+
+function updateZones(game, dt) {
+  const p = game.player;
+  if (p.markedT > 0) p.markedT -= dt;
+  if (!game.zones || !game.zones.length) return;
+  for (const z of game.zones) {
+    z.t += dt;
+    if (z.t >= z.life) {
+      z.done = true;
+      continue;
+    }
+    const at = (e) => !e.dead && !e.down && !e.burrowed && Math.abs(e.y - z.y) <= 1 && z.tiles.some((q) => q.x === e.x && q.z === e.z);
+    const inside = [p, ...game.npcs].filter(at);
+    z.seen ||= new Map();
+    for (const e of inside) {
+      const key = `${e.x},${e.z}`;
+      const was = z.seen.get(e);
+      if (was === key) {
+        if (z.slow) e.slowT = Math.max(e.slowT || 0, 0.5);
+        continue;
+      }
+      z.seen.set(e, key);
+      if (z.slow) e.slowT = Math.max(e.slowT || 0, 0.5);
+      // Stepped in (or a pace further in).
+      if (was === undefined && z.root && e.kind === 'player' && !(e.rollT > 0)) {
+        e.grabbedT = Math.max(e.grabbedT || 0, z.root);
+        game.renderer.floatText(e.x, e.y + 2.4, e.z, z.kind === 'web' ? 'webbed! (roll free)' : 'snared! (roll free)', '#e0e0e8');
+        game.audio?.play(z.kind === 'snare' ? 'clang' : 'skitter', e);
+      }
+      if (z.step && !(e.rollT > 0)) {
+        game.dotHit = true;
+        game.damage(e, z.step, z.by || null);
+        game.dotHit = false;
+      }
+      if (z.once) {
+        if (z.dmg) game.damage(e, z.dmg, z.by || null);
+        game.renderer.emit(e.x, e.y + 0.5, e.z, { n: 8, color: ['#8a8a90', '#c8c8d0'], up: 20, speed: 30, life: 0.4 });
+        z.done = true;
+      }
+    }
+    for (const e of [...z.seen.keys()]) if (!inside.includes(e)) z.seen.delete(e);
+    // Its harm, every so often, to whoever's in it.
+    if (z.tick && !z.done) {
+      z.acc += dt;
+      if (z.acc >= z.tick) {
+        z.acc = 0;
+        for (const e of inside) {
+          if (z.dmg) {
+            game.dotHit = true;
+            game.damage(e, z.dmg, z.by || null);
+            game.dotHit = false;
+          }
+          if (z.chill) chill(e, z.chill);
+          if (z.pull && !(e.x === z.pull.x && e.z === z.pull.z)) knock(game, { x: 2 * e.x - z.pull.x, z: 2 * e.z - z.pull.z }, e, 1);
+        }
+      }
+    }
+    // (A wisp of its colour now and then.)
+    if (z.puff && Math.random() < dt * Math.min(8, z.tiles.length)) {
+      const q = z.tiles[Math.floor(Math.random() * z.tiles.length)];
+      game.renderer.emit(q.x, z.y + 0.2, q.z, { n: 1, color: z.puff, up: 6, speed: 4, life: 0.9, shape: 'puff', gravity: -4 });
+    }
+  }
+  game.zones = game.zones.filter((z) => !z.done);
+}
+
+// Something thrown in an arc to a spot (a flask, a charge, grave-light):
+// `onLand(game, x, z, y)` when it comes down; with none, a burst of cold
+// as a wisp's does (`dmg`).
+export function lob(game, from, tx, tz, o = {}) {
+  const ty = game.world.findStandY(tx, tz, from.y);
+  game.lobOrb(from, tx, ty > 0 ? ty : from.y, tz, o.dmg ?? 0);
+  const a = game.projectiles[game.projectiles.length - 1];
+  if (a) {
+    a.tint = o.tint || null;
+    a.onLand = o.onLand || null;
+  }
+  return a;
 }
 
 export function areaTiles(cx, cz, r, round = false) {
@@ -284,7 +425,7 @@ export const BRAINS = {
         const nx = c.x + (Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? sx : 0);
         const nz = c.z + (Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? 0 : sz);
         const ny = game.world.findStandY(nx, nz, c.y);
-        if (ny > 0 && Math.abs(ny - c.y) <= 1) {
+        if (ny > 0 && Math.abs(ny - c.y) <= 1 && withinLeash(c, nx, nz)) {
           c.face(nx, nz);
           c.startMove(nx, ny, nz, 0.14);
         }
@@ -342,11 +483,32 @@ export const BRAINS = {
   // stare, and the dead called up round him as he weakens.
   barrowKing(c, dt) {
     const game = c.game;
+    const t = c.target;
     phaseSummons(c, [0.66, 0.33], () => {
       for (let i = 0; i < 3; i++) summon(game, i === 0 ? 'wight' : 'skeleton', c, 3, { level: c.level });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'RISE!', '#a0e8ff');
       game.audio?.play('scream', c);
     });
+    // A spectral charge down a line at you.
+    c.chargeCd = (c.chargeCd ?? 6) - dt;
+    if (t && c.chargeCd <= 0 && dist(c, t) >= 3 && dist(c, t) <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
+      c.chargeCd = 9;
+      beginAttack(game, c, t, { ...STYLES.gore, reach: 6, mult: 1.3, windup: 0.9 });
+      c.say?.('Kneel!', 1.2, '#a0e8ff');
+      return true;
+    }
+    // His crown of frost: rings of cold rolling out from him (hurt).
+    c.crownCd = (c.crownCd ?? 4) - dt;
+    if (t && c.crownCd <= 0 && c.hp / c.maxHp < 0.6 && !c.windup) {
+      c.crownCd = 11;
+      for (let r = 1; r <= 4; r++) {
+        const tiles = areaTiles(c.x, c.z, r).filter((q) => Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) === r);
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.9 + r * 0.45, dmg: Math.round(3 * (c.dmgMult || 1)), chill: 2.5, kind: 'cold', color: COLORS.cold });
+      }
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'the cold of the grave!', '#a0e8ff');
+      c.stunT = 0.8;
+      return true;
+    }
     if (bossSlam(c, dt, 1, 1.1, 6, 9)) return true;
     return BRAINS.wight(c, dt);
   },
@@ -360,6 +522,17 @@ export const BRAINS = {
       for (let i = 0; i < 2; i++) summon(game, i ? 'rat' : 'skeleton', c, 2, { level: c.level });
       game.renderer.emit(c.x, c.y + 1, c.z, { n: 20, color: ['#d8d0b8', '#a8a088'], up: 40, speed: 60, gravity: 200, life: 0.7 });
     });
+    // Spikes of bone, bursting up along the floor from it, four ways.
+    c.spikeCd = (c.spikeCd ?? 7) - dt;
+    if (t && !c.windup && c.spikeCd <= 0) {
+      c.spikeCd = 10;
+      const diag = Math.random() < 0.5;
+      for (const [dx, dz] of diag ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (let k = 1; k <= 7; k++) addHazard(game, { by: c, tiles: [{ x: c.x + dx * k, z: c.z + dz * k }], y: c.y, dur: 0.8 + k * 0.12, dmg: Math.round(4 * (c.dmgMult || 1)), kind: 'erupt', color: [230, 220, 190], quiet: k > 1 });
+      }
+      c.stunT = 0.9;
+      return true;
+    }
     c.stormCd = (c.stormCd ?? 4) - dt;
     if (t && !c.windup && c.stormCd <= 0 && dist(c, t) <= 9) {
       c.stormCd = 6;
@@ -388,6 +561,21 @@ export const BRAINS = {
     phaseSummons(c, [0.5], () => {
       for (let i = 0; i < 2; i++) summon(game, 'crawler', c, 3, { level: c.level });
     });
+    // Acid, spat up out of its maw: it pools where it lands.
+    c.spitCd = (c.spitCd ?? 4) - dt;
+    if (t && c.spitCd <= 0 && !c.burrowed && dist(c, t) >= 2 && dist(c, t) <= 9) {
+      c.spitCd = 7;
+      for (let k = 0; k < 2; k++) {
+        lob(game, c, t.x + (k ? Math.round((Math.random() - 0.5) * 4) : 0), t.z + (k ? Math.round((Math.random() - 0.5) * 4) : 0), {
+          tint: [170, 220, 60],
+          onLand: (g, x, z, y) => {
+            addZone(g, { tiles: areaTiles(x, z, 1), y, life: 6, kind: 'poison', tick: 0.6, dmg: 1, by: c, color: COLORS.poison, puff: ['#8ac040', '#c8f070'] });
+            g.renderer.emit(x, y + 0.5, z, { n: 12, color: ['#8ac040', '#c8f070'], up: 20, speed: 30, gravity: 160, life: 0.6 });
+            g.audio?.play('splash', { x, z });
+          },
+        });
+      }
+    }
     return BRAINS.crawler(c, dt);
   },
 
@@ -400,6 +588,15 @@ export const BRAINS = {
       for (let i = 0; i < 3; i++) summon(game, 'drowned', c, 4, { level: c.level, color: ['#80b8d8', '#c8e8f8'] });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'from the deep, come!', '#a0e8d0');
     });
+    // A whirlpool where you stand: it drags you in toward its eye.
+    c.whirlCd = (c.whirlCd ?? 9) - dt;
+    if (t && c.whirlCd <= 0 && c.hp / c.maxHp < 0.75) {
+      c.whirlCd = 13;
+      const eye = { x: t.x, z: t.z };
+      addZone(game, { tiles: areaTiles(eye.x, eye.z, 2, true), y: t.y, life: 6, kind: 'whirl', tick: 0.55, dmg: 1, pull: eye, by: c, color: [80, 150, 200], puff: ['#80b8d8', '#c8e8f8'] });
+      game.renderer.floatText(t.x, t.y + 2.6, t.z, 'the black water swirls!', '#80c8e0');
+      game.audio?.play('splash', c);
+    }
     c.tideCd = (c.tideCd ?? 5) - dt;
     if (t && c.tideCd <= 0) {
       c.tideCd = 7;
@@ -435,6 +632,27 @@ export const BRAINS = {
       for (let i = 0; i < 2; i++) summon(game, 'holdout_archer', c, 5, { level: c.level, color: ['#c8a070', '#8a6a4a'] });
       c.say?.('To me! Shoot them down!', 3, '#ff9070');
     });
+    // A war cry: his own come on quicker, and he hits harder a while.
+    c.cryCd = (c.cryCd ?? 8) - dt;
+    if (t && c.cryCd <= 0 && !c.windup) {
+      c.cryCd = 16;
+      c.furyT = 6;
+      for (const o of allies(game, c, 10)) o.hasteT = 6;
+      c.say?.('Holdout! With me!', 2, '#ff9070');
+      game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 3, r1: 50, color: ['#ff6040', '#ffb080'], life: 0.7, oy: 4, flat: 0.5 });
+      game.audio?.play('horn', c);
+    }
+    if (c.furyT > 0) {
+      c.furyT -= dt;
+      if (Math.random() < dt * 8) game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 1, color: ['#ff4030', '#ffb080'], up: 14, life: 0.4, oy: -8 });
+    }
+    // A charge, shield first, down a line.
+    c.bashCd = (c.bashCd ?? 6) - dt;
+    if (t && c.bashCd <= 0 && dist(c, t) >= 3 && dist(c, t) <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
+      c.bashCd = 9;
+      beginAttack(game, c, t, { ...STYLES.gore, reach: 6, mult: c.furyT > 0 ? 1.6 : 1.2, windup: 0.9 });
+      return true;
+    }
     c.potCd = (c.potCd ?? 4) - dt;
     if (t && c.potCd <= 0 && dist(c, t) >= 2 && dist(c, t) <= 8 && !c.windup) {
       c.potCd = 6;
@@ -755,3 +973,6 @@ export function mobStyle(c) {
 }
 
 export { mend };
+
+// The other masters' ways (see bosses.js).
+Object.assign(BRAINS, bossBrains({ addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, dist, sees, COLORS }));

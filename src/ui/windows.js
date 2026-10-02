@@ -623,6 +623,8 @@ export class TradeWindow extends Window {
   wants(k, game) {
     const sh = this.shop(game);
     if (!sh || k === 'coin' || ITEMS[k].noSell) return false;
+    // (Old coin: anyone will change it.)
+    if (ITEMS[k].exchange) return true;
     const w = WANTS[sh.kind];
     // An adventurer will look at any weapon, armour or food you have.
     if (sh.kind === 'adventurer') {
@@ -670,7 +672,8 @@ export class TradeWindow extends Window {
       const k = p.inv[hs].item;
       const pr = this.wants(k, game) ? this.sellPrice(k, game) : 0;
       const glut = game.sim.sellGlut(this.npc, k);
-      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 ? C.green : C.red);
+      const lot = ITEMS[k].exchange;
+      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : lot ? `They'll change them: ¤${pr} for every ${lot}` : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 ? C.green : C.red);
       const mf = game.sim.market.factor(this.npc.layout, k);
       if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
       else if (this.wants(k, game) && pr > 0 && mf < 0.9) g.text(40, 17, '(plenty about round here: cheap)', C.orange);
@@ -725,11 +728,18 @@ export class TradeWindow extends Window {
     // One at a time: each one they take makes the next worth a little less
     // (unless it's what their trade runs on), until they want no more.
     const item = s.item;
-    const want = all ? s.count : 1;
+    // (Old coin's changed by the lot: two for a gold coin.)
+    const lot = ITEMS[item].exchange || 1;
+    if (s.count < lot) {
+      this.npc.say(`I change those ${lot} for a coin. You've only the ${s.count === 1 ? 'one' : s.count}.`, 2.5);
+      game.audio?.play('error');
+      return;
+    }
+    const want = all ? s.count - (s.count % lot) : lot;
     let n = 0;
     let paid = 0;
     let why = null;
-    while (n < want) {
+    while (n + lot <= want) {
       const pr = this.sellPrice(item, game);
       if (pr <= 0) {
         why = 'full';
@@ -740,9 +750,9 @@ export class TradeWindow extends Window {
         break;
       }
       sh.purse.add(-pr);
-      st.add(sh.store, item, 1);
+      st.add(sh.store, item, lot);
       paid += pr;
-      n++;
+      n += lot;
     }
     if (n <= 0) {
       this.npc.say(why === 'full' ? this.npc.rng.pick(['I\'ve got more of those than I can use.', 'No more of those, thanks. I\'m full up.', 'I couldn\'t sell another one.']) : 'I can\'t afford that right now.', 2.5);
@@ -914,6 +924,7 @@ export class JournalWindow extends Window {
   constructor(ui) {
     super(ui, 70, 32, { kind: 'journal' });
     this.closeOnOutside = true;
+    this.scroll = 0;
   }
   draw(g, game) {
     const sim = game.sim;
@@ -923,16 +934,16 @@ export class JournalWindow extends Window {
     g.text(3, 1, pr.name, C.hi);
     g.text(4 + pr.name.length, 1, `· ${pr.title}`, pr.citizen ? C.green : C.cyan);
     if (pr.renown) g.text(3, 2, `The ${pr.renown.title}`, C.hi);
-    let y = 3;
+    // (Written out line by line, then shown from wherever it's scrolled to.)
+    const rows = [];
+    let y = 0;
+    const put = (x, row, text, col) => (rows[row] ||= []).push({ x, text, col });
     const head = (t) => {
       y++;
-      g.text(2, y++, t, C.hi);
+      put(2, y++, t, C.hi);
     };
     const para = (t, col = '#e0d0b0', ind = 3) => {
-      for (const l of wrap(t, this.w - ind - 3)) {
-        if (y >= this.h - 2) return;
-        g.text(ind, y++, l, col);
-      }
+      for (const l of wrap(t, this.w - ind - 3)) put(ind, y++, l, col);
     };
     head('WORK');
     if (pr.job) {
@@ -951,7 +962,7 @@ export class JournalWindow extends Window {
     for (const f of fav) {
       const left = f.due - game.day;
       para(`• ${sim.favors.describe(f)}`, f.kind === 'slay' && f.kills >= f.count ? C.green : '#e0d0b0');
-      g.text(this.w - 16, y - 1, left <= 0 ? 'due today' : `due in ${left}d`, left <= 0 ? C.orange : C.faint);
+      put(this.w - 16, y - 1, left <= 0 ? 'due today' : `due in ${left}d`, left <= 0 ? C.orange : C.faint);
     }
     const cz = sim.citizen;
     if (cz) {
@@ -994,11 +1005,34 @@ export class JournalWindow extends Window {
         return `${car.townName(sid)}: ${t ? `${t} · ` : ''}${v} deeds${need}`;
       }).join(' · '), C.hi);
     }
+    // The page: as much as fits, from where it's scrolled to.
+    const top = 3;
+    const view = this.h - 2 - top;
+    this.maxScroll = Math.max(0, y - view);
+    this.scroll = Math.max(0, Math.min(this.maxScroll, this.scroll));
+    for (let r = 0; r < view; r++) for (const q of rows[r + this.scroll] || []) g.text(q.x, top + r, q.text, q.col);
+    if (this.maxScroll > 0) {
+      // A scroll bar down the right edge.
+      const h = Math.max(1, Math.round((view * view) / y));
+      const pos = Math.round((this.scroll / this.maxScroll) * (view - h));
+      for (let r = 0; r < view; r++) g.text(this.w - 2, top + r, r >= pos && r < pos + h ? '█' : '│', r >= pos && r < pos + h ? C.dim : C.faint);
+      if (this.scroll > 0) g.text(this.w - 12, top - 1, '▲ more', C.faint);
+      if (this.scroll < this.maxScroll) g.text(this.w - 12, this.h - 2, '▼ more', C.faint);
+    }
+    g.text(2, this.h - 1, this.maxScroll > 0 ? ' wheel / ↑↓ scroll ' : '', C.faint);
     g.text(this.w - 14, this.h - 1, ' [J/ESC] ok ', C.faint);
+  }
+  onWheel(d) {
+    this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll + Math.sign(d) * 3));
   }
   onKey(k) {
     if (k.code === 'KeyJ' || k.code === 'Enter') {
       this.close();
+      return true;
+    }
+    const step = { ArrowDown: 1, ArrowUp: -1, KeyS: 1, KeyW: -1, PageDown: 10, PageUp: -10 }[k.code];
+    if (step) {
+      this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll + step));
       return true;
     }
     return false;
@@ -1309,7 +1343,8 @@ export class MapWindow extends Window {
       if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
     } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
     if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
-    else g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
+    // (Only with nothing pointed at: it used to write over the place's name.)
+    else if (!hover) g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
     g.text(2, y0 + 2, '⌂ village [■] town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
     g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);

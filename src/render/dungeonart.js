@@ -204,7 +204,84 @@ function overseer(frame) {
   return p.outline(OUT);
 }
 
+// The Brood Mother (32): a great bloated spider, legs like scaffolding,
+// a cluster of red eyes.
+function broodMother(frame) {
+  const p = new Px(32, 32);
+  const body = hex('#5a4840');
+  const hi = shade(body, 1.4);
+  const w = frame % 2;
+  // Legs: four a side, jointed high.
+  for (let i = 0; i < 4; i++) {
+    const kx = 8 + i * 5;
+    const up = (i + w) % 2;
+    p.line(kx, 18, kx - 4, 10 + up, hi);
+    p.line(kx - 4, 10 + up, kx - 7, 29, body);
+    p.line(kx + 2, 18, kx + 6, 11 + (1 - up), hi);
+    p.line(kx + 6, 11 + (1 - up), kx + 9, 29, body);
+  }
+  // The abdomen (marked), and the head.
+  p.ellipse(20, 17, 9, 7, body);
+  p.ellipse(20, 15, 6, 3, hi);
+  for (const [x, y] of [[18, 14], [22, 15], [20, 18]]) p.set(x, y, '#c83a30');
+  p.ellipse(9, 19, 5, 4, shade(body, 1.15));
+  for (const [x, y] of [[6, 17], [8, 16], [7, 19], [5, 19]]) p.set(x, y, '#ff3020');
+  // Fangs.
+  p.set(5, 22, '#e8e0c8');
+  p.set(7, 23, '#e8e0c8');
+  return p.outline(OUT);
+}
+
+// An egg sac: a pale lump of webbing, something moving inside.
+function eggSac(frame) {
+  const p = new Px(16, 16);
+  const w = frame % 2;
+  p.ellipse(8, 11, 5 + w * 0.5, 4, hex('#d8d0c0'));
+  p.ellipse(7, 10, 3, 2, hex('#f0ead8'));
+  p.set(9 + w, 11, '#5a4a3a');
+  p.set(6, 12 - w, '#5a4a3a');
+  p.line(3, 13, 1, 15, '#c8c0b0');
+  p.line(13, 13, 15, 15, '#c8c0b0');
+  return p.outline(OUT);
+}
+
+// A broodling: a spider the size of a hand.
+function broodling(frame) {
+  const p = new Px(16, 16);
+  const c = hex('#4a3a32');
+  const w = frame % 2;
+  for (let i = 0; i < 3; i++) {
+    p.line(5 + i * 2, 11, 2 + i * 2 - w, 14, c);
+    p.line(7 + i * 2, 11, 10 + i * 2 + w, 14, c);
+  }
+  p.ellipse(9, 10, 3, 2, c);
+  p.ellipse(5, 11, 2, 1.5, shade(c, 1.2));
+  p.set(4, 10, '#ff3020');
+  return p.outline(OUT);
+}
+
+// A barrow hound: a lean grey shape of a dog, pale light where its eyes are.
+function barrowHound(frame) {
+  const p = new Px(16, 16);
+  const c = hex('#7a8a90');
+  const dark = shade(c, 0.7);
+  const w = frame % 2;
+  p.ellipse(9, 9, 4.5, 2.2, c);
+  p.ellipse(4, 7, 2.2, 2, c);
+  p.rect(1, 7, 2, 2, c);
+  p.set(4, 5, dark);
+  p.set(3, 7, '#c8fbff');
+  p.line(13, 8, 15, 6 + w, dark);
+  for (const x of [6 + w, 8 - w, 11 + w, 12 - w]) p.vline(x, 11, 13, dark);
+  for (let i = 0; i < 4; i++) p.set(6 + i * 2, 7, shade(c, 1.25));
+  return p.outline(OUT);
+}
+
 export const DUNGEON_CREATURES = {
+  brood_mother: { frames: 2, size: 32, draw: (f) => broodMother(f) },
+  egg_sac: { frames: 2, draw: (f) => eggSac(f) },
+  broodling: { frames: 2, draw: (f) => broodling(f) },
+  barrow_hound: { frames: 2, draw: (f) => barrowHound(f) },
   rat: { frames: 2, draw: (f) => rat(f) },
   crawler: { frames: 2, draw: (f) => crawler(f) },
   moth: { frames: 2, draw: (f) => moth(f) },
@@ -229,6 +306,14 @@ export const MONSTER_LOOKS = {
   holdout_archer: { skin: '#b07a50', hair: '#4a2e1a', hairStyle: 'ponytail', shirt: '#4a5a32', pants: '#3a3226', shoes: '#2a1e14', outfit: 'hunter', accent: '#6a4a2a', hat: null },
   warlord: { skin: '#a87a58', hair: '#1a1410', hairStyle: 'short', shirt: '#5a2020', pants: '#3a3030', shoes: '#2a2020', outfit: 'plain', accent: '#c8a030', hat: 'helmet', gear: { body: 'plate:#6a5a50', legs: 'plate:#5a4a40' } },
   warden: { skin: '#3a3858', hair: '#2a2840', hairStyle: 'bald', shirt: '#2a2840', pants: '#24223a', shoes: '#1c1a2a', outfit: 'plain', accent: '#5ad8f0', hat: 'kav', gear: { body: 'kav', legs: 'kav', feet: 'kav' }, eyes: '#5ad8f0', visor: true },
+  // The other masters (see entities/bosses.js).
+  witch: { skin: '#9aa88a', hair: '#2a2a22', hairStyle: 'long', shirt: '#2a2a22', pants: '#22221c', shoes: '#1a1a14', outfit: 'robe_witch', accent: '#6a8a3a', hat: 'hood', eyes: '#a0ff70' },
+  huntsman: { skin: '#8a9aa4', hair: '#c8ccc8', hairStyle: 'long', shirt: '#3a4a3a', pants: '#2a3a2a', shoes: '#1a2a1a', outfit: 'hunter', accent: '#6a8a9a', hat: 'hood', eyes: '#80e8ff' },
+  foreman: { skin: '#d8d4c4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#5a4a3a', pants: '#3a3226', shoes: '#2a1e14', outfit: 'miner', accent: '#c8a040', hat: 'miner', eyes: '#ffb040' },
+  saint: { skin: '#d8d4e0', hair: '#f0f0f8', hairStyle: 'long', shirt: '#d8d4c8', pants: '#c8c4b8', shoes: '#a8a498', outfit: 'robe_saint', accent: '#8a6ad8', hat: 'circlet', eyes: '#c8a0ff' },
+  rook: { skin: '#a87a58', hair: '#3a2a1a', hairStyle: 'short', shirt: '#4a3a3a', pants: '#3a3030', shoes: '#2a2020', outfit: 'plain', accent: '#8a2020', hat: 'helmet', gear: { body: 'plate:#5a5a62', legs: 'plate:#4a4a52' } },
+  wren: { skin: '#a87a58', hair: '#3a2a1a', hairStyle: 'ponytail', shirt: '#2a2a2a', pants: '#22221e', shoes: '#1a1a16', outfit: 'vest', accent: '#8a2020', hat: 'bandana' },
+  poisoner: { skin: '#b8a07a', hair: '#4a5a2a', hairStyle: 'short', shirt: '#3a4a2a', pants: '#2a3020', shoes: '#1a2014', outfit: 'robe_poison', accent: '#a8c040', hat: 'hood', eyes: '#c8ff60' },
 };
 
 // ---------------------------------------------------------------- items

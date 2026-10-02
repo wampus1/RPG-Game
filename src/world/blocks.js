@@ -336,6 +336,29 @@ def('relic', { ...sprite, interact: 'relic', tool: 'pick', hardness: 1, drop: nu
 // The ship you sailed on (see voyage.js): its canvas and its wheel.
 def('sail', { tool: 'axe', hardness: 0.4, drop: 'cloth', label: 'Sailcloth' });
 def('helm', { ...sprite, solid: true, hardness: 1, tool: 'axe', drop: null, label: 'Ship\'s Wheel' });
+// What else is down there (see dungeongen.js, decorate): the dressing of
+// each kind of place; the master's great gate (down behind you, up again
+// when it's dead); a holdout's alarm gong; kegs of powder that go up.
+const dressing = { ...sprite, solid: false };
+def('cobweb', { ...dressing, hardness: 0.2, drop: [{ item: 'string', chance: 0.5 }], label: 'Cobwebs' });
+def('urn', { ...sprite, solid: true, hardness: 0.2, drop: [{ item: 'old_coin', chance: 0.2 }, { item: 'bone', chance: 0.15 }], label: 'Burial Urn' });
+def('candles', { ...dressing, hardness: 0.1, light: 6, drop: null, label: 'Candles' });
+def('statue', { ...sprite, tall: true, solid: true, tool: 'pick', hardness: 8, drop: 'cobblestone', label: 'Old Statue' });
+def('skull_pile', { ...sprite, solid: true, hardness: 0.6, drop: [{ item: 'bone', chance: 0.8, min: 1, max: 3 }], label: 'Heaped Skulls' });
+def('mine_cart', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: [{ item: 'iron_ore', chance: 0.5 }, { item: 'coal', chance: 0.5 }], label: 'Ore Cart' });
+def('stalagmite', { ...sprite, solid: true, tool: 'pick', hardness: 1.5, drop: [{ item: 'cobblestone', chance: 0.6 }], label: 'Stalagmite' });
+def('glowshroom', { ...dressing, hardness: 0.05, light: 5, drop: null, label: 'Glowcaps' });
+def('weapon_rack', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'spear', chance: 0.2 }, { item: 'planks', chance: 0.6 }], label: 'Weapon Rack' });
+def('war_banner', { ...dressing, tall: true, tool: 'axe', hardness: 0.3, drop: [{ item: 'cloth', chance: 0.6 }], label: 'War Banner' });
+def('hanging_chains', { ...dressing, tall: true, tool: 'pick', hardness: 1, drop: null, label: 'Hanging Chains' });
+def('powder_keg', { ...sprite, solid: true, hardness: 0.3, drop: null, label: 'Powder Keg' });
+def('roots', { ...dressing, tall: true, tool: 'axe', hardness: 0.2, drop: [{ item: 'stick', chance: 0.5 }], label: 'Hanging Roots' });
+def('rubble', { ...dressing, tool: 'shovel', hardness: 0.2, drop: [{ item: 'cobblestone', chance: 0.4 }], label: 'Rubble' });
+def('bone_throne', { ...sprite, tall: true, solid: true, hardness: Infinity, drop: null, label: 'Throne of Bones' });
+def('boss_gate', { ...sprite, tall: true, solid: true, interact: 'boss_gate', rotatable: true, hardness: Infinity, drop: null, label: 'Great Gate' });
+def('boss_gate_open', { ...sprite, tall: true, solid: false, interact: 'boss_gate', rotatable: true, hardness: Infinity, drop: null, label: 'Great Gate (Raised)' });
+def('kav_gate', { ...sprite, tall: true, solid: true, interact: 'boss_gate', rotatable: true, hardness: Infinity, drop: null, light: 4, label: 'Hall Door' });
+def('gong', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: null, label: 'Alarm Gong' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
