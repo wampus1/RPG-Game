@@ -166,11 +166,6 @@ export class Wildlife {
         this.fly(b, { x: n.x + 0.5, y: n.y, z: n.z + 0.5, nest: n }, 2.4);
       }
     }
-    // (Its eyes catch the light.)
-    if (near <= 16 && Math.random() < dt * 8) {
-      g.renderer.emit(b.x - 0.1, b.y + 0.55, b.z, { n: 1, color: ['#ffe040'], up: 0, speed: 0, life: 0.14, glow: true, size: 1 });
-      g.renderer.emit(b.x + 0.1, b.y + 0.55, b.z, { n: 1, color: ['#ffe040'], up: 0, speed: 0, life: 0.14, glow: true, size: 1 });
-    }
   }
 
   fly(b, to, dur) {

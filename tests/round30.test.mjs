@@ -217,7 +217,7 @@ function climbs(m, made) {
 }
 
 // ------------------------------------------------------------ the Overseer
-test('the Overseer calls three sentinels at once; they hold up a shield that turns arrows but not blades', () => {
+test('the Overseer calls three sentinels at once; they hold up a shield that turns arrows (and blades)', () => {
   const { game, input, p } = start();
   const { c } = fight(game, p, 'overseer');
   c.workCd = c.beamCd = c.gridCd = 999;
@@ -231,9 +231,9 @@ test('the Overseer calls three sentinels at once; they hold up a shield that tur
   const hit = arrowStrikes(game, { from: p, x0: p.x, z0: p.z, dmg: 6, kind: 'arrow' }, c);
   assert.equal(hit, false);
   assert.equal(c.hp, hp);
-  // A blade doesn't.
+  // (Since round 32, nor does a blade.)
   game.damage(c, 6, p);
-  assert.ok(c.hp < hp, 'the blade goes through');
+  assert.equal(c.hp, hp, 'the blade glances off');
   // Never more than three.
   c.sentCd = 0;
   run(game, input, 40);

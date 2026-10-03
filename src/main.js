@@ -12,7 +12,7 @@ import { hashString } from './util/rng.js';
 import { SaveStore, openSaveDB } from './game/saves.js';
 import { CharacterWindow } from './ui/create.js';
 import { randomHero } from './game/hero.js';
-import { Music, musicMood } from './game/music.js';
+import { Music, musicMood, moodUrgent } from './game/music.js';
 
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
 const params = new URLSearchParams(location.search);
@@ -280,7 +280,7 @@ function step(now) {
   }
   // The music follows where you are and what you're doing.
   try {
-    music.update(dt, game ? musicMood(game) : 'title');
+    music.update(dt, game ? musicMood(game) : 'title', moodUrgent(game));
   } catch (e) {
     if (!step.musicErr) console.error(e);
     step.musicErr = true;

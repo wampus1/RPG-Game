@@ -25,6 +25,7 @@ const P = {
   dirt: ['#7a5436', '#5e3f28', '#946842', '#a8a098'],
   sand: ['#d2b46c', '#b99a58', '#e0c682'],
   snow: ['#b4bcc8', '#98a4b6', '#c4ccd8'],
+  snow_void: ['#a898c0', '#8a78aa', '#c0b2d6', '#7a4ea0'],
   stone: ['#84848c', '#66666e', '#9e9ea6'],
   cobblestone: ['#7a7a80', '#505056', '#98989e'],
   gravel: ['#8a8680', '#6a665e', '#a8a49c', '#7a6e62'],
@@ -287,6 +288,21 @@ function cubeTop(name, v, rand, rot) {
       for (let i = 0; i < 4; i++) p.set(rand() * 16, rand() * 16, '#8e9cb4');
       return p;
     }
+    case 'snow_void': {
+      // (Veins of violet through it, and a cold glint or two.)
+      speckle(p, pal, rand, 0.2);
+      for (let k = 0; k < 2; k++) {
+        let x = rand() * 16;
+        let y = rand() * 16;
+        for (let i = 0; i < 9; i++) {
+          p.set(x, y, pal[3]);
+          x += rand() < 0.5 ? 1 : -1;
+          y += rand() < 0.6 ? 1 : 0;
+        }
+      }
+      for (let i = 0; i < 2; i++) p.set(rand() * 16, rand() * 16, '#5ad8f0');
+      return p;
+    }
     case 'sail': {
       speckle(p, ['#ece4d0', '#dcd3bc', '#f6f0e2'], rand, 0.16);
       for (let x = 3; x < 16; x += 5) p.vline(x, 0, LH - 1, '#c8bc9c');
@@ -529,11 +545,12 @@ function cubeFront(name, v, rand, rot) {
       }
       return frontify(p);
     }
-    case 'snow': {
+    case 'snow': case 'snow_void': {
+      const sp = name === 'snow_void' ? P.snow_void : P.snow;
       speckle(p, P.dirt, rand, 0.3);
       for (let x = 0; x < 16; x++) {
         const d = 3 + (rand() < 0.4 ? 1 : 0);
-        for (let y = 0; y < d; y++) p.set(x, y, y === d - 1 ? P.snow[1] : P.snow[0]);
+        for (let y = 0; y < d; y++) p.set(x, y, y === d - 1 ? sp[1] : sp[0]);
       }
       return frontify(p, 0.9);
     }

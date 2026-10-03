@@ -198,6 +198,14 @@ export class Audio {
       case 'hiss': this.noise(0.7, 0.025, 3800); this.noise(0.5, 0.015, 1600, 0.1); break;
       case 'pulse': this.tone(55, 1.2, 'sine', 0.07, 0); this.tone(82.5, 1.0, 'triangle', 0.02, 0, 0.05); break;
       case 'lift': this.tone(140, 1.4, 'sawtooth', 0.03, -60); this.tone(70, 1.4, 'sine', 0.06, -20); this.noise(1.2, 0.03, 600); break;
+      // A Kavorent lift's ride: the drive spinning up, each band of light
+      // rushing past, the drive winding down to a stop with a clunk.
+      case 'lift_go': this.swell(90, 1.4, 'sawtooth', 0.025, 140); this.swell(180, 1.4, 'sine', 0.035, 280); this.noise(1.2, 0.02, 500); this.tone(1200, 0.2, 'sine', 0.02, 300, 0.05); break;
+      // The rite: a glyph cut in light; the circle catching; and you, back.
+      case 'etch': this.tone(1800 + Math.random() * 600, 0.25, 'triangle', 0.035, -900); this.noise(0.18, 0.04, 5200); break;
+      case 'rebirth': [261.6, 329.6, 392, 523.2, 659.2].forEach((f, i) => this.swell(f, 2.6, i % 2 ? 'triangle' : 'sine', 0.06, 0, i * 0.03)); this.noise(0.6, 0.12, 7000); this.tone(65, 0.9, 'sine', 0.25, -10); break;
+      case 'whoosh': this.noise(0.4, 0.05, 1800); this.tone(520, 0.35, 'sine', 0.012, -360); break;
+      case 'lift_stop': this.tone(260, 0.7, 'sawtooth', 0.025, -200); this.tone(58, 0.35, 'sine', 0.14, -18, 0.45); this.noise(0.18, 0.08, 900, 0.45); this.tone(1400, 0.12, 'triangle', 0.03, 0, 0.6); break;
       case 'rune': this.tone(660, 0.3, 'triangle', 0.05, 330); this.tone(990, 0.4, 'sine', 0.04, 495, 0.1); break;
       case 'beam': this.tone(1400, 0.35, 'sawtooth', 0.03, -700); this.noise(0.3, 0.05, 6000); break;
       case 'charge': this.tone(200, 0.6, 'sawtooth', 0.03, 900); break;

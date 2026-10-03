@@ -98,6 +98,10 @@ export const THEMES = {
   title_shore: { root: 62, scale: 'dorian', bpm: 104, prog: [0, 6, 0, 4], lead: 'square', drums: 'hand', density: 0.6, swing: 0.28, harmony: true },
   title_deep: { root: 50, scale: 'phrygian', bpm: 58, prog: [0, 1, 5, 0], lead: 'sine', bell: true, pad: true, drums: null, density: 0.24, toll: true, detune: 10 },
   title_spire: { root: 54, scale: 'whole', bpm: 70, meter: 12, prog: [0, 2, 4, 1], lead: 'sine', bell: true, pad: true, arp: true, drums: null, density: 0.3, detune: 16 },
+  // Fallen: a slow lament in the dark; then the Kavorent's rite that brings
+  // you back, strange and climbing.
+  death: { root: 45, scale: 'harmonic', bpm: 44, prog: [0, 5, 3, 4], lead: 'sine', pad: true, organ: true, bell: true, drums: null, density: 0.16 },
+  ritual: { root: 50, scale: 'alien', bpm: 88, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, bell: true, drums: null, density: 0.5, detune: 26 },
 };
 
 // The title plays these one after another (a few minutes each, never the
@@ -114,6 +118,14 @@ export const TITLE_SONGS = [
 ];
 // Seconds of each before the next.
 export const TITLE_SONG_LEN = 150;
+
+// How long a scene's music is kept once the scene's over (seconds).
+export const LINGER = 9;
+
+// Is the music right now a scene's own (to come in on its cue)?
+export function moodUrgent(game) {
+  return !!(game && ((game.cutscene && game.cutscene.mood) || (game.scene && game.scene.mood)));
+}
 
 // What the music should be right now.
 export function musicMood(game) {
@@ -229,7 +241,7 @@ export function bossLevel(variant) {
 
 // One playing theme: its own gain node, scheduled a little ahead.
 class Voice {
-  constructor(music, key) {
+  constructor(music, key, fadeIn = 2.5) {
     const [full, variant] = key.split(':');
     const [name, flavour] = full.split('@');
     this.m = music;
@@ -245,7 +257,7 @@ class Voice {
     const c = music.ctx;
     this.out = c.createGain();
     this.out.gain.setValueAtTime(0.0001, c.currentTime);
-    this.out.gain.exponentialRampToValueAtTime(1, c.currentTime + 2.5);
+    this.out.gain.exponentialRampToValueAtTime(1, c.currentTime + fadeIn);
     this.out.connect(music.bus);
     this.rand = mulberry32((Math.random() * 1e9) | 0);
     this.step = 0;
@@ -571,13 +583,13 @@ class Voice {
     }
   }
 
-  fadeOut() {
+  fadeOut(dur = 2.2) {
     const c = this.m.ctx;
     this.out.gain.cancelScheduledValues(c.currentTime);
     this.out.gain.setValueAtTime(Math.max(0.0001, this.out.gain.value), c.currentTime);
-    this.out.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 2.2);
+    this.out.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
     this.stopped = true;
-    setTimeout(() => this.out.disconnect(), 2600);
+    setTimeout(() => this.out.disconnect(), (dur + 0.4) * 1000);
   }
 }
 
@@ -651,15 +663,29 @@ export class Music {
 
   // Called every frame with the mood the game is in; switches themes once
   // a new mood has held for a moment (fights switch at once).
-  update(dt, mood) {
+  // `urgent`: a scene's own music (see moodUrgent): in on its cue, not a
+  // few seconds after; and kept a while once the scene's over, rather than
+  // cut off the moment it ends (anything but a fight waits for it).
+  update(dt, mood, urgent = false) {
     if (!this.setup()) return;
     if (mood === 'title') mood = this.titleSong(dt);
     else this.title = null;
     if (!this.voice) {
-      this.voice = new Voice(this, mood);
+      this.voice = new Voice(this, mood, urgent ? 0.6 : 2.5);
       return;
     }
+    if (urgent) this.linger = LINGER;
+    else if (this.linger > 0) {
+      this.linger -= dt;
+      if (mood !== this.voice.key && !mood.startsWith('fight')) return;
+    }
     if (mood === this.voice.key) {
+      this.want = null;
+      return;
+    }
+    if (urgent) {
+      this.voice.fadeOut(0.8);
+      this.voice = new Voice(this, mood, 0.5);
       this.want = null;
       return;
     }

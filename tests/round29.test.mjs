@@ -142,12 +142,12 @@ test('the blight has got into some rooms: veined floor, growths, and what lives 
   assert.ok(veined > 40);
   // (Not in the other kinds of place.)
   for (const type of ['barrow', 'crypt']) assert.equal(buildFloor(fresh(game, type), 1).blighted.length, 0);
-  // Made, they're the blight's: tougher, and marked so.
+  // Made, they're the blight's, and marked so (frailer since round 32).
   const d = new DungeonRun(game, rec);
   d.enter();
   const c = d.spawn('drone', game.player.x + 4, FY, game.player.z, { infected: true });
   assert.ok(c.infected);
-  assert.ok(c.maxHp > Math.round(SPECIES.drone.hp * (1 + 0.3 * (c.level - 1))));
+  assert.ok(c.maxHp < Math.round(SPECIES.drone.hp * (1 + 0.3 * (c.level - 1))));
   d.leave();
 });
 

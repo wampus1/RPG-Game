@@ -13,6 +13,7 @@ import { findPath } from './pathfind.js';
 import { fits, apart } from './footprint.js';
 import { knock } from '../game/combat.js';
 import { bossTint } from '../render/bossart.js';
+import { walksFields, fieldWay, lowerFields } from './fields.js';
 
 // The hp left (as a share) at which it turns: worn, then desperate.
 export const MARKS = [0.66, 0.33];
@@ -20,6 +21,12 @@ export const MARKS = [0.66, 0.33];
 export const GAP = [0, 1.7, 1.35, 1.0];
 // The longest it stands about before it moves (seconds).
 export const STILL = 1.4;
+// The longest it goes without starting an attack, by phase (seconds):
+// past that, whatever it has is made ready at once (one at a time still,
+// as ever); and a moment more with nothing, it comes straight at you.
+export const PRESS = [0, 3.2, 2.6, 2.0];
+// (Calling help isn't an attack: those keep their own time.)
+const NOT_ATTACKS = new Set(['attackCd', 'callCd', 'sentCd', 'rallyCd']);
 
 // Where each likes to fight from (paces from you; none: up close).
 const RANGE = {
@@ -59,6 +66,24 @@ export function used(c, extra = 0) {
   c.casts = (c.casts || 0) + 1;
   c.stillT = 0;
   c.repo = null;
+  c.sinceAtk = 0;
+  c.pressed = false;
+}
+
+// Gone too long without an attack (see PRESS): its cooldowns cut short
+// (once), and then, if that brings nothing, 'close': at you, to strike
+// with what it has to hand. Null if it isn't pressed yet.
+export function press(c) {
+  const ph = phaseOf(c);
+  if (!c.target || c.target.dead || !((c.sinceAtk || 0) > PRESS[ph])) return null;
+  if (!c.pressed) {
+    c.pressed = true;
+    for (const k of Object.keys(c)) if (k.endsWith('Cd') && !NOT_ATTACKS.has(k) && typeof c[k] === 'number' && c[k] > 0) c[k] = 0;
+    c.gapT = Math.min(c.gapT || 0, 0.2);
+    return 'ready';
+  }
+  if (c.sinceAtk > PRESS[ph] + 1.4 && !(c.burrowed || c.vanished || c.ceiling || c.tether || c.solid === false || c.act)) return 'close';
+  return 'ready';
 }
 
 // Doing something that isn't standing about.
@@ -70,10 +95,18 @@ function busy(c) {
 // phase (turned with a roar when it crosses a mark).
 export function bossClock(c, dt) {
   if (c.gapT > 0) c.gapT -= dt;
+  // (How long since it last went for you: a blow wound up, or one of its
+  // works under way, counts.)
+  if (c.windup || c.act || c.aiming || !c.target || c.target.dead || (c.game.lasers || []).some((L) => L.by === c)) {
+    c.sinceAtk = 0;
+    c.pressed = false;
+  } else c.sinceAtk = (c.sinceAtk || 0) + dt;
   // (The Overseer's shield, down a while once its sentinels are gone, and
   // growing back up round it once they're called: see monsters.js.)
   if (c.shieldDownT > 0) c.shieldDownT -= dt;
   c.shieldUpT = (c.shieldUpT || 0) + dt;
+  if (c.shieldNote > 0) c.shieldNote -= dt;
+  if (c.fieldNote > 0) c.fieldNote -= dt;
   if (c.shieldHit) {
     c.shieldHit.t += dt;
     if (c.shieldHit.t > 0.5) c.shieldHit = null;
@@ -148,8 +181,14 @@ export function drift(c, dt) {
     return false;
   }
   if (!R.path) {
+    const box = c.leash ? { x0: c.leash.x0, z0: c.leash.z0, x1: c.leash.x1, z1: c.leash.z1 } : null;
     const clear = c.foot ? (x, y, z) => fits(c.game, c, x, y, z, true) : null;
-    R.path = findPath(c.game.world, c.x, c.y, c.z, R.goal.x, R.goal.y, R.goal.z, { maxNodes: 500, partial: true, clear, box: c.leash ? { x0: c.leash.x0, z0: c.leash.z0, x1: c.leash.x1, z1: c.leash.z1 } : null });
+    // (The Overseer, with no way round a wall of force, goes through it:
+    // see fields.js.)
+    const soft = walksFields(c) ? fieldWay(c.game) : null;
+    R.path = soft ? findPath(c.game.world, c.x, c.y, c.z, R.goal.x, R.goal.y, R.goal.z, { maxNodes: 500, clear, box }) : null;
+    if (soft && !(R.path && R.path.length)) R.path = findPath(c.game.world, c.x, c.y, c.z, R.goal.x, R.goal.y, R.goal.z, { maxNodes: 500, partial: true, clear: c.foot ? (x, y, z) => fits(c.game, c, x, y, z, true, soft) : null, through: soft, box });
+    if (!(R.path && R.path.length)) R.path = findPath(c.game.world, c.x, c.y, c.z, R.goal.x, R.goal.y, R.goal.z, { maxNodes: 500, partial: true, clear, box });
     R.i = 0;
     if (!R.path || !R.path.length) {
       c.repo = null;
@@ -158,6 +197,7 @@ export function drift(c, dt) {
     }
   }
   const [nx, , nz] = R.path[R.i];
+  if (walksFields(c)) lowerFields(c, nx, nz);
   if (c.tryStep(nx, nz, c.stepTime())) {
     R.i++;
     if (R.i >= R.path.length) c.repo = null;

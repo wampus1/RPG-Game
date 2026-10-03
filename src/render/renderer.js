@@ -4,7 +4,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
-import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK } from './sprites.js';
+import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -182,20 +182,28 @@ export class Renderer {
   // A picture of the scene round the camera, larger than the screen so it
   // can be turned without showing its edges: four views stitched together.
   snapshot(game) {
+    // (As big as the view needs, drawn back or not: wide enough to turn
+    // a quarter without its corners showing.)
+    const z = (this.vw || VIEW_W) / VIEW_W;
+    const SW = Math.min(2 * this.vw, Math.round(SNAP_W * z));
+    const SH = Math.min(2 * this.vh, Math.round(SNAP_H * z));
     const c = document.createElement('canvas');
-    c.width = SNAP_W;
-    c.height = SNAP_H;
+    c.width = SW;
+    c.height = SH;
     const cx = c.getContext('2d');
     cx.imageSmoothingEnabled = false;
     const camX = this.camX;
     const camY = this.camY;
-    const x0 = Math.round((this.vw - SNAP_W) / 2);
-    const y0 = Math.round((this.vh - SNAP_H) / 2);
+    // (Drawn back, the world's drawn on its own bigger canvas: see render.)
+    const prevCtx = this.ctx;
+    if (this.zoomK !== 1 && this.zcanvas) this.ctx = this.zcanvas.getContext('2d');
+    const x0 = Math.round((this.vw - SW) / 2);
+    const y0 = Math.round((this.vh - SH) / 2);
     // (Speech and falling rain or snow aren't part of the picture: they're
     // drawn upright over the turn, see drawSpin.)
     const bubbles = new Map();
-    for (const ox of [x0, x0 + SNAP_W - this.vw]) {
-      for (const oy of [y0, y0 + SNAP_H - this.vh]) {
+    for (const ox of [x0, x0 + SW - this.vw]) {
+      for (const oy of [y0, y0 + SH - this.vh]) {
         this.camX = camX + ox;
         this.camY = camY + oy;
         this.drawScene(game, 0, true);
@@ -208,6 +216,7 @@ export class Renderer {
     }
     this.camX = camX;
     this.camY = camY;
+    this.ctx = prevCtx;
     const p = this.playerPoint(game);
     return { canvas: c, px: p.x - x0, py: p.y - y0, bubbles: [...bubbles.values()] };
   }
@@ -215,7 +224,11 @@ export class Renderer {
   // The turn itself: the old view swings away as the new one swings in.
   drawSpin(game, dt) {
     const sp = this.spin;
-    if (!sp.to) sp.to = this.snapshot(game);
+    if (!sp.to) {
+      sp.to = this.snapshot(game);
+      // (Its speech is drawn turning with it, not upright over the view.)
+      this.bubbles = [];
+    }
     sp.t += dt;
     const k = Math.min(1, sp.t / sp.dur);
     const e = k * k * (3 - 2 * k);
@@ -317,6 +330,20 @@ export class Renderer {
 
   // Is the mouse over an atlas image drawn at (dx, dy)? (Solid pixels only
   // when `alphaTest`.)
+  // Asleep in a tent: Zs drifting up off its ridge, swaying, growing and
+  // fading as they rise, one after another.
+  drawSnores(ctx, x, y, seed) {
+    const a0 = ctx.globalAlpha;
+    for (let i = 0; i < 3; i++) {
+      const k = (this.time * 0.45 + i / 3 + (seed % 7) * 0.13) % 1;
+      const zx = Math.round(x + 2 + k * 8 + Math.sin(k * 6 + i) * 2);
+      const zy = Math.round(y - k * 18);
+      ctx.globalAlpha = a0 * Math.min(1, k * 4) * (1 - k) * 0.95;
+      drawText(ctx, k > 0.5 ? 'Z' : 'z', zx, zy, '#e8f0ff', '#283048');
+    }
+    ctx.globalAlpha = a0;
+  }
+
   under(s, dx, dy, w = s.w, h = s.h, alphaTest = true) {
     const m = this.mouse;
     if (!m) return false;
@@ -335,7 +362,7 @@ export class Renderer {
   // apart from the view (see CRT.present), every one of its pixels sharp;
   // the view keeps only what's over it (speech, the UI). The camera eases
   // in and out like a spring, without overshooting; a scene's own zoom is
-  // taken as it comes. A turn of the camera is instant while it's drawn back.
+  // taken as it comes. A turn of the camera swings round drawn back too.
   render(game, dt) {
     const goal = this.zoomGoal || 1;
     if (this.zoomSnap) {
@@ -356,7 +383,6 @@ export class Renderer {
     const pw = this.vw || VIEW_W;
     const ph = this.vh || VIEW_H;
     if (vw !== VIEW_W || vh !== VIEW_H) {
-      this.spin = null;
       if (!this.zcanvas) this.zcanvas = document.createElement('canvas');
       if (this.zcanvas.width !== vw || this.zcanvas.height !== vh) {
         this.zcanvas.width = vw;
@@ -666,6 +692,10 @@ export class Renderer {
     for (const e of ghost.length ? [...game.visibleEntities, ...ghost] : game.visibleEntities) {
       if (cut && cut.hides(e)) continue;
       if (deep && e !== game.player && e.y >= this.hiddenLevel && this.hidden.has(e.x * 65536 + e.z)) continue;
+      // (Asleep inside a tent: out of sight; the tent snores for them.)
+      if (e.sleeping && e.bedTile && e.bedTile.tent) continue;
+      // (Fallen: drawn by the rite that raises you, over the dark.)
+      if (e === game.player && game.scene && game.scene.kind === 'death' && !game.scene.reborn) continue;
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
       const rp = { x: u, y: wp.y, z: v };
@@ -674,6 +704,12 @@ export class Renderer {
       let arr = buckets.get(row);
       if (!arr) buckets.set(row, (arr = []));
       arr.push({ e, rp, layer: Math.ceil(rp.y - 0.001) + 1 });
+    }
+    // Tents with someone asleep inside (see drawSnores).
+    this.tentSleep = null;
+    for (const n of game.npcs || []) {
+      if (!n.sleeping || !n.bedTile || !n.bedTile.tent || n.dead) continue;
+      (this.tentSleep ||= new Set()).add(n.bedTile.x * 65536 + n.bedTile.z);
     }
     this.fishingDecos(game, buckets, zMin, zMax);
     this.leadDecos(game, buckets, zMin, zMax);
@@ -792,6 +828,17 @@ export class Renderer {
               const s = TEX.sprite[id * 4 + rot][0];
               ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
               if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+            } else if (id === B.tent) {
+              // A tent: bigger than its pace (see sprites.tentSprite), and
+              // whoever's asleep in it snoring away over it.
+              const meta = metaAt(ci, y);
+              const rot = ((meta & META_ROT) + view) & 3;
+              const img = tentSprite(rot, (meta >> CANOPY_SHIFT) & 3, !!(meta & META_STATE));
+              const tx = sx + 8 - (img.width >> 1);
+              const ty = sy + SPR_H + 2 - img.height;
+              ctx.drawImage(img, tx, ty);
+              if (pickable && this.under(null, sx - 6, ty + 4, 28, img.height - 4, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
+              if (this.tentSleep && this.tentSleep.has(wx * 65536 + wz)) this.drawSnores(ctx, sx + 8, ty + 2, wx * 7 + wz);
             } else if (render === 'sprite' || render === 'plant') {
               const meta = metaAt(ci, y);
               const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
@@ -958,27 +1005,38 @@ export class Renderer {
     const wy = feetY - WAGON_H + 1;
     const hood = m.hood !== false;
     if (horse) this.drawSide(ctx, horse, left ? wx - HORSE_W + 7 : wx + WAGON_W - 7, feetY - HORSE_H + 1, left);
-    // Passengers in the bed (under the canvas, its sides rolled up for
-    // them, on a covered wagon): heads and shoulders showing over the side.
+    // Passengers sat in the bed (a covered wagon's canvas rolled back on
+    // its hoops for them), whole, the bed's sides in front of their legs:
+    // seen from the waist up over the side. And someone sat up on the
+    // bench beside the driver's place.
     const riders = m.riders || [];
-    const sat = (front) => riders.forEach((look, i) => {
-      const seat = WAGON_BED[i % WAGON_BED.length];
-      const px = left ? wx + seat.x : wx + WAGON_W - 1 - seat.x;
+    const seated = (look, x) => {
       const sheet = humanoidSheet(look);
-      const top = front ? wy + SPR_PAD - 5 : feetY - CHAR_H + 1 - seat.lift;
-      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, 14, px - 8, top - SPR_PAD, CHAR_W, 14);
+      // (Sitting, the seat's 18 rows down the sprite, under its padding.)
+      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, SHEET_H, x - 8, wy + 13 - 18 - SPR_PAD, CHAR_W, SHEET_H);
+    };
+    riders.forEach((look, i) => {
+      const seat = WAGON_BED[i % WAGON_BED.length];
+      seated(look, left ? wx + seat.x : wx + WAGON_W - 1 - seat.x);
     });
-    if (!hood) sat(false);
     this.drawSide(ctx, wagonSprite(m.banner || null, frame, hood ? (riders.length ? 'open' : true) : false), wx, wy, left);
-    if (hood && riders.length) {
-      // In under the canvas, seen through the rolled-up side.
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(left ? wx + 15 : wx + WAGON_W - 36, wy + 5, 21, 7);
-      ctx.clip();
-      sat(true);
-      ctx.restore();
+    if (m.bench) {
+      const sheet = humanoidSheet(m.bench);
+      const bx = left ? wx + WAGON_SEAT.x + 2 : wx + WAGON_W - 1 - WAGON_SEAT.x - 2;
+      ctx.drawImage(sheet, 4 * CHAR_W, (left ? 1 : 3) * SHEET_H, CHAR_W, SHEET_H, bx - 8, wy + 11 - 18 - SPR_PAD, CHAR_W, SHEET_H);
     }
+  }
+
+  // Which part of a standing wagon drawn at `sx` the mouse is over: its
+  // bench at the front, or the bed at the back.
+  wagonPart(e, sx) {
+    const m = this.mouse;
+    if (!m) return 'back';
+    const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
+    const cx = sx + 8;
+    const wx = left ? cx - WAGON_SEAT.x - 1 : cx - (WAGON_W - WAGON_SEAT.x) + 1;
+    const lx = left ? m.x - wx : wx + WAGON_W - 1 - m.x;
+    return lx < 14 ? 'bench' : 'back';
   }
 
   // A wagon standing still: its hood, wheels and banner (and whoever's
@@ -992,10 +1050,10 @@ export class Renderer {
     ctx.globalAlpha = 0.6;
     ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx - 10, feetY - 4, 36, 8);
     ctx.globalAlpha = 1;
-    this.drawWagonAt(ctx, sx + 8, feetY, left, { banner: e.banner, riders: e.riders || [], hood: e.hood }, 0, e.horse ? horseSprite(0, e.horse.coat || 0, null, !!e.horse.saddle) : null);
-    // Under the mouse? (To climb in.)
+    this.drawWagonAt(ctx, sx + 8, feetY, left, { banner: e.banner, riders: e.riders || [], bench: e.bench || null, hood: e.hood }, 0, e.horse ? horseSprite(0, e.horse.coat || 0, null, !!e.horse.saddle) : null);
+    // Under the mouse? (To climb in: on the bench, or into the back.)
     const m = this.mouse;
-    if (m && m.x >= sx - 10 && m.x < sx + 26 && m.y >= feetY - WAGON_H && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq };
+    if (m && m.x >= sx - 10 && m.x < sx + 26 && m.y >= feetY - WAGON_H && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, part: this.wagonPart(e, sx) };
   }
 
   // A siege engine, side on, turned toward the enemy: a catapult's arm

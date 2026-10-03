@@ -1027,12 +1027,15 @@ export class Justice {
     } else this.trespass = null;
     const held = p.heldDef();
     // Guards of the town may carry arms where others may not.
-    if (lawOn(L, 'armsBan') && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id)) {
+    // (Not while a scene plays out and you can't do anything about it.)
+    const busy = !!(game.cutscene || game.scene);
+    if (lawOn(L, 'armsBan') && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id) && !busy) {
       const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 5);
       if (guard) {
         if (!this.brandish) {
           this.brandish = { t: 0 };
           guard.say(`Put that weapon away! It's the law in ${s.name}.`, 3.5, '#ffe070');
+          game.ui.msg(`Weapons are banned in ${s.name}: hold something else (or nothing), or the guard will take you in.`, '#ffe070', true);
         } else if ((this.brandish.t += 1) >= 12 && !this.brandish.done) {
           this.brandish.done = true;
           this.commit(s.id, 'brandishing', { witnesses: [guard] });

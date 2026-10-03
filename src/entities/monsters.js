@@ -31,6 +31,7 @@ import { startLaser } from '../game/laser.js';
 import { GAME_MINUTES_PER_SECOND } from '../config.js';
 import { onTiles, fits, fitNear, footTiles } from './footprint.js';
 import { phaseOf, ready, used } from './tempo.js';
+import { fieldWay, lowerFields } from './fields.js';
 
 export { BOSS_TITLES };
 
@@ -81,6 +82,8 @@ const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216, 240],
 export function addHazard(game, h) {
   h.t = 0;
   h.y ??= h.by ? h.by.y : game.player.y;
+  // (A master going for you: see tempo.press.)
+  if (h.by && h.by.isBoss) h.by.sinceAtk = 0;
   (game.hazards ||= []).push(h);
   return h;
 }
@@ -332,6 +335,7 @@ export function groundFire(game, x, z, y, by = null, all = false, spread = 1) {
 // `onLand(game, x, z, y)` when it comes down; with none, a burst of cold
 // as a wisp's does (`dmg`).
 export function lob(game, from, tx, tz, o = {}) {
+  if (from && from.isBoss) from.sinceAtk = 0;
   const ty = game.world.findStandY(tx, tz, from.y);
   game.lobOrb(from, tx, ty > 0 ? ty : from.y, tz, o.dmg ?? 0);
   const a = game.projectiles[game.projectiles.length - 1];
@@ -1278,7 +1282,7 @@ export const BRAINS = {
     return false;
   },
 
-  // The Overseer: its shield (turning arrows and bolts, nothing else) is
+  // The Overseer: its shield (turning arrows, bolts and blades alike) is
   // thrown up round it by its sentinels, three drones called down at once
   // to hold it (see SENTINELS below): kill all three and it's down a good
   // while before it can call more. Its sweeping beam, and its great works
@@ -1375,8 +1379,8 @@ export const BRAINS = {
 // ------------------------------------------------------------ its sentinels
 // Three drones called down out of the dark at once, each to a post round
 // the Overseer, and each throwing a thread of light onto it: together they
-// hold up its shield, a dome of light that turns arrows and bolts (a blade
-// goes through). Kill all three and the shield breaks, and stays down a
+// hold up its shield, a dome of light that turns arrows, bolts and blades
+// alike. Kill all three and the shield breaks, and stays down a
 // good while (SHIELD_DOWN) before it can call more.
 export const SENTINELS = 3;
 export const SHIELD_DOWN = 14;
@@ -1427,7 +1431,7 @@ function callSentinels(c) {
   c.shieldUpT = 0;
   c.shieldUp = true;
   r.floatText(c.x, c.y + 3.6, c.z, 'SENTINELS DEPLOYED', '#5ad8f0');
-  if (game.dungeon && game.dungeon.fight) game.ui.msg('Three sentinels take up their posts: the Overseer\'s shield is up (it turns arrows; a blade goes through).', '#5ad8f0', true);
+  if (game.dungeon && game.dungeon.fight) game.ui.msg('Three sentinels take up their posts: the Overseer\'s shield is up (nothing gets through it: bring them down).', '#5ad8f0', true);
   game.audio?.play('charge', c);
   game.audio?.play('hum', c);
   c.stunT = 0.8;
@@ -1554,8 +1558,11 @@ const OVERSEER = {
     const to = { x: c.x + ((t.x - c.x) / Math.max(1, d)) * reach, z: c.z + ((t.z - c.z) / Math.max(1, d)) * reach };
     // (As far down it as all of it fits: it stops short of a wall.)
     const path = [];
+    // (Its own fields, and the ruin's, it turns off as it comes: see
+    // fields.js.)
+    const soft = fieldWay(game);
     for (const q of lineTiles(game, c, to, reach)) {
-      if (!withinLeash(c, q.x, q.z) || !fits(game, c, q.x, c.y, q.z, true)) break;
+      if (!withinLeash(c, q.x, q.z) || !fits(game, c, q.x, c.y, q.z, true, soft)) break;
       path.push(q);
     }
     if (path.length < 2) return false;
@@ -1630,7 +1637,7 @@ function raiseWall(game, c, tiles) {
     r.emit(q.x, c.y + 0.2, q.z, { n: 6, color: ['#5ad8f0', '#c8fbff', '#ffffff'], up: 50, speed: 14, life: 0.6, glow: true });
   }
   if (!put.length) return;
-  (game.bulwarks ||= []).push({ t: 9, put });
+  (game.bulwarks ||= []).push({ t: 9, life: 9, put });
   const mid = tiles[Math.floor(tiles.length / 2)];
   r.effect?.({ type: 'ring', wx: mid.x, wy: c.y, wz: mid.z, r0: 4, r1: 46, color: ['#5ad8f0', '#ffffff'], life: 0.5, oy: 2, flat: 0.5, thick: 2 });
   game.lightDirty = true;
@@ -1670,7 +1677,9 @@ function overseerAct(c, dt) {
         const side = hx ? Math.sign(e.z - q.z) || (Math.random() < 0.5 ? 1 : -1) : Math.sign(e.x - q.x) || (Math.random() < 0.5 ? 1 : -1);
         knock(game, hx ? { x: e.x, z: e.z - side } : { x: e.x - side, z: e.z }, e, 2);
       }
-      // (Someone it couldn't fling clear, or a wall: there it stops.)
+      // (Someone it couldn't fling clear, or a wall: there it stops. A
+      // field it turns off.)
+      lowerFields(c, q.x, q.z);
       if (!fits(game, c, q.x, c.y, q.z) || game.occupiedBySolid(q.x, c.y, q.z, c)) {
         a.i = a.path.length;
         break;
@@ -2013,6 +2022,23 @@ export function guardFront(game, target, source, amount) {
   if (!target.S || !source) return amount;
   const r = game.renderer;
   if (target.burrowed) return 0;
+  // The Overseer's shield up: a blade glances off it as an arrow does (its
+  // sentinels have to come down first).
+  if (target.species === 'overseer' && source !== target && !(source.sentinel === target) && shielded(target)) {
+    target.shieldHit = { t: 0, ang: Math.atan2(source.z - target.z, source.x - target.x) };
+    if (!(target.shieldNote > 0)) {
+      target.shieldNote = 0.6;
+      r.floatText(target.x, target.y + 2.6, target.z, 'shielded', '#a0f4ff');
+    }
+    r.emit(target.x + Math.sign(source.x - target.x) * 1.6, target.y + 1.2, target.z + Math.sign(source.z - target.z) * 1.6, { n: 8, color: ['#ffffff', '#a0f4ff', '#5ad8f0'], up: 30, speed: 70, life: 0.3, glow: true });
+    game.audio?.play('armor_hit', target);
+    game.audio?.play('hum', target);
+    if (source.kind === 'player' && !game.toldShield) {
+      game.toldShield = true;
+      game.ui.msg('Your blow glances off the Overseer\'s shield. Bring down its sentinels first!', '#a0f4ff', true);
+    }
+    return 0;
+  }
   if (target.submerged) return 0;
   if (target.S.shieldBlock || target.species === 'warden') {
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][target.dir] || [0, 1];

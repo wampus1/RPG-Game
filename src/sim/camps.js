@@ -79,7 +79,8 @@ export class Camps {
     const entrance = ents[salt % ents.length];
     const mounts = extra.mounts || [];
     const nWagons = mounts.filter((m) => m.kind === 'wagon').length;
-    const base = Math.max(3, tents * 2 - 1);
+    // (Tents three paces apart: they're big enough to stand up in.)
+    const base = Math.max(3, tents * 3 - 2);
     const w = base + (mounts.length ? 2 + nWagons * 2 : 0);
     const at = this.site(L, entrance, w, mounts.length ? 3 : 2, salt);
     if (!at) return null;
@@ -92,24 +93,26 @@ export class Camps {
     const pos = (i, j) => [at.x + at.lat[0] * i + at.out[0] * j, at.z + at.lat[1] * i + at.out[1] * j];
     const ops = [];
     for (let t = 0; t < tents; t++) {
-      const [x, z] = pos(t * 2, 1);
+      const [x, z] = pos(t * 3, 1);
       ops.push([x, GROUND, z, B.tent, meta]);
     }
+    // (Between the tents, out in front: the fire, and where they stand.)
+    const midT = Math.floor(((tents - 1) * 3) / 2);
     if (merchant) {
-      const [cx, cz] = pos(1, 0);
+      const [cx, cz] = pos(tents > 1 ? midT : 2, 0);
       ops.push([cx, GROUND, cz, B.crate, 0]);
-      const [bx, bz] = pos(2, 1);
+      const [bx, bz] = pos(3, 1);
       if (tents < 2) ops.push([bx, GROUND, bz, B.barrel, 0]);
       // A company on the road keeps a fire going, too.
       if (kind === 'caravan') {
-        const [fx, fz] = pos(0, 0);
+        const [fx, fz] = pos(tents > 1 ? midT + 1 : 1, -1);
         ops.push([fx, GROUND, fz, B.campfire, META_STATE]);
       }
     } else {
-      const [fx, fz] = pos(Math.max(0, tents - 1), 0);
+      const [fx, fz] = pos(tents > 1 ? midT : 1, -1);
       ops.push([fx, GROUND, fz, B.campfire, META_STATE]);
     }
-    const [sx, sz] = pos(Math.max(0, tents - 1), -1);
+    const [sx, sz] = pos(tents > 1 ? midT + 1 : 1, 0);
     const camp = { key, sid: L.settlement.id, kind, ops, placed: 0, until, stand: { x: sx, z: sz }, out: at.out, struck: false, horses: [], wagons: [] };
     if (mounts.length) {
       // A hitching post, the horses round it, the wagons beyond.

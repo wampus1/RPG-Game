@@ -295,11 +295,12 @@ test('a wild horse is won over with food, saddled, ridden, and hitched to your w
   const prop = [...game.props.values()].find((q) => q.own);
   assert.ok(prop, 'it stands there');
   hc.teleport(prop.x + 1, prop.y, prop.z);
-  game.riding.useWagon(prop);
+  // (Its bench clicked: since round 32 the back is for sitting in.)
+  game.riding.useWagon(prop, 'bench');
   assert.equal(game.riding.wagons[0].horse, game.riding.horses[0].id, 'horse in the shafts');
   tick(game, input, 25, 0.05);
   const prop2 = [...game.props.values()].find((q) => q.own);
-  game.riding.useWagon(prop2);
+  game.riding.useWagon(prop2, 'bench');
   assert.equal(p.mount && p.mount.kind, 'wagon', 'up on the bench');
   const g2 = reload(game);
   assert.equal(g2.player.mount && g2.player.mount.kind, 'wagon');

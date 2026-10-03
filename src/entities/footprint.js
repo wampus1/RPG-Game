@@ -41,13 +41,15 @@ export function nearestOf(e, from) {
 // Would `e` fit with its own tile at (x, y, z): every tile it fills open
 // floor it could stand on, and nobody else in it? (`walls`: only the
 // walls count, not who's standing about.)
-export function fits(game, e, x, y, z, walls = false) {
+export function fits(game, e, x, y, z, walls = false, soft = null) {
   const r = (e && e.foot) || 0;
   const w = game.world;
   for (let dz = -r; dz <= r; dz++) {
     for (let dx = -r; dx <= r; dx++) {
       if (!dx && !dz) continue;
-      if (!w.canStand(x + dx, y, z + dz)) return false;
+      // (`soft`: what it can clear from its way as it comes, a field it
+      // turns off: see fields.js.)
+      if (!w.canStand(x + dx, y, z + dz) && !(soft && soft(x + dx, y, z + dz))) return false;
       if (!walls && game.occupiedBySolid(x + dx, y, z + dz, e)) return false;
     }
   }

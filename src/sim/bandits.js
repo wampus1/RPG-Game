@@ -127,19 +127,21 @@ export class Bandits {
       const z = Math.round(cz + Math.sin(a) * r);
       if (!clear(x, z) || (i < 40 && !open(x, z))) continue;
       let ok = true;
-      for (let dx = -1; dx <= 6 && ok; dx++) for (let dz = -1; dz <= 3 && ok; dz++) if (!flat(x + dx, z + dz)) ok = false;
+      for (let dx = -2; dx <= 8 && ok; dx++) for (let dz = -1; dz <= 3 && ok; dz++) if (!flat(x + dx, z + dz)) ok = false;
       if (!ok) continue;
       const tents = clamp(Math.ceil(Math.max(4, band.members.length) / 2), 2, 3);
       const ops = [];
       const meta = 0 | (2 << CANOPY_SHIFT);
-      for (let k = 0; k < tents; k++) ops.push([x + k * 2, GROUND, z, B.tent, meta]);
-      ops.push([x + 1, GROUND, z + 2, B.campfire, META_STATE]);
+      // (Three paces apart: a tent's big enough to stand up in.)
+      for (let k = 0; k < tents; k++) ops.push([x + k * 3, GROUND, z, B.tent, meta]);
+      const fx = x + Math.floor(((tents - 1) * 3) / 2);
+      ops.push([fx, GROUND, z + 2, B.campfire, META_STATE]);
       // (Clear the brush off first.)
       const w0 = this.game.world;
       const soft = ops.filter(([ox, , oz]) => w0.regionAt(ox, oz) && w0.getBlock(ox, GROUND, oz) !== B.air).map(([ox, , oz]) => [ox, GROUND, oz, B.air, 0]);
       if (soft.length) this.sim.setBlocks(soft);
       this.sim.setBlocks(ops);
-      band.camp = { x, z, ops, fire: { x: x + 1, z: z + 2 }, cleared: false };
+      band.camp = { x, z, ops, fire: { x: fx, z: z + 2 }, cleared: false };
       band.near = s.id;
       return band.camp;
     }

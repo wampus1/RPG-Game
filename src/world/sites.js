@@ -127,12 +127,14 @@ export function siteBlocks(s, state = {}) {
     // A keystone in each face at the height of your hand, with a hollow in
     // it the shape of a cut stone.
     for (const [ox, oz] of [[0, 2], [-2, 0], [0, -2], [2, 0]]) put(ox, h + 1, oz, B.kav_keystone);
-    // An opened side: a doorway, two high.
+    // Opened (whichever face the stone was set in): a doorway two high in
+    // every face, all the way round.
     const side = state.open;
     if (side !== undefined && side !== null) {
-      const [ox, oz] = [[0, 2], [-2, 0], [0, -2], [2, 0]][side];
-      put(ox, h + 1, oz, B.kav_door);
-      put(ox, h + 2, oz, B.air);
+      for (const [ox, oz] of [[0, 2], [-2, 0], [0, -2], [2, 0]]) {
+        put(ox, h + 1, oz, B.kav_door);
+        put(ox, h + 2, oz, B.air);
+      }
     }
     return out;
   }
@@ -216,8 +218,30 @@ export function siteBlocks(s, state = {}) {
 
 // What grows in a spire's blight.
 const GROWTHS = [B.void_bloom, B.void_bloom, B.glow_crystal, B.tendril, B.eye_stalk];
-const GRASSY = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.dirt]);
+const GRASSY = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.dirt, B.mud, B.clay, B.sand]);
+// (Snow the blight turns lavender, rather than to turf.)
+const SNOWY = new Set([B.snow, B.snow_void]);
 export const BLIGHT_R = 16;
+
+// How far the blight reaches round a spire, that way (`ang`, radians):
+// never a neat circle, but a ragged one, lobed and fingered, the same each
+// time for the same spire.
+export function blightReach(s, ang) {
+  const ph = (k) => ((hash4(s.seed, k, 0xb10) % 1000) / 1000) * Math.PI * 2;
+  return BLIGHT_R - 1 + 2.4 * Math.sin(3 * ang + ph(1)) + 1.5 * Math.sin(5 * ang + ph(2)) + 0.9 * Math.sin(9 * ang + ph(3)) + 1.2 * Math.max(0, Math.sin(7 * ang + ph(4))) ** 6 * 3;
+}
+
+// Is (x, z) in a spire's blight? Inside its reach for sure; just past it,
+// thinning out tile by tile (a feathered edge, not a hard one).
+export function blighted(s, x, z) {
+  const d = Math.hypot(x - s.x, z - s.z);
+  if (d < 7) return false;
+  const R = blightReach(s, Math.atan2(z - s.z, x - s.x));
+  if (d <= R - 1.5) return true;
+  if (d >= R + 2) return false;
+  const k = (R + 2 - d) / 3.5;
+  return (hash4(x, z, s.seed, 0xb1) % 1000) / 1000 < k * k * (3 - 2 * k);
+}
 
 // The Kavorent's blight round a spire, out past the cleared ground: the
 // turf and the trees gone violet, the flowers turned to strange growths,
@@ -228,8 +252,7 @@ function blight(region, s) {
       const x = region.x0 + lx;
       const z = region.z0 + lz;
       const d = Math.hypot(x - s.x, z - s.z);
-      if (d > BLIGHT_R + 3 || d < 7) continue;
-      if (d > BLIGHT_R - 2 + ((hash4(x, z, s.seed, 0xb1) % 100) / 100) * 5) continue;
+      if (d > BLIGHT_R + 10 || d < 7 || !blighted(s, x, z)) continue;
       const roll = (hash4(x, z, s.seed, 0xb2) % 1000) / 1000;
       for (let y = WORLD_Y - 1; y >= 1; y--) {
         const id = region.get(lx, y, lz);
@@ -244,6 +267,13 @@ function blight(region, s) {
           continue;
         }
         if (!b.solid) continue;
+        // (Snow on the ground: the blight's lavender through it.)
+        if (SNOWY.has(id)) {
+          region.set(lx, y, lz, B.snow_void);
+          const near = 1 - d / BLIGHT_R;
+          if (y + 1 < WORLD_Y && region.get(lx, y + 1, lz) === B.air && roll < 0.03 + near * 0.08) region.set(lx, y + 1, lz, GROWTHS[Math.floor(roll * 997) % GROWTHS.length], Math.floor(roll * 40) % 4);
+          break;
+        }
         if (!GRASSY.has(id)) break;
         region.set(lx, y, lz, B.grass_void);
         const near = 1 - d / BLIGHT_R;
@@ -271,7 +301,7 @@ export function stampSites(world, region) {
   // (The blight reaches further than any site's own ground.)
   for (const s of sites) {
     if (s.type !== 'kavorent' || s.x === undefined) continue;
-    if (Math.abs(s.x - (x0 + REGION_W / 2)) > REGION_W / 2 + BLIGHT_R + 3 || Math.abs(s.z - (z0 + REGION_D / 2)) > REGION_D / 2 + BLIGHT_R + 3) continue;
+    if (Math.abs(s.x - (x0 + REGION_W / 2)) > REGION_W / 2 + BLIGHT_R + 10 || Math.abs(s.z - (z0 + REGION_D / 2)) > REGION_D / 2 + BLIGHT_R + 10) continue;
     blight(region, s);
   }
 }

@@ -86,6 +86,37 @@ export const KAV_FLOORS = [
   { name: 'crimson', hue: 160, sat: 1.1, dark: [0.22, 0.09, 0.11], tint: [1.14, 0.72, 0.74], glow: [255, 110, 120], motes: ['#ff5a6a', '#ffc8d0'] },
   { name: 'pale', hue: -140, sat: 0.3, dark: [0.19, 0.19, 0.21], tint: [1.06, 1.02, 0.96], glow: [255, 240, 210], motes: ['#ffffff', '#ffe8a0'] },
 ];
+// What each of a Kavorent ruin's floors was for (all but its master's, at
+// the bottom), and so what's in it: its own name, said as you arrive, and
+// its own things to find and get past.
+//   works: the coolant works, basins of cold glowing water let into the
+//     floor and vents breathing steam;
+//   archive: aisles of monoliths and light-screens, consoles still
+//     showing what they kept;
+//   dynamo: pylons in pairs across its halls, arcing between them in turn
+//     (time it, and go through between), conduits along the walls;
+//   fallen: half of it come down, heaps of fallen alloy to dig through or
+//     go round, the husks of what was crushed;
+//   garrison: sentinels in rows along the walls, and among them some that
+//     aren't statues at all;
+//   blighted: the blight in most of its rooms, things growing in its
+//     passages.
+export const KAV_KINDS = {
+  works: { title: 'the Coolant Works', mobs: [['drone', 5], ['mender', 3], ['mite', 2], ['warden', 1]] },
+  archive: { title: 'the Archive', mobs: [['drone', 4], ['warden', 3], ['mender', 1]] },
+  dynamo: { title: 'the Dynamo Halls', mobs: [['mite', 4], ['drone', 3], ['golem', 1]] },
+  fallen: { title: 'the Fallen Galleries', mobs: [['mite', 3], ['golem', 2], ['drone', 2]] },
+  garrison: { title: 'the Garrison', mobs: [['warden', 4], ['golem', 2], ['drone', 2]] },
+  blighted: { title: 'the Blighted Deep', mobs: [['drone', 3], ['mender', 2], ['mite', 3]] },
+};
+// The floor's kind (null for the master's): no two alike running down, in
+// an order of the ruin's own.
+export function kavKind(rec, n) {
+  if (rec.type !== 'kavorent' || n >= rec.depth - 1) return null;
+  const keys = Object.keys(KAV_KINDS);
+  const order = new RNG(hash4(rec.seed >>> 0, 0x4b1d)).shuffle(keys);
+  return order[n % order.length];
+}
 // (The bottom floor, the Overseer's, always the pale gold, however deep
 // the ruin goes.)
 export function kavFloor(n, depth = 0) {
@@ -746,15 +777,19 @@ export function buildFloor(rec, n) {
     out.down = { x: b.x0 + dx, z: dz };
   }
   // Dress each room by its kit.
-  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D };
+  const kind = big ? kavKind(rec, n) : null;
+  out.kind = kind;
+  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null };
   for (const r of R) dress(ctx, r);
   for (const r of R) decorate(ctx, r);
+  // A Kavorent floor's own character (see KAV_KINDS).
+  if (kind) floorCharacter(ctx);
   // In a Kavorent ruin, rooms the blight's got into (more of them deeper
-  // down): see blightRoom.
+  // down; most of them, on its blighted floor): see blightRoom.
   if (big) {
     for (const r of R) {
-      if (['entry', 'exit', 'boss', 'vault', 'hidden'].includes(r.kit) || r.sealed) continue;
-      if (rng.chance(BLIGHT_ROOM + n * 0.02)) blightRoom(ctx, r);
+      if (['entry', 'exit', 'boss', 'vault', 'hidden'].includes(r.kit) || r.sealed || r.blight) continue;
+      if (rng.chance(kind === 'blighted' ? 0.6 : BLIGHT_ROOM + n * 0.02)) blightRoom(ctx, r);
     }
   }
   // An old idol somewhere, its blessing waiting for whoever finds it.
@@ -786,11 +821,134 @@ export function buildFloor(rec, n) {
 
 function pickMob(ctx) {
   const { rng, T } = ctx;
+  // (A Kavorent floor keeps its own: see KAV_KINDS.)
+  const mobs = ctx.mobs || T.mobs;
   let total = 0;
-  for (const [, w] of T.mobs) total += w;
+  for (const [, w] of mobs) total += w;
   let v = rng.float(0, total);
-  for (const [k, w] of T.mobs) if ((v -= w) <= 0) return k;
-  return T.mobs[0][0];
+  for (const [k, w] of mobs) if ((v -= w) <= 0) return k;
+  return mobs[0][0];
+}
+
+// ------------------------------------------------------------ floor kinds
+// What makes a Kavorent floor its own (see KAV_KINDS): through each room
+// that isn't the way in or on, a vault, or hidden.
+const ARCHIVE_LINES = [
+  'The light-screen flickers: a tally of something, millions long, counting down. It has a long way left to go.',
+  'Glyphs scroll past, and among them, again and again, the shape of a spire, and a ring round it, and a ring round that.',
+  'A console still lit: a map of the land above, but the coast in the wrong place, and stars drawn where the towns are.',
+  'The screen shows a figure lying down, and lines rising out of it into a circle of glyphs. Then it starts again.',
+  'Row after row of the same glyph, and one, at the very end, different. Someone has scratched at the screen beside it.',
+  'A record of the Overseer\'s watch: each line the same, each a little shorter than the one before.',
+];
+function floorCharacter(ctx) {
+  const { rng, b, plan, out, kind } = ctx;
+  const rooms = out.rooms.filter((r) => !['entry', 'exit', 'boss', 'vault', 'hidden', 'foundry'].includes(r.kit) && !r.sealed);
+  const open = (r, x, z) => own(plan, r, x, z) && b.get(x, FY, z) === B.air && !doorBlocked(plan, r, x, z);
+  const area = (r) => {
+    let n = 0;
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z)) n++;
+    return n;
+  };
+  out.arcs = [];
+  for (const r of rooms) {
+    if (kind === 'works') {
+      // A basin of coolant let into the floor (its water glowing cold),
+      // clear of the walls and the ways in.
+      if (area(r) < 24 || !rng.chance(0.7)) continue;
+      const w = rng.int(2, Math.min(4, r.x1 - r.x0 - 3));
+      const d = rng.int(2, Math.min(3, r.z1 - r.z0 - 3));
+      if (w < 2 || d < 2) continue;
+      for (let t = 0; t < 12; t++) {
+        const x0 = rng.int(r.x0 + 2, r.x1 - 1 - w);
+        const z0 = rng.int(r.z0 + 2, r.z1 - 1 - d);
+        let ok = true;
+        for (let z = z0 - 1; z <= z0 + d && ok; z++) for (let x = x0 - 1; x <= x0 + w && ok; x++) if (!open(r, x, z)) ok = false;
+        if (!ok) continue;
+        for (let z = z0; z < z0 + d; z++) for (let x = x0; x < x0 + w; x++) b.set(x, FY - 1, z, B.water);
+        for (let z = z0 - 1; z <= z0 + d; z++) for (let x = x0 - 1; x <= x0 + w; x++) {
+          const rim = x === x0 - 1 || x === x0 + w || z === z0 - 1 || z === z0 + d;
+          if (rim && (x + z) % 3 === 0) b.set(x, FY, z, B.kav_vent);
+        }
+        out.basins = [...(out.basins || []), { x0: b.x0 + x0, z0, x1: b.x0 + x0 + w - 1, z1: z0 + d - 1 }];
+        break;
+      }
+    } else if (kind === 'archive') {
+      // Aisles: rows of monoliths and light-screens, a way down the middle.
+      if (area(r) < 20) continue;
+      const mid = Math.round((r.x0 + r.x1) / 2);
+      for (let z = r.z0 + 1; z < r.z1; z += 2) {
+        for (let x = r.x0 + 1; x < r.x1; x++) {
+          if (Math.abs(x - mid) <= 1 || !open(r, x, z) || byWall(plan, x, z)) continue;
+          b.set(x, FY, z, (x + z) % 3 ? B.kav_monolith : B.kav_holo);
+        }
+      }
+      if (rng.chance(0.5)) {
+        const c = placeIn(ctx, r, B.kav_holo, 0, true);
+        if (c) out.notes.push({ x: b.x0 + c.x, z: c.z, text: rng.pick(ARCHIVE_LINES) });
+      }
+    } else if (kind === 'dynamo') {
+      // Pylons in pairs across the hall, arcing between them in turn.
+      if (r.x1 - r.x0 < 6 || !rng.chance(0.75)) continue;
+      for (let t = 0; t < 10; t++) {
+        const z = rng.int(r.z0 + 1, r.z1 - 1);
+        let xa = r.x0;
+        while (xa <= r.x1 && !own(plan, r, xa, z)) xa++;
+        let xb = r.x1;
+        while (xb >= r.x0 && !own(plan, r, xb, z)) xb--;
+        if (xb - xa < 5 || !open(r, xa, z) || !open(r, xb, z)) continue;
+        let clear = true;
+        for (let x = xa + 1; x < xb; x++) if (!own(plan, r, x, z)) clear = false;
+        if (!clear) continue;
+        b.set(xa, FY, z, B.kav_pylon);
+        b.set(xb, FY, z, B.kav_pylon);
+        out.arcs.push({ a: { x: b.x0 + xa, z }, b: { x: b.x0 + xb, z }, phase: rng.float(0, 4) });
+        break;
+      }
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kav_conduit, 0, true);
+    } else if (kind === 'fallen') {
+      // Heaps of fallen alloy (dig through, or go round), and the husks of
+      // what it fell on.
+      const heaps = Math.max(1, Math.round(area(r) / 30));
+      for (let h = 0; h < heaps; h++) {
+        const c = { x: rng.int(r.x0 + 1, r.x1 - 1), z: rng.int(r.z0 + 1, r.z1 - 1) };
+        const n = rng.int(3, 7);
+        for (let i = 0; i < n; i++) {
+          const x = c.x + rng.int(-1, 1);
+          const z = c.z + rng.int(-1, 1);
+          if (open(r, x, z)) b.set(x, FY, z, B.kav_debris);
+        }
+      }
+      if (rng.chance(0.6)) placeIn(ctx, r, B.kav_husk, rng.int(0, 3));
+    } else if (kind === 'garrison') {
+      // Sentinels along the walls, a pace apart; and one or two in the row
+      // that wake when you come by.
+      if (area(r) < 18) continue;
+      let k = 0;
+      for (let z = r.z0; z <= r.z1; z++) {
+        for (let x = r.x0; x <= r.x1; x++) {
+          if (!open(r, x, z) || !byWall(plan, x, z) || (x + z) % 2) continue;
+          if (rng.chance(0.55)) {
+            b.set(x, FY, z, B.kav_statue);
+            k++;
+          }
+        }
+      }
+      if (k) spawnIn(ctx, r, rng.chance(0.5) ? 'warden' : 'golem', rng.int(1, 2), { ambush: true });
+    } else if (kind === 'blighted') {
+      if (rng.chance(0.3)) placeIn(ctx, r, rng.pick(GROWTHS));
+    }
+  }
+  // (On the blighted floor, things growing in the passages too.)
+  if (kind === 'blighted') {
+    for (let z = 1; z < plan.D - 1; z++) {
+      for (let x = 1; x < plan.W - 1; x++) {
+        if (!plan.corr[z * plan.W + x] || plan.room[z * plan.W + x] >= 0 || b.get(x, FY, z) !== B.air) continue;
+        if (rng.chance(0.05)) b.set(x, FY, z, rng.pick(GROWTHS));
+        else if (rng.chance(0.25) && b.get(x, FY - 1, z) === B.kav_floor) b.set(x, FY - 1, z, B.blight_floor);
+      }
+    }
+  }
 }
 
 // Someone placed in a room (at a free floor tile in it).

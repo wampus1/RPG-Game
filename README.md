@@ -2010,6 +2010,89 @@ with every success, and the work changes as you rise:
   notes.
 - *Lockpicking*: practice widens the gaps and eases the strain.
 
+## Round 32: the rite, the lift, and the floors below
+
+**Falling, and rising again.** When you die the world slows and goes dark
+around you, until all that's left is your body lying where you fell, in
+whatever you were wearing. YOU HAVE FALLEN, what killed you and what you
+lost are written in the dark. Then the Kavorent's rite begins. Twelve glyphs
+cut themselves into the ground around you one at a time, each traced by a
+point of light, white-hot, throwing sparks. Rings draw themselves between
+the glyphs, and the circle starts to turn, faster and faster, with light
+pouring up from every glyph and motes spiralling in. You're lifted slowly
+back onto your feet and off the ground, a column of light rising through
+you. Then the screen goes white, and you're standing where you last set
+your rest. A slow lament plays in the dark, and the rite's strange, climbing
+song takes over when the circle catches. Space, Enter or R hurries it on.
+
+**Kavorent lifts are a ride.** Going into a Kavorent ruin, or between its
+floors, is no longer an instant jump. The world fades away into the lift's
+shaft and you stand on its platform: three paces by three, plated, its
+seams lit, a ring turning under your feet. The shaft's walls slide past,
+with rails on either side, bands of light rushing by and a whole floor's
+slab going past halfway. The drive spins up, each band whooshes past, and
+it winds down to a stop with a clunk, dust and sparks, before the floor
+you've arrived at fades in around you. Nothing can hurt you while you ride.
+
+**Every floor its own.** Each floor of a Kavorent ruin above the master's
+was built for something, and you're told what as you arrive ("floor 2 of
+4: the Archive"). No two floors in a ruin are alike:
+- *the Coolant Works*: glowing basins let into the floor, ringed with vents.
+- *the Archive*: aisles of monoliths and light-screens, some still showing
+  what they kept.
+- *the Dynamo Halls*: pairs of pylons across the halls that arc between
+  them in turn, so time your crossing, with conduits along the walls.
+- *the Fallen Galleries*: heaps of fallen alloy to dig through or go round,
+  and the husks of what they fell on.
+- *the Garrison*: sentinels in rows along the walls, and some of them aren't
+  statues.
+- *the Blighted Deep*: the blight in most of its rooms, with things growing
+  in the passages.
+
+Each kind has its own mix of what lives there.
+
+**The spire.** A spire opened with a stone now opens on all four faces, not
+just the one you stood at. Its opening scene zooms out smoothly from
+wherever the camera already was, with no sudden jump. Its music comes in on
+cue: the swell from the first moment, and the full song the instant the
+beacon bursts. Music that belongs to a scene now keeps playing for a while
+after the scene ends instead of cutting out. The blight around a spire has
+a ragged, lobed edge that thins out tile by tile, and in the snow it turns
+the snow lavender instead of only catching the odd patch of grass.
+
+**Fights.** Click again while you're still swinging and the next blow is
+lined up: it follows straight on, with the recovery cut short, as long as
+you have the stamina for it ("combo x2"). One can be queued at a time, and
+it lapses if you don't get the chance. No master goes long without
+attacking now: after a few seconds without an attack, whatever it has comes
+ready, and if even that brings nothing it comes straight at you. Before
+this, the Mound Witch could idle for 17 seconds and the Overseer for 11.
+The Overseer's shield turns blades as well as arrows, so its sentinels must
+come down first. When there's no way round a wall of force (its own or
+the ruin's), it switches off the part in its path and goes through, and the
+wall comes back up a few seconds later. It leaves walls it has only just
+raised around you alone. Attacking it no
+longer stalls the game: its many-legged body was being drawn under a
+filter every time it flashed, and is now drawn once and filtered once.
+Blighted constructs have about two-thirds the health of their kin, and
+walking into a blighted room no longer puts up a message.
+
+**Tents.** Tents are big enough to stand up in, about two and a half paces
+across, pegged out with guy ropes. They show a doorway with its flaps tied
+back, a laced-up back or a long side depending on which way they face, and
+camps pitch them three paces apart. Nomads, visiting merchants and
+adventurers go into their tents at night and come out in the morning.
+While someone's asleep inside, Zs drift up off the ridge.
+
+**Quick fixes.** Starting as an island native in a town that bans drawn
+weapons, your weapon is put away and you're told about the law, so the
+watch doesn't arrest you on arrival (and nobody is warned for weapons
+during a scene). Turning the camera while it's zoomed out now animates
+instead of jumping. The glowing particles at bird nests are gone. Clicking
+a wagon's bench puts you on the bench (or drives, if it's yours), and
+clicking its back puts you in the back. Passengers in a wagon are drawn
+whole instead of as a floating head.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2061,8 +2144,9 @@ src/
                        bosses (the masters of the old places), footprint
                        (the great masters filling three paces across),
                        tempo (a master's phases, its breath between
-                       attacks, never standing about), item drops, A*
-                       pathing
+                       attacks, never standing about, never long without
+                       an attack), fields (the Overseer turning off walls
+                       of force in its way), item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling
@@ -2107,7 +2191,8 @@ src/
                        cutscene (the openings: the ship and the storm,
                        the hometown's history), scenes (short scenes in
                        the middle of things: a spire opening, a master
-                       waking and falling),
+                       waking and falling, a Kavorent lift's ride, the
+                       rite that raises you when you fall),
                        audio (synthesized SFX and ambience), music
                        (adaptive procedural chiptune)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,

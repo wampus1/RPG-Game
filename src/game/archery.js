@@ -254,7 +254,8 @@ export function arrowStrikes(game, a, t) {
   const r = game.renderer;
   let hit = true;
   // The Overseer's shield (held up by its sentinels): arrows, bolts and
-  // stones glance off it in a ripple of light. (A blade goes through.)
+  // stones glance off it in a ripple of light (as a blade does: see
+  // monsters.guardFront).
   if (t.species === 'overseer' && shielded(t)) {
     const fx = a.from ? a.from.x : a.x0;
     const fz = a.from ? a.from.z : a.z0;

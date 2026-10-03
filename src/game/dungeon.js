@@ -14,28 +14,31 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
-import { buildFloor, FY, DTYPES, kavFloor, SPIKE_CYCLE } from '../world/dungeongen.js';
+import { buildFloor, FY, DTYPES, kavFloor, SPIKE_CYCLE, KAV_KINDS } from '../world/dungeongen.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { Creature } from '../entities/creature.js';
 import { fits, fitNear } from '../entities/footprint.js';
+import { tickFieldsOff, restoreFields } from '../entities/fields.js';
 import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud, sentinelDown } from '../entities/monsters.js';
 import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
 import { dropFields, raiseFields } from './kavtech.js';
-import { bossEntrance, bossDefeat } from './scenes.js';
+import { bossEntrance, bossDefeat, liftRide } from './scenes.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
 // older way is made afresh rather than patched onto a new plan.
-const FLOOR_GEN = 4;
+const FLOOR_GEN = 5;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
 export const BOSS_HP = 1.3;
 export const BOSS_DMG = 1.15;
+// How much of its kin's health a blighted thing keeps.
+export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
 export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol']);
 
@@ -92,7 +95,7 @@ export class DungeonRun {
     game.mining = null;
     this.open(0, 'top');
     game.updateSettlements(true);
-    game.ui.msg(this.kav ? `The lift sinks into the dark. ${cap(this.rec.name)}: floor 1 of ${this.rec.depth}.` : `You go down into ${this.rec.name}. (Floor 1 of ${this.rec.depth}.)`, '#e0c890');
+    game.ui.msg(this.kav ? `The lift sinks into the dark. ${cap(this.rec.name)}: floor 1 of ${this.rec.depth}${this.kindTitle()}.` : `You go down into ${this.rec.name}. (Floor 1 of ${this.rec.depth}.)`, '#e0c890');
     if (this.rec.cleared) game.ui.msg('It\'s quiet down here now.', '#c8c8c8');
     game.audio?.play(this.kav ? 'lift' : 'door');
     game.renderer.flashScreen?.('#000000', 0.6);
@@ -112,6 +115,7 @@ export class DungeonRun {
     game.hazards = [];
     game.zones = [];
     game.bulwarks = [];
+    game.fieldsOff = [];
     game.lodestar = null;
     game.projectiles = [];
     if (this.stash) {
@@ -319,7 +323,9 @@ export class DungeonRun {
     if (!this.data) return;
     this.settleMimics();
     if (this.state && this.placed) this.state.placed = [...this.placed];
-    // (Not a Field Projector's wall: that's only for the moment.)
+    // (Not a Field Projector's wall: that's only for the moment. A field
+    // the Overseer turned off is back up, though.)
+    restoreFields(this.game);
     dropFields(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
@@ -355,10 +361,16 @@ export class DungeonRun {
     this.saveFloor();
     this.clearFloor();
     this.open(to, arrive || (dir > 0 ? 'top' : 'bottom'));
-    game.ui.msg(`${dir > 0 ? 'Down' : 'Up'} to floor ${to + 1} of ${this.rec.depth}.${to === this.rec.depth - 1 && !this.rec.cleared ? ' Something old waits down here.' : ''}`, '#e0c890');
+    game.ui.msg(`${dir > 0 ? 'Down' : 'Up'} to floor ${to + 1} of ${this.rec.depth}${this.kindTitle()}.${to === this.rec.depth - 1 && !this.rec.cleared ? ' Something old waits down here.' : ''}`, '#e0c890');
     game.audio?.play(this.kav ? 'lift' : 'step_stone');
     game.renderer.flashScreen?.('#000000', 0.5);
     return true;
+  }
+
+  // What this floor of a Kavorent ruin was (": the Archive"), if anything.
+  kindTitle() {
+    const k = this.data && this.data.kind;
+    return k && KAV_KINDS[k] ? `: ${KAV_KINDS[k].title}` : '';
   }
 
   // Something of the place's, made and set loose.
@@ -376,9 +388,11 @@ export class DungeonRun {
     if (o.ambush) c.dormant = 2;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
     // (Changed by the blight: see monsters.js, blightTick.)
+    // (Its tricks are what make it dangerous; the blight's eaten into it,
+    // so it's frailer than its kin.)
     if (o.infected) {
       c.infected = true;
-      c.maxHp = c.hp = Math.round(c.maxHp * 1.25);
+      c.maxHp = c.hp = Math.max(1, Math.round(c.maxHp * INFECTED_HP));
     }
     // (A master's a good deal harder than what it rules.)
     if (o.boss) {
@@ -395,6 +409,9 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     this.t += dt;
+    // Fields the Overseer turned off, back up in their time (see
+    // entities/fields.js).
+    tickFieldsOff(game, dt);
     if (this.arriveT > 0) this.arriveT -= dt;
     // The dead stirring as you pass; golems waking.
     for (const c of game.creatures) {
@@ -438,6 +455,19 @@ export class DungeonRun {
         game.world.setBlock(c.x, FY - 1, c.z, B.air);
         if (p.x === c.x && p.z === c.z && !p.dead) return this.fall(c.x, c.z);
       }
+    }
+    // A dynamo floor's pylons, arcing between each pair in turn (a crackle
+    // and sparks at both as it gathers).
+    for (const ar of this.data.arcs || []) {
+      if (Math.abs(ar.a.x - p.x) > 18 || Math.abs(ar.a.z - p.z) > 12) continue;
+      ar.t = (ar.t ?? ar.phase) + dt;
+      if (ar.t > 3.2 && Math.random() < dt * 14) for (const e of [ar.a, ar.b]) game.renderer.emit(e.x, FY + 1.4, e.z, { n: 1, color: ['#c8fbff', '#ffffff', '#5ad8f0'], up: 20, speed: 30, life: 0.25, glow: true });
+      if (ar.t < 4.2) continue;
+      ar.t = 0;
+      const tiles = [];
+      for (let x = Math.min(ar.a.x, ar.b.x) + 1; x < Math.max(ar.a.x, ar.b.x); x++) tiles.push({ x, z: ar.a.z });
+      addHazard(game, { tiles, y: FY, dur: 1.1, dmg: Math.round(4 + this.floor * 0.6), kind: 'beam', from: ar.a, to: ar.b, color: [150, 220, 255], beamColor: '#ffffff', halo: '#5ad8f0', width: 2, trap: true });
+      game.audio?.play('charge', ar.a);
     }
     // The Kavorent's emitters, firing across their halls in turn.
     for (const em of this.data.emitters) {
@@ -694,16 +724,12 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     const c = this.pal.motes;
-    // In a room the blight's got into: its spores in the air, a whisper, and
-    // (the first time) word of what's changed here.
+    // In a room the blight's got into: its spores in the air and a whisper
+    // (no more said: you can see it).
     const bl = (this.data.blighted || []).find((q) => p.x >= q.x0 && p.x <= q.x1 && p.z >= q.z0 && p.z <= q.z1);
     if (bl) {
       if (Math.random() < dt * 9) game.renderer.emit(p.x + (Math.random() - 0.5) * 14, FY + 0.2 + Math.random() * 1.5, p.z + (Math.random() - 0.5) * 9, { n: 1, color: ['#b070e0', '#e090ff', '#7a3aa0'], up: 5, speed: 3, gravity: -5, life: 2, glow: true });
       if (Math.random() < dt * 0.08) game.audio?.play('whisper');
-      if (!bl.told) {
-        bl.told = true;
-        game.ui.msg('The blight has got in here: the alloy veined violet, strange things growing. What lives here has changed.', '#e090ff');
-      }
     }
     this.kavScanT = (this.kavScanT || 0) - dt;
     if (this.kavScanT <= 0) {
@@ -843,11 +869,14 @@ export class DungeonRun {
         else this.changeFloor(1);
         return true;
       case 'kav_lift': {
+        // A ride up or down its shaft (see scenes.liftRide).
         const d = this.data;
+        if (game.scene) return true;
+        const n = this.rec.depth;
         if (d.up && d.up.x === x && d.up.z === z) {
-          if (this.floor === 0) this.leave();
-          else this.changeFloor(-1);
-        } else if (d.down && d.down.x === x && d.down.z === z) this.changeFloor(1);
+          if (this.floor === 0) game.scene = liftRide(game, -1, () => this.leave(), 'To the surface');
+          else game.scene = liftRide(game, -1, () => this.changeFloor(-1), `Floor ${this.floor} of ${n}`);
+        } else if (d.down && d.down.x === x && d.down.z === z) game.scene = liftRide(game, 1, () => this.changeFloor(1), `Floor ${this.floor + 2} of ${n}`);
         return true;
       }
       case 'lever': {

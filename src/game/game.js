@@ -34,7 +34,7 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
-import { spireOpening, bossTint } from './scenes.js';
+import { spireOpening, bossTint, liftRide, deathRitual } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
@@ -191,6 +191,8 @@ export class Game {
         this.player.hp = this.player.maxHp;
         this.player.spawn = { x: spot.x, y: spot.y, z: spot.z };
         if (coast) this.wreckage(spot);
+        // (Home in a town where arms are banned: yours stays put away.)
+        if (L && !coast && lawOn(L, 'armsBan')) this.stowArms();
       } else {
         for (const [k, n] of START_KIT) this.player.give(k, n);
         this.player.give('coin', 25);
@@ -463,6 +465,20 @@ export class Game {
     }
   }
 
+  // Your hand off any weapon: the first slot on your belt that isn't one.
+  stowArms() {
+    const p = this.player;
+    const held = p.heldDef();
+    if (!held || held.kind !== 'weapon') return;
+    for (let i = 0; i < BELT_SIZE; i++) {
+      const s = p.inv[i];
+      if (!s || ITEMS[s.item]?.kind !== 'weapon') {
+        p.selected = i;
+        return;
+      }
+    }
+  }
+
   // The first words of a new story.
   introduce() {
     const h = this.hero;
@@ -472,6 +488,7 @@ export class Game {
       const par = (c.family?.parents || []).map((i) => L.npcs[i]).filter(Boolean).map((r) => r.name.first);
       this.ui.msg(`Home again in ${L.settlement.name}${par.length ? `, where ${par.join(' and ')} raised you` : ''}. Everyone here has known you all your life.`, '#ffe070');
       this.ui.msg('Your family\'s house is your home: its beds and chests are yours too. The mayor can have a place of your own built, if you like.', '#a0c8ff');
+      if (lawOn(L, 'armsBan')) this.ui.msg(`Weapons may not be carried drawn in ${L.settlement.name}: keep yours put away in town (don't hold it on your belt).`, '#ffe070');
     } else {
       this.ui.msg('You wake on wet sand. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
       this.ui.msg('Nobody on this island knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');
@@ -1522,7 +1539,7 @@ export class Game {
     const sc = this.scene;
     if (sc) {
       sc.t += dt;
-      sc.update?.(this, dt);
+      sc.update?.(this, dt, uiRes.pressed);
       if (sc.t >= sc.dur) {
         sc.end?.(this);
         if (this.scene === sc) this.scene = null;
@@ -1564,6 +1581,12 @@ export class Game {
     else this.cursor = null;
     if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
     else this.mining = null;
+    if (this.queuedBlow) {
+      if (blocked) this.queuedBlow = null;
+      else this.tickQueuedBlow(dt);
+    }
+    if (this.player.comboT > 0) this.player.comboT -= dt;
+    if (this.player.windedNote > 0) this.player.windedNote -= dt;
     tickDice(this, dt);
     // An arrow on the string: the pull, and the aim (a window opened over
     // it lets it down).
@@ -1812,7 +1835,7 @@ export class Game {
     let ent = null;
     if (drawn) {
       const pe = r.pickEnt;
-      if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e, up: pe.up };
+      if (pe && !pe.e.dead && this.visibleEntities.includes(pe.e) && (!r.pick || pe.seq > r.pick.seq)) ent = { e: pe.e, up: pe.up, part: pe.part };
     } else {
       for (const e of this.visibleEntities) {
         if (e === p || e.kind === 'item' || e.kind === 'prop' || e.dead) continue;
@@ -1831,6 +1854,8 @@ export class Game {
       c.entity = ent.e;
       // (How far up them the pointer is: 1 at the top of the head.)
       c.entUp = ent.up ?? 0.5;
+      // (Which part of it: a wagon's bench, or its back.)
+      if (ent.part) c.part = ent.part;
       c.inReach = apart(p, ent.e) <= this.attackReach();
     }
     if (hit) {
@@ -2194,7 +2219,7 @@ export class Game {
       return;
     }
     if (c && c.entity && c.entity.kind === 'prop' && c.entity.type === 'wagon') {
-      this.riding.useWagon(c.entity);
+      this.riding.useWagon(c.entity, c.part || 'back');
       return;
     }
     if (held && held.key === 'wagon' && c && c.block && c.inReach && c.face === 'top') {
@@ -2788,7 +2813,7 @@ export class Game {
     }
     for (const k of [...this.props.keys()]) if (!want.has(k)) this.props.delete(k);
     // You, sat in the back of one.
-    for (const q of this.props.values()) q.riders = p.inWagon === q ? [p.look] : [];
+    for (const q of this.props.values()) this.riding.seatShown(q);
     if (p.inWagon && !this.props.has([...this.props].find(([, q]) => q === p.inWagon)?.[0])) p.inWagon = null;
     for (const [k, c] of [...this.tied]) {
       if (want.has(k) && !c.dead) continue;
@@ -3199,6 +3224,12 @@ export class Game {
       return;
     }
     rec.known = true;
+    // A Kavorent lift: a ride down its shaft (see scenes.liftRide).
+    if (rec.type === 'kavorent' && b.interact === 'kav_lift') {
+      if (this.scene) return;
+      this.scene = liftRide(this, 1, () => new DungeonRun(this, rec).enter(), `${cap(rec.name)} - floor 1 of ${rec.depth}`);
+      return;
+    }
     new DungeonRun(this, rec).enter();
   }
 
@@ -4207,6 +4238,48 @@ export class Game {
     return Math.atan2(dz, dx);
   }
 
+  // Clicked again while still swinging: the next blow's lined up, to follow
+  // straight on from this one (the recovery cut short) if you've the
+  // breath for it. One at a time; it lapses if you don't get the chance.
+  queueBlow(target, heavy) {
+    const p = this.player;
+    if (this.queuedBlow || p.dead) return false;
+    const cost = staminaCost(styleOf(p), heavy);
+    if ((p.stamina ?? 0) < cost) {
+      if (!(p.windedNote > 0)) this.renderer?.floatText(p.x, p.y + 2.4, p.z, 'too winded to follow up', '#c8c8c8');
+      p.windedNote = 1.5;
+      return false;
+    }
+    this.queuedBlow = { target, heavy, t: 1.2, cut: false };
+    return true;
+  }
+
+  // Each frame: the lined-up blow, thrown the moment the last one's done.
+  tickQueuedBlow(dt) {
+    const q = this.queuedBlow;
+    if (!q) return;
+    const p = this.player;
+    q.t -= dt;
+    if (q.t <= 0 || p.dead || p.stunT > 0 || p.rollT > 0 || p.guardBroken > 0 || (q.target && (q.target.dead || q.target.down))) {
+      this.queuedBlow = null;
+      return;
+    }
+    if (p.swing) return;
+    // (The follow-through and half the recovery skipped: that's the combo.)
+    if (!q.cut) {
+      q.cut = true;
+      p.commitT = Math.min(p.commitT || 0, 0.04);
+      p.attackCd = Math.max(0, p.attackCd * 0.4);
+    }
+    if (p.commitT > 0 || p.attackCd > 0) return;
+    this.queuedBlow = null;
+    p.combo = (p.comboT > 0 ? p.combo || 1 : 1) + 1;
+    p.comboT = 1.5;
+    if (q.target) this.attack(q.target, q.heavy);
+    else this.swingAt();
+    if (p.swing && p.combo >= 2) this.renderer?.floatText(p.x, p.y + 2.6, p.z, `combo ×${p.combo}`, '#ffd890');
+  }
+
   swing() {
     this.duelBegins();
     const p = this.player;
@@ -4226,6 +4299,10 @@ export class Game {
   swingAt() {
     this.duelBegins();
     const p = this.player;
+    if ((p.attackCd > 0 || p.swing || p.commitT > 0) && !(p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) && !(p.heldDef() && p.heldDef().ranged)) {
+      this.queueBlow(null, false);
+      return false;
+    }
     if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) return false;
     const def = p.heldDef();
     if (def && def.ranged) {
@@ -4404,6 +4481,10 @@ export class Game {
       return;
     }
     if (target.kind === 'prop') return this.swing();
+    if (!target.dead && !(p.heldDef() && p.heldDef().ranged) && (p.attackCd > 0 || p.swing || p.commitT > 0) && !(p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0)) {
+      this.queueBlow(target, heavy);
+      return;
+    }
     if (p.attackCd > 0 || p.swing || p.commitT > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
     const def = p.heldDef();
     const reach = this.attackReach();
@@ -4561,6 +4642,8 @@ export class Game {
     if (target.dead || target.down) return;
     // (God mode, from the command console.)
     if (target.kind === 'player' && this.cheats.god) return;
+    // (Riding a lift: out of reach, in its shaft.)
+    if (target.kind === 'player' && this.scene && this.scene.kind === 'lift') return;
     // An adventurer slips a blow and rolls clear.
     if (target.adventurer && source && source !== target && !this.dotHit && target.tryDodge && target.tryDodge(source)) return;
     // Onyx armour: the blow goes through them like smoke.
@@ -4960,11 +5043,15 @@ export class Game {
       removeItem(p.inv, 'coin', lost);
       this.spawnDrop('coin', lost, p.x, p.y, p.z, true);
     }
-    this.ui.openDeath(source ? source.name || 'something' : 'misfortune', spilled ? (spilled.length ? 'pack' : 'none') : null);
+    // Fallen: the dark, and the Kavorent's rite that brings you back (see
+    // scenes.deathRitual; it raises you itself, at the end).
+    this.scene = deathRitual(this, source ? source.name || 'something' : 'misfortune', spilled ? (spilled.length ? 'pack' : 'none') : null);
   }
 
   respawn() {
     const p = this.player;
+    // (Raised some other way than by the rite: it's over.)
+    if (this.scene && this.scene.kind === 'death' && !this.scene.reborn) this.scene = null;
     // (Dead down below: you wake up above, and what you dropped stays down there.)
     if (this.dungeon) this.dungeon.leave();
     // The raft drifted off.

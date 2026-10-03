@@ -3,6 +3,10 @@
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
 import { Entity } from './entity.js';
+
+// The four ways (a tent's doorway faces one: see sim/camps.js).
+const TDX = [0, -1, 0, 1];
+const TDZ = [1, 0, -1, 0];
 import { NPC_STEP_TIME, GROUND, SURFACE } from '../config.js';
 import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
@@ -419,7 +423,7 @@ export class NPC extends Entity {
         // (Paid to stand watch: the streets all night instead.)
         const night = this.game.minute >= 1260 || this.game.minute < 360;
         if (e.place === 'camp' && this.adventurer && this.adventurer.guard === L.settlement.id && night) return roadTile();
-        if (e.place === 'camp') return camp ? this.campTile(camp) : plazaTile();
+        if (e.place === 'camp') return this.tentBed(camp) || (camp ? this.campTile(camp) : plazaTile());
         if (e.place === 'market') return claim(L.spotsByTag('shop')) || plazaTile();
         if (e.place === 'tavern') return inBuilding(buildingOf('tavern'), rng.chance(0.5) ? 'drink' : 'eat') || tagged('social') || plazaTile();
         if (e.place === 'train') {
@@ -434,6 +438,9 @@ export class NPC extends Entity {
         // Nomads: at their tents outside town (putting them up first), or
         // looking the town over: the square, the streets, the houses.
         const camp = this.nomad && this.game.sim.camps.get(`n:${this.nomad.id}`);
+        // (At night, in their tents: see tentBed.)
+        const tb = this.tentBed(camp);
+        if (tb) return tb;
         if (camp && (camp.placed < camp.ops.length || rng.chance(0.45))) return this.campTile(camp);
         return rng.chance(0.5) ? plazaTile() : roadTile();
       }
@@ -477,7 +484,7 @@ export class NPC extends Entity {
         // A merchant's tent first, and back to it for the night.
         const camp = this.visit && this.game.sim.camps.get(`v:${this.visit.id}`);
         const late = this.game.minute >= 19 * 60 || this.game.minute < 7 * 60;
-        if (camp && (camp.placed < camp.ops.length || late)) return this.campTile(camp);
+        if (camp && (camp.placed < camp.ops.length || late)) return this.tentBed(camp) || this.campTile(camp);
         const stalls = L.spotsByTag('shop');
         return claim(stalls) || { ...plazaTile(), face: 0, visit: true };
       }
@@ -643,6 +650,33 @@ export class NPC extends Entity {
       const r = this.layout.npcs[i];
       const e = r && r.ent;
       if (e && !e.dead && !e.sleeping && e.act === 'work' && e.state === 'routine' && e.layout === this.layout && r.job !== 'guard' && r.job !== 'miner') return e;
+    }
+    return null;
+  }
+
+  // Bedtime for those who live under canvas.
+  tentNight() {
+    const m = this.game.minute;
+    return m >= 21 * 60 + 30 || m < 6 * 60;
+  }
+
+  // At night: a place in one of the camp's tents (their own, if they have
+  // one, shared out by turns), gone into by its doorway (or whichever side
+  // of it is clear). Null by day, or with no tent standing.
+  tentBed(camp) {
+    if (!camp || !this.tentNight()) return null;
+    const w = this.game.world;
+    const tents = camp.ops.filter((o) => o[3] === B.tent && w.getBlock(o[0], o[1], o[2]) === B.tent);
+    if (!tents.length) return null;
+    const [x, , z, , meta] = tents[hash4(this.rec.idx ?? this.id, 0x7e47) % tents.length];
+    const f = meta & 3;
+    const sides = [f, (f + 1) & 3, (f + 3) & 3, (f + 2) & 3];
+    for (const d of sides) {
+      const ax = x + TDX[d];
+      const az = z + TDZ[d];
+      const y = w.findStandY(ax, az, GROUND);
+      if (Math.abs(y - GROUND) > 1 || !w.canStand(ax, y, az) || w.isWaterAt(ax, y, az)) continue;
+      return { x: ax, y: GROUND, z: az, bed: { x, z, tent: true, access: { x: ax, z: az } }, tag: 'tent' };
     }
     return null;
   }
@@ -1576,6 +1610,20 @@ export class NPC extends Entity {
       this.pathFails = 0;
       // Miners heading out: a big enough watch spares a guard to go along.
       if (this.rec.job === 'miner' && act.entry.act === 'work' && this.goal) game.sim.escortMiner(this, act);
+    }
+    // Under canvas: out of the tent come morning; in again at bedtime.
+    if (this.sleeping && this.bedTile && this.bedTile.tent && !this.tentNight()) {
+      this.wake();
+      this.goal = this.pickGoal(act.entry);
+      this.path = null;
+      this.atGoal = false;
+    } else if (!this.sleeping && this.goal && !this.goal.bed && (this.goal.tag === 'camp' || this.goal.tag === 'shop' || this.goal.visit) && this.tentNight() && this.rng.chance(dt * 0.25)) {
+      const g = this.pickGoal(act.entry);
+      if (g && g.bed) {
+        this.goal = g;
+        this.path = null;
+        this.atGoal = false;
+      }
     }
     // Rain or snow sends the less dedicated home early.
     if (act.entry.act === 'work' && !this.visit && !this.nomad && this.rng.chance(dt * 0.04)) {

@@ -209,14 +209,16 @@ export class Riding {
     return true;
   }
 
-  // Right-clicking a wagon that's standing still.
-  useWagon(prop) {
+  // Right-clicking a wagon that's standing still: where on it you clicked
+  // (`part`: its bench at the front, or the bed at the back) is where you
+  // go. Yours, with a horse in the shafts: the bench is the driver's seat.
+  useWagon(prop, part = 'back') {
     const g = this.game;
     const p = g.player;
     const say = (t, col = '#c8c8c8') => g.ui.msg(t, col, true);
     if (Math.max(Math.abs(prop.x - p.x), Math.abs(prop.z - p.z)) > 3) return say('Get a little closer.');
     const w = prop.own || null;
-    if (w) {
+    if (w && part === 'bench') {
       // Riding up on a horse of yours: into the shafts with it.
       if (p.mount && p.mount.kind === 'horse' && !w.horse) {
         const h = this.horse(p.mount.horseId);
@@ -231,13 +233,24 @@ export class Riding {
       }
       return this.drive(w);
     }
-    // Anyone's wagon: climb up into the back and sit a while.
+    // Anyone's wagon (or the back of yours): up onto the bench, or into the
+    // back, and sit a while.
     p.mount = null;
     p.inWagon = prop;
+    p.wagonSeat = part === 'bench' ? 'bench' : 'back';
     p.sitting = null;
     p.teleport(prop.x, prop.y, prop.z);
-    say('You climb up into the back of the wagon. (Move to climb down.)', '#c8e0ff');
+    this.seatShown(prop);
+    say(p.wagonSeat === 'bench' ? 'You climb up onto the bench. (Move to climb down.)' : 'You climb up into the back of the wagon. (Move to climb down.)', '#c8e0ff');
     return true;
+  }
+
+  // Who's shown sat on a standing wagon: you, on its bench or in its back.
+  seatShown(prop) {
+    const p = this.game.player;
+    const here = p && p.inWagon === prop;
+    prop.bench = here && p.wagonSeat === 'bench' ? p.look : null;
+    prop.riders = here && p.wagonSeat !== 'bench' ? [p.look] : [];
   }
 
   drive(w) {
@@ -283,7 +296,10 @@ export class Riding {
     const g = this.game;
     const p = g.player;
     if (!p.inWagon) return false;
+    const prop = p.inWagon;
     p.inWagon = null;
+    p.wagonSeat = null;
+    this.seatShown(prop);
     const spot = g.findFreeSpot(p.x, p.z + 1, p.y);
     if (spot) p.teleport(spot.x, spot.y, spot.z);
     return true;

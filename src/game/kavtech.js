@@ -200,7 +200,7 @@ function bulwark(game, p) {
     game.ui.msg('No room for the field there.', '#7ae0ff', true);
     return false;
   }
-  (game.bulwarks ||= []).push({ t: 8, put });
+  (game.bulwarks ||= []).push({ t: 8, life: 8, put });
   game.renderer.emit(cx, p.y + 1, cz, { n: 20, color: ['#5ad8f0', '#c8fbff'], up: 30, speed: 40, life: 0.6, glow: true });
   game.audio?.play('hum');
   game.lightDirty = true;
@@ -289,7 +289,7 @@ export function dropFields(game) {
   for (const b of game.bulwarks || []) for (const q of b.put) if (game.world.getBlock(q.x, q.y, q.z) === B.kav_field) game.world.setBlock(q.x, q.y, q.z, B.air);
 }
 export function raiseFields(game) {
-  for (const b of game.bulwarks || []) for (const q of b.put) if (game.world.getBlock(q.x, q.y, q.z) === B.air) game.world.setBlock(q.x, q.y, q.z, B.kav_field);
+  for (const b of game.bulwarks || []) for (const q of b.put) if (!q.down && game.world.getBlock(q.x, q.y, q.z) === B.air) game.world.setBlock(q.x, q.y, q.z, B.kav_field);
 }
 
 // ---------------------------------------------------------------- fittings

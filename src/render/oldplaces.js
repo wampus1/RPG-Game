@@ -9,7 +9,7 @@ import { RELICS } from '../world/items.js';
 import { spireDissolve } from '../game/scenes.js';
 
 // Little glyphs, 4 wide and 5 tall (bit rows).
-const GLYPHS = [
+export const GLYPHS = [
   [0b0110, 0b1001, 0b1111, 0b1001, 0b0110],
   [0b1111, 0b0100, 0b0110, 0b0010, 0b1111],
   [0b1001, 0b0110, 0b0110, 0b1001, 0b1001],
@@ -18,7 +18,7 @@ const GLYPHS = [
   [0b0001, 0b0011, 0b0111, 0b0011, 0b0001],
 ];
 
-function glyph(ctx, g, x, y, k = 1) {
+export function glyph(ctx, g, x, y, k = 1) {
   for (let r = 0; r < 5; r++) for (let c = 0; c < 4; c++) if (GLYPHS[g][r] & (1 << (3 - c))) ctx.fillRect(x + c * k, y + r * k, k, k);
 }
 
@@ -188,10 +188,15 @@ function spireBeacon(r, ctx, game, s, rec) {
 function doorDissolve(r, ctx, sc, s) {
   const k = spireDissolve(sc);
   if (k <= 0 || k >= 1) return;
-  const [du, dv] = r.toView(sc.door.x, sc.door.z);
+  // (Every face comes apart; the one toward you is the one that shows.)
   const [cu, cv] = r.toView(s.x, s.z);
-  // (Only the face toward you shows coming apart.)
-  if (!(dv > cv && du === cu)) return;
+  let du = null;
+  let dv = null;
+  for (const [ox, oz] of [[0, 2], [-2, 0], [0, -2], [2, 0]]) {
+    const [u, v] = r.toView(s.x + ox, s.z + oz);
+    if (v > cv && u === cu) [du, dv] = [u, v];
+  }
+  if (du === null) return;
   const x0 = du * TILE - r.camX;
   const y0 = dv * TILE - (s.h + 2) * LH - r.camY + TILE;
   ctx.globalAlpha = 1;

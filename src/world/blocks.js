@@ -388,6 +388,9 @@ def('idol', { ...sprite, solid: true, interact: 'idol', hardness: Infinity, drop
 // violet (see dungeongen.js, blightRoom).
 def('blight_floor', { hardness: Infinity, drop: null, label: 'Blighted Alloy' });
 def('blight_wall', { hardness: Infinity, drop: null, label: 'Blighted Alloy' });
+// Snow the blight's got into, round a spire in the cold: gone lavender,
+// veined violet. (Last, so no block saved before it changes number.)
+def('snow_void', { tool: 'shovel', hardness: 0.3, drop: 'snow', label: 'Blighted Snow' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

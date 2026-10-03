@@ -266,7 +266,12 @@ export class UI {
     // a short scene's bars and words (see scenes.js).
     if (game && game.cutscene) game.cutscene.draw(ctx);
     if (game && game.scene && game.scene.draw) game.scene.draw(ctx, game);
+    // (A scene that covers the whole view, a lift's shaft or the dark you
+    // lie in, keeps a place's name banner from showing over it.)
+    const sc = game && game.scene;
+    const covered = !!(sc && (sc.kind === 'lift' || (sc.kind === 'death' && !sc.reborn)));
     for (const w of this.windows) {
+      if (covered && w.kind === 'banner') continue;
       w.grid.clear();
       w.hits = [];
       w.draw(w.grid, game);
@@ -919,7 +924,8 @@ export class UI {
         if (!e.broken) lines.push({ text: 'LMB hack at it (an axe is best)', color: C.faint });
       } else if (e.kind === 'prop') {
         lines.push({ text: e.own ? 'Your wagon' : 'Wagon', color: C.hi });
-        lines.push({ text: e.own ? (e.horse ? 'RMB drive' : 'needs a horse in the shafts') : 'RMB climb in', color: C.faint });
+        const bench = c.part === 'bench';
+        lines.push({ text: bench ? (e.own ? (e.horse ? 'the bench · RMB drive' : 'the bench · needs a horse in the shafts') : 'the bench · RMB sit up front') : 'the back · RMB climb in', color: C.faint });
       } else {
         const horse = e.species === 'horse';
         lines.push({ text: horse ? (e.own ? 'Your horse' : e.tie ? (e.banner ? 'A trader\'s horse' : 'A town horse') : 'Wild horse') : e.name || e.species, color: e.hostileNow ? C.red : C.green });

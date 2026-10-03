@@ -927,6 +927,123 @@ export function horseSprite(frame, coat = 0, banner = null, saddle = false) {
   return c;
 }
 
+// A tent, the size of one you could stand up in: canvas over a ridge pole,
+// two and a half paces across, pegged out with guy ropes. `rot` is the way
+// its opening faces on screen (0 toward you, 1 left, 2 away, 3 right): end
+// on, its gable (the doorway with its flaps tied back, or the laced-up
+// back) under the two slopes of its roof running back; side on, the long
+// slope of the near side, the far one beyond the ridge, and the doorway at
+// the end. A merchant's (`striped`) is striped; a nomad family's plain,
+// patched and weathered. (Drawn bottom-centred on its tile.)
+export const TENT_W = 44;
+export const TENT_H = 34;
+const TENT_COLS = ['#c8b890', '#a0503a', '#3a6a9a', '#8a6a48'];
+export function tentSprite(rot = 0, colour = 0, striped = false) {
+  const key = `tent:${rot & 3}:${colour & 3}:${striped ? 1 : 0}`;
+  let c = sheetCache.get(key);
+  if (c) return c;
+  const p = new Px(TENT_W, TENT_H);
+  const col = hex(TENT_COLS[colour & 3]);
+  const lite = shade(col, 1.14);
+  const mid = col;
+  const dk = shade(col, 0.8);
+  const seam = shade(col, 0.66);
+  const stripe = hex('#f0ece0');
+  const dark = '#1c1622';
+  const pole = '#6a4a2a';
+  // A pixel of canvas, striped or patched as it should be.
+  const cloth = (x, y, base) => {
+    let c2 = base;
+    if (striped && ((x >> 1) % 3 === 0)) c2 = shade(stripe, base === lite ? 1 : base === mid ? 0.92 : 0.82);
+    else if (!striped && (x * 7 + y * 3) % 13 === 0) c2 = shade(base, 0.86);
+    p.set(x, y, c2);
+  };
+  const B0 = TENT_H - 2;
+  if ((rot & 1) === 0) {
+    // End on: the roof's slopes running back from the gable.
+    const L = 3;
+    const R = TENT_W - 4;
+    const mid0 = (L + R) / 2;
+    const apexF = 11;
+    const back = 9;
+    for (let y = 0; y <= B0; y++) {
+      for (let x = L; x <= R; x++) {
+        const k = Math.abs(x - mid0) / ((R - L) / 2);
+        const front = apexF + k * (B0 - apexF);
+        const rear = front - back;
+        if (y < rear || y > B0) continue;
+        if (y >= front) cloth(x, y, rot === 0 ? mid : dk);
+        else cloth(x, y, x < mid0 ? lite : dk);
+      }
+    }
+    // The ridge, and the gable's edges.
+    p.line(Math.round(mid0), apexF - back, Math.round(mid0), apexF, seam);
+    p.line(L, B0, Math.round(mid0), apexF, seam);
+    p.line(R, B0, Math.round(mid0), apexF, seam);
+    if (rot === 0) {
+      // The doorway, its flaps tied back.
+      for (let y = apexF + 6; y <= B0; y++) {
+        const w = ((y - apexF - 6) / (B0 - apexF - 6)) * 7;
+        for (let x = Math.ceil(mid0 - w); x <= Math.floor(mid0 + w); x++) p.set(x, y, dark);
+      }
+      p.line(Math.round(mid0) - 1, apexF + 6, Math.round(mid0) - 9, B0 - 1, shade(col, 1.3));
+      p.line(Math.round(mid0) + 1, apexF + 6, Math.round(mid0) + 9, B0 - 1, shade(col, 1.05));
+      p.set(Math.round(mid0) - 8, B0 - 6, pole);
+      p.set(Math.round(mid0) + 8, B0 - 6, pole);
+    } else {
+      // The back, laced up.
+      p.vline(Math.round(mid0), apexF + 2, B0, seam);
+      for (let y = apexF + 5; y < B0; y += 3) p.set(Math.round(mid0) + 1, y, shade(col, 1.25));
+    }
+    p.hline(L, R, B0, seam);
+    // Pole tip.
+    p.vline(Math.round(mid0), apexF - back - 3, apexF - back, pole);
+    // Guy ropes out to their pegs.
+    p.line(L + 2, B0 - 6, 0, B0 + 1, '#b0a080');
+    p.line(R - 2, B0 - 6, TENT_W - 1, B0 + 1, '#b0a080');
+    p.set(0, B0 + 1, pole);
+    p.set(TENT_W - 1, B0 + 1, pole);
+  } else {
+    // Side on: the near slope from the hem up to the ridge, the far one
+    // beyond it, and the doorway at the end it faces.
+    const L = 4;
+    const R = TENT_W - 5;
+    const ridge = 13;
+    const far = 5;
+    for (let y = far; y <= B0; y++) {
+      for (let x = L; x <= R; x++) {
+        // (Its ends lean in, a little, to the ridge.)
+        const inset = y < ridge ? Math.round((ridge - y) / 3) : Math.round((y - ridge) / 8);
+        if (x < L + (y < ridge ? inset : 0) || x > R - (y < ridge ? inset : 0)) continue;
+        cloth(x, y, y < ridge ? lite : y < ridge + 3 ? mid : (y - ridge) % 7 === 0 ? dk : mid);
+      }
+    }
+    p.hline(L, R, ridge, seam);
+    p.hline(L, R, B0, seam);
+    // The end it opens at: the gable's edge and the doorway in it.
+    const left = rot === 1;
+    const ex = left ? L : R;
+    const dir = left ? 1 : -1;
+    for (let y = ridge + 4; y <= B0; y++) {
+      const w = Math.round(((y - ridge - 4) / (B0 - ridge - 4)) * 4);
+      for (let i = 0; i <= w; i++) p.set(ex + dir * i, y, dark);
+    }
+    p.line(ex + dir * 5, ridge + 5, ex + dir * 7, B0 - 1, shade(col, 1.3));
+    // The far end, closed.
+    p.vline(left ? R : L, ridge, B0, seam);
+    // Poles at either end, and the guy ropes.
+    p.vline(L, ridge - 3, ridge, pole);
+    p.vline(R, ridge - 3, ridge, pole);
+    p.line(L, ridge, 0, B0 + 1, '#b0a080');
+    p.line(R, ridge, TENT_W - 1, B0 + 1, '#b0a080');
+    p.set(0, B0 + 1, pole);
+    p.set(TENT_W - 1, B0 + 1, pole);
+  }
+  c = toCanvas(p.outline(OUT));
+  sheetCache.set(key, c);
+  return c;
+}
+
 export const WAGON_W = 38;
 export const WAGON_H = 26;
 // Where the driver sits (from the wagon's left, pulled to the left) and
@@ -951,22 +1068,24 @@ export function wagonSprite(banner = null, frame = 0, hood = true) {
   // The hood on its hoops, over the back of the bed (the front is open,
   // with the bench).
   if (hood === 'open') {
-    // The roof of the canvas, its sides rolled up to a bundle under the
-    // eaves, and the hoops down to the bed.
-    for (let x = 14; x <= 36; x++) {
-      const top = 1 + Math.round(Math.abs(x - 25) > 9 ? (Math.abs(x - 25) - 9) * 0.8 : 0);
-      for (let y = top; y <= 3; y++) p.set(x, y, (x - 14) % 6 === 0 ? shade(canvas, 0.82) : canvas);
-      p.set(x, 4, shade(canvas, x % 3 ? 0.72 : 0.62));
-      // (The shade under the canvas, where the passengers sit.)
-      for (let y = 5; y <= 11; y++) p.set(x, y, '#3a2c22');
+    // The canvas rolled back to a bundle at the tail for passengers, the
+    // bare hoops arching over them, a rail round the bed.
+    for (let i = 0; i <= 8; i++) {
+      const a = (i / 8) * Math.PI;
+      for (const hx of [17, 26]) p.set(Math.round(hx + 4 - Math.cos(a) * 4), Math.round(10 - Math.sin(a) * 8), woodD);
     }
-    for (const x of [14, 25, 36]) p.vline(x, 5, 12, woodD);
+    for (let y = 3; y <= 12; y++) {
+      p.set(35, y, y % 3 ? canvas : shade(canvas, 0.8));
+      p.set(36, y, shade(canvas, 0.78));
+    }
+    p.rect(34, 2, 3, 2, shade(canvas, 0.9));
     if (banner) {
       const b = hex(banner);
-      p.rect(21, 1, 9, 3, b);
-      p.hline(23, 27, 2, '#f0d040');
+      p.rect(33, 5, 2, 5, b);
+      p.set(33, 7, '#f0d040');
     }
-    p.hline(14, 36, 12, woodL);
+    p.hline(14, 36, 10, woodL);
+    for (let x = 14; x <= 34; x += 4) p.vline(x, 10, 13, wood);
   } else if (hood) {
     for (let x = 14; x <= 36; x++) {
       const top = 2 + Math.round(Math.abs(x - 25) > 9 ? (Math.abs(x - 25) - 9) * 1.3 : 0);

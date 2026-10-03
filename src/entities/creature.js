@@ -6,7 +6,8 @@ import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach } from './monsters.js';
 import { apart, fits } from './footprint.js';
-import { bossClock, drift } from './tempo.js';
+import { bossClock, drift, press } from './tempo.js';
+import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
 
@@ -166,6 +167,13 @@ export class Creature extends Entity {
       if (this.isBoss && this.inst && bossBreach(this, dt)) return;
       // Changed by the blight (see monsters.js, blightTick).
       if (this.infected && blightTick(this, dt)) return;
+      // (A master that's gone too long without an attack: what it has made
+      // ready, and if even that brings nothing, straight at you: see
+      // tempo.press.)
+      if (master && this.target && press(this) === 'close') {
+        if (this.attackCd > 0.3) this.attackCd = 0.3;
+        return this.chase(dt);
+      }
       // Its own way of fighting (see monsters.js), if it has one. (A master
       // never stands about long: see tempo.drift.)
       if (this.S.brain && BRAINS[this.S.brain](this, dt)) {
@@ -261,7 +269,15 @@ export class Creature extends Entity {
       const through = placed && placed.size ? (x, y, z) => placed.has(`${x},${y},${z}`) || placed.has(`${x},${y + 1},${z}`) : null;
       const big = this.foot;
       const clear = big ? (x, y, z) => fits(this.game, this, x, y, z, true) : null;
-      this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through, clear });
+      // (The Overseer, with no way round a wall of force, turns it off and
+      // goes through: see fields.js.)
+      const soft = walksFields(this) ? fieldWay(this.game) : null;
+      this.path = soft ? findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, through, clear }) : null;
+      if (soft && !(this.path && this.path.length)) {
+        const way = through ? (x, y, z) => through(x, y, z) || soft(x, y, z) : soft;
+        this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through: way, clear: big ? (x, y, z) => fits(this.game, this, x, y, z, true, soft) : null });
+      }
+      if (!(this.path && this.path.length)) this.path = findPath(this.game.world, this.x, this.y, this.z, t.x, t.y, t.z, { maxNodes: 600, near: 1 + big, partial: true, through, clear });
       this.pathI = 0;
       if (!this.path || !this.path.length) {
         this.path = null;
@@ -269,6 +285,7 @@ export class Creature extends Entity {
       }
     }
     const [nx, , nz] = this.path[this.pathI];
+    if (walksFields(this)) lowerFields(this, nx, nz);
     if (this.tryStep(nx, nz, this.stepTime())) this.pathI++;
     else {
       // (Something you've built in a master's way: it's next for smashing.)

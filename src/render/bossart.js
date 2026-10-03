@@ -373,8 +373,32 @@ function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint) {
 // ------------------------------------------------------------ the body
 // A creature master's body and legs. Returns false when it isn't one drawn
 // here (it's left to the ordinary way).
-export function drawBossBody(r, ctx, e, sx, feetY, game, sheetOf) {
+// A scratch layer for a legged master drawn under a filter (struck white,
+// or coming apart): the hundreds of little strokes its legs are drawn in
+// would each pay for the filter (enough to stall the game every time you
+// hit the Overseer); drawn plain on here instead, and this drawn filtered,
+// once.
+const LAYER_W = 240;
+const LAYER_H = 240;
+let layer = null;
+function scratch() {
+  if (!layer) {
+    const c = document.createElement('canvas');
+    c.width = LAYER_W;
+    c.height = LAYER_H;
+    layer = c.getContext('2d');
+    layer.imageSmoothingEnabled = false;
+  }
+  layer.setTransform(1, 0, 0, 1, 0, 0);
+  layer.globalAlpha = 1;
+  layer.filter = 'none';
+  layer.clearRect(0, 0, LAYER_W, LAYER_H);
+  return layer;
+}
+
+export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
   if (e.burrowed) return true;
+  let ctx = dest;
   const tint = bossTint(e);
   const dt = r.frameDt || 0.016;
   const vd = r.viewDir(e.dir);
@@ -401,6 +425,13 @@ export function drawBossBody(r, ctx, e, sx, feetY, game, sheetOf) {
     ctx.drawImage(sheet, (f + flip) * sz, 0, sz, sz, x, y, w, h);
     rim(ctx, e, sheet, (f + flip) * sz, 0, sz, sz, x, y, w, h, tint, r.time, flash);
     return true;
+  }
+  const filt = typeof dest.filter === 'string' && dest.filter !== 'none' ? dest.filter : null;
+  const lx = Math.round(cx - LAYER_W / 2);
+  const ly = Math.round(feetY - LAYER_H + 60);
+  if (filt) {
+    ctx = scratch();
+    ctx.setTransform(1, 0, 0, 1, -lx, -ly);
   }
   const wp = e.renderPos();
   const homes = rigUpdate(r, e, rig, wp, front, dt, game);
@@ -465,6 +496,10 @@ export function drawBossBody(r, ctx, e, sx, feetY, game, sheetOf) {
     ctx.fillRect(ex - 1, ey - 1, 1, 1);
   }
   legs(1);
+  if (filt) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    dest.drawImage(ctx.canvas, lx, ly);
+  }
   return true;
 }
 
