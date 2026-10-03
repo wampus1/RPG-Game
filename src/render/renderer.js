@@ -1217,7 +1217,11 @@ export class Renderer {
       const cy = Math.round(feetY - sz + 1 - hop + lu.y - (e.burrowed ? sz : 0) + (e.rise || 0));
       // (Burrowed: only the churned earth shows, moving.)
       if (!e.burrowed) {
+        // (Faded: an ash wraith, all but unseen; a puffer gone limp.)
+        const fa = ctx.globalAlpha;
+        if (e.fade !== undefined && e.fade < 1) ctx.globalAlpha = fa * Math.max(0.05, e.fade);
         ctx.drawImage(sheet, (f + flip) * sz, 0, sz, sz, cx, cy, sz, sz);
+        ctx.globalAlpha = fa;
         // The blight in it: a faint violet edge, breathing.
         if (e.infected) {
           const a = ctx.globalAlpha;

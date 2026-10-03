@@ -207,6 +207,12 @@ export class Audio {
       case 'etch': this.tone(1800 + Math.random() * 600, 0.25, 'triangle', 0.035, -900); this.noise(0.18, 0.04, 5200); break;
       case 'rebirth': [261.6, 329.6, 392, 523.2, 659.2].forEach((f, i) => this.swell(f, 2.6, i % 2 ? 'triangle' : 'sine', 0.06, 0, i * 0.03)); this.noise(0.6, 0.12, 7000); this.tone(65, 0.9, 'sine', 0.25, -10); break;
       case 'whoosh': this.noise(0.4, 0.05, 1800); this.tone(520, 0.35, 'sine', 0.012, -360); break;
+      // (The islands' night things: a glass beast's growl, a lurker's
+      // tongue, a thief's snatch, black glass breaking.)
+      case 'growl': this.tone(90, 0.5, 'sawtooth', 0.035, -30); this.noise(0.4, 0.04, 300); break;
+      case 'whip': this.noise(0.12, 0.1, 3000); this.tone(900, 0.12, 'sine', 0.02, -700); break;
+      case 'steal': this.tone(1200, 0.08, 'square', 0.02, 400); this.noise(0.06, 0.05, 4000); break;
+      case 'glass': this.noise(0.25, 0.07, 6000); this.tone(2400, 0.3, 'sine', 0.03, -200); this.tone(3600, 0.2, 'sine', 0.02, 300); break;
       case 'lift_stop': this.tone(260, 0.7, 'sawtooth', 0.025, -200); this.tone(58, 0.35, 'sine', 0.14, -18, 0.45); this.noise(0.18, 0.08, 900, 0.45); this.tone(1400, 0.12, 'triangle', 0.03, 0, 0.6); break;
       case 'rune': this.tone(660, 0.3, 'triangle', 0.05, 330); this.tone(990, 0.4, 'sine', 0.04, 495, 0.1); break;
       case 'beam': this.tone(1400, 0.35, 'sawtooth', 0.03, -700); this.noise(0.3, 0.05, 6000); break;

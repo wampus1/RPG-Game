@@ -5,6 +5,7 @@ import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
+import { ISLE_MOB_SPECIES } from './islemobs.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
@@ -49,8 +50,10 @@ export const SPECIES = {
   mire_toad: { name: 'Mire Toad', hp: 4, dmg: 0, step: 0.3, mode: 'passive', drops: [['raw_meat', 1, 1, 0.8], ['slime_gel', 1, 1, 0.3]], isle: 'myrrow' },
   shroom_crawler: { name: 'Shroom Crawler', hp: 10, dmg: 2, step: 0.5, mode: 'neutral', aggro: 0, drops: [['mushroom', 1, 3, 1], ['glowcap', 1, 1, 0.4]], spores: true, isle: 'myrrow' },
   gloam_moth: { name: 'Gloam Moth', hp: 3, dmg: 0, step: 0.24, mode: 'passive', drops: [['moth_dust', 1, 2, 1]], night: true, floats: true, light: 5, noHalo: true, isle: 'myrrow' },
-  // (And what lives below ground: see monsters.js.)
+  // (And what lives below ground: see monsters.js; and what comes out at
+  // night on Kharos and Myrrow: see islemobs.js.)
   ...MONSTER_SPECIES,
+  ...ISLE_MOB_SPECIES,
 };
 
 // Inside the bounds something's held to (a master, its hall).
@@ -249,7 +252,7 @@ export class Creature extends Entity {
     // (A great master only where all of it fits: never half into a wall.)
     if (this.foot && !fits(this.game, this, nx, ny, nz)) return false;
     // Wildlife avoids settlements' insides and deep water.
-    if (w.isWaterAt(nx, ny, nz) && this.species !== 'slime') return false;
+    if (w.isWaterAt(nx, ny, nz) && this.species !== 'slime' && !this.S.swims) return false;
     // (And lava, unless it's at home in the fire.)
     if (w.getBlock(nx, ny, nz) === B.lava && !this.S.fireproof && !this.S.floats) return false;
     this.face(nx, nz);

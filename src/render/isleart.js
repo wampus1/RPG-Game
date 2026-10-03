@@ -719,7 +719,153 @@ function gloamMoth(f) {
   return p;
 }
 
+// --- the islands' night things (see entities/islemobs.js) -----------------------
+// An ash wraith: a hooded shape of ash, ragged below, two coals for eyes
+// (no outline: it's smoke).
+function ashWraith(f) {
+  const p = new Px(16, 16);
+  const sway = f ? 1 : 0;
+  p.ellipse(8, 5, 3.5, 3.5, hex('#4a4444'), 230);
+  p.ellipse(8, 5, 2.4, 2.6, hex('#1a1416'), 255);
+  p.set(7, 5, '#ff8030');
+  p.set(9, 5, '#ff8030');
+  p.set(7, 4, '#ffd060', 160);
+  for (let y = 8; y < 15; y++) {
+    const w = 3 + Math.floor((y - 8) / 2);
+    for (let x = 8 - w; x <= 8 + w; x++) {
+      if ((x + y + sway) % 3 === 0 && y > 11) continue;
+      p.set(x + (y > 11 ? sway : 0), y, hex(y % 2 ? '#5a5454' : '#6a6464'), 220 - (y - 8) * 22);
+    }
+  }
+  p.set(3 + sway, 9, '#8a8484', 160);
+  p.set(13 - sway, 10, '#8a8484', 140);
+  return p;
+}
+
+// A magma slug: a long low body crusted dark, glowing in its cracks, two
+// stalked eyes; a slugling is the same, small.
+function magmaSlug(f, small) {
+  const p = new Px(16, 16);
+  const k = small ? 0.6 : 1;
+  const cx = 8;
+  const cy = 12;
+  const len = 6 * k;
+  p.ellipse(cx, cy, len + (f ? 0.5 : 0), 2.6 * k + 0.4, hex('#3a2a28'));
+  p.ellipse(cx, cy - 0.5, len - 1, 1.6 * k, hex('#4e3a34'));
+  for (let i = -3; i <= 3; i += 2) p.set(Math.round(cx + i * k), Math.round(cy - 1 + ((i + f) % 2)), '#ff8030');
+  p.hline(Math.round(cx - len + 1), Math.round(cx + len - 1), cy + 1, hex('#c8441a'));
+  const hx = Math.round(cx + len - 1);
+  p.vline(hx, Math.round(cy - 4 * k), cy - 2, '#3a2a28');
+  p.vline(hx - 2, Math.round(cy - 3.5 * k), cy - 2, '#3a2a28');
+  p.set(hx, Math.round(cy - 4 * k) - 1, '#ffd060');
+  p.set(hx - 2, Math.round(cy - 3.5 * k) - 1, '#ffd060');
+  return p.outline(OUT);
+}
+
+// A glasshide stalker (drawn large): a four-legged hunter grown over with
+// plates and spines of black glass, violet glints in it, red eyes low.
+function glasshide(f) {
+  const p = new Px(32, 32);
+  const glass = ['#1e1824', '#2e2638', '#140e1a', '#3e3450'];
+  const step = f ? 1 : 0;
+  // Legs.
+  for (const [x, ph] of [[7, 0], [11, 1], [20, 1], [24, 0]]) {
+    const lift = (ph + step) % 2;
+    p.rect(x, 21 - lift, 3, 8, hex(glass[2]));
+    p.rect(x - 1, 28 - lift, 4, 2, hex(glass[0]));
+  }
+  // Body: a hunched mass of plates.
+  p.ellipse(16, 17, 11, 6, hex(glass[1]));
+  p.ellipse(15, 15, 9, 4, hex(glass[3]));
+  // Spines along the back.
+  for (let i = 0; i < 6; i++) {
+    const x = 8 + i * 3;
+    const h = 4 + ((i * 5) % 3);
+    p.line(x, 12, x + 1, 12 - h, hex(glass[0]));
+    p.set(x + 1, 12 - h, '#c8b8f0');
+  }
+  // Head, low and forward, a jaw of glass teeth.
+  p.ellipse(27, 19, 4.5, 3.5, hex(glass[1]));
+  p.hline(25, 31, 22, hex(glass[2]));
+  for (let x = 26; x <= 30; x += 2) p.set(x, 23, '#e0d8ff');
+  p.set(28, 18, '#ff3030');
+  p.set(29, 18, '#ff9070');
+  // Violet glints in the glass.
+  for (const [x, y] of [[10, 15], [14, 18], [19, 14], [22, 17], [16, 20]]) p.set(x, y, '#8a7aaa');
+  p.set(13, 13, '#e0d8ff');
+  return p.outline(OUT);
+}
+
+// A bog lurker: a wide flat head with eyes on top, a gape of a mouth,
+// mottled green and brown; frame 1 opens the jaw.
+function bogLurker(f) {
+  const p = new Px(16, 16);
+  const skin = hex('#4a5a2e');
+  p.ellipse(8, 11, 7, 3.6, skin);
+  p.ellipse(8, 12, 6, 2, hex('#6a6a3a'));
+  for (const [x, y] of [[4, 10], [8, 9], [11, 11], [6, 12]]) p.set(x, y, '#2e3a1e');
+  p.ellipse(5, 7.5, 1.6, 1.4, skin);
+  p.ellipse(11, 7.5, 1.6, 1.4, skin);
+  p.set(5, 7, '#e8d040');
+  p.set(11, 7, '#e8d040');
+  p.set(5, 8, '#1a1420');
+  p.set(11, 8, '#1a1420');
+  p.hline(2, 14, 13 + (f ? 1 : 0), hex('#2a1a1e'));
+  if (f) {
+    p.hline(3, 13, 13, hex('#8a3a4a'));
+    for (let x = 3; x <= 13; x += 2) p.set(x, 12, '#e8e0c8');
+  }
+  return p.outline(OUT);
+}
+
+// A lantern thief: a little hunched thing with long arms and great yellow
+// eyes, grey-green, a sack over its back.
+function lanternThief(f) {
+  const p = new Px(16, 16);
+  const skin = hex('#6a7a62');
+  p.ellipse(8, 10, 3, 3.4, skin);
+  p.ellipse(8, 5, 3.4, 3, skin);
+  p.set(5, 3, '#4a5a44');
+  p.set(11, 3, '#4a5a44');
+  p.ellipse(6.5, 5, 1.2, 1.2, hex('#f0e040'));
+  p.ellipse(9.5, 5, 1.2, 1.2, hex('#f0e040'));
+  p.set(6, 5, '#1a1420');
+  p.set(10, 5, '#1a1420');
+  p.hline(7, 9, 7, '#2a2a22');
+  // Long arms, swinging.
+  p.line(5, 9, 2, 13 + (f ? -1 : 0), skin);
+  p.line(11, 9, 14, 13 + (f ? 0 : -1), skin);
+  p.rect(10, 7, 4, 4, hex('#8a6a4a'));
+  p.set(11, 7, '#a8885a');
+  p.rect(6, 13, 1, 2, skin);
+  p.rect(9, 13, 1, 2, skin);
+  return p.outline(OUT);
+}
+
+// A spore puffer: a fat mushroom with a pale stalk, a speckled cap and,
+// if you look closely, a pair of eyes under the gills; frame 1 swollen.
+function sporePuffer(f) {
+  const p = new Px(16, 16);
+  const swell = f ? 1 : 0;
+  p.rect(6, 9, 4, 6, hex('#e8dcc8'));
+  p.hline(6, 9, 14, hex('#c8b8a0'));
+  p.ellipse(8, 7, 5.5 + swell, 3.4 + swell, hex('#8a6a9a'));
+  p.ellipse(8, 6, 4.5 + swell, 2.2 + swell, hex('#a88ab8'));
+  for (const [x, y] of [[5, 6], [9, 5], [11, 7], [7, 4]]) p.set(x, y, '#e8f0c0');
+  p.hline(4, 12, 9, hex('#5a4a5a'));
+  p.set(7, 10, '#c8f070');
+  p.set(9, 10, '#c8f070');
+  return p.outline(OUT);
+}
+
 export const ISLE_CREATURES = {
+  ash_wraith: { frames: 2, draw: (f) => ashWraith(f) },
+  magma_slug: { frames: 2, draw: (f) => magmaSlug(f, false) },
+  slugling: { frames: 2, draw: (f) => magmaSlug(f, true) },
+  glasshide: { frames: 2, size: 32, draw: (f) => glasshide(f) },
+  bog_lurker: { frames: 2, draw: (f) => bogLurker(f) },
+  lantern_thief: { frames: 2, draw: (f) => lanternThief(f) },
+  spore_puffer: { frames: 2, draw: (f) => sporePuffer(f) },
   ash_lizard: { frames: 2, draw: (f, v) => ashLizard(f, v) },
   magma_crab: { frames: 2, draw: (f) => magmaCrab(f) },
   cinderling: { frames: 2, draw: (f) => cinderling(f) },

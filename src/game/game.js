@@ -39,6 +39,7 @@ import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast, throwDynamite } from '../entities/monsters.js';
+import { isleNightSpecies, waterNear } from '../entities/islemobs.js';
 import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
@@ -5122,6 +5123,10 @@ export class Game {
         if (npcKill) invAdd(source.rec.inv, item, n);
         else this.spawnDrop(item, n, e.x, e.y, e.z, true);
       }
+      // (What it had taken off you: a lantern thief's prize.)
+      if (e.loot) this.spawnDrop(e.loot.item, e.loot.n, e.x, e.y, e.z, true);
+      // (What its kind does as it dies: see islemobs.js.)
+      if (e.S.onDeath) e.S.onDeath(this, e, source);
       if (npcKill) source.onKill?.(e);
     }
   }
@@ -5269,8 +5274,8 @@ export class Game {
     const isle = ow.islandAt(x, z);
     if (night) {
       const r = Math.random();
-      if (isle === 'kharos' && r < 0.4) species = 'cinderling';
-      else if (isle === 'myrrow' && r < 0.3) species = r < 0.12 ? 'wisp' : 'gloam_moth';
+      // (Kharos and Myrrow have night things all their own: see islemobs.js.)
+      if (isle === 'kharos' || isle === 'myrrow') species = isleNightSpecies(this, isle, x, z);
       else if ((biome === 'forest' || biome === 'taiga') && r < 0.3) species = 'wolf';
       // (Wisps over marsh and through the woods.)
       else if ((biome === 'swamp' || biome === 'jungle' || biome === 'forest') && r < 0.48) species = 'wisp';
@@ -5287,11 +5292,28 @@ export class Game {
       if (ISLE_BEASTS[isle] && Math.random() < 0.3) species = ISLE_BEASTS[isle][Math.floor(Math.random() * ISLE_BEASTS[isle].length)];
     }
     const variant = Math.floor(Math.random() * (species === 'horse' ? 6 : 3));
+    // (A swimmer in the water by there, under the surface.)
+    const wet = SPECIES[species].swims && waterNear(this, x, z);
+    if (wet) {
+      const c = new Creature(this, species, wet.x, wet.y, wet.z, variant);
+      c.burrowed = true;
+      c.solid = false;
+      this.addCreature(c);
+      return;
+    }
     this.addCreature(new Creature(this, species, x, y, z, variant));
     if (SPECIES[species].packs && Math.random() < 0.6) {
       const y2 = this.world.findStandY(x + 1, z, y);
       if (y2 > 0 && !this.entityAt(x + 1, y2, z)) this.addCreature(new Creature(this, species, x + 1, y2, z));
     }
+  }
+
+  // One of the islands' night things, out of another (a magma slug's
+  // halves: see islemobs.js).
+  spawnIsleMob(species, x, y, z) {
+    const c = new Creature(this, species, x, y, z);
+    this.addCreature(c);
+    return c;
   }
 
   // An animal wanders near a hunter (so trappers have something to hunt

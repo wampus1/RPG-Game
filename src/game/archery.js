@@ -270,6 +270,13 @@ export function arrowStrikes(game, a, t) {
     game.audio?.play('hum', t);
     return false;
   }
+  // A glasshide stalker's black glass: arrows glance off it.
+  if (t.S && t.S.glancing) {
+    r.emit(t.x, t.y + 1.2, t.z, { n: 6, color: ['#c8b8f0', '#ffffff', '#6a5a8a'], up: 20, speed: 50, life: 0.3, glow: true });
+    r.floatText(t.x, t.y + 2.6, t.z, 'glances off', '#c8b8f0');
+    game.audio?.play('armor_hit', t);
+    return false;
+  }
   // An adventurer turns the arrow aside with a blade.
   if (t.adventurer && t.tryDeflect && t.tryDeflect(a)) hit = false;
   // Rolled under it.
