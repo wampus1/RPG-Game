@@ -14,7 +14,9 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
-import { buildFloor, FY, DTYPES, kavFloor, SPIKE_CYCLE, KAV_KINDS } from '../world/dungeongen.js';
+import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS } from '../world/dungeongen.js';
+import { ISLE_BOSS_HP, ISLE_BOSS_DMG } from '../world/isledeep.js';
+import { updateWorks, clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
@@ -46,7 +48,8 @@ export class DungeonRun {
   constructor(game, rec) {
     this.game = game;
     this.rec = rec;
-    this.T = DTYPES[rec.type];
+    // (As its island makes it: see isledeep.js.)
+    this.T = dtypeOf(rec);
     this.floor = 0;
     this.data = null;
     this.state = null;
@@ -327,15 +330,20 @@ export class DungeonRun {
     // the Overseer turned off is back up, though.)
     restoreFields(this.game);
     dropFields(this.game);
+    // (Nor what a master's done to its hall: see bosskit.js.)
+    dropWorks(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
     this.rec.floors[this.floor] = { regions, state: this.state, gen: FLOOR_GEN };
+    raiseWorks(this.game);
     raiseFields(this.game);
   }
 
   // Off this floor: its things go (they're kept, or will be made again).
   clearFloor() {
     const game = this.game;
+    clearWorks(game);
+    game.works = [];
     for (const c of game.creatures) {
       game.removeOcc(c);
       c.dead = true;
@@ -397,8 +405,10 @@ export class DungeonRun {
     // (A master's a good deal harder than what it rules.)
     if (o.boss) {
       c.isBoss = true;
-      c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP);
-      c.dmgMult *= BOSS_DMG;
+      // (And the far islands' masters harder still than Thessa's.)
+      const isle = this.rec.isle;
+      c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP * (ISLE_BOSS_HP[isle] || 1));
+      c.dmgMult *= BOSS_DMG * (ISLE_BOSS_DMG[isle] || 1);
     }
     game.addCreature(c);
     return c;
@@ -410,8 +420,10 @@ export class DungeonRun {
     const p = game.player;
     this.t += dt;
     // Fields the Overseer turned off, back up in their time (see
-    // entities/fields.js).
+    // entities/fields.js); what a master's done to its hall, put back in
+    // its time (see bosskit.js).
     tickFieldsOff(game, dt);
+    updateWorks(game, dt);
     if (this.arriveT > 0) this.arriveT -= dt;
     // The dead stirring as you pass; golems waking.
     for (const c of game.creatures) {
@@ -594,7 +606,10 @@ export class DungeonRun {
   //   a mine's roof comes down (dust trickles first: move);
   //   a barrow's dead reach up out of the earth for your ankles;
   //   a crypt's cold draughts gutter your light to nothing a moment;
-  //   a holdout's gongs rouse the whole place when one of them sees you.
+  //   a holdout's gongs rouse the whole place when one of them sees you;
+  //   a Wildwood Hollow's briars whip up out of the moss round you;
+  //   a Kiln-Deep's old vents flare under your feet;
+  //   a Tide Grotto's surges sweep through and knock you off your feet.
   placeDangers(dt) {
     const game = this.game;
     const p = game.player;
@@ -640,6 +655,41 @@ export class DungeonRun {
       game.audio?.play('whisper');
       if (!this.toldHands) game.ui.msg('The earth stirs under your feet... (something reaches up: move!)', '#a0c8b0', true);
       this.toldHands = true;
+    } else if (type === 'grove') {
+      // Briars, whipping up out of the moss.
+      const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.4)];
+      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#5a8a3a', '#8ac060'], up: 6, speed: 6, life: 0.9, oy: 6 });
+      addHazard(game, { tiles, y: FY, dur: 1.2, dmg: Math.round(dmg * 0.6), kind: 'erupt', color: [110, 170, 70], trap: true, onFire: (g, h, hit) => {
+        for (const e of hit) if (e === p) {
+          p.grabbedT = 1;
+          game.renderer.floatText(p.x, p.y + 2.4, p.z, 'caught in briars! (roll free)', '#a0d070');
+        }
+      } });
+      game.audio?.play('whip');
+      if (!this.toldBriars) game.ui.msg('The moss stirs round your feet... (briars: move!)', '#a0d070', true);
+      this.toldBriars = true;
+    } else if (type === 'forge') {
+      // An old vent flaring up under you.
+      const tiles = areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.6);
+      tiles.push({ x: p.x, z: p.z });
+      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 2, color: ['#ff9030', '#ffd070'], up: 10, speed: 6, life: 0.7, glow: true });
+      addHazard(game, { tiles, y: FY, dur: 1.4, dmg, burn: 2, kind: 'fire', center: { x: p.x, z: p.z }, color: [255, 140, 40], trap: true });
+      game.audio?.play('hiss');
+      if (!this.toldVents) game.ui.msg('The floor glows red under your feet... (a vent: move!)', '#ffb070', true);
+      this.toldVents = true;
+    } else if (type === 'grotto') {
+      // A surge of the tide through the caves: a row of water, knocking
+      // you down the way it runs.
+      const across = Math.random() < 0.5;
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const tiles = [];
+      for (let k = -3; k <= 3; k++) tiles.push(across ? { x: p.x + k, z: p.z } : { x: p.x, z: p.z + k });
+      for (const t of tiles) game.renderer.emit(t.x, FY + 0.2, t.z, { n: 2, color: ['#80c8e8', '#e0f8ff'], up: 6, speed: 8, life: 0.8, shape: 'puff' });
+      const from = across ? { x: p.x, z: p.z - dir } : { x: p.x - dir, z: p.z };
+      addHazard(game, { tiles, y: FY, dur: 1.5, dmg: Math.round(dmg * 0.5), knock: 2, from, chill: 1, kind: 'cold', color: [120, 200, 230], trap: true });
+      game.audio?.play('wave');
+      if (!this.toldSurge) game.ui.msg('You hear the sea coming through the rock... (a surge: get out of its way!)', '#a0e0f0', true);
+      this.toldSurge = true;
     } else if (type === 'crypt' && p.heldLightKind && p.heldLightKind() === 'fire') {
       // A cold draught: your flame bows, and goes out a moment.
       p.snuff?.(2.5);
@@ -704,6 +754,20 @@ export class DungeonRun {
       case 'crypt':
         // Pale motes drifting up, like breath.
         game.renderer.emit(x, FY + 0.6, z, { n: 1, color: c, up: 6, speed: 3, gravity: -6, life: 2.2, glow: true });
+        break;
+      case 'grove':
+        // Pollen and seed-fluff drifting down through the roots, glowing.
+        game.renderer.emit(x, FY + 2.4, z, { n: 1, color: c, up: -3, speed: 3, gravity: 4, life: 2.6, glow: Math.random() < 0.4 });
+        break;
+      case 'forge':
+        // Embers rising, and the heat shimmering off the floor.
+        if (Math.random() < 0.6) game.renderer.emit(x, FY + 0.3, z, { n: 1, color: c, up: 10, speed: 4, gravity: -8, life: 1.4, glow: true });
+        if (Math.random() < 0.1) game.renderer.emit(x, FY + 0.2, z, { n: 1, color: ['#8a5a40'], up: 2, speed: 3, life: 1.6, oy: 6, shape: 'puff', gravity: -3 });
+        break;
+      case 'grotto':
+        // Drips off the roof, and bubbles off the pools.
+        if (Math.random() < 0.5) game.renderer.emit(x, FY + 2.6, z, { n: 1, color: c, up: -2, speed: 1, gravity: 90, life: 0.9, oy: -10 });
+        else game.renderer.emit(x, FY + 0.2, z, { n: 1, color: c, up: 4, speed: 2, gravity: -10, life: 1.2, glow: true });
         break;
       case 'holdout':
         // Smoke from the fires, and an ember now and then.
@@ -896,8 +960,11 @@ export class DungeonRun {
         const dr = this.data.drains.find((q) => q.lever.x === x && q.lever.z === z);
         if (dr && on && !this.state.solved[`drain${x},${z}`]) {
           this.state.solved[`drain${x},${z}`] = true;
-          for (const q of dr.water) if (w.getBlock(q.x, FY, q.z) === B.water) w.setBlock(q.x, FY, q.z, B.air);
-          game.ui.msg('A sluice opens: the black water drains away with a long gurgle.', '#80c8e0');
+          const lava = dr.water.some((q) => w.getBlock(q.x, FY, q.z) === B.lava);
+          for (const q of dr.water) if (w.getBlock(q.x, FY, q.z) === B.water || w.getBlock(q.x, FY, q.z) === B.lava) w.setBlock(q.x, FY, q.z, B.air);
+          // (On Kharos the pool's of lava: drained, it runs off down a
+          // channel somewhere below.)
+          game.ui.msg(lava ? 'A sluice grinds open: the lava runs away down some channel below, hissing.' : 'A sluice opens: the black water drains away with a long gurgle.', lava ? '#ffb070' : '#80c8e0');
           game.audio?.play('pour');
           for (const c of game.creatures) if (c.submerged) {
             c.submerged = false;

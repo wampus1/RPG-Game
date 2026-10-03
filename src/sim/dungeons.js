@@ -14,6 +14,7 @@
 // slain, and the way in falls shut behind them.
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { DTYPES } from '../world/dungeongen.js';
+import { ISLE_TYPE_LORE, HOME_ISLE, FAR_DELVE_DAY, FAR_DELVE_GRACE, FAR_DELVE_LATEST } from '../world/isledeep.js';
 import { restamp } from '../world/sites.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { DAY, ledger, st } from './econ.js';
@@ -53,6 +54,8 @@ export class Dungeons {
     this.sim = sim;
     this.list = [];
     this.made = false;
+    // The day you first set foot on each island (see notice).
+    this.isleFirst = {};
   }
 
   // The records, made from the world's sites the first time they're wanted.
@@ -87,7 +90,7 @@ export class Dungeons {
       const style = (town && (town.civ ? town.civ.style : town.style)) || 'vale';
       const far = spawn ? Math.hypot(spawn.cx - s.cx, (spawn.cz - s.cz) * 1.4) : 10;
       const rec = {
-        id: s.id, type: s.type, x: s.x, z: s.z, h: s.h, cx: s.cx, cz: s.cz, seed: s.seed,
+        id: s.id, type: s.type, x: s.x, z: s.z, h: s.h, cx: s.cx, cz: s.cz, seed: s.seed, isle: s.island || null,
         // (Now and then a mine's dug deeper than most: a fourth floor.)
         depth: rng.int(T.floors[0], T.floors[1]) + (s.type === 'mine' && (s.seed >>> 0) % 7 === 0 ? 1 : 0),
         level: s.type === 'kavorent' ? 4 : clamp(1 + Math.floor(far / 8), 1, 3),
@@ -113,6 +116,13 @@ export class Dungeons {
         const god = (faith && faith.god) || rng.pick(['the Old Mother', 'the Pale Lord', 'the Lamp-Bearer', 'the Sleeper']);
         rec.name = `the Drowned Crypt of ${god.replace(/^the /i, 'the ')}`;
         rec.origin = { y, text: `In ${y}, the water came up through the floor of the crypt of the temple of ${god} ${dirFrom(town, s)}, and the priests who stayed to save the reliquary never came out. The chapel above fell in after.`, short: `The crypt of the old temple of ${god} ${dirFrom(town, s)} was drowned, and its priests with it.` };
+      } else if (ISLE_TYPE_LORE[s.type]) {
+        // An island's own kind of place (see isledeep.js).
+        const lore = ISLE_TYPE_LORE[s.type];
+        const who = rng.pick(lore.who);
+        const where = dirFrom(town, s);
+        rec.name = lore.name(who);
+        rec.origin = { y, who, text: lore.text(y, who, where, tn), short: lore.short(who, where) };
       } else if (s.type === 'holdout') {
         const who = rng.pick(BANDITS);
         rec.name = `${who}'s Hole`;
@@ -152,6 +162,8 @@ export class Dungeons {
   notice() {
     const p = this.game.player;
     if (!p || this.game.dungeon) return;
+    const isle = this.game.world.ow.islandAt?.(p.x, p.z);
+    if (isle && this.isleFirst[isle] === undefined) this.isleFirst[isle] = this.game.day;
     for (const d of this.all) {
       if (d.seen || Math.abs(d.x - p.x) > 14 || Math.abs(d.z - p.z) > 10) continue;
       d.seen = true;
@@ -175,7 +187,7 @@ export class Dungeons {
       crypt: [`${cap(d.name)}, ${where}. ${d.origin.short} The water's black down there.`, `Out ${where} there's a ruined chapel with a hole in its floor. The crypt under it drowned, years back.`],
       holdout: [`${cap(d.name)}, ${where}: a nest of cutthroats in the caves. ${d.origin.short}`, `Bandits. In the caves ${where}. The watch won't go in.`],
       kavorent: [`${cap(d.name)}, ${where}. The old ones built it, the tales say. The runes on it move.`, `Have you seen it? The spire ${where}? ${cap(d.name)}, my grandmother called it. Nothing grows near it.`],
-    }[d.type];
+    }[d.type] || ISLE_TYPE_LORE[d.type].rumour(d, where);
     return { d, line: rng.pick(say) };
   }
 
@@ -235,7 +247,7 @@ export class Dungeons {
       const here = ow.settlements[a.at];
       if (!here) continue;
       // Somewhere they could hope to come back from.
-      const want = this.all.filter((d) => !d.cleared && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
+      const want = this.all.filter((d) => !d.cleared && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3) && this.openToDelvers(d, now)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
       if (!want) continue;
       // A band, if others are in town (the bolder they are, the more likely).
       const others = adv.list.filter((b) => b !== a && !b.dead && b.state === 'stay' && b.at === a.at).slice(0, 2);
@@ -250,6 +262,19 @@ export class Dungeons {
       const names = party.map((m) => `${m.name.first} ${m.name.last}`);
       if (L) ledger(L, Math.floor(now / DAY), `${list(names)} set out for ${want.name}${party.length > 1 ? ', together' : ', alone'}.`);
     }
+  }
+
+  // The far islands' old places are left alone a good while: not before
+  // FAR_DELVE_DAY, and not till you've had FAR_DELVE_GRACE days on the
+  // island yourself (or, if you never go, till FAR_DELVE_LATEST). Time to
+  // get there first. (See isledeep.js.)
+  openToDelvers(d, now = this.sim.abs) {
+    if (!d.isle || d.isle === HOME_ISLE) return true;
+    const day = Math.floor(now / DAY);
+    if (day < FAR_DELVE_DAY) return false;
+    const first = this.isleFirst[d.isle];
+    if (first === undefined) return day >= FAR_DELVE_LATEST;
+    return day >= first + FAR_DELVE_GRACE;
   }
 
   // Back from below: what they found, and who's left.
@@ -384,14 +409,20 @@ export class Dungeons {
   // ------------------------------------------------------------ saving
   serialize() {
     if (!this.made) return null;
-    return this.list.map((d) => ({
+    const list = this.list.map((d) => ({
       id: d.id, known: d.known, seen: d.seen, entered: d.entered, cleared: d.cleared, clearedBy: d.clearedBy, clearedDay: d.clearedDay,
       floors: d.floors, weakened: d.weakened, looted: d.looted, delves: d.delves, fallen: d.fallen, spire: d.spire, cores: d.cores, coresGone: d.coresGone || 0, metBoss: !!d.metBoss,
     }));
+    return { list, isleFirst: this.isleFirst };
   }
 
   load(data) {
     if (!data) return;
+    // (An older save kept only the list.)
+    if (!Array.isArray(data)) {
+      this.isleFirst = { ...(data.isleFirst || {}) };
+      data = data.list || [];
+    }
     for (const q of data) {
       const d = this.get(q.id);
       if (!d) continue;

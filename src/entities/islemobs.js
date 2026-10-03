@@ -21,7 +21,8 @@
 //       limp a while, open to a blow, before it swells again.
 // Each has its brain here (run before the plain chase-and-bite: see
 // creature.js), and is drawn in render/isleart.js.
-import { BRAINS, addHazard, addZone, areaTiles, lineTiles, groundFire } from './monsters.js';
+import { BRAINS, MONSTER_SPECIES, addHazard, addZone, areaTiles, lineTiles, groundFire } from './monsters.js';
+import { burn } from '../game/gems.js';
 import { knock, beginAttack, styleOf } from '../game/combat.js';
 import { removeItem } from '../game/inventory.js';
 import { GROUND } from '../config.js';
@@ -86,6 +87,39 @@ export const ISLE_MOB_SPECIES = {
     name: 'Spore Puffer', hp: 10, dmg: 0, step: 0.9, mode: 'hostile', aggro: 5, night: true, isle: 'myrrow', brain: 'sporePuffer',
     drops: [['mushroom', 1, 3, 1], ['glowcap', 1, 1, 0.4]],
   },
+};
+
+// And what lives below ground in each island's own old places (see
+// world/isledeep.js): slag crabs and forge hounds (iron dogs with a fire
+// in their bellies, whose bite burns) in Kharos's Kiln-Deeps and mines;
+// reef crabs in the Tide Grottoes (they swim); thornlings, little walking
+// briars that snag you, in Thessa's Wildwood Hollows; shroom brutes in the
+// peat cuttings; and the islands' own dead and outlaws: Myrrow's bog
+// bodies, kept by the peat; Kharos's ash-raiders; Myrrow's pearl pirates.
+export const ISLE_DEEP_SPECIES = {
+  slag_crab: { name: 'Slag Crab', hp: 14, dmg: 3, step: 0.4, mode: 'hostile', aggro: 9, under: true, fireproof: true, light: 3, noHalo: true, style: 'snap', isle: 'kharos', drops: [['crab_meat', 1, 1, 0.6], ['obsidian_shard', 1, 1, 0.4]] },
+  forge_hound: {
+    name: 'Forge Hound', hp: 18, dmg: 4, step: 0.26, mode: 'hostile', aggro: 12, under: true, fireproof: true, light: 4, noHalo: true, packs: true, style: 'bite', isle: 'kharos', drops: [['iron_ingot', 1, 1, 0.35], ['coal', 1, 2, 0.4]],
+    onHit(game, a, v) {
+      burn(game, v, a, 1.5);
+    },
+  },
+  reef_crab: { name: 'Reef Crab', hp: 12, dmg: 3, step: 0.38, mode: 'hostile', aggro: 9, under: true, swims: true, style: 'snap', isle: 'myrrow', drops: [['crab_meat', 1, 2, 0.8], ['pearl', 1, 1, 0.08]] },
+  shroom_brute: { name: 'Shroom Brute', hp: 20, dmg: 4, step: 0.45, mode: 'hostile', aggro: 8, under: true, spores: true, style: 'bite', isle: 'myrrow', drops: [['mushroom', 1, 3, 1], ['glowcap', 1, 1, 0.5]] },
+  thornling: {
+    name: 'Thornling', hp: 9, dmg: 3, step: 0.36, mode: 'hostile', aggro: 10, under: true, packs: true, style: 'snap', isle: 'thessa', drops: [['stick', 1, 2, 0.6], ['herb', 1, 1, 0.3]],
+    // (Its thorns catch in you.)
+    onHit(game, a, v) {
+      if (v.kind !== 'player' || Math.random() > 0.35) return;
+      v.grabbedT = Math.max(v.grabbedT || 0, 0.5);
+      game.renderer.floatText(v.x, v.y + 2.4, v.z, 'snagged!', '#a0d070');
+    },
+  },
+  bog_body: { ...MONSTER_SPECIES.drowned, name: 'Bog Body', hp: 20, look: 'bog_body', isle: 'myrrow', drops: [['peat_turf', 1, 1, 0.4], ['old_coin', 1, 2, 0.3]] },
+  ash_raider: { ...MONSTER_SPECIES.cutthroat, name: 'Ash Raider', look: 'ash_raider', arms: 'hand_axe', offhand: null, hp: 17, isle: 'kharos', drops: [['coin', 1, 5, 0.8], ['sulfur', 1, 2, 0.4]] },
+  ash_archer: { ...MONSTER_SPECIES.holdout_archer, name: 'Ash-Raider Archer', look: 'ash_archer', isle: 'kharos' },
+  reef_raider: { ...MONSTER_SPECIES.cutthroat, name: 'Pearl Pirate', look: 'reef_raider', arms: 'sabre', offhand: null, hp: 16, isle: 'myrrow', drops: [['coin', 1, 5, 0.8], ['pearl', 1, 1, 0.15]] },
+  reef_archer: { ...MONSTER_SPECIES.holdout_archer, name: 'Pirate Gunner', look: 'reef_archer', isle: 'myrrow' },
 };
 
 // Black glass flying out of a stalker that's died.

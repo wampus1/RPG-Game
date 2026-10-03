@@ -6,6 +6,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
+import { isleBossArt, ISLE_ROBES } from './islebossart.js';
 
 const OUT = '#1c1622';
 export const CHAR_W = 16;
@@ -43,6 +44,8 @@ const OUTFIT_COLORS = {
   hunter: { tunic: '#4a6a32', hood: '#6a4a2a' },
   tunic: { belt: '#4a2e1a', buckle: '#d8b040' },
   traveller: { coat: '#5a4a32', collar: '#7a6a4a' },
+  // (The islands' masters' robes: see islebossart.js.)
+  ...ISLE_ROBES,
   rags: { patch: '#6a5a4a' },
   vest: { vest: '#3a2a22' },
   // The other Dagoni Islands' dress (see npcgen.islandDress).
@@ -949,6 +952,8 @@ export const CREATURE_LOOKS = {
 };
 
 Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES);
+// (And the islands' own masters, below ground: see islebossart.js.)
+Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
 // Creature sheet: frames in a row; left-facing, renderer flips for right.
 // (Square frames: 16 across, or 32 for the great ones.)

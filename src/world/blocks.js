@@ -442,6 +442,27 @@ bench('spore_bed', 'sporewright', 'Spore Bed', { hardness: 0.6, light: 4 });
 bench('pearl_table', 'pearldiver', 'Pearl-Sorting Table', { hardness: 0.7 });
 def('mill_sail', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Windmill Sail' });
 def('mill_hub', { tool: 'axe', hardness: 1, drop: 'planks', label: 'Windmill Hub' });
+// The islands' own old places (see isledeep.js): Thessa's Wildwood
+// Hollows under the roots of the oldest trees (walls of living root, and
+// briars, which some down there can grow at will); Kharos's Kiln-Deeps,
+// the forges of the old Kiln-Kings (basalt brick, a floor of cooled slag,
+// crucibles); Myrrow's Tide Grottoes (rock crusted with coral, shell sand,
+// coral growing up out of it, kelp, giant clams). Each with its own way
+// in. And the black brick of a Kharos crypt.
+def('root_wall', { tool: 'axe', hardness: 6, drop: [{ item: 'stick', chance: 0.6 }], label: 'Living Roots' });
+def('briar', { ...sprite, solid: true, tool: 'axe', hardness: 0.4, drop: [{ item: 'stick', chance: 0.4 }], label: 'Briars' });
+def('forge_brick', { tool: 'pick', hardness: 7, drop: 'basalt', label: 'Forge Brick' });
+def('slag', { tool: 'pick', hardness: 3, drop: [{ item: 'iron_ore', chance: 0.08 }], label: 'Slag' });
+def('crucible', { ...sprite, solid: true, tool: 'pick', hardness: 3, light: 9, drop: null, label: 'Crucible' });
+def('coral_rock', { tool: 'pick', hardness: 6, drop: 'cobblestone', label: 'Coral Rock' });
+def('shell_sand', { tool: 'shovel', hardness: 0.5, drop: 'sand', label: 'Shell Sand' });
+def('coral', { ...sprite, solid: true, tool: 'pick', hardness: 0.8, light: 2, drop: [{ item: 'pearl', chance: 0.04 }], label: 'Coral' });
+def('kelp', { ...dressing, tall: true, hardness: 0.1, drop: null, label: 'Kelp' });
+def('giant_clam', { ...sprite, solid: true, tool: 'pick', hardness: 2, drop: [{ item: 'pearl', chance: 0.5, min: 1, max: 2 }], label: 'Giant Clam' });
+def('basalt_bricks', { tool: 'pick', hardness: 7, drop: 'basalt', label: 'Basalt Bricks' });
+def('hollow_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Hollow in the Roots' });
+def('forge_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 6, label: 'Forge Door' });
+def('grotto_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Grotto Mouth' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

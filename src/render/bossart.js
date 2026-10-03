@@ -27,7 +27,7 @@ export function drawnAsMaster(e) {
   return !!(e.S && (e.S.boss || e.species === 'saint_shade') && (e.kind === 'creature' || e.kind === 'monster'));
 }
 export function bossTint(c) {
-  return TINTS[c.species] || ['#ffe070', '#ffffff'];
+  return TINTS[c.species] || (c.S && c.S.tint) || ['#ffe070', '#ffffff'];
 }
 
 const ease = (k) => k * k * (3 - 2 * k);

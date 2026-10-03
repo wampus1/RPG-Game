@@ -5,7 +5,11 @@ import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
-import { ISLE_MOB_SPECIES } from './islemobs.js';
+import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
+import { KHAROS_BOSSES } from './bosses_kharos.js';
+import { MYRROW_BOSSES } from './bosses_myrrow.js';
+import { GROVE_BOSSES } from './bosses_grove.js';
+import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
@@ -54,6 +58,12 @@ export const SPECIES = {
   // night on Kharos and Myrrow: see islemobs.js.)
   ...MONSTER_SPECIES,
   ...ISLE_MOB_SPECIES,
+  // (And below ground on each island, and the islands' own masters: see
+  // islemobs.js and the bosses_ files.)
+  ...ISLE_DEEP_SPECIES,
+  ...KHAROS_BOSSES,
+  ...MYRROW_BOSSES,
+  ...GROVE_BOSSES,
 };
 
 // Inside the bounds something's held to (a master, its hall).
@@ -90,7 +100,7 @@ export class Creature extends Entity {
     this.angry = false;
     // (The great masters fill three paces across: see footprint.js.)
     this.foot = S.boss && S.big ? 1 : 0;
-    if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] : SKELETON_LOOK;
+    if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] || ISLE_LOOKS[S.look] : SKELETON_LOOK;
     if (species === 'skeleton') {
       let r = this.rng.next();
       this.arms = SKELETON_ARMS.find(([, w]) => (r -= w) <= 0)?.[0] || 'stone_sword';

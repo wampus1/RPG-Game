@@ -78,17 +78,25 @@ export function press(c) {
   if (!c.target || c.target.dead || !((c.sinceAtk || 0) > PRESS[ph])) return null;
   if (!c.pressed) {
     c.pressed = true;
-    for (const k of Object.keys(c)) if (k.endsWith('Cd') && !NOT_ATTACKS.has(k) && typeof c[k] === 'number' && c[k] > 0) c[k] = 0;
+    // (An island master's many works come round in turn: only the next of
+    // them is made ready, if none is already.)
+    const cds = Object.keys(c).filter((k) => k.endsWith('Cd') && !NOT_ATTACKS.has(k) && typeof c[k] === 'number');
+    if (c.S.isle) {
+      if (!cds.some((k) => c[k] <= 0)) {
+        const next = cds.reduce((b, k) => (b === null || c[k] < c[b] ? k : b), null);
+        if (next) c[next] = 0;
+      }
+    } else for (const k of cds) if (c[k] > 0) c[k] = 0;
     c.gapT = Math.min(c.gapT || 0, 0.2);
     return 'ready';
   }
-  if (c.sinceAtk > PRESS[ph] + 1.4 && !(c.burrowed || c.vanished || c.ceiling || c.tether || c.solid === false || c.act)) return 'close';
+  if (c.sinceAtk > PRESS[ph] + 1.4 && !c.S.anchored && !(c.burrowed || c.vanished || c.ceiling || c.tether || c.solid === false || c.act)) return 'close';
   return 'ready';
 }
 
 // Doing something that isn't standing about.
 function busy(c) {
-  return !!(c.moving || c.windup || c.act || c.burrowed || c.stunT > 0 || c.tether || c.ceiling || c.vanished || c.aiming || c.bolts > 0 || c.solid === false || c.dormant || c.waiting);
+  return !!(c.S.anchored || c.moving || c.windup || c.act || c.burrowed || c.stunT > 0 || c.tether || c.ceiling || c.vanished || c.aiming || c.bolts > 0 || c.solid === false || c.dormant || c.waiting);
 }
 
 // Every update, whatever it's doing: its breath between attacks, and its
@@ -135,7 +143,7 @@ function phaseUp(c, ph) {
   game.audio?.play('roar', c);
   game.audio?.play('boom', c);
   r.floatText(c.x, c.y + 3.6, c.z, ph >= 3 ? 'DESPERATE!' : 'ENRAGED!', ph >= 3 ? '#ff4030' : '#ffb040');
-  const line = (PHASE_LINES[c.species] || [])[ph];
+  const line = (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
   if (line) c.say?.(line, 2.6, '#ff9080');
   // (Anyone close by is thrown back from it.)
   for (const e of [game.player, ...game.npcs]) {
@@ -214,7 +222,7 @@ export function drift(c, dt) {
 // it fits.
 function pickSpot(c, t) {
   const game = c.game;
-  const want = RANGE[c.species] ?? 1;
+  const want = RANGE[c.species] ?? c.S.range ?? 1;
   const rad = want + (c.foot || 0) + (want > 1 ? 0 : 1);
   const now = Math.atan2(c.z - t.z, c.x - t.x);
   const side = c.sideTurn || (c.sideTurn = Math.random() < 0.5 ? 1 : -1);

@@ -84,21 +84,48 @@ test('NPCs walk to their scheduled places over a simulated day', () => {
   const checkpoints = [9 * 60, 13 * 60, 23 * 60 + 30];
   const moved = new Set();
   const start = new Map(game.npcs.map((n) => [n.id, `${n.x},${n.z}`]));
+  // Whoever isn't there yet at a checkpoint must be on the way: within the
+  // hour they get there (or their day moves them on to something else).
+  const pending = new Map();
+  const late = [];
+  const settle = () => {
+    for (const [n, p] of pending) {
+      if (n.dead || n.atGoal || n.sleeping || n.activity !== p.activity) pending.delete(n);
+      else if (game.minute - p.since > 60) {
+        late.push(`${n.rec.job} at ${n.x},${n.z} for ${n.goal ? `${n.goal.x},${n.goal.z}` : '?'} since ${Math.round(p.since)}`);
+        pending.delete(n);
+      }
+    }
+  };
   for (const cp of checkpoints) {
     let guard = 0;
     while (game.minute < cp && guard++ < 200000) {
       game.update(dt, input);
       for (const n of game.npcs) if (`${n.x},${n.z}` !== start.get(n.id)) moved.add(n.id);
+      settle();
     }
     const alive = game.npcs.filter((n) => !n.dead);
     const atGoal = alive.filter((n) => n.atGoal || n.sleeping).length;
-    report[cp] = { atGoal, total: alive.length, sleeping: alive.filter((n) => n.sleeping).length };
+    const onWay = alive.filter((n) => !n.atGoal && !n.sleeping && n.goal && n.path && n.path.length).length;
+    report[cp] = { atGoal, onWay, total: alive.length, sleeping: alive.filter((n) => n.sleeping).length };
+    for (const n of alive) if (!n.atGoal && !n.sleeping) pending.set(n, { activity: n.activity, since: game.minute });
+  }
+  for (let guard = 0; pending.size && guard < 200000; guard++) {
+    game.update(dt, input);
+    settle();
   }
   const alive = game.npcs.filter((n) => !n.dead);
   assert.ok(alive.length > 5);
   assert.ok(moved.size >= alive.length * 0.6, `only ${moved.size}/${alive.length} NPCs moved`);
-  // Most people are where they want to be at each checkpoint.
-  for (const cp of checkpoints) assert.ok(report[cp].atGoal >= report[cp].total * 0.6, `checkpoint ${cp}: ${JSON.stringify(report[cp])}`);
+  // At each checkpoint most people are where they want to be, or walking
+  // there (a change of shift has some crossing town), and a good share are
+  // already there...
+  for (const cp of checkpoints) {
+    const r = report[cp];
+    assert.ok(r.atGoal + r.onWay >= r.total * 0.75 && r.atGoal >= r.total * 0.4, `checkpoint ${cp}: ${JSON.stringify(r)}`);
+  }
+  // ...and nobody's stuck on the way.
+  assert.ok(late.length <= 1, `still not there an hour on: ${late.join('; ')}`);
   // Late at night most are asleep.
   assert.ok(report[23 * 60 + 30].sleeping >= report[23 * 60 + 30].total * 0.5, JSON.stringify(report));
 });

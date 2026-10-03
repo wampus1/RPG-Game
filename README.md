@@ -2206,6 +2206,205 @@ guard a stone woodcutting axe; it gives them a club instead. A camp that
 finds no flat ground by the road it came in on now tries the town's other
 roads.
 
+## Round 34: three islands, three peoples
+
+**The voyage.** The castaway's opening now fits the Dagoni Islands. The ship
+finds a gap in the Wall, the storm round the islands, and runs it. It is
+wrecked on the way through, and you wash up on Thessa.
+
+**The storm on the map.** The Wall is now drawn as banks of black cloud that
+drift and roll over each other. Lightning forks through them now and then
+and lights up the cloud round it.
+
+**Asking the way.** Anyone you can talk to can be asked about "the islands
+and the world". You can ask:
+- which island this is, who holds it, and what the other two are like
+  (each people sees them its own way);
+- how to get to the other islands, which way and how far;
+- about the storm, and what the old charts say lies beyond it;
+- about the mountain on Kharos;
+- the way to the coast, to the nearest lake or river, or to a town.
+
+Children know a little, and say so.
+
+**Laws of their own.** Each people passes laws nobody else does. Its watch
+warns you once, then fines you if you carry on.
+- *Thessa*: no riding in the streets.
+- *Kharos*: a fire tithe (more tax, and the mountain spares the town some
+  of its wrath) and the black-glass law (no iron blades at the smithy, and
+  obsidian sells cheap).
+- *The Mirefolk*: a light after dark or a fine, and the town's mushrooms
+  are everyone's.
+- *The Stiltfolk*: a share of every catch to the town (fish fetch less),
+  and raft dues (¤2 to put a raft in at their shore).
+
+**Festivals of their own.** Each people has its own festival, with its own
+stage and posters:
+- the Ashborn keep a vigil when the mountain stirs;
+- the Mirefolk have a lantern night;
+- the Stiltfolk have a tide feast;
+- Thessa keeps its fairs.
+
+**Dress.** Each island dresses its own way:
+- *Kharos*: ash wraps, hoods, masks and helms.
+- *The Mirefolk*: mist cloaks and mushroom caps.
+- *The Stiltfolk*: tide wraps, cone hats and shells.
+
+**Towns.** Each island builds its own way:
+- *Kharos*: flat basalt roofs with braziers on them.
+- *The Mirefolk*: mushroom and moss roofs.
+- *The Stiltfolk*: reed thatch, plank decks and mangrove posts.
+
+Each people also has its own lamps, roads and squares.
+
+**Each island's own tree.** Each island now learns from a tree laid out its
+own way, with steps dropped, moved and added:
+- *Thessa*: horse archers, toll roads, windmills.
+- *Kharos*: magma forges, ash fields, glassblowing, fire-walking.
+- *Myrrow*: bog venom, tide charts, pearl diving.
+
+**A trade for each people.** Each people has a trade nobody else has, with
+its own building and bench. You can take out a licence for each.
+- *Thessa*: the windmill and its miller, who grinds flour. The sails turn
+  over the street.
+- *Kharos*: the glassworks and its glassblower, who makes smoked-glass
+  goggles against the ash.
+- *The Mirefolk*: the spore cellar and its sporewright, who makes a
+  fogsight tincture for seeing at night.
+- *The Stiltfolk*: the pearl house and its pearl divers. A licensed diver
+  swimming in open water comes up with a pearl now and then.
+
+Each trade's step of the tree makes it better:
+- Great Windmills: cheaper bread.
+- Glassblowing: cheaper glass, and sales every week.
+- Pearl Diving: twice the pearls.
+
+**Music.** Each people has its own sound:
+- *The Ashborn*: anvil drums, a buzzing lead, and the mountain's drone.
+- *The Mirefolk*: a reed flute, dripping water, and a drifting pad.
+- *The Stiltfolk*: steel drums and wood blocks.
+
+Each island has its own tunes for town, for out on the land and for a
+fight. Its sound is also laid over everything else you hear there,
+dungeons included. Each island's own kind of old place has its own
+explore, battle and boss themes.
+
+**Night monsters.** The far islands' nights bring their own monsters, each
+fighting its own way.
+
+On Kharos:
+- the ash wraith fades out, blinks up behind you, and slows you;
+- the magma slug leaves a burning trail, and splits when it dies;
+- the glasshide stalker charges down a line, and arrows glance off it.
+
+On Myrrow:
+- the bog lurker waits in the water, drags you in with its tongue, and
+  sinks when it's hurt;
+- the lantern thief snatches your torch or lantern and runs (kill it and
+  you get it back);
+- the spore puffer swells up and bursts into spores.
+
+**Old places, island by island.** The usual kinds of old place are each
+island's own on Kharos and Myrrow. Each has its own stone, dark, motes,
+sounds, things lying about, loot and dwellers.
+- *Kharos*: Ash Barrows, Glass Mines, Glass Crypts with lava pools, and
+  Ash-Raider Dens.
+- *Myrrow*: Bog Barrows, Peat Cuttings, Mist Crypts, and the pearl
+  pirates' sea-cave Coves.
+
+Each island also has a kind of old place nobody else has, with its own
+door on the map:
+- *Thessa's Wildwood Hollows*, under the roots of the oldest trees, walled
+  in roots and full of thornlings.
+- *Kharos's Kiln-Deeps*, the old Kiln-Kings' forges, still hot: forge
+  brick, slag floors, crucibles and lava.
+- *Myrrow's Tide Grottoes*, sea caves of coral rock and shell sand, with
+  kelp and giant clams.
+
+These take some of each island's sites: about a quarter of Thessa's, and
+two in five of the other islands'.
+
+**Masters.** Every island has its own masters, three to each kind of old
+place, 33 in all, and none is met anywhere else. Every one changes its
+hall as it fights. It might raise walls, flood the floor, turn it to lava
+or bog, grow briars or trees, or put out the lights. The far islands'
+masters have about a third more health and hit a quarter harder than
+Thessa's. Whatever a master did to its hall is put back when it falls,
+and none of it is ever saved.
+
+On Kharos:
+- *Ash Barrow*:
+  - the Cinder King runs fire between his braziers and relights them;
+  - the Urn-Mother pours ash that snuffs your light, then breathes the
+    hall in and fire out;
+  - the Smoke Herald fills half the hall with smoke, throws you with his
+    horn, and splits the floor into lava.
+- *Glass Mine*:
+  - the Glass Wyrm bores up under you and tears the walls open;
+  - the Magma Tender lets lava spread from vents;
+  - the Bellows Golem blows the fires out, then overheats and must vent.
+- *Glass Crypt*:
+  - the Obsidian Abbess raises glass walls her bolts glance off, and seals
+    you in a glass cell;
+  - the Kiln-Priest heats the floor row by row (find the cool tile);
+  - the Vitrified Horror leaves shards and burns a prism beam across the
+    hall.
+- *Ash-Raider Den*:
+  - Kharn the Ash-Reaver oils the floor and lights it, and drags
+    barricades across the hall;
+  - Pyrrha the Bombard-Queen leaves rubble where her shells land, and lays
+    a powder line;
+  - Scorch, the chained drake, is held by its chain till it snaps.
+- *Kiln-Deep*:
+  - the Kiln-King pours metal that sets into walls of black glass;
+  - the Slag Titan throws slag that sets into pillars;
+  - the Molten Heart is held up by four chains, then erupts the floor in a
+    checkerboard.
+
+On Myrrow:
+- *Bog Barrow*:
+  - the Bog King turns the floor to bog;
+  - the Moth-Mother puts out every light;
+  - the Willow Wight hides in curtains of moss and floods the floor.
+- *Peat Cutting*:
+  - the Spore Colossus bursts giant mushrooms up through the floor;
+  - the Lamprey Queen floods the hall in channels and swims them;
+  - the Gas Bloat's marsh gas waits for a flame.
+- *Mist Crypt*:
+  - the Lantern-Lord is shielded by grave-lanterns, and breaking them
+    brings the dark;
+  - the Hollow King comes apart and comes together behind you;
+  - the Drowned Choir floods the crypt (stand on the plinths).
+- *Pirates' Cove*:
+  - Makoa Sharktooth throws a harpoon and opens sluices into currents;
+  - the Pearl-Queen Kailani fires ricocheting pearls and shuts herself in
+    a nacre shell;
+  - the smugglers' kraken sends arms up anywhere, and a grab that throws
+    you.
+- *Tide Grotto*:
+  - the Tide-Mother brings the tide in (climb her coral islands);
+  - the Abyssal Clam can only be struck while it's open;
+  - the Coral Colossus grows a reef maze, then bursts it.
+
+On Thessa, in a *Wildwood Hollow*:
+- the Thorn Queen grows briar walls and closes a briar ring in on you;
+- the Elder Stag brings trees up through the floor, and his charges
+  splinter them;
+- the Hollow Oak sends roots that stay as walls, and drives in taproots
+  you can cut.
+
+**Adventurers wait.** Adventurers leave the far islands' old places alone
+until at least day 40. After that they still wait until you've had 10
+days on that island. If you never go there, they wait until day 90. The
+day you first set foot on each island is kept with your save.
+
+**Fixes.**
+- Village halls had sometimes lost their treasury chest to the jail cell;
+  every town hall now has one.
+- The map cursor picks one glyph at a time, not two.
+- Lava burns whatever stands in it and sets it alight, unless it lives in
+  fire. Beasts, people and paths keep out of it.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2249,7 +2448,9 @@ src/
                        places on the map: barrows, mines,
                        crypts, holdouts, Kavorent spires), dungeongen
                        (floors from room kits: shaped rooms, routed
-                       passages, sealed rooms, dressing), voyage (the ship in the
+                       passages, sealed rooms, dressing), isledeep (each
+                       island's old places: their kinds, stone, dwellers
+                       and masters), voyage (the ship in the
                        castaway's opening), region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), acts (what people look like
@@ -2262,7 +2463,11 @@ src/
                        tempo (a master's phases, its breath between
                        attacks, never standing about, never long without
                        an attack), fields (the Overseer turning off walls
-                       of force in its way), item drops, A* pathing
+                       of force in its way), islemobs (the far islands'
+                       night monsters), bosskit (what the island masters
+                       do to their halls, all put back when they fall),
+                       bosses_kharos, bosses_myrrow, bosses_grove (the
+                       islands' own masters), item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling
@@ -2271,7 +2476,8 @@ src/
                        drawn big: auras, rims of light, walking legs),
                        oldplaces (spire runes, beacons, relic circles),
                        isleart (Kharos's and Myrrow's ground, trees,
-                       lava, goods and creatures),
+                       lava, goods and creatures), islebossart (the
+                       islands' masters and their kin),
                        lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
@@ -2308,7 +2514,9 @@ src/
                        pick), mastery (ranks in the fine work: fishing,
                        setting, study, lockpicking), laser
                        (the great beam: the Overseer's and its Eye's),
-                       cutscene (the openings: the ship and the storm,
+                       geotalk (asking the way: the islands, the storm,
+                       the coast, a town), cutscene (the openings: the
+                       ship and the storm,
                        the hometown's history), scenes (short scenes in
                        the middle of things: a spire opening, a master
                        waking and falling, a Kavorent lift's ride, the
@@ -2366,7 +2574,9 @@ src/
                        rumours, adventurers' delves), ancient (the
                        Kavorent's arts in each realm), volcano (the
                        Sleeper on Kharos: tremors, eruptions, ash, lava
-                       flows and their cooling), and the
+                       flows and their cooling), islelaws (each people's
+                       laws as they bear on you), isletrades (each
+                       people's own trade and building), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

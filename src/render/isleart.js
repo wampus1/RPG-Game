@@ -23,6 +23,13 @@ export const ISLE_P = {
   roof_reed: ['#c8b070', '#a89050', '#e0cc90', '#5a4a30'],
   mill_sail: ['#ece4d0', '#d0c6ae', '#7a5a3a', '#5a4028'],
   mill_hub: ['#6a4a2a', '#4e361e', '#8a6438', '#2e2014'],
+  // The islands' own old places (see world/isledeep.js).
+  root_wall: ['#5a4430', '#3e2e20', '#7a5e40', '#2a1e14'],
+  forge_brick: ['#2e2a2c', '#1e1a1c', '#3e3a3c', '#c8502a'],
+  slag: ['#3a3230', '#2a2422', '#4e4440', '#ff7030'],
+  coral_rock: ['#6a6a70', '#4e4e56', '#86868c', '#ff8a8a'],
+  shell_sand: ['#d8c8a8', '#c0b090', '#ece0c8', '#f8f0e8'],
+  basalt_bricks: ['#2a2628', '#1a1618', '#3a3638', '#5a5456'],
 };
 export const ISLE_WOOD = {
   cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
@@ -38,6 +45,67 @@ export function isleTop(name, v, rand, rot = 0) {
   const p = new Px(16, 16);
   const pal = ISLE_P[name];
   switch (name) {
+    case 'root_wall': {
+      // Roots grown together, thick as a body, twisting over each other.
+      p.fill(pal[3]);
+      for (let k = 0; k < 5; k++) {
+        const y0 = Math.floor(rand() * 16);
+        const dy = rand() * 0.8 - 0.4;
+        for (let x = 0; x < 16; x++) {
+          const y = Math.round(y0 + x * dy + Math.sin((x + k * 3) * 0.6) * 1.5);
+          for (let w = -1; w <= 1; w++) if (y + w >= 0 && y + w < 16) p.set(x, y + w, w === -1 ? pal[2] : w === 1 ? pal[1] : pal[0]);
+        }
+      }
+      return p;
+    }
+    case 'forge_brick': case 'basalt_bricks': {
+      // Brick of basalt, the mortar between glowing (in a forge) or dark.
+      p.fill(name === 'forge_brick' ? pal[3] : pal[1]);
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          const row = Math.floor(y / 4);
+          const off = row % 2 ? 4 : 0;
+          if (y % 4 === 3 || (x + off) % 8 === 7) continue;
+          const b = ((Math.floor((x + off) / 8) + row * 3 + v) % 3);
+          p.set(x, y, b === 0 ? pal[0] : b === 1 ? pal[2] : shade(pal[0], 0.9));
+        }
+      }
+      return p;
+    }
+    case 'slag': {
+      // Cooled slag: lumpy, dark, a little fire still caught in it.
+      speckle(p, pal, rand, 0.35);
+      for (let i = 0; i < 3; i++) {
+        const x = Math.floor(rand() * 14);
+        const y = Math.floor(rand() * 14);
+        p.ellipse(x + 1, y + 1, 1.5, 1, pal[2]);
+      }
+      for (let i = 0; i < 2; i++) p.set(rand() * 16, rand() * 16, pal[3]);
+      return p;
+    }
+    case 'coral_rock': {
+      // Grey rock crusted over with coral and barnacles.
+      speckle(p, pal, rand, 0.3);
+      for (let i = 0; i < 5; i++) {
+        const x = Math.floor(rand() * 15);
+        const y = Math.floor(rand() * 15);
+        const c = ['#ff8a8a', '#f0a050', '#40c8b0', '#e8e0d0'][Math.floor(rand() * 4)];
+        p.set(x, y, c);
+        p.set(x + 1, y, shade(c, 0.8));
+      }
+      return p;
+    }
+    case 'shell_sand': {
+      // Pale sand, broken shells in it.
+      speckle(p, pal, rand, 0.3);
+      for (let i = 0; i < 4; i++) {
+        const x = Math.floor(rand() * 15);
+        const y = Math.floor(rand() * 15);
+        p.set(x, y, pal[3]);
+        p.set(x + 1, y, '#e0c8c8');
+      }
+      return p;
+    }
     case 'mill_sail': {
       // Canvas stretched over a lattice of laths (gaps between).
       for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
@@ -221,6 +289,54 @@ export function isleTop(name, v, rand, rot = 0) {
 export function isleFront(name, v, rand) {
   const p = new Px(16, LH);
   switch (name) {
+    case 'root_wall': {
+      // Roots down the face of it, tangled.
+      const pal = ISLE_P.root_wall;
+      p.fill(pal[3]);
+      for (let k = 0; k < 5; k++) {
+        let x = Math.floor(rand() * 16);
+        for (let y = 0; y < LH; y++) {
+          x += Math.round(rand() * 2 - 1) * (y % 3 === 0 ? 1 : 0);
+          for (let w = 0; w < 2; w++) p.set((x + w + 16) % 16, y, w ? pal[1] : pal[0]);
+        }
+      }
+      for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * LH, pal[2]);
+      return frontify(p, 0.9);
+    }
+    case 'forge_brick': case 'basalt_bricks': {
+      const pal = ISLE_P[name];
+      p.fill(name === 'forge_brick' ? pal[3] : pal[1]);
+      for (let y = 0; y < LH; y++) {
+        for (let x = 0; x < 16; x++) {
+          const row = Math.floor(y / 4);
+          const off = row % 2 ? 4 : 0;
+          if (y % 4 === 3 || (x + off) % 8 === 7) continue;
+          const b = ((Math.floor((x + off) / 8) + row * 3 + v) % 3);
+          p.set(x, y, b === 0 ? pal[0] : b === 1 ? pal[2] : shade(pal[0], 0.9));
+        }
+      }
+      // (A forge's mortar glows hotter low down.)
+      if (name === 'forge_brick') for (let x = 0; x < 16; x++) if (x % 8 !== 7) p.set(x, LH - 1, '#ff9040');
+      return frontify(p, 0.9);
+    }
+    case 'coral_rock': {
+      const pal = ISLE_P.coral_rock;
+      speckle(p, pal, rand, 0.3);
+      // Coral growing out of the face, and weed hanging down it.
+      for (let i = 0; i < 4; i++) {
+        const x = Math.floor(rand() * 14) + 1;
+        const y = Math.floor(rand() * (LH - 3)) + 1;
+        const c = ['#ff8a8a', '#f0a050', '#40c8b0'][Math.floor(rand() * 3)];
+        p.set(x, y, c);
+        p.set(x - 1, y - 1, c);
+        p.set(x + 1, y - 1, c);
+      }
+      for (let i = 0; i < 2; i++) {
+        const x = Math.floor(rand() * 16);
+        p.vline(x, 0, 3 + Math.floor(rand() * 4), '#3a7a4a');
+      }
+      return frontify(p, 0.9);
+    }
     case 'mill_sail': case 'mill_hub': {
       const top = isleTop(name, v, rand, 0);
       for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) {
@@ -386,6 +502,114 @@ ISLE_SPRITES.ash_brazier = (rot, st, f) => {
     p.set(7 + (o === 2 ? 1 : 0), 4 + o, '#f8a030');
   } else p.rect(4, 14, 8, 1, '#3a2a24');
   return p.outline(OUT);
+};
+// The islands' own old places (see world/isledeep.js).
+// Briars: a thicket of thorned canes, a few red hips in it.
+ISLE_SPRITES.briar = (rot) => {
+  const p = spr();
+  for (let k = 0; k < 7; k++) {
+    const x0 = 2 + ((k * 5 + rot) % 12);
+    const lean = (k % 3) - 1;
+    for (let y = 26; y > 10 + (k % 4) * 2; y--) {
+      const x = Math.round(x0 + lean * (26 - y) * 0.25);
+      p.set(x, y, k % 2 ? '#4a6a2a' : '#3a5a22');
+      if (y % 3 === 0) p.set(x + (k % 2 ? 1 : -1), y, '#c8c0a0');
+    }
+  }
+  for (const [x, y] of [[4, 15], [11, 13], [8, 19], [13, 20]]) p.set(x, y, '#c83040');
+  return p.outline(OUT);
+};
+// A crucible: a squat bowl of clay on a stand, molten metal glowing in it.
+ISLE_SPRITES.crucible = (rot, st, f) => {
+  const p = spr();
+  p.rect(4, 22, 8, 4, '#3a3234');
+  p.rect(3, 15, 10, 8, '#7a5a40');
+  p.hline(3, 12, 15, '#9a7a58');
+  p.rect(4, 15, 8, 2, f % 2 ? '#ffb040' : '#ff8030');
+  p.set(6, 15, '#ffe070');
+  p.set(7 + (f % 3), 12, '#8a8484');
+  return p.outline(OUT);
+};
+// Coral: a branching clump of it, in one of four colours.
+ISLE_SPRITES.coral = (rot) => {
+  const p = spr();
+  const c = ['#ff7a8a', '#f0a050', '#40c8b0', '#c870d8'][rot % 4];
+  const hi = shade(c, 1.3);
+  const branch = (x, y, h, lean) => {
+    for (let k = 0; k < h; k++) p.set(Math.round(x + lean * k * 0.3), y - k, c);
+    p.set(Math.round(x + lean * h * 0.3), y - h, hi);
+  };
+  branch(8, 26, 12, 0);
+  branch(8, 21, 7, -1.4);
+  branch(8, 19, 6, 1.4);
+  branch(5, 26, 6, -0.6);
+  branch(11, 26, 7, 0.8);
+  p.ellipse(8, 26, 4, 1, shade(c, 0.6));
+  return p.outline(OUT);
+};
+// Kelp: long fronds standing up, swaying.
+ISLE_SPRITES.kelp = (rot, st, f) => {
+  const p = spr(40);
+  for (const [x0, k] of [[5, 0], [9, 1], [12, 2]]) {
+    for (let y = 39; y > 8 + k * 4; y--) {
+      const x = Math.round(x0 + Math.sin(y * 0.25 + k + (f || 0) * 0.5) * 1.5);
+      p.set(x, y, k % 2 ? '#2a6a3a' : '#3a7a4a');
+      if (y % 5 === 0) p.set(x + 1, y, '#5a9a5a');
+    }
+  }
+  return p.outline(OUT);
+};
+// A giant clam on the sand, its ridged shells a little open.
+ISLE_SPRITES.giant_clam = () => {
+  const p = spr();
+  p.ellipse(8, 23, 7, 3, '#a89890');
+  p.ellipse(8, 20, 7, 3, '#c8b8b0');
+  for (let k = -2; k <= 2; k++) p.line(8 + k * 2, 17, 8 + k * 3, 22, '#9a8a82');
+  p.hline(3, 13, 21, '#d870a0');
+  p.set(8, 21, '#fff8f0');
+  return p.outline(OUT);
+};
+// The way into a Wildwood Hollow: a dark hollow between two great roots.
+ISLE_SPRITES.hollow_door = () => {
+  const p = spr(40);
+  for (let y = 0; y < 40; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x + Math.floor(y / 3)) % 5 === 0 ? '#3e2e20' : (x * 7 + y) % 9 === 0 ? '#7a5e40' : '#5a4430');
+  for (let y = 14; y < 40; y++) {
+    const w = y < 20 ? Math.round((y - 14) * 0.8) : 5;
+    for (let x = 8 - w; x <= 7 + w; x++) p.set(x, y, y < 24 ? '#1a120c' : '#0a0806');
+  }
+  for (const [x, y] of [[3, 10], [12, 8], [6, 4]]) p.set(x, y, '#5a8a3a');
+  return p;
+};
+// The way into a Kiln-Deep: a door of basalt brick, its seams aglow.
+ISLE_SPRITES.forge_door = (rot, st, f) => {
+  const p = spr(40);
+  const glow = f % 2 ? '#ff9040' : '#ff7030';
+  p.fill('#2e2a2c');
+  for (let y = 0; y < 40; y += 4) p.hline(0, 15, y, '#1e1a1c');
+  p.rect(2, 8, 12, 32, '#1e1a1c');
+  p.rect(3, 9, 10, 31, '#3a3234');
+  p.vline(7, 9, 39, glow);
+  p.vline(8, 9, 39, glow);
+  for (let y = 12; y < 40; y += 6) p.hline(3, 12, y, '#2a2224');
+  p.rect(5, 22, 6, 3, '#5a4a40');
+  p.set(7, 23, '#ffe070');
+  return p;
+};
+// The way into a Tide Grotto: a cave mouth in coral-crusted rock, wet.
+ISLE_SPRITES.grotto_mouth = () => {
+  const p = spr(40);
+  for (let y = 0; y < 40; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 5 + y * 3) % 11 === 0 ? '#86868c' : (x + y) % 7 === 0 ? '#4e4e56' : '#6a6a70');
+  const inside = (x, y) => {
+    const dx = (x - 7.5) / 5.6;
+    return y >= 29 ? Math.abs(dx) <= 1 : dx * dx + ((y - 29) / 10) ** 2 <= 1;
+  };
+  for (let y = 16; y < 40; y++) for (let x = 0; x < 16; x++) if (inside(x, y)) p.set(x, y, y < 26 ? '#0e1418' : '#060a0c');
+  for (const [x, y, c] of [[1, 18, '#ff8a8a'], [14, 22, '#f0a050'], [2, 30, '#40c8b0'], [13, 12, '#ff8a8a']]) {
+    p.set(x, y, c);
+    p.set(x, y - 1, c);
+  }
+  for (const x of [4, 9, 12]) p.set(x, 17 + (x % 3), '#80c8e8');
+  return p;
 };
 // The islands' trades, at work.
 ISLE_SPRITES.millstone = () => {

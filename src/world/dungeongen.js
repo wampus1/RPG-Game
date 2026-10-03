@@ -15,6 +15,7 @@ import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { ITEMS, RELICS, SHARD_GEMS } from './items.js';
+import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES } from './isledeep.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -73,6 +74,24 @@ export const DTYPES = {
     dark: [0.15, 0.18, 0.25], motes: ['#5ad8f0', '#c8fbff'], ambient: ['hum', 'pulse', 'hum', 'drone'],
   },
 };
+
+// (And each island's own: see isledeep.js.)
+Object.assign(DTYPES, ISLE_DTYPES);
+
+// A place's kind as its island makes it (see isledeep.js): a Kharos barrow's
+// ash and basalt, a Myrrow crypt's moss, and the island's own masters.
+const dtCache = new Map();
+export function dtypeOf(rec) {
+  const T = DTYPES[rec.type];
+  const isle = rec.isle || null;
+  const st = isle && ISLE_DSTYLE[isle] ? ISLE_DSTYLE[isle][rec.type] : null;
+  const bosses = isle && ISLE_BOSSES[isle] ? ISLE_BOSSES[isle][rec.type] : null;
+  if (!T || (!st && !bosses)) return T;
+  const k = `${isle}:${rec.type}`;
+  let out = dtCache.get(k);
+  if (!out) dtCache.set(k, (out = { ...T, ...(st || {}), ...(bosses ? { bosses } : {}) }));
+  return out;
+}
 
 // Each floor of a Kavorent ruin lit its own colour, deeper and stranger the
 // further down: how far the light's hue is turned from the ruin's own cyan
@@ -158,13 +177,16 @@ const KIT_SIZE = {
   trap: [[4, 6], [4, 6]], treasure: [[5, 7], [4, 6]], shrine: [[6, 10], [6, 9]], library: [[7, 11], [5, 8]], cells: [[8, 12], [5, 7]],
   gallery: [[10, 18], [5, 8]], shaft: [[5, 8], [5, 8]], camp: [[7, 11], [6, 9]], collapsed: [[7, 12], [6, 10]],
   guard: [[5, 9], [5, 8]], bunks: [[6, 10], [5, 8]], cache: [[4, 6], [4, 6]], watch: [[8, 12], [7, 10]], kitchen: [[6, 9], [5, 7]],
+  glade: [[8, 13], [7, 10]], thicket: [[7, 11], [6, 9]], burrow: [[5, 8], [5, 7]], spring: [[6, 10], [5, 8]],
+  smelter: [[9, 14], [7, 10]], anvils: [[8, 12], [6, 9]], slagheap: [[7, 12], [6, 10]], cooling: [[7, 11], [6, 9]],
+  tidepool: [[8, 13], [6, 10]], reef: [[8, 12], [7, 10]], wreck: [[8, 13], [6, 9]], pearlbed: [[6, 9], [5, 8]],
 };
 // Kits whose fittings need a room of a given shape (rows of coffins, a
 // grid of pillars, bars along a wall...); the rest take the place's own.
 const KIT_SHAPES = {
   entry: ['rect'], exit: ['rect', 'octagon'], vault: ['rect'], treasure: ['rect', 'octagon'], boss: ['octagon', 'rect', 'round'],
   burial: ['rect'], pillared: ['rect', 'octagon'], library: ['rect'], cells: ['rect'], watch: ['rect'], trap: ['rect'], shrine: ['round', 'octagon', 'cross'],
-  reactor: ['rect'], foundry: ['rect'], plates: ['rect'], field: ['rect'], gallery_k: ['rect'], lab: ['rect', 'hex', 'diamond', 'teeth', 'octagon'], archive: ['rect', 'hex', 'teeth', 'zigzag'],
+  reactor: ['rect'], foundry: ['rect'], plates: ['rect'], field: ['rect'], gallery_k: ['rect'], smelter: ['rect'], anvils: ['rect', 'octagon'], wreck: ['rect', 'round'], lab: ['rect', 'hex', 'diamond', 'teeth', 'octagon'], archive: ['rect', 'hex', 'teeth', 'zigzag'],
 };
 // The most coffins laid in one burial room.
 export const COFFINS_MAX = 8;
@@ -631,7 +653,7 @@ function fill(rng, size, picks) {
 // down; see tierOf), a little more in a harder place. A chest holds only a
 // few kinds of thing (the best of what came up); `rich` makes each likelier
 // (and, rich enough, one more kind).
-function lootFor(type, tier, rng, rich = 1) {
+function lootFor(type, tier, rng, rich = 1, T = null) {
   const out = [];
   const t = Math.max(0, tier);
   const add = (k, lo, hi, chance = 1) => {
@@ -669,6 +691,8 @@ function lootFor(type, tier, rng, rich = 1) {
     add(rng.pick(gear), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
     if (type === 'mine') add(rng.pick(t >= 2 ? ['iron_ore', 'gold_ore', 'coal'] : ['coal', 'iron_ore']), 1, 3 + Math.floor(t), 0.5);
     if (type === 'holdout') add('arrow', 2, 5 + 2 * Math.floor(t), 0.4);
+    // (What's to be found only on its island: see isledeep.js.)
+    for (const [k, lo, hi, ch] of (T && T.loot) || []) add(k, lo, hi + Math.floor(t / 2), ch + t * 0.03);
   }
   // Only a few kinds of thing to a chest: the best of them.
   const kinds = Math.min(4, 2 + Math.floor(t / 2) + (rich >= 1.5 ? 1 : 0));
@@ -691,7 +715,7 @@ function tierOf(ctx) {
 // Build floor `n` (0 = the first down) of a dungeon. `rec` is the
 // dungeon's record (see sim/dungeons.js): { type, seed, depth, level }.
 export function buildFloor(rec, n) {
-  const T = DTYPES[rec.type];
+  const T = dtypeOf(rec);
   const rng = new RNG(hash4(rec.seed >>> 0, n, 0xd06e));
   const big = rec.type === 'kavorent';
   // (Laid out inside its regions, not right to their edges: the old
@@ -957,10 +981,13 @@ function floorCharacter(ctx) {
 export const SPAWNS_OFF = new Set(['coward']);
 
 // Someone placed in a room (at a free floor tile in it).
-function spawnIn(ctx, r, species, n = 1, opts = {}) {
+function spawnIn(ctx, r, species0, n = 1, opts = {}) {
   const { rng, plan, out, b } = ctx;
-  if (SPAWNS_OFF.has(species)) return;
+  if (SPAWNS_OFF.has(species0)) return;
   for (let i = 0; i < n; i++) {
+    // (On another island, its own in their place: see isledeep.js.)
+    const sw = ctx.T.swap && ctx.T.swap[species0];
+    const species = sw ? rng.pick(sw) : species0;
     for (let t = 0; t < 20; t++) {
       const x = rng.int(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 1));
       const z = rng.int(r.z0 + 1, Math.max(r.z0 + 1, r.z1 - 1));
@@ -1030,12 +1057,38 @@ function chestIn(ctx, r, rich = 1, block = B.chest, extra = []) {
   const { rng, b, rec } = ctx;
   const at = placeIn(ctx, r, block, rng.int(0, 3), true);
   if (!at) return null;
-  b.container(at.x, FY, at.z, fill(rng, block === B.chest ? 18 : 9, [...lootFor(rec.type, tierOf(ctx), rng, rich), ...extra]));
+  b.container(at.x, FY, at.z, fill(rng, block === B.chest ? 18 : 9, [...lootFor(rec.type, tierOf(ctx), rng, rich, ctx.T), ...extra]));
   // (Deeper down, now and then, a chest that isn't: see DungeonRun.wakeMimic.)
   if (block === B.chest && !ctx.big && ctx.n >= 1 && r.kit !== 'boss' && rng.chance(MIMIC_CHANCE)) ctx.out.mimics.push({ x: b.x0 + at.x, z: at.z });
   return at;
 }
 export const MIMIC_CHANCE = 0.14;
+
+// A room's own floor tiles, free and out of the doorways' way.
+function freeIn(ctx, r, x, z) {
+  return own(ctx.plan, r, x, z) && ctx.b.get(x, FY, z) === B.air && !doorBlocked(ctx.plan, r, x, z);
+}
+// A rough round patch (`put(x, z, d)` for each free tile, d its distance
+// out), a ring round a spot, a scattering over the room.
+function blob(ctx, r, cx, cz, rad, put) {
+  for (let z = Math.floor(cz - rad); z <= Math.ceil(cz + rad); z++) {
+    for (let x = Math.floor(cx - rad); x <= Math.ceil(cx + rad); x++) {
+      const d = Math.hypot(x - cx, (z - cz) * 1.2);
+      if (d <= rad + ctx.rng.float(-0.4, 0.3) && freeIn(ctx, r, x, z)) put(x, z, d);
+    }
+  }
+}
+function ring(ctx, r, rad, put) {
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2;
+    const x = Math.round(r.cx + Math.cos(a) * rad * 1.2);
+    const z = Math.round(r.cz + Math.sin(a) * rad);
+    if (freeIn(ctx, r, x, z)) put(x, z);
+  }
+}
+function scatter(ctx, r, p, id) {
+  for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (ctx.rng.chance(p) && freeIn(ctx, r, x, z) && Math.hypot(x - r.cx, z - r.cz) > 1.5) ctx.b.set(x, FY, z, id());
+}
 
 const RELIC_KEYS = Object.keys(RELICS);
 
@@ -1156,7 +1209,7 @@ function dress(ctx, r) {
           b.set(x, FY, z, sarc ? B.sarcophagus : B.coffin, rng.chance(0.5) ? 1 : 3);
           const ghoul = rng.chance(0.3);
           out.coffins.push({ x: b.x0 + x, z, ghoul });
-          if (!ghoul) b.container(x, FY, z, fill(rng, 9, lootFor(rec.type, tierOf(ctx), rng, sarc ? 1.4 : 0.5).slice(0, 2)));
+          if (!ghoul) b.container(x, FY, z, fill(rng, 9, lootFor(rec.type, tierOf(ctx), rng, sarc ? 1.4 : 0.5, ctx.T).slice(0, 2)));
         }
       }
       break;
@@ -1220,10 +1273,12 @@ function dress(ctx, r) {
     case 'flooded': {
       // Black water over the floor, knee deep; the drowned under it. A
       // lever somewhere in the room drains it.
+      // (On Kharos, lava.)
       const water = [];
+      const pool = T.pool || B.water;
       for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
         if (b.get(x, FY, z) !== B.air) continue;
-        b.set(x, FY, z, B.water);
+        b.set(x, FY, z, pool);
         water.push({ x: b.x0 + x, z });
       }
       const lv = placeIn(ctx, r, B.lever, 0, true) || null;
@@ -1429,6 +1484,106 @@ function dress(ctx, r) {
       for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (rng.chance(0.25) && own(ctx.plan, r, x, z) && !doorBlocked(ctx.plan, r, x, z)) b.set(x, FY, z, B.kav_debris);
       group('mite', 1, 3);
       group('drone', 0, 1);
+      break;
+    // ------------------------------------------------ a Wildwood Hollow
+    case 'glade':
+      // A ring of glowcaps round the middle (a fairy ring: don't step in),
+      // moss, whatever's come to drink.
+      ring(ctx, r, Math.max(2, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.3), (x, z) => b.set(x, FY, z, B.glowshroom));
+      group('thornling', 1, 2);
+      group(pickMob(ctx), 0, 1);
+      if (rng.chance(0.4)) chestIn(ctx, r, 0.9);
+      break;
+    case 'thicket':
+      // Briars, thick: cut your way through (something lives in them).
+      scatter(ctx, r, 0.3, () => B.briar);
+      group('thornling', 2, 3);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1.1);
+      break;
+    case 'burrow':
+      // A den: bones gnawed clean, roots, the smell of wolf.
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.bones);
+      scatter(ctx, r, 0.08, () => B.roots);
+      group('wolf', 2, 3);
+      break;
+    case 'spring':
+      // A spring welling up in the middle, glowcaps round it.
+      blob(ctx, r, r.cx, r.cz, 2.2, (x, z) => b.set(x, FY, z, B.water));
+      for (let i = 0; i < 4; i++) placeIn(ctx, r, B.glowshroom);
+      group('moth', 1, 2);
+      if (rng.chance(0.35)) chestIn(ctx, r, 1);
+      break;
+    // ------------------------------------------------ a Kiln-Deep
+    case 'smelter': {
+      // A channel of lava across the hall, a bridge or two over it;
+      // crucibles by the walls.
+      const z = r.cz;
+      const bridges = new Set([rng.int(r.x0 + 1, r.x1 - 1), rng.int(r.x0 + 1, r.x1 - 1)]);
+      for (let x = r.x0; x <= r.x1; x++) if (own(ctx.plan, r, x, z) && !bridges.has(x) && !doorBlocked(ctx.plan, r, x, z) && b.get(x, FY, z) === B.air) b.set(x, FY, z, B.lava);
+      for (let i = 0; i < 2; i++) placeIn(ctx, r, B.crucible, 0, true);
+      placeIn(ctx, r, B.ash_brazier, META_STATE, true);
+      group(pickMob(ctx), 1, 2);
+      break;
+    }
+    case 'anvils':
+      // Anvils in rows, where the old smiths stood.
+      for (let z = r.z0 + 2; z <= r.z1 - 2; z += 3) for (let x = r.x0 + 2; x <= r.x1 - 2; x += 3) if (own(ctx.plan, r, x, z) && !doorBlocked(ctx.plan, r, x, z) && b.get(x, FY, z) === B.air) b.set(x, FY, z, B.anvil, rng.int(0, 3));
+      placeIn(ctx, r, B.crucible, 0, true);
+      group('forge_hound', 1, 2);
+      if (rng.chance(0.4)) chestIn(ctx, r, 1, B.chest, [['iron_ingot', rng.int(1, 3)]]);
+      break;
+    case 'slagheap':
+      // Heaps of slag and black glass.
+      for (let i = 0; i < 3; i++) blob(ctx, r, rng.int(r.x0, r.x1), rng.int(r.z0, r.z1), rng.float(1.2, 2.4), (x, z, d) => {
+        b.set(x, FY, z, rng.chance(0.3) ? B.obsidian : B.slag);
+        if (d < 1) b.set(x, FY + 1, z, B.slag);
+      });
+      group('magma_slug', 1, 2);
+      break;
+    case 'cooling':
+      // The quenching troughs, along the walls; steam off them still.
+      for (const { x, z } of wallsOf(ctx.plan, r)) {
+        for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const tx = x + ox;
+          const tz = z + oz;
+          if (own(ctx.plan, r, tx, tz) && !doorBlocked(ctx.plan, r, tx, tz) && b.get(tx, FY, tz) === B.air && rng.chance(0.35)) b.set(tx, FY, tz, B.water);
+        }
+      }
+      group(pickMob(ctx), 1, 2);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1);
+      break;
+    // ------------------------------------------------ a Tide Grotto
+    case 'tidepool':
+      // Pools the tide left behind, kelp in them, and what lurks.
+      for (let i = 0; i < 3; i++) blob(ctx, r, rng.int(r.x0 + 1, r.x1 - 1), rng.int(r.z0 + 1, r.z1 - 1), rng.float(1, 2), (x, z) => b.set(x, FY, z, B.water));
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.kelp);
+      group('reef_crab', 1, 2);
+      if (rng.chance(0.5)) spawnIn(ctx, r, 'bog_lurker', 1);
+      break;
+    case 'reef':
+      // Coral grown up out of the floor in clumps.
+      for (let i = 0; i < 4; i++) blob(ctx, r, rng.int(r.x0, r.x1), rng.int(r.z0, r.z1), rng.float(0.8, 1.6), (x, z) => b.set(x, FY, z, B.coral, rng.int(0, 3)));
+      group('reef_crab', 2, 3);
+      break;
+    case 'wreck': {
+      // A boat that came in after pearls and never went out: its hull
+      // stove in on the sand, its cargo, its crew.
+      const L = Math.min(r.x1 - r.x0 - 3, 9);
+      const x0 = r.cx - Math.floor(L / 2);
+      for (let x = x0; x < x0 + L; x++) {
+        for (const z of [r.cz - 1, r.cz + 1]) if (own(ctx.plan, r, x, z) && !doorBlocked(ctx.plan, r, x, z) && rng.chance(0.75)) b.set(x, FY, z, rng.chance(0.3) ? B.log_mangrove : B.planks_dark);
+        if (own(ctx.plan, r, x, r.cz)) b.set(x, FY - 1, r.cz, B.planks_dark);
+      }
+      for (let i = 0; i < 2; i++) placeIn(ctx, r, rng.chance(0.5) ? B.barrel : B.crate, 0, true);
+      chestIn(ctx, r, 1.4, B.chest, [['pearl', rng.int(1, 3)]]);
+      group('drowned', 1, 2);
+      break;
+    }
+    case 'pearlbed':
+      // Giant clams on the sand, shallow water over them.
+      for (let i = 0; i < rng.int(3, 5); i++) placeIn(ctx, r, B.giant_clam, rng.int(0, 3));
+      scatter(ctx, r, 0.2, () => B.water);
+      group('reef_crab', 1, 2);
       break;
     default:
       group(pickMob(ctx), 1, 2);
@@ -1636,6 +1791,27 @@ function bossHall(ctx, r, boss) {
     for (let k = 0; k < 4; k++) placeIn(ctx, r, B.war_banner, 0, true);
     for (let k = 0; k < 2; k++) placeIn(ctx, r, B.weapon_rack, 0, true);
     for (let k = 0; k < 3; k++) placeIn(ctx, r, B.powder_keg, 0, true);
+  } else if (type === 'grove') {
+    // Under the greatest tree of all: its roots come down through the roof
+    // as pillars, glowcaps round their feet.
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + 0.4;
+      const x = Math.round(r.cx + Math.cos(a) * w * 0.33);
+      const z = Math.round(r.cz + Math.sin(a) * d * 0.33);
+      if (put(x, z, B.root_wall, 0, true)) put(x + 1, z, B.glowshroom);
+    }
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.roots, 0, true);
+  } else if (type === 'forge') {
+    // The great forge: crucibles round the walls, anvils, and the floor
+    // cut with two cold channels the master can let the fire into.
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.crucible, 0, true);
+    for (const [fx, fz] of [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7]]) put(Math.round(r.x0 + w * fx), Math.round(r.z0 + d * fz), B.forge_brick, 0, true);
+    for (let k = 0; k < 2; k++) placeIn(ctx, r, B.anvil, 0, true);
+  } else if (type === 'grotto') {
+    // The sea-cave's heart: coral round the walls, kelp, a few clams.
+    for (let k = 0; k < 7; k++) placeIn(ctx, r, B.coral, rng.int(0, 3), true);
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.kelp, 0, true);
+    for (let k = 0; k < 2; k++) placeIn(ctx, r, B.giant_clam, rng.int(0, 3), true);
   }
   // The throne (the dead rule from one; bandits sit on a stolen chair).
   if (type === 'barrow' || type === 'crypt') put(back.x, back.z, B.bone_throne);

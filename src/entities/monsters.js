@@ -75,7 +75,7 @@ export const MONSTER_SPECIES = {
 // A strike that grabs and holds you (the drowned): roll to break free.
 STYLES.grab = { name: 'grab', windup: 0.6, recover: 1.0, reach: 1, mult: 0.8, grab: true };
 
-const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216, 240], earth: [200, 150, 90], fire: [255, 140, 40], void: [160, 100, 220], poison: [130, 200, 60] };
+export const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216, 240], earth: [200, 150, 90], fire: [255, 140, 40], void: [160, 100, 220], poison: [130, 200, 60] };
 
 // --------------------------------------------------------------- hazards
 // Something coming down on that ground in `dur` seconds (see the header).
@@ -302,6 +302,8 @@ function updateZones(game, dt) {
           if (z.burn) burn(game, e, z.by, z.burn);
           if (z.pull && !(e.x === z.pull.x && e.z === z.pull.z)) knock(game, { x: 2 * e.x - z.pull.x, z: 2 * e.z - z.pull.z }, e, 1);
         }
+        // (Whatever else it does to them: see the islands' masters.)
+        if (z.onTick) z.onTick(game, z, inside);
       }
     }
     // (A wisp of its colour now and then; flames lick up off a fire.)
@@ -1962,7 +1964,7 @@ function surface(c) {
 }
 
 // A great slam all round: the ground for `r` paces lit, and then it lands.
-function bossSlam(c, dt, r, windup, dmg, every, after = null) {
+export function bossSlam(c, dt, r, windup, dmg, every, after = null) {
   const game = c.game;
   const t = c.target;
   c.slamCd = (c.slamCd ?? 2) - dt;
@@ -1980,7 +1982,7 @@ function bossSlam(c, dt, r, windup, dmg, every, after = null) {
 }
 
 // As it weakens past each mark, once: `then`.
-function phaseSummons(c, marks, then) {
+export function phaseSummons(c, marks, then) {
   c.phase ??= 0;
   if (c.phase < marks.length && c.hp / c.maxHp <= marks[c.phase]) {
     c.phase++;
@@ -2040,6 +2042,12 @@ export function guardFront(game, target, source, amount) {
     return 0;
   }
   if (target.submerged) return 0;
+  // (An island master's own guard: a shell shut, a nacre shell, a crust,
+  // anchors still standing: see bosses_kharos.js and the rest.)
+  if (target.S.ward && source !== target) {
+    amount = target.S.ward(game, target, source, amount);
+    if (amount <= 0) return 0;
+  }
   if (target.S.shieldBlock || target.species === 'warden') {
     const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][target.dir] || [0, 1];
     const front = fx * Math.sign(source.x - target.x) + fz * Math.sign(source.z - target.z) > 0;

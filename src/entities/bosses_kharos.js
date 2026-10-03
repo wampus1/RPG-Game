@@ -1,0 +1,1140 @@
+// The masters of Kharos's old places, three to a kind, none of them met
+// anywhere else, and every one of them changes its hall as it fights (see
+// bosskit.js for the works they make):
+//   an Ash Barrow:
+//     the Cinder King, whose braziers answer him (fire runs between them;
+//       put out, he lights them again), whose crown flares outward in
+//       rings, who calls his ashen court, and who at the last burns as he
+//       walks;
+//     the Urn-Mother, a great burial urn that pours its ashes over the
+//       floor (you're slowed in them, and your light gutters), breathes in
+//       all the hall's air (you're drawn to her) and breathes out fire;
+//     the Smoke Herald, who fills half his hall with smoke and is all but
+//       gone in it, whose horn throws you across the floor, and who splits
+//       the floor open in lines of lava;
+//   a Glass Mine:
+//     the Glass Wyrm, under the floor and up through it where you stand,
+//       tearing the hall's walls open as it comes and goes, and penning
+//       you in spires of black glass that burst;
+//     the Magma Tender, who lets the mountain in: lava welling out across
+//       the floor from vents and spreading, her brood, and a crust that
+//       turns your blows till it cracks;
+//     the Bellows Golem, whose gale throws you back and blows the hall's
+//       fires out (yours too), who stokes every fire there is, and who
+//       overheats, and must vent, open to your blows;
+//   a Glass Crypt:
+//     the Obsidian Abbess, who raises walls of glass that her bolts glance
+//       off at angles, seals you in a glass cell (find the gap), and at the
+//       last brings every pane down in shards;
+//     the Kiln-Priest, who heats the floor row by row in a wave (one tile
+//       in each row kept cool: find it), draws the fire of the braziers
+//       into himself (strike him and the brazier dies), and rises up
+//       raining embers;
+//     the Vitrified Horror, fused glass and bone that leaves shards where
+//       it steps, splits off pieces of itself, and burns a prism beam
+//       across its hall;
+//   an Ash-Raider Den:
+//     Kharn the Ash-Reaver, oil thrown across the floor and then fire to
+//       it, barricades dragged across his hall, and his flail whirled;
+//     Pyrrha the Bombard-Queen, whose shells leave heaps of rubble where
+//       they fall (cover, now), who lays a line of powder and lights it,
+//       and rolls kegs at you;
+//     Scorch, the raiders' chained drake, that can't come further than
+//       its chain (till it snaps), sweeps its fire across its hall, lashes
+//       its chain round, and beats ash and embers down from the roof;
+//   a Kiln-Deep (Kharos's own):
+//     the Kiln-King, who pours molten metal down channels across his hall
+//       (it sets into walls of black glass, and the hall's another shape),
+//       strikes his anvil (the floor splits in a cross), and quenches it
+//       all in steam;
+//     the Slag Titan, whose thrown slag sets into pillars where it lands
+//       (and goes off when it smashes them), and who burns round itself;
+//     the Molten Heart, held in the air by four chains (break their
+//       anchors, or your blows hardly touch it), the floor erupting under
+//       you square by square, and at the last the lava coming in from the
+//       walls till there's an island left.
+import { BRAINS, addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, groundFire, COLORS, BOSS_TITLES } from './monsters.js';
+import { phaseOf, ready, used } from './tempo.js';
+import { startLaser } from '../game/laser.js';
+import { B } from '../world/blocks.js';
+import { FY, dist, sees, dmgOf, work, hallTiles, hallOf, inHall, ringTiles, coneTiles, wallTiles, hallLights, setLit, spotIn, blinkTo, backOff, cd, shout, proc, openFloor } from './bosskit.js';
+
+const FIRE = ['#ff8030', '#ffd060', '#ff4020'];
+const ASHC = ['#8a8484', '#5a5454', '#a8a2a0'];
+const GLASS = ['#1e1824', '#6a5a8a', '#c8b8f0'];
+const mid = (tiles) => tiles[Math.floor(tiles.length / 2)] || tiles[0] || { x: 0, z: 0 };
+const fire = (game, c, tiles, dur, dmg, o = {}) => tiles.length && addHazard(game, { by: c, tiles, y: c.y, dur, dmg: dmgOf(c, dmg), kind: 'fire', center: mid(tiles), color: COLORS.fire, burn: 2, ...o });
+const shards = (game, c, tiles, dur, dmg, o = {}) => tiles.length && addHazard(game, { by: c, tiles, y: c.y, dur, dmg: dmgOf(c, dmg), kind: 'hex', center: mid(tiles), color: [200, 184, 240], quiet: tiles.length > 12, ...o });
+
+// --------------------------------------------------------------- species
+const boss = (o) => ({ mode: 'hostile', aggro: 16, under: true, boss: true, isle: 'kharos', ...o });
+export const KHAROS_BOSSES = {
+  cinder_king: boss({
+    name: 'The Cinder King', hp: 120, dmg: 6, step: 0.42, humanoid: true, look: 'cinder_king', arms: 'greatsword', fireproof: true, light: 6, brain: 'cinderKing', tint: ['#ff7030', '#ffd080'],
+    phaseLines: ['', '', 'Rise, my court! Burn for your king!', 'I AM THE PYRE!'], drops: [['old_coin', 6, 12, 1], ['ember_pod', 2, 4, 1], ['obsidian_blade', 1, 1, 0.5]],
+  }),
+  urn_mother: boss({
+    name: 'The Urn-Mother', hp: 140, dmg: 5, step: 0.62, big: true, fireproof: true, brain: 'urnMother', range: 4, tint: ['#c8b8a0', '#ff8040'], style: 'bite',
+    phaseLines: ['', '', 'Come... into the urn...', 'ALL TO ASH.'], drops: [['old_coin', 6, 12, 1], ['sulfur', 3, 6, 1], ['gem', 1, 1, 0.6]],
+  }),
+  smoke_herald: boss({
+    name: 'The Smoke Herald', hp: 105, dmg: 5, step: 0.36, humanoid: true, look: 'smoke_herald', floats: true, fireproof: true, brain: 'smokeHerald', range: 5, tint: ['#a8a0a0', '#ff6030'],
+    ward: (game, c, src, n) => {
+      if (!c.inSmoke || Math.random() >= 0.5) return n;
+      game.renderer.floatText(c.x, c.y + 2.4, c.z, 'lost in the smoke', '#c8c0c0');
+      return 0;
+    },
+    phaseLines: ['', '', 'Hear the horn of the mountain!', 'The ground itself answers me!'], drops: [['old_coin', 6, 12, 1], ['sulfur', 2, 4, 1], ['potion_haste', 1, 1, 0.6]],
+  }),
+  glass_wyrm: boss({
+    name: 'The Glass Wyrm', hp: 135, dmg: 6, step: 0.3, big: true, fireproof: true, brain: 'glassWyrm', tint: ['#b8a8f0', '#ff6040'], style: 'bite',
+    phaseLines: ['', '', '', ''], drops: [['obsidian_shard', 6, 12, 1], ['gem', 1, 2, 1], ['gold_ore', 2, 4, 1]],
+  }),
+  magma_tender: boss({
+    name: 'The Magma Tender', hp: 150, dmg: 5, step: 0.7, big: true, fireproof: true, light: 8, brain: 'magmaTender', tint: ['#ff6020', '#ffd060'], style: 'bite',
+    ward: (game, c, src, n) => {
+      if (!(c.crustT > 0)) return n;
+      game.renderer.floatText(c.x, c.y + 2.6, c.z, 'crusted', '#a8a0a0');
+      return Math.max(1, Math.round(n * 0.2));
+    },
+    phaseLines: ['', '', '', ''], drops: [['sulfur', 4, 8, 1], ['obsidian_shard', 3, 6, 1], ['gold_ingot', 1, 2, 0.7]],
+  }),
+  bellows_golem: boss({
+    name: 'The Bellows Golem', hp: 145, dmg: 6, step: 0.45, big: true, fireproof: true, light: 5, brain: 'bellowsGolem', tint: ['#ffa040', '#c8c0b8'], style: 'bite',
+    phaseLines: ['', '', 'PRESSURE RISING.', 'VENT. VENT. VENT.'], drops: [['iron_ingot', 4, 8, 1], ['gold_ingot', 1, 2, 0.7], ['coal', 4, 8, 1]],
+  }),
+  obsidian_abbess: boss({
+    name: 'The Obsidian Abbess', hp: 115, dmg: 5, step: 0.4, humanoid: true, look: 'obsidian_abbess', fireproof: true, light: 4, brain: 'obsidianAbbess', range: 5, tint: ['#c8b8f0', '#1e1824'],
+    phaseLines: ['', '', 'Be still, and be kept.', 'Let every pane sing!'], drops: [['obsidian_shard', 4, 8, 1], ['glass', 4, 8, 1], ['obsidian_blade', 1, 1, 0.6]],
+  }),
+  kiln_priest: boss({
+    name: 'The Kiln-Priest', hp: 110, dmg: 5, step: 0.38, humanoid: true, look: 'kiln_priest', fireproof: true, light: 6, brain: 'kilnPriest', range: 4, tint: ['#ffb040', '#ffffff'],
+    phaseLines: ['', '', 'The kiln is hungry.', 'I rise in the fire!'], drops: [['old_coin', 6, 12, 1], ['fire_lily', 1, 3, 1], ['potion_vigor', 1, 2, 1]],
+  }),
+  vitrified_horror: boss({
+    name: 'The Vitrified Horror', hp: 140, dmg: 6, step: 0.4, big: true, fireproof: true, brain: 'vitrifiedHorror', tint: ['#a0c8ff', '#e8e0c8'], style: 'bite', glancing: true,
+    phaseLines: ['', '', '', ''], drops: [['glass', 6, 10, 1], ['bone', 4, 8, 1], ['gem', 1, 2, 0.8]],
+  }),
+  ash_reaver: boss({
+    name: 'Kharn the Ash-Reaver', hp: 125, dmg: 6, step: 0.4, humanoid: true, look: 'ash_reaver', arms: 'flail', fireproof: true, brain: 'ashReaver', tint: ['#ff6030', '#c8c0b8'],
+    phaseLines: ['', '', 'Barricades! Pen it in!', 'Everything burns!'], drops: [['coin', 12, 24, 1], ['sulfur', 2, 4, 1], ['flail', 1, 1, 0.5]],
+  }),
+  bombard_queen: boss({
+    name: 'Pyrrha the Bombard-Queen', hp: 115, dmg: 5, step: 0.36, humanoid: true, look: 'bombard_queen', arms: 'crossbow', ranged: true, brain: 'bombardQueen', range: 6, tint: ['#ffb040', '#ff5030'],
+    phaseLines: ['', '', 'Roll out the kegs!', 'Light every fuse you\'ve got!'], drops: [['coin', 12, 24, 1], ['dynamite', 3, 6, 1], ['crossbow', 1, 1, 0.5]],
+  }),
+  chained_drake: boss({
+    name: 'Scorch, the Chained Drake', hp: 150, dmg: 7, step: 0.3, big: true, fireproof: true, light: 6, brain: 'chainedDrake', tint: ['#ff5020', '#ffd060'], style: 'bite',
+    phaseLines: ['', '', '', ''], drops: [['leather', 4, 8, 1], ['ember_pod', 2, 5, 1], ['gem', 1, 2, 0.8]],
+  }),
+  kiln_king: boss({
+    name: 'The Kiln-King', hp: 150, dmg: 7, step: 0.45, humanoid: true, look: 'kiln_king', arms: 'warhammer', fireproof: true, light: 6, brain: 'kilnKing', tint: ['#ff8030', '#ffe0a0'],
+    phaseLines: ['', '', 'The metal is ready. So are you.', 'Quench it! QUENCH IT ALL!'], drops: [['gold_ingot', 2, 4, 1], ['iron_ingot', 4, 8, 1], ['warhammer', 1, 1, 0.5]],
+  }),
+  slag_titan: boss({
+    name: 'The Slag Titan', hp: 170, dmg: 8, step: 0.5, big: true, fireproof: true, light: 5, brain: 'slagTitan', tint: ['#ff7030', '#8a7a70'], style: 'bite',
+    phaseLines: ['', '', '', ''], drops: [['iron_ingot', 4, 8, 1], ['obsidian_shard', 4, 8, 1], ['gold_ingot', 1, 2, 0.7]],
+  }),
+  molten_heart: boss({
+    name: 'The Molten Heart', hp: 160, dmg: 6, step: 9, big: true, floats: true, anchored: true, fireproof: true, light: 10, brain: 'moltenHeart', tint: ['#ff4010', '#ffe070'],
+    ward: (game, c, src, n) => {
+      const held = game.creatures.some((o) => !o.dead && o.species === 'heart_anchor');
+      if (!held) return n;
+      if (!(c.wardNote > 0)) {
+        c.wardNote = 0.8;
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'held by its chains', '#ffb070');
+      }
+      return Math.max(1, Math.round(n * 0.2));
+    },
+    phaseLines: ['', '', '', ''], drops: [['gold_ingot', 2, 4, 1], ['gem', 1, 3, 1], ['obsidian_shard', 4, 8, 1]],
+  }),
+  // (What they bring with them.)
+  glass_shard: { name: 'Glass Shard', hp: 8, dmg: 3, step: 0.22, mode: 'hostile', aggro: 16, under: true, fireproof: true, style: 'snap', glancing: true, isle: 'kharos', drops: [['glass', 1, 1, 0.5]] },
+  heart_anchor: { name: 'Chain Anchor', hp: 30, dmg: 0, step: 9, mode: 'hostile', aggro: 0, under: true, anchored: true, construct: true, fireproof: true, isle: 'kharos', brain: 'heartAnchor', drops: [['iron_ingot', 1, 1, 0.5]] },
+};
+
+export const KHAROS_TITLES = {
+  cinder_king: { name: 'The Cinder King', title: 'Lord of the Ash Barrows', taunt: 'Kneel in the ashes of my court.' },
+  urn_mother: { name: 'The Urn-Mother', title: 'Who Holds the Ashes of Kings' },
+  smoke_herald: { name: 'The Smoke Herald', title: 'Voice of the Burning Mountain', taunt: 'The mountain sends its regards.' },
+  glass_wyrm: { name: 'The Glass Wyrm', title: 'That Which Bores Through Black Glass' },
+  magma_tender: { name: 'The Magma Tender', title: 'Mother of the Slugs, Keeper of the Vents' },
+  bellows_golem: { name: 'The Bellows Golem', title: 'Last Engine of the Old Mines' },
+  obsidian_abbess: { name: 'The Obsidian Abbess', title: 'Keeper of the Glass Crypt', taunt: 'Every soul here is kept behind glass.' },
+  kiln_priest: { name: 'The Kiln-Priest', title: 'Who Fires the Dead', taunt: 'The kiln takes all, in the end.' },
+  vitrified_horror: { name: 'The Vitrified Horror', title: 'The Dead the Mountain Melted Together' },
+  ash_reaver: { name: 'Kharn the Ash-Reaver', title: 'Chief of the Ash-Raiders', taunt: 'Fresh oil for the fires!' },
+  bombard_queen: { name: 'Pyrrha the Bombard-Queen', title: 'Mistress of Powder and Flame', taunt: 'Stand still, would you? Hard to aim.' },
+  chained_drake: { name: 'Scorch', title: 'The Raiders\' Chained Drake' },
+  kiln_king: { name: 'The Kiln-King', title: 'Master of the Deep Forge', taunt: 'Another ingot for the mould.' },
+  slag_titan: { name: 'The Slag Titan', title: 'Poured from the Last Great Melt' },
+  molten_heart: { name: 'The Molten Heart', title: 'Chained Fire of the Mountain' },
+};
+
+// --------------------------------------------------------------- brains
+export const KHAROS_BRAINS = {
+  // ------------------------------------------------ the Ash Barrow
+  cinderKing(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    phaseSummons(c, [0.66, 0.33], () => {
+      for (let i = 0; i < 2; i++) summon(game, 'ash_wraith', c, 3, { color: ASHC });
+    });
+    // (At the last he burns as he walks.)
+    if (ph >= 3) {
+      const k = `${c.x},${c.z}`;
+      if (c.trail && c.trail.k !== k) groundFire(game, c.trail.x, c.trail.z, c.y, c, false, 0);
+      c.trail = { k, x: c.x, z: c.z };
+    }
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // The pyres: fire runs along the floor between every two lit braziers
+    // (and out, he lights them again).
+    if (cd(c, 'pyreCd', dt, 3) && ready(c) && !c.windup) {
+      c.pyreCd = ph >= 2 ? 7 : 9;
+      used(c, 0.4);
+      const lit = hallLights(c).filter((q) => q.lit && (q.id === B.brazier || q.id === B.ash_brazier));
+      if (lit.length < 2) {
+        for (const q of hallLights(c)) if (!q.lit) {
+          setLit(game, q, true);
+          game.renderer.emit(q.x, FY + 1.2, q.z, { n: 14, color: FIRE, up: 40, speed: 30, life: 0.7, glow: true });
+        }
+        shout(c, 'Burn again, my pyres!', '#ffb060');
+        game.audio?.play('fire', c);
+        return true;
+      }
+      // Each to the next round the hall.
+      lit.sort((a, b) => Math.atan2(a.z - c.z, a.x - c.x) - Math.atan2(b.z - c.z, b.x - c.x));
+      for (let i = 0; i < lit.length; i++) {
+        const a = lit[i];
+        const b = lit[(i + 1) % lit.length];
+        const line = lineTiles(game, { x: a.x, y: c.y, z: a.z }, b, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)) + 1);
+        fire(game, c, line.filter((q) => openFloor(game, q.x, q.z)), 1.4 + i * 0.25, 5, { onFire: (g, h) => h.tiles.forEach((q, j) => j % 2 === 0 && groundFire(g, q.x, q.z, c.y, c, false, 0)) });
+      }
+      shout(c, 'Pyres, answer your king!', '#ffb060');
+      game.audio?.play('fire', c);
+      c.doAction?.(0.5);
+      return true;
+    }
+    // His crown flares: rings of fire going out from him.
+    if (cd(c, 'crownCd', dt, 5) && ready(c) && d <= 5 && !c.windup) {
+      c.crownCd = ph >= 3 ? 6 : 8;
+      used(c, 0.3);
+      for (let r = 1; r <= 4; r++) fire(game, c, ringTiles(c.x, c.z, r), 0.8 + r * 0.35, 5, { quiet: r > 1 });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'the crown flares!', '#ffb060');
+      c.stunT = 0.8;
+      return true;
+    }
+    return false;
+  },
+
+  urnMother(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    phaseSummons(c, [0.66, 0.33], () => {
+      // (She cracks, and what she held gets out.)
+      for (let i = 0; i < 2; i++) summon(game, 'ash_wraith', c, 3, { color: ASHC });
+      shards(game, c, ringTiles(c.x, c.z, 2), 0.9, 4);
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'CRACK', '#e8dcc8');
+      game.audio?.play('glass', c);
+    });
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Ash poured out across the floor in a fan: it lies there a long
+    // while; in it you're slowed, and your flame gutters.
+    if (cd(c, 'ashCd', dt, 2.5) && ready(c) && d <= 8 && !c.windup) {
+      c.ashCd = 7;
+      used(c);
+      c.face(t.x, t.z);
+      const tiles = coneTiles(c, t, 6, 0.5).filter((q) => inHall(c, q));
+      addHazard(game, { by: c, tiles, y: c.y, dur: 1, dmg: dmgOf(c, 3), kind: 'acid', color: [160, 150, 150], onFire: (g) => ashPatch(g, c, tiles, 10) });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'she tips...', '#c8c0b8');
+      game.audio?.play('pour', c);
+      return true;
+    }
+    // A breath in: the whole hall's air drawn into her (and you with it);
+    // then out again, as fire.
+    if (cd(c, 'breathCd', dt, 6) && ready(c) && d <= 9 && !c.windup) {
+      c.breathCd = ph >= 2 ? 9 : 11;
+      used(c, 1.5);
+      addZone(game, { by: c, kind: 'wind', tiles: hallTiles(c), y: c.y, life: 1.7, tick: 0.35, pull: { x: c.x, z: c.z }, puff: ['#c8c0b8', '#e8e4dc'] });
+      c.face(t.x, t.z);
+      const cone = coneTiles(c, t, 5, 0.55);
+      fire(game, c, cone, 1.9, 7, { burn: 3, knock: 1, from: { x: c.x, z: c.z } });
+      c.stunT = 2;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'she breathes IN...', '#ffb070');
+      game.audio?.play('wind', c);
+      return true;
+    }
+    // (Worn) Ash falling from the roof in patches.
+    if (ph >= 2 && cd(c, 'fallCd', dt, 4) && ready(c)) {
+      c.fallCd = 10;
+      used(c, 0.2);
+      for (let i = 0; i < 3; i++) {
+        const at = spotIn(c, t, 0, 4);
+        if (at) ashPatch(game, c, areaTiles(at.x, at.z, 1), 8);
+      }
+    }
+    if (d <= 2 && backOff(c, t)) return true;
+    return d > 1;
+  },
+
+  smokeHerald(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // In its smoke it's all but gone.
+    c.inSmoke = (game.zones || []).some((z) => z.by === c && z.kind === 'smoke' && z.tiles.some((q) => q.x === c.x && q.z === c.z));
+    c.fade = c.inSmoke && !c.windup ? 0.25 : 1;
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Smoke: half the hall filled with it.
+    if (cd(c, 'smokeCd', dt, 1.5) && ready(c) && !c.windup) {
+      c.smokeCd = 10;
+      used(c, 0.3);
+      const L = hallOf(c);
+      const across = Math.random() < 0.5;
+      const half = hallTiles(c).filter((q) => (across ? q.x <= (L.x0 + L.x1) / 2 : q.z <= (L.z0 + L.z1) / 2) === (across ? c.x <= (L.x0 + L.x1) / 2 : c.z <= (L.z0 + L.z1) / 2));
+      addZone(game, { by: c, kind: 'smoke', tiles: half, y: c.y, life: 8, tick: 1, slow: false, color: [90, 86, 86], puff: ['#5a5454', '#8a8484', '#3a3636'] });
+      shout(c, 'Lose yourself in the smoke!', '#c8c0c0');
+      game.audio?.play('wind', c);
+      return true;
+    }
+    // The horn: you're thrown across the hall.
+    if (cd(c, 'hornCd', dt, 3) && ready(c) && d <= 5 && !c.windup) {
+      c.hornCd = 6.5;
+      used(c);
+      c.face(t.x, t.z);
+      addHazard(game, { by: c, tiles: coneTiles(c, t, 5, 0.6), y: c.y, dur: 0.9, dmg: dmgOf(c, 4), knock: 3, stun: 0.4, from: { x: c.x, z: c.z }, kind: 'burst', center: { x: t.x, z: t.z } });
+      game.audio?.play('horn', c);
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'BWAAARRR', '#ffd0a0');
+      return true;
+    }
+    // (Worn) The floor split open: lines of lava across the hall (two, at
+    // the last), lit first.
+    if (ph >= 2 && cd(c, 'riftCd', dt, 2) && ready(c) && !c.windup) {
+      c.riftCd = 12;
+      used(c, 0.6);
+      for (let k = 0; k < (ph >= 3 ? 2 : 1); k++) rift(game, c, k ? spotIn(c, t, 2, 5) || t : t);
+      shout(c, 'Open, mountain!', '#ff9060');
+      return true;
+    }
+    if (d <= 2 && backOff(c, t)) return true;
+    return d > 1;
+  },
+
+  // ------------------------------------------------ the Glass Mine
+  glassWyrm(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // Down under the floor: where you stood, it comes up.
+    if (c.digT !== undefined) {
+      c.digT -= dt;
+      if (c.digT > 0) return true;
+      c.digT = undefined;
+      const at = c.digAt;
+      c.burrowed = false;
+      c.solid = true;
+      const to = spotIn(c, at, 0, 2) || { x: c.x, y: c.y, z: c.z };
+      c.teleport(to.x, to.y, to.z);
+      game.moveEntity(c, to.x, to.y, to.z);
+      game.renderer.emit(to.x, to.y + 0.5, to.z, { n: 24, color: GLASS, up: 50, speed: 60, gravity: 160, life: 0.8 });
+      game.shake = Math.min(1.4, (game.shake || 0) + 0.6);
+      // (Coming up by a wall, it tears it open.)
+      for (const q of areaTiles(to.x, to.z, 2)) {
+        if (inHall(c, q)) continue;
+        if (Math.random() < 0.6) for (const y of [FY, FY + 1]) work(game, q.x, y, q.z, B.air, 0, c, { dig: true, keep: true });
+      }
+      c.stunT = 0.6;
+      return true;
+    }
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    if (cd(c, 'digCd', dt, 3) && ready(c) && !c.windup) {
+      c.digCd = ph >= 3 ? 6 : 9;
+      used(c, 1.6);
+      c.burrowed = true;
+      c.solid = false;
+      game.removeOcc(c);
+      c.digAt = { x: t.x, y: t.y, z: t.z };
+      c.digT = 1.4;
+      addHazard(game, { by: c, tiles: areaTiles(t.x, t.z, 1), y: t.y, dur: 1.3, dmg: dmgOf(c, 7), knock: 2, from: { x: t.x, z: t.z + 0.01 }, kind: 'erupt', keep: true });
+      game.renderer.emit(c.x, c.y + 0.3, c.z, { n: 20, color: GLASS, up: 30, speed: 40, gravity: 120, life: 0.6 });
+      game.audio?.play('rumble', c);
+      game.ui.msg('The Glass Wyrm bores down through the floor... (the ground under you shakes: move!)', '#c8b8f0', true);
+      return true;
+    }
+    // A spray of glass, fanned out.
+    if (cd(c, 'sprayCd', dt, 2) && ready(c) && d >= 2 && d <= 9 && sees(game, c, t) && !c.windup) {
+      c.sprayCd = 5;
+      used(c);
+      c.face(t.x, t.z);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const s of [-0.5, -0.25, 0, 0.25, 0.5]) {
+        const to = { x: c.x + Math.cos(base + s) * 9, z: c.z + Math.sin(base + s) * 9 };
+        shards(game, c, lineTiles(game, c, to, 9), 0.9, 4, { quiet: s !== 0 });
+      }
+      c.stunT = 0.9;
+      game.audio?.play('glass', c);
+      return true;
+    }
+    // (Worn) Spires of black glass shot up round you (a pen); a moment,
+    // and they burst.
+    if (ph >= 2 && cd(c, 'spireCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
+      c.spireCd = 12;
+      used(c, 0.5);
+      const at = { x: t.x, z: t.z };
+      const ring = ringTiles(at.x, at.z, 2).filter((q, i) => i % 2 === 0);
+      const up = [];
+      for (const q of ring) if (work(game, q.x, FY, q.z, B.obsidian, 5, c)) {
+        work(game, q.x, FY + 1, q.z, B.obsidian, 5, c);
+        up.push(q);
+      }
+      for (const q of up) game.renderer.emit(q.x, FY + 1, q.z, { n: 6, color: GLASS, up: 30, speed: 20, life: 0.5 });
+      shards(game, c, up.flatMap((q) => areaTiles(q.x, q.z, 1)), 4.4, 5);
+      game.renderer.floatText(at.x, FY + 3, at.z, 'spires!', '#c8b8f0');
+      game.audio?.play('glass', c);
+      return true;
+    }
+    return false;
+  },
+
+  magmaTender(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    if (c.crustT > 0) {
+      c.crustT -= dt;
+      if (Math.random() < dt * 6) game.renderer.emit(c.x, c.y + 1, c.z, { n: 1, color: ['#6a6060', '#8a8080'], up: 10, speed: 20, life: 0.6 });
+      if (c.crustT <= 0) {
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'the crust cracks!', '#ffb070');
+        game.renderer.emit(c.x, c.y + 1, c.z, { n: 20, color: FIRE, up: 30, speed: 50, life: 0.6, glow: true });
+      }
+    }
+    phaseSummons(c, [0.75, 0.5, 0.25], () => {
+      for (let i = 0; i < 2; i++) summon(game, 'magma_slug', c, 3, { color: FIRE });
+    });
+    if (!t || t.dead) return false;
+    // The vents opened: lava welling out across the floor, spreading.
+    if (cd(c, 'ventCd', dt, 3) && ready(c) && dist(c, t) <= 14 && !c.windup) {
+      c.ventCd = ph >= 3 ? 11 : 14;
+      used(c, 0.6);
+      const vents = [spotIn(c, t, 3, 7), spotIn(c, c, 2, 6)].filter(Boolean);
+      for (const v of vents) {
+        fire(game, c, [v], 1.2, 4, { burn: 0 });
+        game.renderer.floatText(v.x, FY + 2, v.z, 'a vent glows...', '#ff9050');
+        proc(game, c, 0.7, 4, (k) => {
+          for (const q of areaTiles(v.x, v.z, k, true)) if (inHall(c, q) && openFloor(game, q.x, q.z)) work(game, q.x, FY, q.z, B.lava, 12 - k, c);
+          game.renderer.emit(v.x, FY + 0.4, v.z, { n: 8, color: FIRE, up: 30, speed: 30, life: 0.6, glow: true });
+        }, 1.2);
+      }
+      shout(c, 'Gllurrrb...', '#ff9050');
+      game.audio?.play('eruption', c);
+      return true;
+    }
+    // A crust: your blows hardly touch her till it cracks.
+    if (cd(c, 'crustCd', dt, 6) && ready(c) && !(c.crustT > 0)) {
+      c.crustT = 5;
+      c.crustCd = 13;
+      used(c, 0.2);
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'her skin crusts over', '#a8a0a0');
+      if (!game.toldCrust) game.ui.msg('The Magma Tender crusts over: your blows hardly touch her. Wait for it to crack!', '#ffb070', true);
+      game.toldCrust = true;
+      return true;
+    }
+    if (bossSlam(c, dt, 1, 0.9, 6, 5)) return true;
+    return false;
+  },
+
+  bellowsGolem(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // The gale: you're thrown back, and every fire in its way blown out
+    // (your own flame too).
+    if (cd(c, 'galeCd', dt, 3) && ready(c) && d <= 7 && !c.windup) {
+      c.galeCd = 8;
+      used(c, 0.4);
+      c.face(t.x, t.z);
+      const cone = coneTiles(c, t, 7, 0.45);
+      addHazard(game, { by: c, tiles: cone, y: c.y, dur: 1, dmg: dmgOf(c, 3), knock: 4, from: { x: c.x, z: c.z }, kind: 'burst', center: { x: t.x, z: t.z }, onFire: (g, h, hit) => {
+        for (const q of hallLights(c)) if (q.lit && cone.some((p) => Math.abs(p.x - q.x) <= 1 && Math.abs(p.z - q.z) <= 1)) setLit(g, q, false);
+        for (const e of hit) if (e === g.player) e.snuff?.(3);
+        for (const z of g.zones || []) if (z.kind === 'fire' && z.tiles.some((p) => cone.some((q) => q.x === p.x && q.z === p.z))) z.done = true;
+      } });
+      for (const q of cone) if (Math.random() < 0.3) game.renderer.emit(q.x, c.y + 0.8, q.z, { n: 1, color: ['#e8e4dc', '#c8c0b8'], up: 2, speed: 30, life: 0.6, shape: 'puff' });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'WHOOOSH', '#e8e4dc');
+      game.audio?.play('wind', c);
+      return true;
+    }
+    // It stokes: every fire in the hall spreads, and a line of it runs out
+    // at you.
+    if (cd(c, 'stokeCd', dt, 5) && ready(c) && !c.windup) {
+      c.stokeCd = 10;
+      used(c, 0.3);
+      for (const z of [...(game.zones || [])]) if (z.kind === 'fire' && !z.done) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) groundFire(game, z.tiles[0].x + dx, z.tiles[0].z + dz, z.y, c, false, 0);
+      const line = lineTiles(game, c, t, d + 2);
+      fire(game, c, line, 1.1, 4, { onFire: (g, h) => h.tiles.forEach((q) => groundFire(g, q.x, q.z, c.y, c, false, 0)) });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'STOKING', '#ffb040');
+      game.audio?.play('fire', c);
+      return true;
+    }
+    // (Worn) Overheating: rings of heat out from it, and then it must vent
+    // (stood still, open: strike now!).
+    if (ph >= 2 && cd(c, 'heatCd', dt, 4) && ready(c) && !c.windup) {
+      c.heatCd = 14;
+      used(c, 2);
+      for (let r = 1; r <= 5; r++) fire(game, c, ringTiles(c.x, c.z, r).filter((q) => inHall(c, q)), 0.7 + r * 0.3, 5, { quiet: r > 1 });
+      proc(game, c, 2.4, 1, () => {
+        c.stunT = 3;
+        c.exposedT = 3;
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'VENTING: strike now!', '#ffe070');
+        game.renderer.emit(c.x, c.y + 2, c.z, { n: 30, color: ['#ffffff', '#e8e4dc'], up: 60, speed: 30, life: 1.2, shape: 'puff', gravity: -20 });
+        game.audio?.play('hiss', c);
+      });
+      return true;
+    }
+    if (bossSlam(c, dt, 1, 1, 6, 5)) return true;
+    return false;
+  },
+
+  // ------------------------------------------------ the Glass Crypt
+  obsidianAbbess(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Walls of glass raised across her hall.
+    if (cd(c, 'mirrorCd', dt, 1.5) && ready(c) && !c.windup) {
+      c.mirrorCd = 11;
+      used(c, 0.3);
+      for (let k = 0; k < 2; k++) {
+        const at = spotIn(c, c, 3, 7);
+        if (!at) continue;
+        for (const q of wallTiles(at, Math.random() < 0.5, 5)) if (inHall(c, q) && openFloor(game, q.x, q.z)) {
+          work(game, q.x, FY, q.z, B.glass, 14, c);
+          work(game, q.x, FY + 1, q.z, B.glass, 14, c);
+        }
+      }
+      shout(c, 'Be kept.', '#c8b8f0');
+      game.audio?.play('glass', c);
+      return true;
+    }
+    // A bolt that glances off the glass, and comes at you from the side.
+    if (cd(c, 'boltCd', dt, 2.5) && ready(c) && d >= 2 && !c.windup) {
+      c.boltCd = ph >= 2 ? 3.5 : 4.5;
+      used(c);
+      c.face(t.x, t.z);
+      const segs = bounceBolt(game, c, t, 16, 2);
+      segs.forEach((s, i) => addHazard(game, { by: c, tiles: s.tiles, y: c.y, dur: 0.85 + i * 0.12, dmg: dmgOf(c, 5), kind: 'beam', from: s.from, to: s.to, beamColor: '#f0e8ff', halo: '#8a6ad8', width: 2 }));
+      game.audio?.play('reflect', c);
+      return true;
+    }
+    // (Worn) A cell of glass round you, with one pane missing: out through
+    // it before it's filled with her light.
+    if (ph >= 2 && cd(c, 'tombCd', dt, 3) && ready(c) && d <= 9 && !c.windup) {
+      c.tombCd = 13;
+      used(c, 0.8);
+      const ring = ringTiles(t.x, t.z, 1);
+      const gap = ring.reduce((b, q) => (Math.hypot(q.x - c.x, q.z - c.z) > Math.hypot(b.x - c.x, b.z - c.z) && (q.x === t.x || q.z === t.z) ? q : b), ring[1]);
+      for (const q of ring) if (q !== gap) for (const y of [FY, FY + 1]) work(game, q.x, y, q.z, B.glass, 3, c);
+      addHazard(game, { by: c, tiles: [{ x: t.x, z: t.z }], y: t.y, dur: 2, dmg: dmgOf(c, 9), kind: 'hex', center: { x: t.x, z: t.z }, color: [200, 184, 240] });
+      game.renderer.floatText(t.x, t.y + 2.6, t.z, 'ENTOMBED: find the gap!', '#c8b8f0');
+      game.audio?.play('glass', c);
+      return true;
+    }
+    // (Desperate) Every pane brought down at once, in shards.
+    if (ph >= 3 && cd(c, 'reqCd', dt, 2) && ready(c) && !c.windup) {
+      c.reqCd = 12;
+      used(c, 0.6);
+      const panes = (game.works || []).filter((q) => q.by === c && q.y === FY && q.id === B.glass);
+      for (const q of panes) {
+        q.life = 0.7;
+        q.t = 0;
+      }
+      shards(game, c, panes.flatMap((q) => areaTiles(q.x, q.z, 1)), 0.75, 5);
+      shout(c, 'Sing, every pane!', '#c8b8f0');
+      game.audio?.play('glass', c);
+      return true;
+    }
+    if (d <= 2 && backOff(c, t)) return true;
+    return d > 1;
+  },
+
+  kilnPriest(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // Drawing a brazier's fire into himself: strike him hard enough and
+    // the brazier dies.
+    if (c.draw) {
+      const D = c.draw;
+      D.t -= dt;
+      D.acc += dt;
+      if (c.hp < D.hp - 6) {
+        setLit(game, D.q, false);
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'the draw is broken!', '#ffe070');
+        game.renderer.emit(D.q.x, FY + 1, D.q.z, { n: 20, color: ['#5a5454', '#8a8484'], up: 30, speed: 20, life: 0.8, shape: 'puff' });
+        c.stunT = 1.5;
+        c.draw = null;
+        return true;
+      }
+      if (D.acc >= 0.5) {
+        D.acc = 0;
+        c.hp = Math.min(c.maxHp, c.hp + 4);
+        D.hp = Math.max(D.hp, c.hp);
+        game.renderer.effect?.({ type: 'siphon', wx: D.q.x, wy: FY + 1, wz: D.q.z, tx: c.x, ty: c.y + 1, tz: c.z, life: 0.5, oy: -6, n: 10, amp: 3, color: FIRE });
+        game.renderer.floatText(c.x, c.y + 2.6, c.z, '+4', '#ffb040');
+      }
+      if (D.t <= 0) c.draw = null;
+      return true;
+    }
+    // Risen, raining embers down.
+    if (c.riseT > 0) {
+      c.riseT -= dt;
+      c.rise = -10 - Math.round(Math.sin(c.riseT * 4) * 2);
+      c.emberAcc = (c.emberAcc || 0) + dt;
+      if (c.emberAcc >= 0.35 && t && !t.dead) {
+        c.emberAcc = 0;
+        const at = spotIn(c, t, 0, 3) || t;
+        fire(game, c, [at], 0.9, 4);
+      }
+      if (c.riseT <= 0) c.rise = 0;
+      return true;
+    }
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // The kiln-wave: the floor heated row by row, coming across the hall
+    // at you (one tile in each row kept cool: find it).
+    if (cd(c, 'kilnCd', dt, 2) && ready(c) && !c.windup) {
+      c.kilnCd = ph >= 2 ? 8 : 10;
+      used(c, 1.2);
+      const L = hallOf(c);
+      const across = Math.abs(t.x - c.x) > Math.abs(t.z - c.z);
+      const from = across ? (c.x < t.x ? L.x1 : L.x0) : (c.z < t.z ? L.z1 : L.z0);
+      const to = across ? (c.x < t.x ? L.x0 : L.x1) : (c.z < t.z ? L.z0 : L.z1);
+      const step = Math.sign(to - from) || 1;
+      let cool = across ? t.z : t.x;
+      for (let k = 0, v = from; k < 24 && v !== to + step; k++, v += step) {
+        cool += Math.round((Math.random() - 0.5) * 2);
+        const row = [];
+        const lo = across ? L.z0 : L.x0;
+        const hi = across ? L.z1 : L.x1;
+        cool = Math.max(lo, Math.min(hi, cool));
+        for (let w = lo; w <= hi; w++) if (w !== cool) row.push(across ? { x: v, z: w } : { x: w, z: v });
+        fire(game, c, row.filter((q) => openFloor(game, q.x, q.z)), 1.2 + k * 0.28, 5, { quiet: k % 3 !== 0, burn: 1 });
+      }
+      shout(c, 'Into the kiln!', '#ffb040');
+      game.audio?.play('fire', c);
+      return true;
+    }
+    // Drawing on a brazier's fire to mend himself.
+    if (c.hp < c.maxHp * 0.85 && cd(c, 'drawCd', dt, 5) && ready(c) && !c.windup) {
+      c.drawCd = 12;
+      const lit = hallLights(c).filter((q) => q.lit && (q.id === B.brazier || q.id === B.ash_brazier));
+      if (lit.length) {
+        used(c, 3);
+        const q = lit.sort((a, b) => dist(a, c) - dist(b, c))[0];
+        c.draw = { q, t: 3, acc: 0, hp: c.hp };
+        c.face(q.x, q.z);
+        shout(c, 'Feed me, holy fire.', '#ffb040');
+        if (!game.toldDraw) game.ui.msg('The Kiln-Priest draws on a brazier\'s fire to mend himself. Strike him hard to break the draw (and the brazier dies with it)!', '#ffe070', true);
+        game.toldDraw = true;
+        return true;
+      }
+    }
+    // (Desperate) He rises in the fire, embers raining down.
+    if (ph >= 3 && cd(c, 'riseCd', dt, 2) && ready(c) && !c.windup) {
+      c.riseCd = 14;
+      used(c, 4);
+      c.riseT = 4.5;
+      shout(c, 'I rise!', '#ffb040');
+      game.audio?.play('roar', c);
+      return true;
+    }
+    if (d <= 2 && backOff(c, t)) return true;
+    return d > 1;
+  },
+
+  vitrifiedHorror(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // Shards where it's stepped.
+    const k = `${c.x},${c.z}`;
+    if (c.trail && c.trail.k !== k) {
+      for (const q of areaTiles(c.trail.x, c.trail.z, 1)) if (Math.random() < 0.3 && openFloor(game, q.x, q.z)) addZone(game, { by: c, kind: 'shards', tiles: [q], y: c.y, life: 12, step: dmgOf(c, 1), color: [180, 170, 220], puff: ['#c8b8f0'] });
+    }
+    c.trail = { k, x: c.x, z: c.z };
+    phaseSummons(c, [0.66, 0.33], () => {
+      for (let i = 0; i < 3; i++) summon(game, 'glass_shard', c, 3, { color: GLASS });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'pieces break off it!', '#c8b8f0');
+      game.audio?.play('glass', c);
+    });
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // A prism beam, burned slowly round after you.
+    if (cd(c, 'prismCd', dt, 3) && ready(c) && d >= 2 && sees(game, c, t) && !c.windup) {
+      c.prismCd = ph >= 2 ? 9 : 11;
+      used(c, 3);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      startLaser(game, { by: c, ang: base + (Math.random() < 0.5 ? -1 : 1) * 0.7, turn: 0.4, len: 12, charge: 1.2, dur: 3.2, dmg: dmgOf(c, 3), tick: 0.35, width: 0.6, foes: 'player', fire: false, hue: 'arc', aim: () => (c.target && !c.target.dead ? Math.atan2(c.target.z - c.z, c.target.x - c.x) : null) });
+      c.stunT = 4.4;
+      return true;
+    }
+    // (Worn) Shards thrown out in every direction.
+    if (ph >= 2 && cd(c, 'novaCd', dt, 3) && ready(c) && d <= 6 && !c.windup) {
+      c.novaCd = 8;
+      used(c);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        shards(game, c, lineTiles(game, c, { x: c.x + Math.cos(a) * 7, z: c.z + Math.sin(a) * 7 }, 7), 1, 5, { quiet: i > 0 });
+      }
+      game.audio?.play('glass', c);
+      c.stunT = 1;
+      return true;
+    }
+    if (bossSlam(c, dt, 1, 0.9, 6, 4.5)) return true;
+    return false;
+  },
+
+  // ------------------------------------------------ the Ash-Raider Den
+  ashReaver(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    phaseSummons(c, [0.66, 0.33], () => {
+      // Barricades dragged across the hall, and the crew to hold them.
+      for (let k = 0; k < 2; k++) {
+        const at = spotIn(c, c, 3, 7);
+        if (at) for (const q of wallTiles(at, Math.random() < 0.5, 5)) if (inHall(c, q) && openFloor(game, q.x, q.z)) work(game, q.x, FY, q.z, B.fence, 25, c);
+      }
+      for (let i = 0; i < 2; i++) summon(game, 'ash_raider', c, 3, { color: ASHC });
+    });
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Oil thrown across the floor; it lies there.
+    if (cd(c, 'oilCd', dt, 2) && ready(c) && d <= 9 && !c.windup) {
+      c.oilCd = 6;
+      used(c);
+      for (let k = 0; k < 3; k++) {
+        const at = k ? spotIn(c, t, 1, 3) || t : t;
+        lob(game, c, at.x, at.z, { tint: [60, 50, 40], onLand: (g, x, z, y) => addZone(g, { by: c, kind: 'oil', tiles: areaTiles(x, z, 1).filter((q) => openFloor(g, q.x, q.z)), y, life: 14, slow: true, color: [40, 34, 30], puff: ['#2a2420', '#4a4036'] }) });
+      }
+      shout(c, 'Oil for the fire!', '#ff9060');
+      return true;
+    }
+    // And then fire to it: every pool of it goes up.
+    const oils = (game.zones || []).filter((z) => z.by === c && z.kind === 'oil' && !z.done);
+    if (oils.length && cd(c, 'igniteCd', dt, 3) && ready(c) && !c.windup) {
+      c.igniteCd = 7;
+      used(c, 0.4);
+      const tiles = oils.flatMap((z) => z.tiles);
+      lob(game, c, tiles[0].x, tiles[0].z, { tint: [255, 140, 40], onLand: (g) => {
+        for (const z of oils) z.done = true;
+        fire(g, c, tiles, 0.05, 6, { burn: 3, onFire: (gg, h) => h.tiles.forEach((q) => groundFire(gg, q.x, q.z, c.y, c, false, 0)) });
+      } });
+      shout(c, 'Burn!', '#ff6030');
+      return true;
+    }
+    // (Worn) The flail whirled: drawn in, and battered.
+    if (ph >= 2 && cd(c, 'whirlCd', dt, 3) && ready(c) && d <= 4 && !c.windup) {
+      c.whirlCd = 9;
+      used(c, 1);
+      addZone(game, { by: c, kind: 'wind', tiles: areaTiles(c.x, c.z, 4), y: c.y, life: 1.2, tick: 0.3, pull: { x: c.x, z: c.z }, puff: ASHC });
+      addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 2), y: c.y, dur: 1.3, dmg: dmgOf(c, 7), knock: 2, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: 2, kind: 'slam', color: COLORS.blow });
+      c.stunT = 1.4;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'the flail whirls!', '#ff9060');
+      game.audio?.play('whoosh', c);
+      return true;
+    }
+    return false;
+  },
+
+  bombardQueen(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    phaseSummons(c, [0.66, 0.33], () => {
+      // Kegs rolled out round you.
+      for (let i = 0; i < 2; i++) {
+        const at = spotIn(c, t || c, 1, 3);
+        if (at) work(game, at.x, FY, at.z, B.powder_keg, 0, c);
+      }
+      shout(c, 'Mind the kegs!', '#ffb040');
+    });
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Shells: a blast, and a heap of rubble left where each fell.
+    if (cd(c, 'shotCd', dt, 1.5) && ready(c) && d >= 2 && d <= 11 && !c.windup) {
+      c.shotCd = 5;
+      used(c);
+      c.face(t.x, t.z);
+      for (let k = 0; k < ph; k++) {
+        const at = k ? spotIn(c, t, 1, 3) || t : t;
+        lob(game, c, at.x, at.z, { tint: [80, 70, 60], onLand: (g, x, z, y) => {
+          fire(g, c, areaTiles(x, z, 1), 0.6, 6, { burn: 1, knock: 1, from: { x, z: z + 0.01 } });
+          proc(g, c, 0.65, 1, () => {
+            if (openFloor(g, x, z)) work(g, x, FY, z, B.cobblestone, 0, c);
+          });
+        } });
+      }
+      game.audio?.play('catapult', c);
+      return true;
+    }
+    // A line of powder laid along the floor, and lit: the fire runs down it.
+    if (cd(c, 'trailCd', dt, 4) && ready(c) && !c.windup) {
+      c.trailCd = 10;
+      used(c, 0.6);
+      const end = { x: t.x + Math.sign(t.x - c.x) * 3, z: t.z + Math.sign(t.z - c.z) * 3 };
+      const line = lineTiles(game, c, end, dist(c, end) + 1);
+      addZone(game, { by: c, kind: 'powder', tiles: line, y: c.y, life: 1.2 + line.length * 0.15, color: [90, 90, 90], puff: ['#5a5a5a'] });
+      line.forEach((q, i) => fire(game, c, [q], 1.2 + i * 0.15, 5, { quiet: i % 3 !== 0, spark: i === 0 ? { x: q.x, y: c.y, z: q.z } : null }));
+      shout(c, 'Light the line!', '#ffb040');
+      game.audio?.play('fuse', c);
+      return true;
+    }
+    // (Worn) Too close: smoke, and she's across the hall.
+    if (ph >= 2 && d <= 2 && cd(c, 'smokeCd', dt, 1)) {
+      c.smokeCd = 7;
+      const to = spotIn(c, c, 5, 9);
+      if (to) {
+        addZone(game, { by: c, kind: 'smoke', tiles: areaTiles(c.x, c.z, 1), y: c.y, life: 4, color: [90, 86, 86], puff: ['#5a5454', '#8a8484'] });
+        blinkTo(c, to, ['#5a5454', '#8a8484', '#3a3636']);
+        return true;
+      }
+    }
+    if (d <= 3 && backOff(c, t)) return true;
+    return d > 1;
+  },
+
+  chainedDrake(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // Chained to the middle of its hall till it tears the chain out.
+    c.anchor ??= { x: c.x, z: c.z };
+    c.hall ??= c.leash;
+    if (ph < 2) {
+      const A = c.anchor;
+      c.leash = { x0: A.x - 4, z0: A.z - 4, x1: A.x + 4, z1: A.z + 4 };
+      c.chainFx = (c.chainFx || 0) - dt;
+      if (c.chainFx <= 0) {
+        c.chainFx = 0.25;
+        game.renderer.effect?.({ type: 'beam', wx: A.x, wy: c.y + 0.2, wz: A.z, tx: c.x, ty: c.y + 0.8, tz: c.z, life: 0.3, oy: -4, color: '#8a8480', halo: '#3a3634', width: 1 });
+      }
+    } else if (!c.unchained) {
+      c.unchained = true;
+      c.leash = c.hall;
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'THE CHAIN SNAPS!', '#ff9060');
+      game.renderer.emit(c.anchor.x, c.y + 0.5, c.anchor.z, { n: 20, color: ['#8a8480', '#c8c0b8'], up: 40, speed: 50, life: 0.6 });
+      game.audio?.play('clang', c);
+    }
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // A sweep of fire across its hall, side to side.
+    if (cd(c, 'breathCd', dt, 2) && ready(c) && d <= 8 && !c.windup) {
+      c.breathCd = 7;
+      used(c, 1.2);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      for (let k = 0; k < 6; k++) {
+        const a = base + dir * (-0.8 + k * 0.32);
+        const aim = { x: c.x + Math.cos(a) * 7, z: c.z + Math.sin(a) * 7 };
+        fire(game, c, coneTiles(c, aim, 7, 0.17), 0.8 + k * 0.2, 6, { burn: 3, quiet: k > 0 });
+      }
+      c.stunT = 1.9;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'it draws breath...', '#ff9060');
+      game.audio?.play('roar', c);
+      return true;
+    }
+    // Its chain lashed round, the whole length of it.
+    if (!c.unchained && cd(c, 'lashCd', dt, 4) && ready(c) && !c.windup) {
+      c.lashCd = 8;
+      used(c, 0.4);
+      const ring = [...ringTiles(c.anchor.x, c.anchor.z, 4), ...ringTiles(c.anchor.x, c.anchor.z, 5)];
+      addHazard(game, { by: c, tiles: ring, y: c.y, dur: 1.1, dmg: dmgOf(c, 6), knock: 1, from: c.anchor, kind: 'slam', center: c.anchor, radius: 5, color: COLORS.blow });
+      game.audio?.play('chains', c);
+      return true;
+    }
+    // (Worn) Its wings beat: ash and embers down from the roof all over
+    // its hall.
+    if (ph >= 2 && cd(c, 'wingCd', dt, 3) && ready(c) && !c.windup) {
+      c.wingCd = 13;
+      used(c, 0.8);
+      const tiles = hallTiles(c);
+      proc(game, c, 0.4, 10, () => {
+        for (let i = 0; i < 3; i++) {
+          const q = tiles[Math.floor(Math.random() * tiles.length)];
+          if (q) fire(game, c, [q], 0.9, 4, { quiet: true });
+        }
+      });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'wings beat!', '#ff9060');
+      game.audio?.play('flap', c);
+      return true;
+    }
+    return false;
+  },
+
+  // ------------------------------------------------ the Kiln-Deep
+  kilnKing(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // The mould poured: molten metal down channels across the hall, which
+    // sets into walls of black glass (gaps left in them).
+    if (cd(c, 'pourCd', dt, 3) && ready(c) && (c.pours || 0) < 3 && !c.windup) {
+      c.pourCd = 12;
+      c.pours = (c.pours || 0) + 1;
+      used(c, 1);
+      const L = hallOf(c);
+      const across = Math.random() < 0.5;
+      const lines = [];
+      for (let k = 0; k < 2; k++) {
+        const v = across ? Math.round(L.z0 + 2 + Math.random() * (L.z1 - L.z0 - 4)) : Math.round(L.x0 + 2 + Math.random() * (L.x1 - L.x0 - 4));
+        const line = [];
+        const lo = across ? L.x0 : L.z0;
+        const hi = across ? L.x1 : L.z1;
+        for (let w = lo; w <= hi; w++) line.push(across ? { x: w, z: v } : { x: v, z: w });
+        lines.push(line.filter((q) => openFloor(game, q.x, q.z) && !(Math.abs(q.x - c.x) <= 1 && Math.abs(q.z - c.z) <= 1)));
+      }
+      for (const line of lines) {
+        fire(game, c, line, 1.6, 6, { burn: 2, onFire: (g, h) => {
+          for (const q of h.tiles) work(g, q.x, FY, q.z, B.lava, 0, c);
+          // (Set, it's a wall; with a gap every few paces.)
+          proc(g, c, 5, 1, () => h.tiles.forEach((q, i) => {
+            if (g.world.getBlock(q.x, FY, q.z) !== B.lava) return;
+            if (i % 5 === 2) work(g, q.x, FY, q.z, B.air, 0, c);
+            else {
+              work(g, q.x, FY, q.z, B.obsidian, 0, c);
+              work(g, q.x, FY + 1, q.z, B.obsidian, 0, c);
+            }
+          }));
+        } });
+      }
+      shout(c, 'Into the mould!', '#ffb040');
+      game.audio?.play('pour', c);
+      return true;
+    }
+    // His hammer on the anvil: the floor splits in a cross.
+    if (cd(c, 'anvilCd', dt, 2) && ready(c) && d <= 9 && !c.windup) {
+      c.anvilCd = 6;
+      used(c);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const line = lineTiles(game, c, { x: c.x + dx * 10, z: c.z + dz * 10 }, 10);
+        addHazard(game, { by: c, tiles: line, y: c.y, dur: 1, dmg: dmgOf(c, 7), knock: 2, from: { x: c.x, z: c.z }, kind: 'erupt' });
+      }
+      c.stunT = 1.1;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'CLANG', '#ffe0a0');
+      game.audio?.play('clang', c);
+      return true;
+    }
+    // (Worn) Quenched: every channel of metal goes up in scalding steam,
+    // and the walls it set into crack and fall.
+    if (ph >= 2 && cd(c, 'quenchCd', dt, 3) && ready(c) && (game.works || []).some((q) => q.by === c) && !c.windup) {
+      c.quenchCd = 12;
+      used(c, 0.8);
+      const mine = (game.works || []).filter((q) => q.by === c && q.y === FY);
+      const tiles = mine.map((q) => ({ x: q.x, z: q.z }));
+      for (const q of game.works.filter((w) => w.by === c)) {
+        q.life = 0.5;
+        q.t = 0;
+      }
+      addZone(game, { by: c, kind: 'steam', tiles, y: c.y, life: 5, tick: 0.6, dmg: dmgOf(c, 2), color: [220, 220, 220], puff: ['#ffffff', '#e0e0e0', '#c8c8c8'] });
+      shards(game, c, tiles, 0.6, 4);
+      shout(c, 'QUENCH!', '#e0f0ff');
+      game.audio?.play('hiss', c);
+      return true;
+    }
+    return false;
+  },
+
+  slagTitan(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // (Worn) Its core open: the ground round it burns.
+    if (ph >= 2 && Math.random() < dt * 2) for (const q of ringTiles(c.x, c.z, 2)) if (Math.random() < 0.3) groundFire(game, q.x, q.z, c.y, c, false, 0);
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    // Slag thrown: where it lands, it sets in a pillar.
+    if (cd(c, 'heapCd', dt, 2) && ready(c) && d >= 2 && d <= 10 && !c.windup) {
+      c.heapCd = 6;
+      used(c);
+      for (let k = 0; k < 2; k++) {
+        const at = k ? spotIn(c, t, 2, 4) || t : t;
+        lob(game, c, at.x, at.z, { tint: [255, 120, 50], onLand: (g, x, z) => {
+          fire(g, c, [{ x, z }], 0.4, 6);
+          proc(g, c, 0.5, 1, () => {
+            if (work(g, x, FY, z, B.slag, 0, c)) work(g, x, FY + 1, z, B.slag, 0, c);
+          });
+        } });
+      }
+      game.audio?.play('catapult', c);
+      return true;
+    }
+    // Its pillars smashed: each goes off in a burst of slag.
+    const pillars = (game.works || []).filter((q) => q.by === c && q.id === B.slag && q.y === FY && dist(q, t) <= 6);
+    if (pillars.length >= 2 && cd(c, 'smashCd', dt, 4) && ready(c) && !c.windup) {
+      c.smashCd = 9;
+      used(c, 0.5);
+      for (const q of pillars) {
+        shards(game, c, areaTiles(q.x, q.z, 1), 1.2, 6);
+        proc(game, c, 1.2, 1, () => {
+          work(game, q.x, FY, q.z, B.air, 0.01, c);
+          work(game, q.x, FY + 1, q.z, B.air, 0.01, c);
+        });
+      }
+      shout(c, 'GRRRAAAH', '#ff9060');
+      game.audio?.play('roar', c);
+      return true;
+    }
+    if (bossSlam(c, dt, 2, 1.1, 8, 5)) return true;
+    return false;
+  },
+
+  moltenHeart(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    const ph = phaseOf(c);
+    // Its four chains, anchored at the hall's corners.
+    if (!c.anchored) {
+      c.anchored = true;
+      const L = hallOf(c);
+      for (const [x, z] of [[L.x0 + 1, L.z0 + 1], [L.x1 - 1, L.z0 + 1], [L.x0 + 1, L.z1 - 1], [L.x1 - 1, L.z1 - 1]]) summon(game, 'heart_anchor', { x, y: c.y, z }, 1, { color: ['#8a8480', '#ffb040'] });
+      if (!game.toldAnchors) game.ui.msg('Four chains hold the Molten Heart up: break their anchors, or your blows will hardly touch it!', '#ffb070', true);
+      game.toldAnchors = true;
+    }
+    c.wardNote = (c.wardNote || 0) - dt;
+    c.chainFx = (c.chainFx || 0) - dt;
+    if (c.chainFx <= 0) {
+      c.chainFx = 0.3;
+      for (const a of game.creatures) if (!a.dead && a.species === 'heart_anchor') game.renderer.effect?.({ type: 'beam', wx: a.x, wy: a.y + 0.6, wz: a.z, tx: c.x, ty: c.y + 1.4, tz: c.z, life: 0.35, oy: -6, color: '#c8a070', halo: '#5a3a20', width: 1 });
+    }
+    if (!t || t.dead) return true;
+    const d = dist(c, t);
+    // The floor erupting under you, square by square.
+    if (cd(c, 'eruptCd', dt, 2) && ready(c) && !c.windup) {
+      c.eruptCd = ph >= 2 ? 5 : 6.5;
+      used(c, 0.4);
+      c.parity = 1 - (c.parity || 0);
+      const tiles = hallTiles(c).filter((q) => (q.x + q.z) % 2 === c.parity && Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) > 1);
+      fire(game, c, tiles, 1.5, 6, { quiet: true, onFire: (g, h) => {
+        for (let i = 0; i < 12; i++) {
+          const q = h.tiles[Math.floor(Math.random() * h.tiles.length)];
+          if (q) g.renderer.emit(q.x, c.y + 0.2, q.z, { n: 4, color: FIRE, up: 50, speed: 20, gravity: 140, life: 0.6, glow: true });
+        }
+      } });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the floor glows...', '#ff9060');
+      game.audio?.play('rumble', c);
+      return true;
+    }
+    // (Worn) A beam of magma, turned after you.
+    if (ph >= 2 && cd(c, 'beamCd', dt, 3) && ready(c) && d >= 2 && !c.windup) {
+      c.beamCd = 11;
+      used(c, 3);
+      startLaser(game, { by: c, ang: Math.atan2(t.z - c.z, t.x - c.x) + 0.8, turn: 0.4, len: 12, charge: 1.2, dur: 3, dmg: dmgOf(c, 3), tick: 0.35, width: 0.6, foes: 'player', fire: true, hue: 'red', aim: () => (c.target && !c.target.dead ? Math.atan2(c.target.z - c.z, c.target.x - c.x) : null) });
+      return true;
+    }
+    // (Desperate) Meltdown: lava in from the walls, ring by ring, till
+    // there's an island left; then it ebbs.
+    if (ph >= 3 && cd(c, 'meltCd', dt, 2) && ready(c) && !c.windup) {
+      c.meltCd = 18;
+      used(c, 2);
+      const L = hallOf(c);
+      const edge = (q) => Math.min(q.x - L.x0, L.x1 - q.x, q.z - L.z0, L.z1 - q.z);
+      const tiles = hallTiles(c);
+      proc(game, c, 1.1, 4, (k) => {
+        const ring = tiles.filter((q) => edge(q) === k);
+        fire(game, c, ring, 0.9, 5, { quiet: true, onFire: (g, h) => h.tiles.forEach((q) => work(g, q.x, FY, q.z, B.lava, 9 - k * 1.1, c)) });
+      });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'MELTDOWN: get to the middle!', '#ff6030');
+      game.audio?.play('eruption', c);
+      return true;
+    }
+    return true;
+  },
+
+  // A chain anchor: it only stands there, its chain taut.
+  heartAnchor() {
+    return true;
+  },
+};
+
+// Ash lying over the floor: slowed in it, and your flame gutters.
+function ashPatch(game, c, tiles, life) {
+  addZone(game, {
+    by: c, kind: 'ash', tiles: tiles.filter((q) => openFloor(game, q.x, q.z)), y: c.y, life, tick: 1, slow: true, color: [120, 114, 112], puff: ASHC,
+    onTick: (g, z, inside) => {
+      for (const e of inside) if (e === g.player) e.snuff?.(1.2);
+    },
+  });
+}
+
+// The floor split open in a jagged line through `at`, lit first, then lava.
+function rift(game, c, at) {
+  const across = Math.random() < 0.5;
+  const L = hallOf(c);
+  const tiles = [];
+  let w = across ? at.z : at.x;
+  const lo = across ? L.x0 : L.z0;
+  const hi = across ? L.x1 : L.z1;
+  for (let v = lo; v <= hi; v++) {
+    if (Math.random() < 0.3) w += Math.random() < 0.5 ? 1 : -1;
+    const q = across ? { x: v, z: w } : { x: w, z: v };
+    if (inHall(c, q) && openFloor(game, q.x, q.z) && !(Math.abs(q.x - c.x) <= 1 && Math.abs(q.z - c.z) <= 1)) tiles.push(q);
+  }
+  fire(game, c, tiles, 1.5, 6, { onFire: (g, h) => h.tiles.forEach((q) => work(g, q.x, FY, q.z, B.lava, 11, c)) });
+  game.audio?.play('rumble', c);
+}
+
+// A bolt from `c` at `t` that glances off the glass in its way (turning
+// toward `t`), `bends` times at most: its straight runs.
+function bounceBolt(game, c, t, len, bends) {
+  const out = [];
+  let x = c.x;
+  let z = c.z;
+  let dx = Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? Math.sign(t.x - c.x) : 0;
+  let dz = dx ? 0 : Math.sign(t.z - c.z) || 1;
+  let seg = { from: { x, z }, tiles: [] };
+  for (let n = 0; n < len; n++) {
+    const nx = x + dx;
+    const nz = z + dz;
+    const id = game.world.getBlock(nx, FY, nz);
+    if (id === B.glass && bends > 0) {
+      bends--;
+      seg.to = { x, z };
+      if (seg.tiles.length) out.push(seg);
+      game.renderer.emit(x, FY + 1, z, { n: 8, color: ['#ffffff', '#c8b8f0'], up: 20, speed: 40, life: 0.4, glow: true });
+      // (Turned toward you.)
+      if (dx) {
+        dx = 0;
+        dz = Math.sign(t.z - z) || (Math.random() < 0.5 ? 1 : -1);
+      } else {
+        dz = 0;
+        dx = Math.sign(t.x - x) || (Math.random() < 0.5 ? 1 : -1);
+      }
+      seg = { from: { x, z }, tiles: [] };
+      continue;
+    }
+    const b = game.world.getBlock(nx, FY, nz);
+    if (b !== B.air && b !== B.water && b !== B.lava && !(game.world.getBlock(nx, FY, nz) === B.fence)) break;
+    x = nx;
+    z = nz;
+    seg.tiles.push({ x, z });
+  }
+  seg.to = { x, z };
+  if (seg.tiles.length) out.push(seg);
+  return out;
+}
+
+Object.assign(BRAINS, KHAROS_BRAINS);
+Object.assign(BOSS_TITLES, KHAROS_TITLES);

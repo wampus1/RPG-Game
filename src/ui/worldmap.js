@@ -12,7 +12,7 @@ import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, CHAR_W, CHAR_H } from '..
 import { Window, cap } from './window.js';
 import { C } from './ascii.js';
 import { BIOMES } from '../world/biomes.js';
-import { DTYPES } from '../world/dungeongen.js';
+import { dtypeOf } from '../world/dungeongen.js';
 import { STORM, ARCHIPELAGO } from '../world/geography.js';
 import { drawGlyph, drawText, glyphBitmap } from '../render/font.js';
 import { teleportTo } from '../game/commands.js';
@@ -31,7 +31,7 @@ const TILES_FROM = 6; // ...or condensed tiles of them
 export function mapMode(z) {
   return z >= GLYPHS_FROM ? 'glyphs' : z >= TILES_FROM ? 'tiles' : 'dots';
 }
-const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║' };
+const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ' };
 const LAKE = '#2a5a9a';
 
 function hexRgb(h) {
@@ -816,7 +816,7 @@ export class MapWindow extends Window {
       const kav = d.type === 'kavorent';
       const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : '#f0d8a0';
       const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
-      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16', `${cap(d.name)} (${DTYPES[d.type].name}) · ${what}`, kav ? '#7ae0ff' : '#f0d8a0');
+      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}) · ${what}`, kav ? '#7ae0ff' : '#f0d8a0');
     }
   }
 

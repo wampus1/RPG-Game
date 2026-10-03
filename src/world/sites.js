@@ -6,6 +6,7 @@
 import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y } from '../config.js';
 import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { OWN_TYPE } from './isledeep.js';
 
 // What kind of place suits a map square, if any: by its land and its
 // neighbours.
@@ -65,8 +66,28 @@ export function genSites(ow) {
       sites.push({ id: sites.length, type, cx: c.cx, cz: c.cz, island: I.key, seed: hash4(ow.seed, c.cx, c.cz, sites.length, 0x5d1) });
       n++;
     }
+    // A share of them the island's own kind of place (see isledeep.js):
+    // where it best belongs (Thessa's hollows in its woods, Myrrow's
+    // grottoes by the sea, Kharos's forges anywhere on the mountain).
+    const own = OWN_TYPE[I.key];
+    const here = sites.filter((q) => q.island === I.key && q.type !== 'kavorent');
+    if (own && here.length) {
+      const want = Math.max(1, Math.round(here.length * OWN_SHARE[I.key]));
+      const score = (q) => ownSuits(ow, q, I.key) + (hash4(ow.seed, q.cx * 31 + q.cz, 0x15d) % 1000) / 1000;
+      here.sort((a, b) => score(b) - score(a)).slice(0, want).forEach((q) => (q.type = own));
+    }
   }
   return sites;
+}
+const OWN_SHARE = { thessa: 0.25, kharos: 0.4, myrrow: 0.4 };
+function ownSuits(ow, c, isle) {
+  const cell = ow.cell(c.cx, c.cz);
+  if (isle === 'thessa') return cell && ['forest', 'taiga', 'jungle'].includes(cell.biome) ? 2 : 0;
+  if (isle === 'myrrow') {
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (ow.cell(c.cx + dx, c.cz + dz)?.biome === 'ocean') return 2;
+    return 0;
+  }
+  return 0;
 }
 const LONELY = new Set(['desert', 'tundra', 'jungle', 'mountain', 'taiga', 'savanna', 'swamp', 'ashland', 'geyser', 'moor', 'fungal', 'mangrove']);
 
@@ -208,6 +229,56 @@ export function siteBlocks(s, state = {}) {
     put(0, h, 0, B.sinkhole);
     for (const [dx, dz] of [[-2, 4], [2, 4], [0, 5]]) put(dx, h + 1, dz, B.gravestone);
     put(0, h + 1, 3, B.air);
+    return out;
+  }
+  if (s.type === 'grove') {
+    clear(5);
+    // An old tree's stump, wider than a house, roots heaving out of the
+    // ground round it, and a dark hollow between two of them.
+    for (let dz = -3; dz <= 1; dz++) for (let dx = -3; dx <= 3; dx++) {
+      const d = Math.hypot(dx / 3.2, (dz + 1) / 2.4);
+      if (d > 1) continue;
+      for (let y = h + 1; y <= h + (d < 0.6 ? 4 : d < 0.85 ? 3 : 2); y++) put(dx, y, dz, B.log_oak);
+      if (d < 0.6) put(dx, h + 5, dz, rng.chance(0.6) ? B.moss : B.leaves_oak);
+    }
+    for (const [dx, dz] of [[-4, 1], [4, 1], [-3, 2], [3, 2], [-5, -1], [5, -2]]) put(dx, h + 1, dz, B.root_wall);
+    for (let i = 0; i < 6; i++) put(rng.int(-5, 5), h + 1, rng.int(2, 4), rng.chance(0.5) ? B.fern : B.mushroom_brown);
+    put(0, h + 1, 1, B.hollow_door);
+    put(0, h + 2, 1, B.log_oak);
+    put(0, h + 1, 2, B.air);
+    put(0, h, 2, B.moss);
+    return out;
+  }
+  if (s.type === 'forge') {
+    clear(5);
+    // A great door of basalt brick in the mountainside, its seams aglow,
+    // a chimney of brick smoking over it, slag heaped round.
+    for (let dz = -3; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, Math.abs(dx) === 3 || dz === -3 ? B.basalt : B.forge_brick);
+    for (let y = h + 4; y <= h + 7; y++) put(-2, y, -2, B.forge_brick);
+    put(-2, h + 8, -2, B.ash_brazier, 1);
+    for (let dx = -2; dx <= 2; dx++) put(dx, h, 1, B.slag);
+    for (let i = 0; i < 5; i++) put(rng.int(-5, 5), h + 1, rng.int(2, 4) * (rng.chance(0.5) ? 1 : -1), rng.chance(0.5) ? B.slag : B.obsidian);
+    put(0, h + 1, 0, B.forge_door);
+    put(0, h + 2, 0, B.forge_brick);
+    put(-2, h + 1, 1, B.ash_brazier, 1);
+    put(2, h + 1, 1, B.ash_brazier, 1);
+    return out;
+  }
+  if (s.type === 'grotto') {
+    clear(5);
+    // A sea cave's mouth in a rock arch crusted with coral and shells,
+    // shell sand before it.
+    for (let dz = -4; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) {
+      const d = Math.hypot(dx / 3.6, (dz + 2) / 2.6);
+      if (d > 1) continue;
+      put(dx, h + 1, dz, d > 0.8 && rng.chance(0.5) ? B.coral_rock : B.cave_rock);
+      if (d < 0.8) put(dx, h + 2, dz, B.coral_rock);
+      if (d < 0.45) put(dx, h + 3, dz, B.cave_rock);
+    }
+    for (let dz = 1; dz <= 4; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h, dz, B.shell_sand);
+    for (const [dx, dz] of [[-3, 1], [3, 2], [-2, 3]]) put(dx, h + 1, dz, B.coral, rng.int(0, 3));
+    put(0, h + 1, 0, B.grotto_mouth);
+    put(0, h + 2, 0, B.air);
     return out;
   }
   // A holdout: a rock outcrop with a cave in its face, a palisade before it.

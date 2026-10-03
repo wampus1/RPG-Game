@@ -74,6 +74,20 @@ export const THEMES = {
   dungeon_holdout_fight: { root: 55, scale: 'dorian', bpm: 150, prog: [0, 6, 0, 4], lead: 'square', drums: 'tribal', density: 0.78, drive: true, swing: 0.1 },
   dungeon_holdout_boss: { root: 46, scale: 'phrygian', bpm: 126, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'grand', density: 0.64, grand: true, brass: true },
   dungeon_kavorent_fight: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  // Each island's own old place, with its own music (`own`: not made over
+  // in the island's way, being its already): a Wildwood Hollow's pipes and
+  // creaking hush, a Kiln-Deep's anvils and the roar under them, a Tide
+  // Grotto's steel drums slowed to a drip, the sea's swell under it. And
+  // each its own fight, and its master's.
+  dungeon_grove: { own: true, root: 57, scale: 'dorian', bpm: 58, prog: [0, 6, 3, 4], lead: 'reed', pad: true, arp: true, drums: null, density: 0.22, detune: 8 },
+  dungeon_grove_fight: { own: true, root: 57, scale: 'dorian', bpm: 138, prog: [0, 6, 3, 4], lead: 'reed', drums: 'tribal', density: 0.74, drive: true, arp: true },
+  dungeon_grove_boss: { own: true, root: 45, scale: 'dorian', bpm: 116, prog: [0, 6, 3, 4, 0, 6, 1, 4], lead: 'reed', drums: 'grand', density: 0.62, grand: true, choir: true, brass: true, arp: true },
+  dungeon_forge: { own: true, root: 48, scale: 'phrygian', bpm: 62, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.26, drone: true },
+  dungeon_forge_fight: { own: true, root: 48, scale: 'phrygian', bpm: 150, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge_battle', density: 0.8, drive: true, drone: true },
+  dungeon_forge_boss: { own: true, root: 41, scale: 'phrygian', bpm: 124, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'buzz', drums: 'grand', density: 0.64, drone: true, grand: true, brass: true, choir: true, toll: true },
+  dungeon_grotto: { own: true, root: 55, scale: 'minpenta', bpm: 60, prog: [0, 3, 4, 3], lead: 'steel', pad: true, drums: 'drip', density: 0.24, fog: true, swing: 0.1 },
+  dungeon_grotto_fight: { own: true, root: 55, scale: 'dorian', bpm: 142, prog: [0, 6, 0, 3], lead: 'steel', drums: 'steel', density: 0.76, drive: true, fog: true },
+  dungeon_grotto_boss: { own: true, root: 46, scale: 'harmonic', bpm: 118, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'steel', drums: 'grand', density: 0.6, fog: true, grand: true, choir: true, brass: true },
   // A Kavorent spire: near it, a slow wrong music in a scale nobody uses;
   // as one opens, it gathers and swells; open, it rings.
   spire: { root: 49, scale: 'alien', bpm: 48, prog: [0, 1, 5, 2], lead: 'sine', pad: true, drums: null, density: 0.16, detune: 28, arp: true },
