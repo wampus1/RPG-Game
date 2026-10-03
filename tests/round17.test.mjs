@@ -217,9 +217,10 @@ test('a road out of a city starts from one of its gateways', () => {
 
 // ------------------------------------------------------------ leads
 test('leads are made from string, and lead an animal along behind you', () => {
-  const { game, input } = start(7);
+  const { game, input, L } = start(7);
   assert.ok(recipesFor('hand').some((r) => r.out === 'lead' && r.in.string === 3), 'three string makes a lead');
-  const { x, z, w, p } = outside(game);
+  // (Clear of the town and its crowds: past its east side.)
+  const { x, z, w, p } = outside(game, L.bounds.x1 + 14 - game.player.x);
   const c = new Creature(game, 'deer', x + 2, w.findStandY(x + 2, z, p.y), z, 0);
   game.addCreature(c);
   p.inv[p.selected] = { item: 'lead', count: 2 };
