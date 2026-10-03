@@ -1462,6 +1462,7 @@ export class Game {
     const ICON = {
       tavern: 'stew', shop: 'coin', smithy: 'iron_sword', temple: 'prayer_beads', bakery: 'bread', library: 'book', townhall: 'scroll',
       guardhouse: 'spear', tailor: 'cloth', workshop: 'planks', herbalist: 'herb', warehouse: 'crate', barn: 'wheat', manor: 'gem',
+      windmill: 'flour', glassworks: 'glass', sporehouse: 'glowcap', pearlhouse: 'pearl',
     };
     this.signIcons.clear();
     for (const { layout } of this.active.values()) {
@@ -1562,6 +1563,25 @@ export class Game {
         }
       }
     }
+  }
+
+  // A licensed pearl diver swimming in open water comes up with a pearl
+  // now and then (more often the deeper the time spent under).
+  pearlDive(dt) {
+    const p = this.player;
+    if (!p.inWater || p.raft || this.dungeon || !this.sim.careers.canUseBench('pearldiver')) {
+      this.diveT = 0;
+      return;
+    }
+    this.diveT = (this.diveT || 0) + dt;
+    if (this.diveT < 18) return;
+    this.diveT = 0;
+    if (Math.random() < 0.55) {
+      const left = p.give('pearl', 1);
+      if (left) this.spawnDrop('pearl', left, p.x, p.y, p.z, true);
+      this.ui.msg('You come up with an oyster, and in it a pearl!', '#f0e8ff');
+      this.renderer.emit(p.x, p.y + 0.6, p.z, { n: 8, color: ['#f4f0ff', '#c8e0ff', '#ffffff'], up: 30, speed: 20, life: 0.6, gravity: 20 });
+    } else this.ui.msg('Only empty shells this time.', '#a0b8c8');
   }
 
   // How thick the mountain's ash is over the sky where you are (0 to 1):
@@ -1729,6 +1749,7 @@ export class Game {
     for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.poisonT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
     this.lavaTick(dt);
     enforceIslandLaws(this, dt);
+    this.pearlDive(dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) {
@@ -2116,11 +2137,16 @@ export class Game {
       p.buffs.push({ combat: e.combat, n: e.n, until: now + e.hours * 60, name: d.name });
       if (e.combat === 'breath') p.stamina = (p.stamina || 0) + e.n;
     }
+    // (Fogsight: the dark goes grey and clear; see lighting.js.)
+    if (e.sight) {
+      p.buffs = (p.buffs || []).filter((q) => !q.sight || q.until <= now);
+      p.buffs.push({ sight: true, until: now + e.hours * 60, name: d.name });
+    }
     removeItem(p.inv, slot.item, 1);
     this.refreshBonus();
     this.audio?.play('gulp');
     this.renderer.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#e8e0ff', '#a0c8ff', '#fff4c0'], up: 25, life: 0.7, gravity: -15 });
-    const what = e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.combat ? `${combatBuffText(e)} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
+    const what = e.sight ? `you see in the dark for ${e.hours} hours` : e.stat ? `${{ str: 'Strength', agi: 'Agility', end: 'Endurance', cha: 'Charisma' }[e.stat]} +${e.n} for ${e.hours} hours` : e.combat ? `${combatBuffText(e)} for ${e.hours} hours` : e.blue ? `+${e.blue} blue health until the day ends` : `+${e.heal} health`;
     this.ui.msg(`${d.name}: ${what}.`, '#c0a0ff');
     return true;
   }

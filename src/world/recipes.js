@@ -19,9 +19,14 @@ export const STATIONS = {
   woodcutter: 'Sawhorse',
   farmer: 'Potting Bench',
   miner: 'Rock Crusher',
+  // The islands' own trades (see isletrades.js).
+  miller: 'Millstone',
+  glassblower: 'Glass Kiln',
+  sporewright: 'Spore Bed',
+  pearldiver: 'Pearl-Sorting Table',
 };
 // Stations that belong to a trade.
-export const TRADE_STATIONS = new Set(['tailor', 'herbalist', 'scribe', 'jeweller', 'baker', 'smith', 'trapper', 'fisher', 'woodcutter', 'farmer', 'miner']);
+export const TRADE_STATIONS = new Set(['tailor', 'herbalist', 'scribe', 'jeweller', 'baker', 'smith', 'trapper', 'fisher', 'woodcutter', 'farmer', 'miner', 'miller', 'glassblower', 'sporewright', 'pearldiver']);
 
 const R = [];
 function r(station, out, n, ingredients) {
@@ -256,6 +261,27 @@ r('farmer', 'hay_bale', 1, { wheat: 5 });
 r('miner', 'iron_ore', 1, { cobblestone: 8 });
 r('miner', 'coal', 2, { cobblestone: 6 });
 r('miner', 'sand', 4, { cobblestone: 2 });
+// Thessa's millers: flour from wheat, and a loaf or two from flour.
+r('miller', 'flour', 2, { wheat: 3 });
+r('miller', 'bread', 2, { flour: 1, wheat: 1 });
+r('miller', 'hay_bale', 1, { wheat: 4 });
+// Kharos's glassblowers: glass from sand (and the mountain's own black
+// glass), lanterns, goggles against the ash, black-glass blades.
+r('glassblower', 'glass', 3, { sand: 2, coal: 1 });
+r('glassblower', 'glass', 2, { obsidian_shard: 2 });
+r('glassblower', 'lantern', 1, { glass: 1, torch: 1, iron_ingot: 1 });
+r('glassblower', 'ash_goggles', 1, { glass: 2, leather: 1 });
+r('glassblower', 'obsidian_blade', 1, { obsidian_shard: 3, stick: 1, string: 1 });
+// The Mirefolk's sporewrights: glowcaps raised in peat, and what's made
+// of them.
+r('sporewright', 'glowcap', 2, { mushroom: 1, peat_turf: 1 });
+r('sporewright', 'mushroom', 3, { peat_turf: 1 });
+r('sporewright', 'mushroom_broth', 1, { mushroom: 2, glowcap: 1 });
+r('sporewright', 'glowcap_tea', 2, { glowcap: 1 });
+r('sporewright', 'spore_tincture', 1, { glowcap: 2, glass: 1 });
+// The Stiltfolk's pearl divers: pearls strung, harpoons for the deep.
+r('pearldiver', 'pearl_necklace', 1, { pearl: 4, string: 1 });
+r('pearldiver', 'harpoon', 1, { stick: 2, iron_ingot: 1, string: 1 });
 
 export const RECIPES = R;
 

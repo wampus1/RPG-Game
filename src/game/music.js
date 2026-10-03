@@ -102,7 +102,72 @@ export const THEMES = {
   // you back, strange and climbing.
   death: { root: 45, scale: 'harmonic', bpm: 44, prog: [0, 5, 3, 4], lead: 'sine', pad: true, organ: true, bell: true, drums: null, density: 0.16 },
   ritual: { root: 50, scale: 'alien', bpm: 88, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, bell: true, drums: null, density: 0.5, detune: 26 },
+  // --- the other Dagoni Islands, each its own sound -------------------------
+  // Kharos: the Ashborn's music is the forge's. A buzzing reed of a lead
+  // (`buzz`), anvils for drums (`forge`), the mountain's rumble under it all
+  // (`drone`), in the dark modes. Its ash plains bare and slow; the cinder
+  // woods crackling; the geyser fields hissing in a scale of whole steps;
+  // the mountain itself savage.
+  ashland: { root: 50, scale: 'phrygian', bpm: 66, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.3, drone: true },
+  cinderwood: { root: 52, scale: 'harmonic', bpm: 76, prog: [0, 5, 1, 4], lead: 'triangle', pad: true, drums: 'crackle', density: 0.36, drone: true },
+  geyser: { root: 55, scale: 'whole', bpm: 70, prog: [0, 2, 0, 4], lead: 'sine', pad: true, arp: true, drums: 'crackle', density: 0.3, detune: 10 },
+  volcano: { root: 45, scale: 'phrygian', bpm: 90, prog: [0, 1, 6, 1], lead: 'buzz', drums: 'forge', density: 0.42, drone: true, stabs: true, fifths: true },
+  ashborn_village: { root: 52, scale: 'phrygian', bpm: 96, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.6, fifths: true },
+  ashborn_town: { root: 54, scale: 'hijaz', bpm: 104, prog: [0, 1, 5, 4], lead: 'buzz', drums: 'forge', density: 0.66, arp: true, fifths: true },
+  ashborn_city: { root: 50, scale: 'hijaz', bpm: 110, prog: [0, 1, 0, 6, 0, 5, 1, 4], lead: 'buzz', drums: 'forge', density: 0.7, arp: true, pad: true, stabs: true, drone: true },
+  fight_kharos: { root: 50, scale: 'phrygian', bpm: 152, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge_battle', density: 0.82, drive: true, drone: true },
+  // Myrrow: the Mirefolk's is the fog's: a breathy reed flute (`reed`),
+  // water dripping in the dark for drums (`drip`), a pad drifting out of
+  // tune (`fog`). The Stiltfolk's is the shallows': a steel-drum lead
+  // (`steel`), wood blocks and hand drums (`steel`), lilting. The moor
+  // bleak; the fungal woods strange, in whole steps; the mangroves between.
+  moor: { root: 55, scale: 'dorian', bpm: 64, prog: [0, 6, 3, 6], lead: 'reed', pad: true, fog: true, drums: null, density: 0.3 },
+  fungal: { root: 58, scale: 'whole', bpm: 72, prog: [0, 2, 1, 3], lead: 'reed', arp: true, fog: true, drums: 'drip', density: 0.32, detune: 20 },
+  mangrove: { root: 60, scale: 'minpenta', bpm: 84, prog: [0, 3, 4, 3], lead: 'steel', drums: 'drip', density: 0.42, swing: 0.15, fog: true },
+  mire_village: { root: 57, scale: 'dorian', bpm: 84, prog: [0, 6, 3, 4], lead: 'reed', pad: true, fog: true, drums: 'drip', density: 0.5 },
+  mire_town: { root: 59, scale: 'dorian', bpm: 90, prog: [0, 3, 6, 4], lead: 'reed', pad: true, fog: true, drums: 'drip', density: 0.56, arp: true },
+  mire_city: { root: 55, scale: 'dorian', bpm: 94, prog: [0, 6, 3, 4, 0, 2, 6, 4], lead: 'reed', pad: true, organ: true, fog: true, drums: 'soft', density: 0.6, arp: true },
+  stilt_village: { root: 64, scale: 'penta', bpm: 108, prog: [0, 4, 3, 4], lead: 'steel', drums: 'steel', density: 0.62, swing: 0.22 },
+  stilt_town: { root: 65, scale: 'mixo', bpm: 114, prog: [0, 6, 3, 4], lead: 'steel', drums: 'steel', density: 0.66, swing: 0.2, harmony: true },
+  stilt_city: { root: 62, scale: 'mixo', bpm: 118, prog: [0, 3, 6, 4, 0, 3, 4, 4], lead: 'steel', drums: 'steel', density: 0.7, swing: 0.2, arp: true, harmony: true, pad: true },
+  fight_myrrow: { root: 53, scale: 'dorian', bpm: 140, prog: [0, 6, 0, 3], lead: 'square', drums: 'battle', density: 0.76, drive: true, fog: true },
 };
+
+// The two other islands' sound laid over any tune heard there that isn't
+// their own already (the beach, the sea, a fight with the watch, a tavern,
+// the dungeons below and their masters): its modes darkened or blurred, its
+// instruments and drums swapped for the island's. (Thessa's is the plain
+// one.)
+const ISLE_SOUND = {
+  kharos: {
+    root: -2, scale: { minor: 'harmonic', dorian: 'phrygian', mixo: 'hijaz', major: 'hijaz', penta: 'minpenta', lydian: 'phrygian' },
+    lead: { square: 'buzz', triangle: 'buzz' }, drums: { soft: 'forge', light: 'forge', hand: 'forge', tribal: 'forge', march: 'forge', battle: 'forge_battle' }, drone: true,
+  },
+  myrrow: {
+    root: 1, bpmX: 0.92, scale: { minor: 'dorian', harmonic: 'dorian', phrygian: 'dorian', major: 'lydian', mixo: 'dorian', penta: 'minpenta' },
+    lead: { triangle: 'reed', sine: 'reed' }, drums: { soft: 'drip', light: 'drip', hand: 'drip', tribal: 'drip' }, fog: true,
+  },
+};
+export function isleTheme(T, isle) {
+  const c = ISLE_SOUND[isle];
+  if (!c) return T;
+  T.root += c.root || 0;
+  if (c.bpmX) T.bpm *= c.bpmX;
+  T.scale = c.scale[T.scale] || T.scale;
+  if (!T.bell) T.lead = c.lead[T.lead] || T.lead;
+  if (T.drums) T.drums = c.drums[T.drums] || T.drums;
+  if (c.drone) T.drone = true;
+  if (c.fog) {
+    T.fog = true;
+    T.detune = Math.max(T.detune || 0, 12);
+  }
+  return T;
+}
+// Each island's own tunes, where it has them: its towns' (by people), its
+// fights' and its lands'.
+const ISLE_TOWNS = { ember: 'ashborn', mist: 'mire', tide: 'stilt' };
+const ISLE_FIGHTS = { kharos: 'fight_kharos', myrrow: 'fight_myrrow' };
+const OWN_BIOMES = new Set(['ashland', 'cinderwood', 'geyser', 'volcano', 'moor', 'fungal', 'mangrove']);
 
 // The title plays these one after another (a few minutes each, never the
 // same one twice running): the theme and what it's called.
@@ -133,20 +198,23 @@ export function musicMood(game) {
   if (!p) return 'title';
   if (game.cutscene && game.cutscene.mood) return game.cutscene.mood;
   if (game.scene && game.scene.mood) return game.scene.mood;
+  // (Which of the Dagoni Islands you're on, or under: its sound.)
+  const tilde = isleTilde(game);
   // A fight: guards after you, or beasts at your throat.
   if (!p.dead) {
     const guards = game.npcs.some((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);
-    if (guards) return 'fight_guards';
+    if (guards) return `fight_guards${tilde}`;
     const beasts = game.creatures.some((c) => !c.dead && c.hostileNow && c.target === p && c.distTo(p) < 12);
     if (beasts || (game.combatT || 0) > 0) {
-      if (game.combatWith === 'guard') return 'fight_guards';
+      if (game.combatWith === 'guard') return `fight_guards${tilde}`;
       // (Below ground: a master's hall, or the place's own fight music.)
       if (game.dungeon) {
         const ty = game.dungeon.rec.type;
-        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss:p${fightPhase(game.dungeon.fight)}`;
-        return `dungeon_${ty}_fight`;
+        const own = ownDungeon(ty) ? '' : tilde;
+        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${fightPhase(game.dungeon.fight)}`;
+        return `dungeon_${ty}_fight${own}`;
       }
-      return 'fight_monsters';
+      return ISLE_FIGHTS[tilde.slice(1)] || 'fight_monsters';
     }
   }
   // Near a Kavorent spire (not one whose ruin is beaten).
@@ -157,7 +225,11 @@ export function musicMood(game) {
   }
   // Down below (no nights there): its master's fight, once begun, even
   // between blows.
-  if (game.dungeon) return game.dungeon.fight ? `dungeon_${game.dungeon.rec.type}_boss:p${fightPhase(game.dungeon.fight)}` : `dungeon_${game.dungeon.rec.type}`;
+  if (game.dungeon) {
+    const ty = game.dungeon.rec.type;
+    const own = ownDungeon(ty) ? '' : tilde;
+    return game.dungeon.fight ? `dungeon_${ty}_boss${own}:p${fightPhase(game.dungeon.fight)}` : `dungeon_${ty}${own}`;
+  }
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;
   if (s) {
@@ -167,15 +239,34 @@ export function musicMood(game) {
       const d = Math.max(gy.x - 3 - p.x, p.x - (gy.x + gy.W + 2), gy.z - 3 - p.z, p.z - (gy.z + 2 * gy.maxRows + 3));
       if (d <= 0) return 'graveyard';
     }
-    if (s.condition === 'abandoned' || s.deserted) return 'ruins';
+    if (s.condition === 'abandoned' || s.deserted) return `ruins${tilde}`;
     const b = game.buildingAtPlayer ? game.buildingAtPlayer() : null;
-    if (b && b.type === 'tavern') return night ? 'tavern:night' : 'tavern';
-    const kind = (s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village') + townMusic(L);
+    if (b && b.type === 'tavern') return night ? `tavern${tilde}:night` : `tavern${tilde}`;
+    // (An island people's town plays its own tune; Thessa's peoples play
+    // the old tunes their own way.)
+    const tier = s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village';
+    const style = (s.civ ? s.civ.style : s.style) || 'vale';
+    const kind = (ISLE_TOWNS[style] ? `${ISLE_TOWNS[style]}_${tier}` : tier) + townMusic(L);
     return night ? `${kind}:night` : kind;
   }
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
-  const t = THEMES[biome] ? biome : 'plains';
+  const t = (THEMES[biome] ? biome : 'plains') + (OWN_BIOMES.has(biome) ? '' : tilde);
   return night ? `${t}:night` : t;
+}
+
+// '~kharos' or '~myrrow' where you are (or where the dungeon you're in
+// is), '' on Thessa or anywhere else.
+export function isleTilde(game) {
+  const ow = game.world && game.world.ow;
+  if (!ow || !ow.islandAt) return '';
+  const at = game.dungeon && game.dungeon.rec && game.dungeon.rec.x !== undefined ? game.dungeon.rec : game.player;
+  const isle = ow.islandAt(Math.round(at.x), Math.round(at.z));
+  return ISLE_SOUND[isle] ? `~${isle}` : '';
+}
+
+// An island's own kind of dungeon has its own music already.
+function ownDungeon(ty) {
+  return !!(THEMES[`dungeon_${ty}`] && THEMES[`dungeon_${ty}`].own);
 }
 
 // Each people plays its own way; a thriving town's tune is quick and
@@ -186,11 +277,8 @@ const CULTURE_SOUND = {
   sun: { scale: 'hijaz', root: 2, drums: 'hand', swing: 0.1 },
   wild: { scale: 'lydian', root: 4, drums: 'tribal', arp: true },
   high: { scale: 'mixo', root: -5, bpmX: 0.92, drums: 'march', fifths: true, pad: true },
-  // (The Ashborn: dark and driving, forge-hammer drums; the Mirefolk: slow
-  // and hushed, a pad like fog; the Stiltfolk: bright and lilting.)
-  ember: { scale: 'phrygian', root: -3, bpmX: 0.96, drums: 'march', fifths: true },
-  mist: { scale: 'dorian', root: 1, bpmX: 0.84, drums: 'soft', pad: true, lead: 'triangle' },
-  tide: { scale: 'penta', root: 5, drums: 'hand', swing: 0.15, arp: true },
+  // (The Ashborn, the Mirefolk and the Stiltfolk have tunes of their own:
+  // see ISLE_TOWNS.)
 };
 const DARKER = { major: 'minor', mixo: 'dorian', lydian: 'dorian', hijaz: 'phrygian', dorian: 'phrygian', penta: 'minpenta' };
 export function flavourTheme(T, style, fortune) {
@@ -221,11 +309,14 @@ export function flavourTheme(T, style, fortune) {
 // faint high shimmer now and then. (Whatever the people's own drums: a
 // sun town's hand drums and a high town's march quieten too.)
 const NIGHT_SCALE = { major: 'lydian', mixo: 'dorian', hijaz: 'phrygian', penta: 'minpenta' };
-const NIGHT_DRUMS = { light: 'soft', hand: 'soft', tribal: 'soft', march: null, soft: null };
+const NIGHT_DRUMS = { light: 'soft', hand: 'soft', tribal: 'soft', march: null, soft: null, forge: 'crackle', steel: 'soft', drip: 'drip', crackle: 'crackle' };
+// (The islands' own instruments stay at night, softer; a forge's buzz goes
+// down to a reed.)
+const NIGHT_LEAD = { square: 'triangle', buzz: 'reed', reed: 'reed', steel: 'steel' };
 export function nightTheme(T) {
   T.bpm *= 0.74;
   T.density *= 0.55;
-  T.lead = T.lead === 'square' ? 'triangle' : 'sine';
+  T.lead = NIGHT_LEAD[T.lead] || 'sine';
   if (T.drums in NIGHT_DRUMS) T.drums = NIGHT_DRUMS[T.drums];
   T.scale = NIGHT_SCALE[T.scale] || T.scale;
   T.pad = true;
@@ -248,10 +339,13 @@ export function bossLevel(variant) {
 class Voice {
   constructor(music, key, fadeIn = 2.5) {
     const [full, variant] = key.split(':');
-    const [name, flavour] = full.split('@');
+    const [named, flavour] = full.split('@');
+    // (`~isle`: one of the other islands' sound laid over it.)
+    const [name, isle] = named.split('~');
     this.m = music;
     this.key = key;
-    this.T = { ...THEMES[name] };
+    this.T = { ...(THEMES[name] || THEMES.plains) };
+    if (isle) isleTheme(this.T, isle);
     // A town's own people's sound, and how it's doing.
     if (flavour) flavourTheme(this.T, ...flavour.split('.'));
     if (variant === 'night') nightTheme(this.T);
@@ -341,6 +435,64 @@ class Voice {
     this.tone(freq, t, dur * 2.2, 'sine', vol);
     this.tone(freq * 2.76, t, dur * 0.9, 'sine', vol * 0.28);
     this.tone(freq * 5.4, t, dur * 0.4, 'sine', vol * 0.1);
+  }
+
+  // The islands' instruments. An anvil struck (Kharos's drums): a bright
+  // ring of partials that don't agree, dying fast.
+  anvil(t, vol) {
+    for (const [m, v] of [[1, 1], [1.47, 0.6], [2.33, 0.4], [3.9, 0.2]]) this.tone(1180 * m, t, 0.22 / m + 0.05, 'square', vol * v * 0.18);
+    this.hit(t, 3200, 0.05, vol * 0.4);
+  }
+
+  // A drip in the dark (the Mirefolk's): a falling plink, and its echo.
+  drip(t, vol) {
+    const c = this.m.ctx;
+    for (const [d, v] of [[0, 1], [0.18, 0.35]]) {
+      const o = c.createOscillator();
+      const g = c.createGain();
+      const f = 1500 + this.rand() * 900;
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t + d);
+      o.frequency.exponentialRampToValueAtTime(f * 0.55, t + d + 0.09);
+      g.gain.setValueAtTime(vol * v, t + d);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.12);
+      o.connect(g).connect(this.out);
+      o.start(t + d);
+      o.stop(t + d + 0.15);
+    }
+  }
+
+  // A steel drum (the Stiltfolk's lead): a round note, a bright overtone
+  // that fades first.
+  steel(freq, t, dur, vol) {
+    this.tone(freq, t, dur * 1.4, 'triangle', vol);
+    this.tone(freq * 2, t, dur * 0.5, 'sine', vol * 0.45);
+    this.tone(freq * 3.01, t, dur * 0.25, 'sine', vol * 0.18);
+  }
+
+  // A reed flute (the Mirefolk's): breathy, slow to speak.
+  reed(freq, t, dur, vol) {
+    this.swell(freq, t, Math.max(0.12, dur * 1.1), 'triangle', vol, 2400, 0.25, 6);
+    this.hit(t, freq * 3, Math.min(0.12, dur), vol * 0.15);
+  }
+
+  // A buzzing reed (the Ashborn's lead): a saw through a closing filter.
+  buzz(freq, t, dur, vol) {
+    const c = this.m.ctx;
+    const o = c.createOscillator();
+    const f = c.createBiquadFilter();
+    const g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq, t);
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(1900, t);
+    f.frequency.exponentialRampToValueAtTime(700, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
   }
 
   hit(t, freq, dur, vol) {
@@ -496,6 +648,29 @@ class Voice {
     } else if (d === 'tribal') {
       if ([0, 6, 8, 11, 14].includes(b)) this.kick(t, b === 0 ? 0.4 : 0.22);
       if (b % 4 === 2) this.hit(t, 500, 0.08, 0.1);
+    } else if (d === 'forge') {
+      // (Kharos: the hammer and the anvil, a bellows breathing.)
+      if (b === 0 || b === 8) this.kick(t, 0.42);
+      if (b === 4 || b === 12) this.anvil(t, 0.5);
+      if (b === 14 && this.rand() < 0.5) this.anvil(t, 0.25);
+      if (b === 6) this.hit(t, 400, 0.25, 0.06);
+    } else if (d === 'forge_battle') {
+      if ([0, 3, 8, 11].includes(b)) this.kick(t, 0.55);
+      if (b === 4 || b === 12) this.anvil(t, 0.7);
+      if (b % 2 === 1) this.anvil(t, 0.12);
+    } else if (d === 'crackle') {
+      // (Embers: a crackle here and there, a low thump.)
+      if (b === 0) this.kick(t, 0.2);
+      if (this.rand() < 0.22) this.hit(t, 2500 + this.rand() * 4000, 0.02, 0.05 + this.rand() * 0.05);
+    } else if (d === 'drip') {
+      // (Myrrow's dark water: a drip, now and then, and a heartbeat.)
+      if (b === 0) this.kick(t, 0.18);
+      if (b === 10 && this.rand() < 0.5) this.kick(t, 0.1);
+      if (this.rand() < 0.11) this.drip(t, 0.09);
+    } else if (d === 'steel') {
+      // (The stilts: hand drums under, a wood block knocking across them.)
+      if ([0, 3, 6, 10, 12].includes(b)) this.hit(t, b === 0 ? 260 : 650 + (b % 3) * 140, 0.1, 0.15);
+      if ([2, 5, 9, 13].includes(b)) this.hit(t, 2900, 0.03, 0.09);
     }
   }
 
@@ -541,6 +716,9 @@ class Voice {
       const dg = n.deg + chord * (this.rand() < 0.3 ? 1 : 0);
       const nt = this.note(dg, 1);
       if (T.bell) this.bell(midi(nt), t + sw, sd * n.len, 0.075);
+      else if (T.lead === 'steel') this.steel(midi(nt), t + sw, sd * n.len, 0.075);
+      else if (T.lead === 'reed') this.reed(midi(nt), t + sw, sd * n.len, 0.07);
+      else if (T.lead === 'buzz') this.buzz(midi(nt), t + sw, sd * n.len * 0.95, 0.045);
       else this.tone(midi(nt), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
       // (Sung in parts: a third under it on the beats.)
       if (T.harmony && ps % 4 === 0) this.tone(midi(this.note(dg - 2, 1)), t + sw, sd * n.len * 0.9, 'triangle', 0.045);
@@ -549,6 +727,10 @@ class Voice {
     }
     // A master's: grand and dark.
     if (T.grand) this.grandLayers(s, t, bar, b, chord, sd);
+    // (Kharos: the mountain's rumble under it, every other bar.)
+    if (T.drone && !T.grand && b === 0 && bar % 2 === 0) this.swell(midi(T.root - 24), t, sd * M * 2, 'sawtooth', 0.045, 180, 0.4);
+    // (Myrrow: a fog of a chord drifting in and out of tune.)
+    if (T.fog && b === 0 && bar % 2 === 1) for (const k of [0, 4]) this.swell(midi(this.note(chord + k, 0)), t, sd * M * 2, 'sine', 0.025, 1600, 0.45, 30);
     // A slow bell in the graveyard.
     if (T.toll && s % (2 * M) === 0) {
       for (const [m, v] of [[1, 0.12], [2.76, 0.05], [5.4, 0.02]]) this.tone(midi(this.T.root - 12) * m, t, 3.5, 'sine', v);

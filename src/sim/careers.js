@@ -9,6 +9,7 @@ import { countItem, removeItem } from '../game/inventory.js';
 import { ITEMS, tabardFor } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
+import { THESSA_STYLES } from './isletrades.js';
 
 // The arms a guard may be issued.
 export const GUARD_ARMS = ['iron_sword', 'spear', 'mace', 'battle_axe', 'halberd', 'sabre', 'short_sword', 'flail', 'hand_axe', 'greatsword'];
@@ -71,6 +72,24 @@ export const PROFESSIONS = {
     title: 'Jeweller', tier: 'city', importance: 1, workshop: 'jeweller', minOp: 15, kit: [], goods: ['gem', 'gold_ingot', 'gold_circlet'], tech: 'gemcraft',
     pitch: 'Our nobles and merchants pay handsomely for gems, gold and fine things from a licensed jeweller.',
   },
+  // Each island people's own trade (see isletrades.js): only its towns
+  // license it.
+  miller: {
+    title: 'Miller', importance: 4, bench: 'millstone', minOp: -5, kit: [['wheat', 9]], goods: ['flour', 'bread', 'wheat', 'hay_bale'], styles: THESSA_STYLES,
+    pitch: 'A licensed miller may grind at a millstone: flour from wheat, a loaf or two from flour. Our bakers and kitchens pay a premium for it.',
+  },
+  glassblower: {
+    title: 'Glassblower', importance: 3, bench: 'glass_kiln', minOp: 0, kit: [['sand', 6], ['coal', 3]], goods: ['glass', 'lantern', 'ash_goggles', 'obsidian_blade'], styles: ['ember'],
+    pitch: 'A licensed glassblower works a kiln: window glass from sand or the mountain\'s black glass, lanterns, goggles against the ash, black-glass blades. We pay well for them.',
+  },
+  sporewright: {
+    title: 'Sporewright', importance: 4, bench: 'spore_bed', minOp: -5, kit: [['peat_turf', 4], ['mushroom', 4]], goods: ['glowcap', 'mushroom', 'mushroom_broth', 'glowcap_tea', 'spore_tincture'], styles: ['mist'],
+    pitch: 'A licensed sporewright raises glowcaps in beds of peat, and brews from them: broth, tea, and the fogsight tincture that lets you see in the dark. The mist folk buy all you make.',
+  },
+  pearldiver: {
+    title: 'Pearl Diver', importance: 4, bench: 'pearl_table', minOp: -5, kit: [['string', 2]], goods: ['pearl', 'pearl_necklace', 'crab_meat'], styles: ['tide'],
+    pitch: 'A licensed pearl diver may dive for oysters in the shallows: swim in the sea a while and you\'ll come up with pearls now and then. String them at a sorting table; the stilt folk pay a premium.',
+  },
 };
 
 // What a licence costs: the more a town needs the trade, the cheaper (the
@@ -92,9 +111,10 @@ export function licenceFee(job, s, citizen, hasShop) {
 
 // Settlement sizes, smallest first: a licence needs a place at least this big.
 export const TIER_ORDER = ['village', 'town', 'city'];
-export function licensesFor(type) {
+// (An island people's own trade, only where they live.)
+export function licensesFor(type, style = null) {
   const t = Math.max(0, TIER_ORDER.indexOf(type));
-  return Object.keys(PROFESSIONS).filter((k) => TIER_ORDER.indexOf(PROFESSIONS[k].tier || 'village') <= t);
+  return Object.keys(PROFESSIONS).filter((k) => TIER_ORDER.indexOf(PROFESSIONS[k].tier || 'village') <= t && (!PROFESSIONS[k].styles || PROFESSIONS[k].styles.includes(style)));
 }
 
 // What each trade needs for its work, and so will buy from you; plain food
@@ -120,6 +140,10 @@ export const NEEDS = {
   lumberjack: ['iron_axe', 'leather_boots'],
   trapper: ['string', 'leather_tunic', 'leather_trousers'],
   fisher: ['string', 'wool_hood'],
+  miller: ['wheat', 'flour'],
+  glassblower: ['sand', 'obsidian_shard', 'coal', 'leather'],
+  sporewright: ['mushroom', 'glowcap', 'peat_turf', 'glass'],
+  pearldiver: ['pearl', 'string', 'fish'],
 };
 export const HOME_FOOD = ['bread', 'pie', 'cooked_fish', 'cooked_meat', 'apple', 'carrot', 'cabbage', 'berries'];
 
@@ -309,7 +333,8 @@ export class Careers {
     const P = PROFESSIONS[job];
     const sim = this.sim;
     if (!P) return { ok: false, reason: 'unknown' };
-    if (!licensesFor(s.type).includes(job)) return { ok: false, reason: 'tier', tier: P.tier };
+    if (P.styles && !P.styles.includes(s.style)) return { ok: false, reason: 'people' };
+    if (!licensesFor(s.type, s.style).includes(job)) return { ok: false, reason: 'tier', tier: P.tier };
     if (sim.justice.exiled.has(s.id)) return { ok: false, reason: 'exiled' };
     if (sim.justice.pendingIn(s.id).length || this.game.isWanted(s.id)) return { ok: false, reason: 'crimes' };
     if (P.citizen && !sim.isCitizen(s.id)) return { ok: false, reason: 'citizen' };

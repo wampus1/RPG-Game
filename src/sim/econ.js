@@ -7,6 +7,7 @@
 // simply caught up (hour by hour, capped) the next time it's needed.
 import { foundingLaws, reviewLaws, LAWS, LAW_IDS } from './laws.js';
 import { blackGlassStock } from './islelaws.js';
+import { TRADE_GOODS, tradeOutput } from './isletrades.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
@@ -35,6 +36,11 @@ export const STOCK = {
   farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
   scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern', 'paper', 'ink'],
   trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers', 'sling', 'longbow'],
+  // The islands' own trades (see isletrades.js).
+  miller: ['flour', 'bread', 'wheat', 'seeds', 'hay_bale'],
+  glassblower: ['glass', 'lantern', 'ash_goggles', 'obsidian_blade', 'obsidian_shard'],
+  sporewright: ['glowcap', 'mushroom', 'mushroom_broth', 'glowcap_tea', 'spore_tincture', 'peat_turf'],
+  pearldiver: ['pearl', 'pearl_necklace', 'crab_meat', 'harpoon', 'fish'],
 };
 
 // What a trader keeps in stock here: herbalists brew potions only where
@@ -79,6 +85,10 @@ export const WANTS = {
   farmer: ['seeds', 'bone', 'wheat', 'carrot', 'cabbage'],
   scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper', 'old_blueprint', 'old_coin', ...SHARD_KEYS],
   trapper: ['string', 'stick', 'feather', 'arrow', 'raw_meat', 'leather', 'bone'],
+  miller: ['wheat', 'flour', 'seeds'],
+  glassblower: ['sand', 'obsidian_shard', 'coal', 'sulfur', 'glass'],
+  sporewright: ['mushroom', 'glowcap', 'peat_turf', 'herb', 'moth_dust'],
+  pearldiver: ['pearl', 'string', 'fish', 'crab_meat'],
   adventurer: ['arrow', 'bow', 'bread', 'stew', 'feast', 'cooked_meat', 'cooked_fish', 'apple', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude', 'potion_breath', 'potion_fury', 'potion_haste',
     'iron_sword', 'gold_sword', 'spear', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'leather_boots', 'leather_cap', 'gem', 'torch', 'leather', 'bone', 'raw_meat'],
 };
@@ -110,6 +120,10 @@ export const ESSENTIAL = {
   farmer: ['seeds', 'bone'],
   scholar: ['paper', 'ink', 'feather', 'reeds'],
   trapper: ['string', 'stick', 'feather'],
+  miller: ['wheat'],
+  glassblower: ['sand', 'obsidian_shard', 'coal'],
+  sporewright: ['mushroom', 'peat_turf'],
+  pearldiver: ['pearl', 'string'],
 };
 export const GLUT_FREE = 2; // they'll take this many at the full price
 export const GLUT_MAX = 8; // and no more once they have this many
@@ -231,7 +245,7 @@ const SKILL_JOBS = {
   farming: { farmer: [0.4, 0.9], herbalist: [0.3, 0.6] },
   trading: { merchant: [0.45, 0.95], innkeeper: [0.3, 0.6], noble: [0.3, 0.7] },
   building: { carpenter: [0.5, 0.95], laborer: [0.35, 0.7], blacksmith: [0.3, 0.6], miner: [0.25, 0.5], lumberjack: [0.25, 0.5] },
-  crafting: { blacksmith: [0.45, 0.95], tailor: [0.45, 0.95], carpenter: [0.4, 0.9], herbalist: [0.4, 0.8], scholar: [0.4, 0.9] },
+  crafting: { blacksmith: [0.45, 0.95], tailor: [0.45, 0.95], carpenter: [0.4, 0.9], herbalist: [0.4, 0.8], scholar: [0.4, 0.9], miller: [0.4, 0.8], glassblower: [0.45, 0.95], sporewright: [0.4, 0.85], pearldiver: [0.3, 0.6] },
 };
 
 export function skillsFor(rec, rng) {
@@ -280,6 +294,7 @@ export const MATERIALS = {
   study: [12, 6],
   stockade: [16, 30],
   prison: [30, 70],
+  windmill: [24, 18], glassworks: [14, 28], sporehouse: [20, 8], pearlhouse: [22, 4],
 };
 const STOCK_CAP = 300;
 
@@ -674,7 +689,7 @@ export function entryStart(sim, L, rec, act, day, rng) {
 }
 
 // ------------------------------------------------------------ production
-const INCOME = { miner: 3, lumberjack: 2, laborer: 2, beggar: 0.5, priest: 1, innkeeper: 2, barkeep: 2, noble: 1 };
+const INCOME = { miner: 3, lumberjack: 2, laborer: 2, beggar: 0.5, priest: 1, innkeeper: 2, barkeep: 2, noble: 1, miller: 2.5, glassblower: 3, sporewright: 2, pearldiver: 2.5 };
 // Trades that live by selling from a shop.
 const SELLS = new Set(['tailor', 'carpenter', 'herbalist', 'scholar', 'merchant']);
 const GOODS = {
@@ -686,6 +701,24 @@ const GOODS = {
   miner: ['coal', 'coal', 'iron_ore', 'cobblestone'],
   lumberjack: ['log_oak', 'planks', 'stick'],
 };
+
+// An hour's pay for work that isn't sold over a counter.
+function earn(L, rec, biz, rng) {
+  const base = INCOME[rec.job];
+  if (!base) return;
+  const sk = rec.skills;
+  // (Guild monopolies and apprenticeships: the trades earn more.)
+  const T = L.sim && L.sim.tech;
+  const guild = T ? (T.has(L.settlement, 'monopolies') ? 1.25 : 1) * (T.has(L.settlement, 'apprenticeships') ? 1.3 : 1) : 1;
+  const inc = Math.round(base * rng.float(0.5, 1.5) * (0.6 + (sk.crafting + sk.trading) * 0.4) * Math.max(0.3, L.econ.wealth) * guild);
+  if (biz) {
+    biz.till += inc;
+    biz.earned += inc;
+  } else {
+    rec.coins += inc;
+    rec.earned += inc;
+  }
+}
 
 function produce(L, rec, rng) {
   const e = L.econ;
@@ -790,6 +823,16 @@ function produce(L, rec, rng) {
     }
     case 'guard': case 'mayor': case 'child': case 'retired':
       return;
+    // The islands' own trades: a day's grinding, blowing, growing and diving
+    // for their shelves (twice the work where the realm knows how).
+    case 'miller': case 'glassblower': case 'sporewright': case 'pearldiver': {
+      if (biz && rng.chance(0.25)) for (const item of tradeOutput(L, rec.job, rng)) if (ITEMS[item] && st.count(biz.store, item) < 6) st.add(biz.store, item, 1);
+      else if (!biz && rng.chance(0.1)) invAdd(rec.inv, rng.pick(TRADE_GOODS[rec.job]), 1);
+      // (And what the town pays for it: flour for the ovens, glass for the
+      // windows, caps for the pot, pearls for the dealers.)
+      earn(L, rec, biz, rng);
+      return;
+    }
     default: {
       // Shopkeepers and craftsmen make and stock their goods; they earn what
       // they sell (see shops.js). Others are paid for their work.
@@ -802,19 +845,8 @@ function produce(L, rec, rng) {
         }
         return;
       }
-      const base = INCOME[rec.job];
-      if (!base) return;
-      // (Guild monopolies and apprenticeships: the trades earn more.)
-      const T = L.sim && L.sim.tech;
-      const guild = T ? (T.has(L.settlement, 'monopolies') ? 1.25 : 1) * (T.has(L.settlement, 'apprenticeships') ? 1.3 : 1) : 1;
-      const inc = Math.round(base * rng.float(0.5, 1.5) * (0.6 + (sk.crafting + sk.trading) * 0.4) * Math.max(0.3, e.wealth) * guild);
-      if (biz) {
-        biz.till += inc;
-        biz.earned += inc;
-      } else {
-        rec.coins += inc;
-        rec.earned += inc;
-      }
+      if (!INCOME[rec.job]) return;
+      earn(L, rec, biz, rng);
       const g = GOODS[rec.job];
       if (g && rng.chance(0.15)) {
         const item = rng.pick(g);

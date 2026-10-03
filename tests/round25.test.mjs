@@ -417,6 +417,12 @@ test('a stone in a shield works when it turns a blow; one in armour when you rol
 test('the woods are alive: birds nest in the trees, owls at night, and the farms keep beasts', () => {
   const { game, input, p, L } = start();
   const w = game.world;
+  const W = game.wildlife;
+  // The town's beasts by its fields.
+  const beasts = game.creatures.filter((c) => c.livestock === L.settlement.id);
+  if (L.fields.length) assert.ok(beasts.length >= 1 && beasts.every((c) => ['pig', 'sheep', 'cow'].includes(c.species)), 'pigs, sheep, cows');
+  // (A wooded spot round about with a nest in it: nests are scarce, so the
+  // first wood found may have none.)
   let spot = null;
   for (let r = 20; r < 90 && !spot; r += 6) {
     for (let k = 0; k < 16 && !spot; k++) {
@@ -428,13 +434,15 @@ test('the woods are alive: birds nest in the trees, owls at night, and the farms
         leaves++;
         break;
       }
-      if (leaves > 20) spot = { x, z };
+      if (leaves <= 20) continue;
+      p.teleport(x, w.findStandY(x, z, GROUND), z);
+      W.at = null;
+      W.update(0.1);
+      if (W.nests.length) spot = { x, z };
     }
   }
   if (!spot) return;
-  p.teleport(spot.x, w.findStandY(spot.x, spot.z, GROUND), spot.z);
   run(game, input, 100);
-  const W = game.wildlife;
   assert.ok(W.nests.length >= 1, 'nests');
   assert.ok(W.birds.some((b) => b.kind === 'song'), 'songbirds');
   for (let i = 0; i < 100; i++) W.updateFlies(0.1, true);
@@ -443,7 +451,4 @@ test('the woods are alive: birds nest in the trees, owls at night, and the farms
   run(game, input, 50);
   assert.equal(W.flies.length, 0, 'none at night');
   if (W.birds.some((b) => b.kind === 'owl')) assert.ok(W.birds.filter((b) => b.kind === 'song').every((b) => b.state !== 'ground'), 'songbirds home to roost');
-  // The town's beasts by its fields.
-  const beasts = game.creatures.filter((c) => c.livestock === L.settlement.id);
-  if (L.fields.length) assert.ok(beasts.length >= 1 && beasts.every((c) => ['pig', 'sheep', 'cow'].includes(c.species)), 'pigs, sheep, cows');
 });

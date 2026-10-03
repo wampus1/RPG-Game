@@ -290,7 +290,9 @@ test('a wild horse is won over with food, saddled, ridden, and hitched to your w
   assert.ok(hc && hc.saddled, 'the horse waits where you left it');
   // A wagon of your own.
   p.inv[p.selected] = { item: 'wagon', count: 1 };
-  assert.ok(game.riding.placeWagon(p.x, w.findStandY(p.x, p.z + 2, p.y), p.z + 2));
+  // (On open ground nearby: wherever the ride ended.)
+  const at = [[0, 2], [0, -2], [2, 0], [-2, 0], [3, 3], [-3, -3], [0, 4], [4, 0]].find(([dx, dz]) => game.riding.placeWagon(p.x + dx, w.findStandY(p.x + dx, p.z + dz, p.y), p.z + dz));
+  assert.ok(at, 'the wagon set down');
   tick(game, input, 25, 0.05);
   const prop = [...game.props.values()].find((q) => q.own);
   assert.ok(prop, 'it stands there');

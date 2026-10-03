@@ -37,6 +37,7 @@ import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
 import { lawOn } from './laws.js';
 import { titheOf, lawPrice } from './islelaws.js';
+import { tradePrice } from './isletrades.js';
 import { Customs } from './culture.js';
 import { History } from './history.js';
 import { Society } from './society.js';
@@ -786,7 +787,7 @@ export class Sim {
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true);
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
@@ -795,7 +796,7 @@ export class Sim {
   // What a trader asks for an item: their prices, and the market's.
   buyPrice(npc, k, discounted = true) {
     const f = discounted ? this.priceFactor(npc) : this.priceParts(npc).base;
-    return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, false)));
+    return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, false) * tradePrice(npc.layout, k, false)));
   }
 
   // How keen they are to take more of something (1 = full price).
@@ -2201,7 +2202,8 @@ export class Sim {
 }
 
 function JOBS_TRADER(rec) {
-  const t = { fisher: 'fisher', farmer: 'farmer', trapper: 'trapper', blacksmith: 'smith', merchant: 'general', baker: 'baker', tailor: 'tailor', carpenter: 'carpenter', herbalist: 'herbalist', scholar: 'scholar' }[rec.job];
+  const t = { fisher: 'fisher', farmer: 'farmer', trapper: 'trapper', blacksmith: 'smith', merchant: 'general', baker: 'baker', tailor: 'tailor', carpenter: 'carpenter', herbalist: 'herbalist', scholar: 'scholar',
+    miller: 'miller', glassblower: 'glassblower', sporewright: 'sporewright', pearldiver: 'pearldiver' }[rec.job];
   return t && STOCK[t] ? t : null;
 }
 

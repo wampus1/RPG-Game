@@ -635,6 +635,16 @@ function drawHumanoid(look, dir, frame) {
         H(hx, hy + 1, 8, 1, '#e0b830');
         if (dir === 0) H(hx + 3, hy + 1, 2, 1, '#50c0e0');
         break;
+      case 'goggles':
+        // (Two smoked lenses on a leather strap.)
+        H(hx, hy + 2, 8, 1, '#3a2a1e');
+        if (dir === 0) {
+          H(hx + 1, hy + 2, 2, 2, '#2a2430');
+          H(hx + 5, hy + 2, 2, 2, '#2a2430');
+          H(hx + 1, hy + 2, 1, 1, '#c87a40');
+          H(hx + 5, hy + 2, 1, 1, '#c87a40');
+        } else if (side) H(hx, hy + 2, 2, 2, '#2a2430');
+        break;
       case 'flower':
         H(side ? hx + 5 : hx + 6, hy, 2, 1, '#f080b0');
         H(side ? hx + 6 : hx + 7, hy - 1, 1, 1, '#ffe070');
@@ -2127,7 +2137,7 @@ function armorIcon(it) {
   const p = new Px(16, 16);
   const [lk, tintCol] = String(it.look).split(':');
   const col = tintCol || {
-    lcap: '#7a5232', helmet: '#9a9aa8', straw: '#e8c860', hood: '#6a4a2a', circlet: '#e0b830',
+    lcap: '#7a5232', helmet: '#9a9aa8', straw: '#e8c860', hood: '#6a4a2a', circlet: '#e0b830', goggles: '#3a2a1e',
     leather: it.slot === 'feet' ? '#4a2e1a' : '#7a5232', chain: '#8a8a98', plate: '#a8aab8', linen: '#e8e0cc', coat: '#3a2a4a', cloth: '#4a4a6a', iron: '#8a8a98',
   }[lk] || '#888888';
   const c = hex(col);
@@ -2142,6 +2152,12 @@ function armorIcon(it) {
       p.ellipse(8, 9, 5, 2, c);
       for (let x = 6; x <= 10; x++) p.clear(x, 9);
       p.set(8, 7, hex('#50c0e0'));
+    } else if (lk === 'goggles') {
+      p.hline(1, 14, 8, c);
+      p.ellipse(5, 8, 3, 3, hex('#2a2430'));
+      p.ellipse(11, 8, 3, 3, hex('#2a2430'));
+      p.set(4, 7, hex('#e09050'));
+      p.set(10, 7, hex('#e09050'));
     } else {
       p.rect(4, 4, 8, 7, c);
       p.hline(4, 11, 4, hi);
@@ -2213,7 +2229,7 @@ const iconCache = new Map();
 function potionIcon(it) {
   const p = new Px(16, 16);
   const e = it.effect || {};
-  const col = e.blue ? '#58a8ff' : e.heal ? '#e05050' : e.combat ? { breath: '#f0e060', wind: '#70f0c0', fury: '#d01838', haste: '#d8d8ff' }[e.combat] : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
+  const col = e.sight ? '#7ae0c8' : e.blue ? '#58a8ff' : e.heal ? '#e05050' : e.combat ? { breath: '#f0e060', wind: '#70f0c0', fury: '#d01838', haste: '#d8d8ff' }[e.combat] : { str: '#e0603a', agi: '#50c0e0', end: '#60c050', cha: '#e070c0' }[e.stat] || '#c0a0e0';
   if (e.heal) {
     // A salve: a little pot.
     p.rect(4, 7, 8, 6, '#c8b890');

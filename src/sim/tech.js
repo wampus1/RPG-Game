@@ -17,6 +17,7 @@ import { ITEMS } from '../world/items.js';
 import { B, META_STATE } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { GROUND, SURFACE } from '../config.js';
+import { tradeWeekly } from './isletrades.js';
 
 export const BRANCHES = [
   { id: 'economy', name: 'Economy', color: '#e8c060' },
@@ -107,7 +108,7 @@ export const TECHS = {
   // Myrrow: the Mirefolk and the Stiltfolk.
   outriggers: T('economy', 2, 0, ['bookkeeping'], 'raft', 'Outrigger Rafts', 'Rafts with outriggers: the realm\'s merchants and soldiers cross the sea to the other islands 40% faster, and its raids from the sea are 15% stronger.', { isles: ['myrrow'] }),
   fog_wardens: T('warfare', 2, 0, ['drill'], 'lantern', 'Fog Wardens', 'The watch knows the mist: the realm\'s towns defend 25% better against raids.', { isles: ['myrrow'] }),
-  spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy, and townsfolk wake 2 health better every morning.', { isles: ['myrrow'] }),
+  spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy; sporewrights raise twice the glowcaps; and townsfolk wake 2 health better every morning.', { isles: ['myrrow'] }),
   // (And more of each island's own, in the places of the common steps it
   // never learns.)
   horse_archers: T('warfare', 4, -0.5, [['shieldwall', 'greatweapons']], 'bow', 'Horse Archers', 'Guards\' bows become longbows (range 11, damage 6), and the watch rides out against raiders even with no horse in the stable (+20% defence); armies are 5% stronger.', { isles: ['thessa'], excl: 'bows', as: ['longbows'] }),
@@ -790,6 +791,8 @@ export class Tech {
     }
     // Weekly: the Ashborn's sulphur sold abroad.
     if (day % 7 === 0 && this.has(s, 'sulphur_trade')) L.econ.treasury += s.coast || s.river ? 20 : 12;
+    // (And glass and pearls, where there's a glassworks or a pearl house.)
+    if (day % 7 === 0) tradeWeekly(L);
     // Spore lore: the herbalists' brews, every morning (and the Ashborn,
     // hardened by the fire-walk).
     if (this.has(s, 'spore_lore') || this.has(s, 'fire_walking')) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + 2);

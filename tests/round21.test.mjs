@@ -98,8 +98,11 @@ test('a town has a history: its founding, its past, what it is known for; the ne
 test('a pickpocket is seen, taken in by the watch, locked up, and fined by the mayor in the morning', () => {
   const { game, input, L, p } = start(12345, {}, 11 * 60);
   const S = game.sim.society;
+  // (Someone near the watch, so it's seen.)
+  const watch = game.npcs.filter((q) => !q.dead && q.settlement === L.settlement && q.rec.job === 'guard');
+  const nearWatch = (q) => Math.min(...watch.map((g) => g.distTo(q)));
   const n = game.npcs.filter((q) => !q.dead && q.settlement === L.settlement && q.rec.age === 'adult' && q.rec.job !== 'guard' && q.rec.job !== 'mayor' && q.state === 'routine')
-    .sort((a, b) => a.distTo(p) - b.distTo(p))[0];
+    .sort((a, b) => nearWatch(a) + a.distTo(p) * 0.25 - (nearWatch(b) + b.distTo(p) * 0.25))[0];
   lifeOf(n.rec).vice = 'thief';
   n.rec.coins = 100;
   assert.ok(S.startCrime(n, 'theft'));

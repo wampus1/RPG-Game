@@ -21,6 +21,8 @@ export const ISLE_P = {
   roof_mushroom: ['#b83a2a', '#8a2a1e', '#f0e8d8', '#ffffff'],
   roof_moss: ['#4a6a3a', '#3a5a2e', '#5e7e48', '#9ab060'],
   roof_reed: ['#c8b070', '#a89050', '#e0cc90', '#5a4a30'],
+  mill_sail: ['#ece4d0', '#d0c6ae', '#7a5a3a', '#5a4028'],
+  mill_hub: ['#6a4a2a', '#4e361e', '#8a6438', '#2e2014'],
 };
 export const ISLE_WOOD = {
   cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
@@ -36,6 +38,20 @@ export function isleTop(name, v, rand, rot = 0) {
   const p = new Px(16, 16);
   const pal = ISLE_P[name];
   switch (name) {
+    case 'mill_sail': {
+      // Canvas stretched over a lattice of laths (gaps between).
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        if (x % 5 === 0 || y % 5 === 0) p.set(x, y, pal[2 + ((x + y) % 2)]);
+        else if ((x + y) % 7 !== 3) p.set(x, y, pal[rand() < 0.15 ? 1 : 0]);
+      }
+      return p;
+    }
+    case 'mill_hub': {
+      speckle(p, pal, rand, 0.3);
+      p.ellipse(8, 8, 4, 4, pal[3]);
+      p.ellipse(8, 8, 2, 2, pal[2]);
+      return p;
+    }
     case 'roof_mushroom': {
       // (The cap of a giant mushroom: red, with pale spots, ridged.)
       const f = rot === 0 || rot === 3 ? 1.06 : rot === 2 ? 0.82 : 0.95;
@@ -205,6 +221,14 @@ export function isleTop(name, v, rand, rot = 0) {
 export function isleFront(name, v, rand) {
   const p = new Px(16, LH);
   switch (name) {
+    case 'mill_sail': case 'mill_hub': {
+      const top = isleTop(name, v, rand, 0);
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) {
+        const c = top.get(x, y % 16);
+        if (top.alpha(x, y % 16)) p.set(x, y, shade([c[0], c[1], c[2]], 0.9));
+      }
+      return p;
+    }
     case 'roof_mushroom': case 'roof_moss': case 'roof_reed': {
       // The roof's edge: its surface, and a dark eave under it.
       const top = isleTop(name, v, rand, 0);
@@ -363,6 +387,79 @@ ISLE_SPRITES.ash_brazier = (rot, st, f) => {
   } else p.rect(4, 14, 8, 1, '#3a2a24');
   return p.outline(OUT);
 };
+// The islands' trades, at work.
+ISLE_SPRITES.millstone = () => {
+  // A great round stone on its edge in a frame, a sack of flour by it.
+  const p = spr();
+  p.rect(1, 22, 14, 4, '#6a4a2a');
+  p.hline(1, 14, 22, '#8a6438');
+  p.ellipse(7, 15, 6, 6, '#8a8680');
+  p.ellipse(7, 15, 5, 5, '#a8a49c');
+  p.ellipse(7, 15, 1, 1, '#4a4440');
+  for (let a = 0; a < 6; a++) p.set(7 + Math.round(Math.cos(a) * 3.5), 15 + Math.round(Math.sin(a) * 3.5), '#7a766e');
+  p.rect(12, 17, 3, 5, '#e8dcc0');
+  p.hline(12, 14, 17, '#c8b898');
+  p.set(13, 16, '#a89878');
+  return p.outline(OUT);
+};
+ISLE_SPRITES.glass_kiln = (rot, st, f) => {
+  // A domed kiln of black brick, its mouth white-hot; a blob of glass
+  // glowing on the end of a blowpipe.
+  const p = spr();
+  p.rect(1, 14, 14, 12, '#3a3036');
+  p.ellipse(8, 14, 7, 6, '#4a3e44');
+  for (let y = 16; y < 26; y += 3) p.hline(1, 14, y, '#2a2228');
+  p.vline(8, 9, 12, '#2a2228');
+  const o = f % 3;
+  p.rect(5, 18, 6, 5, '#c84a1a');
+  p.rect(6, 19, 4, 4, o === 1 ? '#ffb040' : '#f88a28');
+  p.rect(7, 20, 2, 2, '#fff0a0');
+  p.line(11, 13, 15, 9, '#8a8a94');
+  p.ellipse(15, 8, 1, 1, o === 2 ? '#ffd070' : '#f8a030');
+  p.set(4 + o, 6 - o, '#8a8088', 140);
+  p.set(9 - o, 4, '#8a8088', 100);
+  return p.outline(OUT);
+};
+ISLE_SPRITES.spore_bed = (rot, st, f) => {
+  // A long box of black peat, mushrooms crowding up out of it: brown, red,
+  // and the glowcaps, pulsing.
+  const p = spr();
+  p.rect(0, 20, 16, 6, '#5a3e24');
+  p.hline(0, 15, 20, '#7a5632');
+  p.rect(1, 18, 14, 2, '#2e2218');
+  const glow = f % 2 ? '#b8f0e0' : '#90e0d0';
+  p.rect(2, 14, 1, 4, '#e8dcc8');
+  p.ellipse(2, 13, 2, 1, '#8a5a3a');
+  p.rect(6, 12, 1, 6, '#e8dcc8');
+  p.ellipse(6, 11, 3, 2, '#b83a2a');
+  p.set(5, 10, '#f0e8d8');
+  p.set(7, 11, '#f0e8d8');
+  p.rect(10, 15, 1, 3, '#d8e8e0');
+  p.ellipse(10, 14, 2, 1, glow);
+  p.rect(13, 13, 1, 5, '#d8e8e0');
+  p.ellipse(13, 12, 2, 2, glow);
+  p.set(13, 11, '#ffffff');
+  return p.outline(OUT);
+};
+ISLE_SPRITES.pearl_table = () => {
+  // A low table of driftwood, open shells on it and a little heap of
+  // pearls; a basket of oysters under it.
+  const p = spr();
+  p.rect(0, 15, 16, 3, '#9a8a6a');
+  p.hline(0, 15, 15, '#b8a888');
+  p.rect(1, 18, 2, 8, '#7a6a4a');
+  p.rect(13, 18, 2, 8, '#7a6a4a');
+  p.ellipse(4, 13, 3, 2, '#d8d0c0');
+  p.ellipse(4, 13, 2, 1, '#e8b8b0');
+  p.set(4, 13, '#ffffff');
+  p.ellipse(11, 13, 3, 2, '#c8c0b0');
+  for (const [x, y] of [[8, 13], [9, 14], [8, 14], [10, 12]]) p.set(x, y, '#f4f0ff');
+  p.rect(5, 21, 6, 4, '#a8844a');
+  p.hline(5, 10, 21, '#c8a060');
+  p.set(6, 20, '#5a5a6a');
+  p.set(8, 20, '#4a4a5a');
+  return p.outline(OUT);
+};
 export const ISLE_ANIM = { steam_vent: 4 };
 
 // --- icons ------------------------------------------------------------------------------
@@ -380,6 +477,29 @@ export function isleIcon(key) {
       p.rect(3, 6, 10, 2, '#4a6a3a');
       p.set(5, 9, '#5a4a3a');
       p.set(9, 10, '#2e2218');
+      break;
+    case 'flour':
+      // A sack, tied at the neck, a dusting of white.
+      p.ellipse(8, 10, 5, 5, '#e8dcc0');
+      p.rect(6, 3, 4, 3, '#d8ccb0');
+      p.hline(6, 9, 5, '#8a6a4a');
+      p.set(6, 9, '#c8b898');
+      p.set(10, 11, '#c8b898');
+      p.set(7, 8, '#ffffff');
+      break;
+    case 'pearl':
+      p.ellipse(8, 9, 3, 3, '#e8e4f0');
+      p.ellipse(7, 8, 1, 1, '#ffffff');
+      p.set(10, 11, '#b8b0c8');
+      p.set(9, 11, '#c8c0d8');
+      break;
+    case 'pearl_necklace':
+      for (let a = 0; a < 12; a++) {
+        const x = 8 + Math.round(Math.cos(a / 12 * Math.PI * 2) * 5);
+        const y = 8 + Math.round(Math.sin(a / 12 * Math.PI * 2) * 4);
+        p.set(x, y, a % 2 ? '#f4f0ff' : '#d8d0e8');
+      }
+      p.ellipse(8, 13, 1, 1, '#ffffff');
       break;
     case 'moth_dust':
       p.ellipse(8, 10, 4, 3, '#4a3a5a');

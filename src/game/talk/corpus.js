@@ -503,6 +503,11 @@ export const JOBS = {
   mayor: ['The council (sat|argued) (late|till midnight) again, and (decided nothing|settled nothing).', 'Everyone wants (roads|walls|lower taxes), and nobody wants to pay for them.'],
   noble: ['One (must|has to) (keep up|maintain) appearances, (whatever the cost|come what may).', 'My (estates|lands) keep me (busy|terribly busy), (you understand|naturally).'],
   beggar: ['A coin for (a crust|bread)? Nobody (spares|has) a coin (these days|any more).', 'The (nights|cobbles) are (cold|hard) (this time of year|at night).'],
+  // The islands' own trades.
+  miller: ['The (wind|sails) (turned|went round) all (night|morning), and the stones with them.', 'Flour (gets|gets into) everything: (my hair|my bread|my bed|my beard).', 'Bring me wheat and I\'ll (make you flour|grind it fine), (same as my father did|no questions asked).', 'Wet wheat (clogs|gums up) the stones: (pray|I pray) for a dry (week|spell) and a good wind.'],
+  glassblower: ['The kiln (has not|hasn\'t) gone out in (twenty years|three generations|living memory).', 'Black glass from the mountain, sand from the shore: (that\'s|there\'s) all the glass there is.', 'You (blow|breathe) gently, or the glass (bursts|goes to pieces) (in your face|on the floor).', 'Rain on a hot kiln (cracks|spits) like a (cat|kettle), and the glass (goes|comes out) cloudy.'],
+  sporewright: ['The glowcaps (like|want) it dark and wet (and quiet|and still), (same as me|like the bog).', 'Turn the peat, (mind the spores|don\'t breathe the spores), pick the caps (at dusk|before they open).', 'A good bed of peat (gives|will give) caps for (a year|three seasons) (if you\'re kind to it|if you\'re careful).', 'The caps (love|drink up) the rain: a wet (week|spell) and the beds (are|come up) white with them.'],
+  pearldiver: ['(Down|Under) in the green, (you hold your breath|you count your heartbeats) and (feel for the shells|pray for a pearl).', 'A hundred oysters (for|to find) one pearl, (on a good day|if the tide likes you).', 'My (ears|lungs) (ache|hurt) from the deep (water|shelf) (this morning|all week).', 'Rain or shine, the sea\'s (just as|no less) wet (down there|under the stilts).'],
 };
 
 // What one thought leads on to (the second sentence, sometimes).

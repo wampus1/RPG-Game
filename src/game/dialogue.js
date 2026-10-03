@@ -929,7 +929,7 @@ function professionTalk(npc, game, arg) {
     return {
       lines: [`${s.name} licenses ${s.type === 'city' ? 'all manner of' : s.type === 'town' ? 'a good few' : 'a few'} trades. Which interests you?`],
       // A bigger place has call for more trades.
-      choices: licensesFor(s.type).map((k) => {
+      choices: licensesFor(s.type, s.style).map((k) => {
         const f = licenceFee(k, s, game.sim.isCitizen(s.id), !!car.workshopIn(npc.layout, k));
         return { id: 'profession', arg: `ask:${k}`, label: `${PROFESSIONS[k].title}${PROFESSIONS[k].citizen ? ' (citizens)' : ''}${f.total ? ` · ¤${f.total}` : ' · free'}` };
       }),
@@ -1150,6 +1150,7 @@ const KIND_TALK = {
 const TASKS = {
   smithy: 'work the bellows and sort the stock', tavern: 'serve tables and wash up', shop: 'mind the counter', bakery: 'knead dough and sell loaves',
   library: 'sort the shelves', tailor: 'cut cloth and take orders', workshop: 'sand and plane the timber', herbalist: 'grind herbs and bottle tinctures',
+  windmill: 'haul the sacks and sweep up the flour', glassworks: 'feed the kiln and sort the glass', sporehouse: 'turn the peat and pick the caps', pearlhouse: 'shuck oysters and sort the pearls',
 };
 
 // Asking a shopkeeper for work, and quitting.

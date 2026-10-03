@@ -201,7 +201,12 @@ test('road crews walk out to the road and home again: they never just appear or 
       game.player.teleport(n.x + 2, game.world.findStandY(n.x + 2, n.z, n.y) > 0 ? game.world.findStandY(n.x + 2, n.z, n.y) : n.y, n.z);
       game.update(0.1, input);
     }
-    assert.ok(Math.abs(n.x - from.x) + Math.abs(n.z - from.z) > 8, 'walked off down the road');
+    // (Out to where the road begins, at the edge of town: however near
+    // that their home is.)
+    const b = L.bounds;
+    const edge = Math.min(n.x - b.x0, b.x1 - n.x, n.z - b.z0, b.z1 - n.z) <= 1;
+    const moved = Math.abs(n.x - from.x) + Math.abs(n.z - from.z);
+    assert.ok(moved > 8 || (moved >= 2 && edge), 'walked off down the road');
     // Evening: home along it.
     game.minute = 18 * 60;
     D.crews(game.sim.abs);

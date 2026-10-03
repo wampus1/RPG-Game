@@ -432,6 +432,16 @@ def('roof_mushroom', { tool: 'axe', hardness: 0.5, rotatable: true, drop: 'mushr
 def('roof_moss', { hardness: 0.4, rotatable: true, drop: 'moss', label: 'Moss Roof' });
 def('roof_reed', { hardness: 0.4, rotatable: true, label: 'Reed Thatch' });
 def('ash_brazier', { ...sprite, interact: 'torch', tool: 'pick', hardness: 1.2, light: 14, lightWhenState: true, drop: 'basalt', label: 'Brazier' });
+// The islands' own trades (see isletrades.js): Thessa's millstone, and the
+// sails of its windmills on their hub; Kharos's glass kiln, never let go
+// out; the Mirefolk's spore beds, glowing faintly; the Stiltfolk's table
+// for sorting pearls from the shell.
+bench('millstone', 'miller', 'Millstone', { tool: 'pick', hardness: 1.4 });
+bench('glass_kiln', 'glassblower', 'Glass Kiln', { tool: 'pick', hardness: 1.5, light: 9 });
+bench('spore_bed', 'sporewright', 'Spore Bed', { hardness: 0.6, light: 4 });
+bench('pearl_table', 'pearldiver', 'Pearl-Sorting Table', { hardness: 0.7 });
+def('mill_sail', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Windmill Sail' });
+def('mill_hub', { tool: 'axe', hardness: 1, drop: 'planks', label: 'Windmill Hub' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

@@ -6,6 +6,7 @@ import { RNG, hash4 } from '../util/rng.js';
 import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
+import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
 const Y0 = GROUND; // first layer above the floor
@@ -41,6 +42,13 @@ const SPECS = {
   prison: { size: [[13, 8], [12, 8]], tall: 3, civic: true },
   // A licensed trade's own workshop, built for the player (never staffed).
   player_workshop: { size: [[6, 5], [6, 6]] },
+  // Each island people's own trade (see isletrades.js): Thessa's windmill
+  // (a tall tower, its sails over the street), Kharos's glassworks, the
+  // Mirefolk's spore cellar and the Stiltfolk's pearl house.
+  windmill: { size: [[6, 6], [6, 6]], tall: 4 },
+  glassworks: { size: [[7, 6], [7, 6]] },
+  sporehouse: { size: [[7, 5], [6, 6]] },
+  pearlhouse: { size: [[6, 5], [6, 6]] },
 };
 
 export const BUILDING_NAMES = {
@@ -49,6 +57,7 @@ export const BUILDING_NAMES = {
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
   herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy', study: 'Scholar\'s Study',
   stockade: 'Stockade', prison: 'Prison',
+  windmill: 'Windmill', glassworks: 'Glassworks', sporehouse: 'Spore Cellar', pearlhouse: 'Pearl House',
 };
 
 // What a trade works at, in its workshop.
@@ -71,6 +80,10 @@ const SHOP_NAMES = {
   herbalist: ['The Green Remedy', 'Root & Leaf', 'Mortar & Pestle', 'The Healing Herb'],
   townhall: ['Town Hall', 'Council Hall', 'Moot Hall', 'Guildhall'],
   study: ['The Quiet Room', 'House of Questions', 'The Candle & Quill', 'The Little Library'],
+  windmill: ['The Old Mill', 'The Four Sails', 'The White Sails', 'Grist & Grain', 'The Windward Mill', 'Millstone House'],
+  glassworks: ['The Black Glass', 'The Ember Kiln', 'Cinder & Clear', 'The Blowpipe', 'The Mountain\'s Glass'],
+  sporehouse: ['The Damp Cellar', 'The Glowcap Beds', 'Under the Moss', 'The Spore House', 'The Dark Garden'],
+  pearlhouse: ['The Oyster Bed', 'Moonpearl House', 'The Deep Shelf', 'Shell & String', 'The Diver\'s Rest'],
 };
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -624,18 +637,23 @@ class Layout {
     if (jc('herbalist')) count('herbalist');
     if (jc('laborer')) count('warehouse', Math.max(1, Math.ceil(jc('laborer') / 4)));
     if (jc('farmer')) count('barn', s.type === 'village' ? 1 : Math.ceil(jc('farmer') / 5));
-    let civicOrder = ['townhall', 'temple', 'tavern', 'shop', 'library', 'smithy', 'bakery', 'guardhouse', 'tailor', 'workshop', 'herbalist', 'warehouse', 'barn', 'stables'];
+    // (Each island people's own trade.)
+    for (const [job, T] of Object.entries(ISLE_TRADES)) if (jc(job)) count(T.building);
+    let civicOrder = ['townhall', 'temple', 'tavern', 'shop', 'library', 'smithy', 'bakery', 'guardhouse', 'tailor', 'workshop', 'herbalist', 'warehouse', 'barn', 'stables', ...TRADE_BUILDINGS];
     if (s.type === 'village') {
-      // Villages only support a handful of trades.
-      const keep = new Set(['tavern', 'barn', 'townhall']);
-      for (const t of rng.shuffle(['temple', 'shop', 'smithy', 'bakery', 'workshop', 'herbalist', 'guardhouse'].filter((t) => need.has(t))).slice(0, 2)) keep.add(t);
+      // Villages only support a handful of trades (their people's own
+      // among them, and an herbalist, when they have one: see npcgen.js).
+      const keep = new Set(['tavern', 'barn', 'townhall', ...TRADE_BUILDINGS]);
+      if (need.has('herbalist')) keep.add('herbalist');
+      for (const t of rng.shuffle(['temple', 'shop', 'smithy', 'bakery', 'workshop', 'guardhouse'].filter((t) => need.has(t))).slice(0, need.has('herbalist') ? 1 : 2)) keep.add(t);
       civicOrder = civicOrder.filter((t) => keep.has(t));
     }
     let cands = this.frontage();
     const nearCands = byPlaza([...cands]);
     // Essential civic buildings claim the plaza first; the rest are placed
     // after houses so everyone gets a home.
-    const essential = new Set(['townhall', 'temple', 'tavern', 'shop', 'guardhouse']);
+    // (And each island people's own trade: it's what the place is known for.)
+    const essential = new Set(['townhall', 'temple', 'tavern', 'shop', 'guardhouse', ...TRADE_BUILDINGS]);
     const late = [];
     for (const t of civicOrder) {
       for (let i = 0; i < (need.get(t) || 0); i++) {
@@ -1834,6 +1852,8 @@ class Layout {
       if (ch) b.chestPos = { x: ch.x, y: Y0, z: ch.z };
       tryPlace(B.stool, 'wall', { solid: false });
       lamp();
+    } else if (TRADE_BUILDINGS.has(t)) {
+      this.furnishTrade(b, { tryPlace, workAt, lamp, rng, Y0 });
     } else if (t === 'shop' || t === 'warehouse' || t === 'tailor' || t === 'workshop' || t === 'herbalist' || t === 'bakery' || t === 'smithy') {
       if (t === 'smithy') {
         const forge = tryPlace(B.furnace, 'north', { access: true, rot: 0 });
@@ -2107,8 +2127,107 @@ class Layout {
     if (this.settlement.condition !== 'abandoned') this.chimneys.push({ x: t.x, y: top + 1, z: t.z });
   }
 
+  // Inside an island trade's building: its bench (or benches) to work at,
+  // and what it keeps.
+  furnishTrade(b, { tryPlace, workAt, lamp, rng }) {
+    const t = b.type;
+    if (t === 'windmill') {
+      // The millstone, sacks of flour, wheat waiting to be ground.
+      workAt(tryPlace(B.millstone, 'north', { access: true, rot: 0 }));
+      workAt(tryPlace(B.millstone, 'wall', { access: true, rot: 'wall' }));
+      for (let i = 0; i < 2; i++) tryPlace(B.hay_bale, 'corner');
+      tryPlace(B.barrel, 'wall');
+      tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      lamp();
+    } else if (t === 'glassworks') {
+      // The kiln (never let go out), a bench to blow at, shelves of glass.
+      const kiln = tryPlace(B.glass_kiln, 'north', { access: true, rot: 0 });
+      if (kiln && !b.mats.flat) this.chimney(b, kiln);
+      workAt(kiln);
+      workAt(tryPlace(B.table, 'any', { access: true }));
+      tryPlace(B.crate, 'wall');
+      tryPlace(B.barrel, 'wall');
+      tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+    } else if (t === 'sporehouse') {
+      // Beds of peat in the dark, the glowcaps their only light.
+      for (let i = 0; i < 3; i++) workAt(tryPlace(B.spore_bed, i ? 'wall' : 'north', { access: true, rot: i ? 'wall' : 0 }));
+      tryPlace(B.barrel, 'corner');
+      tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      tryPlace(B.glowshroom, 'corner', { solid: false });
+    } else {
+      // The sorting table, baskets of oysters, nets.
+      workAt(tryPlace(B.pearl_table, 'north', { access: true, rot: 0 }));
+      workAt(tryPlace(B.table, 'any', { access: true }));
+      tryPlace(B.barrel, 'wall');
+      tryPlace(B.barrel, 'corner');
+      tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+      lamp();
+    }
+    void rng;
+  }
+
+  // Outside it: a windmill's sails, turned to the street; heaps of sand by
+  // a glassworks; a giant glowcap grown by the spore cellar's door; the
+  // pearl house's baskets.
+  tradeExterior(b, rng) {
+    const s = this.settlement;
+    if (s.condition === 'abandoned' && rng.chance(0.5)) return;
+    if (b.type === 'windmill') {
+      // The hub, out from the middle of a wall above the roof's edge, and
+      // four sails in an X (none low enough to walk into, none over a
+      // neighbour): on the south face if there's room (it faces the way
+      // the street is mostly seen from), else the north, else a side.
+      const hy = Y0 + (b.tall || 4) + 1;
+      const sign = { x: b.outside.x, z: b.outside.z, y: Y0 + 2 };
+      const clear = (x, z) => this.maskAt(x, z) !== M.BUILD && this.maskAt(x, z) !== M.WALL;
+      const faces = [
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z1 + 1, along: true },
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z0 - 1, along: true },
+        { hx: b.x1 + 1, hz: Math.round((b.z0 + b.z1) / 2), along: false },
+        { hx: b.x0 - 1, hz: Math.round((b.z0 + b.z1) / 2), along: false },
+      ];
+      const tiles = (f) => {
+        const out = [{ x: f.hx, z: f.hz, y: hy, hub: true }];
+        for (const [a, v] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+          for (let k = 1; k <= 3; k++) {
+            const t = { x: f.along ? f.hx + a * k : f.hx, z: f.along ? f.hz : f.hz + a * k, y: hy + v * k };
+            if (t.y >= Y0 + 2 && !(t.x === sign.x && t.z === sign.z && t.y === sign.y)) out.push(t);
+          }
+        }
+        return out;
+      };
+      const score = (f) => tiles(f).filter((t) => clear(t.x, t.z)).length;
+      const face = faces.find((f) => score(f) === tiles(f).length) || faces.reduce((m, f) => (score(f) > score(m) ? f : m));
+      for (const t of tiles(face)) if (clear(t.x, t.z)) this.put(t.x, t.y, t.z, t.hub ? B.mill_hub : B.mill_sail);
+      b.sails = { x: face.hx, y: hy, z: face.hz, along: face.along };
+    } else if (b.type === 'glassworks') {
+      for (let i = 0; i < 2; i++) {
+        const q = this.findFreeNear(b.outside.x, b.outside.z, 4, rng);
+        if (!q) break;
+        this.put(q.x, Y0, q.z, i ? B.crate : B.sand);
+        this.setMask(q.x, q.z, M.DECOR);
+      }
+    } else if (b.type === 'sporehouse') {
+      const q = this.findFreeNear(b.outside.x, b.outside.z, 4, rng);
+      if (q) {
+        for (let y = Y0; y <= Y0 + 2; y++) this.put(q.x, y, q.z, B.mushroom_stem);
+        this.put(q.x, Y0 + 3, q.z, B.glowcap_cap);
+        for (const [dx, dz] of DIRS4) if (this.maskAt(q.x + dx, q.z + dz) !== M.BUILD) this.put(q.x + dx, Y0 + 3, q.z + dz, B.glowcap_cap);
+        this.setMask(q.x, q.z, M.DECOR);
+      }
+    } else if (b.type === 'pearlhouse') {
+      for (let i = 0; i < 2; i++) {
+        const q = this.findFreeNear(b.outside.x, b.outside.z, 4, rng);
+        if (!q) break;
+        this.put(q.x, Y0, q.z, B.barrel);
+        this.setMask(q.x, q.z, M.DECOR);
+      }
+    }
+  }
+
   exterior(b, rng) {
     const s = this.settlement;
+    if (TRADE_BUILDINGS.has(b.type)) this.tradeExterior(b, rng);
     const cond = s.condition;
     const o = b.outside;
     // A hanging sign over the street names the building (or the family home).

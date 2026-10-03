@@ -82,6 +82,11 @@ item('peat_turf', { name: 'Peat Turf', value: 2, fuel: true });
 item('obsidian_shard', { name: 'Obsidian Shard', value: 4 });
 // Shaken from a gloam moth's wings: it glows a while in the hand.
 item('moth_dust', { name: 'Gloam Dust', value: 4 });
+// The islands' own trades (see isletrades.js): flour from a Thessan
+// windmill; pearls from the Stiltfolk's shallows, and strings of them.
+item('flour', { name: 'Sack of Flour', value: 4 });
+item('pearl', { name: 'Pearl', value: 16 });
+item('pearl_necklace', { name: 'Pearl Necklace', kind: 'misc', stack: 8, value: 70 });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
@@ -211,6 +216,8 @@ wear('iron_helmet', 'Iron Helmet', 'head', 0.1, 40, 'helmet');
 wear('straw_hat', 'Straw Hat', 'head', 0, 4, 'straw');
 wear('wool_hood', 'Wool Hood', 'head', 0.02, 8, 'hood');
 wear('gold_circlet', 'Gold Circlet', 'head', 0, 60, 'circlet');
+// Blown in a Kharos glassworks: the mountain's ash can't blind you.
+wear('ash_goggles', 'Smoked-Glass Goggles', 'head', 0, 24, 'goggles', { ashproof: true });
 wear('leather_tunic', 'Leather Tunic', 'body', 0.1, 24, 'leather');
 wear('chainmail', 'Chainmail Shirt', 'body', 0.18, 70, 'chain');
 wear('iron_breastplate', 'Iron Breastplate', 'body', 0.26, 110, 'plate');
@@ -310,6 +317,9 @@ potion('potion_breath', 'Tonic of Deep Breath', 22, { combat: 'breath', n: 5, ho
 potion('potion_wind', 'Second Wind Elixir', 22, { combat: 'wind', n: 0.8, hours: 3 });
 potion('potion_fury', 'Berserker\'s Brew', 26, { combat: 'fury', n: 0.35, hours: 2 });
 potion('potion_haste', 'Quicksilver Draught', 26, { combat: 'haste', n: 0.35, hours: 2 });
+// A Mirefolk sporewright's tincture of glowcap: the dark goes grey and
+// clear for a few hours.
+potion('spore_tincture', 'Fogsight Tincture', 20, { sight: true, hours: 4 });
 
 // --- the scribe's trade -----------------------------------------------------------
 item('paper', { value: 2 });

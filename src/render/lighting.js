@@ -105,8 +105,12 @@ export class Lighting {
     const pal = below ? game.dungeon.pal : null;
     let sky = below ? (pal?.dark || game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
     // (The mountain's ash over the sun: a brown dusk at noon.)
-    const ash = !below && game.ashLevel ? game.ashLevel() : 0;
+    // (Smoked-glass goggles from a Kharos glassworks see through it.)
+    const goggled = player && player.equip && player.equip.head === 'ash_goggles';
+    const ash = !below && game.ashLevel ? game.ashLevel() * (goggled ? 0.25 : 1) : 0;
     if (ash > 0) sky = ashSky(sky, ash);
+    // (A Mirefolk fogsight tincture: the dark goes grey-green and clear.)
+    if (player && player.buffs && player.buffs.some((q) => q.sight && q.until > game.day * 1440 + game.minute)) sky = [Math.max(sky[0], 0.5), Math.max(sky[1], 0.62), Math.max(sky[2], 0.52)];
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the

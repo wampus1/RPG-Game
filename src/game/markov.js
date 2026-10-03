@@ -200,6 +200,8 @@ function manner(s, reg, rng) {
   return s;
 }
 
+const OUTDOORS = new Set(['farmer', 'fisher', 'trapper', 'lumberjack', 'miner', 'builder', 'guard', 'miller', 'pearldiver', 'handler']);
+
 // What's on their mind: each topic weighted by who they are and what's
 // going on around them.
 function topicWeights(rec, ctx, c) {
@@ -208,6 +210,8 @@ function topicWeights(rec, ctx, c) {
   for (const k of topicsOf(c)) add(k, EVERYDAY.includes(k) ? 0.6 : 1);
   const wk = ctx.wkind || 'fine';
   add(`weather:${wk}`, wk === 'fine' ? 1.2 : 3);
+  // (Those who work out in it have more to say when it's foul.)
+  if (wk !== 'fine' && OUTDOORS.has(rec.job)) add(`weather:${wk}`, 2);
   if (ctx.time) add(`time:${ctx.time}`, 0.6);
   add('work', rec.job && rec.job !== 'none' ? 1.5 : 0.3);
   if (ctx.hungry) add('hungry', 4);

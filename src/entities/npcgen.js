@@ -4,6 +4,7 @@ import { CLOTHES, PATTERN } from '../sim/culture.js';
 import { RNG, clamp, hash4 } from '../util/rng.js';
 import { personName, familyName } from '../world/names.js';
 import { ITEMS } from '../world/items.js';
+import { tradeOfStyle } from '../sim/isletrades.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
@@ -36,6 +37,12 @@ export const JOBS = {
   adventurer: { title: 'Adventurer', outfit: 'hunter' },
   handler: { title: 'Animal Handler', place: 'stables', start: 420, end: 1080, tools: ['wheat'], outfit: 'farmer' },
   caravanner: { title: 'Caravan Trader', outfit: 'vest' },
+  // Each people of the Dagoni Islands has a trade of its own (see
+  // isletrades.js).
+  miller: { title: 'Miller', place: 'windmill', start: 360, end: 1020, tools: ['wheat'], outfit: 'farmer', trader: 'miller' },
+  glassblower: { title: 'Glassblower', place: 'glassworks', start: 420, end: 1080, tools: ['glass'], outfit: 'smith', trader: 'glassblower' },
+  sporewright: { title: 'Sporewright', place: 'sporehouse', start: 480, end: 1200, tools: ['glowcap'], outfit: 'robe_green', trader: 'sporewright' },
+  pearldiver: { title: 'Pearl Diver', place: 'pearlhouse', start: 330, end: 960, tools: ['harpoon'], outfit: 'fisher', trader: 'pearldiver' },
 };
 
 export const HOBBIES = {
@@ -162,6 +169,17 @@ export function planPopulation(s, rng) {
   // Trim to the adult count, keeping essential roles first (in plan order).
   const trimmed = jobs.slice(0, adults);
   while (trimmed.length < adults) trimmed.push(T === 'village' ? 'farmer' : rng.chance(0.5) ? 'laborer' : 'farmer');
+  // Each island people's own trade (the windmill, the glassworks, the spore
+  // cellar, the pearl house): one of the town's labourers or spare farmers
+  // takes it up. (Its own dice, so the rest of the town comes out the same.)
+  const trade = tradeOfStyle(s.style);
+  if (trade && (T !== 'village' || hash4(s.seed >>> 0, 0x7a0e) % 10 < 7)) {
+    for (let k = 0; k < (T === 'city' ? 2 : 1); k++) {
+      let i = trimmed.lastIndexOf('laborer');
+      if (i < 0 && trimmed.filter((j) => j === 'farmer').length > 1) i = trimmed.lastIndexOf('farmer');
+      if (i >= 0) trimmed[i] = trade;
+    }
+  }
   // (However few the grown-ups, a place has its mayor and its builder: one
   // of the last-listed hands takes the job, never the only guard.)
   for (const need of ['mayor', 'builder']) {

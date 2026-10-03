@@ -172,7 +172,8 @@ const LINKS = [
   { who: ['innkeeper', 'barkeep'], needs: ['cook'], why: 'the tavern needs a cook' },
 ];
 const BUILD_COST = { tavern: 180, smithy: 150, bakery: 120, workshop: 120 };
-const WORKERS = { tavern: 'cook', smithy: 'blacksmith', bakery: 'baker', workshop: 'carpenter', shop: 'merchant', library: 'scholar', study: 'researcher', tailor: 'tailor', temple: 'priest', herbalist: 'herbalist' };
+const WORKERS = { tavern: 'cook', smithy: 'blacksmith', bakery: 'baker', workshop: 'carpenter', shop: 'merchant', library: 'scholar', study: 'researcher', tailor: 'tailor', temple: 'priest', herbalist: 'herbalist',
+  windmill: 'miller', glassworks: 'glassblower', sporehouse: 'sporewright', pearlhouse: 'pearldiver' };
 // People least missed when they change trade.
 const SPARE = ['laborer', 'beggar', 'farmer', 'lumberjack', 'fisher', 'trapper', 'merchant', 'noble'];
 

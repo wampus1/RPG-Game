@@ -160,20 +160,22 @@ export class Prosperity {
       return;
     }
     if (e.boarded && e.boarded.length) return;
-    const ops = [];
-    const houses = L.buildings.filter((b) => (b.residential || b.type === 'shop' || b.type === 'tailor' || b.type === 'warehouse') && !b.playerHome && !b.underConstruction && b.x0 !== undefined);
-    for (const b of houses) {
-      if (hash4(L.settlement.seed >>> 0, b.id, 0xb0a2) % 3) continue;
+    // (A third of those with glass in their windows to board, chosen by
+    // the town's own dice.)
+    const panes = (b) => {
+      const out = [];
       for (let x = b.x0; x <= b.x1; x++) {
         for (let z = b.z0; z <= b.z1; z++) {
           if (x !== b.x0 && x !== b.x1 && z !== b.z0 && z !== b.z1) continue;
-          for (const y of [GROUND + 1, GROUND + 2]) {
-            if (!w.regionAt(x, z) || w.getBlock(x, y, z) !== B.glass) continue;
-            ops.push([x, y, z, B.planks, 0]);
-          }
+          for (const y of [GROUND + 1, GROUND + 2]) if (w.regionAt(x, z) && w.getBlock(x, y, z) === B.glass) out.push([x, y, z, B.planks, 0]);
         }
       }
-    }
+      return out;
+    };
+    const houses = L.buildings.filter((b) => (b.residential || b.type === 'shop' || b.type === 'tailor' || b.type === 'warehouse') && !b.playerHome && !b.underConstruction && b.x0 !== undefined)
+      .map((b) => ({ b, p: panes(b) })).filter((q) => q.p.length)
+      .sort((a, c) => hash4(L.settlement.seed >>> 0, a.b.id, 0xb0a2) - hash4(L.settlement.seed >>> 0, c.b.id, 0xb0a2));
+    const ops = houses.slice(0, Math.ceil(houses.length / 3)).flatMap((q) => q.p);
     if (!ops.length) return;
     this.sim.setBlocks(ops);
     e.boarded = ops.map(([x, y, z]) => [x, y, z]);
