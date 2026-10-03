@@ -3,7 +3,7 @@
 import { CHAR_W, CHAR_H } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
-import { TECHS, BRANCHES, reqIds, rivalsOf } from '../sim/tech.js';
+import { TECHS, BRANCHES, reqIds, rivalsOf, treeOf } from '../sim/tech.js';
 import { has as heroHas } from '../game/hero.js';
 import { itemIcon } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
@@ -27,9 +27,10 @@ const SPREAD = 30; // how far a side line sits off the path
 const NODE = 11; // node radius
 const PANEL = 30; // side panel width (characters)
 
-// Where each step sits on the map (zoom 1, origin at the crest).
-export function techPos(id) {
-  const t = TECHS[id];
+// Where each step sits on the map (zoom 1, origin at the crest), on the
+// tree it's drawn from (each island's is laid out its own way).
+export function techPos(id, tree = treeOf(null)) {
+  const t = tree.techs[id] || TECHS[id];
   const [dx, dz] = DIRS[t.branch];
   const along = 26 + t.tier * LEG;
   return { x: dx * along - dz * t.side * SPREAD, y: dz * along + dx * t.side * SPREAD };
@@ -48,6 +49,8 @@ export class TechWindow extends Window {
     this.drag = null;
     this.t = 0;
     const st = game.sim.tech.stateOf(s);
+    // (The island's own tree.)
+    this.tree = game.sim.tech.treeFor(st);
     // Open on what's being studied, if anything.
     if (st && st.current) this.focus(st.current, 1.1);
   }
@@ -70,15 +73,15 @@ export class TechWindow extends Window {
     const a = this.area();
     if (mx < a.x0 || mx >= a.x1 || my < a.y0 || my >= a.y1) return null;
     let best = null;
-    for (const id of Object.keys(TECHS)) {
-      const q = this.toScreen(techPos(id));
+    for (const id of this.tree.ids) {
+      const q = this.toScreen(techPos(id, this.tree));
       const d = Math.hypot(q.x - mx, q.y - my);
       if (d <= NODE * this.cam.z + 3 && (!best || d < best.d)) best = { id, d };
     }
     return best ? best.id : null;
   }
   focus(id, z = 1.6) {
-    const p = techPos(id);
+    const p = techPos(id, this.tree);
     this.sel = id;
     this.goal = { x: p.x, y: p.y, z };
   }
@@ -167,13 +170,13 @@ export class TechWindow extends Window {
     const T = game.sim.tech;
     const st = T.stateOf(s);
     const civ = s.civ;
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(10,9,16,0.97)', double: true, title: 'WHAT THE REALM KNOWS' });
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(10,9,16,0.97)', double: true, title: `WHAT THE REALM KNOWS${this.tree.isle ? ` · THE LEARNING OF ${this.tree.isle.toUpperCase()}` : ''}` });
     const who = T.leaderOf(s);
     const realm = civ ? civ.name.replace(/^The /, '') : `free town of ${s.name}`;
     g.center(1, `${realm.toUpperCase()}${who ? ` · ${who.name.first} ${who.name.last} decides what is studied` : ''}`, '#f0e0c0');
-    const cur = st.current ? TECHS[st.current] : null;
+    const cur = st.current ? T.def(st, st.current) : null;
     g.text(2, 2, cur ? `Studying ${cur.name} ${bar(st.progress / cur.cost, 12)} ${pct(st.progress, cur.cost)}%` : 'Nothing under study', cur ? '#c8a060' : C.dim);
-    const n = `${st.done.length} of ${Object.keys(TECHS).length} learned`;
+    const n = `${st.done.filter((k) => this.tree.techs[k]).length} of ${this.tree.ids.length} learned`;
     g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, C.faint);
     g.text(2, this.h - 1, ' wheel zoom · drag to move · click a step · arrows pan · ESC close ', C.faint);
     // With a Kavorent core in hand: the other tree, the Kavorent's.
@@ -188,18 +191,18 @@ export class TechWindow extends Window {
     const m = this.ui.mouse;
     this.hover = m ? this.nodeAt(m.x, m.y) : null;
     if (this.hover && !this.drag) {
-      const t = TECHS[this.hover];
+      const t = this.tree.techs[this.hover];
       const stt = this.status(st, this.hover);
       const lines = [{ text: `${t.name}${t.big ? ' ★' : ''}`, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: STATUS_COLOR[stt] }];
       for (const l of wrap(t.desc, 36)) lines.push({ text: l, color: C.white });
-      const rivals = rivalsOf(this.hover);
+      const rivals = rivalsOf(this.hover, this.tree);
       if (rivals.length && stt !== 'barred' && stt !== 'done') lines.push({ text: `A choice: bars ${rivals.map((k) => TECHS[k].name).join(', ')}`, color: C.orange });
       this.ui.tooltip = { lines };
     }
     // The side panel for the step picked.
     if (!this.sel) return;
     const id = this.sel;
-    const t = TECHS[id];
+    const t = this.tree.techs[id];
     const x0 = this.w - 1 - PANEL;
     g.fill(x0, 3, PANEL, this.h - 5, ' ', C.fg, 'rgba(20,18,30,0.98)');
     for (let y = 3; y < this.h - 2; y++) g.put(x0, y, '│', C.faint);
@@ -215,7 +218,7 @@ export class TechWindow extends Window {
     y++;
     const stt = this.status(st, id);
     const when = (st.log || []).find((q) => q.id === id);
-    const rivals = rivalsOf(id);
+    const rivals = rivalsOf(id, this.tree);
     if (stt === 'done') line(when ? `Learned on day ${Math.max(1, when.day)}` : 'Known from of old', C.green);
     else if (stt === 'current') line(`Being studied: ${bar(st.progress / t.cost, 10)} ${pct(st.progress, t.cost)}%`, C.hi);
     else if (stt === 'barred') line(`Barred: the realm chose ${rivals.filter((k) => st.done.includes(k)).map((k) => TECHS[k].name).join(' and ')}`, C.red);
@@ -239,7 +242,7 @@ export class TechWindow extends Window {
     // What this town has put into it (it keeps that, whatever banner it's under).
     const mine = T.contribution(this.s, id);
     if (mine.n >= 1) line(`${this.s.name}'s share of the work: ${Math.round(mine.n)} (${mine.pct}%)`, C.faint);
-    const next = Object.keys(TECHS).filter((k) => reqIds(k).includes(id));
+    const next = this.tree.ids.filter((k) => reqIds(k, this.tree).includes(id));
     if (next.length) line(`Leads to: ${next.map((k) => TECHS[k].name).join(', ')}`, C.faint);
     g.text(x0 + 2, this.h - 3, '[click away] close', C.faint);
   }
@@ -273,11 +276,12 @@ export class TechWindow extends Window {
     // The paths: from each step back to what it needs (the roots to the
     // crest). Bright where it's known, a dotted trail where it could be
     // studied, faint and grey beyond.
-    const ids = Object.keys(TECHS);
+    const tree = this.tree;
+    const ids = tree.ids;
     for (const id of ids) {
-      const t = TECHS[id];
-      const to = this.toScreen(techPos(id));
-      const froms = t.req.length ? reqIds(id).map((k) => this.toScreen(techPos(k))) : [o];
+      const t = tree.techs[id];
+      const to = this.toScreen(techPos(id, tree));
+      const froms = t.req.length ? reqIds(id, tree).map((k) => this.toScreen(techPos(k, tree))) : [o];
       const stt = this.status(st, id);
       const col = BRANCH_COLOR[t.branch];
       for (const f of froms) {
@@ -306,11 +310,12 @@ export class TechWindow extends Window {
     // The choices: the two (or more) sides crossed through between them.
     const seen = new Set();
     for (const id of ids) {
-      const ex = TECHS[id].excl;
+      const ex = tree.techs[id].excl;
       if (!ex || seen.has(ex)) continue;
       seen.add(ex);
-      const group = ids.filter((k) => TECHS[k].excl === ex);
-      const ps = group.map((k) => this.toScreen(techPos(k)));
+      const group = ids.filter((k) => tree.techs[k].excl === ex);
+      if (group.length < 2) continue;
+      const ps = group.map((k) => this.toScreen(techPos(k, tree)));
       const chosen = group.some((k) => st.done.includes(k));
       ctx.setLineDash([3, 2]);
       ctx.strokeStyle = chosen ? 'rgba(200,90,80,0.5)' : 'rgba(240,150,90,0.85)';
@@ -363,8 +368,8 @@ export class TechWindow extends Window {
     // The steps (their names are placed after, so none lands on another).
     const labels = [];
     for (const id of ids) {
-      const t = TECHS[id];
-      const q = this.toScreen(techPos(id));
+      const t = tree.techs[id];
+      const q = this.toScreen(techPos(id, tree));
       const stt = this.status(st, id);
       const col = BRANCH_COLOR[t.branch];
       const r = Math.max(6, NODE * z * (t.big ? 1.25 : 1));
@@ -663,7 +668,7 @@ export class ResearchWindow extends Window {
   draw(g, game) {
     g.box(0, 0, this.w, this.h, { bg: 'rgba(14,12,20,0.97)', double: true, title: 'THE STUDY' });
     const st = game.sim.tech.stateOf(this.s);
-    const t = st.current ? TECHS[st.current] : null;
+    const t = st.current ? game.sim.tech.def(st, st.current) : null;
     g.center(1, t ? `Working on: ${t.name}` : 'Nothing set to study', t ? C.hi : C.dim);
     if (t) g.center(2, `${bar(st.progress / t.cost, 24)} ${pct(st.progress, t.cost)}%`, '#c8a060');
     const status = this.phase === 'out' ? 'The candle is out.  [ENTER] light another'

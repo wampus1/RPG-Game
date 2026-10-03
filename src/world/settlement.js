@@ -249,9 +249,22 @@ class Layout {
       road = B.sandstone;
       plaza = B.sandstone;
     }
-    // (The Ashborn pave with the black rock they live on.)
-    if (s.style === 'ember') plaza = T === 'village' ? B.gravel : B.basalt;
-    if (cond === 'poor' || cond === 'abandoned') {
+    // (The Ashborn pave with the black rock they live on; the Mirefolk lay
+    // dark boardwalks over the bog; the Stiltfolk's whole town stands on
+    // planking.)
+    if (s.style === 'ember') {
+      plaza = T === 'village' ? B.gravel : B.basalt;
+      road = T === 'village' ? B.gravel : B.basalt;
+    }
+    if (s.style === 'mist') {
+      road = B.planks_dark;
+      plaza = T === 'city' ? B.mossy_bricks : B.planks_dark;
+    }
+    if (s.style === 'tide') {
+      road = B.planks;
+      plaza = B.planks;
+    }
+    if ((cond === 'poor' || cond === 'abandoned') && s.style !== 'mist' && s.style !== 'tide') {
       road = B.path;
       if (plaza === B.stone_bricks) plaza = B.cobblestone;
     }
@@ -305,26 +318,30 @@ class Layout {
         roof = rng.chance(0.7) ? B.roof_slate : B.roof_green;
         break;
       // The Ashborn build squat and dark: basalt walls on cinderwood posts,
-      // black glass in the great halls, red tile against the falling ash.
+      // black glass in the great halls, and flat basalt roofs the ash can
+      // be swept off, with a brazier kept burning up there for the mountain.
       case 'ember':
         wall = rng.weighted([[B.basalt, 3], [B.cobblestone, 1], [B.obsidian, civic ? 1.5 : 0.2]]);
         corner = B.log_cinder;
         floor = B.basalt;
-        roof = rng.weighted([[B.roof_red, 3], [B.roof_slate, 2]]);
+        roof = civic && rng.chance(0.4) ? B.obsidian : B.basalt;
+        flat = true;
         break;
-      // The Mirefolk: dark timber on giant-mushroom posts, turf roofs.
+      // The Mirefolk: dark timber on giant-mushroom posts, under roofs like
+      // the caps of the mushrooms they live among (or deep moss).
       case 'mist':
         wall = rng.weighted([[B.planks_dark, 3], [B.log_wall, 2], [B.cobblestone, civic ? 2 : 0.4]]);
         corner = B.mushroom_stem;
         floor = B.planks_dark;
-        roof = rng.weighted([[B.roof_green, 3], [B.thatch, 2]]);
+        roof = rng.weighted([[B.roof_mushroom, civic ? 4 : 3], [B.roof_moss, 2]]);
         break;
-      // The Stiltfolk: pale planks on mangrove posts under reed thatch.
+      // The Stiltfolk: pale planks on mangrove posts under reed thatch, a
+      // plank deck all round.
       case 'tide':
         wall = rng.weighted([[B.planks_birch, 3], [B.planks, 2], [B.log_wall, 0.6]]);
         corner = B.log_mangrove;
         floor = B.planks;
-        roof = rng.weighted([[B.thatch, 4], [B.roof_wood, 1]]);
+        roof = rng.weighted([[B.roof_reed, 4], [B.thatch, 1]]);
         break;
       default:
         wall = rng.weighted([[B.timber, 3], [B.plaster, 2], [B.planks, 2], [B.cobblestone, 1], [B.bricks, T === 'city' ? 2 : 0.3]]);
@@ -336,7 +353,7 @@ class Layout {
             ? rng.weighted([[B.roof_red, 3], [B.roof_wood, 2], [B.thatch, 1], [B.roof_slate, 0.5]])
             : rng.weighted([[B.roof_slate, 3], [B.roof_red, 3], [B.roof_green, 0.5]]);
     }
-    if (civic && T !== 'village' && style !== 'sun' && style !== 'ember') {
+    if (civic && T !== 'village' && !['sun', 'ember', 'mist', 'tide'].includes(style)) {
       if (type === 'temple') wall = s.condition === 'prosperous' || T === 'city' ? B.marble : B.stone_bricks;
       else if (rng.chance(0.6)) wall = rng.pick([B.stone_bricks, B.bricks]);
       corner = wall === B.marble ? B.marble : B.stone_bricks;
@@ -1545,6 +1562,22 @@ class Layout {
         this.setMask(sd.x, sd.z, M.DECOR);
       }
       for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.25)) this.put(q.ox, Y0, q.oz, B.reeds);
+      // A plank deck all round the house, and mangrove posts at its corners
+      // where the stilts come up.
+      for (let z = z0 - 1; z <= z1 + 1; z++) {
+        for (let x = x0 - 1; x <= x1 + 1; x++) {
+          if (x >= x0 && x <= x1 && z >= z0 && z <= z1) continue;
+          const m = this.maskAt(x, z);
+          if (m !== M.YARD && m !== M.FREE) continue;
+          this.put(x, SURFACE, z, B.planks);
+          const cornerPost = (x === x0 - 1 || x === x1 + 1) && (z === z0 - 1 || z === z1 + 1);
+          if (cornerPost && open(x, z)) {
+            this.put(x, Y0, z, B.log_mangrove);
+            this.put(x, Y0 + 1, z, B.fence);
+            this.setMask(x, z, M.DECOR);
+          }
+        }
+      }
     }
   }
 
@@ -1564,9 +1597,12 @@ class Layout {
           this.put(x, roofBase, z, mats.roof);
           const edge = x === x0 || x === x1 || z === z0 || z === z1;
           const corner = (x === x0 || x === x1) && (z === z0 || z === z1);
-          if (corner || (edge && (x + z) % 3 === 0)) this.put(x, roofBase + 1, z, b.mats.wall);
-          else if (!edge && rng.chance(0.05)) this.put(x, roofBase + 1, z, rng.pick([B.barrel, B.crate, B.hay_bale]));
-          else if (!edge && rng.chance(0.04)) this.put(x, roofBase + 1, z, rng.pick([B.rug_red, B.rug_blue]));
+          const ash = mats.style === 'ember';
+          if (corner && ash && !ruined && x === x0 && z === z0) this.put(x, roofBase + 1, z, B.ash_brazier, META_STATE);
+          else if (corner || (edge && (x + z) % 3 === 0)) this.put(x, roofBase + 1, z, b.mats.wall);
+          else if (!edge && !ash && rng.chance(0.05)) this.put(x, roofBase + 1, z, rng.pick([B.barrel, B.crate, B.hay_bale]));
+          else if (!edge && !ash && rng.chance(0.04)) this.put(x, roofBase + 1, z, rng.pick([B.rug_red, B.rug_blue]));
+          else if (!edge && ash && rng.chance(0.06)) this.put(x, roofBase + 1, z, rng.pick([B.barrel, B.fire_lily]));
         }
       }
       b.roofTop = (z) => roofBase;
@@ -2666,8 +2702,20 @@ class Layout {
           if (!adjRoad || this.roadEndAhead(x, z)) continue;
           if ((hash4(x, z, s.seed) % every) !== 0) continue;
           if (this.lamps.some((l) => Math.abs(l.x - x) + Math.abs(l.z - z) < every - 2)) continue;
-          this.put(x, Y0, z, B.fence);
-          this.put(x, Y0 + 1, z, B.lantern, META_STATE);
+          // (Each people its own: a brazier on Kharos, a glowcap on a
+          // mushroom stalk on the Mirefolk's moors, a torch on a mangrove post
+          // where the Stiltfolk live, a lantern on a post elsewhere.)
+          if (s.style === 'ember') this.put(x, Y0, z, B.ash_brazier, META_STATE);
+          else if (s.style === 'mist') {
+            this.put(x, Y0, z, B.mushroom_stem);
+            this.put(x, Y0 + 1, z, B.glowcap_cap);
+          } else if (s.style === 'tide') {
+            this.put(x, Y0, z, B.log_mangrove);
+            this.put(x, Y0 + 1, z, B.torch, META_STATE);
+          } else {
+            this.put(x, Y0, z, B.fence);
+            this.put(x, Y0 + 1, z, B.lantern, META_STATE);
+          }
           this.setMask(x, z, M.DECOR);
           this.lamps.push({ x, z });
         }

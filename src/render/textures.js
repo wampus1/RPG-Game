@@ -260,7 +260,7 @@ function straw(p, pal, rand, rot = 0) {
 function cubeTop(name, v, rand, rot) {
   const dt = dungeonTop(name, v, rand, rot);
   if (dt) return dt;
-  const it = isleTop(name, v, rand);
+  const it = isleTop(name, v, rand, rot);
   if (it) return it;
   const p = new Px(16, 16);
   const pal = P[name];
@@ -2002,9 +2002,9 @@ function crackOverlay(stage) {
 }
 
 // --- build --------------------------------------------------------------------
-const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
+const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed']);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ...DANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, ...DANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 

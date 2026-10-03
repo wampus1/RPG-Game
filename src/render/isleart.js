@@ -18,6 +18,9 @@ export const ISLE_P = {
   peat: ['#3e2e22', '#2e2218', '#4e3a2c', '#5a4a3a'],
   mycelium: ['#c8bcc8', '#aa9eb0', '#dcd2dc', '#8a6aa0'],
   lava: ['#e05a1a', '#a82a10', '#ffa030', '#ffe070'],
+  roof_mushroom: ['#b83a2a', '#8a2a1e', '#f0e8d8', '#ffffff'],
+  roof_moss: ['#4a6a3a', '#3a5a2e', '#5e7e48', '#9ab060'],
+  roof_reed: ['#c8b070', '#a89050', '#e0cc90', '#5a4a30'],
 };
 export const ISLE_WOOD = {
   cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
@@ -29,10 +32,43 @@ export const ISLE_LEAF = {
 };
 
 // --- cube tops ------------------------------------------------------------------
-export function isleTop(name, v, rand) {
+export function isleTop(name, v, rand, rot = 0) {
   const p = new Px(16, 16);
   const pal = ISLE_P[name];
   switch (name) {
+    case 'roof_mushroom': {
+      // (The cap of a giant mushroom: red, with pale spots, ridged.)
+      const f = rot === 0 || rot === 3 ? 1.06 : rot === 2 ? 0.82 : 0.95;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, shade(y % 4 === 3 ? pal[1] : pal[0], f * (rand() < 0.06 ? 0.92 : 1)));
+      for (let i = 0; i < 5; i++) {
+        const sx = Math.floor(rand() * 14) + 1;
+        const sy = Math.floor(rand() * 14) + 1;
+        p.rect(sx, sy, 2, 2, shade(pal[2], f));
+        p.set(sx, sy, shade(pal[3], f));
+      }
+      return p;
+    }
+    case 'roof_moss': {
+      const f = rot === 0 || rot === 3 ? 1.05 : rot === 2 ? 0.82 : 0.95;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        let c = pal[(x * 7 + y * 3 + Math.floor(rand() * 3)) % 3];
+        if (y % 5 === 4) c = shade(pal[1], 0.85);
+        p.set(x, y, shade(c, f));
+      }
+      for (let i = 0; i < 4; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), shade(pal[3], f));
+      return p;
+    }
+    case 'roof_reed': {
+      // (Long reeds laid in courses, bound with a dark cord.)
+      const f = rot === 0 || rot === 3 ? 1.06 : rot === 2 ? 0.8 : 0.94;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        let c = (x + Math.floor(y / 2)) % 3 === 0 ? pal[1] : pal[0];
+        if (y % 6 === 5) c = pal[3];
+        if (rand() < 0.05) c = pal[2];
+        p.set(x, y, shade(c, f));
+      }
+      return p;
+    }
     case 'ash': {
       speckle(p, pal, rand, 0.3);
       // Drifts and a few cinders in it.
@@ -169,6 +205,18 @@ export function isleTop(name, v, rand) {
 export function isleFront(name, v, rand) {
   const p = new Px(16, LH);
   switch (name) {
+    case 'roof_mushroom': case 'roof_moss': case 'roof_reed': {
+      // The roof's edge: its surface, and a dark eave under it.
+      const top = isleTop(name, v, rand, 0);
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) {
+        const c = top.get(x, y % 16);
+        p.set(x, y, shade([c[0], c[1], c[2]], 0.85));
+      }
+      p.rect(0, LH - 3, 16, 3, name === 'roof_mushroom' ? '#e8dcc8' : '#2e2418');
+      if (name === 'roof_mushroom') for (let x = 1; x < 16; x += 3) p.vline(x, LH - 3, LH - 1, '#c8b8a0');
+      else for (let x = 0; x < 16; x += 2) p.set(x, LH - 1, ISLE_P[name][2]);
+      return p;
+    }
     case 'ash': case 'scorched': case 'moss': case 'mycelium': {
       // A skin of it over the dark earth beneath.
       const pal = ISLE_P[name];
@@ -295,6 +343,25 @@ export const ISLE_SPRITES = {
     }
     return p;
   },
+};
+ISLE_SPRITES.ash_brazier = (rot, st, f) => {
+  // A bowl of iron on a basalt foot, coals heaped in it, burning.
+  const p = spr();
+  p.rect(6, 18, 4, 8, '#3a3638');
+  p.hline(6, 9, 18, '#5a5456');
+  p.rect(5, 25, 6, 1, '#2a2628');
+  p.rect(3, 15, 10, 3, '#4a4448');
+  p.hline(3, 12, 15, '#6a6468');
+  p.hline(4, 11, 17, '#2a2628');
+  if (st) {
+    const o = f % 3;
+    p.rect(4, 14, 8, 1, '#c84a1a');
+    p.rect(5, 9 + (o === 1 ? 1 : 0), 6, 5, '#e05a18');
+    p.rect(6, 6 + o, 4, 6, '#f8a030');
+    p.rect(7, 10, 2, 3, '#fff0a0');
+    p.set(7 + (o === 2 ? 1 : 0), 4 + o, '#f8a030');
+  } else p.rect(4, 14, 8, 1, '#3a2a24');
+  return p.outline(OUT);
 };
 export const ISLE_ANIM = { steam_vent: 4 };
 

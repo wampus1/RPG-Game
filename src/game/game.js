@@ -47,6 +47,7 @@ import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
 import { launch as launchRaft, landing as raftLanding, floatable } from '../entities/raft.js';
+import { enforceIslandLaws, raftDues, SPORE_BLOCKS } from '../sim/islelaws.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
@@ -1548,7 +1549,8 @@ export class Game {
       const x = Math.round(e.x);
       const z = Math.round(e.z);
       if (w.getBlock(x, e.y, z) !== B.lava && w.getBlock(x, e.y - 1, z) !== B.lava) continue;
-      this.damage(e, e.kind === 'player' ? 3 : 4, null);
+      // (Kharos's fire-walk: half the harm.)
+      this.damage(e, e.kind === 'player' ? (e.fireWalk === this.day ? 2 : 3) : 4, null);
       e.burnT = Math.max(e.burnT || 0, 4);
       e.burnSrc = null;
       this.renderer.emit(x + 0.5, e.y + 0.4, z + 0.5, { n: 8, color: ['#ff7020', '#ffb040', '#ffe070'], up: 30, speed: 30, life: 0.6, glow: true, gravity: -20 });
@@ -1724,8 +1726,9 @@ export class Game {
     }
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
-    for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.poisonT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
     this.lavaTick(dt);
+    enforceIslandLaws(this, dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) {
@@ -2722,8 +2725,11 @@ export class Game {
     // Your own house is yours to knock about: nobody minds.
     const c = this.sim.citizen;
     if (here.some((q) => q.playerHome && c && c.sid === s.id && c.home === q.id)) return;
-    const civic = here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5 || EVENT_BLOCKS.has(b.id);
-    if (!civic || b.render === 'plant') return;
+    // (Under the Mirefolk's spore law, the town's mushrooms are everyone's.)
+    const spore = SPORE_BLOCKS.has(b.name) && lawOn(L, 'sporeLaw');
+    if (spore) L.econ.recent.picked = (L.econ.recent.picked || 0) + 1;
+    const civic = spore || here.length > 0 || L.maskAt(x, z) === 1 || L.maskAt(x, z) === 5 || EVENT_BLOCKS.has(b.id);
+    if (!civic || (b.render === 'plant' && !spore)) return;
     // The noise of it: anyone near enough to hear (awake) turns to look.
     for (const n of this.active.get(s.id).npcs) {
       if (n.dead || n.sleeping || n.state !== 'routine' || n.sitting || n.moving) continue;
@@ -2741,7 +2747,7 @@ export class Game {
     if (v >= 4) {
       this.vandal.set(s.id, 0);
       this.sim.justice.commit(s.id, 'vandalism', { witnesses: wits, desc: 'Vandalizing the town' });
-    } else witness.say(['Hey! That\'s not yours!', 'Stop wrecking our town!', 'Do you mind?!'][v - 1], 3, '#ffb080');
+    } else witness.say(spore ? ['Those belong to the whole town!', 'Put that back! It\'s the spore law!', 'Thief! The mushrooms are everyone\'s!'][v - 1] : ['Hey! That\'s not yours!', 'Stop wrecking our town!', 'Do you mind?!'][v - 1], 3, '#ffb080');
   }
 
   // ------------------------------------------------------------ placing
@@ -3037,6 +3043,7 @@ export class Game {
     }
     removeItem(p.inv, 'raft', 1);
     launchRaft(this, x, z);
+    raftDues(this, x, z);
     this.audio?.play('splash');
     this.ui.msg('You push off on the raft. A/D turn, W paddles, S back-paddles, F to go ashore.', '#a0d8ff');
     return true;
@@ -3396,7 +3403,7 @@ export class Game {
       if (n.dead || !near(n)) continue;
       const held = n.heldItem ? n.heldItem() : null;
       const off = n.offhandItem ? n.offhandItem() : null;
-      if (held === 'torch' || off === 'torch') out.push({ x: n.x, y: n.y, z: n.z, L: 9 });
+      if (held === 'torch' || off === 'torch' || off === 'lantern') out.push({ x: n.x, y: n.y, z: n.z, L: 9 });
     }
     out.sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.z - p.z) - (Math.abs(b.x - p.x) + Math.abs(b.z - p.z)));
     return out.slice(0, 10);
@@ -3798,6 +3805,11 @@ export class Game {
       if (s && s.condition !== 'abandoned' && this.sim.tech.has(s, 'hospitality') && p.addBlue(2, `bed:${s.id}`)) {
         this.ui.msg(`A night's sleep in a good ${s.name} bed leaves you hardier: a blue heart for today.`, '#a0ffa0');
       }
+      // (Or hardened to fire, where the Ashborn know the fire-walk.)
+      if (s && s.condition !== 'abandoned' && this.sim.tech.has(s, 'fire_walking') && p.fireWalk !== this.day) {
+        p.fireWalk = this.day;
+        this.ui.msg(`You wake in ${s.name} with the fire-walkers' ash on your brow: lava and flames do you half the harm today.`, '#ffb070');
+      }
       p.hp = p.maxHp;
       this.ui.msg('Good morning! You feel rested.', '#ffe8a0');
     } else if (sl.jail && !early) this.ui.msg('You wake, stiff from the cot.', '#c8d8ff');
@@ -3933,7 +3945,10 @@ export class Game {
     // (A set stone goes with the arrow: see gems.js.)
     const gem = gemsOf(from).bow;
     const pace = { bolt: 0.7, stone: 0.85, javelin: 1.35 }[kind] || 1;
-    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: (0.08 + dist * 0.045) * arrowSpeed(from) * pace, dmg, gem, kind });
+    // (A Myrrow guard's arrows are tipped with bog venom, where the realm
+    // knows how.)
+    const venom = from.kind === 'npc' && from.rec && from.rec.job === 'guard' && from.settlement && this.sim.tech.has(from.settlement, 'bog_venom');
+    this.projectiles.push({ from, target, x0: from.x, y0: from.y + 1, z0: from.z, tx: target.x, ty: target.y + 1, tz: target.z, t: 0, dur: (0.08 + dist * 0.045) * arrowSpeed(from) * pace, dmg, gem, kind, venom });
     this.audio?.play(kind === 'stone' || kind === 'javelin' ? 'swing' : 'bow', from);
   }
 
@@ -4055,6 +4070,10 @@ export class Game {
       // Turned aside, rolled under, taken on a shield, or home (see
       // archery.js).
       if (hit) hit = arrowStrikes(this, a, t);
+      if (hit && a.venom && !t.dead) {
+        t.poisonT = 5;
+        t.poisonSrc = a.from;
+      }
       javelin(a);
       onArrowLand(this, a, hit);
     }

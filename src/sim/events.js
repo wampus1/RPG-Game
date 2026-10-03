@@ -123,7 +123,160 @@ const DESIGNS = {
     stand: at([[-1, 0], [3, 0], [-1, 1], [3, 1], [-1, 2], [3, 2], [-1, 3], [3, 3], [0, 4], [1, 4], [2, 4], [1, -1], [0, -1], [2, -1]]),
   },
 };
-const PLANS = { wedding: ['wedding', 'wedding_small'], feast: ['feast', 'feast_small', 'feast_tiny'], fete: ['feast', 'feast_small', 'feast_tiny'] };
+// The islands' own rites (see RITES): Kharos's ring of fires for the
+// mountain, the Mirefolk's avenue of lanterns, the Stiltfolk's driftwood
+// feast, and Thessa's fair in a paddock.
+const FIRE_RING = [[1, 1], [5, 1], [1, 5], [5, 5]];
+Object.assign(DESIGNS, {
+  vigil: {
+    w: 7, d: 7,
+    what: 'a ring of fires for the mountain',
+    blocks: [
+      [3, 0, 3, 'campfire', LIT],
+      [3, 0, 0, 'obsidian'], [3, 1, 0, 'obsidian'],
+      ...FIRE_RING.map(([dx, dz]) => [dx, 0, dz, 'fire_lily']),
+      ...[[0, 0], [6, 0], [0, 6], [6, 6]].flatMap(([dx, dz]) => [[dx, 0, dz, 'basalt'], [dx, 1, dz, 'torch', LIT]]),
+    ],
+    lead: { dx: 3, dz: 1, face: 0 },
+    ring: { dx: 3, dz: 3 },
+    stand: at([[1, 2], [5, 2], [1, 4], [5, 4], [2, 6], [4, 6], [0, 3], [6, 3], [2, 1], [4, 1], [-1, 2], [7, 2], [-1, 4], [7, 4], [1, 7], [5, 7], [3, 7], [-1, 3], [7, 3]]),
+  },
+  vigil_small: {
+    w: 5, d: 5,
+    what: 'a fire for the mountain',
+    blocks: [[2, 0, 2, 'campfire', LIT], [2, 0, 0, 'obsidian'], [0, 0, 4, 'basalt'], [0, 1, 4, 'torch', LIT], [4, 0, 4, 'basalt'], [4, 1, 4, 'torch', LIT]],
+    lead: { dx: 2, dz: 1, face: 0 },
+    ring: { dx: 2, dz: 2 },
+    stand: at([[0, 2], [4, 2], [1, 4], [3, 4], [-1, 1], [5, 1], [-1, 3], [5, 3], [2, 5], [1, 5], [3, 5]]),
+  },
+  lanterns: {
+    w: 9, d: 5,
+    what: 'an avenue of lanterns',
+    blocks: [
+      ...[0, 2, 4, 6, 8].flatMap((dx) => [[dx, 0, 0, 'fence'], [dx, 1, 0, 'lantern', LIT], [dx, 0, 4, 'fence'], [dx, 1, 4, 'lantern', LIT]]),
+      [4, 0, 2, 'mossy_bricks'], [4, 1, 2, 'mossy_bricks'], [4, 2, 2, 'lantern', LIT],
+      [1, 0, 2, 'mushroom_red'], [7, 0, 2, 'mushroom_red'],
+    ],
+    lead: { dx: 4, dz: 1, face: 0 },
+    ring: { dx: 4, dz: 2 },
+    stand: at([[1, 1], [3, 1], [5, 1], [7, 1], [1, 3], [3, 3], [5, 3], [7, 3], [0, 2], [8, 2], [2, 5], [4, 5], [6, 5], [-1, 2], [9, 2], [2, -1], [6, -1]]),
+  },
+  lanterns_small: {
+    w: 5, d: 5,
+    what: 'a lantern pole and a ring of mushrooms',
+    blocks: [[2, 0, 2, 'fence'], [2, 1, 2, 'fence'], [2, 2, 2, 'lantern', LIT], [0, 0, 0, 'mushroom_red'], [4, 0, 0, 'mushroom_red'], [0, 0, 4, 'mushroom_brown'], [4, 0, 4, 'mushroom_brown']],
+    lead: { dx: 2, dz: 0, face: 0 },
+    ring: { dx: 2, dz: 2 },
+    stand: at([[0, 2], [4, 2], [1, 4], [3, 4], [-1, 1], [5, 1], [-1, 3], [5, 3], [2, 5], [1, 5], [3, 5]]),
+  },
+  tidefeast: {
+    w: 7, d: 6,
+    what: 'a driftwood fire and the catch laid out',
+    blocks: [
+      [0, 0, 0, 'barrel'], [6, 0, 0, 'barrel'], [0, 1, 0, 'torch', LIT], [6, 1, 0, 'torch', LIT],
+      ...[1, 2, 4, 5].map((dx) => [dx, 0, 1, 'feast_table']),
+      [3, 0, 4, 'campfire', LIT],
+      [0, 0, 5, 'crate'], [6, 0, 5, 'crate'], [0, 0, 4, 'barrel'],
+    ],
+    lead: { dx: 3, dz: 1, face: 0 },
+    serve: at([[1, 0, 0], [2, 0, 0], [4, 0, 0], [5, 0, 0]]),
+    dine: at([[1, 2], [2, 2], [4, 2], [5, 2]]),
+    ring: { dx: 3, dz: 4 },
+    stand: at([[0, 2], [6, 2], [0, 3], [6, 3], [1, 3], [5, 3], [1, 5], [5, 5], [3, 6], [2, 6], [4, 6], [-1, 2], [7, 2], [-1, 4], [7, 4]]),
+  },
+  tidefeast_small: {
+    w: 5, d: 5,
+    what: 'a driftwood fire',
+    blocks: [[2, 0, 3, 'campfire', LIT], [1, 0, 1, 'feast_table'], [3, 0, 1, 'feast_table'], [0, 0, 0, 'barrel'], [4, 0, 0, 'crate']],
+    lead: { dx: 2, dz: 1, face: 0 },
+    serve: at([[1, 0, 0], [3, 0, 0]]),
+    ring: { dx: 2, dz: 3 },
+    stand: at([[0, 2], [4, 2], [0, 4], [4, 4], [2, 5], [1, 5], [3, 5], [-1, 2], [5, 2], [-1, 3], [5, 3]]),
+  },
+  fair: {
+    w: 9, d: 7,
+    what: 'a paddock, hay and a trader\'s table',
+    blocks: [
+      ...[0, 1, 2, 3, 5, 6, 7, 8].map((dx) => [dx, 0, 0, 'fence']),
+      ...[1, 2, 3, 4, 5].flatMap((dz) => [[0, 0, dz, 'fence'], [8, 0, dz, 'fence']]),
+      ...[0, 1, 2, 6, 7, 8].map((dx) => [dx, 0, 6, 'fence']),
+      [2, 0, 2, 'hay_bale'], [6, 0, 2, 'hay_bale'], [2, 0, 4, 'hay_bale'], [6, 1, 2, 'hay_bale'],
+      [4, 0, 7, 'feast_table'], [3, 0, 7, 'feast_table'],
+      [0, 1, 0, 'lantern', LIT], [8, 1, 0, 'lantern', LIT],
+    ],
+    lead: { dx: 4, dz: 1, face: 0 },
+    serve: at([[3, 8, 2], [4, 8, 2]]),
+    ring: { dx: 4, dz: 3 },
+    stand: at([[-1, 1], [9, 1], [-1, 3], [9, 3], [-1, 5], [9, 5], [1, 7], [7, 7], [2, 8], [5, 8], [6, 8], [1, -1], [3, -1], [5, -1], [7, -1]]),
+  },
+  fair_small: {
+    w: 5, d: 5,
+    what: 'a hay ring and a trader\'s table',
+    blocks: [[0, 0, 0, 'hay_bale'], [4, 0, 0, 'hay_bale'], [0, 0, 4, 'hay_bale'], [4, 0, 4, 'hay_bale'], [2, 0, 0, 'feast_table']],
+    lead: { dx: 2, dz: 1, face: 0 },
+    serve: at([[2, -1, 0]]),
+    ring: { dx: 2, dz: 2 },
+    stand: at([[0, 2], [4, 2], [1, 4], [3, 4], [-1, 1], [5, 1], [-1, 3], [5, 3], [2, 5], [1, 5], [3, 5]]),
+  },
+});
+
+const PLANS = {
+  wedding: ['wedding', 'wedding_small'], feast: ['feast', 'feast_small', 'feast_tiny'], fete: ['feast', 'feast_small', 'feast_tiny'],
+  'rite:vigil': ['vigil', 'vigil_small'], 'rite:lanterns': ['lanterns', 'lanterns_small'], 'rite:tidefeast': ['tidefeast', 'tidefeast_small'], 'rite:fair': ['fair', 'fair_small'],
+};
+
+// Each island's rite: what it's called (by people), when it's held (and
+// for how long), how often (days; the vigil's held when the mountain
+// stirs), its colours, the crowd it draws, and what's said.
+export const RITES = {
+  vigil: {
+    name: () => 'the Waking Vigil', at: 19 * 60, len: 180, palette: 0, pull: 0.75,
+    poster: (s) => ['THE SLEEPER STIRS', '', 'Come to the fires by the square', 'and keep watch with us,', `so ${s.name} may be spared.`, ''],
+    beats: (town) => [
+      { t: 0, who: 'lead', say: 'The mountain is waking. We keep the fires, and we keep faith.' },
+      { t: 2, who: 'crowd', cheer: ['Sleep, Sleeper.', 'Spare us.', 'We keep the fires.', 'Sleep...'] },
+      { t: 60, who: 'lead', say: `Black glass for the mountain, and bread for the hearths of ${town}.` },
+      { t: 61, who: 'crowd', cheer: ['Spare us!', 'We keep faith!'] },
+      { t: 150, who: 'lead', say: 'Go home. Keep a mask by your bed, and your children close.' },
+    ],
+  },
+  lanterns: {
+    name: () => 'the Night of Lanterns', at: 21 * 60, len: 150, palette: 1, pull: 0.65, every: 12,
+    poster: () => ['THE NIGHT OF LANTERNS', '', 'Bring a light to the square', 'and walk the avenue with us,', 'so the fog knows our faces.', ''],
+    beats: () => [
+      { t: 0, who: 'lead', say: 'Lights up, all of you. Let the fog see who we are.' },
+      { t: 2, who: 'crowd', cheer: ['Light to light.', 'We are here.', 'Light to light!'] },
+      { t: 75, who: 'lead', say: 'For those the fog took. Say their names, softly.' },
+      { t: 76, who: 'crowd', cheer: ['*whispers*', 'Remembered.', 'Light to light.'] },
+    ],
+  },
+  tidefeast: {
+    name: () => 'the High Tide Feast', at: 11 * 60 + 30, len: 180, palette: 3, pull: 0.62, every: 9,
+    poster: (s) => ['THE HIGH TIDE FEAST', '', 'The tide is in and the pots are full!', `Crab boil and kelp cakes for all of ${s.name}`, 'by the driftwood fire.', ''],
+    beats: (town) => [
+      { t: 0, who: 'lead', say: 'The Tide-Mother fills the nets. Eat, all of you!' },
+      { t: 2, who: 'crowd', cheer: ['To the tide!', 'Pass the crab!', 'Hooray!', `To ${town}!`] },
+      { t: 90, who: 'lead', say: 'One shell back to the sea for every one we ate. That\'s the rule.' },
+      { t: 91, who: 'crowd', cheer: ['Back to the sea!', 'Ha! Fair enough.'] },
+    ],
+  },
+  fair: {
+    name: (s) => ({ vale: 'the Horse Fair', north: 'the Hiring Fair', sun: 'the Caravan Fair', wild: 'the Feather Market', high: 'the Ore Fair' }[s.style] || 'the Fair'),
+    at: 10 * 60, len: 240, palette: 2, pull: 0.58, every: 15,
+    poster: (s, nm) => [`${nm.toUpperCase()}!`, '', 'Buying, selling, racing and wagers', `in ${s.name} by the square.`, 'Bring your best and your coin!', ''],
+    beats: (town) => [
+      { t: 0, who: 'lead', say: `The fair is open! Bring your best, ${town}!` },
+      { t: 2, who: 'crowd', cheer: ['Hooray!', 'Look at that one!', 'What am I bid?', 'Fair day!'] },
+      { t: 120, who: 'lead', say: 'Prizes at the table for the finest beast and the best bargain!' },
+      { t: 121, who: 'crowd', cheer: ['Huzzah!', 'Rigged!', 'Well done!'] },
+    ],
+  },
+};
+const RITE_OF = { ember: 'vigil', mist: 'lanterns', tide: 'tidefeast' };
+// Which rite a people keeps (Thessa's peoples: the fair).
+export function riteOf(s) {
+  return (s && RITE_OF[s.style]) || 'fair';
+}
 // Round the maypole, a step at a time.
 const RING = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]];
 
@@ -136,6 +289,7 @@ const TRAIT_PULL_KIND = {
   wedding: { romantic: 0.2, devout: 0.08 },
   feast: { lazy: 0.08, stingy: 0.1, romantic: 0.05 },
   fete: { lazy: 0.08, stingy: 0.08, proud: 0.08 },
+  rite: { devout: 0.18, gloomy: 0.1, proud: 0.05 },
 };
 
 const name = (r) => `${r.name.first} ${r.name.last}`;
@@ -172,7 +326,36 @@ export class Events {
       const [a, b] = ev.couple.map((i) => L.npcs[i]);
       return `the wedding of ${a.name.first} and ${b.name.first}`;
     }
+    if (ev.kind === 'rite') return RITES[ev.rite].name(L.settlement);
     return ev.kind === 'fete' ? `the celebration of ${L.settlement.name} becoming a ${ev.tier}` : festivalName(L.settlement);
+  }
+
+  // The island's own rite, when its day comes round (Kharos's when the
+  // mountain stirs). (`soon`: from the command console.)
+  rite(L, day, soon = null) {
+    const s = L.settlement;
+    const key = riteOf(s);
+    const R = RITES[key];
+    const ev = this.announce(L, 'rite', day, { rite: key, host: (L.npcs.find((r) => r.job === 'priest' && alive(r) && !r.away) || L.npcs.find((r) => r.job === 'mayor' && alive(r) && !r.away) || {}).idx ?? null, at: R.at, len: R.len }, soon);
+    ledger(L, day, `${cap(R.name(s))} will be held by the square on day ${ev.day} from ${hodStr(ev.s % DAY)}.`);
+    return ev;
+  }
+
+  // Each morning: is it a rite's day? (Kharos keeps its vigil the evening
+  // the mountain first shakes; the others on their own calendars.)
+  rites(L, day) {
+    const s = L.settlement;
+    if (s.condition === 'abandoned' || this.upcoming(L).length) return null;
+    const key = riteOf(s);
+    if (key === 'vigil') {
+      const V = this.sim.volcano;
+      if (!V || s.island !== 'kharos' || V.warned !== day) return null;
+      return this.rite(L, day, Math.max(this.sim.abs + 60, day * DAY + RITES.vigil.at));
+    }
+    const R = RITES[key];
+    if (key === 'fair' && s.type === 'village') return null;
+    if ((day + 2 + (s.id * 7)) % R.every !== 0) return null;
+    return this.rite(L, day);
   }
 
   // ------------------------------------------------------------ announcing
@@ -183,13 +366,13 @@ export class Events {
     // One do a day: the next free day from the day after tomorrow.
     let d = day + 2;
     while (this.upcoming(L).some((q) => q.day === d)) d++;
-    let start = d * DAY + START[kind];
+    let start = d * DAY + (extra.at ?? START[kind]);
     if (soon !== null) {
       d = Math.floor(soon / DAY);
       start = Math.ceil(Math.max(soon, d * DAY + BUILD_AT + 60) / 30) * 30;
     }
     const ev = {
-      id, kind, day: d, s: start, e: start + LENGTH[kind], state: 'announced',
+      id, kind, day: d, s: start, e: start + (extra.len ?? LENGTH[kind]), state: 'announced',
       posters: [], crier: null, site: null, blocks: [], stage: null, strike: null, guests: null, came: 0, ...extra,
     };
     this.list(L).push(ev);
@@ -444,6 +627,10 @@ export class Events {
         ],
       };
     }
+    if (ev.kind === 'rite') {
+      const R = RITES[ev.rite];
+      return { title: 'POSTER', lines: [...R.poster(s, R.name(s)), when, '', `By the council of ${s.name}.`] };
+    }
     if (ev.kind === 'fete') {
       return { title: 'POSTER', lines: [`${s.name.toUpperCase()} IS A ${ev.tier.toUpperCase()}!`, '', 'Come and celebrate with us:', 'food, drink and dancing', `round ${round}.`, '', when, '', `By order of the council of ${s.name}.`] };
     }
@@ -504,10 +691,10 @@ export class Events {
 
   build(L, ev, active) {
     void active;
-    const site = this.findSite(L, ev.kind);
+    const site = this.findSite(L, ev.kind === 'rite' ? `rite:${ev.rite}` : ev.kind);
     ev.site = site;
     const look = styleOf(L.settlement);
-    const palette = ev.kind === 'wedding' ? WEDDING_PALETTE : look.palette;
+    const palette = ev.kind === 'wedding' ? WEDDING_PALETTE : ev.kind === 'rite' ? RITES[ev.rite].palette : look.palette;
     const stage = [];
     if (site) {
       const dsn = DESIGNS[site.key];
@@ -698,7 +885,7 @@ export class Events {
     if (ev.couple && ev.couple.includes(rec.idx)) return 1;
     if (rec.idx === ev.host) return 1;
     const pers = rec.personality || {};
-    let p = { wedding: 0.38, feast: 0.52, fete: 0.66 }[ev.kind];
+    let p = ev.kind === 'rite' ? RITES[ev.rite].pull : { wedding: 0.38, feast: 0.52, fete: 0.66 }[ev.kind];
     if (ev.couple) {
       const rels = ev.couple.map((i) => this.relation(L, rec, L.npcs[i]));
       p += rels.includes('family') ? 0.6 : rels.includes('friend') ? 0.4 : rels.includes('work') ? 0.15 : 0;
@@ -887,7 +1074,7 @@ export class Events {
     }
     if (ev.kind !== 'wedding') {
       L.econ.lastFeast = ev.day;
-      ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `${festivalName(L.settlement)} by the square drew ${came} people.`);
+      ledger(L, ev.day, ev.kind === 'fete' ? `${came} people turned out by the square to celebrate ${L.settlement.name} becoming a ${ev.tier}.` : `${cap(this.title(L, ev))} by the square drew ${came} people.`);
     }
     // You came along: they won't forget it.
     if (ev.playerCame) {
@@ -981,6 +1168,7 @@ export class Events {
         { t: 26, who: 'lead', say: 'Now, eat, drink and be merry!' },
       ];
     }
+    if (ev.kind === 'rite') return RITES[ev.rite].beats(town);
     return [
       { t: 0, who: 'lead', say: ev.kind === 'fete' ? `${town} is a ${ev.tier} now! Let's celebrate!` : 'Welcome, all! Eat, drink and dance!' },
       { t: 2, who: 'crowd', cheer: ['Hooray!', 'Huzzah!', `To ${town}!`, 'Hear, hear!'] },

@@ -13,6 +13,7 @@ import { B, BLOCKS, LOGS, LEAVES } from '../world/blocks.js';
 import { alive, ledger } from './econ.js';
 import { addHazard } from '../entities/monsters.js';
 import { ignite } from '../game/fire.js';
+import { wrathFactor } from './islelaws.js';
 
 const DAY = DAY_MINUTES;
 // How often (days), and how long the sky stays dark after (days).
@@ -149,7 +150,7 @@ export class Volcano {
     const cz = (s.bounds.z0 + s.bounds.z1) / 2;
     const d = Math.hypot(cx - V.x, (cz - V.z) * V.squash);
     const masks = this.sim.tech && this.sim.tech.has(s, 'ash_masks');
-    const sev = clamp(1.1 - (d - V.r) / 650, 0.15, 1) * (masks ? 0.4 : 1);
+    const sev = clamp(1.1 - (d - V.r) / 650, 0.15, 1) * (masks ? 0.4 : 1) * wrathFactor(L);
     let dead = 0;
     for (const r of L.npcs) {
       if (!alive(r) || r.away || r.visitor) continue;

@@ -45,6 +45,10 @@ const OUTFIT_COLORS = {
   traveller: { coat: '#5a4a32', collar: '#7a6a4a' },
   rags: { patch: '#6a5a4a' },
   vest: { vest: '#3a2a22' },
+  // The other Dagoni Islands' dress (see npcgen.islandDress).
+  ashwrap: { sash: '#c84a1a', hem: '#1e1a1c' },
+  mistcloak: { mantle: '#7a8a6a', fringe: '#4a5a44' },
+  tidewrap: { vest: '#e8dcc0', trim: '#2a8a9a' },
   skeleton: {},
 };
 
@@ -141,6 +145,16 @@ function drawHumanoid(look, dir, frame) {
       R(6 + f, legY + legH, 4, 2, skel ? skinC : shoes);
     }
   }
+  // (The Stiltfolk roll their trousers to the knee: bare shins.)
+  if (outfit === 'tidewrap' && !skel && !sit) {
+    const sy = legY + Math.ceil(legH / 2);
+    const sh = legH - Math.ceil(legH / 2);
+    if (!side) {
+      R(5, sy, 3, sh - (walk > 0 ? 1 : 0), skinC);
+      R(8, sy, 3, sh - (walk < 0 ? 1 : 0), skinC);
+    } else if (walk === 0) R(6, sy, 4, sh, skinC);
+    else R(7 + (walk > 0 ? 1 : -1), sy, 3, sh, skinC);
+  }
   // Torso.
   const tx = side ? 5 : 4;
   const tw = side ? 6 : 8;
@@ -180,6 +194,27 @@ function drawHumanoid(look, dir, frame) {
     R(tx, torsoY + torsoH + 1, tw, 1, shade(shirtC, 0.85));
     R(tx, legY - 1, tw, 1, hex(oc.belt));
     if (dir === 0) S(7, legY - 1, hex(oc.buckle));
+  } else if (outfit === 'ashwrap') {
+    // (The Ashborn's wrap: soot-dark, down to the knee, a sash of ember
+    // red across it, a dark hem.)
+    R(tx, torsoY, tw, torsoH + Math.min(4, legH - 2), shirtC);
+    R(tx, torsoY + torsoH + Math.min(4, legH - 2) - 1, tw, 1, hex(oc.hem));
+    if (dir !== 2) for (let i = 0; i < torsoH + 1; i++) S(tx + (side ? 1 + (i >> 1) : tw - 2 - i), torsoY + i, hex(oc.sash));
+    else R(tx, torsoY + 3, tw, 1, hex(oc.sash));
+  } else if (outfit === 'mistcloak') {
+    // (The Mirefolk's long cloak, a mantle over the shoulders, fringed.)
+    R(tx, torsoY, tw, torsoH + legH - 2, shirtC);
+    R(tx - (side ? 0 : 1), torsoY, tw + (side ? 1 : 2), 3, hex(oc.mantle));
+    for (let x = tx; x < tx + tw; x += 2) S(x, torsoY + torsoH + legH - 2, hex(oc.fringe));
+    if (dir === 0) R(7, torsoY + 3, 2, torsoH + legH - 5, shade(shirtC, 0.82));
+  } else if (outfit === 'tidewrap') {
+    // (The Stiltfolk's open vest, bare chest and arms, a sea-blue trim.)
+    if (dir === 0) {
+      R(6, torsoY, 4, torsoH, skinC);
+      R(tx, torsoY, 2, torsoH, hex(oc.vest));
+      R(tx + tw - 2, torsoY, 2, torsoH, hex(oc.vest));
+      R(tx, torsoY + torsoH - 1, tw, 1, hex(oc.trim));
+    } else R(tx, torsoY, tw, torsoH, hex(oc.vest));
   } else if (outfit === 'traveller') {
     // (A long coat, open down the front.)
     R(tx, torsoY, tw, torsoH + 3, hex(oc.coat));
@@ -200,7 +235,7 @@ function drawHumanoid(look, dir, frame) {
     }
   }
   // Belt.
-  if (!outfit.startsWith('robe') && outfit !== 'farmer' && outfit !== 'tunic') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
+  if (!outfit.startsWith('robe') && outfit !== 'farmer' && outfit !== 'tunic' && outfit !== 'ashwrap' && outfit !== 'mistcloak') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
   // Armour details over the top.
   if (!skel) {
     const G = (x, y, w, h, c) => R(x, y, w, h, hex(c));
@@ -257,7 +292,7 @@ function drawHumanoid(look, dir, frame) {
     }
   }
   // Arms.
-  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'traveller' ? hex(oc.coat) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : shirtC;
+  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'traveller' ? hex(oc.coat) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : outfit === 'tidewrap' && !gear.body ? skinC : outfit === 'mistcloak' ? shade(shirtC, 0.9) : shirtC;
   // A kerchief at the neck.
   if (look.neck && !skel) {
     const nc = hex(look.neck);
@@ -421,6 +456,17 @@ function drawHumanoid(look, dir, frame) {
     } else if (mark === 'mole') {
       if (dir === 0) M(hx + 5, hy + 5, shade(skinC, 0.55));
       else M(hx + 1, hy + 5, shade(skinC, 0.55));
+    } else if (mark === 'tidelines') {
+      // (Blue waves under the eyes: a Stiltfolk's tattoo.)
+      if (dir === 0) {
+        M(hx + 1, hy + 5, '#2a6a9a');
+        M(hx + 2, hy + 6, '#2a6a9a');
+        M(hx + 6, hy + 5, '#2a6a9a');
+        M(hx + 5, hy + 6, '#2a6a9a');
+      } else {
+        M(hx + 1, hy + 5, '#2a6a9a');
+        M(hx + 2, hy + 6, '#2a6a9a');
+      }
     } else if (mark === 'stripes') {
       if (dir === 0) {
         R(hx + 1, hy + 5, 1, 2, hex('#c83a32'));
@@ -512,6 +558,20 @@ function drawHumanoid(look, dir, frame) {
         A(hx + 5, hy + 3, '#a0584a');
         A(hx + 6, hy + 5, '#a0584a');
       } else if (side) A(hx + 2, hy + 3, '#a0584a');
+    } else if (acc === 'ashmask') {
+      // (The Ashborn's mask against the ash: dark cloth, two red vents.)
+      if (dir === 0) {
+        R(hx + 1, hy + 5, 6, 2, hex('#3a3436'));
+        A(hx + 2, hy + 6, '#c84a1a');
+        A(hx + 5, hy + 6, '#c84a1a');
+      } else if (side) {
+        R(hx, hy + 5, 4, 2, hex('#3a3436'));
+        A(hx + 1, hy + 6, '#c84a1a');
+      } else R(hx, hy + 5, 8, 1, hex('#3a3436'));
+    } else if (acc === 'shells') {
+      // (A string of shells round the neck.)
+      if (dir === 0) for (let x = 5; x <= 10; x++) S(x, torsoY + ((x === 5 || x === 10) ? 0 : 1), hex(x % 2 ? '#f0e8d8' : '#e8a8a0'));
+      else if (side) for (let x = 5; x <= 8; x++) S(x, torsoY + 1, hex(x % 2 ? '#f0e8d8' : '#e8a8a0'));
     } else if (acc === 'eyepatch') {
       if (dir !== 2) R(hx, hy + 3, 8, 1, hex('#1a1414'));
       if (dir === 0) R(hx + 5, hy + 3, 2, 2, hex('#1a1414'));
@@ -613,6 +673,49 @@ function drawHumanoid(look, dir, frame) {
         H(hx + 9, hy - 1, 1, 1, '#2a2430');
         H(hx + 1, hy - 3, 6, 3, '#2a2430');
         H(hx + 1, hy - 1, 6, 1, look.hatColor || '#c8a030');
+        break;
+      case 'ashhood': {
+        // (A soot-black hood, its edge stitched in ember red.)
+        const hc = look.hatColor || '#2a2426';
+        H(hx - 1, hy - 1, 10, 3, hc);
+        H(hx - 1, hy + 2, 1, 5, hc);
+        H(hx + 8, hy + 2, 1, 5, hc);
+        if (dir === 0) H(hx, hy + 1, 8, 1, '#c84a1a');
+        else if (dir === 2) H(hx, hy, 8, headH - 1, hc);
+        break;
+      }
+      case 'ashhelm':
+        // (Black glass and iron: a crest like a flame.)
+        H(hx, hy - 1, 8, 4, '#2a2628');
+        H(hx, hy - 1, 8, 1, '#4a4448');
+        H(hx + 3, hy - 4, 2, 3, '#c84a1a');
+        H(hx + 3, hy - 4, 2, 1, '#ffa040');
+        if (dir === 0) H(hx + 3, hy + 2, 2, 3, '#1a1618');
+        break;
+      case 'mushcap': {
+        // (A wide hat like a mushroom's cap, spotted.)
+        const mc = look.hatColor || '#a83a2a';
+        H(hx - 2, hy + 1, 12, 1, shade(hex(mc), 0.8));
+        H(hx - 1, hy - 1, 10, 2, mc);
+        H(hx + 1, hy - 2, 6, 1, mc);
+        H(hx + 1, hy - 1, 1, 1, '#f0ece0');
+        H(hx + 6, hy - 1, 1, 1, '#f0ece0');
+        H(hx + 4, hy - 2, 1, 1, '#f0ece0');
+        break;
+      }
+      case 'conehat':
+        // (A wide cone of woven reed, against sun and rain.)
+        H(hx - 3, hy + 1, 14, 1, '#c8a860');
+        H(hx - 1, hy, 10, 1, '#d8b870');
+        H(hx + 1, hy - 1, 6, 1, '#e0c880');
+        H(hx + 3, hy - 2, 2, 1, '#e8d090');
+        H(hx - 3, hy + 1, 14, 1, '#b89850');
+        break;
+      case 'shellhelm':
+        // (A turtle's shell for a helm.)
+        H(hx - 1, hy - 1, 10, 3, '#5a6a3a');
+        H(hx, hy - 2, 8, 1, '#6a7a44');
+        for (const x of [hx + 1, hx + 4, hx + 7]) H(x, hy - 1, 1, 2, '#3a4a2a');
         break;
       case 'wreath':
         for (let x = hx; x < hx + 8; x++) H(x, hy + ((x - hx) % 3 === 1 ? -1 : 0), 1, 1, (x - hx) % 2 ? '#6ab04a' : '#3a7a32');

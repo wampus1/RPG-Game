@@ -1,4 +1,4 @@
-// Block registry. Every cell of the world grid stores a block id (Uint8) and a
+// Block registry. Every cell of the world grid stores a block id (Uint16) and a
 // meta byte: bits 0-1 rotation (0=S,1=W,2=N,3=E), bit 2 state (open / lit).
 
 export const META_ROT = 0b011;
@@ -27,7 +27,12 @@ const DEFAULTS = {
   tall: false, // sprite visually spans two layers
 };
 
+const LEGACY_TWICE = new Set(['cobweb', 'statue']);
 function def(name, props = {}) {
+  // (Two blocks of one name: the second would quietly take the first's
+  // place. The dungeons' cobwebs and the town statues have done so for a
+  // long while, and saved worlds count on it.)
+  if (B[name] !== undefined && !LEGACY_TWICE.has(name)) throw new Error(`block ${name} defined twice`);
   const id = BLOCKS.length;
   const d = { ...DEFAULTS, ...props, id, name };
   if (d.standable === null) d.standable = d.solid && d.render === 'cube';
@@ -420,7 +425,13 @@ def('leaves_mangrove', leaves([{ item: 'mangrove_pod', chance: 0.04 }]));
 def('mushroom_stem', { tool: 'axe', hardness: 0.8, drop: [{ item: 'mushroom_brown', chance: 0.5 }], label: 'Giant Mushroom Stem' });
 def('mushroom_cap', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, drop: [{ item: 'mushroom_red', chance: 0.3 }], label: 'Giant Mushroom Cap' });
 def('glowcap_cap', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, light: 7, drop: [{ item: 'glowcap', chance: 0.4 }], label: 'Glowcap' });
-// (Room for three more before the byte the world keeps them in is full.)
+// Round 34: the islands' own roofs (the Mirefolk's spotted mushroom-cap
+// and moss, the Stiltfolk's reed), and the Ashborn's brazier, their
+// lamp-post and rooftop fire.
+def('roof_mushroom', { tool: 'axe', hardness: 0.5, rotatable: true, drop: 'mushroom_red', label: 'Mushroom-Cap Roof' });
+def('roof_moss', { hardness: 0.4, rotatable: true, drop: 'moss', label: 'Moss Roof' });
+def('roof_reed', { hardness: 0.4, rotatable: true, label: 'Reed Thatch' });
+def('ash_brazier', { ...sprite, interact: 'torch', tool: 'pick', hardness: 1.2, light: 14, lightWhenState: true, drop: 'basalt', label: 'Brazier' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -443,7 +454,7 @@ export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_d
   'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium'].filter((k) => B[k] !== undefined).map((k) => B[k]));
 // Ores, and the glint they show in a cut wall.
 export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
-export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark]);
+export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks]);
 export const LOGS = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove'].map((w) => B[`log_${w}`]),
 );

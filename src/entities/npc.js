@@ -163,7 +163,12 @@ export class NPC extends Entity {
     const h = this.heldItem();
     const blade = !h || !ITEMS[h] || ITEMS[h].kind !== 'weapon' || ITEMS[h].ranged ? null : offhandOf(this);
     if (blade) return blade;
-    return h !== 'torch' && !(h && ITEMS[h] && ITEMS[h].hands === 2) && this.carriesTorch() ? 'torch' : null;
+    // (Where the Mirefolk's lantern law holds, a lantern.)
+    return h !== 'torch' && !(h && ITEMS[h] && ITEMS[h].hands === 2) && this.carriesTorch() ? (this.lanternTown() ? 'lantern' : 'torch') : null;
+  }
+
+  lanternTown() {
+    return !!(this.layout && this.layout.econ && lawOn(this.layout, 'lanternLaw'));
   }
 
   // Out after dark (a guard on the watch, a traveller on the road, anyone
@@ -178,7 +183,9 @@ export class NPC extends Entity {
     if (night && !this.sleeping && !this.down && this.state !== 'captive' && this.state !== 'labor' && !this.rec.equipment?.shield) {
       const out = !this.layout || !buildingAt(this.layout, this.x, this.z);
       const about = this.caravan || this.rec.job === 'guard' || this.moving || this.state === 'fight' || this.state === 'alert';
-      t = out && about && (hash4(this.rec.idx || 0, 0x70c) % 3 !== 0 || this.rec.job === 'guard' || this.caravan);
+      // (Under the lantern law, everyone out of doors carries a light.)
+      const law = this.lanternTown();
+      t = out && (about || law) && (law || hash4(this.rec.idx || 0, 0x70c) % 3 !== 0 || this.rec.job === 'guard' || this.caravan);
     }
     this._torch = t;
     return t;

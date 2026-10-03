@@ -12,8 +12,8 @@ import { alive, kitchenOf, mayorOf, st, activityFor, DAY, stockOf, ledger, fresh
 import { TIERS } from '../sim/growth.js';
 import { repLevel } from '../sim/sim.js';
 import { PROFESSIONS, clock, bare, licensesFor, licenceFee } from '../sim/careers.js';
-import { TECHS, TECH_IDS } from '../sim/tech.js';
-import { LAWS, LAW_IDS, lawOn, lawList, stance, willSign, needed, decide } from '../sim/laws.js';
+import { TECHS } from '../sim/tech.js';
+import { LAWS, LAW_IDS, lawOn, lawList, lawFits, stance, willSign, needed, decide } from '../sim/laws.js';
 import { plural, relationTo } from '../sim/favors.js';
 import { deserted } from '../sim/civic.js';
 import { hash4, RNG } from '../util/rng.js';
@@ -827,11 +827,11 @@ function researchTalk(npc, game) {
   const st = T.stateOf(s);
   const who = T.leaderOf(s);
   const boss = s.civ ? (who && who.ruler !== undefined && who !== npc.rec ? `${who.name.first} ${who.name.last}` : 'the court') : 'I';
-  const cur = st.current ? TECHS[st.current] : null;
+  const cur = st.current ? T.def(st, st.current) : null;
   const lines = [cur
     ? `${boss === 'I' ? 'I have' : `${boss[0].toUpperCase()}${boss.slice(1)} has`} set the scholars to ${cur.name.toLowerCase()}: ${cur.desc.charAt(0).toLowerCase()}${cur.desc.slice(1)} They're ${Math.floor((st.progress / cur.cost) * 100)}% of the way there.`
     : 'Our scholars have nothing to study just now.',
-  `We know ${st.done.length} of the ${TECH_IDS.length} arts so far. Here, see for yourself.`];
+  `We know ${st.done.length} of the ${T.treeFor(st).ids.length} arts so far. Here, see for yourself.`];
   return { lines, open: 'tech' };
 }
 
@@ -881,7 +881,7 @@ function plansTalk(npc, game) {
   sim.changeRep(npc, 6 * n);
   const T = sim.tech;
   const st = T.stateOf(s);
-  const cur = st && st.current ? TECHS[st.current] : null;
+  const cur = st && st.current ? T.def(st, st.current) : null;
   if (cur) st.progress = Math.min(cur.cost - 1, st.progress + cur.cost * 0.12 * n);
   ledger(L, game.day, `${game.playerName} brought the council old plans from below; the scholars are poring over them.`);
   return {
@@ -1011,7 +1011,7 @@ function petitionTalk(npc, game, arg) {
   if (!sim.isCitizen(s.id) && sim.opinion(npc) < 20) return { lines: ['The laws of this town are a matter for its people. Become a citizen, or earn our trust, first.'] };
   return {
     lines: ['Which law do you have in mind?'],
-    choices: LAW_IDS.map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })),
+    choices: LAW_IDS.filter((id) => lawFits(L.settlement, id)).map((id) => ({ id: 'petition', arg: `law:${id}:${lawOn(L, id) ? 'off' : 'on'}`, label: `${lawOn(L, id) ? 'Repeal' : 'Pass'} the ${LAWS[id].name.toLowerCase()}` })),
     back: 'Never mind.',
   };
 }
@@ -1789,7 +1789,8 @@ function respondRaw(npc, game, id, arg) {
       if (on.length) lines.push(on.map((id) => LAWS[id].desc).join(' '));
       else lines.push('Beyond that there are no special laws here.');
       // And what they make of one of them.
-      const topic = on.length ? on[(game.day + rec.idx) % on.length] : LAW_IDS[(game.day + rec.idx) % LAW_IDS.length];
+      const fits = LAW_IDS.filter((id) => lawFits(s, id));
+      const topic = on.length ? on[(game.day + rec.idx) % on.length] : fits[(game.day + rec.idx) % fits.length];
       const view = stance(rec, topic);
       const nm = LAWS[topic].name.toLowerCase();
       if (rec.job !== 'mayor') {

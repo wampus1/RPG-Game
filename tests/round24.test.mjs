@@ -8,7 +8,7 @@ import { BLOCKS } from '../src/world/blocks.js';
 import { styleOf, beginAttack, tickAttack, heftOf, roll } from '../src/game/combat.js';
 import { promote } from '../src/sim/growth.js';
 import { settlementIcons } from '../src/ui/windows.js';
-import { TECHS, TECH_IDS, rivalsOf } from '../src/sim/tech.js';
+import { TECHS, TECH_IDS, rivalsOf, treeOf } from '../src/sim/tech.js';
 import { runCommand } from '../src/game/commands.js';
 import { smallTalk, STYLES } from '../src/game/markov.js';
 import { wellMade } from '../src/game/talk/grammar.js';
@@ -284,14 +284,20 @@ test('choices: learning one side of a pair bars the other for good', () => {
   const game = makeGame(12345, { learned: false });
   const T = game.sim.tech;
   T.cheat = false;
+  // (On the common tree, every choice is a pair; an island's may have a
+  // side of its own in place of one, or none, where it never learns one.)
+  const common = treeOf(null);
   const groups = {};
-  for (const k of TECH_IDS) if (TECHS[k].excl) (groups[TECHS[k].excl] ||= []).push(k);
+  for (const k of common.ids) if (TECHS[k].excl) (groups[TECHS[k].excl] ||= []).push(k);
   assert.ok(Object.keys(groups).length >= 7, 'several choices');
   for (const g of Object.values(groups)) {
     assert.equal(g.length, 2, 'each a pair');
     assert.deepEqual(rivalsOf(g[0]), [g[1]]);
   }
-  const civ = game.world.ow.civs[0];
+  for (const k of TECH_IDS) if (TECHS[k].excl) assert.ok(['tolls', 'bows', 'arms', 'coffers', 'justice', 'learning', 'harvest'].includes(TECHS[k].excl));
+  // (Free trade or customs: a realm whose island has both.)
+  const both = (c) => { const t = T.treeFor(T.stateOf(c)); return t.techs.free_trade && t.techs.customs; };
+  const civ = game.world.ow.civs.find(both);
   const st = T.stateOf(civ);
   st.done = st.done.filter((k) => k !== 'free_trade' && k !== 'customs');
   T.learnWithPrereqs(civ, 'free_trade', game.day);
@@ -300,7 +306,7 @@ test('choices: learning one side of a pair bars the other for good', () => {
   assert.ok(!T.ready(st, 'customs'));
   assert.match(runCommand(game, `learn customs ${civ.name}`).join(' '), /barred/);
   // (Two realms that chose differently end up different.)
-  const other = game.world.ow.civs[1];
+  const other = game.world.ow.civs.find((c) => c !== civ && both(c));
   const so = T.stateOf(other);
   so.done = so.done.filter((k) => k !== 'free_trade' && k !== 'customs');
   T.learnWithPrereqs(other, 'customs', game.day);
@@ -511,7 +517,8 @@ test('prison labour: prisoners quarry and cut wood under spare guards, and work 
   const ow = game.world.ow;
   const W = game.sim.war;
   // (A realm whose capital has guards to spare.)
-  const civ = ow.civs.find((c) => game.sim.realms.capitalOf(c) && game.sim.labor.spare(game.sim.layoutOf(game.sim.realms.capitalOf(c).id)).guards.length >= 2);
+  // (Not on Thessa, where an old law forbids it.)
+  const civ = ow.civs.find((c) => game.sim.tech.treeFor(game.sim.tech.stateOf(c)).techs.prison_labor && game.sim.realms.capitalOf(c) && game.sim.labor.spare(game.sim.layoutOf(game.sim.realms.capitalOf(c).id)).guards.length >= 2);
   const cap = game.sim.realms.capitalOf(civ);
   const L = game.sim.layoutOf(cap.id);
   const foe = ow.civs.find((c) => c !== civ && game.sim.realms.members(c).length);

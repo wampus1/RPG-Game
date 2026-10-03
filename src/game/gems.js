@@ -793,7 +793,8 @@ export function tickStatus(game, e, dt) {
     e.burnT -= dt;
     e.burnTick = (e.burnTick || 0) - dt;
     if (e.burnTick <= 0) {
-      e.burnTick = 1;
+      // (Hardened by Kharos's fire-walk: half the harm, so half as often.)
+      e.burnTick = e.fireWalk === game.day ? 2 : 1;
       // (Water puts it out.)
       if (e.inWater) e.burnT = 0;
       else game.damage(e, 1, e.burnSrc || null);
@@ -804,6 +805,16 @@ export function tickStatus(game, e, dt) {
   if (e.shadeT > 0) e.shadeT -= dt;
   if (e.lostT > 0) e.lostT -= dt;
   if (e.moonWard && (e.moonWard.t -= dt) <= 0) e.moonWard = null;
+  // Marsh venom (a Myrrow guard's arrow): a little harm each second.
+  if (e.poisonT > 0) {
+    e.poisonT -= dt;
+    e.poisonTick = (e.poisonTick || 0) - dt;
+    if (e.poisonTick <= 0) {
+      e.poisonTick = 1;
+      game.damage(e, 1, e.poisonSrc || null);
+      if (game.renderer) game.renderer.emit(e.x, e.y + 0.9, e.z, { n: 4, color: ['#8ac040', '#c8f070', '#5a8a20'], up: 14, speed: 10, life: 0.7, gravity: -8 });
+    }
+  }
   if (e.bleedT > 0) {
     e.bleedT -= dt;
     e.bleedTick = (e.bleedTick || 0) - dt;

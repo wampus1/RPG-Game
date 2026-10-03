@@ -6,6 +6,7 @@
 // active settlement is ticked as game time passes, and a distant one is
 // simply caught up (hour by hour, capped) the next time it's needed.
 import { foundingLaws, reviewLaws, LAWS, LAW_IDS } from './laws.js';
+import { blackGlassStock } from './islelaws.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { ITEMS, GEMS } from '../world/items.js';
 import { JOBS, activityAt } from '../entities/npcgen.js';
@@ -52,8 +53,11 @@ export function stockFor(L, t) {
   if (t === 'herbalist' && L && L.settlement && !(L.sim && L.sim.tech && (L.sim.tech.has(L.settlement, 'alchemy') || L.sim.tech.has(L.settlement, 'spore_lore')))) return list.filter((k) => !k.startsWith('potion_'));
   // Black glass from the Ashborn's smiths.
   if (t === 'smith' && L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'obsidian_edge')) list = [...list, 'obsidian_blade'];
-  // Steel only from a realm whose smiths know how.
-  if (t === 'smith' && !(L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'steel'))) return list.filter((k) => k !== 'steel_sword');
+  // (Under Kharos's black-glass law: obsidian, and no iron blades.)
+  if (t === 'smith' && L && L.econ) list = blackGlassStock(L, list);
+  // Steel only from a realm whose smiths know how (or whose forges burn
+  // with the mountain's fire).
+  if (t === 'smith' && !(L && L.settlement && L.sim && L.sim.tech && (L.sim.tech.has(L.settlement, 'steel') || L.sim.tech.has(L.settlement, 'magma_forges')))) return list.filter((k) => k !== 'steel_sword');
   return list;
 }
 
@@ -308,6 +312,12 @@ function gather(L, kind, n) {
   k[kind] = Math.min(STOCK_CAP, k[kind] + n);
 }
 
+// (The peoples of Thessa roll their weapons ban again here, as they
+// always have; the other islands' founding laws stand as made.)
+function islandLaws(s, laws, armsBan) {
+  return s.style === 'ember' || s.style === 'mist' || s.style === 'tide' ? laws : { ...laws, armsBan };
+}
+
 export function initEcon(L) {
   if (L.econ) return L.econ;
   const s = L.settlement;
@@ -321,7 +331,7 @@ export function initEcon(L) {
     treasury: Math.round(pop * 14 * wealth * typeF),
     tax: Math.round(clamp((s.condition === 'poor' ? 0.14 : s.condition === 'prosperous' ? 0.06 : 0.1) + rng.float(-0.02, 0.02), 0.02, 0.3) * 100) / 100,
     fineScale: vals.includes('martial') ? 1.25 : vals.includes('pious') ? 0.85 : 1,
-    laws: { ...foundingLaws(s, new RNG(hash4(s.seed, 0x1a55)), vals), armsBan: vals.includes('martial') || rng.chance(0.25) },
+    laws: islandLaws(s, foundingLaws(s, new RNG(hash4(s.seed, 0x1a55)), vals), vals.includes('martial') || rng.chance(0.25)),
     ledger: [],
     biz: {},
     pantry: {},
@@ -1201,6 +1211,8 @@ function mayorReview(sim, L, day, rng) {
       ledger(L, day, `A feast day was held in the square (¤${spend} from the treasury).`);
     }
   }
+  // The island's own rite, when its day comes round.
+  if (sim && sim.events.rites) sim.events.rites(L, day);
   if (sim) sim.dailyCivic(L, day, rng);
 }
 

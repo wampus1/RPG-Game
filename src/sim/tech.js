@@ -36,9 +36,11 @@ const COST = [0, 80, 140, 220, 320, 450, 600];
 // from another branch: not drawn on the tree), `excl` (a choice: learning
 // one step of the group bars the others for good), `big` (a great work).
 // `isles`: only the peoples of those of the Dagoni Islands can learn it
-// (each island's tree is a little different: see ISLE_TECHS).
+// (each island's tree is laid out its own way: see ISLE_TREES). `as`: an
+// island's own form of a common step, that does all it does (and counts
+// as knowing it).
 const T = (branch, tier, side, req, icon, name, desc, o = {}) => ({
-  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier], isles: o.isles || null,
+  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier], isles: o.isles || null, as: o.as || [],
 });
 export const TECHS = {
   // Economy
@@ -106,14 +108,125 @@ export const TECHS = {
   outriggers: T('economy', 2, 0, ['bookkeeping'], 'raft', 'Outrigger Rafts', 'Rafts with outriggers: the realm\'s merchants and soldiers cross the sea to the other islands 40% faster, and its raids from the sea are 15% stronger.', { isles: ['myrrow'] }),
   fog_wardens: T('warfare', 2, 0, ['drill'], 'lantern', 'Fog Wardens', 'The watch knows the mist: the realm\'s towns defend 25% better against raids.', { isles: ['myrrow'] }),
   spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy, and townsfolk wake 2 health better every morning.', { isles: ['myrrow'] }),
+  // (And more of each island's own, in the places of the common steps it
+  // never learns.)
+  horse_archers: T('warfare', 4, -0.5, [['shieldwall', 'greatweapons']], 'bow', 'Horse Archers', 'Guards\' bows become longbows (range 11, damage 6), and the watch rides out against raiders even with no horse in the stable (+20% defence); armies are 5% stronger.', { isles: ['thessa'], excl: 'bows', as: ['longbows'] }),
+  toll_roads: T('economy', 3, 1.5, ['markets'], 'crate', 'Toll Roads', 'Every merchant from another realm pays ¤6 into the treasury of each town they trade in, and the tolls keep up the roads: they\'re built 25% faster.', { isles: ['thessa'], excl: 'tolls', as: ['customs'] }),
+  windmills: T('engineering', 3, -0.5, ['crop_rotation'], 'wheat', 'Great Windmills', 'Millers grind twice as fast: bread and flour cost 25% less in a town with a windmill, and its millers pay a third more for wheat.', { isles: ['thessa'] }),
+  magma_forges: T('warfare', 3, 0.5, ['obsidian_edge'], 'furnace', 'Magma Forges', 'Forges fed from the mountain\'s own fire: smiths sell steel swords even without Steelworking, and armies are 10% stronger.', { isles: ['kharos'] }),
+  ash_fields: T('engineering', 2, -1.5, ['masonry'], 'wheat', 'Ash Fields', 'The black ash of the mountain is rich: farms yield 50% more grain, and hay is stacked by the barns.', { isles: ['kharos'], as: ['mills'] }),
+  glassblowing: T('economy', 3, 0.5, ['sulphur_trade'], 'glass', 'Glassblowing', 'Glassworks sell their wares 25% cheaper, and each week every town with a glassworks sends glass abroad: ¤10 to its treasury.', { isles: ['kharos'], excl: 'tolls' }),
+  fire_walking: T('society', 3, -1, ['ash_masks'], 'torch', 'Fire-Walking', 'A night in a town bed hardens you to fire for the day: lava and flames do you half the harm. The realm\'s folk wake 2 health better every morning.', { isles: ['kharos'] }),
+  bog_venom: T('warfare', 3, -0.5, ['archery'], 'slime_gel', 'Bog Venom', 'The watch tips its arrows with marsh venom: a guard\'s arrow poisons whatever it hits (1 harm a second for 5 seconds); armies are 8% stronger.', { isles: ['myrrow'], excl: 'arms' }),
+  tide_charts: T('engineering', 2, 1, ['metalworking'], 'scroll', 'Tide Charts', 'Charts of the tides and the channels: merchants, letters, settlers and armies travel between towns 15% faster.', { isles: ['myrrow'], as: ['lodestones'] }),
+  pearl_diving: T('economy', 3, -0.25, ['outriggers'], 'pearl', 'Pearl Diving', 'Pearl divers bring up twice as many pearls, and each week every town with a pearl house sells pearls abroad: ¤10 to its treasury.', { isles: ['myrrow'] }),
 };
 
 export const TECH_IDS = Object.keys(TECHS);
-export const branchTechs = (b) => TECH_IDS.filter((k) => TECHS[k].branch === b).sort((x, y) => TECHS[x].tier - TECHS[y].tier || TECHS[x].side - TECHS[y].side);
+
+// How each island's tree differs from the common one: the steps it never
+// learns (`drop`), and those that sit elsewhere on it or need other things
+// first (`move`). Its own steps are in TECHS above.
+//   Thessa, the island of roads and fields: surveying from the first, the
+// horse before the muster, mills from rotated fields; tolls not customs,
+// horse archers not crossbowmen, and no prisoners set to labour (an old
+// law of the island).
+//   Kharos, under the mountain: deep mines from the first, black glass
+// before steel, ash fields not wells and mills; no horses (no cavalry), no
+// tall yew (no longbows), no ships (they cross on rafts), and no free trade
+// (the mountain's goods are sold dear).
+//   Myrrow, in the mist: alchemy as old as law, spore lore from it,
+// hospitality early; tide charts not lodestones (no mines, no lodestone);
+// venomed arrows not great weapons (nothing heavy in the bog); no horses,
+// no stone fortresses, no siege engines, and no monopolies (the stilt
+// folk share).
+export const ISLE_TREES = {
+  thessa: {
+    drop: ['crossbows', 'customs', 'prison_labor'],
+    move: {
+      surveying: { tier: 1, side: 0, req: [] },
+      crop_rotation: { side: -0.5 },
+      cranes: { tier: 3, side: 0.5 },
+      lodestones: { side: 1.5 },
+      fortress: { side: -0.25 },
+      portals: { side: 1.5 },
+      cavalry: { req: ['horse_lords'] },
+      caravan_law: { req: [['free_trade', 'toll_roads']] },
+    },
+  },
+  kharos: {
+    drop: ['cavalry', 'longbows', 'mills', 'wells', 'aqueducts', 'trade_ships', 'free_trade', 'hospitality'],
+    move: {
+      mining: { tier: 1, side: 0, req: [] },
+      surveying: { side: -0.5 },
+      lodestones: { tier: 2, side: 1 },
+      granaries: { tier: 3, side: -1.5, req: ['ash_fields'], excl: null },
+      cranes: { side: -0.5 },
+      fortress: { side: -1, req: ['cranes', 'granaries'] },
+      crossbows: { side: -1 },
+      steel: { req: ['magma_forges', 'fieldworks'] },
+      caravan_law: { req: [['glassblowing', 'customs']] },
+      schools: { req: ['fire_walking'] },
+      apprenticeships: { req: ['fire_walking'] },
+    },
+  },
+  myrrow: {
+    drop: ['cavalry', 'greatweapons', 'mining', 'lodestones', 'fortress', 'rams', 'catapults', 'monopolies'],
+    move: {
+      alchemy: { tier: 1, side: -1, req: [] },
+      codex: { side: 1 },
+      spore_lore: { side: -1.5, req: ['alchemy'] },
+      hospitality: { tier: 2, side: -0.5, req: ['alchemy'] },
+      prisons: { side: 1 },
+      longbows: { req: [['shieldwall', 'bog_venom']] },
+      crossbows: { req: [['shieldwall', 'bog_venom']] },
+      steel: { req: ['fieldworks'] },
+      gemcraft: { side: -1.25 },
+      free_trade: { side: 0.75 },
+      customs: { side: 1.75 },
+      banking: { side: -1.25 },
+      mint: { side: -1.25 },
+      portals: { req: ['tide_charts'] },
+    },
+  },
+};
+
+// An island's tree (or the common one, for anywhere else): each step as it
+// sits there.
+const TREES = new Map();
+export function treeOf(isle) {
+  const key = ISLE_TREES[isle] ? isle : '';
+  let tree = TREES.get(key);
+  if (tree) return tree;
+  const spec = ISLE_TREES[key] || { drop: [], move: {} };
+  const techs = {};
+  for (const id of TECH_IDS) {
+    const t = TECHS[id];
+    if (t.isles ? !t.isles.includes(key) : spec.drop.includes(id)) continue;
+    const m = spec.move[id];
+    techs[id] = m ? { ...t, ...m, cost: COST[m.tier ?? t.tier] } : t;
+  }
+  // (A choice of steps loses the ones the island never learns.)
+  for (const [id, t] of Object.entries(techs)) {
+    if (!t.req.some((r) => Array.isArray(r) && r.some((k) => !techs[k]))) continue;
+    techs[id] = { ...t, req: t.req.map((r) => (Array.isArray(r) ? r.filter((k) => techs[k]) : r)) };
+  }
+  tree = { isle: key || null, techs, ids: Object.keys(techs) };
+  TREES.set(key, tree);
+  return tree;
+}
+// What each common step's island forms are (anything that works `as` it).
+const ALIASES = {};
+for (const id of TECH_IDS) for (const a of TECHS[id].as) (ALIASES[a] ||= []).push(id);
+export const aliasesOf = (id) => ALIASES[id] || [];
+export const branchTechs = (b, tree = treeOf(null)) => tree.ids.filter((k) => tree.techs[k].branch === b).sort((x, y) => tree.techs[x].tier - tree.techs[y].tier || tree.techs[x].side - tree.techs[y].side);
 // What a step needs, flattened (a choice of several counts each of them).
-export const reqIds = (id) => TECHS[id].req.flat();
+export const reqIds = (id, tree = treeOf(null)) => (tree.techs[id] || TECHS[id]).req.flat();
 // The other steps of the same choice (learning this bars them).
-export const rivalsOf = (id) => (TECHS[id] && TECHS[id].excl ? TECH_IDS.filter((k) => k !== id && TECHS[k].excl === TECHS[id].excl) : []);
+export const rivalsOf = (id, tree = treeOf(null)) => {
+  const t = tree.techs[id];
+  return t && t.excl ? tree.ids.filter((k) => k !== id && tree.techs[k].excl === t.excl) : [];
+};
 const met = (done, r) => (Array.isArray(r) ? r.some((k) => done.includes(k)) : done.includes(r));
 // Which of the Dagoni Islands a realm or town is on (its capital's, for a
 // realm), and may it learn this step? (Each island has a few of its own.)
@@ -122,7 +235,7 @@ export function isleOf(s) {
   if (s.civ) return s.civ.island || null;
   return s.island || null;
 }
-export const offered = (s, id) => !TECHS[id].isles || TECHS[id].isles.includes(isleOf(s));
+export const offered = (s, id) => !!treeOf(isleOf(s)).techs[id];
 export const ISLE_TECHS = TECH_IDS.filter((k) => TECHS[k].isles);
 
 // What a realm leans toward knowing first, by what it holds dear.
@@ -210,6 +323,7 @@ export class Tech {
     let st = this.state[k];
     if (!st) {
       st = this.state[k] = { done: [], current: null, progress: 0, banked: {}, log: [] };
+      st.isle = isleOf(s);
       const civ = s.civ || (s.values ? s : null);
       for (const v of civ ? civ.values || [] : []) if (STARTS[v] && !st.done.includes(STARTS[v])) st.done.push(STARTS[v]);
       if (this.startsSmithing(s, civ)) st.done.push('metalworking');
@@ -218,7 +332,18 @@ export class Tech {
       if (civ && !civ.freed) this.startingPerks(civ, st);
     }
     st.banked ||= {};
+    // (Which island's tree it learns from: its capital's.)
+    if (st.isle === undefined) st.isle = isleOf(s);
     return st;
+  }
+
+  // The tree a realm (or free town) learns from, and a step as it sits on it.
+  treeFor(st) {
+    return treeOf(st ? st.isle : null);
+  }
+
+  def(st, id) {
+    return this.treeFor(st).techs[id] || TECHS[id];
   }
 
   // A realm starts out knowing a few things already: one to seven steps of
@@ -235,10 +360,11 @@ export class Tech {
     const lean = {};
     for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
     for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
+    const tree = this.treeFor(st);
     while (st.done.length < want) {
-      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && this.ready(st, k) && offered(civ, k));
+      const open = tree.ids.filter((k) => !st.done.includes(k) && tree.techs[k].tier <= 3 && this.ready(st, k));
       if (!open.length) break;
-      st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[TECHS[k].branch] || 0) * 1.5) * this.fit(civ, null, k) / TECHS[k].tier])));
+      st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[tree.techs[k].branch] || 0) * 1.5) * this.fit(civ, null, k) / tree.techs[k].tier])));
     }
     st.start = st.done.length;
   }
@@ -258,35 +384,39 @@ export class Tech {
     return !need || this.has(s, need);
   }
 
+  // (An island's own form of a step counts as knowing it.)
   has(s, id) {
     if (this.cheat) return true;
     const st = this.stateOf(s);
-    return !!st && st.done.includes(id);
+    return !!st && (st.done.includes(id) || aliasesOf(id).some((k) => st.done.includes(k)));
   }
 
-  // What must be known first (a list inside it: any one of those).
-  prereqs(id) {
-    return TECHS[id] ? TECHS[id].req : [];
+  // What must be known first (a list inside it: any one of those), on the
+  // tree it's learned from.
+  prereqs(id, st = null) {
+    const t = this.def(st, id);
+    return t ? t.req : [];
   }
 
   // (The first of them, for anything that only wants one.)
-  prereq(id) {
-    const r = this.prereqs(id)[0];
+  prereq(id, st = null) {
+    const r = this.prereqs(id, st)[0];
     return Array.isArray(r) ? r[0] : r || null;
   }
 
   // Barred: the realm chose another side of this choice.
   barred(st, id) {
-    return rivalsOf(id).some((k) => st.done.includes(k));
+    return rivalsOf(id, this.treeFor(st)).some((k) => st.done.includes(k));
   }
 
   ready(st, id) {
-    return this.prereqs(id).every((r) => met(st.done, r)) && (TECHS[id].also || []).every((k) => st.done.includes(k)) && !this.barred(st, id);
+    const t = this.def(st, id);
+    return this.prereqs(id, st).every((r) => met(st.done, r)) && (t.also || []).every((k) => st.done.includes(k)) && !this.barred(st, id);
   }
 
   // How far along a step is (what's under study now, or put by for later).
   progressOn(st, id) {
-    if (st.done.includes(id)) return TECHS[id].cost;
+    if (st.done.includes(id)) return this.def(st, id).cost;
     return st.current === id ? st.progress : (st.banked && st.banked[id]) || 0;
   }
 
@@ -316,7 +446,7 @@ export class Tech {
   available(s) {
     const st = this.stateOf(s);
     if (!st) return [];
-    return TECH_IDS.filter((k) => !st.done.includes(k) && this.ready(st, k) && offered(s, k));
+    return this.treeFor(st).ids.filter((k) => !st.done.includes(k) && this.ready(st, k));
   }
 
   // Who decides: the realm's ruler, or a free town's mayor.
@@ -356,8 +486,9 @@ export class Tech {
     if (towns.some((L) => (L.econ.unrest || 0) > 1)) w.society += 1.5;
     // Cheaper steps first, mostly (and what's half done already); for a
     // choice, the side that suits the realm. (A great work is worth the wait.)
-    const score = (k) => w[TECHS[k].branch] * Math.max(0.25, 1.4 - TECHS[k].tier * 0.15) * this.fit(civ, r, k)
-      * (TECHS[k].big ? 1.3 : 1) * (1 + Math.min(1, (st.banked[k] || 0) / TECHS[k].cost)) * (0.6 + rng.next() * 0.8);
+    const D = (k) => this.def(st, k);
+    const score = (k) => w[D(k).branch] * Math.max(0.25, 1.4 - D(k).tier * 0.15) * this.fit(civ, r, k)
+      * (D(k).big ? 1.3 : 1) * (1 + Math.min(1, (st.banked[k] || 0) / D(k).cost)) * (0.6 + rng.next() * 0.8);
     const scored = opts.map((k) => [k, score(k)]);
     const pick = scored.reduce((m, q) => (q[1] > m[1] ? q : m))[0];
     st.current = pick;
@@ -392,7 +523,7 @@ export class Tech {
     const go = (k, depth = 0) => {
       if (st.done.includes(k) || depth > 12) return true;
       if (this.barred(st, k)) return false;
-      for (const r of [...this.prereqs(k), ...(TECHS[k].also || [])]) {
+      for (const r of [...this.prereqs(k, st), ...(this.def(st, k).also || [])]) {
         const opts = Array.isArray(r) ? r : [r];
         if (opts.some((q) => st.done.includes(q))) continue;
         if (!opts.some((q) => go(q, depth + 1))) return false;
@@ -425,7 +556,7 @@ export class Tech {
       const c = (this.contrib[s.id] ||= {});
       c[st.current] = Math.round(((c[st.current] || 0) + pts) * 10) / 10;
     }
-    const t = TECHS[st.current];
+    const t = this.def(st, st.current);
     if (st.progress >= t.cost) {
       st.progress -= t.cost;
       return this.learn(s, st.current, day);
@@ -447,7 +578,7 @@ export class Tech {
       st.current = null;
       st.progress = 0;
     }
-    const t = TECHS[id];
+    const t = this.def(st, id);
     this.announce(s, day, `The scholars have mastered ${t.name.toLowerCase()}! ${t.desc}`);
     this.applyNow(s, id);
     if (this.game.currentSettlement && this.keyOf(this.game.currentSettlement) === this.keyOf(s)) this.game.ui.msg(`Your realm has learned ${t.name}.`, '#ffe070');
@@ -659,8 +790,9 @@ export class Tech {
     }
     // Weekly: the Ashborn's sulphur sold abroad.
     if (day % 7 === 0 && this.has(s, 'sulphur_trade')) L.econ.treasury += s.coast || s.river ? 20 : 12;
-    // Spore lore: the herbalists' brews, every morning.
-    if (this.has(s, 'spore_lore')) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + 2);
+    // Spore lore: the herbalists' brews, every morning (and the Ashborn,
+    // hardened by the fire-walk).
+    if (this.has(s, 'spore_lore') || this.has(s, 'fire_walking')) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + 2);
     // A night in a proper bed: townsfolk wake hardier (hospitality).
     if (this.has(s, 'hospitality')) for (const r of people) if (r.home !== null && r.home !== undefined) r.blue = { day, hp: 2 };
     // Guards keep up with what the realm knows.
@@ -714,11 +846,14 @@ export class Tech {
   // town (the capital first; the further steps take longer).
   settledIn(s, id, day) {
     const st = this.stateOf(s);
-    if (!st || !st.done.includes(id)) return false;
-    const e = st.log.find((q) => q.id === id);
+    if (!st) return false;
+    // (An island's own form of it settles in the same way.)
+    const k = st.done.includes(id) ? id : aliasesOf(id).find((q) => st.done.includes(q));
+    if (!k) return false;
+    const e = st.log.find((q) => q.id === k);
     if (!e) return true;
     const capital = !s.civ || this.sim.realms.isCapital(s);
-    return day - e.day >= 2 + TECHS[id].tier * 2 + (capital ? 0 : 3);
+    return day - e.day >= 2 + this.def(st, k).tier * 2 + (capital ? 0 : 3);
   }
 
   // What you can see of it, once it's settled in (once, in each town, and
@@ -784,7 +919,8 @@ export class Tech {
     const st = this.stateOf(s);
     const out = [];
     for (const [id, pts] of Object.entries(mine)) {
-      const t = TECHS[id];
+      // (Work on a step its new realm's island never learns is lost.)
+      const t = this.treeFor(st).techs[id];
       if (!t || pts < 1 || st.done.includes(id)) continue;
       const before = this.progressOn(st, id);
       const after = before + pts;
@@ -815,7 +951,8 @@ export class Tech {
   // What a town has put into a step (points, and the share of its cost).
   contribution(s, id) {
     const n = (this.contrib[s.id] && this.contrib[s.id][id]) || 0;
-    return { n, pct: TECHS[id] ? Math.round((n / TECHS[id].cost) * 100) : 0 };
+    const t = TECHS[id] && this.def(this.stateOf(s), id);
+    return { n, pct: t ? Math.round((n / t.cost) * 100) : 0 };
   }
 
   // ------------------------------------------------------------ save
@@ -962,5 +1099,5 @@ const LOOKS = {
 export function progressOf(tech, s) {
   const st = tech.stateOf(s);
   if (!st || !st.current) return null;
-  return { id: st.current, done: Math.floor(st.progress), cost: TECHS[st.current].cost };
+  return { id: st.current, done: Math.floor(st.progress), cost: tech.def(st, st.current).cost };
 }

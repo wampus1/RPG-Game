@@ -240,7 +240,10 @@ test('the mayor shows the tree, and the study minigame records an insight for th
   const tw = new TechWindow(ui, game, s);
   const { g, texts } = grid();
   tw.draw(g, game);
-  assert.ok(texts.some((t) => new RegExp(`of ${TECH_IDS.length} learned`).test(t)), 'the count');
+  // (Of its own island's tree.)
+  const tree = game.sim.tech.treeFor(game.sim.tech.stateOf(s));
+  assert.ok(tree.ids.length <= TECH_IDS.length);
+  assert.ok(texts.some((t) => new RegExp(`of ${tree.ids.length} learned`).test(t)), 'the count');
   tw.focus('bookkeeping');
   const g2 = grid();
   tw.draw(g2.g, game);

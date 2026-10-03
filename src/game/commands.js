@@ -4,7 +4,7 @@ import { ITEMS } from '../world/items.js';
 import { GROUND, REGION_W, REGION_D, WORLD_TILES_W, WORLD_TILES_D, DAY_MINUTES } from '../config.js';
 import { alive, DAY } from '../sim/econ.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { TECHS, BRANCHES } from '../sim/tech.js';
+import { TECHS, BRANCHES, treeOf } from '../sim/tech.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -16,6 +16,7 @@ export const COMMANDS = {
   wedding: { args: '[now] [town]', about: 'Two single grown-ups get engaged: the wedding is in two days (or within a few hours, with "now").' },
   feast: { args: '[now] [town]', about: 'The council declares a feast day (two days off, or "now").' },
   fete: { args: '[now] [town]', about: 'A celebration of the town (two days off, or "now").' },
+  rite: { args: '[now] [town]', about: 'The island\'s own rite: Kharos\'s Waking Vigil, the Night of Lanterns, the High Tide Feast, or Thessa\'s fair (two days off, or "now").' },
   street: { args: '[town]', about: 'The builders lay out a new street with lots along it.' },
   finish: { args: '[town]', about: 'Everything under construction in the town is finished at once.' },
   time: { args: '<hh:mm> | +<hours>', about: 'Wait until a time of day, or for so many hours (the world carries on).' },
@@ -108,6 +109,10 @@ function eventCmd(game, kind, words) {
     const [a, b] = pair;
     return [`${a.name.first} ${a.name.last} and ${b.name.first} ${b.name.last} are to be married in ${s.name}: day ${ev.day}, ${hod(ev.s % DAY)}.`];
   }
+  if (kind === 'rite') {
+    ev = sim.events.rite(L, day, soon);
+    return [`${sim.events.title(L, ev)} in ${s.name}: day ${ev.day}, from ${hod(ev.s % DAY)}.`];
+  }
   if (kind === 'feast') ev = sim.events.feast(L, day, 0, soon);
   else ev = sim.events.fete(L, day, s.type, soon);
   return [`${kind === 'feast' ? 'A feast day' : 'A celebration'} in ${s.name}: day ${ev.day}, from ${hod(ev.s % DAY)}.`];
@@ -124,10 +129,8 @@ export function runCommand(game, text) {
   switch (cmd) {
     case 'learn': {
       const T = sim.tech;
-      const all = Object.keys(TECHS);
       const first = (words[0] || '').toLowerCase();
       if (!first) return ['learn <step> | all | list [realm]: e.g. "learn portals", "learn trade ships".'];
-      if (first === 'list') return ['The steps of the tree:', ...BRANCHES.map((b) => `${b.name}: ${all.filter((k) => TECHS[k].branch === b.id).map((k) => k).join(', ')}`)];
       // (Which realm: named at the end, or yours, or the one you're in.)
       const here = game.currentSettlement || ow.settlementAt(p.x, p.z);
       const mine = sim.citizen ? ow.settlements[sim.citizen.sid] : null;
@@ -141,19 +144,23 @@ export function runCommand(game, text) {
         }
       }
       civ ||= (mine && mine.civ) || (here && here.civ) || null;
+      // (Each island's tree is its own.)
+      const tree = civ ? T.treeFor(T.stateOf(civ)) : treeOf(null);
+      const all = [...tree.ids];
+      if (first === 'list') return [`The steps of ${tree.isle ? `${tree.isle[0].toUpperCase()}${tree.isle.slice(1)}'s` : 'the'} tree:`, ...BRANCHES.map((b) => `${b.name}: ${all.filter((k) => tree.techs[k].branch === b.id).join(', ')}`)];
       if (!civ) return ['There\'s no realm here to teach: name one at the end ("war list" names them).'];
       const q = rest.join(' ').toLowerCase().replace(/[_-]/g, ' ').trim();
       if (q === 'all') {
         const st = T.stateOf(civ);
         let n = 0;
         for (let pass = 0; pass < 8; pass++) {
-          for (const k of all.sort((a, b) => TECHS[a].tier - TECHS[b].tier)) if (!st.done.includes(k) && T.ready(st, k) && T.learn(civ, k, game.day)) n++;
+          for (const k of all.sort((a, b) => tree.techs[a].tier - tree.techs[b].tier)) if (!st.done.includes(k) && T.ready(st, k) && T.learn(civ, k, game.day)) n++;
         }
         return [`The ${civ.name.replace(/^The /, '')} has learned ${n} more step${n === 1 ? '' : 's'} (${st.done.length} of ${all.length}; the other side of each choice is barred).`];
       }
       const id = all.find((k) => k.replace(/_/g, ' ') === q) || all.find((k) => TECHS[k].name.toLowerCase() === q)
         || all.find((k) => TECHS[k].name.toLowerCase().startsWith(q) || k.startsWith(q.replace(/ /g, '_'))) || all.find((k) => TECHS[k].name.toLowerCase().includes(q));
-      if (!id) return [`No step called "${q}": "learn list" names them.`];
+      if (!id) return [`No step called "${q}" on the ${civ.name.replace(/^The /, '')}'s tree: "learn list" names them.`];
       const st = T.stateOf(civ);
       if (st.done.includes(id)) return [`The ${civ.name.replace(/^The /, '')} knows ${TECHS[id].name} already.`];
       if (T.barred(st, id)) return [`The ${civ.name.replace(/^The /, '')} chose otherwise: ${TECHS[id].name} is barred to it.`];
@@ -205,6 +212,7 @@ export function runCommand(game, text) {
     }
     case 'wedding':
     case 'feast':
+    case 'rite':
     case 'fete':
       return eventCmd(game, cmd, words);
     case 'street': {

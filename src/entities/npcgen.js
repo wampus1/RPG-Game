@@ -248,7 +248,47 @@ function makeLook(rng, style, age, job, civ) {
     }
   }
   finerThings(look, age, job);
+  islandDress(look, style, age, job);
   return look;
+}
+
+// The other Dagoni Islands dress their own way, whatever their trade
+// (settled from the look itself, so nothing else about anyone changes):
+// the Ashborn in knee-length wraps with an ember sash, hooded and masked
+// against the ash; the Mirefolk in long cloaks and mushroom-cap hats; the
+// Stiltfolk bare-armed in open vests, under wide reed hats, with shells
+// round their necks and the sea tattooed on their faces. Their watches
+// wear their own helms.
+const EVERYDAY = new Set(['plain', 'vest', 'tunic', 'farmer', 'fisher', 'plaid', 'miner', 'hunter', 'apron', 'baker', 'smith']);
+const MUSH_COLS = ['#a83a2a', '#8a5a3a', '#c8b8a0', '#6a4a7a'];
+function islandDress(look, style, age, job) {
+  if (style !== 'ember' && style !== 'mist' && style !== 'tide') return;
+  let h = 2166136261;
+  for (const c of `${look.skin}|${look.shirt}|${look.hair}|${look.hairStyle}|${job}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  const roll = (k) => (Math.imul(h ^ (k * 0x9e3779b9), 2654435761) >>> 0) / 4294967296;
+  const guard = job === 'guard';
+  if (EVERYDAY.has(look.outfit)) look.outfit = style === 'ember' ? 'ashwrap' : style === 'mist' ? 'mistcloak' : 'tidewrap';
+  if (style === 'ember') {
+    if (guard) look.hat = 'ashhelm';
+    else if (!['chef', 'miner', 'feather', 'circlet'].includes(look.hat) && roll(1) < 0.5) {
+      look.hat = 'ashhood';
+      look.hatColor = roll(2) < 0.5 ? '#2a2426' : '#4a3a34';
+    }
+    if (age !== 'child' && (guard || roll(3) < 0.45)) look.acc = 'ashmask';
+  } else if (style === 'mist') {
+    if (guard) {
+      look.hat = 'cowl';
+      look.hatColor = '#3a4a3a';
+    } else if (!['chef', 'miner', 'feather', 'circlet'].includes(look.hat) && roll(1) < 0.55) {
+      look.hat = roll(4) < 0.7 ? 'mushcap' : 'hood';
+      look.hatColor = MUSH_COLS[Math.floor(roll(2) * MUSH_COLS.length)];
+    }
+  } else {
+    if (guard) look.hat = 'shellhelm';
+    else if (!['chef', 'miner', 'feather', 'circlet'].includes(look.hat) && roll(1) < 0.55) look.hat = 'conehat';
+    if (!guard && roll(3) < 0.4) look.acc = 'shells';
+    if (age !== 'child' && roll(5) < 0.35) look.mark = 'tidelines';
+  }
 }
 
 // The finer things (eyes, how a beard's worn, a kerchief, gloves, a
@@ -610,6 +650,8 @@ export function retrain(layout, rec, job, rng) {
     rec.personality.bravery = Math.max(rec.personality.bravery, 0.6);
     rec.shift = 'day';
   }
+  // (Still dressed the way their island dresses.)
+  islandDress(look, layout.settlement.style, rec.age, job);
   rec.look = look;
   rec.schedule = makeSchedules(rec, rng, availOf(layout));
   rec.retrained = true;

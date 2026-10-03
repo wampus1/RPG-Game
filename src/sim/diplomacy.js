@@ -660,10 +660,12 @@ export class Diplomacy {
     return this.roadCrew(sid).length;
   }
 
-  // Surveyors (a realm that has learned to) lay a road quicker.
+  // Surveyors (a realm that has learned to) lay a road quicker; and
+  // Thessa's tolls keep the road crews paid.
   roadPace(sid) {
     const s = this.town(sid);
-    return this.sim.tech && this.sim.tech.has(s, 'surveying') ? 1.5 : 1;
+    const T = this.sim.tech;
+    return (T && T.has(s, 'surveying') ? 1.5 : 1) * (T && T.has(s, 'toll_roads') ? 1.25 : 1);
   }
 
   // Where a road's end is being built now: the next tile from that end.

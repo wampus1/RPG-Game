@@ -8,7 +8,8 @@ export class Region {
     this.rz = rz;
     this.x0 = rx * REGION_W;
     this.z0 = rz * REGION_D;
-    this.blocks = new Uint8Array(REGION_W * REGION_D * WORLD_Y);
+    // (Sixteen bits a cell: room for far more than 256 kinds of block.)
+    this.blocks = new Uint16Array(REGION_W * REGION_D * WORLD_Y);
     this.meta = new Uint8Array(REGION_W * REGION_D * WORLD_Y);
     this.top = new Uint8Array(REGION_W * REGION_D); // highest non-air y + 1
     this.containers = new Map(); // cell index -> slots array

@@ -36,6 +36,7 @@ import { growth } from './growth.js';
 import { removeItem, countItem } from '../game/inventory.js';
 import { priceMult, repGainMult, opinionBonus, has as heroHas } from '../game/hero.js';
 import { lawOn } from './laws.js';
+import { titheOf, lawPrice } from './islelaws.js';
 import { Customs } from './culture.js';
 import { History } from './history.js';
 import { Society } from './society.js';
@@ -785,7 +786,7 @@ export class Sim {
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k);
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
@@ -794,7 +795,7 @@ export class Sim {
   // What a trader asks for an item: their prices, and the market's.
   buyPrice(npc, k, discounted = true) {
     const f = discounted ? this.priceFactor(npc) : this.priceParts(npc).base;
-    return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k)));
+    return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, false)));
   }
 
   // How keen they are to take more of something (1 = full price).
@@ -1128,7 +1129,8 @@ export class Sim {
   // the rate itself on yesterday's earnings in the town.
   playerTax(L, earned) {
     const rate = L.econ.tax;
-    const poll = Math.max(1, Math.round(10 * rate));
+    // (Kharos's fire tithe on top.)
+    const poll = Math.max(1, Math.round(10 * rate)) + titheOf(L);
     const share = Math.floor(earned * rate);
     return { tax: poll + share, poll, share };
   }

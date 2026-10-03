@@ -398,7 +398,7 @@ export class War {
   // realm that has learned to fight mounted.)
   ridesOut(L) {
     const st = this.sim.stables.of(L);
-    return st.horses - st.horsesOut > 0 || this.sim.tech.has(L.settlement, 'cavalry') || this.sim.tech.has(L.settlement, 'horse_lords');
+    return st.horses - st.horsesOut > 0 || ['cavalry', 'horse_lords', 'horse_archers'].some((k) => this.sim.tech.has(L.settlement, k));
   }
 
   resolveRaid(raid, TL, FL, rng) {
@@ -1002,6 +1002,9 @@ export class War {
     const s = this.realms.capitalOf(civ);
     if (s && tech.has(s, 'cavalry')) n *= 1.1;
     if (s && tech.has(s, 'obsidian_edge')) n *= 1.06;
+    // (Forges fed by the mountain; arrows dipped in the bog.)
+    if (s && tech.has(s, 'magma_forges')) n *= 1.1;
+    if (s && tech.has(s, 'bog_venom')) n *= 1.08;
     if (plan) {
       // How the realm fights: shields locked to hold, great weapons to
       // break through.

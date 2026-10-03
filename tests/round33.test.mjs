@@ -11,7 +11,7 @@ import { ITEMS } from '../src/world/items.js';
 import { RECIPES } from '../src/world/recipes.js';
 import { CULTURES } from '../src/world/names.js';
 import { SPAWNS_OFF } from '../src/world/dungeongen.js';
-import { TECHS, ISLE_TECHS, offered, isleOf } from '../src/sim/tech.js';
+import { TECHS, ISLE_TECHS, offered, isleOf, treeOf } from '../src/sim/tech.js';
 import { OVERSEA } from '../src/sim/war.js';
 import { ERUPT_MIN, ERUPT_MAX } from '../src/sim/volcano.js';
 import { SPECIES, Creature } from '../src/entities/creature.js';
@@ -205,8 +205,12 @@ test('each island\'s realms have a few technologies nobody else can learn', () =
     const s = ow.settlements.find((q) => q.civ && isleOf(q) === k);
     assert.ok(s, `a realm on ${k}`);
     for (const id of ISLE_TECHS) assert.equal(offered(s, id), TECHS[id].isles.includes(k), `${id} on ${k}`);
-    // (And the rest of the tree is shared.)
-    assert.ok(Object.keys(TECHS).filter((id) => !TECHS[id].isles).every((id) => offered(s, id)));
+    // (And most of the common tree is shared: each island goes without a
+    // few of its steps; see round 34.)
+    const common = Object.keys(TECHS).filter((id) => !TECHS[id].isles);
+    const shared = common.filter((id) => offered(s, id)).length;
+    assert.ok(shared >= common.length - 8 && shared < common.length, `${k}: ${shared} of ${common.length}`);
+    assert.equal(treeOf(k).ids.length, Object.keys(TECHS).filter((id) => offered(s, id)).length);
   }
 });
 
