@@ -7,6 +7,7 @@ import { makeNomadBand, makeSchedules, availOf, JOBS } from '../entities/npcgen.
 import { RNG, hash4 } from '../util/rng.js';
 
 const STAY_HOURS = 6;
+const ISLE_NOMADS = { kharos: ['ember'], myrrow: ['mist', 'tide'] };
 
 export class Nomads {
   constructor(game, sim) {
@@ -22,7 +23,8 @@ export class Nomads {
     if (s.condition === 'abandoned' || this.bands.some((b) => b.sid === s.id && !b.done)) return null;
     if (!rng.chance(s.deserted ? 0.1 : 0.12)) return null;
     const r = new RNG(hash4(s.seed, day, 0x40ad));
-    const band = makeNomadBand(r, r.int(2, 5));
+    // (Wanderers of the island's own peoples.)
+    const band = makeNomadBand(r, r.int(2, 5), ISLE_NOMADS[s.island]);
     const now = day * DAY + 540 + r.int(0, 300);
     const b = { id: this.next++, sid: s.id, arrive: now, decide: now + STAY_HOURS * 60, family: band.family, style: band.style, people: band.people, done: false, vouched: 0 };
     // Some bands travel with a plain wagon and a horse or two (no banners:

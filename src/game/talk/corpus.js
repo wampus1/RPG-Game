@@ -312,6 +312,75 @@ export const CULTURE = {
     feast: ['At {feast} the forges burn all night long.'],
     lexicon: [[/\bHello\b/g, 'Well met'], [/\bfriend\b/g, 'stonefriend'], [/\bvery\b/g, 'mighty']],
   },
+  // The Ashborn of Kharos.
+  ember: {
+    'weather:fine': ['The ash is light today. You can almost see the sun.', 'A clear day on Kharos is a gift from {god}.'],
+    'weather:rain': ['The rain hisses on the hot stones like it is angry.', 'Rain on the ash makes a grey paste of everything.'],
+    work: [
+      'The forge never goes cold here. The mountain sees to that.',
+      'Black glass makes the keenest edge there is, if you knap it right.',
+      'We trade our sulphur to the other islands for their timber.',
+      'The steam vents are rising more than they used to.',
+      'My grandfather saw the mountain wake. He never spoke of it after.',
+    ],
+    food: ['A bowl of {dish} will sweat the ash out of you.', 'Bread baked in the hot ash, and a cup of {drink}. That is a meal.'],
+    town: [
+      'The ground is warm under your feet here, even at night.',
+      'Every house keeps a fire by the door, for the mountain.',
+      'When the mountain rumbles, the whole town stops and listens.',
+      'The other islands think we are mad, living under the Sleeper.',
+    ],
+    faith: ['May {god} sleep long and dream kindly.', 'We keep the vigil so that {god} keeps sleeping.'],
+    feast: ['At {feast} we throw black glass into the fire and make our wishes.'],
+    past: ['Kharos was all green once, the old songs say, before the mountain woke.'],
+    lexicon: [[/\bHello\b/g, 'Warm hearth'], [/\bfriend\b/g, 'hearth-kin'], [/\bFriend\b/g, 'Hearth-kin'], [/\bvery\b/g, 'fierce']],
+  },
+  // The Mirefolk of Myrrow's moors and fungal woods.
+  mist: {
+    'weather:fine': ['Even on a clear day the mist hangs in the hollows.', 'The heather smells sweet when the sun gets at it.'],
+    'weather:rain': ['Rain is good for the caps. They will be up by morning.', 'The bog drinks it all and asks for more.'],
+    work: [
+      'The glowcaps are fat this season. We will have light all winter.',
+      'You cut peat in long strips, so the moor can heal.',
+      'Never pick a mushroom you cannot name. Never.',
+      'The owls have been calling in the day. That means something.',
+      'The giant caps take a lifetime to grow. We do not cut them lightly.',
+    ],
+    food: ['A bowl of {dish} on a cold night, and the fog can do as it likes.', 'Have some {drink}. It is made from the moor itself.'],
+    town: [
+      'Keep to the lantern-lit paths after dark.',
+      'The fog comes in from the moor every evening, soft as a cat.',
+      'Folk who get lost in the mist sometimes come back. Sometimes.',
+      'The fungal woods glow blue at night. It is the loveliest thing.',
+    ],
+    faith: ['{god} walks in the mist. Mind your manners in it.', 'We leave a lantern burning for {god} on the window sill.'],
+    feast: ['At {feast} every window holds a lantern, and nobody speaks above a whisper.'],
+    past: ['The old stones on the moor were here before anyone came to Myrrow.'],
+    lexicon: [[/\bHello\b/g, 'Soft greetings'], [/\bfriend\b/g, 'mist-sib'], [/\bvery\b/g, 'deeply']],
+  },
+  // The Stiltfolk of Myrrow's mangrove shores.
+  tide: {
+    'weather:fine': ['Flat sea, warm sun. A good day for the nets.', 'The shallows are so clear today you can count the crabs.'],
+    'weather:rain': ['Rain or not, the tide does not wait.', 'Wet from above, wet from below. That is the stilt life.'],
+    work: [
+      'The crabs are thick round the mangrove roots this month.',
+      'We could raft to Thessa in a day, if the wind was kind.',
+      'Nobody gets through the storm wall. Nobody who came back, anyway.',
+      'You patch a net every day, or you lose it in a week.',
+      'The pearl beds are further out than they were.',
+    ],
+    food: ['Nothing beats {dish} straight off the fire.', 'A cup of {drink} and the sound of the tide. What more?'],
+    town: [
+      'We build on stilts because the sea comes visiting.',
+      'The children swim before they walk here.',
+      'You can hear the storm wall on still nights, roaring out past the reef.',
+      'A ship! A real ship, one day. That is the only way past the storm.',
+    ],
+    faith: ['May {god} bring the boats home full.', 'We pour the first cup into the sea, for {god}.'],
+    feast: ['At {feast} the whole town wades out with torches at low tide.'],
+    past: ['My grandmother said ships came through the storm once, long ago.'],
+    lexicon: [[/\bHello\b/g, 'Fair tide'], [/\bfriend\b/g, 'shipmate'], [/\bFriend\b/g, 'Shipmate'], [/\bvery\b/g, 'proper']],
+  },
 };
 
 // Ways of putting things (see voice.js).
@@ -714,6 +783,9 @@ more(CULTURE, {
   sun: { stories: ['(The|Our) (elders|grandmothers) (tell|told) of (the drowned city|the star caravans|the endless dunes).'] },
   wild: { stories: ['(The|Our) (forest|trees) (remember|keep) the old tales, if you (listen|know how to listen).'] },
   high: { stories: ['(Deep|Down) in the (mountain|old mines) (there are|lie) (halls|songs) older than (any king|anything).'] },
+  ember: { stories: ['(The|Our) (kiln-priests|old ones) (tell|sing) of (the first waking|the black glass war|the green Kharos that was).'] },
+  mist: { stories: ['(The|Our) (lantern-bearers|grandmothers) (tell|whisper) of (the Hollow King|the walking dead in the fog|the stones on the moor).'] },
+  tide: { stories: ['(The|Our) (elders|net-menders) (tell|sing) of (the ships that came through the storm|the Great Turtle|the drowned reef city).'] },
 });
 
 more(FLAVOR, {

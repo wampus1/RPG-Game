@@ -162,6 +162,14 @@ export function planPopulation(s, rng) {
   // Trim to the adult count, keeping essential roles first (in plan order).
   const trimmed = jobs.slice(0, adults);
   while (trimmed.length < adults) trimmed.push(T === 'village' ? 'farmer' : rng.chance(0.5) ? 'laborer' : 'farmer');
+  // (However few the grown-ups, a place has its mayor and its builder: one
+  // of the last-listed hands takes the job, never the only guard.)
+  for (const need of ['mayor', 'builder']) {
+    if (trimmed.includes(need) || trimmed.length < 2) continue;
+    let i = trimmed.length - 1;
+    while (i > 0 && (trimmed[i] === 'mayor' || trimmed[i] === 'builder' || (trimmed[i] === 'guard' && trimmed.filter((j) => j === 'guard').length <= 1))) i--;
+    trimmed[i] = need;
+  }
   return { households, jobs: trimmed, target };
 }
 
@@ -172,6 +180,11 @@ const SKIN = {
   sun: ['#c8905c', '#b07848', '#9a653a', '#d8a470', '#86532e', '#704226', '#e0b080'],
   wild: ['#a86a3c', '#8e5630', '#b87a48', '#734424', '#c68a58', '#5e361c', '#4e2c18'],
   high: ['#e0aa84', '#d49a74', '#c88a64', '#ecc0a0', '#b8805a', '#f0ceb0'],
+  // (The Ashborn ruddy and dark from the fires; the Mirefolk pale from the
+  // mist; the Stiltfolk sun-browned.)
+  ember: ['#a86048', '#8e4e38', '#c27a5a', '#6e3a28', '#d08c6a', '#5a2e20'],
+  mist: ['#f0dcd0', '#e6ccc0', '#f6e6dc', '#dcc0b0', '#ecd6cc', '#d0b4a6'],
+  tide: ['#c8945c', '#b07a48', '#d8aa70', '#9a6438', '#e0b888', '#8a5630'],
 };
 const ALL_SKIN = Object.values(SKIN).flat();
 const HAIR = [
@@ -790,8 +803,8 @@ export function makeChild(layout, a, b, rng) {
 // A band of nomads: one family on the road, with its own name, faces and
 // habits. Records get their home, work and schedule when (if) they settle.
 const NOMAD_STYLES = ['vale', 'north', 'sun', 'wild', 'high'];
-export function makeNomadBand(rng, size) {
-  const style = rng.pick(NOMAD_STYLES);
+export function makeNomadBand(rng, size, styles = NOMAD_STYLES) {
+  const style = rng.pick(styles || NOMAD_STYLES);
   const fam = familyName(rng, style);
   const ages = ['adult'];
   if (size >= 2) ages.push(rng.chance(0.8) ? 'adult' : 'elder');

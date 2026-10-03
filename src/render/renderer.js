@@ -287,6 +287,7 @@ export class Renderer {
     this.drawWorld(game);
     this.drawProjectiles(game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
+    this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
     if (this.underground && this.hidden) this.drawDigView(game);
     drawOldPlaces(this, game, dt);
@@ -2130,6 +2131,30 @@ export class Renderer {
       }
       if (d.x < -4) d.x += this.vw + 4;
       if (d.x > this.vw + 4) d.x -= this.vw + 4;
+    }
+  }
+
+  // Ash from the mountain on Kharos coming down after it's gone up: a
+  // brown haze, and grey flakes drifting down slow (and the odd ember).
+  drawAshfall(game, dt) {
+    const a = game.ashLevel ? game.ashLevel() : 0;
+    if (a <= 0.01) return;
+    const ctx = this.ctx;
+    ctx.fillStyle = `rgba(70,56,48,${0.22 * a})`;
+    ctx.fillRect(0, 0, this.vw, this.vh);
+    if (!this.ashFlakes) this.ashFlakes = Array.from({ length: 260 }, () => ({ x: Math.random() * this.vw, y: Math.random() * this.vh, s: 0.5 + Math.random(), e: Math.random() < 0.04 }));
+    const n = Math.floor(this.ashFlakes.length * a * (this.hidden !== null ? 0.25 : 1));
+    for (let i = 0; i < n; i++) {
+      const d = this.ashFlakes[i];
+      d.y += dt * 14 * d.s;
+      d.x += Math.sin(this.time * 0.8 + i) * dt * 8 - dt * 4;
+      ctx.fillStyle = d.e ? `rgba(255,${120 + Math.floor(Math.sin(this.time * 6 + i) * 40)},40,0.9)` : `rgba(${150 + (i % 3) * 20},${145 + (i % 3) * 18},${140 + (i % 3) * 16},0.8)`;
+      ctx.fillRect(Math.round(d.x), Math.round(d.y), d.s > 1.2 ? 2 : 1, 1);
+      if (d.y > this.vh) {
+        d.y = -2;
+        d.x = Math.random() * this.vw;
+      }
+      if (d.x < -2) d.x += this.vw + 2;
     }
   }
 

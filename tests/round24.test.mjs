@@ -510,12 +510,12 @@ test('prison labour: prisoners quarry and cut wood under spare guards, and work 
   game.sim.tech.cheat = false;
   const ow = game.world.ow;
   const W = game.sim.war;
-  const here = [...game.active.values()][0].layout.settlement;
-  const civ = here.civ;
+  // (A realm whose capital has guards to spare.)
+  const civ = ow.civs.find((c) => game.sim.realms.capitalOf(c) && game.sim.labor.spare(game.sim.layoutOf(game.sim.realms.capitalOf(c).id)).guards.length >= 2);
   const cap = game.sim.realms.capitalOf(civ);
   const L = game.sim.layoutOf(cap.id);
   const foe = ow.civs.find((c) => c !== civ && game.sim.realms.members(c).length);
-  const FL = game.sim.realms.memberLayouts(foe)[0];
+  const FL = game.sim.layoutOf(game.sim.realms.members(foe)[0].id);
   for (const r of FL.npcs.filter((q) => q.job === 'guard' && q.age === 'adult' && alive(q)).slice(0, 3)) W.takePrisoner(r, FL, civ, game.day, 'a test', cap.id);
   const n = W.held(cap.id).length;
   assert.ok(n >= 2, 'prisoners in the cells');

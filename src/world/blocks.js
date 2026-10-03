@@ -391,6 +391,36 @@ def('blight_wall', { hardness: Infinity, drop: null, label: 'Blighted Alloy' });
 // Snow the blight's got into, round a spire in the cold: gone lavender,
 // veined violet. (Last, so no block saved before it changes number.)
 def('snow_void', { tool: 'shovel', hardness: 0.3, drop: 'snow', label: 'Blighted Snow' });
+// --- the other Dagoni Islands (after all the rest, so no saved number moves)
+// Kharos, the fire island: ash over basalt, black glass, cinders, yellow
+// sulphur crust round the steam vents, lava (which you can wade into, once),
+// and the black-barked cinder trees with their ember-red leaves. Ground
+// burned bare by the mountain's fire is scorched.
+def('ash', { tool: 'shovel', hardness: 0.4, label: 'Ash' });
+def('basalt', { tool: 'pick', hardness: 2 });
+def('obsidian', { tool: 'pick', hardness: 4, drop: [{ item: 'obsidian_shard', chance: 1, min: 1, max: 3 }] });
+def('lava', { solid: false, opaque: false, render: 'liquid', hardness: Infinity, drop: null, light: 13, lava: true, label: 'Lava' });
+def('cinder', { tool: 'shovel', hardness: 0.5, label: 'Cinders' });
+def('sulfur_crust', { tool: 'pick', hardness: 1, drop: [{ item: 'sulfur', chance: 1, min: 1, max: 2 }], label: 'Sulphur Crust' });
+def('steam_vent', { ...sprite, solid: false, hardness: Infinity, drop: null, label: 'Steam Vent' });
+def('log_cinder', { tool: 'axe', hardness: 1.4, label: 'Cinderwood Log' });
+def('leaves_ember', { ...leaves([{ item: 'ember_pod', chance: 0.05 }]), light: 1, label: 'Ember Leaves' });
+def('fire_lily', { ...plant, light: 3, label: 'Fire Lily' });
+def('scorched', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Scorched Earth' });
+// Myrrow, the misty island: moss and peat on the moors, purple heather,
+// mangroves standing in the shallows, and the fungal forests (white
+// mycelium underfoot, and mushrooms the height of houses, some of them
+// glowing blue).
+def('moss', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Moss' });
+def('peat', { tool: 'shovel', hardness: 0.6, drop: [{ item: 'peat_turf', chance: 1, min: 1, max: 2 }], label: 'Peat' });
+def('heather', { ...plant, label: 'Heather' });
+def('mycelium', { tool: 'shovel', hardness: 0.5, drop: 'dirt', label: 'Mycelium' });
+def('log_mangrove', { tool: 'axe', hardness: 1.2, label: 'Mangrove Log' });
+def('leaves_mangrove', leaves([{ item: 'mangrove_pod', chance: 0.04 }]));
+def('mushroom_stem', { tool: 'axe', hardness: 0.8, drop: [{ item: 'mushroom_brown', chance: 0.5 }], label: 'Giant Mushroom Stem' });
+def('mushroom_cap', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, drop: [{ item: 'mushroom_red', chance: 0.3 }], label: 'Giant Mushroom Cap' });
+def('glowcap_cap', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, light: 7, drop: [{ item: 'glowcap', chance: 0.4 }], label: 'Glowcap' });
+// (Room for three more before the byte the world keeps them in is full.)
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -409,15 +439,16 @@ export function isOpaque(id) {
 // Block ids that count as a road for pathfinding cost / settlement logic.
 // The ground itself (as it lies, not as anyone set it): what digging goes
 // through, and what's drawn as cut rock when you're down in it.
-export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_dry', 'grass_jungle', 'grass_taiga', 'sand', 'sandstone', 'snow', 'mud', 'gravel', 'clay', 'coal_ore', 'iron_ore', 'gold_ore', 'gem_ore', 'bedrock', 'mine_rock', 'cave_rock'].filter((k) => B[k] !== undefined).map((k) => B[k]));
+export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_dry', 'grass_jungle', 'grass_taiga', 'sand', 'sandstone', 'snow', 'mud', 'gravel', 'clay', 'coal_ore', 'iron_ore', 'gold_ore', 'gem_ore', 'bedrock', 'mine_rock', 'cave_rock',
+  'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium'].filter((k) => B[k] !== undefined).map((k) => B[k]));
 // Ores, and the glint they show in a cut wall.
 export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
 export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark]);
 export const LOGS = new Set(
-  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow'].map((w) => B[`log_${w}`]),
+  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove'].map((w) => B[`log_${w}`]),
 );
 export const LEAVES = new Set(
-  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'snowy'].map((w) => B[`leaves_${w}`]),
+  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'snowy', 'ember', 'mangrove'].map((w) => B[`leaves_${w}`]),
 );
 
 // Crops: how many visual stages they pass through, game hours per stage,

@@ -20,6 +20,9 @@ const NAMES = {
   sun: ['Golden Dawn', 'Sand Lark', 'Saffron Queen', 'Desert Rose', 'Sun Barge'],
   wild: ['Green Heron', 'Mossback', 'Willow Song', 'Fern Runner', 'Otter'],
   vale: ['Good Harvest', 'Meadowlark', 'Fair Wind', 'Miller\'s Daughter', 'Bountiful'],
+  ember: ['Ashwake', 'Black Glass', 'Ember Tongue', 'Kiln Daughter', 'Smoke Runner'],
+  mist: ['Grey Lantern', 'Fog Moth', 'Heather Maid', 'Owl\'s Wing', 'Quiet Mere'],
+  tide: ['Pearl Diver', 'Turtle Back', 'Swift Gull', 'Reef Dancer', 'Tide Bride'],
 };
 const DOCK_COST = 150;
 const CREW = 5;

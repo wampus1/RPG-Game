@@ -127,6 +127,64 @@ export const TREE_BUILDERS = {
     trunk(out, 2, B.log_jungle);
     return out;
   },
+  // Kharos: a cinder tree (black bark, a ragged crown of ember-red leaves,
+  // a crooked bough or two), and the charred snag of one the fire took.
+  cinder(rand) {
+    const out = [];
+    const h = 3 + (rand() < 0.5 ? 1 : 0);
+    const L = B.leaves_ember;
+    disc(out, 0, h - 1, 0, 2, L, rand, 1, 0.4);
+    disc(out, 0, h, 0, 1, L, rand, 0, 0.2);
+    out.push([0, h + 1, 0, L]);
+    const dx = rand() < 0.5 ? 1 : -1;
+    out.push([dx, h - 2, 0, B.log_cinder]);
+    if (rand() < 0.5) out.push([dx * 2, h - 1, 0, L]);
+    trunk(out, h, B.log_cinder);
+    return out;
+  },
+  charred(rand) {
+    const out = [];
+    const h = 2 + Math.floor(rand() * 3);
+    trunk(out, h, B.log_cinder);
+    if (rand() < 0.6) out.push([rand() < 0.5 ? 1 : -1, h - 1, 0, B.log_cinder]);
+    return out;
+  },
+  // Myrrow: a mangrove up on its arching roots (it stands in the shallows
+  // as happily as on the mud), and the fungal forests' giant mushrooms,
+  // a fat stem under a broad cap, red-brown or glowing blue.
+  mangrove(rand) {
+    const out = [];
+    const h = 4;
+    const T = B.log_mangrove;
+    for (const [rx, rz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (rand() < 0.75) out.push([rx, 0, rz, T]);
+    trunk(out, h, T, 0, 0, 1);
+    const L = B.leaves_mangrove;
+    disc(out, 0, h - 1, 0, 2, L, rand, 0, 0.3);
+    disc(out, 0, h, 0, 2, L, rand, 1, 0.2);
+    disc(out, 0, h + 1, 0, 1, L, rand, 1);
+    return out;
+  },
+  mushroom(rand, glow = false) {
+    const out = [];
+    const h = 3 + Math.floor(rand() * 2);
+    trunk(out, h, B.mushroom_stem);
+    const C = glow ? B.glowcap_cap : B.mushroom_cap;
+    disc(out, 0, h, 0, 2, C, rand, 0, 0.15);
+    disc(out, 0, h + 1, 0, 1, C, rand, 1);
+    // (The brim turned down at its edge.)
+    for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) if (rand() < 0.5) out.push([dx, h - 1, dz, C]);
+    return out;
+  },
+  glowshroom(rand) {
+    return TREE_BUILDERS.mushroom(rand, true);
+  },
+  toadstool(rand) {
+    const out = [];
+    trunk(out, 2, B.mushroom_stem);
+    const C = rand() < 0.3 ? B.glowcap_cap : B.mushroom_cap;
+    disc(out, 0, 2, 0, 1, C, rand, 0, 0.1);
+    return out;
+  },
 };
 
 // Trees that need their trunk to be on non-water land and how far their

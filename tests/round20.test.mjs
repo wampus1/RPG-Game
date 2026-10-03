@@ -113,8 +113,8 @@ test('a traveller on the road walks the way round the lake, with dry feet', () =
   const input = stubInput();
   const ss = game.world.ow.settlements;
   // (Two towns with a bay between them.)
-  const a = ss.find((s) => s.name === 'Durcrag');
-  const b = ss.find((s) => s.name === 'Durhall');
+  const a = ss.find((s) => s.name === 'Redford');
+  const b = ss.find((s) => s.name === 'Fairfield');
   assert.ok(a && b);
   D.wayBudget = 1;
   const w = D.way(a, b);

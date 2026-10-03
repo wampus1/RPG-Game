@@ -175,7 +175,7 @@ test('floors are made from room kits stitched together, with ways up and down', 
 
 test('going down into an old place and back up: a place apart, kept as you left it', () => {
   const { game, input, p } = start();
-  const rec = game.sim.dungeons.all.find((d) => d.type === 'barrow');
+  const rec = game.sim.dungeons.all.find((d) => d.type === 'barrow' && d.depth >= 2);
   const before = { x: p.x, z: p.z };
   const creatures = game.creatures.length;
   new DungeonRun(game, rec).enter();

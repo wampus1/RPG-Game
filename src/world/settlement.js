@@ -249,6 +249,8 @@ class Layout {
       road = B.sandstone;
       plaza = B.sandstone;
     }
+    // (The Ashborn pave with the black rock they live on.)
+    if (s.style === 'ember') plaza = T === 'village' ? B.gravel : B.basalt;
     if (cond === 'poor' || cond === 'abandoned') {
       road = B.path;
       if (plaza === B.stone_bricks) plaza = B.cobblestone;
@@ -302,6 +304,28 @@ class Layout {
         floor = B.stone_bricks;
         roof = rng.chance(0.7) ? B.roof_slate : B.roof_green;
         break;
+      // The Ashborn build squat and dark: basalt walls on cinderwood posts,
+      // black glass in the great halls, red tile against the falling ash.
+      case 'ember':
+        wall = rng.weighted([[B.basalt, 3], [B.cobblestone, 1], [B.obsidian, civic ? 1.5 : 0.2]]);
+        corner = B.log_cinder;
+        floor = B.basalt;
+        roof = rng.weighted([[B.roof_red, 3], [B.roof_slate, 2]]);
+        break;
+      // The Mirefolk: dark timber on giant-mushroom posts, turf roofs.
+      case 'mist':
+        wall = rng.weighted([[B.planks_dark, 3], [B.log_wall, 2], [B.cobblestone, civic ? 2 : 0.4]]);
+        corner = B.mushroom_stem;
+        floor = B.planks_dark;
+        roof = rng.weighted([[B.roof_green, 3], [B.thatch, 2]]);
+        break;
+      // The Stiltfolk: pale planks on mangrove posts under reed thatch.
+      case 'tide':
+        wall = rng.weighted([[B.planks_birch, 3], [B.planks, 2], [B.log_wall, 0.6]]);
+        corner = B.log_mangrove;
+        floor = B.planks;
+        roof = rng.weighted([[B.thatch, 4], [B.roof_wood, 1]]);
+        break;
       default:
         wall = rng.weighted([[B.timber, 3], [B.plaster, 2], [B.planks, 2], [B.cobblestone, 1], [B.bricks, T === 'city' ? 2 : 0.3]]);
         corner = wall === B.timber || wall === B.plaster ? B.log_oak : wall === B.planks ? B.log_oak : wall;
@@ -312,7 +336,7 @@ class Layout {
             ? rng.weighted([[B.roof_red, 3], [B.roof_wood, 2], [B.thatch, 1], [B.roof_slate, 0.5]])
             : rng.weighted([[B.roof_slate, 3], [B.roof_red, 3], [B.roof_green, 0.5]]);
     }
-    if (civic && T !== 'village' && style !== 'sun') {
+    if (civic && T !== 'village' && style !== 'sun' && style !== 'ember') {
       if (type === 'temple') wall = s.condition === 'prosperous' || T === 'city' ? B.marble : B.stone_bricks;
       else if (rng.chance(0.6)) wall = rng.pick([B.stone_bricks, B.bricks]);
       corner = wall === B.marble ? B.marble : B.stone_bricks;
@@ -1501,6 +1525,26 @@ class Layout {
       // Window boxes.
       const f = rng.pick([B.flower_red, B.flower_yellow, B.flower_white, B.flower_blue, B.flower_purple]);
       for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.55)) this.put(q.ox, Y0, q.oz, f);
+    } else if (style === 'ember') {
+      // A fire kept burning by the door (for the mountain), and fire lilies
+      // under the windows.
+      const sd = sides.find((p) => this.maskAt(p.x, p.z) === M.YARD);
+      if (sd && (b.residential || SPECS[b.type]?.civic) && rng.chance(0.55)) {
+        this.put(sd.x, Y0, sd.z, B.campfire, META_STATE);
+        this.setMask(sd.x, sd.z, M.DECOR);
+      }
+      if (!poor) for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.3)) this.put(q.ox, Y0, q.oz, B.fire_lily);
+    } else if (style === 'mist') {
+      // Mushrooms grown up against the walls (a lucky glowcap or two).
+      for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.35)) this.put(q.ox, Y0, q.oz, rng.chance(0.3) ? B.glowshroom : rng.chance(0.5) ? B.mushroom_red : B.mushroom_brown);
+    } else if (style === 'tide') {
+      // Barrels and crates of the catch stacked by the door; reeds drying.
+      const sd = sides.find((p) => this.maskAt(p.x, p.z) === M.YARD);
+      if (sd && b.residential && rng.chance(0.6)) {
+        this.put(sd.x, Y0, sd.z, rng.chance(0.5) ? B.barrel : B.crate);
+        this.setMask(sd.x, sd.z, M.DECOR);
+      }
+      for (const q of windows) if (!isDoorish(q) && open(q.ox, q.oz) && rng.chance(0.25)) this.put(q.ox, Y0, q.oz, B.reeds);
     }
   }
 
@@ -2627,7 +2671,7 @@ class Layout {
     }
     // A few trees and a park in bigger places.
     const b = this.bounds;
-    const treeType = { taiga: 'pine', tundra: 'snowpine', desert: 'palm', savanna: 'acacia', jungle: 'jungle', swamp: 'willow' }[s.biome] || 'oak';
+    const treeType = { taiga: 'pine', tundra: 'snowpine', desert: 'palm', savanna: 'acacia', jungle: 'jungle', swamp: 'willow', ashland: 'cinder', cinderwood: 'cinder', geyser: 'cinder', volcano: 'cinder', mangrove: 'mangrove', fungal: 'mushroom', moor: 'birch' }[s.biome] || 'oak';
     let trees = 0;
     for (let tries = 0; tries < 200 && trees < (s.type === 'village' ? 4 : 8); tries++) {
       const x = rng.int(b.x0 + 3, b.x1 - 3);
@@ -2821,6 +2865,9 @@ const ANCESTOR_FIRST = {
   sun: ['Amun', 'Bastet', 'Farid', 'Hanan', 'Idris', 'Layla', 'Nabil', 'Samira'],
   wild: ['Ayo', 'Chidi', 'Ekon', 'Imani', 'Kofi', 'Nia', 'Tendai', 'Zola'],
   high: ['Balin', 'Dagna', 'Durin', 'Helga', 'Thrain', 'Brunhild', 'Gimra', 'Orsik'],
+  ember: ['Azkar', 'Brasa', 'Cendrik', 'Hestra', 'Ignar', 'Pyrrha', 'Tephros', 'Vulka'],
+  mist: ['Aelwen', 'Bryn', 'Gloamwyn', 'Heth', 'Lune', 'Myrrin', 'Sorrel', 'Vell'],
+  tide: ['Ahi', 'Kailani', 'Makoa', 'Nalu', 'Pelani', 'Reva', 'Tasi', 'Wahine'],
 };
 function ancestorName(rng, style) {
   return `${rng.pick(ANCESTOR_FIRST[style] || ANCESTOR_FIRST.vale)} ${rng.pick(['the Elder', 'the Founder', 'Oakheart', 'Stonebrook', 'Ashford', 'Millward', 'Greenhill', 'of the Old Road', 'Hearthkeeper', 'Longstride'])}`;

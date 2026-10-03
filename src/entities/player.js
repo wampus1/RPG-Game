@@ -7,7 +7,7 @@ import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable, offhandLight } fr
 import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult } from '../game/hero.js';
-import { steer } from './raft.js';
+import { steer, STORM_WALL } from './raft.js';
 
 const BASE_HP = 20;
 
@@ -337,6 +337,11 @@ export class Player extends Entity {
     if (sprint) {
       this.stamina = Math.max(0, (this.stamina ?? 10) - sprintCost(this));
       this.restT = 0;
+    }
+    // (Swimming out into the storm round the islands: it throws you back.)
+    if (w.ow && w.ow.stormAt(nx, nz) > STORM_WALL && w.ow.stormAt(nx, nz) >= w.ow.stormAt(this.x, this.z)) {
+      this.game.stormTurnsBack?.(false);
+      return;
     }
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));

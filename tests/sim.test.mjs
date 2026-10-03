@@ -29,7 +29,12 @@ test('settlements are spaced out, and every one has a graveyard, a jail and sign
       assert.ok(d > 3.5, `${s[i].name} and ${s[j].name} are too close`);
     }
   }
-  assert.ok(s.length <= 19, `${s.length} settlements`);
+  // (Each of the Dagoni Islands with no more than its own few.)
+  for (const I of ow.islands) {
+    const n = s.filter((q) => q.island === I.key).length;
+    assert.ok(n <= I.civs + I.towns + I.villages, `${n} settlements on ${I.name}`);
+  }
+  assert.ok(s.every((q) => q.island), 'every settlement is on one of the islands');
   const w = new World(4242);
   for (const q of w.ow.settlements) {
     const L = w.getLayout(q);

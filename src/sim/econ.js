@@ -48,7 +48,10 @@ export function stockFor(L, t) {
     const [hot, carry] = dishesOf(s);
     list = (t === 'baker' ? [...list, carry] : [hot, carry, ...list]).filter((k) => !forbiddenFood(s, k));
   }
-  if (t === 'herbalist' && L && L.settlement && !(L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'alchemy'))) return list.filter((k) => !k.startsWith('potion_'));
+  // (The Mirefolk's spore lore does as well as alchemy.)
+  if (t === 'herbalist' && L && L.settlement && !(L.sim && L.sim.tech && (L.sim.tech.has(L.settlement, 'alchemy') || L.sim.tech.has(L.settlement, 'spore_lore')))) return list.filter((k) => !k.startsWith('potion_'));
+  // Black glass from the Ashborn's smiths.
+  if (t === 'smith' && L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'obsidian_edge')) list = [...list, 'obsidian_blade'];
   // Steel only from a realm whose smiths know how.
   if (t === 'smith' && !(L && L.settlement && L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'steel'))) return list.filter((k) => k !== 'steel_sword');
   return list;
@@ -699,7 +702,7 @@ function produce(L, rec, rng) {
     case 'farmer':
       // Moist fields (recent rain, or water carried from the well) yield more.
       // (Watermills: more from the same fields.)
-      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.5 : 1))) invAdd(rec.inv, e.cropFocus && e.crops.includes(e.cropFocus) && rng.chance(0.6) ? e.cropFocus : rng.pick(e.crops), rng.int(1, 3));
+      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'crop_rotation') ? 1.3 : 1))) invAdd(rec.inv, e.cropFocus && e.crops.includes(e.cropFocus) && rng.chance(0.6) ? e.cropFocus : rng.pick(e.crops), rng.int(1, 3));
       return;
     case 'baker': {
       if (!biz) return;

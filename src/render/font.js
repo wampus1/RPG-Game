@@ -144,6 +144,12 @@ const G = {
   '□': '.....|#####|#...#|#...#|#...#|#####|.....',
   '▪': '.....|.....|.###.|.###.|.###.|.....|.....',
   '♀': '.###.|#...#|#...#|.###.|..#..|.###.|..#..',
+  // (The other Dagoni Islands' map glyphs: hot springs, a mangrove on its
+  // roots, a giant mushroom, moorland.)
+  '♨': '#.#.#|.#.#.|#.#.#|.....|#...#|#...#|.###.',
+  'Ψ': '..#..|.###.|#####|..#..|.#.#.|#...#|.....',
+  '♤': '.###.|#####|#.#.#|..#..|..#..|.###.|.....',
+  '∴': '.....|..#..|.....|.....|.#.#.|.....|.....',
 };
 
 // Single-line box drawing: [up, down, left, right].
@@ -275,6 +281,13 @@ export function drawChar(ctx, ch, x, y, color) {
   const i = glyphIndex(ch);
   const a = fontAtlas(color);
   ctx.drawImage(a, (i % COLS_IN_ATLAS) * CHAR_W, Math.floor(i / COLS_IN_ATLAS) * CHAR_H, CHAR_W, CHAR_H, x, y, CHAR_W, CHAR_H);
+}
+
+// One glyph drawn bigger (whole multiples keep it crisp).
+export function drawGlyph(ctx, ch, x, y, color, scale = 1) {
+  const i = glyphIndex(ch);
+  const a = fontAtlas(color);
+  ctx.drawImage(a, (i % COLS_IN_ATLAS) * CHAR_W, Math.floor(i / COLS_IN_ATLAS) * CHAR_H, CHAR_W, CHAR_H, x, y, CHAR_W * scale, CHAR_H * scale);
 }
 
 // Free-positioned text (for world labels, bubbles, floating numbers).

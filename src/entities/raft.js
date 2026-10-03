@@ -6,6 +6,10 @@ import { SURFACE, GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { has as heroHas } from '../game/hero.js';
 
+// How deep into the storm round the islands a raft (or a swimmer) gets
+// before it's thrown back (see geography.js stormAt).
+export const STORM_WALL = 0.2;
+
 export const RAFT = {
   accel: 1.8, // tiles/s² while paddling
   max: 4.2, // tiles/s
@@ -75,6 +79,13 @@ export function steer(p, dt, input) {
   // Each axis on its own, so it slides along a bank instead of sticking.
   const nx = r.x + f.x * r.v * dt;
   const nz = r.z + f.z * r.v * dt;
+  // The storm round the Dagoni Islands: no raft lives in that. It throws
+  // you back the way you came.
+  if (w.ow && w.ow.stormAt(nx, nz) > STORM_WALL && w.ow.stormAt(nx, nz) >= w.ow.stormAt(r.x, r.z)) {
+    r.v = r.v > 0 ? -1.6 : 1.6;
+    if (p.game.stormTurnsBack) p.game.stormTurnsBack(true);
+    return;
+  }
   let hit = false;
   if (ok(nx, r.z)) r.x = nx;
   else hit = true;

@@ -153,7 +153,7 @@ test('news from afar: posted for two days, fading, then gone', async () => {
 test('streets: a town with no lots lays a two-wide street, marks lots with signs, and what waited is built', () => {
   const game = makeGame(7);
   // (A town with open ground beside it for a street and its lots.)
-  const { s, L } = town(game, (q) => q.name === 'Ashstead');
+  const { s, L } = town(game, (q) => q.name === 'Claycross');
   const sim = game.sim;
   for (const p of L.plots) if (p) p.taken = true;
   // Nothing to build on: the new house waits its turn.

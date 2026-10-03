@@ -29,6 +29,9 @@ export const STYLES = {
   sun: { palette: 2, centre: [['fence'], ['lantern', LIT_]], centreWord: 'a lantern post', light: ['lantern', LIT_], rugs: ['rug_red', 'rug_blue'] },
   wild: { palette: 3, centre: [['campfire', LIT_]], centreWord: 'a fire pit', light: ['torch', LIT_], flowers: ['flower_red', 'flower_yellow', 'flower_purple'] },
   high: { palette: 4, centre: [['anvil']], centreWord: 'an anvil to dance round', light: ['lantern', LIT_] },
+  ember: { palette: 0, centre: [['campfire', LIT_]], centreWord: 'a great fire for the mountain', light: ['torch', LIT_], flowers: ['fire_lily'] },
+  mist: { palette: 1, centre: [['fence'], ['lantern', LIT_]], centreWord: 'a lantern pole', light: ['lantern', LIT_], flowers: ['heather', 'mushroom_red'] },
+  tide: { palette: 3, centre: [['campfire', LIT_]], centreWord: 'a driftwood fire', light: ['torch', LIT_], rugs: ['rug_blue'] },
 };
 export const WEDDING_PALETTE = 5;
 export function styleOf(s) {

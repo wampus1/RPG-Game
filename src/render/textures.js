@@ -6,6 +6,7 @@ import { BLOCKS, CROPS } from '../world/blocks.js';
 import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
+import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -62,6 +63,9 @@ const WOOD = {
   jungle: { bark: ['#5e5230', '#48401f', '#746840'], ring: ['#9a7e4e', '#7e643c'] },
   acacia: { bark: ['#8a7a6a', '#6a5a4a', '#a09080'], ring: ['#c08a50', '#a06e3c'] },
   willow: { bark: ['#6e6450', '#50483a', '#847a64'], ring: ['#b09a70', '#907c58'] },
+  // (The other islands' trees: see isleart.js.)
+  cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
+  mangrove: { bark: ['#6a5a44', '#4e4232', '#82705a'], ring: ['#b08a5a', '#8e6a40'] },
 };
 const LEAF = {
   oak: ['#3e8a2e', '#2e6a22', '#58a840'],
@@ -73,6 +77,8 @@ const LEAF = {
   willow: ['#6a9a5a', '#527a46', '#86b474'],
   snowy: ['#2e5e3e', '#224a30', '#c4ccd8'],
   void: ['#5e2e82', '#421e5e', '#9050c0'],
+  ember: ['#c8441a', '#962e12', '#f07a2a'],
+  mangrove: ['#3e7a4a', '#2e5e38', '#58a064'],
 };
 
 // --- atlas ------------------------------------------------------------------
@@ -254,6 +260,8 @@ function straw(p, pal, rand, rot = 0) {
 function cubeTop(name, v, rand, rot) {
   const dt = dungeonTop(name, v, rand, rot);
   if (dt) return dt;
+  const it = isleTop(name, v, rand);
+  if (it) return it;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -534,6 +542,8 @@ function leavesTex(p, pal, rand, snowy, front = false) {
 function cubeFront(name, v, rand, rot) {
   const df = dungeonFront(name, v, rand, rot);
   if (df) return df;
+  const iff = isleFront(name, v, rand);
+  if (iff) return iff;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -1721,6 +1731,8 @@ const SPRITES = {
 // --- plants -------------------------------------------------------------------
 function plantSprite(name, v, rand) {
   if (name === 'bones') return bonesSprite(v, rand);
+  const ip = islePlant(name, v, rand);
+  if (ip) return ip;
   const p = spr();
   const base = 25;
   const blade = (x, h, c, lean = 0) => {
@@ -1992,12 +2004,13 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow']);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, ...DANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ...DANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
+  Object.assign(SPRITES, ISLE_SPRITES);
   for (const b of BLOCKS) {
     const id = b.id;
     const name = b.name;

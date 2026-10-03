@@ -10,6 +10,7 @@
 // stand watch (once laws are written down) and, in a bad war, may draft
 // the old and even the young into the watch (once the realm has learned
 // conscription).
+import { MAP_W } from '../config.js';
 import { alive, ledger } from './econ.js';
 import { deserted } from './civic.js';
 import { retrain } from '../entities/npcgen.js';
@@ -49,7 +50,9 @@ export class Politics {
     this.alliances = []; // { a, b, since }
     this.vassals = {}; // civ id -> { lord, since, paid }
     this.disputes = []; // { a, b, kind: 'border' | 'pact', day, text }
-    this.base = (game.world.ow.cells || []).map((c) => c.civ); // the map as the world began
+    // The map as the world began (only the Dagoni Islands' squares are
+    // ever anyone's: see Overworld.liveCells).
+    this.base = new Map((game.world.ow.liveCells || []).map((c) => [c.cz * MAP_W + c.cx, c.civ]));
     this.str0 = {}; // civ id -> strength when first counted
     this.land0 = {}; // civ id -> land then
     this.talks = {}; // pair key -> day an alliance was last talked of
@@ -178,7 +181,7 @@ export class Politics {
   }
 
   land(civ) {
-    return this.ow.cells.filter((c) => c.civ === civ.id);
+    return this.ow.liveCells.filter((c) => c.civ === civ.id);
   }
 
   // How much land a realm can hold now, against what it held when first
@@ -453,7 +456,7 @@ export class Politics {
       realms.allegiance.push([s.id, big.id]);
     }
     // The land goes with the towns.
-    for (const c of this.ow.cells) if (c.civ === small.id) c.civ = big.id;
+    for (const c of this.ow.liveCells) if (c.civ === small.id) c.civ = big.id;
     this.sim.tech.inherit(big, small);
     if (old) delete old.ruler;
     const R = realms.realm(small);
@@ -698,9 +701,10 @@ export class Politics {
   // ------------------------------------------------------------ save
   serialize() {
     const cells = [];
-    this.ow.cells.forEach((c, i) => {
-      if (c.civ !== this.base[i]) cells.push([i, c.civ]);
-    });
+    for (const c of this.ow.liveCells) {
+      const i = c.cz * MAP_W + c.cx;
+      if (c.civ !== this.base.get(i)) cells.push([i, c.civ]);
+    }
     return { alliances: this.alliances, vassals: this.vassals, disputes: this.disputes, str0: this.str0, land0: this.land0, talks: this.talks, lastDay: this.lastDay, cells, merged: this.sim.realms.civs.filter((c) => c.merged).map((c) => [c.id, c.merged]) };
   }
 

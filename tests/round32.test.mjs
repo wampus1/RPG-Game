@@ -259,7 +259,7 @@ test('tents stand three paces apart (they\'re big enough to stand up in), the fi
 });
 
 test('those who live in tents go in for the night (out of sight), and come out in the morning', () => {
-  const game = makeGame(7);
+  const game = makeGame(8);
   const input = stubInput();
   game.minute = 9 * 60;
   for (let i = 0; i < 20; i++) game.update(0.1, input);

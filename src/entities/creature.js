@@ -4,7 +4,7 @@ import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
-import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach } from './monsters.js';
+import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
@@ -34,6 +34,20 @@ export const SPECIES = {
   pig: { name: 'Pig', hp: 8, dmg: 0, step: 0.42, mode: 'passive', drops: [['raw_meat', 2, 3, 1], ['leather', 1, 1, 0.3]], tame: true },
   sheep: { name: 'Sheep', hp: 7, dmg: 0, step: 0.4, mode: 'passive', drops: [['raw_meat', 1, 2, 1], ['string', 1, 3, 0.8]], tame: true },
   cow: { name: 'Cow', hp: 12, dmg: 0, step: 0.5, mode: 'passive', drops: [['raw_meat', 2, 4, 1], ['leather', 1, 2, 0.8]], tame: true },
+  // The other Dagoni Islands' own (see game.spawning; drawn in isleart.js).
+  // On Kharos: a grey lizard basking on the warm ash (leave it be and it
+  // leaves you be), a crab with a back of cooling rock, glowing in its
+  // cracks; and by night cinderlings, sparks of the mountain that drift
+  // and spit fire where you stand (they burst, and the ground burns).
+  ash_lizard: { name: 'Ash Lizard', hp: 7, dmg: 2, step: 0.24, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sulfur', 1, 1, 0.25]], isle: 'kharos' },
+  magma_crab: { name: 'Magma Crab', hp: 13, dmg: 3, step: 0.42, mode: 'neutral', aggro: 0, drops: [['crab_meat', 1, 2, 1], ['obsidian_shard', 1, 1, 0.35]], light: 3, noHalo: true, isle: 'kharos' },
+  cinderling: { name: 'Cinderling', hp: 7, dmg: 3, step: 0.3, mode: 'hostile', aggro: 11, drops: [['sulfur', 1, 2, 0.7], ['coin', 1, 2, 0.4]], night: true, floats: true, light: 9, lobs: 'fire', isle: 'kharos' },
+  // On Myrrow: fat toads in the shallows and the peat pools; crawlers that
+  // wear the mushrooms they feed on (strike one and it puffs its spores at
+  // you); and moths the size of a hand, lit like lamps, out at dusk.
+  mire_toad: { name: 'Mire Toad', hp: 4, dmg: 0, step: 0.3, mode: 'passive', drops: [['raw_meat', 1, 1, 0.8], ['slime_gel', 1, 1, 0.3]], isle: 'myrrow' },
+  shroom_crawler: { name: 'Shroom Crawler', hp: 10, dmg: 2, step: 0.5, mode: 'neutral', aggro: 0, drops: [['mushroom', 1, 3, 1], ['glowcap', 1, 1, 0.4]], spores: true, isle: 'myrrow' },
+  gloam_moth: { name: 'Gloam Moth', hp: 3, dmg: 0, step: 0.24, mode: 'passive', drops: [['moth_dust', 1, 2, 1]], night: true, floats: true, light: 5, noHalo: true, isle: 'myrrow' },
   // (And what lives below ground: see monsters.js.)
   ...MONSTER_SPECIES,
 };
@@ -182,7 +196,7 @@ export class Creature extends Entity {
       }
       if (master && drift(this, dt)) return;
       // (Those that fight from afar: a skeleton with a bow, a wisp.)
-      if (this.target && (this.species === 'wisp' || this.arms === 'bow' || this.S.ranged) && this.keepOff(dt)) return;
+      if (this.target && (this.species === 'wisp' || this.S.lobs || this.arms === 'bow' || this.S.ranged) && this.keepOff(dt)) return;
       if (this.target) return this.chase(dt);
     } else if (this.tie) {
       // Tied to a post: shifting about on the end of the lead, no further
@@ -303,7 +317,9 @@ export class Creature extends Entity {
     const t = this.target;
     const game = this.game;
     const d = this.distTo(t);
-    const wisp = this.species === 'wisp';
+    // (A cinderling throws as a wisp does, but fire.)
+    const wisp = this.species === 'wisp' || !!this.S.lobs;
+    const fire = this.S.lobs === 'fire';
     this.castT = (this.castT ?? this.rng.float(1, 2.5)) - dt;
     // Gathering itself: the shot comes when it's ready.
     if (this.aiming) {
@@ -314,7 +330,8 @@ export class Creature extends Entity {
       this.aiming = null;
       this.drawnBow = false;
       this.castT = wisp ? this.rng.float(3.5, 5) : this.rng.float(2.4, 3.4);
-      if (wisp) game.lobOrb(this, a.x, a.y, a.z, this.S.dmg);
+      if (fire) lob(game, this, a.x, a.z, { tint: [255, 130, 40], onLand: (g, x, z, y) => cinderBurst(g, this, x, z, y) });
+      else if (wisp) game.lobOrb(this, a.x, a.y, a.z, this.S.dmg);
       else if (d <= 9) game.shoot(this, t, 3, 'arrow');
       this.doAction(0.3);
       return true;
@@ -338,13 +355,15 @@ export class Creature extends Entity {
     this.face(t.x, t.z);
     if (wisp) {
       // (Where it'll come down, glowing on the ground.)
-      game.renderer.effect?.({ type: 'ring', wx: t.x, wy: t.y, wz: t.z, r0: 10, r1: 3, color: ['#80d0ff', '#c0f0ff'], life: 1.0, oy: 4, flat: 0.5 });
+      game.renderer.effect?.({ type: 'ring', wx: t.x, wy: t.y, wz: t.z, r0: 10, r1: 3, color: fire ? ['#ff8030', '#ffd060'] : ['#80d0ff', '#c0f0ff'], life: 1.0, oy: 4, flat: 0.5 });
       game.audio?.play('portal', this);
     }
     return true;
   }
 
   onHurt(attacker) {
+    // (A crawler's mushrooms burst when struck: a cloud of spores.)
+    if (this.S.spores && !this.dead && this.rng.chance(0.5)) sporePuff(this.game, this);
     if (this.S.mode === 'neutral') {
       this.angry = true;
       this.target = attacker;
@@ -355,4 +374,32 @@ export class Creature extends Entity {
       this.fleeT = 7;
     }
   }
+}
+
+// Where a cinderling's fire comes down: it scorches whoever's there (not
+// those who rolled clear), sets them alight a moment, and the ground burns.
+function cinderBurst(game, from, x, z, y) {
+  for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+    if (e.dead || e.down || e === from || (e.S && e.S.night) || Math.max(Math.abs(e.x - x), Math.abs(e.z - z)) > 1 || Math.abs(e.y - y) > 2) continue;
+    if (e.kind === 'player' && e.rollT > 0) {
+      game.renderer.floatText(e.x, e.y + 2, e.z, 'dodged', '#ffd8a0');
+      continue;
+    }
+    game.damage(e, Math.max(1, Math.round(from.S.dmg * (e.x === x && e.z === z ? 1 : 0.6))), from);
+    e.burnT = Math.max(e.burnT || 0, 2);
+    e.burnSrc = from;
+  }
+  groundFire(game, x, z, y, from, false, 0);
+  game.renderer.emit(x + 0.5, y + 0.6, z + 0.5, { n: 16, color: ['#ff8030', '#ffd060', '#ff4020'], up: 30, speed: 40, life: 0.7, glow: true, gravity: -10 });
+  game.audio?.play('impact', { x, y, z });
+}
+
+// A shroom crawler's spores: a pale cloud that stings and slows a while.
+const SPORES = ['#d8d0a0', '#b8c890', '#e8e0c0'];
+function sporePuff(game, c) {
+  const tiles = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (Math.abs(dx) + Math.abs(dz) < 2) tiles.push({ x: c.x + dx, z: c.z + dz });
+  addZone(game, { by: c, kind: 'spores', tiles, y: c.y, life: 3.5, tick: 0.7, dmg: 1, slow: true, color: [200, 200, 140], puff: SPORES });
+  game.renderer.emit(c.x, c.y + 0.8, c.z, { n: 18, color: SPORES, up: 16, speed: 30, life: 0.9, shape: 'puff', gravity: -6 });
+  game.audio?.play('skitter', c);
 }

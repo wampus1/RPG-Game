@@ -50,6 +50,43 @@ export const CULTURES = {
     lastSuf: ['fist', 'delver', 'beard', 'hammer', 'shield', 'helm', 'vein', 'forge', 'breaker', 'crusher', 'grip', 'arm', 'mantle', 'born', 'guard', 'mail', 'song', 'axe', 'brow', 'foot'],
     lastWhole: ['Anvilborn', 'Deepdelver', 'Gemcutter', 'Holdkeeper', 'Stonewright', 'Tunnelwarden'],
   },
+  // --- the other Dagoni Islands' peoples ----------------------------------
+  // The Ashborn of Kharos: smiths and fire-priests under the smoking
+  // mountain (hard consonants, names of ash and flame).
+  ember: {
+    label: 'Ashborn',
+    civ: ['Forge-Throne', 'Ash Kingdom', 'Hearthold', 'Kiln Court'],
+    placePre: ['Kha', 'Vul', 'Az', 'Ign', 'Pyr', 'Ser', 'Mag', 'Cin', 'Tor', 'Bas', 'Obs', 'Kel', 'Sul', 'Ash'],
+    placeSuf: ['kiln', 'forge', 'reth', 'oss', 'ar', 'hearth', 'ash', 'umbra', 'cinder', 'vent', 'pyre', 'kar'],
+    first: ['Azra', 'Bask', 'Cendra', 'Dax', 'Embra', 'Fyrn', 'Garo', 'Hesta', 'Ignis', 'Jorra', 'Kael', 'Lyra', 'Magma', 'Nyx', 'Obren', 'Pyra', 'Rask', 'Sulla', 'Tephra', 'Ustra', 'Vulka', 'Xera', 'Zarr', 'Brasa', 'Calda', 'Drass', 'Ferro', 'Hekla', 'Kindra', 'Lumen', 'Orr', 'Scoria', 'Tarn', 'Vesta', 'Ashk', 'Brann', 'Cind', 'Ember', 'Fumar', 'Ira', 'Basra', 'Cyra', 'Dolm', 'Fenix', 'Grael', 'Hask', 'Kelda', 'Moro', 'Pyrr', 'Rhea', 'Sable', 'Toph'],
+    lastPre: ['Ash', 'Cinder', 'Flame', 'Basalt', 'Kiln', 'Smoke', 'Black', 'Glass', 'Slag', 'Forge', 'Ember', 'Soot', 'Sulphur', 'Char', 'Pumice'],
+    lastSuf: ['born', 'hand', 'heart', 'tongue', 'walker', 'eye', 'brand', 'hammer', 'keeper', 'mark', 'blood', 'scale', 'crown', 'fall'],
+    lastWhole: ['Kilnwright', 'Glassknapper', 'Ashwarden', 'Ventkeeper', 'Slagmonger'],
+  },
+  // The moor folk of Myrrow: quiet growers of mushroom and herb in the
+  // mist, keepers of old lore (soft, sighing names).
+  mist: {
+    label: 'Mirefolk',
+    civ: ['Moot', 'Mistholds', 'Circle', 'Hush Court'],
+    placePre: ['Myr', 'Hollow', 'Fen', 'Moss', 'Grey', 'Hush', 'Mor', 'Bryn', 'Lune', 'Vell', 'Weald', 'Murk', 'Pale', 'Sol'],
+    placeSuf: ['moor', 'mere', 'fen', 'how', 'combe', 'mist', 'wold', 'tarn', 'cairn', 'lea', 'cap', 'shade'],
+    first: ['Aelis', 'Bryony', 'Cael', 'Dew', 'Elow', 'Fenna', 'Gloam', 'Heath', 'Isla', 'Juniper', 'Linnet', 'Myra', 'Nim', 'Orrel', 'Pell', 'Rill', 'Sorrel', 'Tamsin', 'Umber', 'Vetch', 'Willa', 'Yew', 'Aster', 'Bracken', 'Corrie', 'Drizzle', 'Ember', 'Fog', 'Hollis', 'Lichen', 'Morrow', 'Nettle', 'Peat', 'Rook', 'Sedge', 'Tansy', 'Whin', 'Moth', 'Alder', 'Briar', 'Cress', 'Dunlin', 'Eyebright', 'Fennel', 'Gorse', 'Hawthorn', 'Ivy', 'Mallow', 'Orris', 'Quill'],
+    lastPre: ['Moss', 'Fen', 'Grey', 'Mist', 'Heather', 'Peat', 'Bog', 'Cap', 'Spore', 'Gloam', 'Owl', 'Moth', 'Toad', 'Reed', 'Lantern'],
+    lastSuf: ['gatherer', 'wend', 'whisper', 'mere', 'hood', 'cap', 'ling', 'weaver', 'sight', 'water', 'tread', 'dell', 'lock', 'root'],
+    lastWhole: ['Mushroomwife', 'Peatcutter', 'Lanternkeeper', 'Toadwhistle', 'Fogwalker'],
+  },
+  // The stilt folk of Myrrow's mangrove shores: fishers, rafters and
+  // traders on the warm shallows (bright, rolling names).
+  tide: {
+    label: 'Stiltfolk',
+    civ: ['Tide-Council', 'Reef League', 'Shoal Kingdom', 'Moorings'],
+    placePre: ['Kai', 'Mara', 'Lagu', 'Coral', 'Salt', 'Reef', 'Wahi', 'Nalu', 'Pela', 'Shoal', 'Tuna', 'Mako', 'Brine', 'Ola'],
+    placeSuf: ['moor', 'quay', 'reef', 'kai', 'shoal', 'ula', 'nui', 'stilts', 'cove', 'wash', 'landing', 'lagoon'],
+    first: ['Ahi', 'Brin', 'Coral', 'Dune', 'Eke', 'Finn', 'Hali', 'Isa', 'Kai', 'Lani', 'Maka', 'Nalu', 'Ola', 'Pua', 'Reva', 'Sali', 'Tasi', 'Ulu', 'Wai', 'Yena', 'Ama', 'Bel', 'Kele', 'Kona', 'Lio', 'Mano', 'Nai', 'Pili', 'Rua', 'Tide', 'Wren', 'Moana', 'Keo', 'Luana', 'Alo', 'Ewa', 'Hina', 'Iolo', 'Kapo', 'Leilani', 'Mele', 'Niu', 'Opal', 'Pele', 'Rangi', 'Siale', 'Tama', 'Ula'],
+    lastPre: ['Salt', 'Reef', 'Shell', 'Kelp', 'Crab', 'Gull', 'Tide', 'Pearl', 'Brine', 'Coral', 'Wave', 'Net', 'Drift', 'Stilt', 'Eel'],
+    lastSuf: ['caller', 'diver', 'mender', 'runner', 'wake', 'spear', 'line', 'catch', 'song', 'foot', 'shore', 'sail', 'hook', 'swell'],
+    lastWhole: ['Netmender', 'Pearldiver', 'Crabcatcher', 'Stiltwright', 'Rafter'],
+  },
 };
 
 export const CIV_TITLES = ['Kingdom', 'Dominion', 'Republic', 'Confederacy', 'Principality', 'Commonwealth', 'Duchy', 'League', 'Empire', 'Realm', 'Union', 'Compact', 'Protectorate', 'Grand Duchy', 'March', 'Hegemony', 'Alliance', 'Free State'];

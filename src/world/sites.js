@@ -20,43 +20,55 @@ function kindFor(ow, c, rng) {
     if (q.lake || q.river || q.biome === 'ocean') water++;
   }
   if (mtn >= 2 && rng.chance(0.75)) return 'mine';
+  // (The Ashborn dig deep for their forges; the old dead of Myrrow lie in
+  // the wet ground.)
+  if (['ashland', 'cinderwood', 'geyser'].includes(c.biome) && rng.chance(0.5)) return 'mine';
+  if (['moor', 'fungal', 'mangrove'].includes(c.biome) && rng.chance(0.5)) return rng.chance(0.6) ? 'crypt' : 'barrow';
   if ((c.biome === 'swamp' || water >= 3) && rng.chance(0.7)) return 'crypt';
   if (['plains', 'tundra', 'taiga'].includes(c.biome) && rng.chance(0.6)) return 'barrow';
   if (['forest', 'jungle', 'savanna'].includes(c.biome) && rng.chance(0.6)) return 'holdout';
   return rng.pick(['barrow', 'crypt', 'holdout', 'mine']);
 }
 
-// The old places of the island: a dozen and more dungeons, and two or three
-// of the Kavorent's spires out where nobody lives. Placed with the world.
+// The old places of the Dagoni Islands: on each, its own few dungeons and
+// one to three of the Kavorent's spires out where nobody lives (Thessa has
+// the most: see geography.js). Placed with the world.
 export function genSites(ow) {
   const rng = new RNG(hash4(ow.seed, 0xd0e5));
   const sites = [];
   const sett = ow.settlements;
   const farFromTowns = (c, d) => sett.every((s) => Math.hypot(s.cx + (s.cw - 1) / 2 - c.cx, (s.cz + (s.cd - 1) / 2 - c.cz) * 1.4) >= d);
   const farFromSites = (c, d) => sites.every((q) => Math.hypot(q.cx - c.cx, (q.cz - c.cz) * 1.4) >= d);
-  const land = ow.cells.filter((c) => c && c.biome !== 'ocean' && c.biome !== 'beach' && !c.lake && c.settlement === null && c.cont > 0.08 && c.cx > 0 && c.cz > 0 && c.cx < MAP_W - 1 && c.cz < MAP_H - 1);
-  // The Kavorent's first: the loneliest places (desert, ice, deep forest,
-  // the feet of mountains).
-  const lonely = land
-    .filter((c) => ['desert', 'tundra', 'jungle', 'mountain', 'taiga', 'savanna', 'swamp'].includes(c.biome) && c.mountainness < 0.4)
-    .map((c) => ({ c, d: Math.min(...sett.map((s) => Math.hypot(s.cx - c.cx, (s.cz - c.cz) * 1.4))) + rng.float(0, 3) }))
-    .sort((a, b) => b.d - a.d);
-  for (const { c } of lonely) {
-    if (sites.length >= 3) break;
-    if (!farFromTowns(c, 4) || !farFromSites(c, 10)) continue;
-    sites.push({ id: sites.length, type: 'kavorent', cx: c.cx, cz: c.cz, seed: hash4(ow.seed, c.cx, c.cz, 0x4a7) });
-  }
-  // Then the dungeons, near enough to people that they have a story.
-  const cands = rng.shuffle(land.slice());
-  for (const c of cands) {
-    if (sites.length >= 17) break;
-    if (!farFromTowns(c, 2.4) || !farFromSites(c, 3.4)) continue;
-    if (c.mountainness > 0.5) continue;
-    const type = kindFor(ow, c, rng);
-    sites.push({ id: sites.length, type, cx: c.cx, cz: c.cz, seed: hash4(ow.seed, c.cx, c.cz, sites.length, 0x5d1) });
+  for (const I of ow.islands || []) {
+    const land = ow.liveCells.filter((c) => c.island === I.key && c.biome !== 'ocean' && c.biome !== 'beach' && c.biome !== 'volcano' && !c.lake && c.settlement === null && c.cont > 0.08 && c.cx > 0 && c.cz > 0 && c.cx < MAP_W - 1 && c.cz < MAP_H - 1);
+    const mine = sett.filter((s) => s.island === I.key);
+    // The Kavorent's first: the loneliest places (desert, ice, deep forest,
+    // the feet of mountains; ash and moor on the other islands).
+    const lonely = land
+      .filter((c) => LONELY.has(c.biome) && c.mountainness < 0.4)
+      .map((c) => ({ c, d: Math.min(99, ...mine.map((s) => Math.hypot(s.cx - c.cx, (s.cz - c.cz) * 1.4))) + rng.float(0, 3) }))
+      .sort((a, b) => b.d - a.d);
+    let n = 0;
+    for (const { c } of lonely) {
+      if (n >= I.spires) break;
+      if (!farFromTowns(c, 4) || !farFromSites(c, 10)) continue;
+      sites.push({ id: sites.length, type: 'kavorent', cx: c.cx, cz: c.cz, island: I.key, seed: hash4(ow.seed, c.cx, c.cz, 0x4a7) });
+      n++;
+    }
+    // Then the dungeons, near enough to people that they have a story.
+    n = 0;
+    for (const c of rng.shuffle(land.slice())) {
+      if (n >= I.dungeons) break;
+      if (!farFromTowns(c, 2.4) || !farFromSites(c, 3.4)) continue;
+      if (c.mountainness > 0.5) continue;
+      const type = kindFor(ow, c, rng);
+      sites.push({ id: sites.length, type, cx: c.cx, cz: c.cz, island: I.key, seed: hash4(ow.seed, c.cx, c.cz, sites.length, 0x5d1) });
+      n++;
+    }
   }
   return sites;
 }
+const LONELY = new Set(['desert', 'tundra', 'jungle', 'mountain', 'taiga', 'savanna', 'swamp', 'ashland', 'geyser', 'moor', 'fungal', 'mangrove']);
 
 // Find the exact spot for each: flat, dry ground near the middle of its
 // square. Needs the terrain (see World).

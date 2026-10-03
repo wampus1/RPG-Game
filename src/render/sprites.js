@@ -5,6 +5,7 @@ import { ITEMS, GEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
+import { isleIcon, ISLE_CREATURES } from './isleart.js';
 
 const OUT = '#1c1622';
 export const CHAR_W = 16;
@@ -834,7 +835,7 @@ export const CREATURE_LOOKS = {
   chicken: { frames: 2, draw: (f) => quadruped(f, ['#f4f0e8', '#c8c0b0', '#ffffff'], 'chicken') },
 };
 
-Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES);
+Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES);
 
 // Creature sheet: frames in a row; left-facing, renderer flips for right.
 // (Square frames: 16 across, or 32 for the great ones.)
@@ -1365,6 +1366,9 @@ function toolIcon(kind, tier) {
 }
 
 function simpleIcon(key) {
+  // (The other Dagoni Islands' goods: see isleart.js.)
+  const isle = isleIcon(key);
+  if (isle) return isle;
   const p = new Px(16, 16);
   const rand = mulberry32(hashString(key));
   switch (key) {

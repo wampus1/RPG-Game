@@ -2,7 +2,7 @@
 // rules for interacting with blocks and creatures.
 import {
   TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, WATER_Y, REACH, BELT_SIZE,
-  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, MAP_W, MAP_H,
+  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
 } from '../config.js';
 import { World } from '../world/world.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL } from '../world/blocks.js';
@@ -68,6 +68,19 @@ const START_KIT = [
   ['cobblestone', 24], ['door', 2], ['chest', 1], ['bread', 5], ['workbench', 1], ['glass', 8], ['fence', 8],
 ];
 
+// What a save is (3: the world of the Dagoni Islands; older ones were of a
+// single island, and can't be put into this one).
+export const SAVE_VERSION = 3;
+
+// What wanders the other Dagoni Islands by day: on Kharos's ash and cinder
+// woods, lizards and crabs; on Myrrow's moors, mangroves and fungal woods,
+// toads and crawlers (and the odd beast brought over long ago).
+const ISLE_DAY = {
+  ashland: ['ash_lizard', 'ash_lizard', 'magma_crab', 'rabbit'], cinderwood: ['ash_lizard', 'boar', 'deer', 'ash_lizard'], geyser: ['magma_crab', 'ash_lizard'], volcano: ['magma_crab', 'ash_lizard'],
+  mangrove: ['mire_toad', 'mire_toad', 'boar', 'shroom_crawler'], fungal: ['shroom_crawler', 'shroom_crawler', 'mire_toad', 'deer'], moor: ['mire_toad', 'sheep', 'rabbit', 'deer'],
+};
+const ISLE_BEASTS = { kharos: ['ash_lizard', 'magma_crab'], myrrow: ['mire_toad', 'shroom_crawler'] };
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false }) {
     this.seed = seed >>> 0;
@@ -93,6 +106,8 @@ export class Game {
     this.world.onRegionLoad = (r) => {
       this.sim.applyPending(r);
       this.crops.scanRegion(r);
+      // (Near the mountain on Kharos: its flows as they are now.)
+      this.sim.volcano.regionLoaded(r);
     };
     this.signIcons = new Map();
     this.projectiles = [];
@@ -164,8 +179,9 @@ export class Game {
       const coast = this.hero && this.hero.origin === 'crash' ? this.coastSpot() : null;
       const s = home || ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
-      sx = L ? L.plaza.cx + 2 : Math.floor(ow.cells.length / 2);
-      sz = L ? L.plaza.cz : 400;
+      const thessa = ow.islands[0];
+      sx = L ? L.plaza.cx + 2 : Math.floor(thessa.x);
+      sz = L ? L.plaza.cz : Math.floor(thessa.z);
       if (coast) {
         sx = coast.x;
         sz = coast.z;
@@ -228,6 +244,11 @@ export class Game {
     const pick = (l) => l[Math.floor(Math.random() * l.length)];
     let snd = null;
     if (biome === 'beach' || biome === 'ocean') snd = day && !wet && Math.random() < 0.4 ? 'gull' : 'wave';
+    // (Kharos: wind over the ash, the hiss of a vent; Myrrow: frogs in the
+    // mangroves, crickets and the odd owl over the moor and the mushrooms.)
+    else if (biome === 'ashland' || biome === 'volcano' || biome === 'geyser' || biome === 'cinderwood') snd = biome === 'geyser' || Math.random() < 0.25 ? 'torch' : 'wind';
+    else if (biome === 'mangrove') snd = day ? pick(['frog', 'bird', 'frog']) : 'frog';
+    else if (biome === 'fungal' || biome === 'moor') snd = day ? pick(['wind', 'bird', null]) : pick(['cricket', 'owl', 'frog']);
     else if (biome === 'swamp') snd = day ? pick(['frog', 'bird']) : pick(['frog', 'cricket', 'frog']);
     else if (biome === 'tundra' || biome === 'mountain') snd = !day && Math.random() < 0.15 ? 'howl' : 'wind';
     else if (biome === 'desert') snd = day ? (Math.random() < 0.3 ? 'wind' : null) : 'cricket';
@@ -353,7 +374,8 @@ export class Game {
   // seed and your name.
   pickHometown() {
     const ow = this.world.ow;
-    const list = ow.settlements.filter((s) => s.condition !== 'abandoned' && !s.deserted && s.type !== 'camp');
+    // (On Thessa, where every story starts.)
+    const list = ow.settlements.filter((s) => s.condition !== 'abandoned' && !s.deserted && s.type !== 'camp' && s.island === ow.islands[0].key);
     if (!list.length) return null;
     let h = 0;
     for (const ch of String(this.hero.name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -412,9 +434,10 @@ export class Game {
   coastSpot() {
     const ow = this.world.ow;
     const s = ow.spawnSettlement;
-    const hx = s ? s.cx + s.cw / 2 : MAP_W / 2;
-    const hz = s ? s.cz + s.cd / 2 : MAP_H / 2;
-    const beaches = ow.cells.filter((c) => c && c.biome === 'beach').map((c) => ({ c, d: Math.hypot(c.cx - hx, (c.cz - hz) * 1.4) })).sort((a, b) => a.d - b.d);
+    const home = ow.islands[0];
+    const hx = s ? s.cx + s.cw / 2 : home.cx;
+    const hz = s ? s.cz + s.cd / 2 : home.cz;
+    const beaches = ow.liveCells.filter((c) => c.biome === 'beach' && c.island === home.key).map((c) => ({ c, d: Math.hypot(c.cx - hx, (c.cz - hz) * 1.4) })).sort((a, b) => a.d - b.d);
     for (const { c } of beaches.slice(0, 12)) {
       const cx = Math.floor((c.cx + 0.5) * REGION_W);
       const cz = Math.floor((c.cz + 0.5) * REGION_D);
@@ -1499,10 +1522,35 @@ export class Game {
     this.ui.msg(`${this.day - sk.day0} day${this.day - sk.day0 === 1 ? '' : 's'} pass. It's day ${this.day}.`, '#ffe8a0');
   }
 
+  // Out at the storm round the Dagoni Islands: thrown back (a raft, or you
+  // swimming), with a word on why (now and then: not every wave).
+  stormTurnsBack(raft) {
+    const now = this.day * DAY + this.minute;
+    this.shake = Math.min(1, (this.shake || 0) + 0.25);
+    if (Math.random() < 0.3) this.renderer.emit(this.player.x, GROUND, this.player.z, { n: 10, color: ['#e8f4ff', '#a8c8e0', '#ffffff'], up: 40, speed: 50, gravity: 160, life: 0.6, shape: 'drop' });
+    if (this.stormWarned !== undefined && now - this.stormWarned < 3) return;
+    this.stormWarned = now;
+    this.audio?.play('splash');
+    this.ui.msg(raft
+      ? 'The storm round the islands throws your raft back like a leaf. No raft could live out there: it would take a real ship to get through.'
+      : 'Great waves throw you back toward the shore. Nobody could swim through that storm: it would take a real ship.', '#a0c8ff');
+  }
+
+  // How thick the mountain's ash is over the sky where you are (0 to 1):
+  // over all three of the Dagoni Islands, for a few days after it's gone
+  // up (not below ground).
+  ashLevel() {
+    if (this.dungeon || !this.sim || !this.sim.volcano) return 0;
+    if (!this.world.ow.insideStorm(this.player.x, this.player.z)) return 0;
+    return this.sim.volcano.ashLevel();
+  }
+
   // ------------------------------------------------------------ main update
   update(dt, input) {
     this.dt = dt;
     this.pathBudget = 5;
+    // (The land keeps the date too: a fresh lava flow cools in a few days.)
+    this.world.ow.today = this.day;
     if (this.skipping) {
       input.consume();
       return this.updateSkip();
@@ -4030,8 +4078,22 @@ export class Game {
       }
       w.seen = true;
     }
-    const target = w.kind === 'clear' ? 0 : 1;
-    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / 8);
+    // Near the storm round the islands: it's always raining there, harder
+    // and windier the nearer you come, with lightning.
+    const sn = this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0;
+    w.storm = sn;
+    if (sn > 0.12 && w.kind !== 'rain') w.kind = 'rain';
+    w.wind = sn > 0 ? 1 + sn * 2.6 : undefined;
+    const target = w.kind === 'clear' ? 0 : Math.max(1, sn * 1.5);
+    w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / (sn > 0.12 ? 2 : 8));
+    if (sn > 0.45) {
+      this.boltT = (this.boltT ?? 4) - dt;
+      if (this.boltT <= 0) {
+        this.boltT = 3 + Math.random() * 9 * (1.4 - sn);
+        this.renderer.flashScreen?.('#e8f0ff', 0.12);
+        this.audio?.play('thunder');
+      }
+    }
   }
 
   // The weather over a town right now.
@@ -5131,9 +5193,13 @@ export class Game {
     const col = this.world.terrain.column(x, z, this.world.terrain.context(x, z, x, z), {});
     const biome = col.biome;
     let species = null;
+    // (Kharos and Myrrow keep beasts of their own: see ISLE_DAY.)
+    const isle = ow.islandAt(x, z);
     if (night) {
       const r = Math.random();
-      if ((biome === 'forest' || biome === 'taiga') && r < 0.3) species = 'wolf';
+      if (isle === 'kharos' && r < 0.4) species = 'cinderling';
+      else if (isle === 'myrrow' && r < 0.3) species = r < 0.12 ? 'wisp' : 'gloam_moth';
+      else if ((biome === 'forest' || biome === 'taiga') && r < 0.3) species = 'wolf';
       // (Wisps over marsh and through the woods.)
       else if ((biome === 'swamp' || biome === 'jungle' || biome === 'forest') && r < 0.48) species = 'wisp';
       else species = r < 0.45 ? 'slime' : r < 0.72 ? 'skeleton' : r < 0.88 ? 'ghoul' : 'wisp';
@@ -5142,9 +5208,11 @@ export class Game {
         plains: ['rabbit', 'deer', 'rabbit', 'boar', 'horse', 'sheep', 'cow'], forest: ['deer', 'boar', 'rabbit', 'wolf', 'pig'], taiga: ['deer', 'wolf', 'rabbit', 'sheep'],
         tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit', 'horse', 'cow'], jungle: ['boar', 'slime', 'deer', 'pig'], swamp: ['slime', 'boar'],
         desert: ['rabbit'], mountain: ['boar', 'rabbit', 'sheep'], beach: ['rabbit'],
-      }[biome] || ['rabbit'];
+      }[biome] || ISLE_DAY[biome] || ['rabbit'];
       species = opts[Math.floor(Math.random() * opts.length)];
       if (species === 'wolf' && Math.random() < 0.6) species = 'deer';
+      // (And on any ground of theirs, now and then, the islands' own.)
+      if (ISLE_BEASTS[isle] && Math.random() < 0.3) species = ISLE_BEASTS[isle][Math.floor(Math.random() * ISLE_BEASTS[isle].length)];
     }
     const variant = Math.floor(Math.random() * (species === 'horse' ? 6 : 3));
     this.addCreature(new Creature(this, species, x, y, z, variant));
@@ -5165,7 +5233,7 @@ export class Game {
     const y = this.world.findStandY(x, z, n.y);
     if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
     const s = n.settlement;
-    const opts = { tundra: ['rabbit'], desert: ['rabbit'], forest: ['deer', 'rabbit', 'boar'], taiga: ['deer', 'rabbit'], savanna: ['deer', 'boar'], jungle: ['boar', 'deer'], swamp: ['boar'] }[s.biome] || ['rabbit', 'deer', 'rabbit'];
+    const opts = { tundra: ['rabbit'], desert: ['rabbit'], forest: ['deer', 'rabbit', 'boar'], taiga: ['deer', 'rabbit'], savanna: ['deer', 'boar'], jungle: ['boar', 'deer'], swamp: ['boar'] }[s.biome] || ISLE_BEASTS[s.island] || ['rabbit', 'deer', 'rabbit'];
     this.addCreature(new Creature(this, opts[Math.floor(Math.random() * opts.length)], x, y, z, Math.floor(Math.random() * 3)));
   }
 
@@ -5203,10 +5271,16 @@ export class Game {
       }
     }
     // Wisps: sparks of cold light falling away from them.
+    // (Cinderlings: embers drifting up off them; gloam moths: a dust of
+    // light shaken from their wings.)
     for (const c of this.creatures) {
-      if (c.species !== 'wisp' || c.dead || Math.abs(c.x - this.player.x) > 20 || Math.abs(c.z - this.player.z) > 20 || Math.random() > 0.35) continue;
+      const sp = c.species;
+      if ((sp !== 'wisp' && sp !== 'cinderling' && sp !== 'gloam_moth') || c.dead || Math.abs(c.x - this.player.x) > 20 || Math.abs(c.z - this.player.z) > 20 || Math.random() > 0.35) continue;
       const rp = c.renderPos();
-      r.emit(rp.x + 0.3 + Math.random() * 0.4, rp.y + 1.2, rp.z + 0.5, { n: 1, color: ['#80d0ff', '#c0f0ff', '#ffffff'], up: -4, speed: 6, gravity: 6, life: 0.9, glow: true });
+      if (sp === 'cinderling') r.emit(rp.x + 0.3 + Math.random() * 0.4, rp.y + 1.4, rp.z + 0.5, { n: 1, color: ['#ff8030', '#ffd060', '#ff4020'], up: 10, speed: 6, gravity: -8, life: 0.8, glow: true });
+      else if (sp === 'gloam_moth') {
+        if (Math.random() < 0.5) r.emit(rp.x + 0.3 + Math.random() * 0.4, rp.y + 1.1, rp.z + 0.5, { n: 1, color: ['#fff0a0', '#e8d8a0'], up: -2, speed: 4, gravity: 4, life: 1.1, glow: true });
+      } else r.emit(rp.x + 0.3 + Math.random() * 0.4, rp.y + 1.2, rp.z + 0.5, { n: 1, color: ['#80d0ff', '#c0f0ff', '#ffffff'], up: -4, speed: 6, gravity: 6, life: 0.9, glow: true });
     }
     // Portals alight: motes of violet drifting up out of the arch.
     for (const q of Object.values(this.sim.portals.list)) {
@@ -5257,7 +5331,7 @@ export class Game {
     for (const r of this.world.regions.values()) if (r.modified) regions.push(r.serialize());
     const p = this.player;
     return {
-      v: 2,
+      v: SAVE_VERSION,
       seed: this.seed,
       minute: this.minute,
       day: this.day,
@@ -5270,7 +5344,7 @@ export class Game {
       relics: serializeRelics(this),
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
-      explored: Array.from(this.world.ow.explored),
+      explored: this.world.ow.packExplored(),
       stats: this.stats,
       wanted: [...this.wanted],
       crops: this.crops.serialize(),
@@ -5290,7 +5364,7 @@ export class Game {
     this.day = data.day;
     for (const r of data.regions || []) this.world.saved.set(this.world.regionKey(r.rx, r.rz), r);
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
-    if (data.explored) this.world.ow.explored.set(data.explored);
+    if (data.explored) this.world.ow.unpackExplored(data.explored);
     if (data.stats) this.stats = data.stats;
     if (data.cheats) {
       this.cheats = { ...this.cheats, mapTeleport: !!data.cheats.mapTeleport, god: !!data.cheats.god };

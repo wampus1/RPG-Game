@@ -821,8 +821,9 @@ export function buildFloor(rec, n) {
 
 function pickMob(ctx) {
   const { rng, T } = ctx;
-  // (A Kavorent floor keeps its own: see KAV_KINDS.)
-  const mobs = ctx.mobs || T.mobs;
+  // (A Kavorent floor keeps its own: see KAV_KINDS. None kept out: see
+  // SPAWNS_OFF.)
+  const mobs = (ctx.mobs || T.mobs).filter(([k]) => !SPAWNS_OFF.has(k));
   let total = 0;
   for (const [, w] of mobs) total += w;
   let v = rng.float(0, total);
@@ -951,9 +952,14 @@ function floorCharacter(ctx) {
   }
 }
 
+// Kinds kept out of the old places for now (the holdout's coward: far too
+// good at keeping out of reach while the rest of them come at you).
+export const SPAWNS_OFF = new Set(['coward']);
+
 // Someone placed in a room (at a free floor tile in it).
 function spawnIn(ctx, r, species, n = 1, opts = {}) {
   const { rng, plan, out, b } = ctx;
+  if (SPAWNS_OFF.has(species)) return;
   for (let i = 0; i < n; i++) {
     for (let t = 0; t < 20; t++) {
       const x = rng.int(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 1));

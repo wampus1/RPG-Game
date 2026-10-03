@@ -4,7 +4,7 @@ import { CRT } from './render/crt.js';
 import { Renderer } from './render/renderer.js';
 import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
-import { Game } from './game/game.js';
+import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
 import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow } from './ui/windows.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
@@ -98,6 +98,12 @@ function loadFrom(id) {
   store.load(id).then((data) => {
     if (!data) {
       ui.msg('That save is empty.', '#ff5a50');
+      return;
+    }
+    // (From before the Dagoni Islands: a world of one island, made a
+    // different way; it can't be put into this one.)
+    if (!(data.v >= SAVE_VERSION)) {
+      ui.msg('That save is from an older world (before the Dagoni Islands) and can\'t be loaded into this one.', '#ff5a50');
       return;
     }
     startGame(null, data, id);

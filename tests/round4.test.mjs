@@ -53,7 +53,7 @@ test('crops grow through stages over days; unripe gives seeds, a hoe gives more'
 });
 
 test('farmers harvest ripe fields and sow them again', () => {
-  const { game, input, L, w } = start(8, 9 * 60);
+  const { game, input, L, w } = start(12345, 9 * 60);
   const count = () => {
     let ripe = 0;
     let young = 0;
@@ -72,7 +72,7 @@ test('farmers harvest ripe fields and sow them again', () => {
 
 test('wolves are weaker; trappers fight beasts with a blade and set their own snares', () => {
   assert.ok(SPECIES.wolf.hp <= 9 && SPECIES.wolf.dmg <= 2);
-  const { game, a, w } = start(12345, 10 * 60);
+  const { game, a, w } = start(8, 10 * 60);
   const tr = a.npcs.find((n) => n.rec.job === 'trapper');
   const wolf = new Creature(game, 'wolf', tr.x + 1, tr.y, tr.z);
   game.addCreature(wolf);

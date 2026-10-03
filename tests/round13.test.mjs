@@ -112,7 +112,7 @@ test('beasts near you keep pace when time races; far-off ones idle on', () => {
 });
 
 test('nomads camp outside town in tents while they decide, and strike camp when they go', () => {
-  const { game, input, L } = start();
+  const { game, input, L } = start(8);
   let b = null;
   for (let d = 0; d < 400 && !b; d++) b = game.sim.nomads.arrive(L, game.day + d, new RNG(d));
   b.arrive = game.sim.abs - 1;

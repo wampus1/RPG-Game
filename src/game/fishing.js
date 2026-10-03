@@ -3,7 +3,8 @@
 // button) to pull your catch zone along the bar and keep the fish inside it
 // until the line is in; let the fish run too long and it slips the hook.
 //   What bites depends on the water (fresh or salt), the weather and the
-//   hour, and on how practised you are (see mastery.js): a novice catches
+//   hour, the island (Kharos and Myrrow have fish of their own), and on how
+//   practised you are (see mastery.js): a novice catches
 //   perch and mackerel; an old hand hooks pike, eels, swordfish, and now and
 //   then a golden carp. Each kind fights its own way: a perch drifts, a carp
 //   is heavy and pulls your zone back, a pike rests then darts, an eel
@@ -30,6 +31,14 @@ export const KINDS = {
   eel: { name: 'Eel', w: 9, water: 'either', move: 'wave', fight: 1.3, n: 1, rank: 3, body: '#4a4a32', belly: '#8a8a5a', fin: '#3a3a26', len: 15, eel: true, rain: 2.5 },
   swordfish: { name: 'Swordfish', w: 5, water: 'salt', move: 'dart', fight: 1.7, n: 3, rank: 5, body: '#4a5a8a', belly: '#c8d0e8', fin: '#2a3a6a', len: 16, sword: true },
   golden: { name: 'Golden Carp', w: 1.5, water: 'either', move: 'erratic', fight: 1.9, n: 3, rank: 4, body: '#f0c030', belly: '#fff0a0', fin: '#e08020', len: 11, gold: true, coins: 8 },
+  // Only off the other Dagoni Islands (`isle`): round Kharos, an eel that
+  // keeps to the warm water by the vents and a black-scaled snapper; in
+  // Myrrow's dark pools and channels, a carp grey as the mist and a little
+  // fish that glows.
+  ember_eel: { name: 'Ember Eel', w: 12, water: 'either', move: 'wave', fight: 1.35, n: 2, rank: 2, body: '#8a3a1a', belly: '#f0a040', fin: '#5a2010', len: 15, eel: true, isle: 'kharos' },
+  black_snapper: { name: 'Black Snapper', w: 18, water: 'salt', move: 'dart', fight: 1.3, n: 2, rank: 1, body: '#2a2630', belly: '#8a8090', fin: '#c8441a', len: 12, isle: 'kharos' },
+  mist_carp: { name: 'Mist Carp', w: 22, water: 'fresh', move: 'heavy', fight: 1.15, n: 1, rank: 1, body: '#8a9498', belly: '#e0e4e0', fin: '#6a7478', len: 11, isle: 'myrrow' },
+  glowfin: { name: 'Glowfin', w: 8, water: 'either', move: 'erratic', fight: 1.45, n: 2, rank: 3, body: '#4a8a8a', belly: '#c0f8f0', fin: '#9ae0e0', len: 9, isle: 'myrrow', stripe: '#e8fff8' },
   // (Not fish.)
   string: { name: 'Tangle of String', w: 8, water: 'either', move: 'sink', fight: 0.4, item: 'string', rank: 1 },
   bone: { name: 'Old Bone', w: 7, water: 'either', move: 'sink', fight: 0.4, item: 'bone', rank: 1 },
@@ -41,17 +50,18 @@ export const KINDS = {
 // rarer kinds more often as you rise; the lucky pull up coins and gems
 // twice as often).
 export function rollCatch(rand, o = {}) {
-  const { lucky = false, rank = 1, salt = false, rain = false, night = false } = o;
+  const { lucky = false, rank = 1, salt = false, rain = false, night = false, isle = null } = o;
   const list = [];
   for (const [k, c] of Object.entries(KINDS)) {
     if (c.rank > rank) continue;
+    if (c.isle && c.isle !== isle) continue;
     if (c.water === 'fresh' && salt) continue;
     if (c.water === 'salt' && !salt) continue;
     let w = c.w;
     if (c.rank > 1) w *= 1 + 0.25 * (rank - c.rank);
     if ((k === 'coin' || k === 'gem') && lucky) w *= 2;
     if (c.rain && rain) w *= c.rain;
-    if (night && (k === 'eel' || k === 'pike')) w *= 1.6;
+    if (night && (k === 'eel' || k === 'pike' || k === 'glowfin')) w *= 1.6;
     list.push([k, w]);
   }
   let r = rand() * list.reduce((n, [, w]) => n + w, 0);
@@ -110,7 +120,9 @@ export function hook(game, rand = Math.random) {
     return false;
   }
   const rank = mastery(game, 'fishing').rank;
-  const kind = rollCatch(rand, { lucky: heroHas(game.hero, 'lucky'), rank, salt: saltAt(game), rain: game.weather?.kind === 'rain', night: game.minute < 300 || game.minute >= 1260 });
+  const ow = game.world.ow;
+  const isle = ow.islandAt ? ow.islandAt(game.player.x, game.player.z) || ow.islandAt(f.x, f.z) : null;
+  const kind = rollCatch(rand, { lucky: heroHas(game.hero, 'lucky'), rank, salt: saltAt(game), rain: game.weather?.kind === 'rain', night: game.minute < 300 || game.minute >= 1260, isle });
   const K = KINDS[kind];
   // (How big: the bigger, the harder it fights, and the more it lands.)
   const size = K.item ? 1 : 0.75 + rand() * (0.45 + 0.05 * rank);

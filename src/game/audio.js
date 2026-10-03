@@ -184,6 +184,8 @@ export class Audio {
       case 'moon': this.tone(880, 0.5, 'sine', 0.06, 220); this.tone(1320, 0.6, 'sine', 0.04, 330, 0.08); this.tone(1760, 0.5, 'sine', 0.025, 0, 0.16); break;
       case 'bleed': this.noise(0.1, 0.12, 1300); this.tone(240, 0.12, 'sine', 0.05, -120, 0.02); break;
       case 'thunder': this.noise(0.9, 0.3, 160); this.noise(0.4, 0.18, 900, 0.02); this.tone(60, 0.8, 'sine', 0.2, -20); break;
+      // The mountain going up: a crack, then a long deep roar that rolls on.
+      case 'eruption': this.noise(0.5, 0.4, 220); this.noise(3.2, 0.32, 110, 0.15); this.noise(2.4, 0.14, 600, 0.3); this.tone(40, 3.5, 'sine', 0.3, -12); this.tone(55, 2.8, 'sawtooth', 0.05, -20, 0.2); break;
       // Underground: a lever, a gate grinding, a trap's click and its dart,
       // stone crumbling away, something heavy walking, a hum of old power,
       // a lift going down, runes waking, a beam of light.

@@ -35,8 +35,10 @@ const COST = [0, 80, 140, 220, 320, 450, 600];
 // for it; its name; and exactly what it does. Options: `also` (needed too,
 // from another branch: not drawn on the tree), `excl` (a choice: learning
 // one step of the group bars the others for good), `big` (a great work).
+// `isles`: only the peoples of those of the Dagoni Islands can learn it
+// (each island's tree is a little different: see ISLE_TECHS).
 const T = (branch, tier, side, req, icon, name, desc, o = {}) => ({
-  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier],
+  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier], isles: o.isles || null,
 });
 export const TECHS = {
   // Economy
@@ -91,6 +93,19 @@ export const TECHS = {
   granaries: T('engineering', 4, -1, ['mills'], 'barrel', 'Granaries', 'A famine takes 6 hungry days to set in (not 4), and hunger stirs half the unrest.', { excl: 'harvest' }),
   fortress: T('engineering', 5, -0.75, ['cranes', ['aqueducts', 'granaries']], 'cobblestone', 'Fortification', 'Towers and gatehouses: a walled town adds +2 defence against raids (on top of its walls\' +1.5), and capture is a further 25% less likely.'),
   portals: T('engineering', 6, 1, ['lodestones'], 'portal', 'Portals', 'Each town of the realm raises a portal on its square. Step through to any other portal of the same realm; merchants and soldiers use them too. A town taken by another realm is cut off: its portal goes dark.', { big: true }),
+  // --- the islands' own -------------------------------------------------
+  // Thessa: the old island of roads and fields.
+  royal_roads: T('economy', 2, 0, ['bookkeeping'], 'cobblestone', 'Royal Roads', 'Travelling merchants come to town 40% more often (on top of Market Days).', { isles: ['thessa'] }),
+  crop_rotation: T('engineering', 2, 0.25, ['masonry'], 'wheat', 'Crop Rotation', 'Farmers bring in 30% more from the fields.', { isles: ['thessa'] }),
+  horse_lords: T('warfare', 2, 0, ['drill'], 'saddle', 'Horse Lords', 'The watch rides out against raiders even with no horse in the stable (+20% defence), and the realm\'s raiders are 10% stronger.', { isles: ['thessa'] }),
+  // Kharos: the Ashborn under the mountain.
+  sulphur_trade: T('economy', 2, 0, ['bookkeeping'], 'sulfur', 'Sulphur Trade', 'Each week every town sells sulphur abroad: ¤12 to its treasury (¤20 for a port).', { isles: ['kharos'] }),
+  obsidian_edge: T('warfare', 2, 0, ['drill'], 'obsidian_blade', 'Obsidian Edge', 'Smiths knap black glass: they sell obsidian blades (6 damage, quick), and every guard\'s sword is one; armies are 6% stronger.', { isles: ['kharos'] }),
+  ash_masks: T('society', 2, 0, ['codex'], 'cloth', 'Ash Masks', 'When the mountain wakes, the realm\'s folk mask their faces and shelter in time: an eruption kills, burns and starves 60% less in its towns.', { isles: ['kharos'] }),
+  // Myrrow: the Mirefolk and the Stiltfolk.
+  outriggers: T('economy', 2, 0, ['bookkeeping'], 'raft', 'Outrigger Rafts', 'Rafts with outriggers: the realm\'s merchants and soldiers cross the sea to the other islands 40% faster, and its raids from the sea are 15% stronger.', { isles: ['myrrow'] }),
+  fog_wardens: T('warfare', 2, 0, ['drill'], 'lantern', 'Fog Wardens', 'The watch knows the mist: the realm\'s towns defend 25% better against raids.', { isles: ['myrrow'] }),
+  spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy, and townsfolk wake 2 health better every morning.', { isles: ['myrrow'] }),
 };
 
 export const TECH_IDS = Object.keys(TECHS);
@@ -100,6 +115,15 @@ export const reqIds = (id) => TECHS[id].req.flat();
 // The other steps of the same choice (learning this bars them).
 export const rivalsOf = (id) => (TECHS[id] && TECHS[id].excl ? TECH_IDS.filter((k) => k !== id && TECHS[k].excl === TECHS[id].excl) : []);
 const met = (done, r) => (Array.isArray(r) ? r.some((k) => done.includes(k)) : done.includes(r));
+// Which of the Dagoni Islands a realm or town is on (its capital's, for a
+// realm), and may it learn this step? (Each island has a few of its own.)
+export function isleOf(s) {
+  if (!s) return null;
+  if (s.civ) return s.civ.island || null;
+  return s.island || null;
+}
+export const offered = (s, id) => !TECHS[id].isles || TECHS[id].isles.includes(isleOf(s));
+export const ISLE_TECHS = TECH_IDS.filter((k) => TECHS[k].isles);
 
 // What a realm leans toward knowing first, by what it holds dear.
 const LEAN = {
@@ -115,6 +139,7 @@ const STARTS = { martial: 'drill', mercantile: 'bookkeeping', scholarly: 'codex'
 const CULTURE_LEAN = {
   high: { engineering: 1.5, warfare: 1 }, north: { warfare: 1.5, engineering: 0.5 }, sun: { economy: 1.5, society: 0.5 },
   wild: { society: 1.2, engineering: 0.5 }, vale: { engineering: 1, economy: 0.8 },
+  ember: { warfare: 1.2, engineering: 1 }, mist: { society: 1.5, engineering: 0.3 }, tide: { economy: 1.4, warfare: 0.5 },
 };
 // Which side of a choice suits whom: a realm's values and people, and its
 // ruler's temper (`kind`: the kindly lean that way; `hard`: the harsh).
@@ -139,7 +164,7 @@ const FIT = {
 // northerners, and any people that holds arms or craft dear. (Everyone
 // else lights their first forge once they've learned how.)
 const SMITHS = new Set(['martial', 'artisan', 'mercantile']);
-const SMITH_STYLES = new Set(['high', 'north']);
+const SMITH_STYLES = new Set(['high', 'north', 'ember']);
 
 // What can't be had without knowing something first.
 export const GATES = {
@@ -211,7 +236,7 @@ export class Tech {
     for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
     for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
     while (st.done.length < want) {
-      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && this.ready(st, k));
+      const open = TECH_IDS.filter((k) => !st.done.includes(k) && TECHS[k].tier <= 3 && this.ready(st, k) && offered(civ, k));
       if (!open.length) break;
       st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[TECHS[k].branch] || 0) * 1.5) * this.fit(civ, null, k) / TECHS[k].tier])));
     }
@@ -291,7 +316,7 @@ export class Tech {
   available(s) {
     const st = this.stateOf(s);
     if (!st) return [];
-    return TECH_IDS.filter((k) => !st.done.includes(k) && this.ready(st, k));
+    return TECH_IDS.filter((k) => !st.done.includes(k) && this.ready(st, k) && offered(s, k));
   }
 
   // Who decides: the realm's ruler, or a free town's mayor.
@@ -492,8 +517,10 @@ export class Tech {
       eq.items.push({ item: 'bow', count: 1 });
       (r.inv ||= []).push({ item: 'arrow', count: 12 });
     }
-    // Steel for the swordsmen (an axe or a mace stays an axe or a mace).
-    if (metal && this.has(s, 'steel') && (eq.tool === 'iron_sword' || eq.tool === 'stone_sword')) swap(eq.tool, 'steel_sword');
+    // Steel for the swordsmen (an axe or a mace stays an axe or a mace);
+    // black glass for the Ashborn's (before they have steel).
+    if (metal && this.has(s, 'steel') && (eq.tool === 'iron_sword' || eq.tool === 'stone_sword' || eq.tool === 'obsidian_blade')) swap(eq.tool, 'steel_sword');
+    else if (this.has(s, 'obsidian_edge') && ['iron_sword', 'stone_sword', 'short_sword'].includes(eq.tool)) swap(eq.tool, 'obsidian_blade');
     // How the watch fights: a shield on every arm (and a weapon for one
     // hand), or a great weapon in both.
     if (this.has(s, 'shieldwall')) {
@@ -630,6 +657,10 @@ export class Tech {
       L.econ.treasury += coin;
       out.minted = coin;
     }
+    // Weekly: the Ashborn's sulphur sold abroad.
+    if (day % 7 === 0 && this.has(s, 'sulphur_trade')) L.econ.treasury += s.coast || s.river ? 20 : 12;
+    // Spore lore: the herbalists' brews, every morning.
+    if (this.has(s, 'spore_lore')) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + 2);
     // A night in a proper bed: townsfolk wake hardier (hospitality).
     if (this.has(s, 'hospitality')) for (const r of people) if (r.home !== null && r.home !== undefined) r.blue = { day, hp: 2 };
     // Guards keep up with what the realm knows.

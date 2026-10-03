@@ -30,6 +30,9 @@ const CHIEFS = {
   sun: ['Prince Amenhet', 'the Satrap Kurash', 'Queen Nefer', 'the Vizier Ostanes'],
   wild: ['the Jaguar-Chief Ixtal', 'Mother Ayo', 'the Rain-King Tumak', 'Feather-Crowned Itza'],
   high: ['Thane Dorrin Stonefist', 'King Balgrim', 'Old Helga Deepdelver', 'the Forge-Lord Karrak'],
+  ember: ['the Kiln-King Azkar', 'Pyrrha Ashcrown', 'the Vigil-Lord Tephros', 'Old Cendra Glassblood'],
+  mist: ['the Hollow King', 'Mother Gloamwyn', 'the Lantern-Lord Heth', 'Sorrel of the Fog'],
+  tide: ['the Pearl-Queen Kailani', 'Makoa Sharktooth', 'the Tide-Chief Nalu', 'Old Reva Netmender'],
 };
 const BANDITS = ['One-Eye Garrick', 'Red Moll', 'Black Tam', 'Sefa the Knife', 'Bran Coldhand', 'the Brothers Vash', 'Long Ulla', 'Mad Jory'];
 const SPIRE_NAMES = {
@@ -38,6 +41,9 @@ const SPIRE_NAMES = {
   sun: ['the Pillar of the Star-Kings', 'the Needle of Heaven', 'the Djinn\'s Tower'],
   wild: ['the Tree of Iron', 'the Sky-Serpent\'s Bone', 'the Spirit Spire'],
   high: ['the Deep Ones\' Chimney', 'the Black Shaft', 'the Hammer of the Old Ones'],
+  ember: ['the Mountain\'s Thorn', 'the Cold Pillar', 'the Sleeper\'s Nail'],
+  mist: ['the Lantern of the Dead', 'the Grey Needle', 'the Hollow King\'s Staff'],
+  tide: ['the Storm-Caller\'s Mast', 'the Drowned Spire', 'the Turtle\'s Spike'],
 };
 const ORE = ['silver', 'iron', 'copper', 'gold', 'tin'];
 

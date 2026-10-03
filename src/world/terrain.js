@@ -8,6 +8,8 @@ import { BIOMES } from './biomes.js';
 
 const WARM = new Set(['desert', 'savanna', 'jungle', 'beach', 'plains']);
 const COLD = new Set(['taiga', 'tundra', 'mountain']);
+// (Kharos's fire biomes: no snow on them, black sand on their banks.)
+const HOT = new Set(['ashland', 'cinderwood', 'geyser', 'volcano']);
 const MAX_H = WORLD_Y - 3;
 
 export class Terrain {
@@ -83,6 +85,9 @@ export class Terrain {
     out.flat = 0;
     out.wet = 99;
     out.deep = false;
+    out.lava = false;
+    out.hot = false;
+    out.cooled = null;
 
     // --- settlement flattening weight
     for (const s of ctx.setts) {
@@ -118,6 +123,33 @@ export class Terrain {
     const hn = fbm(this.nHill, x / 46, z / 46, 3) * 0.5 + 0.5;
     let h = SURFACE + Math.floor(hn * (amp + 0.999));
     let mountainH = 0;
+    // The mountain on Kharos: a cone up to a crater full of lava, with old
+    // flows down its sides (fresh ones after it's erupted: see volcano.js).
+    let lava = false;
+    let lavaTop = -1;
+    const V = ow.volcano;
+    const vd = V ? Math.hypot(x - V.x, (z - V.z) * V.squash) / V.r : 9;
+    if (biome === 'volcano' && vd < 1) {
+      if (vd < V.crater) {
+        h = SURFACE + 4 + (vd > V.crater * 0.8 ? 2 : 0);
+        if (vd < V.crater * 0.8) {
+          lava = true;
+          lavaTop = SURFACE + 5;
+        }
+      } else {
+        const cone = Math.pow(clamp((1 - vd) / (1 - V.crater * 1.3), 0, 1), 0.85);
+        h = Math.max(h, SURFACE + Math.floor(cone * 8.4 + hn * 0.8));
+      }
+    }
+    // (Its flows run on down onto the ashlands round its foot.)
+    if (V && vd >= V.crater && vd < 1.7 && !lava && out.flat === 0) {
+      const flow = ow.lavaAt(x, z, vd);
+      if (flow === 'lava') {
+        lava = true;
+        lavaTop = h;
+        h -= 1;
+      } else if (flow) out.cooled = flow;
+    }
     if (biome === 'mountain') {
       const m = smoothstep(0, 42, bi.edge);
       const rn = ridged(this.nMount, x / 64, z / 64, 4);
@@ -155,6 +187,17 @@ export class Terrain {
         if (lv < 1.09) bank = true;
       }
     }
+    if (lava && !water) {
+      h = clamp(h, 1, MAX_H);
+      out.biome = biome;
+      out.h = h;
+      out.water = Math.min(lavaTop, MAX_H);
+      out.lava = true;
+      out.wet = 99;
+      out.surf = B.basalt;
+      out.sub = B.basalt;
+      return out;
+    }
     const lowFlat = out.flat < 0.4;
     if (!water && lowFlat && h === SURFACE) {
       if (bdef.pools) {
@@ -183,8 +226,10 @@ export class Terrain {
       out.deep = depth > 1;
       out.wet = 0;
       const bn = this.nBed(x / 6, z / 6);
-      out.surf = biome === 'swamp' ? B.mud : bn > 0.45 ? B.gravel : bn < -0.5 ? B.clay : B.sand;
+      out.surf = biome === 'swamp' || biome === 'mangrove' ? B.mud : HOT.has(biome) ? (bn > 0 ? B.basalt : B.cinder) : bn > 0.45 ? B.gravel : bn < -0.5 ? B.clay : B.sand;
       out.sub = B.dirt;
+      // (A hot spring: it steams.)
+      if (bdef.hot) out.hot = true;
       return out;
     }
 
@@ -205,10 +250,13 @@ export class Terrain {
       if (mountainH <= 1 && h <= SURFACE + 1) surf = BIOMES[bi.biome2].surface === B.sand ? B.sand : B.grass_taiga;
       sub = B.stone;
     }
-    if (bank) surf = COLD.has(biome) ? B.gravel : biome === 'swamp' ? B.mud : WARM.has(biome) ? B.sand : surf;
-    // Snow caps: patchy on the upper slopes, solid on the peaks.
+    if (bank) surf = COLD.has(biome) ? B.gravel : biome === 'swamp' || biome === 'mangrove' ? B.mud : HOT.has(biome) ? B.cinder : WARM.has(biome) ? B.sand : surf;
+    // A flow that's cooled: black rock, glassy where it cooled fastest.
+    if (out.cooled) surf = out.cooled === 'glass' ? B.obsidian : B.basalt;
+    // Snow caps: patchy on the upper slopes, solid on the peaks (but never
+    // on the fire island's hot ground).
     const snowN = this.nPatch(x / 9 + 700, z / 9) * 0.5 + 0.5;
-    if (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && COLD.has(biome) && snowN > 0.3)) surf = B.snow;
+    if (!HOT.has(biome) && (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && COLD.has(biome) && snowN > 0.3))) surf = B.snow;
     if (surf === B.ice) sub = B.dirt;
     out.surf = surf;
     out.sub = sub;

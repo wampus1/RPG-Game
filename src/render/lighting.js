@@ -23,6 +23,12 @@ export function skyLight(minute) {
   return night;
 }
 
+// The sky through the ash of the mountain on Kharos (`a`: how thick).
+const ASH = [0.42, 0.34, 0.3];
+export function ashSky(sky, a) {
+  return sky.map((v, i) => Math.min(v, v + (ASH[i] * Math.min(1, v + 0.3) - v) * a));
+}
+
 // Below ground there's no sky at all: what you see is what's lit.
 const DARK = [0.075, 0.07, 0.095];
 const DARK_KAV = [0.06, 0.075, 0.11];
@@ -97,7 +103,10 @@ export class Lighting {
     // crypt's cold blue, a holdout's smoky red.)
     // (Each of a Kavorent ruin's floors is lit its own colour.)
     const pal = below ? game.dungeon.pal : null;
-    const sky = below ? (pal?.dark || game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
+    let sky = below ? (pal?.dark || game.dungeon.T?.dark || (game.dungeon.kav ? DARK_KAV : DARK)) : skyLight(game.minute);
+    // (The mountain's ash over the sun: a brown dusk at noon.)
+    const ash = !below && game.ashLevel ? game.ashLevel() : 0;
+    if (ash > 0) sky = ashSky(sky, ash);
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the

@@ -71,6 +71,10 @@ const darken = (hex) => {
   return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
 };
 const wet = (s) => !!(s.coast || s.river || s.lake);
+// On the same one of the Dagoni Islands? And how far (in map squares) a
+// raft will go from one island's coast to another's.
+const sameIsle = (s, o) => !s.island || !o.island || s.island === o.island;
+export const OVERSEA = 70;
 export const centreOf = (s) => ({ x: Math.floor((s.cx + (s.cw || 1) / 2) * REGION_W), z: Math.floor((s.cz + (s.cd || 1) / 2) * REGION_D) });
 // When a battle's due, said as folk would say it.
 function whenText(at, now) {
@@ -264,7 +268,8 @@ export class War {
       if (!this.laid(s)) continue;
       let best = null;
       for (const o of this.realms.members(b)) {
-        if (!this.laid(o)) continue;
+        // (Nobody rides over the sea: another island is reached by raft.)
+        if (!this.laid(o) || !sameIsle(s, o)) continue;
         const d = Math.hypot(s.cx - o.cx, s.cz - o.cz);
         if (d <= max && (!best || d < best.d)) best = { o, d };
       }
@@ -277,7 +282,9 @@ export class War {
 
   // Towns of `a` on the water (the sea, a lake, a river) with a town of
   // `b` on the water beyond reach by land but within `max` squares:
-  // raiders can go by raft.
+  // raiders can go by raft. (To another of the Dagoni Islands, from coast
+  // to coast, as far as the sea between them: rafts can cross that,
+  // just not the storm round them all.)
   seaPairs(a, b, max) {
     const out = [];
     for (const s of this.realms.members(a)) {
@@ -286,7 +293,10 @@ export class War {
       for (const o of this.realms.members(b)) {
         if (!wet(o) || !this.laid(o)) continue;
         const d = Math.hypot(s.cx - o.cx, s.cz - o.cz);
-        if (d > 10 && d <= max && (!best || d < best.d)) best = { o, d };
+        const over = !sameIsle(s, o);
+        if (over && !(s.coast && o.coast && d <= OVERSEA)) continue;
+        if (!over && !(d > 10 && d <= max)) continue;
+        if (!best || d < best.d) best = { o, d };
       }
       if (best) out.push({ s, o: best.o, d: best.d });
     }
@@ -378,8 +388,9 @@ export class War {
     d += advs.length * 1.5;
     if (L.walled) d += 1.5 + (tech.has(s, 'fortress') ? 2 : 0);
     if (this.ridesOut(L)) d *= 1.2;
-    // (A shield wall at the gate.)
+    // (A shield wall at the gate; wardens who know the mist.)
     if (tech.has(s, 'shieldwall')) d *= 1.15;
+    if (tech.has(s, 'fog_wardens')) d *= 1.25;
     return d;
   }
 
@@ -387,7 +398,7 @@ export class War {
   // realm that has learned to fight mounted.)
   ridesOut(L) {
     const st = this.sim.stables.of(L);
-    return st.horses - st.horsesOut > 0 || this.sim.tech.has(L.settlement, 'cavalry');
+    return st.horses - st.horsesOut > 0 || this.sim.tech.has(L.settlement, 'cavalry') || this.sim.tech.has(L.settlement, 'horse_lords');
   }
 
   resolveRaid(raid, TL, FL, rng) {
@@ -395,7 +406,8 @@ export class War {
     const a = this.civ(raid.civ);
     const party = this.partyRecs(raid);
     const atk = party.reduce((n, r) => n + this.soldierPower(r, FL.settlement), 0) * (this.sim.tech.has(FL.settlement, 'cavalry') ? 1.1 : 1)
-      * (this.sim.tech.has(FL.settlement, 'greatweapons') ? 1.15 : 1);
+      * (this.sim.tech.has(FL.settlement, 'greatweapons') ? 1.15 : 1) * (this.sim.tech.has(FL.settlement, 'horse_lords') ? 1.1 : 1)
+      * (raid.naval && this.sim.tech.has(FL.settlement, 'outriggers') ? 1.15 : 1);
     const def = this.defence(TL);
     const win = rng.chance(atk / (atk + def * 1.1 + 0.5));
     const lost = [];
@@ -627,7 +639,8 @@ export class War {
     const from = centreOf(via ? via.s : atk);
     const march = clamp(Math.round(Math.hypot(site.x - from.x, site.z - from.z) * 0.7), 40, 600);
     // A long way off, over the water: the attackers come by raft.
-    const naval = !via && best.d > 14 && wet(atk) && wet(def);
+    // (To another island, always by raft.)
+    const naval = !via && (!sameIsle(atk, def) || (best.d > 14 && wet(atk) && wet(def)));
     w.plan = { at, depart: Math.max(now, at - march), site, biome, river: !!(cell && cell.river), name, attacker, atk: atk.id, def: def.id, ca: best.ca.id, cb: best.cb.id, naval, via: via ? via.s.id : undefined };
     const when = whenText(at, now);
     const text = naval ? `The ${plain(ac)} have put an army on rafts, bound for ${def.name}. They will come ashore and meet its defenders ${when}.`
@@ -988,6 +1001,7 @@ export class War {
     const tech = this.sim.tech;
     const s = this.realms.capitalOf(civ);
     if (s && tech.has(s, 'cavalry')) n *= 1.1;
+    if (s && tech.has(s, 'obsidian_edge')) n *= 1.06;
     if (plan) {
       // How the realm fights: shields locked to hold, great weapons to
       // break through.

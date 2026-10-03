@@ -412,9 +412,12 @@ test('a ruler with a dream chases it: a merchant prince builds markets, a warlor
 test('faiths travel the roads, missionaries preach, and the conquered keep (or are made to drop) their gods', () => {
   const game = world();
   const Rl = game.sim.religion;
-  const [a, b] = game.world.ow.civs;
+  // (A realm with towns enough to lose two.)
+  const outer = (c) => laid(game).filter((L) => L.settlement.civ === c && !game.sim.realms.isCapital(L.settlement));
+  const b = game.world.ow.civs.find((c) => outer(c).length >= 2);
+  const a = game.world.ow.civs.find((c) => c !== b && realmFaith(c).key !== realmFaith(b).key);
   const fa = realmFaith(a);
-  const T = laid(game).find((L) => L.settlement.civ === b && !game.sim.realms.isCapital(L.settlement));
+  const T = outer(b)[0];
   assert.ok(T);
   // Missionaries, again and again.
   for (let i = 0; i < 8; i++) Rl.pullKey(T, fa.key, 0.35);

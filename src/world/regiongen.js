@@ -10,6 +10,9 @@ import { stampSites } from './sites.js';
 
 const GREEN = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.mud, B.dirt]);
 const SANDY = new Set([B.sand, B.sandstone, B.gravel]);
+// (The other islands' ground, that things grow in too.)
+const ISLE_GROUND = new Set([B.ash, B.cinder, B.scorched, B.moss, B.peat, B.mycelium, B.basalt, B.sulfur_crust]);
+const NO_REEDS = new Set(['tundra', 'mountain', 'taiga', 'ashland', 'cinderwood', 'geyser', 'volcano']);
 
 function pickWeighted(list, r) {
   let total = 0;
@@ -52,7 +55,7 @@ export function generateRegion(world, rx, rz) {
         if (id === B.stone) id = oreAt(x, y, z, seed);
         region.set(lx, y, lz, id);
       }
-      if (c.water >= 0) for (let y = h + 1; y <= c.water; y++) region.set(lx, y, lz, B.water);
+      if (c.water >= 0) for (let y = h + 1; y <= c.water; y++) region.set(lx, y, lz, c.lava ? B.lava : B.water);
     }
   }
 
@@ -72,7 +75,8 @@ export function generateRegion(world, rx, rz) {
     for (let ex = 0; ex < EW; ex++) {
       const c = cols[ez * EW + ex];
       const bd = BIOMES[c.biome];
-      if (!bd.trees.length || c.water >= 0 || c.flat > 0.02) continue;
+      // (Mangroves stand in the shallows; nothing else does.)
+      if (!bd.trees.length || (c.water >= 0 && !(bd.wetTrees && !c.deep && !c.lava)) || c.flat > 0.02) continue;
       const x = c.x;
       const z = c.z;
       const S = bd.treeSpacing;
@@ -101,7 +105,7 @@ export function generateRegion(world, rx, rz) {
         const cur = region.get(lx, wy, lz);
         const cd = BLOCKS[cur];
         const isTrunk = BLOCKS[id].opaque;
-        if (cur === B.air || (cd.replaceable && !cd.liquid) || (isTrunk && cd.name.startsWith('leaves'))) {
+        if (cur === B.air || (cd.replaceable && !cd.liquid) || (isTrunk && cd.name.startsWith('leaves')) || (isTrunk && cur === B.water && bd.wetTrees)) {
           region.set(lx, wy, lz, id);
         }
       }
@@ -117,7 +121,7 @@ export function generateRegion(world, rx, rz) {
       const bd = BIOMES[c.biome];
       const r = hashf(x, z, seed, 13);
       if (c.water >= 0) {
-        if (!c.deep && c.water + 1 < WORLD_Y && (c.biome === 'swamp' || c.biome === 'forest' || c.biome === 'jungle') && r < 0.07) {
+        if (!c.deep && !c.lava && c.water + 1 < WORLD_Y && (c.biome === 'swamp' || c.biome === 'forest' || c.biome === 'jungle' || c.biome === 'mangrove' || c.biome === 'fungal') && r < 0.07) {
           region.set(lx, c.water + 1, lz, B.lily_pad);
         }
         continue;
@@ -130,7 +134,7 @@ export function generateRegion(world, rx, rz) {
         density *= c.sett ? 0.25 : 1 - c.flat * 0.6;
       }
       const r2 = hashf(x, z, seed, 14);
-      if (c.wet < 2.2 && !['tundra', 'mountain', 'taiga'].includes(c.biome) && r < 0.3) {
+      if (c.wet < 2.2 && !NO_REEDS.has(c.biome) && r < 0.3) {
         region.set(lx, y, lz, B.reeds);
         continue;
       }
@@ -139,7 +143,7 @@ export function generateRegion(world, rx, rz) {
         continue;
       }
       if (r >= density || !bd.plants.length) continue;
-      const surfOk = GREEN.has(c.surf) || (SANDY.has(c.surf) && (c.biome === 'desert' || c.biome === 'beach')) || c.surf === B.snow;
+      const surfOk = GREEN.has(c.surf) || ISLE_GROUND.has(c.surf) || (SANDY.has(c.surf) && (c.biome === 'desert' || c.biome === 'beach')) || c.surf === B.snow;
       if (!surfOk) continue;
       let plant = pickWeighted(bd.plants, r2);
       if (c.surf === B.snow && plant !== B.dead_bush && plant !== B.fern) continue;

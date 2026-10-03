@@ -186,6 +186,11 @@ const CULTURE_SOUND = {
   sun: { scale: 'hijaz', root: 2, drums: 'hand', swing: 0.1 },
   wild: { scale: 'lydian', root: 4, drums: 'tribal', arp: true },
   high: { scale: 'mixo', root: -5, bpmX: 0.92, drums: 'march', fifths: true, pad: true },
+  // (The Ashborn: dark and driving, forge-hammer drums; the Mirefolk: slow
+  // and hushed, a pad like fog; the Stiltfolk: bright and lilting.)
+  ember: { scale: 'phrygian', root: -3, bpmX: 0.96, drums: 'march', fifths: true },
+  mist: { scale: 'dorian', root: 1, bpmX: 0.84, drums: 'soft', pad: true, lead: 'triangle' },
+  tide: { scale: 'penta', root: 5, drums: 'hand', swing: 0.15, arp: true },
 };
 const DARKER = { major: 'minor', mixo: 'dorian', lydian: 'dorian', hijaz: 'phrygian', dorian: 'phrygian', penta: 'minpenta' };
 export function flavourTheme(T, style, fortune) {

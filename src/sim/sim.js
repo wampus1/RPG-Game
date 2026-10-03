@@ -48,6 +48,7 @@ import { Ships } from './ships.js';
 import { Portals } from './portals.js';
 import { Labor } from './labor.js';
 import { Prosperity } from './prosperity.js';
+import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
 
@@ -100,6 +101,12 @@ function fits(cur, soft) {
   return !soft || SOFT.has(cur) || (soft === 'air' && cur === B.air);
 }
 
+// What a merchant from each of the Dagoni Islands brings.
+const ISLE_WARES = {
+  kharos: ['sulfur', 'obsidian_shard', 'ash_bread', 'basalt', 'ember_pod', 'obsidian_blade'],
+  myrrow: ['glowcap', 'peat_turf', 'mushroom_broth', 'crab_meat', 'kelp_cakes', 'harpoon', 'mangrove_pod'],
+};
+
 export class Sim {
   constructor(game) {
     this.game = game;
@@ -146,6 +153,8 @@ export class Sim {
     this.religion = new Religion(game, this);
     this.market = new Market(game, this);
     this.prosperity = new Prosperity(game, this);
+    // The mountain on Kharos.
+    this.volcano = new Volcano(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -283,6 +292,7 @@ export class Sim {
       this.market.update();
     }
     this.war.update(dt);
+    this.volcano.update(dt);
     this.careers.update(dt);
     this.updateConfront();
     this.justice.update(dt);
@@ -1841,15 +1851,20 @@ export class Sim {
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
     const hod = Math.floor((h % DAY) / 60);
-    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1) * (this.tech.has(L.settlement, 'free_trade') ? 1.4 : 1))) {
+    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1) * (this.tech.has(L.settlement, 'free_trade') ? 1.4 : 1) * (this.tech.has(L.settlement, 'royal_roads') ? 1.4 : 1))) {
       const ow = this.game.world.ow;
       const s = L.settlement;
       if (this.war.unsafe(s)) return;
-      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18 && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
+      // (From near by, or now and then by raft from a port of another of
+      // the islands, to a port of this one.)
+      const reach = (o) => (o.island && s.island && o.island !== s.island ? s.coast && o.coast && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 45 : Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
+      const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && reach(o) && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
       if (!from) return;
       const goods = {};
       const opts = ['cloth', 'string', 'torch', 'apple', 'herb', 'lantern', 'book', 'glass', 'leather', 'iron_ingot', 'coal', 'bread', 'arrow', 'gem', 'rug_blue', 'fishing_rod', 'bow'];
       if (from.coast || from.river) opts.push('fish', 'cooked_fish');
+      // (What each island has to sell.)
+      opts.push(...(ISLE_WARES[from.island] || []));
       for (const k of rng.shuffle(opts).slice(0, 6)) if (ITEMS[k]) st.add(goods, k, k === 'gem' ? 1 : rng.int(1, 4));
       const v = makeVisitor(from, rng, h, goods);
       // (Master merchants come only from realms with guild charters.)
@@ -2068,6 +2083,7 @@ export class Sim {
       founding: this.founding.serialize(),
       religion: this.religion.serialize(),
       market: this.market.serialize(),
+      volcano: this.volcano.serialize(),
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
@@ -2156,6 +2172,7 @@ export class Sim {
     this.outings.load(data.outings);
     this.bandits.load(data.bandits);
     this.market.load(data.market);
+    this.volcano.load(data.volcano);
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;

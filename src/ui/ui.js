@@ -111,6 +111,8 @@ export class UI {
   handle(ev, input, game) {
     this.game = game;
     this.mouse = input.mouse;
+    // (Held keys, for windows that move about while one's held: the map.)
+    this.input = input;
     this.mouseCell = { x: Math.floor(input.mouse.x / CHAR_W), y: Math.floor(input.mouse.y / CHAR_H) };
     const out = { pressed: [], clicks: [], wheel: 0, wheelShift: ev.wheelShift };
     for (const k of ev.pressed) {

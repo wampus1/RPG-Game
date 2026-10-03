@@ -212,7 +212,8 @@ test('raiders knocked down in town are dragged to the cells, and prisoners sit i
 
 // ------------------------------------------------------------ the tree
 test('the tree: four branches, lines that join again, new arts with real effects', () => {
-  assert.equal(TECH_IDS.length, 48);
+  // (Besides each of the Dagoni Islands' own few.)
+  assert.equal(TECH_IDS.filter((k) => !TECHS[k].isles).length, 48);
   for (const b of ['economy', 'warfare', 'society', 'engineering']) {
     const ids = TECH_IDS.filter((k) => TECHS[k].branch === b);
     assert.ok(ids.length >= 11);
@@ -235,6 +236,8 @@ test('the tree: four branches, lines that join again, new arts with real effects
   // Embassies: allies made sooner.
   const [, b] = game.world.ow.civs;
   const P = game.sim.politics;
+  // (Of one mind, and not at odds with themselves.)
+  civ.values = ['scholarly', 'artisan'];
   b.values = civ.values.slice();
   game.sim.realms.shift(civ, b, 33 - game.sim.realms.relation(civ, b).score, game.day);
   for (let d = 1; d <= 20; d++) P.pacts([civ, b], game.day + d, new RNG(d));

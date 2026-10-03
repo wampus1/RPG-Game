@@ -11,7 +11,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 
 // The arms a guard may be issued.
-export const GUARD_ARMS = ['iron_sword', 'spear', 'mace', 'iron_axe', 'halberd', 'sabre', 'short_sword', 'flail', 'hand_axe', 'greatsword'];
+export const GUARD_ARMS = ['iron_sword', 'spear', 'mace', 'battle_axe', 'halberd', 'sabre', 'short_sword', 'flail', 'hand_axe', 'greatsword'];
 
 export const PROFESSIONS = {
   guard: {
@@ -343,7 +343,9 @@ export class Careers {
     const P = PROFESSIONS[job];
     if (job !== 'guard' || !s) return P.kit;
     const rng = new RNG(hash4(s.id, this.game.day, this.game.seed >>> 0, 0x6a7d));
-    const arm = this.sim.tech.armFor ? this.sim.tech.armFor(s, rng.pick(GUARD_ARMS)) : rng.pick(GUARD_ARMS);
+    let arm = this.sim.tech.armFor ? this.sim.tech.armFor(s, rng.pick(GUARD_ARMS)) : rng.pick(GUARD_ARMS);
+    // (A realm without iron makes do: never a woodcutter's axe off the rack.)
+    if (ITEMS[arm]?.kind !== 'weapon') arm = 'club';
     return P.kit.map(([it, n]) => [it === 'iron_sword' ? arm : it, n]);
   }
 

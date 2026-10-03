@@ -25,6 +25,9 @@ const FOUNDERS = {
   sun: ['Amun', 'Bastet', 'Farid', 'Hanan', 'Idris', 'Layla', 'Nabil', 'Samira'],
   wild: ['Ayo', 'Chidi', 'Ekon', 'Imani', 'Kofi', 'Nia', 'Tendai', 'Zola'],
   high: ['Balin', 'Dagna', 'Durin', 'Helga', 'Thrain', 'Brunhild', 'Gimra', 'Orsik'],
+  ember: ['Azkar', 'Brasa', 'Cendrik', 'Hestra', 'Ignar', 'Pyrrha', 'Tephros', 'Vulka'],
+  mist: ['Aelwen', 'Bryn', 'Gloamwyn', 'Heth', 'Lune', 'Myrrin', 'Sorrel', 'Vell'],
+  tide: ['Ahi', 'Kailani', 'Makoa', 'Nalu', 'Pelani', 'Reva', 'Tasi', 'Wahine'],
 };
 const EPITHETS = ['the Elder', 'the Founder', 'Oakheart', 'the Bold', 'Longstride', 'the Wise', 'Ironhand', 'the Wanderer', 'Hearthkeeper', 'of the Old Road'];
 // Each people's own: epithets, how founders came, what haunts the hills,
@@ -35,6 +38,9 @@ const STYLE_EPITHETS = {
   sun: ['the Star-Reader', 'of the Seven Wells', 'the Caravaneer', 'the Patient', 'Gold-Hand'],
   wild: ['Jaguar-Eye', 'the Rain-Bringer', 'Feather-Crowned', 'Who-Walks-Softly', 'the Root-Keeper'],
   high: ['Stonefist', 'the Delver', 'Forge-Born', 'Deepdelver', 'Oakenshield'],
+  ember: ['Ash-Crowned', 'the Unburnt', 'Glassblood', 'the Kiln-Keeper', 'Smoke-Eye'],
+  mist: ['the Lantern', 'Fog-Walker', 'the Quiet', 'Owl-Sight', 'Moss-Hand'],
+  tide: ['Sharktooth', 'the Pearl-Diver', 'Net-Mender', 'Wave-Rider', 'the Storm-Watcher'],
 };
 const STYLE_CAME = {
   vale: ['over the hills with their sheep', 'up the river on a barge of seed corn', 'from the old kingdom after the war', 'looking for good black earth'],
@@ -42,6 +48,9 @@ const STYLE_CAME = {
   sun: ['with a caravan of forty camels', 'following a star across the sands', 'from the drowned city on the coast', 'seeking a well that never dries'],
   wild: ['when the old forest city fell', 'following the jaguar\'s tracks', 'paddling down the great river', 'led by a dream of the Rain-Lord'],
   high: ['up from the deep halls below', 'over the high passes before the snows', 'following a seam of silver', 'driven out of the old mountain by fire'],
+  ember: ['across the black glass fields after the last waking', 'out of the caves when the ash settled', 'following the smoke to the forge-fires', 'from Thessa, cast out for worshipping the mountain'],
+  mist: ['out of the fog one morning, nobody knows from where', 'following lantern-lights over the moor', 'from the drowned villages of the south shore', 'seeking the mushroom rings their grandmothers spoke of'],
+  tide: ['on a raft of mangrove logs lashed with kelp', 'following the turtles to their landing beaches', 'when the reef villages sank', 'from Thessa, looking for warmer water'],
 };
 const STYLE_BEASTS = {
   vale: ['a great white stag', 'a black dog with eyes like lamps', 'a lady in grey', 'a headless rider'],
@@ -49,6 +58,9 @@ const STYLE_BEASTS = {
   sun: ['a djinn in the old well', 'a sand-wyrm', 'a veiled woman who asks for water', 'a lion with a man\'s face'],
   wild: ['a jaguar that walks like a man', 'a feathered serpent', 'the weeping woman of the river', 'a spirit in the great tree'],
   high: ['a wyrm under the hill', 'a stone giant', 'the lost miners\' lanterns', 'a goat with golden horns'],
+  ember: ['a salamander as long as a ship', 'the Sleeper\'s red eye in the crater', 'a man of black glass', 'the ash-walkers who come before an eruption'],
+  mist: ['the Hollow King and his grey court', 'a lantern that walks by itself', 'the drowned who call from the bog', 'an owl with a woman\'s voice'],
+  tide: ['the shark who waits beyond the reef', 'a turtle as big as an island', 'the singing in the storm wall', 'a drowned ship that sails by night'],
 };
 const STYLE_PLACES = {
   vale: ['the old well', 'the mill race', 'the crossroads', 'the churchyard yew'],
@@ -56,6 +68,9 @@ const STYLE_PLACES = {
   sun: ['the dry well', 'the old caravanserai', 'the dunes', 'the star tower'],
   wild: ['the old pyramid', 'the cenote', 'the great tree', 'the overgrown ballcourt'],
   high: ['the old mine', 'the deep stair', 'the cairn on the peak', 'the sealed door'],
+  ember: ['the crater\'s lip', 'the glass fields', 'the steam vents', 'the old lava tube'],
+  mist: ['the standing stones', 'the mushroom ring', 'the bog road', 'the lantern cairn'],
+  tide: ['the reef', 'the turtle beach', 'the old pier', 'the mangrove maze'],
 };
 // What befalls each people (and its land) in the years.
 const STYLE_EVENTS = {
@@ -88,6 +103,24 @@ const STYLE_EVENTS = {
     () => 'An avalanche came down in the night and buried the lower houses.',
     (s) => `A vein of silver was struck under ${s.name}, and the town was rich for a lifetime.`,
     () => 'The forges burned day and night for a year to arm the realm against the lowlanders.',
+  ],
+  ember: [
+    () => 'The mountain woke, and the sky was black for a week; the town was dug out of the ash by hand.',
+    (s) => `A river of fire stopped a stone's throw from ${s.name}. The kiln-priests say the Sleeper spared it.`,
+    () => 'A glassknapper made a blade so keen it cut a falling hair, and the ruler hung it over the throne.',
+    () => 'The sulphur pits caught fire, and burned blue for a whole season.',
+  ],
+  mist: [
+    () => 'A fog came in and did not lift for forty days; some who went into it never came out.',
+    (s) => `A ring of giant mushrooms came up overnight on the square of ${s.name}, and nobody dared cut them.`,
+    () => 'The bog gave up an old king in his crown, perfectly kept; he was buried again with honours.',
+    () => 'A blight took the glowcaps, and the winter was long and dark until they came back.',
+  ],
+  tide: [
+    () => 'A great storm broke the stilts of half the town; it was rebuilt higher, on mangrove posts.',
+    (s) => `A pearl as big as a hen's egg was brought up off ${s.name}, and bought a year of plenty.`,
+    () => 'The turtles did not come to the beaches one year, and the old folk said it was a bad omen; the next year the fever came.',
+    () => 'A raft tried to sail out through the storm wall. Only its mast came back, three days later.',
   ],
 };
 // What a realm's values bring.

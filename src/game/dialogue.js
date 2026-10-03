@@ -1872,7 +1872,10 @@ export function revealTown(game, o) {
   let fresh = false;
   for (let z = o.cz; z < o.cz + o.cd; z++) for (let x = o.cx; x < o.cx + o.cw; x++) {
     const k = z * MAP_W + x;
-    if (!ow.explored[k]) fresh = true;
+    if (!ow.explored[k]) {
+      fresh = true;
+      ow.exploredN = (ow.exploredN || 0) + 1;
+    }
     ow.explored[k] = 1;
   }
   if (fresh) game.ui.msg(`Map updated: ${o.name}`, '#a0c8ff');

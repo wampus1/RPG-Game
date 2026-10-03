@@ -33,6 +33,8 @@ const NOT_ITEMS = new Set([
   'powder_keg', 'roots', 'rubble', 'bone_throne', 'boss_gate', 'boss_gate_open', 'kav_gate', 'gong',
   'kav_keystone', 'void_bloom', 'glow_crystal', 'tendril', 'eye_stalk', 'leaves_void',
   'kav_statue', 'kav_monolith', 'kav_holo', 'kav_conduit', 'kav_husk', 'kav_vent', 'satchel', 'spikes', 'idol', 'blight_floor', 'blight_wall',
+  // (The other islands' ground: what it gives when it's dug is its own.)
+  'lava', 'steam_vent', 'scorched', 'moss', 'mycelium', 'peat', 'sulfur_crust', 'mushroom_stem', 'mushroom_cap', 'glowcap_cap',
 ]);
 
 const BLOCK_VALUES = {
@@ -72,6 +74,14 @@ item('book', { kind: 'misc', stack: 16, value: 10 });
 item('coin', { name: 'Gold Coin', kind: 'misc', stack: 999, value: 1 });
 // What's left of a tavern meal, waiting to be cleared away.
 item('dirty_dish', { name: 'Dirty Dish', kind: 'misc', stack: 16, value: 0 });
+// From Kharos and Myrrow: yellow sulphur (the Ashborn trade it for black
+// powder), turves of peat that burn slow and long, and flakes of black
+// glass.
+item('sulfur', { name: 'Sulphur', value: 3 });
+item('peat_turf', { name: 'Peat Turf', value: 2, fuel: true });
+item('obsidian_shard', { name: 'Obsidian Shard', value: 4 });
+// Shaken from a gloam moth's wings: it glows a while in the hand.
+item('moth_dust', { name: 'Gloam Dust', value: 4 });
 
 // --- food ---------------------------------------------------------------------
 const food = (key, heal, value, name, extra = {}) => item(key, { kind: 'food', heal, value, name, ...extra });
@@ -106,10 +116,27 @@ food('tamales', 6, 7, 'Maize Tamales', { quality: 'acceptable', region: 'wild' }
 food('cocoa', 3, 5, 'Cup of Cocoa', { region: 'wild' });
 food('goulash', 7, 7, 'Mountain Goulash', { quality: 'acceptable', region: 'high' });
 food('oatcakes', 4, 4, 'Oatcakes', { region: 'high' });
+// The other Dagoni Islands' peoples: the Ashborn of Kharos bake their bread
+// in the hot ash and stew everything with fire-peppers; the moor folk of
+// Myrrow live on what grows in the dark and the stilt folk on what the
+// shallows give.
+food('pepper_stew', 7, 8, 'Fire-Pepper Stew', { quality: 'acceptable', region: 'ember' });
+food('ash_bread', 4, 5, 'Ash-Baked Bread', { region: 'ember' });
+food('mushroom_broth', 6, 6, 'Mushroom Broth', { quality: 'acceptable', region: 'mist' });
+food('glowcap_tea', 3, 5, 'Glowcap Tea', { region: 'mist' });
+food('crab_boil', 7, 8, 'Crab Boil', { quality: 'acceptable', region: 'tide' });
+food('kelp_cakes', 4, 4, 'Kelp Cakes', { region: 'tide' });
+// What grows (and swims) there.
+food('ember_pod', 1, 2, 'Ember Pod');
+food('mangrove_pod', 1, 1, 'Mangrove Pod');
+food('glowcap', 1, 3, 'Glowcap');
+food('crab_meat', 1, 3, 'Crab Meat');
+food('cooked_crab', 5, 6, 'Cooked Crab');
 // Hot dishes from the pot (and a warm cup) do their good slowly: a little
 // at once, the rest over the next while, and more in all than anything
 // eaten cold. [now, over time, seconds it takes]
-const SLOW = { stew: [2, 10, 20], pottage: [1, 9, 18], chowder: [2, 10, 20], spiced_lentils: [1, 9, 18], goulash: [2, 10, 20], tamales: [2, 7, 14], cocoa: [0, 6, 12], ale: [1, 3, 8] };
+const SLOW = { stew: [2, 10, 20], pottage: [1, 9, 18], chowder: [2, 10, 20], spiced_lentils: [1, 9, 18], goulash: [2, 10, 20], tamales: [2, 7, 14], cocoa: [0, 6, 12], ale: [1, 3, 8],
+  pepper_stew: [2, 10, 20], mushroom_broth: [1, 9, 18], glowcap_tea: [0, 6, 12], crab_boil: [2, 10, 20] };
 for (const [k, [now, over, secs]] of Object.entries(SLOW)) Object.assign(ITEMS[k], { heal: now + over, now, regen: over, regenT: secs });
 
 // --- tools & weapons -----------------------------------------------------------
@@ -128,6 +155,11 @@ item('club', { name: 'Wooden Club', kind: 'weapon', stack: 1, damage: 3, reach: 
 // A fire-hardened point: what a watch carries before it has a forge.
 item('wooden_spear', { name: 'Wooden Spear', kind: 'weapon', stack: 1, damage: 3.5, reach: 2.6, cooldown: 0.65, value: 5 });
 item('dagger', { name: 'Dagger', kind: 'weapon', stack: 1, damage: 3, reach: 1.3, cooldown: 0.3, value: 10 });
+// The island arms: an Ashborn blade of knapped black glass bound to a
+// cinderwood haft (keen, light, quick), and the stilt folk's barbed
+// harpoon (a spear that bites deep).
+item('obsidian_blade', { name: 'Obsidian Blade', kind: 'weapon', stack: 1, damage: 6, reach: 1.5, cooldown: 0.36, value: 30, heft: 0.85 });
+item('harpoon', { name: 'Barbed Harpoon', kind: 'weapon', stack: 1, damage: 5.5, reach: 2.6, cooldown: 0.66, value: 22, style: 'spear' });
 item('mace', { name: 'Iron Mace', kind: 'weapon', stack: 1, damage: 4.5, reach: 1.4, cooldown: 0.6, value: 22, heft: 1.15 });
 // More arms. One-handed ones leave the other arm free for a shield, or a
 // second blade; two-handed ones (`hands: 2`) take both, so no shield and

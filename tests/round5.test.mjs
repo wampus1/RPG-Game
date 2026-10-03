@@ -132,7 +132,7 @@ test('builders mend damage, enlarge houses and put up new buildings', () => {
 });
 
 test('enlarging your house: the mayor gives good workers a discount, builders charge full price', () => {
-  const { game, input, L, a, p, sid } = start(7, 9 * 60);
+  const { game, input, L, a, p, sid } = start(8, 9 * 60);
   const hall = L.buildings.find((b) => b.type === 'townhall');
   const mayor = a.npcs.find((n) => n.rec.job === 'mayor');
   // Villages have no builder of their own; make someone the town's builder.
@@ -172,11 +172,12 @@ test('enlarging your house: the mayor gives good workers a discount, builders ch
 });
 
 test('miners dig stone and ore out in the wild, with a guard to watch them', () => {
-  // (A city in the hills, with stone showing.)
+  // (A town in the hills with stone showing, miners, and a watch big
+  // enough to spare one.)
   const game = makeGame(1);
   const input = stubInput();
   game.minute = 9 * 60;
-  const s = game.world.ow.settlements.find((q) => q.name === 'Ulfnes');
+  const s = game.world.ow.settlements.find((q) => q.name === 'Kingsford');
   const { L, a } = visit(game, input, s);
   assert.ok(L.npcs.filter((r) => r.job === 'guard' && alive(r)).length > 3);
   const m = a.npcs.find((n) => n.rec.job === 'miner');
@@ -310,7 +311,7 @@ test('you can carry a mayor\'s dispatch to another town for pay', () => {
 });
 
 test('nomads camp, weigh up the town, and settle together', () => {
-  const { game, input, sid, L, a } = start(12345, 8 * 60);
+  const { game, input, sid, L, a } = start(8, 8 * 60);
   const nm = game.sim.nomads;
   lotsReady(game, L, 'house_m');
   const band = nm.arrive(L, game.day, always);

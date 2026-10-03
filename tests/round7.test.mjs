@@ -159,7 +159,7 @@ test('children play tag and hide-and-seek in the streets and round the houses', 
 });
 
 test('a builder who likes you knocks something off enlarging your house', () => {
-  const { game, input, L, a, p, sid } = start(7, 9 * 60);
+  const { game, input, L, a, p, sid } = start(8, 9 * 60);
   const hall = L.buildings.find((b) => b.type === 'townhall');
   const mayor = a.npcs.find((n) => n.rec.job === 'mayor');
   const builder = a.npcs.find((n) => n.rec.job === 'builder') || a.npcs.find((n) => n.rec.age === 'adult' && !['mayor', 'guard'].includes(n.rec.job));

@@ -57,12 +57,14 @@ export class Founding {
     const ow = this.game.world.ow;
     const s = L.settlement;
     const opts = [];
-    for (let cz = 1; cz < MAP_H - 1; cz++) {
-      for (let cx = 1; cx < MAP_W - 1; cx++) {
+    // (On their own island: settlers don't put to sea.)
+    for (let cz = Math.max(1, s.cz - 9); cz < Math.min(MAP_H - 1, s.cz + 10); cz++) {
+      for (let cx = Math.max(1, s.cx - 9); cx < Math.min(MAP_W - 1, s.cx + 10); cx++) {
         const d = Math.hypot(cx - s.cx, cz - s.cz);
         if (d < 4 || d > 9) continue;
         const c = ow.cell(cx, cz);
-        if (!c || ['ocean', 'mountain', 'swamp'].includes(c.biome) || c.lake || c.settlement !== null || (c.mountainness || 0) > 0.3) continue;
+        if (!c || ['ocean', 'mountain', 'swamp', 'volcano'].includes(c.biome) || c.lake || c.settlement !== null || (c.mountainness || 0) > 0.3) continue;
+        if (s.island && c.island !== s.island) continue;
         if (ow.settlements.some((o) => Math.hypot(o.cx - cx, o.cz - cz) < 3.2)) continue;
         if (ow.explored[cz * MAP_W + cx] || this.game.world.regions.has(this.game.world.regionKey(cx, cz))) continue;
         opts.push({ cx, cz, d });

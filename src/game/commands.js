@@ -25,6 +25,7 @@ export const COMMANDS = {
   god: { args: '[on|off]', about: 'Nothing can hurt you while it\'s on.' },
   skip: { args: '<days>', about: 'Fast-forward the world so many days (up to 120): towns, realms and wars all carry on.' },
   war: { args: '[realm] [on <realm>] | list | peace', about: 'Start a war: the first realm (yours, or the one you\'re in) declares war on the second. "list" names the realms; "peace" ends the wars of the realm you\'re in.' },
+  erupt: { args: '[days]', about: 'The mountain on Kharos erupts now (or tells you how many days till it next does, with "days").' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -271,6 +272,13 @@ export function runCommand(game, text) {
       game.cheats.god = on;
       if (on) p.hp = p.maxHp;
       return [on ? 'God mode on: nothing can hurt you.' : 'God mode off.'];
+    }
+    case 'erupt':
+    case 'volcano': {
+      const V = sim.volcano;
+      if (words[0] === 'days') return [V.next === null ? 'The mountain sleeps: nobody knows when it will wake.' : `The mountain on Kharos wakes in ${V.daysToGo()} day${V.daysToGo() === 1 ? '' : 's'} (it has gone up ${V.count} time${V.count === 1 ? '' : 's'} so far).`];
+      const r = V.erupt();
+      return [`The mountain on Kharos erupts! (${r.dead} dead and ${r.burnt} roofs burning in its towns.)`];
     }
     case 'skip':
     case 'ff': {

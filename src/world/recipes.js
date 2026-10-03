@@ -118,6 +118,22 @@ r('furnace', 'stew', 1, { cooked_meat: 1, carrot: 1, mushroom: 1 });
 r('furnace', 'pie', 1, { berries: 3, wheat: 2 });
 r('furnace', 'feast', 1, { cooked_meat: 2, cooked_fish: 1, bread: 1, cabbage: 1 });
 
+// --- the other Dagoni Islands -----------------------------------------------------
+// Cinder and mangrove wood saw like any other; peat burns in place of coal
+// (and chars down to it); obsidian takes an edge at the bench, as the
+// Ashborn knap it; sulphur and coal make blasting powder; a harpoon for
+// the Stiltfolk's shallows; crab cooks like anything else; and the moths'
+// glowing dust quickens a draught as well as feathers do.
+r('hand', 'planks_dark', 4, { log_cinder: 1 });
+r('hand', 'planks', 4, { log_mangrove: 1 });
+r('hand', 'torch', 3, { stick: 1, peat_turf: 1 });
+r('workbench', 'obsidian_blade', 1, { obsidian_shard: 3, stick: 1, leather: 1 });
+r('anvil', 'harpoon', 1, { iron_ingot: 1, stick: 2, string: 2 });
+r('anvil', 'dynamite', 2, { sulfur: 2, coal: 1, string: 1 });
+r('furnace', 'cooked_crab', 1, { crab_meat: 1 });
+r('furnace', 'coal', 1, { peat_turf: 2 });
+r('herbalist', 'potion_swiftness', 1, { herb: 1, moth_dust: 2, glass: 1 });
+
 // --- the Kavorent's ------------------------------------------------------------
 // Shards of their crystal grow back into one when pressed together (five
 // of a colour make a stone; a jeweller, who knows how to coax them, needs

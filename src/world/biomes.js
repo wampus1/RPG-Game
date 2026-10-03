@@ -96,6 +96,67 @@ export const BIOMES = {
     trees: [['pine', 3], ['dead', 1]], treeSpacing: 8, treeChance: 0.1, clump: 0.3,
     plants: [[B.fern, 1], [B.dead_bush, 1]], plantDensity: 0.03, rocks: 0.02,
   },
+  // --- Kharos, the fire island ---------------------------------------------
+  // Grey ash plains over black basalt, burned snags and the red fire lilies
+  // that grow nowhere else.
+  ashland: {
+    name: 'Ashlands', char: '░', fg: '#a8a0a0', bg: '#3a3434', isle: 'kharos',
+    surface: B.ash, sub: B.basalt, hills: 1,
+    patches: [[B.basalt, 7, 0.74], [B.cinder, 10, 0.64], [B.scorched, 13, 0.72]],
+    trees: [['charred', 3], ['cinder', 1]], treeSpacing: 8, treeChance: 0.12, clump: 0.4,
+    plants: [[B.dead_bush, 4], [B.fire_lily, 1.2], [B.tall_grass, 0.6]], plantDensity: 0.05, rocks: 0.01,
+  },
+  // Woods of cinder trees: black bark, leaves like embers.
+  cinderwood: {
+    name: 'Cinderwood', char: '♣', fg: '#ff7a3a', bg: '#3a1a14', isle: 'kharos',
+    surface: B.scorched, sub: B.dirt, hills: 2,
+    patches: [[B.ash, 11, 0.58], [B.cinder, 6, 0.8]],
+    trees: [['cinder', 6], ['charred', 1]], treeSpacing: 5, treeChance: 0.5, clump: 0.3,
+    plants: [[B.fire_lily, 2], [B.fern, 2], [B.dead_bush, 2], [B.bush, 1]], plantDensity: 0.12, rocks: 0.004,
+  },
+  // Sulphur flats: yellow crust, steam vents, and hot springs that steam
+  // in the cold of the morning.
+  geyser: {
+    name: 'Geyser Flats', char: '♨', fg: '#f0e060', bg: '#5a5020', isle: 'kharos',
+    surface: B.ash, sub: B.basalt, hills: 0,
+    patches: [[B.sulfur_crust, 8, 0.6], [B.basalt, 6, 0.76], [B.gravel, 5, 0.84]],
+    trees: [['charred', 1]], treeSpacing: 10, treeChance: 0.05, clump: 0,
+    plants: [[B.steam_vent, 2], [B.dead_bush, 2], [B.fire_lily, 0.5]], plantDensity: 0.04, rocks: 0.006, pools: true, hot: true,
+  },
+  // The mountain itself: basalt and black glass up to the crater's lip.
+  volcano: {
+    name: 'Volcano', char: '▲', fg: '#ff6a2a', bg: '#2e1612', isle: 'kharos',
+    surface: B.basalt, sub: B.basalt, hills: 1,
+    patches: [[B.obsidian, 9, 0.72], [B.ash, 12, 0.56], [B.cinder, 7, 0.7]],
+    trees: [['charred', 1]], treeSpacing: 12, treeChance: 0.04, clump: 0,
+    plants: [[B.steam_vent, 1], [B.fire_lily, 0.4]], plantDensity: 0.02, rocks: 0.016,
+  },
+  // --- Myrrow, the misty island --------------------------------------------
+  // Mangroves standing in the warm shallows on their arching roots.
+  mangrove: {
+    name: 'Mangroves', char: 'Ψ', fg: '#6ac08a', bg: '#1a3a2a', isle: 'myrrow',
+    surface: B.mud, sub: B.dirt, hills: 0,
+    patches: [[B.moss, 9, 0.62], [B.clay, 6, 0.86]],
+    trees: [['mangrove', 1]], treeSpacing: 4, treeChance: 0.55, clump: 0.2, wetTrees: true,
+    plants: [[B.reeds, 6], [B.fern, 3], [B.tall_grass, 3], [B.mushroom_brown, 0.6]], plantDensity: 0.22, rocks: 0.001, pools: true,
+  },
+  // The fungal forests: white mycelium, mushrooms taller than houses (the
+  // blue ones glow at night).
+  fungal: {
+    name: 'Fungal Forest', char: '♤', fg: '#e08ad0', bg: '#2a1a34', isle: 'myrrow',
+    surface: B.mycelium, sub: B.dirt, hills: 1,
+    patches: [[B.moss, 10, 0.6], [B.mud, 7, 0.82]],
+    trees: [['mushroom', 4], ['glowshroom', 2], ['toadstool', 3]], treeSpacing: 5, treeChance: 0.5, clump: 0.3,
+    plants: [[B.mushroom_brown, 4], [B.mushroom_red, 3], [B.glowshroom, 1], [B.fern, 2]], plantDensity: 0.2, rocks: 0.002, ponds: true,
+  },
+  // Open moor: moss and peat, purple heather, the odd standing stone, mist.
+  moor: {
+    name: 'Moor', char: '∴', fg: '#b88ad0', bg: '#3a3044', isle: 'myrrow',
+    surface: B.moss, sub: B.dirt, hills: 2,
+    patches: [[B.peat, 9, 0.64], [B.grass_taiga, 14, 0.6], [B.gravel, 6, 0.86]],
+    trees: [['dead', 1], ['birch', 1]], treeSpacing: 9, treeChance: 0.06, clump: 0.5,
+    plants: [[B.heather, 9], [B.tall_grass, 4], [B.fern, 1], [B.berry_bush, 0.4]], plantDensity: 0.24, rocks: 0.012, ponds: true,
+  },
 };
 
 export const BIOME_KEYS = Object.keys(BIOMES);
@@ -107,4 +168,6 @@ export const BIOME_STYLE = {
   desert: 'sun', savanna: 'sun',
   jungle: 'wild', swamp: 'wild',
   mountain: 'high',
+  ashland: 'ember', cinderwood: 'ember', geyser: 'ember', volcano: 'ember',
+  mangrove: 'tide', fungal: 'mist', moor: 'mist',
 };

@@ -15,12 +15,15 @@ export const CUISINE = {
   sun: { dishes: ['spiced_lentils', 'flatbread'], word: 'spiced lentils and flatbread with dates', drink: 'mint tea' },
   wild: { dishes: ['tamales', 'cocoa'], word: 'maize tamales and hot cocoa', drink: 'cocoa' },
   high: { dishes: ['goulash', 'oatcakes'], word: 'mountain goulash and oatcakes', drink: 'dark beer' },
+  ember: { dishes: ['pepper_stew', 'ash_bread'], word: 'fire-pepper stew and bread baked in the ash', drink: 'smoked spirit' },
+  mist: { dishes: ['mushroom_broth', 'glowcap_tea'], word: 'mushroom broth and glowcap tea', drink: 'heather wine' },
+  tide: { dishes: ['crab_boil', 'kelp_cakes'], word: 'crab boil and kelp cakes', drink: 'palm toddy' },
 };
 // Hot dishes a tavern cooks (a pot feeds several, like a stew).
-export const REGIONAL_MEALS = new Set(['pottage', 'chowder', 'spiced_lentils', 'tamales', 'goulash']);
+export const REGIONAL_MEALS = new Set(['pottage', 'chowder', 'spiced_lentils', 'tamales', 'goulash', 'pepper_stew', 'mushroom_broth', 'crab_boil']);
 // Which have meat or fish in them.
-export const MEATY = new Set(['raw_meat', 'cooked_meat', 'feast', 'goulash']);
-export const FISHY = new Set(['fish', 'cooked_fish', 'chowder', 'smoked_fish']);
+export const MEATY = new Set(['raw_meat', 'cooked_meat', 'feast', 'goulash', 'pepper_stew']);
+export const FISHY = new Set(['fish', 'cooked_fish', 'chowder', 'smoked_fish', 'crab_boil', 'kelp_cakes', 'crab_meat', 'cooked_crab']);
 export const DRINKS = new Set(['ale']);
 
 // How they dress: shirts mostly from their own palette (same number of
@@ -31,9 +34,13 @@ export const CLOTHES = {
   sun: ['#e8dcc0', '#d8c8a0', '#c89048', '#2a3a7a', '#3a4a9a', '#b8a078', '#a86a2a', '#f0e8d8', '#7a2a4a', '#c8a048'],
   wild: ['#3a8a4a', '#c8a020', '#c83a32', '#2a8a8a', '#e07a2a', '#6a4a8a', '#4a7a3a', '#d8b030', '#9a4a5a', '#3a6a5a'],
   high: ['#3a3a44', '#4a4a5a', '#6a2a2a', '#7a2a4a', '#8a6a3a', '#5a5a6a', '#2a3a4a', '#a86a2a', '#4a3a2a', '#6a6a7a'],
+  // (Soot-black and ember-red; moss and heather; sun-bleached and sea-blue.)
+  ember: ['#2a2426', '#3a3034', '#8a2a1a', '#c84a1a', '#e07a2a', '#5a4a44', '#6a2a2a', '#3a3a3a', '#a83a1a', '#4a3a34'],
+  mist: ['#5a6a5a', '#6a5a7a', '#8a7aa0', '#4a5a4a', '#7a8a7a', '#3a4a4a', '#9a8ab0', '#5a4a5a', '#6a7a6a', '#4a3a5a'],
+  tide: ['#e8e0c8', '#2a8a9a', '#3aa8b8', '#f0d890', '#d87a5a', '#4a7aaa', '#c8e0d8', '#2a6a7a', '#e0b070', '#7ac0c8'],
 };
 // A trim each people likes on its shirts.
-export const PATTERN = { vale: 'buttons', north: 'collar', sun: 'sash', wild: 'stripes', high: 'buttons' };
+export const PATTERN = { vale: 'buttons', north: 'collar', sun: 'sash', wild: 'stripes', high: 'buttons', ember: 'sash', mist: 'patches', tide: 'stripes' };
 
 // The old gods of each people, and the bits a realm's faith is made of.
 const GODS = {
@@ -42,6 +49,15 @@ const GODS = {
   sun: { gods: ['the One Light', 'the Sun-Crowned', 'the Well of Stars', 'the Veiled Moon', 'the Keeper of Waters', 'the Scarab of Dawn', 'the Lion of the Dunes'], faith: ['the Faith of the Lamp', 'the Path of Noon', 'the Order of the Well', 'the Way of the Veil', 'the Dawn Mysteries', 'the Pride of the Lion'], feast: ['Lantern Night', 'the Feast of Noon', 'Starwell Eve', 'the Night of Veils', 'the Scarab Rising', 'the Lion\'s Feast'], symbol: ['a crescent', 'a sun disc', 'a water jar', 'an eight-pointed star', 'a scarab', 'a lion\'s mane'] },
   wild: { gods: ['the Feathered Serpent', 'the Rain-Lord', 'the Jaguar of Night', 'the Maize Mother', 'the Smoking Mirror', 'the Hummingbird of War', 'the Grandmother Tree'], faith: ['the Serpent Rites', 'the Way of Maize', 'the Rain Covenant', 'the Jaguar Mysteries', 'the Root and Branch', 'the Hummingbird Oath'], feast: ['the Rain Dance', 'the Green Maize Feast', 'the Night of the Jaguar', 'the Feather Day', 'the Root Festival', 'the Flower War'], symbol: ['a feathered serpent', 'a maize cob', 'a jaguar mask', 'a rain glyph', 'a hummingbird', 'a great tree'] },
   high: { gods: ['the Deep Smith', 'the Stone Mother', 'the Anvil-King', 'the Lantern in the Dark', 'the Ore-Father', 'the Silent Ancestors', 'the Goat of the Peaks'], faith: ['the Forge Creed', 'the Halls of the Deep', 'the Covenant of Stone', 'the Lantern Rite', 'the Ancestor Hall', 'the Way of the Peaks'], feast: ['Forge Day', 'the Delving', 'Lanternmoot', 'Hammerfast', 'the Remembering', 'the Goat-Run'], symbol: ['an anvil', 'a pick and hammer', 'a mountain', 'a lantern', 'an ancestor stone', 'a goat\'s horn'] },
+  // The Ashborn worship the mountain itself, the Sleeper, whose waking
+  // they both dread and long for.
+  ember: { gods: ['the Sleeper in the Mountain', 'the Kiln-Mother', 'the Ash-Crowned', 'the Black Glass Saint', 'the Red Tongue', 'the Ember Twins', 'the Smoke That Watches'], faith: ['the Vigil of the Mountain', 'the Kiln Creed', 'the Order of Black Glass', 'the Ashen Covenant', 'the Rite of the Red Tongue', 'the Embers\' Keeping'], feast: ['the Night of Embers', 'Ashfall Day', 'the Waking Vigil', 'the Kiln-Lighting', 'Glassblood Eve', 'the Day of Smoke'], symbol: ['a smoking peak', 'a black glass blade', 'a kiln mouth', 'an ember in a hand', 'a red tongue of flame', 'a crown of ash'] },
+  // The Mirefolk keep the old ways of the mist: the dead walk in it, and
+  // the mushrooms carry their whispers.
+  mist: { gods: ['the Grey Lady', 'the Lantern-Bearer', 'the Mother of Spores', 'the Hollow King', 'the Owl Who Remembers', 'the Drowned Ones', 'the Heather Crone'], faith: ['the Way of the Mist', 'the Lantern Rite', 'the Spore Communion', 'the Hollow Court', 'the Remembering Owl', 'the Heather Path'], feast: ['the Night of Lanterns', 'Fogwalk', 'Sporefall', 'the Hollow Moot', 'the Owl\'s Watch', 'Heather Burning'], symbol: ['a lantern in the mist', 'a mushroom ring', 'an owl\'s eye', 'a sprig of heather', 'a grey veil', 'a standing stone'] },
+  // The Stiltfolk's gods are the sea's: the tide that feeds them and the
+  // storm round the islands that holds them in.
+  tide: { gods: ['the Tide-Mother', 'the Storm Wall', 'the Great Turtle', 'the Pearl in the Deep', 'the Gull-Herald', 'the Mangrove Grandfather', 'the Shark Who Waits'], faith: ['the Tide Covenant', 'the Watchers of the Storm', 'the Turtle\'s Way', 'the Pearl Rite', 'the Gull Oath', 'the Root Moorings'], feast: ['the High Tide Feast', 'Stormwatch', 'the Turtle Landing', 'Pearl Night', 'the Gull Day', 'the Root Blessing'], symbol: ['a turtle shell', 'a pearl', 'a wave', 'a gull feather', 'a fish hook', 'a mangrove root'] },
 };
 export const DAY_NAMES = ['Moonday', 'Ashday', 'Woden\'s Day', 'Thunderday', 'Freyday', 'Starday', 'Sunday'];
 
@@ -52,10 +68,14 @@ const VIRTUES = ['charity', 'courage', 'hard work', 'learning', 'silence', 'hosp
 const CLERGY = {
   vale: ['priest', 'vicar', 'hearth-keeper', 'well-warden'], north: ['godi', 'seer', 'skald-priest', 'rune-reader'], sun: ['imam of the lamp', 'star-reader', 'veiled one', 'keeper of the well'],
   wild: ['shaman', 'rain-caller', 'jaguar priest', 'tree-speaker'], high: ['forge-priest', 'lorekeeper', 'stone-singer', 'ancestor-speaker'],
+  ember: ['kiln-priest', 'ash-reader', 'vigil-keeper', 'glass-speaker'], mist: ['lantern-bearer', 'spore-wife', 'fog-seer', 'owl-keeper'], tide: ['tide-caller', 'storm-watcher', 'pearl-keeper', 'gull-speaker'],
 };
 const RITES = ['burial in the graveyard', 'a pyre on the hill', 'a boat on the water', 'a cairn of stones', 'a tree planted over them'];
-const STYLE_RITES = { vale: [0, 0, 4], north: [1, 2, 3], sun: [0, 3], wild: [4, 1], high: [3, 0] };
-const BEASTS = { vale: ['the hare', 'the owl', 'the deer'], north: ['the wolf', 'the raven', 'the bear'], sun: ['the camel', 'the hawk', 'the lion'], wild: ['the jaguar', 'the hummingbird', 'the serpent'], high: ['the goat', 'the eagle', 'the bear'] };
+const STYLE_RITES = { vale: [0, 0, 4], north: [1, 2, 3], sun: [0, 3], wild: [4, 1], high: [3, 0], ember: [1, 1, 3], mist: [0, 4], tide: [2, 2, 1] };
+const BEASTS = {
+  vale: ['the hare', 'the owl', 'the deer'], north: ['the wolf', 'the raven', 'the bear'], sun: ['the camel', 'the hawk', 'the lion'], wild: ['the jaguar', 'the hummingbird', 'the serpent'], high: ['the goat', 'the eagle', 'the bear'],
+  ember: ['the ash lizard', 'the cinder crow', 'the salamander'], mist: ['the owl', 'the mire toad', 'the moth'], tide: ['the turtle', 'the gull', 'the crab'],
+};
 
 // Customs and taboos: what the faithful don't do (and what folk say when
 // you do). `test` names the check in Customs.
@@ -78,6 +98,11 @@ const LEANS = {
   sun: ['no_drink', 'no_meat', 'no_fish', 'temple_arms', 'holy_rest'],
   wild: ['no_hunting', 'sacred_trees', 'no_meat', 'no_mushroom', 'sacred_beast'],
   high: ['holy_rest', 'temple_arms', 'no_drink', 'no_digging'],
+  ember: ['temple_arms', 'no_digging', 'holy_rest', 'sacred_beast'],
+  // (Never what their own table is made of: the Mirefolk live on
+  // mushrooms, the Stiltfolk on the catch.)
+  mist: ['sacred_trees', 'holy_rest', 'sacred_beast', 'no_drink'],
+  tide: ['sacred_beast', 'holy_rest', 'temple_arms', 'no_hunting'],
 };
 
 // A string's hash (for a realm's name: the same faith every time).
@@ -88,6 +113,8 @@ function strHash(str) {
 }
 
 const pickBy = (list, h) => list[h % list.length];
+// Where each people's folk ways come from.
+const FOLK = { vale: 'vales', north: 'north', sun: 'south', wild: 'forest', high: 'mountains', ember: 'ash', mist: 'mist', tide: 'shallows' };
 
 // A realm's faith (a free town keeps the folk ways of its people).
 export function religionOf(s) {
@@ -115,7 +142,7 @@ export function religionOf(s) {
   return {
     style,
     god,
-    faith: civ ? G.faith[(strHash(style) + civ.id * 3) % G.faith.length] : `the folk ways of the ${style === 'vale' ? 'vales' : style === 'north' ? 'north' : style === 'sun' ? 'south' : style === 'wild' ? 'forest' : 'mountains'}`,
+    faith: civ ? G.faith[(strHash(style) + civ.id * 3) % G.faith.length] : `the folk ways of the ${FOLK[style] || 'vales'}`,
     symbol: pickBy(G.symbol, h(4)),
     holy,
     holyName: DAY_NAMES[holy],

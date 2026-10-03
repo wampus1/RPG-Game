@@ -243,8 +243,8 @@ test('a realm sends raiders by raft to a town on the water beyond reach by land'
 });
 
 test('raiders by raft paddle in off the water and come ashore', () => {
-  // (Seed 1: a village by the water.)
-  const { game, input, L } = start(1, {}, 22 * 60);
+  // (Seed 7: a village by the water.)
+  const { game, input, L } = start(7, {}, 22 * 60);
   const W = game.sim.war;
   const t = L.settlement;
   const foe = game.world.ow.civs.find((c) => c !== t.civ);

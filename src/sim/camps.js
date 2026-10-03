@@ -76,13 +76,15 @@ export class Camps {
   pitch(L, key, kind, tents, until, salt = 0, extra = {}) {
     if (this.get(key)) return this.get(key);
     const ents = L.entrances && L.entrances.length ? L.entrances : [{ x: L.plaza.cx, z: L.plaza.cz }];
-    const entrance = ents[salt % ents.length];
     const mounts = extra.mounts || [];
     const nWagons = mounts.filter((m) => m.kind === 'wagon').length;
     // (Tents three paces apart: they're big enough to stand up in.)
     const base = Math.max(3, tents * 3 - 2);
     const w = base + (mounts.length ? 2 + nWagons * 2 : 0);
-    const at = this.site(L, entrance, w, mounts.length ? 3 : 2, salt);
+    // By the road they came in on; failing that (water, a hillside), by
+    // any other way out of town.
+    let at = null;
+    for (let k = 0; k < ents.length && !at; k++) at = this.site(L, ents[(salt + k) % ents.length], w, mounts.length ? 3 : 2, salt);
     if (!at) return null;
     // Opening toward town.
     const face = DX.findIndex((dx, r) => dx === -at.out[0] && DZ[r] === -at.out[1]);

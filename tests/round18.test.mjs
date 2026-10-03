@@ -91,8 +91,11 @@ test('a road between towns winds, shows on the map square by square, and is buil
   const game = world(12345, { learned: true });
   const ss = game.world.ow.settlements;
   const D = game.sim.diplomacy;
-  const a = ss.find((s) => s.name === 'Haahar');
-  const b = ss.find((s) => s.name === 'Rasesh');
+  // (Two towns of Thessa a few days apart, with no road between them yet.)
+  const live = ss.filter((s) => s.island === 'thessa' && s.condition !== 'abandoned');
+  const pairs = [];
+  for (const x of live) for (const y of live) if (x.id < y.id && Math.hypot(x.cx - y.cx, x.cz - y.cz) >= 5 && Math.hypot(x.cx - y.cx, x.cz - y.cz) <= 9 && !D.roads.some((q) => (q.a === x.id && q.b === y.id) || (q.a === y.id && q.b === x.id))) pairs.push([x, y]);
+  const [a, b] = pairs[0];
   const r = D.startRoad(a, b);
   assert.ok(r && r.tiles.length > 20);
   // Not a straight line: it changes heading again and again.
@@ -173,9 +176,11 @@ test('dice are thrown onto the table as little cubes that roll and come to rest 
 // ------------------------------------------------------------ the tech tree
 test('four branches of a dozen: potions, master merchants, jewellers, steel and wells wait on what the realm knows', () => {
   // (Round 24: eleven to thirteen a branch, with choices and great works.)
-  assert.equal(TECH_IDS.length, 48);
+  // (Round 33: and each of the Dagoni Islands has a few of its own besides.)
+  const shared = TECH_IDS.filter((k) => !TECHS[k].isles);
+  assert.equal(shared.length, 48);
   const counts = { economy: 12, warfare: 13, society: 11, engineering: 12 };
-  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(TECH_IDS.filter((k) => TECHS[k].branch === b).length, counts[b]);
+  for (const b of ['economy', 'warfare', 'society', 'engineering']) assert.equal(shared.filter((k) => TECHS[k].branch === b).length, counts[b]);
   const game = world();
   const T = game.sim.tech;
   const s = game.world.ow.settlements.find((q) => q.civ && q.type === 'town');
@@ -431,7 +436,7 @@ test('hostile realms send small raiding parties at night; merchants keep off the
 });
 
 test('raiders on the ground: the watch fights them, and killing a raider is no crime', () => {
-  const { game, input, L, p } = start(12345, { learned: false }, 22 * 60);
+  const { game, input, L, p } = start(7, { learned: false }, 22 * 60);
   const W = game.sim.war;
   const ss = game.world.ow.settlements;
   const to = L.settlement;

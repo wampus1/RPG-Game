@@ -18,8 +18,8 @@ export const SCREEN_TILES_H = VIEW_H / TILE; // 18
 export const REGION_W = SCREEN_TILES_W * 2; // 64 tiles
 export const REGION_D = SCREEN_TILES_H * 2; // 36 tiles
 export const WORLD_Y = 16; // number of vertical layers
-export const MAP_W = 40; // world map width in regions
-export const MAP_H = 29; // world map height in regions
+export const MAP_W = 320; // world map width in regions (the Dagoni Islands are a small part of it: see world/geography.js)
+export const MAP_H = 240; // world map height in regions
 export const WORLD_TILES_W = MAP_W * REGION_W;
 export const WORLD_TILES_D = MAP_H * REGION_D;
 // Places apart from the island (a dungeon's floor, the deck of a ship at

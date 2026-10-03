@@ -64,13 +64,24 @@ export class Diplomacy {
     const law = this.sim.tech && (this.sim.tech.has(a, 'caravan_law') || this.sim.tech.has(b, 'caravan_law'));
     // (Lodestones: compasses keep everyone on the shortest way.)
     const lode = this.sim.tech && (this.sim.tech.has(a, 'lodestones') || this.sim.tech.has(b, 'lodestones'));
+    // (Over the sea to another island: by raft, coast to coast; quicker on
+    // outriggers.)
+    if (a.island && b.island && a.island !== b.island) {
+      const out = this.sim.tech && (this.sim.tech.has(a, 'outriggers') || this.sim.tech.has(b, 'outriggers'));
+      return Math.round((8 + this.dist(a, b) * 1.1) * (out ? 0.6 : 1) * (lode ? 0.85 : 1));
+    }
     return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1) * (lode ? 0.85 : 1));
   }
 
+  // The towns a mayor writes to: those near, and (for a port) the ports of
+  // the other islands over the water.
   neighbours(s, max = 14) {
+    const over = (o) => o.island && s.island && o.island !== s.island;
+    const reach = (o) => (over(o) ? s.coast && o.coast && this.dist(o, s) < 45 : this.dist(o, s) < max);
+    const cost = (o) => (o.civ === s.civ ? 0 : 6) + this.dist(o, s) * (over(o) ? 0.5 : 1) + (over(o) ? 8 : 0);
     return this.game.world.ow.settlements
-      .filter((o) => o.id !== s.id && !deserted(o) && o.condition !== 'abandoned' && this.dist(o, s) < max)
-      .sort((a, b) => (a.civ === s.civ ? 0 : 6) + this.dist(a, s) - ((b.civ === s.civ ? 0 : 6) + this.dist(b, s)));
+      .filter((o) => o.id !== s.id && !deserted(o) && o.condition !== 'abandoned' && reach(o))
+      .sort((a, b) => cost(a) - cost(b));
   }
 
   // ------------------------------------------------------------ writing

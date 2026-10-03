@@ -1,12 +1,11 @@
 // All UI windows. Each draws itself into a character grid every frame.
-import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
+import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable, offhandLight } from '../world/items.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
-import { BIOMES } from '../world/biomes.js';
 import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
 import { AncientWindow } from './ancient.js';
@@ -14,13 +13,12 @@ import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { TIERS } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
-import { DTYPES } from '../world/dungeongen.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
-import { runCommand, complete, teleportTo } from '../game/commands.js';
+import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
 
@@ -1245,280 +1243,8 @@ export class LedgerWindow extends Window {
 }
 
 // ---------------------------------------------------------------- world map
-const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║' };
-export class MapWindow extends Window {
-  constructor(ui) {
-    super(ui, MAP_W * 2 + 4, MAP_H + 6, { kind: 'map' });
-    this.civView = false;
-  }
-  draw(g, game) {
-    const ow = game.world.ow;
-    g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'WORLD MAP' });
-    // (Below ground, you're where its way in is.)
-    const p = game.mapPos ? game.mapPos() : game.player;
-    const pcx = Math.floor(p.x / REGION_W);
-    const pcz = Math.floor(p.z / REGION_D);
-    const blink = Math.floor(this.ui.time * 3) % 2;
-    let hover = null;
-    const icons = settlementIcons(game);
-    this.icons = icons;
-    for (let cz = 0; cz < MAP_H; cz++) {
-      for (let cx = 0; cx < MAP_W; cx++) {
-        const cell = ow.cell(cx, cz);
-        const x = 2 + cx * 2;
-        const y = 1 + cz;
-        const known = ow.explored[cz * MAP_W + cx] || game.revealMap;
-        const icon = icons.get(cz * 10000 + cx);
-        if (this.hovering(x, y, 2, 1)) hover = { cell, known, icon };
-        if (!known) {
-          g.text(x, y, '░░', '#2a2632', '#0e0c14');
-          continue;
-        }
-        for (let hf = 0; hf < 2; hf++) {
-          const b = BIOMES[cell.halves[hf]];
-          let ch = b.char;
-          let fg = b.fg;
-          let bg = b.bg;
-          if (cell.river && hf === 1 && cell.biome !== 'ocean') {
-            ch = '~';
-            fg = '#80d0ff';
-          }
-          if (cell.lake) {
-            ch = '≈';
-            fg = '#80c8ff';
-            bg = '#1a4a8a';
-          }
-          if (this.civView && cell.civ !== null && ow.civs[cell.civ]) bg = shadeHex(ow.civs[cell.civ].color.hex, 0.45);
-          g.put(x + hf, y, ch, fg, bg);
-        }
-        if (icon) {
-          const s = icon.s;
-          const col = s.civ ? s.civ.color.hex : '#e8e8e8';
-          g.text(x, y, icon.glyph, '#fff4d0', shadeHex(col, icon.shade));
-          if (s.condition === 'abandoned' || s.deserted) g.text(x, y, ' †', '#a0a0a0', '#302830');
-        }
-        if (cx === pcx && cz === pcz && blink) g.put(x + ((p.x % REGION_W) >= REGION_W / 2 ? 1 : 0), y, '@', '#ffffff', '#c02020');
-      }
-    }
-    // Wars and raids: tomorrow's battlefield, the fields fought over
-    // lately, and towns expecting raiders.
-    let mark = null;
-    const seen = (cx, cz) => cx >= 0 && cz >= 0 && cx < MAP_W && cz < MAP_H && (ow.explored[cz * MAP_W + cx] || game.revealMap);
-    this.armies = [];
-    for (const m of game.sim.war.markers()) {
-      const cx = Math.floor(m.x / REGION_W);
-      const cz = Math.floor(m.z / REGION_D);
-      if (!seen(cx, cz)) continue;
-      // (Armies on the march are drawn finer, below.)
-      if (m.kind === 'army') {
-        this.armies.push(m);
-        if (this.hovering(2 + cx * 2, 1 + cz, 2, 1)) mark = m;
-        continue;
-      }
-      const x = 2 + cx * 2 + (m.kind === 'raid' ? 0 : (m.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
-      const y = 1 + cz;
-      if (m.kind !== 'raid' && icons.has(cz * 10000 + cx)) continue;
-      if (m.kind === 'raid') {
-        if (blink) g.put(x, y, '!', '#ffffff', '#c03020');
-      } else g.put(x, y, 'X', m.kind === 'battle' ? '#ffffff' : '#ff9080', m.kind === 'battle' ? (blink ? '#c02020' : '#801818') : '#3a1a1a');
-      if (this.hovering(x, y, 1, 1)) mark = m;
-    }
-    // Bandit camps you've heard of (or seen the smoke of).
-    for (const c of game.sim.bandits ? game.sim.bandits.knownCamps() : []) {
-      const cx = Math.floor(c.x / REGION_W);
-      const cz = Math.floor(c.z / REGION_D);
-      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || icons.has(cz * 10000 + cx)) continue;
-      const x = 2 + cx * 2 + ((c.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
-      g.put(x, 1 + cz, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10');
-      if (this.hovering(x, 1 + cz, 1, 1)) mark = { label: `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}` };
-    }
-    // Old places: those you've found, or been told of. A barrow's mound, a
-    // mine's headframe, a crypt's sinkhole, a cave mouth; a Kavorent spire
-    // pale blue and flickering. (Grey once beaten.)
-    for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
-      if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
-      const cx = Math.floor(d.x / REGION_W);
-      const cz = Math.floor(d.z / REGION_D);
-      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H || icons.has(cz * 10000 + cx)) continue;
-      const x = 2 + cx * 2 + ((d.x % REGION_W) >= REGION_W / 2 ? 1 : 0);
-      const kav = d.type === 'kavorent';
-      const glyph = OLD_PLACE_GLYPH[d.type] || '∩';
-      const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : '#f0d8a0';
-      g.put(x, 1 + cz, glyph, fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16');
-      if (this.hovering(x, 1 + cz, 1, 1)) {
-        const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
-        mark = { label: `${cap(d.name)} (${DTYPES[d.type].name}) · ${what}`, color: kav ? '#7ae0ff' : '#f0d8a0' };
-      }
-    }
-    const y0 = MAP_H + 2;
-    if (hover && hover.known) {
-      const c = hover.cell;
-      let info = `${BIOMES[c.biome].name}`;
-      if (c.river) info += ' · river';
-      if (c.lake) info += ' · lake';
-      if (hover.icon) {
-        const s = hover.icon.s;
-        info = `${s.name} · ${cap(s.type)} · ${s.condition} · ${BIOMES[s.biome].name}`;
-        const L = game.world.layouts.get(s.id);
-        const rd = L && L.econ && L.econ.raidedDay;
-        if (rd !== undefined && rd !== null && game.day - rd <= 3) info += game.day === rd ? ' · raided today' : ` · raided ${game.day - rd} day${game.day - rd === 1 ? '' : 's'} ago`;
-        g.text(2, y0 + 1, s.civ ? `${s.civ.name} (${s.civ.people}; ${s.civ.values.join(', ')})` : 'Independent', s.civ ? s.civ.color.hex : C.dim);
-      } else if (c.civ !== null && ow.civs[c.civ]) g.text(2, y0 + 1, `Territory of the ${ow.civs[c.civ].name}`, ow.civs[c.civ].color.hex);
-      g.text(2, y0, info.slice(0, this.w - 4), C.hi);
-      if (mark) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
-    } else if (hover) g.text(2, y0, 'Unexplored', C.dim);
-    if (mark && !(hover && hover.known)) g.text(2, y0 + 1, mark.label.slice(0, this.w - 4).padEnd(this.w - 4), mark.color || '#ff9080');
-    // (Only with nothing pointed at: it used to write over the place's name.)
-    else if (!hover) g.text(2, y0, 'Each square = 2x2 screens. Hover for details.', C.dim);
-    g.text(2, y0 + 2, '⌂ village [■] town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
-    const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[V] ${this.civView ? 'biomes' : 'civilizations'}  [M/ESC] close `;
-    g.text(this.w - t.length - 2, this.h - 1, t, game.cheats?.mapTeleport ? C.hi : C.dim);
-  }
-  // The roads between towns, drawn over the land as a line through each
-  // map square they pass: straight across, straight up, or round a corner
-  // (as the road really runs). Only what's built, and only where you've
-  // been; town squares keep their icons, the road running up to them.
-  drawPixels(ctx, game) {
-    if (!game) return;
-    const ow = game.world.ow;
-    const icons = this.icons || settlementIcons(game);
-    const ox = this.x * CHAR_W;
-    const oy = this.y * CHAR_H;
-    const known = (cx, cz) => cx >= 0 && cz >= 0 && cx < MAP_W && cz < MAP_H && (ow.explored[cz * MAP_W + cx] || game.revealMap);
-    const links = roadCellLinks(game.sim.diplomacy.roads);
-    const w = CHAR_W * 2;
-    const h = CHAR_H;
-    ctx.save();
-    for (const [k, dirs] of links) {
-      const cx = k % 10000;
-      const cz = Math.floor(k / 10000);
-      if (!known(cx, cz) || icons.has(k)) continue;
-      const mx = Math.round(ox + (2 + cx * 2) * CHAR_W + w / 2);
-      const my = Math.round(oy + (1 + cz) * CHAR_H + h / 2);
-      // A dark edge under a pale line, so it reads on any ground.
-      for (const [col, t] of [['rgba(40,28,16,0.55)', 4], ['rgba(238,212,160,0.9)', 2]]) {
-        ctx.fillStyle = col;
-        for (const d of dirs) {
-          // From the middle of the square out to the edge it leaves by.
-          if (d === 'E') ctx.fillRect(mx - t / 2, my - t / 2, w / 2 + t / 2, t);
-          else if (d === 'W') ctx.fillRect(mx - w / 2, my - t / 2, w / 2 + t / 2, t);
-          else if (d === 'S') ctx.fillRect(mx - t / 2, my - t / 2, t, h / 2 + t / 2);
-          else ctx.fillRect(mx - t / 2, my - h / 2, t, h / 2 + t / 2);
-        }
-        if (dirs.size === 1) {
-          // A road that stops here (still being built): a dot at the end.
-          ctx.fillRect(mx - t / 2, my - t / 2, t, t);
-        }
-      }
-    }
-    // Where something on the map is, in pixels.
-    const at = (x, z) => ({ x: ox + (2 + (x / REGION_W) * 2) * CHAR_W, y: oy + (1 + z / REGION_D) * CHAR_H });
-    const time = this.ui.time;
-    // Smoke still rising over a town raided these last days.
-    for (const s of ow.settlements) {
-      const L = game.world.layouts.get(s.id);
-      const rd = L && L.econ ? L.econ.raidedDay : undefined;
-      if (rd === undefined || rd === null || game.day - rd > 3 || !known(s.cx, s.cz)) continue;
-      const fresh = 1 - (game.day - rd) / 4;
-      const mx = ox + (2 + s.cx * 2) * CHAR_W + w / 2;
-      const my = oy + (1 + s.cz) * CHAR_H + 2;
-      if (game.day - rd <= 1) {
-        ctx.fillStyle = `rgba(255,140,40,${0.35 + 0.25 * Math.sin(time * 9)})`;
-        ctx.fillRect(mx - 2, my - 1, 4, 2);
-      }
-      for (let i = 0; i < 4; i++) {
-        const ph = (time * 0.45 + i / 4 + s.id * 0.13) % 1;
-        const r = 1.5 + ph * 3.5;
-        ctx.fillStyle = `rgba(${game.day === rd ? '70,66,62' : '130,126,120'},${(1 - ph) * 0.55 * fresh})`;
-        ctx.beginPath();
-        ctx.arc(mx + Math.sin(ph * 5 + i) * 2 + ph * 3, my - ph * 16, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    // Goods on the move: merchants and caravans along the roads (a few).
-    this.tradeT = (this.tradeT || 0) - 1;
-    if (this.tradeT <= 0 || !this.trade) {
-      this.tradeT = 20;
-      // (Where they really are, when they're out on the road near you; one
-      // mark for a whole company, at its lead wagon.)
-      const ents = game.caravans || new Map();
-      const marks = new Map();
-      const add = (k, x, z, live) => {
-        const m = marks.get(k);
-        if (!m || (live && !m.live)) marks.set(k, { x, z, live });
-      };
-      for (const tr of game.sim.travellers()) {
-        if (!tr.pos || !(tr.company || (tr.rec && (tr.rec.traveler || tr.rec.job === 'merchant')))) continue;
-        const n = ents.get(tr.key);
-        const live = n && !n.dead;
-        add(tr.company ? `g${tr.company.id}` : tr.key, live ? n.x : tr.pos.x, live ? n.z : tr.pos.z, live);
-      }
-      // (And those still riding in, whose journey's reckoning has them there.)
-      for (const [k, n] of ents) {
-        if (n.dead || !n.tr || !(n.tr.company || n.tr.rec.traveler || n.tr.rec.job === 'merchant')) continue;
-        add(n.tr.company ? `g${n.tr.company.id}` : k, n.x, n.z, true);
-      }
-      this.trade = [...marks.values()].sort((a, b) => b.live - a.live).slice(0, 14);
-    }
-    for (const t of this.trade) {
-      const cx = Math.floor(t.x / REGION_W);
-      const cz = Math.floor(t.z / REGION_D);
-      if (!known(cx, cz) || icons.has(cz * 10000 + cx)) continue;
-      const q = at(t.x, t.z);
-      ctx.fillStyle = 'rgba(40,24,8,0.8)';
-      ctx.fillRect(Math.round(q.x) - 2, Math.round(q.y) - 2, 4, 4);
-      ctx.fillStyle = Math.floor(time * 2 + t.x) % 2 ? '#ffe080' : '#f0c040';
-      ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 2, 2);
-    }
-    // Armies on the march: a banner in their colours, a column behind.
-    for (const m of this.armies || []) {
-      const q = at(m.x, m.z);
-      const bx = Math.round(q.x);
-      const by = Math.round(q.y);
-      ctx.fillStyle = 'rgba(30,20,20,0.85)';
-      for (let i = 1; i <= 3; i++) ctx.fillRect(bx - i * 3, by + 1, 2, 2);
-      ctx.fillRect(bx, by - 8, 1, 10);
-      ctx.fillStyle = m.color || '#c03030';
-      const wave = Math.round(Math.sin(time * 6) * 0.6);
-      ctx.fillRect(bx + 1, by - 8 + wave, 5, 3);
-    }
-    ctx.restore();
-  }
-  // With map teleport on (the command console), a click takes you there.
-  onClick(ck, cx, cy, game) {
-    if (!game || !game.cheats?.mapTeleport || ck.button !== 0) return super.onClick(ck, cx, cy, game);
-    const mx = Math.floor((cx - 2) / 2);
-    const mz = cy - 1;
-    if (mx < 0 || mz < 0 || mx >= MAP_W || mz >= MAP_H) return true;
-    const ow = game.world.ow;
-    if (!ow.explored[mz * MAP_W + mx] && !game.revealMap) {
-      this.ui.msg('You can only teleport to places you have seen (or "reveal" the map).', '#ff9060');
-      return true;
-    }
-    const cell = ow.cell(mx, mz);
-    if (cell && cell.biome === 'ocean') {
-      this.ui.msg('That\'s the open sea.', '#ff9060');
-      return true;
-    }
-    // (To the square of a town, or the half of the square you clicked.)
-    const icon = settlementIcons(game).get(mz * 10000 + mx);
-    const s = icon ? icon.s : null;
-    const L = s ? game.sim.layoutOf(s.id) : null;
-    const x = L && L.plaza ? L.plaza.cx : mx * REGION_W + ((cx - 2) % 2 ? REGION_W * 0.75 : REGION_W * 0.25);
-    const z = L && L.plaza ? L.plaza.cz + 3 : mz * REGION_D + REGION_D / 2;
-    teleportTo(game, x, z);
-    this.ui.msg(s ? `Teleported to ${s.name}.` : 'Teleported.', '#c8d8ff');
-    this.close();
-    return true;
-  }
-  onKey(k) {
-    if (k.code === 'KeyV') {
-      this.civView = !this.civView;
-      return true;
-    }
-    return false;
-  }
-}
+// (Zoomable and draggable, the whole world: see worldmap.js.)
+export { MapWindow } from './worldmap.js';
 
 // Where each place shows on the map, and how: a village is one square, a
 // town two, a city a block of four (with a double line once it has walls).
@@ -1681,13 +1407,6 @@ function mixHex(a, b, t) {
   return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
-function shadeHex(hex, f) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) * f);
-  const g = Math.round(((n >> 8) & 255) * f);
-  const b = Math.round((n & 255) * f);
-  return `rgb(${r},${g},${b})`;
-}
 
 // ---------------------------------------------------------------- text / signs
 export class TextWindow extends Window {

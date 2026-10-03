@@ -444,11 +444,11 @@ test('towns grow: new trades, a village becomes a town, a town a walled city', (
 });
 
 test('a walled city out of room pulls down part of its wall and builds beyond it', () => {
-  const game = makeGame(4242);
+  const game = makeGame(1);
   const input = stubInput();
   game.minute = 8 * 60;
   // (A walled city with little room left inside.)
-  const s = game.world.ow.settlements.find((q) => q.name === 'Wilbrook');
+  const s = game.world.ow.settlements.filter((q) => q.type === 'city' && q.island === 'thessa' && game.world.getLayout(q).walled)[0];
   visit(game, input, s);
   const L = game.world.getLayout(s);
   assert.ok(L.walled);
