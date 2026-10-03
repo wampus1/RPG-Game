@@ -20,7 +20,7 @@ import { settlementIcons, roadCellLinks } from './windows.js';
 
 // Pixels across a map square at each step of the zoom (a square is two
 // thirds as tall as it is wide, like two characters side by side).
-export const ZOOMS = [1.5, 3, 4.5, 6, 9, 12, 24];
+export const ZOOMS = [1.4, 3, 4.5, 6, 9, 12, 24];
 const HOME_ZOOM = 5; // 12: the old map's scale
 const GLYPHS_FROM = 12; // close enough to draw the glyphs
 const TILES_FROM = 6; // ...or condensed tiles of them
@@ -226,10 +226,17 @@ export class MapWindow extends Window {
     this.clampCam();
   }
 
+  // Keep the world in the window: no panning off past its edges, and far
+  // enough out to see all of it, it sits in the middle.
   clampCam() {
+    const a = this.area();
+    const { w, h } = this.sq();
+    const hw = (a.x1 - a.x0) / 2 / w;
+    const hh = (a.y1 - a.y0) / 2 / h;
+    const fit = (v, half, size) => (size <= half * 2 ? size / 2 : Math.max(half, Math.min(size - half, v)));
     for (const c of [this.cam, this.goal]) {
-      c.x = Math.max(0, Math.min(MAP_W, c.x));
-      c.z = Math.max(0, Math.min(MAP_H, c.z));
+      c.x = fit(c.x, hw, MAP_W);
+      c.z = fit(c.z, hh, MAP_H);
     }
   }
 
@@ -355,7 +362,7 @@ export class MapWindow extends Window {
     const q = m ? this.squareAt(m.x, m.y) : null;
     this.hoverSq = q;
     const y0 = this.h - 4;
-    const W = this.w - 4;
+    const W = this.w - 3; // (to the border)
     const put = (y, text, color) => g.text(2, y, text.slice(0, W).padEnd(W), color);
     if (q) {
       const d = this.describe(game, q.cx, q.cz);
@@ -379,7 +386,7 @@ export class MapWindow extends Window {
       put(y0, `Zoom ${Math.round((this.z / 12) * 100)}% · each square = 2x2 screens · point at anything for details.`, C.dim);
       put(y0 + 1, '', C.dim);
     }
-    put(y0 + 2, '⌂ village [■] town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
+    put(y0 + 2, '⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [M] close `;
     g.text(Math.max(1, this.w - t.length - 1), this.h - 1, t.slice(0, this.w - 2), game.cheats?.mapTeleport ? C.hi : C.dim);
   }

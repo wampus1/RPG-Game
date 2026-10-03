@@ -2093,6 +2093,119 @@ a wagon's bench puts you on the bench (or drives, if it's yours), and
 clicking its back puts you in the back. Passengers in a wagon are drawn
 whole instead of as a floating head.
 
+## Round 33: the Dagoni Islands
+
+**A much bigger world.** The world map is now 320 by 240 squares, up from
+40 by 29: some sixty times the area. Your island, Thessa, is one of three called the
+Dagoni Islands, and they sit inside a storm. Beyond it lie two great
+continents, Velmarch to the north and Ostria to the east, and five far
+isles. Those are land and biomes only for now, with nobody living there.
+Only the Dagoni Islands and the storm around them are worked out when a
+world is made; the rest of the world is worked out square by square as the
+map or anything else looks at it, so a new game starts as fast as before.
+(Saves from before this round can't be loaded: the world under them has
+changed.)
+
+**The storm.** A ring of wild water surrounds all three islands. Rain gets
+heavier and the wind rises as you near it, and lightning cracks overhead.
+No raft gets through: paddle into it and it throws you back ("it would take
+a real ship to get through"). The same goes for swimming or wading out.
+Inside the ring, the sea between the islands is calm, and a raft can cross
+from one to another.
+
+**Kharos, the fire island.** Ashlands, cinder woods of black trunks and
+ember-red leaves, steaming geyser fields with hot pools and vents, and in
+the middle the Sleeper, a volcano with a lava-filled crater. Rivers of lava,
+old ones cooled to basalt and obsidian, run down its sides. The ground has
+sulphur crusts, fire lilies and scorched patches. Its people are the
+Ashborn, who build in basalt and black glass, keep a fire lit by every door
+and eat fire-pepper stew and bread baked in the ash.
+
+**Myrrow, the misty island.** Mangrove swamps on stilt roots, moors of
+heather and peat, and forests of giant mushrooms, some of them glowing.
+Two peoples live there: the Mirefolk, in dark-timbered houses with
+mushroom-stalk posts, living on mushroom broth and glowcap tea; and the
+Stiltfolk, mangrove-built fishers with barrels and nets by every door,
+living on crab boil and kelp cakes.
+
+Each of the three new cultures has its own names, dress, gods and clergy,
+rites and sacred beasts, music, history, ship names, festival
+decorations, way of talking and stories.
+
+**Volcano.** Every 60 to 100 days the Sleeper wakes. Three days before, the
+ground shakes and Kharos's towns hear that it's stirring. When it goes up,
+everyone on all three islands hears and feels it: the screen shakes and
+flashes and you hear a deep roar. Ash then blots out the sun everywhere for
+two to four days, turning the light brown at noon while ash and embers
+drift down. New lava flows pour down its sides, glow for a few days, then
+cool to black rock and glass where they lie. On Kharos, people die and
+roofs burn, the closer to the mountain the worse, and the treasury takes a
+loss. The builders then repair the damage. If you're on Kharos when it
+erupts, burning rock rains down around you for a while, so keep moving.
+News reaches the other islands. `erupt` in the console sets it off now,
+and `erupt days` tells you how long until the next one.
+
+**Island creatures.** Kharos has ash lizards basking on the warm ash and
+magma crabs with glowing cracks in their rocky backs; both leave you alone
+unless you hit them. At night cinderlings drift out: sparks of the
+mountain that spit fire at you, and the ground burns where it lands. Myrrow
+has fat mire toads in the pools, and shroom crawlers overgrown with the
+mushrooms they eat, which puff stinging, slowing spores when you hit them.
+At night, hand-sized gloam moths glow like lamps (their dust quickens a
+draught), and there are more will-o'-the-wisps than anywhere else. The
+islands also have their own ambient sounds: vents hissing on Kharos,
+frogs in the mangroves on Myrrow.
+
+**Fish.** Kharos's waters hold the ember eel, which keeps to the warm
+water by the vents, and the black snapper. Myrrow's hold the mist carp and
+the glowfin, which bites best at night. Each bites only off its own
+island.
+
+**Goods and recipes.** You can saw cinder and mangrove logs into planks.
+Two peat turves char into coal, and a turf on a stick makes torches.
+Three obsidian shards knapped onto a stick make an obsidian blade, which is
+sharp and quick. You can forge a harpoon, and sulphur with coal makes
+dynamite. Crab cooks like any other meat, and gloam dust can stand in for
+feathers in a draught of swiftness. Traders from Kharos carry sulphur,
+obsidian, ash bread and blades; traders from Myrrow carry glowcaps, peat,
+crab and harpoons.
+
+**Each island's own learning.** The tree of learning is shared, but each
+island's realms can learn three steps nobody else can:
+- *Thessa*: Royal Roads (merchants come more often), Crop Rotation
+  (bigger harvests) and Horse Lords (riders even without a stable, and
+  harder-hitting raids).
+- *Kharos*: the Sulphur Trade (weekly income), the Obsidian Edge (guards
+  armed with obsidian, and harder-hitting armies) and Ash Masks (the
+  eruption kills far fewer).
+- *Myrrow*: Outriggers (faster crossings, stronger raids by sea), Fog
+  Wardens (towns defended better) and Spore Lore (potions without alchemy,
+  and townsfolk who heal overnight).
+
+**Across the water.** Realms on different islands deal with each other just
+as neighbours do: letters, envoys, trade, alliances, grievances, raids and
+wars. Nobody marches over the sea. Soldiers and raiders go from coast to
+coast by raft, a crossing of up to 70 squares (the outriggers make it
+quicker). They paddle in off the water and come ashore to fight. Traders
+cross too, so merchants from another island turn up in port towns.
+
+**The world map.** The map zooms out until the whole world fits and in to
+twice the old scale. Use the mouse wheel (toward the pointer) or +/-,
+drag it or hold W/A/S/D (or the arrows) to move, and press Space to come
+back to where you are. Close in, each square is drawn with its glyphs. A
+little further out the glyphs are squeezed into each square. Furthest out,
+each square is a dot of its colour, under the fog of where you haven't
+been; lands you've only heard of show as an old chart's outline. The
+storm is drawn as a ring, the Sleeper smokes on its island, and each
+landmass is labelled. The map stays inside the world's edges and is
+centred when it all fits.
+
+**Fixes.** Holdout cowards no longer spawn, for now: they were far too good
+at keeping out of reach. A town without metalworking no longer hands a new
+guard a stone woodcutting axe; it gives them a club instead. A camp that
+finds no flat ground by the road it came in on now tries the town's other
+roads.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2116,6 +2229,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `skip <days>` (or `ff`) | fast-forwards that many days (1–120), the whole world living them |
 | `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
 | `learn <step> [realm]`, `learn all [realm]`, `learn list` | a realm (yours, the one you're in, or one named at the end) learns a step of the tree at once, with whatever it needs first ("learn portals", "learn trade ships"); `all` learns everything it can (one side of each choice); `list` names the steps |
+| `erupt [days]` (or `volcano`) | the mountain on Kharos erupts now; with `days`, how long till it next does |
 
 Map teleporting and the revealed map are kept with your save.
 
@@ -2130,7 +2244,9 @@ src/
                        worldgen (world map), terrain (per-column sampling),
                        regiongen (tiles), trees, settlement (layouts,
                        buildings, interiors, walls), weather, loot,
-                       sites (old places on the map: barrows, mines,
+                       geography (the Dagoni Islands, the storm round
+                       them, the continents and far isles), sites (old
+                       places on the map: barrows, mines,
                        crypts, holdouts, Kavorent spires), dungeongen
                        (floors from room kits: shaped rooms, routed
                        passages, sealed rooms, dressing), voyage (the ship in the
@@ -2154,11 +2270,15 @@ src/
                        stone and alloy below ground), bossart (the masters
                        drawn big: auras, rims of light, walking legs),
                        oldplaces (spire runes, beacons, relic circles),
+                       isleart (Kharos's and Myrrow's ground, trees,
+                       lava, goods and creatures),
                        lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
                        crafting, trade, dialogue, map, help, pause, title,
-                       save slots), create (the character screen),
+                       save slots), worldmap (the world map: zoom, drag,
+                       W/A/S/D; glyphs, tiles or dots by how far out),
+                       create (the character screen),
                        research (the tech tree and the study minigame),
                        ancient (the Ancient Technology Tree), crewtalk
                        (talking to the ship's crew), portal (where an
@@ -2244,7 +2364,9 @@ src/
                        (faiths spreading, conquest, missions, holy wars,
                        pilgrimages), dungeons (old places' records,
                        rumours, adventurers' delves), ancient (the
-                       Kavorent's arts in each realm), and the
+                       Kavorent's arts in each realm), volcano (the
+                       Sleeper on Kharos: tremors, eruptions, ash, lava
+                       flows and their cooling), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

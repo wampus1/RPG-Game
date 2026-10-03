@@ -212,6 +212,11 @@ export class Volcano {
     const game = this.game;
     this.bombs -= dt;
     if (game.dungeon || this.bombs <= 0) return;
+    // (Only while you're on Kharos: sail away and you're out from under it.)
+    if (game.world.ow.islandAt(game.player.x, game.player.z) !== this.V.island) {
+      this.bombs = 0;
+      return;
+    }
     this.bombT = (this.bombT || 0) - dt;
     if (this.bombT > 0) return;
     this.bombT = 0.7 + Math.random() * 1.2;

@@ -287,6 +287,12 @@ test('the ash darkens the sky on every one of the islands, and a save keeps the 
   game.minute = 12 * 60;
   run(game, input, 2);
   assert.ok(game.ashLevel() > 0, 'dark at noon on Thessa');
+  // (Burning rock comes down only on Kharos: sail away and it stops.)
+  V.bombs = 10;
+  const hz = (game.hazards || []).length;
+  V.rain(0.1);
+  assert.equal(V.bombs, 0);
+  assert.equal((game.hazards || []).length, hz);
   const d = JSON.parse(JSON.stringify(game.sim.serialize()));
   const g2 = world();
   g2.sim.load(d);
@@ -310,8 +316,13 @@ test('the world map zooms in and out (condensed tiles, then dots) and pans with 
   }
   assert.ok(modes.includes('tiles') && modes.includes('dots'));
   assert.equal(w.z, ZOOMS[0]);
-  const whole = (w.area().x1 - w.area().x0) / w.z;
-  assert.ok(whole >= MAP_W * 0.5, 'the whole world (near enough) in view');
+  // All the way out: the whole world, in the middle of the window.
+  w.update(0.05);
+  const A = w.area();
+  const tl = w.at(0, 0);
+  const br = w.at(MAP_W * REGION_W, MAP_H * REGION_D);
+  assert.ok(tl.x >= A.x0 - 1 && br.x <= A.x1 + 1 && tl.y >= A.y0 - 1 && br.y <= A.y1 + 1, 'all of it in view');
+  assert.ok(Math.abs((tl.x + br.x) / 2 - (A.x0 + A.x1) / 2) < 2, 'centred');
   // Back in, and along with D held.
   w.zoomTo(3);
   const x0 = w.cam.x;
@@ -324,7 +335,14 @@ test('the world map zooms in and out (condensed tiles, then dots) and pans with 
   for (let i = 0; i < 20; i++) w.update(0.05);
   keys.clear();
   assert.ok(w.cam.z < z0 - 2, 'and north');
-  // Space: back to where you are.
+  // (Never off past the world's edge.)
+  keys.add('KeyA');
+  for (let i = 0; i < 200; i++) w.update(0.05);
+  keys.clear();
+  const a = w.area();
+  assert.ok(w.origin().x <= a.x0 + 1, 'the west edge stays at the window\'s edge');
+  // Space: back to where you are (close in).
+  w.zoomTo(ZOOMS.length - 1);
   w.onKey({ code: 'Space' });
   for (let i = 0; i < 60; i++) w.update(0.05);
   assert.ok(Math.abs(w.cam.x - game.player.x / REGION_W) < 1 && Math.abs(w.cam.z - game.player.z / REGION_D) < 1);
