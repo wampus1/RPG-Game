@@ -22,6 +22,7 @@ import { LAWS, lawList, byDecree } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete, teleportTo } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
+import { mastery, gainMastery, rankText } from '../game/mastery.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
 // peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
@@ -2122,6 +2123,15 @@ export class TitleWindow extends Window {
     if (Math.floor(t * 2) % 2) g.center(this.h - 2, 'PRESS A KEY', C.faint);
     const ctx = this.ui.audio && this.ui.audio.ctx;
     if (!ctx || ctx.state !== 'running') g.center(this.h - 4, '♪ click anywhere for music and sound', C.dim);
+    else {
+      // (What's playing: the title has a few songs, in turn.)
+      const song = this.ui.music && this.ui.music.nowPlaying ? this.ui.music.nowPlaying() : null;
+      if (song) {
+        const note = '♪♫'[Math.floor(t * 1.5) % 2];
+        g.fill(1, this.h - 2, song.length + 4, 1, ' ', C.fg, 'rgba(7,6,11,0.88)');
+        g.text(2, this.h - 2, `${note} ${song}`, C.dim);
+      }
+    }
   }
   update(dt) {
     this.t += dt;
@@ -2345,7 +2355,27 @@ export class NewsWindow extends Window {
 // runs round the setting; press SPACE as it passes each prong to press it
 // down over the stone. Three slips and the stone cracks.
 const RING = 24;
-const PRONGS = [3, 9, 15, 21];
+// How a setting goes, by your practice (see mastery.js) and the stone: more
+// claws (unevenly spaced, past the first rank), a gleam that may turn back
+// on itself, quicken and slow, and (later) cracked claws among the good
+// ones that must be left alone.
+export function settingPlan(rank, rare, rand = Math.random) {
+  const n = Math.min(6, 4 + Math.floor((rank - 1) / 4) + (rare ? 1 : 0));
+  const jit = rank >= 2 ? Math.min(1.6, 0.5 + rank * 0.15) : 0;
+  const prongs = [];
+  for (let k = 0; k < n; k++) prongs.push(((k + 0.5) * RING) / n + (rand() - 0.5) * 2 * jit);
+  const decoys = [];
+  const nd = rank >= 7 ? 2 : rank >= 4 ? 1 : 0;
+  for (let k = 0; k < nd; k++) {
+    // (In a gap between two good claws.)
+    const i = Math.floor(rand() * n);
+    const a = prongs[i];
+    const b = prongs[(i + 1) % n] + (i + 1 === n ? RING : 0);
+    const q = ((a + b) / 2) % RING;
+    if (!decoys.some((d) => Math.abs(d - q) < 1.5)) decoys.push(q);
+  }
+  return { prongs: prongs.map((q) => (q + RING) % RING), decoys, speed: 7 + 0.35 * (rank - 1), reverse: rank >= 3, pulse: rank >= 5 ? 0.35 : 0 };
+}
 export class SettingWindow extends Window {
   constructor(ui, game) {
     super(ui, 52, 22, { kind: 'setting' });
@@ -2394,19 +2424,24 @@ export class SettingWindow extends Window {
     const said = res ? wrap(gemText(socketed(pc.key, gk)).replace(/^Set with an? \w+: /, ''), this.w - 6) : [GEMS[gk].about];
     said.slice(0, 2).forEach((l, i) => g.text(3, 6 + i, l, C.fg));
     if (res) g.text(3, 8, `Makes: ${res.name}`, C.green);
-    g.text(3, 10, 'Press SPACE as the needle passes each prong.', C.faint);
+    g.text(3, 10, 'Press SPACE as the gleam passes each claw.', C.faint);
     g.text(3, 11, 'Three slips and the stone cracks.', C.faint);
-    const hov = this.hovering(3, 14, 22, 1);
-    g.fill(3, 14, 22, 1, ' ', C.fg, hov ? C.bgHi : '#2a2230');
-    g.text(4, 14, '[ENTER] Begin setting', C.hi);
-    this.hit(3, 14, 22, 1, () => this.begin());
+    const m = mastery(this.game, 'setting');
+    g.text(3, 12, rankText(this.game, 'setting'), '#c8a060');
+    const ways = [m.rank >= 2 && 'claws set unevenly', m.rank >= 3 && 'a gleam that turns back', m.rank >= 5 && 'that quickens and slows', m.rank >= 4 && 'cracked claws to leave be'].filter(Boolean);
+    if (ways.length) g.text(3, 13, `Your work now: ${ways.join(', ')}.`.slice(0, this.w - 5), C.dim);
+    const hov = this.hovering(3, 15, 22, 1);
+    g.fill(3, 15, 22, 1, ' ', C.fg, hov ? C.bgHi : '#2a2230');
+    g.text(4, 15, '[ENTER] Begin setting', C.hi);
+    this.hit(3, 15, 22, 1, () => this.begin());
   }
   // (The bench itself is drawn in pixels: see drawPixels.)
   drawRing(g) {
     const cy = 9;
     g.center(1, `${ITEMS[this.set.piece.key].name} · ${GEMS[this.set.gem].name}`, C.dim);
-    g.center(cy + 9, this.phase === 'done' ? 'Set! The stone sits true.' : this.phase === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'×'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}`, this.phase === 'fail' ? C.red : this.phase === 'done' ? C.green : C.fg);
-    g.center(cy + 11, this.phase === 'set' ? 'SPACE as the gleam crosses a claw' : '[ENTER] close', C.faint);
+    g.center(cy + 9, this.phase === 'done' ? 'Set! The stone sits true.' : this.phase === 'fail' ? 'Crack! The stone splits.' : `Slips: ${'×'.repeat(this.slips)}${'·'.repeat(3 - this.slips)}   Claws: ${this.pressed.filter(Boolean).length}/${this.prongs.length}`, this.phase === 'fail' ? C.red : this.phase === 'done' ? C.green : C.fg);
+    if (this.note && (this.t || 0) - this.note.t < 1.6) g.center(cy + 10, this.note.text, this.note.color);
+    g.center(cy + 11, this.phase === 'set' ? (this.decoys.length ? 'SPACE on a good claw; leave the cracked ones' : 'SPACE as the gleam crosses a claw') : '[ENTER] close', C.faint);
   }
   // Under the loupe: the stone in its gold collet, four claws standing up
   // round it, and a gleam of light running round the rim. Press as it
@@ -2495,7 +2530,22 @@ export class SettingWindow extends Window {
       const a = (i / RING) * Math.PI * 2 - Math.PI / 2;
       return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, a];
     };
-    PRONGS.forEach((q, k) => {
+    // Cracked claws (leave them be): dull, dark, a split in them, red as the
+    // gleam comes near.
+    (this.decoys || []).forEach((q) => {
+      const near = this.phase === 'set' && Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q)) <= 1.2;
+      const [ax, ay, a] = at(q, ring - 2);
+      for (let s2 = 0; s2 < 8; s2++) px(ax + Math.cos(a) * s2 - 1, ay + Math.sin(a) * s2 - 1, near ? '#c84a3a' : '#7a3a26', s2 < 3 ? 3 : 2, s2 < 3 ? 3 : 2);
+      // (The crack down it, and its broken tip.)
+      for (let s2 = 1; s2 < 7; s2++) px(ax + Math.cos(a) * s2 + Math.cos(a + 1.57) * ((s2 % 2) - 0.5), ay + Math.sin(a) * s2 + Math.sin(a + 1.57) * ((s2 % 2) - 0.5), '#1a0c08', 1, 1);
+      px(ax + Math.cos(a) * 8 - 1, ay + Math.sin(a) * 8 - 1, '#ff6040', 2, 2);
+      if (near) {
+        ctx.globalAlpha = 0.3 + 0.2 * Math.sin(t * 24);
+        px(ax - 4, ay - 4, '#ff4030', 8, 8);
+        ctx.globalAlpha = 1;
+      }
+    });
+    this.prongs.forEach((q, k) => {
       const near = this.phase === 'set' && !this.pressed[k] && Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q)) <= 0.9;
       const bend = this.pressed[k] ? Math.min(1, (t - (this.pressAt?.[k] ?? -9)) * 6) : 0;
       const [ax, ay, a] = at(q, ring - 2);
@@ -2516,7 +2566,7 @@ export class SettingWindow extends Window {
     // The gleam running round the rim, with its tail.
     if (this.phase === 'set') {
       for (let k = 0; k < 10; k++) {
-        const [gx, gy] = at(this.pos - k * 0.12, ring + 4);
+        const [gx, gy] = at(this.pos - k * 0.12 * (this.dir || 1), ring + 4);
         ctx.globalAlpha = (1 - k / 10) * 0.9;
         px(gx - 1, gy - 1, k === 0 ? '#ffffff' : '#ffe890', k === 0 ? 3 : 2, k === 0 ? 3 : 2);
       }
@@ -2556,10 +2606,17 @@ export class SettingWindow extends Window {
     if (!pieces.length || !gems.length) return;
     this.set = { piece: pieces[this.piece], gem: gems[this.gem] };
     this.phase = 'set';
+    const plan = settingPlan(mastery(this.game, 'setting').rank, !!GEMS[this.set.gem].rare);
+    this.prongs = plan.prongs;
+    this.decoys = plan.decoys;
+    this.reverse = plan.reverse;
+    this.pulse = plan.pulse;
+    this.dir = 1;
     this.pos = 0;
-    this.speed = 7;
+    this.speed = plan.speed;
     this.slips = 0;
-    this.pressed = PRONGS.map(() => false);
+    this.pressed = this.prongs.map(() => false);
+    this.note = null;
     this.ui.audio?.play('select');
   }
   update(dt) {
@@ -2573,13 +2630,14 @@ export class SettingWindow extends Window {
     }
     if (this.fx) this.fx = this.fx.filter((f) => f.life > 0);
     if (this.phase !== 'set') return;
-    this.pos = (this.pos + dt * this.speed) % RING;
+    const v = this.speed * (this.dir || 1) * (1 + (this.pulse || 0) * Math.sin((this.t || 0) * 2.3));
+    this.pos = (((this.pos + dt * v) % RING) + RING) % RING;
   }
   press() {
     // The nearest unpressed prong within reach of the needle.
     let best = -1;
     let bd = 99;
-    PRONGS.forEach((q, k) => {
+    this.prongs.forEach((q, k) => {
       if (this.pressed[k]) return;
       const d = Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q));
       if (d < bd) {
@@ -2589,24 +2647,32 @@ export class SettingWindow extends Window {
     });
     this.pushT = 0.15;
     const claw = (k) => {
-      const a = (PRONGS[k] / RING) * Math.PI * 2 - Math.PI / 2;
+      const a = (this.prongs[k] / RING) * Math.PI * 2 - Math.PI / 2;
       return [Math.cos(a) * 22, Math.sin(a) * 22];
     };
-    if (best >= 0 && bd <= 0.9) {
+    const onDecoy = (this.decoys || []).some((q) => Math.min(Math.abs(this.pos - q), RING - Math.abs(this.pos - q)) <= 0.9);
+    if (best >= 0 && bd <= 0.9 && !onDecoy) {
       this.pressed[best] = true;
       (this.pressAt ||= [])[best] = this.t || 0;
       this.speed += 2.5;
       this.ui.audio?.play('clang');
       const [x, y] = claw(best);
       this.burst(x, y, ['#fff4b0', '#ffd040', '#ffffff'], 12, 45);
+      // (Later on, the gleam may turn back on itself.)
+      if (this.reverse && Math.random() < 0.5) {
+        this.dir = -(this.dir || 1);
+        this.note = { text: 'The gleam turns back!', color: C.orange, t: this.t || 0 };
+      }
       if (this.pressed.every(Boolean)) {
         this.phase = 'done';
         this.endAt = this.t || 0;
         this.burst(0, 0, [GEMS[this.set.gem].color, '#ffffff', '#fff4b0'], 30, 70);
         this.game.setGem(this.set.piece.ref, this.set.gem);
+        gainMastery(this.game, 'setting', 1 + (GEMS[this.set.gem].rare ? 1 : 0) + (this.slips === 0 ? 1 : 0));
       }
       return;
     }
+    if (onDecoy) this.note = { text: 'That claw\'s cracked: leave it be!', color: C.red, t: this.t || 0 };
     this.slips++;
     this.ui.audio?.play('error');
     // A crack runs through the stone.

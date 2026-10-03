@@ -234,7 +234,26 @@ function makeLook(rng, style, age, job, civ) {
       }
     }
   }
+  finerThings(look, age, job);
   return look;
+}
+
+// The finer things (eyes, how a beard's worn, a kerchief, gloves, a
+// cloak), settled from the rest of the look rather than drawn from the
+// town's dice, so nothing else about anyone changes for them.
+const EYE_COLS = ['#1e1a28', '#1e1a28', '#4a2e1a', '#4a2e1a', '#6a5a2a', '#3a6a3a', '#3a5a9a', '#7a8090'];
+const KERCHIEFS = ['#c83a32', '#2f6f8f', '#e0d0b0', '#3a7a3a', '#c8a030'];
+function finerThings(look, age, job) {
+  let h = 2166136261;
+  for (const ch of `${look.skin}${look.hair}${look.hairStyle}${look.shirt}${look.pants}${look.acc || ''}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const roll = (k) => (Math.imul(h ^ (k * 0x9e3779b1), 2654435761) >>> 0) / 4294967296;
+  const pick = (k, list) => list[Math.floor(roll(k) * list.length)];
+  look.eyeColor = pick(1, EYE_COLS);
+  if (look.beard) look.beardStyle = pick(2, ['full', 'full', 'goatee', 'stubble', 'long', 'chinstrap']);
+  if (age === 'child') return;
+  if (roll(3) < (job === 'fisher' || job === 'trapper' || job === 'farmer' ? 0.22 : 0.07)) look.neck = pick(4, KERCHIEFS);
+  if (roll(5) < (job === 'smith' || job === 'trapper' || job === 'guard' || job === 'builder' ? 0.4 : 0.03)) look.gloves = pick(6, ['#4a2e1a', '#2a2a2a', '#7a5232']);
+  if (roll(7) < (job === 'noble' || job === 'mayor' ? 0.5 : job === 'priest' ? 0.2 : 0.02)) look.cape = pick(8, [look.accent, '#2f4a6f', '#8f2f3a', '#4a3a2a']);
 }
 
 // ---------------------------------------------------------------- personality

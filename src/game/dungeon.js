@@ -400,7 +400,13 @@ export class DungeonRun {
     for (const c of game.creatures) {
       if (!c.dormant || c.dead) continue;
       if (c.waiting) {
-        if (c.hp < c.maxHp) this.bossFight();
+        // (Struck where it waits, by you, from its hall or its doorway: it
+        // wakes. Not for the wounds it settled back with, nor anything
+        // that hurt it while you're nowhere near.)
+        const br = this.data.bossRoom;
+        const near = br && p.x >= br.x0 - 3 && p.x <= br.x1 + 3 && p.z >= br.z0 - 3 && p.z <= br.z1 + 3;
+        if (c.hp < (c.restHp ?? c.maxHp) && near && !p.dead) this.bossFight();
+        c.restHp = Math.min(c.restHp ?? c.maxHp, c.hp);
         continue;
       }
       const d = Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z));
@@ -496,8 +502,10 @@ export class DungeonRun {
     game.renderer.flashScreen?.('#400000', 0.35);
     // (The camera goes to it as it wakes, and its fires catch: see scenes.js.
     // Only the first time you come in: after, it's straight to it.)
-    if (!this.metBoss && !game.scene) {
+    // (Its waking scene once a place, not every time you come back to it.)
+    if (!this.metBoss && !this.rec.metBoss && !game.scene) {
       this.metBoss = true;
+      this.rec.metBoss = true;
       game.scene = bossEntrance(game, this, boss);
     } else game.audio?.play('roar', lead);
   }
@@ -526,7 +534,10 @@ export class DungeonRun {
         c.waiting = true;
         c.dormant = 1;
         c.target = null;
+        c.windup = null;
+        c.act = null;
         c.hp = Math.min(c.maxHp, c.hp + Math.round(c.maxHp * 0.25));
+        c.restHp = c.hp;
       }
       this.fight = null;
       game.ui.msg('Behind you, the thing in the hall settles back to wait.', '#c8b8a0');

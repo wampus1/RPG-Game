@@ -361,6 +361,12 @@ item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 
 // --- hobby & trade goods -------------------------------------------------------
 item('lute', { kind: 'misc', stack: 1, value: 25 });
 item('dice', { kind: 'misc', stack: 8, value: 3 });
+// For a household's locked chest (see ui/lockpick.js). Holdout thieves
+// carry them; four are beaten out of an iron ingot at an anvil.
+item('lockpick', { name: 'Lockpick', kind: 'misc', stack: 16, value: 4, about: 'A thin steel pick and a tension wrench. Use one on a locked chest: flick the pins up and turn as each one meets the shear line. A slip strains it; too many and it snaps.' });
+// A holdout bombarder's (see monsters.js): lit and thrown where you point
+// (right button), it goes up a moment after it lands.
+item('dynamite', { name: 'Dynamite', kind: 'misc', stack: 8, value: 8, about: 'A stick of blasting powder with a fuse. Right-click to light it and throw it where you point: it goes up a moment after it lands, and hurts whoever is near.' });
 item('sketchbook', { kind: 'misc', stack: 1, value: 8 });
 item('prayer_beads', { name: 'Prayer Beads', kind: 'misc', stack: 1, value: 6 });
 item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4 });

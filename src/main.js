@@ -27,7 +27,9 @@ const audio = new Audio();
 const music = new Music(audio);
 window.__music = music;
 const ui = new UI(audio);
+ui.music = music;
 const input = new Input(screen, crt);
+window.__input = input;
 let game = null;
 
 function resize() {

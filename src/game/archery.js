@@ -18,7 +18,7 @@ import { gemsOf, arrowSpeed, splitShot, mirrorShot } from './gems.js';
 import { has as heroHas, cooldownMult } from './hero.js';
 import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './combat.js';
 import { aegisUp } from './kavtech.js';
-import { covers } from '../entities/footprint.js';
+import { covers, padded, MASTER_PAD } from '../entities/footprint.js';
 import { shielded } from '../entities/monsters.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
@@ -216,7 +216,7 @@ export function flyAimed(game, a) {
   while (a.k <= reach) {
     const x = Math.round(a.x0 + a.ux * a.k);
     const z = Math.round(a.z0 + a.uz * a.k);
-    const v = victimAt(game, a, x, z);
+    const v = victimAt(game, a, x, z, a.x0 + a.ux * a.k, a.z0 + a.uz * a.k);
     if (v) {
       a.tx = x;
       a.tz = z;
@@ -228,11 +228,13 @@ export function flyAimed(game, a) {
   return null;
 }
 
-function victimAt(game, a, x, z) {
+function victimAt(game, a, x, z, px = x, pz = z) {
   if (x === a.x0 && z === a.z0) return null;
   const y = a.y0 - 1;
   for (const e of [game.player, ...game.npcs, ...game.creatures]) {
-    if (!e || e === a.from || e.dead || e.down || !covers(e, x, z) || Math.abs(e.y - y) > 1) continue;
+    if (!e || e === a.from || e.dead || e.down || Math.abs(e.y - y) > 1) continue;
+    // (A master's a little more to hit than its one pace.)
+    if (!covers(e, x, z) && !(padded(e) && Math.hypot(px - e.x, pz - e.z) <= MASTER_PAD)) continue;
     return e;
   }
   return null;

@@ -56,7 +56,7 @@ with the music off; `&nointro` skips a new character's opening scene.
 | Place block | Select a block item and click (hold to keep placing) |
 | Rotate the block you're about to place | R |
 | Turn the camera a quarter turn | Q / E |
-| Lock the mining/placing layer | Z / X (Shift + wheel), V returns to AUTO |
+| Lock the mining/placing layer | Z / X, V returns to AUTO |
 | Attack | Left-click a creature or person (a bow, crossbow or sling shoots at range; a javelin is thrown); hold the click for a heavy blow |
 | Fight with two blades | Right-click a one-handed weapon in your pack to carry it in the off hand (where a shield goes) |
 | Carry a light in the off hand | Right-click a torch, lantern or the Everlight in your pack (it goes where a shield would) |
@@ -1895,6 +1895,121 @@ has three quarters the health it had. Burial rooms have two or three rows of
 coffins down the middle, never more than eight, rather than a field of them.
 The Pale Huntsman doesn't come up as a master for now.
 
+## Round 31: below ground, behind locks, and the fine work
+
+**Digging you can read.** Down in the ground (rock or earth over your head,
+not a roof), the whole view is cut away at your feet into a plan of the
+workings. Rock you'd dig through is dark and hatched; every passage's edge is
+traced in light; ore glints in the walls near you; a step up shows a pale
+arrow, a drop a blue one; and anywhere the roof's too low to stand is hatched
+amber. Surface folk and things overhead aren't drawn over it. The pointer
+works on that plan: point at rock beside you and you dig it, and the rock
+over it goes too (a dashed square inside the outline shows that), so what
+you dig you can always walk into and you can't strand yourself in a tunnel
+too low to stand in. Point at the floor and you dig down (it's marked -1);
+point at open floor with a block in hand and it goes there, level with you.
+(Lock the layer with Z/X and you dig one block at a time as before.)
+
+**Where a block will go.** The block you're about to place is shown with a
+dotted line dropped from it to the ground it stands over (that ground's top
+outlined, with a cross), and its height against your feet (+1, 0, -2...)
+beside it. A block you're pointing at that isn't level with you says its
+height too, and holding something to place, the tooltip says "click set it
+here", "on top" or "below" instead of offering to mine.
+
+**Quick fixes.** The mouse wheel, with or without Shift, only picks the
+hotbar slot now (Z and X still change the working layer). A master the size
+of a person (the Barrow King, the Warlord, Wren...) is a little easier to
+hit: a blow or an arrow that comes within most of a pace of it finds it, and
+its hover box is bigger. A master you died to no longer starts its fight
+again when you come back to its floor: it only wakes for you walking into
+its hall or striking it, never for the wounds it settled back with (and its
+waking scene plays once a place). The darkness no longer flickers while a
+master's scene zooms the camera.
+
+**The title's songs.** The title plays one of eight songs, moving on to
+another every few minutes and never the same twice running: The Long Road,
+Dawn over the Vale (on bells), a Hearthside Waltz (three to the bar, sung in
+parts), the Ballad of the Barrows, Under the Banner (a march, with brass),
+Far Shores (a shanty), What Lies Below (a slow bell in the dark), and Glass
+and Starlight (the Kavorent's scale, as a waltz). What's playing is shown in
+the corner.
+
+**A bigger character screen.** The LOOKS tab scrolls (the wheel, the arrows
+on its bar, Page Up/Down, or just moving down it) and has more in it: eye
+colour, a beard worn full, long, as a goatee, stubble or a chinstrap, marks
+on the face (war paint, an inked teardrop, rosy cheeks, a mole, red
+stripes), two more hair styles (wavy, an undercut), a tricorn and a leaf
+wreath, a belted tunic and a travelling coat, patched clothes, and a
+kerchief, a cloak and gloves in a colour of your choosing. On the first tab
+you can pick which people's names "another name" draws from. New starting
+gear: Herbalist, Smith, Bard and Cutpurse (lockpicks!). New traits: Night
+Owl (breath back twice as fast from dusk to the small hours), Steady Hands
+(easier locks), and the flaw Squeamish (raw meat and fish do you no good).
+Townsfolk now wear some of these too (kerchiefs on fishers, gloves on
+smiths and guards, a cloak on a mayor).
+
+**Three more of the holdout's own.** Bandit dungeons have three new kinds,
+each dressed their own way:
+- *Bombarders* (a scorched apron, goggles, gloves, a bright bandana) hang
+  back four to nine paces, light a stick of dynamite ("Fire in the hole!",
+  the fuse sparking in their hand) and lob it at you: it tumbles through
+  the air, lands, fizzes a moment with the ground it'll throw marked, and
+  goes up, hurting anyone near, their own side as well, and setting off any
+  powder kegs. Too close to throw, they back off; cornered, out comes a
+  knife. They drop dynamite: right-click with it to throw it where you
+  point.
+- *Thieves* (all in black, cowled and masked) are quick, carry two blades
+  (or a short sword and a knife), and slip out from under your blows. Face
+  to face in a line with you (a corridor suits them best) they roll clean
+  past you to your back, so you're caught between them and the rest. They
+  sometimes carry lockpicks.
+- *Cowards* (in rags, hunched) keep three to six paces off, shouting for
+  help now and then: one or two of their own nearby come running. Left with
+  nobody of their own near, they lose their heads and come at you in a
+  frenzy, stabbing three and four times a go.
+
+**Locked chests.** A household's own chest is locked (not your hosts', not a
+shop's, not a barrel), and most homes now have one. With a lockpick (four
+are beaten out of an iron ingot at an anvil; thieves carry them) and
+nobody watching, you can pick it: the lock is shown cut away, each chamber
+with its spring, driver pin and key pin, the shear line across them, your
+pick in the keyway. Flick a pin up (↑ or a click) and its spring brings it
+back down; turn the plug (SPACE or a right-click) just as the gap between
+its pins meets the shear line and the pin catches. Turn at the wrong moment
+and the pick takes the strain; too much and it snaps. A village's iron lock
+has three pins; a town's brass, four; a city's, five; a manor's steel, six.
+Better locks bind in an order (only the binding pin will set: it's stiff to
+lift and quivers when flicked) and the best have spool pins that give a
+false set first. Someone coming and you slip the pick out. Picked, a chest
+stays open a couple of days until its owners notice and lock it again (and
+what you take is still theft).
+
+**The fine work, for the long run.** Fishing, setting stones, study at the
+desk and picking locks each have ranks (one to ten, shown in each), rising
+with every success, and the work changes as you rise:
+- *Fishing*: what bites depends on the water (perch, carp and trout in
+  fresh water; mackerel and sea bass in the sea) and on your rank (pike and
+  eels for an old hand, more eels in the rain and pike at night, swordfish
+  out at sea, and now and then a golden carp). Each kind fights its own way:
+  a perch drifts, a carp is heavy and hauls your zone back, a pike rests
+  then darts, an eel weaves, a trout zigzags, a golden carp goes
+  everywhere. Big ones fight harder and land an extra fish, and sometimes
+  something glints on the bottom: keep it in your zone a moment and it
+  comes up with the catch. The reel is drawn under the water now: light
+  moving on the bottom, weed, bubbles, your zone a net of light, the fish
+  itself in its colours with its tail going.
+- *Setting a stone*: more claws as you rise (four to six), unevenly spaced,
+  a gleam that turns back on itself and later quickens and slows, and
+  cracked claws among the good ones that must be left alone.
+- *Study*: the rings drift quicker, their gearing varies (the ring inside
+  may turn half against, half along, right back, or not at all: shown
+  between them and down the side), a fourth ring comes in, and insights one
+  after another without a blot run on as a streak worth more each time. The
+  sky inside has drifting nebulae and falling stars; blots stay on your
+  notes.
+- *Lockpicking*: practice widens the gaps and eases the strain.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -1963,7 +2078,8 @@ src/
                        research (the tech tree and the study minigame),
                        ancient (the Ancient Technology Tree), crewtalk
                        (talking to the ship's crew), portal (where an
-                       arch can take you)
+                       arch can take you), lockpick (a lock cut away,
+                       picked pin by pin)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), combat (wind-
@@ -1983,7 +2099,10 @@ src/
                        riding (your own horses and wagons, and a town's
                        horse taken out by a citizen), leads, dungeon
                        (being down below: floors, traps, puzzles), relics,
-                       kavtech (the Kavorent's gear and gadgets), laser
+                       kavtech (the Kavorent's gear and gadgets),
+                       lockpick (how a lock's pins set, bind and snap your
+                       pick), mastery (ranks in the fine work: fishing,
+                       setting, study, lockpicking), laser
                        (the great beam: the Overseer's and its Eye's),
                        cutscene (the openings: the ship and the storm,
                        the hometown's history), scenes (short scenes in

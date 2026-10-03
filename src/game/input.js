@@ -58,7 +58,8 @@ export class Input {
       'wheel',
       (e) => {
         e.preventDefault();
-        this.wheel += Math.sign(e.deltaY);
+        // (With shift held, most browsers scroll sideways: deltaX, not Y.)
+        this.wheel += Math.sign(e.deltaY || e.deltaX);
         this.wheelShift = e.shiftKey;
       },
       { passive: false },

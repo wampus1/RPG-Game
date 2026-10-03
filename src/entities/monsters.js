@@ -6,7 +6,10 @@
 //   the drowned lie under black water till you're close, and grab;
 //   tunnel crawlers dig under you and burst up where you stand;
 //   gloom moths are drawn to your torch, and snuff it;
-//   holdout bandits fight like bandits, archers hanging back.
+//   holdout bandits fight like bandits, archers hanging back; a
+//   bombarder lobs dynamite from afar (a knife when you're close); a
+//   thief rolls past you to your back and out from under your blows; a
+//   coward hangs back shouting for help, and alone, goes berserk.
 // The Kavorent's constructs work together:
 //   sentinel drones keep their distance and fire a beam down a line (two
 //   near each other join theirs into a wall of light); a warden's shield
@@ -19,7 +22,7 @@
 // Attacks you see coming are "hazards": the ground they'll hit, lit up
 // (red for a blow, blue for cold, cyan for the Kavorent's light), going
 // off when the time's up. Traps use them too (see game/dungeon.js).
-import { beginAttack, styleOf, knock, STYLES } from '../game/combat.js';
+import { beginAttack, styleOf, knock, STYLES, strikeAnim } from '../game/combat.js';
 import { burn, chill, stun, mend } from '../game/gems.js';
 import { BLOCKS, B as BLOCKS_ID } from '../world/blocks.js';
 import { pierceOf } from '../game/kavtech.js';
@@ -44,8 +47,12 @@ export const MONSTER_SPECIES = {
   drowned: { name: 'Drowned One', hp: 16, dmg: 3, step: 0.34, mode: 'hostile', aggro: 7, humanoid: true, look: 'drowned', under: true, undead: true, brain: 'drowned', style: 'grab', drops: [['old_coin', 1, 2, 0.3], ['bone', 1, 2, 0.5]] },
   crawler: { name: 'Tunnel Crawler', hp: 22, dmg: 4, step: 0.3, mode: 'hostile', aggro: 10, under: true, brain: 'crawler', style: 'bite', drops: [['leather', 1, 2, 0.6], ['iron_ore', 1, 2, 0.4]] },
   moth: { name: 'Gloom Moth', hp: 4, dmg: 1, step: 0.26, mode: 'hostile', aggro: 12, under: true, floats: true, brain: 'moth', style: 'snap', drops: [] },
-  cutthroat: { name: 'Holdout Cutthroat', hp: 15, dmg: 3, step: 0.3, mode: 'hostile', aggro: 9, humanoid: true, look: 'cutthroat', arms: 'dagger', offhand: 'dagger', dodge: 0.2, under: true, drops: [['coin', 1, 5, 0.8], ['old_coin', 1, 1, 0.2]] },
-  holdout_archer: { name: 'Holdout Archer', hp: 11, dmg: 3, step: 0.32, mode: 'hostile', aggro: 11, humanoid: true, look: 'holdout_archer', arms: 'bow', ranged: true, under: true, drops: [['arrow', 3, 8, 1], ['coin', 1, 4, 0.7]] },
+  cutthroat: { name: 'Holdout Cutthroat', hp: 15, dmg: 3, step: 0.3, mode: 'hostile', aggro: 9, humanoid: true, look: 'cutthroat', arms: 'dagger', offhand: 'dagger', dodge: 0.2, under: true, bandit: true, drops: [['coin', 1, 5, 0.8], ['old_coin', 1, 1, 0.2]] },
+  holdout_archer: { name: 'Holdout Archer', hp: 11, dmg: 3, step: 0.32, mode: 'hostile', aggro: 11, humanoid: true, look: 'holdout_archer', arms: 'bow', ranged: true, under: true, bandit: true, drops: [['arrow', 3, 8, 1], ['coin', 1, 4, 0.7]] },
+  // (Three more of the holdout's own: see their brains.)
+  bombarder: { name: 'Holdout Bombarder', hp: 14, dmg: 3, step: 0.33, mode: 'hostile', aggro: 11, humanoid: true, look: 'bombarder', arms: 'dynamite', under: true, bandit: true, brain: 'bombarder', drops: [['dynamite', 1, 2, 0.6], ['coin', 1, 4, 0.7]] },
+  thief: { name: 'Holdout Thief', hp: 12, dmg: 2, step: 0.24, mode: 'hostile', aggro: 10, humanoid: true, look: 'thief', arms: 'dagger', offhand: 'dagger', kits: [['dagger', 'dagger'], ['dagger', 'dagger'], ['short_sword', 'dagger'], ['dagger', null]], dodge: 0.3, under: true, bandit: true, brain: 'thief', drops: [['coin', 2, 7, 0.9], ['lockpick', 1, 2, 0.35]] },
+  coward: { name: 'Holdout Coward', hp: 10, dmg: 2, step: 0.3, mode: 'hostile', aggro: 10, humanoid: true, look: 'coward', arms: 'dagger', under: true, bandit: true, brain: 'coward', drops: [['coin', 1, 3, 0.6], ['bread', 1, 1, 0.3]] },
   // The masters of their places.
   barrow_king: { name: 'The Barrow King', hp: 110, dmg: 6, step: 0.46, mode: 'hostile', aggro: 14, humanoid: true, look: 'wight_king', arms: 'greatsword', under: true, undead: true, boss: true, brain: 'barrowKing', drops: [['old_coin', 4, 10, 1], ['gold_ingot', 1, 2, 1]] },
   horror: { name: 'The Ossuary Horror', hp: 120, dmg: 5, step: 0.6, mode: 'hostile', aggro: 14, big: true, under: true, undead: true, boss: true, brain: 'horror', style: 'slam', drops: [['bone', 6, 12, 1], ['old_coin', 4, 10, 1]] },
@@ -83,7 +90,9 @@ export function updateHazards(game, dt) {
   if (!game.hazards || !game.hazards.length) return;
   for (const h of game.hazards) {
     h.t += dt;
-    if (h.by && h.by.dead && !h.keep) h.done = true;
+    // (A lit fuse fizzing where it lies.)
+    if (h.spark && Math.random() < dt * 30) game.renderer.emit(h.spark.x, h.spark.y + 0.4, h.spark.z, { n: 1, color: ['#ffe070', '#ff9030', '#ffffff'], up: 22, speed: 30, life: 0.3, glow: true, oy: 2 });
+    if (h.by && h.by.dead && !h.keep && !h.trap) h.done = true;
     if (h.done || h.t < h.dur) continue;
     h.done = true;
     fireHazard(game, h);
@@ -361,6 +370,103 @@ export function summon(game, species, at, near = 2, opts = {}) {
     }
   }
   return null;
+}
+
+// A stick of dynamite, lit and thrown (by a bombarder, or by you): it
+// tumbles through the air, lands, fizzes a moment (the ground it'll throw
+// lit up) and goes up. It hurts anyone near, theirs or yours (all but
+// whoever threw it), and sets off any powder kegs about it.
+export function throwDynamite(game, by, tx, tz, o = {}) {
+  const a = lob(game, by, tx, tz, { tint: [255, 140, 60], onLand: (g, x, z, y) => dynamiteBlast(g, x, y, z, by, o) });
+  if (a) {
+    a.stick = true;
+    a.dur = Math.max(0.55, a.dur * 0.75);
+  }
+  game.audio?.play('fuse', by);
+  return a;
+}
+
+export function dynamiteBlast(game, x, y, z, by = null, o = {}) {
+  const fuse = o.fuse ?? 0.9;
+  const r = game.renderer;
+  game.audio?.play('fuse', { x, z });
+  addHazard(game, {
+    by, tiles: areaTiles(x, z, 1, false), y, dur: fuse, dmg: o.dmg ?? 5, burn: 1, knock: 2, from: { x, z: z + 0.001 }, center: { x, z }, kind: 'blast', color: [255, 140, 40], trap: true, spark: { x, y, z },
+    onFire: (g) => {
+      r.effect?.({ type: 'blast', wx: x, wy: y, wz: z, r1: 26, life: 0.6, oy: 2 });
+      r.effect?.({ type: 'ring', wx: x, wy: y, wz: z, r0: 4, r1: 30, color: ['#ffe070', '#ff9030'], life: 0.4, oy: 4, flat: 0.5, thick: 2 });
+      r.emit(x, y + 1, z, { n: 22, color: ['#ff9030', '#ffe070', '#5a5048', '#3a3430'], up: 50, speed: 80, gravity: 120, life: 0.8 });
+      r.emit(x, y + 0.5, z, { n: 8, color: ['#6a6058', '#4a4440'], up: 20, speed: 30, life: 1.2, shape: 'puff', grow: 2 });
+      g.audio?.play('boom', { x, z });
+      g.shake = Math.min(1.4, (g.shake || 0) + 0.6);
+      g.lightDirty = true;
+      // (Kegs near it go up too.)
+      for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+        for (const yy of [y, y + 1]) if (g.world.getBlock(x + dx, yy, z + dz) === BLOCKS_ID.powder_keg) kegBlast(g, x + dx, yy, z + dz, 0.5);
+      }
+    },
+  });
+}
+
+// A pace away from `t` (any way that isn't toward them). True if it moved.
+function backOff(c, t, pace = 1) {
+  if (c.moving) return false;
+  const dx = Math.sign(c.x - t.x) || (Math.random() < 0.5 ? 1 : -1);
+  const dz = Math.sign(c.z - t.z) || (Math.random() < 0.5 ? 1 : -1);
+  const opts = Math.random() < 0.5 ? [[dx, 0], [0, dz], [dx, dz], [-dz, dx], [dz, -dx]] : [[0, dz], [dx, 0], [dx, dz], [dz, -dx], [-dz, dx]];
+  for (const [ox, oz] of opts) {
+    if (!ox && !oz) continue;
+    if (c.tryStep(c.x + Math.sign(ox), c.z + Math.sign(oz), c.stepTime() * pace)) {
+      c.face(t.x, t.z);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Is `t` about to land a blow (or loose an arrow)?
+function windingUp(t) {
+  return !!((t.swing && t.swing.t < t.swing.dur) || t.windup || t.bowDraw);
+}
+
+// A thief's roll: low and quick along (dx, dz), `far` paces, clean past
+// anyone in the way (never ending up on them). True if it went.
+export function tumble(c, dx, dz, far = 2) {
+  const game = c.game;
+  const w = game.world;
+  let x = c.x;
+  let z = c.z;
+  let y = c.y;
+  let land = null;
+  for (let i = 0; i < far + 2; i++) {
+    const ny = w.stepTarget(x, y, z, x + dx, z + dz, false);
+    if (ny < 0 || w.isWaterAt(x + dx, ny, z + dz) || !withinLeash(c, x + dx, z + dz)) break;
+    x += dx;
+    z += dz;
+    y = ny;
+    if (!game.occupiedBySolid(x, y, z, c)) land = { x, y, z, n: i + 1 };
+    if (i + 1 >= far && land && land.n === i + 1) break;
+  }
+  if (!land) return false;
+  c.rollT = 0.34;
+  c.rollDur = c.rollT;
+  c.rollDir = [dx, dz];
+  c.windup = null;
+  c.startMove(land.x, land.y, land.z, 0.075 * land.n);
+  c.moveEase = 'out';
+  game.renderer.emit(c.x, c.y, c.z, { n: 8, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
+  game.audio?.play('roll', c);
+  return true;
+}
+
+// An overhand throw, as it's drawn.
+function strikeAnimOf(c) {
+  strikeAnim(c, STYLES.spear);
+}
+
+// The holdout's own, near enough to hear a shout (or to be missed).
+function banditsNear(game, c, r) {
+  return allies(game, c, r, (o) => o.S.bandit && !o.S.boss && !o.isBoss);
 }
 
 // --------------------------------------------------------------- brains
@@ -852,6 +958,153 @@ export const BRAINS = {
       game.renderer.emit(c.x, c.y + 1.5, c.z, { n: 6, color: ['#ff9030', '#ffe070'], up: 20, life: 0.4 });
     }
     return bossSlam(c, dt, 1, 1.0, 6, 10);
+  },
+
+  // ------------------------------------------------ the holdout's
+  // A bombarder: hangs back four to nine paces off, lights a stick of
+  // dynamite (its fuse sparking in its hand: your warning) and lobs it at
+  // you; too close to throw, it drops back a pace, and cornered (or you
+  // right on it), out comes a knife.
+  bombarder(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    if (!t || t.dead) {
+      c.lighting = null;
+      return false;
+    }
+    const d = dist(c, t);
+    c.bombCd = (c.bombCd ?? 1.2 + Math.random() * 1.2) - dt;
+    if (c.lighting) {
+      c.lighting.t -= dt;
+      c.face(t.x, t.z);
+      if (Math.random() < dt * 25) game.renderer.emit(c.x, c.y + 1.5, c.z, { n: 1, color: ['#ffe070', '#ff9030', '#ffffff'], up: 18, speed: 26, life: 0.3, glow: true, oy: -6 });
+      if (c.lighting.t > 0) return true;
+      c.lighting = null;
+      c.bombCd = 3 + Math.random() * 1.8;
+      // (Thrown where you'll be: a pace ahead of you if you're on the move.)
+      const ahead = t.moving && t.fx !== undefined ? { x: t.x + Math.sign(t.x - t.fx), z: t.z + Math.sign(t.z - t.fz) } : { x: t.x, z: t.z };
+      throwDynamite(game, c, ahead.x, ahead.z);
+      c.doAction?.(0.3);
+      strikeAnimOf(c);
+      return true;
+    }
+    // Close: the knife (unless it can get away a pace first).
+    if (d <= 1 || (d === 2 && !c.moving && !backOff(c, t, 0.85))) {
+      c.arms = 'dagger';
+      return d <= 1 ? false : !!c.windup;
+    }
+    c.arms = 'dynamite';
+    if (d === 2) return true;
+    if (d > 9 || !sees(game, c, t)) return false;
+    // (A little more room, if there's any to be had.)
+    if (d === 3 && !c.moving && c.bombCd > 0.3 && backOff(c, t, 0.85)) return true;
+    if (c.bombCd <= 0 && Math.abs(t.y - c.y) <= 2) {
+      c.lighting = { t: 0.75 };
+      c.say?.(c.rng.pick(['Fire in the hole!', 'Catch!', 'Light \'em up!', 'Boom time!', 'Duck, if you can!']), 1.2, '#ffb080');
+      game.audio?.play('fuse', c);
+      return true;
+    }
+    // Between throws: shifting about out at its distance.
+    if (!c.moving && Math.random() < dt * 0.8) {
+      const [ox, oz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
+      if (dist({ x: c.x + ox, z: c.z + oz }, t) >= 4) c.tryStep(c.x + ox, c.z + oz, c.stepTime());
+    }
+    c.face(t.x, t.z);
+    return true;
+  },
+
+  // A thief: quick, two blades, and slippery. Face to face in a line (a
+  // corridor's best for it) it rolls clean past you, and has your back (so
+  // its friends have your front); and a blow it sees coming, it rolls out
+  // from under, to one side.
+  thief(c, dt) {
+    const t = c.target;
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    c.rollCd = (c.rollCd ?? 1.5) - dt;
+    // (Out from under a blow it sees coming.)
+    const coming = windingUp(t) && d <= 2;
+    if (coming && c.dodged !== (t.swing || t.windup || t.bowDraw)) {
+      c.dodged = t.swing || t.windup || t.bowDraw;
+      if (c.rollCd <= 0.8 && Math.random() < 0.55) {
+        const hx = Math.sign(c.x - t.x);
+        const hz = Math.sign(c.z - t.z);
+        const sides = Math.random() < 0.5 ? [[hz, hx], [-hz, -hx]] : [[-hz, -hx], [hz, hx]];
+        for (const [sx, sz] of sides) {
+          if ((sx || sz) && tumble(c, sx, sz, 2)) {
+            c.rollCd = 2.2;
+            return true;
+          }
+        }
+      }
+    }
+    // Past you, to your back: in a line with you, close.
+    if (c.rollCd <= 0 && d <= 2 && (t.x === c.x || t.z === c.z) && !c.windup && Math.random() < dt * 1.5) {
+      const dx = Math.sign(t.x - c.x);
+      const dz = Math.sign(t.z - c.z);
+      if (tumble(c, dx, dz, d + 1)) {
+        c.rollCd = 4 + Math.random() * 2.5;
+        c.say?.(c.rng.pick(['Behind you!', 'Too slow!', 'Over here!', 'Heh.']), 1.2, '#c8c0b8');
+        return true;
+      }
+      c.rollCd = 0.6;
+    }
+    return false;
+  },
+
+  // A coward: keeps three to six paces off, out of reach, shouting now and
+  // then for help (one or two of its own near come running); left with
+  // nobody of its own close by, it loses its head and comes at you in a
+  // frenzy, its little knife going three and four times a go.
+  coward(c, dt) {
+    const game = c.game;
+    const t = c.target;
+    if (!t || t.dead) return false;
+    const d = dist(c, t);
+    if (!c.frenzy) {
+      c.lonelyT = banditsNear(game, c, 9).length ? 0 : (c.lonelyT || 0) + dt;
+      if (c.lonelyT > 0.6) {
+        c.frenzy = true;
+        c.say?.(c.rng.pick(['Stay back! STAY BACK!', 'Aaaaaagh!', 'I\'ll gut you myself!', 'No-one? Fine!']), 2, '#ff7060');
+        game.renderer.floatText(c.x, c.y + 2.6, c.z, 'frenzied!', '#ff6050');
+        game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 3, r1: 22, color: ['#ff4030', '#ffb080'], life: 0.5, oy: 4, flat: 0.5 });
+        game.audio?.play('roar', c);
+      }
+    }
+    if (c.frenzy) {
+      c.hasteT = Math.max(c.hasteT || 0, 0.4);
+      if (Math.random() < dt * 6) game.renderer.emit(c.x, c.y + 1.3, c.z, { n: 1, color: ['#ff4030', '#ffb080'], up: 12, life: 0.35, oy: -8 });
+      // (Stab, stab, stab.)
+      if (d <= 1 && Math.abs(t.y - c.y) <= 1 && !c.windup && (c.attackCd || 0) <= 0) {
+        beginAttack(game, c, t, { ...STYLES.dagger, name: 'frenzy', windup: 0.22, recover: 0.55, mult: 0.75, flurry: 2 }, { combo: 1 + Math.floor(Math.random() * 2) });
+        return true;
+      }
+      return false;
+    }
+    // A shout for help, now and then.
+    c.shoutCd = (c.shoutCd ?? 1 + Math.random() * 2) - dt;
+    if (c.shoutCd <= 0) {
+      c.shoutCd = 7 + Math.random() * 4;
+      const near = banditsNear(game, c, 16).filter((o) => o.target !== t && !o.dormant).sort((a, b) => dist(a, c) - dist(b, c)).slice(0, 1 + Math.floor(Math.random() * 2));
+      c.say?.(c.rng.pick(['Help! Over here!', 'Lads! LADS!', 'Someone get over here!', 'Intruder! Help!']), 1.8, '#ffd080');
+      game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y + 1.5, wz: c.z, r0: 2, r1: 34, color: ['#ffd080', '#ffffff'], life: 0.6, oy: -10, flat: 0.8, thick: 1 });
+      game.audio?.play('shout', c);
+      for (const o of near) {
+        o.target = t;
+        o.hasteT = Math.max(o.hasteT || 0, 2.5);
+        o.say?.(o.rng.pick(['Coming!', 'Where?', 'On my way!']), 1.2, '#ffd080');
+      }
+      c.doAction?.(0.4);
+      return true;
+    }
+    // Out of reach, but not out of sight.
+    if (d < 3) {
+      if (backOff(c, t)) return true;
+      return false;
+    }
+    if (d > 6) return false;
+    c.face(t.x, t.z);
+    return true;
   },
 
   // ------------------------------------------------ the Kavorent's

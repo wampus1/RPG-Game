@@ -40,6 +40,8 @@ const OUTFIT_COLORS = {
   plaid: { check: '#5a1e1a' },
   miner: { vest: '#5a4a3a' },
   hunter: { tunic: '#4a6a32', hood: '#6a4a2a' },
+  tunic: { belt: '#4a2e1a', buckle: '#d8b040' },
+  traveller: { coat: '#5a4a32', collar: '#7a6a4a' },
   rags: { patch: '#6a5a4a' },
   vest: { vest: '#3a2a22' },
   skeleton: {},
@@ -170,17 +172,34 @@ function drawHumanoid(look, dir, frame) {
   } else if (outfit === 'rags') {
     S(tx + 2, torsoY + 2, hex(oc.patch));
     S(tx + 5, torsoY + 4, hex(oc.patch));
+  } else if (outfit === 'tunic') {
+    // (Down over the hips, belted.)
+    R(tx, torsoY, tw, torsoH + 2, shirtC);
+    R(tx, torsoY, tw, 1, shade(shirtC, 1.15));
+    R(tx, torsoY + torsoH + 1, tw, 1, shade(shirtC, 0.85));
+    R(tx, legY - 1, tw, 1, hex(oc.belt));
+    if (dir === 0) S(7, legY - 1, hex(oc.buckle));
+  } else if (outfit === 'traveller') {
+    // (A long coat, open down the front.)
+    R(tx, torsoY, tw, torsoH + 3, hex(oc.coat));
+    R(tx, torsoY, tw, 1, hex(oc.collar));
+    if (dir === 0) R(7, torsoY + 1, 2, torsoH + 2, shirtC);
+    else if (dir === 2) R(7, torsoY + 2, 2, torsoH + 1, shade(hex(oc.coat), 0.85));
   }
   // Shirt patterns on everyday clothes.
   const pat = look.pattern;
-  if (pat && !skel && ['plain', 'vest', 'fisher', 'miner', 'apron', 'baker', 'smith', 'hunter', 'plaid'].includes(outfit)) {
+  if (pat && !skel && ['plain', 'vest', 'fisher', 'miner', 'apron', 'baker', 'smith', 'hunter', 'plaid', 'tunic'].includes(outfit)) {
     if (pat === 'stripes') for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) for (let x = tx; x < tx + tw; x++) if (p.get(flip ? CHAR_W - 1 - x : x, y + SPR_PAD)[3]) S(x, y, shade(shirtC, 0.78));
     if (pat === 'collar') R(tx + 1, torsoY, tw - 2, 1, hex('#e8e0d0'));
     if (pat === 'sash' && dir !== 2) for (let i = 0; i < torsoH; i++) S(tx + (side ? 1 + (i >> 1) : 1 + i), torsoY + i, accent);
     if (pat === 'buttons' && dir === 0) for (let y = torsoY + 1; y < torsoY + torsoH; y += 2) S(7, y, hex('#e8d8a0'));
+    if (pat === 'patches') {
+      R(tx + 1, torsoY + 2, 2, 2, shade(shirtC, 0.72));
+      R(tx + tw - 3, torsoY + 3, 2, 2, shade(shirtC, 1.3));
+    }
   }
   // Belt.
-  if (!outfit.startsWith('robe') && outfit !== 'farmer') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
+  if (!outfit.startsWith('robe') && outfit !== 'farmer' && outfit !== 'tunic') R(tx, legY - 1, tw, 1, shade(pantsC, 0.7));
   // Armour details over the top.
   if (!skel) {
     const G = (x, y, w, h, c) => R(x, y, w, h, hex(c));
@@ -237,7 +256,28 @@ function drawHumanoid(look, dir, frame) {
     }
   }
   // Arms.
-  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : shirtC;
+  const armC = outfit.startsWith('robe') ? hex(oc.robe) : outfit === 'traveller' ? hex(oc.coat) : outfit === 'guard' || gear.body === 'tabard' ? hex(OUTFIT_COLORS.guard.chain2) : shirtC;
+  // A kerchief at the neck.
+  if (look.neck && !skel) {
+    const nc = hex(look.neck);
+    R(tx + 1, torsoY, tw - 2, 1, nc);
+    if (dir === 0) R(7, torsoY + 1, 2, 1, shade(nc, 0.85));
+    else if (dir === 2) S(side ? 8 : 7, torsoY + 1, shade(nc, 0.85));
+  }
+  // A cloak: seen from the front, its edges behind your arms; from the
+  // side, hanging behind you; from behind, all of it.
+  const cape = look.cape && !skel && !sit ? hex(look.cape) : null;
+  if (cape && dir === 0) {
+    R(3, torsoY, 1, torsoH + 3, shade(cape, 0.8));
+    R(12, torsoY, 1, torsoH + 3, shade(cape, 0.8));
+    S(tx + 1, torsoY, hex('#d8b040'));
+    S(tx + tw - 2, torsoY, hex('#d8b040'));
+  } else if (cape && side) {
+    R(tx + tw, torsoY, 2, torsoH + legH - 1, cape);
+    R(tx + tw + 1, torsoY + 2, 1, torsoH + legH - 3, shade(cape, 0.8));
+  }
+  // (Gloved hands.)
+  const handC = look.gloves && !skel ? hex(look.gloves) : skinC;
   // A shield on the off arm (on the back, seen from behind).
   const shieldAt = (sx0, sy0) => {
     const kind = gear.shield;
@@ -251,13 +291,18 @@ function drawHumanoid(look, dir, frame) {
     const swing = frame === 3 ? -2 : walk;
     R(3, torsoY + (swing > 0 ? -1 : 0), 1, torsoH - 1, armC);
     R(12, torsoY + (swing < 0 ? -1 : 0), 1, torsoH - 1, armC);
-    S(3, torsoY + torsoH - 1 + (swing > 0 ? -1 : 0), skinC);
-    S(12, torsoY + torsoH - 1 + (swing < 0 ? -1 : 0), skinC);
+    S(3, torsoY + torsoH - 1 + (swing > 0 ? -1 : 0), handC);
+    S(12, torsoY + torsoH - 1 + (swing < 0 ? -1 : 0), handC);
   } else {
     const ax = frame === 3 ? 4 : 7 + walk;
     R(ax, torsoY + 1, 2, torsoH - 2, shade(armC, 0.9));
-    R(ax, torsoY + torsoH - 1, 2, 1, skinC);
-    if (frame === 3) R(2, torsoY + 2, 3, 2, skinC);
+    R(ax, torsoY + torsoH - 1, 2, 1, handC);
+    if (frame === 3) R(2, torsoY + 2, 3, 2, handC);
+  }
+  if (cape && dir === 2) {
+    R(tx - 1, torsoY, tw + 2, torsoH + legH - 2, cape);
+    R(tx - 1, torsoY, tw + 2, 1, shade(cape, 1.2));
+    for (const fx of [tx + 1, tx + tw - 2]) R(fx, torsoY + 2, 1, torsoH + legH - 4, shade(cape, 0.82));
   }
   if (gear.shield && !sit) {
     if (dir === 0) shieldAt(1, torsoY + 1);
@@ -319,9 +364,71 @@ function drawHumanoid(look, dir, frame) {
     }
     if (style === 'spiky') for (let x = hx; x < hx + 8; x += 2) S(x + 1, hy - 1, hairC);
     if (style === 'topknot') R(side ? hx + 4 : 7, hy - 3, 2, 3, hairC);
+    if (style === 'wavy') {
+      // (Down to the jaw, in waves.)
+      const wv = shade(hairC, 0.82);
+      if (dir === 2) {
+        R(hx, hy + headH - 1, 8, 2, hairC);
+        for (let x = hx; x < hx + 8; x += 2) S(x, hy + headH + 1, hairC);
+        for (let x = hx + 1; x < hx + 8; x += 3) R(x, hy + 1, 1, headH - 1, wv);
+      } else if (side) {
+        R(hx + 5, hy, 3, headH + 1, hairC);
+        S(hx + 8, hy + 2, hairC);
+        S(hx + 8, hy + 5, hairC);
+        R(hx + 6, hy + 1, 1, headH - 1, wv);
+      } else {
+        for (const x of [hx - 1, hx + 8]) {
+          R(x, hy + 1, 1, 3, hairC);
+          S(x, hy + 5, hairC);
+        }
+        R(hx, hy + 2, 1, 5, hairC);
+        R(hx + 7, hy + 2, 1, 5, hairC);
+        R(hx + 2, hy, 3, 1, wv);
+      }
+    }
+    if (style === 'undercut') {
+      // (Shaved at the sides, the top swept over.)
+      const sh = shade(skinC, 0.86);
+      if (dir === 2) R(hx, hy + 3, 8, headH - 4, sh);
+      else if (side) {
+        R(hx + 5, hy + 2, 3, headH - 4, sh);
+        R(hx, hy - 1, 6, 1, hairC);
+      } else {
+        R(hx, hy + 2, 1, 3, sh);
+        R(hx + 7, hy + 2, 1, 3, sh);
+        R(hx + 1, hy - 1, 6, 1, hairC);
+        S(hx + 6, hy + 2, hairC);
+      }
+    }
+  }
+  // Marks on the face (paint, ink, a blush, a mole), under the eyes.
+  const mark = look.mark;
+  if (mark && !skel && dir !== 2) {
+    const M = (x, y, c) => S(x, y, typeof c === 'string' ? hex(c) : c);
+    if (mark === 'warpaint') {
+      if (dir === 0) for (let x = hx + 1; x < hx + 7; x++) M(x, hy + 4, '#2a5aa8');
+      else R(hx, hy + 4, 3, 1, hex('#2a5aa8'));
+    } else if (mark === 'tattoo') {
+      // (A teardrop under the eye.)
+      if (dir === 0) R(hx + 5, hy + 5, 1, 2, hex('#2a4a6a'));
+      else R(hx + 1, hy + 5, 1, 2, hex('#2a4a6a'));
+    } else if (mark === 'blush') {
+      if (dir === 0) {
+        M(hx + 1, hy + 5, '#e88a7a');
+        M(hx + 6, hy + 5, '#e88a7a');
+      } else M(hx + 2, hy + 5, '#e88a7a');
+    } else if (mark === 'mole') {
+      if (dir === 0) M(hx + 5, hy + 5, shade(skinC, 0.55));
+      else M(hx + 1, hy + 5, shade(skinC, 0.55));
+    } else if (mark === 'stripes') {
+      if (dir === 0) {
+        R(hx + 1, hy + 5, 1, 2, hex('#c83a32'));
+        R(hx + 6, hy + 5, 1, 2, hex('#c83a32'));
+      } else R(hx + 2, hy + 5, 1, 2, hex('#c83a32'));
+    }
   }
   // Face.
-  const eye = skel ? hex('#1a1414') : hex('#1e1a28');
+  const eye = skel ? hex('#1a1414') : hex(look.eyeColor || '#1e1a28');
   if (dir === 0) {
     S(hx + 2, hy + 4, eye);
     S(hx + 5, hy + 4, eye);
@@ -329,12 +436,42 @@ function drawHumanoid(look, dir, frame) {
       S(hx + 3, hy + 4, eye);
       S(hx + 6, hy + 4, eye);
       R(hx + 2, hy + 6, 4, 1, eye);
-    } else if (look.beard) R(hx + 1, hy + 5, 6, 2, hairC);
-    else S(hx + 3, hy + 6, shade(skinC, 0.8));
+    } else if (!look.beard || look.beardStyle === 'stubble' || look.beardStyle === 'chinstrap') S(hx + 3, hy + 6, shade(skinC, 0.8));
   } else if (side) {
     S(hx + 1, hy + 4, eye);
     S(hx - 1 + 0, hy + 4, skinC);
-    if (look.beard && !skel) R(hx, hy + 5, 4, 2, hairC);
+  }
+  // A beard, worn one way or another.
+  if (look.beard && !skel && dir !== 2) {
+    const bs = look.beardStyle || 'full';
+    if (bs === 'full' || bs === 'long') {
+      if (dir === 0) R(hx + 1, hy + 5, 6, 2, hairC);
+      else R(hx, hy + 5, 4, 2, hairC);
+      if (bs === 'long') {
+        if (dir === 0) R(hx + 2, hy + 7, 4, 2, hairC);
+        else R(hx, hy + 7, 3, 2, hairC);
+      }
+    } else if (bs === 'goatee') {
+      if (dir === 0) {
+        R(hx + 2, hy + 5, 4, 1, hairC);
+        R(hx + 3, hy + 6, 2, 2, hairC);
+      } else R(hx, hy + 5, 2, 2, hairC);
+    } else if (bs === 'stubble') {
+      const st = shade(hairC, 1.1);
+      if (dir === 0) {
+        for (let y = hy + 5; y < hy + 7; y++) for (let x = hx + 1; x < hx + 7; x++) if ((x + y) % 2 && !(x === hx + 3 && y === hy + 6)) S(x, y, st);
+      } else for (let y = hy + 5; y < hy + 7; y++) for (let x = hx; x < hx + 4; x++) if ((x + y) % 2) S(x, y, st);
+    } else if (bs === 'chinstrap') {
+      if (dir === 0) {
+        R(hx, hy + 3, 1, 4, hairC);
+        R(hx + 7, hy + 3, 1, 4, hairC);
+        R(hx + 1, hy + 6, 6, 1, hairC);
+        S(hx + 3, hy + 6, hairC);
+      } else {
+        R(hx + 3, hy + 3, 1, 3, hairC);
+        R(hx, hy + 6, 4, 1, hairC);
+      }
+    }
   }
   // Eyes that burn in the dark (the dead, the drowned, constructs).
   if (look.eyes) {
@@ -457,6 +594,29 @@ function drawHumanoid(look, dir, frame) {
         H(hx - 1, hy - 1, 10, 3, '#6a4a2a');
         H(hx - 1, hy + 2, 1, 5, '#6a4a2a');
         H(hx + 8, hy + 2, 1, 5, '#6a4a2a');
+        break;
+      case 'cowl': {
+        // (A dark hood, and a cloth over the mouth and nose.)
+        const cw = look.hatColor || '#2a2a32';
+        H(hx - 1, hy - 1, 10, 3, cw);
+        H(hx - 1, hy + 2, 1, 5, cw);
+        H(hx + 8, hy + 2, 1, 5, cw);
+        if (dir === 0) H(hx, hy + 5, 8, 2, '#1e1e26');
+        else if (side) H(hx, hy + 5, 4, 2, '#1e1e26');
+        else H(hx, hy, 8, headH - 1, cw);
+        break;
+      }
+      case 'tricorn':
+        H(hx - 2, hy, 12, 1, '#2a2430');
+        H(hx - 2, hy - 1, 1, 1, '#2a2430');
+        H(hx + 9, hy - 1, 1, 1, '#2a2430');
+        H(hx + 1, hy - 3, 6, 3, '#2a2430');
+        H(hx + 1, hy - 1, 6, 1, look.hatColor || '#c8a030');
+        break;
+      case 'wreath':
+        for (let x = hx; x < hx + 8; x++) H(x, hy + ((x - hx) % 3 === 1 ? -1 : 0), 1, 1, (x - hx) % 2 ? '#6ab04a' : '#3a7a32');
+        if (dir === 0) H(hx + 2, hy, 1, 1, '#c83a32');
+        H(side ? hx + 5 : hx + 6, hy - 1, 1, 1, '#c83a32');
         break;
     }
   }
@@ -1092,6 +1252,31 @@ function simpleIcon(key) {
     case 'stick':
       p.line(4, 13, 12, 3, '#8a6038');
       p.line(5, 13, 13, 3, '#5e4024');
+      break;
+    case 'dynamite':
+      // A red stick, banded, its fuse curling off the top.
+      p.line(4, 13, 10, 5, '#c83a2a');
+      p.line(5, 13, 11, 5, '#e85a3a');
+      p.line(5, 14, 11, 6, '#8a2418');
+      p.set(6, 11, '#e8d8a0');
+      p.set(7, 11, '#e8d8a0');
+      p.set(8, 8, '#e8d8a0');
+      p.set(9, 8, '#e8d8a0');
+      p.set(11, 4, '#6a5a3a');
+      p.set(12, 3, '#6a5a3a');
+      p.set(12, 2, '#6a5a3a');
+      p.set(13, 1, '#ffd060');
+      break;
+    case 'lockpick':
+      // A thin steel pick and a tension wrench, crossed.
+      p.line(3, 13, 12, 4, '#9a9aa8');
+      p.line(4, 13, 13, 4, '#d8d8e4');
+      p.set(13, 3, '#d8d8e4');
+      p.set(14, 3, '#9a9aa8');
+      p.line(4, 5, 11, 12, '#7a7a88');
+      p.set(3, 4, '#7a7a88');
+      p.set(3, 5, '#7a7a88');
+      p.rect(2, 12, 3, 3, '#6a4a2a');
       break;
     case 'coal':
       p.ellipse(8, 9, 4, 3, '#2a2a30');

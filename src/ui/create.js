@@ -2,20 +2,26 @@
 // tabs: the basics (name, origin, starting gear), looks, stats, skills and
 // traits. Everything can be changed with the mouse (click the tabs, arrows
 // and boxes) or the keys: 1-5 or Tab switch tabs, ↑↓ pick a line, ←→
-// change it, and you type to edit your name.
+// change it, and you type to edit your name. A tab longer than the screen
+// scrolls (the wheel, the arrows on its bar, or just moving down it).
 import { COLS, ROWS } from '../config.js';
 import { Window, cap } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
+import { CULTURES } from '../world/names.js';
 import { humanoidSheet, SHEET_H, SPR_PAD } from '../render/sprites.js';
 import {
   STATS, STAT_BASE, STAT_MAX, SPECIALTIES, TRAITS, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
   DETAILS, HATS, PATTERNS, OUTFITS, pointsLeft, randomHero, heroName, hpBonus, COMMON_KIT,
+  EYES, BEARD_STYLES, MARKS, NECKS, GLOVES, CAPES,
 } from '../game/hero.js';
 
 const cycle = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
 const DETAIL_NAMES = { null: 'none', mustache: 'moustache', freckles: 'freckles', glasses: 'glasses', earring: 'earrings', scar: 'a scar', eyepatch: 'an eyepatch' };
-const OUTFIT_NAMES = { plain: 'plain shirt', vest: 'waistcoat', hunter: 'hunter\'s tunic', plaid: 'plaid shirt', noble: 'fine doublet', apron: 'apron', fisher: 'fisher\'s vest', farmer: 'overalls', robe_blue: 'blue robe', robe_green: 'green robe', robe_white: 'white robe' };
+const OUTFIT_NAMES = { plain: 'plain shirt', vest: 'waistcoat', hunter: 'hunter\'s tunic', plaid: 'plaid shirt', noble: 'fine doublet', apron: 'apron', fisher: 'fisher\'s vest', farmer: 'overalls', tunic: 'belted tunic', traveller: 'travelling coat', robe_blue: 'blue robe', robe_green: 'green robe', robe_white: 'white robe' };
+const MARK_NAMES = { null: 'none', warpaint: 'war paint', tattoo: 'inked teardrop', blush: 'rosy cheeks', mole: 'a mole', stripes: 'red stripes' };
+const HAT_NAMES = { null: 'none', straw: 'straw hat', cap: 'cap', beret: 'beret', bandana: 'bandana', wide: 'wide brim', feather: 'feathered hat', scarf: 'head scarf', flower: 'a flower', hood: 'hood', fur: 'fur hat', tricorn: 'tricorn', wreath: 'leaf wreath' };
+const EYE_NAMES = { '#1e1a28': 'dark', '#4a2e1a': 'brown', '#6a5a2a': 'hazel', '#3a6a3a': 'green', '#3a5a9a': 'blue', '#7a8090': 'grey', '#a87a2a': 'amber' };
 export const TABS = [
   { id: 'basics', name: 'BASICS' },
   { id: 'looks', name: 'LOOKS' },
@@ -33,6 +39,7 @@ export class CharacterWindow extends Window {
     this.hero = randomHero((seed ^ Date.now()) >>> 0);
     this.tab = 0;
     this.sel = 0;
+    this.scroll = 0;
     this.rows = this.makeRows();
   }
 
@@ -40,19 +47,28 @@ export class CharacterWindow extends Window {
     const h = () => this.hero;
     const look = (k, list) => ({ get: () => h().look[k], set: (d) => { h().look[k] = cycle(list, h().look[k], d); } });
     const pickOf = (k, list, names) => ({ show: () => (names ? names[h().look[k]] : h().look[k]) || 'none', set: (d) => { h().look[k] = cycle(list, h().look[k] ?? null, d); } });
+    // (A colour, or none at all.)
+    const orNone = (k, list) => ({ get: () => h().look[k] || null, set: (d) => { h().look[k] = cycle(list, h().look[k] ?? null, d); } });
+    const beards = [null, ...BEARD_STYLES];
     const rows = [
       { tab: 'basics', id: 'name', label: 'Name', type: 'name', about: 'Type to change your name. ←/→ picks another.' },
+      { tab: 'basics', id: 'nameStyle', label: 'Names from', type: 'cycle', show: () => (h().nameStyle ? CULTURES[h().nameStyle].label : 'anywhere'), set: (d) => { h().nameStyle = cycle([null, ...Object.keys(CULTURES)], h().nameStyle ?? null, d); }, about: 'Which people\'s names ←/→ on your name picks from.' },
       { tab: 'basics', id: 'origin', label: 'Origin', type: 'cycle', show: () => ORIGINS[h().origin].name, set: (d) => { h().origin = cycle(Object.keys(ORIGINS), h().origin, d); }, about: () => ORIGINS[h().origin].about },
       { tab: 'basics', id: 'kit', label: 'Starting gear', type: 'cycle', show: () => KITS[h().kit].name, set: (d) => { h().kit = cycle(Object.keys(KITS), h().kit, d); }, about: () => this.kitText() },
       { tab: 'looks', id: 'skin', label: 'Skin', type: 'swatch', ...look('skin', SKINS) },
+      { tab: 'looks', id: 'eyeColor', label: 'Eyes', type: 'swatch', ...look('eyeColor', EYES), name: (c) => EYE_NAMES[c] || c },
       { tab: 'looks', id: 'hair', label: 'Hair colour', type: 'swatch', ...look('hair', HAIRS) },
       { tab: 'looks', id: 'hairStyle', label: 'Hair style', type: 'cycle', ...pickOf('hairStyle', HAIR_STYLES) },
-      { tab: 'looks', id: 'beard', label: 'Beard', type: 'cycle', show: () => (h().look.beard ? 'beard' : 'none'), set: () => { h().look.beard = !h().look.beard; } },
+      { tab: 'looks', id: 'beard', label: 'Beard', type: 'cycle', show: () => (h().look.beard ? h().look.beardStyle || 'full' : 'none'), set: (d) => { const n = cycle(beards, h().look.beard ? h().look.beardStyle || 'full' : null, d); h().look.beard = !!n; if (n) h().look.beardStyle = n; } },
       { tab: 'looks', id: 'acc', label: 'Face', type: 'cycle', ...pickOf('acc', DETAILS, DETAIL_NAMES) },
-      { tab: 'looks', id: 'hat', label: 'Hat', type: 'cycle', ...pickOf('hat', HATS) },
+      { tab: 'looks', id: 'mark', label: 'Marks', type: 'cycle', ...pickOf('mark', MARKS, MARK_NAMES), about: 'Paint, ink or a mark of your own on your face.' },
+      { tab: 'looks', id: 'hat', label: 'Hat', type: 'cycle', ...pickOf('hat', HATS, HAT_NAMES) },
       { tab: 'looks', id: 'outfit', label: 'Clothes', type: 'cycle', ...pickOf('outfit', OUTFITS, OUTFIT_NAMES) },
       { tab: 'looks', id: 'shirt', label: 'Shirt colour', type: 'swatch', ...look('shirt', CLOTHES) },
       { tab: 'looks', id: 'pattern', label: 'Pattern', type: 'cycle', ...pickOf('pattern', PATTERNS) },
+      { tab: 'looks', id: 'neck', label: 'Kerchief', type: 'swatch', ...orNone('neck', NECKS), about: 'A kerchief knotted at your neck.' },
+      { tab: 'looks', id: 'cape', label: 'Cloak', type: 'swatch', ...orNone('cape', CAPES), about: 'A cloak over your shoulders (best seen from behind).' },
+      { tab: 'looks', id: 'gloves', label: 'Gloves', type: 'swatch', ...orNone('gloves', GLOVES) },
       { tab: 'looks', id: 'pants', label: 'Trousers', type: 'swatch', ...look('pants', PANTS) },
       { tab: 'looks', id: 'shoes', label: 'Shoes', type: 'swatch', ...look('shoes', SHOES) },
       { tab: 'looks', id: 'accent', label: 'Accent', type: 'swatch', ...look('accent', CLOTHES), about: 'The colour of trims, sashes and some hats.' },
@@ -73,7 +89,44 @@ export class CharacterWindow extends Window {
   setTab(i) {
     this.tab = (i + TABS.length) % TABS.length;
     this.sel = 0;
+    this.scroll = 0;
     this.ui.audio?.play('select');
+  }
+
+  // A list too long for the screen: `V` of its `n` lines show, from
+  // this.scroll (kept on the line you're on when you move with the keys).
+  scrolled(n, V) {
+    const top = Math.max(0, n - V);
+    if (this.follow) {
+      if (this.sel < this.scroll) this.scroll = this.sel;
+      else if (this.sel >= this.scroll + V) this.scroll = this.sel - V + 1;
+      this.follow = false;
+    }
+    this.scroll = Math.max(0, Math.min(top, this.scroll));
+    this.view = { n, V };
+    return this.scroll;
+  }
+
+  // Its bar, down the right of the list: arrows to click at either end, the
+  // thumb showing where you are in it.
+  scrollbar(g, x, y0, H, n, V) {
+    if (n <= V) return;
+    const top = n - V;
+    for (let y = y0; y < y0 + H; y++) g.text(x, y, '│', C.faint);
+    const th = Math.max(2, Math.round((H * V) / n));
+    const ty = y0 + Math.round(((H - th) * this.scroll) / top);
+    for (let y = ty; y < ty + th; y++) g.text(x, y, '█', C.dim);
+    g.text(x, y0 - 1, '▲', this.scroll > 0 ? C.hi : C.faint);
+    g.text(x, y0 + H, '▼', this.scroll < top ? C.hi : C.faint);
+    this.hit(x, y0 - 1, 1, 1, () => this.onWheel(-1));
+    this.hit(x, y0 + H, 1, 1, () => this.onWheel(1));
+    this.hit(x, y0, 1, H, (ck, game, cx, cy) => this.onWheel(cy === undefined ? 1 : cy < ty ? -V : cy >= ty + th ? V : 0));
+    if (this.scroll < top) g.text(x - 9, y0 + H, 'more ▼', C.faint);
+  }
+
+  onWheel(d) {
+    if (!this.view || !d) return;
+    this.scroll = Math.max(0, Math.min(this.view.n - this.view.V, this.scroll + Math.round(d)));
   }
 
   kitText() {
@@ -87,7 +140,7 @@ export class CharacterWindow extends Window {
   // ←/→ (or a click on an arrow) on a line.
   change(row, d) {
     const h = this.hero;
-    if (row.type === 'name') h.name = heroName((this.seed + ++this.rolls * 7919) >>> 0, null);
+    if (row.type === 'name') h.name = heroName((this.seed + ++this.rolls * 7919) >>> 0, h.nameStyle || null);
     else if (row.type === 'stat') {
       const v = h.stats[row.key];
       if (d > 0 && v < STAT_MAX && pointsLeft(h) > 0) h.stats[row.key]++;
@@ -150,8 +203,11 @@ export class CharacterWindow extends Window {
       g.text(3, y, r.label, sel ? C.white : C.dim);
       g.text(19, y, '◄', C.hi);
       if (r.type === 'swatch') {
-        g.text(21, y, '███', r.get());
-        g.text(25, y, r.get(), C.faint);
+        const c = r.get();
+        if (c) {
+          g.text(21, y, '███', c);
+          g.text(25, y, r.name ? r.name(c) : c, C.faint);
+        } else g.text(21, y, 'none', C.fg);
       } else if (r.type === 'name') {
         g.text(21, y, `${h.name}${sel && Math.floor(this.ui.time * 2) % 2 ? '_' : ''}`, C.white);
       } else g.text(21, y, cap(String(r.show())), C.fg);
@@ -176,18 +232,25 @@ export class CharacterWindow extends Window {
     if (tab === 'basics') {
       const R = (id) => rows.find((r) => r.id === id);
       cyc(R('name'), 6);
-      cyc(R('origin'), 8);
-      wrap(ORIGINS[h.origin].about, 48).slice(0, 3).forEach((l, i) => g.text(4, 9 + i, l, C.faint));
-      cyc(R('kit'), 13);
-      wrap(this.kitText(), 48).slice(0, 3).forEach((l, i) => g.text(4, 14 + i, l, C.faint));
-      g.text(3, 19, 'Summary', C.cyan);
+      cyc(R('nameStyle'), 7);
+      cyc(R('origin'), 9);
+      wrap(ORIGINS[h.origin].about, 48).slice(0, 3).forEach((l, i) => g.text(4, 10 + i, l, C.faint));
+      cyc(R('kit'), 14);
+      wrap(this.kitText(), 48).slice(0, 3).forEach((l, i) => g.text(4, 15 + i, l, C.faint));
+      g.text(3, 20, 'Summary', C.cyan);
       const sum = [
         `Stats: ${STATS.map((s) => `${s.name.slice(0, 3)} ${h.stats[s.key]}`).join(' · ')}`,
         `Skills: ${h.specialties.map((k) => SPECIALTIES[k].name).join(', ') || 'none'}`,
         `Traits: ${h.traits.map((k) => TRAITS[k].name).join(', ') || 'none'}`,
       ];
-      sum.forEach((l, i) => g.text(4, 20 + i, l.slice(0, 48), C.dim));
-    } else if (tab === 'looks') rows.forEach((r, i) => cyc(r, 6 + i * 2));
+      sum.forEach((l, i) => g.text(4, 21 + i, l.slice(0, 48), C.dim));
+    } else if (tab === 'looks') {
+      // (More than fits: it scrolls.)
+      const V = Math.floor((this.h - 4 - 6) / 2) + 1;
+      const s0 = this.scrolled(rows.length, V);
+      rows.slice(s0, s0 + V).forEach((r, i) => cyc(r, 6 + i * 2));
+      this.scrollbar(g, 52, 6, V * 2 - 1, rows.length, V);
+    }
     else if (tab === 'stats') {
       const left = pointsLeft(h);
       g.text(3, 6, `${left} point${left === 1 ? '' : 's'} to spend`, left > 0 ? C.hi : C.faint);
@@ -275,9 +338,10 @@ export class CharacterWindow extends Window {
   }
 
   randomise() {
-    const name = this.hero.name;
+    const { name, nameStyle } = this.hero;
     this.hero = randomHero((this.seed + ++this.rolls * 104729 + Date.now()) >>> 0);
     this.hero.name = name;
+    this.hero.nameStyle = nameStyle;
     this.ui.audio?.play('craft');
   }
 
@@ -301,8 +365,13 @@ export class CharacterWindow extends Window {
     else if (k.code === 'Tab') this.setTab(this.tab + (k.shift ? -1 : 1));
     else if (digit && digit[1] === '0') this.randomise();
     else if (digit) this.setTab(Number(digit[1]) - 1);
-    else if (k.code === 'ArrowUp') this.sel = (this.sel + n - 1) % n;
-    else if (k.code === 'ArrowDown') this.sel = (this.sel + 1) % n;
+    else if (k.code === 'ArrowUp') {
+      this.sel = (this.sel + n - 1) % n;
+      this.follow = true;
+    } else if (k.code === 'ArrowDown') {
+      this.sel = (this.sel + 1) % n;
+      this.follow = true;
+    } else if (k.code === 'PageDown' || k.code === 'PageUp') this.onWheel(k.code === 'PageDown' ? 5 : -5);
     else if (k.code === 'ArrowLeft' && row) this.change(row, -1);
     else if (k.code === 'ArrowRight' && row) this.change(row, 1);
     else if (row && row.type === 'name') {

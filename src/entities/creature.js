@@ -77,6 +77,12 @@ export class Creature extends Entity {
       this.arms = SKELETON_ARMS.find(([, w]) => (r -= w) <= 0)?.[0] || 'stone_sword';
     }
     if (S.arms) this.arms = S.arms;
+    // (Some carry what comes to hand: a pair of knives, a sword and a knife.)
+    if (S.kits) {
+      const [main, off] = this.rng.pick(S.kits);
+      this.arms = main;
+      this.offhand = off;
+    }
     // (A shield on its arm, drawn there and raised to take a blow.)
     if (S.shield) {
       this.shieldKey = S.shield;
@@ -95,7 +101,7 @@ export class Creature extends Entity {
 
   // A second blade in its other hand (a cutthroat's).
   offhandItem() {
-    return this.S.offhand || null;
+    return this.offhand !== undefined ? this.offhand : this.S.offhand || null;
   }
 
   // How long a step takes it (quicker rallied, slower chilled).
@@ -114,6 +120,8 @@ export class Creature extends Entity {
     const master = this.isBoss && this.inst && !this.dormant && !this.waiting;
     if (master && !(this.game.scene && this.game.scene.lock)) bossClock(this, dt);
     if (this.hasteT > 0) this.hasteT -= dt;
+    // (Mid-roll: see monsters.tumble.)
+    if (this.rollT > 0) this.rollT -= dt;
     if (this.attackCd > 0) this.attackCd -= dt * (this.hasteT > 0 ? 1.6 : 1);
     // Night monsters burn away in daylight.
     if (this.S.night && !this.inst && this.game.isDay() && this.rng.chance(dt * 0.08)) {

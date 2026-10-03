@@ -404,6 +404,11 @@ export function isOpaque(id) {
 }
 
 // Block ids that count as a road for pathfinding cost / settlement logic.
+// The ground itself (as it lies, not as anyone set it): what digging goes
+// through, and what's drawn as cut rock when you're down in it.
+export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_dry', 'grass_jungle', 'grass_taiga', 'sand', 'sandstone', 'snow', 'mud', 'gravel', 'clay', 'coal_ore', 'iron_ore', 'gold_ore', 'gem_ore', 'bedrock', 'mine_rock', 'cave_rock'].filter((k) => B[k] !== undefined).map((k) => B[k]));
+// Ores, and the glint they show in a cut wall.
+export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
 export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark]);
 export const LOGS = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow'].map((w) => B[`log_${w}`]),

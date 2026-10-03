@@ -55,7 +55,7 @@ export const DTYPES = {
   holdout: {
     name: 'Holdout', wall: B.cave_rock, floor: B.dirt, alt: B.path, beam: B.mine_beam, regions: [2, 2], floors: [1, 3],
     kits: ['bunks', 'cache', 'watch', 'kitchen', 'cells', 'collapsed', 'trap', 'bunks', 'watch', 'treasure'],
-    mobs: [['cutthroat', 4], ['holdout_archer', 3], ['rat', 1], ['wolf', 1]], bosses: ['warlord', 'twins', 'poisoner'], torches: 0.7,
+    mobs: [['cutthroat', 4], ['holdout_archer', 3], ['bombarder', 2], ['thief', 2], ['coward', 2], ['rat', 1], ['wolf', 1]], bosses: ['warlord', 'twins', 'poisoner'], torches: 0.7,
     // Caves somebody's made a home of: rooms walled off square, racks of
     // stolen arms, banners, kegs of powder, an alarm gong.
     shapes: { rect: 3, ell: 3, cave: 2 }, wiggle: 0.8, decor: [['weapon_rack', 3], ['war_banner', 2], ['powder_keg', 2], ['stalagmite', 1], ['rubble', 2]],
@@ -1108,14 +1108,18 @@ function dress(ctx, r) {
       for (let i = 0; i < 3; i++) placeIn(ctx, r, B.bed, rng.int(0, 3), true);
       placeIn(ctx, r, B.weapon_rack, 0, true);
       chestIn(ctx, r, 0.9);
-      group('cutthroat', 1, 3);
+      group('cutthroat', 1, 2);
+      group('thief', 0, 1);
+      group('coward', 0, 1);
       break;
     case 'cache':
       for (let i = 0; i < 2; i++) placeIn(ctx, r, B.crate, 0, true);
       placeIn(ctx, r, B.powder_keg, 0, true);
       chestIn(ctx, r, 1.4, B.chest, [['coin', rng.int(3, 8)]]);
       chestIn(ctx, r, 1);
-      group('cutthroat', 1, 2);
+      // (Powder about: a bombarder's never far.)
+      group('cutthroat', 0, 1);
+      group('bombarder', 1, 1);
       break;
     case 'watch': {
       // A barricade across the room, archers behind it.
@@ -1124,7 +1128,9 @@ function dress(ctx, r) {
       // (And a gong, to rouse the place.)
       const gong = placeIn(ctx, r, B.gong, 0, true);
       if (gong) out.gongs.push({ x: b.x0 + gong.x, z: gong.z });
-      group('holdout_archer', 2, 3);
+      group('holdout_archer', 1, 2);
+      group('bombarder', 0, 1);
+      group('coward', 0, 1);
       placeIn(ctx, r, B.barrel, 0, true);
       break;
     }
@@ -1133,14 +1139,15 @@ function dress(ctx, r) {
       placeIn(ctx, r, B.table);
       for (let i = 0; i < 2; i++) placeIn(ctx, r, B.barrel, 0, true);
       chestIn(ctx, r, 0.6, B.chest, [['bread', rng.int(2, 5)], ['cooked_meat', rng.int(1, 4)], ['ale', rng.int(1, 3)]]);
-      group('cutthroat', 1, 2);
+      group('cutthroat', 0, 1);
+      group('coward', 1, 1);
       break;
     case 'cells':
       for (let x = r.x0; x <= r.x1; x += 2) if (own(ctx.plan, r, x, r.z0) && !doorBlocked(ctx.plan, r, x, r.z0)) b.set(x, FY, r.z0, B.iron_bars);
       placeIn(ctx, r, B.bones);
       placeIn(ctx, r, B.hanging_chains, 0, true);
       chestIn(ctx, r, 0.8, B.chest, [['lead', 1]]);
-      group('cutthroat', 1, 1);
+      group(rng.chance(0.5) ? 'thief' : 'cutthroat', 1, 1);
       break;
     // ------------------------------------------------ Kavorent
     case 'hall':

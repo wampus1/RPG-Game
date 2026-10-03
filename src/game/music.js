@@ -87,7 +87,33 @@ export const THEMES = {
   storm: { root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], lead: 'square', drums: 'battle', density: 0.74, drive: true, detune: 10 },
   wreck: { root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.14 },
   fight_boss: { root: 45, scale: 'harmonic', bpm: 120, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.6, organ: true, grand: true, choir: true, brass: true },
+  // The title's other songs (see TITLE_SONGS): a bright morning on bells;
+  // a waltz by the fire, three to the bar; a slow ballad of the barrows,
+  // sung in parts; a march under the banner; a shanty for far shores; the
+  // dark below with its bell; and the Kavorent's glass and starlight.
+  title_dawn: { root: 60, scale: 'lydian', bpm: 84, prog: [0, 4, 5, 3], lead: 'triangle', bell: true, pad: true, drums: null, density: 0.42, arp: true },
+  title_hearth: { root: 62, scale: 'major', bpm: 128, meter: 12, prog: [0, 3, 4, 0, 5, 3, 4, 4], lead: 'triangle', harmony: true, drums: 'waltz', density: 0.55 },
+  title_ballad: { root: 55, scale: 'harmonic', bpm: 64, prog: [0, 5, 3, 4, 0, 5, 1, 4], lead: 'sine', harmony: true, pad: true, drums: null, density: 0.34, detune: 6 },
+  title_banner: { root: 58, scale: 'mixo', bpm: 100, prog: [0, 6, 3, 4], lead: 'square', drums: 'march', density: 0.6, fifths: true, stabs: true },
+  title_shore: { root: 62, scale: 'dorian', bpm: 104, prog: [0, 6, 0, 4], lead: 'square', drums: 'hand', density: 0.6, swing: 0.28, harmony: true },
+  title_deep: { root: 50, scale: 'phrygian', bpm: 58, prog: [0, 1, 5, 0], lead: 'sine', bell: true, pad: true, drums: null, density: 0.24, toll: true, detune: 10 },
+  title_spire: { root: 54, scale: 'whole', bpm: 70, meter: 12, prog: [0, 2, 4, 1], lead: 'sine', bell: true, pad: true, arp: true, drums: null, density: 0.3, detune: 16 },
 };
+
+// The title plays these one after another (a few minutes each, never the
+// same one twice running): the theme and what it's called.
+export const TITLE_SONGS = [
+  ['title', 'The Long Road'],
+  ['title_dawn', 'Dawn over the Vale'],
+  ['title_hearth', 'Hearthside Waltz'],
+  ['title_ballad', 'Ballad of the Barrows'],
+  ['title_banner', 'Under the Banner'],
+  ['title_shore', 'Far Shores'],
+  ['title_deep', 'What Lies Below'],
+  ['title_spire', 'Glass and Starlight'],
+];
+// Seconds of each before the next.
+export const TITLE_SONG_LEN = 150;
 
 // What the music should be right now.
 export function musicMood(game) {
@@ -257,7 +283,7 @@ class Voice {
     const out = [];
     let deg = Math.floor(r() * 3) * 2;
     const dens = Math.min(0.95, (this.base ?? T.density) + 0.11 * ((this.level || 1) - 1));
-    for (let s = 0; s < 32; s++) {
+    for (let s = 0; s < 2 * (T.meter || 16); s++) {
       const strong = s % 4 === 0;
       const p = strong ? dens + 0.2 : s % 2 === 0 ? dens * 0.7 : dens * 0.3;
       if (r() > p) continue;
@@ -291,6 +317,13 @@ class Voice {
     o.connect(g).connect(this.out);
     o.start(t);
     o.stop(t + dur + 0.05);
+  }
+
+  // A struck bell: the note, and the bright partials over it dying first.
+  bell(freq, t, dur, vol) {
+    this.tone(freq, t, dur * 2.2, 'sine', vol);
+    this.tone(freq * 2.76, t, dur * 0.9, 'sine', vol * 0.28);
+    this.tone(freq * 5.4, t, dur * 0.4, 'sine', vol * 0.1);
   }
 
   hit(t, freq, dur, vol) {
@@ -402,8 +435,15 @@ class Voice {
     // (A master's: heavy and slow to begin, then driving, then savage, as
     // the fight climbs.)
     const d = this.T.grand ? (this.lv < 1.6 ? 'grand' : this.lv < 2.5 ? 'battle' : 'fury') : this.T.drums;
-    const b = s % 16;
+    const b = s % (this.T.meter || 16);
     if (!d) return;
+    if (d === 'waltz') {
+      // (One, two, three: the low drum, then two light brushes.)
+      if (b === 0) this.kick(t, 0.3);
+      if (b === 4 || b === 8) this.hit(t, 6000, 0.05, 0.05);
+      if (b === 10 && s % 24 === 22) this.hit(t, 2600, 0.04, 0.03);
+      return;
+    }
     if (d === 'grand') {
       if (b === 0) this.kick(t, 0.65);
       if (b === 6 || b === 10) this.kick(t, 0.32);
@@ -445,22 +485,30 @@ class Voice {
   // Schedule one sixteenth-note step.
   play(s, t) {
     const T = this.T;
-    const bar = Math.floor(s / 16);
-    const b = s % 16;
+    // (Steps to the bar: sixteen, or twelve for three to the bar.)
+    const M = T.meter || 16;
+    const bar = Math.floor(s / M);
+    const b = s % M;
     const chord = T.prog[bar % T.prog.length];
     const sd = this.stepDur;
     // Bass.
     const drive = T.drive || (T.grand && this.lv >= 1.6);
     // (Eased toward the fight's phase, a little each step.)
     if (this.lv !== this.level) this.lv += Math.sign(this.level - this.lv) * Math.min(Math.abs(this.level - this.lv), sd * 0.3);
-    if (drive ? b % 2 === 0 : b === 0 || b === 8 || (T.bpm > 100 && b === 12)) {
+    if (M === 12) {
+      // (Three to the bar: the root, then the chord twice, oom-pah-pah.)
+      if (b === 0) this.tone(midi(this.note(chord, -2)), t, sd * 3.5, 'triangle', 0.22);
+      if (b === 4 || b === 8) for (const k of [2, 4]) this.tone(midi(this.note(chord + k, -1)), t, sd * 1.5, 'triangle', 0.05);
+    } else if (drive ? b % 2 === 0 : b === 0 || b === 8 || (T.bpm > 100 && b === 12)) {
       this.tone(midi(this.note(chord, -2)), t, sd * (drive ? 1.8 : 3.5), 'triangle', 0.22);
       if (T.fifths && b === 0) this.tone(midi(this.note(chord + 4, -2)), t, sd * 7, 'triangle', 0.12);
     }
     // Pad (or organ) chord, once a bar.
     if (T.pad && b === 0) {
-      for (const k of [0, 2, 4]) this.tone(midi(this.note(chord + k, -1)), t, sd * 15, T.organ ? 'triangle' : 'sine', T.organ ? 0.07 : 0.05, T.detune || 0);
+      for (const k of [0, 2, 4]) this.tone(midi(this.note(chord + k, -1)), t, sd * (M - 1), T.organ ? 'triangle' : 'sine', T.organ ? 0.07 : 0.05, T.detune || 0);
     }
+    // Brass on the bar (and an answer late in every other).
+    if (T.stabs && (b === 0 || (b === 10 && bar % 2 === 1))) this.stab([0, 2, 4].map((k) => midi(this.note(chord + k, -1))), t, sd * (b === 0 ? 2.5 : 1.4), b === 0 ? 0.035 : 0.025);
     // Arpeggio.
     if (T.arp && b % 2 === 0) {
       const k = [0, 2, 4, 2][(b / 2) % 4];
@@ -469,26 +517,30 @@ class Voice {
     // Melody: phrases A A B A over eight bars.
     const which = [0, 0, 1, 0][Math.floor(bar / 2) % 4];
     const ph = this.phrases[which];
-    const ps = s % 32;
+    const ps = s % (2 * M);
     for (const n of ph) {
       if (n.s !== ps) continue;
       const sw = T.swing && ps % 2 === 1 ? sd * T.swing : 0;
-      const nt = this.note(n.deg + chord * (this.rand() < 0.3 ? 1 : 0), 1);
-      this.tone(midi(nt), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
+      const dg = n.deg + chord * (this.rand() < 0.3 ? 1 : 0);
+      const nt = this.note(dg, 1);
+      if (T.bell) this.bell(midi(nt), t + sw, sd * n.len, 0.075);
+      else this.tone(midi(nt), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
+      // (Sung in parts: a third under it on the beats.)
+      if (T.harmony && ps % 4 === 0) this.tone(midi(this.note(dg - 2, 1)), t + sw, sd * n.len * 0.9, 'triangle', 0.045);
       // (Desperate: the tune doubled an octave up, shrill over it all.)
       if (T.grand && this.lv >= 2.5) this.tone(midi(nt + 12), t + sw, sd * n.len * 0.8, 'square', 0.025);
     }
     // A master's: grand and dark.
     if (T.grand) this.grandLayers(s, t, bar, b, chord, sd);
     // A slow bell in the graveyard.
-    if (T.toll && s % 32 === 0) {
+    if (T.toll && s % (2 * M) === 0) {
       for (const [m, v] of [[1, 0.12], [2.76, 0.05], [5.4, 0.02]]) this.tone(midi(this.T.root - 12) * m, t, 3.5, 'sine', v);
     }
     // (By night, a faint shimmer high over it every other bar.)
     if (T.night && b === 0 && bar % 2 === 1) this.tone(midi(this.note(chord + 4, 2)), t + sd * 2, sd * 10, 'sine', 0.025);
     this.drums(s, t);
     // New tunes every so often, so a long walk isn't one loop.
-    if (s % 128 === 127) this.phrases = [this.phrase(), this.rand() < 0.5 ? this.phrases[1] : this.phrase()];
+    if (s % (8 * M) === 8 * M - 1) this.phrases = [this.phrase(), this.rand() < 0.5 ? this.phrases[1] : this.phrase()];
   }
 
   // Under a master's fight: a low drone, a choir breathing in each bar,
@@ -576,10 +628,33 @@ export class Music {
     return this.enabled;
   }
 
+  // On the title: its songs one after another (see TITLE_SONGS), from a
+  // random one, each a few minutes (counted only while it's heard).
+  titleSong(dt) {
+    const c = this.ctx;
+    if (!this.title) this.title = { i: Math.floor(Math.random() * TITLE_SONGS.length), t: 0 };
+    const T = this.title;
+    if (c && c.state === 'running' && this.voice && this.voice.key === TITLE_SONGS[T.i][0]) T.t += dt;
+    if (T.t >= TITLE_SONG_LEN) {
+      T.i = (T.i + 1 + Math.floor(Math.random() * (TITLE_SONGS.length - 1))) % TITLE_SONGS.length;
+      T.t = 0;
+    }
+    return TITLE_SONGS[T.i][0];
+  }
+
+  // What's playing on the title (its name), or null.
+  nowPlaying() {
+    if (!this.voice || !this.title) return null;
+    const s = TITLE_SONGS.find(([k]) => k === this.voice.key);
+    return s ? s[1] : null;
+  }
+
   // Called every frame with the mood the game is in; switches themes once
   // a new mood has held for a moment (fights switch at once).
   update(dt, mood) {
     if (!this.setup()) return;
+    if (mood === 'title') mood = this.titleSong(dt);
+    else this.title = null;
     if (!this.voice) {
       this.voice = new Voice(this, mood);
       return;

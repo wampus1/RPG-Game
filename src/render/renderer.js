@@ -2,7 +2,7 @@
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
 import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK } from './sprites.js';
 import { drawText, textWidth } from './font.js';
@@ -275,6 +275,7 @@ export class Renderer {
     this.drawProjectiles(game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.lighting.draw(this, game);
+    if (this.underground && this.hidden) this.drawDigView(game);
     drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
     drawKavSpikes(this, this.ctx, game);
@@ -513,9 +514,24 @@ export class Renderer {
       return false;
     };
     this.hidden = null;
+    this.underground = false;
     // Inside a building's walls counts even under a hole in the roof.
     const inside = bld && !bld.underConstruction && px >= bld.x0 && px <= bld.x1 && pz >= bld.z0 && pz <= bld.z1 && py < (bld.roofBase ?? WORLD_Y);
     if (!inside && !covered(px, pz)) return;
+    // Down in the ground itself (rock or earth over your head, not a roof):
+    // the whole view's cut away at your feet, a plan of the workings (see
+    // drawDigView).
+    if (!inside) {
+      for (let y = py + 2; y < Math.min(WORLD_Y, py + 16); y++) {
+        const id = world.getBlock(px, y, pz);
+        if (id === B.air || BLOCKS[id].render !== 'cube') continue;
+        this.underground = NATURAL.has(id);
+        break;
+      }
+    }
+    const cap = this.underground ? 2800 : 700;
+    const rx = this.underground ? 34 : 24;
+    const rz = this.underground ? 26 : 20;
     // Flood-fill the covered area (the roof footprint).
     const set = new Set();
     const q = [[px, pz]];
@@ -530,13 +546,13 @@ export class Renderer {
         }
       }
     }
-    while (q.length && set.size < 700) {
+    while (q.length && set.size < cap) {
       const [x, z] = q.pop();
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx;
         const nz = z + dz;
         const k = nx * 65536 + nz;
-        if (set.has(k) || Math.abs(nx - px) > 24 || Math.abs(nz - pz) > 20) continue;
+        if (set.has(k) || Math.abs(nx - px) > rx || Math.abs(nz - pz) > rz) continue;
         if (!covered(nx, nz)) continue;
         set.add(k);
         q.push([nx, nz]);
@@ -548,7 +564,14 @@ export class Renderer {
 
   isHidden(x, y, z) {
     if (this.veil && this.game && this.veil.veiled(x, y, z, this.game.world.getBlock(x, y, z))) return true;
-    return this.hidden !== null && y >= this.hiddenLevel && this.hidden.has(x * 65536 + z);
+    if (this.hidden === null || !this.hidden.has(x * 65536 + z)) return false;
+    if (y >= this.hiddenLevel) return true;
+    // (Down in the ground: the rock at your feet, cut flat.)
+    if (this.underground && y === this.hiddenLevel - 1 && this.game) {
+      const b = BLOCKS[this.game.world.getBlock(x, y, z)];
+      return b.render === 'cube' && b.opaque;
+    }
+    return false;
   }
 
   // The atlas with a Kavorent floor's blocks turned to its colour (the
@@ -637,8 +660,12 @@ export class Renderer {
     const cut = game.cutscene;
     // (A master coming apart is still seen, a moment: see scenes.js.)
     const ghost = game.scene && game.scene.ghost && game.scene.ghost.dead ? [game.scene.ghost] : [];
+    // (Down in the ground: anyone up on the surface over the workings isn't
+    // drawn walking about on the plan of them.)
+    const deep = this.underground && this.hidden;
     for (const e of ghost.length ? [...game.visibleEntities, ...ghost] : game.visibleEntities) {
       if (cut && cut.hides(e)) continue;
+      if (deep && e !== game.player && e.y >= this.hiddenLevel && this.hidden.has(e.x * 65536 + e.z)) continue;
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
       const rp = { x: u, y: wp.y, z: v };
@@ -673,10 +700,18 @@ export class Renderer {
     // (A town not yet built, in the native's opening: see cutscene.js.)
     const veil = cut && cut.veiled ? cut : null;
     this.veil = veil;
-    const cutAway = (x, y, z) => hidden !== null && y >= hLevel && hidden.has(x * 65536 + z);
-    const hid = veil
-      ? (x, y, z) => (hidden !== null && y >= hLevel && hidden.has(x * 65536 + z)) || veil.veiled(x, y, z, world.getBlock(x, y, z))
-      : (x, y, z) => hidden !== null && y >= hLevel && hidden.has(x * 65536 + z);
+    // (Down in the ground, the cut's at your feet: the rock there is drawn
+    // flat, as a plan (see drawDigView); what's set on the floor still
+    // shows.)
+    const dig = this.underground ? hLevel - 1 : null;
+    const cutAway = (x, y, z) => {
+      if (hidden === null || !hidden.has(x * 65536 + z)) return false;
+      if (dig === null || y > dig) return y >= hLevel;
+      if (y < dig) return false;
+      const b = BLOCKS[world.getBlock(x, y, z)];
+      return b.render === 'cube' && b.opaque;
+    };
+    const hid = veil ? (x, y, z) => cutAway(x, y, z) || veil.veiled(x, y, z, world.getBlock(x, y, z)) : cutAway;
     this.cursorDrawList = null;
 
     for (let r = 0; r < nRows - 1; r++) {
@@ -1100,7 +1135,7 @@ export class Renderer {
     }
     if (e.flash > 0) ctx.filter = 'brightness(3)';
     // Rolling: a tumble, head over heels, with a blur of afterimages.
-    const rolling = e.kind === 'player' && e.rollT > 0 && !e.mount && !e.raft;
+    const rolling = (e.kind === 'player' || e.kind === 'creature') && e.rollT > 0 && !e.mount && !e.raft;
     if (!rolling && e.rollTrail) e.rollTrail = null;
     if (e.kind === 'creature' && e.species === 'horse') {
       // A horse, bigger than the rest: side on, turned the way it's going.
@@ -1290,8 +1325,9 @@ export class Renderer {
     const m = this.mouse;
     if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead && !e.burrowed) {
       const big = e.kind === 'creature' && e.S && e.S.big;
-      const h = (big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24) * (master ? BOSS_SCALE : 1);
-      const w = (big ? 12 : 0) + (master ? 6 : 0);
+      // (A master's a little more than it's drawn: easier to put a blow on.)
+      const h = (big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24) * (master ? BOSS_SCALE : 1) + (master && !big ? 6 : 0);
+      const w = (big ? 12 : 0) + (master ? (big ? 6 : 10) : 0);
       if (m.x >= sx + 2 - w && m.x < sx + 14 + w && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
     }
     // Straining at a lead: how near it is to breaking free.
@@ -1887,6 +1923,34 @@ export class Renderer {
       }
       // A wisp's ball of cold fire: lobbed in a glowing arc, a pale ring on
       // the ground where it'll burst.
+      if (a.kind === 'orb' && a.stick) {
+        // A stick of dynamite: end over end through the air, its fuse
+        // spitting sparks; the ground it'll land on marked.
+        const gy = a.y0 + (a.ty - a.y0) * f;
+        const [lx, lz] = this.toView(a.tx, a.tz);
+        const ex = Math.round(lx * TILE + 8 - this.camX);
+        const ey = Math.round(lz * TILE - a.ty * LH + LH - this.camY);
+        ctx.fillStyle = `rgba(255,140,60,${0.2 + f * 0.35})`;
+        ctx.fillRect(ex - 5, ey - 1, 10, 1);
+        ctx.fillRect(ex - 1, ey - 3, 2, 5);
+        const gsy = Math.round(wz * TILE - gy * LH + LH - this.camY);
+        const lift = Math.round(Math.sin(f * Math.PI) * a.arc * LH);
+        const cx = sx;
+        const cy = gsy - lift - 1;
+        const ang = f * Math.PI * 4;
+        const ux2 = Math.cos(ang);
+        const uy2 = Math.sin(ang);
+        for (let i = -3; i <= 3; i++) {
+          ctx.fillStyle = i === -1 || i === 1 ? '#e8d8a0' : i > 0 ? '#e85a3a' : '#c83a2a';
+          ctx.fillRect(Math.round(cx + ux2 * i) - 1, Math.round(cy + uy2 * i) - 1, 2, 2);
+        }
+        const fx = Math.round(cx + ux2 * 4.5);
+        const fy = Math.round(cy + uy2 * 4.5);
+        ctx.fillStyle = '#fff4a0';
+        ctx.fillRect(fx, fy, 1, 1);
+        if (Math.random() < 0.7) this.particles.push({ x: fx + this.camX, y: fy + this.camY, vx: (Math.random() - 0.5) * 30, vy: -Math.random() * 30, g: 60, life: 0.3, max: 0.3, color: Math.random() < 0.5 ? '#ffe070' : '#ff9030', size: 1, glow: true, grow: 0, chunk: null });
+        continue;
+      }
       if (a.kind === 'orb') {
         const gy = a.y0 + (a.ty - a.y0) * f;
         const [lx, lz] = this.toView(a.tx, a.tz);
@@ -2376,8 +2440,13 @@ export class Renderer {
     this.drawTelegraphs(game);
     const c = game.cursor;
     if (!c) return;
-    const { x: sx, y: sy } = this.worldToScreen(c.x, c.y, c.z);
     const pulse = 0.55 + Math.sin(this.time * 6) * 0.25;
+    // (Down in the ground, the view's a plan at your feet: see planCursor.)
+    if (c.plan && this.underground && this.hidden) {
+      this.planCursor(game, c, pulse);
+      return;
+    }
+    const { x: sx, y: sy } = this.worldToScreen(c.x, c.y, c.z);
     // Placement ghost.
     if (c.place) {
       const p = c.place;
@@ -2397,6 +2466,9 @@ export class Renderer {
         }
       }
       ctx.globalAlpha = 1;
+      // How high it'll go: a line dropped from it to the ground it stands
+      // over (that ground outlined), and its height against your feet.
+      this.heightCue(game, p.x, p.y, p.z, gx, gy, p.ok ? '#a0ffc0' : '#ff9a9a', true);
       this.cubeOutline(gx, gy, p.ok ? `rgba(120,255,160,${pulse})` : `rgba(255,90,90,${pulse})`);
       if (b.rotatable) {
         const arrow = ['↓', '←', '↑', '→'][p.rot];
@@ -2404,20 +2476,242 @@ export class Renderer {
       }
     }
     if (c.block) {
-      if (game.mining && game.mining.progress > 0) {
-        const stage = Math.min(3, Math.floor(game.mining.progress * 4));
+      const m = game.mining;
+      if (m && m.progress > 0) {
+        const stage = Math.min(3, Math.floor(m.progress * 4));
         const s = TEX.crack[stage];
         ctx.drawImage(this.atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
       }
+      // (Digging a passage: the rock over it goes too, outlined over it.)
+      const pair = game.tunnelPair ? game.tunnelPair(c) : null;
+      if (pair) {
+        const q = this.worldToScreen(pair.x, pair.y, pair.z);
+        if (m && m.progress > 0) {
+          const s = TEX.crack[Math.min(3, Math.floor(m.progress * 4))];
+          ctx.globalAlpha = 0.7;
+          ctx.drawImage(this.atlas, s.x, s.y, s.w, s.h, q.x, q.y, s.w, s.h);
+          ctx.globalAlpha = 1;
+        }
+        this.cubeOutline(q.x, q.y, `rgba(255,200,120,${pulse * 0.7})`, true);
+      }
       this.cubeOutline(sx, sy, c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`);
+      // (Its height against your feet, when it isn't just in front of you.)
+      const rel = c.y - game.player.y;
+      if (rel !== 0 && (this.underground || rel < -1 || rel > 1 || game.player.layerMode !== null)) this.levelTag(sx, sy, rel, c.inReach ? '#ffe8a0' : '#a8a8a8');
     } else if (c.empty) {
       this.cubeOutline(sx, sy, `rgba(160,200,255,${pulse * 0.6})`);
     }
   }
 
-  cubeOutline(sx, sy, color) {
+  // The pointer down in the ground (see game.pickPlan): everything at your
+  // feet's drawn flat on the floor's plane, so what it's on is outlined
+  // flat there too. Rock: the square you'd dig (and, when the rock over it
+  // goes with it, a second dashed square inside: a passage you can walk
+  // into). The floor: dug, it's a hole down (-1). What you'd set: its top
+  // laid flat there, the square around it green, or red if it can't go.
+  planCursor(game, c, pulse) {
+    const ctx = this.ctx;
+    const L = this.hiddenLevel - 1;
+    const flat = (x, z, color, inset = 0, dashed = false) => {
+      const q = this.worldToScreen(x, L - 1, z);
+      const a = q.x + inset;
+      const b = q.y + inset;
+      const n = 16 - inset * 2;
+      ctx.fillStyle = color;
+      if (!dashed) {
+        ctx.fillRect(a, b, n, 1);
+        ctx.fillRect(a, b + n - 1, n, 1);
+        ctx.fillRect(a, b, 1, n);
+        ctx.fillRect(a + n - 1, b, 1, n);
+        return q;
+      }
+      for (let i = 0; i < n; i += 3) {
+        ctx.fillRect(a + i, b, 2, 1);
+        ctx.fillRect(a + i, b + n - 1, 2, 1);
+        ctx.fillRect(a, b + i, 1, 2);
+        ctx.fillRect(a + n - 1, b + i, 1, 2);
+      }
+      return q;
+    };
+    if (c.place) {
+      const p = c.place;
+      const b = BLOCKS[p.id];
+      const q = this.worldToScreen(p.x, L - 1, p.z);
+      const lift = (L - p.y) * LH;
+      ctx.globalAlpha = 0.55;
+      const arr = b.render === 'cube' || b.render === 'door' ? TEX.top[p.id * 4 + (b.rotatable ? p.rot : 0)] : TEX.sprite[p.id * 4 + (b.rotatable ? p.rot : 0)] || TEX.sprite[p.id * 4];
+      if (arr) {
+        const s = arr[0];
+        const sw = Math.min(16, s.w);
+        const sh = Math.min(16, s.h);
+        ctx.drawImage(this.atlas, s.x, s.y, sw, sh, q.x + ((16 - sw) >> 1), q.y + lift + ((16 - sh) >> 1), sw, sh);
+      }
+      ctx.globalAlpha = 1;
+      flat(p.x, p.z, p.ok ? `rgba(120,255,160,${pulse})` : `rgba(255,90,90,${pulse})`);
+      this.levelTag(q.x, q.y + lift, p.y - game.player.y, p.ok ? '#a0ffc0' : '#ff9a9a');
+      if (b.rotatable) drawText(ctx, ['↓', '←', '↑', '→'][p.rot], q.x + 5, q.y - 9, '#a0ffc0', '#000');
+      return;
+    }
+    if (!c.block && !c.empty) return;
+    const q = flat(c.x, c.z, c.block ? (c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`) : `rgba(160,200,255,${pulse * 0.6})`);
+    if (!c.block) return;
+    const m = game.mining;
+    if (m && m.progress > 0) {
+      const s = TEX.crack[Math.min(3, Math.floor(m.progress * 4))];
+      ctx.drawImage(this.atlas, s.x, s.y, 16, 16, q.x, q.y, 16, 16);
+    }
+    if (game.tunnelPair && game.tunnelPair(c)) flat(c.x, c.z, `rgba(255,200,120,${pulse * 0.8})`, 3, true);
+    const rel = c.y - game.player.y;
+    if (rel !== 0) this.levelTag(q.x, q.y, rel, c.inReach ? '#ffe8a0' : '#a8a8a8');
+  }
+
+  // A height against your feet, small, beside a block's outline: +1 above,
+  // -2 below, 0 level with them.
+  levelTag(sx, sy, rel, color) {
+    const t = rel > 0 ? `+${rel}` : rel < 0 ? `${rel}` : '0';
+    const ctx = this.ctx;
+    const w = textWidth(t) + 3;
+    ctx.fillStyle = 'rgba(8,6,14,0.75)';
+    ctx.fillRect(sx + 17, sy - 1, w, 9);
+    drawText(ctx, t, sx + 19, sy, color, null);
+  }
+
+  // Where a block set at (x, y, z) would stand: a dotted line down from it
+  // to the ground beneath (that ground's top outlined), and its height
+  // against your feet.
+  heightCue(game, x, y, z, gx, gy, color, tag) {
+    const ctx = this.ctx;
+    const w = game.world;
+    let gyLevel = null;
+    for (let yy = y - 1; yy >= Math.max(0, y - 12); yy--) {
+      const b = BLOCKS[w.getBlock(x, yy, z)];
+      if (b.solid || b.liquid) {
+        gyLevel = yy;
+        break;
+      }
+    }
+    if (gyLevel !== null && gyLevel < y - 1) {
+      const g = this.worldToScreen(x, gyLevel, z);
+      const bottom = gy + 16 + LH;
+      ctx.fillStyle = color;
+      for (let py = bottom + 1; py < g.y + 8; py += 3) {
+        ctx.globalAlpha = 0.75;
+        ctx.fillRect(gx + 7, py, 2, 1);
+      }
+      // (The ground under it: its top outlined, a cross in the middle.)
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(g.x + 2, g.y + 2, 12, 1);
+      ctx.fillRect(g.x + 2, g.y + 13, 12, 1);
+      ctx.fillRect(g.x + 2, g.y + 2, 1, 12);
+      ctx.fillRect(g.x + 13, g.y + 2, 1, 12);
+      ctx.fillRect(g.x + 6, g.y + 8, 4, 1);
+      ctx.fillRect(g.x + 8, g.y + 6, 1, 4);
+      ctx.globalAlpha = 1;
+    }
+    if (tag) this.levelTag(gx, gy, y - game.player.y, color);
+  }
+
+  // Down in the ground (see computeCutaway): a plan of the workings at your
+  // feet, drawn over the dark so it can always be read. Rock you'd dig
+  // through, dark and hatched; the edges of every passage traced in light;
+  // ore glinting in the walls near you; and anywhere the roof's too low to
+  // stand, hatched in amber.
+  drawDigView(game) {
+    const ctx = this.ctx;
+    const w = game.world;
+    const p = game.player;
+    const L = this.hiddenLevel - 1;
+    const solid = (x, y, z) => {
+      const b = BLOCKS[w.getBlock(x, y, z)];
+      return b.solid && b.render === 'cube';
+    };
+    const t = this.time;
+    const hatch = (this.hatches ||= digHatches());
+    const x0 = this.camX - 24;
+    const x1 = this.camX + this.vw + 8;
+    const y0 = this.camY - 24;
+    const y1 = this.camY + this.vh + 24;
+    for (const k of this.hidden) {
+      const x = Math.floor(k / 65536);
+      const z = k - x * 65536;
+      // (Drawn on the plane of the floor at your feet.)
+      const { x: sx, y: sy } = this.worldToScreen(x, L - 1, z);
+      if (sx + this.camX < x0 || sx + this.camX > x1 || sy + this.camY < y0 || sy + this.camY > y1) continue;
+      const id = w.getBlock(x, L, z);
+      const b = BLOCKS[id];
+      if (b.solid && b.render === 'cube' && !solid(x, L + 1, z) && !solid(x, L + 2, z)) {
+        // A step up (the floor a pace higher there): lighter, an arrow up.
+        ctx.fillStyle = 'rgba(200,190,170,0.16)';
+        ctx.fillRect(sx, sy, 16, 16);
+        ctx.fillStyle = 'rgba(255,226,170,0.7)';
+        ctx.fillRect(sx + 7, sy + 5, 2, 1);
+        ctx.fillRect(sx + 6, sy + 6, 4, 1);
+        ctx.fillRect(sx + 5, sy + 7, 6, 1);
+        ctx.fillRect(sx + 7, sy + 8, 2, 4);
+      } else if (b.solid && b.render === 'cube') {
+        // Rock: darker, hatched.
+        ctx.drawImage(hatch.rock, sx, sy);
+        // Its edges onto open ground, traced in light.
+        ctx.fillStyle = 'rgba(255,226,170,0.78)';
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (solid(x + dx, L, z + dz)) continue;
+          const n = this.worldToScreen(x + dx, L - 1, z + dz);
+          if (n.x > sx) ctx.fillRect(sx + 15, sy, 1, 16);
+          else if (n.x < sx) ctx.fillRect(sx, sy, 1, 16);
+          else if (n.y > sy) ctx.fillRect(sx, sy + 15, 16, 1);
+          else ctx.fillRect(sx, sy, 16, 1);
+        }
+        // Ore near you, glinting in the cut.
+        const ore = ORE_GLINT.get(id);
+        if (ore && Math.abs(x - p.x) <= 9 && Math.abs(z - p.z) <= 7) {
+          for (let i = 0; i < 3; i++) {
+            const ox = (hash4(x, z, i, 3) % 12) + 2;
+            const oz = (hash4(x, z, i, 7) % 12) + 2;
+            const tw = 0.55 + 0.45 * Math.sin(t * 3 + i * 2.1 + x + z);
+            ctx.globalAlpha = tw;
+            ctx.fillStyle = ore;
+            ctx.fillRect(sx + ox, sy + oz, 2, 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(sx + ox, sy + oz, 1, 1);
+          }
+          ctx.globalAlpha = 1;
+        }
+      } else if (!b.solid && !solid(x, L - 1, z)) {
+        // A drop (the floor lower there): darker, an arrow down.
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(sx, sy, 16, 16);
+        ctx.fillStyle = 'rgba(160,200,255,0.65)';
+        ctx.fillRect(sx + 7, sy + 4, 2, 4);
+        ctx.fillRect(sx + 5, sy + 8, 6, 1);
+        ctx.fillRect(sx + 6, sy + 9, 4, 1);
+        ctx.fillRect(sx + 7, sy + 10, 2, 1);
+      } else if (!b.solid && solid(x, L + 1, z) && NATURAL.has(w.getBlock(x, L + 1, z))) {
+        // Open at your feet, but the roof's down at your head: too low to
+        // stand. Hatched amber, on the floor.
+        const f = this.worldToScreen(x, L - 1, z);
+        ctx.drawImage(hatch.low, f.x, f.y);
+        ctx.fillStyle = 'rgba(255,170,80,0.6)';
+        ctx.fillRect(f.x, f.y, 16, 1);
+        ctx.fillRect(f.x, f.y + 15, 16, 1);
+      }
+    }
+  }
+
+  cubeOutline(sx, sy, color, dashed = false) {
     const ctx = this.ctx;
     ctx.fillStyle = color;
+    if (dashed) {
+      for (let i = 0; i < 16; i += 3) {
+        ctx.fillRect(sx + i, sy, 2, 1);
+        ctx.fillRect(sx + i, sy + 16, 2, 1);
+        ctx.fillRect(sx + i, sy + 16 + LH - 1, 2, 1);
+      }
+      for (let i = 0; i < 16 + LH; i += 3) {
+        ctx.fillRect(sx, sy + i, 1, 2);
+        ctx.fillRect(sx + 15, sy + i, 1, 2);
+      }
+      return;
+    }
     ctx.fillRect(sx, sy, 16, 1);
     ctx.fillRect(sx, sy + 16, 16, 1);
     ctx.fillRect(sx, sy + 16 + LH - 1, 16, 1);
@@ -2434,6 +2728,30 @@ export class Renderer {
     if (h >= 5 && h < 7) return 0.22 + (h - 5) / 2 * 0.78;
     return 0.22;
   }
+}
+
+// The dig view's patterns (see drawDigView): cut rock, dark and hatched
+// one way; a roof too low to stand under, hatched amber the other.
+function digHatches() {
+  const make = (fill, line, step, flip) => {
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const g = c.getContext('2d');
+    if (fill) {
+      g.fillStyle = fill;
+      g.fillRect(0, 0, 16, 16);
+    }
+    g.fillStyle = line;
+    for (let i = -16; i < 16; i += step) {
+      for (let j = 0; j < 16; j++) {
+        const hx = i + j;
+        if (hx >= 0 && hx < 16) g.fillRect(hx, flip ? 15 - j : j, 1, 1);
+      }
+    }
+    return c;
+  };
+  return { rock: make('rgba(6,4,12,0.42)', 'rgba(190,175,150,0.14)', 4, true), low: make(null, 'rgba(255,170,80,0.34)', 3, false) };
 }
 
 export { GROUND };

@@ -18,6 +18,14 @@ export function onTiles(e, tiles) {
   return tiles.some((t) => Math.abs(t.x - e.x) <= r && Math.abs(t.z - e.z) <= r);
 }
 
+// A master drawn half as big again as you (not one of the great ones that
+// fill three paces): a blow or a shot that comes this close to its middle
+// finds it, a little more than its one pace.
+export const MASTER_PAD = 0.85;
+export function padded(e) {
+  return !!(e && e.isBoss && !e.foot && e.S && e.S.humanoid);
+}
+
 // Paces between two (edge to edge: 0 when they touch, or overlap).
 export function apart(a, b) {
   const r = ((a && a.foot) || 0) + ((b && b.foot) || 0);

@@ -47,6 +47,8 @@ export const TRAITS = {
   iron_stomach: { name: 'Iron Stomach', about: 'Every meal heals 1 more; raw food does you as much good as cooked.' },
   devout: { name: 'Devout', about: 'Priests and the devout think well of you; a prayer at an altar adds blue hearts too.' },
   silver_tongue: { name: 'Silver Tongue', about: 'People warm to you a quarter faster.' },
+  night_owl: { name: 'Night Owl', about: 'From dusk to the small hours your breath comes back twice as fast.' },
+  steady_hands: { name: 'Steady Hands', about: 'A lock\'s pins give more warning before they bind, and your picks snap less often.' },
   // Flaws: each gives a stat point back.
   frail: { name: 'Frail', about: '-4 health (+1 stat point).', flaw: true },
   rude: { name: 'Blunt', about: 'People like you a little less (+1 stat point).', flaw: true },
@@ -55,6 +57,7 @@ export const TRAITS = {
   short_winded: { name: 'Short of Breath', about: '-3 stamina (+1 stat point).', flaw: true },
   outlander: { name: 'Outlander', about: 'Traders charge you 8% more, wherever you go (+1 stat point).', flaw: true },
   notorious: { name: 'Notorious', about: 'Your face is known: people notice what you get up to from further off (+1 stat point).', flaw: true },
+  squeamish: { name: 'Squeamish', about: 'You can\'t keep raw meat or fish down: they do you no good at all (+1 stat point).', flaw: true },
 };
 
 export const ORIGINS = {
@@ -74,6 +77,10 @@ export const KITS = {
   miner: { name: 'Miner', items: [['stone_pickaxe', 1], ['stone_shovel', 1], ['torch', 16], ['leather_cap', 1], ['leather_boots', 1], ['bread', 3]], coins: 15 },
   scholar: { name: 'Scholar', items: [['book', 2], ['scroll', 3], ['lantern', 1], ['wool_hood', 1], ['linen_shirt', 1], ['bread', 3]], coins: 50 },
   noble: { name: 'Minor Noble', items: [['iron_sword', 1], ['fine_coat', 1], ['gold_circlet', 1], ['leather_boots', 1], ['pie', 2]], coins: 140 },
+  herbalist: { name: 'Herbalist', items: [['herb', 8], ['healing_salve', 2], ['potion_vigor', 1], ['wool_hood', 1], ['dagger', 1], ['bread', 3]], coins: 25 },
+  smith: { name: 'Smith', items: [['hammer', 1], ['iron_ingot', 4], ['stone_pickaxe', 1], ['leather_boots', 1], ['bread', 3]], coins: 20 },
+  cutpurse: { name: 'Cutpurse', items: [['dagger', 1], ['lockpick', 5], ['wool_hood', 1], ['bread', 3], ['torch', 2]], coins: 30 },
+  bard: { name: 'Bard', items: [['lute', 1], ['flute', 1], ['dagger', 1], ['fine_coat', 1], ['bread', 3], ['torch', 2]], coins: 45 },
   castaway: { name: 'Nothing at all', items: [], coins: 0 },
 };
 // Everyone has these.
@@ -81,7 +88,7 @@ export const COMMON_KIT = [['torch', 4], ['bread', 1]];
 
 export const SKINS = ['#fbe0c8', '#f4d0b0', '#e8b48c', '#d8a47c', '#d49a6a', '#c0845a', '#b07a4a', '#9a6a40', '#8a5a34', '#6e4628', '#5a3a22', '#40281a'];
 export const HAIRS = ['#1e1612', '#3a2418', '#6e4424', '#8a5a30', '#a0642e', '#c87a3a', '#d8a048', '#e8d8a0', '#f0ecd8', '#c8c8c8', '#8a8a92', '#a83a2a', '#3a4a8a', '#6a3a7a', '#3a7a4a'];
-export const HAIR_STYLES = ['short', 'long', 'ponytail', 'bun', 'curly', 'spiky', 'mohawk', 'afro', 'braids', 'sidepart', 'topknot', 'pigtails', 'bald'];
+export const HAIR_STYLES = ['short', 'long', 'ponytail', 'bun', 'curly', 'spiky', 'mohawk', 'afro', 'braids', 'sidepart', 'topknot', 'pigtails', 'wavy', 'undercut', 'bald'];
 export const CLOTHES = ['#2f6f8f', '#8f2f3a', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#3a3a4a', '#e0dccc', '#a04a2a', '#2a4a3a', '#8a3a6a', '#4a6aa8', '#c86a3a', '#6a6a6a', '#1e1e28'];
 export const PANTS = ['#3a3a4a', '#4a3a2a', '#2a3a5a', '#5a5a5a', '#6a4a2e', '#2a2a2a', '#3a4a2a', '#6a2a2a', '#c8b88a', '#4a2a4a'];
 export const SHOES = ['#2a1a10', '#4a2e1a', '#1a1a1e', '#6a4a2e', '#5a5a62', '#7a2a2a'];
@@ -89,9 +96,17 @@ export const FACES = [null, 'beard', 'mustache', 'freckles', 'glasses', 'earring
 // Facial hair and a detail can be combined.
 export const BEARDS = [false, true];
 export const DETAILS = [null, 'mustache', 'freckles', 'glasses', 'earring', 'scar', 'eyepatch'];
-export const HATS = [null, 'straw', 'cap', 'beret', 'bandana', 'wide', 'feather', 'scarf', 'flower', 'hood', 'fur'];
-export const PATTERNS = [null, 'stripes', 'collar', 'sash', 'buttons'];
-export const OUTFITS = ['plain', 'vest', 'hunter', 'plaid', 'noble', 'apron', 'fisher', 'farmer', 'robe_blue', 'robe_green', 'robe_white'];
+export const HATS = [null, 'straw', 'cap', 'beret', 'bandana', 'wide', 'feather', 'scarf', 'flower', 'hood', 'fur', 'tricorn', 'wreath'];
+export const PATTERNS = [null, 'stripes', 'collar', 'sash', 'buttons', 'patches'];
+export const OUTFITS = ['plain', 'vest', 'hunter', 'plaid', 'noble', 'apron', 'fisher', 'farmer', 'tunic', 'traveller', 'robe_blue', 'robe_green', 'robe_white'];
+// The finer things (see the character screen's LOOKS): eyes, how a beard's
+// worn, marks on the face, a kerchief at the neck, gloves, a cloak.
+export const EYES = ['#1e1a28', '#4a2e1a', '#6a5a2a', '#3a6a3a', '#3a5a9a', '#7a8090', '#a87a2a'];
+export const BEARD_STYLES = ['full', 'goatee', 'stubble', 'long', 'chinstrap'];
+export const MARKS = [null, 'warpaint', 'tattoo', 'blush', 'mole', 'stripes'];
+export const NECKS = [null, '#c83a32', '#2f6f8f', '#e0d0b0', '#3a7a3a', '#c8a030', '#5a3a7a', '#1e1e28'];
+export const GLOVES = [null, '#4a2e1a', '#2a2a2a', '#7a5232', '#e0dccc', '#8f2f3a'];
+export const CAPES = [null, '#8f2f3a', '#2f4a6f', '#3a5a2a', '#4a3a2a', '#5a3a7a', '#2a2a32', '#c8a030'];
 export const BUILDS = [false, true]; // stooped or upright
 
 export function pointsLeft(h) {
@@ -132,6 +147,14 @@ export function randomHero(seed) {
     const k = rng.pick(keys.filter((q) => h.stats[q] < STAT_MAX));
     h.stats[k]++;
   }
+  // (The finer things, now and then.)
+  const L = h.look;
+  L.eyeColor = rng.pick(EYES);
+  L.beardStyle = rng.pick(BEARD_STYLES);
+  L.mark = rng.chance(0.15) ? rng.pick(MARKS.filter(Boolean)) : null;
+  L.neck = rng.chance(0.2) ? rng.pick(NECKS.filter(Boolean)) : null;
+  L.gloves = rng.chance(0.15) ? rng.pick(GLOVES.filter(Boolean)) : null;
+  L.cape = rng.chance(0.15) ? rng.pick(CAPES.filter(Boolean)) : null;
   return h;
 }
 

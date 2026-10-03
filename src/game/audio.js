@@ -234,6 +234,18 @@ export class Audio {
       case 'voices': for (let i = 0; i < 4; i++) this.tone(140 + Math.random() * 90, 0.18, 'sawtooth', 0.008, Math.random() * 40 - 20, i * 0.22); break;
       case 'wind_low': this.noise(2.4, 0.03, 220); break;
       case 'fuse': this.noise(1.0, 0.05, 5200); break;
+      // Picking a lock: a locked chest's rattle, a pin flicked (a binding
+      // one, stiffer), one caught, the pick straining and snapping, and the
+      // plug turning over at last.
+      case 'locked': this.noise(0.08, 0.1, 900); this.noise(0.06, 0.08, 1300, 0.09); break;
+      case 'pick_tick': this.tone(3200 + Math.random() * 400, 0.03, 'triangle', 0.025); break;
+      case 'pick_bind': this.tone(1500, 0.05, 'square', 0.02, -200); this.noise(0.04, 0.03, 2400); break;
+      case 'pick_set': this.tone(2400, 0.04, 'square', 0.04); this.tone(1800, 0.06, 'triangle', 0.04, 0, 0.03); this.noise(0.03, 0.05, 4000); break;
+      case 'pick_strain': this.tone(420, 0.18, 'sawtooth', 0.025, -60); this.noise(0.12, 0.03, 1800); break;
+      case 'pick_snap': this.noise(0.06, 0.2, 5200); this.tone(2900, 0.05, 'square', 0.05, -900); this.tone(1200, 0.12, 'triangle', 0.03, -400, 0.05); break;
+      case 'unlock': this.tone(220, 0.12, 'square', 0.06, -40); this.noise(0.1, 0.12, 700); this.tone(660, 0.18, 'triangle', 0.05, 0, 0.12); this.tone(880, 0.3, 'triangle', 0.04, 0, 0.2); break;
+      // A shout for help (a holdout coward's).
+      case 'shout': this.tone(300, 0.32, 'sawtooth', 0.05, 60); this.tone(420, 0.28, 'square', 0.025, 50, 0.03); this.noise(0.22, 0.05, 1500); this.tone(360, 0.3, 'sawtooth', 0.04, -40, 0.36); break;
       // A long swell, rising (a spire waking).
       case 'riser': [55, 82.5, 110, 165, 220].forEach((f, i) => this.swell(f, 3.0, i % 2 ? 'sawtooth' : 'sine', i % 2 ? 0.035 : 0.07, f * 1.5, 0)); this.noise(3.0, 0.03, 1600); break;
     }

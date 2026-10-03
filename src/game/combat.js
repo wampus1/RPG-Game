@@ -661,7 +661,7 @@ export function playerTick(game, p, dt, input, blocked) {
   }
   // (Back faster standing still behind a shield than swinging away; and
   // slowly at that.)
-  const morning = game.minute >= 300 && game.minute < 600 && heroHas(game.hero, 'early_riser');
+  const morning = (game.minute >= 300 && game.minute < 600 && heroHas(game.hero, 'early_riser')) || ((game.minute >= 1200 || game.minute < 120) && heroHas(game.hero, 'night_owl'));
   const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1) * relicBreath(game, p);
   if (p.rollStrike > 0) p.rollStrike -= dt;
   tickGuard(game, p, dt);

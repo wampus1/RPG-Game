@@ -140,8 +140,11 @@ export class Lighting {
     const SW = Math.ceil((r.vw || VIEW_W) / TILE) + 3;
     const SH = Math.ceil((r.vh || VIEW_H) / TILE) + 3;
     const hKey = (r.hidden ? r.hidden.size * 7 + r.hiddenLevel : -1) * 4 + (r.view || 0);
-    if (!this.samples || this.samples.k0 !== k0 || this.samples.m0 !== m0 || this.samples.hKey !== hKey) {
-      this.samples = { k0, m0, hKey, pts: this.sampleSurfaces(r, world, k0, m0, SW, SH) };
+    // (Its size too: as a scene draws the camera in or out, the grid grows
+    // and shrinks, and the old samples would be read askew: the dark
+    // flickering.)
+    if (!this.samples || this.samples.k0 !== k0 || this.samples.m0 !== m0 || this.samples.hKey !== hKey || this.samples.SW !== SW || this.samples.SH !== SH) {
+      this.samples = { k0, m0, hKey, SW, SH, pts: this.sampleSurfaces(r, world, k0, m0, SW, SH) };
     }
     // Lights that move: torches carried, wisps, the Kavorent's constructs.
     const ents = game.entityLights ? game.entityLights() : [];

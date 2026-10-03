@@ -5,13 +5,13 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, MAP_W, MAP_H,
 } from '../config.js';
 import { World } from '../world/world.js';
-import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland } from '../world/blocks.js';
+import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL } from '../world/blocks.js';
 import { ITEMS, GEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
-import { covers, onTiles, apart } from '../entities/footprint.js';
+import { covers, onTiles, apart, padded } from '../entities/footprint.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { removeItem, makeSlots, addItem, canAdd } from './inventory.js';
@@ -22,6 +22,8 @@ import { TEX } from '../render/textures.js';
 import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
 import { PortalWindow } from '../ui/portal.js';
+import { LockWindow } from '../ui/lockpick.js';
+import { chestTier, RELOCK_DAYS } from './lockpick.js';
 import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
 import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
@@ -36,7 +38,7 @@ import { spireOpening, bossTint } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
-import { updateHazards, guardFront, kegBlast } from '../entities/monsters.js';
+import { updateHazards, guardFront, kegBlast, throwDynamite } from '../entities/monsters.js';
 import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
@@ -104,6 +106,8 @@ export class Game {
     this.hazards = [];
     // Things set down on the ground: "x,y,z" -> { item, count, owner }.
     this.placed = new Map();
+    // Household chests you've picked open (key -> the day: see chestLocked).
+    this.picked = new Map();
     // Wagons standing still, and horses tied up: by what they belong to.
     this.props = new Map();
     this.tied = new Map();
@@ -1546,7 +1550,7 @@ export class Game {
     // The game saves itself every morning at seven.
     const abs1 = this.day * DAY_MINUTES + this.minute;
     if (Math.floor((abs0 - AUTOSAVE_AT) / DAY_MINUTES) < Math.floor((abs1 - AUTOSAVE_AT) / DAY_MINUTES) && !this.player.dead) this.autosaveDue = true;
-    if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel, uiRes.wheelShift);
+    if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel);
     // What you wear and hold, and the potions you've drunk.
     this.bonusT = (this.bonusT || 0) - dt;
     if (this.bonusT <= 0) {
@@ -1693,7 +1697,7 @@ export class Game {
   }
 
   // ------------------------------------------------------------ keys
-  handleKeys(pressed, wheel, wheelShift) {
+  handleKeys(pressed, wheel) {
     const p = this.player;
     for (const k of pressed) {
       const code = k.code;
@@ -1754,12 +1758,9 @@ export class Game {
           break;
       }
     }
-    if (wheel) {
-      if (wheelShift) {
-        p.layerMode = Math.max(-3, Math.min(3, (p.layerMode ?? 0) - Math.sign(wheel)));
-        this.ui.msg(`Layer: ${this.layerLabel()}`, '#a0c8ff');
-      } else this.selectSlot((p.selected + Math.sign(wheel) + BELT_SIZE) % BELT_SIZE);
-    }
+    // The wheel turns the belt, shift held or not. (The layer you build on
+    // is Z, X and V.)
+    if (wheel) this.selectSlot((p.selected + Math.sign(wheel) + BELT_SIZE) % BELT_SIZE);
   }
 
   layerLabel() {
@@ -1802,6 +1803,8 @@ export class Game {
       const L = p.y + p.layerMode;
       const t = r.screenToTile(mx, my, L);
       hit = { x: t.x, y: L, z: t.z, face: 'top', id: w.getBlock(t.x, L, t.z), fixed: true };
+    } else if (r.underground && r.hidden) {
+      hit = this.pickPlan(mx, my, drawn ? r.pick : null);
     } else if (drawn && r.pick && w.getBlock(r.pick.x, r.pick.y, r.pick.z) === r.pick.id) {
       hit = { ...r.pick };
     } else if (!drawn || r.pick) hit = this.pickGeometric(mx, my);
@@ -1842,7 +1845,8 @@ export class Game {
       // Placement target.
       const held = p.heldDef();
       const placeId = held ? (held.kind === 'block' ? held.block : held.plant ?? null) : null;
-      if (placeId !== null && placeId !== undefined && !ent) {
+      c.plan = !!hit.plan;
+      if (placeId !== null && placeId !== undefined && !ent && !hit.wall) {
         let t;
         if (hit.fixed || (b.replaceable && hit.id !== B.air) || hit.id === B.air) t = { x: hit.x, y: hit.y, z: hit.z };
         else if (hit.face === 'top') t = { x: hit.x, y: hit.y + 1, z: hit.z };
@@ -1858,6 +1862,31 @@ export class Game {
       }
     }
     this.cursor = c;
+  }
+
+  // Down in the ground the view's a plan at your feet (see the renderer's
+  // drawDigView): the pointer's on a tile of your own floor. Rock there
+  // at your feet is the wall you'd dig (nothing set against it); a step
+  // up, its top (what you'd set goes on it); anything set on the floor
+  // (a torch, a chest), that; else the floor itself (what you'd set
+  // stands on it, level with you).
+  pickPlan(mx, my, pick) {
+    const r = this.renderer;
+    const w = this.world;
+    const L = r.hiddenLevel - 1;
+    const t = r.screenToTile(mx, my, L - 1);
+    if (!r.hidden.has(t.x * 65536 + t.z)) return this.pickGeometric(mx, my);
+    if (pick && pick.prop && pick.y === L && w.getBlock(pick.x, pick.y, pick.z) === pick.id) return { ...pick, plan: true };
+    const id = w.getBlock(t.x, L, t.z);
+    const b = BLOCKS[id];
+    if (b.render === 'cube' && b.solid) {
+      const step = !BLOCKS[w.getBlock(t.x, L + 1, t.z)].solid && !BLOCKS[w.getBlock(t.x, L + 2, t.z)].solid;
+      return { x: t.x, y: L, z: t.z, face: 'top', id, plan: true, wall: !step };
+    }
+    if (id !== B.air && !b.replaceable) return { x: t.x, y: L, z: t.z, face: 'top', id, plan: true };
+    // (Open: the floor under it, or the hole where it drops away.)
+    const fid = w.getBlock(t.x, L - 1, t.z);
+    return { x: t.x, y: L - 1, z: t.z, face: 'top', id: fid, plan: true };
   }
 
   // What the geometry says is under the pointer (used before the first
@@ -2099,6 +2128,41 @@ export class Game {
     }
   }
 
+  // A stick of dynamite from your hand to where you point (two to eight
+  // paces off): it goes up a moment after it lands (see monsters.js).
+  throwDynamite() {
+    const p = this.player;
+    const c = this.cursor;
+    if (p.rollT > 0 || p.swing || p.dead || p.down || p.restrained || p.sleeping) return true;
+    let tx;
+    let tz;
+    if (c && c.entity) [tx, tz] = [c.entity.x, c.entity.z];
+    else if (c && c.x !== undefined) [tx, tz] = [c.x, c.z];
+    else {
+      const [dx, dz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
+      [tx, tz] = [p.x + dx * 4, p.z + dz * 4];
+    }
+    let d = Math.hypot(tx - p.x, tz - p.z);
+    if (d < 2) {
+      this.ui.msg('Too close: throw it further off.', '#ffb080', true);
+      return true;
+    }
+    if (d > 8) {
+      tx = p.x + Math.round(((tx - p.x) / d) * 8);
+      tz = p.z + Math.round(((tz - p.z) / d) * 8);
+      d = 8;
+    }
+    const s = p.inv[p.selected];
+    s.count--;
+    if (s.count <= 0) p.inv[p.selected] = null;
+    p.face(tx, tz);
+    strikeAnim(p, STYLES.spear);
+    p.doAction(0.3);
+    throwDynamite(this, p, Math.round(tx), Math.round(tz));
+    this.combatT = Math.max(this.combatT || 0, 2);
+    return true;
+  }
+
   rightClick() {
     const p = this.player;
     const c = this.cursor;
@@ -2110,6 +2174,8 @@ export class Game {
     // The Kavorent's things: used whatever else is about.
     if (held && held.kind === 'gadget' && useGadget(this, held)) return;
     if (held && held.kind === 'enhancer' && fitEnhancer(this, held)) return;
+    // Dynamite: lit, and thrown where you point.
+    if (held && held.key === 'dynamite' && this.throwDynamite()) return;
     // In a fight (or with nothing to use it on), the right button raises
     // your guard instead (held: see combat.js).
     if (canBlock(this, p) && (this.combatT > 0 || !c || (!c.entity && !(c.block && c.block.interact && c.inReach)))) return;
@@ -2226,7 +2292,10 @@ export class Game {
     }
     const p = this.player;
     p.face(c.x, c.z);
-    m.progress += dt / this.breakTime(b);
+    // (Digging a passage: the ground over it, or under it, goes too, a
+    // little longer for it. See tunnelPair.)
+    const pair = this.tunnelPair(c);
+    m.progress += dt / (this.breakTime(b) + (pair ? this.breakTime(BLOCKS[this.world.getBlock(pair.x, pair.y, pair.z)]) * 0.6 : 0));
     m.hitT -= dt;
     if (m.hitT <= 0) {
       m.hitT = 0.28;
@@ -2236,9 +2305,30 @@ export class Game {
       this.audio?.play('dig');
     }
     if (m.progress >= 1) {
+      if (pair) this.breakBlock(pair.x, pair.y, pair.z, true);
       this.breakBlock(c.x, c.y, c.z, true);
       this.mining = null;
     }
+  }
+
+  // Digging into the ground beside you, at your feet or your head (the
+  // layer left to AUTO): the other half of that two-high gap goes with it,
+  // if it's the ground too, so what you dig you can always walk into (and
+  // you're never left in a tunnel too low to stand in). Null otherwise.
+  tunnelPair(c) {
+    const p = this.player;
+    if (!c || !c.block || p.layerMode !== null || this.dungeon) return null;
+    const d = Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z));
+    if (d < 1 || d > 2) return null;
+    const w = this.world;
+    if (!NATURAL.has(w.getBlock(c.x, c.y, c.z))) return null;
+    let y = null;
+    if (c.y === p.y) y = c.y + 1;
+    else if (c.y === p.y + 1) y = c.y - 1;
+    if (y === null) return null;
+    const id = w.getBlock(c.x, y, c.z);
+    if (!NATURAL.has(id) || !isFinite(BLOCKS[id].hardness)) return null;
+    return { x: c.x, y, z: c.z };
   }
 
   blockColor(id) {
@@ -2932,12 +3022,10 @@ export class Game {
         this.useGate(x, y, z);
         break;
       case 'container': {
-        const slots = w.getContainer(x, y, z);
-        this.audio?.play('chest');
         const owner = this.containerOwner(x, y, z);
-        this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
-        if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
-        if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
+        // (A household keeps its chest locked: see pickLock.)
+        if (this.chestLocked(x, y, z, owner)) this.pickLock(x, y, z, owner);
+        else this.openContainerAt(x, y, z, owner);
         break;
       }
       case 'cell_door': {
@@ -3212,6 +3300,67 @@ export class Game {
   mapPos() {
     if (this.dungeon) return { x: this.dungeon.rec.x, z: this.dungeon.rec.z };
     return { x: this.player.x, z: this.player.z };
+  }
+
+  openContainerAt(x, y, z, owner = this.containerOwner(x, y, z)) {
+    const b = BLOCKS[this.world.getBlock(x, y, z)];
+    const slots = this.world.getContainer(x, y, z);
+    this.audio?.play('chest');
+    this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
+    if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
+    if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
+  }
+
+  // A household's own chest is kept locked (not your hosts', not a shop's
+  // or a barrel): picked, it stays open a couple of days, till they notice
+  // and lock it again.
+  chestLocked(x, y, z, owner = this.containerOwner(x, y, z)) {
+    if (!owner || owner.kind !== 'house' || this.dungeon) return false;
+    if (this.world.getBlock(x, y, z) !== B.chest) return false;
+    const k = `${x},${y},${z}`;
+    const at = this.picked.get(k);
+    if (at === undefined) return true;
+    if (this.day - at < RELOCK_DAYS) return false;
+    this.picked.delete(k);
+    return true;
+  }
+
+  // Can anyone see you at a household's lock?
+  lockWatched(owner) {
+    const p = this.player;
+    return this.sim.witnesses(owner.sid, p.x, p.z, 6).length > 0;
+  }
+
+  // Picking a household's lock (see ui/lockpick.js): with a lockpick, and
+  // nobody watching. A village's iron lock is easy; a city manor's steel
+  // one is not.
+  pickLock(x, y, z, owner) {
+    const whose = owner.label ? `The ${owner.label.replace(/ \(.*\)$/, '')}'s chest` : 'This chest';
+    if (countItem(this.player.inv, 'lockpick') <= 0) {
+      this.ui.msg(`${whose} is locked. (A lockpick would open it: four are beaten out of an iron ingot at an anvil.)`, '#c8c8c8', true);
+      this.audio?.play('locked');
+      return;
+    }
+    if (this.lockWatched(owner)) {
+      this.ui.msg('Not with someone watching.', '#ffb080', true);
+      this.audio?.play('locked');
+      this.peekWarning(owner);
+      return;
+    }
+    const s = this.world.ow.settlementAt(x, z);
+    const key = `${x},${y},${z}`;
+    this.audio?.play('locked');
+    this.ui.open(new LockWindow(this.ui, this, {
+      tier: chestTier(s && s.type, owner.b && owner.b.type),
+      seed: hash4(x, y, z, 0x7c4),
+      label: whose,
+      watched: () => this.lockWatched(owner),
+      onOpen: () => {
+        this.picked.set(key, this.day);
+        this.stats.locksPicked = (this.stats.locksPicked || 0) + 1;
+        this.openContainerAt(x, y, z, owner);
+      },
+    }));
   }
 
   // Who a container belongs to: a household, a business, the player.
@@ -3873,7 +4022,9 @@ export class Game {
     const raw = iron ? ITEMS[{ raw_meat: 'cooked_meat', fish: 'cooked_fish' }[slot.item]] : null;
     const bonus = (heroHas(this.hero, 'healer') ? 2 : 0) + (iron ? 1 : 0);
     // (A hot dish: a little now, the rest over a while; see Player.update.)
-    const heal = def.regen ? def.now + bonus : Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + bonus;
+    // (Squeamish, raw meat and fish come straight back up.)
+    const sick = heroHas(this.hero, 'squeamish') && (slot.item === 'raw_meat' || slot.item === 'fish');
+    const heal = sick ? 0 : def.regen ? def.now + bonus : Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + bonus;
     p.hp = Math.min(p.maxHp, p.hp + heal);
     if (def.regen) {
       const h = p.slowHeal && p.slowHeal.left > 0 ? p.slowHeal : (p.slowHeal = { left: 0, rate: 0, acc: 0 });
@@ -3888,7 +4039,8 @@ export class Game {
     if (slot.item === 'ale') this.renderer.emit(p.x, p.y + 1, p.z, { n: 5, color: ['#f4ecd8', '#ffffff', '#e8c060'], shape: 'drop', up: 10, speed: 12, gravity: 120, life: 0.5, oy: -2 });
     else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
     if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
-    this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${def.regen ? `, and ${def.regen} more over ${def.regenT}s` : ''})`, '#80e070');
+    if (sick) this.ui.msg(`You can't keep the ${def.name.toLowerCase()} down. (+0 HP)`, '#c0a060');
+    else this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${def.regen ? `, and ${def.regen} more over ${def.regenT}s` : ''})`, '#80e070');
     // (Not everywhere eats everything: see culture.js.)
     this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
@@ -4106,7 +4258,7 @@ export class Game {
     };
     const s = playerSwing(this, p, null, false, () => {
       const tiles = tilesNow(st);
-      const foe = this.struckOn(tiles, p)[0];
+      const foe = this.struckOn(tiles, p)[0] || this.masterNear(p, dx, dz, st);
       if (foe) return this.landBlow(foe, false, fresh, st);
       strikeAnim(p, st);
       p.doAction(0.25);
@@ -4159,6 +4311,20 @@ export class Game {
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
     for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
     return out;
+  }
+
+  // A swing just beside a master (drawn half as big again as anyone): it
+  // finds it anyway, if it's in reach and near enough the way you swung.
+  masterNear(p, dx, dz, st) {
+    const reach = st.thrust ? st.reach : 1;
+    const len = Math.hypot(dx, dz) || 1;
+    for (const c of this.creatures) {
+      if (c.dead || !padded(c) || apart(p, c) > reach || Math.abs(c.y - p.y) > 1) continue;
+      const vx = c.x - p.x;
+      const vz = c.z - p.z;
+      if ((vx * dx + vz * dz) / (len * (Math.hypot(vx, vz) || 1)) >= 0.6) return c;
+    }
+    return null;
   }
 
   // A training dummy on those tiles (where a blow would catch it).
@@ -5023,6 +5189,7 @@ export class Game {
       crops: this.crops.serialize(),
       sim: this.sim.serialize(),
       placed: [...this.placed],
+      picked: [...this.picked],
       roadCamps: [...this.roadCamp],
       riding: this.riding.serialize(),
       leadsOut: leadsOut(this),
@@ -5044,6 +5211,7 @@ export class Game {
     }
     if (data.sim) this.sim.load(data.sim);
     this.placed = new Map(data.placed || []);
+    this.picked = new Map(data.picked || []);
     loadRelics(this, data.relics);
     this.roadCamp = new Map(data.roadCamps || []);
     this.riding.load(data.riding);

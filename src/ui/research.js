@@ -8,6 +8,7 @@ import { has as heroHas } from '../game/hero.js';
 import { itemIcon } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
 import { AncientWindow, canSeeAncient } from './ancient.js';
+import { mastery, gainMastery, rankText } from '../game/mastery.js';
 
 const pct = (a, b) => Math.max(0, Math.min(100, Math.floor((a / Math.max(1, b)) * 100)));
 const bar = (f, n) => '█'.repeat(Math.round(f * n)) + '░'.repeat(n - Math.round(f * n));
@@ -509,12 +510,34 @@ function shade(hex, k) {
 }
 
 // ---------------------------------------------------------------- the desk
-// An astrolabe of three brass rings, each with eight glyphs round it and
-// one of them marked. The rings drift; you turn one at a time (and the one
-// inside it turns half as far the other way). When all three marks sit
-// under the pointer at once, the thought comes clear: record it before
-// the candle burns down.
+// An astrolabe of brass rings, each with eight glyphs round it and one of
+// them marked. The rings drift; you turn one at a time, and the one inside
+// it turns with it, geared one way or another (shown between them): half as
+// far the other way, half as far the same way, all the way back, or not at
+// all. When all the marks sit under the pointer at once, the thought comes
+// clear: record it before the candle burns down.
+//   With practice (see mastery.js) the problems get harder, and pay more:
+//   the rings drift quicker, their gearing varies (and later, all four
+//   kinds), and a fourth ring is added. Insights one after another without
+//   a blot run on as a streak, worth more each time.
 const RING_R = [62, 46, 30];
+const RING_R4 = [66, 53, 40, 27];
+// How the ring inside turns when you turn one: by this much, of what you
+// turn it.
+export const GEARS = { counter: -0.5, with: 0.5, gear: -1, free: 0 };
+const GEAR_SAY = { counter: 'turns half against', with: 'turns half along', gear: 'turns right back', free: 'stays put' };
+
+// The problem for a sitting at a given rank: how many rings, how fast they
+// drift, and how each is geared to the next.
+export function studyPlan(rank, rand = Math.random) {
+  const n = rank >= 5 ? 4 : 3;
+  const kinds = rank >= 6 ? ['counter', 'with', 'gear', 'free'] : rank >= 3 ? ['counter', 'with'] : ['counter'];
+  return {
+    radii: n === 4 ? RING_R4 : RING_R,
+    drift: 1 + 0.1 * (rank - 1),
+    gears: Array.from({ length: n - 1 }, () => kinds[Math.floor(rand() * kinds.length)]),
+  };
+}
 const GLYPHS = 8;
 const STEP = (Math.PI * 2) / GLYPHS;
 const WINDOW = 0.17;
@@ -526,15 +549,19 @@ export class ResearchWindow extends Window {
     this.s = s;
     this.t = 0;
     this.insights = 0;
+    this.streak = 0;
     this.fx = [];
+    this.stars = [];
     this.newPuzzle();
   }
   newPuzzle() {
     const R = () => Math.random();
-    this.rings = RING_R.map((r, i) => ({
+    const plan = studyPlan(mastery(this.game, 'study').rank);
+    this.gears = plan.gears;
+    this.rings = plan.radii.map((r, i) => ({
       r,
       rot: R() * Math.PI * 2,
-      speed: (R() < 0.5 ? -1 : 1) * (0.05 + R() * 0.07) * (i === 1 ? 1.4 : 1),
+      speed: (R() < 0.5 ? -1 : 1) * (0.05 + R() * 0.07) * (i === 1 ? 1.4 : 1) * plan.drift,
       mark: Math.floor(R() * GLYPHS),
       glyphs: Array.from({ length: GLYPHS }, () => Math.floor(R() * 8)),
     }));
@@ -565,12 +592,17 @@ export class ResearchWindow extends Window {
       f.vy += (f.g ?? 30) * dt;
     }
     this.fx = this.fx.filter((f) => f.life > 0);
+    // (Now and then a star falls across the sky inside the rings.)
+    for (const st of this.stars) st.t += dt;
+    this.stars = this.stars.filter((st) => st.t < 0.9);
+    if (Math.random() < dt * 0.25) this.stars.push({ t: 0, a: Math.random() * Math.PI * 2, r: 20 + Math.random() * 40 });
     if (this.phase !== 'work') return;
     for (const r of this.rings) r.rot += r.speed * dt * (this.allAligned() ? 0.25 : 1);
     this.candle -= dt / 55;
     if (this.candle <= 0) {
       this.candle = 0;
       this.phase = 'out';
+      this.streak = 0;
       this.ui.msg('The candle gutters out, and the thought escapes you.', C.dim);
       this.burst(0, -70, ['#9a9aa2', '#6a6a72'], 10, 14, -20);
     }
@@ -585,8 +617,9 @@ export class ResearchWindow extends Window {
   turn(dir) {
     const r = this.rings[this.sel];
     r.rot += dir * STEP * 0.5;
+    // (The one inside it, as it's geared.)
     const inner = this.rings[this.sel + 1];
-    if (inner) inner.rot -= dir * STEP * 0.25;
+    if (inner) inner.rot += dir * STEP * 0.5 * GEARS[this.gears[this.sel] || 'counter'];
     this.ui.audio?.play('select');
   }
   record() {
@@ -596,16 +629,23 @@ export class ResearchWindow extends Window {
       this.candle = Math.max(0, this.candle - 0.08);
       this.burst(0, 0, ['#1a1a2a', '#2a2a4a'], 8, 30);
       this.ui.audio?.play('error');
+      this.streak = 0;
+      (this.blots ||= []).push({ x: Math.random(), y: Math.random(), r: 2 + Math.random() * 3 });
+      if (this.blots.length > 12) this.blots.shift();
       return;
     }
-    const pts = Math.round((4 + Math.round(this.candle * 4)) * (heroHas(game.hero, 'scholar') ? 1.5 : 1));
+    // (Worth more for a harder problem, and for a run of them.)
+    const rank = mastery(game, 'study').rank;
+    this.streak++;
+    const pts = Math.round((4 + Math.round(this.candle * 4) + Math.floor(rank / 2) + Math.min(4, this.streak - 1)) * (heroHas(game.hero, 'scholar') ? 1.5 : 1));
     const T = game.sim.tech;
     const st = T.stateOf(this.s);
     const was = st.current;
     const learned = T.addPoints(this.s, pts, game.day);
     // Paid by the town for the work.
     const L = game.sim.layoutOf(this.s.id);
-    const pay = L && L.econ.treasury >= 6 ? 6 : 0;
+    const want = 6 + Math.floor(rank / 2);
+    const pay = L && L.econ.treasury >= want ? want : 0;
     if (pay) {
       L.econ.treasury -= pay;
       game.player.give('coin', pay);
@@ -613,6 +653,7 @@ export class ResearchWindow extends Window {
       if (j) j.earned = (j.earned || 0) + pay;
     }
     this.insights++;
+    gainMastery(game, 'study', 1 + (this.streak >= 3 ? 1 : 0) + (this.rings.length >= 4 ? 1 : 0));
     this.phase = 'insight';
     this.flash = 1.2;
     this.burst(0, 0, ['#fff4b0', '#ffe070', '#ffffff', '#a0d8ff'], 40, 90, 0);
@@ -629,7 +670,15 @@ export class ResearchWindow extends Window {
       : this.phase === 'insight' ? 'It comes clear!  [ENTER] the next problem'
         : this.allAligned() ? 'The marks line up: [SPACE] write it down!' : 'Bring the three gold marks under the pointer';
     g.center(this.h - 4, status, this.phase === 'out' ? C.dim : this.allAligned() || this.phase === 'insight' ? C.hi : C.fg);
-    g.center(this.h - 3, `Insights this sitting: ${this.insights}`, C.dim);
+    g.center(this.h - 3, `Insights this sitting: ${this.insights}${this.streak > 1 ? `   Streak ×${this.streak}` : ''}`, this.streak > 1 ? '#ffd060' : C.dim);
+    // How the rings are geared to each other, down the side.
+    g.text(2, 4, 'Gearing', '#c8a060');
+    const names = this.rings.length === 4 ? ['Outer', 'Second', 'Third', 'Inner'] : ['Outer', 'Middle', 'Inner'];
+    this.gears.forEach((k, i) => {
+      g.text(2, 5 + i * 2, `${names[i]} → ${names[i + 1].toLowerCase()}`, i === this.sel ? C.white : C.dim);
+      g.text(3, 6 + i * 2, GEAR_SAY[k], k === 'counter' ? C.cyan : k === 'with' ? C.green : k === 'gear' ? C.orange : C.faint);
+    });
+    g.text(2, this.h - 6, rankText(game, 'study', 6), '#8a6a40');
     g.text(2, this.h - 1, ' ←→ turn · ↑↓ ring · SPACE record · ESC leave ', C.faint);
   }
   // The desk, the astrolabe, the candle: in pixels.
@@ -653,11 +702,32 @@ export class ResearchWindow extends Window {
       const d = Math.abs(y) / SKY;
       px(cx - half, cy + y, `rgb(${Math.round(18 + d * 6)},${Math.round(20 + d * 8)},${Math.round(44 - d * 10)})`, half * 2 + 1, 1);
     }
+    // (A wash of nebula, slowly turning.)
+    for (let i = 0; i < 3; i++) {
+      const a = t * 0.05 + i * 2.1;
+      const gx = cx + Math.cos(a) * 30;
+      const gy = cy + Math.sin(a) * 22;
+      const grd = ctx.createRadialGradient(gx, gy, 2, gx, gy, 34);
+      grd.addColorStop(0, ['rgba(120,80,200,0.16)', 'rgba(60,120,200,0.14)', 'rgba(200,90,140,0.1)'][i]);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(gx - 34, gy - 34, 68, 68);
+    }
     for (let i = 0; i < 40; i++) {
       const a = (i * 2.399) % (Math.PI * 2);
       const r = 8 + ((i * 37) % 64);
       const tw = 0.5 + 0.5 * Math.sin(t * 2 + i);
       if (tw > 0.35) px(cx + Math.cos(a) * r, cy + Math.sin(a) * r, tw > 0.8 ? '#ffffff' : '#8a9ac8');
+    }
+    // Falling stars.
+    for (const st of this.stars) {
+      for (let k = 0; k < 8; k++) {
+        const r = st.r + (st.t * 50 - k * 1.5);
+        if (r > SKY - 4 || r < 4) continue;
+        ctx.globalAlpha = (1 - k / 8) * (1 - st.t / 0.9);
+        px(cx + Math.cos(st.a) * r, cy + Math.sin(st.a) * r, k ? '#c8d8ff' : '#ffffff');
+      }
+      ctx.globalAlpha = 1;
     }
     // Brass rim.
     for (let a = 0; a < Math.PI * 2; a += 0.01) {
@@ -677,6 +747,38 @@ export class ResearchWindow extends Window {
         // (A bright rim inside the dark one: gold, brighter when chosen or aligned.)
         if (Math.floor(a * ring.r) % 3 === 0) px(cx + Math.cos(a) * (ring.r + 4), cy + Math.sin(a) * (ring.r + 4), band);
         if (sel && Math.sin(a * 6 + t * 3) > 0.92) px(cx + Math.cos(a) * ring.r, cy + Math.sin(a) * ring.r, '#fff4c0');
+      }
+      // (Ticks engraved between the glyphs.)
+      for (let k = 0; k < GLYPHS; k++) {
+        const a = (k + 0.5) * STEP + ring.rot - Math.PI / 2;
+        px(cx + Math.cos(a) * (ring.r - 3), cy + Math.sin(a) * (ring.r - 3), dark, 1, 1);
+        px(cx + Math.cos(a) * (ring.r + 3), cy + Math.sin(a) * (ring.r + 3), band, 1, 1);
+      }
+      // How it's geared to the ring inside it: a little mark at the right,
+      // between them (two arrows against each other, two together, a cog, or
+      // a gap).
+      const gk = this.gears[i];
+      if (gk) {
+        const gx = cx + (ring.r + this.rings[i + 1].r) / 2;
+        const gy = cy;
+        const gc = i === this.sel ? '#fff4c0' : '#c8a060';
+        if (gk === 'counter') {
+          px(gx - 2, gy - 3, gc, 4, 1);
+          px(gx + 1, gy - 4, gc, 1, 3);
+          px(gx - 2, gy + 2, gc, 4, 1);
+          px(gx - 2, gy + 1, gc, 1, 3);
+        } else if (gk === 'with') {
+          px(gx - 2, gy - 3, gc, 4, 1);
+          px(gx + 1, gy - 4, gc, 1, 3);
+          px(gx - 2, gy + 2, gc, 4, 1);
+          px(gx + 1, gy + 1, gc, 1, 3);
+        } else if (gk === 'gear') {
+          for (let k = 0; k < 8; k++) px(gx + Math.cos(k * 0.785 + t) * 3, gy + Math.sin(k * 0.785 + t) * 3, gc);
+          px(gx - 1, gy - 1, gc, 2, 2);
+        } else {
+          px(gx - 2, gy, gc, 1, 1);
+          px(gx + 2, gy, gc, 1, 1);
+        }
       }
       for (let k = 0; k < GLYPHS; k++) {
         const a = k * STEP + ring.rot - Math.PI / 2;
@@ -729,12 +831,26 @@ export class ResearchWindow extends Window {
       px(kx + 1 + (fl > 1 ? 1 : 0), base - hgt - 7, '#ffd060', 3, 6);
       px(kx + 2, base - hgt - 5, '#fff8d0', 1, 3);
       px(kx + 2, base - hgt - 1, '#3a2a1a', 1, 1);
+      // (A thread of smoke going up from it.)
+      for (let k = 0; k < 10; k++) {
+        ctx.globalAlpha = 0.25 * (1 - k / 10);
+        px(kx + 2 + Math.sin(t * 2 + k * 0.6) * (k * 0.4), base - hgt - 9 - k * 2, '#c8c0b8');
+      }
+      ctx.globalAlpha = 1;
     } else if (Math.floor(t * 3) % 2) px(kx + 2, base - hgt - 4 - ((t * 10) % 6), '#8a8a92');
     // Papers on the desk: notes in a cramped hand, a book or two.
     const nx = ox + 18;
     px(nx, cy + 82, '#e8dcc0', 70, 34);
     px(nx + 2, cy + 84, '#f4ecd8', 66, 30);
     for (let i = 0; i < 6; i++) for (let j = 0; j < 9; j++) if ((i * 7 + j * 3) % 5) px(nx + 6 + j * 7, cy + 88 + i * 4, '#7a6a5a', 4 + ((i + j) % 3), 1);
+    // (Ink blots where you wrote too soon.)
+    for (const b of this.blots || []) {
+      const bx = nx + 6 + b.x * 56;
+      const by = cy + 88 + b.y * 20;
+      px(bx - b.r / 2, by - b.r / 2, '#1a1a2a', b.r, b.r);
+      px(bx - b.r / 2 - 1, by, '#1a1a2a', 1, 1);
+      px(bx + b.r / 2, by + 1, '#1a1a2a', 1, 1);
+    }
     px(ox + W - 92, cy + 84, '#6a2a2a', 26, 6);
     px(ox + W - 92, cy + 90, '#2a4a6a', 24, 6);
     px(ox + W - 90, cy + 84, '#c8a060', 1, 12);
@@ -757,8 +873,8 @@ export class ResearchWindow extends Window {
       else return true;
     } else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.turn(-1);
     else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.turn(1);
-    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + 2) % 3;
-    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % 3;
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + this.rings.length - 1) % this.rings.length;
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % this.rings.length;
     else if (k.code === 'Space' || k.code === 'Enter') this.record();
     else return false;
     return true;

@@ -332,6 +332,12 @@ export const MONSTER_LOOKS = {
   priest: { skin: '#7aa098', hair: '#3a5a3a', hairStyle: 'long', shirt: '#2a4a5a', pants: '#2a3a46', shoes: '#1a2a36', outfit: 'robe_blue', accent: '#c8a030', hat: 'hood', eyes: '#c8ffd0' },
   cutthroat: { skin: '#c8946a', hair: '#2a1e14', hairStyle: 'short', shirt: '#3a2e26', pants: '#2a2420', shoes: '#1a1410', outfit: 'vest', accent: '#8a2020', hat: 'hood' },
   holdout_archer: { skin: '#b07a50', hair: '#4a2e1a', hairStyle: 'ponytail', shirt: '#4a5a32', pants: '#3a3226', shoes: '#2a1e14', outfit: 'hunter', accent: '#6a4a2a', hat: null },
+  // A bombarder in a scorched leather apron, goggles and gloves, a bright
+  // bandana; a thief all in black, cowled and masked; a coward in rags,
+  // hunched, freckled and wide-eyed.
+  bombarder: { skin: '#b88a60', hair: '#3a2418', hairStyle: 'short', shirt: '#5a3a2a', pants: '#3a3020', shoes: '#2a1e14', outfit: 'smith', accent: '#c86a3a', hat: 'bandana', hatColor: '#d8702a', acc: 'glasses', gloves: '#2a2420', neck: '#c8a030', mark: 'stripes', beard: true, beardStyle: 'stubble' },
+  thief: { skin: '#c8946a', hair: '#1e1612', hairStyle: 'short', shirt: '#26262c', pants: '#1e1e24', shoes: '#141418', outfit: 'plain', accent: '#3a3a44', hat: 'cowl', hatColor: '#24242c', gloves: '#1e1e22', eyeColor: '#a87a2a' },
+  coward: { skin: '#e0b090', hair: '#8a5a30', hairStyle: 'curly', shirt: '#8a7a62', pants: '#5a4a3a', shoes: '#3a2a1a', outfit: 'rags', accent: '#8a6a4a', hat: null, stoop: true, acc: 'freckles', eyeColor: '#3a5a9a', neck: '#6a5a4a' },
   warlord: { skin: '#a87a58', hair: '#1a1410', hairStyle: 'short', shirt: '#5a2020', pants: '#3a3030', shoes: '#2a2020', outfit: 'plain', accent: '#c8a030', hat: 'helmet', gear: { body: 'plate:#6a5a50', legs: 'plate:#5a4a40' } },
   warden: { skin: '#3a3858', hair: '#2a2840', hairStyle: 'bald', shirt: '#2a2840', pants: '#24223a', shoes: '#1c1a2a', outfit: 'plain', accent: '#5ad8f0', hat: 'kav', gear: { body: 'kav', legs: 'kav', feet: 'kav' }, eyes: '#5ad8f0', visor: true },
   // The other masters (see entities/bosses.js).

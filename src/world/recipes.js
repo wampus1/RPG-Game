@@ -139,6 +139,7 @@ for (const t of ['iron', 'gold']) {
 }
 r('anvil', 'spear', 1, { iron_ingot: 2, stick: 3 });
 r('anvil', 'dagger', 1, { iron_ingot: 1, stick: 1 });
+r('anvil', 'lockpick', 4, { iron_ingot: 1 });
 r('anvil', 'mace', 1, { iron_ingot: 3, stick: 1 });
 r('anvil', 'short_sword', 1, { iron_ingot: 1, stick: 1, leather: 1 });
 r('anvil', 'sabre', 1, { iron_ingot: 3, stick: 1, leather: 1 });

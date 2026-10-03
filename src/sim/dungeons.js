@@ -380,7 +380,7 @@ export class Dungeons {
     if (!this.made) return null;
     return this.list.map((d) => ({
       id: d.id, known: d.known, seen: d.seen, entered: d.entered, cleared: d.cleared, clearedBy: d.clearedBy, clearedDay: d.clearedDay,
-      floors: d.floors, weakened: d.weakened, looted: d.looted, delves: d.delves, fallen: d.fallen, spire: d.spire, cores: d.cores, coresGone: d.coresGone || 0,
+      floors: d.floors, weakened: d.weakened, looted: d.looted, delves: d.delves, fallen: d.fallen, spire: d.spire, cores: d.cores, coresGone: d.coresGone || 0, metBoss: !!d.metBoss,
     }));
   }
 

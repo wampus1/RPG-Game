@@ -1684,14 +1684,16 @@ class Layout {
         const bed = tryPlace(B.bed, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.bed, 'any', { access: true });
         if (bed) b.beds.push({ x: bed.x, z: bed.z, access: bed.access });
       }
+      // (Every household keeps a chest, before the table if room's short:
+      // against a wall if it'll go there, anywhere it'll go if not.)
+      const chest = tryPlace(B.chest, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.chest, 'any', { access: true });
+      if (chest) b.chestPos = { x: chest.x, y: Y0, z: chest.z };
       const table = tryPlace(B.table, 'center', { access: true }) || tryPlace(B.table, 'any', { access: true });
       if (table) {
         seat(['eat', 'home'], table);
         seat(['eat', 'home'], table);
         if (rng.chance(0.5)) this.put(table.x, Y0 + 1, table.z, B.lantern, lit);
       }
-      const chest = tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
-      if (chest) b.chestPos = { x: chest.x, y: Y0, z: chest.z };
       if (rng.chance(0.5)) tryPlace(B.barrel, 'wall');
       if (t === 'manor' || rng.chance(0.3)) tryPlace(B.bookshelf, 'north', { rot: 0 });
       if (rng.chance(0.35)) tryPlace(B.stool, 'wall', { solid: false });

@@ -25,7 +25,7 @@ export class Window {
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
       if (cx >= h.x && cy >= h.y && cx < h.x + h.w && cy < h.y + h.h) {
-        h.fn(ck, game);
+        h.fn(ck, game, cx, cy);
         return true;
       }
     }

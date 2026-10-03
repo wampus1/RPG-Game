@@ -9,10 +9,11 @@ import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
 import { itemIcon, drawJewelled } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
-import { addItem } from '../game/inventory.js';
+import { addItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
-import { ZONE } from '../game/fishing.js';
+import { ZONE, KINDS } from '../game/fishing.js';
+import { mastery } from '../game/mastery.js';
 import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
 import { MARKS, fightPhase } from '../entities/tempo.js';
@@ -259,6 +260,8 @@ export class UI {
     }
     // A master's fight: its name and its life across the top of the screen.
     if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.drawBossBar(ctx, game);
+    // Reeling one in (see drawReel).
+    if (this.showHud && game && game.fishing && game.fishing.phase === 'reel') this.drawReel(ctx, game);
     // An opening scene's letterbox, titles and captions (under any window);
     // a short scene's bars and words (see scenes.js).
     if (game && game.cutscene) game.cutscene.draw(ctx);
@@ -695,25 +698,158 @@ export class UI {
   drawFishing(g, game) {
     const f = game.fishing;
     if (!f) return;
-    const W = 34;
-    const x0 = Math.floor((COLS - W - 4) / 2);
-    const y0 = BELT_Y - 6;
-    if (f.phase === 'bite') {
-      if (Math.floor(this.time * 6) % 2 === 0) g.center(y0 + 2, ' !! A BITE! Press SPACE !! ', '#1a1420', 'rgba(255,224,112,0.95)');
-      return;
+    if (f.phase === 'bite' && Math.floor(this.time * 6) % 2 === 0) g.center(BELT_Y - 4, ' !! A BITE! Press SPACE !! ', '#1a1420', 'rgba(255,224,112,0.95)');
+    // (The reel itself is drawn in pixels: see drawReel.)
+  }
+
+  // Reeling in, under the water: the light moving on the bottom, weed
+  // swaying, bubbles; your catch zone a net of light (bright with the fish
+  // in it); the fish itself, its kind's colours, its tail going, turned the
+  // way it's swimming (a splash as it darts); a glint of something lost down
+  // there to scoop up with it; and the line coming in on the spool below.
+  drawReel(ctx, game) {
+    const f = game.fishing;
+    const K = KINDS[f.kind] || KINDS.perch;
+    const t = this.time;
+    const PW = 252;
+    const PH = 62;
+    const x0 = Math.round((VIEW_W - PW) / 2);
+    const y0 = (BELT_Y - 8) * CHAR_H;
+    const R = (x, y, w, h, c) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+    };
+    // Frame.
+    R(x0 - 2, y0 - 2, PW + 4, PH + 4, 'rgba(6,10,18,0.92)');
+    R(x0 - 2, y0 - 2, PW + 4, 1, '#70e0e0');
+    R(x0 - 2, y0 + PH + 1, PW + 4, 1, '#3a7a8a');
+    R(x0 - 2, y0 - 2, 1, PH + 4, '#4a9aa8');
+    R(x0 + PW + 1, y0 - 2, 1, PH + 4, '#3a7a8a');
+    // What's on the line, and your practice.
+    const title = K.item ? 'Something on the line...' : `${f.big ? 'A big ' : ''}${K.name}`;
+    drawText(ctx, title, x0 + 4, y0 + 1, K.gold ? '#ffe070' : f.big ? '#ffb070' : '#c8f0ff', '#000');
+    const rk = mastery(game, 'fishing');
+    const rt = `Rank ${rk.rank} ${rk.title}`;
+    drawText(ctx, rt, x0 + PW - 4 - textWidth(rt), y0 + 1, '#6a9aa8', '#000');
+    // The water.
+    const wx = x0 + 4;
+    const wy = y0 + 11;
+    const ww = PW - 8;
+    const wh = 32;
+    for (let y = 0; y < wh; y++) {
+      const k = y / wh;
+      R(wx, wy + y, ww, 1, `rgb(${Math.round(20 + 14 * (1 - k))},${Math.round(70 + 40 * (1 - k))},${Math.round(100 + 40 * (1 - k))})`);
     }
-    if (f.phase !== 'reel') return;
-    g.box(x0, y0, W + 4, 5, { bg: 'rgba(10,20,34,0.9)', fg: C.cyan, title: 'REEL IT IN' });
-    const zs = Math.round((f.zone - ZONE / 2) * W);
-    const ze = Math.round((f.zone + ZONE / 2) * W);
-    let bar = '';
-    for (let i = 0; i < W; i++) bar += i >= zs && i < ze ? '█' : '░';
-    g.text(x0 + 2, y0 + 1, bar, f.inside ? C.green : '#4a7a5a');
-    const fx = Math.max(0, Math.min(W - 3, Math.round(f.fish * W) - 1));
-    g.text(x0 + 2 + fx, y0 + 1, '><>', f.inside ? C.hi : C.orange);
-    const n = Math.round(Math.max(0, Math.min(1, f.progress)) * W);
-    g.text(x0 + 2, y0 + 2, '▓'.repeat(n) + '·'.repeat(W - n), f.progress > 0.25 ? C.cyan : C.red);
-    g.text(x0 + 2, y0 + 3, 'Hold SPACE to pull right', C.faint);
+    // Light moving on it.
+    ctx.globalAlpha = 0.18;
+    for (let x = 0; x < ww; x += 2) {
+      const y = 3 + Math.round(Math.sin(x * 0.09 + t * 1.6) * 2 + Math.sin(x * 0.033 - t * 0.9) * 3);
+      R(wx + x, wy + y, 2, 1, '#e0fcff');
+      const y2 = 18 + Math.round(Math.sin(x * 0.07 - t * 1.2) * 3);
+      if ((x >> 1) % 3) R(wx + x, wy + y2, 2, 1, '#a8f0ff');
+    }
+    ctx.globalAlpha = 1;
+    // Weed swaying along the bottom.
+    for (let i = 0; i < 14; i++) {
+      const bx = wx + 8 + ((i * 53) % (ww - 16));
+      const hgt = 6 + ((i * 7) % 7);
+      for (let j = 0; j < hgt; j++) R(bx + Math.round(Math.sin(t * 1.4 + i + j * 0.4) * (j / hgt) * 2), wy + wh - 1 - j, 1, 1, j % 3 ? '#2a6a3a' : '#3a8a4a');
+    }
+    // Bubbles rising.
+    for (let i = 0; i < 9; i++) {
+      const ph = (t * (0.3 + (i % 3) * 0.12) + i * 0.37) % 1;
+      R(wx + ((i * 71) % ww) + Math.sin(t * 3 + i) * 1.5, wy + wh - 2 - ph * (wh - 3), 1, 1, '#c8f4ff');
+    }
+    // The catch zone: a net of light.
+    const W = f.zoneW || ZONE;
+    const zx0 = wx + (f.zone - W / 2) * ww;
+    const zw = W * ww;
+    ctx.globalAlpha = f.inside ? 0.32 + 0.08 * Math.sin(t * 10) : 0.16;
+    R(zx0, wy, zw, wh, f.inside ? '#a0ffb0' : '#80c8a0');
+    ctx.globalAlpha = 1;
+    const zc = f.inside ? '#c8ffd0' : '#6ab88a';
+    R(zx0, wy, 1, wh, zc);
+    R(zx0 + zw - 1, wy, 1, wh, zc);
+    for (let x = 0; x < zw; x += 4) {
+      R(zx0 + x, wy, 2, 1, zc);
+      R(zx0 + x, wy + wh - 1, 2, 1, zc);
+    }
+    // Something glinting down there.
+    const tr = f.treasure;
+    if (tr && !tr.done && f.t >= tr.at) {
+      const tx = wx + tr.pos * ww;
+      const ty = wy + wh - 8 + Math.sin(t * 2) * 1;
+      R(tx - 4, ty, 8, 5, '#7a5a2a');
+      R(tx - 4, ty, 8, 2, '#9a7a3a');
+      R(tx - 1, ty + 2, 2, 2, '#ffd040');
+      if (Math.sin(t * 7) > 0.4) R(tx + 3, ty - 2, 1, 1, '#ffffff');
+      // (How near it is to coming up.)
+      R(tx - 5, ty + 7, 10, 1, '#203040');
+      R(tx - 5, ty + 7, Math.round(10 * tr.got), 1, '#ffe070');
+    }
+    // The fish (or the thing).
+    const fx = wx + f.fish * ww;
+    const fy = wy + 15 + Math.sin(t * 2.3) * 2 + (K.eel ? Math.sin(t * 6) * 2 : 0);
+    const face = f.fishV >= 0 ? 1 : -1;
+    if (K.item) {
+      const ic = itemIcon(K.item);
+      ctx.drawImage(ic, Math.round(fx - 6), Math.round(fy - 6), 12, 12);
+    } else this.drawFish(ctx, K, fx, fy, face, f.size || 1, t);
+    if (f.splash > 0) for (let i = 0; i < 5; i++) R(fx - face * (14 + i * 3), fy + Math.sin(i * 2 + t * 20) * 3, 1, 1, '#e0fcff');
+    // The line coming in, on the spool.
+    const py = y0 + PH - 14;
+    const n = Math.max(0, Math.min(1, f.progress));
+    R(wx, py, ww, 5, '#101a24');
+    R(wx, py, Math.round(ww * n), 5, n > 0.25 ? '#3ab8c8' : '#c84a3a');
+    R(wx, py, Math.round(ww * n), 1, n > 0.25 ? '#a8f4ff' : '#ff9a8a');
+    R(wx + Math.round(ww * n) - 1, py - 1, 2, 7, '#ffffff');
+    drawText(ctx, 'Hold SPACE to pull right', wx, py + 6, '#4a7a8a', null);
+  }
+
+  // A fish, side on: body in its kind's colours (a paler belly), a tail
+  // beating, a fin, an eye; an eel long and thin, a swordfish's sword, a
+  // golden carp's sparkle; spots or a stripe on some.
+  drawFish(ctx, K, x, y, face, size, t) {
+    const L = Math.round((K.len || 9) * Math.min(1.4, 0.8 + size * 0.25));
+    const H = K.eel ? 3 : Math.max(4, Math.round(L * 0.45));
+    // (Drawn at twice the size: it's the star of the show.)
+    const S = 2;
+    const R = (dx, dy, w, h, c) => {
+      ctx.fillStyle = c;
+      const xx = face > 0 ? x + dx * S : x - (dx + w) * S;
+      ctx.fillRect(Math.round(xx), Math.round(y + dy * S), w * S, h * S);
+    };
+    const half = L >> 1;
+    for (let i = 0; i < L; i++) {
+      // (Fattest a third of the way back from the head.)
+      const k = i / (L - 1);
+      const th = K.eel ? H : Math.max(1, Math.round(H * Math.sin(Math.PI * Math.min(1, (1 - k) * 0.85 + 0.12))));
+      const wob = K.eel ? Math.round(Math.sin(t * 9 + i * 0.6) * 1.2) : 0;
+      const top = -Math.floor(th / 2) + wob;
+      R(half - i, top, 1, Math.ceil(th / 2), K.body);
+      R(half - i, top + Math.ceil(th / 2), 1, Math.floor(th / 2) || 1, K.belly);
+      if (K.stripe && i > 1 && i < L - 3) R(half - i, 0 + wob, 1, 1, K.stripe);
+      if (K.stripes && i % 3 === 0 && i > 1 && i < L - 3) R(half - i, top, 1, 2, K.stripes);
+      if (K.spots && (i * 7) % 5 === 0 && i > 1 && i < L - 3) R(half - i, top + 1, 1, 1, K.spots);
+    }
+    // The tail, beating.
+    const beat = Math.round(Math.sin(t * (K.eel ? 9 : 14)) * 1.5);
+    if (!K.eel) {
+      R(-half - 1, -2 + beat, 2, 2, K.fin);
+      R(-half - 2, -3 + beat, 1, 2, K.fin);
+      R(-half - 1, 1 + beat, 2, 2, K.fin);
+      R(-half - 2, 2 + beat, 1, 2, K.fin);
+      // A fin on its back.
+      R(1, -Math.floor(H / 2) - 1, 3, 1, K.fin);
+    }
+    if (K.sword) R(half + 1, -1, 5, 1, '#c8d0e0');
+    // The eye.
+    R(half - 2, -1, 1, 1, '#101010');
+    R(half - 1, -1, 1, 1, '#ffffff');
+    if (K.gold && Math.sin(t * 8) > 0.3) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(x + Math.sin(t * 3) * half * S), Math.round(y - H * S), 2, 2);
+    }
   }
 
   drawBelt(g, p) {
@@ -803,19 +939,27 @@ export class UI {
       let label = b.label;
       if (b.interact === 'door') label += game.world.getState(c.x, c.y, c.z) ? ' (open)' : ' (closed)';
       if (b.interact === 'torch') label += game.world.getState(c.x, c.y, c.z) ? ' (lit)' : ' (out)';
+      const locked = b.interact === 'container' && game.chestLocked && game.chestLocked(c.x, c.y, c.z);
+      if (locked) label += ' (locked)';
       // Something set down: what it is (and whose).
       const got = b.id === B.placed_item && game.placed ? game.placed.get(`${c.x},${c.y},${c.z}`) : null;
       if (got) label = `${ITEMS[got.item]?.name || got.item}${got.count > 1 ? ` x${got.count}` : ''}${game.placedOwnerName ? game.placedOwnerName(got) : ''}`;
       lines.push({ text: label, color: c.inReach ? C.hi : C.dim });
       if (got && got.meal && got.eating) lines.push({ text: 'someone\'s meal', color: C.faint });
       const hints = [];
-      if (b.interact) hints.push(`click ${interactVerb(b.interact)}`);
-      if (isFinite(b.hardness) && !b.liquid) hints.push('hold mine');
+      if (locked) hints.push(countItem(game.player.inv, 'lockpick') ? 'click pick the lock' : 'needs a lockpick');
+      else if (b.interact) hints.push(`click ${interactVerb(b.interact)}`);
+      // (With something to set in your hand, a click sets it: it's not
+      // dug.)
+      if (c.place) {
+        if (c.place.ok) hints.push(c.place.y === c.y ? 'click set it here' : c.place.y > c.y ? 'click set it on top' : 'click set it below');
+      } else if (isFinite(b.hardness) && !b.liquid) hints.push(game.tunnelPair && game.tunnelPair(c) ? 'hold dig through' : 'hold mine');
       if (hints.length) lines.push({ text: hints.join(' · '), color: C.faint });
       // The tool that breaks it best is shown as a picture (marked when
       // it's the one in your hand).
       let tool = null;
-      if (isFinite(b.hardness) && !b.liquid && b.tool) {
+      if (c.place) tool = null;
+      else if (isFinite(b.hardness) && !b.liquid && b.tool) {
         const h = game.player.heldDef();
         const held = h && h.kind === 'tool' && h.tool === b.tool ? game.player.heldItem() : null;
         tool = { icon: held || BEST_TOOL[b.tool], held: !!held };
