@@ -159,6 +159,50 @@ function biomeTile(biome, w, h) {
   return t;
 }
 
+// The storm's clouds: puffs scattered round the ring in three layers (dark
+// below, greyer above, a few pale tops), each drifting at its own pace.
+let PUFFS = null;
+function stormPuffs() {
+  if (PUFFS) return PUFFS;
+  let seed = 9173;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  PUFFS = [0, 1, 2].map((layer) => {
+    const n = [190, 150, 70][layer];
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push({
+        a: rnd() * Math.PI * 2,
+        off: layer === 0 ? -0.4 + rnd() * 1.8 : layer === 1 ? -0.2 + rnd() * 1.4 : 0.1 + rnd() * 0.8,
+        size: [2.6, 1.9, 1.2][layer] * (0.7 + rnd() * 0.7),
+        spin: (layer % 2 ? 1 : -1) * (0.002 + rnd() * 0.004),
+        alpha: [0.92, 0.75, 0.5][layer] * (0.7 + rnd() * 0.3),
+        ph: rnd() * 6,
+      });
+    }
+    return out;
+  });
+  return PUFFS;
+}
+
+// A soft round puff of cloud (or, 3, of light), drawn once.
+const PUFF_IMG = [];
+function puffImage(kind) {
+  if (PUFF_IMG[kind]) return PUFF_IMG[kind];
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = c.height = 48;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(24, 22, 2, 24, 24, 24);
+  const [r, gg, b] = [[22, 24, 32], [44, 48, 60], [96, 102, 118], [200, 215, 255]][kind];
+  grd.addColorStop(0, `rgba(${r},${gg},${b},1)`);
+  grd.addColorStop(0.55, `rgba(${r},${gg},${b},0.75)`);
+  grd.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 48, 48);
+  PUFF_IMG[kind] = c;
+  return c;
+}
+
 export class MapWindow extends Window {
   constructor(ui) {
     super(ui, COLS - 2, ROWS - 2, { kind: 'map' });
@@ -207,7 +251,10 @@ export class MapWindow extends Window {
     const cx = Math.floor((px - o.x) / w);
     const cz = Math.floor((py - o.y) / h);
     if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) return null;
-    return { cx, cz };
+    // (Close in, a square shows as two glyphs, its west half and its east:
+    // the one under the pointer.)
+    const hf = mapMode(this.z) === 'glyphs' ? ((px - o.x) / w - cx >= 0.5 ? 1 : 0) : null;
+    return { cx, cz, hf };
   }
 
   zoomTo(zi, mx = null, my = null) {
@@ -318,7 +365,7 @@ export class MapWindow extends Window {
     const s = icon ? icon.s : null;
     const L = s ? game.sim.layoutOf(s.id) : null;
     const o = this.origin();
-    const half = (px - o.x) / this.z - q.cx >= 0.5;
+    const half = q.hf !== null ? q.hf === 1 : (px - o.x) / this.z - q.cx >= 0.5;
     const x = L && L.plaza ? L.plaza.cx : q.cx * REGION_W + (half ? REGION_W * 0.75 : REGION_W * 0.25);
     const z = L && L.plaza ? L.plaza.cz + 3 : q.cz * REGION_D + REGION_D / 2;
     teleportTo(game, x, z);
@@ -327,10 +374,10 @@ export class MapWindow extends Window {
   }
 
   // What's at a square, in words.
-  describe(game, cx, cz) {
+  describe(game, cx, cz, hf = null) {
     const ow = game.world.ow;
     const known = ow.explored[cz * MAP_W + cx] || game.revealMap;
-    const x = (cx + 0.5) * REGION_W;
+    const x = (cx + (hf === null ? 0.5 : hf ? 0.75 : 0.25)) * REGION_W;
     const z = (cz + 0.5) * REGION_D;
     const L = ow.landAt(x, z);
     const onLand = L && ow.continentAt(x, z) >= 0;
@@ -341,11 +388,12 @@ export class MapWindow extends Window {
       return { line: ow.insideStorm(x, z) ? 'Unexplored' : 'The open sea beyond the storm, never sailed.', color: C.dim };
     }
     const cell = ow.cell(cx, cz);
-    let info = BIOMES[cell.biome]?.name || cap(cell.biome);
+    const here = hf !== null && cell.halves ? cell.halves[hf] : cell.biome;
+    let info = BIOMES[here]?.name || cap(here);
     if (onLand) info = `${cap(L.name)} · ${info}`;
     else if (storm > 0) info = 'The storm · wild water no raft gets through';
     else if (cell.biome === 'ocean') info = ow.insideStorm(x, z) ? `The sea between ${ARCHIPELAGO}` : 'The open sea';
-    if (cell.river) info += ' · river';
+    if (cell.river && hf !== 0) info += ' · river';
     if (cell.lake) info += ' · lake';
     const V = ow.volcano;
     if (V && cx === V.cx && cz === V.cz) info += ' · the Sleeper (the mountain of fire)';
@@ -365,7 +413,7 @@ export class MapWindow extends Window {
     const W = this.w - 3; // (to the border)
     const put = (y, text, color) => g.text(2, y, text.slice(0, W).padEnd(W), color);
     if (q) {
-      const d = this.describe(game, q.cx, q.cz);
+      const d = this.describe(game, q.cx, q.cz, q.hf);
       const icon = (this.icons || new Map()).get(q.cz * 10000 + q.cx);
       const mark = this.markAt(game, q.cx, q.cz);
       if (icon && (ow.explored[q.cz * MAP_W + q.cx] || game.revealMap)) {
@@ -534,7 +582,9 @@ export class MapWindow extends Window {
     if (this.hoverSq && this.z >= TILES_FROM) {
       ctx.strokeStyle = 'rgba(255,240,200,0.8)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(o.x + this.hoverSq.cx * w + 0.5, o.y + this.hoverSq.cz * h + 0.5, w - 1, h - 1);
+      const hq = this.hoverSq;
+      if (hq.hf !== null && hq.hf !== undefined) ctx.strokeRect(o.x + hq.cx * w + (hq.hf * w) / 2 + 0.5, o.y + hq.cz * h + 0.5, w / 2 - 1, h - 1);
+      else ctx.strokeRect(o.x + hq.cx * w + 0.5, o.y + hq.cz * h + 0.5, w - 1, h - 1);
     }
     // Still working out the far reaches of the world.
     if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
@@ -550,28 +600,75 @@ export class MapWindow extends Window {
     const ry = STORM.rz * h;
     const bw = (STORM.band / STORM.rx) * rx;
     const bh = (STORM.band / STORM.rx) * ry;
+    const a = this.area();
+    const dt = Math.min(0.1, Math.max(0, time - (this.stormT ?? time)));
+    this.stormT = time;
     ctx.save();
-    for (let k = 0; k < 3; k++) {
-      const f = (k + 0.5) / 3;
-      ctx.strokeStyle = `rgba(${170 + k * 20},${180 + k * 15},${200 + k * 10},${this.z < TILES_FROM ? 0.32 : 0.18})`;
-      ctx.lineWidth = Math.max(1, (bw / 3) * 0.9);
-      ctx.setLineDash([Math.max(2, w * 1.5), Math.max(2, w)]);
-      ctx.lineDashOffset = -time * (8 + k * 5) * (k % 2 ? 1 : -1);
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rx + bw * f, ry + bh * f, 0, 0, Math.PI * 2);
-      ctx.stroke();
+    // Where along the ring, and how far out across the band (0 its inner
+    // edge, 1 its outer), on screen.
+    const at = (ang, off) => ({ x: cx + Math.cos(ang) * (rx + bw * off), y: cy + Math.sin(ang) * (ry + bh * off) });
+    // Banks of black cloud, drifting slowly round (the layers against each
+    // other), heaped up over the band and spilling a little past it.
+    const P = stormPuffs();
+    for (const layer of [0, 1, 2]) {
+      const img = puffImage(layer);
+      if (!img) break;
+      for (const q of P[layer]) {
+        const ang = q.a + time * q.spin;
+        const c = at(ang, q.off);
+        const r = q.size * w * (1 + 0.08 * Math.sin(time * 0.6 + q.ph));
+        if (c.x + r < a.x0 || c.x - r > a.x1 || c.y + r < a.y0 || c.y - r > a.y1) continue;
+        ctx.globalAlpha = q.alpha;
+        ctx.drawImage(img, c.x - r, c.y - r * 0.8, r * 2, r * 1.6);
+      }
     }
-    ctx.setLineDash([]);
-    // A flicker of lightning somewhere along it.
-    const ph = (time * 0.7) % 1;
-    if (ph < 0.06) {
-      const ang = Math.floor(time * 0.7) * 2.39996;
-      const lx = cx + Math.cos(ang) * (rx + bw / 2);
-      const ly = cy + Math.sin(ang) * (ry + bh / 2);
-      ctx.fillStyle = 'rgba(230,240,255,0.85)';
-      ctx.fillRect(Math.round(lx) - 1, Math.round(ly) - 4, 2, 8);
-      ctx.fillRect(Math.round(lx), Math.round(ly), 3, 2);
+    ctx.globalAlpha = 1;
+    // Lightning: now and then a bolt forks through the cloud, lighting it
+    // from within.
+    this.bolts = (this.bolts || []).filter((b) => (b.t -= dt) > 0);
+    this.boltT = (this.boltT ?? 0.4) - dt;
+    if (this.boltT <= 0) {
+      this.boltT = 0.25 + Math.random() * 1.1;
+      const ang = Math.random() * Math.PI * 2;
+      const pts = [];
+      let off = -0.3 + Math.random() * 0.3;
+      let side = 0;
+      for (let k = 0; k < 7; k++) {
+        pts.push({ ang: ang + side, off });
+        off += 0.18 + Math.random() * 0.12;
+        side += (Math.random() - 0.5) * 0.035;
+      }
+      const fork = 1 + Math.floor(Math.random() * 4);
+      const branch = [pts[fork], { ang: pts[fork].ang + (Math.random() < 0.5 ? -1 : 1) * 0.03, off: pts[fork].off + 0.3 }];
+      this.bolts.push({ pts, branch, t: 0.22 + Math.random() * 0.12, life: 0.34, ang });
     }
+    const glow = puffImage(3);
+    for (const b of this.bolts) {
+      const k = b.t / b.life;
+      const mid = at(b.ang, 0.5);
+      if (mid.x < a.x0 - 200 || mid.x > a.x1 + 200 || mid.y < a.y0 - 200 || mid.y > a.y1 + 200) continue;
+      ctx.globalCompositeOperation = 'lighter';
+      if (glow) {
+        const r = Math.max(14, bw * 2.2);
+        ctx.globalAlpha = 0.65 * k;
+        ctx.drawImage(glow, mid.x - r, mid.y - r, r * 2, r * 2);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(1, k * 1.6);
+      for (const [line, width, col] of [[b.pts, Math.max(1, w / 6), '#d8e4ff'], [b.pts, 1, '#ffffff'], [b.branch, 1, '#c8d8ff']]) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        line.forEach((pt, i) => {
+          const c = at(pt.ang, pt.off);
+          if (i) ctx.lineTo(c.x, c.y);
+          else ctx.moveTo(c.x, c.y);
+        });
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
 

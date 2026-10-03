@@ -2600,6 +2600,11 @@ export class NPC extends Entity {
       return false;
     }
     const feet = w.getBlock(nx, ty, nz);
+    // (Never into lava: a flow's run over the way since the path was made.)
+    if (feet === B.lava) {
+      this.path = null;
+      return false;
+    }
     // A shut city gate: townsfolk know how to lift the bar (the watch shuts
     // it again behind them).
     if (feet === B.city_gate && !w.getState(nx, ty, nz)) this.game.setGate(nx, nz, true);

@@ -10,6 +10,7 @@ import { bossClock, drift, press } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
+import { B } from '../world/blocks.js';
 
 export const SPECIES = {
   slime: { name: 'Slime', hp: 8, dmg: 2, step: 0.5, mode: 'hostile', aggro: 7, drops: [['slime_gel', 1, 2, 1]], night: true },
@@ -39,8 +40,8 @@ export const SPECIES = {
   // leaves you be), a crab with a back of cooling rock, glowing in its
   // cracks; and by night cinderlings, sparks of the mountain that drift
   // and spit fire where you stand (they burst, and the ground burns).
-  ash_lizard: { name: 'Ash Lizard', hp: 7, dmg: 2, step: 0.24, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sulfur', 1, 1, 0.25]], isle: 'kharos' },
-  magma_crab: { name: 'Magma Crab', hp: 13, dmg: 3, step: 0.42, mode: 'neutral', aggro: 0, drops: [['crab_meat', 1, 2, 1], ['obsidian_shard', 1, 1, 0.35]], light: 3, noHalo: true, isle: 'kharos' },
+  ash_lizard: { name: 'Ash Lizard', hp: 7, dmg: 2, step: 0.24, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sulfur', 1, 1, 0.25]], fireproof: true, isle: 'kharos' },
+  magma_crab: { name: 'Magma Crab', hp: 13, dmg: 3, step: 0.42, mode: 'neutral', aggro: 0, drops: [['crab_meat', 1, 2, 1], ['obsidian_shard', 1, 1, 0.35]], light: 3, noHalo: true, fireproof: true, isle: 'kharos' },
   cinderling: { name: 'Cinderling', hp: 7, dmg: 3, step: 0.3, mode: 'hostile', aggro: 11, drops: [['sulfur', 1, 2, 0.7], ['coin', 1, 2, 0.4]], night: true, floats: true, light: 9, lobs: 'fire', isle: 'kharos' },
   // On Myrrow: fat toads in the shallows and the peat pools; crawlers that
   // wear the mushrooms they feed on (strike one and it puffs its spores at
@@ -249,6 +250,8 @@ export class Creature extends Entity {
     if (this.foot && !fits(this.game, this, nx, ny, nz)) return false;
     // Wildlife avoids settlements' insides and deep water.
     if (w.isWaterAt(nx, ny, nz) && this.species !== 'slime') return false;
+    // (And lava, unless it's at home in the fire.)
+    if (w.getBlock(nx, ny, nz) === B.lava && !this.S.fireproof && !this.S.floats) return false;
     this.face(nx, nz);
     this.startMove(nx, ny, nz, dur);
     return true;

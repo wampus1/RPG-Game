@@ -24,6 +24,7 @@ import { rainedRecently } from '../world/weather.js';
 import { festivalName, customsTalk, religionOf, cuisineOf } from '../sim/culture.js';
 import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
+import { geoTalk } from './geotalk.js';
 import { fortuneOf } from '../sim/prosperity.js';
 
 function pick(rng, arr) {
@@ -605,6 +606,7 @@ export function askMenu(npc, game) {
   if (rec.age !== 'child') out.push({ id: 'customs', label: 'Your faith and customs' });
   if (!npc.visit && !rec.visitor) out.push({ id: 'history', label: `The history of ${s.name}` });
   if (rec.age !== 'child') out.push({ id: 'oldplaces', label: 'Old places round here' });
+  out.push({ id: 'geo', label: 'The islands and the world' });
   if (rec.age !== 'child' && game.sim.bandits && (game.sim.bandits.bountiesIn(npc.layout).length || game.sim.bandits.nearBands(npc.layout).length)) out.push({ id: 'bandits', label: 'Bandits about?' });
   if (!npc.visit && rec.age !== 'child' && s.civ) out.push({ id: 'realm', label: rec.ruler === s.civ.id ? 'Your reign' : `The ${s.civ.name.replace(/^The /, '')} and its ruler` });
   return out;
@@ -1619,6 +1621,7 @@ function respondRaw(npc, game, id, arg) {
     case 'ancient_view': return { lines: ['Come, see. The scholars have drawn it out already.'], open: 'ancient' };
     case 'give_plans': return plansTalk(npc, game);
     case 'oldplaces': return oldPlacesTalk(npc, game);
+    case 'geo': return geoTalk(npc, game, arg);
     case 'bandits': return { lines: game.sim.bandits.talk(npc.layout, rng), back: 'I\'ll keep my eyes open.' };
     case 'bounty': {
       const r = game.sim.bandits.claim(npc.layout);

@@ -432,20 +432,23 @@ export class HomeIntro extends Cutscene {
 // ------------------------------------------------------------ at sea
 const SHIP_NAMES = ['Grey Heron', 'Morning Star', 'Saltmarsh Maid', 'Constant', 'Gannet', 'Fair Promise', 'Lantern', 'Brightwater', 'Old Faithful', 'Windlass', 'Swift Return', 'Cormorant'];
 const HOME_PORTS = ['Harrowmouth', 'Kell Haven', 'Saltreach', 'Dunmere', 'Aldport', 'Varrow', 'Eastwick', 'Brannoch'];
-const ISLES = ['the Veiled Isle', 'the Island Beyond', 'Kavor\'s Rest', 'the Last Shore', 'the Isle of Spires'];
+// Where you were bound: inside the Wall, the storm round the Dagoni
+// Islands that no ship has come through in living memory. Once in a long
+// while a gap opens in it, and this captain meant to run it.
+const GAPS = ['the Needle', 'the Eye of the Wall', 'the Narrows', 'the Gate of Grey Water', 'the Thinning'];
 
 // Why you were aboard (by what you brought).
 const REASONS = {
-  wanderer: 'You had signed on as a passenger with nowhere in particular to be. The island was simply the next place on the chart.',
-  soldier: 'You were bound for the island with a sword, a letter of recommendation, and the hope that its towns were hiring blades.',
-  fisher: 'Fishermen back home swore the island\'s waters teem with fish no net has ever seen. You meant to find out.',
-  farmer: 'You carried a sack of seed and a rumour: that on the island there was good land nobody had yet put a plough to.',
-  builder: 'The island\'s towns were growing, they said, and every one of them needed builders.',
-  merchant: 'You were bound for the island\'s markets, with a fat purse and a head full of prices.',
-  hunter: 'Hunters at home spoke of the island\'s forests as if they were a story told to children. You wanted to see them.',
-  miner: 'A man in a tavern swore the island\'s hills are veined with iron and gems, and old mines nobody remembers digging.',
-  scholar: 'You were going to see the Kavorent spires with your own eyes: towers older than any kingdom, still standing on the island\'s hills.',
-  noble: 'A small title, a thin purse and a family that wanted you out of sight: the island was as far as the ship would go.',
+  wanderer: 'You had signed on with nowhere in particular to be. Nobody had been inside the Wall in a lifetime: that was reason enough.',
+  soldier: 'You were bound for the Dagoni Islands with a sword and a rumour: that their realms have been at each other\'s throats for generations, and pay well for blades.',
+  fisher: 'Fishermen back home swore the waters inside the Wall teem with fish no net outside it has ever seen. You meant to find out.',
+  farmer: 'You carried a sack of seed and a story: that on Thessa, inside the storm, there is good land nobody has yet put a plough to.',
+  builder: 'The island towns had been cut off for generations, they said: when the Wall opened, they would want builders who knew new ways.',
+  merchant: 'You were bound for markets nobody outside had traded with in a lifetime, with a fat purse and a hold full of hopes.',
+  hunter: 'Hunters at home spoke of the beasts of the Dagoni Islands as if they were a story told to children: lizards that bask on fire, moths lit like lamps. You wanted to see them.',
+  miner: 'A man in a tavern swore the islands are veined with iron, gems and black glass, and old mines nobody remembers digging.',
+  scholar: 'You were going to see the Kavorent spires with your own eyes: towers older than any kingdom, standing inside the storm they may have raised.',
+  noble: 'A small title, a thin purse and a family that wanted you out of sight: the far side of the Wall was as far as any ship could take you.',
   castaway: 'You had stowed away with nothing at all. The cook found you on the first morning, and said nothing to anyone.',
 };
 
@@ -554,9 +557,10 @@ export class ShipIntro extends Cutscene {
     const rng = this.rng;
     this.shipName = rng.pick(SHIP_NAMES);
     this.port = rng.pick(HOME_PORTS);
-    this.isle = rng.pick(ISLES);
+    this.isle = 'the Dagoni Islands';
+    this.gap = rng.pick(GAPS);
     this.title = `~ THE ${this.shipName.toUpperCase()} ~`;
-    this.sub = `Two days out from ${this.port}, bound for ${this.isle}`;
+    this.sub = `Twelve days out from ${this.port}, bound for ${this.isle}`;
     this.hint = 'WASD walk · F talk · ENTER skip';
     this.mood = 'voyage';
     this.phase = 'calm';
@@ -626,22 +630,24 @@ export class ShipIntro extends Cutscene {
       { ...captain, held: null, stations: [S.helm], still: true, dir: 1, talk: {
         hello: () => (storm() ? `Hold on to something, ${you}! I'll not lose a soul tonight, not one!` : `Evening, ${you}. Fair wind, and the ${ship} running before it. I could stand here all night.`),
         topics: [
-          { id: 'where', label: 'Where are we bound?', say: () => [`${isle}. That's what the charts call it, what charts there are.`, 'Two more days if this wind holds. Nobody I know has been further in than the beaches.'] },
+          { id: 'where', label: 'Where are we bound?', say: () => [`${isle}. Three of them: Thessa, Kharos and Myrrow, inside the Wall.`, 'The Wall is a storm that never ends, all the way round them. No ship\'s come out of it in a lifetime, and none that went in came back.'] },
+          { id: 'gap', label: 'How do we get through?', say: () => [`There's a gap. ${this.gap}, the old charts call it. It opens once in thirty years or so, for a few days.`, 'The signs are right. We run it tonight, straight for Thessa, and we\'re the first in a generation.'] },
           { id: 'ship', label: 'Tell me about the ship.', say: () => [`The ${ship}. Thirty years on the Grey Sea and she has never lost a hand.`, 'I mean to keep it that way. She knows it, too.'] },
-          { id: 'sky', label: 'How does the sky look?', say: () => (storm() ? ['Like the end of the world! Get below, or get hold of a line and pray!'] : ['Fair, for now. But I don\'t like that bank of cloud building in the west.', 'If it comes on, you stay off the rail. Understood?']) },
+          { id: 'sky', label: 'How does the sky look?', say: () => (storm() ? ['Like the end of the world! The gap\'s closing on us! Hold on!'] : ['That black ahead is the Wall. It looks still from here, doesn\'t it?', 'It isn\'t. When we go in, you stay off the rail. Understood?']) },
         ] } },
       { ...mate, held: null, stations: [...S.waist.slice(0, 6), S.mainmast], talk: {
         hello: () => (storm() ? 'Reef the main! REEF IT, I said! You, keep out from underfoot!' : 'Don\'t mind me. Somebody has to keep this lot awake on watch.'),
         topics: [
-          { id: 'island', label: 'Have you seen the island?', say: () => ['Once, from a long way off. Spires on the hills, taller than any tower ever built.', 'Sailors call them the Kavorent\'s teeth. I call them a good reason to keep sailing.'] },
+          { id: 'island', label: 'Have you seen the islands?', say: () => ['Never. Nobody living has. But on a dark night, from outside the Wall, you can see a red glow through it.', 'That\'s Kharos, they say: an island with a mountain of fire. Thessa\'s the green one, and Myrrow\'s always in fog.'] },
           { id: 'help', label: 'Anything I can do?', say: () => ['Stay out from under the boom, and don\'t whistle on deck.', 'Whistling calls up the wind. Ask anyone.'] },
           { id: 'crew', label: 'What are the crew like?', say: () => [`Good hands, mostly. ${cook.first} can't cook and ${hand1.first} can't sing, but they both try anyway.`] },
         ] } },
       { ...nav, held: 'scroll', stations: S.stern, talk: {
         hello: () => (storm() ? 'No stars, no coast, no anything! We are blind out here!' : 'Mind the chart, it is the only one of its kind. Most of it is guesswork, I am afraid.'),
         topics: [
-          { id: 'chart', label: 'What does the chart show?', say: () => ['The coast, roughly. Towns along it, some old, some new.', 'And inland, marks I cannot read: barrows, mines, things sunk in the marshes. Old places, from before the towns.'] },
-          { id: 'stars', label: 'How do you steer at night?', say: () => ['By the stars, when there are any.', 'Tonight? Ask me again in an hour. That cloud is coming on faster than I like.'] },
+          { id: 'chart', label: 'What does the chart show?', say: () => ['A ring of storm drawn round three islands, from before the Wall closed. Thessa to the west, Kharos north-east, Myrrow south-east.', 'And inland, marks I cannot read: barrows, mines, things sunk in the marshes. Old places, from before the towns.'] },
+          { id: 'beyond', label: 'What else is out there?', say: () => ['Outside the Wall? Two great continents, Velmarch in the north and Ostria to the east, and isles scattered between.', 'Inside it, the islanders will know nothing of any of that. They\'ve been alone a long time.'] },
+          { id: 'stars', label: 'How do you steer at night?', say: () => ['By the stars, when there are any.', `Inside the Wall there are none. We steer by ${this.gap}, and by luck.`] },
         ] } },
       { ...cook, held: 'cooked_fish', stations: [S.rail[0], S.rail[2], S.waist[8]], talk: {
         hello: () => (storm() ? 'My pots! There go my pots! Oh, I can\'t look...' : `Hungry, ${you}? It's fish. It's always fish.`),
@@ -658,17 +664,18 @@ export class ShipIntro extends Cutscene {
       { ...hand2, held: null, stations: [...S.rail, S.foremast], talk: {
         hello: () => (storm() ? 'The lines! Help me with the lines!' : 'Mind your feet, that line is not for tripping over.'),
         topics: [
-          { id: 'home', label: 'Where are you from?', say: () => [`${this.port}, same as the ship. Three years aboard her now.`, 'Got a sister on the island, if she\'s still there. She went with the first settlers.'] },
+          { id: 'home', label: 'Where are you from?', say: () => [`${this.port}, same as the ship. Three years aboard her now.`, 'My grandmother was born on Thessa, before the Wall closed. She used to sing me the songs. I want to hear them sung there.'] },
         ] } },
       { ...look, held: null, stations: S.bow, talk: {
         hello: () => (storm() ? 'I can\'t see a thing! Not a THING!' : 'Gulls, all afternoon. That means land is not far off.'),
         topics: [
-          { id: 'see', label: 'Seen anything out there?', say: () => (storm() ? ['Only lightning, and the sea standing up like a wall!'] : ['Gulls. And cloud, dark cloud, in the west. I told the captain.', 'Also a sea serpent last night. Don\'t listen to the cook.']) },
+          { id: 'see', label: 'Seen anything out there?', say: () => (storm() ? ['Only lightning, and the sea standing up like a wall!'] : ['The Wall, all day, getting bigger. Black from the sea to the top of the sky.', 'And lightning inside it, all the time, without a sound. That\'s the worst of it.']) },
         ] } },
       { ...scholar, held: 'book', stations: [...S.stern.slice(1), S.rail[4], S.rail[5]], talk: {
-        hello: () => (storm() ? 'The old stories say the storms here are the Kavorent\'s anger. I never believed... I don\'t believe...' : 'Ah, a fellow traveller! Going to see the spires as well?'),
+        hello: () => (storm() ? 'The old stories say the Wall is the Kavorent\'s doing. I never believed... I don\'t believe...' : 'Ah, a fellow traveller! Going to see the spires as well?'),
         topics: [
-          { id: 'kav', label: 'Who were the Kavorent?', say: () => ['Nobody knows! They weren\'t human, that much is plain. They built in an alloy that never rusts.', 'Their spires still stand on the island\'s hills. Offer one a cut gem, the stories say, and a door opens all the way down.'] },
+          { id: 'kav', label: 'Who were the Kavorent?', say: () => ['Nobody knows! They weren\'t human, that much is plain. They built in an alloy that never rusts.', 'Their spires still stand on all three islands. Offer one a cut gem, the stories say, and a door opens all the way down.'] },
+          { id: 'wall', label: 'What is the Wall?', say: () => ['A storm that has stood round the Dagoni Islands for a hundred years, perhaps more. It doesn\'t move with the seasons; it doesn\'t blow itself out.', 'Some say the Kavorent raised it, to keep something in. Or out. A raft couldn\'t live in it an hour; only a real ship, in the gap, has a chance.'] },
           { id: 'why', label: 'Why are you going?', say: () => ['To see what is below the spires, of course. They say their makers still guard the halls: golems that have never slept.', 'I intend to be very polite to them.'] },
           { id: 'me', label: 'Why am I going?', say: () => [`You told me yourself, the first night out. ${reason}`] },
         ] } },
@@ -686,18 +693,18 @@ export class ShipIntro extends Cutscene {
       Navigator: ['We\'re off the chart!', 'Where\'s the coast? WHERE?'],
       'Ship\'s Cook': ['Gods preserve us!', 'My pots!'],
       Deckhand: ['We\'re taking water!', 'Hold on!', 'The line\'s gone!'],
-      Lookout: ['Wave! Big one, starboard!', 'I can\'t see!'],
-      Passenger: ['The Kavorent\'s anger...!', 'This was a mistake!'],
+      Lookout: ['Wave! Big one, starboard!', 'I can\'t see!', 'The gap\'s closing!'],
+      Passenger: ['The Wall... the Kavorent\'s Wall...!', 'This was a mistake!'],
       'Cabin Child': ['MAMA!', 'I\'m scared!'],
     };
     // What they say to nobody in particular, about their work.
     const idle = {
       Captain: ['Steady as she goes.', 'Wind\'s backing west. Hm.', 'Fine evening for it.'],
       'First Mate': ['Look lively!', 'Coil that line properly!', 'Who left this bucket here?'],
-      Navigator: ['Two days, give or take a gale.', 'Where did I put my dividers...'],
+      Navigator: ['The gap opens at dusk, if the old charts are right.', 'Where did I put my dividers...'],
       'Ship\'s Cook': ['Fish again tonight!', 'Who\'s been at the biscuits?'],
       Deckhand: ['Heave!', 'Oh the wind blows west...', 'My back...'],
-      Lookout: ['Gulls off the bow!', 'Nothing yet!'],
+      Lookout: ['Gulls off the bow!', 'The Wall, dead ahead!'],
       Passenger: ['The spires... at last.', 'Fascinating. Simply fascinating.'],
       'Cabin Child': ['Race you to the bow!', 'I saw a fish! A BIG one!'],
     };
@@ -784,14 +791,14 @@ export class ShipIntro extends Cutscene {
       }
       if (t > 60 && !this.warned) {
         this.warned = true;
-        this.say('A dark bank of cloud is building in the west. The wind has changed.', '#c8d8ff');
+        this.say(`The Wall fills the sky ahead: black cloud from the sea to the stars, lit from inside. Somewhere in it is ${this.gap}.`, '#c8d8ff');
         this.caption.until = t + 6;
       }
       // Evening comes on slowly.
       g.minute = Math.min(19 * 60 + 10, g.minute + dt * 0.6);
       if (t > 4 && !this.helloed) {
         this.helloed = true;
-        this.say(`The sun is going down over the Grey Sea. Somewhere ahead, two days off, is ${this.isle}.`);
+        this.say(`The sun is going down over the Grey Sea. Ahead, inside the storm that rings them, lie ${this.isle}.`);
       }
       if (t > 14 && this.caption && this.caption.until === undefined) this.caption.until = t + 0.5;
       // The storm comes when you've met them (or soon enough regardless).
@@ -852,15 +859,15 @@ export class ShipIntro extends Cutscene {
       this.gm = g.minute;
       this.mood = 'storm';
       g.ui.closeAll?.();
-      this.say('The wind is rising. The cloud in the west has come up over half the sky.', '#c8d8ff');
+      this.say(`The ship turns into ${this.gap}. The Wall closes over half the sky, and the wind comes from everywhere at once.`, '#c8d8ff');
       g.audio?.play('wind');
       g.audio?.play('thunder');
       g.audio?.play('bell');
       const cap = this.crew.find((c) => c.role === 'Captain');
-      if (cap) cap.say('All hands! Storm coming! Reef the canvas!', 3, '#ffd0a0');
+      if (cap) cap.say('All hands! We\'re going in! Reef the canvas!', 3, '#ffd0a0');
     } else if (ph === 'storm') {
       g.ui.closeAll?.();
-      this.say('The storm breaks over the ship.', '#c8d8ff');
+      this.say('The gap is closing. The Wall breaks over the ship.', '#c8d8ff');
       for (const c of this.crew) c.goal = null;
     } else if (ph === 'strike') {
       this.strike();
@@ -870,10 +877,10 @@ export class ShipIntro extends Cutscene {
       const g2 = this.game;
       const first = String(g2.playerName).split(' ')[0];
       this.words = [
-        'The storm took the ship that night.',
+        'The Wall took the ship that night, halfway through the gap.',
         `The ${this.shipName} went down with ${this.captain.name} at the wheel and most of her crew.`,
-        'You remember the cold. The black water closing over you. A spar under your hands...',
-        '...and then nothing at all.',
+        'You remember the cold. The black water closing over you. A spar under your hands, and the current carrying you in...',
+        '...and then nothing at all. The gap closed behind you.',
         REASONS[g2.hero.kit] || REASONS.wanderer,
         `Now you have only what the sea gave back, ${first}.`,
       ];

@@ -1719,6 +1719,16 @@ class Layout {
     };
     const rugId = s.civ ? B[s.civ.color.rug] : B.rug_red;
     const t = b.type;
+    // The town's coffers: the treasury lives in these chests. (First of
+    // all, before a cell or a table: a village's hall is small, and often
+    // its jail too, but it must have them.)
+    if (b.type === 'townhall' && !b.playerHome) {
+      this.treasury = this.treasury || [];
+      for (let i = 0; i < (s.type === 'village' ? 1 : 2); i++) {
+        const ch = tryPlace(B.chest, 'wall', { access: true }) || tryPlace(B.chest, 'any', { access: true });
+        if (ch) this.treasury.push({ x: ch.x, y: Y0, z: ch.z, building: b.id });
+      }
+    }
     if (b.jailCand && !this.jail && !b.playerHome) this.jailCell(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
 
     if (b.residential) {
@@ -1895,12 +1905,6 @@ class Layout {
       b.work.push(...b.seats);
       tryPlace(B.bookshelf, 'north', { rot: 0 });
       tryPlace(B.bookshelf, 'north', { rot: 0 });
-      // The town's coffers: the treasury lives in these chests.
-      this.treasury = this.treasury || [];
-      for (let i = 0; i < (this.settlement.type === 'village' ? 1 : 2); i++) {
-        const ch = tryPlace(B.chest, 'wall', { access: true });
-        if (ch) this.treasury.push({ x: ch.x, y: Y0, z: ch.z, building: b.id });
-      }
       tryPlace(rugId, 'center', { solid: false });
       lamp();
       lamp();

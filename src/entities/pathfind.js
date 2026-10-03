@@ -53,6 +53,8 @@ export function findPath(world, sx, sy, sz, tx, ty, tz, opts = {}) {
       const nk = key(nx, ny, nz);
       const floor = world.getBlock(nx, ny - 1, nz);
       const feet = BLOCKS[world.getBlock(nx, ny, nz)];
+      // (Nobody walks into lava on purpose, save what lives in fire.)
+      if (feet.lava && !opts.fireproof) continue;
       let cost = ROAD_BLOCKS.has(floor) ? 0.65 : 1;
       if (feet.liquid) {
         if (dry) continue;

@@ -513,8 +513,8 @@ export class Game {
       this.ui.msg('Your family\'s house is your home: its beds and chests are yours too. The mayor can have a place of your own built, if you like.', '#a0c8ff');
       if (lawOn(L, 'armsBan')) this.ui.msg(`Weapons may not be carried drawn in ${L.settlement.name}: keep yours put away in town (don't hold it on your belt).`, '#ffe070');
     } else {
-      this.ui.msg('You wake on wet sand. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
-      this.ui.msg('Nobody on this island knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');
+      this.ui.msg('You wake on wet sand: a beach on Thessa, inside the Wall. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
+      this.ui.msg('The gap has closed behind you: there\'s no way back out through the storm without a real ship. Nobody here knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');
     }
   }
 
@@ -1536,6 +1536,32 @@ export class Game {
       : 'Great waves throw you back toward the shore. Nobody could swim through that storm: it would take a real ship.', '#a0c8ff');
   }
 
+  // Lava: whatever stands in it is badly burned and set alight, save what
+  // lives in fire (or floats over it, or is on a raft).
+  lavaTick(dt) {
+    this.lavaT = (this.lavaT ?? 0) - dt;
+    if (this.lavaT > 0) return;
+    this.lavaT = 0.4;
+    const w = this.world;
+    for (const e of [this.player, ...this.npcs, ...this.creatures]) {
+      if (e.dead || e.down || e.raft || (e.S && (e.S.fireproof || e.S.floats))) continue;
+      const x = Math.round(e.x);
+      const z = Math.round(e.z);
+      if (w.getBlock(x, e.y, z) !== B.lava && w.getBlock(x, e.y - 1, z) !== B.lava) continue;
+      this.damage(e, e.kind === 'player' ? 3 : 4, null);
+      e.burnT = Math.max(e.burnT || 0, 4);
+      e.burnSrc = null;
+      this.renderer.emit(x + 0.5, e.y + 0.4, z + 0.5, { n: 8, color: ['#ff7020', '#ffb040', '#ffe070'], up: 30, speed: 30, life: 0.6, glow: true, gravity: -20 });
+      if (e === this.player) {
+        const now = this.day * DAY + this.minute;
+        if (this.lavaWarned === undefined || now - this.lavaWarned > 5) {
+          this.lavaWarned = now;
+          this.ui.msg('The lava burns! Get out of it!', '#ff7040');
+        }
+      }
+    }
+  }
+
   // How thick the mountain's ash is over the sky where you are (0 to 1):
   // over all three of the Dagoni Islands, for a few days after it's gone
   // up (not below ground).
@@ -1699,6 +1725,7 @@ export class Game {
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
     for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
+    this.lavaTick(dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) {
