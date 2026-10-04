@@ -133,3 +133,114 @@ test('a master\'s works come round while it walks, not only while it stands', as
   assert.equal(c.sunCd, 0, 'ready stays ready');
   assert.equal(c.fooCd, 'n/a');
 });
+
+// ------------------------------------------------------------ every master's works
+// The masters met in the old places (the Huntsman's benched).
+async function masters() {
+  const { DTYPES, BENCHED } = await import('../src/world/dungeongen.js');
+  const { ISLE_BOSSES, ISLE_DTYPES } = await import('../src/world/isledeep.js');
+  const out = new Set();
+  for (const [type, T] of Object.entries(DTYPES)) if (!ISLE_DTYPES[type]) for (const b of T.bosses || []) out.add(b);
+  for (const m of Object.values(ISLE_BOSSES)) for (const bs of Object.values(m)) for (const b of bs) out.add(b);
+  for (const T of Object.values(ISLE_DTYPES)) for (const b of T.bosses || []) out.add(b);
+  for (const b of BENCHED) out.delete(b);
+  return [...out];
+}
+
+// Its works: a clock of its own for each (an ordinary blow's, and calling
+// help, aren't works); its slam's one; the Overseer's great works come
+// round on one clock between them.
+async function worksOf(sp) {
+  const { SPECIES } = await import('../src/entities/creature.js');
+  const { BRAINS, WORKS } = await import('../src/entities/monsters.js');
+  const src = BRAINS[SPECIES[sp].brain].toString();
+  const keys = new Set();
+  for (const m of src.matchAll(/\b(?:c\.(\w+Cd)\b|'(\w+Cd)')/g)) keys.add(m[1] || m[2]);
+  for (const k of ['attackCd', 'callCd', 'sentCd', 'rallyCd']) keys.delete(k);
+  if (/bossSlam\(/.test(src)) keys.add('slamCd');
+  if (keys.has('workCd')) {
+    keys.delete('workCd');
+    for (const w of WORKS) keys.add(w);
+  }
+  return keys;
+}
+
+test('every master has four ways of fighting at the least (and Rook and Wren between them more)', async () => {
+  const all = await masters();
+  assert.ok(all.length >= 45, `${all.length} masters`);
+  const short = [];
+  for (const sp of all) {
+    const n = (await worksOf(sp)).size;
+    if (n < 4) short.push(`${sp}: ${n}`);
+  }
+  assert.deepEqual(short, []);
+  assert.ok((await worksOf('twin_b')).size >= 4, 'Wren too');
+});
+
+// A fight with `sp` in a hall of its own: you're moved about the hall
+// every few seconds, worn down a third, then two; every work it uses.
+function workout(sp, secs, type = null, isle = null) {
+  const { game, input, p } = start();
+  game.cheats = { ...(game.cheats || {}), god: true };
+  const base = game.sim.dungeons.all.find((d) => (!type || d.type === type) && (!isle || d.isle === isle) && d.type !== 'kavorent') || game.sim.dungeons.all.find((d) => d.isle === isle && d.type !== 'kavorent');
+  const rec = { ...base, floors: {}, cleared: false, pack: null };
+  new DungeonRun(game, rec).enter();
+  while (game.dungeon.floor < rec.depth - 1) game.dungeon.changeFloor(1);
+  const d = game.dungeon;
+  d.metBoss = true;
+  const br = d.data.bossRoom;
+  for (const c of game.creatures) if (c.isBoss || c.leash) {
+    c.dead = true;
+    game.removeOcc(c);
+  }
+  game.creatures = game.creatures.filter((c) => !c.dead);
+  const cx = Math.round((br.x0 + br.x1) / 2);
+  const cz = Math.round((br.z0 + br.z1) / 2);
+  const c = d.spawn(sp, cx, FY, cz, { boss: true });
+  c.leash = br;
+  for (const q of game.creatures) if (!q.isBoss) q.dormant = 999;
+  const s = game.findFreeSpot(cx, cz + 4, FY);
+  p.teleport(s.x, s.y, s.z);
+  d.bossFight();
+  game.scene = null;
+  const prev = {};
+  const used = new Set();
+  let moveT = 0;
+  for (let t = 0; t < secs && !c.dead; t += 0.05) {
+    if (t > secs / 3 && t < secs / 3 + 0.06) c.hp = Math.floor(c.maxHp * 0.6);
+    if (t > (2 * secs) / 3 && t < (2 * secs) / 3 + 0.06) c.hp = Math.floor(c.maxHp * 0.3);
+    p.hp = p.maxHp;
+    moveT -= 0.05;
+    if (moveT <= 0 && !p.moving) {
+      moveT = 3;
+      const a = Math.random() * Math.PI * 2;
+      const r = 2 + Math.floor(Math.random() * 5);
+      const q = game.findFreeSpot(Math.round(c.x + Math.cos(a) * r), Math.round(c.z + Math.sin(a) * r), FY);
+      if (q && q.x >= br.x0 && q.x <= br.x1 && q.z >= br.z0 && q.z <= br.z1) p.teleport(q.x, q.y, q.z);
+    }
+    game.update(0.05, input);
+    for (const k of Object.keys(c)) {
+      if (!k.endsWith('Cd') || k === 'attackCd' || typeof c[k] !== 'number') continue;
+      if (prev[k] !== undefined && c[k] > prev[k] + 0.4) used.add(k);
+      prev[k] = c[k];
+    }
+  }
+  return { used, c };
+}
+
+test('the Drowned Choir and the Pearl-Queen, once two ways each, fight four ways and more', () => {
+  const choir = workout('drowned_choir', 60, 'crypt', 'myrrow').used;
+  assert.ok(choir.size >= 4, `the Choir: ${[...choir]}`);
+  assert.ok(['swellCd', 'tollCd'].some((k) => choir.has(k)), `the Choir's new works: ${[...choir]}`);
+  const pearl = workout('pearl_queen', 60, 'holdout', 'myrrow').used;
+  assert.ok(pearl.size >= 4, `the Pearl-Queen: ${[...pearl]}`);
+  assert.ok(['lungeCd', 'starCd'].some((k) => pearl.has(k)), `her new works: ${[...pearl]}`);
+});
+
+test('Rook bashes with his shield and throws his hammer; Wren trips you with a wire', () => {
+  const { used } = workout('twins', 45, 'holdout');
+  assert.ok(used.size >= 4, `Rook: ${[...used]}`);
+  assert.ok(used.has('bashCd') || used.has('throwCd'), `Rook's new works: ${[...used]}`);
+  const wren = workout('twin_b', 30, 'holdout').used;
+  assert.ok(wren.has('wireCd'), `Wren: ${[...wren]}`);
+});

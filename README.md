@@ -3169,6 +3169,94 @@ together on your network" above for how to start. How it works:
   slope (or in the gable on a gable end), with the sails turning just in
   front of the wall. It used to hang in the air beside the roof.
 
+## Round 44: masters with more to them
+
+- *A cleared place's entrance falls in for everyone.* When you climb out of
+  an old place you've cleared, its way down falls in on every player's copy
+  of the world, not only the host's. That holds whether a guest was there
+  to see it, was somewhere else, or had that ground loaded already.
+  Everyone who climbs out with you gets the message, the flash, the dust
+  and the rumble. Before, a guest could still see the hole open, and only
+  the host saw it go.
+- *Masters drop gear.* A boss drops one or two pieces of armour or weapons
+  (two half the time) on top of its relic and its usual drops. Their tier
+  is a step above the floor's own loot, so they're better the deeper you go
+  and the further the island. Three times in ten it's the island's
+  own gear. Kavorent ruins drop Kavorent gear. Deep down a piece may come
+  with a gem already set in it.
+- *Mimics drop gear too.* A mimic spills what it was holding plus one
+  piece of gear at the floor's tier.
+- *The Hollow Oak fights properly.* It now has two attacks for each season
+  plus its roots:
+  - Spring: acorns that sprout thornlings, and a ring of thicket thrown up
+    round it.
+  - Summer: sun through its leaves, and burning seedpods.
+  - Autumn: a storm of leaves, and dead boughs dropped on you.
+  - Winter: frost, and icicles.
+  - Any season: roots come up under the floor and hold you.
+  - Once worn down, the ground heaves with its roots.
+
+  It also keeps fighting while it drinks through its taproots, where
+  before it stood still for seven seconds.
+- *Bosses' attacks recharge while they walk.* Before, a boss's cooldowns
+  froze whenever it was moving, so slow, big bosses spent most of a fight
+  between attacks. This made every boss livelier, not only the Oak.
+- *New attacks across the board.* Every boss was checked. The 21 that used
+  only two or three attacks each got one or two more, so every boss now
+  has at least four, most five. "Worn" means after it loses a third of its
+  health.
+  - Thessa:
+    - The Brood Mother pounces onto where you stand. Worn, she spins silk
+      round you and spits venom into the middle.
+    - Rook bashes with his shield up close. Worn, he throws his hammer
+      down a line and it comes back up the same line.
+    - Wren flicks a tripwire across your path.
+    - The Elder Stag bellows you back, and sends ghost-stags running across
+      his hall lane after lane (step out of the lit lane).
+  - Kharos:
+    - The Cinder King brands the floor by you so fire runs out in a cross.
+      Worn, he sets a crown of fire round you that closes ring by ring:
+      step out through each ring as it burns down.
+    - The Urn-Mother spits shards of herself in a fan and glows white-hot
+      when you're close.
+    - The Smoke Herald steps out of his smoke at your back to strike.
+      Worn, he sets the smoke around you alight.
+    - The Magma Tender flings gobbets of magma that leave pools. Worn, she
+      rolls a seven-wide tide of magma across the hall: get round its end
+      or roll through it.
+    - The Vitrified Horror sends glass spines up through the floor in a
+      line. Worn, it shakes glass down from the roof.
+    - Scorch sweeps its tail round and spits gobs of fire that leave the
+      floor burning.
+    - The Kiln-King hauls you to his anvil with his tongs (his anvil strike
+      follows) and showers sparks round you.
+    - The Slag Titan splits the floor in three molten fissures. Worn, it
+      shoots iron out all round, then its lodestone pulls the iron back in
+      along different lines.
+  - Myrrow:
+    - The Bog King's bog belches and bursts round you. Worn, he flings
+      clods that make more bog.
+    - The Willow Wight drops boughs where you're going. Worn, her roots
+      grab you and her lash follows.
+    - The Lamprey Queen spits jets of water out of her channels. Worn, she
+      churns the water to drag you toward her mouth.
+    - The Gas Bloat belches gas in your face. Worn, it flicks a spark into
+      the gas nearest you: get out of the gas.
+    - The Hollow King cleaves with his great blade. Worn, he rushes at you
+      as fog down a line.
+    - The Drowned Choir rolls a swell of black water at you. Worn, they toll
+      a bell that comes down wherever you stood when it rang. They also
+      keep fighting while you echo their hymn; before, they stood and
+      waited.
+    - Sharktooth throws lit grog. Worn, he runs out the guns across the
+      cove, lane after lane.
+    - The Pearl-Queen lunges with her rapier and sets down a great pearl
+      that cracks in a star of light.
+    - The kraken sweeps an arm round the cove floor. Worn, it spins its
+      pool into a maelstrom that drags in the whole cove.
+    - The Tide-Mother fires jets of water. Worn, she grows coral round you
+      with one gap and fires a jet down the gap.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

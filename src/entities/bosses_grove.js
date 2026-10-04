@@ -6,7 +6,8 @@
 //     ring of briars in round you, tighter and tighter;
 //   the Elder Stag, who charges in a straight line till something stops
 //     him (a wall stops him hard: stunned, and open to you), tosses you on
-//     his antlers, rears and stamps;
+//     his antlers, bellows you back, sends the wild hunt running across
+//     his hall lane after lane, rears and stamps;
 //   the Hollow Oak, round which the seasons turn: spring mends it (its
 //     taproots: cut them), sprouts thornlings from its acorns and throws
 //     up a thicket round it; summer burns through its leaves and flings
@@ -18,7 +19,7 @@
 import { BRAINS, addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, COLORS, BOSS_TITLES } from './monsters.js';
 import { phaseOf, ready, used } from './tempo.js';
 import { B } from '../world/blocks.js';
-import { FY, dist, sees, dmgOf, work, inHall, ringTiles, wallTiles, spotIn, backOff, cd, shout, proc, openFloor } from './bosskit.js';
+import { FY, dist, sees, dmgOf, work, inHall, ringTiles, coneTiles, wallTiles, spotIn, backOff, cd, shout, proc, openFloor } from './bosskit.js';
 import { fits } from './footprint.js';
 
 const LEAF = ['#5a8a3a', '#8ac060', '#c8f080'];
@@ -161,6 +162,43 @@ export const GROVE_BRAINS = {
       c.face(t.x, t.z);
       addHazard(game, { by: c, tiles: areaTiles(t.x, t.z, 1), y: c.y, dur: 0.7, dmg: dmgOf(c, 8), knock: 4, stun: 0.5, from: { x: c.x, z: c.z }, kind: 'slam', center: { x: t.x, z: t.z }, radius: 1, color: COLORS.blow });
       game.renderer.floatText(c.x, c.y + 3.4, c.z, 'he lowers his antlers!', '#e8d890');
+      return true;
+    }
+    // He bellows: everything in front of him thrown back, and shaken.
+    if (d <= 4 && cd(c, 'bellowCd', dt, 2.5) && ready(c) && !c.windup) {
+      c.bellowCd = 7;
+      used(c, 0.4);
+      c.face(t.x, t.z);
+      const tiles = coneTiles(c, t, 4 + (c.foot || 0), 0.7);
+      addHazard(game, { by: c, tiles, y: c.y, dur: 0.85, dmg: dmgOf(c, 3), knock: 3, stun: 0.6, from: { x: c.x, z: c.z }, kind: 'erupt', center: { x: c.x, z: c.z }, quiet: true, color: [232, 216, 144], onFire: (g) => {
+        g.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y + 1.2, wz: c.z, r0: 6, r1: 40, color: ['#e8d890', '#ffffff'], life: 0.5, oy: -10, flat: 0.6, thick: 2 });
+        g.audio?.play('roar', c);
+      } });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'he draws breath...', '#e8d890');
+      return true;
+    }
+    // The wild hunt: ghost-stags running across his hall, lane after lane
+    // (step out of the lane that's lit).
+    if (cd(c, 'huntCd', dt, 4) && ready(c) && d >= 2 && !c.windup) {
+      c.huntCd = ph >= 2 ? 9 : 12;
+      used(c, 0.8);
+      const L = c.leash || { x0: c.x - 8, z0: c.z - 6, x1: c.x + 8, z1: c.z + 6 };
+      const across = Math.random() < 0.5;
+      const lanes = ph >= 3 ? [-4, -2, 0, 2, 4] : [-3, 0, 3];
+      lanes.sort(() => Math.random() - 0.5);
+      lanes.forEach((off, k) => {
+        const tiles = [];
+        if (across) for (let x = L.x0; x <= L.x1; x++) tiles.push({ x, z: t.z + off });
+        else for (let z = L.z0; z <= L.z1; z++) tiles.push({ x: t.x + off, z });
+        const lane = tiles.filter((q) => inHall(c, q) && openFloor(game, q.x, q.z));
+        if (!lane.length) return;
+        addHazard(game, { by: c, tiles: lane, y: c.y, dur: 1.1 + k * 0.45, dmg: dmgOf(c, 5), knock: 1, from: across ? { x: t.x, z: t.z + off - 1 } : { x: t.x + off - 1, z: t.z }, kind: 'erupt', quiet: k > 0, center: mid(lane), color: [200, 230, 160], onFire: (g, h) => {
+          for (const q of h.tiles) if (Math.random() < 0.4) g.renderer.emit(q.x, c.y + 0.8, q.z, { n: 2, color: LEAF, up: 16, speed: 40, life: 0.5, glow: true });
+          g.audio?.play('stomp', mid(h.tiles));
+        } });
+      });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the wild hunt runs!', '#c8e8a0');
+      game.audio?.play('howl', c);
       return true;
     }
     // (Worn) He rears and stamps: the ground shakes out from him.

@@ -1557,7 +1557,7 @@ function sentinelTick(c, dt) {
 }
 
 // ------------------------------------------------------------ the Overseer's works
-const WORKS = ['fields', 'rush', 'spikes', 'laser'];
+export const WORKS = ['fields', 'rush', 'spikes', 'laser'];
 // The phase each comes out in (see tempo.js).
 const WORK_PHASE = { fields: 1, spikes: 1, rush: 2, laser: 3 };
 const mult = (c) => c.dmgMult || 1;

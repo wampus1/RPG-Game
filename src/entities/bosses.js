@@ -9,12 +9,14 @@
 //   a mine: the Deep Worm; Foreman Gask, blasting charges thrown fizzing
 //     at you, and the roof brought down across the hall (the rock stays);
 //     the Brood Mother, webs that hold you, venom that pools, egg sacs
-//     that hatch, and the dark above you she drops out of;
+//     that hatch, her pounce, silk spun round you, and the dark above you
+//     she drops out of;
 //   a crypt: the Drowned Priest; the Ossuary Horror; the Hollow Saint,
 //     who splits into images of herself, throws grave-light in threes and
 //     consecrates her hall's floor, one square in two;
 //   a holdout: the Warlord; the Twins (two at once, sharing one bar: the
-//     one left goes berserk), Rook's hammer and charge and Wren's knives,
+//     one left goes berserk), Rook's hammer (swung, and thrown and
+//     caught), his shield and charge, and Wren's knives,
 //     Wren behind you while Rook winds up; and Mother Nettle the poisoner,
 //     flasks that leave the floor poisoned, caltrops, and smoke she steps
 //     out of behind you.
@@ -25,6 +27,7 @@ import { fits, fitNear } from './footprint.js';
 import { phaseOf, ready, used } from './tempo.js';
 import { startLaser } from '../game/laser.js';
 import { launchOrb } from '../game/orbs.js';
+import { ringTiles, coneTiles } from './bosskit.js';
 
 // --------------------------------------------------------------- species
 // (The Mound Witch's own clock: the while before she can blink away again.)
@@ -381,9 +384,11 @@ export function bossBrains(h) {
       return bossSlam(c, dt, 1, 1.0, 6, 7);
     },
 
-    // The Brood Mother: webs that hold you, venom that pools; worn, up into
-    // the dark above you and down onto where you stand, and her egg sacs;
-    // desperate, webs fanned three at a time, and venom left where she goes.
+    // The Brood Mother: webs that hold you, venom that pools, a pounce onto
+    // where you stand; worn, up into the dark above you and down onto you,
+    // silk spun round you with venom spat into the middle, and her egg
+    // sacs; desperate, webs fanned three at a time, and venom left where
+    // she goes.
     broodMother(c, dt) {
       const game = c.game;
       const t = c.target;
@@ -426,11 +431,59 @@ export function bossBrains(h) {
         game.audio?.play('skitter', c);
         return true;
       }
+      // (Worn) Silk spun round you in a ring, and venom spat into the
+      // middle of it: out through the gap, or through the silk.
+      c.ringCd = (c.ringCd ?? 5) - dt;
+      if (ph >= 2 && ready(c) && c.ringCd <= 0 && d <= 8 && sees(game, c, t) && !c.windup) {
+        c.ringCd = 12;
+        used(c, 0.5);
+        const y = t.y;
+        const at = { x: t.x, z: t.z };
+        const ring = ringTiles(at.x, at.z, 2);
+        const gap = ring[Math.floor(Math.random() * ring.length)];
+        const silk = ring.filter((q) => Math.abs(q.x - gap.x) + Math.abs(q.z - gap.z) > 1 && inHall(c, q));
+        addHazard(game, { by: c, tiles: silk, y, dur: 0.8, dmg: Math.round(2 * mult(c)), kind: 'hex', quiet: true, center: at, color: [230, 230, 240], onFire: (g) => {
+          addZone(g, { tiles: silk, y, life: 8, kind: 'web', root: 1.0, slow: true, color: [230, 230, 240] });
+        } });
+        addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), y, dur: 1.9, dmg: Math.round(5 * mult(c)), kind: 'acid', center: at, color: COLORS.poison, onFire: (g, h) => {
+          addZone(g, { tiles: h.tiles, y, life: 5, kind: 'poison', tick: 0.7, dmg: 1, by: c, color: COLORS.poison, puff: ['#8ac040', '#c8f070'] });
+        } });
+        game.renderer.floatText(t.x, t.y + 2.6, t.z, 'silk all round you!', '#e8e8f0');
+        game.audio?.play('skitter', c);
+        c.stunT = 0.8;
+        return true;
+      }
+      // A pounce: she gathers herself, and comes down where you stand
+      // (step off the mark).
+      c.pounceCd = (c.pounceCd ?? 4) - dt;
+      if (ready(c) && c.pounceCd <= 0 && d >= 3 && d <= 7 && sees(game, c, t) && !c.windup) {
+        // (Down on where you stand; she lands beside it, all of her.)
+        const at = { x: t.x, y: t.y, z: t.z };
+        const F = c.foot || 0;
+        if (spotNear(c, at, 1 + F, 2.5 + F)) {
+          c.pounceCd = 6;
+          used(c, 0.4);
+          c.face?.(t.x, t.z);
+          addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), y: at.y, dur: 0.9, dmg: Math.round(6 * mult(c)), knock: 1, from: { x: c.x, z: c.z }, center: at, radius: 1, kind: 'slam', color: COLORS.blow, onFire: (g) => {
+            if (c.dead || c.burrowed) return;
+            const s = spotNear(c, at, 1 + F, 2.5 + F);
+            if (!s) return;
+            c.teleport(s.x, s.y, s.z);
+            g.moveEntity(c, s.x, s.y, s.z);
+            c.path = null;
+          } });
+          game.renderer.emit(c.x, c.y + 0.3, c.z, { n: 10, color: ['#5a4a3a', '#8a7a5a'], up: 20, speed: 30, life: 0.5, shape: 'puff' });
+          game.renderer.floatText(c.x, c.y + 2.6, c.z, 'she crouches...', '#ff9070');
+          game.audio?.play('skitter', c);
+          c.stunT = 0.9;
+          return true;
+        }
+      }
       // Webs: a line at you (three fanned, desperate), and where it ends,
       // it clings.
       c.webCd = (c.webCd ?? 2) - dt;
       if (ready(c) && c.webCd <= 0 && d >= 2 && d <= 9 && sees(game, c, t) && !c.windup) {
-        c.webCd = 6;
+        c.webCd = 5;
         used(c);
         const y = t.y;
         for (const ln of ph >= 3 ? fan(c, t, [-0.4, 0, 0.4], 9) : [{ tiles: lineTiles(game, c, t, 9) }]) {
@@ -447,7 +500,7 @@ export function bossBrains(h) {
       // Venom, sprayed in front of her: it pools.
       c.venomCd = (c.venomCd ?? 3) - dt;
       if (ready(c) && c.venomCd <= 0 && d <= 3 + (c.foot || 0) && !c.windup) {
-        c.venomCd = 8;
+        c.venomCd = 6.5;
         used(c);
         const tiles = [];
         const ang = Math.atan2(t.z - c.z, t.x - c.x);
@@ -596,9 +649,10 @@ export function bossBrains(h) {
     },
 
     // ------------------------------------------------ holdout
-    // Rook: the hammer, a charge down a line, a slam; worn, a swap with
-    // Wren; desperate, the earthshaker, a slam that splits the floor
-    // four ways.
+    // Rook: the hammer, a charge down a line, a slam, his shield slammed
+    // into you up close; worn, a swap with Wren, and the hammer thrown
+    // down a line and back; desperate, the earthshaker, a slam that splits
+    // the floor four ways.
     rook(c, dt) {
       const game = c.game;
       const t = c.target;
@@ -630,6 +684,38 @@ export function bossBrains(h) {
         c.stunT = 1.2;
         return true;
       }
+      // (Worn) The hammer thrown, end over end, down a line at you; and
+      // back up the same line to his hand.
+      c.throwCd = (c.throwCd ?? 4) - dt;
+      if (ph >= 2 && ready(c) && c.throwCd <= 0 && d >= 3 && d <= 8 && sees(game, c, t) && !c.windup) {
+        c.throwCd = 9;
+        used(c, 0.8);
+        c.face(t.x, t.z);
+        const line = lineTiles(game, c, t, Math.min(9, d + 2));
+        const end = line[line.length - 1] || { x: t.x, z: t.z };
+        const from = { x: c.x, z: c.z };
+        const y = c.y;
+        addHazard(game, { by: c, tiles: line, y, dur: 0.8, dmg: Math.round(5 * mult(c)), knock: 1, from, to: end, kind: 'dart', color: [200, 200, 210], onFire: (g) => {
+          g.renderer.emit(end.x, y + 0.8, end.z, { n: 8, color: ['#c8c0b8', '#8a8078'], up: 20, speed: 30, life: 0.4 });
+          g.audio?.play('clang', end);
+          addHazard(g, { by: c, tiles: [...line].reverse(), y, dur: 0.75, dmg: Math.round(4 * mult(c)), stun: 0.3, from: end, to: from, kind: 'dart', color: [200, 200, 210] });
+        } });
+        c.say?.('Catch!', 1.3, '#ff9070');
+        c.stunT = 1.5;
+        return true;
+      }
+      // Up close, the shield: slammed into you, and you're thrown back.
+      c.bashCd = (c.bashCd ?? 2) - dt;
+      if (ready(c) && c.bashCd <= 0 && d <= 1 && !c.windup) {
+        c.bashCd = 6;
+        used(c);
+        c.face(t.x, t.z);
+        const tiles = coneTiles(c, t, 2, 0.8);
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.6, dmg: Math.round(4 * mult(c)), knock: 2, stun: 0.5, from: { x: c.x, z: c.z }, kind: 'slam', center: { x: t.x, z: t.z }, radius: 1, color: COLORS.blow });
+        game.renderer.floatText(c.x, c.y + 2.6, c.z, 'shield up!', '#ff9070');
+        c.stunT = 0.6;
+        return true;
+      }
       c.chargeCd = (c.chargeCd ?? 5) - dt;
       if (ready(c) && c.chargeCd <= 0 && d >= 3 && d <= 6 && (t.x === c.x || t.z === c.z) && !c.windup) {
         c.chargeCd = 8;
@@ -641,9 +727,9 @@ export function bossBrains(h) {
       return bossSlam(c, dt, 1, 1.0, 7, 7);
     },
 
-    // Wren: knives thrown in pairs, and behind you while Rook winds up;
-    // worn, four knives at once; desperate, a shadow dance: here, there,
-    // and a knife from each.
+    // Wren: knives thrown in pairs, a wire flicked across your way, and
+    // behind you while Rook winds up; worn, four knives at once;
+    // desperate, a shadow dance: here, there, and a knife from each.
     wren(c, dt) {
       const game = c.game;
       const t = c.target;
@@ -687,6 +773,23 @@ export function bossBrains(h) {
         used(c, 1.5);
         c.dance = { n: 3, t: 0 };
         c.say?.('Keep up!', 1.4, '#ff9070');
+        return true;
+      }
+      // A wire flicked taut across your way, through where you stand: on
+      // it, and you're tripped (and Rook's coming).
+      c.wireCd = (c.wireCd ?? 4) - dt;
+      if (ready(c) && c.wireCd <= 0 && d >= 2 && d <= 6 && !c.windup) {
+        c.wireCd = 8;
+        used(c);
+        const [ux, uz] = Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? [0, 1] : [1, 0];
+        const tiles = [];
+        for (let k = -3; k <= 3; k++) {
+          const q = { x: t.x + ux * k, z: t.z + uz * k };
+          if (inHall(c, q)) tiles.push(q);
+        }
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.8, dmg: Math.round(2 * mult(c)), stun: 0.9, kind: 'dart', from: tiles[0], to: tiles[tiles.length - 1], color: [220, 220, 230] });
+        game.renderer.floatText(t.x, t.y + 2.4, t.z, 'a wire!', '#ff9070');
+        game.audio?.play('whip', c);
         return true;
       }
       c.knifeCd = (c.knifeCd ?? 3) - dt;

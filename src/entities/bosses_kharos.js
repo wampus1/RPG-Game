@@ -6,20 +6,25 @@
 //     the Cinder King, who lays decrees on you: KNEEL (not a step, not a
 //       blow) or BEGONE (keep moving). Obey and he's satisfied, and off
 //       his guard; defy him and burn. His crown flares in rings, his
-//       sceptre runs fire at you, his ashen court rises;
+//       sceptre runs fire at you (or brands the floor by you in a cross),
+//       worn, he sets a crown of fire round you that closes ring by ring;
+//       his ashen court rises;
 //     the Urn-Mother, who pours her ashes over the floor and breathes in
 //       the hall's air: be at her lip when she's done and she swallows you
-//       (strike and strike to burst out of her);
+//       (strike and strike to burst out of her); she spits shards of
+//       herself, and glows white-hot when you're close;
 //     the Smoke Herald, all but gone in his smoke, whose horn sends rings
 //       of force across the hall blast on blast (no outrunning them: roll
-//       through each as it comes);
+//       through each as it comes); he steps out of his smoke at your back,
+//       and worn, sets the smoke round you alight;
 //   a Glass Mine:
 //     the Glass Wyrm, under the floor, hunting you by your footsteps (stand
 //       stock still and it loses you, and comes up dazed), spraying glass,
 //       shaking it down from the roof;
 //     the Magma Tender, who lets the mountain in: lava welling out across
-//       the floor from vents and spreading, her brood, and a crust that
-//       turns your blows till it cracks;
+//       the floor from vents and spreading, gobbets of magma that pool,
+//       worn, a tide of it rolled across the hall at you; her brood, and a
+//       crust that turns your blows till it cracks;
 //     the Bellows Golem, its heat climbing with everything it does (and
 //       every blow you strike while it's hot) till it must vent: steam out
 //       of its front, its back open to you;
@@ -31,8 +36,10 @@
 //       you (three coats and you're fired solid; a hard blow to him cracks
 //       one off), and who rises up raining embers;
 //     the Vitrified Horror, fused glass and bone that leaves shards where
-//       it steps and burns a prism beam across its hall, and shatters at
-//       each mark (break its pieces before they crawl back and mend it);
+//       it steps, sends glass spines up through the floor at you, shakes
+//       glass down from the roof, burns a prism beam across its hall, and
+//       shatters at each mark (break its pieces before they crawl back and
+//       mend it);
 //   an Ash-Raider Den:
 //     Kharn the Ash-Reaver, oil thrown across the floor and then fire to
 //       it, and his fury, up with every blow he lands, till he goes
@@ -40,16 +47,18 @@
 //     Pyrrha the Bombard-Queen, who lobs shells, lays powder lines, and
 //       rolls lit kegs at you (strike one and it rolls back to her);
 //     Scorch, the raiders' chained drake, that can't come further than
-//       its chain (till it snaps), sweeps its fire across its hall, lashes
-//       its chain round, and beats ash and embers down from the roof;
+//       its chain (till it snaps), sweeps its fire across its hall, spits
+//       gobs of it, sweeps its tail round, lashes its chain round, and
+//       beats ash and embers down from the roof;
 //   a Kiln-Deep (Kharos's own):
 //     the Kiln-King, who pours molten metal down channels across his hall
 //       (it sets into walls of black glass, and the hall's another shape),
-//       strikes his anvil (the floor splits in a cross), and quenches it
-//       all in steam;
+//       strikes his anvil (the floor splits in a cross; sparks shower
+//       down), hauls you in with his tongs, and quenches it all in steam;
 //     the Slag Titan, whose heart's a lodestone: glowing blue, it tears
-//       iron out of your hand (and drags you in by iron armour); and
-//       thrown slag, and its slam;
+//       iron out of your hand (and drags you in by iron armour); thrown
+//       slag, fissures of it racing out at you, its slam, and worn, iron
+//       shot out all round and called back;
 //     the Molten Heart, held in the air by four chains (break their
 //       anchors, or your blows hardly touch it), the floor erupting under
 //       you square by square, and at the last fire in from the walls.
@@ -257,6 +266,37 @@ export const KHAROS_BRAINS = {
       c.stunT = 0.8;
       return true;
     }
+    // (Worn) A crown of fire set round you, closing in ring by ring: step
+    // out through each as it burns down.
+    if (ph >= 2 && cd(c, 'circletCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
+      c.circletCd = 11;
+      used(c, 0.6);
+      const at = { x: t.x, z: t.z };
+      for (let r = 3; r >= 0; r--) fire(game, c, ringTiles(at.x, at.z, r).filter((q) => inHall(c, q)), 0.9 + (3 - r) * 0.5, 5, { quiet: r < 3 });
+      game.renderer.floatText(t.x, t.y + 3, t.z, 'a crown of fire for you!', '#ffd060');
+      shout(c, 'Wear it well!', '#ffb060');
+      return true;
+    }
+    // His sceptre brought down beside you: fire runs out from where it
+    // strikes, in a cross.
+    if (d <= 3 && cd(c, 'brandCd', dt, 3) && ready(c) && !c.windup) {
+      c.brandCd = 6;
+      used(c, 0.3);
+      c.face(t.x, t.z);
+      const at = { x: t.x, z: t.z };
+      fire(game, c, [at], 0.8, 6, { burn: 3 });
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const arm = [];
+        for (let k = 1; k <= 3; k++) {
+          const q = { x: at.x + dx * k, z: at.z + dz * k };
+          if (inHall(c, q) && openFloor(game, q.x, q.z)) arm.push(q);
+        }
+        fire(game, c, arm, 1.0, 5, { quiet: true });
+      }
+      game.renderer.floatText(t.x, t.y + 2.8, t.z, 'branded!', '#ffb060');
+      game.audio?.play('clang', c);
+      return true;
+    }
     // His sceptre: a line of fire along the floor at you.
     if (cd(c, 'sceptreCd', dt, 2) && ready(c) && d >= 2 && d <= 9 && sees(game, c, t) && !c.windup) {
       c.sceptreCd = ph >= 2 ? 4 : 5;
@@ -331,6 +371,29 @@ export const KHAROS_BRAINS = {
       game.audio?.play('wind', c);
       return true;
     }
+    // Hot from the kiln: up close she glows, and the heat comes off her in
+    // rings.
+    if (d <= 2 && cd(c, 'glowCd', dt, 2) && ready(c) && !c.windup) {
+      c.glowCd = 6;
+      used(c, 0.3);
+      for (let r = 1; r <= 2; r++) fire(game, c, ringTiles(c.x, c.z, r + (c.foot || 0)), 0.9 + r * 0.15, 5, { knock: 1, from: { x: c.x, z: c.z }, quiet: r > 1 });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'she glows white-hot', '#ffd060');
+      c.stunT = 0.9;
+      return true;
+    }
+    // Shards of herself spat at you, three at a time (five, desperate).
+    if (d >= 2 && d <= 9 && cd(c, 'spitCd', dt, 3) && ready(c) && sees(game, c, t) && !c.windup) {
+      c.spitCd = ph >= 2 ? 4.5 : 6;
+      used(c);
+      c.face(t.x, t.z);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const s of ph >= 3 ? [-0.5, -0.25, 0, 0.25, 0.5] : [-0.3, 0, 0.3]) {
+        const to = { x: c.x + Math.cos(base + s) * 9, z: c.z + Math.sin(base + s) * 9 };
+        shards(game, c, lineTiles(game, c, to, 9), 0.75, 4, { quiet: s !== 0 });
+      }
+      game.audio?.play('glass', c);
+      return true;
+    }
     // (Worn) Ash falling from the roof in patches.
     if (ph >= 2 && cd(c, 'fallCd', dt, 4) && ready(c)) {
       c.fallCd = 10;
@@ -387,6 +450,36 @@ export const KHAROS_BRAINS = {
       if (!game.toldHorn) game.ui.msg('Each blast of the Herald\'s horn sends a ring of force across the hall. You can\'t outrun it: roll through it as it reaches you.', '#ffd0a0', true);
       game.toldHorn = true;
       return true;
+    }
+    // (Worn) Its smoke catches: wherever it lies about you, it bursts into
+    // flame (out of the smoke!).
+    if (ph >= 2 && cd(c, 'flareCd', dt, 3) && ready(c) && !c.windup) {
+      const smoke = (game.zones || []).filter((z) => z.by === c && z.kind === 'smoke').flatMap((z) => z.tiles).filter((q) => Math.max(Math.abs(q.x - t.x), Math.abs(q.z - t.z)) <= 3);
+      if (smoke.length >= 4) {
+        c.flareCd = 9;
+        used(c, 0.4);
+        fire(game, c, smoke, 1.3, 5, { burn: 2, quiet: true });
+        game.renderer.floatText(t.x, t.y + 3, t.z, 'the smoke catches!', '#ffb060');
+        game.audio?.play('crackle', c);
+        return true;
+      }
+      c.flareCd = 1.5;
+    }
+    // Out of its smoke at your back: a blow, and gone again.
+    if (c.inSmoke && cd(c, 'ambushCd', dt, 4) && ready(c) && d >= 3 && !c.windup) {
+      const to = spotIn(c, { x: t.x + Math.sign(t.x - c.x), z: t.z + Math.sign(t.z - c.z) }, 0, 1.5);
+      if (to) {
+        c.ambushCd = ph >= 2 ? 6 : 8;
+        used(c, 0.4);
+        blinkTo(c, to, ASHC);
+        c.face(t.x, t.z);
+        addHazard(game, { by: c, tiles: coneTiles(c, t, 2, 0.9), y: c.y, dur: 0.6, dmg: dmgOf(c, 6), knock: 1, stun: 0.3, from: { x: c.x, z: c.z }, kind: 'slam', center: { x: t.x, z: t.z }, radius: 1, color: COLORS.blow });
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'out of the smoke!', '#c8c0c0');
+        game.audio?.play('whoosh', c);
+        c.stunT = 0.7;
+        return true;
+      }
+      c.ambushCd = 1;
     }
     // Cinders lobbed out of the smoke.
     if (cd(c, 'cinderCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
@@ -485,6 +578,40 @@ export const KHAROS_BRAINS = {
       }
       shout(c, 'Gllurrrb...', '#ff9050');
       game.audio?.play('eruption', c);
+      return true;
+    }
+    // (Worn) A tide of magma rolled out across the hall at you, a wall of
+    // it, a pace at a time: get round its end, or roll through it.
+    if (ph >= 2 && cd(c, 'tideCd', dt, 3) && ready(c) && !c.windup) {
+      c.tideCd = 12;
+      used(c, 0.8);
+      const [fx, fz] = Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? [Math.sign(t.x - c.x) || 1, 0] : [0, Math.sign(t.z - c.z) || 1];
+      const at = { x: c.x, z: c.z };
+      const r0 = 1 + (c.foot || 0);
+      proc(game, c, 0.22, 12, (k) => {
+        const row = [];
+        for (let w = -3; w <= 3; w++) {
+          const q = { x: at.x + fx * (k + r0) + fz * w, z: at.z + fz * (k + r0) + fx * w };
+          if (inHall(c, q) && openFloor(game, q.x, q.z, true)) row.push(q);
+        }
+        if (row.length) fire(game, c, row, 0.25, 5, { burn: 2, knock: 1, from: { x: at.x + fx * (k + r0 - 1), z: at.z + fz * (k + r0 - 1) }, quiet: k % 3 !== 0 });
+      }, 0.7);
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'a tide of magma!', '#ff9050');
+      game.audio?.play('eruption', c);
+      return true;
+    }
+    // Gobbets of magma flung at you: they splash, and pool a while.
+    if (cd(c, 'globCd', dt, 2.5) && ready(c) && dist(c, t) >= 2 && dist(c, t) <= 10 && !c.windup) {
+      c.globCd = ph >= 2 ? 5 : 6.5;
+      used(c);
+      for (let k = 0; k < (ph >= 3 ? 4 : 3); k++) {
+        const at = k ? spotIn(c, t, 1, 3) || t : t;
+        lob(game, c, at.x, at.z, { tint: [255, 110, 40], onLand: (g, x, z) => {
+          fire(g, c, areaTiles(x, z, 1), 0.05, 4, { burn: 2, quiet: k > 0 });
+          if (inHall(c, { x, z }) && openFloor(g, x, z) && !g.everyone().some((p) => p.x === x && p.z === z)) work(g, x, FY, z, B.lava, 6, c);
+        } });
+      }
+      shout(c, 'Hhhuk!', '#ff9050');
       return true;
     }
     // A crust: your blows hardly touch her till it cracks.
@@ -719,6 +846,35 @@ export const KHAROS_BRAINS = {
       c.stunT = 4.4;
       return true;
     }
+    // Glass spines up through the floor at you, one after another down
+    // the line (three lines, desperate); some stay.
+    if (cd(c, 'spineCd', dt, 2.5) && ready(c) && d >= 2 && d <= 10 && !c.windup) {
+      c.spineCd = ph >= 2 ? 5 : 6.5;
+      used(c, 0.4);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const s of ph >= 3 ? [-0.35, 0, 0.35] : [0]) {
+        const to = { x: c.x + Math.cos(base + s) * 10, z: c.z + Math.sin(base + s) * 10 };
+        lineTiles(game, c, to, 10).forEach((q, k) => shards(game, c, [q], 0.6 + k * 0.09, 5, { quiet: k % 3 !== 0, onFire: (g) => {
+          if (Math.random() < 0.4 && openFloor(g, q.x, q.z)) addZone(g, { by: c, kind: 'shards', tiles: [q], y: c.y, life: 8, step: dmgOf(c, 1), color: [180, 170, 220], puff: ['#c8b8f0'] });
+        } }));
+      }
+      game.audio?.play('glass', c);
+      c.stunT = 0.6;
+      return true;
+    }
+    // (Worn) Glass shaken down from the roof round you.
+    if (ph >= 2 && cd(c, 'rainCd', dt, 3) && ready(c) && !c.windup) {
+      c.rainCd = 10;
+      used(c, 0.3);
+      proc(game, c, 0.35, 6, () => {
+        const tt = c.target && !c.target.dead ? c.target : t;
+        const at = spotIn(c, tt, 0, 3);
+        if (at) shards(game, c, areaTiles(at.x, at.z, 1), 1.0, 4, { quiet: true });
+      });
+      game.renderer.floatText(t.x, t.y + 3, t.z, 'glass falls from the roof!', '#c8b8f0');
+      game.audio?.play('shatter', c);
+      return true;
+    }
     // Shards thrown out in every direction.
     if (cd(c, 'novaCd', dt, 4) && ready(c) && d <= 6 && !c.windup) {
       c.novaCd = ph >= 2 ? 8 : 10;
@@ -896,6 +1052,32 @@ export const KHAROS_BRAINS = {
       game.audio?.play('chains', c);
       return true;
     }
+    // Its tail swept round: everything close to it thrown off its feet.
+    if (d <= 2 && cd(c, 'tailCd', dt, 2) && ready(c) && !c.windup) {
+      c.tailCd = 6;
+      used(c, 0.3);
+      const R = 1 + (c.foot || 0);
+      const tiles = [...ringTiles(c.x, c.z, R), ...ringTiles(c.x, c.z, R + 1)];
+      addHazard(game, { by: c, tiles, y: c.y, dur: 0.75, dmg: dmgOf(c, 6), knock: 2, stun: 0.4, from: { x: c.x, z: c.z }, kind: 'slam', center: { x: c.x, z: c.z }, radius: R + 1, color: COLORS.blow });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'its tail swings!', '#ff9060');
+      game.audio?.play('whoosh', c);
+      return true;
+    }
+    // Gobs of fire spat at you: where they land the floor burns.
+    if (d >= 3 && cd(c, 'spitCd', dt, 3) && ready(c) && !c.windup) {
+      c.spitCd = ph >= 2 ? 5 : 6.5;
+      used(c);
+      c.face(t.x, t.z);
+      for (let k = 0; k < (ph >= 2 ? 3 : 2); k++) {
+        const at = k ? spotIn(c, t, 1, 3) || t : t;
+        lob(game, c, at.x, at.z, { tint: [255, 120, 40], onLand: (g, x, z) => {
+          fire(g, c, areaTiles(x, z, 1), 0.05, 5, { burn: 2, quiet: k > 0 });
+          groundFire(g, x, z, c.y, c, false, 0);
+        } });
+      }
+      game.audio?.play('roar', c);
+      return true;
+    }
     // (Worn) Its wings beat: ash and embers down from the roof all over
     // its hall.
     if (ph >= 2 && cd(c, 'wingCd', dt, 3) && ready(c) && !c.windup) {
@@ -955,6 +1137,38 @@ export const KHAROS_BRAINS = {
       }
       shout(c, 'Into the mould!', '#ffb040');
       game.audio?.play('pour', c);
+      return true;
+    }
+    // His tongs, out at you down a line: caught, you're hauled to his
+    // anvil (and the hammer's coming).
+    if (cd(c, 'tongsCd', dt, 4) && ready(c) && d >= 3 && d <= 7 && sees(game, c, t) && !c.windup) {
+      c.tongsCd = ph >= 2 ? 8 : 10;
+      used(c, 0.6);
+      c.face(t.x, t.z);
+      const line = lineTiles(game, c, t, d + 1);
+      const end = line[line.length - 1] || { x: t.x, z: t.z };
+      addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.75, dmg: dmgOf(c, 3), kind: 'dart', from: { x: c.x, z: c.z }, to: end, color: [180, 170, 160], onFire: (g, h, hit) => {
+        for (const e of hit) {
+          if (e.kind !== 'player') continue;
+          drag(g, e, c, Math.max(1, dist(c, e) - 1));
+          g.renderer.floatText(e.x, e.y + 2.4, e.z, 'hauled in!', '#ffb040');
+          c.anvilCd = Math.min(c.anvilCd ?? 0, 0.6);
+        }
+      } });
+      shout(c, 'Come here, ore.', '#ffb040');
+      game.audio?.play('chains', c);
+      return true;
+    }
+    // Sparks off the anvil, showering down round you.
+    if (cd(c, 'sparkCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
+      c.sparkCd = ph >= 2 ? 6 : 7.5;
+      used(c, 0.3);
+      for (let k = 0; k < (ph >= 3 ? 6 : 4); k++) {
+        const at = k ? spotIn(c, t, 1, 3) : { x: t.x, z: t.z };
+        if (at) lob(game, c, at.x, at.z, { tint: [255, 220, 120], onLand: (g, x, z) => fire(g, c, [{ x, z }, ...ringTiles(x, z, 1).filter(() => Math.random() < 0.5)], 0.05, 4, { burn: 1, quiet: k > 0 }) });
+      }
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'sparks fly!', '#ffe0a0');
+      game.audio?.play('clang', c);
       return true;
     }
     // His hammer on the anvil: the floor splits in a cross.
@@ -1022,6 +1236,45 @@ export const KHAROS_BRAINS = {
       game.renderer.floatText(c.x, c.y + 3.4, c.z, 'its heart turns to lodestone...', '#a0c8ff');
       if (!game.toldLode) game.ui.msg('The Slag Titan\'s heart is a lodestone: when it glows blue it tears iron out of your hands (and drags you in by iron armour). Put your iron away, or fight with something else!', '#a0c8ff', true);
       game.toldLode = true;
+      return true;
+    }
+    // The floor split open at you: three fissures of molten slag racing
+    // out from its feet.
+    if (cd(c, 'fissureCd', dt, 3) && ready(c) && d >= 2 && d <= 10 && !c.windup) {
+      c.fissureCd = ph >= 2 ? 6 : 7.5;
+      used(c, 0.5);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const s of [-0.45, 0, 0.45]) {
+        const to = { x: c.x + Math.cos(base + s) * 10, z: c.z + Math.sin(base + s) * 10 };
+        lineTiles(game, c, to, 10).forEach((q, k) => {
+          if (k >= (c.foot || 0)) fire(game, c, [q], 0.7 + k * 0.08, 5, { burn: 2, quiet: k % 3 !== 0 });
+        });
+      }
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the floor splits!', '#ff9050');
+      game.audio?.play('rumble', c);
+      c.stunT = 0.7;
+      return true;
+    }
+    // (Worn) Iron shot out of it all round; and then the lodestone calls
+    // every scrap of it back, from between where it went.
+    if (ph >= 2 && cd(c, 'ironCd', dt, 3) && ready(c) && d <= 9 && !c.windup) {
+      c.ironCd = 11;
+      used(c, 1);
+      const off = Math.random() * (Math.PI / 6);
+      for (let i = 0; i < 6; i++) {
+        const a = off + (i / 6) * Math.PI * 2;
+        const line = lineTiles(game, c, { x: c.x + Math.cos(a) * 9, z: c.z + Math.sin(a) * 9 }, 9);
+        const end = line[line.length - 1];
+        if (!end) continue;
+        addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.8, dmg: dmgOf(c, 4), kind: 'dart', from: { x: c.x, z: c.z }, to: end, color: [160, 170, 190], quiet: i > 0, onFire: (g) => {
+          const b = a + Math.PI / 6;
+          const back = lineTiles(g, c, { x: c.x + Math.cos(b) * 9, z: c.z + Math.sin(b) * 9 }, 9);
+          const far = back[back.length - 1];
+          if (far) addHazard(g, { by: c, tiles: back, y: c.y, dur: 0.9, dmg: dmgOf(c, 4), kind: 'dart', from: far, to: { x: c.x, z: c.z }, color: [160, 200, 255] });
+        } });
+      }
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'iron flies!', '#a0c8ff');
+      game.audio?.play('clank', c);
       return true;
     }
     // Slag thrown: it burns where it lands.
