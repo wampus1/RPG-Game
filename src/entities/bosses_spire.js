@@ -292,15 +292,22 @@ function overheat(c) {
   c.stunT = 4.4;
   used(c, 3.5);
   const want = Math.max(3, foes(c).length + 2);
-  for (let i = 0; i < 30 && c.overheat.cols.length < want; i++) {
-    const at = spotIn(c, c, 3, 7);
-    if (!at || c.overheat.cols.some((q) => Math.abs(q.x - at.x) + Math.abs(q.z - at.z) < 3)) continue;
-    if (work(game, at.x, FY, at.z, B.kav_coolant, 7, c)) {
-      work(game, at.x, FY + 1, at.z, B.kav_coolant, 7, c);
-      c.overheat.cols.push(at);
-      game.renderer.emit(at.x, c.y + 1.5, at.z, { n: 14, color: KAV, up: 40, speed: 20, life: 0.8, glow: true });
-    }
+  const raise = (at) => {
+    if (!at || !inHall(c, at) || !openFloor(game, at.x, at.z) || c.overheat.cols.some((q) => Math.abs(q.x - at.x) + Math.abs(q.z - at.z) < 3)) return false;
+    if (!work(game, at.x, FY, at.z, B.kav_coolant, 7, c)) return false;
+    work(game, at.x, FY + 1, at.z, B.kav_coolant, 7, c);
+    c.overheat.cols.push(at);
+    game.renderer.emit(at.x, c.y + 1.5, at.z, { n: 14, color: KAV, up: 40, speed: 20, life: 0.8, glow: true });
+    return true;
+  };
+  // (One on each of your sides of it, a few paces out, so there's always
+  // somewhere to get to in time; the rest about the hall.)
+  for (const p of foes(c)) {
+    const a = Math.atan2(p.z - c.z, p.x - c.x);
+    const r = (c.foot || 0) + 3;
+    for (const da of [0, 0.4, -0.4, 0.8, -0.8]) if (raise({ x: Math.round(c.x + Math.cos(a + da) * r), z: Math.round(c.z + Math.sin(a + da) * r) })) break;
   }
+  for (let i = 0; i < 30 && c.overheat.cols.length < want; i++) raise(spotIn(c, c, 3, 7));
   game.renderer.floatText(c.x, c.y + 3.6, c.z, 'CORE OVERHEAT', '#ff4020');
   shout(c, 'VENTING ALL HEAT. SHIELD YOURSELF, IF YOU CAN.', '#ff6020', 3.5);
   if (!game.toldOverheat) game.ui.msg('The Crucible is overheating! Get one of the coolant columns between you and it before it blows.', '#ffb040', true);

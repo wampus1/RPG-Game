@@ -203,6 +203,11 @@ export class Dungeons {
     if (s && d.type !== 'kavorent') {
       s.state = { ...(s.state || {}), cleared: true };
       if (!this.game.dungeon || this.game.dungeon.rec !== d) restamp(this.game.world, s);
+    } else if (s) {
+      // (A spire whose master's beaten: its lights go out, and the storm
+      // it kept goes with them: see spirestorm.js.)
+      s.state = { ...(s.state || {}), beaten: true };
+      restamp(this.game.world, s);
     }
     const L = d.town !== null ? this.sim.layoutOf(d.town) : null;
     const text = by === 'you' ? `${this.game.playerName} went down into ${d.name} and slew its master.` : `${by} went down into ${d.name}, and slew its master.`;
@@ -431,7 +436,7 @@ export class Dungeons {
       if (!d) continue;
       Object.assign(d, q);
       const s = this.site(d);
-      if (s) s.state = { cleared: d.type !== 'kavorent' && d.cleared, open: d.spire ? d.spire.open : null };
+      if (s) s.state = { cleared: d.type !== 'kavorent' && d.cleared, open: d.spire ? d.spire.open : null, beaten: d.type === 'kavorent' && d.cleared };
     }
   }
 }

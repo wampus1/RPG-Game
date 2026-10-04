@@ -50,6 +50,8 @@ import { countItem } from './inventory.js';
 import { launch as launchRaft, landing as raftLanding, floatable } from '../entities/raft.js';
 import { enforceIslandLaws, raftDues, SPORE_BLOCKS } from '../sim/islelaws.js';
 import { updateStormSea, stormLocked } from './stormsea.js';
+import { updateSpireStorm } from './spirestorm.js';
+import { wallTick } from './wallfall.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
@@ -1749,6 +1751,7 @@ export class Game {
     // A short scene playing (a spire opening, a master rising or falling:
     // see scenes.js): on the real clock; it may hold you still and slow
     // the world.
+    wallTick(this);
     const slow = this.sceneTick(dt, uiRes.pressed);
     // A blow that lands hard holds the moment (hit-stop); a parry slows
     // the world for a breath after. (Not with others playing in it: see
@@ -1974,6 +1977,7 @@ export class Game {
     // (Their scene is played on their own screen: here only what it does.)
     if (this.net) this.net.mute++;
     try {
+      wallTick(this);
       this.sceneTick(dt, uiRes.pressed);
     } finally {
       if (this.net) this.net.mute--;
@@ -2036,6 +2040,7 @@ export class Game {
   ownAfterPhase(dt, input) {
     this.updateWanted(dt);
     this.updateFishing(dt, input);
+    updateSpireStorm(this, dt);
     updateStormSea(this, dt);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3.6);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
@@ -4722,7 +4727,8 @@ export class Game {
       // (Near the storm round the islands it's raining whatever the sky's
       // doing elsewhere; and coming and going at its edge doesn't make the
       // rain stop and start over and over.)
-      const near = this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0;
+      // (And round a spire, in the storm it keeps: see spirestorm.js.)
+      const near = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0, this.spireStorm || 0);
       w.stormRain = near > (w.stormRain ? 0.06 : 0.12);
       if (w.stormRain) kind = 'rain';
       if (kind !== w.kind) {
@@ -4734,7 +4740,7 @@ export class Game {
     }
     // Near the storm round the islands: it's always raining there, harder
     // and windier the nearer you come, with lightning.
-    const sn = this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0;
+    const sn = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0, (this.spireStorm || 0) * 0.6);
     w.storm = sn;
     if (w.stormRain && w.kind !== 'rain') w.kind = 'rain';
     w.wind = sn > 0 ? 1 + sn * 2.6 : undefined;
@@ -6132,6 +6138,7 @@ export class Game {
       // records are written, which keep it.)
       dungeon: this.dungeon ? this.dungeon.serialize() : null,
       relics: serializeRelics(this),
+      wallDown: !!this.world.ow.wallDown,
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: this.world.ow.packExplored(),
@@ -6191,6 +6198,9 @@ export class Game {
     this.placed = new Map(data.placed || []);
     this.picked = new Map(data.picked || []);
     loadRelics(this, data.relics);
+    // (The storm wall, brought down: see wallfall.js.)
+    this.world.ow.wallDown = !!data.wallDown;
+    this.wallDown = !!data.wallDown;
     this.roadCamp = new Map(data.roadCamps || []);
     this.riding.load(data.riding);
     this.crops.load(data.crops);

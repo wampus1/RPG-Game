@@ -8,7 +8,10 @@ import { buildFloor, gearFor, FY } from '../src/world/dungeongen.js';
 import { RNG } from '../src/util/rng.js';
 import { MODS, STAR_MAX, starKey, parseStar, plainKey, starGear, rollStars, rollMods, starable, gearClass } from '../src/world/quality.js';
 import { modsOf, onBladeMods, onBlockMods, toolDrops, stepModMult, gearHp, critBonus, bladeMult } from '../src/game/mods.js';
-import { B } from '../src/world/blocks.js';
+import { B, BLOCKS } from '../src/world/blocks.js';
+import { WORLD_Y } from '../src/config.js';
+import { spireStormAt, strike } from '../src/game/spirestorm.js';
+import { allSpiresBeaten } from '../src/game/wallfall.js';
 import { Creature, SPECIES } from '../src/entities/creature.js';
 import { BRAINS } from '../src/entities/monsters.js';
 import { beastOf } from '../src/render/bossbeasts.js';
@@ -380,8 +383,112 @@ test('the Condenser soaks you, grounds itself on its rods, and lightning finds y
   assert.equal(boss.S.ward(game, boss, null, 10), 10, 'its rods down, it takes your blows');
   // Soaked, it's worse.
   const p = game.player;
+  p.soakT = 0;
   soak(game, p, 5);
-  assert.ok(p.soakT > 0);
+  assert.equal(p.soakT, 5);
   for (let i = 0; i < 120; i++) p.update(0.05, stubInput(), game);
   assert.ok(!(p.soakT > 0), 'dried off in time');
+});
+
+test('one spire to an island, each its own: the facility, the thermal spire in the crater\'s lava, the tidal spire by the sea', () => {
+  const game = makeGame(12345);
+  const w = game.world;
+  const spires = w.sites.filter((s) => s.type === 'kavorent');
+  assert.equal(spires.length, 3);
+  const by = Object.fromEntries(spires.map((s) => [s.island, s]));
+  assert.equal(by.thessa.theme, 'facility');
+  assert.equal(by.kharos.theme, 'thermal');
+  assert.equal(by.myrrow.theme, 'tidal');
+  // Kharos's: in the crater.
+  const V = w.ow.volcano;
+  assert.equal(by.kharos.x, V.x);
+  assert.equal(by.kharos.z, V.z);
+  // Myrrow's: by the water, its intakes run to it.
+  assert.ok(by.myrrow.sea, 'the sea found');
+  assert.ok(by.myrrow.sea[2] <= 28);
+  // The thermal spire's causeways: out over the lava and up the crater's
+  // wall, never more than a pace up (or down) at a time.
+  const s = by.kharos;
+  for (let rz = Math.floor((s.z - 45) / 36); rz <= Math.floor((s.z + 45) / 36); rz++) for (let rx = Math.floor((s.x - 45) / 64); rx <= Math.floor((s.x + 45) / 64); rx++) w.loadRegion(rx, rz);
+  const top = (x, z) => {
+    for (let y = WORLD_Y - 1; y >= 0; y--) if (BLOCKS[w.getBlock(x, y, z)].solid || BLOCKS[w.getBlock(x, y, z)].liquid) return { y, lava: w.getBlock(x, y, z) === B.lava };
+    return { y: -1 };
+  };
+  assert.equal(w.getBlock(s.x + 3, s.h, s.z), B.kav_floor, 'a platform round its foot');
+  assert.equal(w.getBlock(s.x + 9, s.h, s.z + 9), B.lava, 'in the lava');
+  for (const [ux, uz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    let last = top(s.x + ux * 4, s.z + uz * 4).y;
+    for (let k = 5; k <= 24; k++) {
+      const t = top(s.x + ux * k, s.z + uz * k);
+      assert.ok(!t.lava, `no lava on the causeway (${ux},${uz}) at ${k}`);
+      assert.ok(Math.abs(t.y - last) <= 1, `a step of one at most (${ux},${uz}) at ${k}: ${last} to ${t.y}`);
+      last = t.y;
+    }
+  }
+});
+
+test('each spire keeps a storm about it, rain and lightning, till its master\'s beaten', () => {
+  const { game, p } = start();
+  const s = game.world.sites.find((q) => q.type === 'kavorent' && q.island === 'thessa');
+  assert.equal(spireStormAt(game, s.x, s.z), 1);
+  assert.equal(spireStormAt(game, s.x + 200, s.z), 0);
+  const mid = spireStormAt(game, s.x + 22, s.z);
+  assert.ok(mid > 0 && mid < 1, `${mid}`);
+  // Under it: clouds, and rain.
+  p.teleport(s.x + 8, s.h + 1, s.z);
+  game.moveEntity(p, s.x + 8, s.h + 1, s.z);
+  for (let i = 0; i < 80; i++) game.update(0.1, stubInput());
+  assert.ok(game.spireStorm > 0.5, `${game.spireStorm}`);
+  assert.equal(game.weather.kind, 'rain');
+  assert.ok(game.stormSea.cloud > 0.15 && game.stormSea.cloud < 0.6, `some cloud, not the wall's: ${game.stormSea.cloud}`);
+  // Its lightning: into the spire, or the ground (and whoever's there).
+  const hp = p.hp;
+  const at = strike(game, s, { x: p.x, z: p.z });
+  assert.ok(!at.spire);
+  assert.ok(p.hp < hp, 'struck');
+  // Beaten: no storm.
+  const rec = game.sim.dungeons.get(s.id);
+  game.sim.dungeons.cleared(rec, 'you');
+  assert.ok(s.state.beaten);
+  assert.equal(spireStormAt(game, s.x, s.z), 0);
+});
+
+test('beat all three spires and, out of the last, the storm wall comes down for good', () => {
+  const { game, input } = start();
+  const ow = game.world.ow;
+  const inWall = (() => {
+    // (A spot in the thick of the storm.)
+    for (let x = 0; x < 200 * 64; x += 64) {
+      for (let z = 0; z < 300 * 36; z += 36) if (ow.stormAt(x, z) > 0.8) return { x, z };
+    }
+    return null;
+  })();
+  assert.ok(inWall, 'the storm is up');
+  const recs = game.sim.dungeons.all.filter((d) => d.type === 'kavorent');
+  assert.equal(recs.length, 3);
+  // Two beaten: not yet.
+  for (const r of recs.slice(0, 2)) game.sim.dungeons.cleared(r, 'you');
+  assert.ok(!allSpiresBeaten(game));
+  // The third: down into it, its master beaten, and back up.
+  const last = recs[2];
+  new DungeonRun(game, last).enter();
+  game.sim.dungeons.cleared(last, 'you');
+  assert.ok(allSpiresBeaten(game));
+  game.dungeon.leave();
+  assert.ok(game.wallPending, 'its scene waiting');
+  game.update(0.1, input);
+  assert.equal(game.scene && game.scene.kind, 'wall');
+  assert.ok(!ow.wallDown, 'not till it breaks');
+  for (let i = 0; i < 200 && game.scene; i++) game.update(0.1, input);
+  assert.ok(!game.scene, 'the scene played through');
+  assert.ok(ow.wallDown);
+  assert.equal(ow.stormAt(inWall.x, inWall.z), 0, 'no storm where it stood');
+  assert.equal(ow.stormNear(inWall.x, inWall.z), 0);
+  assert.ok(ow.insideStorm(game.player.x, game.player.z), 'the islands still the islands');
+  // Saved with the world.
+  const data = JSON.parse(JSON.stringify(game.serialize()));
+  assert.equal(data.wallDown, true);
+  const g2 = new game.constructor({ seed: data.seed, renderer: game.renderer, audio: null, ui: game.ui, save: data });
+  assert.ok(g2.world.ow.wallDown);
+  assert.equal(g2.world.ow.stormAt(inWall.x, inWall.z), 0);
 });

@@ -37,7 +37,9 @@ export function updateStormSea(game, dt) {
     return;
   }
   const raw = ow.stormAt(p.x, p.z);
-  const near = ow.stormNear ? ow.stormNear(p.x, p.z) : 0;
+  // (A spire's own storm brings some cloud too, lighter than the wall's:
+  // see spirestorm.js.)
+  const near = Math.max(ow.stormNear ? ow.stormNear(p.x, p.z) : 0, (game.spireStorm || 0) * 0.4);
   // (Eased, so it closes in rather than snapping.)
   S.depth += (raw - S.depth) * Math.min(1, dt * 1.5);
   S.near += (near - S.near) * Math.min(1, dt * 1.5);

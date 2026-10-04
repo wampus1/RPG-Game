@@ -109,8 +109,11 @@ export class Overworld {
   }
 
   // The storm round the islands (0 outside it, to 1 in the thick of it).
+  // Gone, once the three spires that held it up are beaten (`wallDown`:
+  // see game/wallfall.js); the islands are still the islands inside where
+  // it was (insideStorm).
   stormAt(x, z) {
-    return stormAt(x, z);
+    return this.wallDown ? 0 : stormAt(x, z);
   }
 
   insideStorm(x, z) {
@@ -118,7 +121,7 @@ export class Overworld {
   }
 
   stormNear(x, z) {
-    return stormNear(x, z);
+    return this.wallDown ? 0 : stormNear(x, z);
   }
 
   // ---------------------------------------------------------------- volcano

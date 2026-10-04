@@ -3,7 +3,7 @@
 // ruined chapel round a sinkhole, a cave in a rock outcrop with a palisade
 // before it, and the Kavorent's spires, five paces square and taller than
 // anything men have built. (What's below: see dungeongen.js.)
-import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y } from '../config.js';
+import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y, SURFACE } from '../config.js';
 import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
@@ -31,9 +31,18 @@ function kindFor(ow, c, rng) {
   return rng.pick(['barrow', 'crypt', 'holdout', 'mine']);
 }
 
+// What each island's spire is for (see entities/bosses_spire.js for its
+// master): Thessa's, the facility that oversees the whole of the work of
+// holding up the storm wall; Kharos's, the thermal spire, sunk in the
+// lava of the mountain's crater, drawing on its heat to power the wall;
+// Myrrow's, the tidal spire on the shore, wringing the sea into the
+// storm's rain.
+export const SPIRE_THEMES = { thessa: 'facility', kharos: 'thermal', myrrow: 'tidal' };
+
 // The old places of the Dagoni Islands: on each, its own few dungeons and
-// one of the Kavorent's spires out where nobody lives (see geography.js).
-// Placed with the world.
+// one of the Kavorent's spires (see SPIRE_THEMES): out where nobody lives,
+// on Myrrow by the sea, on Kharos in the crater itself. Placed with the
+// world.
 export function genSites(ow) {
   const rng = new RNG(hash4(ow.seed, 0xd0e5));
   const sites = [];
@@ -50,10 +59,23 @@ export function genSites(ow) {
       .map((c) => ({ c, d: Math.min(99, ...mine.map((s) => Math.hypot(s.cx - c.cx, (s.cz - c.cz) * 1.4))) + rng.float(0, 3) }))
       .sort((a, b) => b.d - a.d);
     let n = 0;
-    for (const { c } of lonely) {
+    const theme = SPIRE_THEMES[I.key] || 'facility';
+    const V = ow.volcano;
+    if (theme === 'thermal' && V && V.island === I.key && I.spires > 0) {
+      // (Kharos's: in the lava at the heart of the crater.)
+      sites.push({ id: sites.length, type: 'kavorent', cx: V.cx, cz: V.cz, island: I.key, seed: hash4(ow.seed, V.cx, V.cz, 0x4a7), theme, fixed: { x: V.x, z: V.z, rx: V.r * V.crater, rz: (V.r * V.crater) / V.squash } });
+      n++;
+    }
+    // (Myrrow's on the shore: the loneliest with the sea beside it.)
+    const bySea = (c) => {
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (ow.cell(c.cx + dx, c.cz + dz)?.biome === 'ocean') return true;
+      return false;
+    };
+    const order = theme === 'tidal' ? [...lonely.filter(({ c }) => bySea(c)), ...lonely.filter(({ c }) => !bySea(c))] : lonely;
+    for (const { c } of order) {
       if (n >= I.spires) break;
       if (!farFromTowns(c, 4) || !farFromSites(c, 10)) continue;
-      sites.push({ id: sites.length, type: 'kavorent', cx: c.cx, cz: c.cz, island: I.key, seed: hash4(ow.seed, c.cx, c.cz, 0x4a7) });
+      sites.push({ id: sites.length, type: 'kavorent', cx: c.cx, cz: c.cz, island: I.key, seed: hash4(ow.seed, c.cx, c.cz, 0x4a7), theme });
       n++;
     }
     // Then the dungeons, near enough to people that they have a story.
@@ -109,6 +131,10 @@ const LONELY = new Set(['desert', 'tundra', 'jungle', 'mountain', 'taiga', 'sava
 export function settleSites(world, sites) {
   const t = world.terrain;
   for (const s of sites) {
+    if (s.fixed) {
+      settleThermal(world, s);
+      continue;
+    }
     const rng = new RNG(s.seed);
     const cx = Math.floor((s.cx + 0.5) * REGION_W);
     const cz = Math.floor((s.cz + 0.5) * REGION_D);
@@ -133,7 +159,67 @@ export function settleSites(world, sites) {
     s.x = best ? best.x : cx;
     s.z = best ? best.z : cz;
     s.h = best ? best.h : 5;
+    // (The tidal spire's intakes run to the nearest water, that way.)
+    if (s.theme === 'tidal') {
+      const ctx = t.context(s.x - 30, s.z - 30, s.x + 30, s.z + 30);
+      let sea = null;
+      for (const [ux, uz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (let k = 4; k <= 28 && (!sea || k < sea[2]); k++) {
+          if (t.column(s.x + ux * k, s.z + uz * k, ctx, {}).water >= 0) {
+            sea = [ux, uz, k];
+            break;
+          }
+        }
+      }
+      if (sea) {
+        s.sea = sea;
+        s.reach = Math.max(8, Math.min(14, sea[2]) + 2);
+      }
+    }
   }
+}
+
+// The thermal spire: stood in the crater's lava lake, a platform round
+// its foot, and four causeways out across the lava to the crater's wall,
+// cut up through it in steps to the mountainside (each step found from the
+// ground there, so the way out's never a climb of more than one).
+function settleThermal(world, s) {
+  const t = world.terrain;
+  s.x = s.fixed.x;
+  s.z = s.fixed.z;
+  // (Level with the lava's top: the lake's floor is a pace under it.)
+  s.h = SURFACE + 5;
+  s.spokes = [];
+  const ctx = t.context(s.x - 40, s.z - 40, s.x + 40, s.z + 40);
+  for (const [ux, uz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    let y = s.h;
+    let easy = 0;
+    // (Out past the crater's wall, whatever: its rim's a dip before it.)
+    const wall = Math.ceil((ux ? s.fixed.rx : s.fixed.rz) || 18) + 4;
+    for (let k = 6; k <= 40; k++) {
+      const dx = ux * k;
+      const dz = uz * k;
+      const col = t.column(s.x + dx, s.z + dz, ctx, {});
+      if (col.lava || col.h < s.h) {
+        // (Over the lava: the causeway itself.)
+        s.spokes.push([dx, dz, s.h, 1]);
+        continue;
+      }
+      if (col.h <= y + 1) {
+        // (Ground you can step up (or down) onto: a way cut through what's
+        // over it, and done once the ground's going easily downhill.)
+        y = col.h;
+        s.spokes.push([dx, dz, y, 0]);
+        if (++easy >= 3 && k > wall) break;
+        continue;
+      }
+      // (The crater's wall: a step cut up into it.)
+      easy = 0;
+      y += 1;
+      s.spokes.push([dx, dz, y, 1]);
+    }
+  }
+  s.reach = 44;
 }
 
 // --------------------------------------------------------------- above ground
@@ -150,13 +236,57 @@ export function siteBlocks(s, state = {}) {
   const rng = new RNG(hash4(s.seed, 0x51e));
   if (s.type === 'kavorent') {
     clear(7);
-    // Blighted ground round it (see blight, for further out), fallen
-    // alloy, and the strange things that grow in it.
-    for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
-      if (Math.abs(dx) <= 2 && Math.abs(dz) <= 2) continue;
-      put(dx, h, dz, rng.chance(0.25) ? B.gravel : B.grass_void);
-      if (rng.chance(0.07)) put(dx, h + 1, dz, B.kav_debris);
-      else if (rng.chance(0.12)) put(dx, h + 1, dz, GROWTHS[rng.int(0, GROWTHS.length - 1)], rng.int(0, 3));
+    const theme = s.theme || 'facility';
+    if (theme === 'thermal') {
+      // A platform of alloy round its foot, over the lava, vents breathing
+      // in it; and its causeways out to the crater's wall (see
+      // settleThermal), lit every few paces.
+      for (let dz = -5; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) {
+        if (Math.abs(dx) <= 2 && Math.abs(dz) <= 2) continue;
+        if (Math.hypot(dx, dz) > 5.6) continue;
+        put(dx, h, dz, B.kav_floor);
+        if (Math.abs(dx) + Math.abs(dz) > 3 && rng.chance(0.08)) put(dx, h + 1, dz, B.kav_vent);
+      }
+      (s.spokes || []).forEach(([dx, dz, y, cut], i) => {
+        for (const side of [-1, 0, 1]) {
+          const ox = dz ? side : 0;
+          const oz = dx ? side : 0;
+          if (cut) put(dx + ox, y, dz + oz, side === 0 && i % 4 === 0 ? B.kav_glow : B.kav_floor);
+          for (let yy = y + 1; yy <= Math.min(WORLD_Y - 1, y + 3); yy++) put(dx + ox, yy, dz + oz, B.air);
+        }
+      });
+    } else {
+      // Blighted ground round it (see blight, for further out), fallen
+      // alloy, and the strange things that grow in it.
+      for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
+        if (Math.abs(dx) <= 2 && Math.abs(dz) <= 2) continue;
+        put(dx, h, dz, rng.chance(0.25) ? B.gravel : B.grass_void);
+        if (rng.chance(0.07)) put(dx, h + 1, dz, B.kav_debris);
+        else if (rng.chance(0.12)) put(dx, h + 1, dz, GROWTHS[rng.int(0, GROWTHS.length - 1)], rng.int(0, 3));
+      }
+    }
+    if (theme === 'facility') {
+      // The Overseer's: monoliths at its corners, light-screens and a
+      // console before it, watching over the whole of the work.
+      for (const [dx, dz] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) {
+        put(dx, h, dz, B.kav_floor);
+        put(dx, h + 1, dz, B.kav_monolith);
+      }
+      for (const [dx, dz] of [[-4, 0], [4, 0]]) {
+        put(dx, h, dz, B.kav_floor);
+        put(dx, h + 1, dz, B.kav_holo);
+      }
+      put(0, h, -4, B.kav_floor);
+      put(0, h + 1, -4, B.kav_console);
+    } else if (theme === 'tidal') {
+      // Myrrow's: its intakes, a walk of alloy laid out from its foot to
+      // the water with conduits either side of it (and coils of light up
+      // its sides, below).
+      const [ux, uz, far] = s.sea || [0, 1, 6];
+      for (let k = 3; k <= Math.min(14, far - 1); k++) {
+        put(ux * k, h, uz * k, k % 4 === 0 ? B.kav_glow : B.kav_floor);
+        if (k % 2) for (const side of [-1, 1]) put(ux * k + uz * side, h + 1, uz * k + ux * side, B.kav_conduit);
+      }
     }
     // The spire: five square, up as far as the world goes; hollow at the
     // foot round a lift.
@@ -170,6 +300,13 @@ export function siteBlocks(s, state = {}) {
       }
     }
     put(0, h, 0, B.kav_lift);
+    // (Bands of light up its sides: the thermal and the tidal spires
+    // humming with what they draw.)
+    if (theme !== 'facility' && !state.beaten) {
+      for (let y = h + 5; y < WORLD_Y; y += theme === 'thermal' ? 3 : 4) {
+        for (let k = -2; k <= 2; k++) for (const [dx, dz] of [[k, -2], [k, 2], [-2, k], [2, k]]) put(dx, y, dz, B.kav_glow);
+      }
+    }
     // A keystone in each face at the height of your hand, with a hollow in
     // it the shape of a cut stone.
     for (const [ox, oz] of [[0, 2], [-2, 0], [0, -2], [2, 0]]) put(ox, h + 1, oz, B.kav_keystone);
@@ -397,7 +534,8 @@ export function stampSites(world, region) {
   const x0 = region.x0;
   const z0 = region.z0;
   for (const s of sites) {
-    if (s.x === undefined || Math.abs(s.x - (x0 + REGION_W / 2)) > REGION_W / 2 + 8 || Math.abs(s.z - (z0 + REGION_D / 2)) > REGION_D / 2 + 8) continue;
+    const m = s.reach || 8;
+    if (s.x === undefined || Math.abs(s.x - (x0 + REGION_W / 2)) > REGION_W / 2 + m || Math.abs(s.z - (z0 + REGION_D / 2)) > REGION_D / 2 + m) continue;
     for (const [dx, y, dz, id, meta] of siteBlocks(s, s.state || {})) {
       const x = s.x + dx;
       const z = s.z + dz;

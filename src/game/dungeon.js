@@ -22,6 +22,7 @@ import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
 import { relicAt, placeTag, RELIC_R } from './relics.js';
+import { maybeWallFalls } from './wallfall.js';
 import { Creature } from '../entities/creature.js';
 import { fits, fitNear } from '../entities/footprint.js';
 import { tickFieldsOff, restoreFields } from '../entities/fields.js';
@@ -146,6 +147,9 @@ export class DungeonRun {
     if (this.rec.cleared && site && this.rec.type !== 'kavorent') {
       site.state = { ...(site.state || {}), cleared: true };
     }
+    // (Up out of the last of the three spires beaten: the storm wall's
+    // scene, as soon as you're out. See wallfall.js.)
+    if (this.rec.type === 'kavorent' && this.rec.cleared) maybeWallFalls(game);
     const at = to || this.exitSpot();
     game.loadAround(at.x, at.z, true);
     const fallsIn = this.rec.cleared && site && this.rec.type !== 'kavorent';

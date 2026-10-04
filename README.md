@@ -3257,6 +3257,106 @@ together on your network" above for how to start. How it works:
     - The Tide-Mother fires jets of water. Worn, she grows coral round you
       with one gap and fires a jet down the gap.
 
+## Round 45: the three spires, and the wall coming down
+
+- *One spire to an island, each its own.* Each island now has exactly one
+  Kavorent spire, and each does a different job in keeping the storm wall
+  up:
+  - Thessa's is the Overseer's facility, which watches over the whole
+    operation. It has monoliths at its corners and light-screens and a
+    console before it.
+  - Kharos's is the thermal spire. It stands in the lava lake of the
+    volcano's crater and draws the mountain's heat to power the wall. A
+    platform of alloy rings its foot, and four lit causeways run out
+    across the lava and climb the crater wall one step at a time.
+  - Myrrow's is the tidal spire, on the shore. It wrings the sea into the
+    storm's rain, and its intakes run in a lit walk with conduits down to
+    the water.
+  The thermal and tidal spires carry bands of light up their sides. They
+  go dark when the spire's master is beaten.
+- *A storm round every spire.* While its master lives, each spire keeps a
+  small storm about itself: low cloud, rain the whole time, thunder, and
+  lightning every few seconds. Most bolts hit the spire; the rest hit the
+  ground nearby and hurt whoever is standing there. The storm fades over
+  about twenty paces and is gone once the master is beaten.
+- *A different master in each spire.* The Overseer still keeps Thessa's.
+  The other two are new, and both are very hard:
+  - **The Crucible** (Kharos) runs hotter with everything it does, and the
+    heat shows on its plates. At full heat it raises coolant columns
+    around its hall, counts down, and blasts the whole hall. Only players
+    with a column between them and it are spared; rolling does not help.
+    Afterwards its core stands open for a few seconds and your blows do
+    60% more. Its other attacks:
+    - floor vents that erupt in waves, the last wave where you are
+    - a lance of heat swept in a half circle that leaves lava pools
+    - pistons slammed down where you stand, which stay as walls
+    - slag drones that chase you and burst into fire
+    - in its last third, lava let in from the walls ring by ring
+    - up close, a slam and a jet of flame
+  - **The Condenser** (Myrrow) floats over its hall, raining:
+    - Its cloudbursts soak you. While soaked, lightning does half again
+      as much to you and jumps to anyone within two paces.
+    - It plants lightning rods that arc to each other. While any rod
+      stands it is grounded and takes under a third of your damage.
+      Break the rods.
+    - Thunder follows you across the floor, strike after strike.
+    - A cyclone wanders after you and flings whoever it catches.
+    - A tide sweeps the hall with one gap in it, leaves puddles, then
+      sends a current through them.
+    - Worn down, it pulls everyone in toward it, then blasts outward.
+    - In its last third, hail comes out of it in spirals.
+- *The storm wall comes down.* Once the masters of all three spires are
+  beaten, a cutscene plays as you come up out of the last one. Seen from
+  high over the islands, the three spire lights go out one by one, the
+  ring of storm stutters and tears, and then it blows apart. After that
+  there is no storm at sea: no cloud or dark out there, and a raft can
+  sail past where the wall stood. The world map stops drawing it. This is
+  permanent, is saved with the world, and every player in a shared world
+  sees the cutscene.
+- *Adventurers never beat a spire.* Townsfolk who go into a Kavorent ruin
+  only ever come back with a core or two. Only you can beat a spire's
+  master.
+- *Stars on gear.* Weapons, armour, shields and tools made at a bench, or
+  found in a dungeon, now come with one to five stars (★).
+  - Each star makes the piece a little better (about 6% more damage,
+    armour, block, range or work speed). Each piece also rolls a little
+    above or below that.
+  - Things you make are mostly one or two stars. The tinker's hand does a
+    little better.
+  - Things found below get more stars the deeper the floor, and more
+    again from a boss.
+  - Stars show as gold pips along the foot of the icon. Gear found in a
+    dungeon also has a small violet rune in its corner. The tooltip shows
+    the stars and "from the deep" or "made by hand".
+- *Modifiers.* A starred piece may also come with up to three modifiers
+  (more stars, more modifiers). Each kind of gear has eight:
+  - Blades: venomous, keen (more critical hits), searing, frostbitten,
+    thirsting (heals you), swift, brutal (knock-back and stagger),
+    merciless (half again on a foe below a third of its health).
+  - Bows: twin-strung (two extra arrows), piercing, fire-tipped,
+    rime-feathered, quick-drawn, far-flying, thrifty (some shots free),
+    barbed (poison).
+  - Shields: thorned (returns part of each blocked blow), stalwart,
+    light, repelling, arrow-catching, smouldering, duellist's (wider
+    parry window), rallying.
+  - Armour: fleet (faster movement), sturdy, hale (+2 health), fireproof,
+    fur-lined, featherweight (cheaper rolls), spiked, tireless.
+  - Tools: smelting (ore comes out as ingots), quick, fortunate (double
+    drops sometimes), long-hafted, prospecting, sawing (logs come out as
+    planks), wide (digs a two-high tunnel), keen-edged.
+  The piece is named after its first modifier, e.g. "Venomous Iron
+  Sword". Stars and modifiers stay with it through packs, chests,
+  trading, saves and other players, and a stone can still be set in it.
+- *Relic shards.* Every boss now leaves one to three relic shards. Use
+  one from your belt to set it into a relic in your pack. Each shard
+  makes that relic's circle half a pace wider for good, up to eight per
+  relic (from 4 paces to 8). The relic's tooltip shows its reach, and its
+  icon shows a chip per shard. The relic keeps its shards when you set it
+  down and pick it up again.
+- *Bigger boss halls, wider passages.* Boss rooms are a little larger,
+  and the passages in ordinary dungeons are two wide so a party can move
+  through them together.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -3291,7 +3391,8 @@ src/
   config.js            grid, screen and world constants
   main.js              bootstrap, main loop, title/save/load/new-game hooks
   util/                seeded RNG + hashing, simplex noise, binary heap
-  world/               blocks, items, recipes, biomes, names,
+  world/               blocks, items, quality (stars and modifiers on
+                       gear), recipes, biomes, names,
                        worldgen (world map), terrain (per-column sampling),
                        regiongen (tiles), trees, settlement (layouts,
                        buildings, interiors, walls), weather, loot,
@@ -3319,7 +3420,9 @@ src/
                        night monsters), bosskit (what the island masters
                        do to their halls, all put back when they fall),
                        bosses_kharos, bosses_myrrow, bosses_grove (the
-                       islands' own masters), item drops, A* pathing
+                       islands' own masters), bosses_spire (the Crucible
+                       and the Condenser, in the far islands' spires),
+                       item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
                        arcs, lightning, shock rings, burning), dice (rolling
@@ -3375,6 +3478,8 @@ src/
                        (burning roofs and haystacks), save slots,
                        settings, voices, commands (the console), gems
                        (what set stones do in blades, bows and armour),
+                       mods (what gear's modifiers do in a fight and at
+                       work),
                        riding (your own horses and wagons, and a town's
                        horse taken out by a citizen), leads, dungeon
                        (being down below: floors, traps, puzzles), relics,
@@ -3385,7 +3490,10 @@ src/
                        (the great beam: the Overseer's and its Eye's),
                        geotalk (asking the way: the islands, the storm,
                        the coast, a town), stormsea (sailing into the
-                       storm: the dark, the red, the strike, the beach), cutscene (the openings: the
+                       storm: the dark, the red, the strike, the beach),
+                       spirestorm (the storm each spire keeps about it),
+                       wallfall (the storm wall coming down, and its
+                       scene), cutscene (the openings: the
                        ship and the storm,
                        the hometown's history), scenes (short scenes in
                        the middle of things: a spire opening, a master

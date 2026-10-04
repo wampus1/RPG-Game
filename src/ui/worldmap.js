@@ -61,7 +61,8 @@ function dotColour(biome) {
 // seen: dark inside the storm, and outside it the old charts' outlines of
 // the far lands.
 function worldCache(ow) {
-  if (ow._mapCache) return ow._mapCache;
+  // (Made again once the storm's gone: its grey water with it.)
+  if (ow._mapCache && ow._mapCache.wallDown === !!ow.wallDown) return ow._mapCache;
   const make = (w, h) => {
     if (typeof document === 'undefined') return null;
     const c = document.createElement('canvas');
@@ -74,7 +75,7 @@ function worldCache(ow) {
   ow._mapCache = {
     base, fog, row: 0, biome: new Array(MAP_W * MAP_H),
     img: base ? base.getContext('2d').createImageData(MAP_W, MAP_H) : null,
-    fogN: -1, fogReveal: null,
+    fogN: -1, fogReveal: null, wallDown: !!ow.wallDown,
   };
   return ow._mapCache;
 }
@@ -94,7 +95,7 @@ function fillWorld(ow, rows = 12) {
       // (Rivers show as a bluer square; the storm's own water churns grey.)
       const cell = ow.cells[i];
       if (cell && cell.river && b !== 'ocean') c = mixRgb(c, hexRgb('#5fa8e8'), 0.35);
-      if (b === 'ocean' && cell && cell.storm > 0) c = mixRgb(c, [120, 130, 150], cell.storm * 0.5);
+      if (b === 'ocean' && cell && cell.storm > 0 && !ow.wallDown) c = mixRgb(c, [120, 130, 150], cell.storm * 0.5);
       M.img.data.set([c[0], c[1], c[2], 255], i * 4);
     }
   }
@@ -523,7 +524,7 @@ export class MapWindow extends Window {
                 fg = '#80c8ff';
                 bg = '#1a4a8a';
               }
-              if (cell.biome === 'ocean' && cell.storm > 0) {
+              if (cell.biome === 'ocean' && cell.storm > 0 && !ow.wallDown) {
                 bg = shadeHex('#3a4a60', 0.6 + cell.storm * 0.4);
                 fg = '#c8d8e8';
                 ch = (cx + cz + Math.floor(time * 4)) % 3 ? '≈' : '~';
@@ -537,7 +538,7 @@ export class MapWindow extends Window {
             const b = cell.lake ? 'lake' : cell.biome;
             const t = biomeTile(b, w, h);
             if (t) ctx.drawImage(t, x, y);
-            if (cell.biome === 'ocean' && cell.storm > 0) {
+            if (cell.biome === 'ocean' && cell.storm > 0 && !ow.wallDown) {
               ctx.fillStyle = `rgba(150,165,190,${0.25 + cell.storm * 0.35})`;
               ctx.fillRect(x, y, w, h);
             }
@@ -555,7 +556,7 @@ export class MapWindow extends Window {
         }
       }
     }
-    this.drawStorm(ctx, game, o, w, h, time);
+    if (!ow.wallDown) this.drawStorm(ctx, game, o, w, h, time);
     this.drawRoads(ctx, game, o, w, h, icons, known);
     this.drawVolcano(ctx, game, w, h, time);
     this.drawPlaces(ctx, game, o, w, h, icons, known, blink);
@@ -901,6 +902,6 @@ export class MapWindow extends Window {
       label(big ? L.name.toUpperCase() : L.name, L.x, L.z - (L.kind === 'dagoni' && this.z > 4.5 ? L.trz * 0.6 : 0), L.kind === 'dagoni' ? '#fff0c8' : '#c8a878');
     }
     if (this.z <= 4.5) label(ARCHIPELAGO.toUpperCase().replace(/^THE /, 'THE '), (STORM.cx + 0.5) * REGION_W, (STORM.cz - STORM.rz - STORM.band - 2) * REGION_D, '#e8e0c8');
-    if (this.z <= 6) label('the storm', (STORM.cx + 0.5) * REGION_W, (STORM.cz + STORM.rz + STORM.band / 2) * REGION_D, '#b8c8d8');
+    if (this.z <= 6 && !ow.wallDown) label('the storm', (STORM.cx + 0.5) * REGION_W, (STORM.cz + STORM.rz + STORM.band / 2) * REGION_D, '#b8c8d8');
   }
 }

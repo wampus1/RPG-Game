@@ -10,6 +10,7 @@ import { Region } from '../world/region.js';
 import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../config.js';
 import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
+import { wallFall } from '../game/wallfall.js';
 import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
@@ -156,6 +157,8 @@ export class GuestNet {
     if (m.slow) {
       game.placed = new Map(m.slow.placed || []);
       game.relics = new Map((m.slow.relics || []).map(([k, v]) => [k, dec(v, () => null)]));
+      // (The storm wall, down on the host's side: down here too.)
+      if (m.slow.wallDown) game.world.ow.wallDown = game.wallDown = true;
       game.signIcons = new Map(m.slow.signs || []);
     }
     if (m.ui) applyFrame(game.ui, m.ui);
@@ -335,7 +338,7 @@ export class GuestNet {
       } else if (s.kind === 'spire') {
         const rec = game.sim.dungeons.get(s.rec);
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);
-      }
+      } else if (s.kind === 'wall') sc = wallFall(game);
     } catch (e) {
       void e;
       sc = null;
