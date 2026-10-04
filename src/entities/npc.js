@@ -1734,6 +1734,18 @@ export class NPC extends Entity {
       return;
     }
     if (!this.goal) {
+      // (Given up on getting where it was going: somewhere else for the
+      // same part of its day, after a moment, rather than stand there till
+      // the next.)
+      this.regoalT = (this.regoalT ?? 6) - dt;
+      if (this.regoalT <= 0) {
+        this.regoalT = 6;
+        this.goal = this.pickGoal(act.entry);
+        this.path = null;
+        this.atGoal = false;
+        this.pathFails = 0;
+        if (this.goal) return;
+      }
       this.idle(dt);
       return;
     }
