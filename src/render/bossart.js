@@ -6,7 +6,8 @@
 // Horror and the Overseer, walking on legs of their own, each foot planted
 // where it falls and stepping on only when the body's gone on too far from
 // it, half the legs at a time.
-import { Px, hex, shade } from './pixel.js';
+import { hex, shade } from './pixel.js';
+import { Paint, hash2 } from './paint.js';
 import { TILE, LH } from '../config.js';
 import { frameGlow } from './sprites.js';
 
@@ -22,11 +23,13 @@ const TINTS = {
   warlord: ['#ff6040', '#ffb080'], twins: ['#ff5040', '#c8c0b8'], twin_b: ['#c8c0b8', '#ff5040'], poisoner: ['#a8e040', '#e8ff90'],
   overseer: ['#5ad8f0', '#ffffff'], prime: ['#ff9050', '#5ad8f0'],
 };
-// (The Hollow Saint's images are drawn just as she is: which is she?)
+// (The Hollow Saint's images are drawn just as she is: which is she? And
+// the Hollow King's echoes just as he is, but that they don't breathe.)
 export function drawnAsMaster(e) {
-  return !!(e.S && (e.S.boss || e.species === 'saint_shade') && (e.kind === 'creature' || e.kind === 'monster'));
+  return !!(e.S && (e.S.boss || e.species === 'saint_shade' || e.species === 'hollow_echo') && (e.kind === 'creature' || e.kind === 'monster'));
 }
 export function bossTint(c) {
+  if (c.species === 'hollow_echo' && c.echoOf) return bossTint(c.echoOf);
   return TINTS[c.species] || (c.S && c.S.tint) || ['#ffe070', '#ffffff'];
 }
 
@@ -120,100 +123,113 @@ function body(kind, f) {
 }
 
 const BODY = {
-  // A bloated, banded abdomen marked with a red hourglass, a head bristling
-  // with eyes, fangs working.
+  // A bloated, banded abdomen marked with a red hourglass and bristling,
+  // a head crowded with eyes, fangs working. (Painted as the masters of
+  // the islands are: see paint.js.)
   brood_mother(f) {
-    const p = new Px(46, 32);
-    const body = hex('#4a3a34');
-    const hi = hex('#6e5648');
-    const dk = hex('#2a201c');
-    const br = f === 1 || f === 2 ? 1 : 0;
-    p.ellipse(30, 15, 14 + br * 0.5, 11 + br * 0.5, body);
-    p.ellipse(30, 11, 11, 6, hi);
-    p.ellipse(31, 9, 6, 2, shade(hi, 1.2));
-    for (let k = 0; k < 4; k++) for (let y = 6; y < 25; y++) p.set(21 + k * 5 + Math.round(Math.abs(y - 15) * 0.35), y, shade(body, 0.78));
-    const red = f % 2 ? '#ff4030' : '#d82a20';
-    for (const [x0, x1, y] of [[27, 33, 12], [28, 32, 13], [29, 31, 14], [30, 30, 15], [29, 31, 16], [28, 32, 17], [27, 33, 18]]) p.hline(x0, x1, y, red);
-    for (let i = 0; i < 18; i++) {
-      const a = (i * 2.399) % (Math.PI * 2);
-      p.set(30 + Math.cos(a) * 14.5, 15 + Math.sin(a) * 11.5, shade(hi, 1.3));
+    const P = new Paint(46, 32);
+    const br = f === 1 || f === 2 ? 0.6 : 0;
+    // The abdomen: banded, bristled, the hourglass on it glowing.
+    P.blob(30, 15, 14 + br, 11 + br, '#5a443a');
+    P.over((x, y, c) => {
+      if (x < 18) return null;
+      const k = (x - Math.round(Math.abs(y - 15) * 0.35)) % 6;
+      return k === 0 ? shade(c, 0.55) : k === 1 ? shade(c, 1.18) : null;
+    });
+    for (let i = 0; i < 14; i++) {
+      const a = Math.PI + 0.3 + (i / 13) * (Math.PI - 0.5);
+      P.spike(30 + Math.cos(a) * 13.5, 15 + Math.sin(a) * 10.5, a, 2.5, 0.5, '#8a6a58');
     }
-    p.rect(43, 14, 2, 3, dk);
-    // The head.
-    p.ellipse(13, 18, 9, 7, shade(body, 1.08));
-    p.ellipse(12, 15, 6, 3, hi);
-    const eye = f % 2 ? '#ff5040' : '#ff2414';
-    for (const [x, y] of [[7, 14], [9, 13], [11, 13], [13, 14], [8, 16], [10, 15], [12, 16]]) p.set(x, y, eye);
-    p.rect(5, 15, 2, 2, eye);
-    p.set(5, 15, '#ffd8c8');
-    p.set(9, 13, '#ffd0c0');
+    const red = f % 2 ? '#ff4a30' : '#d82a20';
+    P.poly([[26.5, 9.5], [34, 9.5], [30.5, 14.6]], red, { lv: 0.7, contrast: 0.5 });
+    P.poly([[30.5, 15.4], [34, 20.5], [26.5, 20.5]], red, { lv: 0.6, contrast: 0.5 });
+    P.blob(43.5, 15.5, 2, 2.4, '#3a2a24');
+    // The head and its eyes, two great ones and a crowd of little.
+    P.blob(13, 18, 9, 7, '#4a3630');
+    P.blob(12, 15, 6, 3, '#6a5040', { flat: 0.4 });
+    const eye = f % 2 ? '#ff5040' : '#ff2a1a';
+    P.blob(6.5, 15.5, 1.8, 1.8, eye, { lift: 0.2 });
+    P.blob(10, 14, 1.6, 1.6, eye, { lift: 0.2 });
+    for (const [x, y] of [[13, 14], [8, 17.5], [11.5, 16.5], [14, 16.5], [5, 18]]) P.set(x, y, hex(eye));
     // Fangs, working.
     const open = f === 1 || f === 2 ? 1 : 0;
-    p.line(6, 21, 4 - open, 26, '#e8e0c8');
-    p.line(9, 22, 8 + open, 27, '#e8e0c8');
-    p.line(4, 20, 2, 23, dk);
-    p.line(11, 22, 13, 25, dk);
-    return p.outline(OUT);
+    P.tube(6, 21, 4 - open, 26, 1.3, 0.6, '#3a2a24');
+    P.tube(9, 22, 8 + open, 27, 1.3, 0.6, '#3a2a24');
+    P.set(4 - open, 26, hex('#e8e0c8'));
+    P.set(8 + open, 27, hex('#e8e0c8'));
+    P.over((x, y, c) => (hash2(x, y, 3) < 0.12 ? shade(c, 0.85) : null));
+    P.done();
+    P.glint(6, 15, '#ffd8c8');
+    P.glint(9, 13, '#ffd8c8');
+    return P.p;
   },
-  // A heap of the dead, ribs over a core of red light, skulls whose eyes
-  // come and go.
+  // A heap of the dead: ribs arched over a core of red light, bones
+  // jutting, skulls whose eyes come and go.
   horror(f) {
-    const p = new Px(46, 36);
-    const bone = hex('#d8d0b8');
-    const dark = hex('#8a8270');
-    const deep = hex('#4a4438');
+    const P = new Paint(46, 36);
+    const bone = '#d8d0b8';
     const br = f === 1 || f === 2 ? 1 : 0;
-    p.ellipse(23, 23 - br, 19, 12, deep);
-    p.ellipse(23, 21 - br, 17, 10, dark);
-    const core = ['#ff4030', '#ff6040', '#ff8a50', '#ff6040'][f];
-    p.ellipse(23, 21 - br, 7, 5, hex('#3a0808'));
-    p.ellipse(23, 21 - br, 4 + br, 3, core);
-    p.set(22, 20 - br, '#ffd8a8');
-    for (let i = 0; i < 52; i++) {
+    // The heap: dark, rotten, bones knotted in it.
+    P.blob(23, 23 - br, 19, 12, '#5a5244');
+    for (let i = 0; i < 14; i++) {
       const a = (i * 2.399) % (Math.PI * 2);
-      const r = 4 + ((i * 7) % 14);
-      const x = 23 + Math.cos(a) * r * 1.15;
-      const y = 22 - br + Math.sin(a) * r * 0.62;
-      if (Math.abs(x - 23) < 7 && Math.abs(y - 21 + br) < 5) continue;
-      p.line(x, y, x + (i % 2 ? 2 : -2), y + (i % 3 ? 1 : -1), i % 3 ? bone : shade(bone, 0.8));
+      const r = 6 + ((i * 7) % 10);
+      const x = 23 + Math.cos(a) * r * 1.1;
+      const y = 23 - br + Math.sin(a) * r * 0.6;
+      if (Math.abs(x - 23) < 8 && Math.abs(y - 21 + br) < 6) continue;
+      P.tube(x, y, x + Math.cos(a + 1.3) * 4, y + Math.sin(a + 1.3) * 2.5, 0.9, 0.8, i % 3 ? bone : '#b8b098');
     }
+    // The core, deep in it.
+    const core = ['#ff4030', '#ff6040', '#ff8a50', '#ff6040'][f];
+    P.blob(23, 21 - br, 7, 5, '#2a0808', { amb: 0 });
+    P.blob(23, 21 - br, 4 + br, 3, core, { lift: 0.4 });
+    // Ribs arched over it.
     for (let k = -2; k <= 2; k++) {
-      for (let y = -5; y <= 5; y++) p.set(23 + k * 3 + Math.round((y * y) / 12) * Math.sign(k || 1), 21 - br + y, k === 0 ? shade(bone, 0.9) : bone);
+      const pts = [];
+      for (let y = -6; y <= 6; y += 2) pts.push([23 + k * 3.2 + ((y * y) / 14) * Math.sign(k || 1), 21 - br + y, 0.9]);
+      P.limb(pts, k === 0 ? '#c8c0a8' : bone);
     }
-    for (const [x, y, k] of [[8, 15, 0], [16, 10, 1], [28, 10, 2], [36, 15, 3], [13, 26, 4], [31, 26, 5]]) {
-      p.rect(x, y - br, 5, 4, bone);
-      p.hline(x + 1, x + 3, y + 4 - br, bone);
+    // Skulls in it.
+    for (const [x, y, k] of [[10, 16, 0], [18, 11, 1], [29, 11, 2], [37, 16, 3], [14, 27, 4], [32, 27, 5]]) {
+      P.blob(x, y - br, 3, 2.8, bone);
+      P.rect(x - 1.5, y + 1.5 - br, 3, 1.5, '#a89878');
       const e = (f + k) % 4 === 0 ? '#ffffff' : '#ff4030';
-      p.set(x + 1, y + 1 - br, e);
-      p.set(x + 3, y + 1 - br, e);
-      p.set(x + 2, y + 3 - br, deep);
+      P.set(x - 1, y - br, hex(e));
+      P.set(x + 1, y - br, hex(e));
     }
-    return p.outline(OUT);
+    P.over((x, y, c) => (hash2(x, y, 4) < 0.12 ? shade(c, 0.85) : null));
+    P.done();
+    return P.p;
   },
-  // A great ring of alloy round its eye, seams lit in turn, shards
+  // A great ring of alloy round its eye, its seams lit in turn, shards
   // circling it. (The eye itself is drawn over it, looking at you.)
   overseer(f) {
-    const p = new Px(46, 46);
+    const P = new Paint(46, 46);
     const c = 23;
-    p.ellipse(c, c, 17, 17, hex(K.plate));
-    p.ellipse(c, c, 15, 15, hex(K.edge));
-    p.ellipse(c, c, 14, 14, hex(K.plate));
-    p.ellipse(c, c, 10, 10, hex(K.dark));
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      for (let r = 11; r <= 16; r++) p.set(c + Math.cos(a) * r, c + Math.sin(a) * r, i % 4 === f % 4 ? K.glow : K.seam);
-    }
-    p.ellipse(c, c, 8, 8, hex('#160810'));
-    p.ellipse(c, c, 6, 6, hex('#4a0e16'));
+    // Shards behind.
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + f * 0.26;
-      const x = c + Math.cos(a) * 20.5;
-      const y = c + Math.sin(a) * 20.5;
-      p.rect(x - 1, y - 1, 3, 3, hex(K.edge));
-      p.set(x, y, hex(K.seam));
+      if (Math.sin(a) < 0) P.poly([[c + Math.cos(a) * 18.5, c + Math.sin(a) * 18.5], [c + Math.cos(a + 0.12) * 21, c + Math.sin(a + 0.12) * 21], [c + Math.cos(a) * 23, c + Math.sin(a) * 23], [c + Math.cos(a - 0.12) * 21, c + Math.sin(a - 0.12) * 21]], K.edge, { lv: 0.6 });
     }
-    p.hline(c - 3, c + 3, c + 17, hex(K.seam));
-    return p.outline(OUT);
+    P.blob(c, c, 17, 17, K.edge);
+    P.blob(c, c, 13.5, 13.5, K.plate, { flat: 0.4 });
+    P.blob(c, c, 10, 10, K.dark, { amb: 0.1 });
+    // The seams: eight, lit in turn.
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      for (let r = 11; r <= 16; r++) P.set(c + Math.cos(a) * r, c + Math.sin(a) * r, hex(i % 4 === f % 4 ? K.glow : K.seam));
+    }
+    P.blob(c, c, 8, 8, '#160810', { amb: 0 });
+    P.blob(c, c, 6, 6, '#4a0e16', { amb: 0.2 });
+    // Shards in front.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + f * 0.26;
+      if (Math.sin(a) >= 0) P.poly([[c + Math.cos(a) * 18.5, c + Math.sin(a) * 18.5], [c + Math.cos(a + 0.12) * 21, c + Math.sin(a + 0.12) * 21], [c + Math.cos(a) * 23, c + Math.sin(a) * 23], [c + Math.cos(a - 0.12) * 21, c + Math.sin(a - 0.12) * 21]], K.edge, { lv: 0.7 });
+    }
+    P.p.hline(c - 3, c + 3, c + 17, hex(K.seam));
+    P.done();
+    P.glint(c - 11, c - 11, '#e0f8ff');
+    return P.p;
   },
 };
 
@@ -505,7 +521,7 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
 
 // Its edge lit in its colour (brighter as a blow comes, and white-hot
 // as it's struck).
-function rim(ctx, e, src, fx, fy, w, h, x, y, dw, dh, tint, time, flash) {
+export function rim(ctx, e, src, fx, fy, w, h, x, y, dw, dh, tint, time, flash) {
   const wind = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
   const a = ctx.globalAlpha;
   ctx.globalAlpha = a * Math.min(1, 0.35 + 0.2 * Math.sin(time * 3 + (e.id || 0)) + wind * 0.5 + (flash ? 0.4 : 0));
@@ -515,3 +531,5 @@ function rim(ctx, e, src, fx, fy, w, h, x, y, dw, dh, tint, time, flash) {
   ctx.drawImage(g, x - kx, y - ky, (w + 2) * kx, (h + 2) * ky);
   ctx.globalAlpha = a;
 }
+// (One frame of a legged master's body, unrigged: for the tests.)
+export const rigBody = (kind, f) => BODY[kind](f);

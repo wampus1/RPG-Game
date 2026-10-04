@@ -1,44 +1,44 @@
 // The masters of Kharos's old places, three to a kind, none of them met
-// anywhere else, and every one of them changes its hall as it fights (see
-// bosskit.js for the works they make):
+// anywhere else. A few of them change their halls as they fight (see
+// bosskit.js for the works they make); the rest each have a way of their
+// own with you (see game/afflict.js for what they leave you in):
 //   an Ash Barrow:
-//     the Cinder King, whose braziers answer him (fire runs between them;
-//       put out, he lights them again), whose crown flares outward in
-//       rings, who calls his ashen court, and who at the last burns as he
-//       walks;
-//     the Urn-Mother, a great burial urn that pours its ashes over the
-//       floor (you're slowed in them, and your light gutters), breathes in
-//       all the hall's air (you're drawn to her) and breathes out fire;
-//     the Smoke Herald, who fills half his hall with smoke and is all but
-//       gone in it, whose horn throws you across the floor, and who splits
-//       the floor open in lines of lava;
+//     the Cinder King, who lays decrees on you: KNEEL (not a step, not a
+//       blow) or BEGONE (keep moving). Obey and he's satisfied, and off
+//       his guard; defy him and burn. His crown flares in rings, his
+//       sceptre runs fire at you, his ashen court rises;
+//     the Urn-Mother, who pours her ashes over the floor and breathes in
+//       the hall's air: be at her lip when she's done and she swallows you
+//       (strike and strike to burst out of her);
+//     the Smoke Herald, all but gone in his smoke, whose horn sends rings
+//       of force across the hall blast on blast (no outrunning them: roll
+//       through each as it comes);
 //   a Glass Mine:
-//     the Glass Wyrm, under the floor and up through it where you stand,
-//       tearing the hall's walls open as it comes and goes, and penning
-//       you in spires of black glass that burst;
+//     the Glass Wyrm, under the floor, hunting you by your footsteps (stand
+//       stock still and it loses you, and comes up dazed), spraying glass,
+//       shaking it down from the roof;
 //     the Magma Tender, who lets the mountain in: lava welling out across
 //       the floor from vents and spreading, her brood, and a crust that
 //       turns your blows till it cracks;
-//     the Bellows Golem, whose gale throws you back and blows the hall's
-//       fires out (yours too), who stokes every fire there is, and who
-//       overheats, and must vent, open to your blows;
+//     the Bellows Golem, its heat climbing with everything it does (and
+//       every blow you strike while it's hot) till it must vent: steam out
+//       of its front, its back open to you;
 //   a Glass Crypt:
 //     the Obsidian Abbess, who raises walls of glass that her bolts glance
 //       off at angles, seals you in a glass cell (find the gap), and at the
 //       last brings every pane down in shards;
-//     the Kiln-Priest, who heats the floor row by row in a wave (one tile
-//       in each row kept cool: find it), draws the fire of the braziers
-//       into himself (strike him and the brazier dies), and rises up
-//       raining embers;
+//     the Kiln-Priest, whose kiln-wave and pours of white-hot glaze coat
+//       you (three coats and you're fired solid; a hard blow to him cracks
+//       one off), and who rises up raining embers;
 //     the Vitrified Horror, fused glass and bone that leaves shards where
-//       it steps, splits off pieces of itself, and burns a prism beam
-//       across its hall;
+//       it steps and burns a prism beam across its hall, and shatters at
+//       each mark (break its pieces before they crawl back and mend it);
 //   an Ash-Raider Den:
 //     Kharn the Ash-Reaver, oil thrown across the floor and then fire to
-//       it, barricades dragged across his hall, and his flail whirled;
-//     Pyrrha the Bombard-Queen, whose shells leave heaps of rubble where
-//       they fall (cover, now), who lays a line of powder and lights it,
-//       and rolls kegs at you;
+//       it, and his fury, up with every blow he lands, till he goes
+//       berserk (parry him to cool it);
+//     Pyrrha the Bombard-Queen, who lobs shells, lays powder lines, and
+//       rolls lit kegs at you (strike one and it rolls back to her);
 //     Scorch, the raiders' chained drake, that can't come further than
 //       its chain (till it snaps), sweeps its fire across its hall, lashes
 //       its chain round, and beats ash and embers down from the roof;
@@ -47,17 +47,18 @@
 //       (it sets into walls of black glass, and the hall's another shape),
 //       strikes his anvil (the floor splits in a cross), and quenches it
 //       all in steam;
-//     the Slag Titan, whose thrown slag sets into pillars where it lands
-//       (and goes off when it smashes them), and who burns round itself;
+//     the Slag Titan, whose heart's a lodestone: glowing blue, it tears
+//       iron out of your hand (and drags you in by iron armour); and
+//       thrown slag, and its slam;
 //     the Molten Heart, held in the air by four chains (break their
 //       anchors, or your blows hardly touch it), the floor erupting under
-//       you square by square, and at the last the lava coming in from the
-//       walls till there's an island left.
+//       you square by square, and at the last fire in from the walls.
 import { BRAINS, addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, groundFire, COLORS, BOSS_TITLES } from './monsters.js';
 import { phaseOf, ready, used } from './tempo.js';
 import { startLaser } from '../game/laser.js';
 import { B } from '../world/blocks.js';
-import { FY, dist, sees, dmgOf, work, hallTiles, hallOf, inHall, ringTiles, coneTiles, wallTiles, hallLights, setLit, spotIn, blinkTo, backOff, cd, shout, proc, openFloor } from './bosskit.js';
+import { FY, dist, sees, dmgOf, work, hallTiles, hallOf, inHall, ringTiles, coneTiles, wallTiles, spotIn, blinkTo, backOff, cd, shout, proc, openFloor, drag } from './bosskit.js';
+import { swallow, glaze, chipGlaze, lodestone } from '../game/afflict.js';
 
 const FIRE = ['#ff8030', '#ffd060', '#ff4020'];
 const ASHC = ['#8a8484', '#5a5454', '#a8a2a0'];
@@ -101,6 +102,12 @@ export const KHAROS_BOSSES = {
   }),
   bellows_golem: boss({
     name: 'The Bellows Golem', hp: 145, dmg: 6, step: 0.45, big: true, fireproof: true, light: 5, brain: 'bellowsGolem', tint: ['#ffa040', '#c8c0b8'], style: 'bite',
+    // (Struck while it's hot, it only gets hotter.)
+    ward: (game, c, src, n) => {
+      if (c.heat >= 60 && !(c.ventT > 0) && src === game.player) c.heat = Math.min(100, c.heat + 5);
+      return n;
+    },
+    tick: (c, dt) => heatTick(c, dt),
     phaseLines: ['', '', 'PRESSURE RISING.', 'VENT. VENT. VENT.'], drops: [['iron_ingot', 4, 8, 1], ['gold_ingot', 1, 2, 0.7], ['coal', 4, 8, 1]],
   }),
   obsidian_abbess: boss({
@@ -109,6 +116,11 @@ export const KHAROS_BOSSES = {
   }),
   kiln_priest: boss({
     name: 'The Kiln-Priest', hp: 110, dmg: 5, step: 0.38, humanoid: true, look: 'kiln_priest', fireproof: true, light: 6, brain: 'kilnPriest', range: 4, tint: ['#ffb040', '#ffffff'],
+    // (A hard blow to him cracks a coat of glaze off you.)
+    ward: (game, c, src, n) => {
+      if (src === game.player && n >= 6) chipGlaze(game, src);
+      return n;
+    },
     phaseLines: ['', '', 'The kiln is hungry.', 'I rise in the fire!'], drops: [['old_coin', 6, 12, 1], ['fire_lily', 1, 3, 1], ['potion_vigor', 1, 2, 1]],
   }),
   vitrified_horror: boss({
@@ -117,6 +129,16 @@ export const KHAROS_BOSSES = {
   }),
   ash_reaver: boss({
     name: 'Kharn the Ash-Reaver', hp: 125, dmg: 6, step: 0.4, humanoid: true, look: 'ash_reaver', arms: 'flail', fireproof: true, brain: 'ashReaver', tint: ['#ff6030', '#c8c0b8'],
+    // (His fury: up with every blow he lands, down when he's parried.)
+    onStrike: (game, c) => {
+      if (!(c.berserkT > 0)) c.fury = Math.min(100, (c.fury || 0) + 15);
+    },
+    onParried: (game, c) => {
+      if (c.berserkT > 0) c.berserkT = Math.max(0.01, c.berserkT - 2);
+      else c.fury = Math.max(0, (c.fury || 0) - 35);
+      game.renderer.floatText(c.x, c.y + 3.2, c.z, 'his fury cools', '#a0d8ff');
+    },
+    tick: (c, dt) => furyTick(c, dt),
     phaseLines: ['', '', 'Barricades! Pen it in!', 'Everything burns!'], drops: [['coin', 12, 24, 1], ['sulfur', 2, 4, 1], ['flail', 1, 1, 0.5]],
   }),
   bombard_queen: boss({
@@ -150,6 +172,21 @@ export const KHAROS_BOSSES = {
   }),
   // (What they bring with them.)
   glass_shard: { name: 'Glass Shard', hp: 8, dmg: 3, step: 0.22, mode: 'hostile', aggro: 16, under: true, fireproof: true, style: 'snap', glancing: true, isle: 'kharos', drops: [['glass', 1, 1, 0.5]] },
+  // A keg of Pyrrha's, its fuse lit, rolling (see rollKeg).
+  rolling_keg: {
+    name: 'Lit Keg', hp: 99, dmg: 0, step: 0.32, mode: 'hostile', aggro: 0, under: true, construct: true, fireproof: true, isle: 'kharos', brain: 'rollingKeg', drops: [],
+    // (Struck: it rolls back the way it came, to her.)
+    ward: (game, c, src) => {
+      if (src && src.kind === 'player' && !c.back) {
+        c.back = true;
+        c.stopped = false;
+        c.fuseT = Math.max(c.fuseT, 2.5);
+        game.renderer.floatText(c.x, c.y + 1.8, c.z, 'sent back!', '#ffe070');
+        game.audio?.play('thud', c);
+      }
+      return 0;
+    },
+  },
   heart_anchor: { name: 'Chain Anchor', hp: 30, dmg: 0, step: 9, mode: 'hostile', aggro: 0, under: true, anchored: true, construct: true, fireproof: true, isle: 'kharos', brain: 'heartAnchor', drops: [['iron_ingot', 1, 1, 0.5]] },
 };
 
@@ -180,6 +217,7 @@ export const KHAROS_BRAINS = {
     const ph = phaseOf(c);
     phaseSummons(c, [0.66, 0.33], () => {
       for (let i = 0; i < 2; i++) summon(game, 'ash_wraith', c, 3, { color: ASHC });
+      shout(c, 'Rise, my court!', '#ffb060');
     });
     // (At the last he burns as he walks.)
     if (ph >= 3) {
@@ -187,43 +225,45 @@ export const KHAROS_BRAINS = {
       if (c.trail && c.trail.k !== k) groundFire(game, c.trail.x, c.trail.z, c.y, c, false, 0);
       c.trail = { k, x: c.x, z: c.z };
     }
+    // A decree he's laid on you, waiting to be judged.
+    if (c.decree) return judgeDecree(c, dt);
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // The pyres: fire runs along the floor between every two lit braziers
-    // (and out, he lights them again).
-    if (cd(c, 'pyreCd', dt, 3) && ready(c) && !c.windup) {
-      c.pyreCd = ph >= 2 ? 7 : 9;
-      used(c, 0.4);
-      const lit = hallLights(c).filter((q) => q.lit && (q.id === B.brazier || q.id === B.ash_brazier));
-      if (lit.length < 2) {
-        for (const q of hallLights(c)) if (!q.lit) {
-          setLit(game, q, true);
-          game.renderer.emit(q.x, FY + 1.2, q.z, { n: 14, color: FIRE, up: 40, speed: 30, life: 0.7, glow: true });
-        }
-        shout(c, 'Burn again, my pyres!', '#ffb060');
-        game.audio?.play('fire', c);
-        return true;
-      }
-      // Each to the next round the hall.
-      lit.sort((a, b) => Math.atan2(a.z - c.z, a.x - c.x) - Math.atan2(b.z - c.z, b.x - c.x));
-      for (let i = 0; i < lit.length; i++) {
-        const a = lit[i];
-        const b = lit[(i + 1) % lit.length];
-        const line = lineTiles(game, { x: a.x, y: c.y, z: a.z }, b, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)) + 1);
-        fire(game, c, line.filter((q) => openFloor(game, q.x, q.z)), 1.4 + i * 0.25, 5, { onFire: (g, h) => h.tiles.forEach((q, j) => j % 2 === 0 && groundFire(g, q.x, q.z, c.y, c, false, 0)) });
-      }
-      shout(c, 'Pyres, answer your king!', '#ffb060');
-      game.audio?.play('fire', c);
-      c.doAction?.(0.5);
+    // His decree: KNEEL (not a step, not a blow, till he's done) or BEGONE
+    // (keep moving, the whole while). Obey, and he's satisfied, and off his
+    // guard a moment; defy him, and the fire falls on you. (He doesn't bid
+    // you kneel while his court's about you.)
+    if (cd(c, 'decreeCd', dt, 4) && ready(c) && !c.windup && !t.swallowed) {
+      c.decreeCd = ph >= 3 ? 8 : 10;
+      used(c, 3);
+      const court = game.creatures.some((o) => !o.dead && o.species === 'ash_wraith' && dist(o, t) <= 4);
+      const kneel = !court && (c.lastDecree === 'kneel' ? Math.random() < 0.3 : Math.random() < 0.65);
+      c.lastDecree = kneel ? 'kneel' : 'begone';
+      c.decree = { kneel, t: 0, grace: 1, judge: 3, broke: false, still: 0 };
+      c.face(t.x, t.z);
+      game.renderer.floatText(t.x, t.y + 3.2, t.z, kneel ? 'KNEEL!' : 'BEGONE!', '#ffd060');
+      shout(c, kneel ? 'KNEEL before your king!' : 'BEGONE from my sight!', '#ffb060', 3);
+      if (!game.toldDecree) game.ui.msg('The Cinder King lays a decree on you. KNEEL: not a step, not a blow, till it\'s done. BEGONE: keep moving. Obey and he lowers his guard; defy him and burn.', '#ffd060', true);
+      game.toldDecree = true;
+      game.audio?.play('horn', c);
       return true;
     }
     // His crown flares: rings of fire going out from him.
-    if (cd(c, 'crownCd', dt, 5) && ready(c) && d <= 5 && !c.windup) {
+    if (cd(c, 'crownCd', dt, 4) && ready(c) && d <= 4 && !c.windup) {
       c.crownCd = ph >= 3 ? 6 : 8;
       used(c, 0.3);
       for (let r = 1; r <= 4; r++) fire(game, c, ringTiles(c.x, c.z, r), 0.8 + r * 0.35, 5, { quiet: r > 1 });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'the crown flares!', '#ffb060');
       c.stunT = 0.8;
+      return true;
+    }
+    // His sceptre: a line of fire along the floor at you.
+    if (cd(c, 'sceptreCd', dt, 2) && ready(c) && d >= 2 && d <= 9 && sees(game, c, t) && !c.windup) {
+      c.sceptreCd = ph >= 2 ? 4 : 5;
+      used(c);
+      c.face(t.x, t.z);
+      fire(game, c, lineTiles(game, c, t, d + 2), 0.8, 5, { burn: 2 });
+      game.audio?.play('fire', c);
       return true;
     }
     return false;
@@ -240,6 +280,30 @@ export const KHAROS_BRAINS = {
       game.renderer.floatText(c.x, c.y + 3, c.z, 'CRACK', '#e8dcc8');
       game.audio?.play('glass', c);
     });
+    // You, inside her: she sits, glowing, ash smoking from her mouth.
+    const p = game.player;
+    if (p && p.swallowed && p.swallowed.by === c) {
+      if (Math.random() < dt * 10) game.renderer.emit(c.x, c.y + 2.6, c.z, { n: 1, color: ['#ff9040', '#ffd060', '#8a8484'], up: 30, speed: 10, life: 0.8, glow: true });
+      return true;
+    }
+    // Breathing in: whoever's at her mouth when she's done goes in.
+    if (c.inhale) {
+      c.inhale.t -= dt;
+      if (c.inhale.t > 0) return true;
+      c.inhale = null;
+      if (t && !t.dead && dist(c, t) <= 1 && !(t.rollT > 0) && t === p) {
+        swallow(game, t, c, { need: ph >= 3 ? 9 : 7, max: 6, dmg: 1, spit: dmgOf(c, 6) });
+        return true;
+      }
+      // Missed you: out it comes again, as fire.
+      if (t && !t.dead) {
+        c.face(t.x, t.z);
+        fire(game, c, coneTiles(c, t, 5, 0.55), 0.6, 7, { burn: 3, knock: 1, from: { x: c.x, z: c.z } });
+      }
+      game.renderer.floatText(c.x, c.y + 3, c.z, '...and OUT', '#ff9040');
+      c.stunT = 0.8;
+      return true;
+    }
     if (!t || t.dead) return false;
     const d = dist(c, t);
     // Ash poured out across the floor in a fan: it lies there a long
@@ -254,17 +318,16 @@ export const KHAROS_BRAINS = {
       game.audio?.play('pour', c);
       return true;
     }
-    // A breath in: the whole hall's air drawn into her (and you with it);
-    // then out again, as fire.
-    if (cd(c, 'breathCd', dt, 6) && ready(c) && d <= 9 && !c.windup) {
+    // A breath in: the whole hall's air drawn to her mouth (and you with
+    // it): be at her lip when it's done and she has you.
+    if (cd(c, 'breathCd', dt, 4) && ready(c) && d <= 9 && !c.windup) {
       c.breathCd = ph >= 2 ? 9 : 11;
-      used(c, 1.5);
-      addZone(game, { by: c, kind: 'wind', tiles: hallTiles(c), y: c.y, life: 1.7, tick: 0.35, pull: { x: c.x, z: c.z }, puff: ['#c8c0b8', '#e8e4dc'] });
-      c.face(t.x, t.z);
-      const cone = coneTiles(c, t, 5, 0.55);
-      fire(game, c, cone, 1.9, 7, { burn: 3, knock: 1, from: { x: c.x, z: c.z } });
-      c.stunT = 2;
-      game.renderer.floatText(c.x, c.y + 3, c.z, 'she breathes IN...', '#ffb070');
+      used(c, 2.2);
+      addZone(game, { by: c, kind: 'wind', tiles: hallTiles(c), y: c.y, life: 2, tick: 0.3, pull: { x: c.x, z: c.z }, puff: ['#c8c0b8', '#e8e4dc'] });
+      c.inhale = { t: 2 };
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'she breathes IN... (keep off her lip!)', '#ffb070');
+      if (!game.toldUrn) game.ui.msg('The Urn-Mother draws the air of the hall in: be right by her when she\'s done and she swallows you whole.', '#ffb070', true);
+      game.toldUrn = true;
       game.audio?.play('wind', c);
       return true;
     }
@@ -277,7 +340,7 @@ export const KHAROS_BRAINS = {
         if (at) ashPatch(game, c, areaTiles(at.x, at.z, 1), 8);
       }
     }
-    if (d <= 2 && backOff(c, t)) return true;
+    if (d <= 2 && !c.inhale && backOff(c, t)) return true;
     return d > 1;
   },
 
@@ -302,23 +365,37 @@ export const KHAROS_BRAINS = {
       game.audio?.play('wind', c);
       return true;
     }
-    // The horn: you're thrown across the hall.
-    if (cd(c, 'hornCd', dt, 3) && ready(c) && d <= 5 && !c.windup) {
-      c.hornCd = 6.5;
-      used(c);
-      c.face(t.x, t.z);
-      addHazard(game, { by: c, tiles: coneTiles(c, t, 5, 0.6), y: c.y, dur: 0.9, dmg: dmgOf(c, 4), knock: 3, stun: 0.4, from: { x: c.x, z: c.z }, kind: 'burst', center: { x: t.x, z: t.z } });
-      game.audio?.play('horn', c);
-      game.renderer.floatText(c.x, c.y + 3, c.z, 'BWAAARRR', '#ffd0a0');
+    // The horn, blast on blast: each a ring of force going out across the
+    // hall a pace at a time. There's no outrunning it; roll through it as
+    // it reaches you.
+    if (cd(c, 'hornCd', dt, 2.5) && ready(c) && d <= 9 && !c.windup) {
+      c.hornCd = ph >= 3 ? 7 : 8.5;
+      const blasts = ph + 1;
+      used(c, blasts * 0.9 + 0.6);
+      c.stunT = blasts * 0.9 + 0.3;
+      const at = { x: c.x, z: c.z };
+      proc(game, c, 0.9, blasts, () => {
+        game.audio?.play('horn', c);
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'BWAAARRR', '#ffd0a0');
+        game.renderer.effect?.({ type: 'ring', wx: at.x, wy: c.y, wz: at.z, r0: 6, r1: 10 * 16, color: ['#ffd0a0', '#ffffff'], life: 1.35, oy: 4, flat: 0.5, thick: 3 });
+        proc(game, c, 0.13, 10, (r) => {
+          const ring = ringTiles(at.x, at.z, r + 1).filter((q) => inHall(c, q) && openFloor(game, q.x, q.z));
+          if (ring.length) addHazard(game, { by: c, tiles: ring, y: c.y, dur: 0.12, dmg: dmgOf(c, 4), knock: 1, from: at, kind: 'wave', quiet: true, color: [255, 210, 170] });
+        });
+      }, 0.4);
+      shout(c, 'Hear the horn of the mountain!', '#ffd0a0');
+      if (!game.toldHorn) game.ui.msg('Each blast of the Herald\'s horn sends a ring of force across the hall. You can\'t outrun it: roll through it as it reaches you.', '#ffd0a0', true);
+      game.toldHorn = true;
       return true;
     }
-    // (Worn) The floor split open: lines of lava across the hall (two, at
-    // the last), lit first.
-    if (ph >= 2 && cd(c, 'riftCd', dt, 2) && ready(c) && !c.windup) {
-      c.riftCd = 12;
-      used(c, 0.6);
-      for (let k = 0; k < (ph >= 3 ? 2 : 1); k++) rift(game, c, k ? spotIn(c, t, 2, 5) || t : t);
-      shout(c, 'Open, mountain!', '#ff9060');
+    // Cinders lobbed out of the smoke.
+    if (cd(c, 'cinderCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
+      c.cinderCd = ph >= 2 ? 4 : 5.5;
+      used(c);
+      for (let k = 0; k < (ph >= 2 ? 3 : 2); k++) {
+        const at = k ? spotIn(c, t, 1, 3) || t : t;
+        lob(game, c, at.x, at.z, { tint: [255, 140, 60], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.05, 4, { burn: 2 }) });
+      }
       return true;
     }
     if (d <= 2 && backOff(c, t)) return true;
@@ -330,41 +407,22 @@ export const KHAROS_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    // Down under the floor: where you stood, it comes up.
-    if (c.digT !== undefined) {
-      c.digT -= dt;
-      if (c.digT > 0) return true;
-      c.digT = undefined;
-      const at = c.digAt;
-      c.burrowed = false;
-      c.solid = true;
-      const to = spotIn(c, at, 0, 2) || { x: c.x, y: c.y, z: c.z };
-      c.teleport(to.x, to.y, to.z);
-      game.moveEntity(c, to.x, to.y, to.z);
-      game.renderer.emit(to.x, to.y + 0.5, to.z, { n: 24, color: GLASS, up: 50, speed: 60, gravity: 160, life: 0.8 });
-      game.shake = Math.min(1.4, (game.shake || 0) + 0.6);
-      // (Coming up by a wall, it tears it open.)
-      for (const q of areaTiles(to.x, to.z, 2)) {
-        if (inHall(c, q)) continue;
-        if (Math.random() < 0.6) for (const y of [FY, FY + 1]) work(game, q.x, y, q.z, B.air, 0, c, { dig: true, keep: true });
-      }
-      c.stunT = 0.6;
-      return true;
-    }
+    // Under the floor, listening for you.
+    if (c.hunt) return huntTremor(c, dt);
     if (!t || t.dead) return false;
     const d = dist(c, t);
+    // Down through the floor: it hunts you by your footsteps from there.
     if (cd(c, 'digCd', dt, 3) && ready(c) && !c.windup) {
-      c.digCd = ph >= 3 ? 6 : 9;
-      used(c, 1.6);
+      c.digCd = ph >= 3 ? 7 : 10;
+      used(c, 2);
+      game.renderer.emit(c.x, c.y + 0.3, c.z, { n: 20, color: GLASS, up: 30, speed: 40, gravity: 120, life: 0.6 });
       c.burrowed = true;
       c.solid = false;
       game.removeOcc(c);
-      c.digAt = { x: t.x, y: t.y, z: t.z };
-      c.digT = 1.4;
-      addHazard(game, { by: c, tiles: areaTiles(t.x, t.z, 1), y: t.y, dur: 1.3, dmg: dmgOf(c, 7), knock: 2, from: { x: t.x, z: t.z + 0.01 }, kind: 'erupt', keep: true });
-      game.renderer.emit(c.x, c.y + 0.3, c.z, { n: 20, color: GLASS, up: 30, speed: 40, gravity: 120, life: 0.6 });
+      c.hunt = { t: 0, at: { x: c.x, z: c.z }, heard: { x: t.x, z: t.z }, quiet: 0, step: 0, rumble: 0, max: ph >= 2 ? 6 : 5, rise: 0 };
       game.audio?.play('rumble', c);
-      game.ui.msg('The Glass Wyrm bores down through the floor... (the ground under you shakes: move!)', '#c8b8f0', true);
+      if (!game.toldTremor) game.ui.msg('The Glass Wyrm is under the floor, hunting you by your footsteps. Stand stock still and it loses you!', '#c8b8f0', true);
+      game.toldTremor = true;
       return true;
     }
     // A spray of glass, fanned out.
@@ -381,24 +439,18 @@ export const KHAROS_BRAINS = {
       game.audio?.play('glass', c);
       return true;
     }
-    // (Worn) Spires of black glass shot up round you (a pen); a moment,
-    // and they burst.
-    if (ph >= 2 && cd(c, 'spireCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
-      c.spireCd = 12;
-      used(c, 0.5);
-      const at = { x: t.x, z: t.z };
-      const ring = ringTiles(at.x, at.z, 2).filter((q, i) => i % 2 === 0);
-      const up = [];
-      for (const q of ring) if (work(game, q.x, FY, q.z, B.obsidian, 5, c)) {
-        work(game, q.x, FY + 1, q.z, B.obsidian, 5, c);
-        up.push(q);
+    // (Worn) Glass rain: shards shaken down from the roof round you.
+    if (ph >= 2 && cd(c, 'rainCd', dt, 3) && ready(c) && d <= 10 && !c.windup) {
+      c.rainCd = 9;
+      used(c, 0.4);
+      for (let i = 0; i < 7; i++) {
+        const at = i ? spotIn(c, t, 0, 3) : { x: t.x, z: t.z };
+        if (at) shards(game, c, [at], 0.9 + i * 0.14, 5, { quiet: i > 0 });
       }
-      for (const q of up) game.renderer.emit(q.x, FY + 1, q.z, { n: 6, color: GLASS, up: 30, speed: 20, life: 0.5 });
-      shards(game, c, up.flatMap((q) => areaTiles(q.x, q.z, 1)), 4.4, 5);
-      game.renderer.floatText(at.x, FY + 3, at.z, 'spires!', '#c8b8f0');
-      game.audio?.play('glass', c);
+      game.renderer.floatText(t.x, t.y + 2.6, t.z, 'glass falls!', '#c8b8f0');
       return true;
     }
+    if (bossSlam(c, dt, 1, 0.9, 6, 4.5)) return true;
     return false;
   },
 
@@ -453,17 +505,18 @@ export const KHAROS_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
+    // Venting (see heatTick): stood where it is, doing nothing else.
+    if (c.ventT > 0) return true;
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // The gale: you're thrown back, and every fire in its way blown out
-    // (your own flame too).
-    if (cd(c, 'galeCd', dt, 3) && ready(c) && d <= 7 && !c.windup) {
+    // The gale: you're thrown back (your own flame blown out).
+    if (cd(c, 'galeCd', dt, 2.5) && ready(c) && d <= 7 && !c.windup) {
       c.galeCd = 8;
       used(c, 0.4);
+      c.heat += 12;
       c.face(t.x, t.z);
       const cone = coneTiles(c, t, 7, 0.45);
       addHazard(game, { by: c, tiles: cone, y: c.y, dur: 1, dmg: dmgOf(c, 3), knock: 4, from: { x: c.x, z: c.z }, kind: 'burst', center: { x: t.x, z: t.z }, onFire: (g, h, hit) => {
-        for (const q of hallLights(c)) if (q.lit && cone.some((p) => Math.abs(p.x - q.x) <= 1 && Math.abs(p.z - q.z) <= 1)) setLit(g, q, false);
         for (const e of hit) if (e === g.player) e.snuff?.(3);
         for (const z of g.zones || []) if (z.kind === 'fire' && z.tiles.some((p) => cone.some((q) => q.x === p.x && q.z === p.z))) z.done = true;
       } });
@@ -474,9 +527,10 @@ export const KHAROS_BRAINS = {
     }
     // It stokes: every fire in the hall spreads, and a line of it runs out
     // at you.
-    if (cd(c, 'stokeCd', dt, 5) && ready(c) && !c.windup) {
+    if (cd(c, 'stokeCd', dt, 4) && ready(c) && !c.windup) {
       c.stokeCd = 10;
       used(c, 0.3);
+      c.heat += 15;
       for (const z of [...(game.zones || [])]) if (z.kind === 'fire' && !z.done) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) groundFire(game, z.tiles[0].x + dx, z.tiles[0].z + dz, z.y, c, false, 0);
       const line = lineTiles(game, c, t, d + 2);
       fire(game, c, line, 1.1, 4, { onFire: (g, h) => h.tiles.forEach((q) => groundFire(g, q.x, q.z, c.y, c, false, 0)) });
@@ -484,22 +538,18 @@ export const KHAROS_BRAINS = {
       game.audio?.play('fire', c);
       return true;
     }
-    // (Worn) Overheating: rings of heat out from it, and then it must vent
-    // (stood still, open: strike now!).
+    // (Worn) Heat thrown off it in rings.
     if (ph >= 2 && cd(c, 'heatCd', dt, 4) && ready(c) && !c.windup) {
-      c.heatCd = 14;
-      used(c, 2);
+      c.heatCd = 11;
+      used(c, 0.8);
+      c.heat += 18;
       for (let r = 1; r <= 5; r++) fire(game, c, ringTiles(c.x, c.z, r).filter((q) => inHall(c, q)), 0.7 + r * 0.3, 5, { quiet: r > 1 });
-      proc(game, c, 2.4, 1, () => {
-        c.stunT = 3;
-        c.exposedT = 3;
-        game.renderer.floatText(c.x, c.y + 3, c.z, 'VENTING: strike now!', '#ffe070');
-        game.renderer.emit(c.x, c.y + 2, c.z, { n: 30, color: ['#ffffff', '#e8e4dc'], up: 60, speed: 30, life: 1.2, shape: 'puff', gravity: -20 });
-        game.audio?.play('hiss', c);
-      });
       return true;
     }
-    if (bossSlam(c, dt, 1, 1, 6, 5)) return true;
+    if (bossSlam(c, dt, 1, 1, 6, 5)) {
+      c.heat += 8;
+      return true;
+    }
     return false;
   },
 
@@ -571,30 +621,7 @@ export const KHAROS_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    // Drawing a brazier's fire into himself: strike him hard enough and
-    // the brazier dies.
-    if (c.draw) {
-      const D = c.draw;
-      D.t -= dt;
-      D.acc += dt;
-      if (c.hp < D.hp - 6) {
-        setLit(game, D.q, false);
-        game.renderer.floatText(c.x, c.y + 3, c.z, 'the draw is broken!', '#ffe070');
-        game.renderer.emit(D.q.x, FY + 1, D.q.z, { n: 20, color: ['#5a5454', '#8a8484'], up: 30, speed: 20, life: 0.8, shape: 'puff' });
-        c.stunT = 1.5;
-        c.draw = null;
-        return true;
-      }
-      if (D.acc >= 0.5) {
-        D.acc = 0;
-        c.hp = Math.min(c.maxHp, c.hp + 4);
-        D.hp = Math.max(D.hp, c.hp);
-        game.renderer.effect?.({ type: 'siphon', wx: D.q.x, wy: FY + 1, wz: D.q.z, tx: c.x, ty: c.y + 1, tz: c.z, life: 0.5, oy: -6, n: 10, amp: 3, color: FIRE });
-        game.renderer.floatText(c.x, c.y + 2.6, c.z, '+4', '#ffb040');
-      }
-      if (D.t <= 0) c.draw = null;
-      return true;
-    }
+    const glazed = (g, h, hit) => hit.forEach((e) => e === g.player && glaze(g, e, c, h.coats || 1));
     // Risen, raining embers down.
     if (c.riseT > 0) {
       c.riseT -= dt;
@@ -611,7 +638,7 @@ export const KHAROS_BRAINS = {
     if (!t || t.dead) return false;
     const d = dist(c, t);
     // The kiln-wave: the floor heated row by row, coming across the hall
-    // at you (one tile in each row kept cool: find it).
+    // at you (one tile in each row kept cool: find it). It glazes you.
     if (cd(c, 'kilnCd', dt, 2) && ready(c) && !c.windup) {
       c.kilnCd = ph >= 2 ? 8 : 10;
       used(c, 1.2);
@@ -628,26 +655,30 @@ export const KHAROS_BRAINS = {
         const hi = across ? L.z1 : L.x1;
         cool = Math.max(lo, Math.min(hi, cool));
         for (let w = lo; w <= hi; w++) if (w !== cool) row.push(across ? { x: v, z: w } : { x: w, z: v });
-        fire(game, c, row.filter((q) => openFloor(game, q.x, q.z)), 1.2 + k * 0.28, 5, { quiet: k % 3 !== 0, burn: 1 });
+        fire(game, c, row.filter((q) => openFloor(game, q.x, q.z)), 1.2 + k * 0.28, 4, { quiet: k % 3 !== 0, burn: 1, onFire: glazed });
       }
       shout(c, 'Into the kiln!', '#ffb040');
       game.audio?.play('fire', c);
       return true;
     }
-    // Drawing on a brazier's fire to mend himself.
-    if (c.hp < c.maxHp * 0.85 && cd(c, 'drawCd', dt, 5) && ready(c) && !c.windup) {
-      c.drawCd = 12;
-      const lit = hallLights(c).filter((q) => q.lit && (q.id === B.brazier || q.id === B.ash_brazier));
-      if (lit.length) {
-        used(c, 3);
-        const q = lit.sort((a, b) => dist(a, c) - dist(b, c))[0];
-        c.draw = { q, t: 3, acc: 0, hp: c.hp };
-        c.face(q.x, q.z);
-        shout(c, 'Feed me, holy fire.', '#ffb040');
-        if (!game.toldDraw) game.ui.msg('The Kiln-Priest draws on a brazier\'s fire to mend himself. Strike him hard to break the draw (and the brazier dies with it)!', '#ffe070', true);
-        game.toldDraw = true;
-        return true;
-      }
+    // The glazing: white-hot glaze poured along the floor at you.
+    if (cd(c, 'glazeCd', dt, 1.5) && ready(c) && d >= 1 && d <= 8 && !c.windup) {
+      c.glazeCd = ph >= 2 ? 4 : 5;
+      used(c);
+      c.face(t.x, t.z);
+      const line = lineTiles(game, c, t, d + 1);
+      addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.75, dmg: dmgOf(c, 3), kind: 'beam', from: { x: c.x, z: c.z }, to: line[line.length - 1] || t, beamColor: '#ffe8c0', halo: '#ff9040', width: 2, onFire: glazed });
+      game.audio?.play('pour', c);
+      return true;
+    }
+    // (Worn) The kiln's mouth opened at you: heat that glazes twice over.
+    if (ph >= 2 && cd(c, 'mouthCd', dt, 3) && ready(c) && d <= 5 && !c.windup) {
+      c.mouthCd = 10;
+      used(c, 0.8);
+      c.face(t.x, t.z);
+      fire(game, c, coneTiles(c, t, 5, 0.5), 1.1, 5, { burn: 2, coats: 2, onFire: glazed });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'the kiln door opens...', '#ffb040');
+      return true;
     }
     // (Desperate) He rises in the fire, embers raining down.
     if (ph >= 3 && cd(c, 'riseCd', dt, 2) && ready(c) && !c.windup) {
@@ -666,17 +697,17 @@ export const KHAROS_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
+    // In pieces: they have a little while to get back to it.
+    if (c.shatter) return reform(c, dt);
     // Shards where it's stepped.
     const k = `${c.x},${c.z}`;
     if (c.trail && c.trail.k !== k) {
       for (const q of areaTiles(c.trail.x, c.trail.z, 1)) if (Math.random() < 0.3 && openFloor(game, q.x, q.z)) addZone(game, { by: c, kind: 'shards', tiles: [q], y: c.y, life: 12, step: dmgOf(c, 1), color: [180, 170, 220], puff: ['#c8b8f0'] });
     }
     c.trail = { k, x: c.x, z: c.z };
-    phaseSummons(c, [0.66, 0.33], () => {
-      for (let i = 0; i < 3; i++) summon(game, 'glass_shard', c, 3, { color: GLASS });
-      game.renderer.floatText(c.x, c.y + 3, c.z, 'pieces break off it!', '#c8b8f0');
-      game.audio?.play('glass', c);
-    });
+    // Worn down to each mark, it shatters.
+    phaseSummons(c, [0.66, 0.33], () => shatter(c));
+    if (c.shatter) return true;
     if (!t || t.dead) return false;
     const d = dist(c, t);
     // A prism beam, burned slowly round after you.
@@ -688,9 +719,9 @@ export const KHAROS_BRAINS = {
       c.stunT = 4.4;
       return true;
     }
-    // (Worn) Shards thrown out in every direction.
-    if (ph >= 2 && cd(c, 'novaCd', dt, 3) && ready(c) && d <= 6 && !c.windup) {
-      c.novaCd = 8;
+    // Shards thrown out in every direction.
+    if (cd(c, 'novaCd', dt, 4) && ready(c) && d <= 6 && !c.windup) {
+      c.novaCd = ph >= 2 ? 8 : 10;
       used(c);
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
@@ -710,13 +741,19 @@ export const KHAROS_BRAINS = {
     const t = c.target;
     const ph = phaseOf(c);
     phaseSummons(c, [0.66, 0.33], () => {
-      // Barricades dragged across the hall, and the crew to hold them.
-      for (let k = 0; k < 2; k++) {
-        const at = spotIn(c, c, 3, 7);
-        if (at) for (const q of wallTiles(at, Math.random() < 0.5, 5)) if (inHall(c, q) && openFloor(game, q.x, q.z)) work(game, q.x, FY, q.z, B.fence, 25, c);
-      }
       for (let i = 0; i < 2; i++) summon(game, 'ash_raider', c, 3, { color: ASHC });
+      shout(c, 'To me, raiders!', '#ff9060');
     });
+    // Berserk (see furyTick): the flail never still.
+    if (c.berserkT > 0) {
+      if (t && !t.dead && cd(c, 'rageCd', dt, 0) && ready(c) && dist(c, t) <= 3 && !c.windup) {
+        c.rageCd = 2.2;
+        used(c, 0.4);
+        whirl(game, c);
+        return true;
+      }
+      return false;
+    }
     if (!t || t.dead) return false;
     const d = dist(c, t);
     // Oil thrown across the floor; it lies there.
@@ -747,11 +784,7 @@ export const KHAROS_BRAINS = {
     if (ph >= 2 && cd(c, 'whirlCd', dt, 3) && ready(c) && d <= 4 && !c.windup) {
       c.whirlCd = 9;
       used(c, 1);
-      addZone(game, { by: c, kind: 'wind', tiles: areaTiles(c.x, c.z, 4), y: c.y, life: 1.2, tick: 0.3, pull: { x: c.x, z: c.z }, puff: ASHC });
-      addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 2), y: c.y, dur: 1.3, dmg: dmgOf(c, 7), knock: 2, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: 2, kind: 'slam', color: COLORS.blow });
-      c.stunT = 1.4;
-      game.renderer.floatText(c.x, c.y + 3, c.z, 'the flail whirls!', '#ff9060');
-      game.audio?.play('whoosh', c);
+      whirl(game, c);
       return true;
     }
     return false;
@@ -762,28 +795,31 @@ export const KHAROS_BRAINS = {
     const t = c.target;
     const ph = phaseOf(c);
     phaseSummons(c, [0.66, 0.33], () => {
-      // Kegs rolled out round you.
-      for (let i = 0; i < 2; i++) {
-        const at = spotIn(c, t || c, 1, 3);
-        if (at) work(game, at.x, FY, at.z, B.powder_keg, 0, c);
-      }
+      if (t && !t.dead) for (let k = 0; k < 2; k++) rollKeg(game, c, t, k);
       shout(c, 'Mind the kegs!', '#ffb040');
     });
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Shells: a blast, and a heap of rubble left where each fell.
+    // Kegs rolled out at you, fuses lit: they go up where they stop. Hit
+    // one, and it rolls back to her.
+    if (cd(c, 'kegCd', dt, 2) && ready(c) && d >= 2 && !c.windup) {
+      c.kegCd = ph >= 2 ? 5.5 : 7;
+      used(c, 0.4);
+      for (let k = 0; k < (ph >= 3 ? 2 : 1); k++) rollKeg(game, c, t, k);
+      shout(c, 'Catch!', '#ffb040');
+      if (!game.toldKegs) game.ui.msg('Pyrrha rolls lit kegs at you. Strike one and it rolls back to her: let her have her own powder!', '#ffb040', true);
+      game.toldKegs = true;
+      game.audio?.play('fuse', c);
+      return true;
+    }
+    // Shells lobbed at you.
     if (cd(c, 'shotCd', dt, 1.5) && ready(c) && d >= 2 && d <= 11 && !c.windup) {
       c.shotCd = 5;
       used(c);
       c.face(t.x, t.z);
       for (let k = 0; k < ph; k++) {
         const at = k ? spotIn(c, t, 1, 3) || t : t;
-        lob(game, c, at.x, at.z, { tint: [80, 70, 60], onLand: (g, x, z, y) => {
-          fire(g, c, areaTiles(x, z, 1), 0.6, 6, { burn: 1, knock: 1, from: { x, z: z + 0.01 } });
-          proc(g, c, 0.65, 1, () => {
-            if (openFloor(g, x, z)) work(g, x, FY, z, B.cobblestone, 0, c);
-          });
-        } });
+        lob(game, c, at.x, at.z, { tint: [80, 70, 60], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.6, 6, { burn: 1, knock: 1, from: { x, z: z + 0.01 } }) });
       }
       game.audio?.play('catapult', c);
       return true;
@@ -963,38 +999,45 @@ export const KHAROS_BRAINS = {
     const ph = phaseOf(c);
     // (Worn) Its core open: the ground round it burns.
     if (ph >= 2 && Math.random() < dt * 2) for (const q of ringTiles(c.x, c.z, 2)) if (Math.random() < 0.3) groundFire(game, q.x, q.z, c.y, c, false, 0);
+    // Its lodestone heart charged, glowing blue: then it pulls on every
+    // bit of iron in the hall.
+    if (c.charge) {
+      c.charge.t -= dt;
+      if (Math.random() < dt * 16) {
+        const a = Math.random() * Math.PI * 2;
+        game.renderer.emit(c.x + Math.cos(a) * 2, c.y + 1 + Math.random(), c.z + Math.sin(a) * 2, { n: 1, color: ['#a0c8ff', '#ffffff', '#5a8ae0'], up: 0, speed: 30, life: 0.4, glow: true });
+      }
+      if (c.charge.t > 0) return true;
+      c.charge = null;
+      game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r1: 9 * 16, r0: 60, color: ['#a0c8ff', '#ffffff'], life: 0.6, oy: 4, flat: 0.5, thick: 2 });
+      game.audio?.play('hum', c);
+      const p = game.player;
+      if (p && !p.dead && dist(c, p) <= 9 && lodestone(game, p, c, drag) === 'weapon') shout(c, 'GRRRNNN', '#a0c8ff');
+      return true;
+    }
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Slag thrown: where it lands, it sets in a pillar.
+    if (cd(c, 'magCd', dt, 3.5) && ready(c) && d <= 9 && !c.windup) {
+      c.magCd = ph >= 2 ? 9 : 11;
+      used(c, 1.8);
+      c.charge = { t: 1.5 };
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'its heart turns to lodestone...', '#a0c8ff');
+      if (!game.toldLode) game.ui.msg('The Slag Titan\'s heart is a lodestone: when it glows blue it tears iron out of your hands (and drags you in by iron armour). Put your iron away, or fight with something else!', '#a0c8ff', true);
+      game.toldLode = true;
+      return true;
+    }
+    // Slag thrown: it burns where it lands.
     if (cd(c, 'heapCd', dt, 2) && ready(c) && d >= 2 && d <= 10 && !c.windup) {
       c.heapCd = 6;
       used(c);
       for (let k = 0; k < 2; k++) {
         const at = k ? spotIn(c, t, 2, 4) || t : t;
         lob(game, c, at.x, at.z, { tint: [255, 120, 50], onLand: (g, x, z) => {
-          fire(g, c, [{ x, z }], 0.4, 6);
-          proc(g, c, 0.5, 1, () => {
-            if (work(g, x, FY, z, B.slag, 0, c)) work(g, x, FY + 1, z, B.slag, 0, c);
-          });
+          fire(g, c, areaTiles(x, z, 1), 0.4, 6, { burn: 2 });
+          groundFire(g, x, z, c.y, c, false, 0);
         } });
       }
       game.audio?.play('catapult', c);
-      return true;
-    }
-    // Its pillars smashed: each goes off in a burst of slag.
-    const pillars = (game.works || []).filter((q) => q.by === c && q.id === B.slag && q.y === FY && dist(q, t) <= 6);
-    if (pillars.length >= 2 && cd(c, 'smashCd', dt, 4) && ready(c) && !c.windup) {
-      c.smashCd = 9;
-      used(c, 0.5);
-      for (const q of pillars) {
-        shards(game, c, areaTiles(q.x, q.z, 1), 1.2, 6);
-        proc(game, c, 1.2, 1, () => {
-          work(game, q.x, FY, q.z, B.air, 0.01, c);
-          work(game, q.x, FY + 1, q.z, B.air, 0.01, c);
-        });
-      }
-      shout(c, 'GRRRAAAH', '#ff9060');
-      game.audio?.play('roar', c);
       return true;
     }
     if (bossSlam(c, dt, 2, 1.1, 8, 5)) return true;
@@ -1037,6 +1080,16 @@ export const KHAROS_BRAINS = {
       game.audio?.play('rumble', c);
       return true;
     }
+    // Gobs of magma spat at you.
+    if (cd(c, 'spitCd', dt, 3) && ready(c) && d >= 2 && !c.windup) {
+      c.spitCd = ph >= 2 ? 4 : 5;
+      used(c);
+      for (let k = 0; k < 2; k++) {
+        const at = k ? spotIn(c, t, 1, 2) || t : t;
+        lob(game, c, at.x, at.z, { tint: [255, 100, 30], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.05, 5, { burn: 2 }) });
+      }
+      return true;
+    }
     // (Worn) A beam of magma, turned after you.
     if (ph >= 2 && cd(c, 'beamCd', dt, 3) && ready(c) && d >= 2 && !c.windup) {
       c.beamCd = 11;
@@ -1044,18 +1097,15 @@ export const KHAROS_BRAINS = {
       startLaser(game, { by: c, ang: Math.atan2(t.z - c.z, t.x - c.x) + 0.8, turn: 0.4, len: 12, charge: 1.2, dur: 3, dmg: dmgOf(c, 3), tick: 0.35, width: 0.6, foes: 'player', fire: true, hue: 'red', aim: () => (c.target && !c.target.dead ? Math.atan2(c.target.z - c.z, c.target.x - c.x) : null) });
       return true;
     }
-    // (Desperate) Meltdown: lava in from the walls, ring by ring, till
-    // there's an island left; then it ebbs.
+    // (Desperate) Meltdown: fire in from the walls, ring by ring, till
+    // there's only the middle left.
     if (ph >= 3 && cd(c, 'meltCd', dt, 2) && ready(c) && !c.windup) {
-      c.meltCd = 18;
+      c.meltCd = 14;
       used(c, 2);
       const L = hallOf(c);
       const edge = (q) => Math.min(q.x - L.x0, L.x1 - q.x, q.z - L.z0, L.z1 - q.z);
       const tiles = hallTiles(c);
-      proc(game, c, 1.1, 4, (k) => {
-        const ring = tiles.filter((q) => edge(q) === k);
-        fire(game, c, ring, 0.9, 5, { quiet: true, onFire: (g, h) => h.tiles.forEach((q) => work(g, q.x, FY, q.z, B.lava, 9 - k * 1.1, c)) });
-      });
+      proc(game, c, 1.1, 4, (k) => fire(game, c, tiles.filter((q) => edge(q) === k), 0.9, 5, { quiet: true, burn: 2 }));
       game.renderer.floatText(c.x, c.y + 3.4, c.z, 'MELTDOWN: get to the middle!', '#ff6030');
       game.audio?.play('eruption', c);
       return true;
@@ -1067,7 +1117,302 @@ export const KHAROS_BRAINS = {
   heartAnchor() {
     return true;
   },
+  // A lit keg, rolling: straight at you, or (struck) back to her; it goes
+  // up when its fuse burns down, or when it reaches her.
+  rollingKeg(c, dt) {
+    const game = c.game;
+    c.fuseT -= dt;
+    if (Math.random() < dt * 20) game.renderer.emit(c.x, c.y + 0.9, c.z, { n: 1, color: ['#ffe070', '#ff9030', '#ffffff'], up: 20, speed: 24, life: 0.3, glow: true });
+    const o = c.owner;
+    if (c.back && o && !o.dead && dist(c, o) <= 1) return kegGoesUp(c, true);
+    if (c.fuseT <= 0) return kegGoesUp(c, false);
+    if (!c.moving && !c.stopped) {
+      let [ux, uz] = c.roll;
+      if (c.back && o && !o.dead) {
+        const dx = o.x - c.x;
+        const dz = o.z - c.z;
+        [ux, uz] = Math.abs(dx) >= Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
+      }
+      if (!c.tryStep(c.x + ux, c.z + uz, c.back ? 0.16 : c.S.step)) {
+        // (Fetched up against something: it lies there fizzing.)
+        if (!c.back) {
+          c.stopped = true;
+          c.fuseT = Math.min(c.fuseT, 1.2);
+        } else if (!c.tryStep(c.x + (uz ? Math.sign(o.x - c.x) || 1 : 0), c.z + (ux ? Math.sign(o.z - c.z) || 1 : 0), 0.16)) c.fuseT = Math.min(c.fuseT, 0.6);
+      }
+    }
+    return true;
+  },
 };
+
+// ------------------------------------------------------------ their ways
+// The Cinder King's decree, laid on you: obeyed or defied?
+function judgeDecree(c, dt) {
+  const game = c.game;
+  const D = c.decree;
+  const p = game.player;
+  D.t += dt;
+  if (!p || p.dead) {
+    c.decree = null;
+    return false;
+  }
+  if (Math.random() < dt * 8) {
+    const a = Math.random() * Math.PI * 2;
+    game.renderer.emit(p.x + Math.cos(a) * 1.1, p.y + 0.1, p.z + Math.sin(a) * 1.1, { n: 1, color: D.kneel ? ['#ffd060', '#ffffff'] : FIRE, up: 18, speed: 4, life: 0.5, glow: true });
+  }
+  if (D.t > D.grace) {
+    const acting = p.moving || p.rollT > 0 || p.swing || p.commitT > 0;
+    if (D.kneel && acting) D.broke = true;
+    if (!D.kneel) {
+      D.still = p.moving || p.rollT > 0 ? 0 : D.still + dt;
+      if (D.still > 0.8) D.broke = true;
+    }
+  }
+  if (D.t < D.judge && !D.broke) return true;
+  c.decree = null;
+  if (D.broke) {
+    fire(game, c, areaTiles(p.x, p.z, 1), 0.45, 8, { burn: 3 });
+    game.renderer.floatText(p.x, p.y + 3, p.z, 'DEFIANCE!', '#ff6030');
+    shout(c, 'You DARE?!', '#ff6030');
+  } else {
+    c.exposedT = 3;
+    c.stunT = Math.max(c.stunT || 0, 1.2);
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, 'he is satisfied: off his guard!', '#ffe070');
+    shout(c, D.kneel ? 'Good. Stay down.' : 'Hah! Run, then.', '#ffb060');
+  }
+  return true;
+}
+
+// The Glass Wyrm under the floor, making its way toward the last sound
+// you made (the floor heaving over it); still long enough and it's lost
+// you.
+function huntTremor(c, dt) {
+  const game = c.game;
+  const H = c.hunt;
+  const p = c.target && !c.target.dead ? c.target : game.player;
+  H.t += dt;
+  if (H.rise > 0) {
+    H.rise -= dt;
+    if (H.rise <= 0) return surface(c, H.heard, true);
+    return true;
+  }
+  const loud = p && !p.dead && (p.moving || p.rollT > 0 || p.swing || p.commitT > 0);
+  if (loud) {
+    H.heard = { x: p.x, z: p.z };
+    H.quiet = 0;
+  } else H.quiet += dt;
+  H.step += dt;
+  if (H.step >= 0.22) {
+    H.step = 0;
+    H.at.x += Math.sign(H.heard.x - H.at.x);
+    H.at.z += Math.sign(H.heard.z - H.at.z);
+    game.renderer.emit(H.at.x, c.y + 0.2, H.at.z, { n: 4, color: ['#5a4e6a', '#8a7aaa', '#c8b8f0'], up: 16, speed: 18, gravity: 120, life: 0.45 });
+    H.rumble -= 0.22;
+    if (H.rumble <= 0) {
+      H.rumble = 0.9;
+      game.audio?.play('rumble', H.at);
+      game.shake = Math.min(0.6, (game.shake || 0) + 0.12);
+    }
+  }
+  if (H.quiet >= 1.6 && H.t > 1) return surface(c, H.at, false);
+  const under = H.at.x === H.heard.x && H.at.z === H.heard.z;
+  if ((under && H.t > 1 && H.quiet < 0.5) || H.t >= H.max) {
+    // A moment's warning, the floor bulging, and up it comes.
+    H.rise = 0.55;
+    addHazard(game, { by: c, tiles: areaTiles(H.heard.x, H.heard.z, 1), y: c.y, dur: 0.55, dmg: dmgOf(c, 8), knock: 2, from: { x: H.heard.x, z: H.heard.z + 0.01 }, kind: 'erupt', keep: true });
+  }
+  return true;
+}
+function surface(c, at, onYou) {
+  const game = c.game;
+  c.hunt = null;
+  c.burrowed = false;
+  c.solid = true;
+  const to = spotIn(c, at, 0, 2) || { x: c.x, y: c.y, z: c.z };
+  c.teleport(to.x, to.y ?? c.y, to.z);
+  game.moveEntity(c, to.x, to.y ?? c.y, to.z);
+  game.renderer.emit(to.x, c.y + 0.5, to.z, { n: 24, color: GLASS, up: 50, speed: 60, gravity: 160, life: 0.8 });
+  game.shake = Math.min(1.4, (game.shake || 0) + 0.6);
+  if (onYou) c.stunT = 0.6;
+  else {
+    c.stunT = 3;
+    c.exposedT = 3;
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it lost you! dazed: strike now!', '#ffe070');
+  }
+  return true;
+}
+
+// The Vitrified Horror in pieces: they're loose in the hall; whatever's
+// left of them when its time is up goes back into it, and mends it.
+function shatter(c) {
+  const game = c.game;
+  c.shatter = { t: 0, max: 8, at: { x: c.x, y: c.y, z: c.z }, pieces: [] };
+  for (let i = 0; i < 3; i++) {
+    const s = summon(game, 'glass_shard', c, 3, { color: GLASS });
+    if (s) {
+      s.pieceOf = c;
+      c.shatter.pieces.push(s);
+    }
+  }
+  c.burrowed = true;
+  c.solid = false;
+  c.windup = null;
+  game.removeOcc(c);
+  game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 40, color: ['#c8b8f0', '#ffffff', '#a0c8ff', '#e8e0c8'], up: 50, speed: 80, gravity: 140, life: 0.9 });
+  game.renderer.floatText(c.x, c.y + 3.4, c.z, 'IT SHATTERS!', '#c8b8f0');
+  game.audio?.play('glass', c);
+  if (!game.toldShatter) game.ui.msg('The Vitrified Horror shatters! Break its pieces before they crawl back together: each one that makes it mends it.', '#c8b8f0', true);
+  game.toldShatter = true;
+}
+function reform(c, dt) {
+  const game = c.game;
+  const S = c.shatter;
+  S.t += dt;
+  const live = S.pieces.filter((q) => !q.dead);
+  if (live.length && S.t < S.max) {
+    if (Math.random() < dt * 3) {
+      const q = live[Math.floor(Math.random() * live.length)];
+      game.renderer.effect?.({ type: 'siphon', wx: q.x, wy: q.y + 0.6, wz: q.z, tx: S.at.x, ty: S.at.y + 1, tz: S.at.z, life: 0.5, oy: -6, n: 6, amp: 2, color: GLASS });
+    }
+    return true;
+  }
+  c.shatter = null;
+  c.burrowed = false;
+  c.solid = true;
+  c.teleport(S.at.x, S.at.y, S.at.z);
+  game.moveEntity(c, S.at.x, S.at.y, S.at.z);
+  for (const q of live) {
+    game.renderer.effect?.({ type: 'siphon', wx: q.x, wy: q.y + 0.6, wz: q.z, tx: c.x, ty: c.y + 1, tz: c.z, life: 0.6, oy: -6, n: 10, amp: 3, color: GLASS });
+    q.dead = true;
+  }
+  game.renderer.emit(c.x, c.y + 1.4, c.z, { n: 30, color: ['#c8b8f0', '#ffffff'], up: 30, speed: 40, life: 0.7, glow: true });
+  if (live.length) {
+    const heal = Math.round(c.maxHp * 0.06 * live.length);
+    c.hp = Math.min(c.maxHp, c.hp + heal);
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, `it reforms (+${heal})`, '#c8b8f0');
+  } else {
+    c.stunT = 2;
+    c.exposedT = 4;
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it reforms cracked: strike now!', '#ffe070');
+  }
+  game.audio?.play('glass', c);
+  return true;
+}
+
+// The Bellows Golem's heat, every moment: climbing (quicker when it's
+// worn), and at the top it vents: stood still, steam roaring out of its
+// front, its back open to you, till it's cooled.
+function heatTick(c, dt) {
+  const game = c.game;
+  c.heat ??= 0;
+  if (c.ventT > 0) {
+    c.ventT -= dt;
+    c.exposedT = Math.max(c.exposedT || 0, c.ventT);
+    c.heat = Math.max(0, c.heat - dt * 25);
+    c.gauge = { label: 'VENTING', v: c.ventT / 4.5, color: '#e8e4dc' };
+    c.steamT = (c.steamT || 0) - dt;
+    if (c.steamT <= 0) {
+      c.steamT = 0.6;
+      const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][c.dir] || [0, 1];
+      const cone = coneTiles(c, { x: c.x + fx * 5, z: c.z + fz * 5 }, 5, 0.6);
+      addHazard(game, { by: c, tiles: cone, y: c.y, dur: 0.3, dmg: dmgOf(c, 3), kind: 'steam', quiet: true, knock: 1, from: { x: c.x, z: c.z }, color: [235, 235, 240] });
+      for (const q of cone) if (Math.random() < 0.25) game.renderer.emit(q.x, c.y + 0.8, q.z, { n: 1, color: ['#ffffff', '#e8e4dc'], up: 20, speed: 20, life: 0.6, shape: 'puff', gravity: -20 });
+    }
+    if (c.ventT <= 0) {
+      c.heat = 0;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'it cools, and starts up again', '#c8c0b8');
+    }
+    return;
+  }
+  c.heat = Math.min(100, c.heat + dt * (phaseOf(c) >= 2 ? 3 : 2));
+  c.gauge = { label: 'HEAT', v: c.heat / 100, color: c.heat > 70 ? '#ff6020' : '#ffb040' };
+  if (c.heat >= 100 && !c.windup) {
+    c.ventT = 4.5;
+    c.exposedT = 4.5;
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, 'OVERHEATED: VENTING!', '#ffe070');
+    if (!game.toldVent) game.ui.msg('The Bellows Golem overheats and must vent: steam out of its front, its back wide open. Get behind it and strike! (Hit it while it\'s hot and it overheats sooner.)', '#ffe070', true);
+    game.toldVent = true;
+    game.audio?.play('hiss', c);
+  }
+}
+
+// Kharn's fury, every moment: building while he's after you; full, he
+// goes berserk (quicker, harder) for a while, and then he's spent.
+function furyTick(c, dt) {
+  const game = c.game;
+  const t = c.target;
+  if (c.berserkT > 0) {
+    c.berserkT -= dt;
+    c.hasteT = Math.max(c.hasteT || 0, 0.3);
+    c.fury = Math.max(0, (100 * c.berserkT) / 7);
+    c.gauge = { label: 'BERSERK', v: c.fury / 100, color: '#ff3020' };
+    if (Math.random() < dt * 12) game.renderer.emit(c.x, c.y + 1.2, c.z, { n: 1, color: ['#ff3020', '#ff9060'], up: 20, speed: 14, life: 0.5, glow: true });
+    if (c.berserkT <= 0) {
+      c.dmgMult /= 1.3;
+      c.fury = 0;
+      c.windup = null;
+      c.stunT = 2.5;
+      c.exposedT = 3;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'spent: strike now!', '#ffe070');
+    }
+    return;
+  }
+  c.fury = Math.min(100, (c.fury || 0) + dt * (t && !t.dead ? 3 : 0));
+  c.gauge = { label: 'FURY', v: c.fury / 100, color: '#ff7040' };
+  if (c.fury >= 100) {
+    c.berserkT = 7;
+    c.dmgMult *= 1.3;
+    game.renderer.floatText(c.x, c.y + 3.4, c.z, 'BERSERK!', '#ff3020');
+    c.say?.('BLOOD AND ASH!', 2.2, '#ff3020');
+    game.audio?.play('roar', c);
+    if (!game.toldFury) game.ui.msg('Kharn\'s fury builds with every blow he lands, and when it\'s full he goes berserk. Parry him to cool it!', '#ff7040', true);
+    game.toldFury = true;
+  }
+}
+
+// Kharn's flail whirled: drawn in, and battered.
+function whirl(game, c) {
+  addZone(game, { by: c, kind: 'wind', tiles: areaTiles(c.x, c.z, 4), y: c.y, life: 1.2, tick: 0.3, pull: { x: c.x, z: c.z }, puff: ASHC });
+  addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 2), y: c.y, dur: 1.1, dmg: dmgOf(c, 7), knock: 2, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: 2, kind: 'slam', color: COLORS.blow });
+  c.stunT = 1.2;
+  game.renderer.floatText(c.x, c.y + 3, c.z, 'the flail whirls!', '#ff9060');
+  game.audio?.play('whoosh', c);
+}
+
+// One of Pyrrha's kegs, set rolling from beside her straight at you.
+function rollKeg(game, c, t, k) {
+  const dx = t.x - c.x;
+  const dz = t.z - c.z;
+  const dir = Math.abs(dx) >= Math.abs(dz) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dz) || 1];
+  const side = k ? (dir[0] ? [0, 1] : [1, 0]) : [0, 0];
+  const at = { x: c.x + dir[0] + side[0], y: c.y, z: c.z + dir[1] + side[1] };
+  const keg = summon(game, 'rolling_keg', at, 1, { color: ['#ffe070', '#ff9030'] });
+  if (!keg) return null;
+  keg.owner = c;
+  keg.roll = dir;
+  keg.fuseT = 3.6;
+  return keg;
+}
+function kegGoesUp(c, onOwner) {
+  const game = c.game;
+  const o = c.owner;
+  c.dead = true;
+  game.removeOcc?.(c);
+  addHazard(game, { tiles: areaTiles(c.x, c.z, 1), y: c.y, dur: 0.05, dmg: c.back ? 4 : dmgOf(o || c, 8), burn: 2, knock: 2, from: { x: c.x, z: c.z + 0.001 }, center: { x: c.x, z: c.z }, kind: 'blast', trap: true });
+  game.renderer.effect?.({ type: 'blast', wx: c.x, wy: c.y, wz: c.z, r1: 36, life: 0.7, oy: 2 });
+  game.renderer.emit(c.x, c.y + 1, c.z, { n: 30, color: ['#ff9030', '#ffe070', '#5a5048', '#3a3430'], up: 60, speed: 90, gravity: 120, life: 0.9 });
+  game.audio?.play('boom', c);
+  game.shake = Math.min(1.5, (game.shake || 0) + 0.8);
+  // (Her own powder, back at her.)
+  if (o && !o.dead && (onOwner || dist(c, o) <= 1)) {
+    game.damage(o, Math.max(4, Math.round(o.maxHp * 0.1)), game.player);
+    o.stunT = Math.max(o.stunT || 0, 2.5);
+    o.exposedT = Math.max(o.exposedT || 0, 2.5);
+    game.renderer.floatText(o.x, o.y + 3.2, o.z, 'her own powder!', '#ffe070');
+    o.say?.('ARGH! My own keg!', 2, '#ffb040');
+  }
+  return true;
+}
 
 // Ash lying over the floor: slowed in it, and your flame gutters.
 function ashPatch(game, c, tiles, life) {
@@ -1077,23 +1422,6 @@ function ashPatch(game, c, tiles, life) {
       for (const e of inside) if (e === g.player) e.snuff?.(1.2);
     },
   });
-}
-
-// The floor split open in a jagged line through `at`, lit first, then lava.
-function rift(game, c, at) {
-  const across = Math.random() < 0.5;
-  const L = hallOf(c);
-  const tiles = [];
-  let w = across ? at.z : at.x;
-  const lo = across ? L.x0 : L.z0;
-  const hi = across ? L.x1 : L.z1;
-  for (let v = lo; v <= hi; v++) {
-    if (Math.random() < 0.3) w += Math.random() < 0.5 ? 1 : -1;
-    const q = across ? { x: v, z: w } : { x: w, z: v };
-    if (inHall(c, q) && openFloor(game, q.x, q.z) && !(Math.abs(q.x - c.x) <= 1 && Math.abs(q.z - c.z) <= 1)) tiles.push(q);
-  }
-  fire(game, c, tiles, 1.5, 6, { onFire: (g, h) => h.tiles.forEach((q) => work(g, q.x, FY, q.z, B.lava, 11, c)) });
-  game.audio?.play('rumble', c);
 }
 
 // A bolt from `c` at `t` that glances off the glass in its way (turning

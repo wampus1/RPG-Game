@@ -1,56 +1,60 @@
 // The masters of Myrrow's old places, three to a kind, none of them met
-// anywhere else, and every one of them changes its hall as it fights (see
-// bosskit.js):
+// anywhere else. A few change their halls as they fight (see bosskit.js);
+// the rest each have a way of their own with you (see game/afflict.js):
 //   a Bog Barrow:
 //     the Bog King, who turns his hall's floor to sucking bog under you
 //       (it stays bog), sends peat hands up after your ankles, calls up his
 //       drowned, and at the last sinks into his bog and comes up under you;
-//     the Moth-Mother, whose wings put out every light in her hall (yours
-//       too), who sends false lights drifting at you that burst, calls her
-//       swarm, and swoops;
-//     the Willow Wight, who hangs curtains of moss across her hall and
-//       hides in them, lashes you in from afar, and weeps the floor into a
-//       shallow flood;
+//     the Moth-Mother, whose wings open on eyes: look at her then and your
+//       feet go the wrong way (turn your back!); dust that slows, false
+//       lights that burst, her swarm, her swoop;
+//     the Willow Wight, who marks your ground and hers: still on it when
+//       it's done and you trade places (into what she left for you); her
+//       lash draws you in, her weeping hangs heavy round her;
 //   a Peat Cutting:
-//     the Spore Colossus, giant mushrooms bursting up through the floor
-//       round you (they block your way, and burst in spores), rot that
-//       turns the floor to poisoned mycelium;
+//     the Spore Colossus, whose spores take root on you (roll to shake
+//       them off before they bloom), coughed, lobbed, clouding the hall;
 //     the Lamprey Queen, who floods her hall in channels and swims them
 //       out of reach, latches on and drinks, and is stranded when the water
 //       drains away;
 //     the Gas Bloat, whose marsh gas lies about its hall waiting for a
 //       flame (your torch; its own will-o'-lights) to set it off;
 //   a Mist Crypt:
-//     the Lantern-Lord, shielded by the grave-lanterns round his hall (they
-//       light it: break them, and the dark comes in), soul-fire, fog;
-//     the Hollow King, armour full of fog, who comes apart and comes
-//       together again behind you, sends fog creeping across the floor, and
-//       raises echoes of himself;
+//     the Lantern-Lord, whose soul-fire puts a piece of you in a lantern
+//       (a heart less: break the lantern to take it back), grave-chill,
+//       fog;
+//     the Hollow King, armour full of fog, who comes apart and together
+//       again behind you, and calls echoes just like him (only he
+//       breathes);
 //     the Drowned Choir, three singers and one voice, whose dirge rings
-//       out, whose hymn floods the crypt (stand on the plinths), and who at
-//       the last sing three beams together;
+//       out, who ring stones about the crypt in an order (ring them back in
+//       the same order and their song breaks), and at the last sing three
+//       beams together;
 //   a Pirates' Cove:
-//     Makoa Sharktooth, his harpoon (reeled in), nets dropped from the
-//       roof, and the sluices opened: currents across his hall;
+//     Makoa Sharktooth, who picks your pockets with every blow (hit him
+//       hard to knock it back out), his harpoon, nets from the roof, his
+//       cutlass;
 //     the Pearl-Queen Kailani, pearls that ricochet off the walls, a nacre
-//       shell she shuts herself in while her guard fights, and a riptide
-//       across the hall;
+//       shell that turns your blade back on you while her guard fights,
+//       and a riptide across the hall;
 //     the smugglers' kraken, in a pool of its own, arms up through the
-//       floor anywhere, ink, and a grab that throws you across the cove;
+//       floor anywhere, ink that blinds you, and a grab that throws you
+//       across the cove;
 //   a Tide Grotto (Myrrow's own):
 //     the Tide-Mother, who brings the tide in over her grotto (climb the
 //       coral islands she raises) and swims it, whirlpools, and her shell
 //       spun across the floor;
-//     the Abyssal Clam, open (strike now) and shut (don't bother), pearls
-//       fired off the walls, bubbles that hold you, and the undertow
-//       dragging you to it as it snaps;
+//     the Abyssal Clam, its shell shut on every blow till you parry its
+//       snap and prise it open; pearls fired off the walls, bubbles that
+//       hold you, the undertow;
 //     the Coral Colossus, a reef grown up across its hall (a maze, then),
 //       then burst into shrapnel, and the floor calcified under you.
 import { BRAINS, addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, sporeCloud, COLORS, BOSS_TITLES } from './monsters.js';
 import { phaseOf, ready, used } from './tempo.js';
-import { knock } from '../game/combat.js';
+import { knock, beginAttack } from '../game/combat.js';
+import { mesmerise, sporeUp, takeSoul, freeSouls, plunder, spill, ink } from '../game/afflict.js';
 import { B } from '../world/blocks.js';
-import { FY, dist, sees, dmgOf, work, hallTiles, hallOf, inHall, circleTiles, wallTiles, hallLights, setLit, spotIn, blinkTo, backOff, cd, shout, proc, openFloor, drag } from './bosskit.js';
+import { FY, dist, sees, dmgOf, work, hallTiles, hallOf, inHall, circleTiles, ringTiles, coneTiles, spotIn, blinkTo, backOff, cd, shout, proc, openFloor, drag } from './bosskit.js';
 
 const BOG = ['#5a4a3a', '#7a6a50', '#3a2e22'];
 const MIST = ['#a0b8b0', '#d0e0dc', '#ffffff'];
@@ -122,11 +126,6 @@ export const MYRROW_BOSSES = {
   }),
   willow_wight: boss({
     name: 'The Willow Wight', hp: 115, dmg: 5, step: 0.4, humanoid: true, look: 'willow_wight', undead: true, brain: 'willowWight', range: 3, tint: ['#8ac080', '#d0f0c0'],
-    ward: (game, c, src, n) => {
-      if (!c.hidden || Math.random() >= 0.6) return n;
-      game.renderer.floatText(c.x, c.y + 2.4, c.z, 'lost in the moss', '#a0d090');
-      return 0;
-    },
     phaseLines: ['', '', 'Weep with me...', 'The water rises. So do I.'], drops: [['old_coin', 6, 12, 1], ['herb', 3, 6, 1], ['potion_breath', 1, 1, 0.7]],
   }),
   spore_colossus: boss({
@@ -143,19 +142,20 @@ export const MYRROW_BOSSES = {
   }),
   lantern_lord: boss({
     name: 'The Lantern-Lord Heth', hp: 110, dmg: 5, step: 0.38, humanoid: true, look: 'lantern_lord', undead: true, light: 5, brain: 'lanternLord', range: 5, tint: ['#80e8d0', '#e0fff8'],
-    ward: (game, c, src, n) => {
-      const lit = game.creatures.filter((o) => !o.dead && o.species === 'grave_lantern').length;
-      if (!lit) return n;
-      if (!(c.wardNote > 0)) {
-        c.wardNote = 0.8;
-        game.renderer.floatText(c.x, c.y + 2.6, c.z, `shielded by ${lit} lantern${lit > 1 ? 's' : ''}`, '#80e8d0');
-      }
-      return Math.max(1, Math.round(n * 0.25));
-    },
     phaseLines: ['', '', 'The fog remembers you.', 'Every lantern for every soul!'], drops: [['old_coin', 6, 12, 1], ['lantern', 1, 1, 1], ['spore_tincture', 1, 2, 1]],
   }),
   hollow_king: boss({
     name: 'The Hollow King', hp: 130, dmg: 7, step: 0.4, humanoid: true, look: 'hollow_king', arms: 'greatsword', undead: true, brain: 'hollowKing', tint: ['#a0b8c8', '#ffffff'],
+    // (Struck, the real one: one of his echoes goes out like a lamp.)
+    ward: (game, c, src, n) => {
+      const echo = src === game.player && game.creatures.find((o) => !o.dead && o.echoOf === c);
+      if (echo) {
+        echo.dead = true;
+        game.renderer.emit(echo.x, echo.y + 1, echo.z, { n: 16, color: MIST, up: 20, speed: 30, life: 0.8, shape: 'puff' });
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'found him! an echo fades', '#e0f0ff');
+      }
+      return n;
+    },
     phaseLines: ['', '', 'My knights. My echoes.', 'There is nothing inside. Nothing!'], drops: [['old_coin', 8, 14, 1], ['iron_breastplate', 1, 1, 0.5], ['gem', 1, 1, 0.6]],
   }),
   drowned_choir: boss({
@@ -164,13 +164,24 @@ export const MYRROW_BOSSES = {
   }),
   sharktooth: boss({
     name: 'Makoa Sharktooth', hp: 125, dmg: 6, step: 0.4, humanoid: true, look: 'sharktooth', arms: 'spear', brain: 'sharktooth', range: 3, tint: ['#80c8e8', '#e8e0c8'],
+    // (Every blow of his picks your pockets; a hard one of yours knocks
+    // some of it back out of him.)
+    onStrike: (game, c, p) => plunder(game, p, c),
+    ward: (game, c, src, n) => {
+      if (src === game.player && n >= 5 && c.loot && c.loot.length) spill(game, c);
+      return n;
+    },
     phaseLines: ['', '', 'Open the sluices, lads!', 'The sea takes everyone in the end!'], drops: [['coin', 12, 24, 1], ['pearl', 2, 4, 1], ['harpoon', 1, 1, 0.5]],
   }),
   pearl_queen: boss({
     name: 'The Pearl-Queen Kailani', hp: 115, dmg: 5, step: 0.36, humanoid: true, look: 'pearl_queen', arms: 'sabre', brain: 'pearlQueen', range: 4, tint: ['#f0e8dc', '#80c8e8'],
+    // (Shut in her nacre, she turns a blade back on whoever swung it.)
     ward: (game, c, src, n) => {
       if (!(c.shellT > 0)) return n;
-      if (!(c.wardNote > 0)) {
+      if (src && src.kind === 'player' && !src.dead) {
+        game.damage(src, Math.max(1, Math.round(n * 0.6)), c);
+        game.renderer.floatText(c.x, c.y + 2.6, c.z, 'REFLECTED', '#f0e8dc');
+      } else if (!(c.wardNote > 0)) {
         c.wardNote = 0.8;
         game.renderer.floatText(c.x, c.y + 2.6, c.z, 'shut in her nacre shell', '#f0e8dc');
       }
@@ -197,6 +208,13 @@ export const MYRROW_BOSSES = {
       }
       return Math.max(0, Math.round(n * 0.1));
     },
+    // (Its snap parried: prised open.)
+    onParried: (game, c) => {
+      c.open = true;
+      c.openT = 4;
+      c.exposedT = 4;
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'PRISED OPEN: strike now!', '#ffe070');
+    },
     phaseLines: ['', '', '', ''], drops: [['pearl', 6, 12, 1], ['pearl_necklace', 1, 2, 1], ['gem', 1, 2, 0.8]],
   }),
   coral_colossus: boss({
@@ -205,7 +223,19 @@ export const MYRROW_BOSSES = {
   }),
   // (What they bring with them.)
   lure_light: { name: 'False Light', hp: 4, dmg: 0, step: 0.34, mode: 'hostile', aggro: 20, under: true, floats: true, light: 7, isle: 'myrrow', brain: 'lureLight', drops: [] },
-  grave_lantern: { name: 'Grave-Lantern', hp: 14, dmg: 0, step: 9, mode: 'hostile', aggro: 0, under: true, anchored: true, undead: true, light: 9, isle: 'myrrow', brain: 'still', drops: [['lantern', 1, 1, 0.2]] },
+  // (A grave-lantern with a piece of your soul in it: break it and it's
+  // yours again.)
+  grave_lantern: { name: 'Grave-Lantern', hp: 14, dmg: 0, step: 9, mode: 'hostile', aggro: 0, under: true, anchored: true, undead: true, light: 9, isle: 'myrrow', brain: 'still', drops: [['lantern', 1, 1, 0.2]], onDeath: (game, e) => freeSouls(game, e) },
+  // (An echo of the Hollow King: just like him, but it doesn't breathe.
+  // Struck, it bursts in a chill.)
+  hollow_echo: {
+    name: 'The Hollow King', hp: 1, dmg: 5, step: 0.42, mode: 'hostile', aggro: 16, under: true, undead: true, humanoid: true, look: 'hollow_king', arms: 'greatsword', isle: 'myrrow', brain: 'hollowEcho', drops: [],
+    onDeath: (game, e) => {
+      addHazard(game, { by: null, tiles: areaTiles(e.x, e.z, 1), y: e.y, dur: 0.05, dmg: 2, chill: 2, kind: 'cold', trap: true });
+      game.renderer.emit(e.x, e.y + 1, e.z, { n: 20, color: MIST, up: 30, speed: 40, life: 0.8, shape: 'puff' });
+      game.renderer.floatText(e.x, e.y + 2.4, e.z, 'only an echo', '#c8d8e0');
+    },
+  },
   fog_knight: { name: 'Echo of the Hollow King', hp: 12, dmg: 4, step: 0.36, mode: 'hostile', aggro: 16, under: true, undead: true, humanoid: true, look: 'fog_knight', arms: 'iron_sword', isle: 'myrrow', drops: [] },
   kraken_arm: { name: 'Kraken Arm', hp: 12, dmg: 5, step: 9, mode: 'hostile', aggro: 3, under: true, anchored: true, isle: 'myrrow', brain: 'krakenArm', style: 'bite', drops: [] },
 };
@@ -306,19 +336,44 @@ export const MYRROW_BRAINS = {
     phaseSummons(c, [0.66, 0.33], () => {
       for (let i = 0; i < 3; i++) summon(game, 'moth', c, 3, { color: ['#c8a0e0', '#f0e0ff'] });
     });
+    // Her wings opening: the eyes on them. Look at her when they're open,
+    // and your feet go the wrong way.
+    if (c.gaze) {
+      c.gaze.t -= dt;
+      c.eyes = true;
+      if (c.gaze.t > 0) {
+        if (Math.random() < dt * 12) game.renderer.emit(c.x + (Math.random() - 0.5) * 3, c.y + 1.4 + Math.random(), c.z, { n: 1, color: ['#e0b0ff', '#ffffff', '#ffd0f0'], up: 4, speed: 10, life: 0.5, glow: true });
+        return true;
+      }
+      c.gaze = null;
+      c.eyes = false;
+      const p = game.player;
+      game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 10, r1: 160, color: ['#e0b0ff', '#ffffff'], life: 0.6, oy: -10, flat: 0.5, thick: 2 });
+      if (p && !p.dead && dist(c, p) <= 12) {
+        if (facing(p, c)) {
+          mesmerise(game, p, ph >= 3 ? 4.5 : 3.5);
+          game.damage(p, dmgOf(c, 2), c);
+        } else game.renderer.floatText(p.x, p.y + 2.6, p.z, 'you looked away', '#c8e8ff');
+      }
+      return true;
+    }
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Her wings: every light in her hall put out (yours too), and dust.
-    if (cd(c, 'dustCd', dt, 2.5) && ready(c) && !c.windup) {
-      c.dustCd = 10;
-      used(c, 0.5);
-      for (const q of hallLights(c)) {
-        if (q.id === B.candles) work(game, q.x, FY, q.z, B.air, 0, c, { dig: true });
-        else if (q.lit) setLit(game, q, false);
-      }
-      game.player.snuff?.(4);
+    if (cd(c, 'gazeCd', dt, 3) && ready(c) && !c.windup) {
+      c.gazeCd = ph >= 2 ? 8 : 10;
+      used(c, 1.8);
+      c.gaze = { t: 1.4 };
+      game.renderer.floatText(c.x, c.y + 3.6, c.z, 'her wings open... LOOK AWAY!', '#e0b0ff');
+      if (!game.toldGaze) game.ui.msg('When the Moth-Mother\'s wings open, turn your back on her, or her eyes turn your feet the wrong way.', '#e0b0ff', true);
+      game.toldGaze = true;
+      game.audio?.play('flap', c);
+      return true;
+    }
+    // Dust off her wings: it hangs where you are, and slows you.
+    if (cd(c, 'dustCd', dt, 2.5) && ready(c) && d <= 9 && !c.windup) {
+      c.dustCd = 8;
+      used(c, 0.4);
       addZone(game, { by: c, kind: 'dust', tiles: areaTiles(t.x, t.z, 2), y: c.y, life: 6, slow: true, color: [150, 130, 170], puff: ['#a890c0', '#d0c0e0'] });
-      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'her wings beat: the lights go out', '#c8a0e0');
       game.audio?.play('flap', c);
       return true;
     }
@@ -351,20 +406,43 @@ export const MYRROW_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    c.hidden = game.world.getBlock(c.x, FY, c.z) === B.roots || game.world.getBlock(c.x, FY + 1, c.z) === B.roots;
-    c.fade = c.hidden && !c.windup ? 0.3 : 1;
+    // Her mark on you, and on her: still on it when it's done, and you've
+    // traded places (and where you've landed was laid for you).
+    if (c.swapping) {
+      const S = c.swapping;
+      S.t -= dt;
+      if (Math.random() < dt * 14) {
+        for (const q of [S.mark, { x: c.x, z: c.z }]) game.renderer.emit(q.x + (Math.random() - 0.5), c.y + 0.1, q.z + (Math.random() - 0.5), { n: 1, color: ['#a0d090', '#e0f0d0'], up: 14, speed: 4, life: 0.6, glow: true });
+      }
+      if (S.t > 0) return true;
+      c.swapping = null;
+      const p = game.player;
+      if (p && !p.dead && p.x === S.mark.x && p.z === S.mark.z && !(p.rollT > 0) && !p.moving) {
+        const mine = { x: c.x, y: c.y, z: c.z };
+        const yours = { x: p.x, y: p.y, z: p.z };
+        game.removeOcc(c);
+        p.teleport(mine.x, mine.y, mine.z);
+        game.moveEntity(p, mine.x, mine.y, mine.z);
+        c.teleport(yours.x, yours.y, yours.z);
+        game.moveEntity(c, yours.x, yours.y, yours.z);
+        for (const q of [mine, yours]) game.renderer.emit(q.x, q.y + 1, q.z, { n: 16, color: ['#a0d090', '#e0f0d0', '#ffffff'], up: 30, speed: 40, life: 0.6, glow: true });
+        game.renderer.floatText(p.x, p.y + 2.8, p.z, 'SWAPPED!', '#a0d090');
+        addHazard(game, { by: c, tiles: areaTiles(mine.x, mine.z, 1), y: c.y, dur: 0.65, dmg: dmgOf(c, 6), kind: 'hex', center: mine, color: [140, 200, 130], chill: 1.5 });
+        game.audio?.play('whisper', c);
+      } else if (p && !p.dead) game.renderer.floatText(p.x, p.y + 2.6, p.z, 'you slipped her mark', '#c8e8ff');
+      return true;
+    }
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Curtains of moss hung across her hall: she's all but gone in them.
-    if (cd(c, 'curtainCd', dt, 1.5) && ready(c) && !c.windup) {
-      c.curtainCd = 12;
-      used(c, 0.3);
-      for (let k = 0; k < 2; k++) {
-        const at = k ? spotIn(c, t, 2, 4) : { x: c.x, z: c.z };
-        if (!at) continue;
-        for (const q of wallTiles(at, Math.random() < 0.5, 7)) if (inHall(c, q) && openFloor(game, q.x, q.z) && !(q.x === t.x && q.z === t.z)) work(game, q.x, FY, q.z, B.roots, 16, c);
-      }
-      shout(c, 'Hush...', '#a0d090');
+    // Her mark laid on you.
+    if (cd(c, 'swapCd', dt, 3) && ready(c) && d >= 2 && !c.windup) {
+      c.swapCd = ph >= 2 ? 7 : 9;
+      used(c, 1.4);
+      c.swapping = { t: 1.2, mark: { x: t.x, z: t.z } };
+      addZone(game, { by: c, kind: 'mark', tiles: [{ x: t.x, z: t.z }, { x: c.x, z: c.z }], y: c.y, life: 1.2, color: [140, 200, 130], puff: ['#a0d090', '#e0f0d0'] });
+      game.renderer.floatText(t.x, t.y + 2.6, t.z, 'her mark is on you: step off it!', '#a0d090');
+      if (!game.toldSwap) game.ui.msg('The Willow Wight marks the ground you stand on and her own: still on the mark when it\'s done, and you trade places, into what she left there for you. Step off it!', '#a0d090', true);
+      game.toldSwap = true;
       return true;
     }
     // Her lash: three long whips, and you're drawn in.
@@ -382,23 +460,15 @@ export const MYRROW_BRAINS = {
       game.audio?.play('whip', c);
       return true;
     }
-    // (Worn) She weeps, and the floor floods, shallow, patch by patch.
+    // (Worn) She weeps: sorrow round her, cold and heavy.
     if (ph >= 2 && cd(c, 'weepCd', dt, 3) && ready(c) && !c.windup) {
-      c.weepCd = 14;
+      c.weepCd = 12;
       used(c, 0.6);
-      const tiles = hallTiles(c);
-      proc(game, c, 0.7, 7, () => {
-        const q = tiles[Math.floor(Math.random() * tiles.length)];
-        if (q) flood(game, c, areaTiles(q.x, q.z, 1), 16);
-        for (let i = 0; i < 6; i++) {
-          const r = tiles[Math.floor(Math.random() * tiles.length)];
-          if (r) game.renderer.emit(r.x, FY + 2.6, r.z, { n: 1, color: SEA, up: -6, speed: 2, gravity: 160, life: 0.5 });
-        }
-      });
+      addZone(game, { by: c, kind: 'sorrow', tiles: areaTiles(c.x, c.z, 3, true).filter((q) => inHall(c, q)), y: c.y, life: 8, tick: 1, slow: true, chill: 1, color: [140, 180, 130], puff: ['#a0d090', '#e0f0d0'] });
       shout(c, 'Weep with me...', '#a0d090');
       return true;
     }
-    if (d <= 1 && !c.hidden && backOff(c, t)) return true;
+    if (d <= 1 && backOff(c, t)) return true;
     return d > 1;
   },
 
@@ -409,25 +479,23 @@ export const MYRROW_BRAINS = {
     const ph = phaseOf(c);
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Giant mushrooms burst up through the floor round you (in your way),
-    // and then burst again, in spores.
-    if (cd(c, 'fruitCd', dt, 2) && ready(c) && !c.windup) {
-      c.fruitCd = ph >= 2 ? 8 : 10;
+    // Its spores in the air: stood in them, they take root on you.
+    c.sporeTick = (c.sporeTick || 0) - dt;
+    if (c.sporeTick <= 0) {
+      c.sporeTick = 0.5;
+      if ((game.zones || []).some((z) => z.by === c && z.kind === 'spores' && !z.done && z.tiles.some((q) => q.x === t.x && q.z === t.z))) sporeUp(game, t, c, 0.1);
+    }
+    // A cough of spores straight at you.
+    if (cd(c, 'coughCd', dt, 2) && ready(c) && d <= 6 && !c.windup) {
+      c.coughCd = 5;
       used(c, 0.4);
-      const spots = [];
-      for (let i = 0; i < 5; i++) {
-        const at = spotIn(c, t, 1, 3);
-        if (at && !spots.some((q) => q.x === at.x && q.z === at.z)) spots.push(at);
-      }
-      addHazard(game, { by: c, tiles: spots, y: c.y, dur: 1, dmg: dmgOf(c, 5), knock: 1, from: { x: t.x, z: t.z }, kind: 'erupt', onFire: (g) => {
-        for (const q of spots) if (work(g, q.x, FY, q.z, B.mushroom_stem, 9, c)) work(g, q.x, FY + 1, q.z, B.glowcap_cap, 9, c);
-        proc(g, c, 8.6, 1, () => spots.forEach((q) => sporeCloud(g, q, 1, c)));
-      } });
-      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the floor heaves...', '#c8f070');
-      game.audio?.play('rumble', c);
+      c.face(t.x, t.z);
+      addHazard(game, { by: c, tiles: coneTiles(c, t, 6, 0.5), y: c.y, dur: 0.9, dmg: dmgOf(c, 3), kind: 'acid', onFire: (g, h, hit) => hit.forEach((e) => e === g.player && sporeUp(g, e, c, 0.35)) });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it coughs...', '#c8f070');
+      game.audio?.play('void', c);
       return true;
     }
-    // Spores.
+    // Spore clouds, lobbed about you.
     if (cd(c, 'sporeCd', dt, 3) && ready(c) && d <= 8 && !c.windup) {
       c.sporeCd = 6;
       used(c);
@@ -439,22 +507,31 @@ export const MYRROW_BRAINS = {
       game.audio?.play('void', c);
       return true;
     }
-    // (Worn) Rot: the floor round it gone to mycelium, poisoned to stand on.
-    if (ph >= 2 && cd(c, 'rotCd', dt, 3) && ready(c) && !c.windup) {
-      c.rotCd = 12;
-      used(c, 0.4);
-      const tiles = areaTiles(c.x, c.z, 3, true).filter((q) => inHall(c, q) && openFloor(game, q.x, q.z));
-      for (const q of tiles) work(game, q.x, FY - 1, q.z, B.mycelium, 0, c, { floor: true });
-      addZone(game, { by: c, kind: 'rot', tiles, y: c.y, life: 20, tick: 1, color: [180, 160, 190], puff: ['#c8bcc8', '#8a6aa0'], onTick: (g, z, inside) => {
-        for (const e of inside) if (e === g.player) {
-          e.poisonT = Math.max(e.poisonT || 0, 2);
-          e.poisonSrc = c;
-        }
-      } });
-      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'rot spreads under it', '#c8bcc8');
+    // (Worn) The whole hall clouded, ring by ring round you.
+    if (ph >= 2 && cd(c, 'stormCd', dt, 3) && ready(c) && !c.windup) {
+      c.stormCd = 12;
+      used(c, 0.5);
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.random();
+        const at = { x: Math.round(t.x + Math.cos(a) * 3), z: Math.round(t.z + Math.sin(a) * 3) };
+        if (inHall(c, at)) sporeCloud(game, at, 1, c);
+      }
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'spores everywhere!', '#c8f070');
       return true;
     }
-    if (bossSlam(c, dt, 2, 1, 7, 5)) return true;
+    // (Desperate) It fruits: a scream, and spores into everyone near it.
+    if (ph >= 3 && cd(c, 'fruitCd', dt, 2) && ready(c) && d <= 5 && !c.windup) {
+      c.fruitCd = 11;
+      used(c, 1.2);
+      addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 5, true), y: c.y, dur: 1.2, dmg: dmgOf(c, 2), kind: 'acid', onFire: (g, h, hit) => hit.forEach((e) => e === g.player && sporeUp(g, e, c, 0.5)) });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it shudders... GET BACK', '#e0ff90');
+      game.audio?.play('roar', c);
+      return true;
+    }
+    if (bossSlam(c, dt, 2, 1, 7, 5, () => {
+      const p = game.player;
+      if (p && !p.dead && dist(c, p) <= 3 && !(p.rollT > 0)) sporeUp(game, p, c, 0.25);
+    })) return true;
     return false;
   },
 
@@ -604,30 +681,28 @@ export const MYRROW_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    c.wardNote = (c.wardNote || 0) - dt;
-    // The grave-lanterns round his hall (lit again as he weakens).
-    const lanterns = () => {
-      const L = hallOf(c);
-      for (const [x, z] of [[L.x0 + 1, L.z0 + 1], [L.x1 - 1, L.z0 + 1], [L.x0 + 1, L.z1 - 1], [L.x1 - 1, L.z1 - 1]]) summon(game, 'grave_lantern', { x, y: c.y, z }, 1, { color: ['#80e8d0', '#e0fff8'] });
-    };
-    if (!c.lit) {
-      c.lit = true;
-      lanterns();
-      if (!game.toldLanterns) game.ui.msg('Grave-lanterns burn round the hall: while they\'re lit, the Lantern-Lord is shielded. Break them (and the dark comes in).', '#80e8d0', true);
-      game.toldLanterns = true;
-    }
-    phaseSummons(c, [0.5], lanterns);
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Soul-fire, thrown in threes.
+    // Soul-fire, thrown in threes: where it catches you, a piece of you
+    // goes into one of his lanterns.
     if (cd(c, 'soulCd', dt, 2) && ready(c) && d <= 10 && !c.windup) {
-      c.soulCd = 4;
+      c.soulCd = ph >= 2 ? 3.5 : 4.5;
       used(c);
+      let took = false;
       for (let k = 0; k < 3; k++) {
         const at = k ? spotIn(c, t, 1, 2) || t : t;
-        lob(game, c, at.x, at.z, { tint: [128, 232, 208], onLand: (g, x, z) => hex(g, c, areaTiles(x, z, 1), 0.4, 4, [128, 232, 208], { chill: 1.5 }) });
+        lob(game, c, at.x, at.z, { tint: [128, 232, 208], onLand: (g, x, z) => hex(g, c, areaTiles(x, z, 1), 0.4, 4, [128, 232, 208], { chill: 1.5, onFire: (gg, h, hit) => {
+          if (!took && hit.includes(gg.player)) took = stealSoul(c, gg.player);
+        } }) });
       }
       game.audio?.play('void', c);
+      return true;
+    }
+    // Grave-chill: a ring of cold round him.
+    if (cd(c, 'chillCd', dt, 2) && ready(c) && d <= 3 && !c.windup) {
+      c.chillCd = 6;
+      used(c);
+      for (let r = 1; r <= 2; r++) cold(game, c, ringTiles(c.x, c.z, r), 0.8 + r * 0.25, 4, { quiet: r > 1 });
       return true;
     }
     // (Worn) Fog over half his hall; he steps through it.
@@ -642,6 +717,18 @@ export const MYRROW_BRAINS = {
       shout(c, 'The fog remembers.', '#80e8d0');
       return true;
     }
+    // (Desperate) Every soul he holds burns for him: he mends by each.
+    const held = game.creatures.filter((o) => !o.dead && o.species === 'grave_lantern' && o.souls > 0);
+    if (ph >= 3 && held.length && cd(c, 'feastCd', dt, 2) && ready(c) && !c.windup) {
+      c.feastCd = 10;
+      used(c, 0.6);
+      for (const L of held) {
+        c.hp = Math.min(c.maxHp, c.hp + 3 * L.souls);
+        game.renderer.effect?.({ type: 'siphon', wx: L.x, wy: L.y + 1, wz: L.z, tx: c.x, ty: c.y + 1, tz: c.z, life: 0.6, oy: -6, n: 10, amp: 3, color: ['#80e8d0', '#e0fff8'] });
+      }
+      shout(c, 'Every lantern for every soul!', '#80e8d0');
+      return true;
+    }
     if (d <= 2 && backOff(c, t)) return true;
     return d > 1;
   },
@@ -650,9 +737,12 @@ export const MYRROW_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    phaseSummons(c, [0.66, 0.33], () => {
-      for (let i = 0; i < 2; i++) summon(game, 'fog_knight', c, 3, { color: MIST });
-    });
+    // He breathes (cold from his visor, now and then); his echoes don't.
+    c.breathT = (c.breathT || 0) - dt;
+    if (c.breathT <= 0 && !c.burrowed) {
+      c.breathT = 1.1;
+      game.renderer.emit(c.x, c.y + 1.9, c.z, { n: 3, color: ['#e0f0ff', '#ffffff'], up: 10, speed: 6, life: 0.9, shape: 'puff', gravity: -6 });
+    }
     // Come apart in fog; together again behind you.
     if (c.fogT !== undefined) {
       c.fogT -= dt;
@@ -672,6 +762,26 @@ export const MYRROW_BRAINS = {
     }
     if (!t || t.dead) return false;
     const d = dist(c, t);
+    // His echoes: two more of him, out of the fog, and he among them.
+    if (cd(c, 'echoCd', dt, 3) && ready(c) && !c.windup && !game.creatures.some((o) => !o.dead && o.echoOf === c)) {
+      c.echoCd = ph >= 2 ? 12 : 15;
+      used(c, 1);
+      game.renderer.emit(c.x, c.y + 1, c.z, { n: 30, color: MIST, up: 30, speed: 50, life: 1.1, shape: 'puff' });
+      for (let i = 0; i < (ph >= 3 ? 3 : 2); i++) {
+        const e = summon(game, 'hollow_echo', c, 3, { color: MIST });
+        if (e) {
+          e.echoOf = c;
+          e.lifeT = 14;
+        }
+      }
+      const to = spotIn(c, c, 1, 3);
+      if (to) blinkTo(c, to, MIST);
+      game.renderer.floatText(c.x, c.y + 3.2, c.z, 'which one is he?', '#c8d8e0');
+      if (!game.toldEchoes) game.ui.msg('Echoes of the Hollow King, just like him. Only the real one breathes: watch for the cold breath from his visor. (Strike an echo and it bursts in a chill.)', '#c8d8e0', true);
+      game.toldEchoes = true;
+      game.audio?.play('whisper', c);
+      return true;
+    }
     if (cd(c, 'dispCd', dt, 3) && ready(c) && d <= 9 && !c.windup) {
       c.dispCd = ph >= 3 ? 5 : 8;
       used(c, 1.2);
@@ -707,9 +817,32 @@ export const MYRROW_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
+    // Their hymn, sung and then waiting for you to sing it back.
+    if (c.song && singSong(c, dt)) return true;
     if (!t || t.dead) return false;
     const d = dist(c, t);
     const voices = [{ x: c.x - 1, z: c.z }, { x: c.x, z: c.z }, { x: c.x + 1, z: c.z }];
+    // The hymn: stones about the crypt, rung in an order. Step on them in
+    // the same order, and their voice breaks.
+    if (!c.song && cd(c, 'hymnCd', dt, 3) && ready(c) && !c.windup) {
+      c.hymnCd = 16;
+      used(c, 1);
+      const n = ph >= 3 ? 5 : ph >= 2 ? 4 : 3;
+      const stones = [];
+      for (let i = 0; i < 40 && stones.length < n; i++) {
+        const q = spotIn(c, c, 3, 7);
+        if (q && !stones.some((s) => Math.max(Math.abs(s.x - q.x), Math.abs(s.z - q.z)) < 2)) stones.push({ x: q.x, z: q.z, col: NOTES[stones.length % NOTES.length] });
+      }
+      if (stones.length >= 3) {
+        const order = stones.map((s, i) => i).sort(() => Math.random() - 0.5);
+        const zones = stones.map((s) => addZone(game, { by: c, kind: 'stone', tiles: [s], y: c.y, life: 30, color: s.col.rgb, puff: [s.col.hex] }));
+        c.song = { stones, order, zones, phase: 'sing', i: 0, next: 1, limit: 0, last: -1 };
+        shout(c, 'Sing with us...', '#80c8e0');
+        if (!game.toldHymn) game.ui.msg('The Drowned Choir rings stones about the crypt in an order. Step on them in the same order to break their song!', '#80c8e0', true);
+        game.toldHymn = true;
+        return true;
+      }
+    }
     // The dirge: three rings of it, one from each.
     if (cd(c, 'dirgeCd', dt, 2) && ready(c) && d <= 7 && !c.windup) {
       c.dirgeCd = 5;
@@ -719,23 +852,6 @@ export const MYRROW_BRAINS = {
       });
       game.audio?.play('whisper', c);
       game.renderer.floatText(c.x, c.y + 3.4, c.z, '♪ ♫ ♪', '#80c8e0');
-      return true;
-    }
-    // The hymn: the crypt floods; stand on the plinths.
-    if (cd(c, 'hymnCd', dt, 4) && ready(c) && !c.windup) {
-      c.hymnCd = 18;
-      used(c, 1);
-      const tiles = hallTiles(c);
-      for (let i = 0; i < 6; i++) {
-        const q = spotIn(c, t, 1, 5);
-        if (q) work(game, q.x, FY, q.z, B.crypt_floor, 14, c);
-      }
-      proc(game, c, 1.6, 1, () => {
-        flood(game, c, tiles, 10);
-        addZone(game, { by: c, kind: 'flood', tiles, y: c.y, life: 10, tick: 1, dmg: dmgOf(c, 1), chill: 1.5, color: [80, 140, 180] });
-      });
-      shout(c, 'Down... into the water...', '#80c8e0');
-      game.ui.msg('The crypt is flooding! Get up on a plinth!', '#80c8e0', true);
       return true;
     }
     // (Desperate) Three voices, one beam each, converging on you.
@@ -759,6 +875,9 @@ export const MYRROW_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
+    if (c.plunderT > 0) c.plunderT -= dt;
+    // His hoard, glinting on him.
+    if (c.loot && c.loot.length && Math.random() < dt * 3) game.renderer.emit(c.x, c.y + 1.2, c.z, { n: 1, color: ['#ffe070', '#ffffff'], up: 10, speed: 10, life: 0.5, glow: true, shape: 'star' });
     if (!t || t.dead) return false;
     const d = dist(c, t);
     // The harpoon: and reeled in.
@@ -793,21 +912,17 @@ export const MYRROW_BRAINS = {
       shout(c, 'Drop the nets!', '#e8e0c8');
       return true;
     }
-    // (Worn) The sluices opened: water in lanes, a current along them.
-    if (ph >= 2 && cd(c, 'sluiceCd', dt, 3) && ready(c) && !c.windup) {
-      c.sluiceCd = 14;
-      used(c, 0.6);
-      const L = hallOf(c);
-      const across = Math.random() < 0.5;
-      const sink = across ? { x: Math.random() < 0.5 ? L.x0 : L.x1, z: t.z } : { x: t.x, z: Math.random() < 0.5 ? L.z0 : L.z1 };
-      for (const off of [-2, 2]) {
-        const tiles = [];
-        for (let w = across ? L.x0 : L.z0; w <= (across ? L.x1 : L.z1); w++) for (const o of [off, off + 1]) tiles.push(across ? { x: w, z: t.z + o } : { x: t.x + o, z: w });
-        const open = tiles.filter((q) => inHall(c, q));
-        flood(game, c, open, 12);
-        addZone(game, { by: c, kind: 'current', tiles: open, y: c.y, life: 12, tick: 0.4, pull: across ? { x: sink.x, z: t.z + off } : { x: t.x + off, z: sink.z }, color: [90, 160, 200], puff: SEA });
+    // (Worn) His cutlass: three quick cuts, a pace further each.
+    if (ph >= 2 && cd(c, 'flurryCd', dt, 2) && ready(c) && d <= 3 && !c.windup) {
+      c.flurryCd = 7;
+      used(c, 0.9);
+      c.face(t.x, t.z);
+      const [ux, uz] = Math.abs(t.x - c.x) >= Math.abs(t.z - c.z) ? [Math.sign(t.x - c.x) || 1, 0] : [0, Math.sign(t.z - c.z) || 1];
+      for (let k = 1; k <= 3; k++) {
+        const at = { x: c.x + ux * k, z: c.z + uz * k };
+        addHazard(game, { by: c, tiles: [at, { x: at.x + uz, z: at.z + ux }, { x: at.x - uz, z: at.z - ux }], y: c.y, dur: 0.45 + k * 0.22, dmg: dmgOf(c, 4), kind: 'slam', center: at, radius: 1, color: COLORS.blow, quiet: k > 1 });
       }
-      shout(c, 'Open the sluices!', '#80c8e8');
+      shout(c, 'Hah! Hah! HAH!', '#e8e0c8');
       return true;
     }
     return false;
@@ -834,8 +949,9 @@ export const MYRROW_BRAINS = {
     }
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Shut in her nacre, while her guard fights for her.
-    if ((c.hp < c.maxHp * 0.8 || ph >= 2) && cd(c, 'shellCd', dt, 1) && ready(c) && !c.windup) {
+    // Shut in her nacre (it turns blades back on you), while her guard
+    // fights for her.
+    if ((c.hp < c.maxHp * 0.85 || ph >= 2) && cd(c, 'shellCd', dt, 1) && ready(c) && !c.windup) {
       c.shellCd = 18;
       used(c, 1);
       c.shellT = 10;
@@ -844,7 +960,7 @@ export const MYRROW_BRAINS = {
         if (g) g.pearlGuard = c;
       }
       shout(c, 'Guards!', '#f0e8dc');
-      if (!game.toldShell) game.ui.msg('The Pearl-Queen shuts herself in a shell of nacre: bring down her guard to open it.', '#f0e8dc', true);
+      if (!game.toldShell) game.ui.msg('The Pearl-Queen shuts herself in a shell of nacre: it turns your blade back on you. Bring down her guard to open it.', '#f0e8dc', true);
       game.toldShell = true;
       return true;
     }
@@ -902,17 +1018,22 @@ export const MYRROW_BRAINS = {
       game.audio?.play('splash', c);
       return true;
     }
-    // Ink: a black cloud, your light gone in it.
-    if (cd(c, 'inkCd', dt, 4) && ready(c) && !c.windup) {
-      c.inkCd = 10;
+    // Ink: a black cloud, and you blind in it (and for a while after).
+    if (cd(c, 'inkCd', dt, 3) && ready(c) && !c.windup) {
+      c.inkCd = ph >= 2 ? 8 : 10;
       used(c, 0.3);
-      lob(game, c, t.x, t.z, { tint: [20, 16, 24], onLand: (g, x, z) => addZone(g, {
-        by: c, kind: 'ink', tiles: areaTiles(x, z, 2, true), y: c.y, life: 8, tick: 0.5, slow: true, color: [16, 12, 20], puff: ['#100c14', '#2a2430'],
-        onTick: (gg, zz, inside) => {
-          for (const e of inside) if (e === gg.player) e.snuff?.(1);
-        },
-      }) });
-      for (const q of hallLights(c)) if (q.lit && Math.random() < 0.5) setLit(game, q, false);
+      lob(game, c, t.x, t.z, { tint: [20, 16, 24], onLand: (g, x, z) => {
+        const p = g.player;
+        if (p && !p.dead && Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) <= 2) ink(g, p, 5);
+        addZone(g, {
+          by: c, kind: 'ink', tiles: areaTiles(x, z, 2, true), y: c.y, life: 8, tick: 0.5, slow: true, color: [16, 12, 20], puff: ['#100c14', '#2a2430'],
+          onTick: (gg, zz, inside) => {
+            for (const e of inside) if (e === gg.player) ink(gg, e, 2.5);
+          },
+        });
+      } });
+      if (!game.toldInk) game.ui.msg('The Kraken\'s ink blinds you: you can see barely a pace about you while it lasts. Keep out of the black water!', '#c8a0d0', true);
+      game.toldInk = true;
       game.audio?.play('splash', c);
       return true;
     }
@@ -999,24 +1120,29 @@ export const MYRROW_BRAINS = {
     const t = c.target;
     const ph = phaseOf(c);
     c.wardNote = (c.wardNote || 0) - dt;
-    // Open, and shut (and drawn so: see islebossart.js).
-    c.variant = c.open ? 1 : 0;
-    c.cycle = (c.cycle ?? 3) - dt;
-    if (c.cycle <= 0) {
-      c.open = !c.open;
-      c.cycle = c.open ? 3.5 : 4;
-      if (c.open) {
-        game.renderer.floatText(c.x, c.y + 3, c.z, 'it opens: strike now!', '#ffe070');
-        // (Worn) The undertow as it opens: you're drawn to it.
-        if (ph >= 2) addZone(game, { by: c, kind: 'undertow', tiles: hallTiles(c), y: c.y, life: 2.8, tick: 0.45, pull: { x: c.x, z: c.z }, puff: SEA });
-      } else {
-        // (Snapping shut.)
+    // Open (prised, or gulping), and shut again (drawn so: see the art).
+    if (c.openT > 0) {
+      c.openT -= dt;
+      if (c.openT <= 0) {
+        c.open = false;
         addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 2), y: c.y, dur: 0.05, dmg: dmgOf(c, ph >= 2 ? 10 : 6), knock: 2, from: { x: c.x, z: c.z }, kind: 'slam', center: { x: c.x, z: c.z }, radius: 2, color: COLORS.blow });
         game.audio?.play('clang', c);
       }
     }
+    c.variant = c.open ? 1 : 0;
     c.fade = 1;
     if (!t || t.dead) return true;
+    const d = dist(c, t);
+    // At its lip: it gapes, and snaps (parry the snap, and it's prised
+    // open).
+    if (!c.open && d <= 1 && !c.windup && cd(c, 'snapCd', dt, 0.8)) {
+      c.snapCd = 2.4;
+      beginAttack(game, c, t, { name: 'snap', windup: 0.95, recover: 0.8, reach: 1, mult: 1.4 });
+      game.renderer.floatText(c.x, c.y + 3, c.z, 'it gapes... (parry!)', '#f0e8dc');
+      if (!game.toldClam) game.ui.msg('The Abyssal Clam\'s shell turns every blow. Parry its snap (raise your guard just as it bites) to prise it open!', '#f0e8dc', true);
+      game.toldClam = true;
+      return true;
+    }
     // Open: pearls off the walls.
     if (c.open && cd(c, 'volleyCd', dt, 0.6)) {
       c.volleyCd = 2.2;
@@ -1034,6 +1160,19 @@ export const MYRROW_BRAINS = {
           addZone(g, { by: c, kind: 'bubble', tiles: [{ x, z }], y: c.y, life: 8, root: 1.5, once: true, dmg: dmgOf(c, 2), color: [200, 240, 255], puff: SEA });
         } });
       }
+      return true;
+    }
+    // (Worn) The undertow: you're drawn to it; and it opens, a moment, to
+    // gulp.
+    if (ph >= 2 && !c.open && cd(c, 'tideCd', dt, 3) && ready(c)) {
+      c.tideCd = 10;
+      used(c, 2.2);
+      addZone(game, { by: c, kind: 'undertow', tiles: hallTiles(c), y: c.y, life: 2.2, tick: 0.45, pull: { x: c.x, z: c.z }, puff: SEA });
+      proc(game, c, 2.2, 1, () => {
+        c.open = true;
+        c.openT = 1.5;
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'it gulps: strike!', '#ffe070');
+      });
       return true;
     }
     return true;
@@ -1100,6 +1239,16 @@ export const MYRROW_BRAINS = {
     }
     return true;
   },
+  // An echo: it fights as he does, and fades in its time.
+  hollowEcho(c, dt) {
+    c.lifeT = (c.lifeT ?? 14) - dt;
+    if (c.lifeT <= 0 || !c.echoOf || c.echoOf.dead) {
+      c.game.renderer.emit(c.x, c.y + 1, c.z, { n: 16, color: MIST, up: 20, speed: 30, life: 0.8, shape: 'puff' });
+      c.dead = true;
+      return true;
+    }
+    return false;
+  },
   // A kraken's arm: it lashes whoever's beside it, and sinks back in time.
   krakenArm(c, dt) {
     c.armT = (c.armT ?? 8) - dt;
@@ -1115,6 +1264,90 @@ export const MYRROW_BRAINS = {
     return true;
   },
 };
+
+// ------------------------------------------------------------ their ways
+// Facing toward `c` (whichever way you last turned).
+function facing(p, c) {
+  const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
+  const dx = c.x - p.x;
+  const dz = c.z - p.z;
+  const L = Math.hypot(dx, dz) || 1;
+  return (fx * dx + fz * dz) / L > 0.3;
+}
+
+// A piece of you into a new lantern of the Lantern-Lord's, somewhere off
+// in his hall (four at most).
+function stealSoul(c, p) {
+  const game = c.game;
+  if ((p.soulsTaken || 0) >= 4) return false;
+  const at = spotIn(c, c, 3, 8) || spotIn(c, p, 3, 7);
+  if (!at) return false;
+  const L = summon(game, 'grave_lantern', { x: at.x, y: c.y, z: at.z }, 0, { color: ['#80e8d0', '#e0fff8'] });
+  return !!(L && takeSoul(game, p, c, L));
+}
+
+// The Drowned Choir's hymn: each stone rung in turn (its colour, its
+// note); then yours to ring back, on foot, in the same order.
+const NOTES = [
+  { hex: '#80c8e8', rgb: [128, 200, 232] }, { hex: '#e0a0ff', rgb: [224, 160, 255] }, { hex: '#a0f0b0', rgb: [160, 240, 176] },
+  { hex: '#ffd080', rgb: [255, 208, 128] }, { hex: '#ff9090', rgb: [255, 144, 144] },
+];
+function ring(game, c, s, ok = true) {
+  game.renderer.effect?.({ type: 'ring', wx: s.x, wy: c.y, wz: s.z, r0: 2, r1: 22, color: [ok ? s.col.hex : '#ff4040', '#ffffff'], life: 0.5, oy: 3, flat: 0.5, thick: 2 });
+  game.renderer.emit(s.x, c.y + 0.6, s.z, { n: 10, color: [s.col.hex, '#ffffff'], up: 30, speed: 20, life: 0.6, glow: true });
+  game.renderer.floatText(s.x, c.y + 2, s.z, '♪', ok ? s.col.hex : '#ff4040');
+  game.audio?.play('bell', { x: s.x, z: s.z });
+}
+function singSong(c, dt) {
+  const game = c.game;
+  const S = c.song;
+  const done = (good) => {
+    c.song = null;
+    for (const z of S.zones) if (z) z.done = true;
+    if (good) {
+      c.stunT = 5;
+      c.exposedT = 5;
+      game.renderer.floatText(c.x, c.y + 3.6, c.z, 'THE SONG BREAKS: strike now!', '#ffe070');
+      game.audio?.play('glass', c);
+    } else {
+      cold(game, c, hallTiles(c), 0.8, 6, { quiet: true });
+      game.renderer.floatText(c.x, c.y + 3.6, c.z, 'a dirge for you...', '#80c8e0');
+      game.audio?.play('whisper', c);
+    }
+  };
+  if (S.phase === 'sing') {
+    S.next -= dt;
+    if (S.next <= 0) {
+      if (S.i >= S.order.length) {
+        S.phase = 'echo';
+        S.i = 0;
+        S.limit = 3 + S.order.length * 1.6;
+        game.renderer.floatText(c.x, c.y + 3.6, c.z, 'now you...', '#80c8e0');
+        return true;
+      }
+      ring(game, c, S.stones[S.order[S.i]]);
+      S.i++;
+      S.next = 0.8;
+    }
+    return true;
+  }
+  S.limit -= dt;
+  const p = game.player;
+  const at = p ? S.stones.findIndex((q) => q.x === p.x && q.z === p.z) : -1;
+  if (at >= 0 && at !== S.last) {
+    S.last = at;
+    if (at === S.order[S.i]) {
+      ring(game, c, S.stones[at]);
+      S.i++;
+      if (S.i >= S.order.length) done(true);
+    } else {
+      ring(game, c, S.stones[at], false);
+      done(false);
+    }
+  } else if (at < 0) S.last = -1;
+  if (c.song && S.limit <= 0) done(false);
+  return true;
+}
 
 // Marsh gas going up.
 function blowGas(game, c, z) {

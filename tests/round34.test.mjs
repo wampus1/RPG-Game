@@ -222,7 +222,8 @@ test('each island has its own kind of old place, and makes the usual kinds its o
 });
 
 test('every island\'s masters are its own: three to a kind, none shared, all with brains and art', async () => {
-  const { isleBossArt } = await import('../src/render/islebossart.js');
+  const { hasFigure } = await import('../src/render/bossfigs.js');
+  const { beastOf } = await import('../src/render/bossbeasts.js');
   const all = [];
   for (const kinds of Object.values(ISLE_BOSSES)) for (const list of Object.values(kinds)) {
     assert.equal(list.length, 3);
@@ -239,7 +240,7 @@ test('every island\'s masters are its own: three to a kind, none shared, all wit
     const S = SPECIES[k];
     assert.ok(S && S.boss && BRAINS[S.brain], `${k} is a master with a brain`);
     assert.ok(!thessa.includes(k));
-    assert.ok(S.humanoid ? S.look : isleBossArt({})[k], `${k} is drawn`);
+    assert.ok(S.humanoid ? S.look && hasFigure(k) : beastOf(k), `${k} is drawn`);
   }
   // (The far islands' harder.)
   assert.ok(ISLE_BOSS_HP.kharos > 1 && ISLE_BOSS_HP.myrrow > 1 && !ISLE_BOSS_HP.thessa);
@@ -289,15 +290,21 @@ test('a master\'s works on its hall are put back when it falls, and never saved'
   d.leave();
 });
 
-test('the island masters fight: every one of them uses its powers and changes its hall', () => {
+test('the island masters fight: every one uses its powers, and those that keep their halls change them', () => {
   const game = makeGame(12345);
   const input = stubInput();
   game.cheats = { ...(game.cheats || {}), god: true };
   const p = game.player;
   const base = game.sim.dungeons.all.find((d) => d.type !== 'kavorent');
-  // (A few of each island's: one that floods, one that builds walls, one
-  // that lets lava in.)
-  for (const [sp, isle, type, kind] of [['drowned_choir', 'myrrow', 'crypt', B.water], ['thorn_queen', 'thessa', 'grove', B.briar], ['molten_heart', 'kharos', 'forge', B.lava]]) {
+  // (A few of each island's that keep their halls (see round35 for the
+  // rest, which have their own ways instead): one that floods, one that
+  // grows briars, one that lets lava in.)
+  const typeOf = (sp) => {
+    for (const kinds of Object.values(ISLE_BOSSES)) for (const [t, list] of Object.entries(kinds)) if (list.includes(sp)) return t;
+    return Object.entries(ISLE_DTYPES).find(([, T]) => T.bosses.includes(sp))[0];
+  };
+  for (const [sp, isle, kind] of [['lamprey_queen', 'myrrow', B.water], ['thorn_queen', 'thessa', B.briar], ['magma_tender', 'kharos', B.lava]]) {
+    const type = typeOf(sp);
     new DungeonRun(game, { ...base, type, isle, floors: {}, cleared: false, depth: 1 }).enter();
     const d = game.dungeon;
     const br = d.data.bossRoom;

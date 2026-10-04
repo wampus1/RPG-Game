@@ -59,10 +59,18 @@ export function ready(c) {
   return !(c.gapT > 0);
 }
 
+// (A far island's master breathes less between attacks, and less still
+// while it's whole: it doesn't feel you out first. See ISLE_BOSS_TEMPO.)
+function gapOf(c) {
+  const ph = phaseOf(c);
+  const k = c.tempo || 1;
+  return GAP[ph] / (k > 1 && ph === 1 ? k * 1.2 : k);
+}
+
 // An attack begun: a breath before the next (`extra` seconds more for a
 // long one).
 export function used(c, extra = 0) {
-  c.gapT = GAP[phaseOf(c)] + extra;
+  c.gapT = gapOf(c) + extra;
   c.casts = (c.casts || 0) + 1;
   c.stillT = 0;
   c.repo = null;
@@ -75,7 +83,8 @@ export function used(c, extra = 0) {
 // with what it has to hand. Null if it isn't pressed yet.
 export function press(c) {
   const ph = phaseOf(c);
-  if (!c.target || c.target.dead || !((c.sinceAtk || 0) > PRESS[ph])) return null;
+  const k = c.tempo || 1;
+  if (!c.target || c.target.dead || !((c.sinceAtk || 0) > PRESS[ph] / k)) return null;
   if (!c.pressed) {
     c.pressed = true;
     // (An island master's many works come round in turn: only the next of
@@ -90,7 +99,7 @@ export function press(c) {
     c.gapT = Math.min(c.gapT || 0, 0.2);
     return 'ready';
   }
-  if (c.sinceAtk > PRESS[ph] + 1.4 && !c.S.anchored && !(c.burrowed || c.vanished || c.ceiling || c.tether || c.solid === false || c.act)) return 'close';
+  if (c.sinceAtk > PRESS[ph] / k + 1.4 / k && !c.S.anchored && !(c.burrowed || c.vanished || c.ceiling || c.tether || c.solid === false || c.act)) return 'close';
   return 'ready';
 }
 
@@ -119,6 +128,9 @@ export function bossClock(c, dt) {
     c.shieldHit.t += dt;
     if (c.shieldHit.t > 0.5) c.shieldHit = null;
   }
+  // (Its own clock, if it keeps one: heat, fury, the seasons. It runs
+  // whatever it's doing, unlike its brain.)
+  if (c.S.tick && !c.dead && !c.waiting) c.S.tick(c, dt);
   const ph = phaseOf(c);
   c.phaseSeen ??= 1;
   if (ph > c.phaseSeen && !c.dead && !c.waiting) {

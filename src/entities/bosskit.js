@@ -259,8 +259,11 @@ export function backOff(c, t) {
 
 // A cooldown run down (true when it's ready). `first`: how long before the
 // first time.
+// (A far island's master: its works come round quicker, and the first of
+// them sooner; see ISLE_BOSS_TEMPO.)
 export function cd(c, key, dt, first) {
-  c[key] = (c[key] ?? first) - dt;
+  const k = c.tempo || 1;
+  c[key] = (c[key] ?? first / (k * k)) - dt * k;
   return c[key] <= 0;
 }
 

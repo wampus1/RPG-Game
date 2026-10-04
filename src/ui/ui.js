@@ -17,6 +17,7 @@ import { mastery } from '../game/mastery.js';
 import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
 import { MARKS, fightPhase } from '../entities/tempo.js';
+import { afflictionsOf } from '../game/afflict.js';
 
 // The tool pictured for a block that wants one.
 const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
@@ -391,6 +392,33 @@ export class UI {
       ctx.globalAlpha = Math.min(1, Math.max(0, (f.t - 0.6) * 2));
       drawText(ctx, f.title, Math.round(x0 + W / 2 - textWidth(f.title) / 2), by + 10, '#a89878', '#000');
       ctx.globalAlpha = 1;
+    }
+    // Its own gauge, if it keeps one (heat, fury, the season it's in: see
+    // the bosses_ files), under the title.
+    let gy = by + 21;
+    const g = (f.boss.find((c) => !c.dead && c.gauge) || {}).gauge;
+    if (g) {
+      const gw = 120;
+      const gx = Math.round(x0 + W / 2 - gw / 2);
+      const hot = g.v >= 0.85 && Math.floor(this.time * 8) % 2;
+      drawText(ctx, g.label, gx - textWidth(g.label) - 4, gy - 2, hot ? '#ffffff' : g.color, '#000');
+      ctx.fillStyle = 'rgba(10,4,6,0.85)';
+      ctx.fillRect(gx - 1, gy - 1, gw + 2, 5);
+      ctx.fillStyle = hot ? '#ffffff' : g.color;
+      ctx.fillRect(gx, gy, Math.round(gw * Math.max(0, Math.min(1, g.v))), 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillRect(gx, gy, Math.round(gw * Math.max(0, Math.min(1, g.v))), 1);
+      gy += 9;
+    }
+    // And what it's done to you (and how to be rid of it).
+    const marks = afflictionsOf(game.player);
+    if (marks.length) {
+      const line = marks.map((m) => m.text);
+      let mx = Math.round(x0 + W / 2 - textWidth(line.join('   ')) / 2);
+      for (const m of marks) {
+        drawText(ctx, m.text, mx, gy, m.color, '#000');
+        mx += textWidth(m.text) + textWidth('   ');
+      }
     }
   }
 

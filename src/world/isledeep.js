@@ -154,10 +154,13 @@ export const ISLE_BOSSES = {
   },
 };
 
-// The far islands' masters, harder than Thessa's: their health, and their
-// blows.
-export const ISLE_BOSS_HP = { kharos: 1.35, myrrow: 1.35 };
-export const ISLE_BOSS_DMG = { kharos: 1.25, myrrow: 1.25 };
+// The far islands' masters, harder than Thessa's: their health, their
+// blows, and their pace (ISLE_BOSS_TEMPO: how much quicker their works
+// come round, their breath between attacks and their blows land; and
+// they open with more of what they have, rather than feel you out).
+export const ISLE_BOSS_HP = { kharos: 1.25, myrrow: 1.25 };
+export const ISLE_BOSS_DMG = { kharos: 1.15, myrrow: 1.15 };
+export const ISLE_BOSS_TEMPO = { kharos: 1.3, myrrow: 1.3 };
 
 // Adventurers leave the far islands' old places alone a good while (time
 // for you to get there first): not before this day, nor till you've had

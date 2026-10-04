@@ -15,7 +15,8 @@
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS } from '../world/dungeongen.js';
-import { ISLE_BOSS_HP, ISLE_BOSS_DMG } from '../world/isledeep.js';
+import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
+import { settleAfflictions } from './afflict.js';
 import { updateWorks, clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
@@ -110,6 +111,7 @@ export class DungeonRun {
     const game = this.game;
     // Up and out alive with what you found: it's yours now.
     if (!game.player.dead && this.unbound().length) game.ui.msg('Up in the daylight, what you found below is yours to keep.', '#ffe070');
+    settleAfflictions(game);
     this.carried = null;
     this.saveFloor();
     this.clearFloor();
@@ -409,6 +411,7 @@ export class DungeonRun {
       const isle = this.rec.isle;
       c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP * (ISLE_BOSS_HP[isle] || 1));
       c.dmgMult *= BOSS_DMG * (ISLE_BOSS_DMG[isle] || 1);
+      if (ISLE_BOSS_TEMPO[isle]) c.tempo = ISLE_BOSS_TEMPO[isle];
     }
     game.addCreature(c);
     return c;
@@ -582,6 +585,7 @@ export class DungeonRun {
         c.restHp = c.hp;
       }
       this.fight = null;
+      settleAfflictions(game);
       game.ui.msg('Behind you, the thing in the hall settles back to wait.', '#c8b8a0');
     }
   }
@@ -596,6 +600,7 @@ export class DungeonRun {
       game.audio?.play('gate', { x: g.x, z: g.z });
     }
     if (this.fight) this.fallen = { name: this.fight.name, t: 0 };
+    settleAfflictions(game, this.fight && this.fight.boss);
     this.fight = null;
     // (Its fall's scene plays the fanfare itself.)
     if (!(game.scene && game.scene.kind === 'boss_down')) game.audio?.play('victory');

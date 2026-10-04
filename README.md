@@ -2325,12 +2325,13 @@ These take some of each island's sites: about a quarter of Thessa's, and
 two in five of the other islands'.
 
 **Masters.** Every island has its own masters, three to each kind of old
-place, 33 in all, and none is met anywhere else. Every one changes its
-hall as it fights. It might raise walls, flood the floor, turn it to lava
-or bog, grow briars or trees, or put out the lights. The far islands'
-masters have about a third more health and hit a quarter harder than
-Thessa's. Whatever a master did to its hall is put back when it falls,
-and none of it is ever saved.
+place, 33 in all, and none is met anywhere else. When they came in, every
+one changed its hall as it fought: walls, floods, lava, bog, briars, trees
+or darkness. (Since Round 35 only eight still do; the rest have ways of
+their own. See Round 35 below, which also changed some of what's listed
+here.) The far islands' masters have 25% more health and hit 15% harder
+than Thessa's. Whatever a master did to its hall is put back when it
+falls, and none of it is ever saved.
 
 On Kharos:
 - *Ash Barrow*:
@@ -2405,6 +2406,148 @@ day you first set foot on each island is kept with your save.
 - Lava burns whatever stands in it and sets it alight, unless it lives in
   fire. Beasts, people and paths keep out of it.
 
+## Round 35: painted masters, and their own ways
+
+**Clothes.** Everyone's clothes are repainted (see `render/people.js`).
+Cloth is shaded the way a painter would: lit on the left, in shadow on
+the right, lighter on top, with darker folds, hems, seams and creases.
+Shadows lean toward violet and lights toward gold. Each outfit gets
+details of its own:
+- buttons, laces, collars and cuffs;
+- a smith's apron with its ties, a guard's tabard with its trim;
+- robes whose folds swing at the hem;
+- a hunter's quiver strap, a rope belt on the tidewraps;
+- capes that flutter as you walk.
+
+Hats and armour are redone the same way. Faces get a jaw and a neck in
+shadow, and lose the stray pixels.
+
+**The masters, painted.** Every master is redrawn by hand in code, with
+the same light and palette, and drawn one to one. The old way blew a
+small sprite up by half again, which made some pixels bigger than
+others. Now every pixel matches.
+
+The masters shaped like people are painted as full figures, half again
+as tall as anyone else (see `render/bossfigs.js`). Each has its own:
+- dress and armour;
+- hat or crown or hood;
+- weapon, held as it should be and raised as a blow comes.
+
+The beasts are painted at their full size (see `render/bossbeasts.js`),
+and the three that walk on legs keep their legs, round newly painted
+bodies.
+
+**Moving parts.** All of them breathe, quicker as they're worn down.
+Each has parts of its own that move. Among them:
+- *figures:*
+  - the Cinder King's crown burns, its flames licking;
+  - the Hollow Saint's halo turns, broken in three places;
+  - the Mound Witch's husbands' souls circle her;
+  - smoke rolls off the Smoke Herald's shoulders;
+  - the Lantern-Lord's lantern swings, and fog drifts round his feet;
+  - fog leaks from the joints of the Hollow King's armour;
+  - moss sways from the Willow Wight's arms;
+  - the Bombard-Queen's fuses fizz;
+  - the Kiln-Priest's censer swings and his glaze drips;
+- *beasts:*
+  - the Urn-Mother's ash arms wave, and her lid lifts on the smoke (and
+    is thrown back as she breathes in);
+  - the Glass Wyrm's jaw drops open, glowing;
+  - the Bellows Golem's bellows pump, its stacks smoke, and it glows red
+    as it heats;
+  - the Molten Heart beats twice and rests, its veins flaring;
+  - the eyes on the Moth-Mother's wings open and glow as she fixes you;
+  - the Abyssal Clam's shell opens on a glowing pearl;
+  - the Kraken's arms curl;
+  - the Tide-Mother rows;
+  - the Hollow Oak's leaves follow its seasons (blossom, green, falling
+    gold, bare and snowed on).
+
+What a master is doing shows on it:
+- Kharn's eyes go red and he steams as he goes berserk;
+- Sharktooth's hoard glints on him;
+- the Pearl-Queen shuts in a shell of nacre;
+- the Lamprey Queen, under the water, is only a fin;
+- the Hollow King's echoes look just like him, but they don't breathe.
+
+**Harder far islands.** Masters on Kharos and Myrrow have 25% more health
+than Thessa's and hit 15% harder. They are quicker, too:
+- their powers come round faster, the first time much faster;
+- they rest less between attacks;
+- in their first stage they rest less still, so they don't hang back
+  feeling you out.
+
+**Their own ways.** Most masters no longer change their halls. Only eight
+still do: the Magma Tender, the Obsidian Abbess, the Kiln-King, the Bog
+King, the Lamprey Queen, the smugglers' kraken, the Tide-Mother and the
+Thorn Queen. The rest each fight in a way of their own. Many of these
+work on you rather than on the hall, and what's on you shows under the
+master's bar.
+
+Kharos:
+- *the Cinder King* lays decrees on you: KNEEL (stand still and strike
+  nothing) or BEGONE (keep moving). Obey and he's satisfied, and off his
+  guard a moment; defy him and fire comes down on you.
+- *the Urn-Mother* breathes in, then swallows you. Strike, and strike,
+  to burst out, and she's left reeling. Too slow, and she spits you out,
+  burned. Roll away from the breath.
+- *the Smoke Herald*'s horn sends out rings of sound to roll through.
+- *the Glass Wyrm* hunts you from under the floor by your footsteps.
+  Stand still and it loses you.
+- *the Bellows Golem* heats up as it fights and must stop to vent steam.
+  That's your chance; striking it while hot heats it faster.
+- *the Kiln-Priest*'s glaze coats you. Three coats and you're fired
+  solid. A hard blow to him cracks one off.
+- *the Vitrified Horror* shatters into shards at two-thirds and at a
+  third of its health. Break them before they crawl back together: each
+  one that makes it mends it, and if none does, it reforms cracked and
+  open to you.
+- *Kharn the Ash-Reaver*'s fury rises with every blow he lands and
+  cools when you parry him. Full, he goes berserk.
+- *the Bombard-Queen* rolls lit kegs. Hit one and it rolls back to her.
+- *the Slag Titan*'s lodestone tears iron out of your hand (go and pick
+  it up) or drags you in by your iron armour.
+- *the Molten Heart* spits, and its meltdown is rings of fire.
+
+Myrrow:
+- *the Moth-Mother* opens the eyes on her wings. Meet her gaze and
+  you're mesmerised: your feet go the wrong way. Look away.
+- *the Willow Wight* marks the ground under you and under her. Still on
+  the mark when it's done, and you trade places, into the trap she left
+  there. Step off it.
+- *the Spore Colossus* coughs spores that take root on you. Roll to
+  shake them off before they bloom.
+- *the Lantern-Lord* takes pieces of your soul (a heart each) into
+  grave-lanterns. Break a lantern to get yours back.
+- *the Hollow King* leaves echoes of himself. They look like him but
+  burst at a blow.
+- *the Drowned Choir* rings stones about the crypt in an order. Step on
+  them in the same order to break their song.
+- *Makoa Sharktooth* picks your pockets with every blow. Hit him hard to
+  knock your things back out; they all spill when he falls.
+- *the Pearl-Queen* turns 60% of a blow back on you while she's in her
+  shell.
+- *the smugglers' kraken* inks you blind.
+- *the Abyssal Clam* can be prised open by parrying its snap.
+
+The grove:
+- *the Elder Stag* charges in a straight line until something stops him.
+  Sidestep by a wall and he stuns himself on it. When desperate, he
+  wheels and comes straight back.
+- *the Hollow Oak* goes through the seasons:
+  - spring: taproots and acorns;
+  - summer: sun;
+  - autumn: falling leaves, and it is soft to your blows;
+  - winter: frost, and it is hard as iron.
+
+Whatever a master did to you is put right when the fight ends: your soul
+back, your feet and sight your own, your things returned.
+
+**Fixes.**
+- The Elder Stag was never stunned against a wall: it counted itself as
+  the thing in its way.
+- The Bombard-Queen's kegs had no picture.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2474,6 +2617,13 @@ src/
                        3D dice on tables), dungeontex + dungeonart (the
                        stone and alloy below ground), bossart (the masters
                        drawn big: auras, rims of light, walking legs),
+                       paint (a painter's kit for pixel art in code: lit
+                       masses, tubes, planes, hue-shifted ramps),
+                       people (everyone's clothes, hats and gear, shaded),
+                       bossfigs (the masters shaped like people, painted
+                       as figures), bossbeasts (the rest, painted),
+                       bossbody (drawing a painted master: its frames,
+                       its state, its facing),
                        oldplaces (spire runes, beacons, relic circles),
                        isleart (Kharos's and Myrrow's ground, trees,
                        lava, goods and creatures), islebossart (the

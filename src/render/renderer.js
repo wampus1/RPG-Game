@@ -13,6 +13,7 @@ import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpi
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
+import { drawBossArt } from './bossbody.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -296,6 +297,7 @@ export class Renderer {
     drawLasers(this, this.ctx, game);
     drawShields(this, this.ctx, game);
     this.drawParticles(dt);
+    this.drawInk(game);
     this.drawAim(game);
     if (snap || this.zoomK !== 1) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
@@ -1149,7 +1151,37 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ entities
+  // Blinded by a kraken's ink: black all round, but for a little way about
+  // you (thinning out as it wears off).
+  drawInk(game) {
+    const p = game.player;
+    if (!p || !(p.inkT > 0)) return;
+    const ctx = this.ctx;
+    const rp = p.renderPos();
+    const cx = rp.x * TILE - this.camX + 8;
+    const cy = rp.z * TILE - rp.y * LH + LH - this.camY;
+    const k = Math.min(1, p.inkT / 1.2);
+    const r0 = 26 + (1 - k) * 80;
+    const g = ctx.createRadialGradient(cx, cy, r0 * 0.55, cx, cy, r0 * 1.35);
+    g.addColorStop(0, 'rgba(6,2,10,0)');
+    g.addColorStop(1, `rgba(6,2,10,${0.96 * k})`);
+    ctx.save();
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.vw, this.vh);
+    // (Wisps of the ink, curling.)
+    ctx.globalAlpha = 0.25 * k;
+    ctx.fillStyle = '#2a1830';
+    for (let i = 0; i < 14; i++) {
+      const a = this.time * 0.6 + i * 0.45;
+      const rr = r0 * (1.05 + 0.25 * Math.sin(this.time * 1.3 + i));
+      ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.6), 3, 2);
+    }
+    ctx.restore();
+  }
+
   drawEntity(ctx, e, rp, game) {
+    // (Swallowed: out of sight, inside it.)
+    if (e.kind === 'player' && e.swallowed) return;
     let sx = Math.round(rp.x * TILE - this.camX);
     const floorY = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY); // top of floor face
     const feetY = floorY + 10 - (e.hop || 0);
@@ -1201,6 +1233,8 @@ export class Renderer {
       const left = this.sideOf(e);
       const f = e.moving ? 1 + (Math.floor(this.time * 6) % 2) : 0;
       this.drawSide(ctx, horseSprite(f, e.variant || 0, e.banner || null, !!e.saddled), sx + 8 - HORSE_W / 2, feetY - HORSE_H + 1, left);
+    } else if (master && drawBossArt(this, ctx, e, sx, feetY)) {
+      // (Painted, one to one, moving: see bossbody.js.)
     } else if (master && e.kind === 'creature' && drawBossBody(this, ctx, e, sx, feetY, game, (q) => creatureSheet(q.species, q.variant || 0))) {
       // (Drawn: see bossart.js.)
     } else if (e.kind === 'creature') {

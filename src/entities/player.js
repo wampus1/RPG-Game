@@ -275,6 +275,8 @@ export class Player extends Entity {
     if (input.lastMoveKey && input.isDown(input.lastMoveKey)) d = MOVE_KEYS[input.lastMoveKey];
     else for (const k in MOVE_KEYS) if (input.isDown(k)) d = MOVE_KEYS[k];
     if (!d) return;
+    // (Mesmerised: your feet go the wrong way. See afflict.js.)
+    if (this.mazeT > 0) d = [-d[0], -d[1]];
     this.sitting = null;
     // Sat in the back of a wagon: moving climbs you down.
     if (this.inWagon) {

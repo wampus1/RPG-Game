@@ -59,6 +59,7 @@ import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.j
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
+import { struggle, tickAfflictions } from './afflict.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
@@ -1749,6 +1750,7 @@ export class Game {
     this.dotHit = true;
     for (const e of [this.player, ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.poisonT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
     this.lavaTick(dt);
+    tickAfflictions(this, this.player, dt);
     enforceIslandLaws(this, dt);
     this.pearlDive(dt);
     this.dotHit = false;
@@ -4418,6 +4420,14 @@ export class Game {
   swing() {
     this.duelBegins();
     const p = this.player;
+    // (Swallowed: every blow's a shove at the inside of it.)
+    if (p.swallowed) {
+      if (p.attackCd <= 0) {
+        p.attackCd = 0.18;
+        struggle(this, p);
+      }
+      return;
+    }
     if (p.attackCd > 0) return;
     p.attackCd = 0.3;
     p.doAction(0.22);
@@ -4434,6 +4444,7 @@ export class Game {
   swingAt() {
     this.duelBegins();
     const p = this.player;
+    if (p.swallowed) return this.swing();
     if ((p.attackCd > 0 || p.swing || p.commitT > 0) && !(p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) && !(p.heldDef() && p.heldDef().ranged)) {
       this.queueBlow(null, false);
       return false;
@@ -4606,6 +4617,7 @@ export class Game {
   attack(target, heavy = false) {
     this.duelBegins();
     const p = this.player;
+    if (p.swallowed) return this.swing();
     // (A siege engine: hacked at, like any timber.)
     if (target.kind === 'prop' && (target.type === 'catapult' || target.type === 'ram')) {
       if (p.attackCd > 0 || p.swing) return;
@@ -4860,6 +4872,9 @@ export class Game {
       return;
     }
     target.hp -= amount;
+    // (An island master with its own way with a blow that lands: see
+    // afflict.js.)
+    if (source && source.S && source.S.onStrike && target.kind === 'player' && amount > 0) source.S.onStrike(this, source, target, amount);
     // Jewelled armour answers a blow struck in close.
     if (source && !this.dotHit) onStruck(this, target, source, amount);
     target.flash = 0.12;

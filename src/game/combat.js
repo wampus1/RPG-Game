@@ -34,6 +34,7 @@ import { has as heroHas, staminaBonus } from './hero.js';
 import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 import { onTiles, apart, fits } from '../entities/footprint.js';
+import { shakeSpores } from './afflict.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -237,7 +238,8 @@ export function beginAttack(game, a, target, st = styleOf(a), opts = null) {
   if (st.charge && Math.max(Math.abs(target.x - a.x), Math.abs(target.z - a.z)) <= 1) st = { ...st, charge: false, reach: 1, windup: 0.5, mult: 1.1 };
   const tiles = tilesFor(a, target, st);
   // Heavier arms come round slower; lighter ones quicker.
-  const dur = st.windup * heftOf(a) * (a.slowT > 0 ? 1.3 : 1);
+  // (A far island's master is quicker with its blows: see ISLE_BOSS_TEMPO.)
+  const dur = st.windup * heftOf(a) * (a.slowT > 0 ? 1.3 : 1) * (a.tempo ? 1 / Math.sqrt(a.tempo) : 1);
   a.windup = { t: 0, dur, st, target, tiles, y: a.y, heading: headingTo(a, target), combo: (opts && opts.combo) || 0, press: (opts && opts.press) || 0 };
   if (st.heavy || st.charge || st === STYLES.haymaker) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!', 'Hyaah!']) || 'Hrah!', 0.6, '#ff9080');
   return true;
@@ -305,7 +307,7 @@ export function tickAttack(game, a, dt) {
     return true;
   }
   a.windup = null;
-  a.attackCd = w.st.recover * (a.kind === 'npc' && a.rec && a.rec.job === 'guard' && a.rec.drilled ? 0.85 : 1);
+  a.attackCd = w.st.recover * (a.kind === 'npc' && a.rec && a.rec.job === 'guard' && a.rec.drilled ? 0.85 : 1) / (a.tempo || 1);
   return false;
 }
 
@@ -518,6 +520,9 @@ export function parried(game, v, a) {
   game.audio?.play('armor_hit', v);
   interrupt(a, 2.8);
   a.stunT = Math.max(a.stunT || 0, 2.6 + Math.random() * 0.6);
+  // (Some masters answer a parry in their own way: a shell prised open, a
+  // fury cooled.)
+  a.S?.onParried?.(game, a, v);
   onBlock(game, v, a, true);
   a.windup = null;
   a.attackCd = Math.max(a.attackCd || 0, 1.2);
@@ -729,6 +734,8 @@ function tickSwing(game, p, dt) {
 export function roll(game, p, dirv = null) {
   // (Not with an arrow on the string, drawing or holding it.)
   if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
+  // (Swallowed: no room to roll in there.)
+  if (p.swallowed) return false;
   if (p.grabbedT > 0) {
     p.grabbedT = 0;
     game.renderer.floatText(p.x, p.y + 2.4, p.z, 'wrenched free!', '#c8e8ff');
@@ -769,6 +776,8 @@ export function roll(game, p, dirv = null) {
   }
   spend(p, cost);
   p.rollT = 0.36 + (far - 2) * 0.08;
+  // (Tumbling shakes spores off you.)
+  if (p.spores > 0) shakeSpores(game, p);
   p.rollDur = p.rollT;
   p.rollCd = 0.75;
   // (A breath to find your feet again after: a little slower for a moment.)
