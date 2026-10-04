@@ -7,6 +7,7 @@
 import { REGION_W, REGION_D } from '../config.js';
 import { DAGONI } from '../world/geography.js';
 import { hash4, RNG } from '../util/rng.js';
+import { revealTown } from './dialogue.js';
 
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 
@@ -77,6 +78,14 @@ const KID = {
   wall: ['The Wall is a storm that goes all the way round. Mum says if I go near it the wind will take me.'],
   beyond: ['There\'s nothing past the Wall. Or monsters. Probably monsters.'],
 };
+
+// A place named and pointed to goes on your map, marked as told of.
+function tell(game, lines, x, z, label, glyph) {
+  if (game.world.ow.pin(x, z, label, glyph)) {
+    game.ui.msg(`Map updated: ${label}`, '#a0c8ff');
+    lines.push('(Marked on your map.)');
+  }
+}
 
 // The menu of things to ask.
 export function geoMenu(npc, game) {
@@ -173,7 +182,9 @@ export function geoTalk(npc, game, arg) {
   if (arg === 'coast') {
     const c = nearestCell(ow, npc.x, npc.z, (q) => q.biome === 'beach' || q.biome === 'mangrove', here);
     if (!c) return { ...more, lines: ['The sea? It\'s all round us, friend. Pick a direction.'] };
-    return { ...more, lines: [`The nearest shore is ${compass(npc.x, npc.z, c.x, c.z)}: ${howFar(c.d)}.`].concat(kid ? [] : ['Get a raft and you can go anywhere inside the Wall. Just not through it.']) };
+    const lines = [`The nearest shore is ${compass(npc.x, npc.z, c.x, c.z)}: ${howFar(c.d)}.`].concat(kid ? [] : ['Get a raft and you can go anywhere inside the Wall. Just not through it.']);
+    tell(game, lines, c.x, c.z, 'The shore', '≈');
+    return { ...more, lines };
   }
   if (arg === 'water') {
     const lake = nearestCell(ow, npc.x, npc.z, (q) => q.lake, here);
@@ -184,6 +195,11 @@ export function geoTalk(npc, game, arg) {
     const hill = nearestCell(ow, npc.x, npc.z, (q) => q.biome === 'mountain' || q.biome === 'volcano', here);
     if (hill) lines.push(`And the high ground's ${compass(npc.x, npc.z, hill.x, hill.z)}, ${howFar(hill.d)}.`);
     if (!lines.length) lines.push('Nothing but the sea, I\'m afraid.');
+    if (lake) tell(game, lines, lake.x, lake.z, 'A lake', '•');
+    if (river) tell(game, lines, river.x, river.z, 'A river', '•');
+    if (hill) tell(game, lines, hill.x, hill.z, 'High ground', '•');
+    // (One note will do.)
+    for (let i = lines.length - 1; i > lines.indexOf('(Marked on your map.)'); i--) if (lines[i] === '(Marked on your map.)') lines.splice(i, 1);
     return { ...more, lines };
   }
   if (arg === 'towns' || arg.startsWith('town:')) {
@@ -204,6 +220,7 @@ export function geoTalk(npc, game, arg) {
     lines.push(`It's ${compass(npc.x, npc.z, qx, qz)} of here: ${q.island === here ? howFar(d) : 'across the water. You\'ll need a raft.'}`);
     if (q.coast && q.island === here) lines.push('It\'s on the coast, if you\'d rather go by water.');
     if (kid) lines.push('I went there once! Or I want to.');
+    if (revealTown(game, q)) lines.push('(Marked on your map.)');
     return { ...more, lines };
   }
   return more;

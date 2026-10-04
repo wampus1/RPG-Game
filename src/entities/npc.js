@@ -205,6 +205,22 @@ export class NPC extends Entity {
     return w ? w.item : null;
   }
 
+  // A guard's bow: a born archer's, or (for about a third of the watch) one
+  // carried on the back to use while the others close in, with a quiver
+  // for it.
+  guardBow() {
+    const eq = this.rec.equipment;
+    if (!eq || this.rec.job !== 'guard') return null;
+    if (ITEMS[eq.tool]?.ranged) return eq.tool;
+    const own = eq.items.find((i) => ITEMS[i.item]?.ranged);
+    if (own) return own.item;
+    if (hash4(this.rec.idx || 0, this.settlement?.id || 0, 0xb0) % 3 !== 0) return null;
+    eq.items.push({ item: 'bow', count: 1 });
+    this.rec.inv ||= [];
+    if (!invCount(this.rec.inv, 'arrow')) this.rec.inv.push({ item: 'arrow', count: 12 });
+    return 'bow';
+  }
+
   meleeWeapon() {
     const w = this.weapon();
     if (w && !ITEMS[w].ranged) return w;
@@ -1029,6 +1045,12 @@ export class NPC extends Entity {
     if (this.dead) return;
     // Knocked down in a fight: lying there till it's over.
     if (this.down) return;
+    // Down on one knee (a bout lost): getting their breath, then up.
+    if (this.kneelT > 0) {
+      this.kneelT -= dt;
+      if (this.kneelT <= 0) this.say(this.rng.pick(['Oof. Right.', '*dusts off*', 'Next time, friend.', 'Good bout.']), 2);
+      return;
+    }
     if (this.shoveCd > 0) this.shoveCd -= dt;
     // Somehow up on a roof or a wall (nobody's meant to be): back down.
     this.roofT = (this.roofT || 0) - dt;
@@ -1044,6 +1066,14 @@ export class NPC extends Entity {
     this.rec.hp = this.hp;
     this.closeDoorBehind();
     if (this.moving) return;
+    // A bout won: off a few paces about their business, leaving you to get
+    // up (see scenes.duelYield).
+    if (this.walkOff) {
+      const w = this.walkOff;
+      w.t -= dt;
+      if (w.t <= 0 || this.state !== 'routine' || this.followPath(w, 1)) this.walkOff = null;
+      else return;
+    }
     // Ridden in to camp: down off the horse (or the wagon) once there.
     if (this.mount && this.state !== 'caravan' && this.state !== 'warband') {
       const camp = this.myCamp();
@@ -2856,6 +2886,24 @@ export class NPC extends Entity {
         return;
       }
     }
+    // The watch with a bow: from a distance while another guard has the foe
+    // busy up close (a born archer looses whenever there's room); out
+    // comes the blade once the foe's on them.
+    if (guard && !this.warband) {
+      const bow = this.guardBow();
+      const engaged = bow && game.npcs.some((o) => o !== this && !o.dead && o.rec.job === 'guard' && o.state === 'fight' && o.target === t && o.distTo(t) <= 2);
+      const archer = bow && ITEMS[this.rec.equipment.tool]?.ranged;
+      this.drawnBow = !!(bow && d >= 3 && (engaged || archer) && invCount(this.rec.inv || [], ammoOf(bow)) > 0);
+      if (this.drawnBow) {
+        if (d <= (archer ? 7 : 9) && Math.abs(t.y - this.y) <= 2) {
+          this.face(t.x, t.z);
+          this.aimShot(t, dt, 1.4);
+          return;
+        }
+        this.followPath({ x: t.x, y: t.y, z: t.z }, 6);
+        return;
+      }
+    }
     if (this.canShoot() && d >= 2 && d <= 6 && Math.abs(t.y - this.y) <= 2) {
       this.face(t.x, t.z);
       this.aimShot(t, dt, 1.5);
@@ -2922,6 +2970,27 @@ export class NPC extends Entity {
     if (!silent && !this.warband && this.rng.chance(0.5)) this.say(this.rng.pick(['Phew...', 'That was close.', '*sigh*', 'Is it over?']), 2);
   }
 
+  // Turn from `from` and walk off `n` paces (to a spot that can be stood
+  // on, the way they're facing away).
+  walkAway(from, n = 6) {
+    const dx = Math.sign(this.x - from.x) || (this.rng.chance(0.5) ? 1 : -1);
+    const dz = Math.sign(this.z - from.z) || (this.rng.chance(0.5) ? 1 : -1);
+    const w = this.game.world;
+    for (let k = n; k >= 2; k--) {
+      for (const [ax, az] of [[dx, dz], [dx, 0], [0, dz]]) {
+        const x = this.x + ax * k;
+        const z = this.z + az * k;
+        const y = w.findStandY(x, z, this.y);
+        if (y >= 0 && Math.abs(y - this.y) <= 2 && w.canStand(x, y, z)) {
+          this.walkOff = { x, y, z, t: 8 };
+          this.path = null;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   onHurt(attacker) {
     if (this.hired && attacker && attacker.kind === 'player') {
       this.game.sim.careers.endEscort('You turn on ME? We\'re done!');
@@ -2934,6 +3003,17 @@ export class NPC extends Entity {
 
   // Passing remarks: rare, and dependent on how they feel about you.
   maybeGreet(player, dt) {
+    // A killer the town knows of, coming near: folk run (children first,
+    // the timid sooner, the bold only from the worst of them).
+    if (!player.dead && this.state === 'routine' && !this.sleeping && this.rec.job !== 'guard' && !this.hired && !this.warband && !this.visit && this.settlement) {
+      const dread = this.game.asPlayer(player, () => this.game.sim.justice.dreadIn(this.settlement.id));
+      const brave = this.rec.personality?.bravery ?? 0.5;
+      const need = this.rec.age === 'child' ? 1 : brave > 0.75 ? 3 : brave < 0.3 ? 1 : 2;
+      if (dread >= need && this.distTo(player) <= (dread >= 3 ? 7 : 5)) {
+        this.startFlee(player, this.rng.pick(dread >= 3 ? ['It\'s the butcher!', 'Murderer! RUN!', 'Not again, please!'] : ['It\'s the killer!', 'Stay away from me!', 'Murderer!', 'Keep back!']));
+        return;
+      }
+    }
     this.greetCd -= dt;
     if (this.greetCd > 0 || this.sleeping || this.state !== 'routine' || this.bubble || player.dead) return;
     if (this.distTo(player) > 3) return;

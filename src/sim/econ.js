@@ -76,13 +76,14 @@ export const WANTS = {
   // silver; and shards of crystal, for a jeweller they know.)
   smith: ['iron_ore', 'gold_ore', 'coal', 'iron_ingot', 'gold_ingot', 'gem', 'cobblestone', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'kav_scrap', 'old_coin', ...SHARD_KEYS],
   baker: ['wheat', 'berries', 'apple', 'carrot'],
-  inn: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'cooked_meat', 'cooked_fish'],
-  cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'pumpkin', 'apple'],
+  // (And what the islands grow and catch: a kitchen there takes those too.)
+  inn: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'cooked_meat', 'cooked_fish', 'coconut', 'kelp', 'crab_meat', 'cooked_crab', 'smoked_fish', 'ember_pod', 'mangrove_pod', 'glowcap', 'ale', 'bread'],
+  cook: ['raw_meat', 'fish', 'carrot', 'cabbage', 'mushroom', 'wheat', 'berries', 'pumpkin', 'apple', 'coconut', 'kelp', 'crab_meat', 'smoked_fish', 'ember_pod', 'mangrove_pod', 'glowcap', 'flour'],
   tailor: ['string', 'leather', 'cloth', 'feather', 'wheat', ...['linen_shirt', 'wool_trousers', 'wool_hood', 'fine_coat'].flatMap((g) => ['red', 'blue', 'yellow', 'green', 'purple', 'black', 'white'].map((c) => `${g}_${c}`)), 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_trousers', 'leather_boots', 'leather_cap'],
   carpenter: ['log_oak', 'log_birch', 'log_pine', 'log_palm', 'log_jungle', 'log_acacia', 'log_willow', 'planks', 'stick'],
   herbalist: ['herb', 'mushroom', 'berries', 'flower_red', 'flower_blue', 'flower_yellow', 'flower_white', 'flower_purple', 'sapling', 'slime_gel', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_fortitude', 'potion_charm', 'healing_salve', 'potion_breath', 'potion_wind', 'potion_fury', 'potion_haste'],
-  fisher: ['string', 'reeds', 'fish'],
-  farmer: ['seeds', 'bone', 'wheat', 'carrot', 'cabbage'],
+  fisher: ['string', 'reeds', 'fish', 'kelp', 'crab_meat', 'fishing_rod'],
+  farmer: ['seeds', 'cabbage_seeds', 'bone', 'wheat', 'carrot', 'cabbage', 'apple', 'pumpkin', 'coconut', 'ember_pod', 'mangrove_pod'],
   scholar: ['book', 'scroll', 'gem', 'reeds', 'feather', 'paper', 'ink', 'newspaper', 'old_blueprint', 'old_coin', ...SHARD_KEYS],
   trapper: ['string', 'stick', 'feather', 'arrow', 'raw_meat', 'leather', 'bone'],
   miller: ['wheat', 'flour', 'seeds'],

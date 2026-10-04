@@ -65,6 +65,19 @@ export class Overworld {
     // The old places: dungeons, and the Kavorent's spires.
     this.sites = genSites(this);
     this.explored = new Uint8Array(MAP_W * MAP_H);
+    // Places someone has told you of (a lake, the high ground...): marks
+    // on your map even where you've never been.
+    this.pins = [];
+  }
+
+  // Put a told-of place on the map (once per square and name).
+  pin(x, z, label, glyph = '•') {
+    const cx = Math.floor(x / REGION_W);
+    const cz = Math.floor(z / REGION_D);
+    if (this.pins.some((q) => Math.floor(q.x / REGION_W) === cx && Math.floor(q.z / REGION_D) === cz && q.label === label)) return false;
+    this.pins.push({ x: Math.round(x), z: Math.round(z), label, glyph });
+    if (this.pins.length > 60) this.pins.shift();
+    return true;
   }
 
   // ---------------------------------------------------------------- land

@@ -688,10 +688,15 @@ export class TradeWindow extends Window {
       const glut = game.sim.sellGlut(this.npc, k);
       const lot = ITEMS[k].exchange;
       const room = lot ? this.oldRoom(game) : 0;
-      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : lot ? (room >= lot ? `They'll change them: ¤${pr} for every ${lot}` : 'They\'ve changed all they will today.') : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 && (!lot || room >= lot) ? C.green : C.red);
-      if (lot && room >= lot) g.text(40, 17, `(up to ${room} more today)`, C.faint);
+      // (Wanted, but more than their purse holds: said plainly.)
+      const broke = this.wants(k, game) && pr > 0 && sh && sh.purse.get() < pr;
+      g.text(40, 16, !this.wants(k, game) ? 'They don\'t want that.' : pr <= 0 ? 'They have all they want of that.' : broke ? `Worth ¤${pr}, but they can't afford it` : lot ? (room >= lot ? `They'll change them: ¤${pr} for every ${lot}` : 'They\'ve changed all they will today.') : `They'll pay ¤${pr}${glut < 1 ? ' for the next one' : ' each'}`, this.wants(k, game) && pr > 0 && !broke && (!lot || room >= lot) ? C.green : C.red);
+      if (broke) g.text(40, 17, `(their purse holds ¤${Math.max(0, Math.floor(sh.purse.get()))})`, C.orange);
+      if (lot && room >= lot && !broke) g.text(40, 17, `(up to ${room} more today)`, C.faint);
       const mf = game.sim.market.factor(this.npc.layout, k);
-      if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
+      if (broke) {
+        // (Said above.)
+      } else if (this.wants(k, game) && pr > 0 && glut < 1) g.text(40, 17, '(they have plenty: less each)', C.orange);
       else if (this.wants(k, game) && pr > 0 && mf < 0.9) g.text(40, 17, '(plenty about round here: cheap)', C.orange);
       else if (this.wants(k, game) && pr > 0 && mf > 1.1) g.text(40, 17, '(short round here: a good price)', C.green);
       else if (this.wants(k, game) && game.sim.careers.sellFactor(this.npc, k) > 1) g.text(40, 17, '(licensed seller\'s premium)', C.cyan);
@@ -777,7 +782,10 @@ export class TradeWindow extends Window {
       n += lot;
     }
     if (n <= 0) {
-      this.npc.say(why === 'full' ? this.npc.rng.pick(['I\'ve got more of those than I can use.', 'No more of those, thanks. I\'m full up.', 'I couldn\'t sell another one.']) : 'I can\'t afford that right now.', 2.5);
+      const purse = Math.max(0, Math.floor(sh.purse.get()));
+      const line = why === 'full' ? this.npc.rng.pick(['I\'ve got more of those than I can use.', 'No more of those, thanks. I\'m full up.', 'I couldn\'t sell another one.']) : `I'd give you ¤${this.sellPrice(item, game)} for that, but I've only ¤${purse} to my name. Come back once I've sold a few things.`;
+      this.npc.say(line, 3.5);
+      if (why === 'money') game.ui.msg(`${this.npc.name.split(' ')[0]} can't afford it: their purse holds ¤${purse}. Buy something from them first, or come back another day.`, '#ffb080');
       game.audio?.play('error');
       return;
     }
@@ -790,6 +798,10 @@ export class TradeWindow extends Window {
     game.sim.market.trade(this.npc.layout, item, n, 'player');
     game.audio?.play('coin');
     if (why === 'full') this.npc.say('That\'s all of those I can take.', 2.5);
+    else if (why === 'money') {
+      this.npc.say('That\'s all I can afford for now.', 2.5);
+      game.ui.msg(`${this.npc.name.split(' ')[0]} ran out of coin after ${n} (¤${paid}). Their purse is empty for now.`, '#ffb080');
+    }
   }
   onWheel(d) {
     this.scroll += Math.sign(d);

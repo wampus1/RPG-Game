@@ -1031,7 +1031,14 @@ export class UI {
       // dug.)
       if (c.place) {
         if (c.place.ok) hints.push(c.place.y === c.y ? 'click set it here' : c.place.y > c.y ? 'click set it on top' : 'click set it below');
-      } else if (isFinite(b.hardness) && !b.liquid) hints.push(game.tunnelPair && game.tunnelPair(c) ? 'hold dig through' : 'hold mine');
+      } else if (b.interact === 'container' && game.unbreakableChest && game.unbreakableChest(c.x, c.y, c.z)) {
+        hints.push('can\'t be broken (the town\'s)');
+      } else if (isFinite(b.hardness) && !b.liquid) {
+        const plan = game.digPlan ? game.digPlan(c) : null;
+        hints.push(!plan ? 'hold mine' : plan.kind === 'step' ? (plan.extra.length ? 'hold cut a step up' : 'step ready: walk up') : 'hold dig through (2 high)');
+        // (Beside you, a wall: how to climb it.)
+        if (!(plan && plan.kind === 'step') && game.stepCut && game.stepCut(c)?.extra.length) hints.push('Shift+hold: a step up');
+      }
       if (hints.length) lines.push({ text: hints.join(' · '), color: C.faint });
       // The tool that breaks it best is shown as a picture (marked when
       // it's the one in your hand).

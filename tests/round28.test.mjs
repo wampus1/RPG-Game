@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { B, BLOCKS, META_STATE } from '../src/world/blocks.js';
 import { buildFloor, DTYPES, FY, KAV_FLOORS, kavFloor, SPIKE_CYCLE } from '../src/world/dungeongen.js';
-import { DungeonRun, BOSS_HP, BOSS_DMG, holdings } from '../src/game/dungeon.js';
+import { DungeonRun, BOSS_HP, BOSS_HP_EXTRA, BOSS_DMG, holdings } from '../src/game/dungeon.js';
 import { SPECIES } from '../src/entities/creature.js';
 import { musicMood, THEMES } from '../src/game/music.js';
 import { BLIGHT_R } from '../src/world/sites.js';
@@ -201,7 +201,7 @@ test('masters are tougher than their kind, drawn half as big again, in their own
   while (game.dungeon.floor < rec.depth - 1) game.dungeon.changeFloor(1);
   const boss = game.creatures.find((c) => c.isBoss);
   const lvl = boss.level;
-  assert.equal(boss.maxHp, Math.round(Math.round(boss.S.hp * (1 + 0.3 * (lvl - 1))) * BOSS_HP));
+  assert.equal(boss.maxHp, Math.round(Math.round(boss.S.hp * (1 + 0.3 * (lvl - 1))) * BOSS_HP * (BOSS_HP_EXTRA[boss.species] || 1)));
   assert.ok(Math.abs(boss.dmgMult - (1 + 0.15 * (lvl - 1)) * BOSS_DMG) < 1e-9);
   assert.ok(drawnAsMaster(boss));
   assert.match(bossTint(boss)[0], /^#[0-9a-f]{6}$/);

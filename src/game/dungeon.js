@@ -38,7 +38,14 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 const FLOOR_GEN = 5;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
-export const BOSS_HP = 1.3;
+export const BOSS_HP = 1.43;
+// (And the great slow ones carry more on top: a worm, a colossus, a golem.)
+export const BOSS_HP_EXTRA = {
+  worm: 1.12, horror: 1.08, foreman: 1.08, brood_mother: 1.06, warlord: 1.05, prime: 1.06,
+  hollow_oak: 1.12, elder_stag: 1.05,
+  slag_titan: 1.15, bellows_golem: 1.12, glass_wyrm: 1.08, chained_drake: 1.08, cinder_king: 1.05, vitrified_horror: 1.06,
+  spore_colossus: 1.15, coral_colossus: 1.15, abyssal_clam: 1.1, smugglers_kraken: 1.08, bog_king: 1.06, lamprey_queen: 1.05,
+};
 export const BOSS_DMG = 1.15;
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
@@ -450,7 +457,7 @@ export class DungeonRun {
       c.isBoss = true;
       // (And the far islands' masters harder still than Thessa's.)
       const isle = this.rec.isle;
-      c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP * (ISLE_BOSS_HP[isle] || 1));
+      c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP * (BOSS_HP_EXTRA[species] || 1) * (ISLE_BOSS_HP[isle] || 1));
       c.dmgMult *= BOSS_DMG * (ISLE_BOSS_DMG[isle] || 1);
       if (ISLE_BOSS_TEMPO[isle]) c.tempo = ISLE_BOSS_TEMPO[isle];
     }
@@ -558,7 +565,7 @@ export class DungeonRun {
       ar.t = 0;
       const tiles = [];
       for (let x = Math.min(ar.a.x, ar.b.x) + 1; x < Math.max(ar.a.x, ar.b.x); x++) tiles.push({ x, z: ar.a.z });
-      addHazard(game, { tiles, y: FY, dur: 1.1, dmg: Math.round(4 + this.floor * 0.6), kind: 'beam', from: ar.a, to: ar.b, color: [150, 220, 255], beamColor: '#ffffff', halo: '#5ad8f0', width: 2, trap: true });
+      addHazard(game, { tiles, y: FY, dur: 1.1, dmg: Math.round(4 + this.floor * 0.6), kind: 'beam', from: ar.a, to: ar.b, color: [150, 220, 255], beamColor: '#ffffff', halo: '#5ad8f0', width: 2, trap: true, place: true });
       game.audio?.play('charge', ar.a);
     }
     // The Kavorent's emitters, firing across their halls in turn.
@@ -569,7 +576,7 @@ export class DungeonRun {
       em.t = 0;
       const to = { x: em.x + em.dx * (em.len + 1), z: em.z + em.dz * (em.len + 1) };
       const tiles = lineTiles(game, { x: em.x, y: FY, z: em.z }, to, em.len + 1);
-      addHazard(game, { tiles, y: FY, dur: 1.0, dmg: Math.round(3 + this.floor * 0.6), kind: 'beam', from: { x: em.x, z: em.z }, to: tiles[tiles.length - 1] || to, color: [255, 70, 50], trap: true });
+      addHazard(game, { tiles, y: FY, dur: 1.0, dmg: Math.round(3 + this.floor * 0.6), kind: 'beam', from: { x: em.x, z: em.z }, to: tiles[tiles.length - 1] || to, color: [255, 70, 50], trap: true, place: true });
     }
     // Into the master's hall: the gate comes down behind you, and it wakes.
     const br = this.data.bossRoom;
@@ -727,7 +734,7 @@ export class DungeonRun {
       const tiles = areaTiles(p.x + Math.round(Math.random() * 2 - 1), p.z + Math.round(Math.random() * 2 - 1), 1).filter(() => Math.random() < 0.75);
       tiles.push({ x: p.x, z: p.z });
       for (const t of tiles) game.renderer.emit(t.x, FY + 2.4, t.z, { n: 3, color: ['#8a7a5a', '#6a5a40'], up: -10, speed: 6, gravity: 120, life: 0.9, oy: -10 });
-      addHazard(game, { tiles, y: FY, dur: 1.6, dmg, stun: 0.4, kind: 'rocks', color: [200, 150, 90], trap: true });
+      addHazard(game, { tiles, y: FY, dur: 1.6, dmg, stun: 0.4, kind: 'rocks', color: [200, 150, 90], trap: true, place: true });
       game.audio?.play('rumble');
       game.shake = Math.min(1, (game.shake || 0) + 0.35);
       if (!this.toldRoof) game.ui.msg('Dust trickles from the roof... (it\'s coming down: move!)', '#e0c8a0', true);
@@ -736,7 +743,7 @@ export class DungeonRun {
       // Hands up out of the earth, where you stand and round it.
       const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.35)];
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#c8d0c0', '#8a9a8a'], up: 8, speed: 6, life: 1.1, oy: 6, shape: 'puff' });
-      addHazard(game, { tiles, y: FY, dur: 1.3, dmg: Math.round(dmg * 0.6), chill: 2, kind: 'cold', color: [150, 170, 160], trap: true, onFire: (g, h, hit) => {
+      addHazard(game, { tiles, y: FY, dur: 1.3, dmg: Math.round(dmg * 0.6), chill: 2, kind: 'cold', color: [150, 170, 160], trap: true, place: true, onFire: (g, h, hit) => {
         for (const e of hit) {
           if (e.kind !== 'player') continue;
           e.grabbedT = 1.2;
@@ -751,7 +758,7 @@ export class DungeonRun {
       // Briars, whipping up out of the moss.
       const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.4)];
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#5a8a3a', '#8ac060'], up: 6, speed: 6, life: 0.9, oy: 6 });
-      addHazard(game, { tiles, y: FY, dur: 1.2, dmg: Math.round(dmg * 0.6), kind: 'erupt', color: [110, 170, 70], trap: true, onFire: (g, h, hit) => {
+      addHazard(game, { tiles, y: FY, dur: 1.2, dmg: Math.round(dmg * 0.6), kind: 'erupt', color: [110, 170, 70], trap: true, place: true, onFire: (g, h, hit) => {
         for (const e of hit) if (e.kind === 'player') {
           e.grabbedT = 1;
           game.renderer.floatText(e.x, e.y + 2.4, e.z, 'caught in briars! (roll free)', '#a0d070');
@@ -765,7 +772,7 @@ export class DungeonRun {
       const tiles = areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.6);
       tiles.push({ x: p.x, z: p.z });
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 2, color: ['#ff9030', '#ffd070'], up: 10, speed: 6, life: 0.7, glow: true });
-      addHazard(game, { tiles, y: FY, dur: 1.4, dmg, burn: 2, kind: 'fire', center: { x: p.x, z: p.z }, color: [255, 140, 40], trap: true });
+      addHazard(game, { tiles, y: FY, dur: 1.4, dmg, burn: 2, kind: 'fire', center: { x: p.x, z: p.z }, color: [255, 140, 40], trap: true, place: true });
       game.audio?.play('hiss');
       if (!this.toldVents) game.ui.msg('The floor glows red under your feet... (a vent: move!)', '#ffb070', true);
       this.toldVents = true;
@@ -778,7 +785,7 @@ export class DungeonRun {
       for (let k = -3; k <= 3; k++) tiles.push(across ? { x: p.x + k, z: p.z } : { x: p.x, z: p.z + k });
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.2, t.z, { n: 2, color: ['#80c8e8', '#e0f8ff'], up: 6, speed: 8, life: 0.8, shape: 'puff' });
       const from = across ? { x: p.x, z: p.z - dir } : { x: p.x - dir, z: p.z };
-      addHazard(game, { tiles, y: FY, dur: 1.5, dmg: Math.round(dmg * 0.5), knock: 2, from, chill: 1, kind: 'cold', color: [120, 200, 230], trap: true });
+      addHazard(game, { tiles, y: FY, dur: 1.5, dmg: Math.round(dmg * 0.5), knock: 2, from, chill: 1, kind: 'cold', color: [120, 200, 230], trap: true, place: true });
       game.audio?.play('wave');
       if (!this.toldSurge) game.ui.msg('You hear the sea coming through the rock... (a surge: get out of its way!)', '#a0e0f0', true);
       this.toldSurge = true;
@@ -970,7 +977,7 @@ export class DungeonRun {
     for (const s of pl.slits) {
       const to = { x: s.x + s.dx * 12, z: s.z + s.dz * 12 };
       const tiles = lineTiles(game, { x: s.x, y: FY, z: s.z }, to, 12);
-      addHazard(game, { tiles, y: FY, dur: 0.45, dmg: Math.round(3 + this.floor + (this.rec.level || 1)), kind: 'dart', from: { x: s.x, z: s.z }, to: tiles[tiles.length - 1] || to, color: [255, 200, 120], trap: true });
+      addHazard(game, { tiles, y: FY, dur: 0.45, dmg: Math.round(3 + this.floor + (this.rec.level || 1)), kind: 'dart', from: { x: s.x, z: s.z }, to: tiles[tiles.length - 1] || to, color: [255, 200, 120], trap: true, place: true });
     }
   }
 
@@ -1001,7 +1008,7 @@ export class DungeonRun {
   zap(x, z) {
     const game = this.game;
     game.ui.msg('The glyph flares red under your feet!', '#ff7060', true);
-    addHazard(game, { tiles: [{ x, z }], y: FY, dur: 0.15, dmg: 3, stun: 0.5, kind: 'burst', center: { x, z }, color: [255, 80, 60], trap: true });
+    addHazard(game, { tiles: [{ x, z }], y: FY, dur: 0.15, dmg: 3, stun: 0.5, kind: 'burst', center: { x, z }, color: [255, 80, 60], trap: true, place: true });
   }
 
   solve(con) {
@@ -1320,6 +1327,8 @@ export class DungeonRun {
       for (const e of [...party, ...game.creatures]) {
         if (!e || e.dead || e.burrowed || e.S?.floats || e.x !== sp.x || e.z !== sp.z || this.spikeHit.has(e)) continue;
         if (e.kind !== 'player' && (e.S?.construct || e.isBoss)) continue;
+        // (Not while you're busy in your pack or a chest.)
+        if (e.kind === 'player' && game.rummaging?.(e)) continue;
         this.spikeHit.set(e, 0.9);
         game.damage(e, e.kind === 'player' ? dmg : Math.round(dmg * 1.5), null);
         game.renderer.emit(e.x, FY + 0.4, e.z, { n: 8, color: ['#c82a2a', '#e8e0d0'], up: 30, speed: 30, life: 0.5 });

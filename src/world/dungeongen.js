@@ -171,7 +171,7 @@ function overlaps(a, b, gap) {
 
 // Room sizes by kit (w and d ranges): closets to great halls.
 const KIT_SIZE = {
-  boss: [[14, 18], [11, 14]], entry: [[6, 8], [5, 7]], exit: [[6, 9], [5, 7]],
+  boss: [[16, 20], [12, 16]], entry: [[6, 8], [5, 7]], exit: [[6, 9], [5, 7]],
   hall: [[10, 16], [8, 12]], reactor: [[11, 14], [9, 11]], hangar: [[10, 14], [8, 11]], vault: [[6, 8], [5, 6]], foundry: [[12, 15], [10, 12]],
   pillared: [[9, 14], [7, 11]], flooded: [[7, 13], [6, 10]], ossuary: [[6, 11], [5, 9]], burial: [[8, 13], [6, 9]],
   trap: [[4, 6], [4, 6]], treasure: [[5, 7], [4, 6]], shrine: [[6, 10], [6, 9]], library: [[7, 11], [5, 8]], cells: [[8, 12], [5, 7]],

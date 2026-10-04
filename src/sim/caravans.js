@@ -335,7 +335,7 @@ export class Caravans {
       partner: null, children: [], parents: [], friends: [], personality: m.personality, traits: m.traits, hobbies: [], look: m.look,
       alive: true, shift: 'day', restDay: -1,
       equipment: { tool: guard ? 'spear' : null, hobbyItem: null, items: guard ? [{ item: 'spear', count: 1 }] : [], coins: 0, armor: guard ? 0.2 : 0 },
-      maxHp: guard ? 22 : 12, hp: guard ? 22 : 12, work: { kind: 'none' }, schedule: { work: sched, rest: sched },
+      maxHp: guard ? 28 : 12, hp: guard ? 28 : 12, work: { kind: 'none' }, schedule: { work: sched, rest: sched },
       coins: 0, inv: [], skills: { trading: 0.8, cooking: 0.2, hunting: 0.4, fishing: 0.2, farming: 0.1, building: 0.2, crafting: 0.3 },
       fed: 1, hungry: 0, mood: 0.75, grief: [], override: null, away: false, doneKey: null,
     };

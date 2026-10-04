@@ -2192,11 +2192,12 @@ class Layout {
       const hy = Y0 + (b.tall || 4) + 1;
       const sign = { x: b.outside.x, z: b.outside.z, y: Y0 + 2 };
       const clear = (x, z) => this.maskAt(x, z) !== M.BUILD && this.maskAt(x, z) !== M.WALL;
+      // (`nx`, `nz`: the way the hub faces, out from the wall.)
       const faces = [
-        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z1 + 1, along: true },
-        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z0 - 1, along: true },
-        { hx: b.x1 + 1, hz: Math.round((b.z0 + b.z1) / 2), along: false },
-        { hx: b.x0 - 1, hz: Math.round((b.z0 + b.z1) / 2), along: false },
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z1 + 1, along: true, nx: 0, nz: 1 },
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z0 - 1, along: true, nx: 0, nz: -1 },
+        { hx: b.x1 + 1, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: 1, nz: 0 },
+        { hx: b.x0 - 1, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: -1, nz: 0 },
       ];
       const tiles = (f) => {
         const out = [{ x: f.hx, z: f.hz, y: hy, hub: true }];
@@ -2213,7 +2214,7 @@ class Layout {
       // (Only the hub is built: the sails turn on it, drawn as they go
       // round; see renderer.drawSails.)
       this.put(face.hx, hy, face.hz, B.mill_hub);
-      b.sails = { x: face.hx, y: hy, z: face.hz, along: face.along };
+      b.sails = { x: face.hx, y: hy, z: face.hz, along: face.along, nx: face.nx, nz: face.nz };
     } else if (b.type === 'glassworks') {
       for (let i = 0; i < 2; i++) {
         const q = this.findFreeNear(b.outside.x, b.outside.z, 4, rng);

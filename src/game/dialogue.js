@@ -316,6 +316,9 @@ export function topicsFor(npc, game) {
     const pet = sim.petition;
     add('petition', pet && pet.sid === s.id ? `About my petition (${pet.signers.length} signature${pet.signers.length === 1 ? '' : 's'})...` : 'I\'d like to petition about a law.');
   }
+  // A researcher or a scholar: what they're working on, and the tree of
+  // learning it's part of.
+  if ((rec.job === 'researcher' || rec.job === 'scholar') && !npc.hired && s) add('research', rec.job === 'researcher' ? 'What are you working on? (the tree of learning)' : 'What are the scholars studying? (the tree of learning)');
   // Out gathering signatures: anyone grown up in the town can sign.
   const pet = sim.petition;
   if (pet && pet.sid === s.id && rec.job !== 'mayor' && rec.age !== 'child' && !npc.visit && !rec.visitor && !pet.signers.includes(rec.idx) && !(pet.refused || []).includes(rec.idx)) add('sign', 'Would you sign my petition?');
@@ -828,6 +831,15 @@ function researchTalk(npc, game) {
   const who = T.leaderOf(s);
   const boss = s.civ ? (who && who.ruler !== undefined && who !== npc.rec ? `${who.name.first} ${who.name.last}` : 'the court') : 'I';
   const cur = st.current ? T.def(st, st.current) : null;
+  // (One of the scholars themself: in their own words.)
+  if (npc.rec.job !== 'mayor') {
+    const pct = cur ? Math.floor((st.progress / cur.cost) * 100) : 0;
+    const mine = [cur
+      ? `${npc.rec.job === 'researcher' ? 'I\'m' : 'We\'re'} working on ${cur.name.toLowerCase()}: ${cur.desc.charAt(0).toLowerCase()}${cur.desc.slice(1)} We're ${pct}% of the way there.`
+      : 'Nothing just now: we\'re waiting on the mayor to choose what we study next.',
+    `${s.name} knows ${st.done.length} of the ${T.treeFor(st).ids.length} arts so far. Here, have a look at the whole tree.`];
+    return { lines: mine, open: 'tech' };
+  }
   const lines = [cur
     ? `${boss === 'I' ? 'I have' : `${boss[0].toUpperCase()}${boss.slice(1)} has`} set the scholars to ${cur.name.toLowerCase()}: ${cur.desc.charAt(0).toLowerCase()}${cur.desc.slice(1)} They're ${Math.floor((st.progress / cur.cost) * 100)}% of the way there.`
     : 'Our scholars have nothing to study just now.',

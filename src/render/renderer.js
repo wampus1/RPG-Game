@@ -1093,8 +1093,12 @@ export class Renderer {
   // rising and falling past the hub.
   drawSails(ctx, e, sx, feetY) {
     const [du, dv] = this.toViewDir(e.along ? 1 : 0, e.along ? 0 : 1);
-    const cx = sx + 8;
-    const cy = feetY - 10 - LH / 2;
+    // The hub's middle, moved out to its outer face (the way it faces, as
+    // the camera has it: its face toward you, away, or to a side), and a
+    // little off it: where the sails turn, whichever way you look.
+    const [nu, nv] = this.toViewDir(e.nx ?? 0, e.nz ?? (e.along ? 1 : 0));
+    const cx = sx + 8 + nu * 9;
+    const cy = feetY - 8 + nv * 9;
     // (Wind in the weather turns them quicker.)
     const spin = e.spin || 0.7;
     const a0 = (this.time * spin + (e.seed || 0) * 1.7) % (Math.PI * 2);
@@ -1472,7 +1476,9 @@ export class Renderer {
         const mount = e.mount && !e.sleeping ? e.mount : null;
         let lift = 0;
         if (mount) lift = this.drawMount(ctx, e, mount, sx, feetY);
-        const frame = e.actionTimer > 0 && !mount ? 3 : e.raft || mount ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
+        // (Down on one knee, a bout lost: low, as if sitting on nothing.)
+        const kneel = e.kneelT > 0 && !mount && !e.moving;
+        const frame = e.actionTimer > 0 && !mount && !kneel ? 3 : e.raft || mount || kneel ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
         // Guard up: the shield comes off the arm and up in front of them
         // (see drawRaisedShield); the blade's held across instead.
@@ -1481,10 +1487,10 @@ export class Renderer {
         const raised = guard && dir !== 2 ? this.raisedShield(e) : null;
         const sheet = humanoidSheet(raised ? this.unshielded(e.look) : e.look);
         // Thrown into a blow: leaning back to wind up, lunging into it.
-        const lu = mount || e.sitting ? { x: 0, y: 0 } : this.bodyLunge(e, dir);
+        const lu = mount || e.sitting || kneel ? { x: 0, y: 0 } : this.bodyLunge(e, dir);
         const sx0 = sx;
         sx += lu.x;
-        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift + lu.y;
+        const top = feetY - CHAR_H + 1 + (e.raft ? 1 + bob : 0) - lift + lu.y + (kneel ? 3 : 0);
         // (A second blade, on the far side of them, goes behind.)
         const offKey = e.offhandItem ? e.offhandItem() : null;
         if (offKey && (dir === 1 || dir === 3) && !rolling) this.drawHeld(ctx, offKey, e, sx, top, true, this.guarding(e));
@@ -2798,10 +2804,12 @@ export class Renderer {
         const s = TEX.crack[stage];
         ctx.drawImage(this.atlas, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
       }
-      // (Digging a passage: the rock over it goes too, outlined over it.)
-      const pair = game.tunnelPair ? game.tunnelPair(c) : null;
-      if (pair) {
-        const q = this.worldToScreen(pair.x, pair.y, pair.z);
+      // (Digging a passage: the block over it goes too, outlined over it;
+      // cutting a step up, the blocks over the step and over your head,
+      // and the step itself green: it stays. See game.digPlan.)
+      const plan = game.digPlan ? game.digPlan(c) : null;
+      for (const e of plan ? plan.extra : []) {
+        const q = this.worldToScreen(e.x, e.y, e.z);
         if (m && m.progress > 0) {
           const s = TEX.crack[Math.min(3, Math.floor(m.progress * 4))];
           ctx.globalAlpha = 0.7;
@@ -2810,7 +2818,10 @@ export class Renderer {
         }
         this.cubeOutline(q.x, q.y, `rgba(255,200,120,${pulse * 0.7})`, true);
       }
-      this.cubeOutline(sx, sy, c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`);
+      if (plan && plan.keep) {
+        this.cubeOutline(sx, sy, `rgba(120,255,160,${pulse})`);
+        drawText(ctx, '▲', sx + 5, sy - 9, '#a0ffc0', '#000');
+      } else this.cubeOutline(sx, sy, c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`);
       // (Its height against your feet, when it isn't just in front of you.)
       const rel = c.y - game.player.y;
       if (rel !== 0 && (this.underground || rel < -1 || rel > 1 || game.player.layerMode !== null)) this.levelTag(sx, sy, rel, c.inReach ? '#ffe8a0' : '#a8a8a8');
@@ -2872,11 +2883,19 @@ export class Renderer {
     const q = flat(c.x, c.z, c.block ? (c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`) : `rgba(160,200,255,${pulse * 0.6})`);
     if (!c.block) return;
     const m = game.mining;
-    if (m && m.progress > 0) {
+    const plan = game.digPlan ? game.digPlan(c) : null;
+    if (m && m.progress > 0 && !(plan && plan.keep)) {
       const s = TEX.crack[Math.min(3, Math.floor(m.progress * 4))];
       ctx.drawImage(this.atlas, s.x, s.y, 16, 16, q.x, q.y, 16, 16);
     }
-    if (game.tunnelPair && game.tunnelPair(c)) flat(c.x, c.z, `rgba(255,200,120,${pulse * 0.8})`, 3, true);
+    if (plan && plan.keep) {
+      // (A step cut up into the wall: the step green, ▲ on it, and what
+      // goes over it and over your head dashed.)
+      flat(c.x, c.z, `rgba(120,255,160,${pulse})`);
+      drawText(ctx, '▲', q.x + 5, q.y + 4, '#a0ffc0', '#000');
+      const p = game.player;
+      if (plan.extra.some((e) => e.x === p.x && e.z === p.z)) flat(p.x, p.z, `rgba(255,200,120,${pulse * 0.8})`, 3, true);
+    } else if (plan) flat(c.x, c.z, `rgba(255,200,120,${pulse * 0.8})`, 3, true);
     const rel = c.y - game.player.y;
     if (rel !== 0) this.levelTag(q.x, q.y, rel, c.inReach ? '#ffe8a0' : '#a8a8a8');
   }

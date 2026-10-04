@@ -3,7 +3,7 @@
 // they're made) and either settles there for good or moves on. A deserted
 // town can come back to life this way.
 import { alive, ledger, initRec, DAY, kitchenOf, st, MEAL_ITEMS } from './econ.js';
-import { makeNomadBand, makeSchedules, availOf, JOBS } from '../entities/npcgen.js';
+import { makeNomadBand, makeSchedules, availOf, JOBS, GUARD_HP } from '../entities/npcgen.js';
 import { RNG, hash4 } from '../util/rng.js';
 
 const STAY_HOURS = 6;
@@ -93,8 +93,8 @@ export class Nomads {
         const has = (j) => people.some((q) => q.job === j) || L.npcs.slice(base).some((q) => q.job === j);
         r.job = need.find((j) => !has(j)) || need.find((j) => j === 'farmer' || j === 'laborer') || 'laborer';
         if (r.job === 'guard') {
-          r.maxHp = 24;
-          r.hp = 24;
+          r.maxHp = GUARD_HP;
+          r.hp = GUARD_HP;
           r.look = { ...r.look, outfit: 'guard', hat: 'helmet' };
         } else r.look = { ...r.look, outfit: JOBS[r.job]?.outfit || r.look.outfit };
       }

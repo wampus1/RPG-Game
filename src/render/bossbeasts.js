@@ -561,6 +561,11 @@ function drakeChain(R, front) {
   const collar = { x: p.x + fx * 0.97, y: 2.0 + rear * 0.25, z: p.z + fz * 0.97 };
   const stake = { x: A.x, y: 0.1, z: A.z };
   if (!s.chain) s.chain = new Rope(18, 0.42, collar, e.unchained ? null : stake);
+  // (The collar's painted on the side it faces on screen: turn the camera
+  // and it's somewhere else in the world. The chain's carried there.)
+  if (s.chainView !== undefined && s.chainView !== R.r.view && s.chainAt) s.chain.carry(collar.x - s.chainAt.x, 0, collar.z - s.chainAt.z, !e.unchained);
+  s.chainView = R.r.view;
+  s.chainAt = collar;
   if (!front) s.chain.step(R.dt || 1 / 60, collar, e.unchained ? null : stake, { gravity: 18, drag: 0.97 });
   const pts = s.chain.screen(R.r, p.y);
   // (Split where it passes nearer you than the drake.)

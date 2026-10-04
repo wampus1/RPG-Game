@@ -34,11 +34,11 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
-import { spireOpening, bossTint, liftRide, deathRitual } from './scenes.js';
+import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
-import { updateHazards, guardFront, kegBlast, throwDynamite } from '../entities/monsters.js';
+import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '../entities/monsters.js';
 import { isleNightSpecies, waterNear } from '../entities/islemobs.js';
 import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
@@ -1380,6 +1380,14 @@ export class Game {
   }
 
   updateDuel() {
+    // (The bout's over: the quiet after it running out.)
+    const da = this.duelAfter;
+    if (da) {
+      const dt = this.dt || 0.016;
+      da.t -= dt;
+      if (da.noteT > 0) da.noteT -= dt;
+      if (da.t <= 0 || da.npc.dead) this.duelAfter = null;
+    }
     const d = this.duel;
     if (!d) return;
     const n = d.npc;
@@ -1897,7 +1905,7 @@ export class Game {
 
   // Can't act: a window open over the world, dead, asleep, held, a scene.
   isBlocked() {
-    return this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable) || (!!this.scene && this.scene.lock) || stormLocked(this);
+    return this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || this.player.kneelT > 0 || (!!this.cutscene && !this.cutscene.playable) || (!!this.scene && this.scene.lock) || stormLocked(this);
   }
 
   // How fast time runs: racing while you sleep or wait (with others in the
@@ -1927,6 +1935,8 @@ export class Game {
     }
     this.player.update(dt, input, blocked);
     playerTick(this, this.player, dt, input, blocked);
+    // The ground gone from under you (dug, blown up, burnt away): you drop.
+    this.settleFall(this.player);
     this.input = input;
     // (Another player's pointer: what they pointed at on their own screen.)
     if (!blocked) this.cursor = this.seat && !this.seat.host && this.net ? this.net.cursorFor(this.seat) : (this.updateCursor(input), this.cursor);
@@ -1938,6 +1948,7 @@ export class Game {
       else this.tickQueuedBlow(dt);
     }
     if (this.player.comboT > 0) this.player.comboT -= dt;
+    if (this.stepToldT > 0) this.stepToldT -= dt;
     if (this.player.windedNote > 0) this.player.windedNote -= dt;
     tickDice(this, dt);
     // An arrow on the string: the pull, and the aim (a window opened over
@@ -1977,6 +1988,32 @@ export class Game {
     for (const n of this.npcs) if (!n.dead && Math.abs(n.x - this.player.x) < 12 && Math.abs(n.z - this.player.z) < 12) n.maybeGreet(this.player, dt);
     this.updateDuel();
     this.updateDummy(dt);
+  }
+
+  // Nothing under your feet any more: down to the first ground below (a
+  // long drop hurts). Not on a raft, a horse, a seat or in a wagon.
+  settleFall(p) {
+    if (!p || p.dead || p.moving || p.raft || p.mount || p.inWagon || p.sitting || p.sleeping || p.swallowed || p.down) return false;
+    const w = this.world;
+    const below = BLOCKS[w.getBlock(p.x, p.y - 1, p.z)];
+    if (below.standable || below.liquid || w.isWaterAt(p.x, p.y, p.z)) return false;
+    for (let y = p.y - 1; y >= Math.max(1, p.y - 48); y--) {
+      const id = w.getBlock(p.x, y, p.z);
+      if (BLOCKS[id].liquid) return false;
+      if (!w.canStand(p.x, y, p.z)) {
+        if (BLOCKS[id].solid) return false;
+        continue;
+      }
+      const drop = p.y - y;
+      p.startMove(p.x, y, p.z, Math.min(0.5, 0.12 + drop * 0.06));
+      this.audio?.play(drop > 2 ? 'thud' : 'step', p);
+      if (drop > 3) {
+        this.damage(p, (drop - 3) * 2, null);
+        if (!p.dead) this.ui.msg(`You fall ${drop} blocks and land hard.`, '#ffb080', true);
+      }
+      return true;
+    }
+    return false;
   }
 
   // Each player's own part of the world's turn: the ground under them,
@@ -2179,6 +2216,15 @@ export class Game {
     return p && p.seat && this.seats ? asSeat(this, p.seat, fn) : fn();
   }
 
+  // Busy in your pack or a chest: an old place's own traps hold off (see
+  // dungeon.js and monsters.fireHazard); what lives there doesn't.
+  rummaging(p = this.player) {
+    return this.asPlayer(p, () => {
+      const ui = this.ui;
+      return !!(ui && ui.find && (ui.find('inventory') || ui.find('container')));
+    });
+  }
+
   // Any player within `r` paces of `e`?
   nearPlayer(e, r) {
     for (const q of this.everyone()) if (Math.max(Math.abs(q.x - e.x), Math.abs(q.z - e.z)) < r) return true;
@@ -2303,8 +2349,15 @@ export class Game {
     r.mouse = { x: mx, y: my };
     let hit = null;
     if (p.layerMode !== null) {
+      // The layer locked (Z/X): that height, in the column you point at as
+      // you see it (not a tile the height's own plane happens to cross
+      // there, half a block off).
       const L = p.y + p.layerMode;
-      const t = r.screenToTile(mx, my, L);
+      let col = null;
+      if (r.underground && r.hidden) col = this.pickPlan(mx, my, drawn ? r.pick : null);
+      else if (drawn && r.pick && w.getBlock(r.pick.x, r.pick.y, r.pick.z) === r.pick.id) col = r.pick;
+      else if (!drawn || r.pick) col = this.pickGeometric(mx, my);
+      const t = col || r.screenToTile(mx, my, L);
       hit = { x: t.x, y: L, z: t.z, face: 'top', id: w.getBlock(t.x, L, t.z), fixed: true };
     } else if (r.underground && r.hidden) {
       hit = this.pickPlan(mx, my, drawn ? r.pick : null);
@@ -2793,6 +2846,14 @@ export class Game {
       this.mining = null;
       return;
     }
+    // A town's chests, barrels and wardrobes are its people's: they can be
+    // opened (and picked, and robbed), not broken up and carried off. (Not
+    // in a town that's been left empty; your own are yours.)
+    if (b.interact === 'container' && this.unbreakableChest(c.x, c.y, c.z)) {
+      if (!this.mining || this.mining.x !== c.x || this.mining.z !== c.z) this.ui.msg('That belongs to the town\'s folk: it\'s too heavy and too well made to break. Open it instead.', '#c8c8c8', true);
+      this.mining = { x: c.x, y: c.y, z: c.z, progress: 0, hitT: 1 };
+      return;
+    }
     // In a cell, only the bars could possibly give way.
     const j = this.sim.justice.jail;
     if (j && !j.cellless && b.id !== B.iron_bars && b.id !== B.cell_door) {
@@ -2807,10 +2868,23 @@ export class Game {
     }
     const p = this.player;
     p.face(c.x, c.z);
-    // (Digging a passage: the ground over it, or under it, goes too, a
-    // little longer for it. See tunnelPair.)
-    const pair = this.tunnelPair(c);
-    m.progress += dt / (this.breakTime(b) + (pair ? this.breakTime(BLOCKS[this.world.getBlock(pair.x, pair.y, pair.z)]) * 0.6 : 0));
+    // (Digging a passage: the block over it, or under it, goes too, a
+    // little longer for it; cutting a step up, the blocks over it and over
+    // your head, the step itself left. See digPlan.)
+    const plan = this.digPlan(c);
+    const extra = plan ? plan.extra : [];
+    if (plan && plan.keep && !extra.length) {
+      // (The step's cut already: nothing more to dig. Walk up it.)
+      this.mining = null;
+      if (!(this.stepToldT > 0)) {
+        this.stepToldT = 4;
+        this.ui.msg('That step\'s clear: walk onto it to climb up. (Let go of Shift to dig the step itself.)', '#a0c8ff', true);
+      }
+      return;
+    }
+    let time = plan && plan.keep ? 0 : this.breakTime(b);
+    for (const e of extra) time += this.breakTime(BLOCKS[this.world.getBlock(e.x, e.y, e.z)]) * (plan.keep ? 1 : 0.6);
+    m.progress += dt / Math.max(0.05, time);
     m.hitT -= dt;
     if (m.hitT <= 0) {
       m.hitT = 0.28;
@@ -2820,10 +2894,51 @@ export class Game {
       this.audio?.play('dig');
     }
     if (m.progress >= 1) {
-      if (pair) this.breakBlock(pair.x, pair.y, pair.z, true);
-      this.breakBlock(c.x, c.y, c.z, true);
+      for (const e of extra) this.breakBlock(e.x, e.y, e.z, true);
+      if (!(plan && plan.keep)) this.breakBlock(c.x, c.y, c.z, true);
+      else this.ui.msg('A step cut: walk onto it to climb up.', '#a0c8ff', true);
       this.mining = null;
     }
+  }
+
+  // Everything that goes when you dig at the block under the pointer:
+  //   - beside you, at your feet or your head: the other half of the
+  //     two-high gap goes with it, so you can walk through (out of a house
+  //     as well as into a hillside);
+  //   - Shift held, at a wall beside you: a step up cut into it instead:
+  //     the two blocks over it and the one over your head go, the step
+  //     itself stays, to climb.
+  // Null if it's only the block itself (or the layer's locked: Z/X).
+  digPlan(c) {
+    const p = this.player;
+    if (!c || !c.block || p.layerMode !== null) return null;
+    const inp = this.input;
+    const shift = !!(inp && inp.isDown && (inp.isDown('ShiftLeft') || inp.isDown('ShiftRight')));
+    if (shift) {
+      const step = this.stepCut(c);
+      if (step) return step;
+    }
+    const pair = this.tunnelPair(c);
+    return pair ? { kind: 'pass', extra: [pair], keep: false } : null;
+  }
+
+  // A step up into the wall at (c.x, c.z), beside you: what's still to dig
+  // (the two blocks over the step, and the one over your head).
+  stepCut(c) {
+    const p = this.player;
+    if (this.dungeon || Math.abs(c.x - p.x) + Math.abs(c.z - p.z) !== 1 || (c.y !== p.y && c.y !== p.y + 1)) return null;
+    const w = this.world;
+    if (!BLOCKS[w.getBlock(c.x, p.y, c.z)].standable) return null;
+    const extra = [];
+    for (const q of [{ x: c.x, y: p.y + 1, z: c.z }, { x: c.x, y: p.y + 2, z: c.z }, { x: p.x, y: p.y + 2, z: p.z }]) {
+      const id = w.getBlock(q.x, q.y, q.z);
+      const b = BLOCKS[id];
+      if (id === B.air || !b.solid) continue;
+      // (Something that won't come away: no step here.)
+      if (!digThrough(id)) return null;
+      extra.push(q);
+    }
+    return { kind: 'step', extra, keep: true };
   }
 
   // Digging into the ground beside you, at your feet or your head (the
@@ -2836,14 +2951,25 @@ export class Game {
     const d = Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z));
     if (d < 1 || d > 2) return null;
     const w = this.world;
-    if (!NATURAL.has(w.getBlock(c.x, c.y, c.z))) return null;
+    if (!digThrough(w.getBlock(c.x, c.y, c.z))) return null;
     let y = null;
     if (c.y === p.y) y = c.y + 1;
     else if (c.y === p.y + 1) y = c.y - 1;
     if (y === null) return null;
-    const id = w.getBlock(c.x, y, c.z);
-    if (!NATURAL.has(id) || !isFinite(BLOCKS[id].hardness)) return null;
+    if (!this.digsAlong(c.x, y, c.z)) return null;
     return { x: c.x, y, z: c.z };
+  }
+
+  // What a dig takes along with it unasked: the ground itself, or the wall
+  // of a building the town put up (so you can dig your way out of a house
+  // two high). Not what you've built yourself out in the open.
+  digsAlong(x, y, z) {
+    const id = this.world.getBlock(x, y, z);
+    if (NATURAL.has(id)) return true;
+    if (!digThrough(id)) return false;
+    const s = this.currentSettlement;
+    const L = s && this.world.layouts.get(s.id);
+    return !!(L && buildingAt(L, x, z));
   }
 
   blockColor(id) {
@@ -3342,7 +3468,7 @@ export class Game {
         const k = `mill:${L.settlement.id}:${i}`;
         mills.add(k);
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'sails', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
-        Object.assign(this.props.get(k), { x: sl.x, y: sl.y, z: sl.z, along: sl.along, seed: i, spin: (L.settlement.condition === 'abandoned' ? 0.25 : 0.7) * windy });
+        Object.assign(this.props.get(k), { x: sl.x, y: sl.y, z: sl.z, along: sl.along, nx: sl.nx ?? 0, nz: sl.nz ?? (sl.along ? 1 : 0), seed: i, spin: (L.settlement.condition === 'abandoned' ? 0.25 : 0.7) * windy });
       });
     }
     for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k)) this.props.delete(k);
@@ -3932,6 +4058,13 @@ export class Game {
         this.openContainerAt(x, y, z, owner);
       },
     }));
+  }
+
+  // A container in a living town that isn't yours: it can't be broken.
+  unbreakableChest(x, y, z) {
+    if (this.dungeon && this.world.inInstance(x)) return false;
+    const own = this.containerOwner(x, y, z);
+    return !!(own && own.kind !== 'mine');
   }
 
   // Who a container belongs to: a household, a business, the player.
@@ -5229,6 +5362,18 @@ export class Game {
 
   damage(target, amount, source, crit = false) {
     if (target.dead || target.down) return;
+    // (A master's summoned things never hurt it, nor it them.)
+    if (source && sameSide(source, target)) return;
+    // A bout just over: a blow still on its way, or swung without seeing
+    // it was done, lands on nothing (and is no crime).
+    const da = this.duelAfter;
+    if (da && da.t > 0 && source && ((target === da.npc && source.kind === 'player') || (source === da.npc && target.kind === 'player'))) {
+      if (!(da.noteT > 0)) {
+        da.noteT = 1.5;
+        this.renderer.floatText(target.x, target.y + 2.2, target.z, 'the bout is over', '#ffe070');
+      }
+      return;
+    }
     // (With others in the world: it happens as the one hurt, or the one who
     // struck. Friends don't hurt each other.)
     if (this.seats) {
@@ -5309,7 +5454,14 @@ export class Game {
       target.hp = Math.max(1, Math.min(target.hp, Math.ceil(target.maxHp * 0.25)));
       if (target.rec) target.rec.hp = target.hp;
       target.flash = 0.12;
-      this.endDuel(target === duel.npc ? 'won' : 'lost');
+      const won = target === duel.npc;
+      this.endDuel(won ? 'won' : 'lost');
+      // The one beaten down on one knee, a moment of it (see
+      // scenes.duelYield); and for a while after, no blow between you
+      // lands, nor counts as a crime: the bout's over.
+      this.duelAfter = { npc: duel.npc, t: 7 };
+      if (!this.scene) this.scene = duelYield(this, duel.npc, won);
+      else (won ? duel.npc : this.player).kneelT = 4;
       return;
     }
     // A brawl between townsfolk: bruises, not bodies.
@@ -5938,6 +6090,7 @@ export class Game {
       regions,
       dead: [...this.deadNpcs].map(([sid, set]) => [sid, [...set]]),
       explored: this.world.ow.packExplored(),
+      pins: this.world.ow.pins,
       stats: this.stats,
       wanted: [...this.wanted],
       crops: this.crops.serialize(),
@@ -5980,6 +6133,7 @@ export class Game {
     for (const r of data.regions || []) this.world.saved.set(this.world.regionKey(r.rx, r.rz), r);
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
     if (data.explored) this.world.ow.unpackExplored(data.explored);
+    if (data.pins) this.world.ow.pins = data.pins;
     if (data.stats) this.stats = data.stats;
     if (data.cheats) {
       this.cheats = { ...this.cheats, mapTeleport: !!data.cheats.mapTeleport, god: !!data.cheats.god };
@@ -6040,6 +6194,16 @@ export class Game {
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// A block a passage can be dug through: the ground, or a plain wall (logs,
+// planks, stone, brick...), not a door, a chest, bars or anything else
+// that's used rather than dug.
+function digThrough(id) {
+  const b = BLOCKS[id];
+  if (!b || id === B.air || b.liquid || !isFinite(b.hardness)) return false;
+  if (NATURAL.has(id)) return true;
+  return b.solid && b.render === 'cube' && !b.interact && id !== B.iron_bars && id !== B.cell_door;
 }
 
 // What your feet sound like on this.

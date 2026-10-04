@@ -440,7 +440,7 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   const wealth = { prosperous: 1.6, normal: 1, poor: 0.5 }[cond] || 1;
   const base = { noble: 60, mayor: 40, merchant: 30, blacksmith: 20, innkeeper: 18, cook: 14, scholar: 14, beggar: 1 }[job] ?? (age === 'child' ? 1 : 8);
   const coins = Math.max(0, Math.round(base * wealth * rng.float(0.5, 1.5)));
-  return { tool, hobbyItem, items, coins, armor: job === 'guard' ? 0.35 : 0, shield };
+  return { tool, hobbyItem, items, coins, armor: job === 'guard' ? 0.42 : 0, shield };
 }
 
 // ---------------------------------------------------------------- schedules
@@ -647,6 +647,9 @@ export function withShield(look, shield) {
 }
 
 // Give someone a new trade: workplace, tools, clothes and a new routine.
+// A guard's health: the watch is hardier than the people it watches over.
+export const GUARD_HP = 32;
+
 export function retrain(layout, rec, job, rng) {
   rec.job = job;
   rec.work = layout.assignWork(rec, rng);
@@ -663,8 +666,8 @@ export function retrain(layout, rec, job, rng) {
   }
   if (job === 'guard') {
     look.hat = 'helmet';
-    rec.maxHp = 24;
-    rec.hp = Math.max(rec.hp ?? 12, 18);
+    rec.maxHp = GUARD_HP;
+    rec.hp = Math.max(rec.hp ?? 12, 24);
     rec.personality.bravery = Math.max(rec.personality.bravery, 0.6);
     rec.shift = 'day';
   }
@@ -751,7 +754,7 @@ export function generateNPCs(layout, plan, seed) {
       npc.hobbies = pickHobbies(rng, p, civ, avail, m.age);
       npc.equipment = equipmentFor(rng, job, npc.hobbies, s.condition, m.age);
       npc.look = withShield(makeLook(rng, style, m.age, job, civ), npc.equipment.shield);
-      npc.maxHp = job === 'guard' ? 24 : m.age === 'child' ? 6 : m.age === 'elder' ? 8 : 12;
+      npc.maxHp = job === 'guard' ? GUARD_HP : m.age === 'child' ? 6 : m.age === 'elder' ? 8 : 12;
       npc.hp = npc.maxHp;
       npc.work = layout.assignWork(npc, rng);
       members.push(npc);

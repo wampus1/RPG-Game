@@ -128,6 +128,11 @@ function fireHazard(game, h) {
     if (!e || !on(e) || e === h.by) continue;
     // (Its own kind are spared its blows, unless it's a trap.)
     if (h.by && !h.trap && e.kind !== 'player' && e.kind !== 'npc' && e.S && e.S.construct === h.by.S?.construct && e.S.undead === h.by.S?.undead) continue;
+    // (Nor a master by what it raised, even a mite going up beside it.)
+    if (sameSide(h.by, e)) continue;
+    // (The place's own traps hold off while you're in your pack or a
+    // chest; what lives there doesn't.)
+    if (h.place && e.kind === 'player' && game.rummaging?.(e)) continue;
     if (e.kind === 'player' && e.rollT > 0) {
       r.floatText(e.x, e.y + 2, e.z, 'dodged', '#c8e8ff');
       continue;
@@ -372,11 +377,19 @@ export function areaTiles(cx, cz, r, round = false) {
 }
 
 const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+const rngPick = (a) => a[Math.floor(Math.random() * a.length)];
 const sees = (game, a, b) => !game.sim || !game.sim.lineOfSight || game.sim.lineOfSight(a.x, a.z, b.x, b.z, a.y + 1);
 
 // Others of its kind nearby.
 function allies(game, c, r, pred = null) {
   return game.creatures.filter((o) => o !== c && !o.dead && dist(o, c) <= r && (!pred || pred(o)));
+}
+
+// A master and what it raised (or two things raised by the same master):
+// none of them hurts another, by blow, blast or burst.
+export function sameSide(a, b) {
+  if (!a || !b || a === b) return false;
+  return a.summoner === b || b.summoner === a || (!!a.summoner && a.summoner === b.summoner);
 }
 
 // Raise something new at a spot near `at` (a summoning, a call for help).
@@ -388,6 +401,9 @@ export function summon(game, species, at, near = 2, opts = {}) {
     if (y < 0 || Math.abs(y - at.y) > 1 || game.occupiedAny?.(x, y, z) || game.entityAt(x, y, z)) continue;
     const c = game.spawnMonster(species, x, y, z, opts);
     if (c) {
+      // (Raised by a master, or by one of its things: on its side, and
+      // never a hand raised against it. See sameSide.)
+      if (at.S && at.kind !== 'player' && at.kind !== 'npc') c.summoner = at.summoner || at;
       game.renderer.emit(x, y + 0.5, z, { n: 10, color: opts.color || ['#a0e0ff', '#e0f8ff', '#5a8aa0'], up: 30, speed: 20, life: 0.8, gravity: -20 });
       return c;
     }
@@ -857,13 +873,16 @@ export const BRAINS = {
   },
 
   // The Drowned Priest: keeps off, throws cold, sends the tide across the
-  // floor, and calls the drowned up out of the water; worn, a whirlpool
-  // where you stand; desperate, the tide from both sides at once, and his
-  // cold thrown in threes.
+  // floor, and calls the drowned up out of the water; his flail flung out
+  // on its chain down a line at you (and hauled back), or whirled round him
+  // when you're close; worn, a whirlpool where you stand; desperate, the
+  // tide from both sides at once, and his cold thrown in threes.
   priest(c, dt) {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
+    // (The flail's flight, for his figure: see bossfigs.js.)
+    if (c.flail && (c.flail.t += dt) >= c.flail.dur) c.flail = null;
     phaseSummons(c, [0.7, 0.4], () => {
       for (let i = 0; i < 3; i++) summon(game, 'drowned', c, 4, { level: c.level, color: ['#80b8d8', '#c8e8f8'] });
       game.renderer.floatText(c.x, c.y + 3, c.z, 'from the deep, come!', '#a0e8d0');
@@ -895,6 +914,29 @@ export const BRAINS = {
       }
       if (ph >= 3) game.renderer.floatText(c.x, c.y + 3, c.z, 'DROWN!', '#80c8e0');
       game.audio?.play('splash', c);
+    }
+    // The flail: swung up over his head, then flung down the line at you
+    // as far as its chain runs; or, with you at his elbow, whirled round.
+    c.flailCd = (c.flailCd ?? 1.5) - dt;
+    const fd = dist(c, t);
+    if (ready(c) && c.flailCd <= 0 && !c.flail && !c.windup && fd <= 5 && Math.abs(t.y - c.y) <= 1 && sees(game, c, t)) {
+      c.flailCd = ph >= 3 ? 3.2 : 4.4;
+      used(c, 0.5);
+      if (fd <= 1) {
+        addHazard(game, { by: c, tiles: areaTiles(c.x, c.z, 1), y: c.y, dur: 0.75, dmg: Math.round(3 * mult(c)), knock: 2, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: 1, kind: 'slam', color: COLORS.blow });
+        c.flail = { kind: 'whirl', t: 0, dur: 1.15 };
+        game.renderer.floatText(c.x, c.y + 3, c.z, 'the flail whirls!', '#a0e8d0');
+      } else {
+        const tiles = lineTiles(game, c, t, 5);
+        const end = tiles[tiles.length - 1] || { x: t.x, z: t.z };
+        addHazard(game, { by: c, tiles, y: c.y, dur: 0.8, dmg: Math.round(4 * mult(c)), knock: 1, from: { x: c.x, z: c.z }, center: { x: end.x, z: end.z }, radius: 0, kind: 'slam', color: COLORS.blow,
+          onFire: (g) => g.audio?.play('clang', end) });
+        c.flail = { kind: 'throw', x: end.x, z: end.z, t: 0, dur: 1.35, out: 0.8 };
+        c.say?.(rngPick(['Kneel to the water!', 'Down, child!', 'The chain binds all!']), 1.4, '#a0e8d0');
+      }
+      game.audio?.play('whoosh', c);
+      c.doAction?.(0.3);
+      return true;
     }
     c.castCd = (c.castCd ?? 2) - dt;
     if (ready(c) && c.castCd <= 0 && dist(c, t) <= 9 && !c.windup) {

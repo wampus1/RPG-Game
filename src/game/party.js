@@ -13,7 +13,7 @@ export const GAME_FIELDS = [
   'player', 'hero', 'playerName', 'ui', 'input', 'cursor', 'mining', 'pending', 'placeRepeat', 'queuedBlow', 'fishing', 'sleep', 'waiting', 'sleepFast',
   'scene', 'shake', 'hurtFlash', 'healFlash', 'lastHp', 'beatT', 'bonusT', 'currentSettlement', 'biomeCache', 'stats', 'dummyLog', 'duel', 'charging',
   'combatT', 'combatWith', 'wanted', 'hitStop', 'slowMo', 'slowMoScale', 'diceGame', 'talkingTo', 'stormWarned', 'lavaWarned', 'lastPrayDay', 'aimFixed',
-  'nearSpire', 'looseKeys', 'revealMap', 'stormSea',
+  'nearSpire', 'looseKeys', 'revealMap', 'stormSea', 'duelAfter',
 ];
 // The town's view of each: what they think of you, your record.
 export const SIM_FIELDS = ['rep', 'citizen', 'renown', 'areaCache', 'confront', 'petition'];

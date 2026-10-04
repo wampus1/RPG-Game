@@ -623,7 +623,7 @@ export class Tech {
     if (!eq) return;
     if (this.has(s, 'drill') && !r.drilled) {
       r.drilled = true;
-      r.maxHp = (r.maxHp || 24) + 6;
+      r.maxHp = (r.maxHp || 32) + 6;
       r.hp = Math.min(r.maxHp, (r.hp || 0) + 6);
     }
     eq.items ||= [];

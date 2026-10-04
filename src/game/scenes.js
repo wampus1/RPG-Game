@@ -229,6 +229,60 @@ export function bossDefeat(game, run, boss) {
   };
 }
 
+// ------------------------------------------------------------ a bout
+// A friendly bout's end: the last blow lands slow, the one beaten goes down
+// on one knee, the winner says their piece and goes on their way, and the
+// one on their knees takes a few seconds to get up. (No more blows land
+// between you meanwhile: see Game.damage and duelAfter.)
+export function duelYield(game, npc, won) {
+  const p = game.player;
+  const loser = won ? npc : p;
+  const winner = won ? p : npc;
+  return {
+    kind: 'yield', t: 0, dur: 3, lock: true, npc, won,
+    timeScale(t) {
+      return t < 0.45 ? 0.3 : 1;
+    },
+    get zoom() {
+      return 1 - 0.12 * ease(clamp01(this.t / 0.5)) * (1 - ease(clamp01((this.t - 2.3) / 0.7)));
+    },
+    focus() {
+      const k = 0.5 * ease(clamp01(this.t / 0.5)) * (1 - ease(clamp01((this.t - 2.3) / 0.7)));
+      const a = p.renderPos ? p.renderPos() : p;
+      const b = npc.renderPos ? npc.renderPos() : npc;
+      return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k) };
+    },
+    update(g) {
+      const r = g.renderer;
+      if (!this.down) {
+        this.down = true;
+        loser.kneelT = won ? 5.5 : 4.5;
+        g.audio?.play('thud', loser);
+        r.emit(loser.x, loser.y + 0.2, loser.z, { n: 10, color: ['#c8b898', '#8a7a60'], up: 14, speed: 24, life: 0.5 });
+        r.floatText(loser.x, loser.y + 2.4, loser.z, won ? 'yields!' : 'you yield', '#ffe070');
+        if (npc.face) npc.face(p.x, p.z);
+      }
+      if (this.t > 0.7 && !this.said) {
+        this.said = true;
+        if (won) npc.say?.(npc.rng.pick(['I yield! I yield. Well fought.', 'Enough... you have me.', 'Ha... down I go. You win.']), 3, '#a0ffa0');
+        else npc.say?.(npc.rng.pick(['Stay down, friend. That\'s the bout.', 'Yield, and we\'re done. Good fight.', 'Up when you\'re ready. No shame in it.']), 3, '#ffe070');
+      }
+      // The winner turns away and goes about their business.
+      if (!won && this.t > 1.6 && !this.off) {
+        this.off = true;
+        npc.walkAway?.(p, 6);
+      }
+    },
+    end(g) {
+      if (won) g.ui.msg(`${npc.name} is on one knee. Leave them to get their breath back.`, '#c8d8ff');
+      else g.ui.msg('You get your breath back...', '#c8d8ff');
+    },
+    draw(ctx) {
+      letterbox(ctx, this, winner === p ? 'You win the bout' : `${npc.name} wins the bout`, won ? '#a0ffa0' : '#ffb080');
+    },
+  };
+}
+
 // ------------------------------------------------------------ the lift
 // A Kavorent lift isn't a step through a door: it's a ride. The world
 // round you falls away into the dark of its shaft, and you stand on its

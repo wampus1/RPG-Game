@@ -109,8 +109,13 @@ export function drawBossArt(r, ctx, e, sx, feetY) {
   const rig = (e.rig ||= {});
   const dt = rig.lastT === undefined ? 0 : Math.max(0, Math.min(0.1, r.time - rig.lastT));
   rig.lastT = r.time;
-  const drift = rig.lastX === undefined ? 0 : x - rig.lastX;
-  rig.lastX = x;
+  // (How far it's moved across the world as you see it, not the screen:
+  // the camera following you, or turned with Q and E, swings nothing.)
+  const wx = x + (r.camX || 0);
+  const turned = rig.view !== r.view;
+  rig.view = r.view;
+  const drift = rig.lastX === undefined || turned ? 0 : Math.max(-6, Math.min(6, wx - rig.lastX));
+  rig.lastX = wx;
   const flip = e.faceR;
   const dx = x - ax;
   const dy = y - ay;

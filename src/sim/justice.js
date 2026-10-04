@@ -79,6 +79,25 @@ export class Justice {
     return r;
   }
 
+  // A killing the town knows of, counted once.
+  knownKilling(sid, crime) {
+    if (crime.counted) return;
+    crime.counted = true;
+    const r = this.recordOf(sid);
+    r.murders = (r.murders || 0) + 1;
+    r.murderDay = this.game.day;
+  }
+
+  // How much the town fears you: the killings it knows of, fading a little
+  // with every ten days since the last. Two or more and folk run from you
+  // (children sooner); see NPC.maybeGreet.
+  dreadIn(sid) {
+    const r = this.record.get(sid);
+    if (!r || !r.murders) return 0;
+    const days = Math.max(0, this.game.day - (r.murderDay ?? this.game.day));
+    return Math.max(0, r.murders - Math.floor(days / 10));
+  }
+
   notoriety(sid) {
     const r = this.record.get(sid);
     return this.pendingIn(sid).length + (r ? r.convictions * 0.5 + r.severe : 0);
@@ -109,6 +128,8 @@ export class Justice {
     const list = this.pending.get(sid) || [];
     list.push(crime);
     this.pending.set(sid, list);
+    // A killing people saw: the town knows what you are (see dreadIn).
+    if (type === 'murder' && !crime.suspected) this.knownKilling(sid, crime);
     const r = L.econ.recent;
     if (type === 'theft' || type === 'vandalism' || type === 'trespass') r.thefts++;
     else if (type === 'poaching') r.poached = (r.poached || 0) + 1;
@@ -861,6 +882,8 @@ export class Justice {
     for (const c of v.proven) {
       rec[c.sev]++;
       rec.convictions++;
+      // (Proved at the hearing: now they know.)
+      if (c.type === 'murder') this.knownKilling(v.sid, c);
     }
     this.pending.delete(v.sid);
     this.resisted.delete(v.sid);

@@ -313,8 +313,10 @@ function rigUpdate(r, e, rig, wp, front, dt, game) {
     }
   });
   let R = e.legRig;
-  if (!R || R.n !== homes.length || Math.hypot(wp.x - R.x, wp.z - R.z) > 3) {
-    R = e.legRig = { n: homes.length, x: wp.x, z: wp.z, still: 0, feet: homes.map((h) => ({ x: h.x, z: h.z, fx: h.x, fz: h.z, tx: h.x, tz: h.z, t: 1 })) };
+  // (Its legs are set as it's seen: with the camera turned, they're set
+  // afresh where they stand now, not walked there.)
+  if (!R || R.n !== homes.length || Math.hypot(wp.x - R.x, wp.z - R.z) > 3 || R.view !== r.view) {
+    R = e.legRig = { n: homes.length, view: r.view, x: wp.x, z: wp.z, still: 0, feet: homes.map((h) => ({ x: h.x, z: h.z, fx: h.x, fz: h.z, tx: h.x, tz: h.z, t: 1 })) };
   }
   const moved = Math.hypot(wp.x - R.x, wp.z - R.z);
   R.still = moved < 0.0005 ? R.still + dt : 0;

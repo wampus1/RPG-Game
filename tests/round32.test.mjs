@@ -68,14 +68,20 @@ function squareUp(game, p) {
   const d = holdout(game);
   // (Backed against a wall if it can be, so a blow can't knock it out of
   // reach.)
-  for (const pinned of [true, false]) for (let r = 2; r < 12; r++) {
-    const s = game.findFreeSpot(p.x + r, p.z, FY);
+  // (Looked for all round where you came in, nearest first.)
+  const around = [];
+  for (let a = -12; a <= 12; a += 2) for (let b = -12; b <= 12; b += 2) around.push([a, b]);
+  around.sort((m, n) => Math.hypot(...m) - Math.hypot(...n));
+  for (const pinned of [true, false]) for (const [a, b] of around) {
+    const s = game.findFreeSpot(p.x + a, p.z + b, FY);
     if (!s) continue;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = s.x + dx;
       const z = s.z + dz;
       if (!game.world.canStand(x, s.y, z) || game.occupiedAny(x, s.y, z)) continue;
-      if (pinned && game.world.canStand(x + dx, s.y, z + dz)) continue;
+      // (Pinned: nowhere a blow could knock it to, by the same rule a
+      // knock-back goes by.)
+      if (pinned && game.world.stepTarget(x, s.y, z, x + dx, z + dz, false) >= 0) continue;
       p.teleport(s.x, s.y, s.z);
       const foe = d.spawn('skeleton', x, s.y, z, {});
       foe.maxHp = foe.hp = 999;

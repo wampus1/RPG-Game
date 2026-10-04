@@ -236,6 +236,22 @@ export class Rope {
     Object.assign(P[0], a);
     if (b) Object.assign(P[P.length - 1], b);
   }
+  // Carried bodily, not swung: the held end moved by (dx, dy, dz) and the
+  // rest along with it (less toward a far end that's held fast), keeping
+  // its sway as it was. (So a camera turn that moves where it's held
+  // doesn't set it whipping about.)
+  carry(dx, dy, dz, heldFar = false) {
+    const n = this.p.length - 1;
+    this.p.forEach((q, i) => {
+      const k = heldFar ? 1 - i / n : 1;
+      q.x += dx * k;
+      q.y += dy * k;
+      q.z += dz * k;
+      q.px += dx * k;
+      q.py += dy * k;
+      q.pz += dz * k;
+    });
+  }
   // How hard it's pulled (1: taut).
   taut() {
     let s = 0;

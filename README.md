@@ -92,7 +92,8 @@ with the music off; `&nointro` skips a new character's opening scene.
 | Move (tile by tile) | WASD / arrow keys, hold Shift to sprint |
 | Select belt slot | 1–9 or mouse wheel |
 | Interact (doors, chests, workbench, furnace, anvil, trade benches, torches, beds, signs, posters, wells…) | Click the block, or F / right-click |
-| Mine | Hold left mouse on a block with a tool or an empty hand |
+| Mine | Hold left mouse on a block with a tool or an empty hand (beside you, the block over it comes too, so you can walk into the gap) |
+| Cut a step up (to climb out of a hole, or up a wall) | Hold Shift and hold left mouse on the block beside your feet: it stays as the step, and the blocks over it and over your head come away |
 | Place block | Select a block item and click (hold to keep placing) |
 | Rotate the block you're about to place | R |
 | Turn the camera a quarter turn | Q / E |
@@ -3037,6 +3038,65 @@ together on your network" above for how to start. How it works:
   (`MAX_PLAYERS` in `src/net/protocol.js`). Accounts live in the browser
   and the relay is part of `npm start`, so cloud hosting can be added
   later without changing the game itself.
+
+## Round 42: digging out, guard bows, and how a bout ends
+
+- *Researchers talk about the tree of learning.* Ask a researcher (or a
+  scholar) what they're working on, and the technology tree opens.
+- *Digging is easier to read.*
+  - Digging into the block beside you also takes the block above it: ground,
+    or the wall of one of the town's buildings, so you can dig your way out
+    of a house. Blocks you placed yourself out in the open are never taken
+    along with it. A dashed outline shows the second block before you start.
+  - Hold Shift to cut a step instead. The block at your feet stays as the
+    step, and the two blocks above it and the one over your head come away.
+    A green ▲ marks it, and the tooltip says "hold cut a step up".
+  - If you walk into a wall and can't go on, a hint says what's in the way
+    (your head, the step, or a gap one block high) and how to clear it.
+  - Locking the layer (Z / X) now picks the column under the pointer, then
+    the layer you chose in it. It used to slide one block over at some
+    heights.
+  - Dig out the ground under your feet and you drop, even when you're
+    standing still. A long drop hurts.
+- *Guards are tougher.* More health (32) and better armour, and caravan and
+  nomad guards too. About a third of guards carry a bow as well. When other
+  guards are already fighting someone up close, a guard with a bow hangs
+  back and shoots. If the fight comes close, they switch to their blade.
+- *Folk fear a known killer.* Once a town knows you've killed people,
+  townsfolk run when you come near (children and the timid first). The fear
+  fades over a few weeks.
+- *Merchants say when they're short of coin.* Hovering an item they want
+  shows what it's worth and that they can't afford it, and their purse.
+  Selling more than they can pay for says so too. Inns, cooks, farmers and
+  fishers also buy the island foods they didn't before.
+- *Town chests can't be broken* unless the town is abandoned or deserted.
+- *Places you're told about go on your map.* Ask where a town is and it's
+  marked. Ask about the sea or the lakes and rivers and the spot gets a •
+  pin. Old places and bandit camps you've heard about now show even in the
+  fog of the unexplored map (they used to stay hidden until you'd been
+  there).
+- *Masters.*
+  - Every boss has 10% more health. The big slow ones (the Deep Worm, the
+    colossi, golems and titans) get up to 15% more again.
+  - Boss halls are a little bigger.
+  - Whatever a boss summons can't hurt it, and it can't hurt them (a mite
+    going off beside the Prime used to).
+  - The Drowned Priest uses his flail. He swings it up, then flings it down
+    a line at you (the tiles light up first), or whirls it round himself if
+    you're close.
+- *Dungeon traps wait while you're in your pack or a chest.* Spikes, darts,
+  beams and the rest hold off while your inventory or a chest is open.
+  Monsters still hit you.
+- *Camera turns don't shake chains.* Cloaks, flails, censers, legs and the
+  Chained Drake's chain used to jerk when you turned the camera or when it
+  followed you. They only move now when the boss itself moves.
+- *How a bout ends.* When a friendly duel is won, the last blow lands in
+  slow motion and the loser goes down on one knee for a few seconds. If you
+  win, they stay there while you go. If they win, you're held there while
+  they walk off. For a few seconds after, no blow between you lands and
+  none of it counts as a crime, so a late swing doesn't make you wanted.
+- *The windmill's sails sit on their hub* from every camera angle. Seen
+  from the side the hub faces, they used to float a block too high.
 
 ## Command console
 

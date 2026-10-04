@@ -217,10 +217,35 @@ export class Player extends Entity {
     return addItem(this.inv, key, count);
   }
 
+  // Walked into something you could climb, or squeeze through, if it
+  // weren't for one block: said once in a while.
+  blockedHint(nx, nz) {
+    const w = this.game.world;
+    const solid = (x, y, z) => BLOCKS[w.getBlock(x, y, z)].solid;
+    this.hintT = this.hintT || 0;
+    if (this.hintT > 0) return;
+    let text = null;
+    // A step up, but a block over your head.
+    if (w.canStand(nx, this.y + 1, nz) && solid(this.x, this.y + 2, this.z)) text = 'There\'s a block over your head, so you can\'t climb up. Hold Shift and dig at the step to clear the way up.';
+    // A step up, a block over it.
+    else if (BLOCKS[w.getBlock(nx, this.y, nz)].standable && !solid(nx, this.y + 1, nz) && solid(nx, this.y + 2, nz)) text = 'Too low to climb onto. Hold Shift and dig at the step to clear the block over it.';
+    // A gap only one block high.
+    else if (!solid(nx, this.y, nz) && solid(nx, this.y + 1, nz) && BLOCKS[w.getBlock(nx, this.y - 1, nz)].standable) text = 'Too low to get through: dig the block at your feet there, and the one over it goes with it.';
+    if (!text) return;
+    this.hintT = 8;
+    this.game.ui.msg(text, '#a0c8ff', true);
+  }
+
   update(dt, input, blocked) {
     this.updateBase(dt);
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
+    if (this.hintT > 0) this.hintT -= dt;
+    // Down on one knee (a bout lost): up again in a few seconds.
+    if (this.kneelT > 0) {
+      this.kneelT -= dt;
+      if (this.kneelT <= 0) this.game.ui.msg('You get back on your feet.', '#c8d8ff', true);
+    }
     if (this.snuffT > 0) {
       this.snuffT -= dt;
       if (this.snuffT <= 0) {
@@ -313,7 +338,10 @@ export class Player extends Entity {
       }
     }
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
-    if (ny < 0) return;
+    if (ny < 0) {
+      this.blockedHint(nx, nz);
+      return;
+    }
     const other = this.game.occupiedBySolid(nx, ny, nz, this);
     if (other) {
       // Nudge past a villager who is just standing in the way.

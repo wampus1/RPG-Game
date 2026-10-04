@@ -434,7 +434,7 @@ export class MapWindow extends Window {
       put(y0, `Zoom ${Math.round((this.z / 12) * 100)}% · each square = 2x2 screens · point at anything for details.`, C.dim);
       put(y0 + 1, '', C.dim);
     }
-    put(y0 + 2, '⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire', C.faint);
+    put(y0 + 2, '⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire • told of', C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [M] close `;
     g.text(Math.max(1, this.w - t.length - 1), this.h - 1, t.slice(0, this.w - 2), game.cheats?.mapTeleport ? C.hi : C.dim);
   }
@@ -770,10 +770,11 @@ export class MapWindow extends Window {
         }
       }
     }
-    const put = (x, z, ch, fg, bg, label, color) => {
+    // (Told of counts: a place you've only heard of shows through the fog.)
+    const put = (x, z, ch, fg, bg, label, color, told = false) => {
       const cx = Math.floor(x / REGION_W);
       const cz = Math.floor(z / REGION_D);
-      if (!known(cx, cz)) return;
+      if (!told && !known(cx, cz)) return;
       marks.push({ cx, cz, label, color });
       if (icons.has(cz * 10000 + cx) && glyphs) return;
       if (glyphs) {
@@ -808,7 +809,7 @@ export class MapWindow extends Window {
     }
     // Bandit camps you've heard of (or seen the smoke of).
     for (const c of game.sim.bandits ? game.sim.bandits.knownCamps() : []) {
-      put(c.x, c.z, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10', `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}`);
+      put(c.x, c.z, '▲', c.hired ? '#ffd080' : '#f0a060', '#3a1a10', `Camp of ${c.name} (${c.n} of them${c.hired ? ', hired swords' : ''})${c.from ? `: heard of from ${c.from}` : ''}`, null, true);
     }
     // Old places, found or heard of. (Grey once beaten.)
     for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
@@ -816,8 +817,10 @@ export class MapWindow extends Window {
       const kav = d.type === 'kavorent';
       const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : '#f0d8a0';
       const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
-      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}) · ${what}`, kav ? '#7ae0ff' : '#f0d8a0');
+      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}) · ${what}`, kav ? '#7ae0ff' : '#f0d8a0', true);
     }
+    // What people have told you of: a lake, a river, the coast.
+    for (const q of game.world.ow.pins || []) put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
   }
 
   // Merchants on the roads, armies on the march, smoke over towns raided.

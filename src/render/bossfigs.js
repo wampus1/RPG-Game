@@ -12,7 +12,7 @@
 import { Paint, ramp, hash2 } from './paint.js';
 import { hex, mix, shade, toHex } from './pixel.js';
 import { Sculpt } from './sculpt.js';
-import { Part, Cloth, drawChain, toCanvas } from './bossrig.js';
+import { Part, Cloth, drawChain, toCanvas, onScreen } from './bossrig.js';
 
 export const FIG_W = 46;
 export const FIG_H = 60;
@@ -517,9 +517,40 @@ function front(R) {
     p.v += (-Math.sin(p.a) * 30 - p.v * 1.4 + drive * 4 - R.drift * 30) * Math.min(R.dt, 1 / 30);
     p.a += p.v * Math.min(R.dt, 1 / 30);
     const len = S.weapon.kind === 'flail' ? 9 : 8;
-    const bx = hx + Math.sin(p.a) * len;
-    const by = hy + Math.cos(p.a) * len;
-    drawChain(R.ctx, [{ x: hx, y: hy }, { x: bx, y: by }], S.weapon.kind === 'flail' ? '#6a6a74' : '#8a7a50');
+    let bx = hx + Math.sin(p.a) * len;
+    let by = hy + Math.cos(p.a) * len;
+    // A flail put to use (see the Drowned Priest): whirled up over the
+    // head, flung out down its chain to where it strikes and hauled back;
+    // or whirled round the body. (Its swing picks up again after.)
+    const fl = S.weapon.kind === 'flail' && R.e.flail && !R.e.dead ? R.e.flail : null;
+    let mid = null;
+    if (fl) {
+      const k = fl.t;
+      if (fl.kind === 'whirl') {
+        const a = k * 13;
+        bx = hx + Math.cos(a) * 15;
+        by = hy + 5 + Math.sin(a) * 5;
+      } else if (k < fl.out) {
+        const a = k * (10 + k * 10);
+        bx = hx + Math.cos(a) * 8;
+        by = hy - 9 + Math.sin(a) * 3;
+      } else {
+        // Out to where it strikes (in this frame: turned about with the
+        // figure when it faces right), held a moment, and back.
+        const q = onScreen(R.r, fl.x, R.e.y, fl.z);
+        const tx = R.flip ? 2 * R.x - q.x : q.x;
+        const ty = q.y - 6;
+        const go = Math.min(1, (k - fl.out) / 0.12);
+        const back = Math.max(0, (k - fl.out - 0.25) / Math.max(0.05, fl.dur - fl.out - 0.25));
+        const f = Math.max(0, go - back);
+        bx = hx + (tx - hx) * f;
+        by = hy + (ty - hy) * f;
+        mid = { x: (hx + bx) / 2, y: (hy + by) / 2 + 3 * (1 - f) + 2 };
+      }
+      p.a = Math.atan2(bx - hx, by - hy);
+      p.v = 0;
+    }
+    drawChain(R.ctx, mid ? [{ x: hx, y: hy }, mid, { x: bx, y: by }] : [{ x: hx, y: hy }, { x: bx, y: by }], S.weapon.kind === 'flail' ? '#6a6a74' : '#8a7a50');
     rig.bob.draw(R.ctx, bx, by, 0);
     if (S.weapon.fire) {
       R.ctx.fillStyle = '#ffb040';
@@ -608,7 +639,7 @@ const FIGS = {
   },
   priest: {
     skin: '#7aa098', hair: '#3a5a3a', hairStyle: 'long', eyes: '#c8ffd0', robe: '#2a4a5a', body: '#2a4a5a', trim: '#c8a030', robeRagged: true,
-    hat: { kind: 'hood', color: '#24404e' }, weapon: { kind: 'censer', color: '#a08a50' },
+    hat: { kind: 'hood', color: '#24404e' }, weapon: { kind: 'flail', color: '#5a6e6a' },
     sculpt: (X, J) => {
       // Weed hanging off him.
       X.limb([[17, 30 + J.b, 0.8, 7], [16, 36, 0.7, 7], [16.5, 42, 0.5, 6]], '#3a6a3a', 'moss');
