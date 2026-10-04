@@ -559,7 +559,7 @@ export class HostNet {
       waiting: !!game.waiting,
       mining: game.mining ? enc(game.mining, 2) : null,
       fishing: game.fishing ? enc(game.fishing, 3) : null,
-      scene: sc ? { kind: sc.kind, t: Math.round(sc.t * 100) / 100, cause: sc.cause, below: sc.below, dir: sc.dir, label: sc.label, boss: sc.boss ? (Array.isArray(sc.boss) ? sc.boss.map((b) => b.id) : sc.boss.id) : null, side: sc.side, gemColor: sc.gemColor, rec: sc.rec ? sc.rec.id : null } : null,
+      scene: sc ? this.sceneOf(sc) : null,
       shake: game.shake || 0,
       hurt: game.hurtFlash || 0,
       heal: game.healFlash || 0,
@@ -575,6 +575,24 @@ export class HostNet {
       ops: g.ops,
       storm: game.stormSea ? enc(game.stormSea, 2) : null,
       charging: game.charging ? enc(game.charging, 2) : null,
+    };
+  }
+
+  // A scene of theirs, as their screen plays it (see GuestNet.scene): the
+  // master waking (or falling: the one it was, as its ghost) by id.
+  sceneOf(sc) {
+    const who = sc.boss || sc.ghost || null;
+    return {
+      kind: sc.kind,
+      t: Math.round(sc.t * 100) / 100,
+      cause: sc.cause,
+      below: sc.below,
+      dir: sc.dir,
+      label: sc.label,
+      boss: who ? (Array.isArray(who) ? who.map((b) => b.id) : who.id) : null,
+      side: sc.side,
+      gemColor: sc.gemColor,
+      rec: sc.rec ? sc.rec.id : null,
     };
   }
 

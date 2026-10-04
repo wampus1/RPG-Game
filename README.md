@@ -79,7 +79,9 @@ In a shared world:
   another player is never a crime in town. Blocks and parries work as
   they do against anyone else.
 - If anyone goes down into a dungeon, the whole party goes with them, and
-  comes back up together.
+  comes back up together. Everyone down there sees a master's fight the
+  same way: its waking scene, its health bar and phases, its attacks and
+  the ground it fouls, and its fall.
 - Each player keeps their own character in the host's world between
   sessions. Their reputation with townsfolk, crimes, citizenship, jobs and
   favours are their own, not the party's.

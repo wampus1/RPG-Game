@@ -135,7 +135,18 @@ export class GuestNet {
       const find = (id) => this.ents.get(id) || null;
       for (const e of touched) resolveEntity(e, find);
     }
-    if (m.gone) for (const id of m.gone) if (id !== this.me) this.ents.delete(id);
+    if (m.gone) {
+      // (Kept a moment: a master just fallen is still drawn, coming
+      // apart, in the scene of its fall.)
+      this.lately ||= new Map();
+      for (const id of m.gone) {
+        if (id === this.me) continue;
+        const e = this.ents.get(id);
+        if (e) this.lately.set(id, e);
+        this.ents.delete(id);
+      }
+      if (this.lately.size > 64) this.lately = new Map([...this.lately].slice(-32));
+    }
     this.sortEnts();
     if (m.l) this.lists(m.l);
     if (m.w) this.globals(m.w);
@@ -289,7 +300,7 @@ export class GuestNet {
       if (Math.abs(cur.t - s.t) > 0.5) cur.t = s.t;
       return;
     }
-    const find = (id) => this.ents.get(id) || null;
+    const find = (id) => this.ents.get(id) || (this.lately && this.lately.get(id)) || null;
     let sc = null;
     try {
       if (s.kind === 'death') sc = deathRitual(game, s.cause || 'misfortune', s.below || null);
@@ -299,7 +310,11 @@ export class GuestNet {
         if (boss.length) sc = bossEntrance(game, game.dungeon, boss);
       } else if (s.kind === 'boss_down' && game.dungeon) {
         const b = find(Array.isArray(s.boss) ? s.boss[0] : s.boss);
-        if (b) sc = bossDefeat(game, game.dungeon, b);
+        if (b) {
+          // (Fallen: drawn as it comes apart, see Renderer.)
+          b.dead = true;
+          sc = bossDefeat(game, game.dungeon, b);
+        }
       } else if (s.kind === 'spire') {
         const rec = game.sim.dungeons.get(s.rec);
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);

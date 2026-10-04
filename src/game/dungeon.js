@@ -497,6 +497,13 @@ export class DungeonRun {
     return all.length ? all : [game.player];
   }
 
+  // Everyone down here, each as themselves (their own screen, scene and
+  // words): what a master's waking or fall does to all of you.
+  eachHere(fn) {
+    const game = this.game;
+    for (const q of this.partyHere()) game.asPlayer(q, () => fn(q));
+  }
+
   update(dt) {
     const game = this.game;
     const p = game.player;
@@ -623,10 +630,9 @@ export class DungeonRun {
         game.world.setBlock(g.x, FY, g.z, this.kav ? B.kav_gate : B.boss_gate, g.rot);
         game.audio?.play('gate_slam', { x: g.x, z: g.z });
         game.renderer.emit(g.x, FY + 1, g.z, { n: 18, color: ['#8a8478', '#5a5650'], up: 20, speed: 50, life: 0.7, shape: 'puff' });
-        game.ui.msg('The gate crashes down behind you!', '#ff9060', true);
+        this.eachHere(() => game.ui.msg('The gate crashes down behind you!', '#ff9060', true));
       }
     }
-    game.shake = Math.min(1.4, (game.shake || 0) + 0.9);
     for (const c of boss) {
       c.waiting = false;
       c.dormant = 0;
@@ -636,16 +642,25 @@ export class DungeonRun {
     const lead = boss[0];
     const T = BOSS_TITLES[lead.species] || {};
     this.fight = { boss, name: T.name || lead.S.name, title: T.title || '', t: 0, frac: 1, trail: 1, hitT: -9, away: 0 };
-    game.audio?.play('sting');
     if (T.taunt) lead.say?.(T.taunt, 3.5, '#ff9080');
-    game.renderer.flashScreen?.('#400000', 0.35);
-    // (The camera goes to it as it wakes, and its fires catch: see scenes.js.
-    // Only the first time you come in: after, it's straight to it.)
-    // (Its waking scene once a place, not every time you come back to it.)
-    if (!this.metBoss && !this.rec.metBoss && !game.scene) {
+    // (On everyone's screen down here, not only the one who walked in.)
+    // The camera goes to it as it wakes, and its fires catch (see
+    // scenes.js): only the first time you come in; after, it's straight to
+    // it. (Its waking scene once a place, not every time you come back.)
+    const first = !this.metBoss && !this.rec.metBoss;
+    let shown = false;
+    this.eachHere(() => {
+      game.shake = Math.min(1.4, (game.shake || 0) + 0.9);
+      game.audio?.play('sting');
+      game.renderer.flashScreen?.('#400000', 0.35);
+      if (first && !game.scene) {
+        game.scene = bossEntrance(game, this, boss);
+        shown = true;
+      }
+    });
+    if (shown) {
       this.metBoss = true;
       this.rec.metBoss = true;
-      game.scene = bossEntrance(game, this, boss);
     } else game.audio?.play('roar', lead);
   }
 
@@ -680,7 +695,7 @@ export class DungeonRun {
       }
       this.fight = null;
       settleAfflictions(game);
-      game.ui.msg('Behind you, the thing in the hall settles back to wait.', '#c8b8a0');
+      this.eachHere(() => game.ui.msg('Behind you, the thing in the hall settles back to wait.', '#c8b8a0'));
     }
   }
 
@@ -697,7 +712,9 @@ export class DungeonRun {
     settleAfflictions(game, this.fight && this.fight.boss);
     this.fight = null;
     // (Its fall's scene plays the fanfare itself.)
-    if (!(game.scene && game.scene.kind === 'boss_down')) game.audio?.play('victory');
+    this.eachHere(() => {
+      if (!(game.scene && game.scene.kind === 'boss_down')) game.audio?.play('victory');
+    });
   }
 
   // ------------------------------------------------------------ its dangers
@@ -1252,15 +1269,18 @@ export class DungeonRun {
     }
     if (e.isBoss && master && !this.rec.cleared) {
       game.sim.dungeons.cleared(this.rec, 'you');
-      // Its fall: the world slowed, the camera on it as it comes apart.
-      if (!game.scene) game.scene = bossDefeat(game, this, e);
+      // Its fall: the world slowed, the camera on it as it comes apart (on
+      // everyone's screen down here).
+      this.eachHere(() => {
+        if (!game.scene || game.scene.kind === 'boss_in') game.scene = bossDefeat(game, this, e);
+      });
       this.endFight(true);
       // (Every master of an old place keeps a relic about it.)
       if (!this.kav) {
         const keys = Object.keys(RELICS);
         game.spawnDrop(`relic_${keys[Math.floor(Math.random() * keys.length)]}`, 1, e.x, e.y, e.z, true);
       }
-      game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070');
+      this.eachHere(() => game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070'));
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.
       for (const c of game.creatures) {
@@ -1269,7 +1289,7 @@ export class DungeonRun {
         else if ((c.S.undead || c.S.construct) && Math.max(Math.abs(c.x - e.x), Math.abs(c.z - e.z)) < 20) c.stunT = 3;
       }
       if (this.kav) {
-        game.ui.msg('The ruin\'s hum dies away. Somewhere above, the runes on the spire go out.', '#5ad8f0');
+        this.eachHere(() => game.ui.msg('The ruin\'s hum dies away. Somewhere above, the runes on the spire go out.', '#5ad8f0'));
         // (Two cores in it, and its Eye: see its drops.)
         game.spawnDrop('kav_core', 2, e.x, e.y, e.z, true);
         this.rec.cores = Math.max(0, (this.rec.cores ?? 4) - 2);

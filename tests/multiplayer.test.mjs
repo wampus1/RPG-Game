@@ -7,6 +7,8 @@ import { makeGame, stubInput, stubUI, stubRenderer } from './helpers.mjs';
 import { Game } from '../src/game/game.js';
 import { Creature } from '../src/entities/creature.js';
 import { DungeonRun } from '../src/game/dungeon.js';
+import { FY } from '../src/world/dungeongen.js';
+import { seatField } from '../src/game/party.js';
 import { B } from '../src/world/blocks.js';
 import { Accounts, nameProblem, profileOf } from '../src/net/account.js';
 import { HostNet } from '../src/net/host.js';
@@ -549,6 +551,53 @@ test('host and player: the host lets players fight, and the player is told', () 
   L.hostNet.setPvp(false);
   L.step(1);
   assert.equal(L.guestNet.pvp, false);
+});
+
+test('host and player: a master\'s fight on both screens, its waking and its fall', () => {
+  const L = linked();
+  const { game } = L;
+  const seat = game.seats[1];
+  const gp = seat.ent;
+  const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'barrow'), floors: {}, cleared: false, pack: null };
+  new DungeonRun(game, rec).enter();
+  L.step(4);
+  while (game.dungeon.floor < rec.depth - 1) {
+    game.dungeon.changeFloor(1);
+    L.step(4);
+  }
+  const d = game.dungeon;
+  const boss = game.creatures.find((c) => c.isBoss && !c.dead && c.leash);
+  assert.ok(boss, 'the barrow\'s master, waiting in its hall');
+  const [cx, cz] = [boss.x, boss.z];
+  for (const q of game.creatures) if (!q.isBoss) q.dormant = 999;
+  const s1 = game.findFreeSpot(cx, cz + 4, FY);
+  game.player.teleport(s1.x, s1.y, s1.z);
+  const s2 = game.findFreeSpot(cx + 2, cz + 4, FY);
+  gp.teleport(s2.x, s2.y, s2.z);
+  L.step(2);
+  // It wakes: both of you see it, its name across the top, the camera on it.
+  d.bossFight();
+  L.step(4);
+  assert.equal(game.scene && game.scene.kind, 'boss_in', 'the host sees it wake');
+  assert.equal(seatField(game, seat, 'scene')?.kind, 'boss_in', 'so does the player (their seat)');
+  assert.equal(L.gg.scene && L.gg.scene.kind, 'boss_in', 'on the player\'s own screen');
+  assert.equal(L.gg.dungeon.fight && L.gg.dungeon.fight.name, d.fight.name, 'its bar');
+  const seen = L.guestNet.ents.get(boss.id);
+  assert.ok(seen && seen.isBoss && seen.species === boss.species, 'the master itself');
+  const name = d.fight.name;
+  // Hurt, its bar falls on both screens.
+  boss.hp = Math.round(boss.maxHp / 2);
+  L.step(16);
+  assert.ok(Math.abs(L.gg.dungeon.fight.frac - d.fight.frac) < 0.05, 'the same bar');
+  assert.equal(seen.hp, boss.hp);
+  // The player brings it down: its fall on both screens.
+  game.scene = null;
+  game.damage(boss, boss.hp + 5, gp);
+  L.step(12);
+  assert.ok(boss.dead);
+  assert.equal(game.scene && game.scene.kind, 'boss_down', 'the host sees it fall');
+  assert.equal(L.gg.scene && L.gg.scene.kind, 'boss_down', 'and the player');
+  assert.equal(L.gg.dungeon.fallen && L.gg.dungeon.fallen.name, name, 'VANQUISHED, on theirs too');
 });
 
 test('host and player: kicked, the player\'s screen goes back to the title', () => {
