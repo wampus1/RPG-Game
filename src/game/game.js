@@ -11,7 +11,7 @@ import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
-import { covers, onTiles, apart, padded } from '../entities/footprint.js';
+import { covers, onTiles, apart, padded, padOf, inReach, MASTER_PAD } from '../entities/footprint.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { removeItem, makeSlots, addItem, canAdd } from './inventory.js';
@@ -61,6 +61,7 @@ import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
 import { struggle, tickAfflictions } from './afflict.js';
+import { updateOrbs, swatOrbs } from './orbs.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
@@ -123,6 +124,7 @@ export class Game {
     // see monsters.js).
     this.dungeon = null;
     this.hazards = [];
+    this.orbs = [];
     // Things set down on the ground: "x,y,z" -> { item, count, owner }.
     this.placed = new Map();
     // Household chests you've picked open (key -> the day: see chestLocked).
@@ -1794,6 +1796,7 @@ export class Game {
     this.npcs = this.npcs.filter((n) => !n.dead);
     this.updateProjectiles(dt);
     updateHazards(this, dt);
+    updateOrbs(this, dt);
     updateLasers(this, dt);
     updateRelics(this, dt);
     updateKavTech(this, dt);
@@ -2031,7 +2034,7 @@ export class Game {
       c.entUp = ent.up ?? 0.5;
       // (Which part of it: a wagon's bench, or its back.)
       if (ent.part) c.part = ent.part;
-      c.inReach = apart(p, ent.e) <= this.attackReach();
+      c.inReach = inReach(p, ent.e, this.attackReach());
     }
     if (hit) {
       c.x = hit.x;
@@ -3548,6 +3551,8 @@ export class Game {
       const off = n.offhandItem ? n.offhandItem() : null;
       if (held === 'torch' || off === 'torch' || off === 'lantern') out.push({ x: n.x, y: n.y, z: n.z, L: 9 });
     }
+    // (A witch-light lights its way across her hall.)
+    for (const o of this.orbs || []) if (!o.done && near(o)) out.push({ x: Math.round(o.x), y: o.y, z: Math.round(o.z), L: 5, tint: o.back ? '#ffe070' : '#a0ff70' });
     out.sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.z - p.z) - (Math.abs(b.x - p.x) + Math.abs(b.z - p.z)));
     return out.slice(0, 10);
   }
@@ -4557,6 +4562,7 @@ export class Game {
     this.audio?.play('swing');
     onSwing(this, p);
     lanceThrust(this, p);
+    swatOrbs(this, p);
   }
 
   // A swing at the air in front of you (a weapon in hand, nothing under
@@ -4603,6 +4609,8 @@ export class Game {
       return [...Array(reach).keys()].map((k) => ({ x: p.x + dx * (k + 1), z: p.z + dz * (k + 1) }));
     };
     const s = playerSwing(this, p, null, false, () => {
+      // (A witch-light in the way: knocked back, whatever else it finds.)
+      swatOrbs(this, p, dx, dz, st.thrust ? st.reach : 1);
       const tiles = tilesNow(st);
       const foe = this.struckOn(tiles, p)[0] || this.masterNear(p, dx, dz, st);
       if (foe) return this.landBlow(foe, false, fresh, st);
@@ -4665,10 +4673,11 @@ export class Game {
     const reach = st.thrust ? st.reach : 1;
     const len = Math.hypot(dx, dz) || 1;
     for (const c of this.creatures) {
-      if (c.dead || !padded(c) || apart(p, c) > reach || Math.abs(c.y - p.y) > 1) continue;
+      if (c.dead || !padded(c) || !inReach(p, c, reach) || Math.abs(c.y - p.y) > 1) continue;
       const vx = c.x - p.x;
       const vz = c.z - p.z;
-      if ((vx * dx + vz * dz) / (len * (Math.hypot(vx, vz) || 1)) >= 0.6) return c;
+      // (A broader one is found wider of the swing, too.)
+      if ((vx * dx + vz * dz) / (len * (Math.hypot(vx, vz) || 1)) >= (padOf(c) > MASTER_PAD ? 0.5 : 0.6)) return c;
     }
     return null;
   }
@@ -4793,7 +4802,7 @@ export class Game {
       this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (1 + buffOf(this, 'fury')) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)), kind);
       return;
     }
-    if (apart(p, target) > reach || Math.abs(target.y - p.y) > 1) {
+    if (!inReach(p, target, reach) || Math.abs(target.y - p.y) > 1) {
       this.swing();
       return;
     }
@@ -4816,8 +4825,9 @@ export class Game {
     const def = p.heldDef();
     strikeAnim(p, heavy ? { ...st, heavy: true } : st);
     p.doAction(heavy ? 0.35 : 0.25);
+    swatOrbs(this, p, target.x - p.x, target.z - p.z, st && st.thrust ? st.reach : 1);
     const reach = this.attackReach();
-    if (target.dead || target.down || apart(p, target) > reach || Math.abs(target.y - p.y) > 1 || target.rollT > 0) {
+    if (target.dead || target.down || !inReach(p, target, reach) || Math.abs(target.y - p.y) > 1 || target.rollT > 0) {
       // Stepped back out of it (or rolled under it): a whiff.
       this.audio?.play('swing');
       onSwing(this, p);

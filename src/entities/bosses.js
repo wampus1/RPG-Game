@@ -1,8 +1,9 @@
 // The masters of the old places, three to a kind of place (one picked at
 // random for each; see world/dungeongen.js), each its own kind of danger:
 //   a barrow: the Barrow King (see monsters.js); the Mound Witch, who
-//     blinks about her hall, sets hexes burning round you and ties a
-//     thread of your life to hers (break it: get away, or out of her
+//     blinks about her hall, sets hexes burning round you, lets go
+//     witch-lights that glance about it (knock them back at her) and ties
+//     a thread of your life to hers (break it: get away, or out of her
 //     sight); the Pale Huntsman, his hounds, his volleys, the snares he
 //     sets where you'll step, and the mark that doubles all of it;
 //   a mine: the Deep Worm; Foreman Gask, blasting charges thrown fizzing
@@ -23,10 +24,16 @@ import { B } from '../world/blocks.js';
 import { fits, fitNear } from './footprint.js';
 import { phaseOf, ready, used } from './tempo.js';
 import { startLaser } from '../game/laser.js';
+import { launchOrb } from '../game/orbs.js';
 
 // --------------------------------------------------------------- species
+// (The Mound Witch's own clock: the while before she can blink away again.)
+function witchClock(c, dt) {
+  if (c.blinkWait > 0) c.blinkWait -= dt;
+}
+
 export const BOSS_SPECIES = {
-  mound_witch: { light: 3, name: 'The Mound Witch', hp: 100, dmg: 4, step: 0.42, mode: 'hostile', aggro: 16, humanoid: true, look: 'witch', under: true, undead: true, boss: true, brain: 'moundWitch', drops: [['old_coin', 4, 10, 1], ['potion_vigor', 1, 2, 1]] },
+  mound_witch: { light: 3, name: 'The Mound Witch', hp: 100, dmg: 4, step: 0.42, mode: 'hostile', aggro: 16, humanoid: true, pad: 1.2, look: 'witch', under: true, undead: true, boss: true, brain: 'moundWitch', tick: witchClock, drops: [['old_coin', 4, 10, 1], ['potion_vigor', 1, 2, 1]] },
   huntsman: { light: 2, name: 'The Pale Huntsman', hp: 105, dmg: 5, step: 0.36, mode: 'hostile', aggro: 18, humanoid: true, look: 'huntsman', arms: 'longbow', ranged: true, under: true, undead: true, boss: true, brain: 'huntsman', drops: [['old_coin', 4, 10, 1], ['arrow', 8, 16, 1]] },
   barrow_hound: { light: 2, name: 'Barrow Hound', hp: 10, dmg: 3, step: 0.24, mode: 'hostile', aggro: 16, under: true, undead: true, packs: true, style: 'bite', drops: [] },
   foreman: { name: 'Foreman Gask', hp: 125, dmg: 6, step: 0.44, mode: 'hostile', aggro: 16, humanoid: true, look: 'foreman', arms: 'pickaxe', under: true, undead: true, boss: true, brain: 'foreman', drops: [['gold_ore', 3, 6, 1], ['iron_ingot', 2, 4, 1], ['old_coin', 3, 8, 1]] },
@@ -126,10 +133,11 @@ export function bossBrains(h) {
 
   return {
     // ------------------------------------------------ barrow
-    // The Mound Witch: hexes kindling round you, and gone in a cold mist
-    // when you close; worn, a thread of your life drawn into hers (break
-    // it: get away, or out of her sight) and her dead husbands up out of
-    // the floor; desperate, a ring of hexes closing in on you.
+    // The Mound Witch: hexes kindling round you, witch-lights let go to
+    // glance about her hall, and gone in a cold mist when you close; worn,
+    // a thread of your life drawn into hers (break it: get away, or out of
+    // her sight) and her dead husbands up out of the floor; desperate, no
+    // more witch-lights, but a ring of hexes closing in on you.
     moundWitch(c, dt) {
       const game = c.game;
       const t = c.target;
@@ -200,12 +208,29 @@ export function bossBrains(h) {
         c.doAction?.(0.4);
         game.audio?.play('void', c);
       }
-      // Too close: she's gone, and a cold mist where she stood.
-      c.blinkCd = (c.blinkCd ?? 2) - dt;
-      if (d <= 2 && c.blinkCd <= 0) {
+      // (Whole, or worn) A witch-light let go at you: slow, glancing off
+      // her walls for seven seconds; strike it, or catch it on your guard,
+      // and it goes back at her (see game/orbs.js).
+      c.orbCd = (c.orbCd ?? 3.5) - dt;
+      if (ph < 3 && ready(c) && c.orbCd <= 0 && d >= 2 && d <= 11 && sees(game, c, t) && !c.windup && (game.orbs || []).filter((o) => o.by === c).length < 2) {
+        c.orbCd = ph >= 2 ? 7 : 8;
+        used(c);
+        c.face(t.x, t.z);
+        launchOrb(game, c, t, { dmg: Math.round(4 * mult(c)) });
+        game.renderer.emit(c.x, c.y + 1.2, c.z, { n: 10, color: ['#a0ff70', '#d8ffc0', '#ffffff'], up: 20, speed: 30, life: 0.45, glow: true });
+        if (Math.random() < 0.35) c.say?.(['Catch, dearie.', 'A light for the grave.', 'Mind the little light...'][Math.floor(Math.random() * 3)], 2, '#a0ff70');
+        c.doAction?.(0.5);
+        return true;
+      }
+      // Too close: she's gone, and a cold mist where she stood. (Not too
+      // often: there's a while you can stay on her. On its own clock, kept
+      // every moment (see witchClock), not an attack's: a lull in her
+      // attacks doesn't hurry it (see tempo.press).)
+      c.blinkWait ??= 3;
+      if (d <= 2 && c.blinkWait <= 0) {
         const to = spotNear(c, c, 5, 10);
         if (to) {
-          c.blinkCd = ph >= 3 ? 4 : 6;
+          c.blinkWait = ph >= 2 ? 4.5 : 5.5;
           addZone(game, { tiles: areaTiles(c.x, c.z, 1), y: c.y, life: 4, kind: 'mist', tick: 0.6, chill: 1.2, color: [140, 170, 160], puff: ['#a0b8a8', '#d0e0d8'] });
           blink(c, to, ['#a0ff70', '#3a5a2a', '#ffffff']);
           return true;

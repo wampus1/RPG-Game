@@ -14,6 +14,7 @@ import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpi
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawStormSea, drawStormCover } from './stormfx.js';
+import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
 
@@ -311,6 +312,7 @@ export class Renderer {
     drawEffects(this, this.ctx, dt);
     drawKavSpikes(this, this.ctx, game);
     drawLasers(this, this.ctx, game);
+    drawOrbs(this, this.ctx, game);
     drawShields(this, this.ctx, game);
     drawWards(this, this.ctx, game);
     this.drawParticles(dt);
@@ -1583,8 +1585,10 @@ export class Renderer {
     if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead && !e.burrowed) {
       const big = e.kind === 'creature' && e.S && e.S.big;
       // (A master's a little more than it's drawn: easier to put a blow on.)
-      const h = (big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24) * (master ? BOSS_SCALE : 1) + (master && !big ? 6 : 0);
-      const w = (big ? 12 : 0) + (master ? (big ? 6 : 10) : 0);
+      // (And some, broader, more again: see footprint.padOf.)
+      const pad = master && e.S && e.S.pad ? Math.round((e.S.pad - 0.85) * 16) : 0;
+      const h = (big ? 28 : e.kind === 'creature' ? 14 : e.sleeping ? 8 : 24) * (master ? BOSS_SCALE : 1) + (master && !big ? 6 : 0) + pad;
+      const w = (big ? 12 : 0) + (master ? (big ? 6 : 10) : 0) + pad;
       if (m.x >= sx + 2 - w && m.x < sx + 14 + w && m.y >= feetY - h && m.y < feetY + 2) this.pickEnt = { e, seq: ++this.pickSeq, up: (feetY - m.y) / h };
     }
     // Straining at a lead: how near it is to breaking free.

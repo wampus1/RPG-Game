@@ -2930,6 +2930,29 @@ the masters of the old places are made:
   cave-ins dropped within a pace of it is blown apart. The hall's own rock
   and anything you've built are left alone.
 
+## Round 40: the witch-light
+
+- *The Mound Witch is a little easier to hit.* Her hitbox reaches a bit
+  further from her middle than other humanoid masters' do. A sword blow
+  lands from two paces straight off (or two paces and a little to the
+  side), arrows find her a bit wider of centre, and the area you can click
+  to target her is a few pixels bigger. Two paces on the diagonal, or three
+  paces, is still out of reach.
+- *She blinks away less often.* Her blink used to be cut short whenever
+  she went a while without attacking, so staying on her meant a blink every
+  three to four seconds. It now runs on its own timer: at least 5.5 seconds
+  between blinks while she's whole, 4.5 once she's worn or desperate.
+- *A new attack while she's whole or worn: the witch-light.* She lets go a
+  slow ball of green grave-fire at you (slower than you walk). It glances
+  off walls and the edge of her hall, keeps bouncing, and gutters out after
+  seven seconds. If it touches you it bursts and hurts you. Rolling through
+  it is safe. Swing a blow through it, or have your guard up facing it,
+  and it's knocked back at her, faster and turned gold. It can't hurt you
+  then, and it hurts her when it hits (twice its damage, three times off a
+  parry-timed block) and staggers her a moment. She keeps at most two in
+  the air at once, and she stops using them once she's desperate. They
+  light up the dark as they go.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -181,6 +181,9 @@ export class Audio {
       case 'freeze': this.noise(0.12, 0.12, 5200); this.tone(1900, 0.2, 'triangle', 0.05, -900, 0.04); break;
       case 'void': this.tone(90, 0.5, 'sine', 0.14, -50); this.tone(180, 0.45, 'sawtooth', 0.03, -150); this.noise(0.35, 0.05, 300, 0.05); break;
       case 'reflect': this.tone(2200, 0.14, 'triangle', 0.08, 600); this.tone(3300, 0.2, 'sine', 0.05, 0, 0.05); break;
+      // A witch-light let go (a wobbling rise), and it glancing off a wall.
+      case 'orb': this.tone(330, 0.45, 'sine', 0.08, 330); this.tone(495, 0.4, 'triangle', 0.03, 495, 0.05); this.noise(0.25, 0.03, 700); break;
+      case 'orbBounce': this.tone(620 + Math.random() * 80, 0.12, 'sine', 0.05, -260); break;
       case 'moon': this.tone(880, 0.5, 'sine', 0.06, 220); this.tone(1320, 0.6, 'sine', 0.04, 330, 0.08); this.tone(1760, 0.5, 'sine', 0.025, 0, 0.16); break;
       case 'bleed': this.noise(0.1, 0.12, 1300); this.tone(240, 0.12, 'sine', 0.05, -120, 0.02); break;
       case 'thunder': this.noise(0.9, 0.3, 160); this.noise(0.4, 0.18, 900, 0.02); this.tone(60, 0.8, 'sine', 0.2, -20); break;

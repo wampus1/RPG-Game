@@ -25,6 +25,19 @@ export const MASTER_PAD = 0.85;
 export function padded(e) {
   return !!(e && e.isBoss && !e.foot && e.S && e.S.humanoid);
 }
+// (Some a little more than that: the Mound Witch, all skirts and rags.)
+export function padOf(e) {
+  return (e && e.S && e.S.pad) || MASTER_PAD;
+}
+
+// Is `e` in reach of a blow from `from` (a broader master: to the edge of
+// all of it, a pace further off)?
+export function inReach(from, e, reach) {
+  const gap = apart(from, e);
+  if (gap <= reach) return true;
+  if (!padded(e) || padOf(e) <= MASTER_PAD || gap > reach + 1) return false;
+  return Math.hypot(e.x - from.x, e.z - from.z) - padOf(e) <= reach + 0.05;
+}
 
 // Paces between two (edge to edge: 0 when they touch, or overlap).
 export function apart(a, b) {

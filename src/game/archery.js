@@ -18,7 +18,7 @@ import { gemsOf, arrowSpeed, splitShot, mirrorShot } from './gems.js';
 import { has as heroHas, cooldownMult } from './hero.js';
 import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './combat.js';
 import { aegisUp } from './kavtech.js';
-import { covers, padded, MASTER_PAD } from '../entities/footprint.js';
+import { covers, padded, padOf } from '../entities/footprint.js';
 import { shielded } from '../entities/monsters.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
@@ -234,7 +234,7 @@ function victimAt(game, a, x, z, px = x, pz = z) {
   for (const e of [game.player, ...game.npcs, ...game.creatures]) {
     if (!e || e === a.from || e.dead || e.down || Math.abs(e.y - y) > 1) continue;
     // (A master's a little more to hit than its one pace.)
-    if (!covers(e, x, z) && !(padded(e) && Math.hypot(px - e.x, pz - e.z) <= MASTER_PAD)) continue;
+    if (!covers(e, x, z) && !(padded(e) && Math.hypot(px - e.x, pz - e.z) <= padOf(e))) continue;
     return e;
   }
   return null;

@@ -92,6 +92,7 @@ export class DungeonRun {
     game.creatures = [];
     game.drops = [];
     game.projectiles = [];
+    game.orbs = [];
     game.hazards = [];
     game.wildlife?.clear();
     game.weather = null;
@@ -123,6 +124,7 @@ export class DungeonRun {
     game.fieldsOff = [];
     game.lodestar = null;
     game.projectiles = [];
+    game.orbs = [];
     if (this.stash) {
       game.creatures = this.stash.creatures.filter((c) => !c.dead);
       game.drops = this.stash.drops.filter((d) => !d.dead);
@@ -358,6 +360,7 @@ export class DungeonRun {
     game.hazards = [];
     game.zones = [];
     game.projectiles = [];
+    game.orbs = [];
     game.flames = [];
     game.lasers = [];
     game.kavSpikes = [];
