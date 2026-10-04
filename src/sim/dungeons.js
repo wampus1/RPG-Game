@@ -11,7 +11,8 @@
 // come back), spend what they found on better arms in town, and now and
 // then carry a Kavorent core home to a mayor. What they've taken and
 // killed down there stays taken and killed; a master they've slain stays
-// slain, and the way in falls shut behind them.
+// slain, and the way in falls shut behind them. (Never a spire's master:
+// they go into the spires only to steal a core or two, and get out.)
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { DTYPES } from '../world/dungeongen.js';
 import { ISLE_TYPE_LORE, HOME_ISLE, FAR_DELVE_DAY, FAR_DELVE_GRACE, FAR_DELVE_LATEST } from '../world/isledeep.js';
@@ -318,18 +319,20 @@ export class Dungeons {
         }
       }
       // The master slain, now and then (more likely with a strong band).
-      // (Only once the place has been worn down by a few bands before.)
-      const slew = d.delves >= 3 && rng.chance(clamp(odds - 0.55, 0.02, 0.2)) && !(kav && rng.chance(0.7));
+      // (Only once the place has been worn down by a few bands before; and
+      // never a spire's: nobody but you gets to the bottom of one.)
+      const slew = !kav && d.delves >= 3 && rng.chance(clamp(odds - 0.55, 0.02, 0.2));
       if (slew) this.cleared(d, list(names));
-      // A Kavorent core (or two), for a town: rare.
+      // A spire's what they go down for: they get in, prise a core or two
+      // out of its upper halls, and get out (while it has any to take).
       let cores = 0;
-      if (kav && d.cores > 0 && rng.chance(0.3)) cores = Math.min(d.cores, rng.chance(0.25) ? 2 : 1);
+      if (kav && d.cores > 0) cores = Math.min(d.cores, rng.chance(0.35) ? 2 : 1);
       if (cores && L) {
         d.cores -= cores;
         d.coresGone = (d.coresGone || 0) + cores;
         this.giveCores(L, cores, list(names));
       }
-      if (L) ledger(L, day, slew ? `${list(names)} came back from ${d.name}: its master is dead, and they're laden with old silver.` : `${list(names)} came back from ${d.name} with full packs, and stories.`);
+      if (L) ledger(L, day, slew ? `${list(names)} came back from ${d.name}: its master is dead, and they're laden with old silver.` : kav ? `${list(names)} came back out of ${d.name}${cores ? ` with ${cores === 1 ? 'a Kavorent core' : 'two Kavorent cores'}` : ''}, and wouldn't say how far down they'd dared go.` : `${list(names)} came back from ${d.name} with full packs, and stories.`);
     } else if (d) {
       // Driven out, or worse.
       for (const m of party) {

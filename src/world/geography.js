@@ -19,7 +19,7 @@ export const LANDMASSES = [
   {
     key: 'thessa', name: 'Thessa', kind: 'dagoni', cx: 52, cz: 170, rx: 17, rz: 12.5, rough: 0.34,
     about: 'the greenest of the Dagoni Islands, with snow on its north and sand on its south',
-    civs: 3, towns: 5, villages: 11, rivers: 8, lakes: 6, spires: 3, dungeons: 14,
+    civs: 3, towns: 5, villages: 11, rivers: 8, lakes: 6, spires: 1, dungeons: 14,
   },
   {
     key: 'kharos', name: 'Kharos', kind: 'dagoni', cx: 87, cz: 151, rx: 11.5, rz: 8.6, rough: 0.28,

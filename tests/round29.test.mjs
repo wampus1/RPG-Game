@@ -307,6 +307,14 @@ test('a master\'s way to you runs straight through what you\'ve built, not round
   const rec = fresh(game, 'barrow');
   const d = new DungeonRun(game, rec);
   d.enter();
+  // (Open ground round you, whatever the room's shape: the floor under it,
+  // and air over it.)
+  for (let dz = -6; dz <= 6; dz++) {
+    for (let dx = -1; dx <= 5; dx++) {
+      game.world.setBlock(p.x + dx, FY - 1, p.z + dz, B.stone);
+      for (const y of [FY, FY + 1, FY + 2]) game.world.setBlock(p.x + dx, y, p.z + dz, B.air);
+    }
+  }
   const s = game.findFreeSpot(p.x + 4, p.z, FY);
   // A wall of yours, three high, right across the way.
   const wall = [];
@@ -327,7 +335,7 @@ test('a master\'s way to you runs straight through what you\'ve built, not round
 
 test('what you build below is remembered with the floor', () => {
   const { game, p } = start();
-  const rec = fresh(game, 'crypt');
+  const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'crypt' && d.depth >= 2), floors: {}, cleared: false, pack: null };
   const d = new DungeonRun(game, rec);
   d.enter();
   const key = `${p.x + 1},${FY},${p.z}`;

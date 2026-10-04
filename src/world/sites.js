@@ -32,8 +32,8 @@ function kindFor(ow, c, rng) {
 }
 
 // The old places of the Dagoni Islands: on each, its own few dungeons and
-// one to three of the Kavorent's spires out where nobody lives (Thessa has
-// the most: see geography.js). Placed with the world.
+// one of the Kavorent's spires out where nobody lives (see geography.js).
+// Placed with the world.
 export function genSites(ow) {
   const rng = new RNG(hash4(ow.seed, 0xd0e5));
   const sites = [];
@@ -76,10 +76,23 @@ export function genSites(ow) {
       const score = (q) => ownSuits(ow, q, I.key) + (hash4(ow.seed, q.cx * 31 + q.cz, 0x15d) % 1000) / 1000;
       here.sort((a, b) => score(b) - score(a)).slice(0, want).forEach((q) => (q.type = own));
     }
+    // (Where there are old places enough, one of every ordinary kind at the
+    // least: a kind missing takes the place of one of the commonest.)
+    const mixed = sites.filter((q) => q.island === I.key && KINDS.includes(q.type));
+    if (mixed.length >= KINDS.length + 2) {
+      for (const k of KINDS) {
+        if (mixed.some((q) => q.type === k)) continue;
+        const tally = (t) => mixed.filter((q) => q.type === t).length;
+        const most = KINDS.reduce((b, t) => (tally(t) > tally(b) ? t : b), KINDS[0]);
+        const swap = mixed.filter((q) => q.type === most).pop();
+        if (swap && tally(most) > 1) swap.type = k;
+      }
+    }
   }
   return sites;
 }
 const OWN_SHARE = { thessa: 0.25, kharos: 0.4, myrrow: 0.4 };
+const KINDS = ['barrow', 'mine', 'crypt', 'holdout'];
 function ownSuits(ow, c, isle) {
   const cell = ow.cell(c.cx, c.cz);
   if (isle === 'thessa') return cell && ['forest', 'taiga', 'jungle'].includes(cell.biome) ? 2 : 0;

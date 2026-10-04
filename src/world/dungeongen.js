@@ -171,7 +171,7 @@ function overlaps(a, b, gap) {
 
 // Room sizes by kit (w and d ranges): closets to great halls.
 const KIT_SIZE = {
-  boss: [[16, 20], [12, 16]], entry: [[6, 8], [5, 7]], exit: [[6, 9], [5, 7]],
+  boss: [[19, 23], [14, 18]], entry: [[6, 8], [5, 7]], exit: [[6, 9], [5, 7]],
   hall: [[10, 16], [8, 12]], reactor: [[11, 14], [9, 11]], hangar: [[10, 14], [8, 11]], vault: [[6, 8], [5, 6]], foundry: [[12, 15], [10, 12]],
   pillared: [[9, 14], [7, 11]], flooded: [[7, 13], [6, 10]], ossuary: [[6, 11], [5, 9]], burial: [[8, 13], [6, 9]],
   trap: [[4, 6], [4, 6]], treasure: [[5, 7], [4, 6]], shrine: [[6, 10], [6, 9]], library: [[7, 11], [5, 8]], cells: [[8, 12], [5, 7]],
@@ -389,7 +389,9 @@ function tryLayout(rng, W, D, kits, big, T) {
     const near = free.map((j) => ({ j, d: Math.abs(R[j].cx - R[i].cx) + Math.abs(R[j].cz - R[i].cz) })).filter((q) => q.j !== i && !edges.some(([a, b]) => (a === i && b === q.j) || (b === i && a === q.j))).sort((a, b) => a.d - b.d)[0];
     if (near && near.d < 40) edges.push([i, near.j]);
   }
-  const width = big ? 2 : 1;
+  // (Two wide, all of them, so a band can go down together without
+  // queueing; only a sealed room's one doorway is narrower.)
+  const width = 2;
   plan.ok = true;
   for (const [i, j] of edges) {
     const path = route(plan, { x: R[i].cx, z: R[i].cz }, { x: R[j].cx, z: R[j].cz });
@@ -449,7 +451,7 @@ function tryLayout(rng, W, D, kits, big, T) {
   return plan;
 }
 
-// A passage dug along a path (two wide in a Kavorent ruin).
+// A passage dug along a path (`width` two: the tile beside it and below it too).
 function cutPath(plan, path, width) {
   for (const { x, z } of path) {
     const cells = width > 1 ? [[x, z], [x + 1, z], [x, z + 1]] : [[x, z]];

@@ -191,7 +191,7 @@ test('coral down below is walked through', () => {
 
 test('the stairs go on your map once you\'re in their room', () => {
   const game = makeGame(12345);
-  const base = game.sim.dungeons.all.find((d) => d.type === 'crypt');
+  const base = game.sim.dungeons.all.find((d) => d.type === 'crypt' && d.depth >= 2);
   new DungeonRun(game, { ...base, floors: {}, cleared: false }).enter();
   const d = game.dungeon;
   assert.deepEqual(d.knownStairs().filter((s) => s.down), [], 'not yet');
