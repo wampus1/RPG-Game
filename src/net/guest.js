@@ -11,6 +11,7 @@ import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../con
 import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening } from '../game/scenes.js';
 import { DungeonRun } from '../game/dungeon.js';
+import { dtypeOf } from '../world/dungeongen.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -228,6 +229,10 @@ export class GuestNet {
       run = Object.create(DungeonRun.prototype);
       run.game = game;
       run.rec = rec;
+      // (Its kind, as the screen needs it: its name, its dark, its music.)
+      run.T = dtypeOf(rec);
+      run.state = { stairs: [], solved: {} };
+      run.t = 0;
       run.plateOn = new Map();
       run.notes = [];
       game.dungeon = run;

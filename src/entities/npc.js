@@ -1595,6 +1595,9 @@ export class NPC extends Entity {
 
   // Leading an arrested player to the jail on a rope.
   escortWalk(dt) {
+    // (Leading another player: theirs is the escort.)
+    const who = this.escortOf;
+    if (who && who.seat && this.game.seats && who.seat !== this.game.seat) return this.game.asPlayer(who, () => this.escortWalk(dt));
     const j = this.game.sim.justice;
     const e = j.escort;
     const p = this.game.player;
@@ -2820,6 +2823,9 @@ export class NPC extends Entity {
   fight(dt) {
     const t = this.threat;
     const game = this.game;
+    // (A player the foe: whether the law's after them, the "Halt!" and its
+    // window, are theirs, not whoever's world this is.)
+    if (t && t.kind === 'player' && t.seat && game.seats && t.seat !== game.seat) return game.asPlayer(t, () => this.fight(dt));
     // Mid-swing: the blow comes (or doesn't) before anything else.
     if (this.windup && tickAttack(game, this, dt)) return;
     if (this.hired && (this.distTo(game.player) > 14 || !t || t.kind === 'player')) {

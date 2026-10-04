@@ -321,6 +321,7 @@ export class Justice {
     p.restrained = true;
     guard.wake?.();
     guard.state = 'escort';
+    guard.escortOf = p;
     guard.threat = null;
     guard.path = null;
     guard.releaseSpot();

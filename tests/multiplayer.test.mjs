@@ -210,6 +210,32 @@ test('party: each player their own character, standing and crimes', () => {
   assert.ok(game.asPlayer(back.ent, () => game.sim.justice.pendingIn(sid).length) > 0, 'and their crimes');
 });
 
+test('party: a guard halts the player who did the crime, and only that player sees it', () => {
+  const { game, gui, gp } = party();
+  const victim = game.npcs.find((n) => !n.dead && n.rec && n.rec.job !== 'guard' && n.settlement);
+  game.damage(victim, 1, gp);
+  const sid = victim.settlement.id;
+  assert.ok(game.asPlayer(gp, () => game.isWanted(sid)), 'the guest is wanted');
+  assert.ok(!game.isWanted(sid), 'the host isn\'t');
+  const seen = { host: 0, guest: 0 };
+  game.ui.openHalt = () => seen.host++;
+  gui.openHalt = () => seen.guest++;
+  const g = game.guardsOf(sid).find((q) => !q.dead && !q.sleeping);
+  assert.ok(g);
+  const spot = game.findFreeSpot(gp.x + 1, gp.z, gp.y);
+  g.teleport(spot.x, spot.y, spot.z);
+  g.engage(gp);
+  for (let i = 0; i < 10 && !seen.guest && !seen.host; i++) g.fight(0.05);
+  assert.equal(seen.host, 0, 'not on the host\'s screen');
+  assert.equal(seen.guest, 1, 'on the guest\'s');
+  // Come quietly: the guard leads the guest, not the host.
+  game.asPlayer(gp, () => game.sim.justice.surrender(sid, g));
+  assert.ok(gp.restrained && !game.player.restrained);
+  assert.equal(g.state, 'escort');
+  for (let i = 0; i < 5; i++) g.escortWalk(0.05);
+  assert.equal(g.state, 'escort', 'still leading them');
+});
+
 test('party: a beast goes for one of you, the nearest', () => {
   const { game, input, gp } = party();
   // The guest well off from the host.
@@ -390,6 +416,9 @@ test('host and player: the whole party goes down into a dungeon, and up again', 
   assert.ok(Math.max(Math.abs(gp.x - game.player.x), Math.abs(gp.z - game.player.z)) <= 4, 'beside the host');
   assert.ok(L.gg.world.inst && L.gg.world.inInstance(L.gg.player.x), 'and sees it');
   assert.ok(L.gg.dungeon && L.gg.dungeon.floor === game.dungeon.floor);
+  // (Their copy of it knows what kind of place it is: the HUD names it.)
+  assert.ok(L.gg.dungeon.T && L.gg.dungeon.T.name === game.dungeon.T.name);
+  assert.ok(Array.isArray(L.gg.dungeon.knownStairs()));
   game.dungeon.leave();
   L.step(8);
   assert.ok(!game.world.inInstance(gp.x), 'up again with the host');

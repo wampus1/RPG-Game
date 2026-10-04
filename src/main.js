@@ -811,7 +811,14 @@ function step(now) {
     const t1 = performance.now();
     if (game === g) renderer.render(g, dt);
     const t2 = performance.now();
-    ui.render(ctx, game, fps);
+    // (Something on the HUD gone wrong mustn't leave the screen standing
+    // still: the world's still drawn, and the rest of the frame goes on.)
+    try {
+      ui.render(ctx, game, fps);
+    } catch (e) {
+      if (!step.uiErr || now - step.uiErr > 1000) console.error(e);
+      step.uiErr = now;
+    }
     const t3 = performance.now();
     const pf = (perf.frames = (perf.frames || 0) + 1);
     const k = pf < 30 ? 1 / pf : 0.05;
