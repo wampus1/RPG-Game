@@ -3,20 +3,29 @@
 // picture and the few words about you can be changed whenever you like.
 // It also keeps your friends, and the friend requests waiting on an answer.
 //
-// (No server keeps accounts: an account lives in the browser it was made
-// in. Its code, from the account window, carries it to another browser.)
+// (It lives in the browser it was made in, and with the game's own server
+// as well (see net/machine.js), so it's the same whatever address the game
+// is opened at on that machine. Its code, from the account window,
+// carries it to another browser.)
 
 export const NAME_MIN = 3;
 export const NAME_MAX = 16;
-export const DESC_MAX = 80;
-const KEY = 'tessera-account-v1';
+// The words about you: forty at most (and never a wall of letters).
+export const DESC_WORDS = 40;
+export const DESC_MAX = 320;
+export const KEY = 'tessera-account-v1';
 
-// The pictures to choose from: a shape, its colour, and the ground behind it.
-export const ICON_SHAPES = ['sword', 'shield', 'crown', 'skull', 'star', 'leaf', 'moon', 'sun', 'flame', 'wave', 'eye', 'heart', 'key', 'anchor', 'mushroom', 'gem'];
-export const ICON_COLORS = ['#ffe070', '#ff7060', '#80e070', '#70c8ff', '#c090ff', '#ffa050', '#f4ecd8', '#ff90c8'];
-export const ICON_BGS = ['#2a2238', '#3a1e1e', '#1e3a26', '#1e2a44', '#3a2a14', '#14302e', '#30303a', '#401c34'];
+// The pictures to choose from: a shape, its colour, the ground behind it,
+// a pattern on the ground, and the frame round it all.
+export const ICON_SHAPES = ['sword', 'shield', 'crown', 'skull', 'star', 'leaf', 'moon', 'sun', 'flame', 'wave', 'eye', 'heart', 'key', 'anchor', 'mushroom', 'gem', 'axe', 'tree', 'fish', 'cat', 'ship', 'potion', 'tower', 'feather'];
+export const ICON_COLORS = ['#ffe070', '#ff7060', '#80e070', '#70c8ff', '#c090ff', '#ffa050', '#f4ecd8', '#ff90c8', '#50e0c8', '#c8f060', '#e04050', '#a0a8b8', '#7080ff', '#d0a070'];
+export const ICON_BGS = ['#2a2238', '#3a1e1e', '#1e3a26', '#1e2a44', '#3a2a14', '#14302e', '#30303a', '#401c34', '#101018', '#283a10', '#3a1830', '#203040', '#402a20', '#1c3438'];
+export const ICON_PATTERNS = ['plain', 'stripes', 'dots', 'checks', 'glow', 'stars'];
+export const ICON_FRAMES = ['plain', 'gold', 'silver', 'bronze', 'jade', 'ember', 'rune'];
+// What you go by, after your name (shown with your profile).
+export const TITLES = ['', 'Wanderer', 'Builder', 'Hunter', 'Scholar', 'Sailor', 'Merchant', 'Brawler', 'Healer', 'Explorer', 'Bard', 'Miner', 'Farmer', 'Delver', 'Knight', 'Rogue', 'Smith', 'Mystic'];
 
-export const DEFAULT_ICON = { shape: 'sword', color: ICON_COLORS[0], bg: ICON_BGS[0] };
+export const DEFAULT_ICON = { shape: 'sword', color: ICON_COLORS[0], bg: ICON_BGS[0], pattern: 'plain', frame: 'plain' };
 
 // Is this a name an account can have? (null if so, else why not)
 export function nameProblem(name) {
@@ -33,10 +42,18 @@ export function cleanIcon(icon) {
     shape: ICON_SHAPES.includes(i.shape) ? i.shape : DEFAULT_ICON.shape,
     color: ICON_COLORS.includes(i.color) ? i.color : DEFAULT_ICON.color,
     bg: ICON_BGS.includes(i.bg) ? i.bg : DEFAULT_ICON.bg,
+    pattern: ICON_PATTERNS.includes(i.pattern) ? i.pattern : DEFAULT_ICON.pattern,
+    frame: ICON_FRAMES.includes(i.frame) ? i.frame : DEFAULT_ICON.frame,
   };
 }
 
-export const cleanDesc = (d) => String(d || '').replace(/\s+/g, ' ').trim().slice(0, DESC_MAX);
+// How many words.
+export const wordCount = (d) => (String(d || '').trim() ? String(d).trim().split(/\s+/).length : 0);
+
+// The words about you, tidied: forty words at most.
+export const cleanDesc = (d) => String(d || '').replace(/\s+/g, ' ').trim().split(' ').slice(0, DESC_WORDS).join(' ').slice(0, DESC_MAX);
+
+export const cleanTitle = (t) => (TITLES.includes(t) ? t : '');
 
 function newId() {
   const c = globalThis.crypto;
@@ -49,7 +66,7 @@ function newId() {
 
 // What others are shown of an account.
 export function profileOf(a) {
-  return a ? { id: a.id, name: a.name, icon: cleanIcon(a.icon), desc: cleanDesc(a.desc) } : null;
+  return a ? { id: a.id, name: a.name, icon: cleanIcon(a.icon), desc: cleanDesc(a.desc), title: cleanTitle(a.title) } : null;
 }
 
 export class Accounts {
@@ -64,6 +81,7 @@ export class Accounts {
       if (!a || !a.id || nameProblem(a.name)) return null;
       a.icon = cleanIcon(a.icon);
       a.desc = cleanDesc(a.desc);
+      a.title = cleanTitle(a.title);
       a.friends ||= [];
       a.incoming ||= [];
       a.sent ||= [];
@@ -73,13 +91,22 @@ export class Accounts {
     }
   }
 
+  // (When it was last changed: the newest copy wins, see machine.js.)
   write() {
+    if (this.acc) this.acc.at = Date.now();
     try {
       this.st?.setItem(KEY, JSON.stringify(this.acc));
+      this.onWrite?.(this.acc);
       return true;
     } catch {
       return false;
     }
+  }
+
+  // Read again (another copy of it put in its place).
+  reload() {
+    this.acc = this.read();
+    return this.acc;
   }
 
   get account() {
@@ -91,19 +118,20 @@ export class Accounts {
   }
 
   // Make the account (once). Throws if the name won't do.
-  create(name, icon, desc) {
+  create(name, icon, desc, title = '') {
     const why = nameProblem(name);
     if (why) throw new Error(why);
-    this.acc = { id: newId(), name: String(name).trim(), icon: cleanIcon(icon), desc: cleanDesc(desc), made: Date.now(), friends: [], incoming: [], sent: [] };
+    this.acc = { id: newId(), name: String(name).trim(), icon: cleanIcon(icon), desc: cleanDesc(desc), title: cleanTitle(title), made: Date.now(), friends: [], incoming: [], sent: [] };
     this.write();
     return this.acc;
   }
 
   // A new picture or new words (the name stays).
-  update({ icon, desc } = {}) {
+  update({ icon, desc, title } = {}) {
     if (!this.acc) return null;
     if (icon) this.acc.icon = cleanIcon(icon);
     if (desc !== undefined) this.acc.desc = cleanDesc(desc);
+    if (title !== undefined) this.acc.title = cleanTitle(title);
     this.write();
     return this.acc;
   }
@@ -186,7 +214,7 @@ export class Accounts {
   // The account as a code to paste into another browser.
   exportCode() {
     if (!this.acc) return '';
-    const json = JSON.stringify({ id: this.acc.id, name: this.acc.name, icon: this.acc.icon, desc: this.acc.desc, made: this.acc.made, friends: this.acc.friends });
+    const json = JSON.stringify({ id: this.acc.id, name: this.acc.name, icon: this.acc.icon, desc: this.acc.desc, title: this.acc.title, made: this.acc.made, friends: this.acc.friends });
     return 'TSA1.' + b64(json);
   }
 
@@ -200,7 +228,7 @@ export class Accounts {
       throw new Error('That account code is damaged.');
     }
     if (!a || !a.id || nameProblem(a.name)) throw new Error('That account code is damaged.');
-    this.acc = { id: String(a.id), name: a.name.trim(), icon: cleanIcon(a.icon), desc: cleanDesc(a.desc), made: a.made || Date.now(), friends: (a.friends || []).map((f) => ({ ...profileOf(f), since: f.since || Date.now() })), incoming: [], sent: [] };
+    this.acc = { id: String(a.id), name: a.name.trim(), icon: cleanIcon(a.icon), desc: cleanDesc(a.desc), title: cleanTitle(a.title), made: a.made || Date.now(), friends: (a.friends || []).map((f) => ({ ...profileOf(f), since: f.since || Date.now() })), incoming: [], sent: [] };
     this.write();
     return this.acc;
   }

@@ -193,7 +193,7 @@ export class TechWindow extends Window {
     if (this.hover && !this.drag) {
       const t = this.tree.techs[this.hover];
       const stt = this.status(st, this.hover);
-      const lines = [{ text: `${t.name}${t.big ? ' ★' : ''}`, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: STATUS_COLOR[stt] }];
+      const lines = [{ text: `${t.name}${t.big ? ' ☼' : ''}`, color: BRANCH_COLOR[t.branch] }, { text: STATUS[stt], color: STATUS_COLOR[stt] }];
       for (const l of wrap(t.desc, 36)) lines.push({ text: l, color: C.white });
       const rivals = rivalsOf(this.hover, this.tree);
       if (rivals.length && stt !== 'barred' && stt !== 'done') lines.push({ text: `A choice: bars ${rivals.map((k) => TECHS[k].name).join(', ')}`, color: C.orange });

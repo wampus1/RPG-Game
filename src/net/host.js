@@ -11,7 +11,7 @@ import { openEnvelope, toPlayer, toRelay, MAX_PLAYERS } from './protocol.js';
 import { asSeat } from '../game/party.js';
 import { enc, diffFields, packEntity } from './wire.js';
 import { uiFrame } from './uiwire.js';
-import { profileOf, cleanIcon, cleanDesc } from './account.js';
+import { profileOf, cleanIcon, cleanDesc, cleanTitle } from './account.js';
 import { BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { inReach } from '../entities/footprint.js';
@@ -249,6 +249,7 @@ export class HostNet {
     else if (m.t === 'profile') {
       if (m.icon) seat.profile.icon = cleanIcon(m.icon);
       if (m.desc !== undefined) seat.profile.desc = cleanDesc(m.desc);
+      if (m.title !== undefined) seat.profile.title = cleanTitle(m.title);
       g.profile = seat.profile;
       this.partyChanged();
     } else if (m.t === 'friend') this.friendWord(g.profile, m.to, m.yes);

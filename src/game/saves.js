@@ -198,7 +198,29 @@ export class SaveStore {
     const ix = this.index();
     ix[id] = meta;
     this.writeIndex(ix);
+    this.onChange?.(id, meta);
     return meta;
+  }
+
+  // A save as it was written (its text), or null.
+  async rawText(id) {
+    const ix = this.index();
+    let raw = null;
+    if (this.db && ix[id] && ix[id].db) raw = await unpack(await this.db.get(slotKey(id)));
+    return raw || this.get(slotKey(id));
+  }
+
+  // A save kept elsewhere (see net/machine.js), put in its slot here.
+  async putText(id, text, meta) {
+    const m = { ...meta };
+    delete m.db;
+    if (this.db) {
+      await this.db.put(slotKey(id), await pack(text));
+      m.db = true;
+    } else this.st.setItem(slotKey(id), text);
+    const ix = this.index();
+    ix[id] = m;
+    this.writeIndex(ix);
   }
 
   async load(id) {
@@ -209,7 +231,8 @@ export class SaveStore {
     return raw ? JSON.parse(raw) : null;
   }
 
-  remove(id) {
+  remove(id, quiet = false) {
+    if (!quiet) this.onChange?.(id, null);
     try {
       this.st.removeItem(slotKey(id));
       if (this.db) this.db.del(slotKey(id)).catch(() => {});

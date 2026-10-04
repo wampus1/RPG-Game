@@ -10,7 +10,14 @@ import { DungeonRun } from '../src/game/dungeon.js';
 import { FY } from '../src/world/dungeongen.js';
 import { seatField } from '../src/game/party.js';
 import { B } from '../src/world/blocks.js';
-import { Accounts, nameProblem, profileOf } from '../src/net/account.js';
+import { Accounts, nameProblem, profileOf, cleanDesc, wordCount, DESC_WORDS, cleanIcon } from '../src/net/account.js';
+import { MachineSync } from '../src/net/machine.js';
+import { MachineStore } from '../tools/store.mjs';
+import { SaveStore } from '../src/game/saves.js';
+import { EventEmitter } from 'node:events';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 import { HostNet } from '../src/net/host.js';
 import { GuestNet } from '../src/net/guest.js';
 import { MAX_PLAYERS, NET_VERSION, openEnvelope, toPlayer, toRelay } from '../src/net/protocol.js';
@@ -89,6 +96,113 @@ test('accounts: a friend request asked, answered, and both are friends', () => {
 });
 
 // ------------------------------------------------------------ the relay
+test('accounts: a title, frames and patterns, and forty words about you at most', () => {
+  const words = Array.from({ length: 55 }, (_, i) => `w${i}`).join(' ');
+  assert.equal(wordCount(cleanDesc(words)), DESC_WORDS);
+  assert.equal(cleanDesc('  Likes    boats.  '), 'Likes boats.');
+  assert.deepEqual(cleanIcon({ shape: 'ship', color: '#50e0c8', bg: '#101018', pattern: 'stars', frame: 'gold' }), { shape: 'ship', color: '#50e0c8', bg: '#101018', pattern: 'stars', frame: 'gold' });
+  assert.equal(cleanIcon({ frame: 'nonsense' }).frame, 'plain');
+  const a = new Accounts(memStore());
+  a.create('Wren', { shape: 'cat', frame: 'rune' }, 'Hello there.', 'Sailor');
+  assert.equal(a.profile.title, 'Sailor');
+  assert.equal(a.profile.icon.frame, 'rune');
+  a.update({ title: 'Not a title' });
+  assert.equal(a.profile.title, '', 'only the titles there are');
+  const b = new Accounts(memStore());
+  a.update({ title: 'Bard' });
+  b.importCode(a.exportCode());
+  assert.equal(b.profile.title, 'Bard', 'carried by the code');
+});
+
+// The game's server, kept in memory, and a browser's fetch that reaches it
+// (from this machine, or from another at `ip`).
+function machineServer() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tessera-store-'));
+  const store = new MachineStore(dir);
+  const fetchFrom = (ip = null) => async (url, { method = 'GET', body = null, headers = {} } = {}) => {
+    const req = new EventEmitter();
+    req.method = method;
+    req.headers = Object.fromEntries(Object.entries(headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
+    let code = 0;
+    let out = '';
+    const done = new Promise((resolve) => {
+      const res = { writeHead: (c) => {
+        code = c;
+      }, end: (b = '') => {
+        out = String(b);
+        resolve();
+      } };
+      store.handle(req, res, url, ip ? `ip-${ip}` : 'local', !ip);
+    });
+    if (method === 'PUT') {
+      req.emit('data', Buffer.from(String(body)));
+      req.emit('end');
+    }
+    await done;
+    return { ok: code >= 200 && code < 300, status: code, json: async () => JSON.parse(out), text: async () => out };
+  };
+  return { dir, store, fetchFrom };
+}
+
+// A browser at one address: its own storage, account and saves.
+function browserAt(fetch) {
+  const st = memStore();
+  const accounts = new Accounts(st);
+  const saves = new SaveStore(st);
+  return { st, accounts, saves, sync: new MachineSync({ storage: st, accounts, store: saves, fetch }) };
+}
+
+const fakeGame = (name) => ({
+  playerName: 'Wren', day: 3, minute: 600, seed: 42, currentSettlement: { name: 'Bramley' }, player: { x: 0, z: 0 },
+  partyWorld: { name }, partyChars: new Map(), seats: [], serialize: () => ({ v: 9, seed: 42, party: { world: { name } } }),
+});
+
+test('machine: the account and worlds are the same at every address the game is opened at', async () => {
+  const { dir, fetchFrom } = machineServer();
+  // At localhost: an account made, a world hosted and saved.
+  const A = browserAt(fetchFrom());
+  assert.ok(await A.sync.start());
+  A.accounts.create('Wren', { shape: 'ship' }, 'Hello.', 'Sailor');
+  await A.saves.save('mp1', fakeGame('Testland'));
+  await A.sync.chain;
+  // At the network address (a stranger to localhost's storage): the same.
+  const B = browserAt(fetchFrom());
+  assert.equal(B.accounts.account, null);
+  assert.ok(await B.sync.start());
+  assert.equal(B.accounts.profile.name, 'Wren', 'the account came with it');
+  assert.equal(B.accounts.profile.title, 'Sailor');
+  assert.equal(B.saves.worlds().length, 1, 'and the world');
+  assert.equal((await B.saves.load('mp1')).party.world.name, 'Testland');
+  // Changed there, it's changed here next time; deleted there, gone here.
+  B.accounts.update({ desc: 'Back again.' });
+  B.saves.remove('mp1');
+  await B.sync.chain;
+  const A2 = browserAt(fetchFrom());
+  A2.st.setItem('tessera-account-v1', A.st.getItem('tessera-account-v1'));
+  A2.accounts.reload();
+  await A2.saves.save('mp1', fakeGame('Old copy'));
+  // (Saved here before it was deleted there: older, so it goes.)
+  const ix = A2.saves.index();
+  ix.mp1.savedAt = 1;
+  A2.saves.writeIndex(ix);
+  A2.saves.onChange = null;
+  assert.ok(await A2.sync.start());
+  assert.equal(A2.accounts.profile.desc, 'Back again.');
+  assert.equal(A2.saves.worlds().length, 0);
+  // Another machine on the network: only its account is kept here.
+  const far = fetchFrom('192.168.1.40');
+  const C = browserAt(far);
+  assert.ok(await C.sync.start());
+  assert.equal(C.accounts.account, null, 'not this machine\'s account');
+  C.accounts.create('Bram', null, '');
+  await C.sync.chain;
+  const C2 = browserAt(far);
+  await C2.sync.start();
+  assert.equal(C2.accounts.profile.name, 'Bram', 'theirs, at any address on this server');
+  assert.equal((await far('/api/store/save-mp1', { method: 'PUT', body: '{}' })).status, 403, 'no worlds from elsewhere');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('relay: one host from this machine, players passed through, kicks and bans', async () => {
   const relay = new Relay({ port: 0, max: MAX_PLAYERS, addrs: () => ['10.0.0.5'] });
   const server = http.createServer((q, r) => r.end('x'));

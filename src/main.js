@@ -10,6 +10,7 @@ import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow } from './ui/w
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
 import { SaveStore, openSaveDB } from './game/saves.js';
+import { MachineSync } from './net/machine.js';
 import { CharacterWindow } from './ui/create.js';
 import { randomHero } from './game/hero.js';
 import { Music, musicMood, moodUrgent } from './game/music.js';
@@ -63,7 +64,7 @@ function browserStorage() {
 const store = new SaveStore(browserStorage());
 // Games are kept in IndexedDB once it's open (it has room for many more
 // than browser storage's few megabytes); ask for it to be kept for good.
-openSaveDB().then((db) => {
+const dbReady = openSaveDB().then((db) => {
   store.db = db;
 });
 try {
@@ -244,6 +245,11 @@ ui.hooks = {
 // world there), and the world you're hosting or playing in (see net/).
 const accounts = new Accounts(browserStorage());
 window.__accounts = accounts;
+// Your account and worlds kept with the game's own server too, so they're
+// the same whatever address the game is opened at (see net/machine.js).
+const machine = new MachineSync({ storage: browserStorage(), accounts, store });
+window.__machine = machine;
+dbReady.then(() => machine.start()).catch(() => {});
 let lan = null;
 let lobbyWs = null;
 let session = null;
@@ -379,7 +385,7 @@ function profileChanged(p) {
   if (!session || !session.net) return;
   if (session.role === 'guest') session.net.setProfile(p);
   else {
-    Object.assign(session.net.profile, { icon: p.icon, desc: p.desc });
+    Object.assign(session.net.profile, { icon: p.icon, desc: p.desc, title: p.title || '' });
     session.net.partyChanged();
   }
 }

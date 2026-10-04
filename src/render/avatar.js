@@ -1,5 +1,6 @@
 // An account's picture (see net/account.js): a little shape in its own
-// colour on a ground of its own, sixteen pixels square, framed.
+// colour on a ground of its own (plain or patterned), sixteen pixels
+// square, in a frame of its own.
 import { cleanIcon } from '../net/account.js';
 
 // Twelve by twelve: '#' the colour, '+' a lighter touch of it, '-' a darker.
@@ -68,6 +69,48 @@ const SHAPES = {
     '............', '...######...', '..##++####..', '.#+#++#####.', '############', '.##+######..',
     '..##+####...', '...######...', '....####....', '.....##.....', '............', '............',
   ],
+  axe: [
+    '.......-....', '..#####-....', '.##+###-....', '.#+####-....', '.#+####-....', '.######-....',
+    '..#####-....', '.......-....', '.......-....', '.......-....', '.......-....', '......---...',
+  ],
+  tree: [
+    '.....##.....', '....####....', '...##+###...', '..##+#####..', '.##########.', '...######...',
+    '..##+#####..', '.##########.', '############', '.....--.....', '.....--.....', '....----....',
+  ],
+  fish: [
+    '............', '............', '....#####...', '#..##++###..', '##.######-#.', '###########.',
+    '##.#######..', '#..##--###..', '....#####...', '............', '............', '............',
+  ],
+  cat: [
+    '............', '.#........#.', '.##......##.', '.###....###.', '.##########.', '.##-####-##.',
+    '.##########.', '#####--#####', '.###-##-###.', '..########..', '...######...', '............',
+  ],
+  ship: [
+    '.....#......', '.....##.....', '.....###....', '.....####...', '.....#####..', '.....#++###.',
+    '.....#......', '############', '.##########.', '..########..', '...------...', '............',
+  ],
+  potion: [
+    '....####....', '.....##.....', '.....##.....', '....#..#....', '...#....#...', '..#++....#..',
+    '..########..', '.##########.', '.###++#####.', '.##########.', '..########..', '............',
+  ],
+  tower: [
+    '..#.#..#.#..', '..########..', '...######...', '...##-###...', '...######...', '...###-##...',
+    '...######...', '...##..##...', '..###..###..', '.##########.', '############', '............',
+  ],
+  feather: [
+    '..........##', '........###.', '.......##+#.', '......##+##.', '.....##+##..', '....##+##...',
+    '...##+##....', '...#+##.....', '..#+#.......', '.#-.........', '#-..........', '............',
+  ],
+};
+
+// The frame round it: its colour, and a lighter edge along the top.
+const FRAMES = {
+  gold: ['#e8c050', '#fff0a0'],
+  silver: ['#b8bcc8', '#f0f4ff'],
+  bronze: ['#a86a38', '#e0a070'],
+  jade: ['#40b080', '#a0f0c8'],
+  ember: ['#e05030', '#ffb060'],
+  rune: ['#7058e0', '#c0a8ff'],
 };
 
 function shade(hex, k) {
@@ -80,10 +123,34 @@ function shade(hex, k) {
 export function drawAvatar(ctx, icon, x, y, s = 1) {
   const ic = cleanIcon(icon);
   const rows = SHAPES[ic.shape] || SHAPES.sword;
-  ctx.fillStyle = shade(ic.bg, -0.45);
+  const px = (i, j, col) => {
+    ctx.fillStyle = col;
+    ctx.fillRect(x + i * s, y + j * s, s, s);
+  };
+  // The frame.
+  const fr = FRAMES[ic.frame];
+  ctx.fillStyle = fr ? fr[0] : shade(ic.bg, -0.45);
   ctx.fillRect(x, y, 16 * s, 16 * s);
+  if (fr) {
+    for (let i = 1; i < 15; i++) px(i, 0, fr[1]);
+    // (A rune frame: its marks along each side.)
+    if (ic.frame === 'rune') for (let i = 2; i < 15; i += 3) for (const [a, b] of [[i, 0], [i, 15], [0, i], [15, i]]) px(a, b, '#fff0ff');
+    else for (const [a, b] of [[0, 0], [15, 0], [0, 15], [15, 15]]) px(a, b, fr[1]);
+  }
+  // The ground, and its pattern.
   ctx.fillStyle = ic.bg;
   ctx.fillRect(x + s, y + s, 14 * s, 14 * s);
+  const mark = shade(ic.bg, 0.14);
+  for (let j = 1; j < 15; j++) {
+    for (let i = 1; i < 15; i++) {
+      const p = ic.pattern;
+      if ((p === 'stripes' && (i + j) % 4 === 0) || (p === 'dots' && i % 3 === 1 && j % 3 === 1) || (p === 'checks' && ((i >> 1) + (j >> 1)) % 2 === 0)) px(i, j, mark);
+      else if (p === 'glow') {
+        const d = Math.hypot(i - 7.5, j - 7.5);
+        if (d < 6) px(i, j, shade(ic.bg, 0.3 * (1 - d / 6)));
+      } else if (p === 'stars' && (i * 7 + j * 13) % 17 === 0) px(i, j, shade(ic.bg, 0.6));
+    }
+  }
   ctx.fillStyle = shade(ic.bg, 0.12);
   ctx.fillRect(x + s, y + s, 14 * s, s);
   const cols = { '#': ic.color, '+': shade(ic.color, 0.55), '-': shade(ic.color, -0.4) };
@@ -102,7 +169,7 @@ export function drawAvatar(ctx, icon, x, y, s = 1) {
 const cache = new Map();
 export function avatarCanvas(icon, s = 1) {
   const ic = cleanIcon(icon);
-  const key = `${ic.shape}|${ic.color}|${ic.bg}|${s}`;
+  const key = `${ic.shape}|${ic.color}|${ic.bg}|${s}|${ic.pattern}|${ic.frame}`;
   let c = cache.get(key);
   if (c) return c;
   if (typeof document === 'undefined') return null;
@@ -119,8 +186,8 @@ export function avatarCanvas(icon, s = 1) {
 
 // Back from its key (a window drawn on another screen: see uiwire.js).
 export function avatarFromKey(key) {
-  const [shape, color, bg, s] = String(key || '').split('|');
-  return shape ? avatarCanvas({ shape, color, bg }, Math.max(1, Math.min(4, +s || 1))) : null;
+  const [shape, color, bg, s, pattern, frame] = String(key || '').split('|');
+  return shape ? avatarCanvas({ shape, color, bg, pattern, frame }, Math.max(1, Math.min(4, +s || 1))) : null;
 }
 
 export { SHAPES as AVATAR_SHAPES };

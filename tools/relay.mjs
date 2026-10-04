@@ -378,7 +378,8 @@ function cleanAccount(a) {
   return {
     id: String(a.id || '').slice(0, 64),
     name: String(a.name || 'Wanderer').slice(0, 20),
-    icon: a.icon && typeof a.icon === 'object' ? { shape: String(a.icon.shape || '').slice(0, 20), color: String(a.icon.color || '').slice(0, 9), bg: String(a.icon.bg || '').slice(0, 9) } : null,
-    desc: String(a.desc || '').slice(0, 120),
+    icon: a.icon && typeof a.icon === 'object' ? { shape: String(a.icon.shape || '').slice(0, 20), color: String(a.icon.color || '').slice(0, 9), bg: String(a.icon.bg || '').slice(0, 9), pattern: String(a.icon.pattern || '').slice(0, 12), frame: String(a.icon.frame || '').slice(0, 12) } : null,
+    desc: String(a.desc || '').slice(0, 400),
+    title: String(a.title || '').slice(0, 24),
   };
 }

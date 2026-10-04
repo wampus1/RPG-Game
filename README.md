@@ -43,11 +43,16 @@ npm test           # world generation, settlement and NPC simulation tests
 There's nothing else to set up.
 
 1. **Make an account.** On the title screen press **M** (Multiplayer), then
-   **A**. Pick a username (it can't be changed later), a picture (shape,
-   colour, background) and a few words about yourself. You can change the
-   picture and the words whenever you like. The account is kept in that
-   browser; **X** in the account window copies a code that carries it to
-   another browser.
+   **A**. Pick a username (it can't be changed later), a title (Wanderer,
+   Sailor, Knight and more), a picture (24 shapes, 14 colours and 14
+   backgrounds, a pattern and a frame) and up to 40 words about yourself.
+   You can change everything but the name whenever you like. The account,
+   and your saved and hosted worlds, are kept by the game's own server in
+   the `saves/` folder as well as in the browser. They're the same whether
+   you open the game at `localhost`, at the network address or at
+   `tessera.local`. (A friend's account is kept on the host's server too,
+   so it survives them switching addresses.) **X** in the account window
+   copies a code that carries the account to another computer.
 2. **Host a world.** The person running `npm start` presses **N** in the
    Multiplayer menu for a new world (or continues one of the three hosted
    worlds kept on that machine). They name it, choose **Host on your
@@ -102,6 +107,9 @@ If the others can't connect:
 - To turn off the name and the finding of nearby worlds, start with
   `TESSERA_LAN=off npm start`. `TESSERA_NAME=myname npm start` answers to
   `myname.local` instead.
+- Accounts and worlds are kept in `saves/` next to the game.
+  `TESSERA_DATA=/some/folder npm start` keeps them somewhere else. Copy
+  that folder to move them to another computer.
 
 Useful URL parameters for testing: `?autostart&seed=123` skips the title
 screen (and the character screen; add `&origin=crash` or `&origin=native` for

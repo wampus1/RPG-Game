@@ -8,7 +8,7 @@ import { COLS, CHAR_W, CHAR_H, VIEW_W } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap, Grid, drawGrid } from './ascii.js';
 import { avatarCanvas, drawAvatar } from '../render/avatar.js';
-import { ICON_SHAPES, ICON_COLORS, ICON_BGS, NAME_MAX, DESC_MAX, nameProblem, cleanIcon } from '../net/account.js';
+import { ICON_SHAPES, ICON_COLORS, ICON_BGS, ICON_PATTERNS, ICON_FRAMES, TITLES, NAME_MAX, DESC_MAX, DESC_WORDS, wordCount, nameProblem, cleanIcon } from '../net/account.js';
 import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
 
 // (Solid: nothing behind shows through.)
@@ -30,15 +30,17 @@ function button(w, g, x, y, width, label, fn, { color = C.fg, off = false, hint 
 // words can be changed, never the name.
 export class AccountWindow extends Window {
   constructor(ui, accounts, { onDone = null, onChange = null } = {}) {
-    super(ui, 60, 27, { kind: 'account' });
+    super(ui, 70, 34, { kind: 'account' });
     this.accounts = accounts;
     this.onDone = onDone;
     this.onChange = onChange;
     const a = accounts.account;
     this.editing = !!a;
     this.name = a ? a.name : '';
-    this.icon = cleanIcon(a ? a.icon : { shape: ICON_SHAPES[Math.floor(Math.random() * ICON_SHAPES.length)], color: ICON_COLORS[Math.floor(Math.random() * ICON_COLORS.length)], bg: ICON_BGS[Math.floor(Math.random() * ICON_BGS.length)] });
+    const pick = (list) => list[Math.floor(Math.random() * list.length)];
+    this.icon = cleanIcon(a ? a.icon : { shape: pick(ICON_SHAPES), color: pick(ICON_COLORS), bg: pick(ICON_BGS) });
     this.desc = a ? a.desc : '';
+    this.title = a ? a.title || '' : '';
     this.sel = this.editing ? 1 : 0;
     this.err = null;
     this.code = null;
@@ -47,22 +49,32 @@ export class AccountWindow extends Window {
   rows() {
     return [
       { id: 'name', label: 'Username', locked: this.editing },
-      { id: 'shape', label: 'Picture' },
-      { id: 'color', label: 'Colour' },
-      { id: 'bg', label: 'Background' },
+      { id: 'title', label: 'Title', list: TITLES, show: (v) => v || 'none' },
+      { id: 'shape', label: 'Picture', list: ICON_SHAPES },
+      { id: 'color', label: 'Colour', list: ICON_COLORS, swatch: true },
+      { id: 'bg', label: 'Background', list: ICON_BGS, swatch: true },
+      { id: 'pattern', label: 'Pattern', list: ICON_PATTERNS },
+      { id: 'frame', label: 'Frame', list: ICON_FRAMES },
       { id: 'desc', label: 'About you' },
     ];
+  }
+
+  value(id) {
+    return id === 'title' ? this.title : this.icon[id];
   }
 
   draw(g) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, PANEL);
     g.box(0, 0, this.w, this.h, { bg: PANEL, double: true, title: this.editing ? 'YOUR ACCOUNT' : 'MAKE YOUR ACCOUNT' });
-    g.text(2, 2, this.editing ? 'Your picture and the words about you can be changed.' : 'Who you are to the people you play with. Kept in', C.dim);
-    if (!this.editing) g.text(2, 3, 'this browser for good; the name can\'t be changed later.', C.dim);
-    // The picture, big.
+    g.text(2, 2, this.editing ? 'Your picture, title and the words about you can be changed.' : 'Who you are to the people you play with. Kept on this', C.dim);
+    if (!this.editing) g.text(2, 3, 'machine for good; the name can\'t be changed later.', C.dim);
+    // The picture, big, and you as others see you.
     g.box(this.w - 12, 5, 10, 8, { fg: C.faint, bg: '#100c18' });
     const cv = avatarCanvas(this.icon, 3);
     if (cv) g.image(this.w - 11, 6, cv, 0, 0);
+    const who = this.name || '?';
+    g.text(this.w - 7 - Math.ceil(who.length / 2), 14, who.slice(0, 12), C.hi);
+    if (this.title) g.text(this.w - 7 - Math.ceil(this.title.length / 2), 15, this.title, C.dim);
     const rows = this.rows();
     rows.forEach((r, i) => {
       const y = 5 + i * 2;
@@ -81,49 +93,58 @@ export class AccountWindow extends Window {
       } else if (r.id === 'desc') {
         const lines = wrap(this.desc + (sel && Math.floor(this.ui.time * 2) % 2 ? '_' : ''), this.w - 30);
         if (!this.desc && !sel) g.text(vx, y, '(a few words about you)', C.faint);
-        lines.slice(0, 3).forEach((l, k) => g.text(vx, y + k, l, C.white));
-        g.text(vx, y + 3, `${this.desc.length}/${DESC_MAX}`, C.faint);
+        lines.slice(-7).forEach((l, k) => g.text(vx, y + k, l, C.white));
+        const n = wordCount(this.desc);
+        g.text(vx, y + 7, `${n}/${DESC_WORDS} words`, n >= DESC_WORDS ? C.orange : C.faint);
       } else {
-        const list = r.id === 'shape' ? ICON_SHAPES : r.id === 'color' ? ICON_COLORS : ICON_BGS;
-        const cur = this.icon[r.id];
-        g.text(vx, y, '‹', C.hi);
+        const cur = this.value(r.id);
+        g.text(vx, y, '◄', C.hi);
         this.hit(vx, y, 1, 1, () => this.change(r.id, -1));
-        if (r.id === 'shape') g.text(vx + 2, y, cur, C.white);
-        else {
+        let ax;
+        if (r.swatch) {
           // (The colours to pick from, the one you have marked.)
-          list.forEach((col, k) => g.put(vx + 2 + k * 2, y, col === cur ? '■' : '▪', col));
-          list.forEach((col, k) => this.hit(vx + 2 + k * 2, y, 2, 1, () => {
+          r.list.forEach((col, k) => g.put(vx + 2 + k * 2, y, '■', col));
+          // (The one you have, marked beneath.)
+          const at = r.list.indexOf(cur);
+          if (at >= 0) g.put(vx + 2 + at * 2, y + 1, '▲', C.hi);
+          r.list.forEach((col, k) => this.hit(vx + 2 + k * 2, y, 2, 1, () => {
             this.icon = { ...this.icon, [r.id]: col };
           }));
+          ax = vx + 2 + r.list.length * 2;
+        } else {
+          const text = r.show ? r.show(cur) : cur;
+          g.text(vx + 2, y, text, C.white);
+          g.text(vx + 15, y, `${r.list.indexOf(cur) + 1}/${r.list.length}`, C.faint);
+          ax = vx + 13;
         }
-        const ax = r.id === 'shape' ? vx + 12 : vx + 2 + list.length * 2;
-        g.text(ax, y, '›', C.hi);
+        g.text(ax, y, '►', C.hi);
         this.hit(ax, y, 1, 1, () => this.change(r.id, 1));
       }
     });
-    if (this.err) g.text(2, 17, this.err, C.red, undefined, this.w - 4);
-    const bw = 26;
-    button(this, g, 2, 19, bw, this.editing ? '[ENTER] Save' : '[ENTER] Make my account', () => this.save(), { color: C.hi });
-    button(this, g, 2, 21, bw, this.editing ? '[ESC] Close' : '[ESC] Back', () => this.close());
-    if (this.editing) button(this, g, 30, 19, bw, '[X] Copy my account code', () => this.exportCode());
-    else button(this, g, 30, 19, bw, '[I] Use an account code...', () => this.importCode());
+    if (this.err) g.text(2, 27, this.err, C.red, undefined, this.w - 4);
+    const bw = 30;
+    button(this, g, 2, 28, bw, this.editing ? '[ENTER] Save' : '[ENTER] Make my account', () => this.save(), { color: C.hi });
+    button(this, g, 2, 30, bw, this.editing ? '[ESC] Close' : '[ESC] Back', () => this.close());
+    if (this.editing) button(this, g, 34, 28, bw, '[X] Copy my account code', () => this.exportCode());
+    else button(this, g, 34, 28, bw, '[I] Use an account code...', () => this.importCode());
     if (this.code) {
-      g.text(2, 23, 'Your account code (copied, if the browser let it):', C.dim);
-      g.text(2, 24, this.code.slice(0, this.w - 4), C.cyan);
-      g.text(2, 25, 'Paste it into "Use an account code" in another browser.', C.faint);
-    } else g.text(2, 24, '↑↓ choose · ←→ change · type to write', C.faint);
+      g.text(34, 30, 'Your code (copied, if allowed):', C.dim);
+      g.text(2, 32, this.code.slice(0, this.w - 4), C.cyan);
+    } else g.text(2, 32, '↑↓ choose · ←→ change · type to write', C.faint);
   }
 
   change(id, d) {
-    if (id === 'shape') this.icon = { ...this.icon, shape: cycle(ICON_SHAPES, this.icon.shape, d) };
-    else if (id === 'color') this.icon = { ...this.icon, color: cycle(ICON_COLORS, this.icon.color, d) };
-    else if (id === 'bg') this.icon = { ...this.icon, bg: cycle(ICON_BGS, this.icon.bg, d) };
+    if (id === 'title') this.title = cycle(TITLES, this.title, d);
+    else if (this.icon[id] !== undefined) {
+      const list = { shape: ICON_SHAPES, color: ICON_COLORS, bg: ICON_BGS, pattern: ICON_PATTERNS, frame: ICON_FRAMES }[id];
+      if (list) this.icon = { ...this.icon, [id]: cycle(list, this.icon[id], d) };
+    }
     this.ui.audio?.play('select');
   }
 
   save() {
     try {
-      if (this.editing) this.accounts.update({ icon: this.icon, desc: this.desc });
+      if (this.editing) this.accounts.update({ icon: this.icon, desc: this.desc, title: this.title });
       else {
         const why = nameProblem(this.name);
         if (why) {
@@ -131,7 +152,7 @@ export class AccountWindow extends Window {
           this.sel = 0;
           return;
         }
-        this.accounts.create(this.name, this.icon, this.desc);
+        this.accounts.create(this.name, this.icon, this.desc, this.title);
       }
     } catch (e) {
       this.err = e.message;
@@ -172,14 +193,19 @@ export class AccountWindow extends Window {
     else if (k.code === 'Enter') this.save();
     else if (k.code === 'ArrowUp') this.sel = (this.sel + rows.length - 1) % rows.length;
     else if (k.code === 'ArrowDown' || k.code === 'Tab') this.sel = (this.sel + 1) % rows.length;
-    else if ((k.code === 'ArrowLeft' || k.code === 'ArrowRight') && ['shape', 'color', 'bg'].includes(r.id)) this.change(r.id, k.code === 'ArrowLeft' ? -1 : 1);
+    else if ((k.code === 'ArrowLeft' || k.code === 'ArrowRight') && r.list) this.change(r.id, k.code === 'ArrowLeft' ? -1 : 1);
     else if (r.id === 'name' && !r.locked) {
       if (k.code === 'Backspace') this.name = this.name.slice(0, -1);
       else if (k.key && k.key.length === 1 && /[A-Za-z0-9_\- ]/.test(k.key) && this.name.length < NAME_MAX) this.name += k.key;
       this.err = null;
     } else if (r.id === 'desc') {
       if (k.code === 'Backspace') this.desc = this.desc.slice(0, -1);
-      else if (k.key && k.key.length === 1 && this.desc.length < DESC_MAX) this.desc += k.key;
+      else if (k.key && k.key.length === 1 && this.desc.length < DESC_MAX) {
+        // (Forty words at most: no starting a forty-first.)
+        const starts = !/\s/.test(k.key) && (!this.desc || /\s$/.test(this.desc));
+        if (starts && wordCount(this.desc) >= DESC_WORDS) this.err = `At most ${DESC_WORDS} words.`;
+        else this.desc += k.key;
+      }
     } else if (this.editing && k.code === 'KeyX') this.exportCode();
     else if (!this.editing && k.code === 'KeyI') this.importCode();
     return true;
@@ -372,7 +398,9 @@ export class PartyWindow extends Window {
     const row = (p, yy, extra) => {
       const cv = avatarCanvas(p.icon, 1);
       if (cv) g.image(2, yy, cv, 0, 0);
-      g.text(6, yy, p.name + (p.host ? ' (host)' : '') + (p.id === c.me ? ' (you)' : ''), p.id === c.me ? C.hi : C.white);
+      const nm = p.name + (p.host ? ' (host)' : '') + (p.id === c.me ? ' (you)' : '');
+      g.text(6, yy, nm, p.id === c.me ? C.hi : C.white);
+      if (p.title) g.text(7 + nm.length, yy, `· ${p.title}`, C.dim);
       g.text(6, yy + 1, (p.desc || '').slice(0, 34), C.faint);
       let x = this.w - 2;
       for (const [label, fn, col] of extra.reverse()) {
@@ -451,7 +479,7 @@ export class PartyWindow extends Window {
 export class ProfileWindow extends Window {
   // `ctx()`: { me, friend (bool), sent (bool), hooks: { request(p), edit() } }
   constructor(ui, profile, ctx) {
-    super(ui, 52, 16, { kind: 'profile' });
+    super(ui, 56, 18, { kind: 'profile' });
     this.profile = profile;
     this.ctx = ctx;
   }
@@ -466,14 +494,15 @@ export class ProfileWindow extends Window {
     if (cv) g.image(3, 3, cv, 0, 0);
     g.text(14, 2, p.name, C.hi);
     if (p.host) g.text(14 + p.name.length + 1, 2, '(host)', C.dim);
-    wrap(p.desc || 'No description.', this.w - 16).slice(0, 5).forEach((l, i) => g.text(14, 4 + i, l, p.desc ? C.fg : C.faint));
+    if (p.title) g.text(14, 3, `the ${p.title}`, C.dim);
+    wrap(p.desc || 'No description.', this.w - 16).slice(0, 8).forEach((l, i) => g.text(14, 5 + i, l, p.desc ? C.fg : C.faint));
     const mine = p.id === c.me;
-    if (mine) button(this, g, 2, 11, 24, '[E] Edit your profile', () => c.hooks.edit());
-    else if (c.friend) g.text(3, 11, '✓ Friends', C.green);
-    else if (c.sent) g.text(3, 11, 'Friend request sent.', C.dim);
-    else if (c.asked) button(this, g, 2, 11, 27, '[F] Accept their request', () => c.hooks.accept(p), { color: C.green });
-    else button(this, g, 2, 11, 27, '[F] Send friend request', () => c.hooks.request(p), { color: C.hi });
-    button(this, g, this.w - 16, 13, 14, '[ESC] Close', () => this.close());
+    if (mine) button(this, g, 2, 14, 24, '[E] Edit your profile', () => c.hooks.edit());
+    else if (c.friend) g.text(3, 14, '♥ Friends', C.green);
+    else if (c.sent) g.text(3, 14, 'Friend request sent.', C.dim);
+    else if (c.asked) button(this, g, 2, 14, 27, '[F] Accept their request', () => c.hooks.accept(p), { color: C.green });
+    else button(this, g, 2, 14, 27, '[F] Send friend request', () => c.hooks.request(p), { color: C.hi });
+    button(this, g, this.w - 16, 16, 14, '[ESC] Close', () => this.close());
   }
 
   onKey(k) {

@@ -500,7 +500,7 @@ export class GuestNet {
   }
 
   setProfile(profile) {
-    this.out({ t: 'profile', icon: profile.icon, desc: profile.desc });
+    this.out({ t: 'profile', icon: profile.icon, desc: profile.desc, title: profile.title || '' });
   }
 
   friend(to, yes) {
