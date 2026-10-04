@@ -10,6 +10,7 @@ import { graveyardFence } from '../world/settlement.js';
 import {
   initEcon, mayorOf, simulateTo, activityFor, setOverride, freeSlot, st, invAdd, invCount, invTake, packGoods, makeVisitor,
   ledger, alive, DAY, price, kitchenOf, STOCK, notableNews, hearNews, freshRumours, glutFactor,
+  mendEcon,
 } from './econ.js';
 import { Justice } from './justice.js';
 import { Careers } from './careers.js';
@@ -309,6 +310,7 @@ export class Sim {
     const w = this.game.world;
     const chests = list.filter((t) => w.regionAt(t.x, t.z) && w.getBlock(t.x, t.y, t.z) === B.chest).map((t) => w.getContainer(t.x, t.y, t.z)).filter(Boolean);
     if (!chests.length) return;
+    mendEcon(L);
     const e = L.econ;
     const count = chests.reduce((n, sl) => n + sl.reduce((m, q) => m + (q && q.item === 'coin' ? q.count : 0), 0), 0);
     if (L.chestSeen !== undefined && count !== L.chestSeen) e.treasury = Math.max(0, e.treasury + (count - L.chestSeen));

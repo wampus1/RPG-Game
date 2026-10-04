@@ -441,7 +441,7 @@ bench('millstone', 'miller', 'Millstone', { tool: 'pick', hardness: 1.4 });
 bench('glass_kiln', 'glassblower', 'Glass Kiln', { tool: 'pick', hardness: 1.5, light: 9 });
 bench('spore_bed', 'sporewright', 'Spore Bed', { hardness: 0.6, light: 4 });
 bench('pearl_table', 'pearldiver', 'Pearl-Sorting Table', { hardness: 0.7 });
-def('mill_sail', { solid: false, opaque: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Windmill Sail' });
+def('mill_sail', { solid: false, opaque: false, render: 'none', tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Windmill Sail' });
 def('mill_hub', { tool: 'axe', hardness: 1, drop: 'planks', label: 'Windmill Hub' });
 // The islands' own old places (see isledeep.js): Thessa's Wildwood
 // Hollows under the roots of the oldest trees (walls of living root, and
@@ -457,7 +457,7 @@ def('slag', { tool: 'pick', hardness: 3, drop: [{ item: 'iron_ore', chance: 0.08
 def('crucible', { ...sprite, solid: true, tool: 'pick', hardness: 3, light: 9, drop: null, label: 'Crucible' });
 def('coral_rock', { tool: 'pick', hardness: 6, drop: 'cobblestone', label: 'Coral Rock' });
 def('shell_sand', { tool: 'shovel', hardness: 0.5, drop: 'sand', label: 'Shell Sand' });
-def('coral', { ...sprite, solid: true, tool: 'pick', hardness: 0.8, light: 2, drop: [{ item: 'pearl', chance: 0.04 }], label: 'Coral' });
+def('coral', { ...sprite, solid: false, tool: 'pick', hardness: 0.8, light: 2, drop: [{ item: 'pearl', chance: 0.04 }], label: 'Coral' });
 def('kelp', { ...dressing, tall: true, hardness: 0.1, drop: null, label: 'Kelp' });
 def('giant_clam', { ...sprite, solid: true, tool: 'pick', hardness: 2, drop: [{ item: 'pearl', chance: 0.5, min: 1, max: 2 }], label: 'Giant Clam' });
 def('basalt_bricks', { tool: 'pick', hardness: 7, drop: 'basalt', label: 'Basalt Bricks' });

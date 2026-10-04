@@ -837,6 +837,31 @@ function researchTalk(npc, game) {
 
 // A Kavorent core handed to a mayor: a fortune for you, renown, and the
 // realm's scholars set to the Kavorent's arts (the Ancient Technology Tree).
+// Before handing over something you can't get back (a Kavorent core, old
+// plans): who it'll go to, what you'll get, and are you sure?
+function confirmGift(npc, game, item) {
+  const s = npc.settlement;
+  const n = countItem(game.player.inv, item);
+  if (!n) return { lines: [item === 'kav_core' ? 'Brought what? I don\'t see anything.' : 'Plans? Where?'] };
+  const civ = s.civ !== null && s.civ !== undefined ? game.world.ow.civs[s.civ] : null;
+  const realm = civ ? civ.name : s.name;
+  const core = item === 'kav_core';
+  const what = core ? (n === 1 ? 'the Kavorent core' : `all ${n} Kavorent cores`) : n === 1 ? 'the old blueprint' : `all ${n} old blueprints`;
+  const gain = core
+    ? `${realm} will study ${n === 1 ? 'it' : 'them'} (its Ancient Technology Tree); you'll be paid what the treasury can spare.`
+    : `${s.name}'s scholars will put ${n === 1 ? 'it' : 'them'} to their research; you'll be paid ¤${35 * n}.`;
+  return {
+    lines: [
+      core ? 'A Kavorent core? Here? ...Are you certain you want to part with it?' : 'Old plans? Let me see... you\'d give these to us?',
+      `── HAND OVER ${what.toUpperCase()} TO ${realm.toUpperCase()}? ──`,
+      gain,
+      'Once given, there\'s no taking it back.',
+    ],
+    choices: [{ id: core ? 'give_core' : 'give_plans', arg: 'yes', label: `Yes: give ${what} to ${realm}.` }],
+    back: 'No, I\'ll keep it for now.',
+  };
+}
+
 function coreTalk(npc, game) {
   const s = npc.settlement;
   const L = npc.layout;
@@ -1618,9 +1643,9 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Are you certain? Your home and standing here would be forfeit.'], choices: [{ id: 'renounce', arg: 'yes', label: 'Yes, I renounce it.' }], back: 'On second thought, no.' };
     case 'profession': return professionTalk(npc, game, arg);
     case 'research': return researchTalk(npc, game);
-    case 'give_core': return coreTalk(npc, game);
+    case 'give_core': return arg === 'yes' ? coreTalk(npc, game) : confirmGift(npc, game, 'kav_core');
     case 'ancient_view': return { lines: ['Come, see. The scholars have drawn it out already.'], open: 'ancient' };
-    case 'give_plans': return plansTalk(npc, game);
+    case 'give_plans': return arg === 'yes' ? plansTalk(npc, game) : confirmGift(npc, game, 'old_blueprint');
     case 'oldplaces': return oldPlacesTalk(npc, game);
     case 'geo': return geoTalk(npc, game, arg);
     case 'bandits': return { lines: game.sim.bandits.talk(npc.layout, rng), back: 'I\'ll keep my eyes open.' };

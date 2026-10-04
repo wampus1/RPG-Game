@@ -2807,6 +2807,116 @@ dozen plain notes.
   could get caught waiting for a beast to step out of the way before
   ringing.
 
+## Round 38: into the storm
+
+**You can sail into the storm round the islands now. You won't come out
+the other side** (see `game/stormsea.js` and `render/stormfx.js`).
+- *Coming up to it:* the sky darkens and banks of black cloud billow in
+  over you, lower the nearer you come.
+- *Under it:* the dark closes in until it's pitch black. A torch only just
+  holds it off. Each flash of lightning shows what's out there:
+  - a ship's hull keeled over, its ribs stove in, a snapped mast with a
+    rag of sail;
+  - a bow standing up out of the water;
+  - barrels bobbing;
+  - planks.
+- *Further in:* the dark turns red. The sea goes red and seethes, froth
+  breaking on it, red bubbles and steam. The lightning comes down all
+  round you, nearer each time, until it hits the raft.
+- *Then:* white, then black, and you come to on the nearest beach,
+  battered (down to about a third of your health), with no raft.
+
+The raft is heavy going in the storm's seas: the deeper in, the slower.
+Other people's rafts are still thrown back as before.
+
+**New music.**
+- Out on a raft there's a sea-song: a flute over a squeezebox, a harp
+  turning under it, the waves; at night a gentler one.
+- Into the storm the music turns ominous, then dread in the black, then
+  terror in the red. It is one tune climbing, as a master's fight does:
+  a choir, strings, a tolling bell, the wind, and a savage drum kit at
+  the end.
+- After the wreck, the wreck's lament.
+
+**Every item's picture is redrawn** (see `render/iconsmith.js`), the way
+the masters of the old places are made:
+- *Weapons and tools* are built up out of rounded masses: a blade is a
+  ridged slab with a point, a grip a wrapped rod, a pommel a ball, and a
+  crossguard, an axe's flared bit, a mace's flanges, a bow's curve and
+  its string. They still lie corner to corner.
+- *Armour* fills the square, seen from the front: caps and helms
+  (riveted, with a nasal), hoods with a face in their shadow, tunics with
+  laces and a belt, mail, breastplates with a ridge and pauldrons, coats
+  with gold buttons, tabards with an emblem, trousers, greaves, boots and
+  shields.
+- Each part is surfaced as what it's made of:
+  - steel, iron and gold, each with its own shine;
+  - wood with its grain, wrapped leather, cloth;
+  - stone, bone, glass, black obsidian;
+  - the Kavorent's glowing seams.
+- It's lit from the upper left onto a ramp of its own colour (shadows
+  going violet, lights going gold), with a cool rim of light on the far
+  edge and an outline darker than whatever it borders.
+- Everything else (food, stuff, potions, stones, oddments) keeps its own
+  picture, given a body and lit the same way, with a glint where
+  something shiny catches the light.
+
+**Other new things.**
+- *The windmill turns.* Its sails go round on the hub, drawn as they
+  look from where the camera is: full on, four sails sweeping round;
+  from the side, edge-on, rising and falling past the hub. They spin
+  faster in a storm and lazily in an abandoned town. (Old sail blocks in
+  saved worlds no longer show.)
+- *Dungeon stairs* have a faint pulsing outline: gold for the way down,
+  pale for the way up. Once you've been in their room, they're marked on
+  the minimap.
+- *Handing over a Kavorent core or old plans asks first.* You're told who
+  they go to and what you'll get, and that there's no taking them back.
+  Then you say yes, or keep them.
+- *Holding a weapon,* the hover box shrinks to just what's under the
+  pointer, see-through, so it's not in the way of a fight.
+- Rafts are a little quicker (top speed 5, up from 4.2), and sprinting a
+  little slower.
+
+**Fixes.**
+- Some towns' treasuries showed NaN coins, and coins put in the hall
+  chest didn't add to them. The far islands' signature dishes (lentils,
+  tamales, goulash and so on) had no price. Every dish has one now, and a
+  treasury that went NaN in an old save is mended.
+- Villages with far more people than a town needs didn't become towns.
+  The notice board was counting people who'd moved away. It now counts
+  only those who live there, and says what the place still needs to
+  grow ("4 more buildings", "a tavern").
+- A town's wagon could be left standing on a roof when its spot was built
+  over. Standing wagons and horses now go on the nearest open ground
+  beside their spot.
+- Every enemy cried out when parried. Only people (townsfolk, guards,
+  bandits, the masters who were people) do now. Beasts, the dead, golems
+  and the things below stay silent, and don't cry out when they swing.
+- A relic's circle showed through dungeon floors (a circle from another
+  floor, or from the world above). Each floor shows only its own.
+- Lava in old places sat up on top of the floor and could fill a hall
+  wall to wall. It now lies sunk in the floor, with a ledge left round it
+  and the ways in kept open. Should anything still cut a way off, more
+  floor is left as a bridge until every door, and the stairs, can be
+  reached. A drained lava hall leaves scorched black floor behind.
+- Chests down below are never empty. Adventurers who got there first
+  always leave something.
+- The old places of Kharos and Myrrow keep better loot than Thessa's:
+  as if half a floor deeper.
+- Coral down below no longer blocks your way.
+- Some masters' blows came too fast to react to (the Coral Colossus's
+  great punch). Now a master's blow lands as hard as it was slow in
+  coming:
+  - a snap gives little warning and does little;
+  - a great slow blow does a lot;
+  - every blow gives at least a moment's warning, a big master's a
+    little more;
+  - the quick follow-ups of a flurry land lighter.
+- At the storm's edge the "rain stops" message kept popping up. The
+  storm's rain now counts as the weather there, and it doesn't stop and
+  start as you go back and forth across where it begins.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2889,7 +2999,11 @@ src/
                        frames, its state, its facing, its rig),
                        pieces (each people's great thing on its square,
                        and the ember ward),
-                       oldplaces (spire runes, beacons, relic circles),
+                       oldplaces (spire runes, beacons, relic circles,
+                       the light round a dungeon's stairs),
+                       iconsmith (every item's picture, sculpted and lit),
+                       stormfx (the storm round the islands: cloud, the
+                       wrecks lightning shows, the red sea, the end),
                        isleart (Kharos's and Myrrow's ground, trees,
                        lava, goods and creatures), islebossart (the
                        islands' masters and their kin),
@@ -2930,7 +3044,8 @@ src/
                        setting, study, lockpicking), laser
                        (the great beam: the Overseer's and its Eye's),
                        geotalk (asking the way: the islands, the storm,
-                       the coast, a town), cutscene (the openings: the
+                       the coast, a town), stormsea (sailing into the
+                       storm: the dark, the red, the strike, the beach), cutscene (the openings: the
                        ship and the storm,
                        the hometown's history), scenes (short scenes in
                        the middle of things: a spire opening, a master

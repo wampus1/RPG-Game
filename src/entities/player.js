@@ -20,6 +20,9 @@ export function sprintCost(p) {
 }
 export const VIGOR_CAP = 8;
 export const BLUE_CAP = 6; // three blue hearts at most
+// Sprinting: a step takes this much of the time (nearly half again as
+// quick as walking).
+export const SPRINT_STEP = 0.68;
 
 // A step across the screen as a step in the world, for a camera turned by
 // `view` quarter turns (the renderer's toWorld, for directions).
@@ -355,7 +358,7 @@ export class Player extends Entity {
     // (Just up out of a roll: a little slower for a moment. An arrow on
     // the string: careful steps.)
     const recover = (this.rollRecover > 0 ? 1.45 : 1) * (this.bowDraw ? 1.6 : 1);
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? 0.62 : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

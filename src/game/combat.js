@@ -239,9 +239,12 @@ export function beginAttack(game, a, target, st = styleOf(a), opts = null) {
   const tiles = tilesFor(a, target, st);
   // Heavier arms come round slower; lighter ones quicker.
   // (A far island's master is quicker with its blows: see ISLE_BOSS_TEMPO.)
-  const dur = st.windup * heftOf(a) * (a.slowT > 0 ? 1.3 : 1) * (a.tempo ? 1 / Math.sqrt(a.tempo) : 1);
+  let dur = st.windup * heftOf(a) * (a.slowT > 0 ? 1.3 : 1) * (a.tempo ? 1 / Math.sqrt(a.tempo) : 1);
+  // (A master always gives you time to see a blow coming: a great one,
+  // a bit more.)
+  if (a.isBoss) dur = Math.max(dur, a.foot ? BOSS_MIN_WINDUP + 0.15 : BOSS_MIN_WINDUP);
   a.windup = { t: 0, dur, st, target, tiles, y: a.y, heading: headingTo(a, target), combo: (opts && opts.combo) || 0, press: (opts && opts.press) || 0 };
-  if (st.heavy || st.charge || st === STYLES.haymaker) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!', 'Hyaah!']) || 'Hrah!', 0.6, '#ff9080');
+  if ((st.heavy || st.charge || st === STYLES.haymaker) && speaks(a)) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!', 'Hyaah!']) || 'Hrah!', 0.6, '#ff9080');
   return true;
 }
 
@@ -399,7 +402,18 @@ function strike(game, a, w) {
   // (However they've turned, a blow reaches as far as it reaches. A great
   // master's lands where it was shown coming, off its front.)
   if (!a.foot && !w.st.area && !w.st.charge) w.tiles = withinReach(a, w.tiles, w.st.lunge ? 1 : st.reach);
-  for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, st, w.off ? { weapon: w.off } : null);
+  // (A master's blow lands as hard as it was slow in coming: see
+  // tellScale. The quick second blows of a flurry or the off hand, lighter.)
+  const hard = a.isBoss ? bossBlowScale(w) : 1;
+  const hit = hard === 1 ? st : { ...st, mult: st.mult * hard };
+  for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, hit, w.off ? { weapon: w.off } : null);
+}
+
+export const BOSS_MIN_WINDUP = 0.45;
+// How hard a master's blow lands, by the warning it gave.
+export function bossBlowScale(w) {
+  const quick = w.off || (w.flurried || 0) > 1;
+  return Math.max(0.4, Math.min(1.4, (quick ? 0.25 : w.dur) / 0.7));
 }
 
 // A blow lands (or doesn't). `opts.weapon`: struck with that (the off
@@ -541,7 +555,19 @@ export function parried(game, v, a) {
   r.emit(mx, v.y + 1.2, mz, { n: 8, color: ['#ffffff', '#ffe070'], up: 20, speed: 40, life: 0.8, shape: 'star', glow: true, gravity: -10 });
   r.effect?.({ type: 'ring', wx: mx, wy: v.y, wz: mz, r0: 2, r1: 24, color: '#ffe070', life: 0.45, oy: -14, flat: 0.55, thick: 2 });
   r.effect?.({ type: 'ring', wx: mx, wy: v.y, wz: mz, r0: 1, r1: 12, color: '#ffffff', life: 0.3, oy: -14, flat: 0.55, thick: 1 });
-  a.say?.(a.rng?.pick?.(['Urgh!', 'What?!', 'Agh!', 'Nngh!']) || 'Agh!', 1.2, '#ffd0a0');
+  // (Only someone with words to say says anything.)
+  if (speaks(a)) a.say?.(a.rng?.pick?.(['Urgh!', 'What?!', 'Agh!', 'Nngh!']) || 'Agh!', 1.2, '#ffd0a0');
+}
+
+// People, and those who were people: not beasts, the dead, golems or the
+// things of the deep, which have no words to cry out with.
+export function speaks(a) {
+  if (!a || a.kind === 'player') return false;
+  if (a.kind === 'npc') return true;
+  const S = a.S;
+  if (!S) return false;
+  if (S.bandit) return true;
+  return !!(S.humanoid && !S.undead && !S.construct && !S.night && !S.mute && !S.infected);
 }
 
 // How hard their blows land (before the weapon's way of fighting).

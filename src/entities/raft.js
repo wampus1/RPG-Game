@@ -11,8 +11,8 @@ import { has as heroHas } from '../game/hero.js';
 export const STORM_WALL = 0.2;
 
 export const RAFT = {
-  accel: 1.8, // tiles/s² while paddling
-  max: 4.2, // tiles/s
+  accel: 2.1, // tiles/s² while paddling
+  max: 5, // tiles/s
   back: 1.1, // top speed backwards
   turn: 1.9, // rad/s
   drag: 0.7, // speed lost per second when not paddling (fraction)
@@ -69,7 +69,10 @@ export function steer(p, dt, input) {
   if (left) r.ang += turn * dt;
   if (right) r.ang -= turn * dt;
   r.ang = ((r.ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-  if (fwd) r.v = Math.min(RAFT.max * sail, r.v + RAFT.accel * sail * dt);
+  // (The storm's seas: slow, heavy going, the deeper in the worse.)
+  const S = p.game.stormSea;
+  const heavy = S && S.depth > 0 ? 1 - Math.min(0.45, S.depth * 0.55) : 1;
+  if (fwd) r.v = Math.min(RAFT.max * sail * heavy, r.v + RAFT.accel * sail * heavy * dt);
   else if (backK) r.v = Math.max(-RAFT.back, r.v - RAFT.accel * 1.3 * dt);
   else r.v *= Math.max(0, 1 - RAFT.drag * dt);
   if (Math.abs(r.v) < 0.02 && !fwd && !backK) r.v = 0;
@@ -80,8 +83,9 @@ export function steer(p, dt, input) {
   const nx = r.x + f.x * r.v * dt;
   const nz = r.z + f.z * r.v * dt;
   // The storm round the Dagoni Islands: no raft lives in that. It throws
-  // you back the way you came.
-  if (w.ow && w.ow.stormAt(nx, nz) > STORM_WALL && w.ow.stormAt(nx, nz) >= w.ow.stormAt(r.x, r.z)) {
+  // anyone else back the way they came.
+  // (You can try it yourself, though: see game/stormsea.js.)
+  if (p.kind !== 'player' && w.ow && w.ow.stormAt(nx, nz) > STORM_WALL && w.ow.stormAt(nx, nz) >= w.ow.stormAt(r.x, r.z)) {
     r.v = r.v > 0 ? -1.6 : 1.6;
     if (p.game.stormTurnsBack) p.game.stormTurnsBack(true);
     return;

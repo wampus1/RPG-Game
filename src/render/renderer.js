@@ -13,6 +13,7 @@ import { Lighting, skyLight } from './lighting.js';
 import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpikes, drawShields } from './fx.js';
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
+import { drawStormSea, drawStormCover } from './stormfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
 
@@ -305,6 +306,7 @@ export class Renderer {
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
     if (this.underground && this.hidden) this.drawDigView(game);
+    drawStormSea(this, game);
     drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
     drawKavSpikes(this, this.ctx, game);
@@ -314,6 +316,7 @@ export class Renderer {
     this.drawParticles(dt);
     this.drawInk(game);
     this.drawAim(game);
+    drawStormCover(this, game);
     if (snap || this.zoomK !== 1) return;
     // Speech bubbles and emotes go on top of everything, roofs included.
     for (const b of this.bubbles) {
@@ -1072,11 +1075,89 @@ export class Renderer {
     return lx < 14 ? 'bench' : 'back';
   }
 
+  // A windmill's sails, turning on their hub. They turn in the plane of the
+  // wall they're on (along x or z), drawn as that plane looks from where the
+  // camera is: full on, the four sails sweeping round; side on, edge-on,
+  // rising and falling past the hub.
+  drawSails(ctx, e, sx, feetY) {
+    const [du, dv] = this.toViewDir(e.along ? 1 : 0, e.along ? 0 : 1);
+    const cx = sx + 8;
+    const cy = feetY - 10 - LH / 2;
+    // (Wind in the weather turns them quicker.)
+    const spin = e.spin || 0.7;
+    const a0 = (this.time * spin + (e.seed || 0) * 1.7) % (Math.PI * 2);
+    // In-plane coords (p along the wall, q up) to screen.
+    const P = (pa, pb) => [cx + pa * du * TILE, cy + pa * dv * TILE - pb * LH];
+    const side = du === 0;
+    const R = 3.5;
+    const W = 0.95;
+    const poly = (pts, fill) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+    };
+    ctx.save();
+    for (let k = 0; k < 4; k++) {
+      const th = a0 + (k * Math.PI) / 2;
+      const c = Math.cos(th);
+      const sn = Math.sin(th);
+      const at = (r, w) => P(r * c - w * sn, r * sn + w * c);
+      // The spar, hub to tip.
+      const [x0, y0] = at(0, 0);
+      const [x1, y1] = at(R + 0.2, 0);
+      ctx.strokeStyle = '#4a3420';
+      ctx.lineWidth = side ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      if (side) {
+        // Edge on: the cloth a pale strip down the spar.
+        ctx.strokeStyle = '#e8dfc8';
+        ctx.lineWidth = 1;
+        const [a1, b1] = at(0.7, 0);
+        ctx.beginPath();
+        ctx.moveTo(a1 + 1, b1);
+        ctx.lineTo(x1 + 1, y1);
+        ctx.stroke();
+        continue;
+      }
+      // The cloth on its lattice, on the trailing side of the spar, lit a
+      // little differently as it comes round.
+      const lit = 0.5 + 0.5 * Math.sin(th + 0.8);
+      const cloth = `rgb(${Math.round(206 + 34 * lit)},${Math.round(196 + 32 * lit)},${Math.round(172 + 30 * lit)})`;
+      poly([at(0.7, 0), at(R, 0), at(R, W), at(0.7, W * 0.85)], cloth);
+      ctx.strokeStyle = 'rgba(90,64,40,0.85)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let r = 0.7; r <= R + 0.01; r += (R - 0.7) / 4) {
+        const [ax, ay] = at(r, 0);
+        const [bx, by] = at(r, W * (r <= 0.71 ? 0.85 : 1));
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      }
+      const [ex, ey] = at(0.7, W * 0.85);
+      const [fx, fy] = at(R, W);
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+    }
+    // The hub's cap.
+    ctx.fillStyle = '#3a2814';
+    ctx.fillRect(Math.round(cx - 3), Math.round(cy - 3), 6, 6);
+    ctx.fillStyle = '#8a6438';
+    ctx.fillRect(Math.round(cx - 2), Math.round(cy - 2), 3, 3);
+    ctx.restore();
+  }
+
   // A wagon standing still: its hood, wheels and banner (and whoever's
   // sitting in it).
   drawProp(ctx, e, sx, feetY) {
     if (e.type === 'catapult' || e.type === 'ram') return this.drawEngine(ctx, e, sx, feetY);
     if (e.type === 'ship') return this.drawShip(ctx, e, sx, feetY);
+    if (e.type === 'sails') return this.drawSails(ctx, e, sx, feetY);
     if (e.type !== 'wagon') return;
     const left = e.face === undefined ? true : ((e.face + this.view) & 3) !== 3;
     const sh = TEX.misc.shadow;

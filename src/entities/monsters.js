@@ -22,7 +22,7 @@
 // Attacks you see coming are "hazards": the ground they'll hit, lit up
 // (red for a blow, blue for cold, cyan for the Kavorent's light), going
 // off when the time's up. Traps use them too (see game/dungeon.js).
-import { beginAttack, styleOf, knock, STYLES, strikeAnim } from '../game/combat.js';
+import { beginAttack, styleOf, knock, STYLES, strikeAnim, speaks } from '../game/combat.js';
 import { burn, chill, stun, mend } from '../game/gems.js';
 import { BLOCKS, B as BLOCKS_ID } from '../world/blocks.js';
 import { pierceOf } from '../game/kavtech.js';
@@ -79,9 +79,26 @@ export const COLORS = { blow: [255, 70, 50], cold: [90, 170, 255], kav: [90, 216
 
 // --------------------------------------------------------------- hazards
 // Something coming down on that ground in `dur` seconds (see the header).
+// How hard a blow lands by how long it was in coming (`ref`: an ordinary
+// warning, at full weight): a snap that's on you before you can move does
+// little; a great slow blow you had every chance to step out of, a lot.
+export const HAZARD_TELL = 0.9;
+export const MIN_TELL = 0.45;
+export function tellScale(dur, ref) {
+  return Math.max(0.4, Math.min(1.4, dur / ref));
+}
+
 export function addHazard(game, h) {
   h.t = 0;
   h.y ??= h.by ? h.by.y : game.player.y;
+  // A master's blow shown coming: the less warning it gives, the lighter it
+  // lands (and it always gives enough to react to); the longer it's in
+  // coming, the harder. (The quick bursts that end something already shown
+  // coming, a leap or a lit fuse, are left as they are.)
+  if (h.by && h.by.isBoss && !h.trap && h.dmg > 0 && h.dur >= 0.25) {
+    h.dmg = Math.max(1, Math.round(h.dmg * tellScale(h.dur, HAZARD_TELL)));
+    h.dur = Math.max(h.dur, MIN_TELL);
+  }
   // (A master going for you: see tempo.press.)
   if (h.by && h.by.isBoss) h.by.sinceAtk = 0;
   (game.hazards ||= []).push(h);
@@ -1976,7 +1993,7 @@ export function bossSlam(c, dt, r, windup, dmg, every, after = null) {
   const tiles = areaTiles(c.x, c.z, R);
   addHazard(game, { by: c, tiles, dur: windup, dmg: Math.round(dmg * (c.dmgMult || 1)), knock: 2, stun: 0.3, from: { x: c.x, z: c.z }, center: { x: c.x, z: c.z }, radius: R, kind: 'slam', color: COLORS.blow, onFire: after ? () => after() : null });
   c.stunT = windup + 0.15;
-  c.say?.(Math.random() < 0.5 ? 'Hrraaagh!' : 'Graaah!', 0.8, '#ff9080');
+  if (speaks(c)) c.say?.(Math.random() < 0.5 ? 'Hrraaagh!' : 'Graaah!', 0.8, '#ff9080');
   game.renderer.floatText(c.x, c.y + 3, c.z, '!', '#ff5040');
   return true;
 }

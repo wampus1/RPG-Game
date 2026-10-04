@@ -2210,7 +2210,9 @@ class Layout {
       };
       const score = (f) => tiles(f).filter((t) => clear(t.x, t.z)).length;
       const face = faces.find((f) => score(f) === tiles(f).length) || faces.reduce((m, f) => (score(f) > score(m) ? f : m));
-      for (const t of tiles(face)) if (clear(t.x, t.z)) this.put(t.x, t.y, t.z, t.hub ? B.mill_hub : B.mill_sail);
+      // (Only the hub is built: the sails turn on it, drawn as they go
+      // round; see renderer.drawSails.)
+      this.put(face.hx, hy, face.hz, B.mill_hub);
       b.sails = { x: face.hx, y: hy, z: face.hz, along: face.along };
     } else if (b.type === 'glassworks') {
       for (let i = 0; i < 2; i++) {

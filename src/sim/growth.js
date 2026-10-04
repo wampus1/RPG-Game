@@ -23,6 +23,28 @@ function residents(L) {
   return L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
 }
 
+// The town's own people, as the notice board counts them and as they're
+// counted to go up a size: everyone living who calls it home, those off on
+// a trip included (not those who've moved away for good, nor visitors).
+export function townsfolk(L) {
+  return L.npcs.filter((r) => alive(r) && !r.migrated && !r.visitor);
+}
+
+// What a place still lacks to go up a size (empty: it's ready).
+export function promotionNeeds(sim, L) {
+  const s = L.settlement;
+  const t = TIERS[s.type];
+  if (!t) return null;
+  const out = [];
+  const pop = townsfolk(L).length + sim.playerCount(s.id);
+  if (pop < t.pop) out.push(`${t.pop - pop} more people`);
+  const built = L.buildings.filter((b) => !b.underConstruction).length;
+  if (built < t.buildings) out.push(`${t.buildings - built} more buildings`);
+  if (!(L.econ.treasury >= t.treasury)) out.push(`¤${t.treasury} in the treasury`);
+  for (const n of t.needs) if (!L.buildings.some((b) => b.type === n && !b.underConstruction)) out.push(`a ${n}`);
+  return out;
+}
+
 // One project at a time (and your house, if it's going up, comes first).
 function busy(sim, L) {
   const c = sim.construction;
@@ -119,8 +141,9 @@ export function growth(sim, L, day) {
   const works = sim.works;
   // Up a size, when the town has the people, the buildings and the purse.
   const t = TIERS[s.type];
-  // (You count too, if you're a citizen.)
-  if (t && people.length + sim.playerCount(s.id) >= t.pop && L.buildings.filter((b) => !b.underConstruction).length >= t.buildings && e.treasury >= t.treasury && t.needs.every(has)) {
+  // (You count too, if you're a citizen; and so do its people off on a trip.)
+  const lack = promotionNeeds(sim, L);
+  if (t && lack && !lack.length) {
     return { promoted: promote(sim, L, t.next, day) };
   }
   // A new city walls itself in; so does a town that's been raided (or is

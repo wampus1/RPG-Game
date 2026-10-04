@@ -10,8 +10,8 @@ import { openingLine, topicsFor, respond } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
 import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
-import { STOCK, WANTS, st, mayorOf, alive, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
-import { TIERS } from '../sim/growth.js';
+import { STOCK, WANTS, st, mayorOf, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
+import { TIERS, townsfolk, promotionNeeds } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
@@ -1086,7 +1086,8 @@ export class LedgerWindow extends Window {
     const out = [];
     const row = (k, v, col = '#f0e0c0') => out.push({ k, t: v, c: col });
     const m = mayorOf(L);
-    const living = L.npcs.filter(alive);
+    // (Its own people: not those who've moved away for good.)
+    const living = townsfolk(L);
     const you = game.sim.playerCount(s.id);
     const pop = living.length + you;
     const coffers = e.treasury > pop * 35 ? 'overflowing' : e.treasury > pop * 15 ? 'healthy' : e.treasury > pop * 5 ? 'thin' : 'nearly empty';
@@ -1136,7 +1137,10 @@ export class LedgerWindow extends Window {
     if (mk.length) row('Market', mk.map((q) => q.text).join('; '), '#f0e0c0');
     row('Stores', `${k.wood} timber, ${k.stone} stone${e.short ? ` (short for a ${BUILDING_NAMES[e.short]?.toLowerCase() || e.short})` : ''}`, e.short ? C.orange : '#f0e0c0');
     const t = TIERS[s.type];
-    if (t) row('Growth', `${pop}/${t.pop} people to become a ${t.next}`);
+    if (t) {
+      const lack = promotionNeeds(game.sim, L);
+      row('Growth', lack.length ? `To become a ${t.next}: ${lack.join(', ')}` : `Ready to become a ${t.next}`, lack.length ? '#f0e0c0' : C.green);
+    }
     // (Long values wrap onto the lines below.)
     const lines = [];
     for (const r of out) wrap(r.t, this.w - 23).forEach((l, i) => lines.push({ k: i ? '' : r.k, t: l, c: r.c }));

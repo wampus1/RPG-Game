@@ -94,7 +94,28 @@ export const WANTS = {
 };
 
 export const MEAL_ITEMS = ['feast', 'stew', 'gruel'];
-export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3, pottage: 5, chowder: 5, spiced_lentils: 5, tamales: 5, goulash: 6 };
+export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3, pottage: 5, chowder: 5, spiced_lentils: 5, tamales: 5, goulash: 6, pepper_stew: 6, mushroom_broth: 5, crab_boil: 6 };
+// (Anything else on the menu goes for a stew's price.)
+const mealPrice = (m) => MEAL_PRICE[m] ?? 5;
+
+// Mend any purse, till or treasury that's come to hold something other than
+// a number (from an old save, before every island dish had its price).
+export function mendEcon(L) {
+  const e = L.econ;
+  if (!e) return;
+  const ok = (v) => typeof v === 'number' && Number.isFinite(v);
+  if (!ok(e.treasury)) e.treasury = 0;
+  for (const b of Object.values(e.biz)) {
+    if (!ok(b.till)) b.till = 0;
+    if (!ok(b.earned)) b.earned = 0;
+    if (!ok(b.earnedY)) b.earnedY = 0;
+    if (b.taxDue !== undefined && !ok(b.taxDue)) b.taxDue = 0;
+  }
+  for (const r of L.npcs) {
+    if (!ok(r.coins)) r.coins = 0;
+    if (r.taxDue !== undefined && !ok(r.taxDue)) r.taxDue = 0;
+  }
+}
 // Plain cooked food the tavern also sells (cheaper than a hot meal).
 const SIMPLE_MEALS = ['cooked_fish', 'cooked_meat'];
 // What each food trade's staff may eat from their own stock.
@@ -533,7 +554,7 @@ export function buyMeal(L, rec, rng) {
   const hot = dishesOf(L.settlement)[0];
   for (const m of who.coins > 20 ? [hot, ...MEAL_ITEMS, ...SIMPLE_MEALS] : [hot, 'stew', 'cooked_fish', 'cooked_meat', 'gruel', 'feast']) {
     if (!st.count(k.store, m) || forbiddenFood(L.settlement, m)) continue;
-    const pr = Math.round(MEAL_PRICE[m] * (1 + e.tax * 0.5));
+    const pr = Math.round(mealPrice(m) * (1 + e.tax * 0.5));
     if (who.coins < pr) continue;
     st.take(k.store, m, 1);
     who.coins -= pr;
@@ -1108,6 +1129,7 @@ function dailyNeeds(sim, L, day, rng) {
 // earnings. Fractions of a coin carry over (so even small earners pay, and
 // a higher rate really does bring in more); what can't be paid is owed.
 function collectTaxes(L, day) {
+  mendEcon(L);
   const e = L.econ;
   let total = 0;
   const take = (o, earned, purse) => {

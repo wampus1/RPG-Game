@@ -1,4 +1,5 @@
 // Procedural character, creature and item sprites.
+import { smithIcon, relight } from './iconsmith.js';
 import { Px, hex, shade } from './pixel.js';
 import { TEX, SPR_H } from './textures.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -1669,10 +1670,12 @@ export function itemIcon(key) {
     const bp = new Px(16, 16);
     for (let i = 0; i < 256; i++) if (d[i * 4 + 3]) bp.set(i % 16, Math.floor(i / 16), [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], d[i * 4 + 3]);
     px = edgeOverlay(bp);
-  } else if (dIcon) px = dIcon;
-  else if (!it) px = simpleIcon(key);
-  else if (it.kind === 'potion') px = potionIcon(it);
-  else if (it.kind === 'gem') px = gemIcon(it);
+  } else if (it && (px = smithIcon(key, it))) {
+    // (Sculpted and lit: see iconsmith.js.)
+  } else if (dIcon) px = relight(dIcon);
+  else if (!it) px = relight(simpleIcon(key));
+  else if (it.kind === 'potion') px = relight(potionIcon(it));
+  else if (it.kind === 'gem') px = relight(gemIcon(it));
   else if (it.block !== undefined && it.kind === 'block') px = blockIcon(it.block);
   else {
     const m = key.match(/^(wood|stone|iron|gold|steel)_(pickaxe|axe|shovel|sword)$/);
@@ -1680,7 +1683,7 @@ export function itemIcon(key) {
     else if (key === 'hoe') px = toolIcon('hoe', 'iron');
     else if (key === 'hammer') px = toolIcon('hammer', 'iron');
     else if (it.kind === 'armor') px = armorIcon(it);
-    else px = simpleIcon(key);
+    else px = relight(simpleIcon(key));
   }
   c = toCanvas(px);
   iconCache.set(key, c);

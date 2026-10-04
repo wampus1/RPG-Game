@@ -23,6 +23,17 @@ export function skyLight(minute) {
   return night;
 }
 
+// The sky in and near the storm: dimmer as you come up to it, pitch black
+// in it, a dark red deeper still; a flash of lightning lights it all up.
+export function stormSky(sky, S) {
+  const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  let out = mix(sky, [sky[0] * 0.5, sky[1] * 0.52, sky[2] * 0.6], Math.min(1, S.cloud) * 0.7);
+  out = mix(out, [0.012, 0.012, 0.022], S.dark);
+  if (S.red > 0) out = mix(out, [0.3, 0.035, 0.03], S.red * (0.75 + 0.25 * Math.sin(performance.now() / 260)));
+  if (S.flash > 0) out = mix(out, S.red > 0.3 ? [1, 0.82, 0.78] : [0.92, 0.95, 1.08], Math.min(1, S.flash * 1.15));
+  return out;
+}
+
 // The sky through the ash of the mountain on Kharos (`a`: how thick).
 const ASH = [0.42, 0.34, 0.3];
 export function ashSky(sky, a) {
@@ -111,6 +122,10 @@ export class Lighting {
     const goggled = player && player.equip && player.equip.head === 'ash_goggles';
     const ash = !below && game.ashLevel ? game.ashLevel() * (goggled ? 0.25 : 1) : 0;
     if (ash > 0) sky = ashSky(sky, ash);
+    // The storm round the islands (see game/stormsea.js): the sky darkening
+    // as you come up to it, black under it, then red; white in a flash.
+    const S = !below ? game.stormSea : null;
+    if (S && (S.cloud > 0.01 || S.flash > 0.01)) sky = stormSky(sky, S);
     // (A Mirefolk fogsight tincture: the dark goes grey-green and clear.)
     if (player && player.buffs && player.buffs.some((q) => q.sight && q.until > game.day * 1440 + game.minute)) sky = [Math.max(sky[0], 0.5), Math.max(sky[1], 0.62), Math.max(sky[2], 0.52)];
     const indoor = r.hidden !== null;
@@ -142,7 +157,9 @@ export class Lighting {
     if (dayFull && !indoor && !below) return;
     // The player always carries a faint light so they stay visible at night
     // (fainter below ground: down there, a torch matters).
-    const pl = Math.max(player.lightLevel, below ? 3 : 4);
+    // (Out in the black of the storm, not even that: only a torch.)
+    const blackout = S ? S.dark : 0;
+    const pl = Math.max(player.lightLevel, Math.round((below ? 3 : 4) * (1 - blackout)), 1);
     const pKey = `${player.x},${player.y},${player.z},${pl}`;
     if (!this.pflood || this.pflood.key !== pKey) {
       const R = pl;
@@ -200,6 +217,8 @@ export class Lighting {
         // (Below ground, what light there is carries: a torch's circle is
         // warm and clear, and the dark beyond it the darker for it.)
         if (below) t = Math.min(1.15, t * 1.4);
+        // (A torch only just keeps the storm's dark off.)
+        if (blackout > 0) t *= 1 - blackout * 0.3;
       }
       const o = i * 4;
       px[o] = Math.min(255, (sky[0] * amb + t * tint[0]) * 255);

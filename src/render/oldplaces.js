@@ -6,6 +6,8 @@
 // power.
 import { TILE, LH, WORLD_Y } from '../config.js';
 import { RELICS } from '../world/items.js';
+import { placeTag } from '../game/relics.js';
+import { FY } from '../world/dungeongen.js';
 import { spireDissolve } from '../game/scenes.js';
 
 // Little glyphs, 4 wide and 5 tall (bit rows).
@@ -45,6 +47,34 @@ export function drawOldPlaces(r, game, dt) {
     }
   }
   relicCircles(r, ctx, game);
+  stairOutlines(r, ctx, game);
+}
+
+// Down a dungeon, a faint line of light round the stairs (or the lift), up
+// and down, so they're not lost among the floor tiles.
+function stairOutlines(r, ctx, game) {
+  const dg = game.dungeon;
+  if (!dg || !dg.data) return;
+  const p = game.player;
+  const d = dg.data;
+  const t = r.time;
+  for (const [s, down] of [[d.up, false], [d.down, true]]) {
+    if (!s || Math.abs(s.x - p.x) > 26 || Math.abs(s.z - p.z) > 20) continue;
+    const [u, v] = r.toView(s.x, s.z);
+    // (The floor's top, or for stairs up, the step they rise from.)
+    const x = u * TILE - r.camX;
+    const y = v * TILE - (FY - 1) * LH - r.camY;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.4 + s.x);
+    ctx.save();
+    ctx.strokeStyle = down ? '#ffd870' : '#bfe4ff';
+    ctx.globalAlpha = 0.1 + pulse * 0.08;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - 1, y - 1, TILE + 2, TILE + 2);
+    ctx.globalAlpha = 0.3 + pulse * 0.18;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 0.5, y - 0.5, TILE + 1, TILE + 1);
+    ctx.restore();
+  }
 }
 
 // The middle column of the spire face turned toward you: runes rising.
@@ -247,8 +277,12 @@ function beacon(r, ctx, b) {
 function relicCircles(r, ctx, game) {
   if (!game.relics || !game.relics.size) return;
   const p = game.player;
+  // (Only those on this floor, or up here in the world: not one on a floor
+  // above or below, nor one up top while you're down a dungeon.)
+  const tag = placeTag(game);
   for (const q of game.relics.values()) {
-    if (Math.abs(q.x - p.x) > 26 || Math.abs(q.z - p.z) > 20) continue;
+    if ((q.inst || null) !== tag) continue;
+    if (Math.abs(q.x - p.x) > 26 || Math.abs(q.z - p.z) > 20 || Math.abs(q.y - p.y) > 6) continue;
     const R = RELICS[q.kind];
     if (!R) continue;
     const [u, v] = r.toView(q.x, q.z);

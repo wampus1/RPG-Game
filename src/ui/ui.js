@@ -491,7 +491,9 @@ export class UI {
     let cy = Math.floor(this.mouse.y / CHAR_H) + 1;
     if (cx + w > COLS) cx = Math.max(0, Math.floor(this.mouse.x / CHAR_W) - w - 1);
     if (cy + h > ROWS) cy = ROWS - h;
+    if (t.faint) ctx.globalAlpha = 0.55;
     drawGrid(ctx, g, cx, cy, 1, 0, this.time);
+    ctx.globalAlpha = 1;
     if (t.tool) {
       const ic = itemIcon(t.tool.icon);
       const x = (cx + w - iconW) * CHAR_W;
@@ -1014,6 +1016,13 @@ export class UI {
       else if (this.tooltip && this.tooltip.lines === lines) this.tooltip.far = true;
     }
     if (lines.length && !(this.tooltip && this.tooltip.lines === lines)) this.tooltip = { lines };
+    // Weapon in hand: just what it is (no hints, no tool), small and see-
+    // through, so it's not in the way of a fight.
+    const hd = game.player.heldDef();
+    if (this.tooltip && this.tooltip.lines === lines && hd && hd.kind === 'weapon') {
+      const keep = lines.filter((l) => l.color !== C.faint).slice(0, 2);
+      this.tooltip = { lines: keep.length ? keep : lines.slice(0, 1), far: this.tooltip.far, faint: true };
+    }
   }
 
   renderMinimap(game) {
@@ -1064,6 +1073,15 @@ export class UI {
     };
     for (const n of game.npcs) if (!n.dead) dot(n.x, n.z, n.state === 'fight' ? [255, 60, 60] : [255, 230, 120]);
     for (const c of game.creatures) dot(c.x, c.z, c.hostileNow ? [255, 60, 60] : [200, 200, 200]);
+    // Down a dungeon, the stairs you've found: a bright ring round them
+    // (gold for the way on down, pale for the way back up).
+    if (game.dungeon && game.dungeon.knownStairs) {
+      for (const s of game.dungeon.knownStairs()) {
+        const col = s.down ? [255, 210, 80] : [170, 220, 255];
+        for (const [dx, dz] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) dot(s.x + dx, s.z + dz, col);
+        dot(s.x, s.z, [255, 255, 255]);
+      }
+    }
     ctx.putImageData(img, 0, 0);
   }
 

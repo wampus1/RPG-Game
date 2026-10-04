@@ -280,7 +280,10 @@ export class DungeonRun {
       for (const r of this.data.regions.values()) {
         for (const [i, slots] of r.containers) {
           if (((hash4(this.rec.seed, i, this.floor) % 100) / 100) >= looted) continue;
+          // (They leave the least of it: never the chest quite bare.)
+          const keep = slots.filter(Boolean).sort((p, q) => (ITEMS[p.item]?.value || 0) - (ITEMS[q.item]?.value || 0))[0];
           for (let k = 0; k < slots.length; k++) if (slots[k] && (k % 3 !== 0)) slots[k] = null;
+          if (keep && !slots.some(Boolean)) slots[slots.indexOf(null)] = keep;
         }
       }
     }
@@ -418,6 +421,30 @@ export class DungeonRun {
   }
 
   // ------------------------------------------------------------ each frame
+  // Into the room with the stairs (or the lift) in it: they're marked on
+  // your map from then on (see ui.renderMinimap), this floor.
+  markStairs() {
+    const p = this.game.player;
+    const d = this.data;
+    const st = this.state;
+    for (const [k, at, rm] of [['up', d.up, d.upRoom], ['down', d.down, d.downRoom]]) {
+      if (!at || (st.stairs || []).includes(k)) continue;
+      const box = rm || { x0: at.x - 3, x1: at.x + 3, z0: at.z - 3, z1: at.z + 3 };
+      if (p.x < box.x0 - 1 || p.x > box.x1 + 1 || p.z < box.z0 - 1 || p.z > box.z1 + 1) continue;
+      st.stairs = [...(st.stairs || []), k];
+    }
+  }
+
+  // The stairs of this floor you've found: [{ x, z, down }].
+  knownStairs() {
+    const d = this.data;
+    const st = (this.state && this.state.stairs) || [];
+    const out = [];
+    if (st.includes('up') && d.up) out.push({ ...d.up, down: false });
+    if (st.includes('down') && d.down) out.push({ ...d.down, down: true });
+    return out;
+  }
+
   update(dt) {
     const game = this.game;
     const p = game.player;
@@ -427,6 +454,7 @@ export class DungeonRun {
     // its time (see bosskit.js).
     tickFieldsOff(game, dt);
     updateWorks(game, dt);
+    this.markStairs();
     if (this.arriveT > 0) this.arriveT -= dt;
     // The dead stirring as you pass; golems waking.
     for (const c of game.creatures) {
@@ -965,8 +993,14 @@ export class DungeonRun {
         const dr = this.data.drains.find((q) => q.lever.x === x && q.lever.z === z);
         if (dr && on && !this.state.solved[`drain${x},${z}`]) {
           this.state.solved[`drain${x},${z}`] = true;
-          const lava = dr.water.some((q) => w.getBlock(q.x, FY, q.z) === B.lava);
-          for (const q of dr.water) if (w.getBlock(q.x, FY, q.z) === B.water || w.getBlock(q.x, FY, q.z) === B.lava) w.setBlock(q.x, FY, q.z, B.air);
+          const lava = dr.water.some((q) => w.getBlock(q.x, q.y ?? FY, q.z) === B.lava);
+          // (Lava sunk in the floor leaves the floor behind it, scorched
+          // black; water over the floor, just the floor.)
+          for (const q of dr.water) {
+            const y = q.y ?? FY;
+            const cur = w.getBlock(q.x, y, q.z);
+            if (cur === B.water || cur === B.lava) w.setBlock(q.x, y, q.z, q.y !== undefined ? (B.basalt ?? q.floor ?? B.stone) : B.air);
+          }
           // (On Kharos the pool's of lava: drained, it runs off down a
           // channel somewhere below.)
           game.ui.msg(lava ? 'A sluice grinds open: the lava runs away down some channel below, hissing.' : 'A sluice opens: the black water drains away with a long gurgle.', lava ? '#ffb070' : '#80c8e0');

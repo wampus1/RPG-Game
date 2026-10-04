@@ -166,6 +166,13 @@ export const THEMES = {
   history: { ...CALM, root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], progB: [3, 0, 1, 4], lead: 'flute', counter: 'horn', pad: 'strings', keys: 'harp', bass: 'sub', energy: 0.42 },
   voyage: { ...GROOVE, root: 62, scale: 'dorian', bpm: 110, swing: 0.28, shape: 'triad', prog: [0, 3, 0, 4], progB: [6, 3, 0, 4], lead: 'squeeze', counter: 'flute', keys: 'squeeze', keysStyle: 'stab', bass: 'sub', bassStyle: 'bounce', kit: 'shanty', sea: true, energy: 0.62 },
   storm: { ...DRIVE, root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'lead', pad: 'choir', arp: 'pluck', bass: 'moog', kit: 'battle', wind: true, sea: true, space: 'hall', wet: 0.3, detune: 10 },
+  // Out on a raft: a sea-song, a flute over a squeezebox, a harp turning
+  // under it, the waves.
+  sailing: { ...GROOVE, root: 60, scale: 'mixo', bpm: 96, swing: 0.2, shape: 'triad', prog: [0, 3, 4, 0], progB: [5, 3, 1, 4], lead: 'flute', counter: 'squeeze', keys: 'harp', keysStyle: 'broken', bass: 'pluckbass', bassStyle: 'bounce', kit: 'shanty', sea: true, wind: true, energy: 0.5, mood: 'bright' },
+  // Into the storm round the islands (see stormsea.js): ominous coming up
+  // to it (p1), dread in the black (p2), terror in the red (p3); the same
+  // tune climbing, as a master's fight does.
+  tempest: { ...BOSS, root: 41, scale: 'phrygian', bpm: 86, prog: [0, 1, 0, 6, 0, 1, 5, 1], progB: [5, 6, 1, 0], lead: 'choir', counter: 'strings', pad: 'choir', arp: 'glass', bass: 'moog', toll: true, drone: true, wind: true, sea: true, space: 'cathedral', echo: 0.3, detune: 16, mood: 'eerie' },
   wreck: { ...DEEP, root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], progB: [3, 0, 5, 4], lead: 'ep', pad: 'warm', bass: 'sub', space: 'hall', echo: 0.36, sea: true, tone: 3600, energy: 0.14 },
   // Fallen: a lament, a choir over an organ in the dark; then the
   // Kavorent's rite that brings you back, strange and climbing.
@@ -308,6 +315,14 @@ export function musicMood(game) {
     const s = game.nearSpire;
     const rec = game.sim.dungeons.get?.(s.id);
     if (Math.hypot(s.x - p.x, s.z - p.z) < 20 && !(rec && rec.cleared)) return rec && rec.spire && rec.spire.open !== null && rec.spire.open !== undefined ? 'spire_open' : 'spire';
+  }
+  // Out on a raft: a sea-song; into the storm, its own music, darker the
+  // deeper in; and when it's over, the wreck's.
+  const SS = game.stormSea;
+  if (SS && SS.phase) return SS.phase === 'wake' ? 'wreck' : 'tempest:p3';
+  if (p.raft && !game.dungeon) {
+    if (SS && (SS.depth > 0.03 || SS.near > 0.3)) return `tempest:p${SS.red > 0.15 ? 3 : SS.depth > 0.2 ? 2 : 1}`;
+    return game.minute < 330 || game.minute >= 1230 ? 'sailing:night' : 'sailing';
   }
   // Down below (no nights there): its master's fight, once begun, even
   // between blows.

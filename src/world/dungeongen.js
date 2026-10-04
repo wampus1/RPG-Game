@@ -696,7 +696,14 @@ function lootFor(type, tier, rng, rich = 1, T = null) {
   }
   // Only a few kinds of thing to a chest: the best of them.
   const kinds = Math.min(4, 2 + Math.floor(t / 2) + (rich >= 1.5 ? 1 : 0));
-  return out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
+  const got = out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
+  // (Never nothing at all: somebody left something, if only a few odds
+  // and ends.)
+  if (!got.length) {
+    const k = type === 'kavorent' ? 'kav_scrap' : rng.pick(['bone', 'string', 'torch', 'cloth', 'old_coin', 'healing_salve'].filter((q) => ITEMS[q]));
+    got.push([k, k === 'healing_salve' ? 1 : rng.int(1, 3)]);
+  }
+  return got;
 }
 
 // How much of its regions a floor's plan takes up (across, and down).
@@ -708,8 +715,11 @@ export const FOUNDRY_FLOOR = 2;
 // How good a floor's loot runs: its number down, and a little for how hard
 // the place is.
 function tierOf(ctx) {
-  return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5;
+  return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5 + (FAR_LOOT[ctx.rec.isle] || 0);
 }
+// The old places of the far islands keep better things than Thessa's: as
+// if a good half-floor further down.
+export const FAR_LOOT = { kharos: 0.75, myrrow: 0.75 };
 
 // --------------------------------------------------------------- the floor
 // Build floor `n` (0 = the first down) of a dungeon. `rec` is the
@@ -806,6 +816,10 @@ export function buildFloor(rec, n) {
     upAt = s.front;
   }
   out.upAt = { x: b.x0 + upAt.x, z: upAt.z };
+  // (The rooms the ways up and down are in: walk into one and its stairs
+  // go on your map.)
+  const roomBox = (r) => ({ x0: b.x0 + r.x0, x1: b.x0 + r.x1, z0: r.z0, z1: r.z1 });
+  out.upRoom = roomBox(entry);
   out.entry = { x: b.x0 + entry.cx, z: entry.cz };
   if (!last) {
     let s;
@@ -815,12 +829,13 @@ export function buildFloor(rec, n) {
     else if (rec.type === 'mine') b.set(s.x, FY - 1, s.z, B.mine_shaft);
     else b.set(s.x, FY - 1, s.z, B.stairs_down);
     out.down = { x: b.x0 + s.x, z: s.z };
+    out.downRoom = roomBox(ex);
     out.downAt = { x: b.x0 + s.front.x, z: s.front.z };
   }
   // Dress each room by its kit.
   const kind = big ? kavKind(rec, n) : null;
   out.kind = kind;
-  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null, reserved };
+  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null, reserved, lavaRooms: [] };
   for (const r of R) dress(ctx, r);
   for (const r of R) decorate(ctx, r);
   // A Kavorent floor's own character (see KAV_KINDS).
@@ -857,6 +872,17 @@ export function buildFloor(rec, n) {
       if (id !== B.air && id !== B.stairs_up && id !== B.torch) b.set(x, y, z, B.air);
     }
   }
+  // (And with all that set about, the lava still leaves a way through each
+  // hall it's in: where something now stands in the way round, a little
+  // more of the floor's left as it was.)
+  for (const { r, cells } of ctx.lavaRooms) {
+    const left = rng.shuffle(cells.filter((c) => b.get(c.x, FY - 1, c.z) === B.lava));
+    while (left.length && !crossable(ctx, r)) {
+      const c = left.pop();
+      b.set(c.x, FY - 1, c.z, c.floor);
+    }
+  }
+  for (const d of out.drains) d.water = d.water.filter((q) => q.y === undefined || b.get(q.x - b.x0, q.y, q.z) === B.lava);
   // Who's about, besides: a few wandering on their own.
   for (let i = 0; i < (big ? 10 : 5); i++) {
     const r = R[rng.int(1, R.length - 1)];
@@ -1018,7 +1044,7 @@ function spawnIn(ctx, r, species0, n = 1, opts = {}) {
     for (let t = 0; t < 20; t++) {
       const x = rng.int(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 1));
       const z = rng.int(r.z0 + 1, Math.max(r.z0 + 1, r.z1 - 1));
-      if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air) continue;
+      if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || hot(b, x, z)) continue;
       if (out.spawns.some((s) => s.x === b.x0 + x && s.z === z)) continue;
       out.spawns.push({ id: out.spawns.length, species, x: b.x0 + x, z, room: r.id, ...opts });
       break;
@@ -1033,7 +1059,7 @@ function placeIn(ctx, r, id, meta = 0, edge = false) {
   for (let t = 0; t < 40; t++) {
     const x = rng.int(r.x0, r.x1);
     const z = rng.int(r.z0, r.z1);
-    if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || ctx.reserved?.has(z * plan.W + x)) continue;
+    if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || hot(b, x, z) || ctx.reserved?.has(z * plan.W + x)) continue;
     if (edge && !byWall(plan, x, z)) continue;
     // (Not in a doorway's way.)
     if (doorBlocked(plan, r, x, z)) continue;
@@ -1093,7 +1119,44 @@ export const MIMIC_CHANCE = 0.14;
 
 // A room's own floor tiles, free and out of the doorways' way.
 function freeIn(ctx, r, x, z) {
-  return own(ctx.plan, r, x, z) && ctx.b.get(x, FY, z) === B.air && !doorBlocked(ctx.plan, r, x, z) && !ctx.reserved?.has(z * ctx.plan.W + x);
+  return own(ctx.plan, r, x, z) && ctx.b.get(x, FY, z) === B.air && !hot(ctx.b, x, z) && !doorBlocked(ctx.plan, r, x, z) && !ctx.reserved?.has(z * ctx.plan.W + x);
+}
+
+// Lava sunk in the floor there (nothing's set over it, nor stood on it).
+function hot(b, x, z) {
+  return b.get(x, FY - 1, z) === B.lava;
+}
+
+// From every way into this room (and its stairs or lift) to every other,
+// on your own two feet, without stepping in the lava? (See the flooded and
+// smelter halls: there's always a way round or a bridge across.)
+function crossable(ctx, r) {
+  const { plan, b } = ctx;
+  const ok = (x, z) => own(plan, r, x, z) && !hot(b, x, z) && !BLOCKS[b.get(x, FY, z)].solid && b.get(x, FY, z) !== B.lava;
+  const goals = [];
+  for (let z = r.z0; z <= r.z1; z++) {
+    for (let x = r.x0; x <= r.x1; x++) {
+      if (!own(plan, r, x, z)) continue;
+      const below = b.get(x, FY - 1, z);
+      if (doorBlocked(plan, r, x, z) || below === B.stairs_down || below === B.mine_shaft || below === B.kav_lift) goals.push([x, z]);
+    }
+  }
+  if (!goals.length) return true;
+  if (goals.some(([x, z]) => !ok(x, z))) return false;
+  const seen = new Set([goals[0][1] * plan.W + goals[0][0]]);
+  const q = [goals[0]];
+  while (q.length) {
+    const [x, z] = q.pop();
+    for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + ox;
+      const nz = z + oz;
+      const k = nz * plan.W + nx;
+      if (seen.has(k) || !ok(nx, nz)) continue;
+      seen.add(k);
+      q.push([nx, nz]);
+    }
+  }
+  return goals.every(([x, z]) => seen.has(z * plan.W + x));
 }
 // A rough round patch (`put(x, z, d)` for each free tile, d its distance
 // out), a ring round a spot, a scattering over the room.
@@ -1303,12 +1366,28 @@ function dress(ctx, r) {
       // (On Kharos, lava.)
       const water = [];
       const pool = T.pool || B.water;
-      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
-        if (b.get(x, FY, z) !== B.air) continue;
-        b.set(x, FY, z, pool);
-        water.push({ x: b.x0 + x, z });
+      if (pool === B.lava) {
+        // Lava lies sunk in the floor, in the middle of the hall, with a
+        // ledge of floor left all round it by the walls and the ways in.
+        for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+          if (!own(ctx.plan, r, x, z) || b.get(x, FY, z) !== B.air || byWall(ctx.plan, x, z) || doorBlocked(ctx.plan, r, x, z)) continue;
+          if (ctx.reserved?.has(z * ctx.plan.W + x)) continue;
+          water.push({ x: b.x0 + x, z, y: FY - 1, floor: b.get(x, FY - 1, z) });
+          b.set(x, FY - 1, z, B.lava);
+        }
+        // (If that cut a way off after all, the floor's left whole.)
+        if (!crossable(ctx, r)) {
+          for (const q of water) b.set(q.x - b.x0, FY - 1, q.z, q.floor);
+          water.length = 0;
+        } else ctx.lavaRooms.push({ r, cells: water.map((q) => ({ x: q.x - b.x0, z: q.z, floor: q.floor })) });
+      } else {
+        for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+          if (b.get(x, FY, z) !== B.air) continue;
+          b.set(x, FY, z, pool);
+          water.push({ x: b.x0 + x, z });
+        }
       }
-      const lv = placeIn(ctx, r, B.lever, 0, true) || null;
+      const lv = water.length ? placeIn(ctx, r, B.lever, 0, true) || null : null;
       if (lv) {
         b.set(lv.x, FY, lv.z, B.lever, 0);
         out.drains.push({ lever: { x: b.x0 + lv.x, z: lv.z }, water });
@@ -1544,9 +1623,21 @@ function dress(ctx, r) {
     case 'smelter': {
       // A channel of lava across the hall, a bridge or two over it;
       // crucibles by the walls.
+      // (Sunk in the floor; and should the bridges not line up with the
+      // ways in, more of the floor's left as bridges till they do.)
       const z = r.cz;
       const bridges = new Set([rng.int(r.x0 + 1, r.x1 - 1), rng.int(r.x0 + 1, r.x1 - 1)]);
-      for (let x = r.x0; x <= r.x1; x++) if (own(ctx.plan, r, x, z) && !bridges.has(x) && !doorBlocked(ctx.plan, r, x, z) && b.get(x, FY, z) === B.air) b.set(x, FY, z, B.lava);
+      const cut = [];
+      for (let x = r.x0; x <= r.x1; x++) {
+        if (!own(ctx.plan, r, x, z) || bridges.has(x) || doorBlocked(ctx.plan, r, x, z) || b.get(x, FY, z) !== B.air) continue;
+        cut.push({ x, floor: b.get(x, FY - 1, z) });
+        b.set(x, FY - 1, z, B.lava);
+      }
+      for (const c of rng.shuffle([...cut])) {
+        if (crossable(ctx, r)) break;
+        b.set(c.x, FY - 1, z, c.floor);
+      }
+      ctx.lavaRooms.push({ r, cells: cut.map((c) => ({ x: c.x, z, floor: c.floor })) });
       for (let i = 0; i < 2; i++) placeIn(ctx, r, B.crucible, 0, true);
       placeIn(ctx, r, B.ash_brazier, META_STATE, true);
       group(pickMob(ctx), 1, 2);

@@ -69,7 +69,7 @@ test('the player starts on Thessa, a small island among the three', () => {
   assert.ok(game.world.ow.islandCells('thessa').length < game.world.ow.islandCells('kharos').length * 3, 'and not so much bigger than its neighbours');
 });
 
-test('the storm turns back a raft: it would take a real ship to get out (or in)', () => {
+test('the storm turns back anyone else\'s raft: it would take a real ship to get out (or in)', () => {
   // The ring itself is wild; the islands' sea within it is calm.
   const ringX = (STORM.cx + STORM.rx + STORM.band / 2) * REGION_W;
   const ringZ = STORM.cz * REGION_D;
@@ -84,7 +84,8 @@ test('the storm turns back a raft: it would take a real ship to get out (or in)'
   while (stormAt(x + 1, z) <= STORM_WALL) x++;
   const calls = [];
   game.stormTurnsBack = (raft) => calls.push(raft);
-  const p = { game, kind: 'player', raft: { x, z, ang: Math.PI / 2, v: 4 } };
+  // (Yours goes on in: see round38's storm.)
+  const p = { game, kind: 'npc', raft: { x, z, ang: Math.PI / 2, v: 4 } };
   const fwd = { isDown: (k) => k === 'KeyW' };
   steer(p, 0.5, fwd);
   assert.ok(p.raft.v < 0, 'thrown back');

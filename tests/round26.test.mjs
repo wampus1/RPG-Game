@@ -340,7 +340,11 @@ test('the Ancient Technology Tree: cores to spend, arts that need others first, 
   p.give('kav_core', 2);
   const mayor = a.npcs.find((n) => !n.dead && n.rec.job === 'mayor') || a.npcs.find((n) => !n.dead && n.rec.age === 'adult');
   const coins = p.inv.filter((q) => q && q.item === 'coin').reduce((n, q) => n + q.count, 0);
-  respond(mayor, game, 'give_core');
+  // (Asked first: nothing's handed over till you say yes.)
+  const ask = respond(mayor, game, 'give_core');
+  assert.ok(ask.choices.some((c) => c.arg === 'yes'));
+  assert.equal(p.inv.filter((q) => q && q.item === 'kav_core').reduce((n, q) => n + q.count, 0), 2);
+  respond(mayor, game, 'give_core', 'yes');
   const coins2 = p.inv.filter((q) => q && q.item === 'coin').reduce((n, q) => n + q.count, 0);
   assert.ok(coins2 > coins);
   assert.ok(canSeeAncient(game, s));

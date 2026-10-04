@@ -49,6 +49,7 @@ import { RNG } from '../util/rng.js';
 import { countItem } from './inventory.js';
 import { launch as launchRaft, landing as raftLanding, floatable } from '../entities/raft.js';
 import { enforceIslandLaws, raftDues, SPORE_BLOCKS } from '../sim/islelaws.js';
+import { updateStormSea, stormLocked } from './stormsea.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
@@ -1723,7 +1724,7 @@ export class Game {
       dt *= this.slowMoScale || 0.35;
     }
     this.dt = dt;
-    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable) || (!!this.scene && this.scene.lock);
+    const blocked = this.ui.modal || this.player.dead || !!this.sleep || !!this.player.restrained || !!this.player.down || (!!this.cutscene && !this.cutscene.playable) || (!!this.scene && this.scene.lock) || stormLocked(this);
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
@@ -1845,6 +1846,7 @@ export class Game {
     this.updateCaravans(dt);
     this.updateRoadCrews(dt);
     this.updateWeather(dt);
+    updateStormSea(this, dt);
     this.ambientFx(dt);
     // The camera: drawn back near a spire, or wherever a scene takes it.
     const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
@@ -2918,6 +2920,28 @@ export class Game {
   // What stands still near you: the town's horses at their hitching post
   // (and its wagons beside them), and at camps outside town the traders'
   // and nomads' horses tied up by their wagons. They come and go with you.
+  // The stand height at (x, z) only if it's level with `hint` (give or take
+  // a step): otherwise the nearest such spot within a few paces, or null.
+  groundNear(sp, hint) {
+    const w = this.world;
+    const at = (x, z) => {
+      for (const d of [0, 1, -1, 2, -2]) if (w.canStand(x, hint + d, z)) return hint + d;
+      return -1;
+    };
+    for (let r = 0; r <= 4; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const y = at(sp.x + dx, sp.z + dz);
+          if (y >= 0) return { x: sp.x + dx, y, z: sp.z + dz };
+        }
+      }
+    }
+    // (Up a hill: fine, so long as it's the ground it's stood on.)
+    const y = w.findStandY(sp.x, sp.z, null);
+    return y > 0 && NATURAL.has(w.getBlock(sp.x, y - 1, sp.z)) ? { x: sp.x, y, z: sp.z } : null;
+  }
+
   syncStanding(dt) {
     this.standT = (this.standT || 0) - dt;
     if (this.standT > 0) return;
@@ -2961,11 +2985,15 @@ export class Game {
         this.removeOcc(c);
       }
     }
-    for (const [k, sp] of want) {
+    for (let [k, sp] of want) {
       if (this.looseKeys && this.looseKeys.has(k)) continue;
       if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
-      const y = this.world.findStandY(sp.x, sp.z, sp.y ?? GROUND);
-      if (y < 0) continue;
+      // On the ground near where it belongs, never up on a roof: if the
+      // spot's built over, the nearest open ground close by instead.
+      const near = this.groundNear(sp, sp.y ?? GROUND);
+      if (!near) continue;
+      const y = near.y;
+      sp = { ...sp, x: near.x, z: near.z };
       if (sp.type === 'wagon') {
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
         Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null });
@@ -2992,7 +3020,22 @@ export class Game {
         this.tied.set(k, c);
       }
     }
-    for (const k of [...this.props.keys()]) if (!want.has(k)) this.props.delete(k);
+    // Windmills' sails, turning on their hubs (see renderer.drawSails).
+    const mills = new Set();
+    const windy = this.weather && this.weather.kind && /storm|rain/.test(this.weather.kind) ? 1.6 : 1;
+    for (const { layout: L } of this.active.values()) {
+      L.buildings.forEach((b, i) => {
+        const sl = b.sails;
+        if (b.type !== 'windmill' || !sl || Math.max(Math.abs(sl.x - p.x), Math.abs(sl.z - p.z)) > 36) return;
+        // (Not if the hub's been knocked out.)
+        if (this.world.getBlock(sl.x, sl.y, sl.z) !== B.mill_hub) return;
+        const k = `mill:${L.settlement.id}:${i}`;
+        mills.add(k);
+        if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'sails', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
+        Object.assign(this.props.get(k), { x: sl.x, y: sl.y, z: sl.z, along: sl.along, seed: i, spin: (L.settlement.condition === 'abandoned' ? 0.25 : 0.7) * windy });
+      });
+    }
+    for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k)) this.props.delete(k);
     // You, sat in the back of one.
     for (const q of this.props.values()) this.riding.seatShown(q);
     if (p.inWagon && !this.props.has([...this.props].find(([, q]) => q === p.inWagon)?.[0])) p.inWagon = null;
@@ -4219,7 +4262,13 @@ export class Game {
         const col = this.world.terrain.column(p.x, p.z, this.world.terrain.context(p.x, p.z, p.x, p.z), {});
         this.biomeCache = { x: p.x, z: p.z, biome: col.biome };
       }
-      const kind = weatherAt(this.seed, p.x, p.z, this.day * DAY + this.minute, this.biomeCache.biome);
+      let kind = weatherAt(this.seed, p.x, p.z, this.day * DAY + this.minute, this.biomeCache.biome);
+      // (Near the storm round the islands it's raining whatever the sky's
+      // doing elsewhere; and coming and going at its edge doesn't make the
+      // rain stop and start over and over.)
+      const near = this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0;
+      w.stormRain = near > (w.stormRain ? 0.06 : 0.12);
+      if (w.stormRain) kind = 'rain';
       if (kind !== w.kind) {
         if (w.seen && kind !== 'clear') this.ui.msg(kind === 'rain' ? 'It starts to rain.' : kind === 'snow' ? 'Snow begins to fall.' : 'A fog rolls in.', '#a0b8d0');
         else if (w.seen && w.kind !== 'fog') this.ui.msg(w.kind === 'rain' ? 'The rain stops.' : 'The snow stops falling.', '#a0b8d0');
@@ -4231,7 +4280,7 @@ export class Game {
     // and windier the nearer you come, with lightning.
     const sn = this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0;
     w.storm = sn;
-    if (sn > 0.12 && w.kind !== 'rain') w.kind = 'rain';
+    if (w.stormRain && w.kind !== 'rain') w.kind = 'rain';
     w.wind = sn > 0 ? 1 + sn * 2.6 : undefined;
     const target = w.kind === 'clear' ? 0 : Math.max(1, sn * 1.5);
     w.level += Math.sign(target - w.level) * Math.min(Math.abs(target - w.level), (dt * fast) / (sn > 0.12 ? 2 : 8));
