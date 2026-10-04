@@ -15,7 +15,7 @@ import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js';
-import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES } from './isledeep.js';
+import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES, SPIRE_MASTERS } from './isledeep.js';
 import { starGear } from './quality.js';
 
 export const FY = 5; // standing level on a dungeon floor
@@ -86,7 +86,9 @@ export function dtypeOf(rec) {
   const T = DTYPES[rec.type];
   const isle = rec.isle || null;
   const st = isle && ISLE_DSTYLE[isle] ? ISLE_DSTYLE[isle][rec.type] : null;
-  const bosses = isle && ISLE_BOSSES[isle] ? ISLE_BOSSES[isle][rec.type] : null;
+  // (A spire's master is its island's own: see SPIRE_MASTERS.)
+  const spire = rec.type === 'kavorent' && isle && SPIRE_MASTERS[isle] && SPIRE_MASTERS[isle] !== 'overseer' ? [SPIRE_MASTERS[isle]] : null;
+  const bosses = spire || (isle && ISLE_BOSSES[isle] ? ISLE_BOSSES[isle][rec.type] : null);
   if (!T || (!st && !bosses)) return T;
   const k = `${isle}:${rec.type}`;
   let out = dtCache.get(k);

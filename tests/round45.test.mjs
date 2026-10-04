@@ -4,12 +4,16 @@ import { makeGame, stubInput } from './helpers.mjs';
 import { ITEMS, socketed, grownRelic, SHARD_MAX } from '../src/world/items.js';
 import { DungeonRun } from '../src/game/dungeon.js';
 import { fitShard, setRelic, relicAt, relicReach, inRelic, RELIC_R, serializeRelics, loadRelics } from '../src/game/relics.js';
-import { buildFloor, gearFor } from '../src/world/dungeongen.js';
+import { buildFloor, gearFor, FY } from '../src/world/dungeongen.js';
 import { RNG } from '../src/util/rng.js';
 import { MODS, STAR_MAX, starKey, parseStar, plainKey, starGear, rollStars, rollMods, starable, gearClass } from '../src/world/quality.js';
 import { modsOf, onBladeMods, onBlockMods, toolDrops, stepModMult, gearHp, critBonus, bladeMult } from '../src/game/mods.js';
 import { B } from '../src/world/blocks.js';
-import { Creature } from '../src/entities/creature.js';
+import { Creature, SPECIES } from '../src/entities/creature.js';
+import { BRAINS } from '../src/entities/monsters.js';
+import { beastOf } from '../src/render/bossbeasts.js';
+import { SPIRE_MASTERS } from '../src/world/isledeep.js';
+import { screened, soak } from '../src/entities/bosses_spire.js';
 
 function start(seed = 12345, minute = 10 * 60) {
   const game = makeGame(seed);
@@ -277,4 +281,107 @@ test('a relic shard set into a relic in your pack makes its circle reach further
   loadRelics(game, saved);
   assert.equal(relicAt(game, x, y, z).shards, 2);
   assert.equal(relicAt(game, x, y, z).r, relicReach(2));
+});
+
+// Down to the master of `isle`'s spire.
+function spireHall(game, isle) {
+  const base = game.sim.dungeons.all.find((d) => d.type === 'kavorent' && d.isle === isle);
+  const rec = { ...base, floors: {}, cleared: false, pack: null };
+  new DungeonRun(game, rec).enter();
+  while (game.dungeon.floor < rec.depth - 1) game.dungeon.changeFloor(1);
+  const boss = game.creatures.find((c) => c.isBoss && !c.dead);
+  return { rec, boss };
+}
+
+test('each island\'s spire has its own master: the Overseer, the Crucible, the Condenser', () => {
+  assert.deepEqual(SPIRE_MASTERS, { thessa: 'overseer', kharos: 'crucible', myrrow: 'condenser' });
+  for (const k of ['crucible', 'condenser']) {
+    assert.ok(SPECIES[k] && SPECIES[k].boss && BRAINS[SPECIES[k].brain], k);
+    assert.ok(beastOf(k), `${k} is drawn`);
+  }
+  for (const [isle, sp] of Object.entries(SPIRE_MASTERS)) {
+    const game = makeGame(12345);
+    const { boss } = spireHall(game, isle);
+    assert.equal(boss && boss.species, sp, isle);
+  }
+});
+
+// A fight of `secs` with the master of `isle`'s spire, you stood in its hall.
+function spireFight(isle, secs, hpShare = 1) {
+  const game = makeGame(12345);
+  const input = stubInput();
+  const { boss } = spireHall(game, isle);
+  const p = game.player;
+  boss.hp = Math.round(boss.maxHp * hpShare);
+  for (const c of game.creatures) if (c !== boss && !c.isBoss) c.dormant = 999;
+  p.teleport(boss.x + 4, boss.y, boss.z);
+  game.moveEntity(p, boss.x + 4, boss.y, boss.z);
+  boss.target = p;
+  const orig = game.damage.bind(game);
+  let took = 0;
+  game.damage = (e, n, by) => {
+    if (e === p) {
+      took += n;
+      p.hp = p.maxHp;
+      return;
+    }
+    return orig(e, n, by);
+  };
+  const seen = new Set();
+  for (let i = 0; i < secs * 20; i++) {
+    game.update(0.05, input);
+    if (boss.overheat) seen.add('overheat');
+    if (boss.ventT > 0) seen.add('vent');
+    for (const c of game.creatures) if (!c.dead && c !== boss) seen.add(c.species);
+    if (p.soakT > 0) seen.add('soaked');
+    for (const q of game.works || []) seen.add(`work:${q.id}`);
+  }
+  return { game, boss, p, took, seen };
+}
+
+test('the Crucible runs hot and must blow it off: shelter behind a coolant column, then strike its open core', () => {
+  const { boss, took, seen } = spireFight('kharos', 60);
+  assert.ok(took > 0, 'it fights');
+  assert.ok(seen.has('overheat'), 'it overheats');
+  assert.ok(seen.has('vent'), 'and stands open after');
+  assert.ok(seen.has(`work:${B.kav_coolant}`), 'coolant columns go up');
+  assert.ok(seen.has(`work:${B.lava}`) || seen.has(`work:${B.kav_wall}`), 'its lance leaves lava, its pistons stand');
+  // Open, your blows bite deeper.
+  boss.ventT = 2;
+  assert.ok(boss.S.ward(boss.game, boss, null, 10) > 10);
+  boss.ventT = 0;
+  assert.equal(boss.S.ward(boss.game, boss, null, 10), 10);
+  // Its slag drones, once it's worn.
+  const worn = spireFight('kharos', 30, 0.5);
+  assert.ok(worn.seen.has('slag_drone'), 'slag drones');
+});
+
+test('a column between you and the Crucible shelters you from its blast', () => {
+  const game = makeGame(12345);
+  const { boss } = spireHall(game, 'kharos');
+  const p = game.player;
+  const at = { x: boss.x + 5, z: boss.z };
+  assert.ok(!screened(game, boss, at));
+  game.world.setBlock(boss.x + 3, FY, boss.z, B.kav_coolant);
+  game.world.setBlock(boss.x + 3, FY + 1, boss.z, B.kav_coolant);
+  assert.ok(screened(game, boss, at));
+  assert.ok(p);
+});
+
+test('the Condenser soaks you, grounds itself on its rods, and lightning finds you harder wet', () => {
+  const { game, boss, took, seen } = spireFight('myrrow', 60);
+  assert.ok(took > 0, 'it fights');
+  assert.ok(seen.has('storm_rod'), 'it plants its rods');
+  assert.ok(seen.has('soaked'), 'its rain soaks you');
+  // Its rods standing: it's grounded.
+  const rods = game.creatures.filter((c) => !c.dead && c.species === 'storm_rod' && c.summoner === boss);
+  if (rods.length) assert.ok(boss.S.ward(game, boss, null, 10) < 10);
+  for (const r of rods) game.kill(r, null);
+  assert.equal(boss.S.ward(game, boss, null, 10), 10, 'its rods down, it takes your blows');
+  // Soaked, it's worse.
+  const p = game.player;
+  soak(game, p, 5);
+  assert.ok(p.soakT > 0);
+  for (let i = 0; i < 120; i++) p.update(0.05, stubInput(), game);
+  assert.ok(!(p.soakT > 0), 'dried off in time');
 });

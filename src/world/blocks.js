@@ -510,6 +510,9 @@ def('planks_drift', { tool: 'axe', hardness: 1, label: 'Driftwood Planks' });
 // foot, the desert's sandstone, the fire island's basalt): gone
 // violet-black, veined. (Last, so no saved number moves.)
 def('rock_void', { tool: 'pick', hardness: 1.5, drop: 'cobblestone', label: 'Blighted Rock' });
+// A column of frozen coolant the Crucible throws up before it blows (see
+// entities/bosses_spire.js): shelter, a while.
+def('kav_coolant', { hardness: Infinity, drop: null, light: 6, label: 'Coolant Column' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

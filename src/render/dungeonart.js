@@ -304,7 +304,45 @@ function barrowHound(frame) {
   return p.outline(OUT);
 }
 
+// A slag drone: a cage of alloy round a glowing ball of slag, fins
+// turning, dripping fire.
+function slagDrone(frame) {
+  const p = new Px(16, 16);
+  const w = frame % 2;
+  p.ellipse(8, 8, 4, 4, hex('#ff7a20'));
+  p.ellipse(8, 8, 2.5, 2.5, hex('#ffd060'));
+  p.set(7, 7, '#fff8d0');
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + w * 0.4;
+    p.line(8 + Math.cos(a) * 3, 8 + Math.sin(a) * 3, 8 + Math.cos(a) * 6, 8 + Math.sin(a) * 6, hex(K.edge));
+  }
+  p.hline(4, 12, 8, hex(K.plate));
+  p.set(8, 13 + w, '#ff6020');
+  return p.outline(OUT);
+}
+
+// A lightning rod: a spike of alloy, a coil round it, its tip crackling.
+function stormRod(frame) {
+  const p = new Px(16, 16);
+  const w = frame % 2;
+  p.rect(5, 13, 6, 2, hex(K.plate));
+  p.vline(8, 2, 13, hex(K.edge));
+  p.vline(7, 4, 13, hex(K.plate));
+  for (let y = 6; y <= 11; y += 2) p.hline(6, 9, y, hex('#c8a040'));
+  p.set(8, 1, '#ffffff');
+  if (w) {
+    p.set(6, 1, '#fff8a0');
+    p.set(10, 2, '#fff8a0');
+  } else {
+    p.set(9, 0, '#fff8a0');
+    p.set(6, 2, '#fff8a0');
+  }
+  return p.outline(OUT);
+}
+
 export const DUNGEON_CREATURES = {
+  slag_drone: { frames: 2, draw: (f) => slagDrone(f) },
+  storm_rod: { frames: 2, draw: (f) => stormRod(f) },
   brood_mother: { frames: 2, size: 32, draw: (f) => broodMother(f) },
   egg_sac: { frames: 2, draw: (f) => eggSac(f) },
   broodling: { frames: 2, draw: (f) => broodling(f) },

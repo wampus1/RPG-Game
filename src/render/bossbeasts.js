@@ -1400,6 +1400,139 @@ Object.assign(BEASTS, {
   },
 });
 
+// The masters of the far islands' spires (see entities/bosses_spire.js),
+// the Kavorent's make: alloy plate, seams of cold light.
+const ALLOY = '#2e2c46';
+const ALLOY_LO = '#1e1c30';
+Object.assign(BEASTS, {
+  // The Crucible: a squat engine of alloy on four piston legs, a great
+  // crucible in its middle open at the top on molten metal, its heat
+  // showing (the plate going red, then white at the seams), two piston
+  // arms; spent, its core open and frosted with coolant.
+  crucible: {
+    w: 70, h: 72, ax: 35, ay: 70,
+    sculpt(X, t, st) {
+      const heat = st.heat || 0;
+      const plate = heat >= 2 ? '#5a3040' : heat >= 1 ? '#40304a' : ALLOY;
+      const pump = Math.max(0, sn(t, 2)) * 2.5;
+      X.in(0, 2);
+      // Its legs: pistons, splayed, on broad feet.
+      for (const [x, d] of [[16, -1], [28, -0.5], [42, 0.5], [54, 1]]) {
+        X.limb([[x, 48, 3.6, 0], [x + d * 3, 58, 3, 0], [x + d * 4, 65, 3.4, 0]], ALLOY_LO, 'metal');
+        X.ball(x + d * 4, 68, 5.2, 2.2, ALLOY, 'metal', { rz: 2 });
+      }
+      X.in(1, 3);
+      // The housing, plated, broad at its foot.
+      X.slab([[10, 30], [60, 30], [64, 52], [6, 52]], plate, 'metal', { rz: 12, bevel: 4 });
+      // The crucible itself: a great drum, its lip rolled over.
+      X.ball(35, 30, 18, 15, plate, 'metal', { rz: 14, z: 2 });
+      X.ball(35, 17, 15, 5, ALLOY, 'metal', { rz: 5, z: 5 });
+      X.ball(35, 17, 11.5, 3.4, heat >= 1 ? '#ff8a20' : '#ff6a10', 'molten', { rz: 1, z: 8, glow: '#ffd060', glowK: 0.6 });
+      X.in(2, 1.5);
+      // Its arms: pistons out either side, hammers on their ends.
+      for (const side of [-1, 1]) {
+        const x0 = 35 + side * 22;
+        X.tube(x0, 30, x0 + side * 8, 40 - pump * side * 0.6, 3.2, 2.6, ALLOY_LO, 'metal', { z: 8 });
+        X.slab([[x0 + side * 5, 38 - pump], [x0 + side * 13, 38 - pump], [x0 + side * 13, 48 - pump], [x0 + side * 5, 48 - pump]], ALLOY, 'metal', { rz: 6, bevel: 2, z: 10 });
+      }
+      // Stacks at its back, venting.
+      for (const x of [22, 48]) X.tube(x, 20, x, 6, 2.6, 2.2, ALLOY_LO, 'metal', { z: -2 });
+    },
+    paint(P, t, st) {
+      const heat = st.heat || 0;
+      const pulse = 0.5 + 0.5 * sn(t, 1);
+      const seam = st.vent ? '#e0f8ff' : heat >= 2 ? '#fff0a0' : heat >= 1 ? '#ffb040' : toHex(mix(hex('#3a9ab0'), hex('#c8fbff'), pulse));
+      // Its seams: round the drum, down the housing.
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (0.15 + i * 0.0875);
+        P.set(35 + Math.cos(a) * 17, 30 + Math.sin(a) * 14, hex(seam));
+      }
+      for (const x of [18, 28, 42, 52]) P.line(x, 34, x - (x < 35 ? 2 : -2), 50, seam);
+      P.line(12, 51, 58, 51, seam);
+      // The grate in its belly: molten behind the bars (frost, spent).
+      for (let y = 38; y <= 46; y++) for (let x = 29; x <= 41; x++) {
+        const bar = (x - 29) % 3 === 0 || y === 38 || y === 46;
+        const hot = st.vent ? '#a8e4f8' : heat >= 2 ? '#fff0a0' : sn(t, 3, x * 0.7 + y) > 0.2 ? '#ffb040' : '#ff5a10';
+        P.set(x, y, hex(bar ? '#1a1828' : hot));
+      }
+      if (heat >= 1 && !st.vent) tint(P, (x, y) => hash2(x, y, 7) < 0.06 * heat, '#ff5020', 0.5);
+      if (st.vent) tint(P, (x, y) => hash2(x, y, 5) < 0.12, '#e0f8ff', 0.6);
+    },
+    fx(P, t, st) {
+      const heat = st.heat || 0;
+      P.puff(35, 15, 9, st.vent ? '#a0e8ff' : '#ff8030', 0.15 + heat * 0.08);
+      for (const x of [22, 48]) for (let i = 0; i < 3; i++) {
+        const k = (t * 2 + i / 3 + x * 0.01) % 1;
+        P.puff(x + sn(k, 1, x) * 2, 5 - k * 5, 1.5 + k * 3, st.vent ? '#c8e8f0' : heat >= 1 ? '#ff9040' : '#6a6466', 0.5 * (1 - k));
+      }
+      if (heat >= 2) for (let i = 0; i < 5; i++) {
+        const k = (t * 3 + i / 5) % 1;
+        P.fx(14 + i * 10, 52 - k * 30, '#ffd060', 0.8 * (1 - k));
+      }
+    },
+  },
+
+  // The Condenser: a hovering coil of alloy, three vanes standing out from
+  // it like a lantern's ribs, a storm cloud churning in its crown; rain
+  // falls off it always, and lightning runs between its vanes.
+  condenser: {
+    w: 64, h: 76, ax: 32, ay: 74,
+    sculpt(X, t, st) {
+      const turn = t * TAU;
+      X.in(0, 2);
+      // Its cloud crown, behind and over it.
+      for (let i = 0; i < 6; i++) {
+        const a = turn * 0.5 + (i / 6) * TAU;
+        X.ball(32 + Math.cos(a) * 12, 14 + Math.sin(a) * 3, 9, 6.5, '#4a5468', 'ash', { rz: 6, z: Math.sin(a) * 3 });
+      }
+      X.in(1, 2.5);
+      // The coil: a column ringed in alloy bands, tapering to a point below.
+      X.tube(32, 18, 32, 58, 8, 3, ALLOY, 'metal', { z: 2 });
+      for (let y = 22; y <= 50; y += 6) X.ball(32, y, 9.5 - (y - 22) * 0.12, 2.4, ALLOY_LO, 'metal', { rz: 2, z: 4 });
+      X.ball(32, 62, 2.6, 4, ALLOY_LO, 'metal', { rz: 2, z: 4 });
+      X.in(2, 1.5);
+      // Its vanes: three, curved out from the coil and back.
+      for (let i = 0; i < 3; i++) {
+        const a = turn * 0.25 + (i / 3) * TAU;
+        const sx = Math.cos(a);
+        const front = Math.sin(a);
+        const x = 32 + sx * 15;
+        X.slab([[32 + sx * 6, 24], [x, 28], [x + sx * 2, 42], [32 + sx * 6, 50]], front > -0.2 ? '#3a3a5a' : ALLOY_LO, 'metal', { rz: 3, bevel: 1.5, z: front * 8 });
+      }
+      // A lens in its middle, looking out.
+      X.ball(32, 34, 4.4, 4.4, '#1a2a3a', 'glass', { rz: 3, z: 10 });
+    },
+    paint(P, t, st) {
+      const pulse = 0.5 + 0.5 * sn(t, 2);
+      const seam = toHex(mix(hex('#5a8ac0'), hex('#e0f4ff'), pulse));
+      for (let y = 22; y <= 50; y += 6) P.line(32 - (9 - (y - 22) * 0.12), y, 32 + (9 - (y - 22) * 0.12), y, seam);
+      P.blob(32, 34, 2.4 + pulse * 0.6, 2.4 + pulse * 0.6, st.wind ? '#fff8a0' : '#8ad0ff', { lift: 0.5 });
+      P.glint(31, 33, '#ffffff');
+    },
+    fx(P, t, st) {
+      // Rain off it, always; lightning between its vanes now and then.
+      for (let i = 0; i < 10; i++) {
+        const k = (t * 3 + i / 10) % 1;
+        const x = 18 + ((i * 37) % 28);
+        P.fx(x, 20 + k * 52, '#8ab8e0', 0.7 * (1 - k));
+        P.fx(x, 21 + k * 52, '#c8e0ff', 0.5 * (1 - k));
+      }
+      if (st.wind || sn(t, 3) > 0.7) {
+        let x = 18;
+        let y = 30;
+        for (let s = 0; s < 8; s++) {
+          const nx = x + 3.6;
+          const ny = 30 + (hash2(s, Math.floor(t * 24), 3) - 0.5) * 8;
+          P.line(x, y, nx, ny, '#fff8a0');
+          x = nx;
+          y = ny;
+        }
+      }
+      P.puff(32, 14, 14, '#2a3448', 0.18);
+    },
+  },
+});
+
 // The Worm's body: one length of it, ringed like an earthworm's, up out
 // of its hole on a swaying curve (see bossrig.bodyOf), bristles along the
 // rings; the maw on top turned the way the curve runs; rearing higher as

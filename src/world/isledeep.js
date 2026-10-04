@@ -153,6 +153,10 @@ export const ISLE_BOSSES = {
     holdout: ['sharktooth', 'pearl_queen', 'smugglers_kraken'],
   },
 };
+// The master of each island's spire (Thessa's, the Overseer: see
+// entities/bosses_spire.js for the others): the Crucible in the thermal
+// spire sunk in Kharos's crater, the Condenser in Myrrow's tidal spire.
+export const SPIRE_MASTERS = { thessa: 'overseer', kharos: 'crucible', myrrow: 'condenser' };
 
 // The far islands' masters, harder than Thessa's: their health, their
 // blows, and their pace (ISLE_BOSS_TEMPO: how much quicker their works

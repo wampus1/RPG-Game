@@ -9,6 +9,7 @@ import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
 import { MYRROW_BOSSES } from './bosses_myrrow.js';
 import { GROVE_BOSSES } from './bosses_grove.js';
+import { SPIRE_BOSSES } from './bosses_spire.js';
 import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press, walkCooldowns } from './tempo.js';
@@ -64,6 +65,7 @@ export const SPECIES = {
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,
   ...GROVE_BOSSES,
+  ...SPIRE_BOSSES,
 };
 
 // Inside the bounds something's held to (a master, its hall).

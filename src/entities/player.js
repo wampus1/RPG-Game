@@ -250,6 +250,8 @@ export class Player extends Entity {
     }
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
+    // (Soaked through by the Condenser's rain: drying off.)
+    if (this.soakT > 0) this.soakT -= dt;
     if (this.hintT > 0) this.hintT -= dt;
     // Down on one knee (a bout lost): up again in a few seconds.
     if (this.kneelT > 0) {

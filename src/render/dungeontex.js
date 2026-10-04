@@ -152,6 +152,18 @@ export function dungeonTop(name, v, rand) {
       }
       return p;
     }
+    case 'kav_coolant': {
+      // Frozen coolant, frost-white at its rim, a cold blue core.
+      p.fill('#7ac8e8');
+      p.ellipse(8, 8, 6, 6, '#a8e4f8');
+      p.ellipse(8, 8, 3.5, 3.5, '#5ab0e0');
+      p.ellipse(7, 7, 1.5, 1.5, '#ffffff');
+      for (let i = 0; i < 16; i++) {
+        p.set(i, 0, '#e0f8ff');
+        p.set(0, i, '#e0f8ff');
+      }
+      return p;
+    }
     case 'kav_glow': {
       p.fill(KAV.plate);
       p.rect(0, 7, 16, 2, KAV.seam);
@@ -325,6 +337,20 @@ export function dungeonFront(name, v, rand, rot) {
       p.hline(0, 15, 0, KAV.edge);
       p.hline(0, 15, LH - 1, KAV.deep);
       if (name === 'kav_lift') p.hline(2, 13, 4, KAV.seam);
+      return p;
+    case 'kav_coolant':
+      // Banded ice over alloy: frost running down it.
+      p.fill('#6ab8dc');
+      for (let y = 1; y < LH - 1; y += 3) p.hline(0, 15, y, '#a8e4f8');
+      for (let i = 0; i < 3; i++) {
+        let x = Math.floor(rand() * 14) + 1;
+        for (let y = 0; y < LH; y++) {
+          p.set(x, y, '#e0f8ff');
+          if (rand() < 0.3) x += rand() < 0.5 ? 1 : -1;
+        }
+      }
+      p.hline(0, 15, 0, '#ffffff');
+      p.hline(0, 15, LH - 1, '#3a7aa0');
       return p;
     case 'kav_glow':
       p.fill(KAV.plate);
