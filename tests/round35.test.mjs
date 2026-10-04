@@ -334,6 +334,10 @@ test('the Elder Stag charges; sidestepped by a wall, he\'s stunned against it', 
   const p = game.player;
   const input = stubInput();
   game.cheats = { ...(game.cheats || {}), god: true };
+  // (His charge, and nothing else of his: his bellow and the wild hunt
+  // would throw you back against a wall, and leave him no run at it.)
+  c.bellowCd = 999;
+  c.huntCd = 999;
   d.bossFight();
   game.scene = null;
   // He lowers his antlers, at you.

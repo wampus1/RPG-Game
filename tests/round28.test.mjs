@@ -305,7 +305,8 @@ test('deeper down, now and then a chest has teeth; killed, it gives up what it h
   const before = game.drops.length;
   game.kill(c, p);
   const dropped = game.drops.slice(before).reduce((n, q) => n + q.count, 0);
-  assert.equal(dropped, held.reduce((n, q) => n + q.count, 0));
+  // (What it held, and a piece of gear besides: see round 44.)
+  assert.equal(dropped, held.reduce((n, q) => n + q.count, 0) + 1);
   game.dungeon.leave();
 });
 

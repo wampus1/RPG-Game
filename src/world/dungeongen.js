@@ -647,7 +647,9 @@ function fill(rng, size, picks) {
   return slots;
 }
 
-// Arms and armour by how far down: scraps near the top, good steel deep.
+// Arms and armour by how far down, for a master's or a mimic's leavings
+// (see gearFor; a chest's are its own, in lootFor): scraps near the top,
+// good steel deep.
 const GEAR_TIERS = [
   ['dagger', 'short_sword', 'hand_axe', 'leather_cap', 'wooden_shield', 'leather_boots', 'leather_tunic', 'leather_trousers'],
   ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield', 'iron_helmet', 'round_shield'],
@@ -717,7 +719,11 @@ function lootFor(type, tier, rng, rich = 1, T = null) {
     }
     if (t >= 3) add(rng.pick(['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst']), 1, 1, 0.08 + (t - 3) * 0.05);
     // Arms and armour: scraps near the top, good steel deep down.
-    add(rng.pick(gearOfTier(t)), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
+    const gear = t < 1 ? ['dagger', 'short_sword', 'hand_axe', 'leather_cap', 'wooden_shield', 'leather_boots']
+      : t < 2 ? ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield']
+        : t < 3 ? ['steel_sword', 'sabre', 'flail', 'chainmail', 'iron_helmet', 'iron_shield', 'longbow']
+          : ['steel_sword', 'battle_axe', 'halberd', 'greatsword', 'warhammer', 'crossbow', 'iron_breastplate', 'iron_greaves', 'chainmail'];
+    add(rng.pick(gear), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
     if (type === 'mine') add(rng.pick(t >= 2 ? ['iron_ore', 'gold_ore', 'coal'] : ['coal', 'iron_ore']), 1, 3 + Math.floor(t), 0.5);
     if (type === 'holdout') add('arrow', 2, 5 + 2 * Math.floor(t), 0.4);
     // (What's to be found only on its island: see isledeep.js.)
