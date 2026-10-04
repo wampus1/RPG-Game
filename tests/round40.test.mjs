@@ -149,8 +149,12 @@ test('a witch-light glances off the walls, stays in her hall, and is gone after 
   const o = launchOrb(game, c, { x: c.x - 10, z: c.z });
   const vx = o.vx;
   let gone = null;
+  // (Turned back at some point: in a wide hall it may cross and glance
+  // off the far wall too before it's done.)
+  let turned = false;
   for (let t = 0; t < 9; t += 0.05) {
     game.update(0.05, input);
+    if (!o.done && Math.sign(o.vx) !== Math.sign(vx)) turned = true;
     if (!o.done) {
       assert.ok(o.x >= br.x0 - 0.5 && o.x <= br.x1 + 0.5 && o.z >= br.z0 - 0.5 && o.z <= br.z1 + 0.5, 'in the hall');
       assert.ok(!BLOCKS[game.world.getBlock(Math.round(o.x), o.y, Math.round(o.z))].solid, 'never in a wall');
@@ -158,7 +162,7 @@ test('a witch-light glances off the walls, stays in her hall, and is gone after 
     if (o.done && gone === null) gone = t + 0.05;
   }
   assert.ok(o.bounces >= 1, 'it glanced off a wall');
-  assert.ok(Math.sign(o.vx) !== Math.sign(vx), 'and came back the other way');
+  assert.ok(turned, 'and came back the other way');
   assert.ok(gone !== null && Math.abs(gone - ORB_LIFE) < 0.15, `gone at ${gone}s`);
   assert.equal((game.orbs || []).length, 0);
   game.dungeon.leave();
