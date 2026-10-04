@@ -252,7 +252,10 @@ function pickSpot(c, t) {
     if (c.foot && !fits(game, c, x, y, z)) continue;
     const moved = Math.max(Math.abs(x - c.x), Math.abs(z - c.z));
     if (moved < 2) continue;
-    const s = -Math.abs(moved - 4) - Math.abs(Math.max(Math.abs(x - t.x), Math.abs(z - t.z)) - rad) * 0.5 + Math.random();
+    // (Somewhere it can see you from, rather than behind a pillar: its
+    // spells and missiles need it.)
+    const seen = !game.sim || !game.sim.lineOfSight || game.sim.lineOfSight(x, z, t.x, t.z, y + 1);
+    const s = -Math.abs(moved - 4) - Math.abs(Math.max(Math.abs(x - t.x), Math.abs(z - t.z)) - rad) * 0.5 + Math.random() + (seen ? 3 : 0);
     if (s > bestS) {
       bestS = s;
       best = { x, y, z };

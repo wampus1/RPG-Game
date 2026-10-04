@@ -100,8 +100,10 @@ export function bossBrains(h) {
     game.audio?.play('void', c);
   };
   // Back off from `t` a pace (true if it moved).
+  // (Not when it's on its way somewhere better to fight from: see
+  // tempo.drift.)
   const backOff = (c, t) => {
-    if (c.moving) return false;
+    if (c.moving || c.repo) return false;
     const sx = Math.sign(c.x - t.x) || (Math.random() < 0.5 ? 1 : -1);
     const sz = Math.sign(c.z - t.z) || (Math.random() < 0.5 ? 1 : -1);
     return c.tryStep(c.x + sx, c.z, c.S.step) || c.tryStep(c.x, c.z + sz, c.S.step);
