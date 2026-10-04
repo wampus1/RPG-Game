@@ -8,9 +8,13 @@
 //     him (a wall stops him hard: stunned, and open to you), tosses you on
 //     his antlers, rears and stamps;
 //   the Hollow Oak, round which the seasons turn: spring mends it (its
-//     taproots: cut them) and sprouts thornlings from its acorns, summer
-//     burns through its leaves, autumn sheds them (soft to your blows, but
-//     a storm of leaves about it), winter makes it hard as iron.
+//     taproots: cut them), sprouts thornlings from its acorns and throws
+//     up a thicket round it; summer burns through its leaves and flings
+//     burning seedpods; autumn sheds them (soft to your blows, but a storm
+//     of leaves about it) and drops dead boughs on you; winter makes it
+//     hard as iron, with frost and icicles. Whatever the season, its roots
+//     come for you under the floor and hold you, and worn, the ground
+//     heaves with them.
 import { BRAINS, addHazard, addZone, lob, lineTiles, areaTiles, summon, bossSlam, phaseSummons, COLORS, BOSS_TITLES } from './monsters.js';
 import { phaseOf, ready, used } from './tempo.js';
 import { B } from '../world/blocks.js';
@@ -175,7 +179,8 @@ export const GROVE_BRAINS = {
     const game = c.game;
     const t = c.target;
     const ph = phaseOf(c);
-    // Drinking, through its taproots: mending while they stand.
+    // Drinking, through its taproots: mending while they stand (and still
+    // fighting the while).
     if (c.drinkT > 0) {
       c.drinkT -= dt;
       const roots = game.creatures.filter((o) => !o.dead && o.species === 'taproot' && o.rootOf === c);
@@ -192,11 +197,11 @@ export const GROVE_BRAINS = {
         for (const r of roots) game.renderer.effect?.({ type: 'siphon', wx: r.x, wy: r.y + 0.5, wz: r.z, tx: c.x, ty: c.y + 1, tz: c.z, life: 0.6, oy: -6, n: 8, amp: 2, color: LEAF });
         game.renderer.floatText(c.x, c.y + 2.8, c.z, `+${3 * roots.length}`, '#a0e070');
       }
-      return true;
     }
-    // The seasons go round it (see seasonTick), each its own way of
-    // fighting.
+    // The seasons go round it (see seasonTick), each its own two ways of
+    // fighting; and whatever the season, its roots.
     if (!t || t.dead) return false;
+    const d = dist(c, t);
     if (c.season === 0) {
       // Spring: acorns that sprout thornlings where they fall; and, hurt,
       // its taproots driven down to drink (cut them!).
@@ -213,19 +218,33 @@ export const GROVE_BRAINS = {
         game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it drives its roots down to drink: cut them!', '#a0e070');
         return true;
       }
-      if (cd(c, 'acornCd', dt, 2) && ready(c) && !c.windup) {
+      if (cd(c, 'acornCd', dt, 1.5) && ready(c) && !c.windup) {
         c.acornCd = 5;
         used(c, 0.3);
         for (let i = 0; i < 3; i++) {
           const at = spotIn(c, t, 1, 4);
           if (at) lob(game, c, at.x, at.z, { tint: [160, 120, 60], onLand: (g, x, z) => summon(g, 'thornling', { x, y: c.y, z }, 0, { color: LEAF }) });
         }
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it sheds its acorns', '#c8a060');
+        return true;
+      }
+      // A thicket thrown up round it in a ring, thorns out (a gap to slip
+      // through), throwing you back.
+      if (cd(c, 'thicketCd', dt, 3) && ready(c) && d <= 5 && !c.windup) {
+        c.thicketCd = 6;
+        used(c, 0.5);
+        const r = 2 + (c.foot || 1);
+        const ring = ringTiles(c.x, c.z, r).filter((q) => inHall(c, q) && openFloor(game, q.x, q.z));
+        const gap = ring[Math.floor(Math.random() * ring.length)];
+        thorns(game, c, ring.filter((q) => !gap || Math.abs(q.x - gap.x) + Math.abs(q.z - gap.z) > 1), 1.0, 5, { knock: 2, from: { x: c.x, z: c.z } });
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'thorns spring up round it!', '#a0e070');
+        game.audio?.play('rumble', c);
         return true;
       }
     } else if (c.season === 1) {
       // Summer: shafts of sun through its leaves, where you stand and about.
       if (cd(c, 'sunCd', dt, 1) && ready(c) && !c.windup) {
-        c.sunCd = ph >= 2 ? 2.6 : 3.4;
+        c.sunCd = ph >= 2 ? 3 : 3.8;
         used(c, 0.3);
         for (let i = 0; i < 4; i++) {
           const at = i ? spotIn(c, t, 1, 3) : { x: t.x, z: t.z };
@@ -233,20 +252,102 @@ export const GROVE_BRAINS = {
         }
         return true;
       }
+      // Seedpods, dry as tinder, flung at you: they catch where they land.
+      if (cd(c, 'podCd', dt, 2.5) && ready(c) && d >= 2 && !c.windup) {
+        c.podCd = 4.5;
+        used(c, 0.3);
+        for (let i = 0; i < (ph >= 2 ? 4 : 3); i++) {
+          const at = i ? spotIn(c, t, 1, 3) : { x: t.x, z: t.z };
+          if (!at) continue;
+          lob(game, c, at.x, at.z, { tint: [230, 160, 60], onLand: (g, x, z) => addHazard(g, { by: c, tiles: areaTiles(x, z, 1), y: c.y, dur: 0.5, dmg: dmgOf(c, 4), burn: 2, kind: 'fire', center: { x, z } }) });
+        }
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'it flings its seedpods!', '#ffb040');
+        return true;
+      }
     } else if (c.season === 2) {
       // Autumn: a storm of leaves about it, drawing you in and cutting.
       if (cd(c, 'leafCd', dt, 1) && ready(c) && !c.windup) {
-        c.leafCd = 8;
+        c.leafCd = 6.5;
         used(c, 0.5);
         addZone(game, { by: c, kind: 'leaves', tiles: areaTiles(c.x, c.z, 5, true).filter((q) => inHall(c, q)), y: c.y, life: 5, tick: 0.5, dmg: dmgOf(c, 1), pull: { x: c.x, z: c.z }, color: [200, 120, 50], puff: ['#e08a3a', '#c85a2a', '#f0c060'] });
         game.renderer.floatText(c.x, c.y + 3.4, c.z, 'its leaves whirl!', '#e08a3a');
         return true;
       }
-    } else if (cd(c, 'frostCd', dt, 1.5) && ready(c) && !c.windup) {
+      // Dead boughs crashing down about you, one after another.
+      if (cd(c, 'boughCd', dt, 2.5) && ready(c) && !c.windup) {
+        c.boughCd = 4;
+        used(c, 0.6);
+        const n = ph >= 2 ? 5 : 4;
+        proc(game, c, 0.35, n, (k) => {
+          const at = k === n - 1 ? { x: t.x, z: t.z } : spotIn(c, t, 0, 3);
+          if (at) addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), y: c.y, dur: 0.9, dmg: dmgOf(c, 6), stun: 0.4, kind: 'slam', center: at, radius: 1, color: [170, 120, 70], quiet: k > 0 });
+        });
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'dead boughs creak overhead...', '#c8a070');
+        game.audio?.play('creak', c);
+        return true;
+      }
+    } else {
       // Winter: frost going out from it, ring on ring.
-      c.frostCd = 4;
-      used(c, 0.4);
-      for (let r = 1; r <= 4; r++) addHazard(game, { by: c, tiles: ringTiles(c.x, c.z, r + 1), y: c.y, dur: 0.8 + r * 0.3, dmg: dmgOf(c, 4), chill: 2, kind: 'cold', quiet: r > 1 });
+      if (cd(c, 'frostCd', dt, 1.5) && ready(c) && !c.windup) {
+        c.frostCd = 4;
+        used(c, 0.4);
+        for (let r = 1; r <= 4; r++) addHazard(game, { by: c, tiles: ringTiles(c.x, c.z, r + 1), y: c.y, dur: 0.8 + r * 0.3, dmg: dmgOf(c, 4), chill: 2, kind: 'cold', quiet: r > 1 });
+        return true;
+      }
+      // Icicles from its bare branches: a cross of them over you, then
+      // another between.
+      if (cd(c, 'icicleCd', dt, 2.5) && ready(c) && !c.windup) {
+        c.icicleCd = 4;
+        used(c, 0.4);
+        const at = { x: t.x, z: t.z };
+        const plus = [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]];
+        const ex = [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 2], [-2, -2], [2, -2], [-2, 2]];
+        proc(game, c, 0.7, 2, (k) => {
+          for (const [dx, dz] of k ? ex : plus) {
+            const q = { x: at.x + dx, z: at.z + dz };
+            if (inHall(c, q)) addHazard(game, { by: c, tiles: [q], y: c.y, dur: 0.9, dmg: dmgOf(c, 5), chill: 1.5, kind: 'cold', center: q, quiet: !(dx === 0 && dz === 0) });
+          }
+        });
+        game.renderer.floatText(c.x, c.y + 3.4, c.z, 'icicles crack loose!', '#c8e8ff');
+        return true;
+      }
+    }
+    // Whatever the season: a root driven under the floor at you, bursting
+    // up along the way, and where you stand it grabs.
+    if (cd(c, 'rootCd', dt, 3) && ready(c) && d >= 2 && !c.windup) {
+      c.rootCd = ph >= 3 ? 4 : 5.5;
+      used(c, 0.5);
+      const line = lineTiles(game, c, t, 12).filter((q) => inHall(c, q));
+      const end = { x: t.x, z: t.z };
+      const steps = Math.max(1, Math.ceil(line.length / 2));
+      proc(game, c, 0.12, steps + 1, (k) => {
+        if (k < steps) {
+          const seg = line.slice(k * 2, k * 2 + 2);
+          if (seg.length) thorns(game, c, seg, 0.5, 4, { quiet: k > 0 });
+          return;
+        }
+        thorns(game, c, areaTiles(end.x, end.z, 1).filter((q) => inHall(c, q)), 0.7, 5, { onFire: (g, h, hit) => {
+          for (const e of hit) if (e.kind === 'player') {
+            e.grabbedT = Math.max(e.grabbedT || 0, 1.1);
+            g.renderer.floatText(e.x, e.y + 2.4, e.z, 'roots hold you!', '#a0e070');
+          }
+        } });
+      });
+      game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the floor splits toward you...', '#c8a060');
+      game.audio?.play('rumble', c);
+      return true;
+    }
+    // (Worn) The ground heaving with roots all about you.
+    if (ph >= 2 && cd(c, 'heaveCd', dt, 4) && ready(c) && d <= 9 && !c.windup) {
+      c.heaveCd = 9;
+      used(c, 0.8);
+      const tiles = [];
+      for (let i = 0; i < (ph >= 3 ? 9 : 6); i++) {
+        const at = i ? spotIn(c, t, 0, 4) : { x: t.x, z: t.z };
+        if (at && !tiles.some((q) => q.x === at.x && q.z === at.z)) tiles.push(at);
+      }
+      proc(game, c, 0.25, tiles.length, (k) => thorns(game, c, [tiles[k]], 0.75, 5, { knock: 1, from: { x: c.x, z: c.z }, quiet: k > 0 }));
+      shout(c, 'The whole wood is mine.', '#a0e070');
       return true;
     }
     // Its branches swept round it.

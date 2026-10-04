@@ -55,6 +55,16 @@ export function phaseOf(c) {
 }
 
 // Free to start an attack (its breath since the last one is taken)?
+// A master's works come round while it walks too, not only while it
+// stands and thinks (a slow one spent most of a fight between attacks with
+// its clocks stopped): every cooldown of its own run down as it goes.
+// (`attackCd`, an ordinary blow's, runs down every moment anyway.)
+export function walkCooldowns(c, dt) {
+  for (const k in c) {
+    if (k.length > 2 && k.endsWith('Cd') && k !== 'attackCd' && typeof c[k] === 'number' && c[k] > 0) c[k] -= dt;
+  }
+}
+
 export function ready(c) {
   return !(c.gapT > 0);
 }

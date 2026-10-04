@@ -14,7 +14,7 @@ import { REGION_W, REGION_D, WORLD_Y, INST_RX } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { ITEMS, RELICS, SHARD_GEMS } from './items.js';
+import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js';
 import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES } from './isledeep.js';
 
 export const FY = 5; // standing level on a dungeon floor
@@ -647,6 +647,39 @@ function fill(rng, size, picks) {
   return slots;
 }
 
+// Arms and armour by how far down: scraps near the top, good steel deep.
+const GEAR_TIERS = [
+  ['dagger', 'short_sword', 'hand_axe', 'leather_cap', 'wooden_shield', 'leather_boots', 'leather_tunic', 'leather_trousers'],
+  ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield', 'iron_helmet', 'round_shield'],
+  ['steel_sword', 'sabre', 'flail', 'chainmail', 'iron_helmet', 'iron_shield', 'longbow', 'iron_greaves', 'iron_boots'],
+  ['steel_sword', 'battle_axe', 'halberd', 'greatsword', 'warhammer', 'crossbow', 'iron_breastplate', 'iron_greaves', 'chainmail', 'iron_shield'],
+];
+const gearOfTier = (t) => GEAR_TIERS[Math.max(0, Math.min(GEAR_TIERS.length - 1, Math.floor(t)))].filter((k) => ITEMS[k]);
+// The Kavorent's own arms and armour (in their halls).
+const KAV_GEAR = ['kav_visor', 'kav_carapace', 'kav_greaves', 'kav_treads', 'kav_aegis', 'kav_blade', 'kav_lance', 'kav_caster'];
+
+// One piece of arms or armour from an old place, as good as `tier` (see
+// lootFor): what a master leaves behind it, or a mimic had in its belly.
+// Sometimes of the place's own island (`T`: an obsidian blade, ash-proof
+// goggles...); deep down, now and then with a stone already set in it; in
+// the Kavorent's halls, their own make.
+export function gearFor(type, tier, rng, T = null) {
+  const t = Math.max(0, tier);
+  if (type === 'kavorent') return rng.pick(KAV_GEAR.filter((k) => ITEMS[k]));
+  const isle = ((T && T.loot) || []).map(([k]) => k).filter((k) => ITEMS[k] && (ITEMS[k].kind === 'weapon' || ITEMS[k].kind === 'armor'));
+  const k = isle.length && rng.chance(0.3) ? rng.pick(isle) : rng.pick(gearOfTier(t));
+  if (t >= 2.5 && rng.chance(0.12 + (t - 2.5) * 0.06) && canSocket(k)) {
+    const gem = rng.pick(Object.keys(GEMS));
+    if (ITEMS[socketed(k, gem)]) return socketed(k, gem);
+  }
+  return k;
+}
+
+// How good an old place's things run on floor `n` (see tierOf).
+export function lootTier(rec, n) {
+  return n + ((rec.level || 1) - 1) * 0.5 + (FAR_LOOT[rec.isle] || 0);
+}
+
 // What a chest down here holds, by kind of place and how far down: poor
 // pickings on the first floor (a torch, some string, a coin or two), and
 // better the deeper you go. `tier` is mostly the floor (0 = the first
@@ -684,11 +717,7 @@ function lootFor(type, tier, rng, rich = 1, T = null) {
     }
     if (t >= 3) add(rng.pick(['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst']), 1, 1, 0.08 + (t - 3) * 0.05);
     // Arms and armour: scraps near the top, good steel deep down.
-    const gear = t < 1 ? ['dagger', 'short_sword', 'hand_axe', 'leather_cap', 'wooden_shield', 'leather_boots']
-      : t < 2 ? ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield']
-        : t < 3 ? ['steel_sword', 'sabre', 'flail', 'chainmail', 'iron_helmet', 'iron_shield', 'longbow']
-          : ['steel_sword', 'battle_axe', 'halberd', 'greatsword', 'warhammer', 'crossbow', 'iron_breastplate', 'iron_greaves', 'chainmail'];
-    add(rng.pick(gear), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
+    add(rng.pick(gearOfTier(t)), 1, 1, t < 1 ? 0.05 : 0.08 + t * 0.04);
     if (type === 'mine') add(rng.pick(t >= 2 ? ['iron_ore', 'gold_ore', 'coal'] : ['coal', 'iron_ore']), 1, 3 + Math.floor(t), 0.5);
     if (type === 'holdout') add('arrow', 2, 5 + 2 * Math.floor(t), 0.4);
     // (What's to be found only on its island: see isledeep.js.)

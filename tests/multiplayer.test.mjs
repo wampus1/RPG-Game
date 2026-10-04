@@ -10,6 +10,7 @@ import { DungeonRun } from '../src/game/dungeon.js';
 import { FY } from '../src/world/dungeongen.js';
 import { seatField } from '../src/game/party.js';
 import { B } from '../src/world/blocks.js';
+import { siteBlocks } from '../src/world/sites.js';
 import { Accounts, nameProblem, profileOf, cleanDesc, wordCount, DESC_WORDS, cleanIcon } from '../src/net/account.js';
 import { MachineSync } from '../src/net/machine.js';
 import { MachineStore } from '../tools/store.mjs';
@@ -722,4 +723,55 @@ test('host and player: kicked, the player\'s screen goes back to the title', () 
   assert.equal(L.game.seats.length, 1);
   assert.ok(L.game.partyChars.has('g'), 'their character kept');
   assert.equal(profileOf({ id: 'g', name: 'Guesty' }).id, 'g');
+});
+
+test('an old place cleared on the host falls in on every player\'s copy of the world too', () => {
+  const L = linked();
+  const { game, gg } = L;
+  const rec = game.sim.dungeons.all.find((d) => d.type === 'barrow' && !d.cleared);
+  const site = game.sim.dungeons.site(rec);
+  const theirs = gg.world.sites.find((q) => q.id === site.id);
+  assert.ok(theirs && !(theirs.state && theirs.state.cleared), 'open, on both');
+  // Cleared by someone else, far from everyone (its ground not loaded on
+  // the host): the player's copy still learns of it.
+  game.sim.dungeons.cleared(rec, 'Some adventurers');
+  L.step(2);
+  assert.ok(theirs.state && theirs.state.cleared, 'the player knows it\'s fallen in');
+  // The ground of it, on both: fallen in. (The player's from the host, as
+  // they ask for it.)
+  const rx = Math.floor(site.x / 64);
+  const rz = Math.floor(site.z / 36);
+  game.loadAround(site.x, site.z, true);
+  gg.world.loadRegion(rx, rz);
+  for (let i = 0; i < 10 && !gg.world.isLoaded(rx, rz); i++) {
+    L.step(1);
+    gg.world.loadRegion(rx, rz);
+  }
+  assert.ok(gg.world.isLoaded(rx, rz));
+  // And ground the player already holds, which the host had let go of
+  // when it fell in: put right on the player's side too.
+  const rec2 = game.sim.dungeons.all.find((d) => d.type !== 'kavorent' && !d.cleared && d !== rec);
+  const site2 = game.sim.dungeons.site(rec2);
+  const r2x = Math.floor(site2.x / 64);
+  const r2z = Math.floor(site2.z / 36);
+  gg.world.loadRegion(r2x, r2z);
+  for (let i = 0; i < 10 && !gg.world.isLoaded(r2x, r2z); i++) {
+    L.step(1);
+    gg.world.loadRegion(r2x, r2z);
+  }
+  assert.ok(gg.world.isLoaded(r2x, r2z));
+  if (game.world.isLoaded(r2x, r2z)) game.world.unloadRegion(r2x, r2z);
+  const sentBefore = L.toGuest.length;
+  game.sim.dungeons.cleared(rec2, 'Some adventurers');
+  L.step(2);
+  assert.equal(L.toGuest.slice(sentBefore).filter((t) => t.includes('"site"')).length, 1, 'the player told');
+  // (What a place sets, the last word on each block.)
+  const finalOf = (s) => [...new Map(siteBlocks(s, s.state).map((q) => [`${q[0]},${q[1]},${q[2]}`, q])).values()];
+  for (const [dx, y, dz, id] of finalOf(site2)) assert.equal(gg.world.getBlock(site2.x + dx, y, site2.z + dz), id, `player's held ground ${dx},${y},${dz}`);
+  const placed = finalOf(site);
+  assert.ok(placed.length > 5);
+  for (const [dx, y, dz, id] of placed) {
+    assert.equal(game.world.getBlock(site.x + dx, y, site.z + dz), id, `host ${dx},${y},${dz}`);
+    assert.equal(gg.world.getBlock(site.x + dx, y, site.z + dz), id, `player ${dx},${y},${dz}`);
+  }
 });

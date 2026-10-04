@@ -12,6 +12,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
 import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
+import { restamp } from '../world/sites.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -66,6 +67,7 @@ export class GuestNet {
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
     else if (m.t === 'friend') this.onFriend(m);
+    else if (m.t === 'site') this.site(m);
     else if (m.t === 'closing' || m.t === 'hostgone') this.onEnd('The host has closed the world.');
     else if (m.t === 'kicked') this.onEnd(m.why || 'You were removed from the world.');
     else if (m.t === 'refused') this.onEnd(refusal(m.why));
@@ -195,6 +197,17 @@ export class GuestNet {
       const op = this.ops && this.ops.get(n.id);
       if (op !== undefined) n.netOp = op;
     }
+  }
+
+  // An old place changed on the host's side (a dungeon's way in fallen
+  // in, a spire opened): our copy of it, and the ground we have of it.
+  site(m) {
+    const w = this.game.world;
+    const s = (w.sites || []).find((q) => q.id === m.id);
+    if (!s) return;
+    s.state = m.state || {};
+    restamp(w, s);
+    this.game.lightDirty = true;
   }
 
   instance(inst) {

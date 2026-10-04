@@ -409,6 +409,8 @@ export function restamp(world, s) {
     if (!world.regionAt(x, z)) continue;
     if (world.getBlock(x, y, z) !== id) world.setBlock(x, y, z, id, meta);
   }
+  // (Whoever else keeps a copy of the world is told: see net/host.js.)
+  world.onSiteChange?.(s);
 }
 
 // The site at (x, z), if any's entrance is right there (within a pace or two).

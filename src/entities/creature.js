@@ -11,7 +11,7 @@ import { MYRROW_BOSSES } from './bosses_myrrow.js';
 import { GROVE_BOSSES } from './bosses_grove.js';
 import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
-import { bossClock, drift, press } from './tempo.js';
+import { bossClock, drift, press, walkCooldowns } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
@@ -173,7 +173,10 @@ export class Creature extends Entity {
     if (this.inst && this.game.scene && this.game.scene.lock) return;
     // Winding up a blow (or charging): nothing else till it's thrown.
     if (this.windup && tickAttack(this.game, this, dt)) return;
-    if (this.moving) return;
+    if (this.moving) {
+      if (master) walkCooldowns(this, dt);
+      return;
+    }
     // Staggered by a blow (an amethyst-set blade, or a parry).
     if (this.stunT > 0) {
       this.stunT -= dt;

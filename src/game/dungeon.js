@@ -14,7 +14,7 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
-import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS } from '../world/dungeongen.js';
+import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { settleAfflictions } from './afflict.js';
 import { updateWorks, clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
@@ -148,21 +148,38 @@ export class DungeonRun {
     }
     const at = to || this.exitSpot();
     game.loadAround(at.x, at.z, true);
-    if (this.rec.cleared && site && this.rec.type !== 'kavorent') restamp(game.world, site);
+    const fallsIn = this.rec.cleared && site && this.rec.type !== 'kavorent';
+    if (fallsIn) restamp(game.world, site);
     for (const c of game.creatures) if (!c.dead) game.moveEntity(c, c.x, c.y, c.z);
     const spot = game.findFreeSpot(at.x, at.z, at.y);
     game.player.teleport(spot.x, spot.y, spot.z);
-    this.gatherParty(spot, 'up');
+    this.gatherParty(spot, 'up', fallsIn);
     game.renderer.camInit = false;
     game.lightDirty = true;
     game.updateSettlements(true);
-    game.ui.msg(this.rec.cleared ? `You climb out of ${this.rec.name} into the air. Behind you, the way down falls in.` : `You climb back up into the air.`, '#e0c890');
+    game.ui.msg(fallsIn ? `You climb out of ${this.rec.name} into the air. Behind you, the way down falls in.` : `You climb back up into the air.`, '#e0c890');
     game.renderer.flashScreen?.('#ffffff', 0.25);
+    // The way in coming down: dust, the rumble of it, the ground shaking
+    // (for all of you there to see).
+    if (fallsIn) {
+      const h = site.h || at.y;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) game.renderer.emit(site.x + dx, h + 1, site.z + dz, { n: 8, color: ['#8a8270', '#5a5650', '#c8b898'], up: 26, speed: 34, life: 0.9 });
+      game.audio?.play('crumble', { x: site.x, y: h, z: site.z });
+      game.audio?.play('thud', { x: site.x, y: h, z: site.z });
+      for (const q of this.partyHereUp(spot)) game.asPlayer(q, () => (game.shake = Math.min(1, (game.shake || 0) + 0.6)));
+    }
+  }
+
+  // Everyone come up beside `spot` (the whole party, or just you).
+  partyHereUp(spot) {
+    const game = this.game;
+    const all = game.everyone ? game.everyone() : [game.player];
+    return all.filter((q) => q && !q.dead && Math.max(Math.abs(q.x - spot.x), Math.abs(q.z - spot.z)) <= 6);
   }
 
   // With others in the world (see game/party.js), where one of you goes
   // the rest go too: the whole party, beside whoever led the way.
-  gatherParty(spot, way) {
+  gatherParty(spot, way, fallsIn = false) {
     const game = this.game;
     if (!game.isParty || !game.isParty()) return;
     const lead = game.player;
@@ -182,7 +199,10 @@ export class DungeonRun {
         game.moveEntity(q, at.x, at.y, at.z);
         const who = (lead.account && lead.account.name) || game.seats[0].name;
         if (way === 'down') game.ui.msg(`${who} leads the party down: floor ${this.floor + 1} of ${this.rec.depth} of ${this.rec.name}.`, '#e0c890');
-        else game.ui.msg(`${who} leads the party back up into the air.`, '#e0c890');
+        else {
+          game.ui.msg(`${who} leads the party back up into the air.${fallsIn ? ' Behind you, the way down falls in.' : ''}`, '#e0c890');
+          game.renderer.flashScreen?.('#ffffff', 0.25);
+        }
       });
     }
   }
@@ -1274,10 +1294,12 @@ export class DungeonRun {
     }
     // One the blight was in: it bursts into a cloud of spores.
     if (e.infected && !e.sporeless) sporeCloud(game, e, 1, null);
-    // A mimic: what was in it spills out.
+    // A mimic: what was in it spills out, and something it swallowed
+    // whole: a piece of somebody's arms or armour.
     if (e.mimicLoot) {
       for (const it of e.mimicLoot) game.spawnDrop(it.item, it.count, e.x, e.y, e.z, true);
       e.mimicLoot = null;
+      this.dropGear(e, 1, lootTier(this.rec, this.floor));
     }
     if (e.carries) {
       game.spawnDrop(e.carries, 1, e.x, e.y, e.z, true);
@@ -1303,6 +1325,9 @@ export class DungeonRun {
         const keys = Object.keys(RELICS);
         game.spawnDrop(`relic_${keys[Math.floor(Math.random() * keys.length)]}`, 1, e.x, e.y, e.z, true);
       }
+      // And the arms and armour of those who came down before you and
+      // didn't go back up: one piece or two, the best of the place's.
+      this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1);
       this.eachHere(() => game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070'));
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.
@@ -1406,6 +1431,25 @@ export class DungeonRun {
     game.audio?.play('secret');
     game.renderer.emit(x, FY + 1.2, z, { n: 24, color: ['#ffe070', '#ffffff', '#ffc040'], up: 40, speed: 40, life: 0.9, glow: true });
     game.renderer.emit(p.x, p.y + 1, p.z, { n: 16, color: ['#ffe070', '#ffffff'], up: 30, speed: 20, life: 0.8, glow: true, gravity: -20 });
+  }
+
+  // `n` pieces of arms or armour where `e` fell (see dungeongen.gearFor),
+  // and everyone down here told what.
+  dropGear(e, n, tier) {
+    const game = this.game;
+    const rng = { chance: (p) => Math.random() < p, pick: (a) => a[Math.floor(Math.random() * a.length)] };
+    const got = [];
+    for (let i = 0; i < n; i++) {
+      const k = gearFor(this.rec.type, tier, rng, this.T);
+      if (!k || !ITEMS[k]) continue;
+      game.spawnDrop(k, 1, e.x, e.y, e.z, true);
+      got.push(ITEMS[k].name);
+    }
+    if (got.length) {
+      const name = e.S && e.S.name ? e.S.name : 'It';
+      this.eachHere(() => game.ui.msg(`${name} leaves ${got.join(' and ')}.`, '#ffe070'));
+    }
+    return got;
   }
 
   // ------------------------------------------------------------ mimics

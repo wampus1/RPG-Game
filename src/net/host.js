@@ -357,6 +357,11 @@ export class HostNet {
       };
       game.audio = proxy;
     }
+    // An old place changed (fallen in, a spire opened): every player's copy
+    // of it too, so ground they make for themselves comes out the same.
+    game.world.onSiteChange = (s) => {
+      for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'site', id: s.id, state: s.state || {} });
+    };
     // Every block that changes, for whoever has that ground.
     const onBlock = game.onBlockChange.bind(game);
     game.onBlockChange = (x, y, z, o, n) => {
