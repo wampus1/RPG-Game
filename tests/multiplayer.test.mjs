@@ -495,6 +495,8 @@ test('party: a dungeon\'s traps catch any of you, not only the host', () => {
   const { game, input, gp } = party();
   const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'barrow'), floors: {}, cleared: false, pack: null };
   new DungeonRun(game, rec).enter();
+  // (Each goes down on their own: the guest follows.)
+  game.asPlayer(gp, () => game.runFor(rec).enter());
   for (let i = 0; i < 5; i++) game.update(0.05, input);
   const d = game.dungeon;
   assert.ok(game.world.inInstance(gp.x), 'the guest came down');
@@ -632,7 +634,7 @@ test('host and player: the same world on both screens', () => {
   assert.equal(off, 0);
 });
 
-test('host and player: the whole party goes down into a dungeon, and up again', () => {
+test('host and player: each goes down a dungeon on their own; the player follows the host down, and each comes up alone', () => {
   const L = linked();
   const { game } = L;
   const gp = game.seats[1].ent;
@@ -640,16 +642,29 @@ test('host and player: the whole party goes down into a dungeon, and up again', 
   new DungeonRun(game, rec).enter();
   L.step(8);
   assert.ok(game.world.inInstance(game.player.x));
-  assert.ok(game.world.inInstance(gp.x), 'the guest went down too');
+  assert.ok(!game.world.inInstance(gp.x), 'the guest stays up top');
+  assert.ok(!L.gg.dungeon, 'and isn\'t below on their own screen');
+  // The player goes down after them: the same place, the host's floor.
+  game.asPlayer(gp, () => game.runFor(rec).enter());
+  L.step(8);
+  assert.ok(game.world.inInstance(gp.x), 'the guest went down');
+  assert.equal(seatField(game, game.seats[1], 'dungeon'), game.dungeon, 'into the same place');
   assert.ok(Math.max(Math.abs(gp.x - game.player.x), Math.abs(gp.z - game.player.z)) <= 4, 'beside the host');
   assert.ok(L.gg.world.inst && L.gg.world.inInstance(L.gg.player.x), 'and sees it');
   assert.ok(L.gg.dungeon && L.gg.dungeon.floor === game.dungeon.floor);
   // (Their copy of it knows what kind of place it is: the HUD names it.)
   assert.ok(L.gg.dungeon.T && L.gg.dungeon.T.name === game.dungeon.T.name);
   assert.ok(Array.isArray(L.gg.dungeon.knownStairs()));
+  const run = game.dungeon;
   game.dungeon.leave();
   L.step(8);
-  assert.ok(!game.world.inInstance(gp.x), 'up again with the host');
+  assert.ok(!game.world.inInstance(game.player.x), 'the host is up');
+  assert.ok(game.world.inInstance(gp.x), 'the player is still down there');
+  assert.ok(game.runs.has(rec.id) && run.inst, 'the place still open for them');
+  game.asPlayer(gp, () => game.dungeon.leave());
+  L.step(8);
+  assert.ok(!game.world.inInstance(gp.x), 'and up again');
+  assert.ok(!game.runs.has(rec.id), 'the place closed');
   assert.ok(!L.gg.world.inst);
 });
 
@@ -675,6 +690,7 @@ test('host and player: a master\'s fight on both screens, its waking and its fal
   const gp = seat.ent;
   const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'barrow'), floors: {}, cleared: false, pack: null };
   new DungeonRun(game, rec).enter();
+  game.asPlayer(gp, () => game.runFor(rec).enter());
   L.step(4);
   while (game.dungeon.floor < rec.depth - 1) {
     game.dungeon.changeFloor(1);

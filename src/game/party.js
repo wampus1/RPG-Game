@@ -14,6 +14,12 @@ export const GAME_FIELDS = [
   'scene', 'shake', 'hurtFlash', 'healFlash', 'lastHp', 'beatT', 'bonusT', 'currentSettlement', 'biomeCache', 'stats', 'dummyLog', 'duel', 'charging',
   'combatT', 'combatWith', 'wanted', 'hitStop', 'slowMo', 'slowMoScale', 'diceGame', 'talkingTo', 'stormWarned', 'lavaWarned', 'lastPrayDay', 'aimFixed',
   'nearSpire', 'looseKeys', 'revealMap', 'stormSea', 'duelAfter', 'spireStorm', 'spireBoltT', 'wallPending',
+  // (The old place each is down, if any: see DungeonRun. And the sky over
+  // them, wherever they are.)
+  'dungeon', 'weather',
+  // (A story's opening scene, each their own; and the mountain going up,
+  // still to be seen: see eruption.js.)
+  'cutscene', 'eruptPending',
 ];
 // The town's view of each: what they think of you, your record.
 export const SIM_FIELDS = ['rep', 'citizen', 'renown', 'areaCache', 'confront', 'petition'];
@@ -23,6 +29,8 @@ export const JUSTICE_FIELDS = [
 ];
 export const CAREER_FIELDS = ['job', 'kits', 'escort', 'returning', 'oldLook', 'ent', 'lastAbs', 'lastStep', 'customer', 'nextCustomer'];
 export const FAVOR_FIELDS = ['list', 'offers', 'next', 'done', 'day'];
+// Each one's own map: where they've been, and what they've been told of.
+export const MAP_FIELDS = ['explored', 'exploredN', 'pins'];
 
 const GROUPS = [
   ['g', (game) => game, GAME_FIELDS],
@@ -31,6 +39,9 @@ const GROUPS = [
   ['j', (game) => game.sim.justice, JUSTICE_FIELDS],
   ['c', (game) => game.sim.careers, CAREER_FIELDS],
   ['f', (game) => game.sim.favors, FAVOR_FIELDS],
+  ['o', (game) => game.world && game.world.ow, MAP_FIELDS],
+  // (The bounties each has earned, toward claiming: see sim/bandits.js.)
+  ['b', (game) => game.sim.bandits, ['heads', 'headNames']],
 ];
 
 export class Seat {
@@ -63,7 +74,7 @@ export function freshStore(game, { player, hero = null, ui = null, input = null,
   Object.assign(g, {
     player, hero, playerName: name, ui, input, cursor: null, mining: null, pending: null, placeRepeat: 0, queuedBlow: null, fishing: null, sleep: null,
     waiting: null, sleepFast: 0, scene: null, shake: 0, hurtFlash: 0, healFlash: 0, stats: { kills: 0, crafted: 0, mined: 0, placed: 0 },
-    currentSettlement: null, wanted: new Map(), revealMap: false,
+    currentSettlement: null, wanted: new Map(), revealMap: false, dungeon: null, weather: null, cutscene: null, eruptPending: null,
   });
   const pick = (o, fields) => Object.fromEntries(fields.map((k) => [k, o[k]]));
   return {
@@ -73,6 +84,9 @@ export function freshStore(game, { player, hero = null, ui = null, input = null,
     j: pick(j, JUSTICE_FIELDS),
     c: pick(c, CAREER_FIELDS),
     f: pick(f, FAVOR_FIELDS),
+    // (Nowhere yet on their map: see Game.restoreSeat.)
+    o: { explored: new Uint8Array(game.world.ow.explored.length), exploredN: 0, pins: [] },
+    b: { heads: {}, headNames: {} },
   };
 }
 
@@ -120,6 +134,30 @@ export function asSeat(game, seat, fn) {
 export function seatField(game, seat, k) {
   if (seat === game.seat) return game[k];
   return seat.store && seat.store.g ? seat.store.g[k] : undefined;
+}
+
+// A seat's own field `f` of one of its groups (`k`: 'j' the law's view of
+// them, 's' the towns', 'c' their work...), wherever it is just now.
+export function seatPart(game, seat, k, f) {
+  if (seat === game.seat || !seat.store) {
+    const grp = GROUPS.find((q) => q[0] === k);
+    const o = grp ? grp[1](game) : null;
+    return o ? o[f] : undefined;
+  }
+  return seat.store[k] ? seat.store[k][f] : undefined;
+}
+
+// A seat's own map (its `explored`, `exploredN` and `pins`), wherever it
+// is just now.
+export function seatMap(game, seat) {
+  return seat === game.seat || !seat.store || !seat.store.o ? game.world.ow : seat.store.o;
+}
+
+// Has anyone playing been to (or been told of) map square `k`?
+export function exploredByAny(game, k) {
+  if (game.world.ow.explored[k]) return true;
+  for (const s of game.seats || []) if (s !== game.seat && s.store && s.store.o && s.store.o.explored[k]) return true;
+  return false;
 }
 
 // The whole party's players (the host's first): those still in the world.

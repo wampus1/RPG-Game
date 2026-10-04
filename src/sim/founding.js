@@ -10,6 +10,7 @@ import { RNG, hash4 } from '../util/rng.js';
 import { retrain } from '../entities/npcgen.js';
 import { B } from '../world/blocks.js';
 import { GROUND, REGION_W, REGION_D, MAP_W, MAP_H } from '../config.js';
+import { exploredByAny } from '../game/party.js';
 
 const MAX_FOUNDED = 4;
 const residents = (L) => L.npcs.filter((r) => alive(r) && !r.away && !r.migrated && !r.visitor);
@@ -66,7 +67,7 @@ export class Founding {
         if (!c || ['ocean', 'mountain', 'swamp', 'volcano'].includes(c.biome) || c.lake || c.settlement !== null || (c.mountainness || 0) > 0.3) continue;
         if (s.island && c.island !== s.island) continue;
         if (ow.settlements.some((o) => Math.hypot(o.cx - cx, o.cz - cz) < 3.2)) continue;
-        if (ow.explored[cz * MAP_W + cx] || this.game.world.regions.has(this.game.world.regionKey(cx, cz))) continue;
+        if (exploredByAny(this.game, cz * MAP_W + cx) || this.game.world.regions.has(this.game.world.regionKey(cx, cz))) continue;
         opts.push({ cx, cz, d });
       }
     }

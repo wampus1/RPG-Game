@@ -1,6 +1,7 @@
 // The town simulation layer that sits between the game and the settlement
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
+import { asSeat } from '../game/party.js';
 import { GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
@@ -223,6 +224,7 @@ export class Sim {
         if (c.road && c.road.length && !c.done) bp.list = [...L.roadOps(c.road), ...bp.list];
         c.bid = bp.bld.id;
         bp.bld.underConstruction = !c.done;
+        bp.bld.homeOwner = c.ownerName || undefined;
         L.buildings.push(bp.bld);
         this.bp = { sid, bp };
         if (c.done) this.completeHouse(L, bp, true);
@@ -282,7 +284,8 @@ export class Sim {
         this.syncTreasury(layout);
       }
       this.backgroundTick();
-      this.updateConstruction();
+      // (As the one whose house it is, with others playing: see asBuilder.)
+      this.asBuilder(() => this.updateConstruction());
       this.works.update();
       this.diplomacy.update();
       this.nomads.update();
@@ -1324,11 +1327,27 @@ export class Sim {
     return { ok: true, fee: t.fee, host, plot: t.plot, queued: !t.plot };
   }
 
+  // Is the house going up (if any) someone else's (another playing)?
+  othersHouse(k = this.construction) {
+    const g = this.game;
+    return !!(k && !k.done && !k.cancelled && k.owner && g.seat && k.owner !== g.seat.id);
+  }
+
+  // Do `fn` as the one whose house is going up (with others playing; while
+  // they're away from the world it waits for them).
+  asBuilder(fn) {
+    const c = this.construction;
+    const g = this.game;
+    if (!c || !c.owner || !g.seats || (g.seat && g.seat.id === c.owner)) return fn();
+    const seat = g.seats.find((q) => q.id === c.owner);
+    return seat ? asSeat(g, seat, fn) : null;
+  }
+
   // A lot came free for the home you're waiting on.
   startHome(L) {
     const c = this.citizen;
     const k = this.construction;
-    if (!c || c.sid !== L.settlement.id || (c.home !== null && c.home !== undefined) || (k && k.sid === c.sid && !k.done && !k.cancelled)) return null;
+    if (!c || c.sid !== L.settlement.id || (c.home !== null && c.home !== undefined) || (k && k.sid === c.sid && !k.done && !k.cancelled) || this.othersHouse(k)) return null;
     const plot = this.works.freePlot(L);
     if (!plot) return null;
     const b = this.buildHome(L, plot);
@@ -1351,7 +1370,10 @@ export class Sim {
     bp.bld.underConstruction = true;
     L.buildings.push(bp.bld);
     this.bp = { sid: s.id, bp };
-    this.construction = { sid: s.id, plot: plot.id, rect: rect !== plot ? { x0: rect.x0, z0: rect.z0, x1: rect.x1, z1: rect.z1 } : null, bid: bp.bld.id, road, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false };
+    // (Whose: with others playing, the one it's being done as.)
+    const owner = this.game.seat ? this.game.seat.id : null;
+    bp.bld.homeOwner = this.game.playerName;
+    this.construction = { sid: s.id, plot: plot.id, rect: rect !== plot ? { x0: rect.x0, z0: rect.z0, x1: rect.x1, z1: rect.z1 } : null, bid: bp.bld.id, road, start: this.abs, work: 0, placed: 0, need: 20 * 60, last: this.abs, done: false, owner, ownerName: this.game.playerName };
     this.assignBuilders(L, day, this.abs);
     ledger(L, day, `Builders started on a cottage for ${this.game.playerName}${road.length ? ' (the path to it first)' : ''}.`);
     return bp.bld;
@@ -1366,6 +1388,9 @@ export class Sim {
     if (!c || c.sid !== s.id) return { ok: false, reason: 'citizen' };
     if (c.home !== null && c.home !== undefined) return { ok: false, reason: 'have' };
     const k = this.construction;
+    // (The builders on someone else's house, with others playing: one at a
+    // time.)
+    if (this.othersHouse(k)) return { ok: false, reason: 'busy' };
     if (k && k.sid === s.id && !k.done && !k.cancelled) return { ok: false, reason: 'building' };
     // No lot free: you can still pay; the house goes up on the next one.
     const plot = this.works.freePlot(L);
@@ -1734,8 +1759,13 @@ export class Sim {
     if (!L.spots.includes(bp.spots[0])) L.spots.push(...bp.spots);
     for (const ch of bp.chimneys) if (!L.chimneys.includes(ch)) L.chimneys.push(ch);
     for (const sg of bp.signs) if (!L.signs.includes(sg)) L.signs.push(sg);
-    bld.homeName = `${this.game.playerName}'s Cottage`;
-    if (this.citizen && this.citizen.sid === c.sid) {
+    // (Whose it is, by name; and theirs, with others playing, not whoever's
+    // about when the town's laid out again.)
+    const who = c.ownerName || this.game.playerName;
+    const mine = !c.owner || !this.game.seat || this.game.seat.id === c.owner;
+    bld.homeName = `${who}'s Cottage`;
+    bld.homeOwner = who;
+    if (mine && this.citizen && this.citizen.sid === c.sid) {
       this.citizen.home = bld.id;
       const bed = bld.beds[0];
       if (bed) this.citizen.homeBed = { x: bed.x, y: GROUND, z: bed.z };

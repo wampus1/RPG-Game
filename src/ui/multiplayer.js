@@ -10,6 +10,7 @@ import { C, wrap, Grid, drawGrid } from './ascii.js';
 import { avatarCanvas, drawAvatar } from '../render/avatar.js';
 import { ICON_SHAPES, ICON_COLORS, ICON_BGS, ICON_PATTERNS, ICON_FRAMES, TITLES, NAME_MAX, DESC_MAX, DESC_WORDS, wordCount, nameProblem, cleanIcon } from '../net/account.js';
 import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
+import { GUILD_NAME_MAX } from '../game/guilds.js';
 
 // (Solid: nothing behind shows through.)
 const PANEL = '#100c18';
@@ -396,11 +397,18 @@ export class PartyWindow extends Window {
     } else g.text(2, y++, c.pvp ? 'Players can hurt each other here (the host allows it).' : 'Players can\'t hurt each other here.', c.pvp ? C.red : C.faint);
     y++;
     const row = (p, yy, extra) => {
-      const cv = avatarCanvas(p.icon, 1);
+      const cv = p.icon ? avatarCanvas(p.icon, 1) : null;
       if (cv) g.image(2, yy, cv, 0, 0);
+      else if (p.color) g.text(3, yy, '■', p.color);
       const nm = p.name + (p.host ? ' (host)' : '') + (p.id === c.me ? ' (you)' : '');
-      g.text(6, yy, nm, p.id === c.me ? C.hi : C.white);
-      if (p.title) g.text(7 + nm.length, yy, `· ${p.title}`, C.dim);
+      g.text(6, yy, nm, p.id === c.me ? C.hi : p.color || C.white);
+      let tx = 7 + nm.length;
+      if (p.title) {
+        g.text(tx, yy, `· ${p.title}`, C.dim);
+        tx += p.title.length + 3;
+      }
+      // (Their guild, by name, in its colour.)
+      if (p.guild) g.text(tx, yy, `[${p.guild.name}]`, p.guild.color);
       g.text(6, yy + 1, (p.desc || '').slice(0, 34), C.faint);
       let x = this.w - 2;
       for (const [label, fn, col] of extra.reverse()) {
@@ -417,11 +425,29 @@ export class PartyWindow extends Window {
     const head = (text) => list.push({ h: 1, draw: (yy) => g.text(2, yy, text, C.border) });
     const line = (text) => list.push({ h: 1, draw: (yy) => g.text(3, yy, text, C.faint) });
     const entry = (p, extra) => list.push({ h: 3, draw: (yy) => row(p, yy, extra) });
+    // Your guild (or the founding of one), and invitations to others'.
+    const guilds = c.guilds || [];
+    const mine = guilds.find((q) => q.members.includes(c.me)) || null;
+    const guildOf = (id) => guilds.find((q) => q.members.includes(id)) || null;
+    head(mine ? `YOUR GUILD · ${mine.name.toUpperCase()} (${mine.members.length})` : 'GUILD');
+    if (mine) {
+      const names = mine.members.map((m) => `${(mine.names && mine.names[m]) || 'someone'}${m === mine.leader ? ' (leads)' : ''}`).join(', ');
+      entry({ name: mine.name, color: mine.color, desc: names }, [['Leave', () => H.guild('leave'), C.orange]]);
+      line('Guildmates see each other on the maps, and down the side of the screen.');
+    } else {
+      list.push({ h: 2, draw: (yy) => button(this, g, 2, yy, 30, '[G] Found a guild...', () => H.foundGuild(), { color: C.hi }) });
+      line('A guild\'s members see each other on the maps, wherever they are.');
+    }
+    for (const q of guilds.filter((o) => o.invites.includes(c.me) && !o.members.includes(c.me))) {
+      entry({ name: q.name, color: q.color, desc: `asks you to join (${q.members.length} member${q.members.length === 1 ? '' : 's'})` }, [['Join', () => H.guild('join', { gid: q.id }), C.green], ['Decline', () => H.guild('decline', { gid: q.id }), C.red]]);
+    }
     head(`PLAYERS (${c.party.length}/${MAX_PLAYERS})`);
     for (const p of c.party) {
       const extra = [['Profile', () => H.profile(p)]];
+      // (Into your guild: anyone here not in it, nor asked yet.)
+      if (mine && p.id !== c.me && !mine.members.includes(p.id) && !mine.invites.includes(p.id)) extra.push(['Invite to guild', () => H.guild('invite', { to: p.id }), C.cyan]);
       if (c.host && !p.host) extra.push(['Kick', () => H.kick(p), C.orange], ['Ban', () => H.ban(p), C.red]);
-      entry(p, extra);
+      entry({ ...p, guild: guildOf(p.id) }, extra);
     }
     if (c.host) {
       head('BANNED');
@@ -463,6 +489,7 @@ export class PartyWindow extends Window {
     const c = this.ctx();
     if (k.code === 'Escape' || k.code === 'KeyP') this.close();
     else if (k.code === 'KeyA') c.hooks.account();
+    else if (k.code === 'KeyG' && !(c.guilds || []).some((q) => q.members.includes(c.me))) c.hooks.foundGuild();
     else if (k.code === 'KeyL' && !c.host) c.hooks.leave();
     else if (k.code === 'KeyV' && c.host) c.hooks.pvp();
     else if (k.code === 'ArrowDown') this.scroll += 3;
@@ -472,6 +499,40 @@ export class PartyWindow extends Window {
 
   onWheel(d) {
     this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll + Math.sign(d) * 3));
+  }
+}
+
+// A guild's name, to found it by.
+export class GuildNameWindow extends Window {
+  constructor(ui, onDone) {
+    super(ui, 50, 12, { kind: 'guildName' });
+    this.name = '';
+    this.onDone = onDone;
+  }
+
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, PANEL);
+    g.box(0, 0, this.w, this.h, { bg: PANEL, double: true, title: 'FOUND A GUILD' });
+    g.text(2, 2, 'What\'s it to be called?', C.fg);
+    g.fill(2, 4, this.w - 4, 1, ' ', C.fg, C.bgSel);
+    g.text(3, 4, this.name + (Math.floor(this.ui.time * 2) % 2 ? '_' : ''), C.white);
+    g.text(2, 6, `At most ${GUILD_NAME_MAX} letters. You can ask others to join after.`, C.faint, undefined, this.w - 4);
+    button(this, g, 2, 8, 22, '[ENTER] Found it', () => this.done(), { off: this.name.trim().length < 3, color: C.hi });
+    button(this, g, 26, 8, 22, '[ESC] Back', () => this.close());
+  }
+
+  done() {
+    if (this.name.trim().length < 3) return;
+    this.close();
+    this.onDone(this.name.trim());
+  }
+
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'Enter') this.done();
+    else if (k.code === 'Backspace') this.name = this.name.slice(0, -1);
+    else if (k.key && k.key.length === 1 && this.name.length < GUILD_NAME_MAX && /[A-Za-z0-9 '\-&.]/.test(k.key)) this.name += k.key;
+    return true;
   }
 }
 
@@ -665,7 +726,8 @@ export function tickNotes(ui, dt) {
 
 export function drawNotes(ui, ctx) {
   if (!ui.notes || !ui.notes.length) return;
-  let y = 7 * CHAR_H;
+  // (Under the strip of guildmates, if there is one: see UI.drawGuildStrip.)
+  let y = Math.max(7 * CHAR_H, ui.notesTop || 0);
   for (const n of ui.notes) {
     const lines = wrap(n.text, 30);
     const w = Math.max(...lines.map((l) => l.length)) + (n.profile ? 5 : 2);

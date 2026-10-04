@@ -17,7 +17,7 @@
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { settleAfflictions } from './afflict.js';
-import { updateWorks, clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
+import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { ITEMS, RELICS } from '../world/items.js';
@@ -25,13 +25,15 @@ import { relicAt, placeTag, RELIC_R } from './relics.js';
 import { maybeWallFalls } from './wallfall.js';
 import { Creature } from '../entities/creature.js';
 import { fits, fitNear } from '../entities/footprint.js';
-import { tickFieldsOff, restoreFields } from '../entities/fields.js';
+import { restoreFields } from '../entities/fields.js';
 import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud, sentinelDown } from '../entities/monsters.js';
 import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
 import { dropFields, raiseFields } from './kavtech.js';
 import { bossEntrance, bossDefeat, liftRide } from './scenes.js';
+import { seatField } from './party.js';
+import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
@@ -57,6 +59,12 @@ export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
 export const DUNGEON_INTERACTS = new Set(['dungeon', 'stairs', 'lever', 'portcullis', 'sealed', 'coffin', 'brazier', 'kav_pillar', 'kav_lift', 'kav_console', 'kav_node', 'boss_gate', 'idol']);
 
+// Each old place's own space apart, out past the map (see
+// config.INST_SLOT_RX): its slot, after the one a ship at sea has. (Its own,
+// always: so more than one can be open at once, for players down different
+// ones, and what's kept of its floors is always where it was left.)
+export const slotOf = (rec) => rec.id + 1;
+
 export class DungeonRun {
   constructor(game, rec) {
     this.game = game;
@@ -67,13 +75,62 @@ export class DungeonRun {
     this.data = null;
     this.state = null;
     this.t = 0;
-    this.stash = null;
     this.plateOn = new Map();
     this.crumble = null;
     this.dripT = 2;
     this.fight = null;
     this.hazardT = 20;
     this.moteT = 0;
+    // Its space: x from x0 up to (not including) x1.
+    this.slot = slotOf(rec);
+    this.rx0 = INST_RX + this.slot * INST_SLOT_RX;
+    this.x0 = this.rx0 * REGION_W;
+    this.x1 = this.x0 + INST_SLOT_RX * REGION_W;
+    this.inst = null;
+    // What each of you came down with (see unbound).
+    this.carriedBy = new Map();
+  }
+
+  // What the one it's being done as came down with (each their own).
+  get carried() {
+    return (this.carriedBy && this.carriedBy.get(this.game.player)) || null;
+  }
+
+  set carried(v) {
+    this.carriedBy ||= new Map();
+    if (v) this.carriedBy.set(this.game.player, v);
+    else this.carriedBy.delete(this.game.player);
+  }
+
+  // Is `e` (or the spot x) down here, in this place's own space?
+  has(e) {
+    const x = typeof e === 'number' ? e : e && e.x;
+    return x !== undefined && x >= this.x0 && x < this.x1;
+  }
+
+  // Its own things (not another old place's, nor the island's).
+  creatures() {
+    return this.game.creatures.filter((c) => this.has(c));
+  }
+
+  // Everyone down here (each player whose old place this is).
+  players() {
+    const game = this.game;
+    if (!game.seats || game.seats.length < 2) return game.dungeon === this && game.player ? [game.player] : [];
+    const out = [];
+    for (const s of game.seats) {
+      if (seatField(game, s, 'dungeon') !== this) continue;
+      const p = s === game.seat ? game.player : s.ent;
+      if (p) out.push(p);
+    }
+    return out;
+  }
+
+  // One of you down here (on your feet, if any are), for the place's own
+  // goings-on to be done as (see Game.inPlace).
+  lead() {
+    const all = this.players();
+    return all.find((q) => !q.dead) || all[0] || null;
   }
 
   get kav() {
@@ -87,8 +144,9 @@ export class DungeonRun {
   }
 
   // ------------------------------------------------------------ going down
-  // From the surface: everything up there is put by (the beasts about you,
-  // the birds), and you're on the first floor.
+  // From the surface, down onto the first floor (or, with someone of yours
+  // already down here, onto the floor they're on). With nobody left up top,
+  // everything up there is put by (the beasts about you, the birds).
   enter() {
     const game = this.game;
     const p = game.player;
@@ -98,66 +156,59 @@ export class DungeonRun {
     this.carried = Object.fromEntries(holdings(p));
     this.rec.entered = true;
     this.rec.known = true;
-    // (What was about you up there waits where it was.)
-    this.stash = { creatures: game.creatures, drops: game.drops };
-    for (const c of game.creatures) game.removeOcc(c);
-    game.creatures = [];
-    game.drops = [];
-    game.projectiles = [];
-    game.orbs = [];
-    game.hazards = [];
-    game.wildlife?.clear();
-    game.weather = null;
+    const others = this.players().filter((q) => q !== p);
     game.dungeon = this;
     game.mining = null;
-    this.open(0, 'top');
+    // (Nobody left on the island: what was about you up there waits
+    // where it was. See Game.putByIsland.)
+    game.putByIsland?.();
+    if (!game.seat || game.seat.host) game.wildlife?.clear();
+    if (game.runs) game.runs.set(this.rec.id, this);
+    if (others.length && this.data) {
+      // The others are down here already: you join them on their floor.
+      this.arrive(p, 'top');
+      const who = others.map((q) => (q.account && q.account.name) || 'the others');
+      game.ui.msg(`You go down into ${this.rec.name}, after ${who.length > 1 ? 'the others' : who[0]}: floor ${this.floor + 1} of ${this.rec.depth}${this.kindTitle()}.`, '#e0c890');
+    } else {
+      this.open(0, 'top');
+      game.ui.msg(this.kav ? `The lift sinks into the dark. ${cap(this.rec.name)}: floor 1 of ${this.rec.depth}${this.kindTitle()}.` : `You go down into ${this.rec.name}. (Floor 1 of ${this.rec.depth}.)`, '#e0c890');
+    }
+    this.scaleBosses();
     game.updateSettlements(true);
-    game.ui.msg(this.kav ? `The lift sinks into the dark. ${cap(this.rec.name)}: floor 1 of ${this.rec.depth}${this.kindTitle()}.` : `You go down into ${this.rec.name}. (Floor 1 of ${this.rec.depth}.)`, '#e0c890');
     if (this.rec.cleared) game.ui.msg('It\'s quiet down here now.', '#c8c8c8');
     game.audio?.play(this.kav ? 'lift' : 'door');
     game.renderer.flashScreen?.('#000000', 0.6);
   }
 
-  // Back up to the surface (or a respawn): the floor's kept, the place
-  // apart is gone, and what was up there comes back.
+  // Back up to the surface (or a respawn): you alone (anyone else down here
+  // stays, on their floor). The last of you out: the floor's kept, the
+  // place apart is gone, and what was put by up top comes back.
   leave(to = null) {
     const game = this.game;
+    const p = game.player;
     // Up and out alive with what you found: it's yours now.
-    if (!game.player.dead && this.unbound().length) game.ui.msg('Up in the daylight, what you found below is yours to keep.', '#ffe070');
+    if (!p.dead && this.unbound().length) game.ui.msg('Up in the daylight, what you found below is yours to keep.', '#ffe070');
     settleAfflictions(game);
     this.carried = null;
-    this.saveFloor();
-    this.clearFloor();
-    game.world.setInstance(null);
     game.dungeon = null;
-    game.hazards = [];
-    game.zones = [];
-    game.bulwarks = [];
-    game.fieldsOff = [];
-    game.lodestar = null;
-    game.projectiles = [];
-    game.orbs = [];
-    if (this.stash) {
-      game.creatures = this.stash.creatures.filter((c) => !c.dead);
-      game.drops = this.stash.drops.filter((d) => !d.dead);
-      this.stash = null;
-    }
+    this.plateOn.delete(p);
+    const last = !this.players().length;
+    if (last) this.close();
+    else this.scaleBosses();
+    game.raiseIsland?.();
     const site = game.sim.dungeons.site(this.rec);
-    // (Beaten: the way in falls shut behind you.)
-    if (this.rec.cleared && site && this.rec.type !== 'kavorent') {
-      site.state = { ...(site.state || {}), cleared: true };
-    }
+    // (Beaten, and the last of you out: the way in falls shut behind you.)
+    const fallsIn = last && this.rec.cleared && site && this.rec.type !== 'kavorent';
+    if (fallsIn) site.state = { ...(site.state || {}), cleared: true };
     // (Up out of the last of the three spires beaten: the storm wall's
     // scene, as soon as you're out. See wallfall.js.)
     if (this.rec.type === 'kavorent' && this.rec.cleared) maybeWallFalls(game);
     const at = to || this.exitSpot();
     game.loadAround(at.x, at.z, true);
-    const fallsIn = this.rec.cleared && site && this.rec.type !== 'kavorent';
     if (fallsIn) restamp(game.world, site);
-    for (const c of game.creatures) if (!c.dead) game.moveEntity(c, c.x, c.y, c.z);
     const spot = game.findFreeSpot(at.x, at.z, at.y);
-    game.player.teleport(spot.x, spot.y, spot.z);
-    this.gatherParty(spot, 'up', fallsIn);
+    p.teleport(spot.x, spot.y, spot.z);
+    game.moveEntity?.(p, spot.x, spot.y, spot.z);
     game.renderer.camInit = false;
     game.lightDirty = true;
     game.updateSettlements(true);
@@ -174,6 +225,18 @@ export class DungeonRun {
     }
   }
 
+  // Nobody left down here: the floor kept as it is, its things gone, the
+  // place apart closed.
+  close() {
+    const game = this.game;
+    this.saveFloor();
+    this.clearFloor();
+    if (this.inst) game.world.closeInst(this.inst);
+    this.inst = null;
+    this.fight = null;
+    if (game.runs && game.runs.get(this.rec.id) === this) game.runs.delete(this.rec.id);
+  }
+
   // Everyone come up beside `spot` (the whole party, or just you).
   partyHereUp(spot) {
     const game = this.game;
@@ -181,40 +244,42 @@ export class DungeonRun {
     return all.filter((q) => q && !q.dead && Math.max(Math.abs(q.x - spot.x), Math.abs(q.z - spot.z)) <= 6);
   }
 
-  // With others in the world (see game/party.js), where one of you goes
-  // the rest go too: the whole party, beside whoever led the way.
-  gatherParty(spot, way, fallsIn = false) {
+  // Down here with others (see game/party.js): where one of you goes, to
+  // another floor, the rest down here go too (the floor's the same for all
+  // of you), beside whoever led the way.
+  gatherParty(spot, way) {
     const game = this.game;
     if (!game.isParty || !game.isParty()) return;
     const lead = game.player;
-    for (const q of game.everyone()) {
+    for (const q of this.players()) {
       if (q === lead) continue;
       game.asPlayer(q, () => {
-        game.stopPlayerActions?.();
-        if (game.sleep) game.sleep = null;
-        game.sleepFast = 0;
-        game.waiting = null;
-        q.sleeping = false;
-        q.sitting = null;
-        q.raft = null;
-        game.mining = null;
+        this.stopFor(q);
         const at = game.findFreeSpot(spot.x + 1, spot.z + 1, spot.y);
         q.teleport(at.x, at.y, at.z);
         game.moveEntity(q, at.x, at.y, at.z);
         const who = (lead.account && lead.account.name) || game.seats[0].name;
-        if (way === 'down') game.ui.msg(`${who} leads the party down: floor ${this.floor + 1} of ${this.rec.depth} of ${this.rec.name}.`, '#e0c890');
-        else {
-          game.ui.msg(`${who} leads the party back up into the air.${fallsIn ? ' Behind you, the way down falls in.' : ''}`, '#e0c890');
-          game.renderer.flashScreen?.('#ffffff', 0.25);
-        }
+        if (way === 'down') game.ui.msg(`${who} leads the way: floor ${this.floor + 1} of ${this.rec.depth} of ${this.rec.name}.`, '#e0c890');
       });
     }
   }
 
+  // Whatever you were at, stopped (moved to another floor).
+  stopFor(q) {
+    const game = this.game;
+    game.stopPlayerActions?.();
+    if (game.sleep) game.sleep = null;
+    game.sleepFast = 0;
+    game.waiting = null;
+    q.sleeping = false;
+    q.sitting = null;
+    q.raft = null;
+    game.mining = null;
+  }
+
   // Someone left standing down here besides `p` (with others playing)?
   partyBelow(p) {
-    const game = this.game;
-    return !!(game.isParty && game.isParty() && game.everyone().some((q) => q !== p && !q.dead && game.world.inInstance(q.x)));
+    return this.players().some((q) => q !== p && !q.dead);
   }
 
   // Where you come out: in front of the way in.
@@ -238,28 +303,30 @@ export class DungeonRun {
   open(n, arrive) {
     const game = this.game;
     this.floor = n;
-    const data = buildFloor(this.rec, n);
-    const kept = this.rec.floors[n];
+    const data = buildFloor(this.rec, n, this.rx0);
+    let kept = this.rec.floors[n];
+    // (Kept from before each old place had its own space: moved over.)
+    if (kept && kept.gen === FLOOR_GEN && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
     const saved = kept && kept.gen === FLOOR_GEN ? kept : null;
     if (saved && saved.regions) for (const sr of saved.regions) data.regions.set(sr.rx * 4096 + sr.rz, Region.deserialize(sr));
     this.data = data;
     this.state = saved && saved.state ? saved.state : { killed: [], solved: {}, nodes: {}, step: {}, fallen: false, looted: false };
     // (What you've built down here: a master will smash through it.)
     this.placed = new Set(this.state.placed || []);
-    game.world.setInstance({ regions: data.regions, floor: n, maxY: FY });
+    this.inst = { slot: this.slot, regions: data.regions, floor: n, maxY: FY };
+    game.world.openInst(this.inst);
     // First time down here: adventurers have been before you, perhaps.
     if (!saved) this.firstVisit();
-    // Your own pack, where you fell (told as you come near it).
-    const pk = this.rec.pack;
-    if (pk && pk.floor === n) {
-      if (game.world.getBlock(pk.x, FY, pk.z) === B.satchel) this.notes = [...(this.notes || []).filter((q) => !q.pack), { x: pk.x, z: pk.z, floor: n, pack: true, text: 'Your pack, where you fell. What you found is still in it.' }];
-      else this.rec.pack = null;
-    }
+    // The packs of those who fell down here, where they fell (each told
+    // as someone comes near it: see packNote).
+    this.rec.packs = (this.rec.packs || []).filter((pk) => pk.floor !== n || game.world.getBlock(pk.x, FY, pk.z) === B.satchel);
+    this.notes = (this.notes || []).filter((q) => !q.pack);
+    for (const pk of this.rec.packs) if (pk.floor === n) this.notes.push({ x: pk.x, z: pk.z, floor: n, pack: pk });
     // The relic on the sealed vault's plinth (what kind it is, remembered).
     const ra = data.relicAt;
     if (ra && game.world.getBlock(ra.x, FY, ra.z) === B.relic && !relicAt(game, ra.x, FY, ra.z)) {
       if (!game.relics) game.relics = new Map();
-      game.relics.set(`${ra.x},${FY},${ra.z}`, { x: ra.x, y: FY, z: ra.z, kind: ra.kind, r: RELIC_R, inst: placeTag(game) });
+      game.relics.set(`${ra.x},${FY},${ra.z}`, { x: ra.x, y: FY, z: ra.z, kind: ra.kind, r: RELIC_R, inst: placeTag(game, ra.x) });
     }
     // Who's still about.
     for (const s of data.spawns) {
@@ -292,16 +359,9 @@ export class DungeonRun {
         c.isBoss = true;
       }
     }
-    // Where you come in.
-    let at;
-    if (arrive === 'top') at = data.upAt || { x: data.up.x, z: data.up.z + 1 };
-    else if (arrive === 'bottom') at = data.down ? data.downAt || { x: data.down.x + 1, z: data.down.z } : data.entry;
-    else at = this.landing(arrive.x, arrive.z);
-    const y = game.world.findStandY(at.x, at.z, FY);
-    const spot = game.world.canStand(at.x, y, at.z) && !game.occupiedBySolid(at.x, y, at.z, game.player) ? { x: at.x, y, z: at.z } : game.findFreeSpot(at.x, at.z, FY);
-    game.player.teleport(spot.x, spot.y, spot.z);
+    // Where you come in (and the rest of you down here with you).
+    const spot = this.arrive(game.player, arrive);
     this.gatherParty(spot, 'down');
-    game.renderer.camInit = false;
     game.lightDirty = true;
     this.plateOn.clear();
     this.crumble = null;
@@ -310,6 +370,23 @@ export class DungeonRun {
     // (A gate left up on a master still living comes down again.)
     const g = data.bossGate;
     if (g && !this.rec.cleared && game.world.getBlock(g.x, FY, g.z) === B.boss_gate_open) game.world.setBlock(g.x, FY, g.z, B.boss_gate, g.rot);
+  }
+
+  // `p` put down on this floor: at 'top' (the way in), 'bottom' (by the
+  // way down), or a spot (fallen through to). Where they stand.
+  arrive(p, arrive) {
+    const game = this.game;
+    const data = this.data;
+    let at;
+    if (arrive === 'top') at = data.upAt || { x: data.up.x, z: data.up.z + 1 };
+    else if (arrive === 'bottom') at = data.down ? data.downAt || { x: data.down.x + 1, z: data.down.z } : data.entry;
+    else at = this.landing(arrive.x, arrive.z);
+    const y = game.world.findStandY(at.x, at.z, FY);
+    const spot = game.world.canStand(at.x, y, at.z) && !game.occupiedBySolid(at.x, y, at.z, p) ? { x: at.x, y, z: at.z } : game.findFreeSpot(at.x, at.z, FY);
+    p.teleport(spot.x, spot.y, spot.z);
+    game.moveEntity?.(p, spot.x, spot.y, spot.z);
+    if (p === game.player) game.renderer.camInit = false;
+    return spot;
   }
 
   // Where you come down, through a floor that gave way above: the nearest
@@ -411,31 +488,31 @@ export class DungeonRun {
     dropWorks(this.game);
     const regions = [];
     for (const r of this.data.regions.values()) if (r.modified) regions.push(r.serialize());
-    this.rec.floors[this.floor] = { regions, state: this.state, gen: FLOOR_GEN };
+    this.rec.floors[this.floor] = { regions, state: this.state, gen: FLOOR_GEN, rx0: this.rx0 };
     raiseWorks(this.game);
     raiseFields(this.game);
   }
 
   // Off this floor: its things go (they're kept, or will be made again).
+  // (Only its own: anyone else's old place, and the island, carry on.)
   clearFloor() {
     const game = this.game;
-    clearWorks(game);
-    game.works = [];
+    const mine = (x) => this.has(x);
+    clearWorks(game, null, (q) => mine(q.x) || (q.by && mine(q.by)));
     for (const c of game.creatures) {
+      if (!mine(c)) continue;
       game.removeOcc(c);
       c.dead = true;
     }
-    game.creatures = [];
-    game.drops = [];
-    game.hazards = [];
-    game.zones = [];
-    game.projectiles = [];
-    game.orbs = [];
-    game.flames = [];
-    game.lasers = [];
-    game.kavSpikes = [];
-    game.fireTiles = null;
-    for (const n of game.npcs) if (n.inDungeon) game.despawnNpc?.(n);
+    game.creatures = game.creatures.filter((c) => !mine(c));
+    game.drops = game.drops.filter((d) => !mine(d));
+    const at = (q) => (q.tiles && q.tiles[0] ? q.tiles[0].x : q.x0 ?? q.x ?? (q.by && q.by.x));
+    for (const k of ['hazards', 'zones', 'projectiles', 'orbs', 'flames', 'lasers', 'kavSpikes', 'fieldsOff', 'bulwarks']) {
+      if (!Array.isArray(game[k])) continue;
+      game[k] = game[k].filter((q) => !mine(k === 'fieldsOff' ? q.off && q.off[0] && q.off[0].x : k === 'bulwarks' ? q.put && q.put[0] && q.put[0].x : at(q)));
+    }
+    if (game.lodestar && mine(game.player)) game.lodestar = null;
+    if (game.fireTiles) for (const k of [...game.fireTiles.keys()]) if (mine(Math.floor(k / 65536))) game.fireTiles.delete(k);
   }
 
   // To another floor (`dir` +1 down, -1 up): this one kept, that one made.
@@ -520,9 +597,8 @@ export class DungeonRun {
 
   // Everyone down here (with others in the world, any of you).
   partyHere() {
-    const game = this.game;
-    const all = game.everyone ? game.everyone().filter((q) => game.world.inInstance(q.x)) : [];
-    return all.length ? all : [game.player];
+    const all = this.players();
+    return all.length ? all : [this.game.player];
   }
 
   // Everyone down here, each as themselves (their own screen, scene and
@@ -536,7 +612,7 @@ export class DungeonRun {
   // coming down, or going up, mid-fight: how far gone it is stays the same).
   scaleBosses(n = this.partyHere().length) {
     const k = partyHpScale(n);
-    for (const c of this.game.creatures) {
+    for (const c of this.creatures()) {
       if (!c.isBoss || !c.inst || c.dead) continue;
       const was = c.partyScale || 1;
       if (Math.abs(was - k) < 1e-6) continue;
@@ -558,15 +634,13 @@ export class DungeonRun {
     const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
     const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;
     this.t += dt;
-    // Fields the Overseer turned off, back up in their time (see
-    // entities/fields.js); what a master's done to its hall, put back in
-    // its time (see bosskit.js).
-    tickFieldsOff(game, dt);
-    updateWorks(game, dt);
+    // (Fields the Overseer turned off, and what a master's done to its
+    // hall, are put back in their time once a frame for every old place
+    // at once: see Game.update.)
     this.markStairs();
     if (this.arriveT > 0) this.arriveT -= dt;
     // The dead stirring as you pass; golems waking.
-    for (const c of game.creatures) {
+    for (const c of this.creatures()) {
       if (!c.dormant || c.dead) continue;
       if (c.waiting) {
         // (Struck where it waits, by you, from its hall or its doorway: it
@@ -587,7 +661,7 @@ export class DungeonRun {
       }
     }
     // Plates trodden on (by anyone: the dead set traps off too).
-    for (const e of [...party, ...game.creatures]) {
+    for (const e of [...party, ...this.creatures()]) {
       if (!e || e.dead || e.burrowed || e.S?.floats) continue;
       const k = `${e.x},${e.z}`;
       const prev = this.plateOn.get(e);
@@ -643,13 +717,15 @@ export class DungeonRun {
     game.asPlayer(victim, () => this.placeDangers(dt));
     this.spikesTick(dt);
     this.ambience(dt);
-    // Notes left (an adventurer's remains): told as you come near.
+    // Notes left (an adventurer's remains): told as you come near. (A pack
+    // someone fell and left: told to each of you, as theirs or yours.)
     for (const nt of this.notes || []) {
       if (nt.told || (nt.floor !== undefined && nt.floor !== this.floor)) continue;
-      const by = party.find((q) => Math.abs(nt.x - q.x) <= 3 && Math.abs(nt.z - q.z) <= 3);
+      const by = party.find((q) => Math.abs(nt.x - q.x) <= 3 && Math.abs(nt.z - q.z) <= 3 && !(nt.toldTo && nt.toldTo.has(q)));
       if (!by) continue;
-      nt.told = true;
-      game.asPlayer(by, () => game.ui.msg(nt.text, '#c8b8a0'));
+      if (nt.pack) (nt.toldTo ||= new Set()).add(by);
+      else nt.told = true;
+      game.asPlayer(by, () => game.ui.msg(nt.pack ? packNote(game, nt.pack, by) : nt.text, '#c8b8a0'));
     }
   }
 
@@ -664,7 +740,7 @@ export class DungeonRun {
     if (this.fight || this.rec.cleared) return;
     const game = this.game;
     const p = game.player;
-    const boss = game.creatures.filter((c) => c.isBoss && !c.dead && c.leash);
+    const boss = this.creatures().filter((c) => c.isBoss && !c.dead && c.leash);
     if (!boss.length) return;
     const g = this.data.bossGate;
     // (Not on anyone still outside the hall: with others down here, it
@@ -780,7 +856,7 @@ export class DungeonRun {
     if (p.dead || this.arriveT > 0) return;
     // Gongs: whoever's after you strikes the nearest.
     if (type === 'holdout') {
-      for (const c of game.creatures) {
+      for (const c of this.creatures()) {
         if (c.dead || !c.target || c.target.kind !== 'player' || c.rang || c.isBoss) continue;
         const gong = this.data.gongs.find((q) => !q.rung && Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) <= 9 && game.world.getBlock(q.x, FY, q.z) === B.gong);
         c.rang = true;
@@ -875,7 +951,7 @@ export class DungeonRun {
     game.renderer.floatText(gong.x, FY + 2.4, gong.z, 'BONG!', '#f0c860');
     by.say?.('Alarm! To arms!', 2.5, '#ff9070');
     let n = 0;
-    for (const c of game.creatures) {
+    for (const c of this.creatures()) {
       if (c.dead || c.isBoss || c.waiting || Math.max(Math.abs(c.x - gong.x), Math.abs(c.z - gong.z)) > 24) continue;
       c.dormant = 0;
       c.target = p;
@@ -898,7 +974,8 @@ export class DungeonRun {
     if (this.dripT <= 0) {
       this.dripT = 4 + Math.random() * 7;
       const sounds = this.T.ambient || ['drip'];
-      game.audio?.play(sounds[Math.floor(Math.random() * sounds.length)]);
+      // (Where one of you is: heard by whoever's near, with others down here.)
+      game.audio?.play(sounds[Math.floor(Math.random() * sounds.length)], game.isParty?.() ? { x: p.x, z: p.z } : undefined);
     }
     if (this.kav) this.kavAir(dt);
     this.moteT -= dt;
@@ -1144,7 +1221,7 @@ export class DungeonRun {
           // channel somewhere below.)
           game.ui.msg(lava ? 'A sluice grinds open: the lava runs away down some channel below, hissing.' : 'A sluice opens: the black water drains away with a long gurgle.', lava ? '#ffb070' : '#80c8e0');
           game.audio?.play('pour');
-          for (const c of game.creatures) if (c.submerged) {
+          for (const c of this.creatures()) if (c.submerged) {
             c.submerged = false;
             c.stunT = 0.5;
           }
@@ -1313,7 +1390,7 @@ export class DungeonRun {
     const master = e.spawnId !== undefined && masters.some((s) => s.id === e.spawnId);
     // (Two of them: the one left takes it hard.)
     if (master && !masters.every((s) => this.state.killed.includes(s.id))) {
-      for (const c of game.creatures) if (!c.dead && c.isBoss && c !== e) bossRage(game, c, e);
+      for (const c of this.creatures()) if (!c.dead && c.isBoss && c !== e) bossRage(game, c, e);
       return;
     }
     if (e.isBoss && master && !this.rec.cleared) {
@@ -1341,7 +1418,7 @@ export class DungeonRun {
       this.eachHere(() => game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070'));
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.
-      for (const c of game.creatures) {
+      for (const c of this.creatures()) {
         if (c.dead || c === e) continue;
         if (c.master === e || c.species === 'egg_sac') game.kill(c, null);
         else if ((c.S.undead || c.S.construct) && Math.max(Math.abs(c.x - e.x), Math.abs(c.z - e.z)) < 20) c.stunT = 3;
@@ -1402,7 +1479,7 @@ export class DungeonRun {
         }
       }
       if (!up) continue;
-      for (const e of [...party, ...game.creatures]) {
+      for (const e of [...party, ...this.creatures()]) {
         if (!e || e.dead || e.burrowed || e.S?.floats || e.x !== sp.x || e.z !== sp.z || this.spikeHit.has(e)) continue;
         if (e.kind !== 'player' && (e.S?.construct || e.isBoss)) continue;
         // (Not while you're busy in your pack or a chest.)
@@ -1497,7 +1574,7 @@ export class DungeonRun {
   // where it was (what it held back in it) to wait for you again.
   settleMimics() {
     const game = this.game;
-    for (const c of game.creatures) {
+    for (const c of this.creatures()) {
       if (c.dead || c.species !== 'mimic' || !c.mimicHome) continue;
       const { x, z } = c.mimicHome;
       if (game.world.getBlock(x, FY, z) !== B.air) continue;
@@ -1580,9 +1657,20 @@ export class DungeonRun {
       while (!canAdd(slots, k, n)) slots.push(...new Array(9).fill(null));
       addItem(slots, k, n);
     }
-    this.rec.pack = { floor: this.floor, x: at.x, z: at.z };
+    // (Whose it is, by name: see packAt.)
+    const p = this.game.player;
+    const pk = { floor: this.floor, x: at.x, z: at.z, name: ownerName(this.game, p), id: p.seat ? p.seat.id : null };
+    this.rec.packs = [...(this.rec.packs || []).filter((q) => !(q.floor === pk.floor && q.x === pk.x && q.z === pk.z)), pk];
+    // (The latest of them.)
+    this.rec.pack = pk;
+    this.notes = [...(this.notes || []), { x: at.x, z: at.z, floor: this.floor, pack: pk, toldTo: new Set([p]) }];
     this.game.ui.msg(`What you found down here spills out where you fall. Your pack's still there, floor ${this.floor + 1} of ${this.rec.name}.`, '#ffb080', true);
     return at;
+  }
+
+  // The pack fallen at (x, z) on this floor (whose it is), if there is one.
+  packAt(x, z) {
+    return (this.packs || this.rec.packs || []).find((q) => q.floor === this.floor && q.x === x && q.z === z) || null;
   }
 }
 
@@ -1593,6 +1681,54 @@ const BLESSINGS = [
   { combat: 'wind', n: 0.8, name: 'Idol\'s Breath', text: 'Your lungs fill deep. (An hour of quicker breath.)' },
   { heal: true, text: 'Warmth runs through you, and your wounds close.' },
 ];
+
+// A player's name, as a fallen pack's called by it: the one the others
+// know them by (with others playing), else their character's.
+export function ownerName(game, p) {
+  return (p && p.account && p.account.name) || game.playerName || 'Someone';
+}
+
+// What a fallen pack's called: "Wren's Fallen Pack".
+export function packLabel(pk) {
+  return `${pk && pk.name ? `${pk.name}'s` : 'A'} Fallen Pack`;
+}
+
+// A fallen pack, as `by` comes near it.
+function packNote(game, pk, by) {
+  const mine = pk.id ? by.seat && by.seat.id === pk.id : !by.seat || by.seat.host;
+  return mine ? 'Your pack, where you fell. What you found is still in it.' : `${pk.name}'s pack, where they fell. What they found down here is still in it.`;
+}
+
+// A floor kept from before each old place had a space of its own apart
+// (they were all laid out in the first then): moved over to its own, with
+// what was done on it (the keys of what's been solved, what you set down,
+// a relic left on it).
+function movedFloor(game, rec, n, kept, rx0) {
+  const dRx = rx0 - INST_RX;
+  const lo = INST_X0;
+  const hi = INST_X0 + INST_SLOT_RX * REGION_W;
+  const dx = dRx * REGION_W;
+  const inOld = (x) => x >= lo && x < hi;
+  const str = (v) => v.replace(/-?\d+/, (m) => (inOld(+m) ? String(+m + dx) : m));
+  const walk = (o) => {
+    if (typeof o === 'string') return str(o);
+    if (Array.isArray(o)) return o.map(walk);
+    if (!o || typeof o !== 'object') return o;
+    const out = {};
+    for (const [k, v] of Object.entries(o)) out[str(k)] = (k === 'x' || k === 'x0' || k === 'x1') && typeof v === 'number' && inOld(v) ? v + dx : walk(v);
+    return out;
+  };
+  const tag = `${rec.id}:${n}`;
+  if (game.relics) {
+    for (const [k, q] of [...game.relics]) {
+      if (q.inst !== tag || !inOld(q.x)) continue;
+      game.relics.delete(k);
+      q.x += dx;
+      game.relics.set(`${q.x},${q.y},${q.z}`, q);
+    }
+  }
+  return { ...kept, regions: (kept.regions || []).map((r) => ({ ...r, rx: r.rx + dRx })), state: walk(kept.state), rx0 };
+}
 
 // What's about you, thing by thing: in your pack, worn, in your hands.
 export function holdings(p) {

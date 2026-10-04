@@ -9,7 +9,7 @@ import { MODS, STAR_MAX } from '../world/quality.js';
 import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
-import { itemIcon, drawJewelled } from '../render/sprites.js';
+import { itemIcon, drawJewelled, humanoidSheet, SPR_PAD } from '../render/sprites.js';
 import { drawText, textWidth } from '../render/font.js';
 import { addItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
@@ -278,10 +278,14 @@ export class UI {
   // ------------------------------------------------------------ render
   render(ctx, game, fps) {
     this.tooltip = null;
+    this.notesTop = 0;
     if (this.showHud && game && game.player) {
       this.drawHud(game, fps);
       drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
-      if (this.hudP > 0.8) this.drawMinimapImage(ctx);
+      if (this.hudP > 0.8) {
+        this.drawMinimapImage(ctx, game);
+        this.drawGuildStrip(ctx, game);
+      }
     }
     // A master's fight: its name and its life across the top of the screen.
     if (game && game.dungeon && (game.dungeon.fight || game.dungeon.fallen)) this.drawBossBar(ctx, game);
@@ -1031,6 +1035,9 @@ export class UI {
       if (b.interact === 'torch') label += game.world.getState(c.x, c.y, c.z) ? ' (lit)' : ' (out)';
       const locked = b.interact === 'container' && game.chestLocked && game.chestLocked(c.x, c.y, c.z);
       if (locked) label += ' (locked)';
+      // A pack someone fell and left down here: whose.
+      const pk = b.id === B.satchel && game.packAt ? game.packAt(c.x, c.y, c.z) : null;
+      if (pk && pk.name) label = `${pk.name}'s ${b.label}`;
       // Something set down: what it is (and whose).
       const got = b.id === B.placed_item && game.placed ? game.placed.get(`${c.x},${c.y},${c.z}`) : null;
       if (got) label = `${ITEMS[got.item]?.name || got.item}${got.count > 1 ? ` x${got.count}` : ''}${game.placedOwnerName ? game.placedOwnerName(got) : ''}`;
@@ -1144,7 +1151,7 @@ export class UI {
     ctx.putImageData(img, 0, 0);
   }
 
-  drawMinimapImage(ctx) {
+  drawMinimapImage(ctx, game = this.game) {
     if (!this.minimapPos) return;
     const { x, y } = this.minimapPos;
     ctx.drawImage(this.minimap, x, y);
@@ -1157,6 +1164,73 @@ export class UI {
     ctx.fillRect(x + 42 - 1, y + 20 - 1, 3, 3);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fillRect(x, y, 84, 1);
+    // Your guildmates, in the same place as you: a dot each in their own
+    // colour (at the edge, pointing their way, when they're further off).
+    const mates = game && game.guildMates ? game.guildMates() : [];
+    const p = game && game.player;
+    const r = game && game.renderer;
+    if (!p || !r) return;
+    for (const m of mates) {
+      if (!m.here) continue;
+      let [u, v] = r.toView ? r.toView(m.x - p.x, m.z - p.z) : [m.x - p.x, m.z - p.z];
+      const inside = Math.abs(u) < 40 && Math.abs(v) < 18;
+      if (!inside) {
+        const k = Math.min(40 / Math.max(1e-6, Math.abs(u)), 18 / Math.max(1e-6, Math.abs(v)));
+        u *= k;
+        v *= k;
+      }
+      const px = x + 42 + Math.round(u);
+      const py = y + 20 + Math.round(v);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(px - 2, py - 2, inside ? 5 : 4, inside ? 5 : 4);
+      ctx.fillStyle = m.dead ? '#909090' : m.color;
+      ctx.fillRect(px - 1, py - 1, inside ? 3 : 2, inside ? 3 : 2);
+    }
+  }
+
+  // The others in your guild, down the side of the screen under the little
+  // map: each one's face and body (as they look now), name, and health
+  // (and where they are, if not with you).
+  drawGuildStrip(ctx, game) {
+    this.notesTop = 0;
+    const mates = game && game.guildMates ? game.guildMates() : [];
+    if (!mates.length || !this.minimapPos) return;
+    const x0 = this.minimapPos.x - CHAR_W + 2;
+    let y = this.minimapPos.y + 48;
+    const W = 16 * CHAR_W - 4;
+    for (const m of mates.slice(0, 7)) {
+      const H = 26;
+      ctx.fillStyle = 'rgba(10,8,16,0.78)';
+      ctx.fillRect(x0, y, W, H);
+      ctx.fillStyle = m.color;
+      ctx.fillRect(x0, y, 2, H);
+      // (Their face and body: the top of their sprite, as they look now.)
+      if (m.look) {
+        try {
+          const sheet = humanoidSheet(m.look);
+          ctx.save();
+          if (m.dead) ctx.globalAlpha = 0.45;
+          ctx.drawImage(sheet, 0, SPR_PAD - 2, 16, 24, x0 + 3, y + 1, 16, 24);
+          ctx.restore();
+        } catch {
+          // (No look to draw: the colour's enough.)
+        }
+      }
+      drawText(ctx, m.name.slice(0, 13), x0 + 22, y + 2, m.dead ? '#a0a0a0' : m.color, '#000');
+      // Their health, a bar that runs down (red when it's low).
+      const frac = m.maxHp ? Math.max(0, Math.min(1, m.hp / m.maxHp)) : 0;
+      const bw = W - 26;
+      ctx.fillStyle = '#3a1418';
+      ctx.fillRect(x0 + 22, y + 12, bw, 4);
+      ctx.fillStyle = frac > 0.5 ? '#60d060' : frac > 0.25 ? '#e0c040' : '#e04040';
+      ctx.fillRect(x0 + 22, y + 12, Math.round(bw * frac), 4);
+      const where = m.dead ? 'fallen' : m.below ? `below: ${m.below}` : m.here ? `${m.hp}/${m.maxHp}` : `${m.hp}/${m.maxHp} · far`;
+      drawText(ctx, where.slice(0, 15), x0 + 22, y + 17, '#a8a0b8', '#000');
+      y += H + 2;
+      if (y > VIEW_H - 60) break;
+    }
+    // (Notices go under it.)
+    this.notesTop = y + 2;
   }
 
   // Convenience window openers used by the game.

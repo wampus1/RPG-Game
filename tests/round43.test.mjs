@@ -180,7 +180,6 @@ test('a bout between players: declined, walked away from, too far off to ask', (
 // ------------------------------------------------------------ masters, for a party
 test('a master has more health for each player down in its old place, and less when one goes', () => {
   const { game, input, gp } = party();
-  const p = game.player;
   const up = { x: gp.x, y: gp.y, z: gp.z };
   const rec = { ...game.sim.dungeons.all.find((d) => d.type === 'barrow'), floors: {}, cleared: false, pack: null };
   new DungeonRun(game, rec).enter();
@@ -195,9 +194,9 @@ test('a master has more health for each player down in its old place, and less w
   assert.equal(game.dungeon.partyHere().length, 1);
   const base = boss.maxHp;
   assert.equal(boss.hp, base);
-  // The guest comes down too: half as much again and more.
-  const s = game.findFreeSpot(p.x + 1, p.z, p.y);
-  gp.teleport(s.x, s.y, s.z);
+  // The guest comes down too (each goes down on their own: they join the
+  // host's floor): half as much again and more.
+  game.asPlayer(gp, () => game.runFor(rec).enter());
   assert.ok(game.world.inInstance(gp.x));
   game.update(0.05, input);
   assert.equal(boss.maxHp, Math.round(base * partyHpScale(2)));
@@ -205,7 +204,7 @@ test('a master has more health for each player down in its old place, and less w
   assert.equal(boss.hp, boss.maxHp, 'still whole');
   // Half beaten; then the guest goes back up: half of what it was.
   boss.hp = Math.round(boss.maxHp / 2);
-  gp.teleport(up.x, up.y, up.z);
+  game.asPlayer(gp, () => game.dungeon.leave());
   game.update(0.05, input);
   assert.equal(boss.maxHp, base);
   assert.ok(Math.abs(boss.hp - base / 2) <= 1, `${boss.hp} of ${base}`);

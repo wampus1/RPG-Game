@@ -28,6 +28,12 @@ export const WORLD_TILES_D = MAP_H * REGION_D;
 // World.inst. Region x indices from INST_RX on belong to them.
 export const INST_RX = 2000;
 export const INST_X0 = INST_RX * REGION_W;
+// Each of them has a space of its own out there, side by side (so more than
+// one can be open at once, for players in different old places): this
+// many regions wide. The first (slot 0) is a ship at sea's; each old place
+// has its own after that (see DungeonRun).
+export const INST_SLOT_RX = 4;
+export const instSlotOf = (rx) => Math.floor((rx - INST_RX) / INST_SLOT_RX);
 
 // Standing level on flat ground: the surface block sits at GROUND-1 and
 // creatures stand (feet) at GROUND. Water surfaces sit flush with the ground.

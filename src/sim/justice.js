@@ -3,6 +3,7 @@
 // leader then hears the guard and the witnesses at the jail and decides what
 // can be proven, the fine or jail time, or, for repeat offenders, exile or
 // execution.
+import { seatPart } from '../game/party.js';
 import { GROUND } from '../config.js';
 import { B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
@@ -718,6 +719,17 @@ export class Justice {
     }
     say(judge, 'I have heard enough.');
     return lines;
+  }
+
+  // Anyone playing held in the jail of town `sid` just now (with others
+  // in the world, any of you)?
+  jailedIn(sid) {
+    const game = this.game;
+    if (!game.seats || game.seats.length < 2) return !!(this.jail && this.jail.sid === sid);
+    return game.seats.some((s) => {
+      const j = seatPart(game, s, 'j', 'jail');
+      return !!(j && j.sid === sid);
+    });
   }
 
   update(dt) {

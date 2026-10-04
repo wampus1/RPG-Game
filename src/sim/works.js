@@ -367,7 +367,7 @@ export class Works {
 
   startExpansion(L, b, bounds, who) {
     const rev = (b.rev || 0) + 1;
-    return this.add({ sid: L.settlement.id, kind: 'expand', bid: b.id, bounds, rev, owner: who, label: `enlarging ${b.playerHome ? `${this.game.playerName}'s home` : b.family ? `the ${b.family} home` : 'a house'}` });
+    return this.add({ sid: L.settlement.id, kind: 'expand', bid: b.id, bounds, rev, owner: who, label: `enlarging ${b.playerHome ? `${b.homeOwner || this.game.playerName}'s home` : b.family ? `the ${b.family} home` : 'a house'}` });
   }
 
   // ------------------------------------------------------------ builders

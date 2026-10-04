@@ -1,6 +1,6 @@
 // The World owns the overworld map, lazily generated regions, settlement
 // layouts, and exposes block access in global tile coordinates.
-import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX, INST_X0 } from '../config.js';
+import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX, INST_X0, instSlotOf } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
@@ -26,17 +26,43 @@ export class World {
     this.onRegionLoad = null; // (region) => void
     this._lastKey = -1;
     this._lastRegion = null;
-    // A place apart (a dungeon floor, a ship at sea): its own regions, out
-    // past the map's edge, kept only while you're there.
-    this.inst = null; // { regions: Map(rx * 4096 + rz -> Region), ... }
+    // Places apart (a dungeon floor, a ship at sea): their own regions, out
+    // past the map's edge, kept only while someone's there. Each in its own
+    // slot of that space (see config.INST_SLOT_RX): more than one can be
+    // open at once.
+    this.insts = new Map(); // slot -> { slot, regions: Map(rx * 4096 + rz -> Region), floor, maxY, ... }
+    // (The one place apart opened last the old way: a ship at sea, or on a
+    // player's screen in someone else's world, the one they're in.)
+    this.inst = null;
   }
 
   // Open a place apart: its regions (already made) take over the space
-  // beyond the map.
+  // beyond the map, in its slot (only the one open at a time this way).
   setInstance(inst) {
+    if (this.inst && this.inst !== inst) this.closeInst(this.inst);
     this.inst = inst;
-    this._lastKey = -1;
-    this._lastRegion = null;
+    if (inst) this.openInst(inst);
+  }
+
+  // Open (or close) one place apart of several, in its own slot.
+  openInst(inst) {
+    if (inst.slot === undefined) {
+      const any = inst.regions && inst.regions.values().next().value;
+      inst.slot = any ? instSlotOf(any.rx) : 0;
+    }
+    this.insts.set(inst.slot, inst);
+  }
+
+  closeInst(inst) {
+    if (inst && this.insts.get(inst.slot) === inst) this.insts.delete(inst.slot);
+    if (this.inst === inst) this.inst = null;
+  }
+
+  // The place apart (x, _) is in, if it's open.
+  instAt(x) {
+    const rx = Math.floor(x / REGION_W);
+    if (rx < INST_RX) return null;
+    return this.insts.get(instSlotOf(rx)) || null;
   }
 
   inInstance(x) {
@@ -131,7 +157,11 @@ export class World {
   regionAt(x, z) {
     const rx = Math.floor(x / REGION_W);
     const rz = Math.floor(z / REGION_D);
-    if (rx < 0 || rz < 0 || rx >= MAP_W || rz >= MAP_H) return rx >= INST_RX && rz >= 0 && this.inst ? this.inst.regions.get(rx * 4096 + rz) || null : null;
+    if (rx < 0 || rz < 0 || rx >= MAP_W || rz >= MAP_H) {
+      if (rx < INST_RX || rz < 0) return null;
+      const inst = this.insts.get(instSlotOf(rx));
+      return inst ? inst.regions.get(rx * 4096 + rz) || null : null;
+    }
     const key = rz * MAP_W + rx;
     if (key === this._lastKey) return this._lastRegion;
     const r = this.regions.get(key) || null;
@@ -229,7 +259,10 @@ export class World {
   canStand(x, y, z, allowDoors = false) {
     if (y < 1 || y >= WORLD_Y - 1) return false;
     // (Below ground, nobody climbs up onto the fittings, or the walls.)
-    if (this.inst && this.inst.maxY !== undefined && y > this.inst.maxY && x >= INST_X0) return false;
+    if (x >= INST_X0 && y > 1) {
+      const inst = this.instAt(x);
+      if (inst && inst.maxY !== undefined && y > inst.maxY) return false;
+    }
     const feet = BLOCKS[this.getBlock(x, y, z)];
     // Doors are passable when open (NPCs path through closed ones and open them).
     if (feet.solid && !((feet.interact === 'door' || feet.interact === 'gate') && (allowDoors || this.getState(x, y, z)))) return false;

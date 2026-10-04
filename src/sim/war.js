@@ -2470,7 +2470,7 @@ export class War {
       if (!list.length) continue;
       const L = a.layout;
       const slots = [];
-      const jailFree = L.jail && !(this.sim.justice.jail && this.sim.justice.jail.sid === sid);
+      const jailFree = L.jail && !this.sim.justice.jailedIn(sid);
       if (jailFree) slots.push({ stand: L.jail.stand, bed: L.jail.bed, door: L.jail.door, front: L.jail.front }, { stand: L.jail.bed, bed: L.jail.bed, door: L.jail.door, front: L.jail.front });
       for (const c of L.prisonCells) {
         const b = L.buildings[c.building];

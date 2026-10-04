@@ -385,7 +385,7 @@ def('kav_conduit', { ...sprite, solid: true, hardness: Infinity, drop: null, lig
 def('kav_husk', { ...sprite, solid: true, rotatable: true, tool: 'pick', hardness: 3, drop: [{ item: 'kav_scrap', chance: 0.5 }], label: 'Fallen Construct' });
 def('kav_vent', { ...dressing, hardness: Infinity, drop: null, label: 'Vent' });
 // Your pack, left where you fell below ground (what you'd found down there).
-def('satchel', { ...sprite, solid: false, interact: 'container', hardness: Infinity, drop: null, light: 3, label: 'Your Fallen Pack' });
+def('satchel', { ...sprite, solid: false, interact: 'container', hardness: Infinity, drop: null, light: 3, label: 'Fallen Pack' });
 // A row of spikes in a passage's floor that come up in their turn; an old
 // idol that blesses whoever lays a hand on it, once (lit till then).
 def('spikes', { ...dressing, hardness: Infinity, drop: null, label: 'Spike Trap' });

@@ -20,7 +20,7 @@ import { HostNet } from './net/host.js';
 import { GuestNet } from './net/guest.js';
 import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
 import { windowPixels } from './net/uiwire.js';
-import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow } from './ui/multiplayer.js';
+import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow } from './ui/multiplayer.js';
 import { MapWindow } from './ui/worldmap.js';
 import { avatarFromKey } from './render/avatar.js';
 
@@ -686,7 +686,11 @@ function partyCtx() {
     note: partyNote,
     // (Whether players may hurt each other: the host's to say.)
     pvp: host ? !!(game && game.pvp) : !!(net && net.pvp),
+    // The world's guilds (see game/guilds.js).
+    guilds: host ? (game && game.guilds ? game.guilds.summary() : []) : (net && net.guilds) || [],
     hooks: {
+      guild: (op, args = {}) => guildOp(op, args),
+      foundGuild: () => ui.open(new GuildNameWindow(ui, (name) => guildOp('create', { name }))),
       pvp: () => host && net && net.setPvp(!game.pvp),
       profile: (p) => openProfile(p),
       kick: (p) => net && net.kick(p.cid),
@@ -704,6 +708,13 @@ function partyCtx() {
       leave: () => leaveWorld(null),
     },
   };
+}
+
+// A guild's doings: the host does them; a player asks the host.
+function guildOp(op, args = {}) {
+  if (!session || !session.net) return;
+  if (session.role === 'host') session.net.guildOp(accounts.profile, { op, ...args });
+  else session.net.guild(op, args);
 }
 
 function openParty() {

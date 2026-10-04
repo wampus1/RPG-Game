@@ -39,7 +39,6 @@ export class Volcano {
     this.last = null; // the day it last went up
     this.count = 0;
     this.ash = null; // { from, until } (absolute minutes)
-    this.bombs = 0; // seconds of burning rock still to come down round you
     this.lastDay = null;
   }
 
@@ -71,7 +70,7 @@ export class Volcano {
       this.lastDay = day;
     }
     if (this.at !== null && this.sim.abs >= this.at) this.erupt(new RNG(hash4(this.game.seed >>> 0, this.at, 0xe7a)));
-    if (this.bombs > 0) this.rain(dt);
+    this.rain(dt);
   }
 
   daily(day, rng) {
@@ -80,11 +79,17 @@ export class Volcano {
     if (day === this.next - 3 && this.warned !== day) {
       this.warned = day;
       for (const L of this.towns('kharos')) ledger(L, day, 'The ground shook in the night, and the vents are smoking. The kiln-priests say the Sleeper is stirring.');
-      if (this.game.world.ow.islandAt(this.game.player.x, this.game.player.z) === this.V.island && !this.game.dungeon) {
-        this.game.shake = Math.min(1, (this.game.shake || 0) + 0.5);
-        this.game.audio?.play('crumble');
-        this.game.ui.msg('The ground trembles under your feet. Smoke is rising from the mountain.', '#ffb070');
-      }
+      // (Felt by each of you on Kharos, up top.)
+      const game = this.game;
+      const all = game.everyone ? game.everyone() : [game.player];
+      const tremble = (q) => {
+        if (game.world.ow.islandAt(q.x, q.z) !== this.V.island || game.dungeon) return;
+        game.shake = Math.min(1, (game.shake || 0) + 0.5);
+        game.audio?.play('crumble');
+        game.ui.msg('The ground trembles under your feet. Smoke is rising from the mountain.', '#ffb070');
+      };
+      if (game.asPlayer && all.length > 1) for (const q of all) game.asPlayer(q, () => tremble(q));
+      else tremble(game.player);
     }
     if (day >= this.next && this.at === null) this.at = Math.max(this.sim.abs + 1, day * DAY + rng.int(6 * 60, 22 * 60));
     // Flows that cooled today go black where you can see them.
@@ -185,8 +190,21 @@ export class Volcano {
     return { s, dead, burnt };
   }
 
-  // What you see and hear of it, wherever you are.
+  // What you see and hear of it, wherever you are (each of you playing,
+  // wherever you each are: it's the whole world's).
   felt(dead, burnt, worst) {
+    const game = this.game;
+    const all = game.everyone ? game.everyone() : [game.player];
+    if (game.asPlayer && all.length > 1) for (const q of all) game.asPlayer(q, () => this.feltBy(q, worst));
+    else this.feltBy(game.player, worst);
+    // Lava where you can see it, at once.
+    this.flowLoaded();
+    game.lightDirty = true;
+  }
+
+  // One of you: down an old place, it's only felt; up top, its scene (see
+  // game/eruption.js), and on Kharos the rock coming down after.
+  feltBy(p, worst) {
     const game = this.game;
     const V = this.V;
     if (game.dungeon) {
@@ -194,39 +212,56 @@ export class Volcano {
       game.shake = Math.min(1.2, (game.shake || 0) + 0.6);
       return;
     }
-    const p = game.player;
     const here = game.world.ow.islandAt(p.x, p.z) === V.island;
     const near = Math.hypot(p.x - V.x, p.z - V.z) < V.r * 4;
-    game.shake = Math.min(1.6, (game.shake || 0) + (here ? 1.4 : 0.8));
-    game.audio?.play('eruption');
-    game.renderer?.flashScreen?.(here ? '#ffb060' : '#ffd8a0', here ? 0.6 : 0.35);
+    game.eruptPending = { here, near, at: game.day * DAY + game.minute };
     if (here) {
       game.ui.msg(near ? 'The mountain explodes! Fire and black rock are coming down all around you!' : 'The mountain has erupted! The sky to the heart of the island is fire, and the ash is falling.', '#ff7040');
-      this.bombs = near ? 45 : 18;
+      p.ashBombs = near ? 45 : 18;
     } else {
       game.ui.msg('A tremendous roar rolls in over the sea, and the ground shakes: the mountain on Kharos has erupted. Ash will cover the sun for days.', '#ffb070');
     }
     if (worst && (worst.dead || worst.burnt)) game.ui.msg(`News will come of it: ${worst.s.name} on Kharos was hit worst.`, '#c8a080');
-    // Lava where you can see it, at once.
-    this.flowLoaded();
-    game.lightDirty = true;
   }
 
-  // Burning rock falling round you while it's going off: a shadow where it
-  // will land, then fire.
+  // Seconds of burning rock still to come down round anyone (for talk and
+  // tests).
+  get bombs() {
+    const all = this.game.everyone ? this.game.everyone() : [this.game.player];
+    return Math.max(0, ...all.map((q) => (q && q.ashBombs) || 0));
+  }
+
+  set bombs(v) {
+    const p = this.game.player;
+    if (p) p.ashBombs = v;
+  }
+
+  // Burning rock falling round each of you on Kharos while it's going off:
+  // a shadow where it will land, then fire.
   rain(dt) {
     const game = this.game;
-    this.bombs -= dt;
-    if (game.dungeon || this.bombs <= 0) return;
+    const all = game.everyone ? game.everyone() : [game.player];
+    for (const q of all) {
+      if (!q || !(q.ashBombs > 0)) continue;
+      if (game.asPlayer && all.length > 1) game.asPlayer(q, () => this.rainOn(q, dt));
+      else this.rainOn(q, dt);
+    }
+  }
+
+  rainOn(p, dt) {
+    const game = this.game;
     // (Only while you're on Kharos: sail away and you're out from under it.)
-    if (game.world.ow.islandAt(game.player.x, game.player.z) !== this.V.island) {
-      this.bombs = 0;
+    if (game.world.ow.islandAt(p.x, p.z) !== this.V.island) {
+      p.ashBombs = 0;
       return;
     }
-    this.bombT = (this.bombT || 0) - dt;
-    if (this.bombT > 0) return;
-    this.bombT = 0.7 + Math.random() * 1.2;
-    const p = game.player;
+    // (Not while the scene of it plays: it comes down after.)
+    if (game.scene && game.scene.kind === 'erupt') return;
+    p.ashBombs -= dt;
+    if (game.dungeon || p.ashBombs <= 0) return;
+    p.bombT = (p.bombT || 0) - dt;
+    if (p.bombT > 0) return;
+    p.bombT = 0.7 + Math.random() * 1.2;
     const x = Math.round(p.x + (Math.random() - 0.5) * 22);
     const z = Math.round(p.z + (Math.random() - 0.5) * 14);
     const y = game.world.findStandY ? game.world.findStandY(x, z, p.y) : p.y;

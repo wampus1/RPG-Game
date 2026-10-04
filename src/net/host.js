@@ -8,7 +8,7 @@
 // and everyone sees the same one: the same wolf in the same place,
 // going for one of you; the same block where someone set it.
 import { openEnvelope, toPlayer, toRelay, MAX_PLAYERS } from './protocol.js';
-import { asSeat } from '../game/party.js';
+import { asSeat, seatMap } from '../game/party.js';
 import { enc, diffFields, packEntity } from './wire.js';
 import { uiFrame } from './uiwire.js';
 import { profileOf, cleanIcon, cleanDesc, cleanTitle } from './account.js';
@@ -16,6 +16,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { inReach } from '../entities/footprint.js';
 import { challengeBout } from '../game/bout.js';
+import { guildMates } from '../game/guilds.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -139,6 +140,11 @@ export class HostNet {
     g.sent = { ents: new Map(), lists: {}, ui: {}, regions: new Set(), own: '', glob: '', inst: null, slow: 0 };
     g.blocks = [];
     g.fx = [];
+    // (Their map as they have it: see mapNews.)
+    const om = seatMap(game, g.seat);
+    g.sent.ex = new Uint8Array(om.explored);
+    g.sent.exN = om.exploredN;
+    g.sent.pinsN = (om.pins || []).length;
     // The world as it is, as they'll start with it (theirs: their own
     // character, their own standing with everyone).
     const save = asSeat(game, g.seat, () => game.serialize());
@@ -215,7 +221,8 @@ export class HostNet {
   partyChanged() {
     const list = this.partyList();
     const pvp = !!this.game.pvp;
-    for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'party', list, pvp });
+    const guilds = this.game.guilds ? this.game.guilds.summary() : [];
+    for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'party', list, pvp, guilds });
     this.tellRelay();
     this.onParty(list);
   }
@@ -254,7 +261,27 @@ export class HostNet {
       g.profile = seat.profile;
       this.partyChanged();
     } else if (m.t === 'friend') this.friendWord(g.profile, m.to, m.yes);
+    else if (m.t === 'guild') this.guildOp(g.profile, m);
     else if (m.t === 'bout') challengeBout(this.game, seat, m.to, m.wager);
+  }
+
+  // A guild's doings (see game/guilds.js), by player `by` (their profile:
+  // the host's own, or a player's word): done, and whoever it concerns
+  // told, and everyone's list of guilds brought up to date.
+  guildOp(by, m) {
+    const game = this.game;
+    if (!game.guilds || !by) return null;
+    const r = game.guilds.act(by.id, m.op, { name: m.name, to: m.to, gid: m.gid });
+    if (!r.ok) r.told.push([by.id, r.why]);
+    for (const [pid, text] of r.told) this.tell(pid, text);
+    if (r.ok) this.partyChanged();
+    return r;
+  }
+
+  // A word for one player here (by account id): a notice on their screen.
+  tell(pid, text, profile = null) {
+    if (pid === this.profile.id) return this.notify(text, profile);
+    for (const g of this.guests.values()) if (g.state === 'in' && g.profile.id === pid) this.to(g, { t: 'note', text, profile });
   }
 
   // A friend request (yes undefined), or the answer to one, from `from` to
@@ -399,7 +426,7 @@ export class HostNet {
     const key = regionKeyOf(x, z);
     for (const g of this.guests.values()) {
       if (g.state !== 'in') continue;
-      if (inst ? g.sent.inst === w.inst : g.sent.regions.has(key)) g.blocks.push(ch);
+      if (inst ? g.sent.inst && g.sent.inst === w.instAt(x) : g.sent.regions.has(key)) g.blocks.push(ch);
     }
   }
 
@@ -418,10 +445,12 @@ export class HostNet {
   regionsFor(g, p) {
     const w = this.game.world;
     if (w.inInstance(p.x)) {
-      if (g.sent.inst !== w.inst && w.inst) {
-        g.sent.inst = w.inst;
-        const regions = [...w.inst.regions.values()].map((r) => r.serialize());
-        g.instMsg = { regions, floor: w.inst.floor ?? null, maxY: w.inst.maxY ?? null, voyage: !!w.inst.voyage };
+      // (The place apart they're in: theirs, whoever else's is open.)
+      const inst = w.instAt(p.x);
+      if (g.sent.inst !== inst && inst) {
+        g.sent.inst = inst;
+        const regions = [...inst.regions.values()].map((r) => r.serialize());
+        g.instMsg = { regions, floor: inst.floor ?? null, maxY: inst.maxY ?? null, voyage: !!inst.voyage };
       }
       return;
     }
@@ -464,6 +493,26 @@ export class HostNet {
         g.sent.own = oj;
         msg.own = own;
       }
+      // The others in their guild: where they are, how they are (a few
+      // times a second: see game/guilds.js).
+      g.sent.mateT = (g.sent.mateT || 0) - step;
+      if (g.sent.mateT <= 0) {
+        g.sent.mateT = 0.25;
+        const mates = guildMates(game);
+        const mj = JSON.stringify(mates);
+        if (mj !== g.sent.mates) {
+          g.sent.mates = mj;
+          msg.gm = mates;
+        }
+      }
+      // The world's time, the weather over them, and the old place they're
+      // in (theirs).
+      const glob = this.globals();
+      const gj = JSON.stringify(glob);
+      if (gj !== g.sent.glob) {
+        g.sent.glob = gj;
+        msg.w = glob;
+      }
     });
     // Everything about them.
     const near = (e) => Math.abs(e.x - p.x) <= VIEW && Math.abs(e.z - p.z) <= VIEW;
@@ -499,13 +548,6 @@ export class HostNet {
       g.sent.lists[k] = j;
       (msg.l ||= {})[k] = lists[k];
     }
-    // The world's time, weather, and the old place you're in.
-    const glob = this.globals();
-    const gj = JSON.stringify(glob);
-    if (gj !== g.sent.glob) {
-      g.sent.glob = gj;
-      msg.w = glob;
-    }
     // Slower things, a couple of times a second.
     g.sent.slow -= step;
     if (g.sent.slow <= 0) {
@@ -516,6 +558,7 @@ export class HostNet {
         g.sent.slowLast = sj;
         msg.slow = slow;
       }
+      this.mapNews(g, msg);
     }
     if (g.instMsg) {
       msg.inst = g.instMsg;
@@ -538,6 +581,29 @@ export class HostNet {
       g.msgs = [];
     }
     this.to(g, msg);
+  }
+
+  // What's new on a player's own map (the squares they've been to or been
+  // told of since, and the places they've been told of).
+  mapNews(g, msg) {
+    const om = seatMap(this.game, g.seat);
+    if (om.exploredN !== g.sent.exN) {
+      g.sent.exN = om.exploredN;
+      const e = om.explored;
+      const had = g.sent.ex;
+      const fresh = [];
+      for (let i = 0; i < e.length; i++) {
+        if (!e[i] || had[i]) continue;
+        had[i] = 1;
+        fresh.push(i);
+      }
+      if (fresh.length) msg.ex = fresh;
+    }
+    const pins = om.pins || [];
+    if (pins.length !== g.sent.pinsN) {
+      g.sent.pinsN = pins.length;
+      msg.pins = pins;
+    }
   }
 
   // A player's own: their sleep, their digging, their line in the water,
@@ -605,6 +671,8 @@ export class HostNet {
       foe: sc.kind === 'yield' && sc.npc ? sc.npc.id : undefined,
       won: sc.kind === 'yield' ? !!sc.won : undefined,
       name: sc.kind === 'yield' ? sc.foeName : undefined,
+      // (The mountain going up: under it, or from over the sea.)
+      here: sc.kind === 'erupt' ? !!sc.here : undefined,
     };
   }
 
@@ -625,6 +693,8 @@ export class HostNet {
         up: d.data ? enc(d.data.up, 1) : null,
         upAt: d.data ? enc(d.data.upAt, 1) : null,
         down: d.data ? enc(d.data.down, 1) : null,
+        // (The packs fallen on this floor, and whose.)
+        packs: (d.rec.packs || []).filter((q) => q.floor === d.floor),
       } : null,
     };
   }

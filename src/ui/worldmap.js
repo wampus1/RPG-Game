@@ -109,8 +109,10 @@ function refreshFog(ow, reveal) {
   const M = worldCache(ow);
   if (!M.fog) return;
   const n = ow.exploredN || 0;
-  if (M.fogN === n && M.fogReveal === reveal && M.fogRow === M.row) return;
+  // (Another's map, drawn here: see game/party.js.)
+  if (M.fogN === n && M.fogReveal === reveal && M.fogRow === M.row && M.fogOf === ow.explored) return;
   M.fogN = n;
+  M.fogOf = ow.explored;
   M.fogReveal = reveal;
   M.fogRow = M.row;
   const ctx = M.fog.getContext('2d');
@@ -435,7 +437,7 @@ export class MapWindow extends Window {
       put(y0, `Zoom ${Math.round((this.z / 12) * 100)}% · each square = 2x2 screens · point at anything for details.`, C.dim);
       put(y0 + 1, '', C.dim);
     }
-    put(y0 + 2, '⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire • told of', C.faint);
+    put(y0 + 2, `⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire • told of${game.guildMates && game.guildMates().length ? ' @ guild' : ''}`, C.faint);
     const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [M] close `;
     g.text(Math.max(1, this.w - t.length - 1), this.h - 1, t.slice(0, this.w - 2), game.cheats?.mapTeleport ? C.hi : C.dim);
   }
@@ -579,6 +581,9 @@ export class MapWindow extends Window {
       ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 3, 2, 6);
       ctx.fillRect(Math.round(q.x) - 3, Math.round(q.y) - 1, 6, 2);
     }
+    // The others in your guild, wherever they are (down an old place: at its
+    // way in), each in their own colour.
+    this.drawMates(ctx, game, o, w, h, blink);
     // The square pointed at.
     if (this.hoverSq && this.z >= TILES_FROM) {
       ctx.strokeStyle = 'rgba(255,240,200,0.8)';
@@ -590,6 +595,34 @@ export class MapWindow extends Window {
     // Still working out the far reaches of the world.
     if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
     ctx.restore();
+  }
+
+  // Guildmates on the map (see game/guilds.js).
+  drawMates(ctx, game, o, w, h, blink) {
+    const mates = game.guildMates ? game.guildMates() : [];
+    for (const m of mates) {
+      const cx = Math.floor(m.mx / REGION_W);
+      const cz = Math.floor(m.mz / REGION_D);
+      (this.marks ||= []).push({ cx, cz, label: `${m.name} (your guild)${m.dead ? ', fallen' : ''}${m.below ? `: down ${m.below}` : ''} · ${m.hp}/${m.maxHp} health`, color: m.color });
+      if (this.z >= GLYPHS_FROM) {
+        const sc = this.z / GLYPHS_FROM;
+        const hx = o.x + cx * w + ((m.mx % REGION_W) >= REGION_W / 2 ? w / 2 : 0);
+        const hy = o.y + cz * h;
+        ctx.fillStyle = blink ? m.guild || '#202020' : '#101010';
+        ctx.fillRect(hx, hy, w / 2, h);
+        drawGlyph(ctx, m.below ? '▼' : '@', hx, hy, m.dead ? '#909090' : m.color, sc);
+      } else {
+        const q = this.at(m.mx, m.mz);
+        const x = Math.round(q.x);
+        const y = Math.round(q.y);
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x - 3, y - 3, 6, 6);
+        ctx.fillStyle = m.dead ? '#909090' : m.color;
+        ctx.fillRect(x - 2, y - 2, 4, 4);
+        ctx.fillStyle = m.guild || '#ffffff';
+        if (blink) ctx.fillRect(x - 1, y - 1, 2, 2);
+      }
+    }
   }
 
   // The storm round the islands: a ring of churning grey cloud, lit now

@@ -2,9 +2,11 @@
 // rules for interacting with blocks and creatures.
 import {
   TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, WATER_Y, REACH, BELT_SIZE,
-  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
+  GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST, INST_X0,
 } from '../config.js';
 import { World } from '../world/world.js';
+import { tickFieldsOff } from '../entities/fields.js';
+import { updateWorks } from '../entities/bosskit.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL, PLANK_BLOCKS } from '../world/blocks.js';
 import { ITEMS, GEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
@@ -32,7 +34,7 @@ import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
-import { DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
+import { packLabel, DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
@@ -52,6 +54,7 @@ import { enforceIslandLaws, raftDues, SPORE_BLOCKS } from '../sim/islelaws.js';
 import { updateStormSea, stormLocked } from './stormsea.js';
 import { updateSpireStorm } from './spirestorm.js';
 import { wallTick } from './wallfall.js';
+import { eruptTick } from './eruption.js';
 import { ambientChatter } from './chatter.js';
 import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
@@ -65,6 +68,7 @@ import { EVENT_BLOCKS } from '../sim/events.js';
 import { struggle, tickAfflictions } from './afflict.js';
 import { updateOrbs, swatOrbs } from './orbs.js';
 import { Seat, asSeat, seatField, partyPlayers, freshStore } from './party.js';
+import { Guilds, guildMates } from './guilds.js';
 import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, wideDig } from './mods.js';
@@ -134,8 +138,12 @@ export class Game {
     // Butterflies, songbirds and owls round you (see wildlife.js).
     this.wildlife = new Wildlife(this);
     // Down in a dungeon (see dungeon.js), and blows on their way (hazards:
-    // see monsters.js).
+    // see monsters.js). (Each player's own: with others playing, the old
+    // places anyone's down, each open in its own space: `runs`.)
     this.dungeon = null;
+    this.runs = new Map();
+    // Players banded together (see guilds.js): kept with the world.
+    this.guilds = new Guilds(this);
     this.hazards = [];
     this.orbs = [];
     // Everyone playing (multiplayer: see party.js), and whose turn it is.
@@ -1752,6 +1760,7 @@ export class Game {
     // see scenes.js): on the real clock; it may hold you still and slow
     // the world.
     wallTick(this);
+    eruptTick(this);
     const slow = this.sceneTick(dt, uiRes.pressed);
     // A blow that lands hard holds the moment (hit-stop); a parry slows
     // the world for a breath after. (Not with others playing in it: see
@@ -1784,9 +1793,11 @@ export class Game {
     if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => this.guestPhase(dt, s));
     this.streamRegions();
     if (Math.random() < 0.05) this.updateSettlements();
-    for (const q of this.everyone()) this.world.ow.markExplored(q.x, q.z, 1);
-    // (At sea, before the story starts, the island waits.)
-    const atSea = !!this.cutscene && this.cutscene.kind === 'ship';
+    // (Each on their own map: see party.js.)
+    for (const q of this.everyone()) this.asPlayer(q, () => this.world.ow.markExplored(q.x, q.z, 1));
+    // (At sea, before the story starts, the island waits: not with others
+    // already playing in it.)
+    const atSea = !!this.cutscene && this.cutscene.kind === 'ship' && !party;
     if (!atSea) this.sim.update(dt);
     // (Each player's own dealings with the towns: their work, their favours
     // owed, the law's view of them.)
@@ -1801,14 +1812,17 @@ export class Game {
     const sub = fast > 2 ? Math.min(5, Math.ceil(fast / 15)) : 1;
     const ndt = fast > 2 ? Math.min(0.5, (dt * fast) / sub) : dt;
     if (sub > 1) this.pathBudget = 5 * sub;
-    for (let k = 0; k < sub; k++) {
-      for (const n of this.npcs) {
-        if (n.dead) continue;
-        n.update(ndt);
-        if (k === 0) n.maybeGreet(this.player, dt);
+    // The island's people (as someone up there, with you down an old place).
+    this.inPlace(null, () => {
+      for (let k = 0; k < sub; k++) {
+        for (const n of this.npcs) {
+          if (n.dead) continue;
+          n.update(ndt);
+          if (k === 0) n.maybeGreet(this.player, dt);
+        }
       }
-    }
-    ambientChatter(this, dt);
+      ambientChatter(this, dt);
+    });
     this.updateDuel();
     if (party) updateBouts(this, dt);
     this.updateDummy(dt);
@@ -1819,27 +1833,48 @@ export class Game {
     updateHazards(this, dt);
     updateOrbs(this, dt);
     updateLasers(this, dt);
-    updateRelics(this, dt);
+    // (Relics where each of you is: the island's, and each old place's.)
+    this.inPlace(null, () => updateRelics(this, dt));
+    for (const run of this.runs.values()) if (run.lead()) this.inPlace(run, () => updateRelics(this, dt));
     updateKavTech(this, dt);
     this.sim.ancient.update(dt);
-    if (this.dungeon) this.dungeon.update(dt);
+    // Each old place someone's down: its own goings-on. (Fields the
+    // Overseer turned off, and what a master's done to its hall, put back
+    // in their time: for all of them at once.)
+    this.updateRuns(dt);
+    tickFieldsOff(this, dt);
+    updateWorks(this, dt);
     updateEngines(this, dt);
     if (!atSea) this.wildlife.update(dt);
     updateShips(this, dt);
     sailShips(this, dt);
     updateLabor(this, dt);
-    // Beasts near you keep pace with racing time too (far off, they idle on).
-    const pp = this.player;
     // (The great masters, who fill more than the one tile: see
     // entities/footprint.js.)
     this.bigs = this.creatures.filter((c) => c.foot && !c.dead);
+    // The beasts, each where it is (as someone there: the island's, and
+    // each old place's).
+    const groups = new Map([[null, []]]);
     for (const c of this.creatures) {
-      const near = sub > 1 && Math.abs(c.x - pp.x) < 40 && Math.abs(c.z - pp.z) < 40;
-      if (!near) {
-        c.update(dt);
-        continue;
-      }
-      for (let k = 0; k < sub && !c.dead; k++) c.update(ndt);
+      const run = c.inst ? this.runAt(c.x) : null;
+      if (!groups.has(run)) groups.set(run, []);
+      groups.get(run).push(c);
+    }
+    for (const [run, list] of groups) {
+      if (!list.length) continue;
+      this.inPlace(run, () => {
+        // Beasts near you keep pace with racing time too (far off, they
+        // idle on).
+        const pp = this.player;
+        for (const c of list) {
+          const near = sub > 1 && Math.abs(c.x - pp.x) < 40 && Math.abs(c.z - pp.z) < 40;
+          if (!near) {
+            c.update(dt);
+            continue;
+          }
+          for (let k = 0; k < sub && !c.dead; k++) c.update(ndt);
+        }
+      });
     }
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
@@ -1859,7 +1894,7 @@ export class Game {
     this.pickupDrops();
     if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => this.pickupDrops());
     this.drops = this.drops.filter((d) => !d.dead);
-    this.spawning(dt);
+    this.inPlace(null, () => this.spawning(dt));
     this.growPlants(dt);
     this.crops.update(dt);
     this.playtime.update(dt);
@@ -1869,7 +1904,11 @@ export class Game {
     this.updateWeather(dt);
     this.ambientFx(dt);
     this.ownAfterPhase(dt, input);
-    if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => this.ownAfterPhase(dt, s.input));
+    // (The sky over each of you, wherever you are.)
+    if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => {
+      this.updateWeather(dt);
+      this.ownAfterPhase(dt, s.input);
+    });
     // The camera: drawn back near a spire, or wherever a scene takes it.
     const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
     this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : 1 + 0.32 * nearSpire;
@@ -1978,6 +2017,7 @@ export class Game {
     if (this.net) this.net.mute++;
     try {
       wallTick(this);
+      eruptTick(this);
       this.sceneTick(dt, uiRes.pressed);
     } finally {
       if (this.net) this.net.mute--;
@@ -2095,11 +2135,12 @@ export class Game {
     seat.ui = ui;
     seat.input = input;
     let at = saved && saved.player;
-    // (Left down below, in a place that's gone, or where the party isn't:
-    // up top by whoever's hosting.)
-    if (at && (this.world.inInstance(at.x) !== this.world.inInstance(this.player.x) || this.world.inInstance(at.x))) at = null;
+    // (Left down below, in a place that's gone: up top by whoever's
+    // hosting, or by the way into the old place they're down.)
+    if (at && this.world.inInstance(at.x)) at = null;
     if (!at) {
-      const h = this.player;
+      const h = this.dungeon ? this.dungeon.exitSpot() : this.player;
+      if (this.dungeon) this.loadAround(h.x, h.z, true);
       at = this.findFreeSpot(h.x + 1, h.z + 1, h.y);
       // (Not on top of anyone already here.)
       const taken = (q) => this.everyone().some((o) => o.x === q.x && o.z === q.z);
@@ -2124,6 +2165,8 @@ export class Game {
     asSeat(this, seat, () => {
       if (saved) this.restoreSeat(saved);
       else this.outfitNewcomer(at);
+      // (The country about them, on their own map.)
+      this.world.ow.markExplored(p.x, p.z, 2);
       if (p.awakeSince === undefined) p.awakeSince = this.day * DAY_MINUTES + this.minute;
       this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
     });
@@ -2173,6 +2216,18 @@ export class Game {
     this.sim.justice.load(d.justice);
     this.sim.careers.load(d.careers);
     this.sim.favors.load(d.favors);
+    // Their own map: where they'd been (or, kept from before each had their
+    // own, the host's, which was everyone's then).
+    const ow = this.world.ow;
+    ow.explored = new Uint8Array(ow.explored.length);
+    if (d.explored) ow.unpackExplored(d.explored);
+    else if (this.seats && this.seats[0] && this.seats[0].store && this.seats[0].store.o) ow.explored.set(this.seats[0].store.o.explored);
+    ow.exploredN = ow.explored.reduce((n, v) => n + v, 0);
+    ow.pins = d.pins || [];
+    if (this.sim.bandits) {
+      this.sim.bandits.heads = { ...(d.heads || {}) };
+      this.sim.bandits.headNames = { ...(d.headNames || {}) };
+    }
   }
 
   // A player's character in this world, to keep (in the world's save, and
@@ -2180,11 +2235,13 @@ export class Game {
   seatSave(seat) {
     return asSeat(this, seat, () => {
       const p = this.player;
+      // (Down an old place: kept as come back up out of it.)
+      const at = this.dungeon ? this.dungeon.exitSpot() : p;
       return {
         profile: seat.profile,
         name: this.playerName,
         hero: this.hero || null,
-        player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], equip: p.equip, look: p.baseLook },
+        player: { x: at.x, y: at.y, z: at.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], equip: p.equip, look: p.baseLook },
         stats: this.stats,
         wanted: [...this.wanted],
         rep: [...this.sim.rep],
@@ -2193,6 +2250,11 @@ export class Game {
         justice: this.sim.justice.serialize(),
         careers: this.sim.careers.serialize(),
         favors: this.sim.favors.serialize(),
+        // (Their own map, and the heads of bandits they've brought down.)
+        heads: this.sim.bandits ? this.sim.bandits.heads : {},
+        headNames: this.sim.bandits ? this.sim.bandits.headNames || {} : {},
+        explored: this.world.ow.packExplored(),
+        pins: this.world.ow.pins || [],
         at: Date.now(),
       };
     });
@@ -2202,6 +2264,11 @@ export class Game {
   // world till then.
   removeSeat(seat) {
     if (!this.seats || seat === this.seat || !this.seats.includes(seat)) return;
+    // (Gone from an old place too: up out of it, and it's closed if they
+    // were the last down there.)
+    asSeat(this, seat, () => {
+      if (this.dungeon) this.dungeon.leave();
+    });
     this.partyChars.set(seat.id, this.seatSave(seat));
     const p = seat.ent;
     asSeat(this, seat, () => {
@@ -2215,9 +2282,82 @@ export class Game {
     this.seats = this.seats.filter((q) => q !== seat);
   }
 
+  // The others in your guild, where they are and how (see guilds.js).
+  guildMates() {
+    return guildMates(this);
+  }
+
   // Every player in the world (the host's own first).
   everyone() {
     return partyPlayers(this);
+  }
+
+  // ------------------------------------------------------------ old places
+  // The old place `rec`, as it's being played (someone already down it), or
+  // fresh for going down.
+  runFor(rec) {
+    return this.runs.get(rec.id) || new DungeonRun(this, rec);
+  }
+
+  // The old place open where x is (in its own space apart), if any.
+  runAt(x) {
+    if (x === undefined || !this.world.inInstance(x)) return null;
+    for (const run of this.runs.values()) if (run.has(x)) return run;
+    return null;
+  }
+
+  // Those up on the island (not down an old place).
+  upTop() {
+    return this.everyone().filter((q) => !this.world.inInstance(q.x));
+  }
+
+  // Do `fn` there: down old place `run` (as one of those down there), or
+  // up on the island (null: as one of those up there). (So what the place
+  // does, the beasts in it and its traps, goes on as someone who's in it.)
+  inPlace(run, fn) {
+    let lead = null;
+    if (run) lead = run.lead();
+    else if (this.dungeon) lead = this.upTop()[0] || null;
+    return lead && lead !== this.player ? this.asPlayer(lead, fn) : fn();
+  }
+
+  // Each old place someone's down, its own goings-on (as one of them; one
+  // with nobody left in it is closed).
+  updateRuns(dt) {
+    for (const run of [...this.runs.values()]) {
+      const lead = run.lead();
+      if (!lead) {
+        run.close();
+        continue;
+      }
+      this.asPlayer(lead, () => run.update(dt));
+    }
+  }
+
+  // Nobody left up on the island (the last of you gone down): what was
+  // about you up there is put by, to wait where it was (see raiseIsland).
+  putByIsland() {
+    if (this.islandStash || this.upTop().some((q) => q !== this.player)) return;
+    const up = (e) => !this.world.inInstance(e.x);
+    const creatures = this.creatures.filter(up);
+    for (const c of creatures) this.removeOcc(c);
+    this.islandStash = { creatures, drops: this.drops.filter(up) };
+    this.creatures = this.creatures.filter((c) => !up(c));
+    this.drops = this.drops.filter((d) => !up(d));
+    // (Blows on their way up there: gone.)
+    const at = (q) => (q.tiles && q.tiles[0] ? q.tiles[0].x : q.x0 ?? q.x ?? 0);
+    for (const k of ['projectiles', 'orbs', 'hazards']) if (Array.isArray(this[k])) this[k] = this[k].filter((q) => this.world.inInstance(at(q)));
+  }
+
+  // The first of you back up: what was put by comes back.
+  raiseIsland() {
+    const st = this.islandStash;
+    if (!st) return;
+    this.islandStash = null;
+    const back = st.creatures.filter((c) => !c.dead);
+    for (const c of back) this.moveEntity(c, c.x, c.y, c.z);
+    this.creatures.push(...back);
+    this.drops.push(...st.drops.filter((d) => !d.dead));
   }
 
   // Do `fn` as the player `p` is (or as whoever it is now, for anyone else).
@@ -3902,10 +4042,10 @@ export class Game {
     // A Kavorent lift: a ride down its shaft (see scenes.liftRide).
     if (rec.type === 'kavorent' && b.interact === 'kav_lift') {
       if (this.scene) return;
-      this.scene = liftRide(this, 1, () => new DungeonRun(this, rec).enter(), `${cap(rec.name)} - floor 1 of ${rec.depth}`);
+      this.scene = liftRide(this, 1, () => this.runFor(rec).enter(), `${cap(rec.name)} - floor 1 of ${rec.depth}`);
       return;
     }
-    new DungeonRun(this, rec).enter();
+    this.runFor(rec).enter();
   }
 
   // A cut stone offered to a Kavorent spire: the face you stand at opens.
@@ -3974,7 +4114,9 @@ export class Game {
 
   // Something below ground, made (or summoned) and set loose.
   spawnMonster(species, x, y, z, opts = {}) {
-    if (this.dungeon) return this.dungeon.spawn(species, x, y, z, opts);
+    // (Down an old place, its own: whichever's there.)
+    const run = this.runAt(x) || (this.world.inInstance(x) ? this.dungeon : null);
+    if (run) return run.spawn(species, x, y, z, opts);
     const c = new Creature(this, species, x, y, z);
     this.addCreature(c);
     return c;
@@ -4010,11 +4152,18 @@ export class Game {
     return { x: this.player.x, z: this.player.z };
   }
 
+  // A pack someone fell and left down here (whose it is), at (x, y, z).
+  packAt(x, y, z) {
+    const run = this.dungeon;
+    return run && run.packAt && this.world.getBlock(x, y, z) === B.satchel ? run.packAt(x, z) : null;
+  }
+
   openContainerAt(x, y, z, owner = this.containerOwner(x, y, z)) {
     const b = BLOCKS[this.world.getBlock(x, y, z)];
     const slots = this.world.getContainer(x, y, z);
     this.audio?.play('chest');
-    this.ui.openContainer(owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
+    const pk = this.packAt(x, y, z);
+    this.ui.openContainer(pk ? packLabel(pk) : owner && owner.label ? `${b.label} · ${owner.label}` : b.label, slots, { x, y, z, owner });
     if (owner && owner.sid !== undefined && owner.kind !== 'mine' && owner.kind !== 'work') this.peekWarning(owner);
     if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
   }
@@ -4157,7 +4306,7 @@ export class Game {
     if (sg && sg.kind === 'building') {
       const b = L.buildings[sg.building];
       if (b.residential) {
-        if (b.playerHome) return { title: 'HOME', lines: [b.underConstruction ? 'UNDER CONSTRUCTION' : (b.homeName || 'A cottage').toUpperCase(), '', b.underConstruction ? 'Builders are at work here.' : `Home of ${this.playerName}.`] };
+        if (b.playerHome) return { title: 'HOME', lines: [b.underConstruction ? 'UNDER CONSTRUCTION' : (b.homeName || 'A cottage').toUpperCase(), '', b.underConstruction ? 'Builders are at work here.' : `Home of ${b.homeOwner || this.playerName}.`] };
         const who = living.filter((r) => r.home === b.id);
         const lines = [(b.homeName || b.name).toUpperCase(), ''];
         if (!who.length) lines.push('The house stands empty.');
@@ -5703,7 +5852,12 @@ export class Game {
       if (who && who !== this.seat) return asSeat(this, who, () => this.kill(e, source));
     }
     onKill(this, e, source);
-    if (this.dungeon && e.inst) this.dungeon.onKill(e);
+    // (Down an old place: its own reckoning, as one of you down there.)
+    const run = e.inst ? this.runAt(e.x) : null;
+    if (run) {
+      if (this.dungeon === run) run.onKill(e);
+      else this.inPlace(run, () => run.onKill(e));
+    }
     e.dead = true;
     this.removeOcc(e);
     this.renderer.emit(e.x, e.y + 1, e.z, { n: 16, color: e.kind === 'npc' || e.kind === 'player' ? ['#c82a2a', '#e8e0d0', '#8a1a1a'] : ['#e8e0d0', '#a8a098'], up: 50, speed: 70, life: 0.8, oy: -8 });
@@ -5931,17 +6085,21 @@ export class Game {
   }
 
   spawning(dt) {
-    // (Below ground, nothing wanders in from outside; nor while a story opens.)
-    if (this.dungeon || this.cutscene) return;
+    // (Below ground, nothing wanders in from outside; nor while a story
+    // opens, but for others playing.)
+    if (this.dungeon || (this.cutscene && !this.isParty())) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     this.spawnT = 2.5;
-    // (Round each of you in turn.)
-    const all = this.everyone();
+    // (Round each of you up on the island in turn: those down an old place
+    // have its own.)
+    const all = this.upTop();
+    if (!all.length) return;
     this.spawnTurn = ((this.spawnTurn || 0) + 1) % all.length;
     const p = all[this.spawnTurn] || this.player;
-    // Despawn far creatures.
+    // Despawn far creatures. (Up here: an old place's own are its own.)
     for (const c of this.creatures) {
+      if (c.inst && this.world.inInstance(c.x)) continue;
       if (all.every((q) => Math.max(Math.abs(c.x - q.x), Math.abs(c.z - q.z)) > 48)) {
         c.dead = true;
         this.removeOcc(c);
@@ -6122,6 +6280,8 @@ export class Game {
   }
 
   serializeAll() {
+    // (Old places others are down: their floors kept as they are now too.)
+    for (const run of this.runs.values()) if (run !== this.dungeon && run.data) run.saveFloor();
     const regions = [];
     for (const v of this.world.saved.values()) regions.push(v);
     for (const r of this.world.regions.values()) if (r.modified) regions.push(r.serialize());
@@ -6173,6 +6333,8 @@ export class Game {
       host: this.seats && this.seats[0] ? this.seats[0].profile : null,
       chars: [...chars],
       bans: net ? { ids: [...net.bans.ids], names: [...net.bans.names] } : this.partyBans || null,
+      // (Its guilds: see guilds.js.)
+      guilds: this.guilds.serialize(),
     };
   }
 
@@ -6184,6 +6346,7 @@ export class Game {
       this.pvp = !!data.party.pvp;
       this.partyChars = new Map(data.party.chars || []);
       this.partyBans = data.party.bans || null;
+      this.guilds.load(data.party.guilds);
     }
     for (const r of data.regions || []) this.world.saved.set(this.world.regionKey(r.rx, r.rz), r);
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
@@ -6234,13 +6397,16 @@ export class Game {
     const dg = data.dungeon;
     const rec = dg && !this.remoteCopy ? this.sim.dungeons.get(dg.id) : null;
     if (rec) {
-      const run = new DungeonRun(this, rec);
+      const run = this.runFor(rec);
       run.surface = dg.surface || { x: rec.x, y: GROUND, z: rec.z + 3 };
-      run.stash = { creatures: [], drops: [] };
-      run.carried = dg.carried || null;
       this.dungeon = run;
+      run.carried = dg.carried || null;
+      this.runs.set(rec.id, run);
+      // (Saved from before each old place had its own space: where you were
+      // there, moved over to it. See DungeonRun.slot.)
+      const x = run.has(dg.x) ? dg.x : dg.x + (run.x0 - INST_X0);
       // (Fewer floors than it had when you saved: the deepest there is now.)
-      run.open(Math.min(dg.floor, rec.depth - 1), { x: dg.x, z: dg.z });
+      run.open(Math.min(dg.floor, rec.depth - 1), { x, z: dg.z });
     } else if (this.world.inInstance(pd.x) && !this.remoteCopy) {
       // (A dungeon that's gone: up top, at your bed.)
       const s = this.player.spawn;

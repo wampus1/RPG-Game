@@ -1636,7 +1636,7 @@ function respondRaw(npc, game, id, arg) {
     case 'citizen': return citizenTalk(npc, game, arg);
     case 'ownhome': {
       const t = sim.ownHomeTerms(npc);
-      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', queued: 'It\'s paid for: your house goes up on the next free lot. The builders are laying out a new street for it.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
+      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', busy: 'The builders are at work on someone else\'s house just now: ask me again when it\'s up.', queued: 'It\'s paid for: your house goes up on the next free lot. The builders are laying out a new street for it.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
       if (arg !== 'yes') {
         const kin = sim.citizen.native ? 'Leaving the family home at last? Good for you.' : 'A place of your own? Of course.';
         const where = t.plot ? 'on the free lot' : 'on the next lot we mark out (there\'s none free this minute; a new street is on its way)';

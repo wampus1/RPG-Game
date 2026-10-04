@@ -3357,6 +3357,86 @@ together on your network" above for how to start. How it works:
   and the passages in ordinary dungeons are two wide so a party can move
   through them together.
 
+## Round 46: each their own, and guilds
+
+- *Old places, each their own.* Going down a dungeon or a Kavorent ruin no
+  longer drags the whole party down with you. Each player goes down on
+  their own. Someone who goes down a place another player is already in
+  joins them on the floor they're on. Players in the same place share it:
+  when one of them takes the stairs, the others there come too. Each comes
+  back up on their own, and the place closes when the last one leaves.
+  - Different players can be in different old places at the same time.
+    Each place now has its own space out past the edge of the map (see
+    `config.INST_SLOT_RX` and `DungeonRun.slot`). Each place's monsters,
+    traps, falling rock, boss works and Overseer fields are its own, and
+    clearing a floor only clears that place's.
+  - Each place's beasts and traps are simulated as one of the players down
+    there (`Game.inPlace`). The island's people, animals and spawning are
+    simulated as one of the players still up top. So the island carries
+    on around whoever is up there while someone else is below, and
+    nothing from the island wanders into a dungeon.
+  - When the last player up top goes down, the island's animals and drops
+    are put by (as before). The first player back up brings them back.
+  - Floors saved before this round were all laid out in the same place.
+    They are moved over to their own space when next opened, keeping what
+    was solved and what was set down, and any relic left on them.
+  - What each player brought down with them is their own. Each player's
+    finds are bound to them until they're out. A boss's health scales with
+    the players down in that place only.
+  - A player who leaves the world while down below is brought up out of
+    it first.
+- *Fallen packs carry their owner's name.* A pack dropped where someone
+  fell is "Wren's Fallen Pack": in the hover text, in the pack's window,
+  and in what you're told when you come near it ("Your pack" for your
+  own, "Wren's pack" for someone else's). The packs on each floor, and
+  whose they are, are kept with the world.
+- *Each player's own map.* Where you've been, and the places people have
+  told you of, are your own. Every player has their own fog on the world
+  map. It is sent to their screen as it grows and kept with their
+  character. A character from before this round starts with the host's
+  map, which used to be everyone's.
+- *Scenes: each player's own, or everyone's.*
+  - A story's opening scene belongs to the player watching it. The host's
+    no longer freezes anyone else, or stops the island for them.
+  - The mountain going up (see `game/eruption.js`) is now a scene for
+    everyone up on the islands. It shows the Sleeper against a red sky,
+    the top blowing off, a column of fire, rock thrown up and raining
+    down, ash spreading over the sky and lava running down its sides.
+  - Players down an old place only feel the eruption. Each player is told
+    what they see from where they are. Burning rock falls around each
+    player on Kharos once the scene has played.
+  - The storm wall falling is still everyone's scene, as it was.
+- *Trials, bounties and homes, each their own.*
+  - Towns now check whether any player is in their jail, not only the
+    host, before trying their own prisoners or letting prisoners out to
+    work.
+  - The heads of bandits you bring down, toward a bounty, are your own and
+    kept with your character.
+  - A cottage being built belongs to the player who paid for it. They are
+    the one it's finished for, and its sign and name are theirs. Only one
+    player's cottage goes up at a time: the mayor tells anyone else the
+    builders are busy.
+  - Favours, work, standing and crimes were already each player's own.
+  - The sky over each player (rain, snow, the storm) is now their own too.
+- *Guilds* (see `game/guilds.js`). In a world with others, press P for the
+  multiplayer menu.
+  - **Found** a guild ([G], and give it a name). **Invite** anyone here
+    ("Invite to guild" next to their name).
+  - The one invited is told, and can **Join** or **Decline** from the
+    same menu. A player is in one guild at a time.
+  - Anyone can **Leave**. If the leader leaves, the next member leads,
+    and the last one out ends the guild.
+  - Guildmates see each other everywhere:
+    - On the world map, each in their own colour (at its way in when
+      they're down an old place).
+    - On the minimap, as a dot in their colour, or at its edge pointing
+      their way when they're further off.
+    - In a strip down the right of the screen under the minimap. Each
+      card shows the guildmate's face and body as they look now, their
+      name, and their health as a bar that runs down. It also says when
+      they've fallen, or which place they're down.
+  - Guilds are kept with the world's save.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -3576,6 +3656,9 @@ src/
                        doing things as one of them
   game/bout.js         bouts between players (challenges, the count, the
                        purse)
+  game/guilds.js       guilds (founding, invitations, leaving) and where
+                       each guildmate is and how they are
+  game/eruption.js     the mountain going up, as everyone's scene
   ui/multiplayer.js    the account, Multiplayer menu, hosting, party,
                        profile and invitation windows, and notices
   render/avatar.js     account pictures

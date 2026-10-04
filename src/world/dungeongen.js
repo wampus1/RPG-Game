@@ -608,19 +608,21 @@ function doorways(plan, r) {
 
 // --------------------------------------------------------------- building it
 // The blocks of the floor, written into regions in the place apart.
+// (`rx0`: the first region of its own space apart: see DungeonRun.slot.)
 class Builder {
-  constructor(W, D) {
+  constructor(W, D, rx0 = INST_RX) {
     this.W = W;
     this.D = D;
+    this.rx0 = rx0;
     this.rw = Math.ceil(W / REGION_W);
     this.rd = Math.ceil(D / REGION_D);
-    this.x0 = INST_RX * REGION_W;
+    this.x0 = rx0 * REGION_W;
     this.z0 = 0;
     this.regions = new Map();
-    for (let j = 0; j < this.rd; j++) for (let i = 0; i < this.rw; i++) this.regions.set((INST_RX + i) * 4096 + j, new Region(INST_RX + i, j));
+    for (let j = 0; j < this.rd; j++) for (let i = 0; i < this.rw; i++) this.regions.set((rx0 + i) * 4096 + j, new Region(rx0 + i, j));
   }
   region(x, z) {
-    return this.regions.get((INST_RX + Math.floor(x / REGION_W)) * 4096 + Math.floor(z / REGION_D));
+    return this.regions.get((this.rx0 + Math.floor(x / REGION_W)) * 4096 + Math.floor(z / REGION_D));
   }
   // (Local tile coordinates.)
   set(x, y, z, id, meta = 0) {
@@ -781,7 +783,7 @@ export const FAR_LOOT = { kharos: 0.75, myrrow: 0.75 };
 // --------------------------------------------------------------- the floor
 // Build floor `n` (0 = the first down) of a dungeon. `rec` is the
 // dungeon's record (see sim/dungeons.js): { type, seed, depth, level }.
-export function buildFloor(rec, n) {
+export function buildFloor(rec, n, rx0 = INST_RX) {
   const T = dtypeOf(rec);
   const rng = new RNG(hash4(rec.seed >>> 0, n, 0xd06e));
   const big = rec.type === 'kavorent';
@@ -817,7 +819,7 @@ export function buildFloor(rec, n) {
   if (far !== 1 && R[1] && R[1].kit === 'exit') R[1].kit = rng.pick(T.kits.filter((k) => !SEALED.has(k)));
   if (!(last && boss)) R[far].kit = last ? 'boss' : 'exit';
   entry.kit = 'entry';
-  const b = new Builder(W, D);
+  const b = new Builder(W, D, rx0);
   const out = {
     W, D, x0: b.x0, z0: b.z0, rooms: R, spawns: [], levers: [], plates: [], cracks: [], braziers: [], drains: [], nodes: [], consoles: [],
     fields: [], emitters: [], seals: [], weak: [], coffins: [], ambush: [], relicAt: null, notes: [], gongs: [], kegs: [], mimics: [], spikes: [], blighted: [],

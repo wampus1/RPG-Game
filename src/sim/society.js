@@ -211,7 +211,7 @@ export class Society {
     lf.jailUntil = null;
     const n = r.ent;
     if (n && !n.dead && (n.state === 'jailed' || n.state === 'arrested' || n.state === 'toCell')) {
-      const you = this.sim.justice.jail && this.sim.justice.jail.sid === L.settlement.id;
+      const you = this.sim.justice.jailedIn(L.settlement.id);
       if (L.jail && !you) this.sim.justice.setCellDoor(L, true);
       n.state = 'routine';
       n.sleeping = false;
@@ -760,7 +760,7 @@ export class Society {
     n.crime = null;
     n.activity = null;
     n.path = null;
-    if (!J || (this.sim.justice.jail && this.sim.justice.jail.sid === L.settlement.id)) {
+    if (!J || this.sim.justice.jailedIn(L.settlement.id)) {
       n.state = 'routine';
       return;
     }

@@ -18,20 +18,23 @@ export const RELIC_R = 4;
 // How far a relic with so many shards in it reaches.
 export const relicReach = (shards = 0) => RELIC_R + SHARD_REACH * Math.min(SHARD_MAX, shards || 0);
 
-// Where you are, as relics count it.
-export function placeTag(game) {
-  return game.dungeon ? `${game.dungeon.rec.id}:${game.dungeon.floor}` : null;
+// Where you are, as relics count it. (Or where x is: the floor of the old
+// place open there, with others down different ones; see DungeonRun.)
+export function placeTag(game, x = undefined) {
+  const run = x !== undefined && game.runAt ? game.runAt(x) : null;
+  const d = run || (x === undefined || (game.world && game.world.inInstance(x)) ? game.dungeon : null);
+  return d ? `${d.rec.id}:${d.floor}` : null;
 }
 
-function* active(game) {
+function* active(game, x = undefined) {
   if (!game.relics || !game.relics.size) return;
-  const tag = placeTag(game);
+  const tag = placeTag(game, x);
   for (const q of game.relics.values()) if ((q.inst || null) === tag) yield q;
 }
 
 // Is (x, y, z) inside a relic of this kind's circle?
 export function inRelic(game, x, y, z, kind) {
-  for (const q of active(game)) {
+  for (const q of active(game, x)) {
     if (q.kind !== kind || Math.abs(y - q.y) > 4) continue;
     const r = (q.r || RELIC_R) + 0.5;
     if ((x - q.x) ** 2 + (z - q.z) ** 2 <= r * r) return q;
@@ -42,7 +45,7 @@ export function inRelic(game, x, y, z, kind) {
 // Within `pad` of any relic of this kind (for keeping night things from
 // being born near a vigil lamp).
 export function nearRelic(game, x, z, kind, pad = 0) {
-  for (const q of active(game)) {
+  for (const q of active(game, x)) {
     if (q.kind !== kind) continue;
     const r = (q.r || RELIC_R) + pad;
     if ((x - q.x) ** 2 + (z - q.z) ** 2 <= r * r) return q;
@@ -76,7 +79,7 @@ export function relicGrowth(game, x, y, z) {
 // what it is).
 export function setRelic(game, x, y, z, kind, shards = 0) {
   if (!game.relics) game.relics = new Map();
-  game.relics.set(`${x},${y},${z}`, { x, y, z, kind, r: relicReach(shards), shards: shards || 0, inst: placeTag(game) });
+  game.relics.set(`${x},${y},${z}`, { x, y, z, kind, r: relicReach(shards), shards: shards || 0, inst: placeTag(game, x) });
   const R = RELICS[kind];
   game.renderer.emit(x, y + 0.5, z, { n: 26 + 4 * (shards || 0), color: [R.color, '#ffffff', ...(shards ? ['#e0b8ff'] : [])], up: 30, speed: 40, life: 0.8, glow: true });
   game.audio?.play('rune');

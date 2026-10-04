@@ -99,11 +99,15 @@ export function updateWorks(game, dt) {
 }
 
 // All of them (or all of one master's) put back now.
-export function clearWorks(game, by = null) {
-  if (!by) game.procs = [];
+// (`only(q)`: just those it says, and their procs: one old place's, with
+// others open. See DungeonRun.clearFloor.)
+export function clearWorks(game, by = null, only = null) {
+  if (only) game.procs = (game.procs || []).filter((q) => !(q.by && only({ x: q.by.x, by: q.by })));
+  else if (!by) game.procs = [];
   if (!game.works) return;
   for (const q of game.works) {
     if (by && q.by !== by) continue;
+    if (only && !only(q)) continue;
     undo(game, q);
     q.done = true;
   }

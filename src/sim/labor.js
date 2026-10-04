@@ -196,7 +196,7 @@ function doors(game, L, open) {
     if (open && id === B.cell_door) w.setBlock(d.x, y, d.z, B.cell_door_open, 0);
     else if (!open && id === B.cell_door_open) w.setBlock(d.x, y, d.z, B.cell_door, 0);
   };
-  if (L.jail && !(game.sim.justice.jail && game.sim.justice.jail.sid === L.settlement.id)) game.sim.justice.setCellDoor(L, open);
+  if (L.jail && !game.sim.justice.jailedIn(L.settlement.id)) game.sim.justice.setCellDoor(L, open);
   for (const c of L.prisonCells || []) set(c.door);
 }
 

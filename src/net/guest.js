@@ -11,6 +11,7 @@ import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../con
 import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
 import { wallFall } from '../game/wallfall.js';
+import { eruptionScene } from '../game/eruption.js';
 import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
@@ -39,6 +40,8 @@ export class GuestNet {
     this.me = null;
     this.own = {};
     this.party = [];
+    this.guilds = [];
+    this.mates = [];
     this.wanted = new Set();
     this.sentAt = 0;
     this.last = '';
@@ -65,6 +68,7 @@ export class GuestNet {
     else if (m.t === 'party') {
       this.party = m.list || [];
       this.pvp = !!m.pvp;
+      this.guilds = m.guilds || [];
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
     else if (m.t === 'friend') this.onFriend(m);
@@ -154,6 +158,8 @@ export class GuestNet {
     if (m.l) this.lists(m.l);
     if (m.w) this.globals(m.w);
     if (m.own) this.ownState(m.own);
+    // The others in your guild, as they are now.
+    if (m.gm) this.mates = m.gm;
     if (m.slow) {
       game.placed = new Map(m.slow.placed || []);
       game.relics = new Map((m.slow.relics || []).map(([k, v]) => [k, dec(v, () => null)]));
@@ -161,6 +167,16 @@ export class GuestNet {
       if (m.slow.wallDown) game.world.ow.wallDown = game.wallDown = true;
       game.signIcons = new Map(m.slow.signs || []);
     }
+    // Your own map: what's new on it.
+    if (m.ex) {
+      const ow = w.ow;
+      for (const i of m.ex) {
+        if (ow.explored[i]) continue;
+        ow.explored[i] = 1;
+        ow.exploredN = (ow.exploredN || 0) + 1;
+      }
+    }
+    if (m.pins) w.ow.pins = m.pins;
     if (m.ui) applyFrame(game.ui, m.ui);
     if (m.m) for (const [text, color, merge] of m.m) game.ui.msg(text, color, !!merge);
     if (m.fx) this.effects(m.fx);
@@ -262,6 +278,7 @@ export class GuestNet {
       run.state = { stairs: [], solved: {} };
       run.t = 0;
       run.plateOn = new Map();
+      run.carriedBy = new Map();
       run.notes = [];
       game.dungeon = run;
     }
@@ -270,6 +287,7 @@ export class GuestNet {
     run.fight = dec(d.fight, find);
     run.fallen = dec(d.fallen, find);
     run.data = { bossRoom: d.bossRoom, up: d.up, upAt: d.upAt, down: d.down };
+    run.packs = d.packs || [];
     run.update = () => {};
   }
 
@@ -339,6 +357,7 @@ export class GuestNet {
         const rec = game.sim.dungeons.get(s.rec);
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);
       } else if (s.kind === 'wall') sc = wallFall(game);
+      else if (s.kind === 'erupt') sc = eruptionScene(game, { here: !!s.here });
     } catch (e) {
       void e;
       sc = null;
@@ -530,6 +549,12 @@ export class GuestNet {
   // A bout with another player here, for `wager` coins (see game/bout.js).
   bout(to, wager) {
     this.out({ t: 'bout', to, wager });
+  }
+
+  // A guild's doings, asked of the host (see game/guilds.js): `op` 'create'
+  // (`name`), 'invite' (`to`), 'join' or 'decline' (`gid`), or 'leave'.
+  guild(op, args = {}) {
+    this.out({ t: 'guild', op, ...args });
   }
 }
 
