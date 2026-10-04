@@ -1619,6 +1619,17 @@ export function drawJewelled(ctx, icon, key, x, y, t = 0, thin = false) {
     gearMarks(ctx, it, x, y, t);
     return;
   }
+  if (it && it.shards && !thin) {
+    // A relic grown with shards: a violet chip for each, up its side.
+    ctx.drawImage(icon, x, y);
+    for (let i = 0; i < it.shards; i++) {
+      ctx.fillStyle = '#20102c';
+      ctx.fillRect(x + 13, y + 13 - i * 2 - 1, 3, 2);
+      ctx.fillStyle = i === it.shards - 1 ? '#ffffff' : '#e0b8ff';
+      ctx.fillRect(x + 14, y + 13 - i * 2, 1, 1);
+    }
+    return;
+  }
   if (it && it.socket && GEMS[it.socket]) {
     const color = GEMS[it.socket].color;
     const g = glowOf(icon, color, key, thin);
@@ -1688,6 +1699,12 @@ export function itemIcon(key) {
   // A starred piece looks like the piece it's made from (its stars and
   // where it was found show in the slot: see drawJewelled).
   if (it && it.stars) {
+    c = itemIcon(it.plain);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (So does a relic with shards in it: see drawJewelled.)
+  if (it && it.shards) {
     c = itemIcon(it.plain);
     iconCache.set(key, c);
     return c;

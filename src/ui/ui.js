@@ -2,7 +2,8 @@
 // transitions, and draws the HUD.
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
-import { ITEMS, maxStack, GEMS } from '../world/items.js';
+import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
+import { relicReach } from '../game/relics.js';
 import { gemText } from '../game/gems.js';
 import { MODS, STAR_MAX } from '../world/quality.js';
 import { combatBuffText } from '../game/combat.js';
@@ -575,7 +576,10 @@ export class UI {
       const b = BLOCKS[d.block];
       lines.push({ text: 'Placeable block' + (b.rotatable ? ' · [R] rotate' : ''), color: C.dim });
     }
-    if (d.relic) lines.push({ text: 'Set it down to use it', color: C.green });
+    if (d.relic) {
+      lines.push({ text: `Reaches ${relicReach(d.shards)} paces${d.shards ? ` · ${d.shards} of ${SHARD_MAX} shards set in it` : ''}`, color: '#e0b8ff' });
+      lines.push({ text: 'Set it down to use it', color: C.green });
+    } else if (d.kind === 'relic_shard') lines.push({ text: 'Use it [RMB]: into a relic in your pack', color: C.green });
     else if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
     lines.push({ text: d.exchange ? `Value ¤1 for ${d.exchange}` : `Value ¤${d.value}`, color: C.dim });
     this.tooltip = { lines };

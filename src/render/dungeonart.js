@@ -363,6 +363,19 @@ export function dungeonIcon(key, it) {
     p.set(12, 9, '#ffffff');
     return p.outline(OUT);
   }
+  if (it.kind === 'relic_shard') {
+    // A splinter of a relic: a pale crystal sliver with a violet heart, a
+    // faint ring of runes broken round it.
+    const c = hex(it.color || '#e0b8ff');
+    p.line(6, 13, 9, 2, shade(c, 0.6));
+    p.line(7, 13, 10, 3, c);
+    p.line(8, 13, 11, 5, shade(c, 1.25));
+    p.line(8, 10, 9, 6, '#a060e0');
+    p.set(10, 3, '#ffffff');
+    p.set(9, 5, '#ffffff');
+    for (const a of [0.4, 1.3, 2.4, 3.6, 4.6, 5.6]) p.set(8 + Math.cos(a) * 6.5, 8 + Math.sin(a) * 6.5, shade(c, 0.7));
+    return p.outline(OUT);
+  }
   if (it.kind === 'relic') {
     const c = hex(it.color || '#ffffff');
     p.ellipse(8, 8, 5, 5, shade(c, 0.35), 160);

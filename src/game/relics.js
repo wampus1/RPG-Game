@@ -9,11 +9,14 @@
 //   harvest  crops in it grow twice as fast
 // A relic set down below ground stays on that floor of that place (the
 // same stretch of instance space is reused by every dungeon, so each is
-// tagged with where it really is).
-import { ITEMS, RELICS } from '../world/items.js';
+// tagged with where it really is). Relic shards, set into one, make its
+// circle reach further (see fitShard).
+import { ITEMS, RELICS, SHARD_MAX, SHARD_REACH, grownRelic } from '../world/items.js';
 import { B } from '../world/blocks.js';
 
 export const RELIC_R = 4;
+// How far a relic with so many shards in it reaches.
+export const relicReach = (shards = 0) => RELIC_R + SHARD_REACH * Math.min(SHARD_MAX, shards || 0);
 
 // Where you are, as relics count it.
 export function placeTag(game) {
@@ -71,13 +74,49 @@ export function relicGrowth(game, x, y, z) {
 
 // Set one down (the block's placed by the usual placing; this remembers
 // what it is).
-export function setRelic(game, x, y, z, kind) {
+export function setRelic(game, x, y, z, kind, shards = 0) {
   if (!game.relics) game.relics = new Map();
-  game.relics.set(`${x},${y},${z}`, { x, y, z, kind, r: RELIC_R, inst: placeTag(game) });
+  game.relics.set(`${x},${y},${z}`, { x, y, z, kind, r: relicReach(shards), shards: shards || 0, inst: placeTag(game) });
   const R = RELICS[kind];
-  game.renderer.emit(x, y + 0.5, z, { n: 26, color: [R.color, '#ffffff'], up: 30, speed: 40, life: 0.8, glow: true });
+  game.renderer.emit(x, y + 0.5, z, { n: 26 + 4 * (shards || 0), color: [R.color, '#ffffff', ...(shards ? ['#e0b8ff'] : [])], up: 30, speed: 40, life: 0.8, glow: true });
   game.audio?.play('rune');
-  game.ui.msg(`You set down the ${R.name}. Runes kindle in a circle round it: ${R.about.charAt(0).toLowerCase()}${R.about.slice(1)}`, R.color);
+  game.ui.msg(`You set down the ${R.name}. Runes kindle in a circle round it${shards ? `, ${relicReach(shards)} paces across` : ''}: ${R.about.charAt(0).toLowerCase()}${R.about.slice(1)}`, R.color);
+}
+
+// A relic shard used from the belt: it sinks into a relic in your pack (the
+// nearest to the shard's slot that can take one more), and that relic's
+// circle reaches half a pace further for good. Whether it was used.
+export function fitShard(game, def, p = game.player) {
+  if (!def || def.kind !== 'relic_shard') return false;
+  const slot = p.inv[p.selected];
+  const order = [...p.inv.keys()].sort((a, b) => Math.abs(a - p.selected) - Math.abs(b - p.selected));
+  let at = -1;
+  let full = false;
+  for (const i of order) {
+    const it = p.inv[i] && ITEMS[p.inv[i].item];
+    if (!it || it.kind !== 'relic') continue;
+    if ((it.shards || 0) >= SHARD_MAX) {
+      full = true;
+      continue;
+    }
+    at = i;
+    break;
+  }
+  if (at < 0) {
+    game.ui.msg(full ? `Your relics have all the shards they'll take (${SHARD_MAX}).` : 'You carry no relic to set it in. (Take one up first: the shard goes into a relic in your pack.)', '#e0b8ff', true);
+    game.audio?.play('error');
+    return true;
+  }
+  const was = ITEMS[p.inv[at].item];
+  const n = (was.shards || 0) + 1;
+  p.inv[at] = { item: grownRelic(was.relic, n), count: 1 };
+  slot.count--;
+  if (slot.count <= 0) p.inv[p.selected] = null;
+  const R = RELICS[was.relic];
+  game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 20, color: ['#e0b8ff', R.color, '#ffffff'], up: 30, speed: 26, life: 0.8, glow: true, gravity: -16 });
+  game.audio?.play('rune');
+  game.ui.msg(`The shard sinks into the ${R.name} and is gone: its circle will reach ${relicReach(n)} paces now (${n} of ${SHARD_MAX} shards).`, '#e0b8ff');
+  return true;
 }
 
 // The relic at a block (or one that's been lost track of: its block with
@@ -100,7 +139,7 @@ export function updateRelics(game, dt) {
     // (Broken, or blown up: forgotten, and the relic itself left lying.)
     if (game.world.regionAt(q.x, q.z) && game.world.getBlock(q.x, q.y, q.z) !== B.relic) {
       game.relics.delete(k);
-      game.spawnDrop(`relic_${q.kind}`, 1, q.x, q.y, q.z, true);
+      game.spawnDrop(relicItem(q.kind, q.shards), 1, q.x, q.y, q.z, true);
       continue;
     }
     const r2 = ((q.r || RELIC_R) + 0.5) ** 2;
@@ -132,12 +171,13 @@ export function updateRelics(game, dt) {
 }
 
 // The item a relic block gives back when taken up.
-export function relicItem(kind) {
-  return ITEMS[`relic_${kind}`] ? `relic_${kind}` : 'relic_hearth';
+// (With the shards that were set in it.)
+export function relicItem(kind, shards = 0) {
+  return ITEMS[`relic_${kind}`] ? grownRelic(kind, shards || 0) : 'relic_hearth';
 }
 
 export function serializeRelics(game) {
-  return game.relics ? [...game.relics.values()].map(({ x, y, z, kind, r, inst }) => ({ x, y, z, kind, r, inst })) : [];
+  return game.relics ? [...game.relics.values()].map(({ x, y, z, kind, r, shards, inst }) => ({ x, y, z, kind, r, shards: shards || 0, inst })) : [];
 }
 
 export function loadRelics(game, list) {

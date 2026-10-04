@@ -1328,6 +1328,12 @@ export class DungeonRun {
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.
       this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
+      // What's left of the power it kept about it: one to three relic
+      // shards (see relics.fitShard).
+      const shards = 1 + Math.floor(Math.random() * 3);
+      game.spawnDrop('relic_shard', shards, e.x, e.y, e.z, true);
+      game.renderer.emit(e.x, e.y + 1.4, e.z, { n: 14 + shards * 6, color: ['#e0b8ff', '#ffffff', '#a060e0'], up: 40, speed: 34, life: 1, glow: true, shape: 'star' });
+      this.eachHere(() => game.ui.msg(`${shards === 1 ? 'A relic shard glitters' : `${shards} relic shards glitter`} where it fell.`, '#e0b8ff'));
       this.eachHere(() => game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070'));
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.

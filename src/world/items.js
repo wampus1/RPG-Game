@@ -3,14 +3,15 @@ import { BLOCKS, B } from './blocks.js';
 import { deriveStarred } from './quality.js';
 
 export const ITEMS = {};
-// A starred piece of gear ("iron_sword~3dk7.venom": see quality.js) is
-// made up from its plain one the first time it's asked for, and kept.
-// (Looked for only where a key isn't one of the items proper, so the
-// rest cost nothing more.)
+// A starred piece of gear ("iron_sword~3dk7.venom": see quality.js), or
+// a relic grown with shards ("relic_hearth*3": see grownRelic), is made up
+// from its plain one the first time it's asked for, and kept. (Looked for
+// only where a key isn't one of the items proper, so the rest cost
+// nothing more.)
 const STARRED = new Map();
-const isStarred = (k) => typeof k === 'string' && k.includes('~');
+const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes('*'));
 function starred(k) {
-  if (!STARRED.has(k)) STARRED.set(k, deriveStarred(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.includes('~') ? deriveStarred(k) : deriveGrown(k));
   return STARRED.get(k) || undefined;
 }
 Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
@@ -389,6 +390,24 @@ export const RELICS = {
   harvest: { name: 'Seed of Plenty', color: '#90e050', about: 'Crops near it grow twice as fast.' },
 };
 for (const [k, r] of Object.entries(RELICS)) item(`relic_${k}`, { name: r.name, kind: 'relic', stack: 1, value: 90, relic: k, plant: B.relic, color: r.color, about: `${r.about} (Set it down to use it; pick it up again any time.)` });
+// Relic shards: what a master of an old place leaves of the power it kept
+// about it (one to three). One set into a relic in your pack makes its
+// circle reach half a pace further, for good, up to eight of them.
+export const SHARD_MAX = 8;
+export const SHARD_REACH = 0.5;
+item('relic_shard', { name: 'Relic Shard', kind: 'relic_shard', stack: 16, value: 30, color: '#e0b8ff', about: `A splinter of the power a master of the deep kept about it. Used from your belt, it sinks into a relic in your pack: that relic's circle reaches half a pace further, for good (up to ${SHARD_MAX} shards to a relic).` });
+// A relic with `n` shards set in it ("relic_hearth*3").
+export function grownRelic(kind, n = 0) {
+  const k = `relic_${kind}`;
+  return n > 0 ? `${k}*${Math.min(SHARD_MAX, n)}` : k;
+}
+function deriveGrown(key) {
+  const m = /^(relic_[a-z]+)\*([1-9])$/.exec(key);
+  const base = m && ITEMS[m[1]];
+  const n = m ? +m[2] : 0;
+  if (!base || !base.relic || n > SHARD_MAX) return null;
+  return { ...base, key, plain: m[1], shards: n, name: `${base.name} +${n}`, value: base.value + 20 * n };
+}
 
 // --- the Kavorent's ---------------------------------------------------------------
 // Scrap of their alloy (a smith can make iron of it, and good iron), the

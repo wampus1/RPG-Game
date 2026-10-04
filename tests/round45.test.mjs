@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
-import { ITEMS, socketed } from '../src/world/items.js';
+import { ITEMS, socketed, grownRelic, SHARD_MAX } from '../src/world/items.js';
+import { DungeonRun } from '../src/game/dungeon.js';
+import { fitShard, setRelic, relicAt, relicReach, inRelic, RELIC_R, serializeRelics, loadRelics } from '../src/game/relics.js';
 import { buildFloor, gearFor } from '../src/world/dungeongen.js';
 import { RNG } from '../src/util/rng.js';
 import { MODS, STAR_MAX, starKey, parseStar, plainKey, starGear, rollStars, rollMods, starable, gearClass } from '../src/world/quality.js';
@@ -206,4 +208,73 @@ test('a smelting pick brings ore up as metal; a sawing axe fells planks', () => 
     toolDrops(game, p, B[log], d);
     assert.ok(/planks/.test(d[0].item), d[0].item);
   }
+});
+
+// Down to the last floor of an old place of `type`, beside its master.
+function down(game, type = 'barrow') {
+  const base = game.sim.dungeons.all.find((d) => d.type === type);
+  const rec = { ...base, floors: {}, cleared: false, pack: null };
+  new DungeonRun(game, rec).enter();
+  while (game.dungeon.floor < rec.depth - 1) game.dungeon.changeFloor(1);
+  return rec;
+}
+
+test('a master leaves one to three relic shards, and its gear a star better', () => {
+  const { game, p } = start();
+  const counts = new Set();
+  for (let k = 0; k < 5; k++) {
+    down(game);
+    const boss = game.creatures.find((c) => c.isBoss && !c.dead && c.leash);
+    assert.ok(boss);
+    game.drops = [];
+    game.kill(boss, p);
+    const shards = game.drops.filter((d) => d.item === 'relic_shard').reduce((n, d) => n + d.count, 0);
+    assert.ok(shards >= 1 && shards <= 3, `${shards} shards`);
+    counts.add(shards);
+    for (const d of game.drops) if (gearClass(ITEMS[d.item]) && ITEMS[d.item].origin) assert.equal(ITEMS[d.item].origin, 'd');
+    game.dungeon.leave();
+  }
+  assert.ok(counts.size >= 2, 'not always the same');
+});
+
+test('a relic shard set into a relic in your pack makes its circle reach further, for good', () => {
+  const { game, p } = start();
+  assert.equal(ITEMS.relic_shard.kind, 'relic_shard');
+  assert.equal(grownRelic('hearth', 0), 'relic_hearth');
+  assert.equal(ITEMS[grownRelic('hearth', 3)].shards, 3);
+  assert.equal(ITEMS[grownRelic('hearth', 3)].relic, 'hearth');
+  assert.equal(ITEMS['relic_hearth*9'], undefined);
+  assert.ok(!Object.keys(ITEMS).some((k) => k.includes('*')));
+  p.inv.fill(null);
+  p.inv[0] = { item: 'relic_shard', count: SHARD_MAX + 2 };
+  p.inv[3] = { item: 'relic_ward', count: 1 };
+  p.selected = 0;
+  assert.ok(fitShard(game, ITEMS.relic_shard));
+  assert.equal(p.inv[3].item, 'relic_ward*1');
+  assert.equal(p.inv[0].count, SHARD_MAX + 1);
+  for (let i = 0; i < SHARD_MAX + 1; i++) fitShard(game, ITEMS.relic_shard);
+  assert.equal(ITEMS[p.inv[3].item].shards, SHARD_MAX, 'no more than it can take');
+  assert.equal(p.inv[0].count, 2, 'the rest kept');
+  // None to set it in: kept.
+  p.inv[3] = null;
+  assert.ok(fitShard(game, ITEMS.relic_shard));
+  assert.equal(p.inv[0].count, 2);
+  // Set down, it reaches further; taken up, it keeps its shards.
+  const x = Math.round(p.x) + 2;
+  const z = Math.round(p.z);
+  const y = Math.round(p.y);
+  game.world.setBlock(x, y, z, B.relic);
+  setRelic(game, x, y, z, 'ward', 4);
+  assert.equal(relicAt(game, x, y, z).r, relicReach(4));
+  assert.ok(relicReach(4) > RELIC_R);
+  assert.ok(inRelic(game, x + RELIC_R + 1.5, y, z, 'ward'), 'within the grown circle');
+  assert.ok(!inRelic(game, x + relicReach(4) + 1.5, y, z, 'ward'));
+  game.takeRelic(x, y, z);
+  assert.ok(p.inv.some((s) => s && s.item === 'relic_ward*4'));
+  // (And saved and loaded with it.)
+  setRelic(game, x, y, z, 'ward', 2);
+  const saved = serializeRelics(game);
+  loadRelics(game, saved);
+  assert.equal(relicAt(game, x, y, z).shards, 2);
+  assert.equal(relicAt(game, x, y, z).r, relicReach(2));
 });

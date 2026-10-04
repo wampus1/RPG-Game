@@ -37,7 +37,7 @@ import { startIntro } from './cutscene.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
-import { setRelic, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
+import { setRelic, fitShard, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '../entities/monsters.js';
 import { isleNightSpecies, waterNear } from '../entities/islemobs.js';
 import { updateLasers } from './laser.js';
@@ -2746,6 +2746,7 @@ export class Game {
     // The Kavorent's things: used whatever else is about.
     if (held && held.kind === 'gadget' && useGadget(this, held)) return;
     if (held && held.kind === 'enhancer' && fitEnhancer(this, held)) return;
+    if (held && held.kind === 'relic_shard' && fitShard(this, held)) return;
     // Dynamite: lit, and thrown where you point.
     if (held && held.key === 'dynamite' && this.throwDynamite()) return;
     // In a fight (or with nothing to use it on), the right button raises
@@ -3350,7 +3351,7 @@ export class Game {
       r.containers.set(idx, makeSlots(CONTAINER_SIZE[b.name] || 9));
     }
     if (id === B.sapling) this.saplings.push({ x: t.x, y: t.y, z: t.z, t: 90 + Math.random() * 120 });
-    if (def.relic) setRelic(this, t.x, t.y, t.z, def.relic);
+    if (def.relic) setRelic(this, t.x, t.y, t.z, def.relic, def.shards || 0);
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.2);
@@ -3958,7 +3959,7 @@ export class Game {
     const r = relicAt(this, x, y, z);
     this.world.setBlock(x, y, z, B.air);
     if (r) this.relics.delete(`${x},${y},${z}`);
-    const key = relicItem(r ? r.kind : null);
+    const key = relicItem(r ? r.kind : null, r ? r.shards : 0);
     const left = this.player.give(key, 1);
     if (left) this.spawnDrop(key, 1, x, y, z, true);
     this.renderer.emit(x, y + 0.5, z, { n: 12, color: [ITEMS[key].color, '#ffffff'], up: 20, speed: 20, life: 0.5, glow: true });
