@@ -859,12 +859,9 @@ export const KHAROS_BRAINS = {
     c.hall ??= c.leash;
     if (ph < 2) {
       const A = c.anchor;
+      // (Its chain, from the collar to the stake, is drawn with it: see
+      // bossbeasts.drakeChain.)
       c.leash = { x0: A.x - 4, z0: A.z - 4, x1: A.x + 4, z1: A.z + 4 };
-      c.chainFx = (c.chainFx || 0) - dt;
-      if (c.chainFx <= 0) {
-        c.chainFx = 0.25;
-        game.renderer.effect?.({ type: 'beam', wx: A.x, wy: c.y + 0.2, wz: A.z, tx: c.x, ty: c.y + 0.8, tz: c.z, life: 0.3, oy: -4, color: '#8a8480', halo: '#3a3634', width: 1 });
-      }
     } else if (!c.unchained) {
       c.unchained = true;
       c.leash = c.hall;
@@ -1056,12 +1053,8 @@ export const KHAROS_BRAINS = {
       if (!game.toldAnchors) game.ui.msg('Four chains hold the Molten Heart up: break their anchors, or your blows will hardly touch it!', '#ffb070', true);
       game.toldAnchors = true;
     }
+    // (Its chains are drawn with it: see bossbeasts.heartChains.)
     c.wardNote = (c.wardNote || 0) - dt;
-    c.chainFx = (c.chainFx || 0) - dt;
-    if (c.chainFx <= 0) {
-      c.chainFx = 0.3;
-      for (const a of game.creatures) if (!a.dead && a.species === 'heart_anchor') game.renderer.effect?.({ type: 'beam', wx: a.x, wy: a.y + 0.6, wz: a.z, tx: c.x, ty: c.y + 1.4, tz: c.z, life: 0.35, oy: -6, color: '#c8a070', halo: '#5a3a20', width: 1 });
-    }
     if (!t || t.dead) return true;
     const d = dist(c, t);
     // The floor erupting under you, square by square.

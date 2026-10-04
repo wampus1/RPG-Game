@@ -35,6 +35,9 @@ const NOT_ITEMS = new Set([
   'kav_statue', 'kav_monolith', 'kav_holo', 'kav_conduit', 'kav_husk', 'kav_vent', 'satchel', 'spikes', 'idol', 'blight_floor', 'blight_wall',
   // (The other islands' ground: what it gives when it's dug is its own.)
   'lava', 'steam_vent', 'scorched', 'moss', 'mycelium', 'peat', 'sulfur_crust', 'mushroom_stem', 'mushroom_cap', 'glowcap_cap',
+  // (The great things in the squares, and what the islands' learning puts
+  // up about their towns.)
+  'fountain', 'heartfire', 'heart_crystal', 'great_glowcap', 'conch_fountain', 'plinth', 'glass_lamp', 'ember_gutter', 'fog_lantern',
 ]);
 
 const BLOCK_VALUES = {

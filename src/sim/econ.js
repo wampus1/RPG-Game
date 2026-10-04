@@ -738,10 +738,13 @@ function produce(L, rec, rng) {
       sk.hunting = Math.min(1, sk.hunting + 0.001);
       return;
     }
-    case 'fisher':
-      if (rng.chance(0.45 * (0.5 + sk.fishing))) invAdd(rec.inv, 'fish', rng.int(1, 3));
+    case 'fisher': {
+      // (Half as much again for fishers who know the tides: tide charts.)
+      const tides = L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'tide_charts') ? 1.5 : 1;
+      if (rng.chance(Math.min(0.95, 0.45 * (0.5 + sk.fishing) * tides))) invAdd(rec.inv, 'fish', rng.int(1, 3));
       sk.fishing = Math.min(1, sk.fishing + 0.001);
       return;
+    }
     case 'farmer':
       // Moist fields (recent rain, or water carried from the well) yield more.
       // (Watermills: more from the same fields.)

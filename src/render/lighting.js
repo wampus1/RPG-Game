@@ -87,7 +87,9 @@ export class Lighting {
           const b = BLOCKS[id];
           if (!b.light) continue;
           if (b.lightWhenState && !(world.getMeta(x, y, z) & META_STATE)) continue;
-          out.push({ x, y, z, L: b.light, cold: b.name.startsWith('kav_') });
+          // (Some burn brighter in their other state: see blocks.lightState.)
+          const L = b.lightState && world.getMeta(x, y, z) & META_STATE ? b.lightState : b.light;
+          out.push({ x, y, z, L, cold: b.name.startsWith('kav_') });
         }
       }
     }

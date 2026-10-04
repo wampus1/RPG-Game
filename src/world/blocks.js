@@ -18,6 +18,7 @@ const DEFAULTS = {
   drop: undefined, // item key, null, or [{item, chance, min, max}]
   light: 0, // light emission when lit/always
   lightWhenState: false, // emits only when the state bit is set
+  lightState: 0, // brighter than `light` while the state bit is set
   rotatable: false,
   interact: null,
   replaceable: false,
@@ -463,6 +464,39 @@ def('basalt_bricks', { tool: 'pick', hardness: 7, drop: 'basalt', label: 'Basalt
 def('hollow_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Hollow in the Roots' });
 def('forge_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 6, label: 'Forge Door' });
 def('grotto_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Grotto Mouth' });
+// Round 36: what the Ashborn build with, so their houses stand out from
+// the black ground they're built on: walls of pale ash plaster (lime and
+// pumice, washed every spring), roofs of terracotta kiln tile, a hall's
+// walls of glazed kiln brick, and green copper sheeting over the great
+// roofs.
+def('ash_plaster', { tool: 'pick', hardness: 1, label: 'Ash Plaster' });
+def('kiln_tile', { tool: 'pick', hardness: 1.2, label: 'Kiln Tile' });
+def('kiln_brick', { tool: 'pick', hardness: 2, label: 'Kiln Brick' });
+def('copper_roof', { tool: 'pick', hardness: 1.5, label: 'Copper Sheeting' });
+// The great things in each people's square (drawn bigger than their pace:
+// see render/pieces.js), and the stone they stand on, round them (the
+// paces beside and behind, kept clear of anyone: an unseen plinth).
+//   A fountain, where a Thessan town has learned to bring water in;
+//   the Ashborn's heartfire, a great bowl of fire on a basalt dais, and the
+// heart-crystal it becomes once they've learned to raise the ember ward;
+//   the Mirefolk's Old Glowcap, a mushroom grown as tall as a house (grown
+// greater still, and brighter, once they know the heart of the mire);
+//   the Stiltfolk's conch fountain, water poured from a great shell on a
+// coral spire (pearls set glowing in it too, with the heart of the mire).
+def('fountain', { ...sprite, tall: true, interact: 'well', hardness: Infinity, drop: null, label: 'Fountain' });
+def('heartfire', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 15, lightWhenState: true, label: 'Heartfire' });
+def('heart_crystal', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 15, label: 'Heart-Crystal' });
+def('great_glowcap', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 10, lightState: 15, label: 'The Old Glowcap' });
+def('conch_fountain', { ...sprite, tall: true, interact: 'well', hardness: Infinity, drop: null, light: 4, lightState: 12, label: 'Conch Fountain' });
+def('plinth', { solid: true, opaque: false, render: 'none', standable: false, hardness: Infinity, drop: null, label: 'Plinth' });
+// What the islands' learning puts up about their towns: the Ashborn's lamps
+// of amber glass, and the bronze grates of their magma forges set in the
+// streets over channels of the mountain's heat; the Mirefolk's fog
+// lanterns; squares laid in nacre by the pearl divers.
+def('glass_lamp', { ...sprite, tall: true, tool: 'pick', hardness: 1, light: 13, drop: 'glass', label: 'Glass Lamp' });
+def('ember_gutter', { tool: 'pick', hardness: 2, light: 6, drop: 'basalt', label: 'Ember Grate' });
+def('fog_lantern', { ...sprite, tall: true, tool: 'axe', hardness: 1, light: 11, drop: null, label: 'Fog Lantern' });
+def('nacre_tile', { tool: 'pick', hardness: 1.5, label: 'Nacre Tiles' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

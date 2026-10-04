@@ -1184,7 +1184,9 @@ export const MYRROW_BRAINS = {
     const ph = phaseOf(c);
     if (!t || t.dead) return false;
     const d = dist(c, t);
-    // Coral grown up out of the floor round you, in clumps: a reef.
+    // Coral grown up out of the floor round you, in clumps: a reef, sharp
+    // and clinging (slow going, and it cuts), that crumbles away in time.
+    // (It leaves the hall itself be: you can walk through it, at a cost.)
     if (cd(c, 'growCd', dt, 2) && ready(c) && !c.windup) {
       c.growCd = 8;
       used(c, 0.3);
@@ -1194,17 +1196,20 @@ export const MYRROW_BRAINS = {
         if (at) for (const q of areaTiles(at.x, at.z, 1)) if (Math.random() < 0.45 && inHall(c, q)) spots.push(q);
       }
       addHazard(game, { by: c, tiles: spots, y: c.y, dur: 0.9, dmg: dmgOf(c, 4), kind: 'erupt', onFire: (g) => {
-        for (const q of spots) if (work(g, q.x, FY, q.z, B.coral, 0, c, { meta: Math.floor(Math.random() * 4) })) game.renderer.emit(q.x, FY + 0.6, q.z, { n: 4, color: ['#ff8a8a', '#ffe0c8'], up: 20, speed: 20, life: 0.5 });
+        if (!spots.length) return;
+        addZone(g, { by: c, kind: 'reef', tiles: spots, y: c.y, life: 12, tick: 1, dmg: 1, slow: true, color: [255, 140, 130] });
+        for (const q of spots) game.renderer.emit(q.x, c.y + 0.6, q.z, { n: 4, color: ['#ff8a8a', '#ffe0c8'], up: 20, speed: 20, life: 0.5 });
       } });
       game.audio?.play('crumble', c);
       return true;
     }
     // Its reef burst into shrapnel round you.
-    const reef = (game.works || []).filter((q) => q.by === c && q.id === B.coral && dist(q, t) <= 5);
+    const reefs = (game.zones || []).filter((z) => z.by === c && z.kind === 'reef' && !z.done);
+    const reef = reefs.flatMap((z) => z.tiles).filter((q) => dist(q, t) <= 5);
     if (reef.length >= 3 && cd(c, 'shatterCd', dt, 4) && ready(c) && !c.windup) {
       c.shatterCd = 10;
       used(c, 0.4);
-      hex(game, c, reef.flatMap((q) => areaTiles(q.x, q.z, 1)), 1.1, 5, [255, 160, 150], { onFire: (g) => reef.forEach((q) => work(g, q.x, FY, q.z, B.air, 0.01, c, { dig: true })) });
+      hex(game, c, reef.flatMap((q) => areaTiles(q.x, q.z, 1)), 1.1, 5, [255, 160, 150], { onFire: () => reefs.forEach((z) => (z.done = true)) });
       game.renderer.floatText(c.x, c.y + 3.4, c.z, 'the reef cracks...', '#ff8a8a');
       return true;
     }

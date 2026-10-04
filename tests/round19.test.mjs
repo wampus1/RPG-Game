@@ -217,8 +217,9 @@ test('the tree: four branches, lines that join again, new arts with real effects
   for (const b of ['economy', 'warfare', 'society', 'engineering']) {
     const ids = TECH_IDS.filter((k) => TECHS[k].branch === b);
     assert.ok(ids.length >= 11);
-    // (Engineering has two roots: masonry, and metalworking beside it.)
-    const root = ids.filter((k) => !TECHS[k].req.length);
+    // (Engineering has two roots: masonry, and metalworking beside it. An
+    // island's own first steps aside: Kharos's kilnwork, say.)
+    const root = ids.filter((k) => !TECHS[k].req.length && !TECHS[k].isles);
     assert.equal(root.length, b === 'engineering' ? 2 : 1, 'its roots');
     const cap = ids.find((k) => TECHS[k].tier >= 5);
     assert.ok(cap, 'a last step');

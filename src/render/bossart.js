@@ -6,8 +6,10 @@
 // Horror and the Overseer, walking on legs of their own, each foot planted
 // where it falls and stepping on only when the body's gone on too far from
 // it, half the legs at a time.
-import { hex, shade } from './pixel.js';
+import { hex, mix, shade, toHex } from './pixel.js';
 import { Paint, hash2 } from './paint.js';
+import { Sculpt } from './sculpt.js';
+import { Part, bodyOf, drawBody } from './bossrig.js';
 import { TILE, LH } from '../config.js';
 import { frameGlow } from './sprites.js';
 
@@ -112,121 +114,168 @@ export function drawBossUnder(r, ctx, e, sx, feetY) {
 }
 
 // ------------------------------------------------------------ bodies
-// Drawn facing left (turned for right), bigger and finer than the old
-// sheets, four frames of breath.
+// Drawn facing left (turned for right), sculpted as the masters of the
+// islands are (see sculpt.js: chitin, fur, bone, rotten flesh, alloy, each
+// surfaced as what it is), in twenty-four frames of breath; painted as
+// they're first wanted, a couple a frame (the nearest one painted shown
+// till then), so meeting one never stalls the game.
+export const BODY_FRAMES = 24;
+const TAU = Math.PI * 2;
 const bodies = new Map();
-function body(kind, f) {
+let budgetT = -1;
+let budget = 0;
+function body(kind, f, now) {
   const k = `${kind}:${f}`;
   let c = bodies.get(k);
-  if (!c) bodies.set(k, (c = toCanvas(BODY[kind](f))));
+  if (c) return c;
+  if (now !== budgetT) {
+    budgetT = now;
+    budget = 2;
+  }
+  if (budget <= 0) {
+    for (let d = 1; d < BODY_FRAMES; d++) {
+      for (const g of [f - d, f + d]) {
+        const w = bodies.get(`${kind}:${(g + BODY_FRAMES) % BODY_FRAMES}`);
+        if (w) return w;
+      }
+    }
+  }
+  budget--;
+  bodies.set(k, (c = toCanvas(BODY[kind](f))));
   return c;
+}
+function painted(X, w, h) {
+  const P = new Paint(w, h);
+  P.p = X.render();
+  return P;
 }
 
 const BODY = {
-  // A bloated, banded abdomen marked with a red hourglass and bristling,
-  // a head crowded with eyes, fangs working. (Painted as the masters of
-  // the islands are: see paint.js.)
+  // A spider the size of a cart: a great bristled bag of an abdomen,
+  // banded, an hourglass of red on it that glows as she breathes; the
+  // glossy head-and-body crowded with eyes, two great and many little;
+  // fangs working, feelers twitching.
   brood_mother(f) {
-    const P = new Paint(46, 32);
-    const br = f === 1 || f === 2 ? 0.6 : 0;
-    // The abdomen: banded, bristled, the hourglass on it glowing.
-    P.blob(30, 15, 14 + br, 11 + br, '#5a443a');
+    const t = f / BODY_FRAMES;
+    const br = Math.sin(t * TAU) * 0.6;
+    const fang = Math.max(0, Math.sin(t * TAU * 2));
+    const X = new Sculpt(46, 32, { seed: 13, t });
+    X.in(0, 2.5);
+    X.ball(30, 15, 14 + br, 11 + br, '#5a443a', 'fur', { rz: 11, along: 'x' });
+    X.ball(43.5, 15.5, 2.2, 2.6, '#3a2a24', 'chitin', { z: 2, rz: 1.5 });
+    X.in(1, 1.5);
+    X.ball(19.5, 17, 4, 3.6, '#3a2a24', 'chitin', { rz: 3, z: 2 });
+    X.ball(12.5, 18, 8.5, 6.8, '#4a3630', 'chitin', { rz: 6, z: 3 });
+    X.limb([[7, 20, 1.3, 6], [3.5 - fang * 0.6, 22, 1.1, 7], [2.6, 25, 0.8, 7]], '#4a3630', 'chitin');
+    X.limb([[8, 21, 2.2, 7], [6.5, 24.5, 1.6, 8]], '#3a2a24', 'chitin');
+    X.limb([[6.5, 24.5, 1, 8], [5 - fang, 27.5, 0.4, 8]], '#e8e0c8', 'bone');
+    X.limb([[11, 22, 2.2, 6], [10, 25.5, 1.6, 7]], '#3a2a24', 'chitin');
+    X.limb([[10, 25.5, 1, 7], [10 + fang, 28.5, 0.4, 7]], '#e8e0c8', 'bone');
+    X.in(2, 0.4);
+    for (const [x, y, r] of [[6.5, 15.5, 1.9], [10, 14, 1.7], [13, 13.6, 1.1], [8, 17.6, 1], [11.5, 16.6, 0.9], [14.2, 16, 0.8], [5, 18, 0.8]]) X.ball(x, y, r, r, '#2a0808', 'glass', { z: 9, rz: r * 0.8 });
+    const P = painted(X, 46, 32);
+    // The bands round her abdomen, and the bristles standing off it.
     P.over((x, y, c) => {
-      if (x < 18) return null;
+      if (x < 19) return null;
       const k = (x - Math.round(Math.abs(y - 15) * 0.35)) % 6;
-      return k === 0 ? shade(c, 0.55) : k === 1 ? shade(c, 1.18) : null;
+      return k === 0 ? shade(c, 0.6) : k === 1 ? shade(c, 1.15) : null;
     });
     for (let i = 0; i < 14; i++) {
       const a = Math.PI + 0.3 + (i / 13) * (Math.PI - 0.5);
-      P.spike(30 + Math.cos(a) * 13.5, 15 + Math.sin(a) * 10.5, a, 2.5, 0.5, '#8a6a58');
+      P.spike(30 + Math.cos(a) * (13.5 + br), 15 + Math.sin(a) * (10.5 + br), a + Math.sin(t * TAU + i) * 0.08, 2.5, 0.5, '#8a6a58');
     }
-    const red = f % 2 ? '#ff4a30' : '#d82a20';
-    P.poly([[26.5, 9.5], [34, 9.5], [30.5, 14.6]], red, { lv: 0.7, contrast: 0.5 });
-    P.poly([[30.5, 15.4], [34, 20.5], [26.5, 20.5]], red, { lv: 0.6, contrast: 0.5 });
-    P.blob(43.5, 15.5, 2, 2.4, '#3a2a24');
-    // The head and its eyes, two great ones and a crowd of little.
-    P.blob(13, 18, 9, 7, '#4a3630');
-    P.blob(12, 15, 6, 3, '#6a5040', { flat: 0.4 });
-    const eye = f % 2 ? '#ff5040' : '#ff2a1a';
-    P.blob(6.5, 15.5, 1.8, 1.8, eye, { lift: 0.2 });
-    P.blob(10, 14, 1.6, 1.6, eye, { lift: 0.2 });
-    for (const [x, y] of [[13, 14], [8, 17.5], [11.5, 16.5], [14, 16.5], [5, 18]]) P.set(x, y, hex(eye));
-    // Fangs, working.
-    const open = f === 1 || f === 2 ? 1 : 0;
-    P.tube(6, 21, 4 - open, 26, 1.3, 0.6, '#3a2a24');
-    P.tube(9, 22, 8 + open, 27, 1.3, 0.6, '#3a2a24');
-    P.set(4 - open, 26, hex('#e8e0c8'));
-    P.set(8 + open, 27, hex('#e8e0c8'));
-    P.over((x, y, c) => (hash2(x, y, 3) < 0.12 ? shade(c, 0.85) : null));
+    // The hourglass, glowing as she breathes.
+    const glow = 0.5 + 0.5 * Math.sin(t * TAU);
+    const red = toHex(mix(hex('#c82a20'), hex('#ff6a40'), glow));
+    P.poly([[26.5, 9.5], [34, 9.5], [30.5, 14.6]], red, { lv: 0.75, contrast: 0.5 });
+    P.poly([[30.5, 15.4], [34, 20.5], [26.5, 20.5]], red, { lv: 0.65, contrast: 0.5 });
+    // Her eyes, red in their gloss.
+    for (const [x, y] of [[6, 15], [9.5, 13.5]]) P.set(x + 1, y + 1, hex(glow > 0.5 ? '#ff5040' : '#d82a1a'));
+    for (const [x, y] of [[13, 13.6], [8, 17.6], [11.5, 16.6], [14.2, 16], [5, 18]]) P.set(x, y, hex('#ff3a20'));
     P.done();
     P.glint(6, 15, '#ffd8c8');
     P.glint(9, 13, '#ffd8c8');
     return P.p;
   },
-  // A heap of the dead: ribs arched over a core of red light, bones
-  // jutting, skulls whose eyes come and go.
+  // A heap of the dead grown into one thing: rotten flesh knotted with
+  // bones, ribs arched over a heart of red light that throbs, skulls set
+  // in it whose eyes come and go.
   horror(f) {
-    const P = new Paint(46, 36);
-    const bone = '#d8d0b8';
-    const br = f === 1 || f === 2 ? 1 : 0;
-    // The heap: dark, rotten, bones knotted in it.
-    P.blob(23, 23 - br, 19, 12, '#5a5244');
+    const t = f / BODY_FRAMES;
+    const br = Math.sin(t * TAU) * 0.8;
+    const beat = Math.max(0, Math.sin(t * TAU * 2)) ** 2;
+    const X = new Sculpt(46, 36, { seed: 17, t });
+    X.in(0, 3);
+    X.ball(23, 23 - br, 19, 12, '#5a4a40', 'flesh', { rz: 10 });
+    X.ball(12, 27 - br * 0.5, 8, 5.5, '#4a3a32', 'flesh', { z: 3, rz: 4 });
+    X.ball(34, 27 - br * 0.5, 8, 5.5, '#4a3a32', 'flesh', { z: 3, rz: 4 });
+    X.in(1, 0.8);
     for (let i = 0; i < 14; i++) {
-      const a = (i * 2.399) % (Math.PI * 2);
+      const a = (i * 2.399) % TAU;
       const r = 6 + ((i * 7) % 10);
       const x = 23 + Math.cos(a) * r * 1.1;
       const y = 23 - br + Math.sin(a) * r * 0.6;
       if (Math.abs(x - 23) < 8 && Math.abs(y - 21 + br) < 6) continue;
-      P.tube(x, y, x + Math.cos(a + 1.3) * 4, y + Math.sin(a + 1.3) * 2.5, 0.9, 0.8, i % 3 ? bone : '#b8b098');
+      X.tube(x, y, x + Math.cos(a + 1.3) * 4.5, y + Math.sin(a + 1.3) * 2.8, 1, 0.8, i % 3 ? '#d8d0b8' : '#b8b098', 'bone', { z: 8 });
     }
-    // The core, deep in it.
-    const core = ['#ff4030', '#ff6040', '#ff8a50', '#ff6040'][f];
-    P.blob(23, 21 - br, 7, 5, '#2a0808', { amb: 0 });
-    P.blob(23, 21 - br, 4 + br, 3, core, { lift: 0.4 });
-    // Ribs arched over it.
+    X.ball(23, 21 - br, 7.5, 5.5, '#1a0606', 'flesh', { z: 7, rz: 1 });
+    X.ball(23, 21 - br, 3.5 + beat * 1.2, 2.6 + beat * 0.8, '#ff4030', 'molten', { z: 9, rz: 2, glow: '#ff9060', glowK: 0.4 + beat * 0.4 });
+    X.in(2, 0.6);
     for (let k = -2; k <= 2; k++) {
       const pts = [];
-      for (let y = -6; y <= 6; y += 2) pts.push([23 + k * 3.2 + ((y * y) / 14) * Math.sign(k || 1), 21 - br + y, 0.9]);
-      P.limb(pts, k === 0 ? '#c8c0a8' : bone);
+      for (let y = -6; y <= 6; y += 3) pts.push([23 + k * 3.2 + ((y * y) / 14) * Math.sign(k || 1), 21 - br + y, 0.95, 12 - Math.abs(y) * 0.3]);
+      X.limb(pts, k === 0 ? '#c8c0a8' : '#d8d0b8', 'bone');
     }
-    // Skulls in it.
-    for (const [x, y, k] of [[10, 16, 0], [18, 11, 1], [29, 11, 2], [37, 16, 3], [14, 27, 4], [32, 27, 5]]) {
-      P.blob(x, y - br, 3, 2.8, bone);
-      P.rect(x - 1.5, y + 1.5 - br, 3, 1.5, '#a89878');
-      const e = (f + k) % 4 === 0 ? '#ffffff' : '#ff4030';
-      P.set(x - 1, y - br, hex(e));
-      P.set(x + 1, y - br, hex(e));
+    const skulls = [[10, 16, 0], [18, 11, 1], [29, 11, 2], [37, 16, 3], [14, 27, 4], [32, 27, 5]];
+    for (const [x, y] of skulls) {
+      X.ball(x, y - br, 3.2, 2.9, '#e0d8c0', 'bone', { z: 10, rz: 2.6 });
+      X.ball(x, y + 2 - br, 2, 1.2, '#c8c0a8', 'bone', { z: 10, rz: 1 });
     }
-    P.over((x, y, c) => (hash2(x, y, 4) < 0.12 ? shade(c, 0.85) : null));
+    const P = painted(X, 46, 36);
+    // Their eye-holes, and the light in them coming and going.
+    for (const [x, y, k] of skulls) {
+      const lit = Math.floor(t * 8 + k) % 4 !== 0;
+      for (const dx of [-1, 1]) P.set(x + dx, Math.round(y - br), hex(lit ? '#ff4030' : '#1a0a0a'));
+      P.set(x, Math.round(y + 1 - br), hex('#3a2a20'));
+    }
+    P.over((x, y, c) => (hash2(x, y, 4) < 0.1 ? shade(c, 0.85) : null));
     P.done();
     return P.p;
   },
-  // A great ring of alloy round its eye, its seams lit in turn, shards
-  // circling it. (The eye itself is drawn over it, looking at you.)
+  // A great ring of alloy round its eye: plates riveted on it, its eight
+  // seams lit in turn, shards wheeling round it. (The eye itself is drawn
+  // over it, looking at you.)
   overseer(f) {
-    const P = new Paint(46, 46);
+    const t = f / BODY_FRAMES;
     const c = 23;
-    // Shards behind.
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + f * 0.26;
-      if (Math.sin(a) < 0) P.poly([[c + Math.cos(a) * 18.5, c + Math.sin(a) * 18.5], [c + Math.cos(a + 0.12) * 21, c + Math.sin(a + 0.12) * 21], [c + Math.cos(a) * 23, c + Math.sin(a) * 23], [c + Math.cos(a - 0.12) * 21, c + Math.sin(a - 0.12) * 21]], K.edge, { lv: 0.6 });
-    }
-    P.blob(c, c, 17, 17, K.edge);
-    P.blob(c, c, 13.5, 13.5, K.plate, { flat: 0.4 });
-    P.blob(c, c, 10, 10, K.dark, { amb: 0.1 });
-    // The seams: eight, lit in turn.
+    const X = new Sculpt(46, 46, { seed: 19, t });
+    const shard = (i, z) => {
+      const a = ((i + t) / 6) * TAU;
+      const pt = (r, da) => [c + Math.cos(a + da) * r, c + Math.sin(a + da) * r];
+      X.slab([pt(18.5, 0), pt(21, 0.13), pt(23, 0), pt(21, -0.13)], K.edge, 'metal', { rz: 1.4, bevel: 0.8, z });
+    };
+    X.in(0, 1.5);
+    for (let i = 0; i < 6; i++) if (Math.sin(((i + t) / 6) * TAU) < 0) shard(i, -4);
+    X.in(1, 1.2);
+    X.ball(c, c, 17, 17, K.edge, 'metal', { rz: 6 });
+    X.ball(c, c, 13.5, 13.5, K.plate, 'metal', { z: 3, rz: 2 });
+    X.ball(c, c, 10, 10, K.dark, 'metal', { z: 4.5, rz: 1 });
+    X.in(2, 0.5);
     for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      for (let r = 11; r <= 16; r++) P.set(c + Math.cos(a) * r, c + Math.sin(a) * r, hex(i % 4 === f % 4 ? K.glow : K.seam));
+      const a = (i / 8) * TAU + TAU / 16;
+      X.ball(c + Math.cos(a) * 15.2, c + Math.sin(a) * 15.2, 1, 1, '#8a88b0', 'metal', { z: 6.5, rz: 0.8 });
+    }
+    X.in(3, 1.5);
+    for (let i = 0; i < 6; i++) if (Math.sin(((i + t) / 6) * TAU) >= 0) shard(i, 8);
+    const P = painted(X, 46, 46);
+    // The seams: eight, lit in turn.
+    const on = Math.floor(t * 8) % 8;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU;
+      for (let r = 11; r <= 16; r++) P.set(c + Math.cos(a) * r, c + Math.sin(a) * r, hex(i % 4 === on % 4 ? K.glow : K.seam));
     }
     P.blob(c, c, 8, 8, '#160810', { amb: 0 });
     P.blob(c, c, 6, 6, '#4a0e16', { amb: 0.2 });
-    // Shards in front.
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + f * 0.26;
-      if (Math.sin(a) >= 0) P.poly([[c + Math.cos(a) * 18.5, c + Math.sin(a) * 18.5], [c + Math.cos(a + 0.12) * 21, c + Math.sin(a + 0.12) * 21], [c + Math.cos(a) * 23, c + Math.sin(a) * 23], [c + Math.cos(a - 0.12) * 21, c + Math.sin(a - 0.12) * 21]], K.edge, { lv: 0.7 });
-    }
-    P.p.hline(c - 3, c + 3, c + 17, hex(K.seam));
     P.done();
     P.glint(c - 11, c - 11, '#e0f8ff');
     return P.p;
@@ -323,65 +372,79 @@ function knee(hx, hy, fx, fy, L1, L2) {
   return { kx: k[0], ky: k[1], fx: hx + ux * Math.min(d0, L1 + L2), fy: hy + uy * Math.min(d0, L1 + L2) };
 }
 
-// A thick pixel line (a square stamped along it), `w0` wide at its start
-// tapering to `w1`.
-function seg(ctx, x0, y0, x1, y1, w0, w1, col) {
-  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
-  ctx.fillStyle = col;
-  for (let i = 0; i <= n; i++) {
-    const k = i / n;
-    const w = Math.max(1, Math.round(w0 + (w1 - w0) * k));
-    ctx.fillRect(Math.round(x0 + (x1 - x0) * k - w / 2), Math.round(y0 + (y1 - y0) * k - w / 2), w, w);
-  }
-}
-
-function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint) {
+// Its legs, each drawn whole along hip, knee and foot (see bossrig.bodyOf):
+// round, lit as its body is, and each surfaced as what it is. A spider's:
+// glossy chitin, banded pale at the joints, bristled. Bone: knobbed at the
+// joints, cracked, a skull at each knee whose eyes come and go. The
+// Overseer's: plated alloy in bands, its joints lit in pulses running down
+// the leg.
+const SPIDER = hex('#3e302a');
+const BONE = hex('#d8d0b8');
+const PLATE = hex(K.plate);
+const EDGE = hex(K.edge);
+const LEG = {
+  spider: {
+    rad: (k) => (k < 0.47 ? 2.3 - k * 1.2 : Math.max(0.7, 1.8 - (k - 0.47) * 2.1)),
+    skin: (L1) => (k, u, v, ny) => {
+      if (Math.abs(u - L1) < 1.4 || u < 1.5) return mix(SPIDER, [140, 110, 90], 0.45);
+      if (hash2(Math.floor(u), Math.floor((v + 1) * 2), 9) > 0.86) return mix(SPIDER, [120, 96, 80], 0.6);
+      return ny > 0.5 ? shade(SPIDER, 0.8) : SPIDER;
+    },
+    gloss: 0.6,
+  },
+  bone: {
+    rad: (k, L1, len) => {
+      const knob = (u) => Math.max(0, 1 - Math.abs(k * len - u) / 2);
+      return 1.3 + 1.1 * Math.max(knob(0), knob(L1)) - k * 0.4;
+    },
+    skin: () => (k, u, v) => (hash2(Math.floor(u / 2), Math.floor((v + 1) * 3), 5) > 0.9 ? shade(BONE, 0.7) : BONE),
+    gloss: 0.15,
+  },
+  mech: {
+    rad: (k) => (k < 0.47 ? 3 - k : Math.max(1, 2.4 - (k - 0.47) * 2.6)),
+    skin: () => (k, u) => {
+      const m = u % 5;
+      return m < 0.8 ? shade(PLATE, 0.6) : m < 1.6 ? EDGE : PLATE;
+    },
+    gloss: 0.7,
+  },
+};
+const SKULL = new Part(() => {
+  const X = new Sculpt(9, 9, { seed: 5 });
+  X.ball(4.5, 4, 3.4, 3.1, '#e8e0c8', 'bone', { rz: 2.8 });
+  X.ball(4.5, 6.4, 2.2, 1.4, '#d8d0b8', 'bone', { z: 1.4, rz: 1 });
+  return X.render({ outline: false });
+}, 4.5, 4.5);
+function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, faceR) {
   const { kx, ky, fx: ex, fy: ey } = knee(hx, hy, fx, fy, rig.L1, rig.L2);
-  if (style === 'spider') {
-    seg(ctx, hx, hy, kx, ky, 5, 4, OUT);
-    seg(ctx, kx, ky, ex, ey, 4, 2, OUT);
-    seg(ctx, hx, hy, kx, ky, 3, 2, '#3e302a');
-    seg(ctx, kx, ky, ex, ey, 2, 1, '#2a201c');
-    seg(ctx, hx, hy - 1, kx, ky - 1, 1, 1, '#6e5648');
-    ctx.fillStyle = '#6e5648';
-    ctx.fillRect(Math.round(kx) - 1, Math.round(ky) - 1, 2, 2);
-    // Bristles along the shin.
-    ctx.fillStyle = '#5a4840';
-    for (let k = 0.2; k < 0.9; k += 0.18) ctx.fillRect(Math.round(kx + (ex - kx) * k) + 1, Math.round(ky + (ey - ky) * k), 1, 1);
-    ctx.fillStyle = '#120c0a';
-    ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);
-  } else if (style === 'bone') {
-    seg(ctx, hx, hy, kx, ky, 4, 4, OUT);
-    seg(ctx, kx, ky, ex, ey, 4, 3, OUT);
-    seg(ctx, hx, hy, kx, ky, 2, 2, '#d8d0b8');
-    seg(ctx, kx, ky, ex, ey, 2, 1, '#c8c0a8');
-    // A skull at the knee, and fingers of bone at the foot.
-    ctx.fillStyle = OUT;
-    ctx.fillRect(Math.round(kx) - 3, Math.round(ky) - 3, 6, 6);
-    ctx.fillStyle = '#e8e0c8';
-    ctx.fillRect(Math.round(kx) - 2, Math.round(ky) - 2, 4, 4);
+  const L = LEG[style === 'spider' ? 'spider' : style === 'bone' ? 'bone' : 'mech'];
+  const len = rig.L1 + rig.L2;
+  const b = bodyOf([{ x: hx, y: hy }, { x: kx, y: ky }, { x: ex, y: ey }], { rad: (k) => L.rad(k, rig.L1, len), skin: L.skin(rig.L1), gloss: L.gloss, flip: faceR }, cache);
+  drawBody(ctx, b.back);
+  if (style === 'bone') {
+    // A skull at the knee, its eyes coming and going; fingers of bone.
+    SKULL.draw(ctx, kx, ky, 0);
     ctx.fillStyle = (Math.floor(time * 3) + i) % 5 === 0 ? '#ffffff' : '#ff4030';
-    ctx.fillRect(Math.round(kx) - 1, Math.round(ky) - 1, 1, 1);
+    ctx.fillRect(Math.round(kx) - 2, Math.round(ky) - 1, 1, 1);
     ctx.fillRect(Math.round(kx) + 1, Math.round(ky) - 1, 1, 1);
     ctx.fillStyle = '#d8d0b8';
     ctx.fillRect(Math.round(ex) - 2, Math.round(ey), 1, 1);
     ctx.fillRect(Math.round(ex) + 2, Math.round(ey), 1, 1);
-  } else {
-    seg(ctx, hx, hy, kx, ky, 6, 5, OUT);
-    seg(ctx, kx, ky, ex, ey, 5, 2, OUT);
-    seg(ctx, hx, hy, kx, ky, 4, 3, K.plate);
-    seg(ctx, hx, hy - 1, kx, ky - 1, 1, 1, K.edge);
-    seg(ctx, kx, ky, ex, ey, 3, 1, '#22203a');
-    seg(ctx, kx, ky, ex, ey, 1, 1, K.edge);
-    // Joints lit, in pulses running down the leg.
+  } else if (style === 'mech') {
+    // Its joints lit, in pulses running down the leg.
     const on = 0.5 + 0.5 * Math.sin(time * 6 - i);
-    ctx.fillStyle = OUT;
-    ctx.fillRect(Math.round(kx) - 2, Math.round(ky) - 2, 5, 5);
-    ctx.fillStyle = on > 0.6 ? K.glow : tint;
-    ctx.fillRect(Math.round(kx) - 1, Math.round(ky) - 1, 3, 3);
-    ctx.fillStyle = tint;
-    ctx.fillRect(Math.round(hx) - 1, Math.round(hy) - 1, 3, 3);
+    for (const [x, y, r] of [[kx, ky, 2], [hx, hy, 1]]) {
+      ctx.fillStyle = OUT;
+      ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r, r * 2 + 3, r * 2 + 1);
+      ctx.fillRect(Math.round(x) - r, Math.round(y) - r - 1, r * 2 + 1, r * 2 + 3);
+      ctx.fillStyle = on > 0.6 && r > 1 ? K.glow : tint;
+      ctx.fillRect(Math.round(x) - r, Math.round(y) - r + 1, r * 2 + 1, r * 2 - 1);
+      ctx.fillRect(Math.round(x) - r + 1, Math.round(y) - r, r * 2 - 1, r * 2 + 1);
+    }
     ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+  } else {
+    ctx.fillStyle = '#120c0a';
     ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);
   }
 }
@@ -451,8 +514,10 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
   }
   const wp = e.renderPos();
   const homes = rigUpdate(r, e, rig, wp, front, dt, game);
-  const fb = Math.floor(r.time * (e.hp < e.maxHp * 0.35 ? 9 : 5) + (e.id || 0)) % 4;
-  const img = body(e.species, fb);
+  // (Twenty-four frames of breath at twelve a second: quicker, the worse
+  // it's hurt.)
+  const fb = Math.floor(r.time * (e.hp < e.maxHp * 0.35 ? 18 : 12) + (e.id || 0) * 5) % BODY_FRAMES;
+  const img = body(e.species, fb, r.time);
   const bob = e.species === 'overseer' ? Math.sin(r.time * 2.2 + (e.id || 0)) * 2 : Math.sin(r.time * 3 + (e.id || 0)) * 0.6;
   const ax = Math.round(cx + front * rig.fwd);
   const ay = Math.round(feetY - rig.lift + bob + lu.y + (e.rise || 0));
@@ -468,7 +533,7 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
       if (h.side !== side) return;
       const a = hip(h.j, side);
       const b = foot(i);
-      drawLeg(ctx, rig.style, a.x, a.y, b.x, b.y, rig, r.time, i, tint[0]);
+      drawLeg(ctx, rig.style, a.x, a.y, b.x, b.y, rig, r.time, i, tint[0], ((e.legCv ||= [])[i] ||= {}), front > 0);
     });
   };
   // The far legs, the body, the near legs.
@@ -533,3 +598,4 @@ export function rim(ctx, e, src, fx, fy, w, h, x, y, dw, dh, tint, time, flash) 
 }
 // (One frame of a legged master's body, unrigged: for the tests.)
 export const rigBody = (kind, f) => BODY[kind](f);
+export const LEG_STYLES = LEG;

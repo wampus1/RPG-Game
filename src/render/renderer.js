@@ -3,7 +3,8 @@
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
-import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures } from './textures.js';
+import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
+import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import { humanoidSheet, creatureSheet, itemIcon, bittenIcon, drawJewelled, frameGlow, CHAR_W, CHAR_H, SPR_PAD, SHEET_H, headSprite, horseSprite, wagonSprite, HORSE_W, HORSE_H, WAGON_W, WAGON_H, WAGON_SEAT, WAGON_BED, catapultSprite, CATAPULT_W, CATAPULT_H, ramSprite, RAM_W, RAM_H, shipSprite, SHIP_W, SHIP_H, SHIP_DECK, tentSprite } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 import { hash4 } from '../util/rng.js';
@@ -46,6 +47,19 @@ const THRUST_UP = -Math.PI * 0.25;
 
 // Which blocks are the Kavorent's own (recoloured floor by floor).
 let KAV_TINTED = null;
+// The great things in a square (see pieces.js), by id.
+const PIECE_IDS = new Uint8Array(BLOCKS.length);
+for (const n of PIECE_NAMES) PIECE_IDS[B[n]] = 1;
+// Which blocks are made in a people's craft (see textures.CRAFTED).
+let craftedIds = null;
+function craftedId() {
+  if (!craftedIds) {
+    craftedIds = new Uint8Array(BLOCKS.length);
+    for (const b of BLOCKS) if (CRAFTED.has(b.name)) craftedIds[b.id] = 1;
+  }
+  return craftedIds;
+}
+
 function kavTinted() {
   if (!KAV_TINTED) {
     KAV_TINTED = new Uint8Array(BLOCKS.length);
@@ -296,6 +310,7 @@ export class Renderer {
     drawKavSpikes(this, this.ctx, game);
     drawLasers(this, this.ctx, game);
     drawShields(this, this.ctx, game);
+    drawWards(this, this.ctx, game);
     this.drawParticles(dt);
     this.drawInk(game);
     this.drawAim(game);
@@ -763,7 +778,10 @@ export class Renderer {
       const fadeRow = z >= pz && z <= pz + 7;
       for (let y = 0; y < WORLD_Y; y++) {
         const sy = z * TILE - y * LH - camY;
-        if (sy < this.vh + 4 && sy + SPR_H + LH > -4) {
+        // (Down past the bottom of the screen a little, at the ground, so
+        // the great things in a square, taller than a pace, don't vanish
+        // while their tops still show: see pieces.js.)
+        if (sy < this.vh + 4 + (y === GROUND ? 68 : 0) && sy + SPR_H + LH > -4) {
           const fadeLayer = fadeRow && y >= pLayer && (z > pz || y > pLayer + 1);
           for (let i = 0; i < W; i++) {
             const ci = rowBase + i;
@@ -779,6 +797,9 @@ export class Renderer {
             if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) continue;
             const b = BLOCKS[id];
             const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
+            // (Furniture, doors and windows in the craft of the people whose
+            // town they're in: see textures.CRAFTS.)
+            const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
             const sx = x * TILE - camX;
             let alpha = 1;
             if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
@@ -796,7 +817,7 @@ export class Renderer {
               const showTop = aboveHidden || !(ab.opaque && ab.render === 'cube') && !(CULL_SAME.has(id) && above === id) && !(render === 'liquid' && ab.liquid);
               const liquid = render === 'liquid';
               if (showTop) {
-                const tops = TEX.top[id * 4 + rot];
+                const tops = T.top[id * 4 + rot];
                 const s = liquid ? tops[waterFrame] : tops[v % tops.length];
                 const oy = liquid ? 3 : 0;
                 ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
@@ -821,16 +842,25 @@ export class Renderer {
               const frontHidden = hid(colWX[frontBase + i], y, colWZ[frontBase + i]);
               const showFront = frontHidden || !(fb.opaque && fb.render === 'cube') && !(CULL_SAME.has(id) && fr === id) && !(liquid && fb.liquid);
               if (showFront && !(liquid && fb.solid)) {
-                const fronts = TEX.front[id * 4 + rot];
+                const fronts = T.front[id * 4 + rot];
                 const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
                 ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
                 if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
               }
             } else if (render === 'door') {
               const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
-              const s = TEX.sprite[id * 4 + rot][0];
+              const s = T.sprite[id * 4 + rot][0];
               ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
               if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+            } else if (PIECE_IDS[id] === 1) {
+              // A great thing on its square: drawn whole from the plinth
+              // nearest you (below), or from here if it stands alone.
+              const [fx, fz] = this.toWorld(0, 1);
+              if (world.getBlock(wx + fx, y, wz + fz) !== B.plinth) this.drawPiece(game, ctx, wx, y, wz, id, metaAt(ci, y), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
+            } else if (id === B.plinth) {
+              const [fx, fz] = this.toWorld(0, 1);
+              const cid = world.getBlock(wx - fx, y, wz - fz);
+              if (PIECE_IDS[cid] === 1) this.drawPiece(game, ctx, wx - fx, y, wz - fz, cid, world.getMeta(wx - fx, y, wz - fz), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
             } else if (id === B.tent) {
               // A tent: bigger than its pace (see sprites.tentSprite), and
               // whoever's asleep in it snoring away over it.
@@ -845,7 +875,7 @@ export class Renderer {
             } else if (render === 'sprite' || render === 'plant') {
               const meta = metaAt(ci, y);
               const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
-              const arr = TEX.sprite[id * 4 + rot];
+              const arr = T.sprite[id * 4 + rot];
               const st = meta & META_STATE ? 1 : 0;
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
@@ -892,7 +922,7 @@ export class Renderer {
               ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
               if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
             } else if (render === 'fence') {
-              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, this.craftAt(game, wx, wz)) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
             }
             if (alpha < 1) ctx.globalAlpha = 1;
             if (cur && cur.x === wx && cur.y === y && cur.z === wz) {
@@ -1127,10 +1157,59 @@ export class Renderer {
     if (m && m.x >= x && m.x < x + SHIP_W && m.y >= y && m.y < feetY + 4) this.pickEnt = { e, seq: ++this.pickSeq };
   }
 
+  // One of the great things in a square (see pieces.js), its foot on the
+  // front edge of the pace at (sx, sy) (row `row` on screen): see-through
+  // while it stands between you and the camera, and picked as itself.
+  drawPiece(game, ctx, x, y, z, id, meta, sx, sy, row, fadeable, pRect, prow) {
+    const name = BLOCKS[id].name;
+    const f = (Math.floor(this.time * PIECE_FPS) + x * 7 + z * 3) % PIECE_FRAMES;
+    const img = pieceFrame(name, (f + PIECE_FRAMES) % PIECE_FRAMES, meta & META_STATE);
+    const dx = sx + 8 - (PIECE_W >> 1);
+    const dy = sy + SPR_H - img.height;
+    let a = 1;
+    if (fadeable && prow < row && pRect.x1 > dx + 4 && pRect.x0 < dx + PIECE_W - 4 && pRect.y1 > dy && pRect.y0 < sy + SPR_H - 12) a = 0.45;
+    if (this.veil && this.veil.veiled(x, y, z, id)) return;
+    if (a < 1) ctx.globalAlpha = a;
+    ctx.drawImage(img, dx, dy);
+    if (a < 1) ctx.globalAlpha = 1;
+    const m = this.mouse;
+    if (m && a === 1 && m.x >= dx + 3 && m.x < dx + PIECE_W - 3 && m.y >= dy + 6 && m.y < sy + SPR_H - 2) this.pick = { x, y, z, face: 'front', id, seq: ++this.pickSeq, prop: true };
+  }
+
   // A fence post with rails to its neighbours (in view directions). Returns
   // whether any drawn part is under the mouse, when asked.
-  drawFence(ctx, world, x, y, z, sx, sy, pickTest = false) {
-    const f = TEX.misc.fence;
+  // Whose craft the furniture at (x, z) is made in (see textures.CRAFTS):
+  // the people of the town it stands in, or, out of town, the island's
+  // own (0, the old oak, on Thessa and beyond). Kept by four-pace patches,
+  // looked at afresh each hour (towns grow).
+  craftAt(game, x, z) {
+    const ow = game && game.world && game.world.ow;
+    if (!ow || game.dungeon) return 0;
+    const hour = Math.floor((game.minute || 0) / 60);
+    if (this.craftOw !== ow || this.craftHour !== hour) {
+      this.craftOw = ow;
+      this.craftHour = hour;
+      this.craftCache = new Map();
+    }
+    const k = (x >> 2) * 65536 + (z >> 2);
+    let c = this.craftCache.get(k);
+    if (c === undefined) {
+      const cx = (x >> 2) * 4 + 2;
+      const cz = (z >> 2) * 4 + 2;
+      const s = ow.settlementAt(cx, cz) || ow.settlementAt(x, z);
+      if (s) c = CRAFTS[s.style] || 0;
+      else {
+        const isle = ow.islandAt ? ow.islandAt(cx, cz) : null;
+        c = isle === 'kharos' ? CRAFTS.ember : isle === 'myrrow' ? CRAFTS.mist : 0;
+      }
+      if (this.craftCache.size > 20000) this.craftCache.clear();
+      this.craftCache.set(k, c);
+    }
+    return c;
+  }
+
+  drawFence(ctx, world, x, y, z, sx, sy, pickTest = false, craft = 0) {
+    const f = craft ? TEX.craft[craft].fence : TEX.misc.fence;
     const atlas = this.atlas;
     const conn = (du, dv) => {
       const [dx, dz] = this.toWorld(du, dv);
@@ -2465,6 +2544,18 @@ export class Renderer {
           for (let i = 0; i < 4; i++) {
             ctx.fillRect(sx + 4 + i * 2, sy + 7, 1, 1);
             ctx.fillRect(sx + 5 + i * 2, sy + 9, 1, 1);
+          }
+        } else if (z.kind === 'reef') {
+          // Coral grown up through the floor: little branching fans.
+          for (let i = 0; i < 3; i++) {
+            const fx = sx + 3 + ((i * 5 + t.x * 7 + t.z * 3) % 10);
+            const h = 4 + ((t.x + t.z + i) % 3);
+            ctx.fillStyle = `rgba(232,120,104,${0.95 * fade})`;
+            ctx.fillRect(fx, sy + 13 - h, 1, h);
+            ctx.fillRect(fx - 1, sy + 13 - h + 1, 1, 2);
+            ctx.fillRect(fx + 1, sy + 13 - h + 2, 1, 2);
+            ctx.fillStyle = `rgba(255,190,150,${0.95 * fade})`;
+            ctx.fillRect(fx, sy + 13 - h, 1, 1);
           }
         } else if (z.kind === 'caltrops') {
           for (let i = 0; i < 4; i++) ctx.fillRect(sx + 3 + ((i * 5 + t.x * 3) % 10), sy + 3 + ((i * 7 + t.z * 5) % 10), 2, 1);

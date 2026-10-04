@@ -92,7 +92,7 @@ export const TECHS = {
   mills: T('engineering', 3, -1.5, ['wells'], 'wheat', 'Watermills', 'Farms yield 50% more grain; hay is stacked by the barns.'),
   cranes: T('engineering', 3, -0.5, ['surveying'], 'hammer', 'Cranes', 'Building goes 30% faster (on top of masonry).'),
   lodestones: T('engineering', 3, 1, ['mining'], 'iron_ore', 'Lodestones', 'Compasses: merchants, letters, settlers and armies travel between towns 15% faster.'),
-  aqueducts: T('engineering', 4, -2, ['mills'], 'bucket', 'Aqueducts', '60% more children are born in every town.', { excl: 'harvest' }),
+  aqueducts: T('engineering', 4, -2, ['mills'], 'bucket', 'Aqueducts', '60% more children are born in every town, and in time a fountain plays on the square where its well stood (its water as good as a well\'s).', { excl: 'harvest' }),
   granaries: T('engineering', 4, -1, ['mills'], 'barrel', 'Granaries', 'A famine takes 6 hungry days to set in (not 4), and hunger stirs half the unrest.', { excl: 'harvest' }),
   fortress: T('engineering', 5, -0.75, ['cranes', ['aqueducts', 'granaries']], 'cobblestone', 'Fortification', 'Towers and gatehouses: a walled town adds +2 defence against raids (on top of its walls\' +1.5), and capture is a further 25% less likely.'),
   portals: T('engineering', 6, 1, ['lodestones'], 'portal', 'Portals', 'Each town of the realm raises a portal on its square. Step through to any other portal of the same realm; merchants and soldiers use them too. A town taken by another realm is cut off: its portal goes dark.', { big: true }),
@@ -107,20 +107,25 @@ export const TECHS = {
   ash_masks: T('society', 2, 0, ['codex'], 'cloth', 'Ash Masks', 'When the mountain wakes, the realm\'s folk mask their faces and shelter in time: an eruption kills, burns and starves 60% less in its towns.', { isles: ['kharos'] }),
   // Myrrow: the Mirefolk and the Stiltfolk.
   outriggers: T('economy', 2, 0, ['bookkeeping'], 'raft', 'Outrigger Rafts', 'Rafts with outriggers: the realm\'s merchants and soldiers cross the sea to the other islands 40% faster, and its raids from the sea are 15% stronger.', { isles: ['myrrow'] }),
-  fog_wardens: T('warfare', 2, 0, ['drill'], 'lantern', 'Fog Wardens', 'The watch knows the mist: the realm\'s towns defend 25% better against raids.', { isles: ['myrrow'] }),
-  spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy; sporewrights raise twice the glowcaps; and townsfolk wake 2 health better every morning.', { isles: ['myrrow'] }),
+  fog_wardens: T('warfare', 2, 0, ['drill'], 'lantern', 'Fog Wardens', 'The watch knows the mist: the realm\'s towns defend 25% better against raids, and in time fog lanterns are hung at the crossings and along the edge of every town, burning all night.', { isles: ['myrrow'] }),
+  spore_lore: T('society', 2, 0, ['codex'], 'glowcap', 'Spore Lore', 'Herbalists brew from the fungal woods: they sell potions even without Alchemy; sporewrights raise twice the glowcaps; townsfolk wake 2 health better every morning; and in time glowcaps are grown along the lanes, lighting them at night.', { isles: ['myrrow'] }),
   // (And more of each island's own, in the places of the common steps it
   // never learns.)
   horse_archers: T('warfare', 4, -0.5, [['shieldwall', 'greatweapons']], 'bow', 'Horse Archers', 'Guards\' bows become longbows (range 11, damage 6), and the watch rides out against raiders even with no horse in the stable (+20% defence); armies are 5% stronger.', { isles: ['thessa'], excl: 'bows', as: ['longbows'] }),
   toll_roads: T('economy', 3, 1.5, ['markets'], 'crate', 'Toll Roads', 'Every merchant from another realm pays ¤6 into the treasury of each town they trade in, and the tolls keep up the roads: they\'re built 25% faster.', { isles: ['thessa'], excl: 'tolls', as: ['customs'] }),
   windmills: T('engineering', 3, -0.5, ['crop_rotation'], 'wheat', 'Great Windmills', 'Millers grind twice as fast: bread and flour cost 25% less in a town with a windmill, and its millers pay a third more for wheat.', { isles: ['thessa'] }),
-  magma_forges: T('warfare', 3, 0.5, ['obsidian_edge'], 'furnace', 'Magma Forges', 'Forges fed from the mountain\'s own fire: smiths sell steel swords even without Steelworking, and armies are 10% stronger.', { isles: ['kharos'] }),
-  ash_fields: T('engineering', 2, -1.5, ['masonry'], 'wheat', 'Ash Fields', 'The black ash of the mountain is rich: farms yield 50% more grain, and hay is stacked by the barns.', { isles: ['kharos'], as: ['mills'] }),
-  glassblowing: T('economy', 3, 0.5, ['sulphur_trade'], 'glass', 'Glassblowing', 'Glassworks sell their wares 25% cheaper, and each week every town with a glassworks sends glass abroad: ¤10 to its treasury.', { isles: ['kharos'], excl: 'tolls' }),
+  magma_forges: T('warfare', 3, 0.5, ['obsidian_edge'], 'furnace', 'Magma Forges', 'Forges fed from the mountain\'s own fire: smiths sell steel swords even without Steelworking, and armies are 10% stronger. In time bronze grates are let into the streets over channels of the forges\' heat, glowing all night.', { isles: ['kharos'] }),
+  ash_fields: T('engineering', 2, -1.5, ['kilnwork'], 'wheat', 'Ash Fields', 'The black ash of the mountain is rich: farms yield 50% more grain, and hay is stacked by the barns.', { isles: ['kharos'], as: ['mills'] }),
+  glassblowing: T('economy', 3, 0.5, ['sulphur_trade'], 'glass', 'Glassblowing', 'Glassworks sell their wares 25% cheaper, and each week every town with a glassworks sends glass abroad: ¤10 to its treasury. In time the braziers along the streets are made over as lamps of amber glass, burning brighter.', { isles: ['kharos'], excl: 'tolls' }),
   fire_walking: T('society', 3, -1, ['ash_masks'], 'torch', 'Fire-Walking', 'A night in a town bed hardens you to fire for the day: lava and flames do you half the harm. The realm\'s folk wake 2 health better every morning.', { isles: ['kharos'] }),
   bog_venom: T('warfare', 3, -0.5, ['archery'], 'slime_gel', 'Bog Venom', 'The watch tips its arrows with marsh venom: a guard\'s arrow poisons whatever it hits (1 harm a second for 5 seconds); armies are 8% stronger.', { isles: ['myrrow'], excl: 'arms' }),
-  tide_charts: T('engineering', 2, 1, ['metalworking'], 'scroll', 'Tide Charts', 'Charts of the tides and the channels: merchants, letters, settlers and armies travel between towns 15% faster.', { isles: ['myrrow'], as: ['lodestones'] }),
-  pearl_diving: T('economy', 3, -0.25, ['outriggers'], 'pearl', 'Pearl Diving', 'Pearl divers bring up twice as many pearls, and each week every town with a pearl house sells pearls abroad: ¤10 to its treasury.', { isles: ['myrrow'] }),
+  tide_charts: T('engineering', 2, 1, ['metalworking'], 'scroll', 'Tide Charts', 'Charts of the tides and the channels: merchants, letters, settlers and armies travel between towns 15% faster, and fishers who know the tides bring in half as much again.', { isles: ['myrrow'], as: ['lodestones'] }),
+  pearl_diving: T('economy', 3, -0.25, ['outriggers'], 'pearl', 'Pearl Diving', 'Pearl divers bring up twice as many pearls, and each week every town with a pearl house sells pearls abroad: ¤10 to its treasury. In time every town lays its square in tiles of mother-of-pearl.', { isles: ['myrrow'] }),
+  // Round 36: the islands' own first step in building, and a great work
+  // each, for the heart of every town.
+  kilnwork: T('engineering', 1, -1, [], 'kiln_brick', 'Kilnwork', 'Kilns fire brick and tile for the whole town: buildings and walls go up 35% faster, and in time the square is laid in a mosaic of red kiln tile and black basalt, a sun burning at its heart.', { isles: ['kharos'], as: ['masonry'] }),
+  ember_ward: T('society', 4, -2.5, ['fire_walking'], 'ruby', 'The Ember Ward', 'Each town\'s heartfire is set in a heart-crystal that raises a ward of heat over the town: an eruption breaks on it (nobody hurt, no roof burnt, nothing lost from the stores), burning rock falling about you stops at its edge, and no raider\'s torch takes under it.', { isles: ['kharos'], big: true }),
+  mist_heart: T('society', 4, -2.5, ['spore_lore'], 'glowcap', 'Heart of the Mire', 'The Old Glowcap on each Mirefolk square grows great and bright, and the pearls of each Stiltfolk conch fountain kindle: no night horror rises within thirty paces of the realm\'s towns, and anyone resting on the square by the heart is mended (1 health every 4 seconds).', { isles: ['myrrow'], big: true }),
 };
 
 export const TECH_IDS = Object.keys(TECHS);
@@ -132,10 +137,11 @@ export const TECH_IDS = Object.keys(TECHS);
 // horse before the muster, mills from rotated fields; tolls not customs,
 // horse archers not crossbowmen, and no prisoners set to labour (an old
 // law of the island).
-//   Kharos, under the mountain: deep mines from the first, black glass
-// before steel, ash fields not wells and mills; no horses (no cavalry), no
-// tall yew (no longbows), no ships (they cross on rafts), and no free trade
-// (the mountain's goods are sold dear).
+//   Kharos, under the mountain: kilnwork not masonry, deep mines from the
+// first, black glass before steel, ash fields not wells and mills; no
+// horses (no cavalry), no tall yew (no longbows), no ships (they cross on
+// rafts), and no free trade (the mountain's goods are sold dear). Its
+// streets are paved in basalt, not gravel and cobbles.
 //   Myrrow, in the mist: alchemy as old as law, spore lore from it,
 // hospitality early; tide charts not lodestones (no mines, no lodestone);
 // venomed arrows not great weapons (nothing heavy in the bog); no horses,
@@ -156,10 +162,10 @@ export const ISLE_TREES = {
     },
   },
   kharos: {
-    drop: ['cavalry', 'longbows', 'mills', 'wells', 'aqueducts', 'trade_ships', 'free_trade', 'hospitality'],
+    drop: ['masonry', 'cavalry', 'longbows', 'mills', 'wells', 'aqueducts', 'trade_ships', 'free_trade', 'hospitality'],
     move: {
       mining: { tier: 1, side: 0, req: [] },
-      surveying: { side: -0.5 },
+      surveying: { side: -0.5, req: ['kilnwork'], desc: 'Roads are built 50% faster; in time the town\'s lanes are laid with black basalt and its streets with dressed basalt slabs.' },
       lodestones: { tier: 2, side: 1 },
       granaries: { tier: 3, side: -1.5, req: ['ash_fields'], excl: null },
       cranes: { side: -0.5 },
@@ -175,6 +181,7 @@ export const ISLE_TREES = {
     drop: ['cavalry', 'greatweapons', 'mining', 'lodestones', 'fortress', 'rams', 'catapults', 'monopolies'],
     move: {
       alchemy: { tier: 1, side: -1, req: [] },
+      surveying: { desc: 'Roads are built 50% faster.' },
       codex: { side: 1 },
       spore_lore: { side: -1.5, req: ['alchemy'] },
       hospitality: { tier: 2, side: -0.5, req: ['alchemy'] },
@@ -977,38 +984,222 @@ const tilesWhere = (L, pred) => {
   for (let z = b.z0; z <= b.z1; z++) for (let x = b.x0; x <= b.x1; x++) if (pred(L.maskAt(x, z), x, z)) out.push([x, z]);
   return out;
 };
+// The tiles of a town's square (under its benches and its great thing
+// too, so it's all of a piece).
+const squareTiles = (L) => {
+  const P = L.plaza;
+  return P ? tilesWhere(L, (m, x, z) => (m === M.PLAZA || m === M.DECOR) && x >= P.x0 && x <= P.x1 && z >= P.z0 && z <= P.z1) : [];
+};
+// The great thing in the middle of a town's square (see render/pieces.js),
+// as it stands: { x, z, id, meta }, or null where the ground isn't loaded.
+function centrepiece(T, L) {
+  const P = L.plaza;
+  const w = T.game.world;
+  if (!P || !w.regionAt(P.cx, P.cz)) return null;
+  return { x: P.cx, z: P.cz, id: w.getBlock(P.cx, GROUND, P.cz), meta: w.getMeta(P.cx, GROUND, P.cz) };
+}
+// Free tiles beside a town's streets, spaced out (for lamps and the like):
+// `want(x, z, road)` picks among them; each at least `gap` from the last
+// and from the town's lamps.
+function besideStreets(T, L, gap, want, max) {
+  const w = T.game.world;
+  const taken = (L.lamps || []).map((q) => ({ x: q.x, z: q.z }));
+  const out = [];
+  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [x, z] of tilesWhere(L, (m) => m === M.FREE || m === M.YARD)) {
+    if (out.length >= max) break;
+    const road = D4.find(([dx, dz]) => L.maskAt(x + dx, z + dz) === M.ROAD);
+    if (!road || !w.regionAt(x, z)) continue;
+    if (w.getBlock(x, GROUND, z) !== B.air || w.getBlock(x, GROUND + 1, z) !== B.air) continue;
+    // (Never in front of a door, nor on a building's doorstep.)
+    if (D4.some(([dx, dz]) => L.maskAt(x + dx, z + dz) === M.BUILD) || L.buildings.some((b) => b.outside && Math.abs(b.outside.x - x) + Math.abs(b.outside.z - z) <= 1)) continue;
+    if (!want(x, z, [x + road[0], z + road[1]])) continue;
+    if (taken.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < gap) || out.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < gap)) continue;
+    out.push({ x, z });
+  }
+  return out;
+}
+const ISLE_STYLES = new Set(['ember', 'mist', 'tide']);
 const LOOKS = {
-  // Masonry: the square paved in dressed stone.
+  // Masonry: the square paved in dressed stone. (The Ashborn's kilnwork
+  // lays theirs in a mosaic: a sun of red kiln tile on black basalt, its
+  // rays running out to a border of glazed brick.)
   masonry: {
     built: true,
     apply(T, L) {
       const w = T.game.world;
       const P = L.plaza;
       const was = L.mats && L.mats.plaza;
-      if (!P || !was || was === B.stone_bricks) return;
+      if (!P || !was) return;
       const ops = [];
-      // (Under the benches and the well too, so it's all of a piece.)
-      for (const [x, z] of tilesWhere(L, (m, x, z) => (m === M.PLAZA || m === M.DECOR) && x >= P.x0 && x <= P.x1 && z >= P.z0 && z <= P.z1)) {
-        if (w.regionAt(x, z) && w.getBlock(x, SURFACE, z) === was) ops.push([x, SURFACE, z, B.stone_bricks, 0]);
+      if (L.settlement.style === 'ember') {
+        for (const [x, z] of squareTiles(L)) {
+          if (!w.regionAt(x, z) || w.getBlock(x, SURFACE, z) !== was) continue;
+          const dx = x - P.cx;
+          const dz = z - P.cz;
+          const d = Math.hypot(dx, dz);
+          let id;
+          if (x === P.x0 || x === P.x1 || z === P.z0 || z === P.z1) id = B.kiln_brick;
+          else if (d < 2.2) id = B.kiln_tile;
+          else if (d > 3.4 && d < 4.4) id = B.kiln_brick;
+          else id = Math.floor(((Math.atan2(dz, dx) / (Math.PI * 2)) + 1) * 12 + 0.5) % 2 ? B.kiln_tile : B.basalt_bricks;
+          ops.push([x, SURFACE, z, id, 0]);
+        }
+      } else {
+        if (was === B.stone_bricks) return;
+        for (const [x, z] of squareTiles(L)) if (w.regionAt(x, z) && w.getBlock(x, SURFACE, z) === was) ops.push([x, SURFACE, z, B.stone_bricks, 0]);
       }
       if (ops.length) T.sim.setBlocks(ops);
     },
-    news: (s) => `The masons of ${s.name} have paved the square in dressed stone.`,
+    news: (s) => (s.style === 'ember' ? `The kilnmasters of ${s.name} have laid the square in a mosaic: a sun of red tile on black basalt.` : `The masons of ${s.name} have paved the square in dressed stone.`),
   },
-  // Surveying: dirt lanes gravelled, gravel streets cobbled.
+  // Surveying: dirt lanes gravelled, gravel streets cobbled. (On Kharos:
+  // the lanes laid with black basalt, the streets with dressed slabs of it.)
   surveying: {
     built: true,
     apply(T, L) {
       const w = T.game.world;
       const ops = [];
+      const ember = L.settlement.style === 'ember';
+      const next = ember ? { [B.path]: B.gravel, [B.gravel]: B.basalt, [B.basalt]: B.basalt_bricks } : { [B.path]: B.gravel, [B.gravel]: B.cobblestone };
       for (const [x, z] of tilesWhere(L, (m) => m === M.ROAD)) {
         const id = w.regionAt(x, z) ? w.getBlock(x, SURFACE, z) : null;
-        if (id === B.path) ops.push([x, SURFACE, z, B.gravel, 0]);
-        else if (id === B.gravel) ops.push([x, SURFACE, z, B.cobblestone, 0]);
+        if (id !== null && next[id] !== undefined) ops.push([x, SURFACE, z, next[id], 0]);
       }
       if (ops.length) T.sim.setBlocks(ops);
     },
-    news: (s) => `New surveyors' roads in ${s.name}: the old lanes are gravelled now, the streets cobbled.`,
+    news: (s) => (s.style === 'ember' ? `New surveyors' roads in ${s.name}: the lanes are laid with black basalt now, the streets with dressed slabs.` : `New surveyors' roads in ${s.name}: the old lanes are gravelled now, the streets cobbled.`),
+  },
+  // Glassblowing: the Ashborn's street braziers made over as lamps of
+  // amber glass.
+  glassblowing: {
+    built: true,
+    apply(T, L) {
+      if (L.settlement.style !== 'ember') return;
+      const w = T.game.world;
+      const ops = [];
+      for (const q of L.lamps || []) if (w.regionAt(q.x, q.z) && w.getBlock(q.x, GROUND, q.z) === B.ash_brazier) ops.push([q.x, GROUND, q.z, B.glass_lamp, 0]);
+      if (!ops.length) return false;
+      T.sim.setBlocks(ops);
+    },
+    news: (s) => `The glassblowers of ${s.name} have made over the street braziers as lamps of amber glass.`,
+  },
+  // Magma forges: bronze grates let into the streets over channels of the
+  // forges' heat, glowing at night (spaced out along every street).
+  magma_forges: {
+    built: true,
+    apply(T, L) {
+      if (L.settlement.style !== 'ember') return;
+      const w = T.game.world;
+      const paved = new Set([B.path, B.gravel, B.basalt, B.basalt_bricks, B.cobblestone]);
+      const ops = [];
+      const put = [];
+      const seed = L.settlement.seed >>> 0;
+      for (const [x, z] of tilesWhere(L, (m) => m === M.ROAD)) {
+        if (hash4(x, z, seed, 0x6a7e) % 4 !== 0 || !w.regionAt(x, z) || !paved.has(w.getBlock(x, SURFACE, z))) continue;
+        if (put.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < 5)) continue;
+        put.push({ x, z });
+        ops.push([x, SURFACE, z, B.ember_gutter, 0]);
+        if (ops.length >= 40) break;
+      }
+      if (!ops.length) return false;
+      T.sim.setBlocks(ops);
+    },
+    news: (s) => `Bronze grates have been let into the streets of ${s.name} over channels of the forges' heat; they glow all night.`,
+  },
+  // Fog wardens: fog lanterns at the crossings and along the edge of town.
+  fog_wardens: {
+    built: true,
+    apply(T, L) {
+      const b = L.bounds;
+      const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const at = besideStreets(T, L, 6, (x, z, [rx, rz]) => {
+        const ways = D4.filter(([dx, dz]) => L.maskAt(rx + dx, rz + dz) === M.ROAD).length;
+        const edge = Math.min(x - b.x0, b.x1 - x, z - b.z0, b.z1 - z) <= 4;
+        return ways >= 3 || edge;
+      }, 14);
+      if (!at.length) return false;
+      T.sim.setBlocks(at.map((q) => [q.x, GROUND, q.z, B.fog_lantern, 0]));
+      for (const q of at) L.setMask(q.x, q.z, M.DECOR);
+    },
+    news: (s) => `The fog wardens of ${s.name} have hung lanterns at the crossings and along the edge of town.`,
+  },
+  // Spore lore: glowcaps grown along the lanes, in little clumps.
+  spore_lore: {
+    built: true,
+    apply(T, L) {
+      const seed = L.settlement.seed >>> 0;
+      const at = besideStreets(T, L, 4, (x, z) => hash4(x, z, seed, 0x5b07) % 3 === 0, 22);
+      if (!at.length) return false;
+      T.sim.setBlocks(at.map((q) => [q.x, GROUND, q.z, B.glowshroom, 0]));
+      for (const q of at) L.setMask(q.x, q.z, M.DECOR);
+    },
+    news: (s) => `Glowcaps have been grown along the lanes of ${s.name}; they light the way at night.`,
+  },
+  // Pearl diving: the square laid in tiles of mother-of-pearl, a border
+  // of the old boards (or stone) left round it.
+  pearl_diving: {
+    built: true,
+    apply(T, L) {
+      if (!ISLE_STYLES.has(L.settlement.style) || L.settlement.style === 'ember') return;
+      const w = T.game.world;
+      const P = L.plaza;
+      const was = new Set([L.mats && L.mats.plaza, B.stone_bricks]);
+      const ops = [];
+      for (const [x, z] of squareTiles(L)) {
+        if (x === P.x0 || x === P.x1 || z === P.z0 || z === P.z1) continue;
+        if (w.regionAt(x, z) && was.has(w.getBlock(x, SURFACE, z))) ops.push([x, SURFACE, z, B.nacre_tile, 0]);
+      }
+      if (!ops.length) return false;
+      T.sim.setBlocks(ops);
+    },
+    news: (s) => `The pearl divers of ${s.name} have laid the square in tiles of mother-of-pearl.`,
+  },
+  // Aqueducts: a fountain where the square's well (or its statue) stood,
+  // on nine paces (the eight about it a plinth: see render/pieces.js).
+  aqueducts: {
+    built: true,
+    apply(T, L) {
+      if (ISLE_STYLES.has(L.settlement.style)) return;
+      const c = centrepiece(T, L);
+      if (!c) return false;
+      if (c.id !== B.well && c.id !== B.statue) return;
+      const w = T.game.world;
+      const ring = [];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) ring.push([c.x + dx, c.z + dz]);
+      // (Room for it: a festival's things cleared away first, say.)
+      if (ring.some(([x, z]) => w.getBlock(x, GROUND, z) !== B.air || w.getBlock(x, GROUND + 1, z) !== B.air)) return false;
+      T.sim.setBlocks([[c.x, GROUND, c.z, B.fountain, 0], ...ring.map(([x, z]) => [x, GROUND, z, B.plinth, 0])]);
+      for (const [x, z] of ring) L.setMask(x, z, M.DECOR);
+      L.wells = (L.wells || []).filter((q) => !(q.x === c.x && q.z === c.z));
+      L.wells.push({ x: c.x, z: c.z + 1 });
+    },
+    news: (s) => `The aqueduct reaches ${s.name}: a fountain plays on the square where the well stood.`,
+  },
+  // The ember ward: the heartfire set in a heart-crystal.
+  ember_ward: {
+    built: true,
+    apply(T, L) {
+      const c = centrepiece(T, L);
+      if (!c) return false;
+      if (c.id !== B.heartfire) return;
+      T.sim.setBlocks([[c.x, GROUND, c.z, B.heart_crystal, 0]]);
+      T.game.lightDirty = true;
+    },
+    news: (s) => `The heartfire of ${s.name} has been set in a heart-crystal, and a ward of heat stands over the town.`,
+  },
+  // The heart of the mire: the Old Glowcap grown great; the conch
+  // fountain's pearls kindled.
+  mist_heart: {
+    built: true,
+    apply(T, L) {
+      const c = centrepiece(T, L);
+      if (!c) return false;
+      if (c.id !== B.great_glowcap && c.id !== B.conch_fountain) return;
+      T.sim.setBlocks([[c.x, GROUND, c.z, c.id, c.meta | META_STATE]]);
+      T.game.lightDirty = true;
+    },
+    news: (s) => (s.style === 'tide' ? `The pearls of the conch fountain in ${s.name} have kindled; night horrors keep away from the town now.` : `The Old Glowcap of ${s.name} has grown great and bright; night horrors keep away from the town now.`),
   },
   // Drill: proper helms on the watch.
   drill: {

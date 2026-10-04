@@ -2548,6 +2548,122 @@ back, your feet and sight your own, your things returned.
   the thing in its way.
 - The Bombard-Queen's kegs had no picture.
 
+## Round 36: sculpted masters, and towns of their own
+
+**Kharos's houses stand out.** The Ashborn used to build in basalt on
+black basalt ground, so their towns melted into the land. Now they build
+square on the black rock but never of it:
+- houses are pale ash plaster (washed white every spring);
+- halls are red kiln brick, cornered in dressed basalt;
+- flat roofs are terracotta kiln tile, or green copper over the great
+  halls, each with its brazier kept burning for the mountain.
+
+Their squares are paved in dressed basalt. When a town falls into ruin,
+its plaster falls away to the basalt underneath.
+
+**Furniture in each people's own wood.** Doors, chests, chairs, tables,
+benches, stools, beds, barrels, crates, counters, bookshelves, signs,
+notice boards, windows and fences are now made in the craft of whoever
+lives there (see `CRAFTS` in `render/textures.js`):
+- the Ashborn: black-red cinderwood with bronze fittings, studded doors
+  and amber clasps;
+- the Mirefolk: grey-green bogwood with dark iron and glowcap-green clasps;
+- the Stiltfolk: sea-bleached driftwood lashed with rope.
+
+Thessa keeps its oak. A piece takes the craft of the town it stands in.
+
+**Each people's square has its own great thing.** The well or statue in
+the middle of every square is gone from the far islands. Each great
+thing stands on nine paces (see `render/pieces.js`), drawn bigger than a
+block and moving in twelve frames:
+- *the Ashborn's heartfire*: a great bowl of fire on a basalt dais,
+  burning day and night (cold in a deserted town);
+- *the Mirefolk's Old Glowcap*: a mushroom as tall as a house, glowing;
+- *the Stiltfolk's conch fountain*: water poured from a great shell on a
+  coral spire. You draw water from it as from a well.
+
+Ashborn and Mirefolk towns get a well at the corner of the square
+instead. A Thessan town that learns Aqueducts swaps its well for a
+fountain.
+
+**Learning shows in the towns.** Kharos's and Myrrow's trees now change
+how their towns look as they advance, step by step:
+- *Kilnwork* (Kharos's first step, in place of Masonry): buildings go up
+  35% faster, and the square is laid in a mosaic, a sun of red kiln tile
+  on black basalt with a border of glazed brick.
+- *Surveying* on Kharos lays the lanes in black basalt and the streets in
+  dressed slabs.
+- *Glassblowing*: the street braziers are remade as lamps of amber glass,
+  brighter.
+- *Magma Forges*: bronze grates are let into the streets over channels of
+  the forges' heat, glowing all night.
+- *The Ember Ward* (new, Kharos's great step): the heartfire is set in a
+  heart-crystal that raises a dome of heat over the town. An eruption
+  breaks on it (nobody hurt, no roof burnt, nothing lost from the
+  stores), burning rock stops at its edge, and no raider's torch takes
+  under it. You can see the dome: a shimmer of heat, a beam from the
+  crystal, embers, and rings where rock bursts on it.
+- *Fog Wardens*: fog lanterns at the crossings and round the edge of town.
+- *Spore Lore*: glowcaps grown along the lanes, lighting them at night.
+- *Pearl Diving*: the square laid in tiles of mother-of-pearl.
+- *Tide Charts*: fishers bring in half as much again.
+- *Heart of the Mire* (new, Myrrow's great step): the Old Glowcap grows
+  great and bright, and the conch's pearls kindle. No night horror rises
+  within thirty paces of the realm's towns, and anyone resting by it on
+  the square is slowly mended.
+
+**The masters, sculpted.** Every master is rebuilt (see
+`render/sculpt.js`). Instead of shaded flat shapes, each is modelled as
+rounded masses that blend into one another: a body with a chest and
+hips, shoulders, a neck, a jaw. Each surface is textured as what it's
+made of, with its own sheen. Among the materials:
+- skin and cloth, velvet, leather, mail and plate, gold;
+- scales and chitin, fur, feathers, bark, bone and shell;
+- rock, black glass, cooling lava, glass, coral, fungus, moss, slime and
+  ash.
+
+Clothes drape, armour is riveted, robes are trimmed, hats and crowns sit
+on heads, and weapons are shaped as they should be. The Brood Mother,
+the Ossuary Horror and the Overseer are sculpted the same way, and their
+legs are drawn as whole limbs: glossy chitin banded at the joints, bone
+with a skull at each knee, plated alloy with lit joints.
+
+**Moving of themselves.** What should move freely now does, worked out
+every frame rather than painted frame by frame (see `render/bossrig.js`):
+- *the Glass Wyrm* and *the Lamprey Queen*: their long bodies follow
+  their heads along the way they came, segment by segment, swaying.
+  Each is drawn as one smooth, shaded length: black glass with crystal
+  spines for the Wyrm, a slick body with a fin for the Lamprey.
+- *the Deep Worm*: one ringed body rising out of its hole.
+- *the Chained Drake*: a real chain of iron links from the collar at its
+  throat to the stake in its hall. The chain sags, drags on the floor and
+  pulls taut as the Drake strains. When the chain snaps, it trails
+  behind. The Drake's wings beat as separate pieces.
+- *the Molten Heart*: four chains, one to each anchor in its hall. When
+  you break an anchor, its chain falls loose and swings. The heart now
+  has the arch of an aorta and torn vessels glowing inside.
+- *the Moth-Mother*: four wings, each its own piece beating on its hinge.
+  The wings are shaped and marked as a moth's: veins, a pale band, a
+  fringe, and eyes that open and glow.
+- *the Kraken*: eight smooth arms, pale and suckered underneath.
+- *the Urn-Mother*: ash arms that wave, with embers in them.
+- cloaks that trail and flutter, censers and lanterns that swing on their
+  chains, and the Hollow Saint's halo turning.
+
+**Smoother.** Masters breathe in twenty-four frames, not eight, at twelve
+a second (quicker as they're worn down). Every loop comes round without
+a jump; lava and slime used to slide on and snap back. Wings, chains and
+bodies move every frame. Frames are painted a few at a time as they're
+first needed, so meeting a master never stalls the game.
+
+**Fixes.**
+- Dungeon stairs could stand in a passage or across the way through a
+  room. Stairs now go against a wall, away from doorways, never on a
+  pace a room needs to get from one door to another, and always with a
+  clear pace in front of them. You arrive on that pace.
+- The chains to the Chained Drake and the Molten Heart were drawn as
+  thin flickering beams.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2620,10 +2736,16 @@ src/
                        paint (a painter's kit for pixel art in code: lit
                        masses, tubes, planes, hue-shifted ramps),
                        people (everyone's clothes, hats and gear, shaded),
-                       bossfigs (the masters shaped like people, painted
-                       as figures), bossbeasts (the rest, painted),
-                       bossbody (drawing a painted master: its frames,
-                       its state, its facing),
+                       sculpt (a sculptor's kit: rounded masses that
+                       flow into one another, each surfaced as what it's
+                       made of), bossfigs (the masters shaped like
+                       people, sculpted as figures), bossbeasts (the rest,
+                       sculpted), bossrig (what moves on them of itself:
+                       parts turned and beaten, chains, serpents' bodies,
+                       cloaks), bossbody (drawing a sculpted master: its
+                       frames, its state, its facing, its rig),
+                       pieces (each people's great thing on its square,
+                       and the ember ward),
                        oldplaces (spire runes, beacons, relic circles),
                        isleart (Kharos's and Myrrow's ground, trees,
                        lava, goods and creatures), islebossart (the

@@ -146,6 +146,11 @@ export class Volcano {
   strike(L, day, rng) {
     const s = L.settlement;
     const V = this.V;
+    // (Under an ember ward the fire and the ash break on it, every bit.)
+    if (this.game.wardOf && this.game.wardOf(s)) {
+      ledger(L, day, `The Sleeper woke! Fire and ash came down on ${s.name} and broke on the ember ward like rain on glass: nobody was hurt, and not a roof caught.`);
+      return { s, dead: 0, burnt: 0, warded: true };
+    }
     const cx = (s.bounds.x0 + s.bounds.x1) / 2;
     const cz = (s.bounds.z0 + s.bounds.z1) / 2;
     const d = Math.hypot(cx - V.x, (cz - V.z) * V.squash);
@@ -226,6 +231,16 @@ export class Volcano {
     const z = Math.round(p.z + (Math.random() - 0.5) * 14);
     const y = game.world.findStandY ? game.world.findStandY(x, z, p.y) : p.y;
     if (y <= 0) return;
+    // (Over an ember ward it bursts on the dome of heat, high over the town:
+    // see render/pieces.drawWards.)
+    const ward = game.wardAt && game.wardAt(x, z);
+    if (ward) {
+      const d = Math.min(1, Math.hypot(x + 0.5 - ward.x, z + 0.5 - ward.z) / ward.r);
+      const hy = y + ward.r * 0.8 * Math.sqrt(1 - d * d);
+      (game.wardHits ||= []).push({ x, z, y: hy, t0: game.renderer ? game.renderer.time : 0 });
+      game.renderer?.emit(x, hy, z, { n: 16, color: ['#ffd080', '#ff9030', '#fff0c0', '#5a5450'], up: 20, speed: 60, gravity: 40, life: 0.7, glow: true });
+      return;
+    }
     const tiles = [];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (Math.abs(dx) + Math.abs(dz) <= 1) tiles.push({ x: x + dx, z: z + dz });
     {

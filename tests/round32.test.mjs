@@ -66,13 +66,16 @@ function fight(game, p, species) {
 // You and a foe side by side (it held where it stands, and hard to kill).
 function squareUp(game, p) {
   const d = holdout(game);
-  for (let r = 2; r < 12; r++) {
+  // (Backed against a wall if it can be, so a blow can't knock it out of
+  // reach.)
+  for (const pinned of [true, false]) for (let r = 2; r < 12; r++) {
     const s = game.findFreeSpot(p.x + r, p.z, FY);
     if (!s) continue;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = s.x + dx;
       const z = s.z + dz;
       if (!game.world.canStand(x, s.y, z) || game.occupiedAny(x, s.y, z)) continue;
+      if (pinned && game.world.canStand(x + dx, s.y, z + dz)) continue;
       p.teleport(s.x, s.y, s.z);
       const foe = d.spawn('skeleton', x, s.y, z, {});
       foe.maxHp = foe.hp = 999;

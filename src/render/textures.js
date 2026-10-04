@@ -55,6 +55,38 @@ const P = {
   hay_bale: ['#d8b848', '#b89838', '#8a6a28'],
   water: ['#2e6ab0', '#24569a', '#4a8ad0', '#8cc4f0'],
 };
+
+// The fittings furniture's made with (see SPRITES: a chest's bands and
+// lock, a barrel's staves and hoops, a door's latch, a window's frame, a
+// hanging sign's bracket and board). Swapped, with the wood, for each
+// island's own craft (see CRAFTS).
+const FIT_OAK = {
+  iron: '#5a5a62', ironHi: '#8a8a94', lock: '#f0d040', lockShade: '#8a6a10', staves: ['#9a6a3a', '#7a5028', '#b88450'],
+  barrelTop: '#5a3a1e', frame: '#8e6a3a', bracket: '#3a3a44', panel: '#c8a86a', studs: false,
+};
+let FIT = FIT_OAK;
+// Round 36: furniture in each island people's own craft, drawn by where
+// it stands (see Renderer.craftAt): the Ashborn's in black-red cinderwood
+// with bronze fittings and amber clasps, the Mirefolk's in grey-green
+// bogwood with dark iron and glowcap-green clasps, the Stiltfolk's in
+// sea-bleached driftwood lashed with rope.
+export const CRAFTS = { ember: 1, mist: 2, tide: 3 };
+export const CRAFT_LOOKS = {
+  1: {
+    planks: ['#5e3a30', '#442824', '#7a4c3e'], planks_dark: ['#2e1e1c', '#221616', '#402a26'],
+    fit: { iron: '#9a6a32', ironHi: '#e0b060', lock: '#ffb040', lockShade: '#a8501a', staves: ['#5e3a30', '#442824', '#7a4c3e'], barrelTop: '#2a1614', frame: '#2e1e1c', bracket: '#9a6a32', panel: '#b07a4a', studs: true },
+  },
+  2: {
+    planks: ['#6a6250', '#4e483a', '#847a66'], planks_dark: ['#3e3a2e', '#2e2a22', '#4e4a3c'],
+    fit: { iron: '#3e4a44', ironHi: '#6a7e72', lock: '#b8f080', lockShade: '#4a7a3a', staves: ['#6a6250', '#4e483a', '#847a66'], barrelTop: '#2e2a22', frame: '#3e3a2e', bracket: '#3e4a44', panel: '#9a9278', studs: false },
+  },
+  3: {
+    planks: ['#c4baa4', '#a49a84', '#dcd4c2'], planks_dark: ['#86806c', '#6a6454', '#9c9682'],
+    fit: { iron: '#b89a64', ironHi: '#e0cc98', lock: '#f4ece0', lockShade: '#a89c88', staves: ['#c4baa4', '#a49a84', '#dcd4c2'], barrelTop: '#6a6454', frame: '#86806c', bracket: '#7a6a4a', panel: '#e0d8c4', studs: false },
+  },
+};
+// What's made in a craft: furniture, doors, windows, fences.
+export const CRAFTED = new Set(['door', 'door_top', 'chest', 'barrel', 'crate', 'table', 'chair', 'bench', 'stool', 'bed', 'sign', 'hanging_sign', 'notice_board', 'bookshelf', 'counter', 'glass']);
 const WOOD = {
   oak: { bark: ['#6a4a2e', '#4e361f', '#80603c'], ring: ['#b08a58', '#8e6a40'] },
   birch: { bark: ['#e8e4d8', '#2e2e2e', '#fafaf0'], ring: ['#dcc890', '#c0aa72'] },
@@ -429,7 +461,7 @@ function cubeTop(name, v, rand, rot) {
       return p;
     }
     case 'glass': {
-      p.fill('#8e6a3a');
+      p.fill(FIT.frame);
       p.rect(1, 1, 14, 14, '#a8d8f0', 150);
       p.line(3, 12, 12, 3, '#f0ffff');
       return p;
@@ -621,10 +653,10 @@ function cubeFront(name, v, rand, rot) {
       return p;
     }
     case 'glass': {
-      p.fill('#8e6a3a');
+      p.fill(FIT.frame);
       p.rect(1, 1, 14, LH - 2, '#a8d8f0', 150);
-      p.vline(7, 1, LH - 2, '#8e6a3a');
-      p.hline(1, 14, 5, '#8e6a3a');
+      p.vline(7, 1, LH - 2, FIT.frame);
+      p.hline(1, 14, 5, FIT.frame);
       p.line(2, LH - 3, 5, 2, '#f0ffff');
       p.line(9, LH - 3, 12, 2, '#f0ffff');
       return p;
@@ -738,8 +770,10 @@ function doorFront(upper, rot, rand) {
     p.set(6, 3, '#6a90b0');
   } else {
     p.hline(2, 13, 2, wood[1]);
-    p.set(11, 3, '#f0d040');
-    p.set(11, 4, '#a08020');
+    // (Studs down a stout door, in some woods.)
+    if (FIT.studs) for (const y of [5, 9]) for (const x of [4, 7, 10]) p.set(x, y, FIT.ironHi);
+    p.set(11, 3, FIT.lock);
+    p.set(11, 4, FIT.lockShade);
   }
   return p;
 }
@@ -763,7 +797,7 @@ function doorOpenSprite(rot, upper) {
     p.rect(0, 0, 3, 16, wood[1]);
     p.rect(0, 16, 3, LH, wood[0]);
     p.vline(0, 0, SPR_H - 1, P.planks_dark[0]);
-    if (!upper) p.set(1, 20, '#f0d040');
+    if (!upper) p.set(1, 20, FIT.lock);
   } else {
     p.rect(0, 0, 16, 3, wood[1]);
     p.rect(0, 3, 16, 3, wood[0]);
@@ -878,24 +912,28 @@ const SPRITES = {
     p.hline(2, 13, 12, shade(wood[2], 1.15));
     p.rect(2, 17, 12, 9, wood[0]);
     p.hline(2, 13, 17, P.planks_dark[1]);
-    p.vline(4, 12, 25, '#5a5a62');
-    p.vline(11, 12, 25, '#5a5a62');
+    p.vline(4, 12, 25, FIT.iron);
+    p.vline(11, 12, 25, FIT.iron);
+    p.set(4, 12, FIT.ironHi);
+    p.set(11, 12, FIT.ironHi);
     p.hline(2, 13, 25, wood[1]);
     if (rot === 0) {
-      p.rect(7, 16, 2, 3, '#f0d040');
-      p.set(7, 18, '#8a6a10');
+      p.rect(7, 16, 2, 3, FIT.lock);
+      p.set(7, 18, FIT.lockShade);
     }
     return p.outline(OUT);
   },
   barrel() {
     const p = spr();
-    const c = ['#9a6a3a', '#7a5028', '#b88450'];
+    const c = FIT.staves;
     p.rect(3, 13, 10, 13, c[0]);
     p.ellipse(7.5, 12, 5, 2, c[2]);
-    p.ellipse(7.5, 12, 3, 1, '#5a3a1e');
+    p.ellipse(7.5, 12, 3, 1, FIT.barrelTop);
     for (let x = 4; x < 13; x += 3) p.vline(x, 14, 25, c[1]);
-    p.hline(3, 12, 16, '#5a5a62');
-    p.hline(3, 12, 22, '#5a5a62');
+    p.hline(3, 12, 16, FIT.iron);
+    p.hline(3, 12, 22, FIT.iron);
+    p.set(3, 16, FIT.ironHi);
+    p.set(3, 22, FIT.ironHi);
     p.vline(3, 14, 25, shade(c[0], 1.15));
     return p.outline(OUT);
   },
@@ -1599,7 +1637,7 @@ const SPRITES = {
   hanging_sign(rot) {
     // A board hung from an iron bracket; the renderer paints the trade icon.
     const p = spr();
-    const iron = '#3a3a44';
+    const iron = FIT.bracket;
     if (rot === 1) p.hline(6, 15, 1, iron);
     else if (rot === 3) p.hline(0, 9, 1, iron);
     else p.hline(2, 13, 1, iron);
@@ -1608,7 +1646,7 @@ const SPRITES = {
     p.rect(2, 4, 12, 11, P.planks[1]);
     p.hline(2, 13, 4, P.planks[2]);
     p.hline(2, 13, 14, P.planks_dark[0]);
-    p.rect(3, 5, 10, 9, '#c8a86a');
+    p.rect(3, 5, 10, 9, FIT.panel);
     return p.outline(OUT);
   },
   snare(rot, st) {
@@ -2004,14 +2042,39 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed']);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, ...DANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
   Object.assign(SPRITES, ISLE_SPRITES);
-  for (const b of BLOCKS) {
+  for (const b of BLOCKS) buildBlock(b, TEX);
+  // Round 36: the islands' crafts (see CRAFTS): the same furniture made
+  // again in each people's own wood and fittings.
+  TEX.craft = [null];
+  const oak = { planks: P.planks, planks_dark: P.planks_dark };
+  for (const k of [1, 2, 3]) {
+    const L = CRAFT_LOOKS[k];
+    P.planks = L.planks;
+    P.planks_dark = L.planks_dark;
+    FIT = { ...FIT_OAK, ...L.fit };
+    const T = { top: [], front: [], sprite: [] };
+    for (const b of BLOCKS) if (CRAFTED.has(b.name)) buildBlock(b, T);
+    const fp = fenceParts();
+    T.fence = { post: addImage(fp.post), east: addImage(fp.east), west: addImage(fp.west), north: addImage(fp.north), south: addImage(fp.south) };
+    TEX.craft.push(T);
+  }
+  P.planks = oak.planks;
+  P.planks_dark = oak.planks_dark;
+  FIT = FIT_OAK;
+  finishTextures();
+  return TEX;
+}
+
+// One block's faces and sprites, into `TEX` (or a craft's set of them).
+function buildBlock(b, TEX) {
+  {
     const id = b.id;
     const name = b.name;
     const seed = (k) => mulberry32(hash4(id, k, 0x7e57));
@@ -2066,6 +2129,9 @@ export function buildTextures() {
       }
     }
   }
+}
+
+function finishTextures() {
   const fp = fenceParts();
   TEX.misc.fence = { post: addImage(fp.post), east: addImage(fp.east), west: addImage(fp.west), north: addImage(fp.north), south: addImage(fp.south) };
   for (let s = 0; s < 4; s++) TEX.crack.push(addImage(crackOverlay(s)));
@@ -2110,7 +2176,6 @@ export function buildTextures() {
   }
   pending.length = 0;
   TEX.atlas = atlasCanvas;
-  return TEX;
 }
 
 function waterTop(frame) {

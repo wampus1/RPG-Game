@@ -18,6 +18,9 @@ export function burnable(game, x, y, z) {
 // Set it alight. Returns true if it caught.
 export function ignite(game, x, y, z, cause = null) {
   game.fires ||= [];
+  // (Under an ember ward, the mountain's fire and a raider's torch won't
+  // take: see game.wardAt.)
+  if ((cause === 'volcano' || cause === 'bandits') && game.wardAt && game.wardAt(x, z)) return false;
   if (game.fires.length >= MAX || !burnable(game, x, y, z)) return false;
   if (game.fires.some((f) => f.x === x && f.y === y && f.z === z)) return false;
   game.fires.push({ x, y, z, t: 0, life: 7 + Math.random() * 7, cause, spread: 0 });

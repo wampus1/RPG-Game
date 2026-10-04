@@ -1567,6 +1567,76 @@ export class Game {
     }
   }
 
+  // Round 36. The ember ward over a town of Kharos whose realm has learned
+  // to raise it (see tech.ember_ward): a dome of heat over its square,
+  // reaching over its houses (all but the few furthest out; not its
+  // fields). { s, cx, cz (its middle pace), x, z, r (its reach on the
+  // ground, in paces) }, or null.
+  wardOf(s) {
+    if (!s || s.style !== 'ember' || s.deserted || s.condition === 'abandoned' || !this.sim || !this.sim.tech) return null;
+    if (!this.sim.tech.settledIn(s, 'ember_ward', this.day)) return null;
+    const L = this.world.layouts && this.world.layouts.get(s.id);
+    const P = L && L.plaza;
+    const b = s.bounds;
+    const cx = P ? P.cx : Math.floor((b.x0 + b.x1) / 2);
+    const cz = P ? P.cz : Math.floor((b.z0 + b.z1) / 2);
+    let r = Math.max(cx - b.x0, b.x1 - cx, cz - b.z0, b.z1 - cz) * 0.6;
+    if (L && L.buildings.length) {
+      if (!L.wardR || L.wardR.n !== L.buildings.length) {
+        const far = L.buildings.filter((q) => q.x0 !== undefined).map((q) => Math.max(...[[q.x0, q.z0], [q.x1, q.z0], [q.x0, q.z1], [q.x1, q.z1]].map(([x, z]) => Math.hypot(x + 0.5 - cx - 0.5, z + 0.5 - cz - 0.5)))).sort((u, v) => u - v);
+        L.wardR = { n: L.buildings.length, r: far.length ? far[Math.floor((far.length - 1) * 0.85)] + 2 : r };
+      }
+      r = L.wardR.r;
+    }
+    return { s, cx, cz, x: cx + 0.5, z: cz + 0.5, r: Math.max(8, r) };
+  }
+
+  // The ward over (x, z), if any.
+  wardAt(x, z) {
+    const ow = this.world.ow;
+    if (!ow || !ow.settlementsNear) return null;
+    for (const s of ow.settlementsNear(x, z)) {
+      const w = this.wardOf(s);
+      if (w && Math.hypot(x + 0.5 - w.x, z + 0.5 - w.z) <= w.r) return w;
+    }
+    return null;
+  }
+
+  // The wards to be seen about you: the towns here whose heart-crystal is
+  // up (see render/pieces.drawWards).
+  wards() {
+    const out = [];
+    for (const { layout: L } of this.active.values()) {
+      if (!L.econ || !(L.econ.shown || []).includes('ember_ward')) continue;
+      const w = this.wardOf(L.settlement);
+      if (w) out.push(w);
+    }
+    return out;
+  }
+
+  // Round 36. The heart of the mire (see tech.mist_heart): by the great
+  // glowcap (or the kindled conch) on the square, you're mended, slowly,
+  // motes of its light drifting off you.
+  mireHeart(dt) {
+    const p = this.player;
+    if (this.dungeon || p.dead || p.hp >= p.maxHp) {
+      this.mireT = 0;
+      return;
+    }
+    const s = this.currentSettlement;
+    if (!s || !this.sim || !this.sim.tech.settledIn(s, 'mist_heart', this.day)) return;
+    const L = this.world.layouts && this.world.layouts.get(s.id);
+    const P = L && L.plaza;
+    if (!P || Math.max(Math.abs(p.x - P.cx), Math.abs(p.z - P.cz)) > 6) return;
+    const id = this.world.getBlock(P.cx, GROUND, P.cz);
+    if ((id !== B.great_glowcap && id !== B.conch_fountain) || !(this.world.getMeta(P.cx, GROUND, P.cz) & META_STATE)) return;
+    this.mireT = (this.mireT || 0) + dt;
+    if (this.mireT < 4) return;
+    this.mireT = 0;
+    p.hp = Math.min(p.maxHp, p.hp + 1);
+    this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, color: ['#a8f8ff', '#e0ffff', '#7ae8ff'], up: 22, life: 0.9, gravity: -14, glow: true });
+  }
+
   // A licensed pearl diver swimming in open water comes up with a pearl
   // now and then (more often the deeper the time spent under).
   pearlDive(dt) {
@@ -1753,6 +1823,7 @@ export class Game {
     tickAfflictions(this, this.player, dt);
     enforceIslandLaws(this, dt);
     this.pearlDive(dt);
+    this.mireHeart(dt);
     this.dotHit = false;
     this.creatures = this.creatures.filter((c) => {
       if (c.dead) {
@@ -5277,7 +5348,8 @@ export class Game {
     // from a town lit by coldfire lamps).
     for (const s of ow.settlementsNear(x, z)) {
       const b = s.bounds;
-      const margin = night ? (this.sim.ancient.has(s, 'lamps') ? 34 : 14) : 6;
+      // (Or the heart of the mire.)
+      const margin = night ? (this.sim.ancient.has(s, 'lamps') || this.sim.tech.settledIn(s, 'mist_heart', this.day) ? 34 : 14) : 6;
       if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned' && !s.deserted) return;
     }
     const y = this.world.findStandY(x, z, p.y);

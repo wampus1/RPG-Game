@@ -262,11 +262,11 @@ class Layout {
       road = B.sandstone;
       plaza = B.sandstone;
     }
-    // (The Ashborn pave with the black rock they live on; the Mirefolk lay
-    // dark boardwalks over the bog; the Stiltfolk's whole town stands on
-    // planking.)
+    // (The Ashborn pave with the black rock they live on, their squares
+    // with it cut and dressed; the Mirefolk lay dark boardwalks over the
+    // bog; the Stiltfolk's whole town stands on planking.)
     if (s.style === 'ember') {
-      plaza = T === 'village' ? B.gravel : B.basalt;
+      plaza = T === 'village' ? B.gravel : B.basalt_bricks;
       road = T === 'village' ? B.gravel : B.basalt;
     }
     if (s.style === 'mist') {
@@ -330,14 +330,17 @@ class Layout {
         floor = B.stone_bricks;
         roof = rng.chance(0.7) ? B.roof_slate : B.roof_green;
         break;
-      // The Ashborn build squat and dark: basalt walls on cinderwood posts,
-      // black glass in the great halls, and flat basalt roofs the ash can
-      // be swept off, with a brazier kept burning up there for the mountain.
+      // The Ashborn build squat and square on the black rock, but never of
+      // it: walls of pale ash plaster (washed white again every spring,
+      // so a town shows from far off against the ash), corners of dressed
+      // basalt, the halls of red kiln brick; flat roofs of terracotta tile
+      // (green copper over the great halls) the ash can be swept off, with
+      // a brazier kept burning up there for the mountain.
       case 'ember':
-        wall = rng.weighted([[B.basalt, 3], [B.cobblestone, 1], [B.obsidian, civic ? 1.5 : 0.2]]);
-        corner = B.log_cinder;
-        floor = B.basalt;
-        roof = civic && rng.chance(0.4) ? B.obsidian : B.basalt;
+        wall = civic ? rng.weighted([[B.kiln_brick, 3], [B.ash_plaster, 2]]) : rng.weighted([[B.ash_plaster, 5], [B.kiln_brick, 1]]);
+        corner = B.basalt_bricks;
+        floor = B.kiln_brick;
+        roof = civic && rng.chance(0.6) ? B.copper_roof : B.kiln_tile;
         flat = true;
         break;
       // The Mirefolk: dark timber on giant-mushroom posts, under roofs like
@@ -1603,6 +1606,8 @@ class Layout {
     if (id === B.stone_bricks || id === B.cobblestone || id === B.bricks || id === B.marble) return rng.chance(0.5) ? B.mossy_bricks : B.cracked_bricks;
     if (id === B.plaster || id === B.timber) return B.planks;
     if (id === B.planks || id === B.planks_dark || id === B.planks_birch || id === B.log_wall) return B.planks_dark;
+    // (Ash plaster let go: fallen away to the basalt under it.)
+    if (id === B.ash_plaster) return B.basalt_bricks;
     return id;
   }
 
@@ -2720,11 +2725,37 @@ class Layout {
     const p = this.plaza;
     const cond = s.condition;
     const ruined = cond === 'abandoned';
-    // Plaza centerpiece.
-    const center = s.type === 'village' || rng.chance(0.4) ? B.well : B.statue;
-    this.put(p.cx, Y0, p.cz, center);
-    if (center === B.well) this.wells.push({ x: p.cx, z: p.cz });
-    this.setMask(p.cx, p.cz, M.DECOR);
+    // Plaza centerpiece: a well or a statue on Thessa; on the far islands
+    // each people's own great thing (see render/pieces.js), standing on
+    // nine paces (the eight round it an unseen plinth): the Ashborn's
+    // heartfire (cold in a deserted town), the Mirefolk's Old Glowcap, the
+    // Stiltfolk's conch fountain (its water drawn like a well's).
+    const piece = { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain }[s.style];
+    const room = [];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) room.push([p.cx + dx, p.cz + dz]);
+    if (piece && room.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) {
+      this.put(p.cx, Y0, p.cz, piece, piece === B.heartfire && !ruined ? META_STATE : 0);
+      for (const [x, z] of room) {
+        if (x !== p.cx || z !== p.cz) this.put(x, Y0, z, B.plinth);
+        this.setMask(x, z, M.DECOR);
+      }
+      if (piece === B.conch_fountain) this.wells.push({ x: p.cx, z: p.cz + 1 });
+      else {
+        // (And a well of their own at the corner of the square.)
+        const corner = [[p.x1, p.z1], [p.x0, p.z1], [p.x1, p.z0], [p.x0, p.z0]].find(([x, z]) => this.maskAt(x, z) === M.PLAZA
+          && [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dz]) => this.maskAt(x + dx, z + dz) !== M.ROAD));
+        if (corner) {
+          this.put(corner[0], Y0, corner[1], B.well);
+          this.wells.push({ x: corner[0], z: corner[1] });
+          this.setMask(corner[0], corner[1], M.DECOR);
+        }
+      }
+    } else {
+      const center = s.type === 'village' || rng.chance(0.4) ? B.well : B.statue;
+      this.put(p.cx, Y0, p.cz, center);
+      if (center === B.well) this.wells.push({ x: p.cx, z: p.cz });
+      this.setMask(p.cx, p.cz, M.DECOR);
+    }
     for (const [dx, dz] of DIRS4) this.addSpot(p.cx + dx * 2, p.cz + dz * 2, dirOf(-dx, -dz), ['gossip', 'social', 'play', 'stroll', 'drink', 'music', 'sketch']);
     if (s.type === 'city') {
       for (const [dx, dz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]]) {

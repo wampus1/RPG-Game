@@ -1,1208 +1,1375 @@
-// The masters that aren't shaped like people, painted large (see
-// bossbody.js, which draws them): side on and facing left, lit from the
-// upper left with the painter's kit (see paint.js), in eight frames, each
-// with parts of its own that move: the Urn-Mother's ash arms and her lid
-// lifting, the Glass Wyrm's jaw, the Bellows Golem's bellows and smoke,
-// the Molten Heart's beat, the Moth-Mother's wings and the eyes on them,
-// the Clam's shell, the Hollow Oak's leaves in their season.
+// The masters that aren't shaped like people (see bossbody.js, which
+// draws them), sculpted (see sculpt.js): bodies built of rounded masses
+// flowing into one another, each surfaced as what it is (glazed clay,
+// black glass, cooling crust, iron, scale and hide, fur, chitin, coral,
+// shell, fungus, bark), side on and facing left, in twenty-four frames of
+// breath. And what moves on them of itself, every frame (see each one's
+// `rig`, and bossrig.js): the Glass Wyrm's and the Lamprey Queen's bodies
+// strung out behind their heads along the way they came, the Worm's swaying
+// up out of its hole; the Drake's chain from its collar to the stake, and
+// its wings beating; the Molten Heart's four chains to their anchors; the
+// Moth-Mother's four wings; the Kraken's eight arms; the Bloat's trailing
+// feelers; the moss hanging off the Elder Stag's antlers; the Prime's
+// floating shoulder-stones.
 import { Paint, hash2 } from './paint.js';
-import { hex, mix, shade } from './pixel.js';
+import { hex, mix, shade, toHex } from './pixel.js';
+import { Sculpt } from './sculpt.js';
+import { Part, Rope, Train, bodyOf, drawBody, drawChain, drawStrand, onScreen } from './bossrig.js';
 
 const TAU = Math.PI * 2;
 const sn = (t, k = 1, ph = 0) => Math.sin(t * TAU * k + ph);
 const HOT = '#ff6a1a';
 const CORE = '#ffe890';
+const dark = (c, k = 0.75) => toHex(shade(hex(c), k));
 
-// A glowing crack: a hot line, its corners white-hot.
+// A glowing crack, painted over: a hot line, its corners white-hot.
 function crack(P, pts, hot = HOT, core = CORE) {
   for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], hot);
   for (let i = 1; i + 1 < pts.length; i++) P.set(pts[i][0], pts[i][1], hex(core));
-}
-// The grain of stone, glass, hide: specks a shade darker (or lighter).
-function grain(P, seed, k = 0.12, f = 0.86, test) {
-  P.over((x, y, c) => (hash2(x, y, seed) < k && (!test || test(x, y, c)) ? shade(c, f) : null));
 }
 // Paint over what's there (keeping its light) where `test` says.
 function tint(P, test, col, k) {
   P.over((x, y, c) => (test(x, y, c) ? mix(c, hex(col), k) : null));
 }
-// A lit oval turned by `ang` (a wing, a leaf, a fin).
-function oval(P, cx, cy, rx, ry, ang, col, o = {}) {
-  const pts = [];
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * TAU;
-    const x = Math.cos(a) * rx;
-    const y = Math.sin(a) * ry;
-    pts.push([cx + x * Math.cos(ang) - y * Math.sin(ang), cy + x * Math.sin(ang) + y * Math.cos(ang)]);
+
+// ------------------------------------------------------------ parts
+// A part sculpted once (and turned as wanted: see bossrig.Part); `o.paint`
+// paints over it (its markings).
+const PARTS = new Map();
+function part(key, w, h, px, py, fn, o = {}) {
+  let p = PARTS.get(key);
+  if (!p) {
+    p = new Part(() => {
+      const X = new Sculpt(w, h, { seed: key.length * 7 });
+      fn(X);
+      const out = X.render({ outline: false });
+      if (!o.paint) return out;
+      const P = new Paint(w, h);
+      P.p = out;
+      o.paint(P);
+      return P.p;
+    }, px, py, o);
+    PARTS.set(key, p);
   }
-  P.poly(pts, col, o);
+  return p;
 }
-// A chain of links from a to b, sagging.
-function chain(P, a, b, sag, col = '#6a6a74') {
-  const n = Math.max(3, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 2.5));
-  for (let i = 0; i <= n; i++) {
-    const k = i / n;
-    const x = a.x + (b.x - a.x) * k;
-    const y = a.y + (b.y - a.y) * k + Math.sin(k * Math.PI) * sag;
-    if (i % 2) P.blob(x, y, 1.4, 1, col, { flat: 0.5 });
-    else P.blob(x, y, 0.9, 1.5, col, { flat: 0.5 });
+// The way a master's body lies behind it on the ground (in paces): back
+// the way it's facing on screen.
+function backward(R) {
+  const [x, z] = R.r.toWorld(R.flip ? -1 : 1, 0);
+  return { x, z };
+}
+// Where it is in the world (where it's drawn).
+const posOf = (e) => (e.renderPos ? e.renderPos() : e);
+
+// A serpent's body: a train of segments behind its head along the way it
+// came, each following the one ahead, swaying as it goes (see
+// bossrig.Train); drawn whole through them, one smooth length of it out
+// of the base of its neck, skinned as it is (see bossrig.bodyOf: `rad`,
+// `skin`, `gloss`, `fin`), the part nearer you than its head drawn after
+// it (`front`); `lift(i)` how far each is raised (pixels), `crest(i)`
+// what stands up along its back (a spine) at each.
+function serpent(R, cfg, front) {
+  const e = R.e;
+  const s = e.rig;
+  if (!s.train) s.train = new Train(cfg.n, cfg.gap);
+  if (!front) {
+    const p = posOf(e);
+    s.train.mark(p.x, p.z);
+    const pts = s.train.points(backward(R), (i) => Math.sin(R.t * cfg.wave - i * 0.9) * cfg.amp * Math.min(1, i / 2));
+    const scr = pts.map((q, i) => {
+      const a = onScreen(R.r, q.x, p.y, q.z);
+      return { x: a.x, y: a.y - (cfg.lift ? cfg.lift(i) : 0) };
+    });
+    // (Out of the base of its neck, where it's painted.)
+    scr[0] = { x: R.x, y: R.y - (cfg.lift ? cfg.lift(0) : 0) };
+    const headY = R.y;
+    s.body = bodyOf(scr, { rad: cfg.rad, skin: cfg.skin, gloss: cfg.gloss, fin: cfg.fin, flip: R.flip, front: (x, y) => y > headY + 1 }, (s.bodyCv ||= {}));
+    s.scr = scr;
+    s.headY = headY;
   }
+  const b = s.body;
+  if (!b) return;
+  drawBody(R.ctx, front ? b.front : b.back, cfg.alpha ?? 1);
+  if (!cfg.crest) return;
+  const scr = s.scr;
+  for (let i = scr.length - 1; i >= 1; i--) {
+    const a = scr[i];
+    if ((a.y > s.headY + 1) !== front) continue;
+    const c = cfg.crest(i);
+    if (c) c.draw(R.ctx, a.x, a.y - cfg.rad(i / (scr.length - 1)) + 1, 0, false, cfg.alpha ?? 1);
+  }
+}
+
+// A curling arm: from (x, y), heading `a0`, `n` steps of `len`, each
+// turning by the curl (a wave running down it).
+function curl(x, y, a0, n, len, t, ph, amp = 0.35, speed = 2.2) {
+  const pts = [{ x, y }];
+  let a = a0;
+  for (let i = 1; i <= n; i++) {
+    a += Math.sin(t * speed + ph - i * 0.55) * amp * (0.3 + i / n);
+    x += Math.cos(a) * len;
+    y += Math.sin(a) * len;
+    pts.push({ x, y });
+  }
+  return pts;
 }
 
 // ------------------------------------------------------------ Kharos
 const BEASTS = {
-  // A great burial urn, painted in bands, cracked and glowing; arms of
-  // ash out of its sides, waving; a face painted on its belly; its lid
-  // lifting on the smoke, and thrown back when she breathes in.
+  // A great burial urn of glazed clay, painted in bands, cracked and
+  // glowing; arms of ash out of its sides, waving (rig); a face painted on
+  // its belly; its lid riding on the smoke (rig), thrown back as she
+  // breathes in.
   urn_mother: {
     w: 60, h: 64, ax: 30, ay: 62,
-    body(P, t, st) {
+    sculpt(X, t) {
       const clay = '#b0603a';
-      const lift = st.inhale ? 5 : Math.max(0, sn(t)) * 1.5;
-      // Ash arms, behind her: out of her shoulders, up, waving, long
-      // fingers spread (reaching higher as she rouses).
-      for (const s of [-1, 1]) {
-        const ph = s < 0 ? 0 : 2.4;
-        const w = sn(t, 1, ph);
-        const up = st.wind || st.inhale ? 6 : 0;
-        const sh = [30 + s * 14, 30];
-        const el = [30 + s * (24 + w), 26 - up * 0.5 + w * 1.5];
-        const hd = [30 + s * (26 - w * 1.5), 13 - up + w * 2];
-        P.limb([[sh[0], sh[1], 3.2], [el[0], el[1], 2.4], [hd[0], hd[1], 1.8]], '#7a7270');
-        for (let i = 0; i < 4; i++) {
-          const a = -Math.PI / 2 + s * (-0.5 + i * 0.4) + w * 0.15;
-          P.tube(hd[0], hd[1], hd[0] + Math.cos(a) * 4.5, hd[1] + Math.sin(a) * 4.5, 0.8, 0.5, '#6a6260');
-        }
-        // (Embers in the ash.)
-        P.set(el[0], el[1], hex(w > 0 ? '#ff8a30' : '#c84a1a'));
-      }
-      // The foot, the belly, the neck, the lip.
-      P.poly([[20, 52], [40, 52], [42, 60], [18, 60]], shade(hex(clay), 0.85), { lv: 0.45 });
-      P.blob(30, 38, 18, 17, clay);
-      P.tube(30, 24, 30, 18, 8, 7, clay);
-      P.blob(30, 17, 11, 3.2, shade(hex(clay), 0.9), { flat: 0.5 });
-      P.blob(30, 17.5, 8, 1.6, '#1a0e0a', { amb: 0 });
-      // The painted bands, round the curve of her.
-      tint(P, (x, y) => y === 25 || y === 26 || y === 52 || y === 51, '#2a140e', 0.7);
-      tint(P, (x, y) => y >= 28 && y <= 31 && (x + (y - 28) * 2) % 8 < 4 && Math.abs(x - 30) < 17, '#f0d090', 0.55);
-      tint(P, (x, y) => y >= 46 && y <= 48 && (x % 4 < 2) && Math.abs(x - 30) < 15, '#2a140e', 0.5);
-      // Her painted face: almond eyes, a mouth, glowing as she rouses.
+      X.in(0, 3);
+      X.slab([[20, 52], [40, 52], [42, 60.5], [18, 60.5]], dark(clay, 0.85), 'ceramic', { rz: 5, bevel: 3 });
+      X.ball(30, 39, 18, 16.5 + sn(t) * 0.4, clay, 'ceramic', { rz: 14 });
+      X.tube(30, 25, 30, 19, 8.4, 7.2, clay, 'ceramic', { z: 6 });
+      X.in(1, 1);
+      X.ball(30, 17.5, 11, 3.4, dark(clay, 0.9), 'ceramic', { rz: 3, z: 8 });
+      X.ball(30, 17.6, 8, 1.6, '#1a0e0a', 'ink', { z: 11, rz: 0.4 });
+    },
+    paint(P, t, st) {
+      // The painted bands, round the curve of her; her face.
+      tint(P, (x, y) => (y === 26 || y === 27 || y === 52 || y === 51) && Math.abs(x - 30) < 18, '#2a140e', 0.7);
+      tint(P, (x, y) => y >= 29 && y <= 32 && (x + (y - 29) * 2) % 8 < 4 && Math.abs(x - 30) < 17, '#f0d090', 0.55);
+      tint(P, (x, y) => y >= 47 && y <= 49 && x % 4 < 2 && Math.abs(x - 30) < 15, '#2a140e', 0.5);
       const hot = st.wind || st.inhale;
       for (const ex of [23, 36]) {
-        P.poly([[ex - 4, 38], [ex, 35.5], [ex + 4, 38], [ex, 40.5]], '#e8d0a0', { lv: 0.7, contrast: 0.4 });
-        P.blob(ex, 38, 1.5, 1.5, hot ? '#ffb040' : '#2a140e', { lift: hot ? 0.5 : 0 });
+        P.poly([[ex - 4, 39], [ex, 36.5], [ex + 4, 39], [ex, 41.5]], '#e8d0a0', { lv: 0.7, contrast: 0.4 });
+        P.blob(ex, 39, 1.5, 1.5, hot ? '#ffb040' : '#2a140e', { lift: hot ? 0.5 : 0 });
       }
-      if (st.inhale) P.blob(30, 45, 3, 2.5, '#ffb040', { lift: 0.4 });
-      else P.line(26, 45, 34, 45, '#2a140e');
-      // Cracks, glowing.
-      crack(P, [[41, 27], [43, 32], [41, 36], [44, 41]]);
-      crack(P, [[17, 41], [19, 45], [17, 49]]);
-      crack(P, [[28, 50], [30, 54], [29, 58]]);
-      grain(P, 3, 0.1, 0.9);
-      // The lid, riding the smoke.
-      P.blob(30, 13 - lift, 10, 3, shade(hex(clay), 0.8), { flat: 0.7 });
-      P.blob(30, 9.5 - lift, 2.6, 2, '#d8a050');
+      if (st.inhale) P.blob(30, 46, 3, 2.5, '#ffb040', { lift: 0.4 });
+      else P.line(26, 46, 34, 46, '#2a140e');
+      crack(P, [[41, 28], [43, 33], [41, 37], [44, 42]]);
+      crack(P, [[17, 42], [19, 46], [17, 50]]);
+      crack(P, [[28, 51], [30, 55], [29, 59]]);
     },
     fx(P, t, st) {
-      // Ash breathed out (or drawn in).
-      for (let i = 0; i < 4; i++) {
-        const k = (t + i / 4) % 1;
-        if (st.inhale) P.puff(30 + Math.cos(i * 1.7) * (1 - k) * 22, 16 + Math.sin(i * 1.7) * (1 - k) * 10, 2, '#9a908a', 0.6 * k);
-        else P.puff(30 + sn(k, 0.5, i) * 3, 13 - k * 12, 1.5 + k * 3, '#8a8280', 0.5 * (1 - k));
-      }
-      for (const [x, y] of [[43, 32], [19, 45]]) P.fx(x, y, CORE, 0.5 + 0.5 * sn(t, 2, x));
-    },
-  },
-
-  // A serpent of black volcanic glass, up out of the sand in a curve,
-  // crystal spines down its back; a jaw that drops wide as it strikes.
-  glass_wyrm: {
-    w: 70, h: 66, ax: 42, ay: 63,
-    body(P, t, st) {
-      const glass = '#3a3058';
-      // The hole it's come up through: sand and rubble.
-      P.blob(44, 60, 17, 4.5, '#5a4a3a', { flat: 0.3 });
-      P.blob(44, 60, 11, 2.5, '#140e12', { amb: 0 });
-      // Its body, from the hole round and up to the head.
-      const pts = [];
-      const path = [[46, 62, 7], [49, 52, 7], [47, 42, 6.8], [39, 34, 6.4], [29, 30, 5.8], [20, 27, 5.2], [13, 25, 4.6]];
-      path.forEach(([x, y, r], i) => {
-        const k = i / (path.length - 1);
-        pts.push([x + sn(t, 1, i * 0.9) * 1.6 * k, y + sn(t, 1, i * 0.9 + 1.5) * 1.2 * k - (st.wind ? k * k * 6 : 0), r]);
-      });
-      // Spines down its back, behind it.
-      for (let i = 1; i < pts.length - 1; i++) {
-        const [x0, y0] = pts[i];
-        const [x1, y1] = pts[i + 1];
-        const nx = y1 - y0;
-        const ny = -(x1 - x0);
-        const n = Math.hypot(nx, ny) || 1;
-        const a = Math.atan2(-Math.abs(ny / n) - 0.2, nx / n);
-        P.spike(x0 - (nx / n) * 0, y0 - pts[i][2] + 1, a + (i % 2) * 0.2, 6 + (i % 2) * 2, 1.5, '#a8d8f0');
-      }
-      P.limb(pts, glass);
-      // Belly scales: pale bands across its underside.
-      for (let i = 0; i + 1 < pts.length; i++) {
-        for (let k = 0.2; k < 1; k += 0.4) {
-          const x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k;
-          const y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k;
-          P.line(x - 2, y + pts[i][2] - 2, x + 2, y + pts[i][2] - 1, '#6a5a8a');
-        }
-      }
-      // Scales: a diamond lattice over the glass.
-      P.over((x, y, c) => (c[2] > c[0] && c[2] < 140 && ((x + y * 2) % 7 === 0 || (x - y * 2 + 70) % 7 === 0) ? shade(c, 0.72) : null));
-      // A streak of shine along it.
-      for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0] - 2, pts[i][1] - pts[i][2] + 2, pts[i + 1][0] - 2, pts[i + 1][1] - pts[i + 1][2] + 2, '#c8c0f0');
-      // The head: a wedge, a jaw that drops.
-      const [hx, hy] = pts[pts.length - 1];
-      const open = st.wind ? 0.75 : 0.12 + Math.max(0, sn(t)) * 0.12;
-      // (Its skull: a heavy brow, a long snout.)
-      P.blob(hx + 3, hy - 1, 6, 5, glass);
-      P.poly([[hx + 3, hy - 5], [hx - 13, hy - 1.5], [hx - 13, hy + 1.5], [hx + 5, hy + 3]], glass, { lv: 0.6 });
-      const jx = hx - 12;
-      const jy = hy + 2 + open * 10;
-      P.poly([[hx + 4, hy + 2], [jx, jy], [jx + 1, jy + 2.5], [hx + 6, hy + 6]], shade(hex(glass), 0.8), { lv: 0.45 });
-      // Its teeth, and the glow in its throat as it opens.
       for (let i = 0; i < 5; i++) {
-        P.spike(hx - 12 + i * 3, hy + 1, Math.PI / 2, 2 + (i % 2), 0.7, '#e8f0ff');
-        P.spike(jx + 2 + i * 3 * (1 - open * 0.15), jy - open * 2.5 + i * open * 0.6, -Math.PI / 2, 2, 0.7, '#e8f0ff');
+        const k = (t + i / 5) % 1;
+        if (st.inhale) P.puff(30 + Math.cos(i * 1.7) * (1 - k) * 22, 16 + Math.sin(i * 1.7) * (1 - k) * 10, 2, '#9a908a', 0.6 * k);
+        else P.puff(30 + sn(k, 0.5, i) * 3, 12 - k * 11, 1.5 + k * 3, '#8a8280', 0.5 * (1 - k));
       }
-      if (open > 0.3) P.blob(hx + 1, hy + 4, 3, 2.5, '#ff4060', { lift: 0.5 });
-      P.line(hx - 9, hy - 3, hx + 1, hy - 5, '#c8c0f0');
-      for (const [a, l] of [[-2.7, 9], [-2.4, 7]]) P.spike(hx + 5, hy - 4, a, l, 1.4, '#a8d8f0');
-      P.eye(hx - 2, hy - 2, st.wind ? '#ff6070' : '#ff3050', true);
-      // Rubble at the lip of the hole, in front.
-      for (const [x, r] of [[30, 2.2], [36, 1.6], [56, 2.4], [60, 1.5]]) P.blob(x, 60, r, r * 0.8, '#6a5a48');
+      for (const [x, y] of [[43, 33], [19, 46]]) P.fx(x, y, CORE, 0.5 + 0.5 * sn(t, 2, x));
     },
-    fx(P, t) {
-      // Sand running off it.
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        P.fx(50 + i * 2, 46 + k * 14, '#c8a878', 0.8 * (1 - k));
-      }
+    rig: {
+      behind(R) {
+        // Her ash arms: out of her shoulders and up, waving, fingers
+        // spread, embers in the ash.
+        const up = R.st.wind || R.st.inhale ? 7 : 0;
+        for (const s of [-1, 1]) {
+          const bx = R.ox + 30 + s * 14;
+          const by = R.oy + 31;
+          const pts = curl(bx, by, -Math.PI / 2 + s * 0.9, 9, 2.6, R.t, s * 1.7, 0.22, 1.8);
+          for (const q of pts) q.y -= up * 0.15;
+          // (Ash, packed into an arm: grey, crumbling, embers in it.)
+          const cv = (R.e.rig.ashCv ||= [{}, {}])[s > 0 ? 1 : 0];
+          const arm = bodyOf([...pts].reverse(), { rad: (k) => 1 + 1.2 * k, skin: ashSkin(R.t), gloss: 0 }, cv);
+          drawBody(R.ctx, arm.back);
+          const tip = pts[pts.length - 1];
+          for (let i = 0; i < 4; i++) {
+            const a = -Math.PI / 2 + s * (-0.5 + i * 0.4) + Math.sin(R.t * 3 + i) * 0.15;
+            drawStrand(R.ctx, [tip, { x: tip.x + Math.cos(a) * 4, y: tip.y + Math.sin(a) * 4 }], '#6a6260', 1, 1);
+          }
+        }
+      },
+      front(R) {
+        // The lid, riding the smoke: bobbing, tilting; thrown back as she
+        // breathes in.
+        const lid = part('urn_lid', 26, 12, 13, 8, (X) => {
+          X.ball(13, 8, 10.5, 3, '#8a4a2c', 'ceramic', { rz: 3 });
+          X.ball(13, 5, 3, 2.6, '#d8a050', 'gold', { z: 2.6, rz: 2 });
+        });
+        const inhale = R.st.inhale;
+        const lift = inhale ? 9 : 1.5 + Math.max(0, Math.sin(R.t * 2.2)) * 2;
+        const tilt = inhale ? -0.55 : Math.sin(R.t * 1.3) * 0.08;
+        lid.draw(R.ctx, R.ox + 30 + (inhale ? 5 : 0), R.oy + 14 - lift, tilt);
+      },
     },
   },
 
-  // A great slug of cooling lava, its crust split in glowing seams that
-  // pulse with its heart; eyes on stalks, swaying; a molten foot.
-  magma_tender: {
-    w: 66, h: 48, ax: 33, ay: 46,
-    body(P, t, st) {
-      const crust = '#4a3430';
-      const swell = sn(t) * 0.8;
-      // The molten foot under it.
-      P.blob(35, 41, 25, 4, '#ff7a20', { lift: 0.35 });
-      P.blob(35, 32, 25 + swell * 0.5, 11 + swell, crust);
-      // Plates of crust over its back.
-      for (const [x, y, r] of [[24, 25, 8], [36, 22, 9], [48, 26, 8], [56, 32, 5]]) P.blob(x, y + swell * 0.6, r, r * 0.7, shade(hex(crust), 1.1));
-      grain(P, 11, 0.16, 0.82);
-      // The seams between, glowing (brighter as the heat rises in it).
-      const pulse = 0.5 + 0.5 * sn(t, 1);
-      const hot = mix(hex(HOT), hex('#ffd060'), pulse * (st.wind ? 1 : 0.5));
-      crack(P, [[16, 30], [22, 31], [30, 28], [34, 30], [42, 29], [47, 31], [54, 30]], hot);
-      crack(P, [[20, 37], [27, 35], [33, 38], [40, 35], [48, 37], [56, 36]], hot);
-      crack(P, [[30, 28], [29, 22]], hot);
-      crack(P, [[42, 29], [43, 23]], hot);
-      // The head, low at the front; eyes on stalks.
-      P.blob(12, 34, 8, 7, crust);
-      for (const [s, ph] of [[0, 0], [1, 1.6]]) {
-        const bx = 10 + s * 5;
-        const ex = bx - 4 + sn(t, 1, ph) * 2;
-        const ey = 18 + s * 2 + sn(t, 1, ph + 1) * 1.5 - (st.wind ? 3 : 0);
-        P.tube(bx, 30, ex, ey, 1.6, 1, shade(hex(crust), 1.15));
-        P.blob(ex, ey, 2.4, 2.4, '#ffe070', { lift: 0.3 });
-        P.set(ex - 1, ey, hex('#3a1408'));
-      }
-      P.line(5, 37, 10, 38, '#ffb040');
+  // A serpent of black volcanic glass: its head reared up on its neck (the
+  // painting), its body strung out behind it over the floor along the way
+  // it came, crystal spines down its back, swaying as it goes (the rig).
+  glass_wyrm: {
+    w: 44, h: 46, ax: 30, ay: 44,
+    sculpt(X, t, st) {
+      const glass = '#3a3058';
+      const gape = st.wind ? 1 : 0.15 + Math.max(0, sn(t)) * 0.12;
+      X.in(0, 3);
+      // The neck, rising out of the floor in an arc to the head.
+      X.limb([[30, 44, 6.5, 2], [29, 36, 6, 4], [24, 26, 5.4, 6], [17, 19, 4.8, 7]], glass, 'obsidian', { cell: 5 });
+      // The head: a long wedge of a skull, brows like blades.
+      X.ball(12, 16, 7.5, 5, glass, 'obsidian', { rz: 5, z: 6, ang: -0.15, cell: 4 });
+      X.ball(5.5, 17 + gape * 2, 4.8, 2.4, glass, 'obsidian', { rz: 2.6, z: 7, ang: -0.1 });
+      X.in(1, 1.5);
+      // The lower jaw, dropping as it strikes.
+      X.slab([[3, 20 + gape * 3], [14, 19.5], [16, 22 + gape * 2], [5, 23 + gape * 6]], dark(glass, 0.85), 'obsidian', { rz: 2, bevel: 1.2, z: 5 });
+      X.in(2, 1);
+      for (let i = 0; i < 5; i++) X.tube(10 + i * 3.5, 12 - i * 0.4, 13 + i * 3.6, 6 - (i % 2) * 2, 1.4, 0.3, '#8a78c8', 'glass', { z: 6 });
+      for (let i = 0; i < 3; i++) X.tube(26 - i * 1.5, 28 + i * 5, 32 - i, 25 + i * 5, 1.2, 0.3, '#8a78c8', 'glass', { z: 6 });
+    },
+    paint(P, t, st) {
+      P.eye(9, 14, st.wind ? '#ffd080' : '#ff6040', true);
+      if (st.wind) for (let i = 0; i < 4; i++) P.set(5 + i * 2, 20 + (i % 2), hex('#e8e0ff'));
     },
     fx(P, t) {
-      // Smoke off its back; a glow along its foot.
+      // Light running up through its spines.
+      const k = (t * 2) % 1;
+      P.fx(13 + k * 14, 6 + k * 3, '#e0d8ff', 0.8);
+    },
+    rig: {
+      under(R) {
+        serpent(R, wyrmCfg, false);
+      },
+      over(R) {
+        serpent(R, wyrmCfg, true);
+      },
+    },
+  },
+
+  // A great slug of cooling lava: a crust split in glowing seams that
+  // pulse with its heart, eyes on stalks swaying, a molten foot.
+  magma_tender: {
+    w: 70, h: 52, ax: 36, ay: 50,
+    sculpt(X, t) {
+      const crust = '#3a2420';
+      const heave = sn(t) * 0.8;
+      X.in(0, 4);
+      X.ball(36, 42, 30, 7, '#5a1a0a', 'molten', { rz: 5, cell: 3.5, flow: 0.8 });
+      X.ball(38, 34 - heave, 22, 12 + heave, crust, 'molten', { rz: 12, cell: 5, flow: 0.3 });
+      X.ball(18, 36, 11, 9, crust, 'molten', { rz: 9, cell: 4.5, flow: 0.3 });
+      X.ball(56, 39, 10, 6, crust, 'molten', { rz: 6, cell: 4.5, flow: 0.3 });
+      // Eye stalks, swaying.
+      X.in(1, 1.5);
+      for (const [x, ph] of [[13, 0], [19, 1.4]]) {
+        const sw = sn(t, 1, ph) * 2;
+        X.limb([[x, 30, 1.6, 6], [x - 2 + sw * 0.5, 24, 1.2, 7], [x - 3 + sw, 19, 1, 7]], crust, 'molten', { cell: 2.5 });
+        X.ball(x - 3 + sw, 18, 2, 2, '#2a1a18', 'molten', { z: 8, rz: 2, cell: 2 });
+      }
+    },
+    paint(P, t, st) {
+      for (const [x, ph] of [[13, 0], [19, 1.4]]) P.eye(Math.round(x - 3 + sn(t, 1, ph) * 2 - 0.5), 18, st.wind ? '#ffffff' : '#ffd060', true);
+    },
+    fx(P, t) {
       for (let i = 0; i < 3; i++) {
         const k = (t + i / 3) % 1;
-        P.puff(26 + i * 12, 20 - k * 16, 1.5 + k * 2.5, '#6a6060', 0.5 * (1 - k));
+        P.puff(30 + i * 10, 22 - k * 16, 1.5 + k * 2, '#5a4a48', 0.45 * (1 - k));
       }
-      for (let x = 12; x < 60; x += 2) P.fx(x, 45, '#ff9a40', 0.25 + 0.15 * sn(t, 1, x * 0.3));
     },
   },
 
   // An iron boiler on legs: a furnace in its belly behind a grate, a
-  // bellows on its side pumping, stacks smoking on its shoulders; red-hot
-  // as the heat in it rises, and spouting steam as it vents.
+  // leather bellows on its side pumping, stacks on its shoulders smoking;
+  // red-hot as the heat in it climbs, steam spouting as it vents.
   bellows_golem: {
-    w: 62, h: 66, ax: 31, ay: 64,
-    body(P, t, st) {
-      const iron = '#545460';
-      const pump = sn(t) * (st.vent ? 0 : 1);
+    w: 66, h: 70, ax: 33, ay: 68,
+    sculpt(X, t, st) {
       const heat = st.heat || 0;
-      const wind = st.wind;
-      // Legs.
-      for (const [x, d] of [[23, -1], [39, 1]]) {
-        P.tube(x, 46, x + d, 58, 4.4, 3.8, shade(hex(iron), 0.85));
-        P.blob(x + d * 2, 61, 6, 2.6, '#3a3a44', { flat: 0.6 });
+      const iron = heat >= 2 ? '#8a4a3a' : heat >= 1 ? '#6a4a44' : '#4a4a52';
+      const pump = Math.max(0, sn(t, 2)) * 3;
+      X.in(0, 2);
+      // Legs, stumped and riveted.
+      for (const x of [22, 44]) {
+        X.limb([[x, 50, 4.6, 0], [x - 1, 58, 4, 0], [x - 1, 64, 4.4, 0]], iron, 'metal');
+        X.ball(x - 2, 66, 6, 2.4, dark(iron, 0.8), 'metal', { rz: 2 });
       }
-      // The stacks.
-      for (const [x, top] of [[19, 6], [43, 9]]) {
-        P.tube(x, 26, x, top, 2.6, 2.4, '#3a3a44');
-        P.blob(x, top, 3.6, 1.4, '#2a2a32', { flat: 0.4 });
+      X.in(1, 3);
+      // The boiler: a riveted drum, a dome on top.
+      X.ball(33, 38, 19, 16, iron, 'metal', { rz: 15 });
+      X.ball(33, 22, 13, 6, iron, 'metal', { rz: 8, z: 3 });
+      // Stacks.
+      for (const x of [22, 44]) X.tube(x, 24, x + (x < 33 ? -2 : 2), 9, 3.4, 3, dark(iron, 0.8), 'metal', { z: 2 });
+      X.in(2, 1);
+      // The bellows on its flank, pumping.
+      X.slab([[46, 32 - pump], [56, 28 - pump * 1.3], [57, 46 + pump * 0.3], [47, 45]], '#6a4a2a', 'leather', { z: 12, rz: 3, bevel: 2 });
+      X.tube(47, 38, 52, 38, 1.2, 1.2, '#4a3a2a', 'wood', { z: 15 });
+      // Its arms: pistons and pincers.
+      X.limb([[15, 32, 3.4, 8], [9, 40, 3, 9], [10, 48, 2.6, 10]], dark(iron, 0.9), 'metal');
+      X.ball(10, 50, 3.6, 3, dark(iron, 0.8), 'metal', { z: 11, rz: 3 });
+    },
+    paint(P, t, st) {
+      const heat = st.heat || 0;
+      // Rivets in rows; the grate over the fire.
+      for (let i = 0; i < 9; i++) for (const y of [28, 48]) P.set(17 + i * 4, y + (i % 2), hex('#a8a8b0'));
+      const fire = heat >= 2 ? '#fff0a0' : heat >= 1 ? '#ffb040' : '#ff7a20';
+      for (let y = 37; y <= 45; y++) for (let x = 26; x <= 40; x++) {
+        const bar = (x - 26) % 3 === 0 || y === 37 || y === 45;
+        P.set(x, y, hex(bar ? '#2a2a30' : sn(t, 3, x * 0.7 + y) > 0.2 ? fire : '#ff5a10'));
       }
-      // The far arm.
-      P.tube(47, 26, 52, 38, 3.6, 3.2, iron);
-      P.tube(52, 38, 50, 48, 3.2, 3, iron);
-      P.blob(50, 50, 4.4, 4, '#3a3a44');
-      // The boiler.
-      P.blob(31, 34, 17, 16, iron);
-      // Rivets, in rings round it.
-      for (let a = 0; a < TAU; a += TAU / 16) {
-        const x = 31 + Math.cos(a) * 13;
-        const y = 34 + Math.sin(a) * 12;
-        P.set(x, y, shade(hex(iron), 1.45));
-        P.set(x + 1, y + 1, shade(hex(iron), 0.55));
-      }
-      P.line(14, 30, 48, 30, shade(hex(iron), 0.6));
-      // The bellows on its side, pumping.
-      const bw = 7 + pump * 1.5;
-      P.poly([[14, 33], [14 - bw, 30], [14 - bw, 44], [14, 41]], '#6a4a30', { lv: 0.55 });
-      for (let i = 1; i < 4; i++) P.line(14 - (bw * i) / 4, 31 + i * 0.2, 14 - (bw * i) / 4, 43 - i * 0.2, '#3a2418');
-      P.tube(14 - bw, 37, 8 - bw * 0.3, 37, 1.2, 0.8, '#8a8a90');
-      // The furnace grate, glowing as hot as it is.
-      const fire = ['#c84a14', '#ff8a20', '#ffd060', '#fff0c0'][heat + (pump > 0.4 ? 1 : 0)];
-      P.blob(31, 40, 7, 5, '#1a1214', { amb: 0 });
-      P.blob(31, 41, 5.5, 3.5, fire, { lift: 0.3 });
-      for (let x = 26; x <= 36; x += 2) P.line(x, 36, x, 45, '#2a2a32');
-      // The little head, its eye-slit.
-      P.blob(31, 17, 6, 4.5, iron, { clip: (x, y) => y < 19 });
-      P.rect(28, 16, 7, 1, heat ? '#ffb040' : '#ff7030');
-      // The near arm (a piston), raised to strike.
-      const hand = wind ? [6, 14] : [9, 50];
-      const elbow = wind ? [8, 26] : [7, 38];
-      P.tube(15, 25, elbow[0], elbow[1], 3.8, 3.4, iron);
-      P.tube(elbow[0], elbow[1], hand[0], hand[1], 3.4, 3, iron);
-      P.line(elbow[0], elbow[1], hand[0], hand[1], '#a8a8b0');
-      P.blob(hand[0], hand[1], 4.8, 4.4, '#3a3a44');
-      grain(P, 21, 0.08, 0.85);
-      // Red-hot plates as it nears its venting.
-      if (heat) tint(P, (x, y, c) => (x - 31) ** 2 / 300 + (y - 34) ** 2 / 260 < 1 && Math.abs(c[0] - c[2]) < 30, heat > 1 ? '#ff4020' : '#c83a20', heat > 1 ? 0.4 : 0.2);
+      if (heat >= 1) tint(P, (x, y) => hash2(x, y, 9) < 0.08 * heat, '#ff6030', 0.6);
     },
     fx(P, t, st) {
-      const vent = st.vent;
-      for (const [x, top] of [[19, 6], [43, 9]]) {
+      for (const x of [20, 46]) {
         for (let i = 0; i < 3; i++) {
-          const k = (t * (vent ? 2 : 1) + i / 3) % 1;
-          P.puff(x + k * 4 * (x < 30 ? -1 : 1), top - 2 - k * (vent ? 6 : 5), 1.5 + k * 2.5, vent ? '#f0f0f0' : '#5a5458', (vent ? 0.75 : 0.5) * (1 - k));
+          const k = (t * 2 + i / 3 + x * 0.01) % 1;
+          P.puff(x + sn(k, 1, x) * 2, 8 - k * 8, 1.5 + k * 3, '#6a6466', 0.5 * (1 - k));
         }
       }
-      if (vent) for (let i = 0; i < 4; i++) P.puff(31 + (i - 1.5) * 4, 47 + ((t * 3 + i / 4) % 1) * 6, 2.5, '#ffffff', 0.5);
-      P.puff(31, 41, 6, '#ff9a40', 0.18 + 0.08 * (st.heat || 0));
+      if (st.vent) for (let i = 0; i < 6; i++) {
+        const k = (t * 3 + i / 6) % 1;
+        P.puff(12 - k * 10, 38 + sn(k, 2, i) * 3, 2 + k * 4, '#f0f0f0', 0.7 * (1 - k));
+      }
     },
   },
 
-  // A heaving mass of fused glass, eyes in it, shards bristling out of it
-  // and long crystals over it, light running through them.
+  // A heaving mass of fused glass and bone: eyes in it, ribs and skulls
+  // half sunk in it, long crystals standing out of it, light running
+  // through them; shards of it wheeling round it (rig).
   vitrified_horror: {
-    w: 66, h: 56, ax: 33, ay: 54,
-    body(P, t, st) {
-      const glass = '#304a6a';
-      const br = sn(t) * 0.8;
-      // Shard legs.
-      for (const [x, a] of [[16, 2.2], [24, 1.8], [42, 1.4], [50, 1]]) P.spike(x, 44, a, 10, 2, '#5a7090');
-      // The crystals over it, behind.
-      for (const [x, y, a, l] of [[18, 22, -2.2, 14], [28, 16, -1.75, 18], [40, 17, -1.35, 16], [50, 24, -0.9, 12]]) P.spike(x, y, a + sn(t, 1, x) * 0.05, l, 2, '#80b8e0');
-      // The mass: lobes of glass, swelling and settling.
-      for (const [x, y, rx, ry] of [[22, 36, 12, 10], [42, 36, 13, 10], [32, 30, 14, 11], [33, 42, 16, 7]]) P.blob(x, y + br * (x > 30 ? 1 : -1) * 0.5, rx + br * 0.4, ry + br * 0.3, glass);
-      // Specular streaks: it's glass.
-      for (const [x0, y0, x1, y1] of [[20, 28, 25, 25], [33, 22, 38, 21], [14, 36, 15, 32], [44, 30, 48, 29]]) P.line(x0, y0, x1, y1, '#d0f0ff');
-      // Shards bristling out of it.
-      for (let i = 0; i < 9; i++) {
-        const a = Math.PI + 0.2 + (i / 8) * (Math.PI - 0.4);
-        P.spike(32 + Math.cos(a) * 15, 34 + Math.sin(a) * 10, a, 4 + (i % 3) * 2, 1.2, '#a8d8f0');
+    w: 66, h: 62, ax: 33, ay: 60,
+    sculpt(X, t) {
+      const glass = '#5a7aa8';
+      const heave = sn(t) * 0.7;
+      X.in(0, 4);
+      X.ball(33, 46, 24, 13 + heave, glass, 'glass', { rz: 12 });
+      X.ball(27, 36, 14, 12, glass, 'glass', { rz: 11, z: 2 });
+      X.ball(42, 38, 11, 10, glass, 'glass', { rz: 9, z: 1 });
+      X.in(1, 1.5);
+      // Bone sunk in the glass: ribs, a skull.
+      for (let i = 0; i < 4; i++) X.limb([[22 + i * 5, 42, 1, 9], [20 + i * 5.4, 48, 0.9, 10], [24 + i * 5, 53, 0.8, 9]], '#e8e0c8', 'bone');
+      X.ball(36, 32, 4.2, 4, '#e8e0c8', 'bone', { z: 10, rz: 3.6 });
+      X.in(2, 1);
+      for (const [x, y, a, l] of [[20, 30, -2.2, 14], [30, 26, -1.7, 18], [44, 30, -1.1, 12], [50, 40, -0.4, 9], [14, 40, -2.8, 9]]) {
+        X.tube(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, 2.4, 0.4, '#a8c8ff', 'glass', { z: 6 });
       }
-      // Eyes in it, blinking each in its own time.
-      const eyes = [[20, 33], [27, 27], [36, 31], [43, 36], [30, 39], [24, 41]];
-      eyes.forEach(([x, y], i) => {
-        const shut = (t * 8 + i * 3) % 8 < 1;
-        if (shut) P.line(x - 1, y, x + 1, y, '#1a2a3a');
-        else {
-          P.blob(x, y, 1.8, 1.6, '#e8f0f0', { lift: 0.3 });
-          P.set(x - (st.wind ? 1 : 0), y, hex(st.wind ? '#ff3040' : '#1a1a2a'));
-        }
-      });
+    },
+    paint(P, t, st) {
+      P.rect(34, 31, 1.6, 1.6, '#1a1420');
+      P.rect(37.4, 31, 1.6, 1.6, '#1a1420');
+      for (const [x, y] of [[25, 38], [31, 45], [43, 42]]) P.eye(x, y, st.wind ? '#ffffff' : '#ff6040', true);
     },
     fx(P, t) {
-      // Light running up its crystals.
-      for (const [x, y, a, l] of [[18, 22, -2.2, 14], [28, 16, -1.75, 18], [40, 17, -1.35, 16], [50, 24, -0.9, 12]]) {
-        const k = (t + x * 0.03) % 1;
-        P.fx(x + Math.cos(a) * l * k, y + Math.sin(a) * l * k, '#ffffff', 0.9 * Math.sin(k * Math.PI));
+      for (let i = 0; i < 5; i++) {
+        const k = (t * 2 + i / 5) % 1;
+        P.fx(30 + Math.cos(i) * 3 + k * 2, 26 - k * 16, '#e0f0ff', 0.9 * (1 - k));
       }
+    },
+    rig: {
+      behind(R) {
+        orbitShards(R, false);
+      },
+      front(R) {
+        orbitShards(R, true);
+      },
     },
   },
 
-  // A drake, red and scarred, chained by the neck to a stake: wings half
-  // spread and beating, a tail swinging, fire in its jaws as it rears.
+  // A drake, red and scarred: scales and a pale belly, horns, a collar of
+  // iron at its throat (the chain from it runs to the stake in the floor:
+  // the rig), its wings beating (the rig), a tail swinging, fire in its
+  // jaws as it rears.
   chained_drake: {
-    w: 78, h: 64, ax: 40, ay: 62,
-    body(P, t, st) {
-      const hide = '#9a3420';
-      const belly = '#d8985a';
-      const flap = sn(t);
+    w: 74, h: 62, ax: 38, ay: 60,
+    sculpt(X, t, st) {
+      const scale = '#8a2a1e';
       const rear = st.wind ? 1 : 0;
-      // The far wing.
-      const wingTip = [54 + flap * 2, 6 + flap * 5];
-      P.poly([[44, 30], [wingTip[0], wingTip[1]], [62, 18 + flap * 3], [60, 30]], '#5a1a14', { lv: 0.35 });
-      // Far legs.
-      P.limb([[34, 44, 3.2], [33, 52, 2.4], [31, 59, 2]], shade(hex(hide), 0.7));
-      P.limb([[54, 44, 3.8], [57, 51, 2.6], [55, 59, 2]], shade(hex(hide), 0.7));
-      // The tail, swinging.
-      const tail = [];
-      for (let i = 0; i <= 6; i++) {
-        const k = i / 6;
-        tail.push([58 + k * 16, 40 + k * 8 + sn(t, 1, k * 3) * k * 3, 5 - k * 4]);
-      }
-      P.limb(tail, hide);
-      const tip = tail[tail.length - 1];
-      P.spike(tip[0], tip[1], 0.5 + sn(t, 1, 3) * 0.3, 5, 2.2, '#5a1a14');
-      // The body.
-      P.blob(46, 39, 15, 10, hide);
-      P.blob(44, 45, 11, 4, belly, { clip: (x, y) => y > 42 });
-      for (let x = 36; x < 54; x += 3) P.line(x, 44, x + 1, 48, shade(hex(belly), 0.7));
-      // Spines down its back.
-      for (let i = 0; i < 6; i++) P.spike(36 + i * 4, 30 + Math.abs(i - 2) * 0.6, -Math.PI / 2 - 0.4, 3 + (i % 2), 1.1, '#3a0e0a');
-      // Near legs.
-      P.limb([[40, 44, 3.6], [38, 52, 2.6], [37, 59, 2.2]], hide);
-      P.limb([[52, 44, 4.2], [50, 52, 2.8], [52, 59, 2.2]], hide);
-      for (const fx of [37, 52]) for (let i = 0; i < 3; i++) P.spike(fx - 1 + i * 1.2, 60, Math.PI - 0.3 - i * 0.2, 2, 0.6, '#e8e0c8');
-      // The neck, up and forward (rearing as it draws breath).
-      const head = [14 + rear * 2, 22 - rear * 6 + sn(t, 1, 1) * 1];
-      P.limb([[36, 36, 6], [26, 30 - rear * 3, 4.8], [head[0] + 4, head[1] + 2, 4]], hide);
-      for (let i = 0; i < 4; i++) P.line(28 - i * 3, 33 - rear * 3 - i * 2, 30 - i * 3, 37 - rear * 3 - i * 2, shade(hex(belly), 0.8));
-      // The head: brow, horns, snout, jaw.
-      const [hx, hy] = head;
-      P.blob(hx + 2, hy, 5.5, 4.2, hide);
-      P.poly([[hx - 1, hy - 2], [hx - 10, hy + 1], [hx - 10, hy + 3], [hx, hy + 3]], hide, { lv: 0.55 });
-      const open = rear ? 4 : 1 + Math.max(0, sn(t)) * 0.8;
-      P.poly([[hx, hy + 3], [hx - 9, hy + 3 + open], [hx - 8, hy + 5 + open], [hx + 2, hy + 6]], shade(hex(hide), 0.8), { lv: 0.45 });
-      if (rear) P.blob(hx - 4, hy + 4, 3, 1.6, '#ffd060', { lift: 0.5 });
-      for (const [a, l] of [[-2.7, 9], [-2.3, 7]]) P.spike(hx + 5, hy - 2, a + Math.PI, l, 1.3, '#e8dcc0');
-      P.eye(hx - 1, hy - 1, '#ffd040');
-      P.set(hx - 9, hy + 1, hex('#3a0a08'));
-      // Its collar, and the chain from it to the stake.
-      P.blob(30, 32 - rear * 3, 3.5, 4.5, '#5a5a64', { flat: 0.4 });
-      P.tube(8, 52, 8, 61, 1.8, 1.8, '#5a4a3a');
-      chain(P, { x: 29, y: 35 - rear * 3 }, { x: 9, y: 52 }, rear ? 1 : 5 + flap);
-      // The near wing, over all.
-      const nTip = [36 + flap * 3, 2 + flap * 6];
-      P.poly([[42, 30], [nTip[0], nTip[1]], [50 + flap, 12 + flap * 4], [58, 22 + flap * 2], [56, 32]], '#7a2418', { lv: 0.45, grad: [-0.3, -1] });
-      for (const [x, y] of [[nTip[0], nTip[1]], [50 + flap, 12 + flap * 4], [58, 22 + flap * 2]]) P.line(42, 30, x, y, '#3a0e0a');
-      P.spike(nTip[0], nTip[1], -2, 3, 0.8, '#e8dcc0');
-      grain(P, 31, 0.08, 0.85);
+      const sw = sn(t);
+      X.in(0, 2);
+      // The far legs, behind.
+      X.limb([[46, 44, 4, -2], [49, 51, 3.2, -2], [47, 58, 2.6, -2]], dark(scale, 0.8), 'scales');
+      X.limb([[28, 44, 3.6, -2], [25, 51, 3, -2], [27, 58, 2.6, -2]], dark(scale, 0.8), 'scales');
+      X.in(1, 3.5);
+      // Tail, swinging.
+      X.limb([[54, 42, 6, 2], [62, 40 + sw, 4.4, 2], [68, 35 + sw * 2, 2.6, 2], [71, 28 + sw * 3, 1.2, 2]], scale, 'scales', { scale: 3 });
+      // Body, belly, neck, head.
+      X.ball(40, 38, 16, 10, scale, 'scales', { rz: 10, along: 'x', scale: 3.5 });
+      X.ball(38, 44, 12, 5, '#d8a060', 'leather', { rz: 5, z: 4 });
+      X.limb([[28, 34, 7, 4], [22, 26 - rear * 4, 5.4, 6], [17, 20 - rear * 7, 4.6, 7]], scale, 'scales', { scale: 2.6 });
+      X.ball(11, 18 - rear * 7, 7, 5, scale, 'scales', { rz: 5.5, z: 7, ang: -0.1, scale: 2.4 });
+      X.ball(5, 20 - rear * 7 + rear * 2, 4.2, 2.4, scale, 'scales', { rz: 3, z: 8, scale: 2 });
+      X.in(2, 1.5);
+      // Horns, swept back.
+      X.limb([[13, 14 - rear * 7, 1.4, 9], [18, 10 - rear * 7, 0.9, 8], [22, 9 - rear * 7, 0.4, 7]], '#e8d8b0', 'bone');
+      // The collar, iron, riveted.
+      X.ball(22.5, 27 - rear * 4, 4, 5.6, '#5a5a62', 'metal', { rz: 3, z: 10, ang: 0.4 });
+      // The near legs, in front.
+      X.in(3, 2);
+      X.limb([[48, 46, 4.6, 6], [52, 52, 3.6, 7], [49, 59, 3, 7]], scale, 'scales');
+      X.limb([[30, 46, 4.2, 6], [27, 52, 3.4, 7], [29, 59, 3, 7]], scale, 'scales');
+      for (const x of [47, 27]) X.ball(x, 60, 3.6, 1.6, dark(scale, 0.7), 'scales', { z: 8, rz: 1.5 });
+    },
+    paint(P, t, st) {
+      const rear = st.wind ? 1 : 0;
+      P.eye(9, 16 - rear * 7, st.wind ? '#ffffff' : '#ffd060', true);
+      // Scars across its flank.
+      P.line(36, 33, 44, 40, '#4a1410');
+      P.line(40, 31, 47, 37, '#4a1410');
     },
     fx(P, t, st) {
-      // Smoke from its nostrils; fire as it rears.
-      const k = (t * 2) % 1;
-      P.puff(4 - k * 4, 22 - k * 4 - (st.wind ? 6 : 0), 1 + k * 2, st.wind ? '#ff9030' : '#7a7070', 0.6 * (1 - k));
+      const rear = st.wind ? 1 : 0;
+      if (st.wind) {
+        for (let i = 0; i < 8; i++) {
+          const k = (t * 3 + i / 8) % 1;
+          P.puff(3 - k * 3, 21 - rear * 5 + sn(k, 2, i) * 2, 1 + k * 2, k < 0.4 ? '#fff0a0' : '#ff8030', 0.85 * (1 - k));
+        }
+      } else P.fx(3, 21, '#ff8030', 0.5 + 0.5 * sn(t, 2));
+    },
+    rig: {
+      under(R) {
+        drakeChain(R, false);
+      },
+      behind(R) {
+        drakeWing(R, false);
+      },
+      front(R) {
+        drakeWing(R, true);
+      },
+      over(R) {
+        drakeChain(R, true);
+      },
     },
   },
 
   // A hulk of slag, knuckles to the floor: rock crusted on rock, molten
-  // seams, a core of fire in its chest beating; iron flecks drawn to it
-  // when its lodestone wakes.
+  // seams, a core of fire in its chest; its lodestone heart waking blue.
   slag_titan: {
-    w: 66, h: 66, ax: 33, ay: 64,
-    body(P, t, st) {
-      const rock = '#4e403c';
-      const br = sn(t) * 0.8;
-      const wind = st.wind;
-      // Legs: stumps.
-      for (const x of [24, 40]) {
-        P.tube(x, 44, x, 58, 6, 5.5, shade(hex(rock), 0.85));
-        P.blob(x, 60, 7, 3, shade(hex(rock), 0.75), { flat: 0.6 });
-      }
-      // The far arm.
-      P.limb([[50, 22, 6], [56, 36, 5.5], [55, 50, 5]], shade(hex(rock), 0.8));
-      P.blob(55, 53, 7, 6, shade(hex(rock), 0.8));
-      // The trunk, the boulder shoulders.
-      P.blob(33, 32 + br * 0.3, 18, 15 + br * 0.4, rock);
-      P.blob(14, 20, 9, 8, rock);
-      P.blob(50, 20, 9, 8, rock);
-      // The head, sunk between them.
-      P.blob(30, 13, 7, 6, shade(hex(rock), 1.05));
-      P.rect(25, 13, 4, 1, '#ffb040');
-      P.rect(31, 13, 4, 1, '#ffb040');
-      grain(P, 41, 0.2, 0.8);
-      // Seams and the core.
-      const pulse = 0.5 + 0.5 * sn(t, 1);
-      crack(P, [[20, 24], [24, 30], [22, 36], [26, 42]]);
-      crack(P, [[44, 26], [40, 32], [44, 38]]);
-      crack(P, [[10, 18], [14, 22], [12, 26]]);
-      P.blob(33, 31, 5 + pulse, 5 + pulse, wind ? '#ffe070' : '#ff8a20', { lift: 0.3 + pulse * 0.3 });
-      P.blob(33, 31, 2, 2, '#fff8d0', { lift: 0.6 });
-      // The near arm: down to its knuckles, or up to smash.
-      const fist = wind ? [10, 6] : [9, 54];
-      const elbow = wind ? [6, 20] : [5, 38];
-      P.limb([[15, 24, 6.4], [elbow[0], elbow[1], 5.6], [fist[0], fist[1], 5.4]], rock);
-      P.blob(fist[0], fist[1], 7.5, 6.5, shade(hex(rock), 1.05));
-      crack(P, [[elbow[0] + 2, elbow[1] - 4], [elbow[0], elbow[1]], [elbow[0] + 2, elbow[1] + 4]]);
-      grain(P, 43, 0.12, 0.85, (x, y) => y > 30);
+    w: 72, h: 70, ax: 36, ay: 68,
+    sculpt(X, t) {
+      const rock = '#5a4a44';
+      const b = sn(t) * 0.8;
+      X.in(0, 3);
+      X.limb([[52, 30, 6, -2], [58, 44, 5, -2], [58, 60, 6.4, -2]], dark(rock, 0.8), 'rock', { cell: 4 });
+      X.in(1, 4);
+      for (const x of [27, 45]) X.limb([[x, 50, 6.6, 0], [x - 1, 66, 6.4, 0]], rock, 'rock', { cell: 4.5 });
+      X.ball(37, 36 - b, 21, 17, rock, 'rock', { rz: 15, cell: 6 });
+      X.ball(28, 20 - b, 12, 9, rock, 'rock', { rz: 9, z: 4, cell: 5 });
+      X.ball(20, 24 - b, 6, 5, rock, 'molten', { rz: 5, z: 9, cell: 3 });
+      X.in(2, 3);
+      X.limb([[18, 30 - b, 7, 8], [12, 44, 6, 9], [13, 58, 7.4, 10]], rock, 'rock', { cell: 4.5 });
+      X.ball(13, 61, 7, 5, rock, 'rock', { rz: 5, z: 10, cell: 3 });
+      // Molten seams through it.
+      X.in(3, 0.5);
+      for (const [x0, y0, x1, y1] of [[30, 26, 40, 44], [44, 22, 48, 38], [24, 40, 34, 52]]) X.tube(x0, y0, x1, y1, 1.2, 0.8, '#ff6a1a', 'molten', { z: 16, glow: '#ffb040', glowK: 0.6, cell: 2 });
+    },
+    paint(P, t, st) {
+      const wake = st.wind || st.eyes;
+      P.blob(36, 33, 4 + sn(t) * 0.6, 4 + sn(t) * 0.6, wake ? '#5ac8ff' : '#ff8030', { lift: 0.6 });
+      P.eye(18, 22, wake ? '#a0e8ff' : '#ffd060', true);
     },
     fx(P, t, st) {
-      P.puff(33, 31, 9, '#ff8a20', 0.2 + 0.1 * sn(t));
-      if (!st.wind) return;
-      // Its lodestone wakes: iron flecks drawn into it.
-      for (let i = 0; i < 6; i++) {
-        const k = (t * 2 + i / 6) % 1;
-        const a = (i / 6) * TAU;
-        P.fx(33 + Math.cos(a) * (1 - k) * 28, 31 + Math.sin(a) * (1 - k) * 22, '#c8d8ff', 0.9 * k);
+      if (st.wind || st.eyes) for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + t * TAU;
+        const k = (t * 2 + i / 8) % 1;
+        P.fx(36 + Math.cos(a) * (18 - k * 14), 33 + Math.sin(a) * (14 - k * 10), '#a0e8ff', 0.9);
       }
     },
   },
 
-  // A heart of rock and fire, hung in the air by its veins: it beats
-  // (twice, and rests), the veins in it flaring with each beat.
+  // A heart of rock and fire, hung in the air by four chains (rig, to the
+  // anchors in the corners of its hall): it beats (twice, and rests), the
+  // veins in it flaring with each beat.
   molten_heart: {
-    w: 62, h: 64, ax: 31, ay: 62,
-    body(P, t, st) {
-      const crust = '#3e2622';
-      // Two beats and a rest.
-      const ph = t % 1;
-      const beat = Math.max(0, 1 - Math.abs(ph - 0.05) * 10) + 0.6 * Math.max(0, 1 - Math.abs(ph - 0.25) * 10);
-      const k = 1 + beat * 0.08;
-      const cy = 26;
-      // Its veins down to the floor, holding it.
-      for (const [x0, x1, ph2] of [[22, 12, 0], [28, 24, 1], [36, 40, 2], [42, 52, 3]]) {
-        const pts = [];
-        for (let i = 0; i <= 5; i++) {
-          const q = i / 5;
-          pts.push([x0 + (x1 - x0) * q + sn(t, 1, ph2 + q * 3) * 1.5 * q, cy + 10 + q * (60 - cy - 10), 2.6 - q * 1.2]);
-        }
-        P.limb(pts, '#5a2a22');
-        P.blob(x1, 61, 3.5, 1.4, '#3a1a16', { flat: 0.4 });
-      }
-      // The heart: two lobes and its point.
-      P.blob(24, cy - 2, 11 * k, 10 * k, crust);
-      P.blob(38, cy - 1, 12 * k, 11 * k, crust);
-      P.poly([[14, cy + 2], [49, cy + 2], [31, cy + 22 * k]], crust, { lv: 0.4 });
-      // Its vessels, up from the top.
-      P.limb([[28, cy - 9, 3.6], [26, cy - 16, 3.2], [20, cy - 19, 2.8]], '#5a2a22');
-      P.limb([[38, cy - 10, 4], [40, cy - 18, 3.4], [46, cy - 20, 3]], '#5a2a22');
-      P.blob(20, cy - 19, 2.4, 2, '#ff8a20', { lift: 0.4 });
-      P.blob(46, cy - 20, 2.6, 2, '#ff8a20', { lift: 0.4 });
-      grain(P, 51, 0.16, 0.82);
-      // Veins of fire in it, flaring with each beat.
-      const hot = beat > 0.4 ? '#ffd060' : HOT;
-      const core = beat > 0.4 ? '#ffffff' : CORE;
-      crack(P, [[20, cy - 6], [24, cy - 1], [30, cy + 1], [34, cy + 7], [31, cy + 14]], hot, core);
-      crack(P, [[40, cy - 7], [37, cy - 1], [41, cy + 4], [38, cy + 10]], hot, core);
-      crack(P, [[16, cy + 2], [22, cy + 5], [26, cy + 10]], hot, core);
-      crack(P, [[46, cy], [43, cy + 6], [44, cy + 11]], hot, core);
-      if (st.wind) P.blob(31, cy + 2, 4, 4, '#fff0a0', { lift: 0.5 });
+    w: 56, h: 74, ax: 28, ay: 72,
+    sculpt(X, t) {
+      const beat = beatOf(t);
+      const s = 1 + beat * 0.07;
+      X.in(0, 4);
+      X.ball(28, 26, 15 * s, 13 * s, '#3a2420', 'molten', { rz: 13, cell: 4, flow: 0.5 });
+      X.ball(21, 15, 7 * s, 6 * s, '#3a2420', 'molten', { rz: 6, cell: 3.5, z: 3 });
+      X.ball(34, 14, 6 * s, 5.4 * s, '#3a2420', 'molten', { rz: 5, cell: 3.5, z: 2 });
+      X.ball(28, 38, 9 * s, 8 * s, '#3a2420', 'molten', { rz: 8, cell: 4, z: 1 });
+      X.in(1, 1.5);
+      // Its great vessels, torn off short: the arch of the aorta rising out
+      // of the top of it and over, the trunk beside it, a vein behind;
+      // each open end dark and glowing within.
+      X.limb([[25, 13, 3.4, 4], [24, 6, 3.2, 5], [27, 2, 3, 6], [32, 2, 2.8, 6], [35, 6, 2.6, 6]], '#5a2a20', 'flesh');
+      X.limb([[31, 14, 2.8, 8], [33, 9, 2.4, 8], [32, 6, 2.1, 8]], '#6a3024', 'flesh');
+      X.limb([[18, 15, 2.4, 2], [16, 9, 2, 2]], '#4a2018', 'flesh');
+      for (const [x, y, r] of [[35.4, 7.4, 2], [32, 5.2, 1.6], [16, 8.2, 1.4]]) X.ball(x, y, r, r * 0.6, '#ff6a1a', 'molten', { z: 10, rz: 0.5, glow: '#ffb040', glowK: 0.5 });
+    },
+    paint(P, t) {
+      const beat = beatOf(t);
+      const col = mix(hex('#ff5a10'), hex('#fff0a0'), beat);
+      for (const pts of [[[20, 20], [24, 28], [22, 36]], [[34, 18], [31, 27], [35, 34]], [[27, 14], [28, 24], [28, 34], [29, 42]]]) crack(P, pts, toHex(col), '#ffffff');
     },
     fx(P, t) {
-      const ph = t % 1;
-      const beat = Math.max(0, 1 - Math.abs(ph - 0.05) * 10);
-      P.puff(31, 26, 18, '#ff6020', 0.12 + beat * 0.2);
-      // A drip of fire off its point.
-      const k = (t * 2) % 1;
-      P.fx(31, 48 + k * 12, '#ffb040', 1 - k);
+      const beat = beatOf(t);
+      P.puff(28, 27, 16, '#ff6020', 0.12 + beat * 0.2);
+      for (let i = 0; i < 4; i++) {
+        const k = (t * 2 + i / 4) % 1;
+        P.fx(20 + i * 5, 50 + k * 18, k < 0.5 ? '#ffb040' : '#ff6020', 0.9 * (1 - k));
+      }
+    },
+    rig: {
+      under(R) {
+        heartChains(R, false);
+      },
+      over(R) {
+        heartChains(R, true);
+      },
     },
   },
 };
 
-// ------------------------------------------------------------ Myrrow
+// The wyrm's length: black glass, glossy, rippled as glass breaks (in
+// shells), its belly in plates; a crystal spine standing up off every
+// other segment, smaller toward the tail; raised a little near its neck.
+const wyrmSpine = [];
+const GLASS = hex('#3a3058');
+const GLASS_BELLY = hex('#2a2240');
+const wyrmCfg = {
+  n: 13, gap: 0.5, wave: 3.2, amp: 0.22, gloss: 0.9,
+  lift: (i) => Math.max(0, 3 - i) * 0.8,
+  rad: (k) => 1.2 + 5.4 * Math.pow(1 - k, 0.8),
+  skin(k, u, v, ny) {
+    if (ny > 0.45) return Math.floor(u / 3) % 2 ? shade(GLASS_BELLY, 0.8) : GLASS_BELLY;
+    // (Conchoidal ripples: rings in the glass, lighter where they break.)
+    const r = Math.sin(u * 0.75 + v * 2.4 + hash2(Math.floor(u / 6), 1, 3) * 6);
+    return r > 0.82 ? mix(GLASS, [150, 130, 210], 0.35) : r < -0.9 ? shade(GLASS, 0.7) : GLASS;
+  },
+  crest(i) {
+    if (i % 2 || i > 10) return null;
+    const k = Math.min(3, Math.floor(i / 3));
+    return (wyrmSpine[k] ||= part(`wyrm_spine${k}`, 7, 10, 3.5, 9, (X) => {
+      const h = 7.5 - k * 1.5;
+      X.slab([[1.5, 9.5], [3.2, 9.5 - h], [4.2, 9.5 - h * 0.6], [5.5, 9.5]], '#8a78c8', 'glass', { rz: 1.4, bevel: 0.8 });
+    }));
+  },
+};
+
+// The shards wheeling round the Vitrified Horror (those behind it first).
+function orbitShards(R, front) {
+  const sh = part('vh_shard', 9, 9, 4.5, 4.5, (X) => X.slab([[1, 4], [4.5, 0.5], [8, 3], [5, 8]], '#a8c8ff', 'glass', { rz: 1.5, bevel: 1 }));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + R.t * (0.9 + (i % 2) * 0.3);
+    const s = Math.sin(a);
+    if ((s > 0) !== front) continue;
+    sh.draw(R.ctx, R.ox + 33 + Math.cos(a) * 27, R.oy + 38 + s * 8 + Math.sin(R.t * 2 + i) * 2, R.t * 2 + i, false, front ? 1 : 0.7);
+  }
+}
+
+// The drake's chain: from the collar at its throat to the stake in the
+// floor of its hall, iron links that hang and drag and pull taut (a
+// Verlet chain in the world: see bossrig.Rope); torn free, it drags
+// behind from the collar.
+function drakeChain(R, front) {
+  const e = R.e;
+  const s = e.rig;
+  const p = posOf(e);
+  const A = e.anchor;
+  if (!A) return;
+  // (The collar, in the world: up its neck, toward its head; where it's
+  // painted, a tile to the side it faces and two and a half layers up.)
+  const [fx, fz] = R.r.toWorld(R.flip ? 1 : -1, 0);
+  const rear = R.st.wind ? 1 : 0;
+  const collar = { x: p.x + fx * 0.97, y: 2.0 + rear * 0.25, z: p.z + fz * 0.97 };
+  const stake = { x: A.x, y: 0.1, z: A.z };
+  if (!s.chain) s.chain = new Rope(18, 0.42, collar, e.unchained ? null : stake);
+  if (!front) s.chain.step(R.dt || 1 / 60, collar, e.unchained ? null : stake, { gravity: 18, drag: 0.97 });
+  const pts = s.chain.screen(R.r, p.y);
+  // (Split where it passes nearer you than the drake.)
+  const near = R.r.toView(p.x, p.z)[1] + 0.35;
+  const seq = [];
+  for (let i = 0; i < pts.length; i++) {
+    const q = s.chain.p[i];
+    if ((R.r.toView(q.x, q.z)[1] > near) === front) seq.push(pts[i]);
+    else {
+      if (seq.length > 1) drawChain(R.ctx, seq, '#6a6670');
+      seq.length = 0;
+    }
+  }
+  if (seq.length > 1) drawChain(R.ctx, seq, '#6a6670');
+  // The stake, and the ring on it.
+  if (!front && !e.unchained) {
+    const q = onScreen(R.r, A.x, p.y, A.z);
+    R.ctx.fillStyle = '#3a3638';
+    R.ctx.fillRect(Math.round(q.x) - 2, Math.round(q.y) - 6, 4, 7);
+    R.ctx.fillStyle = '#8a8690';
+    R.ctx.fillRect(Math.round(q.x) - 2, Math.round(q.y) - 6, 4, 1);
+  }
+}
+// Its wings: membrane on a frame of bone, half spread and beating (the far
+// one behind it, darker).
+function drakeWing(R, near) {
+  const w = part(`drake_wing${near ? 1 : 0}`, 30, 24, 4, 21, (X) => {
+    const c = near ? '#7a2a20' : '#5a1e16';
+    X.slab([[4, 21], [14, 4], [28, 1], [26, 10], [20, 13], [17, 22]], c, 'leather', { rz: 1.4, bevel: 1.2 });
+    for (const [x1, y1] of [[14, 4], [28, 1], [26, 10]]) X.tube(4, 21, x1, y1, 1.2, 0.5, '#d8b088', 'bone', { z: 1.6 });
+  });
+  const rate = R.st.wind ? 8 : 3.2;
+  const beat = Math.sin(R.t * rate + (near ? 0 : 0.5));
+  const sy = 0.35 + 0.65 * (beat * 0.5 + 0.5);
+  w.flapY(R.ctx, R.ox + (near ? 40 : 46), R.oy + 31, near ? -0.25 : -0.05, sy * (near ? 1 : 0.9), near ? 1 : 0.85);
+}
+// The heart's beat: two strokes and a rest (0..1).
+function beatOf(t) {
+  const k = (t * 2) % 1;
+  return Math.max(0, Math.sin(k * TAU * 2)) * (k < 0.5 ? 1 : 0);
+}
+// Its chains: one from each anchor in its hall up to it, fast to its side
+// that faces the anchor (those that come from nearer you than it drawn
+// over it, `front`); an anchor broken, its chain hangs loose from the
+// heart and swings as it beats.
+function heartChains(R, front) {
+  const e = R.e;
+  const g = e.game;
+  const s = e.rig;
+  const p = posOf(e);
+  const top = { x: p.x, y: 3.3, z: p.z };
+  const mid = R.r.toView(p.x, p.z)[1];
+  s.chains ||= [];
+  // (Each anchor's chain made as it's first seen, and kept after it's
+  // broken.)
+  for (const a of g && g.creatures ? g.creatures : []) {
+    if (a.species !== 'heart_anchor' || a.dead || s.chains.some((c) => c.a === a)) continue;
+    const d = Math.hypot(a.x - top.x, a.z - top.z) || 1;
+    s.chains.push({ a, rope: new Rope(14, (Math.hypot(d, top.y) / 14) * 1.06, top, { x: a.x, y: 0.25, z: a.z }) });
+  }
+  for (const c of s.chains) {
+    const a = c.a;
+    const held = !a.dead && g.creatures.includes(a);
+    const dx = a.x - top.x;
+    const dz = a.z - top.z;
+    const d = Math.hypot(dx, dz) || 1;
+    if ((R.r.toView(a.x, a.z)[1] > mid) !== front) continue;
+    const from = { x: top.x + (dx / d) * 0.6, y: top.y, z: top.z + (dz / d) * 0.6 };
+    c.rope.step(R.dt || 1 / 60, from, held ? { x: a.x, y: 0.25, z: a.z } : null, { gravity: 14, drag: 0.96 });
+    drawChain(R.ctx, c.rope.screen(R.r, p.y), '#7a6a5a');
+  }
+}
+
 Object.assign(BEASTS, {
-  // A moth as big as a cart, hung in the air on wings of dusk-violet,
-  // an eye on each; they open, and glow, as she fixes you with them.
+  // ------------------------------------------------------------ Myrrow
+  // A moth as big as a cart: a furred body (head, thorax, a long banded
+  // abdomen), plumed feelers, legs; hung in the air on four wings of
+  // dusk-violet, each beating on its own hinge, an eye on each (the rig);
+  // they open, and glow, as she fixes you with them.
   moth_mother: {
-    w: 80, h: 64, ax: 40, ay: 62,
-    body(P, t, st) {
-      const flap = sn(t);
-      const bob = Math.round(sn(t, 1, 1) * 1.5);
-      const cx = 40;
-      const cy = 28 + bob;
-      const wing = '#6a4a8a';
-      // Wings: the hind pair, then the fore, each side; raised and lowered.
-      for (const s of [-1, 1]) {
-        const up = flap * 6;
-        oval(P, cx + s * 14, cy + 11 - up * 0.2, 12, 8, s * 0.5, shade(hex(wing), 0.85), { lv: 0.45, grad: [-s * 0.6, -0.8] });
-        oval(P, cx + s * 20, cy - 7 - up * 0.75, 17, 11, s * -0.3 - up * s * 0.02, wing, { lv: 0.55, grad: [-s * 0.6, -0.8] });
-        // Veins, and a pale band near the edge.
-        for (const [x, y] of [[22, -17], [34, -12], [33, 0], [20, 16]]) P.line(cx + s * 4, cy - 1, cx + s * x, cy + y - up * (y < 0 ? 0.9 : 0.4), shade(hex(wing), 0.6));
-        for (let a = -2.2; a < 0.6; a += 0.08) P.set(cx + s * (20 + Math.cos(a) * 14), cy - 7 - up * 0.75 + Math.sin(a) * 8.5, hex('#b898d8'));
-        // The eye on the wing: a ring, an iris, a pupil (and its glow).
-        const ex = cx + s * 22;
-        const ey = cy - 6 - up * 0.75;
-        const open = st.eyes;
-        P.blob(ex, ey, 5, 4.5, '#2a1a3a', { amb: 0.4 });
-        P.blob(ex, ey, 3.6, 3.2, open ? '#ffd060' : '#8a6a3a', { lift: open ? 0.3 : 0 });
-        if (open) {
-          P.blob(ex, ey, 1.8, 2.4, '#1a0a20', { amb: 0 });
-          P.glint(ex - 1, ey - 1, '#ffffff');
-        } else {
-          // (Shut: a lid of wing over it, lashes along its seam.)
-          P.blob(ex, ey, 3.6, 3.2, shade(hex(wing), 0.8), { amb: 0.4 });
-          P.line(ex - 3, ey, ex + 3, ey, '#2a1a3a');
-          for (const dx of [-2, 0, 2]) P.set(ex + dx, ey + 1, hex('#2a1a3a'));
-        }
+    w: 60, h: 60, ax: 30, ay: 58,
+    sculpt(X, t) {
+      const fur = '#6a5a7a';
+      const bob = sn(t) * 1.2;
+      X.in(0, 3);
+      X.limb([[36, 32 + bob, 6, 2], [44, 35 + bob, 5.4, 2], [51, 39 + bob, 3.6, 2]], '#4a3a5a', 'fur', { seed: 3 });
+      X.ball(27, 30 + bob, 8, 7, fur, 'fur', { rz: 7 });
+      X.ball(18, 28 + bob, 5, 4.6, fur, 'fur', { rz: 4.6, z: 2 });
+      X.in(1, 1);
+      // Plumed feelers.
+      for (const [dx, ph] of [[0, 0], [2, 1]]) {
+        const sw = sn(t, 1, ph) * 1.5;
+        X.limb([[16 + dx, 24 + bob, 0.7, 5], [12 + dx + sw, 17 + bob, 0.6, 5], [9 + dx + sw * 1.5, 12 + bob, 0.4, 5]], '#c8b8a0', 'feather');
+        for (let k = 0; k < 4; k++) X.tube(12 + dx + sw - k, 17 + bob - k * 1.4, 10 + dx + sw - k, 15 + bob - k * 1.4, 0.4, 0.2, '#c8b8a0', 'feather', { z: 5 });
       }
       // Legs, dangling.
-      for (let i = 0; i < 3; i++) P.limb([[cx - 2 + i * 2, cy + 6, 0.9], [cx - 5 + i * 3, cy + 12, 0.7], [cx - 4 + i * 3 + sn(t, 1, i) * 1, cy + 17, 0.6]], '#3a2a2a');
-      // The body: a furred thorax, a banded abdomen.
-      P.limb([[cx, cy + 4, 4.5], [cx + 1, cy + 12, 4], [cx + 2, cy + 19, 2.4]], '#c8b088');
-      for (let y = cy + 7; y < cy + 19; y += 3) P.line(cx - 3, y, cx + 4, y + 1, '#8a7050');
-      P.blob(cx, cy - 1, 6, 5.5, '#e0d0b0');
-      grain(P, 61, 0.25, 0.85, (x, y, c) => c[0] > 150 && c[1] > 130);
-      // The head: great dark eyes, plumed feelers.
-      P.blob(cx, cy - 8, 4.5, 4, '#d8c8a8');
-      for (const s of [-1, 1]) {
-        P.blob(cx + s * 3, cy - 8, 2, 2.4, '#2a1a2a', { lift: 0.1 });
-        P.glint(cx + s * 3 - 1, cy - 9, '#a8a0c8');
-        const pts = [];
-        for (let i = 0; i <= 5; i++) {
-          const k = i / 5;
-          pts.push([cx + s * (2 + k * 9), cy - 11 - k * 12 + k * k * 4 + sn(t, 1, s) * k, 0.7]);
-        }
-        P.limb(pts, '#c8b088');
-        for (let i = 1; i < 6; i++) {
-          const [x, y] = pts[i];
-          P.line(x, y, x + s * 2, y - 1, '#a89068');
-          P.line(x, y, x - s * 0, y - 2, '#a89068');
-        }
-      }
+      X.in(2, 1);
+      for (let i = 0; i < 3; i++) X.limb([[24 + i * 4, 35 + bob, 0.9, 6], [22 + i * 4, 41 + bob, 0.7, 6], [23 + i * 4 + sn(t, 1, i), 46 + bob, 0.5, 6]], '#3a2e48', 'chitin');
     },
-    fx(P, t, st) {
-      // Dust off her wings, drifting down.
+    paint(P, t, st) {
+      const bob = sn(t) * 1.2;
+      P.eye(15, 27 + bob, st.eyes ? '#ffe070' : '#c8a0ff', true);
+      // Bands down the abdomen.
+      tint(P, (x, y) => x > 34 && (x - 34) % 4 === 0 && Math.abs(y - (34 + bob + (x - 36) * 0.4)) < 5, '#2a2036', 0.5);
+    },
+    fx(P, t) {
       for (let i = 0; i < 6; i++) {
         const k = (t + i / 6) % 1;
-        P.fx(14 + i * 10 + sn(k, 1, i) * 2, 20 + k * 40, st.eyes ? '#ffe0a0' : '#d8c8f0', 0.8 * (1 - k));
+        P.fx(22 + i * 4 + sn(k, 1, i) * 3, 40 + k * 18, '#d8c8f0', 0.8 * (1 - k));
       }
-      if (st.eyes) for (const s of [-1, 1]) P.puff(40 + s * 22, 22 - sn(t) * 4.5, 6, '#ffd060', 0.25);
+    },
+    rig: {
+      behind(R) {
+        mothWings(R, false);
+      },
+      front(R) {
+        mothWings(R, true);
+      },
     },
   },
 
-  // A colossus of fungus: a great spotted cap over a pale stalk of a
-  // body, gills under it shedding spores, arms of root, a skirt of roots
+  // A colossus of fungus: a great spotted cap over a pale fibrous stalk of
+  // a body, gills under it shedding spores, arms of root, a skirt of roots
   // for legs; its cap claps down as it coughs.
   spore_colossus: {
-    w: 70, h: 68, ax: 35, ay: 66,
-    body(P, t, st) {
-      const stalk = '#d8ccb4';
+    w: 70, h: 74, ax: 35, ay: 72,
+    sculpt(X, t, st) {
       const cough = st.wind ? 1 : 0;
-      const sq = cough ? 3 : sn(t) * 0.8;
-      // Root legs, a skirt of them.
+      const cap = '#6a3a5a';
+      X.in(0, 3);
       for (let i = 0; i < 7; i++) {
         const x = 20 + i * 5;
-        P.limb([[x + (i - 3) * 0.5, 50, 2.6], [x + (i - 3) * 1.6, 58, 1.8], [x + (i - 3) * 2.4 + sn(t, 1, i) * 0.8, 64, 1]], i % 2 ? '#a8987a' : '#c8b898');
+        X.limb([[35 + (i - 3) * 2, 56, 2.6, 1], [x, 66, 2, 1], [x + (i - 3) * 1.4, 71, 1.4, 1]], '#8a7060', 'bark');
       }
-      // The far arm.
-      P.limb([[46, 36, 3], [52, 44, 2.6], [54, 52, 2]], '#b8a888');
-      // The stalk-body.
-      P.poly([[26, 24], [44, 24], [47, 52], [23, 52]], stalk, { lv: 0.55, grad: [-1, -0.2] });
-      P.blob(35, 44, 12, 9, stalk, { flat: 0.5 });
-      // Its ring (the veil a mushroom has), torn.
-      P.blob(35, 30, 11, 2.6, '#e8e0cc', { flat: 0.4 });
-      for (let x = 26; x < 45; x += 3) P.set(x, 33, hex('#a89878'));
-      // A face in it: hollows for eyes, a mouth that gapes as it coughs.
-      for (const ex of [30, 39]) P.blob(ex, 38, 2, 2.4, '#3a2a1a', { amb: 0.1 });
-      P.set(30, 38, hex('#c8f070'));
-      P.set(39, 38, hex('#c8f070'));
-      P.blob(35, 45, 3, cough ? 3 : 1.4, '#2a1a10', { amb: 0 });
-      grain(P, 71, 0.14, 0.88, (x, y) => y > 24);
-      // The near arm.
-      P.limb([[24, 36, 3.2], [16, 42 - cough * 4, 2.6], [12, 50 - cough * 10, 2]], '#c8b898');
-      for (let i = 0; i < 3; i++) P.tube(12, 50 - cough * 10, 9 + i * 2, 55 - cough * 10, 0.8, 0.5, '#a8987a');
-      // Gills under the cap.
-      P.blob(35, 22 + sq * 0.5, 22, 4, '#c8a890', { flat: 0.3 });
-      for (let x = 15; x < 56; x += 2) P.line(x, 20 + sq * 0.5, 35 + (x - 35) * 0.6, 24 + sq * 0.5, '#8a6a5a');
-      // The cap: red, spotted white.
-      P.blob(35, 15 + sq, 24, 11 - sq * 0.6, '#c83a2a', { clip: (x, y) => y < 21 + sq * 0.5 });
-      for (const [x, y, r] of [[24, 10, 2.4], [34, 7, 2.8], [46, 10, 2.2], [17, 16, 1.8], [52, 16, 1.6], [40, 14, 1.4], [29, 15, 1.5]]) P.blob(x, y + sq, r, r * 0.8, '#f0e8dc', { flat: 0.4 });
+      X.ball(35, 48, 12, 14, '#d8ccc0', 'fungus', { rz: 11 });
+      X.ball(35, 36, 10, 8, '#d8ccc0', 'fungus', { rz: 9, z: 1 });
+      X.in(1, 2);
+      // Root arms.
+      X.limb([[25, 40, 3.4, 6], [16, 46, 2.8, 7], [12, 56 + sn(t), 2, 7], [10, 60 + sn(t), 1.2, 6]], '#8a7060', 'bark');
+      X.limb([[46, 40, 3.4, 6], [54, 46, 2.8, 7], [57, 55 - sn(t), 2, 7]], '#8a7060', 'bark');
+      X.in(2, 2.5);
+      // The gills and the cap over them.
+      X.ball(35, 30 + cough * 4, 24, 4, '#c8a8a0', 'fungus', { rz: 3, z: 2 });
+      X.ball(35, 22 + cough * 4, 26, 11, cap, 'fungus', { rz: 12, z: 3 });
+    },
+    paint(P, t, st) {
+      const cough = st.wind ? 1 : 0;
+      for (let i = 0; i < 9; i++) {
+        const x = 14 + hash2(i, 1, 5) * 42;
+        const y = 14 + cough * 4 + hash2(i, 2, 5) * 12;
+        P.blob(x, y, 1.8 + hash2(i, 3, 5) * 1.6, 1.4 + hash2(i, 3, 5), '#f0e0c8', { lift: 0.3 });
+      }
+      for (let x = 13; x < 58; x += 2) P.set(x, 31 + cough * 4, hex('#8a6060'));
+      P.eye(31, 38, '#e8ff80');
+      P.eye(38, 38, '#e8ff80');
     },
     fx(P, t, st) {
-      // Spores, drifting from the gills (a cloud of them as it coughs).
-      const n = st.wind ? 10 : 5;
-      for (let i = 0; i < n; i++) {
-        const k = (t + i / n) % 1;
-        const x = 18 + ((i * 37) % 36) + sn(k, 1, i) * 3;
-        P.fx(x, 24 + k * (st.wind ? 30 : 20), i % 2 ? '#e0f0a0' : '#c8e070', 0.9 * (1 - k));
-        if (st.wind && i % 3 === 0) P.puff(x, 26 + k * 18, 2 + k * 3, '#c8d890', 0.4 * (1 - k));
+      for (let i = 0; i < (st.wind ? 18 : 8); i++) {
+        const k = (t + i / 10) % 1;
+        P.fx(14 + hash2(i, 4, 5) * 42 + sn(k, 1, i) * 2, 32 + k * 30, i % 2 ? '#e8e0a0' : '#c0d880', 0.8 * (1 - k));
       }
     },
   },
 
-  // A lamprey grown huge, up out of the black water: a long grey-green
-  // body, gills in a row, a round mouth all rings of teeth; under the
-  // water, only its back-fin and the rings it makes.
+  // A lamprey grown huge: up out of the black water, its round mouth all
+  // rings of teeth, gills in a row behind (the painting); the long grey-
+  // green body behind it strung out through the water (the rig). Under the
+  // water, only its back-fin cutting along and the rings it makes.
   lamprey_queen: {
-    w: 68, h: 66, ax: 34, ay: 64,
-    body(P, t, st) {
-      const hide = '#4a6a64';
-      if (st.under) {
-        // Only its fin, cutting the water, and the rings round it.
-        P.poly([[26, 60], [36, 50 + sn(t) * 1.5], [44, 60]], shade(hex(hide), 0.9), { lv: 0.5 });
-        P.blob(35, 61, 16, 2.4, '#1a2a30', { flat: 0.2, amb: 0.3 });
-        return;
-      }
-      const rear = st.wind ? 1 : 0;
-      // Water round its base.
-      P.blob(38, 61, 18, 3, '#1a2a30', { flat: 0.2, amb: 0.3 });
-      const pts = [];
-      const path = [[42, 62, 6.5], [46, 52, 6.5], [44, 42, 6.2], [36, 34, 5.8], [27, 28, 5.6], [19, 22, 5.4]];
-      path.forEach(([x, y, r], i) => {
-        const k = i / (path.length - 1);
-        pts.push([x + sn(t, 1, i * 0.8) * 2 * k - rear * k * 3, y + sn(t, 1, i * 0.8 + 1.4) * 1.2 * k - rear * k * k * 6, r]);
-      });
-      // A fin along its back.
-      for (let i = 1; i < pts.length - 1; i++) P.spike(pts[i][0] + 2, pts[i][1] - pts[i][2] + 1, -Math.PI / 2 + 0.5, 4, 2.4, '#3a5450');
-      P.limb(pts, hide);
-      // Its pale belly, along the inside of the curve.
-      for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0] - pts[i][2] + 2, pts[i][1] + 2, pts[i + 1][0] - pts[i + 1][2] + 2, pts[i + 1][1] + 2, '#a8c0a8');
-      // Slime-shine.
-      for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0] + 1, pts[i][1] - pts[i][2] + 2, pts[i + 1][0] + 1, pts[i + 1][1] - pts[i + 1][2] + 2, '#a8e0d0');
-      grain(P, 81, 0.1, 0.8);
-      // Gill-holes down its neck.
-      const [hx, hy] = pts[pts.length - 1];
-      for (let i = 0; i < 6; i++) P.set(hx + 7 + i * 2, hy + 2 + i * 1.3, hex('#1a2a28'));
-      // The head, and its mouth: a disc, rings of teeth, gaping.
-      P.blob(hx, hy, 6, 5.5, hide);
-      const mr = rear ? 5.5 : 4.2 + Math.max(0, sn(t)) * 0.5;
-      P.blob(hx - 5, hy + 1, 2.4, mr, '#c86a6a', { flat: 0.4 });
-      P.blob(hx - 5, hy + 1, 1.6, mr - 1.4, '#3a0a10', { amb: 0 });
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * TAU;
-        P.set(hx - 5 + Math.cos(a) * 1.6, hy + 1 + Math.sin(a) * (mr - 1), hex('#f0e8d0'));
-      }
-      P.eye(hx + 1, hy - 3, '#e0ff90');
+    w: 40, h: 48, ax: 28, ay: 46,
+    noBody: (e, st) => !!st.under,
+    sculpt(X, t, st) {
+      const skin = '#4a5a48';
+      const gape = st.wind ? 1 : 0.4 + sn(t) * 0.15;
+      X.in(0, 3);
+      X.limb([[28, 46, 6, 2], [26, 36, 6, 4], [20, 26, 5.6, 6], [13, 19, 5.4, 7]], skin, 'slime');
+      X.ball(9, 15, 6.4, 6.8, skin, 'slime', { rz: 6, z: 7 });
+      X.in(1, 0.5);
+      // The mouth: a round sucker, rings of teeth in it.
+      X.ball(5, 14, 4.6 * (0.8 + gape * 0.2), 5.4 * (0.8 + gape * 0.2), '#7a4a48', 'flesh', { rz: 1.5, z: 12 });
     },
-    fx(P, t, st) {
-      // Rings spreading on the water.
-      const k = (t * 1.5) % 1;
-      for (let a = 0; a < TAU; a += 0.25) P.fx(36 + Math.cos(a) * (10 + k * 12), 61 + Math.sin(a) * (1.5 + k * 2), '#a8d0e0', 0.5 * (1 - k));
-      if (st.under) return;
-      const d = (t * 2) % 1;
-      P.fx(14, 26 + d * 30, '#a8e0d0', 1 - d);
+    paint(P, t, st) {
+      const gape = st.wind ? 1 : 0.4 + sn(t) * 0.15;
+      const r = 4.6 * (0.8 + gape * 0.2);
+      P.blob(5, 14, r * 0.55, r * 0.65, '#1a0a0a', { amb: 0 });
+      for (let k = 0; k < 2; k++) for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * TAU + k * 0.3;
+        P.set(5 + Math.cos(a) * (r * (0.75 - k * 0.25)), 14 + Math.sin(a) * (r * (0.85 - k * 0.25)), hex('#f0e8d0'));
+      }
+      for (let i = 0; i < 5; i++) P.rect(15 + i * 2, 21 + i * 1.6, 1, 2, '#1a2018');
+      P.eye(12, 10, '#e0f070');
+    },
+    rig: {
+      under(R) {
+        if (R.st.under) lampreyUnder(R);
+        else serpent(R, lampreyCfg, false);
+      },
+      over(R) {
+        if (!R.st.under) serpent(R, lampreyCfg, true);
+      },
     },
   },
 
-  // A bloated sac of marsh-gas, floating, veined, pocked with blisters,
-  // swelling and settling, its little face pinched in the middle of it,
-  // feelers trailing; gas leaking from it.
+  // A bloated sac of marsh-gas, floating: veined, pocked with blisters,
+  // swelling and settling, its little pinched face in the middle of it;
+  // feelers trailing under it (the rig); gas leaking from it.
   gas_bloat: {
-    w: 64, h: 64, ax: 32, ay: 62,
-    body(P, t, st) {
-      const skin = '#7a9a48';
-      const sw = (st.wind ? 2.5 : 0) + sn(t) * 1.4;
-      const cy = 26 + Math.round(sn(t, 1, 1) * 1.5);
-      // Feelers trailing below.
-      for (let i = 0; i < 6; i++) {
-        const x0 = 20 + i * 5;
-        const pts = [];
-        for (let j = 0; j <= 5; j++) {
-          const k = j / 5;
-          pts.push([x0 + sn(t, 1, i + k * 3) * 3 * k, cy + 14 + k * (20 + (i % 3) * 4), 1.6 - k]);
-        }
-        P.limb(pts, '#5a7a3a');
-      }
-      // The sac, in lumps.
-      P.blob(32, cy, 19 + sw, 17 + sw * 0.8, skin);
-      P.blob(20, cy + 6, 8 + sw * 0.3, 7, skin);
-      P.blob(45, cy - 6, 8 + sw * 0.3, 7, skin);
-      // Veins over it.
-      for (const pts of [[[18, 14], [24, 18], [26, 26], [22, 34]], [[40, 12], [38, 20], [44, 28]], [[30, 40], [34, 34], [42, 36]]]) for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0], pts[i][1] + cy - 26, pts[i + 1][0], pts[i + 1][1] + cy - 26, '#4a6a2a');
-      // Blisters.
-      for (const [x, y, r] of [[14, 22, 2.2], [46, 30, 2.6], [28, 12, 1.8], [38, 40, 2], [50, 18, 1.6]]) P.blob(x, y + cy - 26, r, r, '#c8d870', { lift: 0.1 });
-      grain(P, 91, 0.12, 0.85);
-      // The face: little eyes, a puckered mouth.
-      P.eye(28, cy - 1, '#e8ff70');
-      P.eye(36, cy - 1, '#e8ff70');
-      P.blob(32, cy + 5, 2, st.wind ? 2.5 : 1.4, '#2a3a14', { amb: 0 });
+    w: 60, h: 66, ax: 30, ay: 64,
+    sculpt(X, t) {
+      const sw = sn(t) * 1.2;
+      X.in(0, 4);
+      X.ball(30, 26, 20 + sw, 18 + sw, '#7a8a50', 'slime', { rz: 17 });
+      X.ball(22, 18, 7, 6, '#8a9a5a', 'slime', { rz: 5, z: 12 });
+      X.ball(40, 32, 6, 5, '#8a9a5a', 'slime', { rz: 5, z: 12 });
+      X.ball(30, 44, 6, 3, '#5a6a3a', 'flesh', { rz: 3, z: 6 });
     },
-    fx(P, t, st) {
-      for (let i = 0; i < 4; i++) {
-        const k = (t + i / 4) % 1;
-        P.puff(14 + i * 12 + sn(k, 1, i) * 2, 20 - k * 18, 2 + k * 3, '#b8d870', (st.wind ? 0.5 : 0.35) * (1 - k));
+    paint(P) {
+      // Veins, blisters; the little pinched face.
+      for (const pts of [[[16, 20], [22, 26], [20, 34]], [[38, 14], [36, 22], [42, 28]], [[30, 10], [30, 18]]]) for (let i = 0; i + 1 < pts.length; i++) P.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], '#4a3a2a');
+      for (const [x, y] of [[20, 30], [38, 20], [44, 34], [26, 38]]) P.blob(x, y, 1.4, 1.2, '#c8d070', { lift: 0.3 });
+      P.blob(30, 28, 3.5, 2.6, '#4a4a2a', { amb: 0.4 });
+      P.set(28, 27, hex('#ffe070'));
+      P.set(32, 27, hex('#ffe070'));
+      P.line(29, 30, 31, 30, '#2a1a10');
+    },
+    fx(P, t) {
+      for (let i = 0; i < 5; i++) {
+        const k = (t + i / 5) % 1;
+        P.puff(18 + i * 6 + sn(k, 1, i) * 2, 10 - k * 8, 2 + k * 3, '#b0c070', 0.4 * (1 - k));
       }
+    },
+    rig: {
+      behind(R) {
+        bloatFeelers(R);
+      },
     },
   },
 
   // Three drowned singers grown into one, up to their waists in black
-  // water: hair streaming, eyes pale, mouths open; and when they sing,
-  // their mouths glow and the notes rise.
+  // water: hair streaming, eyes pale, mouths open; when they sing their
+  // mouths glow and the notes rise.
   drowned_choir: {
-    w: 70, h: 64, ax: 35, ay: 62,
-    body(P, t, st) {
-      const flesh = '#8aa0a8';
-      const song = st.song || st.wind;
-      P.blob(35, 58, 26, 4, '#141e24', { flat: 0.2, amb: 0.2 });
-      // Three of them: left, right, and the tallest between.
-      for (const [x, top, ph, robe] of [[19, 22, 0, '#2a4050'], [51, 20, 2, '#2a3a4a'], [35, 10, 4, '#1e3442']]) {
-        const sway = sn(t, 1, ph) * 1.2;
-        const hx = x + sway;
-        const hy = top + 5;
-        // Hair behind, long and wet, streaming.
-        P.poly([[hx - 5, hy - 3], [hx + 5, hy - 3], [hx + 6 + sway, hy + 16], [hx - 6 + sway, hy + 16]], '#1a2a2a', { lv: 0.3 });
-        // The body, robed in weed-rotted cloth, sunk in the water.
-        P.poly([[hx - 7, hy + 7], [hx + 7, hy + 7], [x + 10, 58], [x - 10, 58]], robe, { lv: 0.45 });
-        P.blob(hx, hy + 11, 7.5, 5, robe, { flat: 0.5 });
-        // Arms, clasped across.
-        P.tube(hx - 6, hy + 9, hx - 1, hy + 16, 2, 1.6, flesh);
-        P.tube(hx + 6, hy + 9, hx + 1, hy + 16, 2, 1.6, flesh);
-        // The head.
-        P.blob(hx, hy, 4.6, 5.4, flesh);
-        P.blob(hx, hy - 3, 5, 3, '#1a2a2a', { clip: (xx, yy) => yy < hy - 2 });
-        P.rect(hx - 3, hy - 0, 2, 1, '#e0f8ff');
-        P.rect(hx + 1, hy - 0, 2, 1, '#e0f8ff');
-        // The mouth, open: a dark O (glowing as they sing).
-        const o = song ? 2 : 1.2 + Math.max(0, sn(t, 2, ph)) * 0.6;
-        P.blob(hx, hy + 3, 1.2, o, song ? '#a0e8ff' : '#0e1418', { amb: song ? 0.8 : 0 });
-        // Weed hanging on them.
-        P.line(hx - 4, hy + 8, hx - 5 + sway, hy + 20, '#3a6a3a');
+    w: 66, h: 56, ax: 33, ay: 54,
+    sculpt(X, t) {
+      const skin = '#8a9aa0';
+      X.in(0, 3);
+      // The water they stand in.
+      X.ball(33, 50, 30, 5, '#1e3a4a', 'glass', { rz: 2 });
+      X.in(1, 3);
+      for (const [cx, h, ph] of [[18, 0, 0], [33, -4, 1.2], [48, 0, 2.4]]) {
+        const sway = sn(t, 1, ph) * 0.8;
+        X.ball(cx, 40 + h, 8, 9, '#2a3a40', 'cloth', { rz: 7 });
+        X.tube(cx, 31 + h, cx + sway, 26 + h, 2.4, 2.2, skin, 'skin');
+        X.ball(cx + sway, 21 + h, 5, 5.6, skin, 'skin', { rz: 5, z: 2 });
+        // Hair, long and streaming wet.
+        X.limb([[cx + sway + 1, 17 + h, 5, 1], [cx + sway + 4 + sway, 26 + h, 4.4, 0], [cx + sway + 5 + sway * 2, 36 + h, 3, -1]], '#1a2a2a', 'hair');
       }
-      grain(P, 101, 0.1, 0.85);
+    },
+    paint(P, t, st) {
+      for (const [cx, h, ph] of [[18, 0, 0], [33, -4, 1.2], [48, 0, 2.4]]) {
+        const sway = sn(t, 1, ph) * 0.8;
+        P.eye(cx + sway - 2, 20 + h, '#c8f0ff');
+        P.eye(cx + sway + 1, 20 + h, '#c8f0ff');
+        P.blob(cx + sway - 0.5, 24 + h, 1.2, st.song ? 1.8 : 1, st.song ? '#a0f0ff' : '#1a1418', { lift: st.song ? 0.6 : 0 });
+      }
     },
     fx(P, t, st) {
-      // Water dripping; and notes rising when they sing.
-      for (const x of [16, 35, 53]) {
-        const k = (t * 2 + x * 0.1) % 1;
-        P.fx(x - 4, 30 + k * 26, '#a0d0e0', 0.8 * (1 - k));
+      for (let i = 0; i < 4; i++) {
+        const k = (t + i / 4) % 1;
+        P.fx(4 + ((i * 17) % 58) + k * 4, 50, '#a0d0e0', 0.5 * (1 - k));
       }
-      if (!(st.song || st.wind)) return;
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        const x = [19, 35, 51][i] + sn(k, 1, i) * 3;
-        const y = [30, 18, 28][i] - k * 18;
-        P.fx(x, y, '#c8f8ff', 1 - k);
-        P.fx(x, y - 1, '#c8f8ff', 1 - k);
-        P.fx(x + 1, y - 2, '#c8f8ff', 1 - k);
-        P.fx(x - 1, y + 1, '#c8f8ff', 1 - k);
+      if (st.song) for (let i = 0; i < 6; i++) {
+        const k = (t * 2 + i / 6) % 1;
+        P.fx(18 + (i % 3) * 15 + sn(k, 1, i) * 3, 20 - k * 18, '#a0f0ff', 1 - k);
       }
     },
   },
 
   // A kraken off a smugglers' wreck: a great red mantle, one eye (the
-  // other under a patch), arms curling and uncurling round a sea-chest
-  // spilling gold, ink running from it.
+  // other under a patch), a sea-chest spilling gold in its grip; its eight
+  // arms curling and uncurling (the rig), suckers along them; ink running
+  // from it.
   smugglers_kraken: {
-    w: 72, h: 64, ax: 36, ay: 62,
-    body(P, t, st) {
-      const flesh = '#a8405a';
-      const wind = st.wind ? 1 : 0;
-      P.blob(36, 59, 26, 4, '#142030', { flat: 0.2, amb: 0.2 });
-      // Its sea-chest, under it, spilling.
-      P.poly([[40, 50], [56, 50], [56, 58], [40, 58]], '#6a4a2a', { lv: 0.5 });
-      P.rect(40, 53, 16, 1, '#c8a040');
-      for (const [x, y] of [[43, 49], [47, 48], [51, 49], [45, 47]]) P.blob(x, y, 1.4, 1, '#ffd050', { lift: 0.2 });
-      // Arms: curling out from under the mantle, waving.
-      // (Each from under the mantle, out along the floor and curling up at
-      // its tip; raised to lash as it strikes.)
-      const arms = [[28, -1, 0.5, 0], [24, -1, 1.1, 1.3], [32, -1, 0.15, 2.6], [40, 1, 0.15, 3.4], [44, 1, 0.5, 4.4], [48, 1, 1.0, 5.6]];
-      arms.forEach(([bx, s, spread, ph], i) => {
-        const pts = [[bx, 38, 3.4]];
-        let a = s < 0 ? Math.PI / 2 + 0.4 + spread : Math.PI / 2 - 0.4 - spread;
-        let [x, y] = [bx, 38];
-        const curl = (0.32 + sn(t, 1, ph) * 0.12 + wind * 0.15) * -s;
-        for (let j = 1; j <= 8; j++) {
-          x += Math.cos(a) * 3;
-          y += Math.sin(a) * 2.2;
-          a += j > 3 ? curl : -curl * 0.3;
-          pts.push([x, y, 3.2 - j * 0.33]);
-        }
-        P.limb(pts, i % 2 ? flesh : shade(hex(flesh), 0.85));
-        for (let j = 2; j < 8; j += 2) P.set(pts[j][0], pts[j][1] + pts[j][2] - 0.5, hex('#f0c8d0'));
-      });
-      // The mantle.
-      P.blob(36, 26, 15, 17, flesh);
-      P.blob(36, 14, 10, 8, flesh);
-      for (const [x, y] of [[30, 12], [40, 18], [28, 26], [44, 30], [34, 32]]) P.blob(x, y, 1.6, 1.4, '#c86a80', { lift: 0.1 });
-      grain(P, 111, 0.12, 0.85);
-      // The eye, and the patch.
-      P.blob(30, 32, 4, 3.5, '#f0e0c0');
-      P.rect(28, 32, 5, 1, '#1a0a10');
-      P.glint(29, 31);
-      P.blob(42, 32, 3.6, 3.2, '#1a1418');
-      P.line(39, 30, 50, 22, '#1a1418');
-      P.line(39, 34, 24, 38, '#1a1418');
+    w: 76, h: 66, ax: 38, ay: 64,
+    sculpt(X, t) {
+      const red = '#a03a30';
+      const sw = sn(t);
+      X.in(0, 4);
+      X.ball(42, 26 + sw, 15, 18, red, 'flesh', { rz: 14, ang: 0.35 });
+      X.ball(34, 42, 13, 9, red, 'flesh', { rz: 10, z: 2 });
+      X.in(1, 1.5);
+      // The sea-chest, banded, its lid sprung.
+      X.slab([[14, 48], [34, 48], [33, 60], [15, 60]], '#6a4a2a', 'wood', { rz: 6, bevel: 2, z: 8 });
+      X.slab([[14, 45], [34, 43], [34, 47], [14, 49]], '#5a3a20', 'wood', { rz: 4, bevel: 1.5, z: 10 });
+      X.tube(14, 54, 34, 54, 1, 1, '#c8a040', 'gold', { z: 14 });
+      for (let i = 0; i < 6; i++) X.ball(17 + i * 3, 46 + (i % 2), 1.6, 1.2, '#ffd050', 'gold', { z: 12 + (i % 2), rz: 1.2 });
+    },
+    paint(P, t, st) {
+      P.eye(31, 36, st.wind ? '#ffffff' : '#ffe060', true);
+      P.blob(39, 35, 3, 2.4, '#1a1414', { amb: 0.3 });
+      P.line(36, 31, 46, 39, '#1a1414');
     },
     fx(P, t) {
-      // Ink, running from it into the water.
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        P.puff(26 + i * 10, 44 + k * 14, 1.5 + k * 2.5, '#140a20', 0.6 * (1 - k * 0.6));
+      for (let i = 0; i < 4; i++) {
+        const k = (t + i / 4) % 1;
+        P.puff(52 + i * 4, 56 + k * 6, 2 + k * 3, '#1a1420', 0.45 * (1 - k));
       }
-      if (Math.floor(t * 8) % 4 === 0) P.fx(47, 47, '#ffffff', 1);
+      if (Math.floor(t * 12) % 3 === 0) P.fx(20 + (Math.floor(t * 12) % 12), 46, '#ffffff', 1);
+    },
+    rig: {
+      behind(R) {
+        krakenArms(R, false);
+      },
+      front(R) {
+        krakenArms(R, true);
+      },
     },
   },
 
   // A sea-turtle as old as the reef: a domed shell grown over with coral
-  // and weed and barnacles, a beaked head swaying, flippers rowing.
+  // and weed and barnacles, a beaked head swaying on its neck, flippers
+  // rowing.
   tide_mother: {
-    w: 80, h: 52, ax: 40, ay: 50,
-    body(P, t, st) {
-      const skin = '#6a8a6a';
-      const shell = '#4a6a4a';
+    w: 76, h: 56, ax: 38, ay: 54,
+    sculpt(X, t) {
+      const skin = '#6a7a5a';
       const row = sn(t);
-      // The far flippers.
-      P.limb([[30, 38, 3], [22 + row * 2, 44, 3.4], [16 + row * 3, 47, 2]], shade(hex(skin), 0.75));
-      P.limb([[56, 38, 2.6], [62, 44, 2.6], [66, 46, 1.4]], shade(hex(skin), 0.75));
-      // The shell: a dome, its plates, its rim.
-      P.blob(42, 32, 24, 14, shell, { clip: (x, y) => y < 40 });
-      P.blob(42, 40, 25, 3, '#8a9a6a', { flat: 0.4 });
-      // Plates.
-      for (const [x, y] of [[32, 26], [42, 23], [52, 26], [27, 34], [37, 32], [47, 32], [57, 34]]) {
-        P.p.line(x - 4, y, x - 2, y - 3, hex('#2a4030'));
-        P.p.line(x - 2, y - 3, x + 2, y - 3, hex('#2a4030'));
-        P.p.line(x + 2, y - 3, x + 4, y, hex('#2a4030'));
-        P.p.line(x + 4, y, x + 2, y + 3, hex('#2a4030'));
-        P.p.line(x + 2, y + 3, x - 2, y + 3, hex('#2a4030'));
-        P.p.line(x - 2, y + 3, x - 4, y, hex('#2a4030'));
+      X.in(0, 2);
+      X.limb([[52, 42, 4, -2], [60, 48 - row * 2, 3, -2], [66, 50 - row * 3, 1.6, -2]], dark(skin, 0.8), 'leather');
+      X.in(1, 3);
+      X.ball(40, 34, 24, 15, '#4a6a5a', 'shell', { rz: 15 });
+      X.ball(40, 43, 22, 5, '#c8b890', 'leather', { rz: 4, z: 4 });
+      // Coral and weed grown on it; barnacles.
+      X.in(2, 1);
+      for (const [x, y, c] of [[32, 22, '#e07868'], [46, 21, '#f0a060'], [52, 27, '#e07868']]) {
+        X.tube(x, y + 2, x - 2, y - 5, 1.6, 0.8, c, 'coral', { z: 12 });
+        X.tube(x, y, x + 3, y - 4, 1.2, 0.6, c, 'coral', { z: 12 });
       }
-      // Coral and weed and barnacles grown on it.
-      for (const [x, h, c] of [[36, 9, '#f08a70'], [46, 12, '#e86a8a'], [52, 7, '#f0a040']]) {
-        P.tube(x, 22, x, 22 - h, 1.2, 0.8, c);
-        P.tube(x, 22 - h * 0.5, x - 3, 22 - h * 0.8, 0.8, 0.6, c);
-        P.tube(x, 22 - h * 0.6, x + 3, 22 - h, 0.8, 0.6, c);
-      }
-      for (const [x, y] of [[28, 28], [56, 29], [60, 34], [24, 35], [44, 28]]) P.blob(x, y, 1.6, 1.3, '#d8d0c0', { lift: 0.1 });
-      for (let i = 0; i < 3; i++) P.line(30 + i * 12, 20 + i, 28 + i * 12 + sn(t, 1, i) * 2, 12 + i, '#3a7a4a');
-      grain(P, 121, 0.12, 0.85);
-      // The near flippers, rowing.
-      P.limb([[64, 40, 3], [70, 44 - row, 2.8], [76, 45 - row * 1.5, 1.4]], skin);
-      P.limb([[28, 40, 3.6], [20, 46 + row * 1.5, 4], [11, 48 + row * 2, 2]], skin);
-      // The head on its neck, swaying; a beak; an old eye.
-      const hx = 10 + sn(t, 0.5) * 1.5;
-      const hy = 30 + sn(t, 0.5, 1) * 1;
-      P.tube(22, 34, hx + 4, hy + 1, 4.4, 4, skin);
-      P.blob(hx, hy, 6, 5, skin);
-      P.poly([[hx - 4, hy], [hx - 8, hy + 2], [hx - 4, hy + 4]], '#c8b070', { lv: 0.6 });
-      P.line(hx - 7, hy + 2, hx - 2, hy + 2, '#3a3020');
-      P.eye(hx - 1, hy - 2, st.wind ? '#80fff0' : '#c8e8a0');
-      for (const [x, y] of [[hx + 2, hy + 3], [hx + 4, hy - 1], [18, 32]]) P.set(x, y, hex('#4a6a4a'));
+      for (let i = 0; i < 6; i++) X.ball(26 + i * 5, 28 + (i % 2) * 6, 1.4, 1.2, '#d8d0c0', 'shell', { z: 13, rz: 1.2 });
+      X.in(3, 2.5);
+      // The head on its neck, and the near flipper.
+      X.limb([[20, 38, 5, 6], [13, 36 + sn(t) * 1.5, 4.4, 7]], skin, 'leather');
+      X.ball(9, 35 + sn(t) * 1.5, 6, 4.6, skin, 'leather', { rz: 4.6, z: 8 });
+      X.slab([[26, 44], [32, 44], [24, 54 + row * 2], [16, 52 + row * 2]], skin, 'leather', { rz: 2.4, bevel: 1.6, z: 9 });
+    },
+    paint(P, t) {
+      P.eye(7, 33 + sn(t) * 1.5, '#e0d080', true);
+      P.line(3, 36 + sn(t) * 1.5, 7, 37 + sn(t) * 1.5, '#2a2a1a');
+      // The plates of the shell.
+      for (const [x, y] of [[34, 26], [44, 26], [39, 33], [30, 34], [48, 34]]) P.line(x - 4, y, x + 4, y, '#2a3a30');
     },
     fx(P, t) {
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        P.fx(30 + i * 10, 20 - k * 16, '#c8f0ff', 0.8 * (1 - k));
+      for (let i = 0; i < 4; i++) {
+        const k = (t + i / 4) % 1;
+        P.fx(14 + i * 14, 52 - k * 4, '#a0d8e0', 0.5 * Math.sin(k * Math.PI));
       }
     },
   },
 
-  // A clam the size of a boat: two ridged shells, closed, breathing
-  // bubbles out of the lip; prised open, a tongue of blue flesh and a
-  // pearl glowing in it.
+  // A clam the size of a boat: two ridged shells, closed, breathing bubbles
+  // out of the lip; prised open, a tongue of blue flesh and a pearl
+  // glowing in it.
   abyssal_clam: {
     w: 70, h: 54, ax: 35, ay: 52,
-    body(P, t, st) {
-      const shell = '#a8a0b0';
-      const open = st.open || st.variant === 1;
-      const gap = open ? 0 : Math.max(0, sn(t)) * 1;
+    sculpt(X, t, st) {
+      const open = st.open ? 1 : 0.05 + Math.max(0, sn(t)) * 0.05;
+      X.in(0, 2);
       // The lower shell.
-      P.blob(35, 42, 28, 9, shell, { clip: (x, y) => y >= 38 });
-      for (let i = -6; i <= 6; i++) P.line(35 + i * 4, 40, 35 + i * 4.6, 50 - Math.abs(i) * 0.6, shade(hex(shell), 0.7));
-      if (open) {
-        // Prised open: the upper shell thrown back, the flesh in it, the
-        // pearl.
-        P.blob(35, 18, 27, 13, shade(hex(shell), 0.9), { clip: (x, y) => y <= 22 });
-        for (let i = -6; i <= 6; i++) P.line(35 + i * 4.4, 21, 35 + i * 3.6, 7 + Math.abs(i) * 0.8, shade(hex(shell), 0.62));
-        P.blob(35, 36, 24, 6, '#3a6a8a');
-        P.blob(35, 32, 22, 9, '#5a8aa8', { clip: (x, y) => y > 25 });
-        for (let x = 14; x < 57; x += 3) P.set(x, 30 + Math.round(sn(t, 1, x * 0.3)), hex('#a8d8f0'));
-        P.blob(35, 33, 5, 5, '#f0f0ff', { lift: 0.3 });
-        P.glint(33, 31);
-      } else {
-        // Shut: the upper shell over it, its wavy lip, the dark gap.
-        P.blob(35, 38, 28, 13, shell, { clip: (x, y) => y < 39 - gap });
-        for (let i = -6; i <= 6; i++) P.line(35 + i * 4.6, 26 + Math.abs(i) * 0.8, 35 + i * 4, 38 - gap, shade(hex(shell), 0.7));
-        for (let x = 8; x < 63; x++) P.set(x, 38 - gap + Math.round(sn(x / 40, 3)), hex('#2a1a2a'));
+      X.ball(35, 42, 28, 9, '#5a5a6a', 'shell', { rz: 10 });
+      if (open > 0.2) {
+        X.in(1, 2);
+        X.ball(35, 38, 20, 5, '#5a7aa8', 'slime', { rz: 4, z: 3 });
+        X.ball(35, 35, 4, 4, '#f0f8ff', 'shell', { rz: 4, z: 6, glow: '#c0f0ff', glowK: 0.4 });
       }
-      // Barnacles and weed on it.
-      for (const [x, y] of [[20, 44], [48, 46], [52, open ? 12 : 30], [16, open ? 14 : 32]]) P.blob(x, y, 1.6, 1.3, '#e0d8c8', { lift: 0.1 });
-      grain(P, 131, 0.1, 0.86);
-      // The shimmer of nacre along the ridges.
-      tint(P, (x, y, c) => c[2] > 140 && hash2(x, y, 5) < 0.12, '#e8d0ff', 0.4);
+      X.in(2, 2);
+      // The upper shell, ridged, lifting.
+      X.ball(35, 32 - open * 10, 28, 11, '#6a6a7c', 'shell', { rz: 11, z: 1 + open * 2 });
+      for (let i = 0; i < 7; i++) X.tube(35, 40 - open * 10, 12 + i * 7.6, 24 - open * 10 + Math.abs(i - 3) * 2, 1.4, 1, '#7a7a8c', 'shell', { z: 10 });
     },
     fx(P, t, st) {
-      if (st.open || st.variant === 1) {
-        P.puff(35, 33, 9, '#e0f0ff', 0.3 + 0.1 * sn(t, 2));
-        return;
+      for (let i = 0; i < 4; i++) {
+        const k = (t + i / 4) % 1;
+        P.fx(20 + i * 10 + sn(k, 1, i) * 2, 40 - k * 24, '#c0e8f8', 0.8 * (1 - k));
       }
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        P.fx(20 + i * 14 + sn(k, 1, i), 36 - k * 22, '#c8f0ff', 0.9 * (1 - k));
-      }
+      if (st.open) P.puff(35, 35, 8, '#c0f0ff', 0.25 + 0.1 * sn(t, 2));
     },
   },
 
   // A giant built of the reef: rock and coral, branches of it on its
   // shoulders like horns, anemones waving, eyes glowing in a crevice; a
-  // shoal of little fish round it.
+  // shoal of little fish wheeling round it (the rig).
   coral_colossus: {
-    w: 70, h: 68, ax: 35, ay: 66,
-    body(P, t, st) {
-      const rock = '#7a6a70';
-      const wind = st.wind;
-      for (const x of [26, 44]) {
-        P.tube(x, 46, x, 60, 5.5, 5, shade(hex(rock), 0.85));
-        P.blob(x, 62, 6.5, 2.6, shade(hex(rock), 0.75), { flat: 0.6 });
+    w: 74, h: 72, ax: 37, ay: 70,
+    sculpt(X, t) {
+      const rock = '#6a6a70';
+      const b = sn(t) * 0.8;
+      X.in(0, 3);
+      for (const x of [28, 46]) X.limb([[x, 50, 6.4, 0], [x - 1, 67, 6, 0]], rock, 'rock', { cell: 4.5 });
+      X.ball(37, 36 - b, 20, 17, rock, 'rock', { rz: 15, cell: 6 });
+      X.ball(30, 22 - b, 11, 9, rock, 'rock', { rz: 9, z: 3, cell: 5 });
+      X.in(1, 2);
+      // Coral branches on its shoulders; anemones.
+      for (const [x, y, s] of [[20, 20, -1], [50, 20, 1]]) {
+        X.limb([[x, y - b, 2.4, 6], [x + s * 4, y - 8 - b, 1.8, 6], [x + s * 3, y - 15 - b, 1.2, 6]], '#e07868', 'coral');
+        X.limb([[x + s * 4, y - 8 - b, 1.4, 6], [x + s * 9, y - 12 - b, 1, 6]], '#f0a060', 'coral');
       }
-      // The far arm.
-      P.limb([[52, 24, 5], [57, 38, 4.6], [55, 50, 4.2]], shade(hex(rock), 0.8));
-      P.blob(55, 52, 5.5, 5, shade(hex(rock), 0.8));
-      // The trunk.
-      P.blob(35, 34, 17, 15, rock);
-      P.blob(35, 18, 9, 8, rock);
-      // Coral on its shoulders and head, branching.
-      for (const [x, y, h, c, s] of [[22, 20, 12, '#f07a6a', -1], [48, 20, 13, '#f0a040', 1], [32, 11, 9, '#e86aa8', -1], [40, 11, 8, '#70d8c8', 1]]) {
-        P.tube(x, y, x + s * 3, y - h, 1.6, 1, c);
-        P.tube(x + s * 1.5, y - h * 0.5, x + s * 7, y - h * 0.8, 1, 0.7, c);
-        P.tube(x + s * 2.5, y - h * 0.8, x - s * 1, y - h * 1.2, 0.9, 0.6, c);
+      for (let i = 0; i < 4; i++) {
+        const x = 26 + i * 6;
+        const w = sn(t, 1, i) * 1.4;
+        X.limb([[x, 44 - b, 1.4, 14], [x + w, 40 - b, 1, 14], [x + w * 1.6, 37 - b, 0.6, 14]], i % 2 ? '#f080c0' : '#80e0c0', 'slime');
       }
-      grain(P, 141, 0.2, 0.82, (x, y, c) => Math.abs(c[0] - c[2]) < 20);
-      // Anemones on it, their tentacles waving.
-      for (const [x, y] of [[26, 30], [44, 38], [36, 44]]) {
-        P.blob(x, y, 2.6, 1.6, '#a83a6a');
-        for (let i = 0; i < 5; i++) {
-          const a = -Math.PI / 2 + (i - 2) * 0.4 + sn(t, 1, x + i) * 0.25;
-          P.line(x, y - 1, x + Math.cos(a) * 3.5, y - 1 + Math.sin(a) * 3.5, '#f0a0c8');
-        }
-      }
-      // Eyes in a crevice.
-      P.rect(31, 18, 9, 3, '#1a1418');
-      P.eye(33, 19, '#70fff0');
-      P.eye(37, 19, '#70fff0');
-      // The near arm.
-      const fist = wind ? [10, 10] : [12, 52];
-      const elbow = wind ? [8, 24] : [8, 38];
-      P.limb([[19, 26, 5.4], [elbow[0], elbow[1], 4.8], [fist[0], fist[1], 4.4]], rock);
-      P.blob(fist[0], fist[1], 6, 5.5, rock);
-      P.tube(elbow[0], elbow[1], elbow[0] - 5, elbow[1] - 6, 1.1, 0.7, '#f07a6a');
+      X.in(2, 3);
+      X.limb([[18, 30 - b, 6, 8], [12, 44, 5.4, 9], [13, 57, 6.4, 10]], rock, 'rock', { cell: 4 });
     },
-    fx(P, t) {
-      // A little shoal, circling it.
-      for (let i = 0; i < 5; i++) {
-        const a = t * TAU + (i / 5) * 0.9;
-        const x = 35 + Math.cos(a) * 26;
-        const y = 30 + Math.sin(a) * 8 + i;
-        P.fx(x, y, '#ffe070', 0.9);
-        P.fx(x + Math.sin(a) * 1.5, y, '#f0a030', 0.7);
-      }
+    paint(P, t, st) {
+      const b = sn(t) * 0.8;
+      P.blob(30, 23 - b, 5, 2, '#1a1418', { amb: 0 });
+      P.eye(28, 23 - b, st.wind ? '#ffffff' : '#ff8a8a', true);
+      P.eye(32, 23 - b, st.wind ? '#ffffff' : '#ff8a8a', true);
+    },
+    rig: {
+      behind(R) {
+        shoal(R, false);
+      },
+      front(R) {
+        shoal(R, true);
+      },
     },
   },
 });
 
-// ------------------------------------------------------------ the grove, and Thessa's deep
-// The Hollow Oak's leaves, by season: spring, summer, autumn, winter.
-const LEAVES = [['#7ac050', '#f0a0c0'], ['#3a8a2a', null], ['#d8782a', '#c8401a'], [null, null]];
-Object.assign(BEASTS, {
-  // A stag as tall as a house, grey with age: antlers like a dead tree,
-  // hung with moss; eyes green; head down to charge.
-  elder_stag: {
-    w: 80, h: 72, ax: 42, ay: 70,
-    body(P, t, st) {
-      const hide = '#8a6a4a';
-      const low = st.wind ? 1 : 0;
-      const br = sn(t) * 0.6;
-      // Far legs.
-      P.limb([[30, 44, 3], [28, 54, 2], [29, 63, 1.6], [28, 68, 1.4]], shade(hex(hide), 0.7));
-      P.limb([[56, 44, 3.6], [59, 54, 2.2], [57, 63, 1.6], [58, 68, 1.4]], shade(hex(hide), 0.7));
-      // The body, the rump, the tail flicking.
-      P.blob(46, 38 + br * 0.3, 16, 10, hide);
-      P.blob(58, 37, 8, 9, hide);
-      P.blob(64, 32 + Math.max(0, sn(t, 2)) * -1, 2, 2.5, '#e8e0d0');
-      P.blob(44, 45, 12, 3.5, '#c8b498', { clip: (x, y) => y > 43 });
-      // Moss hanging along its back.
-      for (let i = 0; i < 6; i++) P.line(36 + i * 4, 29 + Math.abs(i - 3) * 0.4, 36 + i * 4 + sn(t, 1, i), 33 + (i % 3) * 2, '#5a8a3a');
-      // Near legs.
-      P.limb([[36, 44, 3.4], [34, 54, 2.2], [35, 63, 1.7], [34, 68, 1.5]], hide);
-      P.limb([[60, 44, 4], [62, 54, 2.4], [60, 63, 1.7], [61, 68, 1.5]], hide);
-      for (const x of [28, 34, 58, 61]) P.blob(x, 69, 2, 1.2, '#2a2220', { flat: 0.4 });
-      // The neck and head (lowered to charge).
-      const hx = 18 - low * 2;
-      const hy = 22 + low * 12 + sn(t, 1, 1) * 0.6;
-      P.limb([[38, 34, 7], [28, 28 + low * 6, 5.5], [hx + 5, hy + 1, 4.5]], hide);
-      P.blob(30, 34 + low * 4, 5, 4, '#c8b498', { clip: (x, y) => y > 32 + low * 4 });
-      P.blob(hx + 3, hy, 5, 4.4, hide);
-      P.poly([[hx + 1, hy - 2], [hx - 9, hy + 2], [hx - 8, hy + 5], [hx + 2, hy + 4]], hide, { lv: 0.55 });
-      P.blob(hx - 8, hy + 3, 1.6, 1.4, '#2a1e1a');
-      // An ear, flicking.
-      P.spike(hx + 6, hy - 2, -0.6 - Math.max(0, sn(t, 1, 2)) * 0.6, 5, 1.3, hide);
-      P.eye(hx, hy - 1, st.wind ? '#c8ff80' : '#80e870');
-      // The antlers: a branching crown, moss and vines on them.
-      const tine = (x, y, a, len, d) => {
-        const x1 = x + Math.cos(a) * len;
-        const y1 = y + Math.sin(a) * len;
-        P.tube(x, y, x1, y1, 1.6 - d * 0.35, 1.2 - d * 0.35, '#d8ccb0');
-        if (d < 3) {
-          tine(x1, y1, a - 0.45, len * 0.72, d + 1);
-          tine(x1, y1, a + 0.4, len * 0.62, d + 1);
+// The lamprey's length: slick grey-green, mottled dark, pale under; a
+// soft fin running along the back of it to the tail.
+const LAMP = hex('#4a5a48');
+const LAMP_BELLY = hex('#9aa888');
+const lampreyCfg = {
+  n: 14, gap: 0.5, wave: 2.6, amp: 0.3, gloss: 0.55,
+  rad: (k) => 1 + 5.2 * Math.pow(1 - k, 0.7),
+  skin(k, u, v, ny) {
+    if (ny > 0.4) return mix(LAMP, LAMP_BELLY, Math.min(1, (ny - 0.4) * 3));
+    const m = hash2(Math.floor(u / 3), Math.floor((v + 1) * 2.5), 7);
+    return m > 0.78 ? shade(LAMP, 0.62) : LAMP;
+  },
+  fin: (k) => (k > 0.25 ? { h: 1 + 2.4 * Math.sin(((k - 0.25) / 0.75) * Math.PI * 0.9), col: '#3a4a38' } : null),
+};
+// Under the water: its back-fin cutting along the surface, the rings it
+// makes.
+function lampreyUnder(R) {
+  const e = R.e;
+  const s = e.rig;
+  if (!s.train) s.train = new Train(lampreyCfg.n, lampreyCfg.gap);
+  const p = posOf(e);
+  s.train.mark(p.x, p.z);
+  const pts = s.train.points(backward(R), (i) => Math.sin(R.t * 2.6 - i * 0.9) * 0.3);
+  const ctx = R.ctx;
+  pts.forEach((q, i) => {
+    if (i % 2) return;
+    const a = onScreen(R.r, q.x, p.y, q.z);
+    ctx.globalAlpha = 0.85 - i * 0.05;
+    ctx.fillStyle = '#2a3a2a';
+    ctx.fillRect(Math.round(a.x) - 1, Math.round(a.y) - 5 + (i ? 1 : 0), 2, i ? 3 : 4);
+    ctx.fillStyle = '#c8e0e8';
+    ctx.fillRect(Math.round(a.x) - 3, Math.round(a.y) - 1, 6, 1);
+  });
+  const h = onScreen(R.r, p.x, p.y, p.z);
+  const k = (R.t * 0.8) % 1;
+  ctx.globalAlpha = 0.6 * (1 - k);
+  ctx.strokeStyle = '#c8e0e8';
+  ctx.beginPath();
+  ctx.ellipse(h.x, h.y - 1, 3 + k * 12, (3 + k * 12) * 0.45, 0, 0, TAU);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// The Moth-Mother's wings: fore and hind on each side, each its own
+// sculpted piece (membrane furred at the root, an eye on the forewing),
+// beating on its hinge at the thorax, the far pair behind her body.
+// (How far (x, y) is from the line a-b.)
+function segDist(x, y, a, b) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+}
+const marginDist = (x, y, edge) => Math.min(...edge.slice(1).map((b, i) => segDist(x, y, edge[i], b)));
+// A moth's wing, marked as a moth's are: dark veins running out from the
+// root, a pale band in from the outer edge and a fringe on it, a dusting
+// of scales, and an eye (rings of black, gold and a white spark) that
+// glows when she opens them on you; `outer` the edge it's marked in from.
+function mothMarks(P, root, outer, eye, base, eyes) {
+  const pale = mix(base, [230, 200, 240], 0.45);
+  P.over((x, y, c) => {
+    const d = marginDist(x + 0.5, y + 0.5, outer);
+    let n = c;
+    // (The veins: lines from the root out to the edge, every so often.)
+    const a = Math.atan2(y - root[1], x - root[0]);
+    if (Math.abs(Math.sin(a * 7)) < 0.12 && Math.hypot(x - root[0], y - root[1]) > 5) n = shade(n, 0.72);
+    if (d < 1.2) n = (x + y) % 2 ? mix(n, pale, 0.6) : shade(n, 0.7);
+    else if (d > 2.4 && d < 4.2) n = mix(n, pale, 0.35);
+    if (hash2(x, y, 21) > 0.9) n = shade(n, 1.15);
+    // (The eye.)
+    if (eye) {
+      const e = Math.hypot((x - eye[0]) / 1.1, y - eye[1]);
+      if (e < eye[2]) {
+        const k = e / eye[2];
+        n = k < 0.25 ? (eyes ? [255, 255, 255] : [210, 190, 240]) : k < 0.5 ? (eyes ? [40, 20, 10] : [26, 18, 40]) : k < 0.8 ? (eyes ? [255, 214, 90] : [214, 160, 70]) : [26, 18, 40];
+      }
+    }
+    return n;
+  });
+  if (eye && eyes) P.glint(eye[0] - 1, eye[1] - 1);
+}
+function mothWings(R, near) {
+  const eyes = !!R.st.eyes;
+  const fore = part(`moth_fore${near ? 1 : 0}${eyes ? 1 : 0}`, 34, 30, 30, 27, (X) => {
+    const c = near ? '#6a4a8a' : '#4a3a6a';
+    // (Long and pointed: the leading edge running straight out to the
+    // tip, the outer edge curving back in.)
+    X.slab([[30, 27], [27, 21], [21, 13], [13, 6], [5, 2], [1, 2], [1, 6], [3, 12], [8, 18], [15, 23], [23, 27]], c, 'velvet', { rz: 1.4, bevel: 2.2 });
+    X.ball(27, 24, 4, 3, '#8a7a9a', 'fur', { z: 1.6, rz: 1 });
+  }, { paint: (P) => mothMarks(P, [30, 27], [[1, 2], [1, 6], [3, 12], [8, 18], [15, 23], [23, 27]], [12, 11, 4.6], hex(near ? '#6a4a8a' : '#4a3a6a'), eyes) });
+  const hind = part(`moth_hind${near ? 1 : 0}${eyes ? 1 : 0}`, 24, 22, 20, 3, (X) => {
+    const c = near ? '#7a4a7a' : '#4a3a5a';
+    // (Round, a fan.)
+    X.slab([[20, 3], [14, 1], [8, 3], [3, 8], [2, 14], [5, 19], [10, 20], [15, 17], [19, 10]], c, 'velvet', { rz: 1.4, bevel: 2 });
+    X.ball(18, 5, 3, 2.4, '#8a7a9a', 'fur', { z: 1.4, rz: 0.8 });
+  }, { paint: (P) => mothMarks(P, [20, 3], [[8, 3], [3, 8], [2, 14], [5, 19], [10, 20], [15, 17]], [8, 13, 2.6], hex(near ? '#7a4a7a' : '#4a3a5a'), eyes) });
+  const bob = Math.sin(R.phase * TAU) * 1.2;
+  const rate = R.st.eyes ? 4.5 : 7;
+  const beat = Math.sin(R.t * rate + (near ? 0 : 0.6));
+  const hingeX = R.ox + (near ? 27 : 30);
+  const hingeY = R.oy + 27 + bob;
+  // (Forewing up over her, hindwing down under; held open wide when she
+  // fixes you with the eyes.)
+  const sFore = eyes ? 1 : 0.25 + 0.75 * (beat * 0.5 + 0.5);
+  const sHind = eyes ? 1 : 0.3 + 0.7 * (Math.sin(R.t * rate + (near ? 0.5 : 1.1)) * 0.5 + 0.5);
+  hind.flapY(R.ctx, hingeX + 2, hingeY + 2, near ? 0.15 : 0.3, sHind, near ? 1 : 0.8);
+  fore.flapY(R.ctx, hingeX, hingeY, near ? -0.1 : 0.05, sFore, near ? 1 : 0.8);
+}
+
+// The Bloat's feelers: soft strands hanging from under it, swaying and
+// trailing as it drifts (each a little hanging chain, held at the top).
+function bloatFeelers(R) {
+  const s = R.e.rig;
+  s.feel ||= [0, 1, 2, 3].map(() => ({ x: [], y: [], px: [], py: [] }));
+  const n = 7;
+  const dt = Math.min(R.dt || 1 / 60, 1 / 30);
+  s.feel.forEach((f, k) => {
+    const ax = R.ox + 22 + k * 5.5;
+    const ay = R.oy + 44 - Math.abs(k - 1.5) * 1.5;
+    if (!f.x.length) for (let i = 0; i <= n; i++) {
+      f.x.push(ax);
+      f.y.push(ay + i * 2.6);
+      f.px.push(ax);
+      f.py.push(ay + i * 2.6);
+    }
+    for (let i = 1; i <= n; i++) {
+      const vx = (f.x[i] - f.px[i]) * 0.94;
+      const vy = (f.y[i] - f.py[i]) * 0.94;
+      f.px[i] = f.x[i];
+      f.py[i] = f.y[i];
+      f.x[i] += vx + Math.sin(R.t * 1.6 + k + i * 0.5) * 0.04;
+      f.y[i] += vy + 30 * dt * dt;
+    }
+    for (let it = 0; it < 6; it++) {
+      f.x[0] = ax;
+      f.y[0] = ay;
+      for (let i = 0; i < n; i++) {
+        const dx = f.x[i + 1] - f.x[i];
+        const dy = f.y[i + 1] - f.y[i];
+        const d = Math.hypot(dx, dy) || 1e-6;
+        const c = (d - 2.6) / d;
+        if (i > 0) {
+          f.x[i] += dx * c * 0.5;
+          f.y[i] += dy * c * 0.5;
         }
-        return [x1, y1];
-      };
-      const base = low ? -2.4 : -1.9;
-      const a1 = tine(hx + 4, hy - 3, base, 9, 0);
-      tine(hx + 5, hy - 3, base + 0.5, 8, 1);
-      // (Moss and a vine, hanging from them.)
-      P.line(a1[0], a1[1], a1[0] + sn(t, 1) * 1.5, a1[1] + 9, '#5a8a3a');
-      P.line(hx + 8, hy - 8, hx + 8 + sn(t, 1, 1), hy + 2, '#4a7a2a');
-      P.blob(a1[0] + 1, a1[1] + 1, 2, 1.4, '#6a9a4a');
-      grain(P, 151, 0.12, 0.86, (x, y, c) => c[0] > c[2]);
+        f.x[i + 1] -= dx * c * (i > 0 ? 0.5 : 1);
+        f.y[i + 1] -= dy * c * (i > 0 ? 0.5 : 1);
+      }
+    }
+    drawStrand(R.ctx, f.x.map((x, i) => ({ x, y: f.y[i] })), '#6a7a40', 2, 1);
+  });
+}
+
+// The Kraken's arms: eight, curling and uncurling each in its own time,
+// out from under its mantle (those behind first), suckers along them.
+// Ash packed into a limb: grey, flecked, embers glowing in it and dying.
+const ASH = hex('#7a7270');
+function ashSkin(t) {
+  return (k, u, v) => {
+    const h = hash2(Math.floor(u), Math.floor((v + 1) * 2), 11);
+    if (h > 0.93) return Math.sin(t * 4 + u) > 0 ? [255, 138, 48] : [200, 74, 26];
+    return h < 0.3 ? shade(ASH, 0.8) : h > 0.75 ? shade(ASH, 1.15) : ASH;
+  };
+}
+// Each arm one smooth length of muscle (see bossrig.bodyOf), thick at the
+// root and tapering to a curling tip, red above and pale under, a row of
+// suckers down the underside.
+const ARM = hex('#a03a30');
+const ARM_UNDER = hex('#e8a090');
+const SUCKER = hex('#f8e0d0');
+function armSkin(back) {
+  const top = back ? shade(ARM, 0.8) : ARM;
+  const under = back ? shade(ARM_UNDER, 0.8) : ARM_UNDER;
+  return (k, u, v, ny) => {
+    if (ny > 0.3) {
+      // (Suckers: pale rings, one every few pixels, a dark pit in each.)
+      const m = u % 3.5;
+      if (ny > 0.55 && m < 2) return m > 0.6 && m < 1.4 && ny > 0.75 ? shade(SUCKER, 0.55) : SUCKER;
+      return under;
+    }
+    return hash2(Math.floor(u / 2), Math.floor(v * 3), 5) > 0.85 ? shade(top, 0.8) : top;
+  };
+}
+const ARM_SKIN = [armSkin(false), armSkin(true)];
+function krakenArms(R, front) {
+  const s = R.e.rig;
+  s.armCv ||= [];
+  for (let i = 0; i < 8; i++) {
+    const isFront = i % 2 === 0;
+    if (isFront !== front) continue;
+    const bx = R.ox + 30 + (i - 3.5) * 4.5;
+    const by = R.oy + 46;
+    const a0 = Math.PI * (0.35 + (i / 7) * 0.3) + (i < 4 ? 0.4 : -0.4);
+    const amp = R.st.wind ? 0.55 : 0.32;
+    const pts = curl(bx, by, a0 + (i < 4 ? 0.6 : -0.6), 12, 2.4, R.t, i * 1.3, amp, R.st.wind ? 4 : 2);
+    const b = bodyOf(pts, { rad: (k) => 0.8 + 2.6 * (1 - k), skin: ARM_SKIN[isFront ? 0 : 1], gloss: 0.4 }, (s.armCv[i] ||= {}));
+    drawBody(R.ctx, b.back);
+  }
+}
+
+// The shoal round the Coral Colossus: little fish wheeling, catching the
+// light as they turn (those behind first).
+function shoal(R, front) {
+  const fish = part('fish', 7, 5, 3.5, 2.5, (X) => {
+    X.ball(3, 2.5, 2.6, 1.5, '#f0c050', 'scales', { rz: 1.4, scale: 1.4 });
+    X.slab([[5, 2.5], [7, 0.5], [7, 4.5]], '#f0a040', 'scales', { rz: 0.6, bevel: 0.5 });
+  });
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * TAU + R.t * (0.8 + (i % 3) * 0.15);
+    const s = Math.sin(a);
+    if ((s > 0) !== front) continue;
+    const x = R.ox + 37 + Math.cos(a) * (24 + (i % 3) * 3);
+    const y = R.oy + 34 + s * 9 + Math.sin(R.t * 3 + i) * 2;
+    fish.draw(R.ctx, x, y, Math.atan2(Math.cos(a) * 9, -Math.sin(a) * 26) + Math.PI);
+  }
+}
+
+Object.assign(BEASTS, {
+  // ------------------------------------------------------------ Thessa's grove
+  // A stag as tall as a house, grey with age: shaggy, its antlers like a
+  // dead tree, hung with moss that sways and trails (the rig); eyes green;
+  // head down to charge.
+  elder_stag: {
+    w: 72, h: 70, ax: 36, ay: 68,
+    sculpt(X, t, st) {
+      const fur = '#7a7468';
+      const down = st.wind ? 1 : 0;
+      const b = sn(t) * 0.6;
+      X.in(0, 2);
+      X.limb([[48, 44, 3.6, -2], [51, 55, 2.6, -2], [50, 66, 2, -2]], dark(fur, 0.8), 'fur');
+      X.limb([[25, 44, 3.4, -2], [22, 55, 2.6, -2], [24, 66, 2, -2]], dark(fur, 0.8), 'fur');
+      X.in(1, 3.5);
+      X.ball(38, 38 - b, 16, 10, fur, 'fur', { rz: 10, along: 'x' });
+      X.ball(52, 36 - b, 5, 4, fur, 'fur', { rz: 4, z: 1 });
+      X.limb([[27, 34 - b, 7, 4], [21, 28 + down * 6, 5.4, 6], [17, 25 + down * 10, 4.6, 7]], fur, 'fur');
+      X.ball(13, 26 + down * 10, 6, 4.2, fur, 'fur', { rz: 4.4, z: 7 });
+      X.ball(7, 28 + down * 10, 3.6, 2.6, dark(fur, 0.85), 'leather', { rz: 2.6, z: 8 });
+      X.ball(22, 37 + down * 3, 5, 6, '#9a9488', 'fur', { rz: 4, z: 6 });
+      X.in(2, 2);
+      X.limb([[46, 46, 4, 6], [49, 56, 3, 7], [48, 66, 2.2, 7]], fur, 'fur');
+      X.limb([[28, 46, 3.8, 6], [25, 56, 3, 7], [26, 66, 2.2, 7]], fur, 'fur');
+      for (const x of [47, 25]) X.ball(x, 67, 2.6, 1.4, '#2a2420', 'bone', { z: 8, rz: 1.2 });
+      // Antlers: two great branching crowns, gnarled as dead wood.
+      X.in(3, 1.2);
+      for (const s of [-1, 1]) {
+        const rx = 15 + s * 2;
+        const ry = 21 + down * 10;
+        X.limb([[rx, ry, 1.6, 9], [rx + s * 3, ry - 8, 1.3, 9], [rx + s * 2, ry - 17, 1, 9], [rx + s * 5, ry - 24, 0.6, 9]], '#c8b898', 'bark');
+        X.limb([[rx + s * 3, ry - 8, 1, 9], [rx + s * 10, ry - 12, 0.7, 9], [rx + s * 14, ry - 18, 0.4, 9]], '#c8b898', 'bark');
+        X.limb([[rx + s * 2, ry - 17, 0.8, 9], [rx - s * 4, ry - 22, 0.5, 9]], '#c8b898', 'bark');
+      }
+    },
+    paint(P, t, st) {
+      const down = st.wind ? 1 : 0;
+      P.eye(11, 25 + down * 10, '#80ff80', true);
     },
     fx(P, t, st) {
-      // Breath in the cold air; little lights (spirits of the grove) round
-      // its antlers.
-      const k = (t * 2) % 1;
-      P.puff(8 - k * 6 - (st.wind ? 2 : 0), 26 + (st.wind ? 12 : 0) - k * 2, 1 + k * 2, '#e0f0f0', 0.5 * (1 - k));
-      for (let i = 0; i < 3; i++) {
-        const a = t * TAU + i * 2.1;
-        P.fx(22 + Math.cos(a) * 10, 6 + (st.wind ? 10 : 0) + Math.sin(a) * 4, '#d0ff90', 0.8);
+      if (st.wind) for (let i = 0; i < 3; i++) {
+        const k = (t * 2 + i / 3) % 1;
+        P.puff(5 - k * 4, 40 - k * 2, 1 + k * 2, '#e0e8e0', 0.6 * (1 - k));
       }
+    },
+    rig: {
+      front(R) {
+        // Moss hanging from the antlers, swaying and trailing.
+        const down = R.st.wind ? 10 : 0;
+        for (const [x, y, len, k] of [[18, 13, 9, 0], [25, 9, 7, 1], [10, 11, 8, 2], [14, 5, 6, 3], [28, 4, 5, 4]]) {
+          const pts = [];
+          for (let i = 0; i <= 5; i++) {
+            const f = i / 5;
+            pts.push({ x: R.ox + x + Math.sin(R.t * 1.8 + k + f * 2) * f * 1.6 - R.drift * 4 * f, y: R.oy + y + down + f * len });
+          }
+          drawStrand(R.ctx, pts, k % 2 ? '#6a8a4a' : '#4a6a3a', 2, 1);
+        }
+      },
     },
   },
 
   // An oak that walks, hollowed by age: a face in its trunk, branches for
-  // arms, roots for feet, and its leaves as the season it's in (spring
+  // arms, roots for feet, its leaves as the season it's in (spring
   // blossom, summer green, autumn fire, winter bare and snowed on).
   hollow_oak: {
-    w: 76, h: 78, ax: 38, ay: 76,
-    body(P, t, st) {
-      const bark = '#5a4430';
+    w: 78, h: 80, ax: 39, ay: 78,
+    sculpt(X, t, st) {
+      const bark = '#5a4a3a';
       const season = st.season ?? 1;
-      const [leaf, bloom] = LEAVES[season];
-      const sw = sn(t) * 1.5;
-      const wind = st.wind;
-      // Roots for feet.
-      for (const [x, s] of [[28, -1], [34, -0.4], [44, 0.4], [50, 1]]) P.limb([[x, 60, 3.4], [x + s * 5, 68, 2.4], [x + s * 9, 74, 1.4]], shade(hex(bark), 0.8));
-      // The trunk.
-      P.poly([[26, 30], [50, 30], [53, 64], [23, 64]], bark, { lv: 0.5, grad: [-1, -0.2] });
-      P.blob(38, 56, 15, 9, bark, { flat: 0.4 });
-      // Its bark: furrows running down it.
-      for (let x = 26; x < 52; x += 3) P.line(x, 32, x + Math.round(sn(x / 10, 1)) , 62, shade(hex(bark), 0.65));
-      grain(P, 161, 0.18, 0.8, (x, y) => y > 28);
-      // The face: hollows for eyes, a gaping hollow for a mouth, light in
-      // them.
-      for (const ex of [32, 44]) P.blob(ex, 40, 3, 3.6, '#140c08', { amb: 0 });
-      P.eye(32, 40, '#c8ff70');
-      P.eye(44, 40, '#c8ff70');
-      P.blob(38, 51, 5, wind ? 5 : 3.5, '#140c08', { amb: 0 });
-      // Branches for arms: the far one, the near one (raised to strike).
-      P.limb([[50, 34, 4], [60, 30 + sw, 3], [68, 24 + sw * 1.5, 2], [72, 18 + sw * 2, 1.2]], shade(hex(bark), 0.85));
-      const nh = wind ? [6, 12] : [6, 44];
-      P.limb([[26, 34, 4.2], [16, wind ? 24 : 36 - sw, 3.2], [nh[0], nh[1] - sw, 2]], bark);
-      for (const [a, b] of [[[16, wind ? 24 : 36 - sw], [10, wind ? 20 : 30]], [[nh[0], nh[1] - sw], [2, nh[1] - sw + 3]], [[nh[0], nh[1] - sw], [4, nh[1] - sw - 4]]]) P.tube(a[0], a[1], b[0], b[1], 1.2, 0.6, bark);
-      // Its crown of boughs.
-      for (const [x0, y0, x1, y1] of [[32, 30, 22, 14], [38, 30, 38, 8], [44, 30, 56, 14], [38, 20, 28, 6], [38, 20, 50, 6]]) P.tube(x0, y0, x1 + sw * 0.5, y1, 2.4, 1.2, bark);
-      // And the leaves on them, as the season is.
-      if (leaf) {
-        for (const [x, y, r] of [[22, 14, 9], [38, 8, 10], [54, 14, 9], [30, 4, 7], [47, 5, 7], [38, 18, 8], [14, 22, 6], [62, 22, 6]]) P.blob(x + sw * 0.6, y, r, r * 0.8, leaf);
-        // (Clumps of leaf: darker hollows in the canopy.)
-        P.over((x, y, c) => (y < 30 && hash2(x >> 1, y >> 1, 9 + season) < 0.2 && c[1] > c[2] ? shade(c, 0.78) : null));
-        if (bloom) for (const [x, y] of [[18, 10], [34, 2], [44, 10], [56, 16], [28, 16], [40, 4], [62, 20], [12, 20]]) P.blob(x + sw * 0.6, y, 1.4, 1.2, bloom, { lift: 0.2 });
-      } else {
-        // Winter: bare twigs, snow along the tops of the boughs.
-        for (const [x, y, a] of [[22, 14, -2], [38, 8, -1.6], [56, 14, -1.1], [28, 6, -2.2], [50, 6, -0.9]]) {
-          P.tube(x, y, x + Math.cos(a) * 6, y + Math.sin(a) * 6, 0.8, 0.5, bark);
-          P.tube(x, y, x + Math.cos(a + 0.7) * 5, y + Math.sin(a + 0.7) * 5, 0.7, 0.4, bark);
-        }
-        P.over((x, y, c) => (y < 32 && c[0] > 40 && c[0] < 120 && c[0] > c[2] && !P.get(x, y - 1)[3] ? hex('#f0f8ff') : null));
+      const b = sn(t) * 0.7;
+      X.in(0, 3);
+      for (const [x, s] of [[30, -1], [48, 1], [39, 0]]) X.limb([[x, 66, 4, 0], [x + s * 6, 74, 3, 0], [x + s * 10, 78, 1.6, 0]], bark, 'bark');
+      X.ball(39, 52, 13, 18, bark, 'bark', { rz: 11 });
+      X.ball(39, 36 - b, 12, 10, bark, 'bark', { rz: 10, z: 1 });
+      X.in(1, 2);
+      for (const s of [-1, 1]) X.limb([[39 + s * 10, 38 - b, 4, 6], [39 + s * 20, 30 - b + sn(t, 1, s) * 1.5, 3, 6], [39 + s * 28, 22 - b + sn(t, 1, s) * 2.5, 1.8, 6], [39 + s * 32, 14 - b + sn(t, 1, s) * 3, 1, 6]], bark, 'bark');
+      if (season !== 3) {
+        X.in(2, 4);
+        const leaf = season === 0 ? '#c8e090' : season === 2 ? '#c86a2a' : '#4a7a3a';
+        for (const [x, y, r] of [[39, 16, 14], [26, 20, 10], [52, 20, 10], [14, 14, 6], [64, 14, 6], [39, 26, 9]]) X.ball(x, y - b, r, r * 0.75, leaf, 'moss', { rz: r * 0.7, z: 4 });
       }
+    },
+    paint(P, t, st) {
+      const b = sn(t) * 0.7;
+      // The hollow face: two eye-holes and a mouth, a glow deep in them.
+      for (const x of [34, 43]) P.blob(x, 44 - b, 2.4, 3, '#140c08', { amb: 0 });
+      P.blob(39, 52 - b, 3.6, 4.4, '#140c08', { amb: 0 });
+      for (const x of [34, 43]) P.set(x, 44 - b, hex(st.wind ? '#ffe080' : '#a0e070'));
+      const season = st.season ?? 1;
+      if (season === 0) for (let i = 0; i < 12; i++) P.set(18 + hash2(i, 1, 3) * 44, 8 + hash2(i, 2, 3) * 22, hex('#fff0f4'));
+      if (season === 3) tint(P, (x, y) => y < 40 && hash2(x, y, 4) < 0.25, '#f0f4ff', 0.7);
     },
     fx(P, t, st) {
       const season = st.season ?? 1;
-      for (let i = 0; i < 4; i++) {
-        const k = (t + i / 4) % 1;
-        const x = 12 + i * 16 + sn(k, 1, i) * 4;
-        const y = 12 + k * 60;
-        if (season === 2) P.fx(x, y, i % 2 ? '#d8782a' : '#c8401a', 1 - k * 0.5);
-        else if (season === 3) P.fx(x, y * 0.9, '#ffffff', 0.9 * (1 - k));
-        else if (season === 0) P.fx(x, y * 0.8, '#f8c8e0', 0.8 * (1 - k));
+      const col = season === 0 ? '#ffe0ec' : season === 2 ? '#e08030' : season === 3 ? '#ffffff' : '#6aa04a';
+      for (let i = 0; i < 6; i++) {
+        const k = (t + i / 6) % 1;
+        P.fx(14 + i * 9 + sn(k, 1, i) * 4, 18 + k * 56, col, 0.9 * (1 - k * 0.6));
       }
     },
   },
 
-  // The Worm: up out of the floor, banded, bristled, its maw a ring of
-  // teeth opening at the top of it as it rears.
+  // The Worm: up out of the floor, banded and bristled, swaying (its body a
+  // column of segments, each set on the curve: the rig), its maw a ring of
+  // teeth opening at the top of it as it rears. The painting is only the
+  // hole it's come up through.
   worm: {
-    w: 54, h: 70, ax: 27, ay: 68,
-    body(P, t, st) {
-      const flesh = '#b08a68';
-      const rear = st.wind ? 1 : 0;
-      P.blob(27, 65, 17, 4, '#5a4a3a', { flat: 0.3 });
-      P.blob(27, 65, 10, 2.2, '#1a120e', { amb: 0 });
-      const pts = [];
-      for (let i = 0; i <= 6; i++) {
-        const k = i / 6;
-        pts.push([27 + sn(t, 1, k * 3) * 3 * k - rear * k * 3, 66 - k * (46 + rear * 6), 9 - k * 1.5]);
-      }
-      P.limb(pts, flesh);
-      // Its bands, and bristles at each.
-      for (let i = 0; i < 12; i++) {
-        const k = i / 12;
-        const j = Math.min(5, Math.floor(k * 6));
-        const q = k * 6 - j;
-        const x = pts[j][0] + (pts[j + 1][0] - pts[j][0]) * q;
-        const y = pts[j][1] + (pts[j + 1][1] - pts[j][1]) * q;
-        const r = pts[j][2];
-        for (let dx = -r; dx <= r; dx++) P.set(x + dx, y + Math.round((dx * dx) / (r * 3)), shade(hex(flesh), 0.62));
-        if (i % 2) {
-          P.set(x - r - 1, y, hex('#3a2a20'));
-          P.set(x + r + 1, y, hex('#3a2a20'));
-        }
-      }
-      grain(P, 171, 0.12, 0.86);
-      // The maw: a ring of flesh, teeth all round it, a dark throat.
-      const [mx, my] = pts[pts.length - 1];
-      const open = rear ? 1 : 0.55 + Math.max(0, sn(t)) * 0.2;
-      P.blob(mx, my, 8.5, 4 + open * 2, '#c86a5a', { flat: 0.4 });
-      P.blob(mx, my + 0.5, 6 * open + 1, 2.5 * open + 1, '#2a0a0a', { amb: 0 });
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * TAU;
-        P.spike(mx + Math.cos(a) * (6.5 * open + 1.5), my + Math.sin(a) * (3 * open + 1.6), a + Math.PI, 2.5, 0.6, '#f0e8d0');
-      }
+    w: 48, h: 20, ax: 24, ay: 16,
+    sculpt(X, t, st) {
+      // (The floor heaves round the hole as it rears.)
+      const heave = st.wind ? 2 : Math.max(0, sn(t)) * 0.8;
+      X.in(0, 2);
+      X.ball(24, 14 - heave * 0.5, 20 + heave, 5 + heave * 0.5, '#5a4a3a', 'rock', { rz: 3 + heave, cell: 3 });
+      for (let i = 0; i < 5; i++) X.ball(8 + i * 8, 11 - heave - (i % 2), 2.6, 2, '#6a5a48', 'rock', { z: 3 + heave, rz: 2, cell: 2 });
+      X.in(1, 1);
+      X.ball(24, 13.5, 13, 3, '#140e0a', 'ink', { z: 5 + heave, rz: 0.4 });
     },
     fx(P, t) {
-      for (let i = 0; i < 3; i++) {
-        const k = (t + i / 3) % 1;
-        P.fx(14 + i * 13, 64 - k * 10, '#c8a878', 0.8 * (1 - k));
+      // Earth crumbling back down into the hole.
+      for (let i = 0; i < 5; i++) {
+        const k = (t * 2 + i / 5) % 1;
+        P.fx(14 + i * 5, 10 + k * 5, '#8a7a60', 1 - k);
       }
+    },
+    rig: {
+      front(R) {
+        wormColumn(R);
+      },
     },
   },
 
   // The Prime: a Kavorent engine of war, plates of violet stone over a
   // core of orange fire, light running in its seams; its shoulder-stones
-  // hang off it, floating.
+  // hang off it, floating (the rig).
   prime: {
     w: 66, h: 64, ax: 33, ay: 62,
-    body(P, t, st) {
+    sculpt(X, t, st) {
       const stone = '#3e3050';
-      const bob = sn(t) * 1.2;
       const wind = st.wind;
-      // Legs: blocks.
+      X.in(0, 1.5);
+      X.slab([[48, 24], [56, 26], [57, 46], [50, 46]], dark(stone, 0.8), 'rock', { rz: 5, bevel: 2, cell: 7 });
       for (const x of [24, 42]) {
-        P.poly([[x - 5, 44], [x + 5, 44], [x + 4, 58], [x - 4, 58]], stone, { lv: 0.5 });
-        P.poly([[x - 6, 57], [x + 6, 57], [x + 6, 61], [x - 6, 61]], shade(hex(stone), 0.8), { lv: 0.5 });
+        X.slab([[x - 5, 44], [x + 5, 44], [x + 4, 58], [x - 4, 58]], stone, 'rock', { rz: 5, bevel: 2, cell: 7 });
+        X.slab([[x - 6, 57], [x + 6, 57], [x + 6, 61.5], [x - 6, 61.5]], dark(stone, 0.8), 'rock', { rz: 4, bevel: 1.5, cell: 7 });
       }
-      // The far arm.
-      P.poly([[48, 24], [56, 26], [57, 46], [50, 46]], shade(hex(stone), 0.8), { lv: 0.45 });
-      P.poly([[49, 46], [58, 46], [58, 53], [49, 53]], shade(hex(stone), 0.75), { lv: 0.45 });
-      // The trunk: a wedge of plate, a waist.
-      P.poly([[16, 20], [50, 20], [44, 44], [22, 44]], stone, { lv: 0.55, grad: [-0.8, -0.6] });
-      P.poly([[22, 40], [44, 40], [42, 46], [24, 46]], shade(hex(stone), 0.8), { lv: 0.5 });
-      // The head: a block, a visor.
-      P.poly([[27, 8], [39, 8], [40, 19], [26, 19]], stone, { lv: 0.6 });
-      P.rect(28, 13, 10, 2, '#140e1e');
-      // The core, and the seams of light.
+      X.in(1, 1.5);
+      X.slab([[16, 20], [50, 20], [44, 44], [22, 44]], stone, 'rock', { rz: 9, bevel: 4, cell: 8 });
+      X.slab([[27, 8], [39, 8], [40, 19.5], [26, 19.5]], stone, 'rock', { rz: 7, bevel: 2.5, cell: 8, z: 2 });
+      X.in(2, 1.5);
+      const fy = wind ? 6 : 48;
+      X.slab([[10, 26], [17, 26], [16, wind ? 16 : 46], [9, wind ? 16 : 46]], stone, 'rock', { rz: 5, bevel: 2, z: 8, cell: 7 });
+      X.slab([[6, fy - 4], [18, fy - 4], [18, fy + 5], [6, fy + 5]], toHex(shade(hex(stone), 1.1)), 'rock', { rz: 6, bevel: 2, z: 10, cell: 7 });
+    },
+    paint(P, t, st) {
       const pulse = 0.5 + 0.5 * sn(t, 1);
-      const seam = mix(hex('#3a9ab0'), hex('#c8fbff'), pulse);
+      const seam = toHex(mix(hex('#3a9ab0'), hex('#c8fbff'), pulse));
       for (const [a, b] of [[[20, 22], [33, 34]], [[46, 22], [33, 34]], [[33, 34], [33, 43]], [[27, 10], [39, 10]], [[22, 44], [44, 44]]]) P.line(a[0], a[1], b[0], b[1], seam);
-      P.blob(33, 29, 4 + pulse, 4 + pulse, wind ? '#ffd090' : '#ff9050', { lift: 0.3 + pulse * 0.3 });
-      P.rect(29, 13, 8, 1, wind ? '#ffffff' : '#ff9050');
-      grain(P, 181, 0.08, 0.85);
-      // The shoulder-stones, floating.
-      for (const [x, ph] of [[12, 0], [52, 2]]) {
-        const y = 18 + sn(t, 1, ph) * 1.5 + bob * 0.3;
-        P.poly([[x - 7, y - 4], [x + 6, y - 5], [x + 7, y + 4], [x - 6, y + 5]], shade(hex(stone), 1.15), { lv: 0.6 });
-        P.line(x - 5, y, x + 5, y - 1, seam);
-      }
-      // The near arm, a hammer of a fist (raised to strike).
-      const fy = wind ? 4 : 48;
-      P.poly([[10, 26], [17, 26], [16, wind ? 16 : 46], [9, wind ? 16 : 46]], stone, { lv: 0.55 });
-      P.poly([[6, fy - 4], [18, fy - 4], [18, fy + 5], [6, fy + 5]], shade(hex(stone), 1.1), { lv: 0.6 });
+      P.blob(33, 29, 4 + pulse, 4 + pulse, st.wind ? '#ffd090' : '#ff9050', { lift: 0.3 + pulse * 0.3 });
+      P.rect(28, 13, 10, 2, '#140e1e');
+      P.rect(29, 13, 8, 1, st.wind ? '#ffffff' : '#ff9050');
+      const fy = st.wind ? 6 : 48;
       P.line(7, fy, 17, fy, seam);
     },
     fx(P, t) {
@@ -1212,8 +1379,64 @@ Object.assign(BEASTS, {
         P.fx(16 + i * 16, 56 - k * 40, '#5ad8f0', 0.8 * (1 - k));
       }
     },
+    rig: {
+      front(R) {
+        const stn = part('prime_stone', 16, 12, 8, 6, (X) => X.slab([[1, 2], [14, 1], [15, 9], [2, 10.5]], '#4e4060', 'rock', { rz: 5, bevel: 2, cell: 7 }));
+        for (const [x, ph] of [[12, 0], [54, 2]]) {
+          const y = 18 + Math.sin(R.t * 2.2 + ph) * 2;
+          stn.draw(R.ctx, R.ox + x, R.oy + y, Math.sin(R.t * 0.9 + ph) * 0.12);
+          R.ctx.fillStyle = '#5ad8f0';
+          R.ctx.globalAlpha = 0.6 + 0.3 * Math.sin(R.t * 3 + ph);
+          R.ctx.fillRect(Math.round(R.ox + x - 5), Math.round(R.oy + y), 10, 1);
+          R.ctx.globalAlpha = 1;
+        }
+      },
+    },
   },
 });
+
+// The Worm's body: one length of it, ringed like an earthworm's, up out
+// of its hole on a swaying curve (see bossrig.bodyOf), bristles along the
+// rings; the maw on top turned the way the curve runs; rearing higher as
+// it strikes.
+const WORM = hex('#b08a60');
+function wormSkin(k, u, v, ny) {
+  // (Its rings: a groove every four pixels, the flesh swelling between.)
+  const m = u % 4;
+  const c = ny > 0.5 ? mix(WORM, [220, 190, 150], 0.35) : WORM;
+  return m < 0.8 ? shade(c, 0.6) : m < 1.6 ? shade(c, 1.1) : c;
+}
+function wormColumn(R) {
+  const head = part('wormhead', 22, 20, 11, 15, (X) => {
+    X.ball(11, 12, 9, 7.5, '#a07a50', 'flesh', { rz: 7 });
+    X.ball(11, 6, 7, 3, '#5a1a14', 'flesh', { z: 6, rz: 1 });
+  });
+  const rear = R.st.wind ? 1.35 : 1;
+  const n = 9;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    pts.push({ x: R.ox + 24 + Math.sin(R.t * 1.6 - f * 2.4) * 6 * f, y: R.oy + 14 - f * 52 * rear });
+  }
+  const body = bodyOf([...pts].reverse(), { rad: (k) => 6.4 + 1.4 * k, skin: wormSkin, gloss: 0.35 }, (R.e.rig.wormCv ||= {}));
+  drawBody(R.ctx, body.back);
+  // (Bristles on its rings, catching the light.)
+  R.ctx.fillStyle = '#3a2a1a';
+  for (let i = 1; i < n - 1; i++) {
+    const a = pts[i];
+    for (const side of [-1, 1]) R.ctx.fillRect(Math.round(a.x + side * (7 + (i % 2))), Math.round(a.y), 1 + (i % 2), 1);
+  }
+  const top = pts[n];
+  const prev = pts[n - 1];
+  head.draw(R.ctx, top.x, top.y, Math.atan2(top.y - prev.y, top.x - prev.x) + Math.PI / 2);
+  // Its teeth, a ring round the maw.
+  const ctx = R.ctx;
+  ctx.fillStyle = '#f0e8d0';
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU + R.t * 0.5;
+    ctx.fillRect(Math.round(top.x + Math.cos(a) * 5), Math.round(top.y - 9 + Math.sin(a) * 2), 1, 2);
+  }
+}
 
 // ------------------------------------------------------------ painting
 export function beastOf(species) {
@@ -1222,9 +1445,12 @@ export function beastOf(species) {
 export const BEAST_SPECIES = Object.keys(BEASTS);
 export function paintBeast(species, t, st) {
   const B = BEASTS[species];
+  const X = new Sculpt(B.w, B.h, { seed: species.length * 13, t });
+  B.sculpt(X, t, st);
+  const px = X.render();
   const P = new Paint(B.w, B.h);
-  B.body(P, t, st);
-  P.done();
+  P.p = px;
+  if (B.paint) B.paint(P, t, st);
   if (B.fx) B.fx(P, t, st);
   return P.p;
 }

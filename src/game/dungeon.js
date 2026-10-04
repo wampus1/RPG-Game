@@ -223,8 +223,8 @@ export class DungeonRun {
     }
     // Where you come in.
     let at;
-    if (arrive === 'top') at = { x: data.up.x, z: data.up.z + 1 };
-    else if (arrive === 'bottom') at = data.down ? { x: data.down.x + 1, z: data.down.z } : data.entry;
+    if (arrive === 'top') at = data.upAt || { x: data.up.x, z: data.up.z + 1 };
+    else if (arrive === 'bottom') at = data.down ? data.downAt || { x: data.down.x + 1, z: data.down.z } : data.entry;
     else at = this.landing(arrive.x, arrive.z);
     const y = game.world.findStandY(at.x, at.z, FY);
     const spot = game.world.canStand(at.x, y, at.z) && !game.occupiedBySolid(at.x, y, at.z, game.player) ? { x: at.x, y, z: at.z } : game.findFreeSpot(at.x, at.z, FY);

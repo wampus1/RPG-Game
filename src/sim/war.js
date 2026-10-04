@@ -803,7 +803,11 @@ export class War {
     if (L.jail) {
       g.teleportPlayer(L.jail.stand.x, L.jail.y, L.jail.stand.z);
       J.setCellDoor(L, false);
-    } else g.teleportPlayer(L.plaza.cx + 1, GROUND, L.plaza.cz + 1);
+    } else {
+      // (On the square, clear of whatever stands in the middle of it.)
+      const at = g.findFreeSpot(L.plaza.cx + 1, L.plaza.cz + 2, GROUND) || { x: L.plaza.cx + 1, z: L.plaza.cz + 2 };
+      g.teleportPlayer(at.x, GROUND, at.z);
+    }
     p.hp = Math.max(p.hp, Math.ceil(p.maxHp * 0.4));
     const days = 2 + (hash4(g.seed, plan.at, 0x9e1) % 3);
     const me = this.playerCiv();

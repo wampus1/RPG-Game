@@ -257,7 +257,15 @@ test('Kharos\'s masters each have their own ways', () => {
   // Bombard Queen rolls kegs.
   const want = {
     cinder_king: { decree: (c) => c.decree },
-    urn_mother: { swallowed: (c, p) => p.swallowed, inhale: (c) => c.inhale },
+    // (You stand at her mouth as her breath ends, so it's not left to
+    // where the fight happens to have taken you.)
+    urn_mother: {
+      swallowed: (c, p) => p.swallowed,
+      inhale: (c, p) => {
+        if (c.inhale && c.inhale.t < 0.15 && !p.swallowed && Math.hypot(p.x - c.x, p.z - c.z) > 1) p.teleport(c.x + 1, p.y, c.z);
+        return c.inhale;
+      },
+    },
     bellows_golem: { vent: (c) => c.ventT > 0, heat: (c) => c.heat > 30 },
     vitrified_horror: { shatter: (c) => c.shatter },
     bombard_queen: { keg: (c, p, g) => g.creatures.some((q) => q.species === 'rolling_keg' && !q.dead) },
@@ -348,7 +356,7 @@ test('the Elder Stag charges; sidestepped by a wall, he\'s stunned against it', 
   d.leave();
 });
 
-test('every master is painted, one to one, in eight frames that move', () => {
+test('every master is painted, one to one, in frames that move', () => {
   const masters = Object.keys(SPECIES).filter((k) => SPECIES[k].boss);
   for (const sp of masters) {
     const S = SPECIES[sp];

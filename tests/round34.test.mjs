@@ -100,7 +100,7 @@ test('each people passes its own laws, and keeps its own festival', () => {
 
 test('the far islands dress their own way, and build their own roofs', () => {
   const game = world();
-  for (const [style, outfit, roofs] of [['ember', 'ashwrap', [B.basalt, B.ash_brazier]], ['mist', 'mistcloak', [B.roof_mushroom, B.roof_moss]], ['tide', 'tidewrap', [B.roof_reed]]]) {
+  for (const [style, outfit, roofs] of [['ember', 'ashwrap', [B.kiln_tile, B.copper_roof, B.ash_brazier]], ['mist', 'mistcloak', [B.roof_mushroom, B.roof_moss]], ['tide', 'tidewrap', [B.roof_reed]]]) {
     const s = settle(game, style);
     const L = game.world.getLayout(s);
     const adults = L.npcs.filter((r) => r.age === 'adult' && r.look);

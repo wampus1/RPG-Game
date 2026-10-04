@@ -206,9 +206,11 @@ test('each island\'s realms have a few technologies nobody else can learn', () =
     assert.ok(s, `a realm on ${k}`);
     for (const id of ISLE_TECHS) assert.equal(offered(s, id), TECHS[id].isles.includes(k), `${id} on ${k}`);
     // (And most of the common tree is shared: each island goes without a
-    // few of its steps; see round 34.)
+    // few of its steps; see round 34. A step it learns in a form of its
+    // own counts as shared: Kharos's kilnwork for masonry, say.)
     const common = Object.keys(TECHS).filter((id) => !TECHS[id].isles);
-    const shared = common.filter((id) => offered(s, id)).length;
+    const ownForm = (id) => ISLE_TECHS.some((q) => TECHS[q].as.includes(id) && offered(s, q));
+    const shared = common.filter((id) => offered(s, id) || ownForm(id)).length;
     assert.ok(shared >= common.length - 8 && shared < common.length, `${k}: ${shared} of ${common.length}`);
     assert.equal(treeOf(k).ids.length, Object.keys(TECHS).filter((id) => offered(s, id)).length);
   }

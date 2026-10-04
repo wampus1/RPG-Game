@@ -785,25 +785,42 @@ export function buildFloor(rec, n) {
       }
     }
   }
-  // The way in, and on.
-  const up = { x: entry.cx, z: entry.z0 };
-  if (big) b.set(up.x, FY - 1, up.z, B.kav_lift);
-  else b.set(up.x, FY, up.z, B.stairs_up, 2);
-  out.up = { x: b.x0 + up.x, z: up.z };
-  out.entry = { x: b.x0 + entry.cx, z: entry.cz };
+  // The way in, and on. (Stairs you walk onto take you up or down, so
+  // they're set against a wall, out of the way between the room's doors,
+  // never where the way through the room has to go; and the pace in front
+  // of them is kept clear. A Kavorent ruin's lifts you ride by choice, so
+  // they stand where they always did.)
+  const reserved = new Set();
+  const ctx0 = { rng, plan, W, reserved };
   const ex = R[far];
+  let upAt;
+  if (big) {
+    const up = { x: entry.cx, z: entry.z0 };
+    b.set(up.x, FY - 1, up.z, B.kav_lift);
+    out.up = { x: b.x0 + up.x, z: up.z };
+    upAt = { x: up.x, z: up.z + 1 };
+  } else {
+    const s = stairSpot(ctx0, entry, true) || { x: entry.cx, z: entry.z0, front: { x: entry.cx, z: entry.z0 + 1 }, rot: 2 };
+    b.set(s.x, FY, s.z, B.stairs_up, s.rot);
+    out.up = { x: b.x0 + s.x, z: s.z };
+    upAt = s.front;
+  }
+  out.upAt = { x: b.x0 + upAt.x, z: upAt.z };
+  out.entry = { x: b.x0 + entry.cx, z: entry.cz };
   if (!last) {
-    const dx = ex.cx;
-    const dz = ex.cz;
-    if (big) b.set(dx, FY - 1, dz, B.kav_lift);
-    else if (rec.type === 'mine') b.set(dx, FY - 1, dz, B.mine_shaft);
-    else b.set(dx, FY - 1, dz, B.stairs_down);
-    out.down = { x: b.x0 + dx, z: dz };
+    let s;
+    if (big) s = { x: ex.cx, z: ex.cz, front: { x: ex.cx + 1, z: ex.cz } };
+    else s = stairSpot(ctx0, ex, false) || { x: ex.cx, z: ex.cz, front: { x: ex.cx + 1, z: ex.cz } };
+    if (big) b.set(s.x, FY - 1, s.z, B.kav_lift);
+    else if (rec.type === 'mine') b.set(s.x, FY - 1, s.z, B.mine_shaft);
+    else b.set(s.x, FY - 1, s.z, B.stairs_down);
+    out.down = { x: b.x0 + s.x, z: s.z };
+    out.downAt = { x: b.x0 + s.front.x, z: s.front.z };
   }
   // Dress each room by its kit.
   const kind = big ? kavKind(rec, n) : null;
   out.kind = kind;
-  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null };
+  const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null, reserved };
   for (const r of R) dress(ctx, r);
   for (const r of R) decorate(ctx, r);
   // A Kavorent floor's own character (see KAV_KINDS).
@@ -830,6 +847,16 @@ export function buildFloor(rec, n) {
   trapPassages(ctx);
   // A gate somewhere, and the lever that lifts it in another room.
   leverGate(ctx);
+  // (Whatever's been set about since, the stairs' own pace and the one in
+  // front of them stay clear.)
+  for (const k of reserved) {
+    const x = k % W;
+    const z = (k / W) | 0;
+    for (const y of [FY, FY + 1]) {
+      const id = b.get(x, y, z);
+      if (id !== B.air && id !== B.stairs_up && id !== B.torch) b.set(x, y, z, B.air);
+    }
+  }
   // Who's about, besides: a few wandering on their own.
   for (let i = 0; i < (big ? 10 : 5); i++) {
     const r = R[rng.int(1, R.length - 1)];
@@ -1006,7 +1033,7 @@ function placeIn(ctx, r, id, meta = 0, edge = false) {
   for (let t = 0; t < 40; t++) {
     const x = rng.int(r.x0, r.x1);
     const z = rng.int(r.z0, r.z1);
-    if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air) continue;
+    if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || ctx.reserved?.has(z * plan.W + x)) continue;
     if (edge && !byWall(plan, x, z)) continue;
     // (Not in a doorway's way.)
     if (doorBlocked(plan, r, x, z)) continue;
@@ -1066,7 +1093,7 @@ export const MIMIC_CHANCE = 0.14;
 
 // A room's own floor tiles, free and out of the doorways' way.
 function freeIn(ctx, r, x, z) {
-  return own(ctx.plan, r, x, z) && ctx.b.get(x, FY, z) === B.air && !doorBlocked(ctx.plan, r, x, z);
+  return own(ctx.plan, r, x, z) && ctx.b.get(x, FY, z) === B.air && !doorBlocked(ctx.plan, r, x, z) && !ctx.reserved?.has(z * ctx.plan.W + x);
 }
 // A rough round patch (`put(x, z, d)` for each free tile, d its distance
 // out), a ring round a spot, a scattering over the room.
@@ -1593,12 +1620,75 @@ function dress(ctx, r) {
 // A way kept clear across a room, from each of its doorways to the first:
 // whatever's been put in the way (rubble, pillars, the room's dressing) is
 // cleared along the cheapest line, sparing chests and the like if it can.
+// Where a room's stairs go: against a wall (`up`: the north wall if it
+// can, as they've always stood), a good way from any doorway, and never on
+// a pace the room needs to get from one of its doors to another (or to the
+// rest of it); with a free pace in front, to step onto them from. Marks
+// them and the paces round them as kept clear (ctx.reserved), and the
+// room's `stairs`. Null if the room has no such spot.
+const DX4 = [0, -1, 0, 1];
+const DZ4 = [1, 0, -1, 0];
+function stairSpot(ctx, r, up) {
+  const { plan, W, reserved } = ctx;
+  const doors = doorways(plan, r);
+  const tiles = [];
+  for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z) && !plan.corr[z * W + x]) tiles.push({ x, z });
+  if (tiles.length < 6) return null;
+  // (Every pace of the room still reachable from every door without it?)
+  const holds = (sx, sz) => {
+    const start = tiles.find((t) => !(t.x === sx && t.z === sz));
+    const seen = new Set([start.z * W + start.x]);
+    const q = [start];
+    while (q.length) {
+      const c = q.pop();
+      for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = c.x + ox;
+        const z = c.z + oz;
+        const k = z * W + x;
+        if (seen.has(k) || (x === sx && z === sz) || !own(plan, r, x, z)) continue;
+        seen.add(k);
+        q.push({ x, z });
+      }
+    }
+    let n = 0;
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z) && !(x === sx && z === sz)) n++;
+    return seen.size === n;
+  };
+  const doorDist = (x, z) => doors.reduce((m, d) => Math.min(m, Math.max(Math.abs(d.x - x), Math.abs(d.z - z))), 99);
+  let best = null;
+  for (const t of tiles) {
+    if (t.x === r.cx && t.z === r.cz) continue;
+    const dd = doorDist(t.x, t.z);
+    if (dd < 2) continue;
+    for (let rot = 0; rot < 4; rot++) {
+      // (Its back to the wall that way; its front the other.)
+      if (plan.at(t.x + DX4[rot], t.z + DZ4[rot])) continue;
+      const front = { x: t.x - DX4[rot], z: t.z - DZ4[rot] };
+      if (!own(plan, r, front.x, front.z) || plan.corr[front.z * W + front.x] || doorDist(front.x, front.z) < 1) continue;
+      if (!holds(t.x, t.z)) continue;
+      const score = Math.min(dd, 5) * 2 + (up && rot === 2 ? 4 : 0) - Math.hypot(t.x - r.cx, t.z - r.cz) * 0.15 + ctx.rng.float(0, 0.5);
+      if (!best || score > best.score) best = { x: t.x, z: t.z, rot, front, score };
+    }
+  }
+  if (!best) return null;
+  // (And nothing solid set round them either, so they never close a
+  // corner off.)
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (own(plan, r, best.x + dx, best.z + dz)) reserved.add((best.z + dz) * W + best.x + dx);
+  reserved.add(best.front.z * W + best.front.x);
+  r.stairs = best;
+  return best;
+}
+
 const KEEP = new Set(['chest', 'coffin', 'sarcophagus', 'kav_cache', 'altar', 'lever', 'relic', 'brazier', 'kav_node', 'kav_console', 'gong', 'idol']);
 function ensureWays(ctx, r) {
   const { plan, b } = ctx;
-  const doors = doorways(plan, r).filter((d) => own(plan, r, d.x, d.z));
-  if (doors.length < 2) return;
   const W = plan.W;
+  const doors = doorways(plan, r).filter((d) => own(plan, r, d.x, d.z));
+  // (The pace in front of a stairway counts as a door: there's always a
+  // way to it. The stairs themselves are never the way through.)
+  const stairs = r.stairs || null;
+  if (stairs) doors.push({ x: stairs.front.x, z: stairs.front.z });
+  if (doors.length < 2) return;
   const blocked = (x, z) => BLOCKS[b.get(x, FY, z)].solid || BLOCKS[b.get(x, FY + 1, z)].solid;
   const start = doors[0].z * W + doors[0].x;
   const cost = new Map([[start, 0]]);
@@ -1614,6 +1704,7 @@ function ensureWays(ctx, r) {
       const nx = x + ox;
       const nz = z + oz;
       if (!own(plan, r, nx, nz)) continue;
+      if (stairs && nx === stairs.x && nz === stairs.z) continue;
       const j = nz * W + nx;
       const step = blocked(nx, nz) ? (KEEP.has(BLOCKS[b.get(nx, FY, nz)].name) ? 30 : 1) : 0.001;
       if (cost.has(j) && cost.get(j) <= c + step) continue;
@@ -1650,7 +1741,7 @@ function decorate(ctx, r) {
   if (T.decor.some(([k]) => k === 'cobweb')) {
     for (let z = r.z0; z <= r.z1; z++) {
       for (let x = r.x0; x <= r.x1; x++) {
-        if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || doorBlocked(plan, r, x, z)) continue;
+        if (!own(plan, r, x, z) || b.get(x, FY, z) !== B.air || doorBlocked(plan, r, x, z) || ctx.reserved?.has(z * plan.W + x)) continue;
         const wx = !plan.at(x - 1, z) ? -1 : !plan.at(x + 1, z) ? 1 : 0;
         const wz = !plan.at(x, z - 1) ? -1 : !plan.at(x, z + 1) ? 1 : 0;
         if (wx && wz && rng.chance(0.45)) b.set(x, FY, z, B.cobweb, wx < 0 ? 0 : 1);

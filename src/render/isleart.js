@@ -4,7 +4,7 @@
 // mangroves, and the giant mushrooms of the fungal woods. And the islands'
 // own goods, as icons. Hooked into textures.js and sprites.js.
 import { Px, hex, shade } from './pixel.js';
-import { speckle, frontify, cobble, spr, OUT } from './textures.js';
+import { speckle, frontify, cobble, spr, OUT, TALL_H } from './textures.js';
 import { LH } from '../config.js';
 
 export const ISLE_P = {
@@ -30,7 +30,85 @@ export const ISLE_P = {
   coral_rock: ['#6a6a70', '#4e4e56', '#86868c', '#ff8a8a'],
   shell_sand: ['#d8c8a8', '#c0b090', '#ece0c8', '#f8f0e8'],
   basalt_bricks: ['#2a2628', '#1a1618', '#3a3638', '#5a5456'],
+  // The Ashborn's own (Round 36): pale plaster, terracotta, glazed brick,
+  // verdigris copper.
+  ash_plaster: ['#d6cdbd', '#c2b8a6', '#e6dfd2', '#9a8a74'],
+  kiln_tile: ['#c4603a', '#9a4226', '#e08a54', '#5a2416'],
+  kiln_brick: ['#8e3e28', '#6e2c1c', '#b05a38', '#cfc2a8'],
+  copper_roof: ['#4a9a86', '#2e7464', '#86ccb6', '#a8643a'],
+  nacre_tile: ['#e8e0e8', '#c8c0d0', '#f8f4ff', '#8ab8c8'],
 };
+// Nacre: squares of mother-of-pearl, each catching the light its own way
+// (pink, green, blue), the grout dark.
+function nacre(p, rand, v, h) {
+  const tints = ['#f0d8e8', '#d8f0e8', '#d8e4f8', '#f4f0e0'];
+  p.fill('#6a7a84');
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < 16; x++) {
+      if (x % 4 === 3 || y % 4 === 3) continue;
+      const t = tints[(Math.floor(x / 4) + Math.floor(y / 4) * 3 + v) % 4];
+      const k = ((x % 4) + (y % 4)) / 4;
+      p.set(x, y, k < 0.4 ? '#ffffff' : k < 1 ? t : shade(hex(t), 0.85));
+    }
+  }
+  if (rand() < 0.5) p.set(Math.floor(rand() * 16), Math.floor(rand() * h), '#8ab8c8');
+  return p;
+}
+// A plaster wall's face: pale and trowelled, ash splashed up its foot,
+// a crack here and there, and where a little has fallen away the dark
+// stone under it (`h` rows high).
+function plasterFace(p, rand, v, h) {
+  const pal = ISLE_P.ash_plaster;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < 16; x++) {
+      const r = rand();
+      let c = r < 0.12 ? pal[1] : r > 0.93 ? pal[2] : pal[0];
+      // (Trowel strokes: long faint bands across it.)
+      if ((y * 5 + Math.floor(x / 6) * 3 + v) % 9 === 0 && r < 0.7) c = pal[2];
+      p.set(x, y, c);
+    }
+  }
+  return p;
+}
+function plasterStains(p, rand, v, h, foot) {
+  const pal = ISLE_P.ash_plaster;
+  if (foot) for (let x = 0; x < 16; x++) for (let y = h - 1 - Math.floor(rand() * 3); y < h; y++) p.set(x, y, rand() < 0.5 ? pal[1] : shade(hex(pal[1]), 0.9));
+  if (v % 3 === 1) {
+    let x = 3 + Math.floor(rand() * 10);
+    for (let y = 1; y < h - 2; y++) {
+      if (rand() < 0.35) x += rand() < 0.5 ? -1 : 1;
+      if (rand() < 0.75) p.set(x, y, pal[3]);
+    }
+  }
+  if (v % 4 === 2) {
+    const cx = 2 + Math.floor(rand() * 11);
+    const cy = 2 + Math.floor(rand() * (h - 5));
+    p.rect(cx, cy, 2, 2, '#3a3638');
+    p.set(cx + 2, cy, '#4a4648');
+    p.set(cx, cy + 2, shade(hex(pal[1]), 0.85));
+  }
+  return p;
+}
+// Terracotta tiles, half-round, laid in courses (seen from above: the
+// rounded backs of them in rows, each lit along its crown).
+function kilnTiles(p, rand, v) {
+  const pal = ISLE_P.kiln_tile;
+  for (let y = 0; y < 16; y++) {
+    const course = Math.floor(y / 4);
+    const off = course % 2 ? 2 : 0;
+    for (let x = 0; x < 16; x++) {
+      const k = (x + off) % 4;
+      const tile = Math.floor((x + off) / 4) + course * 5 + v;
+      const tint = (tile * 37) % 7 === 0 ? 0.88 : (tile * 37) % 5 === 0 ? 1.08 : 1;
+      let c = k === 0 ? pal[3] : k === 1 ? pal[2] : k === 2 ? pal[0] : pal[1];
+      if (y % 4 === 3) c = k === 0 ? pal[3] : pal[1];
+      p.set(x, y, k === 0 ? c : shade(hex(c), tint));
+    }
+  }
+  // (Ash, settled in the gutters between them.)
+  for (let i = 0; i < 6; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), '#8a8282');
+  return p;
+}
 export const ISLE_WOOD = {
   cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
   mangrove: { bark: ['#6a5a44', '#4e4232', '#82705a'], ring: ['#b08a5a', '#8e6a40'] },
@@ -45,6 +123,68 @@ export function isleTop(name, v, rand, rot = 0) {
   const p = new Px(16, 16);
   const pal = ISLE_P[name];
   switch (name) {
+    case 'ash_plaster': {
+      // A wall's top: the plaster capping, ash settled on it.
+      plasterFace(p, rand, v, 16);
+      for (let i = 0; i < 10; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), rand() < 0.5 ? '#a8a0a0' : '#8a8282');
+      p.hline(0, 15, 0, pal[2]);
+      return p;
+    }
+    case 'kiln_tile': return kilnTiles(p, rand, v);
+    case 'ember_gutter': {
+      // A basalt slab of the street with a bronze grate let into it, the
+      // coals of the forges' heat-channel glowing under the bars.
+      const bp = isleTop('basalt_bricks', v, rand, rot);
+      for (let y = 3; y < 13; y++) {
+        for (let x = 3; x < 13; x++) {
+          const r = rand();
+          bp.set(x, y, r < 0.2 ? '#ffd060' : r < 0.55 ? '#ff7a20' : r < 0.85 ? '#c83a14' : '#5a1a10');
+        }
+      }
+      for (let k = 3; k <= 12; k += 3) {
+        bp.vline(k, 3, 12, '#8a5a2a');
+        bp.set(k, 3, '#e0a860');
+      }
+      bp.hline(3, 12, 2, '#c08a48');
+      bp.hline(3, 12, 13, '#5a3a1a');
+      bp.vline(2, 2, 13, '#a87438');
+      bp.vline(13, 2, 13, '#6a4420');
+      return bp;
+    }
+    case 'nacre_tile': return nacre(p, rand, v, 16);
+    case 'kiln_brick': {
+      // Long narrow bricks, a dark glaze on them, the mortar pale.
+      p.fill(pal[3]);
+      for (let y = 0; y < 16; y++) {
+        const row = Math.floor(y / 4);
+        const off = row % 2 ? 4 : 0;
+        for (let x = 0; x < 16; x++) {
+          if (y % 4 === 3 || (x + off) % 8 === 7) continue;
+          const b = (Math.floor((x + off) / 8) + row * 3 + v) % 4;
+          const c = b === 0 ? pal[0] : b === 1 ? pal[1] : b === 2 ? pal[2] : shade(hex(pal[0]), 0.85);
+          p.set(x, y, y % 4 === 0 && rand() < 0.5 ? shade(hex(c), 1.15) : c);
+        }
+      }
+      return p;
+    }
+    case 'copper_roof': {
+      // Sheets of copper gone green, standing seams between them, the red
+      // metal showing through where it's worn.
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          const k = x % 5;
+          let c = k === 0 ? pal[2] : k === 4 ? pal[1] : rand() < 0.15 ? pal[1] : pal[0];
+          if (k !== 0 && rand() < 0.04) c = pal[3];
+          p.set(x, y, c);
+        }
+      }
+      for (let i = 0; i < 2; i++) {
+        let x = 1 + Math.floor(rand() * 14);
+        for (let y = 0; y < 16; y++) if (rand() < 0.7 && x % 5 !== 0) p.set(x, y, '#3a8474');
+        x += 1;
+      }
+      return p;
+    }
     case 'root_wall': {
       // Roots grown together, thick as a body, twisting over each other.
       p.fill(pal[3]);
@@ -289,6 +429,49 @@ export function isleTop(name, v, rand, rot = 0) {
 export function isleFront(name, v, rand) {
   const p = new Px(16, LH);
   switch (name) {
+    case 'ash_plaster': {
+      plasterFace(p, rand, v, LH);
+      plasterStains(p, rand, v, LH, true);
+      return frontify(p, 0.92);
+    }
+    case 'kiln_tile': {
+      // A tiled roof's edge: the rounded ends of the courses, and the
+      // fascia under them.
+      const pal = ISLE_P.kiln_tile;
+      p.fill(pal[1]);
+      for (let x = 0; x < 16; x++) {
+        const k = x % 4;
+        p.set(x, 0, k === 0 ? pal[3] : k === 1 ? pal[2] : pal[0]);
+        p.set(x, 1, k === 0 ? pal[3] : pal[0]);
+        p.set(x, 2, k === 0 ? pal[3] : pal[1]);
+      }
+      for (let y = 3; y < LH; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x + y * 3) % 7 === 0 ? pal[3] : y === 3 ? shade(hex(pal[1]), 0.8) : pal[1]);
+      return frontify(p, 0.9);
+    }
+    case 'kiln_brick': {
+      const pal = ISLE_P.kiln_brick;
+      p.fill(pal[3]);
+      for (let y = 0; y < LH; y++) {
+        const row = Math.floor(y / 4);
+        const off = row % 2 ? 4 : 0;
+        for (let x = 0; x < 16; x++) {
+          if (y % 4 === 3 || (x + off) % 8 === 7) continue;
+          const b = (Math.floor((x + off) / 8) + row * 3 + v) % 4;
+          const c = b === 0 ? pal[0] : b === 1 ? pal[1] : b === 2 ? pal[2] : shade(hex(pal[0]), 0.85);
+          p.set(x, y, y % 4 === 0 ? shade(hex(c), 1.18) : c);
+        }
+      }
+      return frontify(p, 0.9);
+    }
+    case 'nacre_tile': return frontify(nacre(p, rand, v, LH), 0.9);
+    case 'ember_gutter': return isleFront('basalt_bricks', v, rand);
+    case 'copper_roof': {
+      const pal = ISLE_P.copper_roof;
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) p.set(x, y, x % 5 === 0 ? pal[2] : y === 0 ? pal[2] : rand() < 0.2 ? pal[1] : pal[0]);
+      // (Green runs down from the seams.)
+      for (let x = 2; x < 16; x += 5) for (let y = 1; y < LH; y++) if (rand() < 0.5) p.set(x, y, '#3a8474');
+      return frontify(p, 0.88);
+    }
     case 'root_wall': {
       // Roots down the face of it, tangled.
       const pal = ISLE_P.root_wall;
@@ -503,6 +686,61 @@ ISLE_SPRITES.ash_brazier = (rot, st, f) => {
   } else p.rect(4, 14, 8, 1, '#3a2a24');
   return p.outline(OUT);
 };
+// Round 36. An Ashborn glass lamp: a basalt post, a bronze cage on it, a
+// globe of amber glass in the cage, the flame in it wavering.
+ISLE_SPRITES.glass_lamp = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const H = TALL_H;
+  p.rect(6, H - 26, 4, 25, '#3a3638');
+  p.vline(6, H - 26, H - 2, '#5a5456');
+  p.rect(4, H - 3, 8, 2, '#2a2628');
+  p.hline(4, 11, H - 3, '#4a4648');
+  // The bronze cap and cage.
+  p.rect(5, H - 28, 6, 2, '#9a6a32');
+  p.hline(5, 10, H - 28, '#e0b060');
+  p.rect(4, H - 38, 8, 1, '#9a6a32');
+  p.hline(5, 10, H - 39, '#e0b060');
+  // The globe of amber glass, and the flame in it.
+  const o = f % 3;
+  for (let y = H - 37; y <= H - 29; y++) {
+    const w = y < H - 35 || y > H - 31 ? 2 : 3;
+    for (let x = 8 - w; x < 8 + w; x++) p.set(x, y, y < H - 33 ? '#ffb040' : '#e07a20');
+  }
+  p.set(6, H - 35, '#fff0c0');
+  p.rect(7, H - 34 + (o === 1 ? 1 : 0), 2, 3, '#fff8d0');
+  p.set(7 + (o === 2 ? 1 : 0), H - 35, '#ffffff');
+  for (const x of [5, 10]) p.vline(x, H - 37, H - 29, '#7a4a20');
+  return p.outline(OUT);
+};
+// A Mirefolk fog lantern: a crooked pole of bogwood, a lantern hung from
+// its crook, a cold green light in it (swaying a little).
+ISLE_SPRITES.fog_lantern = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const H = TALL_H;
+  p.rect(4, H - 34, 2, 33, '#3e3a2e');
+  p.vline(4, H - 34, H - 2, '#5a5446');
+  p.line(5, H - 34, 10, H - 37, '#3e3a2e');
+  p.line(5, H - 33, 10, H - 36, '#2e2a22');
+  p.rect(2, H - 3, 6, 2, '#2e2a22');
+  const sw = f % 2;
+  p.vline(10 + sw, H - 36, H - 33, '#6a6a5a');
+  p.rect(8 + sw, H - 33, 5, 6, '#3e4a44');
+  p.rect(9 + sw, H - 32, 3, 4, '#b8f0a8');
+  p.set(9 + sw, H - 32, '#f0fff0');
+  p.hline(8 + sw, 12 + sw, H - 27, '#2e3a34');
+  return p.outline(OUT);
+};
+// (The great things in a square are drawn by render/pieces.js; these are
+// only what's shown of them small, as on a list.)
+for (const [k, c] of Object.entries({ fountain: '#80b8e0', heartfire: '#ff8030', heart_crystal: '#ff6040', great_glowcap: '#80d8ff', conch_fountain: '#f0d8c0' })) {
+  ISLE_SPRITES[k] = () => {
+    const p = spr(TALL_H);
+    p.rect(2, TALL_H - 8, 12, 6, '#6a6470');
+    p.rect(5, TALL_H - 24, 6, 16, c);
+    p.rect(3, TALL_H - 30, 10, 6, c);
+    return p.outline(OUT);
+  };
+}
 // The islands' own old places (see world/isledeep.js).
 // Briars: a thicket of thorned canes, a few red hips in it.
 ISLE_SPRITES.briar = (rot) => {
