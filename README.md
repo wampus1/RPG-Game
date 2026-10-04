@@ -2917,6 +2917,19 @@ the masters of the old places are made:
   storm's rain now counts as the weather there, and it doesn't stop and
   start as you go back and forth across where it begins.
 
+## Round 39: clear of the gates
+
+- *Banished, you're put well clear of the town.* Before, you could be left
+  just outside a gate, still inside the town's outskirts and within sight
+  of its guards, who came and killed you. Now you're walked out past the
+  edge (outlying lots too) until you're more than 22 paces clear, on dry
+  ground. Any guard still after you from the trial stands down. Come back
+  and they'll attack, as before.
+- *Foreman Gask's charges blast his own rubble.* When one of his blasting
+  charges goes off (thrown, or in his chain of charges), the gravel his
+  cave-ins dropped within a pace of it is blown apart. The hall's own rock
+  and anything you've built are left alone.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

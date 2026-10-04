@@ -876,7 +876,7 @@ export class Justice {
 
   dismissParty(L) {
     const j = this.jail;
-    for (const i of j.party) {
+    for (const i of (j && j.party) || []) {
       const r = L.npcs[i];
       if (r && r.override && r.override.act === 'trial') r.override = null;
     }
@@ -965,13 +965,12 @@ export class Justice {
     ledger(L, game.day, `${game.playerName} was banished from ${s.name} by ${v.judgeName}.`);
     this.dismissParty(L);
     this.jail = null;
-    // Escorted out of town.
-    const b = s.bounds;
-    const e = L.entrances[0] || { x: b.x0, z: (b.z0 + b.z1) >> 1 };
-    const dx = e.x <= b.x0 + 2 ? -8 : e.x >= b.x1 - 2 ? 8 : 0;
-    const dz = e.z <= b.z0 + 2 ? -8 : e.z >= b.z1 - 2 ? 8 : dx === 0 ? 8 : 0;
+    // Escorted out of town, well clear of it (and of its guards' sight),
+    // and the guards called off.
     game.advanceTime(30);
-    game.teleportPlayer(e.x + dx, GROUND, e.z + dz);
+    const spot = exileSpot(game, L);
+    game.teleportPlayer(spot.x, GROUND, spot.z);
+    for (const g of game.guardsOf(s.id)) if (g.threat === game.player || g.state === 'fight') g.calmDown(true);
     this.returnWeapons(v.proven.some((c) => c.type === 'murder'));
     game.ui.msg(`You have been EXILED from ${s.name}. Its guards will attack you on sight.`, '#ff5050');
     game.ui.showKnockout?.('exile', s.name, 0);
@@ -1194,4 +1193,34 @@ function theftDesc(desc, items) {
   const from = (desc || '').match(/ from .*$/);
   const what = items.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`);
   return `Stealing ${what.slice(0, 2).join(', ')}${what.length > 2 ? ' and more' : ''}${from ? from[0] : ''}`;
+}
+
+// Where the banished are left: out past the town's edge the way its gate
+// faces, on and on till they're clear of it (its outskirts too) by more
+// than a guard can see.
+export const EXILE_CLEAR = 22;
+export function exileSpot(game, L) {
+  const s = L.settlement;
+  const b = s.bounds;
+  const rects = [b, ...(s.suburbs || [])];
+  const gap = (x, z) => Math.min(...rects.map((r) => Math.max(r.x0 - x, x - r.x1, r.z0 - z, z - r.z1)));
+  const cx = (b.x0 + b.x1) / 2;
+  const cz = (b.z0 + b.z1) / 2;
+  const e = L.entrances[0] || { x: b.x0, z: cz };
+  const ow = game.world.ow;
+  // Out from the middle through the gate first; failing that, any way out.
+  const dirs = [[e.x - cx, e.z - cz], [1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [ux, uz] of dirs) {
+    const n = Math.hypot(ux, uz) || 1;
+    for (let d = 4; d < 400; d += 2) {
+      const x = Math.round(e.x + (ux / n) * d);
+      const z = Math.round(e.z + (uz / n) * d);
+      if (gap(x, z) < EXILE_CLEAR || ow.settlementAt(x, z)) continue;
+      // (Somewhere to stand: not out in a lake.)
+      const c = game.world.terrain.column(x, z, game.world.terrain.context(x, z, x, z), {});
+      if (c.water >= 0 && c.h < c.water) continue;
+      return { x, z };
+    }
+  }
+  return { x: Math.round(e.x + Math.sign(e.x - cx || 1) * (EXILE_CLEAR + 10)), z: e.z };
 }

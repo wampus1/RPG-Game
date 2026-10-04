@@ -284,7 +284,9 @@ export function bossBrains(h) {
       });
       if (!t || t.dead) return false;
       const d = dist(c, t);
-      const charge = (at, fuse) => addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), y: c.y, dur: fuse, dmg: Math.round(6 * mult(c)), burn: 2, knock: 1, from: { x: at.x, z: at.z + 0.001 }, center: { x: at.x, z: at.z }, kind: 'fire', color: COLORS.fire });
+      // (A charge going off blasts apart the rubble of his own cave-ins
+      // close by: see blastRubble.)
+      const charge = (at, fuse) => addHazard(game, { by: c, tiles: areaTiles(at.x, at.z, 1), y: c.y, dur: fuse, dmg: Math.round(6 * mult(c)), burn: 2, knock: 1, from: { x: at.x, z: at.z + 0.001 }, center: { x: at.x, z: at.z }, kind: 'fire', color: COLORS.fire, onFire: (g) => blastRubble(g, c, at.x, c.y, at.z) });
       // (Desperate) A chain of charges, down a line to you.
       c.chainCd = (c.chainCd ?? 3) - dt;
       if (ph >= 3 && ready(c) && c.chainCd <= 0 && d >= 3 && !c.windup) {
@@ -314,7 +316,7 @@ export function bossBrains(h) {
             onLand: (g, x, z, y) => {
               g.audio?.play('fuse', { x, z });
               g.renderer.floatText(x, y + 1.6, z, 'fsss...', '#ffb040');
-              addHazard(g, { by: c, tiles: areaTiles(x, z, 1), y, dur: 1.5, dmg: Math.round(6 * mult(c)), burn: 2, knock: 1, from: { x, z: z + 0.001 }, center: { x, z }, kind: 'fire', color: COLORS.fire });
+              addHazard(g, { by: c, tiles: areaTiles(x, z, 1), y, dur: 1.5, dmg: Math.round(6 * mult(c)), burn: 2, knock: 1, from: { x, z: z + 0.001 }, center: { x, z }, kind: 'fire', color: COLORS.fire, onFire: (gg) => blastRubble(gg, c, x, y, z) });
             },
           });
         }
@@ -340,6 +342,7 @@ export function bossBrains(h) {
               for (const q of tiles) {
                 if (Math.random() > 0.3 || g.world.getBlock(q.x, y, q.z) !== B.air || g.entityAt?.(q.x, y, q.z) || g.occupiedBySolid(q.x, y, q.z, null)) continue;
                 g.world.setBlock(q.x, y, q.z, B.gravel);
+                (c.rubble ||= new Set()).add(`${q.x},${y},${q.z}`);
               }
             },
           });
@@ -751,4 +754,25 @@ export function bossBrains(h) {
       return d > 1;
     },
   };
+}
+
+// Foreman Gask's charges going off: the rubble of his own cave-ins within a
+// pace of the blast is blown apart (not the hall's own rock, nor what you've
+// built).
+export function blastRubble(game, c, x, y, z) {
+  if (!c.rubble || !c.rubble.size) return 0;
+  let n = 0;
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const k = `${x + dx},${y},${z + dz}`;
+      if (!c.rubble.has(k)) continue;
+      c.rubble.delete(k);
+      if (game.world.getBlock(x + dx, y, z + dz) !== B.gravel) continue;
+      game.world.setBlock(x + dx, y, z + dz, B.air);
+      game.renderer.emit(x + dx + 0.5, y + 0.5, z + dz + 0.5, { n: 8, color: ['#8a8278', '#6a645c', '#b0a898'], up: 50, speed: 60, gravity: 180, life: 0.6 });
+      n++;
+    }
+  }
+  if (n) game.audio?.play('crumble', { x, z });
+  return n;
 }
