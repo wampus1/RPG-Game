@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { topicsFor, respond } from '../src/game/dialogue.js';
 import { countItem } from '../src/game/inventory.js';
-import { B, CROPS, cropStage, cropMature } from '../src/world/blocks.js';
+import { B, CROPS, cropStage, cropMature, cropMeta } from '../src/world/blocks.js';
 import { alive } from '../src/sim/econ.js';
 import { SPECIES, Creature } from '../src/entities/creature.js';
 
@@ -63,6 +63,11 @@ test('farmers harvest ripe fields and sow them again', () => {
     }
     return { ripe, young };
   };
+  // (A field standing ripe, however the year's gone: most do, not all.)
+  if (!count().ripe) {
+    const f = L.fields[0];
+    for (let z = f.z0; z <= f.z1; z++) for (let x = f.x0; x <= f.x1; x++) if (CROPS[w.getBlock(x, 6, z)]) w.setMeta(x, 6, z, cropMeta(w.getBlock(x, 6, z), 9));
+  }
   const before = count();
   for (let i = 0; i < 2500; i++) game.update(0.2, input);
   const after = count();

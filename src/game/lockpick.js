@@ -167,6 +167,15 @@ export function chestTier(settlementType, buildingType) {
   return Math.min(4, base + (buildingType === 'manor' || buildingType === 'house_l' ? 1 : 0));
 }
 
+// The lock on a chest in a town: a household's or a shop's by the town and
+// the building; the town hall's, over the treasury, an advanced one (a
+// village's brass with spool pins, a town's or a city's steel).
+export function lockTier(s, owner) {
+  const type = s && s.type;
+  if (owner && owner.b && owner.b.type === 'townhall') return type === 'village' ? 3 : 4;
+  return chestTier(type, owner && owner.b && owner.b.type);
+}
+
 // How many days a picked lock stays open before its owners notice and lock
 // it again.
 export const RELOCK_DAYS = 2;

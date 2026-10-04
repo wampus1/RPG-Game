@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeGame, stubInput } from './helpers.mjs';
 import { B, BLOCKS } from '../src/world/blocks.js';
 import { GROUND } from '../src/config.js';
-import { DAY, alive, stockOf } from '../src/sim/econ.js';
+import { DAY, alive, stockOf, setOverride } from '../src/sim/econ.js';
 import { TIERS } from '../src/sim/growth.js';
 import { topicsFor, respond, openingLine } from '../src/game/dialogue.js';
 import { exchangeFor } from '../src/game/chatter.js';
@@ -140,6 +140,9 @@ test('city gates open by day and a guard shuts them at night', () => {
   assert.ok(guard, 'the watch is about');
   guard.teleport(g.x + 2, GROUND, g.z + 2);
   guard.sleeping = false;
+  // (Posted at the gate for the night: up, and not off to bed.)
+  const now = game.day * DAY + game.minute;
+  setOverride(guard.rec, now, now + 60, 'alarm', { target: { x: g.x + 2, z: g.z + 2 }, place: 'gate' });
   // (Anyone let through, the watch shuts it again a few seconds after.)
   tick(game, input, 80, 0.1);
   assert.equal(w.getState(g.x, GROUND, g.z), false, 'shut at night');

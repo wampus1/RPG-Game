@@ -3,7 +3,7 @@
 // bucketed per region, plus semantic data (buildings, spots) used by NPCs.
 import { SURFACE, GROUND, REGION_W, REGION_D } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT } from './blocks.js';
+import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
@@ -263,19 +263,22 @@ class Layout {
       plaza = B.sandstone;
     }
     // (The Ashborn pave with the black rock they live on, their squares
-    // with it cut and dressed; the Mirefolk lay dark boardwalks over the
-    // bog; the Stiltfolk's whole town stands on planking.)
+    // with it cut and dressed; the Mirefolk lay boardwalks of bogwood over
+    // the bog; the Stiltfolk's whole town stands on driftwood planking.
+    // Whatever's planked over water is in each people's own wood: see
+    // blocks.planksOf.)
+    const bridge = planksOf(s.style);
     if (s.style === 'ember') {
       plaza = T === 'village' ? B.gravel : B.basalt_bricks;
       road = T === 'village' ? B.gravel : B.basalt;
     }
     if (s.style === 'mist') {
-      road = B.planks_dark;
-      plaza = T === 'city' ? B.mossy_bricks : B.planks_dark;
+      road = bridge;
+      plaza = T === 'city' ? B.mossy_bricks : bridge;
     }
     if (s.style === 'tide') {
-      road = B.planks;
-      plaza = B.planks;
+      road = bridge;
+      plaza = bridge;
     }
     if ((cond === 'poor' || cond === 'abandoned') && s.style !== 'mist' && s.style !== 'tide') {
       road = B.path;
@@ -287,7 +290,7 @@ class Layout {
       if (road === B.path || road === B.sandstone || road === B.gravel) road = B.flagstone;
       if (plaza === B.sandstone) plaza = B.flagstone;
     }
-    return { road, plaza, cold, hot };
+    return { road, plaza, cold, hot, bridge };
   }
 
   buildingMats(type, rng) {
@@ -343,20 +346,20 @@ class Layout {
         roof = civic && rng.chance(0.6) ? B.copper_roof : B.kiln_tile;
         flat = true;
         break;
-      // The Mirefolk: dark timber on giant-mushroom posts, under roofs like
-      // the caps of the mushrooms they live among (or deep moss).
+      // The Mirefolk: dark bogwood on giant-mushroom posts, under roofs
+      // like the caps of the mushrooms they live among (or deep moss).
       case 'mist':
-        wall = rng.weighted([[B.planks_dark, 3], [B.log_wall, 2], [B.cobblestone, civic ? 2 : 0.4]]);
+        wall = rng.weighted([[B.planks_bog, 3], [B.log_wall, 2], [B.cobblestone, civic ? 2 : 0.4]]);
         corner = B.mushroom_stem;
-        floor = B.planks_dark;
+        floor = B.planks_bog;
         roof = rng.weighted([[B.roof_mushroom, civic ? 4 : 3], [B.roof_moss, 2]]);
         break;
-      // The Stiltfolk: pale planks on mangrove posts under reed thatch, a
-      // plank deck all round.
+      // The Stiltfolk: pale driftwood on mangrove posts under reed thatch,
+      // a deck of it all round.
       case 'tide':
-        wall = rng.weighted([[B.planks_birch, 3], [B.planks, 2], [B.log_wall, 0.6]]);
+        wall = rng.weighted([[B.planks_drift, 4], [B.planks_birch, 1], [B.log_wall, 0.6]]);
         corner = B.log_mangrove;
-        floor = B.planks;
+        floor = B.planks_drift;
         roof = rng.weighted([[B.roof_reed, 4], [B.thatch, 1]]);
         break;
       default:
@@ -377,8 +380,9 @@ class Layout {
       if (!flat) roof = cold ? B.roof_snow : rng.chance(0.3) ? B.roof_green : B.roof_slate;
     }
     if (type === 'barn' || type === 'stables') {
-      wall = style === 'sun' ? B.adobe : B.planks;
-      corner = style === 'sun' ? B.adobe : B.log_oak;
+      // (In each people's own wood: see blocks.planksOf.)
+      wall = style === 'sun' ? B.adobe : planksOf(style);
+      corner = style === 'sun' ? B.adobe : { ember: B.log_cinder, mist: B.log_mangrove, tide: B.log_mangrove }[style] || B.log_oak;
       floor = B.dirt;
     }
     if (cold && !flat && roof !== B.roof_snow && rng.chance(0.7)) roof = B.roof_snow;
@@ -478,14 +482,16 @@ class Layout {
       this.hRoad(cz, b.x0, b.x1, 2);
       if (rng.chance(0.75)) this.vRoad(cx, b.z0, b.z1, 2);
       else this.vRoad(cx, cz, rng.chance(0.5) ? b.z0 : b.z1, 2);
-      pw = 7;
-      pd = 6;
+      // (Squares a little bigger than they were, so there's room to walk
+      // across them round what stands in them: see isLane.)
+      pw = 9;
+      pd = 7;
       this.patrol.push({ x: b.x0 + 1, z: cz }, { x: b.x1 - 1, z: cz });
     } else if (s.type === 'town') {
       this.hRoad(cz, b.x0, b.x1, 3);
       this.vRoad(cx, b.z0, b.z1, 3);
-      pw = 11;
-      pd = 8;
+      pw = 17;
+      pd = 10;
       this.patrol.push({ x: b.x0 + 1, z: cz + 1 }, { x: b.x1 - 1, z: cz + 1 }, { x: cx + 1, z: b.z0 + 1 }, { x: cx + 1, z: b.z1 - 1 });
     } else {
       // City: ring road inside the walls plus a street grid.
@@ -497,8 +503,8 @@ class Layout {
       for (let z = b.z0 + 15; z < b.z1 - 8; z += rng.int(13, 15)) this.hRoad(z, b.x0 + 2, b.x1 - 2, 2);
       this.hRoad(cz, b.x0, b.x1, 3);
       this.vRoad(cx, b.z0, b.z1, 3);
-      pw = 15;
-      pd = 10;
+      pw = 21;
+      pd = 13;
       for (const g of [[b.x0 + 1, cz + 1], [b.x1 - 1, cz + 1], [cx + 1, b.z0 + 1], [cx + 1, b.z1 - 1]]) this.patrol.push({ x: g[0], z: g[1] });
       this.patrol.push({ x: b.x0 + 3, z: b.z0 + 3 }, { x: b.x1 - 4, z: b.z1 - 4 }, { x: b.x1 - 4, z: b.z0 + 3 }, { x: b.x0 + 3, z: b.z1 - 4 });
     }
@@ -901,7 +907,7 @@ class Layout {
     const ops = [];
     for (const [x, z] of tiles) {
       const c = this.col(x, z);
-      ops.push([x, SURFACE, z, c && c.water >= 0 ? B.planks : this.mats.road, 0]);
+      ops.push([x, SURFACE, z, c && c.water >= 0 ? this.mats.bridge : this.mats.road, 0]);
       ops.push([x, Y0, z, B.air, 0, true]);
     }
     return ops;
@@ -1207,12 +1213,13 @@ class Layout {
       if (seen.has(k)) return;
       seen.add(k);
       const m = this.maskAt(x, z);
+      const c = this.col(x, z);
       if (m === M.ROAD || m === M.BRIDGE || m === M.PLAZA) {
-        gates.push({ x, z, rot });
+        // (A bridge out over the water needs no gate: no wall stands there.)
+        if (m !== M.BRIDGE || !c || c.water < 0) gates.push({ x, z, rot });
         return;
       }
       if (!ok(x, z)) return;
-      const c = this.col(x, z);
       if (!c || c.water >= 0 || c.h !== SURFACE) return;
       tiles.push([x, z]);
       for (let y = Y0; y < Y0 + 3; y++) list.push([x, y, z, B.stone_bricks, 0]);
@@ -1452,7 +1459,7 @@ class Layout {
           const k = alongX ? x - x0 : z - z0;
           if (!isCorner(x, z) && windowRow && k % 2 === 0 && !doorAdj(x, z) && !(x === door.x && z === door.z)) {
             id = cond === 'prosperous' || rng.chance(0.75) ? B.glass : mats.wall;
-            if ((poor && rng.chance(0.3)) || ruined) id = rng.chance(0.5) ? B.air : B.planks;
+            if ((poor && rng.chance(0.3)) || ruined) id = rng.chance(0.5) ? B.air : this.mats.bridge;
           }
           if (poor && id !== B.glass && rng.chance(0.12)) id = this.decay(id, rng);
           if (ruined && y >= Y0 + 1 && rng.chance(0.35)) id = B.air;
@@ -1590,7 +1597,7 @@ class Layout {
           if (x >= x0 && x <= x1 && z >= z0 && z <= z1) continue;
           const m = this.maskAt(x, z);
           if (m !== M.YARD && m !== M.FREE) continue;
-          this.put(x, SURFACE, z, B.planks);
+          this.put(x, SURFACE, z, this.mats.bridge);
           const cornerPost = (x === x0 - 1 || x === x1 + 1) && (z === z0 - 1 || z === z1 + 1);
           if (cornerPost && open(x, z)) {
             this.put(x, Y0, z, B.log_mangrove);
@@ -1604,7 +1611,7 @@ class Layout {
 
   decay(id, rng) {
     if (id === B.stone_bricks || id === B.cobblestone || id === B.bricks || id === B.marble) return rng.chance(0.5) ? B.mossy_bricks : B.cracked_bricks;
-    if (id === B.plaster || id === B.timber) return B.planks;
+    if (id === B.plaster || id === B.timber) return this.mats && this.mats.bridge ? this.mats.bridge : B.planks;
     if (id === B.planks || id === B.planks_dark || id === B.planks_birch || id === B.log_wall) return B.planks_dark;
     // (Ash plaster let go: fallen away to the basalt under it.)
     if (id === B.ash_plaster) return B.basalt_bricks;
@@ -2436,6 +2443,35 @@ class Layout {
 
   // Where the notice board goes: on the square, by a corner if one's free,
   // otherwise the nearest open spot to one, along the edge.
+  // The ways across the square, kept clear of anything set down in it: a
+  // street that runs on out of the far side carried straight across it
+  // (as wide as the street); any other way in (a lane, a path to a door)
+  // kept clear two paces in; and a ring two paces wide about the middle
+  // (round the great thing that stands there, or the well), that all of
+  // them meet. Benches, stalls, wells, boards, bells and a festival's
+  // trappings keep off them.
+  isLane(x, z) {
+    const p = this.plaza;
+    if (!p || x < p.x0 || x > p.x1 || z < p.z0 || z > p.z1) return false;
+    if (!this.lanes) {
+      const L = (this.lanes = new Set());
+      const key = (u, v) => v * 65536 + u;
+      const road = (u, v) => this.maskAt(u, v) === M.ROAD;
+      for (let u = p.x0; u <= p.x1; u++) {
+        const n = road(u, p.z0 - 1);
+        const s = road(u, p.z1 + 1);
+        for (let v = p.z0; v <= p.z1; v++) if ((n && s) || (n && v <= p.z0 + 1) || (s && v >= p.z1 - 1)) L.add(key(u, v));
+      }
+      for (let v = p.z0; v <= p.z1; v++) {
+        const w = road(p.x0 - 1, v);
+        const e = road(p.x1 + 1, v);
+        for (let u = p.x0; u <= p.x1; u++) if ((w && e) || (w && u <= p.x0 + 1) || (e && u >= p.x1 - 1)) L.add(key(u, v));
+      }
+      for (let v = p.cz - 3; v <= p.cz + 3; v++) for (let u = p.cx - 3; u <= p.cx + 3; u++) if (Math.max(Math.abs(u - p.cx), Math.abs(v - p.cz)) >= 2) L.add(key(u, v));
+    }
+    return this.lanes.has(z * 65536 + x);
+  }
+
   boardSpot(ok) {
     const p = this.plaza;
     if (!p) return null;
@@ -2443,7 +2479,7 @@ class Layout {
     let best = null;
     for (let z = p.z0; z <= p.z1; z++) {
       for (let x = p.x0; x <= p.x1; x++) {
-        if (!ok(x, z)) continue;
+        if (!ok(x, z) || this.isLane(x, z)) continue;
         // Not in the way of a street coming into the square.
         if (DIRS4.some(([ax, az]) => this.maskAt(x + ax, z + az) === M.ROAD)) continue;
         const edge = Math.min(x - p.x0, p.x1 - x, z - p.z0, p.z1 - z);
@@ -2636,7 +2672,7 @@ class Layout {
         const x = s.x + s.dx * i;
         const z = s.z + s.dz * i;
         this.setMask(x, z, M.BRIDGE);
-        this.put(x, SURFACE, z, B.planks);
+        this.put(x, SURFACE, z, this.mats.bridge);
       }
       const ex = s.x + s.dx * len;
       const ez = s.z + s.dz * len;
@@ -2756,25 +2792,35 @@ class Layout {
       if (center === B.well) this.wells.push({ x: p.cx, z: p.cz });
       this.setMask(p.cx, p.cz, M.DECOR);
     }
-    for (const [dx, dz] of DIRS4) this.addSpot(p.cx + dx * 2, p.cz + dz * 2, dirOf(-dx, -dz), ['gossip', 'social', 'play', 'stroll', 'drink', 'music', 'sketch']);
+    // (Where people stand about in the square: off its ways across.)
+    let gathered = 0;
+    for (const [dx, dz] of [[-4, -4], [4, -4], [-4, 4], [4, 4], [-3, -4], [3, 4], [-4, 3], [4, -3]]) {
+      const x = p.cx + dx;
+      const z = p.cz + dz;
+      if (gathered >= 4 || this.maskAt(x, z) !== M.PLAZA || this.isLane(x, z)) continue;
+      this.addSpot(x, z, Math.abs(dz) >= Math.abs(dx) ? dirOf(0, -Math.sign(dz)) : dirOf(-Math.sign(dx), 0), ['gossip', 'social', 'play', 'stroll', 'drink', 'music', 'sketch']);
+      gathered++;
+    }
     if (s.type === 'city') {
-      for (const [dx, dz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]]) {
+      for (const [dx, dz] of [[-6, -5], [6, -5], [-6, 5], [6, 5]]) {
         const x = p.cx + dx;
         const z = p.cz + dz;
-        if (this.maskAt(x, z) !== M.PLAZA) continue;
+        if (this.maskAt(x, z) !== M.PLAZA || this.isLane(x, z)) continue;
         const id = rng.chance(0.5) ? B.well : B.statue;
         this.put(x, Y0, z, id);
         if (id === B.well) this.wells.push({ x, z });
         this.setMask(x, z, M.DECOR);
       }
     }
-    // Benches facing the centre.
-    const benchPos = [[0, -3], [0, 3], [-4, 0], [4, 0]];
-    for (const [dx, dz] of benchPos) {
+    // Benches facing the centre, in the corners of the square between its
+    // ways across.
+    let benches = 0;
+    for (const [dx, dz] of [[-3, -4], [3, -4], [-3, 4], [3, 4], [-5, -3], [5, -3], [-5, 3], [5, 3], [-4, -4], [4, 4]]) {
       const x = p.cx + dx;
       const z = p.cz + dz;
-      if (this.maskAt(x, z) !== M.PLAZA) continue;
-      const rot = dirOf(-Math.sign(dx), -Math.sign(dz));
+      if (benches >= 4 || this.maskAt(x, z) !== M.PLAZA || this.isLane(x, z)) continue;
+      benches++;
+      const rot = Math.abs(dz) >= Math.abs(dx) ? dirOf(0, -Math.sign(dz)) : dirOf(-Math.sign(dx), 0);
       this.put(x, Y0, z, B.bench, rot);
       this.setMask(x, z, M.DECOR);
       this.addSpot(x, z, rot, ['rest', 'read', 'smoke', 'social', 'sketch', 'music', 'stargaze'], { seat: true });
@@ -2806,6 +2852,9 @@ class Layout {
         for (let dx = -1; dx <= 2; dx++) tiles.push([st.x + dx, back]);
         for (let dx = 0; dx <= 1; dx++) tiles.push([st.x + dx, front]);
         if (!tiles.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) continue;
+        // (Off the ways across the square, and, a row in, with the way
+        // behind it open for the stallholder.)
+        if (tiles.some(([x, z]) => this.isLane(x, z))) continue;
         // The stallholder must be able to get in from behind, and the posts
         // never stand across a street coming into the square.
         const behind = [0, 1].map((dx) => this.maskAt(st.x + dx, back - st.dz));
@@ -2909,7 +2958,7 @@ class Layout {
       this.bells.push({ x, z });
     };
     for (const [x, z] of [[p.x1, p.z0], [p.x0, p.z1], [p.x1, p.z1]]) {
-      if (this.maskAt(x, z) === M.PLAZA) {
+      if (this.maskAt(x, z) === M.PLAZA && !this.isLane(x, z)) {
         put(x, z);
         break;
       }
@@ -2982,10 +3031,10 @@ class Layout {
       for (let x = b.x0; x <= b.x1; x++) {
         let m = this.maskAt(x, z);
         if (m === M.DECOR && this.decorBase) m = this.decorBase.get((z - b.z0) * this.W + (x - b.x0)) ?? m;
-        if (m === M.ROAD) this.put(x, SURFACE, z, this.col(x, z).water >= 0 ? B.planks : mats.road);
+        if (m === M.ROAD) this.put(x, SURFACE, z, this.col(x, z).water >= 0 ? mats.bridge : mats.road);
         else if (m === M.PLAZA) this.put(x, SURFACE, z, mats.plaza);
         else if (m === M.BRIDGE && !this.at(x, SURFACE, z)) {
-          this.put(x, SURFACE, z, B.planks);
+          this.put(x, SURFACE, z, mats.bridge);
         }
       }
     }

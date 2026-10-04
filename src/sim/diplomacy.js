@@ -6,7 +6,7 @@
 // way. Warnings about a dangerous traveller travel the same roads.
 import { alive, ledger, DAY, setOverride } from './econ.js';
 import { deserted } from './civic.js';
-import { B } from '../world/blocks.js';
+import { B, planksOf, PLANK_BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { MinHeap } from '../util/heap.js';
 import { hash4 } from '../util/rng.js';
@@ -358,6 +358,8 @@ export class Diplomacy {
     const e0 = ends(LA, b);
     const e1 = ends(LB, a);
     const t = this.game.world.terrain;
+    // (Bridged in the wood of the people who build it: see planksOf.)
+    const bridge = planksOf(a.style || 'vale');
     const tiles = [];
     const inTown = (x, z) => [a, b].some((s) => x >= s.bounds.x0 && x <= s.bounds.x1 && z >= s.bounds.z0 && z <= s.bounds.z1);
     const seen = new Set();
@@ -367,7 +369,7 @@ export class Diplomacy {
         if (seen.has(k) || inTown(x, z)) continue;
         seen.add(k);
         const col = t.column(x, z, t.context(x, z, x, z), {});
-        if (col.water >= 0) tiles.push([x, col.water, z, B.planks]);
+        if (col.water >= 0) tiles.push([x, col.water, z, bridge]);
         else tiles.push([x, col.h, z, col.surf === B.sand ? B.flagstone : B.path]);
       }
     };
@@ -742,7 +744,7 @@ export class Diplomacy {
   // Only the ground itself, plants and tree trunks give way to a road.
   clearable([x, y, z, id]) {
     const cur = this.game.world.getBlock(x, y, z);
-    if (id !== B.air) return cur !== B.planks && cur !== B.path && cur !== B.flagstone;
+    if (id !== B.air) return !PLANK_BLOCKS.has(cur) && cur !== B.path && cur !== B.flagstone;
     return SOFT.has(cur);
   }
 

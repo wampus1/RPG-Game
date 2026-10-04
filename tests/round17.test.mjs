@@ -34,8 +34,10 @@ const tick = (game, input, n = 20, dt = 0.25) => {
 function outside(game, dx = 30) {
   const p = game.player;
   const w = game.world;
-  const x = p.x + dx;
+  let x = p.x + dx;
   const z = p.z;
+  // (Past the edge of town, however far out that is.)
+  while (w.ow.settlementAt(x, z)) x += 10;
   game.loadAround(x, z, true);
   p.teleport(x, w.findStandY(x, z, 6), z);
   return { x, z, w, p };

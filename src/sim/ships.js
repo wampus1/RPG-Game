@@ -10,7 +10,7 @@ import { alive, ledger, DAY, packGoods, notableNews } from './econ.js';
 import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { SURFACE, GROUND } from '../config.js';
-import { B } from '../world/blocks.js';
+import { B, planksOf } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 
 // What a town calls its ship, after its people.
@@ -109,8 +109,9 @@ export class Ships {
     };
   }
 
-  pierBlocks(site) {
-    const ops = site.tiles.map(([x, z]) => [x, SURFACE, z, B.planks, 0]);
+  pierBlocks(site, style = 'vale') {
+    // (In the people's own wood: see blocks.planksOf.)
+    const ops = site.tiles.map(([x, z]) => [x, SURFACE, z, planksOf(style), 0]);
     // A bollard to tie up to, at the end on the side plank; barrels at the
     // landward end.
     const [ex, ez] = site.tiles[site.tiles.length - 1];
@@ -138,7 +139,7 @@ export class Ships {
       if (L.econ.treasury < DOCK_COST + 30 || this.sim.works.active(s.id).some((q) => q.kind === 'dock')) return null;
       const xs = P.site.tiles.map((t) => t[0]);
       const zs = P.site.tiles.map((t) => t[1]);
-      const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(P.site), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: 'building a harbour pier' });
+      const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(P.site, s.style || 'vale'), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: 'building a harbour pier' });
       L.econ.treasury -= DOCK_COST;
       P.state = 'building';
       P.project = p.id;

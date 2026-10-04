@@ -142,6 +142,13 @@ export class Creature extends Entity {
     return this.S.mode === 'hostile' || this.angry;
   }
 
+  // A beast of the wild (a wolf, a boar, an ash lizard), not a thing of
+  // the night or of the deep: the music fights it differently.
+  get beast() {
+    const S = this.S;
+    return !(S.night || S.humanoid || S.undead || S.construct || S.boss || S.under || S.bandit);
+  }
+
   update(dt) {
     this.updateBase(dt);
     if (this.dead) return;

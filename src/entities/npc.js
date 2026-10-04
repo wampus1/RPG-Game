@@ -1189,7 +1189,9 @@ export class NPC extends Entity {
     const b = this.bell;
     const t = this.threat;
     if (!b || this.stateT > 30) return t && !t.dead ? this.engage(t) : this.calmDown(true);
-    if (!this.followPath({ x: b.x, z: b.z }, 1)) return;
+    // (The rope's in reach two paces off: no stepping round whatever's
+    // coming to get at it.)
+    if (!this.followPath({ x: b.x, z: b.z }, 2)) return;
     this.face(b.x, b.z);
     this.ringT += dt;
     if (this.ringT > 0.4 && this.ringT - dt <= 0.4) {

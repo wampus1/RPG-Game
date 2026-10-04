@@ -4,7 +4,7 @@
 // sooner. What's lost is mended by the town's builders like any damage.
 import { B } from '../world/blocks.js';
 
-export const FLAMMABLE = new Set(['thatch', 'roof_wood', 'planks', 'planks_birch', 'planks_dark', 'hay_bale', 'log_wall', 'timber', 'fence', 'crate', 'barrel',
+export const FLAMMABLE = new Set(['thatch', 'roof_wood', 'planks', 'planks_birch', 'planks_dark', 'planks_bog', 'planks_drift', 'hay_bale', 'log_wall', 'timber', 'fence', 'crate', 'barrel',
   'bookshelf', 'wheat_crop', 'awning_red', 'awning_blue', 'awning_yellow', 'awning_green', 'canopy', 'sail'].map((k) => B[k]).filter((v) => v !== undefined));
 
 // (No more than this many burning at once, however dry it is.)

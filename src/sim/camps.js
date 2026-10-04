@@ -3,7 +3,7 @@
 // strike them again when they move on. Where you can see it, the tents go up
 // a piece at a time with someone from the party there; elsewhere they're
 // simply up.
-import { B, META_STATE, CANOPY_SHIFT } from '../world/blocks.js';
+import { B, META_STATE, CANOPY_SHIFT, PLANK_BLOCKS } from '../world/blocks.js';
 import { GROUND } from '../config.js';
 import { hash4 } from '../util/rng.js';
 import { SOFT } from './diplomacy.js';
@@ -47,7 +47,7 @@ export class Camps {
       if (world.regionAt(x, z)) {
         const top = world.getBlock(x, GROUND, z);
         const below = world.getBlock(x, GROUND - 1, z);
-        if (below === B.path || below === B.flagstone || below === B.planks) return false;
+        if (below === B.path || below === B.flagstone || PLANK_BLOCKS.has(below)) return false;
         if (top !== B.air && !SOFT.has(top)) return false;
       }
       return true;

@@ -5,7 +5,7 @@ import {
   GAME_MINUTES_PER_SECOND, DAY_MINUTES, SETTLEMENT_ACTIVE_DIST,
 } from '../config.js';
 import { World } from '../world/world.js';
-import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL } from '../world/blocks.js';
+import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL, PLANK_BLOCKS } from '../world/blocks.js';
 import { ITEMS, GEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
@@ -23,7 +23,7 @@ import { Sim, buildingAt, RENOWN } from '../sim/sim.js';
 import { ResearchWindow } from '../ui/research.js';
 import { PortalWindow } from '../ui/portal.js';
 import { LockWindow } from '../ui/lockpick.js';
-import { chestTier, RELOCK_DAYS } from './lockpick.js';
+import { lockTier, RELOCK_DAYS } from './lockpick.js';
 import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ.js';
 import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
@@ -1233,7 +1233,7 @@ export class Game {
       if (ow.settlementAt(x, z) || !w.regionAt(x, z)) return false;
       if (w.findStandY(x, z, y) !== y) return false;
       const below = w.getBlock(x, y - 1, z);
-      if (below === B.path || below === B.flagstone || below === B.planks || w.isWaterAt(x, y - 1, z) || !BLOCKS[below].solid) return false;
+      if (below === B.path || below === B.flagstone || PLANK_BLOCKS.has(below) || w.isWaterAt(x, y - 1, z) || !BLOCKS[below].solid) return false;
       const top = w.getBlock(x, y, z);
       return top === B.air || !BLOCKS[top].solid;
     };
@@ -3524,11 +3524,13 @@ export class Game {
     if (owner && owner.kind === 'work') this.sim.careers.onOpenContainer({ x, y, z, owner });
   }
 
-  // A household's own chest is kept locked (not your hosts', not a shop's
-  // or a barrel): picked, it stays open a couple of days, till they notice
-  // and lock it again.
+  // Chests are kept locked by whoever keeps things in them: a household
+  // (not your hosts'), a shop or workshop (not to its staff on shift), and
+  // the town hall, whose chests hold the treasury, under an advanced lock
+  // (see lockTier). A barrel never is. Picked, a lock stays open a couple
+  // of days, till they notice and lock it again.
   chestLocked(x, y, z, owner = this.containerOwner(x, y, z)) {
-    if (!owner || owner.kind !== 'house' || this.dungeon) return false;
+    if (!owner || (owner.kind !== 'house' && owner.kind !== 'biz') || this.dungeon) return false;
     if (this.world.getBlock(x, y, z) !== B.chest) return false;
     const k = `${x},${y},${z}`;
     const at = this.picked.get(k);
@@ -3548,7 +3550,8 @@ export class Game {
   // nobody watching. A village's iron lock is easy; a city manor's steel
   // one is not.
   pickLock(x, y, z, owner) {
-    const whose = owner.label ? `The ${owner.label.replace(/ \(.*\)$/, '')}'s chest` : 'This chest';
+    const name = owner.label ? owner.label.replace(/ \(.*\)$/, '') : '';
+    const whose = name ? `${/^the /i.test(name) ? name : `The ${name}`}'s chest` : 'This chest';
     if (countItem(this.player.inv, 'lockpick') <= 0) {
       this.ui.msg(`${whose} is locked. (A lockpick would open it: four are beaten out of an iron ingot at an anvil.)`, '#c8c8c8', true);
       this.audio?.play('locked');
@@ -3564,7 +3567,7 @@ export class Game {
     const key = `${x},${y},${z}`;
     this.audio?.play('locked');
     this.ui.open(new LockWindow(this.ui, this, {
-      tier: chestTier(s && s.type, owner.b && owner.b.type),
+      tier: lockTier(s, owner),
       seed: hash4(x, y, z, 0x7c4),
       label: whose,
       watched: () => this.lockWatched(owner),
@@ -4895,7 +4898,7 @@ export class Game {
     const foe = target.kind === 'player' ? source : source && source.kind === 'player' ? target : null;
     if (foe) {
       this.combatT = 5;
-      this.combatWith = foe.kind === 'npc' ? 'guard' : 'monster';
+      this.combatWith = foe.kind === 'npc' ? (foe.rec && foe.rec.bandit !== undefined ? 'bandit' : 'guard') : foe.beast ? 'beast' : 'monster';
     }
     if (armored) this.audio?.play('armor_hit', target);
     // Blue hearts take the blow first.

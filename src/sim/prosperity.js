@@ -8,7 +8,7 @@
 // has beggars on the square and a quiet tavern, and its tune goes slow and
 // minor. Each people's music has its own sound, too. It all changes back
 // as the town's luck does.
-import { B } from '../world/blocks.js';
+import { B, planksOf } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { alive, ledger } from './econ.js';
@@ -120,7 +120,7 @@ export class Prosperity {
     const want = [3, 5, 8][tier];
     const blocked = new Set([M.BUILD, M.WALL, M.WATER, M.FIELD]);
     const air = (x, y, z) => w.regionAt(x, z) && w.getBlock(x, y, z) === B.air;
-    const open = (x, z) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && air(x, GROUND, z) && air(x, GROUND + 1, z) && !L.isRoadTile(x, z)
+    const open = (x, z) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && air(x, GROUND, z) && air(x, GROUND + 1, z) && !L.isRoadTile(x, z) && !(L.isLane && L.isLane(x, z))
       && !L.spots.some((q) => q.x === x && q.z === z) && !this.game.entityAt?.(x, GROUND, z);
     const spots = [];
     for (const t of ['townhall', 'tavern', 'temple', 'guardhouse', 'shop', 'library']) {
@@ -154,7 +154,7 @@ export class Prosperity {
     const w = this.game.world;
     if (!on) {
       if (!e.boarded || !e.boarded.length) return;
-      const ops = e.boarded.filter(([x, y, z]) => !w.regionAt(x, z) || w.getBlock(x, y, z) === B.planks).map(([x, y, z]) => [x, y, z, B.glass, 0]);
+      const ops = e.boarded.filter(([x, y, z]) => !w.regionAt(x, z) || w.getBlock(x, y, z) === planksOf(L.settlement.style)).map(([x, y, z]) => [x, y, z, B.glass, 0]);
       if (ops.length) this.sim.setBlocks(ops);
       e.boarded = [];
       return;
@@ -167,7 +167,7 @@ export class Prosperity {
       for (let x = b.x0; x <= b.x1; x++) {
         for (let z = b.z0; z <= b.z1; z++) {
           if (x !== b.x0 && x !== b.x1 && z !== b.z0 && z !== b.z1) continue;
-          for (const y of [GROUND + 1, GROUND + 2]) if (w.regionAt(x, z) && w.getBlock(x, y, z) === B.glass) out.push([x, y, z, B.planks, 0]);
+          for (const y of [GROUND + 1, GROUND + 2]) if (w.regionAt(x, z) && w.getBlock(x, y, z) === B.glass) out.push([x, y, z, planksOf(L.settlement.style), 0]);
         }
       }
       return out;

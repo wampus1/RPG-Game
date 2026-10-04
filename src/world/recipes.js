@@ -37,6 +37,8 @@ function r(station, out, n, ingredients) {
 for (const w of ['oak', 'jungle', 'acacia', 'willow', 'palm']) r('hand', 'planks', 4, { [`log_${w}`]: 1 });
 r('hand', 'planks_birch', 4, { log_birch: 1 });
 r('hand', 'planks_dark', 4, { log_pine: 1 });
+r('hand', 'planks_cinder', 4, { log_cinder: 1 });
+r('hand', 'planks_bog', 4, { log_mangrove: 1 });
 r('hand', 'stick', 4, { planks: 2 });
 r('hand', 'torch', 4, { stick: 1, coal: 1 });
 r('hand', 'workbench', 1, { planks: 4 });

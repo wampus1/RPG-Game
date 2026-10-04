@@ -1,150 +1,206 @@
-// Adaptive chiptune music, made up as it plays. Each place has a theme: a
-// key, a scale, a tempo, a chord progression, instruments and a drum
-// pattern. A theme makes a couple of short melodic phrases and plays them
-// in an A-A-B-A shape over its chords, so it sounds like a tune rather
-// than noodling. When you move somewhere else (into a town, a ruin, a
-// graveyard, another biome, or a fight) the old theme fades out as the
-// new one fades in. Nights are slower and quieter.
+// Adaptive music in the old synthesizer records' way, made up as it plays.
+// Each place has a theme: a key, a mode, a tempo, its chords (and the
+// chords of its middle part), its instruments (see synth.js: a pan flute
+// over an electric piano in a village, a saw lead and a pumping bass in a
+// fight, an organ and a choir in a crypt), its drum machine's pattern (see
+// compose.js's KITS) and the room it's played in (a hall, a cave, a
+// cathedral). A theme writes its own tune (see compose.js): a motif, the
+// motif answered, a contrasting middle; and plays it in a form, parts
+// coming and going (an intro, the tune, the tune again with more around
+// it, the middle, a breath), so it sounds like a piece rather than a loop.
+// When you move somewhere else (into a town, a ruin, a graveyard, another
+// biome, or a fight) the old theme fades out as the new one fades in.
+// Towns sound like their people, and like how they're doing; nights are
+// slower, dimmer and dreamier.
 import { mulberry32 } from '../util/rng.js';
 import { townMusic } from '../sim/prosperity.js';
 import { fightPhase } from '../entities/tempo.js';
+import { SCALES, chordDegs, degMidi, motif, line, counterLine, bassBar, ARPS, KITS, HIT } from './compose.js';
+import { Rack, Samples, master, makeIR, midiHz } from './synth.js';
 
-const SCALES = {
-  major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10],
-  harmonic: [0, 2, 3, 5, 7, 8, 11],
-  dorian: [0, 2, 3, 5, 7, 9, 10],
-  phrygian: [0, 1, 3, 5, 7, 8, 10],
-  hijaz: [0, 1, 4, 5, 7, 8, 10],
-  lydian: [0, 2, 4, 6, 7, 9, 11],
-  mixo: [0, 2, 4, 5, 7, 9, 10],
-  penta: [0, 2, 4, 7, 9],
-  minpenta: [0, 3, 5, 7, 10],
-  whole: [0, 2, 4, 6, 8, 10],
-  // (Nobody's: the Kavorent's.)
-  alien: [0, 1, 4, 5, 6, 10],
-};
+// What every theme starts from, by the kind of music it is: out in the
+// country (unhurried, the drums coming in late), in a town (a groove), in a
+// fight (driving), down below (dark and slow, in a cave), in a master's
+// hall (grand, climbing with the fight).
+const CALM = { form: 'calm', energy: 0.42, mood: 'calm', space: 'hall', wet: 0.32, echo: 0.16, tone: 5200, shape: 'seventh', bassStyle: 'root', keysStyle: 'broken', arpStyle: 'up', arpRate: 2 };
+const GROOVE = { form: 'groove', energy: 0.6, mood: 'bright', space: 'room', wet: 0.24, echo: 0.12, tone: 7200, shape: 'seventh', bassStyle: 'walk', keysStyle: 'comp', arpStyle: 'updown', arpRate: 2 };
+const DRIVE = { form: 'drive', energy: 0.86, mood: 'tense', space: 'room', wet: 0.2, echo: 0.1, tone: 8200, shape: 'triad', bassStyle: 'pulse', keysStyle: 'pulse', arpStyle: 'broken', arpRate: 1, pump: true };
+const DEEP = { form: 'calm', energy: 0.24, mood: 'dark', space: 'cave', wet: 0.5, echo: 0.22, tone: 3000, shape: 'triad', bassStyle: 'drone', keysStyle: 'swell', arpStyle: 'wide', arpRate: 4 };
+const BOSS = { form: 'boss', energy: 0.7, mood: 'dark', space: 'cathedral', wet: 0.28, echo: 0.08, tone: 5600, shape: 'triad', bassStyle: 'root', keysStyle: 'block', arpStyle: 'broken', arpRate: 1, grand: true };
 
-// root: MIDI note; prog: chord roots as scale degrees; density: how busy
-// the melody is; drums: pattern name (or null).
+// Each theme: root (a MIDI note), scale, bpm, prog (a chord root a bar, as
+// scale degrees) and progB (the middle's); lead, counter, pad, keys, arp,
+// bass (instruments: see synth.js's PATCH) and how the keys, arp and bass
+// play; kit (the drums); the room (`space`, how `wet`, how much `echo`,
+// how bright: `tone`); and touches of its own: a tolling bell (`toll`), a
+// low drone, a fog of a pad drifting out of tune, wind, the sea, a far
+// hammer, a shimmer of bells by night.
 export const THEMES = {
-  title: { root: 57, scale: 'dorian', bpm: 76, prog: [0, 5, 3, 4], lead: 'triangle', pad: true, drums: null, density: 0.4, arp: true },
-  plains: { root: 60, scale: 'penta', bpm: 92, prog: [0, 3, 4, 0], lead: 'triangle', drums: 'soft', density: 0.55 },
-  forest: { root: 57, scale: 'dorian', bpm: 84, prog: [0, 6, 3, 4], lead: 'triangle', drums: 'soft', density: 0.5, arp: true },
-  taiga: { root: 55, scale: 'minor', bpm: 70, prog: [0, 5, 3, 6], lead: 'sine', pad: true, drums: null, density: 0.35 },
-  tundra: { root: 53, scale: 'minpenta', bpm: 62, prog: [0, 5, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.28 },
-  desert: { root: 62, scale: 'hijaz', bpm: 78, prog: [0, 1, 0, 6], lead: 'square', drums: 'hand', density: 0.45 },
-  savanna: { root: 58, scale: 'mixo', bpm: 96, prog: [0, 6, 3, 0], lead: 'triangle', drums: 'hand', density: 0.5 },
-  jungle: { root: 64, scale: 'lydian', bpm: 104, prog: [0, 1, 0, 4], lead: 'triangle', drums: 'tribal', density: 0.55, arp: true },
-  swamp: { root: 53, scale: 'phrygian', bpm: 68, prog: [0, 1, 5, 1], lead: 'sine', pad: true, drums: 'soft', density: 0.32, detune: 12 },
-  mountain: { root: 50, scale: 'dorian', bpm: 72, prog: [0, 6, 4, 0], lead: 'triangle', pad: true, drums: null, density: 0.38, fifths: true },
-  beach: { root: 65, scale: 'mixo', bpm: 88, prog: [0, 3, 6, 4], lead: 'triangle', drums: 'soft', density: 0.5, swing: 0.2 },
-  ocean: { root: 62, scale: 'penta', bpm: 70, prog: [0, 4, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.3 },
-  village: { root: 60, scale: 'major', bpm: 106, prog: [0, 4, 5, 3], lead: 'square', drums: 'light', density: 0.68, swing: 0.12 },
-  town: { root: 62, scale: 'major', bpm: 112, prog: [0, 5, 3, 4], lead: 'square', drums: 'light', density: 0.7, arp: true },
-  city: { root: 65, scale: 'mixo', bpm: 116, prog: [0, 3, 4, 5, 0, 3, 6, 4], lead: 'square', drums: 'light', density: 0.72, arp: true, pad: true },
-  tavern: { root: 60, scale: 'mixo', bpm: 124, prog: [0, 3, 0, 4], lead: 'square', drums: 'light', density: 0.8, swing: 0.25 },
-  ruins: { root: 57, scale: 'minor', bpm: 58, prog: [0, 5, 1, 4], lead: 'sine', pad: true, drums: null, density: 0.22, detune: 18 },
-  graveyard: { root: 52, scale: 'harmonic', bpm: 52, prog: [0, 5, 3, 4], lead: 'sine', pad: true, organ: true, drums: null, density: 0.2, toll: true },
-  fight_monsters: { root: 57, scale: 'harmonic', bpm: 148, prog: [0, 5, 6, 4], lead: 'square', drums: 'battle', density: 0.8, drive: true },
-  fight_guards: { root: 55, scale: 'phrygian', bpm: 136, prog: [0, 1, 0, 6], lead: 'square', drums: 'march', density: 0.72, drive: true },
-  // Below ground: each kind of place its own dread. A barrow's slow bell,
-  // a mine's dripping dark, a crypt's organ under water, a bandits' den
-  // with its drums, and the Kavorent's halls in a scale no living people
-  // use, glittering and wrong.
-  dungeon_barrow: { root: 50, scale: 'phrygian', bpm: 54, prog: [0, 1, 5, 0], lead: 'sine', pad: true, drums: null, density: 0.2, toll: true, detune: 10 },
-  dungeon_mine: { root: 48, scale: 'minor', bpm: 64, prog: [0, 6, 5, 6], lead: 'triangle', pad: true, drums: 'soft', density: 0.24, fifths: true },
-  dungeon_crypt: { root: 52, scale: 'harmonic', bpm: 50, prog: [0, 5, 1, 4], lead: 'sine', pad: true, organ: true, drums: null, density: 0.18, detune: 14 },
-  dungeon_holdout: { root: 55, scale: 'dorian', bpm: 84, prog: [0, 6, 0, 4], lead: 'triangle', drums: 'hand', density: 0.4, swing: 0.15 },
-  dungeon_kavorent: { root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], lead: 'sine', pad: true, arp: true, drums: null, density: 0.3, detune: 22 },
-  fight_kavorent: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
-  // ...and each its own fight, and its own master's: a barrow's bell
-  // tolling under the drums, a mine's hammering, a crypt's organ, a
-  // holdout's war drums, the Kavorent's scale turned savage. A master's is
-  // grand and dark (`grand`): a low drone under it all, a choir breathing
-  // in each bar, brass stabs, timpani, a deep bell with a tritone ringing
+  // --- the title's songs (see TITLE_SONGS) ----------------------------------
+  // The long road: a pan flute over an electric piano, a plucked arp
+  // echoing away.
+  title: { ...CALM, root: 57, scale: 'dorian', bpm: 78, prog: [0, 5, 3, 4], progB: [3, 6, 0, 4], lead: 'flute', counter: 'strings', pad: 'pad', keys: 'ep', arp: 'pluck', arpStyle: 'updown', bass: 'sub', kit: 'soft', echo: 0.26, energy: 0.45 },
+  // A bright morning on bells, the kalimba ringing under them.
+  title_dawn: { ...CALM, root: 60, scale: 'lydian', bpm: 84, prog: [0, 4, 5, 3], progB: [1, 4, 5, 1], lead: 'bell', pad: 'glass', keys: 'ep', arp: 'kalimba', arpStyle: 'wide', bass: 'sub', echo: 0.3, tone: 6400, energy: 0.4 },
+  // A waltz by the fire, three to the bar: a squeezebox, the piano's
+  // oom-pah-pah.
+  title_hearth: { ...GROOVE, root: 62, scale: 'major', bpm: 128, meter: 12, shape: 'triad', prog: [0, 3, 4, 0, 5, 3, 4, 4], progB: [3, 0, 4, 0], lead: 'squeeze', counter: 'flute', keys: 'ep', keysStyle: 'oompah', bass: 'sub', bassStyle: 'waltz', kit: 'waltz', space: 'room', energy: 0.5 },
+  // A slow ballad of the barrows, sung in parts over strings and a harp.
+  title_ballad: { ...CALM, root: 55, scale: 'harmonic', bpm: 64, shape: 'triad', prog: [0, 5, 3, 4, 0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'flute', counter: 'choir', pad: 'strings', keys: 'harp', bass: 'sub', wet: 0.4, energy: 0.34 },
+  // A march under the banner: brass, a snare rolling.
+  title_banner: { ...GROOVE, root: 58, scale: 'mixo', bpm: 100, shape: 'triad', prog: [0, 6, 3, 4], progB: [3, 0, 6, 4], lead: 'brass', counter: 'horn', pad: 'strings', bass: 'moog', bassStyle: 'fifths', kit: 'march', space: 'hall', energy: 0.6 },
+  // A shanty for far shores: a tin whistle, the squeezebox under it,
+  // hand drums, the sea.
+  title_shore: { ...GROOVE, root: 62, scale: 'dorian', bpm: 104, swing: 0.24, shape: 'triad', prog: [0, 6, 0, 4], progB: [3, 6, 2, 4], lead: 'flute', counter: 'squeeze', keys: 'squeeze', keysStyle: 'stab', bass: 'pluckbass', bassStyle: 'bounce', kit: 'hand', sea: true, energy: 0.58 },
+  // The dark below: a bell, a choir, a heartbeat, a cave's long ring.
+  title_deep: { ...DEEP, root: 50, scale: 'phrygian', bpm: 58, prog: [0, 1, 5, 0], progB: [6, 5, 1, 0], lead: 'bell', pad: 'choir', bass: 'sub', kit: 'heart', toll: true, drone: true, energy: 0.26 },
+  // The Kavorent's glass and starlight, three to the bar.
+  title_spire: { ...CALM, root: 54, scale: 'whole', bpm: 70, meter: 12, shape: 'triad', prog: [0, 2, 4, 1], progB: [1, 3, 2, 0], lead: 'glass', pad: 'glass', arp: 'bell', arpStyle: 'wide', arpRate: 2, bass: 'sub', bassStyle: 'drone', space: 'cathedral', echo: 0.4, detune: 16, mood: 'eerie', energy: 0.3 },
+
+  // --- Thessa, out in the country ---------------------------------------
+  // Open grassland: a pan flute over a warm pad and an electric piano.
+  plains: { ...CALM, root: 60, scale: 'major', bpm: 92, prog: [0, 3, 5, 4], progB: [5, 3, 0, 4], lead: 'flute', pad: 'warm', keys: 'ep', bass: 'sub', kit: 'soft', energy: 0.46 },
+  // The woods: a flute and a kalimba twinkling under the trees.
+  forest: { ...CALM, root: 57, scale: 'dorian', bpm: 84, prog: [0, 6, 3, 4], progB: [2, 3, 0, 6], lead: 'flute', pad: 'pad', arp: 'kalimba', arpStyle: 'updown', bass: 'sub', kit: 'soft', energy: 0.42 },
+  // Pines in the snow: bells and glass, no drums.
+  taiga: { ...CALM, root: 55, scale: 'minor', bpm: 68, shape: 'add9', prog: [0, 5, 3, 6], progB: [5, 6, 0, 4], lead: 'bell', pad: 'glass', keys: 'harp', bass: 'sub', wet: 0.42, echo: 0.28, tone: 4600, energy: 0.3 },
+  // The frozen waste: a few bells, the wind.
+  tundra: { ...CALM, root: 53, scale: 'minpenta', bpm: 60, shape: 'triad', prog: [0, 3, 2, 0], progB: [2, 4, 3, 1], lead: 'bell', pad: 'glass', bass: 'sub', bassStyle: 'drone', wind: true, wet: 0.5, echo: 0.3, tone: 4200, energy: 0.22, mood: 'dark' },
+  // Sand: a koto in the old desert mode, hand drums, finger cymbals.
+  desert: { ...CALM, root: 62, scale: 'hijaz', bpm: 80, shape: 'triad', prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'koto', pad: 'warm', bass: 'sub', kit: 'hand', drone: true, echo: 0.26, energy: 0.5 },
+  // Long grass and far trees: a marimba, a flute answering, hand drums.
+  savanna: { ...CALM, root: 58, scale: 'mixo', bpm: 96, prog: [0, 6, 3, 0], progB: [5, 3, 6, 0], lead: 'marimba', counter: 'flute', pad: 'warm', bass: 'pluckbass', bassStyle: 'bounce', kit: 'hand', energy: 0.55, mood: 'bright' },
+  // The jungle: a kalimba lead, marimbas, toms and wood.
+  jungle: { ...GROOVE, root: 64, scale: 'lydian', bpm: 104, prog: [0, 1, 0, 4], progB: [5, 2, 1, 4], lead: 'kalimba', pad: 'pad', keys: 'marimba', keysStyle: 'stab', arp: 'marimba', arpStyle: 'broken', bass: 'pluckbass', bassStyle: 'offbeat', kit: 'tribal', space: 'hall', energy: 0.6 },
+  // The swamp: a reed out of tune, water dripping, a heartbeat.
+  swamp: { ...CALM, root: 53, scale: 'phrygian', bpm: 66, shape: 'triad', prog: [0, 1, 5, 1], progB: [6, 5, 1, 0], lead: 'reed', pad: 'warm', bass: 'sub', bassStyle: 'drone', kit: 'drip', detune: 14, wet: 0.42, energy: 0.28, mood: 'eerie' },
+  // High ground: a horn calling over strings, a great drum far off, wind.
+  mountain: { ...CALM, root: 50, scale: 'dorian', bpm: 72, shape: 'sus2', prog: [0, 6, 4, 0], progB: [3, 2, 6, 4], lead: 'horn', counter: 'strings', pad: 'strings', bass: 'sub', bassStyle: 'fifths', kit: 'peak', wind: true, wet: 0.42, energy: 0.38 },
+  // The shore: an electric piano, a flute, a lazy swing, the waves.
+  beach: { ...CALM, root: 65, scale: 'mixo', bpm: 90, swing: 0.18, prog: [0, 3, 6, 3], progB: [5, 4, 3, 6], lead: 'flute', pad: 'warm', keys: 'ep', keysStyle: 'comp', bass: 'sub', bassStyle: 'offbeat', kit: 'light', sea: true, energy: 0.5, mood: 'bright' },
+  // Out at sea: glass and bells and their echoes, the swell.
+  ocean: { ...CALM, root: 62, scale: 'penta', bpm: 70, shape: 'triad', prog: [0, 4, 3, 4], progB: [3, 2, 0, 1], lead: 'bell', pad: 'glass', arp: 'ep', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', sea: true, wet: 0.45, echo: 0.36, energy: 0.3 },
+
+  // --- Thessa's towns ------------------------------------------------------
+  // A village: a pan flute over an electric piano, a light step.
+  village: { ...GROOVE, root: 60, scale: 'major', bpm: 100, swing: 0.1, prog: [0, 4, 5, 3], progB: [3, 4, 2, 5], lead: 'flute', pad: 'warm', keys: 'ep', keysStyle: 'broken', bass: 'sub', bassStyle: 'root', kit: 'light', energy: 0.52, tone: 6400 },
+  // A town: a plucked lead and a flute answering, the piano comping, a
+  // walking bass, the drum machine proper.
+  town: { ...GROOVE, root: 62, scale: 'major', bpm: 108, prog: [0, 5, 3, 4], progB: [1, 4, 0, 5], lead: 'pluck', counter: 'flute', pad: 'pad', keys: 'ep', bass: 'moog', bassStyle: 'walk', kit: 'groove', energy: 0.64 },
+  // A city: a saw lead, strings, brass, an FM bass slapping, the hats in
+  // sixteenths.
+  city: { ...GROOVE, root: 65, scale: 'mixo', bpm: 114, prog: [0, 3, 4, 5, 0, 3, 6, 4], progB: [5, 3, 6, 4], lead: 'lead', counter: 'brass', pad: 'strings', keys: 'ep', arp: 'pluck', bass: 'fmbass', bassStyle: 'bounce', kit: 'city', energy: 0.72 },
+  // A tavern: a squeezebox, the piano, a bouncing bass and a shuffle.
+  tavern: { ...GROOVE, root: 60, scale: 'mixo', bpm: 124, swing: 0.24, shape: 'six', prog: [0, 3, 0, 4], progB: [6, 3, 0, 4], lead: 'squeeze', counter: 'flute', keys: 'ep', keysStyle: 'stab', bass: 'moog', bassStyle: 'bounce', kit: 'shanty', energy: 0.76 },
+  // An empty town: a music box out of tune, its echo going on too long.
+  ruins: { ...DEEP, root: 57, scale: 'minor', bpm: 58, prog: [0, 5, 1, 4], progB: [3, 0, 5, 6], lead: 'kalimba', pad: 'warm', bass: 'sub', space: 'hall', echo: 0.38, detune: 16, energy: 0.2 },
+  // A graveyard: an organ, a choir singing low, a bell tolling.
+  graveyard: { ...DEEP, root: 52, scale: 'harmonic', bpm: 52, prog: [0, 5, 3, 4], progB: [3, 0, 1, 4], lead: 'choir', pad: 'organ', bass: 'sub', toll: true, space: 'cathedral', tone: 3600, energy: 0.2 },
+
+  // --- fights -----------------------------------------------------------
+  // Beasts: the hunt. Great drums and toms (no snare), a plucked
+  // ostinato, a pumping bass, brass.
+  fight_beasts: { ...DRIVE, root: 52, scale: 'minor', bpm: 140, prog: [0, 6, 5, 6], progB: [3, 4, 5, 6], lead: 'brass', pad: 'strings', arp: 'pluck', bass: 'moog', kit: 'beast', space: 'hall', energy: 0.82 },
+  // Things of the night: harmonic minor, a saw lead, an octave-jumping
+  // bass, the gated snare, a choir.
+  fight_monsters: { ...DRIVE, root: 57, scale: 'harmonic', bpm: 148, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'lead', counter: 'brass', pad: 'choir', arp: 'pluck', bass: 'moog', kit: 'battle', energy: 0.9 },
+  // The watch: a march, brass, a galloping bass.
+  fight_guards: { ...DRIVE, root: 55, scale: 'phrygian', bpm: 132, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'brass', counter: 'lead', pad: 'strings', bass: 'moog', bassStyle: 'gallop', kit: 'march', space: 'hall', energy: 0.8 },
+  // Bandits: an outlaw's twanging string over hand drums and a stamp, a
+  // long echo.
+  fight_bandits: { ...DRIVE, root: 53, scale: 'minor', bpm: 138, swing: 0.06, prog: [0, 6, 5, 4], progB: [3, 0, 6, 4], lead: 'koto', counter: 'brass', pad: 'strings', bass: 'fmbass', bassStyle: 'offbeat', kit: 'rogue', echo: 0.24, energy: 0.82 },
+  fight_boss: { ...BOSS, root: 45, scale: 'harmonic', bpm: 120, prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'brass', counter: 'strings', pad: 'choir', keys: 'organ', arp: 'pluck', bass: 'moog', toll: true },
+
+  // --- below ground ---------------------------------------------------------
+  // Each kind of place its own dread. A barrow's tolling bell and
+  // heartbeat; a mine's drips and far hammer; a crypt's organ in a
+  // cathedral's ring; a bandits' den with its hand drums; and the
+  // Kavorent's halls in a scale no living people use, glittering and wrong.
+  dungeon_barrow: { ...DEEP, root: 50, scale: 'phrygian', bpm: 54, prog: [0, 1, 5, 0], progB: [6, 5, 1, 0], lead: 'choir', pad: 'warm', bass: 'sub', kit: 'heart', toll: true, drone: true, detune: 10 },
+  dungeon_mine: { ...DEEP, root: 48, scale: 'minor', bpm: 62, prog: [0, 6, 5, 6], progB: [3, 5, 6, 0], lead: 'bell', pad: 'pad', bass: 'sub', bassStyle: 'fifths', kit: 'deep', drone: true, hammer: true, drip: true, energy: 0.26 },
+  dungeon_crypt: { ...DEEP, root: 52, scale: 'harmonic', bpm: 50, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'choir', pad: 'organ', bass: 'sub', space: 'cathedral', toll: true, detune: 6, energy: 0.18 },
+  dungeon_holdout: { ...CALM, root: 55, scale: 'dorian', bpm: 84, shape: 'triad', prog: [0, 6, 0, 4], progB: [3, 6, 5, 4], lead: 'pluck', pad: 'warm', bass: 'pluckbass', bassStyle: 'offbeat', kit: 'hand', space: 'room', swing: 0.12, tone: 3600, energy: 0.42, mood: 'tense' },
+  dungeon_kavorent: { ...DEEP, root: 54, scale: 'whole', bpm: 66, prog: [0, 2, 4, 1], progB: [1, 3, 2, 0], lead: 'glass', pad: 'glass', arp: 'bell', arpRate: 3, bass: 'sub', space: 'cathedral', echo: 0.36, detune: 22, tone: 4800, energy: 0.3, mood: 'eerie' },
+  // ...each its own fight: the same dread, driven.
+  dungeon_barrow_fight: { ...DRIVE, root: 50, scale: 'phrygian', bpm: 138, prog: [0, 1, 5, 0], progB: [6, 5, 1, 0], lead: 'lead', pad: 'choir', arp: 'pluck', arpRate: 2, bass: 'moog', kit: 'battle', toll: true, space: 'cave', wet: 0.3 },
+  dungeon_mine_fight: { ...DRIVE, root: 48, scale: 'minor', bpm: 142, prog: [0, 6, 5, 6], progB: [3, 4, 5, 6], lead: 'brass', pad: 'strings', arp: 'pluck', bass: 'moog', bassStyle: 'gallop', kit: 'drive', hammer: true, space: 'cave', wet: 0.28 },
+  dungeon_crypt_fight: { ...DRIVE, root: 52, scale: 'harmonic', bpm: 132, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'lead', counter: 'choir', pad: 'organ', bass: 'fmbass', kit: 'march', space: 'cathedral', wet: 0.3 },
+  dungeon_holdout_fight: { ...DRIVE, root: 55, scale: 'dorian', bpm: 150, swing: 0.08, prog: [0, 6, 0, 4], progB: [3, 6, 5, 4], lead: 'koto', counter: 'brass', pad: 'strings', bass: 'pluckbass', bassStyle: 'offbeat', kit: 'rogue', echo: 0.2 },
+  dungeon_kavorent_fight: { ...DRIVE, root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], progB: [2, 4, 1, 3], lead: 'lead', pad: 'glass', arp: 'bell', bass: 'fmbass', kit: 'battle', space: 'cathedral', wet: 0.26, detune: 10 },
+  fight_kavorent: { ...DRIVE, root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], progB: [2, 4, 1, 3], lead: 'lead', pad: 'glass', arp: 'bell', bass: 'fmbass', kit: 'battle', space: 'cathedral', wet: 0.26, detune: 10 },
+  // ...and each its master's: grand and dark (`grand`). A drone under it
+  // all, a choir, brass stabs, timpani, a deep bell with a tritone ringing
   // in it; and it climbs as the fight does, through the master's phases
-  // (see bossLevel).
-  dungeon_barrow_fight: { root: 50, scale: 'phrygian', bpm: 138, prog: [0, 1, 5, 0], lead: 'square', drums: 'battle', density: 0.74, drive: true, toll: true },
-  dungeon_barrow_boss: { root: 45, scale: 'phrygian', bpm: 118, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'square', drums: 'grand', density: 0.6, toll: true, organ: true, grand: true, choir: true, brass: true },
-  dungeon_mine_fight: { root: 48, scale: 'minor', bpm: 142, prog: [0, 6, 5, 6], lead: 'square', drums: 'tribal', density: 0.72, drive: true, fifths: true },
-  dungeon_mine_boss: { root: 43, scale: 'harmonic', bpm: 122, prog: [0, 6, 5, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.62, fifths: true, grand: true, brass: true, choir: true },
-  dungeon_crypt_fight: { root: 52, scale: 'harmonic', bpm: 132, prog: [0, 5, 1, 4], lead: 'square', drums: 'march', density: 0.7, drive: true, organ: true },
-  dungeon_crypt_boss: { root: 45, scale: 'harmonic', bpm: 114, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.58, organ: true, toll: true, detune: 8, grand: true, choir: true },
-  dungeon_holdout_fight: { root: 55, scale: 'dorian', bpm: 150, prog: [0, 6, 0, 4], lead: 'square', drums: 'tribal', density: 0.78, drive: true, swing: 0.1 },
-  dungeon_holdout_boss: { root: 46, scale: 'phrygian', bpm: 126, prog: [0, 1, 0, 6, 0, 1, 4, 6], lead: 'square', drums: 'grand', density: 0.64, grand: true, brass: true },
-  dungeon_kavorent_fight: { root: 54, scale: 'whole', bpm: 140, prog: [0, 1, 3, 2], lead: 'square', drums: 'battle', density: 0.78, drive: true, arp: true },
+  // (see bossLevel): half-time and heavy, then driving with an arp
+  // racing, then savage, the strings shivering and the key lifted.
+  dungeon_barrow_boss: { ...BOSS, root: 45, scale: 'phrygian', bpm: 118, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'brass', counter: 'strings', pad: 'choir', arp: 'pluck', bass: 'moog', toll: true },
+  dungeon_mine_boss: { ...BOSS, root: 43, scale: 'harmonic', bpm: 122, prog: [0, 6, 5, 4, 0, 6, 1, 4], progB: [5, 3, 1, 4], lead: 'brass', counter: 'lead', pad: 'strings', arp: 'pluck', bass: 'moog', hammer: true, space: 'cave', wet: 0.24 },
+  dungeon_crypt_boss: { ...BOSS, root: 45, scale: 'harmonic', bpm: 114, prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'organ', counter: 'strings', pad: 'choir', arp: 'pluck', bass: 'fmbass', toll: true, detune: 8 },
+  dungeon_holdout_boss: { ...BOSS, root: 46, scale: 'phrygian', bpm: 126, prog: [0, 1, 0, 6, 0, 1, 4, 6], progB: [5, 6, 1, 0], lead: 'lead', counter: 'brass', pad: 'strings', arp: 'koto', bass: 'moog', space: 'hall' },
+  dungeon_kavorent_boss: { ...BOSS, root: 42, scale: 'alien', bpm: 116, prog: [0, 1, 3, 2, 0, 4, 3, 1], progB: [2, 4, 1, 3], lead: 'lead', counter: 'choir', pad: 'glass', arp: 'bell', bass: 'fmbass', detune: 14 },
   // Each island's own old place, with its own music (`own`: not made over
-  // in the island's way, being its already): a Wildwood Hollow's pipes and
-  // creaking hush, a Kiln-Deep's anvils and the roar under them, a Tide
+  // in the island's way, being its already): a Wildwood Hollow's pipes in
+  // a creaking hush, a Kiln-Deep's anvils and the roar under them, a Tide
   // Grotto's steel drums slowed to a drip, the sea's swell under it. And
   // each its own fight, and its master's.
-  dungeon_grove: { own: true, root: 57, scale: 'dorian', bpm: 58, prog: [0, 6, 3, 4], lead: 'reed', pad: true, arp: true, drums: null, density: 0.22, detune: 8 },
-  dungeon_grove_fight: { own: true, root: 57, scale: 'dorian', bpm: 138, prog: [0, 6, 3, 4], lead: 'reed', drums: 'tribal', density: 0.74, drive: true, arp: true },
-  dungeon_grove_boss: { own: true, root: 45, scale: 'dorian', bpm: 116, prog: [0, 6, 3, 4, 0, 6, 1, 4], lead: 'reed', drums: 'grand', density: 0.62, grand: true, choir: true, brass: true, arp: true },
-  dungeon_forge: { own: true, root: 48, scale: 'phrygian', bpm: 62, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.26, drone: true },
-  dungeon_forge_fight: { own: true, root: 48, scale: 'phrygian', bpm: 150, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge_battle', density: 0.8, drive: true, drone: true },
-  dungeon_forge_boss: { own: true, root: 41, scale: 'phrygian', bpm: 124, prog: [0, 1, 6, 5, 0, 1, 4, 0], lead: 'buzz', drums: 'grand', density: 0.64, drone: true, grand: true, brass: true, choir: true, toll: true },
-  dungeon_grotto: { own: true, root: 55, scale: 'minpenta', bpm: 60, prog: [0, 3, 4, 3], lead: 'steel', pad: true, drums: 'drip', density: 0.24, fog: true, swing: 0.1 },
-  dungeon_grotto_fight: { own: true, root: 55, scale: 'dorian', bpm: 142, prog: [0, 6, 0, 3], lead: 'steel', drums: 'steel', density: 0.76, drive: true, fog: true },
-  dungeon_grotto_boss: { own: true, root: 46, scale: 'harmonic', bpm: 118, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'steel', drums: 'grand', density: 0.6, fog: true, grand: true, choir: true, brass: true },
-  // A Kavorent spire: near it, a slow wrong music in a scale nobody uses;
-  // as one opens, it gathers and swells; open, it rings.
-  spire: { root: 49, scale: 'alien', bpm: 48, prog: [0, 1, 5, 2], lead: 'sine', pad: true, drums: null, density: 0.16, detune: 28, arp: true },
-  spire_swell: { root: 49, scale: 'alien', bpm: 92, prog: [0, 1, 0, 1, 5, 2, 5, 3], lead: 'square', pad: true, organ: true, drums: 'tribal', density: 0.62, drive: true, detune: 18, arp: true },
-  spire_open: { root: 54, scale: 'whole', bpm: 64, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, drums: null, density: 0.34, detune: 22 },
-  dungeon_kavorent_boss: { root: 42, scale: 'alien', bpm: 116, prog: [0, 1, 3, 2, 0, 4, 3, 1], lead: 'square', drums: 'grand', density: 0.6, arp: true, detune: 14, grand: true, choir: true, brass: true },
-  // The openings: an old town's story, slow and warm; a shanty on deck;
-  // the storm; and the cold after.
-  history: { root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], lead: 'triangle', pad: true, arp: true, drums: null, density: 0.42 },
-  voyage: { root: 62, scale: 'dorian', bpm: 110, prog: [0, 3, 0, 4], lead: 'square', drums: 'light', density: 0.62, swing: 0.3 },
-  storm: { root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], lead: 'square', drums: 'battle', density: 0.74, drive: true, detune: 10 },
-  wreck: { root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], lead: 'sine', pad: true, drums: null, density: 0.14 },
-  fight_boss: { root: 45, scale: 'harmonic', bpm: 120, prog: [0, 5, 1, 4, 0, 6, 1, 4], lead: 'square', drums: 'grand', density: 0.6, organ: true, grand: true, choir: true, brass: true },
-  // The title's other songs (see TITLE_SONGS): a bright morning on bells;
-  // a waltz by the fire, three to the bar; a slow ballad of the barrows,
-  // sung in parts; a march under the banner; a shanty for far shores; the
-  // dark below with its bell; and the Kavorent's glass and starlight.
-  title_dawn: { root: 60, scale: 'lydian', bpm: 84, prog: [0, 4, 5, 3], lead: 'triangle', bell: true, pad: true, drums: null, density: 0.42, arp: true },
-  title_hearth: { root: 62, scale: 'major', bpm: 128, meter: 12, prog: [0, 3, 4, 0, 5, 3, 4, 4], lead: 'triangle', harmony: true, drums: 'waltz', density: 0.55 },
-  title_ballad: { root: 55, scale: 'harmonic', bpm: 64, prog: [0, 5, 3, 4, 0, 5, 1, 4], lead: 'sine', harmony: true, pad: true, drums: null, density: 0.34, detune: 6 },
-  title_banner: { root: 58, scale: 'mixo', bpm: 100, prog: [0, 6, 3, 4], lead: 'square', drums: 'march', density: 0.6, fifths: true, stabs: true },
-  title_shore: { root: 62, scale: 'dorian', bpm: 104, prog: [0, 6, 0, 4], lead: 'square', drums: 'hand', density: 0.6, swing: 0.28, harmony: true },
-  title_deep: { root: 50, scale: 'phrygian', bpm: 58, prog: [0, 1, 5, 0], lead: 'sine', bell: true, pad: true, drums: null, density: 0.24, toll: true, detune: 10 },
-  title_spire: { root: 54, scale: 'whole', bpm: 70, meter: 12, prog: [0, 2, 4, 1], lead: 'sine', bell: true, pad: true, arp: true, drums: null, density: 0.3, detune: 16 },
-  // Fallen: a slow lament in the dark; then the Kavorent's rite that brings
-  // you back, strange and climbing.
-  death: { root: 45, scale: 'harmonic', bpm: 44, prog: [0, 5, 3, 4], lead: 'sine', pad: true, organ: true, bell: true, drums: null, density: 0.16 },
-  ritual: { root: 50, scale: 'alien', bpm: 88, prog: [0, 2, 4, 1], lead: 'sine', pad: true, organ: true, arp: true, bell: true, drums: null, density: 0.5, detune: 26 },
-  // --- the other Dagoni Islands, each its own sound -------------------------
-  // Kharos: the Ashborn's music is the forge's. A buzzing reed of a lead
-  // (`buzz`), anvils for drums (`forge`), the mountain's rumble under it all
+  dungeon_grove: { ...DEEP, own: true, root: 57, scale: 'dorian', bpm: 58, shape: 'sus2', prog: [0, 6, 3, 4], progB: [2, 3, 6, 0], lead: 'reed', pad: 'warm', arp: 'kalimba', arpRate: 4, bass: 'sub', space: 'hall', wind: true, detune: 8, tone: 3800 },
+  dungeon_grove_fight: { ...DRIVE, own: true, root: 57, scale: 'dorian', bpm: 138, prog: [0, 6, 3, 4], progB: [2, 3, 6, 4], lead: 'reed', counter: 'horn', pad: 'strings', arp: 'kalimba', bass: 'pluckbass', kit: 'tribal', space: 'hall' },
+  dungeon_grove_boss: { ...BOSS, own: true, root: 45, scale: 'dorian', bpm: 116, prog: [0, 6, 3, 4, 0, 6, 1, 4], progB: [2, 3, 6, 4], lead: 'horn', counter: 'reed', pad: 'choir', arp: 'kalimba', bass: 'moog', space: 'hall' },
+  dungeon_forge: { ...DEEP, own: true, root: 48, scale: 'phrygian', bpm: 62, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'buzz', pad: 'warm', bass: 'sub', kit: 'forge', drone: true, tone: 3400, energy: 0.28 },
+  dungeon_forge_fight: { ...DRIVE, own: true, root: 48, scale: 'phrygian', bpm: 150, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'buzz', pad: 'strings', bass: 'moog', kit: 'forge_battle', drone: true, space: 'cave', wet: 0.24 },
+  dungeon_forge_boss: { ...BOSS, own: true, root: 41, scale: 'phrygian', bpm: 124, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'buzz', counter: 'brass', pad: 'choir', arp: 'koto', bass: 'moog', drone: true, toll: true, space: 'cave', wet: 0.24 },
+  dungeon_grotto: { ...DEEP, own: true, root: 55, scale: 'minpenta', bpm: 60, swing: 0.1, prog: [0, 3, 4, 3], progB: [2, 4, 3, 1], lead: 'steel', pad: 'glass', bass: 'sub', kit: 'drip', fog: true, sea: true, tone: 3800 },
+  dungeon_grotto_fight: { ...DRIVE, own: true, root: 55, scale: 'dorian', bpm: 142, prog: [0, 6, 0, 3], progB: [3, 6, 5, 4], lead: 'steel', counter: 'brass', pad: 'glass', bass: 'fmbass', bassStyle: 'offbeat', kit: 'steel', fog: true, space: 'cave', wet: 0.26 },
+  dungeon_grotto_boss: { ...BOSS, own: true, root: 46, scale: 'harmonic', bpm: 118, prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'steel', counter: 'brass', pad: 'choir', arp: 'marimba', bass: 'fmbass', fog: true, space: 'cave', wet: 0.24 },
+
+  // --- a Kavorent spire -------------------------------------------------------
+  // Near it, a slow wrong music in a scale nobody uses; as one opens, it
+  // gathers and swells; open, it rings.
+  spire: { ...DEEP, root: 49, scale: 'alien', bpm: 48, prog: [0, 1, 5, 2], progB: [2, 4, 1, 0], lead: 'glass', pad: 'glass', arp: 'bell', arpRate: 4, bass: 'sub', space: 'cathedral', echo: 0.4, detune: 28, tone: 4400, energy: 0.16, mood: 'eerie' },
+  spire_swell: { ...DRIVE, root: 49, scale: 'alien', bpm: 92, prog: [0, 1, 0, 1, 5, 2, 5, 3], progB: [2, 4, 1, 3], lead: 'lead', pad: 'choir', keys: 'organ', keysStyle: 'swell', arp: 'glass', arpRate: 2, bass: 'fmbass', kit: 'ritual', space: 'cathedral', wet: 0.36, detune: 18, energy: 0.62 },
+  spire_open: { ...CALM, root: 54, scale: 'whole', bpm: 64, shape: 'triad', prog: [0, 2, 4, 1], progB: [1, 3, 2, 0], lead: 'choir', pad: 'organ', arp: 'bell', arpStyle: 'wide', bass: 'sub', bassStyle: 'drone', space: 'cathedral', echo: 0.34, detune: 22, energy: 0.34, mood: 'eerie' },
+
+  // --- the stories --------------------------------------------------------
+  // An old town's story, slow and warm; a shanty on deck; the storm; and
+  // the cold after.
+  history: { ...CALM, root: 60, scale: 'major', bpm: 74, prog: [0, 5, 3, 4], progB: [3, 0, 1, 4], lead: 'flute', counter: 'horn', pad: 'strings', keys: 'harp', bass: 'sub', energy: 0.42 },
+  voyage: { ...GROOVE, root: 62, scale: 'dorian', bpm: 110, swing: 0.28, shape: 'triad', prog: [0, 3, 0, 4], progB: [6, 3, 0, 4], lead: 'squeeze', counter: 'flute', keys: 'squeeze', keysStyle: 'stab', bass: 'sub', bassStyle: 'bounce', kit: 'shanty', sea: true, energy: 0.62 },
+  storm: { ...DRIVE, root: 50, scale: 'phrygian', bpm: 140, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'lead', pad: 'choir', arp: 'pluck', bass: 'moog', kit: 'battle', wind: true, sea: true, space: 'hall', wet: 0.3, detune: 10 },
+  wreck: { ...DEEP, root: 45, scale: 'minor', bpm: 46, prog: [0, 5, 3, 4], progB: [3, 0, 5, 4], lead: 'ep', pad: 'warm', bass: 'sub', space: 'hall', echo: 0.36, sea: true, tone: 3600, energy: 0.14 },
+  // Fallen: a lament, a choir over an organ in the dark; then the
+  // Kavorent's rite that brings you back, strange and climbing.
+  death: { ...DEEP, root: 45, scale: 'harmonic', bpm: 44, prog: [0, 5, 3, 4], progB: [3, 0, 1, 4], lead: 'choir', pad: 'organ', bass: 'sub', toll: true, space: 'cathedral', energy: 0.16 },
+  ritual: { ...CALM, root: 50, scale: 'alien', bpm: 88, shape: 'triad', prog: [0, 2, 4, 1], progB: [1, 3, 2, 0], lead: 'choir', pad: 'organ', arp: 'glass', arpRate: 1, arpStyle: 'wide', bass: 'fmbass', bassStyle: 'pulse', kit: 'deep', space: 'cathedral', echo: 0.3, detune: 26, energy: 0.5, mood: 'eerie' },
+
+  // --- the other Dagoni Islands, each its own sound ------------------------
+  // Kharos: the Ashborn's music is the forge's. A buzzing shawm of a lead,
+  // anvils for drums (`forge`), the mountain's rumble under it all
   // (`drone`), in the dark modes. Its ash plains bare and slow; the cinder
   // woods crackling; the geyser fields hissing in a scale of whole steps;
   // the mountain itself savage.
-  ashland: { root: 50, scale: 'phrygian', bpm: 66, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.3, drone: true },
-  cinderwood: { root: 52, scale: 'harmonic', bpm: 76, prog: [0, 5, 1, 4], lead: 'triangle', pad: true, drums: 'crackle', density: 0.36, drone: true },
-  geyser: { root: 55, scale: 'whole', bpm: 70, prog: [0, 2, 0, 4], lead: 'sine', pad: true, arp: true, drums: 'crackle', density: 0.3, detune: 10 },
-  volcano: { root: 45, scale: 'phrygian', bpm: 90, prog: [0, 1, 6, 1], lead: 'buzz', drums: 'forge', density: 0.42, drone: true, stabs: true, fifths: true },
-  ashborn_village: { root: 52, scale: 'phrygian', bpm: 96, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge', density: 0.6, fifths: true },
-  ashborn_town: { root: 54, scale: 'hijaz', bpm: 104, prog: [0, 1, 5, 4], lead: 'buzz', drums: 'forge', density: 0.66, arp: true, fifths: true },
-  ashborn_city: { root: 50, scale: 'hijaz', bpm: 110, prog: [0, 1, 0, 6, 0, 5, 1, 4], lead: 'buzz', drums: 'forge', density: 0.7, arp: true, pad: true, stabs: true, drone: true },
-  fight_kharos: { root: 50, scale: 'phrygian', bpm: 152, prog: [0, 1, 0, 6], lead: 'buzz', drums: 'forge_battle', density: 0.82, drive: true, drone: true },
-  // Myrrow: the Mirefolk's is the fog's: a breathy reed flute (`reed`),
-  // water dripping in the dark for drums (`drip`), a pad drifting out of
-  // tune (`fog`). The Stiltfolk's is the shallows': a steel-drum lead
-  // (`steel`), wood blocks and hand drums (`steel`), lilting. The moor
-  // bleak; the fungal woods strange, in whole steps; the mangroves between.
-  moor: { root: 55, scale: 'dorian', bpm: 64, prog: [0, 6, 3, 6], lead: 'reed', pad: true, fog: true, drums: null, density: 0.3 },
-  fungal: { root: 58, scale: 'whole', bpm: 72, prog: [0, 2, 1, 3], lead: 'reed', arp: true, fog: true, drums: 'drip', density: 0.32, detune: 20 },
-  mangrove: { root: 60, scale: 'minpenta', bpm: 84, prog: [0, 3, 4, 3], lead: 'steel', drums: 'drip', density: 0.42, swing: 0.15, fog: true },
-  mire_village: { root: 57, scale: 'dorian', bpm: 84, prog: [0, 6, 3, 4], lead: 'reed', pad: true, fog: true, drums: 'drip', density: 0.5 },
-  mire_town: { root: 59, scale: 'dorian', bpm: 90, prog: [0, 3, 6, 4], lead: 'reed', pad: true, fog: true, drums: 'drip', density: 0.56, arp: true },
-  mire_city: { root: 55, scale: 'dorian', bpm: 94, prog: [0, 6, 3, 4, 0, 2, 6, 4], lead: 'reed', pad: true, organ: true, fog: true, drums: 'soft', density: 0.6, arp: true },
-  stilt_village: { root: 64, scale: 'penta', bpm: 108, prog: [0, 4, 3, 4], lead: 'steel', drums: 'steel', density: 0.62, swing: 0.22 },
-  stilt_town: { root: 65, scale: 'mixo', bpm: 114, prog: [0, 6, 3, 4], lead: 'steel', drums: 'steel', density: 0.66, swing: 0.2, harmony: true },
-  stilt_city: { root: 62, scale: 'mixo', bpm: 118, prog: [0, 3, 6, 4, 0, 3, 4, 4], lead: 'steel', drums: 'steel', density: 0.7, swing: 0.2, arp: true, harmony: true, pad: true },
-  fight_myrrow: { root: 53, scale: 'dorian', bpm: 140, prog: [0, 6, 0, 3], lead: 'square', drums: 'battle', density: 0.76, drive: true, fog: true },
+  ashland: { ...DEEP, root: 50, scale: 'phrygian', bpm: 66, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'buzz', pad: 'warm', bass: 'sub', kit: 'forge', drone: true, wind: true, space: 'hall', energy: 0.32 },
+  cinderwood: { ...CALM, root: 52, scale: 'harmonic', bpm: 76, shape: 'triad', prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'koto', pad: 'pad', bass: 'sub', kit: 'crackle', drone: true, tone: 3600, energy: 0.36, mood: 'dark' },
+  geyser: { ...CALM, root: 55, scale: 'whole', bpm: 70, shape: 'triad', prog: [0, 2, 0, 4], progB: [1, 3, 2, 0], lead: 'glass', pad: 'glass', arp: 'bell', arpRate: 3, bass: 'sub', kit: 'crackle', wind: true, detune: 10, energy: 0.3, mood: 'eerie' },
+  volcano: { ...CALM, root: 45, scale: 'phrygian', bpm: 90, shape: 'power', prog: [0, 1, 6, 1], progB: [5, 6, 1, 0], lead: 'buzz', counter: 'brass', pad: 'strings', bass: 'moog', bassStyle: 'fifths', kit: 'forge', drone: true, tone: 4200, energy: 0.55, mood: 'dark' },
+  ashborn_village: { ...GROOVE, root: 52, scale: 'phrygian', bpm: 96, shape: 'triad', prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'buzz', pad: 'warm', keys: 'koto', keysStyle: 'broken', bass: 'sub', bassStyle: 'fifths', kit: 'forge', energy: 0.56 },
+  ashborn_town: { ...GROOVE, root: 54, scale: 'hijaz', bpm: 104, shape: 'triad', prog: [0, 1, 5, 4], progB: [3, 1, 6, 0], lead: 'buzz', counter: 'koto', pad: 'pad', arp: 'koto', bass: 'moog', bassStyle: 'fifths', kit: 'forge', energy: 0.64 },
+  ashborn_city: { ...GROOVE, root: 50, scale: 'hijaz', bpm: 110, shape: 'triad', prog: [0, 1, 0, 6, 0, 5, 1, 4], progB: [3, 1, 6, 0], lead: 'buzz', counter: 'brass', pad: 'pad', arp: 'koto', bass: 'moog', bassStyle: 'fifths', kit: 'forge', drone: true, energy: 0.7 },
+  fight_kharos: { ...DRIVE, root: 50, scale: 'phrygian', bpm: 152, prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'buzz', counter: 'brass', pad: 'strings', bass: 'moog', kit: 'forge_battle', drone: true },
+  // Myrrow: the Mirefolk's is the fog's: a breathy reed flute, water
+  // dripping in the dark for drums (`drip`), a pad of glass drifting out
+  // of tune (`fog`). The Stiltfolk's is the shallows': steel drums, wood
+  // blocks and hand drums, a skanking piano, lilting. The moor bleak; the
+  // fungal woods strange, in whole steps; the mangroves between.
+  moor: { ...CALM, root: 55, scale: 'dorian', bpm: 64, shape: 'sus2', prog: [0, 6, 3, 6], progB: [2, 3, 6, 0], lead: 'reed', pad: 'glass', bass: 'sub', bassStyle: 'drone', fog: true, wind: true, wet: 0.42, tone: 4000, energy: 0.3, mood: 'dark' },
+  fungal: { ...CALM, root: 58, scale: 'whole', bpm: 72, shape: 'triad', prog: [0, 2, 1, 3], progB: [1, 3, 2, 0], lead: 'reed', pad: 'glass', arp: 'kalimba', arpStyle: 'wide', bass: 'sub', kit: 'drip', fog: true, detune: 20, energy: 0.32, mood: 'eerie' },
+  mangrove: { ...CALM, root: 60, scale: 'minpenta', bpm: 84, swing: 0.15, shape: 'triad', prog: [0, 3, 4, 3], progB: [2, 4, 3, 1], lead: 'steel', pad: 'glass', bass: 'sub', bassStyle: 'offbeat', kit: 'drip', fog: true, energy: 0.42 },
+  mire_village: { ...GROOVE, root: 57, scale: 'dorian', bpm: 84, shape: 'sus2', prog: [0, 6, 3, 4], progB: [2, 3, 6, 0], lead: 'reed', pad: 'glass', keys: 'kalimba', keysStyle: 'broken', bass: 'sub', bassStyle: 'root', kit: 'drip', fog: true, energy: 0.48, tone: 5200 },
+  mire_town: { ...GROOVE, root: 59, scale: 'dorian', bpm: 90, prog: [0, 3, 6, 4], progB: [2, 3, 6, 0], lead: 'reed', counter: 'flute', pad: 'glass', arp: 'kalimba', bass: 'sub', bassStyle: 'root', kit: 'drip', fog: true, energy: 0.54, tone: 5600 },
+  mire_city: { ...GROOVE, root: 55, scale: 'dorian', bpm: 94, prog: [0, 6, 3, 4, 0, 2, 6, 4], progB: [2, 3, 6, 0], lead: 'reed', counter: 'strings', pad: 'glass', keys: 'organ', keysStyle: 'swell', arp: 'kalimba', bass: 'sub', bassStyle: 'walk', kit: 'soft', fog: true, energy: 0.6, tone: 6000 },
+  stilt_village: { ...GROOVE, root: 64, scale: 'penta', bpm: 108, swing: 0.22, shape: 'triad', prog: [0, 4, 3, 4], progB: [3, 2, 0, 1], lead: 'steel', keys: 'marimba', keysStyle: 'stab', bass: 'sub', bassStyle: 'offbeat', kit: 'steel', sea: true, energy: 0.6 },
+  stilt_town: { ...GROOVE, root: 65, scale: 'mixo', bpm: 114, swing: 0.2, shape: 'triad', prog: [0, 6, 3, 4], progB: [5, 3, 6, 0], lead: 'steel', counter: 'flute', pad: 'warm', keys: 'ep', keysStyle: 'stab', bass: 'pluckbass', bassStyle: 'offbeat', kit: 'steel', energy: 0.66 },
+  stilt_city: { ...GROOVE, root: 62, scale: 'mixo', bpm: 118, swing: 0.2, prog: [0, 3, 6, 4, 0, 3, 4, 4], progB: [5, 3, 6, 0], lead: 'steel', counter: 'brass', pad: 'pad', keys: 'ep', keysStyle: 'stab', arp: 'marimba', bass: 'fmbass', bassStyle: 'offbeat', kit: 'steel', energy: 0.72 },
+  fight_myrrow: { ...DRIVE, root: 53, scale: 'dorian', bpm: 140, prog: [0, 6, 0, 3], progB: [3, 6, 5, 4], lead: 'lead', counter: 'reed', pad: 'glass', arp: 'kalimba', bass: 'moog', kit: 'battle', fog: true },
 };
 
 // The two other islands' sound laid over any tune heard there that isn't
@@ -154,12 +210,18 @@ export const THEMES = {
 // one.)
 const ISLE_SOUND = {
   kharos: {
-    root: -2, scale: { minor: 'harmonic', dorian: 'phrygian', mixo: 'hijaz', major: 'hijaz', penta: 'minpenta', lydian: 'phrygian' },
-    lead: { square: 'buzz', triangle: 'buzz' }, drums: { soft: 'forge', light: 'forge', hand: 'forge', tribal: 'forge', march: 'forge', battle: 'forge_battle' }, drone: true,
+    root: -2, toneX: 0.85, drone: true,
+    scale: { minor: 'harmonic', dorian: 'phrygian', mixo: 'hijaz', major: 'hijaz', penta: 'minpenta', lydian: 'phrygian' },
+    voice: { flute: 'buzz', lead: 'buzz', pluck: 'koto', ep: 'koto', kalimba: 'koto', marimba: 'koto', harp: 'koto', steel: 'buzz', reed: 'buzz', squeeze: 'buzz', horn: 'brass' },
+    pad: { glass: 'pad' },
+    kit: { soft: 'forge', light: 'forge', groove: 'forge', city: 'forge', hand: 'forge', tribal: 'forge', march: 'forge', steel: 'forge', shanty: 'forge', peak: 'forge', battle: 'forge_battle', drive: 'forge_battle', beast: 'forge_battle', rogue: 'forge_battle' },
   },
   myrrow: {
-    root: 1, bpmX: 0.92, scale: { minor: 'dorian', harmonic: 'dorian', phrygian: 'dorian', major: 'lydian', mixo: 'dorian', penta: 'minpenta' },
-    lead: { triangle: 'reed', sine: 'reed' }, drums: { soft: 'drip', light: 'drip', hand: 'drip', tribal: 'drip' }, fog: true,
+    root: 1, bpmX: 0.92, fog: true,
+    scale: { minor: 'dorian', harmonic: 'dorian', phrygian: 'dorian', major: 'lydian', mixo: 'dorian', penta: 'minpenta' },
+    voice: { flute: 'reed', ep: 'reed', bell: 'reed', choir: 'reed', glass: 'reed', squeeze: 'reed', horn: 'reed', pluck: 'kalimba', marimba: 'kalimba', koto: 'kalimba', harp: 'kalimba' },
+    pad: { pad: 'glass', warm: 'glass', strings: 'glass' },
+    kit: { soft: 'drip', light: 'drip', hand: 'drip', tribal: 'drip', groove: 'drip', heart: 'drip', shanty: 'drip', peak: 'drip' },
   },
 };
 export function isleTheme(T, isle) {
@@ -168,9 +230,13 @@ export function isleTheme(T, isle) {
   T.root += c.root || 0;
   if (c.bpmX) T.bpm *= c.bpmX;
   T.scale = c.scale[T.scale] || T.scale;
-  if (!T.bell) T.lead = c.lead[T.lead] || T.lead;
-  if (T.drums) T.drums = c.drums[T.drums] || T.drums;
+  // (A fight's saw lead and brass stay: only the gentler instruments go
+  // over.)
+  for (const k of ['lead', 'counter', 'keys', 'arp']) if (T[k]) T[k] = c.voice[T[k]] || T[k];
+  if (T.pad) T.pad = c.pad[T.pad] || T.pad;
+  if (T.kit) T.kit = c.kit[T.kit] || T.kit;
   if (c.drone) T.drone = true;
+  if (c.toneX) T.tone *= c.toneX;
   if (c.fog) {
     T.fog = true;
     T.detune = Math.max(T.detune || 0, 12);
@@ -214,13 +280,16 @@ export function musicMood(game) {
   if (game.scene && game.scene.mood) return game.scene.mood;
   // (Which of the Dagoni Islands you're on, or under: its sound.)
   const tilde = isleTilde(game);
-  // A fight: guards after you, or beasts at your throat.
+  // A fight: the watch after you, bandits, beasts at your throat, or
+  // things of the night.
   if (!p.dead) {
-    const guards = game.npcs.some((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);
-    if (guards) return `fight_guards${tilde}`;
-    const beasts = game.creatures.some((c) => !c.dead && c.hostileNow && c.target === p && c.distTo(p) < 12);
-    if (beasts || (game.combatT || 0) > 0) {
+    const after = game.npcs.filter((n) => !n.dead && n.threat === p && (n.state === 'fight' || n.state === 'alert') && n.distTo(p) < 20);
+    if (after.some((n) => !(n.rec && n.rec.bandit !== undefined))) return `fight_guards${tilde}`;
+    if (after.length) return `fight_bandits${tilde}`;
+    const foes = game.creatures.filter((c) => !c.dead && c.hostileNow && c.target === p && c.distTo(p) < 12);
+    if (foes.length || (game.combatT || 0) > 0) {
       if (game.combatWith === 'guard') return `fight_guards${tilde}`;
+      if (game.combatWith === 'bandit') return `fight_bandits${tilde}`;
       // (Below ground: a master's hall, or the place's own fight music.)
       if (game.dungeon) {
         const ty = game.dungeon.rec.type;
@@ -228,7 +297,10 @@ export function musicMood(game) {
         if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${fightPhase(game.dungeon.fight)}`;
         return `dungeon_${ty}_fight${own}`;
       }
-      return ISLE_FIGHTS[tilde.slice(1)] || 'fight_monsters';
+      if (ISLE_FIGHTS[tilde.slice(1)]) return ISLE_FIGHTS[tilde.slice(1)];
+      // (A beast, not a thing of the night: the hunt's music.)
+      const beasts = foes.length ? foes.every((c) => c.beast) : game.combatWith === 'beast';
+      return beasts ? 'fight_beasts' : 'fight_monsters';
     }
   }
   // Near a Kavorent spire (not one whose ruin is beaten).
@@ -283,64 +355,96 @@ function ownDungeon(ty) {
   return !!(THEMES[`dungeon_${ty}`] && THEMES[`dungeon_${ty}`].own);
 }
 
-// Each people plays its own way; a thriving town's tune is quick and
-// bright, a struggling one's slow and in a minor key.
+// Each people plays its own way. The north's in the old dorian mode, a
+// horn over a harp, the bass in fifths; the sun peoples' in the desert
+// mode on a koto, hand drums under it; the wild peoples' bright and
+// strange, kalimbas and marimbas over toms; the high peoples' a march of
+// brass and organ.
 const CULTURE_SOUND = {
   vale: {},
-  north: { scale: 'dorian', root: -2, bpmX: 0.9, drums: 'soft', fifths: true, lead: 'triangle' },
-  sun: { scale: 'hijaz', root: 2, drums: 'hand', swing: 0.1 },
-  wild: { scale: 'lydian', root: 4, drums: 'tribal', arp: true },
-  high: { scale: 'mixo', root: -5, bpmX: 0.92, drums: 'march', fifths: true, pad: true },
+  north: { scale: 'dorian', root: -2, bpmX: 0.9, lead: 'horn', keys: 'harp', keysStyle: 'broken', bassStyle: 'fifths', kit: 'soft', drone: true },
+  sun: { scale: 'hijaz', root: 2, lead: 'koto', counter: 'flute', kit: 'hand', swing: 0.1 },
+  wild: { scale: 'lydian', root: 4, lead: 'kalimba', keys: 'marimba', keysStyle: 'stab', arp: 'kalimba', kit: 'tribal' },
+  high: { scale: 'mixo', root: -5, bpmX: 0.92, lead: 'brass', pad: 'strings', keys: 'organ', keysStyle: 'swell', bassStyle: 'fifths', kit: 'march' },
   // (The Ashborn, the Mirefolk and the Stiltfolk have tunes of their own:
   // see ISLE_TOWNS.)
 };
-const DARKER = { major: 'minor', mixo: 'dorian', lydian: 'dorian', hijaz: 'phrygian', dorian: 'phrygian', penta: 'minpenta' };
+// And how the town's doing. Thriving: quicker and brighter, more playing
+// (a counter-melody, an arp, a fuller kit). Struggling: slower, in a
+// sadder mode (sad, not hopeless: a major key goes to dorian, not minor),
+// the tune alone on a soft instrument over a warm pad, the drums down to a
+// shaker.
+const DARKER = { major: 'dorian', mixo: 'dorian', lydian: 'mixo', hijaz: 'phrygian', dorian: 'minor', penta: 'minpenta' };
+const SOFTER = { lead: 'ep', pluck: 'ep', brass: 'horn', squeeze: 'flute', marimba: 'kalimba' };
+const KIT_UP = { soft: 'light', light: 'groove', groove: 'city', heart: 'soft' };
 export function flavourTheme(T, style, fortune) {
   const c = CULTURE_SOUND[style] || {};
   if (c.scale) T.scale = c.scale;
   if (c.root) T.root += c.root;
   if (c.bpmX) T.bpm *= c.bpmX;
-  for (const k of ['drums', 'fifths', 'lead', 'swing', 'arp', 'pad']) if (c[k] !== undefined) T[k] = c[k];
+  for (const k of ['lead', 'counter', 'pad', 'keys', 'keysStyle', 'arp', 'bassStyle', 'kit', 'swing', 'drone']) if (c[k] !== undefined) T[k] = c[k];
   if (fortune === 'thriving') {
-    T.bpm *= 1.08;
-    T.density = Math.min(0.9, T.density + 0.08);
-    T.arp = true;
-    if (!T.drums) T.drums = 'light';
+    T.bpm *= 1.06;
+    T.energy = Math.min(0.95, (T.energy || 0.5) + 0.12);
+    T.counter = T.counter || (T.lead === 'flute' ? 'strings' : 'flute');
+    T.arp = T.arp || 'pluck';
+    T.kit = KIT_UP[T.kit] || T.kit || 'light';
+    T.tone = (T.tone || 6000) * 1.15;
+    T.mood = 'bright';
   } else if (fortune === 'struggling') {
     T.scale = DARKER[T.scale] || T.scale;
     T.bpm *= 0.82;
-    T.density *= 0.65;
-    T.drums = T.drums ? 'soft' : null;
-    T.lead = 'sine';
-    T.pad = true;
+    T.energy = (T.energy || 0.5) * 0.6;
+    T.lead = SOFTER[T.lead] || T.lead || 'ep';
+    T.pad = 'warm';
+    T.keys = null;
+    T.arp = null;
+    T.counter = null;
+    T.kit = T.kit ? 'soft' : null;
+    T.bass = 'sub';
+    T.bassStyle = 'root';
+    T.tone = (T.tone || 6000) * 0.7;
+    T.wet = (T.wet || 0.3) + 0.1;
     T.detune = 8;
+    T.mood = 'calm';
   }
   return T;
 }
 
-// Every tune has a night version: slower, sparser, a dreamier mode, the
-// drums down to a heartbeat (or gone), a soft pad under it all and a
-// faint high shimmer now and then. (Whatever the people's own drums: a
-// sun town's hand drums and a high town's march quieten too.)
+// Every tune has a night version: slower, sparser, a dreamier mode, softer
+// instruments (the saw lead to glass, the brass to a far horn, a pluck to
+// a kalimba), the drums down to a shaker (or gone), more of the room and
+// the echo, and a faint high shimmer of bells now and then. (Whatever the
+// people's own drums: a sun town's hand drums and a high town's march
+// quieten too.)
 const NIGHT_SCALE = { major: 'lydian', mixo: 'dorian', hijaz: 'phrygian', penta: 'minpenta' };
-const NIGHT_DRUMS = { light: 'soft', hand: 'soft', tribal: 'soft', march: null, soft: null, forge: 'crackle', steel: 'soft', drip: 'drip', crackle: 'crackle' };
+const NIGHT_KIT = { light: 'soft', groove: 'soft', city: 'light', hand: 'soft', tribal: 'soft', march: null, soft: null, peak: null, waltz: null, forge: 'crackle', steel: 'soft', shanty: 'soft', drip: 'drip', crackle: 'crackle', heart: 'heart' };
 // (The islands' own instruments stay at night, softer; a forge's buzz goes
 // down to a reed.)
-const NIGHT_LEAD = { square: 'triangle', buzz: 'reed', reed: 'reed', steel: 'steel' };
+const NIGHT_VOICE = { lead: 'glass', brass: 'horn', pluck: 'kalimba', buzz: 'reed', marimba: 'kalimba', squeeze: 'flute', organ: 'warm' };
+const STEADY_BASS = { walk: 'root', bounce: 'root', pulse: 'root', gallop: 'root', offbeat: 'root' };
 export function nightTheme(T) {
-  T.bpm *= 0.74;
-  T.density *= 0.55;
-  T.lead = NIGHT_LEAD[T.lead] || 'sine';
-  if (T.drums in NIGHT_DRUMS) T.drums = NIGHT_DRUMS[T.drums];
+  T.bpm *= 0.75;
+  T.energy = (T.energy || 0.5) * 0.55;
+  if (T.lead) T.lead = NIGHT_VOICE[T.lead] || T.lead;
+  if (T.kit in NIGHT_KIT) T.kit = NIGHT_KIT[T.kit];
   T.scale = NIGHT_SCALE[T.scale] || T.scale;
-  T.pad = true;
-  T.arp = false;
+  T.pad = !T.pad || T.pad === 'pad' ? 'warm' : T.pad;
+  T.arp = ['bell', 'kalimba', 'glass', 'harp', 'ep'].includes(T.arp) ? T.arp : null;
+  T.arpRate = Math.max(T.arpRate || 2, 4);
+  T.counter = null;
+  if (T.keys) T.keysStyle = 'broken';
+  if (T.bass === 'moog' || T.bass === 'fmbass') T.bass = 'sub';
+  T.bassStyle = STEADY_BASS[T.bassStyle] || T.bassStyle;
+  if (T.form === 'groove') T.form = 'calm';
   T.swing = 0;
+  T.wet = Math.min(0.7, (T.wet || 0.3) + 0.15);
+  T.echo = (T.echo || 0.15) + 0.1;
+  T.tone = (T.tone || 6000) * 0.7;
+  T.shimmer = true;
   T.night = true;
   return T;
 }
-
-const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 // A master's fight's phase, from a theme's variant ('p1' to 'p3'; 0 for
 // any other).
@@ -349,7 +453,145 @@ export function bossLevel(variant) {
   return m ? +m[1] : 0;
 }
 
-// One playing theme: its own gain node, scheduled a little ahead.
+// --- playing a theme ------------------------------------------------------------
+// The parts of a tune's form and how many bars each, by the kind of music;
+// once through, it goes round again from `loop`. (A calm one: an intro, the
+// tune, its middle, the tune again, a breath. A town's: an intro, the
+// tune, the middle, the tune with more around it, a break. A fight's: a
+// count-in, then the same, ending on a drop. A master's: no intro, no
+// rest.)
+const FORMS = {
+  calm: { parts: [['intro', 4], ['A', 8], ['B', 8], ['A', 8], ['air', 4]], loop: 1 },
+  groove: { parts: [['intro', 4], ['A', 8], ['B', 8], ['A2', 8], ['break', 4]], loop: 1 },
+  drive: { parts: [['intro', 2], ['A', 8], ['B', 8], ['A2', 8], ['drop', 4]], loop: 1 },
+  boss: { parts: [['A', 8], ['B', 8], ['A2', 8], ['bridge', 4]], loop: 0 },
+};
+// How loud each kind of music is against the others: out in the country
+// and down below softer than a town, a fight louder, a master's loudest
+// (and by night all of it a little softer).
+const LEVEL = { calm: 0.72, groove: 0.85, drive: 1, boss: 1.05 };
+// How strongly each part's played.
+const DYN = { intro: 0.82, A: 0.92, B: 0.96, A2: 1, air: 0.78, break: 0.86, drop: 0.95, bridge: 0.9 };
+
+// Each instrument's channel on the desk: its level, where it sits, how much
+// of it goes to the room and to the echo, and whether it's chorused.
+const CH = {
+  lead: { vol: 0.9, pan: 0, verb: 0.35, echo: 0.6 },
+  dbl: { vol: 0.35, pan: 0.18, verb: 0.35, echo: 0.4 },
+  counter: { vol: 0.55, pan: -0.28, verb: 0.45, echo: 0.3 },
+  pad: { vol: 0.5, pan: 0, verb: 0.55, chorus: true },
+  fog: { vol: 0.4, pan: 0, verb: 0.6, chorus: true },
+  keys: { vol: 0.5, pan: 0.22, verb: 0.38, echo: 0.2, chorus: true },
+  arp: { vol: 0.34, pan: -0.15, verb: 0.35, echo: 0.9 },
+  bass: { vol: 0.8, pan: 0, verb: 0.04 },
+  drone: { vol: 0.55, pan: 0, verb: 0.3 },
+  brass: { vol: 0.5, pan: 0.12, verb: 0.4 },
+  bell: { vol: 0.5, pan: 0.1, verb: 0.75, echo: 0.35 },
+  kick: { vol: 0.85, pan: 0, verb: 0.06 },
+  snare: { vol: 0.8, pan: 0.04, verb: 0.4 },
+  hats: { vol: 0.55, pan: 0.3, verb: 0.12 },
+  perc: { vol: 0.6, pan: -0.25, verb: 0.3, echo: 0.15 },
+  toms: { vol: 0.6, pan: 0.15, verb: 0.35 },
+  boom: { vol: 0.6, pan: 0, verb: 0.55 },
+  cym: { vol: 0.4, pan: 0.2, verb: 0.3 },
+  metal: { vol: 0.4, pan: 0.2, verb: 0.5, echo: 0.3 },
+  fx: { vol: 0.5, pan: 0, verb: 0.6, echo: 0.2 },
+};
+const DRUM_CH = { kick: 'kick', snare: 'snare', clap: 'snare', hat: 'hats', hatO: 'hats', shaker: 'hats', rim: 'perc', conga: 'perc', bongo: 'perc', wood: 'perc', zill: 'metal', tom: 'toms', taiko: 'boom', timp: 'boom', crash: 'cym', swell: 'cym', anvil: 'metal', drip: 'metal', crackle: 'fx', riser: 'fx', wind: 'fx', sea: 'fx' };
+// How each kit's kick sounds (a soft thump, a heartbeat, a deep boom, a
+// punch), and how loud the kit is.
+const KICK = {
+  soft: { f0: 110, f1: 46, dec: 0.3, click: false }, heart: { f0: 85, f1: 38, dec: 0.28, click: false }, deep: { f0: 85, f1: 38, dec: 0.3, click: false },
+  drip: { f0: 85, f1: 38, dec: 0.28, click: false }, crackle: { f0: 90, f1: 40, dec: 0.3, click: false }, light: { f0: 130, f1: 48, dec: 0.28 },
+  waltz: { f0: 110, f1: 46, dec: 0.3, click: false }, shanty: { f0: 120, f1: 50, dec: 0.22, click: false },
+  grand: { f0: 140, f1: 38, dec: 0.75 }, grand2: { f0: 150, f1: 42, dec: 0.5 }, fury: { f0: 170, f1: 46, dec: 0.32 },
+};
+const KIT_VOL = { soft: 0.6, heart: 0.75, deep: 0.7, drip: 0.6, crackle: 0.6, light: 0.8, waltz: 0.7, peak: 0.85, shanty: 0.85 };
+// Which steps of the bar the keys play on (and for how many), by style.
+const KEYS = {
+  comp: { 16: [[0, 3], [6, 2], [10, 4]], 12: [[0, 3], [6, 2], [9, 3]] },
+  block: { 16: [[0, 7], [8, 7]], 12: [[0, 5], [6, 5]] },
+  oompah: { 16: [[4, 2], [12, 2]], 12: [[4, 2], [8, 2]] },
+  stab: { 16: [[2, 1], [6, 1], [10, 1], [14, 1]], 12: [[3, 1], [9, 1]] },
+  swell: { 16: [[0, 16]], 12: [[0, 12]] },
+  pulse: { 16: [0, 2, 4, 6, 8, 10, 12, 14].map((s) => [s, 1]), 12: [0, 2, 4, 6, 8, 10].map((s) => [s, 1]) },
+};
+// Instruments that sit an octave over the tune's usual place (and how the
+// tune's notes are held on each: a bell rings on, a pluck's let go).
+const UP = { flute: 12, bell: 12, glass: 12, kalimba: 12, steel: 12, reed: 12, marimba: 12 };
+const LEGATO = { lead: 1.02, flute: 0.95, brass: 0.9, horn: 0.95, squeeze: 0.88, buzz: 0.92, reed: 0.95, choir: 1, organ: 0.95, bell: 1.5, glass: 1.3, kalimba: 1.2, koto: 1.2, steel: 1, ep: 1.1, pluck: 1, marimba: 1, harp: 1.3 };
+// Which take a grace note now and then (a flick from the note above).
+const GRACE = new Set(['flute', 'reed', 'buzz', 'koto', 'squeeze', 'horn']);
+
+// A note moved by octaves into [lo, hi].
+function reg(n, lo, hi) {
+  while (n < lo) n += 12;
+  while (n > hi) n -= 12;
+  return n;
+}
+
+// A chord's notes placed between `lo` and `hi`, as close as they can be to
+// the last chord's (so the parts move smoothly rather than jumping).
+export function voiceChord(notes, lo, hi, prev) {
+  const opts = notes.map((m) => {
+    const pc = ((m % 12) + 12) % 12;
+    const o = [];
+    for (let x = lo; x <= hi; x++) if (((x % 12) + 12) % 12 === pc) o.push(x);
+    return o.length ? o : [reg(m, lo, lo + 11)];
+  });
+  let best = null;
+  let bc = Infinity;
+  const acc = [];
+  const pick = (i) => {
+    if (i === opts.length) {
+      const v = [...acc].sort((a, b) => a - b);
+      let cost = 0;
+      for (let k = 1; k < v.length; k++) {
+        if (v[k] === v[k - 1]) cost += 50;
+        // (No muddy seconds at the bottom.)
+        else if (k === 1 && v[1] - v[0] < 3) cost += 5;
+      }
+      if (prev && prev.length === v.length) for (let k = 0; k < v.length; k++) cost += Math.abs(v[k] - prev[k]);
+      else cost += v[v.length - 1] - v[0] + Math.abs(v[0] - (lo + 4));
+      if (cost < bc) {
+        bc = cost;
+        best = v;
+      }
+      return;
+    }
+    for (const x of opts[i]) {
+      acc.push(x);
+      pick(i + 1);
+      acc.pop();
+    }
+  };
+  pick(0);
+  return best;
+}
+
+// A theme filled out: whatever it doesn't say, the usual.
+function finish(T) {
+  T.meter = T.meter || 16;
+  T.shape = T.shape || 'triad';
+  T.progB = T.progB || [3, 4, 5, 4];
+  T.energy = T.energy ?? 0.5;
+  T.form = FORMS[T.form] ? T.form : 'calm';
+  T.space = T.space || 'hall';
+  T.wet = T.wet ?? 0.3;
+  T.echo = T.echo ?? 0.12;
+  T.tone = T.tone || 5000;
+  T.swing = T.swing || 0;
+  T.detune = T.detune || 0;
+  T.bassStyle = T.bassStyle || 'root';
+  T.keysStyle = T.keysStyle || 'broken';
+  T.arpStyle = T.arpStyle || 'up';
+  T.arpRate = T.arpRate || 2;
+  T.mood = T.mood || 'calm';
+  return T;
+}
+
+// One playing theme: its own desk (see synth.js's Rack) and fader,
+// scheduled a little ahead.
 class Voice {
   constructor(music, key, fadeIn = 2.5) {
     const [full, variant] = key.split(':');
@@ -363,19 +605,26 @@ class Voice {
     // A town's own people's sound, and how it's doing.
     if (flavour) flavourTheme(this.T, ...flavour.split('.'));
     if (variant === 'night') nightTheme(this.T);
+    finish(this.T);
     // A master's fight, and how far into it (its phase: see bossLevel).
     this.level = bossLevel(variant) || 1;
     this.lv = this.level;
-    this.base = this.T.density;
     const c = music.ctx;
+    this.rand = mulberry32((Math.random() * 1e9) | 0);
     this.out = c.createGain();
     this.out.gain.setValueAtTime(0.0001, c.currentTime);
-    this.out.gain.exponentialRampToValueAtTime(1, c.currentTime + fadeIn);
-    this.out.connect(music.bus);
-    this.rand = mulberry32((Math.random() * 1e9) | 0);
+    this.out.gain.exponentialRampToValueAtTime(LEVEL[this.T.form] * (this.T.night ? 0.85 : 1), c.currentTime + fadeIn);
+    this.out.connect(music.mix || music.bus);
+    const T = this.T;
+    this.rack = new Rack(music, this.out, { space: T.space, wet: T.wet, echo: T.echo, tone: this.toneNow(), beat: this.stepDur * 4, rand: this.rand });
     this.step = 0;
     this.next = c.currentTime + 0.1;
-    this.phrases = [this.phrase(), this.phrase()];
+    this.part = 0;
+    this.partBar = -1;
+    this.loops = 0;
+    this.barN = -1;
+    this.arpK = 0;
+    this.write(true);
     this.stopped = false;
   }
 
@@ -383,8 +632,12 @@ class Voice {
     return 60 / (this.T.bpm * (1 + 0.09 * (this.lv - 1))) / 4;
   }
 
+  toneNow() {
+    return this.T.tone * (1 + 0.22 * (this.lv - 1));
+  }
+
   // The fight's moved into a new phase: the same tune, climbing to it over
-  // a few bars (quicker, busier, more of it playing), with a swell and a
+  // a few bars (quicker, busier, more of it playing), with a riser and a
   // roll of the timpani into it.
   retune(key) {
     this.key = key;
@@ -395,385 +648,314 @@ class Voice {
     if (up && this.m.ctx) {
       const t = this.next;
       const sd = this.stepDur;
-      this.riser(t, sd * 16);
-      for (let i = 0; i < 8; i++) this.timp(midi(this.T.root - 12), t + sd * 8 + i * sd, 0.1 + i * 0.05);
+      this.hit('riser', t, 1, { dur: sd * 16 });
+      const f = midiHz(reg(this.T.root, 36, 47));
+      for (let i = 0; i < 8; i++) this.hit('timp', t + sd * 8 + i * sd, 0.3 + i * 0.09, { f });
     }
-    this.phrases = [this.phrase(), this.phrase()];
   }
 
-  // A two-bar melody: rhythm and scale steps, leaning on chord tones.
-  phrase() {
+  // The tune written (see compose.js): the first motif's two phrases, the
+  // middle's two, and a counter-line under each. Written again (the middle
+  // always, the tune now and then, from the same motif) each time round,
+  // so a long walk isn't one loop.
+  write(all) {
     const T = this.T;
     const r = this.rand;
-    const out = [];
-    let deg = Math.floor(r() * 3) * 2;
-    const dens = Math.min(0.95, (this.base ?? T.density) + 0.11 * ((this.level || 1) - 1));
-    for (let s = 0; s < 2 * (T.meter || 16); s++) {
-      const strong = s % 4 === 0;
-      const p = strong ? dens + 0.2 : s % 2 === 0 ? dens * 0.7 : dens * 0.3;
-      if (r() > p) continue;
-      const move = r() < 0.6 ? (r() < 0.5 ? -1 : 1) : r() < 0.5 ? -2 : 2;
-      deg = Math.max(-2, Math.min(9, deg + move));
-      if (strong && r() < 0.5) deg = Math.round(deg / 2) * 2;
-      let len = 1;
-      while (len < 4 && r() < 0.45) len++;
-      out.push({ s, deg, len });
+    const M = T.meter;
+    const n = (SCALES[T.scale] || SCALES.major).length;
+    if (all || !this.mA) this.mA = motif(r, M, T.energy, T.mood);
+    this.mB = motif(r, M, Math.min(1, T.energy + 0.15), T.mood);
+    const four = (p, k) => [0, 1, 2, 3].map((i) => p[(4 * k + i) % p.length]);
+    const o = { lo: -1, hi: n + 2, shape: T.shape, meter: M };
+    const ob = { ...o, lo: 0, hi: n + 3 };
+    if (all || r() < 0.5) this.lineA = [...line(T, r, this.mA, four(T.prog, 0), { ...o, close: false }), ...line(T, r, this.mA, four(T.prog, 1), { ...o, close: true })];
+    this.lineB = [...line(T, r, this.mB, four(T.progB, 0), { ...ob, close: false }), ...line(T, r, this.mB, four(T.progB, 1), { ...ob, close: true })];
+    const c = { lo: -3, hi: n - 1, meter: M };
+    this.ctrA = [...counterLine(T, r, four(T.prog, 0), c), ...counterLine(T, r, four(T.prog, 1), c)];
+    this.ctrB = [...counterLine(T, r, four(T.progB, 0), c), ...counterLine(T, r, four(T.progB, 1), c)];
+  }
+
+  // The channel an instrument plays into (on this tune's desk).
+  ch(role) {
+    return this.rack.chan(role, CH[role] || CH.fx);
+  }
+
+  // A note (or a chord, its notes together) on an instrument.
+  note(role, patch, midi, t, dur, vel, o = {}) {
+    const f = Array.isArray(midi) ? midi.map(midiHz) : midiHz(midi);
+    this.rack.play(patch, this.ch(role), f, t, dur, vel, { detune: this.T.detune, pipe: this.T.space === 'cathedral', ...o });
+  }
+
+  hit(drum, t, vel = 1, o = {}) {
+    this.rack.hit(drum, this.ch(DRUM_CH[drum] || 'perc'), t, vel, o);
+  }
+
+  get partName() {
+    return FORMS[this.T.form].parts[this.part][0];
+  }
+
+  get partLen() {
+    return FORMS[this.T.form].parts[this.part][1];
+  }
+
+  // What's playing in this part of the form (and at this point in a
+  // master's fight).
+  layers() {
+    const T = this.T;
+    const name = this.partName;
+    const calm = T.form === 'calm';
+    const half = this.partBar >= this.partLen / 2;
+    const L = { lead: false, counter: false, pad: !!T.pad, keys: !!T.keys, arp: false, bass: !!T.bass, drums: !!this.kitName() };
+    if (name === 'intro') {
+      L.keys = L.keys && (calm || half);
+      L.bass = L.bass && (!calm || half);
+      L.drums = L.drums && !calm;
+      L.arp = !!T.arp && (T.form === 'drive' || (calm && !T.keys));
+    } else if (name === 'A') {
+      L.lead = true;
+      L.counter = !!T.counter && this.loops > 0;
+      L.arp = !!T.arp && (T.form === 'drive' || this.loops > 0 || calm);
+    } else if (name === 'A2') {
+      L.lead = true;
+      L.counter = !!T.counter;
+      L.arp = !!T.arp;
+    } else if (name === 'B') {
+      L.lead = true;
+      L.counter = !!T.counter;
+      L.arp = !!T.arp && !calm;
+    } else if (name === 'air') {
+      L.drums = false;
+      L.arp = !!T.arp;
+    } else if (name === 'break') {
+      L.arp = !!T.arp;
+    } else if (name === 'drop') {
+      L.pad = false;
+      L.keys = false;
+      L.arp = !!T.arp;
+    } else if (name === 'bridge') {
+      L.counter = true;
     }
-    return out;
-  }
-
-  note(deg, octave = 0) {
-    const sc = SCALES[this.T.scale];
-    const o = Math.floor(deg / sc.length);
-    const i = ((deg % sc.length) + sc.length) % sc.length;
-    return this.T.root + sc[i] + 12 * (o + octave);
-  }
-
-  tone(freq, t, dur, type, vol, detune = 0) {
-    const c = this.m.ctx;
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    if (detune) o.detune.setValueAtTime((this.rand() - 0.5) * detune * 2, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.out);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-
-  // A struck bell: the note, and the bright partials over it dying first.
-  bell(freq, t, dur, vol) {
-    this.tone(freq, t, dur * 2.2, 'sine', vol);
-    this.tone(freq * 2.76, t, dur * 0.9, 'sine', vol * 0.28);
-    this.tone(freq * 5.4, t, dur * 0.4, 'sine', vol * 0.1);
-  }
-
-  // The islands' instruments. An anvil struck (Kharos's drums): a bright
-  // ring of partials that don't agree, dying fast.
-  anvil(t, vol) {
-    for (const [m, v] of [[1, 1], [1.47, 0.6], [2.33, 0.4], [3.9, 0.2]]) this.tone(1180 * m, t, 0.22 / m + 0.05, 'square', vol * v * 0.18);
-    this.hit(t, 3200, 0.05, vol * 0.4);
-  }
-
-  // A drip in the dark (the Mirefolk's): a falling plink, and its echo.
-  drip(t, vol) {
-    const c = this.m.ctx;
-    for (const [d, v] of [[0, 1], [0.18, 0.35]]) {
-      const o = c.createOscillator();
-      const g = c.createGain();
-      const f = 1500 + this.rand() * 900;
-      o.type = 'sine';
-      o.frequency.setValueAtTime(f, t + d);
-      o.frequency.exponentialRampToValueAtTime(f * 0.55, t + d + 0.09);
-      g.gain.setValueAtTime(vol * v, t + d);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.12);
-      o.connect(g).connect(this.out);
-      o.start(t + d);
-      o.stop(t + d + 0.15);
+    if (T.grand) {
+      // (A master's: the arp and the strings only once it's climbing.)
+      L.arp = !!T.arp && this.lv >= 1.6 && name !== 'bridge';
+      L.counter = L.counter && (name === 'bridge' || this.lv >= 1.6);
     }
+    return L;
   }
 
-  // A steel drum (the Stiltfolk's lead): a round note, a bright overtone
-  // that fades first.
-  steel(freq, t, dur, vol) {
-    this.tone(freq, t, dur * 1.4, 'triangle', vol);
-    this.tone(freq * 2, t, dur * 0.5, 'sine', vol * 0.45);
-    this.tone(freq * 3.01, t, dur * 0.25, 'sine', vol * 0.18);
-  }
-
-  // A reed flute (the Mirefolk's): breathy, slow to speak.
-  reed(freq, t, dur, vol) {
-    this.swell(freq, t, Math.max(0.12, dur * 1.1), 'triangle', vol, 2400, 0.25, 6);
-    this.hit(t, freq * 3, Math.min(0.12, dur), vol * 0.15);
-  }
-
-  // A buzzing reed (the Ashborn's lead): a saw through a closing filter.
-  buzz(freq, t, dur, vol) {
-    const c = this.m.ctx;
-    const o = c.createOscillator();
-    const f = c.createBiquadFilter();
-    const g = c.createGain();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(freq, t);
-    f.type = 'lowpass';
-    f.frequency.setValueAtTime(1900, t);
-    f.frequency.exponentialRampToValueAtTime(700, t + dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(f).connect(g).connect(this.out);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-
-  hit(t, freq, dur, vol) {
-    const c = this.m.ctx;
-    const s = c.createBufferSource();
-    s.buffer = this.m.noise;
-    const f = c.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = freq;
-    const g = c.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f).connect(g).connect(this.out);
-    s.start(t);
-    s.stop(t + dur + 0.02);
-  }
-
-  // A long note that breathes in and out: through a filter, slow to come
-  // (a drone, a choir).
-  swell(freq, t, dur, type, vol, cutoff = 1200, attack = 0.3, detune = 0) {
-    const c = this.m.ctx;
-    const o = c.createOscillator();
-    const f = c.createBiquadFilter();
-    const g = c.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    if (detune) o.detune.setValueAtTime((this.rand() - 0.5) * detune * 2, t);
-    f.type = 'lowpass';
-    f.frequency.value = cutoff;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vol, t + dur * attack);
-    g.gain.setValueAtTime(vol, t + dur * 0.7);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(f).connect(g).connect(this.out);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-
-  // A brass stab: a chord, bright and short.
-  stab(freqs, t, dur, vol) {
-    const c = this.m.ctx;
-    for (const fq of freqs) {
-      const o = c.createOscillator();
-      const f = c.createBiquadFilter();
-      const g = c.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(fq, t);
-      f.type = 'lowpass';
-      f.frequency.setValueAtTime(2200, t);
-      f.frequency.exponentialRampToValueAtTime(500, t + dur);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(f).connect(g).connect(this.out);
-      o.start(t);
-      o.stop(t + dur + 0.05);
-    }
-  }
-
-  // A timpani: a deep skin struck, its pitch sagging as it rings.
-  timp(freq, t, vol = 0.4) {
-    const c = this.m.ctx;
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(freq * 1.5, t);
-    o.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
-    o.connect(g).connect(this.out);
-    o.start(t);
-    o.stop(t + 0.75);
-    this.hit(t, 160, 0.12, vol * 0.5);
-  }
-
-  // A swell of noise rising into a new phase.
-  riser(t, dur) {
-    const c = this.m.ctx;
-    const s = c.createBufferSource();
-    s.buffer = this.m.noise;
-    s.loop = true;
-    const f = c.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.setValueAtTime(400, t);
-    f.frequency.exponentialRampToValueAtTime(6000, t + dur);
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.16, t + dur * 0.95);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
-    s.connect(f).connect(g).connect(this.out);
-    s.start(t);
-    s.stop(t + dur + 0.15);
-  }
-
-  kick(t, vol = 0.5) {
-    const c = this.m.ctx;
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.frequency.setValueAtTime(120, t);
-    o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(g).connect(this.out);
-    o.start(t);
-    o.stop(t + 0.2);
-  }
-
-  drums(s, t) {
+  kitName() {
+    const T = this.T;
     // (A master's: heavy and slow to begin, then driving, then savage, as
     // the fight climbs.)
-    const d = this.T.grand ? (this.lv < 1.6 ? 'grand' : this.lv < 2.5 ? 'battle' : 'fury') : this.T.drums;
-    const b = s % (this.T.meter || 16);
-    if (!d) return;
-    if (d === 'waltz') {
-      // (One, two, three: the low drum, then two light brushes.)
-      if (b === 0) this.kick(t, 0.3);
-      if (b === 4 || b === 8) this.hit(t, 6000, 0.05, 0.05);
-      if (b === 10 && s % 24 === 22) this.hit(t, 2600, 0.04, 0.03);
-      return;
-    }
-    if (d === 'grand') {
-      if (b === 0) this.kick(t, 0.65);
-      if (b === 6 || b === 10) this.kick(t, 0.32);
-      if (b === 8) {
-        this.hit(t, 900, 0.28, 0.24);
-        this.hit(t, 200, 0.3, 0.2);
+    if (T.grand) return this.lv < 1.6 ? 'grand' : this.lv < 2.5 ? 'grand2' : 'fury';
+    return T.kit || null;
+  }
+
+  // A new bar: on through the form; then the chord, and what's held
+  // through the bar (the pad, the bass line, the drone, the bells).
+  startBar(t) {
+    const T = this.T;
+    const F = FORMS[T.form];
+    this.barN++;
+    this.partBar++;
+    if (this.partBar >= this.partLen) {
+      this.partBar = 0;
+      this.part++;
+      if (this.part >= F.parts.length) {
+        this.part = F.loop;
+        this.loops++;
+        this.write(false);
       }
-      if (b % 4 === 2) this.hit(t, 8000, 0.03, 0.04);
-      return;
+      // (The fight at its fiercest: the key lifted a step, once.)
+      if (T.grand && this.lv >= 2.5 && !this.lifted) {
+        this.lifted = true;
+        T.root += 1;
+      }
     }
-    if (d === 'fury') {
-      if ([0, 3, 6, 8, 11, 14].includes(b)) this.kick(t, b % 8 === 0 ? 0.6 : 0.42);
-      if (b === 4 || b === 12) this.hit(t, 1500, 0.14, 0.24);
-      this.hit(t, 9500, 0.02, b % 2 ? 0.05 : 0.09);
-      return;
+    const M = T.meter;
+    const sd = this.stepDur;
+    const barDur = sd * M;
+    const name = this.partName;
+    const prog = name === 'B' || name === 'bridge' ? T.progB : T.prog;
+    const chord = prog[this.partBar % prog.length];
+    const next = prog[(this.partBar + 1) % prog.length];
+    const lastChord = this.chord;
+    this.chord = chord;
+    this.L = this.layers();
+    const L = this.L;
+    this.rack.setBeat(sd * 4);
+    if (T.grand) this.rack.setTone(this.toneNow(), t);
+    const sc = T.scale;
+    const notes = chordDegs(chord, T.shape).map((d) => degMidi(T.root, sc, d));
+    // The pad: held while the chord is.
+    if (L.pad && (this.partBar === 0 || chord !== lastChord || !this.padOn)) {
+      let run = 1;
+      while (this.partBar + run < this.partLen && prog[(this.partBar + run) % prog.length] === chord) run++;
+      const lo = reg(T.root, 50, 61);
+      this.padV = voiceChord(notes, lo, lo + 17, this.padV);
+      const cut = Math.min(2600, Math.max(700, T.tone * 0.3)) * (1 + 0.25 * (this.lv - 1));
+      this.note('pad', T.pad, this.padV, t, barDur * run - sd * 0.5, 0.85 * DYN[name], { cut });
     }
-    if (d === 'soft') {
-      if (b === 0) this.kick(t, 0.25);
-      if (b % 4 === 2) this.hit(t, 7000, 0.03, 0.04);
-    } else if (d === 'light') {
-      if (b === 0 || b === 8) this.kick(t, 0.35);
-      if (b === 4 || b === 12) this.hit(t, 1800, 0.09, 0.12);
-      if (b % 2 === 0) this.hit(t, 8000, 0.025, 0.05);
-    } else if (d === 'battle') {
-      if (b === 0 || b === 3 || b === 8 || b === 11) this.kick(t, 0.5);
-      if (b === 4 || b === 12) this.hit(t, 1600, 0.12, 0.2);
-      this.hit(t, 9000, 0.02, b % 2 ? 0.03 : 0.07);
-    } else if (d === 'march') {
-      if (b === 0 || b === 8) this.kick(t, 0.45);
-      if ([4, 6, 7, 12, 14, 15].includes(b)) this.hit(t, 2000, 0.07, b % 4 === 0 ? 0.18 : 0.1);
-    } else if (d === 'hand') {
-      if ([0, 3, 6, 10, 12].includes(b)) this.hit(t, b === 0 ? 300 : 700 + (b % 3) * 150, 0.1, 0.16);
-    } else if (d === 'tribal') {
-      if ([0, 6, 8, 11, 14].includes(b)) this.kick(t, b === 0 ? 0.4 : 0.22);
-      if (b % 4 === 2) this.hit(t, 500, 0.08, 0.1);
-    } else if (d === 'forge') {
-      // (Kharos: the hammer and the anvil, a bellows breathing.)
-      if (b === 0 || b === 8) this.kick(t, 0.42);
-      if (b === 4 || b === 12) this.anvil(t, 0.5);
-      if (b === 14 && this.rand() < 0.5) this.anvil(t, 0.25);
-      if (b === 6) this.hit(t, 400, 0.25, 0.06);
-    } else if (d === 'forge_battle') {
-      if ([0, 3, 8, 11].includes(b)) this.kick(t, 0.55);
-      if (b === 4 || b === 12) this.anvil(t, 0.7);
-      if (b % 2 === 1) this.anvil(t, 0.12);
-    } else if (d === 'crackle') {
-      // (Embers: a crackle here and there, a low thump.)
-      if (b === 0) this.kick(t, 0.2);
-      if (this.rand() < 0.22) this.hit(t, 2500 + this.rand() * 4000, 0.02, 0.05 + this.rand() * 0.05);
-    } else if (d === 'drip') {
-      // (Myrrow's dark water: a drip, now and then, and a heartbeat.)
-      if (b === 0) this.kick(t, 0.18);
-      if (b === 10 && this.rand() < 0.5) this.kick(t, 0.1);
-      if (this.rand() < 0.11) this.drip(t, 0.09);
-    } else if (d === 'steel') {
-      // (The stilts: hand drums under, a wood block knocking across them.)
-      if ([0, 3, 6, 10, 12].includes(b)) this.hit(t, b === 0 ? 260 : 650 + (b % 3) * 140, 0.1, 0.15);
-      if ([2, 5, 9, 13].includes(b)) this.hit(t, 2900, 0.03, 0.09);
+    this.padOn = L.pad;
+    const kl = reg(T.root, 55, 66);
+    this.keysV = voiceChord(notes, kl, kl + 16, this.keysV);
+    const al = reg(T.root, 62, 73);
+    this.arpV = voiceChord(notes, al, al + 14, this.arpV);
+    // The bass line, in its style.
+    this.bassNotes = [];
+    if (L.bass) {
+      const style = T.grand ? (this.lv < 1.6 ? 'root' : this.lv < 2.5 ? 'pulse' : 'gallop') : T.bassStyle;
+      const base = reg(T.root, 33, 44);
+      let shift = 0;
+      const rn = degMidi(base, sc, chord, 0);
+      while (rn + shift > base + 7) shift -= 12;
+      while (rn + shift < base - 5) shift += 12;
+      for (const b of bassBar(style, chord, next, M, this.rand, T.energy)) this.bassNotes.push({ ...b, midi: degMidi(base, sc, b.deg, b.oct + 2) + shift });
+    }
+    // The touches of its own.
+    const root = T.root;
+    if (T.drone && !T.grand && this.barN % 2 === 0) this.note('drone', 'drone', reg(root, 36, 47), t, barDur * 2, 0.8);
+    if (T.toll && this.barN % 2 === 0) this.note('bell', 'bell', reg(root, 48, 59), t, barDur, 0.75, { deep: true });
+    if (T.fog && this.barN % 2 === 1) this.note('fog', 'glass', [notes[0], notes[2] ?? notes[0] + 7].map((m) => reg(m, 60, 71)), t, barDur * 2, 0.5, { detune: 30 });
+    if (T.wind && this.barN % 4 === 0 && this.rand() < 0.75) this.hit('wind', t, 0.8, { dur: barDur * 4 * 0.9 });
+    if (T.sea && this.barN % 2 === 0) this.hit('sea', t, 0.7, { dur: barDur * 2 });
+    if (T.shimmer && this.barN % 2 === 1) this.note('bell', 'bell', reg(notes[notes.length - 1], 79, 90), t + sd * 2, sd * 6, 0.3);
+    if (T.hammer && this.barN % 4 === 2 && this.rand() < 0.65) this.hit('anvil', t + sd * Math.floor(this.rand() * M), 0.3);
+    if (T.grand) this.grandBar(t, barDur);
+    // (A drop's last bars: a riser into the tune coming back.)
+    if (name === 'drop' && this.partBar === this.partLen - 2) this.hit('riser', t, 1, { dur: barDur * 2 });
+  }
+
+  // A master's, each bar: the drone, timpani on the bar (and rolling into
+  // every fourth), a deep bell with a tritone in it now and then.
+  grandBar(t, barDur) {
+    const T = this.T;
+    const sd = this.stepDur;
+    const low = reg(T.root, 36, 47);
+    if (this.barN % 2 === 0) this.note('drone', 'drone', low, t, barDur * 2, 0.9 + 0.1 * (this.lv - 1));
+    this.hit('timp', t, 0.75, { f: midiHz(low + (this.barN % 2 ? 7 : 0)) });
+    if (this.barN % 4 === 3) for (let i = 12; i < T.meter; i++) this.hit('timp', t + sd * i, 0.2 + (i - 12) * 0.12, { f: midiHz(low) });
+    if (this.barN % 4 === 0) {
+      this.note('bell', 'bell', reg(T.root, 45, 56), t, barDur, 0.8, { deep: true });
+      this.note('bell', 'bell', reg(T.root, 45, 56) + 6, t + 0.02, barDur, 0.35, { deep: true });
     }
   }
 
   // Schedule one sixteenth-note step.
   play(s, t) {
     const T = this.T;
-    // (Steps to the bar: sixteen, or twelve for three to the bar.)
-    const M = T.meter || 16;
-    const bar = Math.floor(s / M);
-    const b = s % M;
-    const chord = T.prog[bar % T.prog.length];
+    const M = T.meter;
     const sd = this.stepDur;
-    // Bass.
-    const drive = T.drive || (T.grand && this.lv >= 1.6);
     // (Eased toward the fight's phase, a little each step.)
     if (this.lv !== this.level) this.lv += Math.sign(this.level - this.lv) * Math.min(Math.abs(this.level - this.lv), sd * 0.3);
-    if (M === 12) {
-      // (Three to the bar: the root, then the chord twice, oom-pah-pah.)
-      if (b === 0) this.tone(midi(this.note(chord, -2)), t, sd * 3.5, 'triangle', 0.22);
-      if (b === 4 || b === 8) for (const k of [2, 4]) this.tone(midi(this.note(chord + k, -1)), t, sd * 1.5, 'triangle', 0.05);
-    } else if (drive ? b % 2 === 0 : b === 0 || b === 8 || (T.bpm > 100 && b === 12)) {
-      this.tone(midi(this.note(chord, -2)), t, sd * (drive ? 1.8 : 3.5), 'triangle', 0.22);
-      if (T.fifths && b === 0) this.tone(midi(this.note(chord + 4, -2)), t, sd * 7, 'triangle', 0.12);
+    const b = s % M;
+    if (b === 0 || !this.L) this.startBar(t);
+    const L = this.L;
+    const r = this.rand;
+    const name = this.partName;
+    const dyn = DYN[name] * (T.grand ? 0.9 + 0.06 * (this.lv - 1) : 1);
+    const sw = T.swing && b % 2 === 1 ? sd * T.swing : 0;
+    const tt = t + sw;
+    const human = () => (r() - 0.5) * 0.008;
+    // The bass.
+    for (const n of this.bassNotes) if (n.s === b) this.note('bass', T.bass, n.midi, tt, sd * n.len * 0.92, n.vel * dyn, { cut: T.tone * 0.25 });
+    // The keys.
+    if (L.keys && this.keysV) {
+      if (T.keysStyle === 'broken') {
+        const k = (M === 12 ? [0, 4, 8] : [0, 4, 8, 12]).indexOf(b);
+        if (k >= 0) {
+          const v = this.keysV;
+          this.note('keys', T.keys, v[[0, 1, 2, 3][k] % v.length], tt + human(), sd * 7, (k ? 0.68 : 0.8) * dyn);
+        }
+      } else {
+        for (const [at, len] of (KEYS[T.keysStyle] || KEYS.comp)[M === 12 ? 12 : 16]) {
+          if (at !== b) continue;
+          this.note('keys', T.keys, this.keysV, tt + human() * 0.5, sd * len * 0.92, (b === 0 ? 0.72 : 0.6) * dyn);
+        }
+      }
     }
-    // Pad (or organ) chord, once a bar.
-    if (T.pad && b === 0) {
-      for (const k of [0, 2, 4]) this.tone(midi(this.note(chord + k, -1)), t, sd * (M - 1), T.organ ? 'triangle' : 'sine', T.organ ? 0.07 : 0.05, T.detune || 0);
+    // The arp: the chord broken, its filter sweeping open and shut over
+    // eight bars.
+    if (L.arp && this.arpV && b % T.arpRate === 0) {
+      const pat = ARPS[T.arpStyle] || ARPS.up;
+      const v = [...this.arpV, this.arpV[0] + 12, this.arpV[1] + 12];
+      const m = v[Math.min(v.length - 1, pat[this.arpK++ % pat.length])];
+      const sweep = 0.5 - 0.5 * Math.cos((2 * Math.PI * ((this.barN % 8) + b / M)) / 8);
+      this.note('arp', T.arp, m, tt, sd * T.arpRate * 0.9, (b % 4 === 0 ? 0.85 : 0.68) * dyn, { cut: 900 + 3000 * sweep * (T.tone / 7000) });
     }
-    // Brass on the bar (and an answer late in every other).
-    if (T.stabs && (b === 0 || (b === 10 && bar % 2 === 1))) this.stab([0, 2, 4].map((k) => midi(this.note(chord + k, -1))), t, sd * (b === 0 ? 2.5 : 1.4), b === 0 ? 0.035 : 0.025);
-    // Arpeggio.
-    if (T.arp && b % 2 === 0) {
-      const k = [0, 2, 4, 2][(b / 2) % 4];
-      this.tone(midi(this.note(chord + k, 0)), t, sd * 1.6, 'square', 0.03);
+    // The tune (the middle's, in the middle), and its counter-line.
+    if (L.lead && T.lead) {
+      const ln = (name === 'B' ? this.lineB : this.lineA)[this.partBar % 8];
+      const base = reg(T.root, 57, 68) + (UP[T.lead] || 0);
+      for (const n of ln) {
+        if (n.s !== b) continue;
+        const m = degMidi(base, T.scale, n.deg);
+        let at = tt + human();
+        const dur = n.len * sd * (LEGATO[T.lead] || 1);
+        if (GRACE.has(T.lead) && n.len >= 3 && (this.loops > 0 || name !== 'A') && r() < 0.16) {
+          this.note('lead', T.lead, degMidi(base, T.scale, n.deg + 1), at, sd * 0.35, n.vel * dyn * 0.7);
+          at += sd * 0.35;
+        }
+        this.note('lead', T.lead, m, at, dur, n.vel * dyn, { from: this.lastLead, cut: Math.min(3000, T.tone * 0.45) });
+        this.lastLead = midiHz(m);
+        // (Desperate: the tune doubled an octave up, shrill over it all.)
+        if (T.grand && this.lv >= 2.5) this.note('dbl', 'lead', m + 12, at, dur * 0.9, n.vel * 0.6);
+      }
     }
-    // Melody: phrases A A B A over eight bars.
-    const which = [0, 0, 1, 0][Math.floor(bar / 2) % 4];
-    const ph = this.phrases[which];
-    const ps = s % (2 * M);
-    for (const n of ph) {
-      if (n.s !== ps) continue;
-      const sw = T.swing && ps % 2 === 1 ? sd * T.swing : 0;
-      const dg = n.deg + chord * (this.rand() < 0.3 ? 1 : 0);
-      const nt = this.note(dg, 1);
-      if (T.bell) this.bell(midi(nt), t + sw, sd * n.len, 0.075);
-      else if (T.lead === 'steel') this.steel(midi(nt), t + sw, sd * n.len, 0.075);
-      else if (T.lead === 'reed') this.reed(midi(nt), t + sw, sd * n.len, 0.07);
-      else if (T.lead === 'buzz') this.buzz(midi(nt), t + sw, sd * n.len * 0.95, 0.045);
-      else this.tone(midi(nt), t + sw, sd * n.len * 0.95, T.lead, T.lead === 'square' ? 0.06 : 0.1, T.detune || 0);
-      // (Sung in parts: a third under it on the beats.)
-      if (T.harmony && ps % 4 === 0) this.tone(midi(this.note(dg - 2, 1)), t + sw, sd * n.len * 0.9, 'triangle', 0.045);
-      // (Desperate: the tune doubled an octave up, shrill over it all.)
-      if (T.grand && this.lv >= 2.5) this.tone(midi(nt + 12), t + sw, sd * n.len * 0.8, 'square', 0.025);
+    if (L.counter) {
+      const cl = (name === 'B' || name === 'bridge' ? this.ctrB : this.ctrA)[this.partBar % 8];
+      const patch = T.counter || 'strings';
+      const base = reg(T.root, 52, 63) + (patch === 'flute' || patch === 'reed' ? 12 : 0);
+      for (const n of cl) if (n.s === b) this.note('counter', patch, degMidi(base, T.scale, n.deg), tt, sd * n.len * 0.96, 0.8 * dyn, { trem: T.grand && this.lv >= 2.5 });
     }
-    // A master's: grand and dark.
-    if (T.grand) this.grandLayers(s, t, bar, b, chord, sd);
-    // (Kharos: the mountain's rumble under it, every other bar.)
-    if (T.drone && !T.grand && b === 0 && bar % 2 === 0) this.swell(midi(T.root - 24), t, sd * M * 2, 'sawtooth', 0.045, 180, 0.4);
-    // (Myrrow: a fog of a chord drifting in and out of tune.)
-    if (T.fog && b === 0 && bar % 2 === 1) for (const k of [0, 4]) this.swell(midi(this.note(chord + k, 0)), t, sd * M * 2, 'sine', 0.025, 1600, 0.45, 30);
-    // A slow bell in the graveyard.
-    if (T.toll && s % (2 * M) === 0) {
-      for (const [m, v] of [[1, 0.12], [2.76, 0.05], [5.4, 0.02]]) this.tone(midi(this.T.root - 12) * m, t, 3.5, 'sine', v);
+    // A master's brass stabs (more of them as it climbs).
+    if (T.grand && this.keysV && name !== 'bridge') {
+      const lv = this.lv;
+      if (b === 0 || (lv >= 1.6 && b === 10) || (lv >= 2.5 && (b === 6 || b === 14))) this.note('brass', 'brass', this.keysV, tt, sd * (b === 0 ? 3 : 1.6), b === 0 ? 0.8 : 0.62, { stab: true });
     }
-    // (By night, a faint shimmer high over it every other bar.)
-    if (T.night && b === 0 && bar % 2 === 1) this.tone(midi(this.note(chord + 4, 2)), t + sd * 2, sd * 10, 'sine', 0.025);
-    this.drums(s, t);
-    // New tunes every so often, so a long walk isn't one loop.
-    if (s % (8 * M) === 8 * M - 1) this.phrases = [this.phrase(), this.rand() < 0.5 ? this.phrases[1] : this.phrase()];
+    this.drums(b, t, sw, dyn);
   }
 
-  // Under a master's fight: a low drone, a choir breathing in each bar,
-  // brass stabs (more of them as it climbs), timpani on the bar and rolling
-  // into every fourth, and a deep bell with a tritone in it now and then.
-  grandLayers(s, t, bar, b, chord, sd) {
+  // The drum machine: the kit's pattern for this step (its fill on a
+  // part's last bar, a crash opening the next), thinned by the part of the
+  // form.
+  drums(b, t, sw, dyn) {
     const T = this.T;
-    const lv = this.lv;
-    if (b === 0 && bar % 2 === 0) {
-      this.swell(midi(T.root - 24), t, sd * 32, 'sawtooth', 0.07, 240, 0.35);
-      this.swell(midi(T.root - 17), t, sd * 32, 'sawtooth', 0.035, 240, 0.35);
+    const M = T.meter;
+    const sd = this.stepDur;
+    const kn = this.kitName();
+    const K = kn && KITS[kn];
+    if (!K || !this.L.drums) return;
+    const name = this.partName;
+    const last = this.partBar === this.partLen - 1;
+    const fill = last && K.fill && this.partLen >= 4 && name !== 'intro';
+    const half = this.partBar >= this.partLen / 2;
+    const thin = (name === 'intro' && !half) || (name === 'break' && !last) || name === 'bridge' || (name === 'drop' && !half);
+    const r = this.rand;
+    const vol = (KIT_VOL[kn] || 1) * dyn;
+    for (const drum of Object.keys(K)) {
+      if (typeof K[drum] !== 'string') continue;
+      if (thin && !(drum === 'hat' || drum === 'shaker' || drum === 'rim' || drum === 'wood' || (name === 'bridge' && drum === 'taiko') || (name === 'drop' && drum === 'kick'))) continue;
+      const pat = fill && K.fill[drum] ? K.fill[drum] : K[drum];
+      const hv = HIT[pat[b] || '.'] || 0;
+      if (!hv) continue;
+      const v = hv * vol * (0.9 + r() * 0.16);
+      const at = t + sw + (drum === 'kick' ? 0 : (r() - 0.5) * 0.006);
+      if (drum === 'kick') {
+        this.hit('kick', at, v, KICK[kn] || {});
+        // (The pads breathing around the kick.)
+        if ((T.pump || (T.grand && this.lv >= 1.6)) && hv >= 1) {
+          this.rack.duck('pad', at, 0.55, sd * 3);
+          this.rack.duck('keys', at, 0.3, sd * 2.5);
+        }
+      } else if (drum === 'tom') this.hit('tom', at, v, { pitch: fill ? 1.35 - (0.6 * b) / M : 1 });
+      else this.hit(drum, at, v);
     }
-    if (T.choir && b === 0) for (const k of [0, 2, 4, 7]) this.swell(midi(this.note(chord + k, -1)), t, sd * 16, 'triangle', 0.03 + 0.012 * (lv - 1), 1500, 0.3, 14);
-    if (T.brass || lv >= 1.6) {
-      const at = b === 0 || (lv >= 1.6 && b === 10) || (lv >= 2.5 && (b === 6 || b === 14));
-      if (at) this.stab([0, 2, 4].map((k) => midi(this.note(chord + k, -1))), t, sd * (b === 0 ? 3 : 1.6), b === 0 ? 0.05 : 0.035);
-    }
-    if (b === 0) this.timp(midi(T.root - 12 + (bar % 2 ? 7 : 0)), t, 0.42);
-    if (bar % 4 === 3 && b >= 12) this.timp(midi(T.root - 12), t, 0.12 + (b - 12) * 0.07);
-    if (s % 64 === 0) for (const [m, v] of [[1, 0.1], [1.414, 0.05], [2.76, 0.03], [5.4, 0.012]]) this.tone(midi(T.root - 12) * m, t, 4.5, 'sine', v);
+    if (K.crackle && r() < 0.18) this.hit('crackle', t + r() * sd, 0.3 + r() * 0.5);
+    if ((K.drip || T.drip) && r() < 0.07) this.hit('drip', t + r() * sd, 0.4 + r() * 0.4);
+    // A crash to open a part (and the cymbal swelling into it).
+    if (K.crash && b === 0 && this.partBar === 0 && this.barN > 0 && name !== 'intro' && name !== 'break' && name !== 'air') this.hit('crash', t, 0.9);
+    if (K.crash && last && b === M / 2 && T.form !== 'calm') this.hit('swell', t, 0.8, { dur: sd * (M / 2) });
   }
 
   schedule(until) {
@@ -790,9 +972,15 @@ class Voice {
     this.out.gain.setValueAtTime(Math.max(0.0001, this.out.gain.value), c.currentTime);
     this.out.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
     this.stopped = true;
-    setTimeout(() => this.out.disconnect(), (dur + 0.4) * 1000);
+    setTimeout(() => {
+      this.out.disconnect();
+      this.rack.dispose();
+    }, (dur + 0.4) * 1000);
   }
 }
+
+// How loud the music is at full volume (against the game's sounds).
+const GAIN = 0.26;
 
 export class Music {
   constructor(audio) {
@@ -813,14 +1001,25 @@ export class Music {
     const c = this.ctx;
     if (!c || this.bus) return !!this.bus;
     this.bus = c.createGain();
-    this.bus.gain.value = this.volume * 0.4;
+    this.bus.gain.value = this.volume * GAIN;
     this.bus.connect(c.destination);
-    const n = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate);
+    this.mix = master(c, this.bus);
+    const n = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
     const d = n.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.noise = n;
+    this.irs = {};
+    // (The drum machine's samples, struck in the background.)
+    this.samples = new Samples(c, n);
+    for (const d of ['kick', 'snare', 'clap', 'hat', 'hatO', 'shaker', 'rim', 'tom', 'conga', 'bongo', 'taiko', 'wood', 'crash', 'timp']) this.samples.get(d);
     this.timer = globalThis.setInterval(() => this.tick(), 60);
     return true;
+  }
+
+  // A room's ring (made once, the first time it's wanted).
+  ir(space) {
+    if (!this.irs[space]) this.irs[space] = makeIR(this.ctx, space);
+    return this.irs[space];
   }
 
   tick() {
@@ -832,12 +1031,12 @@ export class Music {
   setVolume(v) {
     this.volume = v;
     this.enabled = v > 0;
-    if (this.bus) this.bus.gain.setTargetAtTime(v * 0.4, this.ctx.currentTime, 0.2);
+    if (this.bus) this.bus.gain.setTargetAtTime(v * GAIN, this.ctx.currentTime, 0.2);
   }
 
   toggle() {
     this.enabled = !this.enabled;
-    if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * 0.4 : 0, this.ctx.currentTime, 0.3);
+    if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * GAIN : 0, this.ctx.currentTime, 0.3);
     return this.enabled;
   }
 

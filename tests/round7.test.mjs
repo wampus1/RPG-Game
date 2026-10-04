@@ -439,7 +439,8 @@ test('the music follows where you are and what you are doing', () => {
   wolf.angry = true;
   wolf.target = p;
   game.creatures.push(wolf);
-  assert.equal(musicMood(game), 'fight_monsters');
+  // (A wolf is a beast of the wild: the hunt's music, not the night's.)
+  assert.equal(musicMood(game), 'fight_beasts');
   game.creatures = [];
   const ruin = game.world.ow.settlements.find((q) => q.condition === 'abandoned');
   visit(game, input, ruin);

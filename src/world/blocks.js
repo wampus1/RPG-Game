@@ -498,6 +498,15 @@ def('ember_gutter', { tool: 'pick', hardness: 2, light: 6, drop: 'basalt', label
 def('fog_lantern', { ...sprite, tall: true, tool: 'axe', hardness: 1, light: 11, drop: null, label: 'Fog Lantern' });
 def('nacre_tile', { tool: 'pick', hardness: 1.5, label: 'Nacre Tiles' });
 
+// Round 37: planking in each far people's own wood (decks, piers, the
+// boardwalks over the water and the bog, boards over a poor house's
+// windows): the Ashborn's black-red cinderwood, the Mirefolk's grey-green
+// bogwood, the Stiltfolk's sea-bleached driftwood. (Thessa's peoples use
+// oak.)
+def('planks_cinder', { tool: 'axe', hardness: 1, label: 'Cinderwood Planks' });
+def('planks_bog', { tool: 'axe', hardness: 1, label: 'Bogwood Planks' });
+def('planks_drift', { tool: 'axe', hardness: 1, label: 'Driftwood Planks' });
+
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
 }
@@ -519,7 +528,11 @@ export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_d
   'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium'].filter((k) => B[k] !== undefined).map((k) => B[k]));
 // Ores, and the glint they show in a cut wall.
 export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
-export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks]);
+export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks, B.planks_cinder, B.planks_bog, B.planks_drift]);
+// The planks a people lays (by its town's style): see planks_cinder.
+const STYLE_PLANKS = { ember: B.planks_cinder, mist: B.planks_bog, tide: B.planks_drift };
+export const planksOf = (style) => STYLE_PLANKS[style] || B.planks;
+export const PLANK_BLOCKS = new Set([B.planks, B.planks_birch, B.planks_dark, B.planks_cinder, B.planks_bog, B.planks_drift]);
 export const LOGS = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove'].map((w) => B[`log_${w}`]),
 );

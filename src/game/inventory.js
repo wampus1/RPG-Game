@@ -8,8 +8,8 @@ export function makeSlots(n) {
 // Ingredients any of several kinds will do for: planks of any wood, logs
 // of any tree. (A recipe asking for "planks" takes birch or dark planks too.)
 export const ANY = {
-  planks: ['planks', 'planks_birch', 'planks_dark'],
-  log: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_willow', 'log_palm'],
+  planks: ['planks', 'planks_birch', 'planks_dark', 'planks_cinder', 'planks_bog', 'planks_drift'],
+  log: ['log_oak', 'log_birch', 'log_pine', 'log_jungle', 'log_acacia', 'log_willow', 'log_palm', 'log_cinder', 'log_mangrove'],
 };
 const ANY_NAMES = { planks: 'Planks (any wood)', log: 'Logs (any wood)' };
 

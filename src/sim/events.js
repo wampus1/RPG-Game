@@ -750,7 +750,8 @@ export class Events {
     if (ev.site) for (let z = ev.site.z0 - 1; z <= ev.site.z1 + 1; z++) for (let x = ev.site.x0 - 1; x <= ev.site.x1 + 1; x++) used.add(x * 65536 + z);
     const blocked = new Set([M.BUILD, M.WALL, M.WATER, M.FIELD]);
     const air = (x, y, z) => !w.regionAt(x, z) || w.getBlock(x, y, z) === B.air;
-    const open = (x, z, high = false) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && !used.has(x * 65536 + z) && (high ? air(x, GROUND + 2, z) : air(x, GROUND, z) && air(x, GROUND + 1, z));
+    // (Nothing set down on the ways across the square: see Layout.isLane.)
+    const open = (x, z, high = false) => L.inside(x, z, 0) && !blocked.has(L.maskAt(x, z)) && !used.has(x * 65536 + z) && (high ? air(x, GROUND + 2, z) : air(x, GROUND, z) && air(x, GROUND + 1, z) && !(L.isLane && L.isLane(x, z)));
     const wallAt = (x, z) => L.maskAt(x, z) === M.BUILD && (!w.regionAt(x, z) || (BLOCKS[w.getBlock(x, GROUND + 2, z)] || {}).solid);
     const out = [];
     // Strings across the street: a straight run of open air at head

@@ -2664,6 +2664,149 @@ first needed, so meeting a master never stalls the game.
 - The chains to the Chained Drake and the Molten Heart were drawn as
   thin flickering beams.
 
+## Round 37: the old synthesizers, and room to walk
+
+**Every piece of music is new, and sounds like the old synthesizer
+records rather than a chip.** The bare square and triangle waves are
+gone. Everything is played on made-up versions of the old synths and
+drum machines (see `game/synth.js`):
+- pads of detuned saws through a string machine's chorus;
+- a bell-toned electric piano, and bells;
+- a breathy pan flute and a tin whistle;
+- plucked synths whose filter snaps shut, a koto, a kalimba, a marimba,
+  a harp;
+- synth brass that swells open, a far horn, a squeezebox, a choir, an
+  organ, strings;
+- a saw lead that glides from note to note;
+- a fat analogue bass, a slapping FM bass, a deep sub, a drone;
+- a drum machine with a big gated snare, claps, hats, toms, congas,
+  great drums and timpani.
+
+Each tune is played in a room of its own: a small room, a hall, a cave
+or a cathedral, with a tape echo set to its tempo. It all goes through a
+gentle compressor.
+
+**Every place has its own instruments and mood.**
+- *Out in the country:*
+  - plains: a pan flute over an electric piano and a warm pad;
+  - woods: a flute and a twinkling kalimba;
+  - taiga: bells and glass, no drums;
+  - tundra: a few bells and the wind;
+  - desert: a koto in the old desert mode, hand drums, finger cymbals,
+    a drone;
+  - savanna: a marimba with a flute answering;
+  - jungle: kalimbas and marimbas over toms and wood blocks;
+  - swamp: an out-of-tune reed, water dripping, a heartbeat;
+  - mountains: a horn over strings, a great drum far off, the wind;
+  - shore: an electric piano and a flute, a lazy swing, the waves;
+  - open sea: bells and glass, their echoes, the swell.
+- *Towns, by size:*
+  - a village is a pan flute over an electric piano, a light step;
+  - a town has a plucked lead with a flute answering, the piano
+    comping, a walking bass and the drum machine;
+  - a city has a saw lead, strings and brass, a slapping bass and
+    sixteenth-note hats;
+  - a tavern is a squeezebox shuffle.
+- *Each people plays its own way:*
+  - the north: in dorian, a horn over a harp, the bass in fifths;
+  - the sun peoples: the desert mode on a koto over hand drums;
+  - the wild peoples: bright and strange, kalimbas over toms;
+  - the high peoples: a march of brass and organ.
+- *How rich the town is:*
+  - thriving: quicker and brighter, with a counter-melody, an arp and a
+    fuller kit;
+  - struggling: slower, in a sadder mode (sad, not hopeless: a major key
+    goes to dorian, not minor), the tune alone on an electric piano over
+    a warm pad, the drums down to a shaker.
+- *By night:* slower and dimmer. The saw lead becomes glass, brass a far
+  horn, a pluck a kalimba. The drums drop to a shaker or stop, the room
+  rings longer, and a few high bells shimmer.
+- *Fights:*
+  - beasts (wolves, boars, the islands' lizards and crabs) get the hunt:
+    great drums and toms but no snare, a plucked ostinato, a pumping bass
+    and brass;
+  - things of the night: harmonic minor, a saw lead, an octave-jumping
+    bass, the gated snare, a choir;
+  - the watch: a march with brass and a galloping bass;
+  - bandits (new): an outlaw's twanging string over hand drums and a
+    stamp, with a long echo.
+- *Below ground,* everything is ominous, slow and in a cave's ring:
+  - a barrow: a choir, a tolling bell, a heartbeat, a drone;
+  - a mine: bells, dripping water, a hammer far off;
+  - a crypt: an organ and a choir in a cathedral's ring;
+  - a holdout: tense hand drums and a muted pluck;
+  - Kavorent ruins: glass and bells in a scale nobody uses.
+
+  Each one's fight is the same dread, driven.
+- *Masters* climb with the fight:
+  - phase 1 is half-time and heavy: a drone, a choir, timpani, brass
+    stabs, and a deep bell with a tritone in it;
+  - phase 2 drives: a pulsing bass, a racing arp, strings;
+  - phase 3 is savage: a galloping bass, shivering strings, the tune
+    doubled an octave up, and the key lifted a step.
+- *The islands:*
+  - Kharos: a buzzing shawm, anvils and the mountain's rumble;
+  - Myrrow: a reed flute and a fog of glass;
+  - the stilts: steel drums, wood blocks and a skanking piano.
+- *The title's songs and the scenes are remade:* the Hearthside Waltz on
+  a squeezebox, the shanty on a tin whistle, the storm on a saw lead and
+  a choir.
+
+**Written as tunes, played as pieces** (see `game/compose.js`):
+- A tune grows from a motif: the motif, the motif answered over the next
+  chord, a variation, then a cadence. The cadence closes at home, or is
+  left open asking to go on.
+- The middle has its own motif and its own chords. A counter-melody
+  moves against the tune.
+- Chords are voiced to move as little as they can from one to the next.
+  The bass walks, bounces, pulses or gallops by the style.
+- A tune plays in a form: an intro, the tune, its middle, the tune again
+  with more around it, then a breath or a break. Each part comes in with
+  a fill and a crash.
+- It is rewritten a little each time round, so a long walk isn't one
+  loop. Timing and touch are a little human, and in fights the pads duck
+  under the kick.
+
+**Light on the sound card.** A chord's notes share one filter and
+envelope. A sound made of several waves is drawn as one wave. The drums
+are struck once into samples (in the background) and played back from
+them, like the old drum machines. A fight costs about as much as a few
+dozen plain notes.
+
+**Fixes.**
+- Town hall chests weren't locked. They are now, under an advanced lock:
+  a town's or city's as hard as a city manor's, a village's one grade
+  easier.
+- Some shopkeepers' chests weren't locked (only homes' were). Every
+  shop, workshop and trade building now keeps its chests locked, except
+  to its own staff on shift.
+- Town squares could be walled off by stalls and their centrepiece.
+  Squares are bigger now (a village's 9×7, a town's 17×10, a city's
+  21×13, up from 7×6, 11×8 and 15×10), and their ways across are kept
+  clear:
+  - a street running on through the square is carried straight across
+    it;
+  - any other way in is kept clear two paces in;
+  - a ring two paces wide is kept round the fountain, the heartfire or
+    the well.
+
+  Stalls, benches, wells, statues, boards, bells, gossip spots and
+  festival trappings all stay off these ways.
+- The far islands' towns paved their bridges over water in oak planks.
+  Each people now uses its own wood for bridges, piers, stilt decks,
+  boarded-up windows and barns:
+  - the Ashborn use cinderwood planks (black-red, and they don't burn);
+  - the Mirefolk use bogwood;
+  - the Stiltfolk use bleached driftwood.
+
+  Cinderwood and bogwood planks are made from cinder and mangrove logs.
+  All of them count as planks in any recipe.
+- A wall built round a town no longer hangs gates on a bridge out over
+  open water, where no wall stands either side.
+- A guard can ring an alarm bell from two paces away. Before, a guard
+  could get caught waiting for a beast to step out of the way before
+  ringing.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -2794,7 +2937,14 @@ src/
                        waking and falling, a Kavorent lift's ride, the
                        rite that raises you when you fall),
                        audio (synthesized SFX and ambience), music
-                       (adaptive procedural chiptune)
+                       (which theme plays where, made over for its
+                       people, its fortune, the night and the island;
+                       the arranger playing it in its form), compose
+                       (writing the tunes: motifs, phrases, counter-
+                       lines, bass lines, arps, the drum machine's
+                       patterns), synth (the instruments: the old
+                       synthesizers' sounds, the drum machine struck into
+                       samples, the rooms and the tape echo)
   sim/                 town simulation: economy (meals, trades, taxes, mayors,
                        merchants, abstract catch-up), justice (crimes,
                        suspicion, arrests, hearings, jail repairs), careers

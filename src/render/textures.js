@@ -40,6 +40,9 @@ const P = {
   planks: ['#b08850', '#8e6a3a', '#c8a064'],
   planks_birch: ['#dcc890', '#c0aa72', '#ecdcaa'],
   planks_dark: ['#6a4a2a', '#50361e', '#7e5a36'],
+  planks_cinder: ['#5e3a30', '#442824', '#7a4c3e'],
+  planks_bog: ['#6a6250', '#4e483a', '#847a66'],
+  planks_drift: ['#c4baa4', '#a49a84', '#dcd4c2'],
   stone_bricks: ['#8e8e96', '#5e5e66', '#a6a6ae'],
   bricks: ['#a84a3a', '#8a3a2e', '#c05a48', '#c8b8a8'],
   adobe: ['#c89a68', '#b08458', '#d8b080'],
@@ -423,7 +426,7 @@ function cubeTop(name, v, rand, rot) {
       for (let y = 1; y < 16; y += 4) p.hline(0, 15, y, pal[1]);
       return p;
     }
-    case 'planks': case 'planks_birch': case 'planks_dark': return planks(p, pal, rand);
+    case 'planks': case 'planks_birch': case 'planks_dark': case 'planks_cinder': case 'planks_bog': case 'planks_drift': return planks(p, pal, rand);
     case 'stone_bricks': return bricks(p, pal, rand);
     case 'mossy_bricks': {
       bricks(p, P.stone_bricks, rand);
@@ -610,7 +613,7 @@ function cubeFront(name, v, rand, rot) {
       for (let y = 3; y < LH; y += 4) for (let x = 0; x < 16; x++) p.set(x, y + (rand() < 0.2 ? 1 : 0), pal[1]);
       return frontify(p);
     }
-    case 'planks': case 'planks_birch': case 'planks_dark': return frontify(planks(p, pal, rand));
+    case 'planks': case 'planks_birch': case 'planks_dark': case 'planks_cinder': case 'planks_bog': case 'planks_drift': return frontify(planks(p, pal, rand));
     case 'stone_bricks': return frontify(bricks(p, pal, rand));
     case 'bricks': return frontify(bricks(p, pal, rand, 4, 6, pal[3]));
     case 'log_wall': {
