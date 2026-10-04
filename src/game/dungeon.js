@@ -141,11 +141,45 @@ export class DungeonRun {
     for (const c of game.creatures) if (!c.dead) game.moveEntity(c, c.x, c.y, c.z);
     const spot = game.findFreeSpot(at.x, at.z, at.y);
     game.player.teleport(spot.x, spot.y, spot.z);
+    this.gatherParty(spot, 'up');
     game.renderer.camInit = false;
     game.lightDirty = true;
     game.updateSettlements(true);
     game.ui.msg(this.rec.cleared ? `You climb out of ${this.rec.name} into the air. Behind you, the way down falls in.` : `You climb back up into the air.`, '#e0c890');
     game.renderer.flashScreen?.('#ffffff', 0.25);
+  }
+
+  // With others in the world (see game/party.js), where one of you goes
+  // the rest go too: the whole party, beside whoever led the way.
+  gatherParty(spot, way) {
+    const game = this.game;
+    if (!game.isParty || !game.isParty()) return;
+    const lead = game.player;
+    for (const q of game.everyone()) {
+      if (q === lead) continue;
+      game.asPlayer(q, () => {
+        game.stopPlayerActions?.();
+        if (game.sleep) game.sleep = null;
+        game.sleepFast = 0;
+        game.waiting = null;
+        q.sleeping = false;
+        q.sitting = null;
+        q.raft = null;
+        game.mining = null;
+        const at = game.findFreeSpot(spot.x + 1, spot.z + 1, spot.y);
+        q.teleport(at.x, at.y, at.z);
+        game.moveEntity(q, at.x, at.y, at.z);
+        const who = (lead.account && lead.account.name) || game.seats[0].name;
+        if (way === 'down') game.ui.msg(`${who} leads the party down: floor ${this.floor + 1} of ${this.rec.depth} of ${this.rec.name}.`, '#e0c890');
+        else game.ui.msg(`${who} leads the party back up into the air.`, '#e0c890');
+      });
+    }
+  }
+
+  // Someone left standing down here besides `p` (with others playing)?
+  partyBelow(p) {
+    const game = this.game;
+    return !!(game.isParty && game.isParty() && game.everyone().some((q) => q !== p && !q.dead && game.world.inInstance(q.x)));
   }
 
   // Where you come out: in front of the way in.
@@ -231,6 +265,7 @@ export class DungeonRun {
     const y = game.world.findStandY(at.x, at.z, FY);
     const spot = game.world.canStand(at.x, y, at.z) && !game.occupiedBySolid(at.x, y, at.z, game.player) ? { x: at.x, y, z: at.z } : game.findFreeSpot(at.x, at.z, FY);
     game.player.teleport(spot.x, spot.y, spot.z);
+    this.gatherParty(spot, 'down');
     game.renderer.camInit = false;
     game.lightDirty = true;
     this.plateOn.clear();
@@ -448,9 +483,19 @@ export class DungeonRun {
     return out;
   }
 
+  // Everyone down here (with others in the world, any of you).
+  partyHere() {
+    const game = this.game;
+    const all = game.everyone ? game.everyone().filter((q) => game.world.inInstance(q.x)) : [];
+    return all.length ? all : [game.player];
+  }
+
   update(dt) {
     const game = this.game;
     const p = game.player;
+    const party = this.partyHere();
+    const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
+    const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;
     this.t += dt;
     // Fields the Overseer turned off, back up in their time (see
     // entities/fields.js); what a master's done to its hall, put back in
@@ -467,12 +512,12 @@ export class DungeonRun {
         // wakes. Not for the wounds it settled back with, nor anything
         // that hurt it while you're nowhere near.)
         const br = this.data.bossRoom;
-        const near = br && p.x >= br.x0 - 3 && p.x <= br.x1 + 3 && p.z >= br.z0 - 3 && p.z <= br.z1 + 3;
-        if (c.hp < (c.restHp ?? c.maxHp) && near && !p.dead) this.bossFight();
+        const by = br && party.find((q) => !q.dead && inHall(q, br, 3));
+        if (c.hp < (c.restHp ?? c.maxHp) && by) game.asPlayer(by, () => this.bossFight());
         c.restHp = Math.min(c.restHp ?? c.maxHp, c.hp);
         continue;
       }
-      const d = Math.max(Math.abs(c.x - p.x), Math.abs(c.z - p.z));
+      const d = Math.min(...party.map((q) => Math.max(Math.abs(c.x - q.x), Math.abs(c.z - q.z))));
       if (d <= c.dormant || c.hp < c.maxHp) {
         c.dormant = 0;
         game.renderer.emit(c.x, c.y + 1, c.z, { n: 10, color: c.S.construct ? ['#5ad8f0', '#ffffff'] : ['#8a8270', '#d8d0b8'], up: 30, speed: 40, life: 0.5 });
@@ -481,7 +526,7 @@ export class DungeonRun {
       }
     }
     // Plates trodden on (by anyone: the dead set traps off too).
-    for (const e of [p, ...game.creatures]) {
+    for (const e of [...party, ...game.creatures]) {
       if (!e || e.dead || e.burrowed || e.S?.floats) continue;
       const k = `${e.x},${e.z}`;
       const prev = this.plateOn.get(e);
@@ -489,7 +534,7 @@ export class DungeonRun {
       this.plateOn.set(e, k);
       const id = game.world.getBlock(e.x, e.y, e.z);
       if (id === B.pressure_plate) this.plate(e.x, e.z, e);
-      else if (id === B.kav_plate && e === p) this.glyphPlate(e.x, e.z);
+      else if (id === B.kav_plate && e.kind === 'player') game.asPlayer(e, () => this.glyphPlate(e.x, e.z));
     }
     // A cracked floor giving way under you.
     if (this.crumble) {
@@ -499,13 +544,14 @@ export class DungeonRun {
         const c = this.crumble;
         this.crumble = null;
         game.world.setBlock(c.x, FY - 1, c.z, B.air);
-        if (p.x === c.x && p.z === c.z && !p.dead) return this.fall(c.x, c.z);
+        const who = party.find((q) => q.x === c.x && q.z === c.z && !q.dead);
+        if (who) return game.asPlayer(who, () => this.fall(c.x, c.z));
       }
     }
     // A dynamo floor's pylons, arcing between each pair in turn (a crackle
     // and sparks at both as it gathers).
     for (const ar of this.data.arcs || []) {
-      if (Math.abs(ar.a.x - p.x) > 18 || Math.abs(ar.a.z - p.z) > 12) continue;
+      if (!near(ar.a.x, ar.a.z, 18, 12)) continue;
       ar.t = (ar.t ?? ar.phase) + dt;
       if (ar.t > 3.2 && Math.random() < dt * 14) for (const e of [ar.a, ar.b]) game.renderer.emit(e.x, FY + 1.4, e.z, { n: 1, color: ['#c8fbff', '#ffffff', '#5ad8f0'], up: 20, speed: 30, life: 0.25, glow: true });
       if (ar.t < 4.2) continue;
@@ -517,7 +563,7 @@ export class DungeonRun {
     }
     // The Kavorent's emitters, firing across their halls in turn.
     for (const em of this.data.emitters) {
-      if (Math.abs(em.x - p.x) > 16 || Math.abs(em.z - p.z) > 12) continue;
+      if (!near(em.x, em.z, 16, 12)) continue;
       em.t = (em.t ?? em.phase) + dt;
       if (em.t < 3.4) continue;
       em.t = 0;
@@ -527,16 +573,22 @@ export class DungeonRun {
     }
     // Into the master's hall: the gate comes down behind you, and it wakes.
     const br = this.data.bossRoom;
-    if (br && !this.rec.cleared && !this.fight && p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1) this.bossFight();
+    const entrant = br && !this.rec.cleared && !this.fight && party.find((q) => !q.dead && inHall(q, br));
+    if (entrant) game.asPlayer(entrant, () => this.bossFight());
     if (this.fight) this.updateFight(dt);
-    this.placeDangers(dt);
+    // (Its dangers come for one of you at a time.)
+    const up = party.filter((q) => !q.dead);
+    const victim = up.length ? up[Math.floor(Math.random() * up.length)] : p;
+    game.asPlayer(victim, () => this.placeDangers(dt));
     this.spikesTick(dt);
     this.ambience(dt);
     // Notes left (an adventurer's remains): told as you come near.
     for (const nt of this.notes || []) {
-      if (nt.told || (nt.floor !== undefined && nt.floor !== this.floor) || Math.abs(nt.x - p.x) > 3 || Math.abs(nt.z - p.z) > 3) continue;
+      if (nt.told || (nt.floor !== undefined && nt.floor !== this.floor)) continue;
+      const by = party.find((q) => Math.abs(nt.x - q.x) <= 3 && Math.abs(nt.z - q.z) <= 3);
+      if (!by) continue;
       nt.told = true;
-      game.ui.msg(nt.text, '#c8b8a0');
+      game.asPlayer(by, () => game.ui.msg(nt.text, '#c8b8a0'));
     }
   }
 
@@ -554,7 +606,11 @@ export class DungeonRun {
     const boss = game.creatures.filter((c) => c.isBoss && !c.dead && c.leash);
     if (!boss.length) return;
     const g = this.data.bossGate;
-    if (g && !(p.x === g.x && p.z === g.z)) {
+    // (Not on anyone still outside the hall: with others down here, it
+    // comes down only once all of you are in.)
+    const br0 = this.data.bossRoom;
+    const shut = !game.isParty?.() || this.partyHere().every((q) => q.dead || !br0 || (q.x >= br0.x0 && q.x <= br0.x1 && q.z >= br0.z0 && q.z <= br0.z1));
+    if (g && shut && !this.partyHere().some((q) => q.x === g.x && q.z === g.z)) {
       const cur = game.world.getBlock(g.x, FY, g.z);
       if (cur !== B.boss_gate && cur !== B.kav_gate) {
         game.world.setBlock(g.x, FY, g.z, this.kav ? B.kav_gate : B.boss_gate, g.rot);
@@ -589,7 +645,6 @@ export class DungeonRun {
   updateFight(dt) {
     const f = this.fight;
     const game = this.game;
-    const p = game.player;
     f.t += dt;
     f.phaseT = (f.phaseT ?? 9) + dt;
     const alive = f.boss.filter((c) => !c.dead);
@@ -603,8 +658,9 @@ export class DungeonRun {
     // Out of its hall a while (back out the gate, or up the stairs): it
     // settles to wait for you again.
     const br = this.data.bossRoom;
-    const inside = p.x >= br.x0 && p.x <= br.x1 && p.z >= br.z0 && p.z <= br.z1;
-    f.away = inside || p.dead ? 0 : f.away + dt;
+    const party = this.partyHere();
+    const inside = party.some((q) => !q.dead && q.x >= br.x0 && q.x <= br.x1 && q.z >= br.z0 && q.z <= br.z1);
+    f.away = inside || party.every((q) => q.dead) ? 0 : f.away + dt;
     if (f.away > 5) {
       for (const c of alive) {
         c.waiting = true;
@@ -654,7 +710,7 @@ export class DungeonRun {
     // Gongs: whoever's after you strikes the nearest.
     if (type === 'holdout') {
       for (const c of game.creatures) {
-        if (c.dead || c.target !== p || c.rang || c.isBoss) continue;
+        if (c.dead || !c.target || c.target.kind !== 'player' || c.rang || c.isBoss) continue;
         const gong = this.data.gongs.find((q) => !q.rung && Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) <= 9 && game.world.getBlock(q.x, FY, q.z) === B.gong);
         c.rang = true;
         if (gong) this.ringGong(gong, c);
@@ -682,9 +738,9 @@ export class DungeonRun {
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#c8d0c0', '#8a9a8a'], up: 8, speed: 6, life: 1.1, oy: 6, shape: 'puff' });
       addHazard(game, { tiles, y: FY, dur: 1.3, dmg: Math.round(dmg * 0.6), chill: 2, kind: 'cold', color: [150, 170, 160], trap: true, onFire: (g, h, hit) => {
         for (const e of hit) {
-          if (e !== p) continue;
-          p.grabbedT = 1.2;
-          game.renderer.floatText(p.x, p.y + 2.4, p.z, 'grasped! (roll free)', '#a0c8b0');
+          if (e.kind !== 'player') continue;
+          e.grabbedT = 1.2;
+          game.renderer.floatText(e.x, e.y + 2.4, e.z, 'grasped! (roll free)', '#a0c8b0');
         }
         for (const t of h.tiles) game.renderer.emit(t.x, FY + 0.4, t.z, { n: 4, color: ['#e8e4d4', '#a8a088'], up: 30, speed: 20, life: 0.5, oy: 2 });
       } });
@@ -696,9 +752,9 @@ export class DungeonRun {
       const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.4)];
       for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#5a8a3a', '#8ac060'], up: 6, speed: 6, life: 0.9, oy: 6 });
       addHazard(game, { tiles, y: FY, dur: 1.2, dmg: Math.round(dmg * 0.6), kind: 'erupt', color: [110, 170, 70], trap: true, onFire: (g, h, hit) => {
-        for (const e of hit) if (e === p) {
-          p.grabbedT = 1;
-          game.renderer.floatText(p.x, p.y + 2.4, p.z, 'caught in briars! (roll free)', '#a0d070');
+        for (const e of hit) if (e.kind === 'player') {
+          e.grabbedT = 1;
+          game.renderer.floatText(e.x, e.y + 2.4, e.z, 'caught in briars! (roll free)', '#a0d070');
         }
       } });
       game.audio?.play('whip');
@@ -764,7 +820,9 @@ export class DungeonRun {
   // crypt's chains, a holdout's fires), and its own motes in the dark.
   ambience(dt) {
     const game = this.game;
-    const p = game.player;
+    // (Round one of you at a time, with others down here.)
+    const party = this.partyHere();
+    const p = party[Math.floor(Math.random() * party.length)];
     this.dripT -= dt;
     if (this.dripT <= 0) {
       this.dripT = 4 + Math.random() * 7;
@@ -822,24 +880,31 @@ export class DungeonRun {
   // then. (What's near is looked for twice a second.)
   kavAir(dt) {
     const game = this.game;
-    const p = game.player;
+    const party = this.partyHere();
     const c = this.pal.motes;
     // In a room the blight's got into: its spores in the air and a whisper
     // (no more said: you can see it).
-    const bl = (this.data.blighted || []).find((q) => p.x >= q.x0 && p.x <= q.x1 && p.z >= q.z0 && p.z <= q.z1);
-    if (bl) {
+    for (const p of party) {
+      const bl = (this.data.blighted || []).find((q) => p.x >= q.x0 && p.x <= q.x1 && p.z >= q.z0 && p.z <= q.z1);
+      if (!bl) continue;
       if (Math.random() < dt * 9) game.renderer.emit(p.x + (Math.random() - 0.5) * 14, FY + 0.2 + Math.random() * 1.5, p.z + (Math.random() - 0.5) * 9, { n: 1, color: ['#b070e0', '#e090ff', '#7a3aa0'], up: 5, speed: 3, gravity: -5, life: 2, glow: true });
-      if (Math.random() < dt * 0.08) game.audio?.play('whisper');
+      if (Math.random() < dt * 0.08) game.audio?.play('whisper', p);
     }
     this.kavScanT = (this.kavScanT || 0) - dt;
     if (this.kavScanT <= 0) {
       this.kavScanT = 0.5;
       const got = [];
+      const seen = new Set();
       const w = game.world;
-      for (let z = p.z - 8; z <= p.z + 8; z++) {
-        for (let x = p.x - 13; x <= p.x + 13; x++) {
-          const id = w.getBlock(x, FY, z);
-          if (id === B.kav_vent || id === B.kav_monolith || id === B.kav_holo || id === B.kav_conduit || id === B.kav_statue) got.push({ x, z, id });
+      for (const p of party) {
+        for (let z = p.z - 8; z <= p.z + 8; z++) {
+          for (let x = p.x - 13; x <= p.x + 13; x++) {
+            const k = x * 4096 + z;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            const id = w.getBlock(x, FY, z);
+            if (id === B.kav_vent || id === B.kav_monolith || id === B.kav_holo || id === B.kav_conduit || id === B.kav_statue) got.push({ x, z, id });
+          }
         }
       }
       this.kavNear = got;
@@ -848,7 +913,7 @@ export class DungeonRun {
       const r = Math.random();
       if (q.id === B.kav_vent) {
         if (r < dt * 3) game.renderer.emit(q.x, FY + 0.15, q.z, { n: 1, color: ['#d8e4ec', '#9aa8b8', c[1]], up: 14, speed: 3, gravity: -10, life: 1.3, shape: 'puff' });
-        if (r < dt * 0.06 && Math.abs(q.x - p.x) + Math.abs(q.z - p.z) < 6) game.audio?.play('hiss');
+        if (r < dt * 0.06 && party.some((p) => Math.abs(q.x - p.x) + Math.abs(q.z - p.z) < 6)) game.audio?.play('hiss', q);
       } else if (q.id === B.kav_monolith) {
         if (r < dt * 2) game.renderer.emit(q.x, FY + 1 + Math.random() * 1.6, q.z, { n: 1, color: c, up: 6, speed: 3, gravity: -8, life: 1.2, glow: true });
       } else if (q.id === B.kav_holo) {
@@ -1224,7 +1289,9 @@ export class DungeonRun {
   spikesTick(dt) {
     const game = this.game;
     const w = game.world;
-    const p = game.player;
+    const party = this.partyHere();
+    const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
+    const within = (x, z, d) => party.some((q) => Math.abs(x - q.x) + Math.abs(z - q.z) < d);
     const list = this.data.spikes || [];
     if (!list.length) return;
     const dmg = Math.round(4 + this.floor + (this.rec.level || 1));
@@ -1232,7 +1299,7 @@ export class DungeonRun {
     for (const [e, t] of this.spikeHit) if (t - dt <= 0) this.spikeHit.delete(e);
     else this.spikeHit.set(e, t - dt);
     for (const sp of list) {
-      if (Math.abs(sp.x - p.x) > 20 || Math.abs(sp.z - p.z) > 14) continue;
+      if (!near(sp.x, sp.z, 20, 14)) continue;
       if (w.getBlock(sp.x, FY, sp.z) !== B.spikes) continue;
       const ph = (this.t + sp.phase) % SPIKE_CYCLE;
       const up = ph > SPIKE_CYCLE - 1;
@@ -1240,21 +1307,21 @@ export class DungeonRun {
       if (warn && !sp.warned) {
         sp.warned = true;
         game.renderer.emit(sp.x, FY + 0.05, sp.z, { n: 4, color: ['#8a8478', '#5a5650'], up: 8, speed: 10, life: 0.4, shape: 'puff' });
-        if (Math.abs(sp.x - p.x) + Math.abs(sp.z - p.z) < 7) game.audio?.play('click', sp);
+        if (within(sp.x, sp.z, 7)) game.audio?.play('click', sp);
       }
       if (up !== w.getState(sp.x, FY, sp.z)) {
         w.setState(sp.x, FY, sp.z, up);
         if (up) {
           sp.warned = false;
-          if (Math.abs(sp.x - p.x) + Math.abs(sp.z - p.z) < 9) game.audio?.play('spikes', sp);
+          if (within(sp.x, sp.z, 9)) game.audio?.play('spikes', sp);
         }
       }
       if (!up) continue;
-      for (const e of [p, ...game.creatures]) {
+      for (const e of [...party, ...game.creatures]) {
         if (!e || e.dead || e.burrowed || e.S?.floats || e.x !== sp.x || e.z !== sp.z || this.spikeHit.has(e)) continue;
-        if (e !== p && (e.S?.construct || e.isBoss)) continue;
+        if (e.kind !== 'player' && (e.S?.construct || e.isBoss)) continue;
         this.spikeHit.set(e, 0.9);
-        game.damage(e, e === p ? dmg : Math.round(dmg * 1.5), null);
+        game.damage(e, e.kind === 'player' ? dmg : Math.round(dmg * 1.5), null);
         game.renderer.emit(e.x, FY + 0.4, e.z, { n: 8, color: ['#c82a2a', '#e8e0d0'], up: 30, speed: 30, life: 0.5 });
       }
     }

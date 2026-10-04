@@ -263,6 +263,7 @@ export class Sim {
   update(dt) {
     this.greetT -= dt;
     this.tickT -= dt;
+    this.ticked = this.tickT <= 0;
     if (this.tickT <= 0) {
       this.tickT = 0.5;
       for (const { layout } of this.game.active.values()) {
@@ -296,6 +297,19 @@ export class Sim {
     }
     this.war.update(dt);
     this.volcano.update(dt);
+    this.careers.update(dt);
+    this.updateConfront();
+    this.justice.update(dt);
+  }
+
+  // Another player's own dealings with the towns (multiplayer: see
+  // game/party.js), run as them: their work, favours they owe and are owed,
+  // a word the mayor wants with them, and the law's view of them.
+  updateSeat(dt) {
+    if (this.ticked) {
+      this.areaCache.clear();
+      this.favors.update();
+    }
     this.careers.update(dt);
     this.updateConfront();
     this.justice.update(dt);

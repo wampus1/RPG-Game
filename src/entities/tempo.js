@@ -158,7 +158,7 @@ function phaseUp(c, ph) {
   const line = (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
   if (line) c.say?.(line, 2.6, '#ff9080');
   // (Anyone close by is thrown back from it.)
-  for (const e of [game.player, ...game.npcs]) {
+  for (const e of [...game.everyone(), ...game.npcs]) {
     if (!e || e.dead || apart(c, e) > R - (c.foot || 0) || Math.abs(e.y - c.y) > 1) continue;
     knock(game, c, e, 2);
   }

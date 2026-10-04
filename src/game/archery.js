@@ -231,7 +231,7 @@ export function flyAimed(game, a) {
 function victimAt(game, a, x, z, px = x, pz = z) {
   if (x === a.x0 && z === a.z0) return null;
   const y = a.y0 - 1;
-  for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+  for (const e of [...game.everyone(), ...game.npcs, ...game.creatures]) {
     if (!e || e === a.from || e.dead || e.down || Math.abs(e.y - y) > 1) continue;
     // (A master's a little more to hit than its one pace.)
     if (!covers(e, x, z) && !(padded(e) && Math.hypot(px - e.x, pz - e.z) <= padOf(e))) continue;

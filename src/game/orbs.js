@@ -97,28 +97,31 @@ function step(game, o, dt) {
   game.audio?.play('orbBounce', o);
 }
 
-// Whoever it's touching.
+// Whoever it's touching (the first of you it finds).
 function touch(game, o) {
   if (o.back) return touchFoe(game, o);
-  const p = game.player;
-  if (!p || p.dead || p.down || Math.abs(p.y - o.y) > 1) return;
-  const at = p.renderPos ? p.renderPos() : p;
-  if (Math.hypot(at.x - o.x, at.z - o.z) > TOUCH) return;
-  // (Rolled through it.)
-  if (p.rollT > 0) {
-    if (!o.rolled) game.renderer.floatText(p.x, p.y + 2, p.z, 'dodged', '#c8e8ff');
-    o.rolled = true;
+  for (const p of game.everyone()) {
+    if (!p || p.dead || p.down || Math.abs(p.y - o.y) > 1) continue;
+    const at = p.renderPos ? p.renderPos() : p;
+    if (Math.hypot(at.x - o.x, at.z - o.z) > TOUCH) continue;
+    // (Rolled through it.)
+    if (p.rollT > 0) {
+      if (!o.rolled) game.renderer.floatText(p.x, p.y + 2, p.z, 'dodged', '#c8e8ff');
+      o.rolled = true;
+      continue;
+    }
+    // Guard up, toward it: knocked back (a parry if it was only just up).
+    if (p.blocking && facing(p, o)) {
+      p.shieldJolt = 0.18;
+      const quick = game.asPlayer ? game.asPlayer(p, () => p.blockT !== undefined && p.blockT < parryWindow(game)) : p.blockT < parryWindow(game);
+      knockBack(game, o, p, quick ? 'parry' : 'block');
+      return;
+    }
+    if (o.t < ORB_RISE) continue;
+    game.damage(p, o.dmg, o.by);
+    burst(game, o);
     return;
   }
-  // Guard up, toward it: knocked back (a parry if it was only just up).
-  if (p.blocking && facing(p, o)) {
-    p.shieldJolt = 0.18;
-    knockBack(game, o, p, p.blockT !== undefined && p.blockT < parryWindow(game) ? 'parry' : 'block');
-    return;
-  }
-  if (o.t < ORB_RISE) return;
-  game.damage(p, o.dmg, o.by);
-  burst(game, o);
 }
 
 // Knocked back: whoever's against you that it runs into (its maker most
@@ -131,7 +134,7 @@ function touchFoe(game, o) {
     // (A master's bulk counts: see footprint.)
     const r = TOUCH + (c.foot || 0) + (c.isBoss && c.S?.humanoid ? (c.S.pad || 0.85) - 0.45 : 0);
     if (Math.max(Math.abs(at.x - o.x), Math.abs(at.z - o.z)) > r) continue;
-    game.damage(c, o.backDmg, game.player);
+    game.damage(c, o.backDmg, o.backBy || game.player);
     if (c === o.by && !c.dead) {
       c.stunT = Math.max(c.stunT || 0, 0.8);
       game.renderer.floatText(c.x, c.y + 2.8, c.z, 'her own light!', '#ffe070');
@@ -151,6 +154,7 @@ export function knockBack(game, o, p, how) {
   o.vx = Math.cos(ang) * sp;
   o.vz = Math.sin(ang) * sp;
   o.back = true;
+  o.backBy = p;
   o.backDmg = Math.max(6, o.dmg * (how === 'parry' ? 3 : 2));
   o.t = Math.max(o.t, ORB_RISE);
   // (Out of your reach first, so it isn't on you the same moment.)

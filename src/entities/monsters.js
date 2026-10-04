@@ -124,7 +124,7 @@ function fireHazard(game, h) {
   const r = game.renderer;
   const on = (e) => !e.dead && !e.down && !e.burrowed && onTiles(e, h.tiles) && Math.abs(e.y - h.y) <= 1;
   const hit = [];
-  for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+  for (const e of [...game.everyone(), ...game.npcs, ...game.creatures]) {
     if (!e || !on(e) || e === h.by) continue;
     // (Its own kind are spared its blows, unless it's a trap.)
     if (h.by && !h.trap && e.kind !== 'player' && e.kind !== 'npc' && e.S && e.S.construct === h.by.S?.construct && e.S.undead === h.by.S?.undead) continue;
@@ -259,8 +259,8 @@ export function addZone(game, z) {
 }
 
 function updateZones(game, dt) {
-  const p = game.player;
-  if (p.markedT > 0) p.markedT -= dt;
+  const all = game.everyone();
+  for (const q of all) if (q.markedT > 0) q.markedT -= dt;
   if (!game.zones || !game.zones.length) return;
   for (const z of game.zones) {
     z.t += dt;
@@ -270,7 +270,7 @@ function updateZones(game, dt) {
     }
     const at = (e) => !e.dead && !e.down && !e.burrowed && Math.abs(e.y - z.y) <= 1 && onTiles(e, z.tiles);
     // (Fire set by your own hand burns what's hostile too.)
-    const inside = [p, ...game.npcs, ...(z.all ? game.creatures.filter((c) => c !== z.by && !c.S?.floats && (c.hostileNow || c.S?.mode === 'hostile')) : [])].filter((e) => e !== z.by && at(e));
+    const inside = [...all, ...game.npcs, ...(z.all ? game.creatures.filter((c) => c !== z.by && !c.S?.floats && (c.hostileNow || c.S?.mode === 'hostile')) : [])].filter((e) => e !== z.by && at(e));
     // A fire spreads, once, to a pace or two beside it.
     if (z.kind === 'fire' && z.spread > 0 && z.t > 1 && !z.spreadDone) {
       z.spreadDone = true;
@@ -609,7 +609,7 @@ export const BRAINS = {
   // out; with none, it drifts.
   moth(c, dt) {
     const game = c.game;
-    const p = game.player;
+    const p = game.closestPlayer(c.x, c.z).p;
     const lit = p.heldLightKind && p.heldLightKind() === 'fire';
     c.flutter = (c.flutter || 0) - dt;
     if (!lit || p.dead || dist(c, p) > 12) {
@@ -1196,7 +1196,7 @@ export const BRAINS = {
     const game = c.game;
     wardenCover(c);
     const hurt = allies(game, c, 10, (o) => o.S.construct && o.hp < o.maxHp && o.species !== 'mender').sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-    const p = game.player;
+    const p = game.closestPlayer(c.x, c.z).p;
     if (hurt) {
       if (dist(c, hurt) <= 1) {
         c.face(hurt.x, hurt.z);
@@ -1647,7 +1647,7 @@ function raiseWall(game, c, tiles) {
   const r = game.renderer;
   const put = [];
   for (const q of tiles) {
-    if (game.entityAt?.(q.x, c.y, q.z) || (game.player.x === q.x && game.player.z === q.z)) continue;
+    if (game.entityAt?.(q.x, c.y, q.z) || game.everyone().some((p) => p.x === q.x && p.z === q.z)) continue;
     for (const y of [c.y, c.y + 1]) {
       if (w.getBlock(q.x, y, q.z) !== BLOCKS_ID.air) continue;
       w.setBlock(q.x, y, q.z, BLOCKS_ID.kav_field);
@@ -1686,7 +1686,7 @@ function overseerAct(c, dt) {
       const q = a.path[a.i++];
       // Whoever's under it there, struck and flung aside (off the lane).
       const hx = Math.sign(q.x - c.x);
-      for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+      for (const e of [...game.everyone(), ...game.npcs, ...game.creatures]) {
         if (!e || e === c || e.dead || a.hit.has(e) || Math.max(Math.abs(e.x - q.x), Math.abs(e.z - q.z)) > (c.foot || 0) || Math.abs(e.y - c.y) > 1) continue;
         if (e.kind !== 'player' && e.kind !== 'npc' && !e.sentinel && e.S?.construct) continue;
         a.hit.add(e);
@@ -1751,7 +1751,7 @@ function overseerAct(c, dt) {
         s.h = 0.15 + 0.9 * k;
         const tx = Math.round(s.x);
         const tz = Math.round(s.z);
-        for (const e of [game.player, ...game.npcs]) {
+        for (const e of [...game.everyone(), ...game.npcs]) {
           if (!e || e.dead || e.x !== tx || e.z !== tz || (s.hitAt.get(e) ?? -1) > a.t) continue;
           s.hitAt.set(e, a.t + 0.7);
           if (e.kind === 'player' && e.rollT > 0) continue;

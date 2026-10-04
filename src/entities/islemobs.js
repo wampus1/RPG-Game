@@ -323,7 +323,7 @@ export const ISLE_BRAINS = {
   // Drawn to firelight: it snatches it and runs.
   lanternThief(c, dt) {
     const game = c.game;
-    const p = game.player;
+    const p = (c.loot && c.loot.from) || game.closestPlayer(c.x, c.z).p;
     if (c.loot) {
       c.target = null;
       c.carryT = (c.carryT || 0) + dt;
@@ -362,7 +362,7 @@ export const ISLE_BRAINS = {
         }
       }
       if (!item) return true;
-      c.loot = { item, n: 1 };
+      c.loot = { item, n: 1, from: p };
       game.lightDirty = true;
       game.refreshBonus?.();
       game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 10, color: ['#ffd060', '#ff9030', '#ffffff'], up: 20, speed: 30, life: 0.5, glow: true });
@@ -399,7 +399,7 @@ export const ISLE_BRAINS = {
         c.limpT = 6;
         const tiles = areaTiles(c.x, c.z, 2, true);
         addZone(game, { by: c, kind: 'spores', tiles, y: c.y, life: 5, tick: 0.8, dmg: 1, slow: true, puff: ['#c8f070', '#8ac040', '#e0ffb0'] });
-        for (const e of [game.player, ...game.npcs]) {
+        for (const e of [...game.everyone(), ...game.npcs]) {
           if (!e || e.dead || dist(c, e) > 2 || Math.abs(e.y - c.y) > 1) continue;
           if (e.kind === 'player' && e.rollT > 0) continue;
           e.poisonT = Math.max(e.poisonT || 0, 5);

@@ -66,7 +66,7 @@ export function tickFires(game, dt) {
   }
   // Anyone standing in it gets singed.
   for (const f of fires) {
-    for (const e of [game.player, ...game.npcs]) {
+    for (const e of [...game.everyone(), ...game.npcs]) {
       if (!e || e.dead || e.down || Math.abs(e.x - f.x) > 0 || Math.abs(e.z - f.z) > 0 || Math.abs(e.y - f.y) > 1) continue;
       e.singeT = (e.singeT || 0) - dt;
       if (e.singeT <= 0) {

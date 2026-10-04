@@ -37,6 +37,46 @@ lists all of them.
 npm test           # world generation, settlement and NPC simulation tests
 ```
 
+### Playing together on your network
+
+`npm start` also lets up to four people on the same Wi-Fi play in one world.
+There's nothing else to set up.
+
+1. **Make an account.** On the title screen press **M** (Multiplayer), then
+   **A**. Pick a username (it can't be changed later), a picture (shape,
+   colour, background) and a few words about yourself. You can change the
+   picture and the words whenever you like. The account is kept in that
+   browser; **X** in the account window copies a code that carries it to
+   another browser.
+2. **Host a world.** The person running `npm start` presses **N** in the
+   Multiplayer menu for a new world (or continues one of the three hosted
+   worlds kept on that machine). They name it, choose **Host on your
+   network** and make their character. Cloud hosting is shown but greyed
+   out; it isn't available yet. The game then shows the address to share,
+   like `http://192.168.1.20:8080`.
+3. **Join.** Everyone else opens that address in their browser, goes to
+   Multiplayer and presses **J** to join. The first time they join a world
+   they make a character for it.
+
+In a shared world:
+
+- Everyone gets a notice when someone joins or leaves.
+- **P** (or the pause menu's **Multiplayer**) shows who's playing. The host
+  can kick, ban and unban players, and invite friends who are on the title
+  screen at the same address.
+- Right-click another player to see their profile and send a friend
+  request.
+- If anyone goes down into a dungeon, the whole party goes with them, and
+  comes back up together.
+- Each player keeps their own character in the host's world between
+  sessions. Their reputation with townsfolk, crimes, citizenship, jobs and
+  favours are their own, not the party's.
+
+If the others can't connect, check that everyone is on the same network
+and that the host's computer lets Node.js accept connections (Windows asks
+about this the first time `npm start` runs; choose to allow it on private
+networks).
+
 Useful URL parameters for testing: `?autostart&seed=123` skips the title
 screen (and the character screen; add `&origin=crash` or `&origin=native` for
 a random character with that origin), `&time=1320` starts at 22:00,
@@ -82,6 +122,8 @@ with the music off; `&nointro` skips a new character's opening scene.
 | Menu (save and load slots, settings, new game) | Esc |
 | Toggle CRT / debug overlay | F2 / F3 |
 | Command console (teleport, reveal the map, trigger events…) | ` or / |
+| Multiplayer menu (in a world played together) | P |
+| Another player's profile and a friend request | Right-click them |
 
 ## What's in the world
 
@@ -2953,6 +2995,49 @@ the masters of the old places are made:
   the air at once, and she stops using them once she's desperate. They
   light up the dark as they go.
 
+## Round 41: playing together
+
+*Multiplayer over your network, for up to four players.* See "Playing
+together on your network" above for how to start. How it works:
+
+- *One world, run by the host.* The host's browser runs the whole world as
+  usual. Every other player's browser shows a copy of it and sends back what
+  they press and click. The host carries it out for them and sends the
+  results. So there's only one wolf, in one place, on every screen, and a
+  block someone places is the same block for everyone. The host sends the
+  ground around each player whole, then every block that changes.
+- *A beast goes for one of you.* Monsters and night creatures go for the
+  nearest player (or whoever hit them), never two of you at once. Guards,
+  bosses, traps, arrows and dungeon hazards treat every player the same
+  way. Players can't hurt each other.
+- *Your own standing.* What townsfolk think of you, crimes and the law's
+  interest in you, citizenship, renown, jobs, favours and your stats belong
+  to each player. If one of you steals, the guards come for that player
+  only.
+- *Time is shared.* Pausing doesn't stop the world while others are in it.
+  Night only passes quickly once everyone is asleep. A hard blow's freeze
+  and a parry's slow-down are only shown to the player they happen to.
+- *The party moves together.* If one of you takes the stairs into an old
+  place, everyone is taken down too, and everyone comes back up together.
+  If you fall while the others are still below, you come back at the start
+  of that floor. A master's hall gate only comes down once all of you are
+  inside, so nobody is shut out of the fight.
+- *Your windows.* A guest's inventory, chests, trading, conversations and
+  crafting run on the host and are drawn on the guest's screen. A guest's
+  own pause menu, map, help and settings stay on their own screen.
+- *Saved with the world.* The host's save keeps every player's character,
+  so a returning player comes back where they left off, with what they
+  carried. The ban list and the world's name are saved too. A hosted world
+  autosaves every few minutes while others are playing, and saves when the
+  host closes it.
+- *The host's tab in the background.* Browsers stop drawing a tab you've
+  switched away from. The world keeps running for the others anyway, in
+  steps, so it's a bit choppier for them until the host comes back to it.
+- *Built to grow.* The four-player limit is one number
+  (`MAX_PLAYERS` in `src/net/protocol.js`). Accounts live in the browser
+  and the relay is part of `npm start`, so cloud hosting can be added
+  later without changing the game itself.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -3153,6 +3238,20 @@ src/
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)
+  net/                 playing together: protocol (what the host, the relay
+                       and the players agree on), account (your name,
+                       picture, words, friends), host (the host's side:
+                       each player's seat, what they're sent), guest (a
+                       player's copy of the host's world), wire (people
+                       and beasts as data, sent as they change), uiwire
+                       (a player's windows, drawn by the host)
+  game/party.js        each player's own part of the game (seats), and
+                       doing things as one of them
+  ui/multiplayer.js    the account, Multiplayer menu, hosting, party,
+                       profile and invitation windows, and notices
+  render/avatar.js     account pictures
 tests/                 node:test suites (run headlessly with stubs)
-tools/serve.mjs        zero-dependency static server
+tools/serve.mjs        zero-dependency static server (and the LAN relay)
+tools/relay.mjs        the LAN relay: a small WebSocket server passing words
+                       between the host's browser and the players'
 ```

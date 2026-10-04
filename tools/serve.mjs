@@ -1,28 +1,44 @@
 // Minimal static file server for local play: `npm start` then open the URL.
+// It's also the LAN relay for multiplayer (see relay.mjs): a world hosted
+// from this machine's browser can be joined by anyone on the same network
+// at this machine's address, shown in the game when you host.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Relay, lanAddresses } from './relay.mjs';
+import { LAN_PATH } from '../src/net/protocol.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT) || 8080;
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const relay = new Relay({ port });
 
-http
-  .createServer((req, res) => {
-    const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    let file = path.join(root, url === '/' ? 'index.html' : url);
-    if (!file.startsWith(root)) {
-      res.writeHead(403).end();
+const server = http.createServer((req, res) => {
+  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  // Where this machine is on the network, and the world hosted here.
+  if (url === LAN_PATH) {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify(relay.info()));
+    return;
+  }
+  let file = path.join(root, url === '/' ? 'index.html' : url);
+  if (!file.startsWith(root)) {
+    res.writeHead(403).end();
+    return;
+  }
+  fs.readFile(file, (err, data) => {
+    if (err) {
+      res.writeHead(404).end('not found');
       return;
     }
-    fs.readFile(file, (err, data) => {
-      if (err) {
-        res.writeHead(404).end('not found');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-      res.end(data);
-    });
-  })
-  .listen(port, () => console.log(`Tessera running at http://localhost:${port}`));
+    res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.end(data);
+  });
+});
+server.on('upgrade', (req, socket) => relay.upgrade(req, socket));
+server.listen(port, () => {
+  console.log(`Tessera running at http://localhost:${port}`);
+  const lan = lanAddresses();
+  if (lan.length) console.log(`On your network: ${lan.map((a) => `http://${a}:${port}`).join(', ')}`);
+});

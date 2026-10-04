@@ -1535,6 +1535,13 @@ export class PauseWindow extends Window {
       ['N', 'New world', () => this.ui.hooks.newWorld && this.ui.hooks.newWorld()],
       ['T', 'Title screen', () => this.ui.hooks.title && this.ui.hooks.title()],
     ];
+    // Hosting a world for others (see multiplayer.js): who's here, and no
+    // other world loaded over theirs.
+    if (ui.game && ui.game.net && ui.hooks.party) {
+      this.items = this.items.filter(([k]) => k !== 'L' && k !== 'N');
+      this.items.splice(2, 0, ['P', 'Multiplayer', () => this.ui.hooks.party()]);
+      this.items[this.items.length - 1] = ['T', 'Close the world', () => this.ui.hooks.title && this.ui.hooks.title()];
+    }
   }
   draw(g, game) {
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'PAUSED' });
@@ -1831,6 +1838,7 @@ export class TitleWindow extends Window {
       ['N', 'New game (random world)'],
       ['S', 'New game from seed...'],
       ...(this.hasSave ? [['L', 'Load game...']] : []),
+      ['M', 'Multiplayer'],
       ['O', 'Settings'],
       ['H', 'How to play'],
     ];
@@ -1867,10 +1875,11 @@ export class TitleWindow extends Window {
     if (k === 'S' && h.askSeed) h.askSeed();
     if (k === 'H') this.ui.open(new HelpWindow(this.ui));
     if (k === 'O' && h.settings) h.settings();
+    if (k === 'M' && h.multiplayer) h.multiplayer();
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
-    if (this.ui.find('help') || this.ui.find('saves') || this.ui.find('create') || this.ui.find('settings')) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite'].some((k2) => this.ui.find(k2))) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

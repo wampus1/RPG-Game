@@ -298,6 +298,7 @@ export class Renderer {
     if (game.cutscene && game.cutscene.noCutaway) this.hidden = null;
     else this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
+    this.tags = [];
     this.pick = null;
     this.pickEnt = null;
     this.pickSeq = 0;
@@ -320,6 +321,15 @@ export class Renderer {
     this.drawAim(game);
     drawStormCover(this, game);
     if (snap || this.zoomK !== 1) return;
+    // The names of those you're playing with, and how they are.
+    for (const t of this.tags) {
+      drawText(ctx, t.name, t.x, t.y, t.color, '#000');
+      if (t.f === null) continue;
+      ctx.fillStyle = '#1a1018';
+      ctx.fillRect(t.sx + 2, t.y + 7, 14, 3);
+      ctx.fillStyle = t.f > 0.5 ? '#58c048' : t.f > 0.25 ? '#e8c030' : '#e04040';
+      ctx.fillRect(t.sx + 3, t.y + 8, Math.round(12 * t.f), 1);
+    }
     // Speech bubbles and emotes go on top of everything, roofs included.
     for (const b of this.bubbles) {
       if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
@@ -1582,7 +1592,9 @@ export class Renderer {
     }
     // Under the mouse? (The last thing drawn there is what you point at.)
     const m = this.mouse;
-    if (m && e.kind !== 'player' && e.kind !== 'item' && !e.dead && !e.burrowed) {
+    // (Another player, too: right-click them for their profile.)
+    const other = e.kind === 'player' && !!e.account && !!game && e !== game.player;
+    if (m && (e.kind !== 'player' || other) && e.kind !== 'item' && !e.dead && !e.burrowed) {
       const big = e.kind === 'creature' && e.S && e.S.big;
       // (A master's a little more than it's drawn: easier to put a blow on.)
       // (And some, broader, more again: see footprint.padOf.)
@@ -1634,6 +1646,13 @@ export class Renderer {
       ctx.fillRect(sx + 2, feetY - 29, w + 2, 3);
       ctx.fillStyle = f > 0.5 ? '#58c048' : f > 0.25 ? '#e8c030' : '#e04040';
       ctx.fillRect(sx + 3, feetY - 28, Math.round(w * f), 1);
+    }
+    // Someone you're playing with: their name over them, and how they are.
+    if (other && !this.spin) {
+      const name = e.account.name || 'Player';
+      const ty = feetY - (e.mount ? 46 : 38);
+      // (Drawn last, over everyone: see render.)
+      (this.tags ||= []).push({ name, x: Math.round(sx + 8 - textWidth(name) / 2), y: ty, sx, color: e.dead ? '#8a8098' : '#a0e0ff', f: !e.dead && e.hp < e.maxHp ? Math.max(0, e.hp / e.maxHp) : null });
     }
     const bubbles = this.bubbles || [];
     // Voices behind closed doors stay there.

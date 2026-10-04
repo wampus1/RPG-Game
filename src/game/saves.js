@@ -2,6 +2,8 @@
 // key in browser storage, with a small index (who, where, when) so the
 // slot list can be shown without reading every save.
 export const SLOTS = ['auto', '1', '2', '3', '4', '5'];
+// Worlds you host for others, kept apart (see multiplayer.js).
+export const MP_SLOTS = ['mp1', 'mp2', 'mp3'];
 const INDEX_KEY = 'tessera-saves-v2';
 const LEGACY_KEY = 'tessera-save-v1';
 const slotKey = (id) => `tessera-save-${id}`;
@@ -26,6 +28,8 @@ export function metaOf(game) {
     seed: game.seed,
     place,
     savedAt: Date.now(),
+    // (A world played with others: its name, and how many have played in it.)
+    ...(game.partyWorld ? { world: game.partyWorld.name, players: new Set([...(game.partyChars ? game.partyChars.keys() : []), ...(game.seats || []).map((q) => q.id)]).size || 1 } : {}),
   };
 }
 
@@ -144,9 +148,20 @@ export class SaveStore {
     }
   }
 
-  list() {
+  list(slots = SLOTS) {
     const ix = this.index();
-    return SLOTS.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.get(slotKey(id))) ? ix[id] : null }));
+    return slots.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.get(slotKey(id))) ? ix[id] : null }));
+  }
+
+  // The worlds you host for others: those there are, newest first.
+  worlds() {
+    return this.list(MP_SLOTS).filter((s) => s.meta).sort((a, b) => b.meta.savedAt - a.meta.savedAt);
+  }
+
+  // A slot for a new world to host (null if they're all taken).
+  freeWorld() {
+    const s = this.list(MP_SLOTS).find((q) => !q.meta);
+    return s ? s.id : null;
   }
 
   has(id) {

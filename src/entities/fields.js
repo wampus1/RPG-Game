@@ -113,7 +113,7 @@ export function tickFieldsOff(game, dt) {
     const left = [];
     for (const q of g.off) {
       if (q.own && !(game.bulwarks || []).includes(q.own)) continue;
-      const by = [game.player, ...game.npcs, ...game.creatures].some((e) => e && !e.dead && Math.abs(e.x - q.x) <= (e.foot || 0) && Math.abs(e.z - q.z) <= (e.foot || 0) && q.y - e.y >= 0 && q.y - e.y <= 1);
+      const by = [...game.everyone(), ...game.npcs, ...game.creatures].some((e) => e && !e.dead && Math.abs(e.x - q.x) <= (e.foot || 0) && Math.abs(e.z - q.z) <= (e.foot || 0) && q.y - e.y >= 0 && q.y - e.y <= 1);
       if (by) {
         left.push(q);
         continue;

@@ -347,9 +347,9 @@ export const MYRROW_BRAINS = {
       }
       c.gaze = null;
       c.eyes = false;
-      const p = game.player;
       game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 10, r1: 160, color: ['#e0b0ff', '#ffffff'], life: 0.6, oy: -10, flat: 0.5, thick: 2 });
-      if (p && !p.dead && dist(c, p) <= 12) {
+      // (Each of you within sight of her.)
+      for (const p of game.everyone()) if (p && !p.dead && dist(c, p) <= 12) {
         if (facing(p, c)) {
           mesmerise(game, p, ph >= 3 ? 4.5 : 3.5);
           game.damage(p, dmgOf(c, 2), c);
@@ -416,7 +416,8 @@ export const MYRROW_BRAINS = {
       }
       if (S.t > 0) return true;
       c.swapping = null;
-      const p = game.player;
+      // (Whoever's standing on her mark.)
+      const p = game.everyone().find((q) => !q.dead && q.x === S.mark.x && q.z === S.mark.z) || game.player;
       if (p && !p.dead && p.x === S.mark.x && p.z === S.mark.z && !(p.rollT > 0) && !p.moving) {
         const mine = { x: c.x, y: c.y, z: c.z };
         const yours = { x: p.x, y: p.y, z: p.z };
@@ -529,8 +530,7 @@ export const MYRROW_BRAINS = {
       return true;
     }
     if (bossSlam(c, dt, 2, 1, 7, 5, () => {
-      const p = game.player;
-      if (p && !p.dead && dist(c, p) <= 3 && !(p.rollT > 0)) sporeUp(game, p, c, 0.25);
+      for (const p of game.everyone()) if (p && !p.dead && dist(c, p) <= 3 && !(p.rollT > 0)) sporeUp(game, p, c, 0.25);
     })) return true;
     return false;
   },
@@ -618,8 +618,7 @@ export const MYRROW_BRAINS = {
     // Gas set off by a flame: yours, or a will-o'-light's.
     for (const z of game.zones || []) {
       if (z.by !== c || z.kind !== 'gas' || z.done) continue;
-      const p = game.player;
-      const torch = p && p.heldLightKind && p.heldLightKind() === 'fire' && z.tiles.some((q) => Math.abs(q.x - p.x) <= 1 && Math.abs(q.z - p.z) <= 1);
+      const torch = game.everyone().some((p) => p && p.heldLightKind && p.heldLightKind() === 'fire' && z.tiles.some((q) => Math.abs(q.x - p.x) <= 1 && Math.abs(q.z - p.z) <= 1));
       const wisp = game.creatures.some((o) => !o.dead && o.species === 'wisp' && z.tiles.some((q) => q.x === o.x && q.z === o.z));
       if (torch || wisp) blowGas(game, c, z);
     }
@@ -1023,8 +1022,7 @@ export const MYRROW_BRAINS = {
       c.inkCd = ph >= 2 ? 8 : 10;
       used(c, 0.3);
       lob(game, c, t.x, t.z, { tint: [20, 16, 24], onLand: (g, x, z) => {
-        const p = g.player;
-        if (p && !p.dead && Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) <= 2) ink(g, p, 5);
+        for (const p of g.everyone()) if (p && !p.dead && Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) <= 2) ink(g, p, 5);
         addZone(g, {
           by: c, kind: 'ink', tiles: areaTiles(x, z, 2, true), y: c.y, life: 8, tick: 0.5, slow: true, color: [16, 12, 20], puff: ['#100c14', '#2a2430'],
           onTick: (gg, zz, inside) => {
@@ -1337,7 +1335,8 @@ function singSong(c, dt) {
     return true;
   }
   S.limit -= dt;
-  const p = game.player;
+  // (Whichever of you steps on a stone.)
+  const p = game.everyone().find((q) => S.stones.some((s) => s.x === q.x && s.z === q.z)) || game.player;
   const at = p ? S.stones.findIndex((q) => q.x === p.x && q.z === p.z) : -1;
   if (at >= 0 && at !== S.last) {
     S.last = at;

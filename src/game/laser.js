@@ -82,7 +82,7 @@ export function updateLasers(game, dt) {
     if (L.acc >= L.tick) {
       L.acc = 0;
       const keys = new Set(widen(L.tiles, L.width, L.ang).map((q) => q.x * 65536 + q.z));
-      const targets = L.foes === 'player' ? [game.player, ...game.npcs] : game.creatures.filter((c) => c.hostileNow || c.S?.mode === 'hostile');
+      const targets = L.foes === 'player' ? [...game.everyone(), ...game.npcs] : game.creatures.filter((c) => c.hostileNow || c.S?.mode === 'hostile');
       for (const e of targets) {
         if (!e || e === o || e.dead || e.down || e.burrowed || Math.abs(e.y - o.y) > 1.5 || !footTiles(e).some((q) => keys.has(q.x * 65536 + q.z))) continue;
         if (e.kind === 'player' && e.rollT > 0) continue;

@@ -18,6 +18,7 @@ import { Window, cap, describeActivity } from './window.js';
 import { repLevel } from '../sim/sim.js';
 import { MARKS, fightPhase } from '../entities/tempo.js';
 import { afflictionsOf } from '../game/afflict.js';
+import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 
 // The tool pictured for a block that wants one.
 const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
@@ -124,6 +125,12 @@ export class UI {
         continue;
       }
       if (top && top.kind === 'title') continue;
+      // (In someone else's world, this screen's own windows only: the rest
+      // is the host's. See net/guest.js.)
+      if (this.guest) {
+        if (k.code === 'Escape' && top && !top.remote) this.close(top);
+        continue;
+      }
       // (An opening scene playing: only a few of the usual keys.)
       if (game.cutscene && !game.cutscene.allowUi(k.code)) {
         if (!this.modal) out.pressed.push(k);
@@ -132,8 +139,18 @@ export class UI {
       switch (k.code) {
         case 'Escape':
           if (top && top.modal) this.close(top);
-          else if (!game.player.dead) this.open(new W.PauseWindow(this));
+          // (A player in someone else's world pauses on their own screen.)
+          else if (!game.player.dead && !this.remoteSeat) this.open(new W.PauseWindow(this));
           continue;
+        // Who's here with you (with others in the world: see multiplayer.js).
+        case 'KeyP':
+          if (this.hooks.party && game.isParty && game.net) {
+            const w = this.find('party');
+            if (w) this.close(w);
+            else this.hooks.party();
+            continue;
+          }
+          break;
         case 'Tab':
         case 'KeyI':
           if (!game.player.dead) this.toggle('inventory', () => new W.InventoryWindow(this));
@@ -226,6 +243,8 @@ export class UI {
     this.time += dt;
     this.game = game;
     for (const w of this.windows) {
+      // (Another screen's window, as sent: it opens and closes there.)
+      if (w.remote) continue;
       // A window fading out is finished: it mustn't act again (a dialogue
       // closing on its own used to reopen itself every frame of the fade).
       if (w.state !== 'closing') w.update(dt, game);
@@ -237,7 +256,8 @@ export class UI {
         }
       } else if (w.state === 'closing') w.p -= this.instantWindows ? 1 : dt / 0.17;
     }
-    this.windows = this.windows.filter((w) => !(w.state === 'closing' && w.p <= 0));
+    this.windows = this.windows.filter((w) => w.remote || !(w.state === 'closing' && w.p <= 0));
+    tickNotes(this, dt);
     if (this.ko) this.ko.t += dt;
     for (const m of this.messages) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0);
@@ -273,6 +293,10 @@ export class UI {
     // lie in, keeps a place's name banner from showing over it.)
     const sc = game && game.scene;
     const covered = !!(sc && (sc.kind === 'lift' || (sc.kind === 'death' && !sc.reborn)));
+    // (Notices go under a menu that's open, so as not to hide it; over the
+    // title screen and the world.)
+    const under = this.windows.some((w) => w.modal && w.state !== 'closing' && w.kind !== 'title' && w.kind !== 'banner');
+    if (under) drawNotes(this, ctx);
     for (const w of this.windows) {
       if (covered && w.kind === 'banner') continue;
       w.grid.clear();
@@ -282,11 +306,15 @@ export class UI {
       drawGrid(ctx, w.grid, w.x, w.y, easeOut(p), w.seed, this.time);
       if (w.drawPixels && p >= 1) w.drawPixels(ctx, game);
     }
+    // (In someone else's world: what their windows have under your pointer,
+    // and what you've picked up in them, as the host sent it.)
+    if (!this.tooltip && this.remoteTip && this.windows.some((w) => w.remote)) this.tooltip = this.remoteTip;
     if (this.tooltip) this.drawTooltip(ctx);
-    if (this.cursorStack) {
-      const ic = itemIcon(this.cursorStack.item);
-      drawJewelled(ctx, ic, this.cursorStack.item, Math.round(this.mouse.x - 8), Math.round(this.mouse.y - 8), this.time);
-      if (this.cursorStack.count > 1) drawText(ctx, String(this.cursorStack.count), Math.round(this.mouse.x + 2), Math.round(this.mouse.y + 1), C.white, '#000');
+    const held = this.cursorStack || (this.windows.some((w) => w.remote) ? this.remoteStack : null);
+    if (held) {
+      const ic = itemIcon(held.item);
+      drawJewelled(ctx, ic, held.item, Math.round(this.mouse.x - 8), Math.round(this.mouse.y - 8), this.time);
+      if (held.count > 1) drawText(ctx, String(held.count), Math.round(this.mouse.x + 2), Math.round(this.mouse.y + 1), C.white, '#000');
     }
     if (this.fade > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, this.fade)})`;
@@ -294,6 +322,12 @@ export class UI {
     }
     if (game && game.sleep) this.drawSleep(ctx, game);
     if (this.ko) this.drawKnockout(ctx);
+    if (!under) drawNotes(this, ctx);
+  }
+
+  // A notice at the side of the screen (someone joined: see multiplayer.js).
+  notify(text, profile = null, color = C.fg) {
+    addNote(this, text, profile, color);
   }
 
   // The master's bar: it drops in from the top as the fight begins, the
@@ -934,7 +968,13 @@ export class UI {
     const lines = [];
     if (c.entity) {
       const e = c.entity;
-      if (e.kind === 'npc') {
+      if (e.kind === 'player') {
+        // Someone you're playing with.
+        lines.push({ text: e.account ? e.account.name : 'A player', color: '#a0e0ff' });
+        if (e.account && e.account.desc) lines.push({ text: e.account.desc.slice(0, 34), color: C.dim });
+        lines.push({ text: `${Math.max(0, Math.ceil(e.hp))}/${e.maxHp} HP`, color: C.dim });
+        lines.push({ text: 'RMB profile', color: C.faint });
+      } else if (e.kind === 'npc') {
         lines.push({ text: e.name, color: C.hi });
         lines.push({ text: `${e.title}${e.rec.age === 'child' ? ' (child)' : e.rec.age === 'elder' ? ' (elder)' : ''}`, color: C.cyan });
         const act = e.sleeping ? 'sleeping' : e.state === 'flee' ? 'fleeing!' : e.state === 'fight' ? 'fighting!' : e.sitting ? `sitting · ${describeActivity(e.activity.entry)}` : e.activity ? describeActivity(e.activity.entry) : '';

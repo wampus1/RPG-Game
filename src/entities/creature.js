@@ -195,7 +195,7 @@ export class Creature extends Entity {
     // (Lost you in the shadows a moment: it casts about. Not a master, in
     // its own hall: it knows where you are.)
     if (master && this.lostT > 0) this.lostT = 0;
-    if (this.lostT > 0 && this.target === game.player) this.target = null;
+    if (this.lostT > 0 && this.target && this.target.kind === 'player') this.target = null;
     if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
       if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
       // A master through whatever you've built in its way.
@@ -402,7 +402,7 @@ export class Creature extends Entity {
 // Where a cinderling's fire comes down: it scorches whoever's there (not
 // those who rolled clear), sets them alight a moment, and the ground burns.
 function cinderBurst(game, from, x, z, y) {
-  for (const e of [game.player, ...game.npcs, ...game.creatures]) {
+  for (const e of [...game.everyone(), ...game.npcs, ...game.creatures]) {
     if (e.dead || e.down || e === from || (e.S && e.S.night) || Math.max(Math.abs(e.x - x), Math.abs(e.z - z)) > 1 || Math.abs(e.y - y) > 2) continue;
     if (e.kind === 'player' && e.rollT > 0) {
       game.renderer.floatText(e.x, e.y + 2, e.z, 'dodged', '#ffd8a0');

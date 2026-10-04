@@ -78,6 +78,19 @@ export class World {
     const key = this.regionKey(rx, rz);
     let r = this.regions.get(key);
     if (r) return r;
+    // (Someone else's world: the ground comes from them, as they have it.)
+    if (this.remote) {
+      const d = this.netRegions && this.netRegions.get(key);
+      if (!d) {
+        this.wantRegion?.(rx, rz);
+        return null;
+      }
+      this.netRegions.delete(key);
+      r = Region.deserialize(d);
+      r.modified = false;
+      this.regions.set(key, r);
+      return r;
+    }
     const saved = this.saved.get(key);
     r = saved ? Region.deserialize(saved) : generateRegion(this, rx, rz);
     this.regions.set(key, r);

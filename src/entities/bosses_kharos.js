@@ -281,7 +281,7 @@ export const KHAROS_BRAINS = {
       game.audio?.play('glass', c);
     });
     // You, inside her: she sits, glowing, ash smoking from her mouth.
-    const p = game.player;
+    const p = game.everyone().find((q) => q.swallowed && q.swallowed.by === c) || null;
     if (p && p.swallowed && p.swallowed.by === c) {
       if (Math.random() < dt * 10) game.renderer.emit(c.x, c.y + 2.6, c.z, { n: 1, color: ['#ff9040', '#ffd060', '#8a8484'], up: 30, speed: 10, life: 0.8, glow: true });
       return true;
@@ -291,7 +291,7 @@ export const KHAROS_BRAINS = {
       c.inhale.t -= dt;
       if (c.inhale.t > 0) return true;
       c.inhale = null;
-      if (t && !t.dead && dist(c, t) <= 1 && !(t.rollT > 0) && t === p) {
+      if (t && !t.dead && dist(c, t) <= 1 && !(t.rollT > 0) && t.kind === 'player') {
         swallow(game, t, c, { need: ph >= 3 ? 9 : 7, max: 6, dmg: 1, spit: dmgOf(c, 6) });
         return true;
       }
@@ -1008,8 +1008,9 @@ export const KHAROS_BRAINS = {
       c.charge = null;
       game.renderer.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r1: 9 * 16, r0: 60, color: ['#a0c8ff', '#ffffff'], life: 0.6, oy: 4, flat: 0.5, thick: 2 });
       game.audio?.play('hum', c);
-      const p = game.player;
-      if (p && !p.dead && dist(c, p) <= 9 && lodestone(game, p, c, drag) === 'weapon') shout(c, 'GRRRNNN', '#a0c8ff');
+      let tore = false;
+      for (const p of game.everyone()) if (p && !p.dead && dist(c, p) <= 9 && lodestone(game, p, c, drag) === 'weapon') tore = true;
+      if (tore) shout(c, 'GRRRNNN', '#a0c8ff');
       return true;
     }
     if (!t || t.dead) return false;
@@ -1143,7 +1144,7 @@ export const KHAROS_BRAINS = {
 function judgeDecree(c, dt) {
   const game = c.game;
   const D = c.decree;
-  const p = game.player;
+  const p = c.target && c.target.kind === 'player' ? c.target : game.player;
   D.t += dt;
   if (!p || p.dead) {
     c.decree = null;

@@ -316,8 +316,8 @@ function chargeOn(c, dt) {
   if (c.moving) return true;
   const nx = c.x + C.ux;
   const nz = c.z + C.uz;
-  const p = game.player;
-  // You, in his way: gored, and thrown.
+  // You (whichever of you), in his way: gored, and thrown.
+  const p = game.everyone().find((q) => !q.dead && !(q.rollT > 0) && Math.abs(q.x - nx) <= 1 && Math.abs(q.z - nz) <= 1 && Math.abs(q.y - c.y) <= 1) || game.player;
   if (p && !p.dead && !(p.rollT > 0) && Math.abs(p.x - nx) <= 1 && Math.abs(p.z - nz) <= 1 && Math.abs(p.y - c.y) <= 1) {
     c.charge = null;
     game.damage(p, dmgOf(c, 9), c);
