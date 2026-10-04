@@ -27,6 +27,7 @@ const P = {
   sand: ['#d2b46c', '#b99a58', '#e0c682'],
   snow: ['#b4bcc8', '#98a4b6', '#c4ccd8'],
   snow_void: ['#a898c0', '#8a78aa', '#c0b2d6', '#7a4ea0'],
+  rock_void: ['#4e4258', '#3a3044', '#62546e', '#9a5ad0'],
   stone: ['#84848c', '#66666e', '#9e9ea6'],
   cobblestone: ['#7a7a80', '#505056', '#98989e'],
   gravel: ['#8a8680', '#6a665e', '#a8a49c', '#7a6e62'],
@@ -359,6 +360,14 @@ function cubeTop(name, v, rand, rot) {
       randomWalk(p, rand, rand() * 16, rand() * 16, 8, shade(sp[1], 0.85));
       return p;
     }
+    case 'rock_void': {
+      // (Grey gone violet-black: veins of violet through it, and a cold
+      // glint or two.)
+      speckle(p, pal, rand, 0.24);
+      for (let k = 0; k < 2; k++) randomWalk(p, rand, rand() * 16, rand() * 16, 8, pal[3]);
+      for (let i = 0; i < 2; i++) p.set(rand() * 16, rand() * 16, '#5ad8f0');
+      return p;
+    }
     case 'cobblestone': return cobble(p, pal, rand, 7);
     case 'gravel': {
       speckle(p, pal, rand, 0.5);
@@ -606,6 +615,15 @@ function cubeFront(name, v, rand, rot) {
         const y = 3 + k * 5 + Math.floor(rand() * 2);
         for (let x = 0; x < 16; x++) if (rand() < 0.7) p.set(x, y, sp[1]);
       }
+      return frontify(p);
+    }
+    case 'rock_void': {
+      speckle(p, pal, rand, 0.22);
+      for (let k = 0; k < 2; k++) {
+        const y = 3 + k * 5 + Math.floor(rand() * 2);
+        for (let x = 0; x < 16; x++) if (rand() < 0.7) p.set(x, y, pal[1]);
+      }
+      randomWalk(p, rand, rand() * 16, rand() * 4, 10, pal[3]);
       return frontify(p);
     }
     case 'sandstone': {

@@ -502,15 +502,80 @@ export class ProfileWindow extends Window {
     else if (c.sent) g.text(3, 14, 'Friend request sent.', C.dim);
     else if (c.asked) button(this, g, 2, 14, 27, '[F] Accept their request', () => c.hooks.accept(p), { color: C.green });
     else button(this, g, 2, 14, 27, '[F] Send friend request', () => c.hooks.request(p), { color: C.hi });
+    // A bout with them (in the same world): for what purse, if any.
+    if (!mine && c.bout) {
+      if (!this.picking) button(this, g, 30, 14, 24, '[D] Challenge to a bout', () => (this.picking = true), { color: C.orange });
+      else {
+        g.text(2, 16, 'Purse:', C.dim);
+        BOUT_PURSES.forEach((w, i) => button(this, g, 9 + i * 11, 16, 10, `[${i + 1}] ${w ? `¤${w}` : 'none'}`, () => this.challenge(w), { color: C.orange }));
+        return;
+      }
+    }
     button(this, g, this.w - 16, 16, 14, '[ESC] Close', () => this.close());
+  }
+
+  challenge(wager) {
+    this.picking = false;
+    this.ctx().hooks.bout(this.profile, wager);
+    this.close();
   }
 
   onKey(k) {
     const c = this.ctx();
     const p = this.profile;
+    if (this.picking) {
+      const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(k.code);
+      if (i >= 0) this.challenge(BOUT_PURSES[i]);
+      else if (k.code === 'Escape' || k.code === 'KeyD') this.picking = false;
+      return true;
+    }
     if (k.code === 'Escape') this.close();
     else if (k.code === 'KeyE' && p.id === c.me) c.hooks.edit();
     else if (k.code === 'KeyF' && p.id !== c.me && !c.friend && !c.sent) (c.asked ? c.hooks.accept : c.hooks.request)(p);
+    else if (k.code === 'KeyD' && p.id !== c.me && c.bout) this.picking = true;
+    return true;
+  }
+}
+
+// The purses a bout between players can be for (see game/bout.js).
+export const BOUT_PURSES = [0, 10, 25, 50];
+
+// Another player here challenges you to a bout (kept by the host for you:
+// see game/bout.js). `ask`: { from (their profile), wager, live() }.
+export class BoutAskWindow extends Window {
+  constructor(ui, ask, onAnswer) {
+    super(ui, 52, 12, { kind: 'boutAsk' });
+    this.ask = ask;
+    this.onAnswer = onAnswer;
+  }
+
+  draw(g) {
+    const a = this.ask;
+    // (Withdrawn, or no answer in time: gone.)
+    if (a.live && !a.live()) {
+      this.close();
+      return;
+    }
+    const f = a.from || {};
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, PANEL);
+    g.box(0, 0, this.w, this.h, { bg: PANEL, double: true, title: 'A CHALLENGE' });
+    const cv = avatarCanvas(f.icon, 1);
+    if (cv) g.image(2, 2, cv, 0, 0);
+    g.text(6, 2, f.name || 'Someone', C.hi);
+    g.text(6, 3, `challenges you to a bout${a.wager ? `, for ¤${a.wager}` : ''}.`, C.fg);
+    wrap('The first down to a quarter of their strength yields' + (a.wager ? ', and pays the purse.' : '.'), this.w - 4).slice(0, 2).forEach((l, i) => g.text(2, 5 + i, l, C.dim));
+    button(this, g, 2, 9, 22, '[Y] Accept', () => this.answer(true), { color: C.green });
+    button(this, g, 26, 9, 22, '[N] Decline', () => this.answer(false));
+  }
+
+  answer(yes) {
+    this.close();
+    this.onAnswer(yes);
+  }
+
+  onKey(k) {
+    if (k.code === 'KeyY' || k.code === 'Enter') this.answer(true);
+    else if (k.code === 'KeyN' || k.code === 'Escape') this.answer(false);
     return true;
   }
 }

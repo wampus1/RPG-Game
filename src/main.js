@@ -15,6 +15,7 @@ import { CharacterWindow } from './ui/create.js';
 import { randomHero } from './game/hero.js';
 import { Music, musicMood, moodUrgent } from './game/music.js';
 import { Accounts, profileOf } from './net/account.js';
+import { challengeBout } from './game/bout.js';
 import { HostNet } from './net/host.js';
 import { GuestNet } from './net/guest.js';
 import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
@@ -723,10 +724,17 @@ function openProfile(p) {
     friend: accounts.isFriend(live.id),
     sent: accounts.hasSent(live.id),
     asked: !!(accounts.account && accounts.account.incoming.some((r) => r.id === live.id)),
+    // (A bout: with someone else in this world.)
+    bout: !!session && !!session.net && !!game && partyList().some((q) => q.id === live.id),
     hooks: {
       request: (q) => sendFriendRequest(q),
       accept: (q) => answerFriend(q.id, true),
       edit: () => openAccount(),
+      bout: (q, wager) => {
+        if (!session || !session.net) return;
+        if (session.role === 'host') challengeBout(game, game.seat, q.id, wager);
+        else session.net.bout(q.id, wager);
+      },
     },
   })));
 }

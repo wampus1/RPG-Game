@@ -9,7 +9,7 @@ import { applyFrame } from './uiwire.js';
 import { Region } from '../world/region.js';
 import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../config.js';
 import { BLOCKS } from '../world/blocks.js';
-import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening } from '../game/scenes.js';
+import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
 import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
 
@@ -315,6 +315,10 @@ export class GuestNet {
           b.dead = true;
           sc = bossDefeat(game, game.dungeon, b);
         }
+      } else if (s.kind === 'yield') {
+        // (A bout's end: the other one, whoever it was.)
+        const foe = find(s.foe);
+        if (foe) sc = duelYield(game, foe, !!s.won, { name: s.name || foe.name, quiet: true });
       } else if (s.kind === 'spire') {
         const rec = game.sim.dungeons.get(s.rec);
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);
@@ -505,6 +509,11 @@ export class GuestNet {
 
   friend(to, yes) {
     this.out({ t: 'friend', to, yes });
+  }
+
+  // A bout with another player here, for `wager` coins (see game/bout.js).
+  bout(to, wager) {
+    this.out({ t: 'bout', to, wager });
   }
 }
 

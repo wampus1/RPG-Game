@@ -2272,25 +2272,29 @@ class Layout {
     const s = this.settlement;
     if (s.condition === 'abandoned' && rng.chance(0.5)) return;
     if (b.type === 'windmill') {
-      // The hub, out from the middle of a wall above the roof's edge, and
-      // four sails in an X (none low enough to walk into, none over a
-      // neighbour): on the south face if there's room (it faces the way
-      // the street is mostly seen from), else the north, else a side.
+      // The hub, set in the roof in the middle of one face, above the
+      // eaves (on a gable end, in the gable itself), and four sails in an X
+      // turning just out from the wall (none low enough to walk into, none
+      // over a neighbour): on the south face if there's room (it faces the
+      // way the street is mostly seen from), else the north, else a side.
       const hy = Y0 + (b.tall || 4) + 1;
       const sign = { x: b.outside.x, z: b.outside.z, y: Y0 + 2 };
       const clear = (x, z) => this.maskAt(x, z) !== M.BUILD && this.maskAt(x, z) !== M.WALL;
-      // (`nx`, `nz`: the way the hub faces, out from the wall.)
+      // (`nx`, `nz`: the way the hub faces, out from the wall. The hub's on
+      // the wall's own line; its sails in the row of tiles out from it.)
       const faces = [
-        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z1 + 1, along: true, nx: 0, nz: 1 },
-        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z0 - 1, along: true, nx: 0, nz: -1 },
-        { hx: b.x1 + 1, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: 1, nz: 0 },
-        { hx: b.x0 - 1, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: -1, nz: 0 },
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z1, along: true, nx: 0, nz: 1 },
+        { hx: Math.round((b.x0 + b.x1) / 2), hz: b.z0, along: true, nx: 0, nz: -1 },
+        { hx: b.x1, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: 1, nz: 0 },
+        { hx: b.x0, hz: Math.round((b.z0 + b.z1) / 2), along: false, nx: -1, nz: 0 },
       ];
       const tiles = (f) => {
-        const out = [{ x: f.hx, z: f.hz, y: hy, hub: true }];
+        const ox = f.hx + f.nx;
+        const oz = f.hz + f.nz;
+        const out = [{ x: ox, z: oz, y: hy, hub: true }];
         for (const [a, v] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
           for (let k = 1; k <= 3; k++) {
-            const t = { x: f.along ? f.hx + a * k : f.hx, z: f.along ? f.hz : f.hz + a * k, y: hy + v * k };
+            const t = { x: f.along ? ox + a * k : ox, z: f.along ? oz : oz + a * k, y: hy + v * k };
             if (t.y >= Y0 + 2 && !(t.x === sign.x && t.z === sign.z && t.y === sign.y)) out.push(t);
           }
         }

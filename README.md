@@ -78,6 +78,9 @@ In a shared world:
   screen at the same address.
 - Right-click another player to see their profile and send a friend
   request.
+- Challenge another player to a bout from their profile (**D**, then pick a
+  purse: none, ¤10, ¤25 or ¤50). It works like a bout with an adventurer,
+  whether or not the host lets players fight.
 - Players can't hurt each other unless the host allows it: **V** in the
   host's **P** window turns fighting between players on or off. Everyone is
   told when it changes, the setting is saved with the world, and hurting
@@ -86,7 +89,8 @@ In a shared world:
 - If anyone goes down into a dungeon, the whole party goes with them, and
   comes back up together. Everyone down there sees a master's fight the
   same way: its waking scene, its health bar and phases, its attacks and
-  the ground it fouls, and its fall.
+  the ground it fouls, and its fall. A master has 60% more health for each
+  player down there beyond the first.
 - Each player keeps their own character in the host's world between
   sessions. Their reputation with townsfolk, crimes, citizenship, jobs and
   favours are their own, not the party's.
@@ -3132,6 +3136,39 @@ together on your network" above for how to start. How it works:
 - *The windmill's sails sit on their hub* from every camera angle. Seen
   from the side the hub faces, they used to float a block too high.
 
+## Round 43: bouts between players
+
+- *Bouts between players.* Right-click another player (or open their
+  profile from **P**), press **D** and pick a purse: none, ¤10, ¤25 or
+  ¤50. They get a window to accept or decline; a challenge nobody answers
+  lapses after 30 seconds. You must be within 16 paces of each other, and
+  have the coin to back the purse.
+  - It goes like a bout with an adventurer: "On guard!", a count of three,
+    then "Fight!" (a blow struck during the count starts it at once).
+  - Your blows land on each other even when the host has fighting between
+    players turned off, and they're never a crime.
+  - The first down to a quarter of their health yields: the last blow lands
+    in slow motion, they go down on one knee, and the purse changes hands.
+    For a few seconds after, no blow between you lands.
+  - Walk more than 14 paces apart and whoever walked away forfeits the purse.
+    If neither gives way in time, it's called a draw.
+- *Masters for a party.* A boss has 60% more health for each player in the
+  dungeon beyond the first (twice and a fifth with three of you). If
+  someone comes down or goes up mid-fight, its health changes but the share
+  you've beaten off stays the same.
+- *The fur hat* is a round fur cap with a thick fur band and ear flaps. It
+  used to have a row of points along the top that looked like a crown.
+- *The blight round a spire takes every kind of ground.* It used to stop at
+  ground it didn't know, leaving holes or nothing at all. Ash, cinders,
+  scorched earth, moss, peat and mycelium now turn to blighted turf, ice
+  turns lavender like snow, and bare rock (stone, gravel, sandstone, basalt,
+  obsidian, sulphur crust) turns to violet-black Blighted Rock with
+  crystals growing out of it. The spires on Kharos and the moors of Myrrow
+  were the worst.
+- *A windmill's hub is set in its roof.* It sits on the eave, against the
+  slope (or in the gable on a gable end), with the sails turning just in
+  front of the wall. It used to hang in the air beside the roof.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -3341,6 +3378,8 @@ src/
                        (a player's windows, drawn by the host)
   game/party.js        each player's own part of the game (seats), and
                        doing things as one of them
+  game/bout.js         bouts between players (challenges, the count, the
+                       purse)
   ui/multiplayer.js    the account, Multiplayer menu, hosting, party,
                        profile and invitation windows, and notices
   render/avatar.js     account pictures

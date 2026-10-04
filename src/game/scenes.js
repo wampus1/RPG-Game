@@ -234,12 +234,15 @@ export function bossDefeat(game, run, boss) {
 // on one knee, the winner says their piece and goes on their way, and the
 // one on their knees takes a few seconds to get up. (No more blows land
 // between you meanwhile: see Game.damage and duelAfter.)
-export function duelYield(game, npc, won) {
-  const p = game.player;
+// (With another player for `npc`, see bout.js: `opts.name`, theirs; `me`,
+// whose scene it is; `quiet`, the going down done already.)
+export function duelYield(game, npc, won, opts = {}) {
+  const p = opts.me || game.player;
   const loser = won ? npc : p;
   const winner = won ? p : npc;
+  const name = opts.name || npc.name;
   return {
-    kind: 'yield', t: 0, dur: 3, lock: true, npc, won,
+    kind: 'yield', t: 0, dur: 3, lock: true, npc, won, foeName: name,
     timeScale(t) {
       return t < 0.45 ? 0.3 : 1;
     },
@@ -256,13 +259,15 @@ export function duelYield(game, npc, won) {
       const r = g.renderer;
       if (!this.down) {
         this.down = true;
+        if (opts.quiet) return;
         loser.kneelT = won ? 5.5 : 4.5;
         g.audio?.play('thud', loser);
         r.emit(loser.x, loser.y + 0.2, loser.z, { n: 10, color: ['#c8b898', '#8a7a60'], up: 14, speed: 24, life: 0.5 });
         r.floatText(loser.x, loser.y + 2.4, loser.z, won ? 'yields!' : 'you yield', '#ffe070');
         if (npc.face) npc.face(p.x, p.z);
       }
-      if (this.t > 0.7 && !this.said) {
+      // (Another player says what they like: only a townsperson's words.)
+      if (this.t > 0.7 && !this.said && npc.kind === 'npc' && npc.rng) {
         this.said = true;
         if (won) npc.say?.(npc.rng.pick(['I yield! I yield. Well fought.', 'Enough... you have me.', 'Ha... down I go. You win.']), 3, '#a0ffa0');
         else npc.say?.(npc.rng.pick(['Stay down, friend. That\'s the bout.', 'Yield, and we\'re done. Good fight.', 'Up when you\'re ready. No shame in it.']), 3, '#ffe070');
@@ -274,11 +279,11 @@ export function duelYield(game, npc, won) {
       }
     },
     end(g) {
-      if (won) g.ui.msg(`${npc.name} is on one knee. Leave them to get their breath back.`, '#c8d8ff');
+      if (won) g.ui.msg(`${name} is on one knee. Leave them to get their breath back.`, '#c8d8ff');
       else g.ui.msg('You get your breath back...', '#c8d8ff');
     },
     draw(ctx) {
-      letterbox(ctx, this, winner === p ? 'You win the bout' : `${npc.name} wins the bout`, won ? '#a0ffa0' : '#ffb080');
+      letterbox(ctx, this, winner === p ? 'You win the bout' : `${name} wins the bout`, won ? '#a0ffa0' : '#ffb080');
     },
   };
 }

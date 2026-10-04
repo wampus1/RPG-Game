@@ -506,6 +506,10 @@ def('nacre_tile', { tool: 'pick', hardness: 1.5, label: 'Nacre Tiles' });
 def('planks_cinder', { tool: 'axe', hardness: 1, label: 'Cinderwood Planks' });
 def('planks_bog', { tool: 'axe', hardness: 1, label: 'Bogwood Planks' });
 def('planks_drift', { tool: 'axe', hardness: 1, label: 'Driftwood Planks' });
+// Rock the blight's got into, round a spire on stony ground (a mountain's
+// foot, the desert's sandstone, the fire island's basalt): gone
+// violet-black, veined. (Last, so no saved number moves.)
+def('rock_void', { tool: 'pick', hardness: 1.5, drop: 'cobblestone', label: 'Blighted Rock' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

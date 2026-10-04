@@ -1280,9 +1280,23 @@ export function drawHumanoid(look, dir, frame) {
         if (back) F(hx + 3, hy + 4, 2, 3, '#b8a888');
         break;
       case 'fur':
-        H(hx - 1, hy - 1, 10, 3, '#8a6a4a');
-        for (let x = hx - 1; x < hx + 9; x++) F(x, hy - 1 - (x % 3 === 0 ? 1 : 0), 1, 1, x % 2 ? '#c8a888' : '#a8886a');
-        F(hx - 1, hy + 1, 10, 1, '#6a4a32');
+        // (A round cap of hide, a thick roll of fur about it and flaps
+        // over the ears: no points along the top, or it's a crown.)
+        H(hx + 1, hy - 3, 6, 1, '#4a3222');
+        H(hx, hy - 2, 8, 2, '#5a3e2a');
+        F(hx + 2, hy - 3, 2, 1, '#6a4a34');
+        F(hx + 1, hy - 2, 2, 1, '#7a5a40');
+        H(hx - 1, hy, 10, 2, '#b8987a');
+        for (const [x, y, c] of [[0, 0, '#d4b898'], [3, 0, '#d4b898'], [4, 0, '#c8aa8a'], [8, 0, '#d4b898'], [1, 1, '#9a7a5c'], [5, 1, '#a0805e'], [7, 1, '#9a7a5c']]) F(hx - 1 + x, hy + y, 1, 1, c);
+        if (side) {
+          H(hx + 3, hy + 2, 2, 3, '#b8987a');
+          F(hx + 3, hy + 4, 2, 1, '#9a7a5c');
+        } else {
+          H(hx - 1, hy + 2, 2, 3, '#b8987a');
+          H(hx + 7, hy + 2, 2, 3, '#b8987a');
+          F(hx - 1, hy + 4, 2, 1, '#9a7a5c');
+          F(hx + 7, hy + 4, 2, 1, '#9a7a5c');
+        }
         break;
       case 'beret': {
         const bc = look.hatColor || '#8a2a3a';

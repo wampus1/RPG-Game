@@ -47,6 +47,10 @@ export const BOSS_HP_EXTRA = {
   spore_colossus: 1.15, coral_colossus: 1.15, abyssal_clam: 1.1, smugglers_kraken: 1.08, bog_king: 1.06, lamprey_queen: 1.05,
 };
 export const BOSS_DMG = 1.15;
+// With more of you down there, a master's the more to get through: this
+// much again of its health for each of you beside the first.
+export const BOSS_PARTY_HP = 0.6;
+export const partyHpScale = (n) => 1 + BOSS_PARTY_HP * Math.max(0, n - 1);
 // How much of its kin's health a blighted thing keeps.
 export const INFECTED_HP = 0.65;
 // Kinds of block a dungeon handles itself (see Game.interact).
@@ -504,10 +508,29 @@ export class DungeonRun {
     for (const q of this.partyHere()) game.asPlayer(q, () => fn(q));
   }
 
+  // Its masters' health for as many of you as are down here now (someone
+  // coming down, or going up, mid-fight: how far gone it is stays the same).
+  scaleBosses(n = this.partyHere().length) {
+    const k = partyHpScale(n);
+    for (const c of this.game.creatures) {
+      if (!c.isBoss || !c.inst || c.dead) continue;
+      const was = c.partyScale || 1;
+      if (Math.abs(was - k) < 1e-6) continue;
+      const full = c.hp >= c.maxHp;
+      const rested = c.restHp !== undefined && c.restHp >= c.maxHp;
+      const frac = c.hp / c.maxHp;
+      c.maxHp = Math.max(1, Math.round((c.maxHp / was) * k));
+      c.hp = full ? c.maxHp : Math.max(1, Math.min(c.maxHp, Math.round(c.maxHp * frac)));
+      if (c.restHp !== undefined) c.restHp = rested ? c.maxHp : Math.max(1, Math.min(c.maxHp, Math.round((c.restHp / was) * k)));
+      c.partyScale = k;
+    }
+  }
+
   update(dt) {
     const game = this.game;
     const p = game.player;
     const party = this.partyHere();
+    this.scaleBosses(party.length);
     const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
     const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;
     this.t += dt;

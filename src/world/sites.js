@@ -301,9 +301,14 @@ export function siteBlocks(s, state = {}) {
 
 // What grows in a spire's blight.
 const GROWTHS = [B.void_bloom, B.void_bloom, B.glow_crystal, B.tendril, B.eye_stalk];
-const GRASSY = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.dirt, B.mud, B.clay, B.sand]);
-// (Snow the blight turns lavender, rather than to turf.)
-const SNOWY = new Set([B.snow, B.snow_void]);
+// The ground it turns, whatever the land: soft ground to violet turf (the
+// far islands' too: ash and cinders, moss, peat, mycelium), snow and ice
+// lavender, and bare rock violet-black (a mountain's foot, sandstone,
+// basalt).
+const ids = (...names) => names.filter((k) => B[k] !== undefined).map((k) => B[k]);
+const GRASSY = new Set(ids('grass', 'grass_lush', 'grass_dry', 'grass_jungle', 'grass_taiga', 'grass_void', 'dirt', 'mud', 'clay', 'sand', 'ash', 'cinder', 'scorched', 'moss', 'peat', 'mycelium'));
+const SNOWY = new Set(ids('snow', 'snow_void', 'ice'));
+const ROCKY = new Set(ids('stone', 'gravel', 'sandstone', 'basalt', 'obsidian', 'sulfur_crust', 'rock_void'));
 export const BLIGHT_R = 16;
 
 // How far the blight reaches round a spire, that way (`ang`, radians):
@@ -355,6 +360,12 @@ function blight(region, s) {
           region.set(lx, y, lz, B.snow_void);
           const near = 1 - d / BLIGHT_R;
           if (y + 1 < WORLD_Y && region.get(lx, y + 1, lz) === B.air && roll < 0.03 + near * 0.08) region.set(lx, y + 1, lz, GROWTHS[Math.floor(roll * 997) % GROWTHS.length], Math.floor(roll * 40) % 4);
+          break;
+        }
+        if (ROCKY.has(id)) {
+          region.set(lx, y, lz, B.rock_void);
+          const near = 1 - d / BLIGHT_R;
+          if (y + 1 < WORLD_Y && region.get(lx, y + 1, lz) === B.air && roll < 0.02 + near * 0.06) region.set(lx, y + 1, lz, B.glow_crystal, Math.floor(roll * 40) % 4);
           break;
         }
         if (!GRASSY.has(id)) break;

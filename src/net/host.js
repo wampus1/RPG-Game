@@ -15,6 +15,7 @@ import { profileOf, cleanIcon, cleanDesc, cleanTitle } from './account.js';
 import { BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { inReach } from '../entities/footprint.js';
+import { challengeBout } from '../game/bout.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -253,6 +254,7 @@ export class HostNet {
       g.profile = seat.profile;
       this.partyChanged();
     } else if (m.t === 'friend') this.friendWord(g.profile, m.to, m.yes);
+    else if (m.t === 'bout') challengeBout(this.game, seat, m.to, m.wager);
   }
 
   // A friend request (yes undefined), or the answer to one, from `from` to
@@ -594,6 +596,10 @@ export class HostNet {
       side: sc.side,
       gemColor: sc.gemColor,
       rec: sc.rec ? sc.rec.id : null,
+      // (A bout's end: who with, and which way it went.)
+      foe: sc.kind === 'yield' && sc.npc ? sc.npc.id : undefined,
+      won: sc.kind === 'yield' ? !!sc.won : undefined,
+      name: sc.kind === 'yield' ? sc.foeName : undefined,
     };
   }
 

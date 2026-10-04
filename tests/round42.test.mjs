@@ -336,9 +336,11 @@ test('a windmill\'s sails know which way their hub faces', () => {
       const sl = b.sails;
       assert.equal(Math.abs(sl.nx) + Math.abs(sl.nz), 1);
       assert.equal(!!sl.nz, sl.along, 'faces out of the wall it\'s on');
-      // Out from the building, the way it faces.
-      if (sl.nz) assert.ok(sl.nz > 0 ? sl.z > b.z1 : sl.z < b.z0);
-      else assert.ok(sl.nx > 0 ? sl.x > b.x1 : sl.x < b.x0);
+      // In the roof, on the wall the way it faces (round 43: not out past
+      // it, hung in the air beside the roof).
+      if (sl.nz) assert.equal(sl.z, sl.nz > 0 ? b.z1 : b.z0);
+      else assert.equal(sl.x, sl.nx > 0 ? b.x1 : b.x0);
+      assert.ok(sl.x >= b.x0 && sl.x <= b.x1 && sl.z >= b.z0 && sl.z <= b.z1, 'within the building');
     }
     if (seen >= 3) break;
   }

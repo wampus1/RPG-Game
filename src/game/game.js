@@ -63,6 +63,7 @@ import { EVENT_BLOCKS } from '../sim/events.js';
 import { struggle, tickAfflictions } from './afflict.js';
 import { updateOrbs, swatOrbs } from './orbs.js';
 import { Seat, asSeat, seatField, partyPlayers, freshStore } from './party.js';
+import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
@@ -1804,6 +1805,7 @@ export class Game {
     }
     ambientChatter(this, dt);
     this.updateDuel();
+    if (party) updateBouts(this, dt);
     this.updateDummy(dt);
     this.updateGates(dt);
     this.syncStanding(dt);
@@ -5105,7 +5107,7 @@ export class Game {
     const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     // (Another player, when the host lets players fight.)
-    if (this.pvp && this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && on(q)) out.push(q);
+    if (this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && on(q) && (this.pvp || boutOf(this, q, by))) out.push(q);
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
     for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
     return out;
@@ -5206,7 +5208,7 @@ export class Game {
     if (target.kind === 'prop') return this.swing();
     // (Another player, when players can't fight here: a swing at whatever
     // else is in front of you.)
-    if (target.kind === 'player' && !this.pvp) return this.swingAt();
+    if (target.kind === 'player' && !this.pvp && !boutOf(this, target, p)) return this.swingAt();
     if (!target.dead && !(p.heldDef() && p.heldDef().ranged) && (p.attackCd > 0 || p.swing || p.commitT > 0) && !(p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0)) {
       this.queueBlow(target, heavy);
       return;
@@ -5391,7 +5393,18 @@ export class Game {
     // struck. Players don't hurt each other, unless the host has said they
     // may: see pvp.)
     if (this.seats) {
-      if (target.kind === 'player' && source && source.kind === 'player' && source !== target && !this.pvp) return;
+      // (Two players at a bout, see bout.js: their blows land on each other
+      // whether players may fight here or not; just after it, none do.)
+      const pp = target.kind === 'player' && source && source.kind === 'player' && source !== target;
+      const after = pp && boutJustOver(this, target, source);
+      if (after) {
+        if (!(after.noteT > 0)) {
+          after.noteT = 1.5;
+          this.renderer.floatText(target.x, target.y + 2.2, target.z, 'the bout is over', '#ffe070');
+        }
+        return;
+      }
+      if (pp && !this.pvp && !boutOf(this, target, source)) return;
       const who = target.kind === 'player' && target.seat ? target.seat : source && source.kind === 'player' && source.seat ? source.seat : null;
       if (who && who !== this.seat) return asSeat(this, who, () => this.damage(target, amount, source, crit));
     }
@@ -5463,6 +5476,8 @@ export class Game {
         return;
       }
     }
+    // A bout between players: the same (see bout.js).
+    if (target.kind === 'player' && source && source.kind === 'player' && this.seats && boutBlow(this, target, source, amount)) return;
     // A friendly bout ends when one of you is down to a quarter.
     if (inDuel && target.hp - amount <= Math.ceil(target.maxHp * 0.25)) {
       target.hp = Math.max(1, Math.min(target.hp, Math.ceil(target.maxHp * 0.25)));
@@ -5503,7 +5518,9 @@ export class Game {
       this.shake = Math.min(1.3, this.shake + 0.45 + Math.min(0.4, amount * 0.05));
       this.hurtFlash = Math.min(1, (this.hurtFlash || 0) + 0.55 + Math.min(0.35, amount * 0.05));
       this.hitStop = Math.max(this.hitStop || 0, 0.05);
-      if (source && source.name) this.ui.msg(`${source.name} hits you for ${amount}!`, '#ff7060', true);
+      // (Another player by their own name: to themselves they're "You".)
+      const by = source && source.kind === 'player' ? source.account?.name || 'Someone' : source && source.name;
+      if (by) this.ui.msg(`${by} hits you for ${amount}!`, '#ff7060', true);
     }
     // Hitting your employer ends the job on the spot.
     if (target.kind === 'npc' && source && source.kind === 'player' && this.sim.careers.employs(target)) {
