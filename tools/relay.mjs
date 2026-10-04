@@ -5,20 +5,23 @@
 // Nothing to install: a small WebSocket server of its own (RFC 6455, text
 // frames, ping and close).
 import crypto from 'node:crypto';
-import os from 'node:os';
+import { setInterval } from 'node:timers';
+import { rankAddresses } from './lan.mjs';
 import { MAX_PLAYERS, NET_VERSION, NET_PATH } from '../src/net/protocol.js';
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // (A message bigger than this is someone up to no good: dropped.)
 const MAX_MESSAGE = 64 * 1024 * 1024;
+// (A connection that's said nothing, not even an answer to a ping, for
+// this long is gone: a laptop shut, a browser that died. Its world is let
+// go of, so it can be hosted again.)
+const QUIET_MS = 45000;
+const PING_MS = 15000;
 
-// This machine's addresses on the network (what the others type in).
+// This machine's addresses on the network (what the others type in), the
+// one they can most likely reach first (see lan.mjs).
 export function lanAddresses() {
-  const out = [];
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(a.address);
-  }
-  return out;
+  return rankAddresses().map((a) => a.address);
 }
 
 const plainIp = (ip) => String(ip || '').replace(/^::ffff:/, '');
@@ -34,8 +37,12 @@ class Sock {
     this.parts = [];
     this.onmessage = null;
     this.onclose = null;
+    this.heard = Date.now();
     socket.setNoDelay?.(true);
-    socket.on('data', (d) => this.data(d));
+    socket.on('data', (d) => {
+      this.heard = Date.now();
+      this.data(d);
+    });
     socket.on('close', () => this.closed());
     socket.on('error', () => this.closed());
   }
@@ -146,16 +153,33 @@ class Sock {
 // The relay: at most one host, a few players in its world, and anyone
 // waiting at the title screen (so an invitation can find them).
 export class Relay {
-  constructor({ port = 8080, max = MAX_PLAYERS, addrs = lanAddresses } = {}) {
+  // `extra()`: more to say in info (the name this machine answers to, and
+  // worlds hosted elsewhere on the network: see serve.mjs).
+  constructor({ port = 8080, max = MAX_PLAYERS, addrs = lanAddresses, extra = null } = {}) {
     this.port = port;
     this.max = max;
     this.addrs = addrs;
+    this.extra = extra;
     this.host = null;
     this.world = null;
     this.guests = new Map(); // cid -> { sock, account }
     this.lobby = new Set(); // { sock, account }
     this.bans = { ids: new Set(), ips: new Set() };
     this.nextCid = 1;
+    this.socks = new Set();
+    this.beatT = null;
+  }
+
+  // Every connection pinged now and then (a browser answers by itself);
+  // those long silent, closed.
+  beat(now = Date.now()) {
+    for (const s of this.socks) {
+      if (!s.open) this.socks.delete(s);
+      else if (now - s.heard > QUIET_MS) {
+        this.socks.delete(s);
+        s.closed();
+      } else s.frame(0x9, Buffer.alloc(0));
+    }
   }
 
   // What /api/lan says: where this machine is, and the world hosted here.
@@ -167,6 +191,7 @@ export class Relay {
       addrs: this.addrs(),
       max: this.max,
       host: h ? { ...this.world, players: this.guests.size + 1, max: this.max } : null,
+      ...(this.extra ? this.extra() : {}),
     };
   }
 
@@ -181,6 +206,11 @@ export class Relay {
     const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     const sock = new Sock(socket, req.socket.remoteAddress);
+    this.socks.add(sock);
+    if (!this.beatT) {
+      this.beatT = setInterval(() => this.beat(), PING_MS);
+      this.beatT.unref?.();
+    }
     sock.onmessage = (text) => this.first(sock, text);
     return sock;
   }

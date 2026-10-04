@@ -213,9 +213,20 @@ export class HostNet {
 
   partyChanged() {
     const list = this.partyList();
-    for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'party', list });
+    const pvp = !!this.game.pvp;
+    for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'party', list, pvp });
     this.tellRelay();
     this.onParty(list);
+  }
+
+  // Whether players may hurt each other (the host's to say), and everyone
+  // told.
+  setPvp(on) {
+    this.game.pvp = !!on;
+    const text = on ? 'The host has let players fight each other.' : 'The host has stopped players hurting each other.';
+    this.notify(text, this.profile);
+    for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'note', text, profile: this.profile });
+    this.partyChanged();
   }
 
   to(g, msg) {

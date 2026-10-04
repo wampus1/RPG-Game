@@ -129,8 +129,15 @@ export class Ships {
     let P = this.ports[s.id];
     if (!knows && (!P || P.state === 'planned')) return null;
     if (!P) {
+      // (Nowhere for a pier: looked for again now and then, as the town
+      // changes, not every day.)
+      if (L.econ.noDock !== undefined && day - L.econ.noDock < 7) return null;
       const site = this.dockSite(L);
-      if (!site) return null;
+      if (!site) {
+        L.econ.noDock = day;
+        return null;
+      }
+      delete L.econ.noDock;
       const names = NAMES[s.style] || NAMES.vale;
       P = this.ports[s.id] = { sid: s.id, site, state: 'planned', name: names[hash4(s.id, s.seed >>> 0, 0x5b1) % names.length], voyage: null, next: day, voyages: 0, earned: 0 };
     }

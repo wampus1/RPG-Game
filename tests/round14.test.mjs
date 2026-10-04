@@ -204,9 +204,11 @@ test('relations between realms: hostility brings tariffs, refusals and wary merc
   game.sim.tech.stateOf(a).done = game.sim.tech.stateOf(a).done.filter((k) => k !== 'free_trade');
   const r = R.relation(a, b);
   assert.ok(['friendly', 'wary', 'hostile'].includes(r.standing));
+  // (The capital laid out first: far towns are laid out a little at a
+  // time, and only a town that's there hears the news.)
+  const aL = game.sim.layoutOf(R.capitalOf(a).id);
   R.shift(a, b, -200, game.day);
   assert.equal(R.standing(a, b), 'hostile');
-  const aL = game.sim.layoutOf(R.capitalOf(a).id);
   assert.ok(aL.econ.ledger.some((l) => /hostile/.test(l.text)), 'the news goes round');
   // The ruler puts a tariff on the other realm's merchants.
   game.sim.civicDay(aL, game.day, new RNG(1));

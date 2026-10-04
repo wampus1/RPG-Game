@@ -252,8 +252,14 @@ let netT = 0;
 let hostSaveT = 0;
 const pxCanvas = document.createElement('canvas');
 
-const wsUrl = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${NET_PATH}`;
+// (`at`: a world hosted elsewhere on the network, { addr, port }, found by
+// this copy's own server: see tools/lan.mjs.)
+const wsUrl = (at = null) => (at ? `ws://${at.addr}:${at.port}${NET_PATH}` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${NET_PATH}`);
+// Where friends open the game: this machine's best address (and the name
+// it answers to, where their computer or phone knows such names).
 const addrText = () => (lan && lan.addrs && lan.addrs.length ? `http://${lan.addrs[0]}:${lan.port}` : `http://${location.host}`);
+const nameText = () => (lan && lan.mdns ? `http://${lan.mdns}:${lan.port}` : null);
+const joinText = () => (nameText() ? `${addrText()} (or ${nameText()})` : addrText());
 
 // What the server says about the network (null: not started with npm start).
 function refreshLan() {
@@ -268,7 +274,12 @@ function refreshLan() {
       return null;
     });
 }
-refreshLan();
+// (Opened from a friend's machine while they're hosting: straight to the
+// world to join.)
+refreshLan().then((l) => {
+  const visiting = !['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+  if (visiting && l && l.host && !game && !session && !params.has('autostart')) openMultiplayer();
+});
 
 function relayRefusal(why) {
   return {
@@ -391,7 +402,7 @@ const mpCtx = {
       newHosted(/^\d+$/.test(v.trim()) ? parseInt(v.trim(), 10) >>> 0 : hashString(v.trim()));
     },
     continueWorld: (id) => continueHosted(id),
-    join: () => joinWorld(),
+    join: (at = null) => joinWorld(at),
     deleteWorld: (id) => store.remove(id),
   },
 };
@@ -461,7 +472,7 @@ function beginHosting(g, name) {
       if (m.t === 'hosting') {
         lan = { ...(lan || {}), ...m };
         sess.net = makeHostNet(g, sess);
-        ui.notify(`"${name}" is open on your network. Friends on your Wi-Fi join at ${addrText()}`, accounts.profile, '#a0e0ff');
+        ui.notify(`"${name}" is open on your network. Friends on your Wi-Fi join at ${joinText()}`, accounts.profile, '#a0e0ff');
       } else if (m.t === 'refused') {
         ui.notify(relayRefusal(m.why), null, '#ff8070');
         session = null;
@@ -521,12 +532,12 @@ function guestUI(guest) {
 // ------------------------------------------------------------ joining
 // The world hosted at this address: in you go (a character first, if it's
 // your first time there).
-function joinWorld() {
+function joinWorld(at = null) {
   needAccount(() => {
     endSession();
     let ws;
     try {
-      ws = new window.WebSocket(wsUrl());
+      ws = new window.WebSocket(wsUrl(at));
     } catch {
       ui.notify('Couldn\'t reach the game\'s server.');
       return;
@@ -659,13 +670,17 @@ function partyCtx() {
     world: host ? session.world : net && net.worldInfo ? net.worldInfo.name : 'this world',
     hostName: net && net.hostProfile ? net.hostProfile.name : null,
     addrs: lan && lan.addrs ? lan.addrs.map((x) => `${x}:${lan.port}`) : [],
+    mdns: lan && lan.mdns ? `${lan.mdns}:${lan.port}` : null,
     party: partyList(),
     bans: host && net ? net.bannedList() : [],
     friends: a.friends,
     requests: a.incoming,
     lobby: host && net ? net.lobby : [],
     note: partyNote,
+    // (Whether players may hurt each other: the host's to say.)
+    pvp: host ? !!(game && game.pvp) : !!(net && net.pvp),
     hooks: {
+      pvp: () => host && net && net.setPvp(!game.pvp),
       profile: (p) => openProfile(p),
       kick: (p) => net && net.kick(p.cid),
       ban: (p) => net && net.ban(p.cid),
@@ -675,7 +690,7 @@ function partyCtx() {
         if (net.lobby.some((q) => q.id === f.id)) {
           net.invite(f);
           partyNote = `Invitation sent to ${f.name}.`;
-        } else partyNote = `${f.name} isn't at the title screen here: ask them to open ${addrText()} and choose Multiplayer.`;
+        } else partyNote = `${f.name} isn't at the title screen here: ask them to open ${joinText()} and choose Multiplayer.`;
       },
       answer: (id, yes) => answerFriend(id, yes),
       account: () => openAccount(),

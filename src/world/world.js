@@ -6,7 +6,7 @@ import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
 import { generateRegion } from './regiongen.js';
 import { Region } from './region.js';
-import { buildLayout } from './settlement.js';
+import { layoutJob } from './settlement.js';
 import { rollContainerLoot } from './loot.js';
 import { settleSites } from './sites.js';
 
@@ -52,20 +52,38 @@ export class World {
   }
 
   getLayout(s) {
-    let L = this.layouts.get(s.id);
-    if (!L) {
-      // A town is always laid out as it was founded; how it has grown since
-      // is put back on top.
-      const now = s.type;
-      if (s.baseType) s.type = s.baseType;
-      try {
-        L = buildLayout(this, s);
-      } finally {
-        s.type = now;
-      }
-      this.layouts.set(s.id, L);
-      if (this.onLayout) this.onLayout(L);
+    return this.layouts.get(s.id) || this.layOut(s);
+  }
+
+  // Lay a town out: as much of it as `ms` allows now, the rest on the
+  // next call (so the far towns are laid out a little each frame, never
+  // stalling one). The layout once it's done, else null.
+  layOut(s, ms = Infinity) {
+    const done = this.layouts.get(s.id);
+    if (done) return done;
+    this.layJobs ||= new Map();
+    let job = this.layJobs.get(s.id);
+    if (!job) this.layJobs.set(s.id, (job = layoutJob(this, s)));
+    // A town is always laid out as it was founded; how it has grown since
+    // is put back on top.
+    const now = s.type;
+    if (s.baseType) s.type = s.baseType;
+    const t0 = performance.now();
+    let r;
+    try {
+      do r = job.steps.next();
+      while (!r.done && performance.now() - t0 < ms);
+    } catch (e) {
+      this.layJobs.delete(s.id);
+      throw e;
+    } finally {
+      s.type = now;
     }
+    if (!r.done) return null;
+    this.layJobs.delete(s.id);
+    const L = job.L;
+    this.layouts.set(s.id, L);
+    if (this.onLayout) this.onLayout(L);
     return L;
   }
 

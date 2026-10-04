@@ -42,7 +42,7 @@ import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '..
 import { isleNightSpecies, waterNear } from '../entities/islemobs.js';
 import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
-import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText } from './combat.js';
+import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText, guardBlow } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
 import { RNG } from '../util/rng.js';
@@ -5104,6 +5104,8 @@ export class Game {
     if (foes.length) return foes;
     const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
     const out = [];
+    // (Another player, when the host lets players fight.)
+    if (this.pvp && this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && on(q)) out.push(q);
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
     for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
     return out;
@@ -5202,6 +5204,9 @@ export class Game {
       return;
     }
     if (target.kind === 'prop') return this.swing();
+    // (Another player, when players can't fight here: a swing at whatever
+    // else is in front of you.)
+    if (target.kind === 'player' && !this.pvp) return this.swingAt();
     if (!target.dead && !(p.heldDef() && p.heldDef().ranged) && (p.attackCd > 0 || p.swing || p.commitT > 0) && !(p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0)) {
       this.queueBlow(target, heavy);
       return;
@@ -5300,6 +5305,14 @@ export class Game {
       interrupt(target, heavy ? 0.9 : 0.5);
       this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
     }
+    // Another player (when the host lets players fight) may have a shield
+    // up to it, or parry it, as against anyone.
+    if (target.kind === 'player') {
+      const g = this.asPlayer(target, () => guardBlow(this, p, target, dmg, st || {}));
+      if (g === 'parried') return true;
+      dmg = g.amount;
+      if (Math.round(dmg) <= 0) return true;
+    }
     onSwing(this, p, target);
     lanceThrust(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
@@ -5375,9 +5388,10 @@ export class Game {
       return;
     }
     // (With others in the world: it happens as the one hurt, or the one who
-    // struck. Friends don't hurt each other.)
+    // struck. Players don't hurt each other, unless the host has said they
+    // may: see pvp.)
     if (this.seats) {
-      if (target.kind === 'player' && source && source.kind === 'player' && source !== target) return;
+      if (target.kind === 'player' && source && source.kind === 'player' && source !== target && !this.pvp) return;
       const who = target.kind === 'player' && target.seat ? target.seat : source && source.kind === 'player' && source.seat ? source.seat : null;
       if (who && who !== this.seat) return asSeat(this, who, () => this.damage(target, amount, source, crit));
     }
@@ -5813,7 +5827,9 @@ export class Game {
     }
     // Fallen: the dark, and the Kavorent's rite that brings you back (see
     // scenes.deathRitual; it raises you itself, at the end).
-    this.scene = deathRitual(this, source ? source.name || 'something' : 'misfortune', spilled ? (spilled.length ? 'pack' : 'none') : null);
+    // (Struck down by another player: by their name.)
+    const by = source && source.kind === 'player' && source.seat ? source.seat.name : source ? source.name : null;
+    this.scene = deathRitual(this, source ? by || 'something' : 'misfortune', spilled ? (spilled.length ? 'pack' : 'none') : null);
   }
 
   respawn() {
@@ -6116,6 +6132,8 @@ export class Game {
     const net = this.net;
     return {
       world: this.partyWorld,
+      // (Whether players may hurt each other: the host's to say.)
+      pvp: !!this.pvp,
       host: this.seats && this.seats[0] ? this.seats[0].profile : null,
       chars: [...chars],
       bans: net ? { ids: [...net.bans.ids], names: [...net.bans.names] } : this.partyBans || null,
@@ -6127,6 +6145,7 @@ export class Game {
     this.day = data.day;
     if (data.party) {
       this.partyWorld = data.party.world || { name: 'A world' };
+      this.pvp = !!data.party.pvp;
       this.partyChars = new Map(data.party.chars || []);
       this.partyBans = data.party.bans || null;
     }

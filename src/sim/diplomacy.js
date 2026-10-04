@@ -10,6 +10,10 @@ import { B, planksOf, PLANK_BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { MinHeap } from '../util/heap.js';
 import { hash4 } from '../util/rng.js';
+
+// How long a frame may spend working out a traveller's way across country
+// (ms): a long one's spread over several frames.
+const WAY_MS = 4;
 // Builder-minutes to lay one tile of road between towns (from each end).
 const ROAD_MIN_PER_TILE = 20;
 
@@ -414,6 +418,16 @@ export class Diplomacy {
   // costs a little (so it runs straight a while, then turns). Returns the
   // corners of the way, start and end included.
   route(p0, p1, towns = [], wet = 7) {
+    const steps = this.routeSteps(p0, p1, towns, wet);
+    let r;
+    do r = steps.next();
+    while (!r.done);
+    return r.value;
+  }
+
+  // The same, a piece at a time (see way): it stops every few hundred
+  // squares looked at, to be carried on with later.
+  *routeSteps(p0, p1, towns = [], wet = 7) {
     const G = 4;
     const t = this.game.world.terrain;
     const dx = p1.x - p0.x;
@@ -479,6 +493,7 @@ export class Diplomacy {
     let end = null;
     let n = 0;
     while (heap.size && n++ < 40000) {
+      if (n % 300 === 0) yield null;
       const [i, j, d] = heap.pop();
       const k = key(i, j, d);
       if (i === gx1 && j === gz1) {
@@ -539,12 +554,26 @@ export class Diplomacy {
     const centre = (s) => ({ x: Math.floor((s.bounds.x0 + s.bounds.x1) / 2), z: Math.floor((s.bounds.z0 + s.bounds.z1) / 2) });
     const c0 = centre(a);
     const c1 = centre(b);
-    // (Working a way out across country takes a moment: one at a time, and
-    // until it's ready, the straight line will do.)
-    const busy = !road && (this.wayBudget ?? 1) <= 0;
-    if (busy) return { pts: [c0, c1], at: [0, Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1], len: Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1, road: false, rough: true };
-    if (!road) this.wayBudget = (this.wayBudget ?? 1) - 1;
+    // (Working a way out across country takes a while: a few milliseconds
+    // of it a frame, carried on from where it stopped (so the world never
+    // stalls on it), and until it's ready, the straight line will do.)
+    const rough = () => ({ pts: [c0, c1], at: [0, Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1], len: Math.hypot(c1.x - c0.x, c1.z - c0.z) || 1, road: false, rough: true });
     let pts;
+    if (!road) {
+      const left = this.wayMs ?? Infinity;
+      if (left <= 0) return rough();
+      this.wayJobs ||= new Map();
+      let job = this.wayJobs.get(k);
+      if (!job) this.wayJobs.set(k, (job = this.routeSteps(c0, c1, [a, b], 40)));
+      const t0 = performance.now();
+      let r;
+      do r = job.next();
+      while (!r.done && performance.now() - t0 < left);
+      this.wayMs = left - (performance.now() - t0);
+      if (!r.done) return rough();
+      this.wayJobs.delete(k);
+      pts = r.value;
+    }
     if (road) {
       // (A road's tiles go two abreast: one of each pair is enough.)
       const tl = road.a === a.id ? road.tiles : road.tiles.slice().reverse();
@@ -554,7 +583,7 @@ export class Diplomacy {
         if (Math.abs(t[0] - q.x) + Math.abs(t[2] - q.z) >= 2) pts.push({ x: t[0], z: t[2] });
       }
       pts.push(c1);
-    } else pts = this.route(c0, c1, [a, b], 40);
+    }
     const at = [0];
     for (let i = 1; i < pts.length; i++) at.push(at[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
     w = { pts, at, len: at[at.length - 1] || 1, road: !!road };
@@ -773,7 +802,7 @@ export class Diplomacy {
   // ------------------------------------------------------------ time
   update() {
     const now = this.sim.abs;
-    this.wayBudget = 1;
+    this.wayMs = WAY_MS;
     for (const q of this.letters) if (q.status === 'carried' && now >= q.arrive) this.deliver(q);
     this.courier(now);
     this.buildRoads(now);

@@ -53,10 +53,17 @@ There's nothing else to set up.
    worlds kept on that machine). They name it, choose **Host on your
    network** and make their character. Cloud hosting is shown but greyed
    out; it isn't available yet. The game then shows the address to share,
-   like `http://192.168.1.20:8080`.
-3. **Join.** Everyone else opens that address in their browser, goes to
-   Multiplayer and presses **J** to join. The first time they join a world
-   they make a character for it.
+   like `http://192.168.1.20:8080`. It picks the computer's Wi-Fi or cable
+   address, not the made-up ones of virtual machines, WSL, Docker or VPNs.
+   The same machine also answers to **`http://tessera.local:8080`**, so
+   friends don't need the number.
+3. **Join.** Everyone else opens that address (or `tessera.local:8080`) in
+   their browser. While a world is being hosted there, the Multiplayer menu
+   opens by itself; they press **J** to join. If a friend runs the game
+   themselves (`npm start` on their own computer), they don't need any
+   address at all: worlds hosted on the same network show up in their
+   Multiplayer menu (**J**, **K** and **L** join them). The first time they
+   join a world they make a character for it.
 
 In a shared world:
 
@@ -66,16 +73,33 @@ In a shared world:
   screen at the same address.
 - Right-click another player to see their profile and send a friend
   request.
+- Players can't hurt each other unless the host allows it: **V** in the
+  host's **P** window turns fighting between players on or off. Everyone is
+  told when it changes, the setting is saved with the world, and hurting
+  another player is never a crime in town. Blocks and parries work as
+  they do against anyone else.
 - If anyone goes down into a dungeon, the whole party goes with them, and
   comes back up together.
 - Each player keeps their own character in the host's world between
   sessions. Their reputation with townsfolk, crimes, citizenship, jobs and
   favours are their own, not the party's.
 
-If the others can't connect, check that everyone is on the same network
-and that the host's computer lets Node.js accept connections (Windows asks
-about this the first time `npm start` runs; choose to allow it on private
-networks).
+If the others can't connect:
+
+- Check that everyone is on the same network. Guest Wi-Fi often keeps
+  devices from seeing each other.
+- Check that the host's computer lets Node.js accept connections. Windows
+  asks the first time `npm start` runs; allow it on private networks, and
+  make sure the Wi-Fi is set to *Private*, not *Public*.
+- `tessera.local` works on most computers and phones (Windows 10 and
+  later, macOS, iOS, most Linux and newer Android). Where it doesn't, use
+  the numbered address. The host's **P** window lists the computer's other
+  addresses too, in case the first one isn't reachable.
+- If the host's computer sleeps or its browser crashes, the world is
+  released after about a minute, so it can be hosted again.
+- To turn off the name and the finding of nearby worlds, start with
+  `TESSERA_LAN=off npm start`. `TESSERA_NAME=myname npm start` answers to
+  `myname.local` instead.
 
 Useful URL parameters for testing: `?autostart&seed=123` skips the title
 screen (and the character screen; add `&origin=crash` or `&origin=native` for

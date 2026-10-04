@@ -55,6 +55,9 @@ import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
 
+// How long a frame may spend laying out a far town (ms): see World.layOut.
+const LAY_MS = 4;
+
 // Deeds needed for a town to call you its Friend, or its Hero.
 export const RENOWN = { friend: 10, hero: 25 };
 
@@ -239,21 +242,29 @@ export class Sim {
   // grow, build and trade like anywhere else.
   backgroundTick() {
     const world = this.game.world;
-    if (!this.allLaid) {
+    if (!this.allLaid && !this.laying) {
       this.layT = (this.layT ?? 2) - 0.5;
       if (this.layT <= 0) {
         this.layT = 2;
         const s = world.ow.settlements.find((q) => !world.layouts.has(q.id));
-        if (s) world.getLayout(s);
+        // (Laid out a few milliseconds a frame: see update.)
+        if (s) this.laying = s;
         else this.allLaid = true;
       }
     }
+    // (A town's day of business still being worked through: see civicTick.)
+    if (this.civicJob) return;
     const list = [...world.layouts.values()].filter((L) => L.econ && !this.game.active.has(L.settlement.id));
     if (!list.length) return;
     this.bgI = ((this.bgI || 0) + 1) % list.length;
     const L = list[this.bgI];
     if (this.abs - L.econ.lastAbs < 60) return;
-    simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY));
+    this.civicLater = true;
+    try {
+      simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY));
+    } finally {
+      this.civicLater = false;
+    }
   }
 
   catchUp(L) {
@@ -295,6 +306,8 @@ export class Sim {
       this.religion.update();
       this.market.update();
     }
+    if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) this.laying = null;
+    if (this.civicJob) this.civicTick(LAY_MS);
     this.war.update(dt);
     this.volcano.update(dt);
     this.careers.update(dt);
@@ -1069,31 +1082,65 @@ export class Sim {
   }
 
   dailyCivic(L, day, rng) {
-    this.simDay = day;
-    this.simNow = Math.min(this.abs, day * DAY + 600);
+    // (Another town's, still under way, is seen through first.)
+    if (this.civicJob) this.civicTick();
+    const job = { L, day, now: Math.min(this.abs, day * DAY + 600), steps: this.civicSteps(L, day, rng) };
+    // A far town's day is worked through a little each frame (see
+    // civicTick), so no one frame stalls on it; the town waits for it.
+    this.civicJob = job;
+    if (!this.civicLater) this.civicTick(Infinity);
+  }
+
+  // On with the day of business under way, `ms` of it at most (all of it,
+  // by default). Whether it's done.
+  civicTick(ms = Infinity) {
+    const job = this.civicJob;
+    if (!job) return true;
+    this.simDay = job.day;
+    this.simNow = job.now;
+    const t0 = performance.now();
+    let r;
     try {
-      this.civicDay(L, day, rng);
-      // Building work in a town caught up from afar moves on with its days
-      // (and what gets finished is noted on the day it was).
-      this.works.catchUp(L, Math.min(this.abs, (day + 1) * DAY));
+      do r = job.steps.next();
+      while (!r.done && performance.now() - t0 < ms);
+      if (r.done) {
+        this.civicJob = null;
+        // Building work in a town caught up from afar moves on with its
+        // days (and what gets finished is noted on the day it was).
+        this.works.catchUp(job.L, Math.min(this.abs, (job.day + 1) * DAY));
+      }
+    } catch (e) {
+      this.civicJob = null;
+      throw e;
     } finally {
       this.simDay = null;
       this.simNow = null;
     }
+    return r.done;
   }
 
   civicDay(L, day, rng) {
+    const steps = this.civicSteps(L, day, rng);
+    while (!steps.next().done);
+  }
+
+  // A town's day of business, one piece after another (each a place it can
+  // be left for the next frame).
+  *civicSteps(L, day, rng) {
     this.history.daily(L, day);
     this.society.daily(L, day);
     this.prosperity.daily(L, day);
     if (this.game.active.has(L.settlement.id)) this.checkTownSigns(L);
     // Stale news from afar comes down off the board.
     if (L.econ.rumours) L.econ.rumours = freshRumours(L.econ, this.now());
+    yield;
     // New streets and lots, and whatever's been waiting for one.
-    this.roads.daily(L, day);
+    yield* this.roads.dailySteps(L, day);
+    yield;
     checkWatch(this, L, day, rng);
     checkSupply(this, L, day);
     checkHousing(this, L, day);
+    yield;
     births(this, L, day, rng);
     aging(this, L, day);
     electMayor(this, L, day);
@@ -1101,19 +1148,25 @@ export class Sim {
     comingOfAge(this, L, day);
     raids(this, L, day, rng);
     this.hardship.daily(L, day);
+    yield;
     this.realms.daily(L, day, rng);
+    yield;
     this.diplomacy.consider(L, day, rng);
     this.nomads.arrive(L, day, rng);
     this.familyExpansions(L, day, rng);
     this.stables.daily(L, day, rng);
+    yield;
     this.tech.daily(L, day, rng);
+    yield;
     this.ancient.townDay(L, day, rng);
     this.ships.daily(L, day, rng);
+    yield;
     this.portals.daily(L, day);
     this.labor.daily(L, day, rng);
     this.politics.townDay(L, day, rng);
     this.war.townDay(L, day, rng);
     this.outings.daily(L, day);
+    yield;
     growth(this, L, day);
     this.works.daily(L, day);
     this.checkConduct(L, day);
@@ -2072,6 +2125,8 @@ export class Sim {
 
   // ------------------------------------------------------------ save
   serialize() {
+    // (A town's day half worked through is finished first.)
+    this.civicTick();
     const settlements = [];
     for (const L of this.game.world.layouts.values()) {
       if (!L.econ) continue;

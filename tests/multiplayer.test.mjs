@@ -15,6 +15,8 @@ import { MAX_PLAYERS, NET_VERSION, openEnvelope, toPlayer, toRelay } from '../sr
 import { packGrid, unpackGrid } from '../src/net/uiwire.js';
 import { Grid } from '../src/ui/ascii.js';
 import { Relay } from '../tools/relay.mjs';
+import { rankAddresses, addressFor, broadcastAddresses, parseQuery, queryPacket, answerPacket, readAnswer, beaconText, readBeacon, Nearby, MDNS_NAME } from '../tools/lan.mjs';
+import { networkWorlds } from '../src/ui/multiplayer.js';
 
 const memStore = () => {
   const m = new Map();
@@ -149,6 +151,90 @@ test('relay: one host from this machine, players passed through, kicks and bans'
   }
 });
 
+// ------------------------------------------------------------ finding each other
+test('lan: the address friends can reach comes first, not a virtual machine\'s', () => {
+  const ifaces = {
+    'vEthernet (WSL)': [{ family: 'IPv4', address: '172.25.80.1', netmask: '255.255.240.0', internal: false }],
+    'VirtualBox Host-Only Network': [{ family: 'IPv4', address: '192.168.56.1', netmask: '255.255.255.0', internal: false }],
+    'Wi-Fi': [{ family: 'IPv4', address: '192.168.1.23', netmask: '255.255.255.0', internal: false }, { family: 'IPv6', address: 'fe80::1', internal: false }],
+    'Loopback Pseudo-Interface 1': [{ family: 'IPv4', address: '127.0.0.1', netmask: '255.0.0.0', internal: true }],
+    docker0: [{ family: 'IPv4', address: '172.17.0.1', netmask: '255.255.0.0', internal: false }],
+    'Ethernet 2': [{ family: 'IPv4', address: '169.254.10.4', netmask: '255.255.0.0', internal: false }],
+  };
+  const r = rankAddresses(ifaces);
+  assert.equal(r[0].address, '192.168.1.23', 'the Wi-Fi');
+  assert.equal(r.length, 5, 'IPv4 only, not this machine\'s own loopback');
+  assert.equal(r[r.length - 1].address, '169.254.10.4', 'no network at all: last');
+  // (A Mac's: en0 is its Wi-Fi; utun a VPN.)
+  const mac = rankAddresses({ utun3: [{ family: 'IPv4', address: '10.8.0.2', netmask: '255.255.255.0', internal: false }], en0: [{ family: 'IPv4', address: '10.0.0.14', netmask: '255.255.255.0', internal: false }] });
+  assert.equal(mac[0].address, '10.0.0.14');
+  // Answered from the address on the asker's own network.
+  assert.equal(addressFor('192.168.56.10', r), '192.168.56.1');
+  assert.equal(addressFor('::ffff:192.168.1.40', r), '192.168.1.23');
+  assert.equal(addressFor('8.8.8.8', r), '192.168.1.23');
+  assert.ok(broadcastAddresses(r).includes('192.168.1.255'));
+});
+
+test('lan: "tessera.local" asked for on the network, and answered', () => {
+  const q = parseQuery(queryPacket(MDNS_NAME, { id: 77 }));
+  assert.equal(q.id, 77);
+  assert.equal(q.questions[0].name, 'tessera.local');
+  assert.equal(q.questions[0].type, 1);
+  // An answer isn't a question.
+  assert.equal(parseQuery(answerPacket(MDNS_NAME, '192.168.1.23')), null);
+  assert.equal(readAnswer(answerPacket(MDNS_NAME, '192.168.1.23'), 'tessera.local'), '192.168.1.23');
+  // A plain resolver's question: its id and question echoed back.
+  const legacy = answerPacket(MDNS_NAME, '10.0.0.14', { id: 77, legacy: true });
+  assert.equal(legacy.readUInt16BE(0), 77);
+  assert.equal(readAnswer(legacy, 'TESSERA.local'), '10.0.0.14');
+  // (Nonsense is ignored.)
+  assert.equal(parseQuery(Buffer.from('hello')), null);
+  assert.equal(parseQuery(Buffer.from([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 63])), null);
+});
+
+test('lan: a world hosted elsewhere on the network is heard of, and forgotten when it\'s gone', () => {
+  const world = { name: 'Testland', hostName: 'Hosty', hostIcon: null, players: 2, max: 4 };
+  const text = beaconText({ id: 'abc', v: NET_VERSION, port: 8080, world });
+  assert.equal(readBeacon(text, 'abc'), null, 'not our own');
+  assert.equal(readBeacon('{"app":"other"}'), null);
+  assert.equal(readBeacon('not json'), null);
+  const b = readBeacon(text, 'mine');
+  assert.equal(b.world.name, 'Testland');
+  const near = new Nearby();
+  near.heard(b, '192.168.1.40', 1000);
+  assert.deepEqual(near.list(2000).map((n) => [n.addr, n.port, n.world.name]), [['192.168.1.40', 8080, 'Testland']]);
+  assert.equal(near.list(20000).length, 0, 'not heard from in a while: gone');
+  near.heard(b, '192.168.1.40', 30000);
+  near.heard(readBeacon(beaconText({ id: 'abc', v: NET_VERSION, port: 8080, world: null }), 'mine'), '192.168.1.40', 30500);
+  assert.equal(near.list(31000).length, 0, 'stopped hosting: gone at once');
+  // The Multiplayer menu: the world at this address first, then those found.
+  const lan = { host: { name: 'Here', hostName: 'Me', players: 1, max: 4 }, nearby: near.list(31000).concat([{ addr: '192.168.1.40', port: 8080, v: NET_VERSION, world }]) };
+  const ws = networkWorlds(lan);
+  assert.equal(ws[0].name, 'Here');
+  assert.equal(ws[0].at, null);
+  assert.deepEqual(ws[1].at, { addr: '192.168.1.40', port: 8080 });
+  assert.deepEqual(networkWorlds(null), []);
+  // And the relay says so.
+  const relay = new Relay({ port: 0, addrs: () => ['10.0.0.5'], extra: () => ({ mdns: 'tessera.local', nearby: lan.nearby }) });
+  assert.equal(relay.info().mdns, 'tessera.local');
+  assert.equal(relay.info().nearby.length, 1);
+  // A connection long silent (a laptop shut mid-game) is let go of, so the
+  // world can be hosted again; one that answers its pings is kept.
+  const quiet = { open: true, heard: 0, shut: 0, closed() {
+    this.shut++;
+    this.open = false;
+  }, frame() {} };
+  const alive = { open: true, heard: 50000, pings: 0, closed() {}, frame() {
+    this.pings++;
+  } };
+  relay.socks.add(quiet);
+  relay.socks.add(alive);
+  relay.beat(60000);
+  assert.equal(quiet.shut, 1);
+  assert.equal(alive.pings, 1);
+  assert.ok(!relay.socks.has(quiet));
+});
+
 test('ui frames: a window\'s cells packed and unpacked the same', () => {
   const g = new Grid(10, 3);
   g.text(1, 1, 'Hello ★', '#ffe070', '#100c18');
@@ -234,6 +320,31 @@ test('party: a guard halts the player who did the crime, and only that player se
   assert.equal(g.state, 'escort');
   for (let i = 0; i < 5; i++) g.escortWalk(0.05);
   assert.equal(g.state, 'escort', 'still leading them');
+});
+
+test('party: players hurt each other only when the host allows it', () => {
+  const { game, input, gp } = party();
+  const hp0 = gp.hp;
+  game.damage(gp, 2, game.player);
+  assert.equal(gp.hp, hp0, 'friends, unless the host says otherwise');
+  game.pvp = true;
+  game.damage(gp, 2, game.player);
+  assert.ok(gp.hp < hp0, 'with fighting allowed, the blow lands');
+  // A swing at them, standing beside you, lands as on anyone.
+  const p = game.player;
+  const spot = game.findFreeSpot(p.x + 1, p.z, p.y);
+  gp.teleport(spot.x, spot.y, spot.z);
+  const hp1 = gp.hp;
+  p.attackCd = 0;
+  game.attack(gp);
+  for (let i = 0; i < 20; i++) game.update(0.05, input);
+  assert.ok(gp.hp < hp1, 'struck');
+  // (Kept with the world.)
+  game.partyWorld = { name: 'Testland' };
+  const save = JSON.parse(JSON.stringify(game.serialize()));
+  assert.equal(save.party.pvp, true);
+  const again = new Game({ seed: save.seed, renderer: stubRenderer(), audio: null, ui: stubUI(), save });
+  assert.equal(again.pvp, true);
 });
 
 test('party: a beast goes for one of you, the nearest', () => {
@@ -423,6 +534,21 @@ test('host and player: the whole party goes down into a dungeon, and up again', 
   L.step(8);
   assert.ok(!game.world.inInstance(gp.x), 'up again with the host');
   assert.ok(!L.gg.world.inst);
+});
+
+test('host and player: the host lets players fight, and the player is told', () => {
+  const L = linked();
+  assert.equal(L.guestNet.pvp, false);
+  const notes = [];
+  L.guestNet.onNote = (text) => notes.push(text);
+  L.hostNet.setPvp(true);
+  L.step(1);
+  assert.ok(L.game.pvp);
+  assert.equal(L.guestNet.pvp, true, 'the player knows');
+  assert.ok(notes.some((t) => /fight/.test(t)), 'and was told');
+  L.hostNet.setPvp(false);
+  L.step(1);
+  assert.equal(L.guestNet.pvp, false);
 });
 
 test('host and player: kicked, the player\'s screen goes back to the title', () => {

@@ -1,18 +1,30 @@
 // Minimal static file server for local play: `npm start` then open the URL.
 // It's also the LAN relay for multiplayer (see relay.mjs): a world hosted
 // from this machine's browser can be joined by anyone on the same network
-// at this machine's address, shown in the game when you host.
+// at this machine's address, shown in the game when you host; or as
+// http://tessera.local:8080 (this machine answers to that name); or from
+// the Multiplayer menu of their own copy of the game, which finds worlds
+// hosted nearby by itself (see lan.mjs).
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Relay, lanAddresses } from './relay.mjs';
+import { startMdns, startDiscovery, MDNS_NAME, DISCOVERY_PORT } from './lan.mjs';
 import { LAN_PATH } from '../src/net/protocol.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT) || 8080;
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
-const relay = new Relay({ port });
+// (TESSERA_NAME: another name to answer to; TESSERA_LAN=off: neither the
+// name nor finding worlds nearby.)
+const lanOn = process.env.TESSERA_LAN !== 'off';
+let mdns = null;
+let nearby = null;
+const relay = new Relay({
+  port,
+  extra: () => ({ mdns: mdns ? mdns.name : null, nearby: nearby ? nearby.list() : [] }),
+});
 
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -41,4 +53,7 @@ server.listen(port, () => {
   console.log(`Tessera running at http://localhost:${port}`);
   const lan = lanAddresses();
   if (lan.length) console.log(`On your network: ${lan.map((a) => `http://${a}:${port}`).join(', ')}`);
+  if (!lanOn) return;
+  mdns = startMdns({ name: process.env.TESSERA_NAME ? `${process.env.TESSERA_NAME.replace(/\.local$/, '')}.local` : MDNS_NAME, log: (name) => console.log(`Also as http://${name}:${port} (on most phones and computers)`) });
+  nearby = startDiscovery({ port: Number(process.env.TESSERA_DISCOVERY_PORT) || DISCOVERY_PORT, info: () => relay.info() });
 });

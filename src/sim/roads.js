@@ -83,6 +83,12 @@ export class Roads {
   // Once a day: start what's been waiting for a lot, and lay a new street
   // if the town is short of open lots.
   daily(L, day) {
+    const steps = this.dailySteps(L, day);
+    while (!steps.next().done);
+  }
+
+  // The same, a piece at a time (see Sim.civicSteps).
+  *dailySteps(L, day) {
     const s = L.settlement;
     if (s.deserted || s.condition === 'abandoned' || !L.econ) return;
     this.connect(L);
@@ -102,15 +108,16 @@ export class Roads {
       this.startStreet(L, plan);
       return;
     }
+    yield;
     // No room for a street anywhere: a lot beside a road, or on the edge
     // with a path to it, the old way.
-    const plot = L.openPlot(big);
+    const plot = yield* L.openPlotSteps(big);
     if (plot && this.addLot(L, plot, true)) return;
     if (plot) L.plots[plot.id] = null;
     // Nowhere big enough at all: it'll have to make do with a smaller lot.
     (e.cramped ||= {})[big] = day;
     if (big !== 'house_s' && !this.openLots(L).length) {
-      const small = L.openPlot('house_s');
+      const small = yield* L.openPlotSteps('house_s');
       if (small && !this.addLot(L, small, true)) L.plots[small.id] = null;
     }
     this.startWaiting(L);

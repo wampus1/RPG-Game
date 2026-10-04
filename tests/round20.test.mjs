@@ -73,7 +73,7 @@ test('travellers go round water by land, and down a finished road', () => {
   for (const a of ss) {
     for (const b of ss) {
       if (a.id >= b.id || Math.hypot(a.cx - b.cx, a.cz - b.cz) > 8) continue;
-      D.wayBudget = 1;
+      D.wayMs = Infinity;
       const w = D.way(a, b);
       const c0 = w.pts[0];
       const c1 = w.pts[w.pts.length - 1];
@@ -90,13 +90,13 @@ test('travellers go round water by land, and down a finished road', () => {
   }
   assert.ok(best.ns >= 20, `a straight line that crosses water (${best.ns})`);
   assert.ok(best.nw * 4 <= best.ns, `the way keeps to the land (${best.nw} wet vs ${best.ns})`);
-  // (Cached; and one at a time: a second new way waits its turn.)
+  // (Cached; and with no time left this frame, a new way waits its turn.)
   assert.equal(D.way(best.a, best.b), best.w);
-  D.wayBudget = 0;
+  D.wayMs = 0;
   const other = ss.find((s) => s !== best.a && s !== best.b);
   assert.ok(D.way(best.a, other).rough, 'the straight line, for now');
   // A finished road is the way.
-  D.wayBudget = 1;
+  D.wayMs = Infinity;
   const road = D.startRoad(best.a, best.b);
   road.done = true;
   const rw = D.way(best.a, best.b);
@@ -116,7 +116,7 @@ test('a traveller on the road walks the way round the lake, with dry feet', () =
   const a = ss.find((s) => s.name === 'Redford');
   const b = ss.find((s) => s.name === 'Fairfield');
   assert.ok(a && b);
-  D.wayBudget = 1;
+  D.wayMs = Infinity;
   const w = D.way(a, b);
   const s0 = 120;
   const start = D.wayAt(w, s0);

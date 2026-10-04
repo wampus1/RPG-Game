@@ -1412,11 +1412,17 @@ export function simulateTo(sim, L, abs) {
   // A settlement's story starts on the first morning of the world.
   if (e.lastAbs === null) e.lastAbs = Math.floor(Math.min(abs - 60, DAY + 360) / 60) * 60;
   if (abs - e.lastAbs > MAX_CATCHUP) e.lastAbs = Math.floor((abs - MAX_CATCHUP) / 60) * 60;
+  // (Its day of business, if it's still being worked through, first: see
+  // Sim.civicTick.)
+  if (sim && sim.civicJob && sim.civicJob.L === L) sim.civicTick();
   let n = 0;
   while (e.lastAbs + 60 <= abs) {
     tickHour(sim, L, e.lastAbs);
     e.lastAbs += 60;
     n++;
+    // (A far town's day of business, left for the frames to come: the
+    // rest of its time waits for it.)
+    if (sim && sim.civicJob && sim.civicJob.L === L) break;
   }
   return n;
 }

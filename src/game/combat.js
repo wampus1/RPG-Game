@@ -409,28 +409,11 @@ function strike(game, a, w) {
   for (const v of victimsAt(game, a, w.tiles)) resolveHit(game, a, v, hit, w.off ? { weapon: w.off } : null);
 }
 
-export const BOSS_MIN_WINDUP = 0.45;
-// How hard a master's blow lands, by the warning it gave.
-export function bossBlowScale(w) {
-  const quick = w.off || (w.flurried || 0) > 1;
-  return Math.max(0.4, Math.min(1.4, (quick ? 0.25 : w.dur) / 0.7));
-}
-
-// A blow lands (or doesn't). `opts.weapon`: struck with that (the off
-// hand's blade) rather than the main one.
-export function resolveHit(game, a, v, st, opts = null) {
-  if (v.dead || v.down) return 'none';
+// A shield (or a blade) up toward a blow of `amount`: what gets through,
+// and whether they were guarding; or 'parried', up just as it came.
+export function guardBlow(game, a, v, amount, st, opts = null) {
   const text = (s, c) => game.renderer.floatText(v.x, v.y + 2, v.z, s, c);
-  // Rolled clear.
-  if (v.rollT > 0) {
-    text('dodged', '#c8e8ff');
-    onDodge(game, v);
-    game.renderer.emit(v.x, v.y + 0.3, v.z, { n: 5, color: ['#c8e8ff', '#ffffff'], up: 10, speed: 30, life: 0.3 });
-    return 'dodged';
-  }
-  let amount = (opts && opts.weapon ? offDamage(a, opts.weapon) : baseDamage(a)) * st.mult;
   const sh = shieldOf(v);
-  // A shield (or a blade) up toward the blow.
   const guarding = v.kind === 'player' ? v.blocking : sh && v.state === 'fight' && v.rng && v.rng.chance(v.rec && v.rec.job === 'guard' ? 0.45 : 0.25);
   if (guarding && facing(v, a)) {
     // Up just as it came: parried, and they're left reeling.
@@ -476,6 +459,32 @@ export function resolveHit(game, a, v, st, opts = null) {
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
+  return { amount, guarding };
+}
+
+export const BOSS_MIN_WINDUP = 0.45;
+// How hard a master's blow lands, by the warning it gave.
+export function bossBlowScale(w) {
+  const quick = w.off || (w.flurried || 0) > 1;
+  return Math.max(0.4, Math.min(1.4, (quick ? 0.25 : w.dur) / 0.7));
+}
+
+// A blow lands (or doesn't). `opts.weapon`: struck with that (the off
+// hand's blade) rather than the main one.
+export function resolveHit(game, a, v, st, opts = null) {
+  if (v.dead || v.down) return 'none';
+  const text = (s, c) => game.renderer.floatText(v.x, v.y + 2, v.z, s, c);
+  // Rolled clear.
+  if (v.rollT > 0) {
+    text('dodged', '#c8e8ff');
+    onDodge(game, v);
+    game.renderer.emit(v.x, v.y + 0.3, v.z, { n: 5, color: ['#c8e8ff', '#ffffff'], up: 10, speed: 30, life: 0.3 });
+    return 'dodged';
+  }
+  const g = guardBlow(game, a, v, (opts && opts.weapon ? offDamage(a, opts.weapon) : baseDamage(a)) * st.mult, st, opts);
+  if (g === 'parried') return 'parried';
+  const { guarding } = g;
+  let { amount } = g;
   amount = Math.max(guarding ? 0 : 1, Math.round(amount));
   // A ghoul's rake drinks your breath, whether it lands or not: a stream of
   // it torn out of you and into its mouth, and it's the stronger for it.

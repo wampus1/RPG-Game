@@ -62,6 +62,7 @@ export class GuestNet {
     else if (m.t === 's') this.snapshot(m);
     else if (m.t === 'party') {
       this.party = m.list || [];
+      this.pvp = !!m.pvp;
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
     else if (m.t === 'friend') this.onFriend(m);

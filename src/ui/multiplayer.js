@@ -9,7 +9,7 @@ import { Window } from './window.js';
 import { C, wrap, Grid, drawGrid } from './ascii.js';
 import { avatarCanvas, drawAvatar } from '../render/avatar.js';
 import { ICON_SHAPES, ICON_COLORS, ICON_BGS, NAME_MAX, DESC_MAX, nameProblem, cleanIcon } from '../net/account.js';
-import { MAX_PLAYERS } from '../net/protocol.js';
+import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
 
 // (Solid: nothing behind shows through.)
 const PANEL = '#100c18';
@@ -187,6 +187,17 @@ export class AccountWindow extends Window {
 }
 
 // ------------------------------------------------------------ the title menu
+// The worlds to join: the one hosted at this address, then those found
+// elsewhere on the network (each `at` its own address: see tools/lan.mjs).
+const JOIN_KEYS = ['J', 'K', 'L'];
+export function networkWorlds(lan) {
+  if (!lan) return [];
+  const out = [];
+  if (lan.host) out.push({ ...lan.host, at: null });
+  for (const n of lan.nearby || []) if (n && n.world) out.push({ ...n.world, v: n.v, at: { addr: n.addr, port: n.port } });
+  return out.slice(0, JOIN_KEYS.length);
+}
+
 // From the title screen: a world of your own to host, one you've hosted
 // before, or the one being hosted at this address.
 export class MultiplayerWindow extends Window {
@@ -194,7 +205,7 @@ export class MultiplayerWindow extends Window {
   // meta }] of your multiplayer worlds), hooks: { account, newWorld,
   // seedWorld, continueWorld(id), join } }
   constructor(ui, ctx) {
-    super(ui, 66, 30, { kind: 'multiplayer' });
+    super(ui, 66, 34, { kind: 'multiplayer' });
     this.ctx = ctx;
   }
 
@@ -209,7 +220,7 @@ export class MultiplayerWindow extends Window {
       if (cv) g.image(2, 2, cv, 0, 0);
       g.text(6, 2, a.name, C.hi);
       g.text(6, 3, (a.desc || 'No description yet.').slice(0, this.w - 34), C.dim);
-    } else g.text(2, 2, 'You need an account to play with others.', C.orange);
+    } else g.text(2, 2, 'Make an account to play with others.', C.orange);
     button(this, g, this.w - 26, 2, 24, a ? '[A] Account & friends' : '[A] Make an account', () => hooks.account(), { color: a ? C.fg : C.hi });
     let y = 6;
     g.text(2, y++, 'YOUR WORLDS', C.border);
@@ -233,19 +244,25 @@ export class MultiplayerWindow extends Window {
     });
     y += 1;
     g.text(2, y++, 'ON THIS NETWORK', C.border);
-    const h = lan && lan.host;
-    if (h) {
-      button(this, g, 2, y, this.w - 4, `[J] Join "${h.name || 'a world'}" hosted by ${h.hostName || 'someone'}`.slice(0, this.w - 16), () => hooks.join(), { off: !a || h.players >= h.max, color: C.hi, hint: `${h.players}/${h.max}` });
+    const worlds = networkWorlds(lan);
+    worlds.forEach((w, i) => {
+      const key = JOIN_KEYS[i];
+      const old = w.v && w.v !== NET_VERSION;
+      button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => hooks.join(w.at), { off: !a || w.players >= w.max || old, color: C.hi, hint: old ? 'other version' : `${w.players}/${w.max}` });
+      // (Found elsewhere on the network: where.)
+      if (w.at) g.text(7, y + 1, `on another computer, at ${w.at.addr}`, C.faint);
       y += 2;
-    } else {
-      g.text(3, y++, lan ? 'Nobody is hosting a world at this address right now.' : 'This copy of the game wasn\'t started with "npm start",', C.dim);
-      if (!lan) g.text(3, y++, 'so it can\'t host or join on your network.', C.dim);
+    });
+    if (!worlds.length) {
+      g.text(3, y++, lan ? 'Nobody is hosting a world on your network right now.' : 'This copy of the game wasn\'t started with "npm start",', C.dim);
+      if (!lan) g.text(3, y++, 'so it can\'t host or find worlds on your network.', C.dim);
       y++;
     }
     const addrs = lan && lan.addrs && lan.addrs.length ? lan.addrs.map((x) => `http://${x}:${lan.port}`) : [];
     if (addrs.length) {
       g.text(3, y++, 'Friends on the same Wi-Fi join a world you host by opening', C.faint);
-      g.text(3, y++, `${addrs[0]} in their browser.`, C.faint);
+      g.text(3, y++, `${addrs[0]}${lan.mdns ? ` or http://${lan.mdns}:${lan.port}` : ''}`.slice(0, this.w - 5), C.cyan);
+      g.text(3, y++, 'in their browser (or it shows up here, in their own copy).', C.faint);
     }
     button(this, g, 2, this.h - 3, 20, '[ESC] Back', () => this.close());
     g.text(24, this.h - 3, `Up to ${MAX_PLAYERS} players in a world.`, C.faint);
@@ -259,8 +276,10 @@ export class MultiplayerWindow extends Window {
     else if (!a) return true;
     else if (k.code === 'KeyN' && !(saves && saves.length >= 3)) hooks.newWorld();
     else if (k.code === 'KeyS' && !(saves && saves.length >= 3)) hooks.seedWorld();
-    else if (k.code === 'KeyJ' && this.ctx.lan && this.ctx.lan.host) hooks.join();
-    else {
+    else if (JOIN_KEYS.includes(k.code.replace(/^Key/, ''))) {
+      const w = networkWorlds(this.ctx.lan)[JOIN_KEYS.indexOf(k.code.replace(/^Key/, ''))];
+      if (w && w.players < w.max && !(w.v && w.v !== NET_VERSION)) hooks.join(w.at);
+    } else {
       const d = /^Digit([1-3])$/.exec(k.code);
       if (d && saves && saves[+d[1] - 1]) hooks.continueWorld(saves[+d[1] - 1].id);
     }
@@ -289,6 +308,7 @@ export class HostWindow extends Window {
     if (ok) {
       const a = this.lan.addrs && this.lan.addrs[0];
       g.text(6, 6, a ? `Friends on your Wi-Fi open http://${a}:${this.lan.port}` : 'No network found: only this machine can join.', C.dim, undefined, this.w - 8);
+      if (a && this.lan.mdns) g.text(6, 7, `(or http://${this.lan.mdns}:${this.lan.port})`, C.faint, undefined, this.w - 8);
     } else g.text(6, 6, 'Start the game with "npm start" to host on your network.', C.orange, undefined, this.w - 8);
     g.text(2, 8, '( )', C.faint);
     g.text(6, 8, 'Cloud hosting', C.faint);
@@ -321,8 +341,8 @@ export class HostWindow extends Window {
 export class PartyWindow extends Window {
   // `ctx()`: { me, host (bool), world, addrs, party: [profiles], bans,
   // friends, requests, lobby (friends at this address's title screen),
-  // hooks: { profile(p), kick(p), ban(p), unban(id), invite(f), answer(id,
-  // yes), account(), leave() } }
+  // pvp (players may hurt each other), hooks: { profile(p), kick(p), ban(p),
+  // unban(id), invite(f), answer(id, yes), account(), leave(), pvp() } }
   constructor(ui, ctx) {
     super(ui, 74, 34, { kind: 'party' });
     this.ctx = ctx;
@@ -337,8 +357,17 @@ export class PartyWindow extends Window {
     let y = 2;
     if (c.host) {
       g.text(2, y++, c.addrs && c.addrs.length ? `Hosting on your network. Friends on your Wi-Fi open:` : 'Hosting (no network found: only this machine can join).', C.dim);
-      if (c.addrs && c.addrs.length) g.text(4, y++, c.addrs.map((a) => `http://${a}`).join('  or  ').slice(0, this.w - 6), C.cyan);
+      if (c.addrs && c.addrs.length) {
+        g.text(4, y++, [`http://${c.addrs[0]}`, c.mdns ? `http://${c.mdns}` : null].filter(Boolean).join('  or  ').slice(0, this.w - 6), C.cyan);
+        // (Should that one not reach them: this machine's other addresses.)
+        if (c.addrs.length > 1) g.text(4, y++, `(else: ${c.addrs.slice(1, 3).map((a) => `http://${a}`).join(', ')})`.slice(0, this.w - 6), C.faint);
+      }
     } else g.text(2, y++, `In ${c.hostName || 'the host'}'s world.`, C.dim);
+    // Fighting between players: the host's to allow.
+    if (c.host) {
+      const label = `[V] Players can hurt each other: ${c.pvp ? 'ON' : 'OFF'}`;
+      button(this, g, 2, y++, label.length + 2, label, () => H.pvp(), { color: c.pvp ? C.red : C.dim });
+    } else g.text(2, y++, c.pvp ? 'Players can hurt each other here (the host allows it).' : 'Players can\'t hurt each other here.', c.pvp ? C.red : C.faint);
     y++;
     const row = (p, yy, extra) => {
       const cv = avatarCanvas(p.icon, 1);
@@ -407,6 +436,7 @@ export class PartyWindow extends Window {
     if (k.code === 'Escape' || k.code === 'KeyP') this.close();
     else if (k.code === 'KeyA') c.hooks.account();
     else if (k.code === 'KeyL' && !c.host) c.hooks.leave();
+    else if (k.code === 'KeyV' && c.host) c.hooks.pvp();
     else if (k.code === 'ArrowDown') this.scroll += 3;
     else if (k.code === 'ArrowUp') this.scroll = Math.max(0, this.scroll - 3);
     return true;

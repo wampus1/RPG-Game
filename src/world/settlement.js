@@ -96,6 +96,13 @@ export function buildLayout(world, s) {
   return L;
 }
 
+// The same, a piece at a time (see World.layOut): the layout, and the
+// steps still to take in laying it out.
+export function layoutJob(world, s) {
+  const L = new Layout(world, s);
+  return { L, steps: L.generateSteps() };
+}
+
 class Layout {
   constructor(world, s) {
     this.world = world;
@@ -194,6 +201,13 @@ class Layout {
 
   // ------------------------------------------------------------ generation
   generate() {
+    const steps = this.generateSteps();
+    while (!steps.next().done);
+  }
+
+  // Laying the town out, stage by stage (each a pause where the work can
+  // be left for the next frame: see World.layOut).
+  *generateSteps() {
     const s = this.settlement;
     const rng = this.rng;
     const ow = this.world.ow;
@@ -205,13 +219,18 @@ class Layout {
     }
     this.plan = planPopulation(s, rng.fork('plan'));
     this.mats = this.pickSettlementMats();
-    this.scanTerrain();
+    yield;
+    yield* this.scanTerrainSteps();
     if (s.type === 'city') this.cityWalls();
     this.roads();
-    this.placeBuildings();
+    yield;
+    yield* this.placeBuildingsSteps();
     this.docks();
+    yield;
     this.decorate();
+    yield;
     this.wilds();
+    yield;
     this.clearDoorways();
     this.paintGround();
     this.decorBase = null;
@@ -220,17 +239,24 @@ class Layout {
   }
 
   scanTerrain() {
+    const steps = this.scanTerrainSteps();
+    while (!steps.next().done);
+  }
+
+  *scanTerrainSteps() {
     const b = this.bounds;
     const terrain = this.world.terrain;
     const ctx = terrain.context(b.x0 - 16, b.z0 - 16, b.x1 + 16, b.z1 + 16);
     this.ctx = ctx;
     this.cols = new Array(this.W * this.D);
+    yield;
     for (let lz = 0; lz < this.D; lz++) {
       for (let lx = 0; lx < this.W; lx++) {
         const c = terrain.column(b.x0 + lx, b.z0 + lz, ctx, {});
         this.cols[lz * this.W + lx] = c;
         if (c.water >= 0) this.mask[lz * this.W + lx] = M.WATER;
       }
+      if (lz % 8 === 7) yield;
     }
   }
   col(x, z) {
@@ -623,6 +649,11 @@ class Layout {
   }
 
   placeBuildings() {
+    const steps = this.placeBuildingsSteps();
+    while (!steps.next().done);
+  }
+
+  *placeBuildingsSteps() {
     const s = this.settlement;
     const rng = this.rng.fork('bld');
     const plaza = this.plaza;
@@ -698,23 +729,31 @@ class Layout {
         } else if (!bld) break;
       }
       if (bld && cands.length > 50) cands = cands.filter((c) => this.maskAt(c.x + c.dx, c.z + c.dz) === M.FREE);
+      yield;
     }
     // The graveyard, then the remaining trades, then fields on the outskirts.
     if (!this.graveyard && !this.cemetery(rng.fork('cemetery')) && this.growLane(rng)) this.cemetery(rng.fork('cemetery2'));
+    yield;
     for (const t of late) {
       if (!this.placeBuilding(t, byPlaza(this.frontage()), rng) && this.growLane(rng)) this.placeBuilding(t, byPlaza(this.frontage()), rng);
+      yield;
     }
     // Empty lots the town can build on later (e.g. for new citizens).
     if (s.condition !== 'abandoned') {
       for (let i = 0; i < 2; i++) if (!this.placePlot(rng) && !(this.growLane(rng) && this.placePlot(rng))) break;
       if (!this.plots.length) this.fringePlot();
     }
+    yield;
     this.farms();
     // The jail goes in the guardhouse, else the town hall, else the tavern.
     const jailOrder = ['guardhouse', 'townhall', 'tavern', 'warehouse', 'barn'];
     for (const b of this.buildings) b.jailCand = s.condition !== 'abandoned' && jailOrder.includes(b.type);
     const order = [...this.buildings].sort((a, b) => (jailOrder.includes(a.type) ? jailOrder.indexOf(a.type) : 99) - (jailOrder.includes(b.type) ? jailOrder.indexOf(b.type) : 99));
-    for (const b of order) this.construct(b, rng.fork(b.id + 7));
+    yield;
+    for (const b of order) {
+      this.construct(b, rng.fork(b.id + 7));
+      yield;
+    }
   }
 
   // Reserve a small lot beside a road; nothing is built there yet.
@@ -920,7 +959,38 @@ class Layout {
     const h = Math.floor(side / 2);
     const b = this.bounds;
     const p = this.plaza;
+    // (Each tile's answer kept for this look round: the lots overlap.)
+    const pad0 = 2;
+    const mx0 = b.x0 - reach - pad0;
+    const mz0 = b.z0 - reach - pad0;
+    const mw = b.x1 - b.x0 + 2 * (reach + pad0) + 1;
+    const mh = b.z1 - b.z0 + 2 * (reach + pad0) + 1;
+    const memo = new Int8Array(mw * mh);
+    const at = (x, z) => (x - mx0 >= 0 && x - mx0 < mw && z - mz0 >= 0 && z - mz0 < mh ? (z - mz0) * mw + (x - mx0) : -1);
     const tileOk = (x, z) => {
+      const i = at(x, z);
+      if (i < 0) return tileAt(x, z);
+      if (!memo[i]) memo[i] = tileAt(x, z) ? 1 : 2;
+      return memo[i] === 1;
+    };
+    // (What's built, or marked out, within a tile of each: see builtNear.)
+    let near = null;
+    const builtNear = (x, z) => {
+      const i = at(x, z);
+      if (i < 0) return this.builtNear(x, z, null);
+      if (!near) {
+        near = new Uint8Array(mw * mh);
+        const stamp = (r) => {
+          for (let qz = Math.max(mz0, r.z0 - 1); qz <= Math.min(mz0 + mh - 1, r.z1 + 1); qz++) {
+            for (let qx = Math.max(mx0, r.x0 - 1); qx <= Math.min(mx0 + mw - 1, r.x1 + 1); qx++) near[(qz - mz0) * mw + (qx - mx0)] = 1;
+          }
+        };
+        for (const q of this.buildings) stamp(q);
+        for (const p of this.plots) if (p && !p.taken) stamp(p);
+      }
+      return near[i] === 1;
+    };
+    const tileAt = (x, z) => {
       if (this.inside(x, z)) {
         const m = this.maskAt(x, z);
         return m === M.FREE || m === M.YARD;
@@ -931,7 +1001,7 @@ class Layout {
         if (Math.max(b.x0 - x, x - b.x1, b.z0 - z, z - b.z1) > Math.max(12, reach + 1)) return false;
         const other = this.world.ow.settlementAt(x, z);
         if (other && other !== this.settlement) return false;
-        if (this.builtNear(x, z, null)) return false;
+        if (builtNear(x, z)) return false;
         if (this.outRoads && this.outRoads.has(x * 65536 + z)) return false;
       }
       const c = this.col(x, z);
@@ -947,10 +1017,11 @@ class Layout {
     cands.sort((a, c) => a.d - c.d);
     const exits = this.exits();
     for (const { x, z } of cands) {
-      let ok = this.gateClear({ x0: x, z0: z, x1: x + e, z1: z + e }, exits);
+      let ok = true;
       // Lots marked out later stand a little further from their neighbours.
       const pad = sign || !spaced ? 1 : 2;
       for (let dz = -pad; dz <= e + pad && ok; dz++) for (let dx = -pad; dx <= e + pad && ok; dx++) ok = tileOk(x + dx, z + dz);
+      if (ok) ok = this.gateClear({ x0: x, z0: z, x1: x + e, z1: z + e }, exits);
       if (ok && !sign) ok = this.clearAround({ x0: x, z0: z, x1: x + e, z1: z + e }, spaced ? 3 : 2);
       if (!ok) continue;
       // Door on the side facing the nearest street (else the plaza), so a
@@ -1182,12 +1253,28 @@ class Layout {
   // Every lot taken: the town marks out a new one beside a road, else on
   // its edge (after founding, so no sign; the builders come straight away).
   openPlot(type = 'house_s', insideOnly = false) {
+    const steps = this.openPlotSteps(type, insideOnly);
+    let r;
+    do r = steps.next();
+    while (!r.done);
+    return r.value;
+  }
+
+  // The same, a try at a time (each a place the work can be left for the
+  // next frame: see Sim.civicSteps).
+  *openPlotSteps(type = 'house_s', insideOnly = false) {
     const rng = new RNG(hash4(this.settlement.seed, 0x7a0e, this.plots.length));
     // A lot big enough for what's to go on it.
     const inner = this.placePlot(rng, false, type);
     if (inner || insideOnly) return inner;
     const side = Math.max(5, ...(SPECS[type] || SPECS.house_s).size[0]);
-    return this.fringePlot(false, 7, 0.05, true, true, side) || this.fringePlot(false, 12, 0, true, true, side) || this.fringePlot(false, 17, 0, true, true, side) || this.fringePlot(false, 12, 0, true, false, side);
+    // Further and further out, on rougher ground, and closer together.
+    for (const [reach, flat, spaced] of [[7, 0.05, true], [12, 0, true], [17, 0, true], [12, 0, false]]) {
+      yield;
+      const plot = this.fringePlot(false, reach, flat, true, spaced, side);
+      if (plot) return plot;
+    }
+    return null;
   }
 
   // Is the town walled (from its founding as a city, or built since)?
