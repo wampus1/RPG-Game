@@ -327,7 +327,9 @@ test('the island masters fight: every one uses its powers, and those that keep t
       made = Math.max(made, (game.works || []).filter((w) => w.id === kind).length);
     }
     assert.ok(made > 0, `${sp} changed its hall`);
-    assert.ok((c.casts || 0) >= 5, `${sp} used its powers (${c.casts})`);
+    // (Its blows give fair warning now (round 38), so a little more of the
+    // fight goes on those and a little less on its powers.)
+    assert.ok((c.casts || 0) >= 3, `${sp} used its powers (${c.casts})`);
     c.dead = true;
     run(game, input, 0.2);
     assert.equal((game.works || []).length, 0, `${sp}'s works put back`);
