@@ -3,6 +3,7 @@ import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } f
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable, offhandLight } from '../world/items.js';
+import { starable, starGear } from '../world/quality.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
@@ -348,6 +349,7 @@ export class CraftWindow extends Window {
   craft(r, game, times) {
     const inv = game.player.inv;
     let made = 0;
+    const madeKeys = [];
     const saved = [];
     for (let t = 0; t < times; t++) {
       if (!this.canCraft(inv, r)) break;
@@ -356,8 +358,12 @@ export class CraftWindow extends Window {
       // A cook gets more out of the pot; a tinker wastes less.
       const food = ITEMS[r.out]?.kind === 'food';
       const extra = food && heroHas(game.hero, 'cook') && Math.random() < 0.35 ? 1 : 0;
-      const left = addItem(inv, r.out, r.n + extra);
-      if (left) game.spawnDrop(r.out, left, game.player.x, game.player.y, game.player.z, true);
+      // Arms, armour and tools come off the bench with stars of their own
+      // (a tinker's hand a little finer): see world/quality.js.
+      const out = starable(r.out) ? starGear(r.out, { origin: 'c', tinker: heroHas(game.hero, 'tinker') }) : r.out;
+      if (out !== r.out) madeKeys.push(out);
+      const left = addItem(inv, out, r.n + extra);
+      if (left) game.spawnDrop(out, left, game.player.x, game.player.y, game.player.z, true);
       if (extra) saved.push(`an extra ${ITEMS[r.out].name}`);
       if (!food && heroHas(game.hero, 'tinker') && Math.random() < 0.25) {
         const back = used.length ? used[Math.floor(Math.random() * used.length)][0] : null;
@@ -369,6 +375,8 @@ export class CraftWindow extends Window {
       game.audio?.play('craft');
       game.stats.crafted += made;
       this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * made}`, C.green);
+      // (Each piece's stars, and anything special about it.)
+      for (const k of madeKeys) this.ui.msg(`${'★'.repeat(ITEMS[k].stars)} ${ITEMS[k].name}${ITEMS[k].mods.length ? `: ${ITEMS[k].mods.length > 1 ? 'modifiers' : 'a modifier'}!` : ''}`, ITEMS[k].mods.length ? '#f0c070' : '#ffd060');
       if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
     } else game.audio?.play('error');
   }

@@ -72,7 +72,7 @@ const SPECIES_ALT = { wolf: ['snap', 0.4], skeleton: ['bash', 0.3], ghoul: ['pou
 // Which way a weapon fights.
 export function weaponStyle(key) {
   if (!key) return 'fist';
-  const k = String(key).split('+')[0];
+  const k = String(key).split(/[+~]/)[0];
   if (ITEMS[k] && ITEMS[k].style) return ITEMS[k].style;
   if (/spear|pitchfork|halberd|javelin/.test(k)) return 'spear';
   if (/axe/.test(k)) return 'axe';

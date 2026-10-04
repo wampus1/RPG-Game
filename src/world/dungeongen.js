@@ -16,6 +16,7 @@ import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js';
 import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES } from './isledeep.js';
+import { starGear } from './quality.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -637,11 +638,13 @@ class Builder {
   }
 }
 
-// A chest's (or coffin's, or cache's) contents.
-function fill(rng, size, picks) {
+// A chest's (or coffin's, or cache's) contents. (`star`: what's done to
+// arms and armour found there; see found.)
+function fill(rng, size, picks, star = null) {
   const slots = new Array(size).fill(null);
-  for (const [k, n] of picks) {
+  for (let [k, n] of picks) {
     if (!ITEMS[k] || n <= 0) continue;
+    if (star) k = star(k);
     let s = rng.int(0, size - 1);
     for (let i = 0; i < size && slots[s]; i++) s = (s + 1) % size;
     if (!slots[s]) slots[s] = { item: k, count: Math.min(n, ITEMS[k].stack || 64) };
@@ -666,17 +669,32 @@ const KAV_GEAR = ['kav_visor', 'kav_carapace', 'kav_greaves', 'kav_treads', 'kav
 // lootFor): what a master leaves behind it, or a mimic had in its belly.
 // Sometimes of the place's own island (`T`: an obsidian blade, ash-proof
 // goggles...); deep down, now and then with a stone already set in it; in
-// the Kavorent's halls, their own make.
-export function gearFor(type, tier, rng, T = null) {
+// the Kavorent's halls, their own make. Starred, as things found below are
+// (see found; `boss`: off a master, a star better).
+export function gearFor(type, tier, rng, T = null, boss = false) {
   const t = Math.max(0, tier);
-  if (type === 'kavorent') return rng.pick(KAV_GEAR.filter((k) => ITEMS[k]));
+  const star = (k) => found(k, t, rng, boss);
+  if (type === 'kavorent') return star(rng.pick(KAV_GEAR.filter((k) => ITEMS[k])));
   const isle = ((T && T.loot) || []).map(([k]) => k).filter((k) => ITEMS[k] && (ITEMS[k].kind === 'weapon' || ITEMS[k].kind === 'armor'));
-  const k = isle.length && rng.chance(0.3) ? rng.pick(isle) : rng.pick(gearOfTier(t));
+  const k = star(isle.length && rng.chance(0.3) ? rng.pick(isle) : rng.pick(gearOfTier(t)));
   if (t >= 2.5 && rng.chance(0.12 + (t - 2.5) * 0.06) && canSocket(k)) {
     const gem = rng.pick(Object.keys(GEMS));
     if (ITEMS[socketed(k, gem)]) return socketed(k, gem);
   }
   return k;
+}
+
+// A piece of arms, armour or a tool as it's found below: with its stars
+// (more the deeper, `tier`; more again off a master) and the mark of the
+// deep on it (see quality.js). Anything else comes back as it was.
+export function found(k, tier, rng, boss = false) {
+  return starGear(k, { origin: 'd', tier, boss }, rng);
+}
+// What a floor's chests do to the arms and armour in them. (Their own
+// stream, so the rest of the floor comes out as it always did.)
+function foundIn(ctx, boss = false) {
+  if (!ctx.starRng) ctx.starRng = ctx.rng.fork('stars');
+  return (k) => found(k, tierOf(ctx), ctx.starRng, boss);
 }
 
 // How good an old place's things run on floor `n` (see tierOf).
@@ -1147,7 +1165,7 @@ function chestIn(ctx, r, rich = 1, block = B.chest, extra = []) {
   const { rng, b, rec } = ctx;
   const at = placeIn(ctx, r, block, rng.int(0, 3), true);
   if (!at) return null;
-  b.container(at.x, FY, at.z, fill(rng, block === B.chest ? 18 : 9, [...lootFor(rec.type, tierOf(ctx), rng, rich, ctx.T), ...extra]));
+  b.container(at.x, FY, at.z, fill(rng, block === B.chest ? 18 : 9, [...lootFor(rec.type, tierOf(ctx), rng, rich, ctx.T), ...extra], foundIn(ctx, r.kit === 'boss')));
   // (Deeper down, now and then, a chest that isn't: see DungeonRun.wakeMimic.)
   if (block === B.chest && !ctx.big && ctx.n >= 1 && r.kit !== 'boss' && rng.chance(MIMIC_CHANCE)) ctx.out.mimics.push({ x: b.x0 + at.x, z: at.z });
   return at;
@@ -1336,7 +1354,7 @@ function dress(ctx, r) {
           b.set(x, FY, z, sarc ? B.sarcophagus : B.coffin, rng.chance(0.5) ? 1 : 3);
           const ghoul = rng.chance(0.3);
           out.coffins.push({ x: b.x0 + x, z, ghoul });
-          if (!ghoul) b.container(x, FY, z, fill(rng, 9, lootFor(rec.type, tierOf(ctx), rng, sarc ? 1.4 : 0.5, ctx.T).slice(0, 2)));
+          if (!ghoul) b.container(x, FY, z, fill(rng, 9, lootFor(rec.type, tierOf(ctx), rng, sarc ? 1.4 : 0.5, ctx.T).slice(0, 2), foundIn(ctx)));
         }
       }
       break;
@@ -1561,7 +1579,7 @@ function dress(ctx, r) {
       b.set(r.cx, FY, r.cz, B.kav_field);
       b.set(r.cx, FY + 1, r.cz, B.kav_field);
       b.set(r.cx, FY, r.cz + 1, B.kav_cache, 0);
-      b.container(r.cx, FY, r.cz + 1, fill(rng, 9, [...lootFor('kavorent', tierOf(ctx), rng, 2), ...(n >= 2 && rng.chance(0.35) ? [['kav_core', 1]] : [])]));
+      b.container(r.cx, FY, r.cz + 1, fill(rng, 9, [...lootFor('kavorent', tierOf(ctx), rng, 2), ...(n >= 2 && rng.chance(0.35) ? [['kav_core', 1]] : [])], foundIn(ctx)));
       out.nodes.push({ set, field: [{ x: b.x0 + r.cx, z: r.cz }] });
       group('warden', 1, 2);
       group('drone', 1, 2);

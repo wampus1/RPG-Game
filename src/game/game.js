@@ -65,6 +65,8 @@ import { updateOrbs, swatOrbs } from './orbs.js';
 import { Seat, asSeat, seatField, partyPlayers, freshStore } from './party.js';
 import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
+import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, wideDig } from './mods.js';
+import { plainKey } from '../world/quality.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -2796,7 +2798,7 @@ export class Game {
       this.castLine(c);
       return;
     }
-    if (held && held.key === 'hoe' && c && c.block && c.inReach && [B.grass, B.dirt, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.path].includes(c.block.id) && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
+    if (held && (held.plain || held.key) === 'hoe' && c && c.block && c.inReach && [B.grass, B.dirt, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.path].includes(c.block.id) && this.world.getBlock(c.x, c.y + 1, c.z) === B.air) {
       this.world.setBlock(c.x, c.y, c.z, B.farmland);
       if (this.weather && this.weather.kind === 'rain') this.crops.wetten(c.x, c.y, c.z);
       this.audio?.play('dig');
@@ -3021,7 +3023,7 @@ export class Game {
         const meta = w.getMeta(x, y, z);
         w.setBlock(x, y, z, B.air);
         // Crops give seeds back if unripe, and more with a hoe.
-        const crop = this.crops.harvest(id, meta, byPlayer && this.player.heldItem() === 'hoe', rand);
+        const crop = this.crops.harvest(id, meta, byPlayer && plainKey(this.player.heldItem()) === 'hoe', rand);
         const got = crop || rollDrops(id, rand);
         // Green thumbs get an extra crop; foragers an extra handful.
         if (byPlayer && crop && crop.length && crop[0].item !== CROPS[id]?.seed && heroHas(this.hero, 'farmer')) crop[0].count++;
@@ -3029,6 +3031,8 @@ export class Game {
         drops.push(...got);
       }
     }
+    // (What your tool's modifiers make of it: smelted, sawn, doubled...)
+    if (byPlayer) toolDrops(this, this.player, id, drops);
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
     this.freeTied(x, y, z);
     this.renderer.emit(x, y, z, { n: 10, color: this.blockColor(id), up: 45, speed: 60, life: 0.6, oy: -6 });
@@ -3043,6 +3047,8 @@ export class Game {
       this.checkVandalism(x, y, z, b);
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
+      // (A wide pick or shovel: the block over it too.)
+      wideDig(this, this.player, x, y, z);
     }
   }
 
@@ -4640,6 +4646,7 @@ export class Game {
             this.renderer.effect?.({ type: 'ring', wx: Math.round(ex), wy: a.ty - 0.6, wz: Math.round(ez), r0: 1, r1: 10, color: ['#5ad8f0', '#e0fcff'], life: 0.3, oy: -6, flat: 0.6 });
           }
           onArrowLand(this, a, hit);
+          onArrowMods(this, a, hit);
         }
         continue;
       }
@@ -4669,6 +4676,7 @@ export class Game {
       }
       javelin(a);
       onArrowLand(this, a, hit);
+      onArrowMods(this, a, hit);
     }
     this.projectiles = this.projectiles.filter((a) => !a.done);
     updateGemFx(this, dt);
@@ -5295,8 +5303,10 @@ export class Game {
       p.rollStrike = 0;
       this.renderer.floatText(target.x, target.y + 2.4, target.z, 'out of the roll!', '#fff8a0');
     }
-    const crit = riposte || fromRoll || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1);
+    const crit = riposte || fromRoll || Math.random() < (heroHas(this.hero, 'duelist') ? 0.18 : 0.1) + critBonus(p);
     if (crit) dmg *= riposte ? 2.2 : 1.8;
+    // (A merciless blade: half as hard again on a foe worn low.)
+    dmg *= bladeMult(p, target);
     if (riposte) {
       p.riposte = 0;
       this.renderer.floatText(target.x, target.y + 2.4, target.z, 'riposte!', '#ffe070');
@@ -5319,6 +5329,7 @@ export class Game {
     lanceThrust(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
     onBladeHit(this, p, target, { dmg, heavy, crit });
+    onBladeMods(this, p, target);
     this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
     // Knockback (two paces for a heavy blow); with a second blade coming,
     // after that one.

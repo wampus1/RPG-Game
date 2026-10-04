@@ -1,7 +1,22 @@
 // Item registry. Placeable blocks get an item with the same key as the block.
 import { BLOCKS, B } from './blocks.js';
+import { deriveStarred } from './quality.js';
 
 export const ITEMS = {};
+// A starred piece of gear ("iron_sword~3dk7.venom": see quality.js) is
+// made up from its plain one the first time it's asked for, and kept.
+// (Looked for only where a key isn't one of the items proper, so the
+// rest cost nothing more.)
+const STARRED = new Map();
+const isStarred = (k) => typeof k === 'string' && k.includes('~');
+function starred(k) {
+  if (!STARRED.has(k)) STARRED.set(k, deriveStarred(k));
+  return STARRED.get(k) || undefined;
+}
+Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
+  get: (t, k, r) => (isStarred(k) ? starred(k) : Reflect.get(t, k, r)),
+  has: (t, k) => (isStarred(k) ? !!starred(k) : Reflect.has(t, k)),
+}));
 
 function item(key, props) {
   const d = {
@@ -247,9 +262,12 @@ wear('guard_boots', 'Guard Boots', 'feet', 0.04, 12, 'iron', { uniform: true, no
 // Every weapon and piece of armour can carry one set gem: those are items of
 // their own ("iron_sword+ruby"), made here once everything else exists.
 export function socketed(base, gem) {
-  return `${base}+${gem}`;
+  // (A starred piece keeps its stars: the stone goes in before them.)
+  const i = base.indexOf('~');
+  return i < 0 ? `${base}+${gem}` : `${base.slice(0, i)}+${gem}${base.slice(i)}`;
 }
 export function canSocket(key) {
+  if (key && key.includes('~')) return canSocket(key.slice(0, key.indexOf('~')));
   const it = ITEMS[key];
   return !!it && !it.socket && !it.uniform && !it.thrown && (it.kind === 'weapon' || it.kind === 'armor' || (it.kind === 'tool' && it.damage >= 3 && /_(sword|axe)$/.test(key)));
 }
@@ -458,9 +476,12 @@ export function rollDrops(blockId, rand) {
 // own key, like a set stone: "iron_sword+edge"), made here for everything
 // that can take one. (Before the stones, so a fitted piece can take one too.)
 export function enhanced(key, kind) {
-  return `${key}+${kind}`;
+  // (A starred piece keeps its stars: the fitting goes in before them.)
+  const i = key.indexOf('~');
+  return i < 0 ? `${key}+${kind}` : `${key.slice(0, i)}+${kind}${key.slice(i)}`;
 }
 export function canEnhance(key, kind) {
+  if (key && key.includes('~')) return canEnhance(key.slice(0, key.indexOf('~')), kind);
   const it = ITEMS[key];
   if (!it || it.socket || it.enhanced || it.uniform || it.thrown) return false;
   if (kind === 'edge') return it.kind === 'weapon' && !it.ranged;

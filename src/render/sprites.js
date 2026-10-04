@@ -1613,6 +1613,12 @@ function glowOf(icon, color, tag, thin = false) {
 // (`thin` false), a slighter one out in the world.
 export function drawJewelled(ctx, icon, key, x, y, t = 0, thin = false) {
   const it = ITEMS[key];
+  if (it && it.stars && !thin) {
+    // (As the plain piece is drawn, its stone's glow and all; then its marks.)
+    drawJewelled(ctx, icon, it.plain, x, y, t, thin);
+    gearMarks(ctx, it, x, y, t);
+    return;
+  }
   if (it && it.socket && GEMS[it.socket]) {
     const color = GEMS[it.socket].color;
     const g = glowOf(icon, color, key, thin);
@@ -1623,6 +1629,31 @@ export function drawJewelled(ctx, icon, key, x, y, t = 0, thin = false) {
     ctx.globalAlpha = a;
   }
   ctx.drawImage(icon, x, y);
+}
+
+// A starred piece in a slot: a gold pip for each star along its foot, and
+// (found below) a small violet rune in its corner, glowing now and then.
+function gearMarks(ctx, it, x, y, t) {
+  const a = ctx.globalAlpha;
+  for (let i = 0; i < it.stars; i++) {
+    ctx.fillStyle = '#2a1e08';
+    ctx.fillRect(x + i * 3 - 1, y + 13, 3, 3);
+    ctx.fillStyle = i === it.stars - 1 && it.stars === 5 ? '#fff4b0' : '#ffd040';
+    ctx.fillRect(x + i * 3, y + 14, 2, 1);
+    ctx.fillRect(x + i * 3, y + 13, 1, 1);
+  }
+  if (it.origin === 'd') {
+    const glow = 0.6 + 0.4 * Math.max(0, Math.sin(t * 2.2 + (it.roll || 0)));
+    ctx.fillStyle = '#1a0e28';
+    ctx.fillRect(x - 1, y - 1, 5, 5);
+    ctx.globalAlpha = a * glow;
+    ctx.fillStyle = '#c890ff';
+    ctx.fillRect(x + 1, y - 1, 1, 5);
+    ctx.fillRect(x - 1, y + 1, 5, 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 1, y + 1, 1, 1);
+    ctx.globalAlpha = a;
+  }
 }
 
 // Food with bites taken out of it (1-3): bites nibbled from the edges in.
@@ -1654,6 +1685,13 @@ export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
   const it = ITEMS[key];
+  // A starred piece looks like the piece it's made from (its stars and
+  // where it was found show in the slot: see drawJewelled).
+  if (it && it.stars) {
+    c = itemIcon(it.plain);
+    iconCache.set(key, c);
+    return c;
+  }
   // A piece with a stone set in it looks like the plain piece: the stone
   // shows as a glow round it (see drawJewelled).
   if (it && it.socket) {

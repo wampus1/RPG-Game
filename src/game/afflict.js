@@ -222,7 +222,7 @@ export function spill(game, by, all = false) {
 }
 
 // ------------------------------------------------------------ disarmed
-const BASE = (k) => String(k || '').split('+')[0];
+const BASE = (k) => String(k || '').split(/[+~]/)[0];
 const IRON = /^(iron|gold|steel|kav)_|^(dagger|harpoon|mace|short_sword|sabre|hand_axe|flail|greatsword|battle_axe|warhammer|halberd|spear)$/;
 export const ironHeld = (k) => !!k && IRON.test(BASE(k));
 export const ironWorn = (p) => Object.values(p.equip || {}).some((k) => k && /iron|chain|plate|steel|mail|kav|gold/.test(BASE(k)));

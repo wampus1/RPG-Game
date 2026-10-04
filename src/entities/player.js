@@ -8,6 +8,7 @@ import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
+import { stepModMult, gearHp } from '../game/mods.js';
 
 const BASE_HP = 20;
 
@@ -115,6 +116,8 @@ export class Player extends Entity {
     const old = this.equip[slot];
     this.equip[slot] = s.item;
     this.inv[i] = old ? { item: old, count: 1 } : s.count > 1 ? { item: s.item, count: s.count - 1 } : null;
+    // (Hale armour: health with it.)
+    this.recalcMaxHp();
     return slot;
   }
 
@@ -124,11 +127,12 @@ export class Player extends Entity {
     if (!k) return false;
     if (addItem(this.inv, k, 1)) return false;
     this.equip[slot] = null;
+    this.recalcMaxHp();
     return true;
   }
 
   recalcMaxHp() {
-    this.maxHp = Math.max(8, BASE_HP + (this.hpBonus || 0));
+    this.maxHp = Math.max(8, BASE_HP + (this.hpBonus || 0) + gearHp(this));
     this.hp = Math.min(this.hp, this.maxHp);
   }
 
@@ -238,6 +242,12 @@ export class Player extends Entity {
 
   update(dt, input, blocked) {
     this.updateBase(dt);
+    // (Hale armour put on or taken off, however it was: health with it.)
+    const hale = gearHp(this);
+    if (hale !== (this._haleHp || 0)) {
+      this._haleHp = hale;
+      this.recalcMaxHp();
+    }
     if (this.attackCd > 0) this.attackCd -= dt;
     if (this.bumpT > 0) this.bumpT -= dt;
     if (this.hintT > 0) this.hintT -= dt;
@@ -386,7 +396,7 @@ export class Player extends Entity {
     // (Just up out of a roll: a little slower for a moment. An arrow on
     // the string: careful steps.)
     const recover = (this.rollRecover > 0 ? 1.45 : 1) * (this.bowDraw ? 1.6 : 1);
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * stepModMult(this) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

@@ -3,6 +3,7 @@
 // or a guard who bought a jewelled sword).
 import { ITEMS, GEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
+import { swingModMult, arrowModSpeed, onBlockMods, parryModBonus, blockModMult, rollModMult, breathModMult, onStruckMods, chillModMult, burnModSlow } from './mods.js';
 
 export const GEM_EFFECTS = {
   ruby: {
@@ -202,7 +203,7 @@ export function burn(game, e, src, secs = 3) {
 
 export function chill(e, secs = 2) {
   if (!e || e.dead) return;
-  e.slowT = Math.max(e.slowT || 0, secs);
+  e.slowT = Math.max(e.slowT || 0, secs * chillModMult(e));
 }
 
 export function stun(e, secs = 1) {
@@ -252,7 +253,7 @@ export function knockBack(game, attacker, t, tiles = 1) {
 
 // How much quicker a sapphire blade swings.
 export function swingMult(e) {
-  return gemsOf(e).blade === 'sapphire' ? 0.8 : 1;
+  return (gemsOf(e).blade === 'sapphire' ? 0.8 : 1) * swingModMult(e);
 }
 
 // A swing, whether or not it lands: a ruby blade throws an arc of flame
@@ -435,7 +436,7 @@ export function onBladeHit(game, attacker, target, o = {}) {
 
 // How fast an arrow flies (sapphire: quicker).
 export function arrowSpeed(shooter) {
-  return gemsOf(shooter).bow === 'sapphire' ? 0.6 : 1;
+  return (gemsOf(shooter).bow === 'sapphire' ? 0.6 : 1) * arrowModSpeed(shooter);
 }
 
 // An arrow has come down (on its target, if it hit).
@@ -505,6 +506,8 @@ export function splitShot(game, from, aim, o, shoot) {
 // A blow turned on a shield (`parry`: at the last instant; `turned`: how
 // much of it the shield took): its stone at work.
 export function onBlock(game, v, a, parry = false, turned = 1) {
+  // (And the shield's modifiers: see mods.js.)
+  onBlockMods(game, v, a, parry, turned);
   const g = shieldGem(v);
   if (!g || !a || a.dead) return;
   const r = game.renderer;
@@ -645,22 +648,22 @@ export function mirrorShot(game, v, a, parry = false) {
 }
 
 // What a parry window gains from a stone (none now: each shield stone has
-// its own way; see SHIELD_EFFECTS).
-export function parryBonus() {
-  return 0;
+// its own way; see SHIELD_EFFECTS); a duellist's shield, a little.
+export function parryBonus(e = null) {
+  return parryModBonus(e);
 }
 
-// How much breath turning a blow costs.
-export function blockCostMult() {
-  return 1;
+// How much breath turning a blow costs (a light shield: less).
+export function blockCostMult(e = null) {
+  return blockModMult(e);
 }
 
 // A roll's cost, and how fast breath comes back, by the armour's stones.
 export function rollCostMult(e) {
-  return gemsOf(e).armor.includes('sapphire') ? 0.7 : 1;
+  return (gemsOf(e).armor.includes('sapphire') ? 0.7 : 1) * rollModMult(e);
 }
 export function breathMult(e) {
-  return gemsOf(e).armor.includes('emerald') ? 1.25 : 1;
+  return (gemsOf(e).armor.includes('emerald') ? 1.25 : 1) * breathModMult(e);
 }
 
 // A roll, done (from where to where, past whom): the armour's stones.
@@ -761,6 +764,7 @@ export function onKill(game, e, source) {
 // Someone wearing jewelled armour has been struck (in close).
 export function onStruck(game, wearer, attacker, amount) {
   if (!attacker || attacker.dead || attacker === wearer) return;
+  onStruckMods(game, wearer, attacker);
   const close = Math.max(Math.abs(attacker.x - wearer.x), Math.abs(attacker.z - wearer.z)) <= 2;
   if (!close) return;
   for (const g of gemsOf(wearer).armor) {
@@ -794,7 +798,8 @@ export function tickStatus(game, e, dt) {
     e.burnTick = (e.burnTick || 0) - dt;
     if (e.burnTick <= 0) {
       // (Hardened by Kharos's fire-walk: half the harm, so half as often.)
-      e.burnTick = e.fireWalk === game.day ? 2 : 1;
+      // (And fireproof armour, half as often again.)
+      e.burnTick = (e.fireWalk === game.day ? 2 : 1) * burnModSlow(e);
       // (Water puts it out.)
       if (e.inWater) e.burnT = 0;
       else game.damage(e, 1, e.burnSrc || null);

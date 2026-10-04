@@ -17,7 +17,7 @@ import { ITEMS } from '../world/items.js';
 export function marketKey(k) {
   if (/^log_/.test(k)) return 'logs';
   if (/^planks/.test(k)) return 'planks';
-  return String(k).split('+')[0];
+  return String(k).split(/[+~]/)[0];
 }
 
 // Steady deliveries of these, and what the town builds for them.

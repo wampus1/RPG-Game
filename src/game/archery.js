@@ -20,6 +20,7 @@ import { buffOf, shieldOf, facing, strikeAnim, STYLES, MAX_STAMINA } from './com
 import { aegisUp } from './kavtech.js';
 import { covers, padded, padOf } from '../entities/footprint.js';
 import { shielded } from '../entities/monsters.js';
+import { drawModMult, thriftyShot, twinShot, modsOf, catchArrow } from './mods.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -56,7 +57,7 @@ export function beginDraw(game) {
     return false;
   }
   const spec = drawSpec(key);
-  const quick = (heroHas(game.hero, 'marksman') ? 0.85 : 1) / (1 + buffOf(game, 'haste'));
+  const quick = ((heroHas(game.hero, 'marksman') ? 0.85 : 1) * drawModMult(p)) / (1 + buffOf(game, 'haste'));
   p.bowDraw = { t: 0, key, ammo, full: spec.full * quick, cost: spec.cost, hold: spec.hold, power: 0 };
   p.blocking = false;
   p.sitting = null;
@@ -120,7 +121,8 @@ export function releaseDraw(game, scale = 1) {
   if (!def || d.power < MIN_DRAW) return false;
   if (d.ammo !== 'none') {
     if (countItem(p.inv, d.ammo) <= 0) return false;
-    removeItem(p.inv, d.ammo, 1);
+    // (A thrifty bow: now and then, it costs you nothing.)
+    if (!thriftyShot(p)) removeItem(p.inv, d.ammo, 1);
   }
   const power = Math.min(1, d.power * scale);
   const mark = heroHas(game.hero, 'marksman');
@@ -200,13 +202,16 @@ export function shootAimed(game, from, aim, o) {
     x0: from.x, y0: y, z0: from.z, tx: from.x + ux * end, ty: y - 0.6, tz: from.z + uz * end,
     t: 0, dur: ((0.08 + end * 0.045) * arrowSpeed(from) * pace) / (0.7 + 0.3 * (o.power ?? 1)),
     dmg: o.dmg, gem: gemsOf(from).bow, kind: o.kind, head: !!aim.head, aimAt: aim.at || null,
+    mods: o.kind === 'javelin' ? null : modsOf(from).bow,
   };
   game.projectiles.push(a);
   // (A pulse leaves the caster in a flash of cold light.)
   if (o.kind === 'pulse') game.renderer.emit(from.x + ux * 0.6, y - 0.1, from.z + uz * 0.6, { n: 8, color: ['#ffffff', '#a8f4ff', '#5ad8f0'], up: 10, speed: 30, life: 0.25, glow: true, gravity: 0 });
   game.audio?.play(o.kind === 'pulse' ? 'beam' : o.kind === 'stone' || o.kind === 'javelin' ? 'swing' : 'bow', from);
-  // (An onyx bow: two shades of it either side.)
+  // (An onyx bow: two shades of it either side; a twin-strung one, two
+  // more arrows.)
   splitShot(game, from, aim, o, shootAimed);
+  twinShot(game, from, aim, o, shootAimed);
   return a;
 }
 
@@ -305,6 +310,7 @@ export function arrowStrikes(game, a, t) {
     // (A moonstone shield sends it straight back; a crossbow bolt goes
     // through any other, mostly.)
     if (mirrorShot(game, t, a, t.kind === 'player' && t.blockT !== undefined && t.blockT < 0.3)) hit = false;
+    else if (t.kind === 'player' && catchArrow(game, t, a)) hit = false;
     else if (a.kind === 'bolt' && !aegis && Math.random() < 0.6) a.dmg = Math.max(1, Math.round(a.dmg * 0.4));
     else hit = false;
     r.floatText(t.x, t.y + 2, t.z, 'blocked', '#a0c8ff');

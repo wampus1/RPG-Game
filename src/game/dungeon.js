@@ -1327,7 +1327,7 @@ export class DungeonRun {
       }
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.
-      this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1);
+      this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
       this.eachHere(() => game.ui.msg(`${e.S.name} falls. ${cap(this.rec.name)} is beaten!`, '#ffe070'));
       // The rest of the place's things lose heart (the dead fall still);
       // its images and its brood go with it.
@@ -1433,14 +1433,19 @@ export class DungeonRun {
     game.renderer.emit(p.x, p.y + 1, p.z, { n: 16, color: ['#ffe070', '#ffffff'], up: 30, speed: 20, life: 0.8, glow: true, gravity: -20 });
   }
 
-  // `n` pieces of arms or armour where `e` fell (see dungeongen.gearFor),
-  // and everyone down here told what.
-  dropGear(e, n, tier) {
+  // `n` pieces of arms or armour where `e` fell (see dungeongen.gearFor;
+  // `boss`: a master's, a star better), and everyone down here told what.
+  dropGear(e, n, tier, boss = false) {
     const game = this.game;
-    const rng = { chance: (p) => Math.random() < p, pick: (a) => a[Math.floor(Math.random() * a.length)] };
+    const rng = {
+      chance: (p) => Math.random() < p,
+      int: (a, b) => a + Math.floor(Math.random() * (b - a + 1)),
+      float: (a, b) => a + Math.random() * (b - a),
+      pick: (a) => a[Math.floor(Math.random() * a.length)],
+    };
     const got = [];
     for (let i = 0; i < n; i++) {
-      const k = gearFor(this.rec.type, tier, rng, this.T);
+      const k = gearFor(this.rec.type, tier, rng, this.T, boss);
       if (!k || !ITEMS[k]) continue;
       game.spawnDrop(k, 1, e.x, e.y, e.z, true);
       got.push(ITEMS[k].name);

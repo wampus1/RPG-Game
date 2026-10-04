@@ -4,6 +4,7 @@ import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from 
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS } from '../world/items.js';
 import { gemText } from '../game/gems.js';
+import { MODS, STAR_MAX } from '../world/quality.js';
 import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
@@ -545,6 +546,8 @@ export class UI {
     const d = ITEMS[slot.item];
     if (!d) return;
     const lines = [{ text: d.name + (slot.count > 1 ? ` x${slot.count}` : ''), color: C.hi }];
+    // Its stars (and where it came from).
+    if (d.stars) lines.push({ text: `${'★'.repeat(d.stars)}${'☆'.repeat(STAR_MAX - d.stars)}${d.origin === 'd' ? '  Ω from the deep' : '  made by hand'}`, color: d.origin === 'd' ? '#c8a8ff' : '#ffd060' });
     if (d.kind === 'tool') lines.push({ text: `${cap(d.tool === 'pick' ? 'pickaxe' : d.tool || 'tool')} · speed ${d.speed}`, color: C.cyan });
     if (d.damage) lines.push({ text: d.ranged ? `Damage ${d.damage} · range ${d.range}` : `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
     if (d.kind === 'weapon') {
@@ -556,6 +559,11 @@ export class UI {
     const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
     if (d.stats) lines.push({ text: `${d.kind === 'armor' ? 'While worn' : 'While held'}: ${Object.entries(d.stats).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${STAT[k] || k}`).join(' ')}`, color: C.green });
     if (d.socket) for (const t of wrap(gemText(slot.item), 44)) lines.push({ text: t, color: '#c0a0ff' });
+    // Its modifiers, each with what it does.
+    for (const m of d.mods || []) {
+      const md = MODS[d.gear] && MODS[d.gear][m];
+      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `◆ ${t}`, color: '#f0c070' });
+    }
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {
       const e = d.effect || {};
