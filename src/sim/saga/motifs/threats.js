@@ -33,6 +33,12 @@ const MET = {
     shepherd: ['They\'ve had three of my flock already. {threat}, camped {where}.'],
     merchant: ['They stopped me on the road {where} and took {lost}. {threat}. I want it back, and I want them gone.'],
     mayor: ['{threat} raided us in the night and got clean away. They\'re camped {where}. The council wants them gone.'],
+    // (Round 54: not always the one who works out there.)
+    kin: ['My little {kid} came home white as a sheet: they\'d been playing {where} and seen men with knives round a fire. {threat}. What if they\'d been seen?', '{kid} was out {where} after the goats, and ran right into them. {threat}. They let a child go, this time.'],
+    guard: ['Two of us went out on patrol {where}. One came back. {threat}. I can\'t ask the council for more men, there aren\'t any.', 'We tracked them {where}: {threat}, dug in. Too many for the watch alone.'],
+    priest: ['Pilgrims on their way to us were set on {where}. {threat}. They took the offerings, and they took a woman\'s shoes. Her SHOES.', 'The old shrine {where} has been made a den of thieves. {threat}. I\'d have it back.'],
+    innkeeper: ['Nobody comes to the inn now: travellers won\'t take the road {where}. {threat}. I\'ll be ruined by spring.', 'A carter staggered in last night, robbed and beaten {where}. {threat}. That\'s three this month.'],
+    elder: ['I\'ve seen this before, when I was young: {threat}, camped {where}, and then one night they came for the town. Don\'t wait for that night.', 'Mark me: {threat} out {where} will be at our doors by the harvest. They always are.'],
   },
   beasts: {
     lumberjack: ['{threat}. A whole pack of them, denned up {where}. They had my dog last night.', 'I heard them before I saw them: {threat}, out {where}. I\'m not going back in those trees.'],
@@ -44,8 +50,38 @@ const MET = {
     laborer: ['{threat} chased us off the quarry {where}.'],
     shepherd: ['{threat} took half my flock. They\'re denned up {where}.'],
     mayor: ['{threat} have been coming in at night. They\'re denned up {where}.'],
+    kin: ['My {kid} was nearly taken by {threat}, playing {where}. They got up a tree, thank the gods.', 'There are {threat} {where}. {kid} saw their eyes in the dark, and won\'t sleep without a candle now.'],
+    guard: ['{threat}, denned up {where}. They had one of the watch\'s dogs. Next it\'ll be one of the watch.'],
+    priest: ['The graves {where} have been dug at by {threat}. I can\'t have that. Nobody can have that.'],
+    innkeeper: ['{threat} out {where} have the travellers scared off the road. I\'ve had two bookings in a week.'],
+    elder: ['When I was a girl, {threat} came out of {where} the winter of the long frost. I\'ve not forgotten. Neither should you.'],
   },
 };
+// (Who might come asking: weighted, as a town is.)
+const VOICES = [
+  { v: 'worker', w: 1.4 }, { v: 'kin', w: 0.5 }, { v: 'guard', w: 0.45 }, { v: 'priest', w: 0.3 }, { v: 'innkeeper', w: 0.35 }, { v: 'elder', w: 0.35 },
+];
+function voiceOf(L, rng) {
+  const ppl = living(L).filter((r) => r.age !== 'child');
+  const kids = living(L).filter((r) => r.age === 'child');
+  const options = [];
+  for (const { v, w } of VOICES) {
+    let pool = [];
+    if (v === 'worker') pool = ppl.filter((r) => OUT_JOBS.includes(r.job));
+    else if (v === 'kin') pool = ppl.filter((r) => (r.children || []).some((i) => kids.some((k) => k.idx === i)));
+    else if (v === 'guard') pool = ppl.filter((r) => r.job === 'guard');
+    else if (v === 'priest') pool = ppl.filter((r) => r.job === 'priest');
+    else if (v === 'innkeeper') pool = ppl.filter((r) => ['innkeeper', 'barkeep'].includes(r.job));
+    else if (v === 'elder') pool = ppl.filter((r) => r.age === 'elder');
+    if (pool.length) options.push({ v, w, pool });
+  }
+  if (!options.length) return null;
+  let r = rng.next() * options.reduce((a, o) => a + o.w, 0);
+  const o = options.find((q) => (r -= q.w) <= 0) || options[options.length - 1];
+  const who = rng.pick(o.pool);
+  const kid = o.v === 'kin' ? kids.find((k) => (who.children || []).includes(k.idx)) : null;
+  return { voice: o.v, who, kid: kid ? kid.name.first : null };
+}
 const CRIES = {
   bandits: ['Outlaws! There are outlaws in the woods!', 'Bandits! I barely got away!', 'Help! Outlaws, out past the fields!'],
   beasts: ['Wolves! There\'s a pack of them out there!', 'Run! There\'s something in the trees!', 'Beasts, out past the fields! I saw them!'],
@@ -124,10 +160,11 @@ function plead(th, S) {
   const rng = S.rng(th, 0x91e);
   const g = recOf(S, giver);
   const kind = kindOf(th);
-  const job = th.vars.how === 'robbed' ? 'merchant' : th.vars.how === 'raided' ? 'mayor' : g ? g.job : 'farmer';
+  const v = th.vars.voice;
+  const job = th.vars.how === 'robbed' ? 'merchant' : th.vars.how === 'raided' ? 'mayor' : v && v !== 'worker' && MET[kind][v] ? v : g ? g.job : 'farmer';
   const lines = MET[kind][job] || MET[kind].farmer;
   const b = bandOf(S, th);
-  const pitch = say(rng, lines, { where: directions(L.settlement, at.x, at.z), threat: threatName(S, th), n: b ? b.members.length : 3, lost: th.vars.lost || 'everything' })
+  const pitch = say(rng, lines, { where: directions(L.settlement, at.x, at.z), threat: threatName(S, th), n: b ? b.members.length : 3, lost: th.vars.lost || 'everything', kid: th.vars.kid || 'little one' })
     + ` ${coins ? pick(rng, [` I can pay ¤${coins}: it's all I have, and the council's put in.`, ` There's ¤${coins} for whoever does it.`, ` ¤${coins}, if you'll do it.`]) : ''}`;
   t = S.post(th, {
     role: 'clear', kind: 'clear', title: ttl, sid: th.sid, giver, pitch: pitch.trim(), at, r: 34, target: th.cast.threat,
@@ -156,10 +193,9 @@ motif({
       for (const tr of threats) {
         if (S.live().some((t) => t.m === 'plea' && refKey(t.cast.threat) === refKey(tr))) continue;
         if (!rng.chance(0.3)) continue;
-        const ws = living(L).filter((r) => r.age !== 'child' && OUT_JOBS.includes(r.job));
-        const w = ws.length ? rng.pick(ws) : null;
-        if (!w) continue;
-        out.push({ cast: { giver: R.rec(sid, w.idx), threat: tr, town: R.town(sid) }, sid, vars: { how: 'met', delay: rng.int(60, 180) } });
+        const pickd = voiceOf(L, rng);
+        if (!pickd) continue;
+        out.push({ cast: { giver: R.rec(sid, pickd.who.idx), threat: tr, town: R.town(sid) }, sid, vars: { how: 'met', voice: pickd.voice, kid: pickd.kid, delay: rng.int(60, 180) } });
         break;
       }
     }
@@ -188,7 +224,16 @@ motif({
         if (!at) return S.end(th, 'faded');
         const s = town(S, th.sid);
         const how = th.vars.how;
-        S.note(th, how === 'robbed' ? `${NameOf(S, th.cast.giver)} was robbed on the road by ${threatName(S, th)}.` : how === 'raided' ? `${threatName(S, th)} raided ${s.name}.` : `${NameOf(S, th.cast.giver)} ran into ${threatName(S, th)} ${directions(s, at.x, at.z)}.`);
+        const v = th.vars.voice;
+        const who = NameOf(S, th.cast.giver);
+        const where = directions(s, at.x, at.z);
+        S.note(th, how === 'robbed' ? `${who} was robbed on the road by ${threatName(S, th)}.` : how === 'raided' ? `${threatName(S, th)} raided ${s.name}.`
+          : v === 'kin' ? `${who}'s child ${th.vars.kid || ''} saw ${threatName(S, th)} ${where}, and ran home.`
+            : v === 'guard' ? `A patrol from ${s.name} ran into ${threatName(S, th)} ${where}. ${who} came back to tell it.`
+              : v === 'priest' ? `${threatName(S, th)} have been preying on those bound for the shrine ${where}. ${who} has had enough.`
+                : v === 'innkeeper' ? `Travellers have stopped coming to ${s.name}: ${threatName(S, th)} are ${where}. ${who}, at the inn, is the first to say so.`
+                  : v === 'elder' ? `Old ${who} says ${threatName(S, th)} ${where} are how it started last time.`
+                    : `${who} ran into ${threatName(S, th)} ${where}.`);
       },
       // (Home again, shaken: they tell it.)
       hour(th, S) {

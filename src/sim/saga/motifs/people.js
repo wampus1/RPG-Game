@@ -27,6 +27,7 @@ import { mayorOf, alive, DAY } from '../../econ.js';
 import { ITEMS } from '../../../world/items.js';
 import { countItem, removeItem } from '../../../game/inventory.js';
 import { BEASTS } from './beasts.js';
+import { pickAccused } from './troubles.js';
 
 const tid = (th) => `t${th.id}`;
 
@@ -638,6 +639,11 @@ motif({
         if (th.vars.dead >= 3 && !th.vars.dreadNoted) {
           th.vars.dreadNoted = true;
           S.note(th, `The fever has killed ${th.vars.dead} in ${L.settlement.name}. Families are leaving.`, { news: [th.sid] });
+          // (Round 54: and some want someone to blame.)
+          if (rng.chance(0.35)) {
+            const o = pickAccused(S, L, rng, 'the fever came');
+            if (o) S.split(th, 'witch_hunt', o, 'Frightened people are looking for someone to blame for the fever.');
+          }
         }
         if (th.vars.cured && rng.chance(0.4)) for (const r of sick) r.sick = false;
       },

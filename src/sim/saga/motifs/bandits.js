@@ -23,7 +23,7 @@
 // soldiers to storm it (you can go along). Join a band, and they'll have
 // work for you.
 import { motif, R, refKey, nameOf, NameOf, isAlive, resolve, playerOf, lcFirst, poss } from '../core.js';
-import { pick, fill, layoutOf, town, townMid, directions, living, fullName, odds, spotNear, hours, outInTheOpen, inTown, dist, purse } from './lib.js';
+import { pick, fill, layoutOf, town, townName, townMid, directions, living, fullName, odds, spotNear, hours, outInTheOpen, inTown, dist, purse } from './lib.js';
 import { fromBandit, makePerson } from '../actors.js';
 import { fortify, plan as campPlan, stash, stashOf } from './camp.js';
 import { mayorOf, alive, ledger, DAY } from '../../econ.js';
@@ -128,6 +128,9 @@ const SCHEMES = {
   trap: 'to talk terms',
   duel: 'to settle it, one to one',
   tribute: 'to come to an arrangement',
+  // (Round 54: not every chief wants a meeting.)
+  leave: 'to say they\'re done',
+  gift: 'to make peace, with a purse',
 };
 
 motif({
@@ -348,13 +351,24 @@ motif({
         const rng = S.rng(th, 0x1e7);
         const k = S.person(pid);
         const P = chief.personality || {};
+        // (What a chief does depends on who they are: the honest and the
+        // proud don't lay traps; the sly and the hot-headed might; a band
+        // worn thin may simply want out.)
+        const T = chief.traits || [];
+        const honest = T.includes('honest') || T.includes('proud') || T.includes('kind');
+        const sly = T.includes('shrewd') || T.includes('hot-headed') || T.includes('stingy');
+        const weak = b.members.length <= 3;
         const scheme = S.choose(th, [
-          { to: 'parley', w: 1 + (P.kindness ?? 0.5) * 2 - ((th.vars.heat || 0) > 12 ? 1 : 0) },
+          { to: 'parley', w: 1 + (P.kindness ?? 0.5) * 2 - ((th.vars.heat || 0) > 12 ? 0.6 : 0) + (honest ? 0.5 : 0) },
           { to: 'recruit', w: 0.8 + (k.under >= 10 ? 1.5 : 0) + (k.fame < 4 ? 0.5 : 0) },
-          { to: 'trap', w: 1 + (1 - (P.kindness ?? 0.5)) * 2 + (th.vars.heat || 0) * 0.08 },
-          { to: 'duel', w: (P.bravery ?? 0.5) * 1.6 },
+          { to: 'trap', w: Math.max(0.1, 0.4 + (1 - (P.kindness ?? 0.5)) * 1.4 + Math.min(1.2, (th.vars.heat || 0) * 0.05) + (sly ? 0.6 : 0) - (honest ? 0.7 : 0) - (weak ? 0.3 : 0)) },
+          { to: 'duel', w: (P.bravery ?? 0.5) * 1.6 + (T.includes('proud') ? 0.4 : 0) },
           { to: 'tribute', w: b.loot < 50 ? 1 : 0.3 },
+          { to: 'leave', w: weak ? 1.2 : 0.15 + (1 - (P.bravery ?? 0.5)) * 0.4 },
+          { to: 'gift', w: (P.kindness ?? 0.5) * 0.8 + (b.loot > 60 ? 0.4 : 0) },
         ], rng).to;
+        th.vars.gift = scheme === 'gift' ? Math.max(15, Math.min(60, Math.round((b.loot || 30) * 0.4))) : 0;
+        th.vars.feint = scheme === 'leave' && sly && rng.chance(0.5);
         th.vars.scheme = scheme;
         // Where, and when: neutral ground between them, dusk tomorrow.
         const camp = { x: b.camp.x, z: b.camp.z };
@@ -370,6 +384,8 @@ motif({
           trap: [`To ${k.name}.`, '', 'There\'s been enough killing on both sides.', `Come to the ${place}, ${where}, at dusk tomorrow.`, 'Come alone, and we\'ll settle this like people.', '', `- ${sign}`],
           duel: [`To ${k.name}.`, '', 'You and me. Nobody else.', `The ${place}, ${where}, at dusk tomorrow.`, 'If I fall, my people leave these hills for good.', 'If you fall, you\'re mine.', '', `- ${sign}`],
           tribute: [`To ${k.name}.`, '', 'I think we can come to an arrangement, you and I.', `The ${place}, ${where}, at dusk tomorrow.`, '', `- ${sign}`],
+          leave: [`To ${k.name}.`, '', `You've had ${th.vars.heads || 'enough'} of mine. I've had enough of burying them.`, 'We\'re leaving these hills. Don\'t follow us.', '', `- ${sign}`],
+          gift: [`To ${k.name}.`, '', 'Here is a purse. Call it the price of peace.', 'Keep away from my people, and we\'ll keep away from yours.', 'Take the coin and we have a bargain. Strike us again and it\'s war.', '', `- ${sign}`],
         }[scheme];
         th.vars.noteKey = S.writeNote(th, 'letter', `A LETTER FROM ${b.name.toUpperCase()}`, body);
         th.vars.meetM = chief.id;
@@ -672,6 +688,25 @@ function deliver(th, S, left) {
   const m = th.vars.meet;
   S.give(pid, th.vars.noteKey, 1);
   if (left) S.tell(pid, 'A grubby child found you and pressed a sealed letter into your hand, then ran off. (Read it: F/RMB)', '#ffd890');
+  // (Round 54) No meeting wanted: they're going, or they're paying.
+  const b = bandOf(S, th);
+  if (th.vars.scheme === 'gift' && b) {
+    S.give(pid, 'coin', th.vars.gift);
+    S.person(pid).truce[b.id] = S.now + 10 * DAY;
+    th.vars.heat = 1;
+    S.tell(pid, `There's a purse with the letter: ¤${th.vars.gift}. A truce with ${b.name}, for as long as you keep it.`, '#ffd890');
+    S.note(th, `${b.name} sent ${nameOf(S, target(th))} a purse of ¤${th.vars.gift}: the price of peace.`, { news: [b.near] });
+    return S.go(th, 'seethe');
+  }
+  if (th.vars.scheme === 'leave' && b) {
+    if (th.vars.feint) {
+      S.note(th, `${b.name} wrote that they were leaving the hills. They didn't.`, { hidden: true });
+      heat(th, -Math.ceil((th.vars.heat || 0) / 2));
+      return S.go(th, 'seethe');
+    }
+    S.sim.bandits.move(b, S.rng(th, 0x1ea), S.day);
+    return S.end(th, 'left', `${b.name} wrote to ${nameOf(S, target(th))} that they'd had enough, and broke camp, and were gone from those hills by morning.`, { news: [b.near] });
+  }
   const t = S.post(th, {
     role: 'meet', kind: 'meet', title: `Meet ${poss(nameOf(S, th.cast.band))} chief at the ${m.place}`, only: [pid], npc: false,
     at: { x: m.x, z: m.z }, r: 6, hand: 'auto', reward: { fame: 0 },
@@ -761,20 +796,56 @@ motif({
         const n = S.named[th.vars.key];
         const b = bandOf(S, th);
         if (!n || !b) return S.end(th, 'faded');
-        const L = layoutOf(S, b.near);
-        const m = L ? mayorOf(L) : null;
-        const pay = 60 + n.kills.length * 30;
+        // (Round 54) Not every name is hunted: some are sung about, some
+        // are too feared for anyone to post a price, and some want out.
+        const rng = S.rng(th, 0x1e9);
+        const m = b.members.find((q) => q.id === n.member);
+        const P = (m && m.personality) || {};
+        const victimPlayer = S.players().some((q) => nameOf(S, R.pl(q.pid)) === n.kills[n.kills.length - 1]);
+        th.vars.how = th.vars.how || S.choose(th, [
+          { to: 'wanted', w: 1.3 + (victimPlayer ? 0.8 : 0) },
+          { to: 'hero', w: 0.3 + (P.kindness ?? 0.4) * 0.8 },
+          { to: 'feared', w: 0.4 + n.kills.length * 0.15 },
+          { to: 'turncoat', w: 0.15 + (P.kindness ?? 0.4) * 0.5 - (P.temper ?? 0.5) * 0.2 },
+        ], rng).to;
+        const how = th.vars.how;
+        if (how === 'wanted') return postBounty(th, S);
+        if (how === 'hero') {
+          S.note(th, `${n.name} of ${b.name} is called ${n.title} now. But in the poorer streets of ${townName(S, b.near)} they say ${n.name} ${pick(rng, ['gave a merchant\'s purse to a widow', 'only robs those who can spare it', 'paid for a sick child\'s medicine', 'let a family keep their cow'])}. Nobody there will put a price on them.`, { news: [b.near] });
+          if (rng.chance(0.5)) S.split(th, 'bard_song', { cast: { town: R.town(b.near) }, sid: b.near, vars: {} });
+          return;
+        }
+        if (how === 'feared') {
+          const L = layoutOf(S, b.near);
+          const kin = L && living(L).find((r) => r.age !== 'child' && r.job !== 'mayor' && (r.mood ?? 0.5) < 0.4);
+          S.note(th, `${n.name} of ${b.name} is called ${n.title} now. The council of ${townName(S, b.near)} won't post a price: they're afraid of what ${n.name} would do. They're paying to be left alone instead.`, { news: [b.near] });
+          if (kin) {
+            const t = S.post(th, {
+              role: 'hunt', kind: 'hunt', title: `Bring down ${n.name}, ${n.title}`, sid: b.near, giver: R.rec(b.near, kin.idx),
+              pitch: `The council's too frightened to do anything. I'm not. ${n.name} took ${n.kills[n.kills.length - 1] || 'someone I loved'} from me. I've saved a little. It's yours, if they die.`,
+              at: b.camp ? { x: b.camp.x, z: b.camp.z } : null, r: 30, target: R.bandit(b.id, n.member),
+              reward: { coins: 25 + n.kills.length * 10, from: R.rec(b.near, kin.idx), rep: 12, renown: b.near, renownPts: 5, renownWhy: `bringing down ${n.name}`, fame: 4, under: 3 },
+            });
+            t.offerLabel = 'You look like you\'ve lost someone.';
+            t.glyph = 'x';
+          }
+          return;
+        }
+        // A turncoat: they want out, and send word.
+        const at = b.camp ? spotNear(S, b.camp.x, b.camp.z, 30, 60, rng, { clear: 10 }) : null;
+        if (!at) {
+          th.vars.how = 'wanted';
+          return postBounty(th, S);
+        }
+        th.vars.meetAt = at;
+        th.vars.ruse = rng.chance(0.3 + (P.temper ?? 0.5) * 0.3);
+        S.note(th, `${n.name} of ${b.name}, called ${n.title}, has sent word to ${townName(S, b.near)}: they want out. They'll talk to someone they can trust, alone, ${directions(town(S, b.near), at.x, at.z)}.`, { news: [b.near] });
         const t = S.post(th, {
-          role: 'hunt', kind: 'hunt', title: `Bring down ${n.name}, ${n.title}`, sid: b.near, giver: m ? R.rec(b.near, m.idx) : null,
-          pitch: `${n.name} rides with ${b.name}. They call them ${n.title} now, for ${n.kills[n.kills.length - 1] ? `what they did to ${n.kills[n.kills.length - 1]}` : 'what they\'ve done'}. The realm will pay ¤${pay} to see them dead.`,
-          at: b.camp ? { x: b.camp.x, z: b.camp.z } : null, r: 30, target: R.bandit(b.id, n.member),
-          reward: { coins: pay, from: R.town(b.near), rep: 6, renown: b.near, renownPts: 5, renownWhy: `bringing down ${n.name}`, fame: 4, under: 3 },
+          role: 'parley', kind: 'meet', title: `Meet ${n.name}, who wants out of ${b.name}`, sid: b.near, giver: null, at, r: 5,
+          pitch: `Word came from the hills: ${n.name} wants to leave ${b.name}, and will talk to someone they can trust. It could be a trick. It could be a chance.`,
+          reward: { coins: 0, fame: 1 },
         });
-        t.rumour = `There's a price of ¤${pay} on ${n.name}, ${n.title}`;
-        t.glyph = 'x';
-        const civ = town(S, b.near)?.civ;
-        if (civ && S.sim.realms.proclaim) S.sim.realms.proclaim(civ, S.day, `A price of ¤${pay} has been set on the outlaw ${n.name}, called ${n.title}.`);
-        S.note(th, `${n.name} of ${b.name} is called ${n.title} now. There's a price on their head.`, { news: [b.near] });
+        t.rumour = `${n.name} of ${b.name} wants out`;
       },
       day(th, S, rng) {
         const n = S.named[th.vars.key];
@@ -828,6 +899,15 @@ motif({
         legend_grew(th, ev, S) {
           if (ev.key !== th.vars.key) return;
           const n = S.named[th.vars.key];
+          // (A folk hero who kills again, or a turncoat who doesn't turn:
+          // a price on them after all.)
+          if (n && th.vars.how && th.vars.how !== 'wanted' && th.vars.how !== 'feared') {
+            th.vars.how = 'wanted';
+            for (const q of S.tasksOf(th, 'parley')) S.closeTask(q, 'void');
+            S.note(th, `After what ${n.name} did to ${ev.victim}, nobody sings about them any more.`);
+            postBounty(th, S);
+            return;
+          }
           const t = S.tasksOf(th, 'hunt')[0];
           if (n && t) {
             t.reward.coins = 60 + n.kills.length * 30;
@@ -854,6 +934,34 @@ motif({
     },
   },
   tasks: {
+    // A turncoat, waiting where they said.
+    parley: {
+      reach(th, t, pid, S) {
+        if (th.vars.met) return;
+        const n = S.named[th.vars.key];
+        const b = bandOf(S, th);
+        const m = b && n ? b.members.find((q) => q.id === n.member) : null;
+        if (!m) return S.closeTask(t, 'void');
+        th.vars.met = pid;
+        m.out = true;
+        const at = th.vars.meetAt;
+        if (th.vars.ruse) {
+          // (It was a trick.)
+          S.closeTask(t, 'failed');
+          const rng = S.rng(th, 0x7e9);
+          S.actor(th, { key: 'named', kind: 'npc', role: 'ambush', hostile: true, at, person: fromBandit(m, b), orders: { target: pid, capture: rng.chance(0.5), brave: true, cry: 'Trust! Ha!' } });
+          b.members.filter((q) => !q.out && q !== m).slice(0, 2).forEach((q, i) => {
+            q.out = true;
+            S.actor(th, { key: `amb${i}`, kind: 'npc', role: 'ambush', hostile: true, at: { x: at.x + 6 - i * 12, z: at.z + 5 }, person: fromBandit(q, b), orders: { target: pid, capture: true } });
+          });
+          S.tell(pid, 'It\'s a trap!', '#ff7060');
+          th.vars.how = 'wanted';
+          return postBounty(th, S);
+        }
+        S.actor(th, { key: 'named', kind: 'npc', role: 'turncoat', talk: true, at, stay: true, person: fromBandit(m, b), orders: { home: at, outlaw: true, markFor: pid, mark: 'talk', lines: ['Keep your voice down.', 'Were you followed?', 'I\'m done with them. Done.'] } });
+        S.closeTask(t, 'done', R.pl(pid));
+      },
+    },
     hunt: {
       npcs: { adv: 0.12, guard: 0.08 },
       npcPace: 0.3,
@@ -882,7 +990,81 @@ motif({
       thanks: () => ['They\'re really dead? The roads will be safer. The realm keeps its word: here.'],
     },
   },
+  hello(th, a) {
+    return a.role === 'turncoat' ? 'You came. Good. Listen, before anyone sees us.' : '...';
+  },
+  talk(th, a, npc, pid) {
+    if (a.role !== 'turncoat' || th.vars.met !== pid) return [];
+    return [
+      { id: 'sgx2_yield', arg: `t${th.id}`, label: 'Come with me to the town. Give yourself up, and I\'ll speak for you.' },
+      { id: 'sgx2_tell', arg: `t${th.id}`, label: 'Tell me where your band keeps its loot, and go where you like.' },
+      { id: 'sgx2_kill', arg: `t${th.id}`, label: '(Draw your blade.) You don\'t get to just walk away.' },
+    ];
+  },
+  respond(th, npc, pid, id, arg, S) {
+    const n = S.named[th.vars.key];
+    const b = bandOf(S, th);
+    if (!n || !b) return null;
+    const m = b.members.find((q) => q.id === n.member);
+    const rng = S.rng(th, 0x7ea);
+    const leave = () => {
+      if (m) b.members = b.members.filter((q) => q !== m);
+      n.dead = true;
+      n.gone = true;
+      S.dismissActor(th, 'named');
+      if (!b.members.length) S.sim.bandits.wipedOut(b, S.day, nameOf(S, R.pl(pid)), R.pl(pid));
+    };
+    if (id === 'sgx2_yield') {
+      leave();
+      const s = town(S, b.near);
+      const pardoned = rng.chance(0.55);
+      S.person(pid).fame += 2;
+      S.give(pid, 'coin', 30);
+      S.end(th, pardoned ? 'pardoned' : 'surrendered', pardoned
+        ? `${n.name}, ${n.title}, walked into ${s ? s.name : 'town'} beside ${nameOf(S, R.pl(pid))} and gave themself up. The council, to everyone's surprise, let them work off their crimes on the walls.`
+        : `${n.name}, ${n.title}, gave themself up to ${nameOf(S, R.pl(pid))}, and was taken to the realm's justice. ${b.name} have sworn to find whoever turned them.`, { news: [b.near] });
+      return { lines: ['...All right. All right. I\'m tired. Walk with me, so nobody puts an arrow in me on the way.'], close: true };
+    }
+    if (id === 'sgx2_tell') {
+      const loot = Math.max(0, Math.round((b.loot || 0) * 0.6));
+      b.loot = Math.max(0, (b.loot || 0) - loot);
+      leave();
+      S.give(pid, 'coin', loot);
+      S.person(pid).under += 2;
+      S.end(th, 'turned', `${n.name}, ${n.title}, sold out ${b.name}'s hoard to ${nameOf(S, R.pl(pid))} and vanished down the coast road. ${b.name} are tearing the hills apart looking for them.`, { news: [b.near] });
+      return { lines: [`Under the third stone from the fire-pit. ¤${loot}, near enough. I'll be over the water by tomorrow. Don't look for me.`, '(You find the hoard where they said.)'], close: true };
+    }
+    if (id === 'sgx2_kill') {
+      const e = S.actorEnt(th, 'named');
+      const at = e ? { x: Math.round(e.x), z: Math.round(e.z) } : th.vars.meetAt;
+      S.dismissActor(th, 'named');
+      S.actor(th, { key: 'namedf', kind: 'npc', role: 'ambush', hostile: true, at, person: fromBandit(m, b), orders: { target: pid, brave: true, cry: 'So much for trust!' } });
+      return { lines: ['I should have known.'], close: true };
+    }
+    return null;
+  },
 });
+
+// The price on a name: the town's mayor, and the realm.
+function postBounty(th, S) {
+  const n = S.named[th.vars.key];
+  const b = bandOf(S, th);
+  if (!n || !b) return;
+  const L = layoutOf(S, b.near);
+  const m = L ? mayorOf(L) : null;
+  const pay = 60 + n.kills.length * 30;
+  const t = S.post(th, {
+    role: 'hunt', kind: 'hunt', title: `Bring down ${n.name}, ${n.title}`, sid: b.near, giver: m ? R.rec(b.near, m.idx) : null,
+    pitch: `${n.name} rides with ${b.name}. They call them ${n.title} now, for ${n.kills[n.kills.length - 1] ? `what they did to ${n.kills[n.kills.length - 1]}` : 'what they\'ve done'}. The realm will pay ¤${pay} to see them dead.`,
+    at: b.camp ? { x: b.camp.x, z: b.camp.z } : null, r: 30, target: R.bandit(b.id, n.member),
+    reward: { coins: pay, from: R.town(b.near), rep: 6, renown: b.near, renownPts: 5, renownWhy: `bringing down ${n.name}`, fame: 4, under: 3 },
+  });
+  t.rumour = `There's a price of ¤${pay} on ${n.name}, ${n.title}`;
+  t.glyph = 'x';
+  const civ = town(S, b.near)?.civ;
+  if (civ && S.sim.realms.proclaim) S.sim.realms.proclaim(civ, S.day, `A price of ¤${pay} has been set on the outlaw ${n.name}, called ${n.title}.`);
+  S.note(th, `${n.name} of ${b.name} is called ${n.title} now. There's a price on their head.`, { news: [b.near] });
+}
 
 // ------------------------------------------------------------ a windfall
 const TREASURE = (k) => k === 'kav_core' || (ITEMS[k] && (ITEMS[k].kind === 'relic' || ITEMS[k].kav));

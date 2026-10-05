@@ -79,6 +79,28 @@ motif({
         const k = recOf(S, th.cast.killer);
         if (!L || !k || !alive(k)) return S.end(th, 'faded');
         const days = (S.now - th.nodeAt) / DAY;
+        // (Round 54) Not every killer does the same thing, waiting: the
+        // guilty-hearted confess; the sly put the blame on someone else.
+        if (days > 1 && !th.vars.turned && rng.chance(0.2)) {
+          th.vars.turned = true;
+          const kind = k.personality?.kindness ?? 0.4;
+          const sly = (k.traits || []).some((q) => q === 'shrewd' || q === 'stingy');
+          if (kind > 0.6 && rng.chance(0.6)) {
+            const t = S.tasksOf(th, 'solve')[0];
+            if (t) S.closeTask(t, 'void');
+            if (S.sim.society && S.sim.society.exile) S.sim.society.exile(L, k, S.day, rng, `murdering ${th.names.victim}`);
+            return S.end(th, 'confessed', `${fullName(k)} walked into the watch-house and confessed to killing ${th.names.victim}. "I can't sleep," they said. "I can't eat. I did it." They were driven out of ${L.settlement.name}.`, { news: [th.sid] });
+          }
+          if (sly) {
+            // (A word in a witness's ear: one of the others "was seen".)
+            const other = th.vars.suspects.map((i) => L.npcs[i]).find((r) => r && r !== k);
+            const w = th.vars.wits.find((q) => !q.told.length);
+            if (other && w) {
+              w.clue = `that ${other.name.first} ${other.name.last} was out that night, and came home with something under their coat`;
+              S.note(th, `${fullName(k)} has been quietly telling people where ${fullName(other)} was the night ${th.names.victim} died.`, { hidden: true });
+            }
+          }
+        }
         // Unfound: they strike again, or run.
         if (days > 2 && rng.chance(0.25)) {
           if (rng.chance(0.5) && S.sim.bandits) {

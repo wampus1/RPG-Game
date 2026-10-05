@@ -271,10 +271,12 @@ motif({
         if (!b || !b.camp) return S.end(th, 'faded');
         const rng = S.rng(th, 0xca9);
         b.holding = true;
+        // (What they mean to do with you: as the chief is, and the band.)
+        const CP = (b.members[0] && b.members[0].personality) || {};
         th.vars.plan ||= S.choose(th, [
-          { to: 'ransom', w: 3 },
+          { to: 'ransom', w: 2 + ((b.loot || 0) < 50 ? 1 : 0) },
           { to: 'recruit', w: () => (th.cast.captive.t === 'pl' ? 1 + Math.min(2, S.person(th.cast.captive.pid).under / 8) : 0) },
-          { to: 'example', w: 1 },
+          { to: 'example', w: 0.6 + (CP.temper ?? 0.5) },
         ], rng).to;
         th.vars.until = S.now + hours(rng.int(30, 54));
         th.vars.demand = demandFor(S, th);
@@ -334,6 +336,15 @@ motif({
         const b = bandOf(S, th);
         if (!b) return S.go(th, 'freed', null, { by: null });
         if (S.now >= th.vars.until) return S.go(th, 'cast_out');
+        // (Round 54) Not every outlaw has the stomach for it: a soft heart
+        // among them may slip the bolt in the night.
+        if (!th.vars.mercyTried) {
+          const soft = b.members.find((q) => q !== b.members[0] && (q.personality?.kindness ?? 0) > 0.65);
+          if (soft && rng.chance(0.12)) {
+            th.vars.mercyTried = true;
+            return S.go(th, 'freed', `${soft.name.first}, one of ${b.name}, slipped the bolt of the cage in the night and whispered "Go. Now. Don't look back."`, { by: null });
+          }
+        }
         // Their town pays (if it will, and can).
         const c = th.cast.captive;
         if (th.vars.plan === 'ransom') {
