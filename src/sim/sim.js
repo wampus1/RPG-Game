@@ -869,6 +869,8 @@ export class Sim {
     if (rec.visitor) {
       rec.alive = false;
       for (const [sid, list] of this.visits) this.visits.set(sid, list.filter((v) => v !== rec.visit));
+      // (One of a trading company: gone from it. Round 57.)
+      if (rec.caravanTrader !== undefined && rec.member !== undefined) this.caravans.memberDied(rec.caravanTrader, rec.member);
       return null;
     }
     // A traveling merchant who dies away from home is buried at home.

@@ -155,7 +155,8 @@ export class Lighting {
       const az1 = Math.ceil(z1 / 16) * 16 + 16;
       const sources = this.scan(world, ax0 - MARGIN, az0 - MARGIN, ax1 + MARGIN, az1 + MARGIN, below);
       const key = sources.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';') + `|${ax0},${az0}`;
-      this.scanTimer = 0.5;
+      // (Fast, in the settings: the lights looked for less often.)
+      this.scanTimer = this.fast ? 1.5 : 0.5;
       if (!this.flood || key !== this.flood.key || game.lightDirty) {
         const W = ax1 - ax0 + 1;
         const D = az1 - az0 + 1;
@@ -206,44 +207,52 @@ export class Lighting {
     const F = this.flood;
     const PF = this.pflood;
     const pts = this.samples.pts;
+    // (Fast, in the settings: the light worked out every third frame, and
+    // the last one drawn again between, so long as the view's not moved
+    // on. Round 57.)
+    const was = this.lastLit;
+    const reuse = this.fast && was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && ++was.n % 3 !== 0;
+    if (!reuse) this.lastLit = { k0, m0, SW, SH, n: 0 };
     if (this.canvas.width !== SW || this.canvas.height !== SH) {
       this.canvas.width = SW;
       this.canvas.height = SH;
     }
     // (The Kavorent's halls are lit cold.)
     const tint = pal ? pal.tint : below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
-    const img = this.ctx.createImageData(SW, SH);
-    const px = img.data;
-    const lightAt = (G, s) => {
-      const lx = s.x - G.x0;
-      const lz = s.z - G.z0;
-      if (lx < 0 || lz < 0 || lx >= G.W || lz >= G.D) return 0;
-      const k = lz * G.W + lx;
-      const lv = G.level[k];
-      if (lv <= 0) return 0;
-      const dy = Math.abs(s.y - G.srcY[k]);
-      return lv * Math.max(0, 1 - Math.max(0, dy - 1) * 0.45);
-    };
-    for (let i = 0; i < SW * SH; i++) {
-      const s = pts[i];
-      let amb = 1;
-      let t = 0;
-      if (s) {
-        t = Math.max(lightAt(F, s), lightAt(PF, s), EF.W ? lightAt(EF, s) : 0);
-        if (s.indoor && !below) amb = 0.58;
-        // (Below ground, what light there is carries: a torch's circle is
-        // warm and clear, and the dark beyond it the darker for it.)
-        if (below) t = Math.min(1.15, t * 1.4);
-        // (A torch only just keeps the storm's dark off.)
-        if (blackout > 0) t *= 1 - blackout * 0.3;
+    if (!reuse) {
+      const img = this.ctx.createImageData(SW, SH);
+      const px = img.data;
+      const lightAt = (G, s) => {
+        const lx = s.x - G.x0;
+        const lz = s.z - G.z0;
+        if (lx < 0 || lz < 0 || lx >= G.W || lz >= G.D) return 0;
+        const k = lz * G.W + lx;
+        const lv = G.level[k];
+        if (lv <= 0) return 0;
+        const dy = Math.abs(s.y - G.srcY[k]);
+        return lv * Math.max(0, 1 - Math.max(0, dy - 1) * 0.45);
+      };
+      for (let i = 0; i < SW * SH; i++) {
+        const s = pts[i];
+        let amb = 1;
+        let t = 0;
+        if (s) {
+          t = Math.max(lightAt(F, s), lightAt(PF, s), EF.W ? lightAt(EF, s) : 0);
+          if (s.indoor && !below) amb = 0.58;
+          // (Below ground, what light there is carries: a torch's circle is
+          // warm and clear, and the dark beyond it the darker for it.)
+          if (below) t = Math.min(1.15, t * 1.4);
+          // (A torch only just keeps the storm's dark off.)
+          if (blackout > 0) t *= 1 - blackout * 0.3;
+        }
+        const o = i * 4;
+        px[o] = Math.min(255, (sky[0] * amb + t * tint[0]) * 255);
+        px[o + 1] = Math.min(255, (sky[1] * amb + t * tint[1]) * 255);
+        px[o + 2] = Math.min(255, (sky[2] * amb + t * tint[2]) * 255);
+        px[o + 3] = 255;
       }
-      const o = i * 4;
-      px[o] = Math.min(255, (sky[0] * amb + t * tint[0]) * 255);
-      px[o + 1] = Math.min(255, (sky[1] * amb + t * tint[1]) * 255);
-      px[o + 2] = Math.min(255, (sky[2] * amb + t * tint[2]) * 255);
-      px[o + 3] = 255;
+      this.ctx.putImageData(img, 0, 0);
     }
-    this.ctx.putImageData(img, 0, 0);
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
     ctx.imageSmoothingEnabled = true;

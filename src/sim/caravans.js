@@ -83,6 +83,31 @@ export class Caravans {
     return this.list.find((g) => g.id === id) || null;
   }
 
+  // One of a company killed (round 57): gone from it for good, not back
+  // again the next time you pass. The rest go on without them; with none
+  // left, the company's no more (its camp struck, its wagons gone).
+  memberDied(gid, i) {
+    const g = this.get(gid);
+    const m = g && g.members[i];
+    if (!m || m.dead) return;
+    m.dead = true;
+    if (g.members.some((q) => !q.dead)) return;
+    this.sim.camps.strike(`c:${g.id}`);
+    this.list = this.list.filter((q) => q !== g);
+    const s = this.game.world.ow.settlements[g.at ?? g.dest];
+    const L = s && this.sim.layoutOf(s.id);
+    if (L) ledger(L, Math.floor(this.sim.abs / DAY), `${g.name[0].toUpperCase()}${g.name.slice(1)} will trade no more: the last of them is dead.`);
+  }
+
+  // One of their horses killed: the one who rode it walks from now on (a
+  // wagon's driver keeps the wagon: there's another horse in the traces).
+  horseDied(gid, i) {
+    const g = this.get(gid);
+    const m = g && g.members[i];
+    if (!m) return;
+    m.horseLost = true;
+  }
+
   places() {
     return this.game.world.ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned');
   }
@@ -161,10 +186,14 @@ export class Caravans {
     g.seen = [...g.seen.filter((q) => q !== s.id), s.id].slice(-5);
     // A day or two, and they set off in the morning.
     g.leave = inDaylight(this.sim.abs + rng.int(24, 44) * 60);
-    const mounts = g.members.filter((m) => m.mount === 'horse' || m.wagon !== undefined).map((m) => ({ kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat, banner: g.banner }));
+    const mounts = [];
+    g.members.forEach((m, i) => {
+      if (!m.dead && !m.horseLost && (m.mount === 'horse' || m.wagon !== undefined)) mounts.push({ kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat, banner: g.banner, member: i });
+    });
     this.sim.camps.pitch(L, `c:${g.id}`, 'caravan', 2, g.leave + 60, hash4(g.id, s.id, 0xcc), { mounts });
     const day = Math.floor(this.sim.abs / DAY);
-    ledger(L, day, `A caravan of ${g.name} (${g.wagons} wagon${g.wagons > 1 ? 's' : ''}, ${g.members.length} people) made camp outside town to trade.`);
+    const n = g.members.filter((m) => !m.dead).length;
+    ledger(L, day, `A caravan of ${g.name} (${g.wagons} wagon${g.wagons > 1 ? 's' : ''}, ${n} ${n === 1 ? 'person' : 'people'}) made camp outside town to trade.`);
     this.trade(g, L, rng);
   }
 
@@ -313,7 +342,7 @@ export class Caravans {
     const out = [];
     for (const [key, c] of this.game.roadCamp || []) {
       if (!key.startsWith('rc:')) continue;
-      for (const h of c.horses) out.push({ ...h, type: 'horse' });
+      for (const h of c.horses) out.push({ ...h, type: 'horse', company: c.company });
       for (const w of c.wagons) out.push({ ...w, type: 'wagon' });
     }
     return out;
@@ -330,7 +359,7 @@ export class Caravans {
     const day = m.role === 'trader' ? 'market' : guard ? 'patrol' : 'camp';
     const sched = [{ s: 0, e: 420, act: 'adventure', place: 'camp' }, { s: 420, e: 1140, act: 'adventure', place: day }, { s: 1140, e: 1260, act: 'adventure', place: 'tavern' }, { s: 1260, e: 1440, act: 'adventure', place: 'camp' }];
     const rec = {
-      id: `${L.settlement.id}:c${g.id}:${i}`, idx: 6000 + g.id * 10 + i, sid: L.settlement.id, visitor: true, caravanTrader: g.id, role: m.role,
+      id: `${L.settlement.id}:c${g.id}:${i}`, idx: 6000 + g.id * 10 + i, sid: L.settlement.id, visitor: true, caravanTrader: g.id, member: i, role: m.role,
       name: m.name, age: 'adult', job: 'caravanner', home: null, bed: 0, household: null,
       partner: null, children: [], parents: [], friends: [], personality: m.personality, traits: m.traits, hobbies: [], look: m.look,
       alive: true, shift: 'day', restDay: -1,
@@ -355,9 +384,12 @@ export class Caravans {
       const dx = Math.sign(ahead.x - r.pos.x);
       const dz = Math.sign(ahead.z - r.pos.z);
       r.g.members.forEach((m, i) => {
+        // (The dead don't ride on: see memberDied.)
+        if (m.dead) return;
         const back = i * 2;
         const pos = r.camped ? { x: r.pos.x + (i % 2 ? 2 : -2), z: r.pos.z + (i >> 1) * 2 - 1 } : { x: r.pos.x - dx * back, z: r.pos.z - dz * back };
-        const mount = r.camped ? null : { kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat || 0, banner: r.g.banner };
+        const afoot = m.horseLost && m.wagon === undefined;
+        const mount = r.camped || afoot ? null : { kind: m.wagon !== undefined ? 'wagon' : 'horse', coat: m.coat || 0, banner: r.g.banner };
         out.push({ key: `car:${r.g.id}:${i}:${r.g.departAt}`, rec: this.recordOf(r.g, i, L), L, from: r.from, to: r.to, pos, target: r.target, mount, company: r.g, camped: r.camped, camp: r.camped ? r.pos : null });
       });
     }
@@ -374,7 +406,7 @@ export class Caravans {
       g.members.forEach((m, i) => {
         const k = `${g.id}:${i}`;
         const ent = this.ents.get(k);
-        if (here && (!ent || ent.dead)) {
+        if (here && !m.dead && (!ent || ent.dead)) {
           const L = this.sim.layoutOf(g.at);
           const n = g0.spawnCaravanner(L, g, i, this.recordOf(g, i, L));
           if (n) this.ents.set(k, n);

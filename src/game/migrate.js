@@ -229,6 +229,14 @@ export const STEPS = [
       if (n) log.push(`${n} stor${n > 1 ? 'ies' : 'y'} of a child on the way let go: the towns see to births themselves.`);
     },
   },
+  {
+    // A trading company's dead stay dead, and its horses (round 57):
+    // nothing in an older world to put right, but it's said.
+    to: '0.57.0',
+    data(d, log) {
+      log.push('Trading companies camp properly by the road at night, and those killed (people or horses) stay dead.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

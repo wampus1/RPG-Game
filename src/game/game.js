@@ -108,6 +108,13 @@ const ISLE_DAY = {
 };
 const ISLE_BEASTS = { kharos: ['ash_lizard', 'magma_crab'], myrrow: ['mire_toad', 'shroom_crawler'] };
 
+// The trading company a tied horse's key belongs to (a road camp's
+// 'rc:<id>:...', a town camp's 'c:<id>:...'), or null.
+function companyOfKey(k) {
+  const m = /^r?c:(\d+):/.exec(k);
+  return m ? +m[1] : null;
+}
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false }) {
     this.seed = seed >>> 0;
@@ -1084,9 +1091,21 @@ export class Game {
           this.caravanLanded(tr, n);
           continue;
         }
-        if (far) this.endCaravan(tr.key, n);
+        if (far) {
+          this.endCaravan(tr.key, n);
+          // (Seen off down the road: not stood back up where the
+          // reckoning has them, a way behind, while you're still about.
+          // Round 57: a company leaving in the morning kept coming back.)
+          (this.caravanOff ||= new Set()).add(tr.key);
+        }
         continue;
       }
+      if (this.caravanOff && this.caravanOff.has(tr.key)) {
+        if (d > 44) this.caravanOff.delete(tr.key);
+        continue;
+      }
+      // (Killed on the road: not back again. Round 57.)
+      if (tr.rec.alive === false || (tr.adv && tr.adv.dead)) continue;
       if (inTown || d > 26 || d < (tr.close ? 2 : 8) || (tr.rec.ent && !tr.rec.ent.dead) || !this.world.regionAt(tr.pos.x, tr.pos.z)) continue;
       // (On the ground: not up on a ruin's walls or a rock.)
       const t = this.world.terrain;
@@ -1128,6 +1147,7 @@ export class Game {
       this.endCaravan(k, n);
     }
     for (const k of this.caravanIn) if (!live.has(k.split('>')[0])) this.caravanIn.delete(k);
+    if (this.caravanOff) for (const k of this.caravanOff) if (!live.has(k)) this.caravanOff.delete(k);
   }
 
   // Someone you've followed down the road walks into the town they were
@@ -1357,10 +1377,12 @@ export class Game {
     const spots = [[4, 0], [4, 1], [3, 1], [2, 0]];
     let h = 0;
     let wi = 0;
-    for (const m of g.members) {
+    camp.company = g.id;
+    for (const [mi, m] of g.members.entries()) {
       if (m.mount !== 'horse' && m.wagon === undefined) continue;
+      // (A horse killed is gone: see horseDied. The wagon stays.)
       const [sx, sz] = spots[h % spots.length];
-      camp.horses.push({ key: `${key}:h${h}`, x: at.x + sx, y: Y, z: at.z + sz, coat: m.coat || 0, banner: g.banner, post });
+      if (!m.horseLost) camp.horses.push({ key: `${key}:h${h}`, x: at.x + sx, y: Y, z: at.z + sz, coat: m.coat || 0, banner: g.banner, post, member: mi });
       h++;
       if (m.wagon !== undefined) {
         camp.wagons.push({ key: `${key}:w${wi}`, x: at.x + 1 + wi * 2, y: Y, z: at.z - 1, face: 1, banner: g.banner });
@@ -1369,6 +1391,28 @@ export class Game {
     }
     this.roadCamp.set(key, camp);
     return camp;
+  }
+
+  // A tied horse killed (round 57): it stays dead. Whoever kept it is a
+  // horse short from now on, and its place stands empty.
+  standSlain(c) {
+    const k = c.standKey;
+    (this.slainStand ||= new Set()).add(k);
+    this.tied.delete(k);
+    const sim = this.sim;
+    if (c.town) {
+      const L = sim.layoutOf(c.town.sid);
+      if (L && sim.stables.slain) sim.stables.slain(L, c.town.idx);
+    }
+    if (c.standOf && c.standOf.company !== null && c.standOf.company !== undefined) sim.caravans.horseDied(c.standOf.company, c.standOf.member);
+    // (A camp outside a town: its horse gone from it.)
+    for (const camp of sim.camps.list) if (camp.horses && camp.horses.some((h) => h.key === k)) camp.horses = camp.horses.filter((h) => h.key !== k);
+    for (const camp of (this.roadCamp || new Map()).values()) camp.horses = camp.horses.filter((h) => h.key !== k);
+    // (A visitor's, tied at the post: they go home on foot.)
+    if (k.startsWith('guest:')) {
+      const id = k.slice(6);
+      for (const list of sim.visits.values()) for (const v of list) if (String(v.id) === id) v.mount = null;
+    }
   }
 
   // Struck in the morning (or out of sight): only what's still as they
@@ -3866,6 +3910,8 @@ export class Game {
     }
     for (let [k, sp] of want) {
       if (this.looseKeys && this.looseKeys.has(k)) continue;
+      // (Killed: not stood up again in its place. Round 57.)
+      if (this.slainStand && this.slainStand.has(k)) continue;
       if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
       // On the ground near where it belongs, never up on a roof: if the
       // spot's built over, the nearest open ground close by instead.
@@ -3889,6 +3935,8 @@ export class Game {
         c.saddled = !!sp.saddled;
         if (sp.town !== undefined) c.town = { sid: sp.town, idx: sp.idx };
         c.standKey = k;
+        // (Whose it is, for when it's killed: see standSlain.)
+        if (sp.member !== undefined) c.standOf = { company: sp.company ?? companyOfKey(k), member: sp.member };
         // One of yours: loose, not tied.
         if (sp.own) {
           c.own = sp.own;
@@ -6292,6 +6340,8 @@ export class Game {
     this.audio?.play('death', e);
     // A beast killed by the town where the faith forbids it.
     if (e.kind === 'creature' && source && source.kind === 'player') this.sim.customs.onKill(e);
+    // A horse tied up (a town's, a company's, a visitor's) killed: gone.
+    if (e.kind === 'creature' && e.standKey && !e.own) this.standSlain(e);
     if (e.kind === 'npc') {
       e.releaseSpot();
       const L = e.layout;

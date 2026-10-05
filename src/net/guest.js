@@ -106,6 +106,17 @@ export class GuestNet {
     // (Someone else's opinion of you is theirs to tell: the host does.)
     game.sim.opinion = (npc) => (npc && npc.netOp !== undefined ? npc.netOp : 0);
     this.onParty(this.party);
+    // (Asked for word less often, if the settings say so.)
+    if (this.rate && this.rate !== 20) this.out({ t: 'rate', hz: this.rate });
+  }
+
+  // How often the host sends word (round 57: 'Online (as a guest)' in the
+  // settings): 20 a second, smooth, or 10, lighter on a slow line or a
+  // slow machine. What you send back is thinned out to match.
+  setRate(hz) {
+    const was = this.rate;
+    this.rate = hz;
+    if (this.game && hz !== was) this.out({ t: 'rate', hz });
   }
 
   need(rx, rz) {
@@ -544,6 +555,11 @@ export class GuestNet {
     const j = JSON.stringify(msg);
     const now = Date.now();
     if (j === this.last && !msg.p.length && !msg.c.length && now - this.sentAt < 250) return;
+    // (On the light setting: only the pointer moved, not every frame of it.)
+    const kj = JSON.stringify(msg.k);
+    if (this.rate && this.rate <= 10 && !msg.p.length && !msg.c.length && kj === this.lastKeys && !!msg.m.down === !!this.lastDown && now - this.sentAt < 66) return;
+    this.lastKeys = kj;
+    this.lastDown = !!msg.m.down;
     this.last = j;
     this.sentAt = now;
     this.send(j);

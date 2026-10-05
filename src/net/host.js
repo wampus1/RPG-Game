@@ -254,6 +254,8 @@ export class HostNet {
       seat.away = !!m.away;
     } else if (m.t === 'drop') g.sent.regions.delete(`${m.rx},${m.rz}`);
     else if (m.t === 'need') this.sendRegion(g, m.rx, m.rz);
+    // (Word less often, asked for: see GuestNet.setRate.)
+    else if (m.t === 'rate') g.every = Number(m.hz) > 0 && Number(m.hz) <= 10 ? 2 : 1;
     else if (m.t === 'profile') {
       if (m.icon) seat.profile.icon = cleanIcon(m.icon);
       if (m.desc !== undefined) seat.profile.desc = cleanDesc(m.desc);
@@ -475,7 +477,17 @@ export class HostNet {
     if (this.acc < 1 / RATE) return;
     const step = this.acc;
     this.acc = 0;
-    for (const g of this.guests.values()) if (g.state === 'in') this.sendTo(g, step);
+    for (const g of this.guests.values()) {
+      if (g.state !== 'in') continue;
+      // (Asked for word less often: every other time, the time between
+      // carried over.)
+      g.owed = (g.owed || 0) + step;
+      g.beat = (g.beat || 0) + 1;
+      if ((g.every || 1) > 1 && g.beat % g.every) continue;
+      const s = g.owed;
+      g.owed = 0;
+      this.sendTo(g, s);
+    }
   }
 
   sendTo(g, step) {

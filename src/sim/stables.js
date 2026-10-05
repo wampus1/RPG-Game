@@ -75,6 +75,8 @@ export class Stables {
     }
     if (st.horses < cap.horses && rng.chance(0.25)) {
       st.horses++;
+      // (Into the place one killed left empty.)
+      if (st.gone && st.gone.length) st.gone = st.gone.slice(1);
       ledger(L, day, `${handler.name.first} ${handler.name.last} caught and broke in a wild horse. ${s.name} keeps ${st.horses} now.`);
       out = { horse: true };
     }
@@ -167,7 +169,7 @@ export class Stables {
     // Each horse keeps its own place (a stall, or a spot at the post), so
     // one taken out by a townsperson leaves a gap rather than everyone
     // shuffling along.
-    const lent = new Set(st.lent || []);
+    const lent = new Set([...(st.lent || []), ...(st.gone || [])]);
     const idx = [];
     for (let i = 0; idx.length < horses && i < st.horses + lent.size + 2; i++) if (!lent.has(i)) idx.push(i);
     const sb = this.stablesOf(L);
@@ -194,6 +196,16 @@ export class Stables {
       for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: o.x + side[0] * (3 + i * 3), z: o.z + side[1] * (3 + i * 3), face: 1 });
     } else if (post) for (let i = 0; i < Math.min(wagons, 2); i++) out.wagons.push({ key: `town:${L.settlement.id}:w${i}`, x: post.x + 2 + i * 2, z: post.z + 2, face: 1 });
     return out.horses.length || out.wagons.length ? out : null;
+  }
+
+  // One of the town's horses killed (round 57): one fewer, and its stall
+  // (or its place at the post) empty till another's broken in.
+  slain(L, i) {
+    const st = this.of(L);
+    if (st.horses <= 0) return;
+    st.horses--;
+    st.saddled = Math.min(st.saddled || 0, st.horses);
+    st.gone = [...new Set([...(st.gone || []), i])];
   }
 
   // A citizen takes one of the town's horses out (and brings it back).

@@ -2406,6 +2406,8 @@ export class Renderer {
       ctx.fillRect(0, 0, this.vw, this.vh);
     }
     if (part === 'tint' || w.kind === 'fog') return;
+    // (No falling rain or snow, in the settings: the sky's dark all the same.)
+    if (this.noWeatherFx) return;
     const lit = part === 'drops' ? skyLight(game.minute) : [1, 1, 1];
     const tone = (r, g, b, a) => `rgba(${Math.round(r * Math.max(0.25, lit[0]))},${Math.round(g * Math.max(0.25, lit[1]))},${Math.round(b * Math.max(0.3, lit[2]))},${a})`;
     ctx.fillStyle = rain ? tone(170, 190, 230, 0.55) : tone(245, 248, 255, 0.9);
@@ -2482,7 +2484,10 @@ export class Renderer {
     // (Smoke, sparks and crumbs indoors stay indoors.)
     if (this.roofed(wx, y, wz)) return;
     const [x, z] = this.toView(wx, wz);
-    const n = opts.n || 6;
+    // (Fewer, or none, in the settings: round 57.)
+    const k = this.particleK ?? 1;
+    const want = (opts.n || 6) * k;
+    const n = Math.floor(want) + (Math.random() < want % 1 ? 1 : 0);
     for (let i = 0; i < n; i++) {
       this.particles.push({
         x: x * TILE + (opts.spreadX ?? 8) * (Math.random() - 0.5) * 2 + 8,

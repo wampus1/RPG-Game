@@ -21,7 +21,7 @@ import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
-import { SETTING_ROWS, changeSetting } from '../game/settings.js';
+import { SETTING_ROWS, SETTING_KEYS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
@@ -1998,41 +1998,52 @@ export class WaitWindow extends Window {
 }
 
 // ---------------------------------------------------------------- settings
+// (Round 57: one to a line, in two parts: how it sounds and looks, and
+// what to turn down if it lags.)
 export class SettingsWindow extends Window {
   constructor(ui, settings) {
-    super(ui, 46, SETTING_ROWS.length * 2 + 6, { kind: 'settings' });
+    super(ui, 50, SETTING_ROWS.length + SETTING_ROWS.filter((r) => r.section).length + 6, { kind: 'settings' });
     this.s = settings;
     this.sel = 0;
   }
   draw(g) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
     g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'SETTINGS' });
-    SETTING_ROWS.forEach((r, i) => {
-      const y = 2 + i * 2;
+    let y = 2;
+    let i = 0;
+    for (const r of SETTING_ROWS) {
+      if (r.section) {
+        y++;
+        g.text(3, y++, r.section, C.hi);
+        continue;
+      }
+      const k = i++;
       const hov = this.hovering(2, y, this.w - 4, 1);
-      g.fill(2, y, this.w - 4, 1, ' ', C.fg, this.sel === i ? C.bgHi : hov ? '#3a3250' : undefined);
-      g.text(3, y, r.label, this.sel === i ? C.white : C.fg);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, this.sel === k ? C.bgHi : hov ? '#3a3250' : undefined);
+      g.text(3, y, r.label, this.sel === k ? C.white : C.fg);
       const v = this.s[r.key];
       g.text(24, y, '◄', C.hi);
       if (r.kind === 'bool') g.text(26, y, v ? 'On' : 'Off', v ? C.green : C.faint);
+      else if (r.kind === 'choice') g.text(26, y, String(r.opts[v] || r.opts[0]).slice(0, this.w - 32), v ? C.cyan : C.fg);
       else g.text(26, y, `${'■'.repeat(v)}${'□'.repeat(r.max - v)}`, C.cyan);
       g.text(this.w - 5, y, '►', C.hi);
-      this.hit(24, y, 2, 1, () => this.change(i, -1));
-      this.hit(this.w - 6, y, 3, 1, () => this.change(i, 1));
+      this.hit(24, y, 2, 1, () => this.change(k, -1));
+      this.hit(this.w - 6, y, 3, 1, () => this.change(k, 1));
       this.hit(2, y, 21, 1, () => {
-        this.sel = i;
+        this.sel = k;
       });
-    });
+      y++;
+    }
     g.center(this.h - 2, '↑↓ choose · ←→ change · ESC close', C.faint);
   }
   change(i, d) {
     this.sel = i;
-    changeSetting(this.s, SETTING_ROWS[i].key, d);
+    changeSetting(this.s, SETTING_KEYS[i].key, d);
     this.ui.hooks.settingsChanged && this.ui.hooks.settingsChanged(this.s);
     this.ui.audio?.play('select');
   }
   onKey(k) {
-    const n = SETTING_ROWS.length;
+    const n = SETTING_KEYS.length;
     if (k.code === 'Escape') this.close();
     else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
     else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;

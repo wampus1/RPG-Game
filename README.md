@@ -4363,6 +4363,43 @@ dig in. What you do (or don't) decides the rest.
 - *Updating a world:* a save from an older version updates itself. Any
   story of a child on the way is let go.
 
+## Round 57: trading camps, and settings for when it lags
+
+- *Fixed: a trading company's night camp.* Out on the road at night, the
+  company no longer stands stock still round the fire. They sit by it,
+  see to the horses, go in and out of the tent and stretch their legs,
+  and a word goes round now and then. Their guard walks the edge of the
+  camp.
+- *Fixed: the dead coming back.* A company member who's killed (on the
+  road, at a night camp or at their camp outside a town) is gone from the
+  company for good. With nobody left, the company is no more.
+- *Fixed: tied horses coming back.* A horse tied up and killed (a
+  company's, a town's, a visitor's) stays dead:
+  - a company member who rode it walks from then on (a wagon keeps going
+    with its other horse);
+  - a town has one horse fewer, and its stall or place at the post stays
+    empty until the handler breaks in another.
+- *Fixed: a company leaving in the morning kept coming back.* Walking, a
+  company gets ahead of where its journey has it on the road. Once it had
+  walked out of sight it was stood back up at that spot, behind it and near
+  you, over and over. Now a company that's walked off stays gone until
+  you've moved well away from where it should be.
+- *Settings for when it lags.* Settings (**O** in the pause menu) has a
+  new PERFORMANCE part. These help a guest most, but work for anyone:
+  - **Frame rate**: Full, or at most 30 a second;
+  - **Lighting**: Full, or Fast (worked out every third frame, and the
+    lights looked for less often);
+  - **Particles**: All, Fewer or None (sparks, smoke, blood, dust);
+  - **Falling rain/snow**: off leaves the sky dark in a storm, without
+    the falling drops;
+  - **Online (as a guest)**: Smooth (the host sends word 20 times a
+    second) or Light (10 times, and your own input is sent less often
+    too). Light is for a slow line or a slow machine.
+
+  The **CRT screen effect** (already in Settings) is often the costliest
+  thing to draw: turning it off helps on a weak graphics card.
+- *Older worlds* (migration 0.57.0): nothing to put right.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

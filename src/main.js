@@ -86,7 +86,7 @@ try {
 }
 // Volumes and visuals, as the player left them.
 const settings = loadSettings(browserStorage());
-const applyAll = () => applySettings(settings, { audio, music, crt, renderer, ui });
+const applyAll = () => applySettings(settings, { audio, music, crt, renderer, ui, net: session && session.role === 'guest' ? session.net : null });
 applyAll();
 
 // Save into a slot; says so (or why it couldn't).
@@ -697,6 +697,8 @@ function joinWorld(at = null) {
       if (feats.unlock(id)) featNote(id);
     };
     sess.net = net;
+    // (How often the host's to send word: see the settings.)
+    net.rate = settings.netRate === 1 ? 10 : 20;
     net.openPause = () => openGuestPause();
     net.onLocalKey = (k) => guestKey(k);
     net.onProfile = (p) => openProfile(p);
@@ -951,6 +953,8 @@ const ctx = view.getContext('2d');
 function frame(now) {
   // Keep the loop alive even if a frame throws; log the error once per second.
   requestAnimationFrame(frame);
+  // (Capped at 30 a second, in the settings: every other frame let go.)
+  if (settings.frameCap && now - last < 1000 / 30 - 4) return;
   try {
     step(now);
   } catch (e) {

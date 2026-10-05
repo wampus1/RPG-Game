@@ -126,7 +126,7 @@ export class Camps {
       let wi = 0;
       for (const m of mounts) {
         const [hx, hz] = spots[h % spots.length];
-        camp.horses.push({ key: `${key}:h${h}`, x: hx, z: hz, coat: m.coat || 0, banner: m.banner || null, post });
+        camp.horses.push({ key: `${key}:h${h}`, x: hx, z: hz, coat: m.coat || 0, banner: m.banner || null, post, member: m.member });
         h++;
         if (m.kind === 'wagon') {
           const [wx, wz] = pos(base + 3 + wi * 2, 1);

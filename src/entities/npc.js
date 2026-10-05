@@ -49,6 +49,13 @@ const MEAL_LINES = {
 // Who serves the meals at the tavern, and clears up after.
 const TIDIERS = new Set(['barkeep', 'innkeeper', 'cook']);
 
+// What's said round a trading company's fire at night (see campLife).
+function campLines(n, c) {
+  const to = c.to || 'the next town';
+  if (n.rec.role === 'guard') return ['Quiet out there. Too quiet.', 'I\'ll take first watch.', 'Keep the fire low. No sense calling anyone in.', 'Something moved by the trees. Just a fox, I think.'];
+  return [`Two more days to ${to}, if the weather holds.`, 'Pass the bread, would you?', 'The horses are restless tonight.', 'That axle won\'t last another hill.', `They'll pay well for cloth in ${to}.`, 'My feet are done for.', 'Bank the fire before you turn in.', 'Remember the inn at the last stop? Best stew in a month.'];
+}
+
 export class NPC extends Entity {
   constructor(game, rec, layout) {
     super(game, 0, 0, 0);
@@ -1347,14 +1354,9 @@ export class NPC extends Entity {
       this.state = 'routine';
       return;
     }
-    // Camped for the night by the road: round the fire, not going anywhere.
+    // Camped for the night by the road: about the camp, not going anywhere.
     if (c.camp) {
-      const rc = c.campKey && this.game.roadCamp.get(c.campKey);
-      const at = rc ? rc.fire : c.camp;
-      if (Math.max(Math.abs(at.x - this.x), Math.abs(at.z - this.z)) > 2) {
-        const box = { x0: Math.min(this.x, at.x) - 6, z0: Math.min(this.z, at.z) - 6, x1: Math.max(this.x, at.x) + 6, z1: Math.max(this.z, at.z) + 6 };
-        if (this.stateT < 20) this.followPath({ x: at.x, y: this.y, z: at.z }, 2, box);
-      } else if (!this.moving && this.rng.chance(0.02)) this.face(at.x, at.z);
+      this.campLife(c, dt);
       return;
     }
     // Out on the water, crossing.
@@ -1401,6 +1403,62 @@ export class NPC extends Entity {
     const box = { x0: Math.min(this.x, lg.x) - m, z0: Math.min(this.z, lg.z) - m, x1: Math.max(this.x, lg.x) + m, z1: Math.max(this.z, lg.z) + m, nodes: 2500 * (1 + reach * 2) };
     this.followPath(lg, 1, box);
     this.paddle();
+  }
+
+  // A night at a road camp (round 57: they stood stock still): round the
+  // fire, seeing to the horses, in and out of the tent, stretching their
+  // legs; a guard walks the edge of the camp. A word now and then.
+  campLife(c, dt) {
+    const rc = c.campKey && this.game.roadCamp.get(c.campKey);
+    const fire = rc ? rc.fire : c.camp;
+    const guard = this.rec.role === 'guard';
+    c.campT = (c.campT ?? this.rng.float(0, 4)) - (dt || 0);
+    const go = c.campGoal;
+    const there = go && Math.max(Math.abs(go.x - this.x), Math.abs(go.z - this.z)) <= (go.near ?? 1);
+    if (go && !there && c.campT > -12) {
+      const box = { x0: Math.min(this.x, go.x) - 6, z0: Math.min(this.z, go.z) - 6, x1: Math.max(this.x, go.x) + 6, z1: Math.max(this.z, go.z) + 6 };
+      if (!this.followPath({ x: go.x, y: this.y, z: go.z }, go.near ?? 1, box) && this.pathFails > 2) c.campT = Math.min(c.campT, 0) - 13;
+      return;
+    }
+    if (there && go.face) {
+      c.campGoal = { ...go, face: null, x: this.x, z: this.z };
+      this.face(go.face.x, go.face.z);
+    }
+    if (c.campT > 0) {
+      if (!this.moving && this.rng.chance((dt || 0) * 0.012)) this.say(this.rng.pick(campLines(this, c)), 3);
+      return;
+    }
+    // Something else to do.
+    const h = this.game.minute / 60;
+    const late = h >= 22 || h < 4.5;
+    const ring = (r) => {
+      const a = this.rng.float(0, Math.PI * 2);
+      return { x: Math.round(fire.x + Math.cos(a) * r), z: Math.round(fire.z + Math.sin(a) * r) };
+    };
+    let next;
+    if (guard) {
+      next = { ...ring(this.rng.int(4, 6)), near: 0, face: null };
+      c.campT = this.rng.float(3, 7);
+    } else {
+      const post = rc && rc.horses && rc.horses[0] && rc.horses[0].post;
+      const tent = rc && rc.ops && rc.ops[0] ? { x: rc.ops[0][0], z: rc.ops[0][2] } : null;
+      const roll = this.rng.float(0, 1);
+      if (roll < (late ? 0.75 : 0.45)) {
+        next = { ...ring(this.rng.int(1, 2)), near: 0, face: fire };
+        c.campT = this.rng.float(10, 25);
+      } else if (post && roll < 0.65) {
+        next = { x: post.x + this.rng.int(-1, 1), z: post.z + 1, near: 1, face: post };
+        c.campT = this.rng.float(5, 10);
+      } else if (tent && roll < 0.8) {
+        next = { x: tent.x, z: tent.z + 1, near: 1, face: tent };
+        c.campT = this.rng.float(6, 14);
+      } else {
+        next = { ...ring(this.rng.int(3, 5)), near: 1, face: null };
+        c.campT = this.rng.float(4, 9);
+      }
+    }
+    c.campGoal = next;
+    this.path = null;
   }
 
   // A crossing: the tiles from here straight toward where they're going,
