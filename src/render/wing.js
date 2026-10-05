@@ -6,8 +6,13 @@
 // side (seen from in front or behind) or swept back (side on), and a
 // second, lifted pose for a slow beat of it.
 
-const W = 22;
-const H = 22;
+// (Round 49: smaller than it was, 16 across, not 22.)
+const W = 16;
+const H = 16;
+export const WING_SIZE = W;
+// The shoulder's place on the little canvas.
+const SHX = W - 3;
+const shY = (swept) => (swept ? 6 : 5);
 const cache = new Map();
 
 function canvas(w, h) {
@@ -30,29 +35,29 @@ function paint(lift, swept, dull) {
   const pal = dull
     ? { edge: '#a8a49a', top: '#b8b4ac', body: '#9a968e', shade: '#7a766e', tip: '#6a665e' }
     : { edge: '#ffe7a0', top: '#fffaf0', body: '#f4efe2', shade: '#d8d0bc', tip: '#c4b896' };
-  const ax = W - 4;
-  const ay = swept ? 8 : 7;
+  const ax = SHX;
+  const ay = shY(swept);
   // The tip, out and up (swept: out and level, the feathers hanging).
-  const tx = swept ? 2 : 2;
-  const ty = swept ? 6 - lift : 1 - lift;
+  const tx = 1;
+  const ty = swept ? 4 - lift : 1 - lift;
   // Along the arm of it, from the shoulder to the tip: the leading edge.
-  const N = 18;
+  const N = 13;
   const edge = [];
   for (let i = 0; i <= N; i++) {
     const k = i / N;
     // (Bowed up in the middle.)
     const x = ax + (tx - ax) * k;
-    const y = ay + (ty - ay) * k - Math.sin(k * Math.PI) * (swept ? 1.5 : 2.5);
+    const y = ay + (ty - ay) * k - Math.sin(k * Math.PI) * (swept ? 1 : 1.8);
     edge.push([x, y]);
   }
   // The long flight feathers, hanging from the edge: longest toward the
   // tip, each a stroke two wide, shaded at its end.
-  const n = 7;
+  const n = 6;
   for (let j = 0; j < n; j++) {
     const k = 0.25 + (j / (n - 1)) * 0.75;
     const [x0, y0] = edge[Math.round(k * N)];
-    const len = (swept ? 6 : 7) + k * (swept ? 5 : 8);
-    const slant = (swept ? 0.35 : 0.2) + k * 0.25;
+    const len = (swept ? 4 : 5) + k * (swept ? 3 : 5);
+    const slant = (swept ? 0.3 : 0.15) + k * 0.2;
     for (let s = 0; s < len; s++) {
       const x = x0 + s * slant;
       const y = y0 + 1 + s;
@@ -64,10 +69,10 @@ function paint(lift, swept, dull) {
     }
   }
   // The coverts over their roots: shorter, overlapping, a brighter white.
-  for (let j = 0; j < 9; j++) {
-    const k = j / 8;
+  for (let j = 0; j < 7; j++) {
+    const k = j / 6;
     const [x0, y0] = edge[Math.round(k * N)];
-    const len = 3 + Math.round(k * 2);
+    const len = 2 + Math.round(k);
     for (let s = 0; s < len; s++) {
       px(x0 + s * 0.2, y0 + 1 + s, s === len - 1 ? pal.shade : pal.top);
       px(x0 + 1 + s * 0.2, y0 + 1 + s, pal.top);
@@ -131,22 +136,22 @@ export function drawWing(ctx, dir, sx, top, k, t) {
   const alpha = whole ? 1 : 0.22 + 0.5 * k;
   // The glow about it (whole, it shines).
   if (whole) {
-    const cx = ax + (flip ? 8 : -8);
-    const cy = shoulderY + 3;
+    const cx = ax + (flip ? 6 : -6);
+    const cy = shoulderY + 2;
     const pulse = 0.55 + 0.25 * Math.sin(t * 2.4);
-    const gl = ctx.createRadialGradient(cx, cy, 1, cx, cy, 16);
+    const gl = ctx.createRadialGradient(cx, cy, 1, cx, cy, 11);
     gl.addColorStop(0, `rgba(255,240,190,${(0.4 * pulse).toFixed(3)})`);
     gl.addColorStop(1, 'rgba(255,230,160,0)');
     ctx.globalAlpha = a0;
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = gl;
-    ctx.fillRect(cx - 16, cy - 16, 32, 32);
+    ctx.fillRect(cx - 11, cy - 11, 22, 22);
     ctx.globalCompositeOperation = 'source-over';
   }
   ctx.globalAlpha = a0 * alpha;
-  // (The sprite's shoulder is at (W - 4, 7): put it on theirs.)
-  const ox = W - 4;
-  const oy = swept ? 8 : 7;
+  // (The sprite's shoulder is at (SHX, shY): put it on theirs.)
+  const ox = SHX;
+  const oy = shY(swept);
   if (flip) {
     ctx.translate(ax + ox, shoulderY - oy);
     ctx.scale(-1, 1);

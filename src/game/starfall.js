@@ -135,7 +135,7 @@ export function starShockwave(game, at) {
   r.emit(at.x, (at.y ?? GROUND) + 0.5, at.z, { n: 40, color: ['#fffaf0', '#ffe7a0', '#ffb060', '#ffffff'], up: 60, speed: 80, life: 1.2, gravity: 40, glow: true });
   r.emit(at.x, (at.y ?? GROUND) + 0.5, at.z, { n: 20, color: ['#6a5a48', '#4a3e32', '#8a7a64'], up: 30, speed: 60, life: 1.6, gravity: 30, shape: 'puff', grow: 2 });
   for (const q of game.everyone()) {
-    if (!q || q.dead || q === at.who) continue;
+    if (!q || q.dead || q.limbo || q === at.who) continue;
     if (game.world.inInstance && game.world.inInstance(q.x)) continue;
     if (isle && ow.islandAt && ow.islandAt(q.x, q.z) !== isle) continue;
     game.asPlayer(q, () => {
@@ -184,9 +184,11 @@ export function starfallScene(game, info = {}) {
   const seed = hash4(game.seed >>> 0, first.length, 0x57a);
   let art = null;
   return {
-    kind: 'starfall', t: 0, dur, lock: true, village, first, at: info.at || null, words,
+    kind: 'starfall', intro: true, t: 0, dur, lock: true, village, first, at: info.at || null, words,
     get mood() {
-      return this.t < STAR_IMPACT ? 'title_spire' : 'spire_open';
+      // (Its own music: a celesta and a choir as it falls; the blow, and a
+      // music box alone in the dark. See music.js.)
+      return this.t < STAR_IMPACT ? 'cs_starfall' : 'cs_starfall_dark';
     },
     act: info.act || null,
     update(g, dt, pressed) {
@@ -534,7 +536,7 @@ function drawScene(ctx, sc, art) {
     const fk = (s * 0.12) % 1;
     const img = wingSprite(0, true, false);
     ctx.globalAlpha = 0.25 * Math.sin(fk * Math.PI);
-    ctx.drawImage(img, 14, 4, 6, 10, Math.round(VIEW_W * 0.8 + Math.sin(s) * 10), Math.round(fk * VIEW_H), 6, 10);
+    ctx.drawImage(img, 9, 3, 5, 9, Math.round(VIEW_W * 0.8 + Math.sin(s) * 10), Math.round(fk * VIEW_H), 5, 9);
     ctx.globalAlpha = 1;
   }
   ctx.restore();

@@ -10,7 +10,7 @@ import { C, wrap, Grid, drawGrid } from './ascii.js';
 import { avatarCanvas, drawAvatar } from '../render/avatar.js';
 import { ICON_SHAPES, ICON_COLORS, ICON_BGS, ICON_PATTERNS, ICON_FRAMES, TITLES, NAME_MAX, DESC_MAX, DESC_WORDS, wordCount, nameProblem, cleanIcon } from '../net/account.js';
 import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
-import { versionText, sameVersion } from '../version.js';
+import { versionText, sameVersion, canUpgrade } from '../version.js';
 import { GUILD_NAME_MAX } from '../game/guilds.js';
 
 // (Solid: nothing behind shows through.)
@@ -31,11 +31,15 @@ function button(w, g, x, y, width, label, fn, { color = C.fg, off = false, hint 
 // Made once (a name, a picture, a few words); after, the picture and the
 // words can be changed, never the name.
 export class AccountWindow extends Window {
-  constructor(ui, accounts, { onDone = null, onChange = null } = {}) {
+  // (`titles()`: the titles earned, to go by (see game/achievements.js);
+  // `onFeats`: to see the achievements that unlock them.)
+  constructor(ui, accounts, { onDone = null, onChange = null, titles = null, onFeats = null } = {}) {
     super(ui, 70, 34, { kind: 'account' });
     this.accounts = accounts;
     this.onDone = onDone;
     this.onChange = onChange;
+    this.titles = titles || (() => accounts.titles());
+    this.onFeats = onFeats;
     const a = accounts.account;
     this.editing = !!a;
     this.name = a ? a.name : '';
@@ -51,7 +55,7 @@ export class AccountWindow extends Window {
   rows() {
     return [
       { id: 'name', label: 'Username', locked: this.editing },
-      { id: 'title', label: 'Title', list: TITLES, show: (v) => v || 'none' },
+      { id: 'title', label: 'Title', list: this.titleList(), show: (v) => v || 'none' },
       { id: 'shape', label: 'Picture', list: ICON_SHAPES },
       { id: 'color', label: 'Colour', list: ICON_COLORS, swatch: true },
       { id: 'bg', label: 'Background', list: ICON_BGS, swatch: true },
@@ -63,6 +67,12 @@ export class AccountWindow extends Window {
 
   value(id) {
     return id === 'title' ? this.title : this.icon[id];
+  }
+
+  // The titles you can pick: none, and those you've earned.
+  titleList() {
+    const got = this.titles() || [];
+    return ['', ...TITLES.filter((t) => t && got.includes(t))];
   }
 
   draw(g) {
@@ -77,6 +87,10 @@ export class AccountWindow extends Window {
     const who = this.name || '?';
     g.text(this.w - 7 - Math.ceil(who.length / 2), 14, who.slice(0, 12), C.hi);
     if (this.title) g.text(this.w - 7 - Math.ceil(this.title.length / 2), 15, this.title, C.dim);
+    // (Titles are earned: see what earns them.)
+    const earned = this.titleList().length - 1;
+    g.text(this.w - 14, 17, `${earned}/${TITLES.length - 1} titles`, C.faint);
+    if (this.onFeats) button(this, g, this.w - 15, 18, 14, 'Achievements', () => this.onFeats());
     const rows = this.rows();
     rows.forEach((r, i) => {
       const y = 5 + i * 2;
@@ -136,7 +150,7 @@ export class AccountWindow extends Window {
   }
 
   change(id, d) {
-    if (id === 'title') this.title = cycle(TITLES, this.title, d);
+    if (id === 'title') this.title = cycle(this.titleList(), this.title, d);
     else if (this.icon[id] !== undefined) {
       const list = { shape: ICON_SHAPES, color: ICON_COLORS, bg: ICON_BGS, pattern: ICON_PATTERNS, frame: ICON_FRAMES }[id];
       if (list) this.icon = { ...this.icon, [id]: cycle(list, this.icon[id], d) };
@@ -260,7 +274,12 @@ export class MultiplayerWindow extends Window {
     (saves || []).slice(0, 3).forEach((s, i) => {
       const m = s.meta;
       const sure = this.confirm === s.id;
-      button(this, g, 2, y, this.w - 14, `[${i + 1}] Continue: ${m.world || m.name}`.slice(0, 36), () => hooks.continueWorld(s.id), { off: !a, hint: `day ${m.day} · ${m.players || 1} played` });
+      // (Made in an older version of the game: it can be brought up to
+      // this one, asked first; see main.js.)
+      const up = canUpgrade(m.gv) && hooks.upgradeWorld;
+      const other = !sameVersion(m.gv);
+      button(this, g, 2, y, this.w - (up ? 24 : 14), `[${i + 1}] Continue: ${m.world || m.name}`.slice(0, 36), () => hooks.continueWorld(s.id), { off: !a, color: other ? C.orange : C.fg, hint: other ? `${versionText(m.gv)} · day ${m.day}` : `day ${m.day} · ${m.players || 1} played` });
+      if (up) button(this, g, this.w - 21, y, 9, 'Update', () => hooks.upgradeWorld(s.id, m), { color: C.hi });
       button(this, g, this.w - 11, y, 9, sure ? 'Sure?' : 'Delete', () => {
         if (!sure) this.confirm = s.id;
         else {

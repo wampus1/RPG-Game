@@ -11,6 +11,7 @@ import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../con
 import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
 import { starfallScene } from '../game/starfall.js';
+import { introFrom } from '../game/intros.js';
 import { wallFall } from '../game/wallfall.js';
 import { eruptionScene } from '../game/eruption.js';
 import { DungeonRun } from '../game/dungeon.js';
@@ -20,7 +21,7 @@ import { GAME_VERSION, versionText } from '../version.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
-export const LOCAL_KEYS = new Set(['KeyQ', 'KeyE', 'KeyH', 'F1', 'F2', 'F3', 'KeyM', 'KeyP', 'Backquote', 'Slash']);
+export const LOCAL_KEYS = new Set(['KeyQ', 'KeyE', 'KeyH', 'F1', 'F2', 'F3', 'KeyM', 'KeyP', 'KeyL', 'Backquote', 'Slash']);
 // (With one of the host's windows open over the world, it has your keys,
 // all but these: the picture's own.)
 const SCREEN_KEYS = new Set(['F2', 'F3']);
@@ -73,6 +74,7 @@ export class GuestNet {
       this.guilds = m.guilds || [];
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
+    else if (m.t === 'feat') this.onFeat?.(m.id);
     else if (m.t === 'friend') this.onFriend(m);
     else if (m.t === 'site') this.site(m);
     else if (m.t === 'closing' || m.t === 'hostgone') this.onEnd('The host has closed the world.');
@@ -361,6 +363,7 @@ export class GuestNet {
       } else if (s.kind === 'wall') sc = wallFall(game);
       else if (s.kind === 'erupt') sc = eruptionScene(game, { here: !!s.here });
       else if (s.kind === 'starfall') sc = starfallScene(game, { village: s.village, first: s.first });
+      else sc = introFrom(game, s);
     } catch (e) {
       void e;
       sc = null;

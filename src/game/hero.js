@@ -16,12 +16,11 @@ export const STAT_MAX = 5;
 export const STAT_POINTS = 4; // to spend above the base
 
 // Traits: what you're good at (the old skills are traits too), and flaws.
-// You pick up to TRAIT_PICKS good ones; each flaw you take (up to
-// FLAW_MAX) lets you pick one more. A flaw never takes away what a stat
+// You pick up to TRAIT_PICKS good ones; each flaw you take (as many as
+// you like) lets you pick one more. A flaw never takes away what a stat
 // gives (health, stamina, speed, damage, prices, liking): it costs you
 // somewhere else.
 export const TRAIT_PICKS = 4;
-export const FLAW_MAX = 2;
 export const TRAITS = {
   // Good.
   angler: { name: 'Angler', about: 'Fish bite 25% sooner, the strike window lasts 50% longer and you reel in 25% faster.' },
@@ -132,7 +131,7 @@ export function pointsLeft(h) {
 // How many good traits you may pick (one more for each flaw), and how many
 // you have.
 export function traitPicks(h) {
-  return TRAIT_PICKS + Math.min(FLAW_MAX, (h.traits || []).filter((t) => TRAITS[t]?.flaw).length);
+  return TRAIT_PICKS + (h.traits || []).filter((t) => TRAITS[t]?.flaw).length;
 }
 export function goodTraits(h) {
   return (h.traits || []).filter((t) => TRAITS[t] && !TRAITS[t].flaw);
@@ -188,7 +187,7 @@ export function normalizeHero(h) {
   // (Skills were kept apart once: they're traits now. Flaws that are gone
   // are dropped.)
   const all = [...new Set([...(h.specialties || []), ...(h.traits || [])])].filter((k) => TRAITS[k]);
-  const flaws = all.filter((k) => TRAITS[k].flaw).slice(0, FLAW_MAX);
+  const flaws = all.filter((k) => TRAITS[k].flaw);
   out.traits = [...all.filter((k) => !TRAITS[k].flaw).slice(0, TRAIT_PICKS + flaws.length), ...flaws];
   out.specialties = [];
   if (!ORIGINS[out.origin]) out.origin = 'crash';

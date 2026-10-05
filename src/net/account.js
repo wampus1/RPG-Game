@@ -8,6 +8,8 @@
 // is opened at on that machine. Its code, from the account window,
 // carries it to another browser.)
 
+import { FEAT_TITLES, titlesOf, clean as cleanFeats } from '../game/achievements.js';
+
 export const NAME_MIN = 3;
 export const NAME_MAX = 16;
 // The words about you: forty at most (and never a wall of letters).
@@ -22,8 +24,9 @@ export const ICON_COLORS = ['#ffe070', '#ff7060', '#80e070', '#70c8ff', '#c090ff
 export const ICON_BGS = ['#2a2238', '#3a1e1e', '#1e3a26', '#1e2a44', '#3a2a14', '#14302e', '#30303a', '#401c34', '#101018', '#283a10', '#3a1830', '#203040', '#402a20', '#1c3438'];
 export const ICON_PATTERNS = ['plain', 'stripes', 'dots', 'checks', 'glow', 'stars'];
 export const ICON_FRAMES = ['plain', 'gold', 'silver', 'bronze', 'jade', 'ember', 'rune'];
-// What you go by, after your name (shown with your profile).
-export const TITLES = ['', 'Wanderer', 'Builder', 'Hunter', 'Scholar', 'Sailor', 'Merchant', 'Brawler', 'Healer', 'Explorer', 'Bard', 'Miner', 'Farmer', 'Delver', 'Knight', 'Rogue', 'Smith', 'Mystic'];
+// What you go by, after your name (shown with your profile). Each is
+// unlocked by an achievement (see game/achievements.js): none to begin with.
+export const TITLES = ['', ...FEAT_TITLES];
 
 export const DEFAULT_ICON = { shape: 'sword', color: ICON_COLORS[0], bg: ICON_BGS[0], pattern: 'plain', frame: 'plain' };
 
@@ -81,7 +84,11 @@ export class Accounts {
       if (!a || !a.id || nameProblem(a.name)) return null;
       a.icon = cleanIcon(a.icon);
       a.desc = cleanDesc(a.desc);
+      a.feats = cleanFeats(a.feats);
       a.title = cleanTitle(a.title);
+      // (A title is gone by only once it's been earned: see
+      // game/achievements.js.)
+      if (a.title && !titlesOf(a.feats).includes(a.title)) a.title = '';
       a.friends ||= [];
       a.incoming ||= [];
       a.sent ||= [];
@@ -117,11 +124,20 @@ export class Accounts {
     return profileOf(this.acc);
   }
 
-  // Make the account (once). Throws if the name won't do.
+  // The titles this account has earned.
+  titles() {
+    return this.acc ? titlesOf(this.acc.feats) : [];
+  }
+
+  // Make the account (once). Throws if the name won't do. (`localFeats`:
+  // achievements earned in this browser before there was an account, set
+  // by whoever keeps them: see main.js.)
   create(name, icon, desc, title = '') {
     const why = nameProblem(name);
     if (why) throw new Error(why);
-    this.acc = { id: newId(), name: String(name).trim(), icon: cleanIcon(icon), desc: cleanDesc(desc), title: cleanTitle(title), made: Date.now(), friends: [], incoming: [], sent: [] };
+    const feats = cleanFeats(this.localFeats ? this.localFeats() : null);
+    const t = cleanTitle(title);
+    this.acc = { id: newId(), name: String(name).trim(), icon: cleanIcon(icon), desc: cleanDesc(desc), title: titlesOf(feats).includes(t) ? t : '', feats, made: Date.now(), friends: [], incoming: [], sent: [] };
     this.write();
     return this.acc;
   }
@@ -131,7 +147,10 @@ export class Accounts {
     if (!this.acc) return null;
     if (icon) this.acc.icon = cleanIcon(icon);
     if (desc !== undefined) this.acc.desc = cleanDesc(desc);
-    if (title !== undefined) this.acc.title = cleanTitle(title);
+    if (title !== undefined) {
+      const t = cleanTitle(title);
+      if (!t || this.titles().includes(t)) this.acc.title = t;
+    }
     this.write();
     return this.acc;
   }
@@ -214,7 +233,7 @@ export class Accounts {
   // The account as a code to paste into another browser.
   exportCode() {
     if (!this.acc) return '';
-    const json = JSON.stringify({ id: this.acc.id, name: this.acc.name, icon: this.acc.icon, desc: this.acc.desc, title: this.acc.title, made: this.acc.made, friends: this.acc.friends });
+    const json = JSON.stringify({ id: this.acc.id, name: this.acc.name, icon: this.acc.icon, desc: this.acc.desc, title: this.acc.title, feats: this.acc.feats || {}, made: this.acc.made, friends: this.acc.friends });
     return 'TSA1.' + b64(json);
   }
 
@@ -228,7 +247,9 @@ export class Accounts {
       throw new Error('That account code is damaged.');
     }
     if (!a || !a.id || nameProblem(a.name)) throw new Error('That account code is damaged.');
-    this.acc = { id: String(a.id), name: a.name.trim(), icon: cleanIcon(a.icon), desc: cleanDesc(a.desc), title: cleanTitle(a.title), made: a.made || Date.now(), friends: (a.friends || []).map((f) => ({ ...profileOf(f), since: f.since || Date.now() })), incoming: [], sent: [] };
+    const feats = cleanFeats(a.feats);
+    const t = cleanTitle(a.title);
+    this.acc = { id: String(a.id), name: a.name.trim(), icon: cleanIcon(a.icon), desc: cleanDesc(a.desc), title: titlesOf(feats).includes(t) ? t : '', feats, made: a.made || Date.now(), friends: (a.friends || []).map((f) => ({ ...profileOf(f), since: f.since || Date.now() })), incoming: [], sent: [] };
     this.write();
     return this.acc;
   }

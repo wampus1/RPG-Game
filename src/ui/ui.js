@@ -133,7 +133,12 @@ export class UI {
         if (k.code === 'Escape' && top && !top.remote) this.close(top);
         continue;
       }
-      // (An opening scene playing: only a few of the usual keys.)
+      // (An opening playing: only a few of the usual keys; the rest, ENTER
+      // to skip it, are its own.)
+      if (game.scene && game.scene.intro && !['Escape', 'F2', 'F3', 'Backquote', 'KeyH', 'F1', 'KeyL'].includes(k.code)) {
+        out.pressed.push(k);
+        continue;
+      }
       if (game.cutscene && !game.cutscene.allowUi(k.code)) {
         if (!this.modal) out.pressed.push(k);
         continue;
@@ -170,6 +175,15 @@ export class UI {
         case 'F1':
           this.toggle('help', () => new W.HelpWindow(this));
           continue;
+        // Your achievements and titles (your own screen's: see main.js).
+        case 'KeyL':
+          if (this.hooks.feats) {
+            const w = this.find('feats');
+            if (w) this.close(w);
+            else this.hooks.feats();
+            continue;
+          }
+          break;
         case 'F2':
           if (this.hooks.toggleCrt) this.hooks.toggleCrt();
           continue;
@@ -310,7 +324,7 @@ export class UI {
     // (A scene that covers the whole view, a lift's shaft or the dark you
     // lie in, keeps a place's name banner from showing over it.)
     const sc = game && game.scene;
-    const covered = !!(sc && (sc.kind === 'lift' || (sc.kind === 'death' && !sc.reborn)));
+    const covered = !!(sc && (sc.kind === 'lift' || sc.intro || (sc.kind === 'death' && !sc.reborn)));
     // (Notices go under a menu that's open, so as not to hide it; over the
     // title screen and the world.)
     const under = this.windows.some((w) => w.modal && w.state !== 'closing' && w.kind !== 'title' && w.kind !== 'banner');

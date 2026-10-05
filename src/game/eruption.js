@@ -65,7 +65,7 @@ export function eruptionScene(game, info = {}) {
   return {
     kind: 'erupt', t: 0, dur: ERUPT_DUR, lock: true, here,
     get mood() {
-      return 'spire_swell';
+      return 'cs_eruption';
     },
     update(g, dt) {
       if (!this.started) {

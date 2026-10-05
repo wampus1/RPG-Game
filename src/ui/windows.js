@@ -17,7 +17,7 @@ import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
-import { GAME_VERSION, versionText, sameVersion } from '../version.js';
+import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
@@ -1524,7 +1524,7 @@ export class HelpWindow extends Window {
       ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
       ['LEAD', 'Hold a lead, RMB an animal · RMB a fence to tie it up'],
       ['STUDY', 'Researcher at a desk: A/D turn rings · W/S pick · SPACE'],
-      ['WINDOWS', 'TAB bag · C craft · M map · J journal · ESC menu · F2 CRT'],
+      ['WINDOWS', 'TAB bag · C craft · M map · J journal · L achievements · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {
       g.text(3, 2 + i, k, C.hi);
@@ -1624,11 +1624,24 @@ export class SaveSlotsWindow extends Window {
         const m = q.meta;
         g.text(8, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
         g.text(this.w - 4 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
-        // (And the version it was made in: another one's marked.)
+        // (And the version it was made in: another one's marked; an older
+        // one can be brought up to this one, [U].)
         const ver = versionText(m.gv);
         const same = sameVersion(m.gv);
-        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length), C.dim);
+        const up = canUpgrade(m.gv);
+        const upW = up ? 9 : 0;
+        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length - upW), C.dim);
         g.text(this.w - 4 - ver.length, y + 1, ver, same ? C.faint : C.orange);
+        if (up) {
+          const bx = this.w - 5 - ver.length - upW;
+          const hovU = this.hovering(bx, y + 1, upW - 1, 1);
+          g.fill(bx, y + 1, upW - 1, 1, ' ', C.fg, hovU ? C.bgHi : '#2a2238');
+          g.text(bx, y + 1, '[U]pdate', hovU ? C.white : C.hi);
+          this.hit(bx, y + 1, upW - 1, 1, () => {
+            this.sel = i;
+            this.upgrade();
+          });
+        }
       } else g.text(8, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
       this.hit(2, y, this.w - 4, 2, () => {
         this.sel = i;
@@ -1638,7 +1651,7 @@ export class SaveSlotsWindow extends Window {
     const y = this.h - 3;
     if (this.confirm) g.center(y, this.confirm.text, C.orange);
     else g.center(y, load ? 'Click a slot or press its key to load it.' : 'Click a slot or press 1-5 to save there.', C.dim);
-    g.center(this.h - 2, '[↑↓] choose  [ENTER] ' + (load ? 'load' : 'save') + '  [X] delete  [ESC] back', C.faint);
+    g.center(this.h - 2, '[↑↓] choose  [ENTER] ' + (load ? 'load' : 'save') + '  [X] delete  [U] update  [ESC] back', C.faint);
   }
   pick(game) {
     const q = this.store.list()[this.sel];
@@ -1658,6 +1671,18 @@ export class SaveSlotsWindow extends Window {
     this.confirm = null;
     if (h.saveSlot && h.saveSlot(q.id)) this.close();
   }
+  // The chosen world brought up to this version of the game (asked first:
+  // see main.js's upgradeSlot).
+  upgrade() {
+    const q = this.store.list()[this.sel];
+    if (!q || !q.meta) return;
+    if (!canUpgrade(q.meta.gv)) {
+      this.confirm = { id: q.id, kind: 'version', text: sameVersion(q.meta.gv) ? 'That world is already this version.' : 'That world is from a newer version: it can\'t be taken back.' };
+      return;
+    }
+    this.ui.hooks.upgradeSlot?.(q.id, q.meta);
+  }
+
   remove() {
     const q = this.store.list()[this.sel];
     if (!q || !q.meta) return;
@@ -1679,6 +1704,7 @@ export class SaveSlotsWindow extends Window {
     else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
     else if (k.code === 'Enter' || k.code === 'Space') this.pick(game);
     else if (k.code === 'KeyX' || k.code === 'Delete') this.remove();
+    else if (k.code === 'KeyU') this.upgrade();
     else if (k.code === 'KeyA') {
       this.sel = 0;
       this.pick(game);
@@ -1921,6 +1947,7 @@ export class TitleWindow extends Window {
       ['S', 'New game from seed...'],
       ...(this.hasSave ? [['L', 'Load game...']] : []),
       ['M', 'Multiplayer'],
+      ['A', 'Achievements'],
       ['O', 'Settings'],
       ['H', 'How to play'],
     ];
@@ -1961,10 +1988,11 @@ export class TitleWindow extends Window {
     if (k === 'H') this.ui.open(new HelpWindow(this.ui));
     if (k === 'O' && h.settings) h.settings();
     if (k === 'M' && h.multiplayer) h.multiplayer();
+    if (k === 'A' && h.feats) h.feats();
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
-    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite'].some((k2) => this.ui.find(k2))) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', KeyA: 'A', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite', 'feats', 'confirm'].some((k2) => this.ui.find(k2))) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

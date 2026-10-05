@@ -3531,7 +3531,7 @@ together on your network" above for how to start. How it works:
     - Frail, Blunt, Heavy-Footed, Clumsy, Short of Breath and Outlander
       are gone; a character that had one simply loses it.
   - **Picks:** up to 4 good traits, plus one more for each flaw (up to 2
-    flaws). Flaws no longer give stat points.
+    flaws; no limit since round 49). Flaws no longer give stat points.
   - **The list scrolls** (wheel, arrows, or moving down it). Good traits
     come first, then a divider, then the flaws. Each line shows the start
     of its description, and the whole of it shows under the list and in
@@ -3573,6 +3573,90 @@ together on your network" above for how to start. How it works:
     shaken (harder the closer they are) and is told which way it fell.
     Players nearby see the blast itself, and the villagers close by cry
     out.
+
+## Round 49: darker fights, achievements and titles, painted openings
+
+- *Fight and master music, darker and each its own* (`game/music.js`,
+  `game/synth.js`, `game/compose.js`):
+  - **New instruments:** low strings (a chugging ostinato when short), a
+    distorted guitar, monks chanting, shrieking horror strings, a war horn,
+    a "braam" wall of brass, a beating reese bass, an outlaw's twanging
+    baritone guitar, a bit-crushed machine voice, a whale-like call from
+    the deep and a droning wooden pipe. New drums too: a gong, a cinematic
+    impact, rattling chains, a stamping foot, a low war snare and thunder.
+  - **Each fight its own lead and drums:** beasts get a war horn over
+    war drums and stamping (still no snare); things of the night get
+    shrieking strings over a reese bass and chains; the watch get brass
+    walls, galloping cello and a timpani march; bandits get the twanging
+    guitar over boots and slow claps, in the desert mode. Each old place's
+    fight differs again (a barrow's dirge, a mine's grinding guitar, a
+    crypt's organ toccata, a Kavorent hall's broken machine, a grotto's
+    deep call, a wildwood's droning pipe), as do Kharos's and Myrrow's.
+  - **Darker, not playful:** fights are in dark modes, with no bright
+    plucked or belled arps and no shakers or bright hats. The tune moves
+    slower than the drive under it, low and with few leaps.
+  - **Masters' themes:** brass walls (or the place's own instrument) on
+    the beat, a gong as each part opens, an impact when the fight moves
+    into a new phase, and low strings (or a guitar, a shriek, a machine)
+    racing as it climbs.
+- *Every cutscene has its own music,* heard nowhere else: the falling
+  star (celesta and choir, then a music box in the dark), home (hammered
+  dulcimer and horn), the voyage (a fiddle's jig), the storm (a wailing
+  choir, brass walls, thunder), the eruption (shawm, war drums, power
+  chords), the Wall coming down (organ and choir in the dark, then a
+  brass hymn), a spire waking (a theremin over the rite) and a master
+  falling (a slow fanfare with a gong). Death keeps its own.
+- *Flaws have no limit.* Every flaw you take gives one more good-trait
+  pick.
+- *Achievements and titles* (`game/achievements.js`, `ui/feats.js`):
+  - 30 achievements, each unlocking one title. Every title starts locked;
+    an account that went by one it hadn't earned goes by none now.
+  - They're seen as you play (blocks placed or mined, foes defeated, fish,
+    crafting, harvests, insights at a study, locks picked, people saved,
+    map explored, a second island, coins carried, old places, masters
+    brought down, a spire opened, the Wall falling, duels, rising again,
+    citizenship somewhere you weren't born, guard duty, being well liked,
+    being a town's hero, being wanted, bandit leaders, and one for each
+    origin).
+  - They're kept in the browser and with your account (so they travel with
+    its code and the game's own server). Earned in someone else's world,
+    the host sends them to your screen and your account keeps them.
+  - **L** (in a world, yours or someone else's) or **A** on the title
+    screen opens the list: what's done, what each takes, and the title it
+    unlocks. ENTER on an earned one goes by that title. The account window
+    only offers earned titles, and has an Achievements button.
+- *Update a world's version:* in the save list (single player, **U** or
+  the Update button) and in the multiplayer menu's list of your worlds, a
+  world from an older version can be updated to this one. You're warned
+  first that it may not all work and that it can't be undone. Only the
+  version mark changes; a newer world can't be taken back. (The version is
+  now 0.49.0.)
+- *Openings, painted, for everyone* (`game/intros.js`, `game/cutscene.js`):
+  - The two openings that played out in the world are now painted scenes,
+    like the Fallen Star's:
+    - **Native:** your home town on its hillside grows out of bare land as
+      its history is told, a day racing past every couple of seconds: the
+      hall and its bell tower first, houses rising frame by frame, lanes
+      laid, woods cut back, fields tilled, walls last. The houses, roofs
+      and land follow its people's culture and its biome. Then the town
+      today with its people about, and the picture draws in to your
+      family's door.
+    - **Castaway:** your ship at sunset with the Wall ahead and lightning
+      inside it, the crew's last words on deck; then the gap, rain and
+      rising seas, the bolt that splits the mainmast and fires the
+      canvas, and black.
+  - **In worlds with others:** the host of a new world gets an intro, and
+    so does every newcomer. A newcomer native is born in their own home
+    town, a castaway washes up on the beach, a star falls in its crater.
+  - **Kept out of the world until it's done:** while your intro plays, no
+    one sees you, bumps into you or goes after you, and nothing happens to
+    you. When it ends you're set down where your story puts you.
+- *The Fallen Star's wing* is smaller (16 pixels across, not 22), with a
+  smaller glow.
+- *Fixed: an old place cleared while you're away shows it when you come
+  back* (`world/sites.js`). If you'd changed the ground by it (dug, built,
+  felled a tree) and moved far off, it used to come back looking as it was
+  before it fell in.
 
 ## Command console
 

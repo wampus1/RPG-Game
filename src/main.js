@@ -7,7 +7,7 @@ import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
 import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow } from './ui/windows.js';
-import { GAME_VERSION, versionText, sameVersion } from './version.js';
+import { GAME_VERSION, versionText, sameVersion, canUpgrade } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
 import { SaveStore, openSaveDB } from './game/saves.js';
@@ -23,6 +23,8 @@ import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
 import { windowPixels } from './net/uiwire.js';
 import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow } from './ui/multiplayer.js';
 import { MapWindow } from './ui/worldmap.js';
+import { FeatsWindow } from './ui/feats.js';
+import { FeatBook, FEAT } from './game/achievements.js';
 import { avatarFromKey } from './render/avatar.js';
 
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
@@ -87,7 +89,7 @@ function saveTo(id, note, quiet = false) {
   if (!game) return false;
   const g = game;
   // (Not in the middle of the opening scene: there's nothing to keep yet.)
-  if (g.cutscene) {
+  if (g.cutscene || (g.scene && g.scene.intro)) {
     ui.msg('The story hasn\'t begun yet: you can save once it has.', '#ffb080');
     return false;
   }
@@ -132,6 +134,20 @@ function versionCheck(data, go) {
   return null;
 }
 
+// A world made in an older version of the game, brought up to this one:
+// warned first (only its version mark changes; what's in it may not all
+// work as it should), then `done`.
+function upgradeSave(id, meta, done = null) {
+  if (!meta || !canUpgrade(meta.gv)) return;
+  const what = meta.world ? `"${meta.world}"` : `${meta.name || 'This'}'s world`;
+  ui.open(new ConfirmWindow(ui, 'UPDATE THIS WORLD?', `${what} was made in ${versionText(meta.gv)} of the game. Updating it to ${versionText(GAME_VERSION)} means it loads without asking, and others on ${versionText(GAME_VERSION)} can join it. Nothing in it is changed, but a world from an older version may not work as it should (things missing, out of place or broken), and this can't be undone: an updated world can't be taken back to the older version. Update it?`, () => {
+    store.setVersion(id, GAME_VERSION).then(() => {
+      ui.notify(`${what} is now ${versionText(GAME_VERSION)}.`, null, '#80e070');
+      done?.();
+    }, (e) => ui.notify(`Couldn't update it: ${e && e.message ? e.message : e}`, null, '#ff8070'));
+  }, { yes: 'Update it', no: 'Leave it' }));
+}
+
 // `opts.host`: { name } to host the world for others on the network.
 function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
   const s = save ? save.seed : seed ?? (Math.random() * 2 ** 32) >>> 0;
@@ -143,11 +159,13 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
   setTimeout(() => {
     const t0 = performance.now();
     // (A new character's story opens with a scene of where they're from;
-    // ?nointro goes straight in.)
-    // (A world for others starts with everyone on the island: no opening
-    // scene.)
-    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.host });
+    // ?nointro goes straight in. In a world for others too: they're kept
+    // out of it till it's done, see intros.js.)
+    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') });
     game.crt = crt;
+    // (What you do here, worth an achievement: kept with you.)
+    game.featBook = feats;
+    game.onFeat = (id) => featNote(id);
     game.slot = slot && slot !== 'auto' ? slot : null;
     game.autosave = () => saveTo(game.partyWorld && game.slot ? game.slot : 'auto', `Autosaved (day ${game.day}, 7:00).`);
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
@@ -157,7 +175,7 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     ui.lastSettlement = undefined;
     hideLoading();
     if (!save && !hero) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
-    if (!game.cutscene) ui.msg('Press H for help.', '#a0c8ff');
+    if (!game.cutscene && !game.scene) ui.msg('Press H for help.', '#a0c8ff');
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;
     if (params.has('goto')) window.__goto(params.get('goto'));
@@ -209,6 +227,7 @@ ui.hooks = {
     return !!ok;
   },
   loadSlot: (id) => loadFrom(id),
+  upgradeSlot: (id, meta) => upgradeSave(id, meta),
   continue: () => {
     const last = store.latest();
     if (last) loadFrom(last.id);
@@ -240,6 +259,7 @@ ui.hooks = {
   party: () => openParty(),
   profile: (p) => openProfile(p),
   settings: () => ui.open(new SettingsWindow(ui, settings)),
+  feats: () => openFeats(),
   settingsChanged: (s) => {
     applyAll();
     saveSettings(browserStorage(), s);
@@ -258,6 +278,36 @@ ui.hooks = {
 // world there), and the world you're hosting or playing in (see net/).
 const accounts = new Accounts(browserStorage());
 window.__accounts = accounts;
+// Your achievements (and the titles they unlock): kept in this browser and
+// with your account (see game/achievements.js).
+const feats = new FeatBook(browserStorage(), accounts);
+accounts.localFeats = () => feats.local;
+feats.merge();
+window.__feats = feats;
+
+// Something done, worth an achievement: said so.
+function featNote(id) {
+  const f = FEAT[id];
+  if (!f) return;
+  audio.play('fanfare');
+  ui.notify(`Achievement: ${f.name}. You can now go by the title "${f.title}" (press L).`, null, '#ffe070');
+}
+
+// Your achievements, and a title to go by.
+function openFeats() {
+  if (ui.find('feats')) return;
+  ui.open(new FeatsWindow(ui, {
+    got: () => feats.got,
+    title: () => (accounts.account ? accounts.account.title || '' : ''),
+    setTitle: (t) => {
+      if (!accounts.account) return false;
+      feats.merge();
+      accounts.update({ title: t });
+      profileChanged(accounts.profile);
+      return true;
+    },
+  }));
+}
 // Your account and worlds kept with the game's own server too, so they're
 // the same whatever address the game is opened at (see net/machine.js).
 const machine = new MachineSync({ storage: browserStorage(), accounts, store });
@@ -385,7 +435,8 @@ function endSession() {
 // ------------------------------------------------------------ your account
 function openAccount(onDone = null) {
   if (ui.find('account')) return;
-  ui.open(new AccountWindow(ui, accounts, { onDone, onChange: (p) => profileChanged(p) }));
+  feats.merge();
+  ui.open(new AccountWindow(ui, accounts, { onDone, onChange: (p) => profileChanged(p), titles: () => feats.titles(), onFeats: () => openFeats() }));
 }
 
 function needAccount(then) {
@@ -421,6 +472,7 @@ const mpCtx = {
       newHosted(/^\d+$/.test(v.trim()) ? parseInt(v.trim(), 10) >>> 0 : hashString(v.trim()));
     },
     continueWorld: (id) => continueHosted(id),
+    upgradeWorld: (id, meta) => upgradeSave(id, meta),
     join: (at = null) => joinWorld(at),
     // (Hosted in another version of the game: you can't join it.)
     otherVersion: (w) => ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', refusal('gameversion', { host: w.gv || null }), null, { yes: 'OK', only: true })),
@@ -595,6 +647,10 @@ function joinWorld(at = null) {
       onFriend: (msg) => friendWord(msg),
       onEnd: (why, title) => leaveWorld(why, title),
     });
+    // (Something you did in their world, worth an achievement: yours.)
+    net.onFeat = (id) => {
+      if (feats.unlock(id)) featNote(id);
+    };
     sess.net = net;
     net.openPause = () => openGuestPause();
     net.onLocalKey = (k) => guestKey(k);
@@ -674,7 +730,11 @@ function guestKey(k) {
   if (k.code === 'KeyH' || k.code === 'F1') ui.toggle('help', () => new HelpWindow(ui));
   else if (k.code === 'KeyM') ui.toggle('map', () => new MapWindow(ui));
   else if (k.code === 'KeyP') openParty();
-  else if (k.code === 'F2') ui.hooks.toggleCrt();
+  else if (k.code === 'KeyL') {
+    const w = ui.find('feats');
+    if (w) ui.close(w);
+    else openFeats();
+  } else if (k.code === 'F2') ui.hooks.toggleCrt();
   else if (k.code === 'F3') ui.debug = !ui.debug;
 }
 

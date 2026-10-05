@@ -7,6 +7,7 @@ import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y, SURFACE } from '../config.js
 import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
+import { Region } from './region.js';
 
 // What kind of place suits a map square, if any: by its land and its
 // neighbours.
@@ -551,15 +552,35 @@ export function stampSites(world, region) {
   }
 }
 
-// Change what shows above ground of a site that's loaded (a dungeon beaten,
-// a spire opened).
+// Change what shows above ground of a site (a dungeon beaten, a spire
+// opened): where it's loaded, and where it was changed once and put away
+// since (that ground comes back as it was put away, not made afresh, so
+// it's put right where it's kept: see World.unloadRegion).
 export function restamp(world, s) {
+  const kept = new Map();
   for (const [dx, y, dz, id, meta] of siteBlocks(s, s.state || {})) {
     const x = s.x + dx;
     const z = s.z + dz;
-    if (!world.regionAt(x, z)) continue;
-    if (world.getBlock(x, y, z) !== id) world.setBlock(x, y, z, id, meta);
+    if (world.regionAt(x, z)) {
+      if (world.getBlock(x, y, z) !== id) world.setBlock(x, y, z, id, meta);
+      continue;
+    }
+    const rx = Math.floor(x / REGION_W);
+    const rz = Math.floor(z / REGION_D);
+    if (world.remote || !world.saved || y < 0 || y >= WORLD_Y || !world.inBounds(rx, rz)) continue;
+    const key = world.regionKey(rx, rz);
+    if (!kept.has(key)) {
+      const d = world.saved.get(key);
+      kept.set(key, d ? Region.deserialize(d) : null);
+    }
+    const r = kept.get(key);
+    if (!r) continue;
+    const i = Region.idx(x - r.x0, y, z - r.z0);
+    if (BLOCKS[r.blocks[i]]?.interact === 'container' && BLOCKS[id]?.interact !== 'container') r.containers.delete(i);
+    r.blocks[i] = id;
+    r.meta[i] = meta || 0;
   }
+  for (const [key, r] of kept) if (r) world.saved.set(key, r.serialize());
   // (Whoever else keeps a copy of the world is told: see net/host.js.)
   world.onSiteChange?.(s);
 }

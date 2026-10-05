@@ -13,7 +13,7 @@ import { CULTURES } from '../world/names.js';
 import { humanoidSheet, SHEET_H, SPR_PAD } from '../render/sprites.js';
 import { drawWing, wingInFront } from '../render/wing.js';
 import {
-  STATS, STAT_BASE, STAT_MAX, TRAITS, FLAW_MAX, traitPicks, goodTraits, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
+  STATS, STAT_BASE, STAT_MAX, TRAITS, traitPicks, goodTraits, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
   DETAILS, HATS, PATTERNS, OUTFITS, pointsLeft, randomHero, heroName, hpBonus, COMMON_KIT,
   EYES, BEARD_STYLES, MARKS, NECKS, GLOVES, CAPES,
 } from '../game/hero.js';
@@ -162,8 +162,8 @@ export class CharacterWindow extends Window {
   }
 
   // On or off. You may have TRAIT_PICKS good traits, one more for each flaw
-  // (up to FLAW_MAX flaws). False if it can't be taken (all your picks are
-  // used: take one off first, or a flaw).
+  // (as many flaws as you like). False if it can't be taken (all your picks
+  // are used: take one off first, or a flaw).
   toggle(row) {
     const h = this.hero;
     const list = h.traits;
@@ -177,12 +177,7 @@ export class CharacterWindow extends Window {
       this.note = null;
       return true;
     }
-    if (row.flaw) {
-      if (list.filter((k) => TRAITS[k].flaw).length >= FLAW_MAX) {
-        this.note = `You can take at most ${FLAW_MAX} flaws.`;
-        return false;
-      }
-    } else if (goodTraits(h).length >= traitPicks(h)) {
+    if (!row.flaw && goodTraits(h).length >= traitPicks(h)) {
       this.note = 'All your picks are used. Take one off, or take a flaw for another pick.';
       return false;
     }
@@ -293,7 +288,7 @@ export class CharacterWindow extends Window {
       const picks = traitPicks(h);
       const flaws = h.traits.length - good;
       g.text(3, 6, `Good traits: ${good}/${picks}`, good < picks ? C.hi : C.fg);
-      g.text(24, 6, `Flaws: ${flaws}/${FLAW_MAX}`, flaws ? C.orange : C.faint);
+      g.text(24, 6, `Flaws: ${flaws}`, flaws ? C.orange : C.faint);
       // (What's on the list: a heading, the good ones, the divider, the flaws.)
       const lines = [{ head: `GOOD TRAITS  (pick up to ${picks})` }];
       rows.forEach((r, j) => {

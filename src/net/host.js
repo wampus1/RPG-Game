@@ -278,6 +278,12 @@ export class HostNet {
     return r;
   }
 
+  // An achievement a player here has earned (see game/achievements.js):
+  // their screen keeps it, with their own account.
+  feat(seat, id) {
+    for (const g of this.guests.values()) if (g.state === 'in' && g.seat === seat) this.to(g, { t: 'feat', id });
+  }
+
   // A word for one player here (by account id): a notice on their screen.
   tell(pid, text, profile = null) {
     if (pid === this.profile.id) return this.notify(text, profile);
@@ -526,7 +532,8 @@ export class HostNet {
       const ch = diffFields(e, last);
       if (ch) ents.push(packEntity(e, ch));
     };
-    for (const q of game.everyone()) add(q);
+    // (Not anyone still watching their opening: not in the world yet.)
+    for (const q of game.everyone()) if (!q.limbo) add(q);
     for (const n of game.npcs) add(n);
     for (const c of game.creatures) add(c);
     for (const d of game.drops) add(d);
@@ -676,6 +683,9 @@ export class HostNet {
       // (A fallen star: the village it came down by, and whose fall.)
       village: sc.kind === 'starfall' ? sc.village : undefined,
       first: sc.kind === 'starfall' ? sc.first : undefined,
+      // (A painted opening: what's told in it, for their screen to paint.
+      // See game/intros.js.)
+      info: sc.kind === 'home_intro' || sc.kind === 'wreck_intro' ? sc.info : undefined,
     };
   }
 

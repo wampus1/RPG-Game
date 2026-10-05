@@ -76,7 +76,7 @@ export function wallFall(game) {
     kind: 'wall', t: 0, dur: 15, lock: true,
     DARK_AT: [0.6, 1.5, 2.4], BREAK_AT: 7.6,
     get mood() {
-      return this.t < this.BREAK_AT ? 'spire_swell' : 'spire_open';
+      return this.t < this.BREAK_AT ? 'cs_wall' : 'cs_wall_free';
     },
     update(g, dt) {
       if (!this.started) {

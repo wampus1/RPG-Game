@@ -52,7 +52,9 @@ export function spireOpening(game, rec, side, gemColor) {
     door: { x: rec.x + ox, z: rec.z + oz },
     OPEN_AT: 1.4, BURST_AT: 4.4,
     get mood() {
-      return this.t < this.BURST_AT ? 'spire_swell' : 'spire_open';
+      // (Its own music as it wakes, a theremin over the rite; open, the
+      // spire's own song.)
+      return this.t < this.BURST_AT ? 'cs_spire' : 'spire_open';
     },
     // (From however far drawn back the camera already was, out to see the
     // spire whole, and smoothly back: never a jump.)
@@ -187,7 +189,8 @@ export function bossDefeat(game, run, boss) {
   const tint = bossTint(boss);
   return {
     kind: 'boss_down', t: 0, dur: 4.2, lock: true, at, tint, ghost: boss,
-    mood: null,
+    // (A slow fanfare, the gong: see music.js.)
+    mood: 'cs_victory',
     timeScale(t) {
       return t < 1.6 ? 0.18 : t < 2.4 ? 0.5 : 1;
     },

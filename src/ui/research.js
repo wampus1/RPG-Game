@@ -658,6 +658,7 @@ export class ResearchWindow extends Window {
       if (j) j.earned = (j.earned || 0) + pay;
     }
     this.insights++;
+    game.stats.insights = (game.stats.insights || 0) + 1;
     gainMastery(game, 'study', 1 + (this.streak >= 3 ? 1 : 0) + (this.rings.length >= 4 ? 1 : 0));
     this.phase = 'insight';
     this.flash = 1.2;

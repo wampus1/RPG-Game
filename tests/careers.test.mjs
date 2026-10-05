@@ -149,7 +149,9 @@ test('a hired guard follows you, fights beasts, survives a save and goes home af
   p.teleport(guard.x + 1, guard.y, guard.z);
   const offer = respond(guard, game, 'hire');
   assert.equal(offer.choices.length, 4);
-  respond(guard, game, 'hire', '12');
+  // (Four hours: done by the afternoon, not out in the night, when a
+  // guard's busy with whatever comes out of the dark.)
+  respond(guard, game, 'hire', '4');
   assert.equal(guard.state, 'hired');
   assert.ok(!a.npcs.includes(guard), 'no longer part of the town roster');
   walk(game, input, p, 1, 12);
@@ -169,7 +171,9 @@ test('a hired guard follows you, fights beasts, survives a save and goes home af
   assert.ok(e2 && e2.state === 'hired' && e2.distTo(g2.player) <= 3, 'escort restored beside you');
   for (let i = 0; i < 20000 && car.escort; i++) game.update(0.25, input);
   assert.equal(car.escort, null, 'contract ran out');
-  assert.ok(guard.state === 'routine' || guard.state === 'leaving');
+  assert.ok(!guard.dead && !guard.hired, 'alive, and free again');
+  // Back on their town's roster, or on the road home.
+  assert.ok(a.npcs.includes(guard) || car.returning.some((r) => r.idx === guard.rec.idx), `home, or on the way (${guard.state})`);
 });
 
 test('favors: fetch, deliver a letter, slay beasts; lapsed requests disappoint', () => {

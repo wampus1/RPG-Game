@@ -10,7 +10,7 @@ import { ITEMS } from '../src/world/items.js';
 import { starKey, starable, parseStar, MODS } from '../src/world/quality.js';
 import { extraDigMult, toolDrops } from '../src/game/mods.js';
 import {
-  TRAITS, TRAIT_PICKS, FLAW_MAX, normalizeHero, traitPicks, goodTraits, randomHero, ORIGINS, WING_BACK,
+  TRAITS, TRAIT_PICKS, normalizeHero, traitPicks, goodTraits, randomHero, ORIGINS, WING_BACK,
   hpBonus, staminaBonus, priceMult, repGainMult, stepMult, damageMult, digMult, cooldownMult, opinionBonus,
 } from '../src/game/hero.js';
 import { GAME_VERSION, versionText, sameVersion } from '../src/version.js';
@@ -83,7 +83,7 @@ test('the old skills are traits now; you pick good ones, and each flaw gives one
   h.traits = [flaws[0]];
   assert.equal(traitPicks(h), TRAIT_PICKS + 1);
   h.traits = flaws.slice(0, 5);
-  assert.equal(traitPicks(h), TRAIT_PICKS + FLAW_MAX, 'as many as FLAW_MAX count');
+  assert.equal(traitPicks(h), TRAIT_PICKS + 5, 'every flaw counts (round 49: no cap)');
   // An old character: skills and traits, one list.
   const o = normalizeHero({ specialties: ['angler', 'cook'], traits: ['tough', 'frail'] });
   assert.deepEqual(o.traits, ['angler', 'cook', 'tough']);

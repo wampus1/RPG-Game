@@ -284,6 +284,29 @@ export const KITS = {
   deep: { kick: 'x..o............', tom: '..........-.....' },
   // A fight with beasts: taiko and toms, the hunt's pulse; no snare.
   beast: { taiko: 'x.....x...x.....', tom: '..o..o....o..o.o', shaker: 'o-o-o-o-o-o-o-o-', fill: { tom: 'x.....x...xoxoxx', taiko: 'x.....x...x...x.' }, crash: true },
+  // (Round 49: each kind of fight its own drums, all of them heavier.)
+  // The hunt: war drums and stamping, low toms circling; no snare, nothing
+  // bright.
+  hunt: { taiko: 'x.....x...x.....', stomp: 'x.......x..x....', tom: '..o..o....o..o.o', wood: '...-.......-....', fill: { tom: 'x.....x...xoxoxx', taiko: 'x.....x...x...x.' }, crash: true },
+  // The night's: an iron foundry: a low snare, chains rattling, a kick that
+  // stumbles.
+  night: { kick: 'x..x....x..x..x.', war: '....x.......x...', chain: '..o...o.-.o...o.', tom: '..............oo', fill: { war: '....x...x.xxxxxx', tom: '........o.o.oooo' }, crash: true },
+  // The watch's: a war march, the low snare rolling, timpani on the bar.
+  warmarch: { kick: 'x.......x.......', war: '....x.oo....x.oo', timp: 'x.......x.......', rim: '-.-.-.-.-.-.-.-.', fill: { war: '....x.xxxxxxxxxx', timp: 'x.......x.x.x.x.' }, crash: true },
+  // The outlaws': boots stamping on boards, slow hand claps, a wood block.
+  outlaw: { stomp: 'x.....x.x.......', clap: '....o.......o...', wood: '..-.....-.o.....', tom: '..............o.', fill: { stomp: 'x.....x.x.x.xxx.', clap: '....o...o.o.oooo' }, crash: true },
+  // The Kavorent's halls in a fight: a machine's pulse, chains for hats.
+  machine: { kick: 'x...x...x...x...', war: '....x.......x...', chain: '..o...o...o..oo.', fill: { war: '....x...x.x.xxxx', chain: 'oooooooooooooooo' }, crash: true },
+  // The deep water's: slow toms, a heartbeat, the dripping.
+  abyss: { kick: 'x.....x...x.....', tom: '....o.......o..o', conga: '..-...-...-...-.', fill: { tom: '....o...o.o.oooo' }, drip: true, crash: true },
+  // The Wildwood's rite: war drums, toms, a wood block knocking.
+  rite: { taiko: 'x.......x...x...', tom: '..o.o.....o.o...', wood: 'o...o...o...o...', fill: { tom: '..o.o...x.xxxxxx' }, crash: true },
+  // A barrow's: a dirge, a heartbeat kick under a slow low snare.
+  dirge: { kick: 'x..x....x..x....', war: '........x.......', tom: '....-.......-...', fill: { war: '........x.x.xxxx', tom: '....o.......oooo' }, crash: true },
+  // A mountain breaking open: great drums and the ground stamping.
+  quake: { taiko: 'x.....x.x.......', stomp: 'x..x....x..x....', tom: '....o.......o.o.', fill: { taiko: 'x.....x.x.x.xxxx' }, crash: true },
+  // The storm at sea: a great drum and a low snare, thunder in it.
+  gale: { taiko: 'x.......x.......', war: '....x.......x.x.', tom: '..-...-...-...-.', fill: { war: '....x...xxxxxxxx' }, crash: true },
   // A fight with things of the night: the drum machine at full tilt, a
   // gated snare, sixteenth hats.
   battle: { kick: 'x..x....x..x....', snare: '....x.......x...', hat: 'xoxoxoxoxoxoxoxo', clap: '............o...', fill: { snare: '....x...x.xxxxxx', tom: '........o.o.oooo' }, crash: true },
@@ -293,15 +316,16 @@ export const KITS = {
   rogue: { kick: 'x..x..x.x.......', conga: '..o..o....o.o..o', snare: '....o.......o...', shaker: '-o-o-o-o-o-o-o-o', fill: { conga: 'x..o..x...ooxxxx' }, crash: true },
   // Kharos: hammer, anvil, a bellows breathing.
   forge: { kick: 'x.......x.......', anvil: '....x.......x..-', tom: '......-.........', fill: { anvil: '....x.......x.xx' } },
-  forge_battle: { kick: 'x..x....x..x....', anvil: '....x.......x...', hat: '.o.o.o.o.o.o.o.o', snare: '....o.......o...', fill: { anvil: '....x...x.x.xxxx' }, crash: true },
+  forge_battle: { kick: 'x..x....x..x....', anvil: '....x.......x...', chain: '.-.-.-.-.-.-.-.-', war: '....o.......o...', fill: { anvil: '....x...x.x.xxxx' }, crash: true },
   // Embers: a crackle here and there, a low thump.
   crackle: { kick: 'x...............', crackle: true },
   // Myrrow's dark water: a drip now and then, and a heartbeat.
   drip: { kick: 'x.........-.....', drip: true },
   // A master's, by its phase: heavy and slow, then driving, then savage.
-  grand: { taiko: 'x.......x.......', kick: 'x.....x...x.....', snare: '........x.......', fill: { snare: '........x.xxxxxx', tom: '............xxxx' }, crash: true },
-  grand2: { kick: 'x..x....x..x....', snare: '....x.......x...', hat: 'xoxoxoxoxoxoxoxo', taiko: 'x.......x.......', fill: { snare: '....x...xxxxxxxx', tom: '........x.x.xxxx' }, crash: true },
-  fury: { kick: 'x.xx..x.x.xx..x.', snare: '....x..x....x.xx', hat: 'xxxxxxxxxxxxxxxx', taiko: 'x...x...x...x...', fill: { snare: 'xxxxxxxxxxxxxxxx', tom: '........xxxxxxxx' }, crash: true },
+  // (Round 49: the low war snare, chains for hats: darker, heavier.)
+  grand: { taiko: 'x.......x.......', kick: 'x.....x...x.....', war: '........x.......', fill: { war: '........x.xxxxxx', tom: '............xxxx' }, crash: true },
+  grand2: { kick: 'x..x....x..x....', war: '....x.......x...', chain: '..o...o...o...o.', taiko: 'x.......x.......', fill: { war: '....x...xxxxxxxx', tom: '........x.x.xxxx' }, crash: true },
+  fury: { kick: 'x.xx..x.x.xx..x.', war: '....x..x....x.xx', chain: 'o.o.o.o.o.o.o.o.', taiko: 'x...x...x...x...', fill: { war: 'xxxxxxxxxxxxxxxx', tom: '........xxxxxxxx' }, crash: true },
 };
 // What a line's character is worth as a stroke's strength.
 export const HIT = { x: 1, X: 1.2, o: 0.62, '-': 0.32, '.': 0 };

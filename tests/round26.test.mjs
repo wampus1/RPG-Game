@@ -390,53 +390,44 @@ function heroGame(seed, origin) {
   return new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI(), hero, intro: true });
 }
 
-test('a castaway\'s story opens on the deck of their ship, and ends on the beach', () => {
+// (Round 49: painted now, the player kept out of the world till they end.
+// See intros.js and round49.test.mjs.)
+test('a castaway\'s story opens on their ship (painted: the evening, the storm, the strike), and ends on the beach', () => {
   const game = heroGame(12345, 'crash');
-  const cs = game.cutscene;
-  assert.ok(cs && cs.kind === 'ship');
+  const sc = game.scene;
+  assert.ok(sc && sc.kind === 'wreck_intro' && sc.intro);
   const p = game.player;
-  assert.ok(p.x >= INST_X0);
-  assert.ok(cs.crew.length >= 8);
-  assert.ok(cs.crew.some((c) => c.role === 'Captain'));
-  const beach = cs.beach;
-  const clock = cs.clock.minute;
+  assert.ok(p.limbo, 'not in the world while it plays');
+  assert.ok(p.x < INST_X0, 'already where the sea leaves them');
+  assert.ok(sc.info.ship && sc.info.captain && sc.words.length >= 5);
+  const beach = { x: p.x, z: p.z };
+  const clock = game.minute;
   const input = stubInput();
-  // Out to sea a while, then the storm.
-  run(game, input, 30);
-  assert.equal(cs.phase, 'calm');
-  cs.stormAt = cs.t;
-  run(game, input, 5);
-  assert.equal(cs.phase, 'gather');
-  assert.equal(game.weather.kind, 'rain');
-  for (let i = 0; i < 1200 && game.cutscene; i++) game.update(0.1, input);
-  assert.equal(game.cutscene, null);
-  assert.equal(game.world.inst, null);
-  assert.equal(p.x, beach.x);
-  assert.equal(p.z, beach.z);
-  assert.ok(Math.abs(game.minute - clock) < 1);
+  assert.equal(sc.mood, 'cs_voyage');
+  for (let i = 0; i < 1200 && game.scene; i++) game.update(0.1, input);
+  assert.equal(game.scene, null);
+  assert.ok(!p.limbo, 'set down in the world');
+  assert.ok(Math.abs(p.x - beach.x) <= 2 && Math.abs(p.z - beach.z) <= 2);
+  assert.ok(game.minute - clock < 60, 'the same morning');
   assert.ok(game.ui.msgs.some((m) => /wet sand/.test(m)));
 });
 
-test('a native\'s story opens on their town building itself up as its history is told', () => {
+test('a native\'s story opens on their town building itself up as its history is told (painted)', () => {
   const game = heroGame(12345, 'native');
-  const cs = game.cutscene;
-  assert.ok(cs && cs.kind === 'home');
-  const L = cs.L;
-  const b = L.buildings.find((q) => q.x0 !== undefined && q.type !== 'townhall');
-  // At the start: bare ground where the houses will be.
-  cs.prog = 0;
-  let hidden = 0;
-  for (let x = b.x0; x <= b.x1; x++) for (let z = b.z0; z <= b.z1; z++) for (let y = GROUND; y < GROUND + 4; y++) if (game.world.getBlock(x, y, z) && cs.veiled(x, y, z, game.world.getBlock(x, y, z))) hidden++;
-  assert.ok(hidden > 0);
-  cs.prog = 1;
-  let still = 0;
-  for (let x = b.x0; x <= b.x1; x++) for (let z = b.z0; z <= b.z1; z++) for (let y = GROUND; y < GROUND + 4; y++) if (game.world.getBlock(x, y, z) && cs.veiled(x, y, z, game.world.getBlock(x, y, z))) still++;
-  assert.equal(still, 0);
-  assert.ok(cs.beats.length >= 2);
-  for (let i = 1; i < cs.beats.length; i++) assert.ok(cs.beats[i].y >= cs.beats[i - 1].y);
+  const sc = game.scene;
+  assert.ok(sc && sc.kind === 'home_intro' && sc.intro);
+  assert.ok(game.player.limbo);
+  assert.ok(sc.info.beats.length >= 2);
+  for (let i = 1; i < sc.info.beats.length; i++) assert.ok(sc.info.beats[i].y >= sc.info.beats[i - 1].y);
+  // Bare land to begin with; all of it up by today.
+  assert.equal(sc.prog(), 0);
+  sc.t = sc.T1;
+  assert.equal(sc.prog(), 1);
+  sc.t = 0;
   const input = stubInput();
-  for (let i = 0; i < 600 && game.cutscene; i++) game.update(0.1, input);
-  assert.equal(game.cutscene, null);
+  for (let i = 0; i < 900 && game.scene; i++) game.update(0.1, input);
+  assert.equal(game.scene, null);
+  assert.ok(!game.player.limbo);
   assert.ok(game.ui.msgs.some((m) => /Home again/.test(m)));
 });
 

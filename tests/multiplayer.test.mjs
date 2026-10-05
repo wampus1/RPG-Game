@@ -104,8 +104,13 @@ test('accounts: a title, frames and patterns, and forty words about you at most'
   assert.deepEqual(cleanIcon({ shape: 'ship', color: '#50e0c8', bg: '#101018', pattern: 'stars', frame: 'gold' }), { shape: 'ship', color: '#50e0c8', bg: '#101018', pattern: 'stars', frame: 'gold' });
   assert.equal(cleanIcon({ frame: 'nonsense' }).frame, 'plain');
   const a = new Accounts(memStore());
+  // (Titles are earned, round 49: see game/achievements.js. This one's
+  // earned two of them before making the account.)
+  a.localFeats = () => ({ sailor: 1, bard: 1 });
   a.create('Wren', { shape: 'cat', frame: 'rune' }, 'Hello there.', 'Sailor');
   assert.equal(a.profile.title, 'Sailor');
+  a.update({ title: 'Knight' });
+  assert.equal(a.profile.title, 'Sailor', 'not one that hasn\'t been earned');
   assert.equal(a.profile.icon.frame, 'rune');
   a.update({ title: 'Not a title' });
   assert.equal(a.profile.title, '', 'only the titles there are');
@@ -163,6 +168,7 @@ test('machine: the account and worlds are the same at every address the game is 
   // At localhost: an account made, a world hosted and saved.
   const A = browserAt(fetchFrom());
   assert.ok(await A.sync.start());
+  A.accounts.localFeats = () => ({ sailor: 1 });
   A.accounts.create('Wren', { shape: 'ship' }, 'Hello.', 'Sailor');
   await A.saves.save('mp1', fakeGame('Testland'));
   await A.sync.chain;
@@ -786,6 +792,9 @@ test('an old place cleared on the host falls in on every player\'s copy of the w
   for (const [dx, y, dz, id] of finalOf(site2)) assert.equal(gg.world.getBlock(site2.x + dx, y, site2.z + dz), id, `player's held ground ${dx},${y},${dz}`);
   const placed = finalOf(site);
   assert.ok(placed.length > 5);
+  // (The host lets go of ground nobody's near, now and then: taken up
+  // again, it's still fallen in.)
+  game.loadAround(site.x, site.z, true);
   for (const [dx, y, dz, id] of placed) {
     assert.equal(game.world.getBlock(site.x + dx, y, site.z + dz), id, `host ${dx},${y},${dz}`);
     assert.equal(gg.world.getBlock(site.x + dx, y, site.z + dz), id, `player ${dx},${y},${dz}`);

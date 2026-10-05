@@ -123,7 +123,32 @@ const WAVES = {
   squeeze: { plain: 'sawtooth', h: (k) => (k <= 30 ? (k % 2 ? 1.3 : 0.7) / k : 0) },
   fmb: { plain: 'triangle', h: (k) => [0, 1, 0.6, 0.35, 0.18, 0.08][k] || 0 },
   sqsine: { plain: 'square', h: (k) => (k === 1 ? 1.8 : k % 2 ? 1 / k : 0) },
+  // (Round 49.) A cello's bowed string: a saw's, its low partials swelling
+  // (the wooden body), dark at the top.
+  cello: { plain: 'sawtooth', h: (k) => (k <= 28 ? (1 + 0.8 * Math.exp(-((k - 3) ** 2) / 4)) / Math.pow(k, 1.1) : 0) },
+  // A fiddle's: the same, brighter, a nasal ring about the fifth partial.
+  fiddle: { plain: 'sawtooth', h: (k) => (k <= 32 ? (1 + 1.1 * Math.exp(-((k - 5) ** 2) / 5)) / Math.pow(k, 0.9) : 0) },
+  // A hammered string: bright, the even partials strong.
+  dulcimer: { plain: 'triangle', h: (k) => [0, 1, 0.7, 0.35, 0.3, 0.12, 0.1, 0.05, 0.04][k] || 0 },
 };
+// A waveshaper's curve (made once a card): `drive` warms and thickens,
+// `fuzz` clips hard (a distorted guitar's), `crush` steps the wave as an
+// old sampler with too few bits would.
+const curveCache = new WeakMap();
+function shapeCurve(ctx, kind) {
+  let m = curveCache.get(ctx);
+  if (!m) curveCache.set(ctx, (m = {}));
+  if (!m[kind]) {
+    const n = 1024;
+    const c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      c[i] = kind === 'fuzz' ? Math.sign(x) * (1 - Math.exp(-7 * Math.abs(x))) : kind === 'crush' ? Math.round(x * 5) / 5 : Math.tanh(2.6 * x) / Math.tanh(2.6);
+    }
+    m[kind] = c;
+  }
+  return m[kind];
+}
 const waveCache = new WeakMap();
 function drawnWave(ctx, name) {
   if (!ctx.createPeriodicWave) return null;
@@ -302,6 +327,16 @@ export class Rack {
   }
 
   // --- the parts instruments are made of -----------------------------------
+  // A waveshaper (see shapeCurve); on a card without them, the sound goes
+  // straight through.
+  shaper(kind) {
+    if (!this.c.createWaveShaper) return this.gain(1);
+    const s = this.c.createWaveShaper();
+    s.curve = shapeCurve(this.c, kind);
+    s.oversample = '2x';
+    return s;
+  }
+
   // An oscillator: an ordinary wave, or one of the drawn ones (see WAVES).
   osc(type, f, t, end, cents = 0) {
     const o = this.c.createOscillator();
@@ -438,6 +473,9 @@ export const LOUD = {
   flute: 0.63, lead: 1.25, brass: 1.15, horn: 0.75, squeeze: 0.85,
   sub: 0.83, moog: 1.3, pluckbass: 1.7, fmbass: 1, drone: 0.78,
   buzz: 1.35, steel: 1.5, reed: 0.63,
+  // (Round 49: the fights' and the cutscenes' own.)
+  cello: 0.82, dist: 0.95, chant: 0.93, screech: 3.4, warhorn: 0.53, braam: 0.78, reese: 0.77, twang: 1.5, crushed: 2.4, abyss: 0.68,
+  didge: 1.57, celesta: 1.6, dulcimer: 1, fiddle: 1.65, theremin: 0.64, musicbox: 1.75,
 };
 
 // --- the instruments ------------------------------------------------------
@@ -828,6 +866,291 @@ export const PATCH = {
     R.chiff(ch, fs[0] * 1.5, t, 0.03 * v, 0.2);
     g.connect(ch);
   },
+
+  // --- the fights' own (round 49) ---
+  // Low strings, bowed: short and hard (spiccato, the ostinato that drives a
+  // fight) when the note's short, long and singing when it's held.
+  cello(R, ch, fs, t, dur, v, o) {
+    const short = dur < 0.3;
+    const a = short ? 0.01 : clamp(dur * 0.2, 0.05, 0.3);
+    const end = t + Math.max(a, dur) + (short ? 0.14 : 0.45);
+    const cut = o.cut || 1700;
+    const flt = R.filter('lowpass', cut, 0.9);
+    flt.frequency.setValueAtTime(cut * 1.5, t);
+    flt.frequency.setTargetAtTime(cut * 0.7, t + a, 0.15);
+    const g = R.gain(0);
+    const many = fs.length > 2;
+    R.adsr(g.gain, t, dur, 0.06 * v * (many ? 1.3 : 1), a, short ? 0.07 : 0.5, short ? 0.35 : 0.85, short ? 0.1 : 0.35);
+    const oscs = [];
+    each(fs, (f) => {
+      for (const d of many ? [(R.rand() - 0.5) * 14] : [-7, 7]) oscs.push(R.osc('cello', f, t, end, d));
+    });
+    if (!short) R.vibrato(oscs.map((x) => x.detune), t, end, 5.2, 9, 0.25);
+    for (const x of oscs) x.connect(flt);
+    flt.connect(g).connect(ch);
+    // (The bow biting the string.)
+    R.chiff(ch, fs[0] * 4, t, 0.02 * v, short ? 0.04 : 0.09);
+  },
+
+  // A distorted guitar: each note with its fifth over it (a power chord),
+  // through a hard clip; muted against the bridge (dull, a chug) when it's
+  // short.
+  dist(R, ch, fs, t, dur, v) {
+    const short = dur < 0.3;
+    const end = t + dur + (short ? 0.06 : 0.25);
+    const pre = R.filter('lowpass', short ? 900 : 2200, 0.8);
+    const clip = R.shaper('fuzz');
+    const post = R.filter('lowpass', short ? 1500 : 3200, 0.7);
+    const body = R.filter('peaking', 180, 1);
+    if (body.gain) body.gain.value = 4;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.035 * v, 0.004, short ? 0.08 : 0.4, short ? 0.5 : 0.8, short ? 0.05 : 0.2);
+    each(fs.slice(0, 2), (f) => {
+      R.osc('sawtooth', f, t, end, -6).connect(pre);
+      R.osc('sawtooth', f * 1.4983, t, end, 6).connect(pre);
+      R.osc('square', f / 2, t, end).connect(R.gain(0.5)).connect(pre);
+    });
+    pre.connect(R.gain(2.2)).connect(clip).connect(post).connect(body).connect(g).connect(ch);
+  },
+
+  // Monks chanting low: saws through an "oh" (and the chest's hum an octave
+  // under), slow to swell, barely a vibrato, a few voices a hair apart.
+  chant(R, ch, fs, t, dur, v, o) {
+    const a = clamp(dur * 0.3, 0.12, 0.7);
+    const end = t + Math.max(a, dur) + 0.6;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.1 * v, a, 0.8, 0.9, 0.6);
+    const oscs = [];
+    each(fs, (f) => {
+      for (const d of fs.length > 2 ? [0] : [-9, 3, 11]) oscs.push(R.osc('sawtooth', f, t, end, d + (o.detune || 0) * (R.rand() - 0.5)));
+    });
+    R.vibrato(oscs.map((x) => x.detune), t, end, 4.2, 4, 0.4);
+    for (const [ff, amp, q] of [[420, 1, 5], [780, 0.5, 6], [2600, 0.08, 4]]) {
+      const bp = R.filter('bandpass', ff, q);
+      for (const x of oscs) x.connect(bp);
+      bp.connect(R.gain(amp)).connect(g);
+    }
+    const hum = R.gain(0);
+    R.adsr(hum.gain, t, dur, 0.035 * v, a, 0.8, 0.9, 0.6);
+    each(fs, (f) => R.osc('sine', f / 2, t, end).connect(hum));
+    hum.connect(ch);
+    g.connect(ch);
+  },
+
+  // Strings that shriek (the horror kind): high, bowed hard by the bridge,
+  // shivering in a fast tremolo, sliding down into the note.
+  screech(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.25;
+    const hp = R.filter('highpass', 500, 0.7);
+    const pk = R.filter('peaking', 3200, 2);
+    if (pk.gain) pk.gain.value = 7;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.032 * v, 0.03, 0.3, 0.85, 0.2);
+    const trem = R.gain(0.55);
+    R.osc('triangle', 13 + R.rand() * 3, t, end).connect(R.gain(0.45)).connect(trem.gain);
+    each(fs, (f) => {
+      for (const d of [-14, 14]) {
+        const x = R.osc('sawtooth', f * 1.06, t, end, d);
+        x.frequency.exponentialRampToValueAtTime(f, t + 0.09);
+        x.connect(hp);
+      }
+    });
+    hp.connect(pk).connect(trem).connect(g).connect(ch);
+  },
+
+  // A war horn: a great low horn, scooped up into the note, its octave
+  // under it, the filter flaring as it's blown.
+  warhorn(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.35;
+    const flt = R.filter('lowpass', 220, 1.2);
+    flt.frequency.setValueAtTime(220, t);
+    flt.frequency.linearRampToValueAtTime(1700, t + 0.16);
+    flt.frequency.setTargetAtTime(1000, t + 0.16, 0.35);
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.085 * v, 0.07, 0.6, 0.85, 0.3);
+    const drive = R.shaper('drive');
+    each(fs, (f) => {
+      for (const [m, d] of [[1, -5], [1, 6], [0.5, 0]]) {
+        const x = R.osc('horn', f * m * 0.93, t, end, d);
+        x.frequency.exponentialRampToValueAtTime(f * m, t + 0.12);
+        x.connect(flt);
+      }
+    });
+    flt.connect(drive).connect(g).connect(ch);
+  },
+
+  // A braam: a wall of brass, low and enormous, the filter heaving open as
+  // it's struck and slowly closing (a great beast's roar of a chord).
+  braam(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.9;
+    const flt = R.filter('lowpass', 120, 1.5);
+    flt.frequency.setValueAtTime(120, t);
+    flt.frequency.exponentialRampToValueAtTime(1500, t + 0.22);
+    flt.frequency.setTargetAtTime(380, t + 0.25, 0.5);
+    const drive = R.shaper('drive');
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.04 * v * (fs.length > 2 ? 1.2 : 1.6), 0.03, 0.9, 0.7, 0.8);
+    each(fs, (f) => {
+      R.osc('sawtooth', f, t, end, -12).connect(flt);
+      R.osc('sawtooth', f, t, end, 12).connect(flt);
+      R.osc('sawsub', f / 2, t, end).connect(flt);
+    });
+    flt.connect(R.gain(1.6)).connect(drive).connect(g).connect(ch);
+  },
+
+  // A bass of two saws a little out of tune, beating slowly against each
+  // other under a filter that breathes: menacing.
+  reese(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.1;
+    const flt = R.filter('lowpass', 420, 2.5);
+    R.osc('sine', 0.35, t, end).connect(R.gain(160)).connect(flt.frequency);
+    const drive = R.shaper('drive');
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.08 * v, 0.006, 0.3, 0.85, 0.08);
+    each(fs, (f) => {
+      R.osc('sawtooth', f, t, end, -17).connect(flt);
+      R.osc('sawtooth', f, t, end, 17).connect(flt);
+      R.osc('sine', f / 2, t, end).connect(R.gain(0.8)).connect(g);
+    });
+    flt.connect(drive).connect(g).connect(ch);
+  },
+
+  // A baritone guitar, twanging and trembling (the outlaws' sound): bent
+  // into the note, ringing long, its volume wavering.
+  twang(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2.2, 0.6, 1.8);
+    const end = t + ringT + 0.05;
+    const flt = R.filter('lowpass', 3000, 2);
+    flt.frequency.setValueAtTime(3000, t);
+    flt.frequency.exponentialRampToValueAtTime(Math.max(260, fs[0] * 1.4), t + ringT * 0.8);
+    const trem = R.gain(0.7);
+    R.osc('sine', 6.2, t, end).connect(R.gain(0.3)).connect(trem.gain);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.08 * v, 0.002, ringT);
+    each(fs, (f) => {
+      const x = R.osc('sawtooth', f * 0.97, t, end, (R.rand() - 0.5) * 5);
+      x.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+      x.connect(flt);
+      R.osc('square', f, t, end).connect(R.gain(0.35)).connect(flt);
+    });
+    flt.connect(trem).connect(g).connect(ch);
+  },
+
+  // A cold, broken machine's voice (the Kavorent's halls in a fight): a
+  // square stepped down to a few bits, blipping in from an octave up.
+  crushed(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.08;
+    const crush = R.shaper('crush');
+    const bp = R.filter('bandpass', 1300, 0.8);
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.06 * v, 0.003, 0.15, 0.7, 0.06);
+    each(fs, (f) => {
+      const x = R.osc('square', f * 2, t, end, (R.rand() - 0.5) * 8);
+      x.frequency.exponentialRampToValueAtTime(f, t + 0.025);
+      x.connect(crush);
+    });
+    crush.connect(bp).connect(g).connect(ch);
+  },
+
+  // A call from the deep: a glassy tone that swells in slowly, wavers, and
+  // sinks as it's let go (a whale's moan).
+  abyss(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.6;
+    const flt = R.filter('lowpass', 1500, 1);
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.08 * v, clamp(dur * 0.3, 0.06, 0.4), 0.6, 0.85, 0.5);
+    const oscs = [];
+    each(fs, (f) => {
+      for (const type of ['sine', 'triangle']) {
+        const x = R.osc(type, f, t, end, type === 'sine' ? -4 : 4);
+        x.frequency.setValueAtTime(f, t + dur);
+        x.frequency.exponentialRampToValueAtTime(f * 0.89, t + dur + 0.5);
+        oscs.push(x);
+      }
+    });
+    R.vibrato(oscs.map((x) => x.detune), t, end, 3.1, 20, 0.3);
+    for (const x of oscs) x.connect(flt);
+    flt.connect(g).connect(ch);
+  },
+
+  // A droning wooden pipe (the Wildwood's): a low saw through a mouth that
+  // opens and shuts, a hum under it.
+  didge(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.15;
+    const bp = R.filter('bandpass', 520, 3);
+    R.osc('triangle', 2.4 + R.rand(), t, end).connect(R.gain(280)).connect(bp.frequency);
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.13 * v, 0.03, 0.3, 0.9, 0.12);
+    each(fs, (f) => {
+      R.osc('sawtooth', f, t, end).connect(bp);
+      R.osc('sine', f, t, end).connect(R.gain(0.3)).connect(g);
+    });
+    bp.connect(g).connect(ch);
+  },
+
+  // --- the cutscenes' own (round 49) ---
+  // A celesta: little bells struck in a box, sweet and clear (their
+  // partials in tune, not a church bell's clang).
+  celesta(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2, 0.9, 2.2);
+    each(fs, (f) => R.partials(ch, f, t, [[1, 1, ringT], [2, 0.32, ringT * 0.35], [3, 0.12, ringT * 0.2], [4.02, 0.05, 0.12]], 0.06 * v));
+  },
+
+  // A hammered dulcimer: two strings a course, struck together, beating
+  // a little against each other as they ring.
+  dulcimer(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2.5, 0.8, 2);
+    const end = t + ringT + 0.05;
+    const flt = R.filter('lowpass', 5200, 0.7);
+    flt.frequency.setValueAtTime(5200, t);
+    flt.frequency.setTargetAtTime(Math.max(900, fs[0] * 3), t + 0.005, ringT * 0.2);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.07 * v, 0.002, ringT);
+    each(fs, (f) => {
+      R.osc('dulcimer', f, t, end, -4).connect(flt);
+      R.osc('dulcimer', f, t, end, 4).connect(flt);
+    });
+    flt.connect(g).connect(ch);
+  },
+
+  // A fiddle: bowed, nasal and singing, the vibrato quick.
+  fiddle(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.2;
+    const flt = R.filter('lowpass', 3600, 0.8);
+    const pk = R.filter('peaking', 2400, 1.4);
+    if (pk.gain) pk.gain.value = 5;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.05 * v, 0.05, 0.4, 0.85, 0.15);
+    const oscs = fs.map((f) => R.osc('fiddle', f, t, end, (R.rand() - 0.5) * 6));
+    R.vibrato(oscs.map((x) => x.detune), t, end, 6.1, 14, 0.18);
+    for (const x of oscs) x.connect(flt);
+    flt.connect(pk).connect(g).connect(ch);
+    R.chiff(ch, fs[0] * 3, t, 0.015 * v, 0.06);
+  },
+
+  // A theremin: a pure tone gliding from the last note, wavering wide.
+  theremin(R, ch, fs, t, dur, v, o) {
+    const end = t + dur + 0.3;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.07 * v, 0.08, 0.3, 0.9, 0.25);
+    const oscs = [];
+    each(fs, (f) => {
+      const from = fs.length === 1 && o.from && Math.abs(Math.log2(o.from / f)) < 1.2 ? o.from : 0;
+      const x = R.osc('sine', from || f, t, end);
+      if (from) x.frequency.exponentialRampToValueAtTime(f, t + 0.16);
+      oscs.push(x);
+      R.osc('triangle', from || f, t, end).connect(R.gain(0.15)).connect(g);
+    });
+    R.vibrato(oscs.map((x) => x.detune), t, end, 6.4, 26, 0.12);
+    for (const x of oscs) x.connect(g);
+    g.connect(ch);
+  },
+
+  // A music box: tiny tines, plinked, dying quick.
+  musicbox(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 1.5, 0.5, 1.1);
+    each(fs, (f) => R.partials(ch, f, t, [[1, 1, ringT], [3, 0.25, ringT * 0.25], [5.4, 0.18, 0.05]], 0.06 * v));
+  },
 };
 
 export const DRUM = {
@@ -1063,6 +1386,96 @@ export const DRUM = {
     n.connect(bp).connect(g).connect(ch);
   },
 
+  // (Round 49.) A tam-tam: a great gong, its clashing partials blooming
+  // out slowly and ringing a long while.
+  gong(R, ch, t, v) {
+    for (const [m, amp, dec] of [[1, 1, 4], [1.43, 0.7, 3.4], [2.11, 0.5, 2.6], [2.71, 0.4, 2.2], [3.32, 0.3, 1.6], [4.87, 0.18, 1.1]]) {
+      const x = R.osc('sine', 72 * m, t, t + dec + 0.1);
+      const g = R.gain(0);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.12 * v * amp, t + 0.06 + m * 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      x.connect(g).connect(ch);
+    }
+    const n = R.noise(t, t + 2.6);
+    const bp = R.filter('bandpass', 1800, 0.6);
+    const ng = R.gain(0);
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.linearRampToValueAtTime(0.06 * v, t + 0.4);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
+    n.connect(bp).connect(ng).connect(ch);
+  },
+
+  // A blow that shakes the hall: a sub boom falling away, a crack of noise
+  // over it.
+  impact(R, ch, t, v) {
+    const x = R.osc('sine', 75, t, t + 1.5);
+    x.frequency.exponentialRampToValueAtTime(30, t + 1.2);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 1.0 * v, 0.004, 1.4);
+    x.connect(g).connect(ch);
+    const n = R.noise(t, t + 0.6);
+    const lp = R.filter('lowpass', 1400, 0.7);
+    lp.frequency.setValueAtTime(2400, t);
+    lp.frequency.exponentialRampToValueAtTime(200, t + 0.5);
+    const ng = R.gain(0);
+    R.perc(ng.gain, t, 0.5 * v, 0.002, 0.55);
+    n.connect(lp).connect(ng).connect(ch);
+  },
+
+  // Chains shaken: a few quick metal rattles.
+  chain(R, ch, t, v) {
+    for (let i = 0; i < 4; i++) {
+      const at = t + i * 0.018 + R.rand() * 0.01;
+      const n = R.noise(at, at + 0.05);
+      const bp = R.filter('bandpass', 4200 + R.rand() * 2400, 7);
+      const g = R.gain(0);
+      R.perc(g.gain, at, (0.5 - i * 0.08) * v, 0.001, 0.035);
+      n.connect(bp).connect(g).connect(ch);
+    }
+  },
+
+  // A stamp on boards: a dull low thud.
+  stomp(R, ch, t, v) {
+    const x = R.osc('sine', 95, t, t + 0.3);
+    x.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.75 * v, 0.002, 0.26);
+    x.connect(g).connect(ch);
+    const n = R.noise(t, t + 0.08);
+    const lp = R.filter('lowpass', 500, 0.7);
+    const ng = R.gain(0);
+    R.perc(ng.gain, t, 0.35 * v, 0.001, 0.07);
+    n.connect(lp).connect(ng).connect(ch);
+  },
+
+  // A great war drum's snare: low, loose and long.
+  war(R, ch, t, v) {
+    const n = R.noise(t, t + 0.4);
+    const bp = R.filter('bandpass', 1100, 0.9);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.5 * v, 0.002, 0.34);
+    n.connect(bp).connect(g).connect(ch);
+    const x = R.osc('triangle', 150, t, t + 0.2);
+    x.frequency.exponentialRampToValueAtTime(110, t + 0.1);
+    const tg = R.gain(0);
+    R.perc(tg.gain, t, 0.35 * v, 0.002, 0.16);
+    x.connect(tg).connect(ch);
+  },
+
+  // Thunder rolling: low noise rumbling in and away.
+  thunder(R, ch, t, v, o) {
+    const dur = o.dur || 3;
+    const n = R.noise(t, t + dur);
+    const lp = R.filter('lowpass', 180, 0.8);
+    R.osc('sine', 3.3, t, t + dur).connect(R.gain(90)).connect(lp.frequency);
+    const g = R.gain(0);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.6 * v, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(lp).connect(g).connect(ch);
+  },
+
   // A riser: noise swelling and climbing into what's next.
   riser(R, ch, t, v, o) {
     const dur = o.dur || 2;
@@ -1115,7 +1528,7 @@ export const DRUM = {
 // its pitch, as the old samplers did. (Till its sample's ready, a drum is
 // struck live; drums with a length or a randomness of their own always
 // are.)
-const SAMPLED = { kick: 0.85, snare: 0.3, clap: 0.3, hat: 0.08, hatO: 0.32, shaker: 0.11, rim: 0.07, tom: 0.45, conga: 0.3, bongo: 0.2, taiko: 0.8, wood: 0.1, crash: 1.7, timp: 1.2, zill: 0.95, anvil: 0.65 };
+const SAMPLED = { kick: 0.85, snare: 0.3, clap: 0.3, hat: 0.08, hatO: 0.32, shaker: 0.11, rim: 0.07, tom: 0.45, conga: 0.3, bongo: 0.2, taiko: 0.8, wood: 0.1, crash: 1.7, timp: 1.2, zill: 0.95, anvil: 0.65, gong: 4.2, impact: 1.5, stomp: 0.3, war: 0.4 };
 export class Samples {
   constructor(ctx, noise) {
     this.ctx = ctx;

@@ -226,6 +226,22 @@ export class SaveStore {
     this.writeIndex(ix);
   }
 
+  // A world marked as made in version `gv` (see version.js: only ever
+  // brought forward, and only its mark: nothing in it is changed). Rejects
+  // if the slot's empty.
+  async setVersion(id, gv) {
+    const text = await this.rawText(id);
+    if (!text) throw new Error('That save is empty.');
+    const data = JSON.parse(text);
+    data.gv = gv;
+    const out = JSON.stringify(data);
+    const meta = { ...(this.index()[id] || {}), gv, size: out.length };
+    await this.putText(id, out, meta);
+    const now = this.index()[id];
+    this.onChange?.(id, now);
+    return now;
+  }
+
   async load(id) {
     const ix = this.index();
     let raw = null;

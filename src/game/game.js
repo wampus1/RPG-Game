@@ -37,6 +37,7 @@ import { Wildlife } from './wildlife.js';
 import { packLabel, DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
 import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
+import { newFeats, noteIsle } from './achievements.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
@@ -1862,7 +1863,7 @@ export class Game {
         for (const n of this.npcs) {
           if (n.dead) continue;
           n.update(ndt);
-          if (k === 0) n.maybeGreet(this.player, dt);
+          if (k === 0 && !this.player.limbo) n.maybeGreet(this.player, dt);
         }
       }
       ambientChatter(this, dt);
@@ -1953,6 +1954,13 @@ export class Game {
       this.updateWeather(dt);
       this.ownAfterPhase(dt, s.input);
     });
+    // What each of you has done lately, worth an achievement (see
+    // achievements.js).
+    this.featT = (this.featT || 0) - dt;
+    if (this.featT <= 0) {
+      this.featT = 0.5;
+      this.checkFeats();
+    }
     // The camera: drawn back near a spire, or wherever a scene takes it.
     const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
     this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : 1 + 0.32 * nearSpire;
@@ -1961,9 +1969,10 @@ export class Game {
     if (this.audio) this.audio.listener = this.player;
     // Entities visible this frame.
     const p = this.player;
-    const vis = [p];
+    // (Not anyone still watching their opening: they're not here yet.)
+    const vis = p.limbo ? [] : [p];
     // (Square, so turning the camera never leaves anyone out.)
-    for (const q of this.everyone()) if (q !== p && Math.abs(q.x - p.x) < 26 && Math.abs(q.z - p.z) < 26) vis.push(q);
+    for (const q of this.everyone()) if (q !== p && !q.limbo && Math.abs(q.x - p.x) < 26 && Math.abs(q.z - p.z) < 26) vis.push(q);
     for (const n of this.npcs) if (!n.dead && Math.abs(n.x - p.x) < 26 && Math.abs(n.z - p.z) < 26) vis.push(n);
     for (const c of this.creatures) if (Math.abs(c.x - p.x) < 26 && Math.abs(c.z - p.z) < 26) vis.push(c);
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
@@ -1971,11 +1980,56 @@ export class Game {
     for (const q of this.engines) if (Math.abs(q.x - p.x) < 30 && Math.abs(q.z - p.z) < 30) vis.push(q);
     if (this.cutscene && this.cutscene.actors) for (const a of this.cutscene.actors) if (!a.dead) vis.push(a);
     this.visibleEntities = vis;
-    if (this.autosaveDue && !this.cutscene) {
+    if (this.autosaveDue && !this.cutscene && !(this.scene && this.scene.intro)) {
       this.autosaveDue = false;
       if (this.autosave) this.autosave();
     }
     if (this.net) this.net.afterUpdate(dt);
+  }
+
+  // ------------------------------------------------------------ achievements
+  // Each player's newly done (see achievements.js), as themselves.
+  checkFeats() {
+    if (this.remote) return;
+    const look = () => {
+      // (Not while their opening plays: nothing's been done yet.)
+      if (!this.player || this.player.limbo || (this.scene && this.scene.intro)) return;
+      noteIsle(this);
+      for (const id of newFeats(this, this.featsHave())) this.feat(id);
+    };
+    look();
+    if (this.seats) for (const s of this.seats) if (s !== this.seat && s.ent) asSeat(this, s, look);
+  }
+
+  // What the player being played as already has. (Someone in your world:
+  // what they've been told of; their screen keeps the rest.)
+  featsHave() {
+    const seat = this.seats ? this.seat : null;
+    if (seat && !seat.host) return (seat.featsSent ||= new Set());
+    if (this.featBook) return new Set(Object.keys(this.featBook.got));
+    return (this.featsGot ||= new Set());
+  }
+
+  // Done (as the player being played as): theirs to keep. Yours, kept
+  // here; someone else's, sent to their screen (see net/host.js).
+  feat(id) {
+    const seat = this.seats ? this.seat : null;
+    if (seat && !seat.host) {
+      const sent = (seat.featsSent ||= new Set());
+      if (sent.has(id)) return false;
+      sent.add(id);
+      this.net?.feat?.(seat, id);
+      return true;
+    }
+    let fresh;
+    if (this.featBook) fresh = this.featBook.unlock(id);
+    else {
+      const got = (this.featsGot ||= new Set());
+      fresh = !got.has(id);
+      got.add(id);
+    }
+    if (fresh) this.onFeat?.(id);
+    return fresh;
   }
 
   // A scene of yours playing: on the real clock. (How much it slows the
@@ -1986,11 +2040,42 @@ export class Game {
     sc.t += dt;
     sc.update?.(this, dt, pressed);
     if (sc.t >= sc.dur) {
+      // (An opening over: into the world at last, then its first words.)
+      if (sc.intro && !this.remote) this.placeIn();
       sc.end?.(this);
       if (this.scene === sc) this.scene = null;
       return 1;
     }
     return sc.timeScale ? sc.timeScale(sc.t) : 1;
+  }
+
+  // ------------------------------------------------------------ openings
+  // Kept out of the world while their opening plays (see intros.js), the
+  // player being played as: not seen, in nobody's way, nothing after them,
+  // not ticking over. Where they'll be set down is where they stand.
+  holdOut() {
+    const p = this.player;
+    if (!p || p.limbo) return;
+    p.limbo = true;
+    this.removeOcc(p);
+  }
+
+  // Into the world at last, where their story puts them (or as near it
+  // as is free now).
+  placeIn() {
+    const p = this.player;
+    if (!p || !p.limbo) return;
+    p.limbo = false;
+    this.loadAround(p.x, p.z, true);
+    const at = this.findFreeSpot(p.x, p.z, p.y);
+    p.teleport(at.x, at.y, at.z);
+    p.spawn = p.spawn || { x: at.x, y: at.y, z: at.z };
+    if (!this.seat || this.seat.host) {
+      this.renderer.camInit = false;
+      this.lightDirty = true;
+    }
+    this.ui.showHud = true;
+    this.ui.lastSettlement = undefined;
   }
 
   // Can't act: a window open over the world, dead, asleep, held, a scene.
@@ -2023,10 +2108,13 @@ export class Game {
       this.bonusT = 0.5;
       this.refreshBonus();
     }
-    this.player.update(dt, input, blocked);
-    playerTick(this, this.player, dt, input, blocked);
-    // The ground gone from under you (dug, blown up, burnt away): you drop.
-    this.settleFall(this.player);
+    // (Not yet in the world, watching their opening: nothing happens to them.)
+    if (!this.player.limbo) {
+      this.player.update(dt, input, blocked);
+      playerTick(this, this.player, dt, input, blocked);
+      // The ground gone from under you (dug, blown up, burnt away): you drop.
+      this.settleFall(this.player);
+    }
     this.input = input;
     // (Another player's pointer: what they pointed at on their own screen.)
     if (!blocked) this.cursor = this.seat && !this.seat.host && this.net ? this.net.cursorFor(this.seat) : (this.updateCursor(input), this.cursor);
@@ -2077,7 +2165,7 @@ export class Game {
       this.currentSettlement = this.world.ow.settlementAt(this.player.x, this.player.z);
     }
     // Townsfolk who know them say hello.
-    for (const n of this.npcs) if (!n.dead && Math.abs(n.x - this.player.x) < 12 && Math.abs(n.z - this.player.z) < 12) n.maybeGreet(this.player, dt);
+    if (!this.player.limbo) for (const n of this.npcs) if (!n.dead && Math.abs(n.x - this.player.x) < 12 && Math.abs(n.z - this.player.z) < 12) n.maybeGreet(this.player, dt);
     this.updateDuel();
     this.updateDummy(dt);
   }
@@ -2183,8 +2271,11 @@ export class Game {
     // hosting, or by the way into the old place they're down.)
     if (at && this.world.inInstance(at.x)) at = null;
     // A new fallen star: down in a crater of their own, by a village (see
-    // starfall.js), their fall shown on their screen.
+    // starfall.js), their fall shown on their screen. A new castaway: on
+    // the beach, what washed up with them about them. (A native's home is
+    // found as them, below.) Each sees their own opening first.
     let star = null;
+    let coast = null;
     if (!saved && hero && hero.origin === 'star') {
       let salt = 0;
       for (const ch of String(profile.id)) salt = (salt * 31 + ch.charCodeAt(0)) >>> 0;
@@ -2193,6 +2284,12 @@ export class Game {
         this.loadAround(star.x, star.z, true);
         makeCrater(this, star.x, star.z);
         at = this.findFreeSpot(star.x, star.z, GROUND);
+      }
+    } else if (!saved && hero && hero.origin === 'crash' && !this.dungeon) {
+      coast = this.coastSpot();
+      if (coast) {
+        this.loadAround(coast.x, coast.z, true);
+        at = this.findFreeSpot(coast.x, coast.z, GROUND);
       }
     }
     if (!at) {
@@ -2222,16 +2319,36 @@ export class Game {
     asSeat(this, seat, () => {
       if (saved) this.restoreSeat(saved);
       else this.outfitNewcomer(at);
+      // (Born here: their family's house, in their home town.)
+      if (!saved && this.hero && this.hero.origin === 'native' && !this.dungeon) this.homeNewcomer();
+      if (coast) this.wreckage(at);
       // (The country about them, on their own map.)
       this.world.ow.markExplored(p.x, p.z, 2);
       if (p.awakeSince === undefined) p.awakeSince = this.day * DAY_MINUTES + this.minute;
       this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
-      if (star) {
-        this.starAt = star;
-        this.scene = this.starScene(star);
-      }
+      if (star) this.starAt = star;
+      // Their story's opening, on their screen; set down in the world when
+      // it's done (see intros.js).
+      if (!saved && this.hero && this.intros !== false) startIntro(this);
     });
     return seat;
+  }
+
+  // A newcomer born on the islands (as them): their home town and family,
+  // and they stand in their family's house.
+  homeNewcomer() {
+    const p = this.player;
+    const town = this.pickHometown();
+    if (!town) return;
+    const host = this.becomeNative(town);
+    const inside = host && host.house && host.house.inside;
+    if (!inside) return;
+    this.loadAround(inside.x, inside.z, true);
+    const spot = this.findFreeSpot(inside.x, inside.z, GROUND);
+    p.teleport(spot.x, spot.y, spot.z);
+    p.spawn = { x: spot.x, y: spot.y, z: spot.z };
+    const L = this.world.getLayout(town);
+    if (L && lawOn(L, 'armsBan')) this.stowArms();
   }
 
   // A new character's things: their kit, their looks.
@@ -3238,6 +3355,8 @@ export class Game {
         const got = crop || rollDrops(id, rand);
         // Green thumbs get an extra crop; foragers an extra handful.
         if (byPlayer && crop && crop.length && crop[0].item !== CROPS[id]?.seed && heroHas(this.hero, 'farmer')) crop[0].count++;
+        // (A ripe one, counted: see achievements.js.)
+        if (byPlayer && crop && crop.length && crop[0].item !== CROPS[id]?.seed) this.stats.harvested = (this.stats.harvested || 0) + 1;
         else if (byPlayer && !crop && got.length && BLOCKS[id].render === 'plant' && heroHas(this.hero, 'forager') && rand() < 0.6) got[0].count++;
         drops.push(...got);
       }
@@ -5334,7 +5453,7 @@ export class Game {
     const on = (e) => onTiles(e, tiles) && Math.abs(e.y - by.y) <= 1;
     const out = [];
     // (Another player, when the host lets players fight.)
-    if (this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && on(q) && (this.pvp || boutOf(this, q, by))) out.push(q);
+    if (this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && !q.limbo && on(q) && (this.pvp || boutOf(this, q, by))) out.push(q);
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
     for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
     return out;
@@ -5849,7 +5968,7 @@ export class Game {
         const jailed = this.sim.justice.jail && this.sim.justice.jail.sid === sid;
         return !jailed && (this.isWanted(sid) || this.sim.justice.exiled.has(sid));
       });
-      if (after && !p.dead && guard.distTo(p) <= 12 && this.sim.canSee(guard, p.x, p.z, p.y)) return p;
+      if (after && !p.dead && !p.limbo && guard.distTo(p) <= 12 && this.sim.canSee(guard, p.x, p.z, p.y)) return p;
     }
     const b = guard.settlement.bounds;
     const watching = guard.act === 'watch';
@@ -5875,7 +5994,7 @@ export class Game {
     // (Not you while you're gone into shadow. The nearest of you, with
     // others playing: one at a time.)
     for (const p of this.everyone()) {
-      if (p.dead || p.down || p.shadeT > 0 || Math.abs(p.y - c.y) > 2) continue;
+      if (p.dead || p.down || p.limbo || p.shadeT > 0 || Math.abs(p.y - c.y) > 2) continue;
       const d = c.distTo(p);
       if (d <= range && d < bd) {
         best = p;
@@ -5904,7 +6023,7 @@ export class Game {
   }
 
   nearestThreatTo(c, r) {
-    for (const p of this.everyone()) if (!p.dead && c.distTo(p) <= r && !(c.S.tame && !p.heldDef()?.damage)) return p;
+    for (const p of this.everyone()) if (!p.dead && !p.limbo && c.distTo(p) <= r && !(c.S.tame && !p.heldDef()?.damage)) return p;
     for (const o of this.creatures) if (o !== c && o.hostileNow && c.distTo(o) <= r) return o;
     return null;
   }
