@@ -24,6 +24,7 @@ import { makePerson } from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { BIOMES } from '../../../world/biomes.js';
 import { ITEMS } from '../../../world/items.js';
+import { pickAccused } from './troubles.js';
 
 const tid = (th) => `t${th.id}`;
 const first = (r) => (r ? r.name.first : 'them');
@@ -933,6 +934,12 @@ motif({
         const L = layoutOf(S, th.sid);
         if (!L) return S.end(th, 'faded');
         th.vars.n++;
+        // (A town looking for someone to blame.)
+        if (!th.vars.blamed && th.vars.n >= 3 && rng.chance(0.25)) {
+          th.vars.blamed = true;
+          const o = pickAccused(S, L, rng, th.vars.cause);
+          if (o) S.split(th, 'witch_hunt', o, 'People have started looking for someone to blame.');
+        }
         if (th.vars.real && rng.chance(0.3)) {
           L.econ.treasury = Math.max(0, L.econ.treasury - 8);
           S.note(th, pick(rng, ['A barn roof fell in. Nobody was under it, this time.', 'The fishing boats came back empty, three days running.', 'A chimney fire. Then another.']));

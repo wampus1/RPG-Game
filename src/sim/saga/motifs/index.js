@@ -16,3 +16,5 @@ import './intrigue.js';
 import './festive.js';
 import './ventures.js';
 import './wonders.js';
+import './kin.js';
+import './troubles.js';
