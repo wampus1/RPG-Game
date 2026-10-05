@@ -222,7 +222,8 @@ motif({
         th.vars.said = how.said;
         th.vars.body = how.body;
         th.vars.killedAt = S.now;
-        S.retitle(th, `The Death of ${th.vars.dead}`);
+        // (Not retitled: what it was before is nobody's to know.)
+        th.title = `The Death of ${th.vars.dead}`;
         S.sim.recordDeath(L, m, how.said, null);
         S.note(th, `${th.vars.dead} of ${L.settlement.name} died in the night: ${how.said}, they say. The town mourns.`, { news: [th.sid] });
         S.note(th, `It was ${th.names.spy}: ${how.m === 'poison' ? 'poison, in a cup of something warm' : how.m === 'blow' ? 'a blow from behind, and the body arranged at the foot of the stairs' : how.m === 'drown' ? 'held under in the millpond' : 'a pillow, and a long minute'}.`, { hidden: true });

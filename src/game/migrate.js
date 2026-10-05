@@ -17,6 +17,8 @@ import { stockPantry, PANTRY } from './cooking.js';
 import { cookDish, parseDish } from '../world/dishes.js';
 import { invAdd, invCount, kitchenOf, alive, traderOf } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
+import { B } from '../world/blocks.js';
+import { REGION_W, REGION_D } from '../config.js';
 
 export const STEPS = [
   {
@@ -154,6 +156,36 @@ export const STEPS = [
         if (!D || !(D.trig || D.fx.some((f) => f.i === 3))) continue;
         k.store[key] = (k.store[key] || 0) + 1;
         return;
+      }
+    },
+  },
+  {
+    // Story upon story (see sim/saga/motifs): courtships and weddings, the
+    // Academy, festivals, wonders, troubles; stories that run into each
+    // other and go their own ways. And a room to let at every tavern.
+    to: '0.54.0',
+    data(d, log) {
+      log.push('Many more stories: courtships, festivals, ventures, wonders, troubles, and an Academy in the cities.');
+    },
+    game(game, log) {
+      const cities = [...game.world.layouts.values()].filter((L) => L.econ && L.settlement && L.settlement.type === 'city').length;
+      log.push(`Taverns have a room to let (ask the innkeeper or the barkeep).${cities ? ' The cities will each raise an Academy.' : ''}`);
+    },
+    town(L, game) {
+      // The tavern's room: in a part of town that's been changed since (and
+      // so kept as it was), its walls, door and beds put in now (or when
+      // that ground's next loaded).
+      const w = game && game.world;
+      const sim = game && game.sim;
+      if (!w || !sim || !sim.setBlocks) return;
+      for (const b of L.buildings) {
+        if (b.type !== 'tavern' || !b.inn || !b.inn.blocks || b.underConstruction) continue;
+        const bed = b.inn.beds[0];
+        const key = w.regionKey(Math.floor(bed.x / REGION_W), Math.floor(bed.z / REGION_D));
+        const loaded = w.regionAt(bed.x, bed.z);
+        const kept = w.saved && w.saved.has(key);
+        if (loaded ? w.getBlock(bed.x, b.inn.y, bed.z) === B.bed : !kept) continue;
+        sim.setBlocks(b.inn.blocks.map(([x, y, z, id, meta]) => [x, y, z, id, meta]));
       }
     },
   },

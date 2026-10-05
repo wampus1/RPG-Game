@@ -4064,6 +4064,183 @@ dialogue is written by hand; none of it is generated.
 - *Older worlds* (migration 0.53.0): dishes already cooked keep what they
   did. Each town's kitchen puts one of the new kind up for sale.
 
+## Round 54: story upon story
+
+There are now 87 kinds of story (`sim/saga/motifs/`), 51 of them new.
+Not every story is trouble. Some are joyful, some hopeful, some turn on a
+single choice. Who's in a story, and what they're like, decides much of
+how it goes: the romantic warm quickly, the proud slowly, the stubborn
+dig in. What you do (or don't) decides the rest.
+
+- *Stories that meet and part* (`sim/saga/core.js`):
+  - A story can **split** off one of its own: a festival dance becomes a
+    courtship; a deadly fever starts a witch hunt; a cursed box from a
+    treasure map brings ill luck.
+  - Two stories that run into each other can **join** (a wedding ends the
+    feud between two families; a challenger enters a tournament
+    instead), or **fuse** into a third.
+  - A story can be **retitled** as it turns into something else.
+  - The quest log shows what a story once was, what it became part of,
+    and what went its own way from it.
+- *A hidden story* (`motifs/intrigue.js`, rare): a stranger settles in a
+  small town and does good deeds for weeks. Then the mayor dies in the
+  night: "a fall", "a fever", "the millpond". Nothing tells you this is a
+  story. It starts only if you wonder aloud whether the death was what it
+  seemed.
+  - Then it's in your quest log, as what you've found out, in the words
+    you were told. That could be:
+    - what the one who laid out the body noticed;
+    - what neighbours saw or heard that night (a hood, the colour of
+      someone's hair, a smell of someone's trade, which side of town they
+      ran to, dogs barking at a stranger, a foreign word);
+    - a child who saw a paper hidden under a stone, and the letter in
+      cipher under it;
+    - who's new in town (there are other new faces too);
+    - who had their own reasons to wish the mayor gone, and who can vouch
+      for them.
+  - Not every witness is right. The killer may plant a false story, or
+    silence someone who saw too much, once they hear you're asking.
+  - Nobody tells you who did it. Say it to their face. Get it wrong and
+    an innocent is shamed (three wrong guesses and the town stops
+    listening). Get it right and they fight, run, or confess proudly.
+  - Leave it alone and, if their realm goes to war with this one, they
+    open the way: the granary burnt, the well fouled, a guard dead and the
+    keys gone, or the treasury emptied. Then everyone knows.
+  - Sometimes the agent gets themselves elected mayor.
+- *Matters of the heart* (`motifs/hearts.js`):
+  - **Courtship.** Most matches the town makes are now courtships first
+    (see `sim/life.js`). Each heart warms or cools on its own. Trouble
+    can come up: one too shy to say it (carry their letter), a rival
+    suitor, a parent against it (talk them round, or the lovers may
+    elope), doubts that want the right gift, a secret come out (a debt,
+    an old promise, an old love), or two families at war (a wedding may
+    end their feud). You can say a good word, or warn one off the other.
+    On the day there may be cold feet, an objection, a downpour or a
+    mystery gift. Lovers from two towns: one moves to the other's. If you
+    had a hand in it, you're asked to the wedding.
+  - **A child on the way.** Births are often a story now: a cradle to
+    make, and sometimes a hard birth that needs herbs quickly. Some are
+    twins. Some are named after whoever helped.
+  - **Making it up:** family who haven't spoken in years. Carry the
+    letter.
+  - **An elder's last wish:** to see the sea (walk them to the water), a
+    dish their mother made, a song, an old heirloom, a letter to an old
+    friend.
+  - **Home again:** someone long gone comes back. They may be welcomed,
+    rich, haunted, hunted by their old band (stand by them the night the
+    outlaws come), or not who they say they are.
+- *Learning* (`motifs/academy.js`, `sim/college.js`): every city raises an
+  **Academy**, a large building on a lot at its edge.
+  - Inside: a hall with a registrar's desk, a kitchen, a practice hall, a
+    lecture room and a gem workshop.
+  - **Terms:** a term runs over three to five days, with a class or two a
+    day, each in its own room at its own hour. Enrol at the registrar's
+    desk (the fee depends on the city).
+  - **Classes:** be in the right room for an hour of the class and it
+    counts. You come out with practice in it, plus something extra:
+    - cookery: a recipe and the dish;
+    - gem-setting: a cut stone;
+    - natural philosophy: answers for the realm's scholars;
+    - swordplay: a bout with the swordmaster.
+  - **Passing:** pass half your classes to graduate, earning a diploma
+    and a title.
+  - **During a term,** a master may fall ill (take the class yourself if
+    you're good enough), two students may become rivals (or more than
+    rivals), one may not be able to pay their board, one may turn out
+    brilliant.
+  - **Townsfolk** study too, and some come home with a new trade.
+  - **A student's journey:** someone in a town who dreams of the Academy.
+    Their family may help or stand in the way. Help them find the fee.
+  - **New crafts:** cookery and swordplay now have ranks. Cookery makes
+    every dish a little better. Swordplay widens the moment to parry.
+    Bouts count, won or lost.
+- *Good days* (`motifs/festive.js`):
+  - **Festivals:** food for the tables, flowers, music if you play, and
+    a contest on the night (riddles, an eating match, a wrestling ring).
+    It might rain, be raided, end in a brawl, or start a romance.
+  - **Tournaments:** fight your bouts in the square to a yield. There's
+    a masked knight, the favourite may be hurt, and someone may pay you
+    to lose.
+  - **A bard's song:** about you (told true, made grand, or not at all),
+    an outlaw who won't like it, or the mayor.
+  - **The harvest:** a bumper year (and the harvest home), a storm
+    coming, a blight, or boars in the fields.
+- *Ventures* (`motifs/ventures.js`):
+  - **A new business** (put money in for a share).
+  - **An apprentice** with a kind, hard or jealous master.
+  - **A treasure map** (gold, nothing, rival diggers, the dead who guard
+    it, a curse; share it or don't).
+  - **An expedition** to guard a scholar on.
+  - **A barn raising.**
+  - **A rivalry**, which can end as friends, in a feud, or in a
+    courtship.
+- *Wonders* (`motifs/wonders.js`):
+  - **The white stag:** hunters against the devout; see it up close
+    for a blessing.
+  - **A stray** that won't leave (or a riderless horse).
+  - **A haunting:** a ghost, a squatter, a prank, or grief.
+  - **A shipwreck.**
+  - **The well run dry.**
+  - **A falling star.**
+  - **The great fish** of the lake (land it with a big catch near its
+    water).
+  - **A pig loose in the market.**
+  - **Bees in the chimney.**
+  - **Ill luck.**
+- *Families* (`motifs/kin.js`):
+  - **An orphan:** who takes them in.
+  - **A golden wedding.**
+  - **A letter come late.**
+  - **An inheritance:** a will that's fair, all to one, to a stranger,
+    to the cat, or missing.
+  - **A prodigy:** off to the Academy, perhaps.
+  - **The sleepwalker:** follow them at night.
+  - **Two of a kind:** a twin, a trickster, or just the nose.
+- *A town's troubles* (`motifs/troubles.js`):
+  - **The moneylender:** pay it, lean on them, or find their crooked
+    second column.
+  - **Shares in a silver mine:** go and look at the "mine".
+  - **An election:** speak for one side.
+  - **A strike.**
+  - **The ratcatcher:** pay what was promised.
+  - **A witch hunt.**
+  - **A duel of honour at dawn.**
+  - **The gambler:** win it back, or catch the loaded dice.
+  - **A miracle tonic:** have it tested.
+- *On the roads* (`motifs/roads.js`):
+  - **Lost in snow, sand or fog.**
+  - **The bridge washed out.**
+  - **A child alone** off the road.
+  - **A stranger with no memory.**
+  - **A travelling show:** wrestle the strongman; find who really stole
+    the candlesticks.
+  - **A noble hiding as a farmhand.**
+  - **An old soldier's last errand.**
+- *More variety in the older stories:*
+  - Pleas for help come from all sorts: a parent whose child saw them,
+    the watch, a priest, the innkeeper, an old one who's seen it before,
+    as well as those who work out there.
+  - An outlaw chief's letter may say they're leaving (sometimes it's a
+    feint), or come with a purse to buy peace. Honest and proud chiefs
+    don't lay traps.
+  - A named outlaw may be wanted, sung about as a folk hero, too feared
+    for anyone to post a price, or ready to turn on their band (or
+    pretend to).
+  - Captors' plans depend on their chief, and a soft-hearted outlaw may
+    let a captive go.
+  - A murderer may confess, or point at someone else.
+- *A room at the tavern* (`sim/inns.js`): every tavern has a room in a
+  back corner, with two beds behind a door. Ask the innkeeper (or the
+  barkeep, or the cook if there's nobody else) to let it for one night,
+  three, or a week (longer stays are cheaper by the night). While it's let
+  (until mid-morning after the last night), anyone playing may sleep in
+  its beds; when it isn't, nobody may.
+- *Older worlds* (migration 0.54.0):
+  - The new stories simply begin.
+  - Cities raise their Academy within a day or so.
+  - A tavern in a part of town changed since it was saved gets its room
+    put in.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -4273,7 +4450,11 @@ src/
                        people in the world, talk is what they say, and
                        motifs/ holds each kind: outlaws, captives,
                        beasts, townsfolk, crime, realms, faith, the wider
-                       world, players), and the
+                       world, players; and since round 54 academy,
+                       hearts, intrigue, festive, ventures, wonders, kin,
+                       troubles and roads), inns (a tavern's room to
+                       let), college (the Academy: its building, its
+                       terms and classes), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)

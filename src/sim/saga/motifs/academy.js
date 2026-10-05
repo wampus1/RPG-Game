@@ -515,11 +515,12 @@ motif({
         if (L) L.econ.treasury += Math.round(th.vars.fee * 0.5);
         th.vars.players[pid] = { at: S.now, credited: [], att: {} };
         S.touch(th, pid, `${nameOf(S, R.pl(pid))} enrolled for ${th.vars.termName}.`);
-        S.post(th, {
+        const at = S.post(th, {
           role: 'attend', kind: 'meet', title: `Attend your classes at ${th.vars.name}`, sid: th.sid, giver: null, only: [pid], npc: false, board: false, hand: 'auto',
-          pitch: `Be in the right room for each class (most of it) to have it count. Pass the term (half your classes) to graduate.`,
+          pitch: 'Be in the right room for an hour of each class to have it count. Pass the term (half your classes) to graduate.',
           reward: { coins: 0, fame: 1 },
         });
+        S.accept(at, R.pl(pid));
         const nc = th.vars.sched[Math.max(0, nextClass(th.vars.sched, S.now))];
         return { lines: [pick(rng, ['Name... there. You\'re enrolled. Don\'t make me regret it.', 'Welcome to the Academy. Your first lesson is to be on time.', 'There. You\'re one of us now, for a term at least.']), nc ? `Your first class: ${SUBJECTS[nc.subject].title}, day ${nc.day + 1} at ${clock(nc.from)}, in ${ROOM_WORD[SUBJECTS[nc.subject].room]}.` : 'Ask me for the schedule.'] };
       }

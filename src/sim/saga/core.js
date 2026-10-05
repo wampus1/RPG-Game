@@ -60,6 +60,9 @@ export function motif(def) {
 const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 // (A task's title in the middle of a sentence: its first word only.)
 export const lcFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+// (A story's title in the middle of a sentence: "the Feud..." but never
+// "gwen and Giles".)
+const inLine = (t) => (/^(The|A|An) /.test(t || '') ? lcFirst(t) : t);
 
 export class Saga {
   constructor(game, sim) {
@@ -376,8 +379,8 @@ export class Saga {
     const kid = this.spawn(th, mid, o);
     if (!kid) return null;
     kid.split = th.id;
-    this.note(th, line || `From this, a story of its own: ${lcFirst(kid.title)}.`);
-    this.note(kid, `It began as part of ${lcFirst(th.title)}.`);
+    this.note(th, line || `From this, a story of its own: ${inLine(kid.title)}.`);
+    this.note(kid, `It began as part of ${inLine(th.title)}.`);
     return kid;
   }
 
@@ -396,7 +399,7 @@ export class Saga {
     b.mergedInto = a.id;
     const said = line || `${capFirst(b.title)} became part of this story.`;
     this.note(a, said);
-    this.end(b, 'merged', `It became part of ${lcFirst(a.title)}.`);
+    this.end(b, 'merged', `It became part of ${inLine(a.title)}.`);
     this.retier(a);
   }
 
@@ -411,7 +414,7 @@ export class Saga {
     th.also = [b.id];
     for (const x of [a, b]) {
       x.mergedInto = th.id;
-      this.end(x, 'merged', `It became part of ${lcFirst(th.title)}.`);
+      this.end(x, 'merged', `It became part of ${inLine(th.title)}.`);
     }
     if (line) this.note(th, line);
     return th;
