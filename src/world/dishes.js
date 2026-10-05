@@ -13,6 +13,15 @@
 //     become a condition: its effects only work while that holds ("only
 //     while you wear metal armour");
 //   - some kinds lengthen or shorten how long it lasts.
+// (Round 53) And some of it is more than a feeling:
+//   - the condition may instead be something you do (a trigger): each
+//     time you break a block, are struck, eat, land a blow... its effects
+//     come on for a few seconds (see TRIGS);
+//   - an effect may be something that happens (an act): lightning on the
+//     nearest foe, a little blast, a burst of flame, a heart healed, or (a
+//     bad one) a bolt on yourself, a storm, a spell as a sheep... On its
+//     trigger, if it has one; otherwise now and then while it works (and
+//     its condition holds). See ACTS, and game/dishacts.js for the doing.
 // A dish's whole make-up is written into its key ("dish~p~sand,bread,
 // iron_ingot~dry.0,crumbly.0~metallic~300~6": see dishKey), so it goes
 // wherever an item goes as itself, and the same dish is the same item (a
@@ -63,34 +72,88 @@ export const CONDS = {
   fight: 'in a fight',
 };
 
+// (Round 53) When a kind's made a trigger: when its dish's effects come
+// on (for a few seconds: TRIG_SECS), and its acts happen.
+export const TRIGS = {
+  break: 'each time you break a block',
+  hurt: 'each time you\'re struck',
+  eat: 'each time you eat',
+  strike: 'each time you land a blow',
+  kill: 'each time you bring something down',
+  roll: 'each time you roll',
+  fish: 'each time you land a fish',
+  place: 'each time you set a block down',
+  craft: 'each time you make something',
+  talk: 'each time you speak to someone',
+  low: 'when you fall below half health',
+};
+export const TRIG_SECS = 15;
+
+// (Round 53) What a dish can make happen: how it reads, whether it's for
+// the good, and how long before it can happen again (seconds).
+export const ACTS = {
+  // The good.
+  bolt: { text: 'lightning strikes the nearest foe', good: true, cd: 8 },
+  blast: { text: 'a small blast throws back the foes about you', good: true, cd: 8 },
+  flame: { text: 'flame bursts over the nearest foe', good: true, cd: 8 },
+  heart: { text: 'a heart of health comes back to you', good: true, cd: 20 },
+  frost: { text: 'frost bursts from you, freezing a foe and slowing the rest', good: true, cd: 10 },
+  gust: { text: 'a gust of wind throws back everything near you', good: true, cd: 6 },
+  quake: { text: 'the ground shakes, staggering the foes about you', good: true, cd: 12 },
+  snare: { text: 'sticky threads catch the foes about you', good: true, cd: 10 },
+  flash: { text: 'a blinding flash dazzles the foes about you', good: true, cd: 12 },
+  thorns: { text: 'thorny vines lash the nearest foe', good: true, cd: 5 },
+  blink: { text: 'you blink a few paces the way you face', good: true, cd: 6 },
+  wind: { text: 'your breath comes back all at once', good: true, cd: 15 },
+  bloom: { text: 'flowers spring up and mend you and those near you', good: true, cd: 25 },
+  fishrain: { text: 'fish fall out of the sky', good: true, cd: 40 },
+  tempest: { text: 'a storm breaks, and its lightning falls on your foes', good: true, cd: 90 },
+  ward: { text: 'a ward turns aside the next blow', good: true, cd: 20 },
+  dash: { text: 'a burst of speed', good: true, cd: 10 },
+  // The bad.
+  zap: { text: 'lightning strikes you', good: false, cd: 30 },
+  boom: { text: 'you go off like a firecracker', good: false, cd: 30 },
+  burn: { text: 'you catch fire', good: false, cd: 30 },
+  chill: { text: 'you freeze stiff', good: false, cd: 30 },
+  sheep: { text: 'you turn into a sheep for a while', good: false, cd: 90 },
+  stumble: { text: 'you stumble, winded', good: false, cd: 25 },
+  stuck: { text: 'your feet stick fast', good: false, cd: 25 },
+  hiccup: { text: 'you get the hiccups', good: false, cd: 40 },
+  sneeze: { text: 'you sneeze and drop what you hold', good: false, cd: 40 },
+  stink: { text: 'a stink comes off you that folk near you don\'t like', good: false, cd: 60 },
+  storm: { text: 'a storm gathers over you', good: false, cd: 120 },
+  lurch: { text: 'you lurch off somewhere you didn\'t mean to go', good: false, cd: 30 },
+  heavy: { text: 'your legs turn heavy', good: false, cd: 30 },
+};
+
 // The kinds of thing a cook knows: each two good effects, one bad, and
 // the condition it makes.
 export const TYPES = {
-  metallic: { good: [['mine', 0.4], ['armor', 0.12]], bad: ['speed', -0.12], cond: 'metal', color: '#a8b0b8' },
-  cold: { good: [['heatproof', 0.5], ['wind', 0.25]], bad: ['speed', -0.08], cond: 'night', color: '#b8e0f8' },
-  hot: { good: [['coldproof', 0.5], ['fury', 0.12]], bad: ['sick', 1], cond: 'day', color: '#f08040' },
-  meat: { good: [['str', 1], ['regen', 1]], bad: ['wind', -0.25], cond: 'hurt', color: '#c05a48' },
-  hard: { good: [['armor', 0.1], ['end', 1]], bad: ['agi', -1], cond: 'armed', color: '#8a8478' },
-  soft: { good: [['regen', 1], ['cha', 1]], bad: ['armor', -0.12], cond: 'town', color: '#f0e0c8' },
-  sticky: { good: [['long', 1.5], ['mine', 0.2]], bad: ['speed', -0.1], cond: 'deep', color: '#d8b048' },
-  chewy: { good: [['long', 1.5], ['end', 1]], bad: ['haste', -0.1], cond: 'hale', color: '#b08060' },
-  leathery: { good: [['armor', 0.1], ['coldproof', 0.3]], bad: ['agi', -1], cond: 'leather', color: '#8a5a38' },
-  crumbly: { good: [['mine', 0.3], ['haste', 0.1]], bad: ['short', 0.6], cond: 'under', color: '#d8c098' },
-  juicy: { good: [['wind', 0.3], ['regen', 1]], bad: ['short', 0.6], cond: 'rain', color: '#e05878' },
-  dry: { good: [['heatproof', 0.4], ['long', 1.5]], bad: ['wind', -0.2], cond: 'dry', color: '#d8c890' },
-  squishy: { good: [['agi', 1], ['fish', 0.4]], bad: ['sick', 1], cond: 'water', color: '#e8d0b0' },
-  sweet: { good: [['cha', 1], ['haste', 0.1]], bad: ['sick', 1], cond: 'town', color: '#f0a0c0' },
-  bitter: { good: [['end', 1], ['coldproof', 0.3]], bad: ['cha', -1], cond: 'night', color: '#6a7848' },
-  salty: { good: [['wind', 0.25], ['breath', 2]], bad: ['breath', -2], cond: 'water', color: '#e8f0f0' },
-  earthy: { good: [['mine', 0.25], ['end', 1]], bad: ['speed', -0.08], cond: 'wild', color: '#7a5a3a' },
-  herbal: { good: [['regen', 1], ['sight', 1]], bad: ['cha', -1], cond: 'day', color: '#68b048' },
-  spicy: { good: [['fury', 0.18], ['coldproof', 0.4]], bad: ['sick', 1], cond: 'fight', color: '#e03020' },
-  fishy: { good: [['fish', 0.4], ['breath', 2]], bad: ['cha', -1], cond: 'water', color: '#88a8b8' },
-  glowing: { good: [['light', 1], ['sight', 1]], bad: ['sick', 1], cond: 'night', color: '#80f0d0' },
-  stony: { good: [['armor', 0.15], ['mine', 0.2]], bad: ['speed', -0.15], cond: 'under', color: '#909090' },
-  woody: { good: [['end', 1], ['long', 1.5]], bad: ['agi', -1], cond: 'wild', color: '#9a7048' },
-  crystal: { good: [['light', 1], ['haste', 0.12]], bad: ['armor', -0.15], cond: 'under', color: '#c8a0f0' },
-  oily: { good: [['haste', 0.15], ['agi', 1]], bad: ['sick', 1], cond: 'armed', color: '#c8a838' },
+  metallic: { good: [['mine', 0.4], ['armor', 0.12]], bad: ['speed', -0.12], cond: 'metal', trig: 'strike', acts: ['bolt', 'zap'], color: '#a8b0b8' },
+  cold: { good: [['heatproof', 0.5], ['wind', 0.25]], bad: ['speed', -0.08], cond: 'night', trig: 'hurt', acts: ['frost', 'chill'], color: '#b8e0f8' },
+  hot: { good: [['coldproof', 0.5], ['fury', 0.12]], bad: ['sick', 1], cond: 'day', trig: 'strike', acts: ['flame', 'burn'], color: '#f08040' },
+  meat: { good: [['str', 1], ['regen', 1]], bad: ['wind', -0.25], cond: 'hurt', trig: 'kill', acts: ['heart', 'sheep'], color: '#c05a48' },
+  hard: { good: [['armor', 0.1], ['end', 1]], bad: ['agi', -1], cond: 'armed', trig: 'hurt', acts: ['quake', 'stumble'], color: '#8a8478' },
+  soft: { good: [['regen', 1], ['cha', 1]], bad: ['armor', -0.12], cond: 'town', trig: 'talk', acts: ['heart', 'sheep'], color: '#f0e0c8' },
+  sticky: { good: [['long', 1.5], ['mine', 0.2]], bad: ['speed', -0.1], cond: 'deep', trig: 'place', acts: ['snare', 'stuck'], color: '#d8b048' },
+  chewy: { good: [['long', 1.5], ['end', 1]], bad: ['haste', -0.1], cond: 'hale', trig: 'eat', acts: ['wind', 'hiccup'], color: '#b08060' },
+  leathery: { good: [['armor', 0.1], ['coldproof', 0.3]], bad: ['agi', -1], cond: 'leather', trig: 'hurt', acts: ['thorns', 'stink'], color: '#8a5a38' },
+  crumbly: { good: [['mine', 0.3], ['haste', 0.1]], bad: ['short', 0.6], cond: 'under', trig: 'break', acts: ['blast', 'boom'], color: '#d8c098' },
+  juicy: { good: [['wind', 0.3], ['regen', 1]], bad: ['short', 0.6], cond: 'rain', trig: 'eat', acts: ['heart', 'storm'], color: '#e05878' },
+  dry: { good: [['heatproof', 0.4], ['long', 1.5]], bad: ['wind', -0.2], cond: 'dry', trig: 'craft', acts: ['gust', 'sneeze'], color: '#d8c890' },
+  squishy: { good: [['agi', 1], ['fish', 0.4]], bad: ['sick', 1], cond: 'water', trig: 'roll', acts: ['blink', 'stumble'], color: '#e8d0b0' },
+  sweet: { good: [['cha', 1], ['haste', 0.1]], bad: ['sick', 1], cond: 'town', trig: 'talk', acts: ['dash', 'hiccup'], color: '#f0a0c0' },
+  bitter: { good: [['end', 1], ['coldproof', 0.3]], bad: ['cha', -1], cond: 'night', trig: 'low', acts: ['ward', 'stink'], color: '#6a7848' },
+  salty: { good: [['wind', 0.25], ['breath', 2]], bad: ['breath', -2], cond: 'water', trig: 'fish', acts: ['tempest', 'storm'], color: '#e8f0f0' },
+  earthy: { good: [['mine', 0.25], ['end', 1]], bad: ['speed', -0.08], cond: 'wild', trig: 'break', acts: ['quake', 'stuck'], color: '#7a5a3a' },
+  herbal: { good: [['regen', 1], ['sight', 1]], bad: ['cha', -1], cond: 'day', trig: 'eat', acts: ['bloom', 'sneeze'], color: '#68b048' },
+  spicy: { good: [['fury', 0.18], ['coldproof', 0.4]], bad: ['sick', 1], cond: 'fight', trig: 'strike', acts: ['flame', 'burn'], color: '#e03020' },
+  fishy: { good: [['fish', 0.4], ['breath', 2]], bad: ['cha', -1], cond: 'water', trig: 'fish', acts: ['fishrain', 'stink'], color: '#88a8b8' },
+  glowing: { good: [['light', 1], ['sight', 1]], bad: ['sick', 1], cond: 'night', trig: 'kill', acts: ['flash', 'lurch'], color: '#80f0d0' },
+  stony: { good: [['armor', 0.15], ['mine', 0.2]], bad: ['speed', -0.15], cond: 'under', trig: 'break', acts: ['quake', 'heavy'], color: '#909090' },
+  woody: { good: [['end', 1], ['long', 1.5]], bad: ['agi', -1], cond: 'wild', trig: 'place', acts: ['thorns', 'heavy'], color: '#9a7048' },
+  crystal: { good: [['light', 1], ['haste', 0.12]], bad: ['armor', -0.15], cond: 'under', trig: 'roll', acts: ['blink', 'lurch'], color: '#c8a0f0' },
+  oily: { good: [['haste', 0.15], ['agi', 1]], bad: ['sick', 1], cond: 'armed', trig: 'craft', acts: ['blast', 'boom'], color: '#c8a838' },
 };
 export const TYPE_KEYS = Object.keys(TYPES);
 
@@ -217,11 +280,13 @@ export function dishName(st, ings) {
 
 // ------------------------------------------------------------ the dish itself
 // Written into its key: station, what went in, the effects drawn (kind and
-// which of its three: 0 and 1 good, 2 bad), the condition (a kind, or -),
-// how long it lasts (game minutes), and how much good it does.
+// which of its own: 0 and 1 good, 2 bad; round 53, 3 its good act, 4 its
+// bad one), the condition (a kind, or -; a kind made a trigger has a !
+// before it), how long it lasts (game minutes), and how much good it does.
 export function dishKey(o) {
   const fx = o.fx.length ? o.fx.map((f) => `${f.type}.${f.i}`).join(',') : '-';
-  return `dish~${o.st}~${o.ings.map(baseOf).join(',')}~${fx}~${o.cond || '-'}~${Math.round(o.mins)}~${Math.round(o.heal)}`;
+  const cond = o.trig ? `!${o.trig}` : o.cond || '-';
+  return `dish~${o.st}~${o.ings.map(baseOf).join(',')}~${fx}~${cond}~${Math.round(o.mins)}~${Math.round(o.heal)}`;
 }
 
 export function parseDish(key) {
@@ -231,16 +296,24 @@ export function parseDish(key) {
   const fx = p[3] === '-' ? [] : p[3].split(',').map((s) => {
     const [type, i] = s.split('.');
     return { type, i: +i };
-  }).filter((f) => TYPES[f.type] && f.i >= 0 && f.i <= 2);
-  const cond = TYPES[p[4]] ? p[4] : null;
+  }).filter((f) => TYPES[f.type] && f.i >= 0 && f.i <= 4);
+  // (A kind made a trigger, or the condition.)
+  const tk = p[4].startsWith('!') ? p[4].slice(1) : null;
+  const cond = !tk && TYPES[p[4]] ? p[4] : null;
+  const trig = tk && TYPES[tk] ? tk : null;
   const mins = Math.max(10, Math.min(24 * 60, parseInt(p[5], 10) || 60));
   const heal = Math.max(1, Math.min(20, parseInt(p[6], 10) || 1));
-  return { st: p[1], ings, fx, cond, mins, heal };
+  return { st: p[1], ings, fx, cond, trig, mins, heal };
 }
 
-// One effect drawn from a kind: what it does, and how strongly.
+// One effect drawn from a kind: what it does, and how strongly (an act:
+// something that happens; see ACTS).
 export function effectOf(f) {
   const T = TYPES[f.type];
+  if (f.i >= 3) {
+    const k = T.acts[f.i - 3];
+    return { k, n: 1, good: ACTS[k].good, type: f.type, act: true };
+  }
   const [k, n] = f.i === 2 ? T.bad : T.good[f.i];
   return { k, n, good: f.i !== 2, type: f.type };
 }
@@ -260,7 +333,7 @@ export function deriveDish(key) {
     heal: d.heal,
     ...healSplit(d.heal, d.st === 'p' ? Math.max(8, d.heal * 2) : null),
     value: Math.max(2, 2 + d.heal + effects.filter((e) => e.good).length * 4 - effects.filter((e) => !e.good).length * 2),
-    dish: { ...d, effects, form: dishForm(d.st, d.ings), cond: d.cond, condText: d.cond ? CONDS[TYPES[d.cond].cond] : null },
+    dish: { ...d, effects, form: dishForm(d.st, d.ings), cond: d.cond, condText: d.cond ? CONDS[TYPES[d.cond].cond] : null, trigger: d.trig ? TYPES[d.trig].trig : null, trigText: d.trig ? TRIGS[TYPES[d.trig].trig] : null },
   };
 }
 
@@ -286,13 +359,19 @@ export function deriveRecipe(key) {
 }
 
 // What it does, in words (for its tooltip and the cook's window).
+// (Round 53: on a trigger, first when, then what it does, its effects for
+// a few seconds after; with none, its acts now and then.)
 export function dishLines(def) {
   const D = def && def.dish;
   if (!D) return [];
   const out = [];
-  const real = D.effects.filter((e) => !FX[e.k].duration);
+  const real = D.effects.filter((e) => e.act || !FX[e.k].duration);
+  if (D.trigText) out.push({ text: `${D.trigText}:`, cond: true });
   if (!real.length) out.push({ text: 'Nothing more than a meal.', good: true });
-  for (const e of real) out.push({ text: FX[e.k].text(e.n), good: e.good });
+  for (const e of real) {
+    if (e.act) out.push({ text: D.trigText ? ACTS[e.k].text : `now and then, ${ACTS[e.k].text}`, good: e.good, act: true });
+    else out.push({ text: `${FX[e.k].text(e.n)}${D.trigText ? ` (${TRIG_SECS}s)` : ''}`, good: e.good });
+  }
   if (D.condText) out.push({ text: `only ${D.condText}`, cond: true });
   const hrs = D.mins / 60;
   out.push({ text: `for ${hrs >= 1 ? `${Math.round(hrs * 10) / 10} hours` : `${D.mins} minutes`}`, dur: true });
@@ -315,12 +394,27 @@ export function cookDish(ings, st, score, rng = Math.random) {
   const drawn = [];
   while (pool.length && drawn.length < 3) drawn.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   // With more than one thing in it, one of them may be the condition
-  // instead (an even chance).
+  // instead (an even chance); and (round 53) that, as often as not,
+  // something you do: a trigger.
   let cond = null;
-  if (ings.length >= 2 && drawn.length >= 2 && rng() < 0.5) cond = drawn.splice(Math.floor(rng() * drawn.length), 1)[0];
-  // Cooked well, the good effects; badly, the bad, more often.
+  let trig = null;
+  if (ings.length >= 2 && drawn.length >= 2 && rng() < 0.5) {
+    cond = drawn.splice(Math.floor(rng() * drawn.length), 1)[0];
+    if (rng() < 0.5) {
+      trig = cond;
+      cond = null;
+    }
+  }
+  // Cooked well, the good effects; badly, the bad, more often. (Round 53:
+  // a good one may be the kind's act, a bad one its bad act; the more so
+  // on a trigger, where an act's most at home.)
   const badChance = 0.05 + 0.65 * Math.pow(1 - Math.max(0, Math.min(1, score)), 1.3);
-  const fx = drawn.map((type) => ({ type, i: rng() < badChance ? 2 : rng() < 0.5 ? 0 : 1 }));
+  const actChance = trig ? 0.35 : 0.15;
+  const fx = drawn.map((type) => {
+    const bad = rng() < badChance;
+    const act = rng() < actChance;
+    return { type, i: bad ? (act ? 4 : 2) : act ? 3 : rng() < 0.5 ? 0 : 1 };
+  });
   // How long it lasts: the place's own time, longer or shorter for what's
   // in it, and a little for how well it was done.
   let mins = S.mins * (0.8 + 0.4 * score);
@@ -337,7 +431,7 @@ export function cookDish(ings, st, score, rng = Math.random) {
     return n + (d && d.kind === 'food' ? d.heal || 0 : 0);
   }, 0);
   const heal = Math.max(1, Math.min(20, Math.round((food * S.heal + (ings.length - 1)) * (0.6 + 0.6 * score))));
-  return dishKey({ st, ings, fx, cond, mins, heal });
+  return dishKey({ st, ings, fx, cond, trig, mins, heal });
 }
 
 // How well it was cooked, in a word.

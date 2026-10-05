@@ -162,7 +162,7 @@ test('cooking anything: named for what went in and where, cooked well it does go
     const d = parseDish(key);
     assert.ok(d && ITEMS[key], key);
     assert.deepEqual(d.ings, ['apple', 'raw_meat', 'carrot']);
-    assert.ok(d.fx.length + (d.cond ? 1 : 0) <= 3, 'three of its kinds at most');
+    assert.ok(d.fx.length + (d.cond || d.trig ? 1 : 0) <= 3, 'three of its kinds at most');
     assert.equal(ITEMS[key].name, dishName(st, d.ings));
   }
   // You can't make a pie at a campfire.
@@ -174,7 +174,9 @@ test('cooking anything: named for what went in and where, cooked well it does go
   let conds = 0;
   for (let i = 0; i < 200; i++) {
     assert.equal(parseDish(cookDish(['apple'], 'c', 0.5, r)).cond, null);
-    if (parseDish(cookDish(['sand', 'bread', 'iron_ingot'], 'p', 0.5, r)).cond) conds++;
+    // (Round 53: or a trigger, as often as not.)
+    const d = parseDish(cookDish(['sand', 'bread', 'iron_ingot'], 'p', 0.5, r));
+    if (d.cond || d.trig) conds++;
   }
   assert.ok(conds > 60 && conds < 140, `about half (${conds}/200)`);
   // Well cooked, mostly good; burnt, mostly bad.
@@ -417,6 +419,10 @@ test('an older world brought up to this version: one step at a time, what\'s new
   assert.ok(towns.length);
   for (const L of towns) {
     assert.ok((L.econ.migrated || []).includes('0.50.0'), L.settlement.name);
+    // (A town laid out fresh after loading, never saved, isn't brought up
+    // to date: it's new already, and its watch buy their salves as they
+    // can. See townMigrations.)
+    if (L.freshAttach) continue;
     for (const r of L.npcs) if (r.job === 'guard' && r.alive !== false && !r.dead) assert.ok((r.inv || []).some((s) => s && s.item === 'healing_salve'), `${r.name.first} of the watch`);
   }
   // And saved again: done, not done twice.

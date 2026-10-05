@@ -1448,6 +1448,15 @@ export class Renderer {
       // (Painted, one to one, moving: see bossbody.js.)
     } else if (master && e.kind === 'creature' && drawBossBody(this, ctx, e, sx, feetY, game, (q) => creatureSheet(q.species, q.variant || 0))) {
       // (Drawn: see bossart.js.)
+    } else if (e.kind === 'player' && e.sheepT > 0) {
+      // (Round 53) Turned into a sheep by a dish: a sheep, till it wears
+      // off (see game/dishacts.js).
+      const sheet = creatureSheet('sheep', 0);
+      const sz = sheet.height;
+      const frames = sheet.width / (sz * 2);
+      const f = e.moving ? Math.floor(this.time * 6) % frames : 0;
+      const flip = e.dir === 3 ? frames : 0;
+      ctx.drawImage(sheet, (f + flip) * sz, 0, sz, sz, sx + 8 - sz / 2, Math.round(feetY - sz + 1), sz, sz);
     } else if (e.kind === 'creature') {
       const sheet = creatureSheet(e.species, e.variant || 0);
       // (Square frames: 16 across, or 32 for something great.)

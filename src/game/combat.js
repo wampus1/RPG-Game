@@ -31,6 +31,7 @@
 // you clear.
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { dishFx } from './cooking.js';
+import { dishTrigger } from './dishacts.js';
 import { has as heroHas, staminaBonus } from './hero.js';
 import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
@@ -847,6 +848,8 @@ export function roll(game, p, dirv = null) {
   p.sitting = null;
   game.audio?.play('roll', p);
   game.renderer.emit(p.x, p.y, p.z, { n: 8, color: ['#a89878', '#8a7a5a'], up: 8, speed: 30, life: 0.45, oy: 6, shape: 'puff' });
+  // (Round 53: a dish that answers a roll: see dishacts.js.)
+  if (p.kind === 'player') dishTrigger(game, p, 'roll', {});
   if (land) {
     // Fast: twice a run's pace, quickest at the start.
     p.startMove(land.x, land.y, land.z, 0.075 * land.n + (from ? 0.04 : 0));

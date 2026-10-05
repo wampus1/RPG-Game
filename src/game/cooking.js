@@ -7,6 +7,7 @@ import { ITEMS } from '../world/items.js';
 import { TYPES, CONDS, FX, baseOf, cookDish, parseDish, dishKey, COOK_STATIONS, RECIPE_PREFIX } from '../world/dishes.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { addItem, removeItem } from './inventory.js';
+import { tickDishActs } from './dishacts.js';
 
 const nowOf = (g) => g.day * 1440 + g.minute;
 // (No more than this many dishes working on you at once: the newest.)
@@ -48,8 +49,14 @@ export const COND_TEST = {
   fight: (g, p) => g.sim.abs - (p.fightAt ?? -99) < 0.2,
 };
 
-// Does the condition on dish `d` hold for player `p` just now?
-export function condHolds(g, p, d) {
+// Does the condition on dish `d` hold for player `p` just now? (Round 53:
+// one on a trigger, `key` the dish's, holds for a few seconds after it's
+// set off: see dishacts.js.)
+export function condHolds(g, p, d, key = null) {
+  if (d && d.trig) {
+    const st = key && p.dishState && p.dishState[key];
+    return !!(st && st.burst > (p.dishClock || 0));
+  }
   if (!d || !d.cond) return true;
   const c = TYPES[d.cond] && TYPES[d.cond].cond;
   const f = c && COND_TEST[c];
@@ -70,16 +77,18 @@ export function dishBuffs(p, now = p.game ? nowOf(p.game) : 0) {
 // (those whose condition holds), worked out once a frame.
 export function dishFx(p, k) {
   const g = p && p.game;
-  if (!g || !p.buffs || !p.buffs.length) return 0;
+  if (!g || ((!p.buffs || !p.buffs.length) && !p.dishTemp)) return 0;
   const frame = g.frameNo || 0;
   let c = p._dishFx;
   if (!c || c.frame !== frame) {
     const sums = {};
     for (const q of dishBuffs(p)) {
       const D = q.def.dish;
-      if (!condHolds(g, p, D)) continue;
-      for (const e of D.effects) sums[e.k] = (sums[e.k] || 0) + e.n;
+      if (!condHolds(g, p, D, q.dish)) continue;
+      for (const e of D.effects) if (!e.act) sums[e.k] = (sums[e.k] || 0) + e.n;
     }
+    // (And what an act left on you a while: a burst of speed, heavy legs.)
+    for (const [key, t] of Object.entries(p.dishTemp || {})) if (t.until > (p.dishClock || 0)) sums[key] = (sums[key] || 0) + t.n;
     c = p._dishFx = { frame, sums };
   }
   return c.sums[k] || 0;
@@ -116,6 +125,9 @@ export function learnKinds(p, ings) {
 
 // Each moment, as a dish works: a slow mending, or a turn of the stomach.
 export function tickDishes(game, p, dt) {
+  // (What a dish makes happen, and what's still going on from it: see
+  // dishacts.js.)
+  if (game) tickDishActs(game, p, dt);
   if (!p.buffs || !p.buffs.some((q) => q.dish)) return;
   if (dishFx(p, 'regen') > 0 && p.hp < p.maxHp && p.hp > 0) {
     p.dishRegenT = (p.dishRegenT || 0) + dt;

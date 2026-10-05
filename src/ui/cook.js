@@ -249,7 +249,7 @@ export class CookWindow extends Window {
     // What it does: kept clear of the buttons (cut short, if there's more).
     const lines = [{ text: `Heals ${def.now} now${def.regen ? ` and ${def.regen} more over ${def.regenT}s` : ''} · made ${r.n}`, color: C.green }];
     for (const l of dishLines(def)) {
-      for (const [i, t] of wrap(l.text, this.w - 10).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
+      for (const [i, t] of wrap(l.text, this.w - 10).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.act ? '►' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.act ? (l.good ? '#90d8ff' : '#ff9070') : l.good ? '#90e890' : '#f08070' });
     }
     const kinds = def.dish.ings.map((k) => `${ITEMS[k] ? ITEMS[k].name : k}: ${ingredientTypes(k).join(', ')}`).join(' · ');
     lines.push({ text: '', color: C.fg });

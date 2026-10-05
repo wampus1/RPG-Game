@@ -15,6 +15,7 @@ import { ITEMS } from '../world/items.js';
 import { has as heroHas } from './hero.js';
 import { mastery, gainMastery } from './mastery.js';
 import { dishFx } from './cooking.js';
+import { dishTrigger } from './dishacts.js';
 
 const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
 export const ZONE = 0.3; // width of the catch zone on the bar (at the start)
@@ -322,4 +323,6 @@ function land(game, f) {
   // (Practice: more for the harder ones.)
   gainMastery(game, 'fishing', K.item ? 0.5 : Math.max(1, Math.round(K.fight * (f.big ? 1.5 : 1))));
   game.fishing = null;
+  // (Round 53: a dish that answers a catch: see dishacts.js.)
+  dishTrigger(game, p, 'fish', {});
 }

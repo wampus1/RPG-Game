@@ -142,6 +142,7 @@ export class SaveStore {
       if (!ix['1']) {
         const d = JSON.parse(old);
         this.st.setItem(slotKey('1'), old);
+        this.forget('1');
         ix['1'] = { name: d.playerName || d.player?.name || 'Wanderer', day: d.day, minute: Math.floor(d.minute || 0), seed: d.seed, place: '?', savedAt: Date.now() };
         this.writeIndex(ix);
       }
@@ -151,9 +152,22 @@ export class SaveStore {
     }
   }
 
+  // (Asked every frame a save list is open: whether a slot's save is in
+  // browser storage is remembered, rather than reading the whole of it
+  // each time to see. Forgotten when this writes or removes one.)
+  kept(id) {
+    this.keptAt ||= new Map();
+    if (!this.keptAt.has(id)) this.keptAt.set(id, this.get(slotKey(id)) !== null);
+    return this.keptAt.get(id);
+  }
+
+  forget(id) {
+    if (this.keptAt) this.keptAt.delete(id);
+  }
+
   list(slots = SLOTS) {
     const ix = this.index();
-    return slots.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.get(slotKey(id))) ? ix[id] : null }));
+    return slots.map((id) => ({ id, meta: ix[id] && (ix[id].db || this.kept(id)) ? ix[id] : null }));
   }
 
   // The worlds you host for others: those there are, newest first.
@@ -185,6 +199,7 @@ export class SaveStore {
   // Save a game (a snapshot taken at once; the writing may take a moment).
   // Rejects with the reason if it couldn't be kept.
   async save(id, game) {
+    this.forget(id);
     const data = JSON.stringify(game.serialize());
     const meta = metaOf(game);
     meta.size = data.length;
@@ -198,6 +213,7 @@ export class SaveStore {
         // Fine.
       }
     } else this.st.setItem(slotKey(id), data);
+    this.forget(id);
     const ix = this.index();
     ix[id] = meta;
     this.writeIndex(ix);
@@ -215,12 +231,14 @@ export class SaveStore {
 
   // A save kept elsewhere (see net/machine.js), put in its slot here.
   async putText(id, text, meta) {
+    this.forget(id);
     const m = { ...meta };
     delete m.db;
     if (this.db) {
       await this.db.put(slotKey(id), await pack(text));
       m.db = true;
     } else this.st.setItem(slotKey(id), text);
+    this.forget(id);
     const ix = this.index();
     ix[id] = m;
     this.writeIndex(ix);
@@ -267,6 +285,7 @@ export class SaveStore {
   }
 
   remove(id, quiet = false) {
+    this.forget(id);
     if (!quiet) this.onChange?.(id, null);
     try {
       this.st.removeItem(slotKey(id));

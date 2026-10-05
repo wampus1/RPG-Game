@@ -635,7 +635,7 @@ export class UI {
     if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.now ?? d.heal} HP [F/RMB]`, color: C.green });
     // A dish cooked up: what it does, when, and how long for (see
     // world/dishes.js).
-    if (d.dish) for (const l of dishLines(d)) for (const [i, t] of wrap(l.text, 44).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
+    if (d.dish) for (const l of dishLines(d)) for (const [i, t] of wrap(l.text, 44).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.act ? '►' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.act ? (l.good ? '#90d8ff' : '#ff9070') : l.good ? '#90e890' : '#f08070' });
     // (What you've learnt a thing is, cooking with it: see cooking.js.)
     else if (this.game && this.game.player && (this.game.player.kinds || []).includes(slot.item.split(/[~*]/)[0])) lines.push({ text: `To a cook: ${ingredientTypes(slot.item).join(', ')}`, color: '#d8b880' });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
@@ -723,6 +723,8 @@ export class UI {
     if (buffs.length) {
       g.fill(0, BUFF_ROW, 25, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
       const mc = this.mouseCell || { x: -1, y: -1 };
+      // (With a window open too: unless the window's over them.)
+      const covered = this.windows.some((w) => w.state !== 'closing' && w.kind !== 'banner' && w.contains(mc.x, mc.y));
       buffs.slice(0, SHOWN).forEach((q, i) => {
         const x = 1 + i * 4;
         const key = buffKey(q);
@@ -731,7 +733,7 @@ export class UI {
         // (Running out: the time blinks.)
         const ending = left < 15;
         g.text(x, BUFF_ROW + 2, shortLeft(left).padStart(3), ending ? (Math.floor(this.time * 3) % 2 ? '#ff9070' : '#a05040') : q.dish ? '#ffd890' : '#c0a0ff');
-        if (!this.modal && mc.x >= x && mc.x < x + 3 && mc.y >= BUFF_ROW && mc.y <= BUFF_ROW + 2) this.buffTooltip(q, key, left);
+        if (!covered && mc.x >= x && mc.x < x + 3 && mc.y >= BUFF_ROW && mc.y <= BUFF_ROW + 2) this.buffTooltip(q, key, left);
       });
       if (buffs.length > SHOWN) g.text(1 + SHOWN * 4, BUFF_ROW + 1, `+${buffs.length - SHOWN}`, C.dim);
     }

@@ -3988,6 +3988,82 @@ dialogue is written by hand; none of it is generated.
   killed count toward your name among them, and every band with a price on
   its head starts a plea for help in that town.
 
+## Round 53: dishes that do things, and two fixes
+
+- *Fixed: older multiplayer worlds froze the game.* Opening the details
+  of a world saved in an older version asked "Update this world?" again
+  every frame. The prompts piled up until the game crawled. It now asks
+  once, when you press **U** or click **[U] Update**. This affected
+  single-player saves too. The save list also no longer reads every save
+  in full each frame just to see that it's there.
+- *Fixed: a dish's effect picture under the HUD* now shows what it does
+  when you point at it with a window open (your pack, say). If a window
+  covers the picture, the window's own tooltip shows instead.
+- *Triggers* (`world/dishes.js`, `game/dishacts.js`): a cooked dish's
+  condition can now be something you do, not just a state you're in. Its
+  effects switch on for 15 seconds each time it happens:
+  - each time you break a block;
+  - each time you're struck;
+  - each time you eat;
+  - each time you land a blow;
+  - each time you bring something down;
+  - each time you roll;
+  - each time you land a fish;
+  - each time you set a block down;
+  - each time you make something;
+  - each time you speak to someone;
+  - when you fall below half health.
+
+  Each kind of ingredient has its own trigger. A dish cooked with two or
+  three things has an even chance of a condition, and half of those are
+  triggers.
+- *Active effects:* an effect can also be something that happens. It
+  happens on the dish's trigger. A dish without a trigger does it every
+  so often instead, while it lasts and its condition holds. Each kind of
+  ingredient has a good one and a bad one. Each act waits a while before
+  it can happen again.
+  - **Good:**
+    - lightning on the nearest foe;
+    - a small blast that throws back the foes around you;
+    - flame bursting over a foe (setting the ground alight, outside
+      towns);
+    - a heart of health back;
+    - a frost burst (one foe frozen, the rest slowed);
+    - a gust of wind;
+    - a quake that staggers foes;
+    - sticky threads that catch foes;
+    - a blinding flash;
+    - thorny vines that lash a foe;
+    - a blink a few paces ahead;
+    - your breath back all at once;
+    - flowers that spring up and mend you and those near you;
+    - fish falling from the sky;
+    - a storm whose lightning falls on your foes;
+    - a ward that turns aside the next blow;
+    - a burst of speed.
+  - **Bad:**
+    - lightning on you;
+    - going off like a firecracker;
+    - catching fire;
+    - freezing stiff;
+    - turning into a **sheep** for 15 seconds (you can walk, but you
+      can't fight, dig, build or use things, and you bleat);
+    - stumbling, winded;
+    - feet stuck fast;
+    - hiccups;
+    - a sneeze that drops what you're holding;
+    - a stink that people nearby don't like;
+    - a storm gathering over you, its lightning striking near you;
+    - lurching off somewhere;
+    - heavy legs.
+  - **Who gets hit:** acts aimed at foes only hit what's actually
+    fighting you, never townsfolk.
+- *What a dish says it does:* on a trigger, a ◆ line names it, then each
+  effect follows. A passive one shows how long it lasts. An act is marked
+  ► (blue if good, red if bad).
+- *Older worlds* (migration 0.53.0): dishes already cooked keep what they
+  did. Each town's kitchen puts one of the new kind up for sale.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -4215,6 +4291,10 @@ src/
   game/guilds.js       guilds (founding, invitations, leaving) and where
                        each guildmate is and how they are
   game/eruption.js     the mountain going up, as everyone's scene
+  game/cooking.js      what a dish does once eaten, its conditions, and
+                       the towns' cooks
+  game/dishacts.js     what a dish sets off and makes happen: triggers,
+                       acts (lightning, blasts, a storm, a sheep...)
   ui/multiplayer.js    the account, Multiplayer menu, hosting, party,
                        profile and invitation windows, and notices
   render/avatar.js     account pictures

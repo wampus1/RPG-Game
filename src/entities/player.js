@@ -335,6 +335,8 @@ export class Player extends Entity {
       this.grabbedT -= dt;
       return;
     }
+    // (Round 53: feet stuck fast, a dish's doing: see dishacts.js.)
+    if (this.rootT > 0) return;
     // Mid-roll, or staggered (a heavy blow, a broken guard): no steering.
     // (Nor while a blow of your own is coming round: you're committed.)
     if (this.rollT > 0 || this.stunT > 0 || this.guardBroken > 0 || this.swing || this.commitT > 0) return;

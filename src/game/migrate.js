@@ -14,6 +14,7 @@
 // land, its places.
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
+import { cookDish, parseDish } from '../world/dishes.js';
 import { invAdd, invCount, kitchenOf, alive, traderOf } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
 
@@ -129,6 +130,31 @@ export const STEPS = [
         }
       }
       log.push(`The world's stories have begun${pleas ? `: ${pleas} town${pleas > 1 ? 's' : ''} asking for help with outlaws already` : ''}. (Quest log: O)`);
+    },
+  },
+  {
+    // Dishes that answer what you do, and make things happen (see
+    // game/dishacts.js). The dishes already cooked keep what they did;
+    // each kitchen puts up one of the new sort for sale.
+    to: '0.53.0',
+    data(d, log) {
+      // (A dish's own bookkeeping, from before there was any: started clean.)
+      if (d.player) for (const k of ['dishState', 'dishTemp', 'sheepT', 'rootT', 'hiccups']) delete d.player[k];
+      log.push('Dishes can now set things off: lightning, little blasts, storms, a spell as a sheep...');
+    },
+    town(L) {
+      const k = kitchenOf(L);
+      if (!k || !k.store) return;
+      const r = Math.random;
+      for (let i = 0; i < 30; i++) {
+        const ings = [];
+        while (ings.length < 2 + Math.floor(r() * 2)) ings.push(PANTRY[Math.floor(r() * PANTRY.length)]);
+        const key = cookDish(ings, 'p', 0.6 + r() * 0.4, r);
+        const D = parseDish(key);
+        if (!D || !(D.trig || D.fx.some((f) => f.i === 3))) continue;
+        k.store[key] = (k.store[key] || 0) + 1;
+        return;
+      }
     },
   },
 ];

@@ -626,7 +626,7 @@ test('marks over heads: the ! for something asked, the ? when it\'s done, sent t
 });
 
 test('migration 0.52.0: heads you took become a name among the outlaws; standing bounties become pleas', () => {
-  assert.equal(GAME_VERSION, '0.52.0');
+  assert.ok(STEPS.some((q) => q.to === GAME_VERSION), 'this version has its step');
   const step = STEPS.find((q) => q.to === '0.52.0');
   assert.ok(step && step.game && step.data);
   assert.ok(stepsFor('0.51.0').some((q) => q.to === '0.52.0'));

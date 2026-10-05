@@ -13,6 +13,7 @@ import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
 import { recipeOf } from '../game/cooking.js';
+import { dishTrigger } from '../game/dishacts.js';
 import { TIERS, townsfolk, promotionNeeds } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
@@ -400,6 +401,8 @@ export class CraftWindow extends Window {
       // (Each piece's stars, and anything special about it.)
       for (const k of madeKeys) this.ui.msg(`${'★'.repeat(ITEMS[k].stars)} ${ITEMS[k].name}${ITEMS[k].mods.length ? `: ${ITEMS[k].mods.length > 1 ? 'modifiers' : 'a modifier'}!` : ''}`, ITEMS[k].mods.length ? '#f0c070' : '#ffd060');
       if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
+      // (Round 53: a dish that answers something made: see dishacts.js.)
+      if (made > burnt) dishTrigger(game, game.player, 'craft', {});
     } else game.audio?.play('error');
   }
   onWheel(d) {
@@ -1832,7 +1835,7 @@ export class SaveDetailsWindow extends Window {
       if (!off) this.hit(x, y, w, 1, fn);
     };
     btn(2, 14, this.o.mp ? '[ENTER] Host' : '[ENTER] Load', () => this.load(), C.hi, !m);
-    btn(17, 12, '[U] Update', () => this.update(), C.hi, !m || !canUpgrade(m.gv));
+    btn(17, 12, '[U] Update', () => this.upgrade(), C.hi, !m || !canUpgrade(m.gv));
     btn(30, 12, this.sure ? '[X] Sure?' : '[X] Delete', () => this.remove(), this.sure ? C.red : C.dim, !m);
     btn(43, 7, '[ESC]', () => this.close(), C.fg);
     if (this.sure) g.center(this.h - 2, 'Press X again to delete it for good.', C.orange);
@@ -1842,7 +1845,9 @@ export class SaveDetailsWindow extends Window {
     this.close();
     this.o.load();
   }
-  update() {
+  // (Not `update`: that's every window's own, run every frame: see
+  // UI.update. Named so, it asked to update an older world every frame.)
+  upgrade() {
     const m = this.o.meta();
     if (m && canUpgrade(m.gv)) this.o.update();
   }
@@ -1860,7 +1865,7 @@ export class SaveDetailsWindow extends Window {
   onKey(k) {
     if (k.code === 'Escape') this.close();
     else if (k.code === 'Enter' || k.code === 'Space') this.load();
-    else if (k.code === 'KeyU') this.update();
+    else if (k.code === 'KeyU') this.upgrade();
     else if (k.code === 'KeyX' || k.code === 'Delete') this.remove();
     if (k.code !== 'KeyX' && k.code !== 'Delete') this.sure = false;
     return true;

@@ -295,6 +295,9 @@ export class Audio {
         break;
       case 'star_ding': this.tone(1568 + Math.random() * 40, 0.12, 'sine', 0.05); this.tone(3136, 0.08, 'sine', 0.015); break;
       case 'puff': this.noise(0.5, 0.04, 700); break;
+      // (Round 53: a dish's ward or flash; a player turned into a sheep.)
+      case 'chime': this.tone(1320, 0.25, 'sine', 0.06); this.tone(1760, 0.3, 'sine', 0.05, 0, 0.08); break;
+      case 'baa': this.tone(400, 0.12, 'sawtooth', 0.05, 20); this.tone(380, 0.28, 'sawtooth', 0.05, -60, 0.1); break;
     }
   }
 }

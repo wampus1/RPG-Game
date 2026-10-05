@@ -63,6 +63,7 @@ import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
+import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
 import { InstrumentWindow } from '../ui/instrument.js';
 import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
@@ -2114,7 +2115,10 @@ export class Game {
       if (this.hitStop > 0) this.hitStop -= dt;
       else if (this.slowMo > 0) this.slowMo -= dt;
     }
-    if (!blocked) this.handleKeys(uiRes.pressed, uiRes.wheel);
+    // (Round 53: a sheep can walk, turn the camera and pick from the belt,
+    // and bleat; nothing more. See dishacts.js.)
+    const sheep = this.player.sheepT > 0;
+    if (!blocked) this.handleKeys(sheep ? sheepFilter(this, this.player, uiRes.pressed) : uiRes.pressed, uiRes.wheel);
     // What you wear and hold, and the potions you've drunk.
     this.bonusT = (this.bonusT || 0) - dt;
     if (this.bonusT <= 0) {
@@ -2132,7 +2136,12 @@ export class Game {
     // (Another player's pointer: what they pointed at on their own screen.)
     if (!blocked) this.cursor = this.seat && !this.seat.host && this.net ? this.net.cursorFor(this.seat) : (this.updateCursor(input), this.cursor);
     else this.cursor = null;
-    if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
+    if (!blocked && sheep) {
+      this.mining = null;
+      this.charging = null;
+      this.pending = null;
+      if (uiRes.clicks.some((ck) => ck.type === 'down')) sheepFilter(this, this.player, [{ code: 'Mouse' }]);
+    } else if (!blocked) this.handleMouse(dt, uiRes.clicks, input);
     else this.mining = null;
     if (this.queuedBlow) {
       if (blocked) this.queuedBlow = null;
@@ -3468,6 +3477,8 @@ export class Game {
       this.checkVandalism(x, y, z, b);
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
+      // (Round 53: a dish that answers a block broken: see dishacts.js.)
+      dishTrigger(this, this.player, 'break', { at: { x, y, z } });
     }
   }
 
@@ -3757,6 +3768,7 @@ export class Game {
     const w = this.world;
     w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
     if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
+    dishTrigger(this, p, 'place', { at: { x: t.x, y: t.y, z: t.z } });
     if (id === B.door) w.setBlock(t.x, t.y + 1, t.z, B.door_top, rot);
     // (Below ground, what you build is noted: a master smashes through it.)
     if (this.dungeon) {
@@ -5169,7 +5181,7 @@ export class Game {
       // doing elsewhere; and coming and going at its edge doesn't make the
       // rain stop and start over and over.)
       // (And round a spire, in the storm it keeps: see spirestorm.js.)
-      const near = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0, this.spireStorm || 0);
+      const near = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(p.x, p.z) : 0, this.spireStorm || 0, this.dishStorm && this.dishStorm.until > this.sim.abs ? 0.6 : 0);
       w.stormRain = near > (w.stormRain ? 0.06 : 0.12);
       if (w.stormRain) kind = 'rain';
       if (kind !== w.kind) {
@@ -5181,7 +5193,8 @@ export class Game {
     }
     // Near the storm round the islands: it's always raining there, harder
     // and windier the nearer you come, with lightning.
-    const sn = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0, (this.spireStorm || 0) * 0.6);
+    // (Round 53: and one a dish called down: see dishacts.js.)
+    const sn = Math.max(this.world.ow.stormNear ? this.world.ow.stormNear(this.player.x, this.player.z) : 0, (this.spireStorm || 0) * 0.6, this.dishStorm && this.dishStorm.until > this.sim.abs ? 0.55 : 0);
     w.storm = sn;
     if (w.stormRain && w.kind !== 'rain') w.kind = 'rain';
     w.wind = sn > 0 ? 1 + sn * 2.6 : undefined;
@@ -5244,10 +5257,12 @@ export class Game {
     // A dish cooked up: what it does starts working (see cooking.js).
     if (!sick && def.dish) {
       eatDish(this, p, def);
-      const lines = dishLines(def).filter((l) => !l.dur).map((l) => l.text).join('; ');
+      const lines = dishLines(def).filter((l) => !l.dur).map((l) => l.text).join('; ').replace(/:; /g, ': ');
       this.ui.msg(`${def.name}: ${lines}.`, '#ffd890');
       this.refreshBonus();
     }
+    // (Round 53: a dish that answers your eating, this one too.)
+    if (!sick) dishTrigger(this, p, 'eat', { item: slot.item });
     // (Not everywhere eats everything: see culture.js.)
     this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
@@ -5267,6 +5282,8 @@ export class Game {
       npc.say('Zzz...', 2);
       return;
     }
+    // (Round 53: a dish that answers a word with someone: see dishacts.js.)
+    dishTrigger(this, this.player, 'talk', { target: npc });
     // People in the middle of something urgent don't stop to chat.
     const busy = { crime: null, arresting: 'Not now! I\'m after someone.', arrested: npc.rng.pick(['Help me!', 'It wasn\'t me!']), toCell: null, jailed: npc.rng.pick(['Come to gawk?', 'Got a file in a loaf of bread?', 'I didn\'t do it.']), flee: 'Not now! Run!', fight: null, alert: 'Not now! GUARDS!', leaving: 'Can\'t stop, I\'m on my way home!', escort: null, warband: npc.warband && npc.warband.foe ? 'Out of my way!' : 'Not now!', captive: npc.rng.pick(['Come to gloat?', 'Get me out of here...', 'Tell my family I\'m alive.', 'When are they trading us back?']), down: null }[npc.state];
     if (busy !== undefined) {
@@ -5936,7 +5953,9 @@ export class Game {
       nb.hp -= blueSoak;
       amount -= blueSoak;
     }
-    // A ward of moonlight catches what would have felled you.
+    // A ward of moonlight catches what would have felled you. (Round 53:
+    // a dish's ward turns the next blow aside whole: see dishacts.js.)
+    if (target.kind === 'player' && amount > 0 && dishWarded(this, target)) return;
     if (target.kind === 'player') {
       amount = moonWard(this, target, amount);
       if (amount <= 0) return;
@@ -5979,6 +5998,15 @@ export class Game {
       return;
     }
     target.hp -= amount;
+    // (Round 53) A dish that answers a blow taken, or one landed, or your
+    // falling below half (see dishacts.js).
+    if (amount > 0 && !this.dotHit) {
+      if (target.kind === 'player' && !target.dead && target.hp > 0) {
+        dishTrigger(this, target, 'hurt', { source });
+        if (target.hp < target.maxHp / 2 && target.hp + amount >= target.maxHp / 2) dishTrigger(this, target, 'low', { source });
+      }
+      if (source && source.kind === 'player' && target !== source && target.kind !== 'player') dishTrigger(this, source, 'strike', { target });
+    }
     // (An island master with its own way with a blow that lands: see
     // afflict.js.)
     if (source && source.S && source.S.onStrike && target.kind === 'player' && amount > 0) source.S.onStrike(this, source, target, amount);
@@ -6172,6 +6200,8 @@ export class Game {
     onKill(this, e, source);
     // (The stories hear of it: see sim/saga.)
     this.sagaKill(e, source);
+    // (A dish that answers a kill: see dishacts.js.)
+    if (source && source.kind === 'player' && e.kind !== 'player' && e.kind !== 'item') dishTrigger(this, source, 'kill', { target: e });
     // (Down an old place: its own reckoning, as one of you down there.)
     const run = e.inst ? this.runAt(e.x) : null;
     if (run) {
