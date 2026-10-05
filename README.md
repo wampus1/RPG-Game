@@ -3437,6 +3437,66 @@ together on your network" above for how to start. How it works:
       they've fallen, or which place they're down.
   - Guilds are kept with the world's save.
 
+## Round 47: drafts for everyone, cottages in line, and fixes
+
+- *War call-ups work for every player* (see `War.draftOf`,
+  `War.eachCalled`). Before, only whoever was hosting could be called up
+  to a battle.
+  - Each player who is a citizen of a realm at war is now called up to its
+    battles, host or guest. Each is told themselves and marked on their
+    own map.
+  - Each answers for themselves: staying away makes that player alone a
+    deserter, wanted in that realm's towns. Being on the field counts for
+    that player, and so do being in the thick of it or being carried off.
+    Pay, renown and a statue go to whoever earned them.
+  - The host's call-up is kept where it always was (`plan.draft`); the
+    others' are kept by seat (`plan.drafts`). Who has deserted which realm
+    is kept with each character in the save.
+  - A battle starts on the ground when any player is near the field, not
+    only the host. The war's warnings, the side that knows you're among
+    its foes, and the time counted on the field work for each player.
+- *Player cottages queue for the builders.* Before, when one player's
+  cottage was going up, the mayor turned the next player away ("ask me
+  again when it's up").
+  - The next player now pays as usual. Their cottage goes in line, and
+    the mayor says whose it comes after and how many are ahead.
+  - When the builders finish one, they start the next in line. If the
+    town has no free lot, that cottage waits for one, as before.
+  - A player who is away from the world keeps their place in line without
+    holding up the players behind them.
+  - The builders tell each player only about their own cottage: in line,
+    waiting on a lot, or going up.
+  - Becoming a citizen while someone else's cottage is going up no longer
+    replaces it; the new citizen's cottage joins the line.
+  - Two players waiting on lots in the same town are two entries, not
+    one. Each starts as its owner when a lot comes free.
+  - Giving up citizenship takes your own cottage out of the line. It no
+    longer stops someone else's that is going up.
+  - The line is kept in the save (`sim.homeQueue`).
+- *Speech readable on a guest's screen.* A guest saw two dark banners
+  stacked (their own, plus a copy sent from the host) every time they
+  came into a place. Indoors, those banners and the side notices covered
+  what people were saying.
+  - The host no longer sends the name banner; the guest's own screen
+    shows it.
+  - Speech bubbles are now drawn over the banner and the notices (still
+    under menus and dialogue), for everyone. During a scene they're drawn
+    where they were, under its bars and fades.
+- *Storm clouds on a camera turn.* The clouds, the pall and the red sea
+  belong to the screen, but a turn spins a picture of the view. That
+  picture is made in four pieces, so the clouds came out doubled and
+  swinging. The clouds, the red and the final white and black are now
+  kept out of that picture and drawn upright over the turn, like the rain.
+- *The thermal spire is taller.* It stands low in the volcano's lava, so
+  the top of the world was barely over the crater rim. It now goes on up
+  past the top of the world (16 more courses: `spireRise` in
+  `render/oldplaces.js`), with:
+  - its plates and seams;
+  - bands of glow while it still draws on the mountain;
+  - a crown, dimmed with the hour.
+  - Its beacon now rises from the new crown, and its runes climb the whole
+    height. Standing behind it shows it faint, so it never hides you.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

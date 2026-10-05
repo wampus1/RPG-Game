@@ -677,9 +677,10 @@ export class Game {
 
   // Could you see a tile from where you stand (whichever way the camera's
   // turned)? Anything that appears or vanishes should do it out of sight.
+  // In sight of any of you playing.
   inSight(x, z, margin = 0) {
-    const p = this.player;
-    return Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= 18 + margin;
+    for (const p of this.everyone()) if (Math.max(Math.abs(x - p.x), Math.abs(z - p.z)) <= 18 + margin) return true;
+    return false;
   }
 
   // Someone (not asleep or sitting) standing on a tile.
@@ -2228,6 +2229,7 @@ export class Game {
       this.sim.bandits.heads = { ...(d.heads || {}) };
       this.sim.bandits.headNames = { ...(d.headNames || {}) };
     }
+    if (this.sim.war) this.sim.war.deserters = { ...(d.deserters || {}) };
   }
 
   // A player's character in this world, to keep (in the world's save, and
@@ -2253,6 +2255,7 @@ export class Game {
         // (Their own map, and the heads of bandits they've brought down.)
         heads: this.sim.bandits ? this.sim.bandits.heads : {},
         headNames: this.sim.bandits ? this.sim.bandits.headNames || {} : {},
+        deserters: this.sim.war ? this.sim.war.deserters || {} : {},
         explored: this.world.ow.packExplored(),
         pins: this.world.ow.pins || [],
         at: Date.now(),

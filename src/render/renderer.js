@@ -269,6 +269,10 @@ export class Renderer {
     // of a wet day are in the pictures, under the night like always, so the
     // turn doesn't wash the dark out.)
     this.drawWeather(game, dt, 'drops');
+    // (The storm's clouds and its red, and its last white and black, are
+    // the view's own, upright: see drawStormSea.)
+    drawStormSea(this, game, 'sky');
+    drawStormCover(this, game);
     const words = (shot, ang, alpha) => {
       if (alpha <= 0.02) return;
       const c = Math.cos(ang);
@@ -308,7 +312,7 @@ export class Renderer {
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
     if (this.underground && this.hidden) this.drawDigView(game);
-    drawStormSea(this, game);
+    drawStormSea(this, game, snap ? 'world' : 'all');
     drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
     drawKavSpikes(this, this.ctx, game);
@@ -319,7 +323,7 @@ export class Renderer {
     this.drawParticles(dt);
     this.drawInk(game);
     this.drawAim(game);
-    drawStormCover(this, game);
+    if (!snap) drawStormCover(this, game);
     if (snap || this.zoomK !== 1) return;
     // The names of those you're playing with, and how they are.
     for (const t of this.tags) {
@@ -330,10 +334,20 @@ export class Renderer {
       ctx.fillStyle = t.f > 0.5 ? '#58c048' : t.f > 0.25 ? '#e8c030' : '#e04040';
       ctx.fillRect(t.sx + 3, t.y + 8, Math.round(12 * t.f), 1);
     }
-    // Speech bubbles and emotes go on top of everything, roofs included.
-    for (const b of this.bubbles) {
-      if (b.emote) drawText(ctx, b.text, b.x, b.y, b.color, '#000');
-      else this.drawBubble(ctx, b.text, b.x, b.y, b.color);
+    // Speech bubbles and emotes go on top of everything, roofs included
+    // (or later, over a place's name and the notices: see drawBubbles).
+    this.bubbleK = 1;
+    if (!this.deferBubbles) this.drawBubbles(ctx);
+  }
+
+  // What's being said, on the screen's own picture (`bubbleK`: how far the
+  // camera's drawn back). The UI calls it over its banner and notices,
+  // under its windows, when `deferBubbles` is set.
+  drawBubbles(ctx) {
+    const z = this.bubbleK || 1;
+    for (const b of this.bubbles || []) {
+      if (b.emote) drawText(ctx, b.text, Math.round(b.x / z), Math.round(b.y / z), b.color, '#000');
+      else this.drawBubble(ctx, b.text, b.x / z, b.y / z, b.color);
     }
   }
 
@@ -442,10 +456,8 @@ export class Renderer {
     if (this.zoomK !== 1) {
       this.layer = this.zcanvas;
       main.clearRect(0, 0, VIEW_W, VIEW_H);
-      for (const b of this.bubbles || []) {
-        if (b.emote) drawText(main, b.text, Math.round(b.x / z), Math.round(b.y / z), b.color, '#000');
-        else this.drawBubble(main, b.text, b.x / z, b.y / z, b.color);
-      }
+      this.bubbleK = z;
+      if (!this.deferBubbles) this.drawBubbles(main);
       this.ctx = main;
     }
   }

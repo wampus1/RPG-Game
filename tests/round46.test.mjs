@@ -450,7 +450,10 @@ test('a house going up is its player\'s: another can\'t start theirs over it, an
   assert.ok(!game.asPlayer(gp, () => sim.othersHouse()), 'the guest\'s own');
   const mayor = { layout: game.world.getLayout(game.world.ow.settlements[0]) };
   sim.citizen = { sid: 0, home: null };
-  assert.equal(sim.ownHomeTerms(mayor).reason, 'busy');
+  // (Round 47: not turned away; theirs goes in line after it.)
+  const t = sim.ownHomeTerms(mayor);
+  assert.ok(t.ok);
+  assert.equal(t.after, 'Guesty');
   sim.construction = null;
   sim.citizen = null;
 });

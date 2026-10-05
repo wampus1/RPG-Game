@@ -265,8 +265,10 @@ export class UI {
     this.messages = this.messages.filter((m) => m.t > 0);
     if (this.fade > 0 && !(game && game.sleepFast)) this.fade = Math.max(0, this.fade - dt * 0.8);
     if (this.showHud) this.hudP = Math.min(1, this.hudP + dt / 0.5);
-    // Settlement name banner when entering a place.
-    if (game && game.player) {
+    // Settlement name banner when entering a place. (Not for another
+    // player's windows kept here: their own screen shows it, and a second
+    // one sent over it stacked a darker box over what people were saying.)
+    if (game && game.player && !this.remoteSeat) {
       const s = game.currentSettlement;
       if (s !== this.lastSettlement) {
         this.lastSettlement = s;
@@ -279,6 +281,16 @@ export class UI {
   render(ctx, game, fps) {
     this.tooltip = null;
     this.notesTop = 0;
+    // What people are saying (left for here by the renderer: see
+    // Renderer.drawBubbles): over a place's name and the notices, so a dark
+    // box passing over never hides it; under the menus. (In a scene, where
+    // they were, under its bars and its dark.)
+    const r = game && game.renderer;
+    let words = !!(r && r.deferBubbles);
+    if (words && (game.cutscene || game.scene)) {
+      r.drawBubbles(ctx);
+      words = false;
+    }
     if (this.showHud && game && game.player) {
       this.drawHud(game, fps);
       drawGrid(ctx, this.hudGrid, 0, 0, this.hudP, 1234, this.time);
@@ -303,14 +315,22 @@ export class UI {
     // title screen and the world.)
     const under = this.windows.some((w) => w.modal && w.state !== 'closing' && w.kind !== 'title' && w.kind !== 'banner');
     if (under) drawNotes(this, ctx);
-    for (const w of this.windows) {
-      if (covered && w.kind === 'banner') continue;
+    const drawWin = (w) => {
       w.grid.clear();
       w.hits = [];
       w.draw(w.grid, game);
       const p = w.state === 'open' ? 1 : Math.max(0, Math.min(1, w.p));
       drawGrid(ctx, w.grid, w.x, w.y, easeOut(p), w.seed, this.time);
       if (w.drawPixels && p >= 1) w.drawPixels(ctx, game);
+    };
+    if (words) {
+      for (const w of this.windows) if (w.kind === 'banner' && !covered) drawWin(w);
+      if (!under) drawNotes(this, ctx);
+      r.drawBubbles(ctx);
+    }
+    for (const w of this.windows) {
+      if (w.kind === 'banner' && (covered || words)) continue;
+      drawWin(w);
     }
     // (In someone else's world: what their windows have under your pointer,
     // and what you've picked up in them, as the host sent it.)
@@ -328,7 +348,7 @@ export class UI {
     }
     if (game && game.sleep) this.drawSleep(ctx, game);
     if (this.ko) this.drawKnockout(ctx);
-    if (!under) drawNotes(this, ctx);
+    if (!under && !words) drawNotes(this, ctx);
   }
 
   // A notice at the side of the screen (someone joined: see multiplayer.js).

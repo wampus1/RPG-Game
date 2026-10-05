@@ -31,6 +31,7 @@ export function drawOldPlaces(r, game, dt) {
     for (const s of game.world.sites || []) {
       if (s.type !== 'kavorent' || s.x === undefined || Math.abs(s.x - p.x) > 40 || Math.abs(s.z - p.z) > 34) continue;
       const rec = game.sim.dungeons.get(s.id);
+      spireCrown(r, ctx, game, s, rec);
       spireBeacon(r, ctx, game, s, rec);
       spireRunes(r, ctx, game, s, rec, dt);
     }
@@ -93,7 +94,7 @@ function spireRunes(r, ctx, game, s, rec, dt) {
   const [u, v] = r.toView(tx, tz);
   const x = u * TILE - r.camX + 6;
   const top = s.h + 1;
-  const layers = WORLD_Y - top;
+  const layers = WORLD_Y - top + spireRise(s);
   const yBottom = v * TILE - top * LH + TILE + LH - r.camY;
   const height = layers * LH;
   const open = rec && rec.spire && rec.spire.open !== null && rec.spire.open !== undefined;
@@ -155,6 +156,89 @@ function spireRunes(r, ctx, game, s, rec, dt) {
   ctx.globalAlpha = 1;
 }
 
+// How far a spire goes on up past the top of the world, in courses: the
+// thermal spire stands down in its crater's lava, so the world's top is
+// barely over the rim; the rest of it is drawn on up into the sky.
+const RISE = { thermal: 16 };
+export function spireRise(s) {
+  return (s && RISE[s.theme]) || 0;
+}
+
+// The spire carried on up past the top of the world: its face toward you,
+// course by course (alloy plates, a seam of light, bands of glow while it
+// still draws on the mountain), and its crown. Dimmed with the sky (see
+// Lighting.draw); faint while you're behind it, so it never hides you.
+function spireCrown(r, ctx, game, s, rec) {
+  const E = spireRise(s);
+  if (!E || (rec && rec.cleared)) return;
+  const p = game.player;
+  if (Math.abs(p.x - s.x) <= 2 && Math.abs(p.z - s.z) <= 2) return;
+  const [u, v] = r.toView(s.x, s.z);
+  const x0 = (u - 2) * TILE - r.camX;
+  const W = 5 * TILE;
+  if (x0 > r.vw || x0 + W < 0) return;
+  const yB = (v + 3) * TILE - (WORLD_Y - 1) * LH - r.camY;
+  const yA = yB - E * LH;
+  const yT = yA - 5 * TILE;
+  if (yB < 0) return;
+  const pp = r.playerPoint(game);
+  const behind = pp.x > x0 - 8 && pp.x < x0 + W + 8 && pp.y > yT - 16 && pp.y < yB + 24;
+  const sky = (r.lighting && r.lighting.sky) || [1, 1, 1];
+  const lit = Math.max(0.18, (sky[0] + sky[1] + sky[2]) / 3);
+  const glowing = !(s.state && s.state.beaten);
+  const t = r.time;
+  ctx.save();
+  ctx.globalAlpha = behind ? 0.3 : 1;
+  // Its face, course by course.
+  for (let j = 0; j < E; j++) {
+    const y = yB - (j + 1) * LH;
+    ctx.fillStyle = '#2a2840';
+    ctx.fillRect(x0, y, W, LH);
+    ctx.fillStyle = '#3c3a58';
+    ctx.fillRect(x0, y, W, 1);
+    ctx.fillStyle = '#0e0c18';
+    ctx.fillRect(x0, y + LH - 1, W, 1);
+    for (let c = 0; c < 5; c++) {
+      const sx = x0 + c * TILE + ((j + c) % 2 ? 7 : 11);
+      ctx.fillStyle = '#1c1a2a';
+      ctx.fillRect(sx, y, 1, LH);
+      ctx.fillStyle = '#2e5a6a';
+      ctx.fillRect(sx + 1, y + 1, 1, LH - 2);
+    }
+  }
+  // The top: a crown of plates stepping in round the beacon's mouth.
+  ctx.fillStyle = '#3c3a58';
+  ctx.fillRect(x0, yT, W, yA - yT);
+  ctx.fillStyle = '#2a2840';
+  ctx.fillRect(x0 + TILE, yT + TILE, W - 2 * TILE, yA - yT - 2 * TILE);
+  ctx.fillStyle = '#0e0c18';
+  ctx.fillRect(x0 + 2 * TILE, yT + 2 * TILE, TILE, TILE);
+  // Shade it with the hour (the world under it is lit the same way).
+  if (lit < 0.999) {
+    ctx.globalAlpha = (behind ? 0.3 : 1) * Math.min(0.85, 1 - lit);
+    ctx.fillStyle = '#05040a';
+    ctx.fillRect(x0, yT, W, yB - yT);
+  }
+  ctx.globalAlpha = behind ? 0.3 : 1;
+  // Its light, which the dark doesn't dim: bands of glow every few courses
+  // (a slow pulse climbing them), and the seam down its middle.
+  if (glowing) {
+    for (let j = 2; j < E; j += 3) {
+      const y = yB - (j + 1) * LH + Math.floor(LH / 2) - 1;
+      const pulse = 0.55 + 0.45 * Math.sin(t * 2.2 - j * 0.5);
+      ctx.globalAlpha = (behind ? 0.3 : 1) * pulse;
+      ctx.fillStyle = '#5ad8f0';
+      ctx.fillRect(x0, y, W, 2);
+      ctx.fillStyle = '#a8f4ff';
+      ctx.fillRect(x0, y, W, 1);
+    }
+  }
+  ctx.globalAlpha = (behind ? 0.3 : 1) * (0.25 + 0.1 * Math.sin(t * 2));
+  ctx.fillStyle = '#5ad8f0';
+  ctx.fillRect(x0 + 2 * TILE + 7, yA, 2, yB - yA);
+  ctx.restore();
+}
+
 const RUNE_COLOURS = ['#5ad8f0', '#ff70d0', '#ffe070', '#7affb0', '#b080ff', '#ff9050'];
 
 // The beacon at a spire's crown: a column of light up into the sky (faint
@@ -171,7 +255,7 @@ function spireBeacon(r, ctx, game, s, rec) {
   if (flare) I = Math.max(I, 2.2 - flare.t * 0.35);
   const [u, v] = r.toView(s.x, s.z);
   const x = u * TILE + 8 - r.camX;
-  const yTop = v * TILE - (WORLD_Y - 1) * LH - r.camY + 8;
+  const yTop = v * TILE - (WORLD_Y - 1 + spireRise(s)) * LH - r.camY + 8;
   if (yTop < -20 || x < -120 || x > r.vw + 120) return;
   ctx.save();
   const w = (5 + 4 * I) * (1 + 0.08 * Math.sin(t * 3));

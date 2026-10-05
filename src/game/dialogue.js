@@ -1065,6 +1065,10 @@ function myWorksTalk(npc, game) {
   for (const o of list) {
     const thing = o.what === 'workshop' ? 'your workshop' : 'your house';
     const Thing = o.what === 'workshop' ? 'Your workshop' : 'Your house';
+    if (o.state === 'line') {
+      lines.push(`${Thing} is paid for and in line for the builders${o.after ? `, after ${o.after}'s` : ''}${o.ahead ? ` (${o.ahead === 1 ? 'one more' : `${o.ahead} more`} ahead of it)` : ''}. They start on it as soon as they're free.`);
+      continue;
+    }
     if (o.state === 'queued') {
       const waited = Math.max(0, game.day - (o.since ?? game.day));
       lines.push(`${Thing} is paid for and waiting on a lot${o.ahead ? ` (${o.ahead === 1 ? 'one thing is' : `${o.ahead} things are`} ahead of it)` : ', next in line'}${waited ? `: ${waited} day${waited === 1 ? '' : 's'} so far` : ''}.`);
@@ -1636,16 +1640,16 @@ function respondRaw(npc, game, id, arg) {
     case 'citizen': return citizenTalk(npc, game, arg);
     case 'ownhome': {
       const t = sim.ownHomeTerms(npc);
-      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', busy: 'The builders are at work on someone else\'s house just now: ask me again when it\'s up.', queued: 'It\'s paid for: your house goes up on the next free lot. The builders are laying out a new street for it.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
+      if (!t.ok) return { lines: [{ have: 'You have a house already!', building: 'The builders are already at work on it.', inline: 'It\'s paid for: yours is in line for the builders, after the house they\'re on now.', queued: 'It\'s paid for: your house goes up on the next free lot. The builders are laying out a new street for it.', citizen: 'Only citizens may build here.' }[t.reason] || 'Not just now.'] };
       if (arg !== 'yes') {
         const kin = sim.citizen.native ? 'Leaving the family home at last? Good for you.' : 'A place of your own? Of course.';
-        const where = t.plot ? 'on the free lot' : 'on the next lot we mark out (there\'s none free this minute; a new street is on its way)';
+        const where = t.after ? `as soon as they've finished ${t.after}'s${t.ahead ? ` (and ${t.ahead === 1 ? 'one more' : `${t.ahead} more`} waiting before yours)` : ''}` : t.plot ? 'on the free lot' : 'on the next lot we mark out (there\'s none free this minute; a new street is on its way)';
         return { lines: [kin, `The builders can put up a cottage ${where} for ¤${t.fee}. It takes a day or two once they start.`], choices: [{ id: 'ownhome', arg: 'yes', label: `Please do. (Pay ¤${t.fee})` }], back: 'I\'ll stay where I am for now.' };
       }
       const r = sim.ownHome(npc);
       if (!r.ok) return { lines: [r.reason === 'money' ? `You'll need ¤${r.fee} for the builders.` : 'Something went wrong with the paperwork.'] };
-      game.ui.msg(r.queued ? 'Your cottage will go up on the next free lot.' : 'The builders will start on your cottage today.', '#ffe070');
-      return { lines: [r.queued ? 'It\'s paid for. As soon as there\'s a lot free, the builders start on it. You can stay with your family until then.' : 'It\'s done: the builders start today. You can stay with your family until it\'s ready.'] };
+      game.ui.msg(r.after ? `Your cottage is in line for the builders, after ${r.after}'s.` : r.queued ? 'Your cottage will go up on the next free lot.' : 'The builders will start on your cottage today.', '#ffe070');
+      return { lines: [r.after ? `It's paid for. The builders are on ${r.after}'s house; yours is next in line once it's up. You can stay where you are until then.` : r.queued ? 'It\'s paid for. As soon as there\'s a lot free, the builders start on it. You can stay with your family until then.' : 'It\'s done: the builders start today. You can stay with your family until it\'s ready.'] };
     }
     case 'renounce':
       if (arg === 'yes') {
@@ -1902,6 +1906,7 @@ function citizenTalk(npc, game, arg) {
   const lines = [`Welcome, citizen ${game.playerName} of ${s.name}!`];
   if (r.host) lines.push(`You'll stay with the ${r.host.family} family for now. Their spare bed is yours.`);
   if (r.plot) lines.push('The builders will start on your cottage right away.');
+  else if (r.after) lines.push(`Your cottage is in line for the builders, after ${r.after}'s.`);
   else if (r.queued) lines.push('Your cottage goes up on the next free lot; the builders are laying out a new street.');
   game.ui.msg(`You are now a citizen of ${s.name}!`, '#ffe070');
   game.audio?.play('coin');

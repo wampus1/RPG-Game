@@ -123,6 +123,9 @@ export class Sim {
     this.pending = new Map(); // region key -> [[x, y, z, id, meta]]
     this.citizen = null;
     this.construction = null;
+    // Others' cottages, paid for while the builders are on someone's (with
+    // others playing): started in turn (see nextHome).
+    this.homeQueue = [];
     this.saved = null; // sid -> settlement data from a save
     this.greetT = 0;
     this.tickT = 0;
@@ -286,6 +289,7 @@ export class Sim {
       this.backgroundTick();
       // (As the one whose house it is, with others playing: see asBuilder.)
       this.asBuilder(() => this.updateConstruction());
+      this.nextHome();
       this.works.update();
       this.diplomacy.update();
       this.nomads.update();
@@ -1322,9 +1326,8 @@ export class Sim {
     if (host) for (const r of L.npcs) if (r.home === host.house.id && alive(r)) this.changeRep(r.ent || { rec: r, settlement: s }, 6);
     this.changeRep(mayor, 5);
     ledger(L, day, `${this.game.playerName} became a citizen of ${s.name}.`);
-    if (t.plot) this.buildHome(L, t.plot);
-    else this.roads.enqueue(L, { kind: 'home', type: 'house_s' });
-    return { ok: true, fee: t.fee, host, plot: t.plot, queued: !t.plot };
+    const o = this.orderHome(L);
+    return { ok: true, fee: t.fee, host, plot: o.started ? t.plot : null, queued: !o.started, after: o.after };
   }
 
   // Is the house going up (if any) someone else's (another playing)?
@@ -1343,15 +1346,87 @@ export class Sim {
     return seat ? asSeat(g, seat, fn) : null;
   }
 
-  // A lot came free for the home you're waiting on.
-  startHome(L) {
+  // A cottage paid for: started now if the builders are free and there's a
+  // lot; in line behind someone else's (with others playing); or waiting on
+  // the next lot the town marks out.
+  orderHome(L) {
+    const g = this.game;
+    const owner = g.seat ? g.seat.id : null;
+    if (this.othersHouse()) {
+      if (!this.homeQueue.some((o) => o.owner === owner)) this.homeQueue.push({ sid: L.settlement.id, owner, ownerName: g.playerName, day: g.day });
+      return { started: false, after: this.construction.ownerName || null, ahead: this.homeQueue.findIndex((o) => o.owner === owner) };
+    }
+    const plot = this.works.freePlot(L);
+    if (plot) {
+      this.buildHome(L, plot);
+      return { started: true };
+    }
+    this.roads.enqueue(L, { kind: 'home', type: 'house_s', owner });
+    return { started: false };
+  }
+
+  // Is yours waiting in line behind someone else's?
+  homeInLine(sid = null) {
+    const g = this.game;
+    const owner = g.seat ? g.seat.id : null;
+    return this.homeQueue.find((o) => o.owner === owner && (sid === null || o.sid === sid)) || null;
+  }
+
+  // The builders are free: the next cottage in line (of someone here: one
+  // whose owner is away waits for them, without holding up the rest).
+  nextHome() {
+    const k = this.construction;
+    if (k && !k.done && !k.cancelled) return;
+    const g = this.game;
+    for (let i = 0; i < this.homeQueue.length; i++) {
+      const o = this.homeQueue[i];
+      const seat = o.owner && g.seats ? g.seats.find((q) => q.id === o.owner) : null;
+      if (o.owner && g.seats && !seat) continue;
+      this.homeQueue.splice(i, 1);
+      const go = () => {
+        const c = this.citizen;
+        if (!c || c.sid !== o.sid || (c.home !== null && c.home !== undefined)) return;
+        const L = this.layoutOf(o.sid);
+        const plot = this.works.freePlot(L);
+        if (plot) {
+          this.buildHome(L, plot);
+          g.ui.msg(`The builders in ${L.settlement.name} have started on your cottage.`, '#ffe070');
+        } else {
+          this.roads.enqueue(L, { kind: 'home', type: 'house_s', owner: o.owner });
+          g.ui.msg(`Your cottage in ${L.settlement.name} is next: it waits on a free lot.`, '#ffe070');
+        }
+      };
+      if (seat && g.seat !== seat) asSeat(g, seat, go);
+      else go();
+      return;
+    }
+  }
+
+  // A lot came free for the home you're waiting on (`owner`: whose, with
+  // others playing).
+  startHome(L, owner = null) {
+    const g = this.game;
+    if (owner && g.seats && (!g.seat || g.seat.id !== owner)) {
+      const seat = g.seats.find((q) => q.id === owner);
+      // (Away from the world: theirs goes in line for when they're back.)
+      if (!seat) {
+        if (!this.homeQueue.some((o) => o.owner === owner)) this.homeQueue.push({ sid: L.settlement.id, owner, ownerName: null, day: g.day });
+        return null;
+      }
+      return asSeat(g, seat, () => this.startHome(L, owner));
+    }
     const c = this.citizen;
     const k = this.construction;
-    if (!c || c.sid !== L.settlement.id || (c.home !== null && c.home !== undefined) || (k && k.sid === c.sid && !k.done && !k.cancelled) || this.othersHouse(k)) return null;
+    if (!c || c.sid !== L.settlement.id || (c.home !== null && c.home !== undefined) || (k && k.sid === c.sid && !k.done && !k.cancelled && !this.othersHouse(k))) return null;
+    // (The builders on someone else's: yours is next in line after it.)
+    if (this.othersHouse(k)) {
+      this.orderHome(L);
+      return null;
+    }
     const plot = this.works.freePlot(L);
     if (!plot) return null;
     const b = this.buildHome(L, plot);
-    this.game.ui.msg(`A lot is free in ${L.settlement.name}: the builders have started on your home.`, '#ffe070');
+    g.ui.msg(`A lot is free in ${L.settlement.name}: the builders have started on your home.`, '#ffe070');
     return b;
   }
 
@@ -1388,15 +1463,18 @@ export class Sim {
     if (!c || c.sid !== s.id) return { ok: false, reason: 'citizen' };
     if (c.home !== null && c.home !== undefined) return { ok: false, reason: 'have' };
     const k = this.construction;
-    // (The builders on someone else's house, with others playing: one at a
-    // time.)
-    if (this.othersHouse(k)) return { ok: false, reason: 'busy' };
-    if (k && k.sid === s.id && !k.done && !k.cancelled) return { ok: false, reason: 'building' };
+    const g = this.game;
+    const owner = g.seat ? g.seat.id : null;
+    // (The builders on someone else's house, with others playing: yours
+    // goes in line after it, and theirs after any already waiting.)
+    const busy = this.othersHouse(k);
+    if (this.homeInLine()) return { ok: false, reason: 'inline' };
+    if (!busy && k && k.sid === s.id && !k.done && !k.cancelled) return { ok: false, reason: 'building' };
     // No lot free: you can still pay; the house goes up on the next one.
-    const plot = this.works.freePlot(L);
-    if (this.roads.waiting(L, 'home')) return { ok: false, reason: 'queued' };
+    const plot = busy ? null : this.works.freePlot(L);
+    if (this.roads.queue(L).some((o) => o.kind === 'home' && (o.owner ?? null) === owner)) return { ok: false, reason: 'queued' };
     const fee = Math.round(({ village: 40, town: 70, city: 110 }[s.type] || 60) * (c.native ? 0.75 : 1));
-    return { ok: true, fee, plot };
+    return { ok: true, fee, plot, after: busy ? k.ownerName || 'someone else' : null, ahead: busy ? this.homeQueue.length : 0 };
   }
 
   ownHome(mayor) {
@@ -1406,9 +1484,8 @@ export class Sim {
     if (countItem(p.inv, 'coin') < t.fee) return { ok: false, reason: 'money', fee: t.fee };
     removeItem(p.inv, 'coin', t.fee);
     mayor.layout.econ.treasury += t.fee;
-    if (t.plot) this.buildHome(mayor.layout, t.plot);
-    else this.roads.enqueue(mayor.layout, { kind: 'home', type: 'house_s' });
-    return { ok: true, fee: t.fee, queued: !t.plot };
+    const o = this.orderHome(mayor.layout);
+    return { ok: true, fee: t.fee, queued: !o.started, after: o.after || null };
   }
 
   // Your mother, father, brothers and sisters, if you were born here.
@@ -1598,10 +1675,15 @@ export class Sim {
     this.careers.onRevoke(c.sid);
     ledger(L, this.game.day, `${this.game.playerName}'s citizenship was revoked (${reason}). ${L.settlement.name} lost a citizen.`);
     const k = this.construction;
-    if (k && k.sid === c.sid && !k.done) {
+    if (k && k.sid === c.sid && !k.done && !this.othersHouse(k)) {
       k.cancelled = true;
       this.clearBuilders(L);
     }
+    // (And yours, if it was waiting in line or for a lot there.)
+    const owner = this.game.seat ? this.game.seat.id : null;
+    this.homeQueue = this.homeQueue.filter((o) => !(o.owner === owner && o.sid === c.sid));
+    const rq = this.roads.queue(L);
+    for (let i = rq.length - 1; i >= 0; i--) if (rq[i].kind === 'home' && (rq[i].owner ?? null) === owner) rq.splice(i, 1);
     this.areaCache.clear();
   }
 
@@ -2171,6 +2253,7 @@ export class Sim {
       pending: [...this.pending],
       citizen: this.citizen,
       construction: this.construction,
+      homeQueue: this.homeQueue,
       justice: this.justice.serialize(),
       careers: this.careers.serialize(),
       works: this.works.serialize(),
@@ -2262,6 +2345,7 @@ export class Sim {
     this.pending = new Map(data.pending || []);
     this.citizen = data.citizen || null;
     this.construction = data.construction || null;
+    this.homeQueue = data.homeQueue || [];
     this.justice.load(data.justice);
     this.careers.load(data.careers);
     this.works.load(data.works);

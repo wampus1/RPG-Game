@@ -128,6 +128,9 @@ export class Lighting {
     if (S && (S.cloud > 0.01 || S.flash > 0.01)) sky = stormSky(sky, S);
     // (A Mirefolk fogsight tincture: the dark goes grey-green and clear.)
     if (player && player.buffs && player.buffs.some((q) => q.sight && q.until > game.day * 1440 + game.minute)) sky = [Math.max(sky[0], 0.5), Math.max(sky[1], 0.62), Math.max(sky[2], 0.52)];
+    // (The hour's light, for what's drawn past the world's top: see
+    // oldplaces.js.)
+    this.sky = sky;
     const indoor = r.hidden !== null;
     const dayFull = sky[0] >= 0.999 && sky[2] >= 0.999;
     // World-tile area that visible surfaces can belong to (however the

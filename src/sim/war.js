@@ -189,10 +189,12 @@ export class War {
     for (const w of this.wars.slice()) if (w.plan && now >= w.plan.at && !w.plan.live) this.battle(w, w.plan);
     // Called up: a word when it's close (if you're nowhere near the field).
     for (const w of this.wars) {
-      const d = w.plan && w.plan.draft;
-      if (!d || d.state !== 'called' || d.warned || now < w.plan.at - 90) continue;
-      d.warned = true;
-      if (!this.nearPlayer(w.plan.site, 60)) this.game.ui.msg(`${w.plan.name[0].toUpperCase()}${w.plan.name.slice(1)} starts within the hour, and you're expected in the line!`, '#ff9060');
+      if (!w.plan || now < w.plan.at - 90) continue;
+      this.eachCalled(w.plan, (d) => {
+        if (d.warned) return;
+        d.warned = true;
+        if (!this.nearMe(w.plan.site, 60)) this.game.ui.msg(`${w.plan.name[0].toUpperCase()}${w.plan.name.slice(1)} starts within the hour, and you're expected in the line!`, '#ff9060');
+      });
     }
     if (this.game.player.down && !(this.live && this.live.kind === 'battle' && !this.live.done)) this.wakePlayer('You come to.');
     if (this.live) this.liveTick(dt);
@@ -663,20 +665,66 @@ export class War {
     return s && s.civ ? s.civ : null;
   }
 
+  // Each player's own call-up to a battle (the host's kept where it always
+  // was, as plan.draft; anyone else's by their seat: see game/party.js).
+  draftOf(plan) {
+    if (!plan) return null;
+    const s = this.game.seat;
+    if (!s || s.host) return plan.draft || null;
+    return (plan.drafts && plan.drafts[s.id]) || null;
+  }
+
+  setDraft(plan, d) {
+    const s = this.game.seat;
+    if (!s || s.host) plan.draft = d;
+    else (plan.drafts ||= {})[s.id] = d;
+  }
+
+  // Do `fn(draft, player)` as each player called up to `plan` (still
+  // 'called', unless `any`).
+  eachCalled(plan, fn, any = false) {
+    const g = this.game;
+    const each = () => {
+      const d = this.draftOf(plan);
+      if (d && (any || d.state === 'called')) fn(d, g.player);
+    };
+    if (g.seats && g.seats.length > 1) for (const q of g.everyone()) g.asPlayer(q, each);
+    else each();
+  }
+
+  // Within `r` of `at` (the one it's being done as)?
+  nearMe(at, r) {
+    const p = this.game.player;
+    return !!p && Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= r;
+  }
+
   // A citizen of a realm at war is called to its battles: be on the field
-  // when it starts, and stay in the fight.
+  // when it starts, and stay in the fight. (Each of you playing who's a
+  // citizen of one of its realms.)
   callUp(w, plan, day) {
+    const g = this.game;
+    if (g.seats && g.seats.length > 1) {
+      let first = null;
+      for (const q of g.everyone()) g.asPlayer(q, () => (first = this.callUpOne(w, plan, day) || first));
+      return first;
+    }
+    return this.callUpOne(w, plan, day);
+  }
+
+  callUpOne(w, plan, day) {
     const me = this.playerCiv();
     if (!me) return null;
     const side = w.a.includes(me.id) ? 'a' : w.b.includes(me.id) ? 'b' : null;
     if (!side) return null;
-    plan.draft = { side, civ: me.id, state: 'called', present: 0, hits: 0 };
+    if (this.draftOf(plan)) return null;
+    const d = { side, civ: me.id, state: 'called', present: 0, hits: 0 };
+    this.setDraft(plan, d);
     const foe = this.civ(w.lead[side === 'a' ? 'b' : 'a']);
     const L = this.sim.layoutOf(this.sim.citizen.sid);
     ledger(L, day, `${this.game.playerName} is called up to fight for the ${plain(me)} at ${plan.name}.`);
     this.game.ui.msg(`Called to arms! As a citizen of the ${plain(me)} you must fight ${foe ? `the ${plain(foe)} ` : ''}at ${plan.name}, tomorrow morning (it's marked on your map). Stay away and you'll be named a deserter.`, '#ff9060');
     this.game.audio?.play('alarm');
-    return plan.draft;
+    return d;
   }
 
   // Can't come (locked up, or already in a fight elsewhere): excused.
@@ -688,7 +736,7 @@ export class War {
   // Never came, or left the field: a deserter, wanted in every town of the
   // realm until it's answered for.
   desert(w, plan) {
-    const d = plan.draft;
+    const d = this.draftOf(plan);
     if (!d || d.state !== 'called') return null;
     d.state = 'deserted';
     const civ = this.civ(d.civ);
@@ -729,7 +777,11 @@ export class War {
   // Did you do your part? On the field for a good while, or in the thick of
   // it, or carried off it.
   reckonDraft(L, winner = null) {
-    const d = L.plan.draft;
+    this.eachCalled(L.plan, () => this.reckonOne(L, winner));
+  }
+
+  reckonOne(L, winner = null) {
+    const d = this.draftOf(L.plan);
     if (!d || d.state !== 'called') return;
     const p = this.game.player;
     if (d.present >= 20 || d.hits > 0 || p.down) {
@@ -772,9 +824,18 @@ export class War {
   // Coming to after the battle: on your feet if your side held the field,
   // a prisoner if it didn't.
   afterDown(L, winner) {
+    const g = this.game;
+    if (g.seats && g.seats.length > 1) {
+      for (const q of g.everyone()) if (q.down) g.asPlayer(q, () => this.afterDownOne(L, winner));
+      return;
+    }
+    this.afterDownOne(L, winner);
+  }
+
+  afterDownOne(L, winner) {
     const p = this.game.player;
     if (!p.down) return;
-    const d = L.plan.draft;
+    const d = this.draftOf(L.plan);
     const mine = d ? d.side : L.playerFoe === 'a' ? 'b' : L.playerFoe === 'b' ? 'a' : winner;
     if (winner === mine || !this.capturePlayer(L.sides[winner].civ, L.plan)) this.wakePlayer(winner === mine ? 'You come to on the field. It\'s ours.' : 'You come to on an empty field. Nobody came for you.');
   }
@@ -988,11 +1049,11 @@ export class War {
   // The battle (reckoned up, or begun on the ground if you're near).
   battle(w, plan) {
     if (!this.live && this.nearPlayer(plan.site, 70) && this.startLiveBattle(w, plan)) return null;
-    // Called up, and nowhere near the field.
-    if (plan.draft && plan.draft.state === 'called') {
-      if (this.excused() || this.live) plan.draft.state = 'excused';
+    // Called up, and nowhere near the field (each of you).
+    this.eachCalled(plan, (d) => {
+      if (this.excused() || this.live) d.state = 'excused';
       else this.desert(w, plan);
-    }
+    });
     const rng = new RNG(hash4(w.id, plan.at, 0xba7));
     const { A, B: Bm } = this.raise(w, plan, rng);
     return this.fight(w, plan, A, Bm, rng, null);
@@ -1591,9 +1652,10 @@ export class War {
   }
 
   // ------------------------------------------------------------ on the ground
+  // Any of you playing within `r` of `at` (and the ground there about)?
   nearPlayer(at, r) {
-    const p = this.game.player;
-    return !!p && Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= r && !!this.game.world.regionAt(at.x, at.z);
+    const all = this.game.everyone ? this.game.everyone() : [this.game.player];
+    return all.some((p) => p && Math.max(Math.abs(p.x - at.x), Math.abs(p.z - at.z)) <= r) && !!this.game.world.regionAt(at.x, at.z);
   }
 
   spawn(rec, L, x, z, side, kind, extra = {}) {
@@ -1855,11 +1917,11 @@ export class War {
     // (A column that marched here is part of it now.)
     this.columns.delete(w.id);
     const g = this.game;
-    // Called up: the other side knows which line you're in.
-    if (plan.draft && plan.draft.state === 'called') {
-      live.sides[plan.draft.side === 'a' ? 'b' : 'a'].hates = true;
-      g.ui.msg(`You're with the ${plain(live.sides[plan.draft.side].civ)}. Into the line, and stay in the fight!`, '#ffb080');
-    }
+    // Called up: the other side knows which line you're in (each of you).
+    this.eachCalled(plan, (d) => {
+      live.sides[d.side === 'a' ? 'b' : 'a'].hates = true;
+      g.ui.msg(`You're with the ${plain(live.sides[d.side].civ)}. Into the line, and stay in the fight!`, '#ffb080');
+    });
     g.ui.msg(`${plan.name[0].toUpperCase()}${plan.name.slice(1)} is about to begin: the ${plain(live.sides.a.civ)} (${TACTICS[plan.ta].name}) against the ${plain(live.sides.b.civ)} (${TACTICS[plan.tb].name})!`, '#ffb080');
     g.audio?.play('alarm');
     g.disturb?.('Drums and horns: you stop waiting.');
@@ -1965,9 +2027,11 @@ export class War {
     this.liveT = 0.25;
     if (L.kind === 'raid') this.raidTick(L);
     else {
-      const d = L.plan && L.plan.draft;
-      const p = this.game.player;
-      if (d && !L.done && !p.dead && !p.down && Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) <= 30) d.present += 0.25;
+      if (L.plan && !L.done) {
+        this.eachCalled(L.plan, (d, p) => {
+          if (!p.dead && !p.down && Math.max(Math.abs(p.x - L.centre.x), Math.abs(p.z - L.centre.z)) <= 30) d.present += 0.25;
+        });
+      }
       this.battleTick(L);
     }
   }
@@ -2259,7 +2323,7 @@ export class War {
     if (L.kind === 'battle') {
       const s = n.warband.side;
       if (L.sides[s]) L.sides[s].hates = true;
-      const d = L.plan && L.plan.draft;
+      const d = L.plan && this.draftOf(L.plan);
       if (d && d.state === 'called' && s !== d.side) d.hits++;
     }
   }

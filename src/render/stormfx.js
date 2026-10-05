@@ -176,8 +176,12 @@ export function wrecksNear(game, x, z, R = 16) {
 
 // ------------------------------------------------------------ drawing
 // Under the lights' pass: the wreckage (seen only by lightning, or dimly in
-// the red), the black clouds, the red sea.
-export function drawStormSea(r, game) {
+// the red), the black clouds, the red sea. (`part`: 'world', only what's
+// on the sea, for the pictures a turn of the camera swings round; 'sky',
+// only what's over the view, drawn upright over the turn: the clouds are
+// the screen's, and a picture of them turning, made in pieces, showed them
+// doubled and swinging about.)
+export function drawStormSea(r, game, part = 'all') {
   const S = game.stormSea;
   if (!S || game.dungeon || (S.cloud < 0.01 && !S.phase)) return;
   const ctx = r.ctx;
@@ -185,7 +189,7 @@ export function drawStormSea(r, game) {
   const t = r.time;
   // The wrecks.
   const seen = Math.max(S.flash, S.red * 0.22);
-  if (seen > 0.02 && S.depth > 0.05) {
+  if (part !== 'sky' && seen > 0.02 && S.depth > 0.05) {
     if (!r.wreckList || r.wreckAt !== `${p.x >> 2},${p.z >> 2}`) {
       r.wreckAt = `${p.x >> 2},${p.z >> 2}`;
       r.wreckList = wrecksNear(game, p.x, p.z);
@@ -208,6 +212,7 @@ export function drawStormSea(r, game) {
       ctx.restore();
     }
   }
+  if (part === 'world') return;
   // The sea gone red, and churning.
   if (S.red > 0.01) {
     ctx.save();

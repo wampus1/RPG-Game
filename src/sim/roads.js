@@ -44,7 +44,8 @@ export class Roads {
   // Something to build as soon as there's a lot for it (once per kind).
   enqueue(L, entry) {
     const q = this.queue(L);
-    const same = q.find((o) => o.kind === entry.kind && o.type === entry.type && o.job === entry.job);
+    // (Two players' cottages are two, not one.)
+    const same = q.find((o) => o.kind === entry.kind && o.type === entry.type && o.job === entry.job && (o.owner ?? null) === (entry.owner ?? null));
     if (same) return same;
     q.push({ ...entry, day: this.sim.today() });
     return q[q.length - 1];
@@ -64,16 +65,23 @@ export class Roads {
     const street = works.projects.find((p) => !p.done && p.sid === sid && p.kind === 'road') || null;
     const crew = sim.builders(L).length;
     const out = [];
+    // (Only yours, with others playing.)
+    const g = sim.game;
+    const me = g.seat ? g.seat.id : null;
     q.forEach((o, i) => {
+      if (o.kind === 'home' && (o.owner ?? null) !== me) return;
       if (o.kind === 'workshop' || o.kind === 'home') out.push({ what: o.kind, state: 'queued', ahead: i, street: street ? Math.round(works.frameProgress(street) * 100) : null, since: o.day });
     });
+    // In line behind someone else's cottage.
+    const line = sim.homeInLine(sid);
+    if (line) out.push({ what: 'home', state: 'line', ahead: sim.homeQueue.indexOf(line), after: sim.construction && !sim.construction.done ? sim.construction.ownerName : null, since: line.day });
     for (const p of works.projects) {
       if (p.done || p.sid !== sid || !p.shop) continue;
       const pct = Math.round(works.frameProgress(p) * 100);
       out.push({ what: 'workshop', state: 'building', pct, road: !!p.roadOps && pct === 0 && p.placed < p.roadOps, crew });
     }
     const c = sim.construction;
-    if (c && c.sid === sid && !c.done && !c.cancelled) {
+    if (c && c.sid === sid && !c.done && !c.cancelled && !sim.othersHouse(c)) {
       const road = c.road && c.road.length ? L.roadOps(c.road).length : 0;
       out.push({ what: 'home', state: 'building', pct: Math.round((sim.constructionProgress() || 0) * 100), road: road > 0 && c.placed < road, crew });
     }
@@ -133,7 +141,7 @@ export class Roads {
       if (o.kind === 'build' && L.econ.treasury < (o.cost || 0)) break;
       q.shift();
       if (o.kind === 'workshop') works.startWorkshop(L, o.job, o.title, true);
-      else if (o.kind === 'home') this.sim.startHome(L);
+      else if (o.kind === 'home') this.sim.startHome(L, o.owner || null);
       else if (works.startBuilding(L, o.type, o.reason || '', true)) L.econ.treasury -= o.cost || 0;
     }
   }

@@ -33,6 +33,8 @@ view.width = VIEW_W;
 view.height = VIEW_H;
 const crt = new CRT(screen, view);
 const renderer = new Renderer(view);
+// (What people say is drawn with the UI, over a place's name: see UI.render.)
+renderer.deferBubbles = true;
 const audio = new Audio();
 const music = new Music(audio);
 window.__music = music;

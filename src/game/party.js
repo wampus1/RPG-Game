@@ -42,6 +42,8 @@ const GROUPS = [
   ['o', (game) => game.world && game.world.ow, MAP_FIELDS],
   // (The bounties each has earned, toward claiming: see sim/bandits.js.)
   ['b', (game) => game.sim.bandits, ['heads', 'headNames']],
+  // (The realms that name each a deserter: see sim/war.js.)
+  ['w', (game) => game.sim.war, ['deserters']],
 ];
 
 export class Seat {
@@ -87,6 +89,7 @@ export function freshStore(game, { player, hero = null, ui = null, input = null,
     // (Nowhere yet on their map: see Game.restoreSeat.)
     o: { explored: new Uint8Array(game.world.ow.explored.length), exploredN: 0, pins: [] },
     b: { heads: {}, headNames: {} },
+    w: { deserters: {} },
   };
 }
 
