@@ -435,7 +435,16 @@ export class DialogueWindow extends Window {
   }
   allOptions(game) {
     if (this.choices) return this.back === null ? this.choices : [...this.choices, { id: 'back', label: this.back || '(Never mind)' }];
-    return topicsFor(this.npc, game);
+    // (Round 55) What's on offer is looked at afresh each frame, but each
+    // topic keeps the words it first had: a label picked from a few (a
+    // story's "You look troubled...") doesn't flicker from one to another.
+    this.said ||= new Map();
+    return topicsFor(this.npc, game).map((o) => {
+      const k = `${o.id}|${o.arg ?? ''}`;
+      if (!this.said.has(k)) this.said.set(k, o.label);
+      const label = this.said.get(k);
+      return label === o.label ? o : { ...o, label };
+    });
   }
   // Long option labels get the full width (one column of seven).
   isWide(all) {
@@ -1147,7 +1156,7 @@ export class LedgerWindow extends Window {
     const sid = this.s.id;
     const list = S.tasksIn(sid, pid);
     lines.push({ t: 'HELP WANTED', c: C.hi });
-    if (!list.length) lines.push({ t: 'Nothing posted. Folk with trouble have a ! over their heads.', c: C.dim });
+    if (!list.length) for (const l of wrap('Nothing posted. Folk with trouble have a ! over their heads.', this.w - 9)) lines.push({ t: l, c: C.dim });
     for (const t of list) {
       S.hear(pid, t);
       const mine = S.claimedBy(t, pid);
@@ -1288,7 +1297,9 @@ export class LedgerWindow extends Window {
     g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name.replace(/^The /, '') : 'free folk'}`, '#f0e0c0');
     // The tabs.
     const tabs = [['town', ' TOWN '], ['news', ' NEWS '], ['work', ' WORK ']];
-    let tx = Math.floor(this.w / 2) - 8;
+    // (Centred: the three, and the gaps between them.)
+    const span = tabs.reduce((n, [, l]) => n + l.length, 0) + (tabs.length - 1) * 3;
+    let tx = Math.floor((this.w - span) / 2);
     for (const [id, label] of tabs) {
       const on = this.tab === id;
       const hov = this.hovering(tx, 3, label.length, 1);
@@ -1299,7 +1310,18 @@ export class LedgerWindow extends Window {
     }
     for (let x = 2; x < this.w - 2; x++) g.put(x, 4, '─', '#5a4a3a');
     const y = 5;
-    const lines = this.tab === 'town' ? this.townLines(game) : this.tab === 'work' ? this.workLines(game) : this.newsLines(game);
+    const raw = this.tab === 'town' ? this.townLines(game) : this.tab === 'work' ? this.workLines(game) : this.newsLines(game);
+    // (Nothing runs past the edge of the board: a line too long for it
+    // wraps onto the next, indented as it was.)
+    const lines = [];
+    for (const l of raw) {
+      if (l.k !== undefined || l.act || l.t.length <= this.w - 8) {
+        lines.push(l);
+        continue;
+      }
+      const pad = l.t.match(/^ */)[0];
+      wrap(l.t.slice(pad.length), this.w - 8 - pad.length).forEach((t) => lines.push({ ...l, t: pad + t }));
+    }
     const room = this.h - 1 - y;
     this.maxScroll = Math.max(0, lines.length - room);
     this.scroll = Math.max(0, Math.min(this.scroll || 0, this.maxScroll));

@@ -4241,6 +4241,44 @@ dig in. What you do (or don't) decides the rest.
   - A tavern in a part of town changed since it was saved gets its room
     put in.
 
+## Round 55: fixes, and a quest log button
+
+- *Fixed: the notice board's tabs* (TOWN, NEWS, WORK) are now centred.
+  Nothing on the board runs past its edge any more: a long line wraps
+  onto the next, keeping its indent.
+- *Fixed: the watch and your weapon.* In a town where weapons may not be
+  drawn, a guard no longer tells you to put yours away while something is
+  coming at you: a beast, an outlaw, anyone fighting you. They wait until
+  you've been clear of foes for about five seconds.
+- *Fixed: a story's dialogue flickering.* Talking to someone with a
+  story to tell (a guard whose child is missing, say), the way they asked
+  kept changing every frame. Each option now keeps the words it first had
+  for as long as the window is open. A story's "Is something wrong?" also
+  reads the same for the same task each time you talk to them.
+- *Quest log button:* a **QUEST LOG [O]** button sits under the map.
+  Click it (or press **O**) to open the whole log. It shows how many tasks
+  you've taken on, or, in green, how many are done and waiting for you to
+  report back.
+- *Dishes that do things do them more often.* The waits between a
+  dish's acts are shorter, most of all for the good ones:
+  - the storm that strikes your foes: 90s to 35s;
+  - fish from the sky: 40s to 20s;
+  - flowers that mend: 25s to 15s;
+  - a heart back: 20s to 12s.
+
+  A dish with no trigger does its act every 15 to 30 seconds (once its
+  own wait allows), not every 45 to 90. A bad one does its act every 40
+  to 70 seconds, not every 90 to 180.
+- *Running away is 15% slower*, for anything running from danger:
+  - wildlife bolting;
+  - monsters backing off;
+  - townsfolk fleeing a fight or retreating hurt;
+  - outlaws breaking off.
+
+  (`FLEE` in `config.js`.)
+- *Older worlds* (migration 0.55.0): the long waits already counting down
+  on a dish you've eaten are let go.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

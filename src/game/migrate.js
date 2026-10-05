@@ -189,6 +189,24 @@ export const STEPS = [
       }
     },
   },
+  {
+    // Shorter waits between a dish's acts: the long waits already counting
+    // down from before are let go.
+    to: '0.55.0',
+    data(d, log) {
+      const fix = (pd) => {
+        if (!pd || !pd.dishState) return;
+        for (const st of Object.values(pd.dishState)) {
+          if (!st) continue;
+          delete st.next;
+          delete st.cd;
+        }
+      };
+      fix(d.player);
+      for (const c of (d.party && d.party.chars) || []) fix(Array.isArray(c) ? c[1] && c[1].player : c && c.player);
+      log.push('Dishes that do things do them more often now.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

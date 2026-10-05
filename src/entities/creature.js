@@ -16,6 +16,8 @@ import { bossClock, drift, press, walkCooldowns } from './tempo.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
+
+import { FLEE } from '../config.js';
 import { B } from '../world/blocks.js';
 
 export const SPECIES = {
@@ -250,9 +252,10 @@ export class Creature extends Entity {
         const dx = Math.sign(this.x - t.x) || (this.rng.chance(0.5) ? 1 : -1);
         const dz = Math.sign(this.z - t.z) || (this.rng.chance(0.5) ? 1 : -1);
         const opts = this.rng.chance(0.5) ? [[dx, 0], [0, dz]] : [[0, dz], [dx, 0]];
-        for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * (scared ? 0.55 : 0.7))) return;
+        // (Round 55: running off, a touch slower than before: see FLEE.)
+        for (const [ox, oz] of opts) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * (scared ? 0.55 : 0.7) * FLEE)) return;
         // (Cornered on the way it wants: any way but toward them.)
-        if (scared) for (const [ox, oz] of [[dz, dx], [-dz, -dx]]) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * 0.6)) return;
+        if (scared) for (const [ox, oz] of [[dz, dx], [-dz, -dx]]) if (this.tryStep(this.x + ox, this.z + oz, this.S.step * 0.6 * FLEE)) return;
       }
     }
     if (this.thinkT <= 0) {

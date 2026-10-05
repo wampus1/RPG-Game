@@ -27,6 +27,9 @@ function takeFor(game, t) {
 
 const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const pickOf = (rng, a) => a[Math.floor(rng.next() * a.length)];
+// (The same words for the same task every time it's offered: a dialogue
+// asks for its topics every frame.)
+const steady = (t) => new RNG(hash4(t.id | 0, 0x7a5c, 1, 2));
 
 function isGiver(t, npc) {
   return t.giver && t.giver.t === 'rec' && npc.rec && !npc.rec.visitor && t.giver.idx === npc.rec.idx && t.giver.sid === (npc.rec.sid ?? npc.settlement?.id);
@@ -63,11 +66,11 @@ export function sagaTopics(npc, game) {
         out.push({ id: 'sg_deliver', arg: String(t.id), label: `I've something for you, from ${t.giverName || 'a friend'}.` });
       }
       if (!isGiver(t, npc)) continue;
-      if (t.status === 'won' && t.ready === pid) out.push({ id: 'sg_turnin', arg: String(t.id), label: pickOf(npc.rng, ['It\'s done.', 'I\'ve seen to it.', `About ${lcFirst(t.title)}: it's done.`]) });
+      if (t.status === 'won' && t.ready === pid) out.push({ id: 'sg_turnin', arg: String(t.id), label: pickOf(steady(t), ['It\'s done.', 'I\'ve seen to it.', `About ${lcFirst(t.title)}: it's done.`]) });
       else if (t.status === 'open' && S.visibleTo(t, pid) && hasFor(game, t)) out.push({ id: 'sg_give', arg: String(t.id), label: t.item === 'food' ? 'I\'ve brought food.' : `I have the ${ITEMS[t.item] ? ITEMS[t.item].name.toLowerCase() : t.item}.` });
       else if (t.status === 'open' && S.visibleTo(t, pid)) {
         if (S.claimedBy(t, pid)) out.push({ id: 'sg_check', arg: String(t.id), label: `About ${lcFirst(t.title)}...` });
-        else if (S.knownIn(t, townOf(npc))) out.push({ id: 'sg_offer', arg: String(t.id), label: t.offerLabel || pickOf(npc.rng, ['You look troubled. What is it?', 'I hear you need help.', 'Is something wrong?']) });
+        else if (S.knownIn(t, townOf(npc))) out.push({ id: 'sg_offer', arg: String(t.id), label: t.offerLabel || pickOf(steady(t), ['You look troubled. What is it?', 'I hear you need help.', 'Is something wrong?']) });
       }
     }
     // (And whatever else a story has them say: a widow about the one

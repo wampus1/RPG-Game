@@ -71,3 +71,8 @@ export function dirFromDelta(dx, dz) {
   if (Math.abs(dx) > Math.abs(dz)) return dx < 0 ? 1 : 3;
   return dz < 0 ? 2 : 0;
 }
+
+// (Round 55) Anything running away (a hare from you, a monster backing
+// off, a townsperson from a fight, an outlaw breaking off) goes 15% slower
+// than it used to: each of its steps takes this much longer.
+export const FLEE = 1 / 0.85;

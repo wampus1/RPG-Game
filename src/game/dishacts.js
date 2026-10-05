@@ -469,14 +469,16 @@ export function tickDishActs(game, p, dt) {
       const acts = D.effects.filter((e) => e.act);
       if (!acts.length) continue;
       const st = ((p.dishState ||= {})[q.dish] ||= {});
-      st.next ??= now + 12 + Math.random() * 18;
+      st.next ??= now + 5 + Math.random() * 10;
       if (now < st.next || !condHolds(game, p, D, q.dish)) continue;
       let did = false;
       for (const e of acts) if (fireAct(game, p, e.k, {})) did = true;
       // (Nothing for it to do yet: it waits a moment; done, a good while.
       // The bad ones keep the longer.)
       const bad = acts.every((e) => !e.good);
-      st.next = now + (did ? (bad ? 90 + Math.random() * 90 : 45 + Math.random() * 45) : 3);
+      // (Each act's own wait counts too: the longest of them.)
+      const own = Math.max(...acts.map((e) => ACTS[e.k].cd || 8));
+      st.next = now + (did ? Math.max(own, bad ? 40 + Math.random() * 30 : 15 + Math.random() * 15) : 3);
     }
   }
   // As a sheep: bleating, and back to yourself in a puff when it's over.

@@ -16,6 +16,7 @@ import { addItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
 import { QuestWindow } from './quests.js';
+import { pidOf } from '../sim/saga/refs.js';
 import { ZONE, KINDS } from '../game/fishing.js';
 import { mastery } from '../game/mastery.js';
 import { Window, cap, describeActivity } from './window.js';
@@ -255,6 +256,11 @@ export class UI {
           game.selectSlot(s);
           continue;
         }
+        // (Round 55) The quest log button under the map.
+        if (this.onQuestButton(cx, cy)) {
+          if (!game.player.dead) this.toggle('quests', () => new QuestWindow(this));
+          continue;
+        }
       }
       out.clicks.push(ck);
     }
@@ -271,7 +277,13 @@ export class UI {
     const cy = Math.floor(my / CHAR_H);
     if (this.windows.some((w) => w.state !== 'closing' && w.contains(cx, cy))) return true;
     if (this.showHud && cy >= BELT_Y && cx >= BELT_X && cx < BELT_X + BELT_W) return true;
+    if (this.onQuestButton(cx, cy)) return true;
     return false;
+  }
+
+  onQuestButton(cx, cy) {
+    const b = this.questBtn;
+    return !!(this.showHud && b && cy === b.y && cx >= b.x && cx < b.x + b.w);
   }
 
   beltSlotAt(cx, cy) {
@@ -820,6 +832,9 @@ export class UI {
       this.renderMinimap(game);
     }
     this.minimapPos = { x: (bx + 1) * CHAR_W, y: 2 * CHAR_H };
+    // (Round 55) The quest log, a click away: under the map, with how many
+    // you've taken on (and how many are done, waiting to be told).
+    this.drawQuestButton(g, game, bx);
     // Wanted banner: steady near the town, fading out a few seconds after
     // you've left it behind (it comes back if you return).
     if (!this.wantedSeen) this.wantedSeen = new Map();
@@ -872,6 +887,26 @@ export class UI {
     if (this.debug) {
       g.text(25, 0, `${fps | 0}fps x${p.x} y${p.y} z${p.z} npcs${game.npcs.filter((n) => !n.dead).length} cr${game.creatures.length} reg${game.world.regions.size}`, C.green, 'rgba(0,0,0,0.6)');
     }
+  }
+
+  drawQuestButton(g, game, bx) {
+    const S = game.sim && game.sim.saga;
+    let on = 0;
+    let done = 0;
+    if (S) {
+      const pid = pidOf(game.player);
+      for (const th of S.threads) for (const t of th.tasks) {
+        if (t.status === 'won' && t.ready === pid) done++;
+        else if (t.status === 'open' && S.claimedBy(t, pid)) on++;
+      }
+    }
+    const label = ` QUEST LOG ${done ? `${done}✓` : on || ''}`.padEnd(13) + '[O]';
+    const btn = { x: bx, y: 8, w: 16 };
+    const mc = this.mouseCell || { x: -1, y: -1 };
+    const hov = !this.modal && mc.y === btn.y && mc.x >= btn.x && mc.x < btn.x + btn.w;
+    g.fill(btn.x, btn.y, btn.w, 1, ' ', C.fg, hov ? 'rgba(106,80,48,0.95)' : 'rgba(10,8,16,0.8)');
+    g.text(btn.x, btn.y, label.slice(0, btn.w), done ? C.green : hov ? C.white : C.hi);
+    this.questBtn = btn;
   }
 
   // The reel: keep your catch zone (green) over the fish until the line is in.

@@ -24,6 +24,7 @@ import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk } from './sagaman.js';
 import { laborTick } from '../sim/labor.js';
+import { FLEE } from '../config.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -2698,9 +2699,13 @@ export class NPC extends Entity {
     }
     this.face(nx, nz);
     const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
+    // (Round 55) Running away (from a fight, to safety, an outlaw breaking
+    // off): 15% slower than it was.
+    const wb = this.warband;
+    const fleeing = this.state === 'flee' || this.state === 'retreat' || (this.state === 'warband' && wb && (wb.phase === 'flee' || wb.phase === 'done'));
     // In the saddle (or up on a wagon): quicker than walking.
     const ride = this.mount ? (this.mount.kind === 'wagon' ? 0.75 : 0.65) : 1;
-    this.startMove(nx, ty, nz, this.step * pace * ride * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    this.startMove(nx, ty, nz, this.step * pace * ride * (fleeing ? FLEE : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;
   }

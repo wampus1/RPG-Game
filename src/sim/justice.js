@@ -1063,10 +1063,17 @@ export class Justice {
       }
     } else this.trespass = null;
     const held = p.heldDef();
+    // (Round 55) Something coming at you (a beast, a cutthroat): a blade in
+    // hand is self-defence, and the watch doesn't say a word about it till
+    // you've been clear of them a good five seconds.
+    const foe = game.creatures.some((c) => !c.dead && c.hostileNow && Math.hypot(c.x - p.x, c.z - p.z) <= 16)
+      || game.npcs.some((n) => !n.dead && ((n.state === 'fight' && n.threat === p) || n.hostileNow) && Math.hypot(n.x - p.x, n.z - p.z) <= 16);
+    this.calmT = foe ? 0 : (this.calmT ?? 99) + 1;
+    if (this.calmT < 5) this.brandish = null;
     // Guards of the town may carry arms where others may not.
     // (Not while a scene plays out and you can't do anything about it.)
     const busy = !!(game.cutscene || game.scene);
-    if (lawOn(L, 'armsBan') && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id) && !busy) {
+    if (lawOn(L, 'armsBan') && held && held.kind === 'weapon' && !game.isWanted(s.id) && !this.sim.careers.isGuard(s.id) && !busy && this.calmT >= 5) {
       const guard = a.npcs.find((n) => n.rec.job === 'guard' && !n.sleeping && n.state === 'routine' && n.distTo(p) <= 5);
       if (guard) {
         if (!this.brandish) {
@@ -1078,7 +1085,7 @@ export class Justice {
           this.commit(s.id, 'brandishing', { witnesses: [guard] });
         }
       }
-    } else if (!held || held.kind !== 'weapon') this.brandish = null;
+    } else if (!held || held.kind !== 'weapon' || this.calmT < 5) this.brandish = null;
     // Out in the streets after curfew (guards on duty and people heading
     // into their own house excepted): a guard on watch who sees you comes
     // over, tells you to get indoors, and fines you if you don't.

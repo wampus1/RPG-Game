@@ -19,7 +19,7 @@ import { weddings } from '../src/sim/life.js';
 import { births, bear, newcomer } from '../src/sim/civic.js';
 import { hairWord } from '../src/sim/saga/motifs/lib.js';
 import { STEPS, stepsFor } from '../src/game/migrate.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { RNG } from '../src/util/rng.js';
 
 function start(seed = 12345) {
@@ -423,7 +423,7 @@ test('a tavern\'s room: two beds, let by the night, slept in only by who\'s paid
 
 // ------------------------------------------------------------ an older world
 test('migration 0.54.0: the step is there; a tavern room put into a part of town kept from before', () => {
-  assert.equal(GAME_VERSION, '0.54.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.54.0') >= 0);
   const step = STEPS.find((q) => q.to === '0.54.0');
   assert.ok(step && step.data && step.game && step.town);
   assert.ok(stepsFor('0.53.0').some((q) => q.to === '0.54.0'));
