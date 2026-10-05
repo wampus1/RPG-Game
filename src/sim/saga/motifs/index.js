@@ -14,3 +14,5 @@ import './academy.js';
 import './hearts.js';
 import './intrigue.js';
 import './festive.js';
+import './ventures.js';
+import './wonders.js';
