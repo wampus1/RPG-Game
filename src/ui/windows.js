@@ -12,6 +12,7 @@ import { TechWindow } from './research.js';
 import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
 import { STOCK, WANTS, st, mayorOf, stockOf, freshRumours, rumourAge } from '../sim/econ.js';
+import { recipeOf } from '../game/cooking.js';
 import { TIERS, townsfolk, promotionNeeds } from '../sim/growth.js';
 import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
@@ -291,13 +292,6 @@ export class CraftWindow extends Window {
   draw(g, game) {
     const inv = game.player.inv;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `CRAFTING · ${STATIONS[this.station].toUpperCase()}` });
-    // (Round 50: something of your own cooked here: see ui/cook.js.)
-    if (this.station === 'furnace' || this.station === 'baker') {
-      const label = this.station === 'furnace' ? '[K] Cook a dish in the pot' : '[K] Bake a dish of your own';
-      const hov = this.hovering(this.w - label.length - 3, 1, label.length + 2, 1);
-      g.text(this.w - label.length - 2, 1, label, hov ? C.white : C.hi);
-      this.hit(this.w - label.length - 3, 1, label.length + 2, 1, () => this.cook());
-    }
     const list = [...this.recipes].sort((a, b) => (this.canCraft(inv, b) ? 1 : 0) - (this.canCraft(inv, a) ? 1 : 0));
     this.sorted = list;
     const perPage = 12;
@@ -327,8 +321,9 @@ export class CraftWindow extends Window {
     }
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
     g.text(2, this.h - 1, ' click craft · SHIFT x5 · wheel scroll ', C.faint);
-    // The scribe's desk prints; the jeweller's bench sets stones.
-    const extra = this.station === 'scribe' ? ' [P] print a newspaper ' : this.station === 'jeweller' ? ' [S] set a gem ' : null;
+    // The scribe's desk prints; the jeweller's bench sets stones; at a
+    // furnace or an oven, a dish of your own (see ui/cook.js).
+    const extra = { scribe: ' [P] print a newspaper ', jeweller: ' [S] set a gem ', furnace: ' [K] Cook a dish in the pot ', baker: ' [K] Bake a dish of your own ' }[this.station] || null;
     if (extra) {
       const ey = this.h - 3;
       const hov = this.hovering(this.w - extra.length - 2, ey, extra.length, 1);
@@ -338,7 +333,8 @@ export class CraftWindow extends Window {
   }
   extra() {
     const game = this.ui.game;
-    if (this.station === 'scribe') {
+    if (this.station === 'furnace' || this.station === 'baker') this.cook();
+    else if (this.station === 'scribe') {
       const s = game.currentSettlement;
       if (!s) {
         this.ui.msg('There\'s no town here to write about.', C.dim);
@@ -671,6 +667,8 @@ export class TradeWindow extends Window {
     if (!sh || k === 'coin' || ITEMS[k].noSell) return false;
     // (Old coin: anyone will change it.)
     if (ITEMS[k].exchange) return true;
+    // (A recipe on a scroll: any cook, innkeeper or baker, and a scholar.)
+    if (ITEMS[k].kind === 'recipe') return ['cook', 'inn', 'baker', 'scholar', 'general'].includes(sh.kind);
     const w = WANTS[sh.kind];
     // An adventurer will look at any weapon, armour or food you have.
     if (sh.kind === 'adventurer') {
@@ -829,6 +827,16 @@ export class TradeWindow extends Window {
     game.sim.noteTrade(this.npc, Math.ceil(paid / 2));
     game.sim.market.trade(this.npc.layout, item, n, 'player');
     game.audio?.play('coin');
+    // (A cook who buys a recipe learns it, and cooks it after.)
+    if (ITEMS[item].kind === 'recipe' && this.npc.rec && ['cook', 'innkeeper', 'baker', 'barkeep'].includes(this.npc.rec.job)) {
+      const rec = this.npc.rec;
+      rec.recipes ||= [];
+      if (!rec.recipes.some((r) => r.key === ITEMS[item].recipe)) {
+        rec.recipes.push(recipeOf(ITEMS[item].recipe));
+        if (rec.recipes.length > 6) rec.recipes.shift();
+        this.npc.say(this.npc.rng.pick(['Oh, I\'ll be making this one!', 'Now that\'s a dish worth knowing.', 'I\'ll try it tonight.']), 2.5, '#ffe0a0');
+      }
+    }
     if (why === 'full') this.npc.say('That\'s all of those I can take.', 2.5);
     else if (why === 'money') {
       this.npc.say('That\'s all I can afford for now.', 2.5);

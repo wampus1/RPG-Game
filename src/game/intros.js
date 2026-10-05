@@ -27,7 +27,9 @@ import { wrap } from '../ui/ascii.js';
 import { personName, CULTURES } from '../world/names.js';
 import { yearOf } from '../sim/history.js';
 import { alive } from '../sim/econ.js';
-import { drawPerson, drawHouse, drawTree, drawCloud, shade, mix, fillPoly, line } from '../render/scenekit.js';
+import { drawPerson, shade, mix, fillPoly, line } from '../render/scenekit.js';
+import { paintHome, drawTown, ROWS } from '../render/art_home.js';
+import { Bmp, sky as skyBands, rngOf, mixC, rgb as rgbOf } from '../render/brush.js';
 
 // The pictures are painted at half size (each pixel two on the screen).
 const PW = VIEW_W / 2;
@@ -220,26 +222,11 @@ export function homeScene(game, info) {
       return lerp(B[i].y, y1, clamp01((t - i * HOME_BEAT) / HOME_BEAT));
     },
     draw(ctx) {
-      if (!art) art = paintHome(info);
+      if (!art) art = paintHome(info, LOOKS[info.style] || LOOKS.vale);
       drawHome(ctx, this, art);
     },
   };
 }
-
-// The land about a town, by its biome: the far hills, the ground, its
-// trees.
-const LANDS = {
-  plains: { far: '#5a6a8a', near: '#4a6a4a', ground: '#5e8a3e', dark: '#4a7032', light: '#76a04a', leaf: '#3e7a34', leafDark: '#2a5a26', trunk: '#5a3e24', tree: 'round' },
-  forest: { far: '#4a5a7a', near: '#2e5a3a', ground: '#4a7a36', dark: '#3a6228', light: '#5e9040', leaf: '#2e6a2e', leafDark: '#1e4a20', trunk: '#4a321e', tree: 'round', many: true },
-  taiga: { far: '#6a7a9a', near: '#3a5a5a', ground: '#6a8a6a', dark: '#4e6e52', light: '#d8e4ec', leaf: '#2a4a3a', leafDark: '#1a3428', trunk: '#3a2a1e', tree: 'pine', snow: true, many: true },
-  tundra: { far: '#8a9ab8', near: '#9aaabc', ground: '#c8d4dc', dark: '#a8b8c4', light: '#eef4f8', leaf: '#3a5048', leafDark: '#26382e', trunk: '#3a2a1e', tree: 'pine', snow: true },
-  desert: { far: '#b88a5a', near: '#c89a62', ground: '#dcb878', dark: '#c8a064', light: '#ecd09a', leaf: '#4a7a3a', leafDark: '#345a2a', trunk: '#6a4a2a', tree: 'cactus' },
-  savanna: { far: '#8a7a6a', near: '#8a8a4a', ground: '#b0a052', dark: '#988a44', light: '#c8b866', leaf: '#5a7a34', leafDark: '#3e5a24', trunk: '#5a3e24', tree: 'flat' },
-  jungle: { far: '#3a5a5a', near: '#1e5a32', ground: '#3a7a30', dark: '#2a6224', light: '#4e9a3a', leaf: '#1e6a2a', leafDark: '#124a1c', trunk: '#4a321e', tree: 'round', many: true },
-  swamp: { far: '#4a5a5a', near: '#3a4a3a', ground: '#4a5e3a', dark: '#3a4a2e', light: '#5e7048', leaf: '#3a5a32', leafDark: '#26402a', trunk: '#3a2e22', tree: 'round' },
-  mountain: { far: '#7a7a9a', near: '#6a6a72', ground: '#6a8a52', dark: '#56724a', light: '#a8aaa8', leaf: '#2e5a3a', leafDark: '#1e4028', trunk: '#3a2a1e', tree: 'pine', snow: true },
-  beach: { far: '#6a8aaa', near: '#5a8a6a', ground: '#7aa04e', dark: '#62883e', light: '#e8d8a0', leaf: '#3a7a34', leafDark: '#2a5a26', trunk: '#6a4a2a', tree: 'palm' },
-};
 
 // What a people's houses look like: roof colours, walls, timbers, and the
 // shape of them (pitched, steep, flat, round huts; on stilts).
@@ -254,127 +241,17 @@ const LOOKS = {
   tide: { roofs: ['#c8b070', '#b89a5a'], wall: '#8a6a4a', timber: '#5a4430', shape: 'gable', stilts: true },
 };
 
-const H_HORIZON = 66;
-// The town's rows, back to front: where their feet are, how big.
-const ROWS = [
-  { yb: 88, k: 0.55 },
-  { yb: 98, k: 0.7 },
-  { yb: 110, k: 0.85 },
-  { yb: 123, k: 1 },
-];
-
-// What doesn't change as it grows, painted once: the hills and the ground;
-// and where everything will stand (houses, the hall, a temple, trees,
-// fields, lanes, the walls).
-function paintHome(info) {
-  const rng = new RNG(hash4(info.seed >>> 0, 0x40e));
-  const P = LANDS[info.biome] || LANDS.plains;
-  const look = LOOKS[info.style] || LOOKS.vale;
-  const land = makeCanvas(PW, PH);
-  const g = land.getContext('2d');
-  const px = (x, y, col) => {
-    g.fillStyle = col;
-    g.fillRect(x, y, 1, 1);
-  };
-  const seed = info.seed % 997;
-  // The far hills (snow on them in the cold), then the nearer ridge.
-  const ridge = (base, amp, f1, f2, col, edge, snowy) => {
-    for (let x = 0; x < PW; x++) {
-      const h = Math.round(base - amp * (0.6 * Math.sin(x * f1 + seed) + 0.4 * Math.sin(x * f2 + seed * 1.7)));
-      for (let y = h; y < PH; y++) px(x, y, col);
-      px(x, h, edge);
-      if (snowy) for (let y = h; y < h + 3; y++) if (hashf(x, y, 9) < 0.7 - (y - h) * 0.2) px(x, y, '#e8eef4');
-    }
-  };
-  ridge(H_HORIZON - 4, 14, 0.021, 0.067, P.far, shade(P.far, 14), !!P.snow);
-  ridge(H_HORIZON + 6, 6, 0.04, 0.1, P.near, shade(P.near, 12), false);
-  // The ground the town stands on: rolling, speckled.
-  for (let y = H_HORIZON + 10; y < PH; y++) {
-    for (let x = 0; x < PW; x++) {
-      const n = hashf(x, y, seed + 3);
-      px(x, y, n < 0.1 ? P.dark : n > 0.94 ? P.light : P.ground);
-    }
-  }
-  // Darker toward the front (the near slope).
-  g.fillStyle = 'rgba(0,0,0,0.12)';
-  g.fillRect(0, PH - 18, PW, 18);
-  // (By the sea, for the stilt folk: water along the front.)
-  const water = !!look.stilts;
-  if (water) {
-    for (let y = 126; y < PH; y++) for (let x = 0; x < PW; x++) px(x, y, hashf(x, y, 5) < 0.15 ? '#5a8ab8' : '#3a6a98');
-  }
-  // Where the houses go: rows from the back, filling out from the middle.
-  const count = info.tier === 'city' ? 24 : info.tier === 'town' ? 15 : 9;
-  const houses = [];
-  const cx = PW / 2;
-  // The hall first, at the heart; a temple near it.
-  houses.push({ kind: 'hall', row: 1, x: Math.round(cx - 15), w: 30, h: 14, t: 0.02 });
-  if (info.temple) houses.push({ kind: 'temple', row: 0, x: Math.round(cx + 24), w: 16, h: 12, t: 0.12 });
-  const slots = [];
-  ROWS.forEach((R, ri) => {
-    const w = Math.round(22 * R.k);
-    const gap = Math.round(8 * R.k) + 2;
-    const span = 200 + ri * 14;
-    for (let x = Math.round(cx - span / 2); x + w < cx + span / 2; x += w + gap) slots.push({ row: ri, x, w });
-  });
-  // (Nearest the heart first.)
-  slots.sort((a, b) => Math.abs(a.x + a.w / 2 - cx) * (1 + a.row * 0.15) - Math.abs(b.x + b.w / 2 - cx) * (1 + b.row * 0.15));
-  const taken = (q) => houses.some((h) => h.row === q.row && q.x < h.x + h.w + 2 && h.x < q.x + q.w + 2);
-  for (const q of slots) {
-    if (houses.filter((h) => h.kind === 'house').length >= count) break;
-    if (taken(q)) continue;
-    const d = Math.abs(q.x + q.w / 2 - cx) / 120;
-    const k = ROWS[q.row].k;
-    houses.push({ kind: 'house', row: q.row, x: q.x + rng.int(-1, 1), w: q.w + rng.int(-2, 2), h: Math.round((12 + rng.int(-2, 3)) * k), t: 0.08 + 0.74 * Math.min(1, d + rng.float(-0.06, 0.06) + q.row * 0.04), roof: rng.pick(look.roofs) });
-  }
-  for (const h of houses) {
-    h.t = Math.max(0.02, Math.min(0.88, h.t));
-    h.roof ||= look.roofs[0];
-    h.lit = rng.chance(0.7);
-    h.chimney = h.kind === 'house' && look.shape !== 'hut' && rng.chance(0.6);
-  }
-  // Your family's: a house on the front rows, near the middle.
-  // (On the front row if it can be, where nothing's in front of it.)
-  const front = houses.filter((h) => h.kind === 'house' && h.row >= 2).sort((a, b) => b.row - a.row || Math.abs(a.x - cx) - Math.abs(b.x - cx));
-  const home = front[rng.int(0, Math.min(2, front.length - 1))] || houses[houses.length - 1];
-  // Trees: the woods round about (the ones where the town will go are cut
-  // down as it comes).
-  const trees = [];
-  const nTrees = P.many ? 46 : 28;
-  for (let i = 0; i < nTrees; i++) {
-    const row = rng.int(0, 3);
-    const x = rng.int(4, PW - 4);
-    const R = ROWS[row];
-    const y = R.yb + rng.int(-3, 3);
-    const near = houses.find((h) => h.row === row && x > h.x - 6 && x < h.x + h.w + 6);
-    trees.push({ x, y, k: R.k * rng.float(0.8, 1.2), cut: near ? near.t - 0.02 : 2 });
-  }
-  trees.sort((a, b) => a.y - b.y);
-  // Fields out at the edges (a village's, a town's), tilled as it grows.
-  const fields = [];
-  if (info.tier !== 'city' && !water) {
-    for (const side of [-1, 1]) fields.push({ x: side < 0 ? 6 : PW - 56, y: 104 + rng.int(0, 8), w: 50, h: 12, t: 0.25 + rng.float(0, 0.3), crop: rng.pick(['#c8b050', '#7aa040', '#a8783a']) });
-  }
-  // The folk about the lanes, today.
-  const folk = Array.from({ length: info.tier === 'city' ? 16 : info.tier === 'town' ? 11 : 7 }, () => ({
-    row: rng.int(1, 3), x: rng.float(20, PW - 20), v: rng.float(3, 7) * (rng.chance(0.5) ? -1 : 1),
-    shirt: rng.pick(['#8f2f3a', '#2f6f8f', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#e0dccc']),
-    hair: rng.pick(['#1e1612', '#6e4424', '#c87a3a', '#c8c8c8', '#3a2418']),
-    skin: rng.pick(['#f4d0b0', '#d8a47c', '#b07a4a', '#8a5a34', '#e8b48c']),
-  }));
-  const clouds = Array.from({ length: 5 }, () => ({ x: rng.float(0, PW), y: rng.int(20, 44), w: rng.int(22, 46), v: rng.float(2, 5) }));
-  const stars = Array.from({ length: 70 }, () => ({ x: rng.int(0, PW - 1), y: rng.int(BAR / 2, H_HORIZON - 6), b: rng.float(0.3, 1) }));
-  return { land, P, look, houses, home, trees, fields, folk, clouds, stars, water };
-}
+// (Where the sky meets the land in the home town's picture.)
+const H_HORIZON = 84;
 
 // The sky at a time of day (`day`: 0 midnight, 0.5 noon), in bands.
 function skyAt(day) {
   const h = Math.sin((day - 0.25) * Math.PI * 2);
   const dayK = clamp01(h * 1.6 + 0.35);
   const glowK = clamp01(1 - Math.abs(h) * 3.2);
-  const top = mix('#070a1c', '#3a74c0', dayK);
-  const low = mix(mix('#1a2048', '#9ccaf0', dayK), '#f09868', glowK * 0.75);
-  return { top, low, dayK, h };
+  const top = mix('#070a1c', '#5aa8e0', dayK);
+  const low = mix(mix('#1a2048', '#c8ecf4', dayK), '#f09868', glowK * 0.75);
+  return { top, low, dayK, h, glowK };
 }
 
 function drawHome(ctx, sc, art) {
@@ -384,10 +261,7 @@ function drawHome(ctx, sc, art) {
   const g = buf.getContext('2d');
   g.imageSmoothingEnabled = false;
   g.globalAlpha = 1;
-  const px = (x, y, col) => {
-    g.fillStyle = col;
-    g.fillRect(Math.round(x), Math.round(y), 1, 1);
-  };
+  g.globalCompositeOperation = 'source-over';
   const prog = sc.prog();
   // The days racing by as it grows (a day every couple of seconds); today,
   // a bright morning.
@@ -395,40 +269,41 @@ function drawHome(ctx, sc, art) {
   const racing = t < T1;
   const day = racing ? (0.3 + (t - sc.T0) / 2.4) % 1 : 0.36 + (t - T1) * 0.004;
   const S = skyAt(t < sc.T0 ? 0.3 : day);
-  // The sky.
-  const bands = 9;
+  // The sky, in bands; the stars by night; the sun and the moon crossing.
+  const bands = 12;
   for (let i = 0; i < bands; i++) {
     const y0 = Math.floor((i / bands) * H_HORIZON);
     const y1 = Math.floor(((i + 1) / bands) * H_HORIZON);
     g.fillStyle = mix(S.top, S.low, i / (bands - 1));
     g.fillRect(0, y0, PW, y1 - y0 + 1);
   }
-  // (And on down behind the hills, wherever they dip.)
   g.fillStyle = S.low;
   g.fillRect(0, H_HORIZON, PW, PH - H_HORIZON);
-  // The stars by night; the sun (and the moon) crossing.
   if (S.dayK < 0.6) {
-    for (const s of art.stars) {
-      g.globalAlpha = s.b * (1 - S.dayK / 0.6);
-      px(s.x, s.y, '#ffffff');
+    const st = art.stars || (art.stars = Array.from({ length: 90 }, (_, i) => ({ x: (i * 97 + 13) % PW, y: 12 + ((i * 53) % (H_HORIZON - 30)), b: 0.3 + ((i * 37) % 70) / 100 })));
+    g.fillStyle = '#ffffff';
+    for (const s of st) {
+      g.globalAlpha = s.b * (1 - S.dayK / 0.6) * (0.7 + 0.3 * Math.sin(t * 2 + s.x));
+      g.fillRect(s.x, s.y, 1, 1);
     }
     g.globalAlpha = 1;
   }
   const sunA = (t < sc.T0 ? 0.3 : day) * Math.PI * 2 - Math.PI / 2;
   const sx = PW / 2 + Math.cos(sunA + Math.PI) * 120;
-  const sy = H_HORIZON + 6 - Math.sin(sunA + Math.PI) * 58;
+  const sy = H_HORIZON + 6 - Math.sin(sunA + Math.PI) * 62;
   if (sy < H_HORIZON + 4) {
-    g.fillStyle = 'rgba(255,230,160,0.25)';
-    g.beginPath();
-    g.arc(sx, sy, 7, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#fff4c8';
+    const sg = g.createRadialGradient(sx, sy, 2, sx, sy, 16);
+    sg.addColorStop(0, 'rgba(255,240,190,0.55)');
+    sg.addColorStop(1, 'rgba(255,220,150,0)');
+    g.fillStyle = sg;
+    g.fillRect(sx - 16, sy - 16, 32, 32);
+    g.fillStyle = '#fff6d0';
     g.beginPath();
     g.arc(sx, sy, 4, 0, Math.PI * 2);
     g.fill();
   }
   const mx = PW / 2 - Math.cos(sunA + Math.PI) * 120;
-  const my = H_HORIZON + 6 + Math.sin(sunA + Math.PI) * 58;
+  const my = H_HORIZON + 6 + Math.sin(sunA + Math.PI) * 62;
   if (my < H_HORIZON + 4 && S.dayK < 0.75) {
     g.globalAlpha = clamp01((0.75 - S.dayK) * 4);
     g.fillStyle = '#e8ecf4';
@@ -439,158 +314,22 @@ function drawHome(ctx, sc, art) {
     g.fillRect(Math.round(mx), Math.round(my) - 2, 2, 2);
     g.globalAlpha = 1;
   }
-  // Clouds drifting over: heaped, lit along their tops (by the low sun,
-  // warm), their bellies shaded.
-  const cLit = mix(mix('#4a4a6a', '#ffffff', S.dayK), '#ffd0a0', clamp01(1 - Math.abs(S.h) * 3) * 0.6);
-  const cBody = mix('#30304c', '#e4e2ec', S.dayK);
-  const cDark = mix('#24243a', '#b4b8cc', S.dayK);
-  for (const c of art.clouds) {
-    const x = ((c.x + t * c.v * (racing ? 4 : 1)) % (PW + 60)) - 40;
-    g.globalAlpha = 0.92;
-    drawCloud(px, Math.round(x), c.y, c.w, cLit, cBody, cDark);
-    g.globalAlpha = 1;
-  }
-  // The land.
-  g.drawImage(art.land, 0, 0);
-  // The fields, tilled as it grows: furrows, a hedge round them.
-  for (const f of art.fields) {
-    if (prog < f.t) continue;
-    for (let y = f.y; y < f.y + f.h; y++) {
-      for (let x = f.x; x < f.x + f.w; x++) {
-        const edge = y === f.y || y === f.y + f.h - 1 || x === f.x || x === f.x + f.w - 1;
-        px(x, y, edge ? art.P.leafDark : (y - f.y) % 3 === 0 ? shade(f.crop, -46) : (y - f.y) % 3 === 1 ? shade(f.crop, 16) : (x + y) % 5 ? f.crop : shade(f.crop, -20));
-      }
-    }
-  }
-  // The lanes, laid as the rows fill: the road up from the front to the
-  // hall, and a street along the front of each row (its edges worn, the
-  // grass coming up at its ends).
-  const road = art.look.shape === 'flat' ? '#c8b48a' : '#8a7454';
-  const lane = (x0, x1, y, w) => {
-    for (let x = Math.floor(x0); x < x1; x++) {
-      const end = Math.min(x - x0, x1 - x);
-      for (let k = -1; k <= w; k++) {
-        const n = hashf(x, y + k, 4);
-        // (Its edges ragged, the grass growing in over them; its ends
-        // fading out into the grass.)
-        if (k === -1 || k === w) {
-          if (n < 0.4) px(x, y + k, k === -1 ? shade(road, -8) : shade(road, -16));
-          continue;
-        }
-        if (end < 4 && hashf(x, y + k, 6) < 0.6 - end * 0.15) continue;
-        px(x, y + k, n < 0.14 ? shade(road, -12) : n > 0.88 ? shade(road, 12) : (x + k * 3) % 9 === 0 ? shade(road, 6) : road);
-      }
-    }
-  };
-  if (prog > 0.03) {
-    for (let y = ROWS[1].yb + 1; y < PH; y++) {
-      const half = 2 + (y - ROWS[1].yb) * 0.1;
-      for (let x = Math.round(PW / 2 - half); x < Math.round(PW / 2 + half); x++) {
-        const edge = x === Math.round(PW / 2 - half) || x === Math.round(PW / 2 + half) - 1;
-        px(x, y, edge ? shade(road, -18) : hashf(x, y, 4) < 0.2 ? shade(road, -12) : road);
-      }
-    }
-  }
-  ROWS.forEach((R, ri) => {
-    const built = art.houses.filter((h) => h.row === ri && prog >= h.t);
-    if (!built.length) return;
-    const x0 = Math.min(...built.map((h) => h.x)) - 6;
-    const x1 = Math.max(...built.map((h) => h.x + h.w + Math.round(h.w * 0.28))) + 6;
-    lane(x0, x1, R.yb + 2, Math.max(2, Math.round(4 * R.k)));
-  });
-  // Night: everything dimmed, the windows lit.
+  // The town (see render/art_home.js), in the light of the hour.
   const night = 1 - S.dayK;
-  // Back to front: the trees still standing, the houses (rising), the
-  // folk, row by row.
-  const items = [];
-  const lit = [];
-  for (const tr of art.trees) if (prog < tr.cut) items.push({ y: tr.y, x: tr.x, draw: () => drawTree(g, px, tr.x, tr.y, tr.k, art.P) });
+  const tint = night > 0.08 ? ['#141c48', Math.min(0.68, night * 0.72)] : S.glowK > 0.05 ? ['#ff9a5a', S.glowK * 0.24] : null;
   const homeNow = t > T1 + 5;
-  let homeRidge = null;
-  for (const h of art.houses) {
-    const rise = clamp01((prog - h.t) / 0.07);
-    if (rise <= 0) continue;
-    const R = ROWS[h.row];
-    items.push({
-      y: R.yb - 0.5, x: h.x,
-      draw: () => {
-        const mine = h === art.home && homeNow;
-        if (mine) {
-          // Your family's: drawn on its own, a warm light round its edge.
-          const a = clamp01((t - T1 - 5.5) * 2);
-          const hc = drawHome.hc || (drawHome.hc = makeCanvas(PW, PH));
-          const hg = hc.getContext('2d');
-          hg.clearRect(0, 0, PW, PH);
-          hg.globalAlpha = 1;
-          const hpx = (x, y, col) => {
-            hg.fillStyle = col;
-            hg.fillRect(Math.round(x), Math.round(y), 1, 1);
-          };
-          const o = buildingOf(hg, hpx, h, R, art.look, rise, night, t, true);
-          homeRidge = o.ridge;
-          lit.push(...(h.lit ? o.wins || [] : []));
-          const oc = drawHome.oc || (drawHome.oc = makeCanvas(PW, PH));
-          const og = oc.getContext('2d');
-          og.globalCompositeOperation = 'source-over';
-          og.clearRect(0, 0, PW, PH);
-          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1], [-2, 0], [2, 0], [0, -2]]) og.drawImage(hc, dx, dy);
-          og.globalCompositeOperation = 'source-in';
-          og.fillStyle = '#ffe090';
-          og.fillRect(0, 0, PW, PH);
-          og.globalCompositeOperation = 'source-over';
-          g.globalAlpha = a * (0.7 + 0.3 * Math.sin(t * 3));
-          g.drawImage(oc, 0, 0);
-          g.globalAlpha = 1;
-          g.drawImage(hc, 0, 0);
-          return;
-        }
-        const o = buildingOf(g, px, h, R, art.look, rise, night, t, false);
-        if (h.lit && rise >= 1) lit.push(...(o.wins || []));
-      },
-    });
-  }
-  if (t > T1 - 1) {
-    for (const f of art.folk) {
-      const R = ROWS[f.row];
-      let x = (f.x + (t - T1) * f.v) % (PW + 20);
-      if (x < -10) x += PW + 20;
-      const y = R.yb + 1 + Math.max(1, Math.round(2 * R.k));
-      items.push({ y: R.yb + 1 + f.row * 0.01, x, draw: () => drawPerson(px, x, y + 1, { size: f.row >= 3 ? 'small' : 'tiny', pose: 'walk', frame: Math.floor(t * 5 + f.x), dir: f.v > 0 ? 1 : -1, shirt: f.shirt, hair: f.hair, skin: f.skin, lit: -1 }) });
-    }
-  }
-  items.sort((a, b) => a.y - b.y || a.x - b.x);
-  for (const it of items) it.draw();
-  // The walls, last of all (a walled town's), across the front.
-  if (info.walled) {
-    const rise = clamp01((prog - 0.88) / 0.1);
-    if (rise > 0) drawWall(px, rise, art.look);
-  }
-  // Night over the land (the lit windows drawn bright after, a little of
-  // their light on the wall round them).
-  if (night > 0.05) {
-    g.fillStyle = `rgba(8,12,40,${(night * 0.5).toFixed(3)})`;
-    g.fillRect(0, H_HORIZON - 30, PW, PH);
-    const glow = art.look.glow || '#ffcc6a';
-    for (const w of lit) {
-      g.globalAlpha = night * 0.25;
-      g.fillStyle = glow;
-      g.fillRect(w.x - 1, w.y - 1, w.w + 2, w.h + 2);
-      g.globalAlpha = night;
-      g.fillRect(w.x, w.y, w.w, w.h);
-      g.fillStyle = shade(glow, 40);
-      g.fillRect(w.x, w.y, 1, 1);
-    }
-    g.globalAlpha = 1;
-  }
+  const homeA = homeNow ? clamp01((t - T1 - 5.5) * 2) : 0;
+  const ridge = drawTown(g, art, { t, prog, today: t > T1 - 1, tint, night, homeA });
   // Dust where one's just gone up.
   for (const h of art.houses) {
     const k = (prog - h.t - 0.07) / 0.05;
     if (k <= 0 || k >= 1) continue;
     const R = ROWS[h.row];
+    g.fillStyle = '#d8c8a8';
     for (let i = 0; i < 8; i++) {
       const a = i * 0.8 + h.x;
       g.globalAlpha = 0.6 * (1 - k);
-      px(h.x + h.w / 2 + Math.cos(a) * (4 + k * 10), R.yb - 2 - Math.abs(Math.sin(a)) * k * 6, '#c8b898');
+      g.fillRect(Math.round(h.x + h.w / 2 + Math.cos(a) * (4 + k * 10)), Math.round(R.yb - 2 - Math.abs(Math.sin(a)) * k * 6), 1, 1);
     }
     g.globalAlpha = 1;
   }
@@ -607,18 +346,22 @@ function drawHome(ctx, sc, art) {
     fx = lerp(PW / 2, h.x + h.w / 2, k);
     fy = lerp(PH / 2, R.yb - h.h / 2, k);
     const bob = Math.round(Math.sin(t * 4) * 1.5);
-    const ax = Math.round(homeRidge ? (homeRidge.x0 + homeRidge.x1) / 2 : h.x + h.w / 2);
-    const ay = (homeRidge ? homeRidge.y : R.yb - h.h - 8) - 4 + bob;
-    g.globalAlpha = clamp01((t - T1 - 5.5) * 2);
-    // (An arrow, outlined, pointing down at it.)
-    for (let i = -1; i < 5; i++) for (let k2 = -4 + Math.max(0, i); k2 <= 4 - Math.max(0, i); k2++) px(ax + k2, ay + i, '#3a2408');
-    for (let y = ay - 5; y < ay; y++) for (let k2 = -2; k2 <= 2; k2++) px(ax + k2, y, '#3a2408');
-    for (let i = 0; i < 4; i++) for (let k2 = -3 + i; k2 <= 3 - i; k2++) px(ax + k2, ay + i, i === 0 ? '#fff4b0' : '#ffe070');
-    for (let y = ay - 4; y < ay; y++) {
-      px(ax - 1, y, '#fff4b0');
-      px(ax, y, '#ffe070');
-      px(ax + 1, y, '#e0b040');
+    const ax = Math.round(ridge ? (ridge.x0 + ridge.x1) / 2 : h.x + h.w / 2);
+    const ay = (ridge ? ridge.y : R.yb - h.h - 8) - 5 + bob;
+    g.globalAlpha = homeA;
+    g.fillStyle = '#3a2408';
+    for (let i = -1; i < 5; i++) g.fillRect(ax - 4 + Math.max(0, i), ay + i, 9 - Math.max(0, i) * 2, 1);
+    g.fillRect(ax - 2, ay - 5, 5, 5);
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = i === 0 ? '#fff4b0' : '#ffe070';
+      g.fillRect(ax - 3 + i, ay + i, 7 - i * 2, 1);
     }
+    g.fillStyle = '#fff4b0';
+    g.fillRect(ax - 1, ay - 4, 1, 4);
+    g.fillStyle = '#ffe070';
+    g.fillRect(ax, ay - 4, 1, 4);
+    g.fillStyle = '#e0b040';
+    g.fillRect(ax + 1, ay - 4, 1, 4);
     g.globalAlpha = 1;
   }
   // To the screen: in from black, out to black at the end.
@@ -648,112 +391,6 @@ function drawHome(ctx, sc, art) {
     const lines = wrap(`Everyone in ${info.town} knows your face. Today, like any other day, starts at home.`, 60);
     lines.forEach((l, i) => drawText(ctx, l, Math.round(VIEW_W / 2 - (l.length * CHAR_W) / 2), VIEW_H / 2 - 8 + i * 11, '#e8d8b0'));
     ctx.globalAlpha = 1;
-  }
-}
-
-// One of the town's buildings, `rise` of the way up (its frame first, the
-// walls filling in, the roof going on last), seen three-quarters on: a
-// house, the hall (its bell tower on the ridge, a flag on it), a temple
-// (a spire; a dome, in the sun). Returns what it was drawn with (its
-// windows, its ridge).
-function buildingOf(g, px, h, R, look, rise, night, t, mine) {
-  const hall = h.kind === 'hall';
-  const temple = h.kind === 'temple';
-  const shape = look.shape === 'hut' && (hall || temple) ? 'steep' : look.shape;
-  const wall = hall ? shade(look.wall, -10) : temple ? shade(look.wall, 14) : look.wall;
-  const tall = temple ? h.h + 4 : h.h;
-  // (On stilts over the shallows.)
-  if (look.stilts && h.row >= 2) for (let x = h.x + 1; x < h.x + h.w + 4; x += 4) for (let y = R.yb; y < R.yb + 4; y++) px(x, y, y === R.yb ? shade(look.timber, 16) : look.timber);
-  const o = {
-    shape, wall, roof: h.roof, timber: look.shape === 'flat' || look.shape === 'hut' ? null : look.timber,
-    up: rise, night, lit: h.lit, glow: look.glow, chimney: h.chimney, smoke: t, mine,
-    windows: hall ? 4 : temple ? 2 : undefined,
-  };
-  drawHouse(g, px, h.x, R.yb, h.w, tall, o);
-  if (rise < 1) return o;
-  const r = o.ridge;
-  if (!r) return o;
-  const cx = Math.round((r.x0 + r.x1) / 2);
-  if (hall) {
-    // A bell tower over the ridge: its front and its shaded side, the bell
-    // in its arch, a pointed cap, the flag.
-    const tw = 5;
-    const ty = r.y - 8;
-    for (let y = ty; y <= r.y + 2; y++) {
-      for (let x = cx - 2; x < cx - 2 + tw; x++) px(x, y, x === cx - 2 ? shade(wall, 8) : shade(wall, -8));
-      px(cx + 3, y - 1, shade(wall, -40));
-      px(cx + 4, y - 1, shade(wall, -46));
-    }
-    for (let y = ty + 2; y < ty + 5; y++) for (let x = cx - 1; x < cx + 2; x++) px(x, y, '#2a2026');
-    px(cx, ty + 4, '#c8a040');
-    px(cx - 1, ty + 4, '#a88030');
-    for (let i = 0; i < 4; i++) for (let x = cx - 3 + i; x <= cx + 4 - i; x++) px(x, ty - 1 - i, x > cx ? shade(h.roof, -24) : i % 2 ? shade(h.roof, 10) : h.roof);
-    for (let y = ty - 11; y < ty - 4; y++) px(cx, y, '#3a3030');
-    const wave = Math.round(Math.sin(t * 5));
-    for (let y = ty - 11; y < ty - 8; y++) for (let x = cx + 1; x < cx + 6; x++) px(x, y + (x > cx + 3 ? wave : 0), y === ty - 10 ? '#d84a4a' : '#a83030');
-  } else if (temple) {
-    if (look.shape === 'flat') {
-      // A dome on a drum.
-      for (let dy = 0; dy < 6; dy++) {
-        for (let dx = -5; dx <= 5; dx++) {
-          if (dx * dx + dy * dy * 2 >= 30) continue;
-          px(cx + dx, r.y - 1 - dy, dx < -2 ? '#f0e0b0' : dx > 2 ? '#b89858' : '#d8c088');
-        }
-      }
-      px(cx, r.y - 8, '#ffe070');
-      px(cx, r.y - 7, '#c8a040');
-    } else {
-      // A spire: its lit face and its shaded one, a gold point.
-      for (let i = 0; i < 12; i++) {
-        const half = Math.round((12 - i) / 4);
-        for (let d = -half; d <= half; d++) px(cx + d, r.y - i, d > 0 ? shade(h.roof, -28) : shade(h.roof, i % 3 === 0 ? 4 : -6));
-      }
-      px(cx, r.y - 13, '#ffe070');
-      px(cx, r.y - 12, '#c8a040');
-    }
-  }
-  return o;
-}
-
-// A walled town's wall: stone, its top a walk behind the battlements, a
-// tower at each end and either side of the gate.
-function drawWall(px, rise, look) {
-  const yb = 136;
-  const hgt = Math.round(8 * rise);
-  const stone = look.shape === 'flat' ? '#c8b488' : '#8a8a86';
-  for (let x = 6; x < PW - 6; x++) {
-    if (Math.abs(x - PW / 2) < 6) continue;
-    for (let y = yb - hgt; y < yb; y++) {
-      const course = (yb - y) % 3 === 0;
-      const joint = (x + Math.floor((yb - y) / 3) * 2) % 5 === 0;
-      px(x, y, course || joint ? shade(stone, -22) : y === yb - 1 ? shade(stone, -30) : stone);
-    }
-    if (rise >= 1) {
-      px(x, yb - hgt - 1, shade(stone, 26));
-      px(x, yb - hgt - 2, shade(stone, 12));
-      if (x % 4 < 2) {
-        px(x, yb - hgt - 3, shade(stone, 6));
-        px(x, yb - hgt - 4, shade(stone, 20));
-      }
-    }
-  }
-  if (rise < 1) return;
-  for (const tx of [6, PW - 16, PW / 2 - 14, PW / 2 + 6]) {
-    for (let y = yb - 15; y < yb; y++) {
-      for (let x = tx; x < tx + 8; x++) px(x, y, x === tx ? shade(stone, 14) : (x + y) % 4 === 0 ? shade(stone, -22) : shade(stone, -4));
-      for (let x = tx + 8; x < tx + 10; x++) px(x, y - (x - tx - 7), shade(stone, -40));
-    }
-    for (let x = tx; x < tx + 8; x++) px(x, yb - 16, shade(stone, 24));
-    for (let x = tx; x < tx + 8; x += 2) {
-      px(x, yb - 17, shade(stone, 10));
-      px(x, yb - 18, shade(stone, 20));
-    }
-    for (let y = yb - 11; y < yb - 8; y++) px(tx + 3, y, '#1a1a20');
-  }
-  // (The gate: an arch, its doors open.)
-  for (let y = yb - 6; y < yb; y++) {
-    px(PW / 2 - 6, y, '#4a3020');
-    px(PW / 2 + 5, y, '#4a3020');
   }
 }
 
@@ -1014,10 +651,7 @@ function paintShip(broken) {
   line(px, mizzen, 26, 106, 31, '#3a2414');
   line(px, mizzen, 48, 110, 48, '#3a2414');
   fillPoly(px, [[mizzen + 1, 27], [105, 31], [109, 47], [mizzen + 1, 47]], (x, y) => ((x - mizzen) % 4 === 0 ? '#d6cab0' : x > 103 ? mix(cloth, '#ffd8a8', 0.5) : y > 44 ? '#ddd2b6' : cloth));
-  // Her colours: a long pennant off the main (gone after the bolt), the
-  // flag at the mizzen's head; streaming forward, the wind behind her.
-  if (!broken) for (let i = 0; i < 13; i++) px(main - 1 - i, 3 + Math.round(Math.sin(i * 0.7) * 0.8), i < 5 ? '#c83a3a' : '#a82a2a');
-  for (let y = 22; y < 26; y++) for (let x = mizzen - 7; x < mizzen; x++) px(x, y + (x < mizzen - 4 ? 1 : 0), y === 23 ? '#e8dcc0' : '#8a2a3a');
+  // (Her colours fly from the main and the mizzen, waving: see drawWreck.)
   // The hull, her side toward you: the rail and bulwark, the wales and a
   // painted band, her planking, darker under the water; the stern castle,
   // its cabin windows lit; the stem, a gilt figure at its head; the rudder.
@@ -1163,9 +797,64 @@ function paintWreck(info) {
   return {
     ship, broken, shipDark: dark(ship), brokenDark: dark(broken),
     wallWarm: paintWall(info.seed >>> 0, true), wallCold: paintWall(info.seed >>> 0, false),
+    skyWarm: paintWreckSky(info.seed >>> 0, true), skyStorm: paintWreckSky(info.seed >>> 0, false),
+    islets: paintIslets(info.seed >>> 0),
     crew, rows,
+    gulls: Array.from({ length: 4 }, () => ({ x: rng.float(0, PW), y: rng.float(24, 56), v: rng.float(5, 9), ph: rng.float(0, 6) })),
     drops: Array.from({ length: 160 }, () => ({ x: rng.float(0, PW), y: rng.float(0, PH), v: rng.float(0.8, 1.4) })),
   };
+}
+
+// (Round 51) The sky over the Grey Sea, painted: at sunset, bands from a
+// deep violet overhead to gold low down, long streaks of cloud lit pink
+// and gold from under, the sun's glow about where it's setting; or the
+// storm's, slate and low, its streaks dark.
+function paintWreckSky(seed, warm) {
+  const b = new Bmp(PW, W_HORIZON + 1);
+  if (warm) skyBands(b, [[0, '#26285c'], [20, '#4a3474'], [40, '#9a4e7a'], [60, '#e6806a'], [80, '#ffc488']]);
+  else skyBands(b, [[0, '#0e1220'], [40, '#1a2030'], [84, '#2c3442']]);
+  const r = rngOf(seed + (warm ? 1 : 2));
+  for (let i = 0; i < 9; i++) {
+    const y = Math.round(18 + r() * 56);
+    const x0 = r() * PW * 0.9;
+    const len = 30 + r() * 80;
+    const th = 1 + Math.floor(r() * 3);
+    const k = y / W_HORIZON;
+    const top = warm ? mixC('#5a3a6a', '#a85a6a', k) : rgbOf('#141824');
+    const lit = warm ? mixC('#ff9a7a', '#ffd890', k) : rgbOf('#3a4252');
+    for (let x = Math.round(x0); x < x0 + len; x++) {
+      const e = Math.min(x - x0, x0 + len - x) / len;
+      const h = Math.max(1, Math.round(th * Math.min(1, e * 6) + (hashf(x, y, seed) < 0.3 ? 1 : 0)));
+      for (let j = 0; j < h; j++) b.set(x, y - j, j === 0 ? lit : top, e < 0.08 ? 0.5 : 0.9);
+    }
+  }
+  if (warm) {
+    // (The sun's glow, spread along the horizon.)
+    for (let y = W_HORIZON - 30; y <= W_HORIZON; y++) {
+      for (let x = 150; x < PW; x++) {
+        const d = Math.hypot((x - 214) / 1.8, y - W_HORIZON);
+        if (d < 30) b.set(x, y, rgbOf('#ffe0a0'), (1 - d / 30) * 0.45);
+      }
+    }
+  }
+  return b.canvas();
+}
+
+// Far islets on the horizon behind you, hazed.
+function paintIslets(seed) {
+  const b = new Bmp(PW, W_HORIZON + 1);
+  const r = rngOf(seed + 9);
+  for (let i = 0; i < 3; i++) {
+    const cx = 150 + r() * 90;
+    const w = 6 + r() * 14;
+    const h = 2 + r() * 5;
+    for (let x = Math.round(cx - w); x < cx + w; x++) {
+      const k = 1 - Math.abs(x - cx) / w;
+      const top = Math.round(W_HORIZON - h * Math.sqrt(k) - (hashf(x, 2, seed) < 0.3 ? 1 : 0));
+      for (let y = top; y <= W_HORIZON; y++) b.set(x, y, mixC('#6a4a6a', '#b0708a', (x - cx + w) / (2 * w) * 0.5), 0.85);
+    }
+  }
+  return b.canvas();
 }
 
 // A picture as it looks in the storm's dark.
@@ -1197,30 +886,56 @@ function drawWreck(ctx, sc, art) {
   // Lightning: a flash now and then in the storm (the strike, the brightest).
   const flashAt = Math.floor(t * 1.3);
   const flash = (t > WRECK.STORM && hashf(flashAt, 3, 7) < 0.35 ? clamp01(1 - (t * 1.3 - flashAt) * 4) * 0.6 : 0) + (struck ? clamp01(1 - since * 1.6) * 0.9 : 0);
-  // The sky: a sunset going over to storm-dark.
-  const top = mix(mix('#2a2a5a', '#14161e', storm), '#b8c4e8', flash * 0.5);
-  const mid = mix(mix('#b85a6a', '#20242c', storm), '#c8d0f0', flash * 0.5);
-  const low = mix(mix('#f0a868', '#343a42', storm), '#e0e8ff', flash * 0.5);
-  for (let i = 0; i < 12; i++) {
-    const y0 = Math.floor((i / 12) * W_HORIZON);
-    const y1 = Math.floor(((i + 1) / 12) * W_HORIZON);
-    const k = i / 11;
-    g.fillStyle = k < 0.5 ? mix(top, mid, k * 2) : mix(mid, low, (k - 0.5) * 2);
-    g.fillRect(0, y0, PW, y1 - y0 + 1);
+  // The sky: the sunset (painted: see paintWreckSky) going over to the
+  // storm's, lit up white-blue in a flash.
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, PW, PH);
+  g.drawImage(art.skyWarm, 0, 0);
+  if (storm > 0) {
+    g.globalAlpha = storm;
+    g.drawImage(art.skyStorm, 0, 0);
+    g.globalAlpha = 1;
   }
-  // The sun, going down behind you.
+  if (flash > 0.02) {
+    g.fillStyle = `rgba(200,212,255,${(flash * 0.45).toFixed(3)})`;
+    g.fillRect(0, 0, PW, W_HORIZON + 1);
+  }
+  // The sun, going down behind you; islets far off along the horizon.
   const sunX = 214;
   if (storm < 0.9) {
     const sy = W_HORIZON - 4 + t * 0.35;
     g.globalAlpha = 1 - storm;
-    g.fillStyle = 'rgba(255,200,140,0.3)';
+    g.fillStyle = 'rgba(255,214,150,0.35)';
     g.beginPath();
     g.arc(sunX, sy, 12, 0, Math.PI * 2);
     g.fill();
-    g.fillStyle = '#ffe0a0';
+    g.fillStyle = '#ffe8b0';
     g.beginPath();
     g.arc(sunX, sy, 7, 0, Math.PI, true);
     g.fill();
+    g.fillStyle = '#fff8e0';
+    g.beginPath();
+    g.arc(sunX - 1, sy - 1, 4, 0, Math.PI, true);
+    g.fill();
+    g.globalAlpha = 1;
+  }
+  g.globalAlpha = 1 - storm * 0.8;
+  g.drawImage(art.islets, 0, 0);
+  g.globalAlpha = 1;
+  // Gulls in the evening, wheeling (gone before the storm).
+  if (storm < 0.4) {
+    g.fillStyle = '#f4ece0';
+    g.globalAlpha = 1 - storm / 0.4;
+    for (const q of art.gulls) {
+      const x = ((q.x - t * q.v) % (PW + 30) + PW + 30) % (PW + 30) - 15;
+      const y = q.y + Math.sin(t * 0.7 + q.ph) * 4;
+      const up = Math.floor(t * 4 + q.ph) % 2;
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
+      g.fillRect(Math.round(x) - 1, Math.round(y) - up, 1, 1);
+      g.fillRect(Math.round(x) + 1, Math.round(y) - up, 1, 1);
+      g.fillRect(Math.round(x) - 2, Math.round(y) - 1 + (up ? -1 : 1), 1, 1);
+      g.fillRect(Math.round(x) + 2, Math.round(y) - 1 + (up ? -1 : 1), 1, 1);
+    }
     g.globalAlpha = 1;
   }
   // The Wall, ahead (left): its face coming on as you go in, till it fills
@@ -1315,6 +1030,24 @@ function drawWreck(ctx, sc, art) {
   g.globalAlpha = lit;
   g.drawImage(S1.back, ox, oy);
   g.globalAlpha = 1;
+  // Her colours, streaming forward in the wind behind her and waving (more
+  // in the storm): the pennant off the main (gone with its topmast), the
+  // flag at the mizzen's head.
+  const wav = 1 + storm * 1.5;
+  const dimF = (c) => (lit < 0.5 ? shade(c, -50) : c);
+  if (!struck) {
+    for (let i = 0; i < 13; i++) {
+      g.fillStyle = dimF(i < 5 ? '#d84040' : '#b02c2c');
+      g.fillRect(ox + MASTS.main - 1 - i, oy + 3 + Math.round(Math.sin(t * 7 - i * 0.7) * 0.6 * wav * (i / 13)), 1, 1);
+    }
+  }
+  for (let x = 0; x < 8; x++) {
+    const dy = Math.round(Math.sin(t * 6 - x * 0.8) * 0.8 * wav * (x / 8));
+    for (let y = 0; y < 4; y++) {
+      g.fillStyle = dimF(y === 1 ? '#efe4c8' : x > 5 ? '#7a2434' : '#9a3040');
+      g.fillRect(ox + MASTS.mizzen - 1 - x, oy + 22 + y + dy, 1, 1);
+    }
+  }
   // Her people on deck, behind her rail: at their work in the calm, running
   // in the storm, the captain at the wheel.
   const spx = (x, y, col) => {
@@ -1370,6 +1103,20 @@ function drawWreck(ctx, sc, art) {
   const hullX1 = sx + SHIP.w / 2 + (104 - SHIP.w / 2) * Math.cos(ang);
   for (let x = Math.round(hullX0); x < hullX1; x++) if (hashf(x, Math.floor(t * 6), 2) < 0.55) px(x, Math.round(sy) - 1 + (hashf(x, 3, Math.floor(t * 4)) < 0.3 ? -1 : 0), '#e8f0ff');
   g.globalAlpha = 1;
+  // Her wake, streaming out astern (to the right) and spreading, fading.
+  if (!struck) {
+    for (let i = 0; i < 40; i++) {
+      const k = i / 40;
+      const x = Math.round(hullX1 + 2 + k * 70);
+      for (const side of [-1, 1]) {
+        const y = Math.round(sy + side * k * 4 + Math.sin(t * 2 - i * 0.6) * 0.6);
+        if (hashf(i, side + 2, Math.floor(t * 5)) > 0.75 - k * 0.4) continue;
+        g.globalAlpha = (1 - k) * (0.6 - storm * 0.3);
+        px(x, y, '#e8f0ff');
+      }
+    }
+    g.globalAlpha = 1;
+  }
   // Her bow wave, and spray off it in heavy seas.
   for (let i = 0; i < 4 + Math.round(storm * 10); i++) {
     const k = (t * (1.2 + storm) + i / (4 + storm * 10)) % 1;
@@ -1419,6 +1166,13 @@ function drawWreck(ctx, sc, art) {
       const x = (d.x - t * 60 * d.v + 400) % PW;
       g.fillRect(Math.round(x), Math.round(y), 1, 2);
       g.fillRect(Math.round(x) - 1, Math.round(y) + 2, 1, 2);
+    }
+    // (Where it hits the sea, a fleck of white.)
+    g.fillStyle = 'rgba(230,238,255,0.6)';
+    for (let i = 0; i < n * 0.4; i++) {
+      const x = hashf(i, Math.floor(t * 8), 5) * PW;
+      const y = W_HORIZON + 4 + hashf(i, Math.floor(t * 8), 6) * (PH - W_HORIZON - 4);
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
     }
   }
   // (The strike: everything lit blue-white for a moment.)

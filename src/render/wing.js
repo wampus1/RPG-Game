@@ -1,7 +1,7 @@
 // A fallen star's wing (see game/starfall.js): one, from the left shoulder,
 // a dragon's: a frame of blue bone, and between its fingers a skin the
 // light comes through, glowing faintly at its edge. Spent (it carried you
-// through a second roll), it goes thin and grey and fills back in.
+// through a roll with no breath left), it goes thin and grey and fills back in.
 //
 // Drawn pixel by pixel to little canvases, once each: spread out to the
 // side (seen from in front or behind) or swept back (side on), and a

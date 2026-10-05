@@ -1233,13 +1233,68 @@ function simpleIcon(key) {
       p.set(13, 12, '#d02a2a');
       break;
     case 'lute':
-      p.ellipse(6, 10, 4, 3, '#b8743a');
-      p.set(6, 10, '#3a2a1a');
-      p.line(8, 8, 13, 3, '#6a4a2a');
+      // A round-backed body, its rose, the neck and the bent-back pegbox.
+      p.line(8, 8, 12, 3, '#6a4a2a');
+      p.line(9, 8, 13, 3, '#4a3018');
+      p.line(12, 3, 14, 2, '#5a3a1e');
+      p.ellipse(6, 10, 4.5, 3.6, '#a8642e');
+      p.ellipse(5.5, 9.5, 3, 2.4, '#c87e40');
+      p.set(6, 10, '#2a1a0e');
+      p.set(7, 10, '#3a2614');
+      p.line(4, 12, 12, 4, '#e8dcb0');
       break;
     case 'flute':
-      p.line(3, 12, 12, 3, '#c8a878');
-      for (let i = 0; i < 3; i++) p.set(6 + i * 2, 9 - i * 2, '#5a4a3a');
+      p.line(2, 13, 13, 2, '#b8946a');
+      p.line(3, 13, 14, 2, '#8a6a44');
+      for (let i = 0; i < 4; i++) p.set(5 + i * 2, 10 - i * 2, '#3a2a1a');
+      p.set(12, 3, '#e8d8b0');
+      break;
+    case 'lyre':
+      // Two curved arms on a sound box, a crossbar, the strings.
+      p.rect(4, 12, 8, 2, '#7a4a24');
+      p.hline(4, 11, 12, '#9a6232');
+      p.line(4, 12, 2, 7, '#a86a34');
+      p.line(2, 7, 3, 3, '#a86a34');
+      p.line(11, 12, 13, 7, '#8a5428');
+      p.line(13, 7, 12, 3, '#8a5428');
+      p.hline(2, 13, 3, '#6a3e1c');
+      for (const x of [5, 7, 9, 11]) p.vline(x - (x > 8 ? 1 : 0), 4, 11, '#ece4c8');
+      break;
+    case 'fiddle':
+      // The bow across it; the body (waisted), its f-holes, the neck.
+      p.line(9, 7, 13, 2, '#3a2414');
+      p.set(13, 1, '#5a3a1e');
+      p.ellipse(7, 11, 3.6, 2.8, '#b05a24');
+      p.ellipse(7.5, 7.5, 2.8, 2.2, '#b05a24');
+      p.ellipse(6.5, 10.5, 2, 1.6, '#cc7438');
+      p.set(5, 9, '#2a1408');
+      p.set(9, 9, '#2a1408');
+      p.vline(7, 6, 13, '#2a1a10');
+      p.line(1, 4, 14, 14, '#d8c8a0');
+      p.line(1, 3, 14, 13, '#5a3a1e');
+      break;
+    case 'hand_drum':
+      // A hide head on a wooden shell, laced round.
+      p.rect(3, 7, 10, 6, '#8a4a24');
+      p.rect(3, 7, 3, 6, '#a65e30');
+      p.ellipse(8, 13, 5, 1.5, '#5a2e14');
+      p.ellipse(8, 7, 5, 2, '#e8dcb8');
+      p.ellipse(7, 6.6, 3, 1, '#f8f0d8');
+      for (let x = 3; x < 13; x += 2) {
+        p.line(x, 8, x + 1, 12, '#d8c090');
+      }
+      break;
+    case 'hunting_horn':
+      // A brass horn curling from its mouthpiece to the bell; its strap.
+      p.line(2, 4, 6, 3, '#c89838');
+      p.line(6, 3, 10, 5, '#d8a840');
+      p.line(10, 5, 12, 9, '#d8a840');
+      p.line(6, 4, 10, 6, '#a07828');
+      p.ellipse(12, 11, 3, 2.5, '#d8a840');
+      p.ellipse(12.5, 11.5, 1.6, 1.3, '#4a3410');
+      p.set(7, 3, '#fff0b0');
+      p.set(2, 4, '#806020');
+      p.line(3, 6, 11, 13, '#6a4428');
       break;
     case 'dice':
       p.rect(4, 5, 7, 7, '#f0ece0');
@@ -1288,8 +1343,15 @@ function simpleIcon(key) {
       p.ellipse(8, 9, 1, 1, '#b02a2a');
       break;
     case 'pipe':
-      p.line(4, 7, 10, 9, '#5a3a1e');
-      p.rect(10, 6, 3, 4, '#8a5a34');
+      // A long clay stem to the bowl, a curl of smoke off it.
+      p.line(2, 6, 10, 9, '#d8d0c0');
+      p.line(2, 7, 10, 10, '#a8a090');
+      p.rect(10, 6, 4, 5, '#e0d8c8');
+      p.rect(12, 6, 2, 5, '#b8b0a0');
+      p.hline(10, 13, 6, '#4a3a2a');
+      p.set(12, 4, '#9a9aa4');
+      p.set(11, 3, '#b8b8c0');
+      p.set(12, 2, '#9a9aa4');
       break;
     case 'paper':
       p.rect(4, 3, 8, 10, '#f0ead8');
@@ -1721,6 +1783,21 @@ export function itemIcon(key) {
   // shows as a glow round it (see drawJewelled).
   if (it && it.socket) {
     c = itemIcon(it.base);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 51) A recipe on a scroll: the scroll, and on it a small picture
+  // of the dish it's for.
+  if (it && it.kind === 'recipe') {
+    c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(itemIcon('scroll'), 0, 0);
+    g.drawImage(itemIcon(it.recipe), 5, 4, 9, 9);
+    g.fillStyle = '#8a3a2a';
+    g.fillRect(3, 12, 2, 2);
     iconCache.set(key, c);
     return c;
   }

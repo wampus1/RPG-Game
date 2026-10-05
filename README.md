@@ -3750,6 +3750,107 @@ together on your network" above for how to start. How it works:
   hang from their yards and the rigging joins up, she sits in the water
   among layered waves, and the Wall is a bank of storm cloud. In the
   Fallen Star's, the shockwave rises from behind the hills.
+
+## Round 51: recipes on scrolls, instruments, the openings painted again
+
+- *The Fallen Star's wing when you're out of breath:* a roll you're too
+  winded for (no stamina left) is taken on the wing instead, if it's
+  grown back, and costs no stamina. As before it also gives a second roll
+  straight after the first. The wing is spent either way and grows back.
+- *Cooking* (`ui/cook.js`):
+  - **What comes out, with a flourish:** once it's cooked, sparks are
+    drawn in round the pot and it builds for a moment, then bursts out
+    with rays of light, a shower of sparks and a fanfare. How grand depends
+    on how well it was done: *PERFECT!*, *Well cooked*, *Edible*, or a
+    puff of smoke and a sad note for *Burnt...*. The stars ring in one at
+    a time. **SPACE**, **ENTER** or **ESC** skips to the end.
+  - **The window keeps inside itself:** long dish names wrap onto two
+    lines, the details are cut to the room there is, and the buttons sit
+    on two rows. Nothing runs off the edge any more.
+  - **Cook in a furnace:** a furnace's crafting window has a
+    **[K] Cook a dish in the pot** button along its bottom (a baker's oven
+    has **[K] Bake a dish of your own**). **K** works too.
+- *Recipes on scrolls* (`world/dishes.js`, `game/cooking.js`):
+  - With a blank **scroll** in your pack, **S** copies a recipe onto it.
+    Use it on the cooking window's Recipes tab, or when a dish is done. Or
+    hold the blank scroll and press **F** or right-click to pick any recipe
+    you know. You get a *Recipe: ...* scroll, with the dish on it, that
+    stacks and can be sold or handed to another player.
+  - **Reading one** (hold it, then **F** or right-click) teaches you the
+    recipe, and you keep the scroll.
+  - **Selling:** cooks, inns, bakers, scholars and general stores buy
+    recipe scrolls (they're worth three times the dish). A cook,
+    innkeeper, baker or barkeep who buys one learns it and cooks it after.
+  - **Buying:** the town's kitchens now and then put up a scroll of one of
+    their own recipes for sale (two at most).
+- *What's working on you, as pictures:* each dish or potion working on
+  you is shown below your health as its own little picture: the dish
+  itself, or the potion it came from. Its time left is underneath (*4h*,
+  *52m*), blinking in its last quarter of an hour. Hover over one for its
+  full details and when it wears off. (It used to read "undefined +
+  undefined...".)
+- *Instruments* (`game/instruments.js`, `ui/instrument.js`): hold one and
+  press **F** or right-click. A strip comes up showing which key plays
+  which note. While it's up you stand still and only its keys, the mouse
+  (click a key to play it) and **ESC** (put it away) do anything. Each
+  instrument has its own keys and its own sound:
+  - **Lute** (plucked): **A** to **;**, a C major scale.
+  - **Flute:** **Q** to **P**, D dorian.
+  - **Lyre** (harp): **1** to **8**, a pentatonic scale.
+  - **Fiddle** (bowed): **Z** to **/**, G minor.
+  - **Hand drum:** **F G H J K**: a boom, a tone, a slap, the rim and a
+    shake.
+  - **Hunting horn:** **1** to **5**, the horn's natural notes.
+
+  Notes float up off you, and people nearby sometimes say what they think.
+  The general store sells lutes, flutes, clay pipes and blank scrolls; the
+  carpenter sells lyres, fiddles and hand drums; the trapper sells hunting
+  horns. Townsfolk who play music for a hobby carry one (not the horn).
+- *The clay pipe:* hold it and press **F** or right-click to smoke it.
+  Puffs of smoke curl up off you for a few seconds and the bowl glows. It
+  does nothing else.
+- *The openings, painted again* (`render/brush.js`, `render/art_home.js`,
+  `render/art_star.js`, `render/art_erupt.js`, `render/art_wall.js`):
+  - **How they're painted:** every opening is now painted at half the
+    screen's resolution and scaled up, with a shared painting kit:
+    colour ramps whose shadows are cooler and lights warmer; noise for
+    rock, foliage and water; and painters for skies, heaped clouds,
+    ridged mountains, hills, broad trees, pines, palms, bushes, meadows,
+    rocks and houses.
+  - **The houses are one piece:** each roof's end is exactly its gable,
+    with nothing sticking out.
+  - **Your home town** (native start): layered, hazed mountains (mesas in
+    the desert), hills and forest, a lake with reflections where there is
+    one, then the town itself. Its hall has a bell tower and flag, its
+    temple a spire or dome, and there are fields in crop rows, lanes,
+    people about, chimney smoke, lit windows at dusk, swaying trees in
+    front, and clouds and birds drifting over. Each land looks like itself.
+  - **The castaway's ship:** the sky turns from warm to storm, with
+    lightning flashes. Her flags wave, she leaves a wake past rocky islets
+    with gulls, and the rain splashes on the sea.
+  - **The Fallen Star:** a village at night under the Milky Way and the
+    moon, with mountains and forested hills behind. Its people stand round
+    a bonfire in the square, on the ground and clear of the houses (they
+    used to float on the houses' walls); a child points up. There are
+    thatched cottages with lit windows, a well, lanterns, fireflies and
+    smoke. When the star lands, a billowing bank of dust rolls out.
+  - **The Sleeper's eruption**, seen from across the sea at dusk (a beach
+    with palms and people watching) or close up from Kharos (scorched
+    ground and dead trees). The crater glows and smokes first. Then
+    there's a fire fountain, rocks flung out trailing smoke, lava running
+    down its sides in glowing channels, and an ash cloud lit red from
+    beneath, with lightning in it. Its glow lies across the sea, and ash
+    or embers fall.
+  - **The Wall coming down:** the Dagoni Islands seen from high above, as
+    the map has them (mountains raised, coasts with shallows and surf),
+    ringed by the storm's cloud banks. The far banks tower; the near ones
+    lie low so the islands show over them. The spires' beams go out one
+    by one, the banks blow outward and thin, then sunbeams come through
+    and the sea turns blue and sparkles.
+- *Older worlds:* a world from 0.50 is brought up when it's loaded. The
+  potions working on you get their pictures, the shops get their
+  instruments, pipes and scrolls in, and each kitchen gets a recipe
+  scroll to sell. (The version is now 0.51.0.)
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

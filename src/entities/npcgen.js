@@ -430,7 +430,7 @@ function equipmentFor(rng, job, hobbies, cond, age) {
   let hobbyItem = null;
   for (const h of hobbies) {
     let it = HOBBIES[h].item;
-    if (h === 'music') it = rng.chance(0.6) ? 'lute' : 'flute';
+    if (h === 'music') it = rng.pick(['lute', 'lute', 'flute', 'flute', 'lyre', 'fiddle', 'hand_drum']);
     if (it && !items.some((x) => x.item === it)) {
       items.push({ item: it, count: 1 });
       if (!hobbyItem) hobbyItem = it;

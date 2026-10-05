@@ -14,7 +14,8 @@
 // land, its places.
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
-import { invAdd, invCount, kitchenOf, alive } from '../sim/econ.js';
+import { invAdd, invCount, kitchenOf, alive, traderOf } from '../sim/econ.js';
+import { ITEMS } from '../world/items.js';
 
 export const STEPS = [
   {
@@ -62,7 +63,44 @@ export const STEPS = [
       }
     },
   },
+  {
+    // Instruments to play, a pipe to smoke, recipes on scrolls; effects
+    // shown by their pictures.
+    to: '0.51.0',
+    data(d, log) {
+      // (An effect from a potion: which potion, for its picture.)
+      const name = (q) => Object.keys(ITEMS).find((k) => ITEMS[k].kind === 'potion' && ITEMS[k].name === q.name);
+      const fix = (pd) => {
+        if (!pd) return;
+        for (const q of pd.buffs || []) if (q && !q.dish && !q.item && q.name) q.item = name(q) || undefined;
+      };
+      fix(d.player);
+      for (const c of (d.party && d.party.chars) || []) fix(Array.isArray(c) ? c[1] && c[1].player : c && c.player);
+      log.push('Effects on you now show as pictures.');
+    },
+    game(game, log) {
+      log.push('The shops have instruments, pipes and blank scrolls in; the cooks have recipes to sell.');
+    },
+    town(L) {
+      // The new goods in the shops that deal in them (the shops only get
+      // their stock when a town's first laid out).
+      const e = L.econ;
+      for (const r of L.npcs) {
+        if (!alive(r)) continue;
+        const t = traderOf(r);
+        const b = r.work && r.work.building != null ? e.biz[r.work.building] : null;
+        if (!b || !t) continue;
+        for (const k of NEW_STOCK[t] || []) if (!b.store[k]) b.store[k] = 1 + (k.length % 2);
+      }
+      // A recipe on a scroll at the kitchen, from its cook's own.
+      const k = kitchenOf(L);
+      const cook = L.npcs.find((r) => alive(r) && (r.job === 'cook' || r.job === 'innkeeper') && (r.recipes || []).length);
+      if (k && cook) k.store[`recipe~${cook.recipes[0].key}`] = 1;
+    },
+  },
 ];
+// (What each kind of shop took in, in 0.51.)
+const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
 
 // The steps a world saved in version `gv` still needs, in order.
 export function stepsFor(gv) {

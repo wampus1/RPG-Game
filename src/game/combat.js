@@ -770,9 +770,12 @@ function tickSwing(game, p, dt) {
 // SPACE: a roll in the way you're going (or facing), clear of a blow.
 export function roll(game, p, dirv = null) {
   // A fallen star's wing: a second roll straight after the first (at its
-  // end, or just after), with no stamina: the wing's spent instead, and
-  // grows back (see Player.update).
-  const wingRoll = p.rollCd > 0 && !!p.wing && p.wing.k >= 0.999 && !(p.rollT > 0.12);
+  // end, or just after), or a roll when you've no breath left for one at
+  // all: it costs no stamina, the wing's spent instead, and grows back
+  // (see Player.update).
+  const normalCost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * rollCostMult(p);
+  const winded = (p.stamina ?? MAX_STAMINA) < normalCost * 0.6;
+  const wingRoll = (p.rollCd > 0 || winded) && !!p.wing && p.wing.k >= 0.999 && !(p.rollT > 0.12);
   // (Not with an arrow on the string, drawing or holding it.)
   if ((p.rollCd > 0 && !wingRoll) || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
   // (Swallowed: no room to roll in there.)
@@ -783,8 +786,8 @@ export function roll(game, p, dirv = null) {
   }
   // (Mid-stride is fine: the roll carries on from where you are.)
   const from = p.moving ? p.renderPos() : null;
-  const cost = wingRoll ? 0 : COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * rollCostMult(p);
-  if (!wingRoll && (p.stamina ?? MAX_STAMINA) < cost * 0.6) {
+  const cost = wingRoll ? 0 : normalCost;
+  if (!wingRoll && winded) {
     game.ui.msg('Too winded to roll.', '#c8c8c8', true);
     return false;
   }

@@ -4,8 +4,9 @@
 // and the recipes they keep of their best). What a dish is: see
 // world/dishes.js; cooking one yourself: see ui/cook.js.
 import { ITEMS } from '../world/items.js';
-import { TYPES, CONDS, FX, baseOf, cookDish, parseDish, dishKey, COOK_STATIONS } from '../world/dishes.js';
+import { TYPES, CONDS, FX, baseOf, cookDish, parseDish, dishKey, COOK_STATIONS, RECIPE_PREFIX } from '../world/dishes.js';
 import { B, BLOCKS } from '../world/blocks.js';
+import { addItem, removeItem } from './inventory.js';
 
 const nowOf = (g) => g.day * 1440 + g.minute;
 // (No more than this many dishes working on you at once: the newest.)
@@ -155,6 +156,36 @@ export function tickDishes(game, p, dt) {
 export function recipeOf(key) {
   const d = parseDish(key);
   return d ? { key, st: d.st, ings: d.ings, name: ITEMS[key] ? ITEMS[key].name : key } : null;
+}
+
+// (Round 51) Recipes on scrolls. How many a cook keeps in their head (the
+// oldest forgotten for a new one past that).
+export const RECIPE_MAX = 24;
+export const recipeScroll = (dishKey) => RECIPE_PREFIX + dishKey;
+
+// A recipe learnt (from cooking it well, or from a scroll): 'new', or
+// 'known' if it was already.
+export function learnRecipe(p, dishKey) {
+  const r = recipeOf(dishKey);
+  if (!r) return null;
+  p.recipes ||= [];
+  if (p.recipes.some((q) => q.key === dishKey)) return 'known';
+  p.recipes.push(r);
+  if (p.recipes.length > RECIPE_MAX) p.recipes.shift();
+  return 'new';
+}
+
+// One you know, written out on a blank scroll from the pack (the scroll
+// used up, the recipe scroll in its place). False with no scroll.
+export function writeRecipe(inv, dishKey) {
+  if (!parseDish(dishKey) || !inv.some((s) => s && s.item === 'scroll' && s.count > 0)) return false;
+  removeItem(inv, 'scroll', 1);
+  if (addItem(inv, recipeScroll(dishKey), 1)) {
+    // (No room for it: the blank one back.)
+    addItem(inv, 'scroll', 1);
+    return false;
+  }
+  return true;
 }
 
 // Can `inv` (slots or a store {item: n}) make recipe `r`?

@@ -1,7 +1,7 @@
 // Item registry. Placeable blocks get an item with the same key as the block.
 import { BLOCKS, B } from './blocks.js';
 import { deriveStarred } from './quality.js';
-import { deriveDish } from './dishes.js';
+import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
 
 export const ITEMS = {};
 // A starred piece of gear ("iron_sword~3dk7.venom": see quality.js), or
@@ -12,8 +12,9 @@ export const ITEMS = {};
 const STARRED = new Map();
 const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes('*'));
 function starred(k) {
-  // (A dish cooked up, its make-up in its key: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
+  // (A dish cooked up, its make-up in its key, and a recipe for one
+  // written on a scroll: see dishes.js.)
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
   return STARRED.get(k) || undefined;
 }
 Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
@@ -452,7 +453,14 @@ item('kav_edge', { name: 'Alloy Edge', kind: 'enhancer', stack: 4, value: 220, k
 item('kav_plating', { name: 'Alloy Plating', kind: 'enhancer', stack: 4, value: 240, kav: true, fits: 'armor', about: 'Fit it to a piece of armour you wear (use it): it turns a twentieth more of each blow, and adds a point of endurance.' });
 
 // --- hobby & trade goods -------------------------------------------------------
-item('lute', { kind: 'misc', stack: 1, value: 25 });
+// Instruments (round 51): held, the right button (or F) plays them (see
+// game/instruments.js), each on its own keys.
+const PLAY = 'Hold it and press F (or the right button) to play: its keys play its notes.';
+item('lute', { kind: 'misc', stack: 1, value: 25, instrument: true, about: `Plucked strings: the home row, A to ;. ${PLAY}` });
+item('lyre', { name: 'Lyre', kind: 'misc', stack: 1, value: 30, instrument: true, about: `Harp strings on a frame: the number keys, 1 to 8. ${PLAY}` });
+item('fiddle', { name: 'Fiddle', kind: 'misc', stack: 1, value: 34, instrument: true, about: `Bowed strings: the bottom row, Z to /. ${PLAY}` });
+item('hand_drum', { name: 'Hand Drum', kind: 'misc', stack: 1, value: 14, instrument: true, about: `Hide on a wooden frame: F to K, from a boom to a shake. ${PLAY}` });
+item('hunting_horn', { name: 'Hunting Horn', kind: 'misc', stack: 1, value: 20, instrument: true, about: `A horn's five notes: 1 to 5. ${PLAY}` });
 item('dice', { kind: 'misc', stack: 8, value: 3 });
 // For a household's locked chest (see ui/lockpick.js). Holdout thieves
 // carry them; four are beaten out of an iron ingot at an anvil.
@@ -462,10 +470,10 @@ item('lockpick', { name: 'Lockpick', kind: 'misc', stack: 16, value: 4, about: '
 item('dynamite', { name: 'Dynamite', kind: 'misc', stack: 8, value: 8, about: 'A stick of blasting powder with a fuse. Right-click to light it and throw it where you point: it goes up a moment after it lands, and hurts whoever is near.' });
 item('sketchbook', { kind: 'misc', stack: 1, value: 8 });
 item('prayer_beads', { name: 'Prayer Beads', kind: 'misc', stack: 1, value: 6 });
-item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4 });
-item('flute', { kind: 'misc', stack: 1, value: 12 });
+item('pipe', { name: 'Clay Pipe', kind: 'misc', stack: 1, value: 4, about: 'Hold it and press F (or the right button) for a smoke.' });
+item('flute', { kind: 'misc', stack: 1, value: 12, instrument: true, about: `A wooden flute: the top row, Q to P. ${PLAY}` });
 item('ledger', { kind: 'misc', stack: 1, value: 5 });
-item('scroll', { kind: 'misc', stack: 16, value: 6 });
+item('scroll', { kind: 'misc', stack: 16, value: 6, about: 'A blank scroll. Use it (F or the right button) to copy a recipe you know onto it, to sell to a cook or give away.' });
 item('ladle', { kind: 'misc', stack: 1, value: 3 });
 // Tokens of the player's standing: not wanted by any trader.
 item('guard_badge', { name: 'Guard Badge', kind: 'misc', stack: 1, value: 0, noSell: true });

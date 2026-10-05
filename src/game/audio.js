@@ -267,6 +267,34 @@ export class Audio {
       case 'shout': this.tone(300, 0.32, 'sawtooth', 0.05, 60); this.tone(420, 0.28, 'square', 0.025, 50, 0.03); this.noise(0.22, 0.05, 1500); this.tone(360, 0.3, 'sawtooth', 0.04, -40, 0.36); break;
       // A long swell, rising (a spire waking).
       case 'riser': [55, 82.5, 110, 165, 220].forEach((f, i) => this.swell(f, 3.0, i % 2 ? 'sawtooth' : 'sine', i % 2 ? 0.035 : 0.07, f * 1.5, 0)); this.noise(3.0, 0.03, 1600); break;
+      // (Round 51) A dish coming out: the build-up (rising, faster), and
+      // what it comes out as, from a fanfare down to a sad slide; a star
+      // ringing in; a pull on a pipe.
+      case 'cook_build':
+        this.swell(196, 1.45, 'triangle', 0.05, 392);
+        this.swell(294, 1.45, 'sine', 0.04, 588);
+        this.noise(1.45, 0.025, 2600);
+        for (let i = 0; i < 10; i++) this.tone(900 + i * 120, 0.04, 'square', 0.012, 0, i * 0.14 * (1 - i * 0.045));
+        break;
+      case 'reveal_great':
+        this.noise(0.25, 0.08, 4000);
+        [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.12, 'square', 0.07, 0, i * 0.07));
+        [523, 659, 784, 1046, 1318].forEach((f) => this.tone(f, 1.1, 'triangle', 0.05, 0, 0.3));
+        for (let i = 0; i < 6; i++) this.tone(2093 + i * 260, 0.08, 'sine', 0.025, 0, 0.35 + i * 0.07);
+        break;
+      case 'reveal_good':
+        this.noise(0.18, 0.06, 3500);
+        [523, 659, 784].forEach((f, i) => this.tone(f, 0.12, 'square', 0.06, 0, i * 0.08));
+        [392, 523, 659, 784].forEach((f) => this.tone(f, 0.8, 'triangle', 0.045, 0, 0.26));
+        break;
+      case 'reveal_poor': [392, 494].forEach((f, i) => this.tone(f, i ? 0.4 : 0.12, 'triangle', 0.05, 0, i * 0.12)); break;
+      case 'reveal_bad':
+        this.noise(0.5, 0.05, 500);
+        [392, 370, 349].forEach((f, i) => this.tone(f, 0.24, 'sawtooth', 0.035, -8, i * 0.26));
+        this.tone(330, 0.7, 'sawtooth', 0.035, -60, 0.78);
+        break;
+      case 'star_ding': this.tone(1568 + Math.random() * 40, 0.12, 'sine', 0.05); this.tone(3136, 0.08, 'sine', 0.015); break;
+      case 'puff': this.noise(0.5, 0.04, 700); break;
     }
   }
 }

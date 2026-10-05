@@ -18,14 +18,31 @@ import { CHAR_W, CHAR_H } from '../config.js';
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
-import { COOK_STATIONS, TYPES, cookDish, dishName, dishForm, dishLines, ingredientTypes, baseOf, scoreWord } from '../world/dishes.js';
-import { learnKinds, recipeOf, canMake } from '../game/cooking.js';
+import { COOK_STATIONS, TYPES, cookDish, dishName, dishForm, dishLines, ingredientTypes, baseOf } from '../world/dishes.js';
+import { learnKinds, canMake, learnRecipe, writeRecipe } from '../game/cooking.js';
 import { removeItem } from '../game/inventory.js';
 import { itemIcon } from '../render/sprites.js';
 
-const RECIPE_MAX = 24;
 const BG = '#120e0a';
-const TITLES = { c: 'COOK AT THE CAMPFIRE', p: 'COOK IN THE POT', o: 'BAKE IN THE OVEN', t: 'PREPARE AT THE TABLE' };
+const TITLES = { c: 'COOK AT THE CAMPFIRE', p: 'COOK IN THE FURNACE POT', o: 'BAKE IN THE OVEN', t: 'PREPARE AT THE TABLE' };
+// (Round 51) What comes out, by how well it was done: what it's called,
+// how many stars, the colours of its light, and its sound.
+const TIERS = [
+  { min: 0.85, word: 'PERFECT!', col: '#ffe070', rays: ['#fff0a0', '#ffc840'], spark: ['#ffffff', '#ffe070', '#ffb040', '#fff8d0'], sound: 'reveal_great' },
+  { min: 0.6, word: 'Well cooked', col: '#a8f0a0', rays: ['#e8f4ff', '#a8d8ff'], spark: ['#ffffff', '#c8e8ff', '#a8f0a0'], sound: 'reveal_good' },
+  { min: 0.35, word: 'Edible', col: '#e8d8b0', rays: ['#f0e0c0', '#c8b088'], spark: ['#f0e0c0', '#d8c8a0'], sound: 'reveal_poor' },
+  { min: -1, word: 'Burnt...', col: '#f08070', rays: null, spark: ['#4a4040', '#2a2424', '#6a5a50'], sound: 'reveal_bad', smoke: true },
+];
+const tierOf = (score) => TIERS.find((q) => score >= q.min);
+// How long the build-up, and the whole reveal.
+const BUILD = 1.5;
+const REVEAL = 2.9;
+// (Overshooting, then settling: a pop.)
+const back = (k) => {
+  if (k >= 1) return 1;
+  const c = 2.2;
+  return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2);
+};
 const HOW = {
   c: 'Turn the skewer as the marker crosses the glow: SPACE, three times.',
   p: 'Keep it at a simmer: ↑ stokes the fire, ↓ lets it settle.',
@@ -35,10 +52,10 @@ const HOW = {
 const ARROWS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 
 // The things in a pack, each once, with how many (but what's already been
-// cooked: a dish doesn't go into another).
+// cooked: a dish doesn't go into another; nor does a recipe for one).
 function packList(inv) {
   const m = new Map();
-  for (const s of inv) if (s && s.item && ITEMS[s.item] && !String(s.item).startsWith('dish~')) m.set(s.item, (m.get(s.item) || 0) + s.count);
+  for (const s of inv) if (s && s.item && ITEMS[s.item] && !/^(dish|recipe)~/.test(String(s.item))) m.set(s.item, (m.get(s.item) || 0) + s.count);
   return [...m].map(([item, count]) => ({ item, count })).sort((a, b) => (ITEMS[a.item].name < ITEMS[b.item].name ? -1 : 1));
 }
 // One of `base` (or anything made from it) out of the pack.
@@ -80,6 +97,7 @@ export class CookWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: BG, double: true, title: TITLES[this.st] });
     if (this.phase === 'pick') this.drawPick(g);
     else if (this.phase === 'cook') this.drawCook(g);
+    else if (this.phase === 'reveal') this.drawReveal(g);
     else this.drawDone(g);
   }
 
@@ -111,18 +129,18 @@ export class CookWindow extends Window {
         g.text(x0, y, `${i + 1}. -`, C.faint);
         continue;
       }
-      g.text(x0, y, `${i + 1}. ${ITEMS[k].name}`.slice(0, this.w - x0 - 2), C.white);
+      g.text(x0, y, `${i + 1}. ${ITEMS[k].name}`.slice(0, this.w - x0 - 6), C.white);
       const known = (this.me.kinds || []).includes(baseOf(k));
       g.text(x0 + 3, y + 1, (known ? ingredientTypes(k).join(', ') : '(cook it to find out)').slice(0, this.w - x0 - 5), known ? '#d8b880' : C.faint);
     }
     if (this.picked.length) {
       g.text(x0, 11, 'Comes out as:', C.border);
-      wrap(dishName(this.st, this.picked), this.w - x0 - 2).slice(0, 3).forEach((l, i) => g.text(x0, 12 + i, l, C.hi));
+      wrap(dishName(this.st, this.picked), this.w - x0 - 2).slice(0, 4).forEach((l, i) => g.text(x0, 12 + i, l, C.hi));
     } else {
       g.text(x0, 11, `At the ${S.name.toLowerCase()}: a ${dishForm(this.st, ['bread']).toLowerCase()}`, C.dim);
       g.text(x0, 12, 'or the like, of anything.', C.dim);
     }
-    wrap(HOW[this.st], this.w - x0 - 2).forEach((l, i) => g.text(x0, 16 + i, l, C.faint));
+    wrap(HOW[this.st], this.w - x0 - 2).slice(0, 4).forEach((l, i) => g.text(x0, 17 + i, l, C.faint));
     if (this.msg) g.center(this.h - 4, this.msg.text, this.msg.color);
     const btn = (x, w, label, fn, col, dis = false) => {
       const y = this.h - 3;
@@ -135,7 +153,7 @@ export class CookWindow extends Window {
     else btn(2, 18, this.tab === 'recipes' ? '[ENTER] Make it' : '[C] Cook it', () => (this.tab === 'recipes' ? this.fromRecipe() : this.start()), C.hi, this.tab === 'pack' && !this.picked.length);
     if (this.st === 'c' && this.o.lit) btn(21, 18, '[P] Put the fire out', () => this.toggleFire(), C.dim);
     btn(this.w - 11, 9, '[ESC]', () => this.close(), C.fg);
-    g.center(this.h - 2, this.tab === 'pack' ? '↑↓ choose · SPACE put in / take out · TAB recipes' : '↑↓ choose · ENTER make it · TAB your pack', C.faint);
+    g.center(this.h - 2, this.tab === 'pack' ? '↑↓ choose · SPACE put in / take out · TAB recipes' : '↑↓ · ENTER make it · S copy onto a scroll · TAB pack', C.faint);
   }
 
   drawPack(g) {
@@ -198,34 +216,62 @@ export class CookWindow extends Window {
     g.center(this.h - 2, 'ESC: give up (what\'s in it is kept)', C.faint);
   }
 
+  // The top of the reveal and of what it came out as: its name (on two
+  // lines if it must), how well it went and its stars, one by one.
+  drawHead(g, stars) {
+    const r = this.result;
+    const def = ITEMS[r.key];
+    const T = this.tier;
+    wrap(def.name, this.w - 6).slice(0, 2).forEach((l, i) => g.center(2 + i, l, C.hi));
+    const n = Math.max(1, Math.round(r.score * 5));
+    const shown = Math.max(0, Math.min(n, stars));
+    const word = r.fromRecipe ? 'Made from your recipe' : T.word;
+    const line = `${word}  ${'★'.repeat(shown)}${'☆'.repeat(5 - shown)}`;
+    g.center(4, line, r.fromRecipe ? C.dim : T.col);
+  }
+
+  // The build-up: what went in, going round and in, faster and faster;
+  // then out it comes.
+  drawReveal(g) {
+    const R = this.reveal;
+    if (R.t < R.build) {
+      const dots = '.'.repeat(1 + (Math.floor(R.t * 4) % 3));
+      g.center(2, `Something's cooking${dots}`, C.hi);
+      wrap(this.picked.map((k) => (ITEMS[k] ? ITEMS[k].name : k)).join(' + '), this.w - 6).slice(0, 2).forEach((l, i) => g.center(3 + i, l, C.dim));
+    } else this.drawHead(g, Math.floor((R.t - R.build - 0.35) / 0.13) + 1);
+    g.center(this.h - 2, 'SPACE: skip', C.faint);
+  }
+
   drawDone(g) {
     const r = this.result;
     const def = ITEMS[r.key];
-    g.center(2, def.name, C.hi);
-    g.center(3, r.fromRecipe ? 'Made from your recipe.' : `Cooked: ${scoreWord(r.score)}`, r.fromRecipe ? C.dim : r.score >= 0.7 ? C.green : r.score >= 0.45 ? C.fg : C.orange);
-    let y = 10;
-    g.text(4, y++, `Heals ${def.now} now and ${def.regen || 0} more over ${def.regenT || 0}s · ×${r.n}`, C.green);
+    this.drawHead(g, 5);
+    // What it does: kept clear of the buttons (cut short, if there's more).
+    const lines = [{ text: `Heals ${def.now} now${def.regen ? ` and ${def.regen} more over ${def.regenT}s` : ''} · made ${r.n}`, color: C.green }];
     for (const l of dishLines(def)) {
-      for (const [i, t] of wrap(l.text, this.w - 10).entries()) g.text(4, y++, i ? `  ${t}` : l.dur ? t : `${l.cond ? '◇' : l.good ? '+' : '-'} ${t}`, l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070');
+      for (const [i, t] of wrap(l.text, this.w - 10).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
     }
-    y++;
-    g.text(4, y++, 'What went in, you know now:', C.border);
-    for (const k of def.dish.ings) {
-      const kinds = ingredientTypes(k);
-      g.text(5, y++, `${ITEMS[k] ? ITEMS[k].name : k}: ${kinds.join(', ')}`.slice(0, this.w - 8), '#d8b880');
-    }
+    const kinds = def.dish.ings.map((k) => `${ITEMS[k] ? ITEMS[k].name : k}: ${ingredientTypes(k).join(', ')}`).join(' · ');
+    lines.push({ text: '', color: C.fg });
+    wrap(`You know now: ${kinds}`, this.w - 8).forEach((t) => lines.push({ text: t, color: '#d8b880' }));
+    const y0 = 12;
+    const room = this.h - 7 - y0;
+    lines.slice(0, room).forEach((l, i) => g.text(4, y0 + i, l.text.slice(0, this.w - 6), l.color));
+    if (lines.length > room) g.text(this.w - 6, y0 + room - 1, '…', C.dim);
     const known = (this.me.recipes || []).some((q) => q.key === r.key);
-    const btn = (x, w, label, fn, col, dis = false) => {
-      const yy = this.h - 3;
+    const scrolls = this.me.inv.some((q) => q && q.item === 'scroll');
+    const btn = (x, yy, w, label, fn, col, dis = false) => {
       const hov = !dis && this.hovering(x, yy, w, 1);
       g.fill(x, yy, w, 1, ' ', C.fg, hov ? C.bgHi : '#2a2016');
-      g.text(x + 1, yy, label, dis ? C.faint : hov ? C.white : col);
+      g.text(x + 1, yy, label.slice(0, w - 1), dis ? C.faint : hov ? C.white : col);
       if (!dis) this.hit(x, yy, w, 1, fn);
     };
-    btn(2, 24, known ? 'Written down already' : '[W] Write down the recipe', () => this.writeDown(), C.hi, known || r.fromRecipe);
-    btn(28, 16, '[C] Cook another', () => this.again(), C.fg);
-    btn(this.w - 13, 11, '[ENTER] Done', () => this.close(), C.fg);
-    if (this.msg) g.center(this.h - 5, this.msg.text, this.msg.color);
+    const y1 = this.h - 4;
+    btn(2, y1, 28, known ? 'In your recipes' : '[W] Write down the recipe', () => this.writeDown(), C.hi, known);
+    btn(31, y1, 29, scrolls ? '[S] Copy it onto a scroll' : 'No blank scroll to copy to', () => this.toScroll(r.key), C.hi, !scrolls);
+    btn(2, y1 + 1, 28, '[C] Cook another', () => this.again(), C.fg);
+    btn(31, y1 + 1, 29, '[ENTER] Done', () => this.close(), C.fg);
+    if (this.msg) g.center(this.h - 5, this.msg.text.slice(0, this.w - 4), this.msg.color);
   }
 
   // ------------------------------------------------------------ pictures
@@ -234,31 +280,126 @@ export class CookWindow extends Window {
     const oy = this.y * CHAR_H;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
+    // (Nothing drawn outside the window's frame.)
+    ctx.beginPath();
+    ctx.rect(ox + CHAR_W, oy + CHAR_H, (this.w - 2) * CHAR_W, (this.h - 2) * CHAR_H);
+    ctx.clip();
     if (this.phase === 'pick') this.pixPick(ctx, ox, oy);
     else if (this.phase === 'cook') {
       if (this.st === 'c') this.pixCampfire(ctx, ox, oy);
       else if (this.st === 'p') this.pixPot(ctx, ox, oy);
       else if (this.st === 'o') this.pixOven(ctx, ox, oy);
       else this.pixTable(ctx, ox, oy);
-    } else this.pixDone(ctx, ox, oy);
+    } else if (this.phase === 'reveal') this.pixReveal(ctx, ox, oy);
+    else this.pixDone(ctx, ox, oy);
+    this.pixParts(ctx, ox, oy);
     ctx.restore();
   }
 
   pixPick(ctx, ox, oy) {
-    // What's going in, side by side.
-    const x0 = ox + 34 * CHAR_W;
-    this.picked.forEach((k, i) => ctx.drawImage(itemIcon(k), x0 + 150 + i * 18, oy + 3 * CHAR_H));
+    // What's going in: each one's picture beside its line.
+    const x = ox + (this.w - 4) * CHAR_W;
+    this.picked.forEach((k, i) => ctx.drawImage(itemIcon(k), x, oy + (4 + i * 2) * CHAR_H));
+  }
+
+  // Where the dish shows, in the middle under its name.
+  center(ox, oy) {
+    return { cx: Math.round(ox + (this.w * CHAR_W) / 2), cy: oy + 8 * CHAR_H };
+  }
+
+  // Light from behind it, turning: a tier's own colours (none for a burnt
+  // one: smoke instead).
+  rays(ctx, cx, cy, len, a, spin) {
+    const T = this.tier;
+    if (!T.rays || a <= 0) return;
+    const n = 12;
+    for (let i = 0; i < n; i++) {
+      const ang = spin + (i / n) * Math.PI * 2;
+      ctx.globalAlpha = a * (i % 2 ? 0.55 : 1);
+      ctx.fillStyle = T.rays[i % 2];
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ang - 0.11) * len, cy + Math.sin(ang - 0.11) * len);
+      ctx.lineTo(cx + Math.cos(ang + 0.11) * len, cy + Math.sin(ang + 0.11) * len);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  pixReveal(ctx, ox, oy) {
+    const R = this.reveal;
+    const { cx, cy } = this.center(ox, oy);
+    const t = R.t;
+    if (t < R.build) {
+      // What went in, round and round and in toward the middle, faster;
+      // the heat glowing up under it; the window trembling.
+      const k = t / R.build;
+      const sh = k * k * 2.2;
+      ctx.translate(Math.round((Math.random() - 0.5) * sh), Math.round((Math.random() - 0.5) * sh));
+      const heat = this.st === 'c' || this.st === 'p' ? '255,150,60' : this.st === 'o' ? '255,190,90' : '220,230,255';
+      const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, 14 + 46 * k);
+      gl.addColorStop(0, `rgba(${heat},${(0.25 + 0.65 * k).toFixed(3)})`);
+      gl.addColorStop(1, `rgba(${heat},0)`);
+      ctx.fillStyle = gl;
+      ctx.fillRect(cx - 70, cy - 70, 140, 140);
+      const n = this.picked.length || 1;
+      const spin = t * (2.2 + 9 * k * k);
+      const rad = 66 * Math.pow(1 - k, 1.3) + 3;
+      this.picked.forEach((key, i) => {
+        const a = spin + (i / n) * Math.PI * 2;
+        const s = Math.round(16 * (1 - k * 0.45));
+        ctx.globalAlpha = 1 - Math.max(0, k - 0.85) * 5;
+        ctx.drawImage(itemIcon(key), Math.round(cx + Math.cos(a) * rad - s / 2), Math.round(cy + Math.sin(a) * rad * 0.7 - s / 2), s, s);
+      });
+      ctx.globalAlpha = 1;
+      // (A ring closing in at the end.)
+      if (k > 0.6) {
+        ctx.strokeStyle = `rgba(255,255,255,${((k - 0.6) * 1.6).toFixed(3)})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 40 * (1 - k) + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      return;
+    }
+    // Out it comes: a flash, the light behind it, the dish popping up.
+    const e = t - R.build;
+    this.rays(ctx, cx, cy, 64 + Math.min(1, e * 3) * 30, Math.min(1, e * 4) * 0.32, t * 0.6);
+    const pop = back(Math.min(1, e / 0.45));
+    const s = Math.round(48 * pop);
+    if (s > 0) ctx.drawImage(itemIcon(this.result.key), cx - Math.round(s / 2), cy - Math.round(s / 2), s, s);
+    if (e < 0.35) {
+      const a = 1 - e / 0.35;
+      ctx.fillStyle = `rgba(255,255,255,${(a * 0.85).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10 + e * 360, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,250,230,${(a * 0.35).toFixed(3)})`;
+      ctx.fillRect(ox, oy, this.w * CHAR_W, this.h * CHAR_H);
+    }
   }
 
   pixDone(ctx, ox, oy) {
-    const k = this.result.key;
-    const cx = ox + (this.w * CHAR_W) / 2;
-    const glow = ctx.createRadialGradient(cx, oy + 52, 4, cx, oy + 52, 30);
+    const { cx, cy } = this.center(ox, oy);
+    this.rays(ctx, cx, cy, 70, 0.14, this.t * 0.25);
+    const glow = ctx.createRadialGradient(cx, cy, 4, cx, cy, 34);
     glow.addColorStop(0, 'rgba(255,220,150,0.35)');
     glow.addColorStop(1, 'rgba(255,220,150,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(cx - 30, oy + 22, 60, 60);
-    ctx.drawImage(itemIcon(k), cx - 24, oy + 30, 48, 48);
+    ctx.fillRect(cx - 34, cy - 34, 68, 68);
+    const bob = Math.round(Math.sin(this.t * 2.4) * 1.5);
+    ctx.drawImage(itemIcon(this.result.key), cx - 24, cy - 24 + bob, 48, 48);
+  }
+
+  // Sparks drawn in, the burst out (and the smoke off a burnt one).
+  pixParts(ctx, ox, oy) {
+    for (const q of this.parts || []) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, q.life / q.max)) * (q.a ?? 1);
+      ctx.fillStyle = q.col;
+      ctx.fillRect(Math.round(ox + q.x - q.s / 2), Math.round(oy + q.y - q.s / 2), q.s, q.s);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // The fire under it all (campfire and pot): logs, and flames that move.
@@ -511,6 +652,11 @@ export class CookWindow extends Window {
   // ------------------------------------------------------------ cooking
   update(dt) {
     this.t += dt;
+    this.tickParts(dt);
+    if (this.phase === 'reveal') {
+      this.tickReveal(dt);
+      return;
+    }
     if (this.phase !== 'cook') return;
     const m = this.mini;
     m.t += dt;
@@ -561,6 +707,84 @@ export class CookWindow extends Window {
       }
       if (m.cuts.length >= m.marks.length) this.finish(m.cuts.reduce((a, b) => a + b, 0) / m.cuts.length);
     }
+  }
+
+  // (Round 51) Out it comes: sparks drawn in as it builds, then the burst
+  // (or the smoke), its sound, and the stars ringing in one by one.
+  tickReveal(dt) {
+    const R = this.reveal;
+    const was = R.t;
+    R.t += dt;
+    const cx = (this.w * CHAR_W) / 2;
+    const cy = 8 * CHAR_H;
+    if (R.t < R.build) {
+      const k = R.t / R.build;
+      const warm = this.st === 't' ? ['#e8f0ff', '#ffffff'] : ['#ffd070', '#ffb040', '#fff0c0'];
+      for (let i = 0; i < 3; i++) {
+        if (Math.random() > dt * (14 + 50 * k)) continue;
+        const a = Math.random() * Math.PI * 2;
+        const r = 70 + Math.random() * 30;
+        const v = 70 + Math.random() * 90 + 80 * k;
+        this.part({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.7, vx: -Math.cos(a) * v, vy: -Math.sin(a) * v * 0.7, life: r / v * 0.9, col: warm[i % warm.length], s: 1 + (Math.random() < 0.3 ? 1 : 0) });
+      }
+    }
+    if (was < R.build && R.t >= R.build) this.burst();
+    // (Each star in, with a ding.)
+    const n = Math.max(1, Math.round(this.result.score * 5));
+    for (let i = 0; i < n; i++) {
+      const at = R.build + 0.35 + i * 0.13;
+      if (was < at && R.t >= at && !this.result.fromRecipe) this.ui.audio?.play('star_ding');
+    }
+    if (R.t >= R.dur) this.phase = 'done';
+  }
+
+  burst() {
+    const T = this.tier;
+    const cx = (this.w * CHAR_W) / 2;
+    const cy = 8 * CHAR_H;
+    this.ui.audio?.play(T.sound);
+    if (T.smoke) {
+      for (let i = 0; i < 18; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.part({ x: cx + Math.cos(a) * 6, y: cy + Math.sin(a) * 6, vx: Math.cos(a) * 20, vy: -20 - Math.random() * 30, life: 1 + Math.random(), col: T.spark[i % T.spark.length], s: 3 + Math.floor(Math.random() * 3), a: 0.8 });
+      }
+      return;
+    }
+    const many = T === TIERS[0] ? 70 : 42;
+    for (let i = 0; i < many; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 50 + Math.random() * 130;
+      this.part({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: 120, life: 0.7 + Math.random() * 0.8, col: T.spark[i % T.spark.length], s: 1 + Math.floor(Math.random() * 2.4) });
+    }
+  }
+
+  part(q) {
+    q.max = q.life;
+    (this.parts ||= []).push(q);
+    if (this.parts.length > 260) this.parts.shift();
+  }
+
+  tickParts(dt) {
+    if (!this.parts) return;
+    for (const q of this.parts) {
+      q.x += q.vx * dt;
+      q.y += q.vy * dt;
+      q.vy += (q.g || 0) * dt;
+      q.life -= dt;
+    }
+    this.parts = this.parts.filter((q) => q.life > 0);
+    // (A good one still twinkles, done.)
+    if (this.phase === 'done' && this.tier && !this.tier.smoke && Math.random() < dt * 4) {
+      const a = Math.random() * Math.PI * 2;
+      this.part({ x: (this.w * CHAR_W) / 2 + Math.cos(a) * 28, y: 8 * CHAR_H + Math.sin(a) * 22, vx: 0, vy: -6, life: 0.6, col: this.tier.spark[0], s: 1 });
+    }
+  }
+
+  skipReveal() {
+    const R = this.reveal;
+    if (R.t < R.build) this.burst();
+    R.t = R.dur;
+    this.phase = 'done';
   }
 
   // Campfire: a turn of the skewer, as close to the glow's heart as may be.
@@ -643,10 +867,14 @@ export class CookWindow extends Window {
     if (left) this.game.spawnDrop(key, left, p.x, p.y, p.z, true);
     learnKinds(p, ings);
     this.result = { key, score, n, fromRecipe };
-    this.phase = 'done';
+    // (Round 51) Not straight out: it builds, and then out it comes.
+    this.tier = fromRecipe ? TIERS[1] : tierOf(score);
+    this.phase = 'reveal';
+    this.reveal = { t: 0, build: fromRecipe ? 0.8 : BUILD, dur: fromRecipe ? 1.9 : REVEAL };
+    this.parts = [];
     this.msg = null;
     this.game.stats && (this.game.stats.cooked = (this.game.stats.cooked || 0) + 1);
-    this.ui.audio?.play(score >= 0.7 || fromRecipe ? 'craft' : 'pickup');
+    this.ui.audio?.play('cook_build');
     this.game.renderer.emit(p.x, p.y + 1, p.z, { n: 8, color: ['#e8e8f0', '#c8c8d8'], up: 18, speed: 8, life: 1.2, gravity: -10, shape: 'puff' });
   }
 
@@ -668,13 +896,25 @@ export class CookWindow extends Window {
   }
 
   writeDown() {
-    const r = this.result;
-    const p = this.me;
-    p.recipes ||= [];
-    if (p.recipes.some((q) => q.key === r.key)) return;
-    if (p.recipes.length >= RECIPE_MAX) p.recipes.shift();
-    p.recipes.push(recipeOf(r.key));
+    if (learnRecipe(this.me, this.result.key) !== 'new') return;
     this.msg = { text: 'Written down: you can make it again from your recipes.', color: C.green };
+    this.ui.audio?.play('etch');
+  }
+
+  // (Round 51) A recipe copied onto one of your blank scrolls, to sell to
+  // a cook or give away (you keep it in your own recipes too).
+  toScroll(key) {
+    if (!key) return;
+    if (!this.me.inv.some((q) => q && q.item === 'scroll')) {
+      this.msg = { text: 'You need a blank scroll to copy it onto.', color: C.orange };
+      return;
+    }
+    if (!writeRecipe(this.me.inv, key)) {
+      this.msg = { text: 'No room in your pack for it.', color: C.orange };
+      return;
+    }
+    learnRecipe(this.me, key);
+    this.msg = { text: `Copied onto a scroll: ${ITEMS[`recipe~${key}`].name}.`, color: C.green };
     this.ui.audio?.play('etch');
   }
 
@@ -695,6 +935,10 @@ export class CookWindow extends Window {
       } else this.close();
       return true;
     }
+    if (this.phase === 'reveal') {
+      if (['Space', 'Enter', 'Escape', 'NumpadEnter'].includes(code)) this.skipReveal();
+      return true;
+    }
     if (this.phase === 'pick') {
       const n = (this.list || []).length;
       if (code === 'Tab') {
@@ -705,6 +949,7 @@ export class CookWindow extends Window {
       else if (code === 'ArrowDown' || code === 'KeyS') this.sel = Math.min(Math.max(0, n - 1), this.sel + 1);
       else if (code === 'Space' && this.tab === 'pack') this.togglePick();
       else if (code === 'Enter' && this.tab === 'recipes') this.fromRecipe();
+      else if (code === 'KeyS' && this.tab === 'recipes') this.toScroll(this.recipes()[this.sel]?.key);
       else if ((code === 'KeyC' || code === 'Enter') && this.tab === 'pack') this.start();
       else if (code === 'KeyL' && this.st === 'c' && !this.o.lit) this.toggleFire();
       else if (code === 'KeyP' && this.st === 'c' && this.o.lit) this.toggleFire();
@@ -721,6 +966,7 @@ export class CookWindow extends Window {
       return true;
     }
     if (code === 'KeyW') this.writeDown();
+    else if (code === 'KeyS') this.toScroll(this.result && this.result.key);
     else if (code === 'KeyC') this.again();
     else if (code === 'Enter' || code === 'Space') this.close();
     return true;
@@ -744,4 +990,75 @@ function avgColor(list) {
   const s = list.map(hex).reduce((a, c) => a.map((v, i) => v + c[i]), [0, 0, 0]);
   // (A stew's darker than what's in it.)
   return toHex(s.map((v) => (v / list.length) * 0.75));
+}
+
+// (Round 51) A blank scroll used: the recipes you know (from any of the
+// places), to copy one onto it.
+export class RecipeScrollWindow extends Window {
+  constructor(ui, game) {
+    super(ui, 52, 22, { kind: 'recipescroll' });
+    this.game = game;
+    this.sel = 0;
+    this.scroll = 0;
+    this.msg = null;
+  }
+
+  list() {
+    return (this.game.player.recipes || []).filter((r) => ITEMS[r.key]);
+  }
+
+  draw(g) {
+    const list = this.list();
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, BG);
+    g.box(0, 0, this.w, this.h, { bg: BG, double: true, title: 'COPY A RECIPE ONTO A SCROLL' });
+    const blanks = this.game.player.inv.reduce((n, s) => n + (s && s.item === 'scroll' ? s.count : 0), 0);
+    g.text(2, 1, `Blank scrolls: ${blanks}`, blanks ? C.dim : C.red);
+    const rows = 7;
+    if (this.sel >= list.length) this.sel = Math.max(0, list.length - 1);
+    if (this.sel < this.scroll) this.scroll = this.sel;
+    if (this.sel >= this.scroll + rows) this.scroll = this.sel - rows + 1;
+    if (!list.length) wrap('You don\'t know any recipes yet. Cook something good, and write it down when it\'s done (W).', this.w - 6).forEach((l, i) => g.text(3, 4 + i, l, C.dim));
+    list.slice(this.scroll, this.scroll + rows).forEach((r, i) => {
+      const k = this.scroll + i;
+      const y = 3 + i * 2;
+      const cur = k === this.sel;
+      const hov = this.hovering(2, y, this.w - 4, 2);
+      g.fill(2, y, this.w - 4, 2, ' ', C.fg, cur ? '#3a2a1a' : hov ? '#2a2016' : BG);
+      g.icon(3, y, r.key, 0);
+      g.text(7, y, ITEMS[r.key].name.slice(0, this.w - 10), cur ? C.white : C.fg);
+      const where = { c: 'campfire', p: 'furnace pot', o: 'oven', t: 'table' }[r.st];
+      g.text(7, y + 1, `${where}: ${r.ings.map((q) => (ITEMS[q] ? ITEMS[q].name : q)).join(', ')}`.slice(0, this.w - 10), C.dim);
+      this.hit(2, y, this.w - 4, 2, () => {
+        this.sel = k;
+        this.write();
+      });
+    });
+    if (this.msg) g.center(this.h - 4, this.msg.text.slice(0, this.w - 4), this.msg.color);
+    g.center(this.h - 2, '↑↓ choose · ENTER copy it onto a scroll · ESC', C.faint);
+  }
+
+  write() {
+    const r = this.list()[this.sel];
+    if (!r) return;
+    const inv = this.game.player.inv;
+    if (!inv.some((q) => q && q.item === 'scroll')) {
+      this.msg = { text: 'You\'ve no blank scroll left.', color: C.orange };
+      return;
+    }
+    if (!writeRecipe(inv, r.key)) {
+      this.msg = { text: 'No room in your pack for it.', color: C.orange };
+      return;
+    }
+    this.msg = { text: `Copied: ${ITEMS[`recipe~${r.key}`].name}.`, color: C.green };
+    this.ui.audio?.play('etch');
+  }
+
+  onKey(k) {
+    const n = this.list().length;
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = Math.max(0, this.sel - 1);
+    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = Math.min(Math.max(0, n - 1), this.sel + 1);
+    else if (k.code === 'Enter' || k.code === 'Space') this.write();
+    return true;
+  }
 }

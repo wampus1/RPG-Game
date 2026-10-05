@@ -17,14 +17,14 @@
 //
 // What it means after: a single wing at your back, blue and faintly lit,
 // like a dragon's (see render/wing.js), which can carry you through a
-// second roll when you've no breath for it (combat.js), and townsfolk who
+// roll when you've no breath for it (combat.js), and townsfolk who
 // aren't sure what to make of you (some of them are wary: starWary).
 import { VIEW_W, VIEW_H, CHAR_W, GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { RNG, hash4, hashf } from '../util/rng.js';
 import { drawText } from '../render/font.js';
 import { wrap } from '../ui/ascii.js';
-import { drawPerson, drawHouse, drawTree, shade } from '../render/scenekit.js';
+import { paintStarfall, villagers, drawVillage } from '../render/art_star.js';
 
 export const STAR_IMPACT = 15;
 const STAR_BLACK = 20.5;
@@ -244,119 +244,15 @@ function makeCanvas(w, h) {
   return c;
 }
 
-// What doesn't move, painted once, in layers (so what happens behind the
-// hills stays behind them): the sky; the far hills; and the land before
-// them (the nearer slope, the fields, the lane and the village along it).
+// What doesn't move, painted once (see render/art_star.js), and the
+// villagers out in the square.
 function paintBackdrop(seed) {
   const rng = new RNG(seed);
-  const layer = () => {
-    const c = makeCanvas(PW, PH);
-    const g = c.getContext('2d');
-    return [c, g, (x, y, col) => {
-      g.fillStyle = col;
-      g.fillRect(Math.round(x), Math.round(y), 1, 1);
-    }];
-  };
-  const [sky, , spx] = layer();
-  const [far, , fpx] = layer();
-  const [land, g, px] = layer();
-  // The night sky, in bands, dithered where they meet.
-  const bands = ['#060818', '#0a0d24', '#0f1430', '#151a3c', '#1d2148', '#272653', '#33295a'];
-  for (let y = 0; y < PH; y++) {
-    const f = Math.min(1, y / (HORIZON + 10)) * (bands.length - 1);
-    const i = Math.min(bands.length - 1, Math.floor(f));
-    const fr = f - i;
-    for (let x = 0; x < PW; x++) spx(x, y, (x + y) % 2 === 0 && fr > 0.5 ? bands[Math.min(bands.length - 1, i + 1)] : bands[i]);
-  }
-  // A ridge of hills: its crest lit faintly by the sky, a few dark trees
-  // along it.
-  const ridge = (p, base, amp, f1, f2, col, edge, trees) => {
-    for (let x = 0; x < PW; x++) {
-      const h = Math.round(base - amp * (0.6 * Math.sin(x * f1 + seed) + 0.4 * Math.sin(x * f2 + seed * 1.7)));
-      for (let y = h; y < PH; y++) p(x, y, y > h + 1 && hashf(x, y, seed & 255) < 0.06 ? shade(col, -6) : col);
-      p(x, h, edge);
-      if (trees && hashf(x, 0, seed & 511) < 0.07) for (let k = 1; k < 4; k++) for (let d = -1; d <= 1; d++) if (Math.abs(d) < 4 - k) p(x + d, h - k, shade(col, 4));
-    }
-  };
-  ridge(fpx, HORIZON, 7, 0.031, 0.083, '#141a2c', '#222c48', true);
-  ridge(px, HORIZON + 14, 5, 0.045, 0.11, '#16231e', '#24382c', true);
-  // The near ground: dark grass.
-  for (let y = HORIZON + 24; y < PH; y++) {
-    for (let x = 0; x < PW; x++) {
-      const n = hashf(x, y, seed & 1023);
-      px(x, y, n < 0.12 ? '#1e3a24' : n < 0.2 ? '#14281a' : '#183020');
-    }
-  }
-  // (The lane, toward you: its edges ragged, ruts down it.)
-  for (let y = HORIZON + 22; y < PH; y++) {
-    const w = 5 + Math.round((y - HORIZON - 22) * 0.62);
-    for (let x = 124 - w - 1; x <= 124 + w; x++) {
-      const edge = x === 124 - w - 1 || x === 124 + w;
-      if (edge && hashf(x, y, 76) < 0.5) continue;
-      const rut = Math.abs(x - 124 + w * 0.4) < 1 || Math.abs(x - 124 - w * 0.4) < 1;
-      px(x, y, rut ? '#3a3226' : hashf(x, y, 77) < 0.2 ? '#3e3628' : '#4a4030');
-    }
-  }
-  // The houses of the village along the lane, three-quarters on: timber
-  // and thatch, their windows lit, a little of their light out on the
-  // ground before them. The back ones first, smaller.
-  const house = (x0, yb, w, h, roof, wall, lit) => {
-    if (lit) {
-      const lg = g.createRadialGradient(x0 + w / 2, yb + 2, 0, x0 + w / 2, yb + 2, w * 0.8);
-      lg.addColorStop(0, 'rgba(255,190,100,0.22)');
-      lg.addColorStop(1, 'rgba(255,190,100,0)');
-      g.fillStyle = lg;
-      g.fillRect(x0 - w, yb - 6, w * 3, 16);
-    }
-    drawHouse(g, px, x0, yb, w, h, { wall, roof, timber: '#2e2016', shape: 'steep', night: 1, lit, glow: '#ffcc6a', chimney: true, door: '#2a1c12', rh: Math.round(w * 0.42) });
-  };
-  const back = [[40, HORIZON + 20, 16, 8], [64, HORIZON + 19, 13, 7], [150, HORIZON + 20, 15, 8], [174, HORIZON + 21, 18, 9], [210, HORIZON + 20, 14, 8]];
-  for (const [x, y, w, h] of back) house(x, y, w, h, '#4a3c28', '#3a3024', rng.chance(0.6));
-  const front = [[14, HORIZON + 44, 28, 15, '#7a6438', '#6a5038'], [68, HORIZON + 40, 24, 13, '#6e5a32', '#5e4630'], [154, HORIZON + 41, 26, 14, '#7a6438', '#6a5038'], [196, HORIZON + 46, 30, 16, '#6e5a32', '#5e4630']];
-  for (const [x, y, w, h, roof, wall] of front) house(x, y, w, h, roof, wall, true);
-  // A well by the lane: its stone ring, the roof over it on two posts.
-  const wx = 166;
-  const wy = HORIZON + 48;
-  for (let y = wy - 5; y < wy; y++) for (let x = wx; x < wx + 8; x++) px(x, y, y === wy - 5 ? '#6a6a70' : (x + y) % 3 === 0 ? '#3e3e44' : x < wx + 2 ? '#5a5a60' : '#4a4a50');
-  for (let x = wx + 1; x < wx + 7; x++) px(x, wy - 5, '#1a1a20');
-  for (let y = wy - 12; y < wy - 4; y++) {
-    px(wx, y, '#4a3a22');
-    px(wx + 7, y, '#3a2a18');
-  }
-  for (let i = 0; i < 3; i++) for (let x = wx - 2 + i; x < wx + 10 - i; x++) px(x, wy - 12 - i, i === 2 ? '#5a4a2e' : '#4a3c24');
-  px(wx + 3, wy - 9, '#2a1e14');
-  // A fence along the right, and a tree at the left edge.
-  for (let x = 236; x < PW; x++) {
-    if (x % 6 === 0) for (let y = HORIZON + 48; y < HORIZON + 55; y++) px(x, y, x % 12 === 0 ? '#4a3a22' : '#3a2c1a');
-    px(x, HORIZON + 50, '#5a4a2e');
-    px(x, HORIZON + 53, '#4a3a22');
-  }
-  drawTree(g, px, 6, HORIZON + 30, 2.6, { leaf: '#1e3e24', leafDark: '#122a18', trunk: '#2a1e14', tree: 'round' });
-  return {
-    sky, far, land,
-    stars: Array.from({ length: 110 }, (_, i) => ({ x: rng.int(0, PW - 1), y: rng.int(0, HORIZON - 4), b: rng.float(0.3, 1), ph: rng.float(0, 6.28), i })),
-    folk: villagers(rng),
-  };
-}
-
-// The villagers out in the lane, looking up: where they stand, what they
-// wear, and which of them points.
-function villagers(rng) {
-  const out = [];
-  // (Clear of the letterbox along the bottom.)
-  const spots = [[96, 118], [104, 123], [116, 114], [132, 120], [142, 115], [150, 124], [88, 126], [126, 127], [160, 119]];
-  for (const [x, y] of spots) {
-    out.push({
-      x, y,
-      shirt: rng.pick(['#8f2f3a', '#2f6f8f', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#e0dccc']),
-      skin: rng.pick(['#f4d0b0', '#d8a47c', '#b07a4a', '#8a5a34', '#e8b48c']),
-      hair: rng.pick(['#1e1612', '#6e4424', '#c87a3a', '#c8c8c8', '#3a2418']),
-      small: rng.chance(0.25),
-      points: rng.chance(0.35),
-      look: rng.float(0, 0.8),
-    });
-  }
-  return out;
+  const art = paintStarfall(seed, LAND);
+  art.folk = villagers(rng);
+  // (Stars that twinkle, over the painted ones.)
+  art.stars = Array.from({ length: 40 }, (_, i) => ({ x: rng.int(0, PW - 1), y: rng.int(12, HORIZON - 14), b: rng.float(0.4, 1), ph: rng.float(0, 6.28), i }));
+  return art;
 }
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -448,46 +344,9 @@ function drawScene(ctx, sc, art) {
     g.stroke();
     g.globalAlpha = 1;
   }
-  // The hills, and the land and the village before them.
-  g.drawImage(art.far, 0, 0);
-  g.drawImage(art.land, 0, 0);
-  // The light it throws over the land: warm, from where it is.
-  if (glow > 0.01) {
-    const p = pre ? starAt(fall) : LAND;
-    const lg = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, pre ? 220 : 300);
-    lg.addColorStop(0, `rgba(255,236,190,${(glow * 0.8).toFixed(3)})`);
-    lg.addColorStop(1, `rgba(255,200,150,${(glow * 0.15).toFixed(3)})`);
-    g.globalCompositeOperation = 'lighter';
-    g.fillStyle = lg;
-    g.fillRect(0, 0, PW, PH);
-    g.globalCompositeOperation = 'source-over';
-  }
-  if (!pre) {
-    // Then the dust wave, rolling over the village (from the far hills to
-    // the front of the picture).
-    const front = HORIZON + after * 30;
-    if (after < 5) {
-      for (let x = 0; x < PW; x++) {
-        const top = Math.round(front - 6 - 4 * Math.abs(Math.sin(x * 0.11 + after * 3)));
-        const thick = 8 + Math.round(4 * Math.sin(x * 0.07 + after));
-        for (let y = top; y < top + thick; y++) {
-          if (y < 0 || y >= PH) continue;
-          g.globalAlpha = 0.85 * (1 - (y - top) / thick) * Math.max(0, 1 - after / 5);
-          g.fillStyle = hashf(x, y, Math.floor(after * 10)) < 0.5 ? '#c8b08a' : '#a89070';
-          g.fillRect(x, y, 1, 1);
-        }
-      }
-      g.globalAlpha = 1;
-    }
-  }
-  // The people in the lane: looking up at it (their heads turned toward
-  // it), some pointing; knocked flat as the wave passes them.
-  const fp = pre ? starAt(fall) : LAND;
-  for (const f of art.folk) {
-    const hitAt = (f.y - HORIZON) / 30;
-    const down = !pre && after > hitAt;
-    drawFolk(g, f, fp, down, t, glow);
-  }
+  // The hills, the village and its people round their fire, the lights,
+  // the dust when it comes (see render/art_star.js).
+  drawVillage(g, art, { t, pre, after, glow, star: pre ? starAt(fall) : LAND, folk: art.folk, horizon: HORIZON });
   // A child's voice: what they shout.
   if (t > 9.5 && t < 13.5) {
     const f = art.folk[2];
@@ -555,23 +414,4 @@ function drawScene(ctx, sc, art) {
     ctx.globalAlpha = 1;
   }
   ctx.restore();
-}
-
-// One of the villagers, seen from behind, looking up at the star (their
-// head turned toward it), some pointing at it; crouched with their arms
-// over their heads as it comes down on them; flat on the ground after the
-// wave, thrown away from it.
-function drawFolk(g, f, star, down, t, glow) {
-  const px = (x, y, col) => {
-    g.fillStyle = col;
-    g.fillRect(Math.round(x), Math.round(y), 1, 1);
-  };
-  const side = star.x > f.x ? 1 : -1;
-  const turn = Math.abs(star.x - f.x) > 20 ? side : 0;
-  const lit = glow > 0.2 ? side : 0;
-  const pose = down ? 'down' : glow > 0.85 ? 'cower' : f.points ? 'point' : 'stand';
-  drawPerson(px, f.x, f.y + 1, {
-    size: f.small ? 'small' : 'normal', face: 'back', pose, dir: down ? -side : side, turn, lit,
-    shirt: f.shirt, skin: f.skin, hair: f.hair, t: t + f.look,
-  });
 }

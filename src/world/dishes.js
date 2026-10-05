@@ -162,7 +162,7 @@ export function ingredientTypes(key) {
 // cooked into another is still that dish's ingredients' kinds).
 export function baseOf(key) {
   const s = String(key);
-  if (s.startsWith('dish~')) return s;
+  if (s.startsWith('dish~') || s.startsWith(RECIPE_PREFIX)) return s;
   return s.split(/[~*]/)[0];
 }
 
@@ -198,6 +198,7 @@ const ADJ = {
 export function ingredientName(key) {
   const k = baseOf(key);
   if (k.startsWith('dish~')) return 'Leftover';
+  if (k.startsWith(RECIPE_PREFIX)) return 'Scroll';
   const def = ITEMS[k];
   let n = def ? def.name : k.replace(/_/g, ' ');
   n = n.replace(/^(Raw|Sack of|Block of|Bundle of|Piece of|Lump of|Mug of|Cup of|Pile of|Handful of) /i, '').replace(/ (Ingot|Ore|Log|Block|Bars?)$/i, '');
@@ -263,6 +264,27 @@ export function deriveDish(key) {
   };
 }
 
+// A recipe written out on a scroll (round 51): "recipe~" and the dish's
+// key. Read (used), whoever holds it knows how to make that dish (see
+// game/cooking.js); it's kept after, to sell to a cook or hand on.
+export const RECIPE_PREFIX = 'recipe~';
+export function deriveRecipe(key) {
+  const dk = String(key).slice(RECIPE_PREFIX.length);
+  const d = parseDish(dk);
+  if (!d) return undefined;
+  const where = { c: 'a campfire', p: 'a furnace (in its pot)', o: 'an oven', t: 'a table' }[d.st];
+  const dish = deriveDish(dk);
+  return {
+    key,
+    kind: 'recipe',
+    recipe: dk,
+    stack: 8,
+    name: `Recipe: ${dish.name}`,
+    value: Math.max(10, Math.round(dish.value * 3)),
+    about: `How to make ${dish.name} at ${where}, from ${d.ings.map(ingredientName).join(', ')}. Read it [F/RMB] to learn it; sell it to a cook, or hand it to a friend.`,
+  };
+}
+
 // What it does, in words (for its tooltip and the cook's window).
 export function dishLines(def) {
   const D = def && def.dish;
@@ -284,7 +306,7 @@ export function dishLines(def) {
 export function cookDish(ings, st, score, rng = Math.random) {
   // (A dish put in another stands for the first thing in it: its key
   // can't hold another's.)
-  ings = ings.slice(0, 3).map((k) => (String(k).startsWith('dish~') ? (parseDish(k)?.ings[0] || 'bread') : baseOf(k)));
+  ings = ings.slice(0, 3).map((k) => (String(k).startsWith('dish~') ? (parseDish(k)?.ings[0] || 'bread') : String(k).startsWith(RECIPE_PREFIX) ? 'scroll' : baseOf(k)));
   const S = COOK_STATIONS[st] || COOK_STATIONS.c;
   const kinds = [];
   for (const k of ings) for (const t of ingredientTypes(k)) if (!kinds.includes(t)) kinds.push(t);

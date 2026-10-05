@@ -24,19 +24,19 @@ const MAX_CATCHUP = 45 * DAY;
 
 // What each kind of trader deals in (also what their shop restocks).
 export const STOCK = {
-  general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket'],
+  general: ['torch', 'bread', 'apple', 'planks', 'cloth', 'string', 'fishing_rod', 'lantern', 'glass', 'chest', 'bed', 'seeds', 'arrow', 'bucket', 'lute', 'flute', 'pipe', 'scroll'],
   smith: ['iron_ingot', 'coal', 'stone_pickaxe', 'stone_axe', 'stone_sword', 'iron_sword', 'iron_pickaxe', 'iron_axe', 'spear', 'mace', 'dagger', 'hammer', 'anvil', 'lantern', 'iron_bars', 'iron_helmet', 'chainmail', 'iron_breastplate', 'iron_greaves', 'iron_boots', 'iron_shield', 'steel_sword',
     'short_sword', 'sabre', 'hand_axe', 'flail', 'greatsword', 'battle_axe', 'warhammer', 'halberd', 'crossbow', 'bolt', 'javelin'],
   baker: ['bread', 'pie', 'wheat', 'apple', 'berries'],
   inn: ['stew', 'feast', 'gruel', 'cooked_meat', 'bread', 'cooked_fish', 'dice', 'ale'],
   cook: ['stew', 'feast', 'gruel', 'cooked_meat', 'cooked_fish', 'bread'],
   tailor: ['cloth', 'string', 'leather', 'rug_red', 'rug_blue', 'rug_green', 'bed', 'linen_shirt', 'wool_trousers', 'wool_hood', 'straw_hat', 'fine_coat', 'leather_tunic', 'leather_boots', 'linen_shirt_red', 'linen_shirt_blue', 'wool_hood_green', 'wool_trousers_black', 'fine_coat_purple'],
-  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft', 'wooden_shield', 'round_shield', 'quarterstaff'],
+  carpenter: ['planks', 'planks_dark', 'chest', 'door', 'table', 'chair', 'stool', 'bench', 'bookshelf', 'fence', 'workbench', 'barrel', 'crate', 'hanging_sign', 'bucket', 'raft', 'wooden_shield', 'round_shield', 'quarterstaff', 'lyre', 'fiddle', 'hand_drum'],
   herbalist: ['herb', 'mushroom', 'berries', 'seeds', 'sapling', 'flower_red', 'flower_blue', 'healing_salve', 'potion_vigor', 'potion_might', 'potion_swiftness', 'potion_breath', 'potion_wind', 'potion_fury', 'potion_haste'],
   fisher: ['fish', 'cooked_fish', 'fishing_rod', 'reeds', 'string', 'raft'],
   farmer: ['wheat', 'carrot', 'cabbage', 'seeds', 'hay_bale', 'pumpkin', 'apple', 'bucket'],
   scholar: ['book', 'scroll', 'sketchbook', 'bookshelf', 'lantern', 'paper', 'ink'],
-  trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers', 'sling', 'longbow'],
+  trapper: ['raw_meat', 'leather', 'feather', 'arrow', 'bow', 'snare', 'leather_cap', 'leather_trousers', 'sling', 'longbow', 'hunting_horn'],
   // The islands' own trades (see isletrades.js).
   miller: ['flour', 'bread', 'wheat', 'seeds', 'hay_bale'],
   glassblower: ['glass', 'lantern', 'ash_goggles', 'obsidian_blade', 'obsidian_shard'],
@@ -1218,6 +1218,13 @@ function cookShift(L, rec, k, rng, chance) {
   }
   const onSale = Object.keys(k.store).filter((q) => q.startsWith('dish~')).reduce((n, q) => n + k.store[q], 0);
   if (onSale < 4 && rng.chance(chance)) npcCook(rec, k.store, f);
+  // (Round 51) And now and then one of their recipes copied out, for sale
+  // (two at most on the counter).
+  const scrolls = Object.keys(k.store).filter((q) => q.startsWith('recipe~') && k.store[q] > 0).length;
+  if ((rec.recipes || []).length && scrolls < 2 && rng.chance(chance * 0.08)) {
+    const r = rng.pick(rec.recipes);
+    if (r && r.key && !k.store[`recipe~${r.key}`]) k.store[`recipe~${r.key}`] = 1;
+  }
 }
 
 // (Round 50) The watch keep something by them to patch themselves up: each

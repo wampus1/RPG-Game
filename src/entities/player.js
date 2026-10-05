@@ -244,7 +244,7 @@ export class Player extends Entity {
 
   update(dt, input, blocked) {
     this.updateBase(dt);
-    // A fallen star's wing, spent on a second roll: filling back in.
+    // A fallen star's wing, spent on a roll: filling back in.
     if (this.wing && this.wing.k < 1) {
       this._wingT = (this._wingT || 0) + dt;
       this.wing.k = Math.min(1, Math.floor((this._wingT / WING_BACK) * 25) / 25);
@@ -256,6 +256,18 @@ export class Player extends Entity {
     }
     // (The streak of light a wing's roll leaves: see Renderer.drawTumble.)
     if (this.wingDash > 0) this.wingDash = Math.max(0, this.wingDash - dt);
+    // (Round 51) A pipe on the go: a puff of smoke off you now and then,
+    // curling up and drifting, the bowl glowing as you draw on it.
+    if (this.smokeT > 0) {
+      this.smokeT -= dt;
+      this.smokePuff = (this.smokePuff || 0) - dt;
+      if (this.smokePuff <= 0 && this.game && this.game.renderer) {
+        this.smokePuff = 0.45 + Math.random() * 0.5;
+        const r = this.game.renderer;
+        r.emit(this.x, this.y + 1.55, this.z, { n: 2 + (Math.random() < 0.4 ? 1 : 0), color: ['#d8d8e0', '#b8b8c4', '#e8e8ee'], up: 14, speed: 5, life: 1.8, gravity: -6, shape: 'puff', grow: 1.4, oy: -3 });
+        if (Math.random() < 0.5) r.emit(this.x, this.y + 1.45, this.z, { n: 1, color: ['#ff8a30', '#ffc860'], up: 2, speed: 2, life: 0.35, glow: true, oy: -2 });
+      }
+    }
     // Dishes eaten, working through you (see game/cooking.js).
     tickDishes(this.game, this, dt);
     // (Hale armour put on or taken off, however it was: health with it.)

@@ -62,8 +62,9 @@ import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
-import { eatDish, dishFx } from './cooking.js';
-import { CookWindow } from '../ui/cook.js';
+import { eatDish, dishFx, learnRecipe } from './cooking.js';
+import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
+import { InstrumentWindow } from '../ui/instrument.js';
 import { runMigrations } from './migrate.js';
 import { dishLines } from '../world/dishes.js';
 import { Riding } from './riding.js';
@@ -2644,6 +2645,7 @@ export class Game {
           else if (p.heldDef()?.kind === 'potion') this.drink();
           else if (p.heldDef()?.newspaper) this.ui.openNews?.();
           else if (p.heldDef()?.kind === 'armor') this.wearHeld();
+          else if (this.useHeldThing()) break;
           else this.interactFront();
           break;
       }
@@ -2925,18 +2927,18 @@ export class Game {
     }
     if (e.stat) {
       p.buffs = (p.buffs || []).filter((q) => q.stat !== e.stat || q.until <= now);
-      p.buffs.push({ stat: e.stat, n: e.n, until: now + e.hours * 60, name: d.name });
+      p.buffs.push({ stat: e.stat, n: e.n, until: now + e.hours * 60, name: d.name, item: slot.item });
     }
     // For a fight (see combat.buffOf).
     if (e.combat) {
       p.buffs = (p.buffs || []).filter((q) => q.combat !== e.combat || q.until <= now);
-      p.buffs.push({ combat: e.combat, n: e.n, until: now + e.hours * 60, name: d.name });
+      p.buffs.push({ combat: e.combat, n: e.n, until: now + e.hours * 60, name: d.name, item: slot.item });
       if (e.combat === 'breath') p.stamina = (p.stamina || 0) + e.n;
     }
     // (Fogsight: the dark goes grey and clear; see lighting.js.)
     if (e.sight) {
       p.buffs = (p.buffs || []).filter((q) => !q.sight || q.until <= now);
-      p.buffs.push({ sight: true, until: now + e.hours * 60, name: d.name });
+      p.buffs.push({ sight: true, until: now + e.hours * 60, name: d.name, item: slot.item });
     }
     removeItem(p.inv, slot.item, 1);
     this.refreshBonus();
@@ -3167,6 +3169,7 @@ export class Game {
       this.eat();
       return;
     }
+    if (held && this.useHeldThing()) return;
     if (held && held.kind === 'potion') {
       this.drink();
       return;
@@ -3180,6 +3183,52 @@ export class Game {
       return;
     }
     if (c && c.place && c.place.ok) this.tryPlace(c.place);
+  }
+
+  // (Round 51) Things in the hand that are used where you stand: an
+  // instrument played (see ui/instrument.js), a pipe smoked, a recipe on a
+  // scroll read, a blank scroll written on. True if it was one.
+  useHeldThing() {
+    const p = this.player;
+    const d = p.heldDef();
+    if (!d || p.dead) return false;
+    if (d.kind === 'recipe') {
+      const r = learnRecipe(p, d.recipe);
+      const dish = ITEMS[d.recipe];
+      if (r === 'new') this.ui.msg(`You learn to make ${dish.name}. It's in your recipes now (at the ${{ c: 'campfire', p: 'furnace', o: 'oven', t: 'table' }[dish.dish.st]}).`, '#ffd890');
+      else this.ui.msg(`You know how to make ${dish.name} already.`, '#c8c8c8');
+      this.audio?.play('etch');
+      return true;
+    }
+    if (d.key === 'scroll') {
+      if (!(p.recipes || []).length) {
+        this.ui.msg('A blank scroll. Once you know a recipe (cook something good and write it down), you can copy it onto one.', '#c8c8c8');
+        return true;
+      }
+      this.ui.open(new RecipeScrollWindow(this.ui, this));
+      return true;
+    }
+    if (d.instrument) {
+      this.ui.open(new InstrumentWindow(this.ui, this, d.key));
+      return true;
+    }
+    if (d.key === 'pipe') {
+      this.smokePipe();
+      return true;
+    }
+    return false;
+  }
+
+  // A pull on a clay pipe: smoke curling up off you for a while (and
+  // nothing else at all).
+  smokePipe() {
+    const p = this.player;
+    if (p.smokeT > 2) return;
+    p.smokeT = 6;
+    p.smokePuff = 0;
+    p.doAction?.(0.5);
+    this.audio?.play('puff');
+    this.renderer.emit(p.x, p.y + 1.6, p.z, { n: 2, color: ['#ff9040', '#ffd070'], up: 6, speed: 4, life: 0.4, oy: -2, glow: true });
   }
 
   // Put on the armour or clothes in your hand.

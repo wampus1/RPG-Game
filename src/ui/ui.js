@@ -28,6 +28,25 @@ const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shov
 
 export { Window, cap, describeActivity };
 
+// (Round 51) What picture an effect on you goes by: the dish or potion it
+// came from (an older save's potions, found by name; an idol's blessing,
+// the draught that does the same).
+const COMBAT_POTION = { breath: 'potion_breath', wind: 'potion_wind', fury: 'potion_fury', haste: 'potion_haste' };
+const STAT_POTION = { str: 'potion_might', agi: 'potion_swiftness', end: 'potion_fortitude', cha: 'potion_charm' };
+export function buffKey(q) {
+  if (q.dish && ITEMS[q.dish]) return q.dish;
+  if (q.item && ITEMS[q.item]) return q.item;
+  const byName = q.name && Object.keys(ITEMS).find((k) => ITEMS[k].name === q.name);
+  if (byName) return byName;
+  const k = (q.combat && COMBAT_POTION[q.combat]) || (q.stat && STAT_POTION[q.stat]) || (q.sight ? 'spore_tincture' : null);
+  return k && ITEMS[k] ? k : null;
+}
+// Game minutes left, in three letters at most: 4h, 12h, 52m.
+export function shortLeft(min) {
+  if (min >= 60) return `${Math.floor(min / 60)}h`;
+  return `${Math.max(1, Math.ceil(min))}m`;
+}
+
 export class UI {
   constructor(audio) {
     this.audio = audio;
@@ -581,6 +600,20 @@ export class UI {
     }
   }
 
+  // (Round 51) One of your effects, pointed at: what it is and does, as
+  // its item says, and how long it has left.
+  buffTooltip(q, key, left) {
+    const d = key && ITEMS[key];
+    if (d) this.itemTooltip({ item: key, count: 1 });
+    const keep = (this.tooltip && this.tooltip.lines ? this.tooltip.lines : [{ text: q.name || 'An effect', color: C.hi }])
+      .filter((l) => !/^Value |\[F\/RMB\]|^Restores |^Hold it|^A blank|^Read it/.test(l.text));
+    if (!d && q.name) keep[0] = { text: q.name, color: C.hi };
+    if (q.combat && !d) keep.push({ text: combatBuffText(q), color: '#c0a0ff' });
+    const h = Math.floor(left / 60);
+    keep.push({ text: `Wears off in ${h ? `${h}h ` : ''}${Math.round(left % 60)}m`, color: left < 15 ? '#ff9070' : C.dim });
+    this.tooltip = { lines: keep };
+  }
+
   itemTooltip(slot) {
     if (!slot) return;
     const d = ITEMS[slot.item];
@@ -597,7 +630,7 @@ export class UI {
     if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.now ?? d.heal} HP [F/RMB]`, color: C.green });
     // A dish cooked up: what it does, when, and how long for (see
     // world/dishes.js).
-    if (d.dish) for (const l of dishLines(d)) for (const [i, t] of wrap(l.text, 44).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◇' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
+    if (d.dish) for (const l of dishLines(d)) for (const [i, t] of wrap(l.text, 44).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◆' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
     // (What you've learnt a thing is, cooking with it: see cooking.js.)
     else if (this.game && this.game.player && (this.game.player.kinds || []).includes(slot.item.split(/[~*]/)[0])) lines.push({ text: `To a cook: ${ingredientTypes(slot.item).join(', ')}`, color: '#d8b880' });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
@@ -616,6 +649,8 @@ export class UI {
       lines.push({ text: `${what} [F/RMB]`, color: '#c0a0ff' });
     }
     if (d.newspaper) lines.push({ text: 'Read it [F/RMB] · hand copies to people', color: C.dim });
+    // (What it is and how it's used, where it says.)
+    if (d.about && d.kind !== 'gem') for (const t of wrap(d.about, 44)) lines.push({ text: t, color: d.kind === 'recipe' ? '#d8b880' : C.dim });
     if (d.kind === 'block') {
       const b = BLOCKS[d.block];
       lines.push({ text: 'Placeable block' + (b.rotatable ? ' · [R] rotate' : ''), color: C.dim });
@@ -673,16 +708,27 @@ export class UI {
       const blink = Math.floor(performance.now() / 600) % 2 === 0;
       for (let i = 0; i < lost; i++) g.put(1 + n + i, 1, '×', blink ? '#c070ff' : '#8a50c0');
     }
-    // Potions still working.
+    // What's still working on you (potions, dishes, an idol's blessing):
+    // each its own picture, the time it has left under it; the pointer on
+    // one tells what it does (round 51).
     const nowAbs = game.day * 1440 + game.minute;
     const buffs = (p.buffs || []).filter((q) => q.until > nowAbs);
+    const BUFF_ROW = 4;
+    const SHOWN = 6;
     if (buffs.length) {
-      const txt = buffs.map((q) => {
+      g.fill(0, BUFF_ROW, 25, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
+      const mc = this.mouseCell || { x: -1, y: -1 };
+      buffs.slice(0, SHOWN).forEach((q, i) => {
+        const x = 1 + i * 4;
+        const key = buffKey(q);
         const left = Math.max(0, q.until - nowAbs);
-        const what = q.combat ? { breath: `STA+${q.n}`, wind: 'REGEN', fury: 'FURY', haste: 'HASTE' }[q.combat] : `${{ str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' }[q.stat]}+${q.n}`;
-        return `${what} ${Math.floor(left / 60)}h${String(Math.floor(left % 60)).padStart(2, '0')}`;
-      }).join('  ');
-      g.text(1, 4, txt.slice(0, 40), '#c0a0ff', 'rgba(10,8,16,0.55)');
+        if (key) g.icon(x, BUFF_ROW, key, 0, 1, 0);
+        // (Running out: the time blinks.)
+        const ending = left < 15;
+        g.text(x, BUFF_ROW + 2, shortLeft(left).padStart(3), ending ? (Math.floor(this.time * 3) % 2 ? '#ff9070' : '#a05040') : q.dish ? '#ffd890' : '#c0a0ff');
+        if (!this.modal && mc.x >= x && mc.x < x + 3 && mc.y >= BUFF_ROW && mc.y <= BUFF_ROW + 2) this.buffTooltip(q, key, left);
+      });
+      if (buffs.length > SHOWN) g.text(1 + SHOWN * 4, BUFF_ROW + 1, `+${buffs.length - SHOWN}`, C.dim);
     }
     const coins = p.inv.reduce((n, s) => n + (s && s.item === 'coin' ? s.count : 0), 0);
     const ct = `¤ ${coins}`;
@@ -730,7 +776,7 @@ export class UI {
         col = C.green;
       }
       // (A town's taxes and laws are on its notice board, not up here.)
-      let y = buffs.length ? 5 : 4;
+      let y = buffs.length ? 7 : 4;
       if (status) {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, status.slice(0, 24), col);

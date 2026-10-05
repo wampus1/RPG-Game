@@ -74,7 +74,7 @@ export const SPECIALTIES = {};
 export const ORIGINS = {
   crash: { name: 'Crash Landing', about: 'Your ship broke up on the rocks. You wake on a beach with what washed ashore, and nobody on the island knows you.' },
   native: { name: 'Island Native', about: 'You were born and raised in one of the island\'s towns. You start at home with your family, and the whole town knows you.' },
-  star: { name: 'Fallen Star', about: 'You fell from the night sky and landed in a crater near a village on Thessa. You have one glowing wing. Some people are wary of you. Your wing lets you do a second dodge roll right after the first without stamina; it then fades and grows back over 20 seconds.' },
+  star: { name: 'Fallen Star', about: 'You fell from the night sky and landed in a crater near a village on Thessa. You have one glowing wing. Some people are wary of you. Your wing lets you dodge roll without stamina: a second roll right after the first, or a roll when you have no stamina left. It then fades and grows back over 20 seconds.' },
 };
 // (A fallen star's wing: how long it takes to come back once spent.)
 export const WING_BACK = 20;
