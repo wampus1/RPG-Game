@@ -781,7 +781,7 @@ export class Tech {
           pick.ent.activity = null;
         }
         if (desk) pick.work = { kind: 'building', building: desk.id };
-        ledger(L, day, `${pick.name.first} ${pick.name.last}, once a ${was}, took up study at the ${(desk ? desk.name : 'academy').replace(/^The /, '').toLowerCase()}.`);
+        ledger(L, day, `${pick.name.first} ${pick.name.last}, once a ${was}, took up study at the ${(desk ? desk.name : 'research hall').replace(/^The /, '').toLowerCase()}.`);
         out.hired = pick;
         pts += 2;
       }

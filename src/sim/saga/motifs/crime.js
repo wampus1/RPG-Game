@@ -11,15 +11,14 @@
 //   - Smuggling: a shady sort wants a bundle carried past the watch into a
 //     town where it's banned, or taxed to the bone.
 import { motif, R, nameOf } from '../core.js';
-import { pick, layoutOf, laidTowns, townName, adults, fullName, kinOf, recOf } from './lib.js';
+import { pick, layoutOf, laidTowns, townName, adults, fullName, kinOf, recOf, hairWord } from './lib.js';
 import {} from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { countItem, removeItem } from '../../../game/inventory.js';
 import { lawOn } from '../../laws.js';
 
 const tid = (th) => `t${th.id}`;
-const HAIR_WORDS = { '#1e1612': 'black', '#3a2418': 'dark brown', '#6e4424': 'brown', '#8a5a30': 'brown', '#a0642e': 'chestnut', '#c87a3a': 'red', '#d8a048': 'fair', '#e8d8a0': 'fair', '#f0ecd8': 'white', '#c8c8c8': 'grey', '#8a8a92': 'grey' };
-const hairOf = (r) => HAIR_WORDS[r.look && r.look.hair] || 'dark';
+const hairOf = (r) => hairWord(r);
 
 // ------------------------------------------------------------ a murder
 motif({

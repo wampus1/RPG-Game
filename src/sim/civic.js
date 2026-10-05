@@ -1,8 +1,8 @@
 // Keeping a settlement going: a town left without guards asks someone able
 // to take up the spear, and if nobody can, its people pack up and move to
 // another settlement (their own civilization's if possible).
-import { alive, ledger, setOverride, DAY } from './econ.js';
-import { retrain, availOf, makeSchedules, makeChild } from '../entities/npcgen.js';
+import { alive, ledger, setOverride, DAY, CHILDHOOD, ADULTHOOD } from './econ.js';
+import { retrain, availOf, makeSchedules, makeChild, makeNomadBand, JOBS } from '../entities/npcgen.js';
 import { initRec } from './econ.js';
 import { RNG, hash4 } from '../util/rng.js';
 
@@ -361,21 +361,79 @@ export function births(sim, L, day, rng) {
     // (Aqueducts: clean water, more children.)
     const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1;
     if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
-    const r = makeChild(L, a, b, new RNG(hash4(a.idx, b.idx, day, 0xba8e)));
-    r.idx = L.npcs.length;
-    r.id = `${s.id}:${r.idx}`;
-    r.sid = s.id;
-    r.bed = living % Math.max(1, house.beds.length);
-    r.born = day;
-    L.npcs.push(r);
-    initRec(r, new RNG(hash4(r.idx, day, 0xb0)));
-    a.children.push(r.idx);
-    b.children.push(r.idx);
-    a.mood = Math.min(1, (a.mood ?? 0.5) + 0.2);
-    b.mood = Math.min(1, (b.mood ?? 0.5) + 0.2);
+    // (Round 54) A child on the way is a story now and then (see
+    // saga/motifs/hearts.js): born when that's told.
+    if (a.expecting || b.expecting) continue;
+    if (sim.saga && rng.chance(0.6) && sim.saga.startStory('newborn', { cast: { a: { t: 'rec', sid: s.id, idx: a.idx }, b: { t: 'rec', sid: s.id, idx: b.idx }, town: { t: 'town', sid: s.id } }, sid: s.id })) continue;
+    const r = bear(sim, L, a, b, day, hash4(a.idx, b.idx, day, 0xba8e));
     ledger(L, day, `A baby, ${r.name.first}, was born to ${a.name.first} and ${b.name.first} ${a.name.last}.`);
-    sim.game.spawnBorn?.(L, r, [a, b]);
     born.push(r);
   }
   return born;
+}
+
+// A child born to `a` and `b` (in their house): the record.
+export function bear(sim, L, a, b, day, seed) {
+  const s = L.settlement;
+  const r = makeChild(L, a, b, new RNG(seed | 0));
+  const living = L.npcs.filter((q) => q.home === a.home && alive(q) && !q.migrated).length;
+  const house = L.buildings[a.home];
+  r.idx = L.npcs.length;
+  r.id = `${s.id}:${r.idx}`;
+  r.sid = s.id;
+  r.bed = living % Math.max(1, house ? house.beds.length : 1);
+  r.born = day;
+  L.npcs.push(r);
+  initRec(r, new RNG(hash4(r.idx, day, 0xb0)));
+  a.children.push(r.idx);
+  b.children.push(r.idx);
+  a.mood = Math.min(1, (a.mood ?? 0.5) + 0.2);
+  b.mood = Math.min(1, (b.mood ?? 0.5) + 0.2);
+  sim.game.spawnBorn?.(L, r, [a, b]);
+  return r;
+}
+
+// (Round 54) Someone new who makes their home in a town (a story's: one
+// come home, a stranger who stays): a record of their own, a bed where
+// there's room, and work the town has for them. `o`: { name, look,
+// personality, traits, job, household, kin (a record they're family of:
+// 'child' or 'sibling' as `rel`), why }.
+export function newcomer(sim, L, o = {}) {
+  const s = L.settlement;
+  const day = sim.game.day;
+  const rng = new RNG(hash4(s.seed, L.npcs.length, day, 0x9e1c));
+  const p = makeNomadBand(rng, 1, [s.style || 'vale']).people[0];
+  const r = JSON.parse(JSON.stringify(p));
+  delete r.nomad;
+  if (o.name) r.name = { ...r.name, ...o.name };
+  if (o.look) r.look = { ...r.look, ...o.look };
+  if (o.personality) r.personality = { ...r.personality, ...o.personality };
+  if (o.traits) r.traits = o.traits.slice();
+  const used = (h) => L.npcs.filter((q) => q.home === h.id && alive(q) && !q.migrated).length;
+  const kin = o.kin || null;
+  const kh = kin && kin.home !== null && kin.home !== undefined ? L.buildings[kin.home] : null;
+  const house = kh && kh.beds.length > used(kh) ? kh : kh || L.buildings.find((h) => h.residential && !h.playerHome && !h.underConstruction && h.beds.length > used(h)) || null;
+  r.idx = L.npcs.length;
+  r.id = `${s.id}:${r.idx}`;
+  r.sid = s.id;
+  r.home = house ? house.id : null;
+  r.household = kin ? kin.household : o.household || `x${r.idx}`;
+  r.bed = house ? used(house) % Math.max(1, house.beds.length) : 0;
+  r.arrived = true;
+  r.arrivedDay = day;
+  r.from = o.why || 'story';
+  // (Grown, and some way off growing old.)
+  r.born = day - CHILDHOOD - Math.floor(ADULTHOOD * (0.1 + rng.next() * 0.35));
+  if (kin && o.rel === 'child') {
+    r.parents = [kin.idx, ...(kin.partner !== null && kin.partner !== undefined ? [kin.partner] : [])];
+    kin.children = [...(kin.children || []), r.idx];
+  } else if (kin && o.rel === 'sibling') r.parents = (kin.parents || []).slice();
+  const want = o.job && JOBS[o.job] && L.hasWorkplaceFor(o.job) ? o.job : ['farmer', 'laborer', 'builder', 'lumberjack', 'miner', 'fisher'].find((j) => L.hasWorkplaceFor(j)) || 'laborer';
+  r.job = want;
+  r.look = { ...r.look, outfit: JOBS[want]?.outfit || r.look.outfit };
+  L.npcs.push(r);
+  r.work = L.assignWork(r, rng);
+  r.schedule = makeSchedules(r, rng.fork(r.idx), availOf(L));
+  initRec(r, rng.fork(r.idx + 3));
+  return r;
 }

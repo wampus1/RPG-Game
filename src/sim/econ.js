@@ -314,6 +314,7 @@ export const MATERIALS = {
   shop: [20, 14], library: [26, 22], tailor: [18, 10], guardhouse: [14, 30], temple: [20, 40], herbalist: [16, 8], warehouse: [24, 12],
   stables: [26, 6],
   academy: [28, 24],
+  college: [60, 70],
   study: [12, 6],
   stockade: [16, 30],
   prison: [30, 70],

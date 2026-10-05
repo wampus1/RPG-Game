@@ -22,6 +22,7 @@ import { COOK_STATIONS, TYPES, cookDish, dishName, dishForm, dishLines, ingredie
 import { learnKinds, canMake, learnRecipe, writeRecipe } from '../game/cooking.js';
 import { removeItem } from '../game/inventory.js';
 import { itemIcon } from '../render/sprites.js';
+import { cookBonus, gainMastery } from '../game/mastery.js';
 
 const BG = '#120e0a';
 const TITLES = { c: 'COOK AT THE CAMPFIRE', p: 'COOK IN THE FURNACE POT', o: 'BAKE IN THE OVEN', t: 'PREPARE AT THE TABLE' };
@@ -850,6 +851,13 @@ export class CookWindow extends Window {
   finish(score) {
     const p = this.me;
     const inv = p.inv;
+    // (Round 54: a practised cook's dishes come out a little better; and
+    // every one cooked is practice. See mastery.js.)
+    const game = this.ui.game;
+    if (game) {
+      score = Math.min(1, score + cookBonus(game));
+      gainMastery(game, 'cooking', score >= 0.45 ? 1 : 0.4);
+    }
     // (Each thing that went in, used up.)
     const ings = this.picked.filter((k) => takeOne(inv, baseOf(k)) || takeOne(inv, k));
     if (!ings.length) {

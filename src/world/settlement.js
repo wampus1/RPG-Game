@@ -33,6 +33,11 @@ const SPECS = {
   stables: { size: [[9, 6], [8, 6]], tall: 3 },
   // Where the realm's researchers study (see tech.js).
   academy: { size: [[9, 6], [8, 6]], tall: 3, civic: true },
+  // (Round 54) A great city's Academy: a hall down the middle and four
+  // classrooms off it (a kitchen, a practice hall, a lecture room, a gem
+  // workshop), where anyone who pays may study for a term. See
+  // sim/college.js.
+  college: { size: [[13, 13], [13, 13]], tall: 3, civic: true },
   // A village's (or a small town's) place of learning: a room of books
   // and a desk, so even the smallest free town can work out something new.
   study: { size: [[6, 5], [6, 6]] },
@@ -55,7 +60,7 @@ export const BUILDING_NAMES = {
   house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
-  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Academy', study: 'Scholar\'s Study',
+  herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Research Hall', study: 'Scholar\'s Study', college: 'Academy',
   stockade: 'Stockade', prison: 'Prison',
   windmill: 'Windmill', glassworks: 'Glassworks', sporehouse: 'Spore Cellar', pearlhouse: 'Pearl House',
 };
@@ -1127,7 +1132,10 @@ class Layout {
     };
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
     if (type === 'tavern') bld.name = `The ${rng.pick(TAVERN_NAMES)}`;
-    else this.nameShop(bld);
+    else if (type === 'college') {
+      bld.name = `The ${this.settlement.name} Academy`;
+      bld.tall = 3;
+    } else this.nameShop(bld);
     if (type === 'townhall' && this.settlement.type === 'village') bld.name = 'Village Hall';
     return this.planBuilding(bld, rng);
   }
@@ -1798,7 +1806,7 @@ class Layout {
     const freeNeighbor = (t) => DIRS4.some(([dx, dz]) => isIn(t.x + dx, t.z + dz) && !occ.has(key(t.x + dx, t.z + dz)));
     // pref: 'north' | 'wall' | 'center' | 'any' | 'corner'
     const tryPlace = (id, pref, opts = {}) => {
-      let list = interior.filter((t) => !occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z)));
+      let list = interior.filter((t) => !occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z)) && (!opts.within || opts.within.has(key(t.x, t.z))));
       if (pref === 'north') list = list.filter((t) => t.z === iz0);
       else if (pref === 'wall') list = list.filter((t) => wallSide(t) >= 0 && t.z !== iz1);
       else if (pref === 'corner') list = list.filter((t) => (t.x === ix0 || t.x === ix1) && (t.z === iz0 || t.z === iz1));
@@ -1883,6 +1891,9 @@ class Layout {
       }
     }
     if (b.jailCand && !this.jail && !b.playerHome) this.jailCell(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
+    // (Round 54) A tavern's room to let: two beds behind a wall and a door,
+    // in a back corner (before the bar and the tables are set out).
+    if (b.type === 'tavern' && !b.playerHome && s.condition !== 'abandoned') this.innRoom(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
 
     if (b.residential) {
       const nBeds = t === 'house_s' ? 2 : t === 'house_m' ? 3 : t === 'manor' ? 5 : 6;
@@ -2032,6 +2043,8 @@ class Layout {
       }
       b.work.push(...b.seats.filter((q) => q.tags.includes('work')));
       lamp();
+    } else if (t === 'college') {
+      this.furnishCollege(b, { tryPlace, workAt, lamp, occ, reserved, key, isIn, connected, lit, rugId, rng });
     } else if (t === 'academy' || t === 'study') {
       // Shelves of learning, desks for the researchers, a still for the
       // experiments, a table with charts spread on it. (A study: a couple
@@ -2179,6 +2192,234 @@ class Layout {
         }
       }
       this.jail = { building: b.id, cell, bed: cell[0], stand: cell[1], door, front, y: Y0, blocks };
+      return;
+    }
+  }
+
+  // (Round 54) The Academy: a hall from the door to the back, and off it,
+  // behind walls with a door each, four classrooms: a kitchen (the oven, a
+  // hearth, a table), a gem workshop (a jeweller's bench), a lecture room
+  // (desks, shelves, a still) and a practice hall (dummies and a rack of
+  // practice blades). Laid out from the door inward, whichever way the
+  // building faces. Each room's tiles and door kept on the building
+  // (b.rooms), for who's in class (see sim/college.js); the registrar's
+  // desk at the back of the hall.
+  furnishCollege(b, f) {
+    const { tryPlace, workAt, lamp, occ, reserved, key, isIn, connected, lit, rugId } = f;
+    const DX = [0, -1, 0, 1];
+    const DZ = [1, 0, -1, 0];
+    const fx = -DX[b.door.rot];
+    const fz = -DZ[b.door.rot];
+    const ux = fz;
+    const uz = -fx;
+    const o = b.inside;
+    const W = (u, v) => ({ x: o.x + u * ux + v * fx, z: o.z + u * uz + v * fz });
+    // How far the inside runs each way.
+    let depth = 0;
+    while (isIn(W(0, depth + 1).x, W(0, depth + 1).z)) depth++;
+    let uMin = 0;
+    while (isIn(W(uMin - 1, 0).x, W(uMin - 1, 0).z)) uMin--;
+    let uMax = 0;
+    while (isIn(W(uMax + 1, 0).x, W(uMax + 1, 0).z)) uMax++;
+    const Dp = depth + 1;
+    b.rooms = {};
+    if (uMin > -4 || uMax < 4 || Dp < 7) {
+      // (Too small to divide: one great room, a corner for each.)
+      workAt(tryPlace(B.writing_desk, 'north', { access: true }), ['work', 'read', 'study', 'class']);
+      workAt(tryPlace(B.jeweler_bench, 'wall', { access: true }), ['work', 'class']);
+      workAt(tryPlace(B.oven, 'wall', { access: true }), ['work', 'class']);
+      tryPlace(B.training_dummy, 'corner');
+      lamp();
+      return;
+    }
+    const mid = Math.floor(Dp / 2);
+    const top = Y0 + (b.tall || 3) - 1;
+    const wall = (u, v) => {
+      const t = W(u, v);
+      if (!isIn(t.x, t.z)) return;
+      for (let y = Y0; y <= top; y++) this.put(t.x, y, t.z, b.mats.wall);
+      occ.add(key(t.x, t.z));
+    };
+    const doorAt = (u, v, along) => {
+      const t = W(u, v);
+      // (The door's turned to the wall it's in: along the depth, or across.)
+      const rot = along ? (b.door.rot + 1) & 3 : b.door.rot;
+      this.put(t.x, Y0, t.z, B.door, rot);
+      this.put(t.x, Y0 + 1, t.z, B.door_top, rot);
+      for (let y = Y0 + 2; y <= top; y++) this.put(t.x, y, t.z, b.mats.wall);
+      // (A way through the wall: not in the way.)
+      occ.delete(key(t.x, t.z));
+      reserved.add(key(t.x, t.z));
+      return t;
+    };
+    // The two long walls either side of the hall, and the walls across each
+    // wing between its front room and its back room.
+    for (let v = 0; v < Dp; v++) {
+      wall(-2, v);
+      wall(2, v);
+    }
+    for (let u = uMin; u <= -3; u++) wall(u, mid);
+    for (let u = 3; u <= uMax; u++) wall(u, mid);
+    const fm = Math.floor(mid / 2);
+    const bm = mid + 1 + Math.floor((Dp - mid - 1) / 2);
+    const rooms = {
+      kitchen: { u0: uMin, u1: -3, v0: 0, v1: mid - 1, door: [-2, fm] },
+      gems: { u0: 3, u1: uMax, v0: 0, v1: mid - 1, door: [2, fm] },
+      lecture: { u0: uMin, u1: -3, v0: mid + 1, v1: Dp - 1, door: [-2, bm] },
+      yard: { u0: 3, u1: uMax, v0: mid + 1, v1: Dp - 1, door: [2, bm] },
+    };
+    for (const [name, R] of Object.entries(rooms)) {
+      const tiles = [];
+      for (let u = R.u0; u <= R.u1; u++) for (let v = R.v0; v <= R.v1; v++) tiles.push(W(u, v));
+      const door = doorAt(R.door[0], R.door[1], true);
+      // (In front of the door, inside and out: kept clear.)
+      const sx = R.door[0] < 0 ? -1 : 1;
+      for (const t of [W(R.door[0] + sx, R.door[1]), W(R.door[0] - sx, R.door[1])]) reserved.add(key(t.x, t.z));
+      b.rooms[name] = { tiles, door, set: new Set(tiles.map((t) => key(t.x, t.z))) };
+    }
+    const inRoom = (name) => ({ within: b.rooms[name].set });
+    // (What's walked over or sat on, a rug, a lamp, a chair: put down out
+    // of the way of what's placed after, but not in anyone's way.)
+    const deco = (id, name, o = {}) => {
+      const set = name ? b.rooms[name].set : null;
+      const list = [];
+      for (let u = uMin; u <= uMax; u++) {
+        for (let v = 0; v < Dp; v++) {
+          const t = W(u, v);
+          if (!isIn(t.x, t.z) || occ.has(key(t.x, t.z)) || reserved.has(key(t.x, t.z)) || (set && !set.has(key(t.x, t.z)))) continue;
+          list.push(t);
+        }
+      }
+      if (o.near) list.sort((a, c) => Math.abs(a.x - o.near.x) + Math.abs(a.z - o.near.z) - (Math.abs(c.x - o.near.x) + Math.abs(c.z - o.near.z)));
+      else f.rng.shuffle(list);
+      const t = list[0];
+      if (!t) return null;
+      this.put(t.x, Y0, t.z, id, (o.rot ?? 0) | (o.lit ? lit : 0));
+      reserved.add(key(t.x, t.z));
+      return t;
+    };
+    const seatIn = (tags, near, name) => {
+      const t = deco(B.chair, name, { near, rot: faceToward(near.x, near.z, near.x, near.z) });
+      if (t) b.seats.push(this.addSpot(t.x, t.z, faceToward(t.x, t.z, near.x, near.z), tags, { building: b.id, seat: true }));
+      return t;
+    };
+    // The kitchen: the oven and a hearth, a table to work at, a barrel.
+    workAt(tryPlace(B.oven, 'any', { access: true, ...inRoom('kitchen') }), ['work', 'class', 'cook']);
+    const hearth = tryPlace(B.furnace, 'any', { access: true, ...inRoom('kitchen') });
+    if (hearth) {
+      workAt(hearth, ['work', 'class', 'cook']);
+      if (!b.mats.flat) this.chimney(b, hearth);
+    }
+    const kt = tryPlace(B.table, 'any', { access: true, ...inRoom('kitchen') });
+    if (kt) workAt(kt, ['work', 'class', 'cook']);
+    tryPlace(B.barrel, 'any', inRoom('kitchen'));
+    // The gem workshop: the bench, a table, a chest.
+    workAt(tryPlace(B.jeweler_bench, 'any', { access: true, ...inRoom('gems') }), ['work', 'class', 'gems']);
+    const gt = tryPlace(B.table, 'any', { access: true, ...inRoom('gems') });
+    if (gt) {
+      this.put(gt.x, Y0 + 1, gt.z, B.lantern, lit);
+      seatIn(['class', 'study'], gt, 'gems');
+    }
+    tryPlace(B.chest, 'any', { access: true, ...inRoom('gems') });
+    // The lecture room: desks, shelves, a still for the experiments.
+    workAt(tryPlace(B.writing_desk, 'any', { access: true, ...inRoom('lecture') }), ['work', 'read', 'study', 'class', 'research']);
+    tryPlace(B.bookshelf, 'any', { ...inRoom('lecture'), rot: 'wall' });
+    tryPlace(B.bookshelf, 'any', { ...inRoom('lecture'), rot: 'wall' });
+    workAt(tryPlace(B.alembic, 'any', { access: true, ...inRoom('lecture') }), ['work', 'class', 'research']);
+    const lt = tryPlace(B.table, 'any', { access: true, ...inRoom('lecture') });
+    if (lt) {
+      this.put(lt.x, Y0 + 1, lt.z, B.lantern, lit);
+      seatIn(['class', 'study', 'read'], lt, 'lecture');
+      seatIn(['class', 'study', 'read'], lt, 'lecture');
+    }
+    // The practice hall: two dummies, a rack of practice blades, a rug to
+    // fall on.
+    tryPlace(B.training_dummy, 'any', inRoom('yard'));
+    tryPlace(B.training_dummy, 'any', inRoom('yard'));
+    tryPlace(B.weapon_rack, 'any', inRoom('yard'));
+    deco(rugId, 'yard');
+    // The hall: the registrar's desk at the back, benches down the sides,
+    // the notice board by the door, lamps.
+    const back = W(0, Dp - 1);
+    this.put(back.x, Y0, back.z, B.writing_desk, (b.door.rot + 2) & 3);
+    occ.add(key(back.x, back.z));
+    const desk = W(0, Dp - 2);
+    if (!connected()) {
+      occ.delete(key(back.x, back.z));
+      this.put(back.x, Y0, back.z, B.air);
+    } else {
+      reserved.add(key(desk.x, desk.z));
+      b.work.push(this.addSpot(desk.x, desk.z, faceToward(desk.x, desk.z, back.x, back.z), ['work', 'registrar'], { building: b.id }));
+      b.registrar = { x: desk.x, z: desk.z };
+    }
+    for (let v = 1; v < Dp - 2; v += 2) {
+      for (const u of [-1, 1]) {
+        const t = W(u, v);
+        if (occ.has(key(t.x, t.z)) || reserved.has(key(t.x, t.z))) continue;
+        this.put(t.x, Y0, t.z, B.bench, (b.door.rot + (u < 0 ? 1 : 3)) & 3);
+        occ.add(key(t.x, t.z));
+        b.seats.push(this.addSpot(t.x, t.z, 0, ['class', 'social', 'study'], { building: b.id, seat: true }));
+      }
+    }
+    for (let v = 0; v < Dp; v++) {
+      const t = W(0, v);
+      if (!occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z))) this.put(t.x, Y0, t.z, rugId);
+    }
+    for (const name of [null, ...Object.keys(b.rooms)]) deco(B.torch, name, { lit: true });
+    // (The rooms' sets aren't kept: Sets don't save. The tiles are.)
+    for (const r of Object.values(b.rooms)) delete r.set;
+  }
+
+  // (Round 54) A tavern's room to let, in one of its corners: two beds
+  // side by side against the outer wall, a strip of floor in front of
+  // them, a wall round the rest with a door in it. Kept on the building
+  // (b.inn) for whoever rents it (see Sim.bedOwner and dialogue.js), with
+  // the blocks it's made of (for a tavern built before there were rooms:
+  // see migrate.js).
+  innRoom(b, f) {
+    const { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 } = f;
+    if (ix1 - ix0 < 3 || iz1 - iz0 < 3) return;
+    const top = Y0 + (b.tall || 2) - 1;
+    // (Each corner, the beds along the back wall or along the side.)
+    const plans = [];
+    for (const [cx, cz, sx, sz] of [[ix1, iz0, -1, 1], [ix0, iz0, 1, 1], [ix1, iz1, -1, -1], [ix0, iz1, 1, -1]]) {
+      plans.push({
+        beds: [{ x: cx, z: cz }, { x: cx + sx, z: cz }], floor: [{ x: cx, z: cz + sz }, { x: cx + sx, z: cz + sz }],
+        door: { x: cx + sx, z: cz + 2 * sz }, walls: [{ x: cx, z: cz + 2 * sz }, { x: cx + 2 * sx, z: cz }, { x: cx + 2 * sx, z: cz + sz }, { x: cx + 2 * sx, z: cz + 2 * sz }],
+        front: { x: cx + sx, z: cz + 3 * sz }, bedRot: sz > 0 ? 0 : 2, doorRot: sz > 0 ? 2 : 0,
+      });
+      plans.push({
+        beds: [{ x: cx, z: cz }, { x: cx, z: cz + sz }], floor: [{ x: cx + sx, z: cz }, { x: cx + sx, z: cz + sz }],
+        door: { x: cx + 2 * sx, z: cz + sz }, walls: [{ x: cx + 2 * sx, z: cz }, { x: cx, z: cz + 2 * sz }, { x: cx + sx, z: cz + 2 * sz }, { x: cx + 2 * sx, z: cz + 2 * sz }],
+        front: { x: cx + 3 * sx, z: cz + sz }, bedRot: sx > 0 ? 3 : 1, doorRot: sx > 0 ? 1 : 3,
+      });
+    }
+    for (const P of plans) {
+      const { beds, floor, door, walls, front } = P;
+      const all = [...beds, ...floor, door, ...walls];
+      if (!all.every((t) => isIn(t.x, t.z) && !occ.has(key(t.x, t.z)) && !reserved.has(key(t.x, t.z)))) continue;
+      if (!isIn(front.x, front.z) || occ.has(key(front.x, front.z))) continue;
+      // (Not across the way in from the street.)
+      if (all.some((t) => Math.abs(t.x - b.inside.x) + Math.abs(t.z - b.inside.z) <= 1)) continue;
+      for (const t of all) occ.add(key(t.x, t.z));
+      if (!connected()) {
+        for (const t of all) occ.delete(key(t.x, t.z));
+        continue;
+      }
+      reserved.add(key(front.x, front.z));
+      const blocks = [];
+      const put = (x, y, z, id, meta = 0) => {
+        this.put(x, y, z, id, meta);
+        blocks.push([x, y, z, id, meta]);
+      };
+      for (const t of walls) for (let y = Y0; y <= top; y++) put(t.x, y, t.z, b.mats.wall);
+      put(door.x, Y0, door.z, B.door, P.doorRot);
+      put(door.x, Y0 + 1, door.z, B.door_top, P.doorRot);
+      for (let y = Y0 + 2; y <= top; y++) put(door.x, y, door.z, b.mats.wall);
+      for (const t of beds) put(t.x, Y0, t.z, B.bed, P.bedRot);
+      for (const t of floor) put(t.x, Y0, t.z, B.air);
+      put(floor[0].x, Y0, floor[0].z, B.torch, META_STATE);
+      b.inn = { beds, floor, door, front, blocks, y: Y0 };
       return;
     }
   }

@@ -40,7 +40,7 @@ export const SEEN = 44;
 // And this far off, they're gone from the world again (but for the record).
 export const GONE = 72;
 // The most stories going at once, and open tasks a town will post.
-export const MAX_THREADS = 70;
+export const MAX_THREADS = 120;
 export const TOWN_TASKS = 4;
 // How far word of a task travels in a day (in map squares between towns).
 const WORD_REACH = 9;
@@ -311,7 +311,7 @@ export class Saga {
       }
     }
     this.emit('saga_end', { th: th.id, m: th.m, fam: th.fam, outcome, cast: th.cast, vars: th.vars, touched: Object.keys(th.touched) });
-    this.chronicle.push({ at: this.now, id: th.id, title: th.title, outcome, line: th.hist.length ? th.hist[th.hist.length - 1].text : '' });
+    if (!(M && M.hidden && !th.seenBy)) this.chronicle.push({ at: this.now, id: th.id, title: th.title, outcome, line: th.hist.length ? th.hist[th.hist.length - 1].text : '' });
     if (this.chronicle.length > 60) this.chronicle.shift();
   }
 
@@ -360,6 +360,109 @@ export class Saga {
   spawn(th, mid, o = {}) {
     if (!this.room(MOTIFS[mid] || {})) return null;
     return this.begin(mid, { ...o, parent: th ? th.id : null });
+  }
+
+  // (Round 54) A story begun from outside the stories (a town's own
+  // goings-on: a match made, a child on the way), if there's room for it.
+  startStory(mid, o = {}) {
+    const M = MOTIFS[mid];
+    if (!M || !this.room(M)) return null;
+    return this.begin(mid, o);
+  }
+
+  // (Round 54) A story that goes its own way from this one (this one goes
+  // on too): the two told apart from here, each with a note of the other.
+  split(th, mid, o = {}, line = null) {
+    const kid = this.spawn(th, mid, o);
+    if (!kid) return null;
+    kid.split = th.id;
+    this.note(th, line || `From this, a story of its own: ${lcFirst(kid.title)}.`);
+    this.note(kid, `It began as part of ${lcFirst(th.title)}.`);
+    return kid;
+  }
+
+  // (Round 54) Two stories that have run into each other become one: `b`
+  // taken into `a` (its people, who had a hand in it, its history in a
+  // line), and `b` over ('merged').
+  join(a, b, line = null) {
+    if (!a || !b || a.done || b.done || a === b) return;
+    for (const [k, r] of Object.entries(b.cast)) {
+      if (!r || a.cast[k]) continue;
+      a.cast[k] = r;
+      a.names[k] = b.names[k];
+    }
+    for (const pid of Object.keys(b.touched)) a.touched[pid] = this.now;
+    (a.joined ||= []).push(b.id);
+    b.mergedInto = a.id;
+    const said = line || `${capFirst(b.title)} became part of this story.`;
+    this.note(a, said);
+    this.end(b, 'merged', `It became part of ${lcFirst(a.title)}.`);
+    this.retier(a);
+  }
+
+  // (Round 54) Two stories that have run into each other become a third
+  // (`mid`, begun with `o`): both over ('merged'), the new one theirs.
+  fuse(a, b, mid, o = {}, line = null) {
+    if (!a || !b || a.done || b.done) return null;
+    if (!this.room(MOTIFS[mid] || {})) return null;
+    const touched = [...new Set([...Object.keys(a.touched), ...Object.keys(b.touched), ...(o.touched || [])])];
+    const th = this.begin(mid, { ...o, parent: a.id, touched });
+    if (!th) return null;
+    th.also = [b.id];
+    for (const x of [a, b]) {
+      x.mergedInto = th.id;
+      this.end(x, 'merged', `It became part of ${lcFirst(th.title)}.`);
+    }
+    if (line) this.note(th, line);
+    return th;
+  }
+
+  // (Round 54) Its title changed (a quest that's become something else).
+  retitle(th, title) {
+    if (!th || !title || th.title === title) return;
+    (th.was ||= []).push(th.title);
+    th.title = title;
+  }
+
+  // (Round 54) A hidden story: told to `pid` from here on (in their quest
+  // log), as only what they've found out.
+  reveal(th, pid) {
+    if (!th || !pid) return;
+    (th.seenBy ||= {})[pid] = this.now;
+  }
+
+  hiddenFrom(th, pid) {
+    const M = MOTIFS[th.m];
+    return !!(M && M.hidden) && !(th.seenBy && th.seenBy[pid]);
+  }
+
+  // (Round 54) Stories that run into each other (see each motif's
+  // `meets`: { m, when(a, b, S), then(a, b, S) }), once a day.
+  meetUp() {
+    const live = this.live();
+    for (const a of live) {
+      const M = MOTIFS[a.m];
+      if (!M || !M.meets || a.done) continue;
+      for (const rule of M.meets) {
+        for (const b of live) {
+          if (a.done) break;
+          if (b === a || b.done || b.m !== rule.m || (a.met && a.met.includes(b.id))) continue;
+          let ok = false;
+          try {
+            ok = !!rule.when(a, b, this);
+          } catch (e) {
+            this.fault(a, e);
+          }
+          if (!ok) continue;
+          (a.met ||= []).push(b.id);
+          try {
+            rule.then(a, b, this);
+          } catch (e) {
+            this.fault(a, e);
+          }
+        }
+      }
+    }
   }
 
   // ------------------------------------------------------------ in full or plainly
@@ -528,6 +631,8 @@ export class Saga {
       const quiet = (this.now - th.nodeAt) / DAY;
       if (!th.done && quiet > (node.fade ?? M.fade ?? 20)) this.end(th, 'faded', node.faded ? node.faded(th, this) : null);
     }
+    // Stories that have run into each other.
+    this.meetUp();
     // New stories, out of how things stand.
     const rng = new RNG(hash4(this.game.seed | 0, d, 0x5a9a));
     for (const M of Object.values(MOTIFS)) {
@@ -1250,7 +1355,7 @@ export class Saga {
   // newest first.
   storiesFor(pid) {
     const k = this.person(pid);
-    return this.threads.filter((th) => th.touched[pid] || th.tasks.some((t) => k.known[t.id] || this.claimedBy(t, pid)))
+    return this.threads.filter((th) => !this.hiddenFrom(th, pid) && (th.touched[pid] || (th.seenBy && th.seenBy[pid]) || th.tasks.some((t) => k.known[t.id] || this.claimedBy(t, pid))))
       .sort((a, b) => (a.done - b.done) || (b.nodeAt - a.nodeAt));
   }
 

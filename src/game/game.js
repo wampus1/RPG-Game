@@ -63,6 +63,7 @@ import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
+import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
 import { InstrumentWindow } from '../ui/instrument.js';
@@ -1430,6 +1431,7 @@ export class Game {
       this.ui.msg(`You won the bout with ${n.name}${pay ? ` and ¤${pay}` : ''}.`, '#a0ffa0');
       this.sim.changeRep(n, 15);
       if (adv) adv.beaten = (adv.beaten || 0) + 1;
+      gainMastery(this, 'dueling', 1.5);
     } else {
       const owe = Math.min(d.wager, countItem(p.inv, 'coin'));
       if (owe) removeItem(p.inv, 'coin', owe);
@@ -1438,6 +1440,8 @@ export class Game {
       n.say(result === 'fled' ? 'Walking away? Then the purse is mine.' : n.rng.pick(['A good bout! Better luck next time.', 'Not bad at all. Keep at it.', 'You\'ll get me one day.']), 3.5);
       this.ui.msg(result === 'fled' ? `You walked away from the bout and forfeit ¤${owe}.` : `${n.name} won the bout${owe ? `: you pay ¤${owe}` : ''}.`, '#ffb080');
       this.sim.changeRep(n, result === 'fled' ? -5 : 5);
+      // (A bout lost is a lesson too.)
+      if (result !== 'fled') gainMastery(this, 'dueling', 0.5);
     }
   }
 
@@ -4732,6 +4736,10 @@ export class Game {
       return;
     } else if (owner && owner.kind === 'guard') {
       this.ui.msg('A guard\'s cot. Better not.', '#c8c8c8');
+      return;
+    } else if (owner && owner.kind === 'inn') {
+      // (Round 54: see sim/inns.js.)
+      this.ui.msg('This room is let by the night. Ask the innkeeper (or whoever keeps the bar) for it.', '#ffd890');
       return;
     } else if (owner && owner.kind === 'taken') {
       this.ui.msg('Someone is already asleep in that bed.', '#c8c8c8');

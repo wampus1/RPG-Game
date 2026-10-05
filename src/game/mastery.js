@@ -8,7 +8,17 @@ export const CRAFTS = {
   setting: { name: 'Gem setting', rank: ['Novice', 'Apprentice', 'Apprentice', 'Setter', 'Setter', 'Journeyman', 'Journeyman', 'Fine Setter', 'Master Setter', 'Master Jeweller'] },
   study: { name: 'Study', rank: ['Novice', 'Student', 'Student', 'Scholar', 'Scholar', 'Learned', 'Learned', 'Sage', 'Sage', 'Luminary'] },
   lockpick: { name: 'Lockpicking', rank: ['Fumbler', 'Fumbler', 'Picker', 'Picker', 'Lockpick', 'Lockpick', 'Cracksman', 'Cracksman', 'Master Thief', 'Ghost'] },
+  // (Round 54: taught at a city's Academy, and learnt at the pot and in
+  // a fight. Cooking: every dish comes out a little better, rank on rank;
+  // dueling: a parry's moment a little longer.)
+  cooking: { name: 'Cookery', rank: ['Scorcher', 'Kitchen Hand', 'Kitchen Hand', 'Cook', 'Cook', 'Good Cook', 'Good Cook', 'Chef', 'Chef', 'Master Chef'] },
+  dueling: { name: 'Swordplay', rank: ['Flailer', 'Novice', 'Novice', 'Fencer', 'Fencer', 'Duellist', 'Duellist', 'Blademaster', 'Blademaster', 'Sword Saint'] },
 };
+
+// (Round 54) What a rank in these is worth: a dish's cooking nudged up; a
+// parry's window widened (seconds).
+export const cookBonus = (game) => (mastery(game, 'cooking').rank - 1) * 0.02;
+export const parryBonusOf = (game) => (mastery(game, 'dueling').rank - 1) * 0.008;
 // Successes needed for each rank.
 export const RANKS = [0, 3, 8, 15, 25, 40, 60, 85, 115, 150];
 

@@ -322,6 +322,8 @@ export class Events {
   }
 
   title(L, ev) {
+    // (Round 54: a story's own festival, by its own name.)
+    if (ev.name) return ev.name;
     if (ev.kind === 'wedding') {
       const [a, b] = ev.couple.map((i) => L.npcs[i]);
       return `the wedding of ${a.name.first} and ${b.name.first}`;
@@ -1121,8 +1123,10 @@ export class Events {
 
   cancel(L, ev, now) {
     ev.state = 'off';
-    const [a, b] = ev.couple.map((i) => L.npcs[i]);
-    ledger(L, Math.floor(now / DAY), `The wedding of ${name(a)} and ${name(b)} was called off.`);
+    if (ev.couple) {
+      const [a, b] = ev.couple.map((i) => L.npcs[i]);
+      ledger(L, Math.floor(now / DAY), `The wedding of ${name(a)} and ${name(b)} was called off.`);
+    } else ledger(L, Math.floor(now / DAY), `${cap(this.title(L, ev))} was called off.`);
     for (const g of ev.guests || []) {
       const r = L.npcs[g.idx];
       if (r && r.override && r.override.act === 'event' && r.override.ev === ev.id) {

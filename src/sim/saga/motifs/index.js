@@ -10,3 +10,7 @@ import './crime.js';
 import './realm.js';
 import './faith.js';
 import './world.js';
+import './academy.js';
+import './hearts.js';
+import './intrigue.js';
+import './festive.js';

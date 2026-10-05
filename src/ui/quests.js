@@ -16,6 +16,8 @@ const OUTCOME = {
   cast_out: 'cast out', recovered: 'recovered', lost: 'lost', faded: 'faded away', over: 'over', fled: 'fled', cooled: 'cooled', avenged: 'avenged',
   honoured: 'settled with honour', cowed: 'backed down', humbled: 'humbled', taken: 'taken', collected: 'collected', lapsed: 'lapsed', jailed: 'jailed',
   justice: 'justice done', won: 'won', drawn: 'drawn', lit: 'lit', home: 'home again', moved: 'moved on', void: 'void', scattered: 'scattered', betrayed: 'betrayed', left: 'left', recovered_: 'recovered',
+  merged: 'became part of another story', wed: 'wed', parted: 'parted', eloped: 'eloped', graduated: 'graduated', expelled: 'sent down', unmasked: 'unmasked', undone: 'undone', celebrated: 'celebrated', spoiled: 'spoiled',
+  reunited: 'reunited', found: 'found', kept: 'kept', born: 'born', adopted: 'adopted', opened: 'opened', closed: 'closed', crowned: 'crowned', raised: 'raised', sung: 'sung', freed_: 'set free',
 };
 
 export class QuestWindow extends Window {
@@ -178,6 +180,28 @@ export class QuestWindow extends Window {
       const th = e.th;
       put(th.title, C.hi);
       put(th.done ? `Over: ${OUTCOME[th.outcome] || th.outcome}.` : 'Still going on.', th.done ? C.dim : C.cyan);
+      // (Round 54: what it once was, what it's become part of, what's run
+      // into it, and what went its own way from it.)
+      if (th.was && th.was.length) put(`Once: ${th.was.join('; ')}.`, C.dim);
+      const into = th.mergedInto !== undefined && th.mergedInto !== null ? S.thread(th.mergedInto) : null;
+      if (into) put(`Became part of: ${into.title}.`, C.purple);
+      const joined = [...(th.joined || []), ...(th.also || [])].map((i) => S.thread(i)).filter(Boolean);
+      if (joined.length) put(`Ran into it, and became one with it: ${joined.map((q) => q.title).join('; ')}.`, C.purple);
+      if (th.split !== undefined && th.split !== null && S.thread(th.split)) put(`Went its own way from: ${S.thread(th.split).title}.`, C.purple);
+      // (What the story itself has to tell you: what you've found out.)
+      const M = MOTIFS[th.m];
+      if (M && M.journal) {
+        let extra = [];
+        try {
+          extra = M.journal(th, pid, S) || [];
+        } catch {
+          extra = [];
+        }
+        if (extra.length) {
+          gap();
+          for (const [text, col] of extra) put(text, col || C.fg);
+        }
+      }
       // The chain it's part of.
       const root = S.rootOf(th);
       if (root !== th || th.kids.length) {

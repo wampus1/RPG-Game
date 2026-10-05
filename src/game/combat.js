@@ -37,6 +37,7 @@ import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
 import { onTiles, apart, fits } from '../entities/footprint.js';
 import { shakeSpores } from './afflict.js';
+import { parryBonusOf, gainMastery } from './mastery.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -532,7 +533,8 @@ export function siphonBreath(game, a, v, n) {
 
 // How soon before the blow a raised guard turns it into a parry.
 export function parryWindow(game) {
-  return (heroHas(game.hero, 'duelist') ? 0.3 : 0.2) + parryBonus(game.player);
+  // (Round 54: and a little more for each rank of swordplay: see mastery.js.)
+  return (heroHas(game.hero, 'duelist') ? 0.3 : 0.2) + parryBonus(game.player) + parryBonusOf(game);
 }
 
 // A parry: the blow turned aside at the last instant with a crack of
@@ -541,6 +543,8 @@ export function parryWindow(game) {
 export function parried(game, v, a) {
   const r = game.renderer;
   r.floatText(v.x, v.y + 2.6, v.z, 'PARRY!', '#ffe070');
+  // (Practice: see mastery.js.)
+  if (v.kind === 'player' && v === game.player) gainMastery(game, 'dueling', 0.4);
   game.audio?.play('parry', v);
   game.audio?.play('armor_hit', v);
   interrupt(a, 2.8);

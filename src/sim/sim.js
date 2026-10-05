@@ -59,6 +59,7 @@ import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
 import { Saga } from './saga/core.js';
 import './saga/motifs/index.js';
+import { innBedAt, stayAt } from './inns.js';
 
 // How long a frame may spend laying out a far town (ms): see World.layOut.
 const LAY_MS = 4;
@@ -1738,6 +1739,15 @@ export class Sim {
       return inBed ? { kind: 'taken', b, L } : null;
     }
     if (L.jail && L.jail.bed.x === x && L.jail.bed.z === z) return { kind: 'jail', b, L };
+    // (Round 54) A tavern's room to let: anyone playing may sleep in it
+    // while it's let (to one of you), not otherwise. See inns.js.
+    const inn = innBedAt(L, x, z);
+    if (inn) {
+      const stay = stayAt(L, inn, this.abs);
+      if (!stay) return { kind: 'inn', b: inn, L };
+      const inBed = this.game.everyone().some((q) => q && q !== this.game.player && q.sleeping && q.x === x && q.z === z);
+      return inBed ? { kind: 'taken', b: inn, L } : null;
+    }
     if (!b.residential) return b.type === 'guardhouse' ? { kind: 'guard', b, L } : null;
     const living = L.npcs.filter((r) => r.home === b.id && alive(r));
     if (!living.length) return null;

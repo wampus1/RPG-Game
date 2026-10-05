@@ -492,6 +492,8 @@ item('ladle', { kind: 'misc', stack: 1, value: 3 });
 item('guard_badge', { name: 'Guard Badge', kind: 'misc', stack: 1, value: 0, noSell: true });
 item('letter', { name: 'Sealed Letter', kind: 'misc', stack: 16, value: 0, noSell: true });
 item('dispatch', { name: 'Mayor\'s Dispatch', kind: 'misc', stack: 16, value: 0, noSell: true });
+// (Round 54) Proof of a term passed at a city's Academy (see sim/college.js).
+item('diploma', { name: 'Academy Diploma', kind: 'misc', stack: 4, value: 0, noSell: true, about: 'Rolled parchment, the Academy\'s seal at the foot of it: proof you sat a term and passed. Frame it, or show it off.' });
 // (Round 52: see sim/saga.) The key to an outlaws' cage; goods taken on the
 // road, to carry to a fence; a token of an outlaw band's that you ride with
 // them; proof of a deed done.

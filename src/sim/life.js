@@ -59,13 +59,17 @@ export function weddings(sim, L, day, rng) {
   if (L.settlement.deserted) return null;
   const single = (r) => r.partner === null || r.partner === undefined || !alive(L.npcs[r.partner]);
   const taken = sim.events.engaged(L);
-  const singles = residents(L).filter((r) => r.age === 'adult' && single(r) && r.job !== 'merchant' && !taken.has(r.idx));
+  const singles = residents(L).filter((r) => r.age === 'adult' && single(r) && r.job !== 'merchant' && !taken.has(r.idx) && !r.courting);
   // (The more single grown-ups about, the sooner two of them hit it off.)
   if (!rng.chance(Math.min(0.3, 0.04 + 0.01 * singles.length))) return null;
   rng.shuffle(singles);
   for (const a of singles) {
     const b = singles.find((q) => q !== a && q.household !== a.household && !related(L, a, q) && ((a.friends || []).includes(q.idx) || rng.chance(0.25)));
     if (!b) continue;
+    // (Round 54) Mostly, a match is a courtship first, and a story: it may
+    // come to a wedding, or not (see saga/motifs/hearts.js).
+    const sid = L.settlement.id;
+    if (sim.saga && rng.chance(0.85) && sim.saga.startStory('courtship', { cast: { a: { t: 'rec', sid, idx: a.idx }, b: { t: 'rec', sid, idx: b.idx }, town: { t: 'town', sid } }, sid, vars: { ready: true, ha: 0.7, hb: 0.6 } })) return [a, b];
     sim.events.wedding(L, a, b, day);
     return [a, b];
   }

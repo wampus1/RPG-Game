@@ -29,6 +29,7 @@ import { fortuneOf } from '../sim/prosperity.js';
 import { isStar, starGreeting, wingTalk } from './starfall.js';
 import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
 import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
+import { INN_NIGHTS, innFor, innPrice, stayAt, rentRoom, stayLeft } from '../sim/inns.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
 const sagaPid = (game) => sagaPidOf(game.player);
@@ -322,6 +323,11 @@ export function topicsFor(npc, game) {
   // What the stories have them ask of you, or want to hear (see sim/saga).
   out.push(...sagaTopics(npc, game));
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
+  // (Round 54) The tavern's room to let: see sim/inns.js.
+  if (rep > -40 && !npc.hired && innFor(npc)) {
+    const stay = stayAt(npc.layout, innFor(npc), sim.abs);
+    add('inn_room', stay && stay.pid === sagaPidOf(game.player) ? 'About my room...' : 'Have you a room for the night?');
+  }
   if (rec.job === 'mayor') {
     const dip = sim.diplomacy;
     const mine = dip.forPlayer(s.id);
@@ -1011,7 +1017,7 @@ function professionTalk(npc, game, arg) {
         record: 'Not with a conviction on your record. The watch must be above reproach.', distrust: 'Frankly, I don\'t trust you with it. Earn some goodwill first.',
         already: `You already are our ${P.title.toLowerCase()}!`,
         tech: `Nobody in the realm knows the craft yet: our scholars would have to master ${TECHS[t.tech]?.name.toLowerCase() || 'it'} first.`,
-        nowhere: 'We have nowhere for you to do it: no academy, not even a library.',
+        nowhere: 'We have nowhere for you to do it: no research hall, not even a library.',
         tier: `A ${s.type} like ours has no call for a licensed ${P.title.toLowerCase()}. Try a ${t.tier === 'city' ? 'city' : 'town'}.`,
       }[t.reason] || 'I can\'t do that.';
       return { lines: [P.pitch, why] };
@@ -1654,6 +1660,10 @@ function respondRaw(npc, game, id, arg) {
     }
     case 'gift': return { open: 'gift' };
     case 'trade': return { open: 'trade' };
+    // (Round 54) The room to let.
+    case 'inn_room':
+    case 'inn_rent':
+      return innTalk(npc, game, id, arg);
     case 'directions':
       if (arg) {
         const pl = placesFor(npc, game).find((q) => q.key === arg);
@@ -2281,4 +2291,39 @@ export function talkContext(game, s) {
     portalto: gate && ow ? ow.settlements[gate.sid].name : null,
     prisoners: !!(L && L.econ && L.econ.labor && L.econ.labor.day === day),
   };
+}
+
+// (Round 54) A tavern's room to let (see sim/inns.js): what it is and what
+// it costs, a stay taken (or lengthened), and how long's left on one.
+function innTalk(npc, game, id, arg) {
+  const L = npc.layout;
+  const b = innFor(npc);
+  const sim = game.sim;
+  const rng = npc.rng;
+  if (!b) return { lines: ['We\'ve no rooms here.'] };
+  const pid = sagaPidOf(game.player);
+  const stay = stayAt(L, b, sim.abs);
+  const offer = () => INN_NIGHTS.map((n) => ({ id: 'inn_rent', arg: String(n), label: `${n === 1 ? 'One night' : n === 7 ? 'A week' : `${n} nights`} (¤${innPrice(L, n)})` }));
+  if (id === 'inn_room') {
+    if (stay && stay.pid !== pid) return { lines: [pick(rng, ['The room\'s taken, I\'m afraid.', 'Sorry: it\'s let already.', `${stay.who || 'Someone'} has it just now.`]), 'Try again in a day or two.'] };
+    if (stay) return { lines: [`Your room's the one in the corner. You've ${stayLeft(stay, sim.abs)}, out by mid-morning after.`, 'Want it longer?'], choices: offer(), back: 'No, that\'s fine.' };
+    const lines = [pick(rng, [
+      'There\'s a room upstairs... well, in the back. Two beds, clean sheets, a door that shuts.',
+      'We\'ve a room for travellers: two beds, a lamp, and a door with a latch on it.',
+      'Room in the corner, two beds. Quieter than it looks, once the singing stops.',
+    ]), `It's yours (and a friend's) till mid-morning after your last night. ¤${innPrice(L, 1)} a night, less for longer.`];
+    return { lines, choices: offer(), back: 'Maybe later.' };
+  }
+  const n = INN_NIGHTS.includes(+arg) ? +arg : 1;
+  const price = innPrice(L, n);
+  if (stay && stay.pid !== pid) return { lines: ['Someone\'s beaten you to it, sorry.'] };
+  if (countItem(game.player.inv, 'coin') < price) return { lines: [`That's ¤${price}. You haven't got it.`] };
+  removeItem(game.player.inv, 'coin', price);
+  const biz = L.econ.biz && L.econ.biz[b.id];
+  if (biz) biz.till = (biz.till || 0) + price;
+  else L.econ.treasury += Math.round(price * 0.3);
+  const now = rentRoom(L, b, pid, game.playerName, n, sim.abs);
+  game.audio?.play('coin');
+  sim.changeRep(npc, 1);
+  return { lines: [pick(rng, ['Here\'s the key. Breakfast isn\'t included, but I won\'t tell if you take a roll.', 'There you are. The door sticks: lift it as you push.', 'It\'s yours. Sleep well.']), `(The room in the corner is yours: ${stayLeft(now, sim.abs)}.)`] };
 }

@@ -212,3 +212,79 @@ export function ago(S, at) {
 export function townRef(th) {
   return th.sid !== null && th.sid !== undefined ? R.town(th.sid) : null;
 }
+
+// (Round 54) Of someone: a trait they have; a side of their nature (0 to
+// 1, `d` if it's not known).
+export const has = (r, t) => !!(r && r.traits && r.traits.includes(t));
+export const nat = (r, k, d = 0.5) => (r && r.personality && typeof r.personality[k] === 'number' ? r.personality[k] : d);
+
+// Single (no partner, or theirs is gone).
+export function single(L, r) {
+  return r.partner === null || r.partner === undefined || !L.npcs[r.partner] || !alive(L.npcs[r.partner]);
+}
+
+// Kin by blood (a parent or child, or brother or sister).
+export function blood(a, b) {
+  if ((a.parents || []).includes(b.idx) || (b.parents || []).includes(a.idx)) return true;
+  return (a.parents || []).some((p) => (b.parents || []).includes(p));
+}
+
+// Talking someone round, as the one playing just now: the better you're
+// liked by them and the more winning your way, the likelier; `against`
+// how set they are.
+export function persuade(S, npc, rng, base = 0.3, against = 0) {
+  const g = S.game;
+  const cha = (g.hero && g.hero.stats ? g.hero.stats.cha : 2) || 2;
+  const op = npc && npc.rec && S.sim.opinion ? S.sim.opinion(npc) : 0;
+  return rng.chance(Math.max(0.05, Math.min(0.95, base + cha * 0.07 + op / 220 - against)));
+}
+
+// A townsperson's standing with someone playing, changed (spawned or not).
+export function repWith(S, L, r, n) {
+  if (!r || !L) return;
+  S.sim.changeRep(r.ent && !r.ent.dead ? r.ent : { rec: r, settlement: L.settlement, layout: L }, n);
+}
+
+// Is this the townsperson `ref` points at?
+export function isRec(npc, ref) {
+  return !!(npc && npc.rec && ref && ref.t === 'rec' && !npc.rec.visitor && (npc.rec.sid ?? npc.settlement?.id) === ref.sid && npc.rec.idx === ref.idx);
+}
+
+// One of the town's own, for a story's walk-on part: someone grown, not
+// the mayor, and (if `not`) none of those.
+export function someone(L, rng, filter = null, not = []) {
+  const ids = new Set(not.filter(Boolean).map((r) => r.idx));
+  const ppl = adults(L).filter((r) => r.job !== 'mayor' && !ids.has(r.idx) && (!filter || filter(r)));
+  return ppl.length ? pick(rng, ppl) : null;
+}
+
+// (Round 54) A word for the colour of someone's hair (as you'd see it).
+export function hairWord(r) {
+  const hex = r && r.look && typeof r.look.hair === 'string' ? r.look.hair : null;
+  const m = hex && /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 'dark';
+  const n = parseInt(m[1], 16);
+  const rr = ((n >> 16) & 255) / 255;
+  const gg = ((n >> 8) & 255) / 255;
+  const bb = (n & 255) / 255;
+  const mx = Math.max(rr, gg, bb);
+  const mn = Math.min(rr, gg, bb);
+  const l = (mx + mn) / 2;
+  const sat = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (mx !== mn) {
+    if (mx === rr) h = ((gg - bb) / (mx - mn)) % 6;
+    else if (mx === gg) h = (bb - rr) / (mx - mn) + 2;
+    else h = (rr - gg) / (mx - mn) + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  if (l > 0.82) return 'white';
+  if (sat < 0.15) return l < 0.22 ? 'black' : l > 0.6 ? 'silver' : 'grey';
+  if (l < 0.16) return 'black';
+  if (h >= 75 && h < 200) return 'green-dyed';
+  if (h >= 200 && h < 290) return 'blue-dyed';
+  if (h >= 290 || h < 12) return sat > 0.45 && l > 0.3 ? 'red' : 'dark brown';
+  if (h < 30) return l > 0.45 ? (sat > 0.5 ? 'red' : 'light brown') : l > 0.28 ? 'auburn' : 'dark brown';
+  if (h < 75) return l > 0.55 ? 'fair' : l > 0.35 ? 'brown' : 'dark brown';
+  return 'brown';
+}

@@ -362,7 +362,12 @@ test('crowded families get a new house, and couples have children', () => {
   mum.children = [];
   L.npcs[mum.partner].children = [];
   const n = a.npcs.length;
+  // (Round 54: a child on the way is often a story first; here, with no
+  // stories told, it's born at once.)
+  const saga = game.sim.saga;
+  game.sim.saga = null;
   const born = births(game.sim, L, game.day, always).find((r) => r.parents.includes(mum.idx));
+  game.sim.saga = saga;
   assert.ok(born && born.age === 'child' && born.home === mum.home);
   assert.equal(born.name.last, mum.name.last);
   assert.ok(mum.children.includes(born.idx));

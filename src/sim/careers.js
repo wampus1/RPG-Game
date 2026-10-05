@@ -62,7 +62,7 @@ export const PROFESSIONS = {
   // bring from the desk moves its research on, and is paid for.
   researcher: {
     title: 'Researcher', tier: 'town', importance: 3, minOp: 5, kit: [['book', 1], ['ink', 1]], needs: ['academy', 'library', 'study'],
-    pitch: 'The realm\'s scholars could use another sharp mind. Sit at a desk in our academy (or the library) and work at the problems they set: every insight you bring moves the realm\'s research along, and the town pays ¤6 for each.',
+    pitch: 'The realm\'s scholars could use another sharp mind. Sit at a desk in our research hall (or the library) and work at the problems they set: every insight you bring moves the realm\'s research along, and the town pays ¤6 for each.',
   },
   scribe: {
     title: 'Scribe', tier: 'city', importance: 2, workshop: 'scribe', minOp: 10, kit: [['book', 1], ['feather', 3]], goods: ['book', 'scroll'],

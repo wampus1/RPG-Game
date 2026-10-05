@@ -357,7 +357,12 @@ test('life goes on: a new mayor is chosen, couples marry, children grow up, beas
   assert.equal(electMayor(game.sim, L, day), null, 'a couple of days of mourning first');
   const m2 = electMayor(game.sim, L, day + 2);
   assert.ok(m2 && m2.job === 'mayor' && m2 !== mayor);
+  // (Round 54: a match is often a courtship first, a story; here, with no
+  // stories told, it's a wedding at once.)
+  const saga = game.sim.saga;
+  game.sim.saga = null;
   const pair = weddings(game.sim, L, day + 2, always);
+  game.sim.saga = saga;
   // Announced now; the wedding itself is two days on.
   const ev = game.sim.events.upcoming(L).find((q) => q.couple && q.couple.includes(pair[0].idx));
   assert.ok(ev && ev.day === day + 4);

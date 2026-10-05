@@ -1336,6 +1336,17 @@ function simpleIcon(key) {
       p.ellipse(8, 8, 1.5, 1.5, '#c8a030');
       p.set(8, 8, '#8a2a2a');
       break;
+    case 'diploma':
+      // (Round 54) Rolled parchment tied with a ribbon, the Academy's seal on it.
+      p.rect(3, 6, 10, 4, '#f0e6c8');
+      p.vline(3, 5, 10, '#c8b890');
+      p.vline(12, 5, 10, '#c8b890');
+      p.hline(4, 11, 9, '#d8c8a0');
+      p.vline(8, 5, 10, '#a02a3a');
+      p.ellipse(8, 11, 1.5, 1.5, '#c8a030');
+      p.set(7, 13, '#a02a3a');
+      p.set(9, 13, '#a02a3a');
+      break;
     case 'letter':
       p.rect(3, 5, 11, 7, '#ece4cc');
       p.line(3, 5, 8, 9, '#b0a888');
