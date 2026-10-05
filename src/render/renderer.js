@@ -1986,6 +1986,7 @@ export class Renderer {
   }
 
   drawBubble(ctx, text, cx, by, color = '#f4ecd8') {
+    color ||= '#f4ecd8';
     const w = textWidth(text) + 4;
     const x = Math.round(cx - w / 2);
     const y = Math.round(by - 10);
@@ -2616,6 +2617,7 @@ export class Renderer {
   }
 
   floatText(wx, y, wz, text, color = '#ff6060') {
+    color ||= '#ff6060';
     if (this.noDamageNumbers && /^[-!]\d/.test(text)) return;
     const [x, z] = this.toView(wx, wz);
     this.floaters.push({ x: x * TILE + 8, y: z * TILE - y * LH - 4, text, color, t: 0.9 });

@@ -9,6 +9,7 @@ import { has as hasTrait } from '../game/hero.js';
 import { dishFx } from '../game/cooking.js';
 
 const MARGIN = 10;
+const CHEST_GLOW = '#ffcf6a';
 
 export function skyLight(minute) {
   const m = ((minute % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
@@ -89,7 +90,9 @@ export class Lighting {
     return c;
   }
 
-  scan(world, x0, z0, x1, z1) {
+  // (`below`: down an old place, where a chest with anything left in it
+  // glows a little, gold, so it's seen round a wall from any side.)
+  scan(world, x0, z0, x1, z1, below = false) {
     const out = [];
     for (let z = z0; z <= z1; z++) {
       for (let x = x0; x <= x1; x++) {
@@ -98,7 +101,10 @@ export class Lighting {
           const id = world.getBlock(x, y, z);
           if (id === 0) continue;
           const b = BLOCKS[id];
-          if (!b.light) continue;
+          if (!b.light) {
+            if (below && id === B.chest && (world.peekContainer(x, y, z) || []).some((q) => q && q.count > 0)) out.push({ x, y, z, L: 3, tint: CHEST_GLOW, dim: 0.75 });
+            continue;
+          }
           if (b.lightWhenState && !(world.getMeta(x, y, z) & META_STATE)) continue;
           // (Some burn brighter in their other state: see blocks.lightState.)
           const L = b.lightState && world.getMeta(x, y, z) & META_STATE ? b.lightState : b.light;
@@ -147,7 +153,7 @@ export class Lighting {
       const az0 = Math.floor(z0 / 16) * 16 - 16;
       const ax1 = Math.ceil(x1 / 16) * 16 + 16;
       const az1 = Math.ceil(z1 / 16) * 16 + 16;
-      const sources = this.scan(world, ax0 - MARGIN, az0 - MARGIN, ax1 + MARGIN, az1 + MARGIN);
+      const sources = this.scan(world, ax0 - MARGIN, az0 - MARGIN, ax1 + MARGIN, az1 + MARGIN, below);
       const key = sources.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';') + `|${ax0},${az0}`;
       this.scanTimer = 0.5;
       if (!this.flood || key !== this.flood.key || game.lightDirty) {

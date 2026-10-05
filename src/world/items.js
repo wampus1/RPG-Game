@@ -1,6 +1,6 @@
 // Item registry. Placeable blocks get an item with the same key as the block.
 import { BLOCKS, B } from './blocks.js';
-import { deriveStarred } from './quality.js';
+import { deriveStarred, softArmor } from './quality.js';
 import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
 
 export const ITEMS = {};
@@ -253,7 +253,9 @@ item('javelin', { name: 'Javelin', kind: 'weapon', stack: 6, damage: 7, reach: 1
 // Worn in one of four places. `armor` is the share of each blow it takes
 // off (the pieces add up, to at most 60%); `look` is how it shows on you.
 export const WEAR_SLOTS = ['head', 'body', 'legs', 'feet', 'shield'];
-export const ARMOR_CAP = 0.6;
+// (Round 56: no set of armour, with anything else that turns blows, past
+// four-fifths.)
+export const ARMOR_CAP = 0.8;
 const wear = (key, name, slot, armor, value, look, extra = {}) => item(key, { name, kind: 'armor', stack: 1, slot, armor, value, look, ...extra });
 wear('leather_cap', 'Leather Cap', 'head', 0.04, 10, 'lcap');
 wear('iron_helmet', 'Iron Helmet', 'head', 0.1, 40, 'helmet');
@@ -555,7 +557,7 @@ for (const key of Object.keys(ITEMS)) {
   for (const kind of ['edge', 'plating']) {
     if (!canEnhance(key, kind)) continue;
     const b = ITEMS[key];
-    const extra = kind === 'edge' ? { damage: b.damage + 3 } : { armor: Math.round((b.armor + 0.05) * 100) / 100, stats: { ...(b.stats || {}), end: ((b.stats || {}).end || 0) + 1 } };
+    const extra = kind === 'edge' ? { damage: b.damage + 3 } : { armor: softArmor(b.slot, Math.round((b.armor + 0.05) * 100) / 100), stats: { ...(b.stats || {}), end: ((b.stats || {}).end || 0) + 1 } };
     ITEMS[enhanced(key, kind)] = { ...b, key: enhanced(key, kind), name: `${b.name} (${kind === 'edge' ? 'Alloy-Edged' : 'Alloy-Plated'})`, value: b.value + 120, enhanced: kind, base: key, ...extra };
   }
 }

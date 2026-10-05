@@ -96,6 +96,10 @@ function nearest(n, list, r = 99) {
 }
 
 function strike(n, t, dt) {
+  // (How long at this fight, kept apart from how long they've been out:
+  // see NPC.fight.)
+  if (n.threat !== t) n.warFightT = 0;
+  n.warFightT = (n.warFightT || 0) + dt;
   n.threat = t;
   n.fight(dt);
   // (fight() may have called it off: back to the plan next tick.)
@@ -260,7 +264,8 @@ function bandit(n, wb, dt) {
     n.say(n.rng.pick(['Enough! I\'m off!', 'Not worth dying for!', 'Scatter!']), 2, '#ffb080');
     return;
   }
-  const d = pl.dead || pl.down || Math.abs(pl.y - n.y) > 2 ? 99 : n.distTo(pl);
+  // (A ledge or a slope between you is no wall: only a cliff is.)
+  const d = pl.dead || pl.down || Math.abs(pl.y - n.y) > 4 ? 99 : n.distTo(pl);
   const close = d <= 6;
   if (wb.phase === 'camp') {
     const h = wb.home;
@@ -281,8 +286,19 @@ function bandit(n, wb, dt) {
       wb.warnT = 0;
       wb.warned = false;
     }
-    if (n.threat === pl || (!holding && (d <= 3 || (wb.warnT || 0) > 5)) || (holding && d <= 1)) {
-      if (n.threat !== pl && n.rng.chance(0.5)) n.say(n.rng.pick(['Get them!', 'You were warned!', 'Take everything they\'ve got!']), 2, '#ff9080');
+    // (Holding someone: whoever walks right up, or comes in close with a
+    // blade out after the warning.)
+    const armed = !!(pl.heldItem && ITEMS[pl.heldItem()] && ITEMS[pl.heldItem()].kind === 'weapon');
+    if (n.threat === pl || (!holding && (d <= 3 || (wb.warnT || 0) > 5)) || (holding && (d <= 1 || (d <= 3 && armed && (wb.warnT || 0) > 3)))) {
+      if (n.threat !== pl) {
+        if (n.rng.chance(0.5)) n.say(n.rng.pick(['Get them!', 'You were warned!', 'Take everything they\'ve got!']), 2, '#ff9080');
+        // (And the rest of the band round the fire with them: not one at a
+        // time, as each thinks better of it.)
+        for (const q of g.npcs) {
+          if (q === n || q.dead || q.down || !q.warband || q.warband.kind !== 'bandit' || q.warband.band !== wb.band || q.warband.phase !== 'camp') continue;
+          if (q.distTo(n) <= 16 && !q.threat) q.threat = pl;
+        }
+      }
       n.threat = pl;
       return strike(n, pl, dt);
     }

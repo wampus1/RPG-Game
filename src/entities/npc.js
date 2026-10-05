@@ -2883,7 +2883,11 @@ export class NPC extends Entity {
     const justice = game.sim.justice;
     const lawful = t && t.kind === 'player' && (game.isWanted(sid) || justice.exiled.has(sid));
     const tooFar = !t || t.dead || this.distTo(t) > (guard ? 40 : 14) || (t.kind === 'player' && guard && !lawful && this.stateT > 25);
-    if (tooFar || this.stateT > 90 || (t && t.kind === 'player' && justice.jail)) {
+    // (One of a band: how long they've been at this fight, not how long
+    // they've been out: a bandit an hour at their fire still fights. See
+    // warrior.js / sagaman.js strike.)
+    const longT = this.warband && this.state === 'warband' ? this.warFightT || 0 : this.stateT;
+    if (tooFar || longT > 90 || (t && t.kind === 'player' && justice.jail)) {
       this.calmDown();
       return;
     }

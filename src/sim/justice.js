@@ -1067,7 +1067,7 @@ export class Justice {
     // hand is self-defence, and the watch doesn't say a word about it till
     // you've been clear of them a good five seconds.
     const foe = game.creatures.some((c) => !c.dead && c.hostileNow && Math.hypot(c.x - p.x, c.z - p.z) <= 16)
-      || game.npcs.some((n) => !n.dead && ((n.state === 'fight' && n.threat === p) || n.hostileNow) && Math.hypot(n.x - p.x, n.z - p.z) <= 16);
+      || game.npcs.some((n) => !n.dead && (((n.state === 'fight' || n.state === 'warband') && n.threat === p) || n.hostileNow) && Math.hypot(n.x - p.x, n.z - p.z) <= 16);
     this.calmT = foe ? 0 : (this.calmT ?? 99) + 1;
     if (this.calmT < 5) this.brandish = null;
     // Guards of the town may carry arms where others may not.

@@ -59,6 +59,8 @@ export class Grid {
 
   text(x, y, str, fg = C.fg, bg = undefined, maxW = 999) {
     str = String(str);
+    // (A null colour: the usual one, not whatever was there before.)
+    fg ||= C.fg;
     for (let i = 0; i < str.length && i < maxW; i++) this.put(x + i, y, str[i], fg, bg);
     return Math.min(str.length, maxW);
   }

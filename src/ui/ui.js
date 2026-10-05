@@ -119,6 +119,9 @@ export class UI {
   }
 
   msg(text, color = C.fg, merge = false) {
+    // (A colour that came as null, over the wire or from a story: the
+    // usual one, never black. Round 56.)
+    color ||= C.fg;
     if (merge && this.messages.length) {
       const last = this.messages[this.messages.length - 1];
       const m = /^\+(\d+) (.*)$/.exec(text);

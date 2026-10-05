@@ -8,7 +8,7 @@ import { World } from '../world/world.js';
 import { tickFieldsOff } from '../entities/fields.js';
 import { updateWorks } from '../entities/bosskit.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL, PLANK_BLOCKS } from '../world/blocks.js';
-import { ITEMS, GEMS, rollDrops, itemForBlock, socketed } from '../world/items.js';
+import { ITEMS, GEMS, rollDrops, itemForBlock, socketed, ARMOR_CAP } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { Player, screenToWorld } from '../entities/player.js';
 import { NPC } from '../entities/npc.js';
@@ -4120,11 +4120,77 @@ export class Game {
     }
   }
 
+  // Is there a way from where you stand to (x, y, z), not through a wall?
+  // (Over a table, round a corner, yes; through stone, no. Round 56: a
+  // chest or a relic on the far side of a wall was opened all the same.)
+  wayTo(x, y, z) {
+    const p = this.player;
+    const px = Math.round(p.x);
+    const pz = Math.round(p.z);
+    if (Math.max(Math.abs(x - px), Math.abs(z - pz)) <= 1 && !this.wallBetween(px, pz, x, z, p.y)) return true;
+    const wall = (cx, cz) => {
+      // (Open if there's room for a body at about your height.)
+      for (const y0 of [p.y, p.y + 1, p.y - 1]) if (!this.isWall(cx, y0, cz) && !this.isWall(cx, y0 + 1, cz)) return false;
+      return true;
+    };
+    const x0 = Math.min(px, x) - 3;
+    const z0 = Math.min(pz, z) - 3;
+    const W = Math.max(px, x) + 3 - x0 + 1;
+    const D = Math.max(pz, z) + 3 - z0 + 1;
+    if (W * D > 4096) return true;
+    const seen = new Uint8Array(W * D);
+    const q = [[px, pz]];
+    seen[(pz - z0) * W + (px - x0)] = 1;
+    while (q.length) {
+      const [cx, cz] = q.shift();
+      // (Within arm's length of it, and nothing in the way of the arm.)
+      if (Math.max(Math.abs(cx - x), Math.abs(cz - z)) <= 1 && !this.wallBetween(cx, cz, x, z, p.y)) return true;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dz) continue;
+          const nx = cx + dx;
+          const nz = cz + dz;
+          if (nx < x0 || nz < z0 || nx >= x0 + W || nz >= z0 + D) continue;
+          const k = (nz - z0) * W + (nx - x0);
+          if (seen[k] || wall(nx, nz)) continue;
+          // (Not squeezed through where two walls meet at a corner.)
+          if (dx && dz && wall(cx + dx, cz) && wall(cx, cz + dz)) continue;
+          seen[k] = 1;
+          q.push([nx, nz]);
+        }
+      }
+    }
+    return false;
+  }
+
+  isWall(x, y, z) {
+    const b = BLOCKS[this.world.getBlock(x, y, z)];
+    return !!(b && b.opaque && b.render === 'cube');
+  }
+
+  // A step from (ax, az) to (bx, bz) next to it, cut off by walls: a wall
+  // straight between, or both corners of a diagonal one.
+  wallBetween(ax, az, bx, bz, y) {
+    const dx = Math.sign(bx - ax);
+    const dz = Math.sign(bz - az);
+    if (!dx || !dz) return false;
+    const solid = (cx, cz) => this.isWall(cx, y, cz) && this.isWall(cx, y + 1, cz);
+    return solid(ax + dx, az) && solid(ax, az + dz);
+  }
+
   interact(x, y, z) {
     const w = this.world;
     const id = w.getBlock(x, y, z);
     const b = BLOCKS[id];
     const p = this.player;
+    // (Not through a wall: a chest, a relic, a lever on the far side.)
+    if (b.interact && b.interact !== 'door' && b.interact !== 'gate' && !this.wayTo(x, y, z)) {
+      if ((this.wallHintT || 0) <= Date.now()) {
+        this.ui.msg('You can\'t reach that from here: there\'s a wall in the way.', '#ffb080');
+        this.wallHintT = Date.now() + 2000;
+      }
+      return;
+    }
     p.face(x, z);
     // The old places' doors, stairs, levers and the like.
     if (DUNGEON_INTERACTS.has(b.interact)) {
@@ -5934,7 +6000,7 @@ export class Game {
     }
     if (target.kind === 'player') {
       // Your armour, and the watch's mail if you wear the colours.
-      const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue()) * (1 - phase);
+      const a = Math.min(ARMOR_CAP, this.sim.careers.armor() + target.armorValue()) * (1 - phase);
       if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
       armored = a >= 0.1;
       // (A dish that toughens you, or leaves you the softer: cooking.js.)

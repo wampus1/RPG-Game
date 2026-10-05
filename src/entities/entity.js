@@ -92,7 +92,8 @@ export class Entity {
   }
 
   say(text, t = 3, color) {
-    this.bubble = { text, t, color };
+    // (No colour given, or null: the usual one, drawn at the bubble.)
+    this.bubble = { text, t, color: color || undefined };
   }
 
   // A reply a moment after someone else has spoken.

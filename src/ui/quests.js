@@ -17,7 +17,7 @@ const OUTCOME = {
   honoured: 'settled with honour', cowed: 'backed down', humbled: 'humbled', taken: 'taken', collected: 'collected', lapsed: 'lapsed', jailed: 'jailed',
   justice: 'justice done', won: 'won', drawn: 'drawn', lit: 'lit', home: 'home again', moved: 'moved on', void: 'void', scattered: 'scattered', betrayed: 'betrayed', left: 'left', recovered_: 'recovered',
   merged: 'became part of another story', wed: 'wed', parted: 'parted', eloped: 'eloped', graduated: 'graduated', expelled: 'sent down', unmasked: 'unmasked', undone: 'undone', celebrated: 'celebrated', spoiled: 'spoiled',
-  reunited: 'reunited', found: 'found', kept: 'kept', born: 'born', adopted: 'adopted', opened: 'opened', closed: 'closed', crowned: 'crowned', raised: 'raised', sung: 'sung', freed_: 'set free',
+  cut_short: 'cut short by a death', blood: 'ended in blood', reunited: 'reunited', found: 'found', kept: 'kept', born: 'born', adopted: 'adopted', opened: 'opened', closed: 'closed', crowned: 'crowned', raised: 'raised', sung: 'sung', freed_: 'set free',
 };
 
 export class QuestWindow extends Window {
@@ -79,7 +79,7 @@ export class QuestWindow extends Window {
     }
     if (this.tab === 'name') this.drawName(g, game);
     else this.drawList(g, game);
-    g.text(2, this.h - 2, this.tab === 'name' ? '1-4 / TAB tabs · ESC close' : '↑↓ choose · wheel scroll · M mark on map · G give up · 1-4/TAB tabs · ESC', C.faint, undefined, this.w - 4);
+    g.text(2, this.h - 2, this.tab === 'name' ? 'wheel scroll · 1-4 / TAB tabs · ESC close' : '↑↓ choose · wheel or ▲▼ scroll · M mark on map · G give up · 1-4/TAB tabs · ESC', C.faint, undefined, this.w - 4);
   }
 
   entriesCount(game, tab) {
@@ -131,7 +131,80 @@ export class QuestWindow extends Window {
       });
     });
     const e = list[this.sel];
-    if (e) this.drawDetail(g, game, e, LW + 3, top, this.w - LW - 5, rows);
+    this.listW = LW;
+    if (!e) return;
+    // (Its words, with a bar to scroll them by; under them, what can be
+    // done about it: round 56.)
+    this.drawDetail(g, game, e, LW + 3, top, this.w - LW - 7, rows - 2);
+    this.drawActions(g, game, e, LW + 3, this.h - 4);
+  }
+
+  // [M] Mark on map · [G] Give up, under what's chosen (greyed when they
+  // can't be done).
+  drawActions(g, game, e, x, y) {
+    const btn = (bx, label, on, fn, col) => {
+      const w = label.length + 2;
+      const hov = on && this.hovering(bx, y, w, 1);
+      g.fill(bx, y, w, 1, ' ', C.fg, hov ? '#6a5030' : on ? '#3a2e1e' : '#221a12');
+      g.text(bx + 1, y, label, !on ? C.faint : hov ? C.white : col);
+      if (on) this.hit(bx, y, w, 1, fn);
+      return bx + w + 2;
+    };
+    let bx = btn(x, '[M] Mark on map', !!this.markAt(e, game), () => this.mark(e, game), C.cyan);
+    const sure = this.confirmDrop === this.dropKey(e);
+    bx = btn(bx, sure ? '[G] Give it up? Again to be sure' : '[G] Give up', this.droppable(e, game).length > 0, () => this.giveUp(e, game), sure ? C.orange : C.fg);
+    void bx;
+  }
+
+  // Where on the map a task (or a story you're in) is.
+  markAt(e, game) {
+    if (e.t) return e.t.at || null;
+    const S = game.sim.saga;
+    const pid = this.pid(game);
+    const tasks = e.th.tasks.filter((t) => t.status === 'open' && t.at);
+    const t = tasks.find((q) => S.claimedBy(q, pid)) || tasks[0];
+    if (t) return t.at;
+    if (e.th.done) return null;
+    return S.anchors(e.th)[0] || null;
+  }
+
+  mark(e, game) {
+    const at = this.markAt(e, game);
+    if (!at) {
+      game.ui.msg('Nowhere in particular to mark for that.', C.dim);
+      return;
+    }
+    const label = e.t ? e.t.pinLabel || e.t.title : e.th.title;
+    game.world.ow.pin(at.x, at.z, label, (e.t && e.t.glyph) || '!');
+    game.ui.msg('Marked on your map.', C.cyan);
+    this.ui.audio?.play('select');
+  }
+
+  // The tasks of yours giving up would let go of.
+  droppable(e, game) {
+    const S = game.sim.saga;
+    const pid = this.pid(game);
+    const tasks = e.t ? [e.t] : e.th.tasks;
+    return tasks.filter((t) => t.status === 'open' && S.claimedBy(t, pid));
+  }
+
+  dropKey(e) {
+    return e.t ? `t${e.t.id}` : `th${e.th.id}`;
+  }
+
+  // Asked once more first (a stray click shouldn't cost you a quest).
+  giveUp(e, game) {
+    const tasks = this.droppable(e, game);
+    if (!tasks.length) return;
+    const key = this.dropKey(e);
+    if (this.confirmDrop !== key) {
+      this.confirmDrop = key;
+      return;
+    }
+    this.confirmDrop = null;
+    const S = game.sim.saga;
+    for (const t of tasks) S.drop(t, { t: 'pl', pid: this.pid(game) });
+    game.ui.msg(`You gave up on it: ${lcFirst(e.t ? e.t.title : e.th.title)}.`, C.dim);
   }
 
   subOf(e, game) {
@@ -221,7 +294,27 @@ export class QuestWindow extends Window {
     const maxScroll = Math.max(0, out.length - rows);
     this.dscroll = Math.max(0, Math.min(this.dscroll, maxScroll));
     out.slice(this.dscroll, this.dscroll + rows).forEach(([l, col], i) => g.text(x, y0 + i, l, col, undefined, w));
-    if (maxScroll) g.text(x + w - 6, y0 + rows - 1, this.dscroll < maxScroll ? ' ▼more' : '', C.faint);
+    this.scrollbar(g, x + w + 1, y0, rows, out.length);
+  }
+
+  // A bar down the right of what's being read, when there's more of it than
+  // fits: ▲ and ▼ to click at its ends, the thumb where you are in it.
+  scrollbar(g, x, y0, H, n) {
+    this.maxScroll = Math.max(0, n - H);
+    if (n <= H) return;
+    const top = n - H;
+    const th = Math.max(2, Math.round(((H - 2) * H) / n));
+    const ty = y0 + 1 + Math.round(((H - 2 - th) * this.dscroll) / top);
+    for (let y = y0 + 1; y < y0 + H - 1; y++) g.text(x, y, y >= ty && y < ty + th ? '█' : '│', y >= ty && y < ty + th ? C.dim : C.faint);
+    g.text(x, y0, '▲', this.dscroll > 0 ? C.hi : C.faint);
+    g.text(x, y0 + H - 1, '▼', this.dscroll < top ? C.hi : C.faint);
+    this.hit(x, y0, 1, 1, () => this.scrollBy(-3));
+    this.hit(x, y0 + H - 1, 1, 1, () => this.scrollBy(3));
+    this.hit(x, y0 + 1, 1, H - 2, (ck, game, cx, cy) => this.scrollBy(cy === undefined ? 3 : cy < ty ? -H + 2 : cy >= ty + th ? H - 2 : 0));
+  }
+
+  scrollBy(d) {
+    this.dscroll = Math.max(0, Math.min(this.maxScroll ?? Infinity, this.dscroll + d));
   }
 
   drawName(g, game) {
@@ -263,11 +356,23 @@ export class QuestWindow extends Window {
     const rows = this.h - 6;
     const maxScroll = Math.max(0, out.length - rows);
     this.dscroll = Math.max(0, Math.min(this.dscroll, maxScroll));
-    out.slice(this.dscroll, this.dscroll + rows).forEach(([l, col], i) => g.text(3, 3 + i, l, col, undefined, this.w - 6));
+    out.slice(this.dscroll, this.dscroll + rows).forEach(([l, col], i) => g.text(3, 3 + i, l, col, undefined, this.w - 8));
+    this.scrollbar(g, this.w - 3, 3, rows, out.length);
   }
 
-  onWheel(d) {
-    this.dscroll = Math.max(0, this.dscroll + Math.sign(d) * 2);
+  // Over the list, it moves through the list; anywhere else, through what's
+  // written about the one chosen.
+  onWheel(d, game) {
+    game ||= this.ui.game;
+    const m = this.ui.mouseCell;
+    if (this.tab !== 'name' && m && m.x - this.x <= (this.listW || 30) && m.x >= this.x && game) {
+      const n = this.entries(game).length;
+      const was = this.sel;
+      this.sel = Math.max(0, Math.min(n - 1, this.sel + Math.sign(d)));
+      if (this.sel !== was) this.dscroll = 0;
+      return;
+    }
+    this.scrollBy(Math.sign(d) * 2);
   }
 
   onKey(k, game) {
@@ -293,22 +398,14 @@ export class QuestWindow extends Window {
     } else if (code === 'ArrowDown' || code === 'KeyS') {
       this.sel = Math.min(Math.max(0, list.length - 1), this.sel + 1);
       this.dscroll = 0;
-    } else if (code === 'PageDown') this.dscroll += 6;
-    else if (code === 'PageUp') this.dscroll = Math.max(0, this.dscroll - 6);
+    } else if (code === 'PageDown') this.scrollBy(6);
+    else if (code === 'PageUp') this.scrollBy(-6);
     else if (code === 'KeyM') {
       const e = list[this.sel];
-      const at = e && e.t && e.t.at;
-      if (at) {
-        game.world.ow.pin(at.x, at.z, e.t.pinLabel || e.t.title, e.t.glyph || '!');
-        game.ui.msg('Marked on your map.', C.cyan);
-      }
+      if (e) this.mark(e, game);
     } else if (code === 'KeyG') {
       const e = list[this.sel];
-      const S = game.sim.saga;
-      if (e && e.t && e.t.status === 'open' && S.claimedBy(e.t, this.pid(game))) {
-        S.drop(e.t, { t: 'pl', pid: this.pid(game) });
-        game.ui.msg(`You gave up on it: ${lcFirst(e.t.title)}.`, C.dim);
-      }
+      if (e) this.giveUp(e, game);
     }
     return true;
   }

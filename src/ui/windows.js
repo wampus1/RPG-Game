@@ -1696,10 +1696,12 @@ export class PauseWindow extends Window {
 // Save or load: five slots of your own plus the autosave. Click a slot (or
 // press its number) to save there or load it; X deletes the one you're on.
 export class SaveSlotsWindow extends Window {
-  constructor(ui, mode, store) {
+  // (`then`: what to do once it's saved, as when saving before you go.)
+  constructor(ui, mode, store, then = null) {
     super(ui, 60, 22, { kind: 'saves' });
     this.mode = mode;
     this.store = store;
+    this.then = then;
     this.sel = mode === 'load' ? Math.max(0, store.list().findIndex((q) => q.meta && q.id === store.latest()?.id)) : 1;
     this.confirm = null;
   }
@@ -1766,7 +1768,7 @@ export class SaveSlotsWindow extends Window {
       return;
     }
     this.confirm = null;
-    if (h.saveSlot && h.saveSlot(q.id)) this.close();
+    if (h.saveSlot && h.saveSlot(q.id, this.then)) this.close();
   }
   remove() {
     const q = this.store.list()[this.sel];
@@ -1899,7 +1901,8 @@ export class SaveDetailsWindow extends Window {
 // the game, say): [Y] goes ahead, [N] or Esc doesn't.
 export class ConfirmWindow extends Window {
   // (`only`: just the one button, to say it's been read.)
-  constructor(ui, title, text, onYes, { yes = 'Yes', no = 'No', onNo = null, only = false } = {}) {
+  // (`cancel`: a third way, just back out of it: ESC.)
+  constructor(ui, title, text, onYes, { yes = 'Yes', no = 'No', onNo = null, only = false, cancel = null } = {}) {
     const lines = wrap(text, 52);
     super(ui, 58, lines.length + 7, { kind: 'confirm' });
     this.title = title;
@@ -1909,6 +1912,7 @@ export class ConfirmWindow extends Window {
     this.yes = yes;
     this.no = no;
     this.only = only;
+    this.cancel = cancel;
   }
   draw(g) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
@@ -1927,6 +1931,11 @@ export class ConfirmWindow extends Window {
       return;
     }
     btn(3, `[Y] ${this.yes}`, () => this.answer(true), C.hi);
+    if (this.cancel) {
+      btn(Math.floor((this.w - this.no.length - 6) / 2), `[N] ${this.no}`, () => this.answer(false), C.fg);
+      btn(this.w - this.cancel.length - 11, `[ESC] ${this.cancel}`, () => this.close(), C.dim);
+      return;
+    }
     btn(this.w - this.no.length - 9, `[N] ${this.no}`, () => this.answer(false), C.fg);
   }
   answer(yes) {
@@ -1938,6 +1947,7 @@ export class ConfirmWindow extends Window {
     if (this.only) {
       if (['Enter', 'Escape', 'Space', 'KeyY'].includes(k.code)) this.answer(true);
     } else if (k.code === 'KeyY' || k.code === 'Enter') this.answer(true);
+    else if (k.code === 'Escape' && this.cancel) this.close();
     else if (k.code === 'KeyN' || k.code === 'Escape') this.answer(false);
     return true;
   }

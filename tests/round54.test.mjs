@@ -92,7 +92,7 @@ test('stories split, join and fuse; are retitled; and a hidden one is told only 
 });
 
 test('there are fifty new kinds of story, each with its own family, and they run without fault', () => {
-  const NEW = ['academy', 'student', 'courtship', 'newborn', 'reconcile', 'last_wish', 'homecoming', 'infiltrator', 'festival', 'tournament', 'bard_song', 'harvest',
+  const NEW = ['academy', 'student', 'courtship', 'reconcile', 'last_wish', 'homecoming', 'infiltrator', 'festival', 'tournament', 'bard_song', 'harvest',
     'venture', 'apprentice', 'treasure_map', 'expedition', 'barn_raising', 'rivalry', 'moneylender', 'silver_mine', 'election', 'strike', 'ratcatcher', 'witch_hunt',
     'honour_duel', 'gambler', 'tonic', 'white_stag', 'stray', 'haunting', 'shipwreck', 'dry_well', 'falling_star', 'great_fish', 'pig_chase', 'swarm', 'ill_luck',
     'orphan', 'golden_wedding', 'late_letter', 'inheritance', 'prodigy', 'sleepwalker', 'double', 'lost_traveller', 'bridge_out', 'child_alone', 'no_memory', 'show',
@@ -169,9 +169,8 @@ test('the courtship\'s talk: how they feel, a good word, a warning; and a parent
   assert.ok(S.touchedBy(th, 'host'));
 });
 
-test('a child on the way: births go through a story now and then, and are born of it', () => {
-  const { game, input, S } = start();
-  const errs = faults(S);
+test('births are the town\'s own (round 56: no story for them): a couple has a child in their house', () => {
+  const { game } = start();
   const L = game.world.layouts.get(game.currentSettlement.id);
   const mum = L.npcs.find((r) => r.alive !== false && r.age === 'adult' && r.partner !== null && r.partner !== undefined && L.npcs[r.partner] && L.npcs[r.partner].home === r.home && r.home !== null && r.idx < r.partner);
   assert.ok(mum);
@@ -179,17 +178,11 @@ test('a child on the way: births go through a story now and then, and are born o
   const n0 = L.npcs.length;
   const kid = bear(game.sim, L, mum, dad, game.day, 42);
   assert.ok(kid.age === 'child' && kid.parents.includes(mum.idx) && L.npcs.length === n0 + 1);
-  const th = S.begin('newborn', { cast: { a: { t: 'rec', sid: L.settlement.id, idx: mum.idx }, b: { t: 'rec', sid: L.settlement.id, idx: dad.idx }, town: { t: 'town', sid: L.settlement.id } }, sid: L.settlement.id });
-  assert.ok(th && mum.expecting === th.id);
-  assert.ok(/A Child for/.test(th.title));
-  // (No more births to them while it's going.)
-  assert.equal(births(game.sim, L, game.day, always).filter((r) => r.parents.includes(mum.idx)).length, 0);
-  th.vars.due = game.day;
-  th.vars.hard = false;
-  days(game, input, 2);
-  assert.ok(th.done && ['born', 'lost', 'grief'].includes(th.outcome), th.outcome);
-  assert.ok(!mum.expecting);
-  assert.deepEqual(errs, []);
+  assert.ok(!MOTIFS.newborn, 'no story of it');
+  mum.children = [];
+  dad.children = [];
+  const born = births(game.sim, L, game.day, always);
+  assert.ok(born.some((r) => r.parents.includes(mum.idx)), 'born at once');
 });
 
 test('someone new in town: a record of their own, a bed, work, and grown (not about to retire)', () => {

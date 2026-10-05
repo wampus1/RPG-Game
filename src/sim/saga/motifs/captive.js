@@ -24,11 +24,11 @@
 // And afterwards: your things are still in their strongbox (until someone
 // opens it: maybe you).
 import { motif, HOOKS, R, refKey, nameOf, NameOf, resolve, pidOf, playerOf, poss } from '../core.js';
-import { pick, layoutOf, town, townMid, directions, fullName, odds, homeOf, renownIn, spotNear, hours } from './lib.js';
+import { pick, layoutOf, town, townName, townMid, directions, fullName, odds, homeOf, renownIn, spotNear, hours } from './lib.js';
 import { cage, stash, stashOf, stashAt, setDoor, inCage, cageAt } from './camp.js';
 import { fromBandit, makePerson } from '../actors.js';
 import { ITEMS } from '../../../world/items.js';
-import { mayorOf, DAY } from '../../econ.js';
+import { mayorOf, DAY, alive } from '../../econ.js';
 import { countItem, removeItem } from '../../../game/inventory.js';
 import { LockWindow } from '../../../ui/lockpick.js';
 import { hash4 } from '../../../util/rng.js';
@@ -386,23 +386,27 @@ motif({
         if (c.t !== 'pl') freeNpc(th, S, by);
         else S.end(th, 'freed');
       },
-      // (A townsperson let out follows whoever let them out home.)
+      // (A townsperson let out follows whoever let them out home: once
+      // they're back among their own people, they know the way from there,
+      // say so, and go on alone, to whoever's waiting for them. Round 56.)
       live(th, S) {
         const c = th.cast.captive;
         if (c.t === 'pl') return;
         const e = S.actorEnt(th, 'captive');
-        const home = townMid(town(S, c.sid));
-        if (e && home && Math.hypot(e.x - home.x, e.z - home.z) < 30) {
-          const t = S.tasksOf(th, 'rescue')[0];
-          const by = th.vars.leader ? R.pl(th.vars.leader) : null;
-          if (t && by) S.complete(t, by);
-          homeNpc(th, S);
-          S.end(th, 'home', `${NameOf(S, c)} is home again.`, { news: [c.sid] });
+        // (Killed on the way: see castDown.)
+        if (S.actorSpec(th, 'captive')?.dead || !alive(resolve(S, c))) return;
+        if (th.vars.parted) {
+          if (!e) {
+            homeNpc(th, S);
+            S.end(th, 'home', `${NameOf(S, c)} is home again.`, { news: [c.sid] });
+          }
+          return;
         }
+        if (e && th.vars.leader && amongOwn(S, c.sid, e)) partWays(th, S, e);
       },
       day(th, S) {
         // (Nobody led them: they find their own way home.)
-        if (th.cast.captive.t !== 'pl' && S.now - th.nodeAt > DAY) {
+        if (th.cast.captive.t !== 'pl' && S.now - th.nodeAt > DAY && alive(resolve(S, th.cast.captive)) && !S.actorSpec(th, 'captive')?.dead) {
           homeNpc(th, S);
           S.end(th, 'home', `${NameOf(S, th.cast.captive)} found their way home.`);
         }
@@ -613,6 +617,24 @@ motif({
         return null;
     }
   },
+  // (Round 56) The captive dead: in the cage, on the road home, or after.
+  // Killed by the very one who'd got them out, it's remembered.
+  castDown(th, role, ev, S) {
+    if (role !== 'captive') return null;
+    const c = th.cast.captive;
+    const b = bandOf(S, th);
+    const by = ev.by;
+    const where = townName(S, c.sid);
+    if (by && by.t === 'pl' && (th.vars.leader === by.pid || th.node === 'freed')) {
+      const pid = by.pid;
+      S.person(pid).under += 2;
+      if (b) S.emit('captive_slain', { band: b.id, by });
+      return `${nameOf(S, by)} got ${NameOf(S, c)} out of the cage, and then cut them down on the road home. ${where} won't forget it, and the outlaws laugh about it round their fires.`;
+    }
+    if (by && by.t === 'pl') return `${NameOf(S, c)} was killed by ${nameOf(S, by)} before they ever got out of ${b ? poss(b.name) : 'the'} cage.`;
+    if (th.node === 'held') return `${NameOf(S, c)} died in ${b ? poss(b.name) : 'the outlaws\''} cage. Nobody came in time.`;
+    return `${NameOf(S, c)} never made it home to ${where}.`;
+  },
   actorDown(th, a, by, S) {
     // (The jailer had the key on them.)
     if (a.role === 'jailer' && a.at) {
@@ -760,6 +782,59 @@ function freeNpc(th, S, by) {
     homeNpc(th, S);
     S.end(th, 'home', `${NameOf(S, th.cast.captive)} made it home.`);
   }
+}
+
+// Back among their own: near home, or in a town of their own realm.
+function amongOwn(S, sid, e) {
+  const home = town(S, sid);
+  const mid = townMid(home);
+  if (mid && Math.hypot(e.x - mid.x, e.z - mid.z) < 40) return true;
+  const here = S.game.world.ow.settlementAt(Math.round(e.x), Math.round(e.z));
+  return !!(here && home && here.civ !== undefined && here.civ === home.civ);
+}
+
+// Who'll be waiting for them at home: [name, how they're kin], or null.
+function waitingFor(S, c) {
+  const L = layoutOf(S, c.sid);
+  const r = resolve(S, c);
+  if (!L || !r) return null;
+  const at = (i) => (Number.isInteger(i) ? L.npcs[i] : null);
+  const ok = (q) => q && q !== r && q.alive !== false && !q.dead && q.name;
+  const tries = [[at(r.partner), 'partner'], ...(r.children || []).map((i) => [at(i), 'child']), ...(r.parents || []).map((i) => [at(i), 'parent']), ...(r.friends || []).map((i) => [at(i), 'friend'])];
+  const f = tries.find(([q]) => ok(q));
+  return f ? [f[0].name.first, f[1]] : null;
+}
+
+// Parting from whoever led them, to walk the rest of the way alone.
+function partWays(th, S, e) {
+  const c = th.cast.captive;
+  const rng = S.rng(th, 0x9a7);
+  const w = waitingFor(S, c);
+  const place = town(S, c.sid);
+  const where = place ? place.name : 'home';
+  const line = !w ? pick(rng, [
+    `I know where I am now. I can walk to ${where} from here. Thank you, for all of it.`,
+    'These are my own roads. Go on: I\'ll manage the rest. I won\'t forget this.',
+  ]) : {
+    partner: [`I can find my way from here. ${w[0]} must think I'm dead. I'm going straight to them.`, `${w[0]}'s waiting in ${where}. I can't keep them waiting another hour. Thank you!`],
+    child: [`${w[0]} will be watching the road for me. I know the way now. Thank you, with all my heart.`, `I'm going home to ${w[0]}. I can see the way from here. Bless you.`],
+    parent: [`I'm going home to ${w[0]}. I know these roads. Thank you, truly.`, `${w[0]} will have worn a hole in the floor waiting. I'll go on alone from here. Thank you!`],
+    friend: [`From here I know the way. I'll go to ${w[0]} first: they'll have been out of their mind.`, `I'll find ${w[0]} and let them know I'm alive. Go on, I'm fine from here. Thank you.`],
+  }[w[1]][rng.int(0, 1)];
+  e.say(line, 5, '#e8d0a0');
+  th.vars.parted = true;
+  const t = S.tasksOf(th, 'rescue')[0];
+  const by = th.vars.leader ? R.pl(th.vars.leader) : null;
+  if (t && by) S.complete(t, by);
+  S.note(th, `${NameOf(S, c)} parted from ${by ? nameOf(S, by) : 'their rescuer'} on the way into ${where}${w ? `, to go to ${w[0]}` : ''}.`);
+  // (On alone: to the middle of town, and gone from sight.)
+  const mid = townMid(place) || { x: Math.round(e.x), z: Math.round(e.z) };
+  if (e.saga) {
+    e.saga.follow = null;
+    e.saga.homeward = mid;
+  }
+  const a = S.actorSpec(th, 'captive');
+  if (a) a.orders = { ...(a.orders || {}), follow: null, homeward: mid };
 }
 
 function homeNpc(th, S) {

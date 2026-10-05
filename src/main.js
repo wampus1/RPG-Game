@@ -60,6 +60,10 @@ function resize() {
   screen.height = Math.floor(h * dpr);
 }
 window.addEventListener('resize', resize);
+// (Closing the tab on play not yet saved: the browser asks. See unsaved.)
+window.addEventListener('beforeunload', (e) => {
+  if (!params.has('autostart') && unsaved()) e.preventDefault();
+});
 resize();
 
 function browserStorage() {
@@ -102,6 +106,7 @@ function saveTo(id, note, quiet = false) {
   try {
     return store.save(id, g).then(() => {
       if (id !== 'auto') g.slot = id;
+      if (id !== 'auto' || (g.partyWorld && g.slot)) g.savedClock = clockOf(g);
       if (note) ui.msg(note, '#80e070');
       if (!quiet) audio.play('save');
       return true;
@@ -109,6 +114,34 @@ function saveTo(id, note, quiet = false) {
   } catch (e) {
     return fail(e);
   }
+}
+
+// The game's clock, to the minute (to tell if it's been played on since).
+function clockOf(g) {
+  return g.day * 1440 + Math.floor(g.minute);
+}
+
+// Play since this game was last saved to a slot (or loaded): what'd be lost
+// leaving it now. (Not a world you host, kept as it's closed; not someone
+// else's; not before the story's begun.)
+function unsaved() {
+  const g = game;
+  if (!g || ui.guest || session || (g.partyWorld && g.slot)) return false;
+  if (g.cutscene || (g.scene && g.scene.intro)) return false;
+  return g.savedClock !== clockOf(g);
+}
+
+// Leaving this game (for the title, another world, another save): with play
+// not yet saved, asked first. Save (to its own slot, or one picked), go
+// without, or back.
+function leaving(go) {
+  if (!unsaved()) return go();
+  const g = game;
+  ui.open(new ConfirmWindow(ui, 'SAVE FIRST?', `You've played on since this game was last saved${g.savedClock === undefined ? ' (it never has been)' : ''}. Save it before you go?`, () => {
+    if (!g.slot) return ui.open(new SaveSlotsWindow(ui, 'save', store, go));
+    Promise.resolve(saveTo(g.slot, `Game saved to slot ${g.slot}.`)).then((ok) => ok && go());
+  }, { yes: g.slot ? `Save (slot ${g.slot})` : 'Save', no: 'Don\'t save', onNo: go, cancel: 'Back' }));
+  return null;
 }
 
 function loadFrom(id) {
@@ -175,6 +208,8 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     game.featBook = feats;
     game.onFeat = (id) => featNote(id);
     game.slot = slot && slot !== 'auto' ? slot : null;
+    // (Loaded, it's as saved: see unsaved.)
+    if (save) game.savedClock = clockOf(game);
     game.autosave = () => saveTo(game.partyWorld && game.slot ? game.slot : 'auto', `Autosaved (day ${game.day}, 7:00).`);
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
@@ -229,12 +264,14 @@ ui.hooks = {
     ui.open(new SaveSlotsWindow(ui, 'save', store));
   },
   load: () => ui.open(new SaveSlotsWindow(ui, 'load', store)),
-  saveSlot: (id) => {
+  // (`then`: what's next once it's saved: see leaving.)
+  saveSlot: (id, then = null) => {
     const ok = saveTo(id, `Game saved to slot ${id}.`);
     if (ok) ui.closeAll();
+    if (ok && then) Promise.resolve(ok).then((y) => y && then());
     return !!ok;
   },
-  loadSlot: (id) => loadFrom(id),
+  loadSlot: (id) => leaving(() => loadFrom(id)),
   upgradeSlot: (id, meta) => upgradeSave(id, meta),
   continue: () => {
     const last = store.latest();
@@ -247,14 +284,14 @@ ui.hooks = {
     else if (game.slot) saveTo(game.slot, `Game saved to slot ${game.slot}.`);
     else ui.open(new SaveSlotsWindow(ui, 'save', store));
   },
-  newWorld: () => {
+  newWorld: () => leaving(() => {
     endSession();
     game = null;
     ui.showHud = false;
     ui.closeAll();
     newGame(null);
-  },
-  title: () => {
+  }),
+  title: () => leaving(() => {
     // (Closing a world you host: kept as it is, everyone's character in it.)
     if (game && game.partyWorld && game.slot && !ui.guest) saveTo(game.slot, null, true);
     endSession();
@@ -262,7 +299,7 @@ ui.hooks = {
     ui.showHud = false;
     ui.closeAll();
     ui.open(new TitleWindow(ui, store));
-  },
+  }),
   multiplayer: () => openMultiplayer(),
   party: () => openParty(),
   profile: (p) => openProfile(p),

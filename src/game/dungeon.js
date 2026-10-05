@@ -14,7 +14,7 @@
 // a console's glyph drops (tread the plate that matches), plates to tread
 // in the order a console shows, rings of power nodes to put out, vaults
 // under glyph seals.
-import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier } from '../world/dungeongen.js';
+import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier, FAR_LOOT } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
@@ -1532,7 +1532,7 @@ export class DungeonRun {
     };
     const got = [];
     for (let i = 0; i < n; i++) {
-      const k = gearFor(this.rec.type, tier, rng, this.T, boss);
+      const k = gearFor(this.rec.type, tier, rng, this.T, boss, !!FAR_LOOT[this.rec.isle]);
       if (!k || !ITEMS[k]) continue;
       game.spawnDrop(k, 1, e.x, e.y, e.z, true);
       got.push(ITEMS[k].name);

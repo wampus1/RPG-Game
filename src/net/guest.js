@@ -181,9 +181,32 @@ export class GuestNet {
       }
     }
     if (m.pins) w.ow.pins = m.pins;
+    if (m.places) this.places(m.places);
     if (m.ui) applyFrame(game.ui, m.ui);
     if (m.m) for (const [text, color, merge] of m.m) game.ui.msg(text, color, !!merge);
     if (m.fx) this.effects(m.fx);
+  }
+
+  // The old places and camps known of in the host's world (round 56: so
+  // what's heard of there is on this map too).
+  places(pl) {
+    const D = this.game.sim.dungeons;
+    for (const [id, seen, cleared, entered, depth, clearedBy, open] of pl.ds || []) {
+      const d = D && D.get(id);
+      if (!d) continue;
+      d.known = true;
+      d.seen = !!seen;
+      d.cleared = !!cleared;
+      d.entered = !!entered;
+      if (depth) d.depth = depth;
+      d.clearedBy = clearedBy || d.clearedBy;
+      if (open && d.spire && (d.spire.open === null || d.spire.open === undefined)) d.spire.open = true;
+    }
+    const B = this.game.sim.bandits;
+    if (B) {
+      const camps = pl.camps || [];
+      B.knownCamps = () => camps;
+    }
   }
 
   // Everyone, in their lists.

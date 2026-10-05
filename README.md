@@ -4279,6 +4279,90 @@ dig in. What you do (or don't) decides the rest.
 - *Older worlds* (migration 0.55.0): the long waits already counting down
   on a dish you've eaten are let go.
 
+## Round 56: armour caps, story deaths, and many fixes
+
+- *Births are the towns' own again.* There's no longer a story for a
+  child on the way; the town simulation handles births by itself.
+- *Armour is held in.* Stars and plating still make armour better, but
+  each slot now has a ceiling it eases up to:
+  - helm: about 15%;
+  - body: about 33%;
+  - legs: about 18%;
+  - boots: about 10%.
+
+  The best possible set (five stars, sturdy, plated) comes to about 75%,
+  and nothing, with the watch's own kit included, goes past 80%. A plain
+  iron breastplate is still 26%; a five-star sturdy one is about 32%, not
+  45%.
+- *The chests of the old places glow* a soft gold while there's anything
+  left in them, so you can see them from any side, even round a wall. An
+  emptied chest goes dark.
+- *Stars by island.* Arms and armour found below:
+  - on Thessa have one to three stars;
+  - on Kharos and Myrrow have one to four;
+  - have five stars only if they come from a master (a boss).
+
+  Each star is rarer than the one before, a little less so the deeper you
+  go.
+- *Asked to save before you go.* Going to the title screen, starting a new
+  world or loading another save asks whether to save first, if you've
+  played on since your last save. You can save (to the game's own slot,
+  or pick one), go without saving, or back out with ESC. Closing the
+  browser tab on unsaved play asks too.
+- *Fixed: outlaws who wouldn't fight.* An outlaw who had been out at their
+  fire (or on guard) for more than a minute and a half gave up any fight
+  at once, so they did nothing until you hit them. They now fight for as
+  long as the fight lasts. Also:
+  - the rest of a band at the fire join in when one of them sets on you;
+  - a ledge or a slope between you no longer hides you from them;
+  - outlaws holding a captive set on you if you come close with a weapon
+    out after being warned (not only when you walk right up to them);
+  - a sentry notices you from a little further off.
+- *Captives.*
+  - You can squeeze past someone following you (a captive you're leading
+    home, a lost child), as you can past townsfolk.
+  - Once a captive you're leading is back among their own (near home, or
+    in a town of their own realm), they thank you and say who they're
+    going home to (their partner, child, parent or friend by name). Then
+    they go on alone. Your part of the rescue is done there.
+- *The quest log.*
+  - Under what's chosen there are **[M] Mark on map** and **[G] Give up**
+    buttons. On the STORIES tab, mark finds where the story is happening,
+    and give up drops every task of yours in it. Giving up asks you to
+    press again to be sure.
+  - What's written about a quest or story has a scroll bar (click ▲ and ▼
+    or the bar). The mouse wheel scrolls the list when it's over the list,
+    and the words anywhere else.
+  - YOUR NAME scrolls the same way.
+- *Stories mind who dies in them.* When someone at the heart of a story
+  dies (the one asking for help, the captive, the lost child's parent...),
+  the story ends there, cut short. The story ends this way only if it has
+  nothing of its own for that death. The one it's out to see dead, its
+  villains and its rivals don't end it.
+- *Deaths by your hand are held against you,* the more so if it was
+  someone you were helping:
+  - their town thinks less of you;
+  - their family thinks far less of you;
+  - your fame drops and your name among the outlaws grows;
+  - it goes on the town's board;
+  - their kin may come for you (a vendetta).
+
+  A captive you freed and then killed on the road home is remembered as
+  just that. Killing a story's person in the wilds who stands for someone
+  of a town (a captive being led home) now kills that townsperson too, so
+  they no longer turn up at home later as if nothing had happened.
+- *Fixed: black text.* Some messages and speech (a captive's lines, and
+  for guests many messages) were drawn in black. A missing colour now
+  falls back to the usual one.
+- *Fixed: guests' maps.* Old places and outlaw camps learned of after a
+  guest joined (told of in a tavern, come upon, beaten) now show on the
+  guest's map too.
+- *Fixed: reaching through walls.* You can no longer open a chest, take a
+  relic or use anything else on the far side of a wall. There has to be a
+  way round to it. Reaching over a table or round a corner still works.
+- *Updating a world:* a save from an older version updates itself. Any
+  story of a child on the way is let go.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

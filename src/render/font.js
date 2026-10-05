@@ -296,6 +296,7 @@ export function drawGlyph(ctx, ch, x, y, color, scale = 1) {
 
 // Free-positioned text (for world labels, bubbles, floating numbers).
 export function drawText(ctx, str, x, y, color, shadow = null) {
+  color ||= '#f4ecd8';
   if (shadow) {
     for (let i = 0; i < str.length; i++) drawChar(ctx, str[i], x + i * CHAR_W + 1, y + 1, shadow);
   }

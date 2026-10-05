@@ -207,6 +207,28 @@ export const STEPS = [
       log.push('Dishes that do things do them more often now.');
     },
   },
+  {
+    // Births are the towns' own again (no story for a child on the way):
+    // any such story under way let go, and nobody left waiting on one.
+    // (Round 56.)
+    to: '0.56.0',
+    data(d, log) {
+      log.push('Armour no longer adds up to near-immortality; old places\' chests glow; stories mind who dies in them.');
+    },
+    game(game, log) {
+      const S = game.sim.saga;
+      let n = 0;
+      if (S) {
+        for (const th of S.live()) {
+          if (th.m !== 'newborn') continue;
+          S.end(th, 'faded', null);
+          n++;
+        }
+      }
+      for (const L of game.world.layouts.values()) for (const r of L.npcs || []) if (r && r.expecting !== undefined) delete r.expecting;
+      if (n) log.push(`${n} stor${n > 1 ? 'ies' : 'y'} of a child on the way let go: the towns see to births themselves.`);
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

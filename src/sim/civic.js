@@ -361,10 +361,6 @@ export function births(sim, L, day, rng) {
     // (Aqueducts: clean water, more children.)
     const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1;
     if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
-    // (Round 54) A child on the way is a story now and then (see
-    // saga/motifs/hearts.js): born when that's told.
-    if (a.expecting || b.expecting) continue;
-    if (sim.saga && rng.chance(0.6) && sim.saga.startStory('newborn', { cast: { a: { t: 'rec', sid: s.id, idx: a.idx }, b: { t: 'rec', sid: s.id, idx: b.idx }, town: { t: 'town', sid: s.id } }, sid: s.id })) continue;
     const r = bear(sim, L, a, b, day, hash4(a.idx, b.idx, day, 0xba8e));
     ledger(L, day, `A baby, ${r.name.first}, was born to ${a.name.first} and ${b.name.first} ${a.name.last}.`);
     born.push(r);

@@ -62,6 +62,10 @@ const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 export const lcFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 // (A story's title in the middle of a sentence: "the Feud..." but never
 // "gwen and Giles".)
+// (Round 56) Those whose death a story doesn't end on: the one it's out to
+// see dead, villains, rivals, the dead already, go-betweens.
+const PASSING = new Set(['target', 'killer', 'thief', 'fence', 'culprit', 'spy', 'rival', 'mayor', 'contact', 'victim', 'dead', 'lost', 'member', 'mid', 'avenger']);
+const pick1 = (rng, a) => a[rng.int(0, a.length - 1)];
 const inLine = (t) => (/^(The|A|An) /.test(t || '') ? lcFirst(t) : t);
 
 export class Saga {
@@ -202,6 +206,11 @@ export class Saga {
         this.fault(th, e);
       }
     }
+    // (Round 56) Someone at the heart of a story dead: looked at once
+    // everything else that came of it has been heard (the kill that was
+    // the point of it, a story's own way of minding it).
+    if (ev.type === 'npc_died' && ev.who) this.emit('cast_died', { who: ev.who, cause: ev.cause, byPlayer: !!ev.byPlayer, by: ev.by || null, name: ev.name });
+    if (ev.type === 'cast_died') this.castDied(ev);
     // Tasks that count it (kills toward a cull, and so on).
     this.countTasks(ev);
     // Then whatever new story it might start.
@@ -218,6 +227,83 @@ export class Saga {
         for (const o of [].concat(made || [])) if (o) this.begin(M.id, o);
       }
     }
+  }
+
+  // Someone in a story died (round 56). A story that minds deaths its own
+  // way (an npc_died of its own, or castDown) sees to it; otherwise, if
+  // they were at its heart (not one whose death is what it's after), it
+  // ends there. And if one playing killed them, it's held against them,
+  // the worse if it was their own story: someone they'd taken on to help.
+  castDied(ev) {
+    for (const th of this.live()) {
+      const role = Object.keys(th.cast).find((k) => !PASSING.has(k) && th.cast[k] && (th.cast[k].t === 'rec' || th.cast[k].t === 'adv') && sameRef(th.cast[k], ev.who));
+      if (!role) continue;
+      const M = MOTIFS[th.m];
+      if (!M) continue;
+      const node = M.nodes[th.node];
+      if ((node && node.on && node.on.npc_died) || (M.on && M.on.npc_died)) continue;
+      const by = ev.by || (ev.byPlayer ? R.pl(pidOf(this.game.player)) : null);
+      let line = null;
+      if (M.castDown) {
+        try {
+          line = M.castDown(th, role, { ...ev, by }, this);
+        } catch (e) {
+          this.fault(th, e);
+          continue;
+        }
+        if (line === true || th.done) continue;
+      }
+      const name = ev.name || nameOf(this, ev.who);
+      const mine = by && by.t === 'pl' ? by.pid : null;
+      if (mine) this.bloodOn(th, mine, ev.who, name);
+      const rng = this.rng(th, 0xdead);
+      line ||= mine
+        ? pick1(rng, [`${name} was killed by ${nameOf(this, by)}, and that was the end of it.`, `${nameOf(this, by)} cut ${name} down. There was nothing left of this after that.`])
+        : pick1(rng, [`${name} died, and this died with them.`, `${name} is dead. Nobody took it up after them.`, `With ${name} gone, there was no one left to see it through.`]);
+      this.end(th, mine ? 'blood' : 'cut_short', line, { news: ev.who.sid !== undefined ? [ev.who.sid] : [] });
+    }
+  }
+
+  // A death at the hands of one playing, in a story: the town remembers,
+  // and their kin. (Worse if it was someone they'd been helping.)
+  bloodOn(th, pid, who, name) {
+    const ward = !!th.touched[pid] || th.tasks.some((t) => t.claims.some((c) => c.who.t === 'pl' && c.who.pid === pid));
+    const sid = who.sid;
+    const L = sid !== undefined ? this.sim.layoutOf(sid) : null;
+    const k = this.person(pid);
+    k.fame = Math.max(0, k.fame - (ward ? 3 : 1));
+    k.under += ward ? 2 : 1;
+    k.deeds.push({ at: this.now, text: ward ? `Killed ${name}, in the middle of ${inLine(th.title)}` : `Killed ${name}` });
+    this.asPid(pid, () => {
+      if (L && this.sim.loseRenown) this.sim.loseRenown(sid, ward ? 12 : 4);
+      const rec = resolve(this, who);
+      if (L && rec) {
+        for (const i of [rec.partner, ...(rec.children || []), ...(rec.parents || [])]) {
+          const q = Number.isInteger(i) ? L.npcs[i] : null;
+          if (q && recAlive(q)) this.sim.changeRep(q.ent && !q.ent.dead ? q.ent : { rec: q, settlement: L.settlement, layout: L }, ward ? -40 : -20);
+        }
+      }
+    });
+    if (L && L.econ) this.news(sid, `${capFirst(name)} was killed by ${playerName(this.game, pid) || 'a stranger'}${ward ? ', who had been helping them' : ''}.`);
+    this.tell(pid, ward ? `${capFirst(name)} is dead by your hand. ${L ? L.settlement.name : 'Their town'} will not forget it.` : `${capFirst(name)} is dead by your hand. Word will get about.`, '#ff9080');
+  }
+
+  // One of a story's people in the flesh, killed, who stood for someone
+  // of a town (a captive led home): it's them dead, not a stranger.
+  standInDown(th, a, ref, by, e) {
+    const rec = resolve(this, ref);
+    const L = this.sim.layoutOf(ref.sid);
+    if (!rec || !L || !recAlive(rec)) return;
+    this.sim.recordDeath(L, rec, 'slain', by && by.t === 'pl' ? 'player' : 'other');
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      const q = this.queue[i];
+      if (q.type === 'npc_died' && sameRef(q.who, ref)) {
+        q.by = by;
+        break;
+      }
+    }
+    // (Their kin hear who did it: see 'vendetta'.)
+    if (by) this.emit('kill', { by, victim: ref, npc: true, x: Math.round(e.x), z: Math.round(e.z), name: rec.name ? `${rec.name.first} ${rec.name.last}` : null, standIn: true });
   }
 
   fault(th, e) {
@@ -1131,6 +1217,9 @@ export class Saga {
                 this.fault(th, err);
               }
             }
+            // (Round 56: one who stood for someone of a town.)
+            const ref = th.cast[a.key];
+            if (ref && ref.t === 'rec') this.standInDown(th, a, ref, e.sagaKilledBy || null, e);
             continue;
           }
         }

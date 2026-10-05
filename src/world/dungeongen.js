@@ -675,9 +675,9 @@ const KAV_GEAR = ['kav_visor', 'kav_carapace', 'kav_greaves', 'kav_treads', 'kav
 // goggles...); deep down, now and then with a stone already set in it; in
 // the Kavorent's halls, their own make. Starred, as things found below are
 // (see found; `boss`: off a master, a star better).
-export function gearFor(type, tier, rng, T = null, boss = false) {
+export function gearFor(type, tier, rng, T = null, boss = false, far = false) {
   const t = Math.max(0, tier);
-  const star = (k) => found(k, t, rng, boss);
+  const star = (k) => found(k, t, rng, boss, far);
   if (type === 'kavorent') return star(rng.pick(KAV_GEAR.filter((k) => ITEMS[k])));
   const isle = ((T && T.loot) || []).map(([k]) => k).filter((k) => ITEMS[k] && (ITEMS[k].kind === 'weapon' || ITEMS[k].kind === 'armor'));
   const k = star(isle.length && rng.chance(0.3) ? rng.pick(isle) : rng.pick(gearOfTier(t)));
@@ -690,15 +690,16 @@ export function gearFor(type, tier, rng, T = null, boss = false) {
 
 // A piece of arms, armour or a tool as it's found below: with its stars
 // (more the deeper, `tier`; more again off a master) and the mark of the
-// deep on it (see quality.js). Anything else comes back as it was.
-export function found(k, tier, rng, boss = false) {
-  return starGear(k, { origin: 'd', tier, boss }, rng);
+// deep on it (see quality.js; `far`: from Kharos or Myrrow, where the best
+// are). Anything else comes back as it was.
+export function found(k, tier, rng, boss = false, far = false) {
+  return starGear(k, { origin: 'd', tier, boss, far }, rng);
 }
 // What a floor's chests do to the arms and armour in them. (Their own
 // stream, so the rest of the floor comes out as it always did.)
 function foundIn(ctx, boss = false) {
   if (!ctx.starRng) ctx.starRng = ctx.rng.fork('stars');
-  return (k) => found(k, tierOf(ctx), ctx.starRng, boss);
+  return (k) => found(k, tierOf(ctx), ctx.starRng, boss, !!FAR_LOOT[ctx.rec.isle]);
 }
 
 // How good an old place's things run on floor `n` (see tierOf).

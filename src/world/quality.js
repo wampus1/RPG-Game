@@ -53,7 +53,7 @@ export const MODS = {
   },
   armor: {
     fleet: { name: 'Fleet', about: 'you move a little faster' },
-    sturdy: { name: 'Sturdy', about: 'takes a third more off each blow' },
+    sturdy: { name: 'Sturdy', about: 'takes a fifth more off each blow' },
     hale: { name: 'Hale', about: '+2 to your health while you wear it' },
     fireproof: { name: 'Fireproof', about: 'fire burns you half as often' },
     furred: { name: 'Fur-lined', about: 'cold and frost slow you for half as long' },
@@ -124,6 +124,23 @@ export function starMult(stars, roll) {
   return 1 + 0.06 * stars + ((roll / (ROLLS - 1)) - 0.5) * 0.06;
 }
 
+// (Round 56) How much of a blow a piece of armour can take off, at most,
+// for where it's worn: up to the knee it's what it says, and above it each
+// bit more counts for less, never past the cap. The caps together come to
+// three-quarters: no set of armour, however fine, takes off more than that
+// (and with the watch's own kit, never past ARMOR_CAP: see items.js).
+// (A function, not a table: items.js asks for it while it's still being
+// put together.)
+export function armorSlotCap(slot) {
+  return { head: [0.11, 0.15], body: [0.27, 0.33], legs: [0.13, 0.18], feet: [0.065, 0.1] }[slot] || null;
+}
+export function softArmor(slot, raw) {
+  const q = armorSlotCap(slot);
+  if (!q || !(raw > q[0])) return raw;
+  const [knee, cap] = q;
+  return Math.round((knee + (cap - knee) * (1 - Math.exp(-(raw - knee) / (cap - knee)))) * 1000) / 1000;
+}
+
 const r2 = (n) => Math.round(n * 100) / 100;
 const r3 = (n) => Math.round(n * 1000) / 1000;
 
@@ -146,7 +163,9 @@ export function deriveStarred(key) {
     if (has('long')) d.reach = (base.reach || 1.5) + 1;
   }
   if (cls === 'bow' && base.range) d.range = Math.round(base.range * (1 + (k - 1) * 0.5) * (has('far') ? 1.5 : 1));
-  if (cls === 'armor') d.armor = r3(base.armor * k * (has('sturdy') ? 1.33 : 1));
+  // (Armour: stars count for less than on a blade, and every piece is
+  // held under its place's cap: see softArmor.)
+  if (cls === 'armor') d.armor = softArmor(base.slot, r3(base.armor * (1 + (k - 1) * 0.75) * (has('sturdy') ? 1.2 : 1)));
   if (cls === 'shield') d.block = r3(Math.min(0.96, 1 - (1 - base.block) / k * (has('stalwart') ? 0.7 : 1)));
   d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * mods.length);
   d.name = mods.length ? `${MODS[cls][mods[0]].name} ${base.name}` : base.name;
@@ -165,10 +184,22 @@ const LOOSE = {
 // How many stars: made at a bench, mostly one or two (a tinker's hand a
 // little better); found below, more the deeper (`tier`, as the old place's
 // loot runs: see dungeongen.lootTier), and more again off a master.
+const FOUND_W = [50, 30, 14, 5, 1];
 export function rollStars(rng = LOOSE, o = {}) {
+  // Found below: each star the rarer, though less so the deeper (`tier`);
+  // off a master (`boss`), never one star and the good ones likelier. On
+  // Thessa no more than three; on the far islands (`far`) four, and five
+  // only off a master.
   if (o.origin === 'd') {
-    const s = Math.round(1 + (o.tier || 0) * 0.65 + rng.float(-0.6, 1.1) + (o.boss ? 1 : 0));
-    return Math.max(1, Math.min(STAR_MAX, s));
+    const top = o.far ? (o.boss ? 5 : 4) : 3;
+    const g = (1 + Math.max(0, o.tier || 0) * 0.25) * (o.boss ? 1.8 : 1);
+    const w = FOUND_W.slice(0, top).map((v, i) => (o.boss && i === 0 ? 0 : v * g ** i));
+    let r = rng.float(0, w.reduce((a, b) => a + b, 0));
+    for (let i = 0; i < w.length; i++) {
+      r -= w[i];
+      if (r < 0) return i + 1;
+    }
+    return top;
   }
   const w = o.tinker ? [30, 32, 22, 11, 5] : [45, 30, 16, 7, 2];
   let r = rng.float(0, w.reduce((a, b) => a + b, 0));

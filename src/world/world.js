@@ -236,6 +236,13 @@ export class World {
 
   // Container inventories are created on first access; loot is rolled from
   // the block's position so it is stable per world seed.
+  // What's in a container already filled, without filling or touching it
+  // (null if it's never been: see getContainer).
+  peekContainer(x, y, z) {
+    const r = this.regionAt(x, z);
+    return r ? r.containers.get(((z - r.z0) * REGION_W + (x - r.x0)) * WORLD_Y + y) || null : null;
+  }
+
   getContainer(x, y, z) {
     const r = this.regionAt(x, z);
     if (!r) return null;

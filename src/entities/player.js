@@ -387,7 +387,10 @@ export class Player extends Entity {
     const other = this.game.occupiedBySolid(nx, ny, nz, this);
     if (other) {
       // Nudge past a villager who is just standing in the way.
-      if (other.kind === 'npc' && (other.state === 'routine' || other.state === 'hired') && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
+      // (Or one of a story's own walking with you, or on their way: a
+      // captive you're leading home, a lost child. Not one in a cage.)
+      const company = other.state === 'saga' && other.saga && (other.saga.follow || other.saga.homeward || other.saga.seek);
+      if (other.kind === 'npc' && (other.state === 'routine' || other.state === 'hired' || company) && !other.moving && !other.sleeping && other.x === nx && other.z === nz) {
         this.pushT = (this.pushT || 0) + dt;
         if (this.pushT < 0.1) return;
         this.pushT = 0;

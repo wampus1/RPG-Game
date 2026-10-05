@@ -611,6 +611,17 @@ export class HostNet {
       g.sent.pinsN = pins.length;
       msg.pins = pins;
     }
+    // (Round 56) The old places and outlaws' camps known of, as they come
+    // to be (told of in a tavern, come upon, beaten): theirs only had what
+    // was known when they came.
+    const game = this.game;
+    const ds = (game.sim.dungeons ? game.sim.dungeons.all : []).filter((d) => d.known || d.seen).map((d) => [d.id, d.seen ? 1 : 0, d.cleared ? 1 : 0, d.entered ? 1 : 0, d.depth || 0, d.clearedBy || null, d.spire && d.spire.open !== null && d.spire.open !== undefined ? 1 : 0]);
+    const camps = game.sim.bandits ? game.sim.bandits.knownCamps() : [];
+    const sig = JSON.stringify([ds, camps]);
+    if (sig !== g.sent.places) {
+      g.sent.places = sig;
+      msg.places = { ds, camps };
+    }
   }
 
   // A player's own: their sleep, their digging, their line in the water,

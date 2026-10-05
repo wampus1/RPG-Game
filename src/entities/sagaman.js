@@ -43,6 +43,10 @@ function catchUp(n, p, dt, d) {
 }
 
 function strike(n, t, dt) {
+  // (How long at this fight, kept apart from how long they've been out:
+  // see NPC.fight.)
+  if (n.threat !== t) n.warFightT = 0;
+  n.warFightT = (n.warFightT || 0) + dt;
   n.threat = t;
   n.fight(dt);
   if (n.state !== 'warband' && n.state !== 'fight') n.state = 'warband';
@@ -168,7 +172,7 @@ function sentry(n, wb, dt) {
     for (const q of g.everyone()) {
       if (q.dead || q.limbo || q.sagaHeld) continue;
       if (wb.spare && wb.spare.includes(q.seat ? (q.seat.host ? 'host' : String(q.seat.id)) : 'host')) continue;
-      if (n.distTo(q) <= (wb.reach || 4)) t = q;
+      if (n.distTo(q) <= (wb.reach || 6)) t = q;
     }
   }
   if (t) {
@@ -191,6 +195,7 @@ export function sagaTalk(n, dt) {
     return;
   }
   if (s.leaving) return leave(n, s, dt);
+  if (s.homeward) return homeward(n, s, dt);
   if (s.follow) return follow(n, s, dt);
   if (s.seek) return seek(n, s, dt);
   // Standing where they are (or where they're told to).
@@ -203,9 +208,22 @@ export function sagaTalk(n, dt) {
   const p = g.closestPlayer(n.x, n.z);
   if (s.lineT <= 0 && p.d < 10 && s.lines && s.lines.length) {
     s.lineT = n.rng.float(9, 18);
-    n.say(n.rng.pick(s.lines), 3, s.lineColor || null);
+    n.say(n.rng.pick(s.lines), 3, s.lineColor || undefined);
   }
   if (p.d < 7 && !n.moving && n.rng.chance(dt * 0.6)) n.face(p.p.x, p.p.z);
+}
+
+// On home alone (a captive led back to their own people: see captive.js),
+// out of the world once there, or once out of sight a while.
+function homeward(n, s, dt) {
+  const g = n.game;
+  s.walkT = (s.walkT || 0) + dt;
+  const there = far(n, s.homeward.x, s.homeward.z) <= 3;
+  if (there || (s.walkT > 4 && !g.inSight(n.x, n.z, 2)) || s.walkT > 120) {
+    g.despawnNpc(n);
+    return;
+  }
+  goTo(n, s.homeward.x, s.homeward.z, 2);
 }
 
 // Off to find someone by name, to have a word with them.

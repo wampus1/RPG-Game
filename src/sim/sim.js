@@ -1534,6 +1534,14 @@ export class Sim {
     return v >= RENOWN.hero ? 'Hero' : v >= RENOWN.friend ? 'Friend' : null;
   }
 
+  // Renown lost (a deed a town takes badly: round 56). Never below none.
+  loseRenown(sid, pts) {
+    const v = this.renown.get(sid) || 0;
+    if (pts <= 0 || v <= 0) return;
+    this.renown.set(sid, Math.max(0, v - pts));
+    this.areaCache.delete(sid);
+  }
+
   addRenown(sid, pts, why) {
     const s = this.game.world.ow.settlements[sid];
     if (!s || pts <= 0 || this.justice.exiled.has(sid)) return null;

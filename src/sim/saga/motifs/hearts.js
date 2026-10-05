@@ -10,9 +10,6 @@
 //     find a gift; or warn one off the other. It can end at the altar
 //     (with you among the guests), in an elopement, at a broken
 //     engagement, or with one heart broken and another story begun.
-//   - A child on the way: a couple expecting; the cradle to be made, the
-//     birth to come. Most come easy, and some hard (a midwife wanted, and
-//     the herbs for it, quickly), and some are twins.
 //   - Making it up: two of a family who haven't spoken in years (a word
 //     said at a funeral, a debt, an elopement). Carry a letter, bring them
 //     to the same table; it may mend, or tear for good.
@@ -25,7 +22,7 @@
 import { motif, R, nameOf } from '../core.js';
 import { pick, say, layoutOf, laidTowns, townMid, living, adults, fullName, kinOf, recOf, purse, has, nat, single, blood, persuade, repWith, isRec } from './lib.js';
 import { alive, DAY, ledger } from '../../econ.js';
-import { relocate, bear, newcomer } from '../../civic.js';
+import { relocate, newcomer } from '../../civic.js';
 import { makePerson } from '../actors.js';
 import { marry } from '../../events.js';
 import { ITEMS } from '../../../world/items.js';
@@ -779,146 +776,6 @@ function wedded(th, S, rng, L) {
   ]), { news: [th.sid] });
   void L;
 }
-
-// ------------------------------------------------------------ a child on the way
-const CRADLE_WOOD = ['oak_planks', 'birch_planks', 'pine_planks', 'planks'];
-
-motif({
-  id: 'newborn',
-  family: 'hearts',
-  max: 6,
-  key: (o) => `newborn:${o.cast.a.sid}:${o.cast.a.idx}`,
-  title: (th) => `A Child for ${th.names.a.split(' ')[0]} and ${th.names.b.split(' ')[0]}`,
-  nodes: {
-    expecting: {
-      enter(th, S) {
-        const a = recOf(S, th.cast.a);
-        const b = recOf(S, th.cast.b);
-        const L = layoutOf(S, th.sid);
-        if (!a || !b || !L) return S.end(th, 'faded');
-        const rng = S.rng(th, 0xbab);
-        a.expecting = th.id;
-        b.expecting = th.id;
-        th.vars.due = S.day + rng.int(5, 9);
-        th.vars.twins = rng.chance(0.12);
-        th.vars.hard = S.choose(th, [{ to: false, w: 4 }, { to: true, w: 1 + (S.thread && S.live().some((t) => t.m === 'fever' && t.sid === th.sid) ? 2 : 0) }], rng).to;
-        const kids = (a.children || []).filter((i) => L.npcs[i] && alive(L.npcs[i])).length;
-        S.note(th, say(rng, kids ? [
-          '{a} and {b} are expecting again. Their little ones are beside themselves.',
-          'Another on the way for {a} and {b}. "We\'ll need a bigger table," says {a}.',
-        ] : [
-          '{a} and {b} are expecting their first child. {b} has been telling everyone, twice.',
-          '{a} and {b} are going to be parents! {a} has started building things. Badly.',
-          'There\'s to be a baby for {a} and {b}. Their families are already arguing about names.',
-        ], { a: fullName(a), b: fullName(b) }), { news: [th.sid] });
-        // The cradle: the carpenter's to make, if someone brings the wood.
-        const carp = L.npcs.find((r) => alive(r) && !r.away && r.job === 'carpenter');
-        const wood = CRADLE_WOOD.find((k) => ITEMS[k]) || 'stick';
-        if (carp || rng.chance(0.6)) {
-          const giver = carp ? R.rec(th.sid, carp.idx) : th.cast.a;
-          const t = S.post(th, {
-            role: 'cradle', kind: 'fetch', title: `Bring ${carp ? first(carp) : first(a)} 6 ${ITEMS[wood].name.toLowerCase()} for a cradle`, sid: th.sid, giver, item: wood, n: 6,
-            pitch: carp ? `${first(a)} and ${first(b)} want a cradle, and I've no seasoned wood left. Six of ${ITEMS[wood].name.toLowerCase()}, and I'll make one fit for a prince.` : `I'm making the cradle myself. Don't laugh. I need six of ${ITEMS[wood].name.toLowerCase()}, and I can't leave ${first(b)} long enough to fetch them.`,
-            reward: { coins: 8, rep: 12, fame: 0.5 },
-          });
-          t.offerLabel = carp ? 'Busy? What are you making?' : 'You look like a worried parent.';
-        }
-        th.vars.who = rng.chance(0.5) ? 'a' : 'b';
-      },
-      day(th, S, rng) {
-        const a = recOf(S, th.cast.a);
-        const b = recOf(S, th.cast.b);
-        if (!a || !b || !alive(a) || !alive(b)) return S.end(th, 'grief', `${(!a || !alive(a)) ? th.names.a : th.names.b} died before the child came. ${pick(rng, ['The family carries on, somehow.', 'The whole street helps where it can.'])}`);
-        if (S.day >= th.vars.due) S.go(th, th.vars.hard ? 'labour' : 'born');
-      },
-      fade: 14,
-    },
-    // A hard birth: the midwife (the herbalist, or the priest) needs herbs,
-    // quickly.
-    labour: {
-      enter(th, S) {
-        const L = layoutOf(S, th.sid);
-        const rng = S.rng(th, 0x1ab);
-        const heal = L && (L.npcs.find((r) => alive(r) && !r.away && r.job === 'herbalist') || L.npcs.find((r) => alive(r) && !r.away && r.job === 'priest'));
-        th.vars.healer = heal ? fullName(heal) : null;
-        S.note(th, `The baby's coming, and it's not coming easily. ${heal ? `${fullName(heal)} is with them, and sent for herbs.` : 'There\'s no healer in town.'}`, { news: [th.sid] });
-        const t = S.post(th, {
-          role: 'herbs', kind: 'fetch', title: `Bring herbs to ${heal ? first(heal) : th.names.a}, quickly`, sid: th.sid, giver: heal ? R.rec(th.sid, heal.idx) : th.cast.a, item: 'herb', n: 3, days: 1,
-          pitch: say(rng, ['Herbs! Three, the bitter kind. NOW, if you love anyone in this town.', 'It\'s going badly. I need herbs, three at least, before nightfall.'], {}),
-          reward: { coins: 10, rep: 20, renown: th.sid, renownPts: 3, renownWhy: 'helping bring a child into the world', fame: 1 },
-        });
-        t.offerLabel = 'What\'s wrong? Is it the baby?';
-      },
-      day(th, S, rng) {
-        // (A day without the herbs: it goes as it goes.)
-        if ((S.now - th.nodeAt) / DAY < 1) return;
-        th.vars.risk = true;
-        S.go(th, 'born');
-        void rng;
-      },
-    },
-    born: {
-      enter(th, S) {
-        const L = layoutOf(S, th.sid);
-        const a = recOf(S, th.cast.a);
-        const b = recOf(S, th.cast.b);
-        const rng = S.rng(th, 0xb04);
-        if (!L || !a || !b) return S.end(th, 'faded');
-        a.expecting = null;
-        b.expecting = null;
-        // (A hard birth nobody helped with: it may end in sorrow.)
-        if (th.vars.risk && rng.chance(0.35)) {
-          a.mood = Math.max(0, (a.mood ?? 0.5) - 0.5);
-          b.mood = Math.max(0, (b.mood ?? 0.5) - 0.5);
-          return S.end(th, 'lost', `The child didn't live. ${th.names.a} and ${th.names.b} ${pick(rng, ['have closed their shutters.', 'buried them under the apple tree.', 'have had the whole town at their door with food.'])}`, { news: [th.sid] });
-        }
-        const born = [bear(S.sim, L, a, b, S.day, rng.int(0, 1e9))];
-        if (th.vars.twins) born.push(bear(S.sim, L, a, b, S.day, rng.int(0, 1e9)));
-        const names = born.filter(Boolean).map((r) => r.name.first);
-        // Named for someone who helped, now and then.
-        const helper = Object.keys(th.touched)[0];
-        if (helper && born[0] && rng.chance(0.3)) {
-          const nm = nameOf(S, R.pl(helper)).split(' ')[0];
-          if (nm && nm.length < 14) {
-            born[0].name.first = nm;
-            names[0] = nm;
-            S.tell(helper, `${th.names.a} and ${th.names.b} have named their child ${nm}, after you.`, '#ffd0e8');
-          }
-        }
-        S.end(th, 'born', `${names.length > 1 ? `Twins! ${names.join(' and ')}` : `A baby, ${names[0]}`}, born to ${th.names.a} and ${th.names.b}. ${pick(rng, ['Mother, father and child are well.', 'The whole street came round with soup.', 'Loud, healthy, and already the centre of the world.', th.vars.risk ? 'It was close. Very close.' : 'It came easy, in the end.'])}`, { news: [th.sid] });
-      },
-    },
-  },
-  tasks: {
-    cradle: {
-      done(th, t, by, S) {
-        S.note(th, `${nameOf(S, by)} brought the wood. The cradle is ${pick(S.rng(th, 4), ['carved with little birds', 'painted blue', 'too big, but nobody minds', 'rocking already, empty, in the corner'])}.`);
-        const a = recOf(S, th.cast.a);
-        if (a) a.mood = Math.min(1, (a.mood ?? 0.5) + 0.15);
-      },
-      thanks: () => ['There. Now I can make something worth sleeping in.'],
-    },
-    herbs: {
-      done(th, t, by, S) {
-        th.vars.hard = false;
-        th.vars.risk = false;
-        S.note(th, `${nameOf(S, by)} ran the herbs in. It was close, but it's turned.`);
-        S.go(th, 'born');
-      },
-      thanks: () => ['Just in time. Just in time. Go and sit down, you look worse than they do.'],
-    },
-  },
-  meets: [
-    // (Fever in the town: a hard birth is likelier.)
-    { m: 'fever', when: (a, b) => a.node === 'expecting' && b.sid === a.sid, then(a, b, S) { a.vars.hard = true; S.note(a, 'With the fever about, the midwife is worried.'); } },
-  ],
-  ended(th, S) {
-    for (const k of ['a', 'b']) {
-      const r = recOf(S, th.cast[k]);
-      if (r && r.expecting === th.id) r.expecting = null;
-    }
-  },
-});
 
 // ------------------------------------------------------------ making it up
 const RIFTS = [
