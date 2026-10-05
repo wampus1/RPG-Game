@@ -62,6 +62,10 @@ import { CropGrowth } from './crops.js';
 import { weatherAt, townWeather } from '../world/weather.js';
 import { castLine, updateFishing, hook } from './fishing.js';
 import { Playtime } from './playtime.js';
+import { eatDish, dishFx } from './cooking.js';
+import { CookWindow } from '../ui/cook.js';
+import { runMigrations } from './migrate.js';
+import { dishLines } from '../world/dishes.js';
 import { Riding } from './riding.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { lawOn } from '../sim/laws.js';
@@ -202,6 +206,9 @@ export class Game {
     let sz;
     if (save) {
       this.applySave(save);
+      // (Saved in an older version: what's new brought into it. See
+      // migrate.js; the save itself was brought up before it got here.)
+      if (save.pending && save.pending.length) this.migrated = runMigrations(this, save.pending);
       sx = this.player.x;
       sz = this.player.z;
     } else {
@@ -1754,6 +1761,9 @@ export class Game {
   // ------------------------------------------------------------ main update
   update(dt, input) {
     this.dt = dt;
+    // (Which frame this is: for what's worked out once a frame, see
+    // entities/tactics.js.)
+    this.frameNo = (this.frameNo || 0) + 1;
     this.pathBudget = 5;
     // (The land keeps the date too: a fresh lava flow cools in a few days.)
     this.world.ow.today = this.day;
@@ -2379,6 +2389,8 @@ export class Game {
     if (pd.vigor) p.vigor = pd.vigor;
     if (pd.blue) p.blue = pd.blue;
     if (pd.buffs) p.buffs = pd.buffs;
+    if (pd.recipes) p.recipes = pd.recipes;
+    if (pd.kinds) p.kinds = pd.kinds;
     if (pd.equip) p.equip = { head: null, body: null, legs: null, feet: null, ...pd.equip };
     if (pd.look) p.baseLook = pd.look;
     p.awakeSince = pd.awake;
@@ -2420,7 +2432,7 @@ export class Game {
         profile: seat.profile,
         name: this.playerName,
         hero: this.hero || null,
-        player: { x: at.x, y: at.y, z: at.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], equip: p.equip, look: p.baseLook },
+        player: { x: at.x, y: at.y, z: at.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], equip: p.equip, look: p.baseLook },
         stats: this.stats,
         wanted: [...this.wanted],
         rep: [...this.sim.rep],
@@ -2841,6 +2853,8 @@ export class Game {
     const now = this.day * DAY_MINUTES + this.minute;
     p.buffs = (p.buffs || []).filter((q) => q.until > now);
     for (const q of p.buffs) if (q.stat) b[q.stat] = (b[q.stat] || 0) + q.n;
+    // (And a dish's, while its condition holds: see cooking.js.)
+    for (const k of ['str', 'agi', 'end', 'cha']) b[k] += dishFx(p, k);
     const before = JSON.stringify(this.hero.bonus || {});
     this.hero.bonus = b;
     if (before !== JSON.stringify(b)) {
@@ -2864,6 +2878,25 @@ export class Game {
     this.audio?.play('coin');
     this.ui.msg(`${ITEMS[socketed(key, gem)].name}: the stone is set.`, '#c0a0ff');
     return true;
+  }
+
+  // Cooking at a campfire, a pot, an oven or a table (see ui/cook.js).
+  openCooking(st, x, y, z) {
+    const w = this.world;
+    const fire = st === 'c';
+    this.ui.closeAll();
+    this.ui.open(new CookWindow(this.ui, this, {
+      st,
+      at: { x, y, z },
+      lit: fire ? !!w.getState(x, y, z) : true,
+      onFire: (on) => {
+        if (!fire) return;
+        w.setState(x, y, z, on);
+        this.audio?.play('torch');
+        if (on) this.renderer.emit(x, y, z, { n: 6, color: ['#ffb040', '#ffe070'], up: 30, life: 0.5, oy: -8 });
+        this.lightDirty = true;
+      },
+    }));
   }
 
   // Drink a potion (or put on a salve) from the hand.
@@ -3167,6 +3200,8 @@ export class Game {
     let t = b.hardness * 1.5 / (good ? h.speed : 1);
     if (b.tool === 'pick' && !good) t *= 3.5;
     t /= digMult(this.hero);
+    // (A dish that has you through stone faster: see cooking.js.)
+    if (b.tool === 'pick') t /= 1 + Math.max(0, dishFx(this.player, 'mine'));
     return Math.max(0.08, t);
   }
 
@@ -4088,6 +4123,10 @@ export class Game {
       case 'furnace':
         this.ui.openCrafting('furnace');
         break;
+      // (Round 50) A table: something put together on a plate.
+      case 'table':
+        this.openCooking('t', x, y, z);
+        break;
       case 'anvil':
         this.ui.openCrafting('anvil');
         break;
@@ -4105,6 +4144,12 @@ export class Game {
           this.ui.open(new ResearchWindow(this.ui, this, this.currentSettlement));
           break;
         }
+        // (An oven: anyone can bake something of their own in it; the
+        // trade's own goods are for a licensed baker. Round 50.)
+        if (st === 'baker' && !this.sim.careers.canUseBench(st)) {
+          this.openCooking('o', x, y, z);
+          break;
+        }
         if (!this.sim.careers.canUseBench(st)) {
           const P = PROFESSIONS[st];
           this.ui.msg(`Only a licensed ${P ? P.title.toLowerCase() : st} knows how to work the ${BLOCKS[id].label.replace(/^.*'s /, '').toLowerCase()}. (Ask a mayor about a licence.)`, '#c8c8c8', true);
@@ -4114,6 +4159,11 @@ export class Game {
         break;
       }
       case 'torch': {
+        // A campfire: somewhere to cook (lit or put out from there too).
+        if (id === B.campfire) {
+          this.openCooking('c', x, y, z);
+          break;
+        }
         const on = !w.getState(x, y, z);
         w.setState(x, y, z, on);
         this.audio?.play('torch');
@@ -5097,7 +5147,8 @@ export class Game {
     const slot = p.inv[p.selected];
     const def = slot ? ITEMS[slot.item] : null;
     if (!def || def.kind !== 'food') return;
-    if (p.hp >= p.maxHp) {
+    // (A dish is eaten for what it does, too: hungry or not.)
+    if (p.hp >= p.maxHp && !def.dish) {
       this.ui.msg('You\'re not hungry.', '#c8c8c8');
       return;
     }
@@ -5108,12 +5159,17 @@ export class Game {
     // (A hot dish: a little now, the rest over a while; see Player.update.)
     // (Squeamish, raw meat and fish come straight back up.)
     const sick = heroHas(this.hero, 'squeamish') && (slot.item === 'raw_meat' || slot.item === 'fish');
-    const heal = sick ? 0 : def.regen ? def.now + bonus : Math.max(def.heal, raw && raw.heal ? raw.heal : 0) + bonus;
+    // (Round 50: 1 to 3 at once, whatever it is; the rest of its good over
+    // the next while: see healSplit in items.js.)
+    const base = raw && raw.heal > def.heal ? raw : def;
+    const heal = sick ? 0 : Math.min(base.now ?? base.heal, 3);
+    const later = sick ? 0 : (base.heal - heal) + bonus;
+    const secs = base.regenT || Math.max(3, Math.round(later * 1.2));
     p.hp = Math.min(p.maxHp, p.hp + heal);
-    if (def.regen) {
+    if (later > 0) {
       const h = p.slowHeal && p.slowHeal.left > 0 ? p.slowHeal : (p.slowHeal = { left: 0, rate: 0, acc: 0 });
-      h.left += def.regen;
-      h.rate = Math.max(h.rate, def.regen / def.regenT);
+      h.left += later;
+      h.rate = Math.max(h.rate, later / secs);
     }
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
@@ -5124,7 +5180,14 @@ export class Game {
     else this.renderer.emit(p.x, p.y + 1, p.z, { n: 7, chunk: slot.item, up: 22, speed: 22, gravity: 150, life: 0.55, oy: -2 });
     if (slot.item === 'ale' && p.inv.some((q) => !q)) addItem(p.inv, 'empty_mug', 1);
     if (sick) this.ui.msg(`You can't keep the ${def.name.toLowerCase()} down. (+0 HP)`, '#c0a060');
-    else this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${def.regen ? `, and ${def.regen} more over ${def.regenT}s` : ''})`, '#80e070');
+    else this.ui.msg(`${slot.item === 'ale' || slot.item === 'cocoa' ? 'Drank' : 'Ate'} ${def.name}. (+${heal} HP${later > 0 ? `, and ${later} more over ${secs}s` : ''})`, '#80e070');
+    // A dish cooked up: what it does starts working (see cooking.js).
+    if (!sick && def.dish) {
+      eatDish(this, p, def);
+      const lines = dishLines(def).filter((l) => !l.dur).map((l) => l.text).join('; ');
+      this.ui.msg(`${def.name}: ${lines}.`, '#ffd890');
+      this.refreshBonus();
+    }
     // (Not everywhere eats everything: see culture.js.)
     this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
@@ -5789,7 +5852,12 @@ export class Game {
       const a = Math.min(0.7, this.sim.careers.armor() + target.armorValue()) * (1 - phase);
       if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
       armored = a >= 0.1;
+      // (A dish that toughens you, or leaves you the softer: cooking.js.)
+      const d = Math.max(-0.4, Math.min(0.4, dishFx(target, 'armor')));
+      if (d) amount = Math.max(1, Math.round(amount * (1 - d)));
+      target.fightAt = this.sim.abs;
     }
+    if (source && source.kind === 'player') source.fightAt = this.sim.abs;
     // A fight you're in (the music follows it).
     const foe = target.kind === 'player' ? source : source && source.kind === 'player' ? target : null;
     if (foe) {
@@ -6475,7 +6543,7 @@ export class Game {
       seed: this.seed,
       minute: this.minute,
       day: this.day,
-      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
+      player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
       name: this.playerName,
       hero: this.hero || null,
       // (Down below: where, and the floor as it stands. Before the sim's
@@ -6557,6 +6625,10 @@ export class Game {
     this.player = new Player(this, pd.x, pd.y, pd.z);
     if (pd.blue) this.player.blue = pd.blue;
     if (pd.buffs) this.player.buffs = pd.buffs;
+    // (Your recipes, and what you've learnt things are, cooking: see
+    // cooking.js and ui/cook.js.)
+    if (pd.recipes) this.player.recipes = pd.recipes;
+    if (pd.kinds) this.player.kinds = pd.kinds;
     if (pd.raft) this.player.raft = { ...pd.raft, v: 0 };
     if (pd.mount) this.player.mount = pd.mount;
     if (pd.vigor) {

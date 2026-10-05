@@ -184,7 +184,7 @@ def('campfire', {
   drop: [{ item: 'stick', min: 2, max: 3 }],
 });
 def('bed', { ...sprite, interact: 'bed', rotatable: true, tool: 'axe', hardness: 0.6 });
-def('table', { ...sprite, tool: 'axe', hardness: 0.7 });
+def('table', { ...sprite, tool: 'axe', hardness: 0.7, interact: 'table' });
 def('chair', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.5, interact: 'sit' });
 def('bench', { ...sprite, solid: false, rotatable: true, tool: 'axe', hardness: 0.6, interact: 'sit' });
 def('well', { ...sprite, interact: 'well', tool: 'pick', hardness: 3, tall: true, drop: 'cobblestone' });

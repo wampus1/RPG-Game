@@ -2,6 +2,7 @@
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
 import { asSeat } from '../game/party.js';
+import { townMigrations } from '../game/migrate.js';
 import { isStar, starWary } from '../game/starfall.js';
 import { GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
@@ -200,6 +201,10 @@ export class Sim {
     // (A new town keeps to what its realm knows from the first: no forge
     // lit without the know-how, and the watch armed to match.)
     else if (this.tech) this.tech.enforce(L, 0);
+    // (From a world saved in an older version: what's new, brought into
+    // the town as it's laid out. See game/migrate.js.)
+    L.freshAttach = !sv;
+    townMigrations(this, L, !!sv);
     if (L.econ.deserted !== undefined) L.settlement.deserted = true;
     // A village that has grown into a town (or a town into a city).
     const s0 = L.settlement;
@@ -2252,6 +2257,9 @@ export class Sim {
     for (const [sid, list] of this.visits) visits.push([sid, list]);
     return {
       settlements,
+      // (Versions a world's been brought up through, whose steps its
+      // towns get as they're laid out: see game/migrate.js.)
+      migrate: this.migrate || [],
       rep: [...this.rep],
       visits,
       pending: [...this.pending],
@@ -2300,6 +2308,8 @@ export class Sim {
       drafted: r.drafted, raid: r.raid, soldier: r.soldier, captive: r.captive, walkHome: r.walkHome,
       // Ranks, vices, feuds, affairs, time in the cells, fortunes sought.
       life: r.life,
+      // (A cook's own recipes: see game/cooking.js.)
+      ...(r.recipes && r.recipes.length ? { recipes: r.recipes } : {}),
       // A drilled guard keeps the toughness drill gave them.
       ...(r.drilled ? { drilled: true, maxHp: r.maxHp } : {}),
       ...(r.grown ? { hobbies: r.hobbies } : {}),
@@ -2344,6 +2354,7 @@ export class Sim {
     this.founding.load(data.founding);
     this.religion.load(data.religion);
     this.saved = new Map((data.settlements || []).map((s) => [s.sid, s]));
+    this.migrate = data.migrate || [];
     this.rep = new Map(data.rep || []);
     this.visits = new Map(data.visits || []);
     this.pending = new Map(data.pending || []);

@@ -30,6 +30,7 @@
 // blow lands to parry: they're left reeling for a few seconds. SPACE rolls
 // you clear.
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
+import { dishFx } from './cooking.js';
 import { has as heroHas, staminaBonus } from './hero.js';
 import { relicBreath } from './relics.js';
 import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, onDodge, bloodPrice, tickGuard } from './gems.js';
@@ -633,7 +634,8 @@ export function buffOf(game, k) {
   const now = game.day * 1440 + game.minute;
   let n = 0;
   for (const q of p.buffs) if (q.combat === k && q.until > now) n = Math.max(n, q.n);
-  return n;
+  // (And what the dishes you've eaten give, or take: see cooking.js.)
+  return n + dishFx(p, k);
 }
 
 // What a fighting potion does, in words.
@@ -815,12 +817,20 @@ export function roll(game, p, dirv = null) {
   }
   if (cost) spend(p, cost);
   if (wingRoll) {
-    // (The wing beats once, hard, and goes thin and grey.)
+    // (The wing beats once, hard, and goes thin and grey: a burst of blue
+    // light off it, a ring of wind over the ground, and the roll itself
+    // a streak of light, see Renderer.drawTumble.)
     p.wing.k = 0;
     p._wingT = 0;
-    game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 16, color: ['#fffaf0', '#ffe7a0', '#ffffff'], up: 24, speed: 36, life: 0.7, gravity: 10, glow: true });
-    game.renderer.emit(p.x, p.y + 1, p.z, { n: 6, color: ['#f4efe2', '#d8d0bc'], up: 10, speed: 20, life: 1.2, gravity: 6, shape: 'puff' });
-    game.audio?.play('swing', p);
+    p.wingDash = 0.55;
+    const r = game.renderer;
+    r.effect?.({ type: 'wingbeat', wx: p.x, wz: p.z, wy: p.y, oy: -9, dx, dz, life: 0.55 });
+    r.effect?.({ type: 'ring', wx: p.x, wz: p.z, wy: p.y, oy: 2, r0: 4, r1: 26, flat: 0.45, thick: 1, color: ['#a8dcff', '#e0f4ff', '#4f8fe8'], life: 0.45 });
+    r.effect?.({ type: 'ring', wx: p.x, wz: p.z, wy: p.y, oy: 2, r0: 2, r1: 14, flat: 0.45, thick: 1, color: ['#ffffff', '#a8dcff'], life: 0.3 });
+    r.emit(p.x, p.y + 1.2, p.z, { n: 18, color: ['#a8dcff', '#e0f4ff', '#ffffff', '#5ea4f0'], up: 26, speed: 42, life: 0.7, gravity: 10, glow: true });
+    r.emit(p.x, p.y + 1, p.z, { n: 8, color: ['#68aef4', '#3f7ad8'], up: 12, speed: 26, life: 1.0, gravity: 4, shape: 'puff', grow: 1 });
+    game.audio?.play('flap', p);
+    game.audio?.play('whoosh', p);
   }
   p.rollT = 0.36 + (far - 2) * 0.08;
   // (Tumbling shakes spores off you.)

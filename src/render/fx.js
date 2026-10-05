@@ -5,6 +5,7 @@
 // as the camera moves.
 import { TILE, LH } from '../config.js';
 import { humanoidSheet, frameGlow, CHAR_W, CHAR_H, SHEET_H, SPR_PAD } from './sprites.js';
+import { drawWingBurst } from './wing.js';
 
 // ------------------------------------------------------------ flame frames
 // A little tongue of flame, four frames of flicker, in two sizes.
@@ -74,6 +75,13 @@ export function addEffect(r, o) {
   return e;
 }
 
+// A fallen star's wing beating once, hard (a roll on it: see combat.js):
+// both wings flung out wide in blue light, growing and fading.
+function drawWingbeat(ctx, f, k, ox, oy) {
+  const e = 1 - (1 - k) * (1 - k);
+  drawWingBurst(ctx, f.cx + ox, f.cy + oy, (1 - k) * 0.9, 1.2 + 1.5 * e);
+}
+
 function spark(r, x, y, color, o = {}) {
   r.particles.push({
     x, y, vx: o.vx ?? (Math.random() - 0.5) * 30, vy: o.vy ?? -(10 + Math.random() * 25), g: o.g ?? -20,
@@ -102,6 +110,7 @@ export function drawEffects(r, ctx, dt) {
     else if (f.type === 'wave') drawWave(r, ctx, f, k, ox, oy, dt);
     else if (f.type === 'ghost') drawGhost(r, ctx, f, k, ox, oy);
     else if (f.type === 'void') drawVoid(r, ctx, f, k, ox, oy, dt);
+    else if (f.type === 'wingbeat') drawWingbeat(ctx, f, k, ox, oy);
   }
   ctx.globalAlpha = 1;
 }

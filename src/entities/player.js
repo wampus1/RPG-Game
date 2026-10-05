@@ -1,6 +1,7 @@
 // The player: tile-by-tile movement, belt/inventory, mining, placing,
 // attacking and tossing items.
 import { Entity } from './entity.js';
+import { tickDishes, dishFx } from '../game/cooking.js';
 import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable, offhandLight } from '../world/items.js';
@@ -211,7 +212,8 @@ export class Player extends Entity {
     // (A torch snuffed out gives nothing till it catches again; the
     // Everlight never goes out.)
     const fire = (q) => (this.snuffT > 0 && q !== 'kav_everlight' ? 0 : lamp(q));
-    const held = Math.max(fire(k), fire(off));
+    // (A dish that has you glowing: see game/cooking.js.)
+    const held = Math.max(fire(k), fire(off), dishFx(this, 'light') > 0 ? 6 : 0);
     // (Moonstone in your armour: a soft light all your own.)
     const moon = WEAR_SLOTS.some((s) => s !== 'shield' && this.equip[s] && ITEMS[this.equip[s]]?.socket === 'moonstone') ? 8 : 0;
     return Math.max(held, moon);
@@ -248,10 +250,14 @@ export class Player extends Entity {
       this.wing.k = Math.min(1, Math.floor((this._wingT / WING_BACK) * 25) / 25);
       if (this.wing.k >= 1) {
         this._wingT = 0;
-        this.game.renderer?.emit(this.x, this.y + 1.4, this.z, { n: 10, color: ['#ffe7a0', '#fffaf0', '#ffffff'], up: 14, speed: 18, life: 0.7, gravity: -8, glow: true });
+        this.game.renderer?.emit(this.x, this.y + 1.4, this.z, { n: 10, color: ['#a8dcff', '#e0f4ff', '#ffffff'], up: 14, speed: 18, life: 0.7, gravity: -8, glow: true });
         this.game.audio?.play('heal', this);
       }
     }
+    // (The streak of light a wing's roll leaves: see Renderer.drawTumble.)
+    if (this.wingDash > 0) this.wingDash = Math.max(0, this.wingDash - dt);
+    // Dishes eaten, working through you (see game/cooking.js).
+    tickDishes(this.game, this, dt);
     // (Hale armour put on or taken off, however it was: health with it.)
     const hale = gearHp(this);
     if (hale !== (this._haleHp || 0)) {

@@ -1,6 +1,7 @@
 // Item registry. Placeable blocks get an item with the same key as the block.
 import { BLOCKS, B } from './blocks.js';
 import { deriveStarred } from './quality.js';
+import { deriveDish } from './dishes.js';
 
 export const ITEMS = {};
 // A starred piece of gear ("iron_sword~3dk7.venom": see quality.js), or
@@ -11,7 +12,8 @@ export const ITEMS = {};
 const STARRED = new Map();
 const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes('*'));
 function starred(k) {
-  if (!STARRED.has(k)) STARRED.set(k, k.includes('~') ? deriveStarred(k) : deriveGrown(k));
+  // (A dish cooked up, its make-up in its key: see dishes.js.)
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
   return STARRED.get(k) || undefined;
 }
 Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
@@ -161,7 +163,16 @@ food('cooked_crab', 5, 6, 'Cooked Crab');
 // eaten cold. [now, over time, seconds it takes]
 const SLOW = { stew: [2, 10, 20], pottage: [1, 9, 18], chowder: [2, 10, 20], spiced_lentils: [1, 9, 18], goulash: [2, 10, 20], tamales: [2, 7, 14], cocoa: [0, 6, 12], ale: [1, 3, 8],
   pepper_stew: [2, 10, 20], mushroom_broth: [1, 9, 18], glowcap_tea: [0, 6, 12], crab_boil: [2, 10, 20] };
-for (const [k, [now, over, secs]] of Object.entries(SLOW)) Object.assign(ITEMS[k], { heal: now + over, now, regen: over, regenT: secs });
+for (const [k, [now, over, secs]] of Object.entries(SLOW)) Object.assign(ITEMS[k], { heal: now + over, now: Math.max(1, Math.min(3, now)), regen: now + over - Math.max(1, Math.min(3, now)), regenT: secs });
+// (Round 50: nothing heals more than a little at once. A bite does 1 to 3
+// at once and the rest of its good over the next few seconds, faster than
+// a hot dish's slow warmth.) See also healSplit, for dishes cooked up.
+export function healSplit(heal, slowSecs = null) {
+  const now = Math.min(heal, heal >= 8 ? 3 : heal >= 4 ? 2 : heal);
+  const regen = heal - now;
+  return { now, regen, regenT: regen ? slowSecs ?? Math.max(3, Math.round(regen * 1.2)) : 0 };
+}
+for (const [k, d] of Object.entries(ITEMS)) if (d.kind === 'food' && !SLOW[k] && d.heal > 0) Object.assign(d, healSplit(d.heal));
 
 // --- tools & weapons -----------------------------------------------------------
 const TIERS = { wood: [2, 1], stone: [3.2, 2], iron: [5, 3], gold: [7, 2] };

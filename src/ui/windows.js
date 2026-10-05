@@ -291,6 +291,13 @@ export class CraftWindow extends Window {
   draw(g, game) {
     const inv = game.player.inv;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `CRAFTING · ${STATIONS[this.station].toUpperCase()}` });
+    // (Round 50: something of your own cooked here: see ui/cook.js.)
+    if (this.station === 'furnace' || this.station === 'baker') {
+      const label = this.station === 'furnace' ? '[K] Cook a dish in the pot' : '[K] Bake a dish of your own';
+      const hov = this.hovering(this.w - label.length - 3, 1, label.length + 2, 1);
+      g.text(this.w - label.length - 2, 1, label, hov ? C.white : C.hi);
+      this.hit(this.w - label.length - 3, 1, label.length + 2, 1, () => this.cook());
+    }
     const list = [...this.recipes].sort((a, b) => (this.canCraft(inv, b) ? 1 : 0) - (this.canCraft(inv, a) ? 1 : 0));
     this.sorted = list;
     const perPage = 12;
@@ -345,7 +352,15 @@ export class CraftWindow extends Window {
       this.extra();
       return true;
     }
+    if ((this.station === 'furnace' || this.station === 'baker') && k.code === 'KeyK') {
+      this.cook();
+      return true;
+    }
     return false;
+  }
+  cook() {
+    const game = this.ui.game;
+    if (game && game.openCooking) game.openCooking(this.station === 'furnace' ? 'p' : 'o');
   }
   craft(r, game, times) {
     const inv = game.player.inv;
@@ -1624,24 +1639,12 @@ export class SaveSlotsWindow extends Window {
         const m = q.meta;
         g.text(8, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
         g.text(this.w - 4 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
-        // (And the version it was made in: another one's marked; an older
-        // one can be brought up to this one, [U].)
+        // (And the version it was made in: another one's marked. Updating
+        // an older one is done from its details: pick it.)
         const ver = versionText(m.gv);
         const same = sameVersion(m.gv);
-        const up = canUpgrade(m.gv);
-        const upW = up ? 9 : 0;
-        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length - upW), C.dim);
+        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length), C.dim);
         g.text(this.w - 4 - ver.length, y + 1, ver, same ? C.faint : C.orange);
-        if (up) {
-          const bx = this.w - 5 - ver.length - upW;
-          const hovU = this.hovering(bx, y + 1, upW - 1, 1);
-          g.fill(bx, y + 1, upW - 1, 1, ' ', C.fg, hovU ? C.bgHi : '#2a2238');
-          g.text(bx, y + 1, '[U]pdate', hovU ? C.white : C.hi);
-          this.hit(bx, y + 1, upW - 1, 1, () => {
-            this.sel = i;
-            this.upgrade();
-          });
-        }
       } else g.text(8, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
       this.hit(2, y, this.w - 4, 2, () => {
         this.sel = i;
@@ -1650,8 +1653,8 @@ export class SaveSlotsWindow extends Window {
     });
     const y = this.h - 3;
     if (this.confirm) g.center(y, this.confirm.text, C.orange);
-    else g.center(y, load ? 'Click a slot or press its key to load it.' : 'Click a slot or press 1-5 to save there.', C.dim);
-    g.center(this.h - 2, '[↑↓] choose  [ENTER] ' + (load ? 'load' : 'save') + '  [X] delete  [U] update  [ESC] back', C.faint);
+    else g.center(y, load ? 'Click a save or press its key to see it, and load it.' : 'Click a slot or press 1-5 to save there.', C.dim);
+    g.center(this.h - 2, load ? '[↑↓] choose  [ENTER] open  [ESC] back' : '[↑↓] choose  [ENTER] save  [X] delete  [ESC] back', C.faint);
   }
   pick(game) {
     const q = this.store.list()[this.sel];
@@ -1659,7 +1662,19 @@ export class SaveSlotsWindow extends Window {
     const h = this.ui.hooks;
     if (this.mode === 'load') {
       if (!q.meta) return;
-      h.loadSlot && h.loadSlot(q.id);
+      // (What's in it, and what can be done with it: see SaveDetailsWindow.)
+      const store = this.store;
+      this.ui.open(new SaveDetailsWindow(this.ui, {
+        id: q.id,
+        title: q.id === 'auto' ? 'AUTOSAVE' : `SLOT ${q.id}`,
+        meta: () => store.list().find((r) => r.id === q.id)?.meta || null,
+        load: () => h.loadSlot && h.loadSlot(q.id),
+        remove: () => store.remove(q.id),
+        update: () => {
+          const meta = store.list().find((r) => r.id === q.id)?.meta;
+          h.upgradeSlot?.(q.id, meta);
+        },
+      }));
       return;
     }
     if (q.id === 'auto' || !game) return;
@@ -1671,18 +1686,6 @@ export class SaveSlotsWindow extends Window {
     this.confirm = null;
     if (h.saveSlot && h.saveSlot(q.id)) this.close();
   }
-  // The chosen world brought up to this version of the game (asked first:
-  // see main.js's upgradeSlot).
-  upgrade() {
-    const q = this.store.list()[this.sel];
-    if (!q || !q.meta) return;
-    if (!canUpgrade(q.meta.gv)) {
-      this.confirm = { id: q.id, kind: 'version', text: sameVersion(q.meta.gv) ? 'That world is already this version.' : 'That world is from a newer version: it can\'t be taken back.' };
-      return;
-    }
-    this.ui.hooks.upgradeSlot?.(q.id, q.meta);
-  }
-
   remove() {
     const q = this.store.list()[this.sel];
     if (!q || !q.meta) return;
@@ -1703,8 +1706,7 @@ export class SaveSlotsWindow extends Window {
     if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
     else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
     else if (k.code === 'Enter' || k.code === 'Space') this.pick(game);
-    else if (k.code === 'KeyX' || k.code === 'Delete') this.remove();
-    else if (k.code === 'KeyU') this.upgrade();
+    else if ((k.code === 'KeyX' || k.code === 'Delete') && this.mode !== 'load') this.remove();
     else if (k.code === 'KeyA') {
       this.sel = 0;
       this.pick(game);
@@ -1715,6 +1717,95 @@ export class SaveSlotsWindow extends Window {
       this.pick(game);
     }
     if (!['Enter', 'Space', 'KeyX', 'Delete'].includes(k.code)) this.confirm = this.confirm && this.confirm.id === this.store.list()[this.sel]?.id ? this.confirm : null;
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------- one save
+// A saved world picked from a list (round 50): what's known of it, and
+// what can be done with it: load it (or carry on hosting it), update it to
+// this version of the game (only from an older one), or delete it (asked
+// twice). `o`: { id, title, meta() (as it is now), mp, load(), remove(),
+// update() }.
+export class SaveDetailsWindow extends Window {
+  constructor(ui, o) {
+    super(ui, 52, 21, { kind: 'savedetails' });
+    this.o = o;
+    this.sure = false;
+  }
+  draw(g) {
+    const m = this.o.meta();
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: this.o.title });
+    if (!m) {
+      g.center(4, 'Nothing is saved here now.', C.dim);
+      this.buttons(g, null);
+      return;
+    }
+    let y = 2;
+    const row = (label, text, col = C.fg) => {
+      g.text(3, y, label, C.faint);
+      g.text(15, y, String(text).slice(0, this.w - 18), col);
+      y++;
+    };
+    if (m.world) row('World', m.world, C.hi);
+    row(m.world ? 'Your hero' : 'Hero', m.name || 'Wanderer', C.white);
+    if (m.origin) row('From', { native: 'born on the islands', crash: 'shipwrecked', star: 'fallen from the sky' }[m.origin] || m.origin);
+    row('When', `Day ${m.day}, ${timeText(m.minute)}`);
+    row('Where', cap(String(m.place || '?')));
+    if (m.world) row('Players', `${m.players || 1} have played here`);
+    row('Seed', m.seed);
+    row('Saved', agoText(m.savedAt));
+    y++;
+    const same = sameVersion(m.gv);
+    const up = canUpgrade(m.gv);
+    row('Version', `${versionText(m.gv)}${same ? ' (this version)' : ''}`, same ? C.fg : C.orange);
+    if (up) {
+      g.text(3, y++, 'Made in an older version. [U]pdate brings it up to', C.dim);
+      g.text(3, y++, `${versionText(GAME_VERSION)}, converting what's in it as it goes.`, C.dim);
+    } else if (!same) g.text(3, y++, 'Made in a newer version: it can\'t be taken back.', C.dim);
+    this.buttons(g, m);
+  }
+  buttons(g, m) {
+    const y = this.h - 4;
+    const btn = (x, w, label, fn, col, off = false) => {
+      const hov = !off && this.hovering(x, y, w, 1);
+      g.fill(x, y, w, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
+      g.text(x + 1, y, label, off ? C.faint : hov ? C.white : col);
+      if (!off) this.hit(x, y, w, 1, fn);
+    };
+    btn(2, 14, this.o.mp ? '[ENTER] Host' : '[ENTER] Load', () => this.load(), C.hi, !m);
+    btn(17, 12, '[U] Update', () => this.update(), C.hi, !m || !canUpgrade(m.gv));
+    btn(30, 12, this.sure ? '[X] Sure?' : '[X] Delete', () => this.remove(), this.sure ? C.red : C.dim, !m);
+    btn(43, 7, '[ESC]', () => this.close(), C.fg);
+    if (this.sure) g.center(this.h - 2, 'Press X again to delete it for good.', C.orange);
+  }
+  load() {
+    if (!this.o.meta()) return;
+    this.close();
+    this.o.load();
+  }
+  update() {
+    const m = this.o.meta();
+    if (m && canUpgrade(m.gv)) this.o.update();
+  }
+  remove() {
+    if (!this.o.meta()) return;
+    if (!this.sure) {
+      this.sure = true;
+      return;
+    }
+    this.sure = false;
+    this.o.remove();
+    this.ui.audio?.play('break');
+    this.close();
+  }
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'Enter' || k.code === 'Space') this.load();
+    else if (k.code === 'KeyU') this.update();
+    else if (k.code === 'KeyX' || k.code === 'Delete') this.remove();
+    if (k.code !== 'KeyX' && k.code !== 'Delete') this.sure = false;
     return true;
   }
 }

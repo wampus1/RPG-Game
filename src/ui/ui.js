@@ -1,6 +1,7 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
+import { dishLines, ingredientTypes } from '../world/dishes.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
 import { relicReach } from '../game/relics.js';
@@ -593,7 +594,12 @@ export class UI {
       const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? (d.ammo === 'none' ? 'no ammunition: draws stamina' : `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}`) : null;
       lines.push({ text: `${d.hands === 2 ? 'Two-handed (no shield)' : d.ranged ? 'One-handed' : 'One-handed · RMB in pack: off hand'}${ammo ? ` · ${ammo}` : ''}`, color: C.dim });
     }
-    if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.heal} HP [F/RMB]`, color: C.green });
+    if (d.kind === 'food') lines.push({ text: d.regen ? `Restores ${d.now} HP now, ${d.regen} more over ${d.regenT}s [F/RMB]` : `Restores ${d.now ?? d.heal} HP [F/RMB]`, color: C.green });
+    // A dish cooked up: what it does, when, and how long for (see
+    // world/dishes.js).
+    if (d.dish) for (const l of dishLines(d)) for (const [i, t] of wrap(l.text, 44).entries()) lines.push({ text: i ? `  ${t}` : l.dur ? t : `${l.cond ? '◇' : l.good ? '+' : '-'} ${t}`, color: l.cond ? '#e8d070' : l.dur ? C.dim : l.good ? '#90e890' : '#f08070' });
+    // (What you've learnt a thing is, cooking with it: see cooking.js.)
+    else if (this.game && this.game.player && (this.game.player.kinds || []).includes(slot.item.split(/[~*]/)[0])) lines.push({ text: `To a cook: ${ingredientTypes(slot.item).join(', ')}`, color: '#d8b880' });
     if (d.kind === 'armor') lines.push({ text: `Worn: ${d.slot}${d.armor ? ` · blocks ${Math.round(d.armor * 100)}%` : ''} [F/RMB]`, color: C.cyan });
     const STAT = { str: 'STR', agi: 'AGI', end: 'END', cha: 'CHA' };
     if (d.stats) lines.push({ text: `${d.kind === 'armor' ? 'While worn' : 'While held'}: ${Object.entries(d.stats).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${STAT[k] || k}`).join(' ')}`, color: C.green });

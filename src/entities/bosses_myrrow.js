@@ -822,6 +822,18 @@ export const MYRROW_BRAINS = {
       for (let r = 1; r <= 2; r++) cold(game, c, ringTiles(c.x, c.z, r), 0.8 + r * 0.25, 4, { quiet: r > 1 });
       return true;
     }
+    // His lantern's light thrown down the hall at you: a cold beam that
+    // numbs. (Round 50: a third thing from the first.)
+    if (cd(c, 'lampCd', dt, 3.5) && ready(c) && d >= 2 && d <= 9 && sees(game, c, t) && !c.windup) {
+      c.lampCd = ph >= 2 ? 6 : 7.5;
+      used(c, 0.4);
+      c.face(t.x, t.z);
+      const line = lineTiles(game, c, t, d + 3);
+      if (line.length) addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.8, dmg: dmgOf(c, 4), kind: 'beam', from: { x: c.x, z: c.z }, to: line[line.length - 1], beamColor: '#e0fff8', halo: '#80e8d0', width: 2, chill: 1.5 });
+      shout(c, 'Look into the light.', '#80e8d0');
+      game.audio?.play('hum', c);
+      return true;
+    }
     // (Worn) Fog over half his hall; he steps through it.
     if (ph >= 2 && cd(c, 'fogCd', dt, 3) && ready(c) && !c.windup) {
       c.fogCd = 11;
@@ -1145,6 +1157,9 @@ export const MYRROW_BRAINS = {
       const guard = game.creatures.some((o) => !o.dead && o.pearlGuard === c);
       if (!guard || c.shellT <= 0) {
         c.shellT = 0;
+        // (Out of it, a while before she shuts herself in again: her blade
+        // and her pearls between.)
+        c.shellCd = Math.max(c.shellCd || 0, 9);
         game.renderer.floatText(c.x, c.y + 3, c.z, 'the shell opens!', '#f0e8dc');
         game.renderer.emit(c.x, c.y + 1, c.z, { n: 20, color: ['#f0e8dc', '#ffffff', '#c8b8a8'], up: 30, speed: 50, life: 0.6 });
         game.audio?.play('glass', c);
@@ -1161,7 +1176,9 @@ export const MYRROW_BRAINS = {
       c.shellCd = 18;
       used(c, 1);
       c.shellT = 10;
-      for (let i = 0; i < 2; i++) {
+      // (Two guards at most about her: those still standing stay.)
+      const have = game.creatures.filter((o) => !o.dead && o.pearlGuard === c).length;
+      for (let i = have; i < 2; i++) {
         const g = summon(game, 'reef_raider', c, 3, { color: ['#f0e8dc', '#80c8e8'] });
         if (g) g.pearlGuard = c;
       }
@@ -1450,6 +1467,27 @@ export const MYRROW_BRAINS = {
           addZone(g, { by: c, kind: 'bubble', tiles: [{ x, z }], y: c.y, life: 8, root: 1.5, once: true, dmg: dmgOf(c, 2), color: [200, 240, 255], puff: SEA });
         } });
       }
+      return true;
+    }
+    // Shut, and you keeping away: a jet of sea through the crack of its
+    // shell, along a line at you (it throws you back); or a pearl spat high,
+    // that bursts where it lands. (Round 50: kept off, it had only its
+    // bubbles.)
+    if (!c.open && d >= 2 && cd(c, 'jetCd', dt, 2.5) && ready(c) && !c.windup) {
+      c.jetCd = ph >= 2 ? 6.5 : 7.5;
+      used(c, 0.3);
+      const line = lineTiles(game, c, t, d + 2);
+      if (line.length) addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.75, dmg: dmgOf(c, 4), knock: 2, from: { x: c.x, z: c.z }, kind: 'beam', to: line[line.length - 1], beamColor: '#c8f0ff', halo: '#60a8e0', width: 2 });
+      game.audio?.play('splash', c);
+      return true;
+    }
+    if (!c.open && d >= 3 && cd(c, 'spitCd', dt, 4) && ready(c) && !c.windup) {
+      c.spitCd = 9;
+      used(c, 0.3);
+      lob(game, c, t.x, t.z, { tint: [240, 232, 220], onLand: (g, x, z) => {
+        addHazard(g, { by: c, tiles: areaTiles(x, z, 1), y: c.y, dur: 0.05, dmg: dmgOf(c, 5), kind: 'slam', center: { x, z }, radius: 1, color: COLORS.blow });
+        g.renderer.emit(x, c.y + 0.5, z, { n: 10, color: ['#f0e8dc', '#ffffff', '#8a6ad8'], up: 24, speed: 36, life: 0.5 });
+      } });
       return true;
     }
     // (Worn) The undertow: you're drawn to it; and it opens, a moment, to

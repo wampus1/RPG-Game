@@ -5,6 +5,7 @@ import { ITEMS } from '../world/items.js';
 import { B, BLOCKS, LOGS } from '../world/blocks.js';
 import { burn, chill, mend, stun, knockBack } from './gems.js';
 import { has as heroHas } from './hero.js';
+import { dishFx } from './cooking.js';
 
 const WORN = ['head', 'body', 'legs', 'feet'];
 const EMPTY = Object.freeze({ blade: [], bow: [], shield: [], tool: [], armor: {} });
@@ -191,7 +192,9 @@ export function catchArrow(game, t, a) {
 // How long each pace takes (fleet armour: a little less, piece by piece).
 export function stepModMult(e) {
   const n = hasMod(e, 'armor', 'fleet');
-  return n ? 1 / (1 + Math.min(0.18, 0.06 * n)) : 1;
+  // (And a dish that quickens you, or weighs you down: see cooking.js.)
+  const d = e && e.kind === 'player' ? Math.max(-0.4, Math.min(0.4, dishFx(e, 'speed'))) : 0;
+  return (n ? 1 / (1 + Math.min(0.18, 0.06 * n)) : 1) / (1 + d);
 }
 
 // Health from hale armour.
@@ -202,13 +205,15 @@ export function gearHp(e) {
 // Fireproof: the fire on you bites half as often.
 // (And a fire-hardened hide, as much again.)
 export function burnModSlow(e) {
-  return (hasMod(e, 'armor', 'fireproof') ? 2 : 1) * (heroOf(e, 'fire_hardened') ? 2 : 1);
+  const d = e && e.kind === 'player' ? Math.min(0.8, Math.max(0, dishFx(e, 'heatproof'))) : 0;
+  return ((hasMod(e, 'armor', 'fireproof') ? 2 : 1) * (heroOf(e, 'fire_hardened') ? 2 : 1)) / (1 - d);
 }
 
 // Fur-lined: cold slows you half as long.
 // (Northern blood: as much again.)
 export function chillModMult(e) {
-  return (hasMod(e, 'armor', 'furred') ? 0.5 : 1) * (heroOf(e, 'northern_blood') ? 0.5 : 1);
+  const d = e && e.kind === 'player' ? Math.min(0.8, Math.max(0, dishFx(e, 'coldproof'))) : 0;
+  return (hasMod(e, 'armor', 'furred') ? 0.5 : 1) * (heroOf(e, 'northern_blood') ? 0.5 : 1) * (1 - d);
 }
 
 // A player's own trait (with others playing: theirs, see game/party.js).

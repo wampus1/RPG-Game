@@ -95,17 +95,23 @@ export function press(c) {
   const ph = phaseOf(c);
   const k = c.tempo || 1;
   if (!c.target || c.target.dead || !((c.sinceAtk || 0) > PRESS[ph] / k)) return null;
+  // (Only the next of its works is made ready, if none is already: not
+  // all of them at once, or the one it's only just done comes round again
+  // first, and it's the same few over and over. Round 50. If that one
+  // can't be done where it stands, another a moment later, and so on.)
   if (!c.pressed) {
     c.pressed = true;
-    // (An island master's many works come round in turn: only the next of
-    // them is made ready, if none is already.)
-    const cds = Object.keys(c).filter((k) => k.endsWith('Cd') && !NOT_ATTACKS.has(k) && typeof c[k] === 'number');
-    if (c.S.isle) {
-      if (!cds.some((k) => c[k] <= 0)) {
-        const next = cds.reduce((b, k) => (b === null || c[k] < c[b] ? k : b), null);
-        if (next) c[next] = 0;
-      }
-    } else for (const k of cds) if (c[k] > 0) c[k] = 0;
+    c.pressAt = c.sinceAtk;
+    c.pressN = 0;
+  }
+  if (!c.pressN || c.sinceAtk - c.pressAt > c.pressN * 0.8) {
+    c.pressN++;
+    const cds = Object.keys(c).filter((q) => q.endsWith('Cd') && !NOT_ATTACKS.has(q) && typeof c[q] === 'number');
+    const waiting = cds.filter((q) => c[q] > 0);
+    if (c.pressN > 1 || !cds.some((q) => c[q] <= 0)) {
+      const next = waiting.reduce((b, q) => (b === null || c[q] < c[b] ? q : b), null);
+      if (next) c[next] = 0;
+    }
     c.gapT = Math.min(c.gapT || 0, 0.2);
     return 'ready';
   }
@@ -124,7 +130,12 @@ export function bossClock(c, dt) {
   if (c.gapT > 0) c.gapT -= dt;
   // (How long since it last went for you: a blow wound up, or one of its
   // works under way, counts.)
-  if (c.windup || c.act || c.aiming || !c.target || c.target.dead || (c.game.lasers || []).some((L) => L.by === c)) {
+  // (Nor while it's up in the dark, underground, gone from sight or shut
+  // in its shell: those are its works too. Round 50: counted as standing
+  // about, it was pressed, and every one of its works made ready at once,
+  // so the moment it came down it went straight back up.)
+  c.fightClock = (c.fightClock || 0) + dt;
+  if (c.windup || c.act || c.aiming || c.ceiling || c.burrowed || c.vanished || c.submerged || c.shellT > 0 || !c.target || c.target.dead || (c.game.lasers || []).some((L) => L.by === c)) {
     c.sinceAtk = 0;
     c.pressed = false;
   } else c.sinceAtk = (c.sinceAtk || 0) + dt;

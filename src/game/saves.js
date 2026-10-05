@@ -23,7 +23,7 @@ export function metaOf(game) {
   }
   return {
     name: game.playerName,
-    origin: game.origin || null,
+    origin: game.origin || (game.hero && game.hero.origin) || null,
     day: game.day,
     minute: Math.floor(game.minute),
     seed: game.seed,
@@ -240,6 +240,22 @@ export class SaveStore {
     const now = this.index()[id];
     this.onChange?.(id, now);
     return now;
+  }
+
+  // A saved world changed where it's kept (brought up to this version:
+  // see game/migrate.js): `fn(data)` changes it in place; its version
+  // mark goes with it, here and in the list.
+  async upgrade(id, fn) {
+    const text = await this.rawText(id);
+    if (!text) throw new Error('That save is empty.');
+    const data = JSON.parse(text);
+    const res = fn(data);
+    const out = JSON.stringify(data);
+    const meta = { ...(this.index()[id] || {}), gv: data.gv, size: out.length };
+    await this.putText(id, out, meta);
+    const now = this.index()[id];
+    this.onChange?.(id, now);
+    return res;
   }
 
   async load(id) {

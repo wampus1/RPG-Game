@@ -12,6 +12,7 @@ import { ICON_SHAPES, ICON_COLORS, ICON_BGS, ICON_PATTERNS, ICON_FRAMES, TITLES,
 import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
 import { versionText, sameVersion, canUpgrade } from '../version.js';
 import { GUILD_NAME_MAX } from '../game/guilds.js';
+import { SaveDetailsWindow } from './windows.js';
 
 // (Solid: nothing behind shows through.)
 const PANEL = '#100c18';
@@ -273,20 +274,11 @@ export class MultiplayerWindow extends Window {
     y += 2;
     (saves || []).slice(0, 3).forEach((s, i) => {
       const m = s.meta;
-      const sure = this.confirm === s.id;
-      // (Made in an older version of the game: it can be brought up to
-      // this one, asked first; see main.js.)
-      const up = canUpgrade(m.gv) && hooks.upgradeWorld;
+      // (What's in it, and updating or deleting it: picked, see
+      // SaveDetailsWindow. Round 50: not from the list itself.)
       const other = !sameVersion(m.gv);
-      button(this, g, 2, y, this.w - (up ? 24 : 14), `[${i + 1}] Continue: ${m.world || m.name}`.slice(0, 36), () => hooks.continueWorld(s.id), { off: !a, color: other ? C.orange : C.fg, hint: other ? `${versionText(m.gv)} · day ${m.day}` : `day ${m.day} · ${m.players || 1} played` });
-      if (up) button(this, g, this.w - 21, y, 9, 'Update', () => hooks.upgradeWorld(s.id, m), { color: C.hi });
-      button(this, g, this.w - 11, y, 9, sure ? 'Sure?' : 'Delete', () => {
-        if (!sure) this.confirm = s.id;
-        else {
-          this.confirm = null;
-          hooks.deleteWorld(s.id);
-        }
-      }, { color: sure ? C.red : C.dim });
+      const up = canUpgrade(m.gv);
+      button(this, g, 2, y, this.w - 4, `[${i + 1}] ${m.world || m.name}`.slice(0, 40), () => this.details(s.id), { off: !a, color: other ? C.orange : C.fg, hint: other ? `${versionText(m.gv)}${up ? ' · can update' : ''} · day ${m.day}` : `day ${m.day} · ${m.players || 1} played` });
       y += 2;
     });
     y += 1;
@@ -317,6 +309,22 @@ export class MultiplayerWindow extends Window {
     g.text(24, this.h - 3, `Up to ${MAX_PLAYERS} players in a world.`, C.faint);
   }
 
+  // One of your worlds, picked: what's in it, and hosting, updating or
+  // deleting it.
+  details(id) {
+    const { hooks } = this.ctx;
+    const meta = () => (this.ctx.saves || []).find((q) => q.id === id)?.meta || null;
+    this.ui.open(new SaveDetailsWindow(this.ui, {
+      id,
+      title: 'YOUR WORLD',
+      mp: true,
+      meta,
+      load: () => hooks.continueWorld(id),
+      remove: () => hooks.deleteWorld(id),
+      update: () => hooks.upgradeWorld?.(id, meta()),
+    }));
+  }
+
   onKey(k) {
     const { hooks, saves, accounts } = this.ctx;
     const a = accounts.profile;
@@ -333,7 +341,7 @@ export class MultiplayerWindow extends Window {
       }
     } else {
       const d = /^Digit([1-3])$/.exec(k.code);
-      if (d && saves && saves[+d[1] - 1]) hooks.continueWorld(saves[+d[1] - 1].id);
+      if (d && saves && saves[+d[1] - 1]) this.details(saves[+d[1] - 1].id);
     }
     return true;
   }

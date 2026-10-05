@@ -1,5 +1,6 @@
 // Procedural character, creature and item sprites.
 import { smithIcon, relight } from './iconsmith.js';
+import { dishIcon } from './dishart.js';
 import { Px, hex, shade } from './pixel.js';
 import { TEX, SPR_H } from './textures.js';
 import { ITEMS, GEMS } from '../world/items.js';
@@ -1696,6 +1697,13 @@ export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
   const it = ITEMS[key];
+  // A dish cooked up: made of the pictures of what went in it (see
+  // dishart.js).
+  if (it && it.dish) {
+    c = dishIcon(it, itemIcon);
+    iconCache.set(key, c);
+    return c;
+  }
   // A starred piece looks like the piece it's made from (its stars and
   // where it was found show in the slot: see drawJewelled).
   if (it && it.stars) {

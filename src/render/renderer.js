@@ -14,7 +14,7 @@ import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpi
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawStormSea, drawStormCover } from './stormfx.js';
-import { drawWing, wingInFront } from './wing.js';
+import { drawWing, wingInFront, drawWingBurst } from './wing.js';
 import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
@@ -313,7 +313,6 @@ export class Renderer {
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
-    this.drawWingsLit();
     if (this.underground && this.hidden) this.drawDigView(game);
     drawStormSea(this, game, snap ? 'world' : 'all');
     drawOldPlaces(this, game, dt);
@@ -341,20 +340,6 @@ export class Renderer {
     // (or later, over a place's name and the notices: see drawBubbles).
     this.bubbleK = 1;
     if (!this.deferBubbles) this.drawBubbles(ctx);
-  }
-
-  // A fallen star's wing, over the night (see wing.js): its own light, so
-  // the dark doesn't dim it (faint, though, while it grows back).
-  drawWingsLit() {
-    const list = this.wingsLit;
-    if (!list || !list.length) return;
-    const ctx = this.ctx;
-    const a0 = ctx.globalAlpha;
-    for (const w of list) {
-      ctx.globalAlpha = a0 * (w.k >= 0.999 ? 0.85 : 0.3) * (w.a ?? 1);
-      drawWing(ctx, w.dir, w.sx, w.top, w.k, w.t);
-    }
-    ctx.globalAlpha = a0;
   }
 
   // What's being said, on the screen's own picture (`bubbleK`: how far the
@@ -527,7 +512,7 @@ export class Renderer {
     const sign = vx < 0 ? -1 : 1;
     const trail = (e.rollTrail ||= []);
     trail.push({ x: sx, y: top });
-    if (trail.length > 5) trail.shift();
+    while (trail.length > (e.wingDash > 0 && e.wing ? 9 : 5)) trail.shift();
     const cy = SHEET_H * 0.62;
     const draw = (x, y, ang, alpha, sc) => {
       ctx.save();
@@ -540,6 +525,27 @@ export class Renderer {
     };
     // (Spun fast at first, settling as it slows.)
     const spin = sign * (1 - Math.pow(1 - prog, 2)) * Math.PI * 2;
+    // A fallen star's roll on the wing (see combat.js): longer ghosts, lit
+    // blue, the wing spread wide over the tumble beating once, and stars
+    // shed along the way.
+    const dash = e.wingDash > 0 && e.wing;
+    if (dash) {
+      const a0 = ctx.globalAlpha;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < trail.length - 1; i++) {
+        const k = (i + 1) / trail.length;
+        ctx.globalAlpha = a0 * k * 0.55;
+        ctx.drawImage(frameGlow(sheet, 4 * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, i % 2 ? '#78b8ff' : '#a8dcff'), trail[i].x - 1, trail[i].y - SPR_PAD - 1);
+      }
+      ctx.restore();
+      ctx.globalAlpha = a0;
+      drawWingBurst(ctx, sx + CHAR_W / 2, top + 6, Math.min(1, e.wingDash / 0.55) * 0.7, 1.3);
+      if (!this.spin) {
+        const rp = e.renderPos();
+        this.emit(rp.x + (Math.random() - 0.5) * 0.6, rp.y + 0.6 + Math.random(), rp.z, { n: 2, color: ['#e0f4ff', '#a8dcff', '#ffffff'], up: 4, speed: 10, life: 0.6, gravity: -6, glow: true });
+      }
+    }
     for (let i = 0; i < trail.length - 1; i++) draw(trail[i].x, trail[i].y, spin - sign * (trail.length - 1 - i) * 0.7, 0.12 + i * 0.07, 0.82);
     draw(sx, top, spin, 1, 0.86);
     if (Math.random() < 0.5 && !this.spin) {
@@ -1556,8 +1562,10 @@ export class Renderer {
         // their back to you.
         const wing = e.wing && !inWater && !e.submerged && !rolling && !mount ? e.wing : null;
         if (wing && !wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
-        // (Kept, to be drawn again over the dark: it shines by its own light.)
-        if (wing && this.wingsLit) this.wingsLit.push({ dir, sx, top, k: wing.k, t: this.time + (e.id || 0), a: ctx.globalAlpha });
+        // (Kept: it sheds a little light of its own, so the dark doesn't
+        // dim it: see Lighting.draw. Not drawn again over everything: round
+        // 50, it showed through whatever stood in front of it.)
+        if (e.wing && this.wingsLit && e.wing.k >= 0.999 && !inWater && !e.submerged) this.wingsLit.push({ x: e.x, y: e.y, z: e.z });
         if (e.submerged) {
           // Under black water: rings spreading, two pale eyes.
           const k = (this.time * 0.8 + e.id * 0.37) % 1;
@@ -1583,7 +1591,7 @@ export class Renderer {
           if (e._wingT <= 0) {
             e._wingT = 0.35 + Math.random() * 0.5;
             const rp = e.renderPos();
-            this.emit(rp.x + (Math.random() - 0.5) * 0.8, rp.y + 1 + Math.random() * 0.8, rp.z, { n: 1, color: ['#ffe7a0', '#fffaf0'], up: 6, speed: 4, life: 0.9, gravity: -4, glow: true });
+            this.emit(rp.x + (Math.random() - 0.5) * 0.8, rp.y + 1 + Math.random() * 0.8, rp.z, { n: 1, color: ['#a8dcff', '#e0f4ff', '#78b8ff'], up: 6, speed: 4, life: 0.9, gravity: -4, glow: true });
           }
         }
         // (The blight in it: a faint violet edge.)

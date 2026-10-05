@@ -6,6 +6,7 @@
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_STATE } from '../world/blocks.js';
 import { has as hasTrait } from '../game/hero.js';
+import { dishFx } from '../game/cooking.js';
 
 const MARGIN = 10;
 
@@ -128,7 +129,7 @@ export class Lighting {
     const S = !below ? game.stormSea : null;
     if (S && (S.cloud > 0.01 || S.flash > 0.01)) sky = stormSky(sky, S);
     // (A Mirefolk fogsight tincture: the dark goes grey-green and clear.)
-    if (player && player.buffs && player.buffs.some((q) => q.sight && q.until > game.day * 1440 + game.minute)) sky = [Math.max(sky[0], 0.5), Math.max(sky[1], 0.62), Math.max(sky[2], 0.52)];
+    if (player && player.buffs && (player.buffs.some((q) => q.sight && q.until > game.day * 1440 + game.minute) || dishFx(player, 'sight') > 0)) sky = [Math.max(sky[0], 0.5), Math.max(sky[1], 0.62), Math.max(sky[2], 0.52)];
     // (The hour's light, for what's drawn past the world's top: see
     // oldplaces.js.)
     this.sky = sky;
@@ -187,6 +188,9 @@ export class Lighting {
     }
     // Lights that move: torches carried, wisps, the Kavorent's constructs.
     const ents = game.entityLights ? game.entityLights() : [];
+    // (A fallen star's wing: a little blue light of its own. See
+    // Renderer.drawEntity.)
+    for (const w of r.wingsLit || []) if (ents.length < 12) ents.push({ x: w.x, y: w.y + 1, z: w.z, L: 3, tint: '#78b8ff' });
     const eKey = ents.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';');
     if (!this.eflood || this.eflood.key !== eKey || this.eflood.x0 !== this.flood.x0 || this.eflood.z0 !== this.flood.z0) {
       const F0 = this.flood;

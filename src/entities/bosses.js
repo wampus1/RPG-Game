@@ -609,6 +609,25 @@ export function bossBrains(h) {
         game.renderer.floatText(c.x, c.y + 3, c.z, 'CONSECRATE', '#c8a0ff');
         game.audio?.play('rune', c);
       }
+      // A halo of grave-light spreading out from her ring by ring, one gap
+      // in it: out through the gap, or back ahead of it. (Round 50: from
+      // the first, not only her bolts.)
+      c.haloCd = (c.haloCd ?? 4) - dt;
+      if (ready(c) && c.haloCd <= 0 && d <= 6 && !c.bolts) {
+        c.haloCd = ph >= 2 ? 7 : 9;
+        used(c, 0.6);
+        const gapA = Math.atan2(t.z - c.z, t.x - c.x) + (Math.random() - 0.5) * 2;
+        for (let r = 2; r <= 5; r++) {
+          const ring = ringTiles(c.x, c.z, r).filter((q) => {
+            const a = Math.atan2(q.z - c.z, q.x - c.x);
+            return Math.abs(((a - gapA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 0.45;
+          });
+          addHazard(game, { by: c, tiles: ring, y: c.y, dur: 0.7 + r * 0.25, dmg: Math.round(3 * mult(c)), kind: 'hex', center: { x: c.x, z: c.z }, color: [200, 160, 255], quiet: r > 2 });
+        }
+        c.say?.('Kneel in the light.', 1.8, '#c8a0ff');
+        game.audio?.play('rune', c);
+        return true;
+      }
       c.blinkCd = (c.blinkCd ?? 3) - dt;
       if (d <= 2 && c.blinkCd <= 0) {
         const to = spotNear(c, c, 4, 9);

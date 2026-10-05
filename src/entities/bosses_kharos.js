@@ -713,6 +713,22 @@ export const KHAROS_BRAINS = {
       game.audio?.play('reflect', c);
       return true;
     }
+    // A fan of glass shards flung at you: three lines, spreading. (Round
+    // 50: a third thing from the first.)
+    if (cd(c, 'fanCd', dt, 4) && ready(c) && d >= 2 && d <= 8 && !c.windup) {
+      c.fanCd = ph >= 2 ? 6 : 7.5;
+      used(c, 0.4);
+      c.face(t.x, t.z);
+      const base = Math.atan2(t.z - c.z, t.x - c.x);
+      for (const off of [-0.42, 0, 0.42]) {
+        const end = { x: Math.round(c.x + Math.cos(base + off) * 7), z: Math.round(c.z + Math.sin(base + off) * 7) };
+        const line = lineTiles(game, c, end, 7);
+        if (line.length) addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.7, dmg: dmgOf(c, 4), kind: 'beam', from: { x: c.x, z: c.z }, to: line[line.length - 1], beamColor: '#e8e0ff', halo: '#8a6ad8', width: 1, quiet: off !== 0 });
+      }
+      shout(c, 'Shatter.', '#c8b8f0');
+      game.audio?.play('glass', c);
+      return true;
+    }
     // (Worn) A cell of glass round you, with one pane missing: out through
     // it before it's filled with her light.
     if (ph >= 2 && cd(c, 'tombCd', dt, 3) && ready(c) && d <= 9 && !c.windup) {
@@ -796,6 +812,19 @@ export const KHAROS_BRAINS = {
       const line = lineTiles(game, c, t, d + 1);
       addHazard(game, { by: c, tiles: line, y: c.y, dur: 0.75, dmg: dmgOf(c, 3), kind: 'beam', from: { x: c.x, z: c.z }, to: line[line.length - 1] || t, beamColor: '#ffe8c0', halo: '#ff9040', width: 2, onFire: glazed });
       game.audio?.play('pour', c);
+      return true;
+    }
+    // Funeral urns lobbed about you, each bursting into a ring of kiln-fire
+    // (that glazes). (Round 50: a third thing from the first.)
+    if (cd(c, 'urnCd', dt, 4) && ready(c) && d >= 2 && d <= 9 && !c.windup) {
+      c.urnCd = ph >= 2 ? 7 : 8.5;
+      used(c, 0.5);
+      for (let k = 0; k < 2; k++) {
+        const at = spotIn(c, t, k ? 2 : 1, 3) || t;
+        lob(game, c, at.x, at.z, { tint: [200, 120, 70], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.55, 4, { burn: 1, onFire: glazed }) });
+      }
+      shout(c, 'Ashes to the urn!', '#ffb040');
+      game.audio?.play('crumble', c);
       return true;
     }
     // (Worn) The kiln's mouth opened at you: heat that glazes twice over.
@@ -1334,6 +1363,31 @@ export const KHAROS_BRAINS = {
       for (let k = 0; k < 2; k++) {
         const at = k ? spotIn(c, t, 1, 2) || t : t;
         lob(game, c, at.x, at.z, { tint: [255, 100, 30], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.05, 5, { burn: 2 }) });
+      }
+      return true;
+    }
+    // A chain lashed across the floor from the anchor nearest you, through
+    // where it hangs, to the far side (or, its anchors all broken, slag
+    // rained about you). (Round 50: a third thing from the first.)
+    if (cd(c, 'lashCd', dt, 4) && ready(c) && !c.windup) {
+      c.lashCd = ph >= 2 ? 6.5 : 8;
+      used(c, 0.5);
+      const a = game.creatures.filter((o) => !o.dead && o.species === 'heart_anchor' && dist(o, c) < 30).sort((p, q) => dist(p, t) - dist(q, t))[0];
+      if (a) {
+        const far = { x: c.x + (c.x - a.x), z: c.z + (c.z - a.z) };
+        const tiles = lineTiles(game, a, far, Math.ceil(Math.hypot(far.x - a.x, far.z - a.z)) + 1).filter((q) => inHall(c, q));
+        for (const w of [-1, 1]) {
+          const side = tiles.map((q) => (Math.abs(far.x - a.x) > Math.abs(far.z - a.z) ? { x: q.x, z: q.z + w } : { x: q.x + w, z: q.z })).filter((q) => inHall(c, q));
+          if (side.length) addHazard(game, { by: c, tiles: side, y: c.y, dur: 1.0, dmg: dmgOf(c, 3), kind: 'fire', color: COLORS.fire, quiet: true });
+        }
+        if (tiles.length) addHazard(game, { by: c, tiles, y: c.y, dur: 1.0, dmg: dmgOf(c, 5), kind: 'beam', from: { x: a.x, z: a.z }, to: tiles[tiles.length - 1], beamColor: '#ffb040', halo: '#ff5020', width: 2, knock: 1 });
+        game.renderer.floatText(a.x, a.y + 2.4, a.z, 'the chain whips!', '#ffb040');
+        game.audio?.play('chains', c);
+      } else {
+        for (let k = 0; k < 4; k++) {
+          const at = spotIn(c, t, 0, 3) || t;
+          lob(game, c, at.x, at.z, { tint: [255, 120, 40], onLand: (g, x, z) => fire(g, c, areaTiles(x, z, 1), 0.05, 4, { burn: 1 }) });
+        }
       }
       return true;
     }

@@ -15,16 +15,16 @@
 // it: everyone on Thessa sees the flash and is shaken by the blast (see
 // starShockwave).
 //
-// What it means after: a single wing of white feathers at your back (see
-// render/wing.js), which can carry you through a second roll when you've
-// no breath for it (combat.js), and townsfolk who aren't sure what to make
-// of you (some of them are wary: starWary).
+// What it means after: a single wing at your back, blue and faintly lit,
+// like a dragon's (see render/wing.js), which can carry you through a
+// second roll when you've no breath for it (combat.js), and townsfolk who
+// aren't sure what to make of you (some of them are wary: starWary).
 import { VIEW_W, VIEW_H, CHAR_W, GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { RNG, hash4, hashf } from '../util/rng.js';
 import { drawText } from '../render/font.js';
 import { wrap } from '../ui/ascii.js';
-import { wingSprite } from '../render/wing.js';
+import { drawPerson, drawHouse, drawTree, shade } from '../render/scenekit.js';
 
 export const STAR_IMPACT = 15;
 const STAR_BLACK = 20.5;
@@ -109,14 +109,14 @@ export const isStar = (hero) => !!hero && hero.origin === 'star';
 // What they say when you walk up (now and then: see dialogue.js).
 export function starGreeting(rec, sid, rng) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
-  if (rec.age === 'child') return pick(['Is that a real wing? Can you fly? Show me!', 'Mum says you fell out of the sky. Did it hurt?', 'Can I have a feather? Just one?']);
+  if (rec.age === 'child') return pick(['Is that a real wing? Can you fly? Show me!', 'Mum says you fell out of the sky. Did it hurt?', 'Is that a dragon\'s wing? Can I touch it?']);
   if (starWary(rec, sid)) return pick(['Keep that wing away from me.', 'You\'re the one that came down out of the sky. I want no part of whatever you are.', 'A wing on a person isn\'t natural. What do you want?', 'Stay where I can see you, star-thing.']);
   return pick(['The one who fell from the sky! I saw the light of it from my window.', 'That wing... so the stories are true. Hello.', 'You came down like the sun rising. Are you well?', 'Folk say you\'re a star that fell. I\'m glad you landed softly, at least.']);
 }
 
 // Asked about your wing.
 export function wingTalk(rec, sid) {
-  if (rec.age === 'child') return ['It\'s so white! It glows a bit in the dark, did you know?', 'If I find a star, will I get a wing too?'];
+  if (rec.age === 'child') return ['It\'s so blue! It glows a bit in the dark, did you know?', 'If I find a star, will I get a wing too?'];
   if (starWary(rec, sid)) return ['I\'d rather not talk about it.', 'My grandmother said things that fall from the sky bring trouble with them. I hope she was wrong.'];
   return ['It shines a little, even in daylight. Like it remembers where it came from.', 'They say the old priests wrote of stars that walked. I never thought I\'d meet one.'];
 }
@@ -175,7 +175,7 @@ export function starfallScene(game, info = {}) {
   const words = [
     'You remember the cold up there, and the long quiet between the stars.',
     'Then the falling: the air catching fire around you, the ground rushing up.',
-    'When the light faded you were lying in a crater of scorched earth, with one wing of white feathers at your back.',
+    'When the light faded you were lying in a crater of scorched earth, with one wing at your back: blue, and thin as a dragon\'s, and faintly shining.',
     `You don't know why you fell, or what you were before. The people of ${village} saw you come down.`,
     `${first}. That is the name you remember. It will have to do.`,
   ];
@@ -244,92 +244,99 @@ function makeCanvas(w, h) {
   return c;
 }
 
-// What doesn't move, painted once: the sky, the hills, the village.
+// What doesn't move, painted once, in layers (so what happens behind the
+// hills stays behind them): the sky; the far hills; and the land before
+// them (the nearer slope, the fields, the lane and the village along it).
 function paintBackdrop(seed) {
   const rng = new RNG(seed);
-  const c = makeCanvas(PW, PH);
-  const g = c.getContext('2d');
-  const px = (x, y, col) => {
-    g.fillStyle = col;
-    g.fillRect(x, y, 1, 1);
+  const layer = () => {
+    const c = makeCanvas(PW, PH);
+    const g = c.getContext('2d');
+    return [c, g, (x, y, col) => {
+      g.fillStyle = col;
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
+    }];
   };
+  const [sky, , spx] = layer();
+  const [far, , fpx] = layer();
+  const [land, g, px] = layer();
   // The night sky, in bands, dithered where they meet.
   const bands = ['#060818', '#0a0d24', '#0f1430', '#151a3c', '#1d2148', '#272653', '#33295a'];
-  for (let y = 0; y < HORIZON + 10; y++) {
-    const f = (y / (HORIZON + 10)) * (bands.length - 1);
-    const i = Math.floor(f);
+  for (let y = 0; y < PH; y++) {
+    const f = Math.min(1, y / (HORIZON + 10)) * (bands.length - 1);
+    const i = Math.min(bands.length - 1, Math.floor(f));
     const fr = f - i;
-    for (let x = 0; x < PW; x++) px(x, y, (x + y) % 2 === 0 && fr > 0.5 ? bands[Math.min(bands.length - 1, i + 1)] : bands[i]);
+    for (let x = 0; x < PW; x++) spx(x, y, (x + y) % 2 === 0 && fr > 0.5 ? bands[Math.min(bands.length - 1, i + 1)] : bands[i]);
   }
-  // The far hills: blue-black, a soft ridge.
-  const ridge = (base, amp, f1, f2, col, edge) => {
+  // A ridge of hills: its crest lit faintly by the sky, a few dark trees
+  // along it.
+  const ridge = (p, base, amp, f1, f2, col, edge, trees) => {
     for (let x = 0; x < PW; x++) {
       const h = Math.round(base - amp * (0.6 * Math.sin(x * f1 + seed) + 0.4 * Math.sin(x * f2 + seed * 1.7)));
-      for (let y = h; y < PH; y++) px(x, y, col);
-      px(x, h, edge);
+      for (let y = h; y < PH; y++) p(x, y, y > h + 1 && hashf(x, y, seed & 255) < 0.06 ? shade(col, -6) : col);
+      p(x, h, edge);
+      if (trees && hashf(x, 0, seed & 511) < 0.07) for (let k = 1; k < 4; k++) for (let d = -1; d <= 1; d++) if (Math.abs(d) < 4 - k) p(x + d, h - k, shade(col, 4));
     }
   };
-  ridge(HORIZON, 7, 0.031, 0.083, '#141a2c', '#1e2640');
-  ridge(HORIZON + 14, 5, 0.045, 0.11, '#16231e', '#22352a');
-  // The near ground: dark grass, a lane through it toward you.
-  for (let y = HORIZON + 26; y < PH; y++) {
+  ridge(fpx, HORIZON, 7, 0.031, 0.083, '#141a2c', '#222c48', true);
+  ridge(px, HORIZON + 14, 5, 0.045, 0.11, '#16231e', '#24382c', true);
+  // The near ground: dark grass.
+  for (let y = HORIZON + 24; y < PH; y++) {
     for (let x = 0; x < PW; x++) {
       const n = hashf(x, y, seed & 1023);
       px(x, y, n < 0.12 ? '#1e3a24' : n < 0.2 ? '#14281a' : '#183020');
     }
   }
-  // (The lane.)
-  for (let y = HORIZON + 26; y < PH; y++) {
-    const w = 6 + Math.round((y - HORIZON - 26) * 0.7);
-    for (let x = 124 - w; x < 124 + w; x++) px(x, y, hashf(x, y, 77) < 0.2 ? '#3a3226' : '#4a4030');
+  // (The lane, toward you: its edges ragged, ruts down it.)
+  for (let y = HORIZON + 22; y < PH; y++) {
+    const w = 5 + Math.round((y - HORIZON - 22) * 0.62);
+    for (let x = 124 - w - 1; x <= 124 + w; x++) {
+      const edge = x === 124 - w - 1 || x === 124 + w;
+      if (edge && hashf(x, y, 76) < 0.5) continue;
+      const rut = Math.abs(x - 124 + w * 0.4) < 1 || Math.abs(x - 124 - w * 0.4) < 1;
+      px(x, y, rut ? '#3a3226' : hashf(x, y, 77) < 0.2 ? '#3e3628' : '#4a4030');
+    }
   }
-  // The houses of the village, along the lane: timber walls, thatch, the
-  // windows lit. Back row smaller and darker.
+  // The houses of the village along the lane, three-quarters on: timber
+  // and thatch, their windows lit, a little of their light out on the
+  // ground before them. The back ones first, smaller.
   const house = (x0, yb, w, h, roof, wall, lit) => {
-    const roofH = Math.round(w * 0.45);
-    for (let y = yb - h; y < yb; y++) for (let x = x0; x < x0 + w; x++) px(x, y, (x - x0) % 5 === 0 ? shade(wall, -18) : wall);
-    for (let i = 0; i < roofH; i++) {
-      const y = yb - h - i - 1;
-      for (let x = x0 - 2 + i; x < x0 + w + 2 - i; x++) px(x, y, (x + i) % 3 === 0 ? shade(roof, -14) : roof);
+    if (lit) {
+      const lg = g.createRadialGradient(x0 + w / 2, yb + 2, 0, x0 + w / 2, yb + 2, w * 0.8);
+      lg.addColorStop(0, 'rgba(255,190,100,0.22)');
+      lg.addColorStop(1, 'rgba(255,190,100,0)');
+      g.fillStyle = lg;
+      g.fillRect(x0 - w, yb - 6, w * 3, 16);
     }
-    // A chimney.
-    const cx = x0 + Math.round(w * 0.7);
-    for (let y = yb - h - roofH + 1; y < yb - h - Math.round(roofH * 0.4); y++) { px(cx, y, '#3a3434'); px(cx + 1, y, '#2c2828'); }
-    // Windows, warm.
-    for (let wx = x0 + 2; wx < x0 + w - 3; wx += 5) {
-      const wy = yb - Math.round(h * 0.65);
-      for (let y = wy; y < wy + 3; y++) for (let x = wx; x < wx + 2; x++) px(x, y, lit ? '#ffcc6a' : '#3a2c22');
-      if (lit) px(wx, wy + 3, '#a8803a');
-    }
-    // The door.
-    const dx = x0 + Math.floor(w / 2) - 1;
-    for (let y = yb - 5; y < yb; y++) { px(dx, y, '#2a1c12'); px(dx + 1, y, '#2a1c12'); }
+    drawHouse(g, px, x0, yb, w, h, { wall, roof, timber: '#2e2016', shape: 'steep', night: 1, lit, glow: '#ffcc6a', chimney: true, door: '#2a1c12', rh: Math.round(w * 0.42) });
   };
-  const back = [[40, HORIZON + 20, 18, 9], [66, HORIZON + 19, 14, 8], [150, HORIZON + 20, 16, 9], [176, HORIZON + 21, 20, 10], [212, HORIZON + 20, 15, 8]];
+  const back = [[40, HORIZON + 20, 16, 8], [64, HORIZON + 19, 13, 7], [150, HORIZON + 20, 15, 8], [174, HORIZON + 21, 18, 9], [210, HORIZON + 20, 14, 8]];
   for (const [x, y, w, h] of back) house(x, y, w, h, '#4a3c28', '#3a3024', rng.chance(0.6));
-  const front = [[18, HORIZON + 44, 30, 16, '#7a6438', '#6a5038'], [70, HORIZON + 40, 26, 14, '#6e5a32', '#5e4630'], [156, HORIZON + 41, 28, 15, '#7a6438', '#6a5038'], [196, HORIZON + 46, 34, 18, '#6e5a32', '#5e4630']];
+  const front = [[14, HORIZON + 44, 28, 15, '#7a6438', '#6a5038'], [68, HORIZON + 40, 24, 13, '#6e5a32', '#5e4630'], [154, HORIZON + 41, 26, 14, '#7a6438', '#6a5038'], [196, HORIZON + 46, 30, 16, '#6e5a32', '#5e4630']];
   for (const [x, y, w, h, roof, wall] of front) house(x, y, w, h, roof, wall, true);
-  // A well by the lane, a fence, a tree.
-  for (let y = HORIZON + 46; y < HORIZON + 52; y++) for (let x = 108; x < 114; x++) px(x, y, (x + y) % 2 ? '#5a5a5e' : '#4a4a4e');
-  for (let x = 107; x < 115; x++) px(x, HORIZON + 45, '#6a5a3a');
-  for (let y = HORIZON + 39; y < HORIZON + 45; y++) { px(107, y, '#4a3a22'); px(114, y, '#4a3a22'); }
-  for (let x = 236; x < PW; x += 1) {
-    if (x % 6 === 0) for (let y = HORIZON + 48; y < HORIZON + 55; y++) px(x, y, '#4a3a22');
+  // A well by the lane: its stone ring, the roof over it on two posts.
+  const wx = 166;
+  const wy = HORIZON + 48;
+  for (let y = wy - 5; y < wy; y++) for (let x = wx; x < wx + 8; x++) px(x, y, y === wy - 5 ? '#6a6a70' : (x + y) % 3 === 0 ? '#3e3e44' : x < wx + 2 ? '#5a5a60' : '#4a4a50');
+  for (let x = wx + 1; x < wx + 7; x++) px(x, wy - 5, '#1a1a20');
+  for (let y = wy - 12; y < wy - 4; y++) {
+    px(wx, y, '#4a3a22');
+    px(wx + 7, y, '#3a2a18');
+  }
+  for (let i = 0; i < 3; i++) for (let x = wx - 2 + i; x < wx + 10 - i; x++) px(x, wy - 12 - i, i === 2 ? '#5a4a2e' : '#4a3c24');
+  px(wx + 3, wy - 9, '#2a1e14');
+  // A fence along the right, and a tree at the left edge.
+  for (let x = 236; x < PW; x++) {
+    if (x % 6 === 0) for (let y = HORIZON + 48; y < HORIZON + 55; y++) px(x, y, x % 12 === 0 ? '#4a3a22' : '#3a2c1a');
     px(x, HORIZON + 50, '#5a4a2e');
+    px(x, HORIZON + 53, '#4a3a22');
   }
-  for (let y = HORIZON + 6; y < HORIZON + 36; y++) { px(4, y, '#2a1e14'); px(5, y, '#2a1e14'); }
-  for (let i = 0; i < 160; i++) {
-    const a = rng.float(0, Math.PI * 2);
-    const d = rng.float(0, 9);
-    px(Math.round(5 + Math.cos(a) * d * 1.2), Math.round(HORIZON + 2 + Math.sin(a) * d), rng.chance(0.5) ? '#16301c' : '#1e3e24');
-  }
-  return { canvas: c, stars: Array.from({ length: 110 }, (_, i) => ({ x: rng.int(0, PW - 1), y: rng.int(0, HORIZON - 4), b: rng.float(0.3, 1), ph: rng.float(0, 6.28), i })), folk: villagers(rng) };
-}
-
-function shade(hex, d) {
-  const n = parseInt(hex.slice(1), 16);
-  const c = (v) => Math.max(0, Math.min(255, v + d)).toString(16).padStart(2, '0');
-  return `#${c((n >> 16) & 255)}${c((n >> 8) & 255)}${c(n & 255)}`;
+  drawTree(g, px, 6, HORIZON + 30, 2.6, { leaf: '#1e3e24', leafDark: '#122a18', trunk: '#2a1e14', tree: 'round' });
+  return {
+    sky, far, land,
+    stars: Array.from({ length: 110 }, (_, i) => ({ x: rng.int(0, PW - 1), y: rng.int(0, HORIZON - 4), b: rng.float(0.3, 1), ph: rng.float(0, 6.28), i })),
+    folk: villagers(rng),
+  };
 }
 
 // The villagers out in the lane, looking up: where they stand, what they
@@ -367,7 +374,7 @@ function drawScene(ctx, sc, art) {
   g.imageSmoothingEnabled = false;
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
-  g.drawImage(art.canvas, 0, 0);
+  g.drawImage(art.sky, 0, 0);
   const fall = clamp01((t - 2.5) / (STAR_IMPACT - 2.5));
   const after = t - STAR_IMPACT;
   const pre = t < STAR_IMPACT;
@@ -420,6 +427,30 @@ function drawScene(ctx, sc, art) {
     }
     g.globalAlpha = 1;
   }
+  // The shockwave: a dome of light swelling up out of the hills behind
+  // them (the hills in front of its foot), its edge bright.
+  if (!pre && after < 3.6) {
+    const R = after * 120;
+    g.globalAlpha = Math.max(0, 0.9 - after * 0.25);
+    const dg = g.createRadialGradient(LAND.x, LAND.y, Math.max(0, R * 0.6), LAND.x, LAND.y, R + 1);
+    dg.addColorStop(0, 'rgba(255,250,230,0)');
+    dg.addColorStop(0.85, 'rgba(255,240,200,0.6)');
+    dg.addColorStop(1, 'rgba(255,255,255,0.95)');
+    g.fillStyle = dg;
+    g.beginPath();
+    g.ellipse(LAND.x, LAND.y, R, R * 0.55, 0, 0, Math.PI * 2);
+    g.fill();
+    // (Its edge: a white line, racing outward.)
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.ellipse(LAND.x, LAND.y, R, R * 0.55, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+  // The hills, and the land and the village before them.
+  g.drawImage(art.far, 0, 0);
+  g.drawImage(art.land, 0, 0);
   // The light it throws over the land: warm, from where it is.
   if (glow > 0.01) {
     const p = pre ? starAt(fall) : LAND;
@@ -431,30 +462,9 @@ function drawScene(ctx, sc, art) {
     g.fillRect(0, 0, PW, PH);
     g.globalCompositeOperation = 'source-over';
   }
-  // The shockwave: a dome of light swelling up out of the hills, its edge
-  // bright; then the wall of dust rolling across the fields toward you.
   if (!pre) {
-    const R = after * 120;
-    if (after < 3.6) {
-      g.globalAlpha = Math.max(0, 0.9 - after * 0.25);
-      const dg = g.createRadialGradient(LAND.x, LAND.y, Math.max(0, R * 0.6), LAND.x, LAND.y, R + 1);
-      dg.addColorStop(0, 'rgba(255,250,230,0)');
-      dg.addColorStop(0.85, 'rgba(255,240,200,0.6)');
-      dg.addColorStop(1, 'rgba(255,255,255,0.95)');
-      g.fillStyle = dg;
-      g.beginPath();
-      g.ellipse(LAND.x, LAND.y, R, R * 0.55, 0, Math.PI, Math.PI * 2);
-      g.fill();
-      // (Its edge: a hard white line, racing outward.)
-      g.strokeStyle = '#ffffff';
-      g.lineWidth = 2;
-      g.beginPath();
-      g.ellipse(LAND.x, LAND.y, R, R * 0.55, 0, Math.PI, Math.PI * 2);
-      g.stroke();
-      g.globalAlpha = 1;
-    }
-    // The dust wave, passing over the village (from the far hills to the
-    // front of the picture).
+    // Then the dust wave, rolling over the village (from the far hills to
+    // the front of the picture).
     const front = HORIZON + after * 30;
     if (after < 5) {
       for (let x = 0; x < PW; x++) {
@@ -532,53 +542,36 @@ function drawScene(ctx, sc, art) {
       y += ls.length * 10 + 6;
     });
     ctx.globalAlpha = 1;
-    // (A single feather, drifting down past the words.)
+    // (A single blue spark of it, drifting down past the words.)
     const fk = (s * 0.12) % 1;
-    const img = wingSprite(0, true, false);
-    ctx.globalAlpha = 0.25 * Math.sin(fk * Math.PI);
-    ctx.drawImage(img, 9, 3, 5, 9, Math.round(VIEW_W * 0.8 + Math.sin(s) * 10), Math.round(fk * VIEW_H), 5, 9);
+    const fx = Math.round(VIEW_W * 0.8 + Math.sin(s) * 10);
+    const fy = Math.round(fk * VIEW_H);
+    ctx.globalAlpha = 0.5 * Math.sin(fk * Math.PI);
+    ctx.fillStyle = '#5fa2f2';
+    ctx.fillRect(fx - 2, fy, 5, 1);
+    ctx.fillRect(fx, fy - 2, 1, 5);
+    ctx.fillStyle = '#d0f0ff';
+    ctx.fillRect(fx, fy, 1, 1);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
 }
 
-// One of the villagers: a little figure four pixels wide, seen from
-// behind, head turned toward the star; flat on the ground after the wave.
+// One of the villagers, seen from behind, looking up at the star (their
+// head turned toward it), some pointing at it; crouched with their arms
+// over their heads as it comes down on them; flat on the ground after the
+// wave, thrown away from it.
 function drawFolk(g, f, star, down, t, glow) {
   const px = (x, y, col) => {
     g.fillStyle = col;
     g.fillRect(Math.round(x), Math.round(y), 1, 1);
   };
-  const h = f.small ? 7 : 10;
-  const x = f.x;
-  const y = f.y;
-  // (Lit from the star's side.)
-  const lit = glow > 0.2 ? (star.x > x ? 1 : -1) : 0;
-  if (down) {
-    // Knocked flat (or crouched, arms over their head).
-    for (let i = 0; i < h - 2; i++) px(x - 3 + i, y - 1, i < 2 ? f.hair : i < 4 ? f.skin : f.shirt);
-    for (let i = 0; i < h - 2; i++) px(x - 3 + i, y, i < 4 ? '#2a2a32' : '#20202a');
-    return;
-  }
-  // Legs, body, arms, head (from behind: hair).
-  const legH = f.small ? 2 : 4;
-  for (let i = 0; i < legH; i++) { px(x, y - i, '#2a2a32'); px(x + 2, y - i, '#2a2a32'); }
-  const bodyH = f.small ? 3 : 4;
-  for (let i = 0; i < bodyH; i++) for (let k = 0; k < 4; k++) px(x - 1 + k, y - legH - i, k === (lit > 0 ? 3 : 0) && lit ? shade(f.shirt, 30) : f.shirt);
-  const headY = y - legH - bodyH - 2;
-  // (Head turned a little toward the star.)
-  const turn = star.x > x + 20 ? 1 : star.x < x - 20 ? -1 : 0;
-  for (let i = 0; i < 2; i++) for (let k = 0; k < 3; k++) px(x + k + (turn > 0 ? 0 : turn < 0 ? -1 : 0), headY + i, f.hair);
-  if (turn) px(turn > 0 ? x + 3 : x - 2, headY + 1, f.skin);
-  // An arm up, pointing at it (and swaying a little, excited).
-  if (f.points && glow < 0.95) {
-    const ax = turn >= 0 ? x + 3 : x - 2;
-    const sway = Math.round(Math.sin(t * 3 + f.x) * 0.6);
-    px(ax, y - legH - bodyH + 1, f.shirt);
-    px(ax + (turn >= 0 ? 1 : -1), y - legH - bodyH - 1 + sway, f.skin);
-    px(ax + (turn >= 0 ? 2 : -2), y - legH - bodyH - 3 + sway, f.skin);
-  } else {
-    px(x - 2, y - legH - 1, f.skin);
-    px(x + 3, y - legH - 1, f.skin);
-  }
+  const side = star.x > f.x ? 1 : -1;
+  const turn = Math.abs(star.x - f.x) > 20 ? side : 0;
+  const lit = glow > 0.2 ? side : 0;
+  const pose = down ? 'down' : glow > 0.85 ? 'cower' : f.points ? 'point' : 'stand';
+  drawPerson(px, f.x, f.y + 1, {
+    size: f.small ? 'small' : 'normal', face: 'back', pose, dir: down ? -side : side, turn, lit,
+    shirt: f.shirt, skin: f.skin, hair: f.hair, t: t + f.look,
+  });
 }

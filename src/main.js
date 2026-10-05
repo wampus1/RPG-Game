@@ -1,5 +1,6 @@
 // Entry point: sets up the canvases, CRT pass, UI and the main loop.
 import { VIEW_W, VIEW_H } from './config.js';
+import { migrateSave } from './game/migrate.js';
 import { CRT } from './render/crt.js';
 import { Renderer } from './render/renderer.js';
 import { Input } from './game/input.js';
@@ -130,19 +131,23 @@ function loadFrom(id) {
 // play right), then `go`.
 function versionCheck(data, go) {
   if (sameVersion(data.gv)) return go();
-  ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', `This world was made in ${versionText(data.gv)} of the game. You are playing ${versionText(GAME_VERSION)}. Some things in it may not work as they should. Load it anyway?`, go, { yes: 'Load it', no: 'Back' }));
+  // (An older one is brought up to this version as it loads: see
+  // game/migrate.js.)
+  const older = canUpgrade(data.gv);
+  ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', older ? `This world was made in ${versionText(data.gv)} of the game. You are playing ${versionText(GAME_VERSION)}. Loading it brings it up to this version (what's new is brought into it as far as it can be), and once it's saved it can't go back. Some things in it may still not work quite as they should. Load it?` : `This world was made in ${versionText(data.gv)} of the game, newer than this one (${versionText(GAME_VERSION)}). Some things in it may not work as they should. Load it anyway?`, go, { yes: 'Load it', no: 'Back' }));
   return null;
 }
 
 // A world made in an older version of the game, brought up to this one:
-// warned first (only its version mark changes; what's in it may not all
-// work as it should), then `done`.
+// warned first (it's converted, one version at a time, and what's new is
+// brought into it as far as it can be: see game/migrate.js; and it can't
+// be taken back), then `done`.
 function upgradeSave(id, meta, done = null) {
   if (!meta || !canUpgrade(meta.gv)) return;
   const what = meta.world ? `"${meta.world}"` : `${meta.name || 'This'}'s world`;
-  ui.open(new ConfirmWindow(ui, 'UPDATE THIS WORLD?', `${what} was made in ${versionText(meta.gv)} of the game. Updating it to ${versionText(GAME_VERSION)} means it loads without asking, and others on ${versionText(GAME_VERSION)} can join it. Nothing in it is changed, but a world from an older version may not work as it should (things missing, out of place or broken), and this can't be undone: an updated world can't be taken back to the older version. Update it?`, () => {
-    store.setVersion(id, GAME_VERSION).then(() => {
-      ui.notify(`${what} is now ${versionText(GAME_VERSION)}.`, null, '#80e070');
+  ui.open(new ConfirmWindow(ui, 'UPDATE THIS WORLD?', `${what} was made in ${versionText(meta.gv)} of the game. Updating it to ${versionText(GAME_VERSION)} converts it, a version at a time, bringing in what's new as far as it can (cooks with full kitchens, the watch with salves, recipe books...). It loads without asking after, and others on ${versionText(GAME_VERSION)} can join it. A world from an older version may still not work quite as it should (some things are only made with a new world), and this can't be undone: an updated world can't be taken back to the older version. Update it?`, () => {
+    store.upgrade(id, (data) => migrateSave(data)).then((res) => {
+      ui.notify(`${what} is now ${versionText(GAME_VERSION)}.${res && res.log && res.log.length ? ` ${res.log.join(' ')}` : ''}`, null, '#80e070');
       done?.();
     }, (e) => ui.notify(`Couldn't update it: ${e && e.message ? e.message : e}`, null, '#ff8070'));
   }, { yes: 'Update it', no: 'Leave it' }));
@@ -161,6 +166,9 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     // (A new character's story opens with a scene of where they're from;
     // ?nointro goes straight in. In a world for others too: they're kept
     // out of it till it's done, see intros.js.)
+    // (Saved in an older version: brought up to this one as it loads. See
+    // game/migrate.js.)
+    if (save && canUpgrade(save.gv)) migrateSave(save);
     game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') });
     game.crt = crt;
     // (What you do here, worth an achievement: kept with you.)

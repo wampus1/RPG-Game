@@ -14,6 +14,7 @@
 import { ITEMS } from '../world/items.js';
 import { has as heroHas } from './hero.js';
 import { mastery, gainMastery } from './mastery.js';
+import { dishFx } from './cooking.js';
 
 const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
 export const ZONE = 0.3; // width of the catch zone on the bar (at the start)
@@ -82,6 +83,8 @@ function waitTime(game, rand) {
   if ((m >= 300 && m < 480) || (m >= 1080 && m < 1260)) t *= 0.8;
   if (heroHas(game.hero, 'angler')) t *= 0.75;
   t *= 1 - 0.03 * (mastery(game, 'fishing').rank - 1);
+  // (A dish that has the fish biting: see cooking.js.)
+  t *= 1 - Math.min(0.6, Math.max(0, dishFx(game.player, 'fish')));
   return t;
 }
 

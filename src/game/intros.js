@@ -27,6 +27,7 @@ import { wrap } from '../ui/ascii.js';
 import { personName, CULTURES } from '../world/names.js';
 import { yearOf } from '../sim/history.js';
 import { alive } from '../sim/econ.js';
+import { drawPerson, drawHouse, drawTree, drawCloud, shade, mix, fillPoly, line } from '../render/scenekit.js';
 
 // The pictures are painted at half size (each pixel two on the screen).
 const PW = VIEW_W / 2;
@@ -43,26 +44,6 @@ function makeCanvas(w, h) {
   c.width = w;
   c.height = h;
   return c;
-}
-
-function rgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function hex([r, g, b]) {
-  const c = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
-  return `#${c(r)}${c(g)}${c(b)}`;
-}
-// A colour lightened (d > 0) or darkened.
-function shade(h, d) {
-  const [r, g, b] = rgb(h);
-  return hex([r + d, g + d, b + d]);
-}
-// Between two colours.
-function mix(a, b, k) {
-  const x = rgb(a);
-  const y = rgb(b);
-  return hex([lerp(x[0], y[0], k), lerp(x[1], y[1], k), lerp(x[2], y[2], k)]);
 }
 
 // ------------------------------------------------------------ framing
@@ -332,7 +313,7 @@ function paintHome(info) {
   const slots = [];
   ROWS.forEach((R, ri) => {
     const w = Math.round(22 * R.k);
-    const gap = Math.round(5 * R.k) + 2;
+    const gap = Math.round(8 * R.k) + 2;
     const span = 200 + ri * 14;
     for (let x = Math.round(cx - span / 2); x + w < cx + span / 2; x += w + gap) slots.push({ row: ri, x, w });
   });
@@ -353,7 +334,8 @@ function paintHome(info) {
     h.chimney = h.kind === 'house' && look.shape !== 'hut' && rng.chance(0.6);
   }
   // Your family's: a house on the front rows, near the middle.
-  const front = houses.filter((h) => h.kind === 'house' && h.row >= 2).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx));
+  // (On the front row if it can be, where nothing's in front of it.)
+  const front = houses.filter((h) => h.kind === 'house' && h.row >= 2).sort((a, b) => b.row - a.row || Math.abs(a.x - cx) - Math.abs(b.x - cx));
   const home = front[rng.int(0, Math.min(2, front.length - 1))] || houses[houses.length - 1];
   // Trees: the woods round about (the ones where the town will go are cut
   // down as it comes).
@@ -378,8 +360,9 @@ function paintHome(info) {
     row: rng.int(1, 3), x: rng.float(20, PW - 20), v: rng.float(3, 7) * (rng.chance(0.5) ? -1 : 1),
     shirt: rng.pick(['#8f2f3a', '#2f6f8f', '#3a7a3a', '#7a5a2a', '#5a3a7a', '#c8a030', '#e0dccc']),
     hair: rng.pick(['#1e1612', '#6e4424', '#c87a3a', '#c8c8c8', '#3a2418']),
+    skin: rng.pick(['#f4d0b0', '#d8a47c', '#b07a4a', '#8a5a34', '#e8b48c']),
   }));
-  const clouds = Array.from({ length: 6 }, () => ({ x: rng.float(0, PW), y: rng.int(8, 40), w: rng.int(14, 34), v: rng.float(2, 5) }));
+  const clouds = Array.from({ length: 5 }, () => ({ x: rng.float(0, PW), y: rng.int(20, 44), w: rng.int(22, 46), v: rng.float(2, 5) }));
   const stars = Array.from({ length: 70 }, () => ({ x: rng.int(0, PW - 1), y: rng.int(BAR / 2, H_HORIZON - 6), b: rng.float(0.3, 1) }));
   return { land, P, look, houses, home, trees, fields, folk, clouds, stars, water };
 }
@@ -446,82 +429,158 @@ function drawHome(ctx, sc, art) {
   }
   const mx = PW / 2 - Math.cos(sunA + Math.PI) * 120;
   const my = H_HORIZON + 6 + Math.sin(sunA + Math.PI) * 58;
-  if (my < H_HORIZON + 4) {
+  if (my < H_HORIZON + 4 && S.dayK < 0.75) {
+    g.globalAlpha = clamp01((0.75 - S.dayK) * 4);
     g.fillStyle = '#e8ecf4';
     g.beginPath();
     g.arc(mx, my, 3, 0, Math.PI * 2);
     g.fill();
+    g.fillStyle = mix(S.top, S.low, 0.3);
+    g.fillRect(Math.round(mx), Math.round(my) - 2, 2, 2);
+    g.globalAlpha = 1;
   }
-  // Clouds drifting over.
+  // Clouds drifting over: heaped, lit along their tops (by the low sun,
+  // warm), their bellies shaded.
+  const cLit = mix(mix('#4a4a6a', '#ffffff', S.dayK), '#ffd0a0', clamp01(1 - Math.abs(S.h) * 3) * 0.6);
+  const cBody = mix('#30304c', '#e4e2ec', S.dayK);
+  const cDark = mix('#24243a', '#b4b8cc', S.dayK);
   for (const c of art.clouds) {
     const x = ((c.x + t * c.v * (racing ? 4 : 1)) % (PW + 60)) - 40;
-    g.fillStyle = mix('#3a3a5a', '#f4f0e8', S.dayK);
-    g.globalAlpha = 0.75;
-    for (let i = 0; i < c.w; i += 3) g.fillRect(Math.round(x + i), Math.round(c.y - Math.sin((i / c.w) * Math.PI) * 3), 4, 3);
+    g.globalAlpha = 0.92;
+    drawCloud(px, Math.round(x), c.y, c.w, cLit, cBody, cDark);
     g.globalAlpha = 1;
   }
   // The land.
   g.drawImage(art.land, 0, 0);
-  // The fields, tilled as it grows.
+  // The fields, tilled as it grows: furrows, a hedge round them.
   for (const f of art.fields) {
     if (prog < f.t) continue;
-    for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) px(x, y, (y - f.y) % 3 === 0 ? '#5a4630' : (x + y) % 4 ? f.crop : shade(f.crop, -20));
+    for (let y = f.y; y < f.y + f.h; y++) {
+      for (let x = f.x; x < f.x + f.w; x++) {
+        const edge = y === f.y || y === f.y + f.h - 1 || x === f.x || x === f.x + f.w - 1;
+        px(x, y, edge ? art.P.leafDark : (y - f.y) % 3 === 0 ? shade(f.crop, -46) : (y - f.y) % 3 === 1 ? shade(f.crop, 16) : (x + y) % 5 ? f.crop : shade(f.crop, -20));
+      }
+    }
   }
   // The lanes, laid as the rows fill: the road up from the front to the
-  // hall, and one along each row.
+  // hall, and a street along the front of each row (its edges worn, the
+  // grass coming up at its ends).
   const road = art.look.shape === 'flat' ? '#c8b48a' : '#8a7454';
-  if (prog > 0.03) for (let y = ROWS[1].yb; y < PH; y++) for (let x = PW / 2 - 3 - (y - 98) * 0.08; x < PW / 2 + 3 + (y - 98) * 0.08; x++) px(x, y, hashf(Math.round(x), y, 4) < 0.2 ? shade(road, -14) : road);
+  const lane = (x0, x1, y, w) => {
+    for (let x = Math.floor(x0); x < x1; x++) {
+      const end = Math.min(x - x0, x1 - x);
+      for (let k = -1; k <= w; k++) {
+        const n = hashf(x, y + k, 4);
+        // (Its edges ragged, the grass growing in over them; its ends
+        // fading out into the grass.)
+        if (k === -1 || k === w) {
+          if (n < 0.4) px(x, y + k, k === -1 ? shade(road, -8) : shade(road, -16));
+          continue;
+        }
+        if (end < 4 && hashf(x, y + k, 6) < 0.6 - end * 0.15) continue;
+        px(x, y + k, n < 0.14 ? shade(road, -12) : n > 0.88 ? shade(road, 12) : (x + k * 3) % 9 === 0 ? shade(road, 6) : road);
+      }
+    }
+  };
+  if (prog > 0.03) {
+    for (let y = ROWS[1].yb + 1; y < PH; y++) {
+      const half = 2 + (y - ROWS[1].yb) * 0.1;
+      for (let x = Math.round(PW / 2 - half); x < Math.round(PW / 2 + half); x++) {
+        const edge = x === Math.round(PW / 2 - half) || x === Math.round(PW / 2 + half) - 1;
+        px(x, y, edge ? shade(road, -18) : hashf(x, y, 4) < 0.2 ? shade(road, -12) : road);
+      }
+    }
+  }
   ROWS.forEach((R, ri) => {
     const built = art.houses.filter((h) => h.row === ri && prog >= h.t);
     if (!built.length) return;
-    const x0 = Math.min(...built.map((h) => h.x)) - 4;
-    const x1 = Math.max(...built.map((h) => h.x + h.w)) + 4;
-    for (let x = x0; x < x1; x++) {
-      px(x, R.yb + 1, road);
-      if (R.k > 0.8) px(x, R.yb + 2, shade(road, -10));
-    }
+    const x0 = Math.min(...built.map((h) => h.x)) - 6;
+    const x1 = Math.max(...built.map((h) => h.x + h.w + Math.round(h.w * 0.28))) + 6;
+    lane(x0, x1, R.yb + 2, Math.max(2, Math.round(4 * R.k)));
   });
   // Night: everything dimmed, the windows lit.
   const night = 1 - S.dayK;
   // Back to front: the trees still standing, the houses (rising), the
   // folk, row by row.
   const items = [];
-  for (const tr of art.trees) if (prog < tr.cut) items.push({ y: tr.y, draw: () => drawTree(px, tr, art.P) });
+  const lit = [];
+  for (const tr of art.trees) if (prog < tr.cut) items.push({ y: tr.y, x: tr.x, draw: () => drawTree(g, px, tr.x, tr.y, tr.k, art.P) });
+  const homeNow = t > T1 + 5;
+  let homeRidge = null;
   for (const h of art.houses) {
     const rise = clamp01((prog - h.t) / 0.07);
     if (rise <= 0) continue;
     const R = ROWS[h.row];
-    items.push({ y: R.yb - 0.5, draw: () => drawHouse(g, px, h, R, art.look, rise, night, t, h === art.home && t > T1 + 5) });
+    items.push({
+      y: R.yb - 0.5, x: h.x,
+      draw: () => {
+        const mine = h === art.home && homeNow;
+        if (mine) {
+          // Your family's: drawn on its own, a warm light round its edge.
+          const a = clamp01((t - T1 - 5.5) * 2);
+          const hc = drawHome.hc || (drawHome.hc = makeCanvas(PW, PH));
+          const hg = hc.getContext('2d');
+          hg.clearRect(0, 0, PW, PH);
+          hg.globalAlpha = 1;
+          const hpx = (x, y, col) => {
+            hg.fillStyle = col;
+            hg.fillRect(Math.round(x), Math.round(y), 1, 1);
+          };
+          const o = buildingOf(hg, hpx, h, R, art.look, rise, night, t, true);
+          homeRidge = o.ridge;
+          lit.push(...(h.lit ? o.wins || [] : []));
+          const oc = drawHome.oc || (drawHome.oc = makeCanvas(PW, PH));
+          const og = oc.getContext('2d');
+          og.globalCompositeOperation = 'source-over';
+          og.clearRect(0, 0, PW, PH);
+          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1], [-2, 0], [2, 0], [0, -2]]) og.drawImage(hc, dx, dy);
+          og.globalCompositeOperation = 'source-in';
+          og.fillStyle = '#ffe090';
+          og.fillRect(0, 0, PW, PH);
+          og.globalCompositeOperation = 'source-over';
+          g.globalAlpha = a * (0.7 + 0.3 * Math.sin(t * 3));
+          g.drawImage(oc, 0, 0);
+          g.globalAlpha = 1;
+          g.drawImage(hc, 0, 0);
+          return;
+        }
+        const o = buildingOf(g, px, h, R, art.look, rise, night, t, false);
+        if (h.lit && rise >= 1) lit.push(...(o.wins || []));
+      },
+    });
   }
   if (t > T1 - 1) {
     for (const f of art.folk) {
       const R = ROWS[f.row];
       let x = (f.x + (t - T1) * f.v) % (PW + 20);
       if (x < -10) x += PW + 20;
-      items.push({ y: R.yb + 0.5, draw: () => drawWalker(px, x, R.yb + 1, R.k, f, t) });
+      const y = R.yb + 1 + Math.max(1, Math.round(2 * R.k));
+      items.push({ y: R.yb + 1 + f.row * 0.01, x, draw: () => drawPerson(px, x, y + 1, { size: f.row >= 3 ? 'small' : 'tiny', pose: 'walk', frame: Math.floor(t * 5 + f.x), dir: f.v > 0 ? 1 : -1, shirt: f.shirt, hair: f.hair, skin: f.skin, lit: -1 }) });
     }
   }
-  items.sort((a, b) => a.y - b.y);
+  items.sort((a, b) => a.y - b.y || a.x - b.x);
   for (const it of items) it.draw();
   // The walls, last of all (a walled town's), across the front.
   if (info.walled) {
     const rise = clamp01((prog - 0.88) / 0.1);
     if (rise > 0) drawWall(px, rise, art.look);
   }
-  // Night over the land (the lit windows drawn bright after).
+  // Night over the land (the lit windows drawn bright after, a little of
+  // their light on the wall round them).
   if (night > 0.05) {
     g.fillStyle = `rgba(8,12,40,${(night * 0.5).toFixed(3)})`;
     g.fillRect(0, H_HORIZON - 30, PW, PH);
-    for (const h of art.houses) {
-      if (prog < h.t + 0.07 || !h.lit) continue;
-      const R = ROWS[h.row];
+    const glow = art.look.glow || '#ffcc6a';
+    for (const w of lit) {
+      g.globalAlpha = night * 0.25;
+      g.fillStyle = glow;
+      g.fillRect(w.x - 1, w.y - 1, w.w + 2, w.h + 2);
       g.globalAlpha = night;
-      for (const w of windowsOf(h, R)) {
-        g.fillStyle = art.look.glow || '#ffcc6a';
-        g.fillRect(w.x, w.y, w.w, w.h);
-      }
-      g.globalAlpha = 1;
+      g.fillRect(w.x, w.y, w.w, w.h);
+      g.fillStyle = shade(glow, 40);
+      g.fillRect(w.x, w.y, 1, 1);
     }
+    g.globalAlpha = 1;
   }
   // Dust where one's just gone up.
   for (const h of art.houses) {
@@ -535,11 +594,12 @@ function drawHome(ctx, sc, art) {
     }
     g.globalAlpha = 1;
   }
-  // Your family's door, today: a light about it, and a mark over it.
+  // Your family's door, today: the picture drawn in to it, and a mark
+  // over it.
   let zoom = 1;
   let fx = PW / 2;
   let fy = PH / 2;
-  if (t > T1 + 5) {
+  if (homeNow) {
     const h = art.home;
     const R = ROWS[h.row];
     const k = ease(clamp01((t - T1 - 5) / 4));
@@ -547,20 +607,17 @@ function drawHome(ctx, sc, art) {
     fx = lerp(PW / 2, h.x + h.w / 2, k);
     fy = lerp(PH / 2, R.yb - h.h / 2, k);
     const bob = Math.round(Math.sin(t * 4) * 1.5);
-    const ax = Math.round(h.x + h.w / 2);
-    const ay = R.yb - h.h - Math.round(h.w * 0.45) - 6 + bob;
-    const a = clamp01((t - T1 - 5.5) * 2);
-    // (A warm light about the house, and an arrow over it.)
-    g.globalAlpha = a * (0.25 + 0.1 * Math.sin(t * 3));
-    g.fillStyle = '#ffd890';
-    g.fillRect(h.x - 2, R.yb - h.h - Math.round(h.w * 0.45) - 1, h.w + 4, h.h + Math.round(h.w * 0.45) + 2);
-    g.globalAlpha = a;
+    const ax = Math.round(homeRidge ? (homeRidge.x0 + homeRidge.x1) / 2 : h.x + h.w / 2);
+    const ay = (homeRidge ? homeRidge.y : R.yb - h.h - 8) - 4 + bob;
+    g.globalAlpha = clamp01((t - T1 - 5.5) * 2);
+    // (An arrow, outlined, pointing down at it.)
     for (let i = -1; i < 5; i++) for (let k2 = -4 + Math.max(0, i); k2 <= 4 - Math.max(0, i); k2++) px(ax + k2, ay + i, '#3a2408');
-    for (let i = 0; i < 4; i++) for (let k2 = -3 + i; k2 <= 3 - i; k2++) px(ax + k2, ay + i, '#ffe070');
+    for (let y = ay - 5; y < ay; y++) for (let k2 = -2; k2 <= 2; k2++) px(ax + k2, y, '#3a2408');
+    for (let i = 0; i < 4; i++) for (let k2 = -3 + i; k2 <= 3 - i; k2++) px(ax + k2, ay + i, i === 0 ? '#fff4b0' : '#ffe070');
     for (let y = ay - 4; y < ay; y++) {
-      px(ax - 1, y, '#3a2408');
+      px(ax - 1, y, '#fff4b0');
       px(ax, y, '#ffe070');
-      px(ax + 1, y, '#3a2408');
+      px(ax + 1, y, '#e0b040');
     }
     g.globalAlpha = 1;
   }
@@ -594,191 +651,110 @@ function drawHome(ctx, sc, art) {
   }
 }
 
-// A tree of the land's kind.
-function drawTree(px, tr, P) {
-  const k = tr.k;
-  const x = Math.round(tr.x);
-  const y = tr.y;
-  const hgt = Math.round(9 * k);
-  if (P.tree === 'cactus') {
-    for (let i = 0; i < hgt; i++) px(x, y - i, i % 3 ? P.leaf : P.leafDark);
-    for (let i = 0; i < 3; i++) {
-      px(x - 2, y - 4 - i, P.leaf);
-      px(x + 2, y - 5 - i, P.leaf);
-    }
-    px(x - 1, y - 4, P.leaf);
-    px(x + 1, y - 5, P.leaf);
-    return;
-  }
-  for (let i = 0; i < Math.round(3 * k) + 1; i++) px(x, y - i, P.trunk);
-  if (P.tree === 'pine') {
-    for (let i = 0; i < hgt; i++) {
-      const w = Math.round(((hgt - i) / hgt) * 4 * k);
-      for (let d = -w; d <= w; d++) px(x + d, y - 2 - i, (d + i) % 3 ? P.leaf : P.leafDark);
-      if (P.snow && i % 3 === 0) px(x - w, y - 2 - i, '#e8eef4');
-    }
-    return;
-  }
-  if (P.tree === 'palm') {
-    for (let i = 0; i < hgt; i++) px(x + Math.round(i * 0.15), y - i, P.trunk);
-    const top = y - hgt;
-    for (let d = -5; d <= 5; d++) px(x + 1 + d, top + Math.round(Math.abs(d) * 0.5), P.leaf);
-    return;
-  }
-  if (P.tree === 'flat') {
-    for (let i = 0; i < hgt - 2; i++) px(x, y - i, P.trunk);
-    for (let d = -6; d <= 6; d++) {
-      px(x + d, y - hgt + 1, P.leaf);
-      if (Math.abs(d) < 5) px(x + d, y - hgt, P.leafDark);
-    }
-    return;
-  }
-  const r = Math.round(4 * k);
-  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r + 1) px(x + dx, y - 3 - r + dy, dy > 0 || (dx + dy) % 3 === 0 ? P.leafDark : P.leaf);
-}
-
-// The windows of a house (where they'd be lit).
-function windowsOf(h, R) {
-  const out = [];
-  const wy = R.yb - Math.round(h.h * 0.65);
-  const ww = Math.max(1, Math.round(2 * R.k));
-  for (let x = h.x + 2; x < h.x + h.w - 3; x += Math.max(4, Math.round(6 * R.k))) {
-    if (Math.abs(x - (h.x + h.w / 2)) < 2) continue;
-    out.push({ x, y: wy, w: ww, h: Math.max(2, Math.round(3 * R.k)) });
-  }
-  return out;
-}
-
-// One building, `rise` of the way up: its frame first, the walls filling
-// in, the roof going on last.
-function drawHouse(g, px, h, R, look, rise, night, t, mine) {
-  const x0 = h.x;
-  const yb = R.yb;
-  const wall = h.kind === 'hall' ? shade(look.wall, -10) : look.wall;
-  const tall = h.kind === 'temple' ? h.h + 6 : h.h;
-  const up = Math.round(tall * Math.min(1, rise * 1.3));
+// One of the town's buildings, `rise` of the way up (its frame first, the
+// walls filling in, the roof going on last), seen three-quarters on: a
+// house, the hall (its bell tower on the ridge, a flag on it), a temple
+// (a spire; a dome, in the sun). Returns what it was drawn with (its
+// windows, its ridge).
+function buildingOf(g, px, h, R, look, rise, night, t, mine) {
+  const hall = h.kind === 'hall';
+  const temple = h.kind === 'temple';
+  const shape = look.shape === 'hut' && (hall || temple) ? 'steep' : look.shape;
+  const wall = hall ? shade(look.wall, -10) : temple ? shade(look.wall, 14) : look.wall;
+  const tall = temple ? h.h + 4 : h.h;
   // (On stilts over the shallows.)
-  if (look.stilts && h.row >= 2) for (let x = x0 + 1; x < x0 + h.w; x += 5) for (let y = yb; y < yb + 4; y++) px(x, y, look.timber);
-  // The frame, standing ahead of the walls.
-  if (rise < 0.85) {
-    for (let y = yb - tall; y < yb; y++) {
-      px(x0, y, look.timber);
-      px(x0 + h.w - 1, y, look.timber);
+  if (look.stilts && h.row >= 2) for (let x = h.x + 1; x < h.x + h.w + 4; x += 4) for (let y = R.yb; y < R.yb + 4; y++) px(x, y, y === R.yb ? shade(look.timber, 16) : look.timber);
+  const o = {
+    shape, wall, roof: h.roof, timber: look.shape === 'flat' || look.shape === 'hut' ? null : look.timber,
+    up: rise, night, lit: h.lit, glow: look.glow, chimney: h.chimney, smoke: t, mine,
+    windows: hall ? 4 : temple ? 2 : undefined,
+  };
+  drawHouse(g, px, h.x, R.yb, h.w, tall, o);
+  if (rise < 1) return o;
+  const r = o.ridge;
+  if (!r) return o;
+  const cx = Math.round((r.x0 + r.x1) / 2);
+  if (hall) {
+    // A bell tower over the ridge: its front and its shaded side, the bell
+    // in its arch, a pointed cap, the flag.
+    const tw = 5;
+    const ty = r.y - 8;
+    for (let y = ty; y <= r.y + 2; y++) {
+      for (let x = cx - 2; x < cx - 2 + tw; x++) px(x, y, x === cx - 2 ? shade(wall, 8) : shade(wall, -8));
+      px(cx + 3, y - 1, shade(wall, -40));
+      px(cx + 4, y - 1, shade(wall, -46));
     }
-    for (let x = x0; x < x0 + h.w; x++) px(x, yb - tall, look.timber);
-  }
-  // The walls, from the ground up.
-  if (look.shape === 'hut' && h.kind === 'house') {
-    for (let y = yb - up; y < yb; y++) {
-      const k = (yb - y) / tall;
-      const half = Math.round((h.w / 2) * (1 - k * k * 0.3));
-      for (let x = x0 + h.w / 2 - half; x < x0 + h.w / 2 + half; x++) px(x, y, (x + y) % 4 === 0 ? shade(wall, -16) : wall);
-    }
-  } else {
-    for (let y = yb - up; y < yb; y++) for (let x = x0; x < x0 + h.w; x++) px(x, y, (x - x0) % 6 === 0 && look.shape !== 'flat' ? look.timber : wall);
-  }
-  if (rise < 0.85) return;
-  const k = clamp01((rise - 0.85) / 0.15);
-  // Windows (dark by day) and the door.
-  for (const w of windowsOf(h, R)) {
-    g.fillStyle = '#2a2026';
-    g.fillRect(w.x, w.y, w.w, w.h);
-  }
-  const dw = Math.max(2, Math.round(3 * R.k));
-  const dh = Math.max(3, Math.round(5 * R.k));
-  for (let y = yb - dh; y < yb; y++) for (let x = Math.round(x0 + h.w / 2 - dw / 2); x < Math.round(x0 + h.w / 2 + dw / 2); x++) px(x, y, mine ? '#ffcc6a' : '#3a2416');
-  // The roof.
-  const top = yb - tall;
-  const roofH = look.shape === 'flat' ? 2 : look.shape === 'steep' ? Math.round(h.w * 0.6) : Math.round(h.w * 0.42);
-  const rows = Math.round(roofH * k);
-  if (look.shape === 'flat') {
-    for (let x = x0 - 1; x <= x0 + h.w; x++) {
-      px(x, top - 1, shade(h.roof, -18));
-      if (x % 3 === 0) px(x, top - 2, h.roof);
-    }
-  } else if (look.shape === 'hut' && h.kind === 'house') {
-    for (let i = 0; i < rows; i++) {
-      const half = Math.round((h.w / 2 + 2) * (1 - i / roofH));
-      for (let x = x0 + h.w / 2 - half; x < x0 + h.w / 2 + half; x++) px(x, top - i, (x + i) % 3 === 0 ? shade(h.roof, -14) : h.roof);
-    }
-  } else {
-    for (let i = 0; i < rows; i++) {
-      const y = top - i - 1;
-      const inset = Math.round((i / roofH) * (h.w / 2 + 1));
-      for (let x = x0 - 2 + inset; x < x0 + h.w + 2 - inset; x++) px(x, y, (x + i) % 3 === 0 ? shade(h.roof, -14) : h.roof);
-    }
-  }
-  if (k < 1) return;
-  const peak = top - roofH;
-  // The hall's tower and its flag; a temple's spire (a dome, in the sun).
-  if (h.kind === 'hall') {
-    // A bell tower over the ridge: its walls, the bell in its window, a
-    // pointed cap, the flag.
-    const tx = Math.round(x0 + h.w / 2 - 3);
-    const ty = peak - 7;
-    for (let y = ty; y < peak + 3; y++) for (let x = tx; x < tx + 6; x++) px(x, y, x === tx || x === tx + 5 ? shade(wall, -26) : shade(wall, -12));
-    for (let y = ty + 2; y < ty + 5; y++) for (let x = tx + 2; x < tx + 4; x++) px(x, y, '#2a2026');
-    px(tx + 2, ty + 4, '#c8a040');
-    px(tx + 3, ty + 4, '#c8a040');
-    for (let i = 0; i < 4; i++) for (let x = tx - 1 + i; x < tx + 7 - i; x++) px(x, ty - 1 - i, i % 2 ? shade(h.roof, -14) : h.roof);
-    for (let y = ty - 10; y < ty - 4; y++) px(tx + 3, y, '#3a3030');
-    const wave = Math.round(Math.sin(t * 5) * 1);
-    for (let y = ty - 10; y < ty - 7; y++) for (let x = tx + 4; x < tx + 9; x++) px(x, y + (x > tx + 6 ? wave : 0), '#b83a3a');
-  } else if (h.kind === 'temple') {
-    const tx = Math.round(x0 + h.w / 2);
+    for (let y = ty + 2; y < ty + 5; y++) for (let x = cx - 1; x < cx + 2; x++) px(x, y, '#2a2026');
+    px(cx, ty + 4, '#c8a040');
+    px(cx - 1, ty + 4, '#a88030');
+    for (let i = 0; i < 4; i++) for (let x = cx - 3 + i; x <= cx + 4 - i; x++) px(x, ty - 1 - i, x > cx ? shade(h.roof, -24) : i % 2 ? shade(h.roof, 10) : h.roof);
+    for (let y = ty - 11; y < ty - 4; y++) px(cx, y, '#3a3030');
+    const wave = Math.round(Math.sin(t * 5));
+    for (let y = ty - 11; y < ty - 8; y++) for (let x = cx + 1; x < cx + 6; x++) px(x, y + (x > cx + 3 ? wave : 0), y === ty - 10 ? '#d84a4a' : '#a83030');
+  } else if (temple) {
     if (look.shape === 'flat') {
-      for (let dy = 0; dy < 6; dy++) for (let dx = -5; dx <= 5; dx++) if (dx * dx + dy * dy * 2 < 30) px(tx + dx, top - 1 - dy, dy > 3 ? '#e8d8a8' : '#c8a868');
+      // A dome on a drum.
+      for (let dy = 0; dy < 6; dy++) {
+        for (let dx = -5; dx <= 5; dx++) {
+          if (dx * dx + dy * dy * 2 >= 30) continue;
+          px(cx + dx, r.y - 1 - dy, dx < -2 ? '#f0e0b0' : dx > 2 ? '#b89858' : '#d8c088');
+        }
+      }
+      px(cx, r.y - 8, '#ffe070');
+      px(cx, r.y - 7, '#c8a040');
     } else {
-      for (let i = 0; i < 12; i++) for (let d = -Math.round((12 - i) / 4); d <= Math.round((12 - i) / 4); d++) px(tx + d, peak - i, shade(h.roof, -10));
-      px(tx, peak - 13, '#ffe070');
+      // A spire: its lit face and its shaded one, a gold point.
+      for (let i = 0; i < 12; i++) {
+        const half = Math.round((12 - i) / 4);
+        for (let d = -half; d <= half; d++) px(cx + d, r.y - i, d > 0 ? shade(h.roof, -28) : shade(h.roof, i % 3 === 0 ? 4 : -6));
+      }
+      px(cx, r.y - 13, '#ffe070');
+      px(cx, r.y - 12, '#c8a040');
     }
   }
-  // A chimney, and its smoke.
-  if (h.chimney) {
-    const cx = Math.round(x0 + h.w * 0.72);
-    const cy = top - Math.round(roofH * 0.55);
-    for (let y = cy - 3; y < cy + 1; y++) px(cx, y, '#3a3434');
-    for (let i = 0; i < 4; i++) {
-      const s = (t * 0.6 + i / 4 + h.x * 0.01) % 1;
-      g.globalAlpha = 0.5 * (1 - s);
-      px(cx + Math.round(Math.sin(s * 6 + h.x) * 2 + s * 4), cy - 4 - s * 10, night > 0.5 ? '#5a5a6a' : '#c8c8c8');
-    }
-    g.globalAlpha = 1;
-  }
+  return o;
 }
 
-// A walled town's wall: stone, battlemented, a tower at each end and the
-// gate in the middle.
+// A walled town's wall: stone, its top a walk behind the battlements, a
+// tower at each end and either side of the gate.
 function drawWall(px, rise, look) {
   const yb = 136;
   const hgt = Math.round(8 * rise);
   const stone = look.shape === 'flat' ? '#c8b488' : '#8a8a86';
   for (let x = 6; x < PW - 6; x++) {
     if (Math.abs(x - PW / 2) < 6) continue;
-    for (let y = yb - hgt; y < yb; y++) px(x, y, (x + y) % 5 === 0 ? shade(stone, -18) : stone);
-    if (rise >= 1 && x % 4 < 2) px(x, yb - hgt - 1, stone);
+    for (let y = yb - hgt; y < yb; y++) {
+      const course = (yb - y) % 3 === 0;
+      const joint = (x + Math.floor((yb - y) / 3) * 2) % 5 === 0;
+      px(x, y, course || joint ? shade(stone, -22) : y === yb - 1 ? shade(stone, -30) : stone);
+    }
+    if (rise >= 1) {
+      px(x, yb - hgt - 1, shade(stone, 26));
+      px(x, yb - hgt - 2, shade(stone, 12));
+      if (x % 4 < 2) {
+        px(x, yb - hgt - 3, shade(stone, 6));
+        px(x, yb - hgt - 4, shade(stone, 20));
+      }
+    }
   }
   if (rise < 1) return;
-  for (const tx of [6, PW - 14, PW / 2 - 12, PW / 2 + 6]) {
-    for (let y = yb - 14; y < yb; y++) for (let x = tx; x < tx + 8; x++) px(x, y, (x + y) % 4 === 0 ? shade(stone, -22) : shade(stone, -6));
-    for (let x = tx; x < tx + 8; x += 2) px(x, yb - 15, stone);
+  for (const tx of [6, PW - 16, PW / 2 - 14, PW / 2 + 6]) {
+    for (let y = yb - 15; y < yb; y++) {
+      for (let x = tx; x < tx + 8; x++) px(x, y, x === tx ? shade(stone, 14) : (x + y) % 4 === 0 ? shade(stone, -22) : shade(stone, -4));
+      for (let x = tx + 8; x < tx + 10; x++) px(x, y - (x - tx - 7), shade(stone, -40));
+    }
+    for (let x = tx; x < tx + 8; x++) px(x, yb - 16, shade(stone, 24));
+    for (let x = tx; x < tx + 8; x += 2) {
+      px(x, yb - 17, shade(stone, 10));
+      px(x, yb - 18, shade(stone, 20));
+    }
+    for (let y = yb - 11; y < yb - 8; y++) px(tx + 3, y, '#1a1a20');
   }
-}
-
-// Someone walking along a lane.
-function drawWalker(px, x, yb, k, f, t) {
-  const step = Math.floor(t * 6 + x) % 2;
-  const hh = Math.max(4, Math.round(6 * k));
-  px(x, yb - 1, step ? '#2a2a32' : '#20202a');
-  px(x + 1, yb - 1, step ? '#20202a' : '#2a2a32');
-  for (let i = 2; i < hh - 1; i++) {
-    px(x, yb - i, f.shirt);
-    px(x + 1, yb - i, f.shirt);
+  // (The gate: an arch, its doors open.)
+  for (let y = yb - 6; y < yb; y++) {
+    px(PW / 2 - 6, y, '#4a3020');
+    px(PW / 2 + 5, y, '#4a3020');
   }
-  px(x, yb - hh + 1, '#e0b090');
-  px(x + 1, yb - hh + 1, '#e0b090');
-  px(x, yb - hh, f.hair);
-  px(x + 1, yb - hh, f.hair);
 }
 
 // ============================================================ at sea
@@ -896,80 +872,300 @@ export function wreckScene(game, info) {
 }
 
 const W_HORIZON = 84;
-const SHIP = { w: 96, h: 74, water: 60 };
+// The ship's picture: `w` by `h`, her waterline `water` down it.
+const SHIP = { w: 112, h: 84, water: 66 };
+const WL = SHIP.water;
+// Where her masts stand, how high their heads are (the main's, split by
+// the bolt, lower), and the yards across them.
+const MASTS = { fore: 42, main: 66, mizzen: 93 };
 
-// The ship, side on, heading left (toward the Wall): her hull, two masts
-// and their canvas, the rail, the flag. Two of her: whole, and after the
-// bolt (the mainmast's head split off).
+// The top of her side at x (her sheer: lowest amidships, rising to the bow
+// and, less, to the stern; the stern castle above that).
+function sheer(x) {
+  if (x >= 86) return WL - 20;
+  if (x < 62) {
+    const u = (62 - x) / 42;
+    return WL - 11 - Math.round(5 * u * u);
+  }
+  const u = (x - 62) / 44;
+  return WL - 11 - Math.round(3 * u * u);
+}
+
+// The ship, side on, heading left (toward the Wall), lit from behind by
+// the sunset: her hull (in two: what's behind her people on deck, and her
+// side, in front of them), three masts, square sails bent to their yards,
+// the jibs on the forestay, the spanker aft, the rigging, her colours.
+// Whole, and after the bolt (the main topmast split off, its sail gone,
+// the yard hanging).
 function paintShip(broken) {
-  const c = makeCanvas(SHIP.w, SHIP.h);
-  const g = c.getContext('2d');
-  const px = (x, y, col) => {
-    g.fillStyle = col;
-    g.fillRect(Math.round(x), Math.round(y), 1, 1);
+  const back = makeCanvas(SHIP.w, SHIP.h);
+  const front = makeCanvas(SHIP.w, SHIP.h);
+  const pen = (c) => {
+    const g = c.getContext('2d');
+    return (x, y, col) => {
+      g.fillStyle = col;
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
+    };
   };
-  const wl = SHIP.water;
-  // The hull: a long curve, darker below the wales.
-  for (let x = 6; x < 90; x++) {
-    const f = (x - 6) / 84;
-    const deck = wl - 9 + Math.round(Math.pow(Math.abs(f - 0.55) * 1.8, 2) * 2) - (x > 80 ? x - 80 : 0) * 0.3;
-    const keel = wl + 4 - Math.round(Math.pow(Math.abs(f - 0.5) * 2, 3) * 5);
-    for (let y = Math.round(deck); y <= keel; y++) {
-      const band = y - deck;
-      px(x, y, band < 1 ? '#c8a070' : band < 3 ? '#6a4428' : band % 3 === 0 ? '#3a2416' : y > wl ? '#2a1a12' : '#553620');
+  const px = pen(back);
+  const fpx = pen(front);
+  const bg = back.getContext('2d');
+  const rope = '#2a1a10';
+  const cloth = '#ece2c8';
+  const { fore, main, mizzen } = MASTS;
+  const rig = (x0, y0, x1, y1, a = 1) => {
+    bg.globalAlpha = a;
+    line(px, x0, y0, x1, y1, rope);
+    bg.globalAlpha = 1;
+  };
+  // The stays and backstays (in the middle of her: behind the sails).
+  rig(fore, 10, 2, 38);
+  if (!broken) rig(main, 4, fore + 1, 34);
+  else rig(fore + 1, 34, fore + 9, 27);
+  rig(mizzen, 22, main + 1, 30);
+  rig(fore + 1, 11, 56, sheer(56));
+  if (!broken) rig(main + 1, 5, 84, sheer(84));
+  rig(mizzen + 1, 23, 108, WL - 21);
+  // The bowsprit and its boom, out over the bow.
+  line(px, 21, 49, 1, 38, '#5a3a20');
+  line(px, 22, 50, 3, 40, '#3a2414');
+  // Masts: the lower mast up to its top (a platform), the topmast above.
+  const mast = (x, foot, top, head) => {
+    for (let y = top; y < foot; y++) {
+      px(x, y, '#5a3a20');
+      px(x + 1, y, '#a87a4a');
     }
-    // The rail.
-    if (x % 3 === 0) px(x, Math.round(deck) - 1, '#6a4428');
-    px(x, Math.round(deck) - 2, '#8a6038');
+    for (let x2 = x - 3; x2 <= x + 4; x2++) px(x2, top, '#2a1a10');
+    for (let y = head; y < top; y++) px(x, y, y % 4 === 0 ? '#3a2414' : '#6a4628');
+    px(x, head - 1, '#2a1a10');
+  };
+  mast(fore, sheer(fore) + 2, 34, 9);
+  if (!broken) mast(main, sheer(main) + 2, 30, 3);
+  else {
+    // (Split: the stump of the topmast, its end jagged.)
+    mast(main, sheer(main) + 2, 30, 27);
+    for (const [dx, dy] of [[0, -1], [0, -2], [1, -1], [-1, -3]]) px(main + dx, 27 + dy, '#3a2414');
   }
-  // The stern castle (right), the bowsprit (left).
-  for (let y = wl - 15; y < wl - 9; y++) for (let x = 74; x < 89; x++) px(x, y, x === 74 || y === wl - 15 ? '#8a6038' : '#553620');
-  for (let x = 79; x < 87; x += 3) px(x, wl - 12, '#ffcc6a');
-  for (let i = 0; i < 14; i++) px(6 - i * 0.4, wl - 10 - i * 0.55, '#6a4428');
-  // Masts.
-  const fore = 30;
-  const main = 54;
-  const mastTop = (m) => (m === main && broken ? 22 : m === main ? 4 : 12);
-  for (const m of [fore, main]) for (let y = mastTop(m); y < wl - 9; y++) {
-    px(m, y, '#4a3020');
-    px(m + 1, y, '#3a2416');
+  for (let y = 22; y < WL - 20; y++) {
+    px(mizzen, y, '#5a3a20');
+    px(mizzen + 1, y, y < 26 ? '#5a3a20' : '#a87a4a');
   }
-  // The canvas: square sails on yards, bellied, shaded.
-  const sail = (m, top, bottom, half) => {
-    for (let y = top; y < bottom; y++) {
-      const k = (y - top) / (bottom - top);
-      const belly = Math.round(Math.sin(k * Math.PI) * 2);
-      for (let x = m - half - belly; x <= m + half + 1 - belly; x++) {
-        const edge = x === m - half - belly || x === m + half + 1 - belly;
-        px(x, y, edge ? '#c8bca0' : (x - m) % 7 === 0 ? '#ddd2b8' : k > 0.7 ? '#d8ccb0' : '#ece4d0');
+  // The shrouds, up from her rail to each top (rungs across them): behind
+  // the sails, showing under them and between.
+  for (const [m, top] of [[fore, 34], [main, 30], [mizzen, 26]]) {
+    const foot = sheer(m) + 1;
+    bg.globalAlpha = 0.7;
+    for (const d of [-6, -3, 3, 6]) line(px, m + Math.sign(d), top + 1, m + d, foot, rope);
+    bg.globalAlpha = 0.35;
+    for (let y = top + 4; y < foot - 1; y += 3) {
+      const k = (y - top) / (foot - top);
+      line(px, m - 1 - Math.round(5 * k), y, m + 1 + Math.round(5 * k), y, rope);
+    }
+    bg.globalAlpha = 1;
+  }
+  // A square sail: bent to its yard at y0 along all its head, its foot at
+  // y1 (sheeted to the yard below), bellied forward by the wind, seams
+  // down it, a row of reef points, lit through from behind on the right.
+  const yard = (cx, y, half) => {
+    for (let x = cx - half - 1; x <= cx + half + 2; x++) px(x, y, x === cx - half - 1 || x === cx + half + 2 ? '#1e140c' : '#3a2414');
+  };
+  const sail = (cx, y0, y1, h0, h1, torn) => {
+    for (let y = y0 + 1; y <= y1; y++) {
+      const k = (y - y0 - 1) / Math.max(1, y1 - y0 - 1);
+      const half = h0 + (h1 - h0) * k;
+      const belly = Math.round(Math.sin(k * Math.PI) * 1.6);
+      const xl = Math.round(cx - half) - belly;
+      const xr = Math.round(cx + half + 1) - Math.round(belly * 0.5);
+      for (let x = xl; x <= xr; x++) {
+        const u = (x - xl) / Math.max(1, xr - xl);
+        // (Its foot curved up between the corners.)
+        if (y > y1 - Math.round(Math.sin(u * Math.PI) * 1.6)) continue;
+        if (torn && k > 0.35 && hashf(x, y, 7) < 0.2 + k * 0.25) continue;
+        let c = cloth;
+        if (x === xl || x === xr || y === y1 - Math.round(Math.sin(u * Math.PI) * 1.6)) c = '#a89878';
+        else if ((x - cx) % 4 === 0) c = '#d6cab0';
+        else if (u < 0.2) c = '#c8bc9c';
+        else if (u > 0.72) c = mix(cloth, '#ffd8a8', (u - 0.72) * 2.2);
+        else if (k > 0.75) c = '#ddd2b6';
+        if (y === y0 + 3 && x % 2 === 0 && x > xl && x < xr) c = '#b4a684';
+        px(x, y, torn ? shade(c, -40 - Math.round(k * 40)) : c);
       }
     }
-    for (let x = m - half - 2; x <= m + half + 3; x++) px(x, top - 1, '#4a3020');
   };
-  sail(fore, 16, 30, 9);
-  sail(fore, 32, wl - 13, 11);
-  if (!broken) sail(main, 8, 24, 11);
-  sail(main, 26, wl - 12, 13);
-  // The flag at the main's head.
-  if (!broken) for (let y = 1; y < 5; y++) for (let x = main + 2; x < main + 9; x++) px(x, y, y === 2 ? '#e8dcc0' : '#8a2a3a');
-  else for (let i = 0; i < 4; i++) px(main + (i % 2), 22 - i, '#2a1a12');
-  // The jib, from the foremast to the bowsprit.
-  for (let y = 14; y < wl - 12; y++) {
-    const x1 = fore - 1;
-    const x0 = Math.round(fore - 1 - (y - 14) * 0.62);
-    for (let x = x0; x < x1; x++) px(x, y, '#e4dac4');
+  sail(fore, 19, 35, 10, 13);
+  sail(fore, 36, 50, 13, 14);
+  yard(fore, 19, 10);
+  yard(fore, 36, 13);
+  if (!broken) {
+    sail(main, 13, 31, 11, 15);
+    yard(main, 13, 11);
   }
+  sail(main, 32, 50, 15, 16, broken);
+  if (!broken) yard(main, 32, 15);
+  else line(px, main - 16, 30, main + 14, 37, '#3a2414');
+  // The jibs, along the forestay (their luffs on it), out to the bowsprit;
+  // the spanker, aft of the mizzen between its gaff and boom.
+  const tri = (pts, edge) => {
+    fillPoly(px, pts, (x, y) => (hashf(x, y, 3) < 0.08 ? '#d6cab0' : (x + y) % 5 === 0 ? '#e0d6bc' : cloth));
+    for (let i = 0; i < pts.length; i++) line(px, ...pts[i], ...pts[(i + 1) % pts.length], edge);
+  };
+  tri([[34, 16], [19, 48], [37, 49]], '#a89878');
+  tri([[40, 11], [4, 37], [33, 44]], '#a89878');
+  line(px, mizzen, 26, 106, 31, '#3a2414');
+  line(px, mizzen, 48, 110, 48, '#3a2414');
+  fillPoly(px, [[mizzen + 1, 27], [105, 31], [109, 47], [mizzen + 1, 47]], (x, y) => ((x - mizzen) % 4 === 0 ? '#d6cab0' : x > 103 ? mix(cloth, '#ffd8a8', 0.5) : y > 44 ? '#ddd2b6' : cloth));
+  // Her colours: a long pennant off the main (gone after the bolt), the
+  // flag at the mizzen's head; streaming forward, the wind behind her.
+  if (!broken) for (let i = 0; i < 13; i++) px(main - 1 - i, 3 + Math.round(Math.sin(i * 0.7) * 0.8), i < 5 ? '#c83a3a' : '#a82a2a');
+  for (let y = 22; y < 26; y++) for (let x = mizzen - 7; x < mizzen; x++) px(x, y + (x < mizzen - 4 ? 1 : 0), y === 23 ? '#e8dcc0' : '#8a2a3a');
+  // The hull, her side toward you: the rail and bulwark, the wales and a
+  // painted band, her planking, darker under the water; the stern castle,
+  // its cabin windows lit; the stem, a gilt figure at its head; the rudder.
+  for (let x = 20; x <= 106; x++) {
+    const top = sheer(x);
+    let bottom = WL + 5;
+    if (x < 34) bottom = Math.min(bottom, top + (x - 20) * 1.5);
+    if (x > 94) bottom = Math.round(WL + 5 - (x - 94) * 1.3);
+    const end = x < 30 || x > 100 ? -14 : 0;
+    for (let y = top; y <= bottom; y++) {
+      const r = y - top;
+      let c;
+      if (r === 0) c = '#c89a62';
+      else if (x >= 86 && y < WL - 13) c = r === 1 ? '#6a4628' : (y + x) % 7 === 0 ? '#4e321c' : '#5a3a20';
+      else if (r <= 2) c = r === 1 ? '#6a4628' : '#5e3c22';
+      else if (y === WL - 11 + 3 || y === WL - 4) c = '#24160c';
+      else if (y === WL - 11 + 4) c = '#9a6a32';
+      else if (y >= WL) c = '#24302a';
+      else c = (y - top) % 3 === 0 ? '#3e2816' : '#4e321c';
+      fpx(x, y, shade(c, end));
+    }
+  }
+  for (const wx of [90, 95, 100]) {
+    for (let y = WL - 18; y < WL - 14; y++) for (let x = wx - 1; x < wx + 2; x++) fpx(x, y, '#24160c');
+    fpx(wx, WL - 17, '#ffcc6a');
+    fpx(wx, WL - 16, '#e0a040');
+  }
+  for (let y = WL - 23; y < WL - 20; y++) fpx(107, y, '#3a2414');
+  fpx(107, WL - 24, '#ffe090');
+  fpx(108, WL - 24, '#ffcc6a');
+  fpx(19, 49, '#e0b040');
+  fpx(18, 48, '#c89030');
+  fpx(25, WL - 12, '#1a100a');
+  for (let y = WL - 4; y < WL + 3; y++) {
+    fpx(104, y, '#2a1a10');
+    fpx(105, y, '#3a2414');
+  }
+  return { back, front };
+}
+
+// The Wall: the storm round the islands, a cliff of cloud from the sea to
+// the top of the sky. Painted once, as a bank of heaped billows (each lit
+// along its upper edge, shaded under), its face toward you heaped highest,
+// the anvil spreading out over the top; under it the rain hanging to the
+// sea. Two of it: in the sunset's light (its edges warm), and in the
+// storm's (cold).
+const WALL_W = PW + 300;
+const WALL_FACE = WALL_W - 70;
+function paintWall(seed, warm) {
+  const W = WALL_W;
+  const H = W_HORIZON + 1;
+  const img = new ImageData(W, H);
+  const d = img.data;
+  const set = (x, y, c) => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const o = (y * W + x) * 4;
+    d[o] = c[0];
+    d[o + 1] = c[1];
+    d[o + 2] = c[2];
+    d[o + 3] = 255;
+  };
+  const C = warm
+    ? { deep: [24, 22, 36], shadow: [22, 20, 33], inner: [29, 26, 41], innerLit: [35, 31, 48], body: [40, 34, 54], light: [70, 52, 74], rim: [142, 92, 108], rain: [36, 34, 52], streak: [52, 46, 66] }
+    : { deep: [16, 19, 29], shadow: [14, 16, 25], inner: [20, 23, 35], innerLit: [25, 29, 43], body: [30, 34, 50], light: [44, 50, 70], rim: [72, 82, 108], rain: [26, 30, 44], streak: [38, 44, 60] };
+  const rng = new RNG(hash4(seed, 0x3a11));
+  const BASE = H - 15;
+  // Where its face stands at each height (bulging, the anvil out over).
+  const face = (y) => WALL_FACE + Math.round(8 * Math.sin(y * 0.09) + 4 * Math.sin(y * 0.23)) + (y < 22 ? Math.round((22 - y) * (22 - y) * 0.12) : 0);
+  // (Behind it all: the storm's dark, and the rain under it.)
+  for (let y = 0; y < H; y++) {
+    const fx = face(Math.min(y, BASE));
+    for (let x = 0; x < fx - 6; x++) {
+      if (y >= BASE) set(x, y, (x + Math.floor(y * 0.4)) % 4 === 0 ? C.streak : C.rain);
+      else set(x, y, C.deep);
+    }
+  }
+  // A billow: round (flattened up in the anvil), lit from the upper right.
+  const puff = (cx, cy, r, ry, bright) => {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+      if (y >= BASE + 1) continue;
+      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+        const dx = (x - cx) / r;
+        const dy = (y - cy) / ry;
+        const e = dx * dx + dy * dy;
+        if (e > 1) continue;
+        // (Cel-shaded: its lit side, its belly in shadow; the face's lit
+        // edges catching the light most.)
+        const n = dx * 0.55 - dy * 0.83;
+        let c = bright ? C.body : C.inner;
+        if (bright && n > 0.62 && e > 0.55) c = C.rim;
+        else if (n > 0.25) c = bright ? C.light : C.innerLit;
+        else if (dy > 0.55) c = C.shadow;
+        set(x, y, c);
+      }
+    }
+  };
+  // Its body: billows heaped all through it (faint), then its face.
+  for (let i = 0; i < 90; i++) {
+    const y = rng.float(-6, BASE - 4);
+    const x = rng.float(0, face(Math.max(0, y)) - 12);
+    const r = rng.float(10, 22);
+    puff(x, y, r, r * rng.float(0.55, 0.75) * (y < 22 ? 0.7 : 1), false);
+  }
+  for (let y = BASE - 2; y > -12; y -= rng.float(3.5, 6)) {
+    const fx = face(Math.max(0, y));
+    const r = y < 22 ? rng.float(9, 15) : rng.float(6, 11);
+    puff(fx - r * 0.7 + rng.float(-2, 2), y, r, r * (y < 22 ? 0.55 : 0.85), true);
+    puff(fx - r * 1.9 + rng.float(-3, 3), y + rng.float(-2, 2), r * 0.8, r * 0.7, false);
+  }
+  // (Its base: a shelf, darker, a pale lip along it where the rain starts.)
+  for (let x = 0; x < face(BASE) + 2; x++) {
+    set(x, BASE, C.shadow);
+    if (hashf(x, 1, 3) < 0.6) set(x, BASE + 1, C.light);
+  }
+  // The rain's ragged front, under the face.
+  for (let y = BASE; y < H; y++) {
+    const fx = face(BASE) - 6 + Math.round(Math.sin(y * 0.7) * 2);
+    for (let x = fx - 4; x < fx + 2; x++) if (hashf(x, y, 9) < 0.55) set(x, y, C.rain);
+  }
+  const c = makeCanvas(W, H);
+  c.getContext('2d').putImageData(img, 0, 0);
   return c;
 }
 
 function paintWreck(info) {
   const rng = new RNG(hash4(info.seed >>> 0, 0x5e2));
-  // The Wall's face along the sea ahead: how high it stands at each column.
-  const wall = Array.from({ length: PW }, (_, x) => 30 + Math.round(10 * Math.sin(x * 0.05 + 1) + 6 * Math.sin(x * 0.13) + rng.float(0, 3)));
-  const crew = [{ x: 40, s: '#8a2a3a' }, { x: 60, s: '#2a4a7a' }, { x: 70, s: '#5a5a5a' }, { x: 24, s: '#c89030' }, { x: 80, s: '#2a2a3a' }];
+  // Her people on deck: where they stand (along her, from the bow), what
+  // they wear; the captain at the wheel aft.
+  const crew = [
+    { x: 30, s: '#8a2a3a' }, { x: 48, s: '#2a4a7a' }, { x: 56, s: '#5a5a5a' }, { x: 74, s: '#c89030' }, { x: 80, s: '#3a6a3a' },
+    { x: 96, s: '#2a2a3a', captain: true },
+  ].map((c) => ({ ...c, hair: rng.pick(['#1e1612', '#6e4424', '#c87a3a', '#c8c8c8', '#3a2418']), skin: rng.pick(['#f4d0b0', '#d8a47c', '#b07a4a', '#8a5a34', '#e8b48c']) }));
   const ship = paintShip(false);
   const broken = paintShip(true);
-  return { ship, broken, shipDark: darken(ship), brokenDark: darken(broken), wall, crew, drops: Array.from({ length: 140 }, () => ({ x: rng.float(0, PW), y: rng.float(0, PH), v: rng.float(0.8, 1.4) })) };
+  const dark = (p) => ({ back: darken(p.back), front: darken(p.front) });
+  // The sea's rows, far to near (where each one's foot is).
+  const rows = [];
+  const N = 20;
+  for (let i = 0; i <= N; i++) {
+    const y = Math.round(W_HORIZON + 1 + (PH - W_HORIZON) * Math.pow(i / N, 1.45));
+    if (!rows.length || y > rows[rows.length - 1].y) rows.push({ y, ph: rng.float(0, 6.28), f: rng.float(0.9, 1.1) });
+  }
+  return {
+    ship, broken, shipDark: dark(ship), brokenDark: dark(broken),
+    wallWarm: paintWall(info.seed >>> 0, true), wallCold: paintWall(info.seed >>> 0, false),
+    crew, rows,
+    drops: Array.from({ length: 160 }, () => ({ x: rng.float(0, PW), y: rng.float(0, PH), v: rng.float(0.8, 1.4) })),
+  };
 }
 
 // A picture as it looks in the storm's dark.
@@ -989,6 +1185,7 @@ function drawWreck(ctx, sc, art) {
   const g = buf.getContext('2d');
   g.imageSmoothingEnabled = false;
   g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
   const px = (x, y, col) => {
     g.fillStyle = col;
     g.fillRect(Math.round(x), Math.round(y), 1, 1);
@@ -996,13 +1193,14 @@ function drawWreck(ctx, sc, art) {
   // How far into the storm: 0 the calm evening, 1 the worst of it.
   const storm = clamp01((t - WRECK.GATHER) / (WRECK.STORM - WRECK.GATHER + 2));
   const struck = t >= WRECK.STRIKE;
+  const since = t - WRECK.STRIKE;
   // Lightning: a flash now and then in the storm (the strike, the brightest).
   const flashAt = Math.floor(t * 1.3);
-  const flash = (t > WRECK.STORM && hashf(flashAt, 3, 7) < 0.35 ? clamp01(1 - (t * 1.3 - flashAt) * 4) * 0.7 : 0) + (struck ? clamp01(1 - (t - WRECK.STRIKE) * 1.5) : 0);
+  const flash = (t > WRECK.STORM && hashf(flashAt, 3, 7) < 0.35 ? clamp01(1 - (t * 1.3 - flashAt) * 4) * 0.6 : 0) + (struck ? clamp01(1 - since * 1.6) * 0.9 : 0);
   // The sky: a sunset going over to storm-dark.
-  const top = mix(mix('#2a2a5a', '#14161e', storm), '#c8d4f0', flash * 0.6);
-  const mid = mix(mix('#b85a6a', '#20242c', storm), '#e0e8ff', flash * 0.6);
-  const low = mix(mix('#f0a868', '#343a42', storm), '#f0f4ff', flash * 0.6);
+  const top = mix(mix('#2a2a5a', '#14161e', storm), '#b8c4e8', flash * 0.5);
+  const mid = mix(mix('#b85a6a', '#20242c', storm), '#c8d0f0', flash * 0.5);
+  const low = mix(mix('#f0a868', '#343a42', storm), '#e0e8ff', flash * 0.5);
   for (let i = 0; i < 12; i++) {
     const y0 = Math.floor((i / 12) * W_HORIZON);
     const y1 = Math.floor(((i + 1) / 12) * W_HORIZON);
@@ -1011,163 +1209,222 @@ function drawWreck(ctx, sc, art) {
     g.fillRect(0, y0, PW, y1 - y0 + 1);
   }
   // The sun, going down behind you.
+  const sunX = 214;
   if (storm < 0.9) {
     const sy = W_HORIZON - 4 + t * 0.35;
     g.globalAlpha = 1 - storm;
-    g.fillStyle = 'rgba(255,200,140,0.35)';
+    g.fillStyle = 'rgba(255,200,140,0.3)';
     g.beginPath();
-    g.arc(214, sy, 12, 0, Math.PI * 2);
+    g.arc(sunX, sy, 12, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = '#ffe0a0';
     g.beginPath();
-    g.arc(214, sy, 7, 0, Math.PI, true);
+    g.arc(sunX, sy, 7, 0, Math.PI, true);
     g.fill();
     g.globalAlpha = 1;
   }
-  // The Wall: black cloud from the sea to the top of the sky, ahead
-  // (left), its face heaped in great rolls, rain hanging under it; it
-  // fills the sky as you go in.
-  const reachX = 130 + storm * 170;
-  for (let x = 0; x < PW; x++) {
-    const reach = clamp01((reachX - x) / 70);
-    if (reach <= 0) continue;
-    const roll = 8 * Math.sin(x * 0.045 + t * 0.15) + 5 * Math.sin(x * 0.11 - t * 0.2) + 3 * Math.sin(x * 0.23);
-    const topY = Math.round(lerp(W_HORIZON, BAR / 2 + 4 - storm * 20, ease(reach)) + roll * reach);
-    for (let y = Math.max(0, topY); y < W_HORIZON; y++) {
-      const d = y - topY;
-      // (Its billows: bands that curl, lit faintly along their tops.)
-      const b2 = Math.sin(x * 0.06 + y * 0.18 + t * 0.4) + Math.sin(x * 0.021 - y * 0.09 - t * 0.25) * 1.3;
-      let col = d < 2 ? '#3c4258' : b2 > 1.3 ? '#262b3c' : b2 > 0.2 ? '#1c2030' : '#151824';
-      // (Rain hanging under it, near the sea.)
-      if (y > W_HORIZON - 14 && (x + Math.floor(y * 0.5 + t * 6)) % 5 === 0) col = '#2c3244';
-      px(x, y, col);
-    }
+  // The Wall, ahead (left): its face coming on as you go in, till it fills
+  // the sky; its billows rolling slowly; warm at first, cold in the storm.
+  const reach = 112 + ease(storm) * 210;
+  const wx = Math.round(reach - WALL_FACE + Math.sin(t * 0.2) * 2);
+  g.drawImage(art.wallCold, wx, 0);
+  if (storm < 1) {
+    g.globalAlpha = 1 - storm;
+    g.drawImage(art.wallWarm, wx, 0);
+    g.globalAlpha = 1;
+  }
+  if (flash > 0.05) {
+    // (Lit up from inside by the flash.)
+    g.globalAlpha = flash * 0.35;
+    g.globalCompositeOperation = 'lighter';
+    g.drawImage(art.wallCold, wx, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
   }
   // Silent lightning walking inside it.
+  g.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 3; i++) {
     const k = (t * 0.7 + i * 0.37) % 1;
-    if (k > 0.12) continue;
-    const lx = (hashf(i, Math.floor(t * 0.7 + i * 0.37), 5) * (90 + storm * 140)) | 0;
-    const ly = W_HORIZON - 18 - ((hashf(i, Math.floor(t), 9) * 20) | 0);
-    g.fillStyle = `rgba(200,180,255,${(0.5 * (1 - k / 0.12)).toFixed(3)})`;
-    g.beginPath();
-    g.arc(lx, ly, 9, 0, Math.PI * 2);
-    g.fill();
+    if (k > 0.14) continue;
+    const lx = hashf(i, Math.floor(t * 0.7 + i * 0.37), 5) * Math.max(30, reach - 30);
+    const ly = 16 + hashf(i, Math.floor(t), 9) * (W_HORIZON - 40);
+    const a = 0.45 * (1 - k / 0.14);
+    const lg = g.createRadialGradient(lx, ly, 0, lx, ly, 14);
+    lg.addColorStop(0, `rgba(170,160,255,${a.toFixed(3)})`);
+    lg.addColorStop(1, 'rgba(120,110,200,0)');
+    g.fillStyle = lg;
+    g.fillRect(lx - 14, ly - 14, 28, 28);
   }
-  // Rain, from the storm's start: slanting, thicker as it worsens.
-  // (Drawn after the sea and ship, below.)
-  // The sea: bands of swell, crests moving, higher in the storm.
-  for (let y = W_HORIZON; y < PH; y++) {
-    const d = (y - W_HORIZON) / (PH - W_HORIZON);
-    const base = mix(mix('#3a4a7a', '#1a2430', storm), '#203048', d);
-    g.fillStyle = mix(base, '#a8b8d0', flash * 0.3);
-    g.fillRect(0, y, PW, 1);
-    const amp = 0.4 + storm * 1.2;
-    for (let x = 0; x < PW; x++) {
-      const w = Math.sin(x * (0.08 - d * 0.04) + t * (1.4 + storm * 1.6) + y * 0.9);
-      if (w > 1 - 0.08 * amp * (1 + d)) px(x, y, storm > 0.5 ? '#c8d4e0' : '#7a8ab8');
-    }
-  }
-  // (The sun's path on the water.)
-  if (storm < 0.8) {
-    for (let y = W_HORIZON + 1; y < PH; y += 2) {
-      const x = 214 + Math.round(Math.sin(y * 1.7 + t * 3) * (2 + (y - W_HORIZON) * 0.08));
-      g.globalAlpha = (1 - storm) * 0.8;
-      px(x, y, '#ffd8a0');
-      px(x + 1, y, '#ffc080');
-    }
-    g.globalAlpha = 1;
-  }
+  g.globalCompositeOperation = 'source-over';
   // The ship, pitching and rolling, more as the storm grows; heeling over
   // after the strike.
-  const heel = struck ? Math.min(0.32, (t - WRECK.STRIKE) * 0.12) : 0;
-  const ang = Math.sin(t * 1.1) * (0.03 + storm * 0.1) + heel;
-  const bob = Math.sin(t * 0.9) * (1.2 + storm * 3) + (struck ? (t - WRECK.STRIKE) * 2 : 0);
-  const sx = 82;
-  const sy = 108 + bob;
+  const heel = struck ? Math.min(0.3, since * 0.11) : 0;
+  const ang = Math.sin(t * 1.1) * (0.025 + storm * 0.08) + heel;
+  const bob = Math.sin(t * 0.9) * (1 + storm * 2.5) + (struck ? since * 1.6 : 0);
+  const sx = 72;
+  const sy = 106 + bob;
+  // The sea, in rows from the horizon toward you (each row's waves over
+  // the one behind it), the swell growing in the storm, white caps on it;
+  // the sun's path on the crests. Those behind her first.
+  const seaRows = (front) => {
+    const R = art.rows;
+    for (let i = 0; i < R.length - 1; i++) {
+      const row = R[i];
+      const isFront = row.y >= sy - 1;
+      if (isFront !== front) continue;
+      const nextY = R[i + 1].y;
+      const dz = (row.y - W_HORIZON) / (PH - W_HORIZON);
+      const body = mix(mix(mix('#3a4a7a', '#1a2430', storm), '#16203a', dz * 0.7), '#90a0c0', flash * 0.35);
+      const deep = shade(body, -14);
+      const crest = mix(mix('#6a7ab0', '#3a4a5c', storm), '#c8d4f0', flash * 0.4);
+      const lip = mix(crest, '#ffffff', 0.35);
+      const glint = '#ffd8a0';
+      const amp = (0.8 + dz * 3.4) * (0.5 + storm * 1.5);
+      const fr = (0.11 - dz * 0.06) * row.f;
+      const sp = 1.2 + storm * 1.8;
+      const dark = front && row.y < sy + 12 ? mix(body, '#080a14', 0.35 * (1 - (row.y - sy) / 12)) : null;
+      for (let x = 0; x < PW; x++) {
+        const w = 0.5 + 0.5 * Math.sin(x * fr + row.ph + t * sp) * 0.75 + 0.5 * 0.25 * Math.sin(x * fr * 2.3 - t * sp * 0.7 + row.ph);
+        const peak = Math.pow(w, 1 + storm * 1.5);
+        const cy = Math.round(row.y - amp * peak);
+        const under = dark && x > sx + 18 && x < sx + 108;
+        g.fillStyle = under ? dark : body;
+        g.fillRect(x, cy, 1, nextY - cy + 1);
+        // (The lit face of the wave, the crest, foam on the tallest.)
+        px(x, cy, peak > 0.82 && storm > 0.35 ? '#dfe8f4' : peak > 0.6 ? lip : crest);
+        if (nextY - cy > 2) px(x, nextY, deep);
+        if (storm < 0.85 && Math.abs(x - sunX - Math.sin(row.y * 1.7 + t * 2) * (1 + dz * 6)) < 1 + dz * 5 && peak > 0.4) {
+          g.globalAlpha = (1 - storm) * 0.9;
+          px(x, cy, glint);
+          g.globalAlpha = 1;
+        }
+      }
+    }
+  };
+  seaRows(false);
   g.save();
   g.translate(sx + SHIP.w / 2, sy);
   g.rotate(ang);
   // (Darkening as the storm closes in; lit up by the lightning.)
   const lit = clamp01(1 - storm * 0.85 + flash);
-  g.drawImage(struck ? art.brokenDark : art.shipDark, -SHIP.w / 2, -SHIP.water);
+  const S0 = struck ? art.brokenDark : art.shipDark;
+  const S1 = struck ? art.broken : art.ship;
+  const ox = -SHIP.w / 2;
+  const oy = -SHIP.water;
+  g.drawImage(S0.back, ox, oy);
   g.globalAlpha = lit;
-  g.drawImage(struck ? art.broken : art.ship, -SHIP.w / 2, -SHIP.water);
+  g.drawImage(S1.back, ox, oy);
   g.globalAlpha = 1;
-  // Her people on deck (running, in the storm).
+  // Her people on deck, behind her rail: at their work in the calm, running
+  // in the storm, the captain at the wheel.
+  const spx = (x, y, col) => {
+    g.fillStyle = col;
+    g.fillRect(Math.round(x), Math.round(y), 1, 1);
+  };
   for (const c of art.crew) {
-    const run = storm > 0.3 ? Math.sin(t * 2.4 + c.x) * 10 * storm : Math.sin(t * 0.4 + c.x) * 2;
-    const x = -SHIP.w / 2 + c.x + run;
-    const y = -9 - 1;
-    g.fillStyle = c.s;
-    g.fillRect(Math.round(x), y - 3, 2, 3);
-    g.fillStyle = '#e0b090';
-    g.fillRect(Math.round(x), y - 4, 2, 1);
+    const run = c.captain ? 0 : storm > 0.3 ? Math.sin(t * 2.4 + c.x) * 9 * storm : Math.sin(t * 0.4 + c.x) * 2;
+    const x = Math.max(24, Math.min(c.captain ? 104 : 84, c.x + run));
+    const moving = !c.captain && storm > 0.3;
+    drawPerson(spx, ox + x, oy + sheer(Math.round(x)) + 3, { size: 'tiny', pose: moving ? 'run' : 'stand', frame: Math.floor(t * 8 + c.x), shirt: lit < 0.5 ? shade(c.s, -40) : c.s, hair: c.hair, skin: lit < 0.5 ? shade(c.skin, -60) : c.skin });
   }
-  // The mainsail burning (after the strike): flames up the canvas, smoke.
+  g.drawImage(S0.front, ox, oy);
+  g.globalAlpha = lit;
+  g.drawImage(S1.front, ox, oy);
+  g.globalAlpha = 1;
+  // The main course burning (after the strike): flames up the canvas,
+  // sparks, smoke torn off it.
   if (struck) {
-    const s = t - WRECK.STRIKE;
-    const mainX = -SHIP.w / 2 + 54;
-    for (let i = 0; i < 26; i++) {
-      const fx = mainX - 12 + ((i * 7) % 26);
-      const fy0 = -SHIP.water + 26 + ((i * 5) % 20);
-      const hgt = 4 + Math.abs(Math.sin(t * 9 + i)) * 6 * Math.min(1, s);
+    const mainX = ox + MASTS.main;
+    for (let i = 0; i < 30; i++) {
+      const fx = mainX - 14 + ((i * 7) % 29);
+      const fy0 = oy + 36 + ((i * 5) % 15);
+      const hgt = 3 + Math.abs(Math.sin(t * 9 + i)) * 7 * Math.min(1, since * 1.5);
       for (let k = 0; k < hgt; k++) {
         const f = k / hgt;
-        g.fillStyle = f < 0.3 ? '#ffe890' : f < 0.65 ? '#ffa030' : '#ff5014';
-        g.globalAlpha = 0.9;
-        g.fillRect(Math.round(fx + Math.sin(t * 12 + i + k) * 0.6), Math.round(fy0 - k), 1, 1);
+        g.fillStyle = f < 0.25 ? '#fff0a0' : f < 0.6 ? '#ffa030' : '#e84a14';
+        g.globalAlpha = 0.95 - f * 0.3;
+        g.fillRect(Math.round(fx + Math.sin(t * 12 + i + k) * 0.7 - k * 0.15), Math.round(fy0 - k), 1, 1);
       }
     }
-    g.globalAlpha = 1;
-    for (let i = 0; i < 6; i++) {
-      const k = (s * 0.4 + i / 6) % 1;
-      g.globalAlpha = 0.5 * (1 - k);
-      g.fillStyle = '#3a3634';
-      g.fillRect(Math.round(mainX + Math.sin(i * 2 + t) * 4 - k * 18), Math.round(-SHIP.water + 20 - k * 30), 3, 3);
+    for (let i = 0; i < 8; i++) {
+      const k = (since * 0.8 + i / 8) % 1;
+      g.globalAlpha = 1 - k;
+      g.fillStyle = i % 2 ? '#ffd070' : '#ff8030';
+      g.fillRect(Math.round(mainX + Math.sin(i * 3.1 + t * 2) * 10 - k * 16), Math.round(oy + 34 - k * 26), 1, 1);
+    }
+    for (let i = 0; i < 7; i++) {
+      const k = (since * 0.4 + i / 7) % 1;
+      g.globalAlpha = 0.55 * (1 - k);
+      g.fillStyle = k < 0.3 ? '#4a4240' : '#2e2a2a';
+      const r = 2 + Math.round(k * 3);
+      g.fillRect(Math.round(mainX + Math.sin(i * 2 + t) * 4 - k * 26), Math.round(oy + 30 - k * 30), r, r);
     }
     g.globalAlpha = 1;
   }
   g.restore();
-  // Spray off her bow, in heavy seas.
-  if (storm > 0.4) {
-    for (let i = 0; i < 10; i++) {
-      const k = (t * 1.6 + i / 10) % 1;
-      g.globalAlpha = (1 - k) * storm;
-      px(sx + 4 - k * 14 + Math.sin(i) * 3, sy - 6 - Math.sin(k * Math.PI) * 14, '#e8f0ff');
-    }
-    g.globalAlpha = 1;
+  // The sea in front of her (over her hull below the water), and the foam
+  // along her side where the waves meet it.
+  seaRows(true);
+  g.globalAlpha = 0.5 + storm * 0.4;
+  const hullX0 = sx + SHIP.w / 2 + (20 - SHIP.w / 2) * Math.cos(ang);
+  const hullX1 = sx + SHIP.w / 2 + (104 - SHIP.w / 2) * Math.cos(ang);
+  for (let x = Math.round(hullX0); x < hullX1; x++) if (hashf(x, Math.floor(t * 6), 2) < 0.55) px(x, Math.round(sy) - 1 + (hashf(x, 3, Math.floor(t * 4)) < 0.3 ? -1 : 0), '#e8f0ff');
+  g.globalAlpha = 1;
+  // Her bow wave, and spray off it in heavy seas.
+  for (let i = 0; i < 4 + Math.round(storm * 10); i++) {
+    const k = (t * (1.2 + storm) + i / (4 + storm * 10)) % 1;
+    g.globalAlpha = (1 - k) * (0.5 + storm * 0.5);
+    px(sx + 22 - k * (6 + storm * 10) + Math.sin(i * 1.7) * 2, sy - 2 - Math.sin(k * Math.PI) * (2 + storm * 12), '#e8f0ff');
   }
-  // The bolt: down out of the sky onto the mainmast.
-  const boltTo = (x0, x1, y1, alpha) => {
-    g.globalAlpha = alpha;
-    g.fillStyle = '#ffffff';
+  g.globalAlpha = 1;
+  // A bolt: down out of the cloud, forking, a white core, a blue glow
+  // round it.
+  const boltTo = (x0, x1, y1, alpha, seed) => {
+    const pts = [];
     let x = x0;
     for (let y = BAR / 2; y < y1; y++) {
-      x += (hashf(y, Math.floor(t * 10), 3) - 0.5) * 2.6 + (x1 - x) * 0.06;
-      g.fillRect(Math.round(x), y, y % 7 === 0 ? 2 : 1, 1);
+      x += (hashf(y, seed, 3) - 0.5) * 2.4 + (x1 - x) * 0.07;
+      pts.push([x, y]);
+    }
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = alpha * 0.35;
+    g.fillStyle = '#8090ff';
+    for (const [bx, by] of pts) g.fillRect(Math.round(bx) - 1, by, 3, 1);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = alpha;
+    g.fillStyle = '#ffffff';
+    for (const [bx, by] of pts) g.fillRect(Math.round(bx), by, 1, 1);
+    // (A fork or two off it.)
+    for (const at of [0.35, 0.6]) {
+      const [fx0, fy0] = pts[Math.floor(pts.length * at)] || pts[0];
+      let fx = fx0;
+      for (let k = 0; k < 10; k++) {
+        fx += (hashf(k, seed + at * 10, 5) - 0.3) * 2;
+        g.globalAlpha = alpha * (1 - k / 10);
+        g.fillRect(Math.round(fx), Math.round(fy0 + k), 1, 1);
+      }
     }
     g.globalAlpha = 1;
   };
-  if (struck && t - WRECK.STRIKE < 0.45) boltTo(sx + 50, sx + 54, sy - SHIP.water + 22, 1 - (t - WRECK.STRIKE) * 2);
+  if (struck && since < 0.5) boltTo(sx + MASTS.main - 6, sx + MASTS.main, sy - SHIP.water + 27, 1 - since * 1.8, Math.floor(t * 12));
   // Others out over the sea, in the storm.
-  if (t > WRECK.STORM && t < WRECK.BLACK && flash > 0.2 && !struck) boltTo(20 + hashf(flashAt, 1, 2) * 200, 20 + hashf(flashAt, 4, 2) * 200, W_HORIZON, flash);
-  // The rain.
+  if (t > WRECK.STORM && t < WRECK.BLACK && flash > 0.2 && !struck) boltTo(20 + hashf(flashAt, 1, 2) * 200, 20 + hashf(flashAt, 4, 2) * 200, W_HORIZON, flash, flashAt);
+  // The rain: slanting, thicker as it worsens.
   if (t > WRECK.GATHER) {
     const n = Math.round(art.drops.length * storm);
-    g.fillStyle = 'rgba(200,214,240,0.55)';
+    g.fillStyle = 'rgba(200,214,240,0.5)';
     for (let i = 0; i < n; i++) {
       const d = art.drops[i];
       const y = (d.y + t * 160 * d.v) % PH;
       const x = (d.x - t * 60 * d.v + 400) % PW;
-      g.fillRect(Math.round(x), Math.round(y), 1, 3);
-      g.fillRect(Math.round(x) - 1, Math.round(y) + 3, 1, 1);
+      g.fillRect(Math.round(x), Math.round(y), 1, 2);
+      g.fillRect(Math.round(x) - 1, Math.round(y) + 2, 1, 2);
     }
   }
-  // (The strike: white, for a moment.)
-  if (struck && t - WRECK.STRIKE < 0.6) {
-    g.globalAlpha = 0.85 * (1 - (t - WRECK.STRIKE) / 0.6);
-    g.fillStyle = '#ffffff';
+  // (The strike: everything lit blue-white for a moment.)
+  if (struck && since < 0.3) {
+    g.globalAlpha = 0.45 * (1 - since / 0.3);
+    g.fillStyle = '#e8eeff';
     g.fillRect(0, 0, PW, PH);
     g.globalAlpha = 1;
   }

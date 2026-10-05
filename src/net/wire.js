@@ -17,6 +17,7 @@ const SKIP = new Set([
   'game', 'rng', 'path', 'pathI', 'layout', 'settlement', 'seat', 'store', 'S', 'rec', 'brainState', 'openedDoors', 'home', 'goal', 'spot',
   'faceR', 'sideLeft', 'shimmerT', 'rollTrail', 'moteT', 'rig', 'legRig', 'legCv', 'artPhase', 'mat', 'strike', 'swapping', 'victim', 'hunting',
   'schedule', 'memory', 'pathFails', 'idleT', 'waitT', 'stateT', 'greetCd', 'emoteCd', 'lineCd', 'fxT', 'wareT', 'haltT', 'thinkT',
+  '_dishFx', 'dishStatKey', 'tacGoal',
 ]);
 // Of a townsperson's record, what anyone sees of them.
 const REC = ['idx', 'sid', 'name', 'age', 'job', 'look', 'equipment', 'wear', 'traits', 'personality', 'hp', 'maxHp', 'gems', 'tier', 'soldier', 'bandit', 'drafted', 'captive', 'ruler', 'councillor', 'title', 'alive'];

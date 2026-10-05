@@ -15,6 +15,7 @@ import { personName, familyName } from '../world/names.js';
 import { planShopping, buyAt, setUpMerchants, tierOf, rollTier, tierGoods, MERCHANT_TIERS, restockStall } from './shops.js';
 import { townWeather, rainedRecently } from '../world/weather.js';
 import { dishesOf, forbiddenFood } from './culture.js';
+import { npcCook, marketRun, stockPantry } from '../game/cooking.js';
 
 export const DAY = 1440;
 // How far back a town's story is caught up when you return (towns you've
@@ -415,6 +416,9 @@ export function initEcon(L) {
     st.add(k.store, 'raw_meat', rng.int(1, 3));
     if (rng.chance(0.4)) st.add(k.store, 'feast', 1);
     if (s.condition === 'poor') st.add(k.store, 'gruel', rng.int(1, 3));
+    // (Round 50: a little of everything a kitchen cooks with, for the
+    // cook's own dishes: see game/cooking.js.)
+    stockPantry(k.store, () => rng.float(0, 1));
   }
   const m = mayorOf(L);
   ledger(L, 0, `${s.name} keeps ¤${e.treasury} in its coffers.`);
@@ -778,6 +782,9 @@ function produce(L, rec, rng) {
         st.take(biz.store, 'wheat', 2);
         st.add(biz.store, 'bread', 2 + (rng.chance(sk.cooking) ? 1 : 0));
       } else if (rng.chance(0.3)) st.add(biz.store, 'bread', 1); // flour from the stores
+      // (Round 50) Now and then something of their own from the oven: a
+      // pie, a tart, a loaf, of whatever they have in (see cooking.js).
+      cookShift(L, rec, biz, rng, 0.2);
       return;
     }
     case 'cook': {
@@ -801,6 +808,9 @@ function produce(L, rec, rng) {
         st.add(k.store, meal, (raw === 'raw_meat' ? 3 : raw ? 2 : 1) + (raw && veg ? 1 : 0));
         sk.cooking = Math.min(1, sk.cooking + 0.002);
       }
+      // (Round 50) And now and then a dish of the cook's own, of whatever's
+      // in: one of their recipes, or something new (see cooking.js).
+      cookShift(L, rec, k, rng, 0.35);
       // Raw fish and meat don't keep: whatever the pots don't need is
       // grilled and sold as it is.
       for (const [raw, done] of [['fish', 'cooked_fish'], ['raw_meat', 'cooked_meat']]) {
@@ -1193,6 +1203,50 @@ function payWages(L, day) {
     for (const r of staff) r.mood = clamp(r.mood - 0.1, 0, 1);
     if (e.unpaid === 1) ledger(L, day, 'The treasury could not pay the guards today.');
   }
+  guardSupplies(L);
+}
+
+// (Round 50) A cook's own cooking, an hour at work: a dish now and then
+// (never more than a few of them on sale at once), and a run round the
+// town's farmers, fishers and traders for what the kitchen's short of.
+function cookShift(L, rec, k, rng, chance) {
+  if (!k || !k.store) return;
+  const f = () => rng.float(0, 1);
+  if (rng.chance(0.12)) {
+    const sellers = Object.values(L.econ.biz || {}).filter((b) => b && b !== k && b.store);
+    marketRun(k, sellers, f);
+  }
+  const onSale = Object.keys(k.store).filter((q) => q.startsWith('dish~')).reduce((n, q) => n + k.store[q], 0);
+  if (onSale < 4 && rng.chance(chance)) npcCook(rec, k.store, f);
+}
+
+// (Round 50) The watch keep something by them to patch themselves up: each
+// guard buys a healing salve or two, while they've the coin, from whoever
+// in town has them (the herbalist, a trader's stall). They drink one when
+// they've fallen back hurt (see NPC.fight).
+export const GUARD_SUPPLY = ['healing_salve'];
+export function guardSupplies(L) {
+  const e = L.econ;
+  const sellers = Object.values(e.biz || {}).filter((b) => b && b.store && GUARD_SUPPLY.some((k) => st.count(b.store, k) > 0));
+  if (!sellers.length) return 0;
+  let bought = 0;
+  for (const r of L.npcs) {
+    if (!alive(r) || r.away || r.job !== 'guard') continue;
+    r.inv ||= [];
+    for (let i = GUARD_SUPPLY.reduce((n, k) => n + invCount(r.inv, k), 0); i < 2; i++) {
+      const b = sellers.find((q) => GUARD_SUPPLY.some((k) => st.count(q.store, k) > 0));
+      const k = b && GUARD_SUPPLY.find((q) => st.count(b.store, q) > 0);
+      if (!k) return bought;
+      const pr = Math.max(1, Math.round(price(k) * 0.9));
+      if ((r.coins || 0) < pr + 4) break;
+      st.take(b.store, k, 1);
+      b.till = (b.till || 0) + pr;
+      r.coins -= pr;
+      invAdd(r.inv, k, 1);
+      bought++;
+    }
+  }
+  return bought;
 }
 
 // The mayor looks over the books: taxes, relief for the hungry, laws.

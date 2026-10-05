@@ -3658,6 +3658,98 @@ together on your network" above for how to start. How it works:
   felled a tree) and moved far off, it used to come back looking as it was
   before it fell in.
 
+## Round 50: cooking anything, the watch as a body, saves in detail
+
+- *Cooking* (`world/dishes.js`, `game/cooking.js`, `ui/cook.js`,
+  `render/dishart.js`):
+  - **Cook anything, at four places:** a campfire (now cooked at: **L**
+    lights it, **P** puts it out, from the cooking window), a furnace's
+    pot, an oven, or a table. Put in one to three things, *any* things
+    (bread, sand, an iron ingot...), and cook them. Each place has its own
+    minigame: turn the skewer as the marker crosses the glow (campfire);
+    keep the pot at a simmer with ↑ and ↓; crimp the crust with the arrows,
+    then take the pie out when it's golden (oven); chop on the marks as
+    they pass under the knife (table). Bakers' ovens and furnaces show
+    **[K] Cook** in their crafting window.
+  - **Every item is one or two hidden kinds** to a cook (metallic, cold,
+    meat, hard, soft, sticky, chewy, leathery, hot, crumbly, juicy, dry,
+    squishy, sweet, salty, bitter, earthy, fishy and more, 25 in all). You
+    learn what a thing is by cooking with it, and the tooltip says so ("To
+    a cook: crumbly, dry").
+  - **What it does:** up to three of the kinds in it are drawn, each
+    giving one of its three effects (two good, one bad). Cook it well and
+    the good ones come up far more often. Some kinds make it last longer
+    or shorter. With two or three things in it, there's an even chance
+    one kind becomes a *condition* instead: "only while you wear metal
+    armour", "only at night", "only underground", "only in a town"...
+    Effects include mining faster, fire or cold troubling you less, taking
+    less harm, moving faster, more breath, stronger blows, healing over
+    time, seeing in the dark, fish biting sooner, and on the bad side
+    slowness, a turning stomach and taking more harm. At most three dishes
+    work at once (the oldest wears off). Dishes can be eaten at full
+    health, for what they do.
+  - **Named and pictured by what went in and where:** sand, bread and an
+    iron ingot in the pot make a *Sandy Bread and Iron Stew* (a pie can't
+    be made at a campfire). The picture is made from the pictures of what
+    went in: chunks on a skewer, a bowl of stew or soup, a salad, a pie or
+    tart with its filling on top, a loaf, or a platter.
+  - **Recipes:** **W** after cooking writes it down; the Recipes tab
+    (**TAB**) makes it again (**ENTER**) from the same things at the same
+    place.
+  - **The town's cooks cook too:** cooks, innkeepers and bakers start with
+    a stocked pantry, buy more from farmers, fishers and traders, cook
+    their own dishes by the same rules (writing down the ones that turn
+    out well), and put them up for sale.
+- *Food heals over time:* anything eaten heals only 1 to 3 at once (the
+  bigger the meal, the more), and the rest of what it's worth over the
+  next few seconds.
+- *The watch fight as a body* (`entities/tactics.js`, `entities/npc.js`):
+  - Against four foes or fewer, they spread out round them, shared out
+    fairly among the foes, each in a place of their own.
+  - Against more than four, they form a line as wide as the enemy's
+    front, hold it, and take whoever comes into reach.
+  - They don't stand on each other or bunch up: a guard on another's spot
+    steps aside, and one crowded gets to their own place before swinging.
+  - **Salves:** each guard buys a healing salve or two from the herbalist
+    or a trader while they have the coin. Fallen back and hurt, they drink
+    one (not with the foe at their elbow, and not twice in a row).
+- *Masters use everything they have:* every master now has at least
+  three different attacks in every phase. A master kept waiting gets the
+  next of its works ready, one at a time, not all at once (which used to
+  bring the same one or two round again and again). New works: the Lantern
+  Lord's cold beam, the Obsidian Abbess's fan of shards, the Kiln Priest's
+  funeral urns that burst into flame, the Molten Heart's chain lash (or
+  slag rain once its anchors are gone), the Hollow Saint's halo of rings
+  with one gap, and the Abyssal Clam's jet of sea and spat pearl when
+  you keep away from it. The Pearl Queen stays open longer, with at most
+  two guards.
+- *Saves in detail:* picking a save in the load list (and a world in the
+  multiplayer menu) opens its details (world, hero, origin, day, place,
+  players, seed, when it was saved and its version) with **Load** (or
+  **Host**), **Update** (older versions only) and **Delete** (press twice).
+  The list itself no longer has an update button.
+- *Older worlds brought up to this version* (`game/migrate.js`): each
+  version from now on has its own step. A world from an older version is
+  brought up whenever it's loaded, and for good when it's updated: its
+  save filled in (recipe books, cooking counts, broken effects dropped),
+  then once it's loaded, every town as it's laid out gets what's new (its
+  kitchen and bakery pantries stocked, a salve for each of the watch).
+  What only comes with a new world (its land, its places) can't be added.
+  (The version is now 0.50.0.)
+- *The Fallen Star's wing* is a blue, dragon-like wing, faintly glowing
+  and see-through, a little smaller (14 pixels). It's drawn in its place
+  among everything else (it used to be drawn again on top of things in
+  front of it, and of you), lights what's round it, and a wing roll now
+  bursts with light and wind: a beat of the wing, rings, a trail of blue
+  after-images and sparks.
+- *The openings, repainted* (`render/scenekit.js`): people are proper
+  figures with their arms at their sides (no hands off on their own),
+  pointing, waving, running, cowering. Houses are seen three-quarters on,
+  with their gable end, roof and eaves, framed windows and shadows.
+  Trees are shaded, clouds heaped. In the castaway's, the ship's sails
+  hang from their yards and the rigging joins up, she sits in the water
+  among layered waves, and the Wall is a bank of storm cloud. In the
+  Fallen Star's, the shockwave rises from behind the hills.
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -12,6 +12,7 @@ import { HOBBIES, jobTitle } from './npcgen.js';
 import { findPath } from './pathfind.js';
 import { BLOCKS, B, CROPS, cropMature, isFarmland } from '../world/blocks.js';
 import { ITEMS, rollDrops, ammoOf } from '../world/items.js';
+import { guardPlan, stepAside } from './tactics.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { dialogueLine, greetLine } from '../game/dialogue.js';
 import { lawOn } from '../sim/laws.js';
@@ -1203,9 +1204,30 @@ export class NPC extends Entity {
     this.say(this.rng.pick(['Fall back! I need help!', 'I\'m hurt! To me!', 'Help me hold them!']), 2.5, '#ffb080');
   }
 
+  // A hurt guard who's fallen back, with a salve in their kit and nothing
+  // right on top of them: they drink it (once in a while, not every
+  // breath). True if they did.
+  patchUp(t, d = t ? this.distTo(t) : 99) {
+    if (this.hp >= this.maxHp * 0.6 || d < 2 || this.windup) return false;
+    if (this.game.sim.abs - (this.salvedAt ?? -99) < 10) return false;
+    const inv = this.rec.inv || [];
+    const k = ['healing_salve'].find((q) => invCount(inv, q) > 0);
+    if (!k) return false;
+    invTake(inv, k, 1);
+    this.salvedAt = this.game.sim.abs;
+    this.hp = Math.min(this.maxHp, this.hp + (ITEMS[k].heal || 8));
+    this.doAction?.(0.5);
+    this.say(this.rng.pick(['*drinks a salve*', '*gulps down a salve*', 'That\'s better.']), 1.6, '#a0ffa0');
+    this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 8, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.6, gravity: -10, glow: true });
+    this.game.audio?.play('gulp', this);
+    return true;
+  }
+
   retreatRun() {
     const b = this.buddy;
     const t = this.threat;
+    // (Back with the others: a salve first, if there's one.)
+    if (b && !b.dead && this.distTo(b) <= 3 && this.patchUp(t)) return;
     if (!b || b.dead || this.stateT > 20 || this.followPath({ x: b.x, z: b.z }, 2)) {
       this.buddy = null;
       if (t && !t.dead) {
@@ -2865,6 +2887,9 @@ export class NPC extends Entity {
       if (game.alarmNeeded(this, t, 30)) return this.startAlarm(t, 'retreat');
       return this.startRetreat(t);
     }
+    // Fallen back hurt, out of the press: a salve from their kit (bought
+    // from the herbalist or a trader: see econ.guardSupplies). Round 50.
+    if (guard && this.retreated && this.patchUp(t, d)) return;
     if (this.retreated && this.hp >= this.maxHp * 0.6) this.retreated = false;
     if (guard && t.kind === 'player' && !this.warband) {
       // Waiting for an answer to "Halt!".
@@ -2927,12 +2952,40 @@ export class NPC extends Entity {
       this.aimShot(t, dt, 1.5);
       return;
     }
+    // (Round 50) One of a body of the watch: round a few foes, in a line
+    // against many, never all in a heap (see tactics.js).
+    let slot = null;
+    let slotCrowded = false;
+    if (guard && !this.warband && !this.hired) {
+      // (Not on top of another of the watch: a step aside first.)
+      const aside = !this.moving && stepAside(game, this);
+      if (aside) {
+        this.path = null;
+        this.followPath(aside, 0);
+        return;
+      }
+      const plan = guardPlan(game, this, t);
+      if (plan) {
+        if (plan.foe && plan.foe !== t && !plan.foe.dead) {
+          this.threat = plan.foe;
+          this.path = null;
+          return;
+        }
+        if (!plan.fight) slot = plan.spot;
+        // (In the line: into their place first, not swinging on the way.)
+        slotCrowded = !!plan.crowded || (!!plan.line && !!slot);
+        if (plan.hold && !inReach(this, t, styleOf(this, true))) {
+          this.face(t.x, t.z);
+          return;
+        }
+      }
+    }
     // Each weapon its own way: a spear thrusts from two paces, an axe
     // chops slow and heavy, a dagger stabs twice (see combat.js). The blow
     // is wound up first, so it can be seen coming.
     const st = styleOf(this, true);
     const reach = st.reach;
-    if (inReach(this, t, st)) {
+    if (inReach(this, t, st) && !(slot && slotCrowded)) {
       this.face(t.x, t.z);
       // (Dazzled by a topaz: not this moment.) The watch fights hard: a
       // guard strings blows together now and then, and won't be shaken
@@ -2948,6 +3001,18 @@ export class NPC extends Entity {
         this.windup.dur *= swingMult(this) * (guard ? 0.88 : this.adventurer ? 0.9 : 1.05);
         if (combo && this.rng.chance(0.4)) this.say(this.rng.pick(['Have at you!', 'Yield!', 'Stand and fight!', 'Hah!']), 1, '#ffd0a0');
       }
+      return;
+    }
+    // (To their own place round the foe, or in the line: the way there
+    // looked at again as it shifts.)
+    if (slot) {
+      const moved = !this.tacGoal || this.tacGoal.x !== slot.x || this.tacGoal.z !== slot.z;
+      if (!this.path || !this.tacGoal || (moved && this.stateT - (this.chaseSet || 0) > 0.6)) {
+        this.chaseSet = this.stateT;
+        this.tacGoal = slot;
+        this.path = null;
+      }
+      this.followPath(this.tacGoal, 0);
       return;
     }
     if (!this.path || this.stateT - (this.chaseSet || 0) > 0.8) {
