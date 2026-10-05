@@ -64,7 +64,7 @@ export function steer(p, dt, input) {
   const right = down('KeyD', 'ArrowRight');
   // Turning: a little slower at full tilt.
   // (A sailor gets more out of each stroke.)
-  const sail = p.kind === 'player' && heroHas(p.game.hero, 'sailor') ? 1.35 : 1;
+  const sail = p.kind === 'player' ? (heroHas(p.game.hero, 'sailor') ? 1.35 : 1) * (heroHas(p.game.hero, 'seasick') ? 0.75 : 1) : 1;
   const turn = RAFT.turn * sail * (1 - Math.min(0.4, Math.abs(r.v) / (RAFT.max * sail) * 0.4));
   if (left) r.ang += turn * dt;
   if (right) r.ang -= turn * dt;

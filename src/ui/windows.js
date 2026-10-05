@@ -17,6 +17,7 @@ import { BUILDING_NAMES } from '../world/settlement.js';
 import { repLevel, RENOWN } from '../sim/sim.js';
 import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
+import { GAME_VERSION, versionText, sameVersion } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
 import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
@@ -351,6 +352,7 @@ export class CraftWindow extends Window {
     let made = 0;
     const madeKeys = [];
     const saved = [];
+    let burnt = 0;
     for (let t = 0; t < times; t++) {
       if (!this.canCraft(inv, r)) break;
       const used = [];
@@ -358,6 +360,12 @@ export class CraftWindow extends Window {
       // A cook gets more out of the pot; a tinker wastes less.
       const food = ITEMS[r.out]?.kind === 'food';
       const extra = food && heroHas(game.hero, 'cook') && Math.random() < 0.35 ? 1 : 0;
+      // (One who burns the food: now and then the whole lot's ruined.)
+      if (food && heroHas(game.hero, 'burner') && Math.random() < 0.2) {
+        burnt++;
+        made++;
+        continue;
+      }
       // Arms, armour and tools come off the bench with stars of their own
       // (a tinker's hand a little finer): see world/quality.js.
       const out = starable(r.out) ? starGear(r.out, { origin: 'c', tinker: heroHas(game.hero, 'tinker') }) : r.out;
@@ -373,8 +381,9 @@ export class CraftWindow extends Window {
     }
     if (made) {
       game.audio?.play('craft');
-      game.stats.crafted += made;
-      this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * made}`, C.green);
+      game.stats.crafted += made - burnt;
+      if (made > burnt) this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * (made - burnt)}`, C.green);
+      if (burnt) this.ui.msg(`You burnt ${burnt > 1 ? `${burnt} batches` : 'a batch'}: nothing to eat from ${burnt > 1 ? 'them' : 'it'}.`, '#ff9060');
       // (Each piece's stars, and anything special about it.)
       for (const k of madeKeys) this.ui.msg(`${'★'.repeat(ITEMS[k].stars)} ${ITEMS[k].name}${ITEMS[k].mods.length ? `: ${ITEMS[k].mods.length > 1 ? 'modifiers' : 'a modifier'}!` : ''}`, ITEMS[k].mods.length ? '#f0c070' : '#ffd060');
       if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
@@ -1615,7 +1624,11 @@ export class SaveSlotsWindow extends Window {
         const m = q.meta;
         g.text(8, y, `${auto ? 'Autosave: ' : ''}${m.name || 'Wanderer'}`.slice(0, 30), usable ? C.white : C.dim);
         g.text(this.w - 4 - 14, y, agoText(m.savedAt).padStart(14), C.faint);
-        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 12), C.dim);
+        // (And the version it was made in: another one's marked.)
+        const ver = versionText(m.gv);
+        const same = sameVersion(m.gv);
+        g.text(8, y + 1, `Day ${m.day}, ${timeText(m.minute)} · ${cap(String(m.place || '?'))} · seed ${m.seed}`.slice(0, this.w - 14 - ver.length), C.dim);
+        g.text(this.w - 4 - ver.length, y + 1, ver, same ? C.faint : C.orange);
       } else g.text(8, y, auto ? 'Autosave (empty: written every morning at 7:00)' : '- empty -', C.faint);
       this.hit(2, y, this.w - 4, 2, () => {
         this.sel = i;
@@ -1676,6 +1689,55 @@ export class SaveSlotsWindow extends Window {
       this.pick(game);
     }
     if (!['Enter', 'Space', 'KeyX', 'Delete'].includes(k.code)) this.confirm = this.confirm && this.confirm.id === this.store.list()[this.sel]?.id ? this.confirm : null;
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------- yes or no
+// A question to answer before going on (a world from another version of
+// the game, say): [Y] goes ahead, [N] or Esc doesn't.
+export class ConfirmWindow extends Window {
+  // (`only`: just the one button, to say it's been read.)
+  constructor(ui, title, text, onYes, { yes = 'Yes', no = 'No', onNo = null, only = false } = {}) {
+    const lines = wrap(text, 52);
+    super(ui, 58, lines.length + 7, { kind: 'confirm' });
+    this.title = title;
+    this.lines = lines;
+    this.onYes = onYes;
+    this.onNo = onNo;
+    this.yes = yes;
+    this.no = no;
+    this.only = only;
+  }
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: this.title });
+    this.lines.forEach((l, i) => g.text(3, 2 + i, l, C.fg));
+    const y = this.h - 3;
+    const btn = (x, label, fn, col) => {
+      const w = label.length + 2;
+      const hov = this.hovering(x, y, w, 1);
+      g.fill(x, y, w, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
+      g.text(x + 1, y, label, hov ? C.white : col);
+      this.hit(x, y, w, 1, fn);
+    };
+    if (this.only) {
+      btn(3, `[ENTER] ${this.yes}`, () => this.answer(true), C.hi);
+      return;
+    }
+    btn(3, `[Y] ${this.yes}`, () => this.answer(true), C.hi);
+    btn(this.w - this.no.length - 9, `[N] ${this.no}`, () => this.answer(false), C.fg);
+  }
+  answer(yes) {
+    this.close();
+    if (yes) this.onYes && this.onYes();
+    else this.onNo && this.onNo();
+  }
+  onKey(k) {
+    if (this.only) {
+      if (['Enter', 'Escape', 'Space', 'KeyY'].includes(k.code)) this.answer(true);
+    } else if (k.code === 'KeyY' || k.code === 'Enter') this.answer(true);
+    else if (k.code === 'KeyN' || k.code === 'Escape') this.answer(false);
     return true;
   }
 }
@@ -1872,6 +1934,9 @@ export class TitleWindow extends Window {
       this.hit(x - 1, y, 40, 1, () => this.choose(k));
     });
     if (Math.floor(t * 2) % 2) g.center(this.h - 2, 'PRESS A KEY', C.faint);
+    // The game's version, bottom right.
+    const ver = versionText(GAME_VERSION);
+    g.text(this.w - ver.length - 1, this.h - 1, ver, C.dim);
     const ctx = this.ui.audio && this.ui.audio.ctx;
     if (!ctx || ctx.state !== 'running') g.center(this.h - 4, '♪ click anywhere for music and sound', C.dim);
     else {

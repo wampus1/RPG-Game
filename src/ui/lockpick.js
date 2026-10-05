@@ -35,7 +35,7 @@ export class LockWindow extends Window {
     this.closeOnOutside = false;
     const h = game.hero;
     const has = (k) => !!h && ((h.traits || []).includes(k) || (h.specialties || []).includes(k));
-    this.lock = new Lock(spec.tier, spec.seed, { steady: has('steady_hands'), agi: (h && h.stats && h.stats.agi) || 2, rank: mastery(game, 'lockpick').rank });
+    this.lock = new Lock(spec.tier, spec.seed, { steady: has('steady_hands'), heavy: has('heavy_handed'), agi: (h && h.stats && h.stats.agi) || 2, rank: mastery(game, 'lockpick').rank });
     this.sel = 0;
     this.t = 0;
     this.say = { text: this.lock.order ? 'Find the pin that binds: it\'s stiff, and it quivers.' : 'Flick a pin up; turn as its gap meets the line.', color: C.dim, t: 0 };

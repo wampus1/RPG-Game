@@ -10,7 +10,7 @@ import { jobTitle } from '../src/entities/npcgen.js';
 import { runCommand } from '../src/game/commands.js';
 import { newsWeight, LedgerWindow } from '../src/ui/windows.js';
 import { chainFor, babble, smallTalk } from '../src/game/markov.js';
-import { SPECIALTIES, TRAITS, normalizeHero, staminaBonus, priceMult, repGainMult } from '../src/game/hero.js';
+import { TRAITS, normalizeHero, staminaBonus, priceMult, repGainMult } from '../src/game/hero.js';
 import { weaponStyle, STYLES, resolveHit, roll, COST } from '../src/game/combat.js';
 import { TECHS } from '../src/sim/tech.js';
 import { ignite, tickFires } from '../src/game/fire.js';
@@ -123,15 +123,15 @@ test('small talk comes out of word chains, in each people\'s own voice and each 
 });
 
 // ------------------------------------------------------------ character
-test('more skills and traits to choose from, each with a use', () => {
-  assert.ok(Object.keys(SPECIALTIES).length >= 15);
-  assert.ok(Object.keys(TRAITS).length >= 16);
+test('more traits to choose from (the old skills among them), each with a use', () => {
+  // (Round 48: skills are traits now, and no flaw takes away what a stat gives.)
+  assert.ok(Object.values(TRAITS).filter((t) => !t.flaw).length >= 30);
   assert.ok(Object.values(TRAITS).filter((t) => t.flaw).length >= 6, 'flaws too');
   const h = normalizeHero({ specialties: ['duelist', 'marksman'], traits: ['tireless', 'outlander'] });
-  assert.deepEqual(h.specialties, ['duelist', 'marksman']);
+  assert.deepEqual(h.traits, ['duelist', 'marksman', 'tireless'], 'skills carried over; a flaw that\'s gone dropped');
   // (Tireless is worth thirty tenths of breath, on top of what agility gives.)
-  assert.equal(staminaBonus(h) - staminaBonus(normalizeHero({ ...h, traits: ['outlander'] })), 30);
-  assert.ok(priceMult(h) > priceMult(normalizeHero({ traits: [] })), 'an outlander pays more');
+  assert.equal(staminaBonus(h) - staminaBonus(normalizeHero({ traits: [] })), 30);
+  assert.ok(priceMult(h) === priceMult(normalizeHero({ traits: [] })), 'nothing changes the price but charm and haggling');
   assert.ok(repGainMult(normalizeHero({ traits: ['silver_tongue'] })) > repGainMult(normalizeHero({ traits: [] })));
 });
 

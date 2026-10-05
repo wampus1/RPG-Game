@@ -3497,6 +3497,83 @@ together on your network" above for how to start. How it works:
   - Its beacon now rises from the new crown, and its runes climb the whole
     height. Standing behind it shows it faint, so it never hides you.
 
+## Round 48: the Fallen Star, traits reworked, versions
+
+- *Tool modifiers only add.* Two of them took away what every player can
+  do, so they're replaced (see `MODS.tool` in `world/quality.js`):
+  - **Wide** (pick, shovel) dug out the block above every block you broke.
+    That stopped single-block digging, step cuts and layer-locked work.
+    It's now **Clean-cutting**: the second block of a two-high dig costs
+    no extra time, and a step cut takes half as long. It never digs more
+    than you'd dig without it.
+  - **Sawing** (axe) turned every log into planks, so you couldn't get
+    logs. It's now **Woodsman's**: a felled tree gives a third more logs.
+  - Tools saved with the old modifiers load as the new ones.
+- *Elevation numbers only with a block in hand.* The +1/-2 numbers next to
+  the cursor now show only while you hold a block to place.
+- *Traits, reworked* (see `game/hero.js`):
+  - **Skills are traits now**, in one list on one tab (the character
+    screen has four tabs: Basics, Looks, Stats, Traits). Older characters'
+    skills carry over as traits.
+  - **Plain descriptions** that say what changes, with the numbers, e.g.
+    "Fish bite 25% sooner, the strike window lasts 50% longer and you reel
+    in 25% faster." The stat descriptions are written the same way.
+  - **More of them:** 33 good traits, including three new ones:
+    - Night Eyes: your light reaches 6 blocks at night and underground.
+    - Fire-Hardened: burning hurts you half as often.
+    - Northern Blood: cold slows you half as long.
+  - **10 flaws.** No flaw touches anything a stat gives (health, stamina,
+    speed, damage, digging, prices, liking). Each costs you somewhere
+    else:
+    - Night Blind, Poor Swimmer, Heavy-Handed, Burns the Food,
+      Butterfingers, Unlucky, Seasick and Saddle-Sore are new.
+    - Squeamish and Notorious stay.
+    - Frail, Blunt, Heavy-Footed, Clumsy, Short of Breath and Outlander
+      are gone; a character that had one simply loses it.
+  - **Picks:** up to 4 good traits, plus one more for each flaw (up to 2
+    flaws). Flaws no longer give stat points.
+  - **The list scrolls** (wheel, arrows, or moving down it). Good traits
+    come first, then a divider, then the flaws. Each line shows the start
+    of its description, and the whole of it shows under the list and in
+    the box on the right. Picking past your limit says why.
+- *The game's version* (`src/version.js`, `GAME_VERSION`, now 0.48.0; also
+  in `package.json`):
+  - It's shown at the bottom right of the title screen.
+  - Every save records the version it was made in, and the save list
+    shows it (orange when it differs).
+  - Loading a world from another version (or from before versions were
+    recorded) warns you first. You can load it anyway or go back.
+  - A hosted world advertises its version. Joining a world on another
+    version is refused by the relay. The join list marks such worlds, and
+    choosing one says which version each side has and that you can't join
+    it.
+- *New origin: Fallen Star* (see `game/starfall.js`, `render/wing.js`):
+  - **The opening scene** is a painted night over one of Thessa's
+    villages. Its people stand in the lane looking up, some pointing, and
+    a child shouts. A new star grows and comes down behind the hills, the
+    night turns white, and a dome of light swells up. The shockwave rolls
+    across the fields and knocks the villagers flat. Then black, and what
+    you remember. ENTER skips it.
+  - **Where you start:** a crater of scorched earth with ash at its
+    heart, in the hills near that village.
+  - **The wing:** one white wing at your back, edged in gold. It glows
+    (drawn over the dark at night) and sheds motes of light. It shows on
+    the character screen's preview too.
+  - **The second roll:** right after a dodge roll, you can roll again
+    without stamina. That spends the wing: it goes thin and grey, and
+    grows back over 20 seconds (`WING_BACK`), with a flash when it's
+    whole.
+  - **Wary townsfolk:** the superstitious and gloomy, and about a third
+    of the rest, think 12 points less of you. Townsfolk often greet you
+    about your wing (warily or with wonder; children want a feather), and
+    there's a new topic, "About my wing...".
+  - **In a world with others:** a player joining as a Fallen Star lands in
+    a crater of their own and sees the scene on their own screen. When
+    their star strikes, every other player on Thessa sees the flash, is
+    shaken (harder the closer they are) and is told which way it fell.
+    Players nearby see the blast itself, and the villagers close by cry
+    out.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

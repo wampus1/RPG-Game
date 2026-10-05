@@ -34,15 +34,16 @@ export function lockGrade(tier) {
 
 export class Lock {
   // `seed`: the lock's own (a chest's always picks the same); `steady`:
-  // steady hands (wider gaps, less strain on a slip).
-  constructor(tier, seed, { steady = false, agi = 2, rank = 1 } = {}) {
+  // steady hands (wider gaps, less strain on a slip); `heavy`: heavy
+  // hands (narrower, more strain).
+  constructor(tier, seed, { steady = false, heavy = false, agi = 2, rank = 1 } = {}) {
     const G = lockGrade(tier);
     const rng = new RNG(hash4(seed >>> 0, 0x10c4));
     this.grade = G;
     this.metal = G.metal;
     this.steady = steady;
     // (Wider with steady hands, quick ones, and practice: see mastery.js.)
-    const wide = (steady ? 1.4 : 1) * (1 + 0.05 * (agi - 2)) * (1 + 0.04 * (rank - 1));
+    const wide = (steady ? 1.4 : 1) * (heavy ? 0.7 : 1) * (1 + 0.05 * (agi - 2)) * (1 + 0.04 * (rank - 1));
     this.pins = Array.from({ length: G.pins }, () => ({
       h: 0,
       v: 0,
@@ -62,7 +63,7 @@ export class Lock {
     if (!G.binding) this.order = null;
     for (const i of rng.shuffle(this.pins.map((_, k) => k)).slice(0, G.spools)) this.pins[i].spool = true;
     this.stress = 0;
-    this.missStrain = (steady ? 0.22 : 0.32) * (1 - 0.03 * (rank - 1));
+    this.missStrain = (steady ? 0.22 : heavy ? 0.42 : 0.32) * (1 - 0.03 * (rank - 1));
     this.turn = 0;
     this.open = false;
   }

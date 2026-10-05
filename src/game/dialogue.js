@@ -26,6 +26,7 @@ import { smallTalk } from './markov.js';
 import { gossipLines } from '../sim/society.js';
 import { geoTalk } from './geotalk.js';
 import { fortuneOf } from '../sim/prosperity.js';
+import { isStar, starGreeting, wingTalk } from './starfall.js';
 
 function pick(rng, arr) {
   return arr[Math.floor(rng.next() * arr.length)];
@@ -118,6 +119,9 @@ function openingRaw(npc, game) {
       : `${name}, we need to talk. People keep coming to me about you: stealing, fighting, rudeness. As mayor I can't let it go on. Change your ways, or lose your citizenship.`;
   }
   if (game.isWanted(s.id) && rec.job !== 'guard') return pick(rng, ['I have nothing to say to the likes of you.', 'Guards! Someone help!', 'Please... just go.']);
+  // A fallen star: the first time, and now and then after, it's your wing
+  // they talk about (some of them warily: see starfall.js).
+  if (isStar(game.hero) && (!entry.met || rng.next() < 0.2)) return starGreeting(rec, s.id, () => rng.next());
   // Your own family (if you were born here).
   const kin = sim.familyOf(rec);
   const first = name.split(' ')[0];
@@ -337,6 +341,7 @@ export function topicsFor(npc, game) {
   }
   if (sim.citizen && sim.citizen.sid === s.id && sim.citizen.host === rec.home && rec.home !== null) add('host', 'Thanks for putting me up.');
   if (rec.job === 'priest') add('bless', 'A blessing, please. (¤5)');
+  if (isStar(game.hero)) add('wing', 'About my wing...');
   add('ask', 'Can I ask you about...');
   add('chat', rec.age === 'child' ? 'What are you up to?' : 'How are things?');
   if (!mine && !npc.hired && !npc.visit) add('favor', rec.age === 'child' ? 'Want some help with anything?' : 'Need a hand with anything?');
@@ -1633,6 +1638,7 @@ function respondRaw(npc, game, id, arg) {
         return { lines: [tn === 'cold' ? `Figure it out yourself. ...Fine. It's ${dir}.` : `The ${pl.label.replace(/^The /, '')} is ${dir}.`] };
       }
       return { lines: ['Where to?'], choices: placesFor(npc, game).map((pl) => ({ id: 'directions', arg: pl.key, label: pl.label })) };
+    case 'wing': return { lines: wingTalk(rec, s.id) };
     case 'surrender': {
       const sid = s.id;
       return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid, npc) };

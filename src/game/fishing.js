@@ -50,7 +50,7 @@ export const KINDS = {
 // rarer kinds more often as you rise; the lucky pull up coins and gems
 // twice as often).
 export function rollCatch(rand, o = {}) {
-  const { lucky = false, rank = 1, salt = false, rain = false, night = false, isle = null } = o;
+  const { lucky = false, unlucky = false, rank = 1, salt = false, rain = false, night = false, isle = null } = o;
   const list = [];
   for (const [k, c] of Object.entries(KINDS)) {
     if (c.rank > rank) continue;
@@ -60,6 +60,7 @@ export function rollCatch(rand, o = {}) {
     let w = c.w;
     if (c.rank > 1) w *= 1 + 0.25 * (rank - c.rank);
     if ((k === 'coin' || k === 'gem') && lucky) w *= 2;
+    if ((k === 'coin' || k === 'gem') && unlucky) w = 0;
     if (c.rain && rain) w *= c.rain;
     if (night && (k === 'eel' || k === 'pike' || k === 'glowfin')) w *= 1.6;
     list.push([k, w]);
@@ -122,7 +123,7 @@ export function hook(game, rand = Math.random) {
   const rank = mastery(game, 'fishing').rank;
   const ow = game.world.ow;
   const isle = ow.islandAt ? ow.islandAt(game.player.x, game.player.z) || ow.islandAt(f.x, f.z) : null;
-  const kind = rollCatch(rand, { lucky: heroHas(game.hero, 'lucky'), rank, salt: saltAt(game), rain: game.weather?.kind === 'rain', night: game.minute < 300 || game.minute >= 1260, isle });
+  const kind = rollCatch(rand, { lucky: heroHas(game.hero, 'lucky'), unlucky: heroHas(game.hero, 'unlucky'), rank, salt: saltAt(game), rain: game.weather?.kind === 'rain', night: game.minute < 300 || game.minute >= 1260, isle });
   const K = KINDS[kind];
   // (How big: the bigger, the harder it fights, and the more it lands.)
   const size = K.item ? 1 : 0.75 + rand() * (0.45 + 0.05 * rank);
@@ -229,7 +230,7 @@ export function updateFishing(game, dt, input, rand = Math.random) {
     }
     if (f.t <= 0) {
       f.phase = 'bite';
-      f.t = BITE_WINDOW * (heroHas(game.hero, 'angler') ? 1.5 : 1);
+      f.t = BITE_WINDOW * (heroHas(game.hero, 'angler') ? 1.5 : 1) * (heroHas(game.hero, 'butterfingers') ? 0.67 : 1);
       f.dip = 1;
       p.emoteShow('!', '#ffe070', f.t);
       game.audio?.play('bite');
@@ -276,7 +277,7 @@ export function updateFishing(game, dt, input, rand = Math.random) {
   }
   const inside = Math.abs(f.fish - f.zone) <= W / 2;
   f.inside = inside;
-  f.progress += (inside ? 0.28 * (heroHas(game.hero, 'angler') ? 1.25 : 1) / Math.max(1, f.size || 1) : -0.2 * f.fight) * dt;
+  f.progress += (inside ? 0.28 * (heroHas(game.hero, 'angler') ? 1.25 : 1) * (heroHas(game.hero, 'butterfingers') ? 0.8 : 1) / Math.max(1, f.size || 1) : -0.2 * f.fight) * dt;
   // Something glinting: in your zone a moment and it's yours.
   const tr = f.treasure;
   if (tr && !tr.done && f.t >= tr.at) {

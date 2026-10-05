@@ -200,7 +200,7 @@ test('a thorned shield gives back what it turns; fleet and hale armour', () => {
   assert.ok(p.maxHp >= before);
 });
 
-test('a smelting pick brings ore up as metal; a sawing axe fells planks', () => {
+test('a smelting pick brings ore up as metal; a woodsman\'s axe gives more logs (logs still)', () => {
   const { game, p } = start();
   const pick = Object.keys(ITEMS).find((k) => ITEMS[k].tool === 'pick' && starable(k));
   hold(p, starKey(pick, 3, 'c', 600, ['smelting']));
@@ -210,10 +210,11 @@ test('a smelting pick brings ore up as metal; a sawing axe fells planks', () => 
   const axe = Object.keys(ITEMS).find((k) => ITEMS[k].tool === 'axe' && starable(k));
   const log = Object.keys(B).find((k) => /^log/.test(k));
   if (axe && log) {
-    hold(p, starKey(axe, 3, 'c', 600, ['sawing']));
-    const d = [{ item: ITEMS[log] ? log : 'log_oak', count: 1 }];
+    hold(p, starKey(axe, 3, 'c', 600, ['lumber']));
+    const d = [{ item: log, count: 3 }];
     toolDrops(game, p, B[log], d);
-    assert.ok(/planks/.test(d[0].item), d[0].item);
+    assert.equal(d[0].item, log, 'still logs');
+    assert.equal(d[0].count, 4);
   }
 });
 

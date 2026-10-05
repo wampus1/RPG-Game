@@ -1,6 +1,7 @@
 // Save slots: five of your own plus an autosave, each kept under its own
 // key in browser storage, with a small index (who, where, when) so the
 // slot list can be shown without reading every save.
+import { GAME_VERSION } from '../version.js';
 export const SLOTS = ['auto', '1', '2', '3', '4', '5'];
 // Worlds you host for others, kept apart (see multiplayer.js).
 export const MP_SLOTS = ['mp1', 'mp2', 'mp3'];
@@ -28,6 +29,8 @@ export function metaOf(game) {
     seed: game.seed,
     place,
     savedAt: Date.now(),
+    // (Which version of the game it was saved in: see version.js.)
+    gv: GAME_VERSION,
     // (A world played with others: its name, and how many have played in it.)
     ...(game.partyWorld ? { world: game.partyWorld.name, players: new Set([...(game.partyChars ? game.partyChars.keys() : []), ...(game.seats || []).map((q) => q.id)]).size || 1 } : {}),
   };

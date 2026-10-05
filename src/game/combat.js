@@ -426,7 +426,7 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
     // (A Phase Blade's edge is never quite where the shield is.)
     const phase = ITEMS[(opts && opts.weapon) || mainWeapon(a)]?.pierce || 0;
     const power = Math.min(0.95, Math.max(0.15, (sh ? sh.block : 0.4) + (wall ? 0.1 : 0) - (st.heavy ? 0.3 : 0) - (st.charge ? 0.25 : 0) - (st.pierce || 0) - phase * 0.7));
-    const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * (heroHas(hero, 'clumsy') ? 1.35 : 1) * blockCostMult(v) * (st.drain || 1);
+    const cost = (0.6 + amount * 0.3 * (st.heavy ? 1.5 : 1)) * (wall ? 0.6 : 1) * blockCostMult(v) * (st.drain || 1);
     const before = amount;
     if (v.kind === 'player') {
       if ((v.stamina || 0) >= cost) {
@@ -767,8 +767,12 @@ function tickSwing(game, p, dt) {
 
 // SPACE: a roll in the way you're going (or facing), clear of a blow.
 export function roll(game, p, dirv = null) {
+  // A fallen star's wing: a second roll straight after the first (at its
+  // end, or just after), with no stamina: the wing's spent instead, and
+  // grows back (see Player.update).
+  const wingRoll = p.rollCd > 0 && !!p.wing && p.wing.k >= 0.999 && !(p.rollT > 0.12);
   // (Not with an arrow on the string, drawing or holding it.)
-  if (p.rollCd > 0 || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
+  if ((p.rollCd > 0 && !wingRoll) || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
   // (Swallowed: no room to roll in there.)
   if (p.swallowed) return false;
   if (p.grabbedT > 0) {
@@ -777,8 +781,8 @@ export function roll(game, p, dirv = null) {
   }
   // (Mid-stride is fine: the roll carries on from where you are.)
   const from = p.moving ? p.renderPos() : null;
-  const cost = COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * (heroHas(game.hero, 'clumsy') ? 1.35 : 1) * rollCostMult(p);
-  if ((p.stamina ?? MAX_STAMINA) < cost * 0.6) {
+  const cost = wingRoll ? 0 : COST.roll * (heroHas(game.hero, 'nimble') ? 0.5 : 1) * rollCostMult(p);
+  if (!wingRoll && (p.stamina ?? MAX_STAMINA) < cost * 0.6) {
     game.ui.msg('Too winded to roll.', '#c8c8c8', true);
     return false;
   }
@@ -809,7 +813,15 @@ export function roll(game, p, dirv = null) {
     }
     if (n >= far && land && land.n === n) break;
   }
-  spend(p, cost);
+  if (cost) spend(p, cost);
+  if (wingRoll) {
+    // (The wing beats once, hard, and goes thin and grey.)
+    p.wing.k = 0;
+    p._wingT = 0;
+    game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 16, color: ['#fffaf0', '#ffe7a0', '#ffffff'], up: 24, speed: 36, life: 0.7, gravity: 10, glow: true });
+    game.renderer.emit(p.x, p.y + 1, p.z, { n: 6, color: ['#f4efe2', '#d8d0bc'], up: 10, speed: 20, life: 1.2, gravity: 6, shape: 'puff' });
+    game.audio?.play('swing', p);
+  }
   p.rollT = 0.36 + (far - 2) * 0.08;
   // (Tumbling shakes spores off you.)
   if (p.spores > 0) shakeSpores(game, p);

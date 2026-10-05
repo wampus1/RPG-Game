@@ -2,6 +2,7 @@
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
 import { asSeat } from '../game/party.js';
+import { isStar, starWary } from '../game/starfall.js';
 import { GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
@@ -446,6 +447,9 @@ export class Sim {
     let v = this.repEntry(sid, rec.idx).v + this.areaMod(sid) + opinionBonus(this.game.hero);
     // The devout get on with priests and the pious.
     if (heroHas(this.game.hero, 'devout') && (rec.job === 'priest' || (rec.traits || []).includes('devout'))) v += 15;
+    // A fallen star, wing and all: some folk are wary of you (see
+    // starfall.js).
+    if (isStar(this.game.hero) && starWary(rec, sid)) v -= 12;
     // Children don't hear what other towns' mayors write about you.
     if (rec.age === 'child') v += this.diplomacy.penalty(sid);
     const c = this.citizen;

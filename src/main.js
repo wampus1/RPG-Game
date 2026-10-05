@@ -6,7 +6,8 @@ import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
-import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow } from './ui/windows.js';
+import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow } from './ui/windows.js';
+import { GAME_VERSION, versionText, sameVersion } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
 import { SaveStore, openSaveDB } from './game/saves.js';
@@ -17,7 +18,7 @@ import { Music, musicMood, moodUrgent } from './game/music.js';
 import { Accounts, profileOf } from './net/account.js';
 import { challengeBout } from './game/bout.js';
 import { HostNet } from './net/host.js';
-import { GuestNet } from './net/guest.js';
+import { GuestNet, refusal } from './net/guest.js';
 import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
 import { windowPixels } from './net/uiwire.js';
 import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow } from './ui/multiplayer.js';
@@ -40,6 +41,7 @@ const music = new Music(audio);
 window.__music = music;
 const ui = new UI(audio);
 ui.music = music;
+window.__ui = ui;
 const input = new Input(screen, crt);
 window.__input = input;
 let game = null;
@@ -118,8 +120,16 @@ function loadFrom(id) {
       ui.msg('That save is from an older world (before the Dagoni Islands) and can\'t be loaded into this one.', '#ff5a50');
       return;
     }
-    startGame(null, data, id);
+    versionCheck(data, () => startGame(null, data, id));
   }).catch((e) => ui.msg('Load failed: ' + e.message, '#ff5a50'));
+}
+
+// A world made in another version of the game: asked first (it may not
+// play right), then `go`.
+function versionCheck(data, go) {
+  if (sameVersion(data.gv)) return go();
+  ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', `This world was made in ${versionText(data.gv)} of the game. You are playing ${versionText(GAME_VERSION)}. Some things in it may not work as they should. Load it anyway?`, go, { yes: 'Load it', no: 'Back' }));
+  return null;
 }
 
 // `opts.host`: { name } to host the world for others on the network.
@@ -412,6 +422,8 @@ const mpCtx = {
     },
     continueWorld: (id) => continueHosted(id),
     join: (at = null) => joinWorld(at),
+    // (Hosted in another version of the game: you can't join it.)
+    otherVersion: (w) => ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', refusal('gameversion', { host: w.gv || null }), null, { yes: 'OK', only: true })),
     deleteWorld: (id) => store.remove(id),
   },
 };
@@ -449,7 +461,7 @@ function continueHosted(id) {
       if (!data) return ui.notify('That world\'s save is empty.');
       if (!(data.v >= SAVE_VERSION)) return ui.notify('That world is from an older version of the game and can\'t be loaded.');
       const name = (data.party && data.party.world && data.party.world.name) || 'My world';
-      return refreshLan().then(() => ui.open(new HostWindow(ui, { name, lan, onStart: (nm) => startGame(null, data, id, null, { host: { name: nm } }) })));
+      return versionCheck(data, () => refreshLan().then(() => ui.open(new HostWindow(ui, { name, lan, onStart: (nm) => startGame(null, data, id, null, { host: { name: nm } }) }))));
     }).catch((e) => ui.notify('Load failed: ' + e.message));
   });
 }
@@ -467,7 +479,7 @@ function beginHosting(g, name) {
   }
   const sess = { role: 'host', ws, net: null, world: name, game: g };
   session = sess;
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: accounts.profile, world: { name }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: accounts.profile, world: { name, gv: GAME_VERSION }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
   ws.onmessage = (ev) => {
     if (session !== sess) return;
     const text = String(ev.data);
@@ -581,13 +593,13 @@ function joinWorld(at = null) {
         for (const p of list || []) if (accounts.isFriend(p.id)) accounts.refreshFriend(p);
       },
       onFriend: (msg) => friendWord(msg),
-      onEnd: (why) => leaveWorld(why),
+      onEnd: (why, title) => leaveWorld(why, title),
     });
     sess.net = net;
     net.openPause = () => openGuestPause();
     net.onLocalKey = (k) => guestKey(k);
     net.onProfile = (p) => openProfile(p);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'guest', account: accounts.profile }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, gv: GAME_VERSION, role: 'guest', account: accounts.profile }));
     ws.onmessage = (ev) => {
       if (session === sess) net.receive(String(ev.data));
     };
@@ -622,7 +634,9 @@ function buildGuestGame(save, sess) {
   return g;
 }
 
-function leaveWorld(why) {
+// (`title`: said in a window of its own, to be read and dismissed, rather
+// than a notice at the side: see GuestNet's refusals.)
+function leaveWorld(why, title = null) {
   const sess = session;
   session = null;
   ui.guest = false;
@@ -639,7 +653,8 @@ function leaveWorld(why) {
   ui.closeAll();
   ui.messages = [];
   ui.open(new TitleWindow(ui, store));
-  if (why) ui.notify(why, null, '#ffb080');
+  if (why && title) ui.open(new ConfirmWindow(ui, title, why, null, { yes: 'OK', only: true }));
+  else if (why) ui.notify(why, null, '#ffb080');
 }
 
 // In someone else's world, your own pause (the world goes on).

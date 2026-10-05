@@ -36,10 +36,15 @@ import { CrewWindow } from '../ui/crewtalk.js';
 export function startIntro(game) {
   const h = game.hero;
   if (!h) return null;
+  // A fallen star: a painted scene (see starfall.js), played as a scene.
+  if (h.origin === 'star') {
+    game.scene = game.starScene(game.starAt || null);
+    return game.scene;
+  }
   let cs = null;
   try {
     if (h.origin === 'native' && game.sim.citizen) cs = new HomeIntro(game);
-    else if (h.origin !== 'native') cs = new ShipIntro(game);
+    else if (h.origin === 'crash') cs = new ShipIntro(game);
   } catch (e) {
     console.error(e);
     cs = null;

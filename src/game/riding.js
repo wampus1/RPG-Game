@@ -308,7 +308,7 @@ export class Riding {
   // How much quicker you go (step time multiplier).
   pace() {
     const m = this.game.player.mount;
-    return (!m ? 1 : m.kind === 'horse' ? 0.55 : 0.7) * (m && heroHas(this.game.hero, 'rider') ? 0.82 : 1);
+    return (!m ? 1 : m.kind === 'horse' ? 0.55 : 0.7) * (m && heroHas(this.game.hero, 'rider') ? 0.82 : 1) * (m && heroHas(this.game.hero, 'saddle_sore') ? 1.25 : 1);
   }
 
   // Your horses wander a little: keep track of where they are.

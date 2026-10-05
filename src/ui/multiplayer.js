@@ -10,6 +10,7 @@ import { C, wrap, Grid, drawGrid } from './ascii.js';
 import { avatarCanvas, drawAvatar } from '../render/avatar.js';
 import { ICON_SHAPES, ICON_COLORS, ICON_BGS, ICON_PATTERNS, ICON_FRAMES, TITLES, NAME_MAX, DESC_MAX, DESC_WORDS, wordCount, nameProblem, cleanIcon } from '../net/account.js';
 import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
+import { versionText, sameVersion } from '../version.js';
 import { GUILD_NAME_MAX } from '../game/guilds.js';
 
 // (Solid: nothing behind shows through.)
@@ -275,7 +276,9 @@ export class MultiplayerWindow extends Window {
     worlds.forEach((w, i) => {
       const key = JOIN_KEYS[i];
       const old = w.v && w.v !== NET_VERSION;
-      button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => hooks.join(w.at), { off: !a || w.players >= w.max || old, color: C.hi, hint: old ? 'other version' : `${w.players}/${w.max}` });
+      // (A world on another version of the game: you're told, and can't.)
+      const other = !old && !sameVersion(w.gv || null);
+      button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => (other ? hooks.otherVersion(w) : hooks.join(w.at)), { off: !a || w.players >= w.max || old, color: other ? C.orange : C.hi, hint: old || other ? `${versionText(w.gv || null)}` : `${w.players}/${w.max}` });
       // (Found elsewhere on the network: where.)
       if (w.at) g.text(7, y + 1, `on another computer, at ${w.at.addr}`, C.faint);
       y += 2;
@@ -305,7 +308,10 @@ export class MultiplayerWindow extends Window {
     else if (k.code === 'KeyS' && !(saves && saves.length >= 3)) hooks.seedWorld();
     else if (JOIN_KEYS.includes(k.code.replace(/^Key/, ''))) {
       const w = networkWorlds(this.ctx.lan)[JOIN_KEYS.indexOf(k.code.replace(/^Key/, ''))];
-      if (w && w.players < w.max && !(w.v && w.v !== NET_VERSION)) hooks.join(w.at);
+      if (w && w.players < w.max && !(w.v && w.v !== NET_VERSION)) {
+        if (!sameVersion(w.gv || null)) hooks.otherVersion(w);
+        else hooks.join(w.at);
+      }
     } else {
       const d = /^Digit([1-3])$/.exec(k.code);
       if (d && saves && saves[+d[1] - 1]) hooks.continueWorld(saves[+d[1] - 1].id);

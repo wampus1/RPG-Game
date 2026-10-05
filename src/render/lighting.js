@@ -5,6 +5,7 @@
 // roofs are not lit by lanterns in the street below them.
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_STATE } from '../world/blocks.js';
+import { has as hasTrait } from '../game/hero.js';
 
 const MARGIN = 10;
 
@@ -162,7 +163,10 @@ export class Lighting {
     // (fainter below ground: down there, a torch matters).
     // (Out in the black of the storm, not even that: only a torch.)
     const blackout = S ? S.dark : 0;
-    const pl = Math.max(player.lightLevel, Math.round((below ? 3 : 4) * (1 - blackout)), 1);
+    // (Night eyes see further by it; the night-blind hardly at all.)
+    const hero = game.hero;
+    const own = hasTrait(hero, 'night_eyes') ? 6 : hasTrait(hero, 'night_blind') ? 2 : below ? 3 : 4;
+    const pl = Math.max(player.lightLevel, Math.round(own * (1 - blackout)), 1);
     const pKey = `${player.x},${player.y},${player.z},${pl}`;
     if (!this.pflood || this.pflood.key !== pKey) {
       const R = pl;

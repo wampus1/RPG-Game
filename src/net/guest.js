@@ -10,11 +10,13 @@ import { Region } from '../world/region.js';
 import { REGION_W, REGION_D, GAME_MINUTES_PER_SECOND, DAY_MINUTES } from '../config.js';
 import { BLOCKS } from '../world/blocks.js';
 import { deathRitual, liftRide, bossEntrance, bossDefeat, spireOpening, duelYield } from '../game/scenes.js';
+import { starfallScene } from '../game/starfall.js';
 import { wallFall } from '../game/wallfall.js';
 import { eruptionScene } from '../game/eruption.js';
 import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
+import { GAME_VERSION, versionText } from '../version.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -75,7 +77,7 @@ export class GuestNet {
     else if (m.t === 'site') this.site(m);
     else if (m.t === 'closing' || m.t === 'hostgone') this.onEnd('The host has closed the world.');
     else if (m.t === 'kicked') this.onEnd(m.why || 'You were removed from the world.');
-    else if (m.t === 'refused') this.onEnd(refusal(m.why));
+    else if (m.t === 'refused') this.onEnd(refusal(m.why, m), m.why === 'gameversion' ? 'ANOTHER VERSION' : null);
   }
 
   // ------------------------------------------------------------ arriving
@@ -358,6 +360,7 @@ export class GuestNet {
         if (rec) sc = spireOpening(game, rec, s.side, s.gemColor);
       } else if (s.kind === 'wall') sc = wallFall(game);
       else if (s.kind === 'erupt') sc = eruptionScene(game, { here: !!s.here });
+      else if (s.kind === 'starfall') sc = starfallScene(game, { village: s.village, first: s.first });
     } catch (e) {
       void e;
       sc = null;
@@ -598,7 +601,9 @@ function packCursor(c) {
   return out;
 }
 
-function refusal(why) {
+export function refusal(why, m = {}) {
+  // (Another version of the game: which, and that it can't be joined.)
+  if (why === 'gameversion') return `This world is running ${versionText(m.host)} of the game, and you have ${versionText(m.you || GAME_VERSION)}. Your version is incompatible: you can't join this server.`;
   return {
     full: 'That world is full.',
     banned: 'You are banned from that world.',

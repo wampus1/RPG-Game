@@ -230,7 +230,7 @@ export class Relay {
     }
     const account = cleanAccount(m.account);
     if (m.role === 'host') return this.hostHello(sock, m, account);
-    if (m.role === 'guest') return this.guestHello(sock, account);
+    if (m.role === 'guest') return this.guestHello(sock, account, m);
     if (m.role === 'lobby') return this.lobbyHello(sock, account);
     sock.close(1002, 'bad role');
   }
@@ -256,10 +256,13 @@ export class Relay {
     console.log(`Hosting "${this.world.name || 'a world'}" for the LAN: ${this.addrs().map((a) => `http://${a}:${this.port}`).join(', ') || '(no network found)'}`);
   }
 
-  guestHello(sock, account) {
-    const why = !this.host ? 'nohost' : this.banned(account.id, sock.ip) ? 'banned' : this.guests.size + 1 >= this.max ? 'full' : null;
+  guestHello(sock, account, m = {}) {
+    // (A player on another version of the game than the world's: turned
+    // away, told which each is. See src/version.js.)
+    const hv = this.world ? this.world.gv || null : null;
+    const why = !this.host ? 'nohost' : (m.gv || null) !== hv ? 'gameversion' : this.banned(account.id, sock.ip) ? 'banned' : this.guests.size + 1 >= this.max ? 'full' : null;
     if (why) {
-      sock.json({ t: 'refused', why });
+      sock.json({ t: 'refused', why, ...(why === 'gameversion' ? { host: hv, you: m.gv || null } : {}) });
       return sock.close(1000, why);
     }
     const cid = this.nextCid++;

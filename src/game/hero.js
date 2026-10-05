@@ -1,69 +1,84 @@
 // Who you are: made on the character screen before a new game. Your looks,
-// what you start with, four stats, two specialties, up to two traits, and
+// what you start with, four stats, your traits (good ones and flaws), and
 // where you come from: washed up on the shore after a shipwreck, or born
 // and raised in one of the island's towns (where everyone knows you).
 import { RNG, hash4 } from '../util/rng.js';
 import { personName, familyName, CULTURES } from '../world/names.js';
 
 export const STATS = [
-  { key: 'str', name: 'Strength', about: 'Harder blows; quicker digging and chopping.' },
-  { key: 'agi', name: 'Agility', about: 'Quicker on your feet and with a blade, and a little more stamina.' },
-  { key: 'end', name: 'Endurance', about: 'More health: 2 HP a point.' },
-  { key: 'cha', name: 'Charm', about: 'Better prices; people warm to you faster.' },
+  { key: 'str', name: 'Strength', about: 'Each point: +10% melee damage and +8% digging and chopping speed.' },
+  { key: 'agi', name: 'Agility', about: 'Each point: 5% faster walking, 6% faster attacks and +0.4 stamina.' },
+  { key: 'end', name: 'Endurance', about: 'Each point: +2 health.' },
+  { key: 'cha', name: 'Charm', about: 'Each point: prices 3% better and reputation gains 12% larger.' },
 ];
 export const STAT_BASE = 2;
 export const STAT_MAX = 5;
 export const STAT_POINTS = 4; // to spend above the base
 
-export const SPECIALTIES = {
-  angler: { name: 'Angler', about: 'Fish bite sooner, you have longer to strike, and they tire faster.' },
-  haggler: { name: 'Haggler', about: 'Traders give you another 8% either way.' },
-  forager: { name: 'Forager', about: 'Plants and bushes often give an extra handful.' },
-  miner: { name: 'Digger', about: 'Mining and digging go a quarter faster.' },
-  brawler: { name: 'Brawler', about: 'Every hit lands a little harder (+1).' },
-  farmer: { name: 'Green Thumb', about: 'Harvests give an extra crop.' },
-  sneak: { name: 'Light Step', about: 'People have to be closer to notice what you get up to.' },
-  healer: { name: 'Herbalist', about: 'Food and herbs heal you 2 HP more.' },
-  duelist: { name: 'Duelist', about: 'A wider moment to parry, and more of your blows strike true.' },
-  shieldbearer: { name: 'Shield Wall', about: 'Blocking with a shield costs less breath and stops more of the blow.' },
-  marksman: { name: 'Marksman', about: 'Your arrows hit 2 harder and find a weak spot more often.' },
-  tracker: { name: 'Tracker', about: 'Beasts you bring down give more meat and hide; you spot bandit camps from further off.' },
-  tinker: { name: 'Tinker', about: 'Making things at a bench, one time in four you save a material.' },
-  cook: { name: 'Cook', about: 'Cooking at a fire or oven, you often get an extra portion.' },
-  scholar: { name: 'Scholar', about: 'Half again as much comes of your study at a research table.' },
-  rider: { name: 'Horseman', about: 'Horses and wagons go a fifth faster under you.' },
-  sailor: { name: 'Sailor', about: 'You paddle a raft faster and turn it more sharply.' },
-};
-
+// Traits: what you're good at (the old skills are traits too), and flaws.
+// You pick up to TRAIT_PICKS good ones; each flaw you take (up to
+// FLAW_MAX) lets you pick one more. A flaw never takes away what a stat
+// gives (health, stamina, speed, damage, prices, liking): it costs you
+// somewhere else.
+export const TRAIT_PICKS = 4;
+export const FLAW_MAX = 2;
 export const TRAITS = {
-  honest_face: { name: 'Honest Face', about: 'Strangers think a little better of you.' },
+  // Good.
+  angler: { name: 'Angler', about: 'Fish bite 25% sooner, the strike window lasts 50% longer and you reel in 25% faster.' },
+  haggler: { name: 'Haggler', about: 'Prices are 8% better when you buy and sell.' },
+  forager: { name: 'Forager', about: 'Plants and bushes give one extra item 60% of the time.' },
+  miner: { name: 'Digger', about: 'Mining and digging are 25% faster.' },
+  brawler: { name: 'Brawler', about: '+1 damage on every hit.' },
+  farmer: { name: 'Green Thumb', about: 'Every ripe harvest gives one extra crop.' },
+  sneak: { name: 'Light Step', about: 'People notice your crimes from 30% less far away.' },
+  healer: { name: 'Herbalist', about: 'Food and herbs heal 2 more health.' },
+  duelist: { name: 'Duelist', about: 'Your parry window is 50% longer, and 18% of your hits are critical instead of 10%.' },
+  shieldbearer: { name: 'Shield Wall', about: 'Blocking with a shield costs 40% less stamina and stops 10% more damage.' },
+  marksman: { name: 'Marksman', about: 'Arrows do +2 damage, you draw 15% faster and full-power shots crit 22% of the time instead of 12%.' },
+  tracker: { name: 'Tracker', about: 'Animals you kill drop one more meat and hide more often. You spot bandit camps from 110 blocks instead of 45.' },
+  tinker: { name: 'Tinker', about: 'Crafting gives back one material 25% of the time, and gear you make tends to get more stars.' },
+  cook: { name: 'Cook', about: 'Cooking gives one extra portion 35% of the time.' },
+  scholar: { name: 'Scholar', about: 'Research at a research table earns 50% more points.' },
+  rider: { name: 'Horseman', about: 'Horses and wagons are 20% faster with you on them.' },
+  sailor: { name: 'Sailor', about: 'Rafts go 35% faster with you paddling.' },
+  honest_face: { name: 'Honest Face', about: 'Everyone starts with an opinion of you 8 points higher.' },
   tough: { name: 'Tough', about: '+4 health.' },
   swimmer: { name: 'Strong Swimmer', about: 'Water doesn\'t slow you down.' },
-  lucky: { name: 'Lucky', about: 'Better finds on the end of a fishing line.' },
-  early_riser: { name: 'Early Riser', about: 'In the morning hours your breath comes back twice as fast.' },
-  nimble: { name: 'Nimble', about: 'A dodge roll costs half the breath and carries you further.' },
-  tireless: { name: 'Tireless', about: '+3 stamina, and it comes back quicker.' },
-  sure_footed: { name: 'Sure-Footed', about: 'Heavy blows don\'t stagger you or knock you back.' },
-  iron_stomach: { name: 'Iron Stomach', about: 'Every meal heals 1 more; raw food does you as much good as cooked.' },
-  devout: { name: 'Devout', about: 'Priests and the devout think well of you; a prayer at an altar adds blue hearts too.' },
-  silver_tongue: { name: 'Silver Tongue', about: 'People warm to you a quarter faster.' },
-  night_owl: { name: 'Night Owl', about: 'From dusk to the small hours your breath comes back twice as fast.' },
-  steady_hands: { name: 'Steady Hands', about: 'A lock\'s pins give more warning before they bind, and your picks snap less often.' },
-  // Flaws: each gives a stat point back.
-  frail: { name: 'Frail', about: '-4 health (+1 stat point).', flaw: true },
-  rude: { name: 'Blunt', about: 'People like you a little less (+1 stat point).', flaw: true },
-  slow: { name: 'Heavy-Footed', about: 'You walk a little slower (+1 stat point).', flaw: true },
-  clumsy: { name: 'Clumsy', about: 'Rolling and blocking cost a third more breath (+1 stat point).', flaw: true },
-  short_winded: { name: 'Short of Breath', about: '-3 stamina (+1 stat point).', flaw: true },
-  outlander: { name: 'Outlander', about: 'Traders charge you 8% more, wherever you go (+1 stat point).', flaw: true },
-  notorious: { name: 'Notorious', about: 'Your face is known: people notice what you get up to from further off (+1 stat point).', flaw: true },
-  squeamish: { name: 'Squeamish', about: 'You can\'t keep raw meat or fish down: they do you no good at all (+1 stat point).', flaw: true },
+  lucky: { name: 'Lucky', about: 'Coins and gems on your fishing line are twice as likely.' },
+  early_riser: { name: 'Early Riser', about: 'From 5:00 to 10:00 your stamina comes back twice as fast.' },
+  night_owl: { name: 'Night Owl', about: 'From 20:00 to 2:00 your stamina comes back twice as fast.' },
+  nimble: { name: 'Nimble', about: 'A dodge roll costs half the stamina and goes 3 blocks instead of 2.' },
+  tireless: { name: 'Tireless', about: '+3 stamina, and stamina comes back 40% faster.' },
+  sure_footed: { name: 'Sure-Footed', about: 'Heavy hits never stagger you or knock you back.' },
+  iron_stomach: { name: 'Iron Stomach', about: 'Every meal heals 1 more. Raw food heals as much as cooked.' },
+  devout: { name: 'Devout', about: 'Priests and devout people like you 15 points more. Praying at an altar also gives 4 blue hearts.' },
+  silver_tongue: { name: 'Silver Tongue', about: 'Reputation gains are 25% larger.' },
+  steady_hands: { name: 'Steady Hands', about: 'Lock pins give 40% more warning before they bind, and a slip strains your pick less.' },
+  night_eyes: { name: 'Night Eyes', about: 'The light around you reaches 6 blocks instead of 4 at night and underground.' },
+  fire_hardened: { name: 'Fire-Hardened', about: 'Burning hurts you half as often.' },
+  northern_blood: { name: 'Northern Blood', about: 'Cold and frost slow you for half as long.' },
+  // Flaws: each lets you pick one more good trait.
+  squeamish: { name: 'Squeamish', about: 'Raw meat and raw fish don\'t heal you at all.', flaw: true },
+  notorious: { name: 'Notorious', about: 'People notice your crimes from 25% further away.', flaw: true },
+  night_blind: { name: 'Night Blind', about: 'The light around you reaches 2 blocks instead of 4 at night and underground.', flaw: true },
+  poor_swimmer: { name: 'Poor Swimmer', about: 'Water slows you down 50% more than it does other people.', flaw: true },
+  heavy_handed: { name: 'Heavy-Handed', about: 'Lock pins give 30% less warning before they bind, and a slip strains your pick more.', flaw: true },
+  burner: { name: 'Burns the Food', about: 'Cooking ruins the whole batch 20% of the time.', flaw: true },
+  butterfingers: { name: 'Butterfingers', about: 'A biting fish gets away a third sooner, and you reel in 20% slower.', flaw: true },
+  unlucky: { name: 'Unlucky', about: 'Coins and gems never come up on your fishing line.', flaw: true },
+  seasick: { name: 'Seasick', about: 'Rafts go 25% slower with you paddling.', flaw: true },
+  saddle_sore: { name: 'Saddle-Sore', about: 'Horses and wagons are 20% slower with you on them.', flaw: true },
 };
+// (Older characters had their skills apart: they're traits now.)
+export const SPECIALTIES = {};
 
 export const ORIGINS = {
   crash: { name: 'Crash Landing', about: 'Your ship broke up on the rocks. You wake on a beach with what washed ashore, and nobody on the island knows you.' },
   native: { name: 'Island Native', about: 'You were born and raised in one of the island\'s towns. You start at home with your family, and the whole town knows you.' },
+  star: { name: 'Fallen Star', about: 'You fell from the night sky and landed in a crater near a village on Thessa. You have one glowing wing. Some people are wary of you. Your wing lets you do a second dodge roll right after the first without stamina; it then fades and grows back over 20 seconds.' },
 };
+// (A fallen star's wing: how long it takes to come back once spent.)
+export const WING_BACK = 20;
 
 // What you start with (on top of a few common things).
 export const KITS = {
@@ -111,8 +126,16 @@ export const BUILDS = [false, true]; // stooped or upright
 
 export function pointsLeft(h) {
   const spent = STATS.reduce((n, s) => n + (h.stats[s.key] - STAT_BASE), 0);
-  const bonus = (h.traits || []).filter((t) => TRAITS[t]?.flaw).length;
-  return STAT_POINTS + bonus - spent;
+  return STAT_POINTS - spent;
+}
+
+// How many good traits you may pick (one more for each flaw), and how many
+// you have.
+export function traitPicks(h) {
+  return TRAIT_PICKS + Math.min(FLAW_MAX, (h.traits || []).filter((t) => TRAITS[t]?.flaw).length);
+}
+export function goodTraits(h) {
+  return (h.traits || []).filter((t) => TRAITS[t] && !TRAITS[t].flaw);
 }
 
 // A name from a culture (the character screen's "another name").
@@ -131,7 +154,7 @@ export function randomHero(seed) {
   const face = rng.pick(FACES);
   const h = {
     name: nm.first,
-    origin: rng.chance(0.5) ? 'crash' : 'native',
+    origin: rng.pick(Object.keys(ORIGINS)),
     kit: rng.pick(Object.keys(KITS)),
     look: {
       skin: rng.pick(SKINS), hair: rng.pick(HAIRS), hairStyle: rng.pick(HAIR_STYLES), shirt: rng.pick(CLOTHES), pants: rng.pick(PANTS),
@@ -139,8 +162,7 @@ export function randomHero(seed) {
       shoes: rng.pick(SHOES), pattern: rng.chance(0.4) ? rng.pick(PATTERNS.filter(Boolean)) : null,
     },
     stats: { str: STAT_BASE, agi: STAT_BASE, end: STAT_BASE, cha: STAT_BASE },
-    specialties: rng.shuffle(Object.keys(SPECIALTIES)).slice(0, 2),
-    traits: rng.chance(0.6) ? [rng.pick(Object.keys(TRAITS).filter((t) => !TRAITS[t].flaw))] : [],
+    traits: rng.shuffle(Object.keys(TRAITS).filter((t) => !TRAITS[t].flaw)).slice(0, rng.chance(0.6) ? 3 : 2),
   };
   const keys = STATS.map((s) => s.key);
   for (let i = 0; i < STAT_POINTS; i++) {
@@ -163,8 +185,12 @@ export function normalizeHero(h) {
   const base = randomHero(1);
   const out = { ...base, ...h, look: { ...base.look, ...(h.look || {}) }, stats: { ...base.stats, ...(h.stats || {}) } };
   out.look.hatColor = out.look.accent;
-  out.specialties = (h.specialties || []).filter((k) => SPECIALTIES[k]).slice(0, 2);
-  out.traits = (h.traits || []).filter((k) => TRAITS[k]).slice(0, 2);
+  // (Skills were kept apart once: they're traits now. Flaws that are gone
+  // are dropped.)
+  const all = [...new Set([...(h.specialties || []), ...(h.traits || [])])].filter((k) => TRAITS[k]);
+  const flaws = all.filter((k) => TRAITS[k].flaw).slice(0, FLAW_MAX);
+  out.traits = [...all.filter((k) => !TRAITS[k].flaw).slice(0, TRAIT_PICKS + flaws.length), ...flaws];
+  out.specialties = [];
   if (!ORIGINS[out.origin]) out.origin = 'crash';
   if (!KITS[out.kit]) out.kit = 'wanderer';
   for (const s of STATS) out.stats[s.key] = Math.max(1, Math.min(STAT_MAX, out.stats[s.key] | 0));
@@ -184,17 +210,17 @@ export function digMult(h) {
   return (1 + 0.08 * (stat(h, 'str') - STAT_BASE)) * (has(h, 'miner') ? 1.25 : 1);
 }
 export function stepMult(h) {
-  return (1 - 0.05 * (stat(h, 'agi') - STAT_BASE)) * (has(h, 'slow') ? 1.1 : 1);
+  return 1 - 0.05 * (stat(h, 'agi') - STAT_BASE);
 }
 export function cooldownMult(h) {
   return 1 - 0.06 * (stat(h, 'agi') - STAT_BASE);
 }
 export function hpBonus(h) {
-  return 2 * (stat(h, 'end') - STAT_BASE) + (has(h, 'tough') ? 4 : 0) - (has(h, 'frail') ? 4 : 0);
+  return 2 * (stat(h, 'end') - STAT_BASE) + (has(h, 'tough') ? 4 : 0);
 }
 // Multiplies what you pay (below 1 is better); sell prices divide by it.
 export function priceMult(h) {
-  return (1 - 0.03 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'haggler') ? 0.92 : 1) * (has(h, 'outlander') ? 1.08 : 1);
+  return (1 - 0.03 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'haggler') ? 0.92 : 1);
 }
 export function repGainMult(h) {
   return (1 + 0.12 * (stat(h, 'cha') - STAT_BASE)) * (has(h, 'silver_tongue') ? 1.25 : 1);
@@ -203,10 +229,10 @@ export function repGainMult(h) {
 // (In tenths of a point. Light on your feet, you've a little more breath:
 // four tenths for every point of agility above the base.)
 export function staminaBonus(h) {
-  return (has(h, 'tireless') ? 30 : 0) - (has(h, 'short_winded') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE);
+  return (has(h, 'tireless') ? 30 : 0) + 4 * (stat(h, 'agi') - STAT_BASE);
 }
 export function opinionBonus(h) {
   // Well dressed (or charming for a few hours), people warm to you at once.
   const dress = h && h.bonus ? Math.max(0, h.bonus.cha || 0) * 2 : 0;
-  return (has(h, 'honest_face') ? 8 : 0) - (has(h, 'rude') ? 8 : 0) + dress;
+  return (has(h, 'honest_face') ? 8 : 0) + dress;
 }

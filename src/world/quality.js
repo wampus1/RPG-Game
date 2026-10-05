@@ -67,8 +67,8 @@ export const MODS = {
     fortune: { name: 'Fortunate', about: 'one block in five gives twice as much' },
     long: { name: 'Long-hafted', about: 'reaches a pace further' },
     prospect: { name: 'Prospecting', about: 'stone it breaks sometimes turns up coal, iron or a gem', tools: ['pick'] },
-    sawing: { name: 'Sawing', about: 'trees it fells come down as planks, ready sawn', tools: ['axe'] },
-    wide: { name: 'Wide', about: 'digs out the block above as well: a tunnel you can walk', tools: ['pick', 'shovel'] },
+    lumber: { name: "Woodsman's", about: 'a felled tree gives a third more logs', tools: ['axe'] },
+    clean: { name: 'Clean-cutting', about: 'the second block of a two-high dig takes no extra time; step cuts take half as long', tools: ['pick', 'shovel'] },
     keen: { name: 'Keen-edged', about: 'hits two harder as a weapon' },
   },
 };
@@ -93,6 +93,10 @@ export function starable(key) {
 }
 
 // ------------------------------------------------------------ keys
+// Modifiers since replaced (they took away what every player can do: Wide
+// dug out the block above every time, Sawing left you no logs), read as
+// their replacements in pieces from older saves.
+const RENAMED = { wide: 'clean', sawing: 'lumber' };
 const KEY = /^(.+)~([1-5])([dc])([0-9a-z]{2})((?:\.[a-z]+)*)$/;
 const ROLLS = 36 * 36;
 
@@ -105,7 +109,7 @@ export function starKey(plain, stars, origin, roll, mods = []) {
 export function parseStar(key) {
   const m = typeof key === 'string' && KEY.exec(key);
   if (!m) return null;
-  return { plain: m[1], stars: +m[2], origin: m[3], roll: parseInt(m[4], 36), mods: m[5] ? m[5].slice(1).split('.') : [] };
+  return { plain: m[1], stars: +m[2], origin: m[3], roll: parseInt(m[4], 36), mods: m[5] ? m[5].slice(1).split('.').map((q) => RENAMED[q] || q) : [] };
 }
 
 // The piece with its stars taken off (the key itself, for a plain one).

@@ -36,6 +36,7 @@ import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
 import { packLabel, DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
 import { startIntro } from './cutscene.js';
+import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
@@ -71,8 +72,9 @@ import { Seat, asSeat, seatField, partyPlayers, freshStore } from './party.js';
 import { Guilds, guildMates } from './guilds.js';
 import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
-import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, wideDig } from './mods.js';
+import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult } from './mods.js';
 import { plainKey } from '../world/quality.js';
+import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -208,6 +210,8 @@ export class Game {
       if (this.hero) this.playerName = this.hero.name;
       const home = this.hero && this.hero.origin === 'native' ? this.pickHometown() : null;
       const coast = this.hero && this.hero.origin === 'crash' ? this.coastSpot() : null;
+      // (A fallen star: a crater out in the hills by a village.)
+      const star = this.hero && this.hero.origin === 'star' ? starSpot(this, 0) : null;
       const s = home || ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
       const thessa = ow.islands[0];
@@ -216,6 +220,13 @@ export class Game {
       if (coast) {
         sx = coast.x;
         sz = coast.z;
+      }
+      if (star) {
+        sx = star.x;
+        sz = star.z;
+        this.loadAround(sx, sz, true);
+        makeCrater(this, sx, sz);
+        this.starAt = star;
       }
       let host = null;
       if (home) {
@@ -387,6 +398,10 @@ export class Game {
     if (!p) return;
     p.hpBonus = this.hero ? hpBonus(this.hero) : 0;
     p.recalcMaxHp();
+    // A fallen star: the wing (see combat.js, roll; render/wing.js).
+    if (this.hero && this.hero.origin === 'star') {
+      if (!p.wing) p.wing = { k: 1 };
+    } else if (p.wing) p.wing = null;
   }
 
   // Starting clothes go straight on; everything else into the pack.
@@ -537,6 +552,7 @@ export class Game {
   introduce() {
     const h = this.hero;
     const c = this.sim.citizen;
+    if (h.origin === 'star') return this.introduceStar(this.starAt ? this.starAt.village : null);
     if (h.origin === 'native' && c) {
       const L = this.sim.layoutOf(c.sid);
       const par = (c.family?.parents || []).map((i) => L.npcs[i]).filter(Boolean).map((r) => r.name.first);
@@ -547,6 +563,26 @@ export class Game {
       this.ui.msg('You wake on wet sand: a beach on Thessa, inside the Wall. Of your ship, only splinters and a battered chest have come ashore.', '#ffe070');
       this.ui.msg('The gap has closed behind you: there\'s no way back out through the storm without a real ship. Nobody here knows you. Find a town: the map (M) shows what you have seen.', '#a0c8ff');
     }
+  }
+
+  // A fallen star's opening scene (the player it's done as): as it
+  // strikes, everyone else on Thessa feels it (see Game.update).
+  starScene(star) {
+    const who = this.player;
+    return starfallScene(this, {
+      village: star ? star.village : null,
+      first: String(this.playerName || '').split(' ')[0],
+      at: star,
+      act: (g) => {
+        g.starShock = { x: star ? star.x : who.x, y: who.y, z: star ? star.z : who.z, who };
+      },
+    });
+  }
+
+  // Waking in the crater (see starfall.js).
+  introduceStar(village) {
+    this.ui.msg(`You wake in a crater of scorched earth${village ? ` in the hills near ${village}` : ''}. One white wing rests folded at your back, glowing faintly.`, '#ffe070');
+    this.ui.msg('Your wing lets you roll a second time right after the first, without using stamina. It fades and grows back over 20 seconds. Some people will be wary of you. The map (M) shows what you have seen.', '#a0c8ff');
   }
 
   // Nearest standable tile to (x, z), searching outward in rings: first on
@@ -1763,6 +1799,13 @@ export class Game {
     wallTick(this);
     eruptTick(this);
     const slow = this.sceneTick(dt, uiRes.pressed);
+    // A fallen star striking Thessa (anyone's: see starfall.js): felt by
+    // everyone on the island, here where it's not muted.
+    if (this.starShock) {
+      const s = this.starShock;
+      this.starShock = null;
+      starShockwave(this, s);
+    }
     // A blow that lands hard holds the moment (hit-stop); a parry slows
     // the world for a breath after. (Not with others playing in it: see
     // playerPhase.)
@@ -2139,6 +2182,19 @@ export class Game {
     // (Left down below, in a place that's gone: up top by whoever's
     // hosting, or by the way into the old place they're down.)
     if (at && this.world.inInstance(at.x)) at = null;
+    // A new fallen star: down in a crater of their own, by a village (see
+    // starfall.js), their fall shown on their screen.
+    let star = null;
+    if (!saved && hero && hero.origin === 'star') {
+      let salt = 0;
+      for (const ch of String(profile.id)) salt = (salt * 31 + ch.charCodeAt(0)) >>> 0;
+      star = starSpot(this, salt);
+      if (star) {
+        this.loadAround(star.x, star.z, true);
+        makeCrater(this, star.x, star.z);
+        at = this.findFreeSpot(star.x, star.z, GROUND);
+      }
+    }
     if (!at) {
       const h = this.dungeon ? this.dungeon.exitSpot() : this.player;
       if (this.dungeon) this.loadAround(h.x, h.z, true);
@@ -2170,6 +2226,10 @@ export class Game {
       this.world.ow.markExplored(p.x, p.z, 2);
       if (p.awakeSince === undefined) p.awakeSince = this.day * DAY_MINUTES + this.minute;
       this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
+      if (star) {
+        this.starAt = star;
+        this.scene = this.starScene(star);
+      }
     });
     return seat;
   }
@@ -3036,7 +3096,9 @@ export class Game {
       return;
     }
     let time = plan && plan.keep ? 0 : this.breakTime(b);
-    for (const e of extra) time += this.breakTime(BLOCKS[this.world.getBlock(e.x, e.y, e.z)]) * (plan.keep ? 1 : 0.6);
+    // (A clean-cutting tool: the extra blocks quicker. See mods.js.)
+    const xk = extra.length ? extraDigMult(p, !!plan.keep) : 1;
+    for (const e of extra) time += this.breakTime(BLOCKS[this.world.getBlock(e.x, e.y, e.z)]) * (plan.keep ? 1 : 0.6) * xk;
     m.progress += dt / Math.max(0.05, time);
     m.hitT -= dt;
     if (m.hitT <= 0) {
@@ -3196,8 +3258,6 @@ export class Game {
       this.checkVandalism(x, y, z, b);
       this.noteBuildingDamage(x, z, id);
       this.checkCropTheft(x, z, id, drops);
-      // (A wide pick or shovel: the block over it too.)
-      wideDig(this, this.player, x, y, z);
     }
   }
 
@@ -6291,6 +6351,8 @@ export class Game {
     const p = this.player;
     return {
       v: SAVE_VERSION,
+      // (The game's version it was saved in: see version.js.)
+      gv: GAME_VERSION,
       seed: this.seed,
       minute: this.minute,
       day: this.day,
@@ -6392,7 +6454,8 @@ export class Game {
     if (pd.equip) this.player.equip = { head: null, body: null, legs: null, feet: null, ...pd.equip };
     if (pd.look) this.player.baseLook = pd.look;
     if (data.name) this.playerName = data.name;
-    if (data.hero) this.hero = data.hero;
+    // (Skills, kept apart in older saves, are traits now: see hero.js.)
+    if (data.hero) this.hero = data.hero.anon ? data.hero : normalizeHero(data.hero);
     this.applyHero();
     this.moveEntity(this.player, pd.x, pd.y, pd.z);
     this.sim.careers.applyLook();

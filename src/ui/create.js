@@ -1,17 +1,19 @@
-// The character screen: who you'll be before a new game starts, in five
-// tabs: the basics (name, origin, starting gear), looks, stats, skills and
-// traits. Everything can be changed with the mouse (click the tabs, arrows
-// and boxes) or the keys: 1-5 or Tab switch tabs, ↑↓ pick a line, ←→
-// change it, and you type to edit your name. A tab longer than the screen
-// scrolls (the wheel, the arrows on its bar, or just moving down it).
+// The character screen: who you'll be before a new game starts, in four
+// tabs: the basics (name, origin, starting gear), looks, stats and traits
+// (what you're good at, and your flaws). Everything can be changed with the
+// mouse (click the tabs, arrows and boxes) or the keys: 1-4 or Tab switch
+// tabs, ↑↓ pick a line, ←→ change it, and you type to edit your name. A tab
+// longer than the screen scrolls (the wheel, the arrows on its bar, or just
+// moving down it).
 import { COLS, ROWS } from '../config.js';
 import { Window, cap } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
 import { CULTURES } from '../world/names.js';
 import { humanoidSheet, SHEET_H, SPR_PAD } from '../render/sprites.js';
+import { drawWing, wingInFront } from '../render/wing.js';
 import {
-  STATS, STAT_BASE, STAT_MAX, SPECIALTIES, TRAITS, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
+  STATS, STAT_BASE, STAT_MAX, TRAITS, FLAW_MAX, traitPicks, goodTraits, ORIGINS, KITS, SKINS, HAIRS, HAIR_STYLES, CLOTHES, PANTS, SHOES,
   DETAILS, HATS, PATTERNS, OUTFITS, pointsLeft, randomHero, heroName, hpBonus, COMMON_KIT,
   EYES, BEARD_STYLES, MARKS, NECKS, GLOVES, CAPES,
 } from '../game/hero.js';
@@ -26,7 +28,6 @@ export const TABS = [
   { id: 'basics', name: 'BASICS' },
   { id: 'looks', name: 'LOOKS' },
   { id: 'stats', name: 'STATS' },
-  { id: 'skills', name: 'SKILLS' },
   { id: 'traits', name: 'TRAITS' },
 ];
 
@@ -75,8 +76,9 @@ export class CharacterWindow extends Window {
       { tab: 'looks', id: 'stoop', label: 'Stance', type: 'cycle', show: () => (h().look.stoop ? 'stooped' : 'upright'), set: () => { h().look.stoop = !h().look.stoop; } },
     ];
     for (const s of STATS) rows.push({ tab: 'stats', id: `stat:${s.key}`, label: s.name, type: 'stat', key: s.key, about: s.about });
-    for (const k of Object.keys(SPECIALTIES)) rows.push({ tab: 'skills', id: `spec:${k}`, label: SPECIALTIES[k].name, type: 'spec', key: k, about: SPECIALTIES[k].about });
-    for (const k of Object.keys(TRAITS)) rows.push({ tab: 'traits', id: `trait:${k}`, label: TRAITS[k].name, type: 'trait', key: k, about: TRAITS[k].about });
+    // (The good ones first, then the flaws.)
+    const keys = Object.keys(TRAITS);
+    for (const k of [...keys.filter((q) => !TRAITS[q].flaw), ...keys.filter((q) => TRAITS[q].flaw)]) rows.push({ tab: 'traits', id: `trait:${k}`, label: TRAITS[k].name, type: 'trait', key: k, flaw: !!TRAITS[k].flaw, about: TRAITS[k].about });
     return rows;
   }
 
@@ -149,27 +151,44 @@ export class CharacterWindow extends Window {
         this.ui.audio?.play('error');
         return;
       }
-    } else if (row.type === 'spec' || row.type === 'trait') this.toggle(row);
-    else if (row.set) row.set(d);
+    } else if (row.type === 'trait') {
+      if (!this.toggle(row)) {
+        this.ui.audio?.play('error');
+        return;
+      }
+    } else if (row.set) row.set(d);
     h.look.hatColor = h.look.accent;
     this.ui.audio?.play('select');
   }
 
+  // On or off. You may have TRAIT_PICKS good traits, one more for each flaw
+  // (up to FLAW_MAX flaws). False if it can't be taken (all your picks are
+  // used: take one off first, or a flaw).
   toggle(row) {
     const h = this.hero;
-    const list = row.type === 'spec' ? h.specialties : h.traits;
+    const list = h.traits;
     const i = list.indexOf(row.key);
     if (i >= 0) {
       list.splice(i, 1);
-      // Dropping a flaw takes its stat point back.
-      while (pointsLeft(h) < 0) {
-        const k = STATS.map((s) => s.key).sort((a, b) => h.stats[b] - h.stats[a])[0];
-        h.stats[k]--;
+      // Dropping a flaw drops the pick it gave (the last good one taken).
+      if (row.flaw) {
+        while (goodTraits(h).length > traitPicks(h)) list.splice(list.lastIndexOf(goodTraits(h).at(-1)), 1);
       }
-      return;
+      this.note = null;
+      return true;
     }
-    if (list.length >= 2) list.shift();
+    if (row.flaw) {
+      if (list.filter((k) => TRAITS[k].flaw).length >= FLAW_MAX) {
+        this.note = `You can take at most ${FLAW_MAX} flaws.`;
+        return false;
+      }
+    } else if (goodTraits(h).length >= traitPicks(h)) {
+      this.note = 'All your picks are used. Take one off, or take a flaw for another pick.';
+      return false;
+    }
     list.push(row.key);
+    this.note = null;
+    return true;
   }
 
   draw(g) {
@@ -238,12 +257,8 @@ export class CharacterWindow extends Window {
       cyc(R('kit'), 14);
       wrap(this.kitText(), 48).slice(0, 3).forEach((l, i) => g.text(4, 15 + i, l, C.faint));
       g.text(3, 20, 'Summary', C.cyan);
-      const sum = [
-        `Stats: ${STATS.map((s) => `${s.name.slice(0, 3)} ${h.stats[s.key]}`).join(' · ')}`,
-        `Skills: ${h.specialties.map((k) => SPECIALTIES[k].name).join(', ') || 'none'}`,
-        `Traits: ${h.traits.map((k) => TRAITS[k].name).join(', ') || 'none'}`,
-      ];
-      sum.forEach((l, i) => g.text(4, 21 + i, l.slice(0, 48), C.dim));
+      g.text(4, 21, `Stats: ${STATS.map((s) => `${s.name.slice(0, 3)} ${h.stats[s.key]}`).join(' · ')}`.slice(0, 48), C.dim);
+      wrap(`Traits: ${h.traits.map((k) => TRAITS[k].name).join(', ') || 'none'}`, 48).slice(0, 3).forEach((l, i) => g.text(4, 22 + i, l, C.dim));
     } else if (tab === 'looks') {
       // (More than fits: it scrolls.)
       const V = Math.floor((this.h - 4 - 6) / 2) + 1;
@@ -273,29 +288,58 @@ export class CharacterWindow extends Window {
         });
       });
     } else {
-      const list = tab === 'skills' ? h.specialties : h.traits;
-      g.text(3, 6, tab === 'skills' ? 'Pick two specialties.' : 'Up to two traits; flaws (orange) give a point back.', C.dim);
-      // Two columns; what the one you're on does, underneath.
-      const per = Math.ceil(rows.length / 2);
+      // One list: the good traits, a line, then the flaws. It scrolls.
+      const good = goodTraits(h).length;
+      const picks = traitPicks(h);
+      const flaws = h.traits.length - good;
+      g.text(3, 6, `Good traits: ${good}/${picks}`, good < picks ? C.hi : C.fg);
+      g.text(24, 6, `Flaws: ${flaws}/${FLAW_MAX}`, flaws ? C.orange : C.faint);
+      // (What's on the list: a heading, the good ones, the divider, the flaws.)
+      const lines = [{ head: `GOOD TRAITS  (pick up to ${picks})` }];
       rows.forEach((r, j) => {
-        const col = j < per ? 0 : 1;
-        const x = 2 + col * 25;
-        const y = 8 + (j % per) * 2;
-        const { sel, i } = rowAt(r, x, y, 24);
-        const on = list.includes(r.key);
-        const flaw = r.type === 'trait' && TRAITS[r.key].flaw;
-        g.text(x + 1, y, on ? '[x]' : '[ ]', on ? C.green : C.faint);
-        g.text(x + 5, y, r.label.slice(0, 19), sel ? C.white : on ? (flaw ? C.orange : C.fg) : flaw ? '#a87050' : C.dim);
-        this.hit(x, y, 24, 1, () => {
+        if (r.flaw && !lines.some((q) => q.divider)) lines.push({ divider: true });
+        lines.push({ r, j });
+      });
+      const y0 = 8;
+      const V = this.h - y0 - 6;
+      // (Kept on the line you're on, when you move with the keys.)
+      const at = lines.findIndex((q) => q.r && q.j === this.sel);
+      if (this.follow) {
+        if (at < this.scroll + 1) this.scroll = Math.max(0, at - 1);
+        else if (at >= this.scroll + V) this.scroll = at - V + 1;
+        this.follow = false;
+      }
+      this.scroll = Math.max(0, Math.min(Math.max(0, lines.length - V), this.scroll));
+      this.view = { n: lines.length, V };
+      lines.slice(this.scroll, this.scroll + V).forEach((q, k) => {
+        const y = y0 + k;
+        if (q.head) {
+          g.text(3, y, q.head, C.cyan);
+          return;
+        }
+        if (q.divider) {
+          const t = ' FLAWS: each gives one more good pick ';
+          g.text(2, y, `${'─'.repeat(3)}${t}${'─'.repeat(Math.max(0, 47 - t.length))}`, C.orange);
+          return;
+        }
+        const r = q.r;
+        const { sel, i } = rowAt(r, 2, y, 49);
+        const on = h.traits.includes(r.key);
+        g.text(3, y, on ? '[x]' : '[ ]', on ? (r.flaw ? C.orange : C.green) : C.faint);
+        g.text(7, y, r.label.slice(0, 18), sel ? C.white : on ? (r.flaw ? C.orange : C.fg) : r.flaw ? '#a87050' : C.dim);
+        g.text(26, y, (typeof r.about === 'string' ? r.about : '').slice(0, 24) + ((r.about || '').length > 24 ? '…' : ''), C.faint);
+        this.hit(2, y, 49, 1, () => {
           this.sel = i;
           this.change(r, 1);
         });
       });
+      this.scrollbar(g, 52, y0, V, lines.length, V);
       const cur = hovAbout || rows[this.sel];
-      if (cur) {
-        const y0 = 9 + per * 2;
-        g.text(3, y0, cur.label, C.cyan);
-        wrap(cur.about, 48).slice(0, 2).forEach((l, i) => g.text(3, y0 + 1 + i, l, C.dim));
+      const yA = y0 + V + 1;
+      if (this.note) wrap(this.note, 48).slice(0, 2).forEach((l, i) => g.text(3, yA + i, l, C.orange));
+      else if (cur) {
+        g.text(3, yA, cur.label, cur.flaw ? C.orange : C.cyan);
+        wrap(cur.about, 48).slice(0, 2).forEach((l, i) => g.text(3, yA + 1 + i, l, C.dim));
       }
     }
 
@@ -306,7 +350,7 @@ export class CharacterWindow extends Window {
     this.previewAt = { x: px + 9, y: 6 };
     const hp = 20 + hpBonus(h);
     g.text(px + 1, 17, `Health ${hp}`, C.red);
-    g.text(px + 13, 17, ORIGINS[h.origin].name.split(' ')[0], C.cyan);
+    g.text(px + 13, 17, ORIGINS[h.origin].name.slice(0, 13), C.cyan);
     const cur = hovAbout || rows[this.sel];
     const about = cur && (typeof cur.about === 'function' ? cur.about() : cur.about);
     g.box(px - 1, 19, 29, 8, { fg: C.faint, bg: '#0b0912' });
@@ -321,7 +365,7 @@ export class CharacterWindow extends Window {
     btn(28, '[ENTER]  Begin', () => this.begin(), C.hi);
     btn(30, '[0]      Randomise', () => this.randomise());
     btn(32, '[ESC]    Back', () => this.close());
-    g.text(2, this.h - 1, '1-5/TAB switch tab · ↑↓ choose · ←→ change · type to rename', C.faint);
+    g.text(2, this.h - 1, '1-4/TAB switch tab · ↑↓ choose · ←→ change · type to rename', C.faint);
   }
 
   drawPixels(ctx) {
@@ -334,7 +378,18 @@ export class CharacterWindow extends Window {
     const x = (this.x + this.previewAt.x) * 6;
     const y = (this.y + this.previewAt.y) * 8 - SPR_PAD;
     ctx.imageSmoothingEnabled = false;
+    // (A fallen star: the wing too, behind, or in front seen from behind.)
+    const wing = this.hero.origin === 'star';
+    const wingAt = () => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(s, s);
+      drawWing(ctx, row, 0, SPR_PAD, 1, this.ui.time);
+      ctx.restore();
+    };
+    if (wing && !wingInFront(row)) wingAt();
     ctx.drawImage(sheet, f * 16, row * SHEET_H, 16, SHEET_H, x, y, 16 * s, SHEET_H * s);
+    if (wing && wingInFront(row)) wingAt();
   }
 
   randomise() {
@@ -359,7 +414,7 @@ export class CharacterWindow extends Window {
     const rows = this.tabRows;
     const row = rows[this.sel];
     const n = rows.length;
-    const digit = /^Digit([0-5])$/.exec(k.code);
+    const digit = /^Digit([0-4])$/.exec(k.code);
     if (k.code === 'Escape') this.close();
     else if (k.code === 'Enter') this.begin();
     else if (k.code === 'Tab') this.setTab(this.tab + (k.shift ? -1 : 1));
@@ -377,7 +432,7 @@ export class CharacterWindow extends Window {
     else if (row && row.type === 'name') {
       if (k.code === 'Backspace') this.hero.name = this.hero.name.slice(0, -1);
       else if (k.key && k.key.length === 1 && /[\p{L}' -]/u.test(k.key) && this.hero.name.length < 16) this.hero.name += k.key;
-    } else if (row && k.code === 'Space' && (row.type === 'spec' || row.type === 'trait')) this.change(row, 1);
+    } else if (row && k.code === 'Space' && row.type === 'trait') this.change(row, 1);
     return true;
   }
 }

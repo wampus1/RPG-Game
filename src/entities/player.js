@@ -6,7 +6,7 @@ import { makeSlots, addItem } from '../game/inventory.js';
 import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable, offhandLight } from '../world/items.js';
 import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
-import { has as heroHas, stepMult } from '../game/hero.js';
+import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
 import { stepModMult, gearHp } from '../game/mods.js';
 
@@ -242,6 +242,16 @@ export class Player extends Entity {
 
   update(dt, input, blocked) {
     this.updateBase(dt);
+    // A fallen star's wing, spent on a second roll: filling back in.
+    if (this.wing && this.wing.k < 1) {
+      this._wingT = (this._wingT || 0) + dt;
+      this.wing.k = Math.min(1, Math.floor((this._wingT / WING_BACK) * 25) / 25);
+      if (this.wing.k >= 1) {
+        this._wingT = 0;
+        this.game.renderer?.emit(this.x, this.y + 1.4, this.z, { n: 10, color: ['#ffe7a0', '#fffaf0', '#ffffff'], up: 14, speed: 18, life: 0.7, gravity: -8, glow: true });
+        this.game.audio?.play('heal', this);
+      }
+    }
     // (Hale armour put on or taken off, however it was: health with it.)
     const hale = gearHp(this);
     if (hale !== (this._haleHp || 0)) {
@@ -390,7 +400,7 @@ export class Player extends Entity {
     }
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
-    const swim = water && !heroHas(this.game.hero, 'swimmer') ? 1.9 : 1;
+    const swim = water && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1;
     // In the saddle or on the wagon's bench: quicker (and no sprinting).
     const ride = this.mount ? this.game.riding.pace() : 1;
     // (Shield up: a slow, careful step, and no running.)

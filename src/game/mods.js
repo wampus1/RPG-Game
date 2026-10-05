@@ -3,8 +3,8 @@
 // tool. Yours: the island's folk keep to plain gear.
 import { ITEMS } from '../world/items.js';
 import { B, BLOCKS, LOGS } from '../world/blocks.js';
-import { RECIPES } from '../world/recipes.js';
 import { burn, chill, mend, stun, knockBack } from './gems.js';
+import { has as heroHas } from './hero.js';
 
 const WORN = ['head', 'body', 'legs', 'feet'];
 const EMPTY = Object.freeze({ blade: [], bow: [], shield: [], tool: [], armor: {} });
@@ -200,13 +200,20 @@ export function gearHp(e) {
 }
 
 // Fireproof: the fire on you bites half as often.
+// (And a fire-hardened hide, as much again.)
 export function burnModSlow(e) {
-  return hasMod(e, 'armor', 'fireproof') ? 2 : 1;
+  return (hasMod(e, 'armor', 'fireproof') ? 2 : 1) * (heroOf(e, 'fire_hardened') ? 2 : 1);
 }
 
 // Fur-lined: cold slows you half as long.
+// (Northern blood: as much again.)
 export function chillModMult(e) {
-  return hasMod(e, 'armor', 'furred') ? 0.5 : 1;
+  return (hasMod(e, 'armor', 'furred') ? 0.5 : 1) * (heroOf(e, 'northern_blood') ? 0.5 : 1);
+}
+
+// A player's own trait (with others playing: theirs, see game/party.js).
+function heroOf(e, k) {
+  return !!(e && e.kind === 'player' && e.game && heroHas(e.game.hero, k));
 }
 
 // Featherweight: a roll costs less breath.
@@ -232,24 +239,11 @@ export function onStruckMods(game, wearer, attacker) {
 }
 
 // ------------------------------------------------------------ a tool
-// What a log is sawn into (as the recipes have it: four planks of its
-// wood).
-let PLANKS = null;
-function planksOf(log) {
-  if (!PLANKS) {
-    PLANKS = {};
-    for (const r of RECIPES) {
-      const ins = Object.keys(r.in || {});
-      if (r.station === 'hand' && ins.length === 1 && ins[0].startsWith('log_') && r.out.startsWith('planks')) PLANKS[ins[0]] = [r.out, r.n];
-    }
-  }
-  return PLANKS[log] || null;
-}
 const SMELTS = { iron_ore: 'iron_ingot', gold_ore: 'gold_ingot' };
 const STONY = new Set(['stone', 'cobblestone', 'basalt', 'deepslate', 'granite', 'sandstone', 'mine_rock', 'cave_rock']);
 
 // A block you've broken with a tool in hand: what comes of it (smelted,
-// doubled, a find in the rubble, logs sawn into planks). `drops`, as
+// doubled, a find in the rubble, more logs from a tree). `drops`, as
 // breakBlock gathered them, changed in place.
 export function toolDrops(game, p, id, drops) {
   const ms = modsOf(p).tool;
@@ -258,14 +252,8 @@ export function toolDrops(game, p, id, drops) {
   if (ms.includes('smelting')) {
     for (const d of drops) if (SMELTS[d.item]) d.item = SMELTS[d.item];
   }
-  if (ms.includes('sawing') && LOGS.has(id)) {
-    for (const d of drops) {
-      const pl = planksOf(d.item);
-      if (pl) {
-        d.item = pl[0];
-        d.count *= pl[1];
-      }
-    }
+  if (ms.includes('lumber') && LOGS.has(id)) {
+    for (const d of drops) if (LOGS.has(B[d.item])) d.count += Math.ceil(d.count / 3);
   }
   if (ms.includes('prospect') && b && b.tool === 'pick' && STONY.has(b.name) && Math.random() < 0.12) {
     const find = Math.random() < 0.15 ? 'gem' : Math.random() < 0.5 ? 'coal' : 'iron_ore';
@@ -278,18 +266,10 @@ export function toolDrops(game, p, id, drops) {
   }
 }
 
-// A wide pick or shovel: the block over the one you've dug comes out too.
-export function wideDig(game, p, x, y, z) {
-  if (!hasMod(p, 'tool', 'wide') || game.wideDigging) return;
-  const above = game.world.getBlock(x, y + 1, z);
-  const b = BLOCKS[above];
-  if (above === B.air || !b || !b.solid || !isFinite(b.hardness) || b.interact || b.liquid) return;
-  const held = p.heldDef && p.heldDef();
-  if (!held || held.tool !== b.tool) return;
-  game.wideDigging = true;
-  try {
-    game.breakBlock(x, y + 1, z, true);
-  } finally {
-    game.wideDigging = false;
-  }
+// A clean-cutting pick or shovel: how much of the usual time the extra
+// blocks of a dig take (the other half of a two-high gap: none; a step cut:
+// half). It only ever speeds up what anyone can do; it never digs more.
+export function extraDigMult(p, step) {
+  if (!hasMod(p, 'tool', 'clean')) return 1;
+  return step ? 0.5 : 0;
 }

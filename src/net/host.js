@@ -673,6 +673,9 @@ export class HostNet {
       name: sc.kind === 'yield' ? sc.foeName : undefined,
       // (The mountain going up: under it, or from over the sea.)
       here: sc.kind === 'erupt' ? !!sc.here : undefined,
+      // (A fallen star: the village it came down by, and whose fall.)
+      village: sc.kind === 'starfall' ? sc.village : undefined,
+      first: sc.kind === 'starfall' ? sc.first : undefined,
     };
   }
 

@@ -14,6 +14,7 @@ import { addEffect, drawEffects, drawBurning, drawStatus, drawLasers, drawKavSpi
 import { throwDice, stepDice, drawDie } from './dice.js';
 import { drawOldPlaces } from './oldplaces.js';
 import { drawStormSea, drawStormCover } from './stormfx.js';
+import { drawWing, wingInFront } from './wing.js';
 import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
@@ -303,6 +304,7 @@ export class Renderer {
     else this.computeCutaway(game.world, game.player, game.buildingAtPlayer ? game.buildingAtPlayer() : null);
     this.bubbles = [];
     this.tags = [];
+    this.wingsLit = [];
     this.pick = null;
     this.pickEnt = null;
     this.pickSeq = 0;
@@ -311,6 +313,7 @@ export class Renderer {
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
+    this.drawWingsLit();
     if (this.underground && this.hidden) this.drawDigView(game);
     drawStormSea(this, game, snap ? 'world' : 'all');
     drawOldPlaces(this, game, dt);
@@ -338,6 +341,20 @@ export class Renderer {
     // (or later, over a place's name and the notices: see drawBubbles).
     this.bubbleK = 1;
     if (!this.deferBubbles) this.drawBubbles(ctx);
+  }
+
+  // A fallen star's wing, over the night (see wing.js): its own light, so
+  // the dark doesn't dim it (faint, though, while it grows back).
+  drawWingsLit() {
+    const list = this.wingsLit;
+    if (!list || !list.length) return;
+    const ctx = this.ctx;
+    const a0 = ctx.globalAlpha;
+    for (const w of list) {
+      ctx.globalAlpha = a0 * (w.k >= 0.999 ? 0.85 : 0.3) * (w.a ?? 1);
+      drawWing(ctx, w.dir, w.sx, w.top, w.k, w.t);
+    }
+    ctx.globalAlpha = a0;
   }
 
   // What's being said, on the screen's own picture (`bubbleK`: how far the
@@ -1535,6 +1552,12 @@ export class Renderer {
           ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#ff3040'), sx - 1, top - SPR_PAD - 1);
           ctx.globalAlpha = a0;
         }
+        // A fallen star's wing (see wing.js): behind them, unless they've
+        // their back to you.
+        const wing = e.wing && !inWater && !e.submerged && !rolling && !mount ? e.wing : null;
+        if (wing && !wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
+        // (Kept, to be drawn again over the dark: it shines by its own light.)
+        if (wing && this.wingsLit) this.wingsLit.push({ dir, sx, top, k: wing.k, t: this.time + (e.id || 0), a: ctx.globalAlpha });
         if (e.submerged) {
           // Under black water: rings spreading, two pale eyes.
           const k = (this.time * 0.8 + e.id * 0.37) % 1;
@@ -1553,6 +1576,16 @@ export class Renderer {
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
+        // ...and now and then a mote of its light drifting off it.
+        if (wing && wing.k >= 0.999 && !this.spin) {
+          e._wingT = (e._wingT || 0) - (this.frameDt || 0.016);
+          if (e._wingT <= 0) {
+            e._wingT = 0.35 + Math.random() * 0.5;
+            const rp = e.renderPos();
+            this.emit(rp.x + (Math.random() - 0.5) * 0.8, rp.y + 1 + Math.random() * 0.8, rp.z, { n: 1, color: ['#ffe7a0', '#fffaf0'], up: 6, speed: 4, life: 0.9, gravity: -4, glow: true });
+          }
+        }
         // (The blight in it: a faint violet edge.)
         if (e.infected && !rolling && !inWater) {
           ctx.globalAlpha = a0 * (0.35 + 0.2 * Math.sin(this.time * 3 + (e.id || 0)));
@@ -2914,7 +2947,11 @@ export class Renderer {
 
   // A height against your feet, small, beside a block's outline: +1 above,
   // -2 below, 0 level with them.
+  // (Only with a block in hand, to build with: digging or fighting, the
+  // numbers are only clutter.)
   levelTag(sx, sy, rel, color) {
+    const h = this.game && this.game.player && this.game.player.heldDef ? this.game.player.heldDef() : null;
+    if (!h || h.kind !== 'block') return;
     const t = rel > 0 ? `+${rel}` : rel < 0 ? `${rel}` : '0';
     const ctx = this.ctx;
     const w = textWidth(t) + 3;
