@@ -226,6 +226,7 @@ export class Realms {
     if (e && !e.dead) e.look = rec.look;
     R.ruler = { sid: L.settlement.id, idx: rec.idx };
     R.since = day;
+    this.sim.saga?.emit('crowned', { civ: civ.id, sid: L.settlement.id, idx: rec.idx, day });
     // How much the realm asks of its towns depends on the ruler.
     const k = rec.personality?.kindness ?? 0.5;
     R.share = Math.round(clamp(TRIBUTE.max - k * (TRIBUTE.max - TRIBUTE.min), TRIBUTE.min, TRIBUTE.max) * 100) / 100;

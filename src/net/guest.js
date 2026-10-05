@@ -219,6 +219,7 @@ export class GuestNet {
     for (const n of npcs) {
       const op = this.ops && this.ops.get(n.id);
       if (op !== undefined) n.netOp = op;
+      n.netMark = (this.qms && this.qms.get(n.id)) || null;
     }
   }
 
@@ -321,6 +322,7 @@ export class GuestNet {
     game.stormSea = o.storm || null;
     game.charging = o.charging || null;
     if (o.ops) this.ops = new Map(o.ops);
+    if (o.qm) this.qms = new Map(o.qm);
     this.scene(o.scene);
   }
 

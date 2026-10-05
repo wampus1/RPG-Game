@@ -27,6 +27,11 @@ import { gossipLines } from '../sim/society.js';
 import { geoTalk } from './geotalk.js';
 import { fortuneOf } from '../sim/prosperity.js';
 import { isStar, starGreeting, wingTalk } from './starfall.js';
+import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
+import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
+
+const MOTIFS_OF = (S, th) => MOTIFS[th.m];
+const sagaPid = (game) => sagaPidOf(game.player);
 
 function pick(rng, arr) {
   return arr[Math.floor(rng.next() * arr.length)];
@@ -89,6 +94,15 @@ export function openingLine(npc, game) {
 }
 
 function openingRaw(npc, game) {
+  // (A story's own: what their story has them say first.)
+  if (npc.saga) {
+    const S = game.sim.saga;
+    const th = S && S.thread(npc.saga.th);
+    const M = th && MOTIFS_OF(S, th);
+    const a = th && S.actorSpec(th, npc.saga.key);
+    if (M && M.hello && a) return M.hello(th, a, npc, sagaPid(game), S) || '...';
+    return npc.saga.hello || '...';
+  }
   const rec = npc.rec;
   const s = npc.settlement;
   const rng = npc.rng;
@@ -214,6 +228,13 @@ export function topicsFor(npc, game) {
   const wanted = game.isWanted(s.id);
   const out = [];
   const add = (id, label) => out.push({ id, label });
+  // One of the stories' own (a messenger, an outlaw chief, a captive): only
+  // what their story gives them to say (see sim/saga).
+  if (npc.saga) {
+    out.push(...sagaTopics(npc, game));
+    add('bye', 'Goodbye.');
+    return out;
+  }
   if (npc.adventurer) {
     const adv = npc.adventurer;
     if (game.duel && game.duel.npc === npc) {
@@ -298,6 +319,8 @@ export function topicsFor(npc, game) {
   if (ed && countItem(game.player.inv, 'newspaper') > 0 && rec.readEdition !== ed.id && !npc.hired) add('paper', `Care for a copy of ${ed.title}?`);
   const mine = fav.given(npc);
   if (mine) add('favor_check', mine.kind === 'deliver' ? `About your letter for ${mine.toName}...` : 'About your request...');
+  // What the stories have them ask of you, or want to hear (see sim/saga).
+  out.push(...sagaTopics(npc, game));
   if (trader && rep > -40 && !npc.hired) add('trade', rec.job === 'cook' || rec.job === 'innkeeper' || rec.job === 'barkeep' ? 'Something to eat, please.' : 'Let\'s trade.');
   if (rec.job === 'mayor') {
     const dip = sim.diplomacy;
@@ -1424,6 +1447,7 @@ export function respond(npc, game, id, arg) {
 }
 
 function respondRaw(npc, game, id, arg) {
+  if (isSagaTopic(id)) return sagaRespond(npc, game, id, arg);
   const rec = npc.rec;
   const L = npc.layout;
   const s = npc.settlement;

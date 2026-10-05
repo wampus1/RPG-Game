@@ -1397,6 +1397,52 @@ function simpleIcon(key) {
       p.hline(1, 14, 15, '#5e4024');
       break;
     }
+    // (Round 52: the stories' things.) An iron key, big in the hand.
+    case 'cage_key':
+      p.ellipse(5, 5, 3, 3, '#6a6a72');
+      p.set(5, 5, '#2a2a2a');
+      p.line(7, 7, 13, 13, '#8a8a94');
+      p.line(8, 7, 13, 12, '#5a5a62');
+      p.rect(11, 12, 2, 2, '#8a8a94');
+      p.rect(12, 10, 2, 1, '#8a8a94');
+      break;
+    case 'stolen_goods':
+      p.ellipse(8, 10, 5.5, 4, '#8a7048');
+      p.ellipse(8, 9, 4.5, 3, '#a88a5a');
+      p.hline(6, 10, 5, '#5a4428');
+      p.set(8, 4, '#5a4428');
+      p.set(6, 9, '#e8e0c8');
+      p.set(10, 10, '#ffe070');
+      p.set(9, 8, '#c8c8d0');
+      break;
+    case 'outlaw_token':
+      p.line(4, 2, 8, 7, '#5a4428');
+      p.line(12, 2, 8, 7, '#5a4428');
+      p.ellipse(8, 10, 3.5, 3.5, '#c8a030');
+      p.vline(8, 7, 13, '#3a2a1a');
+      p.set(7, 9, '#ffe070');
+      break;
+    case 'trophy':
+      p.line(5, 12, 11, 3, '#ece4d4');
+      p.line(6, 12, 12, 3, '#c8c0b0');
+      p.line(7, 13, 12, 5, '#a8a090');
+      p.set(11, 3, '#ffffff');
+      p.hline(4, 8, 13, '#6a5038');
+      break;
+    case 'heirloom':
+      p.ellipse(8, 8, 4, 4, '#c8c8d0');
+      p.ellipse(8, 8, 2, 2, '#4a4a54');
+      p.set(8, 4, '#80c8ff');
+      p.set(7, 4, '#e8f4ff');
+      break;
+    case 'holy_relic':
+      p.rect(4, 6, 8, 7, '#c8c8d0');
+      p.rect(5, 7, 6, 5, '#8a8a94');
+      p.hline(4, 11, 6, '#ece4c8');
+      p.vline(8, 2, 5, '#ffe070');
+      p.hline(7, 9, 3, '#ffe070');
+      p.set(8, 9, '#ffe070');
+      break;
     case 'newspaper':
       p.rect(2, 3, 12, 10, '#ece6d4');
       p.rect(3, 4, 10, 2, '#2a2630');
@@ -1783,6 +1829,12 @@ export function itemIcon(key) {
   // shows as a glow round it (see drawJewelled).
   if (it && it.socket) {
     c = itemIcon(it.base);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 52) A story's letter, note or map: the paper it's on.
+  if (it && it.kind === 'note') {
+    c = itemIcon(it.icon || 'letter');
     iconCache.set(key, c);
     return c;
   }

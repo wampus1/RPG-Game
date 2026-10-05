@@ -14,13 +14,26 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
   return STARRED.get(k) || undefined;
 }
 Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
   get: (t, k, r) => (isStarred(k) ? starred(k) : Reflect.get(t, k, r)),
   has: (t, k) => (isStarred(k) ? !!starred(k) : Reflect.has(t, k)),
 }));
+
+// (Round 52) A story's letter (see sim/saga): "note~<story>~<n>~<kind>".
+// What it says is the story's; what it is shows in its name.
+const NOTES = {
+  letter: ['Sealed Letter', 'letter'], ransom: ['Ransom Note', 'letter'], orders: ['Written Orders', 'dispatch'], map: ['Rough Map', 'scroll'],
+  confession: ['Signed Confession', 'scroll'], warrant: ['Warrant', 'dispatch'], contract: ['Blood Contract', 'scroll'], will: ['Last Will', 'scroll'],
+  deed: ['Deed', 'scroll'], list: ['List of Names', 'scroll'], plea: ['Desperate Letter', 'letter'], invite: ['Invitation', 'letter'], token: ['Pardon', 'dispatch'],
+};
+function deriveNote(k) {
+  const [, th, n, kind] = String(k).split('~');
+  const [name, icon] = NOTES[kind] || NOTES.letter;
+  return { key: k, kind: 'note', name, icon, stack: 1, value: 0, noSell: true, note: { th: +th, n: +n, kind: kind || 'letter' }, about: 'Read it [F/RMB].' };
+}
 
 function item(key, props) {
   const d = {
@@ -479,6 +492,16 @@ item('ladle', { kind: 'misc', stack: 1, value: 3 });
 item('guard_badge', { name: 'Guard Badge', kind: 'misc', stack: 1, value: 0, noSell: true });
 item('letter', { name: 'Sealed Letter', kind: 'misc', stack: 16, value: 0, noSell: true });
 item('dispatch', { name: 'Mayor\'s Dispatch', kind: 'misc', stack: 16, value: 0, noSell: true });
+// (Round 52: see sim/saga.) The key to an outlaws' cage; goods taken on the
+// road, to carry to a fence; a token of an outlaw band's that you ride with
+// them; proof of a deed done.
+item('cage_key', { name: 'Cage Key', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'Iron, heavy, warm from an outlaw\'s pocket. It opens the cage at their camp.' });
+item('stolen_goods', { name: 'Bundle of Stolen Goods', kind: 'misc', stack: 8, value: 0, noSell: true, about: 'Silver plate, a lady\'s rings, a merchant\'s ledger: wrapped in sacking and tied. Take it to the fence.' });
+item('outlaw_token', { name: 'Outlaw\'s Token', kind: 'misc', stack: 1, value: 0, noSell: true, about: 'A coin cut in half and strung on a cord. Outlaws who know it let you by.' });
+item('trophy', { name: 'Trophy', kind: 'misc', stack: 8, value: 30, about: 'Proof of a hunt: a tooth, a claw, a lock of grey fur. Folk will pay to see it, or to have it.' });
+item('heirloom', { name: 'Heirloom', kind: 'misc', stack: 1, value: 25, noSell: true, about: 'Old silver, worn smooth. Somebody misses this.' });
+item('holy_relic', { name: 'Holy Relic', kind: 'misc', stack: 1, value: 60, noSell: true, about: 'A saint\'s bone in a silver box. It belongs in a temple.' });
+item('cure', { name: 'Fever Cure', kind: 'potion', stack: 8, value: 18, effect: { heal: 4 }, about: 'Bitter, green, and it works. Give it to someone with the fever (or drink it yourself).' });
 
 export function getItem(key) {
   return ITEMS[key];

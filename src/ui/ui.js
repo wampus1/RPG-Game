@@ -15,6 +15,7 @@ import { drawText, textWidth } from '../render/font.js';
 import { addItem, countItem } from '../game/inventory.js';
 import { BIOMES } from '../world/biomes.js';
 import * as W from './windows.js';
+import { QuestWindow } from './quests.js';
 import { ZONE, KINDS } from '../game/fishing.js';
 import { mastery } from '../game/mastery.js';
 import { Window, cap, describeActivity } from './window.js';
@@ -190,6 +191,10 @@ export class UI {
           continue;
         case 'KeyJ':
           if (!game.player.dead) this.toggle('journal', () => new W.JournalWindow(this));
+          continue;
+        // The quest log: what you've taken on, and the world's stories.
+        case 'KeyO':
+          if (!game.player.dead) this.toggle('quests', () => new QuestWindow(this));
           continue;
         case 'KeyH':
         case 'F1':
@@ -1361,6 +1366,12 @@ export class UI {
     if (returned) lines.push('Stolen goods were confiscated.');
     if (weapons) lines.push('The guards took your weapons.');
     this.ko = { t: 0, dur: how === 'exile' ? 3 : 4, lines };
+    this.closeAll();
+  }
+  // A black-out card with lines of its own (struck down and carried off:
+  // see sim/saga).
+  showBlackout(lines, dur = 4.5) {
+    this.ko = { t: 0, dur, lines };
     this.closeAll();
   }
   openTrade(npc) {

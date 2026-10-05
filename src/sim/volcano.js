@@ -117,6 +117,7 @@ export class Volcano {
     this.at = null;
     this.last = day;
     this.count++;
+    this.sim.saga?.emit('eruption', { day, count: this.count });
     this.next = day + rng.int(ERUPT_MIN, ERUPT_MAX);
     // New rivers of fire down its sides, glowing for a few days.
     const n = rng.int(2, 4);

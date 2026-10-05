@@ -98,6 +98,39 @@ export const STEPS = [
       if (k && cook) k.store[`recipe~${cook.recipes[0].key}`] = 1;
     },
   },
+  {
+    // The world's stories (see sim/saga): what's already afoot in an older
+    // world taken up as stories of their own.
+    to: '0.52.0',
+    data(d, log) {
+      log.push('The world\'s stories begin.');
+    },
+    game(game, log) {
+      const S = game.sim.saga;
+      if (!S) return;
+      // Outlaws you've already brought down: they remember you.
+      const heads = game.sim.bandits ? game.sim.bandits.heads || {} : {};
+      let n = 0;
+      for (const [band, k] of Object.entries(heads)) {
+        n += k;
+        S.count(`heads:${band}:pl:host`, k);
+      }
+      if (n) S.person('host').under += n;
+      // A band with a price on its head: whoever posted it is asking for
+      // help with it.
+      let pleas = 0;
+      for (const L of game.world.layouts.values()) {
+        if (!L.econ) continue;
+        for (const b of L.econ.bounties || []) {
+          const band = game.sim.bandits.get(b.band);
+          const m = L.npcs.find((r) => alive(r) && r.job === 'mayor');
+          if (!band || !m) continue;
+          if (S.begin('plea', { cast: { giver: { t: 'rec', sid: L.settlement.id, idx: m.idx }, threat: { t: 'band', id: band.id }, town: { t: 'town', sid: L.settlement.id } }, sid: L.settlement.id, vars: { how: 'raided', delay: 10 } })) pleas++;
+        }
+      }
+      log.push(`The world's stories have begun${pleas ? `: ${pleas} town${pleas > 1 ? 's' : ''} asking for help with outlaws already` : ''}. (Quest log: O)`);
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

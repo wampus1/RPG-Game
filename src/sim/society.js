@@ -225,6 +225,7 @@ export class Society {
   exile(L, r, day, rng, why) {
     const lf = lifeOf(r);
     lf.exiled = { from: L.settlement.id, day, why };
+    this.sim.saga?.emit('exiled', { who: { t: 'rec', sid: L.settlement.id, idx: r.idx }, why, name: `${r.name.first} ${r.name.last}` });
     const p = r.personality || {};
     const sim = this.sim;
     // (A family man or woman leaves alone: their partner and children stay.)

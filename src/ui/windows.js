@@ -24,6 +24,8 @@ import { SETTING_ROWS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
+import { pidOf as sagaPid } from '../sim/saga/refs.js';
+import { questSummary } from './quests.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
 // peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
@@ -1029,6 +1031,13 @@ export class JournalWindow extends Window {
       head('ESCORT');
       para(`${car.escort.name}, a guard of ${car.townName(car.escort.sid)}, is with you for another ${Math.ceil(car.hoursLeft())} hours.`);
     }
+    // (Round 52) What you've taken on in the world's stories (see O).
+    const qs = questSummary(game);
+    if (qs.length) {
+      head('QUESTS (O for the full log)');
+      for (const q of qs.slice(0, 6)) para(`• ${q.text}`, q.ready ? C.green : C.cyan);
+      if (qs.length > 6) para(`...and ${qs.length - 6} more.`, C.dim);
+    }
     head('REQUESTS');
     const fav = sim.favors.list;
     const mail = sim.diplomacy.letters.filter((q) => q.status === 'player');
@@ -1122,7 +1131,31 @@ export class LedgerWindow extends Window {
     this.closeOnOutside = true;
     // Two sides to the board: the town's own business, and its news.
     this.tab = 'town';
-    this.scrolls = { town: 0, news: 0 };
+    this.scrolls = { town: 0, news: 0, work: 0 };
+  }
+  // (Round 52) What's asked for here and hereabouts (see sim/saga): read
+  // here, it's heard of; what nobody in particular asks can be taken on
+  // straight from the board.
+  workLines(game) {
+    const S = game.sim.saga;
+    const lines = [];
+    if (!S) return lines;
+    const pid = sagaPid(game.player);
+    const sid = this.s.id;
+    const list = S.tasksIn(sid, pid);
+    lines.push({ t: 'HELP WANTED', c: C.hi });
+    if (!list.length) lines.push({ t: 'Nothing posted. Folk with trouble have a ! over their heads.', c: C.dim });
+    for (const t of list) {
+      S.hear(pid, t);
+      const mine = S.claimedBy(t, pid);
+      lines.push({ t: '', c: C.fg });
+      for (const l of wrap(`${mine ? '✓ ' : '• '}${t.title}`, this.w - 9)) lines.push({ t: l, c: mine ? C.green : '#f0e0c0' });
+      const where = t.giver ? `Ask ${t.giverName}${t.giver.t === 'rec' && t.giver.sid !== sid ? ` of ${game.world.ow.settlements[t.giver.sid]?.name || 'elsewhere'}` : ''}.` : t.at ? `It's ${S.whereTask(t, sid)}.` : '';
+      const pay = t.reward && t.reward.coins ? ` ¤${t.reward.coins}.` : '';
+      for (const l of wrap(`${where}${pay}`.trim(), this.w - 11)) lines.push({ t: `  ${l}`, c: '#b8a888' });
+      if (!t.giver && !mine && t.status === 'open') lines.push({ t: '  [Take it on]', c: C.cyan, act: t.id });
+    }
+    return lines;
   }
   setTab(t) {
     if (t === this.tab) return;
@@ -1251,7 +1284,7 @@ export class LedgerWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: 'rgba(40,30,20,0.96)', double: true, title: 'NOTICE BOARD' });
     g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name.replace(/^The /, '') : 'free folk'}`, '#f0e0c0');
     // The tabs.
-    const tabs = [['town', ' TOWN '], ['news', ' NEWS ']];
+    const tabs = [['town', ' TOWN '], ['news', ' NEWS '], ['work', ' WORK ']];
     let tx = Math.floor(this.w / 2) - 8;
     for (const [id, label] of tabs) {
       const on = this.tab === id;
@@ -1263,11 +1296,25 @@ export class LedgerWindow extends Window {
     }
     for (let x = 2; x < this.w - 2; x++) g.put(x, 4, '─', '#5a4a3a');
     const y = 5;
-    const lines = this.tab === 'town' ? this.townLines(game) : this.newsLines(game);
+    const lines = this.tab === 'town' ? this.townLines(game) : this.tab === 'work' ? this.workLines(game) : this.newsLines(game);
     const room = this.h - 1 - y;
     this.maxScroll = Math.max(0, lines.length - room);
     this.scroll = Math.max(0, Math.min(this.scroll || 0, this.maxScroll));
     lines.slice(this.scroll, this.scroll + room).forEach((l, i) => {
+      if (l.act) {
+        const hov = this.hovering(3, y + i, 16, 1);
+        g.text(3, y + i, l.t, hov ? C.white : l.c, hov ? '#4a3a26' : undefined);
+        this.hit(3, y + i, 16, 1, () => {
+          const S = game.sim.saga;
+          const t = S && S.task(l.act);
+          if (t && t.status === 'open') {
+            S.accept(t, { t: 'pl', pid: sagaPid(game.player) });
+            if (t.at) game.world.ow.pin(t.at.x, t.at.z, t.pinLabel || t.title, t.glyph || '!');
+            game.ui.msg(`You take it on: ${t.title}. (Quest log: O)`, C.cyan);
+          }
+        });
+        return;
+      }
       if (l.k !== undefined) {
         g.text(3, y + i, l.k, C.dim);
         g.text(18, y + i, l.t, l.c);
@@ -1289,9 +1336,11 @@ export class LedgerWindow extends Window {
     else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.scroll = Math.max(0, (this.scroll || 0) - 1);
     else if (k.code === 'PageDown') this.scroll = Math.min(this.maxScroll || 0, (this.scroll || 0) + 10);
     else if (k.code === 'PageUp') this.scroll = Math.max(0, (this.scroll || 0) - 10);
-    else if (k.code === 'ArrowLeft' || k.code === 'KeyA' || k.code === 'Digit1') this.setTab('town');
-    else if (k.code === 'ArrowRight' || k.code === 'KeyD' || k.code === 'Digit2') this.setTab('news');
-    else if (k.code === 'Tab') this.setTab(this.tab === 'town' ? 'news' : 'town');
+    else if (k.code === 'Digit1') this.setTab('town');
+    else if (k.code === 'Digit2') this.setTab('news');
+    else if (k.code === 'Digit3') this.setTab('work');
+    else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.setTab({ town: 'work', news: 'town', work: 'news' }[this.tab]);
+    else if (k.code === 'ArrowRight' || k.code === 'KeyD' || k.code === 'Tab') this.setTab({ town: 'news', news: 'work', work: 'town' }[this.tab]);
     else if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') this.close();
     else return false;
     return true;
@@ -1547,7 +1596,7 @@ export class HelpWindow extends Window {
       ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
       ['LEAD', 'Hold a lead, RMB an animal · RMB a fence to tie it up'],
       ['STUDY', 'Researcher at a desk: A/D turn rings · W/S pick · SPACE'],
-      ['WINDOWS', 'TAB bag · C craft · M map · J journal · L achievements · ESC menu · F2 CRT'],
+      ['WINDOWS', 'TAB bag · C craft · M map · J journal · O quests · L achievements · ESC menu · F2 CRT'],
     ];
     rows.forEach(([k, v], i) => {
       g.text(3, 2 + i, k, C.hi);

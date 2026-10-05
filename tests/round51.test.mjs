@@ -389,8 +389,8 @@ test('painting\'s colours: the shadows cooler, the lights warmer', () => {
 // ------------------------------------------------------------ updating
 test('a world from 0.50 brought up: potions\' effects with their pictures, the new goods in the shops', () => {
   assert.ok(STEPS.some((s) => s.to === '0.51.0'));
-  assert.equal(GAME_VERSION, '0.51.0');
-  assert.equal(stepsFor('0.50.0').length, 1);
+  assert.ok(STEPS.some((s) => s.to === GAME_VERSION));
+  assert.ok(stepsFor('0.50.0').length >= 1);
   const { game } = start();
   const d = game.serialize();
   d.gv = '0.50.0';

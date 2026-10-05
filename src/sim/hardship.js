@@ -37,7 +37,10 @@ export class Hardship {
     const onset = granary ? 6 : 4;
     const famine = e.famineDays >= onset;
     const poor = e.poorDays >= 8;
-    if (e.famineDays === onset) ledger(L, day, `Famine in ${s.name}: the stores are bare, and families are going to bed hungry.`);
+    if (e.famineDays === onset) {
+      ledger(L, day, `Famine in ${s.name}: the stores are bare, and families are going to bed hungry.`);
+      this.sim.saga?.emit('famine', { sid: s.id });
+    }
     // Tempers rise while it lasts (and cool slowly after).
     if (famine || poor) e.unrest = clamp((e.unrest || 0) + (famine ? 0.25 : 0.1) * (granary ? 0.5 : 1), 0, 3);
     const out = {};
@@ -52,6 +55,7 @@ export class Hardship {
         ? `A crowd gathered at the town hall in ${s.name}, crying out for bread. Windows were broken, and the council handed out ¤${loss} to calm them.`
         : `Angry words at the town hall in ${s.name}: folk want work, and fair taxes. The council spent ¤${loss} to settle things.`);
       out.riot = true;
+      this.sim.saga?.emit('riot', { sid: s.id, famine: !!famine });
     }
     // A wave of families leaving for somewhere better off.
     if (day - (e.waveDay ?? -99) >= 12 && rng.chance(famine ? 0.25 : 0.12)) {

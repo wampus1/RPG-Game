@@ -129,6 +129,8 @@ export class Justice {
     const list = this.pending.get(sid) || [];
     list.push(crime);
     this.pending.set(sid, list);
+    // (The stories hear of it: a bounty on a killer, a victim's kin.)
+    this.sim.saga?.emit('crime', { pid: game.player && game.player.seat ? (game.player.seat.host ? 'host' : String(game.player.seat.id)) : 'host', sid, type, sev, victim: crime.victim, seen: !crime.suspected });
     // A killing people saw: the town knows what you are (see dreadIn).
     if (type === 'murder' && !crime.suspected) this.knownKilling(sid, crime);
     const r = L.econ.recent;

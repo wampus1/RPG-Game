@@ -336,6 +336,7 @@ export class Dungeons {
         d.cores -= cores;
         d.coresGone = (d.coresGone || 0) + cores;
         this.giveCores(L, cores, list(names));
+        this.sim.saga?.emit('core_found', { sid: L.settlement.id, n: cores, by: list(names), dungeon: d.name, advs: party.map((m) => m.id) });
       }
       if (L) ledger(L, day, slew ? `${list(names)} came back from ${d.name}: its master is dead, and they're laden with old silver.` : kav ? `${list(names)} came back out of ${d.name}${cores ? ` with ${cores === 1 ? 'a Kavorent core' : 'two Kavorent cores'}` : ''}, and wouldn't say how far down they'd dared go.` : `${list(names)} came back from ${d.name} with full packs, and stories.`);
     } else if (d) {

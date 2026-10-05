@@ -189,6 +189,9 @@ test('the notice board has a town tab and a news tab', () => {
   assert.ok(!news.some((l) => l.k === 'Taxes'), 'news is news');
   w.onKey({ code: 'ArrowRight' });
   assert.equal(w.tab, 'news');
+  // (And since round 52, a third side: the work asked for there.)
+  w.onKey({ code: 'Tab' });
+  assert.equal(w.tab, 'work');
   w.onKey({ code: 'Tab' });
   assert.equal(w.tab, 'town');
 });

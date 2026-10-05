@@ -65,6 +65,8 @@ import { Playtime } from './playtime.js';
 import { eatDish, dishFx, learnRecipe } from './cooking.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
 import { InstrumentWindow } from '../ui/instrument.js';
+import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
+import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
 import { runMigrations } from './migrate.js';
 import { dishLines } from '../world/dishes.js';
 import { Riding } from './riding.js';
@@ -3192,6 +3194,11 @@ export class Game {
     const p = this.player;
     const d = p.heldDef();
     if (!d || p.dead) return false;
+    // (A story's letter, note or map: see sim/saga.)
+    if (d.kind === 'note') {
+      if (!this.sim.saga || !this.sim.saga.read(d.key)) this.ui.msg('The ink has run. You can\'t make out a word of it.', '#c8c8c8');
+      return true;
+    }
     if (d.kind === 'recipe') {
       const r = learnRecipe(p, d.recipe);
       const dish = ITEMS[d.recipe];
@@ -4128,6 +4135,8 @@ export class Game {
         this.useGate(x, y, z);
         break;
       case 'container': {
+        // (An outlaws' strongbox: see sim/saga.)
+        if (this.sim.saga && this.sim.saga.chest(x, y, z)) break;
         const owner = this.containerOwner(x, y, z);
         // (A household keeps its chest locked: see pickLock.)
         if (this.chestLocked(x, y, z, owner)) this.pickLock(x, y, z, owner);
@@ -4135,6 +4144,8 @@ export class Game {
         break;
       }
       case 'cell_door': {
+        // (A cage at an outlaws' camp: see sim/saga.)
+        if (this.sim.saga && this.sim.saga.door(x, y, z)) break;
         const j = this.sim.justice.jail;
         const L = this.jailLayoutAt(x, z);
         if (j && L && j.sid === L.settlement.id) {
@@ -5865,7 +5876,7 @@ export class Game {
         }
         return;
       }
-      if (pp && !this.pvp && !boutOf(this, target, source)) return;
+      if (pp && !this.pvp && !boutOf(this, target, source) && !(this.sim.saga && this.sim.saga.feud(target, source))) return;
       const who = target.kind === 'player' && target.seat ? target.seat : source && source.kind === 'player' && source.seat ? source.seat : null;
       if (who && who !== this.seat) return asSeat(this, who, () => this.damage(target, amount, source, crit));
     }
@@ -6007,7 +6018,13 @@ export class Game {
       } else if (target.warband && target.warband.foe) {
         // (Nor is fighting raiders, or soldiers in a battle.)
         if (source.kind === 'player') this.sim.war.onStruck(target);
-        if (target.warband.kind === 'bandit' || target.warband.merc) this.sim.bandits.onHurt(target);
+        if (target.warband.kind === 'bandit' || target.warband.merc || (target.warband.kind === 'saga' && target.warband.band !== undefined)) {
+          this.sim.bandits.onHurt(target);
+          if (source.kind === 'player' && target.warband.band !== undefined) this.sim.saga?.breakTruce(target.warband.band, source);
+        }
+      } else if (target.saga && target.saga.outlaw) {
+        // (An outlaw under a flag of truce: no crime, but they'll remember.)
+        this.sim.saga?.emit('outlaw_struck', { th: target.saga.th, key: target.saga.key, by: SR.pl(sagaPid(source.kind === 'player' ? source : this.player)) });
       } else if (source.kind === 'player' && target.hp > 0) this.crime(target);
       else if (source.kind !== 'player') this.witness(target, source);
     } else if (target.onHurt && source) target.onHurt(source);
@@ -6029,6 +6046,8 @@ export class Game {
       if (target.kind === 'npc' && this.sim.war.knockDown(target, source)) return;
       // So may you, on a battlefield.
       if (target.kind === 'player' && this.sim.war.downPlayer(source)) return;
+      // Or taken alive, by those sent to take you (see sim/saga).
+      if (target.kind === 'player' && this.sim.saga && this.sim.saga.subdue(target, source)) return;
       this.kill(target, source);
     }
   }
@@ -6151,6 +6170,8 @@ export class Game {
       if (who && who !== this.seat) return asSeat(this, who, () => this.kill(e, source));
     }
     onKill(this, e, source);
+    // (The stories hear of it: see sim/saga.)
+    this.sagaKill(e, source);
     // (Down an old place: its own reckoning, as one of you down there.)
     const run = e.inst ? this.runAt(e.x) : null;
     if (run) {
@@ -6195,7 +6216,7 @@ export class Game {
       if (e.warband) {
         this.sim.recordDeath(e.originLayout || L, rec, cause, null);
         this.sim.war.onDeath(e, source);
-        if (e.warband.kind === 'bandit' || e.warband.merc) this.sim.bandits.onKilled(e, source);
+        if (e.warband.kind === 'bandit' || e.warband.merc || (e.warband.kind === 'saga' && e.warband.band !== undefined)) this.sim.bandits.onKilled(e, source);
         if (byPlayer) this.stats.kills++;
         const civ = e.warband.civ !== null && e.warband.civ !== undefined ? this.world.ow.civs[e.warband.civ] : null;
         // (The first few by name; the rest are counted at the end.)
@@ -6300,9 +6321,66 @@ export class Game {
     return saved.size;
   }
 
+  // ------------------------------------------------------------ the stories
+  // (See sim/saga.) Who did it, as the stories know them.
+  sagaRefOf(src) {
+    if (!src) return null;
+    if (src.kind === 'player') return SR.pl(sagaPid(src));
+    if (src.kind === 'npc' && src.rec) {
+      const wb = src.warband;
+      if (src.rec.adventurer !== undefined) return SR.adv(src.rec.adventurer);
+      if (wb && wb.band !== undefined && wb.member !== undefined) return SR.bandit(wb.band, wb.member);
+      if (!src.rec.visitor) return SR.rec(src.rec.sid ?? src.settlement.id, src.rec.idx);
+      return null;
+    }
+    if (src.saga && src.saga.den) return SR.den(src.saga.den);
+    return null;
+  }
+
+  // Someone or something killed: the stories hear of it.
+  sagaKill(e, source) {
+    const S = this.sim.saga;
+    if (!S) return;
+    if (e.sagaKey) S.onKilled(e, source);
+    if (e.kind === 'player') return;
+    const base = { by: this.sagaRefOf(source), x: Math.round(e.x), z: Math.round(e.z), byActor: (source && source.sagaKey) || null, actor: e.sagaKey || null, name: e.name };
+    if (e.kind === 'npc') {
+      const rec = e.rec;
+      const wb = e.warband;
+      const who = rec.adventurer !== undefined ? SR.adv(rec.adventurer) : wb && wb.band !== undefined && wb.member !== undefined ? SR.bandit(wb.band, wb.member) : !rec.visitor ? SR.rec(rec.sid ?? e.settlement.id, rec.idx) : null;
+      S.emit('kill', { ...base, victim: who, npc: true, job: rec.job, hostile: !!(wb && wb.foe) });
+    } else S.emit('kill', { ...base, species: e.species, hostile: !!e.hostileNow || (e.S && e.S.mode === 'hostile'), den: e.saga && e.saga.den ? e.saga.den : null });
+  }
+
+  // What's over their head for you (see sim/saga and the renderer).
+  questMark(npc) {
+    const S = this.sim && this.sim.saga;
+    if (!S || !npc.rec) return null;
+    if (Math.abs(npc.x - this.player.x) > 24 || Math.abs(npc.z - this.player.z) > 18) return null;
+    const k = `${npc.id}`;
+    const c = this.markCache || (this.markCache = { t: -1, map: new Map() });
+    const now = Math.floor(this.sim.abs);
+    if (c.t !== now || c.pid !== sagaPid(this.player)) {
+      c.t = now;
+      c.pid = sagaPid(this.player);
+      c.map.clear();
+    }
+    if (!c.map.has(k)) c.map.set(k, S.markOf(npc, c.pid));
+    return c.map.get(k);
+  }
+
+  sagaPerson(a, spot, th) {
+    return spawnPerson(this, a, spot, th);
+  }
+
+  sagaBeast(a, spot, th) {
+    return spawnBeast(this, a, spot, th);
+  }
+
   playerDied(source) {
     const p = this.player;
     this.audio?.play('death');
+    this.sim.saga?.emit('player_died', { pid: sagaPid(p), by: this.sagaRefOf(source), byActor: (source && source.sagaKey) || null, byName: source ? source.name : null, x: p.x, z: p.z, sid: this.currentSettlement ? this.currentSettlement.id : null });
     // Down below: what you found there (and half your coin) is left where
     // you fell (see DungeonRun.spill).
     const spilled = this.dungeon && this.dungeon.carried ? this.dungeon.spill() : null;

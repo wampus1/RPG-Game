@@ -57,6 +57,8 @@ import { Prosperity } from './prosperity.js';
 import { Volcano } from './volcano.js';
 import { Dungeons } from './dungeons.js';
 import { Ancient } from './ancient.js';
+import { Saga } from './saga/core.js';
+import './saga/motifs/index.js';
 
 // How long a frame may spend laying out a far town (ms): see World.layOut.
 const LAY_MS = 4;
@@ -167,6 +169,8 @@ export class Sim {
     this.prosperity = new Prosperity(game, this);
     // The mountain on Kharos.
     this.volcano = new Volcano(game, this);
+    // The world's stories (round 52: see saga/core.js).
+    this.saga = new Saga(game, this);
     this.bp = null;
     this.deserted = new Set();
     this.renown = new Map(); // sid -> points for good deeds done there
@@ -323,6 +327,7 @@ export class Sim {
     if (this.civicJob) this.civicTick(LAY_MS);
     this.war.update(dt);
     this.volcano.update(dt);
+    this.saga.update(dt);
     this.careers.update(dt);
     this.updateConfront();
     this.justice.update(dt);
@@ -435,6 +440,8 @@ export class Sim {
     if (this.justice.exiled.has(sid)) m -= 60;
     m -= this.diplomacy.penalty(sid);
     m += Math.min(15, Math.floor((this.renown.get(sid) || 0) / 2));
+    // (What the stories have made of you there: see saga/core.js.)
+    if (this.saga) m += this.saga.townMod(sid);
     this.areaCache.set(sid, m);
     return m;
   }
@@ -879,6 +886,8 @@ export class Sim {
     rec.deathDay = day;
     rec.cause = cause;
     rec.override = null;
+    // (The stories hear of it: a widow, a feud, a vendetta.)
+    this.saga?.emit('npc_died', { who: { t: 'rec', sid: s.id, idx: rec.idx }, cause, byPlayer: killer === 'player', job: rec.job, name: `${rec.name.first} ${rec.name.last}` });
     if (!game.deadNpcs.has(s.id)) game.deadNpcs.set(s.id, new Set());
     game.deadNpcs.get(s.id).add(rec.idx);
     const ent = rec.ent;
@@ -2295,6 +2304,7 @@ export class Sim {
       portals: this.portals.serialize(),
       politics: this.politics.serialize(),
       war: this.war.serialize(),
+      saga: this.saga.serialize(),
     };
   }
 
@@ -2398,6 +2408,7 @@ export class Sim {
     // (After the realms: the map's borders as they stood.)
     this.politics.load(data.politics);
     this.war.load(data.war);
+    this.saga.load(data.saga);
   }
 }
 

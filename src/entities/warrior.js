@@ -12,6 +12,7 @@ import { ITEMS, ammoOf } from '../world/items.js';
 import { B } from '../world/blocks.js';
 import { FIRESIDE } from '../sim/bandits.js';
 import { ignite, roofTarget, nearestBurnable } from '../game/fire.js';
+import { sagaFight } from './sagaman.js';
 
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
 
@@ -30,6 +31,8 @@ export function warTick(n, dt) {
   if (wb.kind === 'march') return march(n, wb, dt);
   if (wb.kind === 'raid') return raider(n, wb, dt);
   if (wb.kind === 'bandit') return bandit(n, wb, dt);
+  // (The stories' own fighters: see sagaman.js.)
+  if (wb.kind === 'saga') return sagaFight(n, dt);
   return soldier(n, wb, dt);
 }
 
@@ -119,6 +122,26 @@ function leave(n, wb, dt) {
     return;
   }
   goTo(n, h.x, h.z, 1);
+}
+
+// The one playing a bandit at its fire minds most (the nearest, but for a
+// captive in their cage and anyone who's joined them, unless they've
+// turned on them).
+function campMark(g, n, wb) {
+  let best = null;
+  let bd = Infinity;
+  const S = g.sim.saga;
+  for (const q of g.everyone()) {
+    if (q.dead || q.limbo || q.sagaHeld) continue;
+    if (S && S.friendOfBand && S.friendOfBand(wb.band, q) && n.threat !== q) continue;
+    const d = Math.max(Math.abs(q.x - n.x), Math.abs(q.z - n.z));
+    if (d < bd) {
+      bd = d;
+      best = q;
+    }
+  }
+  // (Nobody to mind: someone far off, so nothing's near enough to matter.)
+  return best || { x: n.x + 999, y: n.y, z: n.z + 999, dead: true };
 }
 
 // ------------------------------------------------------------ raiders
@@ -223,7 +246,9 @@ function paddleIn(n, wb, dt) {
 // watch, and away with what they can carry.
 function bandit(n, wb, dt) {
   const g = n.game;
-  const pl = g.player;
+  // (Whoever's nearest of those playing: not one held in their cage, nor
+  // one who rides with them; see sim/saga.)
+  const pl = campMark(g, n, wb);
   if (wb.torch && wb.phase !== 'camp' && n.rng.chance(0.3)) g.renderer.emit(n.x, n.y + 1.6, n.z, { n: 1, color: ['#ffb040', '#ff7020', '#ffe080'], up: 14, speed: 4, life: 0.35, gravity: -30, oy: -14 });
   if (wb.phase === 'flee') return leave(n, wb, dt);
   if (n.hp < n.maxHp * 0.3) {
@@ -239,6 +264,10 @@ function bandit(n, wb, dt) {
   const close = d <= 6;
   if (wb.phase === 'camp') {
     const h = wb.home;
+    // (Someone in their cage: whoever comes may be come to pay for them,
+    // so they're watched, not set on, unless they start something.)
+    const band = g.sim.bandits && g.sim.bandits.get(wb.band);
+    const holding = !!(band && band.holding);
     // Come too near the fire: warned off first, then set on (a few
     // moments to think better of it).
     if (d <= 10 && n.threat !== pl) {
@@ -246,13 +275,13 @@ function bandit(n, wb, dt) {
       if (!wb.warned) {
         wb.warned = true;
         n.face(pl.x, pl.z);
-        n.say(n.rng.pick(['Your purse or your life!', 'Wrong road, friend.', 'Nobody comes to our fire uninvited.', 'Keep walking, stranger.']), 3, '#ff9080');
+        n.say(n.rng.pick(holding ? ['Come to pay, have you? See the jailer.', 'Keep your hands where I can see them.', 'Slowly. The jailer\'s by the cage.'] : ['Your purse or your life!', 'Wrong road, friend.', 'Nobody comes to our fire uninvited.', 'Keep walking, stranger.']), 3, '#ff9080');
       }
     } else if (d > 14) {
       wb.warnT = 0;
       wb.warned = false;
     }
-    if (n.threat === pl || d <= 3 || (wb.warnT || 0) > 5) {
+    if (n.threat === pl || (!holding && (d <= 3 || (wb.warnT || 0) > 5)) || (holding && d <= 1)) {
       if (n.threat !== pl && n.rng.chance(0.5)) n.say(n.rng.pick(['Get them!', 'You were warned!', 'Take everything they\'ve got!']), 2, '#ff9080');
       n.threat = pl;
       return strike(n, pl, dt);

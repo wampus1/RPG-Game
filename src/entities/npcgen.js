@@ -218,7 +218,7 @@ const CLOTH = [
 const PANTS = ['#3a2a1e', '#2a2a3a', '#4a3a2a', '#3a3a2a', '#2e3a4a', '#5a4a3a', '#4a4a4a', '#5a3a2a', '#2a3a2a'];
 const HAT_COLORS = ['#8a2a3a', '#2a4a7a', '#3a6a3a', '#c83a32', '#6a4a8a', '#c89030'];
 
-function makeLook(rng, style, age, job, civ) {
+export function makeLook(rng, style, age, job, civ) {
   // Mostly local looks, with the odd traveler's child from further afield.
   const skin = rng.chance(0.12) ? rng.pick(ALL_SKIN) : rng.pick(SKIN[style] || SKIN.vale);
   let hair = rng.chance(0.04) && age !== 'elder' ? rng.pick(DYED) : rng.pick(HAIR);
@@ -328,7 +328,7 @@ function finerThings(look, age, job) {
 }
 
 // ---------------------------------------------------------------- personality
-function makePersonality(rng, civ, job, age) {
+export function makePersonality(rng, civ, job, age) {
   const vals = civ ? civ.values : [];
   const p = {
     bravery: clamp(rng.gauss(0.5, 0.2) + (vals.includes('martial') ? 0.12 : 0), 0, 1),

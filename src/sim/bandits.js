@@ -87,6 +87,7 @@ export class Bandits {
     };
     if (!this.placeCamp(band, s, rng)) return null;
     this.bands.push(band);
+    this.sim.saga?.emit('band_formed', { band: band.id, sid: s.id });
     return band;
   }
 
@@ -159,7 +160,9 @@ export class Bandits {
 
   // Off somewhere new (never while you're watching).
   move(band, rng, day) {
-    if (this.seen(band)) return false;
+    // (Not with someone in their cage, nor from behind a wall they built:
+    // see sim/saga.)
+    if (this.seen(band) || band.holding || (band.outpost || 0) >= 2) return false;
     const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned' && band.camp && Math.hypot(s.cx - band.camp.x / 64, s.cz - band.camp.z / 36) < 14);
     const s = towns.length ? rng.pick(towns) : this.game.world.ow.settlements[band.near];
     this.strikeCamp(band);
@@ -169,6 +172,7 @@ export class Bandits {
     band.known = false;
     const L = this.game.world.layouts.get(s.id);
     if (L && L.econ) ledger(L, day, `Smoke's been seen out past ${s.name}: ${band.name} have made a new camp.`);
+    this.sim.saga?.emit('band_moved', { band: band.id, sid: s.id });
     return true;
   }
 
@@ -233,7 +237,7 @@ export class Bandits {
       if (!band.done && (day - band.moved >= 7 + (band.id % 5)) && rng.chance(0.5)) this.move(band, rng, day);
     }
     // Some of the world's outcasts take to the hills on their own.
-    if (this.live().length < 2 && rng.chance(0.1)) {
+    if (this.live().length < 3 && rng.chance(this.live().length < 2 ? 0.3 : 0.12)) {
       const towns = this.game.world.ow.settlements.filter((s) => !s.deserted && s.condition !== 'abandoned');
       if (towns.length) {
         const s = rng.pick(towns);
@@ -269,6 +273,7 @@ export class Bandits {
       const lost = [coins ? `¤${coins}` : null, goods ? `${goods} goods` : null].filter(Boolean).join(' and ') || 'nothing worth having';
       ledger(L, day, `${fullName(rec)} was robbed on the road by ${band.name}: ${lost} gone.`);
       this.postBounty(L, band, 15, day);
+      this.sim.saga?.emit('robbery', { band: band.id, sid: L.settlement.id, victim: { t: 'rec', sid: L.settlement.id, idx: rec.idx }, coins, goods });
       return rec;
     }
     return null;
@@ -276,7 +281,7 @@ export class Bandits {
 
   // A village with a weak watch: in by night, out with what they can carry.
   raid(band, day, rng) {
-    const L = this.nearTowns(band, 10).filter((q) => q.settlement.type === 'village' || (q.walled === false && q.settlement.type === 'town'))
+    const L = this.nearTowns(band, 10).filter((q) => (q.settlement.type === 'village' || (q.walled === false && q.settlement.type === 'town')) && !((q.econ.beaconUntil || 0) > this.sim.abs))
       .sort((a, b) => this.guardsOf(a) - this.guardsOf(b))[0];
     if (!L) return null;
     band.raided = day;
@@ -292,11 +297,14 @@ export class Bandits {
       if (L.econ.recent) L.econ.recent.raids = (L.econ.recent.raids || 0) + 1;
       L.econ.raidedDay = day;
       this.postBounty(L, band, 40, day);
+      this.sim.saga?.emit('raid', { band: band.id, sid: L.settlement.id, won: true, take });
       return { won: true, take };
     }
     const fell = band.members.splice(rng.int(0, band.members.length - 1), 1)[0];
     ledger(L, day, `${band.name} tried to raid ${L.settlement.name}, and were beaten off by the watch${fell ? `; ${fell.name.first} ${fell.name.last} was killed` : ''}.`);
     this.postBounty(L, band, 20, day);
+    this.sim.saga?.emit('raid', { band: band.id, sid: L.settlement.id, won: false, take: 0 });
+    if (!band.members.length) this.wipedOut(band, day, `the watch of ${L.settlement.name}`, { t: 'town', sid: L.settlement.id });
     return { won: false };
   }
 
@@ -377,15 +385,18 @@ export class Bandits {
       L.econ.treasury -= pay;
       a.coins += pay;
       ledger(L, day, `${nm} brought in ${kills} of ${band.name} for the bounty (¤${pay}).`);
-      if (!band.members.length) this.wipedOut(band, day, nm);
+      this.sim.saga?.emit('bandit_down', { band: band.id, n: kills, by: { t: 'adv', id: a.id }, sid: L.settlement.id });
+      if (!band.members.length) this.wipedOut(band, day, nm, { t: 'adv', id: a.id });
       else if (!this.seen(band)) this.move(band, rng, day);
       return;
     }
   }
 
   // The last of them gone.
-  wipedOut(band, day, by) {
+  wipedOut(band, day, by, byRef = null) {
+    if (band.done) return;
     band.done = true;
+    this.sim.saga?.emit('band_gone', { band: band.id, by: byRef, byName: by, name: band.name, at: band.camp ? { x: band.camp.x, z: band.camp.z } : null, near: band.near });
     const camp = band.camp;
     this.strikeCamp(band);
     const told = new Set(camp ? this.nearTowns({ camp }, 14) : []);
@@ -422,6 +433,7 @@ export class Bandits {
         CL.econ.treasury -= fee;
         band.loot += fee;
         band.hired = { civ: civ.id, war: w.id, side, until: day + 10 };
+        this.sim.saga?.emit('band_hired', { band: band.id, civ: civ.id });
         this.sim.realms.proclaim?.(civ, day, `Hard pressed, the ${civ.name.replace(/^The /, '')} have paid ${band.name} ¤${fee} to fight for them.`);
         return band.hired;
       }
@@ -447,7 +459,10 @@ export class Bandits {
       partner: null, children: [], parents: [], friends: [], personality: m.personality, traits: m.traits,
       hobbies: [], look: m.look, alive: true, shift: 'day', restDay: -1,
       // (Some fight with a knife or a hatchet in the other hand too.)
-      equipment: { tool: m.weapon, hobbyItem: null, items: [{ item: m.weapon, count: 1 }], coins: 0, armor: 0.1, shield: m.id % 4 === 0 && offhandable(m.weapon) ? (m.id % 8 === 0 ? 'hand_axe' : 'dagger') : null },
+      equipment: { tool: m.weapon, hobbyItem: null, items: [{ item: m.weapon, count: 1 }], coins: 0, armor: m.armor ?? 0.1, shield: m.id % 4 === 0 && offhandable(m.weapon) ? (m.id % 8 === 0 ? 'hand_axe' : 'dagger') : null },
+      // (A name made in the stories, and what they took to wear: see
+      // sim/saga.)
+      title: m.title || undefined, wear: m.wear || undefined,
       maxHp: m.maxHp, hp: Math.max(1, m.hp), work: { kind: 'none' }, schedule: { work: sched, rest: sched },
       coins: 3 + (m.id % 9), inv: [], skills: { trading: 0.1, cooking: 0.2, hunting: 0.6, fishing: 0.1, farming: 0, building: 0.1, crafting: 0.2 },
       fed: 1, hungry: 0, mood: 0.5, grief: [], override: null, away: false, doneKey: null,
@@ -488,6 +503,8 @@ export class Bandits {
       if (this.seen(band, 60)) this.clearing(band);
       const near = this.seen(band, 40) && g.world.regionAt(band.camp.x, band.camp.z);
       band.members.forEach((m, i) => {
+        // (Out after someone, or waiting at a meeting: see sim/saga.)
+        if (m.out) return;
         const k = `${band.id}:${m.id}`;
         const n = this.ents.get(k);
         if (n && !n.dead) {
@@ -581,6 +598,7 @@ export class Bandits {
     const name = band ? band.name : R.name;
     if (band) band.loot += R.take;
     const lost = R.n - (band ? band.members.length : 0);
+    this.sim.saga?.emit('raid', { band: R.band, sid: R.sid, won: !!(R.take || R.fires || R.looted), take: R.take, live: true });
     const burnt = R.fires ? ` They set ${R.fires > 1 ? 'fires' : 'a fire'} as they went.` : '';
     const homes = R.looted ? ` ${R.looted > 1 ? `${R.looted} homes were` : 'A home was'} broken into.` : '';
     ledger(L, this.game.day, (R.take ? `${name} raided ${L.settlement.name} and got away with ¤${R.take}.` : `${name} came raiding ${L.settlement.name}, and went away with nothing${lost > 0 ? `, leaving ${lost} of their own dead` : ''}.`) + burnt + homes);
@@ -640,7 +658,9 @@ export class Bandits {
       const posted = Object.keys(band.bounty).length;
       this.game.ui.msg(`One of ${band.name} down.${posted ? ' (There\'s a price on their heads: claim it from the mayor of a town that posted one.)' : ''}`, '#e8c080');
     }
-    if (!band.members.length) this.wipedOut(band, this.game.day, source && source.kind === 'player' ? this.game.playerName : null);
+    const byRef = this.game.sagaRefOf ? this.game.sagaRefOf(source) : null;
+    this.sim.saga?.emit('bandit_down', { band: band.id, member: n.warband.member, n: 1, by: byRef, name: m ? fullName(m) : n.name, title: m && m.title ? m.title : null, x: Math.round(n.x), z: Math.round(n.z) });
+    if (!band.members.length) this.wipedOut(band, this.game.day, source && source.kind === 'player' ? this.game.playerName : source ? source.name : null, byRef);
   }
 
   // Hurt in a fight: keep the record's hp in step.

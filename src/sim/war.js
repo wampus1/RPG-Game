@@ -545,6 +545,7 @@ export class War {
       score: 0, weary: { [a.id]: 0, [b.id]: 0 }, battles: [], plan: null, next: day, joined: [],
     };
     this.wars.push(w);
+    this.sim.saga?.emit('war_declared', { war: w.id, a: a.id, b: b.id, why: why.text });
     const text = `War! The ${plain(a)} has declared war on the ${plain(b)} over ${why.text}.`;
     for (const c of [a, b]) this.realms.proclaim(c, day, text);
     const here = this.game.currentSettlement;
@@ -1425,6 +1426,7 @@ export class War {
   // beaten), or both walk away.
   peace(w, day, rng, victor, total) {
     this.wars = this.wars.filter((q) => q !== w);
+    this.sim.saga?.emit('war_over', { war: w.id, a: w.lead.a, b: w.lead.b, victor: victor ? w.lead[victor] : null });
     const V = victor ? this.civ(w.lead[victor]) : null;
     const loserSide = victor === 'a' ? 'b' : victor === 'b' ? 'a' : null;
     const Lz = loserSide ? this.civ(w.lead[loserSide]) : null;

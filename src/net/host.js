@@ -626,7 +626,14 @@ export class HostNet {
     if (g.opT <= 0) {
       g.opT = 1;
       g.ops = [];
-      for (const n of game.npcs) if (!n.dead && Math.abs(n.x - p.x) < 20 && Math.abs(n.z - p.z) < 20) g.ops.push([n.id, sim.opinion(n)]);
+      g.qms = [];
+      for (const n of game.npcs) {
+        if (n.dead || Math.abs(n.x - p.x) >= 20 || Math.abs(n.z - p.z) >= 20) continue;
+        g.ops.push([n.id, sim.opinion(n)]);
+        // (What's over their head for this player: see sim/saga.)
+        const mk = game.questMark ? game.questMark(n) : null;
+        if (mk) g.qms.push([n.id, mk]);
+      }
     }
     let hud = [];
     try {
@@ -654,6 +661,7 @@ export class HostNet {
       citizen: enc(sim.citizen, 3),
       hud,
       ops: g.ops,
+      qm: g.qms || [],
       storm: game.stormSea ? enc(game.stormSea, 2) : null,
       charging: game.charging ? enc(game.charging, 2) : null,
     };

@@ -1673,6 +1673,19 @@ export class Renderer {
       ctx.fillStyle = f > 0.75 && Math.floor(this.time * 8) % 2 ? '#ff5040' : f > 0.5 ? '#f08a30' : '#e8c060';
       ctx.fillRect(sx + 3, by + 1, Math.max(1, Math.round(w * f)), 1);
     }
+    // (Round 52) Someone with something to ask of you (a gold "!"), done
+    // what they asked (a green "?"), or still waiting on you (a grey "?");
+    // one of the stories' own who wants a word with you (a blue "!"). See
+    // sim/saga.
+    if (e.kind === 'npc' && !e.dead && !e.sleeping && game && !(e.windup && !e.windup.dash)) {
+      const mk = game.remote ? e.netMark : game.questMark ? game.questMark(e) : null;
+      if (mk) {
+        const ch = mk === 'ready' || mk === 'busy' ? '?' : '!';
+        const col = mk === 'ready' ? '#80f070' : mk === 'busy' ? '#a8a090' : mk === 'talk' ? '#80c8ff' : '#ffd040';
+        const bob = Math.round(Math.sin(this.time * 4 + (e.id || 0)) * 1.2);
+        drawText(ctx, ch, sx + 6, feetY - 36 + bob, col, '#000');
+      }
+    }
     // Winding up to strike: a red "!" over them, louder as it comes.
     if (e.windup && !e.dead && !e.windup.dash) {
       const f = Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur));

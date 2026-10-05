@@ -3851,6 +3851,143 @@ together on your network" above for how to start. How it works:
   potions working on you get their pictures, the shops get their
   instruments, pipes and scrolls in, and each kitchen gets a recipe
   scroll to sell. (The version is now 0.51.0.)
+## Round 52: the world's stories
+
+Everything that goes on out there is now a *story* (`sim/saga/`). A
+woodcutter who ran into outlaws, a pack denned up near a town, a child
+lost in the woods, a price on a player's head: each one keeps going
+whether anyone is watching or not. It grows if it's left alone, and it
+leads on to other stories. The people in a story ask things of you, and
+the town's guards, passing adventurers and other players can take the
+same task on. Whoever finishes it first ends it for everyone. All the
+dialogue is written by hand; none of it is generated.
+
+- *How it works* (`sim/saga/core.js`):
+  - **Events:** the world's systems (outlaws, deaths, crimes, wars, the
+    volcano, the spires, crownings, exiles, famine) report what happens.
+  - **Stories:** each event can start a story or move one along. A story
+    is a chain of steps, and each step decides what happens next from how
+    things stand.
+  - **Near and far:** a story far from everyone playing is worked out a
+    day at a time, in the background. Once you've had a hand in it, or
+    come within about 120 tiles of it, it's acted out in full: its people
+    walk out to meet you, fight you and talk to you.
+  - **Word spreads:** a task is known in its own town first and reaches
+    the towns around it over the following days.
+  - **Saved:** all of it is kept in your save.
+- *Tasks, and the marks over heads:*
+  - **Over people's heads:** a gold **!** means they have something to
+    ask. A green **?** means it's done: go back to them to be paid. A grey
+    **?** means you're still on it. A blue **!** means someone in a story
+    wants a word with you.
+  - **In talk:** *I'll do it* takes a task on, and *It's done* turns it
+    in. Anyone grown can tell you what trouble they've heard of round
+    there.
+  - **Kinds of task:** clearing a camp, slaying, hunting, fetching,
+    delivering, meeting, rescuing, escorting, finding, paying, defending,
+    investigating, smuggling and contracts.
+- *The quest log* (**O**, `ui/quests.js`) has four tabs:
+  - **TASKS:** what you've taken on.
+  - **HEARD OF:** what you know is going on but haven't taken on.
+  - **STORIES:** each story you've had a hand in, with what came of it
+    and what it led to.
+  - **YOUR NAME:** your fame, your name among the outlaws, who holds a
+    grudge against you, and the bands you have a truce with.
+
+  Keys: **M** marks a task on your map, **G** gives it up, and **1-4** or
+  **TAB** change tabs. The journal lists what you're on, and a notice
+  board's new **WORK** side lists what's asked for in that town (tasks
+  nobody in particular is asking can be taken straight off the board).
+- *Outlaws* (`motifs/threats.js`, `motifs/bandits.js`, `motifs/camp.js`):
+  - **A plea:** a worker out past the edge of town (a woodcutter, a
+    trapper, a shepherd) runs into a band or a den and comes home asking
+    for help.
+  - **Left alone, a band grows:** it digs in (stakes, then a palisade,
+    then a stronghold with a lookout), goes after whoever told on them,
+    raids the town or takes in more men. The one who asked may not live
+    to see it done, and then their family takes it up.
+  - **Your name among them:** kill enough of a band and every outlaw knows
+    you. They send killers after you on the road (some with orders to
+    take you alive) and put a price on your head that anyone may take up.
+  - **A letter from the chief:** a messenger brings it (hold it, then
+    **F** or right-click to read it): *come and talk, at dusk tomorrow.*
+    What the chief really wants might be a truce, to recruit you, single
+    combat, tribute, or a trap.
+  - **Whoever kills you is promoted:** they get a name (*Kestrel, the
+    Wanderer's Bane*), better arms and armour, and a price on their head.
+    Every adventurer and soldier in the country then goes after them.
+  - **A windfall:** a band that comes by a Kavorent core, a relic or
+    Kavorent arms is a good deal more dangerous, and the realms want it
+    back.
+  - **A siege:** a realm musters soldiers to storm a stronghold, and you
+    can go with them.
+  - **Join a band** and they have work for you: shaking down a merchant,
+    fencing goods, scouting a town.
+- *Captured* (`motifs/captive.js`):
+  - **Taken alive:** fall to outlaws who wanted you alive and you wake in
+    an iron cage at their camp.
+  - **What they take:** your weapons, armour, coin and gold, relics,
+    Kavorent tech and Kavorent cores all go in the strongbox by their
+    fire. Bread and lockpicks are left.
+  - **What they want:** a ransom, which anyone can pay to the jailer, and
+    then you walk out with your things and safe passage; to recruit you;
+    or to make an example of you, and you're thrown out in the wilds with
+    nothing.
+  - **Getting out:** pick the lock if they missed a lockpick, or someone
+    else frees you: another player, your town's watch or an adventurer.
+    Kill the jailer for the key, or wipe out the band.
+  - **Afterwards:** your things stay in their strongbox until someone
+    opens it.
+  - **Leaving the game while held:** you come back still in the cage.
+- *Beasts* (`motifs/beasts.js`): a pack dens up near a town. It grows,
+  takes the sheep, then a worker out alone. Once there are five or more,
+  one of them may grow a name (*the Grey Widow*), and the bounty on it
+  rises with every life it takes.
+- *Townsfolk* (`motifs/people.js`, `motifs/crime.js`):
+  - **A vendetta:** kin want the killer's head. If the killer was you,
+    they come to have it out with you: pay the blood price, apologise, or
+    face them.
+  - **A lost child** follows you home once you find them.
+  - **Missing on the road:** someone set off for another town and never
+    got there.
+  - **A feud** between two families gets worse every few days.
+  - **Fever:** bring the herbs, then hand the cures out to the sick.
+  - **A runaway** to the outlaws, to be brought home.
+  - **A challenger** wants your name.
+  - **A murder:** ask about town, then name the killer to the watch.
+  - **A thief** in the market at night.
+  - **Smuggling.**
+- *Realms, faith and the wider world* (`motifs/realm.js`,
+  `motifs/faith.js`, `motifs/world.js`):
+  - **Realms:** war orders to carry, a spy's walk, a prisoner of war to
+    ransom, and a pretender to the throne.
+  - **Faith:** a saint's stolen bones to bring back, an old pilgrim to
+    walk to the holy city, and offerings before the Sleeper wakes.
+  - **The wider world:** a rumoured core, refugees from Kharos, famine
+    relief, a shortage, and a merchant's stolen goods.
+- *Between players* (`motifs/players.js`):
+  - **Contracts:** a contract on one of you can be taken up by anyone else
+    playing. A go-between finds you with the offer, or ask the town's
+    shady sorts.
+  - **No opting out:** the one the contract is on never sees it and can't
+    turn it down. Only the others choose whether to take it.
+  - **Fighting:** once you've taken a contract you may fight its target
+    anywhere, even with player fighting switched off.
+  - **Paid in full:** you're paid when you bring them down, or take them
+    alive if that's the deal. The money is set aside when the contract is
+    posted.
+  - **Bounties:** kill someone in front of witnesses and the town puts a
+    price on you. Bounty hunters drag you back to its jail.
+  - **A wager:** two of you making a name are set against each other.
+  - **Two beacons:** two fires on two hills, which have to be lit at the
+    same moment, one of you at each.
+- *Your standing:* what the stories say of you changes how towns treat
+  you (riding with the outlaws who raided them, or killing the beast that
+  took their children).
+- *Updating an older world* (migration 0.52.0): outlaws you'd already
+  killed count toward your name among them, and every band with a price on
+  its head starts a plea for help in that town.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -4055,7 +4192,12 @@ src/
                        Sleeper on Kharos: tremors, eruptions, ash, lava
                        flows and their cooling), islelaws (each people's
                        laws as they bear on you), isletrades (each
-                       people's own trade and building), and the
+                       people's own trade and building), saga (the
+                       world's stories: core runs them, actors puts their
+                       people in the world, talk is what they say, and
+                       motifs/ holds each kind: outlaws, captives,
+                       beasts, townsfolk, crime, realms, faith, the wider
+                       world, players), and the
                        Sim hub (reputation, renown, graves, mourning,
                        citizenship and house building, treasury chests,
                        saving)
