@@ -18,6 +18,8 @@ import { inReach } from '../entities/footprint.js';
 import { challengeBout } from '../game/bout.js';
 import { guildMates } from '../game/guilds.js';
 import { runCommand } from '../game/commands.js';
+import { packShip, shipById } from '../game/ships3d.js';
+import { REACH } from '../config.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -396,6 +398,21 @@ export class HostNet {
         out.inReach = inReach(game.player, e, game.attackReach());
       }
     }
+    // (A ship's plank they pointed at, on their own screen.)
+    if (c.ship && !out.entity) {
+      const S = shipById(game, c.ship.s);
+      const m = S && S.m;
+      if (m && c.ship.vi >= 0 && c.ship.vi < m.N) {
+        const x = c.ship.vi % m.W;
+        const z = Math.floor(c.ship.vi / m.W) % m.L;
+        const y = Math.floor(c.ship.vi / (m.W * m.L));
+        const [wx, wz] = S.toWorld(x + 0.5, z + 0.5);
+        const p = game.player;
+        out.ship = { s: S.id, vi: c.ship.vi, face: c.ship.face };
+        out.inReach = Math.hypot(wx - p.x, wz - p.z) <= REACH + 1 && Math.abs(S.layerY(y) - p.y) <= 5;
+        return out;
+      }
+    }
     if (c.x !== undefined) {
       const p = game.player;
       const id = game.world.getBlock(c.x, c.y, c.z);
@@ -635,6 +652,7 @@ export class HostNet {
     for (const d of game.drops) add(d);
     for (const q of game.props.values()) add(q);
     for (const q of game.engines) add(q);
+    for (const q of game.sailors || []) add(q);
     const gone = [];
     for (const id of [...g.sent.ents.keys()]) {
       if (seen.has(id)) continue;
@@ -643,6 +661,21 @@ export class HostNet {
     }
     if (ents.length) msg.e = ents;
     if (gone.length) msg.gone = gone;
+    // (Round 68) The great ships about them: how each is going, and her
+    // planks when they've changed since.
+    const ships = [];
+    g.sent.shipVer ||= new Map();
+    for (const S of game.ships3d || []) {
+      const mine = p.deck && p.deck.s === S.id;
+      const below = S.hold && S.hold.has(p);
+      if (!mine && !below && Math.hypot(S.x - p.x, S.z - p.z) > VIEW + S.m.L + 40) continue;
+      const cells = g.sent.shipVer.get(S.id) !== S.ver;
+      if (cells) g.sent.shipVer.set(S.id, S.ver);
+      ships.push(packShip(S, cells));
+    }
+    for (const id of [...g.sent.shipVer.keys()]) if (!ships.some((q) => q.id === id)) g.sent.shipVer.delete(id);
+    if (ships.length || g.sent.hadShips) msg.sh = ships;
+    g.sent.hadShips = ships.length > 0;
     // What's in the air and on the ground near them.
     const lists = this.listsNear(p);
     for (const k of Object.keys(lists)) {
@@ -841,6 +874,7 @@ export class HostNet {
       lasers: pick(game.lasers, (L) => [L.by && L.by.x, L.by && L.by.z]),
       flames: pick(game.flames, (f) => [f.x, f.z]),
       kavSpikes: pick(game.kavSpikes, (s) => [s.x, s.z]),
+      cannonballs: pick(game.cannonballs, (b) => [b.x, b.z]),
     };
   }
 

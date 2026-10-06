@@ -162,6 +162,13 @@ export class Ship {
   }
 }
 
+// Her name as it's said ("the Sea Wolf", "The Frigate").
+export function theShip(S, cap = false) {
+  const n = S.name || 'the ship';
+  if (/^the /i.test(n)) return cap ? n[0].toUpperCase() + n.slice(1) : 'the' + n.slice(3);
+  return `${cap ? 'The' : 'the'} ${n}`;
+}
+
 export function shipsOf(game) {
   return (game.ships3d ||= []);
 }
@@ -178,13 +185,19 @@ export function addShip(game, o) {
   return S;
 }
 
-// Is there room for a ship of `type` on the water at (x, z), heading yaw?
-export function roomFor(game, type, x, z, yaw, skip = null) {
+// Is there room for a ship of `type` on the water at (x, z), heading yaw
+// (with `margin` paces of open water all round her)?
+export function roomFor(game, type, x, z, yaw, skip = null, margin = 0) {
   const m = shipModel(type);
   const probe = { m, x, z, yaw, toWorld: Ship.prototype.toWorld };
   for (const p of m.perim) {
-    const [wx, wz] = probe.toWorld(p.x, p.z);
-    if (!sailable(game, Math.round(wx), Math.round(wz))) return false;
+    const nx = p.x - m.px;
+    const nz = p.z - m.pz;
+    const nl = Math.hypot(nx, nz) || 1;
+    for (const k of margin ? [0, margin] : [0]) {
+      const [wx, wz] = probe.toWorld(p.x + (nx / nl) * k, p.z + (nz / nl) * k);
+      if (!sailable(game, Math.round(wx), Math.round(wz))) return false;
+    }
   }
   for (const o of shipsOf(game)) if (o !== skip && Math.hypot(o.x - x, o.z - z) < (o.m.L + m.L) / 2 + 1) return false;
   return true;
@@ -201,7 +214,7 @@ export function waterSpot(game, type, x, z, min = 0) {
       const pz = Math.round(z + Math.sin(a) * R);
       if (!game.world.regionAt(px, pz)) game.loadAround?.(px, pz, true);
       if (!sailable(game, px, pz)) continue;
-      for (const yaw of [a + Math.PI / 2, a, a - Math.PI / 2, a + Math.PI]) if (roomFor(game, type, px, pz, yaw)) return { x: px, z: pz, yaw: ((yaw % TAU) + TAU) % TAU };
+      for (const yaw of [a + Math.PI / 2, a, a - Math.PI / 2, a + Math.PI]) if (roomFor(game, type, px, pz, yaw, null, R > 200 ? 1 : 4)) return { x: px, z: pz, yaw: ((yaw % TAU) + TAU) % TAU };
     }
   }
   return null;
@@ -274,7 +287,10 @@ export function pointOfSail(S, W) {
   const eSq = table(SQ_EFF, deg);
   const eFa = table(FA_EFF, deg);
   const drive = (sq * eSq * (eSq > 0 ? tSq : 1) + fa * eFa * tFa) / (sq + fa);
-  const trim = (sq * tSq + fa * tFa) / (sq + fa);
+  // (How well trimmed, against the best her sails can do together.)
+  const at = (sh) => (sq * tk(Math.abs(sh - I.sq)) + fa * tk(Math.abs(sh - I.fa))) / (sq + fa);
+  const best = Math.max(0.01, at(I.both));
+  const trim = Math.min(1, at(S.sheet) / best);
   return { theta, deg, drive, trim, ideal: I.both, eSq, eFa };
 }
 
@@ -545,7 +561,7 @@ function flooding(game, S, dt) {
   holdFlood(game, S);
   if (!S.sinking && (f >= 0.98 || S.whole < 0.45)) {
     S.sinking = 0.001;
-    for (const e of aboardOf(game, S)) if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`The ${S.name} is going down! Over the side!`, '#ff8060'));
+    for (const e of aboardOf(game, S)) if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`${theShip(S, true)} is going down! Over the side!`, '#ff8060'));
     game.audio?.play('crash', ...shipWhere(S));
   }
 }
@@ -942,7 +958,7 @@ function offEdge(game, S, e, tx, tz) {
     if (w.canStand(rx, y, rz) && !w.isWaterAt(rx, y, rz) && !w.isWaterAt(rx, y - 1, rz)) {
       leaveDeck(game, e);
       e.teleport(rx, y, rz);
-      if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`You step off the ${S.name}.`, '#a0d8ff', true));
+      if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`You step off ${theShip(S)}.`, '#a0d8ff', true));
       return true;
     }
   }
@@ -1010,7 +1026,7 @@ export function boardAt(game, S, e, wx, wz) {
   if (!spot) return false;
   putAboard(game, S, e, spot.cx, spot.y, spot.cz);
   if (e.kind === 'player') game.asPlayer(e, () => {
-    game.ui.msg(`You climb aboard the ${S.name}.`, '#a0d8ff', true);
+    game.ui.msg(`You climb aboard ${theShip(S)}.`, '#a0d8ff', true);
     game.audio?.play('step');
   });
   return true;
@@ -1370,4 +1386,113 @@ export function holeBeside(S, vi, face) {
 
 export function hashSeed(S) {
   return hash4(S.id, 77, 13);
+}
+
+// ------------------------------------------------------------ over the net
+// What a player's screen needs of her, this moment (see net/host.js): where
+// she is and how she's going, her sails and helm and guns, and (when it's
+// changed since they last had it) every plank of hers that isn't as built.
+export function packShip(S, withCells) {
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const out = {
+    id: S.id, type: S.type, x: r2(S.x), z: r2(S.z), yaw: Math.round(S.yaw * 1000) / 1000, v: r2(S.v), yv: Math.round(S.yawV * 1000) / 1000, yo: r2(S.yOff),
+    ss: r2(S.sailSet), sg: r2(S.sailGoal), sh: r2(S.sheet), br: r2(S.brace), bo: r2(S.boom), fi: r2(S.fill || 0), le: S.lee || 1, wh: r2(S.wheel), ru: r2(S.rudder),
+    ro: S.runOut ? 1 : 0, hp: S.sailHp.map(r2), g: S.guns.map((g) => [r2(g.aim), r2(g.elev), g.cd > 0 ? r2(g.cd) : 0, r2(g.recoil)]),
+    n: S.name, pa: S.paint, p2: S.paint2, fl: S.flag, em: S.emblem, ow: S.owner, fd: r2(S.floodCells), an: S.anchor ? 1 : 0, sk: r2(S.sinking || 0),
+    wl: S.windLocal ? [r2(S.windLocal.x), r2(S.windLocal.z)] : null, ver: S.ver, hb: S.helmBy ?? null, am: S.ammo,
+  };
+  if (withCells) {
+    const m = S.m;
+    const diff = [];
+    for (let i = 0; i < m.N; i++) if (S.vox[i] !== m.vox[i]) diff.push(i, S.vox[i]);
+    out.vd = diff;
+  }
+  return out;
+}
+
+// Brought up to date on a player's screen from what was sent.
+export function applyShips(game, list) {
+  const keep = new Set();
+  const ships = shipsOf(game);
+  for (const d of list || []) {
+    keep.add(d.id);
+    let S = shipById(game, d.id);
+    if (!S) {
+      S = new Ship({ id: d.id, type: d.type, x: d.x, z: d.z, yaw: d.yaw, name: d.n });
+      ships.push(S);
+    }
+    // (Where she is: eased toward what's sent, not jumped.)
+    const far = Math.hypot(S.x - d.x, S.z - d.z) > 6;
+    S.netGoal = { x: d.x, z: d.z, yaw: d.yaw };
+    if (far) {
+      S.x = d.x;
+      S.z = d.z;
+      S.yaw = d.yaw;
+    }
+    S.v = d.v;
+    S.yawV = d.yv;
+    S.yOff = d.yo;
+    S.sailSet = d.ss;
+    S.sailGoal = d.sg;
+    S.sheet = d.sh;
+    S.brace = d.br;
+    S.boom = d.bo;
+    S.fill = d.fi;
+    S.lee = d.le;
+    S.wheel = d.wh;
+    S.rudder = d.ru;
+    S.runOut = !!d.ro;
+    S.sailHp = d.hp;
+    d.g.forEach((q, i) => {
+      if (!S.guns[i]) return;
+      Object.assign(S.guns[i], { aim: q[0], elev: q[1], cd: q[2], recoil: q[3] });
+    });
+    S.name = d.n;
+    S.paint = d.pa;
+    S.paint2 = d.p2;
+    S.flag = d.fl;
+    S.emblem = d.em;
+    S.owner = d.ow;
+    S.floodCells = d.fd;
+    S.anchor = !!d.an;
+    S.sinking = d.sk;
+    S.windLocal = d.wl ? { x: d.wl[0], z: d.wl[1] } : S.windLocal;
+    S.helmBy = d.hb;
+    S.ammo = d.am;
+    if (d.vd) {
+      S.vox.set(S.m.vox);
+      for (let k = 0; k < d.vd.length; k += 2) S.vox[d.vd[k]] = d.vd[k + 1];
+      S.ver = d.ver;
+      S.recount();
+    }
+  }
+  game.ships3d = ships.filter((S) => keep.has(S.id));
+}
+
+// Between words from the host: on as she was going.
+export function driftShips(game, dt) {
+  for (const S of shipsOf(game)) {
+    S.yaw += (S.yawV || 0) * dt;
+    S.x += Math.sin(S.yaw) * S.v * dt;
+    S.z += Math.cos(S.yaw) * S.v * dt;
+    const g = S.netGoal;
+    if (g) {
+      const k = Math.min(1, dt * 4);
+      S.x += (g.x - S.x) * k;
+      S.z += (g.z - S.z) * k;
+      let dy = (g.yaw - S.yaw) % TAU;
+      if (dy > Math.PI) dy -= TAU;
+      if (dy < -Math.PI) dy += TAU;
+      S.yaw += dy * k;
+      g.x += Math.sin(S.yaw) * S.v * dt;
+      g.z += Math.cos(S.yaw) * S.v * dt;
+    }
+    for (const q of S.guns) if (q.recoil > 0) q.recoil = Math.max(0, q.recoil - dt * 1.4);
+  }
+  for (const b of game.cannonballs || []) {
+    b.x += b.vx * dt;
+    b.z += b.vz * dt;
+    b.y += b.vy * dt;
+    b.vy -= BALL_GRAV * dt;
+  }
 }

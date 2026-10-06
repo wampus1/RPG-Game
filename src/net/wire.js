@@ -9,6 +9,7 @@ import { NPC } from '../entities/npc.js';
 import { Creature, SPECIES } from '../entities/creature.js';
 import { ItemDrop } from '../entities/itemdrop.js';
 import { Engine } from '../game/engines.js';
+import { Sailor } from '../entities/sailor.js';
 
 // Never sent: the game itself, private workings, and what each screen
 // works out for itself to draw (a master's limbs swinging, a roll's
@@ -18,11 +19,13 @@ const SKIP = new Set([
   'faceR', 'sideLeft', 'shimmerT', 'rollTrail', 'moteT', 'rig', 'legRig', 'legCv', 'artPhase', 'mat', 'strike', 'swapping', 'victim', 'hunting',
   'schedule', 'memory', 'pathFails', 'idleT', 'waitT', 'stateT', 'greetCd', 'emoteCd', 'lineCd', 'fxT', 'wareT', 'haltT', 'thinkT',
   '_dishFx', 'dishStatKey', 'tacGoal',
+  // (Round 68: a ship's hand's own reckoning, and their place on her crew list.)
+  'recRef', 'task', 'hpath', 'hpathTried', 'upTried', 'wx', 'wz',
 ]);
 // Of a townsperson's record, what anyone sees of them.
 const REC = ['idx', 'sid', 'name', 'age', 'job', 'look', 'equipment', 'wear', 'traits', 'personality', 'hp', 'maxHp', 'gems', 'tier', 'soldier', 'bandit', 'drafted', 'captive', 'ruler', 'councillor', 'title', 'alive'];
 
-const isEnt = (v) => v instanceof Player || v instanceof NPC || v instanceof Creature || v instanceof ItemDrop || v instanceof Engine;
+const isEnt = (v) => v instanceof Player || v instanceof NPC || v instanceof Creature || v instanceof ItemDrop || v instanceof Engine || v instanceof Sailor;
 
 // A value as plain data (`depth` levels into it at most).
 export function enc(v, depth = 4) {
@@ -67,10 +70,11 @@ export function kindOf(e) {
   if (e instanceof Creature) return 'C';
   if (e instanceof ItemDrop) return 'D';
   if (e instanceof Engine) return 'E';
+  if (e instanceof Sailor) return 'S';
   return 'R';
 }
 
-const PROTO = { P: Player.prototype, N: NPC.prototype, C: Creature.prototype, D: ItemDrop.prototype, E: Engine.prototype, R: Object.prototype };
+const PROTO = { P: Player.prototype, N: NPC.prototype, C: Creature.prototype, D: ItemDrop.prototype, E: Engine.prototype, S: Sailor.prototype, R: Object.prototype };
 
 // Its fields, as data (each as a string, to compare with what was sent).
 export function fieldsOf(e) {

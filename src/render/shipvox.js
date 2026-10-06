@@ -1316,8 +1316,10 @@ export function shipDecos(r, game, buckets, zMin, zMax) {
   const ships = game.ships3d;
   if (!ships || !ships.length) return;
   const aboard = (game.visibleEntities || []).filter((e) => e.deck);
+  const wakeRows = new Map();
   for (const S of ships) {
     if (S.sunk) continue;
+    wakeOf(r, S, wakeRows);
     const [u, v] = r.toView(S.x, S.z);
     const reach = S.m.L + S.m.bowsprit.len + 30;
     if (u * TILE < r.camX - reach * TILE || u * TILE > r.camX + r.vw + reach * TILE || v * TILE < r.camY - reach * TILE || v * TILE > r.camY + r.vh + reach * TILE) {
@@ -1329,5 +1331,65 @@ export function shipDecos(r, game, buckets, zMin, zMax) {
     let arr = buckets.get(row);
     if (!arr) buckets.set(row, (arr = []));
     arr.push({ deco: () => drawShip(r, game, S, aboard), layer: 99, rp: { y: 99 } });
+  }
+  // Her wake, row by row on the water (so what's in front of it covers it).
+  for (const [row, pts] of wakeRows) {
+    if (row < zMin || row > zMax) continue;
+    let arr = buckets.get(row);
+    if (!arr) buckets.set(row, (arr = []));
+    arr.push({ deco: () => drawWake(r, pts), layer: 6, rp: { y: 6 } });
+  }
+}
+
+// The white water she leaves: from her bow, spreading out either side,
+// and from under her stern, trailing astern and fading.
+function wakeOf(r, S, rows) {
+  const dt = Math.min(0.1, r.frameDt || 0.016);
+  const W = (S.wakePts ||= []);
+  const last = S.wakeLast;
+  const sp = last ? Math.hypot(S.x - last.x, S.z - last.z) / Math.max(1e-3, dt) : 0;
+  S.wakeLast = { x: S.x, z: S.z };
+  const m = S.m;
+  if (sp > 1.2 && sp < 60) {
+    S.wakeAcc = (S.wakeAcc || 0) + dt * Math.min(30, sp * 1.6);
+    while (S.wakeAcc >= 1) {
+      S.wakeAcc -= 1;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const bow = Math.random() < 0.45;
+      const lx = m.px + side * (bow ? 0.8 : m.W * 0.3);
+      const lz = bow ? m.L - 2.5 : 0.3;
+      const [wx, wz] = S.toWorld(lx, lz);
+      const [ox, oz] = S.dirWorld(side, bow ? -0.4 : -1.2);
+      W.push({ x: wx, z: wz, vx: ox * (bow ? 2.2 : 1), vz: oz * (bow ? 2.2 : 1), t: 0, life: bow ? 2.2 : 3.2, big: bow ? 1 : 2 });
+    }
+  }
+  for (const w of W) {
+    w.t += dt;
+    w.x += w.vx * dt;
+    w.z += w.vz * dt;
+    w.vx *= 1 - dt * 0.6;
+    w.vz *= 1 - dt * 0.6;
+  }
+  S.wakePts = W.filter((w) => w.t < w.life).slice(-220);
+  for (const w of S.wakePts) {
+    const [, v] = r.toView(w.x, w.z);
+    const row = Math.ceil(v - 0.001);
+    let a = rows.get(row);
+    if (!a) rows.set(row, (a = []));
+    a.push(w);
+  }
+}
+
+function drawWake(r, pts) {
+  const ctx = r.ctx;
+  for (const w of pts) {
+    const [u, v] = r.toView(w.x, w.z);
+    const x = Math.round(u * TILE + 8 - r.camX);
+    const y = Math.round(v * TILE + 8 - 4.75 * LH - r.camY + 3);
+    const k = 1 - w.t / w.life;
+    ctx.fillStyle = `rgba(236,246,255,${(0.75 * k).toFixed(3)})`;
+    const n = w.big === 2 ? 3 : 2;
+    ctx.fillRect(x, y, n, 1);
+    if (k > 0.5) ctx.fillRect(x + 1, y - 1, 1, 1);
   }
 }

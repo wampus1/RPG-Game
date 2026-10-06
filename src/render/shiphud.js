@@ -4,7 +4,7 @@
 // (and how many rafts' worth that is), the wind and where it is to her
 // (a compass: her bow up, the wind's arrow), how much sail she's carrying,
 // her sheets against where they'd best be, and her guns.
-import { TILE, LH, VIEW_H } from '../config.js';
+import { TILE, LH, VIEW_W } from '../config.js';
 import { drawText } from './font.js';
 import { shipById, shipStatus } from '../game/ships3d.js';
 
@@ -51,9 +51,9 @@ export function drawShipHud(r, game) {
   const helm = p.deck.role === 'helm';
   const gun = p.deck.role === 'gun';
   const H = helm ? 58 : 22;
-  const x0 = 4;
-  const y0 = VIEW_H - 32 - H;
   const W = helm ? 168 : 120;
+  const x0 = VIEW_W - W - 4;
+  const y0 = 84;
   ctx.fillStyle = 'rgba(16,14,24,0.78)';
   ctx.fillRect(x0, y0, W, H);
   ctx.fillStyle = 'rgba(200,170,110,0.5)';

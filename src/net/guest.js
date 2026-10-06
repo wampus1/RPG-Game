@@ -18,6 +18,7 @@ import { DungeonRun } from '../game/dungeon.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
 import { GAME_VERSION, versionText } from '../version.js';
+import { applyShips, driftShips } from '../game/ships3d.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
@@ -226,6 +227,8 @@ export class GuestNet {
       if (this.lately.size > 64) this.lately = new Map([...this.lately].slice(-32));
     }
     this.sortEnts();
+    // (Round 68) The great ships about you.
+    if (m.sh) applyShips(game, m.sh);
     if (m.l) this.lists(m.l);
     if (m.w) this.globals(m.w);
     if (m.own) this.ownState(m.own);
@@ -285,6 +288,7 @@ export class GuestNet {
     const engines = [];
     const props = new Map();
     const players = [];
+    const sailors = [];
     for (const e of this.ents.values()) {
       if (e.netKind === 'N') npcs.push(e);
       else if (e.netKind === 'C') creatures.push(e);
@@ -292,7 +296,9 @@ export class GuestNet {
       else if (e.netKind === 'E') engines.push(e);
       else if (e.netKind === 'R') props.set(e.id, e);
       else if (e.netKind === 'P') players.push(e);
+      else if (e.netKind === 'S') sailors.push(e);
     }
+    game.sailors = sailors;
     game.npcs = npcs;
     game.creatures = creatures;
     game.drops = drops;
@@ -534,6 +540,7 @@ export class GuestNet {
     // and whatever's in the air flies on.
     for (const e of this.ents.values()) tick(e, dt);
     for (const a of game.projectiles || []) if (a.t < a.dur) a.t = Math.min(a.dur, a.t + dt);
+    driftShips(game, dt);
     for (const h of game.hazards || []) h.t = (h.t || 0) + dt;
     for (const z of game.zones || []) z.t = (z.t || 0) + dt;
     for (const o of game.orbs || []) {
@@ -698,6 +705,7 @@ function packCursor(c) {
     if (c.plan) out.plan = true;
     if (c.place) out.place = { x: c.place.x, y: c.place.y, z: c.place.z };
   }
+  if (c.ship) out.ship = { s: c.ship.s, vi: c.ship.vi, face: c.ship.face };
   return out;
 }
 

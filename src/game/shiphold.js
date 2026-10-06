@@ -14,7 +14,7 @@ import { REGION_W, REGION_D, INST_RX, INST_SLOT_RX, WORLD_Y } from '../config.js
 import { Region } from '../world/region.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { isInside, onPlan, standOn } from '../world/shipmodels.js';
-import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf } from './ships3d.js';
+import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf, theShip } from './ships3d.js';
 import { SURFACE } from '../config.js';
 
 // Each ship's space apart: its slot (past every old place's).
@@ -133,7 +133,7 @@ export function enterHold(game, S, e, cx, fy, cz) {
         game.renderer.camInit = false;
         game.lightDirty = true;
       }
-      game.ui.msg(`Below decks on the ${S.name}.`, '#c8b890', true);
+      game.ui.msg(`Below decks on ${theShip(S)}.`, '#c8b890', true);
     });
   }
 }
@@ -273,7 +273,7 @@ export function holdTick(game, dt) {
               game.renderer.camInit = false;
               game.lightDirty = true;
             }
-            game.ui.msg(`On deck of the ${S.name}.`, '#a0d8ff', true);
+            game.ui.msg(`On deck of ${theShip(S)}.`, '#a0d8ff', true);
           });
         }
       }

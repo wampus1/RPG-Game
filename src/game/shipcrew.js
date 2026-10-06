@@ -16,8 +16,8 @@ import { Sailor } from '../entities/sailor.js';
 import { findPath } from '../entities/pathfind.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
-import { putAboard, deckSpotNear, deckStep, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, breakVoxel, mendVoxel } from './ships3d.js';
-import { holdOf, holdPos, holdLocal, enterHold } from './shiphold.js';
+import { putAboard, deckSpotNear, deckStep, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel } from './ships3d.js';
+import { holdOf, holdPos, holdLocal } from './shiphold.js';
 
 const TAU = Math.PI * 2;
 const NEAR = 70;
