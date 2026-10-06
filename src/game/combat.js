@@ -358,7 +358,7 @@ function victimsAt(game, a, tiles) {
   const on = (e) => onTiles(e, tiles) && Math.abs(e.y - a.y) <= 1;
   const p = game.player;
   const target = a.windup && a.windup.target;
-  if (!p.dead && on(p) && (target === p || a.hostileNow || a.threat === p || a.kind === 'creature' || a.kind === 'monster')) out.push(p);
+  if (!p.dead && on(p) && !a.petOf && (target === p || a.hostileNow || a.threat === p || a.kind === 'creature' || a.kind === 'monster')) out.push(p);
   // (Only what they're after, or its side: no cutting down bystanders.)
   if (target && target !== p && !target.dead && on(target)) out.push(target);
   return out;

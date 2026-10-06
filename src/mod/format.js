@@ -399,6 +399,17 @@ export function problems(m, extra = []) {
   const ref = (where, k, id, what) => {
     if (id && !has(k, id)) out.push({ level: 'error', where, text: `${what} points at ${KIND_NAMES[k][0]} "${id}", which isn't in this mod any more.` });
   };
+  // (What a choice on the character screen gives: what it points at.)
+  const gives = (where, what, o) => {
+    const e = o.effects || {};
+    if (o.art) ref(where, 'assets', o.art, what);
+    for (const [it] of Array.isArray(e.items) ? e.items : []) if (typeof it === 'string' && it[0] === '@') ref(where, 'entities', it.slice(1), what);
+    if (typeof e.companion === 'string' && e.companion[0] === '@') ref(where, 'entities', e.companion.slice(1), what);
+    if (typeof e.effect === 'string') ref(where, 'entities', e.effect.replace(/^@/, ''), what);
+    if (e.story) ref(where, 'stories', String(e.story).replace(/^@/, ''), what);
+    if (e.start && e.start !== 'spawn' && !Object.values(m.worlds || {}).some((w) => (w.places || []).some((p) => p.id === e.start))) out.push({ level: 'warn', where, text: `${what} begins characters by a world map place that's gone.` });
+    if (e.start === 'spawn' && !Object.values(m.worlds || {}).some((w) => w.spawn)) out.push({ level: 'warn', where, text: `${what} begins characters where the world map says, and no world map says.` });
+  };
   for (const [k, id, v] of things(m)) {
     const where = [k, id];
     if (k === 'assets') {
@@ -415,6 +426,17 @@ export function problems(m, extra = []) {
     } else if (k === 'biomes') {
       for (const t of v.trees || []) if (t.structure) ref(where, 'structures', t.structure, `Biome "${v.name}"'s tree`);
       if (!v.change && v.place && v.place.how === 'painted' && !Object.keys(m.worlds || {}).length) out.push({ level: 'warn', where, text: `Biome "${v.name}" only grows where it's painted on a world map, and this mod has no world map.` });
+    } else if (k === 'worlds') {
+      for (const p of v.places || []) ref(where, p.kind, p.ref, `World map "${v.name}"'s place`);
+      for (const p of v.people || []) if (typeof p.ent === 'string' && p.ent[0] === '@') ref(where, 'entities', p.ent.slice(1), `Someone on world map "${v.name}"`);
+    } else if (k === 'chargen') {
+      const what = `Character tab "${v.name}"`;
+      for (const r of v.rows || []) {
+        if ((r.kind === 'pick' || r.kind === 'many' || !r.kind) && !(r.options || []).length) out.push({ level: 'warn', where, text: `${what}: its row "${r.label || r.id}" has nothing to choose.` });
+        if (r.kind === 'points' && !(r.entries || []).length) out.push({ level: 'warn', where, text: `${what}: its row "${r.label || r.id}" has nothing to spend points on.` });
+        for (const o of [...(r.options || []), ...(r.entries || [])]) gives(where, `${what}, "${o.name || o.id}"`, o);
+      }
+      for (const L of Object.values(v.add || {})) for (const o of L || []) gives(where, `${what}, "${o.name || o.id}"`, o);
     }
   }
   return [...out, ...extra];

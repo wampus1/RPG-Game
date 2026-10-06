@@ -548,3 +548,22 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .glyphs canvas { width: 12px; height: 16px; }
 .mapglyph { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); }
 .mapglyph canvas { width: 18px; height: 24px; }
+
+/* ------------------------------------------------------------ the Character tool (round 63) */
+.cg-wrap { flex: 1; min-height: 0; display: grid; place-items: center; background: #05060f; overflow: hidden; }
+.cg-screen { image-rendering: pixelated; border: 2px solid var(--line); box-shadow: 0 0 0 1px var(--line2), 4px 4px 0 rgba(0, 0, 0, 0.5); outline: none; cursor: default; }
+.cg-screen:focus { border-color: var(--gold2); }
+.cg-strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-top: 2px solid var(--line); background: var(--bg2); }
+.cg-strip .lab { color: var(--faint); margin-right: 4px; font-size: 11px; }
+.cg-tab { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--bevel); cursor: pointer; color: var(--dim); font-family: var(--pix); font-size: 16px; line-height: 18px; user-select: none; }
+.cg-tab:hover { color: var(--text); }
+.cg-tab.on { background: var(--sel); color: var(--selText); }
+.cg-tab.off > span:not(.eye) { text-decoration: line-through; opacity: 0.55; }
+.cg-tab .eye { opacity: 0.55; display: grid; place-items: center; }
+.cg-tab .eye:hover { opacity: 1; color: var(--gold); }
+.cg-tab.new { border-style: dashed; box-shadow: none; background: transparent; }
+.cg-tab.drop-l { box-shadow: inset 3px 0 0 var(--gold); }
+.cg-tab.drop-r { box-shadow: inset -3px 0 0 var(--gold); }
+.cg-give { border: 1px solid var(--line); background: var(--well); padding: 4px 6px; margin-bottom: 4px; }
+.cg-give .gh { display: flex; align-items: center; gap: 6px; color: var(--cyan); font-size: 12px; margin-bottom: 3px; }
+.cg-gives.drop, .cg-sub.drop, .list .li.drop { outline: 1px dashed var(--gold); }

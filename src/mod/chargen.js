@@ -24,8 +24,12 @@
 //   (0: for good), story (a story's id), flags { name: value }, look {
 //   skin, hair, ... }, companion (a creature '@id'), start ('spawn': where
 //   the mod's world map has characters begin; or a world map place's id) }
+// (hideRows can take away the game's own origins, kits and traits too:
+// 'origin:star', 'kit:fisher', 'trait:angler'.)
 import { MODS } from './state.js';
 import { gameKey } from './format.js';
+import { REGION_W, REGION_D } from '../config.js';
+import { findPath } from '../entities/pathfind.js';
 
 export const GAME_TABS = ['basics', 'looks', 'stats', 'traits'];
 export const GAME_ORDER = { basics: 10, looks: 20, stats: 30, traits: 40 };
@@ -41,6 +45,8 @@ export const LOOK_KEYS = ['skin', 'hair', 'eyeColor', 'shirt', 'pants', 'shoes',
 
 const num = (v, d, a, b) => Math.max(a, Math.min(b, typeof v === 'number' && Number.isFinite(v) ? v : d));
 const ref = (m, r) => (typeof r === 'string' && r[0] === '@' ? gameKey(m.id, r.slice(1)) : r);
+// (An effect: '@id', or just its id, or one of the game's.)
+const effRef = (m, r) => (typeof r !== 'string' ? null : r[0] === '@' ? gameKey(m.id, r.slice(1)) : m.entities && m.entities[r] ? gameKey(m.id, r) : r);
 
 // What the world's mods make of the character screen (from the mods as
 // they are, installed or not: the screen comes before the world).
@@ -136,6 +142,36 @@ export function flagsOf(cg, hero) {
   return flags;
 }
 
+// A character's choices as the rules allow (a guest's come from their own
+// screen): no more of several than may be taken, no more points than there
+// are, nothing that isn't there.
+export function cleanPicks(cg, hero) {
+  const picks = hero.modPicks && typeof hero.modPicks === 'object' ? hero.modPicks : {};
+  const out = {};
+  const rows = [...cg.tabs.flatMap((t) => t.rows), ...Object.values(cg.extra).flat()];
+  for (const r of rows) {
+    const v = picks[r.key];
+    const ids = (r.options || []).map((o) => o.id);
+    if (r.kind === 'pick') out[r.key] = ids.includes(v) ? v : null;
+    else if (r.kind === 'many') out[r.key] = [...new Set(Array.isArray(v) ? v.filter((q) => ids.includes(q)) : [])].slice(0, Math.max(1, r.max | 0 || ids.length));
+    else if (r.kind === 'points') {
+      const o = {};
+      let left = Math.max(0, r.points | 0);
+      for (const en of r.entries || []) {
+        const n = Math.max(0, Math.min(left, en.max ? en.max | 0 : left, v && typeof v === 'object' ? v[en.id] | 0 : 0));
+        if (n) o[en.id] = n;
+        left -= n;
+      }
+      out[r.key] = o;
+    } else out[r.key] = String(v ?? '').slice(0, 40);
+  }
+  hero.modPicks = out;
+  if (hero.modOrigin && !cg.origins.some((q) => q.key === hero.modOrigin)) hero.modOrigin = null;
+  if (hero.modKit && !cg.kits.some((q) => q.key === hero.modKit)) hero.modKit = null;
+  hero.modTraits = (Array.isArray(hero.modTraits) ? hero.modTraits : []).filter((k) => cg.traits.some((q) => q.key === k));
+  return hero;
+}
+
 // ------------------------------------------------------------ the game begun
 // What a new character's choices give, given (their kit just given; before
 // their look and health are settled).
@@ -143,123 +179,154 @@ export function applyCharGen(game, hero, player) {
   if (!hero || !MODS.active.length) return [];
   const cg = charGenOf(MODS.active);
   if (!cg.any) return [];
+  cleanPicks(cg, hero);
   const said = [];
   hero.modStats = {};
   hero.modHp = 0;
+  hero.modGranted = [];
   hero.modFlags = flagsOf(cg, hero);
-  hero.modCompanions ||= [];
-  hero.modLasting ||= [];
+  hero.modCompanions = [];
+  hero.modLasting = [];
   for (const { mod, e, n, what } of chosenEffects(cg, hero)) {
-    for (const [it, c] of e.items || []) {
+    for (const [it, c] of Array.isArray(e.items) ? e.items : []) {
       const k = ref(mod, it);
       if (k) game.giveOrWear(k, Math.max(1, Math.round(num(c, 1, 1, 999))) * n);
     }
     if (e.coins) player.give('coin', Math.round(num(e.coins, 0, 0, 9999)) * n);
     for (const [s, v] of Object.entries(e.stats || {})) if (['str', 'agi', 'end', 'cha'].includes(s)) hero.modStats[s] = (hero.modStats[s] || 0) + num(v, 0, -5, 5) * n;
     if (e.hp) hero.modHp += num(e.hp, 0, -20, 40) * n;
-    for (const t of e.traits || []) if (!hero.traits.includes(t)) hero.traits.push(t);
+    for (const t of e.traits || []) {
+      if (typeof t !== 'string' || hero.traits.includes(t)) continue;
+      hero.traits.push(t);
+      (hero.modGranted ||= []).push(t);
+    }
     if (e.look) for (const [k, v] of Object.entries(e.look)) if (LOOK_KEYS.includes(k) || ['hairStyle', 'hat', 'outfit', 'pattern', 'acc', 'mark', 'beardStyle'].includes(k)) hero.look[k] = v;
-    if (e.effect) hero.modLasting.push({ key: ref(mod, e.effect), mins: num(e.effectMins, 0, 0, 100000) });
-    if (e.companion) hero.modCompanions.push({ species: ref(mod, e.companion), alive: true });
-    if (e.story) (game.modBegin ||= []).push({ type: 'story', mod: mod.id, story: e.story, player });
-    if (e.start) (game.modBegin ||= []).push({ type: 'start', mod: mod.id, start: e.start, player });
+    if (e.effect) hero.modLasting.push({ key: effRef(mod, e.effect), mins: num(e.effectMins, 0, 0, 100000) });
+    if (e.companion) hero.modCompanions.push({ id: `${mod.id}:${hero.modCompanions.length}:${(Math.random() * 1e9) | 0}`, species: ref(mod, e.companion), alive: true, back: 0 });
+    if (e.story) (game.modBegin ||= []).push({ mod: mod.id, story: e.story, player });
     said.push(what);
   }
   return said;
 }
 
+// Where a new character begins, if the mods say: a place their choices
+// name (or the world map's spot for beginning), else the world map's spot,
+// else nowhere in particular (null). { x, z }, in the world.
+export function startOf(game, hero) {
+  if (!MODS.active.length) return null;
+  const plan = MODS.world;
+  let want = null;
+  if (hero) {
+    const cg = charGenOf(MODS.active);
+    if (cg.any) for (const { e } of chosenEffects(cg, hero)) if (e.start) want = e.start;
+  }
+  const square = (cx, cz) => ({ x: Math.floor((cx + 0.5) * REGION_W), z: Math.floor((cz + 0.5) * REGION_D) });
+  if (want && want !== 'spawn' && plan) {
+    const P = plan.places.find((p) => p.id === want);
+    const s = P && (game.world.sites || []).find((x) => x.planId === P.id);
+    if (s) return { x: s.x, z: s.z + Math.ceil((s.d || 6) / 2) + 2 };
+    if (P) return square(P.cx, P.cz);
+  }
+  return plan && plan.spawn ? square(plan.spawn.cx, plan.spawn.cz) : null;
+}
+
 // Each second or so, in play: lasting effects on, companions about (back
-// at their owner's side if they're lost), what waits for the game to have
-// begun (a story, a start somewhere else).
+// at their owner's side if they're lost), the stories that wait for the
+// game to have begun.
 export function charGenTick(game) {
   if (!MODS.active.length) return;
   for (const q of game.modBegin || []) {
     const m = MODS.byId.get(q.mod);
-    if (!m) continue;
-    if (q.type === 'story') MODS.startStory?.(game, m, q.story, { player: q.player, pos: { x: q.player.x, z: q.player.z } });
-    else if (q.type === 'start') startAt(game, q);
+    if (m && q.player) MODS.startStory?.(game, m, q.story, { player: q.player, pos: { x: q.player.x, z: q.player.z } });
   }
   game.modBegin = null;
+  const hour = game.minute / 60;
   for (const p of game.everyone()) {
     const hero = game.asPlayer(p, () => game.hero);
-    if (!hero || p.dead) continue;
+    if (!hero || p.dead || p.limbo) continue;
     for (const L of hero.modLasting || []) {
-      if (L.done) continue;
-      const on = (p.modFx || []).some((q) => q.key === L.key);
-      if (on) continue;
+      if (L.done || (p.modFx || []).some((q) => q.key === L.key)) continue;
       // (For good: on again whenever it's gone. For a while: once.)
       MODS.applyEffect?.(game, p, L.key, L.mins ? L.mins * 60 : 1e9);
       if (L.mins) L.done = true;
     }
     for (const C of hero.modCompanions || []) {
-      if (!C.alive) continue;
-      const c = game.creatures.find((q) => q.modOwnerKey === C && !q.dead);
+      const c = game.creatures.find((q) => q.petId === C.id && !q.dead);
       if (c) {
-        c.owner = p;
+        c.petOf = p;
         continue;
       }
-      // (Killed: gone for good.)
-      if (C.ent && C.ent.dead && C.ent.hp <= 0) {
-        C.alive = false;
-        game.asPlayer(p, () => game.ui?.msg?.(`${C.ent.S?.name || 'Your companion'} has fallen.`, '#ff9080'));
-        continue;
+      // (Fallen: back in the morning.)
+      if (!C.alive) {
+        if (game.day < C.back || hour < 6) continue;
+        C.alive = true;
+        game.asPlayer(p, () => game.ui?.msg?.(`${nameOf(C)} has found their way back to you.`, '#a0e0a0'));
       }
-      const s = game.findFreeSpot(Math.round(p.x) + 1, Math.round(p.z) + 1, Math.floor(p.y));
+      // (Not while they're down an old place of the game's own.)
+      if (game.dungeon && game.asPlayer(p, () => !!game.dungeon)) continue;
+      const s = spotBy(game, p);
+      if (!s) continue;
       const nc = game.spawnMonster?.(C.species, s.x, s.y, s.z);
       if (!nc) continue;
-      nc.owner = p;
-      nc.modOwnerKey = C;
-      C.ent = nc;
+      nc.petOf = p;
+      nc.petId = C.id;
     }
   }
 }
 
-// A character begun somewhere a mod's world map says.
-function startAt(game, q) {
-  const ow = game.world.ow;
-  const plan = MODS.world;
-  let cx = null;
-  let cz = null;
-  if (q.start === 'spawn' && plan && plan.spawn) ({ cx, cz } = plan.spawn);
-  else if (plan) {
-    const P = plan.places.find((p) => p.id === q.start);
-    const s = P && (game.world.sites || []).find((x) => x.planId === P.id);
-    if (s) {
-      const p = q.player;
-      game.loadAround(s.x, s.z + (s.d || 4), true);
-      const at = game.findFreeSpot(s.x, s.z + Math.ceil((s.d || 6) / 2) + 2, s.h + 1);
-      p.teleport(at.x, at.y, at.z);
-      p.spawn = { ...at };
-      return;
+const nameOf = (C) => MODS.species?.(C.species)?.name || 'Your companion';
+
+// A free spot beside someone (never on them), or null.
+function spotBy(game, o) {
+  const x0 = Math.round(o.x);
+  const z0 = Math.round(o.z);
+  const w = game.world;
+  for (let r = 1; r <= 4; r++) {
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const x = x0 + dx;
+        const z = z0 + dz;
+        const y = w.findStandY(x, z, Math.floor(o.y));
+        if (y > 0 && Math.abs(y - o.y) <= 2 && !w.isWaterAt(x, y, z) && !game.occupiedBySolid(x, y, z, null)) return { x, y, z };
+      }
     }
-    if (P) ({ cx, cz } = P);
   }
-  if (cx === null) return;
-  const x = Math.floor((cx + 0.5) * 64);
-  const z = Math.floor((cz + 0.5) * 36);
-  game.loadAround(x, z, true);
-  const at = game.findFreeSpot(x, z, 6);
-  q.player.teleport(at.x, at.y, at.z);
-  q.player.spawn = { ...at };
-  ow.markExplored(at.x, at.z, 1);
+  return null;
 }
 
-// A companion's turn: at its owner's heel, at foes near them.
+// A companion's fall: back with them in the morning (see charGenTick).
+export function petFell(game, c) {
+  const p = c.petOf;
+  if (!p) return;
+  const hero = game.asPlayer(p, () => game.hero);
+  const C = hero && (hero.modCompanions || []).find((q) => q.id === c.petId);
+  if (!C) return;
+  C.alive = false;
+  C.back = game.day + 1;
+  game.asPlayer(p, () => game.ui?.msg?.(`${nameOf(C)} has fallen. They'll find their way back to you in the morning.`, '#ff9080'));
+}
+
+// A companion's turn: at its owner's heel, at foes near them. False when
+// its owner's not about (it does as it would).
 export function companionTick(c, dt) {
-  const o = c.owner;
+  const o = c.petOf;
   if (!o || o.dead || o.limbo || o.down) return false;
   const game = c.game;
   const d = c.distTo(o);
-  if (d > 28 || Math.abs(o.y - c.y) > 6) {
-    const s = game.findFreeSpot(Math.round(o.x) + 1, Math.round(o.z), Math.floor(o.y));
+  // (Left far behind, or up or down a level: at their side again.)
+  if (d > 24 || Math.abs(o.y - c.y) > 6) {
+    const s = spotBy(game, o);
+    if (!s) return true;
     game.moveEntity(c, s.x, s.y, s.z);
-    c.x = s.x;
-    c.y = s.y;
-    c.z = s.z;
+    c.petPath = null;
     return true;
   }
+  // (Something after its owner, or that its owner's fighting: at it.)
   if (c.S.dmg > 0) {
-    const foe = game.creatures.find((q) => q !== c && !q.dead && !q.owner && q.hostileNow && q.distTo(o) < 7 && Math.abs(q.y - o.y) <= 2);
+    const t = c.target;
+    const foe = t && !t.dead && t.kind !== 'player' && !t.petOf && c.distTo(t) < 9 ? t
+      : game.creatures.find((q) => q !== c && !q.dead && !q.petOf && (q.hostileNow || q.target === o) && q.distTo(o) < 7 && Math.abs(q.y - o.y) <= 2);
     if (foe) {
       c.target = foe;
       c.chase(dt);
@@ -267,11 +334,24 @@ export function companionTick(c, dt) {
     }
   }
   c.target = null;
-  if (d > 2.5 && !c.moving) {
-    const sx = Math.sign(Math.round(o.x) - c.x);
-    const sz = Math.sign(Math.round(o.z) - c.z);
-    const order = Math.abs(o.x - c.x) > Math.abs(o.z - c.z) ? [[sx, 0], [0, sz]] : [[0, sz], [sx, 0]];
-    for (const [dx, dz] of order) if ((dx || dz) && c.tryStep(c.x + dx, c.z + dz, c.S.step * 0.9)) return true;
+  if (d <= 2.5 || c.moving) return true;
+  // (Their way to them kept fresh: every so often, or when it runs out.)
+  c.petT = (c.petT || 0) - dt;
+  if (!c.petPath || c.petPathI >= c.petPath.length || c.petT <= 0) {
+    c.petT = 0.8;
+    c.petPath = game.requestPathBudget(d < 8) ? findPath(game.world, c.x, c.y, c.z, o.x, o.y, o.z, { maxNodes: 500, near: 2, partial: true }) : null;
+    c.petPathI = 0;
   }
+  if (c.petPath && c.petPathI < c.petPath.length) {
+    const [nx, , nz] = c.petPath[c.petPathI];
+    if (c.tryStep(nx, nz, c.stepTime() * 0.9)) c.petPathI++;
+    else c.petPath = null;
+    return true;
+  }
+  // (No way found yet: a step straight at them.)
+  const sx = Math.sign(Math.round(o.x) - c.x);
+  const sz = Math.sign(Math.round(o.z) - c.z);
+  const order = Math.abs(o.x - c.x) > Math.abs(o.z - c.z) ? [[sx, 0], [0, sz]] : [[0, sz], [sx, 0]];
+  for (const [dx, dz] of order) if ((dx || dz) && c.tryStep(c.x + dx, c.z + dz, c.stepTime() * 0.9)) break;
   return true;
 }

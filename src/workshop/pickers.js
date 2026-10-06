@@ -4,7 +4,7 @@
 // (blocks, trees, creatures: each with how likely it is, a bar to show its
 // share).
 import { h, ic, clear, button, numberInput, popover, closePopover, textInput, dropTarget } from './kit.js';
-import { blockArt, blockIcon, modBlocks, blockGroups } from './blockart.js';
+import { blockIcon, modBlocks, blockGroups } from './blockart.js';
 import { BLOCKS } from '../world/blocks.js';
 
 export function blockLabel(app, ref) {
@@ -155,5 +155,3 @@ export function weightList(items, o) {
   el.redraw = draw;
   return el;
 }
-
-void blockArt;

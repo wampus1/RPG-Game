@@ -16,6 +16,7 @@ import { addHazard, groundFire as fireAt, areaTiles, summon as summonNear, sameS
 import { ringTiles, proc } from '../entities/bosskit.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { modStat } from './stat.js';
+import { charGenTick, petFell } from './chargen.js';
 import './build.js';
 import './storyrun.js';
 
@@ -213,11 +214,13 @@ Object.assign(SVC, {
   setVar(x, scope, name, v) {
     if (scope === 'local') x.vars[name] = v;
     else if (scope === 'world') modState(x.game).vars[`${x.mod.id}:${name}`] = v;
+    else if (scope === 'player') playerVars(x)[`${x.mod.id}:${name}`] = v;
     else selfVars(x)[name] = v;
   },
   getVar(x, scope, name) {
     if (scope === 'local') return x.vars[name];
     if (scope === 'world') return modState(x.game).vars[`${x.mod.id}:${name}`];
+    if (scope === 'player') return playerVars(x)[`${x.mod.id}:${name}`];
     return selfVars(x)[name];
   },
   near: (x, at, r, which) => near(x.game, at, r, which, x.self),
@@ -316,6 +319,16 @@ Object.assign(SVC, {
 export function modState(game) {
   return (game.modState ||= { vars: {}, once: {}, blocks: {}, events: {}, killed: {}, trig: {} });
 }
+// (Round 63) Kept with the player's character: what they chose on the
+// character screen (each row's choice by its id, and the values its
+// options set), and whatever a graph keeps there.
+function playerVars(x) {
+  const g = x.game;
+  const p = x.player && x.player.kind === 'player' ? x.player : x.self && x.self.kind === 'player' ? x.self : x.target && x.target.kind === 'player' ? x.target : g.player;
+  const hero = p ? g.asPlayer(p, () => g.hero) : g.hero;
+  return hero ? (hero.modFlags ||= {}) : modState(g).vars;
+}
+
 function selfVars(x) {
   if (x.self && typeof x.self === 'object') return (x.self.modVars ||= {});
   if (x.blockKey) return (modState(x.game).blocks[x.blockKey] ||= {});
@@ -773,6 +786,8 @@ export function modScaleDamage(t, src, amount) {
 
 // Something killed.
 export function modKilled(game, e, src) {
+  // (Someone's companion: back in the morning.)
+  if (e.petId) petFell(game, e);
   // (One of a structure's people or beasts: gone, till it comes again.)
   if (e.modMark) {
     const st = modState(game);
@@ -1013,6 +1028,13 @@ export function modTick(game, dt) {
     }
   }
   tickShots(game, dt);
+  // (Round 63) What the character screen gave: lasting effects,
+  // companions, stories begun.
+  game.modCgT = (game.modCgT || 0) - dt;
+  if (game.modCgT <= 0) {
+    game.modCgT = 1;
+    charGenTick(game);
+  }
   // Effects on everyone.
   for (const p of game.everyone()) tickEffects(game, p, dt);
   for (const c of game.creatures) if (c.modFx) tickEffects(game, c, dt);
@@ -1130,6 +1152,7 @@ export function modLoad(game, data) {
 
 // What build.js (and others) reach through MODS.
 MODS.lootSlots = lootSlots;
+MODS.applyEffect = applyEffect;
 MODS.state = modState;
 MODS.species = (k) => SPECIES[k] || null;
 // A structure's trigger set off by someone coming near (see build.js).

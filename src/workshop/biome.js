@@ -8,12 +8,12 @@
 // the music, the people who'd build there, and where in a new world it
 // grows (a climate dragged out on a chart of the game's own, or instead of
 // one of the game's, or only where it's painted on a world map).
-import { h, ic, clear, button, group, field, slider, check, seg, select, panel, toast, canvas, textInput, chips, popover, closePopover, menu, colorButton, dialog, dropTarget } from './kit.js';
+import { h, ic, clear, button, group, field, slider, check, seg, select, panel, toast, canvas, textInput, chips, popover, closePopover, menu, colorButton, dropTarget } from './kit.js';
 import { titleBar, menuButton, vanillaIcon, creatureName, pickRef, glyphCanvas } from './common.js';
 import { blockField, blockLabel, weightList, pickBlock } from './pickers.js';
-import { biomeLand, biomeVox, biomeAbove, biomeWhole, treeCells, biomeLook } from './biomeview.js';
+import { biomeLand, biomeVox, biomeAbove, biomeWhole, treeCells } from './biomeview.js';
 import { renderVox, frameOf, toView, cellY, T, voxPicture } from './voxview.js';
-import { blockIcon, forgetBlockArt } from './blockart.js';
+import { blockIcon } from './blockart.js';
 import { BIOMES } from '../world/biomes.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { LANDMASSES } from '../world/geography.js';
@@ -780,7 +780,3 @@ export default class BiomeTool {
     popover(anchor, h('div', null, h('div', { class: 'note', style: { marginBottom: '6px' } }, 'Its letter on the world map'), grid));
   }
 }
-
-void dialog;
-void forgetBlockArt;
-void biomeLook;

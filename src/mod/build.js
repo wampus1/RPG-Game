@@ -148,8 +148,9 @@ export function addModSites(world) {
   if (!MODS.active.length) return;
   const ow = world.ow;
   const sites = world.sites;
-  // (`at`: the squares to put it on, as a world map sets them; or chosen.)
-  const add = (kind, mod, thing, P, at = null) => {
+  // (`at`: the squares to put it on, as a world map sets them; or chosen.
+  // `planId`: the world map's own name for it.)
+  const add = (kind, mod, thing, P, at = null, planId = null) => {
     const n = Math.max(0, Math.min(12, Math.round(P.count ?? 1)));
     if (!n && !at) return;
     const rng = new RNG(hash4(ow.seed, hashString(mod.id), hashString(thing.id), 0x5173));
@@ -173,6 +174,7 @@ export function addModSites(world) {
         s.oz = -fp.entry.z;
       }
       s.place = { clear: P.clear !== false };
+      if (planId) s.planId = planId;
       sites.push(s);
     }
   };
@@ -191,7 +193,7 @@ export function addModSites(world) {
         ow.planReport.push({ level: 'warn', text: `"${thing.name}" is set on the world map out at sea: it's left out.` });
         continue;
       }
-      add(P.kind === 'structures' ? 'structure' : P.kind === 'layouts' ? 'layout' : 'dungeon', pm, thing, { ...(thing.place || {}), clear: thing.place ? thing.place.clear !== false : true }, [c]);
+      add(P.kind === 'structures' ? 'structure' : P.kind === 'layouts' ? 'layout' : 'dungeon', pm, thing, { ...(thing.place || {}), clear: thing.place ? thing.place.clear !== false : true }, [c], P.id);
     }
   }
   // What's at each: chests with their loot, signs, people and beasts to

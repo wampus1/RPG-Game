@@ -540,8 +540,8 @@ act('act.send', {
   },
 });
 act('act.setvar', {
-  title: 'Set variable', help: 'Keeps a value by a name: on this one creature or block (Self), for this flow only (Local), or for the whole world, kept with it (World).',
-  in: [txt('name', 'Name', 'count'), { id: 'value', t: T.any, label: 'Value', def: 0 }], props: [pick('scope', 'Kept', ['self', 'world', 'local'])],
+  title: 'Set variable', help: 'Keeps a value by a name: on this one creature or block (Self), for this flow only (Local), for the whole world, kept with it (World), or with the player\'s character (Player: what they chose on the character screen is there too, each row by its id).',
+  in: [txt('name', 'Name', 'count'), { id: 'value', t: T.any, label: 'Value', def: 0 }], props: [pick('scope', 'Kept', ['self', 'world', 'local', 'player'])],
   run: (x, nn, api) => {
     SVC.setVar(x, api.prop('scope'), String(api.in('name')), api.in('value'));
     return 'then';
@@ -549,7 +549,7 @@ act('act.setvar', {
 });
 act('act.addvar', {
   title: 'Add to variable', help: 'Adds to a number kept by a name (see Set variable).',
-  in: [txt('name', 'Name', 'count'), n('by', 'Add', 1)], props: [pick('scope', 'Kept', ['self', 'world', 'local'])],
+  in: [txt('name', 'Name', 'count'), n('by', 'Add', 1)], props: [pick('scope', 'Kept', ['self', 'world', 'local', 'player'])],
   run: (x, nn, api) => {
     const s = api.prop('scope');
     const k = String(api.in('name'));
@@ -742,7 +742,7 @@ w('q.biome', { title: 'Biome at', help: 'Whether a place is in a biome.', in: [r
   return p === 'name' ? b : b === (typeof want === 'string' && want[0] === '@' ? `m:${x.mod.id}:${want.slice(1)}` : want);
 } });
 w('q.below', { title: 'Down a dungeon?', help: 'Whether someone (or self) is down in a dungeon.', in: [ref('who', T.ent, 'Who')], out: [out('out', T.bool, 'Below')], eval: (x, nn, p, api) => SVC.below(x, (isEnt(api.in('who')) && api.in('who')) || x.self) });
-w('q.var', { title: 'Variable', help: 'A value kept by a name (see Set variable).', in: [txt('name', 'Name', 'count')], props: [pick('scope', 'Kept', ['self', 'world', 'local'])], out: [out('out', T.any, 'Value')], eval: (x, nn, p, api) => SVC.getVar(x, api.prop('scope'), String(api.in('name'))) ?? 0 });
+w('q.var', { title: 'Variable', help: 'A value kept by a name (see Set variable).', in: [txt('name', 'Name', 'count')], props: [pick('scope', 'Kept', ['self', 'world', 'local', 'player'])], out: [out('out', T.any, 'Value')], eval: (x, nn, p, api) => SVC.getVar(x, api.prop('scope'), String(api.in('name'))) ?? 0 });
 
 // ------------------------------------------------------------ maths
 const m = (type, o) => def(type, { cat: 'Maths', color: C.math, ...o });

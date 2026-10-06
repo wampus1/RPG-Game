@@ -6,7 +6,7 @@
 // flow (if, chance, wait, repeat) and values (numbers, places, the nearest
 // foe); give creatures and bosses abilities of their own. Drag art,
 // effects, loot tables and other entities in from the explorer to use them.
-import { h, ic, clear, button, field, panel, toast, contextMenu } from './kit.js';
+import { h, ic, clear, button, field, panel, toast } from './kit.js';
 import { NodeCanvas, valueWidget } from './nodecanvas.js';
 import { titleBar, refPicker, refInfo, biomeOptions } from './common.js';
 import { NODES, CATS, TYPE_COLORS, fits, makeNode, lint } from '../mod/graph.js';
@@ -432,4 +432,3 @@ export default class GraphTool {
     return false;
   }
 }
-void contextMenu;

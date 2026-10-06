@@ -6,7 +6,7 @@
 // the world map.
 import { makeNoise2D, fbm, ridged } from '../util/noise.js';
 import { hash4, hashf, mulberry32 } from '../util/rng.js';
-import { BLOCKS, B } from '../world/blocks.js';
+import { BLOCKS } from '../world/blocks.js';
 import { BIOMES } from '../world/biomes.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { drawGlyph } from '../render/font.js';
@@ -323,5 +323,3 @@ export function biomeLook(mod, k) {
   const g = BIOMES[k];
   return g ? { name: g.name, char: g.char, fg: g.fg, bg: g.bg } : { name: k, char: '?', fg: '#fff', bg: '#333' };
 }
-
-void B;

@@ -7,9 +7,9 @@
 // structures, layouts and dungeons where they're wanted, found realms
 // where they're wanted, set people about the world or in a realm, and say
 // where new characters begin.
-import { h, ic, clear, button, group, field, slider, check, seg, select, panel, toast, canvas, textInput, chips, menu, dropTarget, confirm, colorButton } from './kit.js';
+import { h, ic, clear, button, group, field, slider, check, seg, select, panel, toast, canvas, textInput, chips, menu, dropTarget, confirm } from './kit.js';
 import { titleBar, pickRef, glyphCanvas, biomeOptions } from './common.js';
-import { biomeLook, biomeWhole } from './biomeview.js';
+import { biomeLook } from './biomeview.js';
 import { iconBits } from './icons.js';
 import { Overworld, CIV_COLORS } from '../world/worldgen.js';
 import { BIOMES } from '../world/biomes.js';
@@ -18,7 +18,6 @@ import { CULTURES } from '../world/names.js';
 import { MAP_W, MAP_H, REGION_W, REGION_D } from '../config.js';
 import { compilePlan, gameLands, grids, packGrid, WN, CLIMATES, VALUES } from '../mod/worldplan.js';
 import { biomeRulesOf, withBiomes, STYLES } from '../mod/biomes.js';
-import { NODES } from '../mod/graph.js';
 import { rid } from '../mod/format.js';
 import { hash4 } from '../util/rng.js';
 
@@ -1233,7 +1232,9 @@ export default class WorldTool {
     const el = h('div');
     el.append(h('div', { class: 'row' }, h('span', { class: 'thumb', style: { width: '24px' } }, t ? app.thumb(p.kind, p.ref) : ic('warn')), h('b', { class: 'grow' }, t ? t.name : '(gone)'), t ? button('Open', { icon: 'next', small: true, onClick: () => app.open(p.kind, p.ref) }) : null),
       h('div', { class: 'note', style: { margin: '6px 0' } }, `At map square ${p.cx}, ${p.cz}: built there in every world made with the mod (as well as wherever its own settings put it). Drag it to move it.`),
-      button('Take it away', { icon: 'trash', small: true, kind: 'ghost', onClick: () => this.deleteSel() }));
+      h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+        button('Begin here (an origin)', { icon: 'bust', small: true, title: 'An origin on the character screen: new characters who choose it begin by this place', onClick: () => app.tool3('chargen', (cg) => cg.addOriginAt(p.id, t ? t.name : 'the place')) }),
+        button('Take it away', { icon: 'trash', small: true, kind: 'ghost', onClick: () => this.deleteSel() })));
     return el;
   }
 
@@ -1283,7 +1284,3 @@ function styleFor(b) {
   const m = { plains: 'vale', forest: 'vale', beach: 'vale', taiga: 'north', tundra: 'north', desert: 'sun', savanna: 'sun', jungle: 'wild', swamp: 'wild', mountain: 'high', ashland: 'ember', cinderwood: 'ember', geyser: 'ember', mangrove: 'tide', fungal: 'mist', moor: 'mist' };
   return m[b] || 'vale';
 }
-
-void colorButton;
-void biomeWhole;
-void NODES;

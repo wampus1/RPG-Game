@@ -7,7 +7,6 @@
 // Right-click for more; Delete, Ctrl+C/V/D as you'd expect; F to see it
 // all.
 import { h, ic, clear, menu, contextMenu, textInput, numberInput, check, colorButton, select, chips, scrubber } from './kit.js';
-import { iconSvg } from './icons.js';
 
 let clip = null;
 
@@ -824,5 +823,3 @@ export function valueWidget(t, value, onChange, o = {}) {
   if (t === 'text' || t === 'any') return textInput({ value: value ?? '', long: o.long && o.big, onChange });
   return null;
 }
-void ic;
-void iconSvg;

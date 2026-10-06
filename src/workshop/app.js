@@ -1027,6 +1027,7 @@ const DEFAULTS = {
   stories: () => ({ name: 'Story', graph: { nodes: [], links: [] } }),
   patches: () => ({ name: 'Story change', motif: null }),
   entities: () => ({ name: 'Entity', graph: emptyGraph() }),
+  chargen: (d) => ({ name: 'Tab', title: '', about: '', rows: [], ...(d.game ? { hideRows: [], add: {} } : { order: 50 }) }),
 };
 
 const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags });
@@ -1104,6 +1105,9 @@ class OverviewTool {
       ['stairs', 'A dungeon', 'Floors you build, stairs between them, a boss at the bottom.', () => app.builder((b) => b.newDungeon())],
       ['scroll', 'A story', 'A tale that starts when something happens, with tasks and turns.', () => app.create('stories', { name: 'Story' })],
       ['sparkle', 'An effect', 'Particles and animated sprites, for spells, hits and glows.', () => app.create('vfx', { name: 'Effect' })],
+      ['tree', 'A biome', 'New land: its ground, trees (or your structures), beasts, weather, and where it grows.', () => app.tool3('biome', (t) => t.newBiome('plains'))],
+      ['globe', 'A world map', 'The world\'s shape: land and sea, biomes, towns, realms, places and people where you put them.', () => app.tool3('world', (t) => t.newWorld())],
+      ['bust', 'A character tab', 'A tab on the character screen: callings, gifts, skills, a vow; what each choice gives.', () => app.tool3('chargen', (t) => t.newTab())],
     ];
     for (const [i, t, d, fn] of quick) {
       const c = h('div', { class: 'card' }, h('div', { class: 't' }, ic(i, 14), t), h('div', { class: 'd' }, d));

@@ -295,7 +295,7 @@ function hideLoading() {
 // A new game: its mods (if you have any), then your character.
 function newGame(seed) {
   const s = seed ?? (Math.random() * 2 ** 32) >>> 0;
-  pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, null, hero, { mods }))));
+  pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, null, hero, { mods }), mods)));
 }
 
 // (Round 62) Which of your mods go into a new world (asked only if you
@@ -655,7 +655,7 @@ function newHosted(seed) {
       lan,
       onStart: (name) => {
         const s = seed ?? (Math.random() * 2 ** 32) >>> 0;
-        pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, slot, hero, { host: { name }, mods }))));
+        pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, slot, hero, { host: { name }, mods }), mods)));
       },
     })));
   });
@@ -795,7 +795,7 @@ function joinWorld(at = null) {
           done = true;
           net.sendHero(hero);
           showLoading(`Joining "${m.world}"...`);
-        });
+        }, sess.mods || []);
         // (Backed out: not joining after all.)
         cw.onClose = () => setTimeout(() => {
           if (!done && session === sess) leaveWorld(null);
@@ -1159,8 +1159,25 @@ function playtest(mod, where = {}) {
   } catch {
     // A new one each time, then.
   }
-  const hero = { ...randomHero(seed), origin: 'native', name: 'Tester' };
-  startGame(seed, null, null, hero, { mods: [mod], playtest: { modId: mod.id, name: mod.name, tool: where.tool || null, sel: where.sel || null } });
+  const pt = { modId: mod.id, name: mod.name, tool: where.tool || null, sel: where.sel || null };
+  const go = (hero) => startGame(seed, null, null, hero, { mods: [mod], playtest: pt });
+  // (Round 63) From the Character tool: its screen first, as a new player
+  // sees it. (Backed out of: back to the Workshop.)
+  if (where.tool === 'chargen') {
+    let done = false;
+    const cw = new CharacterWindow(ui, seed, (hero) => {
+      done = true;
+      go(hero);
+    }, [mod]);
+    cw.onClose = () => setTimeout(() => {
+      if (done || game || workshop) return;
+      playReturn = pt;
+      openWorkshopApp();
+    }, 0);
+    ui.open(cw);
+    return;
+  }
+  go({ ...randomHero(seed), origin: 'native', name: 'Tester' });
 }
 
 // A flat bit of open country near you, out of any town, for a structure

@@ -186,9 +186,11 @@ export function normalizeHero(h) {
   out.look.hatColor = out.look.accent;
   // (Skills were kept apart once: they're traits now. Flaws that are gone
   // are dropped.)
-  const all = [...new Set([...(h.specialties || []), ...(h.traits || [])])].filter((k) => TRAITS[k]);
+  // (Those a mod's character screen gave, over and above the picks: kept.)
+  const granted = (Array.isArray(h.modGranted) ? h.modGranted : []).filter((k) => TRAITS[k]);
+  const all = [...new Set([...(h.specialties || []), ...(h.traits || [])])].filter((k) => TRAITS[k] && !granted.includes(k));
   const flaws = all.filter((k) => TRAITS[k].flaw);
-  out.traits = [...all.filter((k) => !TRAITS[k].flaw).slice(0, TRAIT_PICKS + flaws.length), ...flaws];
+  out.traits = [...all.filter((k) => !TRAITS[k].flaw).slice(0, TRAIT_PICKS + flaws.length), ...flaws, ...granted];
   out.specialties = [];
   if (!ORIGINS[out.origin]) out.origin = 'crash';
   if (!KITS[out.kit]) out.kit = 'wanderer';
@@ -200,7 +202,8 @@ export function normalizeHero(h) {
 export const has = (h, k) => !!h && ((h.specialties || []).includes(k) || (h.traits || []).includes(k));
 // Your abilities, with whatever your clothes, set gems and potions add
 // (kept up to date by the game in h.bonus).
-const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0);
+// (Round 63: and whatever a mod's character screen gave, in h.modStats.)
+const stat = (h, k) => (h && h.stats ? h.stats[k] ?? STAT_BASE : STAT_BASE) + ((h && h.bonus && h.bonus[k]) || 0) + ((h && h.modStats && h.modStats[k]) || 0);
 
 export function damageMult(h) {
   return 1 + 0.1 * (stat(h, 'str') - STAT_BASE);
@@ -215,7 +218,7 @@ export function cooldownMult(h) {
   return 1 - 0.06 * (stat(h, 'agi') - STAT_BASE);
 }
 export function hpBonus(h) {
-  return 2 * (stat(h, 'end') - STAT_BASE) + (has(h, 'tough') ? 4 : 0);
+  return 2 * (stat(h, 'end') - STAT_BASE) + (has(h, 'tough') ? 4 : 0) + Math.round((h && h.modHp) || 0);
 }
 // Multiplies what you pay (below 1 is better); sell prices divide by it.
 export function priceMult(h) {

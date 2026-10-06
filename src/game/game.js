@@ -90,6 +90,7 @@ import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldown
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
 import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain } from '../mod/hooks.js';
 import { biomeSpawn } from '../mod/biomes.js';
+import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -234,15 +235,16 @@ export class Game {
       this.hero = hero ? normalizeHero(hero) : null;
       if (this.hero) this.playerName = this.hero.name;
       const home = this.hero && this.hero.origin === 'native' ? this.pickHometown() : null;
-      // (Round 63) Where a mod's world map has new characters begin (but
+      // (Round 63) Where the mods have new characters begin: a place their
+      // choices on the character screen name, or the world map's spot (but
       // those born in a town, at home).
-      const ps = this.hero && !home && MODS.world && MODS.world.spawn;
+      const ps = this.hero && !home ? startOf(this, this.hero) : null;
       const coast = this.hero && this.hero.origin === 'crash' && !ps ? this.coastSpot() : null;
       // (A fallen star: a crater out in the hills by a village.)
       const star = this.hero && this.hero.origin === 'star' ? starSpot(this, 0) : null;
       if (ps && star) {
-        star.x = Math.floor((ps.cx + 0.5) * REGION_W);
-        star.z = Math.floor((ps.cz + 0.5) * REGION_D);
+        star.x = ps.x;
+        star.z = ps.z;
       }
       const s = home || ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
@@ -254,8 +256,8 @@ export class Game {
         sz = coast.z;
       }
       if (ps) {
-        sx = Math.floor((ps.cx + 0.5) * REGION_W);
-        sz = Math.floor((ps.cz + 0.5) * REGION_D);
+        sx = ps.x;
+        sz = ps.z;
       }
       if (star) {
         sx = star.x;
@@ -277,9 +279,12 @@ export class Game {
       this.player = new Player(this, spot.x, spot.y, spot.z);
       this.moveEntity(this.player, this.player.x, this.player.y, this.player.z);
       if (this.hero) {
-        const kit = KITS[this.hero.kit];
+        // (A mod's starting gear instead of the game's: see mod/chargen.js.)
+        const kit = this.hero.modKit ? { items: [], coins: 0 } : KITS[this.hero.kit];
         for (const [k, n] of [...kit.items, ...COMMON_KIT]) this.giveOrWear(k, n);
         this.player.give('coin', kit.coins);
+        // (Round 63) What the mods' character screen gives.
+        if (MODS.active.length) applyCharGen(this, this.hero, this.player);
         this.player.baseLook = { ...this.hero.look };
         this.applyHero();
         this.player.hp = this.player.maxHp;
@@ -2369,15 +2374,24 @@ export class Game {
     // found as them, below.) Each sees their own opening first.
     let star = null;
     let coast = null;
+    // (Round 63) Where the mods have new characters begin (see startOf).
+    const ps = !saved && hero && hero.origin !== 'native' && !this.dungeon ? startOf(this, hero) : null;
     if (!saved && hero && hero.origin === 'star') {
       let salt = 0;
       for (const ch of String(profile.id)) salt = (salt * 31 + ch.charCodeAt(0)) >>> 0;
       star = starSpot(this, salt);
+      if (star && ps) {
+        star.x = ps.x;
+        star.z = ps.z;
+      }
       if (star) {
         this.loadAround(star.x, star.z, true);
         makeCrater(this, star.x, star.z);
         at = this.findFreeSpot(star.x, star.z, GROUND);
       }
+    } else if (ps) {
+      this.loadAround(ps.x, ps.z, true);
+      at = this.findFreeSpot(ps.x, ps.z, GROUND);
     } else if (!saved && hero && hero.origin === 'crash' && !this.dungeon) {
       coast = this.coastSpot();
       if (coast) {
@@ -2448,9 +2462,10 @@ export class Game {
   outfitNewcomer(at) {
     const p = this.player;
     if (this.hero) {
-      const kit = KITS[this.hero.kit] || KITS[Object.keys(KITS)[0]];
+      const kit = this.hero.modKit ? { items: [], coins: 0 } : KITS[this.hero.kit] || KITS[Object.keys(KITS)[0]];
       for (const [k, n] of [...kit.items, ...COMMON_KIT]) this.giveOrWear(k, n);
       p.give('coin', kit.coins);
+      if (MODS.active.length) applyCharGen(this, this.hero, p);
       p.baseLook = { ...this.hero.look };
     } else {
       for (const [k, n] of START_KIT) p.give(k, n);
@@ -5781,7 +5796,8 @@ export class Game {
     // (Another player, when the host lets players fight.)
     if (this.seats) for (const q of partyPlayers(this)) if (q !== by && !q.dead && !q.limbo && on(q) && (this.pvp || boutOf(this, q, by))) out.push(q);
     for (const n of this.npcs) if (n !== by && !n.dead && !n.down && on(n)) out.push(n);
-    for (const c of this.creatures) if (!c.dead && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
+    // (Not a companion: swung through.)
+    for (const c of this.creatures) if (!c.dead && !c.petOf && c !== by.mount && !(by.mount && by.mount.creature === c) && on(c)) out.push(c);
     return out;
   }
 

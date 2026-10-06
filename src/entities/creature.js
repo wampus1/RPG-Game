@@ -20,6 +20,7 @@ import { ITEMS } from '../world/items.js';
 
 import { FLEE } from '../config.js';
 import { modStat } from '../mod/stat.js';
+import { companionTick } from '../mod/chargen.js';
 import { B } from '../world/blocks.js';
 
 export const SPECIES = {
@@ -151,7 +152,8 @@ export class Creature extends Entity {
   }
 
   get hostileNow() {
-    return this.S.mode === 'hostile' || this.angry;
+    // (Someone's companion, from a mod's character screen: never.)
+    return !this.petOf && (this.S.mode === 'hostile' || this.angry);
   }
 
   // A beast of the wild (a wolf, a boar, an ash lizard), not a thing of
@@ -172,7 +174,7 @@ export class Creature extends Entity {
     if (this.rollT > 0) this.rollT -= dt;
     if (this.attackCd > 0) this.attackCd -= dt * (this.hasteT > 0 ? 1.6 : 1);
     // Night monsters burn away in daylight.
-    if (this.S.night && !this.inst && this.game.isDay() && this.rng.chance(dt * 0.08)) {
+    if (this.S.night && !this.inst && !this.petOf && this.game.isDay() && this.rng.chance(dt * 0.08)) {
       this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 10, color: ['#c8c8c8', '#8a8a8a'], up: 30, life: 0.8 });
       this.dead = true;
       return;
@@ -199,6 +201,8 @@ export class Creature extends Entity {
     // On a lead: pulled along after whoever holds it (or straining to
     // break free of it).
     if ((this.leadBy || this.leadTied) && leadTick(this, dt)) return;
+    // (Round 63) Someone's companion: at their heel (see mod/chargen.js).
+    if (this.petOf && companionTick(this, dt)) return;
     if (this.hostileNow && this.tie) {
       // Tied up, and in a temper: snapping at anyone who comes too close.
       const t = game.findPrey(this, 2);

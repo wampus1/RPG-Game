@@ -8,7 +8,7 @@
 // out as PNG.
 import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, colorPicker, popover, contextMenu, dialog, toast, canvas, download, pickFile, readImage, textInput, rememberColor } from './kit.js';
 import { encodeCel, decodeCel, hexToRgba, rgbaToHex, newAsset, LIMITS, freeId } from '../mod/format.js';
-import { PALETTES, quantize, titleBar, menuButton, pickRef, refInfo, vanillaIcon } from './common.js';
+import { PALETTES, quantize, titleBar, menuButton, pickRef, vanillaIcon } from './common.js';
 import { TEX } from '../render/textures.js';
 import { B, BLOCKS } from '../world/blocks.js';
 
@@ -2401,4 +2401,3 @@ function gamePicture(type, key) {
   }
   return vanillaIcon(type, key);
 }
-void refInfo;
