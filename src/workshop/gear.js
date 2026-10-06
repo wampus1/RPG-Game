@@ -36,6 +36,8 @@ export default class GearTool {
   mount(stage, insp) {
     this.stage = stage;
     this.insp = insp;
+    // (Round 67: what was open, drawn again on coming back to the tab.)
+    if (this.id && this.g) this.open('gear', this.id);
   }
 
   unmount() {

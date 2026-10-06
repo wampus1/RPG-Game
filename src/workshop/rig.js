@@ -10,14 +10,14 @@
 // can be baked into frames of pixel art for the Pixel tool.
 import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, toast, canvas, textInput, dropTarget, menu, dialog } from './kit.js';
 import { titleBar, menuButton, refPicker, quantize } from './common.js';
-import { RigPose, quickRig, autoAnims, keyAt, apply, ROLES, ANIMS, PART_COLORS, RIG_KINDS } from '../mod/rig.js';
+import { RigPose, quickRig, autoAnims, keyAt, apply, ROLES, ANIMS, PART_COLORS, RIG_KINDS, groupSecs } from '../mod/rig.js';
 import { composite, decodeCel, encodeCel, LIMITS } from '../mod/format.js';
 import { MODS } from '../mod/state.js';
 import { NODES } from '../mod/graph.js';
 
 const MODES = [['cut', 'Cut into parts', 'Paint which part each pixel belongs to'], ['bones', 'Bones', 'Where the joints are, and which bone each part hangs from'], ['anim', 'Animate', 'Waves and keyframes; drag a bone to pose it']];
 const CUT_TOOLS = [['brush', 'pencil', 'Paint pixels into the chosen part', 'B'], ['erase', 'eraser', 'Take pixels out of their part (they go with the body)', 'E'], ['fill', 'bucket', 'Fill: touching pixels of one colour into the part', 'G'], ['rect', 'rect', 'A box of pixels into the part', 'U']];
-const SPEEDS = [[0.25, '¼'], [0.5, '½'], [1, '1×']];
+const SPEEDS = [[0.25, '¼'], [0.5, '½'], [1, '1×'], [2, '2×']];
 
 export default class RigTool {
   constructor(app) {
@@ -34,6 +34,12 @@ export default class RigTool {
     this.t = 0;
     this.lastCk = 0;
     this.keySel = null;
+    this.pan = { x: 0, y: 0 };
+    try {
+      this.lookShut = localStorage.getItem('ws-rig-look') === 'shut';
+    } catch {
+      this.lookShut = false;
+    }
   }
 
   get rig() {
@@ -52,6 +58,14 @@ export default class RigTool {
     this.onResize = () => this.fitCanvas();
     window.addEventListener('resize', this.onResize);
     window.addEventListener('ws-resize', this.onResize);
+    // (Round 67) Space held: drag the view about.
+    this.onSpace = (e) => {
+      if (e.code !== 'Space' || /INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || '')) return;
+      this.spaceDown = e.type === 'keydown';
+      if (this.cv) this.cv.style.cursor = this.spaceDown ? 'grab' : '';
+    };
+    window.addEventListener('keydown', this.onSpace);
+    window.addEventListener('keyup', this.onSpace);
     if (this.id && this.rig) this.open('rigs', this.id);
   }
 
@@ -59,8 +73,12 @@ export default class RigTool {
     this.flush();
     window.cancelAnimationFrame(this.raf);
     this.raf = null;
+    this.gen = (this.gen || 0) + 1;
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('ws-resize', this.onResize);
+    window.removeEventListener('keydown', this.onSpace);
+    window.removeEventListener('keyup', this.onSpace);
+    this.spaceDown = false;
   }
 
   current() {
@@ -264,7 +282,19 @@ export default class RigTool {
     this.cv = h('canvas');
     this.hud = h('div', { class: 'hud' });
     this.look = h('div', { class: 'rig-look', 'data-tip': 'As the game will show it (walking, standing, striking, flinching)' });
-    this.wrap.append(this.cv, this.hud, this.look);
+    this.lookCache = null;
+    // (Round 67) The game's view of it, folded away and back.
+    this.lookBtn = button(null, { icon: this.lookShut ? 'eye' : 'eyeOff', small: true, kind: 'ghost', cls: 'rig-look-btn', title: this.lookShut ? 'Show it as the game will' : 'Hide the game\'s view of it', onClick: () => {
+      this.lookShut = !this.lookShut;
+      try {
+        localStorage.setItem('ws-rig-look', this.lookShut ? 'shut' : '');
+      } catch {
+        // Fine.
+      }
+      this.build();
+    } });
+    this.look.classList.toggle('shut', this.lookShut);
+    this.wrap.append(this.cv, this.hud, this.look, this.lookBtn);
     this.bindCanvas();
     this.tl = h('div', { class: 'vfx-tl' });
     this.stage.append(bar, h('div', { style: { flex: 1, display: 'flex', minHeight: 0 } }, this.vt, this.wrap), this.tl);
@@ -285,8 +315,13 @@ export default class RigTool {
     this.drawPlayBtn();
     this.app.hint(this.hintText());
     requestAnimationFrame(() => this.fitCanvas(true));
+    // (Round 67: one loop only. Each build used to start another, and the
+    // animation ran on at twice, three times its speed.)
+    window.cancelAnimationFrame(this.raf);
+    const gen = (this.gen = (this.gen || 0) + 1);
     let last = performance.now();
     const loop = (now) => {
+      if (gen !== this.gen) return;
       this.raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -338,6 +373,7 @@ export default class RigTool {
     this.cw = rc.width;
     this.ch = rc.height;
     const a = this.asset;
+    if (refit) this.pan = { x: 0, y: 0 };
     if ((refit || !this.zoom) && a) this.zoom = Math.max(1, Math.min(24, Math.floor(Math.min((this.cw - 60) / (a.w * 1.8), (this.ch - 60) / (a.h * 1.6)))));
   }
 
@@ -345,7 +381,8 @@ export default class RigTool {
   view() {
     const a = this.asset;
     const z = this.zoom || 4;
-    return { z, ox: Math.round((this.cw - a.w * z) / 2), oy: Math.round((this.ch - a.h * z) / 2 + a.h * z * 0.12) };
+    const P = this.pan || { x: 0, y: 0 };
+    return { z, ox: Math.round((this.cw - a.w * z) / 2 + P.x), oy: Math.round((this.ch - a.h * z) / 2 + a.h * z * 0.12 + P.y) };
   }
 
   toArt(e) {
@@ -391,6 +428,13 @@ export default class RigTool {
 
   draw(dt) {
     if (!this.cv) return;
+    // (Round 67) The view's size changed without a resize (the timeline
+    // shown or hidden, a panel widened): fitted again, so the pixel under
+    // the mouse is the one marked.
+    if (this.wrap && this.wrap.isConnected) {
+      const rc = this.wrap.getBoundingClientRect();
+      if (Math.abs(rc.width - this.cw) > 0.5 || Math.abs(rc.height - this.ch) > 0.5) this.fitCanvas();
+    }
     const dpr = window.devicePixelRatio || 1;
     const ctx = this.cv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -518,7 +562,7 @@ export default class RigTool {
 
   // A small picture of it as the game will draw it.
   drawLook() {
-    if (!this.look) return;
+    if (!this.look || this.lookShut) return;
     const now = performance.now();
     if (!this.lookCache) {
       clear(this.look);
@@ -547,7 +591,8 @@ export default class RigTool {
     const s = C.L.size * 3;
     let i = 0;
     for (const [name, g] of Object.entries(C.L.groups || { walk: [0, C.L.frames] })) {
-      const f = g[0] + (Math.floor(now / (name === 'idle' ? 160 : 110)) % g[1]);
+      // (Round 67: at its own pace, as long as the animation lasts.)
+      const f = g[0] + (Math.floor(((now / 1000) / groupSecs(name, g)) * g[1]) % g[1]);
       x.drawImage(C.frames[f], i * (s + 6), 0, s, s);
       x.fillStyle = '#9a8a70';
       x.font = '10px monospace';
@@ -568,6 +613,14 @@ export default class RigTool {
       if (!this.asset) return;
       cv.setPointerCapture(e.pointerId);
       const p = this.toArt(e);
+      // (Round 67) The view dragged about: with the middle or right
+      // button, or holding Space; and when animating, from anywhere that
+      // isn't a bone.
+      if (e.button === 1 || e.button === 2 || this.spaceDown || (this.mode === 'anim' && !(this.jointAt(e) || this.nearestBone(p)))) {
+        this.drag = { kind: 'pan', x0: e.clientX, y0: e.clientY, px: this.pan.x, py: this.pan.y };
+        cv.style.cursor = 'grabbing';
+        return;
+      }
       if (this.mode === 'cut') return this.cutDown(p, e);
       if (this.mode === 'bones') return this.bonesDown(p, e);
       return this.animDown(p, e);
@@ -577,6 +630,10 @@ export default class RigTool {
       const p = this.toArt(e);
       this.hover = p;
       if (!this.drag) return;
+      if (this.drag.kind === 'pan') {
+        this.pan = { x: this.drag.px + e.clientX - this.drag.x0, y: this.drag.py + e.clientY - this.drag.y0 };
+        return;
+      }
       if (this.mode === 'cut') this.cutMove(p);
       else if (this.mode === 'bones') this.bonesMove(p);
       else this.animMove(p, e);
@@ -585,6 +642,10 @@ export default class RigTool {
       if (!this.drag) return;
       const D = this.drag;
       this.drag = null;
+      if (D.kind === 'pan') {
+        cv.style.cursor = '';
+        return;
+      }
       if (D.kind === 'box') this.applyBox();
       this.flush();
       this.app.touch('rigs', this.id);
@@ -1005,7 +1066,20 @@ export default class RigTool {
       return body;
     }
     const setA = (fn, side = true) => this.set((x) => fn(x.anims[this.anim]), { side });
-    body.append(field('Lasts (s)', slider({ value: A.dur || 1, min: 0.1, max: 6, step: 0.05, onChange: (v) => setA((q) => (q.dur = v), false) })));
+    body.append(field('Lasts (s)', slider({ value: A.dur || 1, min: 0.1, max: 20, step: 0.05, onChange: (v) => setA((q) => (q.dur = v), false) }), { tip: 'How long it takes, once through (in the game too). Its keyframes stay where they are: to make all of it slower or faster, use the buttons below.' }));
+    // (Round 67) All of it, slower or faster: its length and its keyframes'
+    // times stretched together (its waves keep time with it by themselves).
+    const stretchA = (k) => setA((q) => {
+      const d0 = q.dur || 1;
+      q.dur = Math.max(0.1, Math.min(20, Math.round(d0 * k * 100) / 100));
+      const f = q.dur / d0;
+      for (const K of Object.values(q.keys || {})) for (const arr of Object.values(K)) for (const key of arr || []) key.t = Math.round(key.t * f * 100) / 100;
+    });
+    body.append(h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap' } },
+      button('Slower', { small: true, icon: 'minus', title: 'All of it a quarter longer', onClick: () => stretchA(1.25) }),
+      button('Faster', { small: true, icon: 'plus', title: 'All of it a fifth shorter', onClick: () => stretchA(0.8) }),
+      button('Twice as long', { small: true, onClick: () => stretchA(2) }),
+      button('Half as long', { small: true, onClick: () => stretchA(0.5) })));
     body.append(check('Loops', A.loop !== false, (v) => setA((q) => (q.loop = v))));
     body.append(h('div', { class: 'row', style: { gap: '4px', margin: '6px 0' } }, button('Make it again for me', { small: true, icon: 'star', title: 'From the bones\' roles (your keyframes and waves for it are replaced)', onClick: () => this.set((x) => (x.anims = autoAnims(x, this.anim))) }), button('Clear it', { small: true, kind: 'ghost', icon: 'trash', onClick: () => setA((q) => {
       q.moves = {};

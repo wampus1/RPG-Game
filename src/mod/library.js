@@ -8,7 +8,7 @@
 // newer one: see ModLibrary.resolve). Kept in the browser's database where
 // it has one (gzipped), in browser storage otherwise, and in memory when
 // there's neither (the tests).
-import { exportMod, importMod, modHash, modRef, normalizeMod, countThings, rid } from './format.js';
+import { exportMod, importMod, modHash, modRef, normalizeMod, countThings, rid, modPic } from './format.js';
 import { pack, unpack } from '../game/saves.js';
 
 const INDEX_KEY = 'tessera-mods-v1';
@@ -57,6 +57,24 @@ export class ModLibrary {
   // hash, color, updated, size, things, mine }].
   list() {
     return Object.values(this.index()).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  }
+
+  // (Round 67) Mods listed before their pictures were kept with the list:
+  // each read once, and its picture kept (null: it has none). Resolves
+  // true if any changed.
+  async fillPics() {
+    const ix = this.index();
+    let any = false;
+    for (const [id, e] of Object.entries(ix)) {
+      if (e.pic !== undefined) continue;
+      const m = await this.get(id);
+      const cur = this.index();
+      if (!cur[id]) continue;
+      cur[id].pic = m ? modPic(m) : null;
+      this.writeJson(INDEX_KEY, cur);
+      any = true;
+    }
+    return any;
   }
 
   has(id) {
@@ -138,7 +156,7 @@ export class ModLibrary {
     mod.hash = hash;
     await this.putRaw(modKey(mod.id), text);
     const ix = this.index();
-    ix[mod.id] = { ...modRef(mod), hash, updated: mod.updated, size: text.length, things: countThings(mod), mine: o.mine ?? ix[mod.id]?.mine ?? true, from: o.from || ix[mod.id]?.from || null };
+    ix[mod.id] = { ...modRef(mod), hash, updated: mod.updated, size: text.length, things: countThings(mod), mine: o.mine ?? ix[mod.id]?.mine ?? true, from: o.from || ix[mod.id]?.from || null, pic: modPic(mod) };
     this.writeJson(INDEX_KEY, ix);
     this.changed(mod.id);
     return ix[mod.id];

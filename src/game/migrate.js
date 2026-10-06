@@ -321,6 +321,15 @@ export const STEPS = [
       log.push('Mods can have sounds and songs of their own (a biome\'s music, or put on from their nodes), change the game\'s rules, and say how their gear looks worn and held.');
     },
   },
+  {
+    // A world's mods changed from the pause menu (round 67). Nothing in a
+    // world changes shape: its mods are as they were, and can now be
+    // changed while it's open.
+    to: '0.67.0',
+    data(d, log) {
+      log.push('A world\'s mods can be changed from the pause menu (Mods): taken out, updated to your newer versions, or added.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

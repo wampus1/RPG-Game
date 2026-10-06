@@ -31,8 +31,9 @@ import { avatarFromKey } from './render/avatar.js';
 import { ModLibrary } from './mod/library.js';
 import { installMods, uninstallMods, remapRegion, MODS } from './mod/registry.js';
 import { useWorldMap } from './mod/worldplan.js';
-import { exportMod } from './mod/format.js';
+import { exportMod, modHash } from './mod/format.js';
 import { ModPickWindow } from './ui/modpick.js';
+import { ModManagerWindow } from './ui/modmanager.js';
 import './mod/render.js';
 import { ITEMS } from './world/items.js';
 
@@ -374,8 +375,13 @@ function newGame(seed) {
 // have any): `go(mods)` with them, as they are now (each world keeps the
 // versions it was made with).
 function pickMods(title, go, back = null) {
+  if (!modLib.list().length) return go([]);
+  // (Round 67: their pictures found first, for mods kept before they were.)
+  modLib.fillPics().catch(() => {}).then(() => openModPick(title, go, back));
+  return null;
+}
+function openModPick(title, go, back) {
   const list = modLib.list();
-  if (!list.length) return go([]);
   let last = [];
   try {
     last = JSON.parse(localStorage.getItem('mods-last-picked') || '[]');
@@ -384,7 +390,7 @@ function pickMods(title, go, back = null) {
   }
   ui.open(new ModPickWindow(ui, {
     title,
-    list: list.map((e) => ({ id: e.id, name: e.name, version: e.version, author: e.author, color: e.color, things: +e.things || 0, mine: e.mine })),
+    list: list.map((e) => ({ id: e.id, name: e.name, version: e.version, author: e.author, color: e.color, things: +e.things || 0, mine: e.mine, pic: e.pic || null })),
     chosen: last.filter((id) => modLib.has(id)),
     go: 'Next',
     onDone: async (ids) => {
@@ -403,6 +409,61 @@ function pickMods(title, go, back = null) {
     onBack: back,
     onWorkshop: () => openWorkshopApp({}),
   }));
+  return null;
+}
+
+// (Round 67) The world's mods, and changes to them (see ui/modmanager.js):
+// the world saved, then loaded again with its mods as they now are.
+async function openWorldMods() {
+  const g = game;
+  if (!g) return;
+  await modLib.fillPics().catch(() => {});
+  const ix = modLib.index();
+  const used = g.modsUsed || [];
+  const inWorld = new Set(used.map((m) => m.id));
+  const row = (e, m = null) => ({ id: e.id, name: e.name, version: e.version, author: e.author, color: e.color, pic: e.pic || null, things: +e.things || 0, description: (m && m.description) || e.description || '' });
+  const world = used.map((m) => {
+    const e = ix[m.id];
+    const hash = m.hash || modHash(m);
+    // (Yours changed since the world took it: offered.)
+    const newer = e && e.hash && e.hash !== hash ? e.version : null;
+    return { ...row({ ...(e || {}), id: m.id, name: m.name, version: m.version, author: m.author, color: m.color, things: e ? e.things : 0 }, m), newer };
+  });
+  const library = modLib.list().filter((e) => !inWorld.has(e.id)).map((e) => row(e));
+  const locked = ui.guest ? 'Only whoever hosts this world can change its mods.' : g.net ? 'Close the world to others first (its players would be cut off when it reloads).' : g.cutscene || (g.scene && g.scene.intro) ? 'Once the story has begun, the world can be saved and its mods changed.' : null;
+  ui.open(new ModManagerWindow(ui, {
+    world, library, locked,
+    onApply: (plan) => changeWorldMods(plan),
+  }));
+}
+
+async function changeWorldMods(plan) {
+  const g = game;
+  if (!g) return;
+  const fresh = async (id) => {
+    const m = await modLib.get(id);
+    return m ? JSON.parse(exportMod(m)) : null;
+  };
+  const mods = [];
+  for (const m of g.modsUsed || []) {
+    if (plan.remove.includes(m.id)) continue;
+    mods.push(plan.update.includes(m.id) ? (await fresh(m.id)) || m : m);
+  }
+  for (const id of plan.add) {
+    const m = await fresh(id);
+    if (m && !mods.some((q) => q.id === m.id)) mods.push(m);
+  }
+  const reload = (slot) => store.load(slot).then((data) => {
+    if (!data) return ui.msg('That save is empty.', '#ff5a50');
+    ui.closeAll();
+    startGame(null, data, slot, null, { mods });
+    ui.msg(`The world's mods are changed (${mods.length ? mods.map((m) => m.name).join(', ') : 'none now'}).`, '#80e070');
+    return null;
+  }).catch((e) => ui.msg(`Couldn't load it again: ${e && e.message ? e.message : e}`, '#ff5a50'));
+  // (Saved first: to its own slot, or one you choose.)
+  if (!g.slot || g.slot === 'auto') return ui.open(new SaveSlotsWindow(ui, 'save', store, () => reload(game.slot)));
+  const ok = await saveTo(g.slot, `Game saved to slot ${g.slot}.`);
+  if (ok) reload(g.slot);
   return null;
 }
 
@@ -487,6 +548,8 @@ ui.hooks = {
   party: () => openParty(),
   profile: (p) => openProfile(p),
   settings: () => ui.open(new SettingsWindow(ui, settings)),
+  // (Round 67) The world's mods, from the pause menu.
+  worldMods: () => openWorldMods(),
   feats: () => openFeats(),
   settingsChanged: (s) => {
     applyAll();

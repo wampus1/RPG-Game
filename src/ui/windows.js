@@ -1648,7 +1648,7 @@ export class HelpWindow extends Window {
 // ---------------------------------------------------------------- pause
 export class PauseWindow extends Window {
   constructor(ui) {
-    super(ui, 34, 16, { kind: 'pause' });
+    super(ui, 34, 17, { kind: 'pause' });
     this.items = [
       ['ESC', 'Resume', (g) => this.close()],
       ['S', 'Save game', (g) => this.ui.hooks.save && this.ui.hooks.save()],
@@ -1658,6 +1658,8 @@ export class PauseWindow extends Window {
         this.ui.open(new HelpWindow(this.ui));
       }],
       ['O', 'Settings', () => this.ui.hooks.settings && this.ui.hooks.settings()],
+      // (Round 67) The world's mods: what's in it, and changes to them.
+      ['M', 'Mods', () => this.ui.hooks.worldMods && this.ui.hooks.worldMods()],
       ['N', 'New world', () => this.ui.hooks.newWorld && this.ui.hooks.newWorld()],
       ['T', 'Title screen', () => this.ui.hooks.title && this.ui.hooks.title()],
     ];
@@ -1671,7 +1673,7 @@ export class PauseWindow extends Window {
     // (Round 62) Trying out a mod: back to the Workshop (the test world
     // isn't kept).
     if (ui.game && ui.game.playtest) {
-      this.items = this.items.filter(([k]) => k !== 'S' && k !== 'L' && k !== 'N');
+      this.items = this.items.filter(([k]) => k !== 'S' && k !== 'L' && k !== 'N' && k !== 'M');
       this.items.splice(1, 0, ['W', 'Back to the Workshop', () => this.ui.hooks.workshop && this.ui.hooks.workshop({ back: true })]);
     }
   }

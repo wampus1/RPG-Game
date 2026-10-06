@@ -1080,6 +1080,37 @@ export function splitter(el, side, key) {
     bar.addEventListener('pointermove', move);
     bar.addEventListener('pointerup', up);
   });
+  // (Round 67) Its controls never run off its edge: too wide for it, it
+  // widens to fit them (as far as the screen allows), and goes back to the
+  // width it was set to when they're gone.
+  let fitting = 0;
+  const fit = () => {
+    fitting = 0;
+    if (bar.classList.contains('drag')) return;
+    el.style.minWidth = '';
+    if (el.classList.contains('folded') || !el.isConnected) return;
+    const box = el.getBoundingClientRect();
+    if (!box.width) return;
+    let need = 0;
+    for (const q of el.querySelectorAll('.btn, .seg, .btn-group, select, input, .inp')) {
+      const r = q.getBoundingClientRect();
+      if (r.width) need = Math.max(need, r.right - box.left + 10);
+    }
+    const cap = Math.min(560, Math.round(window.innerWidth * 0.45));
+    const w = Math.min(cap, Math.ceil(need));
+    if (w > box.width + 1) {
+      el.style.minWidth = `${w}px`;
+      window.dispatchEvent(new window.Event('ws-resize'));
+    }
+  };
+  const later = () => {
+    if (!fitting) fitting = window.requestAnimationFrame(fit);
+  };
+  new window.MutationObserver(later).observe(el, { childList: true, subtree: true });
+  window.addEventListener('resize', later);
+  bar.addEventListener('pointerup', later);
+  fold.addEventListener('click', later);
+  bar.fit = later;
   return bar;
 }
 

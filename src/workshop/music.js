@@ -78,6 +78,8 @@ export default class MusicTool {
     this.onResize = () => this.drawRoll();
     window.addEventListener('resize', this.onResize);
     window.addEventListener('ws-resize', this.onResize);
+    // (Round 67: what was open, drawn again on coming back to the tab.)
+    if (this.id && this.song) this.open('songs', this.id);
   }
 
   unmount() {

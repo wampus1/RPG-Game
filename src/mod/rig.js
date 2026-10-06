@@ -438,7 +438,8 @@ MODS.rigLook = (m, rig, big) => {
   const add = (name, k, n) => {
     if (!anims[k] && name !== 'walk') return;
     const b = pose.bake(anims[k] ? k : null, n);
-    groups[name] = [frames.length, n];
+    // (Round 67: and how long it lasts, played at its own pace.)
+    groups[name] = [frames.length, n, anims[k] ? Math.max(0.1, Math.min(20, anims[k].dur || 1)) : 0];
     for (const rgba of b.frames) frames.push(fitFlip(rgba, b, a.w, a.h, sz));
   };
   add('walk', anims.walk ? 'walk' : 'idle', 6);
@@ -447,6 +448,13 @@ MODS.rigLook = (m, rig, big) => {
   add('hurt', 'hurt', 4);
   return { frames: frames.length, size: sz, modAsset: true, groups, draw: (fr) => frames[fr % frames.length] };
 };
+
+// (Round 67) How long a group of a rigged look's frames takes, once
+// through: the animation's own length, or (none given) the game's pace.
+export function groupSecs(name, g) {
+  if (g && g[2] > 0) return g[2];
+  return name === 'idle' ? 1 / 0.6 : name === 'walk' ? 1 / 1.6 : name === 'hurt' ? 0.32 : 0.6;
+}
 
 // Into sz x sz at the art's own scale (what swings past its edges cut
 // off), standing on its bottom, mirrored to face left.

@@ -4,6 +4,26 @@
 // always plays the same; others joining it are offered them.
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
+import { picPixels, PIC_SIZE } from '../mod/format.js';
+
+// (Round 67) A mod's picture (as its list entry keeps it: see modPic), as
+// a canvas, or null if it has none. Kept, as lists are drawn every frame.
+const pics = new Map();
+export function picCanvas(pic) {
+  if (!pic) return null;
+  if (pics.has(pic)) return pics.get(pic);
+  const d = picPixels(pic);
+  let c = null;
+  if (d && typeof document !== 'undefined') {
+    c = document.createElement('canvas');
+    c.width = PIC_SIZE;
+    c.height = PIC_SIZE;
+    c.getContext('2d').putImageData(new ImageData(d, PIC_SIZE, PIC_SIZE), 0, 0);
+  }
+  if (pics.size > 64) pics.clear();
+  pics.set(pic, c);
+  return c;
+}
 
 export class ModPickWindow extends Window {
   // o: { list: [{ id, name, version, author, color, description, things,
@@ -39,7 +59,10 @@ export class ModPickWindow extends Window {
       const cur = this.scroll + i === this.at;
       g.fill(2, y, this.w - 4, 2, ' ', C.fg, cur ? '#2e2616' : hov ? '#1e1828' : '#100c18');
       g.text(3, y, on ? '[x]' : '[ ]', on ? C.hi : C.dim);
-      g.text(7, y, '■', m.color || C.hi);
+      // (Its picture, if it has one; else a square of its colour.)
+      const pc = picCanvas(m.pic);
+      if (pc) g.image(6, y, pc, 2, 0);
+      else g.text(7, y, '■', m.color || C.hi);
       g.text(9, y, `${m.name}`.slice(0, 40), on ? C.white : C.fg);
       g.text(9 + Math.min(40, m.name.length) + 1, y, `v${m.version || '1.0.0'}`, C.faint);
       g.text(this.w - 22, y, `${m.things || 0} thing${m.things === 1 ? '' : 's'}`.padStart(18), C.faint);

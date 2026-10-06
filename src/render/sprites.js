@@ -249,8 +249,10 @@ export function lookFrame(kind, e, time) {
   if (G.attack && w && w.dur > 0) return at(G.attack, (Math.min(1, w.t / w.dur)) * 0.45);
   if (G.attack && e.strike && e.strike.dur > 0) return at(G.attack, 0.45 + Math.min(1, e.strike.t / e.strike.dur) * 0.55);
   if (G.hurt && e.flash > 0) return at(G.hurt, 1 - e.flash / 0.12);
-  if (e.moving || !G.idle) return at(G.walk, ((time * 1.6) % 1));
-  return at(G.idle, ((time * 0.6 + (e.id || 0) * 0.37) % 1));
+  // (Round 67: walking and standing at the pace the rig's own walk and
+  // idle last; the game's pace if they don't say.)
+  if (e.moving || !G.idle) return at(G.walk, ((time / (G.walk[2] > 0 ? G.walk[2] : 1 / 1.6)) % 1));
+  return at(G.idle, ((time / (G.idle[2] > 0 ? G.idle[2] : 1 / 0.6) + (e.id || 0) * 0.37) % 1));
 }
 
 // Creature sheet: frames in a row; left-facing, renderer flips for right.

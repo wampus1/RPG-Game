@@ -146,6 +146,45 @@ export function freeId(m, k, stem = '') {
   }
 }
 
+// (Round 67) A mod's picture, small: 16 x 16 RGBA as base64 (kept in the
+// list of mods, so lists can show it without reading the mod), or null if
+// it has none.
+export const PIC_SIZE = 16;
+export function modPic(m) {
+  const a = m && m.icon && m.assets ? m.assets[m.icon] : null;
+  if (!a || !a.w || !a.h || !a.frames || !a.frames.length) return null;
+  let src;
+  try {
+    src = composite(a, 0);
+  } catch {
+    return null;
+  }
+  const S = PIC_SIZE;
+  const k = Math.max(a.w, a.h) / S;
+  const ox = (S - a.w / k) / 2;
+  const oy = (S - a.h / k) / 2;
+  const out = new Uint8Array(S * S * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const sx = Math.floor((x - ox) * k);
+    const sy = Math.floor((y - oy) * k);
+    if (sx < 0 || sy < 0 || sx >= a.w || sy >= a.h) continue;
+    const i = (sy * a.w + sx) * 4;
+    const j = (y * S + x) * 4;
+    for (let c = 0; c < 4; c++) out[j + c] = src[i + c];
+  }
+  return toBase64(out);
+}
+// Its pixels again (RGBA, PIC_SIZE square), or null.
+export function picPixels(pic) {
+  if (typeof pic !== 'string' || !pic) return null;
+  try {
+    const b = fromBase64(pic);
+    return b.length === PIC_SIZE * PIC_SIZE * 4 ? new Uint8ClampedArray(b) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ------------------------------------------------------------ hashing
 // The same JSON for the same content, whatever order its keys were set in.
 export function canonical(v) {

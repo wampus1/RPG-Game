@@ -50,6 +50,8 @@ export default class SoundTool {
     this.onResize = () => this.draw();
     window.addEventListener('resize', this.onResize);
     window.addEventListener('ws-resize', this.onResize);
+    // (Round 67: what was open, drawn again on coming back to the tab.)
+    if (this.id && this.s) this.open('sounds', this.id);
   }
 
   unmount() {

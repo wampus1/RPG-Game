@@ -418,6 +418,10 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 /* The Rig tool. */
 .rig-look { position: absolute; right: 10px; bottom: 10px; padding: 6px; background: rgba(10, 14, 40, 0.92); border: 2px solid var(--line); box-shadow: var(--bevel); }
 .rig-look:empty { display: none; }
+/* (Round 67) The game's view of it, folded away and back by its button. */
+.rig-look.shut { display: none; }
+.rig-look { bottom: 40px; }
+.rig-look-btn { position: absolute; right: 10px; bottom: 10px; }
 .rg-sw { width: 12px; height: 12px; flex: none; border: 1px solid rgba(0, 0, 0, 0.6); }
 .rg-wave { display: grid; grid-template-columns: 70px 1fr; gap: 4px 8px; align-items: center; margin-bottom: 8px; }
 .rg-wave > .row { grid-column: 2; }

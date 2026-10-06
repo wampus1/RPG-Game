@@ -41,6 +41,7 @@ import { newSong } from '../mod/song.js';
 import { newSound, clipSecs } from '../mod/sound.js';
 import { waveThumb } from './audiokit.js';
 import { barCells } from './homebar.js';
+import { picCanvas } from '../ui/modpick.js';
 
 // Which tool edits each collection.
 export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear' };
@@ -170,19 +171,12 @@ export class Workshop {
       }
     };
     window.addEventListener('beforeunload', this.beforeUnload);
-    const last = (() => {
-      try {
-        return localStorage.getItem('ws-last-mod');
-      } catch {
-        return null;
-      }
-    })();
+    // (Back from a playtest: the mod tried out. Otherwise, round 67, the
+    // Workshop's own page of mods, not the last one opened.)
     if (this.o.openMod) {
       if (this.o.openSel) this.sel = this.o.openSel;
       this.openMod(this.o.openMod, this.o.openTool);
-    }
-    else if (last && this.lib.has(last)) this.openMod(last);
-    else this.home();
+    } else this.home();
   }
 
   // (Round 66) A sound heard: the game's (by name), or one of the mod's
@@ -292,6 +286,19 @@ export class Workshop {
     return h('span', { style: { color: '#1a1008', fontWeight: 700, fontSize: `${Math.round(size * 0.6)}px` } }, (m ? m.name : '?').slice(0, 1).toUpperCase());
   }
 
+  // (Round 67) A mod's picture as the list of mods keeps it, `size` across
+  // (or null: it has none).
+  listPic(q, size) {
+    const src = picCanvas(q && q.pic);
+    if (!src) return null;
+    const c = canvas(src.width, src.height);
+    c.getContext('2d').drawImage(src, 0, 0);
+    c.style.width = `${size}px`;
+    c.style.height = `${size}px`;
+    c.style.imageRendering = 'pixelated';
+    return c;
+  }
+
   modMenu(e) {
     const r = e.currentTarget.getBoundingClientRect();
     const items = [{ head: 'Your mods' }];
@@ -311,6 +318,9 @@ export class Workshop {
     clear(this.explorer);
     this.explorer.classList.add('hidden');
     this.inspector.classList.add('hidden');
+    // (No panels on the page of mods: none of their fold tabs either.)
+    this.splitL.classList.add('homeless');
+    this.splitR.classList.add('homeless');
     clear(this.stage);
     this.drawStatus();
     const wrap = h('div', { class: 'home scroll' });
@@ -322,8 +332,12 @@ export class Workshop {
     im.addEventListener('click', () => this.importMod());
     cards.append(nw, im);
     const list = this.lib.list();
+    // (Mods kept before their pictures were: found, and the page drawn
+    // again with them.)
+    if (list.some((q) => q.pic === undefined)) this.lib.fillPics().then((any) => any && !this.mod && this.home()).catch(() => {});
     for (const q of list) {
-      const icon = h('div', { class: 'modicon', style: { background: q.color } }, h('b', { style: { color: '#1a1008', fontSize: '20px' } }, q.name.slice(0, 1).toUpperCase()));
+      // (Round 67: its own picture, if it has one.)
+      const icon = h('div', { class: 'modicon', style: { background: q.color } }, this.listPic(q, 36) || h('b', { style: { color: '#1a1008', fontSize: '20px' } }, q.name.slice(0, 1).toUpperCase()));
       const card = h('div', { class: 'card' },
         h('div', { class: 't' }, icon, h('div', null, h('div', null, q.name), h('div', { class: 'note' }, `v${q.version} · by ${q.author}`))),
         h('div', { class: 'd' }, `${q.things || 0} things · ${Math.max(1, Math.round((q.size || 0) / 1024))} KB${q.from ? ` · from ${q.from}` : q.mine === false ? ' · imported' : ''}`),
@@ -426,6 +440,7 @@ export class Workshop {
     }
     this.explorer.classList.remove('hidden');
     this.inspector.classList.remove('hidden');
+    this.splitL.classList.remove('homeless');
     this.tool?.unmount?.();
     this.tool = null;
     this.drawExplorer();

@@ -5081,6 +5081,58 @@ from, its key, its reach, swings a second and the stats it gives.
 working, and their hashes don't change (a mod with no sounds, songs,
 gear looks or rules is the same mod it was).
 
+## Round 67: fixes in the Workshop, and a world's mods from the pause menu
+
+**Fixes.**
+- **The Workshop button** on the title screen opens the Workshop's page of
+  mods, not the last mod you had open. (Coming back from a playtest still
+  takes you back to the mod you were trying out.)
+- **A gear look took two clicks to open** when you came back to the Gear
+  tab with that look still chosen: the tab came up blank. The Gear, Music
+  and Sound tabs now draw what was open as soon as you come back to them.
+- **Side panels widen to fit their controls.** A panel too narrow for its
+  buttons, fields or switches grows until they fit (up to almost half
+  the screen), and goes back to the width you set when they're gone.
+  The panels' fold tabs no longer show on the page of mods, where there
+  are no panels.
+- **Rig tool:**
+  - The animation sometimes played two or three times too fast: every
+    time the rig was redrawn, another copy of its playback loop started.
+    Now there's only ever one.
+  - The pixel marked under the mouse could be off by a few pixels after
+    the view changed size (the timeline appearing when you switch to
+    Animate, a panel widening). The view now fits itself again whenever
+    its size changes.
+  - The view can be dragged about: with the middle or right mouse
+    button, or holding Space, in any mode; and when animating, by
+    dragging anywhere that isn't a bone.
+  - The game's view of it (bottom right) can be hidden and shown with
+    the eye button below it, and remembers which.
+- **Custom mod pictures** now show in the Workshop's page of mods and in
+  "Mods for this world". A small copy of each mod's picture is kept with
+  the list of mods; mods saved before this get theirs the first time the
+  list is shown.
+
+**Animation length.** An animation's **Lasts** can be up to 20 seconds
+(it was 6). New buttons stretch all of it at once, keyframes included:
+**Slower**, **Faster**, **Twice as long**, **Half as long**. The play speed
+can also be set to 2×. In the game, a rigged creature now walks and stands
+at the pace its walk and idle last (they used to always take about 0.6
+and 1.7 seconds whatever they were set to); the Rig tool's view of it
+plays the same way.
+
+**A world's mods from the pause menu.** **Mods** (M) on the pause menu
+lists the mods in the world, with their pictures, who made them and how
+much is in them, and the rest of your library below. Click a mod (or
+Space) to change what becomes of it: one of the world's can be **taken
+out**, or **updated** to the newer version in your library (when you have
+one); one of your library's can be **added**. **Apply** saves the world
+(to its slot, or one you choose) and loads it again with its mods as you
+left them. Blocks of a mod taken out are left as gaps. Only whoever hosts
+a world can change its mods, and not while others are in it.
+
+**Updating.** Worlds from 0.66 load as they were.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5354,6 +5406,7 @@ src/
                        audiokit (music pickers and previews, waveform
                        pictures), homebar (the home page's bar)
   ui/modpick.js        choosing a new world's mods
+  ui/modmanager.js     the world's mods from the pause menu (round 67)
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)
 tools/relay.mjs        the LAN relay: a small WebSocket server passing words
