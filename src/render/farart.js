@@ -978,6 +978,221 @@ FAR_SPRITES.cairn = () => {
   return p.outline(OUT);
 };
 
+// The ways into the far lands' own old places (see world/sites.js).
+// An arch's opening: round-headed (`point`: pointed, as Saltmere builds).
+function archIn(x, y, cx, half, spring, rise, point = false) {
+  const dx = (x - cx) / half;
+  if (y >= spring) return Math.abs(dx) <= 1;
+  if (point) return Math.abs(dx) <= 1 && spring - y <= rise * (1 - Math.abs(dx) ** 1.4) * 1.05;
+  return dx * dx + ((y - spring) / rise) ** 2 <= 1;
+}
+function arch(p, cx, half, spring, rise, put, point = false) {
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) if (archIn(x, y, cx, half, spring, rise, point)) put(x, y);
+}
+function archRim(p, cx, half, spring, rise, c, point = false) {
+  const inn = (x, y) => archIn(x, y, cx, half, spring, rise, point);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) if (!inn(x, y) && (inn(x - 1, y) || inn(x + 1, y) || inn(x, y + 1) || inn(x - 1, y + 1) || inn(x + 1, y + 1))) p.set(x, y, typeof c === 'function' ? c(x, y) : c);
+}
+// The Imperial Catacomb: a gate of bronze gone green in a travertine
+// arch, its keystone carved, a wreath of laurel over it, an oil lamp
+// burning in a niche either side.
+FAR_SPRITES.catacomb_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const T = FAR_P.travertine;
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
+    const row = Math.floor(y / 5);
+    const j = (x + (row % 2) * 4) % 8 === 0;
+    p.set(x, y, y % 5 === 0 ? T[3] : j ? T[1] : (x * 3 + y * 7) % 13 === 0 ? T[1] : T[0]);
+  }
+  arch(p, 7.5, 4.6, 20, 6, (x, y) => {
+    const leaf = x <= 7 ? 0 : 1;
+    const edge = x === 7 || x === 8;
+    let c = edge ? '#24382a' : (x + y) % 9 === 0 ? '#7aa088' : y % 6 === 2 ? '#3e5a48' : '#5a7a62';
+    if (!edge && (x === 4 || x === 11) && y % 4 === 0) c = '#d8b048';
+    if (y === 27 && (x === 6 + leaf * 3)) c = '#e8c858';
+    p.set(x, y, c);
+  });
+  archRim(p, 7.5, 4.6, 20, 6, (x, y) => (y < 16 && Math.abs(x - 7.5) < 1.2 ? '#fff8e8' : T[2]));
+  p.rect(7, 12, 2, 2, '#f8f0dc');
+  for (let a = 0; a < 12; a++) {
+    const t = (a / 12) * Math.PI * 2;
+    const x = Math.round(7.5 + Math.cos(t) * 3);
+    const y = Math.round(5 + Math.sin(t) * 2.6);
+    p.set(x, y, a % 2 ? '#7a9a3a' : '#5a7a2a');
+  }
+  p.set(7, 8, '#c84030');
+  p.set(8, 8, '#c84030');
+  for (const x of [1, 14]) {
+    p.rect(x - 1, 26, 2, 4, '#3a3226');
+    const fl = f % 2 ? '#ffd070' : '#ffb040';
+    p.set(x, 27, fl);
+    p.set(x - (f % 2), 26, '#fff0b0');
+    p.set(x - 1, 29, '#a8987a');
+  }
+  return p;
+};
+// The Terracotta Vault: red lacquered doors studded with gold in rows, a
+// lion's head with a ring in its jaws on each, under a little roof of
+// green glaze with its eaves turned up.
+FAR_SPRITES.vault_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const A = FAR_P.adobe_red;
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 5 + y * 3) % 11 === 0 ? A[1] : (x + y * 2) % 17 === 0 ? A[2] : A[0]);
+  const J = FAR_P.roof_jade;
+  for (let y = 4; y < 10; y++) {
+    const w = 8 + Math.floor((y - 4) * 0.4);
+    for (let x = 8 - w; x < 8 + w; x++) if (x >= 0 && x < 16) p.set(x, y, y === 4 ? J[2] : (x + y) % 3 === 0 ? J[1] : J[0]);
+  }
+  p.set(0, 3, J[2]);
+  p.set(15, 3, J[2]);
+  p.hline(0, 15, 10, J[3]);
+  p.rect(1, 11, 14, 29, '#5a1418');
+  p.rect(2, 12, 12, 28, '#a8202a');
+  p.vline(7, 12, 39, '#4a0e12');
+  p.vline(8, 12, 39, '#6a1820');
+  const glint = f % 2;
+  for (let y = 14; y < 38; y += 3) for (const x of [3, 5, 10, 12]) p.set(x, y, (x + y + glint) % 4 === 0 ? '#fff0a0' : '#e0b040');
+  for (const cx of [5.5, 10.5]) {
+    p.ellipse(cx, 25, 1.6, 1.6, '#c89030');
+    p.set(Math.round(cx), 25, '#5a3a10');
+    p.ellipse(cx, 28, 1.2, 1, '#e0b040');
+    p.set(Math.round(cx), 28, '#a8202a');
+  }
+  for (const x of [0, 15]) {
+    const lit = f % 2 ? '#ff8a40' : '#ff6a30';
+    p.rect(x === 0 ? 0 : 14, 15, 2, 3, lit);
+    p.set(x === 0 ? 0 : 15, 14, '#3a2a10');
+  }
+  return p;
+};
+// The Leviathan's Gut: the whale's own jaw for a door, bone white,
+// baleen hanging like a curtain, and the dark beyond it breathing.
+FAR_SPRITES.gut_mouth = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 7 + y * 3) % 11 === 0 ? '#86867e' : (x + y) % 6 === 0 ? '#5a5a54' : '#6e6e66');
+  const breathe = f % 2 ? 0.95 : 1.08;
+  arch(p, 7.5, 6, 24, 10, (x, y) => p.set(x, y, shade(y > 30 ? '#2a0a10' : '#4a141c', breathe)));
+  archRim(p, 7.5, 6, 24, 10, (x, y) => ((x + y) % 3 ? '#f2ead6' : '#d6ccb2'));
+  for (let x = 3; x <= 12; x++) {
+    const len = 3 + ((x * 5) % 4);
+    for (let y = 15 + Math.abs(x - 7.5) * 0.5; y < 15 + Math.abs(x - 7.5) * 0.5 + len; y++) if (x % 2 === 0) p.set(x, Math.round(y), y % 2 ? '#3a3226' : '#5a4a36');
+  }
+  for (let x = 2; x <= 13; x += 2) {
+    p.set(x, 38, '#f8f4e8');
+    p.set(x, 37, '#f8f4e8');
+    p.set(x, 36, '#e8e0cc');
+  }
+  p.hline(2, 13, 39, '#c84a5a');
+  p.set(6, 30, '#c8d880');
+  p.set(9, 33, '#a8c070');
+  return p;
+};
+// The Salt Cathedral: a pointed door cut in white salt, a rose window of
+// coloured salt glass over it, crystals grown up round its foot,
+// glittering.
+FAR_SPRITES.salt_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const S = FAR_P.salt_brick;
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
+    const row = Math.floor(y / 4);
+    const j = (x + (row % 2) * 3) % 6 === 0;
+    p.set(x, y, y % 4 === 0 || j ? S[1] : (x * 5 + y) % 19 === 0 ? '#f0d0dc' : S[0]);
+  }
+  p.ellipse(7.5, 6, 4, 4, '#bcb4a8');
+  const panes = ['#e88aa8', '#7ab8e8', '#f8f0a0', '#a8e0c8'];
+  for (let y = 3; y <= 9; y++) for (let x = 4; x <= 11; x++) {
+    const d = Math.hypot(x - 7.5, y - 6);
+    if (d > 3.2) continue;
+    p.set(x, y, d < 1 ? '#ffffff' : panes[Math.floor(((Math.atan2(y - 6, x - 7.5) + Math.PI) / (Math.PI * 2)) * 8) % 4]);
+  }
+  arch(p, 7.5, 3.8, 22, 9, (x, y) => p.set(x, y, y > 34 ? '#182030' : (x + y) % 7 === 0 ? '#3a4a68' : '#26324a'), true);
+  archRim(p, 7.5, 3.8, 22, 9, S[2], true);
+  const g = f % 2;
+  for (const [x, y, h] of [[1, 39, 5], [2, 39, 3], [13, 39, 6], [14, 39, 3], [0, 39, 2], [15, 39, 4]]) {
+    for (let k = 0; k < h; k++) p.set(x, y - k, k === h - 1 ? '#ffffff' : (k + g) % 3 === 0 ? '#ffd8e8' : '#f4eef8');
+  }
+  p.set(3 + g * 9, 20 + g * 4, '#ffffff');
+  return p;
+};
+// The Deep Warren: a hole, perfectly round, in a bank of earth, stones
+// set round its rim; roots hang over it, lantern pods glowing in them.
+FAR_SPRITES.warren_hole = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, y < 6 ? ((x + y) % 3 ? '#5a8a3a' : '#467430') : (x * 3 + y * 5) % 13 === 0 ? '#644a2e' : (x + y) % 7 === 0 ? '#8c6a44' : '#7a5a3a');
+  const cx = 7.5;
+  const cy = 28;
+  for (let y = 18; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d <= 5.4) p.set(x, y, d < 3 ? '#0a0806' : d < 4.4 ? '#160e0a' : '#22160e');
+    else if (d <= 6.6) p.set(x, y, (Math.round(Math.atan2(y - cy, x - cx) * 3) % 2) ? '#9a9a90' : '#7a7a72');
+  }
+  for (const [x0, len] of [[3, 12], [6, 9], [10, 14], [13, 8]]) {
+    for (let y = 6; y < 6 + len; y++) p.set(x0 + Math.round(Math.sin(y * 0.4 + x0) * 0.8), y, '#4a3420');
+  }
+  const lit = f % 2 ? ['#ffe890', '#ffd060'] : ['#ffd060', '#ffe890'];
+  for (const [x, y, k] of [[3, 17, 0], [10, 19, 1], [13, 14, 0], [6, 14, 1]]) {
+    p.set(x, y, lit[k]);
+    p.set(x, y + 1, lit[1 - k]);
+  }
+  return p;
+};
+// The Hollow Hill: three great stones, two standing and one laid over
+// them, in a green hillside; a spiral cut in the lintel glows, and the
+// dark between the stones shimmers like a curtain.
+FAR_SPRITES.mound_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const H = FAR_P.heath;
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
+    if (y <= 3 + Math.abs(x - 7.5) * 0.4) continue;
+    p.set(x, y, (x * 5 + y * 3) % 9 === 0 ? H[1] : (x + y) % 5 === 0 ? H[2] : y < 14 ? '#5a8a3a' : '#4a7a32');
+  }
+  for (let y = 14; y < TALL_H; y++) for (let x = 3; x <= 12; x++) {
+    const s = Math.sin(y * 0.5 + x * 0.9 + f * 1.7);
+    p.set(x, y, s > 0.75 ? '#c8a0ff' : s > 0.3 ? '#2a1a48' : '#160e2a');
+  }
+  for (const x0 of [1, 13]) for (let y = 14; y < TALL_H; y++) for (let x = x0; x < x0 + 2; x++) p.set(x, y, (x + y) % 4 === 0 ? '#64645e' : x === x0 ? '#8a8a84' : '#76766e');
+  for (let y = 10; y < 14; y++) for (let x = 0; x < 16; x++) p.set(x, y, y === 10 ? '#a4a49e' : (x + y) % 5 === 0 ? '#6e6e6a' : '#8a8a86');
+  const glow = f % 2 ? '#a8fff0' : '#70e8d0';
+  for (let a = 0; a < 14; a++) {
+    const t = a * 0.7;
+    const r = 0.3 + a * 0.12;
+    p.set(Math.round(7.5 + Math.cos(t) * r * 1.6), Math.round(12 + Math.sin(t) * r * 0.9), glow);
+  }
+  for (const [x, y] of [[4, 6], [11, 5], [2, 9]]) p.set(x, y, '#ffffff');
+  return p;
+};
+// The Drowned Broch: a low door in the curve of a drystone tower, the
+// lintel one great stone, weed hanging off it, the sea washing in and out
+// over the step.
+FAR_SPRITES.broch_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  const D = FAR_P.drystone;
+  for (let y = 0; y < TALL_H; y++) {
+    const row = Math.floor(y / 3);
+    for (let x = 0; x < 16; x++) {
+      const curve = Math.round(Math.abs(x - 7.5) ** 2 * 0.04);
+      const j = (x + row * 5 + curve) % 6 === 0;
+      p.set(x, y, (y + curve) % 3 === 0 || j ? D[3] : (x * 7 + row * 3) % 5 === 0 ? D[2] : (x + row) % 3 === 0 ? D[1] : D[0]);
+    }
+  }
+  p.rect(4, 20, 8, 20, '#0e1418');
+  p.rect(5, 21, 6, 19, '#141c22');
+  p.rect(3, 17, 10, 3, '#9a9a94');
+  p.hline(3, 12, 17, '#b0b0aa');
+  for (const [x, len] of [[4, 4], [6, 6], [9, 3], [11, 5]]) for (let y = 20; y < 20 + len; y++) p.set(x + ((y + f) % 3 === 0 ? 1 : 0), y, y % 2 ? '#2a5a3a' : '#3a6a42');
+  const wave = f % 2;
+  for (let x = 2; x < 14; x++) {
+    p.set(x, 37 - ((x + wave) % 3 === 0 ? 1 : 0), (x + wave) % 2 ? '#a0d0e8' : '#6aa0c0');
+    p.set(x, 38, '#3a6a8a');
+    p.set(x, 39, '#2a4a6a');
+  }
+  for (const [x, y] of [[2, 30], [13, 26], [1, 34], [14, 33]]) p.set(x, y, '#d8d8cc');
+  return p;
+};
+
+// (Their frames.)
+export const FAR_ANIM = { catacomb_door: 2, vault_door: 2, gut_mouth: 2, salt_door: 2, warren_hole: 2, mound_door: 4, broch_door: 2 };
+
 // --------------------------------------------------------------- creatures
 // The far lands' beasts (16 x 16, facing left, two frames).
 function beast(f, o) {
@@ -1220,7 +1435,62 @@ function seal(f) {
   });
 }
 
+// (Round 68) Below ground. A tunneler: a blind digger, bald and pink,
+// all shoulders and spade-claws, its snout feeling the air.
+function tunneler(f) {
+  return beast(f, (p) => {
+    const hide = hex('#b88a7a');
+    p.ellipse(9, 9, 6, 4, hide);
+    p.hline(5, 13, 6, shade(hide, 1.15));
+    p.hline(5, 13, 12, shade(hide, 0.75));
+    for (let x = 6; x < 13; x += 2) p.set(x, 8, shade(hide, 0.85));
+    p.ellipse(3, 9, 3, 2, shade(hide, 1.05));
+    p.set(0, 9, '#e8a0a0');
+    p.set(1, 8, '#e8a0a0');
+    p.set(1, 10, '#e8a0a0');
+    for (const [x, o] of [[4, f], [12, -f]]) {
+      p.rect(x - 1, 12, 3, 2, shade(hide, 0.85));
+      p.hline(x - 2 + o, x + 2 + o, 14, '#e8e0cc');
+      p.set(x - 2 + o, 15, '#e8e0cc');
+      p.set(x + o, 15, '#e8e0cc');
+    }
+    p.line(15, 9, 14, 11 + f, shade(hide, 0.8));
+  });
+}
+// A grave raven: a raven, but bigger, ragged, its eye red.
+function graveRaven(f) {
+  return beast(f, (p) => {
+    const up = f ? -2 : 1;
+    p.ellipse(9, 9, 4, 2, '#14141e');
+    p.line(6, 8, 3 + f, 4 + up, '#22223a');
+    p.line(11, 8, 14 - f, 4 + up, '#22223a');
+    p.line(7, 8, 5 + f, 5 + up, '#14141e');
+    p.line(10, 8, 12 - f, 5 + up, '#14141e');
+    p.ellipse(5, 8, 2, 2, '#14141e');
+    p.set(4, 7, '#ff3030');
+    p.hline(1, 3, 8, '#3a3a40');
+    p.line(12, 9, 15, 11, '#14141e');
+  });
+}
+// A cave moth: a lantern moth gone strange in the dark, eyes on its wings.
+function caveMoth(f) {
+  return beast(f, (p) => {
+    const up = f ? -1 : 1;
+    p.ellipse(8, 8, 1, 3, '#4a2a1a');
+    for (const s of [-1, 1]) {
+      p.ellipse(8 + s * 4, 7 + up, 3, 2 + (f ? 0 : 1), '#e08a20');
+      p.set(8 + s * 4, 7 + up, '#1a1420');
+      p.set(8 + s * 4 + 1, 7 + up, '#ffe060');
+    }
+    p.line(7, 5, 5, 2, '#4a2a1a');
+    p.line(9, 5, 11, 2, '#4a2a1a');
+  });
+}
+
 export const FAR_CREATURES = {
+  tunneler: { frames: 2, draw: (f) => tunneler(f) },
+  grave_raven: { frames: 2, draw: (f) => graveRaven(f) },
+  cave_moth: { frames: 2, draw: (f) => caveMoth(f) },
   white_bull: { frames: 2, draw: (f, v) => whiteBull(f, v) },
   reindeer: { frames: 2, draw: (f, v) => reindeer(f, v) },
   frost_wolf: { frames: 2, draw: (f) => frostWolf(f) },

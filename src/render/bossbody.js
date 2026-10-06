@@ -12,6 +12,8 @@
 import { paintFigure, hasFigure, figureJoints, figureRig, FIG_W, FIG_H, FIG_AX, FIG_AY } from './bossfigs.js';
 import { paintBeast, beastOf } from './bossbeasts.js';
 import { bossTint, rim } from './bossart.js';
+// (Round 68: the far lands' masters, registered: see farbosses.js.)
+import './farbosses.js';
 
 export const FRAMES = 24;
 const cache = new Map();

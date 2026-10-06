@@ -9,7 +9,7 @@ import { SVC, posOf } from './nodes.js';
 import { NODES } from './graph.js';
 import { gameKey } from './format.js';
 import { ITEMS, tuneKey, socketed, enhanced, TUNE_FIELDS } from '../world/items.js';
-import { parseStar, starKey, gearClass, MODS as QMODS } from '../world/quality.js';
+import { parseStar, starKey, gearClass, MODS as QMODS, modOf } from '../world/quality.js';
 import { B, BLOCKS, CROPS, cropMeta, cropStage, META_ROT } from '../world/blocks.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { BIOMES } from '../world/biomes.js';
@@ -1226,7 +1226,7 @@ Object.assign(SVC, {
       case 'food': return d.kind === 'food' || d.kind === 'potion';
       case 'stars': return d.stars || 0;
       // (Round 66.)
-      case 'modifiers': return (d.mods || []).map((m) => (QMODS[d.gear] && QMODS[d.gear][m] ? QMODS[d.gear][m].name : m)).join(', ');
+      case 'modifiers': return (d.mods || []).map((m) => (modOf(d.gear, m) ? modOf(d.gear, m).name : m)).join(', ');
       case 'stone set in it': return d.socket || d.enhanced || (d.plain && ITEMS[d.plain] ? ITEMS[d.plain].socket || ITEMS[d.plain].enhanced : '') || '';
       case 'the plain piece': return plainOf(k);
       case 'its key': return k;

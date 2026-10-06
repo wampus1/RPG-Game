@@ -7,6 +7,7 @@ import { REGION_W, REGION_D, MAP_W, MAP_H, WORLD_Y, SURFACE } from '../config.js
 import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
+import { FAR_SITES, FAR_OWN_SHARE, FAR_OWN_TYPE } from './fardeep.js';
 import { Region } from './region.js';
 import { MODS } from '../mod/state.js';
 
@@ -113,14 +114,65 @@ export function genSites(ow) {
       }
     }
   }
+  // (Round 68) The far lands' old places, in a new world (where their
+  // peoples live: see worldgen.settleFar): each land's own few, a share of
+  // them its own kind (see fardeep.js); and never a Kavorent spire, out
+  // beyond the storm. (Their own stream, after the islands', so the
+  // islands' places come out as they always did.)
+  if (ow.wg >= 2 && !ow.plan) farSites(ow, sites, farFromTowns, farFromSites);
   return sites;
+}
+function farSites(ow, sites, farFromTowns, farFromSites) {
+  const rng = new RNG(hash4(ow.seed, 0xfa2d));
+  for (const L of ow.lands) {
+    const want = FAR_SITES[L.key];
+    if (!want) continue;
+    // (Its squares are made as they're wanted: every other one of a
+    // continent's, as its towns were placed.)
+    const step = L.kind === 'continent' ? 2 : 1;
+    const land = [];
+    for (let cz = Math.max(1, Math.floor(L.z0 / REGION_D)); cz <= Math.min(MAP_H - 2, Math.ceil(L.z1 / REGION_D)); cz += step) {
+      for (let cx = Math.max(1, Math.floor(L.x0 / REGION_W)); cx <= Math.min(MAP_W - 2, Math.ceil(L.x1 / REGION_W)); cx += step) {
+        const c = ow.cell(cx, cz);
+        if (c && c.island === L.key && c.biome !== 'ocean' && c.biome !== 'beach' && !c.lake && c.settlement === null && !c.bridge && c.cont > 0.08) land.push(c);
+      }
+    }
+    let n = 0;
+    for (const gap of [3.4, 2.6]) {
+      for (const c of rng.shuffle(land.slice())) {
+        if (n >= want) break;
+        if (!farFromTowns(c, gap - 1) || !farFromSites(c, gap) || c.mountainness > 0.5) continue;
+        sites.push({ id: sites.length, type: kindFor(ow, c, rng), cx: c.cx, cz: c.cz, island: L.key, seed: hash4(ow.seed, c.cx, c.cz, sites.length, 0x5d1), far: true });
+        n++;
+      }
+    }
+    const own = FAR_OWN_TYPE[L.key];
+    const here = sites.filter((q) => q.island === L.key);
+    if (own && here.length) {
+      const k = Math.max(1, Math.round(here.length * FAR_OWN_SHARE));
+      const score = (q) => ownSuits(ow, q, L.key) + (hash4(ow.seed, q.cx * 31 + q.cz, 0x15d) % 1000) / 1000;
+      here.sort((a, b) => score(b) - score(a)).slice(0, k).forEach((q) => (q.type = own));
+    }
+    const mixed = sites.filter((q) => q.island === L.key && KINDS.includes(q.type));
+    if (mixed.length >= KINDS.length) {
+      for (const k of KINDS) {
+        if (mixed.some((q) => q.type === k)) continue;
+        const tally = (t) => mixed.filter((q) => q.type === t).length;
+        const most = KINDS.reduce((b, t) => (tally(t) > tally(b) ? t : b), KINDS[0]);
+        const swap = mixed.filter((q) => q.type === most).pop();
+        if (swap && tally(most) > 1) swap.type = k;
+      }
+    }
+  }
 }
 const OWN_SHARE = { thessa: 0.25, kharos: 0.4, myrrow: 0.4 };
 const KINDS = ['barrow', 'mine', 'crypt', 'holdout'];
 function ownSuits(ow, c, isle) {
   const cell = ow.cell(c.cx, c.cz);
   if (isle === 'thessa') return cell && ['forest', 'taiga', 'jungle'].includes(cell.biome) ? 2 : 0;
-  if (isle === 'myrrow') {
+  // (The sea's: Myrrow's grottoes, Corrow's whale, the Skerries' brochs,
+  // Saltmere's salt pans.)
+  if (isle === 'myrrow' || isle === 'corrow' || isle === 'skerries' || isle === 'saltmere') {
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (ow.cell(c.cx + dx, c.cz + dz)?.biome === 'ocean') return 2;
     return 0;
   }
@@ -224,6 +276,164 @@ function settleThermal(world, s) {
   s.reach = 44;
 }
 
+// --------------------------------------------------------------- far lands
+// (Round 68) What the usual kinds' ways in are built of in each far land:
+// a Velmarch barrow under frost with drystone round it, a Saltmere crypt's
+// ruin all salt, the Wyrd Isle's barrows ringed with standing stones.
+const BASE_MAT = { stone: B.cobblestone, cap: B.stone, turf: B.grass, soil: B.dirt, path: B.gravel, brick: B.crypt_brick, floor: B.crypt_floor, rock: B.cave_rock, post: B.log_oak, beam: B.planks_dark, hpath: B.path };
+const FAR_MAT = {
+  velmarch: { stone: B.drystone, cap: B.travertine, turf: B.frost_grass, brick: B.travertine, floor: B.marble, beam: B.planks_dark, hpath: B.flagstone },
+  ostria: { stone: B.red_rock, cap: B.red_rock, turf: B.grass_gold, soil: B.red_rock, brick: B.adobe_red, floor: B.flagstone, rock: B.red_rock, post: B.bamboo, beam: B.planks_lacquer, path: B.sand, hpath: B.sand },
+  corrow: { stone: B.whalebone, cap: B.whalebone, soil: B.bone_sand, brick: B.drystone, floor: B.bone_sand, post: B.whalebone, beam: B.planks_drift, path: B.bone_sand, hpath: B.bone_sand },
+  saltmere: { stone: B.salt_brick, cap: B.salt_brick, turf: B.salt_crust, soil: B.sand, brick: B.salt_brick, floor: B.tile_blue, rock: B.salt_brick, post: B.log_birch, beam: B.planks_birch, path: B.salt_crust, hpath: B.salt_crust },
+  hollowmark: { stone: B.cob, cap: B.moss, brick: B.mossy_bricks, floor: B.cob, path: B.dirt, hpath: B.dirt },
+  wyrd: { menhir: true, turf: B.heath, brick: B.drystone, floor: B.flagstone, beam: B.log_birch, post: B.log_birch, hpath: B.heath },
+  skerries: { stone: B.drystone, cap: B.drystone, brick: B.drystone, floor: B.gravel, path: B.gravel, hpath: B.gravel },
+};
+// A roof stepped up from both eaves to its ridge, as the towns build them
+// (the slope toward you lit, the far one in shadow, the ridge along).
+function gable(put, x0, x1, z0, z1, y0, id) {
+  for (let k = 0; z0 + k <= z1 - k; k++) {
+    const zs = z0 + k;
+    const ze = z1 - k;
+    for (let x = x0; x <= x1; x++) for (const z of zs === ze ? [zs] : [zs, ze]) put(x, y0 + k, z, id, zs === ze ? 1 : z === zs ? 2 : 0);
+  }
+}
+// Each far land's own kind of place, and its way in (see fardeep.js).
+const FAR_GATE = {
+  // A tomb-house of travertine over the stair down: a portico of marble
+  // columns under a roof of red tile, a paved forecourt, a cypress either
+  // side, statues of the legions' standard-bearers.
+  catacomb(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -4; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, dz === 0 && Math.abs(dx) < 3 && y === h + 3 ? B.marble : B.travertine);
+    for (let dz = -4; dz <= 2; dz++) for (let dx = -3; dx <= 3; dx++) put(dx, h + 4, dz, B.marble);
+    gable(put, -4, 4, -5, 3, h + 5, B.roof_terracotta);
+    for (const dx of [-3, -1, 1, 3]) for (let y = h + 1; y <= h + 3; y++) put(dx, y, 2, B.marble_column);
+    for (let dz = 1; dz <= 5; dz++) for (let dx = -3; dx <= 3; dx++) put(dx, h, dz, Math.abs(dx) + dz < 6 ? B.marble : B.flagstone);
+    for (let dz = 1; dz <= 1; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h + 1, dz, B.air);
+    for (const dx of [-5, 5]) {
+      for (let y = h + 1; y <= h + 2; y++) put(dx, y, -1, B.log_olive);
+      for (let y = h + 2; y <= h + 6; y++) put(dx, y, -1, B.leaves_cypress);
+      put(dx, h + 7, -1, B.leaves_cypress);
+    }
+    for (const dx of [-4, 4]) put(dx, h + 1, 4, B.statue, dx < 0 ? 1 : 3);
+    put(0, h + 1, 0, B.catacomb_door);
+    put(0, h + 2, 0, B.travertine);
+    put(-1, h + 1, 3, B.candles);
+    put(1, h + 1, 3, B.candles);
+  },
+  // A gatehouse of red lacquer and green tile over the vault's stair:
+  // posts of lacquer, a roof turned up at the eaves in two tiers, a lion
+  // of stone either side, a walk of flags up to it.
+  vault(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -3; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, Math.abs(dx) === 3 || dz === -3 ? B.planks_lacquer : B.adobe_red);
+    for (let dz = -4; dz <= 1; dz++) for (let dx = -4; dx <= 4; dx++) put(dx, h + 4, dz, B.roof_jade, Math.abs(dx) <= 1 ? 1 : dx < 0 ? 3 : 1);
+    for (let dz = -3; dz <= 0; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h + 5, dz, B.planks_lacquer);
+    for (let dz = -4; dz <= 1; dz++) for (let dx = -3; dx <= 3; dx++) put(dx, h + 6, dz, B.roof_jade, Math.abs(dx) <= 1 ? 1 : dx < 0 ? 3 : 1);
+    for (const dx of [-4, 4]) put(dx, h + 5, 1, B.lantern);
+    for (let dz = 1; dz <= 6; dz++) for (let dx = -1; dx <= 1; dx++) put(dx, h, dz, B.flagstone);
+    for (const dx of [-2, 2]) put(dx, h + 1, 2, B.statue, dx < 0 ? 1 : 3);
+    for (const dx of [-3, 3]) put(dx, h + 1, 4, B.lantern);
+    put(0, h + 1, 0, B.vault_door);
+    put(0, h + 2, 0, B.planks_lacquer);
+  },
+  // The whale's head itself, coming up out of a mound of bone sand: its
+  // jaw for a doorway, ribs standing in two rows down the beach before it,
+  // the bones of its back heaped behind.
+  gut(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -5; dz <= 0; dz++) for (let dx = -4; dx <= 4; dx++) {
+      const d = Math.hypot(dx / 4.6, (dz + 2.4) / 3.2);
+      if (d > 1) continue;
+      for (let y = h + 1; y <= h + (d < 0.5 ? 4 : d < 0.8 ? 3 : 2); y++) put(dx, y, dz, d > 0.8 || y === h + 1 ? B.bone_sand : B.whalebone);
+    }
+    for (let dx = -2; dx <= 2; dx++) put(dx, h + 3, 0, B.whalebone);
+    for (let dz = 1; dz <= 6; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h, dz, B.bone_sand);
+    for (const dz of [2, 4, 6]) {
+      put(-3, h + 1, dz, B.whale_rib, 0);
+      put(3, h + 1, dz, B.whale_rib, 1);
+    }
+    for (let i = 0; i < 4; i++) put(rng.int(-5, 5), h + 1, rng.int(-6, -5), B.bones);
+    put(0, h + 1, 0, B.gut_mouth);
+    put(0, h + 2, 0, B.whalebone);
+  },
+  // A chapel cut out of a hill of salt, white as bone, its roof of blue
+  // glaze, crystals grown up all round it and the ground a crust of salt.
+  saltworks(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -4; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, B.salt_brick);
+    gable(put, -3, 3, -5, 1, h + 4, B.tile_blue);
+    for (let y = h + 4; y <= h + 8; y++) put(0, y, -6, B.salt_brick);
+    put(0, h + 9, -6, B.salt_crystal);
+    for (let dz = -6; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) if (Math.hypot(dx, dz) < 6.2) put(dx, h, dz, B.salt_crust);
+    for (let i = 0; i < 7; i++) {
+      const dx = rng.int(-5, 5);
+      const dz = rng.int(1, 5) * (rng.chance(0.7) ? 1 : -1);
+      if (Math.abs(dx) > 3 || dz > 0) put(dx, h + 1, dz, B.salt_crystal);
+    }
+    put(0, h + 1, 0, B.salt_door);
+    put(0, h + 2, 0, B.salt_brick);
+  },
+  // A bank of earth with turf on it, a round hole in its face lined with
+  // stones; roots over it, glowberries and lantern pods about.
+  warren(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -5; dz <= 0; dz++) for (let dx = -5; dx <= 5; dx++) {
+      const d = Math.hypot(dx / 5.6, (dz + 2.5) / 3.4);
+      if (d > 1) continue;
+      const top = h + (d < 0.45 ? 4 : d < 0.75 ? 3 : 2);
+      for (let y = h + 1; y <= top; y++) put(dx, y, dz, y === top ? B.roof_turf : B.cob);
+    }
+    for (const [dx, y] of [[-1, h + 1], [1, h + 1], [-1, h + 2], [1, h + 2], [0, h + 3]]) put(dx, y, 0, B.drystone);
+    for (let dz = 1; dz <= 5; dz++) put(0, h, dz, B.dirt);
+    for (const [dx, dz] of [[-3, 2], [3, 1], [-4, 4], [4, 3]]) put(dx, h + 1, dz, rng.chance(0.5) ? B.glowberry_bush : B.giant_fern);
+    put(2, h + 1, 3, B.lantern_tree);
+    put(0, h + 1, 0, B.warren_hole);
+    put(0, h + 2, 0, B.cob);
+  },
+  // A green hill, round as a bowl turned over, a ring of standing stones
+  // round it, toadstools in rings about its foot, and the door between two
+  // great stones at its side.
+  mound(put, clear, h, rng) {
+    clear(7);
+    for (let dz = -6; dz <= 1; dz++) for (let dx = -5; dx <= 5; dx++) {
+      const d = Math.hypot(dx / 5.4, (dz + 2.5) / 3.8);
+      if (d > 1) continue;
+      const top = h + Math.max(1, Math.round((1 - d * d) * 4.5));
+      for (let y = h + 1; y <= top; y++) put(dx, y, dz, y === top ? B.grass : B.dirt);
+    }
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2 + 0.35;
+      const dx = Math.round(Math.cos(a) * 6.6);
+      const dz = Math.round(-2.5 + Math.sin(a) * 5.2);
+      if (dz >= 2 && Math.abs(dx) <= 1) continue;
+      put(dx, h + 1, dz, B.standing_stone);
+    }
+    for (let i = 0; i < 6; i++) put(rng.int(-6, 6), h + 1, rng.int(2, 5), B.fairy_ring);
+    for (let dz = 2; dz <= 6; dz++) put(0, h, dz, B.heath);
+    put(0, h + 1, 1, B.mound_door);
+    put(0, h + 2, 1, B.dirt);
+    put(0, h + 1, 2, B.air);
+  },
+  // The stump of a drystone tower, round, broken off at different heights
+  // round its top, weed on its seaward side, its door low in the curve.
+  broch(put, clear, h, rng) {
+    clear(6);
+    for (let dz = -6; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) {
+      const d = Math.hypot(dx, dz + 3);
+      if (d > 3.4) continue;
+      const top = h + 3 + (d > 2.4 ? rng.int(1, 4) : 0);
+      for (let y = h + 1; y <= top; y++) put(dx, y, dz, d > 2.4 ? B.drystone : B.stone);
+    }
+    for (let dz = 1; dz <= 5; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h, dz, B.gravel);
+    for (const [dx, dz] of [[-3, 2], [2, 4], [-1, 5], [4, 1]]) put(dx, h + 1, dz, rng.chance(0.5) ? B.cairn : B.thrift);
+    put(0, h + 1, 0, B.broch_door);
+    put(0, h + 2, 0, B.drystone);
+  },
+};
+
 // --------------------------------------------------------------- above ground
 // The blocks of a site's entrance, as [dx, y, dz, id, meta] from its spot
 // (y absolute). `state`: { cleared, open (a spire's open side) }.
@@ -238,6 +448,8 @@ export function siteBlocks(s, state = {}) {
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) for (let y = h + 1; y < WORLD_Y; y++) put(dx, y, dz, B.air);
   };
   const rng = new RNG(hash4(s.seed, 0x51e));
+  // (Round 68: a far land's in its own stone: see FAR_MAT.)
+  const M = { ...BASE_MAT, ...(FAR_MAT[s.island] || {}) };
   if (s.type === 'kavorent') {
     clear(7);
     const theme = s.theme || 'facility';
@@ -332,6 +544,10 @@ export function siteBlocks(s, state = {}) {
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (rng.chance(0.7)) put(dx, h + 1, dz, rng.chance(0.5) ? B.cobblestone : B.gravel);
     return out;
   }
+  if (FAR_GATE[s.type]) {
+    FAR_GATE[s.type](put, clear, h, rng);
+    return out;
+  }
   if (s.type === 'barrow') {
     clear(5);
     // The mound, grassed over, a little high in the middle.
@@ -339,20 +555,23 @@ export function siteBlocks(s, state = {}) {
       for (let dx = -4; dx <= 4; dx++) {
         const d = Math.hypot(dx / 4.6, dz / 3.4);
         if (d > 1) continue;
-        put(dx, h + 1, dz, d > 0.75 ? B.dirt : B.grass);
-        if (d < 0.55) put(dx, h + 2, dz, B.grass);
-        if (d < 0.75 && d >= 0.55) put(dx, h + 1, dz, B.grass);
+        put(dx, h + 1, dz, d > 0.75 ? M.soil : M.turf);
+        if (d < 0.55) put(dx, h + 2, dz, M.turf);
+        if (d < 0.75 && d >= 0.55) put(dx, h + 1, dz, M.turf);
       }
     }
     // Standing stones round it, and the door at its foot.
     for (const [dx, dz] of [[-5, -1], [5, -1], [-4, 3], [4, 3], [0, -4]]) {
-      put(dx, h + 1, dz, B.cobblestone);
-      if (rng.chance(0.7)) put(dx, h + 2, dz, B.stone);
+      if (M.menhir) put(dx, h + 1, dz, B.standing_stone);
+      else {
+        put(dx, h + 1, dz, M.stone);
+        if (rng.chance(0.7)) put(dx, h + 2, dz, M.cap);
+      }
     }
     put(0, h + 1, 3, B.barrow_door);
     put(0, h + 2, 3, B.air);
     put(0, h + 1, 4, B.air);
-    put(0, h, 4, B.gravel);
+    put(0, h, 4, M.path);
     return out;
   }
   if (s.type === 'mine') {
@@ -360,10 +579,10 @@ export function siteBlocks(s, state = {}) {
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) put(dx, h, dz, B.gravel);
     put(0, h, 0, B.mine_shaft);
     // The headframe: four posts and a beam over the shaft.
-    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, B.log_oak);
-    for (let dx = -1; dx <= 1; dx++) put(dx, h + 4, 0, B.planks_dark);
-    put(0, h + 4, -1, B.planks_dark);
-    put(0, h + 4, 1, B.planks_dark);
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) for (let y = h + 1; y <= h + 3; y++) put(dx, y, dz, M.post);
+    for (let dx = -1; dx <= 1; dx++) put(dx, h + 4, 0, M.beam);
+    put(0, h + 4, -1, M.beam);
+    put(0, h + 4, 1, M.beam);
     // Spoil heaps, an old cart's planks, a barrel.
     for (let i = 0; i < 5; i++) put(rng.int(-4, 4), h + 1, rng.int(3, 4) * (rng.chance(0.5) ? 1 : -1), rng.chance(0.5) ? B.gravel : B.cobblestone);
     put(3, h + 1, 2, B.barrel);
@@ -376,9 +595,9 @@ export function siteBlocks(s, state = {}) {
     for (let dz = -3; dz <= 3; dz++) for (let dx = -4; dx <= 4; dx++) {
       const edge = Math.abs(dx) === 4 || Math.abs(dz) === 3;
       if (edge && rng.chance(0.65)) {
-        put(dx, h + 1, dz, B.crypt_brick);
-        if (rng.chance(0.4)) put(dx, h + 2, dz, B.crypt_brick);
-      } else if (!edge && rng.chance(0.4)) put(dx, h, dz, B.crypt_floor);
+        put(dx, h + 1, dz, M.brick);
+        if (rng.chance(0.4)) put(dx, h + 2, dz, M.brick);
+      } else if (!edge && rng.chance(0.4)) put(dx, h, dz, M.floor);
     }
     put(0, h, 0, B.sinkhole);
     for (const [dx, dz] of [[-2, 4], [2, 4], [0, 5]]) put(dx, h + 1, dz, B.gravestone);
@@ -440,16 +659,16 @@ export function siteBlocks(s, state = {}) {
   for (let dz = -4; dz <= 0; dz++) for (let dx = -3; dx <= 3; dx++) {
     const d = Math.hypot(dx / 3.6, (dz + 2) / 2.6);
     if (d > 1) continue;
-    put(dx, h + 1, dz, B.cave_rock);
-    if (d < 0.8) put(dx, h + 2, dz, B.cave_rock);
-    if (d < 0.45) put(dx, h + 3, dz, B.cave_rock);
+    put(dx, h + 1, dz, M.rock);
+    if (d < 0.8) put(dx, h + 2, dz, M.rock);
+    if (d < 0.45) put(dx, h + 3, dz, M.rock);
   }
   // (The way in set into the face itself, flush with the rock round it.)
   put(0, h + 1, 0, B.cave_mouth);
   put(0, h + 2, 0, B.air);
   for (let dx = -3; dx <= 3; dx++) if (Math.abs(dx) > 1) put(dx, h + 1, 3, B.fence);
   put(2, h + 1, 2, B.campfire);
-  for (let dz = 1; dz <= 4; dz++) put(0, h, dz, B.path);
+  for (let dz = 1; dz <= 4; dz++) put(0, h, dz, M.hpath);
   return out;
 }
 

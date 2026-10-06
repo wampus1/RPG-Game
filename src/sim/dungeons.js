@@ -14,7 +14,7 @@
 // slain, and the way in falls shut behind them. (Never a spire's master:
 // they go into the spires only to steal a core or two, and get out.)
 import { RNG, hash4, clamp } from '../util/rng.js';
-import { DTYPES } from '../world/dungeongen.js';
+import { dtypeOf } from '../world/dungeongen.js';
 import { ISLE_TYPE_LORE, HOME_ISLE, FAR_DELVE_DAY, FAR_DELVE_GRACE, FAR_DELVE_LATEST } from '../world/isledeep.js';
 import { restamp } from '../world/sites.js';
 import { REGION_W, REGION_D } from '../config.js';
@@ -90,7 +90,7 @@ export class Dungeons {
         continue;
       }
       const rng = new RNG(hash4(s.seed, 0xd1));
-      const T = DTYPES[s.type];
+      const T = dtypeOf({ type: s.type, isle: s.island || null });
       // Its town: the nearest, if it's near enough to have a story about it.
       let town = null;
       let bd = Infinity;

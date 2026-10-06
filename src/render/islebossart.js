@@ -31,6 +31,51 @@ export const ISLE_LOOKS = {
   fog_knight: { skin: '#a0b0b8', hair: '#c8d8e0', hairStyle: 'bald', shirt: '#7a8a90', pants: '#6a7a80', shoes: '#5a6a70', outfit: 'plain', accent: '#c8d8e0', hat: 'helmet', hatColor: '#8a9aa0', eyes: '#ffffff', visor: true, gear: { body: 'plate:#8a9aa0', legs: 'plate:#7a8a90' } },
   sharktooth: { skin: '#8a5a38', hair: '#1a1410', hairStyle: 'long', shirt: '#1e3a4a', pants: '#3a3020', shoes: '#2a2014', outfit: 'tidewrap', accent: '#f0e8dc', hat: 'tricorn', hatColor: '#1e1a18', beard: true, beardStyle: 'full', neck: '#f0e8dc', mark: 'stripes' },
   pearl_queen: { skin: '#a06a44', hair: '#1a1410', hairStyle: 'long', shirt: '#e8e0d4', pants: '#3a6a7a', shoes: '#2a3a40', outfit: 'robe_pearl', accent: '#80c8e8', hat: 'shellhelm', hatColor: '#f0e8dc', neck: '#f0e8dc', eyes: '#80c8e8' },
+  // (Round 68) The far lands' dead and outlaws, below ground: Velmarch's
+  // legion shades in bronze and red, their faces gone to cold light;
+  // Ostria's clay soldiers, their plates fired with the rest of them, and
+  // its jade corpses in an official's robe, a charm hung over the face;
+  // Corrow's drowned whalers, bones in oilskin; Saltmere's salt-white
+  // dead; the Wyrd Isle's fey knights in silver, antlered; the Skerries'
+  // wreckers in dark oilskins with their false lanterns.
+  legion_shade: { skin: '#a8c0d8', hair: '#c8d8f0', hairStyle: 'bald', shirt: '#8a2a2a', pants: '#6a2020', shoes: '#4a3a24', outfit: 'tunic', accent: '#c83030', hat: 'galea', hatColor: '#b89040', eyes: '#e0f4ff', gear: { body: 'plate:#b89040', legs: 'plate:#9a7a38' } },
+  terracotta: { skin: '#b8643a', hair: '#8a4a2a', hairStyle: 'bald', shirt: '#a85a34', pants: '#9a5030', shoes: '#7a3e24', outfit: 'tunic', accent: '#d8946a', hat: 'clayhelm', hatColor: '#8a4a2a', eyes: '#3a1a10', gear: { body: 'plate:#a85a34' } },
+  terracotta_archer: { skin: '#b8643a', hair: '#8a4a2a', hairStyle: 'bald', shirt: '#9a5434', pants: '#8a4a2c', shoes: '#7a3e24', outfit: 'tunic', accent: '#d8946a', hat: 'clayhelm', hatColor: '#7a4024', eyes: '#3a1a10' },
+  jade_corpse: { skin: '#a8c8b0', hair: '#1a2a20', hairStyle: 'ponytail', shirt: '#1e3a5a', pants: '#162a44', shoes: '#0e1a2a', outfit: 'robe_jade', accent: '#d8b040', hat: 'guanmao', hatColor: '#1e2a24', eyes: '#80ffa0', stoop: true },
+  bone_whaler: { skin: '#e8e4d4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#2a3a3a', pants: '#24302e', shoes: '#1a2220', outfit: 'skeleton', accent: '#d8b030', hat: 'souwester', hatColor: '#c8a028' },
+  salt_wight: { skin: '#f0ecf0', hair: '#ffffff', hairStyle: 'long', shirt: '#e8e0e4', pants: '#d8d0d8', shoes: '#c8c0c8', outfit: 'robe_salt', accent: '#e8a0b8', hat: 'hood', hatColor: '#e0d8e0', eyes: '#a0c8ff', stoop: true },
+  fey_knight: { skin: '#e0e8f0', hair: '#c8e0d0', hairStyle: 'long', shirt: '#3a5a4a', pants: '#2a4a3a', shoes: '#1e3a2a', outfit: 'plain', accent: '#80ffd0', hat: 'antlers', hatColor: '#e0d8c0', eyes: '#c8a0ff', gear: { body: 'plate:#c8d0e0', legs: 'plate:#a8b0c0' } },
+  wrecker: { skin: '#b08868', hair: '#2a2420', hairStyle: 'short', shirt: '#2a2e34', pants: '#24282c', shoes: '#1a1c1e', outfit: 'traveller', accent: '#ffb040', hat: 'souwester', hatColor: '#2a3036', beard: true, beardStyle: 'stubble' },
+  // (Round 68) The far lands' masters that walk as people do (painted
+  // large: see farbosses.js; this is how they're dressed when they're not).
+  frost_jarl: { skin: '#a8b8c8', hair: '#e8f0f8', hairStyle: 'long', shirt: '#3a4a5a', pants: '#2a3440', shoes: '#2a2a30', outfit: 'plain', accent: '#a0e8ff', hat: 'helmet', hatColor: '#8a9aa8', eyes: '#a0e8ff', beard: true, beardStyle: 'long', gear: { body: 'chain:#6a7a88' } },
+  iron_legate: { skin: '#9ab0c8', hair: '#c8d8e8', hairStyle: 'bald', shirt: '#8a2020', pants: '#6a1a1a', shoes: '#4a3a24', outfit: 'tunic', accent: '#c82020', hat: 'galea', hatColor: '#c8a040', eyes: '#e0f4ff', gear: { body: 'plate:#c8a040', legs: 'plate:#b89040' } },
+  pale_vestal: { skin: '#e8e4f0', hair: '#f0f0f8', hairStyle: 'long', shirt: '#f4f0e8', pants: '#f4f0e8', shoes: '#c8a040', outfit: 'robe_white', accent: '#c8a040', hat: 'hood', hatColor: '#f8f4ec', eyes: '#ffe8a0' },
+  deserter_general: { skin: '#b08060', hair: '#3a2a20', hairStyle: 'short', shirt: '#6a2a2a', pants: '#3a2a24', shoes: '#2a2018', outfit: 'guard', accent: '#8a3a2a', hat: 'galea', hatColor: '#7a7060', beard: true, beardStyle: 'full', gear: { body: 'plate:#8a8070' } },
+  last_emperor: { skin: '#c0c8d8', hair: '#e0e0e8', hairStyle: 'bald', shirt: '#d8b040', pants: '#5a1a6a', shoes: '#c8a040', outfit: 'robe_purple', accent: '#e0c050', hat: 'wreath', eyes: '#ffe080' },
+  jade_corpse_lord: { skin: '#8ab8a0', hair: '#1a2a20', hairStyle: 'ponytail', shirt: '#1e3a5a', pants: '#162a44', shoes: '#0e1a2a', outfit: 'robe_jade', accent: '#d8b040', hat: 'guanmao', hatColor: '#1e2a24', eyes: '#80ffa0', stoop: true },
+  bandit_khan: { skin: '#b07850', hair: '#1a1410', hairStyle: 'long', shirt: '#8a3a20', pants: '#4a3020', shoes: '#2a1a12', outfit: 'traveller', accent: '#40c0b8', hat: 'fur', beard: true, beardStyle: 'full' },
+  terracotta_general: { skin: '#b8643a', hair: '#8a4a2a', hairStyle: 'bald', shirt: '#a85a34', pants: '#9a5030', shoes: '#7a3e24', outfit: 'tunic', accent: '#c83030', hat: 'clayhelm', hatColor: '#8a4a2a', eyes: '#3a1a10', gear: { body: 'plate:#9a5030', legs: 'plate:#8a4a2a' } },
+  bone_thane: { skin: '#e8e4d4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#3a4a50', pants: '#2a3438', shoes: '#2a2620', outfit: 'skeleton', accent: '#80c8e0', hat: 'helmet', hatColor: '#e8e0cc', gear: { body: 'chain:#4a5a60' } },
+  whale_priest: { skin: '#a8b8c0', hair: '#3a4a50', hairStyle: 'long', shirt: '#2a4a5a', pants: '#2a4a5a', shoes: '#1a2a30', outfit: 'robe_deep', accent: '#e8e0cc', hat: 'hood', hatColor: '#e8e0cc', eyes: '#80d8ff' },
+  harpoon_queen: { skin: '#a87a58', hair: '#1a1410', hairStyle: 'long', shirt: '#2a3a3a', pants: '#24302e', shoes: '#1a2220', outfit: 'traveller', accent: '#e0c060', hat: 'tricorn', hatColor: '#1e2426' },
+  salt_mummy: { skin: '#f0ecf0', hair: '#ffffff', hairStyle: 'bald', shirt: '#e8e0e4', pants: '#d8d0d8', shoes: '#c8c0c8', outfit: 'rags', accent: '#e8a0b8', hat: 'hood', hatColor: '#f0e8ec', eyes: '#a0c8ff', stoop: true },
+  salt_bride: { skin: '#f4f0f8', hair: '#ffffff', hairStyle: 'long', shirt: '#ffffff', pants: '#ffffff', shoes: '#e0e8ff', outfit: 'robe_salt', accent: '#a0c8ff', hat: 'hood', hatColor: '#f0f4ff', eyes: '#a0c8ff' },
+  salt_doge: { skin: '#d8b090', hair: '#e8e0d8', hairStyle: 'short', shirt: '#e0b040', pants: '#c8a030', shoes: '#8a6a20', outfit: 'noble', accent: '#ffffff', hat: 'conehat', beard: true, beardStyle: 'full' },
+  salt_mother: { skin: '#f8f4f8', hair: '#ffffff', hairStyle: 'long', shirt: '#f8f0f4', pants: '#f0e8f0', shoes: '#e0d8e0', outfit: 'robe_salt', accent: '#f0a8c8', hat: 'circlet', hatColor: '#ffffff', eyes: '#f0a8c8' },
+  root_witch: { skin: '#9a8a6a', hair: '#5a4a2a', hairStyle: 'long', shirt: '#4a5a2a', pants: '#3a4a22', shoes: '#2a2a18', outfit: 'robe_root', accent: '#a0c060', hat: 'wreath', eyes: '#ffd070' },
+  lamplighter: { skin: '#c8c0b8', hair: '#2a2420', hairStyle: 'short', shirt: '#2a2430', pants: '#1e1a24', shoes: '#141018', outfit: 'traveller', accent: '#ffd070', hat: 'tricorn', hatColor: '#1a1620', eyes: '#ffd070' },
+  burrow_baron: { skin: '#c89a74', hair: '#6a4a2a', hairStyle: 'short', shirt: '#7a5a2a', pants: '#4a3a2a', shoes: '#2a1a12', outfit: 'vest', accent: '#d8b040', hat: 'tricorn', hatColor: '#3a2a1a', beard: true, beardStyle: 'full' },
+  raven_queen: { skin: '#c8c0d8', hair: '#14141e', hairStyle: 'long', shirt: '#1e1a2a', pants: '#1e1a2a', shoes: '#14141e', outfit: 'robe_raven', accent: '#6a5aa0', hat: 'circlet', hatColor: '#3a3a4a', eyes: '#c8a0ff' },
+  antlered_one: { skin: '#8a7a5a', hair: '#3a2a1a', hairStyle: 'long', shirt: '#4a5a3a', pants: '#3a2a1a', shoes: '#2a1a12', outfit: 'hunter', accent: '#a0ff80', hat: 'antlers', hatColor: '#e0d8c0', eyes: '#a0ff80' },
+  rune_witch: { skin: '#c8c0b8', hair: '#8a8a90', hairStyle: 'long', shirt: '#3a3a5a', pants: '#3a3a5a', shoes: '#2a2a3a', outfit: 'robe_rune', accent: '#80e8ff', hat: 'hood', hatColor: '#2a2a40', eyes: '#80e8ff' },
+  fey_reaver: { skin: '#e0e8f0', hair: '#c8e0d0', hairStyle: 'long', shirt: '#3a5a4a', pants: '#2a4a3a', shoes: '#1e3a2a', outfit: 'plain', accent: '#80ffd0', hat: 'antlers', hatColor: '#e0e8f0', eyes: '#c8a0ff', gear: { body: 'plate:#c8d0e0', legs: 'plate:#a8b0c0' } },
+  fair_king: { skin: '#f0f4f8', hair: '#f0e8c0', hairStyle: 'long', shirt: '#c8d0e0', pants: '#4a2a6a', shoes: '#3a1a5a', outfit: 'noble', accent: '#ffe080', hat: 'circlet', hatColor: '#e0e8f0', eyes: '#ffe080' },
+  trow_king: { skin: '#7a8a6a', hair: '#3a3a2a', hairStyle: 'long', shirt: '#4a4a3a', pants: '#3a3a2a', shoes: '#2a2a1e', outfit: 'rags', accent: '#ffd070', hat: 'circlet', hatColor: '#a08a50', eyes: '#ffd070', beard: true, beardStyle: 'long', stoop: true },
+  finnman: { skin: '#8aa0a8', hair: '#2a3a3a', hairStyle: 'long', shirt: '#2a3a40', pants: '#24302e', shoes: '#1a2220', outfit: 'tidewrap', accent: '#80e8ff', hat: 'hood', hatColor: '#2a3a40', eyes: '#80e8ff' },
+  selkie_widow: { skin: '#d8d0c8', hair: '#1a1a1e', hairStyle: 'long', shirt: '#5a6a7a', pants: '#5a6a7a', shoes: '#3a4a5a', outfit: 'robe_seal', accent: '#e0f8ff', hat: 'hood', hatColor: '#6a7a8a' },
+  the_wrecker: { skin: '#b08868', hair: '#2a2420', hairStyle: 'short', shirt: '#2a2e34', pants: '#24282c', shoes: '#1a1c1e', outfit: 'traveller', accent: '#ffb040', hat: 'tricorn', hatColor: '#1a1e22', beard: true, beardStyle: 'full' },
+  beacon_keeper: { skin: '#a8b0b8', hair: '#c8c8c8', hairStyle: 'long', shirt: '#3a4a5a', pants: '#2a3440', shoes: '#1e2428', outfit: 'traveller', accent: '#ffd070', hat: 'hood', hatColor: '#3a4a5a', eyes: '#ffe8a0', beard: true, beardStyle: 'long' },
   // Thessa's.
   thorn_queen: { skin: '#a8c890', hair: '#3a5a2a', hairStyle: 'long', shirt: '#2a4a2a', pants: '#1e3a1e', shoes: '#142a14', outfit: 'robe_thorn', accent: '#e05070', hat: 'wreath', hatColor: '#e05070', eyes: '#e05070' },
 };
@@ -44,6 +89,14 @@ export const ISLE_ROBES = {
   robe_mist: { robe: '#2a3a3a', trim: '#80e8d0' },
   robe_pearl: { robe: '#e8e0d4', trim: '#80c8e8' },
   robe_thorn: { robe: '#2a4a2a', trim: '#e05070' },
+  robe_jade: { robe: '#1e3a5a', trim: '#d8b040' },
+  robe_salt: { robe: '#e8e0e4', trim: '#e8a0b8' },
+  robe_purple: { robe: '#5a1a6a', trim: '#e0c050' },
+  robe_deep: { robe: '#2a4a5a', trim: '#e8e0cc' },
+  robe_root: { robe: '#4a5a2a', trim: '#a0c060' },
+  robe_raven: { robe: '#1e1a2a', trim: '#6a5aa0' },
+  robe_rune: { robe: '#3a3a5a', trim: '#80e8ff' },
+  robe_seal: { robe: '#5a6a7a', trim: '#e0f8ff' },
 };
 
 // --------------------------------------------------------------- the small

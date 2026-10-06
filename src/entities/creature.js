@@ -7,6 +7,8 @@ import { leadTick } from '../game/leads.js';
 import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
 import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
+import { FAR_DEEP_SPECIES } from './farmobs.js';
+import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
 import { MYRROW_BOSSES } from './bosses_myrrow.js';
 import { GROVE_BOSSES } from './bosses_grove.js';
@@ -94,6 +96,9 @@ export const SPECIES = {
   // (And below ground on each island, and the islands' own masters: see
   // islemobs.js and the bosses_ files.)
   ...ISLE_DEEP_SPECIES,
+  // (Round 68: the far lands' old places' own: see farmobs.js.)
+  ...FAR_DEEP_SPECIES,
+  ...FAR_BOSS_SPECIES,
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,
   ...GROVE_BOSSES,

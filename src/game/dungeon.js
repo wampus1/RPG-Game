@@ -16,6 +16,7 @@
 // under glyph seals.
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier, FAR_LOOT } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
+import { farDanger, farMotes } from './fardeep.js';
 import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
@@ -558,6 +559,8 @@ export class DungeonRun {
     c.carries = o.key || null;
     c.home = { x, z };
     if (o.ambush) c.dormant = 2;
+    // (Down here, nothing's minding its own business: see fardeep.js.)
+    if (c.S.mode === 'neutral') c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
     // (Changed by the blight: see monsters.js, blightTick.)
     // (Its tricks are what make it dangerous; the blight's eaten into it,
@@ -942,6 +945,8 @@ export class DungeonRun {
       game.audio?.play('wave');
       if (!this.toldSurge) game.ui.msg('You hear the sea coming through the rock... (a surge: get out of its way!)', '#a0e0f0', true);
       this.toldSurge = true;
+    } else if (farDanger(this, type, p, dmg)) {
+      // (Round 68: a far land's own place's own peril: see fardeep.js.)
     } else if (type === 'crypt' && p.heldLightKind && p.heldLightKind() === 'fire') {
       // A cold draught: your flame bows, and goes out a moment.
       p.snuff?.(2.5);
@@ -1023,6 +1028,15 @@ export class DungeonRun {
         // Drips off the roof, and bubbles off the pools.
         if (Math.random() < 0.5) game.renderer.emit(x, FY + 2.6, z, { n: 1, color: c, up: -2, speed: 1, gravity: 90, life: 0.9, oy: -10 });
         else game.renderer.emit(x, FY + 0.2, z, { n: 1, color: c, up: 4, speed: 2, gravity: -10, life: 1.2, glow: true });
+        break;
+      case 'catacomb':
+      case 'vault':
+      case 'gut':
+      case 'saltworks':
+      case 'warren':
+      case 'mound':
+      case 'broch':
+        farMotes(game, this.rec.type, x, z, c);
         break;
       case 'holdout':
         // Smoke from the fires, and an ember now and then.
@@ -1551,7 +1565,7 @@ export class DungeonRun {
     };
     const got = [];
     for (let i = 0; i < n; i++) {
-      const k = gearFor(this.rec.type, tier, rng, this.T, boss, !!FAR_LOOT[this.rec.isle]);
+      const k = gearFor(this.rec.type, tier, rng, this.T, boss, FAR_LOOT[this.rec.isle] ? this.rec.isle : false);
       if (!k || !ITEMS[k]) continue;
       game.spawnDrop(k, 1, e.x, e.y, e.z, true);
       got.push(ITEMS[k].name);

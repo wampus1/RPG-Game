@@ -3,7 +3,7 @@
 // or a guard who bought a jewelled sword).
 import { ITEMS, GEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
-import { swingModMult, arrowModSpeed, onBlockMods, parryModBonus, blockModMult, rollModMult, breathModMult, onStruckMods, chillModMult, burnModSlow } from './mods.js';
+import { swingModMult, arrowModSpeed, onBlockMods, parryModBonus, blockModMult, rollModMult, breathModMult, onStruckMods, chillModMult, burnModSlow, poisonModRate } from './mods.js';
 
 export const GEM_EFFECTS = {
   ruby: {
@@ -818,7 +818,7 @@ export function tickStatus(game, e, dt) {
   if (e.moonWard && (e.moonWard.t -= dt) <= 0) e.moonWard = null;
   // Marsh venom (a Myrrow guard's arrow): a little harm each second.
   if (e.poisonT > 0) {
-    e.poisonT -= dt;
+    e.poisonT -= dt * poisonModRate(e);
     e.poisonTick = (e.poisonTick || 0) - dt;
     if (e.poisonTick <= 0) {
       e.poisonTick = 1;

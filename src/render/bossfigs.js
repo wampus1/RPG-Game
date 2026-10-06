@@ -944,6 +944,11 @@ function lanternPart() {
 
 // ------------------------------------------------------------ painting
 export const FIG_SPECIES = Object.keys(FIGS);
+// (Round 68: more of them, the far lands': see farbosses.js.)
+export function addFigures(more) {
+  Object.assign(FIGS, more);
+  for (const k of Object.keys(more)) if (!FIG_SPECIES.includes(k)) FIG_SPECIES.push(k);
+}
 
 // Paint one frame of `species` at breath `t`, in state `st`: the Px, and
 // the joints it was posed with (for the rig).

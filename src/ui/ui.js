@@ -6,7 +6,7 @@ import { Grid, drawGrid, C, wrap } from './ascii.js';
 import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
 import { relicReach } from '../game/relics.js';
 import { gemText } from '../game/gems.js';
-import { MODS, STAR_MAX } from '../world/quality.js';
+import { STAR_MAX, modOf } from '../world/quality.js';
 import { combatBuffText } from '../game/combat.js';
 import { BLOCKS, B } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
@@ -27,6 +27,8 @@ import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 import { ModTalkWindow } from './modtalk.js';
 
 // The tool pictured for a block that wants one.
+// (Round 68) The far lands, by name: for a piece's own land's modifier.
+const LAND_NAME = { velmarch: 'Velmarch', ostria: 'Ostria', corrow: 'Corrow', saltmere: 'Saltmere', hollowmark: 'Hollowmark', wyrd: 'the Wyrd Isle', skerries: 'the Grey Skerries' };
 const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
 
 export { Window, cap, describeActivity };
@@ -669,8 +671,8 @@ export class UI {
     if (d.socket) for (const t of wrap(gemText(slot.item), 44)) lines.push({ text: t, color: '#c0a0ff' });
     // Its modifiers, each with what it does.
     for (const m of d.mods || []) {
-      const md = MODS[d.gear] && MODS[d.gear][m];
-      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `◆ ${t}`, color: '#f0c070' });
+      const md = modOf(d.gear, m);
+      if (md) for (const [i, t] of wrap(`${md.name}: ${md.about}${md.land ? ` (only from ${LAND_NAME[md.land] || md.land}'s old places)` : ''}`, 44).entries()) lines.push({ text: i ? `  ${t}` : `${md.land ? '✦' : '◆'} ${t}`, color: md.land ? '#80e8d0' : '#f0c070' });
     }
     if (d.kind === 'gem') lines.push({ text: `${GEMS[slot.item].about}.`, color: '#c0a0ff' }, { text: 'Set into gear at a jeweller\'s bench.', color: C.dim });
     if (d.kind === 'potion') {

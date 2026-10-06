@@ -1476,6 +1476,67 @@ export function drawHumanoid(look, dir, frame, extra = null) {
         for (const x of [hx + 1, hx + 4, hx + 7]) F(x, hy - 1, 1, 2, '#3a4a2a');
         F(hx + 2, hy - 2, 2, 1, '#8a9a5a');
         break;
+      // (Round 68) The far lands' dead and their outlaws: a legionary's
+      // crested helm; an old official's round hat, a paper charm hung
+      // down over the face; antlers grown into a crown; a whaler's
+      // oilskin hat; a clay soldier's knot of hair.
+      case 'galea': {
+        part = METAL;
+        const hc = hex(look.hatColor || '#b89040');
+        R(hx, hy - 1, 8, 4, hc);
+        F(hx, hy - 1, 8, 1, lit(hc, 1.3));
+        F(hx - 1, hy + 2, 1, 3, dim(hc, 0.8));
+        F(hx + 8, hy + 2, 1, 3, dim(hc, 0.8));
+        const crest = hex(look.accent || '#c83030');
+        if (front || back) F(hx + 3, hy - 4, 2, 3, crest);
+        else for (let k = 0; k < 7; k++) F(hx + k, hy - 3 - (k > 0 && k < 6 ? 1 : 0), 1, 2, k % 2 ? lit(crest, 1.2) : crest);
+        if (front) F(hx + 3, hy + 2, 2, 1, dim(hc, 0.7));
+        break;
+      }
+      case 'guanmao': {
+        const hc = hex(look.hatColor || '#1e2a24');
+        H(hx - 1, hy, 10, 1, dim(hc, 0.8));
+        R(hx, hy - 2, 8, 2, hc);
+        F(hx + 3, hy - 3, 2, 1, '#c83030');
+        F(hx + 3, hy - 4, 2, 1, '#e05040');
+        if (front) {
+          F(hx + 2, hy + 1, 4, 6, '#f0d860');
+          F(hx + 3, hy + 2, 2, 1, '#c82020');
+          F(hx + 4, hy + 3, 1, 2, '#c82020');
+          F(hx + 3, hy + 5, 1, 1, '#c82020');
+        }
+        break;
+      }
+      case 'antlers': {
+        const ac = hex(look.hatColor || '#d8c8a0');
+        for (const sx of [-1, 1]) {
+          const bx = sx < 0 ? hx + 1 : hx + 6;
+          F(bx, hy - 1, 1, 2, ac);
+          F(bx + sx, hy - 3, 1, 2, ac);
+          F(bx + sx * 2, hy - 5, 1, 2, ac);
+          F(bx + sx * 3, hy - 6, 1, 1, lit(ac, 1.2));
+          F(bx, hy - 4, 1, 1, ac);
+          F(bx - sx, hy - 6, 1, 2, ac);
+        }
+        if (look.accent) F(hx + 3, hy, 2, 1, hex(look.accent));
+        break;
+      }
+      case 'souwester': {
+        const hc = hex(look.hatColor || '#d8b030');
+        H(hx - 1, hy, 10, 1, dim(hc, 0.85));
+        R(hx, hy - 2, 8, 2, hc);
+        F(hx + 1, hy - 2, 6, 1, lit(hc, 1.2));
+        if (back || side) H(hx - 1, hy + 1, 10, 2, dim(hc, 0.75));
+        break;
+      }
+      case 'clayhelm': {
+        const hc = hex(look.hatColor || '#8a4a2a');
+        R(hx, hy - 1, 8, 2, hc);
+        F(hx, hy - 1, 8, 1, lit(hc, 1.2));
+        H(side ? hx + 5 : hx + 3, hy - 3, 2, 2, dim(hc, 0.85));
+        F(side ? hx + 5 : hx + 3, hy - 3, 1, 1, lit(hc, 1.15));
+        break;
+      }
       case 'wreath':
         for (let x = hx; x < hx + 8; x++) F(x, hy + ((x - hx) % 3 === 1 ? -1 : 0), 1, 1, (x - hx) % 2 ? '#6ab04a' : '#3a7a32');
         if (front) F(hx + 2, hy, 1, 1, '#c83a32');

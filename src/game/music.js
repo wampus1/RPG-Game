@@ -341,6 +341,43 @@ Object.assign(THEMES, {
   fight_hollowmark: { ...DRIVE, root: 50, scale: 'minor', bpm: 132, prog: [0, 6, 3, 4], progB: [2, 3, 6, 4], lead: 'ocarina', counter: 'cello', pad: 'strings', arp: 'cello', arpStyle: 'down', bass: 'moog', kit: 'rite' },
   fight_wyrd: { ...DRIVE, root: 51, scale: 'harmonic', bpm: 134, meter: 12, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'pipes', counter: 'chant', pad: 'choir', arp: 'bell', bass: 'reese', kit: 'night', detune: 10 },
   fight_skerries: { ...DRIVE, root: 50, scale: 'dorian', bpm: 146, swing: 0.1, prog: [0, 6, 0, 4], progB: [3, 6, 0, 4], lead: 'reel', counter: 'squeeze', pad: 'strings', bass: 'pluckbass', bassStyle: 'gallop', kit: 'battle', sea: true, wind: true },
+  // (Round 68) The far lands' own old places, each its own music, below,
+  // in a fight, and in its master's hall.
+  //   The Imperial Catacombs: a dead legion's hymn, choir and lyre, a
+  //     slow march far off; then the march at the charge, brass and war-drums.
+  dungeon_catacomb: { ...DEEP, own: true, root: 50, scale: 'dorian', bpm: 58, prog: [0, 6, 3, 4], progB: [5, 3, 6, 0], lead: 'lyre', counter: 'choir', pad: 'choir', bass: 'sub', bassStyle: 'fifths', kit: 'legion', toll: true, space: 'cathedral', energy: 0.28 },
+  dungeon_catacomb_fight: { ...DRIVE, own: true, root: 50, scale: 'phrygian', bpm: 132, shape: 'power', prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'brass', counter: 'lyre', pad: 'choir', keys: 'braam', keysStyle: 'block', bass: 'moog', bassStyle: 'gallop', kit: 'warmarch', space: 'hall' },
+  dungeon_catacomb_boss: { ...BOSS, own: true, root: 43, scale: 'harmonic', bpm: 112, shape: 'power', prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'brass', counter: 'choir', pad: 'choir', arp: 'lyre', bass: 'moog', stab: 'braam', toll: true, space: 'cathedral' },
+  //   The Terracotta Vaults: a temple's bells and the erhu over a long
+  //   drone, clay settling; in a fight the war-drums of the clay army.
+  dungeon_vault: { ...DEEP, own: true, root: 52, scale: 'minpenta', bpm: 60, prog: [0, 3, 4, 2], progB: [3, 4, 1, 0], lead: 'erhu', counter: 'bell', pad: 'glass', arp: 'koto', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', kit: 'temple', drone: true, wet: 0.4, energy: 0.28 },
+  dungeon_vault_fight: { ...DRIVE, own: true, root: 52, scale: 'minpenta', bpm: 138, prog: [0, 3, 4, 3], progB: [2, 4, 3, 0], lead: 'erhu', counter: 'koto', pad: 'strings', arp: 'koto', arpStyle: 'down', arpRate: 1, bass: 'moog', bassStyle: 'pulse', kit: 'hunt', space: 'hall' },
+  dungeon_vault_boss: { ...BOSS, own: true, root: 45, scale: 'phrygian', bpm: 116, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'erhu', counter: 'brass', pad: 'choir', arp: 'koto', bass: 'moog', stab: 'braam', toll: true, space: 'hall' },
+  //   The Leviathan's Gut: a heartbeat for a drum, the pipes' lament
+  //   gone low and strange, the sea through the ribs.
+  dungeon_gut: { ...DEEP, own: true, root: 46, scale: 'phrygian', bpm: 54, prog: [0, 1, 0, 6], progB: [5, 6, 1, 0], lead: 'pipes', counter: 'cello', pad: 'pad', bass: 'sub', bassStyle: 'drone', kit: 'heart', drone: true, sea: true, detune: 12, tone: 3000, energy: 0.26 },
+  dungeon_gut_fight: { ...DRIVE, own: true, root: 46, scale: 'phrygian', bpm: 128, prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'abyss', counter: 'pipes', pad: 'strings', bass: 'reese', kit: 'abyss', sea: true, space: 'cave', wet: 0.3 },
+  dungeon_gut_boss: { ...BOSS, own: true, root: 41, scale: 'harmonic', bpm: 108, prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'abyss', counter: 'pipes', pad: 'choir', arp: 'cello', bass: 'reese', kit: 'heart', toll: true, space: 'cave', wet: 0.3 },
+  //   The Salt Cathedrals: glass and choir in a great white echo, the
+  //   bouzouki's old mode slowed to a hymn; the salt singing.
+  dungeon_saltworks: { ...DEEP, own: true, root: 57, scale: 'hijaz', bpm: 56, prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'bouzouki', counter: 'choir', pad: 'glass', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', shimmer: true, space: 'cathedral', wet: 0.5, energy: 0.26 },
+  dungeon_saltworks_fight: { ...DRIVE, own: true, root: 52, scale: 'hijaz', bpm: 140, prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'bouzouki', counter: 'glass', pad: 'strings', keys: 'bouzouki', keysStyle: 'chug', bass: 'pluckbass', bassStyle: 'gallop', kit: 'rogue', space: 'hall' },
+  dungeon_saltworks_boss: { ...BOSS, own: true, root: 45, scale: 'hijaz', bpm: 114, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'bouzouki', counter: 'choir', pad: 'choir', arp: 'bell', bass: 'moog', toll: true, shimmer: true, space: 'cathedral' },
+  //   The Deep Warrens: the ocarina gone wary in the dark, a kalimba
+  //   ticking like something digging, low drums.
+  dungeon_warren: { ...DEEP, own: true, root: 53, scale: 'dorian', bpm: 62, swing: 0.1, prog: [0, 6, 3, 4], progB: [2, 3, 6, 0], lead: 'ocarina', counter: 'cello', pad: 'warm', arp: 'kalimba', arpStyle: 'updown', arpRate: 2, bass: 'sub', kit: 'deep', drip: true, energy: 0.3 },
+  dungeon_warren_fight: { ...DRIVE, own: true, root: 50, scale: 'minor', bpm: 132, prog: [0, 6, 3, 4], progB: [2, 3, 6, 4], lead: 'ocarina', counter: 'cello', pad: 'strings', arp: 'cello', arpStyle: 'down', bass: 'moog', kit: 'rite', space: 'cave' },
+  dungeon_warren_boss: { ...BOSS, own: true, root: 43, scale: 'phrygian', bpm: 110, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'ocarina', counter: 'dist', pad: 'choir', arp: 'cello', bass: 'reese', stab: 'dist', toll: true, space: 'cave' },
+  //   The Hollow Hills: the fair folk's own dance, harp and whistle in
+  //   three, bells glittering, a little too sweet.
+  dungeon_mound: { ...DEEP, own: true, root: 57, scale: 'lydian', bpm: 66, meter: 12, shape: 'sus2', prog: [0, 1, 4, 0], progB: [3, 1, 6, 4], lead: 'flute', counter: 'pipes', pad: 'glass', keys: 'harp', keysStyle: 'broken', arp: 'bell', arpStyle: 'wide', bass: 'sub', bassStyle: 'drone', kit: 'circle', shimmer: true, detune: 12, wet: 0.5, energy: 0.3 },
+  dungeon_mound_fight: { ...DRIVE, own: true, root: 51, scale: 'harmonic', bpm: 136, meter: 12, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'pipes', counter: 'chant', pad: 'choir', arp: 'bell', bass: 'reese', kit: 'night', detune: 10 },
+  dungeon_mound_boss: { ...BOSS, own: true, root: 45, scale: 'lydian', bpm: 120, meter: 12, prog: [0, 1, 4, 0, 0, 6, 1, 4], progB: [3, 1, 6, 4], lead: 'flute', counter: 'choir', pad: 'choir', arp: 'harp', bass: 'reese', shimmer: true, toll: true, space: 'hall' },
+  //   The Drowned Brochs: a slow air on the fiddle over the sea in the
+  //   stair, a bell under the water.
+  dungeon_broch: { ...DEEP, own: true, root: 50, scale: 'dorian', bpm: 58, prog: [0, 6, 0, 4], progB: [3, 6, 2, 4], lead: 'reel', counter: 'cello', pad: 'pad', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', toll: true, sea: true, wind: true, fog: true, energy: 0.28 },
+  dungeon_broch_fight: { ...DRIVE, own: true, root: 50, scale: 'dorian', bpm: 144, swing: 0.1, prog: [0, 6, 0, 4], progB: [3, 6, 0, 4], lead: 'reel', counter: 'squeeze', pad: 'strings', bass: 'pluckbass', bassStyle: 'gallop', kit: 'battle', sea: true, wind: true },
+  dungeon_broch_boss: { ...BOSS, own: true, root: 43, scale: 'phrygian', bpm: 116, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'reel', counter: 'brass', pad: 'choir', arp: 'bell', bass: 'reese', toll: true, sea: true, wind: true, space: 'hall' },
 });
 
 // The two other islands' sound laid over any tune heard there that isn't

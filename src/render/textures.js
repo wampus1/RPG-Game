@@ -7,7 +7,7 @@ import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
 import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
-import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES } from './farart.js';
+import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES, FAR_ANIM } from './farart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -2081,7 +2081,7 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', ...FAR_ROT_TOP]);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 

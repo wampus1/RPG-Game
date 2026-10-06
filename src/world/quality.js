@@ -72,6 +72,81 @@ export const MODS = {
     keen: { name: 'Keen-edged', about: 'hits two harder as a weapon' },
   },
 };
+// (Round 68) And one more to each kind for each of the far lands, found
+// only in that land's own old places (see dungeongen.found): the mark of
+// where it was made, and what was made into it there.
+//   Velmarch, Legion-forged: the old empire's discipline;
+//   Ostria, Jade-set: long life;
+//   Corrow, Whaler's: barbed, and it hauls them in;
+//   Saltmere, Brine-cured: what it touches dries and slows;
+//   Hollowmark, Lantern-lit: it gives a light, and the dead shrink from it;
+//   the Wyrd Isle, Rune-cut: runes in it that go off;
+//   the Grey Skerries, Storm-touched: lightning in it.
+export const LAND_MODS = {
+  legion: {
+    land: 'velmarch', name: 'Legion-forged',
+    blade: 'half again as hard on a foe caught in the middle of striking at you',
+    bow: 'its arrows stagger what they strike',
+    shield: 'a parry with it staggers whoever struck a good while',
+    armor: 'takes a tenth more off each blow, and cold slows you a quarter less',
+    tool: 'works a sixth faster',
+  },
+  jade: {
+    land: 'ostria', name: 'Jade-set',
+    blade: 'a foe it fells mends you a little',
+    bow: 'a foe it fells mends you, and gives back the arrow',
+    shield: 'one blow in three it turns mends you a little',
+    armor: 'you mend a little, slowly, while you wear it (quicker, the more pieces)',
+  },
+  whaler: {
+    land: 'corrow', name: "Whaler's",
+    blade: 'barbed: its cuts bleed, and haul the foe a pace toward you',
+    bow: 'barbed: its arrows bleed, and haul the foe a pace toward you',
+    shield: 'a blow it turns hauls the one who struck in, off balance',
+    armor: 'blows throw you about less (two pieces: not at all)',
+    tool: 'reaches a pace further',
+  },
+  brine: {
+    land: 'saltmere', name: 'Brine-cured',
+    blade: 'its cuts parch: the foe slowed, its next blow slower in coming',
+    bow: 'its arrows parch: the foe slowed, its next blow slower in coming',
+    shield: 'a blow it turns parches the one who struck',
+    armor: 'poison wears off you twice as fast',
+    tool: 'stone it breaks sometimes gives up salt',
+  },
+  lantern: {
+    land: 'hollowmark', name: 'Lantern-lit',
+    blade: 'gives a light, and bites a third harder on the dead',
+    bow: 'gives a light, and its arrows bite a third harder on the dead',
+    shield: 'gives a light; a blow it turns from the dead blinds them a moment',
+    armor: 'gives a light',
+    tool: 'gives a light',
+  },
+  rune: {
+    land: 'wyrd', name: 'Rune-cut',
+    blade: 'one cut in five sets off its runes, harming everything round the foe',
+    bow: 'one arrow in four sets off its runes where it strikes',
+    shield: 'a parry with it sets off its runes, throwing back everything round you',
+    armor: 'its runes turn a whole blow now and then (sooner, the more pieces)',
+  },
+  storm: {
+    land: 'skerries', name: 'Storm-touched',
+    blade: 'one cut in four calls lightning down on the foe',
+    bow: 'one arrow in three leaps as lightning to another foe near by',
+    shield: 'a parry with it looses lightning into whoever struck',
+    armor: 'struck up close, now and then you loose lightning into the striker',
+  },
+};
+// (Kept apart from the eight of each kind, by kind: see modOf.)
+export const LAND_MOD_DEFS = {};
+for (const cls of Object.keys(MODS)) LAND_MOD_DEFS[cls] = {};
+for (const [k, L] of Object.entries(LAND_MODS)) for (const cls of Object.keys(MODS)) if (L[cls]) LAND_MOD_DEFS[cls][k] = { name: L.name, about: L[cls], land: L.land };
+// A modifier of a kind of gear, an ordinary one or a far land's.
+export function modOf(cls, m) {
+  return (MODS[cls] && MODS[cls][m]) || (LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][m]) || null;
+}
+// Each far land's own (its key in LAND_MODS).
+export const LAND_MOD_OF = Object.fromEntries(Object.entries(LAND_MODS).map(([k, L]) => [L.land, k]));
 export const MOD_KINDS = Object.keys(MODS);
 
 // What kind of gear a piece is (for its stars and modifiers), if any:
@@ -152,23 +227,23 @@ export function deriveStarred(key) {
   const base = ITEMS[p.plain];
   const cls = gearClass(base);
   if (!base || !cls || base.stars) return null;
-  const mods = p.mods.filter((m) => MODS[cls][m]);
+  const mods = p.mods.filter((m) => modOf(cls, m));
   if (mods.length !== p.mods.length) return null;
   const k = starMult(p.stars, p.roll);
   const has = (m) => mods.includes(m);
   const d = { ...base, key, stars: p.stars, origin: p.origin, roll: p.roll, mods, gear: cls, plain: p.plain, base: base.base || p.plain };
   if (base.damage) d.damage = r2(base.damage * k + (cls === 'tool' && has('keen') ? 2 : 0));
   if (cls === 'tool') {
-    d.speed = r2(base.speed * k * (has('quick') ? 1.35 : 1));
-    if (has('long')) d.reach = (base.reach || 1.5) + 1;
+    d.speed = r2(base.speed * k * (has('quick') ? 1.35 : 1) * (has('legion') ? 1.17 : 1));
+    if (has('long') || has('whaler')) d.reach = (base.reach || 1.5) + 1;
   }
   if (cls === 'bow' && base.range) d.range = Math.round(base.range * (1 + (k - 1) * 0.5) * (has('far') ? 1.5 : 1));
   // (Armour: stars count for less than on a blade, and every piece is
   // held under its place's cap: see softArmor.)
-  if (cls === 'armor') d.armor = softArmor(base.slot, r3(base.armor * (1 + (k - 1) * 0.75) * (has('sturdy') ? 1.2 : 1)));
+  if (cls === 'armor') d.armor = softArmor(base.slot, r3(base.armor * (1 + (k - 1) * 0.75) * (has('sturdy') ? 1.2 : 1) * (has('legion') ? 1.1 : 1)));
   if (cls === 'shield') d.block = r3(Math.min(0.96, 1 - (1 - base.block) / k * (has('stalwart') ? 0.7 : 1)));
   d.value = Math.round((base.value || 1) * (1 + 0.3 * (p.stars - 1)) + 15 * mods.length);
-  d.name = mods.length ? `${MODS[cls][mods[0]].name} ${base.name}` : base.name;
+  d.name = mods.length ? `${modOf(cls, mods[0]).name} ${base.name}` : base.name;
   return d;
 }
 
@@ -212,11 +287,16 @@ export function rollStars(rng = LOOSE, o = {}) {
 
 // Which modifiers a piece of `cls` with so many stars comes with: none to
 // one at one star, up to three at five.
-export function rollMods(cls, stars, rng = LOOSE, base = null) {
+// (Round 68: a far land's own modifier only off its own old places, and
+// there often: see LAND_MODS.)
+export function rollMods(cls, stars, rng = LOOSE, base = null, land = null) {
   const n = Math.min(3, Math.floor(stars / 2) + (rng.chance(0.35) ? 1 : 0));
   const pool = Object.entries(MODS[cls] || {}).filter(([, m]) => (!m.tools || (base && m.tools.includes(base.tool))) && (!m.ammo || (base && base.ammo !== 'none'))).map(([k]) => k);
   const out = [];
-  while (out.length < n && pool.length) out.push(pool.splice(rng.int(0, pool.length - 1), 1)[0]);
+  const own = land && LAND_MOD_OF[land];
+  if (own && LAND_MOD_DEFS[cls] && LAND_MOD_DEFS[cls][own] && rng.chance(stars >= 3 ? 0.65 : 0.35)) out.push(own);
+  const want = Math.max(n, out.length);
+  while (out.length < want && pool.length) out.push(pool.splice(rng.int(0, pool.length - 1), 1)[0]);
   return out;
 }
 
@@ -226,7 +306,7 @@ export function starGear(key, o = {}, rng = LOOSE) {
   if (!starable(key)) return key;
   const base = ITEMS[key];
   const stars = o.stars || rollStars(rng, o);
-  const mods = o.mods || rollMods(gearClass(base), stars, rng, base);
+  const mods = o.mods || rollMods(gearClass(base), stars, rng, base, o.land || null);
   return starKey(key, stars, o.origin || 'c', rng.int(0, ROLLS - 1), mods);
 }
 

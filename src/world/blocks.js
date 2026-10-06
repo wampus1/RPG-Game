@@ -615,6 +615,15 @@ def('whale_rib', { ...sprite, tall: true, solid: true, tool: 'pick', hardness: 2
 def('salt_crystal', { ...sprite, solid: true, tool: 'pick', hardness: 1, light: 3, drop: [{ item: 'salt', min: 1, max: 3 }], label: 'Salt Crystals' });
 def('standing_stone', { ...sprite, tall: true, solid: true, tool: 'pick', hardness: 6, drop: 'cobblestone', light: 2, label: 'Standing Stone' });
 def('cairn', { ...sprite, solid: true, tool: 'pick', hardness: 2, drop: 'cobblestone', label: 'Cairn' });
+// (Round 68) The ways into the far lands' own old places (see
+// world/fardeep.js and sites.js).
+def('catacomb_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 3, label: 'Catacomb Gate' });
+def('vault_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 4, label: 'Vault Doors' });
+def('gut_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Whale\'s Maw' });
+def('salt_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 4, label: 'Cathedral Door' });
+def('warren_hole', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 3, label: 'Warren Hole' });
+def('mound_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 5, label: 'Door in the Hill' });
+def('broch_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Broch Door' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

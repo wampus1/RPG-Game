@@ -39,6 +39,7 @@ import { onBlock, parryBonus, blockCostMult, rollCostMult, breathMult, onRoll, o
 import { onTiles, apart, fits } from '../entities/footprint.js';
 import { shakeSpores } from './afflict.js';
 import { parryBonusOf, gainMastery } from './mastery.js';
+import { knockModMult } from './mods.js';
 
 // windup/recover: an enemy's timing; pw: yours (a wind-up you barely see,
 // but feel); cost: stamina points a blow.
@@ -619,6 +620,11 @@ function offDamage(a, key) {
 // Knocked back a pace or two.
 export function knock(game, a, v, n = 1) {
   if (v.kind === 'player' && (v.raft || v.mount)) return;
+  // (Round 68: Whaler's armour, braced against it.)
+  if (v.kind === 'player') {
+    const k = knockModMult(v);
+    if (k === 0 || (k < 1 && Math.random() < 0.5)) return;
+  }
   // (Nothing shoves one of the great masters about.)
   if (v.foot) return;
   const kx = sgn(v.x - a.x);

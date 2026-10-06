@@ -16,6 +16,7 @@ import { Region } from './region.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js';
 import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES, SPIRE_MASTERS } from './isledeep.js';
+import { FAR_DTYPES, FAR_BOSSES } from './fardeep.js';
 import { starGear } from './quality.js';
 
 export const FY = 5; // standing level on a dungeon floor
@@ -82,13 +83,15 @@ Object.assign(DTYPES, ISLE_DTYPES);
 // A place's kind as its island makes it (see isledeep.js): a Kharos barrow's
 // ash and basalt, a Myrrow crypt's moss, and the island's own masters.
 const dtCache = new Map();
+// (Round 68: and the far lands' own kinds, and their masters, kept apart
+// from the islands': see fardeep.js.)
 export function dtypeOf(rec) {
-  const T = DTYPES[rec.type];
+  const T = DTYPES[rec.type] || FAR_DTYPES[rec.type];
   const isle = rec.isle || null;
   const st = isle && ISLE_DSTYLE[isle] ? ISLE_DSTYLE[isle][rec.type] : null;
   // (A spire's master is its island's own: see SPIRE_MASTERS.)
   const spire = rec.type === 'kavorent' && isle && SPIRE_MASTERS[isle] && SPIRE_MASTERS[isle] !== 'overseer' ? [SPIRE_MASTERS[isle]] : null;
-  const bosses = spire || (isle && ISLE_BOSSES[isle] ? ISLE_BOSSES[isle][rec.type] : null);
+  const bosses = spire || (isle && ISLE_BOSSES[isle] ? ISLE_BOSSES[isle][rec.type] : null) || (isle && FAR_BOSSES[isle] ? FAR_BOSSES[isle][rec.type] : null);
   if (!T || (!st && !bosses)) return T;
   const k = `${isle}:${rec.type}`;
   let out = dtCache.get(k);
@@ -692,14 +695,16 @@ export function gearFor(type, tier, rng, T = null, boss = false, far = false) {
 // (more the deeper, `tier`; more again off a master) and the mark of the
 // deep on it (see quality.js; `far`: from Kharos or Myrrow, where the best
 // are). Anything else comes back as it was.
+// (Round 68: `far` a far land's key, for its own modifier: see
+// quality.LAND_MODS.)
 export function found(k, tier, rng, boss = false, far = false) {
-  return starGear(k, { origin: 'd', tier, boss, far }, rng);
+  return starGear(k, { origin: 'd', tier, boss, far: !!far, land: typeof far === 'string' ? far : null }, rng);
 }
 // What a floor's chests do to the arms and armour in them. (Their own
 // stream, so the rest of the floor comes out as it always did.)
 function foundIn(ctx, boss = false) {
   if (!ctx.starRng) ctx.starRng = ctx.rng.fork('stars');
-  return (k) => found(k, tierOf(ctx), ctx.starRng, boss, !!FAR_LOOT[ctx.rec.isle]);
+  return (k) => found(k, tierOf(ctx), ctx.starRng, boss, FAR_LOOT[ctx.rec.isle] ? ctx.rec.isle : false);
 }
 
 // How good an old place's things run on floor `n` (see tierOf).
@@ -783,7 +788,8 @@ function tierOf(ctx) {
 }
 // The old places of the far islands keep better things than Thessa's: as
 // if a good half-floor further down.
-export const FAR_LOOT = { kharos: 0.75, myrrow: 0.75 };
+// (Round 68: the far lands' better again, a whole floor's worth.)
+export const FAR_LOOT = { kharos: 0.75, myrrow: 0.75, velmarch: 1, ostria: 1, corrow: 1, saltmere: 1, hollowmark: 1, wyrd: 1, skerries: 1 };
 
 // --------------------------------------------------------------- the floor
 // Build floor `n` (0 = the first down) of a dungeon. `rec` is the
@@ -1768,6 +1774,169 @@ function dress(ctx, r) {
       for (let i = 0; i < rng.int(3, 5); i++) placeIn(ctx, r, B.giant_clam, rng.int(0, 3));
       scatter(ctx, r, 0.2, () => B.water);
       group('reef_crab', 1, 2);
+      break;
+    // ------------------------------------------------ an Imperial Catacomb
+    case 'legion': {
+      // The dead of a legion laid out in their ranks, standards at either
+      // end of the line; and the ranks get up as you pass.
+      const rows = [r.cz - 2, r.cz + 1].filter((z) => z > r.z0 && z < r.z1);
+      for (const z of rows) {
+        for (let x = r.x0 + 2; x <= r.x1 - 2; x += 2) {
+          if (!own(ctx.plan, r, x, z) || doorBlocked(ctx.plan, r, x, z) || b.get(x, FY, z) !== B.air) continue;
+          if (rng.chance(0.45)) out.spawns.push({ id: out.spawns.length, species: 'legion_shade', x: b.x0 + x, z, room: r.id, ambush: true });
+          else b.set(x, FY, z, B.bones, 0);
+        }
+      }
+      for (const x of [r.x0 + 1, r.x1 - 1]) if (own(ctx.plan, r, x, r.cz) && !doorBlocked(ctx.plan, r, x, r.cz) && b.get(x, FY, r.cz) === B.air) b.set(x, FY, r.cz, B.war_banner);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1.1, B.chest, [['old_coin', rng.int(3, 8)]]);
+      break;
+    }
+    case 'mosaic': {
+      // A floor laid in tesserae, ring inside ring, a statue of the
+      // emperor at its heart, candles at its corners.
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+        if (!own(ctx.plan, r, x, z)) continue;
+        const ring = Math.max(Math.abs(x - r.cx), Math.abs(z - r.cz));
+        b.set(x, FY - 1, z, ring % 3 === 0 ? B.turquoise_tile : ring % 3 === 1 ? B.marble : B.travertine);
+      }
+      if (freeIn(ctx, r, r.cx, r.cz)) b.set(r.cx, FY, r.cz, B.statue, rng.int(0, 3));
+      for (let i = 0; i < 4; i++) placeIn(ctx, r, B.candles, 0, true);
+      group(pickMob(ctx), 1, 2);
+      if (rng.chance(0.35)) chestIn(ctx, r, 1);
+      break;
+    }
+    // ------------------------------------------------ a Terracotta Vault
+    case 'soldiers': {
+      // The clay army in its rows, and not all of it clay.
+      for (let z = r.z0 + 1; z <= r.z1 - 1; z += 2) for (let x = r.x0 + 1; x <= r.x1 - 1; x += 2) {
+        if (!own(ctx.plan, r, x, z) || doorBlocked(ctx.plan, r, x, z) || b.get(x, FY, z) !== B.air || Math.abs(x - r.cx) <= 0) continue;
+        if (rng.chance(0.18)) out.spawns.push({ id: out.spawns.length, species: rng.chance(0.3) ? 'terracotta_archer' : 'terracotta_soldier', x: b.x0 + x, z, room: r.id, ambush: true });
+        else b.set(x, FY, z, B.statue, 0);
+      }
+      if (rng.chance(0.4)) chestIn(ctx, r, 1.2);
+      break;
+    }
+    case 'lanterns': {
+      // A hall of the court: lacquered floor, lanterns along the walls,
+      // an altar to the ancestors; the court's dead about it.
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(ctx.plan, r, x, z) && (x + z) % 2 === 0) b.set(x, FY - 1, z, B.planks_lacquer);
+      for (const { x, z } of wallsOf(ctx.plan, r)) {
+        if (!rng.chance(0.22)) continue;
+        for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (freeIn(ctx, r, x + ox, z + oz)) {
+          b.set(x + ox, FY, z + oz, B.lantern);
+          break;
+        }
+      }
+      placeIn(ctx, r, B.altar);
+      group('jade_corpse', 1, 2);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1);
+      break;
+    }
+    // ------------------------------------------------ the Leviathan's Gut
+    case 'ribcage':
+      // The ribs arching up out of the floor in pairs down the length of
+      // the gut, the bones of what it swallowed between them.
+      for (let x = r.x0 + 1; x <= r.x1 - 1; x += 3) {
+        for (const z of [r.z0 + 1, r.z1 - 1]) if (own(ctx.plan, r, x, z) && !doorBlocked(ctx.plan, r, x, z) && b.get(x, FY, z) === B.air) b.set(x, FY, z, B.whale_rib, z === r.z0 + 1 ? 0 : 1);
+      }
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.bones);
+      group('bone_crab', 1, 2);
+      group(pickMob(ctx), 0, 1);
+      if (rng.chance(0.3)) chestIn(ctx, r, 0.9, B.chest, [['pearl', 1]]);
+      break;
+    case 'bilepool': {
+      // A pool of bile in the floor of the gut, and what wallows in it.
+      const pool = [];
+      blob(ctx, r, r.cx, r.cz, Math.max(1.6, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.25), (x, z) => pool.push({ x, z }));
+      for (const q of pool) b.set(q.x, FY, q.z, B.water);
+      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air) b.set(q.x + ox, FY - 1, q.z + oz, B.mud);
+      group('slime', 1, 2);
+      group('drowned', 0, 1);
+      break;
+    }
+    // ------------------------------------------------ a Salt Cathedral
+    case 'crystals':
+      // Salt grown up into crystals out of the floor, and pillars of it.
+      for (let i = 0; i < 4; i++) blob(ctx, r, rng.int(r.x0, r.x1), rng.int(r.z0, r.z1), rng.float(0.8, 1.6), (x, z) => b.set(x, FY, z, B.salt_crystal));
+      for (let i = 0; i < 2; i++) {
+        const at = placeIn(ctx, r, B.salt_brick);
+        if (at) b.set(at.x, FY + 1, at.z, B.salt_brick);
+      }
+      group('salt_wight', 1, 2);
+      if (rng.chance(0.4)) chestIn(ctx, r, 1, B.chest, [['salt', rng.int(2, 6)]]);
+      break;
+    case 'brinepool': {
+      // A pool of brine welling up, crusted round with salt.
+      const pool = [];
+      blob(ctx, r, r.cx, r.cz, Math.max(1.5, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.22), (x, z) => pool.push({ x, z }));
+      for (const q of pool) b.set(q.x, FY, q.z, B.water);
+      for (const q of pool) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) if (own(ctx.plan, r, q.x + ox, q.z + oz) && b.get(q.x + ox, FY, q.z + oz) === B.air) b.set(q.x + ox, FY - 1, q.z + oz, B.salt_crust);
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.salt_crystal, 0, true);
+      group('brine_scorpion', 1, 2);
+      break;
+    }
+    // ------------------------------------------------ a Deep Warren
+    case 'lanternroom':
+      // Where the old diggers grew their lights: glowberries in the
+      // walls, roots overhead, moths drawn to it.
+      for (let i = 0; i < 4; i++) placeIn(ctx, r, B.glowberry_bush, 0, true);
+      scatter(ctx, r, 0.06, () => B.roots);
+      placeIn(ctx, r, B.lantern, 0, true);
+      group('cave_moth', 1, 3);
+      if (rng.chance(0.4)) chestIn(ctx, r, 1, B.chest, [['lantern_pod', rng.int(1, 3)]]);
+      break;
+    case 'roots':
+      // Roots grown through from the world above, thick as pillars.
+      for (let i = 0; i < 3; i++) {
+        const at = placeIn(ctx, r, B.root_wall);
+        if (at) b.set(at.x, FY + 1, at.z, B.root_wall);
+      }
+      scatter(ctx, r, 0.12, () => B.roots);
+      group('tunneler', 1, 2);
+      break;
+    case 'larder':
+      // What was stored down here against a long winter.
+      for (let i = 0; i < 4; i++) placeIn(ctx, r, rng.chance(0.5) ? B.barrel : B.crate, 0, true);
+      placeIn(ctx, r, B.table);
+      chestIn(ctx, r, 1, B.chest, [['glowberries', rng.int(1, 4)], ['root_stew', 1]]);
+      group('rat', 2, 3);
+      group('badger', 0, 1);
+      break;
+    // ------------------------------------------------ a Hollow Hill
+    case 'ring': {
+      // A ring of toadstools, standing stones round it: step in, and
+      // you're the fair folk's.
+      ring(ctx, r, Math.max(2, Math.min(r.x1 - r.x0, r.z1 - r.z0) * 0.32), (x, z) => b.set(x, FY, z, B.fairy_ring));
+      for (const [x, z] of [[r.x0 + 1, r.z0 + 1], [r.x1 - 1, r.z0 + 1], [r.x0 + 1, r.z1 - 1], [r.x1 - 1, r.z1 - 1]]) if (freeIn(ctx, r, x, z)) b.set(x, FY, z, B.standing_stone);
+      group('wisp', 1, 2);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1.2, B.chest, [['gem', 1]]);
+      break;
+    }
+    case 'court': {
+      // The fair folk's court: two rows of standing stones up to a seat at
+      // the far end, candles, and its knights in their places.
+      for (let x = r.x0 + 2; x <= r.x1 - 2; x += 3) for (const z of [r.z0 + 1, r.z1 - 1]) if (freeIn(ctx, r, x, z)) b.set(x, FY, z, B.standing_stone);
+      const seat = { x: r.x1 - 1, z: r.cz };
+      if (freeIn(ctx, r, seat.x, seat.z)) b.set(seat.x, FY, seat.z, B.bone_throne, 1);
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.candles);
+      for (let i = 0; i < rng.int(1, 2); i++) spawnIn(ctx, r, 'fey_knight', 1, { ambush: true });
+      if (rng.chance(0.4)) chestIn(ctx, r, 1.2);
+      break;
+    }
+    // ------------------------------------------------ a Drowned Broch
+    case 'beaconroom':
+      // Where the keepers kept the beacon's oil: a brazier, barrels of it,
+      // and the wreckers who use it now.
+      placeIn(ctx, r, B.brazier, META_STATE);
+      for (let i = 0; i < 3; i++) placeIn(ctx, r, B.barrel, 0, true);
+      group('wrecker', 1, 2);
+      if (rng.chance(0.4)) chestIn(ctx, r, 1);
+      break;
+    case 'storehouse':
+      // What the keepers stored, and what the wreckers took off the ships.
+      for (let i = 0; i < 5; i++) placeIn(ctx, r, rng.chance(0.5) ? B.crate : B.barrel, 0, true);
+      chestIn(ctx, r, 1.3, B.chest, [['coin', rng.int(3, 9)]]);
+      group(pickMob(ctx), 1, 2);
       break;
     default:
       group(pickMob(ctx), 1, 2);

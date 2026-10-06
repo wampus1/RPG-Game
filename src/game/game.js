@@ -83,7 +83,7 @@ import { Seat, asSeat, seatField, partyPlayers, freshStore } from './party.js';
 import { Guilds, guildMates } from './guilds.js';
 import { updateBouts, boutBlow, boutOf, boutJustOver } from './bout.js';
 import { gemsOf, onSwing, onBladeHit, onArrowLand, onStruck, updateGemFx, tickStatus, swingMult, arrowSpeed, evade, moonWard, rageMult, onKill } from './gems.js';
-import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult } from './mods.js';
+import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult, runeWard } from './mods.js';
 import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
@@ -6241,6 +6241,8 @@ export class Game {
       amount = Math.max(1, Math.round(amount * (1 - target.rec.equipment.armor * (1 - phase))));
       armored = true;
     }
+    // (Round 68: Rune-cut armour's ward turns a whole blow now and then.)
+    if (target.kind === 'player' && !this.dotHit && source && source !== target && runeWard(this, target)) return;
     if (target.kind === 'player') {
       // Your armour, and the watch's mail if you wear the colours.
       const a = Math.min(ARMOR_CAP, this.sim.careers.armor() + target.armorValue()) * (1 - phase);

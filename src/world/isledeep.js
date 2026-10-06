@@ -15,6 +15,7 @@
 // three to a kind is met anywhere else), and the far islands' masters are
 // harder than Thessa's: see ISLE_BOSS_HP.
 import { B } from './blocks.js';
+import { FAR_DSTYLE, FAR_BOSSES, FAR_BOSS_HP, FAR_BOSS_DMG, FAR_BOSS_TEMPO, FAR_TYPE_LORE } from './fardeep.js';
 
 // Where you begin (inside the storm wall, washed up on its beach).
 export const HOME_ISLE = 'thessa';
@@ -137,6 +138,10 @@ export const ISLE_DTYPES = {
 };
 export const OWN_TYPE = { thessa: 'grove', kharos: 'forge', myrrow: 'grotto' };
 
+// (Round 68: and the far lands' usual kinds, as they make them; their own
+// kinds and masters are kept apart: see fardeep.js.)
+Object.assign(ISLE_DSTYLE, FAR_DSTYLE);
+
 // The masters of the far islands' old places, three to a kind (one picked
 // for each place): see bosses_kharos.js and bosses_myrrow.js.
 export const ISLE_BOSSES = {
@@ -165,6 +170,11 @@ export const SPIRE_MASTERS = { thessa: 'overseer', kharos: 'crucible', myrrow: '
 export const ISLE_BOSS_HP = { kharos: 1.25, myrrow: 1.25 };
 export const ISLE_BOSS_DMG = { kharos: 1.15, myrrow: 1.15 };
 export const ISLE_BOSS_TEMPO = { kharos: 1.3, myrrow: 1.3 };
+for (const k of Object.keys(FAR_BOSSES)) {
+  ISLE_BOSS_HP[k] = FAR_BOSS_HP;
+  ISLE_BOSS_DMG[k] = FAR_BOSS_DMG;
+  ISLE_BOSS_TEMPO[k] = FAR_BOSS_TEMPO;
+}
 
 // Adventurers leave the far islands' old places alone a good while (time
 // for you to get there first): not before this day, nor till you've had
@@ -198,6 +208,8 @@ export const ISLE_TYPE_LORE = {
     rumour: (d, where) => [`${cap(d.name)}, ${where}. The tide goes in and out of it twice a day, and so do things nobody's seen the whole of.`, `The pearl beds in the grotto ${where} are the best on Myrrow. ${d.origin.short}`],
   },
 };
+
+Object.assign(ISLE_TYPE_LORE, FAR_TYPE_LORE);
 
 function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);

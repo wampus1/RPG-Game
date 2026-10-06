@@ -175,6 +175,8 @@ const NOT_ITEMS = new Set([
   'fountain', 'heartfire', 'heart_crystal', 'great_glowcap', 'conch_fountain', 'plinth', 'glass_lamp', 'ember_gutter', 'fog_lantern',
   // (Round 68: the far peoples' great things.)
   'triumph_column', 'frost_hearth', 'bell_pagoda', 'sun_wheel', 'jaw_arch', 'salt_obelisk', 'lantern_tree', 'stone_ring', 'beacon',
+  // (And the ways into their old places.)
+  'catacomb_door', 'vault_door', 'gut_mouth', 'salt_door', 'warren_hole', 'mound_door', 'broch_door',
 ]);
 
 const BLOCK_VALUES = {

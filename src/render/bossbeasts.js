@@ -1581,6 +1581,12 @@ export function beastOf(species) {
   return BEASTS[species] || null;
 }
 export const BEAST_SPECIES = Object.keys(BEASTS);
+// (Round 68: more of them, the far lands': see farbosses.js.)
+export function addBeasts(more) {
+  Object.assign(BEASTS, more);
+  for (const k of Object.keys(more)) if (!BEAST_SPECIES.includes(k)) BEAST_SPECIES.push(k);
+}
+export { part as beastPart, serpent as beastSerpent, curl as beastCurl };
 export function paintBeast(species, t, st) {
   const B = BEASTS[species];
   const X = new Sculpt(B.w, B.h, { seed: species.length * 13, t });

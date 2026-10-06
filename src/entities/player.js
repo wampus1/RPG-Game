@@ -9,7 +9,7 @@ import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
-import { stepModMult, gearHp } from '../game/mods.js';
+import { stepModMult, gearHp, lanternLight, landArmorTick } from '../game/mods.js';
 import { rule } from '../mod/rules.js';
 
 const BASE_HP = 20;
@@ -219,7 +219,8 @@ export class Player extends Entity {
     const held = Math.max(fire(k), fire(off), dishFx(this, 'light') > 0 ? 6 : 0);
     // (Moonstone in your armour: a soft light all your own.)
     const moon = WEAR_SLOTS.some((s) => s !== 'shield' && this.equip[s] && ITEMS[this.equip[s]]?.socket === 'moonstone') ? 8 : 0;
-    return Math.max(held, moon);
+    // (Round 68: a Lantern-lit piece about you, Hollowmark's.)
+    return Math.max(held, moon, lanternLight(this));
   }
 
   give(key, count) {
@@ -273,6 +274,8 @@ export class Player extends Entity {
     }
     // Dishes eaten, working through you (see game/cooking.js).
     tickDishes(this.game, this, dt);
+    // (Round 68) Jade-set armour mending you; Rune-cut armour's ward.
+    landArmorTick(this.game, this, dt);
     // (Hale armour put on or taken off, however it was: health with it.)
     const hale = gearHp(this);
     if (hale !== (this._haleHp || 0)) {

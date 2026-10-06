@@ -32,7 +32,7 @@ const TILES_FROM = 6; // ...or condensed tiles of them
 export function mapMode(z) {
   return z >= GLYPHS_FROM ? 'glyphs' : z >= TILES_FROM ? 'tiles' : 'dots';
 }
-const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ' };
+const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ', catacomb: '†', vault: '⌂', gut: '§', saltworks: '◊', warren: '◎', mound: '∆', broch: '♜' };
 const LAKE = '#2a5a9a';
 
 function hexRgb(h) {

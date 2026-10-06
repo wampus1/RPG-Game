@@ -268,6 +268,13 @@ export class Audio {
       case 'chains': for (let i = 0; i < 5; i++) this.tone(2200 + Math.random() * 900, 0.04, 'triangle', 0.025, 0, i * 0.06 + Math.random() * 0.03); break;
       case 'drone': this.tone(73, 2.2, 'sawtooth', 0.012, 2); this.tone(110, 2.2, 'sine', 0.02, -3); break;
       case 'skitter': for (let i = 0; i < 6; i++) this.noise(0.02, 0.05, 3000 + Math.random() * 2000, i * 0.03); break;
+      // (Round 68) The far lands' old places: the dead legions' tramp far
+      // off in the dark; the slow beat of a heart as big as a house; the
+      // salt singing; a far bell under the sea.
+      case 'march': for (let i = 0; i < 8; i++) { this.noise(0.07, 0.05, 260, i * 0.42); this.tone(62, 0.09, 'sine', 0.05, -12, i * 0.42); if (i % 2) this.tone(2600, 0.03, 'triangle', 0.012, 0, i * 0.42 + 0.03); } break;
+      case 'heart': this.tone(44, 0.22, 'sine', 0.2, -10); this.noise(0.12, 0.08, 140); this.tone(40, 0.26, 'sine', 0.16, -8, 0.3); this.noise(0.1, 0.06, 120, 0.3); break;
+      case 'salt_song': [1568, 1976, 2349, 2093].forEach((f, i) => this.tone(f, 1.2, 'sine', 0.012, f * 0.01, i * 0.22)); break;
+      case 'sea_bell': this.tone(196, 2.4, 'sine', 0.05, -2); this.tone(392, 1.8, 'triangle', 0.02, -4, 0.02); this.tone(587, 1.2, 'sine', 0.012, 0, 0.03); break;
       case 'bones': for (let i = 0; i < 4; i++) this.tone(900 + Math.random() * 500, 0.03, 'square', 0.04, -300, i * 0.04); break;
       case 'shatter': this.noise(0.15, 0.2, 3200); for (let i = 0; i < 3; i++) this.tone(2400 + Math.random() * 1600, 0.05, 'triangle', 0.04, 0, 0.03 + i * 0.04); break;
       case 'thud': this.tone(90, 0.1, 'sine', 0.14, -40); this.noise(0.06, 0.1, 400); break;
