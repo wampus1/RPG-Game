@@ -272,6 +272,15 @@ export const STEPS = [
       for (const r of game.sim.dungeons ? game.sim.dungeons.all : []) r.tier ||= 1;
     },
   },
+  {
+    // Mods (round 62): a world from before had none, and keeps none (a
+    // world's mods are chosen when it's made: see main.js).
+    to: '0.62.0',
+    data(d, log) {
+      d.mods ??= null;
+      log.push('Mods: make your own in the Workshop (W on the title screen), and put them in new worlds.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

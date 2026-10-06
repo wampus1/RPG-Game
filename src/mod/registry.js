@@ -14,7 +14,7 @@ import { SPECIES } from '../entities/creature.js';
 import { CREATURE_LOOKS } from '../render/sprites.js';
 import './rig.js';
 import { Px } from '../render/pixel.js';
-import { gameKey, tagRange, isModKey, assetPixels } from './format.js';
+import { gameKey, tagRange, isModKey, assetPixels, modHash } from './format.js';
 
 export { assetPixels };
 import { compile, Runner, NODES } from './graph.js';
@@ -59,7 +59,10 @@ export function installMods(mods, o = {}) {
   const report = [];
   const keep = { ...(o.blockIds || {}) };
   const remap = {};
-  for (const m of mods) MODS.byId.set(m.id, m);
+  for (const m of mods) {
+    m.hash ||= modHash(m);
+    MODS.byId.set(m.id, m);
+  }
   // (Each mod's collections, by `${mod}:${id}`.)
   for (const m of mods) {
     for (const [k, map] of [['loot', MODS.loot], ['structures', MODS.structures], ['layouts', MODS.layouts], ['dungeons', MODS.dungeons], ['vfx', MODS.vfx], ['assets', MODS.assets], ['rigs', MODS.rigs], ['stories', MODS.stories]]) {

@@ -4485,6 +4485,184 @@ dig in. What you do (or don't) decides the rest.
   or while a dead player's pack still lies below (fetch it up first).
 - *Older worlds* (migration 0.61.0): every dungeon starts at tier I.
 
+## Round 62: the Workshop (mods)
+
+Press **W** on the title screen to open the **Workshop**, where you make
+mods. A mod is a bundle of things you've made: art, effects, rigs,
+blocks, items, creatures, people, bosses, structures, towns, dungeons,
+loot tables and stories. You can export a mod as a `.tmod` file to send to
+a friend, import mods other people made, and put mods into any new world,
+single-player or multiplayer.
+
+The Workshop fills the screen. On the left is the **explorer**: everything
+in the mod, by kind. In the middle is the tool you're working in. On the
+right is the **inspector**: settings for whatever is chosen. Your work is
+saved as you go.
+- Switch tools with the tabs along the top, or Ctrl+1 to Ctrl+7.
+- **Drag anything from the explorer onto any tool that can use it**: art
+  onto a block, a structure onto a layout, a loot table onto a chest, a
+  creature onto a story.
+- **Right-click anything** for what else you can do with it. For art:
+  make a block, an item or a creature from it, animate it, or rig it.
+- Ctrl+K finds anything in the mod. Ctrl+Z / Ctrl+Y undo and redo, for
+  each thing separately. Press ? for every shortcut.
+- **Playtest (F5)** starts a world with your mod in it. Whatever you had
+  open in the Workshop is right there: a structure is built in front of
+  you, a dungeon takes you straight down to its first floor, a creature
+  appears beside you, a story begins in the nearest town. Everything your
+  mod adds is put in your pack. Press Esc, then W, to go back to exactly
+  where you were in the Workshop.
+
+The seven tools:
+- **Overview**: the mod's name, picture, version, author and description;
+  what's in it; quick starts; and a list of problems to fix (for example,
+  something that points at art you deleted). Click a problem to go to it.
+- **Pixel**: a pixel-art editor.
+  - Any size up to 256×256, with presets for block textures, item icons,
+    creatures and effects. You can start from a copy of one of the game's
+    own items, blocks or creatures.
+  - Tools: pencil (pixel-perfect lines), eraser, line, rectangle, ellipse,
+    fill, colour picker, rectangle and lasso selection, magic wand, move,
+    dither brush, shading along the palette, colour replace, and mirror
+    drawing.
+  - Layers with opacity and blend modes. Frames with their own timing,
+    tags for named animations (such as "walk"), onion skin, and playback.
+  - Palette presets (PICO-8, Endesga 32 and others), ramps, sorting and
+    pruning. Outlines, flips, rotation and resizing.
+  - Import a PNG as new art, as a layer, or as frames. Export a frame or
+    a strip of frames, at 1×, 4× or 8×.
+  - The preview shows your art as a block, in an inventory slot, or tiled.
+- **VFX**: effects, previewed as the game plays them.
+  - **Layers**: art (your pixel art), particles, rings (shockwaves) and
+    glows, each placed on a timeline.
+  - **Art layers** move by keyframes (position, size, turn, fade; click a
+    track on the timeline to add one) and by simulated motion: bob, sway,
+    spin, pulse, flicker, rise, orbit, shake, fade in and out, a springy
+    pop, and after-images. One-click motion presets are included.
+  - **Particles**: bursts and streams from a point, circle, ring, line or
+    box. You set their life, speed, direction, spread, gravity, drag,
+    wind, swirl and pull, how their size, colour and opacity change, and
+    how they look (squares, soft blobs, sparks, stars, rings, or your
+    art). They can bounce on the ground. 17 presets: fire, smoke, magic,
+    frost, rain, explosion and more.
+  - Drag a layer around in the preview to place it. A figure stands there
+    for scale.
+  - The whole effect can shake the screen, flash, and play a sound.
+  - **Bake into pixel art** turns an effect into frames of new art for the
+    Pixel tool.
+  - Use an effect as a projectile's trail, a status effect's aura, a
+    trigger in a structure, or play it from any graph. Players in a
+    multiplayer world see it too.
+- **Rig**: characters animated without drawing every frame.
+  - **Cut** your art into parts by painting them (brush, eraser, fill,
+    box), or press **Cut it up for me** and pick a body type: two legs,
+    four legs, wings, blob, serpent, or rooted.
+  - **Bones**: put each part on a bone, joint to joint. Drag joints to move
+    them; click to add a bone. Make some bones **springy** (tails, ears,
+    hair) so they sway as the body moves.
+  - **Animate**: walk, idle, attack and flinch animations are made for you
+    from what each bone is. Change them with waves (how far a joint swings,
+    how often, and when), or drag a bone in the view to pose it at the
+    current time (that adds a keyframe).
+  - A creature made with a rig walks, stands, strikes and flinches in the
+    game. A corner of the view shows it as the game will.
+  - **Bake** any animation into frames of pixel art.
+- **Builder**: structures, layouts, dungeons and loot tables.
+  - **Structures** are built block by block and shown exactly as the game
+    shows them (same angle, same textures). You work one layer at a time:
+    layers above can be faded, hidden or shown. Turn the view to any of
+    four sides. Build with any of the game's blocks (grouped, and
+    searchable) or your own.
+  - Tools: brush, eraser, line, rectangle, circle, fill; **walls** (drag a
+    rectangle to get walls with corner posts, windows and a door); **room**
+    (floor, walls, door, windows and a roof in one drag); **roof** (gable,
+    hipped, flat or one slope, stepping up to a ridge as the game's towns
+    do); pillar; stairs; pick a block; select (copy, cut, paste between
+    structures, move, turn, mirror, fill, hollow, replace one block with
+    another).
+  - You can start from an empty plot, a cottage, a watchtower, a ruin, a
+    market stall, a camp, a shrine, a dungeon entrance or a dungeon floor.
+  - **Markers** say what happens there:
+    - chests (filled from a loot table the first time they're opened);
+    - **triggers** that go off when someone comes near (words on screen,
+      a sound, an effect, creatures, an item, an event, or a story);
+    - spawners (creatures that are there when someone comes, and can come
+      back after they're killed);
+    - people, a boss and its arena, signs;
+    - a dungeon's way in, and the ways up and down between its floors.
+  - Each structure has placement settings: in the wilds, near towns, far
+    from towns or by the sea; how many per world; which island; which
+    biomes.
+  - **Layouts** put several structures together on one patch of ground,
+    with paths painted between them: a hamlet, a camp, a graveyard.
+  - **Dungeons**: a way in on the surface, then floors below, each one a
+    structure you build. Set the master at the bottom, how hard it is,
+    what it's dug out of, its story, and what people in town say about it.
+    The dungeon editor shows them as a cut through the ground.
+  - **Loot tables**: how many rolls, the weight and count range of each
+    thing, and things a chest always has. A sample chest is rolled for you,
+    and the odds of each item over a thousand chests are shown.
+- **Story**: stories of your own, and changes to the game's stories.
+  - A story is a graph of beats:
+    - how it begins: now and then in a town, after one of the game's
+      stories ends, when an event is sent, or only when something starts
+      it;
+    - who's in it: the person asking, and someone else (any grown-up, the
+      mayor, the innkeeper, the priest, a smith, and so on);
+    - news on the town's notice board;
+    - tasks: bring things, carry something to someone, slay creatures, talk
+      to someone, or go somewhere. Each has a reward and an optional time
+      limit;
+    - a conversation, with answers that pick what happens next;
+    - waits, chance, checks ("if a player in it has...");
+    - stored values, gifts, structures raised near the town, events sent
+      and waited for, other stories started;
+    - endings.
+  - Your stories run on the game's own story system, so they work like
+    the game's own stories: tasks on notice boards, townspeople who ask
+    you, the "!" and "?" over them, entries in the journal and the quest
+    log.
+  - Six stories to start from: a plea for help, a beast at the door, a
+    letter to carry, a quarrel, a follow-up to one of the game's stories,
+    and a blank one.
+  - **Changing the game's own stories**: pick any of them (85, by family,
+    with what the game says of each). You see it as a map of its parts,
+    the turns between them, and its endings. You can turn it off; make it
+    rarer or more common; at any turn, send it another way some of the
+    time (to another part, to an ending, or into one of your stories); or,
+    when it reaches a part, show words, send an event, or start one of your
+    stories.
+- **Graph**: entities as visual code (blocks, consumables, weapons, tools,
+  armour, materials, animals, hostile creatures, people, bosses, status
+  effects, world events, recipes and projectiles), each from a template,
+  wired to actions, attacks, conversations and logic. See the Workshop for
+  the full list of nodes.
+
+**Mods in worlds.**
+- When you start a new world, single-player or multiplayer, you're asked
+  which of your mods to put in it (you're only asked if you have any).
+- A world keeps the exact version of each mod it was made with, so it
+  always plays the same even after you change the mod. If you've changed
+  a mod since, loading the world asks whether to use its own version or
+  your newer one.
+- A world whose mods you don't have can't be opened: it tells you which
+  mods to import.
+
+**Mods in multiplayer.**
+- The join list shows which mods a hosted world uses.
+- If you join a world with mods you don't have, you're asked to **Install
+  mods & join**. The host sends them to you (no files to pass around), and
+  they're kept in your Workshop library afterwards.
+- Effects and projectiles from mods are shown to every player.
+
+**Console.** With the console open (playtests have it), `mod` commands put
+any part of the world's mods right where you are: `mod list`, `mod give`,
+`mod spawn`, `mod place`, `mod story`, `mod event`, `mod effect`, and `mod
+dungeon`.
+
+**Updating.** Worlds from 0.61 load as they were, with no mods. Mods only
+go into new worlds.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -4509,6 +4687,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
 | `learn <step> [realm]`, `learn all [realm]`, `learn list` | a realm (yours, the one you're in, or one named at the end) learns a step of the tree at once, with whatever it needs first ("learn portals", "learn trade ships"); `all` learns everything it can (one side of each choice); `list` names the steps |
 | `erupt [days]` (or `volcano`) | the mountain on Kharos erupts now; with `days`, how long till it next does |
+| `mod list`, `mod give/spawn/place/story/effect/dungeon <name>`, `mod event <name>` | what the world's mods add, and any of it put here: an item, a creature, a structure (built south of you), a story begun, an effect played, a dungeon gone down into, an event sent |
 
 Map teleporting and the revealed map are kept with your save.
 
@@ -4723,6 +4902,24 @@ src/
   ui/multiplayer.js    the account, Multiplayer menu, hosting, party,
                        profile and invitation windows, and notices
   render/avatar.js     account pictures
+  mod/                 mods in the game (round 62): format (the file, its
+                       hash, packed pixels), library (your mods, and the
+                       versions worlds keep), registry (putting a mod's
+                       blocks, items, creatures, recipes in and taking them
+                       out), graph and nodes (entities as visual code, and
+                       running it), hooks (what graphs do in the game),
+                       build (structures, layouts and dungeons in the
+                       world), storynodes and storyrun (stories, and
+                       changes to the game's), rig (rigs posed and baked),
+                       vfx (effects, played), render (their art and effects
+                       drawn)
+  workshop/            the Workshop (round 62): app (the frame, explorer,
+                       undo, saving, playtest), kit (its controls), pixel,
+                       vfx, rig, builder (with buildkinds: loot, layouts,
+                       dungeons; buildops: walls, rooms, roofs; voxview: the
+                       game's slant; blockart: block pictures), story,
+                       graph (with nodecanvas), common, icons, workshop.css
+  ui/modpick.js        choosing a new world's mods
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)
 tools/relay.mjs        the LAN relay: a small WebSocket server passing words
