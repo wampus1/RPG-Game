@@ -2199,6 +2199,70 @@ function finishTextures() {
   TEX.atlas = atlasCanvas;
 }
 
+// (Round 62) Images put in after the atlas is made (a mod's blocks): added
+// at its end, the atlas grown to fit (and its solid pixels with it). The
+// slots they went in, in order. `resetLate` takes them all out again.
+let base = null;
+export function addLate(list) {
+  if (!atlasCanvas) return list.map(() => null);
+  if (!base) base = { slots: nextSlot, h: atlasCanvas.height };
+  const slots = list.map((px) => addImage(px));
+  const rows = Math.ceil(nextSlot / ATLAS_COLS);
+  const H = rows * SLOT_H;
+  if (H > atlasCanvas.height) {
+    const c = document.createElement('canvas');
+    c.width = atlasCanvas.width;
+    c.height = H;
+    const x = c.getContext('2d');
+    x.drawImage(atlasCanvas, 0, 0);
+    const alpha = new Uint8Array(c.width * H);
+    alpha.set(TEX.alpha.data.subarray(0, Math.min(TEX.alpha.data.length, alpha.length)));
+    atlasCanvas = c;
+    atlasCtx = x;
+    TEX.alpha = { w: c.width, data: alpha };
+  }
+  for (const { px, slot } of pending) {
+    atlasCtx.clearRect(slot.x, slot.y, SLOT_W, SLOT_H);
+    atlasCtx.putImageData(px.toImageData(), slot.x, slot.y);
+    for (let y = 0; y < px.h; y++) for (let x = 0; x < px.w; x++) TEX.alpha.data[(slot.y + y) * atlasCanvas.width + slot.x + x] = px.d[(y * px.w + x) * 4 + 3];
+  }
+  pending.length = 0;
+  TEX.atlas = atlasCanvas;
+  TEX.version = (TEX.version || 0) + 1;
+  return slots;
+}
+export function resetLate() {
+  if (!base || !atlasCanvas) return;
+  nextSlot = base.slots;
+  if (atlasCanvas.height > base.h) {
+    const c = document.createElement('canvas');
+    c.width = atlasCanvas.width;
+    c.height = base.h;
+    const x = c.getContext('2d');
+    x.drawImage(atlasCanvas, 0, 0);
+    atlasCanvas = c;
+    atlasCtx = x;
+    TEX.alpha = { w: c.width, data: TEX.alpha.data.slice(0, c.width * base.h) };
+  }
+  TEX.atlas = atlasCanvas;
+  TEX.version = (TEX.version || 0) + 1;
+}
+// Average colour of some RGBA (for the minimap).
+export function avgOf(d) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 100) continue;
+    r += d[i];
+    g += d[i + 1];
+    b += d[i + 2];
+    n++;
+  }
+  return n ? [r / n, g / n, b / n] : [0, 0, 0];
+}
+
 function waterTop(frame) {
   const p = new Px(16, 16);
   const pal = P.water;

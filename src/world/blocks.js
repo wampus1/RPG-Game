@@ -44,6 +44,24 @@ function def(name, props = {}) {
   return d;
 }
 
+// (Round 62) A mod's block, at the id a world keeps it by (see
+// mod/registry.js): put in place, or taken out again (the list cut back
+// to the game's own).
+export function defineBlockAt(id, name, props = {}) {
+  const d = { ...DEFAULTS, ...props, id, name, mod: true };
+  if (d.standable === null) d.standable = d.solid && d.render === 'cube';
+  if (d.drop === undefined) d.drop = name;
+  if (!d.label) d.label = name;
+  while (BLOCKS.length < id) BLOCKS.push(null);
+  BLOCKS[id] = d;
+  B[name] = id;
+  return d;
+}
+export function truncateBlocks(n) {
+  for (let i = n; i < BLOCKS.length; i++) if (BLOCKS[i] && B[BLOCKS[i].name] === i) delete B[BLOCKS[i].name];
+  BLOCKS.length = n;
+}
+
 const nonSolid = { solid: false, opaque: false };
 const plant = { ...nonSolid, render: 'plant', hardness: 0.05, replaceable: true, support: true };
 const sprite = { opaque: false, render: 'sprite', standable: false, support: true };

@@ -499,6 +499,8 @@ export function resolveHit(game, a, v, st, opts = null) {
     if (a.windup && a.windup.onHit) a.windup.onHit();
     // (What its kind does to you besides: see islemobs.js.)
     if (a.S && a.S.onHit && !v.dead) a.S.onHit(game, a, v);
+    // (Round 62) A mod's weapon, or one of a mod's creatures: its own.
+    game.onModStruck?.(a, v, amount);
     // (A grab: held fast, till you roll free.)
     if (st.grab && v.kind === 'player' && !v.dead) {
       v.grabbedT = 1.4;

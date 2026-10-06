@@ -90,14 +90,14 @@ export function openSaveDB(idb = globalThis.indexedDB) {
   });
 }
 
-async function pack(text) {
+export async function pack(text) {
   const { CompressionStream: Gzip, Blob: B, Response: R } = globalThis;
   if (!Gzip || !B || !R) return { text };
   const blob = await new R(new B([text]).stream().pipeThrough(new Gzip('gzip'))).blob();
   return { gz: blob };
 }
 
-async function unpack(v) {
+export async function unpack(v) {
   if (!v) return null;
   if (typeof v === 'string') return v;
   if (v.text) return v.text;

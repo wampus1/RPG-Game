@@ -19,6 +19,7 @@ import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
 
 import { FLEE } from '../config.js';
+import { modStat } from '../mod/stat.js';
 import { B } from '../world/blocks.js';
 
 export const SPECIES = {
@@ -84,6 +85,11 @@ const SKELETON_LOOK = {
   skin: '#e8e4d4', hair: '#e8e4d4', hairStyle: 'bald', shirt: '#d8d4c4', pants: '#c8c4b4', shoes: '#c8c4b4', outfit: 'skeleton', accent: '#e8e4d4',
 };
 
+// (Round 62) A mod's person, dressed as the Workshop says.
+function modPersonLook(L) {
+  return { skin: L.skin || '#e0b090', hair: L.hair || '#4a3020', hairStyle: L.hairStyle || 'short', shirt: L.shirt || '#4a6a9a', pants: L.pants || '#3a3a4a', shoes: '#3a2a1e', accent: L.shirt || '#4a6a9a', eyeColor: '#2a2a3a' };
+}
+
 export class Creature extends Entity {
   constructor(game, species, x, y, z, variant = 0) {
     super(game, x, y, z);
@@ -105,7 +111,7 @@ export class Creature extends Entity {
     this.angry = false;
     // (The great masters fill three paces across: see footprint.js.)
     this.foot = S.boss && S.big ? 1 : 0;
-    if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] || ISLE_LOOKS[S.look] : SKELETON_LOOK;
+    if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] || ISLE_LOOKS[S.look] : S.modLook ? modPersonLook(S.modLook) : SKELETON_LOOK;
     if (species === 'skeleton') {
       let r = this.rng.next();
       this.arms = SKELETON_ARMS.find(([, w]) => (r -= w) <= 0)?.[0] || 'stone_sword';
@@ -140,7 +146,8 @@ export class Creature extends Entity {
 
   // How long a step takes it (quicker rallied, slower chilled).
   stepTime() {
-    return this.S.step * (this.hasteT > 0 ? 0.7 : 1) * (this.slowT > 0 ? 1.4 : 1);
+    const m = this.modFx ? 1 / Math.max(0.2, 1 + modStat(this, 'speed') / 100) : 1;
+    return this.S.step * (this.hasteT > 0 ? 0.7 : 1) * (this.slowT > 0 ? 1.4 : 1) * m;
   }
 
   get hostileNow() {
@@ -220,6 +227,8 @@ export class Creature extends Entity {
       // (Round 61) A master of a turned-back place: the turned time's own
       // works first, when they come round (see bosstier.js).
       if (master && this.tier >= 2 && tierTick(this, dt)) return;
+      // (Round 62) One of a mod's: its abilities, ticks and talk.
+      if (this.S.modBrain && game.modBrainOf?.(this, dt)) return;
       // Its own way of fighting (see monsters.js), if it has one. (A master
       // never stands about long: see tempo.drift.)
       if (this.S.brain && BRAINS[this.S.brain](this, dt)) {
@@ -245,6 +254,9 @@ export class Creature extends Entity {
         if (Math.max(Math.abs(this.x + dx - this.tie.x), Math.abs(this.z + dz - this.tie.z)) <= (this.tieR ?? 1)) this.tryStep(this.x + dx, this.z + dz, this.S.step * 2);
         else this.face(this.x + dx, this.z + dz);
       }
+      return;
+    } else if (this.S.modBrain && game.modBrainOf?.(this, dt)) {
+      // (Round 62) A mod's person or beast at its own business.
       return;
     } else if (this.S.mode === 'passive') {
       // Hurt (an arrow from afar as much as a blow): off, away from

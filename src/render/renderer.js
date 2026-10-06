@@ -25,6 +25,7 @@ const SPIN_TIME = 0.38;
 const SNAP_W = Math.ceil(Math.hypot(VIEW_W, VIEW_H)) + 4;
 const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
+import { MODS } from '../mod/state.js';
 
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
@@ -317,6 +318,8 @@ export class Renderer {
     drawStormSea(this, game, snap ? 'world' : 'all');
     drawOldPlaces(this, game, dt);
     drawEffects(this, this.ctx, dt);
+    // (Round 62) The world's mods' effects and shots.
+    if (MODS.active.length) MODS.draw?.(this, this.ctx, game, dt);
     drawKavSpikes(this, this.ctx, game);
     drawLasers(this, this.ctx, game);
     drawOrbs(this, this.ctx, game);
@@ -468,6 +471,11 @@ export class Renderer {
     this.frameDt = dt;
     this.game = game;
     this.time += dt;
+    // (Round 62) The atlas grown (or cut back) for a world's mods.
+    if (this.atlas !== TEX.atlas && TEX.atlas) {
+      this.atlas = TEX.atlas;
+      this.kavAt = null;
+    }
     if (this.wobbles.size) {
       for (const [k, w] of this.wobbles) {
         w.t += dt;

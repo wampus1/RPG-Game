@@ -24,6 +24,7 @@ import { repLevel } from '../sim/sim.js';
 import { MARKS, fightPhase } from '../entities/tempo.js';
 import { afflictionsOf } from '../game/afflict.js';
 import { addNote, tickNotes, drawNotes } from './multiplayer.js';
+import { ModTalkWindow } from './modtalk.js';
 
 // The tool pictured for a block that wants one.
 const BEST_TOOL = { pick: 'stone_pickaxe', axe: 'stone_axe', shovel: 'stone_shovel' };
@@ -1438,6 +1439,17 @@ export class UI {
   openDeath(cause, below = null) {
     this.closeAll();
     this.open(new W.DeathWindow(this, cause, below));
+  }
+  // (Round 62) One of a mod's people talking (see mod/hooks.js): the next
+  // line in the window already open, or a new one.
+  openModTalk(o) {
+    const w = this.find('modtalk');
+    if (w) w.set(o);
+    else this.open(new ModTalkWindow(this, o));
+  }
+  endModTalk(text) {
+    const w = this.find('modtalk');
+    if (w) w.end(text);
   }
 }
 

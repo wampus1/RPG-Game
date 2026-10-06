@@ -1,0 +1,810 @@
+// The kinds of node the Workshop's graphs are built from (round 62): the
+// templates every entity starts from, the moments things happen, what's
+// done then, and the values handed about. (What a node does in the game it
+// does through SVC, filled in by hooks.js: nothing here reaches into the
+// game itself, so the Workshop can show these without the game loaded.)
+import { def, T } from './graph.js';
+
+// What the nodes reach the game through (see hooks.js).
+export const SVC = {};
+
+export const BIOME_LIST = ['plains', 'forest', 'taiga', 'tundra', 'desert', 'savanna', 'jungle', 'swamp', 'mountain', 'beach', 'ashland', 'cinderwood', 'geyser', 'mangrove', 'fungal', 'moor'];
+export const ELEMENTS = ['none', 'fire', 'frost', 'poison', 'shock', 'force'];
+export const STATUSES = ['burn', 'chill', 'stun', 'poison', 'haste', 'slow', 'regen', 'weak', 'shield'];
+export const SOUNDS = ['hit', 'hurt', 'death', 'swing', 'parry', 'pickup', 'coin', 'craft', 'eat', 'gulp', 'heal', 'door', 'chest', 'break', 'place', 'boom', 'thunder', 'portal', 'pulse', 'whoosh', 'roar', 'growl', 'chime', 'bell', 'gong',
+  'fanfare', 'victory', 'magic', 'freeze', 'reflect', 'orb', 'beam', 'charge', 'rumble', 'whisper', 'shatter', 'thud', 'secret', 'rune', 'hiss', 'crackle', 'drip', 'splash', 'click', 'lever', 'unlock', 'locked', 'error', 'bow', 'impact', 'stomp', 'flap', 'sting', 'scream', 'star_ding', 'puff', 'baa', 'howl', 'chirp', 'hoot', 'frog', 'horn', 'boom'];
+export const STYLE_LIST = ['sword', 'dagger', 'axe', 'club', 'spear', 'flail', 'staff', 'great', 'maul', 'halberd'];
+export const ATTACKS = ['bite', 'snap', 'slam', 'gore', 'rake', 'pounce', 'sting', 'bash', 'sword', 'club', 'spear', 'great', 'maul'];
+export const ARMOR_LOOKS = { head: ['helmet', 'lcap', 'hood', 'straw', 'circlet', 'goggles'], body: ['plate', 'chain', 'leather', 'linen', 'coat'], legs: ['plate', 'leather', 'cloth'], feet: ['iron', 'leather'], shield: ['wood', 'iron', 'round'] };
+export const STATIONS = ['hand', 'workbench', 'furnace', 'anvil'];
+export const HAIR_STYLES = ['short', 'long', 'bald', 'spiky', 'bun', 'braid', 'mohawk', 'ponytail', 'curly'];
+
+const C = {
+  tpl: '#7a5a2a', event: '#2a5a3a', flow: '#4a4a5a', act: '#2a4a6a', boss: '#6a2a2a', dlg: '#5a3a6a', data: '#3a3a46', ref: '#5a3a4a', math: '#2a4a4a', q: '#3a4a2a', var: '#4a3a2a',
+};
+const F = (id, label = null) => ({ id, t: T.flow, label: label || id });
+const n = (id, label, d = 0, o = {}) => ({ id, t: T.num, label, def: d, ...o });
+const txt = (id, label, d = '', o = {}) => ({ id, t: T.text, label, def: d, ...o });
+const bool = (id, label, d = false, o = {}) => ({ id, t: T.bool, label, def: d, ...o });
+const col = (id, label, d = '#ffe070', o = {}) => ({ id, t: T.color, label, def: d, ...o });
+const pick = (id, label, opts, d = opts[0], o = {}) => ({ id, t: 'enum', label, opts, def: d, ...o });
+const ref = (id, t, label, o = {}) => ({ id, t, label, def: null, ...o });
+const out = (id, t, label) => ({ id, t, label });
+
+// ------------------------------------------------------------ helpers
+// A place: an entity's, or a place itself.
+export function posOf(v) {
+  if (!v) return null;
+  if (typeof v.x === 'number' && typeof v.z === 'number') return { x: Math.round(v.x), y: Math.round(v.y ?? 6), z: Math.round(v.z) };
+  return null;
+}
+const isEnt = (v) => !!(v && typeof v === 'object' && (v.kind === 'player' || v.kind === 'creature' || v.kind === 'monster' || v.kind === 'npc'));
+const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && !Number.isNaN(+v) ? +v : typeof v === 'boolean' ? +v : d);
+const where = (x, api, port = 'at') => posOf(api.in(port)) || posOf(x.pos) || posOf(x.self) || posOf(x.player);
+const who = (x, api, port = 'target') => {
+  const v = api.in(port);
+  return isEnt(v) ? v : null;
+};
+// (Text with {name} slots: the context's own values put in.)
+export function fillText(x, s) {
+  return String(s ?? '').replace(/\{(\w+)\}/g, (m, k) => {
+    const v = k === 'self' ? x.self && x.self.name : k === 'target' ? x.target && (x.target.name || (x.target.account && x.target.account.name)) : k === 'player' ? SVC.playerName?.(x) : k === 'value' ? x.payload : x.vars[k] ?? x.locals[k];
+    return v === undefined || v === null ? m : String(v);
+  });
+}
+
+// ============================================================ templates
+// The roots. `kind`: what the game makes of it (see registry.js).
+const BLOCK_SHAPES = ['cube', 'prop', 'plant', 'flat', 'tall'];
+def('tpl.block', {
+  cat: 'Templates', title: 'Block', root: true, kind: 'block', color: C.tpl,
+  help: 'A block you can place and break. Cube blocks show their Texture on top and their Side picture on the front; props, plants and flats show the Texture as a sprite.',
+  in: [
+    txt('name', 'Name', 'New Block'), ref('texture', T.asset, 'Texture'), ref('side', T.asset, 'Side (cube)'),
+    n('hardness', 'Hardness', 1, { min: 0, max: 20, step: 0.1 }), n('light', 'Light', 0, { min: 0, max: 15, step: 1 }),
+    ref('drop', T.item, 'Drops (item)', { adv: true }), ref('loot', T.loot, 'Drops (loot table)', { adv: true }), n('value', 'Value', 1, { min: 0, max: 9999, adv: true }),
+    n('slots', 'Chest slots', 9, { min: 1, max: 27, adv: true }), n('near', 'Near radius', 3, { min: 1, max: 12, adv: true }),
+  ],
+  props: [pick('shape', 'Shape', BLOCK_SHAPES), pick('tool', 'Tool', ['none', 'pick', 'axe', 'shovel']), bool('solid', 'Solid', true), bool('seeThrough', 'See-through', false), pick('use', 'Right-click', ['nothing', 'container', 'sit', 'door', 'graph']), bool('rotatable', 'Turns to face you', false), bool('item', 'Has an item', true)],
+  out: [F('onPlace', 'On placed'), F('onBreak', 'On broken'), F('onUse', 'On right-click'), F('onStep', 'On stepped on'), F('onNear', 'On someone near'),
+    out('pos', T.pos, 'Where'), out('who', T.ent, 'Who')],
+  eval: (x, nn, port) => (port === 'pos' ? x.pos : x.target),
+});
+def('tpl.food', {
+  cat: 'Templates', title: 'Consumable', root: true, kind: 'item', color: C.tpl,
+  help: 'Something eaten or drunk (food, a drink, a potion): it heals, and On used does whatever you wire after it.',
+  in: [txt('name', 'Name', 'New Food'), ref('icon', T.asset, 'Icon'), n('heal', 'Heals', 2, { min: 0, max: 40 }), n('regen', 'Heals over time', 0, { min: 0, max: 40 }), n('stack', 'Stack', 16, { min: 1, max: 999, adv: true }), n('value', 'Value', 4, { min: 0, max: 9999 }),
+    ref('effect', T.effect, 'Gives effect', { adv: true }), n('effectSecs', 'Effect seconds', 30, { min: 1, max: 3600, adv: true }), txt('about', 'Description', '', { adv: true })],
+  props: [pick('kind', 'Kind', ['food', 'drink', 'potion']), bool('anytime', 'Usable at full health', false)],
+  out: [F('onUse', 'On used'), out('user', T.ent, 'Who')],
+  eval: (x) => x.target,
+});
+def('tpl.weapon', {
+  cat: 'Templates', title: 'Weapon', root: true, kind: 'item', color: C.tpl,
+  help: 'A weapon. Melee weapons swing in their Style; ranged ones shoot their Ammo (or nothing at all, if left empty). On hit runs for each foe struck.',
+  in: [txt('name', 'Name', 'New Blade'), ref('icon', T.asset, 'Icon'), n('damage', 'Damage', 5, { min: 0, max: 200 }), n('reach', 'Reach', 1.6, { min: 1, max: 3, step: 0.1 }), n('cooldown', 'Swing time', 0.42, { min: 0.15, max: 3, step: 0.01 }),
+    n('range', 'Range (ranged)', 8, { min: 3, max: 16, adv: true }), ref('ammo', T.item, 'Ammo (ranged)', { adv: true }), n('knock', 'Knockback', 0, { min: 0, max: 4, adv: true }), n('value', 'Value', 20, { min: 0, max: 9999, adv: true }), txt('about', 'Description', '', { adv: true })],
+  props: [pick('style', 'Style', STYLE_LIST), pick('hands', 'Hands', ['one', 'two']), bool('ranged', 'Ranged', false), pick('element', 'Element', ELEMENTS)],
+  out: [F('onHit', 'On hit'), F('onSwing', 'On swing'), F('onKill', 'On kill'), out('user', T.ent, 'Wielder'), out('foe', T.ent, 'Foe struck')],
+  eval: (x, nn, port) => (port === 'foe' ? x.target : x.self),
+});
+def('tpl.tool', {
+  cat: 'Templates', title: 'Tool', root: true, kind: 'item', color: C.tpl,
+  help: 'A tool for breaking blocks quicker (and hitting things, not so well). On block broken runs for each block it breaks.',
+  in: [txt('name', 'Name', 'New Tool'), ref('icon', T.asset, 'Icon'), n('speed', 'Speed', 4, { min: 0.5, max: 20, step: 0.1 }), n('damage', 'Damage', 2, { min: 0, max: 50 }), n('value', 'Value', 12, { min: 0, max: 9999, adv: true }), txt('about', 'Description', '', { adv: true })],
+  props: [pick('tool', 'Breaks', ['pick', 'axe', 'shovel'])],
+  out: [F('onBreak', 'On block broken'), F('onUse', 'On right-click'), out('pos', T.pos, 'Where'), out('user', T.ent, 'Who')],
+  eval: (x, nn, port) => (port === 'pos' ? x.pos : x.self),
+});
+def('tpl.armor', {
+  cat: 'Templates', title: 'Armour', root: true, kind: 'item', color: C.tpl,
+  help: 'Something worn (a helm, a shirt of mail, boots, a shield). It shows on you in the Look you pick, in its Tint. While worn ticks every second.',
+  in: [txt('name', 'Name', 'New Armour'), ref('icon', T.asset, 'Icon'), n('armor', 'Armour %', 10, { min: 0, max: 50 }), col('tint', 'Tint', '#a8b0c0'), n('block', 'Shield block %', 75, { min: 0, max: 95, adv: true }), n('value', 'Value', 30, { min: 0, max: 9999, adv: true }), txt('about', 'Description', '', { adv: true })],
+  props: [pick('slot', 'Worn on', ['head', 'body', 'legs', 'feet', 'shield']), pick('look', 'Look', ['auto', 'helmet', 'lcap', 'hood', 'straw', 'circlet', 'goggles', 'plate', 'chain', 'leather', 'linen', 'coat', 'cloth', 'iron', 'wood', 'round'])],
+  out: [F('onEquip', 'On put on'), F('onUnequip', 'On taken off'), F('onWorn', 'While worn (each second)'), F('onHurt', 'On wearer hurt'), out('user', T.ent, 'Wearer'), out('foe', T.ent, 'Attacker')],
+  eval: (x, nn, port) => (port === 'foe' ? x.target : x.self),
+});
+def('tpl.material', {
+  cat: 'Templates', title: 'Material', root: true, kind: 'item', color: C.tpl,
+  help: 'A plain thing to carry, sell and craft with (an ore, a hide, a trinket).',
+  in: [txt('name', 'Name', 'New Material'), ref('icon', T.asset, 'Icon'), n('stack', 'Stack', 64, { min: 1, max: 999 }), n('value', 'Value', 2, { min: 0, max: 9999 }), txt('about', 'Description', '', { adv: true })],
+  props: [bool('fuel', 'Burns as fuel', false)],
+  out: [F('onUse', 'On right-click'), out('user', T.ent, 'Who')],
+  eval: (x) => x.self,
+});
+const CREATURE_IN = [
+  txt('name', 'Name', 'New Creature'), ref('look', T.asset, 'Look (art)'), ref('rig', T.rig, 'Look (rig)', { adv: true }), n('hp', 'Health', 10, { min: 1, max: 5000 }), n('speed', 'Speed', 1, { min: 0.2, max: 4, step: 0.1 }),
+  ref('loot', T.loot, 'Drops (loot table)'), ref('drop', T.item, 'Drops (item)', { adv: true }), n('light', 'Glows', 0, { min: 0, max: 15, adv: true }), n('tick', 'Tick every (s)', 1, { min: 0.2, max: 60, step: 0.1, adv: true }),
+];
+const SPAWN_PROPS = [pick('spawnTime', 'Wanders out', ['day', 'night', 'any', 'never']), { id: 'biomes', t: 'multi', label: 'Biomes', opts: BIOME_LIST, def: ['plains', 'forest'] }, { id: 'weight', t: 'number', label: 'How common (0-10)', def: 3, min: 0, max: 10 }, { id: 'group', t: 'number', label: 'In groups of', def: 1, min: 1, max: 6 }];
+const CREATURE_OUT = [F('onSpawn', 'On spawned'), F('onTick', 'Every tick'), F('onHurt', 'On hurt'), F('onDeath', 'On death'), F('onUse', 'On right-click'), out('me', T.ent, 'This creature'), out('foe', T.ent, 'Other')];
+const creatureEval = (x, nn, port) => (port === 'foe' ? x.target : x.self);
+def('tpl.animal', {
+  cat: 'Templates', title: 'Animal', root: true, kind: 'creature', color: C.tpl,
+  help: 'A beast of the wild: it wanders, and runs (or, if Temper is "fights back", turns on whoever hurts it).',
+  in: [...CREATURE_IN, n('damage', 'Damage', 0, { min: 0, max: 100 })],
+  props: [pick('temper', 'Temper', ['shy', 'fights back', 'tame']), bool('swims', 'Swims', false), bool('floats', 'Flies', false), ...SPAWN_PROPS],
+  out: CREATURE_OUT, eval: creatureEval,
+});
+def('tpl.hostile', {
+  cat: 'Templates', title: 'Hostile', root: true, kind: 'creature', color: C.tpl,
+  help: 'A monster that hunts whoever it sees. Wire Ability nodes to give it attacks of its own, besides its plain one.',
+  in: [...CREATURE_IN, n('damage', 'Damage', 3, { min: 0, max: 200 }), n('aggro', 'Sees you at', 8, { min: 2, max: 24 })],
+  props: [pick('attack', 'Attacks by', ['melee', 'arrows', 'fire orbs', 'frost orbs', 'none']), pick('blow', 'Blow', ATTACKS), bool('burnsInSun', 'Burns in daylight', false), bool('floats', 'Flies', false), bool('fireproof', 'Fireproof', false), bool('swims', 'Swims', false), ...SPAWN_PROPS.map((p) => (p.id === 'spawnTime' ? { ...p, def: 'night' } : p))],
+  out: [...CREATURE_OUT, F('onAttack', 'On attack'), F('onSee', 'On sees a foe')], eval: creatureEval,
+});
+def('tpl.npc', {
+  cat: 'Templates', title: 'Person (NPC)', root: true, kind: 'creature', color: C.tpl,
+  help: 'Someone to talk to. Dress them with the colours below (or give them art of your own), and wire On talked to into Say nodes.',
+  in: [txt('name', 'Name', 'Wanderer'), txt('title', 'Title', 'traveller'), ref('look', T.asset, 'Look (art)', { adv: true }), ref('rig', T.rig, 'Look (rig)', { adv: true }), n('hp', 'Health', 20, { min: 1, max: 5000 }),
+    col('skin', 'Skin', '#e0b090'), col('hair', 'Hair', '#4a3020'), col('shirt', 'Shirt', '#4a6a9a'), col('pants', 'Trousers', '#3a3a4a'), n('wander', 'Wanders (paces)', 4, { min: 0, max: 30 }), n('tick', 'Tick every (s)', 2, { min: 0.2, max: 60, adv: true })],
+  props: [pick('hairStyle', 'Hair', HAIR_STYLES), pick('temper', 'If attacked', ['flees', 'fights back', 'shrugs it off']), bool('immortal', 'Can\'t be hurt', false)],
+  out: [F('onTalk', 'On talked to'), F('onSpawn', 'On spawned'), F('onTick', 'Every tick'), F('onHurt', 'On hurt'), F('onDeath', 'On death'), out('me', T.ent, 'This person'), out('foe', T.ent, 'Talker / attacker')],
+  eval: creatureEval,
+});
+def('tpl.boss', {
+  cat: 'Templates', title: 'Boss', root: true, kind: 'creature', color: C.boss,
+  help: 'A master: a health bar across the screen, phases as it\'s worn down, abilities of its own (wire Ability nodes), and tiers (time crystals make it harder). Put it in a dungeon with the Builder\'s boss marker.',
+  in: [txt('name', 'Name', 'The Unmade'), txt('title', 'Title', 'Keeper of the Deep'), ref('look', T.asset, 'Look (art)'), ref('rig', T.rig, 'Look (rig)', { adv: true }), n('hp', 'Health', 400, { min: 20, max: 50000 }), n('damage', 'Damage', 6, { min: 0, max: 400 }), n('speed', 'Speed', 1, { min: 0.2, max: 3, step: 0.1 }),
+    ref('loot', T.loot, 'Drops (loot table)'), n('light', 'Glows', 6, { min: 0, max: 15, adv: true }), txt('intro', 'Shout on waking', 'You should not have come.', { adv: true }), txt('death', 'Last words', 'It... ends...', { adv: true })],
+  props: [pick('size', 'Size', ['large (3x3)', 'normal']), pick('phases', 'Phases', ['3', '2', '4', '1']), pick('blow', 'Blow', ATTACKS, 'slam'), bool('fireproof', 'Fireproof', false), bool('floats', 'Flies', false)],
+  out: [F('onWake', 'On woken'), F('onPhase2', 'On phase 2'), F('onPhase3', 'On phase 3'), F('onPhase4', 'On phase 4'), F('onHurt', 'On hurt'), F('onDeath', 'On defeated'), out('me', T.ent, 'The boss'), out('foe', T.ent, 'Foe')],
+  eval: creatureEval,
+});
+def('tpl.effect', {
+  cat: 'Templates', title: 'Effect', root: true, kind: 'effect', color: C.tpl,
+  help: 'A lasting effect (a blessing, a curse, a poison). Give it with a Consumable, or the Apply effect node. While on, it changes how fast, how hard and how tough someone is, and ticks each second.',
+  in: [txt('name', 'Name', 'Blessed'), ref('icon', T.asset, 'Icon'), col('color', 'Colour', '#80e070'), n('speed', 'Speed +%', 0, { min: -80, max: 200 }), n('damage', 'Damage +%', 0, { min: -80, max: 300 }), n('armor', 'Armour +%', 0, { min: -50, max: 60 }),
+    n('regen', 'Health per second', 0, { min: -20, max: 20, step: 0.1 }), ref('vfx', T.vfx, 'Aura (effect)', { adv: true })],
+  props: [pick('nature', 'Good or bad', ['good', 'bad']), pick('stack', 'Again', ['refresh', 'add time', 'ignore'])],
+  out: [F('onApply', 'On given'), F('onTick', 'Each second'), F('onExpire', 'On worn off'), out('who', T.ent, 'Who has it')],
+  eval: (x) => x.self,
+});
+def('tpl.event', {
+  cat: 'Templates', title: 'World event', root: true, kind: 'event', color: C.event,
+  help: 'Something that happens in the world: when it starts, at dawn or dusk, every so often, when a custom event is sent (Send event), when someone comes near one of your structures, or when something\'s killed.',
+  in: [n('every', 'Every (s)', 60, { min: 1, max: 86400 }), txt('custom', 'Event name', 'my_event'), ref('structure', T.structure, 'Near structure', { adv: true }), ref('creature', T.creature, 'Killed creature', { adv: true }), n('radius', 'Radius', 8, { min: 1, max: 40, adv: true }), n('chance', 'Chance %', 100, { min: 0, max: 100 })],
+  props: [pick('when', 'When', ['world starts', 'every so often', 'dawn', 'dusk', 'custom event', 'near structure', 'killed']), bool('once', 'Only ever once', false)],
+  out: [F('fire', 'Happens'), out('who', T.ent, 'Who'), out('pos', T.pos, 'Where'), out('value', T.any, 'Event value')],
+  eval: (x, nn, port) => (port === 'who' ? x.target || x.player : port === 'pos' ? x.pos : x.payload),
+});
+def('tpl.recipe', {
+  cat: 'Templates', title: 'Recipe', root: true, kind: 'recipe', color: C.tpl,
+  help: 'A crafting recipe: what goes in (up to four things), where it\'s made, and what comes out.',
+  in: [ref('out', T.item, 'Makes'), n('count', 'How many', 1, { min: 1, max: 64 }), ref('a', T.item, 'Needs'), n('an', '×', 1, { min: 1, max: 64 }), ref('b', T.item, 'And'), n('bn', '×', 1, { min: 1, max: 64 }), ref('c', T.item, 'And', { adv: true }), n('cn', '×', 1, { min: 1, max: 64, adv: true }), ref('d', T.item, 'And', { adv: true }), n('dn', '×', 1, { min: 1, max: 64, adv: true })],
+  props: [pick('station', 'Made at', STATIONS)],
+  out: [],
+});
+def('tpl.projectile', {
+  cat: 'Templates', title: 'Projectile', root: true, kind: 'projectile', color: C.tpl,
+  help: 'Something thrown or shot (by Shoot): how it looks in flight and what it does where it lands.',
+  in: [txt('name', 'Name', 'Bolt'), ref('look', T.asset, 'Look (art)'), ref('trail', T.vfx, 'Trail (effect)'), ref('burst', T.vfx, 'Burst (effect)'), n('damage', 'Damage', 4, { min: 0, max: 400 }), n('speed', 'Speed', 12, { min: 2, max: 40 }), n('radius', 'Splash radius', 0, { min: 0, max: 6 })],
+  props: [pick('path', 'Flies', ['straight', 'lobbed']), pick('element', 'Element', ELEMENTS)],
+  out: [F('onHit', 'On hit'), out('pos', T.pos, 'Where'), out('foe', T.ent, 'Who')],
+  eval: (x, nn, port) => (port === 'pos' ? x.pos : x.target),
+});
+export const TEMPLATES = ['tpl.block', 'tpl.food', 'tpl.weapon', 'tpl.tool', 'tpl.armor', 'tpl.material', 'tpl.animal', 'tpl.hostile', 'tpl.npc', 'tpl.boss', 'tpl.effect', 'tpl.event', 'tpl.recipe', 'tpl.projectile'];
+
+// ============================================================ events
+def('ev.ability', {
+  cat: 'Events', title: 'Ability', starts: true, color: C.boss,
+  help: 'An attack (or trick) of a creature\'s or boss\'s own: used when it\'s ready, its foe is in range and it\'s in the right phase. Wire what it does into Cast.',
+  in: [txt('name', 'Name', 'Ground Slam'), n('cooldown', 'Cooldown (s)', 6, { min: 0.5, max: 120, step: 0.5 }), n('windup', 'Wind-up (s)', 0.8, { min: 0, max: 5, step: 0.1 }), n('min', 'Range from', 0, { min: 0, max: 30 }), n('max', 'Range to', 6, { min: 1, max: 40 }), n('weight', 'How often', 1, { min: 0.1, max: 10, step: 0.1 }), n('fromPhase', 'From phase', 1, { min: 1, max: 4 }), n('toPhase', 'To phase', 4, { min: 1, max: 4 })],
+  props: [bool('shout', 'Shout its name', true)],
+  out: [F('cast', 'Cast'), out('me', T.ent, 'Caster'), out('foe', T.ent, 'Foe')],
+  eval: (x, nn, port) => (port === 'foe' ? x.target : x.self),
+});
+def('ev.custom', {
+  cat: 'Events', title: 'On event', starts: true, color: C.event,
+  help: 'When an event of this name is sent (by Send event, anywhere in the mod).',
+  in: [txt('name', 'Event name', 'my_event')],
+  out: [F('fire', 'Happens'), out('value', T.any, 'Value'), out('who', T.ent, 'Who'), out('pos', T.pos, 'Where')],
+  eval: (x, nn, port) => (port === 'value' ? x.payload : port === 'who' ? x.target : x.pos),
+});
+def('ev.timer', {
+  cat: 'Events', title: 'Every so often', starts: true, color: C.event,
+  help: 'Every so many seconds, while this entity is about (a creature alive, an item held).',
+  in: [n('every', 'Every (s)', 5, { min: 0.2, max: 3600, step: 0.1 })],
+  out: [F('fire', 'Tick'), out('me', T.ent, 'This')],
+  eval: (x) => x.self,
+});
+
+// ============================================================ flow
+def('flow.seq', {
+  cat: 'Flow', title: 'Sequence', color: C.flow, help: 'Does each output in turn: 1, then 2, then 3, then 4.',
+  in: [F('in', 'Do')], out: [F('a', '1'), F('b', '2'), F('c', '3'), F('d', '4')],
+  run: () => ['a', 'b', 'c', 'd'],
+});
+def('flow.branch', {
+  cat: 'Flow', title: 'If', color: C.flow, help: 'Yes or no: which way depends on the condition.',
+  in: [F('in', 'Do'), bool('cond', 'Condition', true)], out: [F('yes', 'Yes'), F('no', 'No')],
+  run: (x, nn, api) => (api.in('cond') ? 'yes' : 'no'),
+});
+def('flow.chance', {
+  cat: 'Flow', title: 'Chance', color: C.flow, help: 'Goes on only now and then: Percent of the time.',
+  in: [F('in', 'Do'), n('pct', 'Percent', 50, { min: 0, max: 100 })], out: [F('yes', 'Lucky'), F('no', 'Not')],
+  run: (x, nn, api) => (Math.random() * 100 < num(api.in('pct')) ? 'yes' : 'no'),
+});
+def('flow.random', {
+  cat: 'Flow', title: 'Pick one', color: C.flow, help: 'One of its outputs, at random, weighed by the numbers.',
+  in: [F('in', 'Do'), n('wa', 'Weight 1', 1, { min: 0 }), n('wb', 'Weight 2', 1, { min: 0 }), n('wc', 'Weight 3', 0, { min: 0 }), n('wd', 'Weight 4', 0, { min: 0 })],
+  out: [F('a', '1'), F('b', '2'), F('c', '3'), F('d', '4')],
+  run: (x, nn, api) => {
+    const w = ['wa', 'wb', 'wc', 'wd'].map((k) => Math.max(0, num(api.in(k))));
+    let r = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < 4; i++) if ((r -= w[i]) < 0) return 'abcd'[i];
+    return null;
+  },
+});
+def('flow.delay', {
+  cat: 'Flow', title: 'Wait', color: C.flow, waits: true, help: 'Waits, then goes on.',
+  in: [F('in', 'Do'), n('secs', 'Seconds', 1, { min: 0, max: 600, step: 0.1 })], out: [F('then', 'Then')],
+  run: (x, nn, api) => {
+    api.later(Math.max(0, num(api.in('secs'))), 'then');
+    return null;
+  },
+});
+def('flow.repeat', {
+  cat: 'Flow', title: 'Repeat', color: C.flow, help: 'Does Each so many times (a Wait after it spaces them out), then Done.',
+  in: [F('in', 'Do'), n('times', 'Times', 3, { min: 1, max: 100 }), n('gap', 'Seconds apart', 0, { min: 0, max: 60, step: 0.05 })], out: [F('each', 'Each time'), F('done', 'Done'), out('i', T.num, 'Count')],
+  run: (x, nn, api) => {
+    const k = Math.min(100, Math.max(1, Math.round(num(api.in('times'), 1))));
+    const gap = Math.max(0, num(api.in('gap')));
+    if (!gap) {
+      for (let i = 0; i < k; i++) {
+        x.locals[`${nn.id}.i`] = i + 1;
+        api.fire('each');
+      }
+      return 'done';
+    }
+    for (let i = 0; i < k; i++) api.later(gap * i, 'each', { [`${nn.id}.i`]: i + 1 });
+    api.later(gap * k, 'done');
+    return null;
+  },
+});
+def('flow.foreach', {
+  cat: 'Flow', title: 'For each nearby', color: C.flow, help: 'For each one near a place (players, creatures, or both): runs Each with them as Who.',
+  in: [F('in', 'Do'), ref('at', T.pos, 'Around'), n('radius', 'Radius', 4, { min: 1, max: 40 })],
+  props: [pick('which', 'Who', ['foes of self', 'players', 'creatures', 'everyone'])],
+  out: [F('each', 'Each'), F('done', 'Done'), out('who', T.ent, 'Who')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (!at) return 'done';
+    for (const e of SVC.near(x, at, num(api.in('radius'), 4), api.prop('which'))) {
+      x.locals[`${nn.id}.who`] = e;
+      api.fire('each');
+    }
+    return 'done';
+  },
+});
+def('flow.once', {
+  cat: 'Flow', title: 'Only once', color: C.flow, help: 'Lets the flow through the first time only (for this creature or block; for the world, from a world event).',
+  in: [F('in', 'Do')], out: [F('first', 'First time'), F('again', 'After')],
+  run: (x, nn) => (SVC.once(x, nn.id) ? 'first' : 'again'),
+});
+def('flow.cooldown', {
+  cat: 'Flow', title: 'Cooldown', color: C.flow, help: 'Lets the flow through at most once every so many seconds.',
+  in: [F('in', 'Do'), n('secs', 'Seconds', 3, { min: 0.1, max: 3600, step: 0.1 })], out: [F('ready', 'Ready'), F('busy', 'Not yet')],
+  run: (x, nn, api) => (SVC.cooldown(x, nn.id, num(api.in('secs'), 3)) ? 'ready' : 'busy'),
+});
+
+// ============================================================ actions
+const act = (type, o) => def(type, { cat: 'Actions', color: C.act, ...o, in: [F('in', 'Do'), ...(o.in || [])], out: [F('then', 'Then'), ...(o.out || [])] });
+act('act.message', {
+  title: 'Message', help: 'Words at the side of the screen, for whoever it\'s about ({target}, {self} and {player} are filled in).',
+  in: [txt('text', 'Text', 'Something stirs...'), col('color', 'Colour', '#ffe070'), ref('to', T.ent, 'To (or everyone)')],
+  run: (x, nn, api) => {
+    SVC.message(x, fillText(x, api.in('text')), api.in('color'), api.in('to'));
+    return 'then';
+  },
+});
+act('act.float', {
+  title: 'Words in the air', help: 'Words rising from a place (like the numbers of a blow).',
+  in: [txt('text', 'Text', '!'), ref('at', T.pos, 'At'), col('color', 'Colour', '#ffffff')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.float(x, at, fillText(x, api.in('text')), api.in('color'));
+    return 'then';
+  },
+});
+act('act.shout', {
+  title: 'Say aloud', help: 'A speech bubble over someone (a creature, a person, a boss).',
+  in: [txt('text', 'Text', 'Grr!'), ref('who', T.ent, 'Who (or self)'), col('color', 'Colour', '#f4ecd8')],
+  run: (x, nn, api) => {
+    const e = who(x, api, 'who') || x.self;
+    if (e) SVC.shout(x, e, fillText(x, api.in('text')), api.in('color'));
+    return 'then';
+  },
+});
+act('act.sound', {
+  title: 'Sound', help: 'One of the game\'s sounds, from a place.',
+  in: [ref('at', T.pos, 'At')], props: [pick('sound', 'Sound', SOUNDS, 'chime')],
+  run: (x, nn, api) => {
+    SVC.sound(x, api.prop('sound'), where(x, api));
+    return 'then';
+  },
+});
+act('act.vfx', {
+  title: 'Play effect', help: 'One of your effects (made in the VFX tool), at a place or following someone.',
+  in: [ref('vfx', T.vfx, 'Effect'), ref('at', T.pos, 'At / on'), n('scale', 'Scale', 1, { min: 0.25, max: 4, step: 0.05 })], props: [bool('follow', 'Follows them', false)],
+  run: (x, nn, api) => {
+    const at = api.in('at');
+    SVC.vfx(x, api.in('vfx'), isEnt(at) ? at : where(x, api), { follow: api.prop('follow'), scale: num(api.in('scale'), 1) });
+    return 'then';
+  },
+});
+act('act.particles', {
+  title: 'Burst of sparks', help: 'A quick burst of specks of colour (for a bigger show, make an effect in the VFX tool).',
+  in: [ref('at', T.pos, 'At'), col('color', 'Colour', '#ffd070'), col('color2', 'Second colour', '#ffffff'), n('count', 'How many', 12, { min: 1, max: 80 }), n('speed', 'Spread', 30, { min: 0, max: 120 }), n('up', 'Rise', 30, { min: -60, max: 120 }), n('life', 'Lasts (s)', 0.7, { min: 0.1, max: 4, step: 0.1 })],
+  props: [pick('shape', 'Shape', ['dot', 'star', 'plus', 'puff', 'drop', 'shard']), bool('glow', 'Glow', true)],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.particles(x, at, { color: [api.in('color'), api.in('color2')], n: num(api.in('count'), 12), speed: num(api.in('speed'), 30), up: num(api.in('up'), 30), life: num(api.in('life'), 0.7), shape: api.prop('shape') === 'dot' ? undefined : api.prop('shape'), glow: api.prop('glow') });
+    return 'then';
+  },
+});
+act('act.shake', {
+  title: 'Shake the screen', help: 'The ground shakes (for those near).',
+  in: [n('power', 'Power', 0.5, { min: 0.05, max: 1, step: 0.05 }), ref('at', T.pos, 'Near')],
+  run: (x, nn, api) => {
+    SVC.shake(x, num(api.in('power'), 0.5), where(x, api));
+    return 'then';
+  },
+});
+act('act.flash', {
+  title: 'Flash the screen', help: 'The screen flashes a colour.',
+  in: [col('color', 'Colour', '#ffffff'), n('secs', 'Seconds', 0.25, { min: 0.05, max: 2, step: 0.05 })],
+  run: (x, nn, api) => {
+    SVC.flash(x, api.in('color'), num(api.in('secs'), 0.25));
+    return 'then';
+  },
+});
+act('act.damage', {
+  title: 'Damage', help: 'Hurts someone (armour takes its share). An element adds its own: fire burns, frost slows, poison sickens, shock stuns, force knocks back.',
+  in: [ref('target', T.ent, 'Who'), n('amount', 'Amount', 3, { min: 0, max: 9999 })], props: [pick('element', 'Element', ELEMENTS)],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.target;
+    if (t) SVC.damage(x, t, num(api.in('amount'), 3), api.prop('element'));
+    return 'then';
+  },
+});
+act('act.heal', {
+  title: 'Heal', help: 'Heals someone.',
+  in: [ref('target', T.ent, 'Who (or self)'), n('amount', 'Amount', 4, { min: 0, max: 9999 })],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.self;
+    if (t) SVC.heal(x, t, num(api.in('amount'), 4));
+    return 'then';
+  },
+});
+act('act.status', {
+  title: 'Give a condition', help: 'Burning, chilled (slowed), stunned, poisoned, quickened, slowed, mending, weakened, or shielded, for a while.',
+  in: [ref('target', T.ent, 'Who'), n('secs', 'Seconds', 3, { min: 0.1, max: 600, step: 0.1 })], props: [pick('status', 'Condition', STATUSES)],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.target;
+    if (t) SVC.status(x, t, api.prop('status'), num(api.in('secs'), 3));
+    return 'then';
+  },
+});
+act('act.effect', {
+  title: 'Apply effect', help: 'One of your Effects (an entity made from the Effect template), on someone for a while.',
+  in: [ref('effect', T.effect, 'Effect'), ref('target', T.ent, 'Who (or self)'), n('secs', 'Seconds', 30, { min: 1, max: 3600 })],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.self;
+    if (t) SVC.applyEffect(x, t, api.in('effect'), num(api.in('secs'), 30));
+    return 'then';
+  },
+});
+act('act.knock', {
+  title: 'Knock back', help: 'Throws someone back, away from someone (or from self).',
+  in: [ref('target', T.ent, 'Who'), ref('from', T.ent, 'Away from (or self)'), n('tiles', 'Paces', 2, { min: 1, max: 6 })],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.target;
+    const f = who(x, api, 'from') || x.self;
+    if (t && f) SVC.knock(x, f, t, num(api.in('tiles'), 2));
+    return 'then';
+  },
+});
+act('act.teleport', {
+  title: 'Teleport', help: 'Moves someone to a place (the nearest open spot to it).',
+  in: [ref('target', T.ent, 'Who (or self)'), ref('to', T.pos, 'To')],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.self;
+    const to = posOf(api.in('to'));
+    if (t && to) SVC.teleport(x, t, to);
+    return 'then';
+  },
+});
+act('act.kill', {
+  title: 'Kill', help: 'Kills someone outright (a player is knocked down as by any blow that fells them).',
+  in: [ref('target', T.ent, 'Who')],
+  run: (x, nn, api) => {
+    const t = who(x, api) || x.target;
+    if (t) SVC.kill(x, t);
+    return 'then';
+  },
+});
+act('act.spawn', {
+  title: 'Spawn creature', help: 'Brings a creature into the world (one of yours, or the game\'s own).',
+  in: [ref('creature', T.creature, 'Creature'), ref('at', T.pos, 'At'), n('count', 'How many', 1, { min: 1, max: 12 })],
+  out: [out('made', T.ent, 'Spawned')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) {
+      const list = SVC.spawn(x, api.in('creature'), at, Math.min(12, Math.max(1, num(api.in('count'), 1))));
+      x.locals[`${nn.id}.made`] = list[list.length - 1] || null;
+    }
+    return 'then';
+  },
+});
+act('act.drop', {
+  title: 'Drop item', help: 'Items fall out onto the ground (to be picked up).',
+  in: [ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 999 }), ref('at', T.pos, 'At')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.drop(x, api.in('item'), num(api.in('count'), 1), at);
+    return 'then';
+  },
+});
+act('act.loot', {
+  title: 'Drop loot', help: 'Rolls one of your loot tables, and drops what comes out.',
+  in: [ref('loot', T.loot, 'Loot table'), ref('at', T.pos, 'At')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.loot(x, api.in('loot'), at);
+    return 'then';
+  },
+});
+act('act.give', {
+  title: 'Give item', help: 'Into someone\'s pack (dropped at their feet if it\'s full).',
+  in: [ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 999 }), ref('target', T.ent, 'To (or the player)')],
+  run: (x, nn, api) => {
+    SVC.give(x, who(x, api) || x.player || x.target, api.in('item'), num(api.in('count'), 1));
+    return 'then';
+  },
+});
+def('act.take', {
+  cat: 'Actions', title: 'Take item', color: C.act, help: 'Takes items from someone\'s pack, if they have them all (Has / Hasn\'t).',
+  in: [F('in', 'Do'), ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 999 }), ref('target', T.ent, 'From (or the player)')],
+  out: [F('ok', 'Taken'), F('no', 'Hasn\'t enough')],
+  run: (x, nn, api) => (SVC.take(x, who(x, api) || x.player || x.target, api.in('item'), num(api.in('count'), 1)) ? 'ok' : 'no'),
+});
+act('act.setblock', {
+  title: 'Set block', help: 'Puts a block at a place (air clears it).',
+  in: [ref('at', T.pos, 'At'), ref('block', T.block, 'Block')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.setBlock(x, at, api.in('block'));
+    return 'then';
+  },
+});
+act('act.breakblock', {
+  title: 'Break block', help: 'Breaks the block at a place, dropping what it drops.',
+  in: [ref('at', T.pos, 'At')], props: [bool('drops', 'Drops it', true)],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.breakBlock(x, at, api.prop('drops'));
+    return 'then';
+  },
+});
+act('act.explode', {
+  title: 'Explosion', help: 'A blast: hurts everyone in its radius, and can break the blocks round it.',
+  in: [ref('at', T.pos, 'At'), n('radius', 'Radius', 2, { min: 1, max: 6 }), n('damage', 'Damage', 8, { min: 0, max: 9999 })], props: [bool('blocks', 'Breaks blocks', false)],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.explode(x, at, num(api.in('radius'), 2), num(api.in('damage'), 8), api.prop('blocks'));
+    return 'then';
+  },
+});
+act('act.lightning', {
+  title: 'Lightning', help: 'A bolt from the sky onto a place.',
+  in: [ref('at', T.pos, 'At'), n('damage', 'Damage', 10, { min: 0, max: 9999 })],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.lightning(x, at, num(api.in('damage'), 10));
+    return 'then';
+  },
+});
+act('act.fire', {
+  title: 'Set the ground alight', help: 'Fire on the ground round a place, for a while (it burns whoever stands in it).',
+  in: [ref('at', T.pos, 'At'), n('radius', 'Radius', 1, { min: 0, max: 5 })],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.groundFire(x, at, num(api.in('radius'), 1));
+    return 'then';
+  },
+});
+act('act.structure', {
+  title: 'Place structure', help: 'Builds one of your structures at a place, all at once.',
+  in: [ref('structure', T.structure, 'Structure'), ref('at', T.pos, 'At')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    if (at) SVC.placeStructure(x, api.in('structure'), at);
+    return 'then';
+  },
+});
+act('act.story', {
+  title: 'Start story', help: 'Begins one of your stories, here (if there\'s room for it).',
+  in: [ref('story', T.story, 'Story')],
+  run: (x, nn, api) => {
+    SVC.startStory(x, api.in('story'));
+    return 'then';
+  },
+});
+act('act.send', {
+  title: 'Send event', help: 'Sends an event of a name, with a value: every On event (and World event) of that name hears it.',
+  in: [txt('name', 'Event name', 'my_event'), { id: 'value', t: T.any, label: 'Value', def: null }],
+  run: (x, nn, api) => {
+    SVC.send(x, String(api.in('name') || ''), api.in('value'));
+    return 'then';
+  },
+});
+act('act.setvar', {
+  title: 'Set variable', help: 'Keeps a value by a name: on this one creature or block (Self), for this flow only (Local), or for the whole world, kept with it (World).',
+  in: [txt('name', 'Name', 'count'), { id: 'value', t: T.any, label: 'Value', def: 0 }], props: [pick('scope', 'Kept', ['self', 'world', 'local'])],
+  run: (x, nn, api) => {
+    SVC.setVar(x, api.prop('scope'), String(api.in('name')), api.in('value'));
+    return 'then';
+  },
+});
+act('act.addvar', {
+  title: 'Add to variable', help: 'Adds to a number kept by a name (see Set variable).',
+  in: [txt('name', 'Name', 'count'), n('by', 'Add', 1)], props: [pick('scope', 'Kept', ['self', 'world', 'local'])],
+  run: (x, nn, api) => {
+    const s = api.prop('scope');
+    const k = String(api.in('name'));
+    SVC.setVar(x, s, k, num(SVC.getVar(x, s, k)) + num(api.in('by'), 1));
+    return 'then';
+  },
+});
+
+// ------------------------------------------------------------ attacks
+const bossAct = (type, o) => act(type, { cat: 'Attacks', color: C.boss, ...o });
+bossAct('atk.hazard', {
+  title: 'Telegraphed blast', help: 'The ground lights up where it will strike (a ring, a circle, a line toward the foe, a cross, a cone), then it strikes after the wind-up.',
+  in: [ref('at', T.pos, 'Centre (or self)'), n('radius', 'Size', 3, { min: 1, max: 14 }), n('windup', 'Wind-up (s)', 0.8, { min: 0.1, max: 4, step: 0.05 }), n('damage', 'Damage', 6, { min: 0, max: 9999 }), col('color', 'Colour', '#ff6040')],
+  props: [pick('shape', 'Shape', ['ring', 'circle', 'line', 'cross', 'cone']), pick('element', 'Element', ELEMENTS)],
+  run: (x, nn, api) => {
+    SVC.hazard(x, { at: posOf(api.in('at')) || posOf(x.self), shape: api.prop('shape'), r: num(api.in('radius'), 3), windup: num(api.in('windup'), 0.8), dmg: num(api.in('damage'), 6), color: api.in('color'), element: api.prop('element') });
+    return 'then';
+  },
+});
+bossAct('atk.rings', {
+  title: 'Shockwaves', help: 'Rings spreading out from the caster one after another, each with a gap to step through.',
+  in: [n('count', 'Rings', 3, { min: 1, max: 8 }), n('gap', 'Seconds apart', 0.6, { min: 0.2, max: 3, step: 0.05 }), n('damage', 'Damage', 5, { min: 0, max: 9999 }), col('color', 'Colour', '#c8a0ff')], props: [pick('element', 'Element', ELEMENTS, 'force')],
+  run: (x, nn, api) => {
+    SVC.rings(x, num(api.in('count'), 3), num(api.in('gap'), 0.6), num(api.in('damage'), 5), api.in('color'), api.prop('element'));
+    return 'then';
+  },
+});
+bossAct('atk.charge', {
+  title: 'Charge', help: 'Rushes at its foe in a line, striking whoever\'s in the way.',
+  in: [ref('target', T.ent, 'At (or its foe)'), n('far', 'Paces', 6, { min: 2, max: 16 }), n('damage', 'Damage', 6, { min: 0, max: 9999 })],
+  run: (x, nn, api) => {
+    SVC.charge(x, who(x, api) || x.target, num(api.in('far'), 6), num(api.in('damage'), 6));
+    return 'then';
+  },
+});
+bossAct('atk.shoot', {
+  title: 'Shoot', help: 'Shoots at someone (or a place): one of your Projectiles, or a plain bolt of colour. A volley spreads them in a fan.',
+  in: [ref('projectile', T.any, 'Projectile (or none)'), ref('target', T.any, 'At (or its foe)'), n('count', 'Volley', 1, { min: 1, max: 12 }), n('spread', 'Spread (°)', 30, { min: 0, max: 360 }), n('damage', 'Damage', 4, { min: 0, max: 9999 }), col('color', 'Colour', '#ff9040')],
+  props: [pick('element', 'Element', ELEMENTS, 'fire')],
+  out: [F('hit', 'On hit'), out('foe', T.ent, 'Struck'), out('pos', T.pos, 'Where it landed')],
+  run: (x, nn, api) => {
+    const t = api.in('target');
+    SVC.shoot(x, { proj: api.in('projectile'), at: isEnt(t) ? t : posOf(t) || x.target, n: num(api.in('count'), 1), spread: num(api.in('spread'), 30), dmg: num(api.in('damage'), 4), color: api.in('color'), element: api.prop('element'),
+      onHit: (y) => {
+        x.locals[`${nn.id}.foe`] = y.target || null;
+        x.locals[`${nn.id}.pos`] = y.pos || null;
+        api.fire('hit');
+      } });
+    return 'then';
+  },
+});
+bossAct('atk.summon', {
+  title: 'Summon', help: 'Calls creatures round the caster (they fight on its side).',
+  in: [ref('creature', T.creature, 'Creature'), n('count', 'How many', 2, { min: 1, max: 8 })],
+  run: (x, nn, api) => {
+    SVC.summon(x, api.in('creature'), Math.min(8, Math.max(1, num(api.in('count'), 2))));
+    return 'then';
+  },
+});
+bossAct('atk.blink', {
+  title: 'Blink', help: 'Vanishes and appears again near its foe (or across its hall).',
+  in: [n('far', 'Paces from foe', 3, { min: 1, max: 12 })],
+  run: (x, nn, api) => {
+    SVC.blink(x, num(api.in('far'), 3));
+    return 'then';
+  },
+});
+bossAct('atk.guard', {
+  title: 'Become untouchable', help: 'Nothing hurts the caster for a while (a shimmer round it).',
+  in: [n('secs', 'Seconds', 3, { min: 0.5, max: 30, step: 0.5 })],
+  run: (x, nn, api) => {
+    SVC.guard(x, num(api.in('secs'), 3));
+    return 'then';
+  },
+});
+
+// ============================================================ talk
+def('dlg.say', {
+  cat: 'Dialogue', title: 'Say', color: C.dlg, waits: true,
+  help: 'A line spoken to whoever\'s talking, and up to four answers to pick from (empty answers are left out; none at all: one "Go on").',
+  in: [F('in', 'Do'), txt('text', 'Line', 'Well met, traveller.', { long: true }), txt('a', 'Answer 1', 'Who are you?'), txt('b', 'Answer 2', 'Goodbye.'), txt('c', 'Answer 3', ''), txt('d', 'Answer 4', ''), ref('speaker', T.ent, 'Speaker (or self)', { adv: true })],
+  out: [F('ra', 'Answer 1'), F('rb', 'Answer 2'), F('rc', 'Answer 3'), F('rd', 'Answer 4')],
+  run: (x, nn, api) => {
+    const opts = ['a', 'b', 'c', 'd'].map((k) => [k, fillText(x, api.in(k))]).filter(([, t]) => t);
+    api.ask(fillText(x, api.in('text')), opts.map(([, t]) => t), (i) => {
+      const k = opts[i] ? opts[i][0] : 'a';
+      api.fire(`r${k}`);
+    });
+    return null;
+  },
+});
+def('dlg.end', {
+  cat: 'Dialogue', title: 'End talk', color: C.dlg, help: 'Ends the conversation (with a last line, if you like).',
+  in: [F('in', 'Do'), txt('text', 'Last line', '')], out: [],
+  run: (x, nn, api) => {
+    SVC.endTalk(x, fillText(x, api.in('text')));
+    return null;
+  },
+});
+
+// ============================================================ values
+const val = (type, o) => def(type, { cat: 'Values', color: C.data, ...o });
+val('val.number', { title: 'Number', in: [n('v', 'Value', 1)], out: [out('out', T.num, 'Number')], eval: (x, nn, p, api) => num(api.in('v')) });
+val('val.text', { title: 'Text', in: [txt('v', 'Value', 'hello', { long: true })], out: [out('out', T.text, 'Text')], eval: (x, nn, p, api) => fillText(x, api.in('v')) });
+val('val.bool', { title: 'Yes / No', in: [bool('v', 'Value', true)], out: [out('out', T.bool, 'Value')], eval: (x, nn, p, api) => !!api.in('v') });
+val('val.color', { title: 'Colour', in: [col('v', 'Colour', '#ffe070')], out: [out('out', T.color, 'Colour')], eval: (x, nn, p, api) => api.in('v') });
+const refNode = (type, t, title, help) => def(type, { cat: 'Things', color: C.ref, title, help, props: [{ id: 'ref', t, label: title, def: null }], out: [out('out', t, title)], eval: (x, nn, p, api) => api.prop('ref') });
+refNode('ref.asset', T.asset, 'Art', 'A piece of your pixel art (drag one in from the explorer).');
+refNode('ref.vfx', T.vfx, 'Effect', 'One of your effects.');
+refNode('ref.rig', T.rig, 'Rig', 'One of your rigs.');
+refNode('ref.item', T.item, 'Item', 'An item: yours, or one of the game\'s.');
+refNode('ref.block', T.block, 'Block', 'A block: yours, or one of the game\'s.');
+refNode('ref.creature', T.creature, 'Creature', 'A creature: yours, or one of the game\'s.');
+refNode('ref.loot', T.loot, 'Loot table', 'One of your loot tables.');
+refNode('ref.structure', T.structure, 'Structure', 'One of your structures.');
+refNode('ref.story', T.story, 'Story', 'One of your stories.');
+refNode('ref.effect', T.effect, 'Effect entity', 'One of your Effects (a lasting blessing or curse).');
+refNode('ref.projectile', T.any, 'Projectile', 'One of your Projectiles.');
+
+// ------------------------------------------------------------ who and where
+const q = (type, o) => def(type, { cat: 'Who & where', color: C.q, ...o });
+q('ctx.self', { title: 'Self', help: 'The creature, block, item user or boss this graph belongs to.', out: [out('out', T.ent, 'Self')], eval: (x) => x.self || null });
+q('ctx.target', { title: 'Target', help: 'Who it\'s about: the foe struck, the one talking, whoever stepped on it.', out: [out('out', T.ent, 'Target')], eval: (x) => x.target || null });
+q('ctx.player', { title: 'Player', help: 'The player it\'s about (whoever used it, or the nearest).', out: [out('out', T.ent, 'Player')], eval: (x) => x.player || SVC.nearestPlayer?.(x) || null });
+q('ctx.here', { title: 'Here', help: 'Where it happened (the block, the place struck, the creature).', out: [out('out', T.pos, 'Place')], eval: (x) => posOf(x.pos) || posOf(x.self) || null });
+q('q.posof', { title: 'Place of', help: 'Where someone stands.', in: [ref('who', T.ent, 'Who')], out: [out('out', T.pos, 'Place')], eval: (x, nn, p, api) => posOf(api.in('who')) });
+q('q.offset', { title: 'Place nearby', help: 'A place moved from another by so many paces (east, up, south).', in: [ref('at', T.pos, 'From'), n('dx', 'East', 0), n('dy', 'Up', 0), n('dz', 'South', 0)], out: [out('out', T.pos, 'Place')], eval: (x, nn, p, api) => {
+  const a = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
+  return a ? { x: a.x + num(api.in('dx')), y: a.y + num(api.in('dy')), z: a.z + num(api.in('dz')) } : null;
+} });
+q('q.randpos', { title: 'Random place near', help: 'Somewhere open within so many paces.', in: [ref('at', T.pos, 'Around'), n('r', 'Within', 5, { min: 1, max: 40 })], out: [out('out', T.pos, 'Place')], eval: (x, nn, p, api) => SVC.randomSpot(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self), num(api.in('r'), 5)) });
+q('q.nearest', { title: 'Nearest', help: 'The nearest one (of a kind) to a place, within so many paces (none if nobody).', in: [ref('at', T.pos, 'To'), n('r', 'Within', 10, { min: 1, max: 60 }), ref('species', T.creature, 'Only this creature', { adv: true })], props: [pick('which', 'Who', ['players', 'foes of self', 'creatures', 'everyone'])], out: [out('out', T.ent, 'Who')],
+  eval: (x, nn, p, api) => {
+    const at = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
+    if (!at) return null;
+    const sp = api.in('species');
+    const list = SVC.near(x, at, num(api.in('r'), 10), api.prop('which')).filter((e) => !sp || e.species === SVC.speciesKey(x, sp));
+    let best = null;
+    let bd = Infinity;
+    for (const e of list) {
+      const d = Math.hypot(e.x - at.x, e.z - at.z);
+      if (d < bd && e !== x.self) {
+        bd = d;
+        best = e;
+      }
+    }
+    return best;
+  } });
+q('q.count', { title: 'Count nearby', help: 'How many (of a kind) are within so many paces.', in: [ref('at', T.pos, 'Around'), n('r', 'Within', 10, { min: 1, max: 60 }), ref('species', T.creature, 'Only this creature', { adv: true })], props: [pick('which', 'Who', ['creatures', 'players', 'foes of self', 'everyone'])], out: [out('out', T.num, 'How many')],
+  eval: (x, nn, p, api) => {
+    const at = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
+    const sp = api.in('species');
+    return at ? SVC.near(x, at, num(api.in('r'), 10), api.prop('which')).filter((e) => !sp || e.species === SVC.speciesKey(x, sp)).length : 0;
+  } });
+q('q.distance', { title: 'Distance', help: 'Paces between two places (or two people).', in: [ref('a', T.pos, 'From'), ref('b', T.pos, 'To')], out: [out('out', T.num, 'Paces')], eval: (x, nn, p, api) => {
+  const a = posOf(api.in('a')) || posOf(x.self);
+  const b = posOf(api.in('b')) || posOf(x.target);
+  return a && b ? Math.hypot(a.x - b.x, a.z - b.z) : 0;
+} });
+q('q.health', { title: 'Health of', help: 'Someone\'s health: as it is, at most, and as a percentage.', in: [ref('who', T.ent, 'Who (or self)')], out: [out('hp', T.num, 'Health'), out('max', T.num, 'Most'), out('pct', T.num, 'Percent')], eval: (x, nn, p, api) => {
+  const e = (isEnt(api.in('who')) && api.in('who')) || x.self;
+  if (!e) return 0;
+  return p === 'hp' ? e.hp : p === 'max' ? e.maxHp : Math.round((100 * e.hp) / Math.max(1, e.maxHp));
+} });
+q('q.isplayer', { title: 'Is a player?', in: [ref('who', T.ent, 'Who')], out: [out('out', T.bool, 'Yes')], eval: (x, nn, p, api) => !!(api.in('who') && api.in('who').kind === 'player') });
+q('q.hasitem', { title: 'Has item?', help: 'Whether someone carries so many of an item.', in: [ref('who', T.ent, 'Who (or the player)'), ref('item', T.item, 'Item'), n('count', 'At least', 1, { min: 1 })], out: [out('out', T.bool, 'Has'), out('n', T.num, 'How many')], eval: (x, nn, p, api) => {
+  const e = (isEnt(api.in('who')) && api.in('who')) || x.player || x.target;
+  const k = SVC.count(x, e, api.in('item'));
+  return p === 'n' ? k : k >= num(api.in('count'), 1);
+} });
+q('q.held', { title: 'Item in hand', help: 'What someone holds (its key), and whether it\'s this one.', in: [ref('who', T.ent, 'Who (or the player)'), ref('item', T.item, 'Is it')], out: [out('is', T.bool, 'Holding it'), out('key', T.item, 'Holding')], eval: (x, nn, p, api) => {
+  const e = (isEnt(api.in('who')) && api.in('who')) || x.player;
+  const k = e && e.heldItem ? e.heldItem() : null;
+  return p === 'key' ? k : !!k && k === SVC.itemKey(x, api.in('item'));
+} });
+q('q.blockat', { title: 'Block at', help: 'Whether the block at a place is this one (or air).', in: [ref('at', T.pos, 'At'), ref('block', T.block, 'Is it')], out: [out('is', T.bool, 'It is'), out('block', T.block, 'Block')], eval: (x, nn, p, api) => {
+  const at = posOf(api.in('at')) || posOf(x.pos);
+  const b = at ? SVC.blockAt(x, at) : null;
+  return p === 'block' ? b : !!b && b === SVC.blockKey(x, api.in('block'));
+} });
+
+// ------------------------------------------------------------ the world
+const w = (type, o) => def(type, { cat: 'World', color: C.q, ...o });
+w('q.night', { title: 'Is it night?', out: [out('out', T.bool, 'Night')], eval: (x) => SVC.isNight(x) });
+w('q.hour', { title: 'Time of day', help: 'The hour (0-23.99) and the day.', out: [out('h', T.num, 'Hour'), out('day', T.num, 'Day')], eval: (x, nn, p) => (p === 'day' ? SVC.day(x) : SVC.hour(x)) });
+w('q.biome', { title: 'Biome at', help: 'Whether a place is in a biome.', in: [ref('at', T.pos, 'At')], props: [pick('biome', 'Biome', BIOME_LIST)], out: [out('is', T.bool, 'It is'), out('name', T.text, 'Biome')], eval: (x, nn, p, api) => {
+  const b = SVC.biome(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self));
+  return p === 'name' ? b : b === api.prop('biome');
+} });
+w('q.below', { title: 'Down a dungeon?', help: 'Whether someone (or self) is down in a dungeon.', in: [ref('who', T.ent, 'Who')], out: [out('out', T.bool, 'Below')], eval: (x, nn, p, api) => SVC.below(x, (isEnt(api.in('who')) && api.in('who')) || x.self) });
+w('q.var', { title: 'Variable', help: 'A value kept by a name (see Set variable).', in: [txt('name', 'Name', 'count')], props: [pick('scope', 'Kept', ['self', 'world', 'local'])], out: [out('out', T.any, 'Value')], eval: (x, nn, p, api) => SVC.getVar(x, api.prop('scope'), String(api.in('name'))) ?? 0 });
+
+// ------------------------------------------------------------ maths
+const m = (type, o) => def(type, { cat: 'Maths', color: C.math, ...o });
+m('math.op', { title: 'Calculate', in: [n('a', 'A', 1), n('b', 'B', 1)], props: [pick('op', 'Do', ['+', '−', '×', '÷', 'min', 'max', 'mod', 'power'])], out: [out('out', T.num, 'Result')], eval: (x, nn, p, api) => {
+  const a = num(api.in('a'));
+  const b = num(api.in('b'));
+  switch (api.prop('op')) {
+    case '−': return a - b;
+    case '×': return a * b;
+    case '÷': return b ? a / b : 0;
+    case 'min': return Math.min(a, b);
+    case 'max': return Math.max(a, b);
+    case 'mod': return b ? ((a % b) + b) % b : 0;
+    case 'power': return a ** b;
+    default: return a + b;
+  }
+} });
+m('math.random', { title: 'Random number', help: 'Between two numbers (whole numbers if Whole).', in: [n('min', 'From', 0), n('max', 'To', 10)], props: [bool('whole', 'Whole', true)], out: [out('out', T.num, 'Number')], eval: (x, nn, p, api) => {
+  const a = num(api.in('min'));
+  const b = num(api.in('max'));
+  return api.prop('whole') ? Math.floor(a + Math.random() * (Math.floor(b) - Math.ceil(a) + 1)) : a + Math.random() * (b - a);
+} });
+m('math.compare', { title: 'Compare', in: [n('a', 'A', 0), n('b', 'B', 0)], props: [pick('op', 'Is', ['>', '<', '=', '≥', '≤', '≠'])], out: [out('out', T.bool, 'True')], eval: (x, nn, p, api) => {
+  const a = api.in('a');
+  const b = api.in('b');
+  const A = num(a, NaN);
+  const Bv = num(b, NaN);
+  const both = !Number.isNaN(A) && !Number.isNaN(Bv);
+  switch (api.prop('op')) {
+    case '<': return A < Bv;
+    case '=': return both ? A === Bv : a === b;
+    case '≥': return A >= Bv;
+    case '≤': return A <= Bv;
+    case '≠': return both ? A !== Bv : a !== b;
+    default: return A > Bv;
+  }
+} });
+m('math.logic', { title: 'And / Or / Not', in: [bool('a', 'A', true), bool('b', 'B', true)], props: [pick('op', 'Do', ['and', 'or', 'not A', 'either but not both'])], out: [out('out', T.bool, 'Result')], eval: (x, nn, p, api) => {
+  const a = !!api.in('a');
+  const b = !!api.in('b');
+  const op = api.prop('op');
+  return op === 'or' ? a || b : op === 'not A' ? !a : op === 'either but not both' ? a !== b : a && b;
+} });
+m('math.round', { title: 'Round', in: [n('a', 'Number', 0)], props: [pick('how', 'How', ['nearest', 'down', 'up'])], out: [out('out', T.num, 'Whole')], eval: (x, nn, p, api) => {
+  const a = num(api.in('a'));
+  const h = api.prop('how');
+  return h === 'down' ? Math.floor(a) : h === 'up' ? Math.ceil(a) : Math.round(a);
+} });
+m('math.join', { title: 'Join text', in: [txt('a', 'A', ''), txt('b', 'B', '')], out: [out('out', T.text, 'Text')], eval: (x, nn, p, api) => `${api.in('a') ?? ''}${api.in('b') ?? ''}` });
+
+// What a template makes, for lists (the Workshop's "New" menu and so on).
+export const TEMPLATE_INFO = {
+  'tpl.block': { group: 'World', icon: '■', blurb: 'A block to place and break: stone, glowing crystal, a trapdoor.' },
+  'tpl.food': { group: 'Items', icon: '🍖', blurb: 'Food, drink or a potion: heals and can do more.' },
+  'tpl.weapon': { group: 'Items', icon: '⚔', blurb: 'A blade, a bow, a staff: with a style and on-hit powers.' },
+  'tpl.tool': { group: 'Items', icon: '⛏', blurb: 'A pick, axe or shovel that breaks blocks.' },
+  'tpl.armor': { group: 'Items', icon: '⛨', blurb: 'A helm, mail, boots or a shield.' },
+  'tpl.material': { group: 'Items', icon: '◆', blurb: 'An ore, a hide, a trinket: to carry, sell and craft with.' },
+  'tpl.animal': { group: 'Creatures', icon: '🐇', blurb: 'A beast that wanders the wild.' },
+  'tpl.hostile': { group: 'Creatures', icon: '☠', blurb: 'A monster that hunts you.' },
+  'tpl.npc': { group: 'Creatures', icon: '☺', blurb: 'Someone to talk to: dialogue, trades, quests.' },
+  'tpl.boss': { group: 'Creatures', icon: '♛', blurb: 'A master with phases, abilities and a health bar.' },
+  'tpl.effect': { group: 'Logic', icon: '✦', blurb: 'A blessing or curse that lasts a while.' },
+  'tpl.event': { group: 'Logic', icon: '⚡', blurb: 'Something that happens in the world.' },
+  'tpl.recipe': { group: 'Logic', icon: '⚒', blurb: 'A crafting recipe.' },
+  'tpl.projectile': { group: 'Logic', icon: '➶', blurb: 'An arrow, orb or bolt for Shoot.' },
+};

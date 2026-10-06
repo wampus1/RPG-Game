@@ -253,7 +253,10 @@ export class World {
     if (c && r.rx >= INST_RX) r.modified = true;
     if (!c) {
       const s = this.ow.settlementAt(x, z);
-      c = rollContainerLoot(this, x, y, z, BLOCKS[r.blocks[i]].name, s);
+      const b = BLOCKS[r.blocks[i]];
+      // (Round 62) A chest in a mod's structure fills from its loot table;
+      // a mod's own chest starts empty, its size its own.
+      c = this.modContainer?.(x, y, z, b) || (b.mod ? new Array(b.modSlots || 9).fill(null) : rollContainerLoot(this, x, y, z, b.name, s));
       r.containers.set(i, c);
       r.modified = true;
     }

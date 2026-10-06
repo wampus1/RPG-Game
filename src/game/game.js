@@ -87,6 +87,9 @@ import { critBonus, bladeMult, onBladeMods, onArrowMods, toolDrops, extraDigMult
 import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
+// (Round 62) Mods at work: imported last of all, so all they reach is ready.
+import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain } from '../mod/hooks.js';
+import { MODS } from '../mod/registry.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
 const GEMS_COLOR = (k) => (ITEMS[k] && ITEMS[k].gem && GEMS[k] ? GEMS[k].color : '#ffffff');
@@ -2003,6 +2006,8 @@ export class Game {
     if (party) for (const s of this.seats) if (s !== this.seat) asSeat(this, s, () => this.pickupDrops());
     this.drops = this.drops.filter((d) => !d.dead);
     this.inPlace(null, () => this.spawning(dt));
+    // (Round 62) The world's mods at work: their waits, effects, events.
+    if (MODS.active.length) modTick(this, dt);
     this.growPlants(dt);
     this.crops.update(dt);
     this.playtime.update(dt);
@@ -2548,6 +2553,16 @@ export class Game {
   // Every player in the world (the host's own first).
   everyone() {
     return partyPlayers(this);
+  }
+
+  // (Round 62) A mod's creature's turn, and a blow landed with a mod's
+  // weapon (or by one of a mod's creatures): see mod/hooks.js.
+  modBrainOf(c, dt) {
+    return modBrain(c, dt);
+  }
+
+  onModStruck(a, v, amount) {
+    if (MODS.active.length) modStruck(this, a, v, amount);
   }
 
   // ------------------------------------------------------------ old places
@@ -3188,6 +3203,8 @@ export class Game {
       this.talk(c.entity);
       return;
     }
+    // (Round 62) One of a mod's creatures: talked to (a person), or used.
+    if (c && c.entity && c.entity.S && c.entity.S.modKey && !c.entity.dead && c.entity.distTo(p) <= 4 && modTalk(this, p, c.entity)) return;
     // Dice in hand: a throw (on the table there, or one beside you).
     if (held && held.key === 'dice' && throwDice(this)) return;
     // Leads: one on a beast, off it, or tie what you're leading to a post.
@@ -3295,6 +3312,8 @@ export class Game {
     }
     // (Round 61) A time crystal: at the way into a beaten place.
     if (d.kind === 'time_crystal') return useTimeCrystal(this, d);
+    // (Round 62) A mod's item, with something to do when it's used.
+    if (d.mod && modUse(this, p, d)) return true;
     return false;
   }
 
@@ -3527,6 +3546,8 @@ export class Game {
     // (What your tool's modifiers make of it: smelted, sawn, doubled...)
     if (byPlayer) toolDrops(this, this.player, id, drops);
     for (const d of drops) this.spawnDrop(d.item, d.count, x, y, z, true);
+    // (Round 62) A mod's block, or broken with a mod's tool.
+    if (b.mod || MODS.active.length) modBlockBroken(this, x, y, z, id, byPlayer);
     this.freeTied(x, y, z);
     this.renderer.emit(x, y, z, { n: 10, color: this.blockColor(id), up: 45, speed: 60, life: 0.6, oy: -6 });
     this.audio?.play(id === B.urn || id === B.skull_pile ? 'shatter' : b.render === 'plant' ? 'crop' : b.tool === 'axe' ? 'chop' : b.tool === 'pick' ? 'stone' : 'break');
@@ -3841,7 +3862,7 @@ export class Game {
     if (b.interact === 'container') {
       const r = w.regionAt(t.x, t.z);
       const idx = ((t.z - r.z0) * REGION_W + (t.x - r.x0)) * WORLD_Y + t.y;
-      r.containers.set(idx, makeSlots(CONTAINER_SIZE[b.name] || 9));
+      r.containers.set(idx, makeSlots(CONTAINER_SIZE[b.name] || b.modSlots || 9));
     }
     if (id === B.sapling) this.saplings.push({ x: t.x, y: t.y, z: t.z, t: 90 + Math.random() * 120 });
     if (def.relic) setRelic(this, t.x, t.y, t.z, def.relic, def.shards || 0);
@@ -3852,6 +3873,7 @@ export class Game {
     this.audio?.play('place');
     this.stats.placed++;
     this.renderer.emit(t.x, t.y, t.z, { n: 4, color: this.blockColor(id), up: 15, life: 0.3, oy: -2 });
+    if (b.mod) modBlockPlaced(this, t.x, t.y, t.z, id);
   }
 
   // ------------------------------------------------------------ horses & wagons
@@ -4321,6 +4343,10 @@ export class Game {
       }
       case 'sit':
         this.sitOn(x, y, z);
+        break;
+      // (Round 62) A mod's block, with something to do when it's used.
+      case 'mod':
+        modBlockUse(this, x, y, z, id);
         break;
       case 'workbench':
         this.ui.openCrafting('workbench');
@@ -5364,7 +5390,7 @@ export class Game {
     const def = slot ? ITEMS[slot.item] : null;
     if (!def || def.kind !== 'food') return;
     // (A dish is eaten for what it does, too: hungry or not.)
-    if (p.hp >= p.maxHp && !def.dish) {
+    if (p.hp >= p.maxHp && !def.dish && !def.anytime) {
       this.ui.msg('You\'re not hungry.', '#c8c8c8');
       return;
     }
@@ -5406,6 +5432,8 @@ export class Game {
     }
     // (Round 53: a dish that answers your eating, this one too.)
     if (!sick) dishTrigger(this, p, 'eat', { item: slot.item });
+    // (Round 62) A mod's: what it does besides.
+    if (!sick && def.mod) modEaten(this, p, def);
     // (Not everywhere eats everything: see culture.js.)
     this.sim.customs.onEat(slot.item);
     // Meal quality matters: bad cooking can turn your stomach, a delightful
@@ -6141,6 +6169,15 @@ export class Game {
       target.say?.(target.rng.pick(['Enough! Enough!', 'I yield!']), 2);
       return;
     }
+    // (Round 62) What a mod's effects make of it (and a master that's made
+    // itself untouchable).
+    if (MODS.active.length) {
+      amount = Math.round(modScaleDamage(target, source, amount));
+      if (amount <= 0) {
+        this.renderer.floatText(target.x, target.y + 2, target.z, 'no effect', '#c8c8ff');
+        return;
+      }
+    }
     target.hp -= amount;
     // (Round 53) A dish that answers a blow taken, or one landed, or your
     // falling below half (see dishacts.js).
@@ -6156,6 +6193,7 @@ export class Game {
     if (source && source.S && source.S.onStrike && target.kind === 'player' && amount > 0) source.S.onStrike(this, source, target, amount);
     // Jewelled armour answers a blow struck in close.
     if (source && !this.dotHit) onStruck(this, target, source, amount);
+    if (MODS.active.length && amount > 0) modHurt(this, target, source, amount);
     target.flash = 0.12;
     this.renderer.floatText(target.x, target.y + 2, target.z, `${crit ? '!' : '-'}${amount || blueSoak}`, amount <= 0 && blueSoak ? '#80a8ff' : target.kind === 'player' ? '#ff5050' : crit ? '#ffe070' : '#ffffff');
     this.renderer.emit(target.x, target.y + 1, target.z, { n: 5, color: target.species === 'slime' ? ['#58c048', '#8ae070'] : target.kind === 'monster' ? ['#e8e4d4', '#b0aca0'] : ['#c82a2a', '#8a1a1a'], up: 30, speed: 50, life: 0.4, oy: -8 });
@@ -6342,6 +6380,7 @@ export class Game {
       if (who && who !== this.seat) return asSeat(this, who, () => this.kill(e, source));
     }
     onKill(this, e, source);
+    if (MODS.active.length) modKilled(this, e, source);
     // (The stories hear of it: see sim/saga.)
     this.sagaKill(e, source);
     // (A dish that answers a kill: see dishacts.js.)
@@ -6704,6 +6743,8 @@ export class Game {
       // (And on any ground of theirs, now and then, the islands' own.)
       if (ISLE_BEASTS[isle] && Math.random() < 0.3) species = ISLE_BEASTS[isle][Math.floor(Math.random() * ISLE_BEASTS[isle].length)];
     }
+    // (Round 62) Or one of a mod's, where it belongs.
+    if (MODS.active.length) species = modSpawnPick(night, biome) || species;
     const variant = Math.floor(Math.random() * (species === 'horse' ? 6 : 3));
     // (A swimmer in the water by there, under the surface.)
     const wet = SPECIES[species].swims && waterNear(this, x, z);
@@ -6868,6 +6909,9 @@ export class Game {
       leadsOut: leadsOut(this),
       view: this.renderer.view || 0,
       cheats: { ...this.cheats, reveal: !!this.revealMap },
+      // (Round 62) The world's mods: which, the numbers their blocks are
+      // kept by, and what their graphs keep.
+      mods: modSave(this),
       // A world played with others: each one's character, kept for when
       // they come back, and who's not welcome.
       party: this.partyWorld ? this.partySave() : null,
@@ -6897,6 +6941,9 @@ export class Game {
   applySave(data) {
     this.minute = data.minute;
     this.day = data.day;
+    // (Round 62) What the world's mods keep (they're put into the game
+    // before it's made: see main.js).
+    if (data.mods) modLoad(this, data.mods);
     if (data.party) {
       this.partyWorld = data.party.world || { name: 'A world' };
       this.pvp = !!data.party.pvp;

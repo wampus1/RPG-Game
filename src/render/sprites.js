@@ -10,6 +10,7 @@ import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
 import { isleBossArt } from './islebossart.js';
 import { drawHumanoid, CHAR_W, SHEET_H, FRAMES, SPR_PAD } from './people.js';
+import { MODS } from '../mod/state.js';
 
 const OUT = '#1c1622';
 // (People are drawn in people.js.)
@@ -1816,6 +1817,14 @@ export function itemIcon(key) {
   let c = iconCache.get(key);
   if (c) return c;
   const it = ITEMS[key];
+  // (Round 62) A mod's item: its own art (see mod/render.js).
+  if (it && it.mod && MODS.iconFor) {
+    c = MODS.iconFor(key, it);
+    if (c) {
+      iconCache.set(key, c);
+      return c;
+    }
+  }
   // A dish cooked up: made of the pictures of what went in it (see
   // dishart.js).
   if (it && it.dish) {
@@ -1894,6 +1903,14 @@ export function itemIcon(key) {
 }
 
 export { toCanvas };
+
+// (Round 62) A world's mods put in (or taken out): their pictures made
+// again next time they're wanted.
+export function forgetModArt() {
+  for (const k of [...iconCache.keys()]) if (k.startsWith('m:')) iconCache.delete(k);
+  for (const k of [...sheetCache.keys()]) if (k.startsWith('c:m:')) sheetCache.delete(k);
+  for (const k of [...glowCache.keys()]) if (String(k).includes('m:')) glowCache.delete(k);
+}
 export const SPRITE_FRAME_H = SPR_H;
 
 // A faint outline of a stone's colour round one frame of a sheet (someone
