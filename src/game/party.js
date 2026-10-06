@@ -14,6 +14,8 @@ export const GAME_FIELDS = [
   'scene', 'shake', 'hurtFlash', 'healFlash', 'lastHp', 'beatT', 'bonusT', 'currentSettlement', 'biomeCache', 'stats', 'dummyLog', 'duel', 'charging',
   'combatT', 'combatWith', 'wanted', 'hitStop', 'slowMo', 'slowMoScale', 'diceGame', 'talkingTo', 'stormWarned', 'lavaWarned', 'lastPrayDay', 'aimFixed',
   'nearSpire', 'looseKeys', 'revealMap', 'stormSea', 'duelAfter', 'spireStorm', 'spireBoltT', 'wallPending',
+  // (Each one's own cheats from the command console: map teleport, god.)
+  'cheats',
   // (The old place each is down, if any: see DungeonRun. And the sky over
   // them, wherever they are.)
   'dungeon', 'weather',
@@ -77,6 +79,7 @@ export function freshStore(game, { player, hero = null, ui = null, input = null,
     player, hero, playerName: name, ui, input, cursor: null, mining: null, pending: null, placeRepeat: 0, queuedBlow: null, fishing: null, sleep: null,
     waiting: null, sleepFast: 0, scene: null, shake: 0, hurtFlash: 0, healFlash: 0, stats: { kills: 0, crafted: 0, mined: 0, placed: 0 },
     currentSettlement: null, wanted: new Map(), revealMap: false, dungeon: null, weather: null, cutscene: null, eruptPending: null,
+    cheats: { mapTeleport: false, god: false },
   });
   const pick = (o, fields) => Object.fromEntries(fields.map((k) => [k, o[k]]));
   return {

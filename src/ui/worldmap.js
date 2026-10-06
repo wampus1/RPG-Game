@@ -371,6 +371,13 @@ export class MapWindow extends Window {
     const half = q.hf !== null ? q.hf === 1 : (px - o.x) / this.z - q.cx >= 0.5;
     const x = L && L.plaza ? L.plaza.cx : q.cx * REGION_W + (half ? REGION_W * 0.75 : REGION_W * 0.25);
     const z = L && L.plaza ? L.plaza.cz + 3 : q.cz * REGION_D + REGION_D / 2;
+    // (In someone else's world: the host moves you, as a command.)
+    if (game.remote && game.remote.command) {
+      game.remote.command(`tp ${Math.round(x)} ${Math.round(z)}`);
+      this.ui.msg(s ? `Off to ${s.name}...` : 'Off you go...', '#c8d8ff');
+      this.close();
+      return;
+    }
     teleportTo(game, x, z);
     this.ui.msg(s ? `Teleported to ${s.name}.` : 'Teleported.', '#c8d8ff');
     this.close();

@@ -75,7 +75,7 @@ export class GuestNet {
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
     // (What a command run on the host said: into the console.)
-    else if (m.t === 'cmdOut') this.commandOut(m.lines || []);
+    else if (m.t === 'cmdOut') this.commandOut(m.lines || [], m.flags || null);
     else if (m.t === 'feat') this.onFeat?.(m.id);
     else if (m.t === 'friend') this.onFriend(m);
     else if (m.t === 'site') this.site(m);
@@ -132,8 +132,14 @@ export class GuestNet {
     this.out({ t: 'cmd', text: String(text).slice(0, 200) });
   }
 
-  commandOut(lines) {
-    const ui = this.game && this.game.ui;
+  commandOut(lines, flags = null) {
+    const game = this.game;
+    // (Your map, on your own screen: shown whole, or clicked to go there.)
+    if (game && flags) {
+      game.revealMap = !!flags.reveal;
+      game.cheats = { ...(game.cheats || {}), mapTeleport: !!flags.mapTeleport };
+    }
+    const ui = game && game.ui;
     if (!ui) return;
     const log = (ui.consoleLog ||= []);
     log.push(...lines.map((l) => (typeof l === 'string' ? l : { text: l.text, c: l.c || undefined })));

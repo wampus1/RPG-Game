@@ -260,12 +260,19 @@ export class HostNet {
       return;
     }
     let lines;
+    let flags = null;
     try {
-      lines = asSeat(this.game, g.seat, () => runCommand(this.game, text));
+      lines = asSeat(this.game, g.seat, () => {
+        const out = runCommand(this.game, text);
+        // (What their own screen needs to know of it: the map shown whole,
+        // a click on it to go there. See GuestNet.commandOut.)
+        flags = { reveal: !!this.game.revealMap, mapTeleport: !!(this.game.cheats && this.game.cheats.mapTeleport) };
+        return out;
+      });
     } catch (err) {
       lines = [{ text: `That went wrong: ${err.message}`, c: '#ffb080' }];
     }
-    this.to(g, { t: 'cmdOut', lines: (lines || []).slice(0, 80).map((l) => (typeof l === 'string' ? l : { text: String(l.text ?? ''), c: l.c || null })) });
+    this.to(g, { t: 'cmdOut', flags, lines: (lines || []).slice(0, 80).map((l) => (typeof l === 'string' ? l : { text: String(l.text ?? ''), c: l.c || null })) });
   }
 
   // Whether players may hurt each other (the host's to say), and everyone

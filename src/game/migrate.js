@@ -254,6 +254,13 @@ export const STEPS = [
       log.push('Worlds on another computer no longer look like another version.');
     },
   },
+  {
+    // Each player's own cheats (round 60): nothing in the world to change.
+    to: '0.60.0',
+    data(d, log) {
+      log.push('A player\'s reveal and map teleport commands now work on their own screen.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

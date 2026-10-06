@@ -194,6 +194,7 @@ export function runCommand(game, text) {
       return [`Teleported to ${s.name}.`];
     }
     case 'teleport': {
+      game.cheats ||= {};
       const on = words[0] ? !/^(off|no|0|false)$/i.test(words[0]) : !game.cheats.mapTeleport;
       game.cheats.mapTeleport = on;
       return [on ? 'Map teleport on: click a place on the world map (M) to go there.' : 'Map teleport off.'];
@@ -276,6 +277,7 @@ export function runCommand(game, text) {
       p.hp = p.maxHp;
       return ['You feel fully restored.'];
     case 'god': {
+      game.cheats ||= {};
       const on = words[0] ? !/^(off|no|0|false)$/i.test(words[0]) : !game.cheats.god;
       game.cheats.god = on;
       if (on) p.hp = p.maxHp;

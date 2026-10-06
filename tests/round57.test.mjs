@@ -355,3 +355,65 @@ test('a player\'s fight wears off (it only ever did for the host, so they never 
   const left = asSeat(game, seat, () => game.combatT);
   assert.ok(!(left > 0), `still in a fight: ${left}`);
 });
+
+test('a player\'s own reveal and map teleport: on their screen, not the host\'s', () => {
+  const game = makeGame(12345);
+  const input = stubInput();
+  game.minute = 600;
+  for (let i = 0; i < 20; i++) game.update(0.1, input);
+  const queue = [];
+  let guestNet = null;
+  const uiStub = () => Object.assign(stubUI(), { windows: [], update() {}, find: () => null, closeAll() {} });
+  const hostNet = new HostNet(game, {
+    send: (text) => {
+      if (text[0] !== '@') return;
+      const body = text.slice(text.indexOf('|') + 1);
+      queue.push(() => guestNet.receive(body));
+    },
+    profile: { id: 'h', name: 'Hosty' },
+    world: { name: 'Testland' },
+    makeUI: () => uiStub(),
+  });
+  let gg = null;
+  guestNet = new GuestNet({
+    send: (text) => queue.push(() => hostNet.receive(`@7|${text}`)),
+    profile: { id: 'g', name: 'Guesty' },
+    build: (save) => (gg = new Game({ seed: save.seed, renderer: stubRenderer(), audio: null, ui: uiStub(), save, remote: true })),
+    onNeedHero: () => guestNet.sendHero(null),
+    onEnd: () => {},
+    onNote: () => {},
+    onParty: () => {},
+  });
+  const flush = () => {
+    while (queue.length) queue.shift()();
+  };
+  hostNet.receive('!' + JSON.stringify({ t: 'join', cid: 7, account: { id: 'g', name: 'Guesty' } }));
+  flush();
+  for (let i = 0; i < 10; i++) {
+    game.update(0.05, input);
+    flush();
+    if (gg) gg.update(0.05, stubInput());
+    flush();
+  }
+  hostNet.setPerm('g', 'commands', true);
+  flush();
+  guestNet.command('reveal');
+  guestNet.command('teleport on');
+  flush();
+  assert.ok(gg.revealMap, 'their map, whole');
+  assert.ok(gg.cheats.mapTeleport, 'and a click on it takes them there');
+  assert.ok(!game.revealMap, 'not the host\'s');
+  assert.ok(!(game.cheats && game.cheats.mapTeleport), 'nor the host\'s map teleport');
+  // A click on their map: the host moves them.
+  const seat = game.seats[1];
+  const sent = [];
+  const was = guestNet.command.bind(guestNet);
+  guestNet.command = (t) => {
+    sent.push(t);
+    return was(t);
+  };
+  const s = game.world.ow.settlements.find((q) => q.id !== game.currentSettlement?.id) || game.world.ow.settlements[0];
+  guestNet.command(`tp ${s.bounds.x0 + 4} ${s.bounds.z0 + 4}`);
+  flush();
+  assert.ok(Math.abs(seat.ent.x - (s.bounds.x0 + 4)) < 12, 'moved on the host');
+});

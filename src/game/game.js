@@ -6025,7 +6025,7 @@ export class Game {
       if (who && who !== this.seat) return asSeat(this, who, () => this.damage(target, amount, source, crit));
     }
     // (God mode, from the command console.)
-    if (target.kind === 'player' && this.cheats.god) return;
+    if (target.kind === 'player' && this.cheats && this.cheats.god) return;
     // (Riding a lift: out of reach, in its shaft.)
     if (target.kind === 'player' && this.scene && this.scene.kind === 'lift') return;
     // An adventurer slips a blow and rolls clear.
