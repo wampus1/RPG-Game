@@ -321,6 +321,21 @@ export const KITS = {
   crackle: { kick: 'x...............', crackle: true },
   // Myrrow's dark water: a drip now and then, and a heartbeat.
   drip: { kick: 'x.........-.....', drip: true },
+  // (Round 68) The far lands' drums. The Velari's legion: a marching snare,
+  // timpani on the bar. The Rimeborn's frame drum, struck steady, its
+  // rattle. The Jade Court's temple: wood blocks and a far gong. The
+  // Keshari's great drum, four to the bar, rattles over it. A bodhran's
+  // jig (Corrow, the Skerries). The Saltfolk's dance: hand drums, claps,
+  // finger cymbals. The Hollowfolk's hearth: a soft kick, spoons. The
+  // Wyrdfolk's circle: a slow drum, a bell now and then.
+  legion: { kick: 'x.......x.......', war: '....x.o.....x.o.', timp: 'x...............', rim: '-.-.-.-.-.-.-.-.', fill: { war: '....x.x.x.xxxxxx', timp: 'x.......x...x.x.' } },
+  frame: { taiko: 'x...x...x...x...', shaker: '..-...-...-...-.', tom: '..........o.....', fill: { taiko: 'x...x...x.x.xxxx' } },
+  temple: { wood: 'x...o...x.o.o...', zill: '........-.......', tom: '..............o.', fill: { wood: 'x...o...x.o.oooo' } },
+  pueblo: { tom: 'x...x...x...x...', shaker: '-o-o-o-o-o-o-o-o', stomp: 'x.......x.......', fill: { tom: 'x...x...x.x.xxxx' } },
+  bodhran: { tom: 'x..o.ox.x..o.ox.', rim: '..-.....-.......', kick: 'x.......x.......', fill: { tom: 'x..o.ox.xoxoxoxo' } },
+  sirtaki: { conga: 'x..o..x.x..o..x.', clap: '....o.......o...', zill: '..-...-...-...-.', fill: { conga: 'x..o..x.x.oooxxx', clap: '....o...o.o.oooo' } },
+  hearth: { kick: 'x.......x.......', wood: '....o.......o...', shaker: '-.-.-.-.-.-.-.-.' },
+  circle: { taiko: 'x.......x.......', tom: '....-.......-...', zill: '..............-.' },
   // A master's, by its phase: heavy and slow, then driving, then savage.
   // (Round 49: the low war snare, chains for hats: darker, heavier.)
   grand: { taiko: 'x.......x.......', kick: 'x.....x...x.....', war: '........x.......', fill: { war: '........x.xxxxxx', tom: '............xxxx' }, crash: true },

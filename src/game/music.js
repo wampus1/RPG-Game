@@ -18,6 +18,7 @@ import { fightPhase } from '../entities/tempo.js';
 import { SCALES, chordDegs, degMidi, motif, line, counterLine, bassBar, ARPS, KITS, HIT } from './compose.js';
 import { Rack, Samples, master, makeIR, midiHz } from './synth.js';
 import { BIOMES } from '../world/biomes.js';
+import { MAP_W, REGION_W, REGION_D } from '../config.js';
 import { MODS } from '../mod/state.js';
 import { SongPlayer } from '../mod/song.js';
 import { clipBuffer } from '../mod/sound.js';
@@ -279,6 +280,69 @@ export const THEMES = {
   fight_myrrow: { ...DRIVE, root: 53, scale: 'minor', bpm: 134, prog: [0, 6, 0, 1], progB: [3, 6, 5, 4], lead: 'reed', counter: 'chant', pad: 'glass', arp: 'cello', arpStyle: 'down', bass: 'reese', kit: 'abyss', fog: true },
 };
 
+// --- the far lands, each its own sound (round 68) ----------------------------
+// Velmarch: the Velari's lyre and brass, the legion's drums, in bright
+// modes; the Rimeborn's horn over a chant, the frame drum, a drone, the
+// wind off the ice. Ostria: the Jade Court's erhu and zither, temple
+// blocks, in the pentatonic; the Keshari's cedar flute over the great
+// drum, the desert wind. Corrow's pipes and bodhran over the sea;
+// Saltmere's bouzouki dancing in the old modes; Hollowmark's ocarina by
+// the hearth; the Wyrd Isle's harp and whistle in a fey ring; the
+// Skerries' fiddle reels, the sea and the gale.
+const FAR_MUSIC = {
+  velari: { root: 62, scale: 'mixo', bpm: 100, lead: 'lyre', counter: 'brass', pad: 'strings', keys: 'lyre', keysStyle: 'broken', arp: 'harp', bass: 'sub', bassStyle: 'fifths', kit: 'legion' },
+  rime: { root: 52, scale: 'dorian', bpm: 84, lead: 'horn', counter: 'chant', pad: 'glass', keys: 'harp', keysStyle: 'broken', arp: 'bell', bass: 'sub', bassStyle: 'drone', kit: 'frame', drone: true, wind: true },
+  jade: { root: 60, scale: 'penta', bpm: 88, prog: [0, 3, 4, 2], progB: [3, 4, 1, 0], lead: 'erhu', counter: 'flute', pad: 'glass', keys: 'koto', keysStyle: 'broken', arp: 'koto', bass: 'sub', bassStyle: 'root', kit: 'temple' },
+  kesh: { root: 55, scale: 'minpenta', bpm: 92, prog: [0, 3, 4, 3], progB: [2, 4, 3, 0], lead: 'cedar', counter: 'chant', pad: 'warm', keys: 'marimba', keysStyle: 'stab', arp: 'kalimba', bass: 'sub', bassStyle: 'pulse', kit: 'pueblo', drone: true, wind: true },
+  corrow: { root: 57, scale: 'mixo', bpm: 104, swing: 0.2, lead: 'pipes', counter: 'reel', pad: 'warm', keys: 'harp', keysStyle: 'broken', arp: 'harp', bass: 'pluckbass', bassStyle: 'bounce', kit: 'bodhran', sea: true },
+  salt: { root: 62, scale: 'hijaz', bpm: 112, lead: 'bouzouki', counter: 'reed', pad: 'warm', keys: 'bouzouki', keysStyle: 'stab', arp: 'harp', bass: 'pluckbass', bassStyle: 'offbeat', kit: 'sirtaki', sea: true },
+  hollow: { root: 60, scale: 'major', bpm: 90, swing: 0.12, lead: 'ocarina', counter: 'squeeze', pad: 'warm', keys: 'ep', keysStyle: 'broken', arp: 'kalimba', bass: 'sub', bassStyle: 'root', kit: 'hearth' },
+  wyrd: { root: 57, scale: 'dorian', bpm: 78, meter: 12, lead: 'flute', counter: 'pipes', pad: 'glass', keys: 'harp', keysStyle: 'broken', arp: 'bell', bass: 'sub', bassStyle: 'drone', kit: 'circle', shimmer: true, detune: 8 },
+  skerry: { root: 62, scale: 'mixo', bpm: 118, swing: 0.24, lead: 'reel', counter: 'squeeze', pad: 'warm', keys: 'squeeze', keysStyle: 'stab', arp: 'harp', bass: 'pluckbass', bassStyle: 'bounce', kit: 'bodhran', sea: true, wind: true },
+};
+const FAR_TIERS = {
+  village: (P) => ({ ...GROOVE, ...P, counter: null, arp: null, energy: 0.5 }),
+  town: (P) => ({ ...GROOVE, ...P, arp: null, energy: 0.6, bpm: P.bpm * 1.04 }),
+  city: (P) => ({ ...GROOVE, ...P, energy: 0.68, bpm: P.bpm * 1.07, prog: [...P.prog, ...P.progB] }),
+  // (An empire's capital: grander still, a choir over it all.)
+  empire: (P) => ({ ...GROOVE, ...P, pad: 'choir', energy: 0.74, bpm: P.bpm * 1.08, prog: [...P.prog, ...P.progB], space: 'cathedral', toll: true }),
+};
+for (const [k, P] of Object.entries(FAR_MUSIC)) {
+  const base = { prog: [0, 5, 3, 4], progB: [3, 4, 0, 4], ...P };
+  for (const [tier, fn] of Object.entries(FAR_TIERS)) THEMES[`${k}_${tier}`] = fn(base);
+}
+Object.assign(THEMES, {
+  // Their lands. The olive hills: the lyre over strings, a soft legion's
+  // tread far off, warm.
+  olive_hills: { ...CALM, own: true, root: 62, scale: 'mixo', bpm: 84, prog: [0, 6, 3, 4], progB: [5, 3, 1, 4], lead: 'lyre', counter: 'flute', pad: 'strings', keys: 'harp', keysStyle: 'broken', bass: 'sub', bassStyle: 'fifths', kit: 'soft', energy: 0.42, mood: 'bright' },
+  // The rimewood: a horn calling over a chant and glass, the frame drum
+  // slow, the drone of the ice, the wind.
+  rimewood: { ...CALM, own: true, root: 50, scale: 'dorian', bpm: 64, shape: 'sus2', prog: [0, 6, 3, 6], progB: [2, 3, 6, 0], lead: 'horn', counter: 'chant', pad: 'glass', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', kit: 'frame', drone: true, wind: true, wet: 0.45, echo: 0.3, energy: 0.3, mood: 'dark' },
+  // The bamboo: an erhu over the zither, temple blocks, the pentatonic.
+  bamboo_grove: { ...CALM, own: true, root: 60, scale: 'penta', bpm: 76, prog: [0, 4, 3, 4], progB: [3, 2, 0, 1], lead: 'erhu', counter: 'flute', pad: 'glass', arp: 'koto', arpStyle: 'updown', arpRate: 2, bass: 'sub', kit: 'temple', wet: 0.4, energy: 0.38 },
+  // The red mesa: the cedar flute alone over the great drum and the wind.
+  red_mesa: { ...CALM, own: true, root: 55, scale: 'minpenta', bpm: 72, shape: 'sus2', prog: [0, 3, 4, 3], progB: [2, 4, 3, 0], lead: 'cedar', pad: 'warm', bass: 'sub', bassStyle: 'drone', kit: 'pueblo', drone: true, wind: true, wet: 0.45, echo: 0.34, energy: 0.34 },
+  // The bone strand: a lament on the pipes, the sea, a heartbeat.
+  bone_strand: { ...CALM, own: true, root: 55, scale: 'dorian', bpm: 66, prog: [0, 6, 3, 4], progB: [6, 3, 0, 4], lead: 'pipes', counter: 'cello', pad: 'warm', bass: 'sub', bassStyle: 'drone', kit: 'heart', sea: true, wind: true, energy: 0.3, mood: 'dark' },
+  // The salt flats: a bouzouki in the heat, the old mode, hand drums.
+  salt_flats: { ...CALM, own: true, root: 62, scale: 'hijaz', bpm: 80, prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'bouzouki', counter: 'reed', pad: 'warm', bass: 'sub', bassStyle: 'drone', kit: 'hand', drone: true, wind: true, energy: 0.4 },
+  // The lantern hollows: an ocarina by firelight, a kalimba, cosy.
+  lantern_hollows: { ...CALM, own: true, root: 60, scale: 'major', bpm: 78, swing: 0.1, prog: [0, 4, 5, 3], progB: [3, 4, 1, 4], lead: 'ocarina', counter: 'squeeze', pad: 'warm', arp: 'kalimba', arpStyle: 'updown', bass: 'sub', kit: 'hearth', energy: 0.38 },
+  // The rune heath: a whistle and harp in three, the pipes far off, a
+  // glitter of bells, a little out of this world.
+  rune_heath: { ...CALM, own: true, root: 57, scale: 'dorian', bpm: 70, meter: 12, shape: 'sus2', prog: [0, 6, 3, 4], progB: [2, 3, 6, 0], lead: 'flute', counter: 'pipes', pad: 'glass', keys: 'harp', keysStyle: 'broken', arp: 'bell', arpStyle: 'wide', bass: 'sub', bassStyle: 'drone', kit: 'circle', shimmer: true, detune: 10, wet: 0.45, energy: 0.3, mood: 'eerie' },
+  // The sea cliffs: a slow air on the fiddle, the squeezebox, the gale.
+  sea_cliffs: { ...CALM, own: true, root: 62, scale: 'mixo', bpm: 74, prog: [0, 6, 0, 4], progB: [3, 6, 2, 4], lead: 'reel', counter: 'squeeze', pad: 'warm', keys: 'harp', keysStyle: 'broken', bass: 'sub', kit: 'soft', sea: true, wind: true, energy: 0.36 },
+  // Their fights: each people's war-music.
+  fight_velmarch: { ...DRIVE, root: 50, scale: 'phrygian', bpm: 136, shape: 'power', prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'brass', counter: 'lyre', pad: 'strings', keys: 'braam', keysStyle: 'block', bass: 'moog', bassStyle: 'gallop', kit: 'warmarch', space: 'hall' },
+  fight_ostria: { ...DRIVE, root: 52, scale: 'minpenta', bpm: 140, prog: [0, 3, 4, 3], progB: [2, 4, 3, 0], lead: 'erhu', counter: 'koto', pad: 'strings', arp: 'koto', arpStyle: 'down', arpRate: 1, bass: 'moog', bassStyle: 'pulse', kit: 'hunt', space: 'hall' },
+  fight_corrow: { ...DRIVE, root: 50, scale: 'dorian', bpm: 140, prog: [0, 6, 0, 4], progB: [3, 6, 5, 4], lead: 'pipes', counter: 'reel', pad: 'strings', bass: 'moog', bassStyle: 'gallop', kit: 'battle', sea: true },
+  fight_saltmere: { ...DRIVE, root: 52, scale: 'hijaz', bpm: 144, prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'bouzouki', counter: 'brass', pad: 'strings', keys: 'bouzouki', keysStyle: 'chug', bass: 'pluckbass', bassStyle: 'gallop', kit: 'rogue' },
+  fight_hollowmark: { ...DRIVE, root: 50, scale: 'minor', bpm: 132, prog: [0, 6, 3, 4], progB: [2, 3, 6, 4], lead: 'ocarina', counter: 'cello', pad: 'strings', arp: 'cello', arpStyle: 'down', bass: 'moog', kit: 'rite' },
+  fight_wyrd: { ...DRIVE, root: 51, scale: 'harmonic', bpm: 134, meter: 12, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'pipes', counter: 'chant', pad: 'choir', arp: 'bell', bass: 'reese', kit: 'night', detune: 10 },
+  fight_skerries: { ...DRIVE, root: 50, scale: 'dorian', bpm: 146, swing: 0.1, prog: [0, 6, 0, 4], progB: [3, 6, 0, 4], lead: 'reel', counter: 'squeeze', pad: 'strings', bass: 'pluckbass', bassStyle: 'gallop', kit: 'battle', sea: true, wind: true },
+});
+
 // The two other islands' sound laid over any tune heard there that isn't
 // their own already (the beach, the sea, a fight with the watch, a tavern,
 // the dungeons below and their masters): its modes darkened or blurred, its
@@ -300,6 +364,19 @@ const ISLE_SOUND = {
     kit: { soft: 'drip', light: 'drip', hand: 'drip', tribal: 'drip', groove: 'drip', heart: 'drip', shanty: 'drip', peak: 'drip' },
   },
 };
+// (Round 68) The far lands' sound over what's heard there that isn't their
+// own: Velmarch's lyre and legion, Ostria's erhu and temple blocks,
+// Corrow's pipes, Saltmere's bouzouki, Hollowmark's ocarina, the Wyrd
+// Isle's harp and fey bells, the Skerries' fiddle.
+Object.assign(ISLE_SOUND, {
+  velmarch: { root: 2, scale: { minor: 'dorian', penta: 'major' }, voice: { flute: 'lyre', ep: 'lyre', pluck: 'lyre', kalimba: 'lyre', harp: 'lyre', koto: 'lyre', steel: 'lyre', squeeze: 'brass', reed: 'horn' }, pad: {}, kit: { soft: 'legion', light: 'legion', groove: 'legion', city: 'legion', hand: 'legion', tribal: 'legion', shanty: 'legion', steel: 'legion' } },
+  ostria: { scale: { major: 'penta', mixo: 'penta', minor: 'minpenta', dorian: 'minpenta', lydian: 'penta' }, voice: { flute: 'erhu', lead: 'erhu', ep: 'koto', pluck: 'koto', kalimba: 'koto', harp: 'koto', marimba: 'koto', squeeze: 'erhu', reed: 'erhu' }, pad: { pad: 'glass' }, kit: { soft: 'temple', light: 'temple', groove: 'temple', city: 'temple', hand: 'temple', shanty: 'temple', steel: 'temple' } },
+  corrow: { root: -3, scale: { major: 'mixo', minor: 'dorian', lydian: 'mixo' }, voice: { flute: 'pipes', lead: 'pipes', squeeze: 'pipes', ep: 'harp', pluck: 'harp', kalimba: 'harp', steel: 'reel' }, pad: {}, kit: { soft: 'bodhran', light: 'bodhran', groove: 'bodhran', city: 'bodhran', hand: 'bodhran', steel: 'bodhran' }, sea: true },
+  saltmere: { scale: { major: 'hijaz', mixo: 'hijaz', minor: 'phrygian', dorian: 'phrygian' }, voice: { flute: 'bouzouki', lead: 'bouzouki', pluck: 'bouzouki', ep: 'bouzouki', kalimba: 'harp', squeeze: 'reed', steel: 'bouzouki' }, pad: {}, kit: { soft: 'sirtaki', light: 'sirtaki', groove: 'sirtaki', city: 'sirtaki', shanty: 'sirtaki', steel: 'sirtaki' } },
+  hollowmark: { bpmX: 0.94, scale: { minor: 'dorian', phrygian: 'dorian' }, voice: { flute: 'ocarina', lead: 'ocarina', reed: 'ocarina', bell: 'kalimba', pluck: 'kalimba', steel: 'ocarina' }, pad: { pad: 'warm', glass: 'warm' }, kit: { soft: 'hearth', light: 'hearth', groove: 'hearth', city: 'hearth', hand: 'hearth', tribal: 'hearth' } },
+  wyrd: { root: -3, scale: { major: 'dorian', mixo: 'dorian', minor: 'dorian', lydian: 'dorian' }, voice: { lead: 'flute', ep: 'harp', pluck: 'harp', kalimba: 'bell', squeeze: 'pipes', reed: 'pipes', steel: 'harp' }, pad: { pad: 'glass', warm: 'glass' }, kit: { soft: 'circle', light: 'circle', groove: 'circle', city: 'circle', hand: 'circle', shanty: 'circle', steel: 'circle' }, fog: true },
+  skerries: { scale: { major: 'mixo', minor: 'dorian' }, voice: { flute: 'reel', lead: 'reel', reed: 'reel', ep: 'squeeze', pluck: 'harp', kalimba: 'harp', steel: 'reel' }, pad: {}, kit: { soft: 'bodhran', light: 'bodhran', groove: 'bodhran', city: 'bodhran', hand: 'bodhran', steel: 'bodhran' }, sea: true },
+});
 export function isleTheme(T, isle) {
   const c = ISLE_SOUND[isle];
   if (!c) return T;
@@ -317,13 +394,14 @@ export function isleTheme(T, isle) {
     T.fog = true;
     T.detune = Math.max(T.detune || 0, 12);
   }
+  if (c.sea) T.sea = true;
   return T;
 }
 // Each island's own tunes, where it has them: its towns' (by people), its
 // fights' and its lands'.
 const ISLE_TOWNS = { ember: 'ashborn', mist: 'mire', tide: 'stilt' };
-const ISLE_FIGHTS = { kharos: 'fight_kharos', myrrow: 'fight_myrrow' };
-const OWN_BIOMES = new Set(['ashland', 'cinderwood', 'geyser', 'volcano', 'moor', 'fungal', 'mangrove']);
+const ISLE_FIGHTS = { kharos: 'fight_kharos', myrrow: 'fight_myrrow', velmarch: 'fight_velmarch', ostria: 'fight_ostria', corrow: 'fight_corrow', saltmere: 'fight_saltmere', hollowmark: 'fight_hollowmark', wyrd: 'fight_wyrd', skerries: 'fight_skerries' };
+const OWN_BIOMES = new Set(['ashland', 'cinderwood', 'geyser', 'volcano', 'moor', 'fungal', 'mangrove', 'olive_hills', 'rimewood', 'bamboo_grove', 'red_mesa', 'bone_strand', 'salt_flats', 'lantern_hollows', 'rune_heath', 'sea_cliffs']);
 
 // The title plays these one after another (a few minutes each, never the
 // same one twice running): the theme and what it's called.
@@ -431,7 +509,10 @@ export function musicMood(game) {
     // the old tunes their own way.)
     const tier = s.type === 'city' ? 'city' : s.type === 'town' ? 'town' : 'village';
     const style = (s.civ ? s.civ.style : s.style) || 'vale';
-    const kind = (ISLE_TOWNS[style] ? `${ISLE_TOWNS[style]}_${tier}` : tier) + townMusic(L);
+    // (Round 68) A far people's town its own people's music; an empire's
+    // capital, grandest of all.
+    const far = FAR_MUSIC[style] ? `${style}_${s.empire ? 'empire' : tier}` : null;
+    const kind = (far || (ISLE_TOWNS[style] ? `${ISLE_TOWNS[style]}_${tier}` : tier)) + townMusic(L);
     return night ? `${kind}:night` : kind;
   }
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
@@ -469,7 +550,13 @@ export function isleTilde(game) {
   const ow = game.world && game.world.ow;
   if (!ow || !ow.islandAt) return '';
   const at = game.dungeon && game.dungeon.rec && game.dungeon.rec.x !== undefined ? game.dungeon.rec : game.player;
-  const isle = ow.islandAt(Math.round(at.x), Math.round(at.z));
+  let isle = ow.islandAt(Math.round(at.x), Math.round(at.z));
+  // (Round 68) Or one of the far lands: the land under you (made already,
+  // being where you are).
+  if (!isle && ow.cells) {
+    const c = ow.cells[Math.floor(at.z / REGION_D) * MAP_W + Math.floor(at.x / REGION_W)];
+    if (c && c.biome !== 'ocean' && c.island) isle = c.island;
+  }
   return ISLE_SOUND[isle] ? `~${isle}` : '';
 }
 
@@ -651,13 +738,14 @@ const KEYS = {
 // tune's notes are held on each: a bell rings on, a pluck's let go).
 // (And some an octave under it: the low strings, a guitar, monks, a war
 // horn, the outlaws' baritone.)
-const UP = { flute: 12, bell: 12, glass: 12, kalimba: 12, steel: 12, reed: 12, marimba: 12, screech: 12, celesta: 12, musicbox: 12, cello: -12, dist: -12, chant: -12, warhorn: -12, twang: -12 };
+const UP = { flute: 12, bell: 12, glass: 12, kalimba: 12, steel: 12, reed: 12, marimba: 12, screech: 12, celesta: 12, musicbox: 12, cello: -12, dist: -12, chant: -12, warhorn: -12, twang: -12, ocarina: 12, cedar: 12 };
 const LEGATO = {
   lead: 1.02, flute: 0.95, brass: 0.9, horn: 0.95, squeeze: 0.88, buzz: 0.92, reed: 0.95, choir: 1, organ: 0.95, bell: 1.5, glass: 1.3, kalimba: 1.2, koto: 1.2, steel: 1, ep: 1.1, pluck: 1, marimba: 1, harp: 1.3,
   cello: 1, dist: 0.9, chant: 1, screech: 1, warhorn: 0.95, braam: 1, twang: 1.3, crushed: 0.8, abyss: 1.1, celesta: 1.4, dulcimer: 1.3, fiddle: 0.95, theremin: 1.02, musicbox: 1.3,
+  lyre: 1.3, erhu: 0.96, cedar: 0.95, pipes: 0.98, bouzouki: 1.1, ocarina: 1, reel: 0.95,
 };
 // Which take a grace note now and then (a flick from the note above).
-const GRACE = new Set(['flute', 'reed', 'buzz', 'koto', 'squeeze', 'horn', 'fiddle', 'dulcimer']);
+const GRACE = new Set(['flute', 'reed', 'buzz', 'koto', 'squeeze', 'horn', 'fiddle', 'dulcimer', 'erhu', 'cedar', 'pipes', 'ocarina', 'reel']);
 // Instruments played an octave under where the chords are usually voiced,
 // as keys, arp or a master's stabs (the low strings' ostinato, a guitar's
 // power chords, a wall of brass).

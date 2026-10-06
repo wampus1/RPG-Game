@@ -10,7 +10,7 @@
 // turquoise; whalebone; sparkling salt brick; blue glaze; cob; drystone
 // without a lick of mortar; thatch roped and weighted against the gales.
 import { Px, hex, shade, mix } from './pixel.js';
-import { speckle, frontify } from './textures.js';
+import { speckle, frontify, cobble, spr, OUT, TALL_H } from './textures.js';
 import { LH } from '../config.js';
 
 export const FAR_P = {
@@ -31,6 +31,13 @@ export const FAR_P = {
   cob: ['#a8845a', '#8c6a44', '#c09a6a', '#644a2e'],
   drystone: ['#8a8a86', '#6e6e6a', '#a4a49e', '#2e2e2c'],
   roof_rope: ['#a8925a', '#8a7442', '#c4ac72', '#5a4a2e'],
+  // The far lands' ground (see world/biomes.js).
+  grass_gold: ['#c8a848', '#a88a34', '#e0c460', '#7a6a2a'],
+  frost_grass: ['#9ab8c8', '#7a98aa', '#d8ecf8', '#ffffff'],
+  red_rock: ['#b85a34', '#984628', '#d0744a', '#6a2e1a'],
+  salt_crust: ['#f4f0ea', '#dcd6cc', '#ffffff', '#c8bcb8'],
+  bone_sand: ['#e8dcc0', '#d0c4a6', '#f6eedc', '#a89a80'],
+  heath: ['#7a6a88', '#5e5070', '#9a88a8', '#4a6a3a'],
 };
 
 // A roof's top by which way its slope faces (0: toward you and lit, 2:
@@ -450,9 +457,100 @@ export function farTop(name, v, rand, rot = 0) {
       p.hline(s, s + 2, 10, '#9a9a94');
       return roofTone(p, rot, FAR_P.roof_rope);
     }
+    case 'grass_gold': {
+      speckle(p, FAR_P.grass_gold, rand, 0.4);
+      // Long dry stems lying every which way in the wind.
+      for (let i = 0; i < 9; i++) {
+        const x = Math.floor(rand() * 14);
+        const y = Math.floor(rand() * 15);
+        p.set(x, y, FAR_P.grass_gold[2]);
+        p.set(x + 1, y + 1, FAR_P.grass_gold[2]);
+        p.set(x + 2, y + 1, FAR_P.grass_gold[3]);
+      }
+      return p;
+    }
+    case 'frost_grass': {
+      speckle(p, FAR_P.frost_grass, rand, 0.45);
+      // Rime crystals, white, catching the light.
+      for (let i = 0; i < 12; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), rand() < 0.4 ? '#ffffff' : FAR_P.frost_grass[2]);
+      return p;
+    }
+    case 'red_rock': {
+      // Bedded red sandstone: bands, a crack or two.
+      const pal = FAR_P.red_rock;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const band = (y + Math.floor(Math.sin((x + v * 5) * 0.4) * 1.5)) % 5;
+        p.set(x, y, band === 0 ? pal[2] : band === 4 ? pal[1] : rand() < 0.1 ? pal[1] : pal[0]);
+      }
+      for (let i = 0; i < 2; i++) {
+        let x = Math.floor(rand() * 16);
+        for (let y = Math.floor(rand() * 8); y < 16; y++) {
+          if (rand() < 0.3) x += rand() < 0.5 ? 1 : -1;
+          if (rand() < 0.6) p.set(x, y, pal[3]);
+        }
+      }
+      return p;
+    }
+    case 'salt_crust': {
+      // Polygons of crust, their raised white rims.
+      const pal = FAR_P.salt_crust;
+      cobble(p, [pal[0], pal[3], pal[2]], rand, 6);
+      for (let i = 0; i < 6; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), '#ffffff');
+      return p;
+    }
+    case 'bone_sand': {
+      speckle(p, FAR_P.bone_sand, rand, 0.35);
+      // Chips and splinters of bone, a shell.
+      for (let i = 0; i < 4; i++) {
+        const x = Math.floor(rand() * 14);
+        const y = Math.floor(rand() * 15);
+        p.hline(x, x + 1 + Math.floor(rand() * 2), y, '#fffaf0');
+        p.set(x, y + 1, FAR_P.bone_sand[3]);
+      }
+      if (v % 3 === 0) p.set(3 + (v * 5) % 10, 8, '#f0b0a0');
+      return p;
+    }
+    case 'heath': {
+      speckle(p, FAR_P.heath, rand, 0.4);
+      for (let i = 0; i < 10; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), rand() < 0.5 ? '#b088d0' : FAR_P.heath[3]);
+      return p;
+    }
+    case 'bamboo_stalk': {
+      // A cut cane from above: a green ring round a pale hollow.
+      p.ellipse(8, 8, 6, 6, '#4a8a36');
+      p.ellipse(8, 8, 5, 5, '#6ab04a');
+      p.ellipse(8, 8, 3, 3, '#e8e0b0');
+      p.ellipse(8, 8, 2, 2, '#c8b880');
+      return p;
+    }
+    case 'leaves_lantern': return lanternLeaves(p, rand, v, 16);
     default:
       return null;
   }
+}
+
+// Dark leaves hung thick with lantern pods, glowing amber.
+function lanternLeaves(p, rand, v, h) {
+  const pal = ['#2e5a3a', '#1e4028', '#447a4e'];
+  p.fill(pal[1]);
+  for (let i = 0; i < 9; i++) {
+    const cx = rand() * 16;
+    const cy = rand() * h;
+    const r = 2 + rand() * 2;
+    for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > r) continue;
+      p.set(((x % 16) + 16) % 16, y, -(x - cx + y - cy) / r > 0.4 ? pal[2] : pal[0]);
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    const x = 1 + Math.floor(rand() * 13);
+    const y = 1 + Math.floor(rand() * (h - 3));
+    p.set(x, y, '#ffd060');
+    p.set(x, y + 1, '#f0a030');
+    p.set(x + 1, y, '#fff0a0');
+  }
+  return p;
 }
 
 // ------------------------------------------------------------ cube fronts
@@ -524,6 +622,47 @@ export function farFront(name, v, rand) {
       }
       return frontify(p, 0.85);
     }
+    case 'grass_gold': case 'frost_grass': case 'heath': {
+      // The turf's edge: the grass over the dirt under it.
+      const pal = FAR_P[name];
+      speckle(p, ['#7a5a3a', '#5e4430', '#8a6a48'], rand, 0.3);
+      for (let x = 0; x < 16; x++) {
+        const d = 2 + (rand() < 0.4 ? 1 : 0) + (rand() < 0.15 ? 2 : 0);
+        for (let y = 0; y < d; y++) p.set(x, y, y === d - 1 ? pal[1] : pal[0]);
+        if (name === 'frost_grass' && rand() < 0.5) p.set(x, 0, '#ffffff');
+      }
+      return frontify(p, 0.9);
+    }
+    case 'red_rock': {
+      const pal = FAR_P.red_rock;
+      for (let y = 0; y < LH; y++) for (let x = 0; x < 16; x++) {
+        const band = (y + v) % 4;
+        p.set(x, y, band === 0 ? pal[2] : band === 3 ? pal[1] : rand() < 0.08 ? pal[3] : pal[0]);
+      }
+      return frontify(p, 0.85);
+    }
+    case 'salt_crust': {
+      const pal = FAR_P.salt_crust;
+      speckle(p, ['#d8c8b0', '#c8b498', '#e8dcc8'], rand, 0.3);
+      for (let x = 0; x < 16; x++) for (let y = 0; y < 2 + (x % 3 === 0 ? 1 : 0); y++) p.set(x, y, y === 0 ? pal[2] : pal[0]);
+      return frontify(p, 0.92);
+    }
+    case 'bone_sand': return frontify(speckle(p, FAR_P.bone_sand, rand, 0.35), 0.88);
+    case 'bamboo_stalk': {
+      // A cane's side: green, lit down its left, a node every few rows.
+      for (let x = 0; x < 16; x++) {
+        const u = Math.abs(x - 7.5) / 8;
+        if (u > 0.9) continue;
+        for (let y = 0; y < LH; y++) {
+          let c = x < 6 ? '#8ed064' : x < 11 ? '#6ab04a' : '#4a8a36';
+          if ((y + v * 3) % 8 === 0) c = '#c8d890';
+          else if ((y + v * 3) % 8 === 1) c = shade(hex(c), 0.8);
+          p.set(x, y, c);
+        }
+      }
+      return p;
+    }
+    case 'leaves_lantern': return frontify(lanternLeaves(p, rand, v, LH), 0.82);
     default:
       return null;
   }
@@ -654,3 +793,449 @@ export function farIcon(key) {
   }
   return p.outline('#1a1420');
 }
+
+// ----------------------------------------------------------------- plants
+// The far lands' plants (base: the ground line in a one-cell sprite).
+export function farPlant(name, v, rand) {
+  const p = spr();
+  const base = 25;
+  const blade = (x, h, c, lean = 0) => {
+    for (let k = 0; k < h; k++) p.set(x + Math.round((k / h) * lean), base - k, c);
+  };
+  switch (name) {
+    case 'vine': {
+      // A vine on a stake, leaves, a bunch of purple grapes hanging.
+      p.vline(8, base - 12, base, '#8a6a40');
+      for (let k = 0; k < 12; k += 3) {
+        p.set(7 + (k % 2 ? 2 : -1), base - k - 2, '#4a7a2a');
+        p.set(6 + (k % 2 ? 4 : 0), base - k - 3, '#5a9a34');
+      }
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 1], [0, 1], [1, 1], [0, 2]]) p.set(10 + dx, base - 9 + dy, dy === 0 && dx === 0 ? '#9a5ac0' : '#6a2a8a');
+      if (v % 2) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) p.set(5 + dx, base - 6 + dy, '#7a3a9a');
+      return p;
+    }
+    case 'ice_flower': {
+      // Petals of clear ice on a frosted stem, glowing pale blue.
+      const n = 1 + (v % 2);
+      for (let i = 0; i < n; i++) {
+        const x = 5 + Math.floor(rand() * 6);
+        const h = 5 + Math.floor(rand() * 3);
+        blade(x, h, '#a8c8d8');
+        const y = base - h;
+        for (const [dx, dy] of [[0, -2], [-2, 0], [2, 0], [0, 1], [-1, -1], [1, -1]]) p.set(x + dx, y + dy, '#c8f0ff');
+        p.set(x, y, '#ffffff');
+        p.set(x - 1, y + 1, '#88c8f0');
+        p.set(x + 1, y + 1, '#88c8f0');
+      }
+      return p;
+    }
+    case 'peony': {
+      for (let i = 0; i < 2; i++) {
+        const x = 4 + i * 6 + Math.floor(rand() * 2);
+        const h = 5 + Math.floor(rand() * 3);
+        blade(x, h, '#3a6a2a');
+        p.set(x - 1, base - 2, '#4a8a36');
+        p.set(x + 1, base - 3, '#4a8a36');
+        const y = base - h;
+        const c = (v + i) % 2 ? '#f080a8' : '#ffffff';
+        p.ellipse(x, y, 2, 2, c);
+        p.set(x, y, '#ffd060');
+        p.set(x - 1, y - 1, shade(hex(c), 1.1));
+      }
+      return p;
+    }
+    case 'prickly_pear': {
+      // Flat green pads, spined, with red fruit on their rims.
+      const pad = (x, y, rx, ry) => {
+        p.ellipse(x, y, rx, ry, '#5a9a4a');
+        p.set(x - 1, y - 1, '#7ab860');
+        p.set(x + 1, y, '#e8e8c8');
+        p.set(x - 1, y + 1, '#e8e8c8');
+      };
+      pad(8, base - 3, 3, 3);
+      pad(5, base - 8, 2, 3);
+      pad(11, base - 7, 2, 3);
+      p.set(5, base - 12, '#d83a4a');
+      p.set(11, base - 11, '#d83a4a');
+      return p;
+    }
+    case 'sea_grass': {
+      for (let i = 0; i < 6; i++) blade(2 + Math.floor(rand() * 12), 4 + Math.floor(rand() * 6), rand() < 0.5 ? '#8a9a5a' : '#a8b070', Math.floor(rand() * 5) - 2);
+      return p;
+    }
+    case 'saltbush': {
+      for (let i = 0; i < 14; i++) {
+        const x = 3 + Math.floor(rand() * 10);
+        const y = base - Math.floor(rand() * 6);
+        p.set(x, y, rand() < 0.5 ? '#a0b0a0' : '#c0ccc0');
+      }
+      p.vline(8, base - 2, base, '#7a6a5a');
+      for (let i = 0; i < 3; i++) p.set(4 + Math.floor(rand() * 8), base - 2 - Math.floor(rand() * 4), '#ffffff');
+      return p;
+    }
+    case 'giant_fern': {
+      // Fronds as long as a man is tall, arching out of a crown.
+      for (const lean of [-6, -3, 0, 3, 6]) {
+        for (let k = 0; k < 12; k++) {
+          const t = k / 12;
+          const x = 8 + Math.round(lean * t * 1.2);
+          const y = base - Math.round(k * (1 - t * 0.35));
+          p.set(x, y, '#3a7a3a');
+          if (k > 2 && k % 2 === 0) {
+            p.set(x - 1, y, '#5aa04a');
+            p.set(x + 1, y, '#5aa04a');
+          }
+        }
+      }
+      return p;
+    }
+    case 'glowberry_bush': {
+      p.ellipse(8, base - 3, 5, 3, '#2e5a3a');
+      p.ellipse(7, base - 4, 3, 2, '#3e7448');
+      for (const [x, y] of [[5, base - 4], [9, base - 2], [11, base - 4], [7, base - 1]]) {
+        p.set(x, y, '#60e0ff');
+        p.set(x, y - 1, '#c8f8ff');
+      }
+      return p;
+    }
+    case 'fairy_ring': {
+      // A ring of little pale toadstools, glowing faintly.
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const x = Math.round(8 + Math.cos(a) * 6);
+        const y = Math.round(base - 2 + Math.sin(a) * 2);
+        p.set(x, y, '#e8e0d0');
+        p.set(x, y - 1, i % 3 === 0 ? '#c8a8ff' : '#f0e8ff');
+      }
+      return p;
+    }
+    case 'thrift': {
+      // Cushions of grassy leaves, pink pompom flowers on wiry stems.
+      p.ellipse(8, base - 1, 5, 1, '#4a6a3a');
+      for (let i = 0; i < 4; i++) {
+        const x = 4 + Math.floor(rand() * 9);
+        const h = 4 + Math.floor(rand() * 3);
+        blade(x, h, '#6a7a4a');
+        p.set(x, base - h, '#f088b0');
+        p.set(x - 1, base - h, '#e070a0');
+        p.set(x, base - h - 1, '#ffb0d0');
+      }
+      return p;
+    }
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------- sprites
+export const FAR_SPRITES = {};
+// A great whale's rib, curving up out of the sand, taller than a man.
+FAR_SPRITES.whale_rib = (rot) => {
+  const p = spr(TALL_H);
+  const H = TALL_H;
+  const dir = rot % 2 ? -1 : 1;
+  for (let k = 0; k < 30; k++) {
+    const t = k / 30;
+    const x = 8 + dir * Math.round(Math.sin(t * Math.PI * 0.8) * 5 - 2);
+    const y = H - 3 - k;
+    const w = t < 0.8 ? 2 : 1;
+    for (let i = 0; i < w; i++) p.set(x + i, y, i === 0 ? '#f6eedc' : '#d0c4a6');
+  }
+  p.set(8, H - 4, '#a89a80');
+  p.ellipse(8, H - 2, 3, 1, '#c8bc9e');
+  return p.outline(OUT);
+};
+// Clusters of white salt crystal, cubes on cubes.
+FAR_SPRITES.salt_crystal = () => {
+  const p = spr();
+  for (const [x, y, s] of [[5, 24, 4], [10, 25, 3], [8, 20, 3], [12, 21, 2]]) {
+    p.rect(x - s / 2, y - s, s, s, '#f4f4f8');
+    p.hline(Math.round(x - s / 2), Math.round(x + s / 2) - 1, y - s, '#ffffff');
+    p.vline(Math.round(x + s / 2) - 1, y - s, y - 1, '#c8ccd8');
+  }
+  p.set(8, 18, '#e8f8ff');
+  return p.outline(OUT);
+};
+// A tall standing stone, lichened, a rune cut in it that glows faintly.
+FAR_SPRITES.standing_stone = () => {
+  const p = spr(TALL_H);
+  const H = TALL_H;
+  for (let y = H - 30; y < H - 1; y++) {
+    const w = y < H - 26 ? 3 : 4;
+    for (let x = 8 - w; x < 8 + w; x++) p.set(x, y, x < 7 ? '#8a8a84' : x < 9 ? '#7a7a74' : '#64645e');
+  }
+  for (const [x, y] of [[5, H - 20], [9, H - 12], [6, H - 7]]) p.set(x, y, '#a8b058');
+  for (const [x, y] of [[7, H - 22], [7, H - 21], [7, H - 20], [8, H - 21], [6, H - 19]]) p.set(x, y, '#a8f0ff');
+  return p.outline(OUT);
+};
+// A cairn: stones heaped by hand, one on another.
+FAR_SPRITES.cairn = () => {
+  const p = spr();
+  for (const [x, y, rx, ry, c] of [[8, 24, 6, 2, '#7a7a76'], [7, 21, 5, 2, '#8a8a84'], [9, 18, 4, 2, '#7a7a74'], [8, 15, 3, 2, '#9a9a94'], [8, 12, 2, 1, '#8a8a84']]) {
+    p.ellipse(x, y, rx, ry, c);
+    p.hline(x - rx + 1, x, y - ry, '#b0b0aa');
+  }
+  return p.outline(OUT);
+};
+
+// --------------------------------------------------------------- creatures
+// The far lands' beasts (16 x 16, facing left, two frames).
+function beast(f, o) {
+  const p = new Px(16, 16);
+  o(p, f);
+  return p.outline(OUT);
+}
+// A white bull of the Velari: broad, short-horned, garlanded on feast days.
+function whiteBull(f, v) {
+  return beast(f, (p) => {
+    const body = hex(['#f0ece0', '#e0d8c8', '#f8f4ec'][v % 3]);
+    p.rect(4, 6, 10, 5, body);
+    p.hline(4, 13, 6, shade(body, 1.05));
+    p.hline(4, 13, 10, shade(body, 0.8));
+    p.rect(1, 5, 4, 4, body);
+    p.set(1, 7, '#d8a8a0');
+    p.set(2, 6, '#1a1420');
+    p.line(1, 4, 0, 2, '#e8dcc0');
+    p.line(4, 4, 5, 2, '#e8dcc0');
+    for (const [x, o] of [[5, f], [7, -f], [11, f], [13, -f]]) p.vline(x + o, 11, 14, shade(body, 0.75));
+    p.line(14, 7, 15, 10, shade(body, 0.8));
+  });
+}
+// A reindeer: brown, pale-necked, its antlers branching back.
+function reindeer(f, v) {
+  return beast(f, (p) => {
+    const body = hex(['#8a6a4a', '#7a5a3e', '#9a7a58'][v % 3]);
+    p.rect(5, 7, 8, 4, body);
+    p.rect(3, 5, 3, 4, '#e0d8c8');
+    p.rect(1, 4, 3, 3, body);
+    p.set(1, 6, '#2a1a14');
+    p.set(2, 4, '#1a1420');
+    for (const [x0, y0, x1, y1] of [[3, 3, 5, 0], [4, 1, 6, 1], [2, 3, 1, 0], [1, 1, 0, 1]]) p.line(x0, y0, x1, y1, '#d8c8a8');
+    for (const [x, o] of [[6, f], [8, -f], [11, f], [12, -f]]) p.vline(x + o, 11, 14, shade(body, 0.7));
+    p.set(13, 7, '#e0d8c8');
+  });
+}
+// A frost wolf: white-grey, blue-eyed, frost on its ruff.
+function frostWolf(f) {
+  return beast(f, (p) => {
+    const body = hex('#c8d4e0');
+    p.rect(4, 7, 9, 4, body);
+    p.rect(1, 6, 4, 3, body);
+    p.set(0, 8, '#4a5868');
+    p.set(2, 6, '#40c0ff');
+    p.set(3, 5, body);
+    p.set(4, 5, body);
+    p.line(13, 8, 15, 6 + f, body);
+    for (const [x, o] of [[5, f], [7, -f], [10, f], [12, -f]]) p.vline(x + o, 11, 14, shade(body, 0.75));
+    for (const x of [4, 6, 8]) p.set(x, 7, '#ffffff');
+  });
+}
+// A red-crowned crane, stepping high on long legs.
+function crane(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 7, 4, 2, '#f4f4f0');
+    p.hline(11, 14, 8, '#1e1e24');
+    p.line(6, 6, 4, 2, '#1e1e24');
+    p.set(3, 1, '#d82a2a');
+    p.set(4, 1, '#f4f4f0');
+    p.hline(1, 2, 2, '#c8b060');
+    p.line(8, 9, 7 + f, 14, '#3a3a3a');
+    p.line(10, 9, 11 - f, 14, '#3a3a3a');
+  });
+}
+// A tiger, gold and striped, low and heavy.
+function tiger(f) {
+  return beast(f, (p) => {
+    const body = hex('#e08a2a');
+    p.rect(4, 7, 9, 4, body);
+    p.rect(1, 6, 4, 4, body);
+    p.hline(4, 12, 10, '#f4e8d0');
+    p.set(1, 8, '#f4e8d0');
+    p.set(2, 7, '#1a1420');
+    p.set(2, 5, body);
+    p.set(4, 5, body);
+    for (const x of [5, 7, 9, 11]) p.vline(x, 7, 9, '#2a1a14');
+    p.line(13, 8, 15, 5 + f, body);
+    p.set(15, 5 + f, '#2a1a14');
+    for (const [x, o] of [[5, f], [7, -f], [10, f], [12, -f]]) p.vline(x + o, 11, 14, shade(body, 0.75));
+  });
+}
+// A coyote: lean, sandy, big-eared.
+function coyote(f) {
+  return beast(f, (p) => {
+    const body = hex('#b89a6a');
+    p.rect(5, 7, 8, 3, body);
+    p.rect(2, 6, 4, 3, body);
+    p.set(1, 8, '#4a3a2a');
+    p.set(3, 6, '#1a1420');
+    p.line(3, 5, 3, 3, body);
+    p.line(5, 5, 5, 3, body);
+    p.line(13, 8, 15, 10, '#8a7050');
+    for (const [x, o] of [[6, f], [8, -f], [11, f], [12, -f]]) p.vline(x + o, 10, 14, shade(body, 0.7));
+  });
+}
+// A rattlesnake, coiled to strike, its rattle up.
+function rattlesnake(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 12, 5, 2, '#a88a5a');
+    p.ellipse(9, 11, 3, 1, '#8a6a40');
+    for (const x of [6, 9, 12]) p.set(x, 12, '#5a3a24');
+    p.line(5, 11, 3, 8 - f, '#a88a5a');
+    p.rect(2, 7 - f, 2, 2, '#a88a5a');
+    p.set(2, 7 - f, '#1a1420');
+    p.set(1, 8 - f, '#d82a2a');
+    p.vline(14, 9 - f, 11, '#e8dcc0');
+  });
+}
+// A bone crab: a crab grown a back of old bone, pale and pitted.
+function boneCrab(f) {
+  return beast(f, (p) => {
+    p.ellipse(8, 10, 5, 3, '#e8dcc0');
+    p.hline(4, 12, 8, '#fffaf0');
+    for (const [x, y] of [[6, 10], [9, 9], [10, 11]]) p.set(x, y, '#a89a80');
+    for (let k = 0; k < 3; k++) {
+      p.set(4 + k * 2 + f, 13, '#c87a5a');
+      p.set(9 + k * 2 - f, 13, '#c87a5a');
+    }
+    p.rect(1, 6 - f, 3, 2, '#d8805a');
+    p.rect(12, 6 + f, 3, 2, '#d8805a');
+    p.set(6, 6, '#1a1420');
+    p.set(10, 6, '#1a1420');
+  });
+}
+// A gull, standing, head cocked.
+function gull(f) {
+  return beast(f, (p) => {
+    p.ellipse(8, 9, 4, 2, '#f4f4f0');
+    p.hline(9, 13, 8, '#9aa0a8');
+    p.ellipse(4, 6 + f, 2, 2, '#f4f4f0');
+    p.set(3, 6 + f, '#1a1420');
+    p.hline(1, 2, 7 + f, '#e8b030');
+    p.vline(7, 11, 14, '#e8a060');
+    p.vline(9, 11, 14, '#e8a060');
+  });
+}
+// A flamingo: pink, on one leg (and then the other).
+function flamingo(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 6, 4, 2, '#f490a4');
+    p.hline(11, 13, 6, '#2a1a20');
+    p.line(6, 5, 5, 1, '#f490a4');
+    p.ellipse(4, 1, 1, 1, '#f490a4');
+    p.set(3, 2, '#1a1420');
+    p.vline(9, 8, 14, '#e06a7a');
+    if (f) p.line(10, 8, 11, 11, '#e06a7a');
+    else p.vline(10, 8, 14, '#e06a7a');
+  });
+}
+// A brine scorpion: pale as the salt it hides in, its sting raised.
+function brineScorpion(f) {
+  return beast(f, (p) => {
+    p.ellipse(7, 11, 4, 2, '#d8c8b0');
+    for (let k = 0; k < 3; k++) {
+      p.set(4 + k * 2 + f, 13, '#a89a80');
+      p.set(5 + k * 2 - f, 13, '#a89a80');
+    }
+    p.line(11, 11, 13, 8, '#d8c8b0');
+    p.line(13, 8, 12, 5 + f, '#d8c8b0');
+    p.set(11, 5 + f, '#c84a3a');
+    p.rect(1, 9, 2, 2, '#c8b8a0');
+    p.set(4, 10, '#1a1420');
+  });
+}
+// A lantern moth, the size of a hand, its wings lit like paper lamps.
+function lanternMoth(f) {
+  return beast(f, (p) => {
+    const up = f ? -1 : 1;
+    p.ellipse(8, 8, 1, 3, '#6a4a2a');
+    for (const s of [-1, 1]) {
+      p.ellipse(8 + s * 4, 7 + up, 3, 2 + (f ? 0 : 1), '#f0b040');
+      p.set(8 + s * 4, 7 + up, '#fff0a0');
+    }
+    p.line(7, 5, 6, 3, '#6a4a2a');
+    p.line(9, 5, 10, 3, '#6a4a2a');
+  });
+}
+// A badger: grey, striped face, digging claws.
+function badger(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 10, 5, 3, '#6a6a68');
+    p.hline(5, 13, 8, '#8a8a88');
+    p.rect(2, 9, 4, 3, '#f0f0e8');
+    p.hline(2, 5, 10, '#1a1a1a');
+    p.set(2, 11, '#1a1420');
+    for (const [x, o] of [[6, f], [8, -f], [11, f], [12, -f]]) p.vline(x + o, 13, 14, '#3a3a38');
+  });
+}
+// A white hare of the Wyrd Isle, long-eared (one of them is a witch).
+function whiteHare(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 11 - f, 4, 2, '#f4f4f0');
+    p.ellipse(5, 9 - f, 2, 2, '#f4f4f0');
+    p.line(5, 7 - f, 6, 3 - f, '#f4f4f0');
+    p.line(4, 7 - f, 4, 4 - f, '#e8e0e8');
+    p.set(4, 9 - f, '#c83a4a');
+    p.set(13, 10 - f, '#ffffff');
+    p.vline(7, 12 - f, 14, '#d8d8d4');
+    p.vline(11, 12 - f, 14, '#d8d8d4');
+  });
+}
+// A raven, black with a sheen of blue, hopping.
+function raven(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 10 - f, 4, 2, '#1e1e2a');
+    p.hline(6, 11, 9 - f, '#3a3a5a');
+    p.ellipse(5, 8 - f, 2, 2, '#1e1e2a');
+    p.set(4, 7 - f, '#e8e8ff');
+    p.hline(2, 3, 8 - f, '#3a3a40');
+    p.line(12, 10 - f, 15, 9 - f, '#1e1e2a');
+    p.vline(8, 12 - f, 14, '#3a3a40');
+    p.vline(10, 12 - f, 14, '#3a3a40');
+  });
+}
+// A puffin: black back, white face, the striped beak.
+function puffin(f) {
+  return beast(f, (p) => {
+    p.ellipse(9, 10, 3, 3, '#1e1e24');
+    p.ellipse(8, 11, 2, 2, '#f4f4f0');
+    p.ellipse(6, 6, 2, 2, '#1e1e24');
+    p.set(6, 6, '#f4f4f0');
+    p.set(5, 6, '#1a1420');
+    p.rect(2, 6, 2, 2, '#e8702a');
+    p.set(3, 6, '#f0c040');
+    p.set(8 + f, 14, '#e8702a');
+    p.set(10 - f, 14, '#e8702a');
+  });
+}
+// A grey seal, sleek, flippers flapping.
+function seal(f) {
+  return beast(f, (p) => {
+    p.ellipse(8, 11, 6, 2, '#7a8088');
+    p.hline(3, 12, 10, '#9aa0a8');
+    p.ellipse(3, 9, 2, 2, '#7a8088');
+    p.set(2, 9, '#1a1420');
+    p.set(1, 10, '#3a3a40');
+    p.line(13, 11, 15, 9 + f, '#6a7078');
+    p.set(7, 13 - f, '#6a7078');
+  });
+}
+
+export const FAR_CREATURES = {
+  white_bull: { frames: 2, draw: (f, v) => whiteBull(f, v) },
+  reindeer: { frames: 2, draw: (f, v) => reindeer(f, v) },
+  frost_wolf: { frames: 2, draw: (f) => frostWolf(f) },
+  crane: { frames: 2, draw: (f) => crane(f) },
+  tiger: { frames: 2, draw: (f) => tiger(f) },
+  coyote: { frames: 2, draw: (f) => coyote(f) },
+  rattlesnake: { frames: 2, draw: (f) => rattlesnake(f) },
+  bone_crab: { frames: 2, draw: (f) => boneCrab(f) },
+  gull: { frames: 2, draw: (f) => gull(f) },
+  flamingo: { frames: 2, draw: (f) => flamingo(f) },
+  brine_scorpion: { frames: 2, draw: (f) => brineScorpion(f) },
+  lantern_moth: { frames: 2, draw: (f) => lanternMoth(f) },
+  badger: { frames: 2, draw: (f) => badger(f) },
+  white_hare: { frames: 2, draw: (f) => whiteHare(f) },
+  raven: { frames: 2, draw: (f) => raven(f) },
+  puffin: { frames: 2, draw: (f) => puffin(f) },
+  seal: { frames: 2, draw: (f) => seal(f) },
+};

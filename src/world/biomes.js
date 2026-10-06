@@ -182,6 +182,94 @@ export const BIOMES = {
     trees: [['dead', 1], ['birch', 1]], treeSpacing: 9, treeChance: 0.06, clump: 0.5,
     plants: [[B.heather, 9], [B.tall_grass, 4], [B.fern, 1], [B.berry_bush, 0.4]], plantDensity: 0.24, rocks: 0.012, ponds: true,
   },
+  // --- the far lands (round 68: see world/farlands.js) ----------------------
+  // Velmarch's warm heart: golden grass over rolling hills, silver olive
+  // groves, dark cypresses standing like sentries, wild vines.
+  olive_hills: {
+    name: 'Olive Hills', char: '♣', fg: '#d8c060', bg: '#5a5a2a', isle: 'velmarch',
+    climate: 'warm', bank: B.sand, rain: 0.6,
+    surface: B.grass_gold, sub: B.dirt, hills: 2,
+    patches: [[B.grass, 12, 0.62], [B.gravel, 7, 0.84]],
+    trees: [['olive', 5], ['cypress', 3]], treeSpacing: 5, treeChance: 0.4, clump: 0.4,
+    plants: [[B.tall_grass, 8], [B.vine, 2.5], [B.flower_yellow, 2], [B.flower_purple, 1.5], [B.herb, 0.6], [B.bush, 1]], plantDensity: 0.2, rocks: 0.006,
+  },
+  // Velmarch's frozen north: frost birches white as bone, leaves of ice,
+  // the ground silvered with frost, ice flowers that glow at dusk.
+  rimewood: {
+    name: 'Rimewood', char: '♠', fg: '#c8e8ff', bg: '#2a3a5a', isle: 'velmarch',
+    climate: 'cold', bank: B.gravel, reeds: false, snowy: true,
+    surface: B.frost_grass, sub: B.dirt, hills: 2,
+    patches: [[B.snow, 10, 0.5], [B.gravel, 7, 0.85]],
+    trees: [['frostbirch', 6], ['snowpine', 2]], treeSpacing: 4, treeChance: 0.5, clump: 0.3,
+    plants: [[B.ice_flower, 3], [B.fern, 2], [B.tall_grass, 2], [B.berry_bush, 0.8]], plantDensity: 0.16, rocks: 0.008,
+  },
+  // Ostria's green east: bamboo groves, cherry trees in blossom, peonies.
+  bamboo_grove: {
+    name: 'Bamboo Grove', char: '‖', fg: '#7ad070', bg: '#1e4a2a', isle: 'ostria',
+    climate: 'warm', lilies: true, rain: 1.2,
+    surface: B.grass_lush, sub: B.dirt, hills: 2,
+    patches: [[B.grass, 10, 0.55], [B.mud, 8, 0.86]],
+    trees: [['bamboo', 7], ['cherry', 2]], treeSpacing: 4, treeChance: 0.58, clump: 0.25,
+    plants: [[B.fern, 5], [B.peony, 2.5], [B.tall_grass, 4], [B.flower_red, 1], [B.herb, 0.8]], plantDensity: 0.22, rocks: 0.004, ponds: true,
+  },
+  // Ostria's red canyons: red rock and red sand, saguaro and prickly pear.
+  red_mesa: {
+    name: 'Red Mesa', char: '▙', fg: '#e07040', bg: '#6a2a18', isle: 'ostria',
+    climate: 'hot', bank: B.sand, reeds: false, rain: 0.3,
+    surface: B.red_rock, sub: B.red_rock, hills: 3,
+    patches: [[B.sand, 9, 0.6], [B.sandstone, 7, 0.78]],
+    trees: [['saguaro', 4], ['dead', 1]], treeSpacing: 9, treeChance: 0.14, clump: 0.2,
+    plants: [[B.prickly_pear, 3], [B.dead_bush, 3], [B.tall_grass, 1], [B.flower_yellow, 0.6]], plantDensity: 0.06, rocks: 0.02,
+  },
+  // Corrow's bone strand: pale sand full of bone chips, the ribs of
+  // whales standing up out of it, sea grass.
+  bone_strand: {
+    name: 'Bone Strand', char: ')', fg: '#f0e8d0', bg: '#6a6458', isle: 'corrow',
+    climate: 'mild', bank: B.bone_sand, reeds: false,
+    surface: B.bone_sand, sub: B.sand, hills: 1,
+    patches: [[B.grass_taiga, 11, 0.6], [B.gravel, 7, 0.8]],
+    trees: [['dead', 1]], treeSpacing: 10, treeChance: 0.04, clump: 0.3,
+    plants: [[B.sea_grass, 6], [B.whale_rib, 1.2], [B.tall_grass, 2], [B.dead_bush, 1]], plantDensity: 0.12, rocks: 0.008,
+  },
+  // Saltmere's flats: a white crust to the horizon, salt crystals, saltbush,
+  // and pink lagoons.
+  salt_flats: {
+    name: 'Salt Flats', char: '▫', fg: '#f8f4ec', bg: '#a89a9a', isle: 'saltmere',
+    climate: 'hot', bank: B.salt_crust, reeds: false, rain: 0.35,
+    surface: B.salt_crust, sub: B.sand, hills: 0,
+    patches: [[B.sand, 10, 0.66], [B.clay, 8, 0.85]],
+    trees: [['dead', 1]], treeSpacing: 12, treeChance: 0.03, clump: 0,
+    plants: [[B.saltbush, 4], [B.salt_crystal, 1.5], [B.dead_bush, 1]], plantDensity: 0.07, rocks: 0.002, pools: true,
+  },
+  // Hollowmark's hollows: deep moss, giant ferns, glowberries, and the
+  // lantern trees whose pods light the bottoms all night.
+  lantern_hollows: {
+    name: 'Lantern Hollows', char: '♣', fg: '#ffd070', bg: '#2a3a1a', isle: 'hollowmark',
+    climate: 'mild', lilies: true,
+    surface: B.moss, sub: B.dirt, hills: 3,
+    patches: [[B.grass_lush, 10, 0.55], [B.mud, 7, 0.84]],
+    trees: [['lantern', 5], ['oak', 2]], treeSpacing: 5, treeChance: 0.42, clump: 0.3,
+    plants: [[B.giant_fern, 4], [B.fern, 4], [B.glowberry_bush, 2], [B.mushroom_brown, 1], [B.tall_grass, 2]], plantDensity: 0.24, rocks: 0.006, ponds: true,
+  },
+  // The Wyrd Isle's heath: purple-grey heath, silver birches, fairy rings,
+  // standing stones, the aurora overhead.
+  rune_heath: {
+    name: 'Rune Heath', char: '∩', fg: '#b8a0e0', bg: '#2e2a44', isle: 'wyrd',
+    climate: 'cold',
+    surface: B.heath, sub: B.dirt, hills: 2,
+    patches: [[B.moss, 9, 0.6], [B.gravel, 7, 0.84]],
+    trees: [['silverbirch', 4], ['dead', 1]], treeSpacing: 7, treeChance: 0.16, clump: 0.5,
+    plants: [[B.heather, 6], [B.fairy_ring, 1], [B.standing_stone, 0.5], [B.tall_grass, 3], [B.mushroom_red, 0.6]], plantDensity: 0.18, rocks: 0.01, ponds: true,
+  },
+  // The Skerries' sea cliffs: wind-cropped turf, pink thrift, cairns, rock.
+  sea_cliffs: {
+    name: 'Sea Cliffs', char: '^', fg: '#c8d0d8', bg: '#3a4450', isle: 'skerries',
+    climate: 'cold', bank: B.gravel, reeds: false, rain: 1.3,
+    surface: B.grass_taiga, sub: B.stone, hills: 3,
+    patches: [[B.stone, 7, 0.62], [B.gravel, 9, 0.7]],
+    trees: [['dead', 1]], treeSpacing: 12, treeChance: 0.02, clump: 0,
+    plants: [[B.thrift, 5], [B.tall_grass, 4], [B.cairn, 0.4], [B.heather, 1]], plantDensity: 0.14, rocks: 0.025,
+  },
 };
 
 export const BIOME_KEYS = Object.keys(BIOMES);
@@ -195,10 +283,13 @@ export const BIOME_STYLE = {
   mountain: 'high',
   ashland: 'ember', cinderwood: 'ember', geyser: 'ember', volcano: 'ember',
   mangrove: 'tide', fungal: 'mist', moor: 'mist',
+  // (Round 68: the far lands', for whoever lives there without a realm.)
+  olive_hills: 'velari', rimewood: 'rime', bamboo_grove: 'jade', red_mesa: 'kesh', bone_strand: 'corrow', salt_flats: 'salt', lantern_hollows: 'hollow', rune_heath: 'wyrd', sea_cliffs: 'skerry',
 };
 
 // How good each kind of land is to build a town on (see worldgen.js).
 export const BIOME_SETTLE = {
   plains: 0.45, forest: 0.3, savanna: 0.15, taiga: 0.1, jungle: 0.05, desert: -0.1, tundra: -0.2, swamp: -0.2, mountain: -1,
   ashland: 0.2, cinderwood: 0.15, geyser: 0.35, volcano: -1, moor: 0.35, fungal: 0.2, mangrove: 0.15,
+  olive_hills: 0.5, rimewood: 0.05, bamboo_grove: 0.25, red_mesa: 0.1, bone_strand: 0.25, salt_flats: 0.3, lantern_hollows: 0.3, rune_heath: 0.3, sea_cliffs: 0.2,
 };

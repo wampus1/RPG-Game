@@ -574,6 +574,47 @@ def('salt_obelisk', { ...sprite, tall: true, interact: 'well', hardness: Infinit
 def('lantern_tree', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 14, label: 'Lantern Tree' });
 def('stone_ring', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 7, label: 'Ring of Runestones' });
 def('beacon', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 15, lightWhenState: true, label: 'Beacon' });
+// Round 68: the far lands' own ground, trees and plants (see biomes.js):
+// Velmarch's golden olive hills (olive trees and dark cypresses, vines
+// heavy with grapes) and its frozen rimewood (birches white with frost,
+// leaves of ice, flowers of ice that glow); Ostria's bamboo groves (and
+// cherry trees in blossom, peonies) and its red mesas (red rock, saguaro
+// and prickly pear); Corrow's bone strand (pale sand, the ribs of whales,
+// sea grass); Saltmere's salt flats (the crust, its crystals, saltbush);
+// Hollowmark's lantern hollows (giant ferns, glowberries, lantern trees);
+// the Wyrd Isle's rune heath (silver birches, fairy rings, standing
+// stones); the Skerries' sea cliffs (thrift, and cairns).
+def('grass_gold', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Golden Grass' });
+def('frost_grass', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Frosted Grass' });
+def('red_rock', { tool: 'pick', hardness: 1.4, drop: 'cobblestone', label: 'Red Rock' });
+def('salt_crust', { tool: 'shovel', hardness: 0.7, label: 'Salt Crust' });
+def('bone_sand', { tool: 'shovel', hardness: 0.5, drop: 'sand', label: 'Bone Sand' });
+def('heath', { tool: 'shovel', hardness: 0.6, drop: 'dirt', label: 'Heath' });
+def('log_olive', { tool: 'axe', hardness: 1.2, label: 'Olive Log' });
+def('leaves_olive', { ...leaves([{ item: 'olives', chance: 0.12 }]), label: 'Olive Leaves' });
+def('leaves_cypress', { ...leaves(), label: 'Cypress Needles' });
+def('log_frostbirch', { tool: 'axe', hardness: 1.1, label: 'Frost Birch Log' });
+def('leaves_frost', { ...leaves([{ item: 'frost_crystal', chance: 0.04 }]), light: 2, label: 'Ice Leaves' });
+def('bamboo_stalk', { tool: 'axe', hardness: 0.6, drop: [{ item: 'bamboo_cane', min: 1, max: 2 }], label: 'Bamboo Stalk' });
+def('leaves_bamboo', { ...leaves(), label: 'Bamboo Leaves' });
+def('log_cherry', { tool: 'axe', hardness: 1.1, label: 'Cherry Log' });
+def('leaves_blossom', { ...leaves([{ item: 'cherries', chance: 0.06 }]), label: 'Cherry Blossom' });
+def('leaves_lantern', { ...leaves([{ item: 'lantern_pod', chance: 0.12 }]), light: 4, label: 'Lantern Leaves' });
+def('leaves_silver', { ...leaves(), label: 'Silver Birch Leaves' });
+def('vine', { ...plant, drop: [{ item: 'grapes', chance: 0.6, min: 1, max: 2 }], label: 'Vine' });
+def('ice_flower', { ...plant, light: 5, drop: [{ item: 'frost_crystal', chance: 0.25 }], label: 'Ice Flower' });
+def('peony', { ...plant, label: 'Peony' });
+def('prickly_pear', { ...plant, drop: [{ item: 'cactus_fruit', chance: 0.6 }], label: 'Prickly Pear' });
+def('sea_grass', { ...plant, label: 'Sea Grass' });
+def('saltbush', { ...plant, drop: [{ item: 'salt', chance: 0.3 }], label: 'Saltbush' });
+def('giant_fern', { ...plant, label: 'Giant Fern' });
+def('glowberry_bush', { ...plant, light: 6, drop: [{ item: 'glowberries', min: 1, max: 3 }], label: 'Glowberry Bush' });
+def('fairy_ring', { ...plant, light: 4, label: 'Fairy Ring' });
+def('thrift', { ...plant, label: 'Sea Thrift' });
+def('whale_rib', { ...sprite, tall: true, solid: true, tool: 'pick', hardness: 2, drop: [{ item: 'bone', min: 2, max: 4 }], label: 'Whale Rib' });
+def('salt_crystal', { ...sprite, solid: true, tool: 'pick', hardness: 1, light: 3, drop: [{ item: 'salt', min: 1, max: 3 }], label: 'Salt Crystals' });
+def('standing_stone', { ...sprite, tall: true, solid: true, tool: 'pick', hardness: 6, drop: 'cobblestone', light: 2, label: 'Standing Stone' });
+def('cairn', { ...sprite, solid: true, tool: 'pick', hardness: 2, drop: 'cobblestone', label: 'Cairn' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -593,7 +634,8 @@ export function isOpaque(id) {
 // The ground itself (as it lies, not as anyone set it): what digging goes
 // through, and what's drawn as cut rock when you're down in it.
 export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_dry', 'grass_jungle', 'grass_taiga', 'sand', 'sandstone', 'snow', 'mud', 'gravel', 'clay', 'coal_ore', 'iron_ore', 'gold_ore', 'gem_ore', 'bedrock', 'mine_rock', 'cave_rock',
-  'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium'].filter((k) => B[k] !== undefined).map((k) => B[k]));
+  'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium',
+  'grass_gold', 'frost_grass', 'red_rock', 'salt_crust', 'bone_sand', 'heath'].filter((k) => B[k] !== undefined).map((k) => B[k]));
 // Ores, and the glint they show in a cut wall.
 export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
 export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks, B.planks_cinder, B.planks_bog, B.planks_drift, B.travertine, B.turquoise_tile, B.salt_brick, B.bamboo]);
@@ -602,10 +644,10 @@ const STYLE_PLANKS = { ember: B.planks_cinder, mist: B.planks_bog, tide: B.plank
 export const planksOf = (style) => STYLE_PLANKS[style] || B.planks;
 export const PLANK_BLOCKS = new Set([B.planks, B.planks_birch, B.planks_dark, B.planks_cinder, B.planks_bog, B.planks_drift, B.bamboo, B.planks_lacquer]);
 export const LOGS = new Set(
-  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove'].map((w) => B[`log_${w}`]),
+  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove', 'olive', 'frostbirch', 'cherry'].map((w) => B[`log_${w}`]),
 );
 export const LEAVES = new Set(
-  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'snowy', 'ember', 'mangrove'].map((w) => B[`leaves_${w}`]),
+  ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'snowy', 'ember', 'mangrove', 'olive', 'cypress', 'frost', 'bamboo', 'blossom', 'lantern', 'silver'].map((w) => B[`leaves_${w}`]),
 );
 
 // Crops: how many visual stages they pass through, game hours per stage,

@@ -296,6 +296,22 @@ food('seer_stew', 6, 7, 'Seer\'s Stew', { quality: 'acceptable', region: 'wyrd' 
 food('heather_bread', 4, 5, 'Heather Bread', { region: 'wyrd' });
 food('fish_pie', 7, 8, 'Fish Pie', { quality: 'acceptable', region: 'skerry' });
 food('seaweed_crisps', 3, 4, 'Seaweed Crisps', { region: 'skerry' });
+// What the far lands grow (see blocks.js): olives, grapes, cherries,
+// cactus fruit, glowberries, lantern pods; and bamboo, salt and frost
+// crystals to work with.
+food('olives', 1, 2, 'Olives');
+food('grapes', 1, 3, 'Grapes');
+food('cherries', 1, 2, 'Cherries');
+food('cactus_fruit', 1, 3, 'Cactus Fruit');
+food('glowberries', 1, 3, 'Glowberries');
+food('lantern_pod', 1, 1, 'Lantern Pod');
+item('bamboo_cane', { name: 'Bamboo Cane', kind: 'misc', stack: 64, value: 1 });
+item('salt', { name: 'Salt', kind: 'misc', stack: 64, value: 3 });
+item('frost_crystal', { name: 'Frost Crystal', kind: 'misc', stack: 32, value: 9, about: 'A shard of ice that never melts. The Rimeborn burn them in their frost hearths.' });
+item('antler', { name: 'Antler', kind: 'misc', stack: 16, value: 6 });
+item('tiger_pelt', { name: 'Tiger Pelt', kind: 'misc', stack: 8, value: 30 });
+item('pink_feather', { name: 'Pink Feather', kind: 'misc', stack: 32, value: 4 });
+item('scorpion_sting', { name: 'Scorpion Sting', kind: 'misc', stack: 16, value: 8 });
 // What grows (and swims) there.
 food('ember_pod', 1, 2, 'Ember Pod');
 food('mangrove_pod', 1, 1, 'Mangrove Pod');

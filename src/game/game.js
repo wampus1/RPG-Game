@@ -112,6 +112,15 @@ export const SAVE_VERSION = 3;
 const ISLE_DAY = {
   ashland: ['ash_lizard', 'ash_lizard', 'magma_crab', 'rabbit'], cinderwood: ['ash_lizard', 'boar', 'deer', 'ash_lizard'], geyser: ['magma_crab', 'ash_lizard'], volcano: ['magma_crab', 'ash_lizard'],
   mangrove: ['mire_toad', 'mire_toad', 'boar', 'shroom_crawler'], fungal: ['shroom_crawler', 'shroom_crawler', 'mire_toad', 'deer'], moor: ['mire_toad', 'sheep', 'rabbit', 'deer'],
+  // (Round 68) The far lands' (see world/biomes.js).
+  olive_hills: ['white_bull', 'sheep', 'rabbit', 'horse', 'white_bull'], rimewood: ['reindeer', 'reindeer', 'rabbit', 'deer'],
+  bamboo_grove: ['crane', 'crane', 'tiger', 'deer', 'rabbit'], red_mesa: ['rattlesnake', 'rabbit', 'horse', 'rattlesnake'],
+  bone_strand: ['bone_crab', 'gull', 'gull', 'seal'], salt_flats: ['flamingo', 'flamingo', 'brine_scorpion', 'rabbit'],
+  lantern_hollows: ['badger', 'deer', 'rabbit', 'badger'], rune_heath: ['white_hare', 'raven', 'white_hare', 'deer', 'sheep'], sea_cliffs: ['puffin', 'puffin', 'seal', 'sheep'],
+};
+// What comes out at night on the far lands' own ground, now and then.
+const FAR_NIGHT = {
+  rimewood: ['frost_wolf'], red_mesa: ['coyote'], salt_flats: ['brine_scorpion'], lantern_hollows: ['lantern_moth', 'lantern_moth', 'wisp'], rune_heath: ['wisp', 'wisp', 'ghoul'], bone_strand: ['skeleton'],
 };
 const ISLE_BEASTS = { kharos: ['ash_lizard', 'magma_crab'], myrrow: ['mire_toad', 'shroom_crawler'] };
 
@@ -6868,6 +6877,7 @@ export class Game {
       const r = Math.random();
       // (Kharos and Myrrow have night things all their own: see islemobs.js.)
       if (isle === 'kharos' || isle === 'myrrow') species = isleNightSpecies(this, isle, x, z);
+      else if (FAR_NIGHT[like] && r < 0.6) species = FAR_NIGHT[like][Math.floor(Math.random() * FAR_NIGHT[like].length)];
       else if ((like === 'forest' || like === 'taiga') && r < 0.3) species = 'wolf';
       // (Wisps over marsh and through the woods.)
       else if ((like === 'swamp' || like === 'jungle' || like === 'forest') && r < 0.48) species = 'wisp';

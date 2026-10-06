@@ -178,6 +178,96 @@ export const TREE_BUILDERS = {
   glowshroom(rand) {
     return TREE_BUILDERS.mushroom(rand, true);
   },
+  // (Round 68) The far lands' trees. Velmarch: the olive, low and broad on
+  // a gnarled trunk, silver-green; the cypress, a dark spire; the frost
+  // birch of the rimewood, white, its leaves of ice.
+  olive(rand) {
+    const out = [];
+    const h = 2;
+    const dx = rand() < 0.5 ? 1 : -1;
+    trunk(out, h, B.log_olive);
+    out.push([dx, h, 0, B.log_olive]);
+    disc(out, dx * 0.5 | 0, h, 0, 2, B.leaves_olive, rand, 0, 0.35);
+    disc(out, 0, h + 1, 0, 2, B.leaves_olive, rand, 1, 0.3);
+    out.push([0, h + 2, 0, B.leaves_olive]);
+    return out;
+  },
+  cypress(rand) {
+    const out = [];
+    const h = 5 + (rand() < 0.5 ? 1 : 0);
+    trunk(out, 2, B.log_oak);
+    for (let y = 1; y < h; y++) {
+      out.push([0, y, 0, B.leaves_cypress]);
+      if (y > 1 && y < h - 1) for (const [x, z] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (rand() < (y < h - 2 ? 0.85 : 0.4)) out.push([x, y, z, B.leaves_cypress]);
+    }
+    out.push([0, h, 0, B.leaves_cypress]);
+    return out;
+  },
+  frostbirch(rand) {
+    const out = [];
+    const h = 3 + (rand() < 0.5 ? 1 : 0);
+    disc(out, 0, h - 1, 0, 1, B.leaves_frost, rand, 0, 0.15);
+    disc(out, 0, h, 0, 1, B.leaves_frost, rand, 1);
+    out.push([0, h + 1, 0, B.leaves_frost]);
+    trunk(out, h, B.log_frostbirch);
+    return out;
+  },
+  // Ostria: a clump of bamboo, tall canes with tufts; the cherry in
+  // blossom; the saguaro of the mesas.
+  bamboo(rand) {
+    const out = [];
+    const canes = [[0, 0], ...[[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1]].filter(() => rand() < 0.45)];
+    for (const [x, z] of canes) {
+      const h = 4 + Math.floor(rand() * 3);
+      trunk(out, h, B.bamboo_stalk, x, z);
+      out.push([x, h, z, B.leaves_bamboo]);
+      if (rand() < 0.6) out.push([x + (rand() < 0.5 ? 1 : -1), h - 1, z, B.leaves_bamboo]);
+    }
+    return out;
+  },
+  cherry(rand) {
+    const out = [];
+    const h = 2 + (rand() < 0.5 ? 1 : 0);
+    disc(out, 0, h, 0, 2, B.leaves_blossom, rand, 0, 0.3);
+    disc(out, 0, h + 1, 0, 2, B.leaves_blossom, rand, 1, 0.25);
+    disc(out, 0, h + 2, 0, 1, B.leaves_blossom, rand, 1, 0.2);
+    trunk(out, h + 1, B.log_cherry);
+    return out;
+  },
+  saguaro(rand) {
+    const out = [];
+    const h = 3 + Math.floor(rand() * 2);
+    trunk(out, h, B.cactus);
+    for (const dx of [1, -1]) {
+      if (rand() < 0.6) {
+        const y = 1 + Math.floor(rand() * 2);
+        out.push([dx, y, 0, B.cactus]);
+        out.push([dx, y + 1, 0, B.cactus]);
+      }
+    }
+    return out;
+  },
+  // Hollowmark: the lantern tree, broad, its leaves hung with glowing
+  // pods. The Wyrd Isle: the silver birch.
+  lantern(rand) {
+    const out = [];
+    const h = 3;
+    trunk(out, h + 1, B.log_oak);
+    for (const [x, z] of [[1, 0], [-1, 0]]) if (rand() < 0.5) out.push([x, 0, z, B.log_oak]);
+    disc(out, 0, h, 0, 2, B.leaves_lantern, rand, 0, 0.25);
+    disc(out, 0, h + 1, 0, 2, B.leaves_lantern, rand, 1, 0.3);
+    disc(out, 0, h + 2, 0, 1, B.leaves_lantern, rand, 1);
+    return out;
+  },
+  silverbirch(rand) {
+    const out = [];
+    const h = 3 + (rand() < 0.5 ? 1 : 0);
+    disc(out, 0, h - 1, 0, 1, B.leaves_silver, rand, 0, 0.2);
+    disc(out, 0, h, 0, 1, B.leaves_silver, rand, 1);
+    out.push([0, h + 1, 0, B.leaves_silver]);
+    trunk(out, h, B.log_birch);
+    return out;
+  },
   toadstool(rand) {
     const out = [];
     trunk(out, 2, B.mushroom_stem);

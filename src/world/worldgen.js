@@ -321,6 +321,18 @@ export class Overworld {
       if (moist > 0.34) return 'moor';
       return temp > 0.55 ? 'swamp' : 'forest';
     }
+    // (Round 68) The far lands' own ground, in a world made since they've
+    // had it: Velmarch's olive hills in its warmth and rimewood in its
+    // cold; Ostria's bamboo where it's wet and red mesas where it's dry;
+    // each far isle's own, over most of it. (See farlands.js.)
+    const F = this.wg >= 2 && key ? FAR_LANDS[key] : null;
+    if (F && F.biome && rng.chance(0.62)) return F.biome;
+    if (F && F.biomes) {
+      if (F.biomes.warm && temp > 0.42 && moist < 0.78 && rng.chance(0.6)) return F.biomes.warm;
+      if (F.biomes.cold && temp < 0.3 && rng.chance(0.55)) return F.biomes.cold;
+      if (F.biomes.wet && moist > 0.5 && temp > 0.36 && rng.chance(0.6)) return F.biomes.wet;
+      if (F.biomes.dry && moist < 0.48 && rng.chance(0.62)) return F.biomes.dry;
+    }
     if (rng.chance(0.16)) return 'mountain';
     if (temp < 0.2) return moist < 0.45 ? 'tundra' : 'taiga';
     if (temp < 0.36) return moist > 0.48 ? 'taiga' : moist < 0.24 ? 'plains' : 'forest';

@@ -478,6 +478,8 @@ export const LOUD = {
   didge: 1.57, celesta: 1.6, dulcimer: 1, fiddle: 1.65, theremin: 0.64, musicbox: 1.75,
   // (Round 64: the Workshop's.)
   vibes: 1.35, handpan: 1.5, bowl: 1.6, breath: 1.1, felt: 1.15,
+  // (Round 68: the far lands'.)
+  lyre: 1.3, erhu: 1.2, cedar: 0.7, pipes: 0.8, bouzouki: 1.5, ocarina: 0.8, reel: 1.55,
 };
 
 // --- the instruments ------------------------------------------------------
@@ -1152,6 +1154,131 @@ export const PATCH = {
   musicbox(R, ch, fs, t, dur, v) {
     const ringT = clamp(dur * 1.5, 0.5, 1.1);
     each(fs, (f) => R.partials(ch, f, t, [[1, 1, ringT], [3, 0.25, ringT * 0.25], [5.4, 0.18, 0.05]], 0.06 * v));
+  },
+
+  // --- the far lands' own (round 68: see music.js) -------------------------
+  // A lyre (the Velari's): gut strings plucked, bright at the strike and
+  // ringing warm, each string a hair out from its pair.
+  lyre(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2.2, 0.7, 1.9);
+    const end = t + ringT + 0.05;
+    const flt = R.filter('lowpass', 6000, 1.2);
+    flt.frequency.setValueAtTime(6000, t);
+    flt.frequency.setTargetAtTime(Math.max(700, fs[0] * 2.5), t + 0.004, ringT * 0.25);
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.07 * v, 0.002, ringT);
+    each(fs, (f) => {
+      R.osc('dulcimer', f, t, end, -3).connect(flt);
+      R.osc('triangle', f * 2, t, end, 3).connect(R.gain(0.25)).connect(flt);
+    });
+    flt.connect(g).connect(ch);
+  },
+
+  // An erhu (the Jade Court's): two strings bowed, nasal and crying,
+  // sliding up into each note, the vibrato slow and wide.
+  erhu(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.2;
+    const flt = R.filter('bandpass', 1300, 0.9);
+    const pk = R.filter('peaking', 2800, 2);
+    if (pk.gain) pk.gain.value = 7;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.06 * v, 0.08, 0.3, 0.88, 0.18);
+    const oscs = fs.map((f) => {
+      const x = R.osc('fiddle', f * 0.94, t, end);
+      x.frequency.exponentialRampToValueAtTime(f, t + 0.09);
+      return x;
+    });
+    R.vibrato(oscs.map((x) => x.detune), t, end, 4.6, 28, 0.15);
+    for (const x of oscs) x.connect(flt);
+    flt.connect(pk).connect(g).connect(ch);
+  },
+
+  // A cedar flute (the Keshari's): breathy and woody, a heavy chiff, a slow
+  // vibrato, the note sagging a little as the breath runs out.
+  cedar(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.2;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.085 * v, 0.07, 0.4, 0.8, 0.16);
+    const oscs = fs.map((f) => {
+      const x = R.osc('flute', f, t, end);
+      x.frequency.setValueAtTime(f, t + Math.max(0.05, dur * 0.7));
+      x.frequency.linearRampToValueAtTime(f * 0.985, t + dur + 0.15);
+      return x;
+    });
+    R.vibrato(oscs.map((x) => x.detune), t, end, 4.2, 16, 0.3);
+    for (const x of oscs) x.connect(g);
+    // (The breath through it all along.)
+    const n = R.noise(t, end);
+    const bp = R.filter('bandpass', fs[0] * 2, 2);
+    const ng = R.gain(0);
+    R.adsr(ng.gain, t, dur, 0.012 * v, 0.05, 0.3, 0.5, 0.1);
+    n.connect(bp).connect(ng).connect(ch);
+    R.chiff(ch, fs[0] * 3, t, 0.06 * v, 0.16);
+    g.connect(ch);
+  },
+
+  // Bagpipes (the Wyrdfolk's and the Bonewrights'): a nasal chanter over
+  // its own drone a fifth and an octave down, never quite stopping.
+  pipes(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.08;
+    const flt = R.filter('lowpass', 3400, 1.4);
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.05 * v, 0.02, 0.1, 0.95, 0.06);
+    each(fs, (f) => {
+      R.osc('shawm', f, t, end, (R.rand() - 0.5) * 8).connect(flt);
+      R.osc('shawm', f / 2, t, end, 5).connect(R.gain(0.22)).connect(flt);
+      R.osc('shawm', (f * 2) / 3 / 2, t, end, -4).connect(R.gain(0.14)).connect(flt);
+    });
+    flt.connect(g).connect(ch);
+  },
+
+  // A bouzouki (the Saltfolk's): paired steel strings picked fast, the
+  // tremolo of the pick on a held note.
+  bouzouki(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 1.6, 0.4, 1.2);
+    const end = t + Math.max(dur, ringT) + 0.05;
+    const flt = R.filter('lowpass', 5200, 2);
+    const g = R.gain(0);
+    // (Held long: picked again and again.)
+    const picks = dur > 0.45 ? Math.min(12, Math.floor(dur / 0.09)) : 1;
+    for (let i = 0; i < picks; i++) R.perc(g.gain, t + i * 0.09, (i ? 0.045 : 0.07) * v, 0.002, picks > 1 && i < picks - 1 ? 0.085 : ringT);
+    each(fs, (f) => {
+      R.osc('steel', f, t, end, -6).connect(flt);
+      R.osc('steel', f * 2, t, end, 6).connect(R.gain(0.4)).connect(flt);
+    });
+    flt.connect(g).connect(ch);
+  },
+
+  // A reel fiddle (the Skerrymen's, and the Bonewrights'): bright and
+  // quick, its bow crossing onto the open string beside the note, the
+  // sympathetic strings ringing under it.
+  reel(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.12;
+    const flt = R.filter('lowpass', 4600, 0.9);
+    const pk = R.filter('peaking', 3000, 1.6);
+    if (pk.gain) pk.gain.value = 6;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.05 * v, 0.02, 0.2, 0.8, 0.08);
+    const oscs = fs.map((f) => R.osc('fiddle', f, t, end, (R.rand() - 0.5) * 5));
+    R.vibrato(oscs.map((x) => x.detune), t, end, 6.8, 9, 0.25);
+    for (const x of oscs) x.connect(flt);
+    // (The open string a fifth under, bowed with it.)
+    R.osc('fiddle', fs[0] * 2 / 3, t, end, 3).connect(R.gain(0.18)).connect(flt);
+    flt.connect(pk).connect(g).connect(ch);
+    R.partials(ch, fs[0] * 2, t, [[1, 0.25, 0.6], [1.5, 0.12, 0.4]], 0.02 * v);
+  },
+
+  // An ocarina (the Hollowfolk's): round and pure, hollow, a little breath.
+  ocarina(R, ch, fs, t, dur, v) {
+    const end = t + dur + 0.12;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.09 * v, 0.04, 0.25, 0.9, 0.1);
+    const oscs = fs.map((f) => R.osc('sine', f, t, end));
+    for (const f of fs) R.osc('triangle', f * 2, t, end).connect(R.gain(0.06)).connect(g);
+    R.vibrato(oscs.map((x) => x.detune), t, end, 5.2, 9, 0.35);
+    for (const x of oscs) x.connect(g);
+    R.chiff(ch, fs[0] * 2.5, t, 0.03 * v, 0.08);
+    g.connect(ch);
   },
 
   // --- the Workshop's own (round 64): soft, slow, for working by ---

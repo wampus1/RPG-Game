@@ -8,7 +8,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
-import { farIcon } from './farart.js';
+import { farIcon, FAR_CREATURES } from './farart.js';
 import { isleBossArt } from './islebossart.js';
 import { drawHumanoid, CHAR_W, SHEET_H, FRAMES, SPR_PAD } from './people.js';
 import { MODS } from '../mod/state.js';
@@ -234,7 +234,7 @@ export const CREATURE_LOOKS = {
   chicken: { frames: 2, draw: (f) => quadruped(f, ['#f4f0e8', '#c8c0b0', '#ffffff'], 'chicken') },
 };
 
-Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES);
+Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES, FAR_CREATURES);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 

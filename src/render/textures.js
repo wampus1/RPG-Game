@@ -7,7 +7,7 @@ import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
 import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
-import { farTop, farFront, FAR_ROT_TOP } from './farart.js';
+import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES } from './farart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -103,6 +103,10 @@ const WOOD = {
   // (The other islands' trees: see isleart.js.)
   cinder: { bark: ['#2a2222', '#1a1414', '#3a302e'], ring: ['#7a4a2a', '#5a3018'] },
   mangrove: { bark: ['#6a5a44', '#4e4232', '#82705a'], ring: ['#b08a5a', '#8e6a40'] },
+  // (Round 68: the far lands': see farart.js.)
+  olive: { bark: ['#7a7468', '#5a544a', '#948c80'], ring: ['#c8b080', '#a89060'] },
+  frostbirch: { bark: ['#e8f0f8', '#7890a8', '#ffffff'], ring: ['#d8e0e8', '#b8c8d8'] },
+  cherry: { bark: ['#5a3430', '#422422', '#74443e'], ring: ['#c8886a', '#a86a50'] },
 };
 const LEAF = {
   oak: ['#3e8a2e', '#2e6a22', '#58a840'],
@@ -116,6 +120,13 @@ const LEAF = {
   void: ['#5e2e82', '#421e5e', '#9050c0'],
   ember: ['#c8441a', '#962e12', '#f07a2a'],
   mangrove: ['#3e7a4a', '#2e5e38', '#58a064'],
+  olive: ['#8aa070', '#6a8058', '#b4c89c'],
+  cypress: ['#2a4a2a', '#1e3820', '#3e6238'],
+  frost: ['#c8e8ff', '#98c0e8', '#f4fcff'],
+  bamboo: ['#6ab04a', '#4a8a36', '#8ed064'],
+  blossom: ['#f4a8c8', '#d880a8', '#ffe0ee'],
+  silver: ['#a8b898', '#889878', '#d0dcc0'],
+  lantern: ['#2e5a3a', '#1e4028', '#447a4e'],
 };
 
 // --- atlas ------------------------------------------------------------------
@@ -1797,6 +1808,8 @@ function plantSprite(name, v, rand) {
   if (name === 'bones') return bonesSprite(v, rand);
   const ip = islePlant(name, v, rand);
   if (ip) return ip;
+  const fp = farPlant(name, v, rand);
+  if (fp) return fp;
   const p = spr();
   const base = 25;
   const blade = (x, h, c, lean = 0) => {
@@ -2074,7 +2087,7 @@ export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
-  Object.assign(SPRITES, ISLE_SPRITES);
+  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES);
   for (const b of BLOCKS) buildBlock(b, TEX);
   // Round 36: the islands' crafts (see CRAFTS): the same furniture made
   // again in each people's own wood and fittings.

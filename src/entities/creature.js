@@ -61,6 +61,32 @@ export const SPECIES = {
   mire_toad: { name: 'Mire Toad', hp: 4, dmg: 0, step: 0.3, mode: 'passive', drops: [['raw_meat', 1, 1, 0.8], ['slime_gel', 1, 1, 0.3]], isle: 'myrrow' },
   shroom_crawler: { name: 'Shroom Crawler', hp: 10, dmg: 2, step: 0.5, mode: 'neutral', aggro: 0, drops: [['mushroom', 1, 3, 1], ['glowcap', 1, 1, 0.4]], spores: true, isle: 'myrrow' },
   gloam_moth: { name: 'Gloam Moth', hp: 3, dmg: 0, step: 0.24, mode: 'passive', drops: [['moth_dust', 1, 2, 1]], night: true, floats: true, light: 5, noHalo: true, isle: 'myrrow' },
+  // (Round 68) The far lands' own (see world/biomes.js; drawn in
+  // farart.js). Velmarch: the Velari's white bulls (let them be), the
+  // Rimeborn's reindeer, in herds, and the frost wolves of the rimewood
+  // by night. Ostria: cranes and tigers in the bamboo (a tiger let be
+  // lets you be), rattlesnakes in the red rocks and coyotes, at night, in
+  // packs. Corrow: bone crabs and gulls, seals off the strand. Saltmere:
+  // flamingos in the lagoons, and brine scorpions out on the salt.
+  // Hollowmark: badgers, and lantern moths by night. The Wyrd Isle: white
+  // hares and ravens. The Skerries: puffins and seals.
+  white_bull: { name: 'White Bull', hp: 18, dmg: 4, step: 0.4, mode: 'neutral', aggro: 0, drops: [['raw_meat', 2, 4, 1], ['leather', 1, 3, 0.8]], isle: 'velmarch' },
+  reindeer: { name: 'Reindeer', hp: 10, dmg: 0, step: 0.26, mode: 'passive', drops: [['raw_meat', 1, 3, 1], ['leather', 1, 2, 0.7], ['antler', 1, 1, 0.4]], packs: true, isle: 'velmarch' },
+  frost_wolf: { name: 'Frost Wolf', hp: 12, dmg: 3, step: 0.26, mode: 'hostile', aggro: 8, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.5], ['frost_crystal', 1, 1, 0.25]], packs: true, night: true, isle: 'velmarch' },
+  crane: { name: 'Red-Crowned Crane', hp: 4, dmg: 0, step: 0.3, mode: 'passive', drops: [['feather', 1, 3, 1], ['raw_meat', 1, 1, 0.5]], isle: 'ostria' },
+  tiger: { name: 'Tiger', hp: 22, dmg: 5, step: 0.28, mode: 'neutral', aggro: 0, drops: [['raw_meat', 2, 3, 1], ['tiger_pelt', 1, 1, 0.6]], isle: 'ostria' },
+  coyote: { name: 'Coyote', hp: 8, dmg: 2, step: 0.24, mode: 'hostile', aggro: 8, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.5]], packs: true, night: true, isle: 'ostria' },
+  rattlesnake: { name: 'Rattlesnake', hp: 5, dmg: 3, step: 0.4, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 1, 0.6], ['leather', 1, 1, 0.4]], isle: 'ostria' },
+  bone_crab: { name: 'Bone Crab', hp: 14, dmg: 3, step: 0.44, mode: 'neutral', aggro: 0, drops: [['crab_meat', 1, 2, 1], ['bone', 1, 2, 0.6]], isle: 'corrow' },
+  gull: { name: 'Gull', hp: 3, dmg: 0, step: 0.3, mode: 'passive', drops: [['feather', 1, 2, 1]], isle: 'corrow' },
+  flamingo: { name: 'Flamingo', hp: 5, dmg: 0, step: 0.36, mode: 'passive', drops: [['pink_feather', 1, 3, 1], ['raw_meat', 1, 1, 0.5]], isle: 'saltmere' },
+  brine_scorpion: { name: 'Brine Scorpion', hp: 8, dmg: 3, step: 0.36, mode: 'hostile', aggro: 7, drops: [['scorpion_sting', 1, 1, 0.6], ['salt', 1, 2, 0.5]], isle: 'saltmere' },
+  lantern_moth: { name: 'Lantern Moth', hp: 3, dmg: 0, step: 0.26, mode: 'passive', drops: [['lantern_pod', 1, 1, 0.6], ['moth_dust', 1, 1, 0.6]], night: true, floats: true, light: 6, noHalo: true, isle: 'hollowmark' },
+  badger: { name: 'Badger', hp: 9, dmg: 2, step: 0.4, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.6]], isle: 'hollowmark' },
+  white_hare: { name: 'White Hare', hp: 3, dmg: 0, step: 0.2, mode: 'passive', drops: [['raw_meat', 1, 1, 1], ['leather', 1, 1, 0.3]], isle: 'wyrd' },
+  raven: { name: 'Raven', hp: 3, dmg: 0, step: 0.34, mode: 'passive', drops: [['feather', 1, 2, 1]], isle: 'wyrd' },
+  puffin: { name: 'Puffin', hp: 3, dmg: 0, step: 0.36, mode: 'passive', drops: [['feather', 1, 2, 1], ['raw_meat', 1, 1, 0.5]], isle: 'skerries' },
+  seal: { name: 'Grey Seal', hp: 10, dmg: 0, step: 0.5, mode: 'passive', drops: [['raw_meat', 2, 3, 1], ['leather', 1, 2, 0.8]], swims: true, isle: 'skerries' },
   // (And what lives below ground: see monsters.js; and what comes out at
   // night on Kharos and Myrrow: see islemobs.js.)
   ...MONSTER_SPECIES,

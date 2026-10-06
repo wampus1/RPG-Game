@@ -41,17 +41,20 @@ export const FAR_LANDS = {
     peoples: ['velari', 'rime'], civs: 5, towns: 8, villages: 14, empires: 2,
     empirePeoples: ['velari', 'rime'],
     suits: { taiga: 'rime', tundra: 'rime', rimewood: 'rime', mountain: 'rime' },
+    // (Its own ground: see world/biomes.js.)
+    biomes: { warm: 'olive_hills', cold: 'rimewood' },
   },
   ostria: {
     peoples: ['jade', 'kesh'], civs: 4, towns: 6, villages: 11, empires: 1,
     empirePeoples: ['jade'],
     suits: { desert: 'kesh', savanna: 'kesh', red_mesa: 'kesh', mountain: 'kesh' },
+    biomes: { wet: 'bamboo_grove', dry: 'red_mesa' },
   },
-  corrow: { peoples: ['corrow'], civs: 1, towns: 1, villages: 3 },
-  saltmere: { peoples: ['salt'], civs: 1, towns: 1, villages: 3 },
-  hollowmark: { peoples: ['hollow'], civs: 1, towns: 1, villages: 3 },
-  wyrd: { peoples: ['wyrd'], civs: 1, towns: 1, villages: 3 },
-  skerries: { peoples: ['skerry'], civs: 1, towns: 1, villages: 3 },
+  corrow: { peoples: ['corrow'], civs: 1, towns: 1, villages: 3, biome: 'bone_strand' },
+  saltmere: { peoples: ['salt'], civs: 1, towns: 1, villages: 3, biome: 'salt_flats' },
+  hollowmark: { peoples: ['hollow'], civs: 1, towns: 1, villages: 3, biome: 'lantern_hollows' },
+  wyrd: { peoples: ['wyrd'], civs: 1, towns: 1, villages: 3, biome: 'rune_heath' },
+  skerries: { peoples: ['skerry'], civs: 1, towns: 1, villages: 3, biome: 'sea_cliffs' },
 };
 export const FAR_KEYS = Object.keys(FAR_LANDS);
 
