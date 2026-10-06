@@ -395,9 +395,15 @@ export function sameSide(a, b) {
 
 // Raise something new at a spot near `at` (a summoning, a call for help).
 export function summon(game, species, at, near = 2, opts = {}) {
-  for (let i = 0; i < 12; i++) {
-    const x = at.x + Math.round((Math.random() - 0.5) * 2 * near);
-    const z = at.z + Math.round((Math.random() - 0.5) * 2 * near);
+  // (A dozen tries at random; then, so it never fails while there's room,
+  // every spot in reach, nearest first.)
+  const ring = [];
+  for (let dz = -near; dz <= near; dz++) for (let dx = -near; dx <= near; dx++) if (dx || dz) ring.push([dx, dz]);
+  ring.sort((a, b) => Math.max(Math.abs(a[0]), Math.abs(a[1])) - Math.max(Math.abs(b[0]), Math.abs(b[1])));
+  for (let i = 0; i < 12 + ring.length; i++) {
+    const r = i >= 12 ? ring[i - 12] : null;
+    const x = at.x + (r ? r[0] : Math.round((Math.random() - 0.5) * 2 * near));
+    const z = at.z + (r ? r[1] : Math.round((Math.random() - 0.5) * 2 * near));
     const y = game.world.findStandY(x, z, at.y);
     if (y < 0 || Math.abs(y - at.y) > 1 || game.occupiedAny?.(x, y, z) || game.entityAt(x, y, z)) continue;
     const c = game.spawnMonster(species, x, y, z, opts);

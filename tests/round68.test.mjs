@@ -241,3 +241,236 @@ test('compiling a story with every new beat in it', () => {
   assert.ok(M);
   for (const n of nodes) if (NODES[n.type].in.some((q) => q.t === 'flow')) assert.ok(M.nodes[n.id], `${n.type} made a beat`);
 });
+
+// ------------------------------------------------------------ the lands
+import { shapeLands } from '../src/world/shapes.js';
+import { LANDMASSES } from '../src/world/geography.js';
+import { FAR_LANDS, FAR_PEOPLES, coreWorth } from '../src/world/farlands.js';
+import { FAR_OWN_TYPE, FAR_BOSSES, FAR_DTYPES } from '../src/world/fardeep.js';
+import { LAND_MODS, LAND_MOD_OF } from '../src/world/quality.js';
+import { BIOMES } from '../src/world/biomes.js';
+import { SPECIES } from '../src/entities/creature.js';
+import { THEMES } from '../src/game/music.js';
+import { ISLE_DAY } from '../src/game/game.js';
+import { TECHS, treeOf } from '../src/sim/tech.js';
+import { SHIP_TYPES, shipModel } from '../src/world/shipmodels.js';
+import { addShip, shipsOf as shipsOf2, roomFor, sailable, boardAt, breakVoxel, packShip, applyShips, fireGun } from '../src/game/ships3d.js';
+import { holdOf, holdPos, holdUse } from '../src/game/shiphold.js';
+import { makeCrew } from '../src/game/shipcrew.js';
+import { navalOf, seaRoute, sendVoyage, ports } from '../src/game/shipfleets.js';
+import { ITEMS } from '../src/world/items.js';
+import { RECIPES } from '../src/world/recipes.js';
+import { B } from '../src/world/blocks.js';
+import { STEPS, migrateSave } from '../src/game/migrate.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
+
+test('each land\'s shape is picked by the world\'s seed', () => {
+  const kinds = new Set();
+  const per = [];
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const L = shapeLands(LANDMASSES, seed);
+    assert.equal(L.length, LANDMASSES.length);
+    per.push(L.map((q) => (q.shape ? q.shape.kind : 'classic')).join(','));
+    for (const q of L) kinds.add(q.shape ? q.shape.kind : 'classic');
+  }
+  assert.ok(new Set(per).size >= 6, 'different seeds, different lands');
+  assert.ok(kinds.size >= 5, `many kinds of shape: ${[...kinds].join(', ')}`);
+});
+
+let FAR = null;
+const farGame = () => (FAR ||= makeGame(4242, { wg: 2 }));
+
+test('the far lands are lived in: their peoples, realms, towns; no more than three empires, each a capital and well off', () => {
+  const game = farGame();
+  const ow = game.world.ow;
+  for (const k of ['velmarch', 'ostria', 'corrow', 'saltmere', 'hollowmark', 'wyrd', 'skerries']) {
+    const towns = ow.settlements.filter((s) => s.island === k);
+    if (!ow.lands.some((L) => L.key === k)) continue;
+    assert.ok(towns.length >= 3, `${k}: ${towns.length} places`);
+    assert.ok(towns.some((s) => FAR_LANDS[k].peoples.includes(s.style)), `${k}: its own peoples`);
+  }
+  const empires = ow.settlements.filter((s) => s.empire);
+  assert.ok(empires.length <= 3 && empires.length >= 1, `${empires.length} empires`);
+  assert.ok(empires.filter((s) => s.island === 'velmarch').length <= 2 && empires.filter((s) => s.island === 'ostria').length <= 1);
+  assert.ok(empires.every((s) => s.island === 'velmarch' || s.island === 'ostria'), 'only on the two great lands');
+  for (const s of empires) {
+    assert.ok(s.civ && s.civ.empire, 'an empire\'s realm');
+    assert.equal(game.sim.realms.capitalOf(s.civ), s, 'its capital');
+    assert.ok((s.prosperity ?? s.civ.prosperity ?? 1) >= 0.5, 'well off');
+  }
+  // Out past the storm: no spires; and they'd pay far more for a core.
+  const outside = (x) => !ow.insideStorm((x.cx + 0.5) * 64, (x.cz + 0.5) * 64);
+  assert.ok(!ow.sites.some((q) => q.type === 'kavorent' && FAR_LANDS[q.island]), 'no spires on the lands beyond the storm');
+  assert.ok(ow.sites.filter((q) => q.type === 'kavorent').every((q) => !FAR_LANDS[q.island] && (q.island === 'thessa' || q.island === 'kharos' || q.island === 'myrrow' || !outside(q))));
+  const far = ow.settlements.find((s) => s.island === 'velmarch');
+  const home = ow.settlements.find((s) => s.island === 'thessa');
+  assert.ok(coreWorth(far) > coreWorth(home) * 2);
+});
+
+test('each far land: its own ground, beasts, music, dungeon, two masters to each kind of dungeon, gear', () => {
+  const lands = Object.keys(FAR_LANDS);
+  const ownTypes = new Set();
+  for (const k of lands) {
+    const biomes = Object.entries(BIOMES).filter(([, b]) => b.land === k);
+    assert.ok(biomes.length >= 1, `${k}: ground of its own`);
+    const beasts = biomes.flatMap(([id]) => ISLE_DAY[id] || []);
+    assert.ok(beasts.length >= 3 && beasts.every((sp) => SPECIES[sp]), `${k}: beasts of its own ground`);
+    assert.ok(THEMES[`fight_${k}`], `${k}: its own fighting music`);
+    const own = FAR_OWN_TYPE[k];
+    assert.ok(own && FAR_DTYPES[own], `${k}: a dungeon of its own`);
+    ownTypes.add(own);
+    for (const [type, two] of Object.entries(FAR_BOSSES[k])) {
+      assert.equal(two.length, 2, `${k} ${type}: two masters`);
+      for (const b of two) assert.ok(SPECIES[b], `${b} is a creature`);
+    }
+    assert.ok(LAND_MOD_OF[k] && LAND_MODS[LAND_MOD_OF[k]], `${k}: its own gear modifier`);
+  }
+  assert.equal(ownTypes.size, lands.length, 'each land a different kind');
+});
+
+test('the far peoples\' learning: Velmarch\'s and Ostria\'s with 15-20 steps of their own, the widest of all', () => {
+  const own = (style) => Object.entries(TECHS).filter(([, t]) => (t.isles || []).includes(style)).length;
+  for (const style of ['velari', 'rime', 'jade', 'kesh']) {
+    const n = own(style);
+    assert.ok(n >= 15 && n <= 20, `${style}: ${n}`);
+  }
+  for (const style of ['corrow', 'salt', 'hollow', 'wyrd', 'skerry']) assert.ok(own(style) < 15, style);
+  const big = treeOf('velari').ids.length;
+  for (const style of ['corrow', 'salt', 'hollow', 'wyrd', 'skerry', 'thessa']) assert.ok(treeOf(style).ids.length < big, `${style} smaller than the Velari's`);
+  assert.ok(Object.keys(FAR_PEOPLES).length >= 9);
+});
+
+// ------------------------------------------------------------ ships
+const openWater = (game, type = 'galleon') => {
+  const p = game.player;
+  for (let R = 30; R < 900; R += 12) {
+    for (let k = 0; k < 48; k++) {
+      const a = (k / 48) * Math.PI * 2;
+      const x = Math.round(p.x + Math.cos(a) * R);
+      const z = Math.round(p.z + Math.sin(a) * R);
+      game.loadAround?.(x, z, true);
+      if (!roomFor(game, type, x, z, 0)) continue;
+      let ok = true;
+      for (let a2 = 0; a2 < 16 && ok; a2++) for (const rr of [10, 20, 30]) if (!sailable(game, Math.round(x + Math.cos((a2 / 16) * 6.283) * rr), Math.round(z + Math.sin((a2 / 16) * 6.283) * rr))) ok = false;
+      if (ok) return { x, z };
+    }
+  }
+  return null;
+};
+
+test('the four great ships: built of blocks, with decks below, guns, masts, a wheel; up to six times a raft\'s speed', () => {
+  const raft = 5;
+  for (const t of ['sloop', 'brigantine', 'galleon', 'frigate']) {
+    const T = SHIP_TYPES[t];
+    const m = shipModel(t);
+    assert.ok(m.total > 300, `${t}: ${m.total} blocks`);
+    assert.ok(m.masts.length >= 1 && m.helm && m.guns.length >= 2, t);
+    assert.ok(T.speed / raft >= 2 && T.speed / raft <= 6, `${t}: ${T.speed / raft}× a raft`);
+  }
+  assert.ok(SHIP_TYPES.galleon.floors.length >= 2 && shipModel('frigate').guns.some((g) => !g.deck), 'more than one deck below; a gun deck');
+  for (const k of ['cannonball', 'ship_sloop', 'ship_brigantine', 'ship_galleon', 'ship_frigate', 'sailors_articles']) assert.ok(ITEMS[k], k);
+  assert.ok(RECIPES.some((r) => r.out === 'cannonball' || r.item === 'cannonball' || r.result === 'cannonball'));
+});
+
+test('a ship sails, takes shot, floods below, is pumped; her hold and her hull are one', () => {
+  const game = makeGame(7);
+  const spot = openWater(game);
+  assert.ok(spot, 'open water');
+  const S = addShip(game, { type: 'galleon', x: spot.x, z: spot.z, yaw: 0, crew: makeCrew(5, 'galleon', 'vale', 8) });
+  const p = game.player;
+  p.teleport(spot.x + 8, 6, spot.z);
+  boardAt(game, S, p, spot.x, spot.z);
+  assert.ok(p.deck && p.deck.s === S.id, 'aboard');
+  S.anchor = false;
+  S.sailGoal = 1;
+  S.route = [{ x: spot.x + 60, z: spot.z + 60 }];
+  const x0 = S.x;
+  const z0 = S.z;
+  for (let i = 0; i < 600; i++) game.update(1 / 60, stubInput());
+  assert.ok(Math.hypot(S.x - x0, S.z - z0) > 3, 'under way');
+  // Shot from a frigate alongside.
+  const T = addShip(game, { type: 'frigate', x: S.x + 28, z: S.z, yaw: 0 });
+  const before = S.whole;
+  let fired = 0;
+  for (let i = 0; i < T.guns.length; i++) {
+    if (T.m.guns[i].side !== -1) continue;
+    T.guns[i].elev = 0.02;
+    if (fireGun(game, T, i)) fired++;
+  }
+  assert.ok(fired > 0);
+  for (let i = 0; i < 180; i++) game.update(1 / 60, stubInput());
+  assert.ok(S.whole <= before, 'hit');
+  // Her hull, broken from outside, is broken inside her too.
+  const H = holdOf(game, S);
+  assert.ok(H);
+  const m = S.m;
+  let vi = -1;
+  for (let i = 0; i < m.N && vi < 0; i++) if (m.skin && m.skin[i] && S.vox[i] && i % 7 === 0) vi = i;
+  if (vi < 0) for (let i = 0; i < m.N && vi < 0; i++) if (m.skin && m.skin[i] && S.vox[i]) vi = i;
+  const x = vi % m.W;
+  const z = Math.floor(vi / m.W) % m.L;
+  const y = Math.floor(vi / (m.W * m.L));
+  const [hx, hy, hz] = holdPos(S, x, y, z);
+  const plank = game.world.getBlock(hx, hy, hz);
+  assert.equal(plank, S.vox[vi], 'inside, the same plank');
+  breakVoxel(game, S, vi, 'test');
+  assert.ok([B.air, B.water].includes(game.world.getBlock(hx, hy, hz)), 'broken inside too (the sea in, below her waterline)');
+  // Her pump, worked by hand.
+  S.floodCells = 40;
+  const pump = m.pump ? holdPos(S, m.pump.x, m.pump.y, m.pump.z) : null;
+  if (pump) {
+    holdUse(game, p, pump[0], pump[1], pump[2], 'pump');
+    assert.ok(S.floodCells < 40, 'pumped');
+  }
+  // Saved and loaded with the world.
+  const d = game.serialize();
+  assert.ok(d.ships && d.ships.ships && d.ships.ships.length >= 2);
+});
+
+test('ships over the network: where she is, and every plank broken', () => {
+  const game = makeGame(9);
+  const spot = openWater(game, 'brigantine');
+  const S = addShip(game, { type: 'brigantine', x: spot.x, z: spot.z, yaw: 0.6 });
+  breakVoxel(game, S, S.m.N - S.m.W * 3 + 2, 'test');
+  const pk = packShip(S, true);
+  const guest = makeGame(9);
+  applyShips(guest, [pk]);
+  const G = shipsOf2(guest)[0];
+  assert.ok(G && G.type === 'brigantine');
+  assert.ok(Math.abs(G.x - S.x) < 0.01 && Math.abs(G.yaw - S.yaw) < 0.01);
+  let a = 0;
+  let b = 0;
+  for (let i = 0; i < S.m.N; i++) {
+    if (S.vox[i] !== S.m.vox[i]) a++;
+    if (G.vox[i] !== G.m.vox[i]) b++;
+  }
+  assert.equal(a, b, 'the same planks gone');
+});
+
+test('the realms send ships across the sea (round the storm, till the wall falls)', () => {
+  const game = farGame();
+  const ow = game.world.ow;
+  for (const c of ow.civs) {
+    const st = game.sim.tech.stateOf(c);
+    if (st && !st.done.includes('trade_ships')) st.done.push('trade_ships');
+  }
+  assert.ok(ow.civs.some((c) => navalOf(game, c)), 'some can');
+  const P = ports(game);
+  const from = P.find((s) => s.island === 'velmarch');
+  const to = P.find((s) => s.island === 'ostria');
+  assert.ok(from && to, 'ports on both');
+  const v = sendVoyage(game, from, to, 'trade');
+  assert.ok(v && v.route.length >= 2, 'a voyage');
+  for (const q of v.route) assert.ok(ow.wallDown || !ow.insideStorm(q.x, q.z), 'never through the storm');
+  assert.ok(seaRoute);
+});
+
+// ------------------------------------------------------------ the update
+test('a world from 0.67 comes up to 0.68 (keeping its lands)', () => {
+  assert.ok(compareVersions(GAME_VERSION, '0.68.0') >= 0);
+  assert.ok(STEPS.find((s) => s.to === '0.68.0'));
+  const d = { gv: '0.67.0', v: 1 };
+  const r = migrateSave(d);
+  assert.equal(d.wg, 1, 'its lands as they were made');
+  assert.ok(r.log.some((t) => /ships/i.test(t)));
+});

@@ -45,6 +45,11 @@ export function crewTick(game, S, dt) {
   const near = playersNear(game, S, S.crewHere ? FAR : NEAR);
   if (near && !S.crewHere && S.crewRecs.length && !S.sinking) spawnCrew(game, S);
   else if (!near && S.crewHere) despawnCrew(game, S);
+  // (Hands lost: gone from her books, not to come back.)
+  if (game.sailors && game.sailors.some((c) => c.dead && c.shipId === S.id)) {
+    for (const c of game.sailors) if (c.dead && c.shipId === S.id && c.recRef) c.recRef.dead = true;
+    game.sailors = game.sailors.filter((c) => !(c.dead && c.shipId === S.id));
+  }
   const crew = crewOf(game, S);
   if (S.crewHere) for (const c of crew) {
     c.update(dt);
@@ -52,6 +57,8 @@ export function crewTick(game, S, dt) {
     if (c.deck) deckBrain(game, S, c, dt);
     else if (S.hold && S.hold.has(c)) holdBrain(game, S, c, dt);
   }
+  // Fighting whoever's struck one of them.
+  if (S.crewHere && crew.some((c) => c.angry)) crewFight(game, S, dt);
   // Her helmsman, if she's not a player's to steer.
   if (!S.owner || S.autoHelm) helmsman(game, S, dt);
   // Run her guns in again a while after the last shot.

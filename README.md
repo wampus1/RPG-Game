@@ -5133,6 +5133,171 @@ a world can change its mods, and not while others are in it.
 
 **Updating.** Worlds from 0.66 load as they were.
 
+## Round 68: the far lands, great ships, and stories that can do anything
+
+**Each land's shape, by the seed.** In a new world, every landmass is
+shaped by the world's seed: bigger or smaller than the old charts have
+it, long and drawn out, broken into pieces, split by a strait (with
+bridges across: plank, stone or a causeway, as wide and as long as the
+strait needs), bitten by a bay, a crescent, or all bays and capes. The
+world map says which. (A mod's own world map is left as it's drawn.)
+
+**The far lands lived in.** Out past the storm, the two great continents
+and the five far isles have peoples of their own now, each with its
+names, dress, dishes, gods, customs, history, way of building, and the
+great thing on its square:
+- **Velmarch**: the **Velari**, an old empire of marble roads, red-tiled
+  roofs, laurels and legions (a triumphal column on every square); and
+  the **Rimeborn** of the frozen north, reindeer herders in turf-roofed
+  longhouses who keep a fire of ice (the frost hearth).
+- **Ostria**: the **Jade Court**, of lacquered halls, green tiles,
+  lanterns and bells (the bell pagoda); and the **Keshari** of the red
+  canyons, building in red adobe up the cliffs (the sun wheel).
+- **Corrow**: the **Bonewrights**, whalers building with the ribs of the
+  great whales (the jaw arch). **Saltmere**: the **Saltfolk**, raking
+  the salt flats and building white domes (the salt obelisk).
+  **Hollowmark**: the **Hollowfolk**, in burrows round great sinkholes
+  under lantern trees. **The Wyrd Isle**: the **Wyrdfolk**, rune-carvers
+  in stone round houses within their stone rings. **The Grey Skerries**:
+  the **Skerrymen**, fishing the cold seas and keeping their beacons lit.
+
+Their realms have villages, towns and cities, and the great continents
+have **empires**: at most three in a world (two on Velmarch, one on
+Ostria), each the capital of the realm it's born with, the greatest
+place in the world (with a palace), always well off and well stocked. The far lands are cut off by the storm while the wall stands
+(the Dagoni Islands start sailing to them once it falls), and there are
+no Kavorent spires out there: so they pay far more for a **Kavorent
+core** (over twice what the islands do).
+
+**Their own ground, beasts and music.** Nine new kinds of ground: the
+Olive Hills and Rimewood (Velmarch), the Bamboo Grove and Red Mesa
+(Ostria), the Bone Strand (Corrow), the Salt Flats (Saltmere), the
+Lantern Hollows (Hollowmark), the Rune Heath (Wyrd) and the Sea Cliffs
+(the Skerries), each with its own trees and plants, and seventeen new
+creatures between them (white bulls, reindeer, cranes, tigers,
+rattlesnakes, flamingos, brine scorpions, puffins, frost wolves,
+lantern moths...). Every land has its own music, with instruments of its
+own (lyre and brass for Velmarch, erhu and koto for Ostria, pipes and
+bodhran for Corrow, bouzouki for Saltmere, ocarina for Hollowmark, chant
+and bells for the Wyrd Isle, reels for the Skerries), in its towns, on its
+ground and in its fights.
+
+**Their old places.** Each land has a kind of dungeon no other has, with
+rooms, perils, air and music of its own: the **Imperial Catacombs**
+(Velmarch), the **Terracotta Vaults** (Ostria), the **Leviathan's Gut**
+(Corrow), the **Salt Cathedrals** (Saltmere), the **Deep Warrens**
+(Hollowmark), the **Hollow Hills** (Wyrd) and the **Drowned Brochs**
+(the Skerries); and the usual kinds, built in each land's own stone. Every
+kind of dungeon in every land has **two masters** of its own (seventy in
+all, each painted), and eight new creatures live down there. Gear found
+in a land can have that land's **own modifier**, found nowhere else:
+Legion-forged (Velmarch), Jade-set (Ostria), Whaler's (Corrow),
+Brine-cured (Saltmere), Lantern-lit (Hollowmark), Rune-cut (Wyrd),
+Storm-touched (the Skerries).
+
+**Their learning.** Each far people has its own tech tree: the common
+steps it never learns dropped, others moved, and steps of its own. The
+four peoples of the great continents have 15 to 20 steps of their own
+each (the Census, Imperial Roads, the Forum, the Legion, the Testudo...
+for the Velari), the widest trees in the game.
+
+**Great ships.** Four ships built of blocks, drawn turning freely in any
+direction: the **sloop** (fast and handy), the **brigantine**, the
+**galleon** (three decks, a high poop and forecastle, a hold full of
+cargo) and the **frigate** (the fastest, with a gun deck below the main
+deck); up to six times as fast as a raft, as well as she's sailed.
+- **Getting one**: a shipwright (a carpenter by the sea) sells deeds
+  (a sloop always; a brigantine, galleon or frigate as the town's
+  learning allows), or make a sloop kit at a workbench. Use the deed or
+  kit by the water and she's launched, with a crew. **Sailor's
+  articles** sign on another hand.
+- **Aboard**: **F** beside her climbs aboard. Walk her decks, and down
+  the hatches into her hold (her inside is its own place, a deck or two
+  below, that moves with her: it shakes when she's struck, water comes
+  in where her hull's broken, and what's broken inside is broken outside
+  too, and the other way about). **F** at the wheel takes it.
+- **At the wheel**: A/D turn her, W/S set or take in sail (S with no sail
+  backs her off), Z/X or the mouse wheel trim the sheets, R lets go or
+  weighs the anchor. Her yards and sails swing with the trim; the wind
+  (shown on the compass) and how well she's trimmed decide her speed:
+  the gauge says when she's drawing well, luffing, aback or in irons.
+- **Her guns**: **F** at a gun takes it: aim with the mouse, W/S or the
+  wheel raise and lower her, click to fire (cannonballs, made at an
+  anvil, or her own shot). At the wheel, a click fires the broadside on
+  the side you point to (as many guns as she has hands for). Below, the
+  gun deck's guns fire through their ports.
+- **Damage**: shot breaks her blocks (hull, rails, masts, sails); her
+  health is what's left of her. Holes below the waterline let the sea
+  in; work the **pump** below (her crew do too), or she settles and
+  founders. Mend her by putting planks back where blocks are gone, on
+  deck or below; her carpenter mends slowly from her stores.
+- **Her crew** walk her decks and go below, take the wheel, haul on the
+  sheets, man the guns in a fight and the pumps when she's holed, and
+  turn on anyone who strikes one of them. Hammocks below are beds.
+- **Together**: ships, their damage, their crews and who's aboard are
+  the same for everyone in a world.
+
+Towns' trade ships are great ships now (a sloop for a village, a
+brigantine for a town, a galleon for a city or an empire's capital),
+built from the keel up beside the new pier, their merchants walking
+aboard before they sail.
+
+**The realms' fleets.** A realm that has learned to cross the sea sends
+ships between the lands: merchantmen (their trade felt where they put
+in), settlers, men-of-war to an enemy's coast, cargo hulks. They sail
+round the storm while the wall stands (the Dagoni Islands' peoples only
+once it's down), shown on the world map (⛵); near you, they're real
+ships with their crews, to be watched, met, or fought.
+
+**Stories with everything in them.** The Story tool's graphs can now
+have **any node the entity graphs have** (actions, flow, values, maths,
+terrain, containers, behaviour, towns...): they run with the story's
+people and places (self is the giver, target the other, player a player
+in it, here its town), and its values are theirs ({name}, Set variable
+"local"). And forty-one new beats of its own, in groups:
+- **Ways**: Which way (by a value), Round again, The first time, In
+  turn (or shuffled), A mark / Go to a mark, **Wait till** (anything an
+  If can ask, with a time to give up), Whichever comes first (an event,
+  a kill, someone coming near, time running out), **Meanwhile** (the
+  story goes two ways at once), A new chapter (its title changed, across
+  the screen), End another story, Into the journal.
+- **People**: Someone else comes into it (a third and a fourth, {third}
+  and {fourth}), Someone goes (and stays), **Bring someone along** (they
+  follow you, till they're brought somewhere, or lost), Someone turns
+  (on the players, away, to follow, back to their day), Something
+  befalls someone, Change someone, Find out, **A word, with conditions**
+  (five answers, each able to ask for an item, coins or a value), Two of
+  them talk.
+- **Towns and realms**: The town changes (coffers, taxes, laws, a feast,
+  a new name...), Realms (war, peace, warmer, colder), The story moves
+  (to another town), Someone arrives, A dungeon (marked, the story's
+  place), The weather turns, A mark on the map.
+- **Players**: Coins, Befalls the players, The players are taken (with
+  a blackout of words), Spoken of, A moment (shake, flash, sound, music,
+  sparks, an effect), Words across the screen.
+- **The sea**: A ship comes (friendly, passing, or after the players),
+  The story's ship (to the town, to the players, turns on them, given to
+  a player, founders...), Ships are sent (a realm's fleet).
+- **Values**: Work it out, Keep a value (the world's or each player's),
+  Who's in it and A story value (for any node to wire from).
+
+The If (and Wait till) asks seventeen new things: whether the third or
+fourth is alive, someone's following a player, a player's at sea or
+aboard the story's ship, the ship's sunk or near the town, a player's in
+a dungeon, the wall's down, the town's realm is at war with a player's,
+coins, the town's coffers and mood, an event's been sent... Stories can
+begin in a town on any of the far lands, past the storm, or in an
+empire's capital. The story editor shows every node's inputs, and checks
+the new beats (a mark that isn't there, a third nobody brings in).
+
+**Fixes.** Says aloud didn't say anything (it looked for the giver's
+record, not the one walking about).
+
+**Updating.** Worlds from 0.67 keep their lands as they were made (their
+towns were laid on them), and the far lands as they were. Ships and
+fleets are in them from now on. A new world has the lands shaped by its
+seed and the far lands lived in.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5157,6 +5322,7 @@ you've typed. These are for exploring and testing, and they change your game.
 | `war list`, `war <realm> on <realm>`, `war peace [realm]` | lists the realms, starts a war between two, or makes peace |
 | `learn <step> [realm]`, `learn all [realm]`, `learn list` | a realm (yours, the one you're in, or one named at the end) learns a step of the tree at once, with whatever it needs first ("learn portals", "learn trade ships"); `all` learns everything it can (one side of each choice); `list` names the steps |
 | `erupt [days]` (or `volcano`) | the mountain on Kharos erupts now; with `days`, how long till it next does |
+| `ship <sloop\|brigantine\|galleon\|frigate> [aboard]`, `ship foe <type>`, `ship list` | launches a ship of your own on the nearest open water, with a crew and shot (and puts you aboard with `aboard`); `foe` sends a warship against you; `list` names the ships about |
 | `mod list`, `mod give/spawn/place/story/effect/dungeon <name>`, `mod event <name>` | what the world's mods add, and any of it put here: an item, a creature, a structure (built south of you), a story begun, an effect played, a dungeon gone down into, an event sent |
 
 Map teleporting and the revealed map are kept with your save.
@@ -5393,7 +5559,10 @@ src/
                        .wav in and out, cutting and effects), song (songs
                        in patterns, played, MIDI in and out), rules and
                        ruleset (the game's rules as mods change them),
-                       gear (how gear looks worn and held)
+                       gear (how gear looks worn and held); (round 68)
+                       storynodes2 and storyrun2 (the newer story beats,
+                       and the entity graph's nodes run in a story),
+                       lists (the game's sounds, music, conditions)
   workshop/            the Workshop (round 62): app (the frame, explorer,
                        undo, saving, playtest), kit (its controls), pixel,
                        vfx, rig, builder (with buildkinds: loot, layouts,
@@ -5407,6 +5576,32 @@ src/
                        pictures), homebar (the home page's bar)
   ui/modpick.js        choosing a new world's mods
   ui/modmanager.js     the world's mods from the pause menu (round 67)
+  world/shapes.js      (round 68) each land's shape, by the world's seed
+  world/bridges.js     bridges across the straits of a split land
+  world/farlands.js    the far lands' peoples, realms, towns and empires
+  world/fardeep.js     the far lands' own old places, their masters
+  sim/fartech.js       the far peoples' learning (their own steps, and
+                       the common ones they never learn)
+  world/shipmodels.js  the great ships, block by block: hull, decks, holds,
+                       masts, guns, wheel, cabins, pumps, hammocks
+  game/ships3d.js      a ship at sea: sailing (wind, sails, trim, the
+                       wheel), the shore, shot and damage, flooding and
+                       sinking, mending, who's aboard, walking her decks,
+                       saving, and sending her over the network
+  game/shiphold.js     her inside, its own place: kept the same as her
+                       hull, flooded, shaken, her pump and her guns
+  game/shipcrew.js     her crew: who they are, at the wheel, the sheets,
+                       the guns, the pumps, below, fighting
+  game/shipfleets.js   the realms' fleets: routes round the storm,
+                       voyages, ships made real near you
+  game/shipgame.js     ships and you: keys, the mouse, deeds and kits,
+                       sailors signed on, saving
+  game/shipping.js     towns' trade ships (built at the pier, sailing)
+  render/shipvox.js    the great ships drawn: her blocks at any heading,
+                       her rigging, sails and flags, her crew among them
+  render/shiphud.js    the ship's gauges (speed, trim, wind) and shot
+  render/shipart.js    the ships' own blocks' and items' pictures
+  entities/sailor.js   a hand aboard one of the great ships
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)
 tools/relay.mjs        the LAN relay: a small WebSocket server passing words

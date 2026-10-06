@@ -49,4 +49,9 @@ export class Sailor extends Entity {
     this.updateBase(dt);
     if (this.attackCd > 0) this.attackCd -= dt;
   }
+
+  // Struck: the whole crew turns on whoever did it (see crewHurt).
+  onHurt(source) {
+    if (source && source !== this && this.game.shipCrewHurt) this.game.shipCrewHurt(this, source);
+  }
 }

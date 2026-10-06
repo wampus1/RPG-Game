@@ -330,6 +330,24 @@ export const STEPS = [
       log.push('A world\'s mods can be changed from the pause menu (Mods): taken out, updated to your newer versions, or added.');
     },
   },
+  {
+    // The far lands lived in, great ships and the realms' fleets, and
+    // stories with every node (round 68). A world made before keeps the
+    // shapes of its lands (and the far lands as they were: wild, nobody
+    // living there), since its towns and its ground were laid on them; a
+    // new world has each land's shape picked by its seed, and the far
+    // lands' peoples, empires, ground, beasts, music, old places and
+    // masters. Ships are kept with the world from now on (none yet).
+    to: '0.68.0',
+    data(d, log) {
+      d.wg ??= 1;
+      d.ships ??= null;
+      log.push('Great ships: sloops, brigantines, galleons and frigates, bought as a deed from a shipwright (or built from a sloop kit), sailed by the wheel and her sails\' trim, her guns aimed and fired, her hold below to walk, pump and mend; her crew working her.');
+      log.push('Towns\' trade ships are great ships now, and the realms that have learned to cross the sea send merchantmen, settlers, men-of-war and cargo hulks between the lands (on the world map too).');
+      log.push('Mods\' stories can have any node the entity graphs have, and forty more beats of their own (people sent and brought along, towns and realms changed, ships, chapters, waits for anything an If can ask).');
+      if (d.wg === 1) log.push('This world keeps its lands as they were made. A new world has each land\'s shape picked by its seed, and the far lands lived in: their peoples and empires, their own ground, beasts, music, old places, masters and gear.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -14,7 +14,8 @@ import { REGION_W, REGION_D, INST_RX, INST_SLOT_RX, WORLD_Y } from '../config.js
 import { Region } from '../world/region.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { isInside, onPlan, standOn } from '../world/shipmodels.js';
-import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf, theShip } from './ships3d.js';
+import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf, theShip, fireGun } from './ships3d.js';
+import { countItem, removeItem } from './inventory.js';
 import { SURFACE } from '../config.js';
 
 // Each ship's space apart: its slot (past every old place's).
@@ -363,4 +364,43 @@ export function belowOn(game, S) {
 
 export function holdShipOfEntity(game, e) {
   return e && e.belowShip !== undefined && e.belowShip !== null ? shipById(game, e.belowShip) : null;
+}
+
+// (Round 68) Her pump worked by hand, or one of her gun deck's guns fired
+// through its port, from inside her. True if it was hers to see to.
+export function holdUse(game, p, x, y, z, what) {
+  const S = holdShipAt(game, x);
+  if (!S) {
+    game.ui.msg(what === 'pump' ? 'The pump sucks at nothing.' : 'A gun with no ship under it.', '#c8c8c8');
+    return true;
+  }
+  if (what === 'pump') {
+    const before = S.flood;
+    S.floodCells = Math.max(0, S.floodCells - 4);
+    S.pumpers = (S.pumpers || 0) + 6;
+    game.audio?.play('splash', p);
+    game.renderer?.emit?.(x, y + 1, z, { n: 8, color: ['#8cc4f0', '#e0f4ff'], up: 30, life: 0.5 });
+    game.ui.msg(before > 0.02 ? `You work the pump: the water in her falls (${Math.round(S.flood * 100)}% flooded now).` : 'You work the pump: she\'s dry enough.', '#80c8ff');
+    return true;
+  }
+  const [lx, ly, lz] = holdLocal(S, x, y, z);
+  const gi = S.m.guns.findIndex((g) => !g.deck && g.x === lx && g.y === ly && g.z === lz);
+  if (gi < 0) return false;
+  const st = S.guns[gi];
+  if (st && st.cd > 0) {
+    game.ui.msg('Still swabbing her out: a moment.', '#c8c8c8');
+    return true;
+  }
+  const shot = S.ammo > 0 ? 'ship' : countItem(p.inv, 'cannonball') > 0 ? 'mine' : null;
+  if (!shot) {
+    game.ui.msg('No shot for her: cannonballs are made at an anvil.', '#ffb080');
+    return true;
+  }
+  if (!fireGun(game, S, gi, p)) {
+    game.ui.msg('Her port\'s stove in: she can\'t fire through it.', '#ffb080');
+    return true;
+  }
+  if (shot === 'ship') S.ammo--;
+  else removeItem(p.inv, 'cannonball', 1);
+  return true;
 }

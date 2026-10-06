@@ -32,8 +32,9 @@ import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
 import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem } from './shipgame.js';
-import { holdBlockChanged } from './shiphold.js';
+import { holdBlockChanged, holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
+import { crewHurt } from './shipcrew.js';
 import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
@@ -113,7 +114,7 @@ export const SAVE_VERSION = 3;
 // What wanders the other Dagoni Islands by day: on Kharos's ash and cinder
 // woods, lizards and crabs; on Myrrow's moors, mangroves and fungal woods,
 // toads and crawlers (and the odd beast brought over long ago).
-const ISLE_DAY = {
+export const ISLE_DAY = {
   ashland: ['ash_lizard', 'ash_lizard', 'magma_crab', 'rabbit'], cinderwood: ['ash_lizard', 'boar', 'deer', 'ash_lizard'], geyser: ['magma_crab', 'ash_lizard'], volcano: ['magma_crab', 'ash_lizard'],
   mangrove: ['mire_toad', 'mire_toad', 'boar', 'shroom_crawler'], fungal: ['shroom_crawler', 'shroom_crawler', 'mire_toad', 'deer'], moor: ['mire_toad', 'sheep', 'rabbit', 'deer'],
   // (Round 68) The far lands' (see world/biomes.js).
@@ -4566,7 +4567,13 @@ export class Game {
         break;
       }
       case 'bed':
+      case 'hammock':
         this.trySleep(x, y, z);
+        break;
+      // (Round 68) Inside one of the great ships: her pump, her guns.
+      case 'pump':
+      case 'cannon':
+        holdUse(this, p, x, y, z, b.interact);
         break;
       case 'bell':
         this.ringBell(x, z, null, p);
@@ -7043,6 +7050,11 @@ export class Game {
   // Where someone aboard a ship is drawn (see Entity.renderPos).
   shipDeckPos(e) {
     return deckRenderPos(this, e);
+  }
+
+  // One of a ship's crew struck: her crew turns on whoever did it.
+  shipCrewHurt(c, by) {
+    crewHurt(this, c, by);
   }
 
   onBlockChange(x, y, z, o, n) {
