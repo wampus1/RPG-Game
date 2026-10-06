@@ -364,6 +364,24 @@ input[type=range].rng::-moz-range-thumb { width: 12px; height: 12px; border-radi
 .rg-wavebar { position: absolute; left: 0; right: 0; top: 9px; height: 4px; background: repeating-linear-gradient(90deg, rgba(112, 224, 224, 0.5) 0 6px, transparent 6px 12px); border-radius: 2px; }
 .vt-key.small { width: 7px; height: 7px; top: 5px; margin-left: -3px; background: var(--cyan); }
 
+/* Changes to the game's stories: a map of one. */
+.pt-map { position: relative; margin-top: 8px; }
+.pt-map svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.pt-e { fill: none; stroke: #6a5e4a; }
+.pt-e.maybe { stroke-dasharray: 4 4; }
+.pt-e.end { stroke: #5a3a3a; }
+.pt-e.hit { stroke: transparent; cursor: pointer; pointer-events: stroke; }
+.pt-e.changed, .pt-e.on { stroke: var(--gold); }
+.pt-e.hit.changed, .pt-e.hit.on { stroke: transparent; }
+.pt-node, .pt-end { position: absolute; border-radius: 6px; padding: 6px 9px; display: flex; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pt-node { background: var(--panel2); border: 1px solid var(--line2); cursor: pointer; }
+.pt-node:hover { border-color: var(--gold2); }
+.pt-node.start { border-color: #8a6a3a; background: #2a2016; }
+.pt-node.changed { box-shadow: 0 0 0 2px rgba(255, 224, 112, 0.35); }
+.pt-node.on { border-color: var(--gold); background: var(--sel); }
+.pt-end { background: #241318; border: 1px dashed #6a3a44; border-radius: 16px; }
+.pt-any { position: absolute; }
+
 /* Loot tables. */
 .lt-h { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; color: var(--gold); }
 .lt-h .btn { margin-left: auto; }

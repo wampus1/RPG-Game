@@ -17,6 +17,7 @@ import { ringTiles, proc } from '../entities/bosskit.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { modStat } from './stat.js';
 import './build.js';
+import './storyrun.js';
 
 export { modStat };
 
@@ -679,6 +680,8 @@ export function sendEvent(game, name, value, o = {}) {
   if (!name) return;
   const depth = (o.from && o.from.sendDepth) || 0;
   if (depth > 8) return;
+  // (Heard by the stories too: see storyrun.js, Wait for.)
+  game.sim?.saga?.emit('mod_event', { name, value, pos: o.pos ? { x: o.pos.x, z: o.pos.z } : null });
   for (const rec of MODS.events) {
     if (rec.f.when !== 'custom event' || String(rec.f.custom) !== name) continue;
     worldEvent(game, rec, { payload: value, target: o.target, pos: o.pos, sendDepth: depth + 1 });
@@ -1127,6 +1130,7 @@ MODS.lootSlots = lootSlots;
 MODS.state = modState;
 MODS.species = (k) => SPECIES[k] || null;
 // A structure's trigger set off by someone coming near (see build.js).
+MODS.sendEvent = sendEvent;
 MODS.fireTrigger = (game, mk, who) => {
   const m = mk.mod;
   const x = { game, mod: m, rec: null, self: null, target: who, player: who, pos: { x: mk.x, y: mk.y, z: mk.z }, vars: {}, locals: {}, steps: 0 };

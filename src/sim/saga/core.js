@@ -52,6 +52,10 @@ export const MOTIFS = {};
 // cell door used, a letter read. Each a list of (S, ...) => true if it was
 // theirs.
 export const HOOKS = { subdue: [], feud: [], door: [], read: [], chest: [], rejoin: [] };
+// (Round 62) Mods' changes to the stories: (th, from, to, S, phase) at
+// each turn a story takes. Before it ('turn'): { to } to go elsewhere, or
+// { end } to end it there; after it's arrived ('arrive'): nothing.
+export const GO_HOOKS = [];
 export function motif(def) {
   MOTIFS[def.id] = def;
   return def;
@@ -356,6 +360,19 @@ export class Saga {
   go(th, to, line = null, o = {}) {
     if (th.done) return;
     const M = MOTIFS[th.m];
+    for (const f of GO_HOOKS) {
+      let r = null;
+      try {
+        r = f(th, th.node, to, this, 'turn');
+      } catch (e) {
+        this.fault(th, e);
+      }
+      if (r && r.end) return this.end(th, r.end, line);
+      if (r && r.to && r.to !== to) {
+        to = r.to;
+        break;
+      }
+    }
     const prev = th.node ? M.nodes[th.node] : null;
     if (prev && prev.exit) {
       try {
@@ -374,6 +391,13 @@ export class Saga {
     if (node.enter) {
       try {
         node.enter(th, this, o);
+      } catch (e) {
+        this.fault(th, e);
+      }
+    }
+    for (const f of GO_HOOKS) {
+      try {
+        f(th, null, to, this, 'arrive');
       } catch (e) {
         this.fault(th, e);
       }

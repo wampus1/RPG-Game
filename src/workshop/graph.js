@@ -179,7 +179,7 @@ export default class GraphTool {
       defs: NODES, fits, colors: TYPE_COLORS, cats: CATS,
       graph: () => this.ent.graph,
       makeNode: (type, x, y) => (NODES[type].root ? null : makeNode(type, x, y)),
-      canAdd: (d) => !d.root,
+      canAdd: (d) => !d.root && !d.story,
       checkpoint: () => this.app.checkpoint('entities', this.id),
       onChange: () => {
         this.app.touch('entities', this.id);

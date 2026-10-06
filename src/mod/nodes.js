@@ -808,3 +808,6 @@ export const TEMPLATE_INFO = {
   'tpl.recipe': { group: 'Logic', icon: '⚒', blurb: 'A crafting recipe.' },
   'tpl.projectile': { group: 'Logic', icon: '➶', blurb: 'An arrow, orb or bolt for Shoot.' },
 };
+
+// (Round 62) The Story tool's nodes (in the same registry; marked story).
+import './storynodes.js';

@@ -1113,6 +1113,9 @@ function beginPlaytest(g, pt) {
       rec.known = true;
       g.runFor(rec).enter();
     } else ui.msg('That dungeon found no place in this world (is "How many" 0, or its biomes ones this island hasn\'t?).', '#ffb080');
+  } else if (sel.kind === 'stories') {
+    const th = MODS.startStory?.(g, mod, sel.id, { player: p, pos: { x: p.x, z: p.z } });
+    ui.msg(th ? `"${th.title}" has begun (see your journal, and the notice board in ${g.world.ow.settlements[th.sid]?.name || 'town'}).` : 'The story couldn\'t begin here: is there a town near with the people it needs?', th ? '#80e070' : '#ffb080');
   } else if (sel.kind === 'entities') {
     const sp = `m:${pt.modId}:${sel.id}`;
     if (MODS.species && MODS.species(sp)) {
