@@ -1014,14 +1014,46 @@ export function tooltips(root2) {
 // A bar between two panes: dragged, `el` grows or shrinks (from `side`,
 // 'left' or 'right'); kept for next time under `key`.
 export function splitter(el, side, key) {
-  const bar = h('div', { class: 'split' });
+  const bar = h('div', { class: `split ${side}` });
   try {
     const w = +localStorage.getItem(`ws-w-${key}`);
     if (w > 0) el.style.width = `${w}px`;
   } catch {
     // Fine.
   }
+  // (Round 66) A button on it folds the panel away (and back): kept so.
+  const fold = h('button', { class: 'fold', type: 'button' });
+  const setFolded = (on, keep = true) => {
+    el.classList.toggle('folded', on);
+    bar.classList.toggle('folded', on);
+    clear(fold);
+    fold.append(ic(on === (side === 'left') ? 'chevRight' : 'chevLeft', 9));
+    fold.setAttribute('data-tip', on ? 'Show this panel' : 'Fold this panel away');
+    if (keep) {
+      try {
+        localStorage.setItem(`ws-fold-${key}`, on ? '1' : '');
+      } catch {
+        // Fine.
+      }
+    }
+    window.dispatchEvent(new window.Event('ws-resize'));
+  };
+  let folded = false;
+  try {
+    folded = localStorage.getItem(`ws-fold-${key}`) === '1';
+  } catch {
+    folded = false;
+  }
+  setFolded(folded, false);
+  fold.addEventListener('pointerdown', (e) => e.stopPropagation());
+  fold.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setFolded(!el.classList.contains('folded'));
+  });
+  bar.append(fold);
+  bar.fold = setFolded;
   bar.addEventListener('pointerdown', (e) => {
+    if (el.classList.contains('folded')) return;
     e.preventDefault();
     bar.setPointerCapture(e.pointerId);
     bar.classList.add('drag');

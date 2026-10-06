@@ -114,7 +114,17 @@
 .ws-inspector { width: 300px; flex: none; background: var(--bg2); border-left: 2px solid var(--line); display: flex; flex-direction: column; min-width: 200px; max-width: 520px; }
 .ws-inspector.hidden, .ws-explorer.hidden { display: none; }
 .split { width: 5px; flex: none; cursor: col-resize; background: transparent; margin: 0 -2px; z-index: 3; position: relative; }
-.split:hover, .split.drag { background: repeating-linear-gradient(0deg, var(--gold) 0 2px, transparent 2px 4px); opacity: 0.6; }
+.split:hover, .split.drag { background: repeating-linear-gradient(0deg, var(--gold) 0 2px, transparent 2px 4px); }
+/* (Round 66) Its button folds the panel away; folded, a strip to open it. */
+.split .fold { position: absolute; top: calc(50% - 18px); width: 14px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--panel); border: 2px solid var(--line); box-shadow: var(--bevel); color: var(--dim); cursor: pointer; z-index: 4; opacity: 0.85; }
+.split.left .fold { left: -5px; }
+.split.right .fold { right: -5px; }
+.split .fold:hover { color: var(--gold); opacity: 1; }
+.split.folded { width: 14px; margin: 0; cursor: default; background: var(--bg2); border-left: 2px solid var(--line); border-right: 2px solid var(--line); }
+.split.folded:hover { background: var(--bg2); }
+.split.folded .fold { left: -2px; right: auto; }
+.ws-explorer.folded, .ws-inspector.folded, .ws-inspector.home { display: none; }
+.split.homeless { display: none; }
 
 /* ---------------------------------------------------------- explorer */
 .ex-head { padding: 8px; display: flex; gap: 6px; border-bottom: 2px solid var(--line); }
@@ -574,3 +584,27 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .cg-give { border: 1px solid var(--line); background: var(--well); padding: 4px 6px; margin-bottom: 4px; }
 .cg-give .gh { display: flex; align-items: center; gap: 6px; color: var(--cyan); font-size: 12px; margin-bottom: 3px; }
 .cg-gives.drop, .cg-sub.drop, .list .li.drop { outline: 1px dashed var(--gold); }
+
+/* ---------------------------------------------------------- the mod's page (round 66) */
+.home-head { display: flex; align-items: center; gap: 18px; max-width: 980px; }
+.home-head .grow { flex: 1; min-width: 0; }
+.modicon.pick { cursor: pointer; border: 2px solid var(--line); box-shadow: var(--bevel); flex: none; display: grid; place-items: center; }
+.modicon.pick:hover { outline: 2px solid var(--gold); }
+.home-name { width: 100%; font: inherit; font-family: var(--pix); font-size: 30px; line-height: 36px; color: var(--gold); text-shadow: 2px 2px 0 #000; background: transparent; border: 2px solid transparent; padding: 0 4px; margin: 0 0 4px -6px; }
+.home-name:hover { border-color: var(--line); }
+.home-name:focus { border-color: var(--gold); background: var(--well); outline: none; }
+.home-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px 22px; max-width: 980px; }
+.home-details .field.wide { grid-column: 1 / -1; }
+.home-details textarea { min-height: 80px; }
+.mod-bar { display: flex; flex-wrap: wrap; gap: 3px; padding: 5px; background: var(--well); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.35); max-width: 980px; }
+.mod-bar .sq { width: 16px; height: 16px; flex: none; cursor: pointer; box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.28), inset -2px -2px 0 rgba(0, 0, 0, 0.32); }
+.mod-bar .sq:hover { outline: 2px solid var(--gold); }
+.mod-bar .sq.empty { background: var(--panel); opacity: 0.45; cursor: default; box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.4); }
+.mod-bar .sq.empty:hover { outline: none; }
+.mod-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; max-width: 980px; }
+.mod-legend .lg { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); font-size: 12px; padding: 2px 4px; }
+.mod-legend .lg:hover { background: var(--panel); }
+.mod-legend .lg.none { color: var(--dim); opacity: 0.7; }
+.mod-legend .lg b { color: var(--gold); }
+.mod-legend .sw { width: 10px; height: 10px; box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.3), inset -1px -1px 0 rgba(0, 0, 0, 0.35); }
+.mod-legend .lg.none .sw { opacity: 0.4; }

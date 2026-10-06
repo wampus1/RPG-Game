@@ -58,20 +58,21 @@ const LOADERS = {
   chargen: () => import('./chargen.js'),
 };
 // The explorer's sections, in order.
+// (Round 66: each its own colour, for the mod's page.)
 const SECTIONS = [
-  { key: 'assets', name: 'Art', icon: 'pencil' },
-  { key: 'vfx', name: 'Effects', icon: 'sparkle' },
-  { key: 'rigs', name: 'Rigs', icon: 'bone' },
-  { key: 'entities', name: 'Entities', icon: 'node' },
-  { key: 'structures', name: 'Structures', icon: 'house' },
-  { key: 'layouts', name: 'Layouts', icon: 'grid' },
-  { key: 'dungeons', name: 'Dungeons', icon: 'stairs' },
-  { key: 'loot', name: 'Loot tables', icon: 'chest' },
-  { key: 'stories', name: 'Stories', icon: 'scroll' },
-  { key: 'patches', name: 'Story changes', icon: 'book' },
-  { key: 'biomes', name: 'Biomes', icon: 'tree' },
-  { key: 'worlds', name: 'World maps', icon: 'globe' },
-  { key: 'chargen', name: 'Character tabs', icon: 'bust' },
+  { key: 'assets', name: 'Art', icon: 'pencil', color: '#e86aa8' },
+  { key: 'vfx', name: 'Effects', icon: 'sparkle', color: '#c070f0' },
+  { key: 'rigs', name: 'Rigs', icon: 'bone', color: '#80d8f0' },
+  { key: 'entities', name: 'Entities', icon: 'node', color: '#70d070' },
+  { key: 'structures', name: 'Structures', icon: 'house', color: '#c8a070' },
+  { key: 'layouts', name: 'Layouts', icon: 'grid', color: '#a08860' },
+  { key: 'dungeons', name: 'Dungeons', icon: 'stairs', color: '#8a7aa8' },
+  { key: 'loot', name: 'Loot tables', icon: 'chest', color: '#e0c050' },
+  { key: 'stories', name: 'Stories', icon: 'scroll', color: '#f09070' },
+  { key: 'patches', name: 'Story changes', icon: 'book', color: '#d07060' },
+  { key: 'biomes', name: 'Biomes', icon: 'tree', color: '#50b878' },
+  { key: 'worlds', name: 'World maps', icon: 'globe', color: '#4aa8e0' },
+  { key: 'chargen', name: 'Character tabs', icon: 'bust', color: '#f0d0a0' },
 ];
 
 let cssDone = false;
@@ -123,7 +124,9 @@ export class Workshop {
     this.stage = h('section', { class: 'ws-stage' });
     this.inspector = h('aside', { class: 'ws-inspector' });
     this.status = h('div', { class: 'ws-status' });
-    const body = h('div', { class: 'ws-body' }, this.explorer, splitter(this.explorer, 'left', 'explorer'), this.stage, splitter(this.inspector, 'right', 'inspector'), this.inspector);
+    this.splitL = splitter(this.explorer, 'left', 'explorer');
+    this.splitR = splitter(this.inspector, 'right', 'inspector');
+    const body = h('div', { class: 'ws-body' }, this.explorer, this.splitL, this.stage, this.splitR, this.inspector);
     this.root.append(this.top, body, this.status);
     // (Round 64) Drawn afresh after a click, the stage and the inspector
     // keep where they were scrolled to; the tools' names, as many as fit;
@@ -396,6 +399,10 @@ export class Workshop {
     if (this.toolId === id && this.tool && !force) return;
     this.tool?.unmount?.();
     this.toolId = id;
+    // (Round 66) The mod's own page has everything on it: no panel on the
+    // right.
+    this.inspector.classList.toggle('home', id === 'overview');
+    this.splitR.classList.toggle('homeless', id === 'overview');
     this.drawTop();
     clear(this.stage);
     clear(this.inspector);
@@ -1135,128 +1142,113 @@ class OverviewTool {
     this.draw();
   }
 
+  // (Round 66) The mod's own page: what it is (to change right here), what
+  // it's made of (a bar of squares, a colour to each kind), and what's
+  // wrong with it. No quick starts, no panel on the right.
   draw() {
     const app = this.app;
     const m = app.mod;
     clear(this.stage);
     clear(this.insp);
     const wrap = h('div', { class: 'home scroll' });
-    const icon = h('div', { class: 'modicon', style: { background: m.color, width: '56px', height: '56px' } }, app.modIcon(56));
-    wrap.append(h('div', { class: 'row', style: { gap: '16px', alignItems: 'center' } }, icon, h('div', null, h('h1', null, m.name), h('div', { class: 'note' }, `v${m.version} · by ${m.author} · ${countThings(m)} things`))));
-    if (m.description) wrap.append(h('div', { class: 'sub', style: { marginTop: '12px' } }, m.description));
-    // What's in it.
-    const stats = h('div', { class: 'stats' });
-    for (const S of SECTIONS) {
-      const n = Object.keys(m[S.key] || {}).length;
-      const st = h('div', { class: 'stat', 'data-tip': `New ${KIND_NAMES[S.key][0]}` }, h('div', { class: 'v' }, n), h('div', { class: 'l' }, S.name));
-      st.addEventListener('click', (e) => app.newMenu(e.clientX, e.clientY, S.key));
-      stats.append(st);
+    const set = (k, v, redraw = false) => {
+      app.checkpoint('meta', 'meta');
+      m[k] = v;
+      app.touch('meta');
+      app.drawTop();
+      if (redraw) this.draw();
+    };
+    const icon = h('div', { class: 'modicon pick', style: { background: m.color, width: '64px', height: '64px' }, 'data-tip': 'Its picture: click to choose art, or drag some here' }, app.modIcon(64));
+    icon.addEventListener('click', (e) => {
+      const items = Object.values(m.assets).map((a) => ({ label: a.name, onClick: () => set('icon', a.id, true) }));
+      if (m.icon) items.push({ sep: true }, { label: 'No picture', onClick: () => set('icon', null, true) });
+      if (!Object.keys(m.assets).length) items.push({ label: 'Draw some art first (Pixel)', off: true });
+      menu(items, e.clientX, e.clientY);
+    });
+    dropTarget(icon, (q) => q.kind === 'assets', (q) => set('icon', q.id, true));
+    const name = h('input', { class: 'home-name', value: m.name, maxlength: 40, spellcheck: 'false', 'data-tip': 'Its name (click to change)' });
+    name.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') name.blur();
+    });
+    name.addEventListener('change', () => set('name', cleanName(name.value, 40, m.name)));
+    wrap.append(h('div', { class: 'home-head' }, icon, h('div', { class: 'grow' }, name, h('div', { class: 'note' }, `${countThings(m)} things · v${m.version} · by ${m.author}`)),
+      h('div', { class: 'row' }, button('Playtest', { icon: 'play', kind: 'go', onClick: () => app.playtest() }), button('Export', { icon: 'export', onClick: () => app.exportMod() }))));
+    // What it is.
+    const details = h('div', { class: 'home-details' },
+      field('Author', textInput({ value: m.author, max: 24, onChange: (v) => set('author', cleanName(v, 24, m.author)) })),
+      field('Version', textInput({ value: m.version, max: 16, onChange: (v) => set('version', cleanName(v, 16, m.version)) }), { tip: 'Raise it when you send a new version out (1.0.0 → 1.1.0).' }),
+      field('Colour', colorButton(m.color, (v) => set('color', v.slice(0, 7), true))),
+      field('Tags', textInput({ value: (m.tags || []).join(', '), max: 160, placeholder: 'magic, dungeons, cosy', onChange: (v) => set('tags', v.split(',').map((t) => cleanName(t, 16, '')).filter(Boolean).slice(0, 8)) }), { tip: 'A few words for what it is, with commas between.' }),
+      field('About it', textInput({ value: m.description, long: true, max: 2000, placeholder: 'What it adds, and how to find it in a world.', onChange: (v) => set('description', v) }), { wide: true }));
+    wrap.append(h('h2', null, 'What it is'), details);
+    // What it's made of: a bar of squares.
+    const counts = SECTIONS.map((S) => ({ ...S, n: Object.keys(m[S.key] || {}).length }));
+    const total = counts.reduce((a, c) => a + c.n, 0);
+    const CELLS = 48;
+    const bar = h('div', { class: 'mod-bar' });
+    const cells = barCells(counts.map((c) => c.n), CELLS);
+    counts.forEach((c, i) => {
+      for (let k = 0; k < cells[i]; k++) {
+        const sq = h('span', { class: 'sq', style: { background: c.color }, 'data-tip': `${c.name}: ${c.n} (${Math.round((c.n / total) * 100)}% of it)` });
+        sq.addEventListener('click', () => this.reveal(c.key));
+        bar.append(sq);
+      }
+    });
+    for (let k = cells.reduce((a, b) => a + b, 0); k < CELLS; k++) bar.append(h('span', { class: 'sq empty' }));
+    const legend = h('div', { class: 'mod-legend' });
+    for (const c of counts) {
+      const it = h('div', { class: `lg${c.n ? '' : ' none'}`, 'data-tip': c.n ? `Show its ${KIND_NAMES[c.key][1]}` : `New ${KIND_NAMES[c.key][0]}` }, h('span', { class: 'sw', style: { background: c.color } }), ic(c.icon, 10), h('span', null, c.name), h('b', null, c.n));
+      it.addEventListener('click', (e) => (c.n ? this.reveal(c.key) : app.newMenu(e.clientX, e.clientY, c.key)));
+      legend.append(it);
     }
-    wrap.append(h('h2', null, 'In this mod'), stats);
-    // Quick starts.
-    wrap.append(h('h2', null, 'Quick starts'));
-    const cards = h('div', { class: 'cards' });
-    const quick = [
-      ['cube', 'A new block', 'Draw a 16×16 texture, and it becomes a block you can place and break.', () => this.quickBlock()],
-      ['sword', 'A new weapon', 'Draw an icon; set its damage, style and what it does on a hit.', () => this.quickItem('tpl.weapon', 'Weapon')],
-      ['skull', 'A new monster', 'Draw a creature (with a walk animation if you like), and it hunts at night.', () => this.quickCreature('tpl.hostile', 'Monster')],
-      ['person', 'Someone to talk to', 'A person with lines to say and answers to pick, placed in a structure.', () => this.quickCreature('tpl.npc', 'Wanderer')],
-      ['crown', 'A boss', 'A master with phases and abilities, at the bottom of a dungeon of your own.', () => this.quickCreature('tpl.boss', 'Boss')],
-      ['house', 'A building', 'Walls, floors, roofs, chests with loot, triggers that set things off.', () => app.builder((b) => b.newDialog())],
-      ['stairs', 'A dungeon', 'Floors you build, stairs between them, a boss at the bottom.', () => app.builder((b) => b.newDungeon())],
-      ['scroll', 'A story', 'A tale that starts when something happens, with tasks and turns.', () => app.create('stories', { name: 'Story' })],
-      ['sparkle', 'An effect', 'Particles and animated sprites, for spells, hits and glows.', () => app.create('vfx', { name: 'Effect' })],
-      ['tree', 'A biome', 'New land: its ground, trees (or your structures), beasts, weather, and where it grows.', () => app.tool3('biome', (t) => t.newBiome('plains'))],
-      ['globe', 'A world map', 'The world\'s shape: land and sea, biomes, towns, realms, places and people where you put them.', () => app.tool3('world', (t) => t.newWorld())],
-      ['bust', 'A character tab', 'A tab on the character screen: callings, gifts, skills, a vow; what each choice gives.', () => app.tool3('chargen', (t) => t.newTab())],
-    ];
-    for (const [i, t, d, fn] of quick) {
-      const c = h('div', { class: 'card' }, h('div', { class: 't' }, ic(i, 14), t), h('div', { class: 'd' }, d));
-      c.addEventListener('click', fn);
-      cards.append(c);
-    }
-    wrap.append(cards);
+    wrap.append(h('h2', null, 'In this mod'), bar, legend);
+    if (!total) wrap.append(h('div', { class: 'note', style: { marginTop: '8px' } }, 'Nothing in it yet. Pick a tool along the top, or the + in the explorer, to make the first thing.'));
     // Problems.
     const probs = app.problems();
     wrap.append(h('h2', null, probs.length ? `To look at (${probs.length})` : 'Problems'));
     if (!probs.length) wrap.append(h('div', { class: 'note' }, 'Nothing wrong that the Workshop can see.'));
     else {
       const list = h('div', { class: 'problems' });
-      for (const p of probs.slice(0, 60)) {
-        const el = h('div', { class: `problem ${p.level}` }, ic(p.level === 'error' ? 'warn' : 'info'), h('div', null, p.text));
-        if (p.where) el.addEventListener('click', () => app.open(p.where[0], p.where[1]));
+      for (const q of probs.slice(0, 60)) {
+        const el = h('div', { class: `problem ${q.level}` }, ic(q.level === 'error' ? 'warn' : 'info'), h('div', null, q.text));
+        if (q.where) el.addEventListener('click', () => app.open(q.where[0], q.where[1]));
         list.append(el);
       }
       wrap.append(list);
     }
+    wrap.append(h('div', { class: 'note', style: { marginTop: '24px', maxWidth: '760px' } }, h('b', null, 'Using it: '), 'when you start a new game (or host a multiplayer world), you\'re asked which mods to turn on for it. Players joining a world you host are offered the mod to install.'));
     this.stage.append(wrap);
-    // The mod's own settings.
-    this.insp.append(h('div', { class: 'insp-head' }, ic('gear'), 'Mod settings'));
-    const body = h('div', { class: 'insp-body scroll' });
-    const set = (k, v) => {
-      app.checkpoint('meta', 'meta');
-      m[k] = v;
-      app.touch('meta');
-      app.drawTop();
-    };
-    const iconRef = h('div', { class: 'ref' });
-    const drawIcon = () => {
-      clear(iconRef);
-      iconRef.append(h('span', { class: 'thumb' }, m.icon && m.assets[m.icon] ? app.thumb('assets', m.icon) : ic('star')), h('span', { class: `nm${m.icon ? '' : ' none'}` }, m.icon && m.assets[m.icon] ? m.assets[m.icon].name : 'Drop art here'));
-    };
-    drawIcon();
-    dropTarget(iconRef, (p) => p.kind === 'assets', (p) => {
-      set('icon', p.id);
-      drawIcon();
-      this.draw();
-    });
-    iconRef.addEventListener('click', (e) => {
-      const items = Object.values(m.assets).map((a) => ({ label: a.name, onClick: () => {
-        set('icon', a.id);
-        this.draw();
-      } }));
-      if (!items.length) items.push({ label: 'Draw some art first', off: true });
-      menu(items, e.clientX, e.clientY);
-    });
-    body.append(
-      h('div', { class: 'panel-b', style: { paddingTop: '10px' } },
-        field('Name', textInput({ value: m.name, max: 40, onChange: (v) => set('name', cleanName(v, 40, m.name)) })),
-        field('Author', textInput({ value: m.author, max: 24, onChange: (v) => set('author', cleanName(v, 24, m.author)) })),
-        field('Version', textInput({ value: m.version, max: 16, onChange: (v) => set('version', cleanName(v, 16, m.version)) }), { tip: 'Raise it when you send a new version out (1.0.0 → 1.1.0).' }),
-        field('Colour', colorButton(m.color, (v) => set('color', v.slice(0, 7)))),
-        field('Picture', iconRef, { tip: 'Drag art here from the explorer' }),
-        field('About it', textInput({ value: m.description, long: true, max: 2000, onChange: (v) => set('description', v) }), { wide: true }),
-        h('div', { class: 'hr' }),
-        h('div', { class: 'note' }, h('b', null, 'Using it: '), 'when you start a new game (or host a multiplayer world), you\'re asked which mods to turn on for it. Players joining a world you host are offered the mod to install.'),
-        h('div', { class: 'row' }, button('Playtest', { icon: 'play', kind: 'go', onClick: () => app.playtest() }), button('Export', { icon: 'export', onClick: () => app.exportMod() }))));
-    this.insp.append(body);
   }
 
-  async quickBlock() {
+  // A kind of thing, opened up in the explorer (its first one opened).
+  reveal(key) {
     const app = this.app;
-    const id = await app.newAsset({ name: 'Block texture', w: 16, h: 16, use: 'block', quiet: true });
-    if (!id) return;
-    await app.newEntity('tpl.block', { texture: id }, 'New Block');
-    await app.open('assets', id);
-    toast('Draw the block\'s top here. Its block is already made (in Entities): open it to set how hard it is, and what it does.', 'good', 6000);
+    app.closed[key] = false;
+    app.drawExplorer();
+    const first = Object.keys(app.mod[key] || {})[0];
+    if (first) app.open(key, first);
   }
+}
 
-  async quickItem(tpl, name) {
-    const app = this.app;
-    const id = await app.newAsset({ name: `${name} icon`, w: 16, h: 16, use: 'icon', quiet: true });
-    if (!id) return;
-    await app.newEntity(tpl, { icon: id }, name);
-    await app.open('assets', id);
-    toast(`Draw the ${name.toLowerCase()}'s icon. Its item is made already (in Entities).`, 'good', 5000);
+// How many of `cells` squares each kind gets: the whole bar shared out by
+// how many of each there are, the largest remainders rounding up, and a
+// square at least for any kind there is one of.
+export function barCells(ns, cells) {
+  const total = ns.reduce((a, b) => a + b, 0);
+  if (!total) return ns.map(() => 0);
+  const raw = ns.map((n) => (n / total) * cells);
+  const out = raw.map((r, i) => (ns[i] ? Math.max(1, Math.floor(r)) : 0));
+  let left = cells - out.reduce((a, b) => a + b, 0);
+  const order = raw.map((r, i) => [r - Math.floor(r), i]).filter(([, i]) => ns[i]).sort((a, b) => b[0] - a[0]);
+  for (let k = 0; left > 0 && order.length; k++) {
+    out[order[k % order.length][1]]++;
+    left--;
   }
-
-  async quickCreature(tpl, name) {
-    const app = this.app;
-    const big = tpl === 'tpl.boss';
-    const id = await app.newAsset({ name, w: big ? 32 : 16, h: big ? 32 : 16, use: 'creature', frames: 2, quiet: true });
-    if (!id) return;
-    await app.newEntity(tpl, { look: id }, name);
-    await app.open('assets', id);
-    toast(`Draw the ${name.toLowerCase()} facing right (frame 2 is its step). Its entity is made already.`, 'good', 5000);
+  while (left < 0) {
+    const i = out.indexOf(Math.max(...out));
+    out[i]--;
+    left++;
   }
+  return out;
 }
