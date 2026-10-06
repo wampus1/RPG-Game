@@ -384,11 +384,46 @@ export class NodeCanvas {
           n.open = !n.open;
           this.refreshNode(n);
         } },
+        ...(this.sel.size > 1 ? [
+          { label: 'Line up in a column', onClick: () => this.lineUp('column') },
+          { label: 'Line up in a row', onClick: () => this.lineUp('row') },
+        ] : []),
         ...(this.o.nodeMenu ? this.o.nodeMenu(n) : []),
         { sep: true },
         { label: 'Delete', icon: 'trash', danger: true, key: 'Del', onClick: () => this.deleteSel(), off: this.o.defs[n.type]?.root },
       ]);
     });
+  }
+
+  // (Round 64) The chosen nodes put in a tidy column (or row), in the order
+  // they're in now, a little apart.
+  lineUp(how) {
+    const list = [...this.sel].map((id) => this.nodeOf(id)).filter(Boolean);
+    if (list.length < 2) return;
+    this.o.checkpoint?.();
+    const col = how === 'column';
+    list.sort((a, b) => (col ? a.y - b.y : a.x - b.x));
+    const x0 = Math.min(...list.map((q) => q.x));
+    const y0 = Math.min(...list.map((q) => q.y));
+    let at = col ? y0 : x0;
+    for (const q of list) {
+      const el = this.els.get(q.id);
+      if (col) {
+        q.x = x0;
+        q.y = at;
+        at += (el ? el.offsetHeight : 80) + 24;
+      } else {
+        q.y = y0;
+        q.x = at;
+        at += (el ? el.offsetWidth : 200) + 40;
+      }
+      if (el) {
+        el.style.left = `${q.x}px`;
+        el.style.top = `${q.y}px`;
+      }
+    }
+    this.wireDirty = true;
+    this.o.onChange?.('move');
   }
 
   select(ids, add = false) {
@@ -544,11 +579,12 @@ export class NodeCanvas {
       close();
       const n = this.addNode(d.type, at.x, at.y);
       if (w && n) {
+        // (A socket the new node shows as it's set, first.)
         if (w.out) {
-          const bp = d.in.find((p) => o.fits(w.type, p.t));
+          const bp = d.in.find((p) => o.fits(w.type, p.t) && shown(n, p)) || d.in.find((p) => o.fits(w.type, p.t));
           if (bp) this.link(w.n, w.p, n, bp);
         } else {
-          const ap = d.out.find((p) => o.fits(p.t, w.type));
+          const ap = d.out.find((p) => o.fits(p.t, w.type) && shown(n, p)) || d.out.find((p) => o.fits(p.t, w.type));
           if (ap) this.link(n, ap, w.n, w.p);
         }
       }

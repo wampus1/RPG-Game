@@ -569,7 +569,30 @@ export default class StoryTool {
       if (n.type === 'st.talk' && (v.who === 'other' ? sv.other : sv.giver) === 'nobody') out.push({ level: 'error', node: n.id, text: `A word with the ${v.who}: but the story has nobody as its ${v.who}.` });
       if (n.type === 'st.task' && (v.kind === 'carry something' || v.kind === 'talk to someone') && sv.other === 'nobody' && (v.to || 'other') === 'other') out.push({ level: 'error', node: n.id, text: 'A task to someone else: but the story has nobody else in it.' });
       if (n.type === 'st.task' && sv.giver === 'nobody') out.push({ level: 'warn', node: n.id, text: 'A task with nobody asking: it goes on the board only.' });
+      // (Round 64) The newer nodes, and the If's newer questions.
+      const role = (r) => (r === 'other' ? sv.other : sv.giver) === 'nobody';
+      if ((n.type === 'st.say' && role(v.who)) || (n.type === 'st.rep' && v.by && v.by !== 'the town' && role(v.by === 'the other' ? 'other' : 'giver'))) out.push({ level: 'error', node: n.id, text: `The ${n.type === 'st.say' ? v.who || 'giver' : v.by.slice(4)}: but the story has nobody as that.` });
+      if (n.type === 'st.spawn' && !v.creature) out.push({ level: 'error', node: n.id, text: 'Creatures come: choose which.' });
+      if (n.type === 'st.until' && v.what === 'a kill' && !v.creature) out.push({ level: 'error', node: n.id, text: 'Wait for a kill: of which creature?' });
+      if (n.type === 'st.check') {
+        const w = v.what || 'a player in it has';
+        if (w === 'another story of yours is going' && !v.story) out.push({ level: 'error', node: n.id, text: 'If another story is going: choose which.' });
+        if ((w === 'the giver thinks well of a player in it' || w === 'the giver is alive') && role('giver')) out.push({ level: 'warn', node: n.id, text: 'An If about the giver: but the story has nobody asking (always No).' });
+        if (w === 'the other is alive' && role('other')) out.push({ level: 'warn', node: n.id, text: 'An If about the other: but the story has nobody else in it (always No).' });
+        if ((w === 'a player in it came as' && v.origin === 'mod' && !v.originId) || (w === 'a player in it has the trait' && v.trait === 'mod' && !v.traitId)) out.push({ level: 'error', node: n.id, text: 'Type the id of yours (as the Character tool has it).' });
+      }
     }
+    // Values in its words that nothing in it sets (the story's own: those
+    // of your graphs, {world:...} and {player:...}, are theirs to set).
+    const own = new Set(['town', 'giver', 'other', 'player', 'item', 'count', 'creature']);
+    for (const n of g.nodes) if (n.type === 'st.set' && n.p && n.p.name) own.add(String(n.p.name).replace(/[^\w-]/g, ''));
+    const missing = new Set();
+    for (const n of g.nodes) for (const [k, t] of Object.entries(n.p || {})) {
+      const pd = NODES[n.type]?.propMap[k];
+      if (typeof t !== 'string' || k === 'after' || !pd || !shown(n, pd)) continue;
+      for (const m of t.matchAll(/\{([\w-]+)\}/g)) if (!own.has(m[1])) missing.add(m[1]);
+    }
+    for (const k of missing) out.push({ level: 'warn', text: `{${k}} is in its words, but nothing in it sets it (Set a value). Your graphs' values are {world:${k}} or {player:${k}}.` });
     if (sv.when === 'after a game story ends' && !sv.after) out.push({ level: 'error', node: start.id, text: 'Choose which of the game\'s stories it follows.' });
     return out;
   }

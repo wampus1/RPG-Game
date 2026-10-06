@@ -116,6 +116,9 @@ export function lint(g) {
     const pb = NODES[b.type]?.inMap[l.to[1]];
     if (!pa || !pb) out.push({ node: b.id, level: 'warn', text: 'A wire to a socket that\'s gone.' });
     else if (!fits(pa.t, pb.t)) out.push({ node: b.id, level: 'error', text: `A ${pa.t} wire can't go into ${pb.label || pb.id} (${pb.t}).` });
+    // (Round 64) Wired where the node, as it's set, doesn't look.
+    else if (pb.t !== 'flow' && !shown(b, pb)) out.push({ node: b.id, level: 'warn', text: `${pb.label || pb.id} is wired, but as this node's set it isn't used.` });
+    else if (!shown(a, pa)) out.push({ node: a.id, level: 'warn', text: `${pa.label || pa.id} is wired, but as this node's set it never comes.` });
   }
   // Flow loops with no wait in them would never end.
   const flowNext = new Map();

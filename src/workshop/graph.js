@@ -350,7 +350,25 @@ export default class GraphTool {
     }
     if (!n) {
       this.insp.append(h('div', { class: 'insp-head' }, ic('node'), this.ent.name));
-      body.append(h('div', { class: 'panel-b note' }, 'This entity has no template node, so the game makes nothing of it. Start a new entity from a template instead.'));
+      body.append(h('div', { class: 'panel-b note' }, 'This entity has no template node yet, so the game makes nothing of it. What is it?'));
+      // (Round 64) Made one here, rather than starting again.
+      const row = h('div', { class: 'panel-b', style: { display: 'flex', flexWrap: 'wrap', gap: '4px' } });
+      for (const t of TEMPLATES) {
+        row.append(button(NODES[t].title, { small: true, icon: TEMPLATE_INFO[t].icon, title: TEMPLATE_INFO[t].blurb, onClick: () => {
+          const g = this.ent.graph;
+          if (g.nodes.some((q) => NODES[q.type] && NODES[q.type].root)) return;
+          this.app.checkpoint('entities', this.id);
+          const root = makeNode(t, 80, 80, { v: { name: this.ent.name } });
+          const more = starter(root);
+          g.nodes.push(root, ...more.nodes);
+          g.links.push(...more.links);
+          (g.notes ||= []).push(...more.notes);
+          this.app.touch('entities', this.id);
+          this.app.drawExplorer?.();
+          this.open('entities', this.id);
+        } }));
+      }
+      body.append(row);
       this.insp.append(body);
       return;
     }
@@ -381,6 +399,8 @@ export default class GraphTool {
       if (w) fields.append(field(p.label, w, { wide: p.long, tip: `${p.label} (${p.t})` }));
     }
     body.append(panel(d.root ? 'What it is' : 'Settings', fields, { key: 'g-fields' }));
+    // (Round 64) What can go in a typed field.
+    if (!d.root && d.in.some((p) => p.t === 'text' || p.t === 'number' || p.t === 'any')) body.append(h('div', { class: 'panel-b note' }, 'Typed fields can have values in them: {name} (a variable: this flow\'s, then self\'s, the world\'s, the player\'s), or say whose: {world:name}, {player:name}, {self:name}. And {self}, {target}, {player}, {value}. In a number field, a value that\'s a number.'));
     if (d.out.some((p) => p.t === 'flow')) {
       const list = h('div', { class: 'list' });
       for (const p of d.out.filter((q) => q.t === 'flow')) {
