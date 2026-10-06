@@ -46,6 +46,7 @@ import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '..
 import { isleNightSpecies, waterNear } from '../entities/islemobs.js';
 import { updateLasers } from './laser.js';
 import { siteAt } from '../world/sites.js';
+import { useTimeCrystal } from './timecrystal.js';
 import { parryWindow, playerTick, roll, spend, interrupt, knock, canBlock, buffOf, styleOf, staminaCost, playerSwing, offhandOf, sweepTiles, STYLES, weaponStyle, strikeAnim, combatBuffText, guardBlow } from './combat.js';
 import { jobTitle, visitorRecord } from '../entities/npcgen.js';
 import { personName, familyName } from '../world/names.js';
@@ -3173,6 +3174,13 @@ export class Game {
     if (held && held.kind === 'relic_shard' && fitShard(this, held)) return;
     // Dynamite: lit, and thrown where you point.
     if (held && held.key === 'dynamite' && this.throwDynamite()) return;
+    // Armour in hand, pointed at nothing in particular: put on. (Before the
+    // guard below: a shield in hand, the Aegis Projector say, went up as a
+    // guard instead and could never be put on this way. Round 61.)
+    if (held && held.kind === 'armor' && !(c && c.entity) && !(c && c.block && c.block.interact && c.inReach)) {
+      this.wearHeld();
+      return;
+    }
     // In a fight (or with nothing to use it on), the right button raises
     // your guard instead (held: see combat.js).
     if (canBlock(this, p) && (this.combatT > 0 || !c || (!c.entity && !(c.block && c.block.interact && c.inReach)))) return;
@@ -3285,6 +3293,8 @@ export class Game {
       this.smokePipe();
       return true;
     }
+    // (Round 61) A time crystal: at the way into a beaten place.
+    if (d.kind === 'time_crystal') return useTimeCrystal(this, d);
     return false;
   }
 
@@ -4450,6 +4460,12 @@ export class Game {
     if (!rec) return;
     if (Math.max(Math.abs(p.x - x), Math.abs(p.z - z)) > 3) {
       this.ui.msg('Closer.', '#c8c8c8', true);
+      return;
+    }
+    // (Round 61) A time crystal in hand: the place turned back.
+    const held = p.heldDef();
+    if (held && held.kind === 'time_crystal') {
+      useTimeCrystal(this, held, rec);
       return;
     }
     if (b.interact === 'kav_pillar') {
@@ -5918,7 +5934,8 @@ export class Game {
     }
     // Caught mid-swing: knocked off their stroke (always, with a heavy
     // blow or a riposte; usually, with a plain one).
-    if (target.windup && (heavy || riposte || Math.random() < 0.65)) {
+    // (Never a master of an old place: only a parry stops one. Round 61.)
+    if (target.windup && !(target.isBoss || target.S?.boss) && (heavy || riposte || Math.random() < 0.65)) {
       interrupt(target, heavy ? 0.9 : 0.5);
       this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
     }

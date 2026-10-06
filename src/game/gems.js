@@ -169,6 +169,12 @@ export function bleed(game, e, src, n = 1) {
 // Frozen solid: no moving, no striking, ice all over them.
 export function freeze(game, e, secs = 2) {
   if (!e || e.dead) return;
+  // (A master of an old place shrugs the ice off its stroke: only slowed.
+  // Round 61: a stone could stop one mid-blow.)
+  if (e.isBoss || e.S?.boss) {
+    e.slowT = Math.max(e.slowT || 0, secs + 1.5);
+    return;
+  }
   e.frozenT = Math.max(e.frozenT || 0, secs);
   e.stunT = Math.max(e.stunT || 0, secs);
   e.slowT = Math.max(e.slowT || 0, secs + 1.5);
@@ -207,7 +213,7 @@ export function chill(e, secs = 2) {
 }
 
 export function stun(e, secs = 1) {
-  if (!e || e.dead) return;
+  if (!e || e.dead || e.isBoss || e.S?.boss) return;
   e.stunT = Math.max(e.stunT || 0, secs);
 }
 

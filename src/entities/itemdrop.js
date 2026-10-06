@@ -1,6 +1,16 @@
 // Items lying in the world: thrown with a little physics arc, picked up by
 // walking over them.
 import { BLOCKS } from '../world/blocks.js';
+import { parseStar } from '../world/quality.js';
+
+// What lava doesn't take: a fireproof piece (see quality.js), and the
+// things that were made in fire to begin with.
+const LAVAPROOF = new Set(['obsidian', 'kav_core', 'ember_pod', 'cinder_heart']);
+function lavaproof(item) {
+  const s = parseStar(item);
+  if (s && s.mods.includes('fireproof')) return true;
+  return LAVAPROOF.has(s ? s.plain : item);
+}
 
 let nextDropId = 1;
 
@@ -73,6 +83,7 @@ export class ItemDrop {
       }
       this.groundY = ground;
       this.air = this.py - ground;
+      if (this.air < 0.05) this.lavaCheck();
     } else {
       // Fall if the floor under us was removed.
       const g = this.groundAt(this.x, this.z, this.y);
@@ -81,7 +92,25 @@ export class ItemDrop {
       }
       this.groundY = g;
       this.air = 0;
+      this.lavaCheck();
     }
+  }
+
+  // Come down in lava: it burns up, with a hiss and a puff of smoke.
+  // (Round 61: things thrown in floated there for ever.)
+  lavaCheck() {
+    if (this.dead || lavaproof(this.item)) return;
+    const w = this.game.world;
+    const x = Math.floor(this.px);
+    const z = Math.floor(this.pz);
+    const y = Math.floor(this.py + 0.001);
+    const lava = (yy) => BLOCKS[w.getBlock(x, yy, z)]?.lava;
+    if (!lava(y - 1) && !lava(y)) return;
+    this.dead = true;
+    const r = this.game.renderer;
+    r?.emit?.(x, y, z, { n: 10, color: ['#ff7020', '#ffb040', '#ffe080'], up: 26, speed: 18, life: 0.5, glow: true, gravity: -20 });
+    r?.emit?.(x, y + 0.5, z, { n: 6, color: ['#6a6460', '#8a8480', '#4a4440'], up: 14, speed: 6, life: 1.2, gravity: -12, size: 2 });
+    this.game.audio?.play('hiss', { x, y, z });
   }
 
   groundAt(x, z, hint) {

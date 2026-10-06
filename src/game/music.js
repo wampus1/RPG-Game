@@ -349,7 +349,7 @@ export function musicMood(game) {
       if (game.dungeon) {
         const ty = game.dungeon.rec.type;
         const own = ownDungeon(ty) ? '' : tilde;
-        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${fightPhase(game.dungeon.fight)}`;
+        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${Math.min(3, fightPhase(game.dungeon.fight))}`;
         return `dungeon_${ty}_fight${own}`;
       }
       if (ISLE_FIGHTS[tilde.slice(1)]) return ISLE_FIGHTS[tilde.slice(1)];
@@ -377,7 +377,7 @@ export function musicMood(game) {
   if (game.dungeon) {
     const ty = game.dungeon.rec.type;
     const own = ownDungeon(ty) ? '' : tilde;
-    return game.dungeon.fight ? `dungeon_${ty}_boss${own}:p${fightPhase(game.dungeon.fight)}` : `dungeon_${ty}${own}`;
+    return game.dungeon.fight ? `dungeon_${ty}_boss${own}:p${Math.min(3, fightPhase(game.dungeon.fight))}` : `dungeon_${ty}${own}`;
   }
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;

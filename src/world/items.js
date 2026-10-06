@@ -442,6 +442,16 @@ function deriveGrown(key) {
 // town's thinkers can learn from it what nobody else alive knows), and
 // shards of crystal in a gem's colours (five fuse into a whole stone).
 item('kav_scrap', { name: 'Kavorent Scrap', kind: 'material', stack: 64, value: 14, about: 'Dark, light, unbelievably hard. A smith can work it into iron.' });
+// (Round 61) Time crystals: what a master leaves when it falls, of its
+// tier. Used at the way into a beaten place, they turn it back to what it
+// was before anyone went down, a tier harder (and richer) than the crystal:
+// see game/timecrystal.js.
+for (const t of [1, 2, 3]) {
+  item(`time_crystal_${t}`, {
+    name: `Time Crystal (Tier ${['', 'I', 'II', 'III'][t]})`, kind: 'time_crystal', tier: t, stack: 4, value: [0, 300, 700, 1500][t], color: ['', '#9ad8ff', '#c8a0ff', '#ffd070'][t],
+    about: `It ticks, very softly, out of time with everything. Hold it at the way into an old place whose master is beaten and use it (right-click): the place turns back to what it was, at tier ${['', 'II', 'III', 'III'][t]}: harder, its master stronger, its chests richer.`,
+  });
+}
 item('kav_core', { name: 'Kavorent Core', kind: 'misc', stack: 8, value: 450, about: 'A heavy sphere with a slow light turning inside it. Give it to a mayor: with it, a realm can begin to learn the Kavorent\'s arts.' });
 // (Their shards are made with the stones, above.)
 // The rarest finds: their arms and armour, things they made to carry, and

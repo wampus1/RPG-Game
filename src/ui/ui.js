@@ -490,15 +490,24 @@ export class UI {
       ctx.fillRect(mx - 1, by + 7, 3, 2);
       ctx.fillRect(mx, by + 9, 1, 1);
     }
-    const roman = ['', 'I', 'II', 'III'][ph];
-    drawText(ctx, roman, x0 + W + 9, by - 1, ph >= 3 ? '#ff5040' : ph >= 2 ? '#ffb040' : '#c8a060', '#000');
+    // (A master at tier 3: its fourth phase's mark too, near the end.)
+    if (f.tier >= 3) {
+      const mx = x0 + Math.round(W * 0.15);
+      ctx.fillStyle = 'rgba(10,4,6,0.85)';
+      ctx.fillRect(mx, by, 1, 6);
+      ctx.fillStyle = f.frac <= 0.15 ? '#c8a0ff' : '#6a5a80';
+      ctx.fillRect(mx - 1, by - 3, 3, 2);
+      ctx.fillRect(mx - 1, by + 7, 3, 2);
+    }
+    const roman = ['', 'I', 'II', 'III', 'IV'][ph];
+    drawText(ctx, roman, x0 + W + 9, by - 1, ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff5040' : ph >= 2 ? '#ffb040' : '#c8a060', '#000');
     const pt = f.phaseT ?? 9;
     if (pt < 0.8) {
-      ctx.fillStyle = `rgba(255,${ph >= 3 ? 80 : 180},60,${(1 - pt / 0.8) * 0.8})`;
+      ctx.fillStyle = ph >= 4 ? `rgba(200,160,255,${(1 - pt / 0.8) * 0.8})` : `rgba(255,${ph >= 3 ? 80 : 180},60,${(1 - pt / 0.8) * 0.8})`;
       ctx.fillRect(x0 - 3, by - 2, W + 6, 10);
-      const word = ph >= 3 ? 'DESPERATE' : 'ENRAGED';
+      const word = ph >= 4 ? 'UNBOUND' : ph >= 3 ? 'DESPERATE' : 'ENRAGED';
       ctx.globalAlpha = 1 - pt / 0.8;
-      drawText(ctx, word, Math.round(x0 + W / 2 - textWidth(word) / 2), by + 20, ph >= 3 ? '#ff5040' : '#ffb040', '#000');
+      drawText(ctx, word, Math.round(x0 + W / 2 - textWidth(word) / 2), by + 20, ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff5040' : '#ffb040', '#000');
       ctx.globalAlpha = 1;
     }
     // The title under it.

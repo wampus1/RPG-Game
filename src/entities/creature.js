@@ -13,6 +13,7 @@ import { SPIRE_BOSSES } from './bosses_spire.js';
 import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press, walkCooldowns } from './tempo.js';
+import { tierTick } from './bosstier.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
 import { ITEMS } from '../world/items.js';
@@ -216,6 +217,9 @@ export class Creature extends Entity {
         if (this.attackCd > 0.3) this.attackCd = 0.3;
         return this.chase(dt);
       }
+      // (Round 61) A master of a turned-back place: the turned time's own
+      // works first, when they come round (see bosstier.js).
+      if (master && this.tier >= 2 && tierTick(this, dt)) return;
       // Its own way of fighting (see monsters.js), if it has one. (A master
       // never stands about long: see tempo.drift.)
       if (this.S.brain && BRAINS[this.S.brain](this, dt)) {

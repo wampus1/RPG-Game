@@ -33,6 +33,7 @@ import { restamp } from '../world/sites.js';
 import { dropFields, raiseFields } from './kavtech.js';
 import { bossEntrance, bossDefeat, liftRide } from './scenes.js';
 import { seatField } from './party.js';
+import { applyTier, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
@@ -41,7 +42,8 @@ const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 const FLOOR_GEN = 5;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
-export const BOSS_HP = 1.43;
+// (Round 61: half as much again, 1.43 before.)
+export const BOSS_HP = 1.43 * 1.5;
 // (And the great slow ones carry more on top: a worm, a colossus, a golem.)
 export const BOSS_HP_EXTRA = {
   worm: 1.12, horror: 1.08, foreman: 1.08, brood_mother: 1.06, warlord: 1.05, prime: 1.06,
@@ -357,6 +359,8 @@ export class DungeonRun {
         c.dormant = 6;
         c.guardian = true;
         c.isBoss = true;
+        // (As every master: half as much again. Round 61.)
+        c.maxHp = c.hp = Math.round(c.maxHp * 1.5);
       }
     }
     // Where you come in (and the rest of you down here with you).
@@ -540,7 +544,10 @@ export class DungeonRun {
   spawn(species, x, y, z, o = {}) {
     const game = this.game;
     const c = new Creature(game, species, x, y, z, o.variant || 0);
-    const lvl = (this.rec.level || 1) + this.floor * 0.5 + (this.rec.cleared ? 0 : 0);
+    // (A place turned back with a time crystal: everything in it the harder
+    // for each tier past the first. See timecrystal.js.)
+    // (Not its master: its tier does that, exactly. See applyTier.)
+    const lvl = (this.rec.level || 1) + this.floor * 0.5 + (o.boss ? 0 : ((this.rec.tier || 1) - 1) * 1.0);
     c.inst = true;
     c.level = lvl;
     c.maxHp = c.hp = Math.round(c.S.hp * (1 + 0.3 * (lvl - 1)));
@@ -565,6 +572,8 @@ export class DungeonRun {
       c.maxHp = c.hp = Math.round(c.maxHp * BOSS_HP * (BOSS_HP_EXTRA[species] || 1) * (ISLE_BOSS_HP[isle] || 1));
       c.dmgMult *= BOSS_DMG * (ISLE_BOSS_DMG[isle] || 1);
       if (ISLE_BOSS_TEMPO[isle]) c.tempo = ISLE_BOSS_TEMPO[isle];
+      // (Round 61) Its tier: as its place was turned back (see bosstier.js).
+      applyTier(c, this.rec.tier || 1);
     }
     game.addCreature(c);
     return c;
@@ -764,7 +773,9 @@ export class DungeonRun {
     }
     const lead = boss[0];
     const T = BOSS_TITLES[lead.species] || {};
-    this.fight = { boss, name: T.name || lead.S.name, title: T.title || '', t: 0, frac: 1, trail: 1, hitT: -9, away: 0 };
+    // (Its tier under its name, past the first: see bosstier.js.)
+    const tier = lead.tier || 1;
+    this.fight = { boss, name: T.name || lead.S.name, title: `${T.title || ''}${tier > 1 ? `${T.title ? ' · ' : ''}Tier ${roman(tier)}` : ''}`, tier, t: 0, frac: 1, trail: 1, hitT: -9, away: 0 };
     if (T.taunt) lead.say?.(T.taunt, 3.5, '#ff9080');
     // (On everyone's screen down here, not only the one who walked in.)
     // The camera goes to it as it wakes, and its fires catch (see
@@ -1409,6 +1420,12 @@ export class DungeonRun {
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.
       this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
+      // (Round 61) A time crystal of its tier: with it, a beaten place can
+      // be turned back to what it was, and harder (see timecrystal.js).
+      const tier = e.tier || this.rec.tier || 1;
+      game.spawnDrop(`time_crystal_${tier}`, 1, e.x, e.y, e.z, true);
+      game.renderer.emit(e.x, e.y + 1.6, e.z, { n: 24, color: [CRYSTAL_COLORS[tier], '#ffffff', '#c8a0ff'], up: 50, speed: 30, life: 1.2, glow: true, shape: 'star' });
+      this.eachHere(() => game.ui.msg(`A time crystal (tier ${roman(tier)}) hangs in the air where it fell, ticking. Hold it at the way into a beaten place and use it to turn that place back.`, CRYSTAL_COLORS[tier]));
       // What's left of the power it kept about it: one to three relic
       // shards (see relics.fitShard).
       const shards = 1 + Math.floor(Math.random() * 3);

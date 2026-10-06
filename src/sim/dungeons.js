@@ -423,6 +423,8 @@ export class Dungeons {
       floors: d.floors, weakened: d.weakened, looted: d.looted, delves: d.delves, fallen: d.fallen, spire: d.spire, cores: d.cores, coresGone: d.coresGone || 0, metBoss: !!d.metBoss,
       // (The packs fallen down there, and whose: see DungeonRun.dropPack.)
       packs: d.packs || [],
+      // (Its tier, and how often it's been turned back: see timecrystal.js.)
+      tier: d.tier || 1, restores: d.restores || 0,
     }));
     return { list, isleFirst: this.isleFirst };
   }

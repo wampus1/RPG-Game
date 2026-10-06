@@ -703,8 +703,10 @@ function foundIn(ctx, boss = false) {
 }
 
 // How good an old place's things run on floor `n` (see tierOf).
+// (Round 61: and a whole floor's worth better for each tier a place has
+// been turned back to: see game/timecrystal.js.)
 export function lootTier(rec, n) {
-  return n + ((rec.level || 1) - 1) * 0.5 + (FAR_LOOT[rec.isle] || 0);
+  return n + ((rec.level || 1) - 1) * 0.5 + (FAR_LOOT[rec.isle] || 0) + ((rec.tier || 1) - 1);
 }
 
 // What a chest down here holds, by kind of place and how far down: poor
@@ -725,6 +727,8 @@ function lootFor(type, tier, rng, rich = 1, T = null) {
     add('healing_salve', 1, 1, 0.25);
     add('old_blueprint', 1, 1, 0.04 + t * 0.015);
     add(rng.pick(['kav_everlight', 'kav_blink', 'kav_mender', 'kav_lodestar', 'kav_bulwark', 'kav_edge', 'kav_plating']), 1, 1, 0.03 + t * 0.012);
+    // (Round 61: now and then a piece of their arms or armour too.)
+    add(rng.pick(KAV_GEAR.filter((k) => ITEMS[k])), 1, 1, 0.06 + t * 0.02);
   } else {
     // Odds and ends anybody might have left.
     add(rng.pick(['bone', 'string', 'torch', 'cloth', 'stick', 'feather']), 1, 3, 0.75);
@@ -775,7 +779,7 @@ export const FOUNDRY_FLOOR = 2;
 // How good a floor's loot runs: its number down, and a little for how hard
 // the place is.
 function tierOf(ctx) {
-  return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5 + (FAR_LOOT[ctx.rec.isle] || 0);
+  return ctx.n + ((ctx.rec.level || 1) - 1) * 0.5 + (FAR_LOOT[ctx.rec.isle] || 0) + ((ctx.rec.tier || 1) - 1);
 }
 // The old places of the far islands keep better things than Thessa's: as
 // if a good half-floor further down.
@@ -786,7 +790,9 @@ export const FAR_LOOT = { kharos: 0.75, myrrow: 0.75 };
 // dungeon's record (see sim/dungeons.js): { type, seed, depth, level }.
 export function buildFloor(rec, n, rx0 = INST_RX) {
   const T = dtypeOf(rec);
-  const rng = new RNG(hash4(rec.seed >>> 0, n, 0xd06e));
+  // (Turned back with a time crystal: made afresh, not as it was before.
+  // See game/timecrystal.js.)
+  const rng = new RNG(hash4((rec.seed + (rec.restores || 0) * 7919) >>> 0, n, 0xd06e));
   const big = rec.type === 'kavorent';
   // (Laid out inside its regions, not right to their edges: the old
   // places a little tighter than they were, a Kavorent ruin's floors a good

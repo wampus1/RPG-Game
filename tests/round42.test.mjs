@@ -172,7 +172,8 @@ test('a town, or the shore, told of goes on your map (and the marks are kept)', 
 
 // ------------------------------------------------------------ bosses
 test('masters: a tenth more health all round, more again for the great slow ones; halls a little bigger', () => {
-  assert.ok(Math.abs(BOSS_HP - 1.3 * 1.1) < 1e-9);
+  // (Round 61: half as much again on top.)
+  assert.ok(Math.abs(BOSS_HP - 1.3 * 1.1 * 1.5) < 1e-9);
   for (const k of ['worm', 'slag_titan', 'spore_colossus', 'coral_colossus']) assert.ok(BOSS_HP_EXTRA[k] > 1, k);
   for (const type of Object.keys(DTYPES)) {
     if (type === 'kavorent') continue;

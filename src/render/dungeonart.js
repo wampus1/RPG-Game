@@ -414,6 +414,26 @@ export function dungeonIcon(key, it) {
     for (const a of [0.4, 1.3, 2.4, 3.6, 4.6, 5.6]) p.set(8 + Math.cos(a) * 6.5, 8 + Math.sin(a) * 6.5, shade(c, 0.7));
     return p.outline(OUT);
   }
+  if (it.kind === 'time_crystal') {
+    // (Round 61) A time crystal: a long faceted crystal in its tier's
+    // colour, a little clock face caught in its heart, its hands at odds.
+    const c = hex(it.color || '#c8a0ff');
+    for (let y = 1; y <= 14; y++) {
+      const w = y < 8 ? Math.round((y - 1) * 0.75) : Math.round((14 - y) * 0.75);
+      p.hline(8 - w, 8 + w, y, y < 8 ? shade(c, 0.85 + y * 0.03) : shade(c, 0.7));
+    }
+    p.line(8, 1, 8, 14, shade(c, 1.25));
+    p.ellipse(8, 8, 2.6, 2.6, shade(c, 0.4));
+    p.ellipse(8, 8, 1.9, 1.9, '#fff8e8');
+    p.set(8, 7, '#3a3050');
+    p.set(8, 6, '#3a3050');
+    p.set(9, 8, '#3a3050');
+    p.set(6, 3, '#ffffff');
+    p.set(7, 2, '#ffffff');
+    // (Tier marks: a pip for each, down its side.)
+    for (let i = 0; i < (it.tier || 1); i++) p.set(12, 11 - i * 2, '#ffffff');
+    return p.outline(OUT);
+  }
   if (it.kind === 'relic') {
     const c = hex(it.color || '#ffffff');
     p.ellipse(8, 8, 5, 5, shade(c, 0.35), 160);

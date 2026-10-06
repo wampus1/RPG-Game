@@ -4435,6 +4435,56 @@ dig in. What you do (or don't) decides the rest.
   which each of you has.
 - *Older worlds* (migration 0.59.0): nothing to put right.
 
+## Round 61: boss tiers and time crystals
+
+- *Fixed: armour in hand that wouldn't go on.* Right-clicking a piece of
+  armour in your hand while a shield was on your arm raised the shield as
+  a guard instead of putting the armour on. Armour in hand is now put on
+  first (a Kavorent Aegis replaces the shield you had).
+- *Fixed: things dropped in lava lasted for ever.* A dropped item that
+  lands in lava (or comes to rest on it) now burns up with a hiss. A
+  fireproof piece survives, and so do obsidian, Kavorent cores, ember pods
+  and cinder hearts.
+- *Fixed: bosses knocked off their attacks.* A heavy blow, a stun or a
+  freezing gem no longer stops a boss mid-attack (frost still slows it).
+  Only a parry does.
+- *Bosses are tougher.* Every boss has half as much health again.
+- *Shields parry better.* With a shield on your arm the parry window is
+  a little longer (0.07 seconds).
+- *Kavorent chests.* A chest in a Kavorent spire now and then holds a piece
+  of their arms or armour, more often deeper down.
+- *The Crucible throws its walls.* When the Crucible's piston walls stand
+  near it, it can strike one so that it slides across the hall at you,
+  setting the floor burning behind it and knocking aside anyone in its
+  way. The wall stops with a crash when it hits something.
+- *Boss tiers.* Every boss has a tier from I to III. When a world is made
+  every boss is at tier I. Above tier I, the boss bar shows the tier
+  ("· Tier II"), and so does the dungeon's tooltip on the world map.
+  - **Tier II**: 1.75 times the health, 1.2 times the damage and speed,
+    a slightly shorter parry window, now and then one attack straight into
+    the next, and one extra ability.
+  - **Tier III**: 3 times the health, 1.5 times the damage and speed, a
+    shorter parry window again, attacks chained together into combos, a
+    fourth phase ("UNBOUND") at the last 15% of its health, and two extra
+    abilities.
+
+  The extra abilities belong to every boss, in its own colour and kind of
+  harm (fire, frost, or a blow that throws you back):
+  - **Time ripples**: rings spreading out from it, one after another,
+    each with a gap to step into;
+  - **Your past catches up**: the places you've just stood, marked one by
+    one, burst in the order you stood in them.
+- *Time crystals.* A defeated boss drops a time crystal of its tier. Hold
+  it at the entrance of a dungeon whose boss is beaten and use it
+  (right-click). The ground shivers, light runs back into the entrance,
+  the fallen stones lift and fit together, a clock spins backwards over it
+  all, and with a crack the dungeon stands as it was: open, its floors
+  made afresh, its boss waiting again, one tier above the crystal's (tier
+  III at most). Everything in a higher-tier dungeon is harder, and its
+  chests are richer. A crystal can't be used while someone is down there,
+  or while a dead player's pack still lies below (fetch it up first).
+- *Older worlds* (migration 0.61.0): every dungeon starts at tier I.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

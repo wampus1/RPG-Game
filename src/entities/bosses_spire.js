@@ -230,11 +230,17 @@ const CRUCIBLE = {
         by: c, tiles, y: c.y, dur: 1.1 + i * 0.25, dmg: dmgOf(c, 8), stun: 0.6, kind: 'slam', center: s, radius: 1, color: COLORS.kav,
         onFire: (g) => {
           g.renderer.emit(s.x + 0.5, c.y + 2.5, s.z + 0.5, { n: 12, color: ['#4a4870', '#5ad8f0', '#c8fbff'], up: -20, speed: 30, life: 0.5 });
-          // (Standing a while after: walls, till they draw back up.)
+          // (Standing a while after: walls, till they draw back up. Round
+          // 61: and it remembers where, to strike them at you: see hurl.)
+          const placed = [];
           for (const q of tiles) {
             if (!openFloor(g, q.x, q.z)) continue;
-            if (work(g, q.x, FY, q.z, B.kav_wall, ph >= 3 ? 7 : 5, c)) work(g, q.x, FY + 1, q.z, B.kav_wall, ph >= 3 ? 7 : 5, c);
+            if (work(g, q.x, FY, q.z, B.kav_wall, ph >= 3 ? 7 : 5, c)) {
+              work(g, q.x, FY + 1, q.z, B.kav_wall, ph >= 3 ? 7 : 5, c);
+              placed.push({ x: q.x, z: q.z });
+            }
           }
+          if (placed.length) (c.pillars ||= []).push({ tiles: placed, life: ph >= 3 ? 7 : 5 });
         },
       });
     });
@@ -282,6 +288,99 @@ const CRUCIBLE = {
     return true;
   },
 };
+
+// (Round 61) One of its piston walls struck at you: shown coming along
+// the floor, then it slides the length of the hall, a tile at a time,
+// knocking aside and burning whoever's in its way, and leaving the floor
+// it crossed on fire behind it.
+function standing(game, p) {
+  return p.tiles.every((q) => game.world.getBlock(q.x, FY, q.z) === B.kav_wall);
+}
+export function hurl(c) {
+  const game = c.game;
+  const t = c.target;
+  if (!t || t.dead) return false;
+  c.pillars = (c.pillars || []).filter((p) => standing(game, p));
+  const reach = (c.foot || 0) + 4;
+  const near = c.pillars.filter((p) => p.tiles.some((q) => Math.max(Math.abs(q.x - c.x), Math.abs(q.z - c.z)) <= reach));
+  if (!near.length) return false;
+  const pil = near[Math.floor(Math.random() * near.length)];
+  const cx = pil.tiles.reduce((a, q) => a + q.x, 0) / pil.tiles.length;
+  const cz = pil.tiles.reduce((a, q) => a + q.z, 0) / pil.tiles.length;
+  // At you, eight ways round.
+  const ang = Math.atan2(t.z - cz, t.x - cx);
+  const dx = Math.round(Math.cos(ang));
+  const dz = Math.round(Math.sin(ang));
+  if (!dx && !dz) return false;
+  c.pillars = c.pillars.filter((p) => p !== pil);
+  // The way it'll go, shown on the floor.
+  const path = [];
+  for (let k = 1; k <= 12; k++) for (const q of pil.tiles) {
+    const x = q.x + dx * k;
+    const z = q.z + dz * k;
+    if (inHall(c, { x, z }) && !path.some((o) => o.x === x && o.z === z)) path.push({ x, z });
+  }
+  c.face(cx, cz);
+  c.doAction?.(0.5);
+  game.renderer.floatText(c.x, c.y + 3.2, c.z, 'PISTON EJECT', '#ffb040');
+  shout(c, 'CLEAR THE CHAMBER.', '#ffb040');
+  game.renderer.effect?.({ type: 'ring', wx: cx, wy: c.y + 1, wz: cz, r0: 4, r1: 30, color: HEAT, life: 0.5, oy: 2, flat: 0.5, thick: 2 });
+  addHazard(game, { by: c, tiles: path, y: c.y, dur: 0.75, dmg: 0, kind: 'fire', center: path[Math.floor(path.length / 2)] || { x: cx, z: cz }, color: COLORS.fire, quiet: true });
+  const life = pil.life;
+  let cur = pil.tiles.map((q) => ({ ...q }));
+  const hit = new Set();
+  proc(game, c, 0.08, 12, () => {
+    if (!cur) return;
+    const next = cur.map((q) => ({ x: q.x + dx, z: q.z + dz }));
+    const own = (x, z) => cur.some((q) => q.x === x && q.z === z);
+    // (Into a wall, or out of the hall: it stops there, with a crash.)
+    const blocked = next.some((q) => !inHall(c, q) || (!own(q.x, q.z) && !openFloor(game, q.x, q.z, true)) || (c.foot && Math.abs(q.x - c.x) <= c.foot && Math.abs(q.z - c.z) <= c.foot));
+    if (blocked) {
+      game.renderer.emit(cur[0].x, c.y + 1, cur[0].z, { n: 14, color: ['#4a4870', '#5ad8f0', ...HEAT], up: 30, speed: 50, life: 0.6 });
+      game.shake = Math.min(1, (game.shake || 0) + 0.3);
+      game.audio?.play('boom', c);
+      cur = null;
+      return;
+    }
+    // Whoever's in the way: struck, burned and thrown aside.
+    for (const p of game.everyone()) {
+      if (p.dead || !next.some((q) => q.x === p.x && q.z === p.z) || Math.abs(p.y - c.y) > 2) continue;
+      if (!hit.has(p) && !(p.rollT > 0)) {
+        hit.add(p);
+        game.damage(p, dmgOf(c, 7), c);
+        burn(game, p, c, 2);
+      }
+      knock(game, { x: p.x - dx, z: p.z - dz }, p, 2);
+    }
+    // Moved on: off the old floor, onto the new.
+    const w = game.world;
+    for (const q of cur) {
+      if (next.some((o) => o.x === q.x && o.z === q.z)) continue;
+      for (const y of [FY, FY + 1]) {
+        if (w.getBlock(q.x, y, q.z) === B.kav_wall) w.setBlock(q.x, y, q.z, B.air);
+        game.works = (game.works || []).filter((o) => !(o.x === q.x && o.y === y && o.z === q.z));
+      }
+      // (And a burning trail behind it.)
+      groundFire(game, q.x, q.z, FY, c);
+      game.renderer.emit(q.x, c.y + 0.3, q.z, { n: 3, color: HEAT, up: 20, speed: 10, life: 0.5, glow: true });
+    }
+    const placed = [];
+    for (const q of next) {
+      if (own(q.x, q.z)) {
+        placed.push(q);
+        continue;
+      }
+      if (work(game, q.x, FY, q.z, B.kav_wall, life, c)) {
+        work(game, q.x, FY + 1, q.z, B.kav_wall, life, c);
+        placed.push(q);
+      }
+    }
+    cur = placed.length ? placed : null;
+    if (Math.random() < 0.5) game.audio?.play('rumble', c);
+  }, 0.75);
+  heatUp(c, 8);
+  return true;
+}
 
 // Too hot: coolant columns thrown up about the hall, a count, and its heat
 // blown out across the whole of it. Only those with a column between them
@@ -636,6 +735,16 @@ export const SPIRE_BRAINS = {
         used(c, 0.5);
         return true;
       }
+    }
+    // (Round 61) One of its piston walls struck at you, when there's one
+    // standing near.
+    if (c.pillars && c.pillars.length && cd(c, 'hurlCd', dt, 1.5) && ready(c) && !c.windup) {
+      if (hurl(c)) {
+        c.hurlCd = ph >= 2 ? 3.2 : 4.5;
+        used(c, 0.6);
+        return true;
+      }
+      c.hurlCd = 1;
     }
     // Close: a slam of its great frame.
     if (bossSlam(c, dt, 2, 0.9, 8, ph >= 2 ? 3.5 : 4.5)) {

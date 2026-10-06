@@ -261,6 +261,17 @@ export const STEPS = [
       log.push('A player\'s reveal and map teleport commands now work on their own screen.');
     },
   },
+  {
+    // Masters' tiers and time crystals (round 61): every old place stands
+    // at tier 1 till it's turned back.
+    to: '0.61.0',
+    data(d, log) {
+      log.push('Masters are half as hard again to bring down, and leave time crystals: use one at the way into a beaten place to turn it back, harder.');
+    },
+    game(game) {
+      for (const r of game.sim.dungeons ? game.sim.dungeons.all : []) r.tier ||= 1;
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

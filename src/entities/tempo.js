@@ -14,17 +14,19 @@ import { fits, apart } from './footprint.js';
 import { knock } from '../game/combat.js';
 import { bossTint } from '../render/bossart.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
+import { PHASE4, TIERS, UNBOUND_LINES, UNBOUND_CONSTRUCT } from './bosstier.js';
 
 // The hp left (as a share) at which it turns: worn, then desperate.
 export const MARKS = [0.66, 0.33];
-// Seconds between its attacks, by phase (quicker as it's worn down).
-export const GAP = [0, 1.7, 1.35, 1.0];
+// Seconds between its attacks, by phase (quicker as it's worn down). (The
+// fourth: a master at tier 3, unbound at the very last: see bosstier.js.)
+export const GAP = [0, 1.7, 1.35, 1.0, 0.75];
 // The longest it stands about before it moves (seconds).
 export const STILL = 1.4;
 // The longest it goes without starting an attack, by phase (seconds):
 // past that, whatever it has is made ready at once (one at a time still,
 // as ever); and a moment more with nothing, it comes straight at you.
-export const PRESS = [0, 3.2, 2.6, 2.0];
+export const PRESS = [0, 3.2, 2.6, 2.0, 1.6];
 // (Calling help isn't an attack: those keep their own time.)
 const NOT_ATTACKS = new Set(['attackCd', 'callCd', 'sentCd', 'rallyCd']);
 
@@ -51,6 +53,7 @@ const PHASE_LINES = {
 
 export function phaseOf(c) {
   const f = c.hp / Math.max(1, c.maxHp);
+  if (c.tier >= 3 && f <= PHASE4) return 4;
   return f <= MARKS[1] ? 3 : f <= MARKS[0] ? 2 : 1;
 }
 
@@ -81,6 +84,14 @@ function gapOf(c) {
 // long one).
 export function used(c, extra = 0) {
   c.gapT = gapOf(c) + extra;
+  // (Round 61: a master of a turned-back place runs one attack straight
+  // into the next, now and then; at tier 3, often. Never three running.)
+  const chain = (TIERS[c.tier] || TIERS[1]).combo;
+  if (chain && !c.chained && Math.random() < chain * (phaseOf(c) >= 4 ? 1.5 : 1)) {
+    c.gapT = 0.2 + extra * 0.25;
+    c.chained = true;
+    c.game?.renderer?.floatText?.(c.x, c.y + 3.6, c.z, 'COMBO!', '#ff9060');
+  } else c.chained = false;
   c.casts = (c.casts || 0) + 1;
   c.stillT = 0;
   c.repo = null;
@@ -170,13 +181,15 @@ function phaseUp(c, ph) {
   r.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 6, r1: 90, color: [tint[0], '#ffffff'], life: 0.8, oy: 4, flat: 0.5, thick: 3 });
   r.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 4, r1: 56, color: ['#ffffff', tint[0]], life: 0.55, oy: 4, flat: 0.5, thick: 2 });
   r.emit(c.x, c.y + 1.4, c.z, { n: 40, color: [tint[0], tint[1] || '#ffffff', '#ffffff'], up: 50, speed: 110, life: 0.8, glow: true, gravity: 40 });
-  r.flashScreen?.(ph >= 3 ? '#ff2010' : '#ffb060', ph >= 3 ? 0.3 : 0.2);
+  r.flashScreen?.(ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff2010' : '#ffb060', ph >= 3 ? 0.3 : 0.2);
   game.shake = Math.min(1.6, (game.shake || 0) + (ph >= 3 ? 1.1 : 0.8));
   game.hitStop = Math.max(game.hitStop || 0, 0.12);
   game.audio?.play('roar', c);
   game.audio?.play('boom', c);
-  r.floatText(c.x, c.y + 3.6, c.z, ph >= 3 ? 'DESPERATE!' : 'ENRAGED!', ph >= 3 ? '#ff4030' : '#ffb040');
-  const line = (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
+  r.floatText(c.x, c.y + 3.6, c.z, ph >= 4 ? 'UNBOUND!' : ph >= 3 ? 'DESPERATE!' : 'ENRAGED!', ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff4030' : '#ffb040');
+  // (Unbound: rings of the turned time going out from it, again and again.)
+  if (ph >= 4) for (let i = 0; i < 3; i++) r.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 6 + i * 8, r1: 140 + i * 30, color: ['#c8a0ff', '#ffffff', tint[0]], life: 0.9 + i * 0.25, oy: 4, flat: 0.5, thick: 3 });
+  const line = ph >= 4 ? (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES)[Math.floor(Math.random() * (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES).length)] : (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
   if (line) c.say?.(line, 2.6, '#ff9080');
   // (Anyone close by is thrown back from it.)
   for (const e of [...game.everyone(), ...game.npcs]) {
@@ -302,5 +315,6 @@ function pickSpot(c, t) {
 // The music's step up for the fight as it stands (1 to 3).
 export function fightPhase(fight) {
   if (!fight) return 1;
+  if (fight.tier >= 3 && fight.frac <= PHASE4) return 4;
   return fight.frac <= MARKS[1] ? 3 : fight.frac <= MARKS[0] ? 2 : 1;
 }

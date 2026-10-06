@@ -26,13 +26,13 @@ const VIEW = 30;
 // (Effects further off than this aren't worth sending.)
 const FX_NEAR = 34;
 
-// What a player has pressed, clicked and pointed at, as last sent.
 // What a host can let a player do (round 57: the Permissions button in
 // the Multiplayer window). `told`: how the player's told of it.
 export const PERMS = [
   { key: 'commands', label: 'Use commands', about: 'The command console (the ` or / key): teleporting, items, the time of day, skipping days... as the host can.', told: 'use commands (the ` key)' },
 ];
 
+// What a player has pressed, clicked and pointed at, as last sent.
 export class RemoteInput {
   constructor() {
     this.keys = new Set();

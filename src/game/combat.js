@@ -246,7 +246,9 @@ export function beginAttack(game, a, target, st = styleOf(a), opts = null) {
   // (A master always gives you time to see a blow coming: a great one,
   // a bit more.)
   if (a.isBoss) dur = Math.max(dur, a.foot ? BOSS_MIN_WINDUP + 0.15 : BOSS_MIN_WINDUP);
-  a.windup = { t: 0, dur, st, target, tiles, y: a.y, heading: headingTo(a, target), combo: (opts && opts.combo) || 0, press: (opts && opts.press) || 0 };
+  // (A master at tier 3 strings its blows together: see bosstier.js.)
+  const combo = (opts && opts.combo) || (a.isBoss && a.tier >= 3 && Math.random() < 0.4 ? 1 + (Math.random() < 0.3 ? 1 : 0) : 0);
+  a.windup = { t: 0, dur, st, target, tiles, y: a.y, heading: headingTo(a, target), combo, press: (opts && opts.press) || 0 };
   if ((st.heavy || st.charge || st === STYLES.haymaker) && speaks(a)) a.say?.(a.rng?.pick?.(['Hrrah!', 'Graaah!', 'Hyaah!']) || 'Hrah!', 0.6, '#ff9080');
   return true;
 }
@@ -421,7 +423,7 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
   if (guarding && facing(v, a)) {
     // Up just as it came: parried, and they're left reeling.
     const hero = v.kind === 'player' ? game.hero : null;
-    if (v.kind === 'player' && v.blockT !== undefined && v.blockT < parryWindow(game) && !st.charge) {
+    if (v.kind === 'player' && v.blockT !== undefined && v.blockT < parryWindow(game, a) && !st.charge) {
       parried(game, v, a);
       return 'parried';
     }
@@ -506,7 +508,8 @@ export function resolveHit(game, a, v, st, opts = null) {
   else game.audio?.play('armor_hit', v);
   // A heavy blow staggers (not if you're sure on your feet).
   if (v.kind === 'player' && heroHas(game.hero, 'sure_footed')) return amount > 0 ? 'hit' : 'blocked';
-  if (st.stagger && amount > 0 && !v.dead) v.stunT = Math.max(v.stunT || 0, v.kind === 'player' ? st.stagger * 0.5 : st.stagger);
+  // (A master of an old place isn't staggered: round 61.)
+  if (st.stagger && amount > 0 && !v.dead && !(v.isBoss || v.S?.boss)) v.stunT = Math.max(v.stunT || 0, v.kind === 'player' ? st.stagger * 0.5 : st.stagger);
   if ((st.charge || st.heavy) && amount > 0 && !v.dead) knock(game, a, v, st.charge ? 2 : 1);
   return amount > 0 ? 'hit' : 'blocked';
 }
@@ -532,10 +535,15 @@ export function siphonBreath(game, a, v, n) {
 }
 
 // How soon before the blow a raised guard turns it into a parry.
-export function parryWindow(game) {
+// (Round 61: a shield on your arm gives a little longer; a master at its
+// hardest, `a` (see bosstier.js), a little less.)
+export function parryWindow(game, a = null) {
   // (Round 54: and a little more for each rank of swordplay: see mastery.js.)
-  return (heroHas(game.hero, 'duelist') ? 0.3 : 0.2) + parryBonus(game.player) + parryBonusOf(game);
+  const w = (heroHas(game.hero, 'duelist') ? 0.3 : 0.2) + parryBonus(game.player) + parryBonusOf(game) + (game.player && shieldOf(game.player) ? SHIELD_PARRY : 0);
+  return w * (a && a.parryK ? a.parryK : 1);
 }
+// How much longer a shield holds the parry open (seconds).
+export const SHIELD_PARRY = 0.07;
 
 // A parry: the blow turned aside at the last instant with a crack of
 // steel. The world holds its breath; they reel back, dazed for a few
