@@ -10,7 +10,8 @@
 //     comes from it), change (a game biome's key: this changes that one
 //     rather than being a new one), char, fg, bg (on the world map),
 //     surface, sub, patches [{ block, size, amount }], hills (0-3),
-//     water ('none' | 'ponds' | 'pools'), climate, bank, bed, reeds,
+//     water ('none' | 'ponds' | 'pools'), liquid ('water' | 'lava' |
+//     'ice' | 'mud', round 65), climate, bank, bed, reeds,
 //     lilies, rain (percent), snowy, trees [{ tree | structure, w }],
 //     treeSpacing, treeChance, clump, wetTrees, plants [{ block, w }],
 //     plantDensity, rocks (per thousand), creatures { day, night: [{
@@ -31,6 +32,10 @@ import { hashString } from '../util/rng.js';
 // the shore and the fire mountain aren't).
 export const GAME_BIOMES = Object.keys(BIOMES).filter((k) => !['ocean', 'beach', 'volcano'].includes(k));
 export const CLIMATES = ['mild', 'warm', 'cold', 'hot'];
+// (Round 65) What a biome's ponds and pools can hold (water: the game's
+// own way, nothing to set).
+export const LIQUIDS = { water: 0, lava: B.lava, ice: B.ice, mud: B.mud };
+const LIQUID_OF = { [B.lava]: 'lava', [B.ice]: 'ice', [B.mud]: 'mud' };
 export const STYLES = ['vale', 'north', 'sun', 'wild', 'high', 'ember', 'mist', 'tide'];
 
 const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -57,7 +62,7 @@ export function biomeFields(k) {
     char: g.char, fg: g.fg, bg: g.bg,
     surface: nm(g.surface), sub: nm(g.sub),
     patches: (g.patches || []).map(([id, size, thr]) => ({ block: nm(id), size, amount: Math.round((1 - thr) * 100) })),
-    hills: g.hills ?? 1, water: g.pools ? 'pools' : g.ponds ? 'ponds' : 'none',
+    hills: g.hills ?? 1, water: g.pools ? 'pools' : g.ponds ? 'ponds' : 'none', liquid: LIQUID_OF[g.liquid] || 'water',
     climate: g.climate || 'mild', bank: g.bank !== undefined ? nm(g.bank) : null, bed: g.bed || null,
     reeds: g.reeds !== false, lilies: !!g.lilies, rain: Math.round((g.rain ?? 1) * 100), snowy: !!g.snowy,
     trees: (g.trees || []).map(([t, w]) => ({ tree: t, w })), treeSpacing: g.treeSpacing ?? 7, treeChance: Math.round((g.treeChance ?? 0) * 100), clump: Math.round((g.clump ?? 0) * 100), wetTrees: !!g.wetTrees,
@@ -90,6 +95,12 @@ export function compileBiome(mod, b) {
   if (b.water) {
     out.ponds = b.water === 'ponds';
     out.pools = b.water === 'pools';
+  }
+  // (Round 65) What's in its ponds and pools.
+  if (b.liquid !== undefined) {
+    const id = LIQUIDS[b.liquid];
+    if (id) out.liquid = id;
+    else delete out.liquid;
   }
   if (CLIMATES.includes(b.climate)) out.climate = b.climate;
   if (b.bank !== undefined) {

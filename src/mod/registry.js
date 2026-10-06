@@ -348,14 +348,17 @@ function lookOf(r) {
     const sz = big ? 32 : 16;
     return { frames: 2, size: sz, draw: (fr) => placeholder(sz, m.color, fr) };
   }
-  const sz = big || a.w > 20 || a.h > 20 ? 32 : 16;
+  // (Round 65) A person's art (16 across, as tall as the game's people): at
+  // its own size, feet on the ground, not squeezed into a square.
+  const tall = a.use === 'person' || (a.h > a.w * 1.3 && a.w <= 16 && a.h <= 32);
+  const sz = big || tall || a.w > 20 || a.h > 20 ? 32 : 16;
   const [f0, f1] = (a.tags || []).some((t) => t.name === 'walk') ? tagRange(a, 'walk') : [0, a.frames.length - 1];
   const frames = Math.max(1, Math.min(8, f1 - f0 + 1));
   return {
     frames, size: sz, modAsset: true,
     // (Its art faces right, as drawn: the game wants it facing left.)
     draw: (fr) => {
-      const pix = assetPixels(m, f.look, f0 + (fr % frames), sz, sz, 'contain', true);
+      const pix = assetPixels(m, f.look, f0 + (fr % frames), sz, sz, tall ? 'native' : 'contain', true);
       const p = toPx(pix);
       const q = new Px(sz, sz);
       for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) {

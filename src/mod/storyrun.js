@@ -10,6 +10,7 @@
 import { MODS } from './state.js';
 import { gameKey } from './format.js';
 import { NODES } from './graph.js';
+import { WHO_JOBS } from './storynodes.js';
 import { MOTIFS, GO_HOOKS, R, nameOf, sameRef, isAlive, resolve } from '../sim/saga/core.js';
 import { laidTowns, adults, living, spotNear, townsNear, layoutOf, fill, townMid } from '../sim/saga/motifs/lib.js';
 import { mayorOf, alive } from '../sim/econ.js';
@@ -42,10 +43,7 @@ export function compareValues(a, op, b) {
   }
 }
 
-const JOBS = {
-  'the innkeeper': ['innkeeper', 'barkeep'], 'the priest': ['priest'], 'a smith': ['blacksmith', 'smith'], 'a cook': ['cook', 'baker'],
-  'a farmer': ['farmer'], 'a merchant': ['merchant', 'jeweller', 'tailor'], 'a guard': ['guard'],
-};
+const JOBS = WHO_JOBS;
 const ISLE = { 'a town on Thessa': 'thessa', 'a town on Kharos': 'kharos', 'a town on Myrrow': 'myrrow' };
 const ref = (mod, k) => (k && typeof k === 'string' && k[0] === '@' ? gameKey(mod.id, k.slice(1)) : k);
 

@@ -528,6 +528,7 @@ export class Workshop {
           { label: 'Armour', onClick: () => this.newEntity('tpl.armor', icon, t.name) },
           { label: 'Material', onClick: () => this.newEntity('tpl.material', icon, t.name) },
         ] },
+        ...(t.use === 'person' ? [{ label: 'Make a person (NPC) from it', icon: 'person', onClick: () => this.newEntity('tpl.npc', look, t.name) }] : []),
         { label: 'Make a creature from it', icon: 'skull', sub: [
           { label: 'Animal', onClick: () => this.newEntity('tpl.animal', look, t.name) },
           { label: 'Hostile', onClick: () => this.newEntity('tpl.hostile', look, t.name) },

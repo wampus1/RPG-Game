@@ -17,8 +17,18 @@ const out = (id, label) => ({ id, t: T.flow, label });
 const P = (id, t, label, d, o = {}) => ({ id, t, label, def: d, ...o });
 const pick = (id, label, opts, d, o = {}) => ({ id, t: 'enum', label, opts, def: d ?? opts[0], ...o });
 
-// Who in a town someone in a story can be.
-export const WHO = ['someone grown', 'the mayor', 'the innkeeper', 'the priest', 'a smith', 'a cook', 'a farmer', 'a merchant', 'a guard', 'an elder', 'a child', 'nobody'];
+// Who in a town someone in a story can be, and (round 65: every trade a
+// town has) the work that makes them that.
+export const WHO_JOBS = {
+  'the innkeeper': ['innkeeper', 'barkeep'], 'the priest': ['priest'], 'a smith': ['blacksmith', 'smith'], 'a cook': ['cook', 'baker'],
+  'a farmer': ['farmer'], 'a merchant': ['merchant', 'jeweller', 'tailor'], 'a guard': ['guard'],
+  'a barkeep': ['barkeep'], 'a baker': ['baker'], 'a scholar': ['scholar'], 'a researcher': ['researcher'], 'a noble': ['noble'],
+  'a tailor': ['tailor'], 'a carpenter': ['carpenter'], 'a herbalist': ['herbalist'], 'a fisher': ['fisher'], 'a lumberjack': ['lumberjack'],
+  'a miner': ['miner'], 'a trapper': ['trapper'], 'a labourer': ['laborer'], 'a builder': ['builder'], 'a beggar': ['beggar'],
+  'an animal handler': ['handler'], 'a miller': ['miller'], 'a glassblower': ['glassblower'], 'a sporewright': ['sporewright'],
+  'a pearl diver': ['pearldiver'], 'someone retired': ['retired'],
+};
+export const WHO = ['someone grown', 'the mayor', 'an elder', 'a child', ...Object.keys(WHO_JOBS), 'nobody'];
 export const WHERE_TOWN = ['any town', 'a town on Thessa', 'a town on Kharos', 'a town on Myrrow', 'the nearest town'];
 export const SPOTS = ['out near the town', 'far out in the wilds', 'in the town', 'by the one asking'];
 export const ROLES = ['giver', 'other'];

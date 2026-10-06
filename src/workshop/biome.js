@@ -496,6 +496,7 @@ export default class BiomeTool {
       field('Hills', slider({ value: w.hills ?? 1, min: 0, max: 3, int: true, tip: HILLS.join(', '), onChange: (v) => set((x) => (x.hills = v)) }), { tip: '0 flat, 1 rolling, 2 hilly, 3 rugged (ridges, as the mountains have).' }),
       field('Climate', seg([['mild', 'Mild'], ['warm', 'Warm', 'Sandy banks'], ['cold', 'Cold', 'Snow on the heights sooner'], ['hot', 'Hot', 'Never snow; dark beds under its water']], w.climate || 'mild', (v) => set((x) => (x.climate = v)))),
       field('Water', seg([['none', 'None'], ['ponds', 'Ponds', 'Now and then, in the low places'], ['pools', 'Pools', 'Many, shallow (as marshes have)']], w.water || 'none', (v) => set((x) => (x.water = v)))),
+      ...((w.water || 'none') !== 'none' ? [field('Filled with', seg([['water', 'Water'], ['lava', 'Lava', 'Glowing, in beds of basalt'], ['ice', 'Ice', 'Frozen over, water under it'], ['mud', 'Mud', 'A bog']], w.liquid || 'water', (v) => set((x) => (x.liquid = v))), { tip: 'What its ponds and pools hold (rivers and lakes stay water).' })] : []),
       field('Banks', blockField(app, w.bank, (v) => set((x) => (x.bank = v)), { none: 'its own ground', tab: 'Ground' }), { tip: 'Along its water.' }),
       h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '4px 14px' } },
         check('Reeds by the water', w.reeds !== false, (v) => set((x) => (x.reeds = v))),

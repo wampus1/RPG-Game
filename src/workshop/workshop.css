@@ -152,8 +152,9 @@
 .panel-h .tools { margin-left: auto; display: flex; gap: 4px; font-family: var(--mono); font-size: 13px; }
 .panel-b { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 7px; }
 .panel.closed .panel-b { display: none; }
-.field { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; min-height: 26px; }
-.field > label { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field { display: grid; grid-template-columns: minmax(100px, 38%) 1fr; align-items: center; gap: 8px; min-height: 26px; }
+/* (Round 65: labels wrap rather than being cut off.) */
+.field > label { color: var(--dim); font-size: 12px; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; padding: 2px 0; }
 .field > label.scrub { cursor: ew-resize; }
 .field > label.scrub:hover { color: var(--gold); }
 .field.wide { grid-template-columns: 1fr; }
@@ -491,7 +492,7 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .nc-wire:hover { opacity: 1; stroke-width: 4; }
 .nc-wire.hot { opacity: 1; }
 .nc-wire.drag { stroke-dasharray: 6 4; opacity: 1; pointer-events: none; }
-.nc-node { position: absolute; min-width: 190px; max-width: 320px; background: rgba(27, 36, 82, 0.97); border: 2px solid var(--line); box-shadow: var(--bevel), 4px 4px 0 rgba(0, 0, 0, 0.45); font-size: 12px; z-index: 2; }
+.nc-node { position: absolute; min-width: 190px; max-width: 380px; background: rgba(27, 36, 82, 0.97); border: 2px solid var(--line); box-shadow: var(--bevel), 4px 4px 0 rgba(0, 0, 0, 0.45); font-size: 12px; z-index: 2; }
 .nc-node.sel { outline: 2px solid var(--gold); z-index: 3; }
 .nc-node.root { min-width: 250px; border-color: #6a4a10; }
 .nc-node.bad { outline: 2px solid var(--red); }
@@ -503,7 +504,8 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .nc-row.in { padding-left: 14px; }
 .nc-row.out { justify-content: flex-end; padding-right: 14px; }
 .nc-row.out.flow .nc-lbl { color: var(--text); }
-.nc-lbl { color: var(--dim); white-space: nowrap; flex: none; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.nc-lbl { color: var(--dim); white-space: normal; flex: 0 1 auto; max-width: 150px; line-height: 1.15; overflow-wrap: anywhere; padding: 2px 0; }
+.nc-row.out .nc-lbl { max-width: none; text-align: right; }
 .nc-row > .inp, .nc-row > .ref, .nc-row > select, .nc-row > .seg { height: 22px; font-size: 12px; flex: 1; min-width: 70px; }
 .nc-row > .inp.num { width: 70px; flex: 1; }
 .nc-row > .check { flex: 1; }

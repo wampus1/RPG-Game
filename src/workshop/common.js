@@ -117,6 +117,19 @@ function medianCut(entries, max) {
 export function vanillaItems() {
   return Object.keys(ITEMS).filter((k) => !k.includes('~') && !k.includes('*') && !k.includes('+') && !k.startsWith('m:') && ITEMS[k].kind !== 'note');
 }
+// (Round 65) What kind of thing a game item is, for lists.
+export const ITEM_GROUPS = ['Weapons', 'Tools', 'Armour', 'Food & potions', 'Materials & gems', 'Other things', 'Blocks'];
+export function itemGroup(k) {
+  const d = ITEMS[k] || {};
+  const kd = d.kind;
+  if (kd === 'weapon') return 'Weapons';
+  if (kd === 'tool') return 'Tools';
+  if (kd === 'armor') return 'Armour';
+  if (kd === 'food' || kd === 'potion') return 'Food & potions';
+  if (kd === 'material' || kd === 'gem' || kd === 'shard') return 'Materials & gems';
+  if (kd === 'block') return 'Blocks';
+  return 'Other things';
+}
 export function vanillaBlocks() {
   return BLOCKS.filter((b) => b && !b.mod && b.name !== 'air' && !b.name.startsWith('m:')).map((b) => b.name);
 }
@@ -286,8 +299,10 @@ export function refPicker(app, t, value, onChange, o = {}) {
 export function pickRef(app, t, anchor, onPick, o = {}) {
   const R = refInfo(t);
   const mine = refOptions(app, t);
-  const vlist = R.vanilla === 'item' ? vanillaItems() : R.vanilla === 'block' ? vanillaBlocks() : R.vanilla === 'biome' ? GAME_BIOMES : vanillaCreatures();
-  const game = R.vanilla ? vlist.map((k) => ({ value: k, name: R.vanilla === 'item' ? itemName(k) : R.vanilla === 'block' ? blockName(k) : R.vanilla === 'biome' ? biomeName(k) : creatureName(k), thumb: () => vanillaIcon(R.vanilla, k) })) : [];
+  let vlist = R.vanilla === 'item' ? vanillaItems() : R.vanilla === 'block' ? vanillaBlocks() : R.vanilla === 'biome' ? GAME_BIOMES : vanillaCreatures();
+  // (Round 65: items not blocks, when that's what's wanted.)
+  if (R.vanilla === 'item' && o.noBlocks) vlist = vlist.filter((k) => ITEMS[k].kind !== 'block');
+  const game = R.vanilla ? vlist.map((k) => ({ value: k, name: R.vanilla === 'item' ? itemName(k) : R.vanilla === 'block' ? blockName(k) : R.vanilla === 'biome' ? biomeName(k) : creatureName(k), thumb: () => vanillaIcon(R.vanilla, k), group: R.vanilla === 'item' ? itemGroup(k) : null })) : [];
   const r = anchor.getBoundingClientRect();
   const box = raise(h('div', { class: 'menu', style: { width: '280px' } }));
   const q = textInput({ placeholder: `Find ${R.name}...` });
@@ -295,8 +310,8 @@ export function pickRef(app, t, anchor, onPick, o = {}) {
   const draw = () => {
     clear(list);
     const f = q.value.toLowerCase();
-    const add = (head, arr) => {
-      const hits = arr.filter((x) => !f || x.name.toLowerCase().includes(f) || String(x.value).includes(f)).slice(0, 120);
+    const add = (head, arr, cap = 120) => {
+      const hits = arr.filter((x) => !f || x.name.toLowerCase().includes(f) || String(x.value).includes(f)).slice(0, cap);
       if (!hits.length) return;
       list.append(h('div', { class: 'mh' }, head));
       for (const x of hits) {
@@ -311,7 +326,10 @@ export function pickRef(app, t, anchor, onPick, o = {}) {
       }
     };
     add('This mod', mine);
-    add('The game\'s own', game);
+    // (Round 65) The game's items by kind, its blocks last: they came first,
+    // and filled the list before any item did.
+    if (R.vanilla === 'item') for (const g of ITEM_GROUPS) add(`The game's ${g.toLowerCase()}`, game.filter((x) => x.group === g), 400);
+    else add('The game\'s own', game);
     if (!mine.length && !game.length) list.append(h('div', { class: 'ex-empty' }, `No ${R.name}s in this mod yet.`));
   };
   q.addEventListener('input', draw);

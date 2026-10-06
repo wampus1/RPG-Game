@@ -147,12 +147,14 @@ def('tpl.hostile', {
   props: [pick('attack', 'Attacks by', ['melee', 'arrows', 'fire orbs', 'frost orbs', 'none']), pick('blow', 'Blow', ATTACKS, 'bite', { show: { attack: ['melee'] } }), bool('burnsInSun', 'Burns in daylight', false), bool('floats', 'Flies', false), bool('fireproof', 'Fireproof', false), bool('swims', 'Swims', false), ...SPAWN_PROPS.map((p) => (p.id === 'spawnTime' ? { ...p, def: 'night' } : p))],
   out: [...CREATURE_OUT, F('onAttack', 'On attack'), F('onSee', 'On sees a foe')], eval: creatureEval,
 });
+// (A person with art of their own: no colours to dress them in.)
+const NO_ART = (g) => !g('look') && !g('rig');
 def('tpl.npc', {
   cat: 'Templates', title: 'Person (NPC)', root: true, kind: 'creature', color: C.tpl,
-  help: 'Someone to talk to. Dress them with the colours below (or give them art of your own), and wire On talked to into Say nodes.',
-  in: [txt('name', 'Name', 'Wanderer'), txt('title', 'Title', 'traveller'), ref('look', T.asset, 'Look (art)', { adv: true }), ref('rig', T.rig, 'Look (rig)', { adv: true }), n('hp', 'Health', 20, { min: 1, max: 5000 }),
-    col('skin', 'Skin', '#e0b090'), col('hair', 'Hair', '#4a3020'), col('shirt', 'Shirt', '#4a6a9a'), col('pants', 'Trousers', '#3a3a4a'), n('wander', 'Wanders (paces)', 4, { min: 0, max: 30 }), n('tick', 'Tick every (s)', 2, { min: 0.2, max: 60, adv: true })],
-  props: [pick('hairStyle', 'Hair', HAIR_STYLES), bool('immortal', 'Can\'t be hurt', false), pick('temper', 'If attacked', ['flees', 'fights back', 'shrugs it off'], 'flees', { show: { immortal: [false] } })],
+  help: 'Someone to talk to. Dress them with the colours below, or give them art of your own (the Pixel tool\'s "Person (NPC)" size is drawn at a person\'s height; start it from one of the game\'s people), and wire On talked to into Say nodes.',
+  in: [txt('name', 'Name', 'Wanderer'), txt('title', 'Title', 'traveller'), ref('look', T.asset, 'Look (art)'), ref('rig', T.rig, 'Look (rig)', { adv: true }), n('hp', 'Health', 20, { min: 1, max: 5000 }),
+    ...[col('skin', 'Skin', '#e0b090'), col('hair', 'Hair', '#4a3020'), col('shirt', 'Shirt', '#4a6a9a'), col('pants', 'Trousers', '#3a3a4a')].map((q) => ({ ...q, show: NO_ART })), n('wander', 'Wanders (paces)', 4, { min: 0, max: 30 }), n('tick', 'Tick every (s)', 2, { min: 0.2, max: 60, adv: true })],
+  props: [pick('hairStyle', 'Hair', HAIR_STYLES, HAIR_STYLES[0], { show: NO_ART }), bool('immortal', 'Can\'t be hurt', false), pick('temper', 'If attacked', ['flees', 'fights back', 'shrugs it off'], 'flees', { show: { immortal: [false] } })],
   out: [F('onTalk', 'On talked to'), F('onSpawn', 'On spawned'), F('onTick', 'Every tick'), F('onHurt', 'On hurt'), F('onDeath', 'On death'), out('me', T.ent, 'This person'), out('foe', T.ent, 'Talker / attacker')],
   eval: creatureEval,
 });

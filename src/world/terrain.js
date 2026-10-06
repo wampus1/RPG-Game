@@ -85,6 +85,7 @@ export class Terrain {
     out.wet = 99;
     out.deep = false;
     out.lava = false;
+    out.liquid = 0;
     out.hot = false;
     out.cooled = null;
 
@@ -198,17 +199,20 @@ export class Terrain {
       return out;
     }
     const lowFlat = out.flat < 0.4;
+    let pond = false;
     if (!water && lowFlat && h === SURFACE) {
       if (bdef.pools) {
         const pn = this.nPool(x / 10, z / 10) + this.nPool(x / 4, z / 4) * 0.25;
         if (pn > 0.18) {
           water = true;
+          pond = true;
           depth = pn > 0.5 ? 2 : 1;
         } else out.wet = Math.min(out.wet, (0.18 - pn) * 10);
       } else if (bdef.ponds) {
         const pn = this.nPool(x / 13 + 400, z / 13) + this.nPool(x / 5, z / 5 + 400) * 0.2;
         if (pn > 0.78) {
           water = true;
+          pond = true;
           depth = pn > 0.86 ? 2 : 1;
         } else if (pn > 0.7) out.wet = Math.min(out.wet, (0.78 - pn) * 20);
       }
@@ -230,6 +234,15 @@ export class Terrain {
       out.sub = B.dirt;
       // (A hot spring: it steams.)
       if (bdef.hot) out.hot = true;
+      // (Round 65) A biome's own ponds and pools of something else: lava
+      // (in a bed of basalt), or frozen over, or a bog of mud.
+      if (pond && bdef.liquid) {
+        if (bdef.liquid === B.lava) {
+          out.lava = true;
+          out.surf = B.basalt;
+          out.wet = 99;
+        } else out.liquid = bdef.liquid;
+      }
       return out;
     }
 

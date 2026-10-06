@@ -6,11 +6,14 @@
 // selection, magic wand, move, dither, shading along the palette, colour
 // replace, mirror drawing, outlines, flips and turns, and pictures in and
 // out as PNG.
-import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, colorPicker, popover, contextMenu, dialog, toast, canvas, download, pickFile, readImage, textInput, rememberColor } from './kit.js';
+import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, colorPicker, popover, contextMenu, dialog, toast, canvas, download, pickFile, readImage, textInput, rememberColor, menu } from './kit.js';
 import { encodeCel, decodeCel, hexToRgba, rgbaToHex, newAsset, LIMITS, freeId } from '../mod/format.js';
 import { PALETTES, quantize, titleBar, menuButton, pickRef, vanillaIcon } from './common.js';
 import { TEX } from '../render/textures.js';
 import { B, BLOCKS } from '../world/blocks.js';
+import { drawHumanoid } from '../render/people.js';
+import { JOBS, makeLook } from '../entities/npcgen.js';
+import { RNG } from '../util/rng.js';
 
 const TOOLS = [
   ['pencil', 'pencil', 'Pencil', 'B'], ['eraser', 'eraser', 'Eraser', 'E'], ['line', 'line', 'Line', 'L'], ['rect', 'rect', 'Rectangle (Shift: filled)', 'U'],
@@ -25,6 +28,7 @@ const SIZES = [
   ['Item icon', 16, 16, 'icon', 1, 'What an item looks like in your pack and in your hand.'],
   ['Creature', 16, 16, 'creature', 2, 'Facing right; frame 2 is a step (tagged "walk").'],
   ['Big creature / boss', 32, 32, 'creature', 4, 'A great beast or a master, four frames of walking.'],
+  ['Person (NPC)', 16, 30, 'person', 3, 'Someone to talk to, as tall as the game\'s people (room above for a hat); frames 2 and 3 are steps.'],
   ['Tall prop', 16, 32, 'prop', 1, 'Something that stands two blocks tall.'],
   ['Effect sprite', 16, 16, 'fx', 6, 'A few frames of fire, sparkle or smoke for the VFX tool.'],
   ['Portrait', 32, 32, 'sprite', 1, 'A face, a sign, a picture.'],
@@ -196,9 +200,20 @@ export default class PixelTool {
           if (!v) return;
           from = { type: t, key: v, label: v.replace(/_/g, ' ') };
           drawFrom();
-        }) });
+        }, { noBlocks: t === 'item' }) });
         fromEl.append(b);
       }
+      // (Round 65) One of the game's people, by their work.
+      const pb = button('A game person', { small: true, icon: 'person', onClick: () => {
+        const r = pb.getBoundingClientRect();
+        menu(PERSON_JOBS.map((j) => ({ label: JOBS[j].title, onClick: () => {
+          from = { type: 'person', key: j, label: `a ${JOBS[j].title.toLowerCase()}` };
+          const pi = SIZES.findIndex((s) => s[3] === 'person');
+          if (W !== SIZES[pi][1] || H !== SIZES[pi][2]) sizes.children[pi].click();
+          drawFrom();
+        } })), r.left, r.bottom + 4);
+      } });
+      fromEl.append(pb);
       if (from) fromEl.append(button(null, { small: true, icon: 'close', title: 'Blank instead', onClick: () => {
         from = null;
         drawFrom();
@@ -223,7 +238,25 @@ export default class PixelTool {
     const n = Math.max(1, Math.min(8, o.frames || 1));
     for (let i = 1; i < n; i++) a.frames.push({ dur: 125, cels: { l1: encodeCel(new Uint8Array(a.w * a.h)) } });
     if (o.use === 'creature' && n > 1) a.tags.push({ name: 'walk', from: 0, to: n - 1, color: '#80e070' });
-    if (o.from) {
+    if (o.from && o.from.type === 'person') {
+      // (Each frame its own: standing, then a step each way.)
+      let pal = null;
+      a.frames.forEach((f, i) => {
+        const src = gamePicture('person', o.from.key, i);
+        const c = canvas(a.w, a.h);
+        const x = c.getContext('2d');
+        x.imageSmoothingEnabled = false;
+        x.drawImage(src, Math.floor((a.w - src.width) / 2), a.h - src.height);
+        // (The first frame's colours for them all, so they index alike.)
+        const q = quantize(x.getImageData(0, 0, a.w, a.h).data, a.w, a.h, 64, pal);
+        if (!pal) {
+          pal = q.palette;
+          a.palette = [...q.palette, ...a.palette.filter((p) => !q.palette.includes(p))].slice(0, LIMITS.palette);
+        }
+        f.cels.l1 = encodeCel(q.idx);
+      });
+      if (n > 1 && !a.tags.some((t) => t.name === 'walk')) a.tags.push({ name: 'walk', from: 0, to: n - 1, color: '#80e070' });
+    } else if (o.from) {
       const src = gamePicture(o.from.type, o.from.key);
       if (src) {
         const c = canvas(a.w, a.h);
@@ -2386,7 +2419,18 @@ function previewSlot(x, img, W, H) {
 
 // A picture of one of the game's own (an item's icon, a block's top, a
 // creature's first frame), to start from.
-function gamePicture(type, key) {
+// (Round 65) The game's people one can start from, by their work.
+const PERSON_JOBS = ['farmer', 'guard', 'merchant', 'blacksmith', 'innkeeper', 'cook', 'baker', 'priest', 'scholar', 'mayor', 'noble', 'tailor', 'carpenter', 'herbalist', 'fisher', 'miner', 'lumberjack', 'trapper', 'laborer', 'beggar', 'adventurer', 'glassblower', 'sporewright', 'pearldiver'];
+
+function gamePicture(type, key, frame = 0) {
+  if (type === 'person') {
+    // (Facing right, as art here does: frame 0 standing, 1 and 2 steps.)
+    const look = makeLook(new RNG(7 + key.length * 131), 'vale', 'adult', key, null);
+    const px = drawHumanoid(look, 1, Math.min(2, frame % 3));
+    const c = canvas(px.w, px.h);
+    c.getContext('2d').putImageData(px.toImageData(), 0, 0);
+    return c;
+  }
   if (type === 'block') {
     const id = B[key];
     if (id !== undefined && TEX.atlas) {

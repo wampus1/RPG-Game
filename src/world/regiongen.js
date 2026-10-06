@@ -54,7 +54,8 @@ export function generateRegion(world, rx, rz) {
         if (id === B.stone) id = oreAt(x, y, z, seed);
         region.set(lx, y, lz, id);
       }
-      if (c.water >= 0) for (let y = h + 1; y <= c.water; y++) region.set(lx, y, lz, c.lava ? B.lava : B.water);
+      // (Round 65: a biome's ponds frozen over, or a bog: see terrain.js.)
+      if (c.water >= 0) for (let y = h + 1; y <= c.water; y++) region.set(lx, y, lz, c.lava ? B.lava : c.liquid === B.ice ? (y === c.water ? B.ice : B.water) : c.liquid || B.water);
     }
   }
 
@@ -120,7 +121,7 @@ export function generateRegion(world, rx, rz) {
       const bd = BIOMES[c.biome];
       const r = hashf(x, z, seed, 13);
       if (c.water >= 0) {
-        if (!c.deep && !c.lava && c.water + 1 < WORLD_Y && bd.lilies && r < 0.07) {
+        if (!c.deep && !c.lava && !c.liquid && c.water + 1 < WORLD_Y && bd.lilies && r < 0.07) {
           region.set(lx, c.water + 1, lz, B.lily_pad);
         }
         continue;

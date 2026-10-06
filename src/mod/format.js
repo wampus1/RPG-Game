@@ -349,8 +349,10 @@ export function resample(src, sw, sh, w, h, fit = 'stretch', bottom = false) {
   let oy = 0;
   let dw = w;
   let dh = h;
-  if (fit === 'contain') {
-    const k = Math.max(sw / w, sh / h);
+  if (fit === 'contain' || fit === 'native') {
+    // (Native, round 65: as drawn, pixel for pixel, made smaller only if
+    // it must be.)
+    const k = fit === 'native' ? Math.max(1, sw / w, sh / h) : Math.max(sw / w, sh / h);
     sx = sy = k;
     dw = Math.round(sw / k);
     dh = Math.round(sh / k);
