@@ -1668,6 +1668,12 @@ export class PauseWindow extends Window {
       this.items.splice(2, 0, ['P', 'Multiplayer', () => this.ui.hooks.party()]);
       this.items[this.items.length - 1] = ['T', 'Close the world', () => this.ui.hooks.title && this.ui.hooks.title()];
     }
+    // (Round 62) Trying out a mod: back to the Workshop (the test world
+    // isn't kept).
+    if (ui.game && ui.game.playtest) {
+      this.items = this.items.filter(([k]) => k !== 'S' && k !== 'L' && k !== 'N');
+      this.items.splice(1, 0, ['W', 'Back to the Workshop', () => this.ui.hooks.workshop && this.ui.hooks.workshop({ back: true })]);
+    }
   }
   draw(g, game) {
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'PAUSED' });
@@ -2143,6 +2149,8 @@ export class TitleWindow extends Window {
       ['S', 'New game from seed...'],
       ...(this.hasSave ? [['L', 'Load game...']] : []),
       ['M', 'Multiplayer'],
+      // (Round 62) Where mods are made.
+      ['W', 'Workshop (make mods)'],
       ['A', 'Achievements'],
       ['O', 'Settings'],
       ['H', 'How to play'],
@@ -2185,10 +2193,11 @@ export class TitleWindow extends Window {
     if (k === 'O' && h.settings) h.settings();
     if (k === 'M' && h.multiplayer) h.multiplayer();
     if (k === 'A' && h.feats) h.feats();
+    if (k === 'W' && h.workshop) h.workshop();
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', KeyA: 'A', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
-    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite', 'feats', 'confirm'].some((k2) => this.ui.find(k2))) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', KeyA: 'A', KeyW: 'W', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite', 'feats', 'confirm', 'modpick'].some((k2) => this.ui.find(k2))) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

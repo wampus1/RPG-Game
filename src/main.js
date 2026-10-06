@@ -27,6 +27,11 @@ import { MapWindow } from './ui/worldmap.js';
 import { FeatsWindow } from './ui/feats.js';
 import { FeatBook, FEAT } from './game/achievements.js';
 import { avatarFromKey } from './render/avatar.js';
+// (Round 62) Mods: kept here, put into the game for a world, drawn.
+import { ModLibrary } from './mod/library.js';
+import { installMods, uninstallMods, remapRegion, MODS } from './mod/registry.js';
+import './mod/render.js';
+import { ITEMS } from './world/items.js';
 
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
 const params = new URLSearchParams(location.search);
@@ -77,10 +82,14 @@ function browserStorage() {
   }
 }
 const store = new SaveStore(browserStorage());
+// (Round 62) The mods on this computer (see mod/library.js).
+const modLib = new ModLibrary(browserStorage());
+window.__mods = modLib;
 // Games are kept in IndexedDB once it's open (it has room for many more
 // than browser storage's few megabytes); ask for it to be kept for good.
 const dbReady = openSaveDB().then((db) => {
   store.db = db;
+  modLib.db = db;
 });
 try {
   window.navigator.storage?.persist?.();
@@ -205,7 +214,11 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     // (Saved in an older version: brought up to this one as it loads. See
     // game/migrate.js.)
     if (save && canUpgrade(save.gv)) migrateSave(save);
-    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') });
+    // (Round 62) The world's mods put into the game before it's made (their
+    // blocks at the numbers the world keeps them by).
+    const modded = setMods(opts.mods || [], save);
+    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest });
+    if (modded) game.modReport = modded.report;
     game.crt = crt;
     // (What you do here, worth an achievement: kept with you.)
     game.featBook = feats;
@@ -227,7 +240,38 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     if (params.has('goto')) window.__goto(params.get('goto'));
     if (params.has('reveal')) game.revealMap = true;
     if (opts.host) beginHosting(game, opts.host.name);
+    if (opts.playtest) beginPlaytest(game, opts.playtest);
+    else if (modded && modded.report.length) for (const r of modded.report.slice(0, 3)) ui.msg(r.text, r.level === 'error' ? '#ff8070' : '#ffb080');
   }, 30);
+}
+
+// (Round 62) A world's mods into the game (none: the game as it is). Its
+// save's blocks moved if any had to be (see remapRegion).
+function setMods(mods, save = null) {
+  if (!mods.length) {
+    uninstallMods();
+    return null;
+  }
+  const res = installMods(mods, { blockIds: save && save.mods ? save.mods.blockIds : {} });
+  if (save && Object.keys(res.remap).length) remapSave(save, res.remap);
+  return res;
+}
+function remapSave(save, remap) {
+  const walk = (v, d = 0) => {
+    if (!v || typeof v !== 'object' || d > 8) return;
+    if (Array.isArray(v)) {
+      for (const q of v) walk(q, d + 1);
+      return;
+    }
+    if (Array.isArray(v.rle) && v.rx !== undefined) {
+      remapRegion(v, remap);
+      return;
+    }
+    for (const q of Object.values(v)) if (q && typeof q === 'object') walk(q, d + 1);
+  };
+  walk(save.regions);
+  walk(save.sim);
+  walk(save.dungeon);
 }
 
 let loadingEl = null;
@@ -299,11 +343,14 @@ ui.hooks = {
     if (game && game.partyWorld && game.slot && !ui.guest) saveTo(game.slot, null, true);
     endSession();
     game = null;
+    uninstallMods();
     ui.showHud = false;
     ui.closeAll();
     ui.open(new TitleWindow(ui, store));
   }),
   multiplayer: () => openMultiplayer(),
+  // (Round 62) Where mods are made (`back`: from a playtest).
+  workshop: (o = {}) => openWorkshopApp(o),
   party: () => openParty(),
   profile: (p) => openProfile(p),
   settings: () => ui.open(new SettingsWindow(ui, settings)),
@@ -933,6 +980,88 @@ function friendWord(msg) {
   }
 }
 
+// ------------------------------------------------------------ the Workshop
+// (Round 62) Where mods are made: opened over the game (see workshop/).
+let workshop = null;
+let playReturn = null;
+async function openWorkshopApp(o = {}) {
+  if (workshop) return;
+  // (From a playtest: that world's let go, and you're back where you were.)
+  if (o.back && game && game.playtest) {
+    playReturn = game.playtest;
+    endSession();
+    game = null;
+    uninstallMods();
+    ui.showHud = false;
+  }
+  ui.closeAll();
+  showLoading('Opening the Workshop...');
+  await dbReady.catch(() => {});
+  const { openWorkshop } = await import('./workshop/app.js');
+  hideLoading();
+  input.paused = true;
+  screen.style.display = 'none';
+  workshop = openWorkshop({
+    library: modLib,
+    author: accounts.profile ? accounts.profile.name : 'Someone',
+    audio,
+    openMod: playReturn ? playReturn.modId : null,
+    openTool: playReturn ? playReturn.tool : null,
+    openSel: playReturn ? playReturn.sel : null,
+    onExit: () => closeWorkshop(),
+    onPlaytest: (mod, where) => {
+      workshop = null;
+      input.paused = false;
+      screen.style.display = '';
+      playtest(mod, where);
+    },
+  });
+  window.__workshop = workshop;
+  playReturn = null;
+}
+function closeWorkshop() {
+  workshop = null;
+  input.paused = false;
+  screen.style.display = '';
+  resize();
+  ui.closeAll();
+  ui.open(new TitleWindow(ui, store));
+}
+
+// A mod tried out: a world of its own (the same one each time, for that
+// mod), everything the mod adds in your pack.
+function playtest(mod, where = {}) {
+  let seed = (Math.random() * 2 ** 32) >>> 0;
+  try {
+    const k = `ws-test-seed-${mod.id}`;
+    const had = +localStorage.getItem(k);
+    if (had > 0) seed = had >>> 0;
+    else localStorage.setItem(k, String(seed));
+  } catch {
+    // A new one each time, then.
+  }
+  const hero = { ...randomHero(seed), origin: 'native', name: 'Tester' };
+  startGame(seed, null, null, hero, { mods: [mod], playtest: { modId: mod.id, name: mod.name, tool: where.tool || null, sel: where.sel || null } });
+}
+
+function beginPlaytest(g, pt) {
+  g.playtest = pt;
+  g.cheats = { ...(g.cheats || {}), console: true };
+  const p = g.player;
+  // What the mod adds, in your pack (a stack of each block, the rest one
+  // each).
+  const keys = Object.keys(ITEMS).filter((k) => k.startsWith(`m:${pt.modId}:`));
+  let n = 0;
+  for (const k of keys) {
+    const it = ITEMS[k];
+    const left = p.give(k, it.kind === 'block' ? 16 : it.kind === 'food' || it.kind === 'material' ? 4 : 1);
+    if (!left) n++;
+  }
+  ui.notify(`Playtesting "${pt.name}". ${n ? `Its ${n} item${n > 1 ? 's are' : ' is'} in your pack.` : 'It adds no items.'} Press ESC, then W, to go back to the Workshop. The console (\` or /) has "mod" commands: try "mod help".`, null, '#80e070');
+  const ev = MODS.events.length;
+  if (ev) ui.msg(`(${ev} world event${ev > 1 ? 's' : ''} of the mod's at work.)`, '#a0c8ff');
+}
+
 // (For testing from the console.)
 window.__mp = { accounts, joinWorld, newHosted, openParty, session: () => session, lan: () => lan, refreshLan };
 
@@ -985,6 +1114,16 @@ function frame(now) {
 function step(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  // (Round 62) The Workshop open over the game: nothing to draw here.
+  if (workshop) {
+    input.consume();
+    try {
+      music.update(dt, 'title', false);
+    } catch {
+      // Not now.
+    }
+    return;
+  }
   netTick(dt);
   fps = fps * 0.95 + (1 / Math.max(dt, 0.001)) * 0.05;
   // (Going back to the title mid-frame drops `game`; finish this frame

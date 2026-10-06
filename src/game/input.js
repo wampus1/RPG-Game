@@ -13,6 +13,8 @@ export class Input {
     this.lastMoveKey = null;
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      // (Round 62: the Workshop open over the game: its keys are its own.)
+      if (this.paused) return;
       const k = normKey(e);
       // (Ctrl with a game key mustn't reach the browser: Ctrl+G is "find
       // next", Ctrl+B bookmarks, Ctrl+D bookmarks the page, and so on.)
