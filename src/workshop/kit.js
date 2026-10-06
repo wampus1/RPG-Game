@@ -120,7 +120,10 @@ export function playSound(name, o = {}) {
 // A choice of one of the game's sounds, with a button to hear it (and
 // each heard as it's picked).
 export function soundPicker(sounds, value, onChange, o = {}) {
-  const list = [...(o.none ? [['', o.none]] : []), ...sounds.map((x) => (Array.isArray(x) ? x : [x, x]))];
+  // (Round 66: the mod's own sounds first, as '@id'.)
+  const mine = o.mine === false ? [] : (soundHost?.mine?.() || []).map(([id, name]) => [`@${id}`, `♪ ${name}`]);
+  const list = [...(o.none ? [['', o.none]] : []), ...mine, ...sounds.map((x) => (Array.isArray(x) ? x : [x, x]))];
+  if (value && String(value)[0] === '@' && !list.some(([v]) => v === value)) list.unshift([value, '(a sound that\'s been deleted)']);
   let v = value ?? '';
   const sel = select(list, v, (nv) => {
     v = nv;

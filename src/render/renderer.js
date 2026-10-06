@@ -567,6 +567,13 @@ export class Renderer {
     this.flash = { color, t: dur, dur };
   }
 
+  // (Round 66) A mod's music put on for whoever sees this screen ('song:..'
+  // or a theme's key): for `secs` (0: till it's stopped); null stops it.
+  // (Here, so a multiplayer host can send it to the player it's for.)
+  modMusic(key, secs = 0) {
+    this.modMusicOn = key ? { key: String(key), until: secs > 0 ? performance.now() / 1000 + secs : 0 } : null;
+  }
+
   // Hurt: the screen reddens at the edges, and fades back. A flash of
   // light over everything.
   drawFlashes(game, dt) {

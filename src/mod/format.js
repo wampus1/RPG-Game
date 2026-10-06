@@ -19,6 +19,10 @@
 //               places, realms and people (see mod/worldplan.js)
 //   chargen     the character screen's tabs: new ones, and changes to the
 //               game's own (see mod/chargen.js)
+//   sounds      sound clips, brought in or made in the Sound tab (see
+//               mod/sound.js), round 66
+//   songs       tunes sketched in the Music tab, in patterns (see
+//               mod/song.js), round 66
 //
 // Each thing in a mod has an id of its own, unique in the mod; the mod has
 // an id that stays the same from one version of it to the next, and a hash
@@ -29,15 +33,15 @@ import { GAME_VERSION } from '../version.js';
 
 export const MOD_FORMAT = 'tessera-mod';
 export const MOD_FV = 1;
-export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen'];
+export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen', 'sounds', 'songs'];
 // (Collections a mod made before round 63 hasn't got: left out of its hash
 // while empty, so its hash stays as it was.)
-const LATER = ['biomes', 'worlds', 'chargen'];
+const LATER = ['biomes', 'worlds', 'chargen', 'sounds', 'songs'];
 // What each collection holds, said plainly (for lists and messages).
 export const KIND_NAMES = {
   assets: ['art', 'art'], vfx: ['effect', 'effects'], rigs: ['rig', 'rigs'], structures: ['structure', 'structures'], layouts: ['layout', 'layouts'],
   dungeons: ['dungeon', 'dungeons'], loot: ['loot table', 'loot tables'], stories: ['story', 'stories'], patches: ['story change', 'story changes'], entities: ['entity', 'entities'],
-  biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'],
+  biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'], sounds: ['sound', 'sounds'], songs: ['song', 'songs'],
 };
 // Limits that keep a mod (and a world using it) workable.
 export const LIMITS = { assetSide: 256, frames: 64, layers: 16, palette: 255, blueprintSide: 96, blueprintH: 16 };

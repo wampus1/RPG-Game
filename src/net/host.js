@@ -453,6 +453,8 @@ export class HostNet {
     wrap('wobble', (a) => at(a[0], a[2]));
     wrap('effect', (a) => (a[0] ? at(a[0].wx, a[0].wz) : null));
     wrap('flashScreen', () => null, true);
+    // (Round 66) A mod's music, for the player it's put on for.
+    wrap('modMusic', () => null, true);
     // (Round 62) A mod's effects, and their stopping.
     wrap('modVfx', (a) => at(a[2], a[4]));
     wrap('modVfxStop', () => null);
@@ -463,11 +465,14 @@ export class HostNet {
       const real = audio;
       const proxy = Object.create(real);
       proxy.netWrapped = true;
-      proxy.play = (name, where) => {
+      proxy.play = (name, where, g, o) => {
         const w = where && typeof where === 'object' && where.x !== undefined ? at(where.x, where.z) : null;
-        this.fx('sound', [name, w ? { x: w.x, z: w.z, y: where.y } : null], w);
+        // (Round 66: how loud and how high, for a mod's sound.)
+        const args = [name, w ? { x: w.x, z: w.z, y: where.y } : null];
+        if (o && (o.vol !== undefined || o.pitch !== undefined)) args.push({ vol: o.vol, pitch: o.pitch });
+        this.fx('sound', args, w);
         if (!w && !this.hostTurn()) return undefined;
-        return real.play(name, where);
+        return real.play(name, where, g, o);
       };
       game.audio = proxy;
     }

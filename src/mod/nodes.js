@@ -14,6 +14,12 @@ export const ELEMENTS = ['none', 'fire', 'frost', 'poison', 'shock', 'force'];
 export const STATUSES = ['burn', 'chill', 'stun', 'poison', 'haste', 'slow', 'regen', 'weak', 'shield'];
 export const SOUNDS = ['hit', 'hurt', 'death', 'swing', 'parry', 'pickup', 'coin', 'craft', 'eat', 'gulp', 'heal', 'door', 'chest', 'break', 'place', 'boom', 'thunder', 'portal', 'pulse', 'whoosh', 'roar', 'growl', 'chime', 'bell', 'gong',
   'fanfare', 'victory', 'magic', 'freeze', 'reflect', 'orb', 'beam', 'charge', 'rumble', 'whisper', 'shatter', 'thud', 'secret', 'rune', 'hiss', 'crackle', 'drip', 'splash', 'click', 'lever', 'unlock', 'locked', 'error', 'bow', 'impact', 'stomp', 'flap', 'sting', 'scream', 'star_ding', 'puff', 'baa', 'howl', 'chirp', 'hoot', 'frog', 'horn'];
+// (Round 66) The game's own music a node can put on: [key, name].
+export const THEME_LIST = [['plains', 'Plains'], ['forest', 'Forest'], ['taiga', 'Taiga'], ['tundra', 'Tundra'], ['desert', 'Desert'], ['savanna', 'Savanna'], ['jungle', 'Jungle'], ['swamp', 'Swamp'],
+  ['mountain', 'Mountains'], ['beach', 'Beach'], ['ocean', 'Open sea'], ['ashland', 'Ashlands'], ['cinderwood', 'Cinderwood'], ['geyser', 'Geyser fields'], ['moor', 'Moor'], ['fungal', 'Fungal wood'], ['mangrove', 'Mangroves'],
+  ['village', 'A village'], ['town', 'A town'], ['city', 'A city'], ['tavern', 'A tavern'], ['ruins', 'Ruins'], ['graveyard', 'A graveyard'], ['fight_beasts', 'A fight with beasts'], ['fight_monsters', 'A fight with monsters'],
+  ['fight_guards', 'A fight with the watch'], ['fight_bandits', 'A fight with bandits'], ['fight_boss', 'A great fight'], ['dungeon_crypt', 'A crypt'], ['dungeon_barrow', 'A barrow'], ['dungeon_mine', 'An old mine'],
+  ['dungeon_grove', 'A grove'], ['dungeon_forge', 'A forge'], ['dungeon_grotto', 'A grotto'], ['spire', 'A spire'], ['sailing', 'Sailing'], ['storm', 'A storm'], ['ritual', 'A ritual'], ['history', 'Long ago'], ['voyage', 'A voyage'], ['death', 'A death']];
 export const STYLE_LIST = ['sword', 'dagger', 'axe', 'club', 'spear', 'flail', 'staff', 'great', 'maul', 'halberd'];
 export const ATTACKS = ['bite', 'snap', 'slam', 'gore', 'rake', 'pounce', 'sting', 'bash', 'sword', 'club', 'spear', 'great', 'maul'];
 export const ARMOR_LOOKS = { head: ['helmet', 'lcap', 'hood', 'straw', 'circlet', 'goggles'], body: ['plate', 'chain', 'leather', 'linen', 'coat'], legs: ['plate', 'leather', 'cloth'], feet: ['iron', 'leather'], shield: ['wood', 'iron', 'round'] };
@@ -376,10 +382,34 @@ act('act.shout', {
   },
 });
 act('act.sound', {
-  title: 'Sound', help: 'One of the game\'s sounds, from a place.',
-  in: [ref('at', T.pos, 'At')], props: [{ id: 'sound', t: 'sound', label: 'Sound', opts: SOUNDS, def: 'chime' }],
+  title: 'Sound', help: 'One of the game\'s sounds, or one of yours (made in the Sound tab), from a place: louder or softer, higher or lower.',
+  in: [ref('at', T.pos, 'At'), n('vol', 'Volume', 1, { min: 0, max: 3, step: 0.05, adv: true }), n('pitch', 'Pitch (2: an octave up)', 1, { min: 0.25, max: 4, step: 0.05, adv: true })],
+  props: [{ id: 'sound', t: 'sound', label: 'Sound', opts: SOUNDS, def: 'chime' }],
   run: (x, nn, api) => {
-    SVC.sound(x, api.prop('sound'), where(x, api));
+    const vol = num(api.in('vol'), 1);
+    const pitch = num(api.in('pitch'), 1);
+    SVC.sound(x, api.prop('sound'), where(x, api), vol !== 1 || pitch !== 1 ? { vol, pitch } : null);
+    return 'then';
+  },
+});
+// (Round 66) The music.
+act('act.music', {
+  title: 'Play music', help: 'Music in place of the usual, for a player (or everyone): one of your songs (made in the Music tab), one of your sounds round and round, or one of the game\'s own. For a while, or till it\'s stopped.',
+  in: [ref('song', T.song, 'Song', { show: { what: ['song'] } }), ref('clip', T.clip, 'Sound', { show: { what: ['sound'] } }), n('secs', 'For (seconds; 0: till stopped)', 0, { min: 0, max: 3600 }), ref('who', T.ent, 'For (or everyone)')],
+  props: [pick('what', 'Play', [['song', 'a song of yours'], ['sound', 'a sound of yours'], ['game', 'the game\'s own']], 'song'), pick('theme', 'Music', THEME_LIST, 'forest', { show: { what: ['game'] } })],
+  run: (x, nn, api) => {
+    const what = api.prop('what') || 'song';
+    const id = what === 'song' ? api.in('song') : what === 'sound' ? api.in('clip') : null;
+    const key = what === 'game' ? api.prop('theme') || 'forest' : id ? `song:m:${x.mod.id}:${id}` : null;
+    if (key) SVC.music?.(x, api.in('who'), key, Math.max(0, num(api.in('secs'), 0)));
+    return 'then';
+  },
+});
+act('act.musicstop', {
+  title: 'Stop the music', help: 'Music a node put on stopped: back to what the game would play (for a player, or everyone).',
+  in: [ref('who', T.ent, 'For (or everyone)')],
+  run: (x, nn, api) => {
+    SVC.music?.(x, api.in('who'), null, 0);
     return 'then';
   },
 });

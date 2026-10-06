@@ -1,4 +1,8 @@
-// Tiny synthesized chiptune sound effects (no audio files).
+// Tiny synthesized chiptune sound effects (no audio files), and (round
+// 66) the sounds of the world's mods, played from their clips.
+import { MODS } from '../mod/state.js';
+import { clipBuffer } from '../mod/sound.js';
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -83,13 +87,43 @@ export class Audio {
     s.stop(t + dur + 0.02);
   }
 
-  // `src` (optional) is an entity; far-away sounds are skipped.
-  play(name, src = null, game = null) {
+  // `src` (optional) is an entity; far-away sounds are skipped. (Round 66:
+  // a mod's sound by its key, 'm:mod:id'; `o`: { vol, pitch } for it.)
+  play(name, src = null, game = null, o = null) {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     if (src && this.listener && Math.hypot(src.x - this.listener.x, src.z - this.listener.z) > 14) return;
     const now = performance.now();
     if (now - (this.last.get(name) || 0) < 40) return;
     this.last.set(name, now);
+    if (typeof name === 'string' && name.startsWith('m:')) {
+      const r = MODS.sounds.get(name);
+      if (r) this.playClip(r.v, o || {});
+      return;
+    }
+    this.voice(name);
+  }
+
+  // (Round 66) A sound clip (a mod's: see mod/sound.js) played as it is,
+  // as loud as it says (times `o.vol`), faster and higher by `o.pitch`.
+  // Returns its source (to stop it), or null.
+  playClip(s, o = {}) {
+    if (!this.ctx || !this.master) return null;
+    const buf = clipBuffer(this.ctx, s);
+    if (!buf) return null;
+    const c = this.ctx;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const p = Math.max(0.25, Math.min(4, +o.pitch || 1));
+    if (p !== 1) src.playbackRate.value = p;
+    const g = c.createGain();
+    g.gain.value = Math.max(0, Math.min(3, (s.vol ?? 1) * (o.vol ?? 1)));
+    src.connect(g).connect(o.dest || this.master);
+    src.start(c.currentTime + (o.delay || 0));
+    return src;
+  }
+
+  // One of the game's own sounds, by name.
+  voice(name) {
     switch (name) {
       case 'step': this.noise(0.05, 0.08, 500 + Math.random() * 300); break;
       case 'splash': this.noise(0.15, 0.12, 900); break;
@@ -302,4 +336,28 @@ export class Audio {
       case 'baa': this.tone(400, 0.12, 'sawtooth', 0.05, 20); this.tone(380, 0.28, 'sawtooth', 0.05, -60, 0.1); break;
     }
   }
+}
+
+// (Round 66) One of the game's own sounds made into samples (for the
+// Workshop's Sound tab, to put into a clip): { rate, x }, the quiet after
+// it cut off. Null where the browser can't.
+export async function renderGameSound(name, rate = 22050) {
+  const OAC = globalThis.OfflineAudioContext;
+  if (!OAC) return null;
+  const oc = new OAC(1, Math.ceil(rate * 4), rate);
+  const a = Object.create(Audio.prototype);
+  a.ctx = oc;
+  a.master = oc.createGain();
+  a.master.gain.value = 1;
+  a.master.connect(oc.destination);
+  const b = oc.createBuffer(1, Math.floor(rate * 0.5), rate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  a.noiseBuf = b;
+  a.voice(name);
+  const buf = await oc.startRendering();
+  const x = buf.getChannelData(0);
+  let end = x.length;
+  while (end > 0 && Math.abs(x[end - 1]) < 0.0015) end--;
+  return { rate, x: x.slice(0, Math.min(x.length, end + Math.round(rate * 0.02))) };
 }

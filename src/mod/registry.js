@@ -17,6 +17,8 @@ import './biomes.js';
 import './worldplan.js';
 import { Px } from '../render/pixel.js';
 import { gameKey, tagRange, isModKey, assetPixels, modHash } from './format.js';
+import { cleanSound } from './sound.js';
+import { cleanSong } from './song.js';
 
 export { assetPixels };
 import { compile, Runner, NODES } from './graph.js';
@@ -41,6 +43,14 @@ export function resolveRef(mod, v) {
   if (typeof v !== 'string') return v;
   if (v[0] === '@') return gameKey(mod.id, v.slice(1));
   return v;
+}
+
+// (Round 66) A mod's sound, by what its things call it ('@id', or any
+// mod's 'm:mod:id'): the sound itself, or null.
+export function modSound(mod, ref) {
+  const k = resolveRef(mod, ref);
+  const r = typeof k === 'string' ? MODS.sounds.get(k) : null;
+  return r ? r.v : null;
 }
 
 export function toPx(pix) {
@@ -70,6 +80,10 @@ export function installMods(mods, o = {}) {
     for (const [k, map] of [['loot', MODS.loot], ['structures', MODS.structures], ['layouts', MODS.layouts], ['dungeons', MODS.dungeons], ['vfx', MODS.vfx], ['assets', MODS.assets], ['rigs', MODS.rigs], ['stories', MODS.stories]]) {
       for (const [id, v] of Object.entries(m[k] || {})) map.set(`${m.id}:${id}`, { mod: m, v });
     }
+    // (Round 66) Its sounds and songs, by their keys in the game (the music
+    // and the sounds ask for them so).
+    for (const [id, v] of Object.entries(m.sounds || {})) if (cleanSound(v)) MODS.sounds.set(gameKey(m.id, id), { mod: m, v });
+    for (const [id, v] of Object.entries(m.songs || {})) MODS.songs.set(gameKey(m.id, id), { mod: m, v: cleanSong(v) });
   }
   // Every entity, compiled.
   const ents = [];
@@ -194,7 +208,7 @@ export function uninstallMods() {
   MODS.byId.clear();
   MODS.ents.clear();
   MODS.blocks.clear();
-  for (const k of ['loot', 'structures', 'layouts', 'dungeons', 'vfx', 'assets', 'rigs', 'stories', 'effects']) MODS[k].clear();
+  for (const k of ['loot', 'structures', 'layouts', 'dungeons', 'vfx', 'assets', 'rigs', 'stories', 'effects', 'sounds', 'songs']) MODS[k].clear();
   MODS.events = [];
   MODS.blockIds = {};
   MODS.serial++;

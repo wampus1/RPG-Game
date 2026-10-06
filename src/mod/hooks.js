@@ -103,7 +103,17 @@ Object.assign(SVC, {
   },
   float: (x, at, text, color) => x.game.renderer.floatText(at.x, at.y + 2, at.z, text, color || '#ffffff'),
   shout: (x, e, text, color) => e.say?.(text, 3, color || undefined),
-  sound: (x, name, at) => x.game.audio?.play(name, at || null),
+  // (Round 66: one of the mod's sounds by its '@id' too; `o`: { vol,
+  // pitch }.)
+  sound: (x, name, at, o) => x.game.audio?.play(R(x, name), at || null, null, o || null),
+  // (Round 66) Music put on (or taken off: `key` null) for a player, or
+  // everyone; each hears it on their own screen.
+  music(x, to, key, secs) {
+    const g = x.game;
+    const put = (p) => g.asPlayer(p, () => g.renderer?.modMusic?.(key, secs));
+    if (isEnt(to) && to.kind === 'player') put(to);
+    else for (const p of g.everyone()) put(p);
+  },
   vfx: (x, id, at, o) => MODS.playVfx?.(x.game, x.mod, id, at, o),
   particles: (x, at, o) => x.game.renderer.emit(at.x, at.y + 1, at.z, { oy: -4, ...o }),
   shake(x, power, at) {
@@ -1688,7 +1698,7 @@ MODS.fireTrigger = (game, mk, who) => {
   const m = mk.mod;
   const x = { game, mod: m, rec: null, self: null, target: who, player: who, pos: { x: mk.x, y: mk.y, z: mk.z }, vars: {}, locals: {}, steps: 0 };
   if (mk.message) game.asPlayer(who, () => game.ui.msg(String(mk.message), mk.color || '#ffe070'));
-  if (mk.sound) game.audio?.play(mk.sound, mk);
+  if (mk.sound) game.audio?.play(resolveRef(m, mk.sound), mk);
   if (mk.vfx) MODS.playVfx?.(game, m, mk.vfx, { x: mk.x, y: mk.y, z: mk.z }, {});
   if (mk.creature && mk.count) SVC.spawn(x, mk.creature, { x: mk.x, y: mk.y, z: mk.z }, Math.min(8, mk.count));
   if (mk.item) SVC.give(x, who, mk.item, mk.itemCount || 1);

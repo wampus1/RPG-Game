@@ -608,3 +608,41 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .mod-legend .lg b { color: var(--gold); }
 .mod-legend .sw { width: 10px; height: 10px; box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.3), inset -1px -1px 0 rgba(0, 0, 0, 0.35); }
 .mod-legend .lg.none .sw { opacity: 0.4; }
+
+/* (Round 66) The Music tab: the song (a row a channel, a square a bar),
+   and the pattern under it (a piano roll, or a row a drum). */
+.mu-top { flex: none; display: flex; max-height: 46%; overflow-y: auto; border-bottom: 2px solid var(--line); background: var(--well); }
+.mu-heads { flex: none; width: 168px; border-right: 2px solid var(--line); background: var(--bg2); }
+.mu-hcorner { border-bottom: 1px solid var(--line); }
+.mu-head { display: flex; align-items: center; gap: 5px; padding: 0 4px 0 6px; border-bottom: 1px solid var(--line); cursor: pointer; color: var(--dim); white-space: nowrap; overflow: hidden; }
+.mu-head:hover { background: var(--hover); }
+.mu-head.on { background: var(--sel); color: var(--selText); }
+.mu-head.muted .nm { text-decoration: line-through; opacity: 0.6; }
+.mu-head .dot { width: 8px; height: 8px; background: var(--cc); flex: none; box-shadow: 1px 1px 0 #000; }
+.mu-head .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mu-head .mu-ms { min-width: 18px; height: 18px; padding: 0 3px; font-size: 11px; opacity: 0.55; }
+.mu-head .mu-ms.on { opacity: 1; color: var(--gold); }
+.mu-addch { padding: 4px 6px; }
+.mu-gscroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+.mu-grid { display: block; cursor: pointer; }
+.mu-grid:focus, .mu-roll:focus { outline: none; }
+.mu-rollwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mu-rhead { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--bg2); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+.mu-rhead .dot { width: 8px; height: 8px; box-shadow: 1px 1px 0 #000; flex: none; }
+.mu-rscroll { flex: 1; min-height: 0; overflow: auto; position: relative; }
+.mu-roll { display: block; cursor: crosshair; }
+.mu-mark { position: absolute; top: 0; width: 2px; background: rgba(255, 255, 255, 0.85); pointer-events: none; box-shadow: 0 0 6px rgba(255, 255, 255, 0.6); }
+.mu-vol { width: 70px; accent-color: var(--gold); }
+.mu-info { white-space: nowrap; }
+.mu-kit .row { display: flex; gap: 4px; align-items: center; margin-bottom: 3px; }
+.mu-kit .row select { flex: 1; min-width: 0; }
+.mu-pats { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.mu-pats .chip { min-width: 26px; text-align: center; }
+.mu-pats .chip.none { opacity: 0.55; }
+
+/* (Round 66) The Sound tab: the sound's shape, and what's done to it. */
+.sn-edits { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; background: var(--bg2); border-bottom: 2px solid var(--line); }
+.sn-wrap { flex: 1; min-height: 0; position: relative; padding: 1px; }
+.sn-wave { display: block; cursor: text; image-rendering: auto !important; }
+.sn-wave:focus { outline: none; }
+.sn-time { white-space: nowrap; font-variant-numeric: tabular-nums; }

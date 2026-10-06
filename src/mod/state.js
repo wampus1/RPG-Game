@@ -14,6 +14,8 @@ export const MODS = {
   assets: new Map(),
   rigs: new Map(),
   stories: new Map(),
+  sounds: new Map(), // game key ('m:mod:id') -> { mod, v } (round 66)
+  songs: new Map(), // likewise
   events: [], // world events' records
   effects: new Map(), // game key -> record
   blockIds: {}, // game key -> id (what the world keeps)

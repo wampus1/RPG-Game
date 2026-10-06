@@ -14,6 +14,7 @@ import { blockField, blockLabel, weightList, pickBlock } from './pickers.js';
 import { biomeLand, biomeVox, biomeAbove, biomeWhole, treeCells } from './biomeview.js';
 import { renderVox, frameOf, toView, cellY, T, voxPicture } from './voxview.js';
 import { blockIcon } from './blockart.js';
+import { musicPicker } from './audiokit.js';
 import { BIOMES } from '../world/biomes.js';
 import { TREE_BUILDERS } from '../world/trees.js';
 import { LANDMASSES } from '../world/geography.js';
@@ -484,7 +485,8 @@ export default class BiomeTool {
       } })), { tip: 'What it\'s taken for where the game asks by name (its beasts, if it keeps the game\'s), and what it\'s like where you haven\'t said.' }));
     }
     id.append(
-      field('Music', select(GAME_BIOMES.map((k) => [k, `${BIOMES[k].name}'s`]), w.music || b.base || 'plains', (v) => set((x) => (x.music = v))), { tip: 'The game\'s music for one of its biomes.' }),
+      field('Music', musicPicker(app, w.music || b.change || b.base || 'plains', (v) => set((x) => (x.music = v || undefined))), { tip: 'What plays here by day: one of your songs (the Music tab) or sounds (the Sound tab), or the game\'s music for somewhere.' }),
+      field('At night', musicPicker(app, w.musicNight || '', (v) => set((x) => (x.musicNight = v || undefined)), { none: 'The same, softer', fallback: w.music || b.change || b.base || 'plains' }), { tip: 'What plays here by night (the game\'s night music is its day\'s, softer).' }),
       field('Who\'d build', select(STYLES.map((k) => [k, CULTURES[k] ? CULTURES[k].label : k]), w.style || 'vale', (v) => set((x) => (x.style = v))), { tip: 'The people whose towns are built here (their houses, their names).' }),
       field('Towns here', slider({ value: w.settle ?? 0, min: -100, max: 100, step: 5, onChange: (v) => set((x) => (x.settle = v)) }), { tip: 'How much towns like it: 100 best of all, 0 as likely as not, -100 never.' }));
     body.append(panel('The biome', id, { key: 'bi-id' }));

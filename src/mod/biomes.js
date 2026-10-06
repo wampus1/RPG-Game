@@ -16,7 +16,8 @@
 //     treeSpacing, treeChance, clump, wetTrees, plants [{ block, w }],
 //     plantDensity, rocks (per thousand), creatures { day, night: [{
 //     species, w }], mode 'add' | 'only' }, settle (-100..100), style,
-//     music, place { how: 'climate' | 'replace' | 'painted', isles, temp
+//     music, musicNight (round 66: a theme's key, or the mod's song or
+//     sound, '@id'), place { how: 'climate' | 'replace' | 'painted', isles, temp
 //     [lo, hi], moist [lo, hi] (percents), replaces, share (percent) } }
 import { MODS } from './state.js';
 export { CLIMATE_OF, modBiomeFor, climateOf } from './biomerules.js';
@@ -131,7 +132,15 @@ export function compileBiome(mod, b) {
   if (Array.isArray(b.plants)) out.plants = b.plants.map((p) => [blk(p.block, null), clamp(num(p.w, 1), 0, 100)]).filter((p) => p[0] !== null && p[1] > 0).slice(0, 16);
   if (b.plantDensity !== undefined) out.plantDensity = clamp(num(b.plantDensity, 20), 0, 100) / 100;
   if (b.rocks !== undefined) out.rocks = clamp(num(b.rocks, 3), 0, 100) / 1000;
-  if (b.music && BIOMES[b.music]) out.music = b.music;
+  // (Round 66) Its music: one of the game's themes (by key), or one of the
+  // mod's songs or sounds ('@id'); and its nights' own, if it has any.
+  const tune = (v) => (typeof v !== 'string' || !v ? null : v[0] === '@' ? { song: gameKey(mod.id, v.slice(1)) } : /^[a-z_]+$/.test(v) ? { music: v } : null);
+  const day = tune(b.music);
+  if (day && day.song) out.song = day.song;
+  else if (day) out.music = day.music;
+  const night = tune(b.musicNight);
+  if (night && night.song) out.songNight = night.song;
+  else if (night) out.musicNight = night.music;
   // (Its plants grow on its own ground, whatever that is.)
   out.grows = new Set([out.surface, ...(out.patches || []).map((p) => p[0])]);
   out.mod = mod.id;

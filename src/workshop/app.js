@@ -30,9 +30,12 @@ import { BIOMES } from '../world/biomes.js';
 import { GAME_BIOMES, biomeFields } from '../mod/biomes.js';
 import { biomeWhole } from './biomeview.js';
 import { glyphCanvas } from './common.js';
+import { newSong } from '../mod/song.js';
+import { newSound, clipSecs } from '../mod/sound.js';
+import { waveThumb } from './audiokit.js';
 
 // Which tool edits each collection.
-export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen' };
+export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound' };
 const TOOLS = [
   { id: 'overview', name: 'Overview', icon: 'home', key: '1', tip: 'The mod: its name, its picture, what\'s in it, and what\'s wrong with it.' },
   { id: 'pixel', name: 'Pixel', icon: 'pencil', key: '2', tip: 'Pixel art: textures, icons, creatures, animations.' },
@@ -44,6 +47,9 @@ const TOOLS = [
   { id: 'biome', name: 'Biome', icon: 'tree', key: '8', tip: 'Biomes: new kinds of land, and changes to the game\'s own.' },
   { id: 'world', name: 'World', icon: 'globe', key: '9', tip: 'The world map: its lands, where biomes and towns go, set places, realms and people.' },
   { id: 'chargen', name: 'Character', icon: 'bust', key: '0', tip: 'The character screen: its tabs, new ones and changes to the game\'s.' },
+  // (Round 66.)
+  { id: 'music', name: 'Music', icon: 'note', key: '1', shift: true, tip: 'Songs, sketched in patterns: for biomes, or put on from nodes.' },
+  { id: 'sound', name: 'Sound', icon: 'speaker', key: '2', shift: true, tip: 'Sounds: brought in, cut, mixed, slowed, echoed. For nodes, effects, songs and biomes.' },
 ];
 const LOADERS = {
   overview: async () => ({ default: OverviewTool }),
@@ -56,6 +62,8 @@ const LOADERS = {
   biome: () => import('./biome.js'),
   world: () => import('./world.js'),
   chargen: () => import('./chargen.js'),
+  music: () => import('./music.js'),
+  sound: () => import('./sound.js'),
 };
 // The explorer's sections, in order.
 // (Round 66: each its own colour, for the mod's page.)
@@ -73,6 +81,8 @@ const SECTIONS = [
   { key: 'biomes', name: 'Biomes', icon: 'tree', color: '#50b878' },
   { key: 'worlds', name: 'World maps', icon: 'globe', color: '#4aa8e0' },
   { key: 'chargen', name: 'Character tabs', icon: 'bust', color: '#f0d0a0' },
+  { key: 'songs', name: 'Songs', icon: 'note', color: '#b0a0ff' },
+  { key: 'sounds', name: 'Sounds', icon: 'speaker', color: '#80d8ff' },
 ];
 
 let cssDone = false;
@@ -137,7 +147,7 @@ export class Workshop {
     window.addEventListener('resize', this.onResize);
     // (The pixel lettering, once it's loaded, is another width.)
     ensurePixelFont().then(() => this.fitTabs());
-    setSoundHost({ play: (name) => this.o.audio?.play(name), duck: (secs) => this.o.music?.duck?.(secs) });
+    setSoundHost({ play: (name) => this.hear(name), duck: (secs) => this.o.music?.duck?.(secs), mine: () => (this.mod ? Object.values(this.mod.sounds || {}).sort((a, b) => a.name.localeCompare(b.name)).map((q) => [q.id, q.name]) : []) });
     this.keys = (e) => this.onKey(e);
     window.addEventListener('keydown', this.keys);
     this.beforeUnload = (e) => {
@@ -160,6 +170,22 @@ export class Workshop {
     }
     else if (last && this.lib.has(last)) this.openMod(last);
     else this.home();
+  }
+
+  // (Round 66) A sound heard: the game's (by name), or one of the mod's
+  // ('@id'), the music dipping under it as long as it lasts.
+  hear(name) {
+    const A = this.o.audio;
+    if (!A || !name) return;
+    if (String(name)[0] === '@') {
+      const s = this.mod && this.mod.sounds && this.mod.sounds[name.slice(1)];
+      if (!s || !A.ctx) return;
+      if (A.ctx.state === 'suspended') A.ctx.resume();
+      A.playClip(s);
+      this.o.music?.duck?.(Math.min(12, (s.n || 0) / (s.rate || 22050) + 0.3));
+      return;
+    }
+    A.play(name);
   }
 
   async close() {
@@ -196,7 +222,7 @@ export class Workshop {
     this.top.append(pick);
     const tabs = h('div', { class: 'ws-tabs' });
     for (const t of TOOLS) {
-      const tab = h('div', { class: `ws-tab${t.id === this.toolId ? ' on' : ''}`, 'data-tip': `${t.name}: ${t.tip}`, 'data-key': `Ctrl+${t.key}` }, ic(t.icon), h('span', { class: 'nm' }, t.name));
+      const tab = h('div', { class: `ws-tab${t.id === this.toolId ? ' on' : ''}`, 'data-tip': `${t.name}: ${t.tip}`, 'data-key': `Ctrl+${t.shift ? 'Shift+' : ''}${t.key}` }, ic(t.icon), h('span', { class: 'nm' }, t.name));
       tab.addEventListener('click', () => this.useTool(t.id));
       tabs.append(tab);
     }
@@ -322,7 +348,7 @@ export class Workshop {
     m.color = colors[Math.floor(Math.random() * colors.length)];
     await this.lib.put(m, { mine: true });
     this.openMod(m.id, 'overview');
-    toast(`"${m.name}" made. Start by drawing something, or pick a quick start below.`, 'good');
+    toast(`"${m.name}" made. Fill in what it is, then pick a tool along the top to make the first thing.`, 'good');
   }
 
   async importMod() {
@@ -441,7 +467,7 @@ export class Workshop {
     if (!this.mod) return null;
     const stem = data.name || KIND_NAMES[kind][0];
     const id = freeId(this.mod, kind, stem);
-    const base = DEFAULTS[kind] ? DEFAULTS[kind](data, this) : {};
+    const base = DEFAULTS[kind] ? DEFAULTS[kind](data, this, o) : {};
     const thing = { ...base, ...data, id, name: cleanName(data.name || base.name || stem, 48, stem) };
     this.mod[kind][id] = thing;
     this.touch(kind, id, { quiet: true });
@@ -474,6 +500,17 @@ export class Workshop {
     }
     if (sub('worlds')) items.push({ label: 'World map', icon: 'globe', onClick: () => this.tool3('world', (t) => t.newWorld()) });
     if (sub('chargen')) items.push({ label: 'Character tab', icon: 'bust', onClick: () => this.tool3('chargen', (t) => t.newTab()) });
+    if (sub('songs')) items.push({ label: 'Song', icon: 'note', sub: [
+      { label: 'Empty', onClick: () => this.create('songs', { name: 'Song' }) },
+      { label: 'With a tune to start from', onClick: () => this.create('songs', { name: 'Song' }, { demo: true }) },
+      { label: 'From a song or MIDI file...', icon: 'import', onClick: () => this.tool3('music', (t) => t.upload()) },
+    ] });
+    if (sub('sounds')) items.push({ label: 'Sound', icon: 'speaker', sub: [
+      { label: 'From a sound file (.wav, .mp3, .ogg)...', icon: 'import', onClick: () => this.tool3('sound', (t) => t.importFile()) },
+      { label: 'Recorded (a microphone)...', icon: 'mic', onClick: () => this.useTool('sound').then(() => this.tools.sound.record()) },
+      { label: 'One of the game\'s sounds', icon: 'speaker', onClick: () => this.useTool('sound').then(() => this.tools.sound.fromGame()) },
+      { label: 'Silence, to build on', onClick: () => this.useTool('sound').then(() => this.tools.sound.newBlank()) },
+    ] });
     if (only && items.length === 1 && !items[0].sub) return items[0].onClick();
     menu(items, x, y);
   }
@@ -792,7 +829,7 @@ export class Workshop {
       for (const t of list) {
         const sel = this.sel && this.sel.kind === S.key && this.sel.id === t.id;
         const thumb = h('span', { class: 'thumb' }, this.thumb(S.key, t.id));
-        const sub = S.key === 'entities' ? entityTag(t) : S.key === 'assets' ? `${t.w}×${t.h}${t.frames && t.frames.length > 1 ? ` ·${t.frames.length}` : ''}` : '';
+        const sub = S.key === 'entities' ? entityTag(t) : S.key === 'assets' ? `${t.w}×${t.h}${t.frames && t.frames.length > 1 ? ` ·${t.frames.length}` : ''}` : S.key === 'sounds' ? `${clipSecs(t).toFixed(1)}s` : S.key === 'songs' ? `${t.bars || 0} bars` : '';
         const it = h('div', { class: `ex-item${sel ? ' on' : ''}`, dataset: { kind: S.key, id: t.id }, 'data-tip': entityTip(S.key, t) }, thumb, h('span', { class: 'nm' }, t.name), sub ? h('span', { class: 'tag' }, sub) : null);
         it.addEventListener('click', () => this.open(S.key, t.id));
         it.addEventListener('contextmenu', (e) => contextMenu(e, this.actionsFor(S.key, t.id)));
@@ -884,7 +921,18 @@ export class Workshop {
         return c;
       }
     }
-    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book', biomes: 'tree', worlds: 'globe', chargen: 'bust' };
+    if (kind === 'sounds') {
+      let src = this.thumbs.get(k);
+      if (!src) {
+        src = waveThumb(t, 20, 16);
+        this.thumbs.set(k, src);
+      }
+      const c = canvas(src.width, src.height);
+      c.getContext('2d').drawImage(src, 0, 0);
+      c.style.imageRendering = 'auto';
+      return c;
+    }
+    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book', biomes: 'tree', worlds: 'globe', chargen: 'bust', songs: 'note' };
     if (kind === 'entities') {
       const tp = rootType(t);
       return ic(TEMPLATE_INFO[tp] ? TEMPLATE_INFO[tp].icon : 'node');
@@ -957,7 +1005,7 @@ export class Workshop {
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && /^Digit[0-9]$/.test(e.code) && this.mod) {
       e.preventDefault();
-      const t = TOOLS.find((q) => q.key === e.code.slice(5));
+      const t = TOOLS.find((q) => q.key === e.code.slice(5) && !!q.shift === e.shiftKey);
       if (t) this.useTool(t.id);
       return;
     }
@@ -995,7 +1043,7 @@ export class Workshop {
   }
 
   shortcuts() {
-    const rows = [['Ctrl+1..9, 0', 'Switch tool'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
+    const rows = [['Ctrl+1..9, 0', 'Switch tool'], ['Ctrl+Shift+1, 2', 'Music, Sound'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
     dialog({ title: 'Shortcuts', icon: 'info', body: h('div', { class: 'helpgrid' }, rows.flatMap(([k, t]) => [h('span', { class: 'kbd' }, k), h('span', { class: 'note' }, t)])), buttons: [{ label: 'Close', kind: 'primary' }] });
   }
 
@@ -1096,6 +1144,9 @@ const DEFAULTS = {
   patches: () => ({ name: 'Story change', motif: null }),
   entities: () => ({ name: 'Entity', graph: emptyGraph() }),
   chargen: (d) => ({ name: 'Tab', title: '', about: '', rows: [], ...(d.game ? { hideRows: [], add: {} } : { order: 50 }) }),
+  // (Round 66.)
+  songs: (d, app, o = {}) => newSong({ name: d.name, demo: !!o.demo }),
+  sounds: (d) => newSound({ name: d.name }),
 };
 
 const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags });

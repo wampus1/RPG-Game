@@ -192,6 +192,8 @@ const REF = {
   creature: { coll: 'entities', name: 'creature', tpl: ['tpl.animal', 'tpl.hostile', 'tpl.npc', 'tpl.boss'], vanilla: 'creature', at: true },
   projectile: { coll: 'entities', name: 'projectile', tpl: ['tpl.projectile'] },
   world: { coll: 'worlds', name: 'world map' },
+  song: { coll: 'songs', name: 'song' },
+  clip: { coll: 'sounds', name: 'sound' },
   biome: { coll: 'biomes', name: 'biome', vanilla: 'biome', at: true, mine: (b) => !b.change },
   any: { coll: null, name: 'thing' },
 };

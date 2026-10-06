@@ -475,8 +475,8 @@ export class GuestNet {
     const r = game.renderer;
     for (const [kind, args] of list) {
       if (kind === 'sound') {
-        const [name, at] = args;
-        game.audio?.play(name, at || undefined);
+        const [name, at, o] = args;
+        game.audio?.play(name, at || undefined, null, o && typeof o === 'object' ? o : null);
       } else if (typeof r[kind] === 'function') r[kind](...args);
     }
   }

@@ -18,6 +18,9 @@ import { fightPhase } from '../entities/tempo.js';
 import { SCALES, chordDegs, degMidi, motif, line, counterLine, bassBar, ARPS, KITS, HIT } from './compose.js';
 import { Rack, Samples, master, makeIR, midiHz } from './synth.js';
 import { BIOMES } from '../world/biomes.js';
+import { MODS } from '../mod/state.js';
+import { SongPlayer } from '../mod/song.js';
+import { clipBuffer } from '../mod/sound.js';
 
 // What every theme starts from, by the kind of music it is: out in the
 // country (unhurried, the drums coming in late), in a town (a groove), in a
@@ -362,6 +365,10 @@ export function musicMood(game) {
   if (!p) return 'title';
   if (game.cutscene && game.cutscene.mood) return game.cutscene.mood;
   if (game.scene && game.scene.mood) return game.scene.mood;
+  // (Round 66) A mod's music, put on by one of its nodes (for a while, or
+  // till it's stopped).
+  const mm = modMusicNow(game);
+  if (mm) return mm;
   // (Which of the Dagoni Islands you're on, or under: its sound.)
   const tilde = isleTilde(game);
   // A fight: the watch after you, bandits, beasts at your throat, or
@@ -428,10 +435,31 @@ export function musicMood(game) {
     return night ? `${kind}:night` : kind;
   }
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
-  // (A mod's biome: the music of the game's biome it asks for.)
-  const mb = THEMES[biome] ? biome : BIOMES[biome] && THEMES[BIOMES[biome].music] ? BIOMES[biome].music : 'plains';
+  const def = BIOMES[biome];
+  // (Round 66) A biome a mod's given a song of its own (or a sound to play
+  // round and round), by day and by night.
+  const song = def && (night && def.songNight ? def.songNight : def.song);
+  if (song && (MODS.songs.has(song) || MODS.sounds.has(song))) return `song:${song}`;
+  // (Its night's own theme, if it's given one.)
+  if (night && def && def.musicNight && THEMES[def.musicNight]) return def.musicNight + (OWN_BIOMES.has(def.musicNight) ? '' : tilde);
+  // (A mod's biome, or a change to one of the game's: the music of the
+  // game's biome it asks for.)
+  const mb = def && def.music && THEMES[def.music] ? def.music : THEMES[biome] ? biome : 'plains';
   const t = mb + (OWN_BIOMES.has(mb) ? '' : tilde);
   return night ? `${t}:night` : t;
+}
+
+// (Round 66) The music a mod's node has put on for this player, while it
+// lasts: 'song:...' (or a theme's key), or null.
+export function modMusicNow(game) {
+  const r = game.renderer;
+  const M = r && r.modMusicOn;
+  if (!M) return null;
+  if (M.until && performance.now() / 1000 > M.until) {
+    r.modMusicOn = null;
+    return null;
+  }
+  return M.key;
 }
 
 // '~kharos' or '~myrrow' where you are (or where the dungeon you're in
@@ -1101,6 +1129,80 @@ class Voice {
   }
 }
 
+// (Round 66) A mod's song playing as the music ('song:m:mod:id'): its
+// patterns scheduled a little ahead on a desk of its own, round and round
+// (from the bar it says to go back to); or a mod's sound, played round
+// and round. The Workshop's preview is 'song:@preview' (see
+// Music.preview).
+class SongVoice {
+  constructor(music, key, fadeIn = 2.5) {
+    this.m = music;
+    this.key = key;
+    const c = music.ctx;
+    const ref = key.slice(5);
+    const pv = ref === '@preview' ? music.previewSong : null;
+    const rec = pv || MODS.songs.get(ref) || MODS.sounds.get(ref);
+    const mod = rec ? rec.mod : null;
+    this.out = c.createGain();
+    this.out.gain.setValueAtTime(0.0001, c.currentTime);
+    this.out.gain.exponentialRampToValueAtTime(0.9, c.currentTime + Math.max(0.05, fadeIn));
+    this.out.connect(music.mix || music.bus);
+    this.player = null;
+    this.src = null;
+    if (!rec) return;
+    if (rec.v && Array.isArray(rec.v.chans)) {
+      const clip = (r) => {
+        const k = r && r[0] === '@' && mod ? `m:${mod.id}:${r.slice(1)}` : r;
+        const own = r && r[0] === '@' && mod && mod.sounds ? mod.sounds[r.slice(1)] : null;
+        return own || (MODS.sounds.get(k) || {}).v || null;
+      };
+      this.player = new SongPlayer(music, this.out, rec.v, { loop: true, clip });
+    } else {
+      const buf = clipBuffer(c, rec.v);
+      if (!buf) return;
+      const g = c.createGain();
+      g.gain.value = Math.min(2, rec.v.vol ?? 1);
+      this.src = c.createBufferSource();
+      this.src.buffer = buf;
+      this.src.loop = true;
+      this.src.connect(g).connect(this.out);
+      this.src.start(c.currentTime + 0.05);
+    }
+  }
+
+  schedule(until) {
+    if (this.player) this.player.schedule(until);
+  }
+
+  retune(key) {
+    this.key = key;
+  }
+
+  fadeOut(dur = 2.2) {
+    const c = this.m.ctx;
+    this.out.gain.cancelScheduledValues(c.currentTime);
+    this.out.gain.setValueAtTime(Math.max(0.0001, this.out.gain.value), c.currentTime);
+    this.out.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    this.stopped = true;
+    setTimeout(() => {
+      if (this.player) this.player.stop(0.01);
+      if (this.src) {
+        try {
+          this.src.stop();
+        } catch {
+          // (Done already.)
+        }
+      }
+      this.out.disconnect();
+    }, (dur + 0.4) * 1000);
+  }
+}
+
+// The voice for a mood: a mod's song or sound, or one of the game's themes.
+function voiceFor(music, key, fadeIn) {
+  return key.startsWith('song:') ? new SongVoice(music, key, fadeIn) : new Voice(music, key, fadeIn);
+}
+
 // How loud the music is at full volume (against the game's sounds).
 const GAIN = 0.26;
 
@@ -1151,7 +1253,7 @@ export class Music {
     // (Dipped under a sound a moment: back up once it's gone.)
     if (this.ducked && c.currentTime >= this.ducked) {
       this.ducked = 0;
-      if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * GAIN : 0, c.currentTime, 0.5);
+      if (this.bus) this.bus.gain.setTargetAtTime(this.enabled && !this.hushed ? this.volume * GAIN : 0, c.currentTime, 0.5);
     }
   }
 
@@ -1159,20 +1261,58 @@ export class Music {
   // Workshop's previews), then comes back.
   duck(secs = 1.4) {
     const c = this.ctx;
-    if (!c || !this.bus || !this.enabled) return;
+    if (!c || !this.bus || !this.enabled || this.hushed) return;
     if (!this.ducked) this.bus.gain.setTargetAtTime(this.volume * GAIN * 0.12, c.currentTime, 0.06);
     this.ducked = Math.max(this.ducked || 0, c.currentTime + secs);
+  }
+
+  // (Round 66) The Workshop's: one of the game's themes (its key), or a
+  // mod's song or sound ({ song, mod } or { sound, mod }), heard for
+  // `secs` in place of the Workshop's music (null: stop now).
+  preview(what, secs = 30) {
+    if (!what) {
+      // (Stopped: gone at once, the Workshop's own coming back in.)
+      if (this.previewKey && this.previewT > 0 && this.voice) {
+        this.voice.fadeOut(0.35);
+        this.voice = null;
+      }
+      this.previewT = 0;
+      this.previewKey = null;
+      this.linger = 0;
+      return;
+    }
+    if (typeof what === 'string') this.previewKey = what;
+    else {
+      this.previewSong = { mod: what.mod, v: what.song || what.sound };
+      // (A new key each time, so the same song heard again starts over.)
+      this.previewN = (this.previewN || 0) + 1;
+      this.previewKey = 'song:@preview';
+      if (this.voice && this.voice.key === 'song:@preview') this.voice.key = `song:@preview~${this.previewN}`;
+    }
+    this.previewT = secs;
+  }
+
+  previewing() {
+    return this.previewKey && this.previewT > 0 ? this.previewKey : null;
+  }
+
+  // (Round 66) Quiet (the Workshop playing something of its own over it),
+  // or back.
+  hush(on) {
+    this.hushed = !!on;
+    const c = this.ctx;
+    if (this.bus && c) this.bus.gain.setTargetAtTime(this.enabled && !on ? this.volume * GAIN : 0, c.currentTime, on ? 0.08 : 0.6);
   }
 
   setVolume(v) {
     this.volume = v;
     this.enabled = v > 0;
-    if (this.bus) this.bus.gain.setTargetAtTime(v * GAIN, this.ctx.currentTime, 0.2);
+    if (this.bus) this.bus.gain.setTargetAtTime(this.hushed ? 0 : v * GAIN, this.ctx.currentTime, 0.2);
   }
 
   toggle() {
     this.enabled = !this.enabled;
-    if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * GAIN : 0, this.ctx.currentTime, 0.3);
+    if (this.bus) this.bus.gain.setTargetAtTime(this.enabled && !this.hushed ? this.volume * GAIN : 0, this.ctx.currentTime, 0.3);
     return this.enabled;
   }
 
@@ -1205,12 +1345,24 @@ export class Music {
   // cut off the moment it ends (anything but a fight waits for it).
   update(dt, mood, urgent = false) {
     if (!this.setup()) return;
+    // (Round 66) Something the Workshop wants heard in its place a while
+    // (see preview).
+    if (this.previewKey) {
+      this.previewT -= dt;
+      if (this.previewT > 0) {
+        mood = this.previewKey;
+        urgent = true;
+      } else {
+        this.previewKey = null;
+        this.linger = 0;
+      }
+    }
     if (mood === 'title') mood = this.titleSong(dt);
     else if (mood === 'workshop') mood = this.titleSong(dt, WORKSHOP_SONGS, WORKSHOP_SONG_LEN, 'ws');
     else this.title = null;
     if (mood.startsWith('ws_') === false && this.ws) this.ws = null;
     if (!this.voice) {
-      this.voice = new Voice(this, mood, urgent ? 0.6 : 2.5);
+      this.voice = voiceFor(this, mood, urgent ? 0.6 : 2.5);
       return;
     }
     if (urgent) this.linger = LINGER;
@@ -1224,7 +1376,7 @@ export class Music {
     }
     if (urgent) {
       this.voice.fadeOut(0.8);
-      this.voice = new Voice(this, mood, 0.5);
+      this.voice = voiceFor(this, mood, 0.5);
       this.want = null;
       return;
     }
@@ -1244,7 +1396,7 @@ export class Music {
     const hold = fight ? 0.3 : leavingFight ? 4 : 2.5;
     if (this.wantT >= hold) {
       this.voice.fadeOut();
-      this.voice = new Voice(this, mood);
+      this.voice = voiceFor(this, mood);
       this.want = null;
     }
   }
