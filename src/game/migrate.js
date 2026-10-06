@@ -246,6 +246,14 @@ export const STEPS = [
       log.push('A host can now let players use commands (Multiplayer: Permissions).');
     },
   },
+  {
+    // Joining a world from another computer on the same version (round
+    // 59): nothing in the world itself to put right.
+    to: '0.59.0',
+    data(d, log) {
+      log.push('Worlds on another computer no longer look like another version.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

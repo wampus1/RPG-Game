@@ -4422,6 +4422,19 @@ dig in. What you do (or don't) decides the rest.
 - *Older worlds* (migration 0.58.0): nobody has any permissions until the
   host gives them.
 
+## Round 59: joining from another computer
+
+- *Fixed: "another version" when you were on the same one.* A world heard
+  of from another computer on the network lost its version on the way
+  over, so the Multiplayer list took every such world for another version
+  and wouldn't let you join. That included a new world, or an older one
+  just updated, with both of you on the same version. The version now
+  comes across with the world. A world whose version isn't known is no
+  longer turned away by your own list: the host's server checks when you
+  join, and still turns you away if the versions really differ, saying
+  which each of you has.
+- *Older worlds* (migration 0.59.0): nothing to put right.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

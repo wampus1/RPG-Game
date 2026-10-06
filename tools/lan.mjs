@@ -289,7 +289,9 @@ export function readBeacon(text, selfId = null) {
   if (!m || m.app !== 'tessera' || !m.id || m.id === selfId || !Number.isInteger(m.port) || m.port <= 0 || m.port > 65535) return null;
   const w = m.world && typeof m.world === 'object' ? m.world : null;
   const clean = (s, n) => String(s ?? '').slice(0, n);
-  const world = w ? { name: clean(w.name, 40), hostName: clean(w.hostName, 24), hostIcon: w.hostIcon && typeof w.hostIcon === 'object' ? w.hostIcon : null, players: Math.max(0, Math.min(99, Number(w.players) || 0)), max: Math.max(1, Math.min(99, Number(w.max) || 1)) } : null;
+  // (And the version of the game it's running: round 59. Without it, every
+  // world heard of from another computer looked like another version.)
+  const world = w ? { name: clean(w.name, 40), hostName: clean(w.hostName, 24), hostIcon: w.hostIcon && typeof w.hostIcon === 'object' ? w.hostIcon : null, players: Math.max(0, Math.min(99, Number(w.players) || 0)), max: Math.max(1, Math.min(99, Number(w.max) || 1)), gv: w.gv ? clean(w.gv, 16) : null } : null;
   return { id: String(m.id), v: Number(m.v) || 0, port: m.port, world };
 }
 

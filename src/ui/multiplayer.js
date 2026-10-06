@@ -287,8 +287,10 @@ export class MultiplayerWindow extends Window {
     worlds.forEach((w, i) => {
       const key = JOIN_KEYS[i];
       const old = w.v && w.v !== NET_VERSION;
-      // (A world on another version of the game: you're told, and can't.)
-      const other = !old && !sameVersion(w.gv || null);
+      // (A world on another version of the game: you're told, and can't.
+      // Not knowing which it's on isn't reason enough: the host's own
+      // server asks, and turns you away then if it must.)
+      const other = !old && !!w.gv && !sameVersion(w.gv);
       button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => (other ? hooks.otherVersion(w) : hooks.join(w.at)), { off: !a || w.players >= w.max || old, color: other ? C.orange : C.hi, hint: old || other ? `${versionText(w.gv || null)}` : `${w.players}/${w.max}` });
       // (Found elsewhere on the network: where.)
       if (w.at) g.text(7, y + 1, `on another computer, at ${w.at.addr}`, C.faint);
@@ -336,7 +338,7 @@ export class MultiplayerWindow extends Window {
     else if (JOIN_KEYS.includes(k.code.replace(/^Key/, ''))) {
       const w = networkWorlds(this.ctx.lan)[JOIN_KEYS.indexOf(k.code.replace(/^Key/, ''))];
       if (w && w.players < w.max && !(w.v && w.v !== NET_VERSION)) {
-        if (!sameVersion(w.gv || null)) hooks.otherVersion(w);
+        if (w.gv && !sameVersion(w.gv)) hooks.otherVersion(w);
         else hooks.join(w.at);
       }
     } else {
