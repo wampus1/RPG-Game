@@ -33,6 +33,7 @@ import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
 import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem } from './shipgame.js';
 import { holdBlockChanged } from './shiphold.js';
+import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
@@ -2004,6 +2005,8 @@ export class Game {
     // aboard them.
     updateShips3d(this, dt);
     tickLater(this, dt);
+    fleetsTick(this, dt);
+    idleShipsTick(this, dt);
     updateLabor(this, dt);
     // (The great masters, who fill more than the one tile: see
     // entities/footprint.js.)

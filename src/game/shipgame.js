@@ -9,6 +9,7 @@ import { REACH } from '../config.js';
 import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId } from './ships3d.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { makeCrew, addHand } from './shipcrew.js';
+import { fleetsSave, fleetsLoad } from './shipfleets.js';
 import { enterHold, holdShipAt, holdLocal } from './shiphold.js';
 import { addItem, removeItem } from './inventory.js';
 
@@ -186,12 +187,13 @@ export function shipSave(game) {
     const [lx, ly, lz] = holdLocal(S, p.x, p.y, p.z);
     below = { s: S.id, lx, ly, lz };
   }
-  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0 };
+  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game) };
 }
 
 export function shipLoad(game, data) {
   if (!data) return;
   loadShips(game, data.ships);
+  fleetsLoad(game, data.fleets);
   const p = game.player;
   const at = data.deck || data.below;
   const S = at ? shipById(game, at.s) : null;

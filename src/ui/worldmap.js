@@ -16,6 +16,7 @@ import { BIOMES } from '../world/biomes.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { STORM, ARCHIPELAGO } from '../world/geography.js';
 import { drawGlyph, drawText, glyphBitmap } from '../render/font.js';
+import { voyagesNow } from '../game/shipfleets.js';
 import { teleportTo } from '../game/commands.js';
 import { settlementIcons, roadCellLinks } from './windows.js';
 
@@ -884,6 +885,14 @@ export class MapWindow extends Window {
     }
     // What people have told you of: a lake, a river, the coast.
     for (const q of game.world.ow.pins || []) put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
+    // (Round 68) The realms' ships at sea, where you know the water.
+    const civs = game.world.ow.civs || [];
+    for (const v of voyagesNow(game)) {
+      const civ = civs.find((c) => c.id === v.civ);
+      const col = civ ? civ.color.hex : '#e8e8e8';
+      const what = { trade: 'a merchantman', settlers: 'a settler ship', war: 'a man-of-war', cargo: 'a cargo hulk' }[v.kind] || 'a ship';
+      put(v.x, v.z, '⛵', v.kind === 'war' && blink ? '#ff8060' : '#f4f0e0', col, `The ${v.name}: ${what} of the ${civ ? civ.name.replace(/^The /, '') : 'sea'}`, col, !!game.revealMap);
+    }
   }
 
   // (Round 68) The bridges across the straits of a land split in pieces:
