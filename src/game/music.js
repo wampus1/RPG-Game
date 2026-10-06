@@ -71,8 +71,8 @@ export const THEMES = {
   ws_glass: { ...CALM, root: 57, scale: 'penta', bpm: 60, prog: [0, 3, 1, 4], progB: [3, 2, 0, 4], lead: 'vibes', pad: 'glass', arp: 'bowl', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', space: 'cathedral', wet: 0.45, echo: 0.34, energy: 0.22 },
   // A handpan rolling on a breeze, a soft step under it.
   ws_drift: { ...CALM, root: 62, scale: 'dorian', bpm: 72, prog: [0, 6, 3, 4], progB: [3, 4, 0, 6], lead: 'handpan', pad: 'breath', arp: 'handpan', arpStyle: 'updown', arpRate: 2, bass: 'sub', kit: 'soft', energy: 0.3 },
-  // A lantern on the bench: a celesta, the felt piano under it, warm.
-  ws_lantern: { ...CALM, root: 65, scale: 'major', bpm: 62, prog: [0, 5, 3, 4], progB: [5, 3, 1, 4], lead: 'celesta', pad: 'warm', keys: 'felt', keysStyle: 'broken', bass: 'sub', echo: 0.28, energy: 0.24 },
+  // A lantern on the bench: a vibraphone, the felt piano under it, warm.
+  ws_lantern: { ...CALM, root: 65, scale: 'major', bpm: 62, prog: [0, 5, 3, 4], progB: [5, 3, 1, 4], lead: 'vibes', pad: 'warm', keys: 'felt', keysStyle: 'broken', bass: 'sub', echo: 0.28, energy: 0.24 },
   // The tide out: bowls and a breath, the vibraphone swelling, the sea.
   ws_tide: { ...CALM, root: 55, scale: 'mixo', bpm: 56, shape: 'sus2', prog: [0, 6, 0, 4], progB: [3, 6, 2, 0], lead: 'bowl', pad: 'breath', keys: 'vibes', keysStyle: 'swell', bass: 'sub', bassStyle: 'drone', sea: true, wet: 0.5, echo: 0.3, energy: 0.2 },
   // Late at the bench: the felt piano low, a cello under it.
