@@ -186,7 +186,7 @@ export const BIOMES = {
   // Velmarch's warm heart: golden grass over rolling hills, silver olive
   // groves, dark cypresses standing like sentries, wild vines.
   olive_hills: {
-    name: 'Olive Hills', char: '♣', fg: '#d8c060', bg: '#5a5a2a', isle: 'velmarch',
+    name: 'Olive Hills', char: '♣', fg: '#d8c060', bg: '#5a5a2a', land: 'velmarch',
     climate: 'warm', bank: B.sand, rain: 0.6,
     surface: B.grass_gold, sub: B.dirt, hills: 2,
     patches: [[B.grass, 12, 0.62], [B.gravel, 7, 0.84]],
@@ -196,7 +196,7 @@ export const BIOMES = {
   // Velmarch's frozen north: frost birches white as bone, leaves of ice,
   // the ground silvered with frost, ice flowers that glow at dusk.
   rimewood: {
-    name: 'Rimewood', char: '♠', fg: '#c8e8ff', bg: '#2a3a5a', isle: 'velmarch',
+    name: 'Rimewood', char: '♠', fg: '#c8e8ff', bg: '#2a3a5a', land: 'velmarch',
     climate: 'cold', bank: B.gravel, reeds: false, snowy: true,
     surface: B.frost_grass, sub: B.dirt, hills: 2,
     patches: [[B.snow, 10, 0.5], [B.gravel, 7, 0.85]],
@@ -205,7 +205,7 @@ export const BIOMES = {
   },
   // Ostria's green east: bamboo groves, cherry trees in blossom, peonies.
   bamboo_grove: {
-    name: 'Bamboo Grove', char: '‖', fg: '#7ad070', bg: '#1e4a2a', isle: 'ostria',
+    name: 'Bamboo Grove', char: '‖', fg: '#7ad070', bg: '#1e4a2a', land: 'ostria',
     climate: 'warm', lilies: true, rain: 1.2,
     surface: B.grass_lush, sub: B.dirt, hills: 2,
     patches: [[B.grass, 10, 0.55], [B.mud, 8, 0.86]],
@@ -214,7 +214,7 @@ export const BIOMES = {
   },
   // Ostria's red canyons: red rock and red sand, saguaro and prickly pear.
   red_mesa: {
-    name: 'Red Mesa', char: '▙', fg: '#e07040', bg: '#6a2a18', isle: 'ostria',
+    name: 'Red Mesa', char: '▙', fg: '#e07040', bg: '#6a2a18', land: 'ostria',
     climate: 'hot', bank: B.sand, reeds: false, rain: 0.3,
     surface: B.red_rock, sub: B.red_rock, hills: 3,
     patches: [[B.sand, 9, 0.6], [B.sandstone, 7, 0.78]],
@@ -224,7 +224,7 @@ export const BIOMES = {
   // Corrow's bone strand: pale sand full of bone chips, the ribs of
   // whales standing up out of it, sea grass.
   bone_strand: {
-    name: 'Bone Strand', char: ')', fg: '#f0e8d0', bg: '#6a6458', isle: 'corrow',
+    name: 'Bone Strand', char: ')', fg: '#f0e8d0', bg: '#6a6458', land: 'corrow',
     climate: 'mild', bank: B.bone_sand, reeds: false,
     surface: B.bone_sand, sub: B.sand, hills: 1,
     patches: [[B.grass_taiga, 11, 0.6], [B.gravel, 7, 0.8]],
@@ -234,7 +234,7 @@ export const BIOMES = {
   // Saltmere's flats: a white crust to the horizon, salt crystals, saltbush,
   // and pink lagoons.
   salt_flats: {
-    name: 'Salt Flats', char: '▫', fg: '#f8f4ec', bg: '#a89a9a', isle: 'saltmere',
+    name: 'Salt Flats', char: '▫', fg: '#f8f4ec', bg: '#a89a9a', land: 'saltmere',
     climate: 'hot', bank: B.salt_crust, reeds: false, rain: 0.35,
     surface: B.salt_crust, sub: B.sand, hills: 0,
     patches: [[B.sand, 10, 0.66], [B.clay, 8, 0.85]],
@@ -244,7 +244,7 @@ export const BIOMES = {
   // Hollowmark's hollows: deep moss, giant ferns, glowberries, and the
   // lantern trees whose pods light the bottoms all night.
   lantern_hollows: {
-    name: 'Lantern Hollows', char: '♣', fg: '#ffd070', bg: '#2a3a1a', isle: 'hollowmark',
+    name: 'Lantern Hollows', char: '♣', fg: '#ffd070', bg: '#2a3a1a', land: 'hollowmark',
     climate: 'mild', lilies: true,
     surface: B.moss, sub: B.dirt, hills: 3,
     patches: [[B.grass_lush, 10, 0.55], [B.mud, 7, 0.84]],
@@ -254,7 +254,7 @@ export const BIOMES = {
   // The Wyrd Isle's heath: purple-grey heath, silver birches, fairy rings,
   // standing stones, the aurora overhead.
   rune_heath: {
-    name: 'Rune Heath', char: '∩', fg: '#b8a0e0', bg: '#2e2a44', isle: 'wyrd',
+    name: 'Rune Heath', char: '∩', fg: '#b8a0e0', bg: '#2e2a44', land: 'wyrd',
     climate: 'cold',
     surface: B.heath, sub: B.dirt, hills: 2,
     patches: [[B.moss, 9, 0.6], [B.gravel, 7, 0.84]],
@@ -263,7 +263,7 @@ export const BIOMES = {
   },
   // The Skerries' sea cliffs: wind-cropped turf, pink thrift, cairns, rock.
   sea_cliffs: {
-    name: 'Sea Cliffs', char: '^', fg: '#c8d0d8', bg: '#3a4450', isle: 'skerries',
+    name: 'Sea Cliffs', char: '^', fg: '#c8d0d8', bg: '#3a4450', land: 'skerries',
     climate: 'cold', bank: B.gravel, reeds: false, rain: 1.3,
     surface: B.grass_taiga, sub: B.stone, hills: 3,
     patches: [[B.stone, 7, 0.62], [B.gravel, 9, 0.7]],
