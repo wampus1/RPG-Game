@@ -1110,17 +1110,18 @@ export function drawShip(r, game, S, aboard) {
   const tq = Math.floor(r.time * 10) / 10;
   S.night = !!(game && game.minute !== undefined && (game.minute < 6 * 60 + 30 || game.minute > 19 * 60 + 30));
   const gk = (S.guns || []).map((g) => `${Math.round((g.aim || 0) * 20)}:${Math.round((g.elev || 0) * 20)}:${Math.round((g.recoil || 0) * 10)}`).join(';');
-  const key = [q, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
+  const key = [q, S.noRig ? 1 : 0, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
     Math.round((S.wheel || 0) * 12), gk, S.runOut ? 1 : 0, (S.sailHp || []).map((h) => Math.round(h * 20)).join(':'), S.night ? 1 : 0, tq,
     Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10)].join(',');
   if (!S.dyn || S.dyn.k !== key) {
     const low = pooled(S, 'low', Rs.ox - 24, Rs.oy - 24, Rs.ox + Rs.w + 24, Rs.oy + Rs.h + 8, Rs);
     deckWorks(S, T, low, tq);
-    rigFor(S, T, low, true, tq);
+    // (Still building: no masts yet.)
+    if (!S.noRig) rigFor(S, T, low, true, tq);
     const hb = rigBox(S, T);
     const high = pooled(S, 'high', hb[0], hb[1], hb[2], hb[3], Rs);
     mergeDepth(high, low);
-    rigFor(S, T, high, false, tq);
+    if (!S.noRig) rigFor(S, T, high, false, tq);
     S.dyn = { k: key, low, lowCv: shipCanvas(S, 'low', low), hiCv: shipCanvas(S, 'high', high), high };
   }
   const { low, lowCv, hiCv, high } = S.dyn;

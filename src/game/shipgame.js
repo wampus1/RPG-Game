@@ -6,9 +6,11 @@
 // right-click with planks to mend a hole.
 import { BLOCKS } from '../world/blocks.js';
 import { REACH } from '../config.js';
-import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld } from './ships3d.js';
+import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId } from './ships3d.js';
+import { SHIP_TYPES } from '../world/shipmodels.js';
+import { makeCrew, addHand } from './shipcrew.js';
 import { enterHold, holdShipAt, holdLocal } from './shiphold.js';
-import { addItem } from './inventory.js';
+import { addItem, removeItem } from './inventory.js';
 
 // A key aboard (or beside) a ship: true if it was hers to handle.
 export function shipKey(game, code) {
@@ -198,4 +200,50 @@ export function shipLoad(game, data) {
     const spot = deckSpotNear(S, data.deck.cx + 0.5, data.deck.cz + 0.5, 4, data.deck.y);
     if (spot) putAboard(game, S, p, spot.cx, spot.y, spot.cz);
   } else enterHold(game, S, p, data.below.lx, data.below.ly, data.below.lz);
+}
+
+// A ship of yours to launch (from what you're holding): on the open water
+// nearest you; or a sailor signed on, aboard your own ship. True if the
+// thing held was one of these.
+const OWN_NAMES = ['Sea Lark', 'Wandering Star', 'Fortune', 'Grey Gull', 'Second Chance', 'Morning Tide', 'Salt Rose', 'Kestrel', 'Long Shot', 'Fair Weather', 'Last Light', 'Swift'];
+export function useShipItem(game, held) {
+  const p = game.player;
+  if (held.shipKit) {
+    const type = held.shipKit;
+    if (p.deck || game.world.inInstance(p.x)) {
+      game.ui.msg('Ashore, by open water, to launch her.', '#ffb080', true);
+      return true;
+    }
+    const at = waterSpot(game, type, p.x, p.z, 3);
+    if (!at || Math.hypot(at.x - p.x, at.z - p.z) > 34) {
+      game.ui.msg('She needs open water, deep and wide, close by: stand on the shore of the sea or a great lake.', '#ffb080', true);
+      return true;
+    }
+    const T = SHIP_TYPES[type];
+    const crewN = { sloop: 2, brigantine: 4, galleon: 8, frigate: 7 }[type] || 2;
+    const name = `The ${OWN_NAMES[(shipsOf(game).length * 7 + Math.floor(Math.random() * 12)) % OWN_NAMES.length]}`;
+    addShip(game, {
+      type, x: at.x, z: at.z, yaw: at.yaw, owner: ownerId(game, p), name, anchor: true, ammo: Math.round(T.speed),
+      crew: makeCrew(Math.floor(Math.random() * 1e9), type, game.hero && game.hero.style ? game.hero.style : 'vale', crewN), paint: '#2a4a8a', paint2: '#1a1a20', flag: '#e0c040', emblem: 'stripe',
+    });
+    removeItem(p.inv, held.key, 1);
+    game.audio?.play('splash', { x: at.x, y: 6, z: at.z });
+    game.ui.msg(`${name} slides into the water, ${Math.round(Math.hypot(at.x - p.x, at.z - p.z))} paces off: a ${T.name.toLowerCase()} of your own, her crew aboard. (F beside her to climb aboard; F at her wheel to take it.)`, '#a0d8ff');
+    return true;
+  }
+  if (held.key === 'sailors_articles') {
+    const S = p.deck ? shipById(game, p.deck.s) : null;
+    if (!S || S.owner !== ownerId(game, p)) {
+      game.ui.msg('Aboard a ship of your own, to sign a sailor on.', '#ffb080', true);
+      return true;
+    }
+    const rec = makeCrew(Math.floor(Math.random() * 1e9), S.type, 'vale', 3)[2];
+    rec.role = Math.random() < 0.4 ? 'gunner' : 'sailor';
+    S.crewRecs.push(rec);
+    addHand(game, S, rec);
+    removeItem(p.inv, held.key, 1);
+    game.ui.msg(`${rec.name.first || 'A sailor'} signs on as ${rec.role === 'gunner' ? 'a gunner' : 'a hand'} (${S.crewRecs.length} aboard her now).`, '#a0d8ff', true);
+    return true;
+  }
+  return false;
 }

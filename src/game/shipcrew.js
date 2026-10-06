@@ -125,6 +125,17 @@ function spawnCrew(game, S) {
   });
 }
 
+// One more hand aboard her (signed on just now).
+export function addHand(game, S, rec) {
+  if (!S.crewHere) return;
+  const c = new Sailor(game, { ...rec, ship: S.id });
+  c.recRef = rec;
+  const spot = deckSpotNear(S, S.m.spawn.x + 0.5, S.m.spawn.z + 0.5, 6, null);
+  if (!spot) return;
+  game.sailors.push(c);
+  putAboard(game, S, c, spot.cx, spot.y, spot.cz);
+}
+
 function despawnCrew(game, S) {
   S.crewHere = false;
   const keep = [];

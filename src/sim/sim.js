@@ -732,6 +732,29 @@ export class Sim {
   // ------------------------------------------------------------ trading
   // The shelf an NPC sells from and the purse they pay with.
   shopOf(npc) {
+    const sh = this.shopOfInner(npc);
+    // (Round 68) At a harbour: the carpenter builds ships to order (the
+    // great ships the realm knows how to build), and shot and sailors are
+    // to be had at the general store too.
+    if (sh && (sh.kind === 'carpenter' || sh.kind === 'general') && npc.layout && !sh.personal) {
+      const s = npc.layout.settlement;
+      const P = this.ships && this.ships.port(s.id);
+      if (P && P.state === 'docked') {
+        const tech = (k) => this.tech.has(s, k);
+        sh.store.cannonball = Math.max(sh.store.cannonball || 0, 24);
+        sh.store.sailors_articles = Math.max(sh.store.sailors_articles || 0, 4);
+        if (sh.kind === 'carpenter') {
+          sh.store.ship_sloop = 1;
+          if (tech('trade_ships')) sh.store.ship_brigantine = 1;
+          if (s.empire || s.type === 'city') sh.store.ship_galleon = 1;
+          if (tech('trade_ships') && (tech('steel') || tech('fortress') || tech('fieldworks'))) sh.store.ship_frigate = 1;
+        }
+      }
+    }
+    return sh;
+  }
+
+  shopOfInner(npc) {
     const rec = npc.rec;
     const L = npc.layout;
     const e = L.econ;

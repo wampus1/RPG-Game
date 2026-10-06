@@ -381,6 +381,17 @@ item('hoe', { name: 'Hoe', kind: 'tool', stack: 1, tool: 'shovel', speed: 1.5, d
 item('bucket', { name: 'Wooden Bucket', kind: 'tool', stack: 1, value: 4, bucket: true });
 item('water_bucket', { name: 'Bucket of Water', kind: 'tool', stack: 1, value: 4, bucket: true, water: 3 });
 item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
+// (Round 68) The great ships (see world/shipmodels.js): bought at a
+// harbour's shipwright (a sloop can be built at a workbench), launched on
+// open water; shot for their guns; a sailor signed on.
+item('cannonball', { name: 'Cannonball', kind: 'misc', stack: 32, value: 3, about: 'Iron shot for a ship\'s gun, a shot a fire. An anvil makes four from an iron ingot, a lump of sulphur and a coal; a harbour\'s shipwright sells them.' });
+item('sailors_articles', { name: 'Sailor\'s Articles', kind: 'misc', stack: 8, value: 45, about: 'A sailor\'s mark on the ship\'s articles: right-click aboard a ship of your own and they join her crew (more hands sail her better, man her guns, pump her and mend her).' });
+for (const [type, name, cost, about] of [
+  ['sloop', 'Sloop', 1400, 'A sloop, every plank and line of her ready to put together: right-click by open water to launch her. One mast, four guns, quick to turn: a crew of two comes with her.'],
+  ['brigantine', 'Brigantine', 3600, 'A brigantine, bought at a shipwright\'s: right-click by open water to launch her. Square sails forward, a great gaff sail aft, eight guns; her crew comes with her.'],
+  ['galleon', 'Galleon', 7200, 'A galleon, bought at a shipwright\'s: right-click by open water to launch her. A towering castle of a ship, a deep hold, twenty guns; slow to turn. Her crew comes with her.'],
+  ['frigate', 'Frigate', 9000, 'A frigate, bought at a shipwright\'s: right-click by open water to launch her. The fastest thing on the sea, eighteen guns; her crew comes with her.'],
+]) item(`ship_${type}`, { name: name, kind: 'tool', stack: 1, value: cost, shipKit: type, about });
 // Tack for a horse of your own, and a wagon for it to pull.
 item('saddle', { name: 'Saddle', kind: 'misc', stack: 1, value: 35 });
 item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });

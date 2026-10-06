@@ -31,7 +31,7 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
-import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad } from './shipgame.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem } from './shipgame.js';
 import { holdBlockChanged } from './shiphold.js';
 import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
@@ -3392,6 +3392,8 @@ export class Game {
       }
     }
     // A raft goes in the water, and you climb on.
+    // (Round 68) A ship of your own to launch, a sailor to sign on.
+    if (held && (held.shipKit || held.key === 'sailors_articles') && useShipItem(this, held)) return;
     if (held && held.raft && c && c.block && c.block.liquid && c.inReach && !this.player.raft) {
       this.launchRaft(c.x, c.z);
       return;

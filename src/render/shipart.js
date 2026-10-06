@@ -272,3 +272,57 @@ export const SHIP_SPRITES = {
   },
 };
 export const SHIP_ANIM = { ship_pump: 2 };
+
+// ------------------------------------------------------------ item icons
+// Shot for the guns, a sailor's articles, and the ships themselves (a ship
+// in miniature, side on, her masts and canvas by her kind).
+export function shipIcon(key) {
+  const p = new Px(16, 16);
+  if (key === 'cannonball') {
+    for (const [x, y] of [[5, 10], [10, 10], [7, 6]]) {
+      p.ellipse(x, y, 2.6, 2.6, '#26262c');
+      p.set(x - 1, y - 1, '#6a6a78');
+      p.set(x, y - 1, '#4a4a54');
+    }
+    return p.outline(OUT);
+  }
+  if (key === 'sailors_articles') {
+    p.rect(3, 3, 10, 11, '#e8dcbc');
+    p.hline(3, 12, 3, '#c8b890');
+    p.hline(3, 12, 13, '#a89870');
+    for (const y of [5, 7, 9]) p.hline(5, 10, y, '#8a7a5a');
+    // (An anchor, and a mark.)
+    p.vline(11, 8, 12, '#2a3a5a');
+    p.hline(10, 12, 9, '#2a3a5a');
+    p.set(10, 12, '#2a3a5a');
+    p.set(12, 12, '#2a3a5a');
+    p.line(5, 11, 8, 12, '#3a2a1a');
+    return p.outline(OUT);
+  }
+  const m = /^ship_(sloop|brigantine|galleon|frigate)$/.exec(key);
+  if (!m) return null;
+  const type = m[1];
+  const masts = { sloop: [8], brigantine: [6, 10], galleon: [4, 8, 12], frigate: [4, 8, 11] }[type];
+  const tall = type === 'galleon';
+  // Hull.
+  for (let x = 1; x <= 14; x++) {
+    const bot = 13 - (x < 3 ? 2 - x + 1 : 0) - (x > 12 ? x - 12 : 0);
+    for (let y = 10; y <= bot; y++) p.set(x, y, y === 10 ? '#8a2a1e' : y === bot ? '#2e1e14' : '#4a3020');
+  }
+  if (tall) p.rect(1, 8, 3, 3, '#4a3020');
+  p.hline(1, 14, 10, '#c8a040');
+  // Masts and sails.
+  for (const x of masts) {
+    p.vline(x, 1, 9, '#6a4a2a');
+    if (type === 'sloop') {
+      for (let y = 2; y <= 9; y++) p.hline(x + 1, Math.min(14, x + 1 + Math.round((y - 1) * 0.7)), y, '#f0e8d4');
+    } else {
+      p.rect(x - 2, 2, 5, 3, '#f0e8d4');
+      p.rect(x - 2, 6, 5, 3, '#e4dcc4');
+    }
+  }
+  if (type === 'galleon') p.set(4, 0, '#c82020');
+  // The bowsprit.
+  p.line(14, 10, 15, 8, '#6a4a2a');
+  return p.outline(OUT);
+}
