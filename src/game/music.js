@@ -437,8 +437,9 @@ export function musicMood(game) {
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
   const def = BIOMES[biome];
   // (Round 66) A biome a mod's given a song of its own (or a sound to play
-  // round and round), by day and by night.
-  const song = def && (night && def.songNight ? def.songNight : def.song);
+  // round and round), by day and by night. (At night: the night's song;
+  // or, if the night has a theme of the game's, that; else the day's.)
+  const song = def && (night ? def.songNight || (def.musicNight ? null : def.song) : def.song);
   if (song && (MODS.songs.has(song) || MODS.sounds.has(song))) return `song:${song}`;
   // (Its night's own theme, if it's given one.)
   if (night && def && def.musicNight && THEMES[def.musicNight]) return def.musicNight + (OWN_BIOMES.has(def.musicNight) ? '' : tilde);

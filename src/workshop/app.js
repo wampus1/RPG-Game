@@ -1,8 +1,9 @@
 // The Workshop (round 62): where mods are made. Opened from the title
 // screen, it covers the game: on the left everything in the mod you're
 // working on, in the middle the tool you're using on one of them, on the
-// right that thing's settings. Ten tools:
-//   Overview  the mod itself: its name, picture, what's in it, what's wrong
+// right that thing's settings. Fourteen tools:
+//   Overview  the mod's home: its name, picture and details, what's in it,
+//             what's wrong (round 66: edited in place, no right side)
 //   Pixel     pixel art (pictures for blocks, items, creatures, effects)
 //   VFX       effects: particles and animated sprites
 //   Rig       characters cut into parts on bones, moved by simulation
@@ -14,6 +15,12 @@
 //   World     the world's map: its lands, where biomes and towns go, set
 //             places, realms and people (round 63)
 //   Character the character screen's tabs (round 63)
+//   Music     songs sketched in patterns: MIDI and song files in and out,
+//             .wav out (round 66)
+//   Sound     sounds brought in, cut, mixed, sped up or slowed, with
+//             effects (round 66)
+//   Gear      how armour, weapons and tools look worn and held (round 66)
+//   Rules     the game's own rules and any thing's numbers (round 66)
 // Everything's saved as you go (see ModLibrary). Anything in the explorer
 // can be dragged onto any tool that can use it; right-click it for what
 // else can be done with it.
@@ -33,6 +40,7 @@ import { glyphCanvas } from './common.js';
 import { newSong } from '../mod/song.js';
 import { newSound, clipSecs } from '../mod/sound.js';
 import { waveThumb } from './audiokit.js';
+import { barCells } from './homebar.js';
 
 // Which tool edits each collection.
 export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear' };
@@ -1299,26 +1307,4 @@ class OverviewTool {
     const first = Object.keys(app.mod[key] || {})[0];
     if (first) app.open(key, first);
   }
-}
-
-// How many of `cells` squares each kind gets: the whole bar shared out by
-// how many of each there are, the largest remainders rounding up, and a
-// square at least for any kind there is one of.
-export function barCells(ns, cells) {
-  const total = ns.reduce((a, b) => a + b, 0);
-  if (!total) return ns.map(() => 0);
-  const raw = ns.map((n) => (n / total) * cells);
-  const out = raw.map((r, i) => (ns[i] ? Math.max(1, Math.floor(r)) : 0));
-  let left = cells - out.reduce((a, b) => a + b, 0);
-  const order = raw.map((r, i) => [r - Math.floor(r), i]).filter(([, i]) => ns[i]).sort((a, b) => b[0] - a[0]);
-  for (let k = 0; left > 0 && order.length; k++) {
-    out[order[k % order.length][1]]++;
-    left--;
-  }
-  while (left < 0) {
-    const i = out.indexOf(Math.max(...out));
-    out[i]--;
-    left++;
-  }
-  return out;
 }

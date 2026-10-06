@@ -135,12 +135,22 @@ export function compileBiome(mod, b) {
   // (Round 66) Its music: one of the game's themes (by key), or one of the
   // mod's songs or sounds ('@id'); and its nights' own, if it has any.
   const tune = (v) => (typeof v !== 'string' || !v ? null : v[0] === '@' ? { song: gameKey(mod.id, v.slice(1)) } : /^[a-z_]+$/.test(v) ? { music: v } : null);
+  // (One or the other: a change made over another mod's change keeps none
+  // of that one's music where it gives its own.)
   const day = tune(b.music);
-  if (day && day.song) out.song = day.song;
-  else if (day) out.music = day.music;
+  if (day) {
+    delete out.song;
+    delete out.music;
+    if (day.song) out.song = day.song;
+    else out.music = day.music;
+  }
   const night = tune(b.musicNight);
-  if (night && night.song) out.songNight = night.song;
-  else if (night) out.musicNight = night.music;
+  if (night) {
+    delete out.songNight;
+    delete out.musicNight;
+    if (night.song) out.songNight = night.song;
+    else out.musicNight = night.music;
+  }
   // (Its plants grow on its own ground, whatever that is.)
   out.grows = new Set([out.surface, ...(out.patches || []).map((p) => p[0])]);
   out.mod = mod.id;

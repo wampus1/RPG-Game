@@ -209,7 +209,9 @@ export function remakeItem(key, ch = {}) {
   if (ch.more) stars = Math.max(0, Math.min(5, stars + Math.round(ch.more)));
   for (const m of ch.mods || []) if (!mods.includes(m)) mods.push(m);
   if (ch.found) origin = 'd';
-  if (mods.length && !stars) stars = 1;
+  // (Modifiers come with a star at least; stars taken down to none take
+  // them off with them.)
+  if (!stars && (ch.mods || []).length && !(ch.more < 0)) stars = 1;
   if (stars > 0) {
     const it = ITEMS[k];
     const cls = gearClass(it);

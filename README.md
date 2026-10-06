@@ -4980,6 +4980,107 @@ are, how far, and how hurt.
 **Updating.** Worlds from 0.64 load as they were. Mods made in 0.64 keep
 working.
 
+## Round 66: music, sounds, rules and gear in the Workshop
+
+**The mod's home page** is simpler. There are no quick starts. Its name,
+author, version, colour, picture, tags and description are edited right
+on the page, so the right side panel folds away while you're there.
+**In this mod** is a bar of square segments, one colour for each kind of
+thing (art, effects, songs, sounds, entities...), sized by how many there
+are; hovering over a segment names the kind, and clicking it opens that
+kind in the explorer.
+
+**Side panels fold away.** Each side panel has a button at its edge to
+fold it away and bring it back (the Rules tab and the home page have no
+right panel at all).
+
+**Four new tabs** (Ctrl+Shift+1 to 4):
+- **Music**: songs sketched in patterns, the way the old trackers did it.
+  The top shows the song: a row for each channel (an instrument, or
+  drums), a square for each bar holding the pattern it plays there.
+  Below is the pattern under the cursor: a piano roll (or a row for each
+  drum), with the song's key and scale shown. Channels play the game's
+  own instruments or one of the mod's sounds; each has its volume,
+  left/right, echo and mute/solo. A song has a tempo, beats a bar, steps
+  a beat, swing, a room (hall, cave, cathedral) and where it loops back
+  to. Patterns can be copied, moved up or down a half-step or an octave,
+  given a beat to start from (drums) or a melody made up in the key.
+  Bring in a song file (.tsong) or a MIDI file; save a song as either, or
+  as a .wav; or turn it into one of the mod's sounds. It can also be set
+  as a biome's music from here.
+- **Sound**: a sound's waveform to work on. Bring one in (.wav, .mp3,
+  .ogg and anything else the browser can read), record one, or start from
+  one of the game's own sounds. Choose a stretch with the mouse to cut,
+  copy, paste, delete or keep only it. Effects: volume, make it as loud as
+  it can be, fade in or out, backwards, speed (like a tape), speed keeping
+  the pitch, pitch keeping the length, echo, room, muffle, thin out,
+  telephone, distortion, bit crush, tremolo, vibrato, chorus, trim the
+  quiet ends; each can be heard before it's applied. Mix other sounds in
+  over it (the mod's, a file, the game's, a tone, a song of the mod's).
+  It has its own undo, a quality to keep it at (11 to 32 kHz) and is kept
+  small in the mod (up to three minutes); it downloads as a .wav.
+- **Gear**: how a piece of armour, a weapon or a tool (the mod's, or one
+  of the game's) looks on someone. Worn: one of the game's looks under it,
+  tinted, and art of its own laid over the person (front, side and back).
+  Held: art of its own in the hand, gripped where you click, as big and
+  as slanted as you set it. It's shown on a person of your choosing,
+  turned any way, standing, walking or swinging. Starred, set and tuned
+  pieces made from it look the same.
+- **Rules**: the game's own rules for every world the mod is turned on in
+  (single player and multiplayer): how fast blocks break, what they drop,
+  how fast crops grow, the hearts a player starts with, health coming
+  back on its own, walking speed, stamina, the damage players deal and
+  take, how much falling hurts, creatures' health and damage, how many
+  creatures roam, how long a day is, what shops charge and pay. Below
+  that, any item (damage, armour, block, swing time, work speed, reach,
+  range, healing, stack size, worth, name), block (hardness, light, name)
+  or creature (health, damage, speed, how far off it sees you, name),
+  the game's or the mod's, can have its numbers changed. With several
+  mods, their percentages multiply. Everything goes back as it was when
+  the world is left.
+
+**Sounds and music in nodes.** **Play sound** can play one of the mod's
+sounds (they're listed first), louder or softer, higher or lower; so can
+effects and triggers. **Play music** puts on one of the mod's songs, one
+of its sounds round and round, or one of the game's themes, for a player
+or everyone, for a while or until **Stop the music**.
+
+**A biome's music.** In the Biome tab, a biome (new, or a change to one of
+the game's) can play one of the game's themes, one of the mod's songs, or
+one of its sounds looped, by day, and something else at night. Each can
+be heard from there.
+
+**Items made special by nodes.** The **Item** node can be **made
+special**: stars (and modifiers with them, the ones that suit the item),
+a stone or fitting set in it, its numbers changed (damage, armour,
+block, swing speed, work speed, reach, range, healing, worth, strength,
+agility, endurance, charisma) and a name of its own. Such an item is a
+piece of its own and goes anywhere an item goes. **Change an item**
+does the same to what someone holds, wears or carries, in place (or
+takes the stone out, or adds or removes stars). **About an item** also
+gives its modifiers, the stone set in it, the plain piece it was made
+from, its key, its reach, swings a second and the stats it gives.
+
+**More nodes** for changing the world:
+- **Terrain & blocks**: Replace blocks (in a box or a ball), Ball of
+  blocks (solid or a shell), Dig (a ball, a box or a tunnel; with drops
+  or without), Raise or lower the ground, Line of blocks (a wall, a road,
+  a bridge), Copy blocks, Grow a tree (any of the game's kinds), Plant a
+  crop (as far grown as you say), Pour (water or lava), Open or shut (a
+  door or a town's gate).
+- **Containers & decoration**: Put in, Take from and Empty a container,
+  Fill from a loot table, What's in a container, Set an item down, Take
+  up what's set down, Scatter decorations (candles, cobwebs, rubble,
+  flowers...), Clear decorations.
+- **Find out**: The ground at (where to stand, how high, what it's made
+  of), Count blocks; and About a block now says whether a door is open,
+  which way it faces, how grown a crop is, whether it's a container, how
+  many items are in it, and what's set down there.
+
+**Updating.** Worlds from 0.65 load as they were. Mods made in 0.65 keep
+working, and their hashes don't change (a mod with no sounds, songs,
+gear looks or rules is the same mod it was).
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5236,7 +5337,11 @@ src/
                        behave (creatures told what to do: walk, follow,
                        flee, wander, patrol, guard, leap); (round 65)
                        towns and townlists (towns and their people for
-                       graphs)
+                       graphs); (round 66) sound (sounds kept small,
+                       .wav in and out, cutting and effects), song (songs
+                       in patterns, played, MIDI in and out), rules and
+                       ruleset (the game's rules as mods change them),
+                       gear (how gear looks worn and held)
   workshop/            the Workshop (round 62): app (the frame, explorer,
                        undo, saving, playtest), kit (its controls), pixel,
                        vfx, rig, builder (with buildkinds: loot, layouts,
@@ -5245,7 +5350,9 @@ src/
                        graph (with nodecanvas), common, icons, workshop.css;
                        (round 63) biome (with biomeview), world, chargen,
                        pickers, pixfont (the game's font as a TrueType
-                       font)
+                       font); (round 66) music, sound, gear, rules,
+                       audiokit (music pickers and previews, waveform
+                       pictures), homebar (the home page's bar)
   ui/modpick.js        choosing a new world's mods
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)

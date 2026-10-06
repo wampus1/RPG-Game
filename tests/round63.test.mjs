@@ -292,6 +292,10 @@ test('what a character\'s choices give, in the game: things, stats, health, trai
   try {
     let hero = null;
     const win = new CharacterWindow(fakeUI(), 3, (h) => (hero = h), [m]);
+    // (The window rolls a new character each time, and about one in twelve
+    // is born tough: a trait they have already isn't given again. Not this
+    // one.)
+    win.hero.traits = win.hero.traits.filter((t) => t !== 'tough');
     win.setKit(win.kits().find((o) => o.mod === `${m.id}:glass`));
     win.begin();
     const game = new Game({ seed: 4242, renderer: stubRenderer(), audio: null, ui: stubUI(), hero, learned: true });

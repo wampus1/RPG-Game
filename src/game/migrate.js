@@ -310,6 +310,17 @@ export const STEPS = [
       log.push('Mods can change towns and their people, find out much more, and send you across to another of their world maps.');
     },
   },
+  {
+    // Sounds, songs, rules and gear looks in mods (round 66). Nothing in a
+    // world changes shape: a mod's music a node put on wasn't kept (it's
+    // the screen's), so none is waiting; and a world's own hearts, as the
+    // game had them, are what its mods' rules start from.
+    to: '0.66.0',
+    data(d, log) {
+      if (d.modMusic) delete d.modMusic;
+      log.push('Mods can have sounds and songs of their own (a biome\'s music, or put on from their nodes), change the game\'s rules, and say how their gear looks worn and held.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
