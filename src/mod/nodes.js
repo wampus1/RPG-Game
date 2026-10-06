@@ -737,7 +737,9 @@ w('q.night', { title: 'Is it night?', out: [out('out', T.bool, 'Night')], eval: 
 w('q.hour', { title: 'Time of day', help: 'The hour (0-23.99) and the day.', out: [out('h', T.num, 'Hour'), out('day', T.num, 'Day')], eval: (x, nn, p) => (p === 'day' ? SVC.day(x) : SVC.hour(x)) });
 w('q.biome', { title: 'Biome at', help: 'Whether a place is in a biome.', in: [ref('at', T.pos, 'At')], props: [pick('biome', 'Biome', BIOME_LIST)], out: [out('is', T.bool, 'It is'), out('name', T.text, 'Biome')], eval: (x, nn, p, api) => {
   const b = SVC.biome(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self));
-  return p === 'name' ? b : b === api.prop('biome');
+  // (One of this mod's own biomes: '@its id'.)
+  const want = api.prop('biome');
+  return p === 'name' ? b : b === (typeof want === 'string' && want[0] === '@' ? `m:${x.mod.id}:${want.slice(1)}` : want);
 } });
 w('q.below', { title: 'Down a dungeon?', help: 'Whether someone (or self) is down in a dungeon.', in: [ref('who', T.ent, 'Who')], out: [out('out', T.bool, 'Below')], eval: (x, nn, p, api) => SVC.below(x, (isEnt(api.in('who')) && api.in('who')) || x.self) });
 w('q.var', { title: 'Variable', help: 'A value kept by a name (see Set variable).', in: [txt('name', 'Name', 'count')], props: [pick('scope', 'Kept', ['self', 'world', 'local'])], out: [out('out', T.any, 'Value')], eval: (x, nn, p, api) => SVC.getVar(x, api.prop('scope'), String(api.in('name'))) ?? 0 });

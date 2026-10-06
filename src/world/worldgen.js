@@ -6,10 +6,13 @@ import {
 } from '../config.js';
 import { RNG, hash4, clamp, smoothstep } from '../util/rng.js';
 import { makeNoise2D } from '../util/noise.js';
-import { BIOMES, BIOME_STYLE } from './biomes.js';
+import { BIOMES, BIOME_STYLE, BIOME_SETTLE } from './biomes.js';
 import { placeName, civName, CULTURES } from './names.js';
 import { genSites } from './sites.js';
 import { buildLandmasses, landValue, landmassAt, stormAt, stormNear, insideStorm, DETAIL, DAGONI_KEYS } from './geography.js';
+import { MODS } from '../mod/state.js';
+import { modBiomeFor } from '../mod/biomerules.js';
+import { paintOwners } from '../mod/worldplan.js';
 
 const SPLOTCH_STEP_X = 150;
 const SPLOTCH_STEP_Z = 96;
@@ -32,16 +35,18 @@ const ISLAND_VALUES = {
   mist: ['scholarly', 'pious', 'agrarian'],
   tide: ['seafaring', 'mercantile', 'seafaring', 'martial'],
 };
-// How good each kind of land is to build a town on.
-const BIOME_SETTLE = {
-  plains: 0.45, forest: 0.3, savanna: 0.15, taiga: 0.1, jungle: 0.05, desert: -0.1, tundra: -0.2, swamp: -0.2, mountain: -1,
-  ashland: 0.2, cinderwood: 0.15, geyser: 0.35, volcano: -1, moor: 0.35, fungal: 0.2, mangrove: 0.15,
-};
 
 export class Overworld {
-  constructor(seed) {
+  // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
+  // a mod's world map (see mod/worldplan.js). The mods' in the game, if not
+  // given.
+  constructor(seed, o = {}) {
     this.seed = seed >>> 0;
     const s = this.seed;
+    this.biomeRules = o.rules || MODS.biomeRules || [];
+    this.plan = o.plan !== undefined ? o.plan : MODS.world || null;
+    // (What couldn't be as the world map has it: said when the world's made.)
+    this.planReport = [];
     this.nWarpX = makeNoise2D(hash4(s, 11));
     this.nWarpZ = makeNoise2D(hash4(s, 12));
     this.nFine = makeNoise2D(hash4(s, 13));
@@ -50,7 +55,8 @@ export class Overworld {
     this.rng = new RNG(hash4(s, 99));
     // The lie of the land: the Dagoni Islands, the continents, the far
     // isles (see geography.js).
-    this.lands = buildLandmasses();
+    this.lands = buildLandmasses(this.plan);
+    if (this.plan) this.paintLands();
     this.islands = this.lands.filter((L) => L.kind === 'dagoni');
     // The mountain on Kharos (its moods: see sim/volcano.js).
     this.setupVolcano();
@@ -68,6 +74,67 @@ export class Overworld {
     // Places someone has told you of (a lake, the high ground...): marks
     // on your map even where you've never been.
     this.pins = [];
+  }
+
+  // (Round 63) A mod's world map's painted land given to the landmasses it
+  // touches or runs on from (land painted far from any, a wild land of its
+  // own), and each one's bounds widened to take its in.
+  paintLands() {
+    const plan = this.plan;
+    const { owner, wild } = paintOwners(plan, this.lands, (L, x, z) => landValue(L, x, z, this.nCont), REGION_W, REGION_D);
+    if (wild) {
+      let x0 = MAP_W;
+      let z0 = MAP_H;
+      let x1 = 0;
+      let z1 = 0;
+      for (let i = 0; i < owner.length; i++) {
+        if (plan.land[i] !== 1 || owner[i]) continue;
+        const cx = i % MAP_W;
+        const cz = (i - cx) / MAP_W;
+        x0 = Math.min(x0, cx);
+        x1 = Math.max(x1, cx);
+        z0 = Math.min(z0, cz);
+        z1 = Math.max(z1, cz);
+      }
+      const W = buildLandmasses({ lands: [{ key: 'wilds', name: 'the wild lands', kind: 'isle', cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, rx: (x1 - x0) / 2 + 1, rz: (z1 - z0) / 2 + 1, rough: 0.3, about: 'land far over the sea', blob: false }] })[0];
+      W.i = this.lands.length;
+      W.off = W.i * 1717.3;
+      this.lands.push(W);
+      for (let i = 0; i < owner.length; i++) if (plan.land[i] === 1 && !owner[i]) owner[i] = W.i + 1;
+    }
+    const paint = { owner, land: plan.land };
+    const box = this.lands.map(() => null);
+    for (let i = 0; i < owner.length; i++) {
+      const o = owner[i];
+      if (!o) continue;
+      const cx = i % MAP_W;
+      const cz = (i - cx) / MAP_W;
+      const b = box[o - 1] || (box[o - 1] = { x0: cx, x1: cx, z0: cz, z1: cz });
+      b.x0 = Math.min(b.x0, cx);
+      b.x1 = Math.max(b.x1, cx);
+      b.z0 = Math.min(b.z0, cz);
+      b.z1 = Math.max(b.z1, cz);
+    }
+    this.lands.forEach((L, j) => {
+      L.paint = paint;
+      const b = box[j];
+      if (!b) return;
+      const bx0 = (b.x0 - 1) * REGION_W;
+      const bx1 = (b.x1 + 2) * REGION_W;
+      const bz0 = (b.z0 - 1) * REGION_D;
+      const bz1 = (b.z1 + 2) * REGION_D;
+      if (L.blob === false) {
+        L.x0 = bx0;
+        L.x1 = bx1;
+        L.z0 = bz0;
+        L.z1 = bz1;
+      } else {
+        L.x0 = Math.min(L.x0, bx0);
+        L.x1 = Math.max(L.x1, bx1);
+        L.z0 = Math.min(L.z0, bz0);
+        L.z1 = Math.max(L.z1, bz1);
+      }
+    });
   }
 
   // Put a told-of place on the map (once per square and name).
@@ -190,10 +257,18 @@ export class Overworld {
         // (Each landmass its own climate: Thessa cold in the north and hot
         // in the south, the far lands by how far north they lie.)
         const L = landmassAt(this.lands, x, z, this.nCont);
-        const lat = L && L.kind === 'dagoni' ? (z - (L.z - L.trz)) / (2 * L.trz) : z / WORLD_TILES_D;
+        let lat = L && L.kind === 'dagoni' ? (z - (L.z - L.trz)) / (2 * L.trz) : z / WORLD_TILES_D;
+        // (Round 63) A climate a world map gives the landmass.
+        if (L && L.climate) {
+          const loc = Math.max(0, Math.min(1, (z - (L.z - L.trz)) / (2 * L.trz)));
+          lat = { n2s: loc, s2n: 1 - loc, cold: 0.04 + loc * 0.2, mild: 0.38 + loc * 0.24, warm: 0.66 + loc * 0.3 }[L.climate] ?? lat;
+        }
         const temp = clamp(lat + this.nClimate(x / 500, z / 500) * 0.18 + rng.float(-0.08, 0.08), 0, 1);
         const moist = clamp(rng.float(0, 1) * 0.7 + (this.nClimate(x / 300 + 50, z / 300) * 0.5 + 0.5) * 0.3, 0, 1);
-        const biome = this.pickBiome(L, temp, moist, L ? landValue(L, x, z, this.nCont) : -1, rng);
+        let biome = this.pickBiome(L, temp, moist, L ? landValue(L, x, z, this.nCont) : -1, rng);
+        // (Round 63) One of a mod's instead, where its rules say (or, on a
+        // landmass that takes only some, the nearest of those).
+        if (this.biomeRules.length || (L && L.allow)) biome = modBiomeFor(biome, L, temp, moist, (salt) => (hash4(this.seed, gx, gz, salt) % 10007) / 10007, this.biomeRules, L ? L.allow : null);
         // Stretch while keeping area roughly constant; mountains form long ranges.
         const s = biome === 'mountain' ? rng.float(1.6, 2.6) : rng.float(0.6, 1.7);
         const sp = {
@@ -285,6 +360,9 @@ export class Overworld {
     out.biome2 = s2 ? s2.biome : s1.biome;
     out.edge = s2 && s2.biome !== s1.biome ? (d2 - d1) * 0.5 : 60;
     out.splotch = s1.i;
+    // (Round 63) A biome painted on a mod's world map: there, whatever the
+    // splotches say (its edges as wavy as theirs).
+    if (this.plan && this.plan.legend.length) this.paintedBiome(wx, wz, out);
     // (The mountain on Kharos stands over whatever's round it.)
     const V = this.volcano;
     if (V && Math.abs(x - V.x) < V.r * 1.3 && Math.abs(z - V.z) < V.r * 1.3) {
@@ -296,6 +374,37 @@ export class Overworld {
       }
     }
     return out;
+  }
+
+  // The biome painted where (wx, wz) is (warped), if any: put in `out`,
+  // with how far it is to where something else is (its edge).
+  paintedBiome(wx, wz, out) {
+    const P = this.plan;
+    const cx = Math.floor(wx / REGION_W);
+    const cz = Math.floor(wz / REGION_D);
+    if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) return;
+    const v = P.biome[cz * MAP_W + cx];
+    const nb = (x, z) => (x < 0 || z < 0 || x >= MAP_W || z >= MAP_H ? 0 : P.biome[z * MAP_W + x]);
+    let edge = 60;
+    // (How near the nearest square that's otherwise.)
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      if (nb(cx + dx, cz + dz) === v) continue;
+      const x0 = (cx + dx) * REGION_W;
+      const z0 = (cz + dz) * REGION_D;
+      const ex = Math.max(0, x0 - wx, wx - (x0 + REGION_W));
+      const ez = Math.max(0, z0 - wz, wz - (z0 + REGION_D));
+      edge = Math.min(edge, Math.hypot(ex, ez));
+    }
+    if (v) {
+      const k = P.legend[v - 1];
+      if (!k || !BIOMES[k]) return;
+      if (out.biome !== k) out.biome2 = out.biome;
+      out.biome = k;
+      out.edge = edge;
+    } else if (edge < out.edge) {
+      // (Near something painted: its edge, so the hills meet it smoothly.)
+      out.edge = edge;
+    }
   }
 
   // ---------------------------------------------------------------- map cells
@@ -615,8 +724,13 @@ export class Overworld {
   // towns (two squares across) and villages.
   settleIsland(I, rng, colorOrder) {
     const mine = (c) => c && c.island === I.key;
+    // (Round 63) A mod's world map's towns: never where it says none, and
+    // only where it says they may be, if it says so anywhere on the island.
+    const zone = this.plan ? this.plan.town : null;
+    const zoned = !!zone && this.liveCells.some((c) => c.island === I.key && zone[c.cz * MAP_W + c.cx] === 1);
     const score = (c) => {
       if (!mine(c) || c.biome === 'ocean' || c.biome === 'beach' || c.mountainness > 0.12 || c.cont < 0.06) return -1;
+      if (zone && (zone[c.cz * MAP_W + c.cx] === 2 || (zoned && zone[c.cz * MAP_W + c.cx] !== 1))) return -1;
       if (c.lake && !c.river) return -1;
       if (c.biome === 'volcano') return -1;
       let s = rng.float(0, 1);
@@ -669,6 +783,35 @@ export class Overworld {
     }
     for (const cand of cityCand) if (!ordered.includes(cand)) ordered.push(cand);
     let founded = 0;
+    // (Round 63) A world map's own realms on this island first, their
+    // capitals where it puts them (or as near as there's room).
+    for (const R of this.plan ? this.plan.realms : []) {
+      const at = this.landAt((R.cx + 0.5) * REGION_W, (R.cz + 0.5) * REGION_D);
+      if (!at || at.key !== I.key) continue;
+      let best = null;
+      for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+        const c = this.cell(R.cx + dx, R.cz + dz);
+        if (!c || c.cx >= MAP_W - 1 || c.cz >= MAP_H - 1) continue;
+        const quad = [c, this.cell(c.cx + 1, c.cz), this.cell(c.cx, c.cz + 1), this.cell(c.cx + 1, c.cz + 1)];
+        if (quad.some((q) => score(q) < 0)) continue;
+        if (tooClose(c.cx + 0.5, c.cz + 0.5, 6)) continue;
+        const d = Math.hypot(dx, dz);
+        if (!best || d < best.d) best = { c, d };
+      }
+      if (!best) {
+        this.planReport.push({ level: 'warn', text: `The realm "${R.name}" found no room for its capital where it's put on the world map.` });
+        continue;
+      }
+      const style = CULTURES[R.style] ? R.style : styleOf(best.c);
+      const vals = R.values.length ? R.values.slice(0, 2) : rng.shuffle([...(ISLAND_VALUES[style] || VALUES)]).slice(0, 2);
+      const civ = { id: this.civs.length, style, values: vals, color: CIV_COLORS[R.color % CIV_COLORS.length], prosperity: rng.float(0.3, 0.9), island: I.key, planRealm: R.id };
+      civ.name = R.name;
+      civ.people = CULTURES[style].label;
+      this.civs.push(civ);
+      const city = place('city', best.c.cx, best.c.cz, 2, 2, civ);
+      civ.capital = city.id;
+      founded++;
+    }
     for (const { c } of ordered) {
       if (founded >= I.civs) break;
       if (tooClose(c.cx + 0.5, c.cz + 0.5, I.civs > 1 ? Math.min(12, I.rx * 0.75) : 12)) continue;

@@ -13,6 +13,8 @@ import { RECIPES } from '../world/recipes.js';
 import { SPECIES } from '../entities/creature.js';
 import { CREATURE_LOOKS } from '../render/sprites.js';
 import './rig.js';
+import './biomes.js';
+import './worldplan.js';
 import { Px } from '../render/pixel.js';
 import { gameKey, tagRange, isModKey, assetPixels, modHash } from './format.js';
 
@@ -325,7 +327,7 @@ function speciesOf(r) {
   // Out in the wild: when, where, how often.
   const when = f.spawnTime || (t === 'tpl.hostile' ? 'night' : 'day');
   if ((t === 'tpl.animal' || t === 'tpl.hostile') && when !== 'never' && num(f.weight, 3) > 0) {
-    S.modSpawn = { when, biomes: Array.isArray(f.biomes) ? f.biomes : [], weight: num(f.weight, 3), group: Math.max(1, Math.min(6, Math.round(num(f.group, 1)))) };
+    S.modSpawn = { when, biomes: Array.isArray(f.biomes) ? f.biomes.map((b) => (typeof b === 'string' && b[0] === '@' ? gameKey(r.mod.id, b.slice(1)) : b)) : [], weight: num(f.weight, 3), group: Math.max(1, Math.min(6, Math.round(num(f.group, 1)))) };
   }
   return S;
 }

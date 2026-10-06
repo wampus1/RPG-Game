@@ -12,7 +12,6 @@ const GREEN = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.gra
 const SANDY = new Set([B.sand, B.sandstone, B.gravel]);
 // (The other islands' ground, that things grow in too.)
 const ISLE_GROUND = new Set([B.ash, B.cinder, B.scorched, B.moss, B.peat, B.mycelium, B.basalt, B.sulfur_crust]);
-const NO_REEDS = new Set(['tundra', 'mountain', 'taiga', 'ashland', 'cinderwood', 'geyser', 'volcano']);
 
 function pickWeighted(list, r) {
   let total = 0;
@@ -121,7 +120,7 @@ export function generateRegion(world, rx, rz) {
       const bd = BIOMES[c.biome];
       const r = hashf(x, z, seed, 13);
       if (c.water >= 0) {
-        if (!c.deep && !c.lava && c.water + 1 < WORLD_Y && (c.biome === 'swamp' || c.biome === 'forest' || c.biome === 'jungle' || c.biome === 'mangrove' || c.biome === 'fungal') && r < 0.07) {
+        if (!c.deep && !c.lava && c.water + 1 < WORLD_Y && bd.lilies && r < 0.07) {
           region.set(lx, c.water + 1, lz, B.lily_pad);
         }
         continue;
@@ -134,7 +133,7 @@ export function generateRegion(world, rx, rz) {
         density *= c.sett ? 0.25 : 1 - c.flat * 0.6;
       }
       const r2 = hashf(x, z, seed, 14);
-      if (c.wet < 2.2 && !NO_REEDS.has(c.biome) && r < 0.3) {
+      if (c.wet < 2.2 && bd.reeds !== false && r < 0.3) {
         region.set(lx, y, lz, B.reeds);
         continue;
       }
@@ -143,7 +142,8 @@ export function generateRegion(world, rx, rz) {
         continue;
       }
       if (r >= density || !bd.plants.length) continue;
-      const surfOk = GREEN.has(c.surf) || ISLE_GROUND.has(c.surf) || (SANDY.has(c.surf) && (c.biome === 'desert' || c.biome === 'beach')) || c.surf === B.snow;
+      // (A mod's biome: its plants grow on its own ground too.)
+      const surfOk = GREEN.has(c.surf) || ISLE_GROUND.has(c.surf) || (SANDY.has(c.surf) && (c.biome === 'desert' || c.biome === 'beach')) || c.surf === B.snow || (bd.grows && bd.grows.has(c.surf));
       if (!surfOk) continue;
       let plant = pickWeighted(bd.plants, r2);
       if (c.surf === B.snow && plant !== B.dead_bush && plant !== B.fern) continue;

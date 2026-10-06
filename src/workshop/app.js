@@ -1,7 +1,7 @@
 // The Workshop (round 62): where mods are made. Opened from the title
 // screen, it covers the game: on the left everything in the mod you're
 // working on, in the middle the tool you're using on one of them, on the
-// right that thing's settings. Seven tools:
+// right that thing's settings. Ten tools:
 //   Overview  the mod itself: its name, picture, what's in it, what's wrong
 //   Pixel     pixel art (pictures for blocks, items, creatures, effects)
 //   VFX       effects: particles and animated sprites
@@ -10,6 +10,10 @@
 //   Story     stories: new ones as graphs, and changes to the game's own
 //   Graph     entities (blocks, items, creatures, effects, events) as
 //             visual code
+//   Biome     new biomes, and changes to the game's own (round 63)
+//   World     the world's map: its lands, where biomes and towns go, set
+//             places, realms and people (round 63)
+//   Character the character screen's tabs (round 63)
 // Everything's saved as you go (see ModLibrary). Anything in the explorer
 // can be dragged onto any tool that can use it; right-click it for what
 // else can be done with it.
@@ -22,9 +26,13 @@ import { GAME_VERSION } from '../version.js';
 import { starter } from './graph.js';
 import { voxPicture, structVox, layoutVox } from './voxview.js';
 import { VfxPlayer, newEffect, newLayer, EMITTER_PRESETS } from '../mod/vfx.js';
+import { BIOMES } from '../world/biomes.js';
+import { GAME_BIOMES, biomeFields } from '../mod/biomes.js';
+import { biomeWhole } from './biomeview.js';
+import { glyphCanvas } from './common.js';
 
 // Which tool edits each collection.
-export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph' };
+export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen' };
 const TOOLS = [
   { id: 'overview', name: 'Overview', icon: 'home', key: '1', tip: 'The mod: its name, its picture, what\'s in it, and what\'s wrong with it.' },
   { id: 'pixel', name: 'Pixel', icon: 'pencil', key: '2', tip: 'Pixel art: textures, icons, creatures, animations.' },
@@ -33,6 +41,9 @@ const TOOLS = [
   { id: 'builder', name: 'Builder', icon: 'house', key: '5', tip: 'Structures, towns, dungeons and loot tables.' },
   { id: 'story', name: 'Story', icon: 'scroll', key: '6', tip: 'Stories: new ones, and changes to the game\'s own.' },
   { id: 'graph', name: 'Graph', icon: 'node', key: '7', tip: 'Entities as visual code: blocks, items, creatures, effects, events.' },
+  { id: 'biome', name: 'Biome', icon: 'tree', key: '8', tip: 'Biomes: new kinds of land, and changes to the game\'s own.' },
+  { id: 'world', name: 'World', icon: 'globe', key: '9', tip: 'The world map: its lands, where biomes and towns go, set places, realms and people.' },
+  { id: 'chargen', name: 'Character', icon: 'bust', key: '0', tip: 'The character screen: its tabs, new ones and changes to the game\'s.' },
 ];
 const LOADERS = {
   overview: async () => ({ default: OverviewTool }),
@@ -42,6 +53,9 @@ const LOADERS = {
   builder: () => import('./builder.js'),
   story: () => import('./story.js'),
   graph: () => import('./graph.js'),
+  biome: () => import('./biome.js'),
+  world: () => import('./world.js'),
+  chargen: () => import('./chargen.js'),
 };
 // The explorer's sections, in order.
 const SECTIONS = [
@@ -55,6 +69,9 @@ const SECTIONS = [
   { key: 'loot', name: 'Loot tables', icon: 'chest' },
   { key: 'stories', name: 'Stories', icon: 'scroll' },
   { key: 'patches', name: 'Story changes', icon: 'book' },
+  { key: 'biomes', name: 'Biomes', icon: 'tree' },
+  { key: 'worlds', name: 'World maps', icon: 'globe' },
+  { key: 'chargen', name: 'Character tabs', icon: 'bust' },
 ];
 
 let cssDone = false;
@@ -400,17 +417,28 @@ export class Workshop {
     if (sub('loot')) items.push({ label: 'Loot table', icon: 'chest', onClick: () => this.create('loot', { name: 'Loot' }) });
     if (sub('stories')) items.push({ label: 'Story', icon: 'scroll', onClick: () => this.create('stories', { name: 'Story' }) });
     if (sub('patches')) items.push({ label: 'Change to a game story', icon: 'book', onClick: () => this.useTool('story').then(() => this.tools.story.pickPatch?.()) });
+    if (sub('biomes')) {
+      items.push({ label: 'Biome, starting from', icon: 'tree', sub: GAME_BIOMES.map((k) => ({ label: BIOMES[k].name, swatch: BIOMES[k].bg, onClick: () => this.tool3('biome', (t) => t.newBiome(k)) })) });
+      items.push({ label: 'Change a game biome', icon: 'leaf', sub: GAME_BIOMES.map((k) => ({ label: BIOMES[k].name, swatch: BIOMES[k].bg, onClick: () => this.tool3('biome', (t) => t.changeBiome(k)) })) });
+    }
+    if (sub('worlds')) items.push({ label: 'World map', icon: 'globe', onClick: () => this.tool3('world', (t) => t.newWorld()) });
+    if (sub('chargen')) items.push({ label: 'Character tab', icon: 'bust', onClick: () => this.tool3('chargen', (t) => t.newTab()) });
     if (only && items.length === 1 && !items[0].sub) return items[0].onClick();
     menu(items, x, y);
   }
 
   // The Builder (loaded if it isn't yet), to do something with.
   async builder(fn) {
-    if (!this.tools.builder) {
-      const T = (await LOADERS.builder()).default;
-      this.tools.builder = new T(this);
+    return this.tool3('builder', fn);
+  }
+
+  // A tool (loaded if it isn't yet), to do something with.
+  async tool3(id, fn) {
+    if (!this.tools[id]) {
+      const T = (await LOADERS[id]()).default;
+      this.tools[id] = new T(this);
     }
-    return fn(this.tools.builder);
+    return fn(this.tools[id]);
   }
 
   async newAsset(o = {}) {
@@ -478,6 +506,12 @@ export class Workshop {
       items.push({ sep: true }, { label: 'Make a creature with it', icon: 'skull', sub: ['tpl.animal', 'tpl.hostile', 'tpl.npc', 'tpl.boss'].map((tp) => ({ label: NODES[tp].title, onClick: () => this.newEntity(tp, { rig: id }, t.name) })) });
     } else if (kind === 'loot') {
       items.push({ sep: true }, { label: 'Drop it from a new creature', icon: 'skull', onClick: () => this.newEntity('tpl.hostile', { loot: id }, 'Looter') });
+    } else if (kind === 'biomes') {
+      const ref = t.change || `@${id}`;
+      items.push({ sep: true }, { head: 'Use it' },
+        { label: 'Paint it on a world map', icon: 'globe', onClick: () => this.useTool('world').then(() => this.tools.world?.paintBiome?.(ref)) },
+        { label: 'A beast that wanders it', icon: 'paw', onClick: () => this.newEntity('tpl.animal', { biomes: [ref], spawnTime: 'day' }, `${t.title || t.name} beast`) },
+        { label: 'A monster of its nights', icon: 'skull', onClick: () => this.newEntity('tpl.hostile', { biomes: [ref], spawnTime: 'night' }, `${t.title || t.name} horror`) });
     }
     items.push({ sep: true }, { label: 'Delete', icon: 'trash', danger: true, onClick: () => this.remove(kind, id) });
     return items;
@@ -751,6 +785,17 @@ export class Workshop {
         return c;
       }
     }
+    if (kind === 'biomes') {
+      const w = biomeWhole(t);
+      return glyphCanvas(w.char, w.fg, w.bg, 2);
+    }
+    if (kind === 'worlds' && this.thumbs.get(k)) {
+      const src = this.thumbs.get(k);
+      const c = canvas(src.width, src.height);
+      c.getContext('2d').drawImage(src, 0, 0);
+      c.style.imageRendering = 'auto';
+      return c;
+    }
     if (kind === 'structures' || kind === 'layouts' || kind === 'dungeons') {
       let src = this.thumbs.get(k);
       if (src === undefined) {
@@ -771,7 +816,7 @@ export class Workshop {
         return c;
       }
     }
-    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book' };
+    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book', biomes: 'tree', worlds: 'globe', chargen: 'bust' };
     if (kind === 'entities') {
       const tp = rootType(t);
       return ic(TEMPLATE_INFO[tp] ? TEMPLATE_INFO[tp].icon : 'node');
@@ -842,9 +887,10 @@ export class Workshop {
   onKey(e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
     const ctrl = e.ctrlKey || e.metaKey;
-    if (ctrl && /^Digit[1-7]$/.test(e.code) && this.mod) {
+    if (ctrl && /^Digit[0-9]$/.test(e.code) && this.mod) {
       e.preventDefault();
-      this.useTool(TOOLS[+e.code.slice(5) - 1].id);
+      const t = TOOLS.find((q) => q.key === e.code.slice(5));
+      if (t) this.useTool(t.id);
       return;
     }
     if (ctrl && e.code === 'KeyZ') {
@@ -881,7 +927,7 @@ export class Workshop {
   }
 
   shortcuts() {
-    const rows = [['Ctrl+1..7', 'Switch tool'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
+    const rows = [['Ctrl+1..9, 0', 'Switch tool'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
     dialog({ title: 'Shortcuts', icon: 'info', body: h('div', { class: 'helpgrid' }, rows.flatMap(([k, t]) => [h('span', { class: 'kbd' }, k), h('span', { class: 'note' }, t)])), buttons: [{ label: 'Close', kind: 'primary' }] });
   }
 
@@ -971,6 +1017,7 @@ function vfxPicture(app, fx) {
 // What each new thing starts as.
 const DEFAULTS = {
   assets: (d) => newAsset({ name: d.name || 'Sprite', w: d.w || 16, h: d.h || 16 }),
+  biomes: (d) => ({ name: 'Biome', base: d.base || 'plains', ...biomeFields(d.change || d.base || 'plains'), creatures: { day: [], night: [], mode: 'add' }, ...(d.change ? {} : { place: { how: 'climate', isles: ['thessa'], temp: [40, 70], moist: [30, 60], replaces: d.base || 'plains', share: 35 } }) }),
   vfx: (d) => newEffect(d.from && d.from.asset ? { layers: [newLayer('sprite', { id: 'l1', name: 'Art', asset: d.from.asset, anim: { ...newLayer('sprite').anim, bob: 2, bobHz: 0.8, pulse: 0.06, pulseHz: 1.2 } }), newLayer('emitter', { ...EMITTER_PRESETS.magic, id: 'l2', preset: 'magic', name: 'Sparkle' })] } : {}),
   rigs: (d) => ({ name: 'Rig', asset: d.asset || null, parts: [], bones: [], anims: {} }),
   structures: () => ({ name: 'Structure', w: 11, d: 11, h: 8, ground: 1, pal: ['keep'], cells: '', metas: '', marks: [], place: { where: 'wild', biomes: [], count: 2, isle: 'any', clear: true } }),

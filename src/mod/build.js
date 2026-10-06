@@ -148,11 +148,14 @@ export function addModSites(world) {
   if (!MODS.active.length) return;
   const ow = world.ow;
   const sites = world.sites;
-  const add = (kind, mod, thing, P) => {
+  // (`at`: the squares to put it on, as a world map sets them; or chosen.)
+  const add = (kind, mod, thing, P, at = null) => {
     const n = Math.max(0, Math.min(12, Math.round(P.count ?? 1)));
-    if (!n) return;
+    if (!n && !at) return;
     const rng = new RNG(hash4(ow.seed, hashString(mod.id), hashString(thing.id), 0x5173));
-    for (const c of chooseCells(ow, sites, rng, P, n)) {
+    // (One of this mod's own biomes: '@its id'.)
+    const P2 = { ...P, biomes: (P.biomes || []).map((b) => (typeof b === 'string' && b[0] === '@' ? gameKey(mod.id, b.slice(1)) : b)) };
+    for (const c of at || chooseCells(ow, sites, rng, P2, n)) {
       const s = { id: sites.length, type: gameKey(mod.id, thing.id), mod: mod.id, thing: thing.id, kind, cx: c.cx, cz: c.cz, island: c.island || null, seed: hash4(ow.seed, c.cx, c.cz, hashString(thing.id)), state: {} };
       const fp = footprint(mod, kind, thing);
       if (!fp) continue;
@@ -176,6 +179,21 @@ export function addModSites(world) {
   for (const m of MODS.active) for (const d of Object.values(m.dungeons || {})) if (d.entrance && (d.floors || []).length) add('dungeon', m, d, d.place || {});
   for (const m of MODS.active) for (const st of Object.values(m.structures || {})) if (st.place && st.place.where !== 'nowhere' && (st.place.count ?? 0) > 0 && !usedAsPart(m, st.id)) add('structure', m, st, st.place);
   for (const m of MODS.active) for (const L of Object.values(m.layouts || {})) if ((L.pieces || []).length && L.place && (L.place.count ?? 0) > 0) add('layout', m, L, L.place);
+  // (Round 63) A world map's places, where it sets them.
+  const plan = MODS.world;
+  const pm = plan && MODS.byId.get(plan.modId);
+  if (pm) {
+    for (const P of plan.places) {
+      const thing = pm[P.kind] && pm[P.kind][P.ref];
+      const c = ow.cell(P.cx, P.cz);
+      if (!thing || (P.kind === 'dungeons' && !(thing.entrance && (thing.floors || []).length))) continue;
+      if (!c || c.biome === 'ocean' || c.lake) {
+        ow.planReport.push({ level: 'warn', text: `"${thing.name}" is set on the world map out at sea: it's left out.` });
+        continue;
+      }
+      add(P.kind === 'structures' ? 'structure' : P.kind === 'layouts' ? 'layout' : 'dungeon', pm, thing, { ...(thing.place || {}), clear: thing.place ? thing.place.clear !== false : true }, [c]);
+    }
+  }
   // What's at each: chests with their loot, signs, people and beasts to
   // come, triggers.
   world.modChests = new Map();
@@ -183,6 +201,36 @@ export function addModSites(world) {
   world.modMarks = [];
   for (const s of sites) if (s.mod && s.kind !== 'dungeon') collectMarks(world, s);
   for (const s of sites) if (s.mod && s.kind === 'dungeon') collectMarks(world, s);
+  // (Round 63) A world map's people: where it sets them, or in their
+  // realm's capital (or one of its towns).
+  if (pm) {
+    for (const p of plan.people) {
+      let x = (p.cx + 0.5) * REGION_W;
+      let z = (p.cz + 0.5) * REGION_D;
+      if (p.realm) {
+        const civ = ow.civs.find((q) => q.planRealm === p.realm);
+        if (!civ) {
+          ow.planReport.push({ level: 'warn', text: 'Someone set in a realm on the world map has no realm to live in (it found no room).' });
+          continue;
+        }
+        let s = ow.settlements[civ.capital];
+        if (p.home === 'any') {
+          const towns = ow.settlements.filter((q) => q.civ === civ);
+          s = towns[hash4(ow.seed, hashString(p.id), 0x40e) % towns.length] || s;
+        }
+        x = Math.round((s.bounds.x0 + s.bounds.x1) / 2);
+        z = Math.round((s.bounds.z0 + s.bounds.z1) / 2) + 3;
+      }
+      x = Math.round(x);
+      z = Math.round(z);
+      const col = world.terrain.column(x, z, world.terrain.context(x, z, x, z), {});
+      if (col.water >= 0 && !p.realm) {
+        ow.planReport.push({ level: 'warn', text: 'Someone set on the world map is out at sea: left out.' });
+        continue;
+      }
+      world.modMarks.push({ type: 'npc', id: `world_${p.id}`, creature: p.ent, x, y: col.h + 1, z, mod: pm, key: `world:${p.id}`, site: null });
+    }
+  }
 }
 
 // (A structure that's a dungeon's floor or way in, or part of a layout, is

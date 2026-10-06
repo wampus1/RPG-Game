@@ -14,6 +14,11 @@
 //   stories     new stories, as graphs (see mod/story.js)
 //   patches     changes to the game's own stories
 //   entities    blocks, items, creatures, effects, events (see mod/graph.js)
+//   biomes      new biomes, and changes to the game's own (see mod/biomes.js)
+//   worlds      the world's map: its lands, where biomes and towns go, set
+//               places, realms and people (see mod/worldplan.js)
+//   chargen     the character screen's tabs: new ones, and changes to the
+//               game's own (see mod/chargen.js)
 //
 // Each thing in a mod has an id of its own, unique in the mod; the mod has
 // an id that stays the same from one version of it to the next, and a hash
@@ -24,11 +29,15 @@ import { GAME_VERSION } from '../version.js';
 
 export const MOD_FORMAT = 'tessera-mod';
 export const MOD_FV = 1;
-export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities'];
+export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen'];
+// (Collections a mod made before round 63 hasn't got: left out of its hash
+// while empty, so its hash stays as it was.)
+const LATER = ['biomes', 'worlds', 'chargen'];
 // What each collection holds, said plainly (for lists and messages).
 export const KIND_NAMES = {
   assets: ['art', 'art'], vfx: ['effect', 'effects'], rigs: ['rig', 'rigs'], structures: ['structure', 'structures'], layouts: ['layout', 'layouts'],
   dungeons: ['dungeon', 'dungeons'], loot: ['loot table', 'loot tables'], stories: ['story', 'stories'], patches: ['story change', 'story changes'], entities: ['entity', 'entities'],
+  biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'],
 };
 // Limits that keep a mod (and a world using it) workable.
 export const LIMITS = { assetSide: 256, frames: 64, layers: 16, palette: 255, blueprintSide: 96, blueprintH: 16 };
@@ -145,6 +154,7 @@ export function modHash(m) {
   delete rest.updated;
   delete rest.created;
   delete rest.hash;
+  for (const k of LATER) if (rest[k] && typeof rest[k] === 'object' && !Object.keys(rest[k]).length) delete rest[k];
   const s = canonical(rest);
   const a = hashString(s) >>> 0;
   const b = hashString(`${s.length}|${s.slice(0, 4096)}|${s.slice(-4096)}`) ^ (a * 2654435761);
@@ -402,6 +412,9 @@ export function problems(m, extra = []) {
       for (const p of v.pieces || []) ref(where, 'structures', p.structure, `Layout "${v.name}"`);
     } else if (k === 'structures') {
       for (const c of v.containers || []) if (c.loot) ref(where, 'loot', c.loot, `A chest in "${v.name}"`);
+    } else if (k === 'biomes') {
+      for (const t of v.trees || []) if (t.structure) ref(where, 'structures', t.structure, `Biome "${v.name}"'s tree`);
+      if (!v.change && v.place && v.place.how === 'painted' && !Object.keys(m.worlds || {}).length) out.push({ level: 'warn', where, text: `Biome "${v.name}" only grows where it's painted on a world map, and this mod has no world map.` });
     }
   }
   return [...out, ...extra];

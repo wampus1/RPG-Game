@@ -89,6 +89,7 @@ import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
 import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain } from '../mod/hooks.js';
+import { biomeSpawn } from '../mod/biomes.js';
 import { MODS } from '../mod/registry.js';
 
 const AUTOSAVE_AT = 7 * 60; // 7:00 every morning
@@ -233,9 +234,16 @@ export class Game {
       this.hero = hero ? normalizeHero(hero) : null;
       if (this.hero) this.playerName = this.hero.name;
       const home = this.hero && this.hero.origin === 'native' ? this.pickHometown() : null;
-      const coast = this.hero && this.hero.origin === 'crash' ? this.coastSpot() : null;
+      // (Round 63) Where a mod's world map has new characters begin (but
+      // those born in a town, at home).
+      const ps = this.hero && !home && MODS.world && MODS.world.spawn;
+      const coast = this.hero && this.hero.origin === 'crash' && !ps ? this.coastSpot() : null;
       // (A fallen star: a crater out in the hills by a village.)
       const star = this.hero && this.hero.origin === 'star' ? starSpot(this, 0) : null;
+      if (ps && star) {
+        star.x = Math.floor((ps.cx + 0.5) * REGION_W);
+        star.z = Math.floor((ps.cz + 0.5) * REGION_D);
+      }
       const s = home || ow.spawnSettlement;
       const L = s ? this.world.getLayout(s) : null;
       const thessa = ow.islands[0];
@@ -244,6 +252,10 @@ export class Game {
       if (coast) {
         sx = coast.x;
         sz = coast.z;
+      }
+      if (ps) {
+        sx = Math.floor((ps.cx + 0.5) * REGION_W);
+        sz = Math.floor((ps.cz + 0.5) * REGION_D);
       }
       if (star) {
         sx = star.x;
@@ -6724,6 +6736,9 @@ export class Game {
     if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
     const col = this.world.terrain.column(x, z, this.world.terrain.context(x, z, x, z), {});
     const biome = col.biome;
+    // (A mod's biome: taken for the game's it started from, by the game's
+    // own lists.)
+    const like = (BIOMES[biome] && BIOMES[biome].like) || biome;
     let species = null;
     // (Kharos and Myrrow keep beasts of their own: see ISLE_DAY.)
     const isle = ow.islandAt(x, z);
@@ -6731,23 +6746,30 @@ export class Game {
       const r = Math.random();
       // (Kharos and Myrrow have night things all their own: see islemobs.js.)
       if (isle === 'kharos' || isle === 'myrrow') species = isleNightSpecies(this, isle, x, z);
-      else if ((biome === 'forest' || biome === 'taiga') && r < 0.3) species = 'wolf';
+      else if ((like === 'forest' || like === 'taiga') && r < 0.3) species = 'wolf';
       // (Wisps over marsh and through the woods.)
-      else if ((biome === 'swamp' || biome === 'jungle' || biome === 'forest') && r < 0.48) species = 'wisp';
+      else if ((like === 'swamp' || like === 'jungle' || like === 'forest') && r < 0.48) species = 'wisp';
       else species = r < 0.45 ? 'slime' : r < 0.72 ? 'skeleton' : r < 0.88 ? 'ghoul' : 'wisp';
     } else {
       const opts = {
         plains: ['rabbit', 'deer', 'rabbit', 'boar', 'horse', 'sheep', 'cow'], forest: ['deer', 'boar', 'rabbit', 'wolf', 'pig'], taiga: ['deer', 'wolf', 'rabbit', 'sheep'],
         tundra: ['rabbit', 'wolf'], savanna: ['deer', 'boar', 'rabbit', 'horse', 'cow'], jungle: ['boar', 'slime', 'deer', 'pig'], swamp: ['slime', 'boar'],
         desert: ['rabbit'], mountain: ['boar', 'rabbit', 'sheep'], beach: ['rabbit'],
-      }[biome] || ISLE_DAY[biome] || ['rabbit'];
+      }[like] || ISLE_DAY[like] || ['rabbit'];
       species = opts[Math.floor(Math.random() * opts.length)];
       if (species === 'wolf' && Math.random() < 0.6) species = 'deer';
       // (And on any ground of theirs, now and then, the islands' own.)
       if (ISLE_BEASTS[isle] && Math.random() < 0.3) species = ISLE_BEASTS[isle][Math.floor(Math.random() * ISLE_BEASTS[isle].length)];
     }
     // (Round 62) Or one of a mod's, where it belongs.
-    if (MODS.active.length) species = modSpawnPick(night, biome) || species;
+    if (MODS.active.length) {
+      // (Round 63) What a mod's biome (or its change to one of the
+      // game's) has come out in it; nothing, if it says only its own and
+      // has none.
+      const bs = biomeSpawn(biome, night);
+      if (bs === false) return;
+      species = bs || modSpawnPick(night, biome) || species;
+    }
     const variant = Math.floor(Math.random() * (species === 'horse' ? 6 : 3));
     // (A swimmer in the water by there, under the surface.)
     const wet = SPECIES[species].swims && waterNear(this, x, z);

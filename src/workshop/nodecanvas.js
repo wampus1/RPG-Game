@@ -819,7 +819,7 @@ export function valueWidget(t, value, onChange, o = {}) {
   if (t === 'number') return numberInput({ value: value ?? 0, min: o.min, max: o.max, step: o.step, onChange });
   if (t === 'bool') return check(o.label || '', !!value, onChange);
   if (t === 'color') return colorButton(value || '#ffffff', onChange);
-  if (t === 'enum') return select(o.opts.map((x) => [x, x]), value, onChange);
+  if (t === 'enum') return select(o.opts.map((x) => (Array.isArray(x) ? x : [x, x])), value, onChange);
   if (t === 'multi') return chips(o.opts, value || [], onChange);
   if (t === 'text' || t === 'any') return textInput({ value: value ?? '', long: o.long && o.big, onChange });
   return null;

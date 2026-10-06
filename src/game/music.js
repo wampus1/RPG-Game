@@ -17,6 +17,7 @@ import { townMusic } from '../sim/prosperity.js';
 import { fightPhase } from '../entities/tempo.js';
 import { SCALES, chordDegs, degMidi, motif, line, counterLine, bassBar, ARPS, KITS, HIT } from './compose.js';
 import { Rack, Samples, master, makeIR, midiHz } from './synth.js';
+import { BIOMES } from '../world/biomes.js';
 
 // What every theme starts from, by the kind of music it is: out in the
 // country (unhurried, the drums coming in late), in a town (a groove), in a
@@ -399,7 +400,9 @@ export function musicMood(game) {
     return night ? `${kind}:night` : kind;
   }
   const biome = game.biomeCache ? game.biomeCache.biome : 'plains';
-  const t = (THEMES[biome] ? biome : 'plains') + (OWN_BIOMES.has(biome) ? '' : tilde);
+  // (A mod's biome: the music of the game's biome it asks for.)
+  const mb = THEMES[biome] ? biome : BIOMES[biome] && THEMES[BIOMES[biome].music] ? BIOMES[biome].music : 'plains';
+  const t = mb + (OWN_BIOMES.has(mb) ? '' : tilde);
   return night ? `${t}:night` : t;
 }
 

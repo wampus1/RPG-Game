@@ -8,6 +8,9 @@ import { ITEMS } from '../world/items.js';
 import { BLOCKS } from '../world/blocks.js';
 import { SPECIES } from '../entities/creature.js';
 import { itemIcon, creatureSheet } from '../render/sprites.js';
+import { BIOMES } from '../world/biomes.js';
+import { GAME_BIOMES } from '../mod/biomes.js';
+import { drawGlyph } from '../render/font.js';
 
 // ------------------------------------------------------------ palettes
 export const PALETTES = {
@@ -130,9 +133,32 @@ export function blockName(k) {
 export function creatureName(k) {
   return (SPECIES[k] && SPECIES[k].name) || k;
 }
+export function biomeName(k) {
+  return (BIOMES[k] && BIOMES[k].name) || k;
+}
+// (Round 63) The biomes a field can name: the game's, then this mod's own
+// ('@id'), as [value, label] pairs.
+export function biomeOptions(app, o = {}) {
+  const out = (o.all ? Object.keys(BIOMES).filter((k) => !k.startsWith('m:')) : GAME_BIOMES).map((k) => [k, BIOMES[k].name]);
+  for (const b of Object.values((app && app.mod && app.mod.biomes) || {})) if (!b.change) out.push([`@${b.id}`, b.title || b.name]);
+  return out;
+}
+// A biome's square on the world map (its letter in its colours).
+export function glyphCanvas(ch, fg, bg, k = 2) {
+  const c = canvas(6 * k, 8 * k);
+  const x = c.getContext('2d');
+  x.fillStyle = bg || '#000';
+  x.fillRect(0, 0, c.width, c.height);
+  drawGlyph(x, ch || '?', 0, 0, fg || '#fff', k);
+  return c;
+}
 // A small picture of one of the game's own items, blocks or creatures.
 export function vanillaIcon(type, k) {
   try {
+    if (type === 'biome') {
+      const g = BIOMES[k];
+      return g ? glyphCanvas(g.char, g.fg, g.bg, 2) : null;
+    }
     if (type === 'creature') {
       const sh = creatureSheet(k, 0);
       const s = sh.height;
@@ -162,6 +188,7 @@ const REF = {
   block: { coll: 'entities', name: 'block', tpl: ['tpl.block'], vanilla: 'block', at: true },
   creature: { coll: 'entities', name: 'creature', tpl: ['tpl.animal', 'tpl.hostile', 'tpl.npc', 'tpl.boss'], vanilla: 'creature', at: true },
   projectile: { coll: 'entities', name: 'projectile', tpl: ['tpl.projectile'] },
+  biome: { coll: 'biomes', name: 'biome', vanilla: 'biome', at: true, mine: (b) => !b.change },
   any: { coll: null, name: 'thing' },
 };
 export const refInfo = (t) => REF[t] || REF.any;
@@ -178,6 +205,7 @@ export function refOptions(app, t) {
       const r = rootOf(v);
       if (!r || !R.tpl.includes(r.type)) continue;
     }
+    if (R.mine && !R.mine(v)) continue;
     out.push({ value: R.at ? `@${id}` : id, name: v.name, mine: true, thumb: () => app.thumb(R.coll, id) });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
@@ -186,17 +214,17 @@ export function refLabel(app, t, v) {
   if (!v) return null;
   const R = refInfo(t);
   if (R.at && typeof v === 'string' && v[0] === '@') {
-    const e = app.mod.entities[v.slice(1)];
-    return e ? e.name : `${v} (deleted)`;
+    const e = app.mod[R.coll || 'entities'][v.slice(1)];
+    return e ? e.title || e.name : `${v} (deleted)`;
   }
-  if (R.vanilla) return R.vanilla === 'item' ? itemName(v) : R.vanilla === 'block' ? blockName(v) : creatureName(v);
+  if (R.vanilla) return R.vanilla === 'item' ? itemName(v) : R.vanilla === 'block' ? blockName(v) : R.vanilla === 'biome' ? biomeName(v) : creatureName(v);
   const x = R.coll && app.mod[R.coll] ? app.mod[R.coll][v] : null;
   return x ? x.name : `${v} (deleted)`;
 }
 export function refThumb(app, t, v) {
   if (!v) return null;
   const R = refInfo(t);
-  if (R.at && typeof v === 'string' && v[0] === '@') return app.mod.entities[v.slice(1)] ? app.thumb('entities', v.slice(1)) : ic('warn');
+  if (R.at && typeof v === 'string' && v[0] === '@') return app.mod[R.coll || 'entities'][v.slice(1)] ? app.thumb(R.coll || 'entities', v.slice(1)) : ic('warn');
   if (R.vanilla) return vanillaIcon(R.vanilla, v);
   return R.coll && app.mod[R.coll] && app.mod[R.coll][v] ? app.thumb(R.coll, v) : ic('warn');
 }
@@ -258,7 +286,8 @@ export function refPicker(app, t, value, onChange, o = {}) {
 export function pickRef(app, t, anchor, onPick, o = {}) {
   const R = refInfo(t);
   const mine = refOptions(app, t);
-  const game = R.vanilla ? (R.vanilla === 'item' ? vanillaItems() : R.vanilla === 'block' ? vanillaBlocks() : vanillaCreatures()).map((k) => ({ value: k, name: R.vanilla === 'item' ? itemName(k) : R.vanilla === 'block' ? blockName(k) : creatureName(k), thumb: () => vanillaIcon(R.vanilla, k) })) : [];
+  const vlist = R.vanilla === 'item' ? vanillaItems() : R.vanilla === 'block' ? vanillaBlocks() : R.vanilla === 'biome' ? GAME_BIOMES : vanillaCreatures();
+  const game = R.vanilla ? vlist.map((k) => ({ value: k, name: R.vanilla === 'item' ? itemName(k) : R.vanilla === 'block' ? blockName(k) : R.vanilla === 'biome' ? biomeName(k) : creatureName(k), thumb: () => vanillaIcon(R.vanilla, k) })) : [];
   const r = anchor.getBoundingClientRect();
   const box = raise(h('div', { class: 'menu', style: { width: '280px' } }));
   const q = textInput({ placeholder: `Find ${R.name}...` });

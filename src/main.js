@@ -1,5 +1,5 @@
 // Entry point: sets up the canvases, CRT pass, UI and the main loop.
-import { VIEW_W, VIEW_H } from './config.js';
+import { VIEW_W, VIEW_H, REGION_W, REGION_D } from './config.js';
 import { migrateSave } from './game/migrate.js';
 import { CRT } from './render/crt.js';
 import { Renderer } from './render/renderer.js';
@@ -246,6 +246,8 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     if (opts.host) beginHosting(game, opts.host.name);
     if (opts.playtest) beginPlaytest(game, opts.playtest);
     else if (modded && modded.report.length) for (const r of modded.report.slice(0, 3)) ui.msg(r.text, r.level === 'error' ? '#ff8070' : '#ffb080');
+    // (Round 63) What a mod's world map couldn't have as it says.
+    for (const r of ((game.world && game.world.ow.planReport) || []).slice(0, 3)) ui.msg(r.text, '#ffb080');
   }, 30);
 }
 
@@ -1239,6 +1241,33 @@ function beginPlaytest(g, pt) {
       const s = g.findFreeSpot(Math.round(p.x) + 3, Math.round(p.z), Math.floor(p.y));
       g.spawnMonster(sp, s.x, s.y, s.z);
       ui.msg('It\'s here, just east of you.', '#80e070');
+    }
+  } else if (sel.kind === 'biomes' && mod.biomes[sel.id]) {
+    // (Round 63) The nearest of it: you, in the middle of it.
+    const b = mod.biomes[sel.id];
+    const key = b.change || `m:${pt.modId}:${sel.id}`;
+    const ow = g.world.ow;
+    const pcx = Math.floor(p.x / REGION_W);
+    const pcz = Math.floor(p.z / REGION_D);
+    let best = null;
+    for (const c of ow.liveCells) {
+      if (c.biome !== key || c.settlement !== null) continue;
+      // (Well into it: its neighbours it too.)
+      const deep = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => ow.cell(c.cx + dx, c.cz + dz)?.biome === key).length;
+      const d = Math.hypot(c.cx - pcx, (c.cz - pcz) * 1.5) - deep * 2;
+      if (!best || d < best.d) best = { c, d };
+    }
+    if (!best) ui.msg(`"${b.title || b.name}" grows nowhere in this world${b.place && b.place.how === 'painted' ? ' (it only grows where it\'s painted on a world map)' : ' (is its climate one this island has?)'}.`, '#ffb080');
+    else {
+      const x = Math.floor((best.c.cx + 0.5) * REGION_W);
+      const z = Math.floor((best.c.cz + 0.5) * REGION_D);
+      g.loadAround(x, z, true);
+      const s = g.findFreeSpot(x, z, 6);
+      p.teleport(s.x, s.y, s.z);
+      p.spawn = { ...s };
+      renderer.camInit = false;
+      ow.markExplored(s.x, s.z, 1);
+      ui.msg(`In the ${b.title || b.name}.`, '#80e070');
     }
   }
 }

@@ -4,10 +4,9 @@
 // a hamlet, a camp, a graveyard), and dungeons (a way in, floors below,
 // a master at the bottom), each its own editor inside the Builder.
 import { h, ic, clear, button, field, numberInput, slider, select, chips, panel, textInput, dropTarget, check, group } from './kit.js';
-import { titleBar, menuButton, refPicker, refThumb, refLabel, pickRef } from './common.js';
+import { titleBar, menuButton, refPicker, refThumb, refLabel, pickRef, biomeOptions } from './common.js';
 import { renderVox, pickCell, frameOf, structVox, layoutVox, toView, cellY, T, voxPicture } from './voxview.js';
 import { blockIcon } from './blockart.js';
-import { BIOME_LIST } from '../mod/nodes.js';
 import { NODES } from '../mod/graph.js';
 import { ITEMS } from '../world/items.js';
 import { buildPreset, blockButton } from './builder.js';
@@ -30,7 +29,7 @@ function placeFields(app, kind, id, P, redraw, o = {}) {
   if (o.where !== false) out.push(field('Where', select(WHERE, P.where || 'wild', (v) => set(() => (P.where = v))), { tip: 'Where in a new world it\'s put.' }));
   out.push(field('How many', slider({ value: P.count ?? 1, min: 0, max: 12, int: true, onChange: (v) => set(() => (P.count = v)) }), { tip: 'How many in each world (0: none; a graph can still place it).' }));
   out.push(field('Island', select(ISLES, P.isle || 'any', (v) => set(() => (P.isle = v)))));
-  out.push(field('Biomes', chips(BIOME_LIST, P.biomes || [], (v) => set(() => (P.biomes = v))), { wide: true, tip: 'None chosen: any.' }));
+  out.push(field('Biomes', chips(biomeOptions(app), P.biomes || [], (v) => set(() => (P.biomes = v))), { wide: true, tip: 'None chosen: any.' }));
   if (o.clear !== false) out.push(check('Clear the ground over it (trees, hills)', P.clear !== false, (v) => set(() => (P.clear = v))));
   return out;
 }

@@ -6,10 +6,9 @@ import { makeNoise2D, fbm, ridged } from '../util/noise.js';
 import { B } from './blocks.js';
 import { BIOMES } from './biomes.js';
 
-const WARM = new Set(['desert', 'savanna', 'jungle', 'beach', 'plains']);
-const COLD = new Set(['taiga', 'tundra', 'mountain']);
-// (Kharos's fire biomes: no snow on them, black sand on their banks.)
-const HOT = new Set(['ashland', 'cinderwood', 'geyser', 'volcano']);
+// (What each biome's banks, beds and snow are: its own climate, bank and
+// bed, see biomes.js. Kharos's fire biomes are 'hot': no snow on them,
+// black sand on their banks.)
 const MAX_H = WORLD_Y - 3;
 
 export class Terrain {
@@ -226,7 +225,8 @@ export class Terrain {
       out.deep = depth > 1;
       out.wet = 0;
       const bn = this.nBed(x / 6, z / 6);
-      out.surf = biome === 'swamp' || biome === 'mangrove' ? B.mud : HOT.has(biome) ? (bn > 0 ? B.basalt : B.cinder) : bn > 0.45 ? B.gravel : bn < -0.5 ? B.clay : B.sand;
+      const bw = BIOMES[biome];
+      out.surf = bw.bed === 'mud' ? B.mud : bw.climate === 'hot' ? (bn > 0 ? B.basalt : B.cinder) : bn > 0.45 ? B.gravel : bn < -0.5 ? B.clay : B.sand;
       out.sub = B.dirt;
       // (A hot spring: it steams.)
       if (bdef.hot) out.hot = true;
@@ -250,13 +250,14 @@ export class Terrain {
       if (mountainH <= 1 && h <= SURFACE + 1) surf = BIOMES[bi.biome2].surface === B.sand ? B.sand : B.grass_taiga;
       sub = B.stone;
     }
-    if (bank) surf = COLD.has(biome) ? B.gravel : biome === 'swamp' || biome === 'mangrove' ? B.mud : HOT.has(biome) ? B.cinder : WARM.has(biome) ? B.sand : surf;
+    const bh = BIOMES[biome];
+    if (bank && bh.bank !== undefined) surf = bh.bank;
     // A flow that's cooled: black rock, glassy where it cooled fastest.
     if (out.cooled) surf = out.cooled === 'glass' ? B.obsidian : B.basalt;
     // Snow caps: patchy on the upper slopes, solid on the peaks (but never
     // on the fire island's hot ground).
     const snowN = this.nPatch(x / 9 + 700, z / 9) * 0.5 + 0.5;
-    if (!HOT.has(biome) && (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && COLD.has(biome) && snowN > 0.3))) surf = B.snow;
+    if (bh.climate !== 'hot' && (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && bh.climate === 'cold' && snowN > 0.3))) surf = B.snow;
     if (surf === B.ice) sub = B.dirt;
     out.surf = surf;
     out.sub = sub;

@@ -51,9 +51,10 @@ export const STORM = { cx: 70, cz: 170, rx: 50, rz: 39, band: 5 };
 const SPAN = 1280; // (the half-width, in tiles, coastlines are scaled to)
 const CORE = 0.88;
 
-// In tiles, with what's worked out once.
-export function buildLandmasses() {
-  return LANDMASSES.map((L, i) => {
+// In tiles, with what's worked out once. (Round 63) `plan`: a mod's world
+// map's landmasses instead (see mod/worldplan.js).
+export function buildLandmasses(plan = null) {
+  return (plan ? plan.lands : LANDMASSES).map((L, i) => {
     const rx = L.rx * REGION_W;
     const rz = L.rz * REGION_D;
     return {
@@ -73,13 +74,47 @@ export function buildLandmasses() {
   });
 }
 
-// How far into landmass `L` (x, z) is: above 0 is land.
+// How far into landmass `L` (x, z) is: above 0 is land. (Round 63) With
+// a mod's world map: its own shape (unless it's only what's painted), the
+// land painted as its, and none where the sea's painted.
 export function landValue(L, x, z, noise) {
   if (x < L.x0 || x > L.x1 || z < L.z0 || z > L.z1) return -1;
-  const nx = (x - L.x) / L.trx;
-  const nz = (z - L.z) / L.trz;
-  const d = Math.cbrt(Math.abs(nx) ** 3 + Math.abs(nz) ** 3);
-  return CORE - d + fbm(noise, (x + L.off) / (380 * L.s), (z - L.off) / (380 * L.s), 4) * L.rough + fbm(noise, x / 55 + 300 + L.off, z / 55, 2) * 0.05;
+  let v = -1;
+  if (L.blob !== false) {
+    const nx = (x - L.x) / L.trx;
+    const nz = (z - L.z) / L.trz;
+    const d = Math.cbrt(Math.abs(nx) ** 3 + Math.abs(nz) ** 3);
+    v = CORE - d + fbm(noise, (x + L.off) / (380 * L.s), (z - L.off) / (380 * L.s), 4) * L.rough + fbm(noise, x / 55 + 300 + L.off, z / 55, 2) * 0.05;
+  }
+  const P = L.paint;
+  if (P) {
+    const own = paintAt(P.owner, L.i + 1, x, z);
+    const sea = paintAt(P.land, 2, x, z);
+    if (own > 0 || sea > 0) {
+      const n = fbm(noise, x / 55 + 300 + L.off, z / 55, 2) * 0.3 + fbm(noise, (x + L.off) / 190, (z - L.off) / 190, 3) * 0.25;
+      if (own > 0) v = Math.max(v, (own - 0.5) * 1.6 + n);
+      if (sea > 0) v = Math.min(v, (0.5 - sea) * 1.6 + n * 0.6);
+    }
+  }
+  return v;
+}
+
+// How much of the squares round (x, z) hold `want` in `grid` (one a map
+// square): 0 to 1, smoothly between squares' middles.
+export function paintAt(grid, want, x, z) {
+  const fx = x / REGION_W - 0.5;
+  const fz = z / REGION_D - 0.5;
+  const x0 = Math.floor(fx);
+  const z0 = Math.floor(fz);
+  const tx = fx - x0;
+  const tz = fz - z0;
+  const at = (cx, cz) => (cx >= 0 && cz >= 0 && cx < MAP_W && cz < MAP_H && grid[cz * MAP_W + cx] === want ? 1 : 0);
+  const a = at(x0, z0);
+  const b = at(x0 + 1, z0);
+  const c = at(x0, z0 + 1);
+  const d = at(x0 + 1, z0 + 1);
+  if (!(a | b | c | d)) return 0;
+  return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
 }
 
 // The landmass (x, z) is on, or nearest to being on.

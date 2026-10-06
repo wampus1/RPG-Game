@@ -4,14 +4,23 @@ import { B } from './blocks.js';
 // patches: [block, noiseScale, threshold] applied in order on the surface layer.
 // trees: [treeType, weight]; treeSpacing: jittered-grid cell size;
 // treeChance: chance a grid cell holds a tree (boosted by forest clumping noise).
+// (Round 63) What the land's like, said by each (so a mod's biome, or a
+// change to one of these, can say it too): climate ('mild', 'warm',
+// 'cold': snow on the heights sooner; 'hot': never snow), bank (the block
+// along rivers and lakes; none: its own ground), bed ('mud': a muddy
+// bottom under its water), reeds (false: none by the water), lilies (lily
+// pads on its pools), rain (how often it rains: 1 as most; less, drier),
+// snowy (it snows rather than rains).
 export const BIOMES = {
   ocean: {
     name: 'Ocean', char: '≈', fg: '#5fa8e8', bg: '#123a6a',
+    climate: 'mild',
     surface: B.sand, sub: B.sand, hills: 0,
     trees: [], treeSpacing: 8, treeChance: 0, plants: [], plantDensity: 0,
   },
   beach: {
     name: 'Beach', char: '·', fg: '#f3dd9a', bg: '#8a7440',
+    climate: 'warm', bank: B.sand, rain: 0.75,
     surface: B.sand, sub: B.sand, hills: 0,
     patches: [[B.gravel, 7, 0.78]],
     trees: [['palm', 1]], treeSpacing: 9, treeChance: 0.12,
@@ -20,6 +29,7 @@ export const BIOMES = {
   },
   plains: {
     name: 'Plains', char: '"', fg: '#a8e05a', bg: '#3c6e28',
+    climate: 'warm', bank: B.sand,
     surface: B.grass, sub: B.dirt, hills: 1,
     patches: [[B.grass_lush, 13, 0.55], [B.dirt, 6, 0.8]],
     trees: [['oak', 5], ['birch', 1]], treeSpacing: 7, treeChance: 0.1, clump: 0.35,
@@ -31,6 +41,7 @@ export const BIOMES = {
   },
   forest: {
     name: 'Forest', char: '♣', fg: '#5ccf4e', bg: '#1e4a22',
+    climate: 'mild', lilies: true,
     surface: B.grass_lush, sub: B.dirt, hills: 2,
     patches: [[B.grass, 11, 0.5], [B.dirt, 5, 0.82]],
     trees: [['oak', 5], ['birch', 3], ['stump', 0.3]], treeSpacing: 4, treeChance: 0.62, clump: 0.25,
@@ -42,6 +53,7 @@ export const BIOMES = {
   },
   taiga: {
     name: 'Taiga', char: '♠', fg: '#6fc2a0', bg: '#173c3a',
+    climate: 'cold', bank: B.gravel, reeds: false, snowy: true,
     surface: B.grass_taiga, sub: B.dirt, hills: 2,
     patches: [[B.snow, 12, 0.45], [B.gravel, 6, 0.83]],
     trees: [['pine', 6], ['snowpine', 3]], treeSpacing: 4, treeChance: 0.55, clump: 0.3,
@@ -50,6 +62,7 @@ export const BIOMES = {
   },
   tundra: {
     name: 'Tundra', char: '*', fg: '#e8f4ff', bg: '#6a7c8e',
+    climate: 'cold', bank: B.gravel, reeds: false, snowy: true,
     surface: B.snow, sub: B.dirt, hills: 1,
     patches: [[B.ice, 9, 0.72], [B.gravel, 5, 0.8], [B.grass_taiga, 14, 0.62]],
     trees: [['snowpine', 3], ['dead', 1]], treeSpacing: 9, treeChance: 0.1, clump: 0.5,
@@ -57,6 +70,7 @@ export const BIOMES = {
   },
   desert: {
     name: 'Desert', char: '~', fg: '#f6d56a', bg: '#9a7a2a',
+    climate: 'warm', bank: B.sand, rain: 0.08,
     surface: B.sand, sub: B.sand, hills: 1,
     patches: [[B.sandstone, 8, 0.74], [B.gravel, 5, 0.86]],
     trees: [['cactus', 4], ['dead', 1]], treeSpacing: 7, treeChance: 0.14, clump: 0,
@@ -64,6 +78,7 @@ export const BIOMES = {
   },
   savanna: {
     name: 'Savanna', char: ',', fg: '#e0c85a', bg: '#6c6424',
+    climate: 'warm', bank: B.sand, rain: 0.3,
     surface: B.grass_dry, sub: B.dirt, hills: 1,
     patches: [[B.dirt, 8, 0.66], [B.grass, 15, 0.72]],
     trees: [['acacia', 1]], treeSpacing: 10, treeChance: 0.25, clump: 0.2,
@@ -72,6 +87,7 @@ export const BIOMES = {
   },
   jungle: {
     name: 'Jungle', char: '¥', fg: '#3ef06a', bg: '#0c4418',
+    climate: 'warm', bank: B.sand, rain: 1.2, lilies: true,
     surface: B.grass_jungle, sub: B.dirt, hills: 2,
     patches: [[B.mud, 9, 0.7], [B.grass_lush, 12, 0.5]],
     trees: [['jungle', 5], ['palm', 1], ['bushtree', 2]], treeSpacing: 4, treeChance: 0.66, clump: 0.2,
@@ -83,6 +99,7 @@ export const BIOMES = {
   },
   swamp: {
     name: 'Swamp', char: '%', fg: '#9ab85a', bg: '#2e3a1e',
+    climate: 'mild', bank: B.mud, bed: 'mud', rain: 1.2, lilies: true,
     surface: B.mud, sub: B.dirt, hills: 0,
     patches: [[B.grass_lush, 10, 0.5], [B.clay, 6, 0.85]],
     trees: [['willow', 4], ['dead', 1]], treeSpacing: 6, treeChance: 0.35, clump: 0.3,
@@ -91,6 +108,7 @@ export const BIOMES = {
   },
   mountain: {
     name: 'Mountains', char: '▲', fg: '#c8c8d0', bg: '#4a4a58',
+    climate: 'cold', bank: B.gravel, reeds: false, snowy: true,
     surface: B.stone, sub: B.stone, hills: 1,
     patches: [[B.gravel, 7, 0.62], [B.grass_taiga, 15, 0.64]],
     trees: [['pine', 3], ['dead', 1]], treeSpacing: 8, treeChance: 0.1, clump: 0.3,
@@ -101,6 +119,7 @@ export const BIOMES = {
   // that grow nowhere else.
   ashland: {
     name: 'Ashlands', char: '░', fg: '#a8a0a0', bg: '#3a3434', isle: 'kharos',
+    climate: 'hot', bank: B.cinder, reeds: false,
     surface: B.ash, sub: B.basalt, hills: 1,
     patches: [[B.basalt, 7, 0.74], [B.cinder, 10, 0.64], [B.scorched, 13, 0.72]],
     trees: [['charred', 3], ['cinder', 1]], treeSpacing: 8, treeChance: 0.12, clump: 0.4,
@@ -109,6 +128,7 @@ export const BIOMES = {
   // Woods of cinder trees: black bark, leaves like embers.
   cinderwood: {
     name: 'Cinderwood', char: '♣', fg: '#ff7a3a', bg: '#3a1a14', isle: 'kharos',
+    climate: 'hot', bank: B.cinder, reeds: false,
     surface: B.scorched, sub: B.dirt, hills: 2,
     patches: [[B.ash, 11, 0.58], [B.cinder, 6, 0.8]],
     trees: [['cinder', 6], ['charred', 1]], treeSpacing: 5, treeChance: 0.5, clump: 0.3,
@@ -118,6 +138,7 @@ export const BIOMES = {
   // in the cold of the morning.
   geyser: {
     name: 'Geyser Flats', char: '♨', fg: '#f0e060', bg: '#5a5020', isle: 'kharos',
+    climate: 'hot', bank: B.cinder, reeds: false,
     surface: B.ash, sub: B.basalt, hills: 0,
     patches: [[B.sulfur_crust, 8, 0.6], [B.basalt, 6, 0.76], [B.gravel, 5, 0.84]],
     trees: [['charred', 1]], treeSpacing: 10, treeChance: 0.05, clump: 0,
@@ -126,6 +147,7 @@ export const BIOMES = {
   // The mountain itself: basalt and black glass up to the crater's lip.
   volcano: {
     name: 'Volcano', char: '▲', fg: '#ff6a2a', bg: '#2e1612', isle: 'kharos',
+    climate: 'hot', bank: B.cinder, reeds: false,
     surface: B.basalt, sub: B.basalt, hills: 1,
     patches: [[B.obsidian, 9, 0.72], [B.ash, 12, 0.56], [B.cinder, 7, 0.7]],
     trees: [['charred', 1]], treeSpacing: 12, treeChance: 0.04, clump: 0,
@@ -135,6 +157,7 @@ export const BIOMES = {
   // Mangroves standing in the warm shallows on their arching roots.
   mangrove: {
     name: 'Mangroves', char: 'Ψ', fg: '#6ac08a', bg: '#1a3a2a', isle: 'myrrow',
+    climate: 'mild', bank: B.mud, bed: 'mud', lilies: true,
     surface: B.mud, sub: B.dirt, hills: 0,
     patches: [[B.moss, 9, 0.62], [B.clay, 6, 0.86]],
     trees: [['mangrove', 1]], treeSpacing: 4, treeChance: 0.55, clump: 0.2, wetTrees: true,
@@ -144,6 +167,7 @@ export const BIOMES = {
   // blue ones glow at night).
   fungal: {
     name: 'Fungal Forest', char: '♤', fg: '#e08ad0', bg: '#2a1a34', isle: 'myrrow',
+    climate: 'mild', lilies: true,
     surface: B.mycelium, sub: B.dirt, hills: 1,
     patches: [[B.moss, 10, 0.6], [B.mud, 7, 0.82]],
     trees: [['mushroom', 4], ['glowshroom', 2], ['toadstool', 3]], treeSpacing: 5, treeChance: 0.5, clump: 0.3,
@@ -152,6 +176,7 @@ export const BIOMES = {
   // Open moor: moss and peat, purple heather, the odd standing stone, mist.
   moor: {
     name: 'Moor', char: '∴', fg: '#b88ad0', bg: '#3a3044', isle: 'myrrow',
+    climate: 'mild',
     surface: B.moss, sub: B.dirt, hills: 2,
     patches: [[B.peat, 9, 0.64], [B.grass_taiga, 14, 0.6], [B.gravel, 6, 0.86]],
     trees: [['dead', 1], ['birch', 1]], treeSpacing: 9, treeChance: 0.06, clump: 0.5,
@@ -170,4 +195,10 @@ export const BIOME_STYLE = {
   mountain: 'high',
   ashland: 'ember', cinderwood: 'ember', geyser: 'ember', volcano: 'ember',
   mangrove: 'tide', fungal: 'mist', moor: 'mist',
+};
+
+// How good each kind of land is to build a town on (see worldgen.js).
+export const BIOME_SETTLE = {
+  plains: 0.45, forest: 0.3, savanna: 0.15, taiga: 0.1, jungle: 0.05, desert: -0.1, tundra: -0.2, swamp: -0.2, mountain: -1,
+  ashland: 0.2, cinderwood: 0.15, geyser: 0.35, volcano: -1, moor: 0.35, fungal: 0.2, mangrove: 0.15,
 };

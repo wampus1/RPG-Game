@@ -10,13 +10,13 @@
 // dungeons (a way in and floors below) are edited here too: see
 // buildkinds.js.
 import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, chips, panel, dialog, toast, canvas, textInput, contextMenu, dropTarget, popover, closePopover, colorButton } from './kit.js';
-import { titleBar, menuButton, refPicker, blockName } from './common.js';
+import { titleBar, menuButton, refPicker, blockName, biomeOptions } from './common.js';
 import { blockArt, blockIcon, blockGroups, modBlocks } from './blockart.js';
 import { renderVox, pickBlock, pickCell, frameOf, structVox, toView, cellY, T, voxPicture } from './voxview.js';
 import * as OPS from './buildops.js';
 import { bpDecode, bpEncode, bpAt } from '../mod/build.js';
 import { LIMITS } from '../mod/format.js';
-import { BIOME_LIST, SOUNDS } from '../mod/nodes.js';
+import { SOUNDS } from '../mod/nodes.js';
 import { LH } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE } from '../world/blocks.js';
 import { TEX } from '../render/textures.js';
@@ -1837,7 +1837,7 @@ export default class BuilderTool {
     if (P.where !== 'nowhere') {
       body.append(field('How many', slider({ value: P.count ?? 2, min: 0, max: 12, int: true, onChange: (v) => set(() => (P.count = v)) }), { tip: 'How many of it in each world.' }));
       body.append(field('Island', select(ISLES, P.isle || 'any', (v) => set(() => (P.isle = v)))));
-      body.append(field('Biomes', chips(BIOME_LIST, P.biomes || [], (v) => set(() => (P.biomes = v))), { wide: true, tip: 'None chosen: any.' }));
+      body.append(field('Biomes', chips(biomeOptions(app), P.biomes || [], (v) => set(() => (P.biomes = v))), { wide: true, tip: 'None chosen: any.' }));
       body.append(check('Clear the ground over it (trees, hills)', P.clear !== false, (v) => set(() => (P.clear = v))));
     }
     body.append(h('div', { class: 'note', style: { marginTop: '8px' } }, 'Playtest (F5) puts it right in front of you, too.'));

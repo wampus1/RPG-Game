@@ -8,9 +8,9 @@
 // effects, loot tables and other entities in from the explorer to use them.
 import { h, ic, clear, button, field, panel, toast, contextMenu } from './kit.js';
 import { NodeCanvas, valueWidget } from './nodecanvas.js';
-import { titleBar, refPicker, refInfo } from './common.js';
+import { titleBar, refPicker, refInfo, biomeOptions } from './common.js';
 import { NODES, CATS, TYPE_COLORS, fits, makeNode, lint } from '../mod/graph.js';
-import { TEMPLATES, TEMPLATE_INFO } from '../mod/nodes.js';
+import { TEMPLATES, TEMPLATE_INFO, BIOME_LIST } from '../mod/nodes.js';
 
 const REF_KIND = { assets: 'ref.asset', vfx: 'ref.vfx', rigs: 'ref.rig', loot: 'ref.loot', structures: 'ref.structure', stories: 'ref.story' };
 const ENT_REF = { 'tpl.block': 'ref.block', 'tpl.animal': 'ref.creature', 'tpl.hostile': 'ref.creature', 'tpl.npc': 'ref.creature', 'tpl.boss': 'ref.creature', 'tpl.effect': 'ref.effect', 'tpl.projectile': 'ref.projectile' };
@@ -259,8 +259,13 @@ export default class GraphTool {
       done();
       if (big) this.nc?.refreshNode(n);
       else if (this.nc && this.nc.sel.has(n.id)) this.drawInspector();
-    }, { min: p.min, max: p.max, step: p.step, long: p.long, big });
+    }, { min: p.min, max: p.max, step: p.step, long: p.long, big, opts: this.optsOf(p) });
     return w;
+  }
+
+  // (A list of biomes: the game's, and this mod's own.)
+  optsOf(p) {
+    return p.opts === BIOME_LIST ? biomeOptions(this.app) : p.opts;
   }
 
   propWidget(n, p, done, big) {
@@ -270,7 +275,7 @@ export default class GraphTool {
         this.set(n, p.id, nv, true);
         done();
         if (big) this.nc?.refreshNode(n);
-      }, { opts: p.opts, min: p.min, max: p.max });
+      }, { opts: this.optsOf(p), min: p.min, max: p.max });
     }
     // (A reference node's own pick.)
     return refPicker(this.app, p.t, v ?? null, (nv) => {

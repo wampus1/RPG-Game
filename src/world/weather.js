@@ -5,6 +5,7 @@
 // switching on, and a town far away has rain on its fields too.
 import { hash4 } from '../util/rng.js';
 import { REGION_W, REGION_D } from '../config.js';
+import { BIOMES } from './biomes.js';
 
 export const SPELL = 360; // minutes
 const CELL_W = REGION_W * 5;
@@ -13,7 +14,6 @@ const CELL_D = REGION_D * 5;
 // region's width a day.
 const DRIFT_X = 1 / 24;
 const DRIFT_Z = 1 / 60;
-const COLD = new Set(['tundra', 'taiga', 'mountain']);
 
 function frac(seed, a, b, c) {
   return (hash4(seed, a, b, c) % 10007) / 10007;
@@ -21,17 +21,16 @@ function frac(seed, a, b, c) {
 
 // 'clear' | 'rain' | 'snow' | 'fog' at tile (x, z) at absolute minute abs.
 // Dry places see rain far less often (and no fog), and snow only ever
-// falls where it's cold.
-const DRY = { desert: 0.08, savanna: 0.3, beach: 0.75, jungle: 1.2, swamp: 1.2 };
-
+// falls where it's cold (each biome's rain and snowy: see biomes.js).
 export function weatherAt(seed, x, z, abs, biome) {
-  const f = DRY[biome] ?? 1;
+  const bd = BIOMES[biome];
+  const f = (bd && bd.rain) ?? 1;
   const cx = Math.floor((x - abs * DRIFT_X) / CELL_W);
   const cz = Math.floor((z - abs * DRIFT_Z) / CELL_D);
   const spell = Math.floor(abs / SPELL);
   const front = frac(seed, cx, cz, Math.floor(spell / 3) * 7 + 0x51);
   const r = frac(seed, cx, cz, spell * 13 + 0x3b);
-  const wet = COLD.has(biome) ? 'snow' : 'rain';
+  const wet = bd && bd.snowy ? 'snow' : 'rain';
   // Most of the time the sky is clear; a wet front passes now and then.
   if (front < 0.2 * f) return r < 0.75 ? wet : f >= 0.7 ? 'fog' : 'clear';
   if (front < 0.2 * f + 0.08 && f >= 0.7) return r < 0.35 ? 'fog' : 'clear';
