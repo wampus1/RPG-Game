@@ -5,6 +5,7 @@ import { hash4, clamp, smoothstep, lerp } from '../util/rng.js';
 import { makeNoise2D, fbm, ridged } from '../util/noise.js';
 import { B } from './blocks.js';
 import { BIOMES } from './biomes.js';
+import { onBridge } from './bridges.js';
 
 // (What each biome's banks, beds and snow are: its own climate, bank and
 // bed, see biomes.js. Kharos's fire biomes are 'hot': no snow on them,
@@ -32,7 +33,8 @@ export class Terrain {
       if (b.x1 + 12 < x0 || b.x0 - 12 > x1 || b.z1 + 12 < z0 || b.z0 - 12 > z1) continue;
       setts.push(s);
     }
-    return { segs: wf.segs, lakes: wf.lakes, setts };
+    // (Round 68: and any bridge across a strait: see bridges.js.)
+    return { segs: wf.segs, lakes: wf.lakes, setts, bridges: this.ow.bridgesIn ? this.ow.bridgesIn(x0 - 4, z0 - 4, x1 + 4, z1 + 4) : [] };
   }
 
   riverDist(x, z, segs) {
@@ -88,6 +90,7 @@ export class Terrain {
     out.liquid = 0;
     out.hot = false;
     out.cooled = null;
+    out.bridge = ctx.bridges && ctx.bridges.length ? onBridge(ctx.bridges, x, z) : null;
 
     // --- settlement flattening weight
     for (const s of ctx.setts) {

@@ -7,6 +7,7 @@ import { BIOMES } from './biomes.js';
 import { TREE_BUILDERS, TREE_MARGIN } from './trees.js';
 import { Region } from './region.js';
 import { stampSites } from './sites.js';
+import { BRIDGE_KINDS, bridgeMats, DECK_Y } from './bridges.js';
 
 const GREEN = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.mud, B.dirt]);
 const SANDY = new Set([B.sand, B.sandstone, B.gravel]);
@@ -56,6 +57,8 @@ export function generateRegion(world, rx, rz) {
       }
       // (Round 65: a biome's ponds frozen over, or a bog: see terrain.js.)
       if (c.water >= 0) for (let y = h + 1; y <= c.water; y++) region.set(lx, y, lz, c.lava ? B.lava : c.liquid === B.ice ? (y === c.water ? B.ice : B.water) : c.liquid || B.water);
+      // (Round 68) A bridge across a strait over it.
+      if (c.bridge) stampBridge(region, lx, lz, c);
     }
   }
 
@@ -76,7 +79,7 @@ export function generateRegion(world, rx, rz) {
       const c = cols[ez * EW + ex];
       const bd = BIOMES[c.biome];
       // (Mangroves stand in the shallows; nothing else does.)
-      if (!bd.trees.length || (c.water >= 0 && !(bd.wetTrees && !c.deep && !c.lava)) || c.flat > 0.02) continue;
+      if (!bd.trees.length || (c.water >= 0 && !(bd.wetTrees && !c.deep && !c.lava)) || c.flat > 0.02 || c.bridge) continue;
       const x = c.x;
       const z = c.z;
       const S = bd.treeSpacing;
@@ -120,6 +123,7 @@ export function generateRegion(world, rx, rz) {
       const z = z0 + lz;
       const bd = BIOMES[c.biome];
       const r = hashf(x, z, seed, 13);
+      if (c.bridge) continue;
       if (c.water >= 0) {
         if (!c.deep && !c.lava && !c.liquid && c.water + 1 < WORLD_Y && bd.lilies && r < 0.07) {
           region.set(lx, c.water + 1, lz, B.lily_pad);
@@ -169,6 +173,42 @@ export function generateRegion(world, rx, rz) {
 
   region.recomputeTops();
   return region;
+}
+
+// (Round 68) One column of a bridge (see bridges.js): over the water its
+// deck a layer above the sea, the rail or parapet along its edges, piers
+// down to the bed and lamps every so far (towers on a causeway); on land,
+// its ends run up to meet it.
+function stampBridge(region, lx, lz, c) {
+  const { b, along, side } = c.bridge;
+  const K = BRIDGE_KINDS[b.kind];
+  const M = bridgeMats(b.land, b.kind);
+  const D = DECK_Y;
+  const edge = Math.abs(side) === b.hw;
+  const a = Math.round(along);
+  const deck = b.kind === 'causeway' && side === 0 && M.mid !== undefined ? M.mid : M.deck;
+  if (c.water < 0) {
+    // (Its ends: the ground made up to the deck, and paved.)
+    if (c.h < D) {
+      for (let y = c.h + 1; y < D; y++) region.set(lx, y, lz, B.dirt);
+      region.set(lx, D, lz, deck);
+      for (let y = D + 1; y < D + 3; y++) if (BLOCKS[region.get(lx, y, lz)].replaceable) region.set(lx, y, lz, B.air);
+    } else if (c.h === D) region.set(lx, D, lz, deck);
+    return;
+  }
+  for (let y = c.water + 1; y <= D + 2; y++) region.set(lx, y, lz, B.air);
+  region.set(lx, D, lz, deck);
+  if (!edge) return;
+  const tower = K.towers && a % K.towers <= 1 && a > 4 && a < c.bridge.len - 4;
+  const pier = tower || (K.piers ? a % K.piers === 0 : a % 4 === 0);
+  if (pier) for (let y = Math.max(1, c.h + 1); y < D; y++) region.set(lx, y, lz, M.pier);
+  if (tower) {
+    for (let y = D + 1; y <= D + 3; y++) region.set(lx, y, lz, M.pier);
+    if (a % K.towers === 0) region.set(lx, D + 4, lz, M.lamp);
+    return;
+  }
+  region.set(lx, D + 1, lz, M.rail);
+  if (K.lamps && a % K.lamps === Math.floor(K.lamps / 2)) region.set(lx, D + 2, lz, M.lamp);
 }
 
 export function oreAt(x, y, z, seed) {

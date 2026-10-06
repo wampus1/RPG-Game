@@ -8,6 +8,7 @@
 //   to a single dot of colour each, so the whole world fits: the islands,
 //   the ring of the storm round them, and the far lands no one from the
 //   islands has seen (only their outlines, from the old charts).
+import { shapeWords } from '../world/shapes.js';
 import { COLS, ROWS, MAP_W, MAP_H, REGION_W, REGION_D, CHAR_W, CHAR_H } from '../config.js';
 import { Window, cap } from './window.js';
 import { C } from './ascii.js';
@@ -393,7 +394,7 @@ export class MapWindow extends Window {
     const onLand = L && ow.continentAt(x, z) >= 0;
     const storm = ow.stormAt(x, z);
     if (!known) {
-      if (onLand && L.kind !== 'dagoni') return { line: `${cap(L.name)}: ${L.about}. Beyond the storm: only on the old charts.`, color: '#c8a878' };
+      if (onLand && L.kind !== 'dagoni') return { line: `${cap(L.name)}: ${L.about}${shapeWords(L) ? `, ${shapeWords(L)}` : ''}. Beyond the storm: only on the old charts.`, color: '#c8a878' };
       if (storm > 0) return { line: 'The storm: a wall of wind and wild water round the islands. No raft gets through it.', color: '#a0b8d0' };
       return { line: ow.insideStorm(x, z) ? 'Unexplored' : 'The open sea beyond the storm, never sailed.', color: C.dim };
     }
@@ -405,6 +406,7 @@ export class MapWindow extends Window {
     else if (cell.biome === 'ocean') info = ow.insideStorm(x, z) ? `The sea between ${ARCHIPELAGO}` : 'The open sea';
     if (cell.river && hf !== 0) info += ' · river';
     if (cell.lake) info += ' · lake';
+    if (cell.bridge) info += ' · a bridge across the strait';
     const V = ow.volcano;
     if (V && cx === V.cx && cz === V.cz) info += ' · the Sleeper (the mountain of fire)';
     return { line: info, color: C.hi, cell };
@@ -569,6 +571,7 @@ export class MapWindow extends Window {
     this.drawRoads(ctx, game, o, w, h, icons, known);
     this.drawVolcano(ctx, game, w, h, time);
     this.drawPlaces(ctx, game, o, w, h, icons, known, blink);
+    this.drawBridges(ctx, game, known);
     this.drawMoving(ctx, game, w, h, icons, known, time);
     this.drawLabels(ctx, game, w, h);
     // You.
@@ -864,6 +867,41 @@ export class MapWindow extends Window {
     }
     // What people have told you of: a lake, a river, the coast.
     for (const q of game.world.ow.pins || []) put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
+  }
+
+  // (Round 68) The bridges across the straits of a land split in pieces:
+  // a pale span with its piers, once either end's been seen.
+  drawBridges(ctx, game, known) {
+    for (const b of game.world.ow.bridges || []) {
+      const k0 = known(Math.floor(b.x0 / REGION_W), Math.floor(b.z0 / REGION_D));
+      const k1 = known(Math.floor(b.x1 / REGION_W), Math.floor(b.z1 / REGION_D));
+      if (!k0 && !k1) continue;
+      const a = this.at(b.x0, b.z0);
+      const c = this.at(b.x1, b.z1);
+      const wide = Math.max(1, Math.min(4, Math.round(this.z * (b.kind === 'causeway' ? 0.5 : 0.32))));
+      ctx.strokeStyle = 'rgba(30,20,10,0.75)';
+      ctx.lineWidth = wide + 2;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.stroke();
+      ctx.strokeStyle = b.kind === 'plank' ? '#c8a064' : '#d8d4c8';
+      ctx.lineWidth = wide;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.stroke();
+      // (Its piers, at a closer look.)
+      if (this.z >= 3 && b.kind !== 'plank') {
+        const n = Math.max(2, Math.round(b.len / 16));
+        ctx.fillStyle = '#6a6458';
+        for (let i = 1; i < n; i++) {
+          const q = this.at(b.x0 + ((b.x1 - b.x0) * i) / n, b.z0 + ((b.z1 - b.z0) * i) / n);
+          ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 2, 2);
+        }
+      }
+    }
+    ctx.lineWidth = 1;
   }
 
   // Merchants on the roads, armies on the march, smoke over towns raided.

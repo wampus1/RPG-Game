@@ -48,8 +48,11 @@ export function stubInput() {
 // (Older rounds' tests were written before realms had to learn things:
 // everything is known there, as it used to be. Pass learned: false for a
 // world that has to research.)
-export function makeGame(seed = 12345, { learned = true } = {}) {
-  const game = new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI(), learned });
+// (Round 68: and in the world as it was made before 0.68, the towns and
+// places they name where they always were. Pass wg: 2 for a world made
+// as new ones are now: see world/worldgen.js.)
+export function makeGame(seed = 12345, { learned = true, wg = 1 } = {}) {
+  const game = new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI(), learned, wg });
   game.sim.tech.cheat = learned;
   return game;
 }

@@ -52,7 +52,7 @@ export function genSites(ow) {
   const farFromTowns = (c, d) => sett.every((s) => Math.hypot(s.cx + (s.cw - 1) / 2 - c.cx, (s.cz + (s.cd - 1) / 2 - c.cz) * 1.4) >= d);
   const farFromSites = (c, d) => sites.every((q) => Math.hypot(q.cx - c.cx, (q.cz - c.cz) * 1.4) >= d);
   for (const I of ow.islands || []) {
-    const land = ow.liveCells.filter((c) => c.island === I.key && c.biome !== 'ocean' && c.biome !== 'beach' && c.biome !== 'volcano' && !c.lake && c.settlement === null && c.cont > 0.08 && c.cx > 0 && c.cz > 0 && c.cx < MAP_W - 1 && c.cz < MAP_H - 1);
+    const land = ow.liveCells.filter((c) => c.island === I.key && c.biome !== 'ocean' && c.biome !== 'beach' && c.biome !== 'volcano' && !c.lake && c.settlement === null && !c.bridge && c.cont > 0.08 && c.cx > 0 && c.cz > 0 && c.cx < MAP_W - 1 && c.cz < MAP_H - 1);
     const mine = sett.filter((s) => s.island === I.key);
     // The Kavorent's first: the loneliest places (desert, ice, deep forest,
     // the feet of mountains; ash and moor on the other islands).

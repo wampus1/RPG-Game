@@ -49,15 +49,16 @@ export const ARCHIPELAGO = 'the Dagoni Islands';
 export const STORM = { cx: 70, cz: 170, rx: 50, rz: 39, band: 5 };
 
 const SPAN = 1280; // (the half-width, in tiles, coastlines are scaled to)
-const CORE = 0.88;
+export const CORE = 0.88;
 
 // In tiles, with what's worked out once. (Round 63) `plan`: a mod's world
-// map's landmasses instead (see mod/worldplan.js).
-export function buildLandmasses(plan = null) {
-  return (plan ? plan.lands : LANDMASSES).map((L, i) => {
+// map's landmasses instead (see mod/worldplan.js). (Round 68) `defs`: the
+// world's own, shaped for its seed (see shapes.js).
+export function buildLandmasses(plan = null, defs = null) {
+  return (plan ? plan.lands : defs || LANDMASSES).map((L, i) => {
     const rx = L.rx * REGION_W;
     const rz = L.rz * REGION_D;
-    return {
+    const out = {
       ...L, i,
       x: (L.cx + 0.5) * REGION_W,
       z: (L.cz + 0.5) * REGION_D,
@@ -71,7 +72,53 @@ export function buildLandmasses(plan = null) {
       z0: (L.cz - L.rz * 1.6) * REGION_D,
       z1: (L.cz + L.rz * 1.6 + 1) * REGION_D,
     };
+    // (Round 68) A land of several pieces (or one turned, warped, with a
+    // bay bitten out of it): each piece a rounded blob of its own, in tiles,
+    // and its bounds round all of them.
+    if (L.parts) {
+      out.parts = L.parts.map((P) => {
+        const x = (L.cx + P.ox + 0.5) * REGION_W;
+        const z = (L.cz + P.oz + 0.5) * REGION_D;
+        return { x, z, rx: P.rx * REGION_W, rz: P.rz * REGION_D, c: Math.cos(P.ang || 0), sn: Math.sin(P.ang || 0) };
+      });
+      out.bites = (L.bites || []).map((b) => ({ x: (L.cx + b.ox + 0.5) * REGION_W, z: (L.cz + b.oz + 0.5) * REGION_D, rx: b.rx * REGION_W, rz: b.rz * REGION_D }));
+      out.warp = (L.warp || 0) * REGION_D;
+      const m = 1.6;
+      const pad = out.warp * 1.2;
+      out.x0 = Math.min(...out.parts.map((P) => P.x - Math.max(P.rx, P.rz * 1.8) * m)) - pad;
+      out.x1 = Math.max(...out.parts.map((P) => P.x + Math.max(P.rx, P.rz * 1.8) * m)) + pad;
+      out.z0 = Math.min(...out.parts.map((P) => P.z - Math.max(P.rz, P.rx / 1.8) * m)) - pad;
+      out.z1 = Math.max(...out.parts.map((P) => P.z + Math.max(P.rz, P.rx / 1.8) * m)) + pad;
+    }
+    return out;
   });
+}
+
+// (Round 68) How far into a shaped land's pieces (x, z) is, before its
+// coast's roughness: the least of each piece's rounded distance (0 at its
+// heart, 1 at its edge), pushed out where a bay's bitten in.
+function partsDist(L, x, z, noise) {
+  let wx = x;
+  let wz = z;
+  if (L.warp) {
+    const f = 1 / (1100 * L.s);
+    wx += fbm(noise, x * f + L.off * 0.37, z * f + 91.7, 2) * L.warp;
+    wz += fbm(noise, x * f - 57.3, z * f - L.off * 0.21, 2) * L.warp;
+  }
+  let d = Infinity;
+  for (const P of L.parts) {
+    const dx = wx - P.x;
+    const dz = wz - P.z;
+    const u = (dx * P.c + dz * P.sn) / P.rx;
+    const w = (-dx * P.sn + dz * P.c) / P.rz;
+    const dd = Math.cbrt(Math.abs(u) ** 3 + Math.abs(w) ** 3);
+    if (dd < d) d = dd;
+  }
+  for (const b of L.bites) {
+    const e = Math.hypot((wx - b.x) / b.rx, (wz - b.z) / b.rz);
+    if (e < 1) d = Math.max(d, CORE + (1 - e) * 0.9);
+  }
+  return d;
 }
 
 // How far into landmass `L` (x, z) is: above 0 is land. (Round 63) With
@@ -81,9 +128,13 @@ export function landValue(L, x, z, noise) {
   if (x < L.x0 || x > L.x1 || z < L.z0 || z > L.z1) return -1;
   let v = -1;
   if (L.blob !== false) {
-    const nx = (x - L.x) / L.trx;
-    const nz = (z - L.z) / L.trz;
-    const d = Math.cbrt(Math.abs(nx) ** 3 + Math.abs(nz) ** 3);
+    let d;
+    if (L.parts) d = partsDist(L, x, z, noise);
+    else {
+      const nx = (x - L.x) / L.trx;
+      const nz = (z - L.z) / L.trz;
+      d = Math.cbrt(Math.abs(nx) ** 3 + Math.abs(nz) ** 3);
+    }
     v = CORE - d + fbm(noise, (x + L.off) / (380 * L.s), (z - L.off) / (380 * L.s), 4) * L.rough + fbm(noise, x / 55 + 300 + L.off, z / 55, 2) * 0.05;
   }
   const P = L.paint;

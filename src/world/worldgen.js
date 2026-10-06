@@ -9,7 +9,9 @@ import { makeNoise2D } from '../util/noise.js';
 import { BIOMES, BIOME_STYLE, BIOME_SETTLE } from './biomes.js';
 import { placeName, civName, CULTURES } from './names.js';
 import { genSites } from './sites.js';
-import { buildLandmasses, landValue, landmassAt, stormAt, stormNear, insideStorm, DETAIL, DAGONI_KEYS } from './geography.js';
+import { buildLandmasses, landValue, landmassAt, stormAt, stormNear, insideStorm, DETAIL, DAGONI_KEYS, LANDMASSES } from './geography.js';
+import { shapeLands } from './shapes.js';
+import { findBridges } from './bridges.js';
 import { MODS } from '../mod/state.js';
 import { modBiomeFor } from '../mod/biomerules.js';
 import { paintOwners } from '../mod/worldplan.js';
@@ -36,13 +38,20 @@ const ISLAND_VALUES = {
   tide: ['seafaring', 'mercantile', 'seafaring', 'martial'],
 };
 
+// (Round 68) How a world's made, as of this version: 1 as worlds were
+// made before 0.68 (kept for them: their land can't change under them);
+// 2, the lands shaped by the seed (see shapes.js) and bridged, and the far
+// lands lived in (see farlands.js).
+export const WORLD_GEN = 2;
+
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
   // a mod's world map (see mod/worldplan.js). The mods' in the game, if not
-  // given.
+  // given. `o.wg`: how it's made (see WORLD_GEN).
   constructor(seed, o = {}) {
     this.seed = seed >>> 0;
     const s = this.seed;
+    this.wg = o.wg ?? WORLD_GEN;
     this.biomeRules = o.rules || MODS.biomeRules || [];
     this.plan = o.plan !== undefined ? o.plan : MODS.world || null;
     // (What couldn't be as the world map has it: said when the world's made.)
@@ -55,7 +64,8 @@ export class Overworld {
     this.rng = new RNG(hash4(s, 99));
     // The lie of the land: the Dagoni Islands, the continents, the far
     // isles (see geography.js).
-    this.lands = buildLandmasses(this.plan);
+    // (Round 68: shaped by the seed, unless a world map sets them.)
+    this.lands = buildLandmasses(this.plan, !this.plan && this.wg >= 2 ? shapeLands(LANDMASSES, s) : null);
     if (this.plan) this.paintLands();
     this.islands = this.lands.filter((L) => L.kind === 'dagoni');
     // The mountain on Kharos (its moods: see sim/volcano.js).
@@ -67,6 +77,8 @@ export class Overworld {
     this.genCells();
     this.genRivers();
     this.genLakes();
+    // (Round 68) The straits between a split land's pieces, bridged.
+    this.genBridges();
     this.genCivsAndSettlements();
     // The old places: dungeons, and the Kavorent's spires.
     this.sites = genSites(this);
@@ -638,6 +650,24 @@ export class Overworld {
     return { segs, lakes };
   }
 
+  // ---------------------------------------------------------------- bridges
+  genBridges() {
+    this.bridges = this.wg >= 2 ? findBridges(this) : [];
+    // (Their squares marked, for the map and to keep towns off their ends.)
+    for (const b of this.bridges) {
+      const n = Math.ceil(Math.hypot(b.x1 - b.x0, b.z1 - b.z0) / 8);
+      for (let i = 0; i <= n; i++) {
+        const c = this.cell(Math.floor((b.x0 + ((b.x1 - b.x0) * i) / n) / REGION_W), Math.floor((b.z0 + ((b.z1 - b.z0) * i) / n) / REGION_D));
+        if (c) c.bridge = true;
+      }
+    }
+  }
+
+  // The bridges whose bounds touch a tile rectangle.
+  bridgesIn(x0, z0, x1, z1) {
+    return (this.bridges || []).filter((b) => b.bx1 >= x0 && b.bx0 <= x1 && b.bz1 >= z0 && b.bz0 <= z1);
+  }
+
   // ---------------------------------------------------------------- lakes
   genLakes() {
     const rng = this.rng.fork('lakes');
@@ -732,7 +762,7 @@ export class Overworld {
       if (!mine(c) || c.biome === 'ocean' || c.biome === 'beach' || c.mountainness > 0.12 || c.cont < 0.06) return -1;
       if (zone && (zone[c.cz * MAP_W + c.cx] === 2 || (zoned && zone[c.cz * MAP_W + c.cx] !== 1))) return -1;
       if (c.lake && !c.river) return -1;
-      if (c.biome === 'volcano') return -1;
+      if (c.biome === 'volcano' || c.bridge) return -1;
       let s = rng.float(0, 1);
       if (c.river) s += 0.6;
       if (this.nearOcean(c)) s += 0.25;

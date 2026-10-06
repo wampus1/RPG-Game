@@ -128,7 +128,7 @@ function creatureSnap(c) {
 }
 
 export class Game {
-  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null }) {
+  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
     // (Round 65) Made from another of a mod's world maps (one crossed into:
     // see requestCross), and the world its family of worlds began as.
@@ -144,7 +144,9 @@ export class Game {
     }
     this.audio = audio;
     this.ui = ui;
-    this.world = new World(this.seed);
+    // (Round 68: as the world was made: a world from before 0.68 as it was,
+    // its land unchanged; a new one shaped by its seed. See worldgen.js.)
+    this.world = new World(this.seed, { wg: save ? save.wg || 1 : wg });
     // (Someone else's world, seen from here: its ground comes from them.
     // See net/guest.js.)
     if (remote) {
@@ -7029,6 +7031,8 @@ export class Game {
       // (The game's version it was saved in: see version.js.)
       gv: GAME_VERSION,
       seed: this.seed,
+      // (Round 68: how its land was made.)
+      wg: this.world.ow.wg,
       minute: this.minute,
       day: this.day,
       player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },

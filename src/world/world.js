@@ -12,9 +12,10 @@ import { settleSites } from './sites.js';
 import { MODS } from '../mod/state.js';
 
 export class World {
-  constructor(seed) {
+  // `o.wg`: how the world's made (see worldgen.WORLD_GEN).
+  constructor(seed, o = {}) {
     this.seed = seed >>> 0;
-    this.ow = new Overworld(this.seed);
+    this.ow = new Overworld(this.seed, o.wg !== undefined ? { wg: o.wg } : {});
     this.terrain = new Terrain(this.ow);
     // The old places, each at its exact spot (see sites.js).
     this.sites = this.ow.sites;
