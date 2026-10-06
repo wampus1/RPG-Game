@@ -4400,6 +4400,23 @@ dig in. What you do (or don't) decides the rest.
   thing to draw: turning it off helps on a weak graphics card.
 - *Older worlds* (migration 0.57.0): nothing to put right.
 
+## Round 58: player permissions
+
+- *Permissions for players.* Hosting, the Multiplayer window (**P**) has a
+  **Permissions** button by each player. It opens their permissions, to
+  switch on and off:
+  - **Use commands**: they can open the command console (the **`** or
+    **/** key) and use it as the host can: teleporting, giving items,
+    changing the time, skipping days. Their commands run as them (a
+    `give` goes into their pack, a `tp` moves them).
+
+  Permissions are kept with the world, so a player has them whenever they
+  come back. The player is told when one is given or taken away, and the
+  Multiplayer list shows "can use commands" by their name. Without it, the
+  console key just says the host hasn't allowed it.
+- *Older worlds* (migration 0.58.0): nobody has any permissions until the
+  host gives them.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

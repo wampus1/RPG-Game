@@ -7,7 +7,7 @@ import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
-import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow } from './ui/windows.js';
+import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow, ConsoleWindow } from './ui/windows.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { hashString } from './util/rng.js';
@@ -18,11 +18,11 @@ import { randomHero } from './game/hero.js';
 import { Music, musicMood, moodUrgent } from './game/music.js';
 import { Accounts, profileOf } from './net/account.js';
 import { challengeBout } from './game/bout.js';
-import { HostNet } from './net/host.js';
+import { HostNet, PERMS } from './net/host.js';
 import { GuestNet, refusal } from './net/guest.js';
 import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
 import { windowPixels } from './net/uiwire.js';
-import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow } from './ui/multiplayer.js';
+import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow, PermsWindow } from './ui/multiplayer.js';
 import { MapWindow } from './ui/worldmap.js';
 import { FeatsWindow } from './ui/feats.js';
 import { FeatBook, FEAT } from './game/achievements.js';
@@ -783,6 +783,13 @@ function guestKey(k) {
     else openFeats();
   } else if (k.code === 'F2') ui.hooks.toggleCrt();
   else if (k.code === 'F3') ui.debug = !ui.debug;
+  // The command console: if the host has let you (see the Multiplayer
+  // window's Permissions).
+  else if (k.code === 'Backquote' || k.code === 'Slash') {
+    const net = session && session.net;
+    if (net && net.canCommand && net.canCommand()) ui.toggle('console', () => new ConsoleWindow(ui));
+    else ui.msg('The host hasn\'t let you use commands in this world.', '#ffb080');
+  }
 }
 
 // ------------------------------------------------------------ the party
@@ -818,6 +825,8 @@ function partyCtx() {
       pvp: () => host && net && net.setPvp(!game.pvp),
       profile: (p) => openProfile(p),
       kick: (p) => net && net.kick(p.cid),
+      // What a player may do beyond playing (the host's to say).
+      perms: (p) => host && net && openPerms(p),
       ban: (p) => net && net.ban(p.cid),
       unban: (id) => net && net.unban(id),
       invite: (f) => {
@@ -832,6 +841,15 @@ function partyCtx() {
       leave: () => leaveWorld(null),
     },
   };
+}
+
+// A player's permissions, for the host to change (see HostNet.setPerm).
+function openPerms(p) {
+  const old = ui.find('perms');
+  if (old) ui.close(old);
+  const net = session && session.net;
+  if (!net || session.role !== 'host') return;
+  ui.open(new PermsWindow(ui, p, PERMS, () => net.permsOf(p.id), (key, on) => net.setPerm(p.id, key, on)));
 }
 
 // A guild's doings: the host does them; a player asks the host.

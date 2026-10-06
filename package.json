@@ -1,6 +1,6 @@
 {
   "name": "rpg-game",
-  "version": "0.57.0",
+  "version": "0.58.0",
   "private": true,
   "type": "module",
   "description": "A 2.5D top-down grid RPG with a retro pixel/CRT look.",

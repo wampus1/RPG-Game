@@ -227,3 +227,82 @@ test('0.57.0', () => {
   assert.ok(step);
   assert.ok(compareVersions(GAME_VERSION, '0.57.0') >= 0);
 });
+
+test('permissions: the host lets a player use commands; they run as that player', () => {
+  const game = makeGame(12345);
+  const input = stubInput();
+  game.minute = 600;
+  for (let i = 0; i < 20; i++) game.update(0.1, input);
+  const queue = [];
+  let guestNet = null;
+  const uiStub = () => Object.assign(stubUI(), { windows: [], update() {}, find: () => null, closeAll() {} });
+  const hostNet = new HostNet(game, {
+    send: (text) => {
+      if (text[0] !== '@') return;
+      const body = text.slice(text.indexOf('|') + 1);
+      queue.push(() => guestNet.receive(body));
+    },
+    profile: { id: 'h', name: 'Hosty' },
+    world: { name: 'Testland' },
+    makeUI: () => uiStub(),
+  });
+  let gg = null;
+  guestNet = new GuestNet({
+    send: (text) => queue.push(() => hostNet.receive(`@7|${text}`)),
+    profile: { id: 'g', name: 'Guesty' },
+    build: (save) => (gg = new Game({ seed: save.seed, renderer: stubRenderer(), audio: null, ui: uiStub(), save, remote: true })),
+    onNeedHero: () => guestNet.sendHero(null),
+    onEnd: () => {},
+    onNote: () => {},
+    onParty: () => {},
+  });
+  const flush = () => {
+    while (queue.length) queue.shift()();
+  };
+  const step = (k) => {
+    for (let i = 0; i < k; i++) {
+      game.update(0.05, input);
+      flush();
+      if (gg) gg.update(0.05, stubInput());
+      flush();
+    }
+  };
+  hostNet.receive('!' + JSON.stringify({ t: 'join', cid: 7, account: { id: 'g', name: 'Guesty' } }));
+  flush();
+  step(10);
+  assert.ok(gg);
+  const seat = game.seats[1];
+  const has = (k) => (seat.ent.inv || []).filter((q) => q && q.item === k).reduce((a, q) => a + q.count, 0);
+  // Not allowed: told so, and nothing happens.
+  assert.ok(!guestNet.canCommand());
+  const start0 = has('bread');
+  guestNet.command('give bread 3');
+  flush();
+  assert.ok(gg.ui.consoleLog.some((l) => /hasn't let you/.test(l.text || l)));
+  assert.equal(has('bread'), start0);
+  // The host allows it (and it's kept with the world).
+  hostNet.setPerm('g', 'commands', true);
+  flush();
+  assert.ok(guestNet.canCommand(), 'the player knows');
+  assert.ok(hostNet.partyList().find((q) => q.id === 'g').perm.commands);
+  assert.deepEqual(game.partySave().perms, { g: { commands: true } });
+  const before = has('bread');
+  guestNet.command('give bread 3');
+  flush();
+  step(2);
+  assert.equal(has('bread'), before + 3, 'into their pack, not the host\'s');
+  assert.ok(gg.ui.consoleLog.length >= 2);
+  // Taken away again.
+  hostNet.setPerm('g', 'commands', false);
+  flush();
+  assert.ok(!guestNet.canCommand());
+});
+
+test('0.58.0: no permissions in an older hosted world till the host gives them', () => {
+  const step = STEPS.find((q) => q.to === '0.58.0');
+  assert.ok(step);
+  const d = { party: { world: { name: 'x' } } };
+  step.data(d, []);
+  assert.deepEqual(d.party.perms, {});
+  assert.ok(compareVersions(GAME_VERSION, '0.58.0') >= 0);
+});

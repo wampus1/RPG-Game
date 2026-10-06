@@ -479,8 +479,11 @@ export class PartyWindow extends Window {
       const extra = [['Profile', () => H.profile(p)]];
       // (Into your guild: anyone here not in it, nor asked yet.)
       if (mine && p.id !== c.me && !mine.members.includes(p.id) && !mine.invites.includes(p.id)) extra.push(['Invite to guild', () => H.guild('invite', { to: p.id }), C.cyan]);
+      // (What they may do beyond playing: the host's to say. Round 57.)
+      if (c.host && !p.host && H.perms) extra.push(['Permissions', () => H.perms(p), C.cyan]);
       if (c.host && !p.host) extra.push(['Kick', () => H.kick(p), C.orange], ['Ban', () => H.ban(p), C.red]);
-      entry({ ...p, guild: guildOf(p.id) }, extra);
+      const allowed = !p.host && p.perm && p.perm.commands;
+      entry({ ...p, guild: guildOf(p.id), desc: allowed ? `${(p.desc || '').slice(0, 20)}${p.desc ? ' · ' : ''}can use commands` : p.desc }, extra);
     }
     if (c.host) {
       head('BANNED');
@@ -532,6 +535,56 @@ export class PartyWindow extends Window {
 
   onWheel(d) {
     this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll + Math.sign(d) * 3));
+  }
+}
+
+// What a player may do beyond playing (round 57): for the host to switch
+// on and off, one by one. `perms`: the list (see net/host.js PERMS);
+// `get()`: what they may now; `set(key, on)`.
+export class PermsWindow extends Window {
+  constructor(ui, player, perms, get, set) {
+    super(ui, 56, 9 + perms.length * 4, { kind: 'perms' });
+    this.player = player;
+    this.perms = perms;
+    this.get = get;
+    this.set = set;
+    this.sel = 0;
+  }
+
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, PANEL);
+    g.box(0, 0, this.w, this.h, { bg: PANEL, double: true, title: `PERMISSIONS · ${String(this.player.name || 'player').toUpperCase()}`.slice(0, this.w - 6) });
+    g.text(2, 2, `What ${this.player.name || 'they'} may do in this world, beyond playing:`.slice(0, this.w - 4), C.dim);
+    const now = this.get() || {};
+    this.perms.forEach((q, i) => {
+      const y = 4 + i * 4;
+      const on = !!now[q.key];
+      const label = `[${i + 1}] ${q.label}: ${on ? 'ON' : 'OFF'}`;
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, this.sel === i || hov ? C.bgHi : '#1c1726');
+      g.text(3, y, label, on ? C.green : C.fg);
+      this.hit(2, y, this.w - 4, 1, () => this.toggle(i));
+      wrap(q.about, this.w - 6).slice(0, 2).forEach((l, j) => g.text(4, y + 1 + j, l, C.faint));
+    });
+    g.center(this.h - 3, 'Kept with this world: they have it whenever they come back.', C.faint);
+    button(this, g, this.w - 22, this.h - 2, 20, '[ESC] Close', () => this.close());
+  }
+
+  toggle(i) {
+    const q = this.perms[i];
+    if (!q) return;
+    this.sel = i;
+    this.set(q.key, !(this.get() || {})[q.key]);
+    this.ui.audio?.play('select');
+  }
+
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (/^Digit[1-9]$/.test(k.code)) this.toggle(+k.code.slice(5) - 1);
+    else if (k.code === 'ArrowDown') this.sel = Math.min(this.perms.length - 1, this.sel + 1);
+    else if (k.code === 'ArrowUp') this.sel = Math.max(0, this.sel - 1);
+    else if (k.code === 'Enter' || k.code === 'Space') this.toggle(this.sel);
+    return true;
   }
 }
 

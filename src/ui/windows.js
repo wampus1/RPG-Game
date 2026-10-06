@@ -2319,6 +2319,14 @@ export class ConsoleWindow extends Window {
     if (H.length > 40) H.shift();
     const log = this.ui.consoleLog;
     log.push(`> ${t}`);
+    // (In someone else's world, with their leave: the host runs it, as you,
+    // and what it says comes back. See GuestNet.command.)
+    const remote = this.ui.game && this.ui.game.remote;
+    if (remote && remote.command) {
+      remote.command(t);
+      this.ui.audio?.play('select');
+      return;
+    }
     let out;
     try {
       out = runCommand(this.ui.game, t);

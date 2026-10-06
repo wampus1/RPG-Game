@@ -17,6 +17,7 @@ import { REGION_W, REGION_D } from '../config.js';
 import { inReach } from '../entities/footprint.js';
 import { challengeBout } from '../game/bout.js';
 import { guildMates } from '../game/guilds.js';
+import { runCommand } from '../game/commands.js';
 
 // How often each player is sent what's changed (a second's worth), and how
 // far about them (in paces) the things they're sent are.
@@ -26,6 +27,12 @@ const VIEW = 30;
 const FX_NEAR = 34;
 
 // What a player has pressed, clicked and pointed at, as last sent.
+// What a host can let a player do (round 57: the Permissions button in
+// the Multiplayer window). `told`: how the player's told of it.
+export const PERMS = [
+  { key: 'commands', label: 'Use commands', about: 'The command console (the ` or / key): teleporting, items, the time of day, skipping days... as the host can.', told: 'use commands (the ` key)' },
+];
+
 export class RemoteInput {
   constructor() {
     this.keys = new Set();
@@ -215,7 +222,25 @@ export class HostNet {
   }
 
   partyList() {
-    return (this.game.seats || []).map((s) => ({ ...s.profile, host: !!s.host, cid: s.cid, ent: (s === this.game.seat ? this.game.player : s.ent)?.id }));
+    return (this.game.seats || []).map((s) => ({ ...s.profile, host: !!s.host, cid: s.cid, ent: (s === this.game.seat ? this.game.player : s.ent)?.id, perm: s.host ? { commands: true } : this.permsOf(s.profile && s.profile.id) }));
+  }
+
+  // ------------------------------------------------------------ permissions
+  // What the host lets each player do beyond playing (round 57): kept with
+  // the world, by account. Just now: the command console.
+  permsOf(id) {
+    const P = this.game.perms || {};
+    return { ...(id && P[id] ? P[id] : {}) };
+  }
+
+  setPerm(id, key, on) {
+    if (!id || !PERMS.some((q) => q.key === key)) return;
+    const P = (this.game.perms ||= {});
+    P[id] = { ...(P[id] || {}), [key]: !!on };
+    const g = [...this.guests.values()].find((q) => q.profile && q.profile.id === id);
+    const what = PERMS.find((q) => q.key === key).told;
+    if (g && g.state === 'in') this.to(g, { t: 'note', text: on ? `The host has let you ${what}.` : `The host no longer lets you ${what}.`, profile: this.profile });
+    this.partyChanged();
   }
 
   partyChanged() {
@@ -225,6 +250,22 @@ export class HostNet {
     for (const g of this.guests.values()) if (g.state === 'in') this.to(g, { t: 'party', list, pvp, guilds });
     this.tellRelay();
     this.onParty(list);
+  }
+
+  // A player's command (see commands.js), run as them in the world, and
+  // what it said sent back to their console.
+  command(g, text) {
+    if (!this.permsOf(g.profile && g.profile.id).commands) {
+      this.to(g, { t: 'cmdOut', lines: [{ text: 'The host hasn\'t let you use commands in this world.', c: '#ffb080' }] });
+      return;
+    }
+    let lines;
+    try {
+      lines = asSeat(this.game, g.seat, () => runCommand(this.game, text));
+    } catch (err) {
+      lines = [{ text: `That went wrong: ${err.message}`, c: '#ffb080' }];
+    }
+    this.to(g, { t: 'cmdOut', lines: (lines || []).slice(0, 80).map((l) => (typeof l === 'string' ? l : { text: String(l.text ?? ''), c: l.c || null })) });
   }
 
   // Whether players may hurt each other (the host's to say), and everyone
@@ -254,6 +295,8 @@ export class HostNet {
       seat.away = !!m.away;
     } else if (m.t === 'drop') g.sent.regions.delete(`${m.rx},${m.rz}`);
     else if (m.t === 'need') this.sendRegion(g, m.rx, m.rz);
+    // A command typed in their console: run as them, if the host allows it.
+    else if (m.t === 'cmd') this.command(g, String(m.text || '').slice(0, 200));
     // (Word less often, asked for: see GuestNet.setRate.)
     else if (m.t === 'rate') g.every = Number(m.hz) > 0 && Number(m.hz) <= 10 ? 2 : 1;
     else if (m.t === 'profile') {

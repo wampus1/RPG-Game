@@ -237,6 +237,15 @@ export const STEPS = [
       log.push('Trading companies camp properly by the road at night, and those killed (people or horses) stay dead.');
     },
   },
+  {
+    // Permissions for the players in a hosted world (round 58): nobody's
+    // allowed anything extra till the host says so.
+    to: '0.58.0',
+    data(d, log) {
+      if (d.party && !d.party.perms) d.party.perms = {};
+      log.push('A host can now let players use commands (Multiplayer: Permissions).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

@@ -74,6 +74,8 @@ export class GuestNet {
       this.guilds = m.guilds || [];
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
+    // (What a command run on the host said: into the console.)
+    else if (m.t === 'cmdOut') this.commandOut(m.lines || []);
     else if (m.t === 'feat') this.onFeat?.(m.id);
     else if (m.t === 'friend') this.onFriend(m);
     else if (m.t === 'site') this.site(m);
@@ -117,6 +119,25 @@ export class GuestNet {
     const was = this.rate;
     this.rate = hz;
     if (this.game && hz !== was) this.out({ t: 'rate', hz });
+  }
+
+  // May I use the command console here? (The host's to say: round 57.)
+  canCommand() {
+    const me = (this.party || []).find((q) => this.profile && q.id === this.profile.id);
+    return !!(me && me.perm && me.perm.commands);
+  }
+
+  // A command typed in the console: the host runs it, as you.
+  command(text) {
+    this.out({ t: 'cmd', text: String(text).slice(0, 200) });
+  }
+
+  commandOut(lines) {
+    const ui = this.game && this.game.ui;
+    if (!ui) return;
+    const log = (ui.consoleLog ||= []);
+    log.push(...lines.map((l) => (typeof l === 'string' ? l : { text: l.text, c: l.c || undefined })));
+    while (log.length > 200) log.shift();
   }
 
   need(rx, rz) {

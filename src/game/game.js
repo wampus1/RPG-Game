@@ -6868,6 +6868,8 @@ export class Game {
       bans: net ? { ids: [...net.bans.ids], names: [...net.bans.names] } : this.partyBans || null,
       // (Its guilds: see guilds.js.)
       guilds: this.guilds.serialize(),
+      // (What each player's allowed beyond playing: see HostNet.setPerm.)
+      perms: this.perms || {},
     };
   }
 
@@ -6880,6 +6882,7 @@ export class Game {
       this.partyChars = new Map(data.party.chars || []);
       this.partyBans = data.party.bans || null;
       this.guilds.load(data.party.guilds);
+      this.perms = data.party.perms || {};
     }
     for (const r of data.regions || []) this.world.saved.set(this.world.regionKey(r.rx, r.rz), r);
     for (const [sid, list] of data.dead || []) this.deadNpcs.set(sid, new Set(list));
