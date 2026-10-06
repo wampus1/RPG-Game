@@ -493,6 +493,19 @@ export function buildModFloor(rec, n, rx0 = INST_RX) {
       out.downAt = { x: best.x, z: best.z };
     }
   }
+  // (The last floor, its master chosen but no place marked for it: as far
+  // from the way up as can be.)
+  if (n === rec.depth - 1 && D && D.boss && !out.spawns.some((q) => q.boss)) {
+    let best = null;
+    for (let z = 0; z < Dd; z++) for (let x = 0; x < W; x++) if (open[z * W + x]) {
+      const d = Math.hypot(x0 + x - out.up.x, z - out.up.z);
+      if (!best || d > best.d) best = { x: x0 + x, z, d };
+    }
+    if (best) {
+      out.spawns.push({ id: out.spawns.length, species: D.boss[0] === '@' ? gameKey(m.id, D.boss.slice(1)) : D.boss, x: best.x, z: best.z, room: 0, boss: true });
+      out.bossRoom = { x0: Math.max(x0 + ox, best.x - 7), x1: Math.min(x0 + ox + (st ? st.w : W) - 1, best.x + 7), z0: Math.max(oz, best.z - 7), z1: Math.min(oz + (st ? st.d : Dd) - 1, best.z + 7) };
+    }
+  }
   // Its chests, filled.
   for (const c of out.modChests || []) {
     const r = reg(c.x - x0, c.z);
@@ -530,15 +543,40 @@ MODS.buildFloor = buildModFloor;
 MODS.container = modContainer;
 MODS.triggerTick = triggerTick;
 MODS.structureSpots = (game, modId, id) => (game.world.sites || []).filter((s) => s.mod === modId && (s.thing === id || (s.kind === 'layout' && (MODS.byId.get(modId)?.layouts[s.thing]?.pieces || []).some((p) => p.structure === id)))).map((s) => ({ x: s.x, y: s.h + 1, z: s.z }));
-// (Placed whole, by a graph: Place structure.)
-MODS.placeStructure = (game, mod, id, at) => {
+// (Placed whole, by a graph's Place structure, or in front of you when
+// playtesting it: the ground under it levelled and the air over it
+// cleared if `o.level`, its markers at work if `o.marks`.)
+MODS.placeStructure = (game, mod, id, at, o = {}) => {
   const st = mod.structures[id];
-  if (!st) return;
+  if (!st) return null;
+  const world = game.world;
   const g = st.ground ?? 1;
   const x0 = at.x - Math.floor(st.w / 2);
   const z0 = at.z - Math.floor(st.d / 2);
   const base = at.y - 1;
-  for (const [x, y, z, bid, meta] of bpCells(mod, st)) game.world.setBlock(x0 + x, base + (y - g), z0 + z, bid, meta);
+  if (o.level) for (let z = 0; z < st.d; z++) for (let x = 0; x < st.w; x++) {
+    for (let y = base + 1; y <= Math.min(WORLD_Y - 1, base + st.h - g + 3); y++) world.setBlock(x0 + x, y, z0 + z, B.air);
+    for (let y = Math.max(1, base - 2); y < base; y++) if (!BLOCKS[world.getBlock(x0 + x, y, z0 + z)]?.solid) world.setBlock(x0 + x, y, z0 + z, B.dirt);
+    world.setBlock(x0 + x, base, z0 + z, B.grass);
+  }
+  for (const [x, y, z, bid, meta] of bpCells(mod, st)) world.setBlock(x0 + x, base + (y - g), z0 + z, bid, meta);
+  if (o.marks) {
+    world.modChests ||= new Map();
+    world.modSigns ||= new Map();
+    world.modMarks ||= [];
+    const tag = `p${(world.modPlaced = (world.modPlaced || 0) + 1)}`;
+    for (const mk of st.marks || []) {
+      const x = x0 + mk.x;
+      const z = z0 + mk.z;
+      const y = base + (mk.y - g);
+      const key = `${tag}:${st.id}:${mk.id}`;
+      // (Its chests fill from their loot the first time they're opened.)
+      if (mk.type === 'chest' && mk.loot) world.modChests.set(`${x},${y},${z}`, { mod, loot: mk.loot, key });
+      else if (mk.type === 'sign') world.modSigns.set(`${x},${y},${z}`, { title: mk.title || 'SIGN', lines: String(mk.text || '').split('\n') });
+      else if (['spawn', 'npc', 'trigger', 'boss'].includes(mk.type)) world.modMarks.push({ ...mk, key, x, y, z, mod, site: -1 });
+    }
+  }
   game.lightDirty = true;
+  return { x0, z0, base, w: st.w, d: st.d };
 };
 export { META_STATE };

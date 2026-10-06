@@ -249,10 +249,10 @@ export function pickCell(vox, px, py, y, rot = 0, clamp = false) {
 }
 
 // A small picture of a voxel source (`max` across at most).
-export function voxPicture(app, vox, max = 48, rot = 0) {
+export function voxPicture(app, vox, max = 48, rot = 0, o = {}) {
   const F = frameOf(vox, rot);
   const full = canvas(F.pw, F.ph);
-  renderVox(full.getContext('2d'), app, vox, { rot, ground: false });
+  renderVox(full.getContext('2d'), app, vox, { rot, ground: false, layer: o.layer ?? null, above: o.above || 'show' });
   // (Cropped to what's drawn.)
   const d = full.getContext('2d').getImageData(0, 0, F.pw, F.ph).data;
   let x0 = F.pw;

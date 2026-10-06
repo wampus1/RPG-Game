@@ -19,6 +19,7 @@ import { NODES, makeNode, emptyGraph, lint } from '../mod/graph.js';
 import { TEMPLATES, TEMPLATE_INFO } from '../mod/nodes.js';
 import { GAME_VERSION } from '../version.js';
 import { starter } from './graph.js';
+import { voxPicture, structVox, layoutVox } from './voxview.js';
 
 // Which tool edits each collection.
 export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph' };
@@ -390,14 +391,23 @@ export class Workshop {
       for (const t of TEMPLATES) (groups[TEMPLATE_INFO[t].group] ||= []).push(t);
       for (const [g, list] of Object.entries(groups)) items.push({ label: `${g}`, icon: g === 'Items' ? 'sword' : g === 'Creatures' ? 'skull' : g === 'World' ? 'cube' : 'bolt', sub: list.map((t) => ({ label: NODES[t].title, onClick: () => this.newEntity(t), tip: TEMPLATE_INFO[t].blurb })) });
     }
-    if (sub('structures')) items.push({ label: 'Structure', icon: 'house', onClick: () => this.create('structures', { name: 'Structure' }) });
+    if (sub('structures')) items.push({ label: 'Structure...', icon: 'house', onClick: () => this.builder((b) => b.newDialog()) });
     if (sub('layouts')) items.push({ label: 'Layout (town, camp...)', icon: 'grid', onClick: () => this.create('layouts', { name: 'Layout' }) });
-    if (sub('dungeons')) items.push({ label: 'Dungeon', icon: 'stairs', onClick: () => this.create('dungeons', { name: 'Dungeon' }) });
+    if (sub('dungeons')) items.push({ label: 'Dungeon', icon: 'stairs', onClick: () => this.builder((b) => b.newDungeon()) });
     if (sub('loot')) items.push({ label: 'Loot table', icon: 'chest', onClick: () => this.create('loot', { name: 'Loot' }) });
     if (sub('stories')) items.push({ label: 'Story', icon: 'scroll', onClick: () => this.create('stories', { name: 'Story' }) });
     if (sub('patches')) items.push({ label: 'Change to a game story', icon: 'book', onClick: () => this.useTool('story').then(() => this.tools.story.pickPatch?.()) });
     if (only && items.length === 1 && !items[0].sub) return items[0].onClick();
     menu(items, x, y);
+  }
+
+  // The Builder (loaded if it isn't yet), to do something with.
+  async builder(fn) {
+    if (!this.tools.builder) {
+      const T = (await LOADERS.builder()).default;
+      this.tools.builder = new T(this);
+    }
+    return fn(this.tools.builder);
   }
 
   async newAsset(o = {}) {
@@ -591,7 +601,8 @@ export class Workshop {
     if (kind && kind !== 'meta' && id) this.exT = setTimeout(() => {
       this.refreshThumb(kind, id);
       // (Art changed: whatever shows it changes too.)
-      if (kind === 'assets') for (const k of [...this.thumbs.keys()]) {
+      if (kind === 'assets' || kind === 'entities' || kind === 'structures') for (const k of [...this.thumbs.keys()]) {
+        if (kind !== 'assets' && !/^(structures|layouts|dungeons):/.test(k)) continue;
         if (k.startsWith('assets:')) continue;
         this.thumbs.delete(k);
         const [ok, oid] = k.split(':');
@@ -717,6 +728,26 @@ export class Workshop {
       const c = canvas(src.width, src.height);
       c.getContext('2d').drawImage(src, 0, 0);
       return c;
+    }
+    if (kind === 'structures' || kind === 'layouts' || kind === 'dungeons') {
+      let src = this.thumbs.get(k);
+      if (src === undefined) {
+        try {
+          const st = kind === 'dungeons' ? this.mod.structures[t.entrance] : t;
+          // (A dungeon's floor seen with its roof off.)
+          const floor = kind === 'structures' && Object.values(this.mod.dungeons || {}).some((D) => (D.floors || []).includes(t.id));
+          src = !st ? null : kind === 'layouts' ? voxPicture(this, layoutVox(this.mod, t), 40) : voxPicture(this, structVox(st), 40, 0, floor ? { layer: (st.ground ?? 1) + 1, above: 'hide' } : {});
+        } catch {
+          src = null;
+        }
+        this.thumbs.set(k, src);
+      }
+      if (src) {
+        const c = canvas(src.width, src.height);
+        c.getContext('2d').drawImage(src, 0, 0);
+        c.style.imageRendering = 'auto';
+        return c;
+      }
     }
     const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book' };
     if (kind === 'entities') {
@@ -903,9 +934,9 @@ const DEFAULTS = {
   assets: (d) => newAsset({ name: d.name || 'Sprite', w: d.w || 16, h: d.h || 16 }),
   vfx: (d) => ({ name: 'Effect', dur: 1.2, loop: true, bg: 'grass', layers: d.from && d.from.asset ? [{ id: 'l1', type: 'sprite', name: 'Sprite', asset: d.from.asset, anim: { bob: 2, spin: 0, pulse: 0.1 }, fps: 8 }] : [{ id: 'l1', type: 'emitter', name: 'Sparks', preset: 'sparks' }] }),
   rigs: (d) => ({ name: 'Rig', asset: d.asset || null, parts: [], bones: [], anims: {} }),
-  structures: () => ({ name: 'Structure', w: 9, d: 9, h: 8, ground: 1, pal: ['air'], cells: '', marks: [], place: { where: 'wild', biomes: [], count: 2, isle: 'any' } }),
-  layouts: () => ({ name: 'Layout', pieces: [], paths: [], place: { where: 'wild', biomes: [], count: 1, isle: 'any' }, size: 48 }),
-  dungeons: () => ({ name: 'Dungeon', entrance: null, floors: [], boss: null, place: { biomes: [], count: 1, isle: 'any' }, tiers: true }),
+  structures: () => ({ name: 'Structure', w: 11, d: 11, h: 8, ground: 1, pal: ['keep'], cells: '', metas: '', marks: [], place: { where: 'wild', biomes: [], count: 2, isle: 'any', clear: true } }),
+  layouts: () => ({ name: 'Layout', pieces: [], paths: [], place: { where: 'wild', biomes: [], count: 1, isle: 'any', clear: true }, size: 48 }),
+  dungeons: () => ({ name: 'Dungeon', entrance: null, floors: [], boss: null, level: 2, place: { biomes: [], count: 1, isle: 'any' } }),
   loot: () => ({ name: 'Loot', rolls: [1, 3], entries: [{ item: 'coin', w: 4, min: 2, max: 8 }, { item: 'bread', w: 2, min: 1, max: 2 }], always: [] }),
   stories: () => ({ name: 'Story', graph: { nodes: [], links: [] } }),
   patches: () => ({ name: 'Story change', motif: null }),
@@ -983,8 +1014,8 @@ class OverviewTool {
       ['skull', 'A new monster', 'Draw a creature (with a walk animation if you like), and it hunts at night.', () => this.quickCreature('tpl.hostile', 'Monster')],
       ['person', 'Someone to talk to', 'A person with lines to say and answers to pick, placed in a structure.', () => this.quickCreature('tpl.npc', 'Wanderer')],
       ['crown', 'A boss', 'A master with phases and abilities, at the bottom of a dungeon of your own.', () => this.quickCreature('tpl.boss', 'Boss')],
-      ['house', 'A building', 'Walls, floors, roofs, chests with loot, triggers that set things off.', () => app.create('structures', { name: 'House' })],
-      ['stairs', 'A dungeon', 'Floors you build, stairs between them, a boss at the bottom.', () => app.create('dungeons', { name: 'Dungeon' })],
+      ['house', 'A building', 'Walls, floors, roofs, chests with loot, triggers that set things off.', () => app.builder((b) => b.newDialog())],
+      ['stairs', 'A dungeon', 'Floors you build, stairs between them, a boss at the bottom.', () => app.builder((b) => b.newDungeon())],
       ['scroll', 'A story', 'A tale that starts when something happens, with tasks and turns.', () => app.create('stories', { name: 'Story' })],
       ['sparkle', 'An effect', 'Particles and animated sprites, for spells, hits and glows.', () => app.create('vfx', { name: 'Effect' })],
     ];

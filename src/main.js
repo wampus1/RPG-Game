@@ -1044,6 +1044,39 @@ function playtest(mod, where = {}) {
   startGame(seed, null, null, hero, { mods: [mod], playtest: { modId: mod.id, name: mod.name, tool: where.tool || null, sel: where.sel || null } });
 }
 
+// A flat bit of open country near you, out of any town, for a structure
+// being playtested (its middle, at its ground).
+function playtestSpot(g, st) {
+  const p = g.player;
+  const w = g.world;
+  const hw = Math.ceil(st.w / 2) + 1;
+  const hd = Math.ceil(st.d / 2) + 1;
+  for (let r = 10; r <= 60; r += 6) for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    const x = Math.round(p.x + Math.cos(a) * r);
+    const z = Math.round(p.z + Math.sin(a) * r * 0.7);
+    const pts = [[x, z], [x - hw, z - hd], [x + hw, z - hd], [x - hw, z + hd], [x + hw, z + hd], [x, z + hd + 2]];
+    let lo = 99;
+    let hi = -1;
+    let ok = true;
+    for (const [qx, qz] of pts) {
+      if (!w.topAt(qx, qz) || w.ow.settlementAt(qx, qz)) {
+        ok = false;
+        break;
+      }
+      const y = w.findStandY(qx, qz, Math.floor(p.y));
+      if (y < 1 || w.isWaterAt(qx, y, qz) || w.isWaterAt(qx, y - 1, qz)) {
+        ok = false;
+        break;
+      }
+      lo = Math.min(lo, y);
+      hi = Math.max(hi, y);
+    }
+    if (ok && hi - lo <= 2) return { x, y: lo, z };
+  }
+  return null;
+}
+
 function beginPlaytest(g, pt) {
   g.playtest = pt;
   g.cheats = { ...(g.cheats || {}), console: true };
@@ -1060,6 +1093,34 @@ function beginPlaytest(g, pt) {
   ui.notify(`Playtesting "${pt.name}". ${n ? `Its ${n} item${n > 1 ? 's are' : ' is'} in your pack.` : 'It adds no items.'} Press ESC, then W, to go back to the Workshop. The console (\` or /) has "mod" commands: try "mod help".`, null, '#80e070');
   const ev = MODS.events.length;
   if (ev) ui.msg(`(${ev} world event${ev > 1 ? 's' : ''} of the mod's at work.)`, '#a0c8ff');
+  // What was open in the Workshop, right here: a structure built in front
+  // of you, a dungeon gone straight down into, a creature beside you.
+  const sel = pt.sel;
+  const mod = MODS.byId.get(pt.modId);
+  if (!sel || !mod) return;
+  if (sel.kind === 'structures' && mod.structures[sel.id]) {
+    const st = mod.structures[sel.id];
+    const at = playtestSpot(g, st) || { x: Math.round(p.x), y: Math.floor(p.y), z: Math.round(p.z) + 3 + Math.floor(st.d / 2) };
+    const put = MODS.placeStructure(g, mod, sel.id, at, { level: true, marks: true });
+    // (You, at its front, looking at it.)
+    const fz = put.z0 + st.d + 1;
+    const fy = g.world.findStandY(at.x, fz, at.y);
+    if (fy > 0) p.teleport(at.x, fy, fz);
+    ui.msg(`"${st.name}" is built here, in front of you.`, '#80e070');
+  } else if (sel.kind === 'dungeons') {
+    const rec = g.sim && g.sim.dungeons.all.find((d) => d.mod === pt.modId && d.thing === sel.id);
+    if (rec) {
+      rec.known = true;
+      g.runFor(rec).enter();
+    } else ui.msg('That dungeon found no place in this world (is "How many" 0, or its biomes ones this island hasn\'t?).', '#ffb080');
+  } else if (sel.kind === 'entities') {
+    const sp = `m:${pt.modId}:${sel.id}`;
+    if (MODS.species && MODS.species(sp)) {
+      const s = g.findFreeSpot(Math.round(p.x) + 3, Math.round(p.z), Math.floor(p.y));
+      g.spawnMonster(sp, s.x, s.y, s.z);
+      ui.msg('It\'s here, just east of you.', '#80e070');
+    }
+  }
 }
 
 // (For testing from the console.)

@@ -266,6 +266,7 @@ input[type=range].rng::-moz-range-thumb { width: 12px; height: 12px; border-radi
 .canvas-wrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hud { position: absolute; left: 10px; bottom: 10px; padding: 4px 8px; background: rgba(13, 10, 18, 0.85); border: 1px solid var(--line); border-radius: 4px; color: var(--dim); font-size: 11px; pointer-events: none; }
 .hud.r { left: auto; right: 10px; }
+.hud:empty { display: none; }
 .hud.t { bottom: auto; top: 10px; }
 .timeline { flex: none; border-top: 1px solid var(--line); background: var(--bg2); display: flex; flex-direction: column; }
 .tl-bar { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
@@ -307,6 +308,56 @@ input[type=range].rng::-moz-range-thumb { width: 12px; height: 12px; border-radi
 .blockbtn canvas { width: 32px; height: 32px; }
 .blockbtn .mk { position: absolute; top: 1px; right: 2px; font-size: 9px; color: var(--purple); }
 .helpgrid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; }
+
+/* The Builder: its layers down the side of the view, the blocks used
+   lately along the bottom. */
+.layerbar { position: absolute; right: 8px; top: 44px; bottom: 44px; width: 52px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 4px; background: rgba(13, 10, 18, 0.88); border: 1px solid var(--line); border-radius: 4px; }
+.layerbar > .btn { width: 100%; }
+.lb-list { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.lb { position: relative; height: 20px; flex: none; border-radius: 3px; cursor: pointer; display: flex; align-items: center; padding: 0 4px; border: 1px solid transparent; font-size: 11px; color: var(--dim); overflow: hidden; }
+.lb:hover { background: var(--hover); color: var(--text); }
+.lb.on { border-color: var(--gold2); background: var(--sel); color: var(--gold); }
+.lb.ground { box-shadow: inset 0 -2px 0 #5aa040; }
+.lb.under { color: var(--faint); }
+.lb .n { position: relative; z-index: 1; }
+.lb .bar { position: absolute; left: 0; bottom: 0; top: 0; background: rgba(128, 168, 255, 0.16); pointer-events: none; }
+.hotbar { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--bg2); overflow-x: auto; }
+.hotbar .blockbtn { flex: none; }
+.mark-form .field { margin-bottom: 6px; }
+.mark-form .check { margin: 4px 0 8px; }
+
+/* Loot tables. */
+.lt-h { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; color: var(--gold); }
+.lt-h .btn { margin-left: auto; }
+.lt-table { display: flex; flex-direction: column; gap: 4px; max-width: 900px; }
+.lt-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) minmax(140px, 1.2fr) 150px minmax(90px, 1fr) 30px; gap: 10px; align-items: center; padding: 4px 6px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); }
+.lt-row.head { background: none; border: none; color: var(--dim); font-size: 11px; padding-bottom: 0; }
+.lt-row.bad { border-color: var(--red); }
+.lt-row .inp.num { width: 46px; }
+.lt-bar { position: relative; height: 16px; border-radius: 3px; background: var(--bg); overflow: hidden; display: block; min-width: 60px; }
+.lt-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #c8a060, #ffe070); opacity: 0.55; }
+.lt-bar b { position: relative; font-size: 11px; padding-left: 6px; line-height: 16px; color: var(--text); }
+.loot-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; max-width: 900px; margin-top: 8px; }
+.slotgrid { display: grid; grid-template-columns: repeat(6, 40px); gap: 4px; margin-bottom: 8px; }
+.slot { width: 40px; height: 40px; background: #1d1724; border: 1px solid var(--line2); border-radius: 3px; display: grid; place-items: center; position: relative; }
+.slot canvas { width: 32px; height: 32px; }
+.slot b { position: absolute; right: 2px; bottom: 0; font-size: 11px; color: #fff; text-shadow: 1px 1px 0 #000; }
+.lt-odds { display: flex; flex-direction: column; gap: 3px; }
+.lt-odd { display: grid; grid-template-columns: 20px 1fr 110px 40px; gap: 8px; align-items: center; }
+.lt-odd .ico canvas { width: 16px; height: 16px; }
+
+/* Dungeons: a cut through the ground, the way in at the top. */
+.dg-stack { max-width: 760px; margin: 0 auto; padding: 18px; }
+.dg-sky { padding: 10px 14px 18px; border-radius: 6px 6px 0 0; background: linear-gradient(#1c2a44, #22324a 60%, #2e4a2a 60%, #24361e); }
+.dg-rock { padding: 4px 14px 14px; background: repeating-linear-gradient(135deg, #1a1612 0 10px, #1e1915 10px 20px); border-radius: 0 0 6px 6px; border-top: 4px solid #3a2a1a; }
+.dg-label { color: #c8d8f0; font-size: 11px; display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.dg-card { display: flex; gap: 14px; align-items: center; background: rgba(13, 10, 18, 0.88); border: 1px solid var(--line2); border-radius: 6px; padding: 10px; }
+.dg-card.none { border-style: dashed; }
+.dg-pic { width: 230px; height: 130px; flex: none; display: grid; place-items: center; background: #08060b; border-radius: 4px; cursor: pointer; overflow: hidden; }
+.dg-pic canvas { max-width: 100%; max-height: 100%; }
+.dg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dg-down { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--dim); font-size: 11px; padding: 8px 0; }
+.dg-boss { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 12px; padding: 10px; border: 1px solid #5a2030; border-radius: 6px; background: #1e0e14; color: #ff90a8; }
 
 /* (Narrower screens: the tools' names only on the one in use.) */
 @media (max-width: 1420px) {

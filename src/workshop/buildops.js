@@ -253,7 +253,7 @@ export const PRESETS = [
   } },
   { id: 'ruin', name: 'Ruin', icon: 'skull', blurb: 'The broken walls of something old, roofless, overgrown, with a chest left in the rubble.', w: 11, d: 9, h: 7, ground: 1, build(g, mk) {
     rect(g, 1, 1, 9, 7, 1, 'cobblestone');
-    walls(g, 1, 1, 9, 7, 2, 3, { wall: 'mossy_cobblestone', corner: 'stone_bricks', door: 'front', windows: false });
+    walls(g, 1, 1, 9, 7, 2, 3, { wall: 'mossy_bricks', corner: 'stone_bricks', door: 'front', windows: false });
     // (Fallen in, here and there.)
     for (const [x, y, z] of [[3, 4, 1], [4, 4, 1], [4, 3, 1], [9, 4, 3], [9, 4, 4], [9, 3, 4], [6, 4, 7], [7, 4, 7], [1, 4, 5], [1, 3, 5], [1, 4, 6]]) put(g, x, y, z, 'air');
     for (const [x, z] of [[3, 3], [7, 5], [5, 2]]) put(g, x, 2, z, 'tall_grass');
@@ -289,8 +289,8 @@ export const PRESETS = [
   } },
   { id: 'entrance', name: 'Dungeon way in', icon: 'stairs', blurb: 'A crumbling stone mouth in the ground: the way down into a dungeon of your own.', w: 7, d: 7, h: 6, ground: 1, build(g, mk) {
     rect(g, 1, 1, 5, 5, 1, 'stone_bricks');
-    for (const [x, z] of [[1, 1], [5, 1], [1, 5], [5, 5]]) pillar(g, x, z, 2, 2, 'mossy_cobblestone');
-    put(g, 2, 2, 1, 'mossy_cobblestone');
+    for (const [x, z] of [[1, 1], [5, 1], [1, 5], [5, 5]]) pillar(g, x, z, 2, 2, 'mossy_bricks');
+    put(g, 2, 2, 1, 'mossy_bricks');
     put(g, 4, 2, 5, 'cobblestone');
     put(g, 3, 1, 3, 'air');
     mk({ type: 'entry', x: 3, y: 1, z: 3 });
