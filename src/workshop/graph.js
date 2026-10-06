@@ -116,7 +116,7 @@ export default class GraphTool {
       wrap.append(h('h2', null, g));
       const cards = h('div', { class: 'cards' });
       for (const t of list) {
-        const c = h('div', { class: 'card tpl-card' }, h('div', { class: 't' }, h('span', { class: 'ico' }, TEMPLATE_INFO[t].icon), NODES[t].title), h('div', { class: 'd' }, TEMPLATE_INFO[t].blurb));
+        const c = h('div', { class: 'card tpl-card' }, h('div', { class: 't' }, h('span', { class: 'ico' }, ic(TEMPLATE_INFO[t].icon, 18)), NODES[t].title), h('div', { class: 'd' }, TEMPLATE_INFO[t].blurb));
         c.addEventListener('click', () => this.newFrom(t));
         cards.append(c);
       }

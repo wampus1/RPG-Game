@@ -200,12 +200,12 @@ export class NodeCanvas {
             this.changed(n, true);
           }, step: p.step || 1, min: p.min ?? -Infinity, max: p.max ?? Infinity });
         }
-      } else row.append(h('span', { class: 'nc-val wired' }, '← wired'));
+      } else row.append(h('span', { class: 'nc-val wired' }, ic('chevLeft', 8), 'wired'));
       body.append(row);
     }
     const hasAdv = d.in.some((p) => p.adv) || d.props.some((p) => p.adv || p.t === 'multi');
     if (hasAdv) {
-      const more = h('div', { class: 'nc-more' }, expanded ? '▴ fewer' : '▾ more');
+      const more = h('div', { class: 'nc-more' }, ic(expanded ? 'chevUp' : 'chevDown', 8), expanded ? 'fewer' : 'more');
       more.addEventListener('click', (e) => {
         e.stopPropagation();
         n.open = !n.open;

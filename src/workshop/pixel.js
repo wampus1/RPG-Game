@@ -6,7 +6,7 @@
 // selection, magic wand, move, dither, shading along the palette, colour
 // replace, mirror drawing, outlines, flips and turns, and pictures in and
 // out as PNG.
-import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, colorPicker, popover, contextMenu, dialog, toast, canvas, download, pickFile, readImage, textInput } from './kit.js';
+import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, colorPicker, popover, contextMenu, dialog, toast, canvas, download, pickFile, readImage, textInput, rememberColor } from './kit.js';
 import { encodeCel, decodeCel, hexToRgba, rgbaToHex, newAsset, LIMITS, freeId } from '../mod/format.js';
 import { PALETTES, quantize, titleBar, menuButton, pickRef, refInfo, vanillaIcon } from './common.js';
 import { TEX } from '../render/textures.js';
@@ -39,6 +39,9 @@ export default class PixelTool {
     // (A colour that shows on the dark checks, to begin with.)
     this.fg = 24;
     this.bg = 0;
+    // (Round 63) A colour picked that isn't in the palette yet: it goes in
+    // when it's drawn with, not before (picking one, you pass many).
+    this.pend = { fg: null, bg: null };
     this.zoom = 0;
     this.undoStack = [];
     this.redoStack = [];
@@ -449,15 +452,21 @@ export default class PixelTool {
     const b = this.colorsPanel.body;
     clear(b);
     const sw = (i) => (i ? a.palette[i - 1] : 'transparent');
-    const fgEl = h('div', { class: 'fg', style: { background: sw(this.fg) }, 'data-tip': 'First colour (left button). Click to change it.' });
-    const bgEl = h('div', { class: 'bg', style: { background: sw(this.bg) }, 'data-tip': 'Second colour (right button). Click to change it.' });
+    const shown = (w) => this.pend[w] || sw(this[w]);
+    const newTip = ' (A new colour: it joins the palette when you draw with it.)';
+    const fgEl = h('div', { class: `fg${this.pend.fg ? ' new' : ''}`, style: { background: shown('fg') }, 'data-tip': `First colour (left button). Click to change it.${this.pend.fg ? newTip : ''}` });
+    const bgEl = h('div', { class: `bg${this.pend.bg ? ' new' : ''}`, style: { background: shown('bg') }, 'data-tip': `Second colour (right button). Click to change it.${this.pend.bg ? newTip : ''}` });
+    this.fgEl = fgEl;
+    this.bgEl = bgEl;
     const swap = button(null, { icon: 'replace', small: true, kind: 'ghost', title: 'Swap them', key: 'X', onClick: () => this.swapColors() });
     fgEl.addEventListener('click', () => this.editColor(this.fg, fgEl, 'fg'));
     bgEl.addEventListener('click', () => this.editColor(this.bg, bgEl, 'bg'));
-    const hexOf = (i) => (i ? a.palette[i - 1] : 'clear');
-    b.append(h('div', { class: 'row', style: { gap: '12px' } }, h('div', { class: 'fgbg' }, fgEl, bgEl), h('div', null, h('div', { class: 'note' }, `1st: ${hexOf(this.fg)}`), h('div', { class: 'note' }, `2nd: ${hexOf(this.bg)}`), swap)));
+    const hexOf = (w) => (this.pend[w] ? `${this.pend[w]} (new)` : this[w] ? a.palette[this[w] - 1] : 'clear');
+    b.append(h('div', { class: 'row', style: { gap: '12px' } }, h('div', { class: 'fgbg' }, fgEl, bgEl), h('div', null, h('div', { class: 'note' }, `1st: ${hexOf('fg')}`), h('div', { class: 'note' }, `2nd: ${hexOf('bg')}`), swap)));
     const grid = h('div', { class: 'palette' });
-    const clearSw = h('div', { class: `pc${this.fg === 0 ? ' on' : ''}${this.bg === 0 ? ' on2' : ''}`, style: { background: 'repeating-conic-gradient(#333 0 25%, #555 0 50%) 0 0 / 8px 8px' }, 'data-tip': 'Clear (no colour)' });
+    const isFg = (i) => !this.pend.fg && this.fg === i;
+    const isBg = (i) => !this.pend.bg && this.bg === i;
+    const clearSw = h('div', { class: `pc${isFg(0) ? ' on' : ''}${isBg(0) ? ' on2' : ''}`, style: { background: 'repeating-conic-gradient(#333 0 25%, #555 0 50%) 0 0 / 8px 8px' }, 'data-tip': 'Clear (no colour)' });
     clearSw.addEventListener('click', () => this.setColor('fg', 0));
     clearSw.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -466,7 +475,7 @@ export default class PixelTool {
     grid.append(clearSw);
     a.palette.forEach((c, i) => {
       const idx = i + 1;
-      const el = h('div', { class: `pc${this.fg === idx ? ' on' : ''}${this.bg === idx ? ' on2' : ''}`, style: { background: c }, 'data-tip': `${c}  (left: 1st, right: 2nd, double-click: change it everywhere)` });
+      const el = h('div', { class: `pc${isFg(idx) ? ' on' : ''}${isBg(idx) ? ' on2' : ''}`, style: { background: c }, 'data-tip': `${c}  (left: 1st, right: 2nd, double-click: change it everywhere)` });
       el.addEventListener('click', () => this.setColor('fg', idx));
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -482,7 +491,8 @@ export default class PixelTool {
     if (a.palette.length < LIMITS.palette) {
       const add = h('div', { class: 'pc add', 'data-tip': 'Add a colour' }, ic('plus', 9));
       add.addEventListener('click', () => {
-        this.structural(() => a.palette.push(a.palette[Math.max(0, this.fg - 1)] || '#ffffff'));
+        this.structural(() => a.palette.push(this.pend.fg || a.palette[Math.max(0, this.fg - 1)] || '#ffffff'));
+        this.pend.fg = null;
         this.setColor('fg', a.palette.length);
         this.editColor(a.palette.length, add, 'edit');
       });
@@ -515,40 +525,82 @@ export default class PixelTool {
 
   setColor(which, idx) {
     this[which] = idx;
+    this.pend[which] = null;
     this.drawColors();
   }
 
   swapColors() {
     [this.fg, this.bg] = [this.bg, this.fg];
+    [this.pend.fg, this.pend.bg] = [this.pend.bg, this.pend.fg];
     this.drawColors();
   }
 
-  // A colour changed: `mode` 'fg'/'bg' (a new colour into the palette, or
-  // the nearest already there) or 'edit' (that colour itself, everywhere).
+  // The colour index `which` ('fg' or 'bg') draws with, now that it's
+  // being drawn with: a new colour picked goes into the palette here (or,
+  // the palette full, the nearest there is used).
+  useColor(which) {
+    const hex = this.pend[which];
+    if (!hex) return this[which];
+    const a = this.a;
+    this.pend[which] = null;
+    let i = a.palette.findIndex((c) => c.toLowerCase() === hex.toLowerCase());
+    if (i < 0) {
+      if (a.palette.length >= LIMITS.palette) {
+        const want = hexToRgba(hex);
+        let bd = Infinity;
+        a.palette.forEach((c, j) => {
+          const q = hexToRgba(c);
+          const d = (q[0] - want[0]) ** 2 + (q[1] - want[1]) ** 2 + (q[2] - want[2]) ** 2;
+          if (d < bd) {
+            bd = d;
+            i = j;
+          }
+        });
+        toast('The palette is full (255 colours): drawing with the nearest in it.', 'bad');
+      } else {
+        this.structural(() => a.palette.push(hex));
+        i = a.palette.length - 1;
+      }
+    }
+    this[which] = i + 1;
+    rememberColor(hex);
+    this.drawColors();
+    return this[which];
+  }
+
+  // A colour changed: `mode` 'fg'/'bg' (the colour to draw with: one of
+  // the palette's if it's there, or a new one, which goes into the palette
+  // only when it's drawn with: see useColor) or 'edit' (that colour
+  // itself, everywhere it's used).
   editColor(idx, anchor, mode) {
     const a = this.a;
-    const start = idx ? a.palette[idx - 1] : '#ffffff';
+    const start = mode !== 'edit' && this.pend[mode] ? this.pend[mode] : idx ? a.palette[idx - 1] : '#ffffff';
     let before = null;
     popover(anchor, colorPicker(start, (hex) => {
+      const c = hex.slice(0, 7);
       if (mode === 'edit') {
         if (!before) before = this.snapshot();
-        a.palette[idx - 1] = hex.slice(0, 7);
+        a.palette[idx - 1] = c;
         this.draw();
         this.drawPreview();
       } else {
-        let i = a.palette.findIndex((c) => c.toLowerCase() === hex.slice(0, 7).toLowerCase());
-        if (i < 0) {
-          if (a.palette.length >= LIMITS.palette) return toast('The palette is full (255 colours).', 'bad');
-          if (!before) before = this.snapshot();
-          a.palette.push(hex.slice(0, 7));
-          i = a.palette.length - 1;
+        const i = a.palette.findIndex((q) => q.toLowerCase() === c.toLowerCase());
+        if (i >= 0) {
+          this[mode] = i + 1;
+          this.pend[mode] = null;
+        } else this.pend[mode] = c;
+        // (Shown as it's picked; the palette's left alone.)
+        const el = mode === 'fg' ? this.fgEl : this.bgEl;
+        if (el) {
+          el.style.background = c;
+          el.classList.toggle('new', !!this.pend[mode]);
         }
-        this[mode] = i + 1;
       }
     }), { onClose: () => {
       if (before) {
         const after = JSON.stringify(this.a);
         if (after !== before) this.push({ type: 'all', before, after });
+        rememberColor(a.palette[idx - 1]);
         this.changed();
       }
       this.drawColors();
@@ -644,7 +696,7 @@ export default class PixelTool {
 
   addRamp() {
     const a = this.a;
-    const base = hexToRgba(this.fg ? a.palette[this.fg - 1] : '#888888');
+    const base = hexToRgba(this.pend.fg || (this.fg ? a.palette[this.fg - 1] : '#888888'));
     const ramp = [0.45, 0.65, 0.82, 1.15, 1.32].map((k) => {
       // (Shadows lean violet, lights lean gold: as the game's own art does.)
       const warm = k > 1 ? (k - 1) * 40 : 0;
@@ -678,7 +730,11 @@ export default class PixelTool {
     const t = this.tool;
     const o = this.opts;
     if (['pencil', 'eraser', 'dither', 'shade'].includes(t)) {
-      b.append(field('Size', slider({ value: o.size, min: 1, max: 16, int: true, onChange: (v) => (o.size = v) }), { scrub: { get: () => o.size, set: (v) => (o.size = v), min: 1, max: 16 } }));
+      const sz = slider({ value: o.size, min: 1, max: 16, int: true, onChange: (v) => (o.size = v) });
+      b.append(field('Size', sz, { scrub: { get: () => o.size, set: (v) => {
+        o.size = v;
+        sz.setValue(v);
+      }, min: 1, max: 16 } }));
       b.append(field('Shape', seg([['square', 'Square'], ['round', 'Round']], o.round ? 'round' : 'square', (v) => (o.round = v === 'round'))));
     }
     if (t === 'pencil') b.append(check('Pixel-perfect lines', o.perfect, (v) => (o.perfect = v), { tip: 'Thin strokes without doubled corners.' }));
@@ -692,8 +748,8 @@ export default class PixelTool {
     b.append(h('div', { class: 'hr' }));
     b.append(h('div', { class: 'note' }, 'For the whole layer (or the selection):'));
     b.append(h('div', { class: 'row', style: { flexWrap: 'wrap' } },
-      button('Flip ↔', { small: true, icon: 'flipH', title: 'Shift+H', onClick: () => this.flip(true) }),
-      button('Flip ↕', { small: true, title: 'Shift+V', onClick: () => this.flip(false) }),
+      button('Flip H', { small: true, icon: 'flipH', title: 'Flip it left to right (Shift+H)', onClick: () => this.flip(true) }),
+      button('Flip V', { small: true, icon: 'flipV', title: 'Flip it upside down (Shift+V)', onClick: () => this.flip(false) }),
       button('Turn', { small: true, icon: 'rotate', title: 'A quarter turn (Shift+R)', onClick: () => this.rotate() }),
       button('Outline', { small: true, icon: 'outline', title: 'An outline round it, in the 1st colour', onClick: () => this.outline() }),
       button('Shift', { small: true, icon: 'move', title: 'Move every pixel by some amount (wrapping round: for seamless tiles)', onClick: () => this.shiftDialog() })));
@@ -741,8 +797,22 @@ export default class PixelTool {
     b.append(list);
     const L = a.layers.find((q) => q.id === this.layer);
     if (L) {
-      b.append(field('Opacity', slider({ value: Math.round((L.opacity ?? 1) * 100), min: 0, max: 100, int: true, onChange: (v) => {
-        this.structural(() => (L.opacity = v / 100));
+      // (Seen as it's dragged; one step to undo when it's let go.)
+      let before = null;
+      b.append(field('Opacity', slider({ value: Math.round((L.opacity ?? 1) * 100), min: 0, max: 100, int: true, onInput: (v) => {
+        if (!before) {
+          this.flush();
+          before = this.snapshot();
+        }
+        L.opacity = v / 100;
+        this.draw();
+      }, onChange: (v) => {
+        if (before) {
+          L.opacity = v / 100;
+          const after = JSON.stringify(this.a);
+          if (after !== before) this.push({ type: 'all', before, after });
+          before = null;
+        } else this.structural(() => (L.opacity = v / 100));
         this.draw();
         this.changed(false);
       } })));
@@ -1413,7 +1483,7 @@ export default class PixelTool {
   // The colour index a button draws with.
   ink(button) {
     if (this.tool === 'eraser') return 0;
-    return button === 2 ? this.bg : this.fg;
+    return this.useColor(button === 2 ? 'bg' : 'fg');
   }
 
   begin(p, e) {
@@ -1626,6 +1696,7 @@ export default class PixelTool {
     }
     if (second) this.bg = v;
     else this.fg = v;
+    this.pend[second ? 'bg' : 'fg'] = null;
     this.drawColors();
   }
 
@@ -1902,7 +1973,7 @@ export default class PixelTool {
   outline() {
     this.dropFloat();
     const a = this.a;
-    const ink = this.fg || 1;
+    const ink = this.useColor('fg') || 1;
     this.eachTarget((c, before) => {
       for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) {
         const i = y * a.w + x;
@@ -1938,7 +2009,7 @@ export default class PixelTool {
     const drawGrid = () => {
       clear(grid);
       for (let i = 0; i < 9; i++) {
-        const b = h('button', { class: `btn small icon${i === anchor ? ' on' : ''}`, type: 'button' }, i === anchor ? '●' : '·');
+        const b = h('button', { class: `btn small icon${i === anchor ? ' on' : ''}`, type: 'button' }, ic(i === anchor ? 'dot' : 'minus', 8));
         b.addEventListener('click', () => {
           anchor = i;
           drawGrid();

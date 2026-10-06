@@ -878,11 +878,11 @@ export class DungeonEditor {
     const n = (t) => marks.filter((m) => m.type === t).length;
     const facts = [];
     if (o.floor) {
-      facts.push(n('up') ? 'way up ✓' : 'way up: made for you');
-      if (!o.last) facts.push(n('down') ? 'way down ✓' : 'way down: made for you');
-      if (o.last) facts.push(n('boss') ? 'boss marker ✓' : this.D.boss ? 'boss: far from the stairs' : 'no boss');
+      facts.push(n('up') ? 'way up: placed' : 'way up: made for you');
+      if (!o.last) facts.push(n('down') ? 'way down: placed' : 'way down: made for you');
+      if (o.last) facts.push(n('boss') ? 'boss: at its marker' : this.D.boss ? 'boss: far from the stairs' : 'no boss');
       facts.push(`${marks.filter((m) => m.type === 'spawn').reduce((s, m) => s + (m.count || 1), 0)} foes`, `${n('chest')} chests`);
-    } else facts.push(n('entry') ? 'way in ✓' : 'way in: its middle');
+    } else facts.push(n('entry') ? 'way in: placed' : 'way in: its middle');
     el.append(h('div', { class: 'dg-pic' }, pic || ic('house', 20)), h('div', { class: 'dg-info' }, h('div', { class: 'note' }, label), h('b', null, st.name), h('div', { class: 'note' }, `${st.w}×${st.d}×${st.h} · ${facts.join(' · ')}`), h('div', { class: 'row', style: { gap: '4px', marginTop: '6px' } }, button('Open', { small: true, icon: 'next', kind: 'primary', onClick: () => app.open('structures', sid) }), ...(o.actions || []))));
     el.querySelector('.dg-pic').addEventListener('click', () => app.open('structures', sid));
     return el;

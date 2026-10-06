@@ -13,7 +13,8 @@
 // Everything's saved as you go (see ModLibrary). Anything in the explorer
 // can be dragged onto any tool that can use it; right-click it for what
 // else can be done with it.
-import { h, ic, clear, button, field, textInput, colorButton, menu, contextMenu, dialog, confirm, prompt, toast, tooltips, splitter, dragSource, dropTarget, download, pickFile, readText, canvas, overlay, closeMenu } from './kit.js';
+import { h, ic, clear, button, field, textInput, colorButton, menu, contextMenu, dialog, confirm, prompt, toast, tooltips, splitter, dragSource, dropTarget, download, pickFile, readText, canvas, overlay, closeMenu, gesture } from './kit.js';
+import { ensurePixelFont } from './pixfont.js';
 import { newMod, freeId, modHash, exportMod, problems as modProblems, KIND_NAMES, COLLECTIONS, composite, cleanName, countThings, newAsset } from '../mod/format.js';
 import { NODES, makeNode, emptyGraph, lint } from '../mod/graph.js';
 import { TEMPLATES, TEMPLATE_INFO } from '../mod/nodes.js';
@@ -58,6 +59,7 @@ const SECTIONS = [
 
 let cssDone = false;
 function loadCss() {
+  ensurePixelFont();
   if (cssDone) return;
   cssDone = true;
   document.head.append(h('link', { rel: 'stylesheet', href: new URL('./workshop.css', import.meta.url).href }));
@@ -390,7 +392,7 @@ export class Workshop {
     if (sub('entities')) {
       const groups = {};
       for (const t of TEMPLATES) (groups[TEMPLATE_INFO[t].group] ||= []).push(t);
-      for (const [g, list] of Object.entries(groups)) items.push({ label: `${g}`, icon: g === 'Items' ? 'sword' : g === 'Creatures' ? 'skull' : g === 'World' ? 'cube' : 'bolt', sub: list.map((t) => ({ label: NODES[t].title, onClick: () => this.newEntity(t), tip: TEMPLATE_INFO[t].blurb })) });
+      for (const [g, list] of Object.entries(groups)) items.push({ label: `${g}`, icon: g === 'Items' ? 'sword' : g === 'Creatures' ? 'skull' : g === 'World' ? 'cube' : 'bolt', sub: list.map((t) => ({ label: NODES[t].title, icon: TEMPLATE_INFO[t].icon, onClick: () => this.newEntity(t), tip: TEMPLATE_INFO[t].blurb })) });
     }
     if (sub('structures')) items.push({ label: 'Structure...', icon: 'house', onClick: () => this.builder((b) => b.newDialog()) });
     if (sub('layouts')) items.push({ label: 'Layout (town, camp...)', icon: 'grid', onClick: () => this.create('layouts', { name: 'Layout' }) });
@@ -532,6 +534,9 @@ export class Workshop {
     if (!this.mod) return;
     const data = kind === 'meta' ? JSON.stringify(metaOf(this.mod)) : JSON.stringify(this.mod[kind][id] ?? null);
     const k = `${kind}:${id}`;
+    // (A drag of a slider is one step back, not one for each small move.)
+    if (gesture.on && this.gestureCk === `${gesture.n}:${k}`) return;
+    this.gestureCk = gesture.on ? `${gesture.n}:${k}` : null;
     const H = this.hist(k);
     if (H.undo.length && H.undo[H.undo.length - 1] === data) return;
     H.undo.push(data);
@@ -659,7 +664,7 @@ export class Workshop {
       const list = Object.values(m[S.key] || {}).filter((t) => !f || (t.name || '').toLowerCase().includes(f)).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       if (f && !list.length) continue;
       const closed = !!this.closed[S.key] && !f;
-      const head = h('div', { class: `ex-cat${closed ? ' closed' : ''}` }, h('span', { class: 'chev' }, '▾'), ic(S.icon, 11), S.name, h('span', { class: 'n' }, list.length || ''));
+      const head = h('div', { class: `ex-cat${closed ? ' closed' : ''}` }, h('span', { class: 'chev' }, ic('chevDown', 8)), ic(S.icon, 11), h('span', { class: 'cn' }, S.name), h('span', { class: 'n' }, list.length || ''));
       const plus = button(null, { icon: 'plus', kind: 'ghost', small: true, cls: 'add', title: `New ${KIND_NAMES[S.key][0]}` });
       plus.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -769,7 +774,7 @@ export class Workshop {
     const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book' };
     if (kind === 'entities') {
       const tp = rootType(t);
-      return ic({ 'tpl.block': 'cube', 'tpl.boss': 'crown', 'tpl.npc': 'person', 'tpl.hostile': 'skull', 'tpl.animal': 'heart', 'tpl.effect': 'star', 'tpl.event': 'bolt', 'tpl.recipe': 'gear', 'tpl.projectile': 'target' }[tp] || 'sword');
+      return ic(TEMPLATE_INFO[tp] ? TEMPLATE_INFO[tp].icon : 'node');
     }
     return ic(icons[kind] || 'info');
   }

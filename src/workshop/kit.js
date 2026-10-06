@@ -1,7 +1,15 @@
 // The Workshop's pieces (round 62): buttons, fields, sliders, colour
 // pickers, menus, dialogs, notices, tooltips, panels that resize, and
-// dragging things from one place to another. Plain DOM, the game's colours
-// (see workshop.css).
+// dragging things from one place to another. Plain DOM, styled by
+// workshop.css.
+//
+// (Round 63) Whatever opens last is on top: a menu opened from a dialog
+// shows over it, a sub-menu over its menu, a pop-up's own menu over the
+// pop-up (see raise). Sub-menus open when the pointer rests on them, and
+// the keys work in menus. Escape closes one thing at a time, the one on
+// top. Sliders follow the pointer even when the panel they're in is drawn
+// afresh under them, and a drag is one step to undo. The colour picker's
+// "lately used" row only keeps colours that were used.
 import { iconSvg } from './icons.js';
 
 // ------------------------------------------------------------ elements
@@ -43,6 +51,55 @@ export function ic(name, size = 12) {
   return s;
 }
 
+// ------------------------------------------------------------ the layer above
+// Menus, pop-ups, dialogs, notices and tips go in one layer over the
+// Workshop. Each new thing there is raised over all that came before.
+let layer = null;
+let zTop = 100;
+export function overlay() {
+  if (!layer || !layer.isConnected) {
+    layer = h('div', { class: 'ws-layer' });
+    (document.getElementById('workshop') || document.body).append(layer);
+  }
+  return layer;
+}
+export function raise(el) {
+  el.style.zIndex = String(++zTop);
+  return el;
+}
+// Is `t` (something clicked) in a thing of the layer raised over `el`?
+function above(t, el) {
+  const top = t && t.closest ? t.closest('.ws-layer > *') : null;
+  return !!top && top !== el && +top.style.zIndex > +(el.style.zIndex || 0);
+}
+
+// Escape closes what's on top, one thing at a time.
+const escStack = [];
+export function onEscape(fn) {
+  escStack.push(fn);
+  return () => {
+    const i = escStack.lastIndexOf(fn);
+    if (i >= 0) escStack.splice(i, 1);
+  };
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !escStack.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  escStack[escStack.length - 1]();
+}, true);
+
+// A change made by dragging (a slider, a label scrubbed): one step to undo,
+// however many small changes it made on the way (see Workshop.checkpoint).
+export const gesture = { on: false, n: 0 };
+const gestureStart = () => {
+  gesture.on = true;
+  gesture.n++;
+};
+const gestureEnd = () => {
+  gesture.on = false;
+};
+
 // ------------------------------------------------------------ buttons
 // button('Save', { icon: 'save', kind: 'primary', title, key, onClick })
 export function button(label, o = {}) {
@@ -70,7 +127,7 @@ export function scrubber(el, { get, set, step = 1, min = -Infinity, max = Infini
     e.preventDefault();
     const x0 = e.clientX;
     const v0 = +get() || 0;
-    el.setPointerCapture(e.pointerId);
+    gestureStart();
     const move = (ev) => {
       const k = ev.shiftKey ? 10 : ev.altKey ? 0.1 : 1;
       let v = v0 + Math.round((ev.clientX - x0) / 4) * step * k;
@@ -78,11 +135,14 @@ export function scrubber(el, { get, set, step = 1, min = -Infinity, max = Infini
       set(+v.toFixed(4));
     };
     const up = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      gestureEnd();
     };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
   });
 }
 
@@ -113,6 +173,7 @@ export function numberInput(o = {}) {
     o.onChange?.(v);
   };
   el.addEventListener('change', commit);
+  el.addEventListener('focus', () => el.select());
   el.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') el.blur();
@@ -129,24 +190,174 @@ export function numberInput(o = {}) {
   return el;
 }
 
+// A number on a track, with a box to type it in. Dragged, it says so at
+// most once a frame (onInput, or onChange when there's no onInput), and
+// onChange once more when let go; it keeps following the pointer even if
+// the panel it's in is drawn afresh under it. Click the track to jump
+// there, drag the knob to move from where it is; hold Shift for fine
+// steps. Focused (clicked, or Tab), the arrow keys, Page Up/Down, Home and
+// End move it, and so does the wheel. `def`: double-click to put it back.
 export function slider(o = {}) {
-  const r = h('input', { class: 'rng', type: 'range', min: o.min ?? 0, max: o.max ?? 100, step: o.step ?? 1 });
-  r.value = o.value ?? 0;
-  const n = numberInput({ value: o.value ?? 0, min: o.min, max: o.max, step: o.step, int: o.int, onChange: (v) => {
-    r.value = v;
-    o.onChange?.(v);
+  const min = +(o.min ?? 0);
+  const max = +(o.max ?? 100);
+  const step = Math.max(1e-6, +(o.step ?? 1));
+  const dec = (String(step).split('.')[1] || '').length;
+  const snap = (x) => {
+    let v = Math.max(min, Math.min(max, +x || 0));
+    v = min + Math.round((v - min) / step) * step;
+    v = +v.toFixed(Math.min(8, dec + 1));
+    if (o.int) v = Math.round(v);
+    return Math.max(min, Math.min(max, v));
+  };
+  let v = snap(o.value ?? min);
+  let sent = v;
+  let raf = 0;
+  // (A panel drawn afresh by a change keeps where it was scrolled to.)
+  let scroller = null;
+  let scrollTop = 0;
+  const hold = () => {
+    scroller = null;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (p.scrollHeight > p.clientHeight + 1 && /(auto|scroll)/.test(window.getComputedStyle(p).overflowY)) {
+        scroller = p;
+        scrollTop = p.scrollTop;
+        break;
+      }
+    }
+  };
+  const keep = () => {
+    if (scroller && scroller.isConnected && scroller.scrollTop !== scrollTop) scroller.scrollTop = scrollTop;
+  };
+  const say = (fn) => {
+    fn?.(v);
+    keep();
+  };
+  const fill = h('div', { class: 'sl-fill' });
+  const knob = h('div', { class: 'sl-knob' });
+  const track = h('div', { class: 'sl-track', tabindex: '0', role: 'slider', 'aria-valuemin': String(min), 'aria-valuemax': String(max), 'data-tip': o.tip || null }, h('div', { class: 'sl-groove' }), fill, knob);
+  const steps = (max - min) / step;
+  if (steps >= 2 && steps <= 20) for (let i = 1; i < steps; i++) track.append(h('i', { class: 'sl-tick', style: { left: `${(i / steps) * 100}%` } }));
+  const box = numberInput({ value: v, min, max, step, int: o.int, onChange: (nv) => {
+    const was = v;
+    show(snap(nv));
+    commit(was);
   } });
-  r.addEventListener('input', () => {
-    const v = +r.value;
-    n.setValue(v);
-    o.onInput?.(v);
-    if (!o.onInput) o.onChange?.(v);
+  const el = h('div', { class: 'slider' }, track, box);
+  function show(nv) {
+    v = nv;
+    const f = max > min ? (v - min) / (max - min) : 0;
+    fill.style.width = `${f * 100}%`;
+    knob.style.left = `${f * 100}%`;
+    track.setAttribute('aria-valuenow', String(v));
+    box.setValue(v);
+  }
+  const live = () => {
+    if (raf) return;
+    raf = window.requestAnimationFrame(() => {
+      raf = 0;
+      if (v === sent) return;
+      sent = v;
+      say(o.onInput || o.onChange);
+    });
+  };
+  // Let go (or a key, or the box): said for good.
+  function commit(from) {
+    window.cancelAnimationFrame(raf);
+    raf = 0;
+    if (!scroller) hold();
+    if (o.onInput) {
+      if (v !== sent) {
+        sent = v;
+        say(o.onInput);
+      }
+      if (v !== from) say(o.onChange);
+    } else if (v !== sent) {
+      sent = v;
+      say(o.onChange);
+    }
+    scroller = null;
+  }
+  track.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    track.focus({ preventScroll: true });
+    gestureStart();
+    hold();
+    const r = track.getBoundingClientRect();
+    const from = v;
+    const span = Math.max(1, r.width);
+    let ax = e.clientX;
+    let av = v;
+    // (Grabbed by the knob, or with Shift: it moves on from where it is,
+    // a tenth as fast while Shift's held.)
+    let rel = e.target === knob || e.shiftKey;
+    let fine = e.shiftKey;
+    const at = (ev) => {
+      if (ev.shiftKey !== fine) {
+        fine = ev.shiftKey;
+        rel = true;
+        ax = ev.clientX;
+        av = v;
+      }
+      if (rel) return snap(av + ((ev.clientX - ax) / span) * (max - min) * (fine ? 0.1 : 1));
+      return snap(min + ((ev.clientX - r.left) / span) * (max - min));
+    };
+    if (!rel) show(at(e));
+    live();
+    track.classList.add('drag');
+    const move = (ev) => {
+      const nv = at(ev);
+      if (nv !== v) {
+        show(nv);
+        live();
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      track.classList.remove('drag');
+      commit(from);
+      gestureEnd();
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
   });
-  r.addEventListener('change', () => o.onChange?.(+r.value));
-  const el = h('div', { class: 'slider' }, r, n);
-  el.setValue = (v) => {
-    r.value = v;
-    n.setValue(v);
+  track.addEventListener('keydown', (e) => {
+    const big = Math.max(step, snap(min + (max - min) / 10) - min);
+    let nv = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') nv = v + (e.shiftKey ? big : step);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') nv = v - (e.shiftKey ? big : step);
+    else if (e.key === 'PageUp') nv = v + big;
+    else if (e.key === 'PageDown') nv = v - big;
+    else if (e.key === 'Home') nv = min;
+    else if (e.key === 'End') nv = max;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    const was = v;
+    show(snap(nv));
+    commit(was);
+  });
+  track.addEventListener('wheel', (e) => {
+    if (document.activeElement !== track) return;
+    e.preventDefault();
+    const was = v;
+    show(snap(v + (e.deltaY < 0 ? step : -step) * (e.shiftKey ? 10 : 1)));
+    commit(was);
+  }, { passive: false });
+  if (o.def !== undefined) {
+    track.addEventListener('dblclick', () => {
+      const was = v;
+      show(snap(o.def));
+      commit(was);
+    });
+  }
+  show(v);
+  el.setValue = (nv) => {
+    show(snap(nv));
+    sent = v;
   };
   return el;
 }
@@ -195,8 +406,8 @@ export function chips(opts, chosen, onChange) {
   const set = new Set(chosen || []);
   const el = h('div', { class: 'chips' });
   for (const o of opts) {
-    const [v, label] = Array.isArray(o) ? o : [o, o];
-    const c = h('span', { class: `chip${set.has(v) ? ' on' : ''}` }, label);
+    const [v, label, tip] = Array.isArray(o) ? o : [o, o];
+    const c = h('span', { class: `chip${set.has(v) ? ' on' : ''}`, 'data-tip': tip || null }, label);
     c.addEventListener('click', () => {
       if (set.has(v)) set.delete(v);
       else set.add(v);
@@ -230,14 +441,14 @@ export function panel(title, body, o = {}) {
   } catch {
     // No storage: as given.
   }
-  const head = h('div', { class: 'panel-h' }, h('span', { class: 'chev' }, open ? '▾' : '▸'), title, o.tools ? h('span', { class: 'tools' }, o.tools) : null);
+  const chev = h('span', { class: 'chev' }, ic('chevDown', 8));
+  const head = h('div', { class: 'panel-h' }, chev, h('span', { class: 'pt' }, title), o.tools ? h('span', { class: 'tools' }, o.tools) : null);
   const b = h('div', { class: 'panel-b' }, body);
   const el = h('div', { class: `panel${open ? '' : ' closed'}` }, head, b);
   head.addEventListener('click', (e) => {
     if (e.target.closest('.tools')) return;
     open = !open;
     el.classList.toggle('closed', !open);
-    head.firstChild.textContent = open ? '▾' : '▸';
     try {
       if (key) localStorage.setItem(key, open ? '1' : '0');
     } catch {
@@ -270,7 +481,39 @@ export function hsvToHex(hh, s, v, a = 1) {
   const c = (x) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, '0');
   return `#${c(f(5))}${c(f(3))}${c(f(1))}${a < 1 ? c(a) : ''}`;
 }
-const recentColors = [];
+
+// Colours lately used (painted with, given to something): the picker's
+// row of them. Only colours that were used, not every one passed on the
+// way to one (round 63).
+const RECENT_KEY = 'ws-recent-colors';
+const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i;
+let recentColors = null;
+function recents() {
+  if (!recentColors) {
+    try {
+      recentColors = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter((c) => HEX.test(c)).slice(0, 16);
+    } catch {
+      recentColors = [];
+    }
+  }
+  return recentColors;
+}
+export function rememberColor(hex) {
+  if (!HEX.test(hex || '')) return;
+  const list = recents();
+  const c = hex.toLowerCase();
+  const i = list.indexOf(c);
+  if (i === 0) return;
+  if (i > 0) list.splice(i, 1);
+  list.unshift(c);
+  list.length = Math.min(list.length, 16);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    // Fine.
+  }
+}
+
 export function colorPicker(value, onChange, o = {}) {
   let { h: H, s: S, v: V, a: A } = hexToHsv(value);
   const sv = h('div', { class: 'sv' });
@@ -278,13 +521,14 @@ export function colorPicker(value, onChange, o = {}) {
   sv.append(dot);
   const hue = h('div', { class: 'hue' }, h('div', { class: 'bar' }));
   const alpha = o.alpha ? h('div', { class: 'alpha' }, h('div', { class: 'bar' })) : null;
+  const was = h('span', { class: 'cp-was', style: { background: value }, 'data-tip': `As it was (${value}): click to go back to it` });
+  const now = h('span', { class: 'cp-now' });
   const hexIn = textInput({ value, onChange: (t) => {
     const m = /^#?([0-9a-f]{6}([0-9a-f]{2})?)$/i.exec(t.trim());
     if (!m) return;
     ({ h: H, s: S, v: V, a: A } = hexToHsv(`#${m[1]}`));
     draw(true);
   } });
-  const recent = h('div', { class: 'recent' });
   const draw = (emit) => {
     sv.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${hsvToHex(H, 1, 1)})`;
     dot.style.left = `${S * 100}%`;
@@ -296,26 +540,32 @@ export function colorPicker(value, onChange, o = {}) {
       alpha.firstChild.style.left = `${A * 100}%`;
     }
     const hex = hsvToHex(H, S, V, alpha ? A : 1);
+    now.style.background = hex;
     if (document.activeElement !== hexIn) hexIn.value = hex;
     if (emit) onChange(hex);
   };
+  was.addEventListener('click', () => {
+    ({ h: H, s: S, v: V, a: A } = hexToHsv(value));
+    draw(true);
+  });
   const drag = (el, fn) => el.addEventListener('pointerdown', (e) => {
-    el.setPointerCapture(e.pointerId);
+    e.preventDefault();
     const at = (ev) => {
       const r = el.getBoundingClientRect();
       fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height)));
       draw(true);
     };
     at(e);
+    gestureStart();
     const up = () => {
-      el.removeEventListener('pointermove', at);
-      el.removeEventListener('pointerup', up);
-      const hx = hsvToHex(H, S, V, alpha ? A : 1);
-      if (!recentColors.includes(hx)) recentColors.unshift(hx);
-      recentColors.length = Math.min(recentColors.length, 14);
+      window.removeEventListener('pointermove', at, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      gestureEnd();
     };
-    el.addEventListener('pointermove', at);
-    el.addEventListener('pointerup', up);
+    window.addEventListener('pointermove', at, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
   });
   drag(sv, (x, y) => {
     S = x;
@@ -323,7 +573,9 @@ export function colorPicker(value, onChange, o = {}) {
   });
   drag(hue, (x) => (H = x * 360));
   if (alpha) drag(alpha, (x) => (A = x));
-  for (const c of recentColors) {
+  const list = recents();
+  const recent = h('div', { class: 'recent' });
+  for (const c of list) {
     const sw = h('span', { style: { background: c }, 'data-tip': c });
     sw.addEventListener('click', () => {
       ({ h: H, s: S, v: V, a: A } = hexToHsv(c));
@@ -332,7 +584,9 @@ export function colorPicker(value, onChange, o = {}) {
     recent.append(sw);
   }
   draw(false);
-  return h('div', { class: 'cp' }, sv, hue, alpha, h('div', { class: 'row' }, h('span', { class: 'note' }, 'Hex'), h('div', { class: 'grow' }, hexIn)), recentColors.length ? recent : null);
+  return h('div', { class: 'cp' }, sv, hue, alpha,
+    h('div', { class: 'row' }, h('span', { class: 'cp-pair' }, was, now), h('span', { class: 'note' }, 'Hex'), h('div', { class: 'grow' }, hexIn)),
+    list.length ? h('div', { class: 'note cp-lh' }, 'Lately used') : null, list.length ? recent : null);
 }
 
 export function colorButton(value, onChange, o = {}) {
@@ -343,11 +597,16 @@ export function colorButton(value, onChange, o = {}) {
     b.dataset.tip = o.tip || v;
   };
   paint();
-  b.addEventListener('click', () => popover(b, colorPicker(v, (nv) => {
-    v = nv;
-    paint();
-    onChange(nv);
-  }, o)));
+  b.addEventListener('click', () => {
+    const start = v;
+    popover(b, colorPicker(v, (nv) => {
+      v = nv;
+      paint();
+      onChange(nv);
+    }, o), { onClose: () => {
+      if (v !== start) rememberColor(v);
+    } });
+  });
   b.setValue = (nv) => {
     v = nv;
     paint();
@@ -355,22 +614,13 @@ export function colorButton(value, onChange, o = {}) {
   return b;
 }
 
-// ------------------------------------------------------------ layers above
-let layer = null;
-export function overlay() {
-  if (!layer || !layer.isConnected) {
-    layer = h('div', { class: 'ws-layer' });
-    (document.getElementById('workshop') || document.body).append(layer);
-  }
-  return layer;
-}
-
-// Something shown by an element (a colour picker, a list): gone again
-// when you click elsewhere or press Escape.
+// ------------------------------------------------------------ pop-ups
+// Something shown by an element (a colour picker, a list): gone again when
+// you click elsewhere or press Escape.
 let openPop = null;
 export function popover(anchor, content, o = {}) {
   closePopover();
-  const el = h('div', { class: 'popover' }, content);
+  const el = raise(h('div', { class: 'popover' }, content));
   overlay().append(el);
   const r = anchor.getBoundingClientRect();
   const W = el.offsetWidth;
@@ -382,95 +632,227 @@ export function popover(anchor, content, o = {}) {
   el.style.left = `${Math.max(8, x)}px`;
   el.style.top = `${y}px`;
   const away = (e) => {
-    if (!el.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) closePopover();
-  };
-  const esc = (e) => {
-    if (e.key === 'Escape') closePopover();
+    if (el.contains(e.target) || e.target === anchor || anchor.contains(e.target) || above(e.target, el)) return;
+    closePopover();
   };
   setTimeout(() => {
-    document.addEventListener('pointerdown', away, true);
-    document.addEventListener('keydown', esc, true);
+    if (openPop && openPop.el === el) document.addEventListener('pointerdown', away, true);
   }, 0);
+  const unEsc = onEscape(() => closePopover());
   openPop = { el, off: () => {
     document.removeEventListener('pointerdown', away, true);
-    document.removeEventListener('keydown', esc, true);
+    unEsc();
     o.onClose?.();
   } };
   return el;
 }
 export function closePopover() {
   if (!openPop) return;
-  openPop.el.remove();
-  openPop.off();
+  const p = openPop;
   openPop = null;
+  p.el.remove();
+  p.off();
 }
 
-// A menu of things to do: [{ label, icon, key, onClick, danger, off, sep,
-// head, sub: [...] }], at (x, y).
-let openMenu = null;
-export function menu(items, x, y, o = {}) {
+// ------------------------------------------------------------ menus
+// A menu of things to do: [{ label, icon, swatch, key, tip, onClick,
+// danger, off, sep, head, sub: [...] }], at (x, y). A thing with `sub`
+// opens its menu beside it when the pointer rests on it (or it's clicked,
+// or → is pressed on it). Keys: ↑ ↓ to choose, → or Enter into a
+// sub-menu, ← back out of it, Enter to do it, Escape to close the
+// sub-menu (or the menu), a letter to the next thing starting with it.
+let root = null;
+export const menuOpen = () => !!root;
+
+export function menu(items, x, y) {
   closeMenu();
-  const el = h('div', { class: 'menu', role: 'menu' });
-  const build = (list, into) => {
-    for (const it of list) {
-      if (!it) continue;
-      if (it.sep) {
-        into.append(h('div', { class: 'sep' }));
-        continue;
-      }
-      if (it.head) {
-        into.append(h('div', { class: 'mh' }, it.head));
-        continue;
-      }
-      const mi = h('div', { class: `mi${it.danger ? ' danger' : ''}${it.off ? ' off' : ''}${it.sub ? ' sub' : ''}`, 'data-tip': it.tip || null }, h('span', { class: 'ic' }, it.icon ? ic(it.icon) : it.swatch ? h('span', { style: { width: '10px', height: '10px', borderRadius: '2px', background: it.swatch, display: 'inline-block' } }) : ''), h('span', null, it.label), it.key ? h('span', { class: 'k' }, it.key) : null);
-      if (it.sub) {
-        mi.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const r = mi.getBoundingClientRect();
-          menu(it.sub, r.right + 2, r.top - 4, { keep: true });
-        });
-      } else {
-        mi.addEventListener('click', () => {
-          closeMenu();
-          it.onClick?.();
-        });
-      }
-      into.append(mi);
-    }
+  const M = openMenuAt(items, x, y, null);
+  root = M;
+  const away = (e) => {
+    for (let m = root; m; m = m.child) if (m.el.contains(e.target)) return;
+    if (root && above(e.target, root.el)) return;
+    closeMenu();
   };
-  build(items, el);
+  const keys = (e) => menuKey(e);
+  setTimeout(() => {
+    if (root !== M) return;
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', keys, true);
+  }, 0);
+  const unEsc = onEscape(() => {
+    let d = root;
+    while (d && d.child) d = d.child;
+    if (d && d.parent) closeChildren(d.parent);
+    else closeMenu();
+  });
+  M.off = () => {
+    document.removeEventListener('pointerdown', away, true);
+    document.removeEventListener('keydown', keys, true);
+    unEsc();
+  };
+  return M.el;
+}
+
+function openMenuAt(items, x, y, parent, leftEdge = null) {
+  const el = raise(h('div', { class: 'menu', role: 'menu' }));
+  const M = { el, items: [], parent, child: null, from: -1, at: -1, timer: 0, off: null };
+  for (const it of items) {
+    if (!it) continue;
+    if (it.sep) {
+      el.append(h('div', { class: 'sep' }));
+      continue;
+    }
+    if (it.head) {
+      el.append(h('div', { class: 'mh' }, it.head));
+      continue;
+    }
+    const icon = it.icon ? ic(it.icon) : it.swatch ? h('span', { class: 'sw', style: { background: it.swatch } }) : '';
+    const mi = h('div', { class: `mi${it.danger ? ' danger' : ''}${it.off ? ' off' : ''}${it.sub ? ' sub' : ''}`, role: 'menuitem', 'data-tip': it.tip || null },
+      h('span', { class: 'ic' }, icon), h('span', { class: 'ml' }, it.label), it.key ? h('span', { class: 'k' }, it.key) : null, it.sub ? h('span', { class: 'arr' }, ic('chevRight', 8)) : null);
+    const idx = M.items.length;
+    M.items.push({ it, mi });
+    mi.addEventListener('pointerenter', () => hoverItem(M, idx));
+    mi.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activate(M, idx, false);
+    });
+    el.append(mi);
+  }
+  // (Into a sub-menu: its menu keeps it open.)
+  el.addEventListener('pointerenter', () => {
+    if (M.parent) {
+      window.clearTimeout(M.parent.timer);
+      M.parent.timer = 0;
+      if (M.parent.items[M.from]) setHot(M.parent, M.from);
+    }
+  });
   overlay().append(el);
   const W = el.offsetWidth;
   const H = el.offsetHeight;
-  el.style.left = `${Math.max(6, Math.min(x, window.innerWidth - W - 6))}px`;
+  let left = x;
+  if (left + W > window.innerWidth - 6) left = leftEdge !== null ? leftEdge - W : window.innerWidth - W - 6;
+  el.style.left = `${Math.max(6, left)}px`;
   el.style.top = `${Math.max(6, Math.min(y, window.innerHeight - H - 6))}px`;
-  const prev = o.keep && openMenu ? openMenu : null;
-  const away = (e) => {
-    if (!el.contains(e.target) && !(prev && prev.el.contains(e.target))) closeMenu();
-  };
-  const key = (e) => {
-    if (e.key === 'Escape') closeMenu();
-  };
-  setTimeout(() => {
-    document.addEventListener('pointerdown', away, true);
-    document.addEventListener('keydown', key, true);
-  }, 0);
-  const mine = { el, prev, off: () => {
-    document.removeEventListener('pointerdown', away, true);
-    document.removeEventListener('keydown', key, true);
-  } };
-  if (prev) prev.child = mine;
-  openMenu = mine;
-  return el;
+  return M;
 }
-export function closeMenu() {
-  let m = openMenu;
-  while (m) {
-    m.el.remove();
-    m.off();
-    m = m.prev;
+
+function setHot(M, idx) {
+  if (M.at >= 0 && M.items[M.at]) M.items[M.at].mi.classList.remove('hot');
+  M.at = idx;
+  if (idx >= 0 && M.items[idx]) M.items[idx].mi.classList.add('hot');
+}
+
+function hoverItem(M, idx) {
+  setHot(M, idx);
+  window.clearTimeout(M.timer);
+  M.timer = 0;
+  const { it } = M.items[idx];
+  if (M.child && M.child.from === idx) return;
+  // (A moment's grace: the pointer on its way to an open sub-menu may pass
+  // over others.)
+  const wait = M.child ? 240 : it.sub ? 90 : 0;
+  if (!wait && !it.sub) return;
+  M.timer = window.setTimeout(() => {
+    M.timer = 0;
+    if (!M.el.isConnected) return;
+    closeChildren(M);
+    if (it.sub && !it.off && M.at === idx) openSub(M, idx, false);
+  }, wait);
+}
+
+function openSub(M, idx, keyed) {
+  closeChildren(M);
+  const { it, mi } = M.items[idx];
+  const r = mi.getBoundingClientRect();
+  const S = openMenuAt(it.sub, r.right + 2, r.top - 5, M, r.left - 2);
+  S.from = idx;
+  M.child = S;
+  mi.classList.add('open');
+  if (keyed) setHot(S, nextOn(S, -1, 1));
+}
+
+function closeChildren(M) {
+  if (!M.child) return;
+  if (M.items[M.child.from]) M.items[M.child.from].mi.classList.remove('open');
+  for (let c = M.child; c; c = c.child) {
+    window.clearTimeout(c.timer);
+    c.el.remove();
   }
-  openMenu = null;
+  M.child = null;
+}
+
+function activate(M, idx, keyed) {
+  const { it } = M.items[idx];
+  if (it.off) return;
+  if (it.sub) {
+    window.clearTimeout(M.timer);
+    M.timer = 0;
+    if (M.child && M.child.from === idx) {
+      if (keyed) setHot(M.child, nextOn(M.child, -1, 1));
+      return;
+    }
+    openSub(M, idx, keyed);
+    return;
+  }
+  closeMenu();
+  it.onClick?.();
+}
+
+// The next of a menu's things (from `i`, going `d`) that can be chosen.
+function nextOn(M, i, d) {
+  const n = M.items.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (((i + d * k) % n) + n) % n;
+    if (!M.items[j].it.off) return j;
+  }
+  return -1;
+}
+
+function menuKey(e) {
+  if (!root) return;
+  let M = root;
+  while (M.child) M = M.child;
+  const k = e.key;
+  const stop = () => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  if (k === 'ArrowDown' || k === 'ArrowUp') {
+    stop();
+    setHot(M, nextOn(M, M.at < 0 && k === 'ArrowUp' ? 0 : M.at, k === 'ArrowDown' ? 1 : -1));
+  } else if (k === 'ArrowRight') {
+    stop();
+    if (M.at >= 0 && M.items[M.at].it.sub && !M.items[M.at].it.off) openSub(M, M.at, true);
+  } else if (k === 'ArrowLeft') {
+    stop();
+    if (M.parent) closeChildren(M.parent);
+  } else if (k === 'Enter' || k === ' ') {
+    stop();
+    if (M.at >= 0) activate(M, M.at, true);
+  } else if (k.length === 1 && /\S/.test(k) && !e.ctrlKey && !e.metaKey) {
+    stop();
+    const c = k.toLowerCase();
+    const n = M.items.length;
+    for (let s = 1; s <= n; s++) {
+      const j = (M.at + s + n) % n;
+      const { it } = M.items[j];
+      if (!it.off && String(it.label || '').toLowerCase().startsWith(c)) {
+        setHot(M, j);
+        break;
+      }
+    }
+  }
+}
+
+export function closeMenu() {
+  if (!root) return;
+  const M = root;
+  root = null;
+  for (let c = M; c; c = c.child) {
+    window.clearTimeout(c.timer);
+    c.el.remove();
+  }
+  M.off?.();
 }
 export function contextMenu(e, items) {
   e.preventDefault();
@@ -484,9 +866,11 @@ export function contextMenu(e, items) {
 export function dialog(o) {
   return new Promise((resolve) => {
     const body = h('div', { class: 'db' }, typeof o.body === 'function' ? o.body() : o.body);
+    let unEsc = null;
     const close = (v) => {
       scrim.remove();
       document.removeEventListener('keydown', key, true);
+      unEsc?.();
       resolve(v);
     };
     if (o.handle) o.handle.close = close;
@@ -497,16 +881,15 @@ export function dialog(o) {
         close(b.value ?? b.label);
       } }));
     }
-    const box = h('div', { class: `dialog${o.wide ? ' wide' : ''}`, role: 'dialog' }, h('div', { class: 'dh' }, o.icon ? ic(o.icon, 14) : null, o.title), body, foot);
-    const scrim = h('div', { class: 'scrim' }, box);
+    const box = h('div', { class: `dialog${o.wide ? ' wide' : ''}`, role: 'dialog' }, h('div', { class: 'dh' }, o.icon ? ic(o.icon, 12) : null, h('span', { class: 'dt' }, o.title)), body, foot);
+    const scrim = raise(h('div', { class: 'scrim' }, box));
     scrim.addEventListener('pointerdown', (e) => {
       if (e.target === scrim && !o.modal) close(null);
     });
     const key = (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close(null);
-      } else if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA') && o.enter !== false) {
+      // (A menu or a pop-up over it has the keys first.)
+      if (root || (openPop && above(openPop.el, scrim))) return;
+      if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA') && o.enter !== false) {
         const def = (o.buttons || []).find((q) => q.kind === 'primary' || q.kind === 'go' || q.kind === 'danger');
         if (def) {
           e.stopPropagation();
@@ -517,6 +900,7 @@ export function dialog(o) {
       }
     };
     document.addEventListener('keydown', key, true);
+    unEsc = onEscape(() => close(null));
     overlay().append(scrim);
     const first = box.querySelector('input, textarea');
     if (first) setTimeout(() => {
@@ -551,8 +935,8 @@ export function toast(text, kind = '', ms = 3200) {
 // when the pointer rests on it.
 let tipEl = null;
 let tipT = null;
-export function tooltips(root) {
-  root.addEventListener('pointerover', (e) => {
+export function tooltips(root2) {
+  root2.addEventListener('pointerover', (e) => {
     const t = e.target.closest && e.target.closest('[data-tip]');
     window.clearTimeout(tipT);
     if (tipEl) tipEl.remove();
@@ -573,7 +957,7 @@ export function tooltips(root) {
       tipEl.style.top = `${y}px`;
     }, 420);
   });
-  root.addEventListener('pointerdown', () => {
+  root2.addEventListener('pointerdown', () => {
     window.clearTimeout(tipT);
     if (tipEl) tipEl.remove();
     tipEl = null;

@@ -1,7 +1,7 @@
 // What the Workshop's tools share (round 62): palettes, turning a picture
 // into palette art, choosing one of the mod's things (or one of the
 // game's own) for a field, and the game's own lists.
-import { h, ic, clear, menu, dropTarget, canvas, textInput, overlay } from './kit.js';
+import { h, ic, clear, menu, dropTarget, canvas, textInput, overlay, raise, onEscape } from './kit.js';
 import { DEFAULT_PALETTE, rgbaToHex, hexToRgba, composite } from '../mod/format.js';
 import { NODES } from '../mod/graph.js';
 import { ITEMS } from '../world/items.js';
@@ -260,7 +260,7 @@ export function pickRef(app, t, anchor, onPick, o = {}) {
   const mine = refOptions(app, t);
   const game = R.vanilla ? (R.vanilla === 'item' ? vanillaItems() : R.vanilla === 'block' ? vanillaBlocks() : vanillaCreatures()).map((k) => ({ value: k, name: R.vanilla === 'item' ? itemName(k) : R.vanilla === 'block' ? blockName(k) : creatureName(k), thumb: () => vanillaIcon(R.vanilla, k) })) : [];
   const r = anchor.getBoundingClientRect();
-  const box = h('div', { class: 'menu', style: { width: '280px' } });
+  const box = raise(h('div', { class: 'menu', style: { width: '280px' } }));
   const q = textInput({ placeholder: `Find ${R.name}...` });
   const list = h('div', { style: { maxHeight: '320px', overflow: 'auto' }, class: 'scroll' });
   const draw = () => {
@@ -307,19 +307,17 @@ export function pickRef(app, t, anchor, onPick, o = {}) {
       off();
     }
   };
-  const esc = (e) => {
-    if (e.key === 'Escape') {
-      box.remove();
-      off();
-    }
-  };
+  // (Escape: this list closes, not what it's over.)
+  const unEsc = onEscape(() => {
+    box.remove();
+    off();
+  });
   const off = () => {
     document.removeEventListener('pointerdown', away, true);
-    document.removeEventListener('keydown', esc, true);
+    unEsc();
   };
   setTimeout(() => {
-    document.addEventListener('pointerdown', away, true);
-    document.addEventListener('keydown', esc, true);
+    if (box.isConnected) document.addEventListener('pointerdown', away, true);
   }, 0);
 }
 

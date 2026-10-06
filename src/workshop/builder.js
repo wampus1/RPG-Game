@@ -1863,7 +1863,7 @@ export default class BuilderTool {
     const drawA = () => {
       clear(anchor);
       for (const zz of [0, 0.5, 1]) for (const xx of [0, 0.5, 1]) {
-        const b = h('button', { class: `btn small${ax === xx && az === zz ? ' on' : ''}`, type: 'button', style: { width: '26px', height: '22px', padding: 0 } }, ax === xx && az === zz ? '●' : '');
+        const b = h('button', { class: `btn small${ax === xx && az === zz ? ' on' : ''}`, type: 'button', style: { width: '26px', height: '22px', padding: 0 } }, ax === xx && az === zz ? ic('dot', 8) : '');
         b.addEventListener('click', () => {
           ax = xx;
           az = zz;

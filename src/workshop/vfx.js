@@ -541,7 +541,7 @@ export default class VfxTool {
     const pair = (k, label, min, max, step = 1, tip = null) => {
       const v = Array.isArray(L[k]) ? L[k] : [L[k] ?? 0, L[k] ?? 0];
       return field(label, h('div', { class: 'row', style: { gap: '4px', alignItems: 'center' } },
-        numberInput({ value: v[0], min, max, step, onChange: (q) => set(k, [q, v[1]]) }), h('span', { class: 'note' }, '→'),
+        numberInput({ value: v[0], min, max, step, onChange: (q) => set(k, [q, v[1]]) }), h('span', { class: 'note' }, ic('chevRight', 8)),
         numberInput({ value: v[1], min, max, step, onChange: (q) => set(k, [v[0], q]) })), { tip });
     };
     body.append(field('Name', textInput({ value: L.name, onChange: (v) => set('name', v.slice(0, 32) || L.name) })));

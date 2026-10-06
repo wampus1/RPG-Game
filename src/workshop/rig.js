@@ -977,17 +977,18 @@ export default class RigTool {
     const b = r.bones.find((q) => q.id === this.bone);
     if (b) {
       const i = r.bones.indexOf(b);
-      const set = (fn) => this.set((x) => fn(x.bones[i]));
+      // (`side` false: the panel isn't drawn afresh: a slider's own change.)
+      const set = (fn, side = true) => this.set((x) => fn(x.bones[i]), { side });
       body.append(h('div', { class: 'hr' }),
         field('Name', textInput({ value: b.name, onChange: (v) => set((q) => (q.name = v.slice(0, 24) || b.name)) })),
         field('Hangs from', select([['', '(nothing: the root)'], ...r.bones.filter((q) => q.id !== b.id).map((q) => [q.id, q.name])], b.parent || '', (v) => set((q) => (q.parent = v || null)))),
         field('Is a', select(ROLES.map((x) => [x, x]), b.role || 'other', (v) => set((q) => (q.role = v))), { tip: 'What it is decides how "make it for me" animates it.' }),
-        field('Rests turned', slider({ value: b.rest || 0, min: -180, max: 180, int: true, onChange: (v) => set((q) => (q.rest = v)) })),
+        field('Rests turned', slider({ value: b.rest || 0, min: -180, max: 180, int: true, onChange: (v) => set((q) => (q.rest = v), false) })),
         check('Springy (sways as the body moves)', !!(b.phys && b.phys.on), (v) => set((q) => (q.phys = { stiff: 40, damp: 6, swing: 1, ...(q.phys || {}), on: v })), { tip: 'For tails, ears, hair, antennae, loose cloth.' }));
       if (b.phys && b.phys.on) body.append(
-        field('Stiffness', slider({ value: b.phys.stiff ?? 40, min: 2, max: 200, int: true, onChange: (v) => set((q) => (q.phys.stiff = v)) })),
-        field('Damping', slider({ value: b.phys.damp ?? 6, min: 0, max: 30, step: 0.5, onChange: (v) => set((q) => (q.phys.damp = v)) })),
-        field('Swing', slider({ value: b.phys.swing ?? 1, min: 0, max: 5, step: 0.1, onChange: (v) => set((q) => (q.phys.swing = v)) })));
+        field('Stiffness', slider({ value: b.phys.stiff ?? 40, min: 2, max: 200, int: true, onChange: (v) => set((q) => (q.phys.stiff = v), false) })),
+        field('Damping', slider({ value: b.phys.damp ?? 6, min: 0, max: 30, step: 0.5, onChange: (v) => set((q) => (q.phys.damp = v), false) })),
+        field('Swing', slider({ value: b.phys.swing ?? 1, min: 0, max: 5, step: 0.1, onChange: (v) => set((q) => (q.phys.swing = v), false) })));
       body.append(h('div', { class: 'row', style: { marginTop: '6px' } }, button('Delete the bone', { small: true, icon: 'trash', kind: 'ghost', onClick: () => this.removeBone(b.id) })));
     }
     return body;
@@ -1003,8 +1004,8 @@ export default class RigTool {
         button('An empty one', { small: true, onClick: () => this.set((x) => (x.anims[this.anim] = { dur: 1, loop: this.anim === 'walk' || this.anim === 'idle', moves: {}, keys: {} })) })));
       return body;
     }
-    const setA = (fn) => this.set((x) => fn(x.anims[this.anim]));
-    body.append(field('Lasts (s)', slider({ value: A.dur || 1, min: 0.1, max: 6, step: 0.05, onChange: (v) => setA((q) => (q.dur = v)) })));
+    const setA = (fn, side = true) => this.set((x) => fn(x.anims[this.anim]), { side });
+    body.append(field('Lasts (s)', slider({ value: A.dur || 1, min: 0.1, max: 6, step: 0.05, onChange: (v) => setA((q) => (q.dur = v), false) })));
     body.append(check('Loops', A.loop !== false, (v) => setA((q) => (q.loop = v))));
     body.append(h('div', { class: 'row', style: { gap: '4px', margin: '6px 0' } }, button('Make it again for me', { small: true, icon: 'star', title: 'From the bones\' roles (your keyframes and waves for it are replaced)', onClick: () => this.set((x) => (x.anims = autoAnims(x, this.anim))) }), button('Clear it', { small: true, kind: 'ghost', icon: 'trash', onClick: () => setA((q) => {
       q.moves = {};
