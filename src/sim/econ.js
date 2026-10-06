@@ -776,7 +776,7 @@ function produce(L, rec, rng) {
     case 'farmer':
       // Moist fields (recent rain, or water carried from the well) yield more.
       // (Watermills: more from the same fields.)
-      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'crop_rotation') ? 1.3 : 1))) invAdd(rec.inv, e.cropFocus && e.crops.includes(e.cropFocus) && rng.chance(0.6) ? e.cropFocus : rng.pick(e.crops), rng.int(1, 3));
+      if (rng.chance(0.5 * (0.5 + sk.farming) * (e.moist ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'mills') ? 1.5 : 1) * (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'crop_rotation') ? 1.3 : 1) * (L.sim && L.sim.tech ? 1 + L.sim.tech.fxOf(L.settlement, 'farms') : 1))) invAdd(rec.inv, e.cropFocus && e.crops.includes(e.cropFocus) && rng.chance(0.6) ? e.cropFocus : rng.pick(e.crops), rng.int(1, 3));
       return;
     case 'baker': {
       if (!biz) return;
@@ -1165,6 +1165,8 @@ function collectTaxes(L, day) {
   }
   // (Bookkeeping: nothing slips through the ledgers.)
   if (L.sim && L.sim.tech && L.sim.tech.has(L.settlement, 'bookkeeping')) total = Math.round(total * 1.2);
+  // (Round 68: a far people's own ways with tax: see sim/fartech.js.)
+  if (L.sim && L.sim.tech) total = Math.round(total * (1 + L.sim.tech.fxOf(L.settlement, 'tax')));
   e.treasury += total;
   e.taxY = total;
   e.taxDay = day;

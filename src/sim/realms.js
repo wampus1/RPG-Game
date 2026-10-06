@@ -772,7 +772,9 @@ export class Realms {
     // (Free trade: no tolls to haggle over.)
     const free = this.sim.tech && (this.sim.tech.has(a, 'free_trade') || this.sim.tech.has(b, 'free_trade')) ? 1.5 : 1;
     r.trade += coins;
-    r.tradeWeek += coins * league * free;
+    // (Round 68: tea houses, the senate, the thing: see sim/fartech.js.)
+    const warm = this.sim.tech ? 1 + Math.max(this.sim.tech.fxOf(a, 'relations'), this.sim.tech.fxOf(b, 'relations')) : 1;
+    r.tradeWeek += coins * league * free * warm;
   }
 
   // How a merchant from another realm is treated in town: welcomed where

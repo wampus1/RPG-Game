@@ -19,6 +19,7 @@ import { M } from '../world/settlement.js';
 import { GROUND, SURFACE } from '../config.js';
 import { tradeWeekly } from './isletrades.js';
 import { farTable } from '../world/farlands.js';
+import { FAR_TECH_DEFS, FAR_TREES } from './fartech.js';
 
 export const BRANCHES = [
   { id: 'economy', name: 'Economy', color: '#e8c060' },
@@ -42,7 +43,7 @@ const COST = [0, 80, 140, 220, 320, 450, 600];
 // island's own form of a common step, that does all it does (and counts
 // as knowing it).
 const T = (branch, tier, side, req, icon, name, desc, o = {}) => ({
-  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier], isles: o.isles || null, as: o.as || [],
+  branch, tier, side, req, icon, name, desc, also: o.also || [], excl: o.excl || null, big: !!o.big, cost: COST[tier], isles: o.isles || null, as: o.as || [], fx: o.fx || null,
 });
 export const TECHS = {
   // Economy
@@ -129,6 +130,9 @@ export const TECHS = {
   mist_heart: T('society', 4, -2.5, ['spore_lore'], 'glowcap', 'Heart of the Mire', 'The Old Glowcap on each Mirefolk square grows great and bright, and the pearls of each Stiltfolk conch fountain kindle: no night horror rises within thirty paces of the realm\'s towns, and anyone resting on the square by the heart is mended (1 health every 4 seconds).', { isles: ['myrrow'], big: true }),
 };
 
+// (Round 68: and the far lands' peoples' own: see fartech.js.)
+for (const [id, a] of Object.entries(FAR_TECH_DEFS)) TECHS[id] = T(...a);
+
 export const TECH_IDS = Object.keys(TECHS);
 
 // How each island's tree differs from the common one: the steps it never
@@ -200,6 +204,9 @@ export const ISLE_TREES = {
   },
 };
 
+// (Round 68) And each far people's tree: see fartech.js.
+Object.assign(ISLE_TREES, FAR_TREES);
+
 // An island's tree (or the common one, for anywhere else): each step as it
 // sits there.
 const TREES = new Map();
@@ -220,6 +227,14 @@ export function treeOf(isle) {
     if (!t.req.some((r) => Array.isArray(r) && r.some((k) => !techs[k]))) continue;
     techs[id] = { ...t, req: t.req.map((r) => (Array.isArray(r) ? r.filter((k) => techs[k]) : r)) };
   }
+  // (And a far people's: a step needing one it never learns needs it no
+  // more.)
+  if (spec.prune) {
+    for (const [id, t] of Object.entries(techs)) {
+      const req = t.req.filter((r) => (Array.isArray(r) ? r.length : techs[r]));
+      if (req.length !== t.req.length) techs[id] = { ...t, req };
+    }
+  }
   tree = { isle: key || null, techs, ids: Object.keys(techs) };
   TREES.set(key, tree);
   return tree;
@@ -239,9 +254,14 @@ export const rivalsOf = (id, tree = treeOf(null)) => {
 const met = (done, r) => (Array.isArray(r) ? r.some((k) => done.includes(k)) : done.includes(r));
 // Which of the Dagoni Islands a realm or town is on (its capital's, for a
 // realm), and may it learn this step? (Each island has a few of its own.)
+// (Round 68: a far land's realm learns as its people do: the Velari's tree,
+// the Jade Court's...)
 export function isleOf(s) {
   if (!s) return null;
+  const civ = s.civ || (s.values !== undefined ? s : null);
+  if (civ && civ.far && FAR_TREES[civ.style]) return civ.style;
   if (s.civ) return s.civ.island || null;
+  if (s.far && !s.civ && FAR_TREES[s.style]) return s.style;
   return s.island || null;
 }
 export const offered = (s, id) => !!treeOf(isleOf(s)).techs[id];
@@ -371,6 +391,9 @@ export class Tech {
     for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
     for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
     const tree = this.treeFor(st);
+    // (Round 68: a far people knows its own first steps from the start:
+    // the Velari's census, the Jade Court's silk, the Keshari's adobe...)
+    if (FAR_TREES[st.isle]) for (const k of tree.ids) if (TECHS[k].isles && tree.techs[k].tier === 1 && !tree.techs[k].req.length && !st.done.includes(k)) st.done.push(k);
     while (st.done.length < want) {
       const open = tree.ids.filter((k) => !st.done.includes(k) && tree.techs[k].tier <= 3 && this.ready(st, k));
       if (!open.length) break;
@@ -399,6 +422,25 @@ export class Tech {
     if (this.cheat) return true;
     const st = this.stateOf(s);
     return !!st && (st.done.includes(id) || aliasesOf(id).some((k) => st.done.includes(k)));
+  }
+
+  // (Round 68) How much of `key` what it knows comes to (see fartech.js:
+  // the far peoples' steps say what they do as plain amounts).
+  fxOf(s, key) {
+    if (!s) return 0;
+    const st = this.stateOf(s);
+    if (!st) return 0;
+    if (st._fxN !== st.done.length || st._fxIsle !== st.isle) {
+      const sum = {};
+      for (const id of st.done) {
+        const fx = (this.def(st, id) || {}).fx;
+        if (fx) for (const [k, v] of Object.entries(fx)) sum[k] = (sum[k] || 0) + v;
+      }
+      Object.defineProperty(st, '_fx', { value: sum, writable: true, enumerable: false, configurable: true });
+      Object.defineProperty(st, '_fxN', { value: st.done.length, writable: true, enumerable: false, configurable: true });
+      Object.defineProperty(st, '_fxIsle', { value: st.isle, writable: true, enumerable: false, configurable: true });
+    }
+    return st._fx[key] || 0;
   }
 
   // What must be known first (a list inside it: any one of those), on the
@@ -560,7 +602,7 @@ export class Tech {
     if (!st.current) this.choose(s, day, new RNG(hash4(day, s.id, 0x7ec)));
     if (!st.current) return null;
     // (The Glyph Archive: the Kavorent's own records to read.)
-    const pts = n * (this.has(s, 'schools') ? 1.4 : 1) * (this.sim.ancient && this.sim.ancient.has(s, 'archive') ? 2 : 1);
+    const pts = n * (this.has(s, 'schools') ? 1.4 : 1) * (this.sim.ancient && this.sim.ancient.has(s, 'archive') ? 2 : 1) * (1 + this.fxOf(s, 'study'));
     st.progress += pts;
     if (s.cx !== undefined) {
       const c = (this.contrib[s.id] ||= {});
@@ -802,6 +844,13 @@ export class Tech {
     if (day % 7 === 0 && this.has(s, 'sulphur_trade')) L.econ.treasury += s.coast || s.river ? 20 : 12;
     // (And glass and pearls, where there's a glassworks or a pearl house.)
     if (day % 7 === 0) tradeWeekly(L);
+    // (Round 68) Weekly: what a far people's own trades bring in (silk,
+    // salt, furs, whale oil...: see fartech.js).
+    const income = this.fxOf(s, 'income');
+    if (day % 7 === 0 && income) L.econ.treasury += Math.round(income);
+    // (And what their healers and hearths do for them, every morning.)
+    const heal = this.fxOf(s, 'heal');
+    if (heal) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + heal);
     // Spore lore: the herbalists' brews, every morning (and the Ashborn,
     // hardened by the fire-walk).
     if (this.has(s, 'spore_lore') || this.has(s, 'fire_walking')) for (const r of people) if (r.hp !== undefined && r.maxHp) r.hp = Math.min(r.maxHp, r.hp + 2);

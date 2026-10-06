@@ -75,7 +75,9 @@ export class Diplomacy {
       const out = this.sim.tech && (this.sim.tech.has(a, 'outriggers') || this.sim.tech.has(b, 'outriggers'));
       return Math.round((8 + this.dist(a, b) * 1.1) * (out ? 0.6 : 1) * (lode ? 0.85 : 1));
     }
-    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1) * (lode ? 0.85 : 1));
+    // (Round 68: a far people's roads and canals: see sim/fartech.js.)
+    const quick = this.sim.tech ? 1 / (1 + Math.max(this.sim.tech.fxOf(a, 'travel'), this.sim.tech.fxOf(b, 'travel'))) : 1;
+    return Math.round((3 + this.dist(a, b) * 1.5) * (road ? 0.5 : 1) * (law ? 0.8 : 1) * (lode ? 0.85 : 1) * quick);
   }
 
   // The towns a mayor writes to: those near, and (for a port) the ports of

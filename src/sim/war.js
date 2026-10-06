@@ -377,6 +377,8 @@ export class War {
     if (tech.has(s, 'steel')) p *= 1.15;
     if (tech.has(s, 'archery')) p *= 1.08;
     if (tech.has(s, 'longbows') || tech.has(s, 'crossbows')) p *= 1.05;
+    // (Round 68: a far people's own arts of war: see sim/fartech.js.)
+    p *= 1 + tech.fxOf(s, 'army');
     // (The Kavorent's arts: alloy blades, the storm engine.)
     if (this.sim.ancient) p *= this.sim.ancient.power(s);
     p *= clamp((r.hp ?? r.maxHp ?? 12) / Math.max(1, r.maxHp ?? 12), 0.4, 1);
@@ -396,6 +398,8 @@ export class War {
     // (A shield wall at the gate; wardens who know the mist.)
     if (tech.has(s, 'shieldwall')) d *= 1.15;
     if (tech.has(s, 'fog_wardens')) d *= 1.25;
+    // (Round 68: a far people's walls and watchers: see sim/fartech.js.)
+    d *= 1 + tech.fxOf(s, 'defence');
     return d;
   }
 
@@ -943,7 +947,7 @@ export class War {
         // The levy: a share of the able-bodied (more from a martial people,
         // fewer from merchants and scholars), with spears.
         const vals = civ.values || [];
-        const rate = (0.25 + (vals.includes('martial') ? 0.1 : 0) - (vals.includes('mercantile') || vals.includes('scholarly') ? 0.06 : 0)) * share * (this.sim.tech.has(s, 'muster') ? 1.5 : 1);
+        const rate = (0.25 + (vals.includes('martial') ? 0.1 : 0) - (vals.includes('mercantile') || vals.includes('scholarly') ? 0.06 : 0)) * share * (this.sim.tech.has(s, 'muster') ? 1.5 : 1) * (1 + this.sim.tech.fxOf(s, 'muster'));
         const able = residents(L).filter((r) => r.age === 'adult' && r.job !== 'guard' && !LEVY_EXEMPT.has(r.job) && r.ruler === undefined && r.councillor === undefined
           && r.raid === undefined && r.soldier === undefined && r.captive === undefined && !r.trip?.phase?.startsWith('away'))
           .sort((x, y) => y.personality.bravery - x.personality.bravery);

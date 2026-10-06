@@ -2079,7 +2079,7 @@ export class Sim {
     const keep = list.filter((v) => h < v.leave + 180 || v.fromIdx !== undefined);
     this.visits.set(sid, keep.filter((v) => !(v.fromIdx === undefined && h >= v.leave)));
     const hod = Math.floor((h % DAY) / 60);
-    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1) * (this.tech.has(L.settlement, 'free_trade') ? 1.4 : 1) * (this.tech.has(L.settlement, 'royal_roads') ? 1.4 : 1))) {
+    if (this.game.active.has(sid) && hod >= 8 && hod <= 15 && !keep.some((v) => h >= v.arrive && h < v.leave) && rng.chance(0.07 * (this.tech.has(L.settlement, 'markets') ? 1.8 : 1) * (this.tech.has(L.settlement, 'free_trade') ? 1.4 : 1) * (this.tech.has(L.settlement, 'royal_roads') ? 1.4 : 1) * (1 + this.tech.fxOf(L.settlement, 'merchants')))) {
       const ow = this.game.world.ow;
       const s = L.settlement;
       if (this.war.unsafe(s)) return;

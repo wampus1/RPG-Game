@@ -359,7 +359,7 @@ export function births(sim, L, day, rng) {
     if (kids >= 3) continue;
     const living = L.npcs.filter((r) => r.home === a.home && alive(r) && !r.migrated).length;
     // (Aqueducts: clean water, more children.)
-    const water = sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1;
+    const water = (sim.tech && sim.tech.has(L.settlement, 'aqueducts') ? 1.6 : 1) * (sim.tech ? 1 + sim.tech.fxOf(L.settlement, 'births') : 1);
     if (!rng.chance((living < house.beds.length ? 0.05 : 0.03) * water)) continue;
     const r = bear(sim, L, a, b, day, hash4(a.idx, b.idx, day, 0xba8e));
     ledger(L, day, `A baby, ${r.name.first}, was born to ${a.name.first} and ${b.name.first} ${a.name.last}.`);
