@@ -2280,6 +2280,11 @@ export class Game {
   // And after it: the law's interest in them, their line in the water, the
   // storm at sea, how they feel.
   ownAfterPhase(dt, input) {
+    // (A fight wearing off: each player's own. Round 58: it only ever wore
+    // off for the host, so a player who'd once fought, blade or shield in
+    // hand, raised their guard at every right-click and never talked to
+    // anyone again.)
+    if (this.combatT > 0) this.combatT -= dt;
     this.updateWanted(dt);
     this.updateFishing(dt, input);
     updateSpireStorm(this, dt);
@@ -6743,7 +6748,6 @@ export class Game {
   }
 
   ambientFx(dt) {
-    if (this.combatT > 0) this.combatT -= dt;
     this.ambientSounds(dt);
     this.fxT -= dt;
     if (this.fxT > 0) return;

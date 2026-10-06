@@ -4414,6 +4414,11 @@ dig in. What you do (or don't) decides the rest.
   come back. The player is told when one is given or taken away, and the
   Multiplayer list shows "can use commands" by their name. Without it, the
   console key just says the host hasn't allowed it.
+- *Fixed: a player who could no longer talk to anyone.* Once a player
+  (not the host) had been in a fight, their "in a fight" timer never wore
+  off. From then on, right-clicking someone with a weapon or shield in
+  hand raised their guard instead of talking. It now wears off for every
+  player, as it always did for the host.
 - *Older worlds* (migration 0.58.0): nobody has any permissions until the
   host gives them.
 

@@ -306,3 +306,52 @@ test('0.58.0: no permissions in an older hosted world till the host gives them',
   assert.deepEqual(d.party.perms, {});
   assert.ok(compareVersions(GAME_VERSION, '0.58.0') >= 0);
 });
+
+test('a player\'s fight wears off (it only ever did for the host, so they never talked to anyone again)', async () => {
+  const { asSeat } = await import('../src/game/party.js');
+  const game = makeGame(12345);
+  const input = stubInput();
+  game.minute = 600;
+  for (let i = 0; i < 20; i++) game.update(0.1, input);
+  const queue = [];
+  let guestNet = null;
+  const uiStub = () => Object.assign(stubUI(), { windows: [], update() {}, find: () => null, closeAll() {} });
+  const hostNet = new HostNet(game, {
+    send: (text) => {
+      if (text[0] !== '@') return;
+      const body = text.slice(text.indexOf('|') + 1);
+      queue.push(() => guestNet.receive(body));
+    },
+    profile: { id: 'h', name: 'Hosty' },
+    world: { name: 'Testland' },
+    makeUI: () => uiStub(),
+  });
+  guestNet = new GuestNet({
+    send: (text) => queue.push(() => hostNet.receive(`@7|${text}`)),
+    profile: { id: 'g', name: 'Guesty' },
+    build: (save) => new Game({ seed: save.seed, renderer: stubRenderer(), audio: null, ui: uiStub(), save, remote: true }),
+    onNeedHero: () => guestNet.sendHero(null),
+    onEnd: () => {},
+    onNote: () => {},
+    onParty: () => {},
+  });
+  const flush = () => {
+    while (queue.length) queue.shift()();
+  };
+  hostNet.receive('!' + JSON.stringify({ t: 'join', cid: 7, account: { id: 'g', name: 'Guesty' } }));
+  flush();
+  for (let i = 0; i < 10; i++) {
+    game.update(0.05, input);
+    flush();
+  }
+  const seat = game.seats[1];
+  asSeat(game, seat, () => {
+    game.combatT = 5;
+  });
+  for (let i = 0; i < 140; i++) {
+    game.update(0.05, input);
+    flush();
+  }
+  const left = asSeat(game, seat, () => game.combatT);
+  assert.ok(!(left > 0), `still in a fight: ${left}`);
+});
