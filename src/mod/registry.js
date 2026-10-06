@@ -12,6 +12,7 @@ import { ITEMS } from '../world/items.js';
 import { RECIPES } from '../world/recipes.js';
 import { SPECIES } from '../entities/creature.js';
 import { CREATURE_LOOKS } from '../render/sprites.js';
+import './rig.js';
 import { Px } from '../render/pixel.js';
 import { gameKey, tagRange, isModKey, assetPixels } from './format.js';
 

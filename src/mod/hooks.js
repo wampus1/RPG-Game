@@ -534,7 +534,7 @@ function charge(x, t, far, dmg) {
     path.push({ x: px, z: pz, y });
   }
   if (!path.length) return;
-  addHazard(g, { by: c, tiles: path.map((q) => ({ x: q.x, z: q.z })), y: c.y, dur: 0.55, kind: 'burst', dmg: Math.round(dmg), knock: 2, from: { x: c.x, z: c.z }, color: [255, 200, 120] });
+  addHazard(g, { by: c, tiles: path.map((q) => ({ x: q.x, z: q.z })), y: c.y, dur: 0.55, kind: 'burst', dmg: Math.round(dmg), knock: 2, center: { x: path[path.length - 1].x, z: path[path.length - 1].z }, from: { x: c.x, z: c.z }, color: [255, 200, 120] });
   // (It goes, as the blow lands.)
   proc(g, c, 0.55, 1, () => {
     const end = path[path.length - 1];

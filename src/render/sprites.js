@@ -235,6 +235,22 @@ Object.assign(CREATURE_LOOKS, DUNGEON_CREATURES, ISLE_CREATURES);
 // (And the islands' own masters, below ground: see islebossart.js.)
 Object.assign(CREATURE_LOOKS, isleBossArt(CREATURE_LOOKS));
 
+// (Round 62) Which frame of a creature's whose look has groups of frames
+// (a mod's rigged creature: walking, standing, attacking, flinching), or
+// null for the usual.
+export function lookFrame(kind, e, time) {
+  const L = CREATURE_LOOKS[kind];
+  const G = L && L.groups;
+  if (!G) return null;
+  const at = (g, k) => g[0] + Math.min(g[1] - 1, Math.max(0, Math.floor(k * g[1])));
+  const w = e.windup && !e.windup.dash ? e.windup : e.swing || null;
+  if (G.attack && w && w.dur > 0) return at(G.attack, (Math.min(1, w.t / w.dur)) * 0.45);
+  if (G.attack && e.strike && e.strike.dur > 0) return at(G.attack, 0.45 + Math.min(1, e.strike.t / e.strike.dur) * 0.55);
+  if (G.hurt && e.flash > 0) return at(G.hurt, 1 - e.flash / 0.12);
+  if (e.moving || !G.idle) return at(G.walk, ((time * 1.6) % 1));
+  return at(G.idle, ((time * 0.6 + (e.id || 0) * 0.37) % 1));
+}
+
 // Creature sheet: frames in a row; left-facing, renderer flips for right.
 // (Square frames: 16 across, or 32 for the great ones.)
 export function creatureSheet(kind, variant = 0) {
