@@ -7,6 +7,7 @@
 // of its people, with fewer rules. Breaking a custom isn't a crime: folk who
 // see it think a little less of you.
 import { hash4 } from '../util/rng.js';
+import { farTable } from '../world/farlands.js';
 
 // What's eaten and drunk where (item keys; see items.js).
 export const CUISINE = {
@@ -115,6 +116,20 @@ function strHash(str) {
 const pickBy = (list, h) => list[h % list.length];
 // Where each people's folk ways come from.
 const FOLK = { vale: 'vales', north: 'north', sun: 'south', wild: 'forest', high: 'mountains', ember: 'ash', mist: 'mist', tide: 'shallows' };
+
+// (Round 68) The far lands' peoples' own (see world/farlands.js).
+Object.assign(CUISINE, farTable('cuisine'));
+Object.assign(CLOTHES, farTable('clothes'));
+Object.assign(PATTERN, farTable('pattern'));
+Object.assign(GODS, farTable('gods'));
+Object.assign(CLERGY, farTable('clergy'));
+Object.assign(STYLE_RITES, farTable('rites'));
+Object.assign(BEASTS, farTable('beasts'));
+Object.assign(LEANS, farTable('taboos'));
+Object.assign(FOLK, farTable('folk'));
+for (const P of Object.values(farTable('cuisine'))) REGIONAL_MEALS.add(P.dishes[0]);
+for (const k of ['reindeer_roast', 'whale_stew', 'dumplings']) MEATY.add(k);
+for (const k of ['garum_stew', 'salt_fish', 'fish_pie', 'shrimp_soup']) FISHY.add(k);
 
 // A realm's faith (a free town keeps the folk ways of its people).
 export function religionOf(s) {

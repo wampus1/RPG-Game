@@ -15,6 +15,7 @@ import { findBridges } from './bridges.js';
 import { MODS } from '../mod/state.js';
 import { modBiomeFor } from '../mod/biomerules.js';
 import { paintOwners } from '../mod/worldplan.js';
+import { farTable, FAR_LANDS, FAR_PEOPLES, EMPIRE, peopleFor } from './farlands.js';
 
 const SPLOTCH_STEP_X = 150;
 const SPLOTCH_STEP_Z = 96;
@@ -37,6 +38,8 @@ const ISLAND_VALUES = {
   mist: ['scholarly', 'pious', 'agrarian'],
   tide: ['seafaring', 'mercantile', 'seafaring', 'martial'],
 };
+
+Object.assign(ISLAND_VALUES, farTable('values'));
 
 // (Round 68) How a world's made, as of this version: 1 as worlds were
 // made before 0.68 (kept for them: their land can't change under them);
@@ -477,7 +480,12 @@ export class Overworld {
   cell(cx, cz) {
     if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) return null;
     const i = cz * MAP_W + cx;
-    return this.cells[i] || (this.cells[i] = this.makeCell(cx, cz));
+    let c = this.cells[i];
+    if (c) return c;
+    c = this.cells[i] = this.makeCell(cx, cz);
+    // (A far land's square, claimed for its realm as it's made.)
+    if (this.farClaims && c.island && FAR_LANDS[c.island]) this.claimFar(c);
+    return c;
   }
 
   // The biome a map square shows, without making the square ('lake' for
@@ -704,6 +712,13 @@ export class Overworld {
     // geography.js for how many): Thessa's as the old island's were;
     // Kharos's fire-folk; Myrrow's mist-folk and tide-folk.
     for (const I of this.islands) this.settleIsland(I, rng, colorOrder);
+    // (Round 68) And the far lands beyond the storm, in a world made since
+    // they've been lived in (and not on a mod's world map: it says who
+    // lives where itself).
+    if (this.wg >= 2 && !this.plan) {
+      const frng = this.rng.fork('farlands');
+      for (const L of this.lands) if (FAR_LANDS[L.key]) this.settleFar(L, frng, colorOrder);
+    }
     // Link settlement footprints to map cells for fast lookups.
     for (const s of this.settlements) {
       const b = s.bounds;
@@ -731,7 +746,146 @@ export class Overworld {
       const near = this.nearestCiv(c.cx, c.cz, c.island);
       if (near.civ && near.dist < 9) c.civ = near.civ.id;
     }
+    // (The far lands' squares are made as they're wanted: each claimed
+    // for its realm then. See cell.)
+    this.farClaims = true;
+    for (const c of this.cells) if (c && c.island && FAR_LANDS[c.island]) this.claimFar(c);
     this.pickSpawn();
+  }
+
+  // A far land's square for the realm whose capital's nearest (on the same
+  // land, and within its reach: further on a continent).
+  claimFar(c) {
+    if (c.biome === 'ocean' || c.civ !== null || !FAR_LANDS[c.island]) return;
+    const near = this.nearestCiv(c.cx, c.cz, c.island);
+    const L = this.island(c.island);
+    const reach = L && L.kind === 'continent' ? (near.civ && near.civ.empire ? 30 : 22) : 10;
+    if (near.civ && near.dist < reach) c.civ = near.civ.id;
+  }
+
+  // ---------------------------------------------------------------- far lands
+  // (Round 68) One far land's realms and places (see farlands.js): its
+  // empires first (each the capital of its own realm, three map squares
+  // across, never poor), then its other realms' cities, then towns and
+  // villages; each of its peoples where the ground suits them. The land's
+  // squares are looked over a few at a time (every other one), as they're
+  // made only as wanted.
+  settleFar(L, rng, colorOrder) {
+    const F = FAR_LANDS[L.key];
+    const cont = L.kind === 'continent';
+    const score = (c) => {
+      if (!c || c.island !== L.key || c.biome === 'ocean' || c.biome === 'beach' || c.mountainness > 0.12 || c.cont < 0.06) return -1;
+      if (c.lake || c.bridge || c.biome === 'volcano') return -1;
+      let v = rng.float(0, 1);
+      if (this.nearOcean(c)) v += 0.3;
+      v += BIOME_SETTLE[c.biome] ?? 0;
+      return v;
+    };
+    // (Every other square of the land, scored.)
+    const cand = [];
+    const x0 = Math.max(1, Math.floor(L.x0 / REGION_W));
+    const x1 = Math.min(MAP_W - 3, Math.ceil(L.x1 / REGION_W));
+    const z0 = Math.max(1, Math.floor(L.z0 / REGION_D));
+    const z1 = Math.min(MAP_H - 3, Math.ceil(L.z1 / REGION_D));
+    const step = cont ? 2 : 1;
+    for (let cz = z0; cz <= z1; cz += step) {
+      for (let cx = x0; cx <= x1; cx += step) {
+        if (landValue(L, (cx + 0.5) * REGION_W, (cz + 0.5) * REGION_D, this.nCont) < 0.06) continue;
+        const c = this.cell(cx, cz);
+        const v = score(c);
+        if (v >= 0) cand.push({ c, v });
+      }
+    }
+    cand.sort((a, b) => b.v - a.v);
+    const taken = this.settlements.map((t) => ({ cx: t.cx + (t.cw - 1) / 2, cz: t.cz + (t.cd - 1) / 2 }));
+    const tooClose = (cx, cz, d) => taken.some((t) => Math.hypot(t.cx - cx, (t.cz - cz) * 1.5) < d);
+    const fits = (c, w, d) => {
+      for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) if (score(this.cell(c.cx + dx, c.cz + dz)) < 0) return false;
+      return true;
+    };
+    const place = (type, c, w, d, civ, style, o = {}) => {
+      const s = this.makeSettlement(type, c.cx, c.cz, w, d, civ, rng, { style, ...o });
+      s.island = L.key;
+      s.far = true;
+      taken.push({ cx: c.cx + (w - 1) / 2, cz: c.cz + (d - 1) / 2 });
+      return s;
+    };
+    const civGap = cont ? Math.min(34, Math.max(18, L.rx * 0.36)) : 12;
+    const found = (c, style, empire) => {
+      const P = FAR_PEOPLES[style];
+      const civ = {
+        id: this.civs.length, style,
+        values: rng.shuffle([...(ISLAND_VALUES[style] || VALUES)]).slice(0, 2),
+        color: CIV_COLORS[colorOrder[this.civs.length % CIV_COLORS.length]],
+        prosperity: empire ? rng.float(0.75, 1) : rng.float(0.3, 0.9),
+        island: L.key, far: true,
+      };
+      if (empire) {
+        civ.empire = true;
+        const place0 = placeName(rng, style);
+        const title = { velari: 'Empire', rime: 'Frost Empire', jade: 'Celestial Empire' }[style] || 'Empire';
+        civ.name = rng.chance(0.5) ? `The ${place0} ${title}` : `${title} of ${place0}`;
+      } else {
+        // (Only the empires are called so.)
+        civ.name = civName(rng, style);
+        for (let i = 0; i < 6 && /Empire/.test(civ.name); i++) civ.name = civName(rng, style);
+        if (/Empire/.test(civ.name)) civ.name = civ.name.replace('Empire', 'Realm');
+      }
+      civ.people = P ? P.label : CULTURES[style].label;
+      this.civs.push(civ);
+      const size = empire ? EMPIRE.cw : 2;
+      const city = place('city', c, size, size, civ, style, empire ? { empire: true } : {});
+      civ.capital = city.id;
+      return civ;
+    };
+    // Empires: each in the ground its people likes best, well apart.
+    let founded = 0;
+    for (let e = 0; e < (F.empires || 0); e++) {
+      const style = F.empirePeoples[e % F.empirePeoples.length];
+      const pick = (strict) => cand.find(({ c }) => (!strict || peopleFor(L.key, c.biome) === style) && !tooClose(c.cx + 1, c.cz + 1, civGap * 1.3) && fits(c, EMPIRE.cw, EMPIRE.cd));
+      const got = pick(true) || pick(false);
+      if (!got) continue;
+      found(got.c, style, true);
+      founded++;
+    }
+    // A realm of each of its peoples (where the ground suits them, if
+    // anywhere does).
+    for (const style of F.peoples) {
+      if (founded >= F.civs || this.civs.some((q) => q.island === L.key && q.style === style)) continue;
+      const pick = (strict) => cand.find(({ c }) => (!strict || peopleFor(L.key, c.biome) === style) && !tooClose(c.cx + 0.5, c.cz + 0.5, civGap) && fits(c, 2, 2));
+      const got = pick(true) || pick(false);
+      if (!got) continue;
+      found(got.c, style, false);
+      founded++;
+    }
+    // The other realms.
+    for (const { c } of cand) {
+      if (founded >= F.civs) break;
+      if (tooClose(c.cx + 0.5, c.cz + 0.5, civGap) || !fits(c, 2, 2)) continue;
+      found(c, peopleFor(L.key, c.biome), false);
+      founded++;
+    }
+    const civWithin = (cx, cz) => {
+      const { civ, dist } = this.nearestCiv(cx, cz, L.key);
+      return dist < (cont ? 22 : 10) ? civ : null;
+    };
+    // Towns, then villages, spread about.
+    let towns = 0;
+    for (const { c } of cand) {
+      if (towns >= F.towns) break;
+      if (tooClose(c.cx + 0.5, c.cz, cont ? 9 : 7.5) || !fits(c, 2, 1)) continue;
+      const civ = civWithin(c.cx, c.cz);
+      place('town', c, 2, 1, civ, civ ? civ.style : peopleFor(L.key, c.biome));
+      towns++;
+    }
+    let villages = 0;
+    for (const { c } of rng.shuffle(cand.slice(0, Math.max(8, Math.floor(cand.length * 0.8))))) {
+      if (villages >= F.villages) break;
+      if (tooClose(c.cx, c.cz, cont ? 6 : 4.6)) continue;
+      const civ = civWithin(c.cx, c.cz);
+      place('village', c, 1, 1, civ, civ ? civ.style : peopleFor(L.key, c.biome));
+      villages++;
+    }
   }
 
   // The nearest capital to a square (of an island's, if given).
@@ -896,13 +1050,15 @@ export class Overworld {
     return false;
   }
 
-  makeSettlement(type, cx, cz, cw, cd, civ, rng) {
+  // (`o.style`: whose it is, where the land doesn't say; `o.empire`: an
+  // empire's capital.)
+  makeSettlement(type, cx, cz, cw, cd, civ, rng, o = {}) {
     const id = this.settlements.length;
     const center = this.cell(cx, cz);
     // (Without a realm, the people of the land it's on: on Kharos the
     // Ashborn, on Myrrow the Mirefolk inland and the Stiltfolk by the water.)
     const own = ISLAND_STYLES[center.island];
-    const style = civ ? civ.style : own ? (own.length > 1 && BIOME_STYLE[center.biome] !== own[0] ? own[1] : own[0]) : BIOME_STYLE[center.biome] || 'vale';
+    const style = civ ? civ.style : o.style ? o.style : own ? (own.length > 1 && BIOME_STYLE[center.biome] !== own[0] ? own[1] : own[0]) : BIOME_STYLE[center.biome] || 'vale';
     let condition = rng.weighted([
       ['prosperous', 0.2 + (civ ? civ.prosperity * 0.2 : 0)],
       ['normal', 0.45],
@@ -910,9 +1066,14 @@ export class Overworld {
       ['abandoned', type === 'village' ? 0.1 : 0],
     ]);
     if (type === 'city' && condition === 'poor' && rng.chance(0.5)) condition = 'normal';
+    // (An empire's capital is never poor: rich, more often than not.)
+    if (o.empire) condition = rng.chance(0.7) ? 'prosperous' : 'normal';
     let w;
     let d;
-    if (type === 'village') {
+    if (o.empire) {
+      w = REGION_W * cw - 20;
+      d = REGION_D * cd - 12;
+    } else if (type === 'village') {
       w = rng.int(48, 56);
       d = rng.int(28, 32);
     } else if (type === 'town') {
@@ -948,6 +1109,7 @@ export class Overworld {
       seed: rng.int(0, 2 ** 31),
       layout: null,
     };
+    if (o.empire) s.empire = true;
     this.settlements.push(s);
     return s;
   }

@@ -11,6 +11,7 @@ import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { ledger } from './econ.js';
 import { religionOf, cuisineOf } from './culture.js';
+import { farTable } from '../world/farlands.js';
 
 // The year it is now: a year here runs sixty days.
 const YEAR_DAYS = 60;
@@ -123,6 +124,13 @@ const STYLE_EVENTS = {
     () => 'A raft tried to sail out through the storm wall. Only its mast came back, three days later.',
   ],
 };
+// (Round 68) The far lands' peoples' own (see world/farlands.js).
+Object.assign(FOUNDERS, farTable('founders'));
+Object.assign(STYLE_EPITHETS, farTable('epithets'));
+Object.assign(STYLE_CAME, farTable('came'));
+Object.assign(STYLE_BEASTS, farTable('haunts'));
+Object.assign(STYLE_PLACES, farTable('places'));
+Object.assign(STYLE_EVENTS, farTable('events'));
 // What a realm's values bring.
 const VALUE_EVENTS = {
   martial: (s) => `The men and women of ${s.name} marched to war, and fewer came home; a stone on the square names the dead.`,

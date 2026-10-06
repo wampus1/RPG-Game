@@ -22,6 +22,7 @@ import { DAY, ledger, st } from './econ.js';
 import { ITEMS, socketed, canSocket } from '../world/items.js';
 import { religionOf } from './culture.js';
 import { MODS } from '../mod/state.js';
+import { farTable } from '../world/farlands.js';
 
 const YEAR_DAYS = 60;
 const BASE_YEAR = 1180;
@@ -37,6 +38,8 @@ const CHIEFS = {
   mist: ['the Hollow King', 'Mother Gloamwyn', 'the Lantern-Lord Heth', 'Sorrel of the Fog'],
   tide: ['the Pearl-Queen Kailani', 'Makoa Sharktooth', 'the Tide-Chief Nalu', 'Old Reva Netmender'],
 };
+// (Round 68: the far lands' peoples' old rulers too.)
+Object.assign(CHIEFS, farTable('chiefs'));
 const BANDITS = ['One-Eye Garrick', 'Red Moll', 'Black Tam', 'Sefa the Knife', 'Bran Coldhand', 'the Brothers Vash', 'Long Ulla', 'Mad Jory'];
 const SPIRE_NAMES = {
   vale: ['the Giants\' Needle', 'the Elder Spire', 'the Fairies\' Chimney'],

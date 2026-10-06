@@ -31,6 +31,7 @@ import { M } from '../world/settlement.js';
 import { fieldEngines, workEngines, endEngines, ramming } from '../game/engines.js';
 import { authority } from './realms.js';
 import { breachFor } from './growth.js';
+import { cutOff } from '../world/farlands.js';
 
 export const TACTICS = {
   line: { name: 'a frontal assault', verb: 'charged straight at them' },
@@ -296,6 +297,8 @@ export class War {
         if (!wet(o) || !this.laid(o)) continue;
         const d = Math.hypot(s.cx - o.cx, s.cz - o.cz);
         const over = !sameIsle(s, o);
+        // (Not through the storm while it stands.)
+        if (cutOff(this.game.world.ow, s, o)) continue;
         if (over && !(s.coast && o.coast && d <= OVERSEA)) continue;
         if (!over && !(d > 10 && d <= max)) continue;
         if (!best || d < best.d) best = { o, d };
@@ -521,6 +524,7 @@ export class War {
       if (!ruler) continue;
       for (const b of civs) {
         if (b === a || this.atWar(b) || this.politics.bound(a, b) || this.truce(a, b, day)) continue;
+        if (cutOff(this.game.world.ow, a, b)) continue;
         const r = realms.relation(a, b);
         const why = this.reasons(a, b, day);
         this.seen[this.key(a, b)] = Math.max(this.seen[this.key(a, b)] || 0, r.incidents - 2);

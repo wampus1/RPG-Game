@@ -4975,7 +4975,7 @@ export class Game {
       return { title: 'GRAVEYARD', lines: [`THE RESTING PLACE OF ${s.name.toUpperCase()}`, '', `${n} souls rest here.`, ...(recent.length ? ['', 'Recently laid to rest:', ...recent.map((q) => `${q.grave.name} (day ${q.grave.died})`)] : [])] };
     }
     if (sg && sg.kind === 'board') return { ledger: true, s, L };
-    const lines = [`${s.name.toUpperCase()}`, `${cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, `Population: ${living.length + this.sim.playerCount(s.id)}`, ''];
+    const lines = [`${s.name.toUpperCase()}`, `${s.empire ? 'Imperial capital' : cap(s.type)} of the ${s.civ ? s.civ.name : 'free folk'}`, `Population: ${living.length + this.sim.playerCount(s.id)}`, ''];
     const names = [...new Set(L.buildings.filter((b) => !b.residential).map((b) => b.name))];
     if (names.length) lines.push('Services: ' + names.slice(0, 5).join(', '));
     if (s.condition === 'abandoned') lines.push('', '...someone scrawled: "LEAVE WHILE YOU CAN"');

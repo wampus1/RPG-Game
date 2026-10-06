@@ -772,7 +772,7 @@ export class UI {
     // (Below ground: which place, and how deep.)
     const dg = game.dungeon;
     if (dg) loc = `${dg.kav ? 'Ruin' : cap(dg.T.name)} · Floor ${dg.floor + 1}/${dg.rec.depth}`;
-    else if (s) loc = `${s.name} · ${cap(s.type)}`;
+    else if (s) loc = `${s.name} · ${s.empire ? 'Imperial capital' : cap(s.type)}`;
     else {
       const col = game.world.terrain.column(p.x, p.z, game.world.terrain.context(p.x, p.z, p.x, p.z), {});
       loc = BIOMES[col.biome].name;

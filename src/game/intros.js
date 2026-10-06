@@ -24,12 +24,13 @@ import { VIEW_W, VIEW_H, CHAR_W } from '../config.js';
 import { RNG, hash4, hashf } from '../util/rng.js';
 import { drawText } from '../render/font.js';
 import { wrap } from '../ui/ascii.js';
-import { personName, CULTURES } from '../world/names.js';
+import { personName, HOME_STYLES } from '../world/names.js';
 import { yearOf } from '../sim/history.js';
 import { alive } from '../sim/econ.js';
 import { drawPerson, shade, mix, fillPoly, line } from '../render/scenekit.js';
 import { paintHome, drawTown, ROWS } from '../render/art_home.js';
 import { Bmp, sky as skyBands, rngOf, mixC, rgb as rgbOf } from '../render/brush.js';
+import { farTable } from '../world/farlands.js';
 
 // The pictures are painted at half size (each pixel two on the screen).
 const PW = VIEW_W / 2;
@@ -241,6 +242,8 @@ const LOOKS = {
   tide: { roofs: ['#c8b070', '#b89a5a'], wall: '#8a6a4a', timber: '#5a4430', shape: 'gable', stilts: true },
 };
 
+Object.assign(LOOKS, farTable('look'));
+
 // (Where the sky meets the land in the home town's picture.)
 const H_HORIZON = 84;
 
@@ -422,7 +425,7 @@ export function wreckInfo(game) {
   let k = 0;
   for (const ch of String(h.name || game.playerName || '')) k = (k * 31 + ch.charCodeAt(0)) >>> 0;
   const rng = new RNG(hash4(game.seed >>> 0, k, 0x5e1));
-  const styles = Object.keys(CULTURES);
+  const styles = HOME_STYLES;
   const home = rng.pick(styles);
   const person = () => personName(rng, rng.chance(0.7) ? home : rng.pick(styles), null);
   const captain = person();

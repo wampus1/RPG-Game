@@ -9,7 +9,8 @@ import { deserted } from './civic.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { ITEMS } from '../world/items.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { CULTURES, familyName, placeName } from '../world/names.js';
+import { HOME_STYLES, familyName, placeName } from '../world/names.js';
+import { isFar } from '../world/farlands.js';
 
 const GROUPS = 3;
 const BANNERS = ['#b8322e', '#2e5eb8', '#2e8a4a', '#c89a28', '#7a3ea8', '#1e8a8a'];
@@ -108,12 +109,14 @@ export class Caravans {
     m.horseLost = true;
   }
 
+  // (The Dagoni Islands' towns, while the storm stands round them.)
   places() {
-    return this.game.world.ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned');
+    const ow = this.game.world.ow;
+    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && (ow.wallDown || !isFar(s)));
   }
 
   create(rng) {
-    const styles = Object.keys(CULTURES);
+    const styles = HOME_STYLES;
     const style = rng.pick(styles);
     const fam = familyName(rng, style);
     const name = rng.chance(0.5) ? `the ${fam} Trading Company` : `the ${placeName(rng, style)} Traders`;

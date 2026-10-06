@@ -688,6 +688,15 @@ PIECES.conch_fountain = {
 
 export const PIECE_NAMES = Object.keys(PIECES);
 export const pieceHeight = (name) => (PIECES[name] ? PIECES[name].h : 0);
+// (Round 68) More of them, painted elsewhere (see farpieces.js), with the
+// painter's helpers here.
+export function addPieces(more) {
+  for (const [k, d] of Object.entries(more)) {
+    if (!PIECES[k]) PIECE_NAMES.push(k);
+    PIECES[k] = d;
+  }
+}
+export const PIECE_KIT = { edge, inside, frac, roundWall, water, fall, fire, glow, W, CX, TAU };
 
 // One frame of a great thing (f of PIECE_FRAMES) in a state, as pixels.
 export function paintPiece(name, f = 0, st = 0) {

@@ -33,7 +33,9 @@ const centre = (s) => ({ x: (s.bounds.x0 + s.bounds.x1) / 2, z: (s.bounds.z0 + s
 
 // ------------------------------------------------------------ the world
 test('a much bigger world: three Dagoni Islands inside a storm, two continents and far isles beyond', () => {
-  const ow = new Overworld(12345);
+  // (A world as they were made then: since 0.68 the far lands are lived in
+  // too. See round68.test.mjs.)
+  const ow = new Overworld(12345, { wg: 1 });
   assert.ok(MAP_W * MAP_H >= 300 * 220, `a big map (${MAP_W} x ${MAP_H})`);
   assert.deepEqual([...DAGONI_KEYS].sort(), ['kharos', 'myrrow', 'thessa']);
   assert.equal(LANDMASSES.filter((L) => L.kind === 'continent').length, 2);

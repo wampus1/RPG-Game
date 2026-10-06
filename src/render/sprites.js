@@ -8,6 +8,7 @@ import { BLOCKS } from '../world/blocks.js';
 import { mulberry32, hashString } from '../util/rng.js';
 import { DUNGEON_CREATURES, dungeonIcon, edgeOverlay } from './dungeonart.js';
 import { isleIcon, ISLE_CREATURES } from './isleart.js';
+import { farIcon } from './farart.js';
 import { isleBossArt } from './islebossart.js';
 import { drawHumanoid, CHAR_W, SHEET_H, FRAMES, SPR_PAD } from './people.js';
 import { MODS } from '../mod/state.js';
@@ -787,6 +788,8 @@ function simpleIcon(key) {
   // (The other Dagoni Islands' goods: see isleart.js.)
   const isle = isleIcon(key);
   if (isle) return isle;
+  const far = farIcon(key);
+  if (far) return far;
   const p = new Px(16, 16);
   const rand = mulberry32(hashString(key));
   switch (key) {

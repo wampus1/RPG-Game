@@ -61,6 +61,7 @@ import { Ancient } from './ancient.js';
 import { Saga } from './saga/core.js';
 import './saga/motifs/index.js';
 import { innBedAt, stayAt } from './inns.js';
+import { cutOff, isFar, FAR_CORE } from '../world/farlands.js';
 
 // How long a frame may spend laying out a far town (ms): see World.layOut.
 const LAY_MS = 4;
@@ -846,6 +847,8 @@ export class Sim {
     const raw = (ITEMS[k]?.value || 0) * 0.5 * rule('sell') * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
+    // (A Kavorent core, beyond the storm: worth far more there.)
+    if (k === 'kav_core' && npc.layout && isFar(npc.layout.settlement)) return Math.round((lic > 1 ? Math.max(normal + 1, raw * lic) : normal) * FAR_CORE);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;
   }
 
@@ -2082,7 +2085,7 @@ export class Sim {
       if (this.war.unsafe(s)) return;
       // (From near by, or now and then by raft from a port of another of
       // the islands, to a port of this one.)
-      const reach = (o) => (o.island && s.island && o.island !== s.island ? s.coast && o.coast && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 45 : Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
+      const reach = (o) => !cutOff(ow, s, o) && (o.island && s.island && o.island !== s.island ? s.coast && o.coast && Math.hypot(o.cx - s.cx, o.cz - s.cz) < 45 : Math.hypot(o.cx - s.cx, o.cz - s.cz) < 18);
       const from = rng.pick(ow.settlements.filter((o) => o.id !== sid && !deserted(o) && reach(o) && !(o.civ && s.civ && o.civ !== s.civ && this.realms.standing(o.civ, s.civ) === 'hostile') && !this.war.unsafe(o)) || []);
       if (!from) return;
       const goods = {};

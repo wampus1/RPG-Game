@@ -16,6 +16,7 @@ import { deserted } from './civic.js';
 import { retrain } from '../entities/npcgen.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { authority } from './realms.js';
+import { cutOff } from '../world/farlands.js';
 
 // How friendly two realms must be to swear an alliance, and how far it can
 // fall before the alliance breaks.
@@ -354,6 +355,8 @@ export class Politics {
       for (let j = i + 1; j < civs.length; j++) {
         const a = civs[i];
         const b = civs[j];
+        // (Realms the storm keeps apart don't treat with each other.)
+        if (cutOff(this.game.world.ow, a, b)) continue;
         const r = realms.relation(a, b);
         const al = this.alliance(a, b);
         if (al) {

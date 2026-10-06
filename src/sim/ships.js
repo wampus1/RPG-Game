@@ -12,6 +12,7 @@ import { RNG, hash4, clamp } from '../util/rng.js';
 import { SURFACE, GROUND } from '../config.js';
 import { B, planksOf } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
+import { farTable } from '../world/farlands.js';
 
 // What a town calls its ship, after its people.
 const NAMES = {
@@ -24,6 +25,7 @@ const NAMES = {
   mist: ['Grey Lantern', 'Fog Moth', 'Heather Maid', 'Owl\'s Wing', 'Quiet Mere'],
   tide: ['Pearl Diver', 'Turtle Back', 'Swift Gull', 'Reef Dancer', 'Tide Bride'],
 };
+Object.assign(NAMES, farTable('ships'));
 const DOCK_COST = 150;
 const CREW = 5;
 

@@ -7,6 +7,7 @@ import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
 import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
+import { farTop, farFront, FAR_ROT_TOP } from './farart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -298,6 +299,8 @@ function cubeTop(name, v, rand, rot) {
   if (dt) return dt;
   const it = isleTop(name, v, rand, rot);
   if (it) return it;
+  const ft = farTop(name, v, rand, rot);
+  if (ft) return ft;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -588,6 +591,8 @@ function cubeFront(name, v, rand, rot) {
   if (df) return df;
   const iff = isleFront(name, v, rand);
   if (iff) return iff;
+  const ff = farFront(name, v, rand);
+  if (ff) return ff;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -2061,7 +2066,7 @@ function crackOverlay(stage) {
 }
 
 // --- build --------------------------------------------------------------------
-const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed']);
+const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', ...FAR_ROT_TOP]);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
 const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM };
 Object.assign(SPRITES, DSPRITES);

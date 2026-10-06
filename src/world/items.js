@@ -173,6 +173,8 @@ const NOT_ITEMS = new Set([
   // (The great things in the squares, and what the islands' learning puts
   // up about their towns.)
   'fountain', 'heartfire', 'heart_crystal', 'great_glowcap', 'conch_fountain', 'plinth', 'glass_lamp', 'ember_gutter', 'fog_lantern',
+  // (Round 68: the far peoples' great things.)
+  'triumph_column', 'frost_hearth', 'bell_pagoda', 'sun_wheel', 'jaw_arch', 'salt_obelisk', 'lantern_tree', 'stone_ring', 'beacon',
 ]);
 
 const BLOCK_VALUES = {
@@ -269,6 +271,31 @@ food('mushroom_broth', 6, 6, 'Mushroom Broth', { quality: 'acceptable', region: 
 food('glowcap_tea', 3, 5, 'Glowcap Tea', { region: 'mist' });
 food('crab_boil', 7, 8, 'Crab Boil', { quality: 'acceptable', region: 'tide' });
 food('kelp_cakes', 4, 4, 'Kelp Cakes', { region: 'tide' });
+// (Round 68) The far lands' peoples' (see world/farlands.js): the Velari's
+// fish-sauce stew and olive bread, the Rimeborn's roast reindeer and
+// cloudberry cakes, the Jade Court's dumplings and jasmine tea, the
+// Keshari's chili squash and blue corn, the Bonewrights' whale stew and
+// bannocks, the Saltfolk's shrimp soup and salt fish, the Hollowfolk's
+// root stew and glowberry tart, the Wyrdfolk's seer's stew and heather
+// bread, the Skerrymen's fish pie and seaweed crisps.
+food('garum_stew', 7, 8, 'Garum Fish Stew', { quality: 'acceptable', region: 'velari' });
+food('olive_bread', 4, 5, 'Olive Bread and Figs', { region: 'velari' });
+food('reindeer_roast', 8, 8, 'Roast Reindeer', { quality: 'acceptable', region: 'rime' });
+food('cloudberry_cakes', 4, 6, 'Cloudberry Cakes', { region: 'rime' });
+food('dumplings', 7, 8, 'Steamed Dumplings', { quality: 'acceptable', region: 'jade' });
+food('jasmine_tea', 3, 5, 'Jasmine Tea', { region: 'jade' });
+food('chili_squash', 7, 7, 'Chili Squash', { quality: 'acceptable', region: 'kesh' });
+food('blue_corn_cakes', 4, 5, 'Blue Corn Cakes', { region: 'kesh' });
+food('whale_stew', 8, 8, 'Whale Stew', { quality: 'acceptable', region: 'corrow' });
+food('oat_bannock', 4, 4, 'Oat Bannock', { region: 'corrow' });
+food('shrimp_soup', 6, 7, 'Pink Shrimp Soup', { quality: 'acceptable', region: 'salt' });
+food('salt_fish', 4, 5, 'Salt Fish', { region: 'salt' });
+food('root_stew', 6, 7, 'Cave-Root Stew', { quality: 'acceptable', region: 'hollow' });
+food('glowberry_tart', 4, 6, 'Glowberry Tart', { region: 'hollow' });
+food('seer_stew', 6, 7, 'Seer\'s Stew', { quality: 'acceptable', region: 'wyrd' });
+food('heather_bread', 4, 5, 'Heather Bread', { region: 'wyrd' });
+food('fish_pie', 7, 8, 'Fish Pie', { quality: 'acceptable', region: 'skerry' });
+food('seaweed_crisps', 3, 4, 'Seaweed Crisps', { region: 'skerry' });
 // What grows (and swims) there.
 food('ember_pod', 1, 2, 'Ember Pod');
 food('mangrove_pod', 1, 1, 'Mangrove Pod');
@@ -279,7 +306,9 @@ food('cooked_crab', 5, 6, 'Cooked Crab');
 // at once, the rest over the next while, and more in all than anything
 // eaten cold. [now, over time, seconds it takes]
 const SLOW = { stew: [2, 10, 20], pottage: [1, 9, 18], chowder: [2, 10, 20], spiced_lentils: [1, 9, 18], goulash: [2, 10, 20], tamales: [2, 7, 14], cocoa: [0, 6, 12], ale: [1, 3, 8],
-  pepper_stew: [2, 10, 20], mushroom_broth: [1, 9, 18], glowcap_tea: [0, 6, 12], crab_boil: [2, 10, 20] };
+  pepper_stew: [2, 10, 20], mushroom_broth: [1, 9, 18], glowcap_tea: [0, 6, 12], crab_boil: [2, 10, 20],
+  garum_stew: [2, 10, 20], reindeer_roast: [2, 11, 22], dumplings: [2, 10, 20], jasmine_tea: [0, 6, 12], chili_squash: [2, 9, 18], whale_stew: [2, 11, 22],
+  shrimp_soup: [1, 9, 18], root_stew: [1, 9, 18], seer_stew: [1, 9, 18], fish_pie: [2, 10, 20] };
 for (const [k, [now, over, secs]] of Object.entries(SLOW)) Object.assign(ITEMS[k], { heal: now + over, now: Math.max(1, Math.min(3, now)), regen: now + over - Math.max(1, Math.min(3, now)), regenT: secs });
 // (Round 50: nothing heals more than a little at once. A bite does 1 to 3
 // at once and the rest of its good over the next few seconds, faster than

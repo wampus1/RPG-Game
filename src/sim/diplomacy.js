@@ -10,6 +10,7 @@ import { B, planksOf, PLANK_BLOCKS } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
 import { MinHeap } from '../util/heap.js';
 import { hash4 } from '../util/rng.js';
+import { isFar, cutOff } from '../world/farlands.js';
 
 // How long a frame may spend working out a traveller's way across country
 // (ms): a long one's spread over several frames.
@@ -80,8 +81,13 @@ export class Diplomacy {
   // The towns a mayor writes to: those near, and (for a port) the ports of
   // the other islands over the water.
   neighbours(s, max = 14) {
+    const ow = this.game.world.ow;
     const over = (o) => o.island && s.island && o.island !== s.island;
-    const reach = (o) => (over(o) ? s.coast && o.coast && this.dist(o, s) < 45 : this.dist(o, s) < max);
+    // (On a great continent, towns lie further apart: their neighbours
+    // further off too. Nobody writes through the storm.)
+    const land = isFar(s) ? ow.island(s.island) : null;
+    const far = land && land.kind === 'continent' ? max * 1.8 : max;
+    const reach = (o) => !cutOff(ow, s, o) && (over(o) ? s.coast && o.coast && this.dist(o, s) < 45 : this.dist(o, s) < far);
     const cost = (o) => (o.civ === s.civ ? 0 : 6) + this.dist(o, s) * (over(o) ? 0.5 : 1) + (over(o) ? 8 : 0);
     return this.game.world.ow.settlements
       .filter((o) => o.id !== s.id && !deserted(o) && o.condition !== 'abandoned' && reach(o))

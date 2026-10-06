@@ -18,6 +18,7 @@ import { B, META_STATE } from '../world/blocks.js';
 import { M } from '../world/settlement.js';
 import { GROUND, SURFACE } from '../config.js';
 import { tradeWeekly } from './isletrades.js';
+import { farTable } from '../world/farlands.js';
 
 export const BRANCHES = [
   { id: 'economy', name: 'Economy', color: '#e8c060' },
@@ -262,6 +263,7 @@ const CULTURE_LEAN = {
   wild: { society: 1.2, engineering: 0.5 }, vale: { engineering: 1, economy: 0.8 },
   ember: { warfare: 1.2, engineering: 1 }, mist: { society: 1.5, engineering: 0.3 }, tide: { economy: 1.4, warfare: 0.5 },
 };
+Object.assign(CULTURE_LEAN, farTable('lean'));
 // Which side of a choice suits whom: a realm's values and people, and its
 // ruler's temper (`kind`: the kindly lean that way; `hard`: the harsh).
 const FIT = {

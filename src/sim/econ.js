@@ -96,7 +96,8 @@ export const WANTS = {
 };
 
 export const MEAL_ITEMS = ['feast', 'stew', 'gruel'];
-export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3, pottage: 5, chowder: 5, spiced_lentils: 5, tamales: 5, goulash: 6, pepper_stew: 6, mushroom_broth: 5, crab_boil: 6 };
+export const MEAL_PRICE = { gruel: 2, stew: 5, feast: 9, cooked_fish: 3, cooked_meat: 3, pottage: 5, chowder: 5, spiced_lentils: 5, tamales: 5, goulash: 6, pepper_stew: 6, mushroom_broth: 5, crab_boil: 6,
+  garum_stew: 6, reindeer_roast: 7, dumplings: 6, chili_squash: 5, whale_stew: 7, shrimp_soup: 5, root_stew: 5, seer_stew: 5, fish_pie: 6 };
 // (Anything else on the menu goes for a stew's price.)
 const mealPrice = (m) => MEAL_PRICE[m] ?? 5;
 

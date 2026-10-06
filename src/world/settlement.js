@@ -7,6 +7,7 @@ import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf } from '
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
+import { farTable } from './farlands.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
 const Y0 = GROUND; // first layer above the floor
@@ -16,6 +17,9 @@ const SPECS = {
   house_m: { size: [[7, 5], [7, 6]], beds: 3, residential: true },
   house_l: { size: [[9, 6], [9, 7]], beds: 6, residential: true },
   manor: { size: [[11, 8], [12, 8]], beds: 5, residential: true, tall: 3, civic: true },
+  // (Round 68) An empire's palace, in its capital (see farlands.EMPIRE):
+  // where its ruler and the court live, near the square.
+  palace: { size: [[15, 11], [15, 11]], beds: 6, residential: true, tall: 3, civic: true },
   tavern: { size: [[11, 7], [10, 7]], tall: 3 },
   shop: { size: [[7, 6], [7, 5]] },
   smithy: { size: [[7, 6], [8, 6]] },
@@ -56,8 +60,22 @@ const SPECS = {
   pearlhouse: { size: [[6, 5], [6, 6]] },
 };
 
+// (Round 68) How each far people builds (see world/farlands.js), as block
+// ids: picked from by weight like everyone else's.
+const FAR_BUILD = {};
+for (const [k, F] of Object.entries(farTable('build'))) {
+  const ids = (list) => list.map(([n, w]) => [B[n] ?? B.planks, w]);
+  FAR_BUILD[k] = {
+    wall: ids(F.wall), corner: B[F.corner], floor: B[F.floor], roof: ids(F.roof), flat: !!F.flat,
+    civic: { wall: ids(F.civic.wall), corner: B[F.civic.corner], floor: B[F.civic.floor], roof: ids(F.civic.roof), flat: F.civic.flat ?? !!F.flat },
+    road: F.road.map((n) => B[n]), plaza: F.plaza.map((n) => B[n]), cityWall: B[F.cityWall], barn: F.barn.map((n) => B[n]),
+  };
+}
+const FAR_PIECE_BLOCKS = {};
+for (const [k, piece] of Object.entries(farTable('piece'))) FAR_PIECE_BLOCKS[k] = B[piece];
+
 export const BUILDING_NAMES = {
-  house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', tavern: 'Tavern',
+  house_s: 'Cottage', house_m: 'House', house_l: 'Family House', manor: 'Manor', palace: 'Palace', tavern: 'Tavern',
   shop: 'General Store', smithy: 'Smithy', temple: 'Temple', bakery: 'Bakery', library: 'Library',
   townhall: 'Town Hall', guardhouse: 'Guardhouse', tailor: 'Tailor', workshop: 'Carpentry',
   herbalist: 'Herbalist', warehouse: 'Warehouse', barn: 'Barn', player_workshop: 'Workshop', stables: 'Stables', academy: 'Research Hall', study: 'Scholar\'s Study', college: 'Academy',
@@ -311,6 +329,13 @@ class Layout {
       road = bridge;
       plaza = bridge;
     }
+    // (A far people's own roads and squares: see farlands.js.)
+    const F = FAR_BUILD[s.style];
+    if (F) {
+      const k = T === 'village' ? 0 : T === 'town' ? 1 : 2;
+      road = F.road[k];
+      plaza = F.plaza[k];
+    }
     if ((cond === 'poor' || cond === 'abandoned') && s.style !== 'mist' && s.style !== 'tide') {
       road = B.path;
       if (plaza === B.stone_bricks) plaza = B.cobblestone;
@@ -330,6 +355,27 @@ class Layout {
     const civic = SPECS[type]?.civic;
     const { cold, hot } = this.mats;
     let style = s.style;
+    // (A far people builds its own way, whatever the weather.)
+    const far = FAR_BUILD[style];
+    if (far) {
+      const F = civic && T !== 'village' ? far.civic : far;
+      let wall = rng.weighted(F.wall);
+      let corner = F.corner;
+      let floor = F.floor;
+      if (type === 'barn' || type === 'stables') {
+        wall = far.barn[0];
+        corner = far.barn[1];
+        floor = B.dirt;
+      }
+      const roof = rng.weighted(F.roof);
+      // (An empire's palace in its grandest.)
+      if (type === 'palace') {
+        wall = rng.weighted(far.civic.wall);
+        corner = far.civic.corner;
+        floor = far.civic.floor;
+      }
+      return { wall, corner, floor, roof, flat: F.flat && type !== 'barn' && type !== 'stables', style };
+    }
     if (hot && style !== 'high' && rng.chance(0.6)) style = 'sun';
     if (cold && style === 'vale' && rng.chance(0.5)) style = 'north';
     let wall;
@@ -423,7 +469,8 @@ class Layout {
   // ------------------------------------------------------------ walls
   cityWalls() {
     const b = this.bounds;
-    const W = B.stone_bricks;
+    // (A far people's in its own stone or timber.)
+    const W = FAR_BUILD[this.settlement.style]?.cityWall ?? B.stone_bricks;
     const edge = (x, z) => x === b.x0 || x === b.x1 || z === b.z0 || z === b.z1;
     for (let z = b.z0; z <= b.z1; z++) {
       for (let x = b.x0; x <= b.x1; x++) {
@@ -457,8 +504,8 @@ class Layout {
         for (let dx = -1; dx <= 1; dx++) {
           const x = cx + dx;
           const z = cz + dz;
-          for (let y = Y0; y < Y0 + 4; y++) this.put(x, y, z, B.stone_bricks);
-          if (Math.abs(dx) + Math.abs(dz) === 2 || (dx === 0 && dz === 0)) this.put(x, Y0 + 4, z, B.stone_bricks);
+          for (let y = Y0; y < Y0 + 4; y++) this.put(x, y, z, this.wallBlock);
+          if (Math.abs(dx) + Math.abs(dz) === 2 || (dx === 0 && dz === 0)) this.put(x, Y0 + 4, z, this.wallBlock);
         }
       }
       this.put(cx, Y0 + 5, cz, B.lantern, META_STATE);
@@ -720,10 +767,16 @@ class Layout {
       const n = h.members.length;
       let t = n <= 2 ? 'house_s' : n === 3 ? 'house_m' : 'house_l';
       if (nobles > 0 && h.members.some((m) => m.age === 'adult')) {
-        t = 'manor';
+        // (An empire's first noble house is its ruling family's: the
+        // palace, by the square.)
+        t = s.empire && !this.buildings.some((q) => q.type === 'palace') ? 'palace' : 'manor';
         nobles--;
       }
       let bld = null;
+      if (t === 'palace') {
+        bld = this.placeBuilding('palace', byPlaza(this.frontage()), rng);
+        if (!bld) t = 'manor';
+      }
       for (let attempt = 0; attempt < 4 && !bld; attempt++) {
         bld = this.placeBuilding(t, cands, rng);
         if (!bld && t === 'manor') bld = this.placeBuilding('house_l', cands, rng);
@@ -1897,6 +1950,7 @@ class Layout {
 
     if (b.residential) {
       const nBeds = t === 'house_s' ? 2 : t === 'house_m' ? 3 : t === 'manor' ? 5 : 6;
+      const grand = t === 'manor' || t === 'palace';
       hearth();
       for (let i = 0; i < nBeds; i++) {
         const bed = tryPlace(B.bed, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.bed, 'any', { access: true });
@@ -1913,13 +1967,21 @@ class Layout {
         if (rng.chance(0.5)) this.put(table.x, Y0 + 1, table.z, B.lantern, lit);
       }
       if (rng.chance(0.5)) tryPlace(B.barrel, 'wall');
-      if (t === 'manor' || rng.chance(0.3)) tryPlace(B.bookshelf, 'north', { rot: 0 });
+      if (grand || rng.chance(0.3)) tryPlace(B.bookshelf, 'north', { rot: 0 });
       if (rng.chance(0.35)) tryPlace(B.stool, 'wall', { solid: false });
-      if (t === 'manor') {
+      if (grand) {
         tryPlace(B.bookshelf, 'north', { rot: 0 });
         tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
       }
-      if (rng.chance(0.55) || t === 'manor') tryPlace(rugId, 'center', { solid: false });
+      // (A palace's hall: its treasure, banners, the court's books, and
+      // rugs from wall to wall.)
+      if (t === 'palace') {
+        for (let i = 0; i < 2; i++) tryPlace(B.chest, 'wall', { access: true, rot: 'wall' });
+        for (let i = 0; i < 3; i++) tryPlace(B.bookshelf, 'north', { rot: 0 });
+        for (let i = 0; i < 3; i++) tryPlace(rugId, 'center', { solid: false });
+        for (let i = 0; i < 2; i++) tryPlace(B.war_banner, 'wall', { solid: false });
+      }
+      if (rng.chance(0.55) || grand) tryPlace(rugId, 'center', { solid: false });
       lamp();
     } else if (t === 'tavern') {
       hearth();
@@ -3101,16 +3163,17 @@ class Layout {
     // nine paces (the eight round it an unseen plinth): the Ashborn's
     // heartfire (cold in a deserted town), the Mirefolk's Old Glowcap, the
     // Stiltfolk's conch fountain (its water drawn like a well's).
-    const piece = { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain }[s.style];
+    // (Round 68) The far peoples' own: see render/farpieces.js.
+    const piece = { ember: B.heartfire, mist: B.great_glowcap, tide: B.conch_fountain, ...FAR_PIECE_BLOCKS }[s.style];
     const room = [];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) room.push([p.cx + dx, p.cz + dz]);
     if (piece && room.every(([x, z]) => this.maskAt(x, z) === M.PLAZA)) {
-      this.put(p.cx, Y0, p.cz, piece, piece === B.heartfire && !ruined ? META_STATE : 0);
+      this.put(p.cx, Y0, p.cz, piece, (piece === B.heartfire || piece === B.frost_hearth || piece === B.beacon) && !ruined ? META_STATE : 0);
       for (const [x, z] of room) {
         if (x !== p.cx || z !== p.cz) this.put(x, Y0, z, B.plinth);
         this.setMask(x, z, M.DECOR);
       }
-      if (piece === B.conch_fountain) this.wells.push({ x: p.cx, z: p.cz + 1 });
+      if (piece === B.conch_fountain || piece === B.salt_obelisk) this.wells.push({ x: p.cx, z: p.cz + 1 });
       else {
         // (And a well of their own at the corner of the square.)
         const corner = [[p.x1, p.z1], [p.x0, p.z1], [p.x1, p.z0], [p.x0, p.z0]].find(([x, z]) => this.maskAt(x, z) === M.PLAZA
@@ -3400,7 +3463,8 @@ class Layout {
       case 'shop':
         return this.buildings.some((b) => b.type === 'shop') || this.spotsByTag('market').length > 0;
       default:
-        return this.buildings.some((b) => b.type === J.place && b.work.length + b.seats.length > 0);
+        // (A noble's at home in a palace as in a manor.)
+        return this.buildings.some((b) => (b.type === J.place || (J.place === 'manor' && b.type === 'palace')) && b.work.length + b.seats.length > 0);
     }
   }
 
@@ -3455,6 +3519,7 @@ const ANCESTOR_FIRST = {
   mist: ['Aelwen', 'Bryn', 'Gloamwyn', 'Heth', 'Lune', 'Myrrin', 'Sorrel', 'Vell'],
   tide: ['Ahi', 'Kailani', 'Makoa', 'Nalu', 'Pelani', 'Reva', 'Tasi', 'Wahine'],
 };
+Object.assign(ANCESTOR_FIRST, farTable('founders'));
 function ancestorName(rng, style) {
   return `${rng.pick(ANCESTOR_FIRST[style] || ANCESTOR_FIRST.vale)} ${rng.pick(['the Elder', 'the Founder', 'Oakheart', 'Stonebrook', 'Ashford', 'Millward', 'Greenhill', 'of the Old Road', 'Hearthkeeper', 'Longstride'])}`;
 }

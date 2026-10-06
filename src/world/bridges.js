@@ -43,9 +43,46 @@ const MATS = {
     stone: { deck: 'mossy_bricks', rail: 'mossy_bricks', pier: 'stone_bricks', lamp: 'fog_lantern' },
     causeway: { deck: 'mossy_bricks', mid: 'planks_bog', rail: 'mossy_bricks', pier: 'stone_bricks', lamp: 'fog_lantern' },
   },
+  // The far lands' (see world/farlands.js): the Velari's travertine on
+  // marble; the Jade Court's bamboo and red lacquer; whalebone on Corrow;
+  // salt brick and blue glaze on Saltmere; cob and lanterns on Hollowmark;
+  // drystone on the Wyrd Isle and the Skerries.
+  velmarch: {
+    plank: { deck: 'planks', rail: 'fence', pier: 'log_oak', lamp: 'lantern' },
+    stone: { deck: 'travertine', rail: 'marble', pier: 'travertine', lamp: 'lantern' },
+    causeway: { deck: 'travertine', mid: 'stone_bricks', rail: 'marble_column', pier: 'travertine', lamp: 'lantern' },
+  },
+  ostria: {
+    plank: { deck: 'bamboo', rail: 'fence', pier: 'planks_lacquer', lamp: 'lantern' },
+    stone: { deck: 'stone_bricks', rail: 'planks_lacquer', pier: 'stone_bricks', lamp: 'lantern' },
+    causeway: { deck: 'stone_bricks', mid: 'flagstone', rail: 'planks_lacquer', pier: 'stone_bricks', lamp: 'lantern' },
+  },
+  corrow: {
+    plank: { deck: 'planks_drift', rail: 'fence', pier: 'whalebone', lamp: 'lantern' },
+    stone: { deck: 'drystone', rail: 'whalebone', pier: 'drystone', lamp: 'lantern' },
+    causeway: { deck: 'drystone', mid: 'planks_drift', rail: 'whalebone', pier: 'drystone', lamp: 'lantern' },
+  },
+  saltmere: {
+    plank: { deck: 'planks_birch', rail: 'fence', pier: 'log_birch', lamp: 'lantern' },
+    stone: { deck: 'salt_brick', rail: 'tile_blue', pier: 'salt_brick', lamp: 'lantern' },
+    causeway: { deck: 'salt_brick', mid: 'tile_blue', rail: 'salt_brick', pier: 'salt_brick', lamp: 'lantern' },
+  },
+  hollowmark: {
+    plank: { deck: 'planks', rail: 'fence', pier: 'log_oak', lamp: 'lantern' },
+    stone: { deck: 'cob', rail: 'mossy_bricks', pier: 'mossy_bricks', lamp: 'lantern' },
+    causeway: { deck: 'mossy_bricks', mid: 'cob', rail: 'mossy_bricks', pier: 'mossy_bricks', lamp: 'lantern' },
+  },
+  wyrd: {
+    plank: { deck: 'planks_dark', rail: 'fence', pier: 'log_pine', lamp: 'lantern' },
+    stone: { deck: 'drystone', rail: 'drystone', pier: 'drystone', lamp: 'lantern' },
+    causeway: { deck: 'drystone', mid: 'flagstone', rail: 'drystone', pier: 'drystone', lamp: 'lantern' },
+  },
+  skerries: {
+    plank: { deck: 'planks_dark', rail: 'fence', pier: 'log_pine', lamp: 'lantern' },
+    stone: { deck: 'drystone', rail: 'drystone', pier: 'drystone', lamp: 'lantern' },
+    causeway: { deck: 'drystone', mid: 'cobblestone', rail: 'drystone', pier: 'drystone', lamp: 'lantern' },
+  },
 };
-// (Round 68: the far lands' own, added where their peoples are: see
-// world/farlands.js.)
 export function bridgeMats(land, kind) {
   const M = MATS[land] || MATS.default;
   const m = M[kind] || MATS.default[kind];

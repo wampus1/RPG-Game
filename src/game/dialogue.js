@@ -30,6 +30,7 @@ import { isStar, starGreeting, wingTalk } from './starfall.js';
 import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
 import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
 import { INN_NIGHTS, innFor, innPrice, stayAt, rentRoom, stayLeft } from '../sim/inns.js';
+import { coreWorth } from '../world/farlands.js';
 
 const MOTIFS_OF = (S, th) => MOTIFS[th.m];
 const sagaPid = (game) => sagaPidOf(game.player);
@@ -916,8 +917,12 @@ function coreTalk(npc, game) {
   const n = countItem(p.inv, 'kav_core');
   if (!n) return { lines: ['Brought what? I don\'t see anything.'] };
   removeItem(p.inv, 'kav_core', n);
-  const pay = Math.min(Math.max(0, Math.floor(L.econ.treasury * 0.5)), 220 * n) + 60 * n;
-  L.econ.treasury = Math.max(0, L.econ.treasury - (pay - 60 * n));
+  // (Beyond the storm, where no spire stands, a realm pays far more: see
+  // farlands.FAR_CORE.)
+  const k = coreWorth(s);
+  const base = Math.round(60 * n * k);
+  const pay = Math.min(Math.max(0, Math.floor(L.econ.treasury * (k > 1 ? 0.8 : 0.5))), Math.round(220 * n * k)) + base;
+  L.econ.treasury = Math.max(0, L.econ.treasury - (pay - base));
   p.give('coin', pay);
   sim.ancient.addCores(L, n, 'you');
   sim.addRenown(s.id, 8 * n, 'bringing a Kavorent core');
@@ -928,7 +933,7 @@ function coreTalk(npc, game) {
   return {
     lines: [
       `Is that... gods. ${n === 1 ? 'A core' : `${n} cores`} from the old ones, and still alight.`,
-      `Take ¤${pay}: it's not what ${n === 1 ? 'it\'s' : 'they\'re'} worth, but it's what we can spare. Our scholars will want to see this at once.`,
+      k > 1 ? `Out here we've never so much as seen a spire. Take ¤${pay}, and know the realm would pay twice that if it had it. Our scholars will want to see this at once.` : `Take ¤${pay}: it's not what ${n === 1 ? 'it\'s' : 'they\'re'} worth, but it's what we can spare. Our scholars will want to see this at once.`,
       `(The realm has ${st.cores} core${st.cores === 1 ? '' : 's'} to study now.)`,
     ],
     choices: [{ id: 'ancient_view', label: 'Show me what the realm could learn from it.' }],

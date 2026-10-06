@@ -17,6 +17,7 @@ import { M } from '../world/settlement.js';
 import { GROUND } from '../config.js';
 import { hash4, clamp } from '../util/rng.js';
 import { festivalName, religionOf } from './culture.js';
+import { farTable } from '../world/farlands.js';
 
 export const EVENT_BLOCKS = new Set(['poster', 'flower_arch', 'maypole', 'bunting', 'feast_table', 'festival_banner'].map((k) => B[k]));
 
@@ -33,9 +34,15 @@ export const STYLES = {
   mist: { palette: 1, centre: [['fence'], ['lantern', LIT_]], centreWord: 'a lantern pole', light: ['lantern', LIT_], flowers: ['heather', 'mushroom_red'] },
   tide: { palette: 3, centre: [['campfire', LIT_]], centreWord: 'a driftwood fire', light: ['torch', LIT_], rugs: ['rug_blue'] },
 };
+// (Round 68) The far lands' peoples' own (see world/farlands.js): their
+// centres and lights lit where they say so.
+const FAR_STYLES = {};
+for (const [k, L] of Object.entries(farTable('feastLook'))) {
+  FAR_STYLES[k] = { ...L, centre: L.centre.map(([b, lit]) => (lit ? [b, LIT_] : [b])), light: [L.light[0], LIT_] };
+}
 export const WEDDING_PALETTE = 5;
 export function styleOf(s) {
-  return STYLES[s && s.style] || STYLES.vale;
+  return STYLES[s && s.style] || FAR_STYLES[s && s.style] || STYLES.vale;
 }
 // A colour for bunting or a banner (rotation kept for bunting).
 export function decorMeta(palette, rot = 0) {

@@ -5,6 +5,7 @@ import { RNG, clamp, hash4 } from '../util/rng.js';
 import { personName, familyName } from '../world/names.js';
 import { ITEMS } from '../world/items.js';
 import { tradeOfStyle } from '../sim/isletrades.js';
+import { farTable, EMPIRE } from '../world/farlands.js';
 
 // start/end: minutes after midnight for the job's core hours.
 export const JOBS = {
@@ -99,6 +100,8 @@ export function planPopulation(s, rng) {
     return { households, jobs: rng.shuffle(['innkeeper', 'priest', 'blacksmith', 'farmer']).slice(0, 2), target: 0 };
   }
   let target = { village: rng.int(13, 21), town: rng.int(28, 40), city: rng.int(60, 84) }[s.type];
+  // (Round 68) An empire's capital: the greatest place in the world.
+  if (s.empire) target *= EMPIRE.popX;
   target *= { prosperous: 1.15, normal: 1, poor: 0.78 }[s.condition] || 1;
   if (has('agrarian') && s.type === 'village') target *= 1.12;
   if (has('mercantile') && s.type !== 'village') target *= 1.08;
@@ -156,7 +159,15 @@ export function planPopulation(s, rng) {
   add('priest', scale(has('pious') || rng.chance(0.4) ? 1 : 0, 0, 1, 2) + (has('pious') && T !== 'village' ? 1 : 0));
   add('baker', scale(rng.chance(0.4) ? 1 : 0, 0, 1, 2));
   if (T !== 'village' || has('scholarly')) add('scholar', scale(has('scholarly') ? 1 : 0, 0, has('scholarly') ? 2 : 1, has('scholarly') ? 3 : 2));
-  if (T === 'city') add('noble', rng.int(2, 3));
+  if (T === 'city') add('noble', rng.int(2, 3) + (s.empire ? 3 : 0));
+  // (And an empire's capital a garrison, its markets, its schools.)
+  if (s.empire) {
+    add('guard', rng.int(4, 6));
+    add('merchant', rng.int(2, 4));
+    add('scholar', 2);
+    add('priest', 1);
+    add('blacksmith', 1);
+  }
   if (T !== 'village') add('tailor', 1);
   if (T !== 'village' || has('artisan')) add('carpenter', 1);
   if (rng.chance(T === 'village' ? 0.45 : 0.7)) jobs.splice(herbAt, 0, 'herbalist');
@@ -205,6 +216,9 @@ const SKIN = {
   tide: ['#c8945c', '#b07a48', '#d8aa70', '#9a6438', '#e0b888', '#8a5630'],
 };
 const ALL_SKIN = Object.values(SKIN).flat();
+// (Round 68: the far lands' peoples' own, kept out of the mix above so
+// the islands' folk look as they always have.)
+Object.assign(SKIN, farTable('skins'));
 const HAIR = [
   '#2a1a12', '#4a2c1a', '#6e4424', '#a0622a', '#d8a848', '#e8d078', '#b83a1c', '#1a1a22', '#5a5a5a',
   '#8a3a1a', '#e8e0c8', '#1a2030', '#6a3a1a', '#d07848', '#3a2418',
@@ -712,7 +726,7 @@ export function generateNPCs(layout, plan, seed) {
     house.household = h;
     const fam = familyName(rng, style);
     house.family = fam;
-    house.homeName = house.type === 'manor' ? `${fam} Manor` : house.type === 'house_s' ? `${fam} Cottage` : `The ${fam} House`;
+    house.homeName = house.type === 'palace' ? 'The Imperial Palace' : house.type === 'manor' ? `${fam} Manor` : house.type === 'house_s' ? `${fam} Cottage` : `The ${fam} House`;
     const members = [];
     for (const m of h.members) {
       const idx = npcs.length;
@@ -725,7 +739,7 @@ export function generateNPCs(layout, plan, seed) {
         // Everyone able finds some work: the fields, the water, the woods.
         if (!layout.hasWorkplaceFor(job)) job = ['farmer', 'fisher', 'trapper', 'laborer', 'lumberjack', 'miner'].find((alt) => layout.hasWorkplaceFor(alt)) || 'retired';
       }
-      if (job === 'noble' && house.type !== 'manor') {
+      if (job === 'noble' && house.type !== 'manor' && house.type !== 'palace') {
         // Nobles who didn't get a manor become merchants.
         job = layout.hasWorkplaceFor('merchant') ? 'merchant' : 'laborer';
       }

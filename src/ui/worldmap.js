@@ -430,7 +430,7 @@ export class MapWindow extends Window {
       const mark = this.markAt(game, q.cx, q.cz);
       if (icon && (ow.explored[q.cz * MAP_W + q.cx] || game.revealMap)) {
         const s = icon.s;
-        let info = `${s.name} · ${cap(s.type)} · ${s.condition} · ${BIOMES[s.biome]?.name || s.biome}${s.island ? ` · ${cap(ow.island(s.island)?.name || s.island)}` : ''}`;
+        let info = `${s.name} · ${s.empire ? 'Imperial capital' : cap(s.type)} · ${s.condition} · ${BIOMES[s.biome]?.name || s.biome}${s.island ? ` · ${cap(ow.island(s.island)?.name || s.island)}` : ''}`;
         const L = game.world.layouts.get(s.id);
         const rd = L && L.econ && L.econ.raidedDay;
         if (rd !== undefined && rd !== null && game.day - rd <= 3) info += game.day === rd ? ' · raided today' : ` · raided ${game.day - rd} day${game.day - rd === 1 ? '' : 's'} ago`;
@@ -491,11 +491,23 @@ export class MapWindow extends Window {
         ctx.drawImage(M.fog, 0, 0, MAP_W, MAP_H, o.x, o.y, MAP_W * w, MAP_H * h);
       }
       if (this.civView) {
-        for (const c of ow.liveCells) {
-          if (c.civ === null || !ow.civs[c.civ] || !known(c.cx, c.cz)) continue;
+        const paint = (c) => {
+          if (c.civ === null || !ow.civs[c.civ]) return;
           ctx.fillStyle = ow.civs[c.civ].color.hex;
           ctx.globalAlpha = 0.45;
           ctx.fillRect(o.x + c.cx * w, o.y + c.cz * h, Math.ceil(w), Math.ceil(h));
+        };
+        for (const c of ow.liveCells) if (known(c.cx, c.cz)) paint(c);
+        // (Round 68) The far lands' realms, over what's known of them.
+        for (const L of ow.lands) {
+          if (L.kind === 'dagoni' || !ow.civs.some((q) => q.island === L.key)) continue;
+          for (let cz = Math.max(0, Math.floor(L.z0 / REGION_D)); cz <= Math.min(MAP_H - 1, Math.floor(L.z1 / REGION_D)); cz++) {
+            for (let cx = Math.max(0, Math.floor(L.x0 / REGION_W)); cx <= Math.min(MAP_W - 1, Math.floor(L.x1 / REGION_W)); cx++) {
+              if (!known(cx, cz) || (M.biome[cz * MAP_W + cx] || ow.mapBiome(cx, cz)) === 'ocean') continue;
+              const c = ow.cell(cx, cz);
+              if (c && c.island === L.key) paint(c);
+            }
+          }
         }
         ctx.globalAlpha = 1;
       }
@@ -806,7 +818,12 @@ export class MapWindow extends Window {
         } else if (!seen.has(s.id)) {
           seen.add(s.id);
           const q = this.at((s.cx + s.cw / 2) * REGION_W, (s.cz + s.cd / 2) * REGION_D);
-          const r = s.type === 'city' ? 2 : s.type === 'town' ? 1.5 : 1;
+          const r = s.empire ? 3 : s.type === 'city' ? 2 : s.type === 'town' ? 1.5 : 1;
+          // (An empire's capital: a gold crown of a border round it.)
+          if (s.empire) {
+            ctx.fillStyle = '#e0b040';
+            ctx.fillRect(Math.round(q.x - r - 2), Math.round(q.y - r - 2), Math.round(r * 2 + 4), Math.round(r * 2 + 4));
+          }
           ctx.fillStyle = '#1a1410';
           ctx.fillRect(Math.round(q.x - r - 1), Math.round(q.y - r - 1), Math.round(r * 2 + 2), Math.round(r * 2 + 2));
           ctx.fillStyle = s.condition === 'abandoned' || s.deserted ? '#8a8478' : col;

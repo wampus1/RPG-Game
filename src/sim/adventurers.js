@@ -11,7 +11,8 @@ import { deserted } from './civic.js';
 import { makeAdventurer } from '../entities/npcgen.js';
 import { ITEMS, offhandable } from '../world/items.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
-import { CULTURES } from '../world/names.js';
+import { HOME_STYLES } from '../world/names.js';
+import { isFar, cutOff } from '../world/farlands.js';
 
 // A day for an adventurer in town (minutes after midnight).
 export const ADV_DAY = [
@@ -44,15 +45,18 @@ export class Adventurers {
     return this.list.find((a) => a.id === id) || null;
   }
 
-  // Where adventurers go: anywhere lived in.
+  // Where adventurers go: anywhere lived in (in the Dagoni Islands, while
+  // the storm stands round them).
   places() {
-    return this.game.world.ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned');
+    const ow = this.game.world.ow;
+    return ow.settlements.filter((s) => !deserted(s) && s.condition !== 'abandoned' && (ow.wallDown || !isFar(s)));
   }
 
   create(rng, at = null) {
-    const civs = this.game.world.ow.civs || [];
+    const ow = this.game.world.ow;
+    const civs = (ow.civs || []).filter((c) => ow.wallDown || !isFar(c));
     const home = civs.length && rng.chance(0.8) ? rng.pick(civs) : null;
-    const style = home ? home.style : rng.pick(Object.keys(CULTURES));
+    const style = home ? home.style : rng.pick(HOME_STYLES);
     const level = rng.chance(0.2) ? 3 : rng.chance(0.45) ? 2 : 1;
     const base = makeAdventurer(rng, style, level);
     const a = {
@@ -99,7 +103,7 @@ export class Adventurers {
   nextStop(a, rng) {
     const ow = this.game.world.ow;
     const here = ow.settlements[a.at ?? a.dest];
-    const cands = this.places().filter((s) => s !== here && Math.hypot(s.cx - here.cx, s.cz - here.cz) < 20);
+    const cands = this.places().filter((s) => s !== here && !cutOff(ow, here, s) && Math.hypot(s.cx - here.cx, s.cz - here.cz) < 20);
     if (!cands.length) return this.places().find((s) => s !== here) || here;
     const score = (s) => (s.civ !== here.civ ? 3 : 0) + (a.seen.includes(s.id) ? -4 : 0) - Math.hypot(s.cx - here.cx, s.cz - here.cz) * 0.15 + rng.float(0, 3);
     return cands.reduce((m, s) => (score(s) > score(m) ? s : m));

@@ -3,7 +3,7 @@
 // where you come from: washed up on the shore after a shipwreck, or born
 // and raised in one of the island's towns (where everyone knows you).
 import { RNG, hash4 } from '../util/rng.js';
-import { personName, familyName, CULTURES } from '../world/names.js';
+import { personName, familyName, CULTURES, HOME_STYLES } from '../world/names.js';
 
 export const STATS = [
   { key: 'str', name: 'Strength', about: 'Each point: +10% melee damage and +8% digging and chopping speed.' },
@@ -140,14 +140,14 @@ export function goodTraits(h) {
 // A name from a culture (the character screen's "another name").
 export function heroName(seed, style) {
   const rng = new RNG(hash4(seed >>> 0, 0x9a3e));
-  const st = CULTURES[style] ? style : rng.pick(Object.keys(CULTURES));
+  const st = CULTURES[style] ? style : rng.pick(HOME_STYLES);
   return personName(rng, st, familyName(rng, st)).first;
 }
 
 // A fresh random character (also what "randomise" does).
 export function randomHero(seed) {
   const rng = new RNG(hash4(seed >>> 0, 0x4e70));
-  const style = rng.pick(Object.keys(CULTURES));
+  const style = rng.pick(HOME_STYLES);
   const fam = familyName(rng, style);
   const nm = personName(rng, style, fam);
   const face = rng.pick(FACES);

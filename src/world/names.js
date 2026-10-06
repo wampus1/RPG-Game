@@ -1,4 +1,5 @@
 // Culture-flavoured name generators for civilizations, settlements and people.
+import { FAR_PEOPLES } from './farlands.js';
 
 export const CULTURES = {
   vale: {
@@ -89,6 +90,14 @@ export const CULTURES = {
   },
 };
 
+// The Dagoni Islands' peoples, as ever: those picked from where nobody
+// says whose (a stranger's name, a merchant's people...).
+export const HOME_STYLES = Object.keys(CULTURES);
+// (Round 68) And the far lands' (see farlands.js).
+for (const [k, P] of Object.entries(FAR_PEOPLES)) {
+  CULTURES[k] = { label: P.label, civ: P.civ, placePre: P.placePre, placeSuf: P.placeSuf, first: P.first, lastPre: P.lastPre, lastSuf: P.lastSuf, lastWhole: P.lastWhole };
+}
+
 export const CIV_TITLES = ['Kingdom', 'Dominion', 'Republic', 'Confederacy', 'Principality', 'Commonwealth', 'Duchy', 'League', 'Empire', 'Realm', 'Union', 'Compact', 'Protectorate', 'Grand Duchy', 'March', 'Hegemony', 'Alliance', 'Free State'];
 
 // A civilization's name: a title of its own people or a common one, before
@@ -127,6 +136,7 @@ export function familyName(rng, culture) {
   if (whole.length && a < 0.22) return whole[Math.floor(b * whole.length)];
   const pre = c.lastPre[Math.floor(((whole.length ? (a - 0.22) / 0.78 : a)) * c.lastPre.length)];
   const suf = c.lastSuf[Math.floor(b * c.lastSuf.length)];
-  if (pre.endsWith(' ') || pre.endsWith('-')) return pre + suf;
+  // (Kept apart, or a Gaelic Mac, O' or Mc with the name after it as it is.)
+  if (pre.endsWith(' ') || pre.endsWith('-') || pre.endsWith('\'') || pre === 'Mac' || pre === 'Mc') return pre + suf;
   return (pre + suf.toLowerCase()).replace(/(.)\1\1/, '$1$1');
 }

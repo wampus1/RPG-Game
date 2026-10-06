@@ -532,6 +532,49 @@ def('rock_void', { tool: 'pick', hardness: 1.5, drop: 'cobblestone', label: 'Bli
 // entities/bosses_spire.js): shelter, a while.
 def('kav_coolant', { hardness: Infinity, drop: null, light: 6, label: 'Coolant Column' });
 
+// Round 68: what the far lands' peoples build with (see world/farlands.js):
+// the Velari's warm travertine, their fluted marble columns and red barrel
+// tiles; the Rimeborn's frost-dark logs and roofs of living turf; the Jade
+// Court's red-lacquered posts, paper screens, bamboo floors and roofs of
+// green glazed tile; the Keshari's red adobe and turquoise mosaic; the
+// Bonewrights' whalebone; the Saltfolk's white salt brick and blue glaze;
+// the Hollowfolk's cob; the drystone of the Wyrd Isle and the Skerries,
+// and the Skerrymen's thatch roped down against the gales.
+def('travertine', { tool: 'pick', hardness: 1.8, label: 'Travertine' });
+def('roof_terracotta', { tool: 'pick', hardness: 1.2, rotatable: true, label: 'Barrel-Tile Roof' });
+def('marble_column', { tool: 'pick', hardness: 2.2, drop: 'marble', label: 'Marble Column' });
+def('log_frost', { tool: 'axe', hardness: 1.3, label: 'Frost-Dark Logs' });
+def('roof_turf', { tool: 'shovel', hardness: 0.6, rotatable: true, drop: 'dirt', label: 'Turf Roof' });
+def('planks_lacquer', { tool: 'axe', hardness: 1.1, label: 'Lacquered Wood' });
+def('paper_wall', { tool: 'axe', hardness: 0.5, label: 'Paper Screen' });
+def('roof_jade', { tool: 'pick', hardness: 1.2, rotatable: true, label: 'Jade Tile Roof' });
+def('bamboo', { tool: 'axe', hardness: 0.8, label: 'Bamboo Boards' });
+def('adobe_red', { tool: 'pick', hardness: 0.9, label: 'Red Adobe' });
+def('turquoise_tile', { tool: 'pick', hardness: 1.5, label: 'Turquoise Mosaic' });
+def('whalebone', { tool: 'pick', hardness: 1.6, label: 'Whalebone' });
+def('salt_brick', { tool: 'pick', hardness: 1, label: 'Salt Brick' });
+def('tile_blue', { tool: 'pick', hardness: 1.2, rotatable: true, label: 'Blue Glaze' });
+def('cob', { tool: 'shovel', hardness: 0.8, drop: 'dirt', label: 'Cob' });
+def('drystone', { tool: 'pick', hardness: 2, drop: 'cobblestone', label: 'Drystone' });
+def('roof_rope', { hardness: 0.5, rotatable: true, label: 'Roped Thatch' });
+// The great things in the far peoples' squares (drawn whole: see
+// render/farpieces.js): the Velari's triumphal column, its gilt eagle
+// over the forum; the Rimeborn's frost hearth, a fire of blue ice in a
+// ring of antlered stones; the Jade Court's bell pagoda; the Keshari's
+// sun wheel over the kiva; the Bonewrights' arch of a great whale's jaws;
+// the Saltfolk's salt obelisk in its pink pool (water drawn from it like a
+// well's); the Hollowfolk's lantern tree; the Wyrdfolk's ring of
+// runestones; the Skerrymen's beacon.
+def('triumph_column', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 6, label: 'Triumphal Column' });
+def('frost_hearth', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 13, lightWhenState: true, label: 'Frost Hearth' });
+def('bell_pagoda', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 9, label: 'Bell Pagoda' });
+def('sun_wheel', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 8, label: 'Sun Wheel' });
+def('jaw_arch', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 8, label: 'Whale-Jaw Arch' });
+def('salt_obelisk', { ...sprite, tall: true, interact: 'well', hardness: Infinity, drop: null, light: 5, label: 'Salt Obelisk' });
+def('lantern_tree', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 14, label: 'Lantern Tree' });
+def('stone_ring', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 7, label: 'Ring of Runestones' });
+def('beacon', { ...sprite, tall: true, hardness: Infinity, drop: null, light: 15, lightWhenState: true, label: 'Beacon' });
+
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
 }
@@ -553,11 +596,11 @@ export const NATURAL = new Set(['stone', 'dirt', 'grass', 'grass_lush', 'grass_d
   'ash', 'basalt', 'obsidian', 'cinder', 'sulfur_crust', 'scorched', 'moss', 'peat', 'mycelium'].filter((k) => B[k] !== undefined).map((k) => B[k]));
 // Ores, and the glint they show in a cut wall.
 export const ORE_GLINT = new Map([['coal_ore', '#3a3a44'], ['iron_ore', '#e0b090'], ['gold_ore', '#ffd84a'], ['gem_ore', '#7affe0']].filter(([k]) => B[k] !== undefined).map(([k, c]) => [B[k], c]));
-export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks, B.planks_cinder, B.planks_bog, B.planks_drift]);
+export const ROAD_BLOCKS = new Set([B.path, B.flagstone, B.cobblestone, B.gravel, B.stone_bricks, B.planks, B.planks_dark, B.basalt, B.mossy_bricks, B.planks_cinder, B.planks_bog, B.planks_drift, B.travertine, B.turquoise_tile, B.salt_brick, B.bamboo]);
 // The planks a people lays (by its town's style): see planks_cinder.
-const STYLE_PLANKS = { ember: B.planks_cinder, mist: B.planks_bog, tide: B.planks_drift };
+const STYLE_PLANKS = { ember: B.planks_cinder, mist: B.planks_bog, tide: B.planks_drift, rime: B.planks_dark, jade: B.bamboo, corrow: B.planks_drift, salt: B.planks_birch, wyrd: B.planks_dark, skerry: B.planks_dark };
 export const planksOf = (style) => STYLE_PLANKS[style] || B.planks;
-export const PLANK_BLOCKS = new Set([B.planks, B.planks_birch, B.planks_dark, B.planks_cinder, B.planks_bog, B.planks_drift]);
+export const PLANK_BLOCKS = new Set([B.planks, B.planks_birch, B.planks_dark, B.planks_cinder, B.planks_bog, B.planks_drift, B.bamboo, B.planks_lacquer]);
 export const LOGS = new Set(
   ['oak', 'birch', 'pine', 'palm', 'jungle', 'acacia', 'willow', 'cinder', 'mangrove'].map((w) => B[`log_${w}`]),
 );

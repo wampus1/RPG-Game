@@ -1294,7 +1294,7 @@ export class LedgerWindow extends Window {
   draw(g, game) {
     const { s } = this;
     g.box(0, 0, this.w, this.h, { bg: 'rgba(40,30,20,0.96)', double: true, title: 'NOTICE BOARD' });
-    g.center(1, `${s.name.toUpperCase()} · ${cap(s.type)} of the ${s.civ ? s.civ.name.replace(/^The /, '') : 'free folk'}`, '#f0e0c0');
+    g.center(1, `${s.name.toUpperCase()} · ${s.empire ? 'Imperial capital' : cap(s.type)} of the ${s.civ ? s.civ.name.replace(/^The /, '') : 'free folk'}`, '#f0e0c0');
     // The tabs.
     const tabs = [['town', ' TOWN '], ['news', ' NEWS '], ['work', ' WORK ']];
     // (Centred: the three, and the gaps between them.)
@@ -1475,9 +1475,11 @@ export function settlementIcons(game) {
     const o = out.get(cz * 10000 + cx);
     return (c.settlement !== null && c.settlement !== s.id) || (o && o.s !== s) || c.biome === 'ocean';
   };
-  const list = [...ow.settlements].sort((a, b) => (ICON_SIZE[b.type] || [1, 1])[0] * (ICON_SIZE[b.type] || [1, 1])[1] - (ICON_SIZE[a.type] || [1, 1])[0] * (ICON_SIZE[a.type] || [1, 1])[1]);
+  // (Round 68: an empire's capital three squares by three.)
+  const size = (s) => (s.empire ? [3, 3] : ICON_SIZE[s.type] || [1, 1]);
+  const list = [...ow.settlements].sort((a, b) => size(b)[0] * size(b)[1] - size(a)[0] * size(a)[1]);
   for (const s of list) {
-    const [w, h] = ICON_SIZE[s.type] || [1, 1];
+    const [w, h] = size(s);
     reach = reachedCells(s);
     spill = !!s.baseType && s.baseType !== s.type;
     // Start from the squares it was founded on, then grow sideways and down
@@ -1517,6 +1519,11 @@ export function settlementIcons(game) {
           // (A city squeezed onto one row still reads as a city.)
           glyph = s.type === 'city' ? (dx === 0 ? '╠▓' : '▓╣') : dx === 0 ? '[■' : '■]';
           shade = s.type === 'city' ? 0.6 : 0.5;
+        } else if (cw === 3 && ch === 3) {
+          // An empire's capital: walls all round, its palace in the middle.
+          const rows = [['╔═', '══', '═╗'], ['║▓', '▓▓', '▓║'], ['╚═', '══', '═╝']];
+          glyph = rows[dz][dx];
+          shade = dx === 1 && dz === 1 ? 0.95 : 0.7;
         } else {
           const [tl, tr, bl, br] = walled ? ['╔═', '═╗', '╚═', '═╝'] : ['┌─', '─┐', '└─', '─┘'];
           glyph = dz === 0 ? (dx === 0 ? tl : tr) : dx === 0 ? bl : br;
@@ -1571,7 +1578,7 @@ export class BannerWindow extends Window {
   constructor(ui, s) {
     // Only one banner at a time.
     ui.windows = ui.windows.filter((w) => w.kind !== 'banner');
-    const sub = `${cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.deserted ? 'deserted ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
+    const sub = `${s.empire && s.condition !== 'abandoned' && !s.deserted ? 'Imperial capital' : cap(s.condition === 'abandoned' ? 'abandoned ' + s.type : s.deserted ? 'deserted ' + s.type : s.type)}${s.civ ? ' · ' + s.civ.name : ''}`;
     const w = Math.max(s.name.length + 8, sub.length + 4);
     super(ui, w, 4, { kind: 'banner', modal: false, y: 5 });
     this.s = s;
