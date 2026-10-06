@@ -28,7 +28,9 @@ const sheetCache = new Map();
 
 // Sprite sheet: 4 directions (rows) x FRAMES columns.
 export function humanoidSheet(look) {
-  const key = JSON.stringify(look);
+  let key = JSON.stringify(look);
+  // (Round 66: a mod's gear looks are new with each world: see mod/gear.js.)
+  if (key.includes('modgear')) key += `|${MODS.serialGear || 0}`;
   let c = sheetCache.get(key);
   if (c) return c;
   const sheet = new Px(CHAR_W * FRAMES, SHEET_H * 4);
@@ -1858,6 +1860,12 @@ export function itemIcon(key) {
   // (So does a relic with shards in it: see drawJewelled.)
   if (it && it.shards) {
     c = itemIcon(it.plain);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 66) A piece a mod's node tuned looks like the piece it was.
+  if (it && it.tunedFrom) {
+    c = itemIcon(it.tunedFrom);
     iconCache.set(key, c);
     return c;
   }

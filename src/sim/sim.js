@@ -7,6 +7,7 @@ import { isStar, starWary } from '../game/starfall.js';
 import { GROUND } from '../config.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
+import { rule } from '../mod/rules.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { jobTitle } from '../entities/npcgen.js';
 import { graveyardFence } from '../world/settlement.js';
@@ -792,6 +793,8 @@ export class Sim {
     m *= tr.includes('generous') ? 0.95 : tr.includes('stingy') || tr.includes('shrewd') ? 1.06 : 1;
     m *= 1 + (e ? e.tax * 0.5 : 0);
     m *= priceMult(this.game.hero);
+    // (Round 66: what the world's mods have things cost.)
+    m *= rule('buy');
     // Laws: outsiders pay the tariff; an open market takes a little off.
     if (lawOn(npc.layout, 'tariff') && !this.isCitizen(s.id)) m *= 1.1;
     if (lawOn(npc.layout, 'openMarket')) m *= 0.95;
@@ -840,7 +843,7 @@ export class Sim {
     const sh = this.shopOf(npc);
     const glut = sh ? glutFactor(sh.kind, k, sh.store[k] || 0) : 1;
     if (glut <= 0) return 0;
-    const raw = (ITEMS[k]?.value || 0) * 0.5 * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
+    const raw = (ITEMS[k]?.value || 0) * 0.5 * rule('sell') * (op >= 35 ? 1.15 : op <= -25 ? 0.8 : 1) / priceMult(this.game.hero) * glut * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, true) * tradePrice(npc.layout, k, true);
     const normal = Math.max(k === 'coin' ? 0 : 1, Math.floor(raw));
     const lic = this.careers.sellFactor(npc, k);
     return lic > 1 ? Math.max(normal + 1, Math.round(raw * lic)) : normal;

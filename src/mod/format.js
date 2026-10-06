@@ -23,6 +23,8 @@
 //               mod/sound.js), round 66
 //   songs       tunes sketched in the Music tab, in patterns (see
 //               mod/song.js), round 66
+//   gear        how pieces look worn and held (see mod/gear.js), round 66
+// and (round 66) its rules: the game's own, changed (see mod/rules.js).
 //
 // Each thing in a mod has an id of its own, unique in the mod; the mod has
 // an id that stays the same from one version of it to the next, and a hash
@@ -33,15 +35,15 @@ import { GAME_VERSION } from '../version.js';
 
 export const MOD_FORMAT = 'tessera-mod';
 export const MOD_FV = 1;
-export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen', 'sounds', 'songs'];
+export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear'];
 // (Collections a mod made before round 63 hasn't got: left out of its hash
 // while empty, so its hash stays as it was.)
-const LATER = ['biomes', 'worlds', 'chargen', 'sounds', 'songs'];
+const LATER = ['biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear'];
 // What each collection holds, said plainly (for lists and messages).
 export const KIND_NAMES = {
   assets: ['art', 'art'], vfx: ['effect', 'effects'], rigs: ['rig', 'rigs'], structures: ['structure', 'structures'], layouts: ['layout', 'layouts'],
   dungeons: ['dungeon', 'dungeons'], loot: ['loot table', 'loot tables'], stories: ['story', 'stories'], patches: ['story change', 'story changes'], entities: ['entity', 'entities'],
-  biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'], sounds: ['sound', 'sounds'], songs: ['song', 'songs'],
+  biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'], sounds: ['sound', 'sounds'], songs: ['song', 'songs'], gear: ['gear look', 'gear looks'],
 };
 // Limits that keep a mod (and a world using it) workable.
 export const LIMITS = { assetSide: 256, frames: 64, layers: 16, palette: 255, blueprintSide: 96, blueprintH: 16 };
@@ -113,6 +115,8 @@ export function normalizeMod(m) {
       }
     }
   }
+  // (Round 66) Its rules (see mod/rules.js): an object, or none.
+  if (m.rules !== undefined && (!m.rules || typeof m.rules !== 'object' || Array.isArray(m.rules))) delete m.rules;
   m.created ||= Date.now();
   m.updated ||= m.created;
   return m;
@@ -159,6 +163,7 @@ export function modHash(m) {
   delete rest.created;
   delete rest.hash;
   for (const k of LATER) if (rest[k] && typeof rest[k] === 'object' && !Object.keys(rest[k]).length) delete rest[k];
+  if (rest.rules && typeof rest.rules === 'object' && !Object.keys(rest.rules).length) delete rest.rules;
   const s = canonical(rest);
   const a = hashString(s) >>> 0;
   const b = hashString(`${s.length}|${s.slice(0, 4096)}|${s.slice(-4096)}`) ^ (a * 2654435761);

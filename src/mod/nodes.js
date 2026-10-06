@@ -20,6 +20,17 @@ export const THEME_LIST = [['plains', 'Plains'], ['forest', 'Forest'], ['taiga',
   ['village', 'A village'], ['town', 'A town'], ['city', 'A city'], ['tavern', 'A tavern'], ['ruins', 'Ruins'], ['graveyard', 'A graveyard'], ['fight_beasts', 'A fight with beasts'], ['fight_monsters', 'A fight with monsters'],
   ['fight_guards', 'A fight with the watch'], ['fight_bandits', 'A fight with bandits'], ['fight_boss', 'A great fight'], ['dungeon_crypt', 'A crypt'], ['dungeon_barrow', 'A barrow'], ['dungeon_mine', 'An old mine'],
   ['dungeon_grove', 'A grove'], ['dungeon_forge', 'A forge'], ['dungeon_grotto', 'A grotto'], ['spire', 'A spire'], ['sailing', 'Sailing'], ['storm', 'A storm'], ['ritual', 'A ritual'], ['history', 'Long ago'], ['voyage', 'A voyage'], ['death', 'A death']];
+// (Round 66) What an item can be made (Item, made special; Change an
+// item): a stone or fitting set in it, and its modifiers (each kind of
+// gear has its own: see world/quality.js).
+export const GEM_LIST = [['none', 'nothing'], ['ruby', 'a ruby (strength; fire)'], ['sapphire', 'a sapphire (agility; frost)'], ['emerald', 'an emerald (endurance; life)'], ['topaz', 'a topaz (charisma; lightning)'],
+  ['amethyst', 'an amethyst (endurance; force)'], ['onyx', 'onyx (agility; shadow)'], ['moonstone', 'a moonstone (charisma; moonlight)'], ['bloodstone', 'a bloodstone (strength; blood)'], ['edge', 'an alloy edge (blades: harder)'], ['plating', 'alloy plating (armour)']];
+export const MOD_LIST = [['venom', 'Venomous (blades)'], ['keen', 'Keen (blades, tools)'], ['searing', 'Searing (blades)'], ['frost', 'Frostbitten (blades)'], ['thirst', 'Thirsting (blades)'], ['swift', 'Swift (blades)'],
+  ['brutal', 'Brutal (blades)'], ['merciless', 'Merciless (blades)'], ['twin', 'Twin-strung (bows)'], ['piercing', 'Piercing (bows)'], ['fire', 'Fire-tipped (bows)'], ['rime', 'Rime-feathered (bows)'], ['quick', 'Quick (bows, tools)'],
+  ['far', 'Far-flying (bows)'], ['thrifty', 'Thrifty (bows)'], ['barbed', 'Barbed (bows)'], ['thorns', 'Thorned (shields)'], ['stalwart', 'Stalwart (shields)'], ['light', 'Light (shields)'], ['repel', 'Repelling (shields)'],
+  ['catch', 'Arrow-catching (shields)'], ['smoulder', 'Smouldering (shields)'], ['duel', 'Duellist\'s (shields)'], ['rally', 'Rallying (shields)'], ['fleet', 'Fleet (armour)'], ['sturdy', 'Sturdy (armour)'], ['hale', 'Hale (armour)'],
+  ['fireproof', 'Fireproof (armour)'], ['furred', 'Fur-lined (armour)'], ['feather', 'Featherweight (armour)'], ['spiked', 'Spiked (armour)'], ['tireless', 'Tireless (armour)'], ['smelting', 'Smelting (picks)'],
+  ['fortune', 'Fortunate (tools)'], ['long', 'Long-hafted (tools)'], ['prospect', 'Prospecting (picks)'], ['lumber', 'Woodsman\'s (axes)'], ['clean', 'Clean-cutting (picks, shovels)']];
 export const STYLE_LIST = ['sword', 'dagger', 'axe', 'club', 'spear', 'flail', 'staff', 'great', 'maul', 'halberd'];
 export const ATTACKS = ['bite', 'snap', 'slam', 'gore', 'rake', 'pounce', 'sting', 'bash', 'sword', 'club', 'spear', 'great', 'maul'];
 export const ARMOR_LOOKS = { head: ['helmet', 'lcap', 'hood', 'straw', 'circlet', 'goggles'], body: ['plate', 'chain', 'leather', 'linen', 'coat'], legs: ['plate', 'leather', 'cloth'], feet: ['iron', 'leather'], shield: ['wood', 'iron', 'round'] };
@@ -28,6 +39,7 @@ export const HAIR_STYLES = ['short', 'long', 'bald', 'spiky', 'bun', 'braid', 'm
 
 const C = {
   town: '#6a5a24', info: '#2a4a5a', tpl: '#7a5a2a', event: '#2a5a3a', flow: '#4a4a5a', act: '#2a4a6a', boss: '#6a2a2a', dlg: '#5a3a6a', data: '#3a3a46', ref: '#5a3a4a', math: '#2a4a4a', q: '#3a4a2a', var: '#4a3a2a', beh: '#6a4a24',
+  land: '#4a5a2a', box: '#5a4a3a',
 };
 const F = (id, label = null) => ({ id, t: T.flow, label: label || id });
 const n = (id, label, d = 0, o = {}) => ({ id, t: T.num, label, def: d, ...o });
@@ -353,6 +365,29 @@ def('flow.check', {
   run: (x, nn, api) => (SVC.compare(api.in('a'), api.prop('op'), api.in('b')) ? 'yes' : 'no'),
 });
 
+// (Round 66) An item made special: its stars, modifiers, stone, numbers
+// and name (`show`: when these are there at all).
+const itemTunes = (show) => [
+  txt('name', 'Called (blank: as it is)', '', { show, adv: true }),
+  n('damage', 'Damage +', 0, { min: -999, max: 999, show, adv: true }),
+  n('armor', 'Armour + (%)', 0, { min: -50, max: 50, show, adv: true }),
+  n('block', 'Blocks + (%, shields)', 0, { min: -90, max: 90, show, adv: true }),
+  n('swing', 'Swings (× as fast)', 1, { min: 0.2, max: 5, step: 0.05, show, adv: true }),
+  n('speed', 'Works (× as fast, tools)', 1, { min: 0.1, max: 10, step: 0.05, show, adv: true }),
+  n('reach', 'Reach +', 0, { min: -2, max: 4, step: 0.1, show, adv: true }),
+  n('range', 'Range + (bows)', 0, { min: -20, max: 40, show, adv: true }),
+  n('heal', 'Heals + (food)', 0, { min: -50, max: 50, show, adv: true }),
+  n('value', 'Worth (×)', 1, { min: 0, max: 100, step: 0.1, show, adv: true }),
+  n('str', 'Strength +', 0, { min: -5, max: 5, show, adv: true }),
+  n('agi', 'Agility +', 0, { min: -5, max: 5, show, adv: true }),
+  n('end', 'Endurance +', 0, { min: -5, max: 5, show, adv: true }),
+  n('cha', 'Charisma +', 0, { min: -5, max: 5, show, adv: true }),
+];
+const itemChanges = (x, api) => ({
+  stars: num(api.in('stars'), 0), more: num(api.in('more'), 0), name: fillText(x, api.in('name') || '').trim(), gem: api.prop('gem') || 'none', mods: api.prop('mods') || [], found: !!api.prop('found'),
+  tune: Object.fromEntries(['damage', 'armor', 'block', 'swing', 'speed', 'reach', 'range', 'heal', 'value', 'str', 'agi', 'end', 'cha'].map((k) => [k, num(api.in(k), ['swing', 'speed', 'value'].includes(k) ? 1 : 0)])),
+});
+const SPECIAL = { custom: [true] };
 // ============================================================ actions
 const act = (type, o) => def(type, { cat: 'Actions', color: C.act, ...o, in: [F('in', 'Do'), ...(o.in || [])], out: [F('then', 'Then'), ...(o.out || [])] });
 act('act.message', {
@@ -570,6 +605,20 @@ def('act.take', {
   out: [F('ok', 'Taken'), F('no', 'Hasn\'t enough')],
   run: (x, nn, api) => (SVC.take(x, who(x, api) || x.player || x.target, api.in('item'), num(api.in('count'), 1)) ? 'ok' : 'no'),
 });
+act('act.itemedit', {
+  title: 'Change an item', help: 'What someone holds, wears or carries made better (or worse), and kept: stars (and modifiers with them), a stone set in it or taken out, its numbers changed, a name of its own ("more" for all of it).',
+  in: [ref('who', T.ent, 'Whose (or the player)'), n('slot', 'Pack slot (1-36)', 1, { min: 1, max: 36, show: { from: ['a pack slot'] } }), n('stars', 'Stars (0: as they are)', 0, { min: 0, max: 5 }), n('more', 'Stars more (or fewer)', 0, { min: -5, max: 5 }), ...itemTunes(null)],
+  props: [pick('from', 'The item in', [['the main hand', 'their main hand'], ['the off hand', 'their off hand'], ['an armour slot', 'an armour slot'], ['a pack slot', 'a slot of their pack']], 'the main hand'),
+    pick('wear', 'Slot', ['head', 'body', 'legs', 'feet'], 'body', { show: { from: ['an armour slot'] } }),
+    pick('gem', 'Set with', [['none', 'as it is'], ['remove', 'nothing (taken out)'], ...GEM_LIST.slice(1)], 'none'), { id: 'mods', t: 'multi', label: 'Add modifiers', opts: MOD_LIST, def: [] }, bool('found', 'Found below (marked so)', false, { adv: true })],
+  out: [out('item', T.item, 'As it is now'), F('none', 'Nothing there')],
+  run: (x, nn, api) => {
+    const e = who(x, api, 'who') || x.player || x.target;
+    const k = e && SVC.editItem ? SVC.editItem(x, e, { from: api.prop('from'), slot: num(api.in('slot'), 1) - 1, wear: api.prop('wear') }, itemChanges(x, api)) : null;
+    x.locals[`${nn.id}.item`] = k;
+    return k ? 'then' : 'none';
+  },
+});
 act('act.setblock', {
   title: 'Set block', help: 'Puts a block at a place (air clears it).',
   in: [ref('at', T.pos, 'At'), ref('block', T.block, 'Block')],
@@ -655,6 +704,187 @@ act('act.addvar', {
     const s = api.prop('scope');
     const k = String(api.in('name'));
     SVC.setVar(x, s, k, num(SVC.getVar(x, s, k)) + num(api.in('by'), 1));
+    return 'then';
+  },
+});
+
+// ============================================================ the land (round 66)
+// Changing the ground and the blocks on it, a lot at once (no more than a
+// few thousand blocks a time: see hooks.js). Solid rock the game won't
+// let be broken (bedrock and the like) is left alone.
+const land = (type, o) => def(type, { cat: 'Terrain & blocks', color: C.land, ...o, in: [F('in', 'Do'), ...(o.in || [])], out: [F('then', 'Then'), ...(o.out || [])] });
+export const TREE_LIST = [['', 'the land\'s own'], ['oak', 'Oak'], ['birch', 'Birch'], ['pine', 'Pine'], ['snowpine', 'Snowy pine'], ['palm', 'Palm'], ['jungle', 'Jungle tree'], ['acacia', 'Acacia'], ['willow', 'Willow'],
+  ['dead', 'Dead tree'], ['cactus', 'Cactus'], ['stump', 'Stump'], ['bushtree', 'Bush'], ['cinder', 'Cinderwood'], ['charred', 'Charred tree'], ['mangrove', 'Mangrove'], ['mushroom', 'Giant mushroom'], ['glowshroom', 'Glowcap'], ['toadstool', 'Toadstool']];
+const MATCH = [['a block', 'a block'], ['solid', 'any solid block'], ['any', 'anything (not air)'], ['air', 'air (empty)']];
+land('blk.replace', {
+  title: 'Replace blocks', help: 'One kind of block turned into another, in a box between two corners or a ball round a place (snow over the grass, gold for the stone, air for the water).',
+  in: [ref('a', T.pos, 'At / from corner'), ref('b', T.pos, 'To corner', { show: { shape: ['a box'] } }), n('r', 'Radius', 4, { min: 1, max: 12, show: { shape: ['a ball'] } }), ref('from', T.block, 'This block', { show: { what: ['a block'] } }), ref('to', T.block, 'Into')],
+  props: [pick('shape', 'In', ['a box', 'a ball'], 'a ball'), pick('what', 'What', MATCH, 'a block')],
+  out: [out('n', T.num, 'Blocks changed')],
+  run: (x, nn, api) => {
+    const a = posOf(api.in('a')) || where(x, api, 'a');
+    x.locals[`${nn.id}.n`] = a && SVC.replaceBlocks ? SVC.replaceBlocks(x, { shape: api.prop('shape'), a, b: posOf(api.in('b')), r: num(api.in('r'), 4), what: api.prop('what'), from: api.in('from'), to: api.in('to') }) : 0;
+    return 'then';
+  },
+});
+land('blk.ball', {
+  title: 'Ball of blocks', help: 'A ball of a block round a place: solid, or just its shell; over everything, or only where it\'s empty (air).',
+  in: [ref('at', T.pos, 'At'), n('r', 'Radius', 3, { min: 1, max: 10 }), ref('block', T.block, 'Block')], props: [bool('hollow', 'Just the shell', false), bool('empty', 'Only where it\'s empty', false)],
+  out: [out('n', T.num, 'Blocks set')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.ball ? SVC.ball(x, at, num(api.in('r'), 3), api.in('block'), api.prop('hollow'), api.prop('empty')) : 0;
+    return 'then';
+  },
+});
+land('blk.dig', {
+  title: 'Dig', help: 'Blocks cleared away: a ball, a box, or a tunnel on from a place (toward somewhere, or the way someone faces). With what they drop, or without.',
+  in: [ref('at', T.pos, 'At / from'), n('r', 'Size', 2, { min: 1, max: 10 }), ref('to', T.pos, 'Toward (or the way self faces)', { show: { shape: ['a tunnel'] } }), n('len', 'How far', 8, { min: 1, max: 48, show: { shape: ['a tunnel'] } })],
+  props: [pick('shape', 'Shape', ['a ball', 'a box', 'a tunnel'], 'a ball'), bool('drops', 'They drop what they drop', false)],
+  out: [out('n', T.num, 'Blocks dug')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.dig ? SVC.dig(x, at, { shape: api.prop('shape'), r: num(api.in('r'), 2), to: posOf(api.in('to')), len: num(api.in('len'), 8), drops: api.prop('drops') }) : 0;
+    return 'then';
+  },
+});
+land('blk.raise', {
+  title: 'Raise or lower the ground', help: 'A hill heaped up round a place (or, lower, a hollow dug out), rounded off toward its edge. Raised, of a block of your choosing, or the ground\'s own.',
+  in: [ref('at', T.pos, 'At'), n('r', 'Radius', 5, { min: 1, max: 14 }), n('h', 'How high (less than 0: down)', 3, { min: -8, max: 8 }), ref('block', T.block, 'Of (or the ground\'s own)')],
+  out: [out('n', T.num, 'Blocks changed')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.raise ? SVC.raise(x, at, num(api.in('r'), 5), num(api.in('h'), 3), api.in('block')) : 0;
+    return 'then';
+  },
+});
+land('blk.line', {
+  title: 'Line of blocks', help: 'A line of a block from one place to another: a wall (taller), a bridge or a road (thicker).',
+  in: [ref('a', T.pos, 'From'), ref('b', T.pos, 'To'), ref('block', T.block, 'Block'), n('h', 'How tall', 1, { min: 1, max: 8 }), n('w', 'How thick', 1, { min: 1, max: 3 })],
+  out: [out('n', T.num, 'Blocks set')],
+  run: (x, nn, api) => {
+    const a = posOf(api.in('a'));
+    const b = posOf(api.in('b'));
+    x.locals[`${nn.id}.n`] = a && b && SVC.line ? SVC.line(x, a, b, api.in('block'), num(api.in('h'), 1), num(api.in('w'), 1)) : 0;
+    return 'then';
+  },
+});
+land('blk.copy', {
+  title: 'Copy blocks', help: 'The blocks in a box between two corners copied to another place (its lowest corner there): a statue stamped out, a ruin moved. Empty air left out if you like.',
+  in: [ref('a', T.pos, 'From corner'), ref('b', T.pos, 'To corner'), ref('to', T.pos, 'Copied to')], props: [bool('air', 'Air too (clears what\'s there)', false)],
+  out: [out('n', T.num, 'Blocks set')],
+  run: (x, nn, api) => {
+    const a = posOf(api.in('a'));
+    const b = posOf(api.in('b'));
+    const to = posOf(api.in('to'));
+    x.locals[`${nn.id}.n`] = a && b && to && SVC.copyBlocks ? SVC.copyBlocks(x, a, b, to, api.prop('air')) : 0;
+    return 'then';
+  },
+});
+land('blk.tree', {
+  title: 'Grow a tree', help: 'A tree grown at once at a place (on the ground there): the land\'s own kind, or one you choose. None if there\'s no room.',
+  in: [ref('at', T.pos, 'At')], props: [pick('kind', 'Kind', TREE_LIST, '')], out: [F('no', 'No room')],
+  run: (x, nn, api) => (SVC.growTree && SVC.growTree(x, where(x, api), api.prop('kind')) ? 'then' : 'no'),
+});
+land('blk.crop', {
+  title: 'Plant a crop', help: 'A crop planted at a place (the ground under it tilled), as far grown as you say: it goes on growing.',
+  in: [ref('at', T.pos, 'At'), n('stage', 'Grown (0: just planted)', 0, { min: 0, max: 3 })], props: [pick('crop', 'Crop', ['wheat', 'carrot', 'cabbage'], 'wheat')], out: [F('no', 'Can\'t grow there')],
+  run: (x, nn, api) => (SVC.plantCrop && SVC.plantCrop(x, where(x, api), api.prop('crop'), num(api.in('stage'), 0)) ? 'then' : 'no'),
+});
+land('blk.liquid', {
+  title: 'Pour', help: 'Water or lava poured out at a place (round it, if wider).',
+  in: [ref('at', T.pos, 'At'), n('r', 'Radius', 0, { min: 0, max: 3 })], props: [pick('liquid', 'What', ['water', 'lava'], 'water'), bool('empty', 'Only where it\'s empty', true)],
+  out: [out('n', T.num, 'Blocks filled')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.pour ? SVC.pour(x, at, api.prop('liquid'), num(api.in('r'), 0), api.prop('empty')) : 0;
+    return 'then';
+  },
+});
+land('blk.door', {
+  title: 'Open or shut', help: 'A door (or a town\'s gate) at a place opened, shut, or the other way from how it is.',
+  in: [ref('at', T.pos, 'At')], props: [pick('how', 'Make it', ['open', 'shut', 'the other way'], 'the other way')], out: [out('open', T.bool, 'Open now')],
+  run: (x, nn, api) => {
+    x.locals[`${nn.id}.open`] = SVC.door ? SVC.door(x, where(x, api), api.prop('how')) : false;
+    return 'then';
+  },
+});
+
+// ============================================================ containers and decoration (round 66)
+const box = (type, o) => def(type, { cat: 'Containers & decoration', color: C.box, ...o, in: [F('in', 'Do'), ...(o.in || [])], out: [F('then', 'Then'), ...(o.out || [])] });
+box('box.put', {
+  title: 'Put in a container', help: 'Items put into the chest, barrel or crate at a place (any of yours that holds things, too). What doesn\'t fit: dropped beside it, or not put in.',
+  in: [ref('at', T.pos, 'Container at'), ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 999 })], props: [bool('spill', 'What won\'t fit drops beside it', false)],
+  out: [F('full', 'Not all fitted'), out('left', T.num, 'Didn\'t fit')],
+  run: (x, nn, api) => {
+    const left = SVC.boxPut ? SVC.boxPut(x, posOf(api.in('at')) || where(x, api), api.in('item'), num(api.in('count'), 1), api.prop('spill')) : -1;
+    x.locals[`${nn.id}.left`] = Math.max(0, left);
+    return left === 0 ? 'then' : 'full';
+  },
+});
+box('box.take', {
+  title: 'Take from a container', help: 'Items taken out of a container at a place, if it has them all: into someone\'s pack, or gone.',
+  in: [ref('at', T.pos, 'Container at'), ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 999 }), ref('who', T.ent, 'Into the pack of (or gone)')],
+  out: [F('no', 'Hasn\'t enough')],
+  run: (x, nn, api) => (SVC.boxTake && SVC.boxTake(x, posOf(api.in('at')) || where(x, api), api.in('item'), num(api.in('count'), 1), isEnt(api.in('who')) ? api.in('who') : null) ? 'then' : 'no'),
+});
+box('box.empty', {
+  title: 'Empty a container', help: 'Everything in a container at a place: tipped out onto the ground, or gone.',
+  in: [ref('at', T.pos, 'Container at')], props: [bool('drop', 'Tipped out (not gone)', true)], out: [out('n', T.num, 'Items in it')],
+  run: (x, nn, api) => {
+    x.locals[`${nn.id}.n`] = SVC.boxEmpty ? SVC.boxEmpty(x, posOf(api.in('at')) || where(x, api), api.prop('drop')) : 0;
+    return 'then';
+  },
+});
+box('box.fill', {
+  title: 'Fill from a loot table', help: 'What one of your loot tables rolls, put into a container at a place (on top of what\'s there, or instead of it).',
+  in: [ref('at', T.pos, 'Container at'), ref('loot', T.loot, 'Loot table')], props: [bool('clear', 'Empty it first', false)], out: [out('n', T.num, 'Items put in')],
+  run: (x, nn, api) => {
+    x.locals[`${nn.id}.n`] = SVC.boxFill ? SVC.boxFill(x, posOf(api.in('at')) || where(x, api), api.in('loot'), api.prop('clear')) : 0;
+    return 'then';
+  },
+});
+def('q.box', {
+  cat: 'Containers & decoration', color: C.box, title: 'What\'s in a container', help: 'About a container at a place: whether there is one, how many of an item it holds, how many items in all, its empty slots, the first thing in it.',
+  in: [ref('at', T.pos, 'Container at'), ref('item', T.item, 'Item (to count)')],
+  out: [out('is', T.bool, 'A container'), out('n', T.num, 'How many of it'), out('all', T.num, 'Items in all'), out('free', T.num, 'Empty slots'), out('first', T.item, 'First thing in it')],
+  eval: (x, nn, p, api) => {
+    const r = SVC.boxInfo ? SVC.boxInfo(x, posOf(api.in('at')) || posOf(x.pos), api.in('item')) : null;
+    if (!r) return p === 'is' ? false : p === 'first' ? null : 0;
+    return r[p];
+  },
+});
+box('deco.setdown', {
+  title: 'Set an item down', help: 'An item set down at a place, to be seen (a sword on a table, a skull on an altar), and taken up again by whoever mines it. None if there\'s no ground or no room.',
+  in: [ref('at', T.pos, 'At'), ref('item', T.item, 'Item'), n('count', 'How many', 1, { min: 1, max: 64 })], out: [F('no', 'No room')],
+  run: (x, nn, api) => (SVC.setDown && SVC.setDown(x, where(x, api), api.in('item'), num(api.in('count'), 1)) ? 'then' : 'no'),
+});
+box('deco.takeup', {
+  title: 'Take up what\'s set down', help: 'What\'s set down at a place, taken up: into someone\'s pack, or gone.',
+  in: [ref('at', T.pos, 'At'), ref('who', T.ent, 'Into the pack of (or gone)')], out: [F('no', 'Nothing there'), out('item', T.item, 'What it was'), out('n', T.num, 'How many')],
+  run: (x, nn, api) => {
+    const got = SVC.takeUp ? SVC.takeUp(x, where(x, api), isEnt(api.in('who')) ? api.in('who') : null) : null;
+    x.locals[`${nn.id}.item`] = got ? got.item : null;
+    x.locals[`${nn.id}.n`] = got ? got.count : 0;
+    return got ? 'then' : 'no';
+  },
+});
+box('deco.scatter', {
+  title: 'Scatter decorations', help: 'A block scattered about a place, on the ground (candles, cobwebs, rubble, glowcaps, flowers, bones...), as many as you say where there\'s room.',
+  in: [ref('at', T.pos, 'Round'), n('r', 'Radius', 5, { min: 1, max: 16 }), n('count', 'How many', 8, { min: 1, max: 64 }), ref('block', T.block, 'Block')],
+  out: [out('n', T.num, 'Put down')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.scatter ? SVC.scatter(x, at, num(api.in('r'), 5), num(api.in('count'), 8), api.in('block')) : 0;
+    return 'then';
+  },
+});
+box('deco.clear', {
+  title: 'Clear decorations', help: 'Everything small and not solid round a place cleared away: grass, flowers, cobwebs, candles, rubble, things set down (not doors, beds or chests).',
+  in: [ref('at', T.pos, 'Round'), n('r', 'Radius', 4, { min: 1, max: 16 })], out: [out('n', T.num, 'Cleared')],
+  run: (x, nn, api) => {
+    const at = where(x, api);
+    x.locals[`${nn.id}.n`] = at && SVC.clearDeco ? SVC.clearDeco(x, at, num(api.in('r'), 4)) : 0;
     return 'then';
   },
 });
@@ -981,7 +1211,16 @@ const refNode = (type, t, title, help) => def(type, { cat: 'Things', color: C.re
 refNode('ref.asset', T.asset, 'Art', 'A piece of your pixel art (drag one in from the explorer).');
 refNode('ref.vfx', T.vfx, 'Effect', 'One of your effects.');
 refNode('ref.rig', T.rig, 'Rig', 'One of your rigs.');
-refNode('ref.item', T.item, 'Item', 'An item: yours, or one of the game\'s.');
+def('ref.item', {
+  cat: 'Things', color: C.ref, title: 'Item', help: 'An item: yours, or one of the game\'s. Made special, it\'s a piece of its own: stars (and modifiers with them), a stone set in it, its numbers changed, a name of its own ("more" for all of it). Wire it into Give item, Drop item, Take item...',
+  props: [{ id: 'ref', t: T.item, label: 'Item', def: null }, bool('custom', 'Made special', false), pick('gem', 'Set with', GEM_LIST, 'none', { show: SPECIAL }), { id: 'mods', t: 'multi', label: 'Modifiers', opts: MOD_LIST, def: [], show: SPECIAL }, bool('found', 'Found below (marked so)', false, { show: SPECIAL, adv: true })],
+  in: [n('stars', 'Stars (0-5)', 0, { min: 0, max: 5, show: SPECIAL }), ...itemTunes(SPECIAL)],
+  out: [out('out', T.item, 'Item')],
+  eval: (x, nn, p, api) => {
+    const r = api.prop('ref');
+    return r && api.prop('custom') && SVC.makeItem ? SVC.makeItem(x, r, itemChanges(x, api)) : r;
+  },
+});
 refNode('ref.block', T.block, 'Block', 'A block: yours, or one of the game\'s.');
 refNode('ref.creature', T.creature, 'Creature', 'A creature: yours, or one of the game\'s.');
 refNode('ref.loot', T.loot, 'Loot table', 'One of your loot tables.');
@@ -1300,14 +1539,25 @@ export const PLAYER_FACTS = ['name', 'coins', 'health', 'most health', 'stamina'
 inf('q.playerinfo', { title: 'About a player', help: 'About a player: their name, coins, health, stamina, what they hold, their armour, how much they carry and how much room they have, their traits and where they came from, their fame, days played, whether they\'re riding, asleep, down a dungeon, wanted in the town they\'re in.',
   in: [ref('who', T.ent, 'Who (or the player)')], props: [pick('what', 'What', PLAYER_FACTS)], out: [out('out', T.any, 'Value')],
   eval: (x, nn, p, api) => (SVC.playerFact ? SVC.playerFact(x, (isEnt(api.in('who')) && api.in('who')) || x.player || x.target, api.prop('what')) : null) });
-export const ITEM_FACTS = ['name', 'kind', 'value', 'damage', 'armour %', 'stack', 'heals', 'worn on', 'ranged', 'a block', 'food', 'stars'];
-inf('q.iteminfo', { title: 'About an item', help: 'About an item (yours or the game\'s): its name, kind, value, damage, armour, how many stack, how much it heals, where it\'s worn, whether it\'s ranged, a block, food; its stars.',
+export const ITEM_FACTS = ['name', 'kind', 'value', 'damage', 'armour %', 'stack', 'heals', 'worn on', 'ranged', 'a block', 'food', 'stars', 'modifiers', 'stone set in it', 'the plain piece', 'its key', 'one of yours', 'strength +', 'agility +', 'endurance +', 'charisma +', 'reach', 'swings a second'];
+inf('q.iteminfo', { title: 'About an item', help: 'About an item (yours or the game\'s): its name, kind, value, damage, armour, how many stack, how much it heals, where it\'s worn, whether it\'s ranged, a block, food; its stars, modifiers, the stone set in it, the plain piece it is, what it gives your abilities.',
   in: [ref('item', T.item, 'Item')], props: [pick('what', 'What', ITEM_FACTS)], out: [out('out', T.any, 'Value')],
   eval: (x, nn, p, api) => (SVC.itemFact ? SVC.itemFact(x, api.in('item'), api.prop('what')) : null) });
-export const BLOCK_FACTS = ['name', 'its key', 'air', 'solid', 'liquid', 'hardness', 'light', 'tool', 'see-through', 'one of yours'];
-inf('q.blockinfo', { title: 'About a block', help: 'About the block at a place: its name and key, whether it\'s air, solid, a liquid, see-through, one of this mod\'s; how hard, how bright, the tool for it.',
+export const BLOCK_FACTS = ['name', 'its key', 'air', 'solid', 'liquid', 'hardness', 'light', 'tool', 'see-through', 'one of yours', 'open (a door)', 'facing (0-3)', 'grown (a crop)', 'a container', 'items in it', 'set down here'];
+inf('q.blockinfo', { title: 'About a block', help: 'About the block at a place: its name and key, whether it\'s air, solid, a liquid, see-through, one of this mod\'s; how hard, how bright, the tool for it; a door\'s open or shut, which way it faces, a crop\'s growth, a container and what\'s in it, what\'s set down there.',
   in: [ref('at', T.pos, 'At (or here)')], props: [pick('what', 'What', BLOCK_FACTS)], out: [out('out', T.any, 'Value')],
   eval: (x, nn, p, api) => (SVC.blockFact ? SVC.blockFact(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self), api.prop('what')) : null) });
+inf('q.ground', { title: 'The ground at', help: 'The ground at a place\'s spot on the map: the place on top of it (to stand), how high it is, and the block it\'s of.',
+  in: [ref('at', T.pos, 'At (or here)')], out: [out('pos', T.pos, 'On top of it'), out('y', T.num, 'How high'), out('block', T.block, 'Its block')],
+  eval: (x, nn, p, api) => {
+    const g = SVC.groundAt ? SVC.groundAt(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self)) : null;
+    if (!g) return p === 'y' ? 0 : null;
+    return g[p];
+  } });
+inf('q.countblocks', { title: 'Count blocks', help: 'How many of a block (or any solid block, or air) there are round a place, or in a box between two corners.',
+  in: [ref('a', T.pos, 'Round / from corner'), ref('b', T.pos, 'To corner', { show: { shape: ['a box'] } }), n('r', 'Radius', 4, { min: 1, max: 12, show: { shape: ['a ball'] } }), ref('block', T.block, 'Block', { show: { what: ['a block'] } })],
+  props: [pick('shape', 'In', ['a ball', 'a box'], 'a ball'), pick('what', 'What', MATCH, 'a block')], out: [out('n', T.num, 'How many')],
+  eval: (x, nn, p, api) => (SVC.countBlocks ? SVC.countBlocks(x, { shape: api.prop('shape'), a: posOf(api.in('a')) || posOf(x.pos) || posOf(x.self), b: posOf(api.in('b')), r: num(api.in('r'), 4), what: api.prop('what'), from: api.in('block') }) : 0) });
 inf('q.abilities', { title: 'Its abilities', help: 'A creature\'s abilities (its Ability nodes): how many, which are ready, the name of one ready now (the one it\'d likely use), and how long till one (by its name) is ready again.',
   in: [ref('who', T.ent, 'Whose (or self)'), txt('name', 'Ability (its name)', '')],
   out: [out('n', T.num, 'How many'), out('ready', T.num, 'Ready now'), out('next', T.text, 'One ready'), out('names', T.text, 'Their names'), out('left', T.num, 'Seconds till ready'), out('casting', T.bool, 'Winding one up')],

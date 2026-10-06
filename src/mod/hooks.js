@@ -8,14 +8,19 @@ import { MODS, resolveRef } from './registry.js';
 import { SVC, posOf } from './nodes.js';
 import { NODES } from './graph.js';
 import { gameKey } from './format.js';
-import { ITEMS } from '../world/items.js';
-import { B, BLOCKS } from '../world/blocks.js';
+import { ITEMS, tuneKey, socketed, enhanced, TUNE_FIELDS } from '../world/items.js';
+import { parseStar, starKey, gearClass, MODS as QMODS } from '../world/quality.js';
+import { B, BLOCKS, CROPS, cropMeta, cropStage, META_ROT } from '../world/blocks.js';
+import { TREE_BUILDERS } from '../world/trees.js';
+import { BIOMES } from '../world/biomes.js';
+import { WORLD_Y } from '../config.js';
 import { SPECIES } from '../entities/creature.js';
 import { burn, chill, stun, mend, knockBack } from '../game/gems.js';
 import { addHazard, groundFire as fireAt, areaTiles, summon as summonNear, sameSide } from '../entities/monsters.js';
 import { ringTiles, proc } from '../entities/bosskit.js';
-import { countItem, removeItem } from '../game/inventory.js';
+import { countItem, removeItem, addItem } from '../game/inventory.js';
 import { modStat } from './stat.js';
+import { rule } from './rules.js';
 import { charGenTick, petFell } from './chargen.js';
 import { setOrder, orderTick, doingOf, leapTick } from './behave.js';
 import { compareValues } from './storyrun.js';
@@ -63,8 +68,16 @@ function ctx(game, rec, o = {}) {
 }
 // Run root output `port` of the entity with game key `key`. True if it's
 // wired to anything.
+// (Round 66) The entity a key is of: its own, or (a starred, set or tuned
+// piece of a mod's item) the plain piece's.
+function recOf(key) {
+  const r = MODS.ents.get(key);
+  if (r || typeof key !== 'string' || !key.startsWith('m:')) return r || null;
+  const it = ITEMS[key];
+  return it && it.mod && it.modEnt ? MODS.ents.get(gameKey(it.mod, it.modEnt)) || null : null;
+}
 export function fire(game, key, port, o = {}) {
-  const rec = MODS.ents.get(key);
+  const rec = recOf(key);
   if (!rec || !rec.prog.root || !rec.prog.next.has(`${rec.prog.root.id}.${port}`)) return false;
   return rec.runner.emit(port, ctx(game, rec, o));
 }
@@ -77,6 +90,148 @@ const key = (x, v) => {
   return typeof k === 'string' ? k : null;
 };
 const thingKey = (x, v) => (v ? `${x.mod.id}:${v}` : null);
+
+// ------------------------------------------------------------ the land (round 66)
+const CAP = 4096;
+const breakable = (b) => !!b && Number.isFinite(b.hardness);
+// A block reference ('@id', the game's key, 'air') as a block's number;
+// null if there's no such block.
+function blockNo(x, ref) {
+  const k = key(x, ref);
+  if (!k || k === 'air') return B.air;
+  const id = B[k];
+  return id === undefined ? null : id;
+}
+function matches(id, what, fromId) {
+  if (what === 'air') return id === B.air;
+  if (what === 'any') return id !== B.air;
+  if (what === 'solid') return !!(BLOCKS[id] && BLOCKS[id].solid);
+  return id === fromId;
+}
+// The cells of a box between two corners, or of a ball round one (no
+// more than CAP of them; inside the world's height).
+function cellsOf(o) {
+  const out = [];
+  const y0 = 1;
+  const y1 = WORLD_Y - 2;
+  if (o.shape === 'a box' && o.b) {
+    const a = o.a;
+    const b = o.b;
+    for (let y = Math.max(y0, Math.min(a.y, b.y)); y <= Math.min(y1, Math.max(a.y, b.y)); y++) {
+      for (let z = Math.min(a.z, b.z); z <= Math.max(a.z, b.z); z++) {
+        for (let xx = Math.min(a.x, b.x); xx <= Math.max(a.x, b.x); xx++) {
+          if (out.length >= CAP) return out;
+          out.push([xx, y, z]);
+        }
+      }
+    }
+    return out;
+  }
+  const r = Math.max(1, Math.min(12, Math.round(o.r || 1)));
+  const a = o.a;
+  for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    if (dx * dx + dy * dy + dz * dz > r * r + r * 0.8) continue;
+    const y = a.y + dy;
+    if (y < y0 || y > y1) continue;
+    if (out.length >= CAP) return out;
+    out.push([a.x + dx, y, a.z + dz]);
+  }
+  return out;
+}
+// The way someone faces: [dx, dz].
+const FACE = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+// The top of the ground at a column, near `y`: the y of its top block (or
+// null).
+function groundTop(w, X, Z, y) {
+  for (let yy = Math.min(WORLD_Y - 2, y + 12); yy >= Math.max(1, y - 24); yy--) {
+    const b = BLOCKS[w.getBlock(X, yy, Z)];
+    if (b && b.solid && !b.liquid && b.render === 'cube') return yy;
+  }
+  return null;
+}
+// A container's slots at a place (or null: none there). Marked to be
+// saved, as it's about to change.
+function slotsAt(x, at) {
+  if (!at) return null;
+  const w = x.game.world;
+  const b = BLOCKS[w.getBlock(at.x, at.y, at.z)];
+  if (!b || b.interact !== 'container') return null;
+  const slots = w.getContainer(at.x, at.y, at.z);
+  const r = w.regionAt(at.x, at.z);
+  if (r) r.modified = true;
+  return slots;
+}
+
+// (Round 66) A piece taken apart (its stars, its stone, what a node
+// changed of it), changed by `ch` ({ stars (set, if over 0), more (stars
+// more or fewer), mods (added), found, gem ('none' as it is, 'remove', a
+// stone or fitting), tune ({ damage: +, swing: ×, ... } added to what it
+// had), name }), and put together again: its key now. (What can't be done
+// to it, isn't: a stone where none can go, stars on what can't have them.)
+const TUNE_MUL = new Set(['speed', 'swing', 'value']);
+export function remakeItem(key, ch = {}) {
+  if (!key || !ITEMS[key]) return key;
+  const p = parseStar(key);
+  let k0 = p ? p.plain : key;
+  let gem = null;
+  const i0 = ITEMS[k0];
+  if (i0 && (i0.socket || i0.enhanced) && i0.base) {
+    gem = i0.socket || i0.enhanced;
+    k0 = i0.base;
+  }
+  let t = {};
+  const i1 = ITEMS[k0];
+  if (i1 && i1.tunedFrom) {
+    t = { ...i1.tuned };
+    k0 = i1.tunedFrom;
+  }
+  for (const f of TUNE_FIELDS) {
+    const v = ch.tune ? +ch.tune[f] : NaN;
+    if (!Number.isFinite(v)) continue;
+    if (TUNE_MUL.has(f)) {
+      if (v !== 1) t[f] = Math.round((t[f] || 1) * v * 1000) / 1000;
+    } else if (v !== 0) t[f] = Math.round(((t[f] || 0) + v) * 1000) / 1000;
+  }
+  if (ch.name) t.name = String(ch.name).slice(0, 32);
+  let k = tuneKey(k0, t);
+  if (!ITEMS[k]) k = k0;
+  if (ch.gem === 'remove') gem = null;
+  else if (ch.gem && ch.gem !== 'none') gem = ch.gem;
+  if (gem) {
+    const g = gem === 'edge' || gem === 'plating' ? enhanced(k, gem) : socketed(k, gem);
+    if (ITEMS[g]) k = g;
+  }
+  let stars = p ? p.stars : 0;
+  let mods = p ? p.mods.slice() : [];
+  let origin = p ? p.origin : 'c';
+  const roll = p ? p.roll : 648;
+  if (ch.stars > 0) stars = Math.min(5, Math.round(ch.stars));
+  if (ch.more) stars = Math.max(0, Math.min(5, stars + Math.round(ch.more)));
+  for (const m of ch.mods || []) if (!mods.includes(m)) mods.push(m);
+  if (ch.found) origin = 'd';
+  if (mods.length && !stars) stars = 1;
+  if (stars > 0) {
+    const it = ITEMS[k];
+    const cls = gearClass(it);
+    if (cls && !it.stars) {
+      mods = mods.filter((m) => QMODS[cls][m] && (!QMODS[cls][m].tools || QMODS[cls][m].tools.includes(it.tool))).slice(0, 3);
+      const sk = starKey(k, stars, origin, roll, mods);
+      if (ITEMS[sk]) k = sk;
+    }
+  }
+  return k;
+}
+// The plain piece an item is (no stars, stone or changes).
+function plainOf(key) {
+  let k = key;
+  for (let n = 0; n < 4 && k && ITEMS[k]; n++) {
+    const it = ITEMS[k];
+    const next = it.plain || it.tunedFrom || (it.socket || it.enhanced ? it.base : null);
+    if (!next || next === k) break;
+    k = next;
+  }
+  return k;
+}
 
 Object.assign(SVC, {
   playerName: (x) => (x.player && x.player.account && x.player.account.name) || (x.game && x.game.playerName) || 'traveller',
@@ -458,6 +613,371 @@ Object.assign(SVC, {
     }
     return n;
   },
+  // (Round 66) The land, a lot at once.
+  replaceBlocks(x, o) {
+    const to = blockNo(x, o.to);
+    const fromId = o.what === 'a block' ? blockNo(x, o.from) : null;
+    if (to === null || (o.what === 'a block' && fromId === null)) return 0;
+    const w = x.game.world;
+    let n = 0;
+    for (const [X, Y, Z] of cellsOf(o)) {
+      const cur = w.getBlock(X, Y, Z);
+      if (cur === to || !matches(cur, o.what, fromId) || (cur !== B.air && !breakable(BLOCKS[cur]))) continue;
+      w.setBlock(X, Y, Z, to);
+      n++;
+    }
+    return n;
+  },
+  ball(x, at, r, ref, hollow, empty) {
+    const id = blockNo(x, ref);
+    if (id === null) return 0;
+    const w = x.game.world;
+    const R = Math.max(1, Math.min(10, Math.round(r)));
+    let n = 0;
+    for (const [X, Y, Z] of cellsOf({ shape: 'a ball', a: at, r: R })) {
+      const d2 = (X - at.x) ** 2 + (Y - at.y) ** 2 + (Z - at.z) ** 2;
+      if (hollow && d2 < (R - 1) * (R - 1)) continue;
+      const cur = w.getBlock(X, Y, Z);
+      if (cur === id || (empty && cur !== B.air) || (cur !== B.air && !breakable(BLOCKS[cur]))) continue;
+      w.setBlock(X, Y, Z, id);
+      n++;
+    }
+    return n;
+  },
+  dig(x, at, o) {
+    const g = x.game;
+    const w = g.world;
+    const r = Math.max(1, Math.min(10, Math.round(o.r || 1)));
+    let cells;
+    if (o.shape === 'a tunnel') {
+      let dx;
+      let dy = 0;
+      let dz;
+      if (o.to) {
+        dx = o.to.x - at.x;
+        dy = o.to.y - at.y;
+        dz = o.to.z - at.z;
+      } else {
+        const f = FACE[(isEnt(x.self) ? x.self.dir : 0) || 0] || FACE[0];
+        [dx, dz] = f;
+      }
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len;
+      const uz = dz / len;
+      const uy = Math.max(-1, Math.min(1, dy / len));
+      const L = Math.max(1, Math.min(48, Math.round(o.len || 8)));
+      const half = Math.floor((r - 1) / 2);
+      const tall = Math.max(2, r);
+      const seen = new Set();
+      cells = [];
+      for (let i = 0; i <= L && cells.length < CAP; i++) {
+        const cx = at.x + ux * i;
+        const cy = at.y + uy * i;
+        const cz = at.z + uz * i;
+        for (let k = -half; k <= r - 1 - half; k++) for (let hh = 0; hh < tall; hh++) {
+          const X = Math.round(cx + -uz * k);
+          const Z = Math.round(cz + ux * k);
+          const Y = Math.round(cy) + hh;
+          const kk = `${X},${Y},${Z}`;
+          if (seen.has(kk) || Y < 1 || Y > WORLD_Y - 2) continue;
+          seen.add(kk);
+          cells.push([X, Y, Z]);
+        }
+      }
+    } else cells = o.shape === 'a box' ? cellsOf({ shape: 'a box', a: { x: at.x - r, y: at.y - r, z: at.z - r }, b: { x: at.x + r, y: at.y + r, z: at.z + r } }) : cellsOf({ shape: 'a ball', a: at, r });
+    let n = 0;
+    for (const [X, Y, Z] of cells) {
+      const cur = w.getBlock(X, Y, Z);
+      if (cur === B.air || !breakable(BLOCKS[cur])) continue;
+      if (o.drops) g.breakBlock(X, Y, Z, false);
+      else w.setBlock(X, Y, Z, B.air);
+      n++;
+    }
+    return n;
+  },
+  raise(x, at, r, hgt, ref) {
+    const w = x.game.world;
+    const R = Math.max(1, Math.min(14, Math.round(r)));
+    const H = Math.max(-8, Math.min(8, Math.round(hgt)));
+    if (!H) return 0;
+    const own = ref ? blockNo(x, ref) : null;
+    let n = 0;
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
+      const d = Math.hypot(dx, dz);
+      if (d > R) continue;
+      const amt = Math.round(H * (1 - (d / (R + 0.5)) ** 2));
+      if (!amt) continue;
+      const X = at.x + dx;
+      const Z = at.z + dz;
+      const y0 = groundTop(w, X, Z, at.y);
+      if (y0 === null) continue;
+      if (amt > 0) {
+        const top = own ?? w.getBlock(X, y0, Z);
+        const sub = own ?? w.getBlock(X, y0 - 1, Z);
+        if (own === null && sub !== top) w.setBlock(X, y0, Z, sub);
+        for (let k = 1; k <= amt && y0 + k < WORLD_Y - 1; k++) {
+          const cur = BLOCKS[w.getBlock(X, y0 + k, Z)];
+          if (cur && cur.solid) continue;
+          w.setBlock(X, y0 + k, Z, k === amt ? top : sub);
+          n++;
+        }
+      } else {
+        const top = w.getBlock(X, y0, Z);
+        let y = y0;
+        for (let k = 0; k < -amt && y > 1; k++, y--) {
+          if (!breakable(BLOCKS[w.getBlock(X, y, Z)])) break;
+          w.setBlock(X, y, Z, B.air);
+          n++;
+        }
+        // (The new floor of the hollow, of what the ground was.)
+        if (breakable(BLOCKS[w.getBlock(X, y, Z)]) && w.getBlock(X, y, Z) !== B.air) w.setBlock(X, y, Z, top);
+      }
+    }
+    return n;
+  },
+  line(x, a, b, ref, hgt, wid) {
+    const id = blockNo(x, ref);
+    if (id === null) return 0;
+    const w = x.game.world;
+    const steps = Math.max(Math.abs(b.x - a.x), Math.abs(b.z - a.z), Math.abs(b.y - a.y), 1);
+    const H = Math.max(1, Math.min(8, Math.round(hgt)));
+    const W = Math.max(1, Math.min(3, Math.round(wid)));
+    const lo = -Math.floor((W - 1) / 2);
+    let n = 0;
+    const seen = new Set();
+    for (let i = 0; i <= Math.min(steps, 256); i++) {
+      const px = Math.round(a.x + ((b.x - a.x) * i) / steps);
+      const py = Math.round(a.y + ((b.y - a.y) * i) / steps);
+      const pz = Math.round(a.z + ((b.z - a.z) * i) / steps);
+      for (let ox = lo; ox < lo + W; ox++) for (let oz = lo; oz < lo + W; oz++) for (let hh = 0; hh < H; hh++) {
+        const X = px + ox;
+        const Y = py + hh;
+        const Z = pz + oz;
+        const k = `${X},${Y},${Z}`;
+        if (seen.has(k) || Y < 1 || Y > WORLD_Y - 2 || n >= CAP) continue;
+        seen.add(k);
+        const cur = w.getBlock(X, Y, Z);
+        if (cur === id || (cur !== B.air && !breakable(BLOCKS[cur]))) continue;
+        w.setBlock(X, Y, Z, id);
+        n++;
+      }
+    }
+    return n;
+  },
+  copyBlocks(x, a, b, to, air) {
+    const w = x.game.world;
+    const cells = cellsOf({ shape: 'a box', a, b });
+    const x0 = Math.min(a.x, b.x);
+    const y0 = Math.min(a.y, b.y);
+    const z0 = Math.min(a.z, b.z);
+    const got = cells.map(([X, Y, Z]) => [X - x0, Y - y0, Z - z0, w.getBlock(X, Y, Z), w.getMeta(X, Y, Z)]);
+    let n = 0;
+    for (const [dx, dy, dz, id, meta] of got) {
+      if (id === B.air && !air) continue;
+      const X = to.x + dx;
+      const Y = to.y + dy;
+      const Z = to.z + dz;
+      if (Y < 1 || Y > WORLD_Y - 2) continue;
+      const cur = w.getBlock(X, Y, Z);
+      if (cur !== B.air && !breakable(BLOCKS[cur])) continue;
+      w.setBlock(X, Y, Z, id, meta);
+      n++;
+    }
+    return n;
+  },
+  growTree(x, at, kind) {
+    if (!at) return false;
+    const w = x.game.world;
+    let y = at.y;
+    if (w.getBlock(at.x, y, at.z) !== B.air) y = (groundTop(w, at.x, at.z, at.y) ?? at.y) + 1;
+    const below = BLOCKS[w.getBlock(at.x, y - 1, at.z)];
+    if (w.getBlock(at.x, y, at.z) !== B.air || !below || !below.solid) return false;
+    let type = kind;
+    if (!type || !TREE_BUILDERS[type]) {
+      try {
+        const col = w.terrain.column(at.x, at.z, w.terrain.context(at.x, at.z, at.x, at.z), {});
+        const bd = BIOMES[col.biome];
+        type = bd && bd.trees && bd.trees.length ? bd.trees[0][0] : 'oak';
+      } catch {
+        type = 'oak';
+      }
+    }
+    const cells = (TREE_BUILDERS[type] || TREE_BUILDERS.oak)(Math.random);
+    for (const [dx, dy, dz, id] of cells) {
+      const cur = w.getBlock(at.x + dx, y + dy, at.z + dz);
+      if (cur === B.air || (BLOCKS[cur] && BLOCKS[cur].replaceable)) w.setBlock(at.x + dx, y + dy, at.z + dz, id);
+    }
+    return true;
+  },
+  plantCrop(x, at, crop, stage) {
+    if (!at) return false;
+    const g = x.game;
+    const w = g.world;
+    const id = B[`${crop}_crop`];
+    if (id === undefined || !CROPS[id]) return false;
+    let y = at.y;
+    if (w.getBlock(at.x, y, at.z) !== B.air) y = (groundTop(w, at.x, at.z, at.y) ?? at.y) + 1;
+    const below = BLOCKS[w.getBlock(at.x, y - 1, at.z)];
+    if (w.getBlock(at.x, y, at.z) !== B.air || !below || !below.solid || !breakable(below)) return false;
+    w.setBlock(at.x, y - 1, at.z, B.farmland);
+    const st = Math.max(0, Math.min(CROPS[id].stages - 1, Math.round(stage)));
+    w.setBlock(at.x, y, at.z, id, cropMeta(id, st));
+    g.crops?.sow(at.x, y, at.z, id, st);
+    return true;
+  },
+  pour(x, at, liquid, r, empty) {
+    const id = liquid === 'lava' ? B.lava : B.water;
+    const w = x.game.world;
+    const R = Math.max(0, Math.min(3, Math.round(r)));
+    let n = 0;
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
+      if (dx * dx + dz * dz > R * R + R * 0.8) continue;
+      const cur = w.getBlock(at.x + dx, at.y, at.z + dz);
+      if (cur === id || (empty && cur !== B.air) || (cur !== B.air && !breakable(BLOCKS[cur]))) continue;
+      w.setBlock(at.x + dx, at.y, at.z + dz, id);
+      n++;
+    }
+    return n;
+  },
+  door(x, at, how) {
+    if (!at) return false;
+    const g = x.game;
+    const w = g.world;
+    const id = w.getBlock(at.x, at.y, at.z);
+    const gate = id === B.city_gate || id === B.city_gate_top;
+    const by = id === B.door_top || id === B.city_gate_top ? at.y - 1 : at.y;
+    const was = w.getState(at.x, by, at.z);
+    const now = how === 'open' ? true : how === 'shut' ? false : !was;
+    if (gate) g.setGate?.(at.x, at.z, now);
+    else if (id === B.door || id === B.door_top) g.setDoor?.(at.x, at.y, at.z, now);
+    else return was;
+    return w.getState(at.x, by, at.z);
+  },
+  // (Round 66) Containers, and what's set down.
+  boxPut(x, at, ref, n, spill) {
+    const k = key(x, ref);
+    const slots = slotsAt(x, at);
+    if (!k || !ITEMS[k] || !slots) return Math.max(1, Math.round(n));
+    const left = addItem(slots, k, Math.max(1, Math.round(n)));
+    if (left && spill) x.game.spawnDrop(k, left, at.x, at.y + 1, at.z, true);
+    return left;
+  },
+  boxTake(x, at, ref, n, who) {
+    const k = key(x, ref);
+    const slots = slotsAt(x, at);
+    const want = Math.max(1, Math.round(n));
+    if (!k || !slots || countItem(slots, k) < want) return false;
+    removeItem(slots, k, want);
+    if (who) SVC.give(x, who, k, want);
+    return true;
+  },
+  boxEmpty(x, at, drop) {
+    const slots = slotsAt(x, at);
+    if (!slots) return 0;
+    let n = 0;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (!s) continue;
+      n += s.count;
+      if (drop) x.game.spawnDrop(s.item, s.count, at.x, at.y + 1, at.z, true);
+      slots[i] = null;
+    }
+    return n;
+  },
+  boxFill(x, at, lootRef, clear) {
+    const slots = slotsAt(x, at);
+    const t = lootRef ? MODS.loot.get(thingKey(x, lootRef)) : null;
+    if (!slots || !t) return 0;
+    if (clear) slots.fill(null);
+    let n = 0;
+    for (const d of rollLoot(t)) n += d.count - addItem(slots, d.item, d.count);
+    return n;
+  },
+  boxInfo(x, at, ref) {
+    const w = x.game.world;
+    if (!at) return null;
+    const b = BLOCKS[w.getBlock(at.x, at.y, at.z)];
+    if (!b || b.interact !== 'container') return { is: false, n: 0, all: 0, free: 0, first: null };
+    const slots = w.getContainer(at.x, at.y, at.z) || [];
+    const k = key(x, ref);
+    const firstSlot = slots.find(Boolean);
+    return { is: true, n: k ? countItem(slots, k) : 0, all: slots.reduce((a, s) => a + (s ? s.count : 0), 0), free: slots.filter((s) => !s).length, first: firstSlot ? firstSlot.item : null };
+  },
+  setDown(x, at, ref, n) {
+    const k = key(x, ref);
+    if (!at || !k || !ITEMS[k]) return false;
+    const g = x.game;
+    const w = g.world;
+    let y = at.y;
+    // (On the ground there: the place itself if it's free with ground
+    // under it, else the top of the ground at that spot.)
+    const below = BLOCKS[w.getBlock(at.x, y - 1, at.z)];
+    if (w.getBlock(at.x, y, at.z) !== B.air || !below || !below.solid) {
+      const top = groundTop(w, at.x, at.z, at.y);
+      if (top === null) return false;
+      y = top + 1;
+    }
+    return g.setDown(at.x, y, at.z, k, Math.max(1, Math.round(n)), null);
+  },
+  takeUp(x, at, who) {
+    if (!at) return null;
+    const got = x.game.takePlaced(at.x, at.y, at.z);
+    if (got && who) SVC.give(x, who, got.item, got.count);
+    return got;
+  },
+  scatter(x, at, r, count, ref) {
+    const id = blockNo(x, ref);
+    if (id === null || id === B.air) return 0;
+    const w = x.game.world;
+    const R = Math.max(1, Math.min(16, Math.round(r)));
+    const want = Math.max(1, Math.min(64, Math.round(count)));
+    let n = 0;
+    for (let tries = 0; n < want && tries < want * 8; tries++) {
+      const dx = Math.round((Math.random() * 2 - 1) * R);
+      const dz = Math.round((Math.random() * 2 - 1) * R);
+      if (dx * dx + dz * dz > R * R) continue;
+      const X = at.x + dx;
+      const Z = at.z + dz;
+      const y0 = groundTop(w, X, Z, at.y);
+      if (y0 === null || w.getBlock(X, y0 + 1, Z) !== B.air) continue;
+      w.setBlock(X, y0 + 1, Z, id);
+      n++;
+    }
+    return n;
+  },
+  clearDeco(x, at, r) {
+    const g = x.game;
+    const w = g.world;
+    let n = 0;
+    for (const [X, Y, Z] of cellsOf({ shape: 'a ball', a: at, r: Math.max(1, Math.min(12, Math.round(r))) })) {
+      const id = w.getBlock(X, Y, Z);
+      const b = BLOCKS[id];
+      if (id === B.air || !b || b.solid || b.liquid || !breakable(b)) continue;
+      if (id === B.placed_item) g.takePlaced(X, Y, Z);
+      else if (b.interact || b.render === 'cube' || b.render === 'door') continue;
+      else w.setBlock(X, Y, Z, B.air);
+      n++;
+    }
+    return n;
+  },
+  // (Round 66) The ground at a place's spot: where to stand on it.
+  groundAt(x, at) {
+    if (!at) return null;
+    const w = x.game.world;
+    const y0 = groundTop(w, at.x, at.z, at.y);
+    if (y0 === null) return null;
+    const b = BLOCKS[w.getBlock(at.x, y0, at.z)];
+    return { pos: { x: at.x, y: y0 + 1, z: at.z }, y: y0 + 1, block: b ? b.name : 'air' };
+  },
+  countBlocks(x, o) {
+    if (!o.a) return 0;
+    const fromId = o.what === 'a block' ? blockNo(x, o.from) : null;
+    if (o.what === 'a block' && fromId === null) return 0;
+    const w = x.game.world;
+    let n = 0;
+    for (const [X, Y, Z] of cellsOf(o)) if (matches(w.getBlock(X, Y, Z), o.what, fromId)) n++;
+    return n;
+  },
   weatherNow(x) {
     const w = x.game.weather;
     return (w && w.kind) || 'clear';
@@ -703,8 +1223,54 @@ Object.assign(SVC, {
       case 'a block': return d.kind === 'block';
       case 'food': return d.kind === 'food' || d.kind === 'potion';
       case 'stars': return d.stars || 0;
+      // (Round 66.)
+      case 'modifiers': return (d.mods || []).map((m) => (QMODS[d.gear] && QMODS[d.gear][m] ? QMODS[d.gear][m].name : m)).join(', ');
+      case 'stone set in it': return d.socket || d.enhanced || (d.plain && ITEMS[d.plain] ? ITEMS[d.plain].socket || ITEMS[d.plain].enhanced : '') || '';
+      case 'the plain piece': return plainOf(k);
+      case 'its key': return k;
+      case 'one of yours': return !!(d.mod && d.mod === x.mod.id);
+      case 'strength +': return (d.stats || {}).str || 0;
+      case 'agility +': return (d.stats || {}).agi || 0;
+      case 'endurance +': return (d.stats || {}).end || 0;
+      case 'charisma +': return (d.stats || {}).cha || 0;
+      case 'reach': return d.reach || 0;
+      case 'swings a second': return d.cooldown ? Math.round((1 / d.cooldown) * 100) / 100 : 0;
       default: return 0;
     }
+  },
+  // (Round 66) An item made special (see remakeItem); one someone has,
+  // changed where it is.
+  makeItem: (x, ref, ch) => remakeItem(key(x, ref), ch),
+  editItem(x, e, o, ch) {
+    let get;
+    let put;
+    if (o.from === 'the main hand') {
+      if (e.kind === 'player') {
+        const s = e.inv && e.inv[e.selected];
+        get = () => s && s.item;
+        put = (k) => (s.item = k);
+      } else {
+        get = () => (e.arms && e.arms !== 'bow' ? e.arms : null);
+        put = (k) => (e.arms = k);
+      }
+    } else if (o.from === 'a pack slot') {
+      const s = e.inv && e.inv[Math.max(0, Math.min(35, o.slot | 0))];
+      get = () => s && s.item;
+      put = (k) => (s.item = k);
+    } else {
+      const slot = o.from === 'the off hand' ? 'shield' : o.wear || 'body';
+      get = () => (e.equip && e.equip[slot]) || (o.from === 'the off hand' ? e.offhand : null);
+      put = (k) => {
+        if (e.equip && e.equip[slot]) e.equip[slot] = k;
+        else e.offhand = k;
+        e.recalcMaxHp?.();
+      };
+    }
+    const was = get();
+    if (!was || !ITEMS[was]) return null;
+    const k = remakeItem(was, ch);
+    if (k !== was) put(k);
+    return k;
   },
   blockFact(x, at, what) {
     if (!at) return null;
@@ -721,6 +1287,24 @@ Object.assign(SVC, {
       case 'tool': return b.tool || 'none';
       case 'see-through': return b.opaque === false;
       case 'one of yours': return !!(b.mod && b.mod === x.mod.id) || String(b.name || '').startsWith(`m:${x.mod.id}:`);
+      // (Round 66.)
+      case 'open (a door)': {
+        const w = x.game.world;
+        const by = id === B.door_top || id === B.city_gate_top ? at.y - 1 : at.y;
+        return w.getState(at.x, by, at.z);
+      }
+      case 'facing (0-3)': return x.game.world.getMeta(at.x, at.y, at.z) & META_ROT;
+      case 'grown (a crop)': return CROPS[id] ? cropStage(x.game.world.getMeta(at.x, at.y, at.z)) : 0;
+      case 'a container': return b.interact === 'container';
+      case 'items in it': {
+        if (b.interact !== 'container') return 0;
+        const slots = x.game.world.getContainer(at.x, at.y, at.z) || [];
+        return slots.reduce((a, q) => a + (q ? q.count : 0), 0);
+      }
+      case 'set down here': {
+        const got = x.game.placed && x.game.placed.get(`${at.x},${at.y},${at.z}`);
+        return got ? got.item : '';
+      }
       default: return null;
     }
   },
@@ -1171,7 +1755,7 @@ function worldEvent(game, rec, o = {}) {
 // ------------------------------------------------------------ the game calls these
 // A mod's item used (right button). True if it did anything.
 export function modUse(game, p, def) {
-  const rec = def && def.key && MODS.ents.get(def.key);
+  const rec = def && def.key && recOf(def.key);
   if (!rec) return false;
   if (rec.kind === 'item' && rec.tpl !== 'tpl.food' && wired(rec, 'onUse')) {
     fire(game, def.key, 'onUse', { self: p, player: p, item: def.key });
@@ -1183,7 +1767,7 @@ export function modUse(game, p, def) {
 
 // A mod's food eaten (after the game's own healing).
 export function modEaten(game, p, def) {
-  const rec = MODS.ents.get(def.key);
+  const rec = recOf(def.key);
   if (!rec) return;
   if (rec.f.effect) applyEffect(game, p, gameKey(rec.mod.id, rec.f.effect), Math.max(1, rec.f.effectSecs || 30));
   fire(game, def.key, 'onUse', { self: p, player: p, target: p, item: def.key });
@@ -1232,6 +1816,12 @@ export function modHurt(game, t, src, amount) {
 export function modScaleDamage(t, src, amount) {
   if (t && t.modGuardT > 0) return 0;
   let a = amount;
+  // (Round 66) The world's mods' rules: how hard players and creatures hit.
+  if (MODS.rules) {
+    if (src && src.kind === 'player') a *= rule('dealt');
+    else if (src && (src.kind === 'creature' || src.kind === 'monster')) a *= rule('mobDmg');
+    if (t && t.kind === 'player') a *= rule('taken');
+  }
   const up = src ? modStat(src, 'damage') : 0;
   if (up) a *= 1 + up / 100;
   const arm = t ? modStat(t, 'armor') : 0;
@@ -1610,7 +2200,7 @@ export function modTick(game, dt) {
   for (const p of game.everyone()) {
     const keys = new Set([p.heldItem ? p.heldItem() : null, ...Object.values(p.equip || {})].filter((k) => k && ITEMS[k] && ITEMS[k].mod));
     for (const k of keys) {
-      const rec = MODS.ents.get(k);
+      const rec = recOf(k);
       if (!rec) continue;
       for (const n of rec.prog.starts) {
         if (n.type !== 'ev.timer') continue;

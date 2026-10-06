@@ -646,3 +646,26 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .sn-wave { display: block; cursor: text; image-rendering: auto !important; }
 .sn-wave:focus { outline: none; }
 .sn-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* (Round 66) The Rules tab. */
+.rules .rules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
+.rules .rules-box { background: var(--panel); box-shadow: var(--bevel); padding: 8px 10px 10px; }
+.rules .rules-box h3 { margin: 0 0 6px; color: var(--cyan); font-family: var(--pix); font-size: 16px; font-weight: normal; }
+.rule-row { display: grid; grid-template-columns: 170px 1fr 30px 24px; align-items: center; gap: 6px; padding: 2px 0; }
+.rule-row .rn { color: var(--dim); }
+.rule-row.changed .rn { color: var(--gold); }
+.rule-row .ru { text-align: left; }
+.rules-things { margin-top: 10px; }
+.rule-card { background: var(--panel); box-shadow: var(--bevel); margin-top: 8px; padding: 6px 10px 8px; max-width: 980px; }
+.rule-card .rc-head { display: flex; align-items: center; gap: 8px; }
+.rule-card .rc-head .thumb { width: 20px; height: 20px; display: inline-grid; place-items: center; }
+.rule-card .rc-head .thumb canvas { width: 16px; height: 16px; }
+.rule-card .rc-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 10px; margin-top: 6px; }
+.rule-card .rc-f { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 6px; color: var(--dim); }
+.rule-card .rc-f.on { color: var(--gold); }
+.rule-card .rc-f input::placeholder { color: var(--faint); }
+
+/* (Round 66) The Gear tab. */
+.gr-wrap { flex: 1; min-height: 0; padding: 1px; }
+.gr-view { display: block; }
+.gr-grip { display: block; margin: 4px 0 8px; cursor: crosshair; box-shadow: var(--sunk); }

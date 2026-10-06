@@ -35,9 +35,9 @@ import { newSound, clipSecs } from '../mod/sound.js';
 import { waveThumb } from './audiokit.js';
 
 // Which tool edits each collection.
-export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound' };
+export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear' };
 const TOOLS = [
-  { id: 'overview', name: 'Overview', icon: 'home', key: '1', tip: 'The mod: its name, its picture, what\'s in it, and what\'s wrong with it.' },
+  { id: 'overview', name: 'Overview', icon: 'home', key: '1', side: false, tip: 'The mod: its name, its picture, what\'s in it, and what\'s wrong with it.' },
   { id: 'pixel', name: 'Pixel', icon: 'pencil', key: '2', tip: 'Pixel art: textures, icons, creatures, animations.' },
   { id: 'vfx', name: 'VFX', icon: 'sparkle', key: '3', tip: 'Effects: particles, glows, animated sprites.' },
   { id: 'rig', name: 'Rig', icon: 'bone', key: '4', tip: 'Characters: cut art into parts on bones, and let it move.' },
@@ -50,6 +50,8 @@ const TOOLS = [
   // (Round 66.)
   { id: 'music', name: 'Music', icon: 'note', key: '1', shift: true, tip: 'Songs, sketched in patterns: for biomes, or put on from nodes.' },
   { id: 'sound', name: 'Sound', icon: 'speaker', key: '2', shift: true, tip: 'Sounds: brought in, cut, mixed, slowed, echoed. For nodes, effects, songs and biomes.' },
+  { id: 'gear', name: 'Gear', icon: 'helm', key: '3', shift: true, tip: 'How armour, weapons and tools look on someone: worn (art over the person) and held (art, grip, size, slant).' },
+  { id: 'rules', name: 'Rules', icon: 'scales', key: '4', shift: true, side: false, tip: 'The game\'s own rules for worlds with the mod: breaking, hearts, damage, creatures, days, prices; and any item, block or creature\'s numbers.' },
 ];
 const LOADERS = {
   overview: async () => ({ default: OverviewTool }),
@@ -64,6 +66,8 @@ const LOADERS = {
   chargen: () => import('./chargen.js'),
   music: () => import('./music.js'),
   sound: () => import('./sound.js'),
+  rules: () => import('./rules.js'),
+  gear: () => import('./gear.js'),
 };
 // The explorer's sections, in order.
 // (Round 66: each its own colour, for the mod's page.)
@@ -83,6 +87,7 @@ const SECTIONS = [
   { key: 'chargen', name: 'Character tabs', icon: 'bust', color: '#f0d0a0' },
   { key: 'songs', name: 'Songs', icon: 'note', color: '#b0a0ff' },
   { key: 'sounds', name: 'Sounds', icon: 'speaker', color: '#80d8ff' },
+  { key: 'gear', name: 'Gear looks', icon: 'helm', color: '#c8b0a0' },
 ];
 
 let cssDone = false;
@@ -427,8 +432,9 @@ export class Workshop {
     this.toolId = id;
     // (Round 66) The mod's own page has everything on it: no panel on the
     // right.
-    this.inspector.classList.toggle('home', id === 'overview');
-    this.splitR.classList.toggle('homeless', id === 'overview');
+    const bare = TOOLS.find((t) => t.id === id)?.side === false;
+    this.inspector.classList.toggle('home', bare);
+    this.splitR.classList.toggle('homeless', bare);
     this.drawTop();
     clear(this.stage);
     clear(this.inspector);
@@ -442,7 +448,7 @@ export class Workshop {
     this.tool = this.tools[id];
     this.tool.mount(this.stage, this.inspector);
     const want = this.sel && TOOL_OF[this.sel.kind] === id && this.mod[this.sel.kind][this.sel.id] ? this.sel : null;
-    if (id !== 'overview') {
+    if (id !== 'overview' && id !== 'rules') {
       const keep = this.tool.current && this.tool.current();
       if (want && (!keep || keep.id !== want.id)) this.tool.open(want.kind, want.id);
       else if (!keep) this.tool.open(null, null);
@@ -500,6 +506,7 @@ export class Workshop {
     }
     if (sub('worlds')) items.push({ label: 'World map', icon: 'globe', onClick: () => this.tool3('world', (t) => t.newWorld()) });
     if (sub('chargen')) items.push({ label: 'Character tab', icon: 'bust', onClick: () => this.tool3('chargen', (t) => t.newTab()) });
+    if (sub('gear')) items.push({ label: 'Gear look (worn, held)', icon: 'helm', onClick: () => this.create('gear', { name: 'Gear look' }) });
     if (sub('songs')) items.push({ label: 'Song', icon: 'note', sub: [
       { label: 'Empty', onClick: () => this.create('songs', { name: 'Song' }) },
       { label: 'With a tune to start from', onClick: () => this.create('songs', { name: 'Song' }, { demo: true }) },
@@ -589,6 +596,9 @@ export class Workshop {
         } });
     } else if (kind === 'structures') {
       items.push({ sep: true }, { label: 'Make a dungeon with it as a floor', icon: 'stairs', onClick: () => this.create('dungeons', { name: `${t.name} dungeon`, floors: [id] }) }, { label: 'Put it in a layout', icon: 'grid', onClick: () => this.create('layouts', { name: `${t.name} layout`, pieces: [{ structure: id, x: 0, z: 0, rot: 0 }] }) });
+    } else if (kind === 'entities' && ['tpl.weapon', 'tpl.tool', 'tpl.armor', 'tpl.material', 'tpl.food'].includes(rootType(t))) {
+      const have = Object.values(m.gear || {}).find((g) => g.item === `@${id}`);
+      items.push({ sep: true }, { label: have ? 'Its look worn or held' : 'A look for it worn or held', icon: 'helm', onClick: () => (have ? this.open('gear', have.id) : this.create('gear', { name: `${t.name} look`, item: `@${id}` })) });
     } else if (kind === 'vfx') {
       items.push({ sep: true }, { label: 'Make a projectile with it', icon: 'bolt', onClick: () => this.newEntity('tpl.projectile', { trail: id }, t.name) });
     } else if (kind === 'rigs') {
@@ -725,7 +735,11 @@ export class Workshop {
     const back = way === 'undo' ? H.undo.pop() : H.redo.pop();
     (way === 'undo' ? H.redo : H.undo).push(now);
     const v = JSON.parse(back);
-    if (kind === 'meta') Object.assign(this.mod, v);
+    if (kind === 'meta') {
+      Object.assign(this.mod, v);
+      // (Round 66: no rules then, none now.)
+      if (!v.rules) delete this.mod.rules;
+    }
     else if (v === null) delete this.mod[kind][id];
     else this.mod[kind][id] = v;
     this.touch(kind, id);
@@ -932,7 +946,7 @@ export class Workshop {
       c.style.imageRendering = 'auto';
       return c;
     }
-    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book', biomes: 'tree', worlds: 'globe', chargen: 'bust', songs: 'note' };
+    const icons = { vfx: 'sparkle', rigs: 'bone', structures: 'house', layouts: 'grid', dungeons: 'stairs', loot: 'chest', stories: 'scroll', patches: 'book', biomes: 'tree', worlds: 'globe', chargen: 'bust', songs: 'note', gear: 'helm' };
     if (kind === 'entities') {
       const tp = rootType(t);
       return ic(TEMPLATE_INFO[tp] ? TEMPLATE_INFO[tp].icon : 'node');
@@ -943,6 +957,7 @@ export class Workshop {
   thumbAsset(kind, t) {
     const A = this.mod.assets;
     if (kind === 'assets') return t;
+    if (kind === 'gear') return (t.held && A[t.held.art]) || (t.worn && A[t.worn.art]) || null;
     if (kind === 'rigs') return A[t.asset] || null;
     if (kind === 'vfx') {
       const L = (t.layers || []).find((q) => q.asset && A[q.asset]);
@@ -1043,7 +1058,7 @@ export class Workshop {
   }
 
   shortcuts() {
-    const rows = [['Ctrl+1..9, 0', 'Switch tool'], ['Ctrl+Shift+1, 2', 'Music, Sound'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
+    const rows = [['Ctrl+1..9, 0', 'Switch tool'], ['Ctrl+Shift+1, 2, 3, 4', 'Music, Sound, Gear, Rules'], ['Ctrl+K', 'Find anything'], ['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+S', 'Save now (it saves as you go anyway)'], ['F5', 'Playtest'], ['Right-click', 'What else can be done with a thing'], ...(this.tool && this.tool.keyHelp ? this.tool.keyHelp() : [])];
     dialog({ title: 'Shortcuts', icon: 'info', body: h('div', { class: 'helpgrid' }, rows.flatMap(([k, t]) => [h('span', { class: 'kbd' }, k), h('span', { class: 'note' }, t)])), buttons: [{ label: 'Close', kind: 'primary' }] });
   }
 
@@ -1147,9 +1162,10 @@ const DEFAULTS = {
   // (Round 66.)
   songs: (d, app, o = {}) => newSong({ name: d.name, demo: !!o.demo }),
   sounds: (d) => newSound({ name: d.name }),
+  gear: (d) => ({ name: 'Gear look', item: d.item || null }),
 };
 
-const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags });
+const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags, rules: m.rules ? JSON.parse(JSON.stringify(m.rules)) : null });
 const rootType = (e) => {
   const r = (e.graph && e.graph.nodes || []).find((n) => NODES[n.type] && NODES[n.type].root);
   return r ? r.type : null;
@@ -1235,6 +1251,9 @@ class OverviewTool {
     wrap.append(h('h2', null, 'What it is'), details);
     // What it's made of: a bar of squares.
     const counts = SECTIONS.map((S) => ({ ...S, n: Object.keys(m[S.key] || {}).length }));
+    // (Round 66: the game's rules it changes, too.)
+    const R = m.rules || {};
+    counts.push({ key: 'rules', name: 'Rules changed', icon: 'scales', color: '#9aa8d8', n: Object.keys(R).filter((k) => !['items', 'blocks', 'creatures'].includes(k)).length + ['items', 'blocks', 'creatures'].reduce((a, k) => a + Object.keys(R[k] || {}).length, 0) });
     const total = counts.reduce((a, c) => a + c.n, 0);
     const CELLS = 48;
     const bar = h('div', { class: 'mod-bar' });
@@ -1242,15 +1261,15 @@ class OverviewTool {
     counts.forEach((c, i) => {
       for (let k = 0; k < cells[i]; k++) {
         const sq = h('span', { class: 'sq', style: { background: c.color }, 'data-tip': `${c.name}: ${c.n} (${Math.round((c.n / total) * 100)}% of it)` });
-        sq.addEventListener('click', () => this.reveal(c.key));
+        sq.addEventListener('click', () => (c.key === 'rules' ? app.useTool('rules') : this.reveal(c.key)));
         bar.append(sq);
       }
     });
     for (let k = cells.reduce((a, b) => a + b, 0); k < CELLS; k++) bar.append(h('span', { class: 'sq empty' }));
     const legend = h('div', { class: 'mod-legend' });
     for (const c of counts) {
-      const it = h('div', { class: `lg${c.n ? '' : ' none'}`, 'data-tip': c.n ? `Show its ${KIND_NAMES[c.key][1]}` : `New ${KIND_NAMES[c.key][0]}` }, h('span', { class: 'sw', style: { background: c.color } }), ic(c.icon, 10), h('span', null, c.name), h('b', null, c.n));
-      it.addEventListener('click', (e) => (c.n ? this.reveal(c.key) : app.newMenu(e.clientX, e.clientY, c.key)));
+      const it = h('div', { class: `lg${c.n ? '' : ' none'}`, 'data-tip': c.key === 'rules' ? 'The Rules tab' : c.n ? `Show its ${KIND_NAMES[c.key][1]}` : `New ${KIND_NAMES[c.key][0]}` }, h('span', { class: 'sw', style: { background: c.color } }), ic(c.icon, 10), h('span', null, c.name), h('b', null, c.n));
+      it.addEventListener('click', (e) => (c.key === 'rules' ? app.useTool('rules') : c.n ? this.reveal(c.key) : app.newMenu(e.clientX, e.clientY, c.key)));
       legend.append(it);
     }
     wrap.append(h('h2', null, 'In this mod'), bar, legend);

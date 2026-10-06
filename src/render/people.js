@@ -9,6 +9,7 @@
 // is a dark of whatever colour it borders, not one flat black.
 import { Px, hex, shade, mix } from './pixel.js';
 import { ISLE_ROBES } from './islebossart.js';
+import { MODS } from '../mod/state.js';
 
 const OUT = '#1c1622';
 export const CHAR_W = 16;
@@ -200,7 +201,15 @@ export const GEAR = {
 
 const GOLD = '#d8b040';
 
-export function drawHumanoid(look, dir, frame) {
+// (Round 66) A mod's gear look ('modgear<n>': see mod/gear.js), or null.
+function modGear(v) {
+  const m = /^modgear(\d+)$/.exec(String(v || ''));
+  return m && MODS.gearLooks ? MODS.gearLooks[+m[1]] || null : null;
+}
+
+// `extra.overlays` (round 66, the Workshop's Gear tab): gear art to lay
+// over, as a mod's worn gear's is ([{ frames, slot }]).
+export function drawHumanoid(look, dir, frame, extra = null) {
   const p = new Px(CHAR_W, SHEET_H);
   const pm = new Uint8Array(CHAR_W * SHEET_H);
   const flat = new Uint8Array(CHAR_W * SHEET_H);
@@ -226,10 +235,27 @@ export function drawHumanoid(look, dir, frame) {
   const gear0 = look.gear || {};
   const gear = {};
   const tint = {};
+  const overlays = extra && extra.overlays ? extra.overlays.slice() : [];
   for (const k of Object.keys(gear0)) {
-    const [kind, t] = String(gear0[k]).split(':');
+    let [kind, t] = String(gear0[k]).split(':');
+    // (A mod's: the game's look under it, its tint, and its art over it.)
+    const G = modGear(kind);
+    if (G) {
+      kind = G.base === 'none' ? '' : G.base;
+      t = G.tint || t;
+      if (G.frames) overlays.push({ frames: G.frames, slot: k });
+    }
+    if (!kind) continue;
     gear[k] = kind;
     if (t) tint[k] = t;
+  }
+  // (The head's: a hat of the game's, tinted, or a mod's.)
+  let [hatKind, hatTint] = String(look.hat || '').split(':');
+  const HG = modGear(hatKind);
+  if (HG) {
+    hatKind = HG.base === 'none' ? '' : HG.base;
+    hatTint = HG.tint || hatTint;
+    if (HG.frames) overlays.push({ frames: HG.frames, slot: 'head' });
   }
   let shoesG = null;
   if (gear.body && (tint.body || GEAR[gear.body]?.shirt)) shirt = hex(gear.body === 'tabard' ? '#6a6a78' : tint.body || GEAR[gear.body].shirt);
@@ -921,7 +947,7 @@ export function drawHumanoid(look, dir, frame) {
   }
   const style = look.hairStyle;
   const hairC = skel ? skinC : hair;
-  const hat = look.hat;
+  const hat = hatKind || null;
   const hiHair = lit(hairC, 1.6);
   if (!skel && style !== 'bald') {
     part = HAIR;
@@ -1232,18 +1258,21 @@ export function drawHumanoid(look, dir, frame) {
         F(hx + 1, hy, 6, 1, '#a0602a');
         for (let x = hx - 2; x < hx + 10; x += 2) F(x, hy + 1, 1, 1, '#c8a040');
         break;
-      case 'helmet':
+      case 'helmet': {
         part = METAL;
-        H(hx, hy - 1, 8, 4, '#9a9aa8');
-        F(hx, hy - 1, 8, 1, '#d0d0dc');
-        F(hx, hy + 2, 8, 1, '#6a6a78');
+        // (Round 66: in a mod's tint, if it has one.)
+        const hc = hatTint && /^#[0-9a-f]{6}$/i.test(hatTint) ? hex(hatTint) : hex('#9a9aa8');
+        R(hx, hy - 1, 8, 4, hc);
+        F(hx, hy - 1, 8, 1, lit(hc, 1.35));
+        F(hx, hy + 2, 8, 1, dim(hc, 0.7));
         if (front) {
-          H(hx + 3, hy + 2, 2, 3, '#7a7a88');
-          F(hx + 3, hy + 2, 1, 3, '#a8a8b8');
+          R(hx + 3, hy + 2, 2, 3, dim(hc, 0.8));
+          F(hx + 3, hy + 2, 1, 3, lit(hc, 1.1));
         }
         F(hx + 3, hy - 3, 2, 2, accent);
         F(hx + 3, hy - 3, 1, 1, lit(accent, 1.5));
         break;
+      }
       case 'chef':
         H(hx + 1, hy - 4, 6, 5, '#f4f4f0');
         H(hx - 0, hy - 5, 3, 2, '#f4f4f0');
@@ -1464,6 +1493,21 @@ export function drawHumanoid(look, dir, frame) {
     // (A quiver's strap across the chest.)
     part = FLAT;
     for (let i = 0; i < torsoH; i++) S(side ? tx + 1 + (i >> 1) : tx + tw - 1 - i, torsoY + i, hex('#5a3a1e'));
+  }
+  // (Round 66) Gear of a mod's own laid over: its art for the way they
+  // face (front, side, back), moving with the body as it steps (the legs'
+  // and feet's staying with the ground).
+  for (const ov of overlays) {
+    const fr = ov.frames && (ov.frames[front ? 0 : side ? 1 : 2] || ov.frames[0]);
+    if (!fr) continue;
+    const low = ov.slot === 'legs' || ov.slot === 'feet';
+    const dy = low ? 0 : top + bob;
+    part = ov.slot === 'head' ? HAT : OVER;
+    for (let y = 0; y < SHEET_H; y++) for (let x = 0; x < CHAR_W; x++) {
+      const i = (y * CHAR_W + x) * 4;
+      if (fr[i + 3] < 128) continue;
+      S(x, y - SPR_PAD + dy, [fr[i], fr[i + 1], fr[i + 2]]);
+    }
   }
   lightUp(p, pm, flat);
   return outlineSel(p);

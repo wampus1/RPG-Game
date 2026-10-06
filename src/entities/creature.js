@@ -1,4 +1,5 @@
 // Wildlife and monsters: wander, flee, or hunt the player and villagers.
+import { rule } from '../mod/rules.js';
 import { Entity } from './entity.js';
 import { findPath } from './pathfind.js';
 import { RNG, hash4 } from '../util/rng.js';
@@ -99,7 +100,8 @@ export class Creature extends Entity {
     this.species = species;
     this.S = S;
     this.name = S.name;
-    this.hp = this.maxHp = S.hp;
+    // (Round 66: as hardy as the world's mods have creatures.)
+    this.hp = this.maxHp = Math.max(1, Math.round(S.hp * rule('mobHp')));
     this.variant = variant;
     this.rng = new RNG(hash4(this.id, x, z, 91));
     this.target = null;

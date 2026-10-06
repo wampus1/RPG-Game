@@ -2,6 +2,7 @@
 import { BLOCKS, B } from './blocks.js';
 import { deriveStarred, softArmor } from './quality.js';
 import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
+import { rule } from '../mod/rules.js';
 
 export const ITEMS = {};
 // A starred piece of gear ("iron_sword~3dk7.venom": see quality.js), or
@@ -9,13 +10,115 @@ export const ITEMS = {};
 // from its plain one the first time it's asked for, and kept. (Looked for
 // only where a key isn't one of the items proper, so the rest cost
 // nothing more.)
+// (Round 66: likewise a piece set with a stone or a fitting that isn't
+// set out below, as a mod's are: "m:mod:blade+ruby"; and one tuned by a
+// mod's node, "iron_sword^d3_S1": see tuneKey.)
 const STARRED = new Map();
-const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes('*'));
+const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes('*') || k.includes('^') || k.includes('+'));
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.includes('~') ? deriveStarred(k) : deriveGrown(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
+}
+// (Mods come and go: what was made up of theirs is forgotten with them.)
+export function forgetDerived(prefix = 'm:') {
+  for (const k of [...STARRED.keys()]) if (k.startsWith(prefix)) STARRED.delete(k);
+}
+
+// ------------------------------------------------------------ tuned pieces
+// (Round 66) A piece a mod's node has changed (Item, Change an item): what
+// it changes written into its key after a '^', as a stone's is after a
+// '+', so it goes wherever an item goes as itself. Each change a letter
+// and a number, '_' between: d damage (+), a armour (+ percent), b block
+// (+ percent), s work speed (times), w swings (times as fast), r reach
+// (+), g range (+), h heals (+), v worth (times), S A E C strength,
+// agility, endurance, charisma (+); n its name (hex of its letters).
+const TUNES = { d: 'damage', a: 'armor', b: 'block', s: 'speed', w: 'swing', r: 'reach', g: 'range', h: 'heal', v: 'value', S: 'str', A: 'agi', E: 'end', C: 'cha' };
+const TUNE_OF = Object.fromEntries(Object.entries(TUNES).map(([k, v]) => [v, k]));
+const TUNE_MUL = new Set(['speed', 'swing', 'value']);
+export const TUNE_FIELDS = Object.values(TUNES);
+const hexOf = (s) => [...new globalThis.TextEncoder().encode(String(s).slice(0, 32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+const fromHex = (h) => {
+  try {
+    return new globalThis.TextDecoder().decode(Uint8Array.from((h.match(/../g) || []).map((b) => parseInt(b, 16))));
+  } catch {
+    return '';
+  }
+};
+// `t`: { damage, armor, ..., name } (anything left at no change left out).
+// The piece itself if nothing changes.
+export function tuneKey(base, t) {
+  const parts = [];
+  for (const [field, letter] of Object.entries(TUNE_OF)) {
+    const v = +t[field];
+    if (!Number.isFinite(v) || v === (TUNE_MUL.has(field) ? 1 : 0)) continue;
+    parts.push(`${letter}${Math.round(v * 1000) / 1000}`);
+  }
+  const nm = String(t.name || '').trim();
+  if (nm) parts.push(`n${hexOf(nm)}`);
+  return parts.length ? `${base}^${parts.join('_')}` : base;
+}
+export function parseTune(code) {
+  const t = {};
+  for (const p of String(code).split('_')) {
+    if (!p) continue;
+    if (p[0] === 'n') t.name = fromHex(p.slice(1)).slice(0, 32);
+    else if (TUNES[p[0]] && Number.isFinite(+p.slice(1))) t[TUNES[p[0]]] = +p.slice(1);
+    else return null;
+  }
+  return t;
+}
+const rr2 = (n) => Math.round(n * 100) / 100;
+function deriveTuned(k, from, code, b) {
+  const t = parseTune(code);
+  if (!t) return null;
+  const d = { ...b, key: k, tuned: t, tunedFrom: from };
+  if (t.damage && typeof b.damage === 'number') d.damage = Math.max(0, rr2(b.damage + t.damage));
+  if (t.armor && b.kind === 'armor' && b.slot !== 'shield') d.armor = Math.max(0, softArmor(b.slot, Math.round(((b.armor || 0) + t.armor / 100) * 1000) / 1000));
+  if (t.block && typeof b.block === 'number') d.block = Math.max(0, Math.min(0.96, Math.round((b.block + t.block / 100) * 1000) / 1000));
+  if (t.speed && b.speed) d.speed = rr2(b.speed * Math.max(0.1, t.speed));
+  if (t.swing && b.cooldown) d.cooldown = Math.max(0.12, Math.round((b.cooldown / Math.max(0.1, t.swing)) * 1000) / 1000);
+  if (t.reach && b.reach) d.reach = Math.max(0.5, rr2(b.reach + t.reach));
+  if (t.range && b.range) d.range = Math.max(1, Math.round(b.range + t.range));
+  if (t.heal && b.kind === 'food') {
+    d.heal = Math.max(0, (b.heal || 0) + t.heal);
+    d.regen = Math.max(0, (b.regen || 0) + t.heal);
+  }
+  if (t.value) d.value = Math.max(0, Math.round((b.value || 1) * t.value));
+  const st = { ...(b.stats || {}) };
+  let any = false;
+  for (const s of ['str', 'agi', 'end', 'cha']) {
+    if (!t[s]) continue;
+    st[s] = (st[s] || 0) + Math.round(t[s]);
+    any = true;
+  }
+  if (any) d.stats = st;
+  if (t.name) d.name = t.name;
+  return d;
+}
+
+// A set stone or fitting not set out below, or a tuned piece: made up
+// from the piece it's of.
+function deriveVariant(k) {
+  const i = Math.max(k.lastIndexOf('+'), k.lastIndexOf('^'));
+  if (i <= 0) return null;
+  const from = k.slice(0, i);
+  const what = k.slice(i + 1);
+  const b = ITEMS[from];
+  if (!b) return null;
+  if (k[i] === '^') return deriveTuned(k, from, what, b);
+  if (GEMS[what]) {
+    if (!canSocket(from)) return null;
+    const stats = { ...(b.stats || {}) };
+    for (const [st, n] of Object.entries(GEMS[what].stats)) stats[st] = (stats[st] || 0) + n;
+    return { ...b, key: k, name: `${b.name} (${GEMS[what].name})`, value: b.value + 40, stats, socket: what, base: from };
+  }
+  if ((what === 'edge' || what === 'plating') && canEnhance(from, what)) {
+    const extra = what === 'edge' ? { damage: b.damage + 3 } : { armor: softArmor(b.slot, Math.round((b.armor + 0.05) * 100) / 100), stats: { ...(b.stats || {}), end: ((b.stats || {}).end || 0) + 1 } };
+    return { ...b, key: k, name: `${b.name} (${what === 'edge' ? 'Alloy-Edged' : 'Alloy-Plated'})`, value: b.value + 120, enhanced: what, base: from, ...extra };
+  }
+  return null;
 }
 Object.setPrototypeOf(ITEMS, new Proxy(Object.prototype, {
   get: (t, k, r) => (isStarred(k) ? starred(k) : Reflect.get(t, k, r)),
@@ -541,7 +644,10 @@ export function rollDrops(blockId, rand) {
     if (e.chance !== undefined && rand() >= e.chance) continue;
     const min = e.min ?? 1;
     const max = e.max ?? min;
-    const count = min + Math.floor(rand() * (max - min + 1));
+    let count = min + Math.floor(rand() * (max - min + 1));
+    // (Round 66: as much as the world's mods have blocks give.)
+    const k = rule('drops');
+    if (k !== 1) count = Math.floor(count * k + rand());
     if (count > 0 && ITEMS[e.item]) out.push({ item: e.item, count });
   }
   return out;
@@ -574,3 +680,23 @@ for (const key of Object.keys(ITEMS)) {
 
 // (Last, so every weapon and piece of armour above can take a gem.)
 registerSockets();
+
+// (Round 66) A piece changed (by a mod's rules): its stones and fittings,
+// set out above, made again from it as it is now.
+export function rebuildVariants(key) {
+  const b = ITEMS[key];
+  if (!b) return;
+  for (const k of Object.keys(ITEMS)) {
+    const v = ITEMS[k];
+    if (!v || k === key || v.base !== key) continue;
+    if (v.socket && GEMS[v.socket]) {
+      const stats = { ...(b.stats || {}) };
+      for (const [st, n] of Object.entries(GEMS[v.socket].stats)) stats[st] = (stats[st] || 0) + n;
+      ITEMS[k] = { ...b, key: k, name: `${b.name} (${GEMS[v.socket].name})`, value: b.value + 40, stats, socket: v.socket, base: key };
+    } else if (v.enhanced === 'edge' || v.enhanced === 'plating') {
+      const extra = v.enhanced === 'edge' ? { damage: b.damage + 3 } : { armor: softArmor(b.slot, Math.round((b.armor + 0.05) * 100) / 100), stats: { ...(b.stats || {}), end: ((b.stats || {}).end || 0) + 1 } };
+      ITEMS[k] = { ...b, key: k, name: `${b.name} (${v.enhanced === 'edge' ? 'Alloy-Edged' : 'Alloy-Plated'})`, value: b.value + 120, enhanced: v.enhanced, base: key, ...extra };
+    } else continue;
+    rebuildVariants(k);
+  }
+}

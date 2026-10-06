@@ -8,6 +8,7 @@ import { forgetModArt, toCanvas } from '../render/sprites.js';
 import { Px, shade } from '../render/pixel.js';
 import { TILE, LH } from '../config.js';
 import { VfxPlayer } from './vfx.js';
+import { heldLookOf } from './gear.js';
 import { Renderer } from '../render/renderer.js';
 
 const toPx = (pix) => {
@@ -142,6 +143,24 @@ MODS.iconFor = (key, it) => {
   }
   const pix = assetPixels(m, id, 0, 16, 16, 'contain');
   return toCanvas(toPx(pix));
+};
+
+// (Round 66) How a piece of a mod's look is held (see mod/gear.js): its
+// own art (or none: its icon), where the hand grips it, how big, at what
+// slant. Null: as the game holds anything.
+const heldImgs = new Map();
+MODS.heldLook = (key) => {
+  const H = heldLookOf(key);
+  if (!H) return null;
+  const ck = `${MODS.serialGear || 0}|${H.mod.id}|${H.gear.id}`;
+  if (heldImgs.has(ck)) return heldImgs.get(ck);
+  const h = H.held || {};
+  const pix = h.art ? assetPixels(H.mod, h.art, 0, null, null) : null;
+  const img = pix ? toCanvas(toPx(pix)) : null;
+  const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  const r = { img, x: num(h.x, 3), y: num(h.y, 13), scale: Math.max(0.2, Math.min(3, num(h.scale, 0.8))), ang: (num(h.angle, 0) * Math.PI) / 180 };
+  heldImgs.set(ck, r);
+  return r;
 };
 
 // ------------------------------------------------------------ each frame

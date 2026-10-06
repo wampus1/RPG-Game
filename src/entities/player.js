@@ -10,6 +10,7 @@ import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
 import { stepModMult, gearHp } from '../game/mods.js';
+import { rule } from '../mod/rules.js';
 
 const BASE_HP = 20;
 
@@ -47,7 +48,7 @@ export class Player extends Entity {
     super(game, x, y, z);
     this.kind = 'player';
     this.name = 'You';
-    this.hp = this.maxHp = 20;
+    this.hp = this.maxHp = rule('hearts') * 2;
     this.inv = makeSlots(INV_SIZE);
     this.selected = 0;
     this.rot = 0;
@@ -133,7 +134,9 @@ export class Player extends Entity {
   }
 
   recalcMaxHp() {
-    this.maxHp = Math.max(8, BASE_HP + (this.hpBonus || 0) + gearHp(this));
+    // (Round 66: the hearts the world's mods start you with.)
+    const base = rule('hearts') * 2;
+    this.maxHp = Math.max(Math.min(8, base), (base === 20 ? BASE_HP : base) + (this.hpBonus || 0) + gearHp(this));
     this.hp = Math.min(this.hp, this.maxHp);
   }
 
@@ -304,6 +307,16 @@ export class Player extends Entity {
         this.hp = Math.min(this.maxHp, this.hp + 1);
       }
     } else this.regenT = 0;
+    // (Round 66) Health coming back on its own, where the world's mods
+    // have it so.
+    const rg = rule('regen');
+    if (rg > 0 && this.hp > 0 && !this.dead && this.hp < this.maxHp) {
+      this.ruleRegenT = (this.ruleRegenT || 0) + dt;
+      if (this.ruleRegenT >= rg) {
+        this.ruleRegenT = 0;
+        this.hp = Math.min(this.maxHp, this.hp + 1);
+      }
+    }
     // A hot meal working through you: a heart at a time.
     const sh = this.slowHeal;
     if (sh && sh.left > 0 && this.hp > 0 && !this.dead) {
@@ -431,7 +444,7 @@ export class Player extends Entity {
     // (Just up out of a roll: a little slower for a moment. An arrow on
     // the string: careful steps.)
     const recover = (this.rollRecover > 0 ? 1.45 : 1) * (this.bowDraw ? 1.6 : 1);
-    this.startMove(nx, ny, nz, PLAYER_STEP_TIME * stepMult(this.game.hero) * stepModMult(this) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
+    this.startMove(nx, ny, nz, (PLAYER_STEP_TIME / rule('walk')) * stepMult(this.game.hero) * stepModMult(this) * (sprint && !this.mount && !this.blocking ? SPRINT_STEP : 1) * ride * swim * guard * recover * (ny !== this.y ? 1.15 : 1) * (leafy ? 1.35 : 1));
     if (leafy) this.game.rustle?.(nx, ny, nz);
     this.game.onPlayerStep(nx, ny, nz, water);
   }

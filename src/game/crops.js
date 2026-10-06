@@ -5,6 +5,7 @@ import { B, BLOCKS, CROPS, cropStage, cropMeta, META_AGE, isFarmland } from '../
 import { REGION_W, REGION_D, WORLD_Y } from '../config.js';
 import { weatherAt, SPELL } from '../world/weather.js';
 import { relicGrowth } from './relics.js';
+import { rule } from '../mod/rules.js';
 
 const WET_HOURS = 24; // how long soaked soil stays moist once the rain stops
 
@@ -31,7 +32,7 @@ export class CropGrowth {
   perStage(id, x, z) {
     const c = CROPS[id];
     const j = ((x * 73856093) ^ (z * 19349663)) >>> 0;
-    return c.hours * 60 * (0.85 + (j % 1000) / 1000 * 0.3);
+    return (c.hours * 60 * (0.85 + (j % 1000) / 1000 * 0.3)) / rule('growth');
   }
 
   sow(x, y, z, id, stage = 0) {

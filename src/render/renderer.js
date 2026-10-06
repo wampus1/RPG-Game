@@ -1861,7 +1861,9 @@ export class Renderer {
   // little one dropped items use), its grip in their hand.
   drawHeld(ctx, key, e, sx, top, off = false, guard = false) {
     if (!key) return;
-    const icon = itemIcon(key);
+    // (Round 66: a mod's piece held its own way: see mod/gear.js.)
+    const hl = MODS.heldLook ? MODS.heldLook(key) : null;
+    const icon = hl && hl.img ? hl.img : itemIcon(key);
     const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
     const look = e.look || {};
@@ -1875,9 +1877,9 @@ export class Renderer {
     // held upright by the foot of its stem, which is the middle of the
     // picture, so it sits in the hand rather than beside it.)
     const upright = !!HELD_FLAMES[key];
-    const gx = upright ? -7.5 : -3;
-    const gy = upright ? -12 : -13;
-    const S = 0.8;
+    const gx = hl ? -hl.x : upright ? -7.5 : -3;
+    const gy = hl ? -hl.y : upright ? -12 : -13;
+    const S = hl ? hl.scale : 0.8;
     const mir = off && dir === 0 ? true : dir === 1;
     const pose = this.swingPose(e, dir, off, mir) || (guard ? this.guardPose(e, dir, off, mir) : null);
     if (!pose && act <= 0 && dir === 2) return; // behind them
@@ -1908,7 +1910,7 @@ export class Renderer {
       ctx.arc(0, 0, R, Math.min(a0, a1), Math.max(a0, a1));
       ctx.stroke();
     }
-    ctx.rotate(ang);
+    ctx.rotate(ang + (hl ? (mir ? -hl.ang : hl.ang) : 0));
     ctx.scale(mir ? -S : S, S);
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
     // A flame carried: embers off its head now and then, and a flicker of

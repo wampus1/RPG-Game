@@ -8,13 +8,15 @@
 // long as the world has it. A block whose mod is gone (or no longer has it)
 // stays as a "missing" block, so nothing built of it is lost.
 import { BLOCKS, defineBlockAt, truncateBlocks } from '../world/blocks.js';
-import { ITEMS } from '../world/items.js';
+import { ITEMS, forgetDerived } from '../world/items.js';
 import { RECIPES } from '../world/recipes.js';
 import { SPECIES } from '../entities/creature.js';
 import { CREATURE_LOOKS } from '../render/sprites.js';
 import './rig.js';
 import './biomes.js';
 import './worldplan.js';
+import './ruleset.js';
+import './gear.js';
 import { Px } from '../render/pixel.js';
 import { gameKey, tagRange, isModKey, assetPixels, modHash } from './format.js';
 import { cleanSound } from './sound.js';
@@ -193,6 +195,8 @@ export function uninstallMods() {
     }
   }
   for (const k of added.items) delete ITEMS[k];
+  // (Round 66) Starred, set and tuned pieces of theirs, forgotten too.
+  forgetDerived('m:');
   for (const k of added.species) delete SPECIES[k];
   for (const k of added.looks) delete CREATURE_LOOKS[k];
   for (const r of added.recipes) {

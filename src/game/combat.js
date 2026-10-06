@@ -29,6 +29,7 @@
 // shield takes most of it, a blade a little), and raise it just as the
 // blow lands to parry: they're left reeling for a few seconds. SPACE rolls
 // you clear.
+import { rule } from '../mod/rules.js';
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { dishFx } from './cooking.js';
 import { dishTrigger } from './dishacts.js';
@@ -728,7 +729,7 @@ export function playerTick(game, p, dt, input, blocked) {
   const regen = (p.blocking ? 0.9 : p.moving ? 1.7 : 2.6) * (heroHas(game.hero, 'tireless') ? 1.4 : 1) * (1 + buffOf(game, 'wind')) * breathMult(p) * (morning ? 2 : 1) * relicBreath(game, p);
   if (p.rollStrike > 0) p.rollStrike -= dt;
   tickGuard(game, p, dt);
-  if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen);
+  if (p.restT > 0.75) p.stamina = Math.min(p.maxStamina, p.stamina + dt * regen * rule('breath'));
   if (p.stamina > p.maxStamina) p.stamina = Math.max(p.maxStamina, p.stamina - dt * 2);
 }
 

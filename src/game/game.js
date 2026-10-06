@@ -89,6 +89,7 @@ import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
 import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain, modSwung, modBlockedBlow } from '../mod/hooks.js';
+import { rule } from '../mod/rules.js';
 import { biomeSpawn } from '../mod/biomes.js';
 import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
@@ -1917,7 +1918,7 @@ export class Game {
     if (this.sleep) this.updateSleep(dt, uiRes.pressed);
     else if (this.waiting) this.updateWait(dt, uiRes.pressed);
     const abs0 = this.day * DAY_MINUTES + this.minute;
-    this.minute += dt * GAME_MINUTES_PER_SECOND * this.timeRate();
+    this.minute += (dt * GAME_MINUTES_PER_SECOND * this.timeRate()) / rule('day');
     if (this.minute >= DAY_MINUTES) {
       this.minute -= DAY_MINUTES;
       this.day++;
@@ -2289,8 +2290,8 @@ export class Game {
       const drop = p.y - y;
       p.startMove(p.x, y, p.z, Math.min(0.5, 0.12 + drop * 0.06));
       this.audio?.play(drop > 2 ? 'thud' : 'step', p);
-      if (drop > 3) {
-        this.damage(p, (drop - 3) * 2, null);
+      if (drop > 3 && rule('fall') > 0) {
+        this.damage(p, Math.max(1, Math.round((drop - 3) * 2 * rule('fall'))), null);
         if (!p.dead) this.ui.msg(`You fall ${drop} blocks and land hard.`, '#ffb080', true);
       }
       return true;
@@ -3471,6 +3472,8 @@ export class Game {
     let t = b.hardness * 1.5 / (good ? h.speed : 1);
     if (b.tool === 'pick' && !good) t *= 3.5;
     t /= digMult(this.hero);
+    // (Round 66: as fast as the world's mods have it.)
+    t /= rule('breakSpeed');
     // (A dish that has you through stone faster: see cooking.js.)
     if (b.tool === 'pick') t /= 1 + Math.max(0, dishFx(this.player, 'mine'));
     return Math.max(0.08, t);
@@ -6829,8 +6832,9 @@ export class Game {
       }
     }
     const night = !this.isDay();
-    // (As many again round each of you as round one.)
-    const cap = (night ? 9 : 6) * all.length;
+    // (As many again round each of you as round one; as many as the
+    // world's mods have it.)
+    const cap = Math.round((night ? 9 : 6) * all.length * rule('spawns'));
     if (this.creatures.filter((c) => c.species !== 'chicken').length >= cap) return;
     const a = Math.random() * Math.PI * 2;
     const dist = 14 + Math.random() * 12;
