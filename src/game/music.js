@@ -61,6 +61,23 @@ export const THEMES = {
   // The Kavorent's glass and starlight, three to the bar.
   title_spire: { ...CALM, root: 54, scale: 'whole', bpm: 70, meter: 12, shape: 'triad', prog: [0, 2, 4, 1], progB: [1, 3, 2, 0], lead: 'glass', pad: 'glass', arp: 'bell', arpStyle: 'wide', arpRate: 2, bass: 'sub', bassStyle: 'drone', space: 'cathedral', echo: 0.4, detune: 16, mood: 'eerie', energy: 0.3 },
 
+  // --- the Workshop's (round 64: see WORKSHOP_SONGS) ---------------------
+  // Slow and soft, to work by: no drums but the faintest, the new
+  // instruments (a felt piano, a vibraphone, a handpan, singing bowls, a
+  // breath of a pad), wide rooms and long echoes.
+  // A felt piano over a breath, in the lydian's light.
+  ws_studio: { ...CALM, root: 60, scale: 'lydian', bpm: 66, shape: 'add9', prog: [0, 4, 5, 3], progB: [1, 4, 0, 5], lead: 'felt', pad: 'breath', keys: 'felt', keysStyle: 'broken', bass: 'sub', bassStyle: 'drone', wet: 0.42, echo: 0.3, tone: 4800, energy: 0.26 },
+  // A vibraphone over glass, singing bowls struck far apart.
+  ws_glass: { ...CALM, root: 57, scale: 'penta', bpm: 60, prog: [0, 3, 1, 4], progB: [3, 2, 0, 4], lead: 'vibes', pad: 'glass', arp: 'bowl', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', space: 'cathedral', wet: 0.45, echo: 0.34, energy: 0.22 },
+  // A handpan rolling on a breeze, a soft step under it.
+  ws_drift: { ...CALM, root: 62, scale: 'dorian', bpm: 72, prog: [0, 6, 3, 4], progB: [3, 4, 0, 6], lead: 'handpan', pad: 'breath', arp: 'handpan', arpStyle: 'updown', arpRate: 2, bass: 'sub', kit: 'soft', energy: 0.3 },
+  // A lantern on the bench: a celesta, the felt piano under it, warm.
+  ws_lantern: { ...CALM, root: 65, scale: 'major', bpm: 62, prog: [0, 5, 3, 4], progB: [5, 3, 1, 4], lead: 'celesta', pad: 'warm', keys: 'felt', keysStyle: 'broken', bass: 'sub', echo: 0.28, energy: 0.24 },
+  // The tide out: bowls and a breath, the vibraphone swelling, the sea.
+  ws_tide: { ...CALM, root: 55, scale: 'mixo', bpm: 56, shape: 'sus2', prog: [0, 6, 0, 4], progB: [3, 6, 2, 0], lead: 'bowl', pad: 'breath', keys: 'vibes', keysStyle: 'swell', bass: 'sub', bassStyle: 'drone', sea: true, wet: 0.5, echo: 0.3, energy: 0.2 },
+  // Late at the bench: the felt piano low, a cello under it.
+  ws_dusk: { ...CALM, root: 52, scale: 'minor', bpm: 58, prog: [0, 5, 3, 6], progB: [3, 0, 5, 4], lead: 'felt', counter: 'cello', pad: 'warm', keys: 'vibes', keysStyle: 'broken', bass: 'sub', wet: 0.38, mood: 'dark', energy: 0.24 },
+
   // --- Thessa, out in the country ---------------------------------------
   // Open grassland: a pan flute over a warm pad and an electric piano.
   plains: { ...CALM, root: 60, scale: 'major', bpm: 92, prog: [0, 3, 5, 4], progB: [5, 3, 0, 4], lead: 'flute', pad: 'warm', keys: 'ep', bass: 'sub', kit: 'soft', energy: 0.46 },
@@ -319,6 +336,17 @@ export const TITLE_SONGS = [
 ];
 // Seconds of each before the next.
 export const TITLE_SONG_LEN = 150;
+
+// (Round 64) The Workshop's own, likewise (a few minutes each).
+export const WORKSHOP_SONGS = [
+  ['ws_studio', 'The Studio'],
+  ['ws_glass', 'Glass Bench'],
+  ['ws_drift', 'Drift'],
+  ['ws_lantern', 'Lantern Hours'],
+  ['ws_tide', 'Low Tide'],
+  ['ws_dusk', 'Late at the Bench'],
+];
+export const WORKSHOP_SONG_LEN = 180;
 
 // How long a scene's music is kept once the scene's over (seconds).
 export const LINGER = 9;
@@ -1120,6 +1148,20 @@ export class Music {
     const c = this.ctx;
     if (!c || c.state !== 'running' || !this.voice) return;
     this.voice.schedule(c.currentTime + 0.3);
+    // (Dipped under a sound a moment: back up once it's gone.)
+    if (this.ducked && c.currentTime >= this.ducked) {
+      this.ducked = 0;
+      if (this.bus) this.bus.gain.setTargetAtTime(this.enabled ? this.volume * GAIN : 0, c.currentTime, 0.5);
+    }
+  }
+
+  // (Round 64) Dips out for `secs` (a sound played over it: the
+  // Workshop's previews), then comes back.
+  duck(secs = 1.4) {
+    const c = this.ctx;
+    if (!c || !this.bus || !this.enabled) return;
+    if (!this.ducked) this.bus.gain.setTargetAtTime(this.volume * GAIN * 0.12, c.currentTime, 0.06);
+    this.ducked = Math.max(this.ducked || 0, c.currentTime + secs);
   }
 
   setVolume(v) {
@@ -1136,16 +1178,17 @@ export class Music {
 
   // On the title: its songs one after another (see TITLE_SONGS), from a
   // random one, each a few minutes (counted only while it's heard).
-  titleSong(dt) {
+  // (The Workshop's likewise: `list`, `len`, and which it's kept as.)
+  titleSong(dt, list = TITLE_SONGS, len = TITLE_SONG_LEN, as = 'title') {
     const c = this.ctx;
-    if (!this.title) this.title = { i: Math.floor(Math.random() * TITLE_SONGS.length), t: 0 };
-    const T = this.title;
-    if (c && c.state === 'running' && this.voice && this.voice.key === TITLE_SONGS[T.i][0]) T.t += dt;
-    if (T.t >= TITLE_SONG_LEN) {
-      T.i = (T.i + 1 + Math.floor(Math.random() * (TITLE_SONGS.length - 1))) % TITLE_SONGS.length;
+    if (!this[as]) this[as] = { i: Math.floor(Math.random() * list.length), t: 0 };
+    const T = this[as];
+    if (c && c.state === 'running' && this.voice && this.voice.key === list[T.i][0]) T.t += dt;
+    if (T.t >= len) {
+      T.i = (T.i + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length;
       T.t = 0;
     }
-    return TITLE_SONGS[T.i][0];
+    return list[T.i][0];
   }
 
   // What's playing on the title (its name), or null.
@@ -1163,7 +1206,9 @@ export class Music {
   update(dt, mood, urgent = false) {
     if (!this.setup()) return;
     if (mood === 'title') mood = this.titleSong(dt);
+    else if (mood === 'workshop') mood = this.titleSong(dt, WORKSHOP_SONGS, WORKSHOP_SONG_LEN, 'ws');
     else this.title = null;
+    if (mood.startsWith('ws_') === false && this.ws) this.ws = null;
     if (!this.voice) {
       this.voice = new Voice(this, mood, urgent ? 0.6 : 2.5);
       return;

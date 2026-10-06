@@ -8,7 +8,7 @@
 // values the mod's graphs read, looks, where on the world map they begin);
 // and for the game's own tabs, which of their rows show, and origins,
 // starting gear and traits of the mod's own.
-import { h, ic, clear, button, field, textInput, numberInput, check, seg, select, chips, panel, toast, contextMenu, colorButton, dialog, dropTarget, prompt } from './kit.js';
+import { h, ic, clear, button, field, textInput, numberInput, check, seg, select, chips, panel, toast, contextMenu, colorButton, dialog, dropTarget, prompt, playSound } from './kit.js';
 import { titleBar, menuButton, refPicker, pickRef, refLabel, refThumb } from './common.js';
 import { CharacterWindow, effectsText } from '../ui/create.js';
 import { drawGrid } from '../ui/ascii.js';
@@ -64,7 +64,8 @@ export default class CharGenTool {
     this.gameTab = null;
     this.row = null;
     this.pick = null;
-    this.ui = { audio: null, mouseCell: { x: -1, y: -1 }, time: 0, close() {}, open() {} };
+    // (Its sounds heard, as a player would hear them: the music dips a moment.)
+    this.ui = { audio: { play: (name) => playSound(name, { duck: 0.5 }) }, mouseCell: { x: -1, y: -1 }, time: 0, close() {}, open() {} };
     this.win = null;
   }
 

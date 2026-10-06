@@ -1124,6 +1124,8 @@ async function openWorkshopApp(o = {}) {
     library: modLib,
     author: accounts.profile ? accounts.profile.name : 'Someone',
     audio,
+    // (Round 64: its own music, dipping under the sounds it plays.)
+    music,
     openMod: playReturn ? playReturn.modId : null,
     openTool: playReturn ? playReturn.tool : null,
     openSel: playReturn ? playReturn.sel : null,
@@ -1361,7 +1363,7 @@ function step(now) {
   if (workshop) {
     input.consume();
     try {
-      music.update(dt, 'title', false);
+      music.update(dt, 'workshop', false);
     } catch {
       // Not now.
     }

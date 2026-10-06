@@ -17,7 +17,7 @@
 // Everything's saved as you go (see ModLibrary). Anything in the explorer
 // can be dragged onto any tool that can use it; right-click it for what
 // else can be done with it.
-import { h, ic, clear, button, field, textInput, colorButton, menu, contextMenu, dialog, confirm, prompt, toast, tooltips, splitter, dragSource, dropTarget, download, pickFile, readText, canvas, overlay, closeMenu, gesture } from './kit.js';
+import { h, ic, clear, button, field, textInput, colorButton, menu, contextMenu, dialog, confirm, prompt, toast, tooltips, splitter, dragSource, dropTarget, download, pickFile, readText, canvas, overlay, closeMenu, gesture, setSoundHost } from './kit.js';
 import { ensurePixelFont } from './pixfont.js';
 import { newMod, freeId, modHash, exportMod, problems as modProblems, KIND_NAMES, COLLECTIONS, composite, cleanName, countThings, newAsset } from '../mod/format.js';
 import { NODES, makeNode, emptyGraph, lint } from '../mod/graph.js';
@@ -125,6 +125,16 @@ export class Workshop {
     this.status = h('div', { class: 'ws-status' });
     const body = h('div', { class: 'ws-body' }, this.explorer, splitter(this.explorer, 'left', 'explorer'), this.stage, splitter(this.inspector, 'right', 'inspector'), this.inspector);
     this.root.append(this.top, body, this.status);
+    // (Round 64) Drawn afresh after a click, the stage and the inspector
+    // keep where they were scrolled to; the tools' names, as many as fit;
+    // sounds heard over the music.
+    this.keepScroll(this.stage);
+    this.keepScroll(this.inspector);
+    this.onResize = () => this.fitTabs();
+    window.addEventListener('resize', this.onResize);
+    // (The pixel lettering, once it's loaded, is another width.)
+    ensurePixelFont().then(() => this.fitTabs());
+    setSoundHost({ play: (name) => this.o.audio?.play(name), duck: (secs) => this.o.music?.duck?.(secs) });
     this.keys = (e) => this.onKey(e);
     window.addEventListener('keydown', this.keys);
     this.beforeUnload = (e) => {
@@ -154,6 +164,8 @@ export class Workshop {
     this.tool?.unmount?.();
     window.removeEventListener('keydown', this.keys);
     window.removeEventListener('beforeunload', this.beforeUnload);
+    window.removeEventListener('resize', this.onResize);
+    setSoundHost(null);
     closeMenu();
     overlay().remove();
     this.root.remove();
@@ -186,6 +198,7 @@ export class Workshop {
       tabs.append(tab);
     }
     this.top.append(tabs);
+    this.tabsEl = tabs;
     const acts = h('div', { class: 'ws-actions' },
       button(null, { icon: 'search', kind: 'ghost', title: 'Find anything in the mod', key: 'Ctrl+K', onClick: () => this.quickOpen() }),
       button(null, { icon: 'undo', kind: 'ghost', title: 'Undo', key: 'Ctrl+Z', onClick: () => this.undo() }),
@@ -193,6 +206,37 @@ export class Workshop {
       button('Export', { icon: 'export', title: 'Save the mod as a file to send to someone (.tmod)', onClick: () => this.exportMod() }),
       button('Playtest', { icon: 'play', kind: 'go', title: 'Try the mod out in a world of its own, then come back here', key: 'F5', onClick: () => this.playtest() }));
     this.top.append(acts);
+    this.fitTabs();
+  }
+
+  // The tools' tabs: all named if they fit; else the one in use only; else
+  // none (icons, with their names on hover).
+  fitTabs() {
+    const t = this.tabsEl;
+    if (!t || !t.isConnected) return;
+    t.classList.remove('compact', 'tight');
+    if (t.scrollWidth > t.clientWidth + 1) t.classList.add('compact');
+    if (t.scrollWidth > t.clientWidth + 1) t.classList.add('tight');
+  }
+
+  // A part of the frame drawn afresh (a panel rebuilt after a click): its
+  // scrolling parts put back where they were, so long as it's still the
+  // same thing open.
+  keepScroll(host) {
+    let memo = null;
+    const key = () => `${this.toolId}|${this.sel ? `${this.sel.kind}:${this.sel.id}` : ''}`;
+    host.addEventListener('scroll', () => {
+      memo = { key: key(), tops: [...host.querySelectorAll('.scroll')].map((el) => [el.className, el.scrollTop]) };
+    }, true);
+    new window.MutationObserver((muts) => {
+      if (!memo || memo.key !== key()) return;
+      const fresh = muts.some((m) => [...m.addedNodes].some((nd) => nd.nodeType === 1 && (nd.classList.contains('scroll') || nd.querySelector('.scroll'))));
+      if (!fresh) return;
+      [...host.querySelectorAll('.scroll')].forEach((el, i) => {
+        const t = memo.tops[i];
+        if (t && t[0] === el.className && t[1] > 0 && el.scrollTop === 0) el.scrollTop = t[1];
+      });
+    }).observe(host, { childList: true, subtree: true });
   }
 
   modIcon(size) {

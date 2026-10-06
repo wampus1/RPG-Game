@@ -14,7 +14,7 @@ export const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 // "{who} saw {what}" with { who, what }.
 export function fill(t, v = {}) {
-  return String(t).replace(/\{(\w+)\}/g, (m, k) => (v[k] !== undefined && v[k] !== null ? String(v[k]) : m));
+  return String(t).replace(/\{([\w-]+)\}/g, (m, k) => (v[k] !== undefined && v[k] !== null ? (typeof v[k] === 'number' ? String(+v[k].toFixed(2)) : String(v[k])) : m));
 }
 export function say(rng, list, v = {}) {
   return fill(pick(rng, list), v);

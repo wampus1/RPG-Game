@@ -281,12 +281,20 @@ function playHere(game, modId, id, pos, ent, follow, loop, scale, key) {
     last: null,
   };
   list.push(inst);
+  inst.cycle = 0;
+  fxHit(game, def, pos);
+  return inst;
+}
+
+// The whole effect's own: its sound, a shake of the screen, a flash (for
+// those near). (Round 64: each time round, too, if it loops and says so:
+// see drawVfx.)
+function fxHit(game, def, pos) {
   const p = game.player;
   const near = p && Math.abs(p.x - pos.x) < 40 && Math.abs(p.z - pos.z) < 30;
   if (def.sound) game.audio?.play(def.sound, pos);
   if (near && def.shake) game.shake = Math.min(1.4, (game.shake || 0) + def.shake * 0.12);
   if (near && def.flash) game.renderer?.flashScreen?.(def.flash, 0.25);
-  return inst;
 }
 
 // (On the renderer, so what's played is told to everyone near: see
@@ -316,6 +324,10 @@ MODS.drawVfx = (r, ctx, game, dt) => {
     if (q.player.done) continue;
     const e = q.ent;
     const rp = e && e.renderPos ? e.renderPos() : e || q.pos;
+    if (q.player.cycle !== q.cycle) {
+      q.cycle = q.player.cycle;
+      if (q.player.def.again !== false) fxHit(game, q.player.def, { x: rp.x, y: rp.y, z: rp.z });
+    }
     const { x, y, z } = rp;
     const [u, v] = r.toView(x, z);
     const sx = u * TILE + 8 - r.camX;

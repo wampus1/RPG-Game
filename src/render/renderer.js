@@ -1007,9 +1007,22 @@ export class Renderer {
     }
   }
 
+  // How see-through a block drawn at (sx, sy) is because it hides the
+  // player, drawn standing at (psx, psy) (the top of the floor they stand
+  // on): by how much of them it covers. (Round 64: it went by how near the
+  // block was, so blocks beside them and a step down, that hid nothing of
+  // them, were drawn half there, and looked darker than they are.)
   fadeFor(sx, sy, psx, psy) {
-    const d = Math.hypot((sx - psx) / 16, (sy + 14 - psy) / 16);
-    return Math.min(1, 0.3 + Math.max(0, d - 0.9) * 0.5);
+    const px0 = psx + 3;
+    const px1 = psx + 13;
+    const py0 = psy - 18;
+    const py1 = psy + 10;
+    const ox = Math.min(px1, sx + TILE) - Math.max(px0, sx);
+    const oy = Math.min(py1, sy + SPR_H) - Math.max(py0, sy);
+    if (ox <= 0 || oy <= 0) return 1;
+    const cover = (ox * oy) / ((px1 - px0) * (py1 - py0));
+    if (cover < 0.22) return 1;
+    return Math.max(0.3, 1 - (cover - 0.1) * 1.1);
   }
 
   // Alpha a block is drawn with because it hides the player (1 = opaque).

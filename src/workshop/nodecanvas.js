@@ -6,7 +6,9 @@
 // Shift-drag (or a drag from empty space with Ctrl) to select several.
 // Right-click for more; Delete, Ctrl+C/V/D as you'd expect; F to see it
 // all.
-import { h, ic, clear, menu, contextMenu, textInput, numberInput, check, colorButton, select, chips, scrubber } from './kit.js';
+import { h, ic, clear, menu, contextMenu, textInput, numberInput, check, colorButton, select, chips, scrubber, soundPicker } from './kit.js';
+import { SOUNDS } from '../mod/nodes.js';
+import { shown } from '../mod/graph.js';
 
 let clip = null;
 
@@ -171,29 +173,39 @@ export class NodeCanvas {
     el.append(head);
     const body = h('div', { class: 'nc-body' });
     const expanded = !!n.open;
-    // Props first (choices), then inputs, then outputs.
+    // (A setting that changes what else it has: the box again, as it is now.)
+    const after = () => {
+      this.changed(n);
+      if (d.dyn) this.refreshNode(n);
+    };
+    const wiredIn = (p) => this.g.links.some((l) => l.to[0] === n.id && l.to[1] === p.id);
+    const wiredOut = (p) => this.g.links.some((l) => l.from[0] === n.id && l.from[1] === p.id);
+    // Props first (choices), then inputs, then outputs (each only if, as
+    // it's set, it has it: see graph.shown).
     for (const p of d.props) {
+      if (!shown(n, p)) continue;
       if (p.adv && !expanded) continue;
       if (p.t === 'multi' && !expanded) {
         const v = (n.p && n.p[p.id]) || p.def || [];
         body.append(h('div', { class: 'nc-row' }, h('span', { class: 'nc-lbl' }, p.label), h('span', { class: 'nc-val' }, v.length ? `${v.length} chosen` : 'none')));
         continue;
       }
-      const w = this.o.propWidget(n, p, () => this.changed(n));
+      const w = this.o.propWidget(n, p, after);
       body.append(h('div', { class: 'nc-row' }, h('span', { class: 'nc-lbl' }, p.label), w));
     }
     for (const p of d.in) {
       if (p.t === 'flow') continue;
-      const wired = this.g.links.some((l) => l.to[0] === n.id && l.to[1] === p.id);
+      const wired = wiredIn(p);
+      if (!wired && !shown(n, p)) continue;
       if (p.adv && !expanded && !wired) continue;
       const row = h('div', { class: 'nc-row in' }, this.port(n, p, false));
       const lbl = h('span', { class: 'nc-lbl', 'data-tip': `${p.label} (${p.t})` }, p.label);
       row.append(lbl);
       if (!wired) {
-        const w = this.o.widget(n, p, () => this.changed(n));
+        const w = this.o.widget(n, p, after);
         if (w) {
           row.append(w);
-          if (p.t === 'number') scrubber(lbl, { get: () => (n.v && n.v[p.id]) ?? p.def ?? 0, set: (v) => {
+          if (p.t === 'number') scrubber(lbl, { get: () => (typeof (n.v && n.v[p.id]) === 'string' ? 0 : (n.v && n.v[p.id]) ?? p.def ?? 0), set: (v) => {
             n.v[p.id] = v;
             if (w.setValue) w.setValue(v);
             this.changed(n, true);
@@ -202,7 +214,7 @@ export class NodeCanvas {
       } else row.append(h('span', { class: 'nc-val wired' }, ic('chevLeft', 8), 'wired'));
       body.append(row);
     }
-    const hasAdv = d.in.some((p) => p.adv) || d.props.some((p) => p.adv || p.t === 'multi');
+    const hasAdv = d.in.some((p) => p.adv && shown(n, p)) || d.props.some((p) => (p.adv || p.t === 'multi') && shown(n, p));
     if (hasAdv) {
       const more = h('div', { class: 'nc-more' }, ic(expanded ? 'chevUp' : 'chevDown', 8), expanded ? 'fewer' : 'more');
       more.addEventListener('click', (e) => {
@@ -212,7 +224,7 @@ export class NodeCanvas {
       });
       body.append(more);
     }
-    const outs = d.out.filter((p) => p.t !== 'flow' || true);
+    const outs = d.out.filter((p) => wiredOut(p) || shown(n, p));
     if (outs.length) {
       const og = h('div', { class: 'nc-outs' });
       for (const p of outs) og.append(h('div', { class: `nc-row out${p.t === 'flow' ? ' flow' : ''}` }, h('span', { class: 'nc-lbl' }, p.label), this.port(n, p, true)));
@@ -815,7 +827,8 @@ function shadeHex(hx, k) {
 // The widget for a value of each kind (inline on a node, or bigger in the
 // inspector).
 export function valueWidget(t, value, onChange, o = {}) {
-  if (t === 'number') return numberInput({ value: value ?? 0, min: o.min, max: o.max, step: o.step, onChange });
+  if (t === 'sound') return soundPicker(o.opts || SOUNDS, value, onChange);
+  if (t === 'number') return numberInput({ value: value ?? 0, min: o.min, max: o.max, step: o.step, onChange, vars: o.vars !== false });
   if (t === 'bool') return check(o.label || '', !!value, onChange);
   if (t === 'color') return colorButton(value || '#ffffff', onChange);
   if (t === 'enum') return select(o.opts.map((x) => (Array.isArray(x) ? x : [x, x])), value, onChange);

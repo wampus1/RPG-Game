@@ -9,7 +9,7 @@
 // Loot tables, layouts (several structures as a hamlet or a camp) and
 // dungeons (a way in and floors below) are edited here too: see
 // buildkinds.js.
-import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, chips, panel, dialog, toast, canvas, textInput, contextMenu, dropTarget, popover, closePopover, colorButton } from './kit.js';
+import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, chips, panel, dialog, toast, canvas, textInput, contextMenu, dropTarget, popover, closePopover, colorButton, soundPicker } from './kit.js';
 import { titleBar, menuButton, refPicker, blockName, biomeOptions } from './common.js';
 import { blockArt, blockIcon, blockGroups, modBlocks } from './blockart.js';
 import { renderVox, pickBlock, pickCell, frameOf, structVox, toView, cellY, T, voxPicture } from './voxview.js';
@@ -1536,7 +1536,7 @@ export default class BuilderTool {
       f.append(check('Only the first time', !!m.once, (v) => set('once', v || null), { tip: 'Otherwise it happens again each time someone walks away and comes back.' }));
       f.append(field('Words', textInput({ long: true, value: m.message || '', placeholder: 'What the player reads (on screen)', onChange: (v) => set('message', v.slice(0, 300)) }), { wide: true }));
       f.append(field('Colour', colorButton(m.color || '#ffe070', (v) => set('color', v))));
-      f.append(field('Sound', select([['', '(none)'], ...SOUNDS.map((s) => [s, s])], m.sound || '', (v) => set('sound', v || null))));
+      f.append(field('Sound', soundPicker(SOUNDS, m.sound || '', (v) => set('sound', v || null), { none: '(none)' })));
       f.append(field('Effect', refPicker(app, 'vfx', m.vfx || null, (v) => set('vfx', v)), { tip: 'An effect of yours, played there.' }));
       f.append(creature('Creatures', 'Brought out when it goes off.'));
       if (m.creature) f.append(num('count', 'How many', 1, 1, 8));

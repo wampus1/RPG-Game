@@ -45,15 +45,43 @@ export const CATS = [];
 // [ports], props: [fields], run(x, n, api), eval(x, n, port, api) }).
 // A port: { id, t (a T), label, def (its value unwired), opts (for a
 // choice), min, max, step, adv (shown in the inspector only) }.
+// (Round 64) A port or prop can have `show`: what the node's settings
+// must be for it to be there at all ({ setting: [values] }, or a function
+// of `get(setting)`): see shown. A node with any such is `dyn`: its box is
+// drawn afresh when a setting changes.
 export function def(type, d) {
   const n = { type, in: [], out: [], props: [], color: '#5a5470', ...d };
   n.inMap = Object.fromEntries(n.in.map((p) => [p.id, p]));
   n.outMap = Object.fromEntries(n.out.map((p) => [p.id, p]));
   n.propMap = Object.fromEntries(n.props.map((p) => [p.id, p]));
+  n.dyn = [...n.in, ...n.out, ...n.props].some((p) => p.show);
   NODES[type] = n;
   if (!CATS.includes(n.cat)) CATS.push(n.cat);
   return n;
 }
+
+// Whether node `n`'s port or prop `p` is there, as its settings are now.
+export function shown(n, p) {
+  const s = p && p.show;
+  if (!s) return true;
+  const d = NODES[n.type];
+  const get = (k) => {
+    if (n.p && n.p[k] !== undefined) return n.p[k];
+    if (n.v && n.v[k] !== undefined) return n.v[k];
+    const q = d && (d.propMap[k] || d.inMap[k]);
+    return q ? q.def : undefined;
+  };
+  if (typeof s === 'function') return !!s(get);
+  return Object.entries(s).every(([k, vals]) => {
+    const v = get(k);
+    if (vals && typeof vals === 'object' && !Array.isArray(vals) && vals.not) return !vals.not.includes(v);
+    return Array.isArray(vals) ? vals.includes(v) : v === vals;
+  });
+}
+
+// (Round 64) Words typed into a field with {names} in them, the names'
+// values put in as the flow runs (set by nodes.js: see fillText).
+export const FILL = { fn: null };
 
 // A new node of a kind, its inputs and props at their defaults.
 let nodeSeq = 0;
@@ -240,7 +268,17 @@ export class Runner {
       return x.locals[`${src[0]}.${src[1]}`];
     }
     const v = n.v ? n.v[port] : undefined;
-    return v !== undefined ? v : NODES[n.type].inMap[port]?.def;
+    const out = v !== undefined ? v : NODES[n.type].inMap[port]?.def;
+    // (A value typed with {a name} in it: the name's value put in; a number
+    // wanted, a number made of it.)
+    if (typeof out === 'string' && out.includes('{') && FILL.fn) {
+      const t = FILL.fn(x, out);
+      const pt = NODES[n.type].inMap[port]?.t;
+      if (pt === 'number') return t.trim() !== '' && !Number.isNaN(+t) ? +t : 0;
+      if (pt === 'bool') return t === 'true' || (t.trim() !== '' && !Number.isNaN(+t) && +t !== 0);
+      return t;
+    }
+    return out;
   }
 
   // An entity's root output fired: `port` of the root (if it's wired).

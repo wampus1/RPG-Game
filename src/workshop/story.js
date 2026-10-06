@@ -11,7 +11,7 @@
 import { h, ic, clear, button, field, numberInput, slider, check, select, panel, toast, textInput, dialog } from './kit.js';
 import { NodeCanvas } from './nodecanvas.js';
 import { titleBar, refPicker } from './common.js';
-import { NODES, CATS, TYPE_COLORS, fits, makeNode } from '../mod/graph.js';
+import { NODES, CATS, TYPE_COLORS, fits, makeNode, shown } from '../mod/graph.js';
 import { MOTIFS } from '../sim/saga/core.js';
 
 const human = (id) => {
@@ -505,6 +505,8 @@ export default class StoryTool {
       this.setP(n, p.id, nv);
       done();
       if (big) this.nc?.refreshNode(n);
+      // (What else it has follows the setting: the inspector too.)
+      if (big && NODES[n.type].dyn) this.drawInspector();
     };
     // (After which of the game's stories, and which of its endings.)
     if (n.type === 'st.start' && p.id === 'after') {
@@ -522,9 +524,9 @@ export default class StoryTool {
       set(nv);
       this.nc?.refreshNode(n);
     }, { create: p.t === 'structure' ? () => this.app.builder((b) => b.newDialog({ open: false })) : p.t === 'story' ? () => this.newStory('blank') : null });
-    if (p.t === 'enum') return select(p.opts.map((x) => [x, x]), v, set);
+    if (p.t === 'enum') return select(p.opts.map((x) => (Array.isArray(x) ? x : [x, x])), v, set);
     if (p.t === 'bool') return check('', !!v, set);
-    if (p.t === 'number') return numberInput({ value: v ?? 0, min: p.min, max: p.max, onChange: set });
+    if (p.t === 'number') return numberInput({ value: v ?? 0, min: p.min, max: p.max, onChange: set, vars: true });
     return textInput({ value: v ?? '', long: !!(p.long && big), onChange: set });
   }
 
@@ -586,27 +588,12 @@ export default class StoryTool {
       const fields = h('div');
       const sv = n.p || {};
       for (const p of d.props) {
-        // (Only what matters for how it's set.)
-        if (n.type === 'st.start') {
-          if (p.id === 'chance' && sv.when && sv.when !== 'now and then') continue;
-          if ((p.id === 'after' || p.id === 'outcome') && sv.when !== 'after a game story ends') continue;
-          if (p.id === 'event' && sv.when !== 'when an event is sent') continue;
-        }
-        if (n.type === 'st.task') {
-          const k = sv.kind || 'bring things';
-          if (p.id === 'item' && !['bring things', 'carry something'].includes(k)) continue;
-          if (p.id === 'creature' && k !== 'slay creatures') continue;
-          if ((p.id === 'spot' || p.id === 'structure') && !['slay creatures', 'go somewhere'].includes(k)) continue;
-          if (p.id === 'to' && !['carry something', 'talk to someone'].includes(k)) continue;
-        }
-        if (n.type === 'st.check' && p.id === 'item' && sv.what !== 'a player in it has') continue;
-        if (n.type === 'st.check' && p.id === 'name' && sv.what !== 'a value is at least') continue;
-        if (n.type === 'st.until' && p.id === 'name' && sv.what === 'a kill') continue;
-        if (n.type === 'st.until' && p.id === 'creature' && sv.what !== 'a kill') continue;
+        // (Only what matters for how it's set: see storynodes' `show`.)
+        if (!shown(n, p)) continue;
         fields.append(field(p.label, this.propWidget(n, p, () => this.nc?.refreshNode(n), true), { wide: p.long }));
       }
       body.append(panel('Settings', fields, { key: 'st-fields' }));
-      if (d.props.some((p) => p.t === 'text')) body.append(h('div', { class: 'panel-b note' }, 'In any words: {town}, {giver}, {other}, {player}, {item}, {count}, {creature}, and values you\'ve set, as {name}.'));
+      if (d.props.some((p) => p.t === 'text')) body.append(h('div', { class: 'panel-b note' }, 'In any words: {town}, {giver}, {other}, {player}, {item}, {count}, {creature}, values the story has set ({name}), and your graphs\' values: {world:name}, {player:name} (a player\'s, and their character screen\'s choices).'));
       if (n.type === 'st.start' && sv.when === 'after a game story ends' && sv.after) {
         loadAbout().then(() => {
           const a = ABOUT.get(sv.after);

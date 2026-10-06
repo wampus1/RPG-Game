@@ -3,7 +3,7 @@
 // done then, and the values handed about. (What a node does in the game it
 // does through SVC, filled in by hooks.js: nothing here reaches into the
 // game itself, so the Workshop can show these without the game loaded.)
-import { def, T } from './graph.js';
+import { def, T, FILL } from './graph.js';
 
 // What the nodes reach the game through (see hooks.js).
 export const SVC = {};
@@ -45,13 +45,27 @@ const who = (x, api, port = 'target') => {
   const v = api.in(port);
   return isEnt(v) ? v : null;
 };
-// (Text with {name} slots: the context's own values put in.)
+// (Text with {name} slots: the context's own values put in. Round 64: any
+// variable's too, by its name ({gold}, {times-met}): the flow's own first,
+// then what's kept on self, the world, the player; or say where, as
+// {world:gold}, {player:class}, {self:count}, {local:n}.)
 export function fillText(x, s) {
-  return String(s ?? '').replace(/\{(\w+)\}/g, (m, k) => {
-    const v = k === 'self' ? x.self && x.self.name : k === 'target' ? x.target && (x.target.name || (x.target.account && x.target.account.name)) : k === 'player' ? SVC.playerName?.(x) : k === 'value' ? x.payload : x.vars[k] ?? x.locals[k];
-    return v === undefined || v === null ? m : String(v);
+  return String(s ?? '').replace(/\{([\w:.-]+)\}/g, (m, k) => {
+    let v;
+    const at = k.indexOf(':');
+    if (at > 0 && ['self', 'world', 'local', 'player'].includes(k.slice(0, at))) v = SVC.getVar?.(x, k.slice(0, at), k.slice(at + 1));
+    else if (k === 'self') v = x.self && x.self.name;
+    else if (k === 'target') v = x.target && (x.target.name || (x.target.account && x.target.account.name));
+    else if (k === 'player') v = SVC.playerName?.(x);
+    else if (k === 'value') v = x.payload;
+    else {
+      v = (x.vars || {})[k] ?? (x.locals || {})[k];
+      if (v === undefined && SVC.getVar && x.game) v = SVC.getVar(x, 'self', k) ?? SVC.getVar(x, 'world', k) ?? SVC.getVar(x, 'player', k);
+    }
+    return v === undefined || v === null ? m : typeof v === 'number' ? String(+v.toFixed(2)) : String(v);
   });
 }
+FILL.fn = fillText;
 
 // ============================================================ templates
 // The roots. `kind`: what the game makes of it (see registry.js).
@@ -318,7 +332,7 @@ act('act.shout', {
 });
 act('act.sound', {
   title: 'Sound', help: 'One of the game\'s sounds, from a place.',
-  in: [ref('at', T.pos, 'At')], props: [pick('sound', 'Sound', SOUNDS, 'chime')],
+  in: [ref('at', T.pos, 'At')], props: [{ id: 'sound', t: 'sound', label: 'Sound', opts: SOUNDS, def: 'chime' }],
   run: (x, nn, api) => {
     SVC.sound(x, api.prop('sound'), where(x, api));
     return 'then';

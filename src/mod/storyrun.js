@@ -15,6 +15,32 @@ import { laidTowns, adults, living, spotNear, townsNear, layoutOf, fill, townMid
 import { mayorOf, alive } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
 import { RNG, hash4, hashString } from '../util/rng.js';
+import { townWeather } from '../world/weather.js';
+
+const DAY_MIN = 24 * 60;
+// (Round 64) Two things compared, as an If or a Wait for one has them:
+// as numbers when both are, else as words (nothing counts as 0).
+export function compareValues(a, op, b) {
+  const asNum = (v) => (typeof v === 'number' ? v : typeof v === 'boolean' ? +v : v === undefined || v === null || String(v).trim() === '' ? null : Number.isNaN(+v) ? null : +v);
+  let na = asNum(a);
+  let nb = asNum(b);
+  const blank = (v) => v === undefined || v === null || String(v).trim() === '';
+  if (na === null && blank(a) && nb !== null) na = 0;
+  if (nb === null && blank(b) && na !== null) nb = 0;
+  const num = na !== null && nb !== null;
+  const sa = String(a ?? '').trim().toLowerCase();
+  const sb = String(b ?? '').trim().toLowerCase();
+  switch (op) {
+    case 'is': case '=': return num ? na === nb : sa === sb;
+    case 'is not': case '≠': return num ? na !== nb : sa !== sb;
+    case 'is at least': case '≥': return num ? na >= nb : sa >= sb;
+    case 'is more than': case '>': return num ? na > nb : sa > sb;
+    case 'is at most': case '≤': return num ? na <= nb : sa <= sb;
+    case 'is less than': case '<': return num ? na < nb : sa < sb;
+    case 'has in it': return sa.includes(sb);
+    default: return false;
+  }
+}
 
 const JOBS = {
   'the innkeeper': ['innkeeper', 'barkeep'], 'the priest': ['priest'], 'a smith': ['blacksmith', 'smith'], 'a cook': ['cook', 'baker'],
@@ -78,8 +104,33 @@ export function compileStory(mod, story) {
     const l = g.links.find((q) => q.from[0] === nid && q.from[1] === port);
     return l && byId.has(l.to[0]) ? l.to[0] : null;
   };
+  // (Round 64) A player in it, and their character (its traits, where
+  // they came from, the values the mod's graphs keep with them).
+  const inIt = (th, S) => {
+    const ids = players(th, S);
+    return S.players().filter((q) => ids.includes(q.pid));
+  };
+  const heroOf = (S, p) => (S.game.asPlayer ? S.game.asPlayer(p, () => S.game.hero) : S.game.hero) || null;
+  // A value kept by the story ({name}), the world's ({world:name}) or a
+  // player's in it ({player:name}: the first of them, or this one).
+  const valueOf = (th, S, scope, name, p = null) => {
+    const k = String(name ?? '').replace(/^\{|\}$/g, '');
+    if (scope === 'world') return ((S.game.modState || {}).vars || {})[`${mod.id}:${k}`];
+    if (scope === 'player') {
+      const q = p || inIt(th, S)[0]?.p || S.game.player;
+      const h = q ? heroOf(S, q) : null;
+      return h && h.modFlags ? h.modFlags[`${mod.id}:${k}`] : undefined;
+    }
+    return th.vars[k];
+  };
+  // Words with {world:name} and {player:name} in them, those put in.
+  const scoped = (th, S, text, p = null) => String(text ?? '').replace(/\{(world|player|story):([\w.-]+)\}/g, (m, sc, k) => {
+    const x = valueOf(th, S, sc, k, p);
+    return x === undefined || x === null ? '' : typeof x === 'number' ? String(+x.toFixed(2)) : String(x);
+  });
   // Its words, with what's in them filled in.
   const words = (th, S, text, n = null) => {
+    text = scoped(th, S, text);
     const v = (n && n.p) || {};
     const it = ref(mod, v.item);
     const cr = ref(mod, v.creature);
@@ -123,6 +174,110 @@ export function compileStory(mod, story) {
     const placed = (th.vars._places || []).find((q) => q.x !== undefined);
     if (placed && spot === 'out near the town') return { x: placed.x, z: placed.z };
     return spotNear(S, c.x, c.z, spot === 'far out in the wilds' ? 90 : 40, spot === 'far out in the wilds' ? 160 : 80, rng, { clear: 12, flat: 1 }) || { x: c.x + 50, z: c.z };
+  };
+  // (Round 64) Whether an If's so, as things stand. Fields compared can
+  // have values in them ({name}, {world:name}, {player:name}).
+  const check = (th, S, v) => {
+    const w = v.what || 'a player in it has';
+    const ps = () => inIt(th, S);
+    const town = th.sid !== null && th.sid !== undefined ? S.game.world.ow.settlements[th.sid] : null;
+    const hour = (S.now / 60) % 24;
+    const least = +(v.least ?? v.count ?? 1) || 0;
+    const fillv = (t) => words(th, S, String(t ?? ''));
+    switch (w) {
+      case 'a player in it has': {
+        const it = ref(mod, v.item);
+        return ps().some(({ p }) => p.inv.reduce((s, q) => s + (q && q.item === it ? q.count : 0), 0) >= (v.count ?? 1));
+      }
+      case 'a player in it holds': {
+        const it = ref(mod, v.item);
+        return ps().some(({ p }) => (p.heldItem ? p.heldItem() : null) === it);
+      }
+      case 'a player in it wears': {
+        const it = ref(mod, v.item);
+        return ps().some(({ p }) => Object.values(p.equip || {}).includes(it));
+      }
+      case 'a player in it is hurt':
+        return ps().some(({ p }) => (100 * Math.max(0, p.hp)) / Math.max(1, p.maxHp) < (+v.pct || 50));
+      case 'a player in it is near': {
+        let at = null;
+        if (v.whom === 'the town') at = town ? townMid(town) : null;
+        else if (v.whom === 'where a task is') at = (th.tasks || []).map((t) => t.at).find(Boolean) || null;
+        else {
+          const r = th.cast[v.whom === 'the other' ? 'other' : 'giver'];
+          const e = r ? resolve(S, r) : null;
+          at = e && e.x !== undefined ? e : null;
+        }
+        const d = +v.dist || 8;
+        return !!at && ps().some(({ p }) => Math.hypot(p.x - at.x, p.z - at.z) <= d);
+      }
+      case 'a player in it is famous':
+        return players(th, S).some((pid) => (S.person(pid).fame || 0) >= least);
+      case 'the giver thinks well of a player in it': {
+        const g = th.cast.giver;
+        if (!g || g.t !== 'rec' || !S.sim.repEntry) return false;
+        return S.sim.repEntry(g.sid, g.idx).v + (S.sim.areaMod ? S.sim.areaMod(g.sid) : 0) >= least;
+      }
+      case 'a player in it has the trait':
+        return ps().some(({ p }) => {
+          const h = heroOf(S, p);
+          if (!h) return false;
+          if (v.trait === 'mod') return (h.modTraits || []).some((k) => k === gameKey(mod.id, v.traitId || '') || String(k).endsWith(`:${v.traitId}`));
+          return (h.traits || []).includes(v.trait || 'tough');
+        });
+      case 'a player in it came as':
+        return ps().some(({ p }) => {
+          const h = heroOf(S, p);
+          if (!h) return false;
+          if (v.origin === 'mod') return !!h.modOrigin && (h.modOrigin === gameKey(mod.id, v.originId || '') || String(h.modOrigin).endsWith(`:${v.originId}`));
+          return !h.modOrigin && h.origin === (v.origin || 'crash');
+        });
+      case 'players in it are at least':
+        return ps().length >= least;
+      case 'the giver is alive':
+        return !!th.cast.giver && isAlive(S, th.cast.giver);
+      case 'the other is alive':
+        return !!th.cast.other && isAlive(S, th.cast.other);
+      case 'it is night':
+        return !!(S.sim.isNight ? S.sim.isNight() : hour < 6 || hour >= 20);
+      case 'it is day':
+        return !(S.sim.isNight ? S.sim.isNight() : hour < 6 || hour >= 20);
+      case 'the hour is between': {
+        const a = +v.from || 0;
+        const b = +v.to || 0;
+        return a <= b ? hour >= a && hour < b : hour >= a || hour < b;
+      }
+      case 'days since it began are at least':
+        return (S.now - (th.born ?? S.now)) / DAY_MIN >= least;
+      case 'the weather is': {
+        const k = town ? townWeather(S.game.seed, town, S.now) : S.game.weather?.kind || 'clear';
+        return v.sky === 'rain or snow' || !v.sky ? k === 'rain' || k === 'snow' : k === v.sky;
+      }
+      case 'the town is a':
+        return !!town && town.type === (v.size || 'village');
+      case 'the town is on':
+        return !!town && String(town.island || '').toLowerCase() === String(v.isle || 'Thessa').toLowerCase();
+      case 'the town is at war':
+        return !!town && !!S.sim.war && !!S.sim.war.atWar && S.sim.war.atWar(town.civ);
+      case 'a value is at least':
+        return (+valueOf(th, S, 'story', v.name) || 0) >= (v.count ?? 1);
+      case 'a value is':
+        return compareValues(valueOf(th, S, 'story', v.name), v.op || 'is at least', fillv(v.value));
+      case 'a world value is':
+        return compareValues(valueOf(th, S, 'world', v.name), v.op || 'is at least', fillv(v.value));
+      case 'a player value is':
+        return ps().some(({ p }) => compareValues(valueOf(th, S, 'player', v.name, p), v.op || 'is at least', fillv(v.value)));
+      case 'these compare':
+        return compareValues(fillv(v.left), v.op || 'is', fillv(v.value));
+      case 'by chance':
+        return S.rng(th, hashString(`${th.node}:${S.now}`)).next() * 100 < (v.chance ?? 50);
+      case 'another story of yours is going': {
+        const k = v.story ? gameKey(mod.id, v.story) : null;
+        return !!k && S.live().some((t) => t !== th && t.m === k);
+      }
+      default:
+        return false;
+    }
   };
   // Every beat of the story, a node of its own.
   const nodes = {};
@@ -209,26 +364,11 @@ export function compileStory(mod, story) {
         };
         break;
       case 'st.check':
-        node.enter = (th, S) => {
-          let ok = false;
-          const w = v.what;
-          if (w === 'a player in it has') {
-            const it = ref(mod, v.item);
-            ok = players(th, S).some((pid) => {
-              const p = S.players().find((q) => q.pid === pid)?.p;
-              return p && p.inv.reduce((s, q) => s + (q && q.item === it ? q.count : 0), 0) >= (v.count ?? 1);
-            });
-          } else if (w === 'the giver is alive') ok = !!th.cast.giver && isAlive(S, th.cast.giver);
-          else if (w === 'the other is alive') ok = !!th.cast.other && isAlive(S, th.cast.other);
-          else if (w === 'it is night') ok = !!(S.sim.isNight ? S.sim.isNight() : ((S.now / 60) % 24 < 6 || (S.now / 60) % 24 >= 20));
-          else if (w === 'a value is at least') ok = (+th.vars[v.name] || 0) >= (v.count ?? 1);
-          else if (w === 'a player in it is famous') ok = players(th, S).some((pid) => (S.person(pid).fame || 0) >= (v.count ?? 1));
-          on(th, S, n.id, ok ? 'yes' : 'no');
-        };
+        node.enter = (th, S) => on(th, S, n.id, check(th, S, v) ? 'yes' : 'no');
         break;
       case 'st.set':
         node.enter = (th, S) => {
-          const k = String(v.name || 'value').replace(/[^a-z0-9_]/gi, '');
+          const k = String(v.name || 'value').replace(/[^\w-]/g, '');
           th.vars[k] = v.op === 'set' ? +v.value || 0 : (+th.vars[k] || 0) + (+v.value || 0);
           on(th, S, n.id, 'next');
         };
@@ -261,17 +401,48 @@ export function compileStory(mod, story) {
           on(th, S, n.id, 'next');
         };
         break;
-      case 'st.until':
+      case 'st.until': {
+        const what = v.what || 'an event';
         node.on = {
           mod_event: (th, ev, S) => {
-            if (v.what !== 'a kill' && ev.name === v.name) on(th, S, n.id, 'next');
+            if (what === 'an event' && ev.name === v.name) on(th, S, n.id, 'next');
           },
           kill: (th, ev, S) => {
-            if (v.what === 'a kill' && ev.species && ev.species === ref(mod, v.creature)) on(th, S, n.id, 'next');
+            if (what !== 'a kill' || !ev.species || ev.species !== ref(mod, v.creature)) return;
+            // (So many of them: counted while it waits.)
+            const k = `_k${n.id}`;
+            th.vars[k] = (th.vars[k] || 0) + 1;
+            if (th.vars[k] >= Math.max(1, +v.count || 1)) {
+              delete th.vars[k];
+              on(th, S, n.id, 'next');
+            }
           },
         };
+        // (Round 64) A value come to something; an hour of the day come round.
+        const ready = (th, S) => {
+          if (what === 'a value') {
+            const m = /^\{?(?:(world|player|story):)?([\w.-]+)\}?$/.exec(String(v.value || '').trim());
+            const cur = m ? valueOf(th, S, m[1] || 'story', m[2]) : undefined;
+            if (m && m[1] === 'player') return inIt(th, S).some(({ p }) => compareValues(valueOf(th, S, 'player', m[2], p), v.op || 'is at least', words(th, S, String(v.than ?? ''))));
+            return compareValues(cur, v.op || 'is at least', words(th, S, String(v.than ?? '')));
+          }
+          if (what === 'a time of day') return Math.floor((S.now / 60) % 24) === Math.floor(+v.hour || 0);
+          return false;
+        };
+        if (what === 'a value' || what === 'a time of day') {
+          node.live = (th, S) => {
+            raisePending(th, S, mod);
+            if (ready(th, S)) on(th, S, n.id, 'next');
+          };
+          node.hour = node.live;
+          // (Far from anyone, a day goes by at a time: the hour's been and gone.)
+          node.day = (th, S) => {
+            if (what === 'a time of day' || ready(th, S)) on(th, S, n.id, 'next');
+          };
+        }
         node.fade = 60;
         break;
+      }
       case 'st.story':
         node.enter = (th, S) => {
           if (v.story && mod.stories[v.story]) S.spawn(th, gameKey(mod.id, v.story), { sid: th.sid, cast: th.cast, vars: {} });

@@ -465,12 +465,17 @@ textarea.inp { height: auto; min-height: 64px; padding: 6px 8px; resize: vertica
 .dg-down { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--dim); font-size: 11px; padding: 8px 0; }
 .dg-boss { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 12px; padding: 10px; border: 2px solid #5a2030; background: #1e0e14; color: #ff90a8; }
 
-/* (Narrower screens: the tools' names only on the one in use.) */
+/* (Round 64: as many tools' names as fit, measured: the rest, the one in
+   use only; then not even that. See Workshop.fitTabs.) */
+.ws-tabs.compact .ws-tab:not(.on) .nm { display: none; }
+.ws-tabs.compact .ws-tab { padding: 0 9px; }
+.ws-tabs.tight .ws-tab { padding: 0 6px; gap: 4px; }
+.ws-tabs.tight .ws-tab.on .nm { display: none; }
 @media (max-width: 1560px) {
-  .ws-tab:not(.on) .nm { display: none; }
-  .ws-tab { padding: 0 9px; }
   .ws-modpick { min-width: 150px; }
 }
+.sound-pick { display: flex; gap: 3px; align-items: center; min-width: 0; }
+.sound-pick > select { flex: 1; min-width: 0; }
 @media (max-width: 1100px) {
   .ws-actions .btn span { display: none; }
   .ws-actions .btn { width: 28px; padding: 0; }

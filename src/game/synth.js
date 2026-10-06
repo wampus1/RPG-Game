@@ -476,6 +476,8 @@ export const LOUD = {
   // (Round 49: the fights' and the cutscenes' own.)
   cello: 0.82, dist: 0.95, chant: 0.93, screech: 3.4, warhorn: 0.53, braam: 0.78, reese: 0.77, twang: 1.5, crushed: 2.4, abyss: 0.68,
   didge: 1.57, celesta: 1.6, dulcimer: 1, fiddle: 1.65, theremin: 0.64, musicbox: 1.75,
+  // (Round 64: the Workshop's.)
+  vibes: 1.35, handpan: 1.5, bowl: 1.6, breath: 1.1, felt: 1.15,
 };
 
 // --- the instruments ------------------------------------------------------
@@ -1150,6 +1152,91 @@ export const PATCH = {
   musicbox(R, ch, fs, t, dur, v) {
     const ringT = clamp(dur * 1.5, 0.5, 1.1);
     each(fs, (f) => R.partials(ch, f, t, [[1, 1, ringT], [3, 0.25, ringT * 0.25], [5.4, 0.18, 0.05]], 0.06 * v));
+  },
+
+  // --- the Workshop's own (round 64): soft, slow, for working by ---
+  // A vibraphone: a round bar and its fourth partial, the fans in its
+  // tubes beating it gently as it rings.
+  vibes(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2.6, 1.4, 3.6);
+    const end = t + ringT + 0.1;
+    const g = R.gain(0);
+    R.perc(g.gain, t, 0.075 * v, 0.004, ringT);
+    const trem = R.gain(0.75);
+    const lfo = R.osc('sine', 4.6, t, end);
+    lfo.connect(R.gain(0.25)).connect(trem.gain);
+    each(fs, (f) => {
+      R.osc('sine', f, t, end).connect(g);
+      if (f * 4 < 9000) {
+        const o4 = R.gain(0);
+        R.perc(o4.gain, t, 0.022 * v, 0.003, ringT * 0.18);
+        R.osc('sine', f * 4, t, t + ringT * 0.3).connect(o4).connect(trem);
+      }
+    });
+    g.connect(trem).connect(ch);
+  },
+
+  // A handpan: a tuned steel dome, its note and the octave and the twelfth
+  // over it, soft-struck by a hand, a breath of the shell under it.
+  handpan(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 2.2, 1.2, 3);
+    each(fs, (f) => {
+      R.partials(ch, f, t, [[1, 1, ringT], [2, 0.42, ringT * 0.6], [3.01, 0.16, ringT * 0.35], [0.5, 0.12, ringT * 0.4]], 0.05 * v);
+      R.chiff(ch, f * 2, t, 0.008 * v, 0.05);
+    });
+  },
+
+  // A singing bowl: struck, its partials (not in tune with one another)
+  // ringing on and on, each a hair out against its twin so it slowly
+  // beats.
+  bowl(R, ch, fs, t, dur, v) {
+    const ringT = clamp(dur * 3, 3, 8);
+    each(fs, (f) => {
+      for (const [r, a, k] of [[1, 1, 1], [2.71, 0.38, 0.6], [5.15, 0.14, 0.35]]) {
+        if (f * r > 10000) continue;
+        for (const det of [-1.2, 1.2]) {
+          const x = R.osc('sine', f * r + det, t, t + ringT * k + 0.05);
+          const g = R.gain(0);
+          R.perc(g.gain, t, 0.03 * v * a, 0.01, ringT * k);
+          x.connect(g).connect(ch);
+        }
+      }
+    });
+  },
+
+  // A breath: air through a pipe that isn't quite there, a soft sine under
+  // the hiss, swelling in slowly and dying away slow.
+  breath(R, ch, fs, t, dur, v) {
+    const a = clamp(dur * 0.4, 0.4, 2);
+    const end = t + Math.max(a, dur) + 1.6;
+    const g = R.gain(0);
+    R.adsr(g.gain, t, dur, 0.05 * v, a, 1, 0.8, 1.5);
+    each(fs, (f) => {
+      const n = R.noise(t, end);
+      const bp = R.filter('bandpass', f * 2, 22);
+      n.connect(bp).connect(R.gain(1.6)).connect(g);
+      R.osc('sine', f, t, end, (R.rand() - 0.5) * 8).connect(R.gain(0.35)).connect(g);
+    });
+    g.connect(ch);
+  },
+
+  // A felt piano: the hammers padded, so the note's soft and dark from the
+  // start, a little thump of the felt on it, ringing a while.
+  felt(R, ch, fs, t, dur, v) {
+    const ringT = 1.4 + clamp((520 - fs[0]) / 260, 0, 1.6);
+    const end = t + Math.min(dur, ringT * 1.4) + 0.5;
+    const flt = R.filter('lowpass', 1100, 0.5);
+    flt.frequency.setValueAtTime(1400 + 600 * clamp(v, 0, 1), t);
+    flt.frequency.setTargetAtTime(Math.max(380, fs[0] * 1.6), t + 0.01, 0.35);
+    const g = R.gain(0);
+    R.ring(g.gain, t, dur, 0.08 * v, ringT, 0.45);
+    each(fs, (f) => {
+      R.osc('triangle', f, t, end, -3).connect(flt);
+      R.osc('sine', f, t, end, 3).connect(flt);
+      R.osc('sine', f * 2, t, end).connect(R.gain(0.18)).connect(flt);
+    });
+    flt.connect(g).connect(ch);
+    R.chiff(ch, Math.min(900, fs[0] * 1.5), t, 0.01 * v, 0.03);
   },
 };
 

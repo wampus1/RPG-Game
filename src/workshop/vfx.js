@@ -7,7 +7,7 @@
 // from the explorer to add it, and bake the whole into pixel art frames
 // for the Pixel tool. The game plays effects with the same code
 // (mod/vfx.js), so what's seen here is what's seen there.
-import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, toast, canvas, textInput, dropTarget, colorButton, menu, dialog } from './kit.js';
+import { h, ic, clear, button, group, field, numberInput, slider, check, seg, select, panel, toast, canvas, textInput, dropTarget, colorButton, menu, dialog, soundPicker, playSound } from './kit.js';
 import { titleBar, menuButton, refPicker, quantize } from './common.js';
 import { VfxPlayer, newLayer, EMITTER_PRESETS, LOOKS, SHAPES, EASES, TRACKS, trackAt } from '../mod/vfx.js';
 import { SOUNDS } from '../mod/nodes.js';
@@ -213,10 +213,23 @@ export default class VfxTool {
     return art;
   }
 
+  // (Round 64: it loops only if the effect does, and the whole effect's
+  // shake, flash and sound play as it starts: see fired.)
   rebuildPlayer() {
     const t = this.player ? this.player.t : 0;
-    this.player = new VfxPlayer(this.fx, { art: (aid) => this.art(aid), loop: true, seed: 7 });
-    this.player.seek(t);
+    const wasDone = this.player && this.player.done;
+    this.player = new VfxPlayer(this.fx, { art: (aid) => this.art(aid), loop: !!this.fx.loop, seed: 7 });
+    this.player.seek(wasDone ? 0 : t);
+    this.firedCycle = this.player.cycle;
+  }
+
+  // The whole effect's own, at its start (and each time round, if it loops
+  // and says so): its sound heard, the view shaken, a flash.
+  fired() {
+    const f = this.fx;
+    if (f.sound) playSound(f.sound, { duck: Math.max(1.2, +f.dur || 1) });
+    if (f.shake) this.shakeV = Math.min(1.4, (this.shakeV || 0) + f.shake * 0.12);
+    if (f.flash) this.flashV = { color: f.flash, t: 0.25 };
   }
 
   // ------------------------------------------------------------ the screen
@@ -286,8 +299,25 @@ export default class VfxTool {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       if (this.playing && this.player) {
-        this.player.step(dt * this.speed);
+        const P = this.player;
+        // (Just begun, or round again: the effect's own.)
+        if (this.firedCycle === -1 || (P.cycle !== this.firedCycle && this.fx.again !== false)) {
+          this.firedCycle = P.cycle;
+          this.fired();
+        }
+        this.firedCycle = P.cycle;
+        P.step(dt * this.speed);
         this.movePlayhead();
+        // (Played out, not looping: it stops at the end. Play: again.)
+        if (P.done) {
+          this.playing = false;
+          this.drawPlayBtn();
+        }
+      }
+      if (this.shakeV > 0) this.shakeV = Math.max(0, this.shakeV - dt * 3.6);
+      if (this.flashV) {
+        this.flashV.t -= dt;
+        if (this.flashV.t <= 0) this.flashV = null;
       }
       this.draw();
     };
@@ -309,8 +339,12 @@ export default class VfxTool {
   }
 
   togglePlay() {
+    // (Played out: from the start.)
+    if (!this.playing && this.player && (this.player.done || (!this.fx.loop && this.player.t >= this.player.dur))) return this.restart();
     this.playing = !this.playing;
+    if (this.playing && this.player && this.player.t < 0.02) this.firedCycle = -1;
     this.drawPlayBtn();
+    return null;
   }
 
   drawPlayBtn() {
@@ -322,6 +356,7 @@ export default class VfxTool {
   restart() {
     this.player.reset();
     this.playing = true;
+    this.firedCycle = -1;
     this.drawPlayBtn();
   }
 
@@ -346,7 +381,9 @@ export default class VfxTool {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#08060b';
     ctx.fillRect(0, 0, this.cv.width, this.cv.height);
-    ctx.setTransform(z * dpr, 0, 0, z * dpr, 0, 0);
+    // (Shaken, as the game shakes the screen.)
+    const sk = this.shakeV > 0 ? this.shakeV * 4 * z * dpr : 0;
+    ctx.setTransform(z * dpr, 0, 0, z * dpr, sk ? (Math.random() - 0.5) * sk : 0, sk ? (Math.random() - 0.5) * sk : 0);
     ctx.imageSmoothingEnabled = false;
     const W = Math.ceil(this.cw / z);
     const H = Math.ceil(this.ch / z);
@@ -399,7 +436,16 @@ export default class VfxTool {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.fillRect(A.x - 3, A.y, 7, 1 / z);
     ctx.fillRect(A.x, A.y - 3, 1 / z, 7);
-    this.hud.textContent = `${this.player.t.toFixed(2)}s / ${(+this.fx.dur || 1).toFixed(2)}s${this.fx.loop ? ' · loops' : ''}`;
+    // (A flash over it all, fading.)
+    if (this.flashV) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = Math.max(0, Math.min(1, this.flashV.t / 0.25)) * 0.7;
+      ctx.fillStyle = this.flashV.color;
+      ctx.fillRect(0, 0, this.cv.width, this.cv.height);
+      ctx.globalAlpha = 1;
+    }
+    const P = this.player;
+    this.hud.textContent = `${P.t.toFixed(2)}s / ${(+this.fx.dur || 1).toFixed(2)}s${this.fx.loop ? ' · loops' : P.done ? ' · played (Enter: again)' : ' · once'}`;
   }
 
   bindCanvas() {
@@ -517,10 +563,24 @@ export default class VfxTool {
     clear(body);
     const f = this.fx;
     body.append(field('Lasts', slider({ value: f.dur ?? 1.2, min: 0.1, max: 10, step: 0.05, onChange: (v) => this.set((x) => (x.dur = v)) }), { tip: 'Seconds (each time round, if it loops).' }));
-    body.append(check('Loops (an aura, a lasting fire)', !!f.loop, (v) => this.set((x) => (x.loop = v))));
-    body.append(field('Shakes the screen', slider({ value: f.shake || 0, min: 0, max: 10, int: true, onChange: (v) => this.set((x) => (x.shake = v), { timeline: false }) })));
-    body.append(field('Flash', h('div', { class: 'row', style: { gap: '6px' } }, check('', !!f.flash, (v) => this.set((x) => (x.flash = v ? '#ffffff' : null), { timeline: false })), colorButton(f.flash || '#ffffff', (v) => this.set((x) => (x.flash = v), { timeline: false })))));
-    body.append(field('Sound', select([['', '(none)'], ...SOUNDS.map((s) => [s, s])], f.sound || '', (v) => this.set((x) => (x.sound = v || null), { timeline: false }))));
+    body.append(check('Loops (an aura, a lasting fire)', !!f.loop, (v) => {
+      this.set((x) => (x.loop = v));
+      this.drawFx();
+      this.restart();
+    }));
+    if (f.loop) body.append(check('Sound, shake and flash each time round', f.again !== false, (v) => this.set((x) => (x.again = v), { timeline: false }), { tip: 'Off: only as it begins.' }));
+    body.append(field('Shakes the screen', slider({ value: f.shake || 0, min: 0, max: 10, int: true, onChange: (v) => {
+      this.set((x) => (x.shake = v), { timeline: false });
+      if (v) this.shakeV = Math.min(1.4, v * 0.12);
+    } })));
+    body.append(field('Flash', h('div', { class: 'row', style: { gap: '6px' } }, check('', !!f.flash, (v) => {
+      this.set((x) => (x.flash = v ? '#ffffff' : null), { timeline: false });
+      if (v) this.flashV = { color: '#ffffff', t: 0.25 };
+    }), colorButton(f.flash || '#ffffff', (v) => {
+      this.set((x) => (x.flash = v), { timeline: false });
+      this.flashV = { color: v, t: 0.25 };
+    }))));
+    body.append(field('Sound', soundPicker(SOUNDS, f.sound || '', (v) => this.set((x) => (x.sound = v || null), { timeline: false }), { none: '(none)' })));
   }
 
   // ------------------------------------------------------------ a layer's settings

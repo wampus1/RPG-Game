@@ -100,6 +100,45 @@ const gestureEnd = () => {
   gesture.on = false;
 };
 
+// ------------------------------------------------------------ sounds
+// (Round 64) The game's sounds, heard in the Workshop (a sound picked, an
+// effect previewed): the Workshop's music dips under them a moment. Set
+// by the app (see app.js): { play(name), duck(secs) }.
+let soundHost = null;
+export function setSoundHost(o) {
+  soundHost = o;
+}
+export function playSound(name, o = {}) {
+  if (!name || !soundHost) return;
+  try {
+    soundHost.play(name);
+    soundHost.duck?.(o.duck ?? 1.4);
+  } catch {
+    // (No sound to be had: fine.)
+  }
+}
+// A choice of one of the game's sounds, with a button to hear it (and
+// each heard as it's picked).
+export function soundPicker(sounds, value, onChange, o = {}) {
+  const list = [...(o.none ? [['', o.none]] : []), ...sounds.map((x) => (Array.isArray(x) ? x : [x, x]))];
+  let v = value ?? '';
+  const sel = select(list, v, (nv) => {
+    v = nv;
+    if (nv) playSound(nv);
+    onChange(nv);
+  });
+  const hear = button(null, { icon: 'play', small: true, kind: 'ghost', title: 'Hear it', onClick: (e) => {
+    e.stopPropagation();
+    playSound(v || sel.value);
+  } });
+  const el = h('div', { class: 'sound-pick' }, sel, hear);
+  el.setValue = (nv) => {
+    v = nv ?? '';
+    sel.value = v;
+  };
+  return el;
+}
+
 // ------------------------------------------------------------ buttons
 // button('Save', { icon: 'save', kind: 'primary', title, key, onClick })
 export function button(label, o = {}) {
@@ -159,11 +198,18 @@ export function textInput(o = {}) {
   return el;
 }
 
+// (`o.vars`: a {variable} may be typed instead of a number: see
+// graph.FILL.)
 export function numberInput(o = {}) {
   const el = h('input', { class: 'inp num', type: 'text', inputmode: 'decimal' });
-  const fmt = (v) => (Number.isInteger(v) ? String(v) : String(+(+v).toFixed(3)));
+  const fmt = (v) => (typeof v === 'string' ? v : Number.isInteger(v) ? String(v) : String(+(+v).toFixed(3)));
   el.value = fmt(o.value ?? 0);
+  if (o.vars) el.dataset.tip = 'A number, or a {variable}';
   const commit = () => {
+    if (o.vars && el.value.includes('{')) {
+      o.onChange?.(el.value.trim().slice(0, 60));
+      return;
+    }
     let v = parseFloat(el.value);
     if (Number.isNaN(v)) v = o.value ?? 0;
     if (o.min !== undefined) v = Math.max(o.min, v);

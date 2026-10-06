@@ -68,7 +68,10 @@ export default class WorldTool {
   mount(stage, insp) {
     this.stage = stage;
     this.insp = insp;
-    this.onResize = () => this.paint();
+    this.onResize = () => {
+      this.rect = null;
+      this.paint();
+    };
     window.addEventListener('resize', this.onResize);
     window.addEventListener('ws-resize', this.onResize);
     if (this.id && this.w) this.open('worlds', this.id);
@@ -273,8 +276,13 @@ export default class WorldTool {
       }
       return rgb.get(hex);
     };
+    // (Each square's biome kept: the letters close up, and what's under
+    // the pointer, read from here rather than worked out again.)
+    const keys = (this.biomeKeys = new Array(MAP_W * MAP_H));
+    this.mapSerial = (this.mapSerial || 0) + 1;
     for (let cz = 0; cz < MAP_H; cz++) for (let cx = 0; cx < MAP_W; cx++) {
       const b = ow.mapBiome(cx, cz);
+      keys[cz * MAP_W + cx] = b;
       const i = (cz * MAP_W + cx) * 4;
       let k;
       if (b === 'ocean') {
@@ -296,6 +304,7 @@ export default class WorldTool {
   build() {
     const app = this.app;
     clear(this.stage);
+    this.rect = null;
     const tb = titleBar(app, 'worlds', this.id);
     this.nameEl = tb.querySelector('.title input');
     this.seedIn = textInput({ value: String(this.seed), max: 10, onChange: (v) => {
@@ -363,19 +372,27 @@ export default class WorldTool {
   }
 
   fitK() {
-    const r = this.wrap ? this.wrap.getBoundingClientRect() : { width: 960, height: 720 };
+    const r = this.wrap ? this.view() : { width: 960, height: 720 };
     return Math.max(1, Math.min((r.width - 16) / MAP_W, (r.height - 16) / MAP_H));
   }
 
   // Map squares (fractional) <-> the canvas's own pixels.
+  // (The view's size, as it was when last drawn: asking the page for it
+  // each time, thousands of times a frame, was what made it crawl.)
+  view() {
+    return this.rect || (this.rect = this.wrap.getBoundingClientRect());
+  }
+
   toScreen(cx, cz) {
-    const r = this.wrap.getBoundingClientRect();
-    return [r.width / 2 + (cx - this.cam.x) * this.k, r.height / 2 + (cz - this.cam.z) * this.k];
+    const r = this.view();
+    const k = this.k;
+    return [r.width / 2 + (cx - this.cam.x) * k, r.height / 2 + (cz - this.cam.z) * k];
   }
 
   toMap(px, py) {
-    const r = this.wrap.getBoundingClientRect();
-    return [this.cam.x + (px - r.width / 2) / this.k, this.cam.z + (py - r.height / 2) / this.k];
+    const r = this.view();
+    const k = this.k;
+    return [this.cam.x + (px - r.width / 2) / k, this.cam.z + (py - r.height / 2) / k];
   }
 
   zoomBy(d, at) {
@@ -395,13 +412,24 @@ export default class WorldTool {
     this.paint();
   }
 
+  // Drawn again, once, in the next frame (however many times it's asked).
   paint() {
+    if (this.paintQ) return;
+    this.paintQ = window.requestAnimationFrame(() => {
+      this.paintQ = 0;
+      this.paintNow();
+    });
+  }
+
+  paintNow() {
     const cv = this.cv;
-    if (!cv || !this.wrap) return;
-    const r = this.wrap.getBoundingClientRect();
+    if (!cv || !this.wrap || !this.wrap.isConnected) return;
+    const r = (this.rect = this.wrap.getBoundingClientRect());
     const dpr = window.devicePixelRatio || 1;
-    cv.width = Math.max(1, Math.round(r.width * dpr));
-    cv.height = Math.max(1, Math.round(r.height * dpr));
+    const W = Math.max(1, Math.round(r.width * dpr));
+    const H = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width !== W) cv.width = W;
+    if (cv.height !== H) cv.height = H;
     const x = cv.getContext('2d');
     x.setTransform(dpr, 0, 0, dpr, 0, 0);
     x.imageSmoothingEnabled = false;
@@ -433,32 +461,78 @@ export default class WorldTool {
     this.drawCursor(x);
   }
 
+  // The map's own letters, close up: drawn a block of squares at a time
+  // into pictures kept for this zoom (so looking about, or a brush moved
+  // over them, only stamps a few of those).
   drawGlyphs(x, r) {
-    const ow = this.ow;
     const k = this.k;
+    const s = Math.floor(k / 8);
+    if (s < 1) return;
+    const T = 16;
+    const G = this.glyphTiles && this.glyphTiles.k === k && this.glyphTiles.serial === this.mapSerial ? this.glyphTiles : (this.glyphTiles = { k, serial: this.mapSerial, map: new Map(), pics: new Map() });
+    const tiles = G.map;
+    // (A few new blocks a frame, so zooming in never stalls: the rest in
+    // the frames after.)
+    let fresh = 0;
+    let more = false;
     const [a, b] = this.toMap(0, 0);
     const [c, d] = this.toMap(r.width, r.height);
-    for (let cz = Math.max(0, Math.floor(b)); cz <= Math.min(MAP_H - 1, Math.ceil(d)); cz++) for (let cx = Math.max(0, Math.floor(a)); cx <= Math.min(MAP_W - 1, Math.ceil(c)); cx++) {
-      const bk = ow.mapBiome(cx, cz);
-      const mine = `m:${this.app.mod.id}:`;
-      const g = bk === 'ocean' ? BIOMES.ocean : bk === 'lake' ? { char: '≈', fg: '#80c8ff', bg: '#2a6ab0' } : bk.startsWith(mine) ? biomeLook(this.app.mod, `@${bk.slice(mine.length)}`) : BIOMES[bk] || BIOMES.plains;
-      const [sx, sy] = this.toScreen(cx, cz);
-      const s = Math.floor(k / 8);
-      if (s < 1) continue;
-      x.drawImage(glyphCanvas(g.char, g.fg, g.bg, s), Math.round(sx + (k - 6 * s) / 2), Math.round(sy + (k - 8 * s) / 2));
+    for (let tz = Math.max(0, Math.floor(b / T)); tz <= Math.min(Math.floor((MAP_H - 1) / T), Math.floor(d / T)); tz++) {
+      for (let tx = Math.max(0, Math.floor(a / T)); tx <= Math.min(Math.floor((MAP_W - 1) / T), Math.floor(c / T)); tx++) {
+        const key = tz * 1000 + tx;
+        let cv = tiles.get(key);
+        if (cv) tiles.delete(key);
+        else if (fresh >= 6) {
+          more = true;
+          continue;
+        } else {
+          cv = this.glyphTile(G, tx, tz, T, k, s);
+          fresh++;
+        }
+        // (The ones used last kept; the oldest let go.)
+        tiles.set(key, cv);
+        if (tiles.size > 140) tiles.delete(tiles.keys().next().value);
+        const [sx, sy] = this.toScreen(tx * T, tz * T);
+        x.drawImage(cv, Math.round(sx), Math.round(sy));
+      }
     }
+    if (more) this.paint();
+  }
+
+  glyphTile(G, tx, tz, T, k, s) {
+    const cv = canvas(T * k, T * k);
+    const g = cv.getContext('2d');
+    const mine = `m:${this.app.mod.id}:`;
+    const keys = this.biomeKeys;
+    const gw = 6 * s;
+    const gh = 8 * s;
+    for (let cz = tz * T; cz < Math.min(MAP_H, tz * T + T); cz++) {
+      for (let cx = tx * T; cx < Math.min(MAP_W, tx * T + T); cx++) {
+        const bk = keys ? keys[cz * MAP_W + cx] : this.ow.mapBiome(cx, cz);
+        let pic = G.pics.get(bk);
+        if (!pic) {
+          const q = bk === 'ocean' ? BIOMES.ocean : bk === 'lake' ? { char: '≈', fg: '#80c8ff', bg: '#2a6ab0' } : bk.startsWith(mine) ? biomeLook(this.app.mod, `@${bk.slice(mine.length)}`) : BIOMES[bk] || BIOMES.plains;
+          pic = glyphCanvas(q.char, q.fg, q.bg, s);
+          G.pics.set(bk, pic);
+        }
+        g.drawImage(pic, (cx - tx * T) * k + Math.round((k - gw) / 2), (cz - tz * T) * k + Math.round((k - gh) / 2));
+      }
+    }
+    return cv;
   }
 
   drawRealms(x) {
     const ow = this.ow;
     const k = this.k;
+    const r = this.view();
     x.globalAlpha = 0.32;
     for (const c of ow.liveCells) {
       if (c.civ === null || c.civ === undefined || c.biome === 'ocean') continue;
       const civ = ow.civs[c.civ];
       if (!civ) continue;
-      x.fillStyle = civ.color.hex;
       const [sx, sy] = this.toScreen(c.cx, c.cz);
+      if (sx + k < 0 || sy + k < 0 || sx > r.width || sy > r.height) continue;
+      x.fillStyle = civ.color.hex;
       x.fillRect(sx, sy, Math.ceil(k), Math.ceil(k));
     }
     x.globalAlpha = 1;
@@ -484,8 +558,8 @@ export default class WorldTool {
   // going on: its squares as they'll be).
   drawPaint(x) {
     const k = this.k;
-    const g = this.work || (this.gridsCache && this.gridsCache.id === this.paintKey() ? this.gridsCache.g : null) || this.grids();
-    const r = this.wrap.getBoundingClientRect();
+    const g = this.work || (this.gridsCache && this.sameGrids() ? this.gridsCache.g : null) || this.grids();
+    const r = this.view();
     const [a, b] = this.toMap(0, 0);
     const [c, d] = this.toMap(r.width, r.height);
     const x0 = Math.max(0, Math.floor(a));
@@ -688,15 +762,18 @@ export default class WorldTool {
   }
 
   // ------------------------------------------------------------ the grids
-  paintKey() {
-    const P = this.w.paint;
-    return `${this.id}:${(P.land || '').length}:${P.land}:${P.biome}:${P.town}:${(P.legend || []).join(',')}`;
-  }
-
   grids() {
     const g = grids(this.w);
-    this.gridsCache = { id: this.paintKey(), g };
+    const P = this.w.paint || {};
+    this.gridsCache = { id: this.id, land: P.land, biome: P.biome, town: P.town, legend: (P.legend || []).join(','), g };
     return g;
+  }
+
+  // (Still the paint the kept grids were made from?)
+  sameGrids() {
+    const c = this.gridsCache;
+    const P = this.w.paint || {};
+    return c.id === this.id && c.land === P.land && c.biome === P.biome && c.town === P.town && c.legend === (P.legend || []).join(',');
   }
 
   // The squares a brush at (fx, fz) covers.
@@ -1062,7 +1139,7 @@ export default class WorldTool {
       this.hud.textContent = '';
       return;
     }
-    const b = ow.mapBiome(cx, cz);
+    const b = this.biomeKeys ? this.biomeKeys[cz * MAP_W + cx] : ow.mapBiome(cx, cz);
     const L = ow.landAt((cx + 0.5) * REGION_W, (cz + 0.5) * REGION_D);
     const s = ow.settlementAt((cx + 0.5) * REGION_W, (cz + 0.5) * REGION_D);
     const name = b === 'ocean' ? 'sea' : b === 'lake' ? 'a lake' : biomeLook(this.app.mod, b.startsWith(`m:${this.app.mod.id}:`) ? `@${b.split(':')[2]}` : b).name;

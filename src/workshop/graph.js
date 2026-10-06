@@ -9,7 +9,7 @@
 import { h, ic, clear, button, field, panel, toast } from './kit.js';
 import { NodeCanvas, valueWidget } from './nodecanvas.js';
 import { titleBar, refPicker, refInfo, biomeOptions } from './common.js';
-import { NODES, CATS, TYPE_COLORS, fits, makeNode, lint } from '../mod/graph.js';
+import { NODES, CATS, TYPE_COLORS, fits, makeNode, lint, shown } from '../mod/graph.js';
 import { TEMPLATES, TEMPLATE_INFO, BIOME_LIST } from '../mod/nodes.js';
 
 const REF_KIND = { assets: 'ref.asset', vfx: 'ref.vfx', rigs: 'ref.rig', loot: 'ref.loot', structures: 'ref.structure', stories: 'ref.story' };
@@ -257,8 +257,10 @@ export default class GraphTool {
     const w = valueWidget(t, v ?? p.def, (nv) => {
       this.set(n, p.id, nv);
       done();
-      if (big) this.nc?.refreshNode(n);
-      else if (this.nc && this.nc.sel.has(n.id)) this.drawInspector();
+      if (big) {
+        this.nc?.refreshNode(n);
+        if (NODES[n.type].dyn) this.drawInspector();
+      } else if (this.nc && this.nc.sel.has(n.id)) this.drawInspector();
     }, { min: p.min, max: p.max, step: p.step, long: p.long, big, opts: this.optsOf(p) });
     return w;
   }
@@ -270,11 +272,13 @@ export default class GraphTool {
 
   propWidget(n, p, done, big) {
     const v = n.p && n.p[p.id] !== undefined ? n.p[p.id] : p.def;
-    if (p.t === 'enum' || p.t === 'multi' || p.t === 'bool' || p.t === 'number') {
+    if (p.t === 'enum' || p.t === 'multi' || p.t === 'bool' || p.t === 'number' || p.t === 'sound') {
       return valueWidget(p.t, v, (nv) => {
         this.set(n, p.id, nv, true);
         done();
         if (big) this.nc?.refreshNode(n);
+        // (What else it has follows the setting: the inspector too.)
+        if (big && NODES[n.type].dyn) this.drawInspector();
       }, { opts: this.optsOf(p), min: p.min, max: p.max });
     }
     // (A reference node's own pick.)
@@ -360,11 +364,13 @@ export default class GraphTool {
     if (d.help) body.append(h('div', { class: 'panel-b note', style: { paddingTop: '10px' } }, d.help));
     const fields = h('div');
     for (const p of d.props) {
+      if (!shown(n, p)) continue;
       fields.append(field(p.label, this.propWidget(n, p, () => {}, true), { wide: p.t === 'multi' }));
     }
     for (const p of d.in) {
       if (p.t === 'flow') continue;
       const wire = this.ent.graph.links.find((l) => l.to[0] === n.id && l.to[1] === p.id);
+      if (!wire && !shown(n, p)) continue;
       if (wire) {
         const src = this.ent.graph.nodes.find((q) => q.id === wire.from[0]);
         const unwire = button(null, { icon: 'close', small: true, kind: 'ghost', title: 'Unwire it', onClick: () => this.nc.removeLinks([wire]) });
