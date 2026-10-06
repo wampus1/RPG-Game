@@ -20,17 +20,19 @@
 export const T = {
   flow: 'flow', num: 'number', bool: 'bool', text: 'text', color: 'color', ent: 'entity', pos: 'pos', item: 'item', block: 'block',
   creature: 'creature', asset: 'asset', vfx: 'vfx', rig: 'rig', loot: 'loot', structure: 'structure', story: 'story', sound: 'sound',
-  effect: 'effect', any: 'any', list: 'list',
+  effect: 'effect', any: 'any', list: 'list', town: 'town', world: 'world',
 };
 // How each kind of wire looks (the editor's colours).
 export const TYPE_COLORS = {
   flow: '#f4ecd8', number: '#7ad0ff', bool: '#ff7a7a', text: '#ffd070', color: '#ff9adf', entity: '#8ce07a', pos: '#c8a0ff', item: '#ffb050',
   block: '#c89a68', creature: '#70e0b0', asset: '#ff80c0', vfx: '#f070ff', rig: '#a0f0ff', loot: '#e0c060', structure: '#b0b8c8', story: '#e8a0a0',
-  sound: '#90c0ff', effect: '#c0ff80', any: '#c0c0c0', list: '#a0a0ff',
+  sound: '#90c0ff', effect: '#c0ff80', any: '#c0c0c0', list: '#a0a0ff', town: '#e0b070', world: '#70c8c0',
 };
 // What can go into what (besides the same kind, and anything into 'any').
 const FITS = {
-  number: ['bool'], text: ['number', 'bool', 'color', 'item', 'block', 'creature', 'sound'], bool: ['number'], entity: [], pos: ['entity'],
+  number: ['bool'], text: ['number', 'bool', 'color', 'item', 'block', 'creature', 'sound', 'town'], bool: ['number'], entity: [], pos: ['entity', 'town'],
+  // (Round 65: a town from its name, or from someone of it.)
+  town: ['text', 'entity'],
 };
 export function fits(from, to) {
   if (from === to || to === 'any' || from === 'any') return from !== 'flow' && to !== 'flow' ? true : from === to;

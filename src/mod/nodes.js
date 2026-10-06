@@ -4,6 +4,7 @@
 // does through SVC, filled in by hooks.js: nothing here reaches into the
 // game itself, so the Workshop can show these without the game loaded.)
 import { def, T, FILL } from './graph.js';
+import { TOWN_FACTS, TOWN_CHANGES, PERSON_FACTS, PERSON_CHANGES, LAW_LIST, JOB_LIST, SHOP_KINDS } from './townlists.js';
 
 // What the nodes reach the game through (see hooks.js).
 export const SVC = {};
@@ -20,7 +21,7 @@ export const STATIONS = ['hand', 'workbench', 'furnace', 'anvil'];
 export const HAIR_STYLES = ['short', 'long', 'bald', 'spiky', 'bun', 'braid', 'mohawk', 'ponytail', 'curly'];
 
 const C = {
-  tpl: '#7a5a2a', event: '#2a5a3a', flow: '#4a4a5a', act: '#2a4a6a', boss: '#6a2a2a', dlg: '#5a3a6a', data: '#3a3a46', ref: '#5a3a4a', math: '#2a4a4a', q: '#3a4a2a', var: '#4a3a2a', beh: '#6a4a24',
+  town: '#6a5a24', info: '#2a4a5a', tpl: '#7a5a2a', event: '#2a5a3a', flow: '#4a4a5a', act: '#2a4a6a', boss: '#6a2a2a', dlg: '#5a3a6a', data: '#3a3a46', ref: '#5a3a4a', math: '#2a4a4a', q: '#3a4a2a', var: '#4a3a2a', beh: '#6a4a24',
 };
 const F = (id, label = null) => ({ id, t: T.flow, label: label || id });
 const n = (id, label, d = 0, o = {}) => ({ id, t: T.num, label, def: d, ...o });
@@ -962,7 +963,31 @@ refNode('ref.projectile', T.any, 'Projectile', 'One of your Projectiles.');
 // ------------------------------------------------------------ who and where
 const q = (type, o) => def(type, { cat: 'Who & where', color: C.q, ...o });
 q('ctx.self', { title: 'Self', help: 'The creature, block, item user or boss this graph belongs to.', out: [out('out', T.ent, 'Self')], eval: (x) => x.self || null });
-q('ctx.target', { title: 'Target', help: 'Who it\'s about: the foe struck, the one talking, whoever stepped on it.', out: [out('out', T.ent, 'Target')], eval: (x) => x.target || null });
+// (Round 65) Target, upgraded: who it's about, or its foe, who last hurt
+// it, who it's following, a player looking at it, the strongest or
+// weakest or a random foe near; with where they are, how far, how hurt.
+export const TARGETS = ['who it\'s about', 'its foe', 'who last hurt it', 'who it last hurt', 'who it\'s following', 'the nearest player', 'a player looking at it', 'the strongest foe near', 'the weakest foe near', 'a random foe near', 'its owner (a companion\'s)'];
+q('ctx.target', { title: 'Target', help: 'Someone, by how they stand to this one: who it\'s about (the foe struck, the one talking, whoever stepped on it), its foe, who last hurt it or was last hurt by it, who it\'s following, the nearest player, a player looking straight at it, the strongest, weakest or a random foe within reach. With where they are, how far, and how hurt.',
+  in: [ref('of', T.ent, 'Of (or self)', { adv: true }), n('r', 'Looks within', 12, { min: 1, max: 60, show: (g) => ['the nearest player', 'a player looking at it', 'the strongest foe near', 'the weakest foe near', 'a random foe near'].includes(g('which')) })],
+  props: [pick('which', 'Which', TARGETS)],
+  out: [out('out', T.ent, 'Target'), out('found', T.bool, 'Found'), out('pos', T.pos, 'Where'), out('dist', T.num, 'How far'), out('pct', T.num, 'Health %')],
+  eval: (x, nn, p, api) => {
+    const k = `${nn.id}.t`;
+    let t = x.locals[k];
+    if (t === undefined || x.locals[`${k}@`] !== x.steps) {
+      t = api.prop('which') && api.prop('which') !== 'who it\'s about' ? SVC.target?.(x, (isEnt(api.in('of')) && api.in('of')) || x.self, api.prop('which'), num(api.in('r'), 12)) ?? null : x.target || null;
+      x.locals[k] = t;
+      x.locals[`${k}@`] = x.steps;
+    }
+    if (p === 'found') return !!t;
+    if (p === 'pos') return posOf(t);
+    if (p === 'dist') {
+      const a = posOf(api.in('of')) || posOf(x.self) || posOf(x.pos);
+      return t && a ? Math.hypot(t.x - a.x, t.z - a.z) : 0;
+    }
+    if (p === 'pct') return t && t.maxHp ? Math.round((100 * Math.max(0, t.hp)) / t.maxHp) : 0;
+    return t;
+  } });
 q('ctx.player', { title: 'Player', help: 'The player it\'s about (whoever used it, or the nearest).', out: [out('out', T.ent, 'Player')], eval: (x) => x.player || SVC.nearestPlayer?.(x) || null });
 q('ctx.here', { title: 'Here', help: 'Where it happened (the block, the place struck, the creature).', out: [out('out', T.pos, 'Place')], eval: (x) => posOf(x.pos) || posOf(x.self) || null });
 q('q.posof', { title: 'Place of', help: 'Where someone stands.', in: [ref('who', T.ent, 'Who')], out: [out('out', T.pos, 'Place')], eval: (x, nn, p, api) => posOf(api.in('who')) });
@@ -971,22 +996,32 @@ q('q.offset', { title: 'Place nearby', help: 'A place moved from another by so m
   return a ? { x: a.x + num(api.in('dx')), y: a.y + num(api.in('dy')), z: a.z + num(api.in('dz')) } : null;
 } });
 q('q.randpos', { title: 'Random place near', help: 'Somewhere open within so many paces.', in: [ref('at', T.pos, 'Around'), n('r', 'Within', 5, { min: 1, max: 40 })], out: [out('out', T.pos, 'Place')], eval: (x, nn, p, api) => SVC.randomSpot(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self), num(api.in('r'), 5)) });
-q('q.nearest', { title: 'Nearest', help: 'The nearest one (of a kind) to a place, within so many paces (none if nobody).', in: [ref('at', T.pos, 'To'), n('r', 'Within', 10, { min: 1, max: 60 }), ref('species', T.creature, 'Only this creature', { adv: true })], props: [pick('which', 'Who', ['players', 'foes of self', 'creatures', 'everyone'])], out: [out('out', T.ent, 'Who')],
+// (Round 65) Nearest, upgraded: of players, foes, creatures (of a kind),
+// people (of a trade), or a block, a dropped item, one of your
+// structures, a town; with where, how far, and whether there was one.
+export const NEAREST = ['players', 'foes of self', 'creatures', 'everyone', 'a kind of creature', 'people (of a trade)', 'a block', 'a dropped item', 'one of your structures', 'a town'];
+const ENT_NEAREST = ['players', 'foes of self', 'creatures', 'everyone', 'a kind of creature', 'people (of a trade)'];
+q('q.nearest', { title: 'Nearest', help: 'The nearest one (of a kind) to a place, within so many paces: a player, a foe, a creature (of a kind), someone of a trade, a block of a kind, an item lying on the ground, one of your structures, a town. With where it is, how far, and whether there was one at all.',
+  in: [ref('at', T.pos, 'To'), n('r', 'Within', 10, { min: 1, max: 200 }), ref('species', T.creature, 'Of this creature', { show: (g) => ['creatures', 'everyone', 'a kind of creature'].includes(g('which')) }),
+    ref('block', T.block, 'Block', { show: { which: ['a block'] } }), ref('item', T.item, 'Item (or any)', { show: { which: ['a dropped item'] } }), ref('structure', T.structure, 'Structure', { show: { which: ['one of your structures'] } })],
+  props: [pick('which', 'Of', NEAREST, 'players'), pick('job', 'Trade', [['anyone', 'Any trade'], ...JOB_LIST], 'anyone', { show: { which: ['people (of a trade)'] } }), pick('kind', 'Kind', ['any', 'village', 'town', 'city'], 'any', { show: { which: ['a town'] } }),
+    bool('notSelf', 'Not itself', true, { show: { which: ENT_NEAREST } }), bool('sight', 'Only in plain sight', false, { show: { which: ENT_NEAREST } })],
+  out: [{ ...out('out', T.ent, 'Who'), show: { which: ENT_NEAREST } }, { ...out('town', T.town, 'Town'), show: { which: ['a town'] } }, out('pos', T.pos, 'Where'), out('dist', T.num, 'How far'), out('found', T.bool, 'Found')],
   eval: (x, nn, p, api) => {
-    const at = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
-    if (!at) return null;
-    const sp = api.in('species');
-    const list = SVC.near(x, at, num(api.in('r'), 10), api.prop('which')).filter((e) => !sp || e.species === SVC.speciesKey(x, sp));
-    let best = null;
-    let bd = Infinity;
-    for (const e of list) {
-      const d = Math.hypot(e.x - at.x, e.z - at.z);
-      if (d < bd && e !== x.self) {
-        bd = d;
-        best = e;
-      }
+    const k = `${nn.id}.hit`;
+    let hit = x.locals[k];
+    if (hit === undefined || x.locals[`${k}@`] !== x.steps) {
+      const at = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
+      hit = at && SVC.findNearest ? SVC.findNearest(x, at, { which: api.prop('which') || 'players', r: num(api.in('r'), 10), species: api.in('species'), block: api.in('block'), item: api.in('item'), structure: api.in('structure'), job: api.prop('job'), kind: api.prop('kind'), notSelf: api.prop('notSelf') !== false, sight: !!api.prop('sight') }) : null;
+      x.locals[k] = hit;
+      x.locals[`${k}@`] = x.steps;
     }
-    return best;
+    if (p === 'found') return !!hit;
+    if (!hit) return p === 'dist' ? 0 : null;
+    if (p === 'pos') return hit.pos;
+    if (p === 'dist') return hit.dist;
+    if (p === 'town') return hit.town || null;
+    return hit.ent || null;
   } });
 q('q.count', { title: 'Count nearby', help: 'How many (of a kind) are within so many paces.', in: [ref('at', T.pos, 'Around'), n('r', 'Within', 10, { min: 1, max: 60 }), ref('species', T.creature, 'Only this creature', { adv: true })], props: [pick('which', 'Who', ['creatures', 'players', 'foes of self', 'everyone'])], out: [out('out', T.num, 'How many')],
   eval: (x, nn, p, api) => {
@@ -1147,6 +1182,157 @@ m('math.pickword', { title: 'Pick a word', help: 'One of a list of words (put co
   return L.length ? L[Math.floor(Math.random() * L.length)] : '';
 } });
 m('math.join', { title: 'Join text', in: [txt('a', 'A', ''), txt('b', 'B', '')], out: [out('out', T.text, 'Text')], eval: (x, nn, p, api) => `${api.in('a') ?? ''}${api.in('b') ?? ''}` });
+
+// ============================================================ towns
+// (Round 65) The towns of the world and their people: which town, what's
+// known of it, changing it, someone new moving in; about someone of a
+// town, and changing them (their trade, coins, mood, what they think of
+// you).
+const tw = (type, o) => def(type, { cat: 'Towns', color: C.town, ...o });
+const NUMERIC_CHANGES = ['coffers', 'tax %', 'everyone\'s mood', 'wood', 'stone', 'a feast day', 'your standing', 'wanted', 'stock a shop'];
+tw('q.townof', { title: 'Town', help: 'A town: the one someone (or a place) is in, the nearest (of a kind), or one by its name. Wire it into the other Town nodes, or use it as a place (its square).',
+  in: [{ id: 'of', t: T.any, label: 'Of (someone, a place, a name)', def: null }],
+  props: [pick('how', 'Which', ['the one it\'s in', 'the nearest', 'by its name']), pick('kind', 'Kind', ['any', 'village', 'town', 'city'], 'any', { show: { how: ['the nearest'] } })],
+  out: [out('out', T.town, 'Town'), out('found', T.bool, 'Found'), out('name', T.text, 'Name')],
+  eval: (x, nn, p, api) => {
+    const t = SVC.townOf ? SVC.townOf(x, api.in('of'), api.prop('how'), api.prop('kind')) : null;
+    return p === 'found' ? !!t : p === 'name' ? (t ? t.name : '') : t;
+  } });
+tw('q.towninfo', { title: 'About a town', help: 'What\'s known of a town: its name, kind, island, how many live there, its coffers, its tax, how happy its people are, its wood and stone, its guards, its realm and ruler, whether it\'s at war, whether you\'re wanted there, how well you stand there, its laws, its weather.',
+  in: [ref('town', T.town, 'Town (or the one here)')], props: [pick('what', 'What', TOWN_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.townFact ? SVC.townFact(x, api.in('town'), api.prop('what')) : null) });
+tw('act.towndo', { title: 'Change a town', help: 'Its coffers, its tax, its people\'s mood, its wood and stone, a law (on or off), its name, a feast day, how well players stand there, whether they\'re wanted, a line in its records (on its notice board), a shop stocked with something.',
+  in: [F('in', 'Do'), ref('town', T.town, 'Town (or the one here)'), n('value', 'By', 10, { show: { what: NUMERIC_CHANGES } }), txt('text', 'Words', '', { show: { what: ['name', 'a line in its records'] } }), ref('item', T.item, 'Item', { show: { what: ['stock a shop'] } })],
+  props: [pick('what', 'Change', TOWN_CHANGES), pick('how', 'How', [['add', 'add (take away if below 0)'], ['set', 'set to']], 'add', { show: { what: ['coffers', 'tax %', 'everyone\'s mood', 'wood', 'stone', 'wanted'] } }),
+    pick('law', 'Law', LAW_LIST, 'curfew', { show: { what: ['a law'] } }), bool('on', 'In force', true, { show: { what: ['a law'] } }), pick('shop', 'Shop', SHOP_KINDS, 'shop', { show: { what: ['stock a shop'] } })],
+  out: [F('then', 'Then'), F('no', 'Couldn\'t')],
+  run: (x, nn, api) => (SVC.changeTown && SVC.changeTown(x, api.in('town'), api.prop('what'), { value: num(api.in('value'), 0), how: api.prop('how'), law: api.prop('law'), on: api.prop('on'), text: fillText(x, api.in('text')), item: api.in('item'), shop: api.prop('shop') }) ? 'then' : 'no'),
+});
+tw('act.newcomer', { title: 'Someone moves in', help: 'Someone new comes to live in a town (in a trade, if the town has work for one): a home, a schedule, a place in its life.',
+  in: [F('in', 'Do'), ref('town', T.town, 'Town (or the one here)'), txt('first', 'First name (or any)', '')], props: [pick('job', 'Trade', [['any', 'Whatever it needs'], ...JOB_LIST], 'any')],
+  out: [F('then', 'Then'), out('who', T.ent, 'Who')],
+  run: (x, nn, api) => {
+    x.locals[`${nn.id}.who`] = SVC.newcomer ? SVC.newcomer(x, api.in('town'), { first: fillText(x, api.in('first')), job: api.prop('job') }) : null;
+    return 'then';
+  } });
+tw('flow.people', { title: 'For each of its people', help: 'For each person of a town (of a trade, if you like): runs Each with them as Who. Those about now are the town\'s people walking it; a town far off, their records.',
+  in: [F('in', 'Do'), ref('town', T.town, 'Town (or the one here)'), n('max', 'At most', 50, { min: 1, max: 500 })], props: [pick('job', 'Trade', [['anyone', 'Anyone'], ...JOB_LIST], 'anyone')],
+  out: [F('each', 'Each'), F('done', 'Done'), out('who', T.ent, 'Who'), out('n', T.num, 'How many')],
+  run: (x, nn, api) => {
+    const list = SVC.peopleOf ? SVC.peopleOf(x, api.in('town'), api.prop('job')) : [];
+    x.locals[`${nn.id}.n`] = list.length;
+    for (const e of list.slice(0, Math.max(1, num(api.in('max'), 50)))) {
+      x.locals[`${nn.id}.who`] = e;
+      api.fire('each');
+    }
+    return 'done';
+  } });
+tw('q.person', { title: 'About someone', help: 'About someone of a town: their name, trade, age, mood, coins, what they think of you, their traits, their town, their home and their work (places), whether they\'re alive, married, how many children.',
+  in: [ref('who', T.ent, 'Who (or the target)')], props: [pick('what', 'What', PERSON_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.personFact ? SVC.personFact(x, (isEnt(api.in('who')) && api.in('who')) || api.in('who') || x.target, api.prop('what')) : null) });
+tw('act.persondo', { title: 'Change someone', help: 'Someone of a town: a new trade (with the tools and clothes of it), coins, their mood, what they think of you, a trait added or taken, a new first name.',
+  in: [F('in', 'Do'), ref('who', T.ent, 'Who (or the target)'), n('value', 'By', 10, { show: { what: ['coins', 'mood', 'what they think of you'] } }), txt('text', 'Words', '', { show: { what: ['add a trait', 'take a trait', 'first name'] } })],
+  props: [pick('what', 'Change', PERSON_CHANGES), pick('how', 'How', [['add', 'add'], ['set', 'set to']], 'add', { show: { what: ['coins', 'mood'] } }), pick('job', 'Trade', JOB_LIST, 'farmer', { show: { what: ['trade'] } })],
+  out: [F('then', 'Then'), F('no', 'Couldn\'t')],
+  run: (x, nn, api) => (SVC.changePerson && SVC.changePerson(x, api.in('who') || x.target, api.prop('what'), { value: num(api.in('value'), 0), how: api.prop('how'), job: api.prop('job'), text: fillText(x, api.in('text')) }) ? 'then' : 'no'),
+});
+
+// ============================================================ other worlds
+// (Round 65) Another of your world maps: a world of its own, made the
+// first time someone goes, kept after (see Game.requestCross).
+tw('act.cross', { cat: 'World', color: C.q, title: 'Cross to another world', help: 'Sends a player (with everything they are and carry, and whoever\'s at their heel) to another of your world maps: a world of its own, made the first time anyone goes and kept after; or back to the world it all began in. A creature sent alone goes on ahead, there when someone next arrives. (Not while others are playing in the world.)',
+  in: [F('in', 'Do'), ref('who', T.ent, 'Who (or the player)'), ref('at', T.pos, 'Arrive at (or where they were)', { adv: true })],
+  props: [pick('to', 'To', [['map', 'one of your world maps'], ['first', 'the world it began as']], 'map'), { id: 'map', t: T.world, label: 'World map', def: null, show: { to: ['map'] } }],
+  out: [F('then', 'Then')],
+  run: (x, nn, api) => {
+    const e = who(x, api, 'who') || x.player || x.target;
+    if (e && SVC.cross) SVC.cross(x, e, api.prop('to') === 'first' ? null : api.prop('map'), posOf(api.in('at')));
+    return 'then';
+  } });
+w('q.whichworld', { title: 'Which world', help: 'Which of the world maps this world was made from (the world it all began in, or one of yours, crossed into).', props: [{ id: 'map', t: T.world, label: 'Is it', def: null }],
+  out: [out('name', T.text, 'Map'), out('first', T.bool, 'The first world'), out('is', T.bool, 'It is')],
+  eval: (x, nn, p, api) => {
+    const m = SVC.worldMap ? SVC.worldMap(x) : null;
+    if (p === 'first') return !m;
+    if (p === 'is') return !!m && m.mod === x.mod.id && m.id === api.prop('map');
+    return m ? m.name || m.id : 'the first world';
+  } });
+
+// ============================================================ finding out
+// (Round 65) What there is to know about anyone or anything: one node per
+// kind of thing, a choice of what.
+const inf = (type, o) => def(type, { cat: 'Find out', color: C.info, ...o });
+export const ENT_FACTS = ['name', 'kind', 'place', 'health', 'most health', 'health %', 'speed', 'damage', 'facing', 'place ahead', 'block under', 'biome', 'town', 'moving', 'hostile', 'its foe', 'its home', 'what it\'s doing', 'held item', 'is a player', 'is a person', 'is a boss', 'flies', 'in water', 'burning', 'conditions', 'tier'];
+inf('q.entinfo', { title: 'About someone', help: 'Anything about someone or something alive: name, kind, where, health (and most, and as a percentage), speed, damage, which way it faces and the place ahead, the block under it, its biome and town, whether it\'s moving, hostile, a player, a person, a boss, flying, in water, burning; its foe, its home, what it\'s doing, what it holds, its conditions, a master\'s tier.',
+  in: [ref('who', T.ent, 'Who (or self)')], props: [pick('what', 'What', ENT_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.entFact ? SVC.entFact(x, (isEnt(api.in('who')) && api.in('who')) || x.self || x.target, api.prop('what')) : null) });
+export const PLAYER_FACTS = ['name', 'coins', 'health', 'most health', 'stamina', 'held item', 'selected slot', 'armour %', 'items carried', 'empty slots', 'traits', 'came as', 'fame', 'days played', 'riding', 'sleeping', 'in a dungeon', 'wanted here'];
+inf('q.playerinfo', { title: 'About a player', help: 'About a player: their name, coins, health, stamina, what they hold, their armour, how much they carry and how much room they have, their traits and where they came from, their fame, days played, whether they\'re riding, asleep, down a dungeon, wanted in the town they\'re in.',
+  in: [ref('who', T.ent, 'Who (or the player)')], props: [pick('what', 'What', PLAYER_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.playerFact ? SVC.playerFact(x, (isEnt(api.in('who')) && api.in('who')) || x.player || x.target, api.prop('what')) : null) });
+export const ITEM_FACTS = ['name', 'kind', 'value', 'damage', 'armour %', 'stack', 'heals', 'worn on', 'ranged', 'a block', 'food', 'stars'];
+inf('q.iteminfo', { title: 'About an item', help: 'About an item (yours or the game\'s): its name, kind, value, damage, armour, how many stack, how much it heals, where it\'s worn, whether it\'s ranged, a block, food; its stars.',
+  in: [ref('item', T.item, 'Item')], props: [pick('what', 'What', ITEM_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.itemFact ? SVC.itemFact(x, api.in('item'), api.prop('what')) : null) });
+export const BLOCK_FACTS = ['name', 'its key', 'air', 'solid', 'liquid', 'hardness', 'light', 'tool', 'see-through', 'one of yours'];
+inf('q.blockinfo', { title: 'About a block', help: 'About the block at a place: its name and key, whether it\'s air, solid, a liquid, see-through, one of this mod\'s; how hard, how bright, the tool for it.',
+  in: [ref('at', T.pos, 'At (or here)')], props: [pick('what', 'What', BLOCK_FACTS)], out: [out('out', T.any, 'Value')],
+  eval: (x, nn, p, api) => (SVC.blockFact ? SVC.blockFact(x, posOf(api.in('at')) || posOf(x.pos) || posOf(x.self), api.prop('what')) : null) });
+inf('q.abilities', { title: 'Its abilities', help: 'A creature\'s abilities (its Ability nodes): how many, which are ready, the name of one ready now (the one it\'d likely use), and how long till one (by its name) is ready again.',
+  in: [ref('who', T.ent, 'Whose (or self)'), txt('name', 'Ability (its name)', '')],
+  out: [out('n', T.num, 'How many'), out('ready', T.num, 'Ready now'), out('next', T.text, 'One ready'), out('names', T.text, 'Their names'), out('left', T.num, 'Seconds till ready'), out('casting', T.bool, 'Winding one up')],
+  eval: (x, nn, p, api) => {
+    const a = SVC.abilities ? SVC.abilities(x, (isEnt(api.in('who')) && api.in('who')) || x.self, fillText(x, api.in('name'))) : null;
+    if (!a) return p === 'next' || p === 'names' ? '' : p === 'casting' ? false : 0;
+    return a[p];
+  } });
+inf('q.direction', { title: 'Direction', help: 'Which way one place (or someone) is from another: as a compass word, an angle, and the steps east and south.',
+  in: [ref('a', T.pos, 'From (or self)'), ref('b', T.pos, 'To (or the target)')],
+  out: [out('word', T.text, 'Way'), out('deg', T.num, 'Angle (°)'), out('dx', T.num, 'East'), out('dz', T.num, 'South')],
+  eval: (x, nn, p, api) => {
+    const a = posOf(api.in('a')) || posOf(x.self) || posOf(x.pos);
+    const b = posOf(api.in('b')) || posOf(x.target);
+    if (!a || !b) return p === 'word' ? '' : 0;
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    if (p === 'dx') return dx;
+    if (p === 'dz') return dz;
+    const deg = ((Math.atan2(dz, dx) * 180) / Math.PI + 360) % 360;
+    if (p === 'deg') return Math.round(deg);
+    return ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'][Math.round(deg / 45) % 8];
+  } });
+inf('q.slot', { title: 'In a pack', help: 'What\'s in a slot of someone\'s pack (1 to 36), and how many; where in it an item is first found.',
+  in: [ref('who', T.ent, 'Whose (or the player)'), n('slot', 'Slot', 1, { min: 1, max: 36 }), ref('item', T.item, 'Find this item', { adv: true })],
+  out: [out('key', T.item, 'Item'), out('n', T.num, 'How many'), out('at', T.num, 'Found in slot (0: not)')],
+  eval: (x, nn, p, api) => {
+    const e = (isEnt(api.in('who')) && api.in('who')) || x.player || x.target;
+    const inv = e && e.inv;
+    if (!inv) return p === 'key' ? null : 0;
+    if (p === 'at') {
+      const k = SVC.itemKey ? SVC.itemKey(x, api.in('item')) : null;
+      const i = k ? inv.findIndex((q) => q && q.item === k) : -1;
+      return i + 1;
+    }
+    const s = inv[Math.max(0, Math.min(inv.length - 1, num(api.in('slot'), 1) - 1))];
+    return p === 'key' ? (s ? s.item : null) : s ? s.count : 0;
+  } });
+inf('q.structinfo', { title: 'One of your structures', help: 'Where one of your structures stands in the world (the nearest of them), how many there are, and whether someone\'s there now.',
+  in: [ref('structure', T.structure, 'Structure'), ref('at', T.pos, 'Nearest to (or here)'), n('r', 'Someone within', 8, { min: 1, max: 60, adv: true })],
+  out: [out('pos', T.pos, 'Where'), out('n', T.num, 'How many'), out('dist', T.num, 'How far'), out('busy', T.bool, 'Someone there')],
+  eval: (x, nn, p, api) => {
+    const s = SVC.structInfo ? SVC.structInfo(x, api.in('structure'), posOf(api.in('at')) || posOf(x.pos) || posOf(x.self), num(api.in('r'), 8)) : null;
+    if (!s) return p === 'pos' ? null : p === 'busy' ? false : 0;
+    return s[p];
+  } });
+inf('q.random', { title: 'Someone at random', help: 'Someone near a place, picked at random (players, foes, creatures, or anyone).',
+  in: [ref('at', T.pos, 'Around'), n('r', 'Within', 10, { min: 1, max: 60 })], props: [pick('which', 'Who', ['everyone', 'players', 'foes of self', 'creatures']), bool('notSelf', 'Not itself', true)],
+  out: [out('out', T.ent, 'Who'), out('n', T.num, 'Out of')],
+  eval: (x, nn, p, api) => {
+    const at = posOf(api.in('at')) || posOf(x.pos) || posOf(x.self);
+    const list = at ? SVC.near(x, at, num(api.in('r'), 10), api.prop('which')).filter((e) => !(api.prop('notSelf') !== false && e === x.self)) : [];
+    if (p === 'n') return list.length;
+    return list.length ? list[Math.floor(Math.random() * list.length)] : null;
+  } });
 
 // What a template makes, for lists (the Workshop's "New" menu and so on).
 export const TEMPLATE_INFO = {

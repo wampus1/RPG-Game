@@ -197,7 +197,7 @@ export default class GraphTool {
     wrap.append(this.nc.el);
     // The colours of the wires, as a key.
     const legend = h('div', { class: 'nc-legend' });
-    for (const [t, label] of [['flow', 'what happens next'], ['entity', 'someone'], ['pos', 'a place'], ['number', 'number'], ['bool', 'yes/no'], ['text', 'text'], ['item', 'item'], ['asset', 'art']]) legend.append(h('span', null, h('i', { style: { background: TYPE_COLORS[t] } }), label));
+    for (const [t, label] of [['flow', 'what happens next'], ['entity', 'someone'], ['pos', 'a place'], ['number', 'number'], ['bool', 'yes/no'], ['text', 'text'], ['item', 'item'], ['asset', 'art'], ['town', 'a town']]) legend.append(h('span', null, h('i', { style: { background: TYPE_COLORS[t] } }), label));
     wrap.append(legend);
     this.nc.render();
     if (fresh) requestAnimationFrame(() => requestAnimationFrame(() => this.nc && this.nc.frameAll()));

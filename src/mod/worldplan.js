@@ -107,6 +107,32 @@ function uninstall(M) {
   addedKeys.length = 0;
   M.world = null;
 }
+
+// (Round 65) A world made from another of a mod's world maps (one crossed
+// into: see Game.requestCross): `ref` { mod, id } puts that map in place of
+// the one the mods chose; null leaves theirs. False if it isn't there.
+export function useWorldMap(ref, M = MODS) {
+  if (!ref || !ref.mod || !ref.id) return true;
+  const m = M.active.find((q) => q.id === ref.mod);
+  const w = m && m.worlds && m.worlds[ref.id];
+  if (!w) return false;
+  for (const k of addedKeys) DAGONI_KEYS.delete(k);
+  addedKeys.length = 0;
+  M.world = compilePlan(m, w);
+  for (const L of M.world.lands) if (L.kind === 'dagoni' && !DAGONI_KEYS.has(L.key)) {
+    DAGONI_KEYS.add(L.key);
+    addedKeys.push(L.key);
+  }
+  return true;
+}
+
+// The world map a world's mods would choose (its { mod, id }), or null.
+export function chosenWorldMap(M = MODS) {
+  const m = M.active.find((q) => Object.keys(q.worlds || {}).length);
+  if (!m) return null;
+  const w = Object.values(m.worlds).sort((a, b) => (a.use === b.use ? 0 : a.use ? -1 : 1))[0];
+  return { mod: m.id, id: w.id };
+}
 MODS.hooks.install.unshift((M, report) => install(M, report));
 MODS.hooks.uninstall.push((M) => uninstall(M));
 MODS.world = null;

@@ -19,6 +19,7 @@ import { modStat } from './stat.js';
 import { charGenTick, petFell } from './chargen.js';
 import { setOrder, orderTick, doingOf, leapTick } from './behave.js';
 import { compareValues } from './storyrun.js';
+import { townOf as townOfV, townValue, nearestTown, townFact, changeTown, personFact, changePerson, newcomerIn, peopleOf } from './towns.js';
 import './build.js';
 import './storyrun.js';
 
@@ -464,6 +465,286 @@ Object.assign(SVC, {
     return false;
   },
   compare: (a, op, b) => compareValues(a, op, b),
+  // ------------------------------------------------------------ round 65
+  // Towns and their people (see towns.js).
+  townOf(x, v, how = 'the one it\'s in', kind = 'any') {
+    const g = x.game;
+    let s = null;
+    if (how === 'by its name') s = townOfV(g, typeof v === 'string' ? v : v && v.name);
+    else if (how === 'the nearest') s = nearestTown(g, posOf(v) || posOf(x.pos) || posOf(x.self) || posOf(x.player), kind);
+    else s = townOfV(g, v ?? x.self ?? x.pos ?? x.player);
+    return townValue(g, s);
+  },
+  townFact: (x, t, what) => townFact(x.game, townOfV(x.game, t ?? x.self ?? x.pos ?? x.player), what),
+  changeTown: (x, t, what, o) => changeTown(x.game, townOfV(x.game, t ?? x.self ?? x.pos ?? x.player), what, { ...o, item: o.item ? key(x, o.item) : null }),
+  newcomer(x, t, o) {
+    const g = x.game;
+    const r = newcomerIn(g, townOfV(g, t ?? x.self ?? x.pos ?? x.player), { first: o.first, job: o.job === 'any' ? null : o.job });
+    if (!r) return null;
+    // (Its walking self, if the town's about: else its record.)
+    const act = g.active && g.active.get(r.sid);
+    return (act && act.npcs.find((n) => n.rec === r)) || r;
+  },
+  peopleOf: (x, t, job) => peopleOf(x.game, townOfV(x.game, t ?? x.self ?? x.pos ?? x.player), job),
+  personFact: (x, e, what) => personFact(x.game, e, what),
+  changePerson: (x, e, what, o) => changePerson(x.game, e, what, o),
+  // Another of the mod's world maps (see Game.requestCross).
+  cross: (x, e, mapId, at) => x.game.requestCross?.({ who: e, map: mapId ? { mod: x.mod.id, id: mapId } : null, at }),
+  worldMap(x) {
+    const m = x.game.worldMap;
+    if (!m) return null;
+    const mod = MODS.active.find((q) => q.id === m.mod);
+    const w = mod && mod.worlds && mod.worlds[m.id];
+    return { mod: m.mod, id: m.id, name: w ? w.name : m.id };
+  },
+  // Who, by how they stand to someone (the Target node).
+  target(x, e, which, r) {
+    const g = x.game;
+    const me = e || x.self;
+    const at = posOf(me) || posOf(x.pos);
+    const ok = (q) => q && !q.dead && !q.limbo;
+    switch (which) {
+      case 'its foe': return ok(me && me.target) ? me.target : null;
+      case 'who last hurt it': return ok(me && me.modHurtBy) ? me.modHurtBy : null;
+      case 'who it last hurt': return ok(me && me.modHit) ? me.modHit : null;
+      case 'who it\'s following': {
+        const o = me && me.modOrder;
+        return ok(o && (o.kind === 'follow' || o.kind === 'hunt' || o.kind === 'keep') ? o.who : me && me.petOf) ? (o && o.who) || me.petOf : null;
+      }
+      case 'its owner (a companion\'s)': return ok(me && me.petOf) ? me.petOf : null;
+      default:
+    }
+    if (!at) return null;
+    if (which === 'the nearest player' || which === 'a player looking at it') {
+      let best = null;
+      let bd = Infinity;
+      for (const p of g.everyone()) {
+        if (!ok(p) || p === me) continue;
+        const d = Math.hypot(p.x - at.x, p.z - at.z);
+        if (d > r) continue;
+        if (which === 'a player looking at it') {
+          // (Facing it, near enough straight on.)
+          const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][p.dir] || [0, 1];
+          const dot = d > 0 ? ((at.x - p.x) * fx + (at.z - p.z) * fz) / d : 1;
+          if (dot < 0.8) continue;
+        }
+        if (d < bd) {
+          bd = d;
+          best = p;
+        }
+      }
+      return best;
+    }
+    const foes = near(g, at, r, 'foes of self', me).filter((q) => q !== me);
+    if (!foes.length) return null;
+    if (which === 'a random foe near') return foes[Math.floor(Math.random() * foes.length)];
+    foes.sort((a, b) => (which === 'the weakest foe near' ? a.hp - b.hp : b.hp - a.hp));
+    return foes[0];
+  },
+  // The nearest of anything (the Nearest node): { ent?, town?, pos, dist }.
+  findNearest(x, at, o) {
+    const g = x.game;
+    const r = Math.max(1, o.r);
+    const flat = (q) => Math.hypot(q.x - at.x, q.z - at.z);
+    const best = (list) => {
+      let b = null;
+      let bd = Infinity;
+      for (const q of list) {
+        const d = flat(q);
+        if (d <= r + 0.01 && d < bd) {
+          bd = d;
+          b = q;
+        }
+      }
+      return b ? { b, d: bd } : null;
+    };
+    const w = o.which;
+    if (w === 'a block') {
+      const id = (() => {
+        const k = key(x, o.block);
+        return k && B[k] !== undefined ? B[k] : null;
+      })();
+      if (id === null) return null;
+      const R0 = Math.min(16, Math.ceil(r));
+      let hit = null;
+      let hd = Infinity;
+      for (let dy = -4; dy <= 4; dy++) for (let dz = -R0; dz <= R0; dz++) for (let dx = -R0; dx <= R0; dx++) {
+        const d = Math.hypot(dx, dz) + Math.abs(dy) * 0.5;
+        if (d >= hd || d > r) continue;
+        if (g.world.getBlock(at.x + dx, (at.y ?? 6) + dy, at.z + dz) === id) {
+          hd = d;
+          hit = { x: at.x + dx, y: (at.y ?? 6) + dy, z: at.z + dz };
+        }
+      }
+      return hit ? { pos: hit, dist: hd } : null;
+    }
+    if (w === 'a dropped item') {
+      const k = o.item ? key(x, o.item) : null;
+      const h = best(g.drops.filter((d) => !d.dead && (!k || d.item === k)));
+      return h ? { pos: { x: Math.round(h.b.x), y: Math.round(h.b.y), z: Math.round(h.b.z) }, dist: h.d } : null;
+    }
+    if (w === 'one of your structures') {
+      const h = o.structure ? best(MODS.structureSpots?.(g, x.mod.id, o.structure) || []) : null;
+      return h ? { pos: h.b, dist: h.d } : null;
+    }
+    if (w === 'a town') {
+      const s = nearestTown(g, at, o.kind);
+      const t = townValue(g, s);
+      if (!t) return null;
+      const d = flat(t);
+      return d <= r ? { town: t, pos: { x: t.x, y: t.y, z: t.z }, dist: d } : null;
+    }
+    let list;
+    if (w === 'people (of a trade)') list = (g.npcs || []).filter((n) => !n.dead && (!o.job || o.job === 'anyone' || (n.rec && n.rec.job === o.job)));
+    else if (w === 'a kind of creature') list = g.creatures.filter((c) => !c.dead);
+    else list = near(g, at, r, w, x.self);
+    const sp = o.species ? SVC.speciesKey(x, o.species) : null;
+    list = list.filter((e) => (!sp || e.species === sp) && !(o.notSelf && e === x.self) && !e.limbo && Math.abs((e.y ?? at.y) - (at.y ?? e.y)) <= 4);
+    if (o.sight && g.sim && g.sim.lineOfSight) list = list.filter((e) => g.sim.lineOfSight(Math.round(at.x), Math.round(at.z), Math.round(e.x), Math.round(e.z), (at.y ?? e.y) + 1));
+    const h = best(list);
+    return h ? { ent: h.b, pos: posOf(h.b), dist: h.d } : null;
+  },
+  // Anything about someone (the About someone node).
+  entFact(x, e, what) {
+    const g = x.game;
+    if (!e) return what === 'name' || what === 'kind' ? '' : null;
+    const at = posOf(e);
+    switch (what) {
+      case 'name': return e.kind === 'player' ? (e.account && e.account.name) || g.playerName || 'you' : e.rec ? `${e.rec.name.first} ${e.rec.name.last}` : e.name || (e.S && e.S.name) || e.species || '';
+      case 'kind': return e.kind === 'player' ? 'player' : e.kind === 'npc' ? 'person' : e.species || e.kind;
+      case 'place': return at;
+      case 'health': return Math.round(e.hp ?? 0);
+      case 'most health': return Math.round(e.maxHp ?? 0);
+      case 'health %': return e.maxHp ? Math.round((100 * Math.max(0, e.hp)) / e.maxHp) : 0;
+      case 'speed': return e.stepTime ? +(0.36 / Math.max(0.05, e.stepTime())).toFixed(2) : 1;
+      case 'damage': return e.S ? e.S.dmg || 0 : 0;
+      case 'facing': return ['south', 'west', 'north', 'east'][e.dir] || 'south';
+      case 'place ahead': {
+        const [fx, fz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][e.dir] || [0, 1];
+        return at ? { x: at.x + fx, y: at.y, z: at.z + fz } : null;
+      }
+      case 'block under': return at ? SVC.blockAt(x, { x: at.x, y: at.y - 1, z: at.z }) : 'air';
+      case 'biome': return SVC.biome(x, at);
+      case 'town': return townValue(g, townOfV(g, e));
+      case 'moving': return !!e.moving;
+      case 'hostile': return e.kind === 'player' ? false : !!e.hostileNow;
+      case 'its foe': return e.target && !e.target.dead ? e.target : null;
+      case 'its home': return e.home ? { x: e.home.x, y: e.home.y ?? at.y, z: e.home.z } : at;
+      case 'what it\'s doing': return doingOf(e);
+      case 'held item': return e.heldItem ? e.heldItem() : null;
+      case 'is a player': return e.kind === 'player';
+      case 'is a person': return e.kind === 'npc' || !!(e.S && e.S.npc);
+      case 'is a boss': return !!(e.S && e.S.boss) || !!e.isBoss;
+      case 'flies': return !!(e.S && e.S.floats);
+      case 'in water': return !!e.inWater;
+      case 'burning': return e.burnT > 0;
+      case 'conditions': return ['burnT', 'slowT', 'stunT', 'poisonT', 'bleedT', 'frozenT'].filter((k) => e[k] > 0).map((k) => k.slice(0, -1)).join(', ');
+      case 'tier': return e.tier || 1;
+      default: return null;
+    }
+  },
+  playerFact(x, p, what) {
+    const g = x.game;
+    if (!p || p.kind !== 'player') return what === 'name' ? '' : 0;
+    const hero = g.asPlayer(p, () => g.hero) || {};
+    switch (what) {
+      case 'name': return (p.account && p.account.name) || g.playerName || 'you';
+      case 'coins': return countItem(p.inv, 'coin');
+      case 'health': return Math.round(p.hp);
+      case 'most health': return Math.round(p.maxHp);
+      case 'stamina': return Math.round((p.stamina ?? 0) * 10) / 10;
+      case 'held item': return p.heldItem();
+      case 'selected slot': return (p.selected | 0) + 1;
+      case 'armour %': return p.armorPct ? Math.round(p.armorPct() * 100) : 0;
+      case 'items carried': return p.inv.reduce((n, q) => n + (q ? q.count : 0), 0);
+      case 'empty slots': return p.inv.filter((q) => !q).length;
+      case 'traits': return (hero.traits || []).join(', ');
+      case 'came as': return hero.modOrigin || hero.origin || '';
+      case 'fame': {
+        const S = g.sim && g.sim.saga;
+        const pid = S && S.players().find((q) => q.p === p)?.pid;
+        return pid ? S.person(pid).fame || 0 : 0;
+      }
+      case 'days played': return g.day;
+      case 'riding': return !!p.mount;
+      case 'sleeping': return !!p.sleeping;
+      case 'in a dungeon': return !!g.world.inInstance(p.x);
+      case 'wanted here': {
+        const s = townOfV(g, p);
+        return !!(s && g.isWanted(s.id));
+      }
+      default: return 0;
+    }
+  },
+  itemFact(x, ref, what) {
+    const k = key(x, ref);
+    const d = k && ITEMS[k];
+    if (!d) return what === 'name' || what === 'kind' || what === 'worn on' ? '' : what === 'ranged' || what === 'a block' || what === 'food' ? false : 0;
+    switch (what) {
+      case 'name': return d.name;
+      case 'kind': return d.kind || '';
+      case 'value': return d.value || 0;
+      case 'damage': return d.damage || 0;
+      case 'armour %': return Math.round((d.armor || 0) * 100);
+      case 'stack': return d.stack || 1;
+      case 'heals': return d.heal || 0;
+      case 'worn on': return d.slot || '';
+      case 'ranged': return !!d.ranged;
+      case 'a block': return d.kind === 'block';
+      case 'food': return d.kind === 'food' || d.kind === 'potion';
+      case 'stars': return d.stars || 0;
+      default: return 0;
+    }
+  },
+  blockFact(x, at, what) {
+    if (!at) return null;
+    const id = x.game.world.getBlock(at.x, at.y, at.z);
+    const b = BLOCKS[id] || {};
+    switch (what) {
+      case 'name': return b.label || b.name || 'air';
+      case 'its key': return b.name || 'air';
+      case 'air': return id === B.air;
+      case 'solid': return !!b.solid;
+      case 'liquid': return !!(b.liquid || b.lava);
+      case 'hardness': return Number.isFinite(b.hardness) ? b.hardness : 999;
+      case 'light': return b.light || 0;
+      case 'tool': return b.tool || 'none';
+      case 'see-through': return b.opaque === false;
+      case 'one of yours': return !!(b.mod && b.mod === x.mod.id) || String(b.name || '').startsWith(`m:${x.mod.id}:`);
+      default: return null;
+    }
+  },
+  abilities(x, c, nm) {
+    const rec = c && c.S && MODS.ents.get(c.S.modKey);
+    if (!rec) return null;
+    const abs = rec.prog.starts.filter((n) => n.type === 'ev.ability');
+    const cd = c.modAbCd || {};
+    const ready = abs.filter((n) => !(cd[n.id] > 0));
+    const named = (nm) => abs.find((n) => String((n.v || {}).name || '').toLowerCase() === String(nm || '').toLowerCase());
+    return {
+      n: abs.length, ready: ready.length, next: ready.length ? String((ready[0].v || {}).name || '') : '', names: abs.map((n) => (n.v || {}).name || '').join(', '),
+      left: (() => {
+        const q = named(nm);
+        return q ? Math.max(0, +(cd[q.id] || 0).toFixed(1)) : 0;
+      })(),
+      casting: !!c.modCast,
+    };
+  },
+  structInfo(x, ref, at, r) {
+    const g = x.game;
+    const spots = ref ? MODS.structureSpots?.(g, x.mod.id, ref) || [] : [];
+    if (!spots.length) return { pos: null, n: 0, dist: 0, busy: false };
+    let b = spots[0];
+    let bd = Infinity;
+    for (const s of spots) {
+      const d = at ? Math.hypot(s.x - at.x, s.z - at.z) : 0;
+      if (d < bd) {
+        bd = d;
+        b = s;
+      }
+    }
+    return { pos: b, n: spots.length, dist: at ? Math.round(bd) : 0, busy: near(g, b, r, 'players').length > 0 };
+  },
 });
 
 // The values kept for the world (saved with it).
@@ -901,6 +1182,9 @@ export function modEaten(game, p, def) {
 // A blow landed (by anyone, on anyone).
 export function modStruck(game, a, v, amount) {
   if (!a || !v) return;
+  // (Round 65) Who struck whom last (for the Target node).
+  a.modHit = v;
+  v.modHurtBy = a;
   if (a.kind === 'player') {
     const k = a.heldItem ? a.heldItem() : null;
     const it = k && ITEMS[k];

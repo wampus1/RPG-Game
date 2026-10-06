@@ -30,6 +30,7 @@ import { avatarFromKey } from './render/avatar.js';
 // (Round 62) Mods: kept here, put into the game for a world, drawn.
 import { ModLibrary } from './mod/library.js';
 import { installMods, uninstallMods, remapRegion, MODS } from './mod/registry.js';
+import { useWorldMap } from './mod/worldplan.js';
 import { exportMod } from './mod/format.js';
 import { ModPickWindow } from './ui/modpick.js';
 import './mod/render.js';
@@ -221,7 +222,13 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     const modded = setMods(opts.mods || [], save);
     // (The very versions it's made with, kept for it.)
     for (const m of opts.mods || []) modLib.putPack(m).catch(() => {});
-    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest });
+    // (Round 65) A world made from another of its mods' world maps (crossed
+    // into: see crossWorlds).
+    const wmap = save ? save.worldMap || null : opts.worldMap || null;
+    if (wmap && !useWorldMap(wmap)) ui.msg('That world\'s map isn\'t in its mods any more: the mods\' own is used.', '#ffb080');
+    game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest, worldMap: opts.worldMap || null, worldRoot: opts.worldRoot || null });
+    game.modsUsed = opts.mods || [];
+    game.onCross = (out) => crossWorlds(game, out);
     if (modded) game.modReport = modded.report;
     game.crt = crt;
     // (What you do here, worth an achievement: kept with you.)
@@ -230,7 +237,15 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     game.slot = slot && slot !== 'auto' ? slot : null;
     // (Loaded, it's as saved: see unsaved.)
     if (save) game.savedClock = clockOf(game);
-    game.autosave = () => saveTo(game.partyWorld && game.slot ? game.slot : 'auto', `Autosaved (day ${game.day}, 7:00).`);
+    // (A world crossed into keeps its own place: see crossWorlds.)
+    game.autosave = () => saveTo((game.partyWorld || game.worldRoot) && game.slot ? game.slot : 'auto', `Autosaved (day ${game.day}, 7:00).`);
+    // (Round 65) Come from another world: as you were there, and who came
+    // (or was sent on ahead).
+    if (opts.arrive || game.slot) {
+      const ahead = takeSentAhead(slot);
+      if (opts.arrive || ahead.length) game.applyArrival({ ...(opts.arrive || {}), creatures: [...((opts.arrive && opts.arrive.creatures) || []), ...ahead] });
+      if (opts.arrive) ui.msg(game.worldMap ? `You cross into ${(MODS.world && MODS.world.name) || 'another world'}.` : 'You cross back into the world you began in.', '#c8a0ff');
+    }
     if (params.has('time') && !save) game.minute = parseInt(params.get('time'), 10);
     renderer.camInit = false;
     ui.showHud = !game.cutscene;
@@ -249,6 +264,60 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     // (Round 63) What a mod's world map couldn't have as it says.
     for (const r of ((game.world && game.world.ow.planReport) || []).slice(0, 3)) ui.msg(r.text, '#ffb080');
   }, 30);
+}
+
+// (Round 65) Crossing to another of a mod's world maps (see
+// Game.requestCross): each a world of its own, kept beside the one it
+// began as (its slot, then "~" and the map), made the first time anyone
+// goes, loaded after. This one saved as it's left; a player goes with all
+// they are and carry. A creature only, sent on ahead: there when someone
+// next arrives.
+const aheadKey = (id) => `tessera-cross-${id}`;
+function sendAhead(id, creatures) {
+  try {
+    const st = browserStorage();
+    const now = JSON.parse(st.getItem(aheadKey(id)) || '[]');
+    st.setItem(aheadKey(id), JSON.stringify([...now, ...creatures].slice(-24)));
+  } catch {
+    // (Nowhere to keep it: it's lost between the worlds.)
+  }
+}
+function takeSentAhead(id) {
+  if (!id) return [];
+  try {
+    const st = browserStorage();
+    const v = JSON.parse(st.getItem(aheadKey(id)) || '[]');
+    st.removeItem(aheadKey(id));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function crossWorlds(g, out) {
+  if (session || g !== game) return;
+  const root = g.worldRoot || g.slot || 'auto';
+  const idOf = (m) => (m ? `${root}~${m.mod}.${m.id}` : root);
+  const here = g.worldMap ? idOf(g.worldMap) : g.slot || root;
+  const there = idOf(out.map);
+  if (!out.player) {
+    sendAhead(there, out.creatures);
+    return;
+  }
+  // (A playtest keeps nothing: the world crossed into is made fresh.)
+  if (g.playtest) {
+    const pt = { ...g.playtest, sel: null };
+    startGame((hashString(`${g.seed}:${there}`) ^ g.seed) >>> 0, null, null, null, { mods: g.modsUsed, worldMap: out.map, worldRoot: 'playtest', arrive: { player: out.player, at: out.at, creatures: out.creatures }, playtest: pt });
+    return;
+  }
+  g.worldRoot = root;
+  Promise.resolve(saveTo(here, null, true)).then((ok) => {
+    if (!ok) return;
+    const arrive = { player: out.player, at: out.at, creatures: out.creatures };
+    store.load(there).then((data) => {
+      if (data) startGame(null, data, there, null, { mods: g.modsUsed, arrive });
+      else startGame((hashString(`${g.seed}:${there}`) ^ g.seed) >>> 0, null, there, null, { mods: g.modsUsed, worldMap: out.map, worldRoot: root, arrive });
+    }, (e) => ui.msg(`Couldn't cross: ${e && e.message ? e.message : e}`, '#ff5a50'));
+  });
 }
 
 // (Round 62) A world's mods into the game (none: the game as it is). Its

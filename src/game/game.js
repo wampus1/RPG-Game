@@ -121,9 +121,18 @@ function companyOfKey(k) {
   return m ? +m[1] : null;
 }
 
+// (Round 65) A creature as it is, to go with someone to another world.
+function creatureSnap(c) {
+  return { species: c.species, hp: c.hp, modVars: c.modVars ? JSON.parse(JSON.stringify(c.modVars)) : null, pet: !!c.petOf };
+}
+
 export class Game {
-  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false }) {
+  constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null }) {
     this.seed = seed >>> 0;
+    // (Round 65) Made from another of a mod's world maps (one crossed into:
+    // see requestCross), and the world its family of worlds began as.
+    this.worldMap = save ? save.worldMap || null : worldMap;
+    this.worldRoot = save ? save.worldRoot || null : worldRoot;
     this.renderer = renderer;
     // A new world starts with north up (a saved one as you left it).
     if (renderer) {
@@ -2584,6 +2593,85 @@ export class Game {
 
   // (Round 62) A mod's creature's turn, and a blow landed with a mod's
   // weapon (or by one of a mod's creatures): see mod/hooks.js.
+  // ------------------------------------------------------------ other worlds
+  // (Round 65) Someone sent to another of a mod's world maps (a world of its
+  // own, made the first time anyone goes there, kept after: see main.js),
+  // or back to the world it all began as (`map` null). A player goes, with
+  // everything they are and carry; a creature is sent ahead, to be there
+  // when someone next arrives. Not in a world played with others.
+  requestCross(req) {
+    if (this.remoteCopy || (this.seats && this.seats.length > 1)) {
+      this.ui?.msg?.('No crossing to another world while others are playing in this one.', '#ffb080');
+      return false;
+    }
+    const same = (a, b) => (!a && !b) || (a && b && a.mod === b.mod && a.id === b.id);
+    if (same(req.map, this.worldMap)) {
+      if (req.at && req.who === this.player) this.teleportPlayer(req.at.x, req.at.y, req.at.z);
+      return false;
+    }
+    const out = { map: req.map || null, at: req.at || null, player: null, creatures: [] };
+    if (req.who && req.who.kind === 'player') {
+      out.player = this.crossSnapshot();
+      // (Those at their heel go with them.)
+      for (const c of this.creatures) if (!c.dead && c.petOf === req.who) out.creatures.push(creatureSnap(c));
+    } else if (req.who && req.who.kind === 'creature' && !req.who.dead) {
+      out.creatures.push(creatureSnap(req.who));
+      // (Gone from here, no death about it: a shimmer where it stood.)
+      this.renderer?.emit?.(req.who.x, req.who.y + 1, req.who.z, { n: 18, color: ['#c8a0ff', '#ffffff'], up: 40, speed: 30, life: 0.8, glow: true });
+      req.who.dead = true;
+    } else return false;
+    if (this.onCross) this.onCross(out);
+    else this.crossing = out;
+    return true;
+  }
+
+  // A player as they are, to arrive in another world with.
+  crossSnapshot() {
+    const p = this.player;
+    const keep = (v) => JSON.parse(JSON.stringify(v ?? null));
+    return {
+      name: this.playerName, hero: keep(this.hero), hp: p.hp, inv: keep(p.inv), selected: p.selected, equip: keep(p.equip), buffs: keep(p.buffs || []),
+      recipes: keep(p.recipes || []), kinds: keep(p.kinds || []), look: keep(p.baseLook), vigor: keep(p.vigor), blue: keep(p.blue), stats: keep(this.stats),
+    };
+  }
+
+  // Arrived from another world: who you were there, here (at `at`, or
+  // where new characters begin), and anyone who came with you.
+  applyArrival(a) {
+    const p = this.player;
+    const s = a.player;
+    if (s) {
+      if (s.name) this.playerName = s.name;
+      if (s.hero) this.hero = s.hero;
+      if (Array.isArray(s.inv)) for (let i = 0; i < p.inv.length; i++) p.inv[i] = s.inv[i] || null;
+      if (Number.isInteger(s.selected)) p.selected = s.selected;
+      if (s.equip) p.equip = { ...p.equip, ...s.equip };
+      if (s.buffs) p.buffs = s.buffs;
+      if (s.recipes) p.recipes = s.recipes;
+      if (s.kinds) p.kinds = s.kinds;
+      if (s.look) p.baseLook = s.look;
+      if (s.vigor) p.vigor = s.vigor;
+      if (s.blue) p.blue = s.blue;
+      if (s.stats) this.stats = { ...this.stats, ...s.stats };
+      this.refreshBonus?.();
+      p.recalcMaxHp?.();
+      if (typeof s.hp === 'number') p.hp = Math.max(1, Math.min(p.maxHp, s.hp));
+    }
+    if (a.at) {
+      const y = this.world.findStandY(Math.round(a.at.x), Math.round(a.at.z), a.at.y ?? p.y);
+      const spot = this.findFreeSpot(Math.round(a.at.x), Math.round(a.at.z), y > 0 ? y : p.y);
+      if (spot) this.teleportPlayer(spot.x, spot.y, spot.z);
+    }
+    for (const c of a.creatures || []) {
+      const spot = this.findFreeSpot(p.x + 1 + Math.floor(Math.random() * 3), p.z + 1, p.y);
+      const e = spot ? this.spawnMonster(c.species, spot.x, spot.y, spot.z) : null;
+      if (!e) continue;
+      if (typeof c.hp === 'number') e.hp = Math.max(1, Math.min(e.maxHp, c.hp));
+      if (c.modVars) e.modVars = c.modVars;
+      if (c.pet && s) e.petOf = p;
+    }
+  }
+
   // (Round 64) A mod's weapon swung or shot; a blow taken on a mod's shield.
   modSwing(p, shot) {
     if (MODS.active.length) modSwung(this, p, shot);
@@ -6965,6 +7053,10 @@ export class Game {
       // (Round 62) The world's mods: which, the numbers their blocks are
       // kept by, and what their graphs keep.
       mods: modSave(this),
+      // (Round 65) Which of a mod's world maps it's made from, if not the
+      // one its mods chose, and the world it was crossed into from.
+      worldMap: this.worldMap || null,
+      worldRoot: this.worldRoot || null,
       // A world played with others: each one's character, kept for when
       // they come back, and who's not welcome.
       party: this.partyWorld ? this.partySave() : null,

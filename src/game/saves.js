@@ -287,6 +287,8 @@ export class SaveStore {
   remove(id, quiet = false) {
     this.forget(id);
     if (!quiet) this.onChange?.(id, null);
+    // (Round 65) The worlds crossed into from it go with it.
+    if (!String(id).includes('~')) for (const k of Object.keys(this.index())) if (k.startsWith(`${id}~`)) this.remove(k, true);
     try {
       this.st.removeItem(slotKey(id));
       if (this.db) this.db.del(slotKey(id)).catch(() => {});
