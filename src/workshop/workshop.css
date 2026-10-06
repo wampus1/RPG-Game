@@ -259,6 +259,7 @@ input[type=range].rng::-moz-range-thumb { width: 12px; height: 12px; border-radi
 .toolbar .title input:focus { border-color: var(--gold2); outline: none; background: var(--bg); }
 .toolbar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .toolbar .spacer { flex: 1; }
+.toolbar select.inp { width: auto; }
 .vtools { width: 46px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; background: var(--bg2); border-right: 1px solid var(--line); }
 .vtools .btn { width: 34px; height: 32px; padding: 0; }
 .vtools .gap { height: 8px; }
@@ -325,6 +326,33 @@ input[type=range].rng::-moz-range-thumb { width: 12px; height: 12px; border-radi
 .hotbar .blockbtn { flex: none; }
 .mark-form .field { margin-bottom: 6px; }
 .mark-form .check { margin: 4px 0 8px; }
+
+/* The VFX timeline. */
+.vfx-tl { flex: none; border-top: 1px solid var(--line); background: var(--bg2); max-height: 240px; overflow-y: auto; }
+.vt { display: flex; min-height: 70px; }
+.vt-names { width: 150px; flex: none; border-right: 1px solid var(--line); }
+.vt-n { height: 22px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 11px; color: var(--dim); cursor: pointer; white-space: nowrap; overflow: hidden; }
+.vt-n.head { height: 20px; color: var(--faint); cursor: default; }
+.vt-n.on { color: var(--gold); background: var(--sel); }
+.vt-n.sub { padding-left: 24px; color: var(--faint); cursor: default; height: 18px; }
+.vt-lane { flex: 1; position: relative; min-width: 0; }
+.vt-ruler { height: 20px; position: relative; border-bottom: 1px solid var(--line); cursor: ew-resize; background: var(--panel); }
+.vt-ruler .tick { position: absolute; top: 3px; font-size: 10px; color: var(--faint); transform: translateX(2px); border-left: 1px solid var(--line2); padding-left: 3px; height: 14px; pointer-events: none; }
+.vt-end { position: absolute; top: 0; bottom: -2000px; width: 0; border-left: 1px dashed var(--gold2); pointer-events: none; opacity: 0.6; }
+.vt-row { height: 22px; position: relative; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.vt-row.on { background: rgba(255, 224, 112, 0.04); }
+.vt-row.sub { height: 18px; cursor: copy; background: rgba(0, 0, 0, 0.15); }
+.vt-bar { position: absolute; top: 4px; bottom: 4px; border-radius: 3px; background: #5a4a8a; cursor: grab; min-width: 4px; }
+.vt-bar.t-emitter { background: #8a5a3a; }
+.vt-bar.t-ring { background: #3a6a8a; }
+.vt-bar.t-glow { background: #8a7a3a; }
+.vt-bar.off { opacity: 0.35; }
+.vt-bar .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.vt-bar .grip.l { left: 0; }
+.vt-bar .grip.r { right: 0; }
+.vt-key { position: absolute; top: 4px; width: 9px; height: 9px; margin-left: -4px; background: var(--gold2); transform: rotate(45deg); cursor: grab; border: 1px solid #000; }
+.vt-key.on { background: #fff; }
+.vt-head { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--red); pointer-events: none; }
 
 /* Loot tables. */
 .lt-h { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; color: var(--gold); }

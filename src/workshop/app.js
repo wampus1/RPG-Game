@@ -20,6 +20,7 @@ import { TEMPLATES, TEMPLATE_INFO } from '../mod/nodes.js';
 import { GAME_VERSION } from '../version.js';
 import { starter } from './graph.js';
 import { voxPicture, structVox, layoutVox } from './voxview.js';
+import { VfxPlayer, newEffect, newLayer, EMITTER_PRESETS } from '../mod/vfx.js';
 
 // Which tool edits each collection.
 export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph' };
@@ -729,6 +730,22 @@ export class Workshop {
       c.getContext('2d').drawImage(src, 0, 0);
       return c;
     }
+    if (kind === 'vfx') {
+      let src = this.thumbs.get(k);
+      if (src === undefined) {
+        try {
+          src = vfxPicture(this, t);
+        } catch {
+          src = null;
+        }
+        this.thumbs.set(k, src);
+      }
+      if (src) {
+        const c = canvas(src.width, src.height);
+        c.getContext('2d').drawImage(src, 0, 0);
+        return c;
+      }
+    }
     if (kind === 'structures' || kind === 'layouts' || kind === 'dungeons') {
       let src = this.thumbs.get(k);
       if (src === undefined) {
@@ -928,11 +945,28 @@ export class Workshop {
   }
 }
 
+// A moment of an effect, as a small picture (on the dark).
+function vfxPicture(app, fx) {
+  const art = (aid) => {
+    const a = app.mod.assets[aid];
+    if (!a) return null;
+    return { frames: a.frames.map((f, i) => app.assetCanvas(a, i)), durs: a.frames.map((f) => f.dur || 100), tags: a.tags || [] };
+  };
+  const p = new VfxPlayer(fx, { art, loop: true, seed: 3 });
+  p.seek(Math.max(0.05, (+fx.dur || 1) * 0.35));
+  const c = canvas(40, 40);
+  const x = c.getContext('2d');
+  x.fillStyle = '#120e18';
+  x.fillRect(0, 0, 40, 40);
+  p.draw(x, 20, 30);
+  return c;
+}
+
 // ------------------------------------------------------------ what's new
 // What each new thing starts as.
 const DEFAULTS = {
   assets: (d) => newAsset({ name: d.name || 'Sprite', w: d.w || 16, h: d.h || 16 }),
-  vfx: (d) => ({ name: 'Effect', dur: 1.2, loop: true, bg: 'grass', layers: d.from && d.from.asset ? [{ id: 'l1', type: 'sprite', name: 'Sprite', asset: d.from.asset, anim: { bob: 2, spin: 0, pulse: 0.1 }, fps: 8 }] : [{ id: 'l1', type: 'emitter', name: 'Sparks', preset: 'sparks' }] }),
+  vfx: (d) => newEffect(d.from && d.from.asset ? { layers: [newLayer('sprite', { id: 'l1', name: 'Art', asset: d.from.asset, anim: { ...newLayer('sprite').anim, bob: 2, bobHz: 0.8, pulse: 0.06, pulseHz: 1.2 } }), newLayer('emitter', { ...EMITTER_PRESETS.magic, id: 'l2', preset: 'magic', name: 'Sparkle' })] } : {}),
   rigs: (d) => ({ name: 'Rig', asset: d.asset || null, parts: [], bones: [], anims: {} }),
   structures: () => ({ name: 'Structure', w: 11, d: 11, h: 8, ground: 1, pal: ['keep'], cells: '', metas: '', marks: [], place: { where: 'wild', biomes: [], count: 2, isle: 'any', clear: true } }),
   layouts: () => ({ name: 'Layout', pieces: [], paths: [], place: { where: 'wild', biomes: [], count: 1, isle: 'any', clear: true }, size: 48 }),

@@ -7,6 +7,7 @@ import { TEX, addLate, resetLate, avgOf, SPR_H, TALL_H } from '../render/texture
 import { forgetModArt, toCanvas } from '../render/sprites.js';
 import { Px, shade } from '../render/pixel.js';
 import { TILE, LH } from '../config.js';
+import { VfxPlayer } from './vfx.js';
 
 const toPx = (pix) => {
   const p = new Px(pix.w, pix.h);
@@ -195,5 +196,75 @@ MODS.draw = (r, ctx, game, dt) => {
     ctx.globalAlpha = 1;
   }
 };
+
+// ------------------------------------------------------------ effects
+// A mod's art as an effect wants it: each frame a canvas, how long each
+// lasts, its tags.
+const vfxArt = new Map();
+export function effectArt(mod, id) {
+  const k = `${mod.id}:${id}:${MODS.serial}`;
+  if (vfxArt.has(k)) return vfxArt.get(k);
+  const a = mod.assets[id];
+  let out = null;
+  if (a) {
+    const frames = a.frames.map((f, i) => {
+      const pix = assetPixels(mod, id, i, null, null);
+      return pix ? toCanvas(toPx(pix)) : null;
+    }).filter(Boolean);
+    out = { frames, durs: a.frames.map((f) => f.dur || 100), tags: a.tags || [] };
+  }
+  if (vfxArt.size > 400) vfxArt.clear();
+  vfxArt.set(k, out);
+  return out;
+}
+
+// An effect played: at a place, or on someone (following them if
+// `o.follow`). Returns a handle (set .done to stop it).
+MODS.playVfx = (game, mod, id, at, o = {}) => {
+  if (!game || !mod || !id || !at) return null;
+  const rec = MODS.vfx.get(`${mod.id}:${id}`);
+  if (!rec) return null;
+  const def = rec.v;
+  const ent = typeof at.hp === 'number' ? at : null;
+  const list = (game.modVfx ||= []);
+  if (list.length > 160) list.shift().done = true;
+  const inst = {
+    player: new VfxPlayer(def, { art: (aid) => effectArt(mod, aid), scale: o.scale || 1, loop: o.loop ?? !!def.loop, seed: (Math.random() * 2 ** 31) | 0 }),
+    ent: ent && (o.follow || o.loop) ? ent : null,
+    pos: { x: ent ? ent.x : at.x, y: ent ? ent.y : at.y, z: ent ? ent.z : at.z },
+    done: false,
+    last: null,
+  };
+  list.push(inst);
+  const near = game.player && Math.abs(game.player.x - inst.pos.x) < 40 && Math.abs(game.player.z - inst.pos.z) < 30;
+  if (def.sound) game.audio?.play(def.sound, inst.pos);
+  if (near && def.shake) game.shake = Math.min(1.4, (game.shake || 0) + def.shake * 0.12);
+  if (near && def.flash) game.renderer?.flashScreen?.(def.flash, 0.25);
+  return inst;
+};
+
+MODS.drawVfx = (r, ctx, game, dt) => {
+  const list = game.modVfx;
+  if (!list || !list.length) return;
+  const keep = [];
+  for (const q of list) {
+    if (q.done || q.player.done || (q.ent && (q.ent.dead || q.ent.removed))) continue;
+    q.player.step(dt || 1 / 60);
+    if (q.player.done) continue;
+    const e = q.ent;
+    const rp = e && e.renderPos ? e.renderPos() : e || q.pos;
+    const { x, y, z } = rp;
+    const [u, v] = r.toView(x, z);
+    const sx = u * TILE + 8 - r.camX;
+    const sy = v * TILE - y * LH + LH + 10 - r.camY;
+    if (q.last && e) q.player.shift(sx + r.camX - q.last[0], sy + r.camY - q.last[1]);
+    q.last = [sx + r.camX, sy + r.camY];
+    keep.push(q);
+    if (sx < -120 || sy < -120 || sx > r.vw + 120 || sy > r.vh + 120) continue;
+    q.player.draw(ctx, Math.round(sx), Math.round(sy));
+  }
+  game.modVfx = keep;
+};
+MODS.hooks.uninstall.push(() => vfxArt.clear());
 
 export { composite, resample };
