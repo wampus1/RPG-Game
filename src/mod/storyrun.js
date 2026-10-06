@@ -369,7 +369,62 @@ export function compileStory(mod, story) {
       case 'st.set':
         node.enter = (th, S) => {
           const k = String(v.name || 'value').replace(/[^\w-]/g, '');
-          th.vars[k] = v.op === 'set' ? +v.value || 0 : (+th.vars[k] || 0) + (+v.value || 0);
+          // (Round 64: what's typed can have values in it too.)
+          const by = +words(th, S, String(v.value ?? 1)) || 0;
+          if (v.op === 'set') th.vars[k] = by;
+          else if (v.op === 'take away') th.vars[k] = (+th.vars[k] || 0) - by;
+          else if (v.op === 'a random number up to') th.vars[k] = Math.floor(S.rng(th, hashString(n.id)).next() * (Math.max(0, by) + 1));
+          else if (v.op === 'words') th.vars[k] = words(th, S, v.words ?? '');
+          else th.vars[k] = (+th.vars[k] || 0) + by;
+          on(th, S, n.id, 'next');
+        };
+        break;
+      case 'st.take':
+        node.enter = (th, S) => {
+          const it = ref(mod, v.item);
+          const want = Math.max(1, +v.count || 1);
+          const who = inIt(th, S).find(({ p }) => p.inv && p.inv.reduce((s, q) => s + (q && q.item === it ? q.count : 0), 0) >= want);
+          if (!who || !it) return on(th, S, n.id, 'no');
+          let left = want;
+          for (let i = 0; i < who.p.inv.length && left > 0; i++) {
+            const q = who.p.inv[i];
+            if (!q || q.item !== it) continue;
+            const k = Math.min(left, q.count);
+            q.count -= k;
+            left -= k;
+            if (q.count <= 0) who.p.inv[i] = null;
+          }
+          if (v.text) S.tell(who.pid, words(th, S, v.text, n), '#ffe070');
+          on(th, S, n.id, 'ok');
+        };
+        break;
+      case 'st.rep':
+        node.enter = (th, S) => {
+          const k = Math.round(+v.n || 0);
+          for (const pid of players(th, S)) {
+            if (v.by === 'the town' || !v.by) {
+              if (th.sid !== null && th.sid !== undefined) S.townSay(pid, th.sid, k);
+            } else {
+              const r = th.cast[v.by === 'the other' ? 'other' : 'giver'];
+              if (r && r.t === 'rec' && S.sim.repEntry) S.sim.repEntry(r.sid, r.idx).v += k;
+            }
+            if (v.text) S.tell(pid, words(th, S, v.text, n), k >= 0 ? '#a0e080' : '#e09080');
+          }
+          on(th, S, n.id, 'next');
+        };
+        break;
+      case 'st.say':
+        node.enter = (th, S) => {
+          const r = th.cast[v.who === 'other' ? 'other' : 'giver'];
+          const e = r ? resolve(S, r) : null;
+          if (e && e.say) e.say(words(th, S, v.text, n), 4);
+          on(th, S, n.id, 'next');
+        };
+        break;
+      case 'st.spawn':
+        node.enter = (th, S) => {
+          const at = spotFor(th, S, n, v.spot);
+          if (at) (th.vars._spawns ||= []).push({ sp: ref(mod, v.creature), n: Math.max(1, Math.min(12, +v.count || 1)), x: at.x, z: at.z });
           on(th, S, n.id, 'next');
         };
         break;
@@ -536,8 +591,22 @@ export function compileStory(mod, story) {
   return M;
 }
 
-// Structures a story's waiting to put up, raised once someone's near.
+// Structures a story's waiting to put up, raised once someone's near (and,
+// round 64, creatures waiting to come).
 function raisePending(th, S, mod) {
+  for (const q of th.vars._spawns || []) {
+    if (q.done || !q.sp || !MODS.species?.(q.sp)) continue;
+    if (!S.players().some(({ p }) => Math.max(Math.abs(p.x - q.x), Math.abs(p.z - q.z)) <= 40)) continue;
+    q.done = true;
+    const game = S.game;
+    for (let i = 0; i < q.n; i++) {
+      const y = game.world.findStandY(q.x + (i % 3) * 2, q.z + Math.floor(i / 3) * 2);
+      if (y < 1) continue;
+      const s = game.findFreeSpot(q.x + (i % 3) * 2, q.z + Math.floor(i / 3) * 2, y);
+      const c = game.spawnMonster(q.sp, s.x, s.y, s.z);
+      if (c) c.home = { x: q.x, z: q.z };
+    }
+  }
   const list = th.vars._places;
   if (!list || !list.length) return;
   for (const q of list) {

@@ -43,9 +43,9 @@ def('st.start', {
     P('title', 'text', 'Called', 'Trouble in {town}'),
     pick('when', 'Starts', ['now and then', 'after a game story ends', 'when an event is sent', 'only when started'], 'now and then'),
     P('chance', 'number', 'Chance a day (%)', 8, { min: 0, max: 100, show: { when: ['now and then'] } }),
-    P('after', 'text', 'After the story', '', { adv: true, show: { when: ['after a game story ends'] } }),
-    P('outcome', 'text', 'Ending (blank: any)', '', { adv: true, show: { when: ['after a game story ends'] } }),
-    P('event', 'text', 'On the event', 'my_event', { adv: true, show: { when: ['when an event is sent'] } }),
+    P('after', 'text', 'After the story', '', { show: { when: ['after a game story ends'] } }),
+    P('outcome', 'text', 'Ending (blank: any)', '', { show: { when: ['after a game story ends'] } }),
+    P('event', 'text', 'On the event', 'my_event', { show: { when: ['when an event is sent'] } }),
     pick('where', 'In', WHERE_TOWN, 'any town'),
     pick('giver', 'Asking', WHO, 'someone grown'),
     pick('other', 'And', WHO, 'nobody'),
@@ -154,7 +154,39 @@ def('st.set', {
   cat: 'Story', story: true, color: C.flow, title: 'Set a value',
   help: 'A value the story keeps (a count, a choice made), for If and for words ({name}).',
   in: [flowIn],
-  props: [P('name', 'text', 'Value', 'trust'), pick('op', 'To', ['set', 'add'], 'add'), P('value', 'number', 'By', 1, { min: -999, max: 999 })],
+  props: [P('name', 'text', 'Value', 'trust'), pick('op', 'To', ['set', 'add', 'take away', 'a random number up to', 'words'], 'add'), P('value', 'number', 'By', 1, { min: -999, max: 999, show: { op: { not: ['words'] } } }), P('words', 'text', 'Words', '{giver}', { show: { op: ['words'] } })],
+  out: [out('next', 'Then')],
+});
+
+def('st.take', {
+  cat: 'Story', story: true, color: C.world, title: 'Take',
+  help: 'Something taken from a player in the story, if one has enough (Taken), or not (Hasn\'t).',
+  in: [flowIn],
+  props: [P('item', 'item', 'Item', 'coin'), P('count', 'number', 'How many', 5, { min: 1, max: 999 }), P('text', 'text', 'Told', '{giver} takes it gratefully.')],
+  out: [out('ok', 'Taken'), out('no', 'Hasn\'t')],
+});
+
+def('st.rep', {
+  cat: 'Story', story: true, color: C.world, title: 'Thought of',
+  help: 'How the players in the story are thought of: by the town (and the towns near it), or by the giver or the other alone. Less, if it\'s below 0.',
+  in: [flowIn],
+  props: [pick('by', 'By', ['the town', 'the giver', 'the other'], 'the town'), P('n', 'number', 'More by', 5, { min: -50, max: 50 }), P('text', 'text', 'Told', '', { adv: true })],
+  out: [out('next', 'Then')],
+});
+
+def('st.say', {
+  cat: 'Story', story: true, color: C.talk, title: 'Says aloud',
+  help: 'The giver or the other says something aloud, where they stand (seen by anyone near).',
+  in: [flowIn],
+  props: [pick('who', 'Who', ROLES, 'giver'), P('text', 'text', 'Says', 'Has anyone seen {other}?', { long: true })],
+  out: [out('next', 'Then')],
+});
+
+def('st.spawn', {
+  cat: 'Story', story: true, color: C.world, title: 'Creatures come',
+  help: 'Creatures of a kind appear (when someone\'s near enough to see them): near the town, far out, in it, or by the giver.',
+  in: [flowIn],
+  props: [P('creature', 'creature', 'Creature', 'wolf'), P('count', 'number', 'How many', 3, { min: 1, max: 12 }), pick('spot', 'Where', SPOTS, 'out near the town')],
   out: [out('next', 'Then')],
 });
 
@@ -207,4 +239,4 @@ def('st.end', {
   out: [],
 });
 
-export const STORY_NODE_TYPES = ['st.start', 'st.news', 'st.task', 'st.talk', 'st.wait', 'st.chance', 'st.check', 'st.set', 'st.give', 'st.place', 'st.event', 'st.until', 'st.story', 'st.end'];
+export const STORY_NODE_TYPES = ['st.start', 'st.news', 'st.task', 'st.talk', 'st.say', 'st.wait', 'st.chance', 'st.check', 'st.set', 'st.give', 'st.take', 'st.rep', 'st.spawn', 'st.place', 'st.event', 'st.until', 'st.story', 'st.end'];

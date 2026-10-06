@@ -148,12 +148,14 @@ export class Creature extends Entity {
   // How long a step takes it (quicker rallied, slower chilled).
   stepTime() {
     const m = this.modFx ? 1 / Math.max(0.2, 1 + modStat(this, 'speed') / 100) : 1;
-    return this.S.step * (this.hasteT > 0 ? 0.7 : 1) * (this.slowT > 0 ? 1.4 : 1) * m;
+    // (Round 64: and a mod's Change pace.)
+    return (this.S.step * (this.hasteT > 0 ? 0.7 : 1) * (this.slowT > 0 ? 1.4 : 1) * m) / (this.modPace || 1);
   }
 
   get hostileNow() {
-    // (Someone's companion, from a mod's character screen: never.)
-    return !this.petOf && (this.S.mode === 'hostile' || this.angry);
+    // (Someone's companion, from a mod's character screen: never. Nor one
+    // a mod's graph has calmed: see hooks.SVC.temper.)
+    return !this.petOf && !this.modCalm && (this.S.mode === 'hostile' || this.angry);
   }
 
   // A beast of the wild (a wolf, a boar, an ash lizard), not a thing of

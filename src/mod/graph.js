@@ -243,6 +243,16 @@ export class Runner {
         const y = { ...x, locals: { ...x.locals, ...(extra || {}) }, steps: 0 };
         self.host.later(sec, () => self.fire(y, n.id, port), x);
       },
+      // (Round 64) The rest of the flow from `port`, whenever the function
+      // handed back is called (a creature got where it was sent, say).
+      afterwards: (port) => {
+        const y = { ...x, locals: { ...x.locals }, steps: 0 };
+        return (extra = null) => {
+          if (extra) Object.assign(y.locals, extra);
+          y.steps = 0;
+          self.fire(y, n.id, port);
+        };
+      },
       ask: (text, choices, cb) => self.host.ask(x, text, choices, cb, n),
       host: self.host,
       x,

@@ -17,6 +17,8 @@ import { ringTiles, proc } from '../entities/bosskit.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { modStat } from './stat.js';
 import { charGenTick, petFell } from './chargen.js';
+import { setOrder, orderTick, doingOf, leapTick } from './behave.js';
+import { compareValues } from './storyrun.js';
 import './build.js';
 import './storyrun.js';
 
@@ -313,6 +315,155 @@ Object.assign(SVC, {
   guard(x, secs) {
     if (isEnt(x.self)) x.self.modGuardT = Math.max(x.self.modGuardT || 0, secs);
   },
+  // (Round 64) Drop what someone has: in a hand, an armour slot, a slot of
+  // their pack. The item's key, or null if there was nothing.
+  dropFrom(x, e, o, at) {
+    const g = x.game;
+    if (!e || !at) return null;
+    let k = null;
+    let n = 0;
+    const take = (slot, all) => {
+      const s = e.inv && e.inv[slot];
+      if (!s) return;
+      k = s.item;
+      n = all ? s.count : Math.min(s.count, Math.max(1, Math.round(o.n)));
+      s.count -= n;
+      if (s.count <= 0) e.inv[slot] = null;
+    };
+    if (o.from === 'the main hand') {
+      if (e.kind === 'player') take(e.selected, !(o.n > 0));
+      else if (e.arms && e.arms !== 'bow') {
+        k = e.arms;
+        n = 1;
+        e.arms = null;
+      }
+    } else if (o.from === 'a pack slot') take(Math.max(0, Math.min(35, o.slot | 0)), !(o.n > 0));
+    else if (o.from === 'the off hand' || o.from === 'an armour slot') {
+      const slot = o.from === 'the off hand' ? 'shield' : o.wear || 'head';
+      if (e.equip && e.equip[slot]) {
+        k = e.equip[slot];
+        n = 1;
+        e.equip[slot] = null;
+        e.recalcMaxHp?.();
+      } else if (o.from === 'the off hand' && e.offhand) {
+        k = e.offhand;
+        n = 1;
+        e.offhand = null;
+      }
+    }
+    if (!k || !ITEMS[k] || n <= 0) return null;
+    g.spawnDrop(k, n, at.x, at.y, at.z, true);
+    return k;
+  },
+  // What a creature's been told to do (see behave.js).
+  order(x, c, o) {
+    if (!c || c.kind === 'player' || !c.S) return false;
+    setOrder(c, o);
+    return true;
+  },
+  doing: (x, c) => doingOf(c),
+  leap(x, c, to, h) {
+    const g = x.game;
+    if (!c || c.kind === 'player' || !c.S || c.dead) return false;
+    const s = g.findFreeSpot(Math.round(to.x), Math.round(to.z), to.y ?? c.y);
+    if (!s) return false;
+    const d = Math.hypot(s.x - c.x, s.z - c.z);
+    c.face?.(s.x, s.z);
+    c.startMove(s.x, s.y, s.z, Math.max(0.25, Math.min(1, 0.18 + d * 0.06)));
+    c.moveEase = 'out';
+    c.modLeap = { t: 0, dur: c.moveDur, h: Math.max(4, Math.min(40, h)) };
+    g.audio?.play('whoosh', c);
+    return true;
+  },
+  face(x, c, at) {
+    if (c && at && c.face) c.face(Math.round(at.x), Math.round(at.z));
+  },
+  setHome(x, c, at) {
+    if (c && at && c.kind !== 'player') c.home = { x: Math.round(at.x), y: Math.round(at.y ?? c.y), z: Math.round(at.z) };
+  },
+  temper(x, c, how, secs) {
+    if (!c || c.kind === 'player' || !c.S) return;
+    if (how === 'calm') {
+      c.modCalm = true;
+      c.angry = false;
+      c.target = null;
+    } else if (how === 'hostile') {
+      c.modCalm = false;
+      c.angry = true;
+      if (isEnt(x.target) && x.target !== c) c.target = x.target;
+    } else {
+      c.modCalm = false;
+      c.angry = false;
+    }
+    c.modCalmT = how !== 'its nature' && secs > 0 ? secs : 0;
+    c.modCalmAs = how;
+  },
+  pace(x, c, k, secs) {
+    if (!c || c.kind === 'player') return;
+    c.modPace = Math.max(0.2, Math.min(5, k || 1));
+    c.modPaceT = secs > 0 ? secs : 0;
+  },
+  join(x, c, p, leave) {
+    if (!c || c.kind === 'player' || !c.S) return;
+    if (leave) {
+      if (!c.petId) c.petOf = null;
+      return;
+    }
+    if (p && p.kind === 'player') {
+      c.petOf = p;
+      c.angry = false;
+      c.target = null;
+      setOrder(c, null);
+    }
+  },
+  weather(x, kind, mins) {
+    const g = x.game;
+    const now = g.day * 24 * 60 + g.minute;
+    g.modWeather = kind === 'as it would be' ? null : { kind, until: now + Math.max(1, mins) };
+    if (g.weather) g.weather.t = 0;
+  },
+  setTime(x, how, h) {
+    const g = x.game;
+    const m = Math.round(h * 60);
+    if (how === 'add hours') {
+      const t = g.minute + m;
+      g.day += Math.floor(t / 1440);
+      g.minute = ((t % 1440) + 1440) % 1440;
+    } else g.minute = ((m % 1440) + 1440) % 1440;
+  },
+  fill(x, a, b, ref) {
+    const k = key(x, ref);
+    const id = !k || k === 'air' ? B.air : B[k];
+    if (id === undefined) return 0;
+    const w = x.game.world;
+    const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+    const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+    const [z0, z1] = [Math.min(a.z, b.z), Math.max(a.z, b.z)];
+    let n = 0;
+    // (No more than a few thousand at once.)
+    for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let xx = x0; xx <= x1; xx++) {
+      if (++n > 4096) return n - 1;
+      w.setBlock(xx, y, z, id);
+    }
+    return n;
+  },
+  weatherNow(x) {
+    const w = x.game.weather;
+    return (w && w.kind) || 'clear';
+  },
+  roofed: (x, at) => !!x.game.roofed?.(at.x, at.y, at.z),
+  counter(x, id, every) {
+    const holder = x.self && typeof x.self === 'object' ? x.self : modState(x.game);
+    const m = (holder.modCounts ||= {});
+    const k = `${x.rec ? x.rec.key : ''}:${id}`;
+    m[k] = (m[k] || 0) + 1;
+    if (m[k] >= every) {
+      m[k] = 0;
+      return true;
+    }
+    return false;
+  },
+  compare: (a, op, b) => compareValues(a, op, b),
 });
 
 // The values kept for the world (saved with it).
@@ -761,6 +912,16 @@ export function modStruck(game, a, v, amount) {
   } else if (a.S && a.S.modKey) fire(game, a.S.modKey, 'onAttack', { self: a, target: v });
 }
 
+// (Round 64) A mod's weapon swung (or shot); a blow taken on a mod's shield.
+export function modSwung(game, p, shot) {
+  const k = p && p.heldItem ? p.heldItem() : null;
+  if (k && ITEMS[k] && ITEMS[k].mod) fire(game, k, shot ? 'onShoot' : 'onSwing', { self: p, player: p, item: k, pos: posOf(p), target: p.swing?.target || null });
+}
+export function modBlockedBlow(game, v, a) {
+  const k = v && v.equip && v.equip.shield;
+  if (k && ITEMS[k] && ITEMS[k].mod) fire(game, k, 'onBlock', { self: v, player: v.kind === 'player' ? v : null, target: a, item: k, pos: posOf(v) });
+}
+
 // Someone hurt (after armour): their own graph, their worn pieces', a
 // master's phases.
 export function modHurt(game, t, src, amount) {
@@ -879,16 +1040,34 @@ export function modBrain(c, dt) {
     c.modTickT = Math.max(0.2, rec.f.tick || 1);
     fire(game, rec.key, 'onTick', { self: c });
   }
-  // Timers in its graph (Every so often).
+  // Timers in its graph (Every so often); (round 64) someone come near or
+  // gone, its health low.
   for (const n of rec.prog.starts) {
+    if (n.type === 'ev.near') {
+      nearTick(game, rec, c, n, dt);
+      continue;
+    }
+    if (n.type === 'ev.lowhp') {
+      const low = (100 * c.hp) / Math.max(1, c.maxHp) < num((n.v || {}).pct, 50);
+      const m = (c.modLow ||= {});
+      if (low && !m[n.id]) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: c.target || null })), n.id, 'fire');
+      m[n.id] = low;
+      continue;
+    }
     if (n.type !== 'ev.timer') continue;
     const k = `t:${n.id}`;
     const m = (c.modTimersT ||= {});
     m[k] = (m[k] ?? 0) - dt;
     if (m[k] > 0) continue;
-    m[k] = Math.max(0.2, (n.v && n.v.every) || 5);
+    m[k] = Math.max(0.2, num((n.v || {}).every, 5));
     rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c })), n.id, 'fire');
   }
+  // (Round 64) Calmed, riled or sped up for a while: back as it was.
+  if (c.modCalmT > 0 && (c.modCalmT -= dt) <= 0) {
+    c.modCalm = false;
+    if (c.modCalmAs === 'hostile') c.angry = false;
+  }
+  if (c.modPaceT > 0 && (c.modPaceT -= dt) <= 0) c.modPace = 1;
   // A foe seen for the first time.
   if (c.target && c.target !== c.modSeen) {
     c.modSeen = c.target;
@@ -927,6 +1106,9 @@ export function modBrain(c, dt) {
   }
   // Cooldowns run down.
   if (c.modAbCd) for (const k of Object.keys(c.modAbCd)) c.modAbCd[k] -= dt;
+  // (Round 64) What it's been told to do, before its own ways (see
+  // behave.js).
+  if (c.modOrder && orderTick(c, dt)) return true;
   // (One with no blow of its own keeps its distance: its abilities are
   // all it has.)
   if (S.noAttack && c.hostileNow && c.target && Math.hypot(c.target.x - c.x, c.target.z - c.z) <= 4) return true;
@@ -944,6 +1126,24 @@ export function modBrain(c, dt) {
     return true;
   }
   return false;
+}
+
+// (Round 64) Someone come within so many paces of a creature (its On
+// someone near), or gone off again.
+const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && !Number.isNaN(+v) ? +v : d);
+function nearTick(game, rec, c, n, dt) {
+  const m = (c.modNearT ||= {});
+  m[n.id] = (m[n.id] ?? Math.random() * 0.4) - dt;
+  if (m[n.id] > 0) return;
+  m[n.id] = 0.4;
+  const v = n.v || {};
+  const sp = v.species ? resolveRef(rec.mod, v.species) : null;
+  const list = near(game, c, num(v.r, 5), (n.p && n.p.which) || 'players', c).filter((e) => e !== c && (!sp || e.species === sp));
+  const was = ((c.modNearIn ||= {})[n.id] ||= new Set());
+  const now = new Set(list);
+  for (const e of list) if (!was.has(e)) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: e })), n.id, 'fire');
+  for (const e of was) if (!now.has(e) && rec.prog.next.has(`${n.id}.gone`)) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: e })), n.id, 'gone');
+  c.modNearIn[n.id] = now;
 }
 
 function pickAbility(c, rec) {
@@ -1076,13 +1276,45 @@ export function modTick(game, dt) {
         rec.timer = Math.max(1, f.every || 60);
         worldEvent(game, rec, { player: game.player, pos: posOf(game.player) });
       }
-    } else if (f.when === 'dawn' || f.when === 'dusk') {
-      const at = f.when === 'dawn' ? 6 : 19.5;
+    } else if (f.when === 'dawn' || f.when === 'dusk' || f.when === 'at an hour') {
+      const at = f.when === 'dawn' ? 6 : f.when === 'dusk' ? 19.5 : Math.max(0, Math.min(23.99, num(f.hour, 12)));
       const k = `${f.when}:${rec.key}`;
       const day = game.day;
       if (hour >= at && st.events[k] !== day) {
         st.events[k] = day;
         worldEvent(game, rec, { player: game.player, pos: posOf(game.player) });
+      }
+    } else if (f.when === 'a player joins' || f.when === 'a player is downed') {
+      // (Round 64) Each player come into the world, or knocked down.
+      for (const p of game.everyone()) {
+        const k = f.when === 'a player joins' ? 'modJoined' : 'modDowned';
+        const seen = (p[k] ||= {});
+        const now = f.when === 'a player joins' ? true : !!(p.down || p.dead);
+        if (now && !seen[rec.key]) worldEvent(game, rec, { target: p, player: p, pos: posOf(p) });
+        seen[rec.key] = now;
+      }
+    } else if (f.when === 'it starts to rain') {
+      const wet = !!(game.weather && (game.weather.kind === 'rain' || game.weather.kind === 'snow'));
+      if (wet && !rec.wasWet) worldEvent(game, rec, { player: game.player, pos: posOf(game.player), payload: game.weather.kind });
+      rec.wasWet = wet;
+    }
+  }
+  // (Round 64) Leaps through the air, carried along.
+  for (const c of game.creatures) if (c.modLeap) leapTick(c, dt);
+  // (Round 64) Every so often, for what a player holds or wears.
+  for (const p of game.everyone()) {
+    const keys = new Set([p.heldItem ? p.heldItem() : null, ...Object.values(p.equip || {})].filter((k) => k && ITEMS[k] && ITEMS[k].mod));
+    for (const k of keys) {
+      const rec = MODS.ents.get(k);
+      if (!rec) continue;
+      for (const n of rec.prog.starts) {
+        if (n.type !== 'ev.timer') continue;
+        const m = (p.modTimersT ||= {});
+        const tk = `${k}:${n.id}`;
+        m[tk] = (m[tk] ?? 0) - dt;
+        if (m[tk] > 0) continue;
+        m[tk] = Math.max(0.2, num((n.v || {}).every, 5));
+        rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: p, player: p, item: k })), n.id, 'fire');
       }
     }
   }

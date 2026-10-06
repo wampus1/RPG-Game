@@ -460,7 +460,10 @@ export function guardBlow(game, a, v, amount, st, opts = null) {
     v.shieldJolt = 0.18;
     if (v.kind !== 'player') v.guardT = 0.7;
     game.renderer.emit(v.x, v.y + 1.1, v.z, { n: 8, color: ['#ffffff', '#ffe8a0', '#c8d8ff'], up: 30, speed: 60, life: 0.25, glow: true });
-    if (!(v.guardBroken > 0)) onBlock(game, v, a, false, before - amount);
+    if (!(v.guardBroken > 0)) {
+      onBlock(game, v, a, false, before - amount);
+      game.modBlocked?.(v, a);
+    }
     if (v.kind === 'player') game.shake = Math.min(1.2, (game.shake || 0) + 0.18);
     game.audio?.play('armor_hit', v);
   }
@@ -563,6 +566,7 @@ export function parried(game, v, a) {
   // fury cooled.)
   a.S?.onParried?.(game, a, v);
   onBlock(game, v, a, true);
+  game.modBlocked?.(v, a);
   a.windup = null;
   a.attackCd = Math.max(a.attackCd || 0, 1.2);
   knock(game, v, a, 1);
@@ -761,6 +765,8 @@ export function playerSwing(game, p, target, heavy, land) {
   const quick = 1 / (1 + buffOf(game, 'haste'));
   const dur = st.pw * heftOf(p) * (heavy ? 0.6 : 1) * quick;
   p.swing = { t: 0, dur, target, heavy, st, land };
+  // (Round 64) A mod's weapon: its On swing.
+  game.modSwing?.(p, false);
   p.blocking = false;
   p.sitting = null;
   if (dur <= 0.001) tickSwing(game, p, 0);

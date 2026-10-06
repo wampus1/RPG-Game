@@ -174,6 +174,8 @@ export function aimPoint(game) {
 // as far as it carries or to the first wall in its way, striking the first
 // thing it meets on the way.
 export function shootAimed(game, from, aim, o) {
+  // (Round 64) A mod's weapon: its On shot.
+  if (from && from.kind === 'player') game.modSwing?.(from, true);
   const dx = aim.x - from.x;
   const dz = aim.z - from.z;
   const len = Math.hypot(dx, dz) || 1;

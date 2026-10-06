@@ -88,7 +88,7 @@ import { plainKey } from '../world/quality.js';
 import { GAME_VERSION } from '../version.js';
 import { normalizeHero, KITS, COMMON_KIT, hpBonus, damageMult, digMult, cooldownMult, has as heroHas } from './hero.js';
 // (Round 62) Mods at work: imported last of all, so all they reach is ready.
-import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain } from '../mod/hooks.js';
+import { modUse, modEaten, modStruck, modHurt, modScaleDamage, modKilled, modBlockBroken, modBlockPlaced, modBlockUse, modTalk, modTick, modSpawnPick, modSave, modLoad, modBrain, modSwung, modBlockedBlow } from '../mod/hooks.js';
 import { biomeSpawn } from '../mod/biomes.js';
 import { applyCharGen, startOf } from '../mod/chargen.js';
 import { MODS } from '../mod/registry.js';
@@ -2584,6 +2584,15 @@ export class Game {
 
   // (Round 62) A mod's creature's turn, and a blow landed with a mod's
   // weapon (or by one of a mod's creatures): see mod/hooks.js.
+  // (Round 64) A mod's weapon swung or shot; a blow taken on a mod's shield.
+  modSwing(p, shot) {
+    if (MODS.active.length) modSwung(this, p, shot);
+  }
+
+  modBlocked(v, a) {
+    if (MODS.active.length) modBlockedBlow(this, v, a);
+  }
+
   modBrainOf(c, dt) {
     return modBrain(c, dt);
   }
@@ -5376,6 +5385,8 @@ export class Game {
         this.biomeCache = { x: p.x, z: p.z, biome: col.biome };
       }
       let kind = weatherAt(this.seed, p.x, p.z, this.day * DAY + this.minute, this.biomeCache.biome);
+      // (Round 64) Weather a mod has called down, for a while.
+      if (this.modWeather && this.modWeather.until > this.day * DAY + this.minute) kind = this.modWeather.kind;
       // (Near the storm round the islands it's raining whatever the sky's
       // doing elsewhere; and coming and going at its edge doesn't make the
       // rain stop and start over and over.)
@@ -5937,6 +5948,7 @@ export class Game {
       const mark = heroHas(this.hero, 'marksman');
       const kind = def.thrown ? 'javelin' : ammo === 'none' ? 'pulse' : ammo === 'bolt' ? 'bolt' : ammo === 'cobblestone' ? 'stone' : 'arrow';
       this.shoot(p, target, Math.round((def.damage + (mark ? 2 : 0)) * (1 + buffOf(this, 'fury')) * (Math.random() < (mark ? 0.22 : 0.12) ? 1.8 : 1)), kind);
+      this.modSwing(p, true);
       return;
     }
     if (!inReach(p, target, reach) || Math.abs(target.y - p.y) > 1) {
