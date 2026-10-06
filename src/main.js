@@ -48,6 +48,9 @@ window.__ui = ui;
 const input = new Input(screen, crt);
 window.__input = input;
 let game = null;
+// (Hosting or playing in someone else's world: see below. Declared up here,
+// as the settings applied at start-up already ask after it.)
+let session = null;
 
 function resize() {
   const s = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
@@ -360,7 +363,6 @@ window.__machine = machine;
 dbReady.then(() => machine.start()).catch(() => {});
 let lan = null;
 let lobbyWs = null;
-let session = null;
 let partyNote = null;
 let netT = 0;
 let hostSaveT = 0;
