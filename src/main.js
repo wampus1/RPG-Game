@@ -30,6 +30,8 @@ import { avatarFromKey } from './render/avatar.js';
 // (Round 62) Mods: kept here, put into the game for a world, drawn.
 import { ModLibrary } from './mod/library.js';
 import { installMods, uninstallMods, remapRegion, MODS } from './mod/registry.js';
+import { exportMod } from './mod/format.js';
+import { ModPickWindow } from './ui/modpick.js';
 import './mod/render.js';
 import { ITEMS } from './world/items.js';
 
@@ -168,7 +170,7 @@ function loadFrom(id) {
       ui.msg('That save is from an older world (before the Dagoni Islands) and can\'t be loaded into this one.', '#ff5a50');
       return;
     }
-    versionCheck(data, () => startGame(null, data, id));
+    versionCheck(data, () => worldMods(data, (mods) => startGame(null, data, id, null, { mods })));
   }).catch((e) => ui.msg('Load failed: ' + e.message, '#ff5a50'));
 }
 
@@ -217,6 +219,8 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     // (Round 62) The world's mods put into the game before it's made (their
     // blocks at the numbers the world keeps them by).
     const modded = setMods(opts.mods || [], save);
+    // (The very versions it's made with, kept for it.)
+    for (const m of opts.mods || []) modLib.putPack(m).catch(() => {});
     game = new Game({ seed: s, renderer, audio, ui, save, hero, intro: !!hero && !params.has('nointro') && !opts.playtest });
     if (modded) game.modReport = modded.report;
     game.crt = crt;
@@ -286,10 +290,65 @@ function hideLoading() {
   if (loadingEl) loadingEl.style.display = 'none';
 }
 
-// A new game: make your character first.
+// A new game: its mods (if you have any), then your character.
 function newGame(seed) {
   const s = seed ?? (Math.random() * 2 ** 32) >>> 0;
-  ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, null, hero)));
+  pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, null, hero, { mods }))));
+}
+
+// (Round 62) Which of your mods go into a new world (asked only if you
+// have any): `go(mods)` with them, as they are now (each world keeps the
+// versions it was made with).
+function pickMods(title, go, back = null) {
+  const list = modLib.list();
+  if (!list.length) return go([]);
+  let last = [];
+  try {
+    last = JSON.parse(localStorage.getItem('mods-last-picked') || '[]');
+  } catch {
+    last = [];
+  }
+  ui.open(new ModPickWindow(ui, {
+    title,
+    list: list.map((e) => ({ id: e.id, name: e.name, version: e.version, author: e.author, color: e.color, things: +e.things || 0, mine: e.mine })),
+    chosen: last.filter((id) => modLib.has(id)),
+    go: 'Next',
+    onDone: async (ids) => {
+      try {
+        localStorage.setItem('mods-last-picked', JSON.stringify(ids));
+      } catch {
+        // Fine.
+      }
+      const mods = [];
+      for (const id of ids) {
+        const m = await modLib.get(id);
+        if (m) mods.push(JSON.parse(exportMod(m)));
+      }
+      go(mods);
+    },
+    onBack: back,
+    onWorkshop: () => openWorkshopApp({}),
+  }));
+  return null;
+}
+
+// (Round 62) A saved world's mods, found here: the very versions it was
+// made with (or, if you'd rather, your newer ones). A world whose mods
+// aren't here can't be opened (you're told which). Then `go(mods)`.
+async function worldMods(data, go) {
+  const refs = (data && data.mods && data.mods.refs) || [];
+  if (!refs.length) return go([]);
+  const res = await modLib.resolve(refs);
+  const missing = res.filter((r) => r.missing);
+  if (missing.length) {
+    ui.open(new ConfirmWindow(ui, 'MODS MISSING', `This world was made with ${missing.length > 1 ? 'mods' : 'a mod'} you haven't got: ${missing.map((r) => `"${r.ref.name}" (v${r.ref.version}${r.ref.author ? `, by ${r.ref.author}` : ''})`).join(', ')}. Import ${missing.length > 1 ? 'them' : 'it'} in the Workshop (from whoever made ${missing.length > 1 ? 'them' : 'it'}), then load the world again.`, null, { yes: 'OK', only: true }));
+    return null;
+  }
+  const own = res.map((r) => r.mod || r.newer);
+  const changed = res.filter((r) => r.mod && r.newer);
+  if (!changed.length) return go(own);
+  ui.open(new ConfirmWindow(ui, 'NEWER MODS', `You've changed ${changed.map((r) => `"${r.ref.name}"`).join(', ')} since this world was made. Play it with the versions it was made with (it plays as it always has), or with your newer ones (what's new comes into it; what's gone may leave gaps)?`, () => go(own), { yes: 'Its own versions', no: 'My newer ones', onNo: () => go(res.map((r) => r.newer || r.mod)) }));
+  return null;
 }
 
 ui.hooks = {
@@ -594,7 +653,7 @@ function newHosted(seed) {
       lan,
       onStart: (name) => {
         const s = seed ?? (Math.random() * 2 ** 32) >>> 0;
-        ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, slot, hero, { host: { name } })));
+        pickMods('MODS FOR THIS WORLD', (mods) => ui.open(new CharacterWindow(ui, s, (hero) => startGame(s, null, slot, hero, { host: { name }, mods }))));
       },
     })));
   });
@@ -607,7 +666,7 @@ function continueHosted(id) {
       if (!data) return ui.notify('That world\'s save is empty.');
       if (!(data.v >= SAVE_VERSION)) return ui.notify('That world is from an older version of the game and can\'t be loaded.');
       const name = (data.party && data.party.world && data.party.world.name) || 'My world';
-      return versionCheck(data, () => refreshLan().then(() => ui.open(new HostWindow(ui, { name, lan, onStart: (nm) => startGame(null, data, id, null, { host: { name: nm } }) }))));
+      return versionCheck(data, () => worldMods(data, (mods) => refreshLan().then(() => ui.open(new HostWindow(ui, { name, lan, onStart: (nm) => startGame(null, data, id, null, { host: { name: nm }, mods }) })))));
     }).catch((e) => ui.notify('Load failed: ' + e.message));
   });
 }
@@ -625,7 +684,7 @@ function beginHosting(g, name) {
   }
   const sess = { role: 'host', ws, net: null, world: name, game: g };
   session = sess;
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: accounts.profile, world: { name, gv: GAME_VERSION }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: accounts.profile, world: { name, gv: GAME_VERSION, mods: worldModRefs() }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
   ws.onmessage = (ev) => {
     if (session !== sess) return;
     const text = String(ev.data);
@@ -659,6 +718,11 @@ function beginHosting(g, name) {
   };
 }
 
+// (Round 62) The mods of the world in play: what a joining player needs.
+function worldModRefs() {
+  return MODS.active.map((m) => ({ id: m.id, hash: m.hash, name: m.name, version: m.version, author: m.author || '', color: m.color || null }));
+}
+
 function makeHostNet(g, sess) {
   const send = (text) => {
     if (sess.ws.readyState === 1) sess.ws.send(text);
@@ -666,8 +730,10 @@ function makeHostNet(g, sess) {
   const net = new HostNet(g, {
     send,
     profile: accounts.profile,
-    world: { name: sess.world },
+    world: { name: sess.world, mods: worldModRefs() },
     bans: g.partyBans,
+    // (A mod of the world's, for someone joining without it.)
+    packText: (hash) => modLib.packText(hash),
     makeUI: (guest) => guestUI(guest),
     notify: (text, profile) => ui.notify(text, profile),
     onParty: (list) => {
@@ -741,6 +807,9 @@ function joinWorld(at = null) {
       onFriend: (msg) => friendWord(msg),
       onEnd: (why, title) => leaveWorld(why, title),
     });
+    // (Round 62) The world's mods: had (on we go), or offered, got from the
+    // host, kept, and on we go.
+    net.onMods = (m) => guestMods(net, sess, m);
     // (Something you did in their world, worth an achievement: yours.)
     net.onFeat = (id) => {
       if (feats.unlock(id)) featNote(id);
@@ -761,10 +830,57 @@ function joinWorld(at = null) {
   });
 }
 
+// (Round 62) Joining a world with mods: those you have, used; those you
+// haven't, asked about, then sent by the host and kept in your library.
+async function guestMods(net, sess, m) {
+  const refs = m.mods || [];
+  const want = refs.filter((r) => !modLib.hasPack(r.hash));
+  const ready = async () => {
+    const mods = [];
+    for (const r of refs) {
+      const mod = await modLib.getPack(r.hash);
+      if (!mod) return leaveWorld(`Couldn't get the mod "${r.name}" from the host.`);
+      mods.push(mod);
+    }
+    sess.mods = mods;
+    net.modsReady();
+    return null;
+  };
+  if (!want.length) return ready();
+  hideLoading();
+  const by = m.host ? m.host.name : 'its host';
+  const list = want.map((r) => `"${r.name}" (v${r.version}${r.author ? `, by ${r.author}` : ''})`).join(', ');
+  const them = want.length > 1 ? 'them' : 'it';
+  ui.open(new ConfirmWindow(ui, 'THIS WORLD HAS MODS', `"${m.world}" is played with ${refs.length > 1 ? `${refs.length} mods` : 'a mod'}. You haven't got ${want.length > 1 ? 'these' : 'this one'}: ${list}. Install ${them} from ${by} and join? (Kept in your Workshop library after.)`, async () => {
+    showLoading('Installing mods...');
+    for (const r of want) {
+      const text = await net.requestPack(r.hash);
+      if (session !== sess) return;
+      if (!text) {
+        leaveWorld(`The host couldn't send the mod "${r.name}".`);
+        return;
+      }
+      try {
+        await modLib.addPack(text, { from: by });
+      } catch (e) {
+        leaveWorld(`The mod "${r.name}" couldn't be installed: ${e.message || e}`);
+        return;
+      }
+    }
+    ui.notify(`Installed ${want.length > 1 ? `${want.length} mods` : `"${want[0].name}"`}: they're in your Workshop library now.`, null, '#80e070');
+    showLoading(`Joining "${m.world}"...`);
+    ready();
+  }, { yes: 'Install mods & join', no: 'Not now', onNo: () => leaveWorld(null) }));
+  return null;
+}
+
 // The copy of the host's world on your screen (see net/guest.js).
 function buildGuestGame(save, sess) {
   ui.closeAll();
   ui.messages = [];
+  // (Round 62) The world's mods in first, their blocks numbered as the
+  // host's are.
+  setMods(sess.mods || [], save);
   const g = new Game({ seed: save.seed, renderer, audio, ui, save, hero: null, intro: false, remote: true });
   g.crt = crt;
   g.slot = null;
@@ -801,6 +917,7 @@ function leaveWorld(why, title = null) {
   }
   hideLoading();
   game = null;
+  uninstallMods();
   ui.showHud = false;
   ui.closeAll();
   ui.messages = [];

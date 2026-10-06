@@ -58,6 +58,26 @@ export class GuestNet {
     this.out({ t: 'hero', hero });
   }
 
+  // (Round 62) One of the world's mods, from the host: its text, promised
+  // (null if it can't be had).
+  requestPack(hash) {
+    this.packWait ||= new Map();
+    return new Promise((res) => {
+      this.packWait.set(hash, res);
+      this.out({ t: 'modpack?', hash });
+      setTimeout(() => {
+        if (this.packWait.get(hash) === res) {
+          this.packWait.delete(hash);
+          res(null);
+        }
+      }, 60000);
+    });
+  }
+
+  modsReady() {
+    this.out({ t: 'mods', ok: true });
+  }
+
   receive(text) {
     let m;
     try {
@@ -66,6 +86,15 @@ export class GuestNet {
       return;
     }
     if (m.t === 'needHero') this.onNeedHero(m);
+    // (Round 62) The world's mods: had, or to be got (see main.js).
+    else if (m.t === 'mods?') this.onMods?.(m);
+    else if (m.t === 'modpack') {
+      const w = this.packWait && this.packWait.get(m.hash);
+      if (w) {
+        this.packWait.delete(m.hash);
+        w(m.text || null);
+      }
+    }
     else if (m.t === 'welcome') this.welcome(m);
     else if (m.t === 's') this.snapshot(m);
     else if (m.t === 'party') {
@@ -682,5 +711,6 @@ export function refusal(why, m = {}) {
     version: 'That host is playing a different version of the game.',
     'already here': 'You are already in that world (from another window?).',
     'no account': 'You need an account to join.',
+    mods: 'That world uses mods you didn\'t install.',
   }[why] || `You couldn't join that world${why ? ` (${why})` : ''}.`;
 }

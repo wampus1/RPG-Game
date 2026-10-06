@@ -292,8 +292,9 @@ export class MultiplayerWindow extends Window {
       // server asks, and turns you away then if it must.)
       const other = !old && !!w.gv && !sameVersion(w.gv);
       button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => (other ? hooks.otherVersion(w) : hooks.join(w.at)), { off: !a || w.players >= w.max || old, color: other ? C.orange : C.hi, hint: old || other ? `${versionText(w.gv || null)}` : `${w.players}/${w.max}` });
-      // (Found elsewhere on the network: where.)
-      if (w.at) g.text(7, y + 1, `on another computer, at ${w.at.addr}`, C.faint);
+      // (Found elsewhere on the network: where. With mods: which.)
+      const mods = (w.mods || []).map((q) => q.name).join(', ');
+      if (w.at || mods) g.text(7, y + 1, `${w.at ? `on another computer, at ${w.at.addr}` : ''}${w.at && mods ? ' · ' : ''}${mods ? `mods: ${mods}` : ''}`.slice(0, this.w - 9), mods ? C.purple : C.faint);
       y += 2;
     });
     if (!worlds.length) {

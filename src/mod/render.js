@@ -8,6 +8,7 @@ import { forgetModArt, toCanvas } from '../render/sprites.js';
 import { Px, shade } from '../render/pixel.js';
 import { TILE, LH } from '../config.js';
 import { VfxPlayer } from './vfx.js';
+import { Renderer } from '../render/renderer.js';
 
 const toPx = (pix) => {
   const p = new Px(pix.w, pix.h);
@@ -155,7 +156,31 @@ function shotImg(mod, id) {
   return img;
 }
 
+// (A shot seen in someone else's world: only its look, flying on.)
+Renderer.prototype.modShot = function modShot(modId, look, color, x, y, z, vx, vz, life, lob, arc) {
+  const game = this.game;
+  if (!game || !game.remote) return;
+  const mod = MODS.byId.get(modId);
+  if (!mod) return;
+  (game.modShots ||= []).push({ ghost: true, mod, look, color, x, y, z, y0: y, vx, vz, t: 0, life, lob, arc });
+};
+
+function stepGhosts(game, dt) {
+  const list = game.modShots;
+  if (!list || !game.remote) return;
+  for (const s of list) {
+    if (!s.ghost) continue;
+    s.t += dt;
+    s.x += s.vx * dt;
+    s.z += s.vz * dt;
+    if (s.lob) s.y = s.y0 + Math.sin(Math.min(1, s.t / s.life) * Math.PI) * s.arc;
+    if (s.t >= s.life) s.done = true;
+  }
+  game.modShots = list.filter((s) => !s.done);
+}
+
 MODS.draw = (r, ctx, game, dt) => {
+  stepGhosts(game, dt || 1 / 60);
   // Effects (see vfx.js).
   MODS.drawVfx?.(r, ctx, game, dt);
   // Shots in flight.
@@ -219,28 +244,66 @@ export function effectArt(mod, id) {
 }
 
 // An effect played: at a place, or on someone (following them if
-// `o.follow`). Returns a handle (set .done to stop it).
+// `o.follow`). Returns a handle (MODS.stopVfx to stop it). Played through
+// the renderer (Renderer.modVfx), so a host's players see it too.
 MODS.playVfx = (game, mod, id, at, o = {}) => {
-  if (!game || !mod || !id || !at) return null;
-  const rec = MODS.vfx.get(`${mod.id}:${id}`);
-  if (!rec) return null;
-  const def = rec.v;
+  if (!game || !mod || !id || !at || !MODS.vfx.get(`${mod.id}:${id}`)) return null;
   const ent = typeof at.hp === 'number' ? at : null;
+  const key = `v${Math.floor(Math.random() * 2 ** 31).toString(36)}`;
+  const pos = ent ? { x: ent.x, y: ent.y, z: ent.z } : { x: at.x, y: at.y, z: at.z };
+  const r = game.renderer;
+  if (r && typeof r.modVfx === 'function') r.modVfx(mod.id, id, pos.x, pos.y, pos.z, ent ? ent.id : null, !!(o.follow || o.loop), o.loop ?? null, o.scale || 1, key);
+  else playHere(game, mod.id, id, pos, ent, !!(o.follow || o.loop), o.loop ?? null, o.scale || 1, key);
+  return { key, game, set done(v) {
+    if (v) MODS.stopVfx(game, this);
+  } };
+};
+MODS.stopVfx = (game, h) => {
+  if (!h || !h.key) return;
+  const r = game.renderer;
+  if (r && typeof r.modVfxStop === 'function') r.modVfxStop(h.key);
+  else for (const q of game.modVfx || []) if (q.key === h.key) q.done = true;
+};
+
+function playHere(game, modId, id, pos, ent, follow, loop, scale, key) {
+  const rec = MODS.vfx.get(`${modId}:${id}`);
+  const mod = MODS.byId.get(modId);
+  if (!rec || !mod) return null;
+  const def = rec.v;
   const list = (game.modVfx ||= []);
   if (list.length > 160) list.shift().done = true;
   const inst = {
-    player: new VfxPlayer(def, { art: (aid) => effectArt(mod, aid), scale: o.scale || 1, loop: o.loop ?? !!def.loop, seed: (Math.random() * 2 ** 31) | 0 }),
-    ent: ent && (o.follow || o.loop) ? ent : null,
-    pos: { x: ent ? ent.x : at.x, y: ent ? ent.y : at.y, z: ent ? ent.z : at.z },
+    key,
+    player: new VfxPlayer(def, { art: (aid) => effectArt(mod, aid), scale, loop: loop ?? !!def.loop, seed: (Math.random() * 2 ** 31) | 0 }),
+    ent: ent && follow ? ent : null,
+    pos: { ...pos },
     done: false,
     last: null,
   };
   list.push(inst);
-  const near = game.player && Math.abs(game.player.x - inst.pos.x) < 40 && Math.abs(game.player.z - inst.pos.z) < 30;
-  if (def.sound) game.audio?.play(def.sound, inst.pos);
+  const p = game.player;
+  const near = p && Math.abs(p.x - pos.x) < 40 && Math.abs(p.z - pos.z) < 30;
+  if (def.sound) game.audio?.play(def.sound, pos);
   if (near && def.shake) game.shake = Math.min(1.4, (game.shake || 0) + def.shake * 0.12);
   if (near && def.flash) game.renderer?.flashScreen?.(def.flash, 0.25);
   return inst;
+}
+
+// (On the renderer, so what's played is told to everyone near: see
+// net/host.js, which passes the renderer's effects on.)
+Renderer.prototype.modVfx = function modVfx(modId, id, x, y, z, entId, follow, loop, scale, key) {
+  const game = this.game;
+  if (!game) return;
+  let ent = null;
+  if (entId !== null && entId !== undefined) {
+    const all = [...(game.creatures || []), ...(game.npcs || []), ...(game.everyone ? game.everyone() : [game.player])];
+    ent = all.find((e) => e && e.id === entId) || null;
+    if (!ent && game.remote && game.remote.ents) ent = game.remote.ents.get(entId) || null;
+  }
+  playHere(game, modId, id, { x, y, z }, ent, follow, loop, scale, key);
+};
+Renderer.prototype.modVfxStop = function modVfxStop(key) {
+  for (const q of (this.game && this.game.modVfx) || []) if (q.key === key) q.done = true;
 };
 
 MODS.drawVfx = (r, ctx, game, dt) => {

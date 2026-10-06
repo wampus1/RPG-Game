@@ -413,7 +413,7 @@ function tickEffects(game, e, dt) {
   for (const q of list) {
     if (q.until <= now) {
       q.gone = true;
-      if (q.vfx) q.vfx.done = true;
+      if (q.vfx) MODS.stopVfx?.(game, q.vfx);
       if (q.key) fire(game, q.key, 'onExpire', { self: e });
       continue;
     }
@@ -571,6 +571,9 @@ function shoot(x, o) {
       by: c, dmg: P ? f.damage ?? o.dmg : o.dmg, radius: P ? f.radius || 0 : 0, element: P ? f.element || 'none' : o.element, color: o.color || '#ff9040',
       mod: x.mod, look: P ? f.look || null : null, trail: P ? f.trail || null : null, burst: P ? f.burst || null : null, proj: P, onHit: o.onHit, trailT: 0,
     });
+    // (Seen by the players of a world hosted here too: see render.js.)
+    const s = g.modShots[g.modShots.length - 1];
+    g.renderer?.modShot?.(x.mod.id, s.look, s.color, s.x, s.y, s.z, s.vx, s.vz, s.life, s.lob, s.arc);
   }
   g.audio?.play(P ? 'whoosh' : 'orb', from);
 }

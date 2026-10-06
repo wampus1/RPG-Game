@@ -5,6 +5,7 @@ import { GROUND, REGION_W, REGION_D, WORLD_TILES_W, WORLD_TILES_D, DAY_MINUTES }
 import { alive, DAY } from '../sim/econ.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { TECHS, BRANCHES, treeOf } from '../sim/tech.js';
+import { MODS } from '../mod/state.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -27,6 +28,7 @@ export const COMMANDS = {
   skip: { args: '<days>', about: 'Fast-forward the world so many days (up to 120): towns, realms and wars all carry on.' },
   war: { args: '[realm] [on <realm>] | list | peace', about: 'Start a war: the first realm (yours, or the one you\'re in) declares war on the second. "list" names the realms; "peace" ends the wars of the realm you\'re in.' },
   erupt: { args: '[days]', about: 'The mountain on Kharos erupts now (or tells you how many days till it next does, with "days").' },
+  mod: { args: 'help | list | give | spawn | place | story | event | effect | dungeon ...', about: '(Round 62) For trying a mod out: what the world\'s mods add ("mod list"), and putting any of it here: an item, a creature, a structure, a story, an event, an effect, a dungeon to go down into ("mod help" for each).' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -168,6 +170,8 @@ export function runCommand(game, text) {
       if (!got.includes(id)) return [`Couldn't learn ${TECHS[id].name}: something it needs is barred.`];
       return [`The ${civ.name.replace(/^The /, '')} has learned ${got.map((k) => TECHS[k].name).join(', ')}.`, TECHS[id].desc];
     }
+    case 'mod':
+      return modCommand(game, words);
     case 'help':
     case '?': {
       if (words[0] && COMMANDS[words[0]]) {
@@ -333,6 +337,97 @@ export function runCommand(game, text) {
     }
     default:
       return [`Unknown command "${cmd}". Type "help".`];
+  }
+}
+
+// (Round 62) The world's mods, tried out: `mod <what> <name> [count]`.
+// Names are a thing's id or name (or the start of either), in any of the
+// world's mods.
+function modCommand(game, words) {
+  const what = (words.shift() || 'help').toLowerCase();
+  const mods = MODS.active;
+  if (!mods.length) return ['This world has no mods. (Make one in the Workshop: W on the title screen.)'];
+  const p = game.player;
+  const q = words.filter((w) => !/^\d+$/.test(w)).join(' ').toLowerCase().replace(/_/g, ' ').trim();
+  const n = Math.max(1, Math.min(64, +(words.find((w) => /^\d+$/.test(w)) || 1)));
+  // (A thing of a kind, by id or name, from any of the world's mods.)
+  const find = (coll, test = () => true) => {
+    const all = [];
+    for (const m of mods) for (const [id, t] of Object.entries(m[coll] || {})) if (test(t)) all.push({ m, id, t, nm: String(t.name || id).toLowerCase() });
+    if (!q) return all.length === 1 ? all[0] : null;
+    return all.find((x) => x.id === q.replace(/ /g, '_') || x.nm === q) || all.find((x) => x.nm.startsWith(q) || x.id.startsWith(q)) || all.find((x) => x.nm.includes(q)) || null;
+  };
+  const root = (e) => (e.graph && e.graph.nodes || []).find((x) => /^tpl\./.test(x.type));
+  const names = (coll, test = () => true) => mods.flatMap((m) => Object.values(m[coll] || {}).filter(test).map((t) => t.name)).slice(0, 30).join(', ') || 'none';
+  const isCreature = (e) => ['tpl.animal', 'tpl.hostile', 'tpl.npc', 'tpl.boss'].includes(root(e)?.type);
+  const isItem = (e) => ['tpl.food', 'tpl.weapon', 'tpl.tool', 'tpl.armor', 'tpl.material', 'tpl.block'].includes(root(e)?.type);
+  switch (what) {
+    case 'list':
+      return [
+        `${mods.length} mod${mods.length > 1 ? 's' : ''}: ${mods.map((m) => `${m.name} v${m.version}`).join(', ')}.`,
+        `Items: ${names('entities', isItem)}`,
+        `Creatures: ${names('entities', isCreature)}`,
+        `Structures: ${names('structures')}`, `Dungeons: ${names('dungeons')}`, `Stories: ${names('stories')}`, `Effects: ${names('vfx')}`,
+      ];
+    case 'give': {
+      const x = find('entities', isItem);
+      if (!x) return [`Give which? ${names('entities', isItem)}.`];
+      const k = `m:${x.m.id}:${x.id}`;
+      const left = p.give(k, n);
+      return [`${n - (left || 0)} ${x.t.name} in your pack.`];
+    }
+    case 'spawn': {
+      const x = find('entities', isCreature);
+      if (!x) return [`Spawn which? ${names('entities', isCreature)}.`];
+      let made = 0;
+      for (let i = 0; i < Math.min(12, n); i++) {
+        const s = game.findFreeSpot(p.x + 3 + (i % 3), p.z + Math.floor(i / 3), p.y);
+        if (game.spawnMonster(`m:${x.m.id}:${x.id}`, s.x, s.y, s.z)) made++;
+      }
+      return [`${made} ${x.t.name} beside you.`];
+    }
+    case 'place': {
+      const x = find('structures');
+      if (!x) return [`Place which? ${names('structures')}.`];
+      const at = { x: Math.round(p.x), y: Math.floor(p.y), z: Math.round(p.z) + 3 + Math.floor(x.t.d / 2) };
+      MODS.placeStructure?.(game, x.m, x.id, at, { level: true, marks: true });
+      return [`"${x.t.name}" built just south of you.`];
+    }
+    case 'story': {
+      const x = find('stories');
+      if (!x) return [`Start which? ${names('stories')}.`];
+      const th = MODS.startStory?.(game, x.m, x.id, { player: p, pos: { x: p.x, z: p.z } });
+      return th ? [`"${th.title}" has begun (see your journal).`] : ['It couldn\'t begin here (no town near with the people it needs, or one like it\'s already going).'];
+    }
+    case 'event': {
+      const name = words.join(' ').trim();
+      if (!name) return ['mod event <name>: sends one of your events (On event nodes, World events, stories waiting for it hear it).'];
+      MODS.sendEvent?.(game, name, null, { pos: { x: p.x, y: p.y, z: p.z } });
+      return [`Sent "${name}".`];
+    }
+    case 'effect': {
+      const x = find('vfx');
+      if (!x) return [`Play which? ${names('vfx')}.`];
+      MODS.playVfx?.(game, x.m, x.id, p, { follow: true });
+      return [`"${x.t.name}" played on you.`];
+    }
+    case 'dungeon': {
+      const x = find('dungeons');
+      if (!x) return [`Go down into which? ${names('dungeons')}.`];
+      const rec = game.sim.dungeons.all.find((d) => d.mod === x.m.id && d.thing === x.id);
+      if (!rec) return ['That dungeon found no place in this world.'];
+      rec.known = true;
+      game.runFor(rec).enter();
+      return [`Down into ${rec.name}.`];
+    }
+    default:
+      return [
+        'mod list: what the world\'s mods add',
+        'mod give <item> [count]   mod spawn <creature> [count]',
+        'mod place <structure>     mod story <story>',
+        'mod event <name>          mod effect <effect>',
+        'mod dungeon <dungeon>     (names: an id or a name, or the start of one)',
+      ];
   }
 }
 

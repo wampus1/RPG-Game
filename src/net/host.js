@@ -78,8 +78,11 @@ export class HostNet {
   // `send`: words to the relay; `profile`: the host's account; `world`:
   // what the world's called; `makeUI(guest)`: a player's own windows (kept
   // here); `notify(text, profile)`: tell the host something.
-  constructor(game, { send, profile, world = {}, makeUI, bans = null, notify = null, onParty = null }) {
+  // (Round 62) `packText(hash)`: one of the world's mods, as a file's text
+  // (for a player joining without it), promised.
+  constructor(game, { send, profile, world = {}, makeUI, bans = null, notify = null, onParty = null, packText = null }) {
     this.game = game;
+    this.packText = packText;
     this.send = send;
     this.profile = profileOf(profile);
     this.world = world;
@@ -130,8 +133,20 @@ export class HostNet {
     if ((this.game.seats || []).length >= MAX_PLAYERS) return refuse('full');
     const g = { cid, profile: p, ip, seat: null, state: 'door', sent: null };
     this.guests.set(cid, g);
-    // Been here before: back as they were. Else, a character first.
-    if (this.game.partyChars && this.game.partyChars.has(p.id)) this.admit(g, null);
+    // (Round 62) A world with mods: they must have them first (offered,
+    // and sent from here, if they haven't).
+    if (this.world.mods && this.world.mods.length) {
+      g.state = 'mods';
+      this.to(g, { t: 'mods?', mods: this.world.mods, world: this.world.name || 'this world', host: this.profile });
+      return;
+    }
+    this.door(g);
+  }
+
+  // Been here before: back as they were. Else, a character first.
+  door(g) {
+    g.state = 'door';
+    if (this.game.partyChars && this.game.partyChars.has(g.profile.id)) this.admit(g, null);
     else this.to(g, { t: 'needHero', world: this.world.name || 'this world', host: this.profile });
   }
 
@@ -292,6 +307,16 @@ export class HostNet {
   // ------------------------------------------------------------ from a player
   fromGuest(g, m) {
     if (m.t === 'hero' && g.state === 'door') return this.admit(g, m.hero || null);
+    // (Round 62) Their mods: all there now (in, then), or one wanted.
+    if (g.state === 'mods') {
+      if (m.t === 'mods' && m.ok) this.door(g);
+      else if (m.t === 'modpack?' && this.packText && (this.world.mods || []).some((q) => q.hash === m.hash)) {
+        Promise.resolve(this.packText(m.hash)).then((text) => {
+          if (this.guests.get(g.cid) === g) this.to(g, { t: 'modpack', hash: m.hash, text: text || null });
+        }, () => this.to(g, { t: 'modpack', hash: m.hash, text: null }));
+      }
+      return;
+    }
     if (g.state !== 'in') return;
     const seat = g.seat;
     if (m.t === 'in') {
@@ -428,6 +453,10 @@ export class HostNet {
     wrap('wobble', (a) => at(a[0], a[2]));
     wrap('effect', (a) => (a[0] ? at(a[0].wx, a[0].wz) : null));
     wrap('flashScreen', () => null, true);
+    // (Round 62) A mod's effects, and their stopping.
+    wrap('modVfx', (a) => at(a[2], a[4]));
+    wrap('modVfxStop', () => null);
+    wrap('modShot', (a) => at(a[3], a[5]));
     // Sounds: where they happen (heard by whoever's near), or a player's own.
     const audio = game.audio;
     if (audio && !audio.netWrapped) {

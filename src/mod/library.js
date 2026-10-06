@@ -169,6 +169,16 @@ export class ModLibrary {
     return { mod, entry, same: false };
   }
 
+  // A version of someone else's mod (a world's, sent by its host): kept
+  // as that version, and in the library too unless there's already one by
+  // that name here (yours, say: never overwritten by theirs).
+  async addPack(text, o = {}) {
+    const mod = importMod(text);
+    await this.putPack(mod);
+    if (!this.has(mod.id)) await this.put(mod, { keepTime: true, mine: false, from: o.from || null });
+    return mod;
+  }
+
   // ------------------------------------------------------------ versions kept
   // This exact version of a mod, kept for the worlds made with it.
   async putPack(mod) {
