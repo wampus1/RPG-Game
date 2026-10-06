@@ -9,9 +9,11 @@
 // something of the mod's done when one comes to a part of it.
 import { MODS } from './state.js';
 import { gameKey } from './format.js';
-import { NODES } from './graph.js';
-import { WHO_JOBS } from './storynodes.js';
+import { NODES, Runner, compile } from './graph.js';
+import { WHO_JOBS, LAND_OF } from './storynodes.js';
 import { MOTIFS, GO_HOOKS, R, nameOf, sameRef, isAlive, resolve } from '../sim/saga/core.js';
+import { entOf } from '../sim/saga/refs.js';
+import { moreNode, checkMore, keepOrders, releaseOrders, askChoices, askPay, townOfStory } from './storyrun2.js';
 import { laidTowns, adults, living, spotNear, townsNear, layoutOf, fill, townMid } from '../sim/saga/motifs/lib.js';
 import { mayorOf, alive } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
@@ -44,7 +46,7 @@ export function compareValues(a, op, b) {
 }
 
 const JOBS = WHO_JOBS;
-const ISLE = { 'a town on Thessa': 'thessa', 'a town on Kharos': 'kharos', 'a town on Myrrow': 'myrrow' };
+const ISLE = LAND_OF;
 const ref = (mod, k) => (k && typeof k === 'string' && k[0] === '@' ? gameKey(mod.id, k.slice(1)) : k);
 
 // Someone of a town, as a story wants them.
@@ -83,6 +85,9 @@ function townsFor(S, where, near = null) {
   let list = laidTowns(S);
   const isle = ISLE[where];
   if (isle) list = list.filter((L) => L.settlement.island === isle);
+  // (Round 68) Out past the storm; the empires' great capitals.
+  if (where === 'a town past the storm') list = list.filter((L) => !S.game.world.ow.insideStorm(townMid(L.settlement).x, townMid(L.settlement).z));
+  if (where === 'an empire\'s capital') list = list.filter((L) => L.settlement.empire);
   if (where === 'the nearest town' || near) {
     const p = near || (S.game.player ? { x: S.game.player.x, z: S.game.player.z } : null);
     if (p) list = list.sort((a, b) => Math.hypot(townMid(a.settlement).x - p.x, townMid(a.settlement).z - p.z) - Math.hypot(townMid(b.settlement).x - p.x, townMid(b.settlement).z - p.z));
@@ -98,9 +103,14 @@ export function compileStory(mod, story) {
   if (!start) return null;
   const mid = gameKey(mod.id, story.id);
   const sv = start.p || {};
+  // (Round 68) Where each flow out goes: a story's beat first (the way it
+  // goes on), then any of the entity graph's nodes besides (done on the
+  // way: see runAside).
+  const isBeat = (id) => !!(byId.has(id) && NODES[byId.get(id).type] && NODES[byId.get(id).type].story);
+  const targets = (nid, port) => g.links.filter((q) => q.from[0] === nid && q.from[1] === port && byId.has(q.to[0]) && NODES[byId.get(q.to[0]).type]).map((q) => q.to[0]);
   const next = (nid, port) => {
-    const l = g.links.find((q) => q.from[0] === nid && q.from[1] === port);
-    return l && byId.has(l.to[0]) ? l.to[0] : null;
+    const tos = targets(nid, port);
+    return tos.find(isBeat) ?? tos[0] ?? null;
   };
   // (Round 64) A player in it, and their character (its traits, where
   // they came from, the values the mod's graphs keep with them).
@@ -137,13 +147,13 @@ export function compileStory(mod, story) {
     const town = th.sid !== null && th.sid !== undefined ? S.game.world.ow.settlements[th.sid] : null;
     const pl = Object.keys(th.touched || {})[0];
     return fill(text || '', {
-      ...th.vars, town: town ? town.name : 'the town', giver: th.names.giver || 'someone', other: th.names.other || 'someone else',
+      ...th.vars, town: town ? town.name : 'the town', giver: th.names.giver || 'someone', other: th.names.other || 'someone else', third: th.names.third || 'someone', fourth: th.names.fourth || 'someone',
       player: pl ? nameOf(S, R.pl(pl)) : 'you', item: it && ITEMS[it] ? ITEMS[it].name.toLowerCase() : v.item || 'things', count: v.count ?? '',
       creature: cr ? (MODS.species?.(cr)?.name || String(cr).replace(/^m:[^:]+:/, '').replace(/_/g, ' ')).toLowerCase() : 'beasts',
     });
   };
-  // On to whatever's wired to `port` (or, nothing there, the story's over).
-  const on = (th, S, nid, port, line = null) => {
+  // On to beat `to` (round 68: kept from going round in circles).
+  const go = (th, S, to, line = null) => {
     if (th.done) return;
     // (Too many steps at once: a loop. Stopped.)
     const now = S.now;
@@ -152,8 +162,18 @@ export function compileStory(mod, story) {
       th.vars._n = 0;
     }
     if (++th.vars._n > 60) return S.end(th, 'tangled', 'The story went round in circles, and stopped.');
-    const to = next(nid, port);
-    if (to) S.go(th, to, line);
+    S.go(th, to, line);
+  };
+  // On to whatever's wired to `port` (or, nothing there, the story's over).
+  // (Round 68) Any of the entity graph's nodes wired there too are done on
+  // the way.
+  const on = (th, S, nid, port, line = null) => {
+    if (th.done) return;
+    const tos = targets(nid, port);
+    const to = tos.find(isBeat) ?? tos[0] ?? null;
+    for (const id of tos) if (id !== to && !isBeat(id)) runAside(th, S, id);
+    if (th.done) return;
+    if (to) go(th, S, to, line);
     else S.end(th, 'over', line);
   };
   const players = (th, S) => {
@@ -254,9 +274,9 @@ export function compileStory(mod, story) {
         return v.sky === 'rain or snow' || !v.sky ? k === 'rain' || k === 'snow' : k === v.sky;
       }
       case 'the town is a':
-        return !!town && town.type === (v.size || 'village');
+        return !!town && (v.size === 'empire' ? !!town.empire : town.type === (v.size || 'village'));
       case 'the town is on':
-        return !!town && String(town.island || '').toLowerCase() === String(v.isle || 'Thessa').toLowerCase();
+        return !!town && String(town.island || '').toLowerCase() === String(LAND_OF[`a town on ${v.isle || 'Thessa'}`] || v.isle || 'thessa').toLowerCase();
       case 'the town is at war':
         return !!town && !!S.sim.war && !!S.sim.war.atWar && S.sim.war.atWar(town.civ);
       case 'a value is at least':
@@ -276,23 +296,169 @@ export function compileStory(mod, story) {
         return !!k && S.live().some((t) => t !== th && t.m === k);
       }
       default:
-        return false;
+        return !!checkMore(th, S, K, v);
     }
+  };
+  // (Round 68) A value kept by the world or a player (Keep a value).
+  const setValue = (th, S, scope, name, x, p = null) => {
+    const k = String(name ?? '').replace(/^\{|\}$/g, '');
+    if (scope === 'world') {
+      const st = (S.game.modState ||= { vars: {}, once: {} });
+      (st.vars ||= {})[`${mod.id}:${k}`] = x;
+      return;
+    }
+    if (scope === 'player') {
+      const h = p ? heroOf(S, p) : null;
+      const bag = h ? (h.modFlags ||= {}) : ((S.game.modState ||= { vars: {}, once: {} }).vars ||= {});
+      bag[`${mod.id}:${k}`] = x;
+      return;
+    }
+    th.vars[k] = x;
+  };
+
+  // ------------------------------------------------------------ the entity graph's nodes in a story (round 68)
+  // Any of the entity graph's nodes can be in a story: run by the graph
+  // runner, as in an entity, with the story's people and places (self:
+  // the giver, target: the other, player: a player in it, here: its town)
+  // and its values ({name}, Set variable "local"). The story goes on at
+  // the first of its beats the flow comes to; a flow that comes to none
+  // (and has nothing left waiting: a Wait, a line of talk, a creature
+  // sent somewhere) ends it, as a beat with nothing after it does.
+  const tasks = {};
+  const prog = compile(g);
+  const host = {
+    later(sec, fn, x) {
+      const st = x && x.story;
+      if (st) st.pending++;
+      MODS.host?.later(sec, () => {
+        if (st) st.pending--;
+        fn();
+        if (st) st.settle();
+      }, x);
+    },
+    ask(x, text, choices, cb, node) {
+      const st = x && x.story;
+      if (st) st.pending++;
+      MODS.host?.ask(x, text, choices, (i) => {
+        if (st) st.pending--;
+        cb(i);
+        if (st) st.settle();
+      }, node);
+    },
+    fault: (e, nid) => MODS.host?.fault(e, nid),
+  };
+  class StoryRunner extends Runner {
+    exec(x, nid) {
+      const n = this.prog.nodes.get(nid);
+      if (n && NODES[n.type] && NODES[n.type].story && x.story) return x.story.reach(nid);
+      return super.exec(x, nid);
+    }
+
+    api(x, n) {
+      const a = super.api(x, n);
+      const st = x.story;
+      if (!st) return a;
+      const after = a.afterwards;
+      a.afterwards = (port) => {
+        st.pending++;
+        const fn = after(port);
+        let done = false;
+        return (extra = null) => {
+          if (!done) {
+            done = true;
+            st.pending--;
+          }
+          fn(extra);
+          st.settle();
+        };
+      };
+      return a;
+    }
+  }
+  const runner = new StoryRunner(prog, host);
+  // A flow's context in the story `th` (from node `from`).
+  const ctxOf = (th, S, aside = false) => {
+    const town = townOfStory(th, S);
+    const m = town ? townMid(town) : null;
+    const y = m && S.game.world.regionAt?.(m.x, m.z) ? S.game.world.findStandY(m.x, m.z) : 6;
+    const self = th.cast.giver ? entOf(S, th.cast.giver) : null;
+    const target = th.cast.other ? entOf(S, th.cast.other) : null;
+    const player = inIt(th, S)[0]?.p || null;
+    const st = {
+      th, S, K, aside, steps: th.steps, moved: false, pending: 0,
+      // (Come to one of the story's beats: on from there, the first time,
+      // if the story hasn't gone on some other way meanwhile.)
+      reach(nid) {
+        if (this.aside || this.moved || th.done || th.steps !== this.steps) return;
+        this.moved = true;
+        go(th, S, nid);
+      },
+      // (Nothing more to come of it, and it never came to a beat: over.)
+      settle() {
+        if (!this.aside && !this.moved && this.pending <= 0 && !th.done && th.steps === this.steps) S.end(th, 'over');
+      },
+    };
+    return runner.ctx({ game: S.game, mod, rec: null, self, target, player, pos: m ? { x: m.x, y: y > 0 ? y : 6, z: m.z } : null, vars: th.vars, story: st });
+  };
+  // One of the entity graph's nodes, done on the way (the story going on
+  // by its own way).
+  const runAside = (th, S, nid) => {
+    const x = ctxOf(th, S, true);
+    runner.exec(x, nid);
+  };
+  const K = {
+    mod, g, byId, mid, on, go, next, words, check, valueOf, setValue, inIt, players, spotFor, ref: (k) => ref(mod, k), compare: compareValues,
+    castOne, tasks, keep: (th, S) => {
+      raisePending(th, S, mod);
+      keepOrders(th, S);
+    },
+    ctx: (th, S) => ctxOf(th, S, true),
+    input: (th, S, n, port) => runner.input(ctxOf(th, S, true), n, port),
   };
   // Every beat of the story, a node of its own.
   const nodes = {};
-  const tasks = {};
   for (const n of g.nodes) {
     const v = n.p || {};
     const D = NODES[n.type];
-    if (!D || !D.story) continue;
+    if (!D) continue;
+    // (Round 68) One of the entity graph's nodes: its flow run with the
+    // story's people and places.
+    if (!D.story) {
+      if (!D.run) continue;
+      nodes[n.id] = {
+        enter: (th, S) => {
+          const x = ctxOf(th, S);
+          runner.exec(x, n.id);
+          x.story.settle();
+        },
+        live: (th, S) => K.keep(th, S),
+        fade: 3,
+      };
+      continue;
+    }
+    const more = moreNode(n, K);
+    if (more) {
+      if (!more.live) more.live = (th, S) => K.keep(th, S);
+      nodes[n.id] = more;
+      continue;
+    }
     const node = {};
     // (Structures waiting to go up near the town: raised when someone's
-    // near enough to see them.)
-    node.live = (th, S) => raisePending(th, S, mod);
+    // near enough to see them; round 68: and what its people have been
+    // told to do, kept to.)
+    node.live = (th, S) => K.keep(th, S);
     switch (n.type) {
       case 'st.start':
-        node.enter = (th, S) => on(th, S, n.id, 'begin');
+        node.enter = (th, S) => {
+          // (Round 68) A second telling of it, begun at Meanwhile: on from
+          // there.
+          const j = th.vars._jump;
+          if (j && byId.has(j)) {
+            delete th.vars._jump;
+            return go(th, S, j);
+          }
+          on(th, S, n.id, 'begin');
+        };
         break;
       case 'st.news':
         node.enter = (th, S) => {
@@ -319,7 +485,7 @@ export function compileStory(mod, story) {
           if (at) t.pinLabel = t.title;
         };
         node.live = (th, S) => {
-          raisePending(th, S, mod);
+          K.keep(th, S);
           // (Its creatures there when someone comes near.)
           for (const t of S.tasksOf(th, n.id)) {
             const sp = t.data && t.data.spawn;
@@ -416,7 +582,8 @@ export function compileStory(mod, story) {
       case 'st.say':
         node.enter = (th, S) => {
           const r = th.cast[v.who === 'other' ? 'other' : 'giver'];
-          const e = r ? resolve(S, r) : null;
+          // (Round 68: the one walking about, not their record.)
+          const e = r ? entOf(S, r) : null;
           if (e && e.say) e.say(words(th, S, v.text, n), 4);
           on(th, S, n.id, 'next');
         };
@@ -486,7 +653,7 @@ export function compileStory(mod, story) {
         };
         if (what === 'a value' || what === 'a time of day') {
           node.live = (th, S) => {
-            raisePending(th, S, mod);
+            K.keep(th, S);
             if (ready(th, S)) on(th, S, n.id, 'next');
           };
           node.hour = node.live;
@@ -511,27 +678,56 @@ export function compileStory(mod, story) {
     }
     nodes[n.id] = node;
   }
+  // (Round 68) Events sent while it's told, remembered (for an If's "an
+  // event has been sent").
+  const heard = (th, ev, S) => {
+    (th.vars._ev ||= {})[ev.name] = S.now;
+  };
+  for (const node of Object.values(nodes)) {
+    if (!node.on || !node.on.mod_event) continue;
+    const f = node.on.mod_event;
+    node.on.mod_event = (th, ev, S) => {
+      heard(th, ev, S);
+      f(th, ev, S);
+    };
+  }
   // A word with someone: what they'd say, while the story's at it.
-  const talkFor = (th, S, nid) => {
+  const talkFor = (th, S, nid, pid = null, pre = null) => {
     const n = byId.get(nid);
     const v = n.p || {};
-    const choices = ['a', 'b', 'c'].filter((k) => v[k]).map((k) => ({ id: 'sg_modc', arg: `t${th.id}:${nid}:${k}`, label: words(th, S, v[k], n) }));
-    return { lines: [words(th, S, v.text, n)], choices: choices.length ? choices : [{ id: 'sg_modc', arg: `t${th.id}:${nid}:next`, label: 'I see.' }], back: null };
+    const choices = n.type === 'st.ask'
+      ? askChoices(th, S, K, n, pid).map((c) => ({ id: 'sg_modc', arg: `t${th.id}:${nid}:${c.k}`, label: c.label }))
+      : ['a', 'b', 'c'].filter((k) => v[k]).map((k) => ({ id: 'sg_modc', arg: `t${th.id}:${nid}:${k}`, label: words(th, S, v[k], n) }));
+    return { lines: [...(pre ? [pre] : []), words(th, S, v.text, n)], choices: choices.length ? choices : [{ id: 'sg_modc', arg: `t${th.id}:${nid}:next`, label: 'I see.' }], back: null };
   };
+  const talks = (n) => !!n && (n.type === 'st.talk' || n.type === 'st.ask');
   const isWho = (th, npc, who) => {
     const r = th.cast[who || 'giver'];
     return !!(r && npc.rec && r.t === 'rec' && r.idx === npc.rec.idx && r.sid === (npc.rec.sid ?? npc.settlement?.id));
   };
   const M = {
     id: mid, family: `mod:${mod.id}`, mod: mod.id, max: Math.max(1, Math.min(8, sv.max ?? 2)), hidden: !!sv.secret,
-    key: (o) => (sv.perTown !== false && o.sid !== null && o.sid !== undefined ? `${mid}:${o.sid}` : null),
+    key: (o) => (sv.perTown !== false && o.sid !== null && o.sid !== undefined ? `${mid}:${o.sid}${o.vars && o.vars._branch ? `:${o.vars._branch}` : ''}` : null),
     title: (th, S) => words(th, S, sv.title || story.name || 'A story'),
     start: start.id,
     nodes,
     tasks,
+    on: { mod_event: heard },
+    // (Round 68) Over: its people back to their own ways.
+    ended: (th, S) => releaseOrders(th, S),
+    // Someone in it dead: on, if it was the story's own doing (Something
+    // befalls someone) or the beat it's at minds it (Bring someone along).
+    castDown(th, role, ev, S) {
+      if (th.vars._fated === role) {
+        delete th.vars._fated;
+        return true;
+      }
+      const nd = nodes[th.node];
+      return nd && nd.castDown ? nd.castDown(th, role, ev, S) : null;
+    },
     townTalk(th, npc, pid) {
       const n = byId.get(th.node);
-      if (!n || n.type !== 'st.talk' || !isWho(th, npc, (n.p || {}).who)) return [];
+      if (!talks(n) || !isWho(th, npc, (n.p || {}).who)) return [];
       return [{ id: 'sg_mod', arg: `t${th.id}:${n.id}`, label: fill((n.p || {}).ask || 'Yes?', {}) }];
     },
     respond(th, npc, pid, id, arg, S) {
@@ -540,17 +736,19 @@ export function compileStory(mod, story) {
       if (id === 'sg_mod') {
         if (th.node !== nid) return { lines: ['Hm? Never mind.'] };
         S.touch(th, pid, null);
-        return talkFor(th, S, nid);
+        return talkFor(th, S, nid, pid);
       }
       if (id === 'sg_modc') {
         if (th.node !== nid) return { lines: ['...'] };
         const n = byId.get(nid);
+        // (Round 68) An answer that asks something: had and given, or not.
+        if (n.type === 'st.ask' && parts[2] !== 'next' && !askPay(th, S, K, n, parts[2], pid)) return talkFor(th, S, nid, pid, '(You haven\'t what that answer needs.)');
         const port = parts[2] === 'next' || !next(nid, parts[2]) ? 'next' : parts[2];
         S.touch(th, pid, null);
         on(th, S, nid, port);
         // (Another word with the same one straight after: the talk goes on.)
         const nn = byId.get(th.node);
-        if (!th.done && nn && nn.type === 'st.talk' && isWho(th, npc, (nn.p || {}).who)) return talkFor(th, S, nn.id);
+        if (!th.done && talks(nn) && isWho(th, npc, (nn.p || {}).who)) return talkFor(th, S, nn.id, pid);
         return { lines: [words(th, S, (n.p || {}).bye || 'Very well.', n)] };
       }
       return null;

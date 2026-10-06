@@ -9,8 +9,9 @@
 // yours), or do something of yours when it comes to a part. A story of
 // yours can also follow on from one of the game's, by how it ended.
 import { h, ic, clear, button, field, numberInput, slider, check, select, panel, toast, textInput, dialog } from './kit.js';
-import { NodeCanvas } from './nodecanvas.js';
-import { titleBar, refPicker } from './common.js';
+import { NodeCanvas, valueWidget } from './nodecanvas.js';
+import { titleBar, refPicker, refInfo, biomeOptions } from './common.js';
+import { BIOME_LIST } from '../mod/nodes.js';
 import { NODES, CATS, TYPE_COLORS, fits, makeNode, shown } from '../mod/graph.js';
 import { MOTIFS } from '../sim/saga/core.js';
 
@@ -471,11 +472,15 @@ export default class StoryTool {
     const wrap = h('div', { class: 'canvas-wrap' });
     this.stage.append(bar, wrap);
     const hasStart = () => this.story.graph.nodes.some((n) => n.type === 'st.start');
+    // (Round 68) A story's own beats first, then everything the entity
+    // graphs have (actions, flow, values, maths...): run in the story, with
+    // its people and places.
+    const cats = [...CATS.filter((c) => String(c).startsWith('Story')), ...CATS.filter((c) => !String(c).startsWith('Story'))];
     this.nc = new NodeCanvas({
-      defs: NODES, fits, colors: TYPE_COLORS, cats: CATS,
+      defs: NODES, fits, colors: TYPE_COLORS, cats,
       graph: () => this.story.graph,
       makeNode: (type, x, y) => makeNode(type, x, y),
-      canAdd: (d) => !!d.story && (!d.storyRoot || !hasStart()),
+      canAdd: (d) => (d.story ? !d.storyRoot || !hasStart() : !d.root && !d.starts),
       checkpoint: () => app.checkpoint('stories', this.id),
       onChange: () => {
         app.touch('stories', this.id);
@@ -484,7 +489,7 @@ export default class StoryTool {
       },
       onSelect: () => this.drawInspector(),
       onView: (z) => this.zoomEl && (this.zoomEl.textContent = `${Math.round(z * 100)}%`),
-      widget: () => null,
+      widget: (n, p, done) => this.widget(n, p, done, false),
       propWidget: (n, p, done) => this.propWidget(n, p, done),
       nodeExtra: () => {},
       nodeMenu: (n) => (NODES[n.type]?.help ? [{ label: 'What does it do?', icon: 'info', onClick: () => toast(NODES[n.type].help, '', 7000) }] : []),
@@ -500,6 +505,24 @@ export default class StoryTool {
     this.app.checkpoint('stories', this.id);
     (n.p ||= {})[k] = v;
     this.app.touch('stories', this.id);
+  }
+
+  // (Round 68) An input's own field (the entity graph's nodes, and the
+  // story's own that take a wire): as the Graph tool has them.
+  widget(n, p, done, big) {
+    const v = n.v ? n.v[p.id] : undefined;
+    const set = (nv) => {
+      this.app.checkpoint('stories', this.id);
+      (n.v ||= {})[p.id] = nv;
+      this.app.touch('stories', this.id);
+      done();
+      if (big) {
+        this.nc?.refreshNode(n);
+        if (NODES[n.type].dyn) this.drawInspector();
+      } else if (this.nc && this.nc.sel.has(n.id)) this.drawInspector();
+    };
+    if (refInfo(p.t).coll || ['item', 'block', 'creature', 'effect'].includes(p.t)) return refPicker(this.app, p.t, v ?? null, set);
+    return valueWidget(p.t, v ?? p.def, set, { min: p.min, max: p.max, step: p.step, long: p.long, big, opts: p.opts === BIOME_LIST ? biomeOptions(this.app) : p.opts });
   }
 
   propWidget(n, p, done, big = false) {
@@ -523,13 +546,14 @@ export default class StoryTool {
       const mp = n.p && n.p.after ? motifMap(n.p.after) : null;
       if (mp) return select([['', 'any ending'], ...mp.ends.map((e) => [e, human(e)])], v || '', set);
     }
-    if (['item', 'creature', 'structure', 'story', 'asset', 'vfx', 'loot'].includes(p.t)) return refPicker(this.app, p.t, v ?? null, (nv) => {
+    if (['item', 'creature', 'structure', 'story', 'asset', 'vfx', 'loot', 'song', 'clip', 'block', 'effect'].includes(p.t) || (p.t !== 'text' && refInfo(p.t).coll)) return refPicker(this.app, p.t, v ?? null, (nv) => {
       set(nv);
       this.nc?.refreshNode(n);
     }, { create: p.t === 'structure' ? () => this.app.builder((b) => b.newDialog({ open: false })) : p.t === 'story' ? () => this.newStory('blank') : null });
     if (p.t === 'enum') return select(p.opts.map((x) => (Array.isArray(x) ? x : [x, x])), v, set);
     if (p.t === 'bool') return check('', !!v, set);
-    if (p.t === 'number') return numberInput({ value: v ?? 0, min: p.min, max: p.max, onChange: set, vars: true });
+    if (p.t === 'number') return numberInput({ value: v ?? 0, min: p.min, max: p.max, step: p.step, onChange: set, vars: true });
+    if (p.t === 'color' || p.t === 'multi' || p.t === 'sound') return valueWidget(p.t, v, set, { opts: p.opts === BIOME_LIST ? biomeOptions(this.app) : p.opts, min: p.min, max: p.max });
     return textInput({ value: v ?? '', long: !!(p.long && big), onChange: set });
   }
 
@@ -564,7 +588,26 @@ export default class StoryTool {
       for (const l of g.links) if (l.from[0] === id) go(l.to[0]);
     };
     go(start.id);
-    for (const n of g.nodes) if (!seen.has(n.id)) out.push({ level: 'warn', node: n.id, text: `${NODES[n.type]?.title || n.type}: nothing leads to it.` });
+    // (Round 68: a node of values only is led to by its wires out, not in.)
+    const flowIn = (n) => !NODES[n.type] || NODES[n.type].in.some((p) => p.t === 'flow');
+    for (const n of g.nodes) if (!seen.has(n.id) && flowIn(n)) out.push({ level: 'warn', node: n.id, text: `${NODES[n.type]?.title || n.type}: nothing leads to it.` });
+    for (const n of g.nodes) if (!NODES[n.type]) out.push({ level: 'error', node: n.id, text: `Unknown node "${n.type}" (from a newer game?): it does nothing.` });
+    // (Round 68) The newer beats' own needs.
+    const sv0 = start.p || {};
+    for (const n of g.nodes) {
+      const v = n.p || {};
+      const nobody = (r) => (r === 'giver' || r === 'other') && (r === 'other' ? sv0.other : sv0.giver) === 'nobody';
+      const cast = new Set(g.nodes.filter((q) => (q.type === 'st.cast' || q.type === 'st.newcomer') && q.p).map((q) => q.p.role || 'third'));
+      if (['st.walk', 'st.escort', 'st.turn', 'st.fate', 'st.person', 'st.ask'].includes(n.type)) {
+        const r = v.who || (n.type === 'st.escort' || n.type === 'st.fate' ? 'other' : 'giver');
+        if (nobody(r)) out.push({ level: 'error', node: n.id, text: `${NODES[n.type].title}: but the story has nobody as its ${r}.` });
+        if ((r === 'third' || r === 'fourth') && !cast.has(r)) out.push({ level: 'warn', node: n.id, text: `${NODES[n.type].title}: the ${r}, but nothing brings a ${r} into it (Someone else comes into it).` });
+      }
+      if (n.type === 'st.jump' && !g.nodes.some((q) => q.type === 'st.mark' && String((q.p || {}).name || '').trim().toLowerCase() === String(v.name || '').trim().toLowerCase())) out.push({ level: 'error', node: n.id, text: `Go to a mark: there's no mark called "${v.name}".` });
+      if (n.type === 'st.endstory' && !v.story) out.push({ level: 'error', node: n.id, text: 'End another story: choose which.' });
+      if (n.type === 'st.shipdo' && !g.nodes.some((q) => q.type === 'st.ship')) out.push({ level: 'warn', node: n.id, text: 'The story\'s ship: but nothing in it brings a ship (A ship comes).' });
+      if (n.type === 'st.meanwhile' && !g.links.some((l) => l.from[0] === n.id && l.from[1] === 'aside')) out.push({ level: 'warn', node: n.id, text: 'Meanwhile: nothing wired to Meanwhile.' });
+    }
     if (!g.nodes.some((n) => n.type === 'st.end' && seen.has(n.id))) out.push({ level: 'warn', text: 'It never comes to "The end" (it\'ll end where it runs out).' });
     const sv = start.p || {};
     for (const n of g.nodes) {
@@ -587,8 +630,10 @@ export default class StoryTool {
     }
     // Values in its words that nothing in it sets (the story's own: those
     // of your graphs, {world:...} and {player:...}, are theirs to set).
-    const own = new Set(['town', 'giver', 'other', 'player', 'item', 'count', 'creature']);
-    for (const n of g.nodes) if (n.type === 'st.set' && n.p && n.p.name) own.add(String(n.p.name).replace(/[^\w-]/g, ''));
+    const own = new Set(['town', 'giver', 'other', 'third', 'fourth', 'player', 'item', 'count', 'creature', 'self', 'target', 'value']);
+    for (const n of g.nodes) if (['st.set', 'st.calc', 'st.learn'].includes(n.type) && n.p && n.p.name) own.add(String(n.p.name).replace(/[^\w-]/g, ''));
+    // (Set variable, kept for this flow: the story's own value.)
+    for (const n of g.nodes) if (n.type === 'act.setvar' || n.type === 'act.addvar') own.add(String((n.v || {}).name || 'count').replace(/[^\w-]/g, ''));
     const missing = new Set();
     for (const n of g.nodes) for (const [k, t] of Object.entries(n.p || {})) {
       const pd = NODES[n.type]?.propMap[k];
@@ -616,9 +661,24 @@ export default class StoryTool {
       for (const p of d.props) {
         // (Only what matters for how it's set: see storynodes' `show`.)
         if (!shown(n, p)) continue;
-        fields.append(field(p.label, this.propWidget(n, p, () => this.nc?.refreshNode(n), true), { wide: p.long }));
+        fields.append(field(p.label, this.propWidget(n, p, () => this.nc?.refreshNode(n), true), { wide: p.long || p.t === 'multi' }));
+      }
+      // (Round 68) Its inputs: typed, or wired from another node.
+      for (const p of d.in) {
+        if (p.t === 'flow') continue;
+        const wire = g.links.find((l) => l.to[0] === n.id && l.to[1] === p.id);
+        if (!wire && !shown(n, p)) continue;
+        if (wire) {
+          const src = g.nodes.find((q) => q.id === wire.from[0]);
+          const unwire = button(null, { icon: 'close', small: true, kind: 'ghost', title: 'Unwire it', onClick: () => this.nc.removeLinks([wire]) });
+          fields.append(field(p.label, h('div', { class: 'row' }, h('span', { class: 'note grow' }, `from ${src ? NODES[src.type]?.title : '?'}`), unwire)));
+          continue;
+        }
+        const wd = this.widget(n, p, () => {}, true);
+        if (wd) fields.append(field(p.label, wd, { wide: p.long, tip: `${p.label} (${p.t})` }));
       }
       body.append(panel('Settings', fields, { key: 'st-fields' }));
+      if (!d.story) body.append(h('div', { class: 'panel-b note' }, 'One of the entity graph\'s nodes, in a story: Self is the giver, Target the other, Player a player in it, Here the town (or wire in Who\'s in it). Values set "local" are the story\'s own ({name}). The story goes on at the first of its beats the flow comes to.'));
       if (d.props.some((p) => p.t === 'text')) body.append(h('div', { class: 'panel-b note' }, 'In any words: {town}, {giver}, {other}, {player}, {item}, {count}, {creature}, values the story has set ({name}), and your graphs\' values: {world:name}, {player:name} (a player\'s, and their character screen\'s choices).'));
       if (n.type === 'st.start' && sv.when === 'after a game story ends' && sv.after) {
         loadAbout().then(() => {

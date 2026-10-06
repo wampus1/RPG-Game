@@ -29,10 +29,15 @@ export const WHO_JOBS = {
   'a pearl diver': ['pearldiver'], 'someone retired': ['retired'],
 };
 export const WHO = ['someone grown', 'the mayor', 'an elder', 'a child', ...Object.keys(WHO_JOBS), 'nobody'];
-export const WHERE_TOWN = ['any town', 'a town on Thessa', 'a town on Kharos', 'a town on Myrrow', 'the nearest town'];
+// (Round 68) The lands a town can be on: the three islands, and the lands
+// out past the storm (as the world map has them), with their keys.
+export const LANDS = [['Thessa', 'thessa'], ['Kharos', 'kharos'], ['Myrrow', 'myrrow'], ['Velmarch', 'velmarch'], ['Ostria', 'ostria'], ['Corrow', 'corrow'], ['Saltmere', 'saltmere'],
+  ['Hollowmark', 'hollowmark'], ['Wyrd', 'wyrd'], ['the Grey Skerries', 'skerries']];
+export const LAND_OF = Object.fromEntries(LANDS.map(([n, k]) => [`a town on ${n}`, k]));
+export const WHERE_TOWN = ['any town', 'a town on Thessa', 'a town on Kharos', 'a town on Myrrow', 'the nearest town', ...LANDS.slice(3).map(([n]) => `a town on ${n}`), 'a town past the storm', 'an empire\'s capital'];
 export const SPOTS = ['out near the town', 'far out in the wilds', 'in the town', 'by the one asking'];
 export const ROLES = ['giver', 'other'];
-export const STORY_TEXT = 'In any words: {town}, {giver}, {other}, {player}, {item}, {count}, {creature}, any value the story has set ({name}), and your graphs\' values ({world:name}, {player:name}).';
+export const STORY_TEXT = 'In any words: {town}, {giver}, {other}, {third}, {fourth}, {player}, {item}, {count}, {creature}, any value the story has set ({name}), and your graphs\' values ({world:name}, {player:name}).';
 // (Round 64) What an If can ask, and how two things can be compared.
 export const IFS = [
   'a player in it has', 'a player in it holds', 'a player in it wears', 'a player in it is hurt', 'a player in it is near',
@@ -40,6 +45,10 @@ export const IFS = [
   'players in it are at least', 'the giver is alive', 'the other is alive', 'it is night', 'it is day', 'the hour is between',
   'days since it began are at least', 'the weather is', 'the town is a', 'the town is on', 'the town is at war',
   'a value is at least', 'a value is', 'a world value is', 'a player value is', 'these compare', 'by chance', 'another story of yours is going',
+  // (Round 68)
+  'the third is alive', 'the fourth is alive', 'someone in it is following a player', 'someone in it is where they were sent', 'a player in it is at sea', 'a player in it is aboard the story\'s ship',
+  'the story\'s ship is sunk', 'the story\'s ship is near the town', 'a player in it is in a dungeon', 'the storm wall is down', 'the town\'s realm is at war with a player\'s', 'a player in it has coins',
+  'a player in it is in the town', 'a player in it is near the story\'s place', 'the town has in its coffers', 'the town\'s people are content', 'an event has been sent',
 ];
 export const OPS = ['is', 'is not', 'is at least', 'is more than', 'is at most', 'is less than', 'has in it'];
 const holding = ['a player in it has', 'a player in it holds', 'a player in it wears'];
@@ -129,34 +138,38 @@ def('st.chance', {
   out: [out('a', 'A'), out('b', 'B'), out('c', 'C')],
 });
 
+// The questions an If (or a Wait till) asks, and what each needs.
+export const IF_PROPS = [
+  pick('what', 'If', IFS, 'a player in it has'),
+  P('item', 'item', 'Item', 'coin', { show: { what: holding } }),
+  P('count', 'number', 'How many', 1, { min: 0, max: 99999, show: { what: ['a player in it has', 'a value is at least', 'a player in it has coins', 'the town has in its coffers'] } }),
+  P('least', 'number', 'At least', 1, { min: -999, max: 9999, show: { what: ['a player in it is famous', 'the giver thinks well of a player in it', 'players in it are at least', 'days since it began are at least'] } }),
+  P('pct', 'number', 'Health under (%)', 50, { min: 1, max: 100, show: { what: ['a player in it is hurt'] } }),
+  pick('whom', 'Near', ['the giver', 'the other', 'the town', 'where a task is', 'the third', 'the fourth'], 'the giver', { show: { what: ['a player in it is near'] } }),
+  P('dist', 'number', 'Within (blocks)', 8, { min: 1, max: 500, show: { what: ['a player in it is near', 'a player in it is near the story\'s place', 'the story\'s ship is near the town'] } }),
+  P('event', 'text', 'Event', 'my_event', { show: { what: ['an event has been sent'] } }),
+  pick('trait', 'Trait', [...Object.keys(TRAITS).map((k) => [k, TRAITS[k].name]), ['mod', 'One of your traits']], 'tough', { show: { what: ['a player in it has the trait'] } }),
+  P('traitId', 'text', 'Trait (its id)', '', { show: (g) => g('what') === 'a player in it has the trait' && g('trait') === 'mod' }),
+  pick('origin', 'Came as', [...Object.keys(ORIGINS).map((k) => [k, ORIGINS[k].name]), ['mod', 'One of your origins']], 'crash', { show: { what: ['a player in it came as'] } }),
+  P('originId', 'text', 'Origin (its id)', '', { show: (g) => g('what') === 'a player in it came as' && g('origin') === 'mod' }),
+  P('from', 'number', 'From (hour)', 6, { min: 0, max: 24, show: { what: ['the hour is between'] } }),
+  P('to', 'number', 'Till (hour)', 12, { min: 0, max: 24, show: { what: ['the hour is between'] } }),
+  pick('sky', 'Weather', ['rain or snow', 'rain', 'snow', 'fog', 'clear'], 'rain or snow', { show: { what: ['the weather is'] } }),
+  pick('size', 'Kind', ['village', 'town', 'city', 'empire'], 'village', { show: { what: ['the town is a'] } }),
+  pick('isle', 'Island', LANDS.map(([n]) => n), 'Thessa', { show: { what: ['the town is on'] } }),
+  P('left', 'text', 'This', '{trust}', { show: { what: ['these compare'] } }),
+  P('name', 'text', 'Value', 'trust', { show: { what: ['a value is at least', ...valued] } }),
+  pick('op', 'Compared', OPS, 'is at least', { show: { what: [...valued, 'these compare'] } }),
+  P('value', 'text', 'With', '1', { show: { what: [...valued, 'these compare'] } }),
+  P('chance', 'number', 'Chance (%)', 50, { min: 0, max: 100, show: { what: ['by chance'] } }),
+  P('story', 'story', 'Story', null, { show: { what: ['another story of yours is going'] } }),
+];
+
 def('st.check', {
   cat: 'Story', story: true, color: C.flow, title: 'If',
   help: 'Goes on by Yes or No, as things stand. Fields to compare can have values in them: {name} (the story\'s), {world:name}, {player:name}.',
   in: [flowIn],
-  props: [
-    pick('what', 'If', IFS, 'a player in it has'),
-    P('item', 'item', 'Item', 'coin', { show: { what: holding } }),
-    P('count', 'number', 'How many', 1, { min: 0, max: 999, show: { what: ['a player in it has', 'a value is at least'] } }),
-    P('least', 'number', 'At least', 1, { min: -999, max: 9999, show: { what: ['a player in it is famous', 'the giver thinks well of a player in it', 'players in it are at least', 'days since it began are at least'] } }),
-    P('pct', 'number', 'Health under (%)', 50, { min: 1, max: 100, show: { what: ['a player in it is hurt'] } }),
-    pick('whom', 'Near', ['the giver', 'the other', 'the town', 'where a task is'], 'the giver', { show: { what: ['a player in it is near'] } }),
-    P('dist', 'number', 'Within (blocks)', 8, { min: 1, max: 500, show: { what: ['a player in it is near'] } }),
-    pick('trait', 'Trait', [...Object.keys(TRAITS).map((k) => [k, TRAITS[k].name]), ['mod', 'One of your traits']], 'tough', { show: { what: ['a player in it has the trait'] } }),
-    P('traitId', 'text', 'Trait (its id)', '', { show: (g) => g('what') === 'a player in it has the trait' && g('trait') === 'mod' }),
-    pick('origin', 'Came as', [...Object.keys(ORIGINS).map((k) => [k, ORIGINS[k].name]), ['mod', 'One of your origins']], 'crash', { show: { what: ['a player in it came as'] } }),
-    P('originId', 'text', 'Origin (its id)', '', { show: (g) => g('what') === 'a player in it came as' && g('origin') === 'mod' }),
-    P('from', 'number', 'From (hour)', 6, { min: 0, max: 24, show: { what: ['the hour is between'] } }),
-    P('to', 'number', 'Till (hour)', 12, { min: 0, max: 24, show: { what: ['the hour is between'] } }),
-    pick('sky', 'Weather', ['rain or snow', 'rain', 'snow', 'fog', 'clear'], 'rain or snow', { show: { what: ['the weather is'] } }),
-    pick('size', 'Kind', ['village', 'town', 'city'], 'village', { show: { what: ['the town is a'] } }),
-    pick('isle', 'Island', ['Thessa', 'Kharos', 'Myrrow'], 'Thessa', { show: { what: ['the town is on'] } }),
-    P('left', 'text', 'This', '{trust}', { show: { what: ['these compare'] } }),
-    P('name', 'text', 'Value', 'trust', { show: { what: ['a value is at least', ...valued] } }),
-    pick('op', 'Compared', OPS, 'is at least', { show: { what: [...valued, 'these compare'] } }),
-    P('value', 'text', 'With', '1', { show: { what: [...valued, 'these compare'] } }),
-    P('chance', 'number', 'Chance (%)', 50, { min: 0, max: 100, show: { what: ['by chance'] } }),
-    P('story', 'story', 'Story', null, { show: { what: ['another story of yours is going'] } }),
-  ],
+  props: IF_PROPS,
   out: [out('yes', 'Yes'), out('no', 'No')],
 });
 

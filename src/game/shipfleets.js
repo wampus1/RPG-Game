@@ -306,28 +306,49 @@ function dispatch(game, F, now) {
       to = rng.weighted(friendly.map((s) => [s, s.civ === civ ? 1.6 : sim.realms.standing(civ, s.civ) === 'friendly' ? 1.4 : 1]));
       kind = rng.weighted([['trade', 6], ['settlers', 1.5], ['cargo', 2.5]]);
     }
-    const a = seaOff(ow, from);
-    const b = seaOff(ow, to);
-    if (!a || !b) {
-      no('no sea');
-      continue;
-    }
-    const route = seaRoute(game, a, b);
-    if (!route || route.length < 2) {
-      no('no route');
-      continue;
-    }
-    const type = kind === 'war' ? nav.war : kind === 'trade' ? nav.merchant : nav.big;
-    const len = routeLen(route);
-    const pace = SHIP_TYPES[type].speed * PACE;
-    const v = {
-      id: F.seq++, civ: civ.id, from: from.id, to: to.id, kind, type, route, len, pace, at: 0, atT: now, depart: now, ship: null,
-      name: shipName(rng, civ, kind), seed: rng.int(0, 1e9),
-    };
-    F.voyages.push(v);
-    const L = sim.layoutOf(from.id);
-    if (L && L.econ) ledger(L, Math.floor(now / DAY), `The ${v.name}, a ${FLEET_KINDS[kind].name}, has sailed for ${to.name}${kind === 'war' ? ', her decks crowded with marines' : kind === 'settlers' ? ', settlers aboard' : ''}.`);
+    if (!voyage(game, F, now, rng, civ, from, to, kind, nav)) no('no route');
   }
+}
+
+// A voyage begun: a ship of `civ`'s sailing from port `from` to port `to`
+// on an errand of `kind` (the ship as the realm's means allow: `nav`). The
+// voyage, or null if there's no way across.
+function voyage(game, F, now, rng, civ, from, to, kind, nav) {
+  const ow = game.world.ow;
+  const a = seaOff(ow, from);
+  const b = seaOff(ow, to);
+  if (!a || !b) return null;
+  const route = seaRoute(game, a, b);
+  if (!route || route.length < 2) return null;
+  const type = kind === 'war' ? nav.war : kind === 'trade' ? nav.merchant : nav.big;
+  const len = routeLen(route);
+  const pace = SHIP_TYPES[type].speed * PACE;
+  const v = {
+    id: F.seq++, civ: civ.id, from: from.id, to: to.id, kind, type, route, len, pace, at: 0, atT: now, depart: now, ship: null,
+    name: shipName(rng, civ, kind), seed: rng.int(0, 1e9),
+  };
+  F.voyages.push(v);
+  const L = game.sim.layoutOf(from.id);
+  if (L && L.econ) ledger(L, Math.floor(now / DAY), `The ${v.name}, a ${FLEET_KINDS[kind].name}, has sailed for ${to.name}${kind === 'war' ? ', her decks crowded with marines' : kind === 'settlers' ? ', settlers aboard' : ''}.`);
+  return v;
+}
+
+// (Round 68) Ships sent on purpose (a mod's story, say): from the port of
+// town `from` to the port of town `to`, on an errand of `kind`. `any`:
+// even a realm without the learning (sloops, then). The voyage, or null.
+export function sendVoyage(game, from, to, kind, { any = false } = {}) {
+  if (!game.sim || !from || !to || !from.civ || !FLEET_KINDS[kind]) return null;
+  const nav = navalOf(game, from.civ) || (any ? { merchant: 'sloop', war: 'brigantine', big: 'brigantine' } : null);
+  if (!nav) return null;
+  const F = fleetState(game);
+  const now = game.sim.abs;
+  return voyage(game, F, now, new RNG(hash4(Math.floor(now), from.id, to.id, F.seq)), from.civ, from, to, kind, nav);
+}
+
+// The ports a voyage could be sent from or to (towns on the coast, lived in).
+export function ports(game) {
+  const ow = game.world.ow;
+  return ow.settlements.filter((s) => s.coast && !s.deserted && s.condition !== 'abandoned' && s.civ);
 }
 
 const NAMES = ['Sea Wolf', 'Constant', 'Valour', 'Dauntless', 'Fair Venture', 'Golden Hind', 'Endeavour', 'Swift', 'Resolute', 'Triumph', 'Bounty', 'Merchant Royal', 'Good Hope', 'Hawk', 'Unicorn', 'Thunderer', 'Defiance', 'Prosperous', 'Seahorse', 'Star of the East'];

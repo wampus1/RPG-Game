@@ -291,3 +291,30 @@ function follow(n, s, dt) {
   const box = { x0: Math.min(n.x, p.x) - 12, z0: Math.min(n.z, p.z) - 12, x1: Math.max(n.x, p.x) + 12, z1: Math.max(n.z, p.z) + 12 };
   n.followPath(n.fgoal, 1, box);
 }
+
+// ------------------------------------------------------------ a mod's story's orders
+// (Round 68) Someone of a town a mod's story has told what to do (see
+// mod/storyrun2.js): follow a player in it (`follow`: their pid), go to a
+// place and stay there (`home`), or stand where they are. Talked to as
+// themselves all the while (their story's words with them).
+export function storyTick(n, dt) {
+  const s = n.storyOrder;
+  if (!s) {
+    n.state = 'routine';
+    return;
+  }
+  if (s.follow) {
+    follow(n, s, dt);
+    if (!s.follow) s.home = { x: Math.round(n.x), z: Math.round(n.z) };
+    return;
+  }
+  const h = s.home;
+  if (h && far(n, h.x, h.z) > (s.roam ?? 1)) {
+    s.there = false;
+    goTo(n, h.x, h.z, 1);
+    return;
+  }
+  s.there = true;
+  const p = n.game.closestPlayer(n.x, n.z);
+  if (p && p.d < 7 && !n.moving && n.rng.chance(dt * 0.6)) n.face(p.p.x, p.p.z);
+}

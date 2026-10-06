@@ -1599,6 +1599,48 @@ export class BannerWindow extends Window {
   }
 }
 
+// ---------------------------------------------------------------- a story's card
+// (Round 68) Words across the screen, from a mod's story: a chapter's
+// title, a place reached, a vow. Faded in and out, over everything else.
+export class CardWindow extends Window {
+  constructor(ui, title, sub = '', secs = 4, color = '#f0d890') {
+    ui.windows = ui.windows.filter((w) => w.kind !== 'card');
+    const t = String(title || '').slice(0, 60);
+    const u = String(sub || '').slice(0, 80);
+    const w = Math.max(t.length + 12, u.length + 8, 24);
+    super(ui, w, u ? 7 : 5, { kind: 'card', modal: false });
+    this.title = t;
+    this.sub = u;
+    this.life = Math.max(1, secs);
+    this.t = 0;
+    this.color = color;
+  }
+  draw(g) {
+    const a = Math.min(1, this.t / 0.6, (this.life - this.t) / 0.8);
+    const k = Math.max(0, a);
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, `rgba(8,6,12,${(0.78 * k).toFixed(3)})`);
+    const line = '─'.repeat(Math.max(0, Math.floor((this.w - this.title.length) / 2) - 3));
+    const fade = (hex) => {
+      const s = String(hex || '#f0d890').replace('#', '');
+      const r = parseInt(s.slice(0, 2), 16) || 0;
+      const gg = parseInt(s.slice(2, 4), 16) || 0;
+      const b = parseInt(s.slice(4, 6), 16) || 0;
+      return `rgba(${r},${gg},${b},${k.toFixed(3)})`;
+    };
+    g.center(1, `${line} ◆ ${line}`, fade('#8a7a5a'));
+    g.center(2, this.title.toUpperCase(), fade(this.color));
+    if (this.sub) g.center(4, this.sub, fade('#c8c0b0'));
+    g.center(this.h - 2, `${line} ◆ ${line}`, fade('#8a7a5a'));
+  }
+  update(dt) {
+    this.t += dt;
+    if (this.t >= this.life) this.close();
+  }
+  contains() {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------- help
 export class HelpWindow extends Window {
   constructor(ui) {

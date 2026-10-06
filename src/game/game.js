@@ -989,7 +989,11 @@ export class Game {
   deactivate(s) {
     const a = this.active.get(s.id);
     if (!a) return;
+    // (Round 68) One following a player at a story's bidding goes with
+    // them, out of their town (see storyTick).
+    const going = a.npcs.filter((n) => !n.dead && n.storyOrder && n.storyOrder.follow);
     for (const n of a.npcs) {
+      if (going.includes(n)) continue;
       n.releaseSpot();
       this.removeOcc(n);
       n.dead = true;
@@ -1002,7 +1006,7 @@ export class Game {
       if (n.visit) this.sim.visitorEnts.delete(n.visit.id);
       if (n.visit && n.rec.visit === n.visit) n.rec.visit = null;
     }
-    this.npcs = this.npcs.filter((n) => !a.npcs.includes(n));
+    this.npcs = this.npcs.filter((n) => going.includes(n) || !a.npcs.includes(n));
     this.active.delete(s.id);
     this.refreshSigns();
   }

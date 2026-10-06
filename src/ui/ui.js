@@ -1426,6 +1426,11 @@ export class UI {
     this.ko = { t: 0, dur, lines };
     this.closeAll();
   }
+  // (Round 68) Words across the screen (see CardWindow).
+  showCard(title, sub = '', secs = 4, color = '#f0d890') {
+    if (!title) return;
+    this.open(new W.CardWindow(this, title, sub, secs, color));
+  }
   openTrade(npc) {
     this.closeAll();
     this.open(new W.TradeWindow(this, npc));

@@ -22,7 +22,7 @@ import { fortuneOf } from '../sim/prosperity.js';
 import { beginAttack, tickAttack, inReach, styleOf, offhandOf } from '../game/combat.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
-import { sagaTalk } from './sagaman.js';
+import { sagaTalk, storyTick } from './sagaman.js';
 import { laborTick } from '../sim/labor.js';
 import { FLEE } from '../config.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
@@ -1107,7 +1107,7 @@ export class NPC extends Entity {
     }
     // Someone you're talking to stands and listens (on the road too: an
     // adventurer or a trader met on the way stops for you).
-    if ((this.state === 'routine' || this.state === 'caravan' || this.state === 'saga') && this.game.talkingTo === this && !this.sleeping) {
+    if ((this.state === 'routine' || this.state === 'caravan' || this.state === 'saga' || this.state === 'story') && this.game.talkingTo === this && !this.sleeping) {
       this.face(this.game.player.x, this.game.player.z);
       return;
     }
@@ -1148,6 +1148,10 @@ export class NPC extends Entity {
       // One of the stories' own you can talk to (see sagaman.js).
       case 'saga':
         sagaTalk(this, dt);
+        break;
+      // (Round 68) Told what to do by a mod's story.
+      case 'story':
+        storyTick(this, dt);
         break;
       case 'captive':
         captiveTick(this, dt);
@@ -3118,7 +3122,7 @@ export class NPC extends Entity {
     this.aim = null;
     this.drawnBow = false;
     this.windup = null;
-    this.state = this.warband ? 'warband' : this.saga ? 'saga' : this.hired ? 'hired' : 'routine';
+    this.state = this.warband ? 'warband' : this.saga ? 'saga' : this.storyOrder ? 'story' : this.hired ? 'hired' : 'routine';
     this.threat = null;
     this.path = null;
     this.activity = null;

@@ -5,21 +5,13 @@
 // game itself, so the Workshop can show these without the game loaded.)
 import { def, T, FILL } from './graph.js';
 import { TOWN_FACTS, TOWN_CHANGES, PERSON_FACTS, PERSON_CHANGES, LAW_LIST, JOB_LIST, SHOP_KINDS } from './townlists.js';
+import { ELEMENTS, STATUSES, SOUNDS, THEME_LIST } from './lists.js';
 
 // What the nodes reach the game through (see hooks.js).
 export const SVC = {};
 
 export const BIOME_LIST = ['plains', 'forest', 'taiga', 'tundra', 'desert', 'savanna', 'jungle', 'swamp', 'mountain', 'beach', 'ashland', 'cinderwood', 'geyser', 'mangrove', 'fungal', 'moor'];
-export const ELEMENTS = ['none', 'fire', 'frost', 'poison', 'shock', 'force'];
-export const STATUSES = ['burn', 'chill', 'stun', 'poison', 'haste', 'slow', 'regen', 'weak', 'shield'];
-export const SOUNDS = ['hit', 'hurt', 'death', 'swing', 'parry', 'pickup', 'coin', 'craft', 'eat', 'gulp', 'heal', 'door', 'chest', 'break', 'place', 'boom', 'thunder', 'portal', 'pulse', 'whoosh', 'roar', 'growl', 'chime', 'bell', 'gong',
-  'fanfare', 'victory', 'magic', 'freeze', 'reflect', 'orb', 'beam', 'charge', 'rumble', 'whisper', 'shatter', 'thud', 'secret', 'rune', 'hiss', 'crackle', 'drip', 'splash', 'click', 'lever', 'unlock', 'locked', 'error', 'bow', 'impact', 'stomp', 'flap', 'sting', 'scream', 'star_ding', 'puff', 'baa', 'howl', 'chirp', 'hoot', 'frog', 'horn'];
-// (Round 66) The game's own music a node can put on: [key, name].
-export const THEME_LIST = [['plains', 'Plains'], ['forest', 'Forest'], ['taiga', 'Taiga'], ['tundra', 'Tundra'], ['desert', 'Desert'], ['savanna', 'Savanna'], ['jungle', 'Jungle'], ['swamp', 'Swamp'],
-  ['mountain', 'Mountains'], ['beach', 'Beach'], ['ocean', 'Open sea'], ['ashland', 'Ashlands'], ['cinderwood', 'Cinderwood'], ['geyser', 'Geyser fields'], ['moor', 'Moor'], ['fungal', 'Fungal wood'], ['mangrove', 'Mangroves'],
-  ['village', 'A village'], ['town', 'A town'], ['city', 'A city'], ['tavern', 'A tavern'], ['ruins', 'Ruins'], ['graveyard', 'A graveyard'], ['fight_beasts', 'A fight with beasts'], ['fight_monsters', 'A fight with monsters'],
-  ['fight_guards', 'A fight with the watch'], ['fight_bandits', 'A fight with bandits'], ['fight_boss', 'A great fight'], ['dungeon_crypt', 'A crypt'], ['dungeon_barrow', 'A barrow'], ['dungeon_mine', 'An old mine'],
-  ['dungeon_grove', 'A grove'], ['dungeon_forge', 'A forge'], ['dungeon_grotto', 'A grotto'], ['spire', 'A spire'], ['sailing', 'Sailing'], ['storm', 'A storm'], ['ritual', 'A ritual'], ['history', 'Long ago'], ['voyage', 'A voyage'], ['death', 'A death']];
+export { ELEMENTS, STATUSES, SOUNDS, THEME_LIST } from './lists.js';
 // (Round 66) What an item can be made (Item, made special; Change an
 // item): a stone or fitting set in it, and its modifiers (each kind of
 // gear has its own: see world/quality.js).
@@ -1634,3 +1626,4 @@ export const TEMPLATE_INFO = {
 
 // (Round 62) The Story tool's nodes (in the same registry; marked story).
 import './storynodes.js';
+import './storynodes2.js';
