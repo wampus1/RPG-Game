@@ -1286,6 +1286,22 @@ function beginPlaytest(g, pt) {
       ow.markExplored(s.x, s.z, 1);
       ui.msg(`In the ${b.title || b.name}.`, '#80e070');
     }
+  } else if (sel.kind === 'worlds' && MODS.world) {
+    // (Round 63) The world as the map has it: you, where it has new
+    // characters begin (or by the first place it sets down).
+    const w = MODS.world;
+    const at = w.spawn || w.places[0] || null;
+    if (at) {
+      const x = Math.floor((at.cx + 0.5) * REGION_W);
+      const z = Math.floor((at.cz + 0.5) * REGION_D);
+      g.loadAround(x, z, true);
+      const s = g.findFreeSpot(x, z, 6);
+      p.teleport(s.x, s.y, s.z);
+      p.spawn = { ...s };
+      renderer.camInit = false;
+      g.world.ow.markExplored(s.x, s.z, 2);
+    }
+    ui.msg(`The world as "${w.name}" has it (M: the map).${at ? (w.spawn ? ' You\'re where it has characters begin.' : ' You\'re by the first place it sets down.') : ''}`, '#80e070');
   }
 }
 

@@ -439,5 +439,12 @@ export function problems(m, extra = []) {
       for (const L of Object.values(v.add || {})) for (const o of L || []) gives(where, `${what}, "${o.name || o.id}"`, o);
     }
   }
+  // (Two rows of the character screen by one id: graphs and characters
+  // would take one for the other.)
+  const rowIds = new Map();
+  for (const [id, v] of Object.entries(m.chargen || {})) for (const r of v.rows || []) {
+    if (rowIds.has(r.id)) out.push({ level: 'warn', where: ['chargen', id], text: `Character tab "${v.name}" has a row "${r.label || r.id}" whose id ("${r.id}") another row has too (a copied tab?): delete one of them, and add it again.` });
+    else rowIds.set(r.id, id);
+  }
   return [...out, ...extra];
 }

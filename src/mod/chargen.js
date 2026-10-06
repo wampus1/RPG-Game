@@ -263,7 +263,7 @@ export function charGenTick(game) {
         game.asPlayer(p, () => game.ui?.msg?.(`${nameOf(C)} has found their way back to you.`, '#a0e0a0'));
       }
       // (Not while they're down an old place of the game's own.)
-      if (game.dungeon && game.asPlayer(p, () => !!game.dungeon)) continue;
+      if (game.asPlayer(p, () => !!game.dungeon)) continue;
       const s = spotBy(game, p);
       if (!s) continue;
       const nc = game.spawnMonster?.(C.species, s.x, s.y, s.z);

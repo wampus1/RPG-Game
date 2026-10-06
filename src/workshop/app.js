@@ -532,6 +532,22 @@ export class Workshop {
     const t = JSON.parse(JSON.stringify(this.mod[kind][id]));
     delete t.id;
     t.name = `${t.name} copy`;
+    // (A copy of a character tab: a tab of the mod's own, its rows with ids
+    // of their own, so the two don't take each other's choices.)
+    if (kind === 'chargen') {
+      const taken = new Set(Object.values(this.mod.chargen).flatMap((q) => (q.rows || []).map((r) => r.id)));
+      for (const r of t.rows || []) {
+        let n = 2;
+        while (taken.has(`${r.id}_${n}`)) n++;
+        r.id = `${r.id}_${n}`;
+        taken.add(r.id);
+      }
+      if (t.game) {
+        t.title ||= String(t.game).toUpperCase();
+        for (const k of ['game', 'hideRows', 'add', 'hide']) delete t[k];
+        t.order = 60;
+      }
+    }
     return this.create(kind, t);
   }
 

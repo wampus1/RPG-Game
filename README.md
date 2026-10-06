@@ -4663,6 +4663,124 @@ dungeon`.
 **Updating.** Worlds from 0.61 load as they were, with no mods. Mods only
 go into new worlds.
 
+## Round 63: biomes, world maps and the character screen in the Workshop
+
+**The Workshop looks different.** It has a darker blue colour scheme and a
+more retro feel: square bevelled buttons, gold title bars and chunky
+scrollbars. Headings, tabs, buttons and menus use the game's own pixel
+font. Emoji are gone: every icon is now pixel art.
+
+**Fixes in the Workshop.**
+- **Sliders** work properly now.
+  - Click the track to jump to that point. Drag the knob to move it from
+    where it is. Hold Shift for fine steps.
+  - A drag keeps going even if the panel redraws under it, and a whole
+    drag is one undo step.
+  - When a slider is selected, the arrow keys, Page Up/Down, Home and End
+    move it, and so does the mouse wheel. Double-click to reset it.
+- **The pixel editor's colours.** It only adds a colour to the palette
+  (and to "Lately used") once you actually draw with it, not every shade
+  you pass through while picking.
+- **Menus and pop-ups always show on top**, including sub-menus and lists
+  opened from inside a dialog. Escape closes the topmost one first.
+- **The + menu for entities**: hovering a category (Items, Creatures,
+  World, Logic) now opens the list of entities in it. The arrow keys work
+  in every menu too.
+
+**Three new tools.** Each has a Quick start on the Overview.
+
+**Biome tool** (Ctrl+8): make new biomes, or change the game's own.
+- **A new biome** starts from one of the game's. You set:
+  - its ground, and patches of other blocks in it;
+  - its hills, ponds or pools, its shores and the beds of its water;
+  - its trees: the game's own, or **any structure you built in the
+    Builder** (drag it in);
+  - its plants and rocks, its weather and its music;
+  - what comes out in it by day and by night: added to what the game
+    would put there, or only what you choose;
+  - which people build there.
+- **Where it grows** in new worlds:
+  - a warmth-and-wetness range you drag out on a chart (on the islands you
+    choose);
+  - or instead of one of the game's biomes, for a share of it;
+  - or only where it's painted on a world map.
+- **Change one of the game's biomes** (forest, desert, swamp and the rest).
+  Every world made with the mod has it your way; take the mod out and it's
+  the game's own again. "As the game has it" puts everything back.
+- The preview shows a stretch of the biome as the game draws it, with its
+  creatures about. You can turn it, zoom in, see it by night, see a wider
+  stretch from above, and see its square on the world map.
+- Playtesting a biome puts you in the middle of the nearest patch of it.
+
+**World tool** (Ctrl+9): the shape of the world.
+- **Land**: the game's landmasses can be moved, resized, renamed, and made
+  rougher or smoother. You can add new ones: lived-in islands (with
+  realms, towns, rivers and old places) or wild isles and continents.
+- **Paint** land and sea onto the map (B and O): cut bays and channels,
+  join islands up, or draw a new coast.
+- **Biomes**:
+  - choose which ones each landmass may have, and its climate (for
+    example, cold in the north and hot in the south);
+  - paint biomes exactly where you want them (U), your own or the game's.
+- **Towns**: paint where towns may be founded, or where they mayn't (T).
+- **Set things down**:
+  - structures, layouts and dungeons from the Builder, at a spot (P);
+  - people, at a spot or living in a realm's capital or towns (C);
+  - realms, founded with your name, people, colour and values (R);
+  - where new characters begin (S).
+  You can also drag things straight onto the map from the explorer.
+- The map is remade as you work, so you see the realms, towns and rivers
+  a world would really get. The three islands are always there, Thessa
+  first.
+- A place set down can be made an **origin** on the character screen
+  ("Begin here"): characters who choose it start beside it.
+- Playtesting a world map starts you where characters begin.
+
+**Character tool** (Ctrl+0): the screen where new characters are made.
+- **The real character screen is in the middle, live.** Click about it,
+  type a name and pick things, just as a player would. Its keys work once
+  you click it (Esc lets go). "Begin" shows what that character would
+  start with.
+- **The tabs** are along the bottom:
+  - drag them into a new order;
+  - click the eye to hide one (the game's own too);
+  - double-click to rename one;
+  - add new tabs, and right-click to delete one (or set the game's back as
+    it was).
+- **A tab of your own** has rows of four kinds:
+  - a choice of one;
+  - several to tick (up to a number you set);
+  - points to spend on a few things;
+  - words to write in (a motto, a vow).
+- **The game's tabs** can have rows taken away (any of the looks, origin,
+  starting gear) and rows of yours added. You can hide any of the game's
+  origins, starting gear or traits, and add **origins, starting gear and
+  traits of your own**.
+- **What choosing something gives**, set for each choice:
+  - things (drag items in from the explorer) and coins;
+  - stats, health and traits;
+  - a lasting effect (for a while, or for good);
+  - **a companion** who follows them, fights at their side, and comes back
+    the next morning if it falls;
+  - a story that begins;
+  - looks;
+  - where on the world map they begin;
+  - values for your graphs.
+- Each choice can have a picture, shown beside the character while it's
+  chosen. Drag an item, creature, effect or story onto a row's choices to
+  make a choice that gives it.
+- **Graphs read what was chosen**: Variable now has a "player" setting,
+  kept with the player's character. Each row's choice is there by the
+  row's id, along with the values its choices set.
+- Playtesting from the Character tool shows your character screen first.
+
+**In the game.** Worlds made with these mods have their biomes, their map
+and their character screen. Players joining a multiplayer world see the
+world's character screen, and the host gives what they chose.
+
+**Updating.** Worlds from 0.62 load as they were. Mods made in 0.62 keep
+working unchanged.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -4912,13 +5030,19 @@ src/
                        world), storynodes and storyrun (stories, and
                        changes to the game's), rig (rigs posed and baked),
                        vfx (effects, played), render (their art and effects
-                       drawn)
+                       drawn); (round 63) biomes and biomerules (mods'
+                       biomes, and where they grow), worldplan (a mod's
+                       world map), chargen (the character screen as mods
+                       have it, what it gives, companions)
   workshop/            the Workshop (round 62): app (the frame, explorer,
                        undo, saving, playtest), kit (its controls), pixel,
                        vfx, rig, builder (with buildkinds: loot, layouts,
                        dungeons; buildops: walls, rooms, roofs; voxview: the
                        game's slant; blockart: block pictures), story,
-                       graph (with nodecanvas), common, icons, workshop.css
+                       graph (with nodecanvas), common, icons, workshop.css;
+                       (round 63) biome (with biomeview), world, chargen,
+                       pickers, pixfont (the game's font as a TrueType
+                       font)
   ui/modpick.js        choosing a new world's mods
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)

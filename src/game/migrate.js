@@ -281,6 +281,15 @@ export const STEPS = [
       log.push('Mods: make your own in the Workshop (W on the title screen), and put them in new worlds.');
     },
   },
+  {
+    // Biomes, world maps and the character screen in mods (round 63). A
+    // world from before keeps its land, its towns and its people as they
+    // were made; its character, as they were made.
+    to: '0.63.0',
+    data(d, log) {
+      log.push('The Workshop makes biomes, world maps and tabs for the character screen now: new worlds made with such mods have them.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

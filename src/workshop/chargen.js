@@ -208,9 +208,11 @@ export default class CharGenTool {
     const t = this.ensure();
     if (!t) return;
     const n = { pick: 'Choice', many: 'Gifts', points: 'Skills', text: 'Motto' }[kind];
+    // (Its id the mod's own: graphs read the choice by it.)
+    const all = Object.values(this.app.mod.chargen).flatMap((q) => q.rows || []);
     this.set((x) => {
       x.rows ||= [];
-      const r = { id: uid(x.rows, n), label: n, kind, about: '' };
+      const r = { id: uid(all, n), label: n, kind, about: '' };
       if (kind === 'pick' || kind === 'many') r.options = [{ id: 'one', name: 'One', about: '' }, { id: 'two', name: 'Two', about: '' }];
       if (kind === 'many') r.max = 1;
       if (kind === 'points') {
