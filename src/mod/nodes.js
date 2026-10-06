@@ -1227,10 +1227,10 @@ tw('flow.people', { title: 'For each of its people', help: 'For each person of a
     }
     return 'done';
   } });
-tw('q.person', { title: 'About someone', help: 'About someone of a town: their name, trade, age, mood, coins, what they think of you, their traits, their town, their home and their work (places), whether they\'re alive, married, how many children.',
+tw('q.person', { title: 'About a townsperson', help: 'About someone of a town: their name, trade, age, mood, coins, what they think of you, their traits, their town, their home and their work (places), whether they\'re alive, married, how many children.',
   in: [ref('who', T.ent, 'Who (or the target)')], props: [pick('what', 'What', PERSON_FACTS)], out: [out('out', T.any, 'Value')],
   eval: (x, nn, p, api) => (SVC.personFact ? SVC.personFact(x, (isEnt(api.in('who')) && api.in('who')) || api.in('who') || x.target, api.prop('what')) : null) });
-tw('act.persondo', { title: 'Change someone', help: 'Someone of a town: a new trade (with the tools and clothes of it), coins, their mood, what they think of you, a trait added or taken, a new first name.',
+tw('act.persondo', { title: 'Change a townsperson', help: 'Someone of a town: a new trade (with the tools and clothes of it), coins, their mood, what they think of you, a trait added or taken, a new first name.',
   in: [F('in', 'Do'), ref('who', T.ent, 'Who (or the target)'), n('value', 'By', 10, { show: { what: ['coins', 'mood', 'what they think of you'] } }), txt('text', 'Words', '', { show: { what: ['add a trait', 'take a trait', 'first name'] } })],
   props: [pick('what', 'Change', PERSON_CHANGES), pick('how', 'How', [['add', 'add'], ['set', 'set to']], 'add', { show: { what: ['coins', 'mood'] } }), pick('job', 'Trade', JOB_LIST, 'farmer', { show: { what: ['trade'] } })],
   out: [F('then', 'Then'), F('no', 'Couldn\'t')],

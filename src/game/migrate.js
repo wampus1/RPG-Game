@@ -300,6 +300,16 @@ export const STEPS = [
       log.push('Mods can tell their creatures where to go and how to behave, and their stories ask more of the world. Blocks beside you no longer go dark as you pass above them.');
     },
   },
+  {
+    // Towns for mods' graphs, and other worlds to cross into (round 65). A
+    // world from before was made from the map its mods chose: so it says.
+    to: '0.65.0',
+    data(d, log) {
+      d.worldMap ??= null;
+      d.worldRoot ??= null;
+      log.push('Mods can change towns and their people, find out much more, and send you across to another of their world maps.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

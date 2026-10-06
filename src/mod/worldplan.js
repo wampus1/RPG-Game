@@ -95,7 +95,8 @@ function install(M, report) {
   const m = withMaps[0];
   const w = Object.values(m.worlds).sort((a, b) => (a.use === b.use ? 0 : a.use ? -1 : 1))[0];
   M.world = compilePlan(m, w);
-  if (withMaps.length > 1 || Object.keys(m.worlds).length > 1) report.push({ level: 'warn', text: `More than one world map among the mods: "${w.name}" (of "${m.name}") is used.` });
+  // (Round 65: a mod's other maps are worlds to cross into, not a clash.)
+  if (withMaps.length > 1) report.push({ level: 'warn', text: `More than one mod has world maps: "${w.name}" (of "${m.name}") is used.` });
   // (New lived-in islands: lived in, as the three are.)
   for (const L of M.world.lands) if (L.kind === 'dagoni' && !DAGONI_KEYS.has(L.key)) {
     DAGONI_KEYS.add(L.key);

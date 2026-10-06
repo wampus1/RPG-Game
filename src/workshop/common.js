@@ -117,19 +117,9 @@ function medianCut(entries, max) {
 export function vanillaItems() {
   return Object.keys(ITEMS).filter((k) => !k.includes('~') && !k.includes('*') && !k.includes('+') && !k.startsWith('m:') && ITEMS[k].kind !== 'note');
 }
-// (Round 65) What kind of thing a game item is, for lists.
-export const ITEM_GROUPS = ['Weapons', 'Tools', 'Armour', 'Food & potions', 'Materials & gems', 'Other things', 'Blocks'];
-export function itemGroup(k) {
-  const d = ITEMS[k] || {};
-  const kd = d.kind;
-  if (kd === 'weapon') return 'Weapons';
-  if (kd === 'tool') return 'Tools';
-  if (kd === 'armor') return 'Armour';
-  if (kd === 'food' || kd === 'potion') return 'Food & potions';
-  if (kd === 'material' || kd === 'gem' || kd === 'shard') return 'Materials & gems';
-  if (kd === 'block') return 'Blocks';
-  return 'Other things';
-}
+// (Round 65) What kind of thing a game item is, for lists: see itemgroups.js.
+export { ITEM_GROUPS, itemGroup } from './itemgroups.js';
+import { ITEM_GROUPS, itemGroup } from './itemgroups.js';
 export function vanillaBlocks() {
   return BLOCKS.filter((b) => b && !b.mod && b.name !== 'air' && !b.name.startsWith('m:')).map((b) => b.name);
 }

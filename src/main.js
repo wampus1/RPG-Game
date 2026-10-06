@@ -88,6 +88,9 @@ const store = new SaveStore(browserStorage());
 // (Round 62) The mods on this computer (see mod/library.js).
 const modLib = new ModLibrary(browserStorage());
 window.__mods = modLib;
+// (Tests: a new world with some of your mods, and the save store.)
+window.__newWorld = async (seed, ids = []) => startGame(seed, null, null, null, { mods: await Promise.all(ids.map((id) => modLib.get(id))) });
+window.__store = store;
 // Games are kept in IndexedDB once it's open (it has room for many more
 // than browser storage's few megabytes); ask for it to be kept for good.
 const dbReady = openSaveDB().then((db) => {
@@ -252,7 +255,7 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     ui.hudP = 0;
     ui.lastSettlement = undefined;
     hideLoading();
-    if (!save && !hero) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
+    if (!save && !hero && !opts.arrive) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
     if (!game.cutscene && !game.scene) ui.msg('Press H for help.', '#a0c8ff');
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;

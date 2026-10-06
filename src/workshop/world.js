@@ -1256,10 +1256,14 @@ export default class WorldTool {
     body.append(panel('Show', sh, { key: 'wo-show' }));
     // The map itself.
     const me = h('div');
-    if (Object.keys(app.mod.worlds).length > 1) me.append(check('This is the map the mod uses', !!w.use, (v) => this.set((ww) => {
-      for (const o of Object.values(app.mod.worlds)) o.use = false;
-      ww.use = v;
-    }, { regen: false })));
+    if (Object.keys(app.mod.worlds).length > 1) {
+      me.append(check('New worlds begin on this map', !!w.use, (v) => this.set((ww) => {
+        for (const o of Object.values(app.mod.worlds)) o.use = false;
+        ww.use = v;
+      }, { regen: false })));
+      // (Round 65) The others: worlds to cross into.
+      me.append(h('div', { class: 'note' }, 'Your other maps are worlds of their own, to cross into with the "Cross to another world" node: each made the first time someone goes there, and kept.'));
+    }
     me.append(h('div', { class: 'note' }, `Started from ${w.base === 'sea' ? 'open sea (the three islands only)' : 'the game\'s world'}. The dashed rings are the storm: inside it are the lived-in seas (realms, towns and stories only come to land in there).`),
       h('div', { class: 'row', style: { marginTop: '6px', flexWrap: 'wrap' } },
         button('Wipe all paint', { icon: 'eraser', small: true, kind: 'ghost', onClick: async () => {

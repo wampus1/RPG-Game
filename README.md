@@ -4894,6 +4894,92 @@ editor is playing a sound.
 working: an older story If set to "famous" keeps its number when it's
 next opened.
 
+## Round 65: towns, other worlds, and finding things out
+
+**Fixes.**
+- **"A game item" in the art editor** listed only blocks. The game's 156
+  block-items came first in its list, and the list stopped at 120 entries.
+  Now items are grouped by kind (weapons, tools, armour, food and potions,
+  materials and gems, other things), with blocks last. This applies to
+  every item picker in the Workshop, and "A game item" leaves blocks out.
+- **NPC textures.** The Pixel tool has a **Person (NPC)** size (16×30, the
+  height of the game's people, with three frames tagged "walk"). You can
+  start one from **A game person** of any trade. In the game, art that
+  size is drawn at its real size, feet on the ground, instead of being
+  squeezed into a square. A person node's "Look (art)" is now on the node
+  itself, and the colour fields disappear once it has art. Art made at
+  this size has "Make a person (NPC) from it" in its right-click menu.
+- **Biome ponds**: a biome's ponds and pools can be filled with **water,
+  lava** (in beds of basalt), **ice** (frozen over, water under it) **or
+  mud** (a bog). Rivers and lakes stay water.
+- **"The story begins"** can have someone of **any trade** asking (or as
+  the other): barkeep, baker, scholar, noble, tailor, carpenter,
+  herbalist, fisher, miner, trapper, builder, beggar, miller,
+  glassblower, pearl diver and more, as well as the old choices.
+- **Text no longer cuts off.** Labels on nodes and in the side panel wrap
+  onto a second line instead of ending in "...", and nodes can be a
+  little wider.
+
+**Towns for mods.** New **Towns** nodes:
+- **Town**: the one someone (or a place) is in, the nearest of a kind, or
+  one by name. A town can be used as a place too (its square).
+- **About a town**: its name, kind, island, people, coffers, tax, mood,
+  wood and stone, guards, realm and ruler, whether it's at war, whether
+  you're wanted there, your standing, its laws, its last feast, its
+  weather.
+- **Change a town**: its coffers, tax, everyone's mood, wood and stone, a
+  law on or off, its name, a feast day, your standing there, being
+  wanted, a line in its records (shown on its notice board), a shop
+  stocked with something.
+- **Someone moves in**: a new townsperson (in a trade, if the town has
+  work for one), with a home and a daily routine.
+- **For each of its people** (of a trade).
+- **About a townsperson** and **Change a townsperson**: their name,
+  trade, age, mood, coins, what they think of you, traits, home and work,
+  family; give them a new trade (with its tools and clothes), coins, a
+  better or worse mood or opinion of you, traits, a new name.
+
+**Other worlds.** A mod with more than one world map can send people
+between them with **Cross to another world**. Each other map is a world
+of its own, made the first time anyone goes there and kept after; the
+same node takes you back to the world it began as. The player goes with
+everything they are and carry, and whoever's at their heel goes with
+them. A creature sent alone goes on ahead and is there when someone next
+arrives. **Which world** tells a graph which map it's on. (Not while
+others are playing in the world.)
+
+**Nearest, upgraded.** It can find the nearest player, foe, creature (or
+creature of a kind), person of a trade, block of a kind, item lying on the
+ground, one of your structures, or town. It gives where it is, how far,
+and whether there was one, and can skip itself or anything out of sight.
+
+**Target, upgraded.** It was just "who it's about". Now it can also give
+its foe, who last hurt it, who it last hurt, who it's following, its owner
+(for a companion), the nearest player, a player looking straight at it,
+or the strongest, weakest or a random foe nearby. It gives where they
+are, how far, and how hurt.
+
+**Find out.** A new group of nodes for getting information:
+- **About someone**: name, kind, place, health, speed, damage, which way
+  it faces and the place ahead, the block under it, its biome and town,
+  whether it's moving, hostile, a player, a person, a boss, flying, in
+  water, burning; its foe, home, what it's doing, what it holds, its
+  conditions, a master's tier.
+- **About a player**: coins, health, stamina, what they hold, armour, how
+  much they carry and how much room is left, traits, where they came
+  from, fame, whether they're riding, asleep, down a dungeon, wanted
+  here.
+- **About an item** and **About a block**.
+- **Its abilities**: how many, how many ready, the name of one ready now,
+  seconds until a named one is ready, and whether it's winding one up.
+- **Direction** (compass word, angle, steps east and south), **In a
+  pack** (what's in a slot, where an item is), **One of your
+  structures** (where the nearest is, how many, whether someone's
+  there), **Someone at random**.
+
+**Updating.** Worlds from 0.64 load as they were. Mods made in 0.64 keep
+working.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5148,7 +5234,9 @@ src/
                        world map), chargen (the character screen as mods
                        have it, what it gives, companions); (round 64)
                        behave (creatures told what to do: walk, follow,
-                       flee, wander, patrol, guard, leap)
+                       flee, wander, patrol, guard, leap); (round 65)
+                       towns and townlists (towns and their people for
+                       graphs)
   workshop/            the Workshop (round 62): app (the frame, explorer,
                        undo, saving, playtest), kit (its controls), pixel,
                        vfx, rig, builder (with buildkinds: loot, layouts,
