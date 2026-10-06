@@ -8,6 +8,7 @@ import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
 import { isleTop, isleFront, islePlant, ISLE_SPRITES } from './isleart.js';
 import { farTop, farFront, farPlant, FAR_ROT_TOP, FAR_SPRITES, FAR_ANIM } from './farart.js';
+import { shipTop, shipFront, SHIP_SPRITES, SHIP_ANIM } from './shipart.js';
 
 export const VARIANTS = 4;
 export const SPR_H = TILE + LH; // 28: one-cell prop frame
@@ -312,6 +313,8 @@ function cubeTop(name, v, rand, rot) {
   if (it) return it;
   const ft = farTop(name, v, rand, rot);
   if (ft) return ft;
+  const st = shipTop(name, v, rand);
+  if (st) return st;
   const p = new Px(16, 16);
   const pal = P[name];
   switch (name) {
@@ -604,6 +607,8 @@ function cubeFront(name, v, rand, rot) {
   if (iff) return iff;
   const ff = farFront(name, v, rand);
   if (ff) return ff;
+  const sf = shipFront(name, v, rand);
+  if (sf) return sf;
   const p = new Px(16, LH);
   const pal = P[name];
   switch (name) {
@@ -2081,13 +2086,13 @@ function crackOverlay(stage) {
 // --- build --------------------------------------------------------------------
 const CUBE_ROT_TOP = new Set(['thatch', 'roof_red', 'roof_slate', 'roof_wood', 'roof_green', 'roof_snow', 'roof_mushroom', 'roof_moss', 'roof_reed', ...FAR_ROT_TOP]);
 const CUBE_ROT_FRONT = new Set(['bookshelf', 'arrow_slit', 'kav_emitter']);
-const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM };
+const ANIM = { furnace: 2, torch: 3, lantern: 2, campfire: 3, bell: 4, oven: 2, maypole: 2, steam_vent: 4, ash_brazier: 3, glass_kiln: 3, spore_bed: 2, glass_lamp: 3, fog_lantern: 2, ...DANIM, ...FAR_ANIM, ...SHIP_ANIM };
 Object.assign(SPRITES, DSPRITES);
 export { speckle, frontify, cobble, bricks, planks, randomWalk, spr, P, OUT };
 
 export function buildTextures() {
   if (TEX.atlas) return TEX;
-  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES);
+  Object.assign(SPRITES, ISLE_SPRITES, FAR_SPRITES, SHIP_SPRITES);
   for (const b of BLOCKS) buildBlock(b, TEX);
   // Round 36: the islands' crafts (see CRAFTS): the same furniture made
   // again in each people's own wood and fittings.
@@ -2109,6 +2114,24 @@ export function buildTextures() {
   FIT = FIT_OAK;
   finishTextures();
   return TEX;
+}
+
+// (Round 68) A cube block's faces as pixels, the same as in the atlas
+// (its top 16 by 16, its front 16 by LH): for drawing the great ships out
+// of them at any heading (see shipvox.js), here or where there's no screen.
+const FACE_PX = new Map();
+export function faceTexels(id, v = 0) {
+  const k = id * 8 + v;
+  let f = FACE_PX.get(k);
+  if (f !== undefined) return f;
+  const b = BLOCKS[id];
+  f = null;
+  if (b && b.render === 'cube') {
+    const seed = (q) => mulberry32(hash4(id, q, 0x7e57));
+    f = { top: cubeTop(b.name, v, seed(v * 10), 0), front: cubeFront(b.name, v, seed(v * 10 + 5), 0) };
+  }
+  FACE_PX.set(k, f);
+  return f;
 }
 
 // One block's faces and sprites, into `TEX` (or a craft's set of them).

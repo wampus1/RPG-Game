@@ -34,6 +34,11 @@ export class Entity {
   }
 
   renderPos() {
+    // (Aboard one of the great ships: carried with her, see ships3d.js.)
+    if (this.deck && this.game && this.game.shipDeckPos) {
+      const p = this.game.shipDeckPos(this);
+      if (p) return p;
+    }
     if (this.moveT >= 1) return { x: this.x, y: this.y, z: this.z };
     const t = this.moveT;
     // (Most moves ease in and out; a roll bursts away and slows at the end.)
@@ -61,6 +66,8 @@ export class Entity {
   }
 
   teleport(x, y, z) {
+    // (Off any ship they were aboard: see ships3d.js.)
+    if (this.deck) this.deck = null;
     this.game.moveEntity(this, x, y, z);
     this.fx = x;
     this.fy = y;

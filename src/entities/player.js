@@ -9,6 +9,7 @@ import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
 import { steer, STORM_WALL } from './raft.js';
+import { deckUpdate, tryBoardStep } from '../game/ships3d.js';
 import { stepModMult, gearHp, lanternLight, landArmorTick } from '../game/mods.js';
 import { rule } from '../mod/rules.js';
 
@@ -340,6 +341,12 @@ export class Player extends Entity {
       this.blue = { hp: 0, day: this.game.day, from: [] };
       this.game.ui.msg('Your blue hearts fade with the new day.', '#80a8ff');
     }
+    // Aboard one of the great ships: walking her deck, or at her wheel or
+    // a gun (see game/ships3d.js).
+    if (this.deck) {
+      if (!this.dead) deckUpdate(this.game, this, dt, input, blocked);
+      return;
+    }
     // Out on a raft: paddling, not walking.
     if (this.raft) {
       if (!this.dead && !blocked) steer(this, dt, input);
@@ -395,6 +402,8 @@ export class Player extends Entity {
         return;
       }
     }
+    // Onto a ship's deck, from a pier or up her side out of the water.
+    if (this.game.ships3d && this.game.ships3d.length && tryBoardStep(this.game, this, nx, nz)) return;
     const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
     if (ny < 0) {
       this.blockedHint(nx, nz);

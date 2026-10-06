@@ -624,6 +624,24 @@ def('salt_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hard
 def('warren_hole', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 3, label: 'Warren Hole' });
 def('mound_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 5, label: 'Door in the Hill' });
 def('broch_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, label: 'Broch Door' });
+// (Round 68) What the great ships are built of (see world/shipmodels.js):
+// their tarred hull planking and scrubbed decks, the rail round the deck
+// (nobody stands on that), the ports the guns run out of, the stern's
+// windows and gilded carving, the masts, the copper sheathing under the
+// waterline; and below deck, the guns on their carriages, the crew's
+// hammocks, the bilge pump and the capstan.
+def('hull_planks', { tool: 'axe', hardness: 1.4, drop: 'planks', label: 'Hull Planking' });
+def('deck_planks', { tool: 'axe', hardness: 1.1, drop: 'planks', label: 'Deck Planking' });
+def('ship_rail', { tool: 'axe', hardness: 1.1, drop: 'planks', standable: false, label: 'Ship\'s Rail' });
+def('gunport', { tool: 'axe', hardness: 1.4, drop: 'planks', label: 'Gunport' });
+def('stern_window', { tool: 'axe', hardness: 0.6, opaque: false, drop: 'glass', label: 'Stern Window' });
+def('gilt_trim', { tool: 'axe', hardness: 1.2, drop: 'planks', label: 'Gilded Carving' });
+def('ship_mast', { tool: 'axe', hardness: 3, drop: 'planks', label: 'Mast' });
+def('copper_sheath', { tool: 'pick', hardness: 1.6, drop: 'planks', label: 'Copper Sheathing' });
+def('ship_cannon', { ...sprite, solid: true, rotatable: true, interact: 'cannon', tool: 'pick', hardness: 4, drop: [{ item: 'iron_ingot', min: 2, max: 4 }], support: false, label: 'Ship\'s Gun' });
+def('hammock', { ...sprite, solid: false, rotatable: true, interact: 'hammock', tool: 'axe', hardness: 0.4, drop: 'cloth', support: false, label: 'Hammock' });
+def('ship_pump', { ...sprite, solid: true, interact: 'pump', tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Bilge Pump' });
+def('capstan', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Capstan' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

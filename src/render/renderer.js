@@ -19,6 +19,8 @@ import { drawWing, wingInFront, drawWingBurst } from './wing.js';
 import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
+import { shipDecos } from './shipvox.js';
+import { drawCannonballs, drawShipHud } from './shiphud.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
 // cover the screen at any angle (two screens across and two down, stitched).
@@ -309,9 +311,11 @@ export class Renderer {
     this.wingsLit = [];
     this.pick = null;
     this.pickEnt = null;
+    this.shipPick = null;
     this.pickSeq = 0;
     this.drawWorld(game);
     this.drawProjectiles(game);
+    drawCannonballs(this, game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
@@ -510,6 +514,7 @@ export class Renderer {
     }
     this.drawScene(game, dt);
     this.drawOverlays(game);
+    drawShipHud(this, game);
     this.drawFlashes(game, dt);
   }
 
@@ -780,6 +785,8 @@ export class Renderer {
       if (e.sleeping && e.bedTile && e.bedTile.tent) continue;
       // (Fallen: drawn by the rite that raises you, over the dark.)
       if (e === game.player && game.scene && game.scene.kind === 'death' && !game.scene.reborn) continue;
+      // (Aboard one of the great ships: drawn with her, see shipvox.js.)
+      if (e.deck) continue;
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
       const rp = { x: u, y: wp.y, z: v };
@@ -799,6 +806,7 @@ export class Renderer {
     this.leadDecos(game, buckets, zMin, zMax);
     this.diceDecos(buckets, zMin, zMax);
     game.wildlife?.decos(this, buckets, zMin, zMax);
+    shipDecos(this, game, buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();

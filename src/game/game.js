@@ -30,6 +30,9 @@ import { alive, invAdd, DAY, setOverride, ledger, simulateTo } from '../sim/econ
 import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
+import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad } from './shipgame.js';
+import { holdBlockChanged } from './shiphold.js';
 import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
@@ -1997,6 +2000,10 @@ export class Game {
     if (!atSea) this.wildlife.update(dt);
     updateShips(this, dt);
     sailShips(this, dt);
+    // (Round 68) The great ships: sailing, fighting, foundering; whoever's
+    // aboard them.
+    updateShips3d(this, dt);
+    tickLater(this, dt);
     updateLabor(this, dt);
     // (The great masters, who fill more than the one tile: see
     // entities/footprint.js.)
@@ -2084,6 +2091,7 @@ export class Game {
     for (const d of this.drops) if (Math.abs(d.x - p.x) < 26 && Math.abs(d.z - p.z) < 26) vis.push(d);
     for (const q of this.props.values()) if (Math.abs(q.x - p.x) < 28 && Math.abs(q.z - p.z) < 28) vis.push(q);
     for (const q of this.engines) if (Math.abs(q.x - p.x) < 30 && Math.abs(q.z - p.z) < 30) vis.push(q);
+    for (const c of this.sailors || []) if (!c.dead && Math.abs(c.x - p.x) < 40 && Math.abs(c.z - p.z) < 40) vis.push(c);
     if (this.cutscene && this.cutscene.actors) for (const a of this.cutscene.actors) if (!a.dead) vis.push(a);
     this.visibleEntities = vis;
     if (this.autosaveDue && !this.cutscene && !(this.scene && this.scene.intro)) {
@@ -2287,7 +2295,7 @@ export class Game {
   // Nothing under your feet any more: down to the first ground below (a
   // long drop hurts). Not on a raft, a horse, a seat or in a wagon.
   settleFall(p) {
-    if (!p || p.dead || p.moving || p.raft || p.mount || p.inWagon || p.sitting || p.sleeping || p.swallowed || p.down) return false;
+    if (!p || p.dead || p.moving || p.raft || p.deck || p.mount || p.inWagon || p.sitting || p.sleeping || p.swallowed || p.down) return false;
     const w = this.world;
     const below = BLOCKS[w.getBlock(p.x, p.y - 1, p.z)];
     if (below.standable || below.liquid || w.isWaterAt(p.x, p.y, p.z)) return false;
@@ -2835,6 +2843,7 @@ export class Game {
           else if (!p.sitting) this.ui.msg('Sit down somewhere first (a chair, bench or stool) to wait.', '#c8c8c8', true);
           break;
         case 'KeyR':
+          if (shipKey(this, 'KeyR')) break;
           p.rot = (p.rot + 1) % 4;
           this.audio?.play('select');
           break;
@@ -2857,6 +2866,7 @@ export class Game {
         case 'KeyF':
           if (this.cutscene) this.interactFront();
           else if (p.raft) this.leaveRaft();
+          else if (shipKey(this, 'KeyF')) break;
           else if (p.heldDef()?.kind === 'food') this.eat();
           else if (p.heldDef()?.kind === 'potion') this.drink();
           else if (p.heldDef()?.newspaper) this.ui.openNews?.();
@@ -2868,6 +2878,7 @@ export class Game {
     }
     // The wheel turns the belt, shift held or not. (The layer you build on
     // is Z, X and V.)
+    if (wheel && shipWheel(this, wheel)) return;
     if (wheel) this.selectSlot((p.selected + Math.sign(wheel) + BELT_SIZE) % BELT_SIZE);
   }
 
@@ -2978,6 +2989,8 @@ export class Game {
         if (ok || held.kind === 'block') c.place = { ...t, id: placeId, rot: p.rot, ok, why };
       }
     }
+    // (A ship's planks, drawn in front of what's behind them.)
+    shipCursor(this, c, r);
     this.cursor = c;
   }
 
@@ -3181,6 +3194,9 @@ export class Game {
       this.mining = null;
       return;
     }
+    // (Round 68) At a ship's wheel or one of her guns, or pointing at her
+    // planks: hers to handle.
+    if (shipMouse(this, dt, clicks, input)) return;
     // Reeling in a fish: the mouse button pulls the line, nothing else.
     if (this.fishing && this.fishing.phase === 'reel') {
       this.mining = null;
@@ -7015,8 +7031,15 @@ export class Game {
     if (water) this.renderer.emit(x, y, z, { n: 4, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.4, oy: -2 });
   }
 
+  // Where someone aboard a ship is drawn (see Entity.renderPos).
+  shipDeckPos(e) {
+    return deckRenderPos(this, e);
+  }
+
   onBlockChange(x, y, z, o, n) {
     if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
+    // (Inside one of the great ships: the same in her. See shiphold.js.)
+    if (this.ships3d && this.ships3d.length && this.world.inInstance(x)) holdBlockChanged(this, x, y, z, o, n);
     if (o === -1 || (BLOCKS[o] && (BLOCKS[o].light || BLOCKS[o].opaque)) || (BLOCKS[n] && (BLOCKS[n].light || BLOCKS[n].opaque))) this.lightDirty = true;
   }
 
@@ -7080,6 +7103,8 @@ export class Game {
       // A world played with others: each one's character, kept for when
       // they come back, and who's not welcome.
       party: this.partyWorld ? this.partySave() : null,
+      // (Round 68) The great ships, and whether you were aboard one.
+      ships: shipSave(this),
     };
   }
 
@@ -7167,6 +7192,9 @@ export class Game {
     this.applyHero();
     this.moveEntity(this.player, pd.x, pd.y, pd.z);
     this.sim.careers.applyLook();
+    // (Round 68) The great ships; aboard one, or below her decks.
+    shipLoad(this, data.ships);
+    const shipAt = this.player.deck || (data.ships && data.ships.below && this.world.inInstance(this.player.x));
     // Saved down below: back down there.
     const dg = data.dungeon;
     const rec = dg && !this.remoteCopy ? this.sim.dungeons.get(dg.id) : null;
@@ -7181,7 +7209,7 @@ export class Game {
       const x = run.has(dg.x) ? dg.x : dg.x + (run.x0 - INST_X0);
       // (Fewer floors than it had when you saved: the deepest there is now.)
       run.open(Math.min(dg.floor, rec.depth - 1), { x, z: dg.z });
-    } else if (this.world.inInstance(pd.x) && !this.remoteCopy) {
+    } else if (this.world.inInstance(pd.x) && !this.remoteCopy && !shipAt) {
       // (A dungeon that's gone: up top, at your bed.)
       const s = this.player.spawn;
       this.loadAround(s.x, s.z, true);

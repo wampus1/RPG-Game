@@ -177,6 +177,8 @@ const NOT_ITEMS = new Set([
   'triumph_column', 'frost_hearth', 'bell_pagoda', 'sun_wheel', 'jaw_arch', 'salt_obelisk', 'lantern_tree', 'stone_ring', 'beacon',
   // (And the ways into their old places.)
   'catacomb_door', 'vault_door', 'gut_mouth', 'salt_door', 'warren_hole', 'mound_door', 'broch_door',
+  // (What a great ship's built of: mended with planks, not taken away whole.)
+  'hull_planks', 'deck_planks', 'ship_rail', 'gunport', 'stern_window', 'gilt_trim', 'ship_mast', 'copper_sheath', 'ship_cannon', 'hammock', 'ship_pump', 'capstan',
 ]);
 
 const BLOCK_VALUES = {

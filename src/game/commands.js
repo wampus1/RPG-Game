@@ -6,6 +6,9 @@ import { alive, DAY } from '../sim/econ.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { TECHS, BRANCHES, treeOf } from '../sim/tech.js';
 import { MODS } from '../mod/state.js';
+import { addShip, shipsOf, waterSpot, boardAt, ownerId } from './ships3d.js';
+import { SHIP_TYPES } from '../world/shipmodels.js';
+import { makeCrew } from './shipcrew.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
@@ -29,6 +32,7 @@ export const COMMANDS = {
   war: { args: '[realm] [on <realm>] | list | peace', about: 'Start a war: the first realm (yours, or the one you\'re in) declares war on the second. "list" names the realms; "peace" ends the wars of the realm you\'re in.' },
   erupt: { args: '[days]', about: 'The mountain on Kharos erupts now (or tells you how many days till it next does, with "days").' },
   mod: { args: 'help | list | give | spawn | place | story | event | effect | dungeon ...', about: '(Round 62) For trying a mod out: what the world\'s mods add ("mod list"), and putting any of it here: an item, a creature, a structure, a story, an event, an effect, a dungeon to go down into ("mod help" for each).' },
+  ship: { args: '<sloop|brigantine|galleon|frigate> [aboard] | foe <type> | list', about: '(Round 68) Launch a ship of your own on the nearest open water (and put you aboard her, with "aboard"), with a crew and shot; "foe" sends a warship against you; "list" names the ships about.' },
   learn: { args: '<step> | all | list [realm]', about: 'A realm (yours, or the one you\'re in) learns a step of the tree at once, by key or name, with whatever it needs first ("learn portals", "learn trade ships"); "all" learns everything it can; "list" names the steps.' },
 };
 
@@ -276,6 +280,34 @@ export function runCommand(game, text) {
       const left = p.give('coin', n);
       if (left) game.spawnDrop('coin', left, p.x, p.y, p.z, true);
       return [`+¤${n}.`];
+    }
+    case 'ship':
+    case 'ships': {
+      const sub = (words[0] || '').toLowerCase();
+      if (sub === 'list' || !sub) {
+        const list = shipsOf(game);
+        if (!list.length) return ['No ships about. "ship <sloop|brigantine|galleon|frigate>" launches one.'];
+        return list.map((S) => `${S.name} (${SHIP_TYPES[S.type].name}) at ${Math.round(S.x)}, ${Math.round(S.z)}: hull ${Math.round(S.whole * 100)}%${S.owner ? ', yours' : ''}`);
+      }
+      const foe = sub === 'foe' || sub === 'enemy';
+      const type = (foe ? words[1] : sub) || 'frigate';
+      if (!SHIP_TYPES[type]) return [`No such ship: ${type}. (sloop, brigantine, galleon, frigate)`];
+      const at = waterSpot(game, type, p.x, p.z, foe ? 40 : 6);
+      if (!at) return ['No open water near enough for her.'];
+      const T = SHIP_TYPES[type];
+      const S = addShip(game, {
+        type, x: at.x, z: at.z, yaw: at.yaw, owner: foe ? null : ownerId(game, p), name: foe ? `The ${['Black', 'Red', 'Grey'][Math.floor(Math.random() * 3)]} ${['Wolf', 'Gull', 'Corsair', 'Shark'][Math.floor(Math.random() * 4)]}` : `The ${T.name}`,
+        crew: makeCrew(Math.floor(Math.random() * 1e9), type, 'vale', foe ? T.crew + 2 : Math.max(2, T.crew - 1)), ammo: foe ? 999 : 40,
+        paint: foe ? '#2a2a30' : '#8a2a1e', flag: foe ? '#1a1a1a' : '#c8a040', emblem: foe ? 'disc' : 'cross', anchor: !foe,
+      });
+      if (foe) {
+        S.fight = { player: true };
+        S.route = [{ x: p.x, z: p.z }];
+        S.hostile = true;
+        return [`${S.name}, a ${T.name.toLowerCase()} under black colours, bears down on you!`];
+      }
+      if (/aboard|on/.test(words[1] || '')) boardAt(game, S, p, S.x, S.z);
+      return [`${S.name} rides at anchor ${Math.round(Math.hypot(at.x - p.x, at.z - p.z))} paces off: yours. Climb aboard (F beside her), take her wheel (F at it).`];
     }
     case 'heal':
       p.hp = p.maxHp;
