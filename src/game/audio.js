@@ -122,6 +122,8 @@ export class Audio {
       case 'gulp': this.tone(240, 0.08, 'sine', 0.1, -120); this.noise(0.05, 0.05, 500, 0.02); this.tone(220, 0.09, 'sine', 0.1, -110, 0.2); this.noise(0.05, 0.05, 450, 0.22); break;
       // Mended: a soft rising chime.
       case 'heal': this.tone(660, 0.18, 'sine', 0.05, 220); this.tone(990, 0.25, 'sine', 0.035, 330, 0.08); break;
+      // (Round 64) A shimmer of magic (a mod's sound to pick: it was silent).
+      case 'magic': this.tone(784, 0.14, 'sine', 0.06, 400); this.tone(1175, 0.18, 'triangle', 0.04, 300, 0.06); this.tone(1568, 0.24, 'sine', 0.03, 500, 0.12); this.noise(0.18, 0.03, 5200, 0.02); break;
       // Close to death: your heart in your ears.
       case 'heartbeat': this.tone(55, 0.12, 'sine', 0.22, -15); this.tone(50, 0.14, 'sine', 0.16, -15, 0.18); break;
       case 'alarm': this.tone(880, 0.15, 'square', 0.1); this.tone(660, 0.15, 'square', 0.1, 0, 0.16); break;

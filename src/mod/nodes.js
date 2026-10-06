@@ -12,7 +12,7 @@ export const BIOME_LIST = ['plains', 'forest', 'taiga', 'tundra', 'desert', 'sav
 export const ELEMENTS = ['none', 'fire', 'frost', 'poison', 'shock', 'force'];
 export const STATUSES = ['burn', 'chill', 'stun', 'poison', 'haste', 'slow', 'regen', 'weak', 'shield'];
 export const SOUNDS = ['hit', 'hurt', 'death', 'swing', 'parry', 'pickup', 'coin', 'craft', 'eat', 'gulp', 'heal', 'door', 'chest', 'break', 'place', 'boom', 'thunder', 'portal', 'pulse', 'whoosh', 'roar', 'growl', 'chime', 'bell', 'gong',
-  'fanfare', 'victory', 'magic', 'freeze', 'reflect', 'orb', 'beam', 'charge', 'rumble', 'whisper', 'shatter', 'thud', 'secret', 'rune', 'hiss', 'crackle', 'drip', 'splash', 'click', 'lever', 'unlock', 'locked', 'error', 'bow', 'impact', 'stomp', 'flap', 'sting', 'scream', 'star_ding', 'puff', 'baa', 'howl', 'chirp', 'hoot', 'frog', 'horn', 'boom'];
+  'fanfare', 'victory', 'magic', 'freeze', 'reflect', 'orb', 'beam', 'charge', 'rumble', 'whisper', 'shatter', 'thud', 'secret', 'rune', 'hiss', 'crackle', 'drip', 'splash', 'click', 'lever', 'unlock', 'locked', 'error', 'bow', 'impact', 'stomp', 'flap', 'sting', 'scream', 'star_ding', 'puff', 'baa', 'howl', 'chirp', 'hoot', 'frog', 'horn'];
 export const STYLE_LIST = ['sword', 'dagger', 'axe', 'club', 'spear', 'flail', 'staff', 'great', 'maul', 'halberd'];
 export const ATTACKS = ['bite', 'snap', 'slam', 'gore', 'rake', 'pounce', 'sting', 'bash', 'sword', 'club', 'spear', 'great', 'maul'];
 export const ARMOR_LOOKS = { head: ['helmet', 'lcap', 'hood', 'straw', 'circlet', 'goggles'], body: ['plate', 'chain', 'leather', 'linen', 'coat'], legs: ['plate', 'leather', 'cloth'], feet: ['iron', 'leather'], shield: ['wood', 'iron', 'round'] };

@@ -1029,45 +1029,12 @@ export function modBrain(c, dt) {
     fire(game, rec.key, S.boss ? 'onWake' : 'onSpawn', { self: c });
     if (S.boss && S.modIntro) c.say?.(S.modIntro, 3.5, '#ffd0a0');
   }
-  if (c.modGuardT > 0) c.modGuardT -= dt;
   // (Talking: it stands and faces you.)
   if (c.talkT > 0) {
     c.talkT -= dt;
     return true;
   }
-  c.modTickT -= dt;
-  if (c.modTickT <= 0) {
-    c.modTickT = Math.max(0.2, rec.f.tick || 1);
-    fire(game, rec.key, 'onTick', { self: c });
-  }
-  // Timers in its graph (Every so often); (round 64) someone come near or
-  // gone, its health low.
-  for (const n of rec.prog.starts) {
-    if (n.type === 'ev.near') {
-      nearTick(game, rec, c, n, dt);
-      continue;
-    }
-    if (n.type === 'ev.lowhp') {
-      const low = (100 * c.hp) / Math.max(1, c.maxHp) < num((n.v || {}).pct, 50);
-      const m = (c.modLow ||= {});
-      if (low && !m[n.id]) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: c.target || null })), n.id, 'fire');
-      m[n.id] = low;
-      continue;
-    }
-    if (n.type !== 'ev.timer') continue;
-    const k = `t:${n.id}`;
-    const m = (c.modTimersT ||= {});
-    m[k] = (m[k] ?? 0) - dt;
-    if (m[k] > 0) continue;
-    m[k] = Math.max(0.2, num((n.v || {}).every, 5));
-    rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c })), n.id, 'fire');
-  }
-  // (Round 64) Calmed, riled or sped up for a while: back as it was.
-  if (c.modCalmT > 0 && (c.modCalmT -= dt) <= 0) {
-    c.modCalm = false;
-    if (c.modCalmAs === 'hostile') c.angry = false;
-  }
-  if (c.modPaceT > 0 && (c.modPaceT -= dt) <= 0) c.modPace = 1;
+  // (Its clocks: see creatureClock, every frame.)
   // A foe seen for the first time.
   if (c.target && c.target !== c.modSeen) {
     c.modSeen = c.target;
@@ -1104,8 +1071,7 @@ export function modBrain(c, dt) {
       return true;
     }
   }
-  // Cooldowns run down.
-  if (c.modAbCd) for (const k of Object.keys(c.modAbCd)) c.modAbCd[k] -= dt;
+  // (Its abilities' cooldowns: see creatureClock.)
   // (Round 64) What it's been told to do, before its own ways (see
   // behave.js).
   if (c.modOrder && orderTick(c, dt)) return true;
@@ -1144,6 +1110,48 @@ function nearTick(game, rec, c, n, dt) {
   for (const e of list) if (!was.has(e)) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: e })), n.id, 'fire');
   for (const e of was) if (!now.has(e) && rec.prog.next.has(`${n.id}.gone`)) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: e })), n.id, 'gone');
   c.modNearIn[n.id] = now;
+}
+
+// (Round 64) A mod creature's clocks: its ticks, its timers, someone come
+// near, its health low, a while calm or quick run out. Every frame (they
+// were kept on its turn, which only comes between its steps: they ran slow
+// while it walked).
+function creatureClock(game, c, dt) {
+  const rec = MODS.ents.get(c.S.modKey);
+  if (!rec || !c.modBorn || c.dead || c.dormant) return;
+  if (c.modGuardT > 0) c.modGuardT -= dt;
+  if (c.modAbCd) for (const k of Object.keys(c.modAbCd)) c.modAbCd[k] -= dt;
+  if (c.modCalmT > 0 && (c.modCalmT -= dt) <= 0) {
+    c.modCalm = false;
+    if (c.modCalmAs === 'hostile') c.angry = false;
+  }
+  if (c.modPaceT > 0 && (c.modPaceT -= dt) <= 0) c.modPace = 1;
+  if (c.talkT > 0) return;
+  c.modTickT -= dt;
+  if (c.modTickT <= 0) {
+    c.modTickT = Math.max(0.2, rec.f.tick || 1);
+    fire(game, rec.key, 'onTick', { self: c });
+  }
+  for (const n of rec.prog.starts) {
+    if (n.type === 'ev.near') {
+      nearTick(game, rec, c, n, dt);
+      continue;
+    }
+    if (n.type === 'ev.lowhp') {
+      const low = (100 * c.hp) / Math.max(1, c.maxHp) < num((n.v || {}).pct, 50);
+      const m = (c.modLow ||= {});
+      if (low && !m[n.id]) rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c, target: c.target || null })), n.id, 'fire');
+      m[n.id] = low;
+      continue;
+    }
+    if (n.type !== 'ev.timer') continue;
+    const k = `t:${n.id}`;
+    const m = (c.modTimersT ||= {});
+    m[k] = (m[k] ?? 0) - dt;
+    if (m[k] > 0) continue;
+    m[k] = Math.max(0.2, num((n.v || {}).every, 5));
+    rec.runner.fire(rec.runner.ctx(ctx(game, rec, { self: c })), n.id, 'fire');
+  }
 }
 
 function pickAbility(c, rec) {
@@ -1299,8 +1307,11 @@ export function modTick(game, dt) {
       rec.wasWet = wet;
     }
   }
-  // (Round 64) Leaps through the air, carried along.
-  for (const c of game.creatures) if (c.modLeap) leapTick(c, dt);
+  // (Round 64) Leaps through the air, carried along; mod creatures' clocks.
+  for (const c of game.creatures) {
+    if (c.modLeap) leapTick(c, dt);
+    if (c.S && c.S.modKey) creatureClock(game, c, dt);
+  }
   // (Round 64) Every so often, for what a player holds or wears.
   for (const p of game.everyone()) {
     const keys = new Set([p.heldItem ? p.heldItem() : null, ...Object.values(p.equip || {})].filter((k) => k && ITEMS[k] && ITEMS[k].mod));

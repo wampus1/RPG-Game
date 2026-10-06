@@ -449,6 +449,9 @@ export default class StoryTool {
     const st = this.story;
     st.graph ||= { nodes: [], links: [], notes: [] };
     st.graph.notes ||= [];
+    // (Round 64) An If made before "famous" had its own At least: the
+    // number it had, there.
+    for (const n of st.graph.nodes) if (n.type === 'st.check' && n.p && n.p.least === undefined && n.p.what === 'a player in it is famous') n.p.least = n.p.count ?? 1;
     clear(this.stage);
     this.zoomEl = h('span', { class: 'note', style: { minWidth: '40px' } }, '100%');
     const bar = titleBar(app, 'stories', this.id,

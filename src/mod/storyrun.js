@@ -119,7 +119,9 @@ export function compileStory(mod, story) {
     if (scope === 'player') {
       const q = p || inIt(th, S)[0]?.p || S.game.player;
       const h = q ? heroOf(S, q) : null;
-      return h && h.modFlags ? h.modFlags[`${mod.id}:${k}`] : undefined;
+      // (No character: kept with the world, as the graphs keep them.)
+      const bag = h ? h.modFlags || {} : (S.game.modState || {}).vars || {};
+      return bag[`${mod.id}:${k}`];
     }
     return th.vars[k];
   };

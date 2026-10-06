@@ -4781,6 +4781,119 @@ world's character screen, and the host gives what they chose.
 **Updating.** Worlds from 0.62 load as they were. Mods made in 0.62 keep
 working unchanged.
 
+## Round 64: creatures that do as they're told, and the node editors
+
+**Fixes.**
+- **The World tool no longer lags when you zoom in.** The map's symbols
+  are drawn once and kept, and the screen is only redrawn once per frame
+  however many things change.
+- **Blocks don't go dark when you stand above-left or above-right of
+  them.** Only blocks that actually cover your character fade now, by how
+  much of you they cover.
+- **The World tab at the top is no longer cut off.** When the window is
+  too narrow for every tab's name, the tabs shrink to icons (the open
+  one keeps its name), then tighten further.
+- **Clicking buttons and options no longer jumps the panel back to the
+  top.** The editors keep their scroll position when a panel redraws.
+- **Effect previews**: screen shake, flash and sound now play in the VFX
+  tool's preview, and a looping effect plays them again each time round
+  (or only the first time, if you untick "each time round"). They work
+  in the game too.
+- **Node boxes change with their settings.** When a node's setting
+  changes what it needs, the box on the canvas changes too, not just the
+  panel on the right. For example, the story If shows only the fields for
+  the question picked, a World event shows the event name only for a
+  custom event, a ranged weapon shows Range and Ammo instead of Reach,
+  and a boss with two phases has no "On phase 3". This is done for every
+  node. A wire into a field the node isn't set to use is pointed out.
+- **A weapon's "On swing" now fires** (it never did), and **"Every so
+  often" now works for items** that are held or worn, as its help said.
+- **A mod creature's timers no longer run slow while it walks.** "Every
+  tick", "Every so often" and ability cooldowns used to count down only
+  between its steps.
+- The "magic" sound was silent; it plays now.
+
+**Creatures that do as they're told.** A new **Behaviour** group of
+nodes gives a creature orders. Each order replaces the last one, and when
+it's done the creature goes back to its usual ways.
+- **Walk to** a place (walking, running or creeping), then go on by
+  "Arrived" or "Couldn't".
+- **Follow** someone, **Run from** someone (then "Safe"), **Wander**
+  about a place, **Patrol** between up to four places (round and round or
+  there and back), **Keep its distance** (backing off, closing in,
+  circling), **Stand still**, **Guard a place** (going for its foes,
+  players, a kind of creature, or anyone not its own kind), and **Go
+  after** someone (a player, a person or another creature).
+- Most orders can be set to break off for a fight.
+- **Leap** at someone or to a place, **Turn to face**, **Change temper**
+  (calm, hostile, or back to its nature, for a while or for good),
+  **Change pace**, **Set its home**, **Join someone** as their companion
+  (or leave them), and **Back to its own ways**.
+- New events: **Someone comes near** (and "Goes off" again), and
+  **Health falls low**.
+- New questions: **What it's doing**, **Its foe**, **Its home**, **Still
+  alive?**, **Kind of**.
+
+**More nodes.**
+- **Flow**: Switch (one way of several, by a value), Every so many times,
+  Compare and go.
+- **Actions**: Change the weather, Set the time, Fill an area with a
+  block.
+- **Drop item** can now drop what someone has: from their main hand, off
+  hand, an armour slot, or a slot of their pack (how many, or all).
+- **Who & where / World**: Worn (in a slot), Weather, Under a roof?
+- **Maths**: Keep between, Maths of (size, square root, sine...), Words
+  (length, capitals, "has in it", as a number), Pick a word.
+- **Templates**: weapons have "On shot", shields "On a blow blocked";
+  World events can happen at an hour, when a player joins or is downed,
+  or when it starts to rain.
+- **Story**: Says aloud, Take (from a player in the story), Thought of
+  (by the town, the giver or the other), Creatures come. Set a value can
+  take away, roll a random number, or keep words. Wait for can wait for
+  several kills, for a value to reach something, or for an hour of the
+  day.
+
+**The story If asks much more.** As well as the old questions, it can ask
+whether a player in the story holds or wears something, is hurt, is near
+the giver, the other, the town or a task, has a trait (the game's or
+yours), came as an origin, or is liked by the giver; whether there are at
+least so many players in it; whether it's day, or the hour is between two
+hours; how many days since it began; the weather; whether the town is a
+village, town or city, which island it's on, and whether it's at war; how
+a story value, a world value or a player value compares; how two things
+compare; a percentage chance; and whether another of your stories is
+going. The Story tool warns about Ifs and beats that can't work as set,
+and about `{values}` in the words that nothing sets.
+
+**Values in words and fields.** Write `{name}` in any text to put a
+variable's value there: the flow's own first, then the creature's or
+block's, the world's, and the player's. Or say whose: `{world:gold}`,
+`{player:class}`, `{self:count}`. Names can have dashes
+(`{times-met}`). A number field takes a value too (`{world:gold}`), and
+fields being compared take them on either side. Stories can use
+`{world:name}` and `{player:name}` as well as their own values.
+
+**Sound previews.** Every sound picker has a play button, and choosing a
+sound plays it.
+
+**Workshop music.** The Workshop has six quiet, ambient pieces of its own,
+using new instruments (vibraphone, handpan, singing bowl, breathy pads,
+felt piano). They change every few minutes, and the music dips while the
+editor is playing a sound.
+
+**Other improvements in the editors.**
+- An entity with no template can be turned into one straight from the
+  panel (it used to say to start again).
+- A new story starts with its beginning node.
+- When you drop a wire on empty space and pick a node, the wire goes into
+  a field the new node actually shows.
+- Several nodes can be lined up in a column or a row (right-click).
+- The Graph tool explains what can go in a typed field.
+
+**Updating.** Worlds from 0.63 load as they were. Mods made in 0.63 keep
+working: an older story If set to "famous" keeps its number when it's
+next opened.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5033,7 +5146,9 @@ src/
                        drawn); (round 63) biomes and biomerules (mods'
                        biomes, and where they grow), worldplan (a mod's
                        world map), chargen (the character screen as mods
-                       have it, what it gives, companions)
+                       have it, what it gives, companions); (round 64)
+                       behave (creatures told what to do: walk, follow,
+                       flee, wander, patrol, guard, leap)
   workshop/            the Workshop (round 62): app (the frame, explorer,
                        undo, saving, playtest), kit (its controls), pixel,
                        vfx, rig, builder (with buildkinds: loot, layouts,

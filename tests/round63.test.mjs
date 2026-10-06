@@ -343,7 +343,7 @@ test('the Workshop sees what\'s wrong with a character tab', () => {
 
 // ------------------------------------------------------------ the update
 test('a world from 0.62 comes up to 0.63', () => {
-  assert.equal(GAME_VERSION, '0.63.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.63.0') >= 0);
   const step = STEPS.find((s) => s.to === '0.63.0');
   assert.ok(step);
   const d = { gv: '0.62.0', v: 1, mods: null };

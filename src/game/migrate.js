@@ -290,6 +290,16 @@ export const STEPS = [
       log.push('The Workshop makes biomes, world maps and tabs for the character screen now: new worlds made with such mods have them.');
     },
   },
+  {
+    // Mods' creatures told what to do, and more for their graphs and
+    // stories (round 64). Weather a mod called down isn't kept (it was
+    // never saved); a story waiting on a kill still goes on at the first.
+    to: '0.64.0',
+    data(d, log) {
+      if (d.modWeather) delete d.modWeather;
+      log.push('Mods can tell their creatures where to go and how to behave, and their stories ask more of the world. Blocks beside you no longer go dark as you pass above them.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };
