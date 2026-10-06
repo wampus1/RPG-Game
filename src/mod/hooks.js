@@ -16,6 +16,7 @@ import { addHazard, groundFire as fireAt, areaTiles, summon as summonNear, sameS
 import { ringTiles, proc } from '../entities/bosskit.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { modStat } from './stat.js';
+import './build.js';
 
 export { modStat };
 
@@ -312,7 +313,7 @@ Object.assign(SVC, {
 
 // The values kept for the world (saved with it).
 export function modState(game) {
-  return (game.modState ||= { vars: {}, once: {}, blocks: {}, events: {} });
+  return (game.modState ||= { vars: {}, once: {}, blocks: {}, events: {}, killed: {}, trig: {} });
 }
 function selfVars(x) {
   if (x.self && typeof x.self === 'object') return (x.self.modVars ||= {});
@@ -766,6 +767,11 @@ export function modScaleDamage(t, src, amount) {
 
 // Something killed.
 export function modKilled(game, e, src) {
+  // (One of a structure's people or beasts: gone, till it comes again.)
+  if (e.modMark) {
+    const st = modState(game);
+    (st.killed ||= {})[e.modMark] = game.sim ? game.sim.abs : game.modClock || 1;
+  }
   if (src && src.kind === 'player') {
     const k = src.heldItem ? src.heldItem() : null;
     if (k && ITEMS[k] && ITEMS[k].mod) fire(game, k, 'onKill', { self: src, player: src, target: e, item: k, pos: posOf(e) });
@@ -1108,13 +1114,30 @@ function nearChecks(game) {
 export function modSave(game) {
   if (!MODS.active.length) return null;
   const st = modState(game);
-  return { refs: MODS.active.map((m) => ({ id: m.id, hash: m.hash, name: m.name, version: m.version, author: m.author, color: m.color })), blockIds: { ...MODS.blockIds }, state: { vars: st.vars, once: st.once, blocks: st.blocks, events: st.events, placed: st.placed || [] } };
+  return { refs: MODS.active.map((m) => ({ id: m.id, hash: m.hash, name: m.name, version: m.version, author: m.author, color: m.color })), blockIds: { ...MODS.blockIds }, state: { vars: st.vars, once: st.once, blocks: st.blocks, events: st.events, killed: st.killed || {}, trig: st.trig || {} } };
 }
 export function modLoad(game, data) {
   if (!data) return;
   const st = modState(game);
-  Object.assign(st, { vars: {}, once: {}, blocks: {}, events: {}, ...(data.state || {}) });
+  Object.assign(st, { vars: {}, once: {}, blocks: {}, events: {}, killed: {}, trig: {}, ...(data.state || {}) });
 }
+
+// What build.js (and others) reach through MODS.
+MODS.lootSlots = lootSlots;
+MODS.state = modState;
+MODS.species = (k) => SPECIES[k] || null;
+// A structure's trigger set off by someone coming near (see build.js).
+MODS.fireTrigger = (game, mk, who) => {
+  const m = mk.mod;
+  const x = { game, mod: m, rec: null, self: null, target: who, player: who, pos: { x: mk.x, y: mk.y, z: mk.z }, vars: {}, locals: {}, steps: 0 };
+  if (mk.message) game.asPlayer(who, () => game.ui.msg(String(mk.message), mk.color || '#ffe070'));
+  if (mk.sound) game.audio?.play(mk.sound, mk);
+  if (mk.vfx) MODS.playVfx?.(game, m, mk.vfx, { x: mk.x, y: mk.y, z: mk.z }, {});
+  if (mk.creature && mk.count) SVC.spawn(x, mk.creature, { x: mk.x, y: mk.y, z: mk.z }, Math.min(8, mk.count));
+  if (mk.item) SVC.give(x, who, mk.item, mk.itemCount || 1);
+  if (mk.event) sendEvent(game, String(mk.event), mk.value ?? null, { target: who, pos: { x: mk.x, y: mk.y, z: mk.z } });
+  if (mk.story) MODS.startStory?.(game, m, mk.story, x);
+};
 
 // What the world's mods are called (for lists).
 export const activeMods = () => MODS.active;

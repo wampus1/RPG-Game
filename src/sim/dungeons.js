@@ -21,6 +21,7 @@ import { REGION_W, REGION_D } from '../config.js';
 import { DAY, ledger, st } from './econ.js';
 import { ITEMS, socketed, canSocket } from '../world/items.js';
 import { religionOf } from './culture.js';
+import { MODS } from '../mod/state.js';
 
 const YEAR_DAYS = 60;
 const BASE_YEAR = 1180;
@@ -75,6 +76,16 @@ export class Dungeons {
     const ow = w.ow;
     const spawn = ow.spawnSettlement;
     for (const s of w.sites || []) {
+      // (Round 62) A mod's dungeon: its own record (see mod/build.js). Its
+      // other places aren't old places.
+      if (s.mod) {
+        const rec = s.kind === 'dungeon' && MODS.dungeonRec ? MODS.dungeonRec(s, this.game) : null;
+        if (rec) {
+          s.state = s.state || {};
+          this.list.push(rec);
+        }
+        continue;
+      }
       const rng = new RNG(hash4(s.seed, 0xd1));
       const T = DTYPES[s.type];
       // Its town: the nearest, if it's near enough to have a story about it.
@@ -188,7 +199,7 @@ export class Dungeons {
       crypt: [`${cap(d.name)}, ${where}. ${d.origin.short} The water's black down there.`, `Out ${where} there's a ruined chapel with a hole in its floor. The crypt under it drowned, years back.`],
       holdout: [`${cap(d.name)}, ${where}: a nest of cutthroats in the caves. ${d.origin.short}`, `Bandits. In the caves ${where}. The watch won't go in.`],
       kavorent: [`${cap(d.name)}, ${where}. The old ones built it, the tales say. The runes on it move.`, `Have you seen it? The spire ${where}? ${cap(d.name)}, my grandmother called it. Nothing grows near it.`],
-    }[d.type] || ISLE_TYPE_LORE[d.type].rumour(d, where);
+    }[d.type] || (d.mod ? [d.modRumour || `${cap(d.name)}, ${where}. Nobody who goes in says much about it after.`] : ISLE_TYPE_LORE[d.type].rumour(d, where));
     return { d, line: rng.pick(say) };
   }
 
@@ -253,7 +264,7 @@ export class Dungeons {
       const here = ow.settlements[a.at];
       if (!here) continue;
       // Somewhere they could hope to come back from.
-      const want = this.all.filter((d) => !d.cleared && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3) && this.openToDelvers(d, now)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
+      const want = this.all.filter((d) => !d.cleared && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3) && !d.noDelve && this.openToDelvers(d, now)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
       if (!want) continue;
       // A band, if others are in town (the bolder they are, the more likely).
       const others = adv.list.filter((b) => b !== a && !b.dead && b.state === 'stay' && b.at === a.at).slice(0, 2);

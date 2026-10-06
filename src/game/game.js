@@ -4764,6 +4764,9 @@ export class Game {
   }
 
   signText(x, y, z) {
+    // (Round 62) A sign in a mod's structure: its own words.
+    const ms = this.world.modSigns && this.world.modSigns.get(`${x},${y},${z}`);
+    if (ms) return ms;
     const s = this.world.ow.settlementAt(x, z) || this.world.ow.settlementsNear(x, z)[0];
     if (!s) return { lines: ['A weathered sign.', 'The writing has long faded.'] };
     const L = this.world.getLayout(s);

@@ -8,6 +8,7 @@ import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
 import { Region } from './region.js';
+import { MODS } from '../mod/state.js';
 
 // What kind of place suits a map square, if any: by its land and its
 // neighbours.
@@ -227,6 +228,8 @@ function settleThermal(world, s) {
 // The blocks of a site's entrance, as [dx, y, dz, id, meta] from its spot
 // (y absolute). `state`: { cleared, open (a spire's open side) }.
 export function siteBlocks(s, state = {}) {
+  // (Round 62) A mod's place: built as its Builder says (see mod/build.js).
+  if (s.mod) return MODS.siteBlocks ? MODS.siteBlocks(s, state) : [];
   const out = [];
   const h = s.h;
   const put = (dx, y, dz, id, meta = 0) => out.push([dx, y, dz, id, meta]);

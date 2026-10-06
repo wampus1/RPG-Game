@@ -9,6 +9,7 @@ import { Region } from './region.js';
 import { layoutJob } from './settlement.js';
 import { rollContainerLoot } from './loot.js';
 import { settleSites } from './sites.js';
+import { MODS } from '../mod/state.js';
 
 export class World {
   constructor(seed) {
@@ -18,6 +19,11 @@ export class World {
     // The old places, each at its exact spot (see sites.js).
     this.sites = this.ow.sites;
     settleSites(this, this.sites);
+    // (Round 62) The world's mods' places, after its own (see mod/build.js).
+    if (MODS.active.length && MODS.addSites) {
+      MODS.addSites(this);
+      this.modContainer = (x, y, z, b) => MODS.container(this, x, y, z, b);
+    }
     this.regions = new Map();
     this.saved = new Map(); // serialized modified regions awaiting reload
     this.layouts = new Map();

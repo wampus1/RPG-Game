@@ -35,6 +35,7 @@ import { bossEntrance, bossDefeat, liftRide } from './scenes.js';
 import { seatField } from './party.js';
 import { applyTier, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
+import { MODS } from '../mod/state.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
@@ -305,7 +306,8 @@ export class DungeonRun {
   open(n, arrive) {
     const game = this.game;
     this.floor = n;
-    const data = buildFloor(this.rec, n, this.rx0);
+    // (Round 62) A mod's dungeon: its floors as built (see mod/build.js).
+    const data = this.rec.mod && MODS.buildFloor ? MODS.buildFloor(this.rec, n, this.rx0) : buildFloor(this.rec, n, this.rx0);
     let kept = this.rec.floors[n];
     // (Kept from before each old place had its own space: moved over.)
     if (kept && kept.gen === FLOOR_GEN && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
