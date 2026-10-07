@@ -391,7 +391,9 @@ function build(type) {
   } else if (decks.length === 2) {
     for (let z = 3; z < L - 3; z += 3) if (free(cx + 1, hy, z) && get(cx + 1, hy, z) === 0) set(cx + 1, hy, z, B.hammock, 0);
   }
-  for (const c of cabins) {
+  let blueprint = null;
+  // (The captain's great cabin first: see her blueprint table, below.)
+  for (const c of [...cabins].sort((a, b) => (b.kind === 'great') - (a.kind === 'great'))) {
     const y = c.y;
     const spots = [];
     for (let z = c.z0; z <= c.z1; z++) for (let x = 1; x < W - 1; x++) if (free(x, y, z) && !(x === c.door.x && Math.abs(z - c.door.z) <= 1)) spots.push([x, z]);
@@ -414,10 +416,25 @@ function build(type) {
       const sp = spots.filter(([x, z]) => Math.abs(x - cx) > 1 || Math.abs(z - mz) > 0);
       spots.length = 0;
       spots.push(...sp);
+      // (Round 69) Her blueprint table, in her captain's cabin (the
+      // great cabin, if she has one).
+      if (!blueprint) {
+        const bp = put(B.blueprint_table);
+        if (bp) blueprint = { x: bp[0], y, z: bp[1] };
+      }
       put(c.kind === 'great' ? B.bookshelf : B.bed);
       const ch = put(B.chest);
       if (ch) holds.push({ x: ch[0], y, z: ch[1], id: B.chest, captain: true });
       put(B.lantern, META_STATE);
+    }
+  }
+  // (No cabin: below in her hold, aft.)
+  for (let z = 2; z < L - 2 && !blueprint; z++) {
+    for (const x of [cx, cx + 1, cx - 1]) {
+      if (!free(x, hy, z) || (x === pump.x && z === pump.z)) continue;
+      set(x, hy, z, B.blueprint_table);
+      blueprint = { x, y: hy, z };
+      break;
     }
   }
   // On deck: the capstan before the mainmast, a lantern on her stern,
@@ -479,7 +496,7 @@ function build(type) {
     // (The pivot she turns about: the middle of her plan.)
     px: W / 2, pz: L / 2,
     wl: T.wl, deck: T.deck, yBase: 5 - T.wl,
-    masts, helm, guns, hatches, cabins, gangways, holds, lanterns, pump, deckProps, sternLights, spawn,
+    masts, helm, guns, hatches, cabins, gangways, holds, lanterns, pump, deckProps, sternLights, spawn, blueprint,
     bowsprit: { x: mid + 0.5, y: topOf(T, L - 1) + 1, z: L - 0.5, len: T.bowsprit },
     idx,
   };

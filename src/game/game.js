@@ -31,7 +31,7 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
-import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard } from './shipgame.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard, shipGhostTick } from './shipgame.js';
 import { holdBlockChanged, holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { crewHurt } from './shipcrew.js';
@@ -2009,6 +2009,8 @@ export class Game {
     // (Round 68) The great ships: sailing, fighting, foundering; whoever's
     // aboard them.
     updateShips3d(this, dt);
+    // (Round 69) A ship in a bottle in hand: her ghost where she'd go.
+    shipGhostTick(this);
     tickLater(this, dt);
     fleetsTick(this, dt);
     idleShipsTick(this, dt);
@@ -4593,6 +4595,7 @@ export class Game {
       // (Round 68) Inside one of the great ships: her pump, her guns.
       case 'pump':
       case 'cannon':
+      case 'blueprint':
         holdUse(this, p, x, y, z, b.interact);
         break;
       case 'bell':

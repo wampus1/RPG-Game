@@ -72,6 +72,7 @@ const PROPS = {
   bed: { w: 0.9, h: 0.4, top: '#c83a32', side: '#6a4a2a', band: '#e8e0d0', bands: [0.3] },
   bookshelf: { w: 0.9, h: 0.95, top: '#6a4a2a', side: '#5a3a20', band: '#a03a2a', bands: [0.3, 0.6] },
   furnace: { w: 0.86, h: 0.86, top: '#6a6a72', side: '#4e4e56', band: '#e07a2a', bands: [0.35] },
+  blueprint_table: { w: 0.86, h: 0.6, top: '#9ab8d8', side: '#5a3e22', band: '#2a4a8a', bands: [0.85] },
 };
 const DYNAMIC = new Set(['ship_cannon', 'helm', 'lantern', 'hammock']);
 
@@ -501,7 +502,7 @@ function toCanvas(col, w, h) {
 // latest), made again once she's been holed or mended or has settled.
 export function staticFor(S, q) {
   const sink = Math.round(-(S.yOff || 0) * LH);
-  const ver = `${S.ver || 0}|${sink}|${S.paint}`;
+  const ver = `${S.ver || 0}|${sink}|${S.paint}|${S.paint2}`;
   S.rcache ||= new Map();
   if (S.rcacheVer !== ver) {
     S.rcache.clear();
@@ -698,6 +699,17 @@ const MAST = '#8a6438';
 // A sail cloth's colour at (u across, v down) of it: panels, seams, reef
 // bands, the bolt rope round it; her mark on the great sails; holes where
 // it's been shot through (`hp` how much of it is whole).
+// (Round 69) Is (u, v) of a sail inside the mark on it (see ui/blueprint.js)?
+export function markAt(em, u, v) {
+  if (em === 'cross') return Math.abs(u - 0.5) < 0.08 || Math.abs(v - 0.45) < 0.08;
+  if (em === 'stripe') return Math.abs(v - 0.5) < 0.12;
+  if (em === 'disc') return (u - 0.5) * (u - 0.5) + (v - 0.48) * (v - 0.48) < 0.04;
+  if (em === 'saltire') return Math.abs(u - v) < 0.09 || Math.abs(u + v - 1) < 0.09;
+  if (em === 'quarter') return u < 0.5 && v < 0.5;
+  if (em === 'chevron') return Math.abs(v - (0.25 + Math.abs(u - 0.5) * 0.8)) < 0.1;
+  return false;
+}
+
 function clothShade(f, emblem, hp, seed, fade = 1) {
   return (u, v) => {
     if (hp < 1) {
@@ -713,9 +725,7 @@ function clothShade(f, emblem, hp, seed, fade = 1) {
     let b = CLOTH[2];
     if (emblem) {
       const em = emblem.kind;
-      const inMark = em === 'cross' ? Math.abs(u - 0.5) < 0.08 || Math.abs(v - 0.45) < 0.08
-        : em === 'stripe' ? Math.abs(v - 0.5) < 0.12
-          : em === 'disc' ? (u - 0.5) * (u - 0.5) + (v - 0.48) * (v - 0.48) < 0.04 : false;
+      const inMark = markAt(em, u, v);
       if (inMark) {
         r = emblem.rgb[0];
         g = emblem.rgb[1];
@@ -1149,7 +1159,7 @@ export function drawShip(r, game, S, aboard) {
   const gk = (S.guns || []).map((g) => `${Math.round((g.aim || 0) * 20)}:${Math.round((g.elev || 0) * 20)}:${Math.round((g.recoil || 0) * 10)}`).join(';');
   const key = [q, S.noRig ? 1 : 0, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
     Math.round((S.wheel || 0) * 12), gk, S.runOut ? 1 : 0, (S.sailHp || []).map((h) => Math.round(h * 20)).join(':'), S.night ? 1 : 0, tq,
-    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10)].join(',');
+    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem].join(',');
   if (!S.dyn || S.dyn.k !== key) {
     const low = pooled(S, 'low', Rs.ox - 24, Rs.oy - 24, Rs.ox + Rs.w + 24, Rs.oy + Rs.h + 8, Rs);
     deckWorks(S, T, low, tq);
@@ -1392,6 +1402,58 @@ export function rasterForTest(S, q) {
 
 // The ships among what the world draws: each with the frontmost row of
 // her (so what's in front of her is drawn over her, what's behind under).
+// (Round 69) A ship in a bottle in your hand: her ghost on the water where
+// she'd go (see shipgame.js shipGhostTick), pale blue, or red where she'd
+// strike something that isn't water.
+export function drawShipGhost(r, game) {
+  const G = game.shipGhost;
+  if (!G || !G.S) return;
+  const S = G.S;
+  S.x = G.x;
+  S.z = G.z;
+  S.yaw = G.yaw;
+  const cv = (r.ghostCv ||= document.createElement('canvas'));
+  if (cv.width !== r.vw || cv.height !== r.vh) {
+    cv.width = r.vw;
+    cv.height = r.vh;
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, cv.width, cv.height);
+  // (Drawn as any ship is, onto a canvas of its own: she's not to be
+  // pointed at, so what was under the pointer stays so.)
+  const ctx0 = r.ctx;
+  const pick0 = r.shipPick;
+  const mouse0 = r.mouse;
+  r.ctx = g;
+  r.mouse = null;
+  try {
+    drawShip(r, game, S, []);
+  } finally {
+    r.ctx = ctx0;
+    r.shipPick = pick0;
+    r.mouse = mouse0;
+  }
+  g.globalCompositeOperation = 'source-atop';
+  const pulse = 0.5 + 0.12 * Math.sin(r.time * 5);
+  g.fillStyle = G.ok ? `rgba(110,200,255,${pulse})` : `rgba(255,40,30,${pulse + 0.1})`;
+  g.fillRect(0, 0, cv.width, cv.height);
+  // Where she'd strike: marked.
+  g.globalCompositeOperation = 'source-over';
+  if (!G.ok && G.bad) {
+    g.fillStyle = 'rgba(255,60,40,0.75)';
+    for (const [x, z] of G.bad) {
+      const s = r.worldToScreen(x, 5, z);
+      g.fillRect(Math.round(s.x) + 4, Math.round(s.y) + 4, 8, 4);
+    }
+  }
+  const a0 = r.ctx.globalAlpha;
+  r.ctx.globalAlpha = 0.62;
+  r.ctx.drawImage(cv, 0, 0);
+  r.ctx.globalAlpha = a0;
+}
+
 export function shipDecos(r, game, buckets, zMin, zMax) {
   const ships = game.ships3d;
   if (!ships || !ships.length) return;

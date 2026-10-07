@@ -14,7 +14,7 @@ import { REGION_W, REGION_D, INST_RX, INST_SLOT_RX, WORLD_Y } from '../config.js
 import { Region } from '../world/region.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { isInside, onPlan, standOn } from '../world/shipmodels.js';
-import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf, theShip, fireGun } from './ships3d.js';
+import { shipById, shipsOf, putAboard, deckSpotNear, mendVoxel, breakVoxel, aboardOf, theShip, fireGun, ownerId } from './ships3d.js';
 import { countItem, removeItem } from './inventory.js';
 import { SURFACE } from '../config.js';
 
@@ -373,7 +373,17 @@ export function holdShipOfEntity(game, e) {
 export function holdUse(game, p, x, y, z, what) {
   const S = holdShipAt(game, x);
   if (!S) {
-    game.ui.msg(what === 'pump' ? 'The pump sucks at nothing.' : 'A gun with no ship under it.', '#c8c8c8');
+    game.ui.msg(what === 'pump' ? 'The pump sucks at nothing.' : what === 'blueprint' ? 'Plans of a ship that isn\'t here.' : 'A gun with no ship under it.', '#c8c8c8');
+    return true;
+  }
+  // (Round 69) Her blueprint table: her name and her colours, hers to
+  // change who owns her.
+  if (what === 'blueprint') {
+    if (S.owner && S.owner !== ownerId(game, p) && !game.cheats?.ships) {
+      game.ui.msg(`${theShip(S, true)}'s plans: her captain's, not yours to mark.`, '#ffb080');
+      return true;
+    }
+    game.ui.openBlueprint?.(S);
     return true;
   }
   if (what === 'pump') {

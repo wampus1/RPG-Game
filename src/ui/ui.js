@@ -25,6 +25,7 @@ import { MARKS, fightPhase } from '../entities/tempo.js';
 import { afflictionsOf } from '../game/afflict.js';
 import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 import { ModTalkWindow } from './modtalk.js';
+import { BlueprintWindow } from './blueprint.js';
 
 // The tool pictured for a block that wants one.
 // (Round 68) The far lands, by name: for a piece's own land's modifier.
@@ -1449,6 +1450,12 @@ export class UI {
   }
   // (Round 62) One of a mod's people talking (see mod/hooks.js): the next
   // line in the window already open, or a new one.
+  // (Round 69) A ship's blueprint table: her name and her colours.
+  openBlueprint(S) {
+    this.closeAll();
+    this.open(new BlueprintWindow(this, this.game, S));
+  }
+
   openModTalk(o) {
     const w = this.find('modtalk');
     if (w) w.set(o);

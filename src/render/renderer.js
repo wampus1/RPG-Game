@@ -19,7 +19,7 @@ import { drawWing, wingInFront, drawWingBurst } from './wing.js';
 import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
-import { shipDecos } from './shipvox.js';
+import { shipDecos, drawShipGhost } from './shipvox.js';
 import { drawCannonballs, drawShipHud } from './shiphud.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
@@ -2881,6 +2881,8 @@ export class Renderer {
   drawOverlays(game) {
     const ctx = this.ctx;
     this.drawTelegraphs(game);
+    // (Round 69) A ship in a bottle in hand: where she'd go.
+    if (game.shipGhost) drawShipGhost(this, game);
     const c = game.cursor;
     if (!c) return;
     const pulse = 0.55 + Math.sin(this.time * 6) * 0.25;

@@ -271,6 +271,23 @@ export const SHIP_SPRITES = {
     return p.outline(OUT);
   },
 };
+// (Round 69) The blueprint table: her plans spread on it, pinned at the
+// corners, a pair of dividers lying across them.
+SHIP_SPRITES.blueprint_table = function blueprintTable() {
+  const p = new Px(16, SPR_H);
+  const wood = '#6a4a2a';
+  p.rect(1, 14, 14, 3, wood);
+  p.hline(1, 14, 14, shade(wood, 1.25));
+  for (const x of [2, 13]) p.vline(x, 17, 26, shade(wood, 0.8));
+  p.rect(2, 11, 12, 4, '#9ab8d8');
+  p.rect(2, 11, 12, 1, '#c8dcf0');
+  for (let x = 3; x < 13; x += 2) p.set(x, 13, '#5a7aa8');
+  p.hline(4, 10, 12, '#2a4a8a');
+  p.line(5, 14, 9, 11, '#3a3a42');
+  p.line(6, 14, 10, 12, '#5a5a62');
+  for (const [x, y] of [[2, 11], [13, 11]]) p.set(x, y, '#c82020');
+  return p.outline(OUT);
+};
 export const SHIP_ANIM = { ship_pump: 2 };
 
 // ------------------------------------------------------------ item icons

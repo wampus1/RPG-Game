@@ -642,6 +642,9 @@ def('ship_cannon', { ...sprite, solid: true, rotatable: true, interact: 'cannon'
 def('hammock', { ...sprite, solid: false, rotatable: true, interact: 'hammock', tool: 'axe', hardness: 0.4, drop: 'cloth', support: false, label: 'Hammock' });
 def('ship_pump', { ...sprite, solid: true, interact: 'pump', tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Bilge Pump' });
 def('capstan', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Capstan' });
+// (Round 69) Her plans spread on a table in her captain's cabin (in a
+// sloop's hold): her name and her colours, to be changed (see ui/blueprint.js).
+def('blueprint_table', { ...sprite, solid: true, interact: 'blueprint', tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Blueprint Table' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

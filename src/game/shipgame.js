@@ -5,10 +5,10 @@
 // her: hold the button to knock a plank out (an axe does it quicker),
 // right-click with planks to mend a hole.
 import { B, BLOCKS } from '../world/blocks.js';
-import { REACH, NPC_STEP_TIME } from '../config.js';
-import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck } from './ships3d.js';
+import { REACH, NPC_STEP_TIME, SURFACE } from '../config.js';
+import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck, sailable, Ship } from './ships3d.js';
 import { holeAt, cellScreen } from '../render/shipvox.js';
-import { SHIP_TYPES } from '../world/shipmodels.js';
+import { SHIP_TYPES, shipModel } from '../world/shipmodels.js';
 import { bottledKey } from '../world/items.js';
 import { makeCrew, addHand } from './shipcrew.js';
 import { fleetsSave, fleetsLoad } from './shipfleets.js';
@@ -63,6 +63,79 @@ export function shipWheel(game, wheel) {
     if (st) st.elev = Math.max(-0.08, Math.min(0.55, st.elev - Math.sign(wheel) * 0.04));
   }
   return true;
+}
+
+// (Round 69) A ship in a bottle in your hand: her ghost on the water where
+// she'd go if you uncorked her now: where you point (if it's within 34
+// paces), else the nearest open water; lying across the way from you (R
+// turns her). Red, and where she'd strike marked, if any of her would be
+// on something that isn't open water (or on another ship).
+export function shipGhostTick(game) {
+  const p = game.player;
+  const held = p && p.heldDef ? p.heldDef() : null;
+  if (!held || !held.shipKit || p.deck || p.raft || p.dead || game.cutscene || game.world.inInstance(p.x)) {
+    game.shipGhost = null;
+    return;
+  }
+  const type = held.shipKit;
+  const c = game.cursor;
+  let at = null;
+  if (c && c.x !== undefined && !c.ship && Math.hypot(c.x - p.x, c.z - p.z) <= 34) {
+    let a = Math.atan2(c.x - p.x, c.z - p.z);
+    a = Math.round(a / (Math.PI / 8)) * (Math.PI / 8);
+    at = { x: c.x, z: c.z, yaw: a + Math.PI / 2 };
+  } else {
+    const A = game.shipGhostAuto;
+    if (!A || A.type !== type || Math.hypot(A.px - p.x, A.pz - p.z) > 4) game.shipGhostAuto = { type, px: p.x, pz: p.z, at: openWaterNear(game, type, p.x, p.z) };
+    at = game.shipGhostAuto.at;
+  }
+  if (!at) {
+    game.shipGhost = null;
+    return;
+  }
+  const yaw = (((at.yaw + (p.rot || 0) * (Math.PI / 2)) % TAU_) + TAU_) % TAU_;
+  const key = `${type},${at.x},${at.z},${yaw.toFixed(3)}`;
+  const G0 = game.shipGhost;
+  if (G0 && G0.key === key) return;
+  const bad = ghostBad(game, type, at.x, at.z, yaw);
+  const ghosts = (game.ghostShips ||= {});
+  const S = (ghosts[type] ||= new Ship({ id: -1, type, x: at.x, z: at.z, yaw, name: 'ghost', crew: [], anchor: true }));
+  game.shipGhost = { key, type, S, x: at.x, z: at.z, yaw, ok: !bad.length, bad, wy: SURFACE };
+}
+const TAU_ = Math.PI * 2;
+
+// Where of her (world cells round her waterline) she'd be on something.
+function ghostBad(game, type, x, z, yaw) {
+  const m = shipModel(type);
+  const probe = { m, x, z, yaw, toWorld: Ship.prototype.toWorld };
+  const out = [];
+  const seen = new Set();
+  for (const q of m.perim) {
+    const [wx, wz] = probe.toWorld(q.x, q.z);
+    const tx = Math.round(wx);
+    const tz = Math.round(wz);
+    const k = `${tx},${tz}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (!sailable(game, tx, tz) || shipAtWorld(game, tx, tz)) out.push([tx, tz]);
+  }
+  return out;
+}
+
+// The nearest open water a ship of `type` fits in, within 34 paces of
+// (x, z) (and lying along the shore), or null.
+function openWaterNear(game, type, x, z) {
+  for (let R = 6; R <= 32; R += 3) {
+    const n = Math.max(12, Math.round(R));
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * TAU_;
+      const px = Math.round(x + Math.sin(a) * R);
+      const pz = Math.round(z + Math.cos(a) * R);
+      if (!sailable(game, px, pz)) continue;
+      for (const yaw of [a + Math.PI / 2, a - Math.PI / 2, a, a + Math.PI]) if (!ghostBad(game, type, px, pz, yaw).length) return { x: px, z: pz, yaw };
+    }
+  }
+  return null;
 }
 
 // (Round 69) A ship bottle used beside (or aboard) a ship of your own: she
@@ -687,10 +760,14 @@ export function useShipItem(game, held) {
       game.ui.msg('Ashore, by open water, to launch her.', '#ffb080', true);
       return true;
     }
-    // (Round 69) Where her ghost showed her (see drawShipGhost), if it
-    // showed her clear.
+    // (Round 69) Where her ghost shows her (see shipGhostTick): there, if
+    // she fits there.
     const G = game.shipGhost;
-    const at = G && G.type === type && G.ok ? { x: G.x, z: G.z, yaw: G.yaw } : waterSpot(game, type, p.x, p.z, 3);
+    if (G && G.type === type && !G.ok) {
+      game.ui.msg('She won\'t fit there: her ghost is red where she\'d be on land, rock or another ship. Point at open water (R turns her).', '#ffb080', true);
+      return true;
+    }
+    const at = G && G.type === type ? { x: G.x, z: G.z, yaw: G.yaw } : waterSpot(game, type, p.x, p.z, 3);
     if (!at || Math.hypot(at.x - p.x, at.z - p.z) > 34) {
       game.ui.msg('She needs open water, deep and wide, close by: stand on the shore of the sea or a great lake.', '#ffb080', true);
       return true;
