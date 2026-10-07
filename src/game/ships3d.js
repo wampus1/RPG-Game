@@ -1272,7 +1272,7 @@ function entryStep(game, S, p, ang, dur) {
 // The way across her deck from cell `from` to `to` (each { x, y, z }),
 // cell by cell (four ways round): null if there's none. Not down a hatch
 // unless that's where it's going.
-export function deckPath(S, from, to, maxN = 1500) {
+export function deckPath(S, from, to, maxN = 1500, avoid = null) {
   const m = S.m;
   const key = (x, y, z) => (y * m.L + z) * m.W + x;
   const prev = new Map([[key(from.x, from.y, from.z), null]]);
@@ -1299,6 +1299,8 @@ export function deckPath(S, from, to, maxN = 1500) {
       const ny = stepOn(m, S.vox, x, y, z, nx, nz);
       if (ny < 0) continue;
       if (isInside(m, nx, ny, nz) && !(nx === to.x && nz === to.z)) continue;
+      // (Round 69: round whoever's standing there, if asked.)
+      if (avoid && !(nx === to.x && nz === to.z) && avoid(nx, ny, nz)) continue;
       const k = key(nx, ny, nz);
       if (prev.has(k)) continue;
       prev.set(k, [x, y, z]);
@@ -1317,7 +1319,7 @@ export function walkAboard(game, p, S, to, then = null) {
   const here = d.cx === to.x && d.cz === to.z && Math.abs(d.y - to.y) <= 1;
   const path = here ? [] : deckPath(S, { x: d.cx, y: d.y, z: d.cz }, to);
   if (!path) return false;
-  d.auto = { path, then, tries: 0 };
+  d.auto = { path, then, tries: 0, to };
   d.role = null;
   return true;
 }
@@ -1327,8 +1329,23 @@ function autoWalk(game, S, p) {
   const A = d.auto;
   if (A.path.length) {
     const [nx, , nz] = A.path[0];
-    if (deckStep(game, S, p, Math.sign(nx - d.cx), Math.sign(nz - d.cz), PLAYER_STEP_TIME)) A.path.shift();
-    else if (++A.tries > 3) d.auto = null;
+    if (deckStep(game, S, p, Math.sign(nx - d.cx), Math.sign(nz - d.cz), PLAYER_STEP_TIME)) {
+      A.path.shift();
+      A.tries = 0;
+      return;
+    }
+    // (Someone in the way: a moment for them to move, the way found again
+    // round them; near enough the wheel or the gun, it's taken from here.)
+    A.tries++;
+    if (A.tries % 20 === 0 && A.to) {
+      const again = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, A.to, 1500, (x, y, z) => !!occupiedOn(game, S, x, y, z, p));
+      if (again) A.path = again;
+    }
+    if (A.tries > 90) {
+      d.auto = null;
+      const t = A.then;
+      if (t && (t.kind === 'helm' || t.kind === 'gun')) deckInteract(game, p, t.kind === 'gun' ? t.gi : null);
+    }
     return;
   }
   d.auto = null;

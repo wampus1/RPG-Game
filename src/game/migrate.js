@@ -348,6 +348,25 @@ export const STEPS = [
       if (d.wg === 1) log.push('This world keeps its lands as they were made. A new world has each land\'s shape picked by its seed, and the far lands lived in: their peoples and empires, their own ground, beasts, music, old places, masters and gear.');
     },
   },
+  {
+    // (Round 69) Ships in bottles: every ship item is one (a sloop in a
+    // bottle, and so on, at 750 to 5,000), launched with no crew; a Ship
+    // Bottle puts a ship of yours back into one, everyone aboard with
+    // her (kept with the world: ships.bottles). Her decks every part to
+    // be got to and from (her plans redrawn, a blueprint table in them),
+    // her hatches, doors, wheel and guns to click, your crew's orders,
+    // your companions aboard with you.
+    to: '0.69.0',
+    data(d, log) {
+      if (d.ships && typeof d.ships === 'object') {
+        d.ships.bottles ??= {};
+        d.ships.bseq ??= 0;
+      }
+      log.push('Ships come in bottles now ("Sloop in a Bottle", 750 coins, up to the Frigate in a Bottle at 5,000), with no crew till you sign some on; a Ship Bottle (a shipwright\'s, or a workbench\'s) puts a ship of yours back in one with everyone aboard her. Holding one shows her ghost where she\'d go.');
+      log.push('Aboard: hatches, cabin doors, the wheel and the guns are clicked to use; stepping toward a hatch takes you down it; talk to your crew for orders; your companions come aboard with you; mend her from outside with planks; a raft runs into a ship (yours: you climb aboard). A blueprint table in her captain\'s cabin (or her hold) renames her and changes her colours.');
+      log.push('The ships\' plans are redrawn so no corner of a deck traps anyone (a ship of yours keeps her damage and her stores).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

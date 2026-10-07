@@ -5,7 +5,7 @@
 // her: hold the button to knock a plank out (an axe does it quicker),
 // right-click with planks to mend a hole.
 import { B, BLOCKS } from '../world/blocks.js';
-import { REACH, NPC_STEP_TIME, SURFACE } from '../config.js';
+import { REACH, NPC_STEP_TIME, SURFACE, TILE, LH, VIEW_W, VIEW_H } from '../config.js';
 import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck, sailable, Ship } from './ships3d.js';
 import { holeAt, cellScreen } from '../render/shipvox.js';
 import { SHIP_TYPES, shipModel } from '../world/shipmodels.js';
@@ -63,6 +63,85 @@ export function shipWheel(game, wheel) {
     if (st) st.elev = Math.max(-0.08, Math.min(0.55, st.elev - Math.sign(wheel) * 0.04));
   }
   return true;
+}
+
+// (Round 69) At her wheel, the view draws back to show the whole of her
+// and some sea round her, centred on her middle (her masts a little in
+// it): how far back, and where to look. Null when you aren't steering.
+export const HELM_ZOOM_MAX = 2.4;
+export function helmView(game) {
+  const p = game.player;
+  const d = p && p.deck;
+  if (!d || d.role !== 'helm') return null;
+  const S = shipById(game, d.s);
+  const r = game.renderer;
+  if (!S || !r || !r.toView) return null;
+  const m = S.m;
+  const len = m.L + ((m.bowsprit && m.bowsprit.len) || 0);
+  let u0 = Infinity;
+  let u1 = -Infinity;
+  let v0 = Infinity;
+  let v1 = -Infinity;
+  for (const [lx, lz] of [[0, 0], [m.W, 0], [0, len], [m.W, len]]) {
+    const [wx, wz] = S.toWorld(lx, lz);
+    const [u, v] = r.toView(wx, wz);
+    u0 = Math.min(u0, u);
+    u1 = Math.max(u1, u);
+    v0 = Math.min(v0, v);
+    v1 = Math.max(v1, v);
+  }
+  const mast = Math.max(0, ...m.masts.map((mm) => (mm.base || 0) + (mm.h || 0))) - m.deck;
+  const M = 5;
+  const needW = (u1 - u0 + 2 * M) * TILE;
+  const needH = (v1 - v0 + 2 * M) * TILE + (m.deck + mast * 0.6) * LH;
+  const zoom = Math.max(1, Math.min(HELM_ZOOM_MAX, Math.max(needW / VIEW_W, needH / VIEW_H)));
+  const [cx, cz] = S.toWorld(m.W / 2, len / 2);
+  return { zoom, focus: { x: cx, y: S.layerY(m.deck) + mast * 0.3, z: cz } };
+}
+
+// (Round 69) Below decks, the view turns with her: her inside is laid out
+// square in the world (see shiphold.js), so the camera's quarter turns
+// follow her heading (as near as a quarter turn can), so what's forward
+// in her is the way her bow points on deck. Back up on deck, the view's
+// what it was. (Q and E still turn it, below, from there.)
+export function holdViewTick(game) {
+  const r = game.renderer;
+  const p = game.player;
+  if (!r || !r.turn || !p) return;
+  const S = p.deck ? null : holdShipAt(game, p.x);
+  if (!S) {
+    if (r.holdBase !== undefined && r.holdBase !== null && !r.spin) {
+      const d = turnBy(r.view, r.holdBase);
+      r.holdBase = null;
+      if (d) {
+        r.turn(d);
+        r.spin = null;
+      }
+    }
+    return;
+  }
+  if (r.holdBase === undefined || r.holdBase === null) r.holdBase = r.view;
+  if (r.spin) return;
+  // (How far round she is, in quarter turns of the view; turned only past
+  // the halfway, and a little more, so she doesn't flick to and fro.)
+  const f = r.holdBase - S.yaw / (Math.PI / 2);
+  let off = (((f - r.view) % 4) + 4) % 4;
+  if (off > 2) off -= 4;
+  if (Math.abs(off) < 0.62) return;
+  r.turn(off > 0 ? 1 : -1);
+}
+
+// Q and E, below decks: from her heading, not the world's.
+export function holdTurnKey(game, d) {
+  const r = game.renderer;
+  if (!r || r.holdBase === undefined || r.holdBase === null) return false;
+  r.holdBase = (r.holdBase + d + 4) & 3;
+  return true;
+}
+
+function turnBy(from, to) {
+  const d = (to - from + 4) & 3;
+  return d === 3 ? -1 : d === 2 ? 2 : d;
 }
 
 // (Round 69) A ship in a bottle in your hand: her ghost on the water where

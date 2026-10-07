@@ -72,7 +72,8 @@ export function drawShipHud(r, game) {
   }
   if (!helm) return;
   // Her speed.
-  drawText(ctx, `${st.speed.toFixed(1)} pace/s  x${st.raft.toFixed(1)} raft`, x0 + 3, y0 + 22, '#e8e8f0', '#000');
+  // (At anchor: room on the line for saying so.)
+  drawText(ctx, st.anchor ? `${st.speed.toFixed(1)} pace/s` : `${st.speed.toFixed(1)} pace/s  x${st.raft.toFixed(1)} raft`, x0 + 3, y0 + 22, '#e8e8f0', '#000');
   // Sail, and the sheets against where they'd best be.
   drawText(ctx, 'SAIL', x0 + 3, y0 + 32, '#c8c0b0', '#000');
   bar(ctx, x0 + 28, y0 + 33, 40, st.set, '#f0e8d0');

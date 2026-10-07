@@ -31,7 +31,7 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
-import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard, shipGhostTick } from './shipgame.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard, shipGhostTick, holdViewTick, holdTurnKey, helmView } from './shipgame.js';
 import { holdBlockChanged, holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { crewHurt } from './shipcrew.js';
@@ -2009,8 +2009,10 @@ export class Game {
     // (Round 68) The great ships: sailing, fighting, foundering; whoever's
     // aboard them.
     updateShips3d(this, dt);
-    // (Round 69) A ship in a bottle in hand: her ghost where she'd go.
+    // (Round 69) A ship in a bottle in hand: her ghost where she'd go. And
+    // below her decks, the view turned with her.
     shipGhostTick(this);
+    holdViewTick(this);
     tickLater(this, dt);
     fleetsTick(this, dt);
     idleShipsTick(this, dt);
@@ -2086,7 +2088,10 @@ export class Game {
     }
     // The camera: drawn back near a spire, or wherever a scene takes it.
     const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
-    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : 1 + 0.32 * nearSpire;
+    // (Round 69: at a ship's wheel, drawn back to see all of her.)
+    const helm = this.scene ? null : helmView(this);
+    this.helmFocus = helm ? helm.focus : null;
+    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + 0.32 * nearSpire, helm ? helm.zoom : 1);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
     this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
     if (this.audio) this.audio.listener = this.player;
@@ -2835,7 +2840,8 @@ export class Game {
         // Q and E turn the camera a quarter turn either way.
         case 'KeyQ':
         case 'KeyE':
-          if (this.renderer.turn) {
+          if (holdTurnKey(this, code === 'KeyQ' ? -1 : 1)) this.audio?.play('select');
+          else if (this.renderer.turn) {
             this.renderer.turn(code === 'KeyQ' ? -1 : 1);
             this.mining = null;
             this.audio?.play('select');

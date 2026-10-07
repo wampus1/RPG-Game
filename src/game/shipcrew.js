@@ -332,15 +332,16 @@ function holdBrain(game, S, c, dt) {
   b.t -= dt;
   if (b.why === 'pump') {
     const [px, py, pz] = holdPos(S, m.pump.x, m.pump.y, m.pump.z);
-    if (Math.abs(c.x - px) + Math.abs(c.z - pz) <= 1) {
+    // (Beside it, square or cornerwise: round 69.)
+    if (Math.max(Math.abs(c.x - px), Math.abs(c.z - pz)) <= 1 && Math.abs(c.y - py) <= 1) {
       S.pumpers = (S.pumpers || 0) + 1;
       if (Math.random() < dt * 3) c.actionTimer = 0.25;
       if ((S.flood > 0.01 || c.order === 'pump') && b.t > 0 && (c.order === 'pump' || b.t < 1e8)) return;
-    } else if (!c.hpathTried) {
+    } else if (!c.hpathTried || (c.order === 'pump' && Math.random() < dt * 0.5)) {
       c.hpathTried = true;
       c.hpath = findPath(game.world, c.x, c.y, c.z, px, py, pz, { near: 1, maxNodes: 2500 }) || [];
       return;
-    }
+    } else if (c.order === 'pump') return;
   }
   if (b.t > 0 && b.why !== 'pump') {
     if (!c.hpath && Math.random() < dt * 0.5) {

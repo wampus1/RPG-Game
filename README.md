@@ -5298,6 +5298,91 @@ towns were laid on them), and the far lands as they were. Ships and
 fleets are in them from now on. A new world has the lands shaped by its
 seed and the far lands lived in.
 
+## Round 69: living aboard a ship
+
+**Ships come in bottles.** Every ship item is a ship in a bottle, named
+for her kind: a **Sloop in a Bottle** (750 coins), a **Brigantine in a
+Bottle** (1,800), a **Galleon in a Bottle** (3,500), a **Frigate in a
+Bottle** (5,000), the same price at every shipwright. Uncorked by open
+water, she comes out with **no crew**: sign sailors on aboard her with
+Sailor's Articles (or sail her alone). Holding one shows her **ghost** on
+the water where she'd go (where you point, within 34 paces, else the
+nearest open water), pale blue, or **red** where she'd be on land, rock
+or another ship (the spots marked); **R** turns her. She's launched
+where the ghost is, and not at all where it's red.
+
+A **Ship Bottle** (a shipwright sells them; 6 glass, 2 planks and a
+string at a workbench) puts a ship of yours back into a bottle: used
+beside her or aboard her (you're set ashore, or in the sea), she shrinks
+into it with her crew, whoever came aboard with you, her stores and her
+damage, and comes out again just as she was. (The bottle's item shows
+her name; what's in it is kept with the world.) The masters of sunken
+places (a drowned crypt, a tide grotto, a drowned broch, a leviathan's
+gut, a sea cave) sometimes drop a ship in a bottle.
+
+**Getting about her.**
+- Stepping **toward a hatch or a cabin door** takes you in, whichever
+  way she's lying on the screen (beside its head, the way in is enough;
+  no exact diagonal needed). Hatches, doors, her **wheel**, her deck
+  **guns** and the capstan can be **clicked**: you're walked there and
+  it's used (the wheel's spokes count, and a little round them).
+- Every corner of her decks can be got back from: the galleon's castle
+  stairs no longer drop you into a railed pocket at her stern, and a
+  rail that boxed a corner in is opened. If you ever do end up
+  somewhere with no way back (pressing on and getting nowhere), you
+  clamber out over the rail.
+- On her deck, whoever's beside you is beside you: **attacking** and
+  **talking** (right-click) to people aboard work as anywhere.
+- **Your crew take orders**: talk to a hand of yours to send them to the
+  guns (they stand by them, and fire as she bears in a fight), below to
+  the pump (they stay there), to carry on, or to pay them off (ashore
+  they go). Your crew and any ship's hands go below and come up again.
+- **Companions** (a hired escort, a friend travelling with you) come
+  aboard after you, follow you about her deck, go down the hatch after
+  you and come up again, and ashore when you do.
+- **Mending from outside**: with planks in hand, click (or right-click)
+  a hole in her side from the water or a pier; holding the button with
+  planks never knocks a plank out.
+- **Rafts**: a raft runs into a ship as into a bank. Your own: you make
+  the raft fast and climb aboard her, the raft back in your pack.
+- **Below decks the view turns with her**: the camera's quarter turns
+  follow her heading, so her bow points the way it does on deck; back
+  up, the view's what it was (Q and E still turn it below).
+- **A blueprint table** in her captain's cabin (the galleon's) or aft in
+  her hold (the others): rename her, and change her flag's colour, the
+  mark on her mainsail (stripe, cross, disc, saltire, quarter, chevron)
+  and her paint. Only her owner may.
+
+**At the wheel** the view draws back to take in the whole of her and some
+sea round her, centred on her middle (the gauges stay where they are);
+let go of the wheel and it comes in again.
+
+**Sailing.** She always makes way: with the sails set she keeps steerage
+way on any heading, the sheets trim themselves when you aren't trimming
+them (a crew trims better), and headed dead into the wind she falls off
+it rather than stopping dead.
+
+**Feedback.** Planks split and splinter as they're knocked out (chips
+of what they're made of, dust, the sea spouting in at a hole low down),
+cracks spread across a plank as you work at it, mending throws sawdust,
+and she has her own sounds: planks breaking and being hammered home, shot
+striking, her timbers creaking, her sails flapping, the sea rushing in,
+the anchor chain, her bell.
+
+**Fixes.** Some lands' ground (bamboo groves, red mesas, salt flats) and
+some far lands' old places showed on the map as "?": they have their own
+marks now. A ship launched by a player no longer comes with hands nobody
+hired. Pointing at one of a ship's hands (or talking to one) could freeze
+the game (their name is their first and last, and the box round it came
+out as nothing at all); a box with nothing to say no longer stops
+anything. Clicking the wheel with her crew in the way: you're walked
+round them (or take it from beside it), not stopped.
+
+**Updating.** Worlds from 0.68 keep their ships, their damage and their
+stores; ships of yours that already had crews keep them. The ships'
+plans are redrawn (the trapping corners opened, a blueprint table put
+in), and bottled ships are kept with the world from now on.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5594,13 +5679,15 @@ src/
                        the guns, the pumps, below, fighting
   game/shipfleets.js   the realms' fleets: routes round the storm,
                        voyages, ships made real near you
-  game/shipgame.js     ships and you: keys, the mouse, deeds and kits,
-                       sailors signed on, saving
+  game/shipgame.js     ships and you: keys, the mouse, ships in bottles
+                       (and back in), her ghost, sailors signed on and
+                       their orders, companions aboard, rafts, saving
   game/shipping.js     towns' trade ships (built at the pier, sailing)
   render/shipvox.js    the great ships drawn: her blocks at any heading,
                        her rigging, sails and flags, her crew among them
   render/shiphud.js    the ship's gauges (speed, trim, wind) and shot
   render/shipart.js    the ships' own blocks' and items' pictures
+  ui/blueprint.js      a ship's blueprint table: her name and colours
   entities/sailor.js   a hand aboard one of the great ships
 tests/                 node:test suites (run headlessly with stubs)
 tools/serve.mjs        zero-dependency static server (and the LAN relay)

@@ -25,6 +25,7 @@ import { MARKS, fightPhase } from '../entities/tempo.js';
 import { afflictionsOf } from '../game/afflict.js';
 import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 import { ModTalkWindow } from './modtalk.js';
+import { ownerId } from '../game/ships3d.js';
 import { BlueprintWindow } from './blueprint.js';
 
 // The tool pictured for a block that wants one.
@@ -607,6 +608,10 @@ export class UI {
 
   drawTooltip(ctx) {
     const t = this.tooltip;
+    // (Whatever's to be said, said as words: a line that isn't, or none at
+    // all, is never to take the whole screen down with it.)
+    t.lines = (t.lines || []).filter(Boolean).map((l) => (typeof l.text === 'string' ? l : { ...l, text: String(l.text ?? '') }));
+    if (!t.lines.length) return;
     // Room on the right for a tool's picture (three characters by two rows).
     const iconW = t.tool ? 4 : 0;
     const w = Math.max(...t.lines.map((l) => l.text.length)) + 2 + iconW;
@@ -1134,6 +1139,17 @@ export class UI {
         if (e.account && e.account.desc) lines.push({ text: e.account.desc.slice(0, 34), color: C.dim });
         lines.push({ text: `${Math.max(0, Math.ceil(e.hp))}/${e.maxHp} HP`, color: C.dim });
         lines.push({ text: 'RMB profile', color: C.faint });
+      } else if (e.kind === 'sailor') {
+        // (Round 69) A ship's hand (their name was drawn as nothing at all,
+        // and the box with it).
+        const nm = e.name && typeof e.name === 'object' ? `${e.name.first || ''} ${e.name.last || ''}`.trim() : String(e.name || 'A sailor');
+        const sh = game.ships3d ? game.ships3d.find((q) => q.id === e.shipId) : null;
+        const own = !!(sh && sh.owner && sh.owner === ownerId(game, game.player));
+        const role = { captain: 'Captain', mate: 'Mate', gunner: 'Gunner', marine: 'Marine', merchant: 'Merchant', passenger: 'Passenger' }[e.role] || 'Hand';
+        lines.push({ text: nm, color: e.angry ? C.red : C.hi });
+        lines.push({ text: `${role}${sh ? ` of ${sh.name}` : ''}${own ? ' · your crew' : ''}`, color: C.cyan });
+        lines.push({ text: `${Math.max(0, Math.ceil(e.hp))}/${e.maxHp} HP`, color: C.dim });
+        lines.push({ text: own ? 'RMB orders' : 'RMB talk', color: C.faint });
       } else if (e.kind === 'npc') {
         lines.push({ text: e.name, color: C.hi });
         lines.push({ text: `${e.title}${e.rec.age === 'child' ? ' (child)' : e.rec.age === 'elder' ? ' (elder)' : ''}`, color: C.cyan });

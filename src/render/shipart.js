@@ -325,46 +325,50 @@ export function shipIcon(key) {
 }
 
 function bottle(p, type) {
-  const GD = '#6aa4b8';
-  const IN = '#dcf0f6';
+  const GD = '#5a96aa';
+  const IN = '#a8d4e6';
   // The glass: a long body, rounded at the ends, and its neck.
   for (let x = 1; x <= 12; x++) {
     const end = x === 1 || x === 12;
-    const top = end ? 5 : 4;
+    const top = end ? 4 : 3;
     const bot = end ? 11 : 12;
     for (let y = top; y <= bot; y++) p.set(x, y, y === top || y === bot || end ? GD : IN);
   }
-  for (let x = 13; x <= 13; x++) for (let y = 6; y <= 10; y++) p.set(x, y, y === 6 || y === 10 ? GD : IN);
+  for (let y = 6; y <= 9; y++) p.set(13, y, y === 6 || y === 9 ? GD : IN);
   // The cork.
-  p.rect(14, 7, 2, 3, '#b08050');
-  p.set(15, 8, '#7a5030');
+  p.rect(14, 6, 2, 4, '#b08050');
+  p.vline(15, 6, 9, '#7a5030');
   // The stand.
   p.hline(3, 4, 13, '#6a4a2a');
   p.hline(9, 10, 13, '#6a4a2a');
   p.hline(2, 11, 14, '#4a3020');
   if (type) {
-    // A sea of blue putty, and her on it.
-    p.hline(2, 11, 11, '#4a88a8');
-    p.hline(3, 10, 10, '#8a2a1e');
-    p.hline(4, 9, 10, '#5a3a22');
-    p.hline(3, 10, 9, '#c8a040');
-    if (type === 'galleon') p.rect(2, 7, 2, 2, '#5a3a22');
+    // A sea of blue putty, and her on it: her hull, her masts, her sails.
+    p.hline(2, 11, 11, '#2e6a94');
+    p.hline(3, 10, 9, '#7a4a28');
+    p.hline(4, 9, 10, '#8a2a1e');
+    if (type === 'galleon') p.rect(2, 7, 2, 2, '#7a4a28');
     const masts = { sloop: [6], brigantine: [5, 8], galleon: [5, 7, 9], frigate: [4, 7, 9] }[type];
     for (const x of masts) {
-      p.vline(x, 5, 8, '#6a4a2a');
+      p.vline(x, 4, 8, '#4a2e14');
       if (type === 'sloop') {
-        p.set(x + 1, 6, '#f8f0dc');
-        p.hline(x + 1, x + 2, 7, '#f8f0dc');
-        p.hline(x + 1, x + 3, 8, '#f8f0dc');
+        p.set(x + 1, 5, '#ffffff');
+        p.hline(x + 1, x + 2, 6, '#ffffff');
+        p.hline(x + 1, x + 3, 7, '#f4ecd8');
       } else {
-        p.hline(x - 1, x + 1, 6, '#f8f0dc');
-        p.hline(x - 1, x + 1, 7, '#ece4cc');
+        p.set(x - 1, 5, '#ffffff');
+        p.set(x + 1, 5, '#ffffff');
+        p.set(x - 1, 7, '#f4ecd8');
+        p.set(x + 1, 7, '#f4ecd8');
       }
     }
-    if (type === 'galleon') p.set(5, 4, '#c82020');
+    p.set(masts[Math.floor(masts.length / 2)], 4, '#d82020');
+  } else {
+    // (Empty: the light through it.)
+    p.hline(4, 10, 8, '#c4e4f0');
   }
   // The light on the glass.
-  p.hline(3, 9, 5, '#ffffff');
-  p.set(11, 6, '#ffffff');
+  p.hline(2, 3, 4, '#ffffff');
+  p.set(11, 4, '#ffffff');
   return p.outline(OUT);
 }

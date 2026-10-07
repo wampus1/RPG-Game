@@ -469,6 +469,9 @@ export class Renderer {
       this.bubbleK = z;
       if (!this.deferBubbles) this.drawBubbles(main);
       this.ctx = main;
+      // (Round 69: the ship's gauges on the screen, not the drawn-back
+      // world: see renderFrame.)
+      if (!this.spin) drawShipHud(this, game);
     }
   }
 
@@ -489,7 +492,8 @@ export class Renderer {
     }
     const player = game.player;
     // (An opening scene moves the camera its own way: see cutscene.js.)
-    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : player.renderPos();
+    // (Round 69: at a ship's wheel, her middle: see shipgame.js helmView.)
+    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : game.helmFocus || player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
     const tx = pu * TILE + 8 - this.vw / 2;
@@ -514,7 +518,7 @@ export class Renderer {
     }
     this.drawScene(game, dt);
     this.drawOverlays(game);
-    drawShipHud(this, game);
+    if (this.zoomK === 1) drawShipHud(this, game);
     this.drawFlashes(game, dt);
   }
 

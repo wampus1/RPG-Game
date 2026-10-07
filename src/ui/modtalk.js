@@ -43,7 +43,9 @@ export class ModTalkWindow extends Window {
 
   draw(g) {
     const sp = this.speaker;
-    const name = sp ? sp.name || 'Someone' : 'Someone';
+    // (A ship's hand's name is their first and last: round 69.)
+    const nm = sp && sp.name && typeof sp.name === 'object' ? `${sp.name.first || ''} ${sp.name.last || ''}`.trim() : sp && sp.name;
+    const name = String(nm || 'Someone');
     const title = sp && sp.S && sp.S.title ? `, ${sp.S.title}` : '';
     g.box(0, 0, this.w, this.h, { bg: 'rgba(16,12,22,0.95)', double: true, title: `${name.toUpperCase()}${title}` });
     // Their picture.
