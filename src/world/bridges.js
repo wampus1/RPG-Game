@@ -83,11 +83,17 @@ const MATS = {
     causeway: { deck: 'drystone', mid: 'cobblestone', rail: 'drystone', pier: 'drystone', lamp: 'lantern' },
   },
 };
+// (Round 70) A parapet's a thin wall of its stone now, not whole blocks
+// (a column's stone, its own; a plank bridge keeps its fence).
+const WALL_FOR = { marble_column: 'marble' };
 export function bridgeMats(land, kind) {
   const M = MATS[land] || MATS.default;
   const m = M[kind] || MATS.default[kind];
   const out = {};
   for (const [k, v] of Object.entries(m)) out[k] = B[v] ?? B[MATS.default[kind][k]] ?? B.planks;
+  const rail = m.rail || MATS.default[kind].rail;
+  const wall = B[`${WALL_FOR[rail] || rail}_wall`];
+  if (wall !== undefined) out.rail = wall;
   return out;
 }
 export function addBridgeMats(land, mats) {
@@ -165,18 +171,33 @@ export function findBridges(ow) {
 // Where (x, z) is on a bridge, if it is: how far along it (in tiles from
 // its first end), how far out from its middle line (signed), and the
 // bridge. Null off any.
+function bandOf(b, x, z) {
+  const dx = b.x1 - b.x0;
+  const dz = b.z1 - b.z0;
+  const l2 = dx * dx + dz * dz || 1;
+  const t = ((x - b.x0) * dx + (z - b.z0) * dz) / l2;
+  const len = Math.sqrt(l2);
+  const side = ((x - b.x0) * -dz + (z - b.z0) * dx) / len;
+  return { t, len, side, on: t >= 0 && t <= 1 && Math.abs(side) <= b.hw + 0.5, slant: Math.max(Math.abs(dx), Math.abs(dz)) / len };
+}
 export function onBridge(bridges, x, z) {
   for (const b of bridges) {
     if (x < b.bx0 || x > b.bx1 || z < b.bz0 || z > b.bz1) continue;
-    const dx = b.x1 - b.x0;
-    const dz = b.z1 - b.z0;
-    const l2 = dx * dx + dz * dz || 1;
-    const t = ((x - b.x0) * dx + (z - b.z0) * dz) / l2;
-    if (t < 0 || t > 1) continue;
-    const len = Math.sqrt(l2);
-    const side = ((x - b.x0) * -dz + (z - b.z0) * dx) / len;
-    if (Math.abs(side) > b.hw + 0.5) continue;
-    return { b, along: t * len, side: Math.round(side), len };
+    const q = bandOf(b, x, z);
+    if (q.t < 0 || q.t > 1) continue;
+    // (Round 70: and the exact distance off its line, and how far a pace
+    // across the world moves you off it, so its parapet runs unbroken on a
+    // slant: see regiongen.stampBridge.)
+    if (q.on) return { b, along: q.t * q.len, side: Math.round(q.side), sideF: q.side, slant: q.slant, len: q.len };
+    // (Just off it on a slant, in the corner of its staircase of an edge:
+    // a cell of parapet there, so a wall that only joins side to side runs
+    // on unbroken, and the deck's no narrower.)
+    if (Math.abs(q.side) > b.hw + 2) continue;
+    const on = (ax, az) => bandOf(b, ax, az).on;
+    if ((on(x - 1, z) || on(x + 1, z)) && (on(x, z - 1) || on(x, z + 1))) {
+      const s = Math.sign(q.side) * (b.hw + 1);
+      return { b, along: q.t * q.len, side: s, sideF: q.side, slant: q.slant, len: q.len, rim: true };
+    }
   }
   return null;
 }

@@ -173,7 +173,7 @@ function make(game, P, sid, x, z, building = false) {
   for (const type of [townShipKind(s), 'brigantine', 'sloop']) {
     let at = roomFor(game, type, x, z, yaw) ? { x, z, yaw } : null;
     if (!at) {
-      const w = waterSpot(game, type, x, z, 0);
+      const w = waterSpot(game, type, x, z, 0, 16, false);
       if (w && Math.hypot(w.x - x, w.z - z) < 12) at = w;
     }
     if (!at) continue;

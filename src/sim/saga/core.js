@@ -877,7 +877,14 @@ export class Saga {
     t.claims.push({ who, at: this.now, name: nameOf(this, who) });
     const th = this.threadOf(t);
     if (who.t === 'pl') {
+      // (Round 70: taken on by something you did, not offered by anyone:
+      // said so, and whose it is, so it isn't a mystery in your journal.)
+      const unasked = !this.person(who.pid).known[t.id];
       this.hear(who.pid, t);
+      if (unasked && !t.only) {
+        const town = t.giver && t.giver.t === 'rec' ? this.game.world.ow.settlements[t.giver.sid]?.name : null;
+        this.tell(who.pid, `In your journal now: ${t.title}${t.giverName ? ` (it's ${t.giverName}'s${town ? `, of ${town}` : ''})` : ''}.`, '#e8d8a8');
+      }
       this.touch(th, who.pid, `${nameOf(this, who)} took it on: ${lcFirst(t.title)}.`);
     } else if (th) this.note(th, `${NameOf(this, who)} took it on: ${lcFirst(t.title)}.`);
     const M = MOTIFS[th.m];

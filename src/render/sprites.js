@@ -1502,8 +1502,8 @@ function blockIcon(id) {
   const ctx = atlasC.getContext('2d');
   const p = new Px(16, 16);
   const read = (slot, sx, sy, w, h) => ctx.getImageData(slot.x + sx, slot.y + sy, w, h).data;
-  if (b.render === 'fence') {
-    const f = TEX.misc.fence;
+  if (b.render === 'fence' || b.render === 'wall') {
+    const f = b.render === 'wall' && TEX.wall && TEX.wall[id] ? TEX.wall[id] : TEX.misc.fence;
     for (const part of [f.west, f.post, f.east]) {
       const d = read(part, 0, 0, part.w, part.h);
       for (let y = 4; y < 26; y++) for (let x = 0; x < 16; x++) {

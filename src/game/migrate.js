@@ -367,6 +367,15 @@ export const STEPS = [
       log.push('The ships\' plans are redrawn so no corner of a deck traps anyone (a ship of yours keeps her damage and her stores).');
     },
   },
+  {
+    to: '0.70.0',
+    data(d, log) {
+      log.push('Bridges not yet walked are built with thin walls of their stone for parapets (joining up along them, slanted ones too), and their lanterns burn from the start; the walls come in thirteen stones for building with as well.');
+      log.push('Dungeon chests can hold a dish cooked from what that kind of dungeon keeps (its own ingredients), and now and then the recipe for one.');
+      log.push('A task you take up without being asked (a beast caught, a find) says so, and whose it is; the journal says whose a task is ("For ...") rather than who asked.');
+      log.push('Imperial cities in worlds made from now have arenas, parks, training yards, animal pens, market squares and monuments, an academy or college, and many more houses and shops (a world already made keeps its cities as they are).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

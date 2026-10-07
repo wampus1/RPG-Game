@@ -7,6 +7,7 @@ import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf } from '
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
+import { empireQuarter } from './empire.js';
 import { farTable } from './farlands.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
@@ -794,6 +795,12 @@ class Layout {
     yield;
     for (const t of late) {
       if (!this.placeBuilding(t, byPlaza(this.frontage()), rng) && this.growLane(rng)) this.placeBuilding(t, byPlaza(this.frontage()), rng);
+      yield;
+    }
+    // (Round 70) An empire's city: its landmarks, and its streets built up
+    // (see empire.js).
+    if (s.empire && s.type === 'city' && s.condition !== 'abandoned' && (this.world.ow.wg || 1) >= 3) {
+      empireQuarter(this, rng.fork('empire'));
       yield;
     }
     // Empty lots the town can build on later (e.g. for new citizens).

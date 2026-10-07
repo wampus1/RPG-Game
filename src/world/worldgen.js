@@ -44,8 +44,10 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // (Round 68) How a world's made, as of this version: 1 as worlds were
 // made before 0.68 (kept for them: their land can't change under them);
 // 2, the lands shaped by the seed (see shapes.js) and bridged, and the far
-// lands lived in (see farlands.js).
-export const WORLD_GEN = 2;
+// lands lived in (see farlands.js); (round 70) 3, an empire's cities
+// filled out with landmarks and houses (see empire.js: a city already laid
+// out in an older world keeps its plan).
+export const WORLD_GEN = 3;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:

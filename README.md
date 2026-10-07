@@ -5383,6 +5383,48 @@ stores; ships of yours that already had crews keep them. The ships'
 plans are redrawn (the trapping corners opened, a blueprint table put
 in), and bottled ships are kept with the world from now on.
 
+## Round 70: fuller cities, walled bridges
+
+**Imperial cities** (in worlds made from now) are built up: many more
+houses and shops along their streets, an academy (or a college where an
+empire has one), stables, and their own landmarks, each laid out on a lot
+of its own by a road:
+- an **arena**: an oval of two-high walls of the city's stone, its gates
+  north and south, sand inside, banners, lamps, dummies and a rack, and
+  people watching from its step;
+- a **park**: a hedge round grass and gravel walks, a fountain, flowers,
+  saplings and benches people sit and read on;
+- a **training yard**: fenced gravel, dummies people practise at, weapon
+  racks and archery butts;
+- **beast pens**: two fenced pens, stocked with the city's livestock,
+  which stay in them;
+- a **market square**: flagstones, stalls under awnings, crates and
+  barrels, where people come to trade;
+- a **monument**: a statue on a plinth, columns with lanterns, a banner.
+A world already made keeps its cities as they are.
+
+**Bridges** have thin **walls** for parapets now, of the bridge's stone,
+joining up along it as fences do (a slanted bridge's too, its corners
+filled so the wall runs unbroken and the deck's no narrower); plank
+bridges keep their rail. Their **lanterns are lit** from the start. The
+walls come in thirteen stones (cobblestone, stone brick, mossy brick,
+marble, basalt, basalt brick, lacquered planks, whalebone, blue tile,
+salt brick, drystone, travertine, cob) for building with too.
+
+**Dungeon chests** can hold a **dish** cooked from what that kind of
+place keeps (a barrow's meat, mushrooms and herbs; a grotto's fish, crab
+and kelp; a forge's ember pods; the far lands' own foods in theirs),
+cooked any way and well or badly, and now and then the **recipe** for
+one. Never in a Kavorent vault.
+
+**Fixes.**
+- A stall of a second or so, over and over, near a town with a ship:
+  finding the town's ship somewhere to lie made the world out to a long
+  way round. It looks only nearby, in what's already made.
+- A task you take up by something you did, not by being asked (a beast
+  you caught, a find), says so ("In your journal now: ...", and whose it
+  is); the journal says "For" whoever it's for, rather than who asked.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5663,6 +5705,7 @@ src/
   ui/modmanager.js     the world's mods from the pause menu (round 67)
   world/shapes.js      (round 68) each land's shape, by the world's seed
   world/bridges.js     bridges across the straits of a split land
+  world/empire.js      an imperial city's landmarks and its filled-in streets
   world/farlands.js    the far lands' peoples, realms, towns and empires
   world/fardeep.js     the far lands' own old places, their masters
   sim/fartech.js       the far peoples' learning (their own steps, and

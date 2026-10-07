@@ -229,7 +229,8 @@ export class QuestWindow extends Window {
       const t = e.t;
       put(t.title, C.hi);
       put(e.ready ? `Done. Go back to ${t.giverName || 'whoever asked'} for your reward.` : S.claimedBy(t, pid) ? 'You\'ve taken this on.' : 'You\'ve heard of this.', e.ready ? C.green : C.cyan);
-      if (t.giverName && !e.ready) put(`Asked by ${t.giverName}${t.giver && t.giver.t === 'rec' ? ` of ${game.world.ow.settlements[t.giver.sid]?.name || 'a town'}` : ''}.`, C.dim);
+      // (Round 70: whose it is; not "asked by", which they mightn't have.)
+      if (t.giverName && !e.ready) put(`For ${t.giverName}${t.giver && t.giver.t === 'rec' ? ` of ${game.world.ow.settlements[t.giver.sid]?.name || 'a town'}` : ''}.`, C.dim);
       if (t.at) {
         const near = game.world.ow.settlementsNear(t.at.x, t.at.z)[0];
         put(`Where: ${near ? directions(near, t.at.x, t.at.z) : 'out in the wilds'}.`, C.dim);

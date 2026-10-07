@@ -18,6 +18,7 @@ import { ITEMS, RELICS, SHARD_GEMS, GEMS, canSocket, socketed } from './items.js
 import { ISLE_DSTYLE, ISLE_DTYPES, ISLE_BOSSES, SPIRE_MASTERS } from './isledeep.js';
 import { FAR_DTYPES, FAR_BOSSES } from './fardeep.js';
 import { starGear } from './quality.js';
+import { cookDish, RECIPE_PREFIX } from './dishes.js';
 
 export const FY = 5; // standing level on a dungeon floor
 const WALL_H = 2; // how high the walls show
@@ -720,7 +721,45 @@ export function lootTier(rec, n) {
 // down; see tierOf), a little more in a harder place. A chest holds only a
 // few kinds of thing (the best of what came up); `rich` makes each likelier
 // (and, rich enough, one more kind).
-function lootFor(type, tier, rng, rich = 1, T = null) {
+// (Round 70) What whoever was down here lived on, by the kind of place it
+// is: a dish of it (cooked any way at all, well or badly) left in a chest
+// now and then, and once in a while the recipe for one written down. (And
+// whatever of the island's own is food: see isledeep.js, fardeep.js.)
+export const PANTRY = {
+  barrow: ['raw_meat', 'mushroom', 'herb', 'bone', 'berries', 'wheat'],
+  mine: ['mushroom', 'coal', 'bread', 'raw_meat', 'salt', 'glowcap'],
+  crypt: ['bone', 'ash', 'mushroom', 'herb', 'wheat', 'old_coin'],
+  holdout: ['raw_meat', 'bread', 'cabbage', 'carrot', 'apple', 'fish'],
+  grove: ['herb', 'berries', 'mushroom', 'apple', 'cherries', 'glowberries'],
+  forge: ['ember_pod', 'coal', 'raw_meat', 'sulfur', 'ash'],
+  grotto: ['fish', 'crab_meat', 'kelp', 'salt', 'salt_fish'],
+  catacomb: ['bone', 'ash', 'olives', 'grapes', 'bread', 'herb'],
+  vault: ['salt', 'olives', 'bread', 'grapes', 'cherries'],
+  gut: ['fish', 'kelp', 'crab_meat', 'slime_gel', 'salt_fish'],
+  saltworks: ['salt', 'fish', 'salt_fish', 'kelp', 'cabbage'],
+  warren: ['raw_meat', 'mushroom', 'carrot', 'cabbage', 'berries'],
+  mound: ['herb', 'mushroom', 'berries', 'bone', 'wheat'],
+  broch: ['fish', 'salt_fish', 'kelp', 'salt', 'crab_meat'],
+};
+export function pantryOf(type, T = null) {
+  const own = ((T && T.loot) || []).map(([k]) => k).filter((k) => ITEMS[k] && ITEMS[k].kind === 'food');
+  return [...new Set([...(PANTRY[type] || PANTRY.barrow), ...own])].filter((k) => ITEMS[k]);
+}
+// A dish of the place: one to three of its makings, at a fire, a pot, an
+// oven or a table.
+export function dungeonDish(type, T, rng) {
+  const P = pantryOf(type, T);
+  if (!P.length) return null;
+  const n = rng.int(1, Math.min(3, P.length));
+  const ings = [];
+  while (ings.length < n) {
+    const k = rng.pick(P);
+    if (!ings.includes(k)) ings.push(k);
+  }
+  return cookDish(ings, rng.pick(['c', 'p', 'o', 't']), rng.float(0.35, 1), () => rng.next());
+}
+
+export function lootFor(type, tier, rng, rich = 1, T = null) {
   const out = [];
   const t = Math.max(0, tier);
   const add = (k, lo, hi, chance = 1) => {
@@ -766,6 +805,21 @@ function lootFor(type, tier, rng, rich = 1, T = null) {
   // Only a few kinds of thing to a chest: the best of them.
   const kinds = Math.min(4, 2 + Math.floor(t / 2) + (rich >= 1.5 ? 1 : 0));
   const got = out.filter(([k]) => ITEMS[k]).sort((p, q) => (ITEMS[q[0]].value || 0) - (ITEMS[p[0]].value || 0)).slice(0, kinds);
+  // (Round 70) Their provisions, and a recipe: on top of the rest. (Drawn
+  // apart from the floor's own dice, a chest at a time, so every floor
+  // falls out as it did before.)
+  if (type !== 'kavorent') {
+    rng.pantry = (rng.pantry || 0) + 1;
+    const pr = new RNG(hash4(rng.seed, rng.pantry, 0x9a7d));
+    if (pr.chance(Math.min(0.9, (0.24 + t * 0.03) * rich))) {
+      const d = dungeonDish(type, T, pr);
+      if (d && ITEMS[d]) got.push([d, pr.int(1, 2)]);
+    }
+    if (pr.chance(Math.min(0.5, (0.07 + t * 0.02) * rich))) {
+      const d = dungeonDish(type, T, pr);
+      if (d && ITEMS[RECIPE_PREFIX + d]) got.push([RECIPE_PREFIX + d, 1]);
+    }
+  }
   // (Never nothing at all: somebody left something, if only a few odds
   // and ends.)
   if (!got.length) {

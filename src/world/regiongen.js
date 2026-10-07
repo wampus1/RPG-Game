@@ -2,7 +2,7 @@
 // any settlement structures that overlap the region.
 import { REGION_W, REGION_D, WORLD_Y } from '../config.js';
 import { hash4, hashf, mulberry32 } from '../util/rng.js';
-import { B, BLOCKS } from './blocks.js';
+import { B, BLOCKS, META_STATE } from './blocks.js';
 import { BIOMES } from './biomes.js';
 import { TREE_BUILDERS, TREE_MARGIN } from './trees.js';
 import { Region } from './region.js';
@@ -184,7 +184,11 @@ function stampBridge(region, lx, lz, c) {
   const K = BRIDGE_KINDS[b.kind];
   const M = bridgeMats(b.land, b.kind);
   const D = DECK_Y;
-  const edge = Math.abs(side) === b.hw;
+  // (Its edge: where a step to the side, any of the four ways, would be off
+  // it; on a slant that's a staircase of cells, and the corners of it
+  // filled (rim: see bridges.onBridge), so the parapet along it is one
+  // wall.)
+  const edge = c.bridge.rim || Math.abs(side) === b.hw || (c.bridge.sideF !== undefined && Math.abs(c.bridge.sideF) + c.bridge.slant > b.hw + 0.5);
   const a = Math.round(along);
   const deck = b.kind === 'causeway' && side === 0 && M.mid !== undefined ? M.mid : M.deck;
   if (c.water < 0) {
@@ -204,11 +208,12 @@ function stampBridge(region, lx, lz, c) {
   if (pier) for (let y = Math.max(1, c.h + 1); y < D; y++) region.set(lx, y, lz, M.pier);
   if (tower) {
     for (let y = D + 1; y <= D + 3; y++) region.set(lx, y, lz, M.pier);
-    if (a % K.towers === 0) region.set(lx, D + 4, lz, M.lamp);
+    if (a % K.towers === 0) region.set(lx, D + 4, lz, M.lamp, META_STATE);
     return;
   }
   region.set(lx, D + 1, lz, M.rail);
-  if (K.lamps && a % K.lamps === Math.floor(K.lamps / 2)) region.set(lx, D + 2, lz, M.lamp);
+  // (Lit, as they're meant to be: round 70.)
+  if (K.lamps && a % K.lamps === Math.floor(K.lamps / 2)) region.set(lx, D + 2, lz, M.lamp, META_STATE);
 }
 
 export function oreAt(x, y, z, seed) {

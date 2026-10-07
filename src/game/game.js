@@ -977,6 +977,22 @@ export class Game {
         this.addCreature(c);
       }
     }
+    // (Round 70) An empire city's beast pens, stocked (see world/empire.js).
+    if (s.condition !== 'abandoned') {
+      layout.pens?.forEach((pen, pi) => {
+        const rr = new RNG(hash4(s.id, pi, 0x9e7));
+        for (let i = 0; i < pen.n; i++) {
+          const x = rr.int(pen.x0, pen.x1);
+          const z = rr.int(pen.z0, pen.z1);
+          const y = this.world.findStandY(x, z, GROUND);
+          if (y <= 0 || this.entityAt(x, y, z) || this.world.isWaterAt(x, y, z)) continue;
+          const c = new Creature(this, rr.pick(pen.kinds), x, y, z, rr.int(0, 2));
+          c.livestock = s.id;
+          c.leash = { x0: pen.x0, z0: pen.z0, x1: pen.x1, z1: pen.z1 };
+          this.addCreature(c);
+        }
+      });
+    }
     this.active.set(s.id, { layout, npcs, since: this.sim.abs });
     this.sim.checkTownSigns(layout);
     // How the town's doing shows: banners up, or windows boarded.
@@ -3930,7 +3946,7 @@ export class Game {
       const b = BLOCKS[id];
       if (id === B.air || !b.support) return;
       const below = BLOCKS[w.getBlock(x, y + i - 1, z)];
-      if (below.solid || below.render === 'fence' || id === B.lily_pad && below.liquid) return;
+      if (below.solid || below.render === 'fence' || below.render === 'wall' || id === B.lily_pad && below.liquid) return;
       w.setBlock(x, y + i, z, B.air);
       for (const d of rollDrops(id, Math.random)) this.spawnDrop(d.item, d.count, x, y + i, z, true);
     }
@@ -3996,7 +4012,7 @@ export class Game {
     const b = BLOCKS[id];
     if (b.solid && this.occupiedAny(x, y, z)) return false;
     const below = BLOCKS[w.getBlock(x, y - 1, z)];
-    if (b.support && !(below.solid || below.render === 'fence' || (b.render === 'flat' && below.liquid) || below.name === 'table' || below.name === 'counter')) return false;
+    if (b.support && !(below.solid || below.render === 'fence' || below.render === 'wall' || (b.render === 'flat' && below.liquid) || below.name === 'table' || below.name === 'counter')) return false;
     if (CROPS[id] && !isFarmland(w.getBlock(x, y - 1, z))) return false;
     if (id === B.door) {
       const up = BLOCKS[w.getBlock(x, y + 1, z)];

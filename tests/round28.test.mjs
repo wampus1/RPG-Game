@@ -357,6 +357,9 @@ test('an old idol blesses whoever lays a hand on it, once', () => {
   }
   assert.ok(at && at.y === FY);
   assert.ok(game.world.getMeta(at.x, FY, at.z) & META_STATE, 'lit');
+  // (Stood beside it: it's not always in reach of the stairs.)
+  const by = [[0, 1], [1, 0], [-1, 0], [0, -1]].find(([dx, dz]) => game.world.getBlock(at.x + dx, FY, at.z + dz) === B.air && game.world.getBlock(at.x + dx, FY + 1, at.z + dz) === B.air);
+  if (by) p.teleport(at.x + by[0], FY, at.z + by[1]);
   p.hp = 3;
   const buffs = (p.buffs || []).length;
   game.interact(at.x, FY, at.z);

@@ -362,7 +362,7 @@ function make(game, v, pos, d) {
   const ow = game.world.ow;
   const civ = ow.civs.find((c) => c.id === v.civ) || null;
   game.loadAround?.(Math.round(pos.x), Math.round(pos.z), false);
-  const at = waterSpot(game, v.type, Math.round(pos.x), Math.round(pos.z), 0);
+  const at = waterSpot(game, v.type, Math.round(pos.x), Math.round(pos.z), 0, 44, false);
   if (!at || Math.hypot(at.x - pos.x, at.z - pos.z) > 40) {
     v.at = d;
     v.atT = game.sim.abs;

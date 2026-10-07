@@ -2065,6 +2065,64 @@ function fenceParts() {
   return { post, east, west, north, south };
 }
 
+// (Round 70) A thin wall's parts, in the stone (or wood) it's of: its post,
+// and the wall running off it each way (see renderer.drawWall).
+function wallParts(base, seed) {
+  const top = cubeTop(base, 0, seed(1), 0);
+  const front = cubeFront(base, 0, seed(2), 0);
+  const put = (p, x, y, src, sx, sy, k) => {
+    const c = src.get(sx, sy);
+    const i = (y * p.w + x) * 4;
+    p.d[i] = Math.min(255, c[0] * k);
+    p.d[i + 1] = Math.min(255, c[1] * k);
+    p.d[i + 2] = Math.min(255, c[2] * k);
+    p.d[i + 3] = 255;
+  };
+  const T = (p, x0, y0, w, h, k = 1.08) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) put(p, x, y, top, x & 15, y & 15, k);
+  };
+  const F = (p, x0, y0, w, h, k = 1) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) put(p, x, y, front, x & 15, (y - y0) % LH, k);
+  };
+  const dark = (p, x0, y0, w, h, k = 0.72) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.d[i + 3]) continue;
+      p.d[i] *= k;
+      p.d[i + 1] *= k;
+      p.d[i + 2] *= k;
+    }
+  };
+  // The post: a square pier, its cap a little proud of the wall.
+  const post = spr();
+  T(post, 5, 4, 6, 7, 1.16);
+  F(post, 5, 11, 6, 13);
+  dark(post, 5, 11, 6, 1, 0.8);
+  post.outline(OUT);
+  // East (and, mirrored, west): its top and its face, a little lower.
+  const east = spr();
+  T(east, 10, 6, 6, 6);
+  F(east, 10, 12, 6, 11);
+  dark(east, 10, 6, 6, 1, 1.18);
+  dark(east, 10, 11, 6, 1, 0.8);
+  dark(east, 10, 22, 6, 1, 0.7);
+  const west = new Px(16, SPR_H);
+  west.blit(east, 0, 0, true);
+  // North: its top, away up the screen (its face is behind the post).
+  const north = spr();
+  T(north, 5, 0, 6, 6);
+  dark(north, 5, 0, 1, 6);
+  dark(north, 10, 0, 1, 6);
+  // South: its top, and its face where it ends at the cell's edge.
+  const south = spr();
+  T(south, 5, 11, 6, 7);
+  F(south, 5, 18, 6, 10);
+  dark(south, 5, 11, 1, 7);
+  dark(south, 10, 11, 1, 7);
+  dark(south, 5, 18, 6, 1, 0.8);
+  return { post, east, west, north, south };
+}
+
 function crackOverlay(stage) {
   const p = new Px(16, SPR_H);
   const rand = mulberry32(99 + stage);
@@ -2159,6 +2217,11 @@ function buildBlock(b, TEX) {
           TEX.front[id * 4 + rot] = arr;
         }
       }
+    } else if (b.render === 'wall') {
+      // (Round 70) A thin wall: its parts (see wallParts).
+      const wp = wallParts(b.wallOf, seed);
+      TEX.wall ||= [];
+      TEX.wall[id] = { post: addImage(wp.post), east: addImage(wp.east), west: addImage(wp.west), north: addImage(wp.north), south: addImage(wp.south) };
     } else if (b.render === 'door') {
       const upper = name === 'door_top';
       for (let rot = 0; rot < 4; rot++) {

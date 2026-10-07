@@ -206,14 +206,22 @@ export function roomFor(game, type, x, z, yaw, skip = null, margin = 0) {
 
 // The nearest open water to (x, z), at least `min` paces off, a ship of
 // `type` has room in (and which way she'd lie): null if none near.
-export function waterSpot(game, type, x, z, min = 0) {
-  for (let R = Math.max(4, min); R < 360; R += 4) {
+// (Round 70: `maxR`, how far to look; `load`, whether to make the land
+// there if it isn't yet. Something made in passing (a town's ship, a
+// fleet's) looks only where's already made, and only as far as it'll
+// take: a search out to 360 paces making every region on the way was a
+// second's stall, again and again.)
+export function waterSpot(game, type, x, z, min = 0, maxR = 360, load = true) {
+  for (let R = Math.max(4, min); R < maxR; R += 4) {
     const n = Math.max(12, Math.round(R / 2));
     for (let k = 0; k < n; k++) {
       const a = (k / n) * TAU;
       const px = Math.round(x + Math.cos(a) * R);
       const pz = Math.round(z + Math.sin(a) * R);
-      if (!game.world.regionAt(px, pz)) game.loadAround?.(px, pz, true);
+      if (!game.world.regionAt(px, pz)) {
+        if (!load) continue;
+        game.loadAround?.(px, pz, true);
+      }
       if (!sailable(game, px, pz)) continue;
       for (const yaw of [a + Math.PI / 2, a, a - Math.PI / 2, a + Math.PI]) if (roomFor(game, type, px, pz, yaw, null, R > 200 ? 1 : 4)) return { x: px, z: pz, yaw: ((yaw % TAU) + TAU) % TAU };
     }

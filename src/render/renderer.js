@@ -1001,6 +1001,8 @@ export class Renderer {
               if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
             } else if (render === 'fence') {
               if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, this.craftAt(game, wx, wz)) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+            } else if (render === 'wall') {
+              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, 0, TEX.wall && TEX.wall[id]) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
             }
             if (alpha < 1) ctx.globalAlpha = 1;
             if (cur && cur.x === wx && cur.y === y && cur.z === wz) {
@@ -1381,13 +1383,15 @@ export class Renderer {
     return c;
   }
 
-  drawFence(ctx, world, x, y, z, sx, sy, pickTest = false, craft = 0) {
-    const f = craft ? TEX.craft[craft].fence : TEX.misc.fence;
+  // (Round 70: a thin wall too, its own parts in `parts`, joining walls,
+  // fences and solid blocks the same way.)
+  drawFence(ctx, world, x, y, z, sx, sy, pickTest = false, craft = 0, parts = null) {
+    const f = parts || (craft ? TEX.craft[craft].fence : TEX.misc.fence);
     const atlas = this.atlas;
     const conn = (du, dv) => {
       const [dx, dz] = this.toWorld(du, dv);
       const b = BLOCKS[world.getBlock(x + dx, y, z + dz)];
-      return b.render === 'fence' || (b.opaque && b.render === 'cube') || b.render === 'door';
+      return b.render === 'fence' || b.render === 'wall' || (b.opaque && b.render === 'cube') || b.render === 'door';
     };
     let hit = false;
     const d = (s) => {

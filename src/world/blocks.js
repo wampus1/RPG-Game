@@ -645,6 +645,15 @@ def('capstan', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks
 // (Round 69) Her plans spread on a table in her captain's cabin (in a
 // sloop's hold): her name and her colours, to be changed (see ui/blueprint.js).
 def('blueprint_table', { ...sprite, solid: true, interact: 'blueprint', tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Blueprint Table' });
+// (Round 70) Thin walls, a post with a wall running off it to whatever's
+// beside it (another wall, a fence, a solid block): bridges' parapets, and
+// anyone's to build. One of each stone (and wood) a bridge's made of.
+export const WALL_BASES = ['cobblestone', 'stone_bricks', 'mossy_bricks', 'marble', 'basalt', 'basalt_bricks', 'planks_lacquer', 'whalebone', 'tile_blue', 'salt_brick', 'drystone', 'travertine', 'cob'];
+for (const base of WALL_BASES) {
+  const o = BLOCKS[B[base]];
+  if (!o) continue;
+  def(`${base}_wall`, { opaque: false, render: 'wall', wallOf: base, standable: false, tool: o.tool, hardness: o.hardness, label: `${o.label} Wall` });
+}
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

@@ -3,7 +3,7 @@
 // middle number is the round of work; see README). Worlds made in another
 // version still load, with a warning; a player on another version can't
 // join a world (see tools/relay.mjs).
-export const GAME_VERSION = '0.69.0';
+export const GAME_VERSION = '0.70.0';
 
 // Written as people read it.
 export const versionText = (v) => (v ? `v${v}` : 'an older version');
