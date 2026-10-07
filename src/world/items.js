@@ -18,7 +18,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -136,6 +136,20 @@ function deriveNote(k) {
   const [, th, n, kind] = String(k).split('~');
   const [name, icon] = NOTES[kind] || NOTES.letter;
   return { key: k, kind: 'note', name, icon, stack: 1, value: 0, noSell: true, note: { th: +th, n: +n, kind: kind || 'letter' }, about: 'Read it [F/RMB].' };
+}
+
+// (Round 69) A ship of yours put in a bottle (see shipgame.js): "bottled~
+// <type>~<n>~<her name in hex>". What was aboard her is kept with the
+// world (game.shipBottles[n]); her name shows when you look at it.
+export function bottledKey(type, n, name) {
+  return `bottled~${type}~${n}~${hexOf(name || '')}`;
+}
+function deriveBottled(k) {
+  const [, type, n, hex] = String(k).split('~');
+  const base = ITEMS[`ship_${type}`];
+  if (!base) return undefined;
+  const name = fromHex(hex || '');
+  return { ...base, key: k, value: Math.round(base.value * 0.8), shipPrice: undefined, bottled: +n, shipName: name, about: `${name || 'A ship of yours'}, in a bottle, and everyone who was aboard her with her (her crew, whoever came with you), and all her stores. Right-click by open water to uncork her and launch her again, just as she was.` };
 }
 
 function item(key, props) {
@@ -385,13 +399,17 @@ item('raft', { name: 'Raft', kind: 'tool', stack: 1, value: 16, raft: true });
 // harbour's shipwright (a sloop can be built at a workbench), launched on
 // open water; shot for their guns; a sailor signed on.
 item('cannonball', { name: 'Cannonball', kind: 'misc', stack: 32, value: 3, about: 'Iron shot for a ship\'s gun, a shot a fire. An anvil makes four from an iron ingot, a lump of sulphur and a coal; a harbour\'s shipwright sells them.' });
-item('sailors_articles', { name: 'Sailor\'s Articles', kind: 'misc', stack: 8, value: 45, about: 'A sailor\'s mark on the ship\'s articles: right-click aboard a ship of your own and they join her crew (more hands sail her better, man her guns, pump her and mend her).' });
+item('sailors_articles', { name: 'Sailor\'s Articles', kind: 'misc', stack: 8, value: 45, about: 'A sailor\'s mark on the ship\'s articles: right-click aboard a ship of your own and they join her crew (more hands sail her better, man her guns, pump her and mend her). Talk to a hand of yours for orders.' });
+// (Round 69) Every ship comes in a bottle, and goes back into one: she
+// comes out of it with no crew (sign them on), and at a fixed price, 750
+// to 5,000 coins by her kind.
 for (const [type, name, cost, about] of [
-  ['sloop', 'Sloop', 1400, 'A sloop, every plank and line of her ready to put together: right-click by open water to launch her. One mast, four guns, quick to turn: a crew of two comes with her.'],
-  ['brigantine', 'Brigantine', 3600, 'A brigantine, bought at a shipwright\'s: right-click by open water to launch her. Square sails forward, a great gaff sail aft, eight guns; her crew comes with her.'],
-  ['galleon', 'Galleon', 7200, 'A galleon, bought at a shipwright\'s: right-click by open water to launch her. A towering castle of a ship, a deep hold, twenty guns; slow to turn. Her crew comes with her.'],
-  ['frigate', 'Frigate', 9000, 'A frigate, bought at a shipwright\'s: right-click by open water to launch her. The fastest thing on the sea, eighteen guns; her crew comes with her.'],
-]) item(`ship_${type}`, { name: name, kind: 'tool', stack: 1, value: cost, shipKit: type, about });
+  ['sloop', 'Sloop', 750, 'A sloop in a bottle: right-click by open water to uncork her and launch her. One mast, four guns, quick to turn. She comes with no crew: sign sailors on with Sailor\'s Articles (or sail her alone).'],
+  ['brigantine', 'Brigantine', 1800, 'A brigantine in a bottle: right-click by open water to uncork her and launch her. Square sails forward, a great gaff sail aft, eight guns. She comes with no crew: sign sailors on with Sailor\'s Articles.'],
+  ['galleon', 'Galleon', 3500, 'A galleon in a bottle: right-click by open water to uncork her and launch her. A towering castle of a ship, a deep hold, twenty guns; slow to turn. She comes with no crew: sign sailors on with Sailor\'s Articles.'],
+  ['frigate', 'Frigate', 5000, 'A frigate in a bottle: right-click by open water to uncork her and launch her. The fastest thing on the sea, eighteen guns. She comes with no crew: sign sailors on with Sailor\'s Articles.'],
+]) item(`ship_${type}`, { name: `${name} in a Bottle`, kind: 'tool', stack: 1, value: cost, shipPrice: cost, shipKit: type, about });
+item('ship_bottle', { name: 'Ship Bottle', kind: 'tool', stack: 4, value: 60, shipBottle: true, about: 'A great empty bottle, blown by a shipwright\'s craft to hold a ship. Right-click beside a ship of your own (or aboard her) and she\'s in it, everyone aboard her with her.' });
 // Tack for a horse of your own, and a wagon for it to pull.
 item('saddle', { name: 'Saddle', kind: 'misc', stack: 1, value: 35 });
 item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });

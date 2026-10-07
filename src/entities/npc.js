@@ -1057,6 +1057,14 @@ export class NPC extends Entity {
     if (this.dead) return;
     // Knocked down in a fight: lying there till it's over.
     if (this.down) return;
+    // (Round 69) Aboard a ship with you: about her deck after you (see
+    // shipgame.js npcAboard), whatever else they were about.
+    if (this.deck) {
+      if (this.attackCd > 0) this.attackCd -= dt;
+      this.rec.hp = this.hp;
+      if (!this.game.npcAboard || !this.game.npcAboard(this, dt)) this.deck = null;
+      return;
+    }
     // Down on one knee (a bout lost): getting their breath, then up.
     if (this.kneelT > 0) {
       this.kneelT -= dt;
@@ -1286,6 +1294,8 @@ export class NPC extends Entity {
       this.calmDown(true);
       return;
     }
+    // (Round 69) You aboard a ship, or they are: with you (see shipgame.js).
+    if (g.npcAboard && g.npcAboard(this, dt)) return;
     const t = car.escortThreat(this);
     if (t) {
       if (this.rng.chance(0.4)) this.say(this.rng.pick(['Stay behind me!', 'I\'ve got this one!', 'Back, beast!']), 2, '#ffe070');

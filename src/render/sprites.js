@@ -1884,6 +1884,12 @@ export function itemIcon(key) {
     iconCache.set(key, c);
     return c;
   }
+  // (Round 69) A ship of yours in a bottle: the bottle she came in.
+  if (it && it.bottled !== undefined) {
+    c = itemIcon(`ship_${it.shipKit}`);
+    iconCache.set(key, c);
+    return c;
+  }
   // (Round 52) A story's letter, note or map: the paper it's on.
   if (it && it.kind === 'note') {
     c = itemIcon(it.icon || 'letter');

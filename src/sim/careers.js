@@ -855,6 +855,9 @@ export class Careers {
   updateEscort() {
     const e = this.escort;
     if (!e) return;
+    // (Round 69) In a bottle with your ship (see shipgame.js): there till
+    // she's uncorked.
+    if (e.bottled !== undefined) return;
     const g = this.game;
     const n = this.ent;
     if (n && n.dead) {

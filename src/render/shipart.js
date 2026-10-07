@@ -299,30 +299,55 @@ export function shipIcon(key) {
     p.line(5, 11, 8, 12, '#3a2a1a');
     return p.outline(OUT);
   }
+  // (Round 69) Every ship's in a bottle: lying on its stand, corked, her
+  // in miniature inside it (an empty one, a ship bottle, to put one in).
+  if (key === 'ship_bottle') return bottle(p, null);
   const m = /^ship_(sloop|brigantine|galleon|frigate)$/.exec(key);
   if (!m) return null;
-  const type = m[1];
-  const masts = { sloop: [8], brigantine: [6, 10], galleon: [4, 8, 12], frigate: [4, 8, 11] }[type];
-  const tall = type === 'galleon';
-  // Hull.
-  for (let x = 1; x <= 14; x++) {
-    const bot = 13 - (x < 3 ? 2 - x + 1 : 0) - (x > 12 ? x - 12 : 0);
-    for (let y = 10; y <= bot; y++) p.set(x, y, y === 10 ? '#8a2a1e' : y === bot ? '#2e1e14' : '#4a3020');
+  return bottle(p, m[1]);
+}
+
+function bottle(p, type) {
+  const GD = '#6aa4b8';
+  const IN = '#dcf0f6';
+  // The glass: a long body, rounded at the ends, and its neck.
+  for (let x = 1; x <= 12; x++) {
+    const end = x === 1 || x === 12;
+    const top = end ? 5 : 4;
+    const bot = end ? 11 : 12;
+    for (let y = top; y <= bot; y++) p.set(x, y, y === top || y === bot || end ? GD : IN);
   }
-  if (tall) p.rect(1, 8, 3, 3, '#4a3020');
-  p.hline(1, 14, 10, '#c8a040');
-  // Masts and sails.
-  for (const x of masts) {
-    p.vline(x, 1, 9, '#6a4a2a');
-    if (type === 'sloop') {
-      for (let y = 2; y <= 9; y++) p.hline(x + 1, Math.min(14, x + 1 + Math.round((y - 1) * 0.7)), y, '#f0e8d4');
-    } else {
-      p.rect(x - 2, 2, 5, 3, '#f0e8d4');
-      p.rect(x - 2, 6, 5, 3, '#e4dcc4');
+  for (let x = 13; x <= 13; x++) for (let y = 6; y <= 10; y++) p.set(x, y, y === 6 || y === 10 ? GD : IN);
+  // The cork.
+  p.rect(14, 7, 2, 3, '#b08050');
+  p.set(15, 8, '#7a5030');
+  // The stand.
+  p.hline(3, 4, 13, '#6a4a2a');
+  p.hline(9, 10, 13, '#6a4a2a');
+  p.hline(2, 11, 14, '#4a3020');
+  if (type) {
+    // A sea of blue putty, and her on it.
+    p.hline(2, 11, 11, '#4a88a8');
+    p.hline(3, 10, 10, '#8a2a1e');
+    p.hline(4, 9, 10, '#5a3a22');
+    p.hline(3, 10, 9, '#c8a040');
+    if (type === 'galleon') p.rect(2, 7, 2, 2, '#5a3a22');
+    const masts = { sloop: [6], brigantine: [5, 8], galleon: [5, 7, 9], frigate: [4, 7, 9] }[type];
+    for (const x of masts) {
+      p.vline(x, 5, 8, '#6a4a2a');
+      if (type === 'sloop') {
+        p.set(x + 1, 6, '#f8f0dc');
+        p.hline(x + 1, x + 2, 7, '#f8f0dc');
+        p.hline(x + 1, x + 3, 8, '#f8f0dc');
+      } else {
+        p.hline(x - 1, x + 1, 6, '#f8f0dc');
+        p.hline(x - 1, x + 1, 7, '#ece4cc');
+      }
     }
+    if (type === 'galleon') p.set(5, 4, '#c82020');
   }
-  if (type === 'galleon') p.set(4, 0, '#c82020');
-  // The bowsprit.
-  p.line(14, 10, 15, 8, '#6a4a2a');
+  // The light on the glass.
+  p.hline(3, 9, 5, '#ffffff');
+  p.set(11, 6, '#ffffff');
   return p.outline(OUT);
 }

@@ -306,6 +306,7 @@ export function aboardOf(game, S) {
   const out = [];
   for (const q of game.everyone ? game.everyone() : [game.player]) if (q && q.deck && q.deck.s === S.id) out.push(q);
   for (const c of game.sailors || []) if (c.deck && c.deck.s === S.id && !c.dead) out.push(c);
+  for (const n of game.npcs || []) if (n.deck && n.deck.s === S.id && !n.dead) out.push(n);
   return out;
 }
 
@@ -884,7 +885,12 @@ function findBy(game, id) {
 // cell), mv (a step under way), role ('helm', 'gun', null) }.
 export function putAboard(game, S, e, cx, y, cz) {
   game.removeOcc?.(e);
-  e.sitting = null;
+  // (Someone of a town's: out of their seat, their spot let go. An NPC's
+  // sitting is only what they're doing: see npc.js.)
+  if (e.kind === 'npc') {
+    e.releaseSpot?.();
+    e.path = null;
+  } else e.sitting = null;
   e.raft = null;
   e.mount = null;
   e.deck = { s: S.id, x: cx + 0.5, z: cz + 0.5, y, cx, cz, mv: null, role: null };
@@ -925,6 +931,8 @@ function syncWalkers(game, dt) {
   const all = [];
   for (const q of game.everyone ? game.everyone() : [game.player]) if (q && q.deck) all.push(q);
   for (const c of game.sailors || []) if (c.deck) all.push(c);
+  // (Round 69: and whoever's come aboard with you.)
+  for (const n of game.npcs || []) if (n.deck && !n.dead) all.push(n);
   walkersCache = all;
   for (const e of all) {
     const S = shipById(game, e.deck.s);

@@ -241,6 +241,7 @@ export function holdTick(game, dt) {
     const people = [];
     for (const q of game.everyone ? game.everyone() : [game.player]) if (H.has(q)) people.push(q);
     for (const c of game.sailors || []) if (H.has(c) && !c.dead) people.push(c);
+    for (const n of game.npcs || []) if (H.has(n) && !n.dead) people.push(n);
     for (const e of people) {
       if (e.moving || e.dead) continue;
       const [lx, ly, lz] = holdLocal(S, e.x, e.y, e.z);
@@ -328,6 +329,7 @@ export function closeHold(game, S, sinking) {
   const people = [];
   for (const q of game.everyone ? game.everyone() : [game.player]) if (H.has(q)) people.push(q);
   for (const c of game.sailors || []) if (H.has(c)) people.push(c);
+  for (const n of game.npcs || []) if (H.has(n) && !n.dead) people.push(n);
   for (const e of people) {
     const [lx, , lz] = holdLocal(S, e.x, e.y, e.z);
     e.belowShip = null;

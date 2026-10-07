@@ -744,6 +744,7 @@ export class Sim {
         sh.store.cannonball = Math.max(sh.store.cannonball || 0, 24);
         sh.store.sailors_articles = Math.max(sh.store.sailors_articles || 0, 4);
         if (sh.kind === 'carpenter') {
+          sh.store.ship_bottle = Math.max(sh.store.ship_bottle || 0, 2);
           sh.store.ship_sloop = 1;
           if (tech('trade_ships')) sh.store.ship_brigantine = 1;
           if (s.empire || s.type === 'city') sh.store.ship_galleon = 1;
@@ -877,6 +878,9 @@ export class Sim {
 
   // What a trader asks for an item: their prices, and the market's.
   buyPrice(npc, k, discounted = true) {
+    // (Round 69) A ship in a bottle: her price, the same everywhere.
+    const sp = ITEMS[k]?.shipPrice;
+    if (sp) return sp;
     const f = discounted ? this.priceFactor(npc) : this.priceParts(npc).base;
     return Math.max(1, Math.round((ITEMS[k]?.value || 0) * f * this.market.factor(npc.layout, k) * lawPrice(npc.layout, k, false) * tradePrice(npc.layout, k, false)));
   }

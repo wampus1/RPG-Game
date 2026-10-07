@@ -5,13 +5,14 @@
 // her: hold the button to knock a plank out (an axe does it quicker),
 // right-click with planks to mend a hole.
 import { B, BLOCKS } from '../world/blocks.js';
-import { REACH } from '../config.js';
-import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep } from './ships3d.js';
+import { REACH, NPC_STEP_TIME } from '../config.js';
+import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck } from './ships3d.js';
 import { holeAt, cellScreen } from '../render/shipvox.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
+import { bottledKey } from '../world/items.js';
 import { makeCrew, addHand } from './shipcrew.js';
 import { fleetsSave, fleetsLoad } from './shipfleets.js';
-import { enterHold, holdShipAt, holdLocal } from './shiphold.js';
+import { enterHold, holdShipAt, holdLocal, closeHold } from './shiphold.js';
 import { addItem, removeItem } from './inventory.js';
 
 // A key aboard (or beside) a ship: true if it was hers to handle.
@@ -60,6 +61,249 @@ export function shipWheel(game, wheel) {
   } else if (d.role === 'gun') {
     const st = S.guns[d.gi];
     if (st) st.elev = Math.max(-0.08, Math.min(0.55, st.elev - Math.sign(wheel) * 0.04));
+  }
+  return true;
+}
+
+// (Round 69) A ship bottle used beside (or aboard) a ship of your own: she
+// shrinks into it, her crew, whoever came aboard with you, her stores and
+// every hole in her with her. (Kept with the world: game.shipBottles.)
+function bottleShip(game, p, held) {
+  const S = p.deck ? shipById(game, p.deck.s) : holdShipAt(game, p.x) || nearShip(game, p, 5);
+  if (!S || S.owner !== ownerId(game, p)) {
+    game.ui.msg('Beside a ship of your own, or aboard her, to put her in the bottle.', '#ffb080', true);
+    return true;
+  }
+  if (S.sinking || S.fight) {
+    game.ui.msg(S.sinking ? 'Too late for that: she\'s going down.' : 'Not in the thick of a fight.', '#ffb080', true);
+    return true;
+  }
+  if (game.remote) {
+    game.ui.msg('Only the world\'s host can bottle a ship.', '#ffb080', true);
+    return true;
+  }
+  const aboard = (q) => q && ((q.deck && q.deck.s === S.id) || (S.hold && S.hold.has(q)));
+  if ((game.everyone ? game.everyone() : []).some((q) => q !== p && aboard(q))) {
+    game.ui.msg('Not with anyone else aboard her.', '#ffb080', true);
+    return true;
+  }
+  game.shipBottles ||= {};
+  const n = (game.shipBottleSeq = (game.shipBottleSeq || 0) + 1);
+  // You: off her first (ashore, if there's a bank near; or in the sea).
+  const youAboard = aboard(p);
+  if (youAboard) {
+    if (p.deck) leaveDeck(game, p);
+    p.belowShip = null;
+    const spot = shoreNear(game, S) || seaBeside(game, S);
+    p.teleport(spot.x, spot.y, spot.z);
+    if (!game.seat || game.seat.host) game.renderer && (game.renderer.camInit = false);
+  }
+  // Her crew as they are now.
+  for (const c of game.sailors || []) if (c.shipId === S.id && c.recRef) c.recRef.hp = c.hp;
+  // Whoever came aboard with you: in the bottle with her.
+  const folk = [];
+  const car = game.sim && game.sim.careers;
+  for (const q of [...(game.npcs || [])]) {
+    if (q.dead || !aboard(q)) continue;
+    if (car && car.ent === q && car.escort) {
+      car.escort.bottled = n;
+      car.ent = null;
+      folk.push({ escort: true, name: q.rec.name });
+    } else folk.push({ name: q.rec.name, sid: q.settlement && q.settlement.id, idx: q.rec.idx });
+    if (q.deck) leaveDeck(game, q);
+    q.belowShip = null;
+    q.rec.away = true;
+    game.despawnNpc(q);
+  }
+  if (S.hold) closeHold(game, S, false);
+  for (const c of game.sailors || []) if (c.shipId === S.id) game.removeOcc?.(c);
+  game.sailors = (game.sailors || []).filter((c) => c.shipId !== S.id);
+  const rec = S.save();
+  rec.crew = S.crewRecs.filter((r) => !r.dead);
+  game.shipBottles[n] = { ...rec, id: undefined, folk, day: game.day };
+  game.ships3d = shipsOf(game).filter((q) => q !== S);
+  // A swirl of spray and a wink of light, and she's gone.
+  const r = game.renderer;
+  if (r && r.emit) {
+    r.emit(S.x, 7, S.z, { n: 40, color: ['#ffffff', '#c8e8ff', '#80b8e0', '#fff0a0'], up: 70, speed: 60, gravity: 40, life: 1.2, glow: true });
+    r.emit(S.x, 6, S.z, { n: 18, color: ['#ffffff', '#d8f0ff'], up: 30, speed: 30, gravity: -20, life: 1.4, shape: 'puff', size: 3 });
+  }
+  game.audio?.play('splash', { x: Math.round(S.x), y: 6, z: Math.round(S.z) });
+  game.audio?.play('ship_bell');
+  removeItem(p.inv, held.key, 1);
+  p.give(bottledKey(S.type, n, S.name), 1);
+  const who = rec.crew.length + folk.length;
+  game.ui.msg(`${S.name} shrinks away into the bottle, ${who ? `${who} aboard her with her` : 'empty decks and all'}. (Right-click by open water to uncork her again.)`, '#a0d8ff');
+  return true;
+}
+
+// A bottled ship of yours, uncorked at `at`.
+function uncork(game, p, held, at) {
+  const rec = (game.shipBottles || {})[held.bottled];
+  removeItem(p.inv, held.key, 1);
+  if (!rec) {
+    game.ui.msg('The bottle\'s empty: whatever was in it is long gone.', '#c8c8c8', true);
+    p.give('ship_bottle', 1);
+    return true;
+  }
+  delete game.shipBottles[held.bottled];
+  const S = addShip(game, { ...rec, id: undefined, x: at.x, z: at.z, yaw: at.yaw, anchor: true, owner: ownerId(game, p), sailSet: 0 });
+  // Whoever went into the bottle with her: aboard her again.
+  const car = game.sim && game.sim.careers;
+  for (const f of rec.folk || []) {
+    let q = null;
+    if (f.escort && car && car.escort && car.escort.bottled === held.bottled) {
+      delete car.escort.bottled;
+      q = car.ent = game.spawnEscort ? game.spawnEscort(car.escort) : null;
+    } else if (f.sid !== undefined && f.sid !== null) {
+      const L = game.sim.layoutOf && game.sim.layoutOf(f.sid);
+      const r0 = L && L.npcs[f.idx];
+      if (r0) r0.away = false;
+    }
+    if (!q) continue;
+    const spot = deckSpotNear(S, S.m.spawn.x + 0.5, S.m.spawn.z + 0.5, 6, null);
+    if (spot) putAboard(game, S, q, spot.cx, spot.y, spot.cz);
+  }
+  uncorkFx(game, p, at);
+  const n = (rec.crew || []).length;
+  game.ui.msg(`Out of the bottle and into the water: ${S.name}, just as she was${n ? `, her ${n === 1 ? 'one hand' : `${n} hands`} aboard` : ''}.`, '#a0d8ff');
+  return true;
+}
+
+function uncorkFx(game, p, at) {
+  game.audio?.play('splash', { x: at.x, y: 6, z: at.z });
+  game.audio?.play('select');
+  const r = game.renderer;
+  if (r && r.emit) {
+    r.emit(p.x, p.y + 1, p.z, { n: 10, color: ['#ffffff', '#d8f0ff', '#fff0a0'], up: 40, speed: 30, gravity: 60, life: 0.6, glow: true });
+    r.emit(at.x, 6, at.z, { n: 36, color: ['#ffffff', '#c8e8ff', '#80b8e0'], up: 80, speed: 50, gravity: 140, life: 1.1 });
+  }
+}
+
+// The nearest bank to her you could stand on (within a dozen paces of her
+// side), or null.
+function shoreNear(game, S) {
+  const w = game.world;
+  let best = null;
+  let bd = Infinity;
+  const R = Math.ceil(S.m.L / 2) + 12;
+  for (let dz = -R; dz <= R; dz += 1) for (let dx = -R; dx <= R; dx += 1) {
+    const x = Math.round(S.x) + dx;
+    const z = Math.round(S.z) + dz;
+    if (shipAtWorld(game, x, z)) continue;
+    const y = w.findStandY(x, z, 8);
+    if (y < 0 || w.isWaterAt(x, y, z) || w.isWaterAt(x, y - 1, z)) continue;
+    const d = Math.hypot(dx, dz);
+    if (d < bd) {
+      bd = d;
+      best = { x, y, z };
+    }
+  }
+  return best && bd <= R ? best : null;
+}
+
+function seaBeside(game, S) {
+  const [wx, wz] = S.toWorld(-1.5, S.m.L / 2);
+  const x = Math.round(wx);
+  const z = Math.round(wz);
+  const y = game.world.findStandY(x, z, 8);
+  return { x, y: y >= 0 ? y : 5, z };
+}
+
+// (Round 69) Whoever's with you (a hired escort, a companion) when you
+// go aboard a ship: up her side after you, about her deck at your heels,
+// down her hatch when you go below and up again when you come up; ashore
+// when you are. True if it was theirs to see to (see NPC.hiredDuty).
+export function npcAboard(game, n, dt) {
+  const p = game.player;
+  const pS = p.deck ? shipById(game, p.deck.s) : holdShipAt(game, p.x);
+  const nS = n.deck ? shipById(game, n.deck.s) : holdShipAt(game, n.x);
+  if (!pS && !nS) return false;
+  n.aboardT = (n.aboardT || 0) + dt;
+  // You've gone ashore (or aboard another): after you, in a moment.
+  if (nS && pS !== nS) {
+    if (n.aboardT < 1.4) return true;
+    n.aboardT = 0;
+    n.task = null;
+    if (n.deck) leaveDeck(game, n);
+    n.belowShip = null;
+    if (pS) return putNear(game, pS, n, p);
+    const spot = besideYou(game, p);
+    n.teleport(spot.x, spot.y, spot.z);
+    n.path = null;
+    return true;
+  }
+  // You aboard and they're not yet: up her side after you.
+  if (pS && !nS) {
+    if (n.aboardT < 1.2) return false;
+    n.aboardT = 0;
+    return putNear(game, pS, n, p);
+  }
+  const S = pS;
+  // Both below: they follow you about her as anywhere.
+  if (!n.deck && !p.deck) return false;
+  // Below, and you've gone up: up after you.
+  if (!n.deck && p.deck) {
+    if (n.aboardT < 1.6) return true;
+    n.aboardT = 0;
+    return putNear(game, S, n, p);
+  }
+  const d = n.deck;
+  if (d.mv) return true;
+  const t = n.task;
+  if (t && t.path && t.path.length) {
+    const [nx, , nz] = t.path[0];
+    if (deckStep(game, S, n, Math.sign(nx - d.cx), Math.sign(nz - d.cz), NPC_STEP_TIME * 0.8)) t.path.shift();
+    else t.path = null;
+    return true;
+  }
+  n.task = null;
+  // You've gone below: to the way down nearest where you are, and down.
+  if (!p.deck) {
+    if (n.aboardT < 0.8) return true;
+    n.aboardT = 0;
+    const [lx, , lz] = holdLocal(S, p.x, p.y, p.z);
+    const E = entrances(S.m).slice().sort((a, b) => Math.hypot(a.inX - lx, a.inZ - lz) - Math.hypot(b.inX - lx, b.inZ - lz))[0];
+    const path = E && deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: E.x, y: E.y, z: E.z });
+    if (path) {
+      path.push([E.x + E.dx, E.y, E.z + E.dz]);
+      n.task = { kind: 'go', path };
+    } else putNear(game, S, n, p);
+    return true;
+  }
+  // About her deck at your heels.
+  const gap = Math.max(Math.abs(d.cx - p.deck.cx), Math.abs(d.cz - p.deck.cz));
+  if (gap > 2 || Math.abs(d.y - p.deck.y) > 2) {
+    if (n.aboardT < 0.5) return true;
+    n.aboardT = 0;
+    const path = deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: p.deck.cx, y: p.deck.y, z: p.deck.cz });
+    if (path && path.length > 1) n.task = { kind: 'go', path: path.slice(0, -1) };
+  } else if (Math.random() < dt * 0.3) n.face(p.x, p.z);
+  return true;
+}
+
+// A free spot a pace behind `p` (not where they stand).
+function besideYou(game, p) {
+  const [dx, dz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][p.dir] || [0, -1];
+  for (const [ox, oz] of [[dx, dz], [-dz, dx], [dz, -dx], [-dx, -dz]]) {
+    const spot = game.findFreeSpot ? game.findFreeSpot(p.x + ox, p.z + oz, p.y) : null;
+    if (spot && (spot.x !== p.x || spot.z !== p.z)) return spot;
+  }
+  return { x: p.x, y: p.y, z: p.z };
+}
+
+// Put `n` aboard S beside `p` (on her deck, or below with them).
+function putNear(game, S, n, p) {
+  n.path = null;
+  if (p.deck) {
+    const spot = deckSpotNear(S, p.deck.cx + 0.5, p.deck.cz + 0.5, 3, p.deck.y);
+    if (!spot) return true;
+    putAboard(game, S, n, spot.cx, spot.y, spot.cz);
+  } else {
+    const spot = besideYou(game, p);
+    if (n.deck) leaveDeck(game, n);
+    n.teleport(spot.x, spot.y, spot.z);
+    n.belowShip = S.id;
   }
   return true;
 }
@@ -410,13 +654,16 @@ export function shipSave(game) {
     const [lx, ly, lz] = holdLocal(S, p.x, p.y, p.z);
     below = { s: S.id, lx, ly, lz };
   }
-  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game) };
+  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game), bottles: game.shipBottles || {}, bseq: game.shipBottleSeq || 0 };
 }
 
 export function shipLoad(game, data) {
   if (!data) return;
   loadShips(game, data.ships);
   fleetsLoad(game, data.fleets);
+  // (Round 69) Ships of yours in bottles.
+  game.shipBottles = data.bottles || {};
+  game.shipBottleSeq = data.bseq || 0;
   const p = game.player;
   const at = data.deck || data.below;
   const S = at ? shipById(game, at.s) : null;
@@ -433,27 +680,33 @@ export function shipLoad(game, data) {
 const OWN_NAMES = ['Sea Lark', 'Wandering Star', 'Fortune', 'Grey Gull', 'Second Chance', 'Morning Tide', 'Salt Rose', 'Kestrel', 'Long Shot', 'Fair Weather', 'Last Light', 'Swift'];
 export function useShipItem(game, held) {
   const p = game.player;
+  if (held.shipBottle) return bottleShip(game, p, held);
   if (held.shipKit) {
     const type = held.shipKit;
     if (p.deck || game.world.inInstance(p.x)) {
       game.ui.msg('Ashore, by open water, to launch her.', '#ffb080', true);
       return true;
     }
-    const at = waterSpot(game, type, p.x, p.z, 3);
+    // (Round 69) Where her ghost showed her (see drawShipGhost), if it
+    // showed her clear.
+    const G = game.shipGhost;
+    const at = G && G.type === type && G.ok ? { x: G.x, z: G.z, yaw: G.yaw } : waterSpot(game, type, p.x, p.z, 3);
     if (!at || Math.hypot(at.x - p.x, at.z - p.z) > 34) {
       game.ui.msg('She needs open water, deep and wide, close by: stand on the shore of the sea or a great lake.', '#ffb080', true);
       return true;
     }
     const T = SHIP_TYPES[type];
-    const crewN = { sloop: 2, brigantine: 4, galleon: 8, frigate: 7 }[type] || 2;
+    // A ship of yours bottled before: out again just as she was.
+    if (held.bottled !== undefined) return uncork(game, p, held, at);
     const name = `The ${OWN_NAMES[(shipsOf(game).length * 7 + Math.floor(Math.random() * 12)) % OWN_NAMES.length]}`;
+    // (Round 69) No crew: you sign them on (Sailor's Articles).
     addShip(game, {
       type, x: at.x, z: at.z, yaw: at.yaw, owner: ownerId(game, p), name, anchor: true, ammo: Math.round(T.speed),
-      crew: makeCrew(Math.floor(Math.random() * 1e9), type, game.hero && game.hero.style ? game.hero.style : 'vale', crewN), paint: '#2a4a8a', paint2: '#1a1a20', flag: '#e0c040', emblem: 'stripe',
+      crew: [], paint: '#2a4a8a', paint2: '#1a1a20', flag: '#e0c040', emblem: 'stripe',
     });
     removeItem(p.inv, held.key, 1);
-    game.audio?.play('splash', { x: at.x, y: 6, z: at.z });
-    game.ui.msg(`${name} slides into the water, ${Math.round(Math.hypot(at.x - p.x, at.z - p.z))} paces off: a ${T.name.toLowerCase()} of your own, her crew aboard. (F beside her to climb aboard; F at her wheel to take it.)`, '#a0d8ff');
+    uncorkFx(game, p, at);
+    game.ui.msg(`Out of the bottle and into the water, ${Math.round(Math.hypot(at.x - p.x, at.z - p.z))} paces off: ${name}, a ${T.name.toLowerCase()} of your own. She has no crew yet: sign sailors on aboard her with Sailor's Articles (a shipwright sells them). (F beside her to climb aboard; F at her wheel to take it.)`, '#a0d8ff');
     return true;
   }
   if (held.key === 'sailors_articles') {

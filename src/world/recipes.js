@@ -92,7 +92,9 @@ r('workbench', 'book', 1, { cloth: 1, reeds: 3 });
 r('workbench', 'fishing_rod', 1, { stick: 3, string: 2 });
 r('workbench', 'bucket', 1, { planks: 3, string: 1 });
 r('workbench', 'raft', 1, { planks: 6, stick: 2, string: 3 });
-r('workbench', 'ship_sloop', 1, { planks: 80, string: 24, cloth: 12, iron_ingot: 6 });
+r('workbench', 'ship_sloop', 1, { planks: 80, string: 24, cloth: 12, iron_ingot: 6, glass: 4 });
+// (Round 69) A bottle great enough for a ship (see shipgame.js).
+r('workbench', 'ship_bottle', 1, { glass: 6, planks: 2, string: 1 });
 r('workbench', 'saddle', 1, { leather: 4, string: 2, iron_ingot: 1 });
 r('hand', 'lead', 1, { string: 3 });
 r('workbench', 'wagon', 1, { planks: 16, stick: 4, iron_ingot: 2, cloth: 3 });

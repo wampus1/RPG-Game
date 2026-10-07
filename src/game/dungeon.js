@@ -36,6 +36,14 @@ import { bossEntrance, bossDefeat, liftRide } from './scenes.js';
 import { seatField } from './party.js';
 import { applyTier, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
+
+// (Round 69) A place the sea has (or had): its master may have a ship in
+// a bottle about it (see onKill).
+export const SUNKEN_SHIP_CHANCE = 0.35;
+const SUNKEN_TYPES = new Set(['gut', 'broch', 'grotto']);
+export function sunkenPlace(rec) {
+  return !!rec && (SUNKEN_TYPES.has(rec.type) || /drown|sunk|sea cave|tide|wreck/i.test(rec.name || ''));
+}
 import { MODS } from '../mod/state.js';
 
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
@@ -1442,6 +1450,15 @@ export class DungeonRun {
       game.spawnDrop(`time_crystal_${tier}`, 1, e.x, e.y, e.z, true);
       game.renderer.emit(e.x, e.y + 1.6, e.z, { n: 24, color: [CRYSTAL_COLORS[tier], '#ffffff', '#c8a0ff'], up: 50, speed: 30, life: 1.2, glow: true, shape: 'star' });
       this.eachHere(() => game.ui.msg(`A time crystal (tier ${roman(tier)}) hangs in the air where it fell, ticking. Hold it at the way into a beaten place and use it to turn that place back.`, CRYSTAL_COLORS[tier]));
+      // (Round 69) The master of a sunken place (a drowned crypt, a tide
+      // grotto, a drowned broch, a leviathan's gut, a sea cave): now and
+      // then, a ship it took down, in a bottle.
+      if (sunkenPlace(this.rec) && Math.random() < SUNKEN_SHIP_CHANCE) {
+        const type = ['sloop', 'sloop', 'brigantine', 'galleon', 'frigate'][Math.floor(Math.random() * 5)];
+        game.spawnDrop(`ship_${type}`, 1, e.x, e.y, e.z, true);
+        game.renderer.emit(e.x, e.y + 1.2, e.z, { n: 20, color: ['#c8e8ff', '#ffffff', '#80b8e0'], up: 40, speed: 30, life: 1, glow: true, shape: 'star' });
+        this.eachHere(() => game.ui.msg(`Something rolls out of the wrack where it fell: a ${type} in a bottle!`, '#a0d8ff'));
+      }
       // What's left of the power it kept about it: one to three relic
       // shards (see relics.fitShard).
       const shards = 1 + Math.floor(Math.random() * 3);

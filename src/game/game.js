@@ -31,7 +31,7 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
-import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip } from './shipgame.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip, npcAboard } from './shipgame.js';
 import { holdBlockChanged, holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { crewHurt } from './shipcrew.js';
@@ -3406,7 +3406,7 @@ export class Game {
     }
     // A raft goes in the water, and you climb on.
     // (Round 68) A ship of your own to launch, a sailor to sign on.
-    if (held && (held.shipKit || held.key === 'sailors_articles') && useShipItem(this, held)) return;
+    if (held && (held.shipKit || held.shipBottle || held.key === 'sailors_articles') && useShipItem(this, held)) return;
     if (held && held.raft && c && c.block && c.block.liquid && c.inReach && !this.player.raft) {
       this.launchRaft(c.x, c.z);
       return;
@@ -4334,6 +4334,11 @@ export class Game {
 
   raftMeetsShip(p, x, z) {
     return raftMeetsShip(this, p, x, z);
+  }
+
+  // (Round 69) Whoever's with you, aboard a ship with you (see npc.js).
+  npcAboard(n, dt) {
+    return npcAboard(this, n, dt);
   }
 
   leaveRaft(force = false) {
