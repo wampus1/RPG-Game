@@ -11,7 +11,10 @@
 // never stalls the game.
 import { paintFigure, hasFigure, figureJoints, figureRig, FIG_W, FIG_H, FIG_AX, FIG_AY } from './bossfigs.js';
 import { paintBeast, beastOf } from './bossbeasts.js';
-import { bossTint, rim } from './bossart.js';
+import { bossTint } from './bossart.js';
+import { beginTex, makeTex, drawTex, drawRim, texScale, bigTex, paletteFor, TEXEL } from './bosstex.js';
+import { mapWorld } from './bossrig.js';
+import { poseOf, drawPoseFx, drawPoseBehind } from './bossanim.js';
 // (Round 68: the far lands' masters, registered: see farbosses.js.)
 import './farbosses.js';
 
@@ -89,6 +92,40 @@ export const hasBossArt = (species) => hasFigure(species) || !!beastOf(species);
 
 // Draw `e` (a master) with its feet at (sx + 8, feetY); false if it has
 // no painting (it's drawn the old way).
+// (Round 71: drawn whole onto a scratch canvas, rig and all, and made a
+// texture of, thirty-two texels square or sixty-four, each two pixels: see
+// bosstex.js. One with nothing moving on it of itself is made once a frame
+// of its breath; one with a rig, afresh thirty times a second. And posed
+// as it fights: see bossanim.js.)
+const TEX_BY_IMG = new WeakMap();
+// How big it's painted: what of its first frame isn't empty (so each fills
+// its texture, however much room its painting left round it).
+const BOXES = new Map();
+function bodyBox(species, img) {
+  let b = BOXES.get(species);
+  if (b) return b;
+  const [c0] = bossFrame(species, 0, {});
+  const cv = c0.getContext ? c0 : img;
+  const w = cv.width;
+  const h = cv.height;
+  const d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] < 40) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  b = x1 < 0 ? { w, h } : { w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  BOXES.set(species, b);
+  return b;
+}
 export function drawBossArt(r, ctx, e, sx, feetY) {
   const fig = hasFigure(e.species);
   const def = fig ? null : beastOf(e.species);
@@ -107,45 +144,80 @@ export function drawBossArt(r, ctx, e, sx, feetY) {
   const lu = r.bodyLunge(e, vd);
   const x = Math.round(sx + 8 + lu.x);
   const y = Math.round(feetY + 1 + lu.y + (e.rise || 0));
-  // The rig's own state, and how it's moved since the last frame.
-  const rig = (e.rig ||= {});
-  const dt = rig.lastT === undefined ? 0 : Math.max(0, Math.min(0.1, r.time - rig.lastT));
-  rig.lastT = r.time;
-  // (How far it's moved across the world as you see it, not the screen:
-  // the camera following you, or turned with Q and E, swings nothing.)
-  const wx = x + (r.camX || 0);
-  const turned = rig.view !== r.view;
-  rig.view = r.view;
-  const drift = rig.lastX === undefined || turned ? 0 : Math.max(-6, Math.min(6, wx - rig.lastX));
-  rig.lastX = wx;
-  const flip = e.faceR;
-  const dx = x - ax;
-  const dy = y - ay;
-  const R = { r, ctx, e, st, t: r.time, dt, drift: flip ? -drift : drift, x, y, flip, ox: dx, oy: dy, phase: (e.artPhase % 1), b: 0 };
-  if (fig) R.J = figureJoints(e.species, f / FRAMES, st);
   const hooks = fig ? figureRig : def.rig || {};
   if (e.burrowed && !(def && def.burrowed)) return true;
+  const flip = !!e.faceR;
+  const big = bigTex(e);
+  const box = bodyBox(e.species, img);
+  const s = texScale(e, box.w, box.h);
+  const K = s * TEXEL;
+  const rigged = !!(hooks.under || hooks.behind || hooks.front || hooks.over);
+  let tex = null;
+  if (!rigged) {
+    const m = TEX_BY_IMG.get(img);
+    tex = m && m[flip ? 1 : 0];
+  } else if (e.texMade && e.texMade.flip === flip && r.time - e.texMade.t < 1 / 30 && r.time >= e.texMade.t) tex = e.texMade.tex;
+  if (!tex) {
+    const sc = beginTex(x, y, big);
+    // The rig's own state, and how it's moved since it was last drawn.
+    const rig = (e.rig ||= {});
+    const dt = rig.lastT === undefined ? 0 : Math.max(0, Math.min(0.1, r.time - rig.lastT));
+    rig.lastT = r.time;
+    // (How far it's moved across the world as you see it, not the screen:
+    // the camera following you, or turned with Q and E, swings nothing.)
+    const wx = x + (r.camX || 0);
+    const turned = rig.view !== r.view;
+    rig.view = r.view;
+    const drift = rig.lastX === undefined || turned ? 0 : Math.max(-6, Math.min(6, wx - rig.lastX));
+    rig.lastX = wx;
+    const dx = x - ax;
+    const dy = y - ay;
+    const R = { r, ctx: sc, e, st, t: r.time, dt, drift: flip ? -drift : drift, x, y, flip, ox: dx, oy: dy, phase: (e.artPhase % 1), b: 0 };
+    if (fig) R.J = figureJoints(e.species, f / FRAMES, st);
+    mapWorld(x, y, K);
+    // (In the world, below it: a serpent's coils, a chain to its stake.)
+    if (hooks.under) hooks.under(R);
+    sc.save();
+    // (Painted facing left: turned about for right.)
+    if (flip) {
+      sc.translate(x, 0);
+      sc.scale(-1, 1);
+      sc.translate(-x, 0);
+    }
+    if (hooks.behind) hooks.behind(R);
+    if (!(def && def.noBody && def.noBody(e, st))) sc.drawImage(img, dx, dy);
+    if (hooks.front) hooks.front(R);
+    sc.restore();
+    // (In the world, over it.)
+    if (hooks.over) hooks.over(R);
+    mapWorld(0, 0, 1);
+    tex = makeTex(e.species, s, big);
+    if (!tex) return true;
+    if (!rigged) {
+      // (Kept, once its palette's made: till then each is made afresh.)
+      if (paletteFor(e.species)) {
+        const m = TEX_BY_IMG.get(img) || [];
+        m[flip ? 1 : 0] = tex;
+        TEX_BY_IMG.set(img, m);
+      }
+    } else e.texMade = { t: r.time, tex, flip };
+  }
+  const pose = poseOf(r, e, K);
   const a = ctx.globalAlpha;
-  if (e.fade !== undefined && e.fade < 1) ctx.globalAlpha = a * Math.max(0.05, e.fade);
-  // (In the world, below it: a serpent's coils, a chain to its stake.)
-  if (hooks.under) hooks.under(R);
-  ctx.save();
-  // (Painted facing left: turned about for right.)
-  if (flip) {
-    ctx.translate(x, 0);
-    ctx.scale(-1, 1);
-    ctx.translate(-x, 0);
-  }
-  if (hooks.behind) hooks.behind(R);
-  if (!(def && def.noBody && def.noBody(e, st))) {
-    ctx.drawImage(img, dx, dy);
-    rim(ctx, e, img, 0, 0, img.width, img.height, dx, dy, img.width, img.height, bossTint(e), r.time, e.flash > 0);
-  }
-  if (hooks.front) hooks.front(R);
-  ctx.restore();
-  // (In the world, over it.)
-  if (hooks.over) hooks.over(R);
+  drawPoseBehind(r, ctx, e, tex, x, y, pose);
+  ctx.globalAlpha = a * pose.alpha * (e.fade !== undefined && e.fade < 1 ? Math.max(0.05, e.fade) : 1);
+  drawTex(ctx, tex, x, y, pose);
+  rimTex(ctx, e, tex, x, y, pose, r.time);
   ctx.globalAlpha = a;
+  drawPoseFx(r, ctx, e, tex, x, y, pose);
   return true;
+}
+// Its edge lit in its colour (brighter as a blow comes, white-hot as it's
+// struck).
+export function rimTex(ctx, e, tex, x, y, pose, time) {
+  const wind = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
+  const tint = bossTint(e);
+  const k = Math.min(1, 0.22 + 0.14 * Math.sin(time * 3 + (e.id || 0)) + wind * 0.6 + (e.flash > 0 ? 0.5 : 0));
+  drawRim(ctx, tex, x, y, wind > 0.6 && Math.floor(time * 12) % 2 ? '#ffffff' : tint[0], k, pose);
 }
 export { FIG_W, FIG_H };

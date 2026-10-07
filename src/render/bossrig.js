@@ -160,9 +160,21 @@ export class Part {
 // ------------------------------------------------------------ the world
 // Where a point of the world (x, z in paces, y in layers, fractions and
 // all) is on screen, as an entity's feet would be drawn there.
+// (Round 71: while a master's drawn bigger or smaller than it was painted
+// (see bosstex.js), what of it lies in the world, a serpent's coils, a
+// chain to its stake, is drawn in toward its feet to match, so that
+// scaled up with the rest of it it lies where it is.)
+let worldMap = null;
+export function mapWorld(ax, ay, k) {
+  worldMap = k && Math.abs(k - 1) > 1e-3 ? { ax, ay, k } : null;
+}
 export function onScreen(r, x, y, z) {
   const [u, v] = r.toView(x, z);
-  return { x: u * TILE - r.camX + 8, y: v * TILE - y * LH + LH + 10 - r.camY };
+  const sx = u * TILE - r.camX + 8;
+  const sy = v * TILE - y * LH + LH + 10 - r.camY;
+  if (!worldMap) return { x: sx, y: sy };
+  const m = worldMap;
+  return { x: m.ax + (sx - m.ax) / m.k, y: m.ay + (sy - m.ay) / m.k };
 }
 
 // ------------------------------------------------------------ chains

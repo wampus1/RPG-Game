@@ -29,6 +29,7 @@
 // shield takes most of it, a blade a little), and raise it just as the
 // blow lands to parry: they're left reeling for a few seconds. SPACE rolls
 // you clear.
+import { cue } from '../entities/cue.js';
 import { rule } from '../mod/rules.js';
 import { ITEMS, twoHanded, offhandable } from '../world/items.js';
 import { dishFx } from './cooking.js';
@@ -283,6 +284,7 @@ export function tickAttack(game, a, dt) {
   if (w.st.charge) {
     // Head down and away: across the ground in a straight line.
     w.dash = { i: 0, hit: false };
+    if (a.S && a.S.boss) cue(a, 'charge', w.target);
     return dashTick(game, a, w, dt);
   }
   strike(game, a, w);
@@ -374,6 +376,8 @@ export function strikeAnim(e, st, off = false) {
 function strike(game, a, w) {
   const st = w.off ? STYLES[weaponStyle(w.off)] : w.st;
   strikeAnim(a, st, !!w.off);
+  // (Round 71: a master's blow, drawn: see cue.js.)
+  if (a.S && a.S.boss) cue(a, st.heavy || st.area ? 'smash' : 'strike', w.target);
   if (!w.off) a.doAction?.(0.3);
   game.audio?.play('swing', a);
   // A lunge: a bound forward, then the bite.

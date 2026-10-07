@@ -7,6 +7,7 @@
 import { lineTiles, groundFire } from '../entities/monsters.js';
 import { burn, chill } from './gems.js';
 import { footTiles } from '../entities/footprint.js';
+import { cue } from '../entities/cue.js';
 
 // `o`: { by, ang, aim() (the angle it's turned toward, or null), turn
 // (radians a second), len, charge, dur, dmg, tick, width (1: three paces
@@ -19,6 +20,7 @@ export function startLaser(game, o) {
     hue: o.hue || 'red', chill: o.chill || 0,
   };
   (game.lasers ||= []).push(L);
+  cue(o.by, 'beam');
   game.audio?.play('charge', o.by);
   return L;
 }

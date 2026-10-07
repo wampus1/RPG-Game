@@ -22,6 +22,7 @@
 // Attacks you see coming are "hazards": the ground they'll hit, lit up
 // (red for a blow, blue for cold, cyan for the Kavorent's light), going
 // off when the time's up. Traps use them too (see game/dungeon.js).
+import { cue, cueHazard } from './cue.js';
 import { beginAttack, styleOf, knock, STYLES, strikeAnim, speaks } from '../game/combat.js';
 import { burn, chill, stun, mend } from '../game/gems.js';
 import { BLOCKS, B as BLOCKS_ID } from '../world/blocks.js';
@@ -102,6 +103,8 @@ export function addHazard(game, h) {
   }
   // (A master going for you: see tempo.press.)
   if (h.by && h.by.isBoss) h.by.sinceAtk = 0;
+  // (Round 71: and drawn doing it: see cue.js.)
+  if (h.by && h.by.S && h.by.S.boss) cueHazard(h.by, h);
   (game.hazards ||= []).push(h);
   return h;
 }
@@ -361,6 +364,7 @@ export function groundFire(game, x, z, y, by = null, all = false, spread = 1) {
 // as a wisp's does (`dmg`).
 export function lob(game, from, tx, tz, o = {}) {
   if (from && from.isBoss) from.sinceAtk = 0;
+  if (from && from.S && from.S.boss) cue(from, 'throw', { x: tx, z: tz });
   const ty = game.world.findStandY(tx, tz, from.y);
   game.lobOrb(from, tx, ty > 0 ? ty : from.y, tz, o.dmg ?? 0);
   const a = game.projectiles[game.projectiles.length - 1];
@@ -411,6 +415,7 @@ export function summon(game, species, at, near = 2, opts = {}) {
       // (Raised by a master, or by one of its things: on its side, and
       // never a hand raised against it. See sameSide.)
       if (at.S && at.kind !== 'player' && at.kind !== 'npc') c.summoner = at.summoner || at;
+      if (at.S && at.S.boss) cue(at, 'summon');
       game.renderer.emit(x, y + 0.5, z, { n: 10, color: opts.color || ['#a0e0ff', '#e0f8ff', '#5a8aa0'], up: 30, speed: 20, life: 0.8, gravity: -20 });
       return c;
     }

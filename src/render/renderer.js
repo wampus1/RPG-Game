@@ -19,6 +19,7 @@ import { drawWing, wingInFront, drawWingBurst } from './wing.js';
 import { drawOrbs } from './orbfx.js';
 import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_SCALE } from './bossart.js';
 import { drawBossArt } from './bossbody.js';
+import { watchBoss } from './bossanim.js';
 import { shipDecos, drawShipGhost } from './shipvox.js';
 import { drawCannonballs, drawShipHud } from './shiphud.js';
 
@@ -1472,13 +1473,19 @@ export class Renderer {
     } else if (master) {
       if (!e.burrowed) drawBossUnder(this, ctx, e, sx, feetY);
     } else if (!e.sleeping && !inWater) ctx.drawImage(this.atlas, sh.x, sh.y, 16, 8, sx, feetY - 4, 16, 8);
-    // (A master coming apart: see scenes.js, bossDefeat.)
+    // (A master coming apart: see scenes.js, bossDefeat. Round 71: one
+    // drawn from its texture staggers, falls and comes apart into motes of
+    // itself: see bossanim.js. Only its light rises in it here.)
     const a00 = ctx.globalAlpha;
+    if (master) watchBoss(this, e);
     if (e.dying !== undefined) {
       const k = e.dying;
-      ctx.globalAlpha = a00 * Math.max(0, 1 - k * k);
-      ctx.filter = `brightness(${1 + k * 2.5 + (Math.floor(this.time * 20) % 2) * k})`;
-      sx += Math.round((Math.random() - 0.5) * 3 * k);
+      if (master) ctx.filter = `brightness(${1 + Math.min(k, 0.6) * 2 + (Math.floor(this.time * 20) % 2) * Math.min(k, 0.5)})`;
+      else {
+        ctx.globalAlpha = a00 * Math.max(0, 1 - k * k);
+        ctx.filter = `brightness(${1 + k * 2.5 + (Math.floor(this.time * 20) % 2) * k})`;
+        sx += Math.round((Math.random() - 0.5) * 3 * k);
+      }
     }
     if (e.flash > 0) ctx.filter = 'brightness(3)';
     // Rolling: a tumble, head over heels, with a blur of afterimages.

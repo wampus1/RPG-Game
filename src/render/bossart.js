@@ -12,6 +12,8 @@ import { Sculpt } from './sculpt.js';
 import { Part, bodyOf, drawBody } from './bossrig.js';
 import { TILE, LH } from '../config.js';
 import { frameGlow } from './sprites.js';
+import { beginTex, makeTex, drawTex, drawRim, texScale, bigTex, TEXEL } from './bosstex.js';
+import { poseOf, drawPoseFx, drawPoseBehind } from './bossanim.js';
 
 export const BOSS_SCALE = 1.5;
 const OUT = '#1c1622';
@@ -304,18 +306,20 @@ export const LEGGED = new Set(Object.keys(RIGS));
 
 // The legs' feet: planted, or partway through a step (an arc from where it
 // was to where it's going). Kept on the entity, in world tiles.
-function rigUpdate(r, e, rig, wp, front, dt, game) {
+// (Round 71: `K`, how much bigger than painted it's drawn: its feet set
+// out so much further, to match. See bosstex.js.)
+function rigUpdate(r, e, rig, wp, front, dt, game, K = 1) {
   const homes = [];
   rig.legs.forEach(([u], j) => {
     for (const side of [0, 1]) {
-      const [dx, dz] = r.toWorld(u * front, side ? rig.vNear : rig.vFar);
+      const [dx, dz] = r.toWorld(u * front * K, (side ? rig.vNear : rig.vFar) * K);
       homes.push({ x: wp.x + dx, z: wp.z + dz, side, j, grp: (j + side) % 2 });
     }
   });
   let R = e.legRig;
   // (Its legs are set as it's seen: with the camera turned, they're set
   // afresh where they stand now, not walked there.)
-  if (!R || R.n !== homes.length || Math.hypot(wp.x - R.x, wp.z - R.z) > 3 || R.view !== r.view) {
+  if (!R || R.n !== homes.length || Math.hypot(wp.x - R.x, wp.z - R.z) > 3 * K || R.view !== r.view) {
     R = e.legRig = { n: homes.length, view: r.view, x: wp.x, z: wp.z, still: 0, feet: homes.map((h) => ({ x: h.x, z: h.z, fx: h.x, fz: h.z, tx: h.x, tz: h.z, t: 1 })) };
   }
   const moved = Math.hypot(wp.x - R.x, wp.z - R.z);
@@ -344,8 +348,8 @@ function rigUpdate(r, e, rig, wp, front, dt, game) {
     const h = homes[i];
     if (busy[1 - h.grp]) return;
     const d = Math.hypot(f.x - h.x, f.z - h.z);
-    if (d < (R.still > 0.25 ? 0.12 : rig.reach)) return;
-    const over = Math.min(0.35, d * 0.45);
+    if (d < (R.still > 0.25 ? 0.12 : rig.reach * K)) return;
+    const over = Math.min(0.35 * K, d * 0.45);
     f.fx = f.x;
     f.fz = f.z;
     f.tx = h.x + ((h.x - f.x) / d) * over;
@@ -454,32 +458,8 @@ function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, faceR) {
 // ------------------------------------------------------------ the body
 // A creature master's body and legs. Returns false when it isn't one drawn
 // here (it's left to the ordinary way).
-// A scratch layer for a legged master drawn under a filter (struck white,
-// or coming apart): the hundreds of little strokes its legs are drawn in
-// would each pay for the filter (enough to stall the game every time you
-// hit the Overseer); drawn plain on here instead, and this drawn filtered,
-// once.
-const LAYER_W = 240;
-const LAYER_H = 240;
-let layer = null;
-function scratch() {
-  if (!layer) {
-    const c = document.createElement('canvas');
-    c.width = LAYER_W;
-    c.height = LAYER_H;
-    layer = c.getContext('2d');
-    layer.imageSmoothingEnabled = false;
-  }
-  layer.setTransform(1, 0, 0, 1, 0, 0);
-  layer.globalAlpha = 1;
-  layer.filter = 'none';
-  layer.clearRect(0, 0, LAYER_W, LAYER_H);
-  return layer;
-}
-
 export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
   if (e.burrowed) return true;
-  let ctx = dest;
   const tint = bossTint(e);
   const dt = r.frameDt || 0.016;
   const vd = r.viewDir(e.dir);
@@ -493,6 +473,7 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
   if (!rig) {
     // The rest (the Worm, a prime golem): their sheet, half as big again,
     // breathing, rimmed in their light.
+    const ctx = dest;
     const sheet = sheetOf(e);
     const sz = sheet.height;
     const frames = sheet.width / (sz * 2);
@@ -507,15 +488,17 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
     rim(ctx, e, sheet, (f + flip) * sz, 0, sz, sz, x, y, w, h, tint, r.time, flash);
     return true;
   }
-  const filt = typeof dest.filter === 'string' && dest.filter !== 'none' ? dest.filter : null;
-  const lx = Math.round(cx - LAYER_W / 2);
-  const ly = Math.round(feetY - LAYER_H + 60);
-  if (filt) {
-    ctx = scratch();
-    ctx.setTransform(1, 0, 0, 1, -lx, -ly);
-  }
+  // (Round 71: drawn whole, legs and all, onto a scratch canvas and made a
+  // texture of: see bosstex.js. Its legs are worked out at its size on the
+  // screen, and drawn in toward it to match its painting.)
+  const big = bigTex(e);
+  const s = texScale(e, Math.max(rig.w, rig.h) * 1.4, 1);
+  const K = s * TEXEL;
+  const ox = Math.round(cx);
+  const oy = Math.round(feetY + 1);
+  const ctx = beginTex(ox, oy, big);
   const wp = e.renderPos();
-  const homes = rigUpdate(r, e, rig, wp, front, dt, game);
+  const homes = rigUpdate(r, e, rig, wp, front, dt, game, K);
   // (Twenty-four frames of breath at twelve a second: quicker, the worse
   // it's hurt.)
   const fb = Math.floor(r.time * (e.hp < e.maxHp * 0.35 ? 18 : 12) + (e.id || 0) * 5) % BODY_FRAMES;
@@ -524,11 +507,16 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
   const ax = Math.round(cx + front * rig.fwd);
   const ay = Math.round(feetY - rig.lift + bob + lu.y + (e.rise || 0));
   const hip = (j, side) => ({ x: ax + front * rig.legs[j][1], y: ay + (side ? rig.hipNear : rig.hipFar) });
+  const [cu, cv] = r.toView(wp.x, wp.z);
+  const mx = cu * TILE - r.camX + 8;
+  const my = cv * TILE - wp.y * LH + LH - r.camY + 10;
   const foot = (i) => {
     const f = e.legRig.feet[i];
     const [u, v] = r.toView(f.x, f.z);
-    const lift = f.t < 1 ? Math.sin(Math.PI * f.t) * rig.arc : 0;
-    return { x: u * TILE - r.camX + 8, y: v * TILE - wp.y * LH + LH - r.camY + 10 - lift };
+    const lift = f.t < 1 ? Math.sin(Math.PI * f.t) * rig.arc * K : 0;
+    const fx = u * TILE - r.camX + 8;
+    const fy = v * TILE - wp.y * LH + LH - r.camY + 10 - lift;
+    return { x: mx + (fx - mx) / K, y: my + (fy - my) / K };
   };
   const legs = (side) => {
     homes.forEach((h, i) => {
@@ -547,27 +535,23 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
     ctx.translate(bx + rig.w, by);
     ctx.scale(-1, 1);
     ctx.drawImage(img, 0, 0);
-    rim(ctx, e, img, 0, 0, rig.w, rig.h, 0, 0, rig.w, rig.h, tint, r.time, flash);
     ctx.restore();
-  } else {
-    ctx.drawImage(img, bx, by);
-    rim(ctx, e, img, 0, 0, rig.w, rig.h, bx, by, rig.w, rig.h, tint, r.time, flash);
-  }
+  } else ctx.drawImage(img, bx, by);
   // The Overseer's eye, turned on you.
   if (e.species === 'overseer') {
     const p = game && game.player;
-    let ox = 0;
-    let oy = 0;
+    let ex0 = 0;
+    let ey0 = 0;
     if (p) {
       const pp = p.renderPos();
       const [pu, pv] = r.toView(pp.x, pp.z);
       const [eu, ev] = r.toView(wp.x, wp.z);
       const d = Math.hypot(pu - eu, pv - ev) || 1;
-      ox = Math.round(((pu - eu) / d) * 2);
-      oy = Math.round(((pv - ev) / d) * 2);
+      ex0 = Math.round(((pu - eu) / d) * 2);
+      ey0 = Math.round(((pv - ev) / d) * 2);
     }
-    const ex = ax + ox;
-    const ey = ay + oy;
+    const ex = ax + ex0;
+    const ey = ay + ey0;
     const hot = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
     ctx.fillStyle = '#c81a28';
     ctx.fillRect(ex - 2, ey - 3, 5, 7);
@@ -579,10 +563,18 @@ export function drawBossBody(r, dest, e, sx, feetY, game, sheetOf) {
     ctx.fillRect(ex - 1, ey - 1, 1, 1);
   }
   legs(1);
-  if (filt) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    dest.drawImage(ctx.canvas, lx, ly);
-  }
+  const tex = makeTex(e.species, s, big);
+  if (!tex) return true;
+  const pose = poseOf(r, e, K);
+  const a0 = dest.globalAlpha;
+  drawPoseBehind(r, dest, e, tex, ox, oy, pose);
+  dest.globalAlpha = a0 * pose.alpha;
+  drawTex(dest, tex, ox, oy, pose);
+  const wind = e.windup ? Math.min(1, e.windup.t / Math.max(0.05, e.windup.dur)) : 0;
+  const k = Math.min(1, 0.22 + 0.14 * Math.sin(r.time * 3 + (e.id || 0)) + wind * 0.6 + (flash ? 0.5 : 0));
+  drawRim(dest, tex, ox, oy, wind > 0.6 && Math.floor(r.time * 12) % 2 ? '#ffffff' : tint[0], k, pose);
+  dest.globalAlpha = a0;
+  drawPoseFx(r, dest, e, tex, ox, oy, pose);
   return true;
 }
 

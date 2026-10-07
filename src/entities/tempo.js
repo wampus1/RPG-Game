@@ -175,6 +175,11 @@ export function bossClock(c, dt) {
 // back), its colour flares, and the fight quickens.
 function phaseUp(c, ph) {
   const game = c.game;
+  // (Drawn rearing up and roaring: see cue.js, render/bossanim.js.)
+  c.animK = 'roar';
+  c.animN = (c.animN || 0) + 1;
+  c.animAt = c.fightClock || 0;
+  c.animPh = ph;
   const r = game.renderer;
   const tint = bossTint(c);
   const R = (c.foot || 0) + 3;

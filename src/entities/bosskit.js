@@ -10,6 +10,7 @@
 //     lines and spirals across it, its braziers.
 import { B, BLOCKS, META_STATE } from '../world/blocks.js';
 import { FY } from '../world/dungeongen.js';
+import { cue } from './cue.js';
 
 export { FY };
 // (Paces between them, edge to edge: a great master's three paces across
@@ -246,6 +247,7 @@ export function spotIn(c, near, lo, hi, wet = false) {
 // Gone from here and there again, in a puff of `color`.
 export function blinkTo(c, to, color) {
   const game = c.game;
+  cue(c, 'blink');
   game.renderer.emit(c.x, c.y + 1, c.z, { n: 16, color, up: 30, speed: 40, life: 0.6, glow: true });
   c.teleport(to.x, to.y, to.z);
   game.moveEntity(c, to.x, to.y, to.z);
