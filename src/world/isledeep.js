@@ -16,6 +16,7 @@
 // harder than Thessa's: see ISLE_BOSS_HP.
 import { B } from './blocks.js';
 import { FAR_DSTYLE, FAR_BOSSES, FAR_BOSS_HP, FAR_BOSS_DMG, FAR_BOSS_TEMPO, FAR_TYPE_LORE } from './fardeep.js';
+import { ANCIENT_LORE } from './ancient.js';
 
 // Where you begin (inside the storm wall, washed up on its beach).
 export const HOME_ISLE = 'thessa';
@@ -210,6 +211,8 @@ export const ISLE_TYPE_LORE = {
 };
 
 Object.assign(ISLE_TYPE_LORE, FAR_TYPE_LORE);
+// (Round 71: and the ancient places': see ancient.js.)
+Object.assign(ISLE_TYPE_LORE, ANCIENT_LORE);
 
 function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);

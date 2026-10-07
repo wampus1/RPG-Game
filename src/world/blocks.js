@@ -645,6 +645,12 @@ def('capstan', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: 'planks
 // (Round 69) Her plans spread on a table in her captain's cabin (in a
 // sloop's hold): her name and her colours, to be changed (see ui/blueprint.js).
 def('blueprint_table', { ...sprite, solid: true, interact: 'blueprint', tool: 'axe', hardness: 2, drop: 'planks', support: false, label: 'Blueprint Table' });
+// (Round 71) The ways into the ancient places (see world/ancient.js):
+// after every other block, so a saved world's blocks keep their numbers.
+def('athanor_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 6, label: 'Athanor Doors' });
+def('champion_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 3, label: 'Champion\'s Door' });
+def('rift_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 7, label: 'The Rift' });
+def('gullet_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 2, label: 'The Gullet' });
 // (Round 70) Thin walls, a post with a wall running off it to whatever's
 // beside it (another wall, a fence, a solid block): bridges' parapets, and
 // anyone's to build. One of each stone (and wood) a bridge's made of.

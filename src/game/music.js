@@ -378,6 +378,32 @@ Object.assign(THEMES, {
   dungeon_broch: { ...DEEP, own: true, root: 50, scale: 'dorian', bpm: 58, prog: [0, 6, 0, 4], progB: [3, 6, 2, 4], lead: 'reel', counter: 'cello', pad: 'pad', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', toll: true, sea: true, wind: true, fog: true, energy: 0.28 },
   dungeon_broch_fight: { ...DRIVE, own: true, root: 50, scale: 'dorian', bpm: 144, swing: 0.1, prog: [0, 6, 0, 4], progB: [3, 6, 0, 4], lead: 'reel', counter: 'squeeze', pad: 'strings', bass: 'pluckbass', bassStyle: 'gallop', kit: 'battle', sea: true, wind: true },
   dungeon_broch_boss: { ...BOSS, own: true, root: 43, scale: 'phrygian', bpm: 116, prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'reel', counter: 'brass', pad: 'choir', arp: 'crushed', bass: 'reese', toll: true, sea: true, wind: true, space: 'hall' },
+  // (Round 71) The ancient places on the great continents, and their
+  // evolved masters: the darkest music there is. Below, a dread that
+  // never lifts; in their halls, the end of the world, climbing through
+  // every one of the master's phases (see bossLevel: five, and its
+  // rising) and heavier with each: the drums doubling, the choir and the
+  // braams piling up, a gong at every bar at the last (see grandBar).
+  //   The Athanor: glass and an organ in a sealed vault, the bubbling of
+  //     the great work; its master's a hymn turned inside out.
+  dungeon_athanor: { ...DEEP, own: true, root: 49, scale: 'harmonic', bpm: 56, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'organ', counter: 'glass', pad: 'choir', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', drone: true, toll: true, shimmer: true, space: 'cathedral', wet: 0.5, detune: 10, energy: 0.26 },
+  dungeon_athanor_fight: { ...DRIVE, own: true, root: 49, scale: 'harmonic', bpm: 138, prog: [0, 5, 1, 4], progB: [3, 0, 5, 4], lead: 'organ', counter: 'chant', pad: 'choir', keys: 'organ', keysStyle: 'pulse', arp: 'glass', arpStyle: 'down', bass: 'reese', kit: 'warmarch', space: 'cathedral', wet: 0.32 },
+  dungeon_athanor_boss: { ...BOSS, own: true, levels: 6, apocalypse: true, root: 40, scale: 'harmonic', bpm: 104, prog: [0, 5, 1, 4, 0, 6, 1, 4], progB: [3, 0, 5, 4], lead: 'organ', counter: 'choir', pad: 'choir', arp: 'glass', bass: 'reese', stab: 'braam', dbl: 'screech', toll: true, shimmer: true, space: 'cathedral', wet: 0.32, detune: 12 },
+  //   The Sundered Reach: the alien scale broken and slid out of tune,
+  //     glass shattering in the echo; its master's time coming apart.
+  dungeon_rift: { ...DEEP, own: true, root: 47, scale: 'alien', bpm: 52, prog: [0, 1, 3, 2], progB: [2, 4, 1, 3], lead: 'crushed', counter: 'glass', pad: 'glass', arp: 'bell', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'drone', drone: true, fog: true, space: 'cathedral', wet: 0.55, detune: 18, energy: 0.24 },
+  dungeon_rift_fight: { ...DRIVE, own: true, root: 47, scale: 'alien', bpm: 142, prog: [0, 1, 3, 2], progB: [2, 4, 1, 3], lead: 'crushed', counter: 'screech', pad: 'glass', arp: 'crushed', arpStyle: 'down', bass: 'reese', kit: 'machine', space: 'cathedral', wet: 0.3, detune: 16 },
+  dungeon_rift_boss: { ...BOSS, own: true, levels: 6, apocalypse: true, root: 39, scale: 'alien', bpm: 106, prog: [0, 1, 3, 2, 0, 4, 3, 1], progB: [2, 4, 1, 3], lead: 'crushed', counter: 'choir', pad: 'glass', arp: 'crushed', bass: 'reese', stab: 'crushed', dbl: 'screech', toll: true, space: 'cathedral', wet: 0.3, detune: 20 },
+  //   The Hall of the Last Champion: a dead hero's march, the warhorn
+  //     over a choir, slow and grand and wrong; its master's a last stand.
+  dungeon_champion: { ...DEEP, own: true, root: 50, scale: 'phrygian', bpm: 58, prog: [0, 1, 6, 5], progB: [5, 6, 1, 0], lead: 'warhorn', counter: 'cello', pad: 'choir', arp: 'lyre', arpStyle: 'wide', arpRate: 4, bass: 'sub', bassStyle: 'fifths', kit: 'legion', toll: true, space: 'cathedral', wet: 0.45, energy: 0.28 },
+  dungeon_champion_fight: { ...DRIVE, own: true, root: 50, scale: 'phrygian', bpm: 136, shape: 'power', prog: [0, 1, 0, 6], progB: [5, 1, 6, 0], lead: 'warhorn', counter: 'brass', pad: 'choir', keys: 'braam', keysStyle: 'block', bass: 'moog', bassStyle: 'gallop', kit: 'warmarch', space: 'hall' },
+  dungeon_champion_boss: { ...BOSS, own: true, levels: 6, apocalypse: true, root: 41, scale: 'phrygian', bpm: 108, shape: 'power', prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'warhorn', counter: 'choir', pad: 'choir', arp: 'cello', bass: 'moog', stab: 'braam', dbl: 'brass', toll: true, space: 'cathedral' },
+  //   The Gullet of the World: a heartbeat as big as a mountain, the
+  //     earth grinding, the abyss's call; its master's the end of it all.
+  dungeon_gullet: { ...DEEP, own: true, root: 45, scale: 'phrygian', bpm: 50, prog: [0, 1, 0, 6], progB: [5, 6, 1, 0], lead: 'abyss', counter: 'cello', pad: 'pad', bass: 'sub', bassStyle: 'drone', kit: 'heart', drone: true, drip: true, detune: 14, tone: 2600, energy: 0.24 },
+  dungeon_gullet_fight: { ...DRIVE, own: true, root: 45, scale: 'phrygian', bpm: 130, shape: 'power', prog: [0, 1, 0, 6], progB: [3, 1, 6, 0], lead: 'abyss', counter: 'dist', pad: 'strings', keys: 'dist', keysStyle: 'chug', bass: 'reese', kit: 'abyss', space: 'cave', wet: 0.3 },
+  dungeon_gullet_boss: { ...BOSS, own: true, levels: 6, apocalypse: true, root: 38, scale: 'phrygian', bpm: 100, shape: 'power', prog: [0, 1, 6, 5, 0, 1, 4, 0], progB: [5, 6, 1, 0], lead: 'abyss', counter: 'choir', pad: 'choir', arp: 'dist', bass: 'reese', stab: 'dist', dbl: 'screech', kit: 'heart', toll: true, space: 'cave', wet: 0.3, detune: 16 },
 });
 
 // The two other islands' sound laid over any tune heard there that isn't
@@ -500,7 +526,7 @@ export function musicMood(game) {
       if (game.dungeon) {
         const ty = game.dungeon.rec.type;
         const own = ownDungeon(ty) ? '' : tilde;
-        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${Math.min(3, fightPhase(game.dungeon.fight))}`;
+        if (game.dungeon.fight || game.creatures.some((c) => !c.dead && c.isBoss && c.target === p && c.distTo(p) < 18)) return `dungeon_${ty}_boss${own}:p${Math.min(levelsOf(ty), fightPhase(game.dungeon.fight))}`;
         return `dungeon_${ty}_fight${own}`;
       }
       if (ISLE_FIGHTS[tilde.slice(1)]) return ISLE_FIGHTS[tilde.slice(1)];
@@ -528,7 +554,7 @@ export function musicMood(game) {
   if (game.dungeon) {
     const ty = game.dungeon.rec.type;
     const own = ownDungeon(ty) ? '' : tilde;
-    return game.dungeon.fight ? `dungeon_${ty}_boss${own}:p${Math.min(3, fightPhase(game.dungeon.fight))}` : `dungeon_${ty}${own}`;
+    return game.dungeon.fight ? `dungeon_${ty}_boss${own}:p${Math.min(levelsOf(ty), fightPhase(game.dungeon.fight))}` : `dungeon_${ty}${own}`;
   }
   const night = game.minute < 330 || game.minute >= 1230;
   const s = game.currentSettlement;
@@ -696,8 +722,12 @@ export function nightTheme(T) {
 // A master's fight's phase, from a theme's variant ('p1' to 'p3'; 0 for
 // any other).
 export function bossLevel(variant) {
-  const m = /^p([1-3])$/.exec(variant || '');
+  const m = /^p([1-6])$/.exec(variant || '');
   return m ? +m[1] : 0;
+}
+// How far a place's master's music climbs (three; an ancient place's six).
+export function levelsOf(type) {
+  return (THEMES[`dungeon_${type}_boss`] && THEMES[`dungeon_${type}_boss`].levels) || 3;
 }
 
 // --- playing a theme ------------------------------------------------------------
@@ -1113,6 +1143,24 @@ class Voice {
     if (this.barN % 4 === 0) {
       this.note('bell', 'bell', reg(T.root, 45, 56), t, barDur, 0.8, { deep: true });
       this.note('bell', 'bell', reg(T.root, 45, 56) + 6, t + 0.02, barDur, 0.35, { deep: true });
+    }
+    // (Round 71) The end of the world, an evolved master's: heavier with
+    // every phase. A blow on every bar; then the timpani doubled and a
+    // braam on the half bar; then a riser into every other bar; risen, a
+    // gong at every bar and the blows on every beat.
+    if (T.apocalypse) {
+      const lv = this.lv;
+      if (lv >= 2.5) this.hit('impact', t, 0.35 + 0.08 * (lv - 2.5));
+      if (lv >= 3.5) {
+        for (let i = 2; i < T.meter; i += 4) this.hit('timp', t + sd * i, 0.3 + 0.05 * lv, { f: midiHz(low + (i % 8 ? 7 : 0)) });
+        this.note('brass', T.stab || 'braam', reg(T.root, 36, 47), t + sd * Math.floor(T.meter / 2), sd * 4, 0.5, { stab: true });
+      }
+      if (lv >= 4.5 && this.barN % 2 === 1) this.hit('riser', t, 0.6, { dur: barDur });
+      if (lv >= 5.5) {
+        this.hit('gong', t, 0.5);
+        for (let i = 4; i < T.meter; i += 4) this.hit('impact', t + sd * i, 0.3);
+        this.note('drone', 'drone', low - 12, t, barDur, 0.8);
+      }
     }
   }
 

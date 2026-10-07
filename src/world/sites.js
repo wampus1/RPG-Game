@@ -8,6 +8,7 @@ import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
 import { FAR_SITES, FAR_OWN_SHARE, FAR_OWN_TYPE } from './fardeep.js';
+import { ancientSites, ANCIENT_GATE } from './ancient.js';
 import { Region } from './region.js';
 import { MODS } from '../mod/state.js';
 
@@ -120,6 +121,9 @@ export function genSites(ow) {
   // beyond the storm. (Their own stream, after the islands', so the
   // islands' places come out as they always did.)
   if (ow.wg >= 2 && !ow.plan) farSites(ow, sites, farFromTowns, farFromSites);
+  // (Round 71) The ancient places, two on each great continent: last of
+  // all, so a world made before keeps all it had (see ancient.js).
+  if (!ow.plan) ancientSites(ow, sites, farFromTowns, farFromSites);
   return sites;
 }
 function farSites(ow, sites, farFromTowns, farFromSites) {
@@ -433,6 +437,8 @@ const FAR_GATE = {
     put(0, h + 2, 0, B.drystone);
   },
 };
+// (Round 71: and the ancient places' gates.)
+Object.assign(FAR_GATE, ANCIENT_GATE);
 
 // --------------------------------------------------------------- above ground
 // The blocks of a site's entrance, as [dx, y, dz, id, meta] from its spot

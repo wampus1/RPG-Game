@@ -52,9 +52,22 @@ const PHASE_LINES = {
 };
 
 export function phaseOf(c) {
+  // (Round 71: an evolved master's own phases, four or five of them and
+  // its rising: see evolved.js. Its breath between attacks as the last of
+  // the others' at the most.)
+  if (c.S && c.S.evolved) return Math.min(4, evoPhase(c));
   const f = c.hp / Math.max(1, c.maxHp);
   if (c.tier >= 3 && f <= PHASE4) return 4;
   return f <= MARKS[1] ? 3 : f <= MARKS[0] ? 2 : 1;
+}
+
+// (Round 71) An evolved master's phase: its hp in `S.phases` equal parts
+// (1 whole ... N at the last), and past them, once it's risen, N + 1.
+export function evoPhase(c) {
+  const N = (c.S && c.S.phases) || 4;
+  if (c.enraged) return N + 1;
+  const f = Math.max(0, c.hp) / Math.max(1, c.maxHp);
+  return Math.max(1, Math.min(N, 1 + Math.floor((1 - f) * N + 1e-6)));
 }
 
 // Free to start an attack (its breath since the last one is taken)?
@@ -163,7 +176,7 @@ export function bossClock(c, dt) {
   // (Its own clock, if it keeps one: heat, fury, the seasons. It runs
   // whatever it's doing, unlike its brain.)
   if (c.S.tick && !c.dead && !c.waiting) c.S.tick(c, dt);
-  const ph = phaseOf(c);
+  const ph = c.S.evolved ? evoPhase(c) : phaseOf(c);
   c.phaseSeen ??= 1;
   if (ph > c.phaseSeen && !c.dead && !c.waiting) {
     c.phaseSeen = ph;
@@ -191,10 +204,13 @@ function phaseUp(c, ph) {
   game.hitStop = Math.max(game.hitStop || 0, 0.12);
   game.audio?.play('roar', c);
   game.audio?.play('boom', c);
-  r.floatText(c.x, c.y + 3.6, c.z, ph >= 4 ? 'UNBOUND!' : ph >= 3 ? 'DESPERATE!' : 'ENRAGED!', ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff4030' : '#ffb040');
+  const evo = c.S.evolved;
+  if (evo) r.floatText(c.x, c.y + 4.4, c.z, c.enraged ? 'UNDYING!' : `PHASE ${['', 'I', 'II', 'III', 'IV', 'V'][ph] || ph}`, ph >= 4 ? '#ff4030' : '#ffb040');
+  else r.floatText(c.x, c.y + 3.6, c.z, ph >= 4 ? 'UNBOUND!' : ph >= 3 ? 'DESPERATE!' : 'ENRAGED!', ph >= 4 ? '#c8a0ff' : ph >= 3 ? '#ff4030' : '#ffb040');
+  if (evo && c.S.onPhase) c.S.onPhase(c, ph, game);
   // (Unbound: rings of the turned time going out from it, again and again.)
   if (ph >= 4) for (let i = 0; i < 3; i++) r.effect?.({ type: 'ring', wx: c.x, wy: c.y, wz: c.z, r0: 6 + i * 8, r1: 140 + i * 30, color: ['#c8a0ff', '#ffffff', tint[0]], life: 0.9 + i * 0.25, oy: 4, flat: 0.5, thick: 3 });
-  const line = ph >= 4 ? (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES)[Math.floor(Math.random() * (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES).length)] : (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
+  const line = evo ? (c.S.phaseLines || [])[ph] : ph >= 4 ? (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES)[Math.floor(Math.random() * (c.S.construct ? UNBOUND_CONSTRUCT : UNBOUND_LINES).length)] : (PHASE_LINES[c.species] || c.S.phaseLines || [])[ph];
   if (line) c.say?.(line, 2.6, '#ff9080');
   // (Anyone close by is thrown back from it.)
   for (const e of [...game.everyone(), ...game.npcs]) {
@@ -320,6 +336,9 @@ function pickSpot(c, t) {
 // The music's step up for the fight as it stands (1 to 3).
 export function fightPhase(fight) {
   if (!fight) return 1;
+  // (An evolved master's: its own, one to five and its rising.)
+  const lead = fight.boss && fight.boss[0];
+  if (lead && lead.S && lead.S.evolved && !lead.dead) return evoPhase(lead);
   if (fight.tier >= 3 && fight.frac <= PHASE4) return 4;
   return fight.frac <= MARKS[1] ? 3 : fight.frac <= MARKS[0] ? 2 : 1;
 }
