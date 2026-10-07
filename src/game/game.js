@@ -46,7 +46,7 @@ import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.j
 import { newFeats, noteIsle } from './achievements.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
-import { ancientAir } from './ancient.js';
+import { ancientAir, wadeTick } from './ancient.js';
 import { updateEvolvedGear, clawMult, clawRend, clawSoak } from './evolvedgear.js';
 import { updateQuestFinder } from './questfinder.js';
 import { doorLocked, knock as knockDoor, houseOfDoor, unlockFor, updateKnocks } from './doorlocks.js';
@@ -2025,6 +2025,7 @@ export class Game {
     updateEvolvedGear(this, dt);
     updateQuestFinder(this, dt);
     updateKnocks(this, dt);
+    wadeTick(this, dt);
     this.sim.ancient.update(dt);
     // Each old place someone's down: its own goings-on. (Fields the
     // Overseer turned off, and what a master's done to its hall, put back
@@ -4995,14 +4996,13 @@ export class Game {
   // nobody watching. A village's iron lock is easy; a city manor's steel
   // one is not.
   pickLock(x, y, z, owner) {
-    const name = owner.label ? owner.label.replace(/ \(.*\)$/, '') : '';
-    const whose = name ? `${/^the /i.test(name) ? name : `The ${name}`}'s chest` : 'This chest';
     if (countItem(this.player.inv, 'lockpick') <= 0) {
       // (Round 73: said over your head, with the rattle of it.)
       this.lockedAt(x, y, z);
-      void whose;
       return;
     }
+    const name = owner.label ? owner.label.replace(/ \(.*\)$/, '') : '';
+    const whose = name ? `${/^the /i.test(name) ? name : `The ${name}`}'s chest` : 'This chest';
     if (this.lockWatched(owner)) {
       this.ui.msg('Not with someone watching.', '#ffb080', true);
       this.audio?.play('locked');
@@ -6017,7 +6017,7 @@ export class Game {
       this.queueBlow(null, false);
       return false;
     }
-    if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead) return false;
+    if (p.attackCd > 0 || p.swing || p.commitT > 0 || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.dead || p.tunnel) return false;
     const def = p.heldDef();
     if (def && def.ranged) {
       this.swing();
@@ -6209,7 +6209,7 @@ export class Game {
       this.queueBlow(target, heavy);
       return;
     }
-    if (p.attackCd > 0 || p.swing || p.commitT > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0) return;
+    if (p.attackCd > 0 || p.swing || p.commitT > 0 || target.dead || p.rollT > 0 || p.stunT > 0 || p.guardBroken > 0 || p.tunnel) return;
     const def = p.heldDef();
     const reach = this.attackReach();
     const quick = 1 / (1 + buffOf(this, 'haste'));
@@ -6383,6 +6383,8 @@ export class Game {
 
   damage(target, amount, source, crit = false) {
     if (target.dead || target.down) return;
+    // (Round 73: under the ground with the Tooth, nothing reaches you.)
+    if (target.tunnel && target.tunnel.phase === 'under') return;
     // (A master's summoned things never hurt it, nor it them.)
     if (source && sameSide(source, target)) return;
     // A bout just over: a blow still on its way, or swung without seeing

@@ -1511,10 +1511,23 @@ function step(now) {
   const g = game;
   if (g) {
     const t0 = performance.now();
-    g.update(dt, input);
+    // (Round 73) Each part of the frame on its own: something gone wrong in
+    // the world (or in drawing it) mustn't leave the menus, the map and the
+    // pack unable to open or be seen.
+    try {
+      g.update(dt, input);
+    } catch (e) {
+      if (!step.updErr || now - step.updErr > 1000) console.error(e);
+      step.updErr = now;
+    }
     ui.update(dt, game);
     const t1 = performance.now();
-    if (game === g) renderer.render(g, dt);
+    try {
+      if (game === g) renderer.render(g, dt);
+    } catch (e) {
+      if (!step.drawErr || now - step.drawErr > 1000) console.error(e);
+      step.drawErr = now;
+    }
     const t2 = performance.now();
     // (Something on the HUD gone wrong mustn't leave the screen standing
     // still: the world's still drawn, and the rest of the frame goes on.)

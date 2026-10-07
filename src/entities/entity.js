@@ -1,5 +1,14 @@
 // Base class for everything that walks the grid tile by tile.
+import { BLOCKS } from '../world/blocks.js';
+
 let nextId = 1;
+
+// (Round 73) The liquid underfoot, if it's one you wade (see wading).
+const WADE = new Set(['acid_pool', 'quicksilver']);
+export function wadeOf(world, x, y, z) {
+  const b = world && world.getBlock ? BLOCKS[world.getBlock(x, y - 1, z)] : null;
+  return b && WADE.has(b.name) ? b.name : null;
+}
 
 export class Entity {
   constructor(game, x, y, z) {
@@ -34,6 +43,9 @@ export class Entity {
   }
 
   renderPos() {
+    // (Round 73: under the ground with the Tooth: where the earth heaves
+    // over you, for the camera and the light. See evolvedgear.tooth.)
+    if (this.underAt) return { x: this.underAt.x, y: this.y, z: this.underAt.z };
     // (Aboard one of the great ships: carried with her, see ships3d.js.)
     if (this.deck && this.game && this.game.shipDeckPos) {
       const p = this.game.shipDeckPos(this);
@@ -61,8 +73,11 @@ export class Entity {
     this.game.moveEntity(this, nx, ny, nz);
     this.moveT = 0;
     // (Chilled by frost: slower.)
-    this.moveDur = this.slowT > 0 ? dur * 1.7 : dur;
     this.inWater = this.game.world.isWaterAt(nx, ny, nz);
+    // (Round 73) Wading a liquid sunk in the floor (acid, quicksilver):
+    // slower through it, and down in it to the shins.
+    this.wading = wadeOf(this.game.world, nx, ny, nz);
+    this.moveDur = (this.slowT > 0 ? dur * 1.7 : dur) * (this.wading ? 1.35 : 1);
   }
 
   teleport(x, y, z) {
@@ -74,6 +89,7 @@ export class Entity {
     this.fz = z;
     this.moveT = 1;
     this.inWater = this.game.world.isWaterAt(x, y, z);
+    this.wading = wadeOf(this.game.world, x, y, z);
   }
 
   updateBase(dt) {

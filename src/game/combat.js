@@ -821,7 +821,7 @@ export function roll(game, p, dirv = null) {
   // (Not with an arrow on the string, drawing or holding it.)
   if ((p.rollCd > 0 && !wingRoll) || p.dead || p.down || p.restrained || p.raft || p.mount || p.sitting || p.sleeping || p.swing || p.commitT > 0 || p.bowDraw) return false;
   // (Swallowed: no room to roll in there.)
-  if (p.swallowed) return false;
+  if (p.swallowed || p.tunnel) return false;
   if (p.grabbedT > 0) {
     p.grabbedT = 0;
     game.renderer.floatText(p.x, p.y + 2.4, p.z, 'wrenched free!', '#c8e8ff');

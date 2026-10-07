@@ -713,3 +713,58 @@ export function ancientAir(game, s, d, dt) {
       break;
   }
 }
+
+// (Round 73) Wading a liquid sunk in the floor, anywhere: acid eats at
+// you (a little, often: get out of it), quicksilver drags at your legs.
+export function wadeTick(game, dt) {
+  for (const e of [...game.everyone(), ...(game.npcs || [])]) {
+    if (!e || e.dead || e.down || !e.wading) continue;
+    if (e.wading === 'quicksilver') {
+      chill(e, 0.5);
+      continue;
+    }
+    e.acidT = (e.acidT ?? 0.4) - dt;
+    if (Math.random() < dt * 6) game.renderer.emit(e.x, e.y + 0.15, e.z, { n: 1, color: ['#c8f070', '#90d040', '#ffffff'], up: 14, speed: 6, life: 0.5, shape: 'puff' });
+    if (e.acidT > 0) continue;
+    e.acidT = 0.9;
+    game.damage(e, 1, null);
+    if (e.kind === 'player') game.renderer.floatText(e.x, e.y + 2.2, e.z, 'burning!', '#c8f070');
+    game.audio?.play('hiss', e);
+  }
+}
+
+// (Round 73) Above the hall where it waits, the Alinelidan goes through its
+// own Gullet now and then: up out of the rock on one side of you and across
+// and down into it again (see evolved_worm.passTick). It pays you no mind,
+// and nothing you can do marks it. A minute or two between.
+export function gulletPass(run, dt) {
+  if (!run || run.rec.type !== 'gullet' || run.fight || run.floor >= (run.rec.depth || 1) - 1) return;
+  const game = run.game;
+  const w = run.passing;
+  if (w && game.creatures.includes(w)) return;
+  run.passing = null;
+  run.passT = (run.passT ?? 30 + Math.random() * 30) - dt;
+  if (run.passT > 0) return;
+  run.passT = 75 + Math.random() * 60;
+  const p = game.player;
+  if (!p || p.dead) return;
+  const a = Math.random() * Math.PI * 2;
+  const ax = Math.cos(a);
+  const az = Math.sin(a);
+  const side = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.floor(Math.random() * 3));
+  const from = { x: Math.round(p.x - ax * 20 - az * side), z: Math.round(p.z - az * 20 + ax * side) };
+  const to = { x: Math.round(p.x + ax * 20 - az * side), z: Math.round(p.z + az * 20 + ax * side) };
+  if (!run.has(from.x) || !run.has(to.x)) return;
+  const c = run.spawn('alinelidan', from.x, FY, from.z, {});
+  if (!c) return;
+  c.passing = { from, to, len: Math.max(1, Math.round(Math.hypot(to.x - from.x, to.z - from.z))), i: 0, t: 0 };
+  c.isBoss = false;
+  c.burrowed = true;
+  c.hostile = false;
+  run.passing = c;
+  game.audio?.play('rumble', c);
+  if (!run.toldPass) {
+    run.toldPass = true;
+    game.ui.msg('The whole Gullet shudders. Something vast is moving through the rock.', '#e0ff90', true);
+  }
+}

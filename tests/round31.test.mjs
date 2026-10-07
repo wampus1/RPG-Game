@@ -355,9 +355,9 @@ test('a household\'s chest is locked; picked, it stays open a while, then they l
   assert.equal(game.world.getBlock(x, y, z), B.chest);
   assert.ok(game.chestLocked(x, y, z));
   // No pick: no luck.
-  game.ui.msgs.length = 0;
+  p.lockedSaidT = null;
   game.interact(x, y, z);
-  assert.ok(game.ui.msgs.some((m) => /lockpick/i.test(m)));
+  assert.ok(p.lockedSaidT != null, 'it says it is locked');
   // Picked: open a while.
   game.picked.set(`${x},${y},${z}`, game.day);
   assert.ok(!game.chestLocked(x, y, z));

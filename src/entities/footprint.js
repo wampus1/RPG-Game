@@ -8,12 +8,16 @@
 // Does `e` fill the tile (x, z)?
 export function covers(e, x, z) {
   const r = (e && e.foot) || 0;
-  return Math.abs(x - e.x) <= r && Math.abs(z - e.z) <= r;
+  if (Math.abs(x - e.x) <= r && Math.abs(z - e.z) <= r) return true;
+  // (Round 73) A long body laid along the ground (the World-Worm's rings):
+  // every pace of it is solid, and can be struck.
+  return !!(e && e.bodyTiles && e.bodyTiles.has(x * 65536 + z));
 }
 
 // Does `e` fill any of those tiles?
 export function onTiles(e, tiles) {
   const r = (e && e.foot) || 0;
+  if (e && e.bodyTiles && tiles.some((t) => e.bodyTiles.has(t.x * 65536 + t.z))) return true;
   if (!r) return tiles.some((t) => t.x === e.x && t.z === e.z);
   return tiles.some((t) => Math.abs(t.x - e.x) <= r && Math.abs(t.z - e.z) <= r);
 }
@@ -45,13 +49,37 @@ export function apart(a, b) {
   // world (turned, two next to each other can round two tiles apart).
   if (a && b && a.deck && b.deck && a.deck.s === b.deck.s) return Math.max(Math.abs(a.deck.cx - b.deck.cx), Math.abs(a.deck.cz - b.deck.cz));
   const r = ((a && a.foot) || 0) + ((b && b.foot) || 0);
-  return Math.max(0, Math.abs(a.x - b.x) - r, Math.abs(a.z - b.z) - r);
+  let d = Math.max(0, Math.abs(a.x - b.x) - r, Math.abs(a.z - b.z) - r);
+  // (Round 73) Up against a long body: as near as its nearest pace.
+  for (const [e, o] of [[b, a], [a, b]]) {
+    if (!e || !e.bodyTiles || !o || d <= 1) continue;
+    for (const k of e.bodyTiles) {
+      const bx = Math.floor(k / 65536);
+      const bz = k - bx * 65536;
+      d = Math.min(d, Math.max(0, Math.abs(o.x - bx) - ((o.foot) || 0), Math.abs(o.z - bz) - ((o.foot) || 0)));
+    }
+  }
+  return d;
 }
 
 // The nearest tile of `e` to `from` (where a blow at it lands).
 export function nearestOf(e, from) {
   const r = (e && e.foot) || 0;
-  return { x: e.x + Math.max(-r, Math.min(r, from.x - e.x)), z: e.z + Math.max(-r, Math.min(r, from.z - e.z)) };
+  let best = { x: e.x + Math.max(-r, Math.min(r, from.x - e.x)), z: e.z + Math.max(-r, Math.min(r, from.z - e.z)) };
+  // (Round 73: or the nearest pace of its body, for a long one.)
+  if (e && e.bodyTiles) {
+    let bd = Math.max(Math.abs(best.x - from.x), Math.abs(best.z - from.z));
+    for (const k of e.bodyTiles) {
+      const bx = Math.floor(k / 65536);
+      const bz = k - bx * 65536;
+      const d = Math.max(Math.abs(bx - from.x), Math.abs(bz - from.z));
+      if (d < bd) {
+        bd = d;
+        best = { x: bx, z: bz };
+      }
+    }
+  }
+  return best;
 }
 
 // Would `e` fit with its own tile at (x, y, z): every tile it fills open

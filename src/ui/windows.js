@@ -414,8 +414,9 @@ export class CraftWindow extends Window {
         continue;
       }
       // Arms, armour and tools come off the bench with stars of their own
-      // (a tinker's hand a little finer): see world/quality.js.
-      const out = starable(r.out) ? starGear(r.out, { origin: 'c', tinker: heroHas(game.hero, 'tinker') }) : r.out;
+      // (a tinker's hand a little finer): see world/quality.js. (Round 73:
+      // not down in a dungeon, at a makeshift bench: plain work there.)
+      const out = starable(r.out) && !game.dungeon ? starGear(r.out, { origin: 'c', tinker: heroHas(game.hero, 'tinker') }) : r.out;
       if (out !== r.out) madeKeys.push(out);
       const left = addItem(inv, out, r.n + extra);
       if (left) game.spawnDrop(out, left, game.player.x, game.player.y, game.player.z, true);

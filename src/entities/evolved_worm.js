@@ -47,6 +47,21 @@ function trailTick(c) {
   const d = Math.hypot(p.x - T[0].x, p.z - T[0].z);
   if (d >= 0.3) T.unshift({ x: Math.round(p.x * 100) / 100, z: Math.round(p.z * 100) / 100 });
   if (T.length > SEG * 5) T.length = SEG * 5;
+  // (Round 73) Its body solid along the ground behind its head, to its
+  // tail: in the way, and there to be struck (see footprint.covers). Not
+  // while it's under the floor.
+  if (c.burrowed || c.diving) {
+    c.bodyTiles = null;
+    return;
+  }
+  const set = new Set();
+  for (const q of wormRings(c)) {
+    const x = Math.round(q.x);
+    const z = Math.round(q.z);
+    if (Math.abs(x - c.x) <= (c.foot || 0) && Math.abs(z - c.z) <= (c.foot || 0)) continue;
+    set.add(x * 65536 + z);
+  }
+  c.bodyTiles = set;
 }
 // Its rings, head to tail: each `GAP` along its trail.
 export function wormRings(c) {
@@ -484,6 +499,14 @@ export const WORM_BOSSES = {
     // Whatever it's learned barely marks it; and it keeps count of what
     // you're using.
     ward: (game, c, src, n) => {
+      // (Passing through: nothing you do marks it.)
+      if (c.passing) {
+        if (!(c.wardNote > 0)) {
+          c.wardNote = 1.2;
+          game.renderer.floatText(c.x, c.y + 3.6, c.z, 'it doesn\'t even notice', '#e0ff90');
+        }
+        return 0;
+      }
       const k = armsKey(src);
       if (!k) return n;
       c.usedArms ||= {};
@@ -513,8 +536,45 @@ export const WORM_TITLES = {
   alinelidan: { name: 'The Alinelidan', title: 'Mother of Leeches, the World-Worm', taunt: '*the ground breathes in*' },
 };
 
+// (Round 73) Passing through its own Gullet, above the hall where it
+// waits (see ancient.gulletPass): through the rock and out across a room
+// and into the rock again, paying you no mind, and nothing you do marks it.
+const PASS_STEP = 0.3;
+function passTick(c, dt) {
+  const P = c.passing;
+  const game = c.game;
+  P.t = (P.t || 0) - dt;
+  if (P.t > 0) return true;
+  P.t = PASS_STEP;
+  P.i = (P.i || 0) + 1;
+  const k = P.i / P.len;
+  if (k >= 1) {
+    // Gone into the rock for good.
+    game.removeOcc(c);
+    c.bodyTiles = null;
+    c.burrowed = true;
+    game.creatures = game.creatures.filter((q) => q !== c);
+    return true;
+  }
+  const x = Math.round(P.from.x + (P.to.x - P.from.x) * k);
+  const z = Math.round(P.from.z + (P.to.z - P.from.z) * k);
+  const open = game.world.canStand(x, c.y, z);
+  if (open && c.burrowed) {
+    c.trail = [{ x, z }];
+    game.renderer.emit(x, c.y + 0.5, z, { n: 24, color: ['#7a5a3a', '#5a4430', '#a8885a'], up: 40, speed: 50, gravity: 140, life: 0.8 });
+    game.shake = Math.min(1, (game.shake || 0) + 0.5);
+    game.audio?.play('rumble', c);
+  } else if (!open && !c.burrowed) {
+    game.renderer.emit(c.x, c.y + 0.5, c.z, { n: 16, color: ['#7a5a3a', '#5a4430'], up: 30, speed: 40, gravity: 140, life: 0.7 });
+  }
+  c.burrowed = !open;
+  c.teleport(x, c.y, z);
+  return true;
+}
+
 export const WORM_BRAINS = {
   alinelidan(c, dt) {
+    if (c.passing) return passTick(c, dt);
     if (c.riseT > 0) return true;
     if (c.diving || c.burrowed) return true;
     if (rushTick(c, dt)) return true;

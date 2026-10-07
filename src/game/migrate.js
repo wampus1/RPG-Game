@@ -418,6 +418,41 @@ export const STEPS = [
       if (n) log.push(`The ${n} ancient places' gates have been raised anew, grander than they were.`);
     },
   },
+  {
+    // (Round 73) The QOL update.
+    to: '0.73.0',
+    data(d, log) {
+      log.push('Every town on the coast now has a dock as big as the town (a jetty, a pier, a harbour with a T-head and lamps), built where there was none and grown as the town grows. Ships are sold by the shipwright down at the pier, in realms that know how to build them.');
+      log.push('Weapon racks hold and show weapons; display stands, wall hangers and paintings, small and large, are new to build (and new towns hang them as their peoples like).');
+      log.push('The ancient places keep their own creatures now, nothing borrowed from the old barrows; the perils that came for you anywhere in an old place are gone.');
+      log.push('Worlds made from now on have winding streets for some peoples, homes of more shapes with rooms, and more variety in the far lands\' ground, peoples and names. (Towns already laid out keep their plans.)');
+    },
+    game(game, log) {
+      // The far realms catch up on what they knew from the first: twenty
+      // to thirty steps of learning on the continents, ten to fifteen on
+      // the isles beyond the storm, and trade ships.
+      const T = game.sim && game.sim.tech;
+      let n = 0;
+      for (const civ of (game.world.ow && game.world.ow.civs) || []) {
+        if (!T || !civ.far || civ.freed) continue;
+        const cap = game.world.ow.settlements[civ.capital];
+        if (!cap) continue;
+        const st = T.stateOf(cap);
+        const before = st.done.length;
+        T.startingPerks(civ, st);
+        if (st.done.length > before) n++;
+      }
+      if (n) log.push(`${n} of the far realms have caught up on what they always knew: their learning, and their ships.`);
+      // The Champion's and the Gullet's gates, raised again as they now are.
+      let g = 0;
+      for (const s2 of game.world.sites || []) {
+        if (!s2.ancient || s2.x === undefined || (s2.type !== 'champion' && s2.type !== 'gullet')) continue;
+        restamp(game.world, s2);
+        g++;
+      }
+      if (g) log.push('The Champion\'s and the Gullet\'s gates have been made over.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

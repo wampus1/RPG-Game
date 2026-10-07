@@ -1229,33 +1229,62 @@ FAR_SPRITES.athanor_door = (rot, st, f) => {
   }
   return p;
 };
-// The Hall of the Last Champion: a door of old oak bound in iron, deep
-// in mossy stone, his sword carved over it point down, and the flowers
-// the folk leave at his door, fresh.
+// The Hall of the Last Champion: a pair of oak doors bound in iron and
+// studded, deep in mossy stone under a carved lintel, ring-knockers on
+// them; his sword carved over it point down, its runes kindling one after
+// another; ivy down the jambs; the flowers the folk leave at his door, and
+// the grave-light under it. (Round 73: redrawn, four frames.)
 FAR_SPRITES.champion_door = (rot, st, f) => {
   const p = spr(TALL_H);
   for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
     const row = Math.floor(y / 4);
     const j = (x + (row % 2) * 4) % 8 === 0;
-    p.set(x, y, y % 4 === 0 || j ? '#3a4232' : (x * 3 + y * 5) % 9 === 0 ? '#5a7a3a' : '#5a6252');
+    p.set(x, y, y % 4 === 0 || j ? '#343c2c' : (x * 3 + y * 5) % 9 === 0 ? '#5a7a3a' : (x * 7 + y) % 13 === 0 ? '#6a725e' : '#566050');
   }
-  arch(p, 7.5, 5, 20, 7, (x, y) => {
-    const edge = x === 7 || x === 8;
-    p.set(x, y, edge ? '#2a1a10' : y % 6 === 0 ? '#4a4a52' : x % 3 === 0 ? '#5a3a20' : '#6a4a2a');
+  // The lintel: a slab carved with a row of shields.
+  p.rect(1, 12, 14, 3, '#7a7a6c');
+  p.hline(1, 14, 12, '#9a9a8a');
+  p.hline(1, 14, 14, '#4a4a40');
+  for (let x = 2; x <= 13; x += 3) {
+    p.set(x, 13, '#a83a30');
+    p.set(x + 1, 13, '#c8a040');
+  }
+  // The doors.
+  arch(p, 7.5, 5, 22, 6, (x, y) => {
+    if (y < 15) return;
+    const seam = x === 7 || x === 8;
+    const band = y === 20 || y === 28 || y === 35;
+    const plank = (x % 3 === 0 && !seam);
+    p.set(x, y, seam ? '#1e140a' : band ? '#3a3a42' : plank ? '#4e321c' : (x + y) % 7 === 0 ? '#5e3e22' : '#6a4626');
+    if (band && (x + y) % 2 === 0 && !seam) p.set(x, y, '#8a8a94');
   });
-  archRim(p, 7.5, 5, 20, 7, '#8a8a7a');
-  // His sword over the door.
-  p.vline(7, 2, 10, '#c8ccd8');
-  p.vline(8, 2, 10, '#8a8e98');
-  p.hline(5, 10, 4, '#c8a040');
-  p.set(7, 11, '#e8ecf8');
+  archRim(p, 7.5, 5, 22, 6, (x, y) => ((x + y) % 3 ? '#8a8a7a' : '#a0a090'));
+  // Ring-knockers.
+  for (const x of [5, 10]) {
+    p.set(x, 25, '#c8a040');
+    p.set(x - 1, 26, '#c8a040');
+    p.set(x + 1, 26, '#c8a040');
+    p.set(x, 27, '#a88030');
+  }
+  // His sword, point down over the door, its runes kindling in turn.
+  p.vline(7, 1, 10, '#d8dce8');
+  p.vline(8, 1, 10, '#8a8e98');
+  p.hline(5, 10, 3, '#c8a040');
+  p.set(7, 0, '#c8a040');
+  p.set(8, 0, '#c8a040');
+  p.set(7, 11, '#eef0ff');
+  for (let k = 0; k < 3; k++) p.set(8, 5 + k * 2, (f + k) % 4 === 0 ? '#ffe8a0' : '#6a6e78');
+  // Ivy down the jambs.
+  for (const [x, y0] of [[1, 15], [14, 17], [0, 24], [15, 28]]) for (let y = y0; y < y0 + 7; y++) if ((y * 5 + x) % 3) p.set(x, y, (y + x) % 2 ? '#3a6a2a' : '#4a8a3a');
   // Flowers at the foot of it.
-  for (const [x, c] of [[2, '#e85060'], [3, '#f8e070'], [12, '#a070e8'], [13, '#e85060'], [4, '#ffffff']]) {
+  for (const [x, c] of [[1, '#e85060'], [2, '#f8e070'], [3, '#ffffff'], [12, '#a070e8'], [13, '#e85060'], [14, '#f8e070']]) {
     p.set(x, 38, c);
     p.set(x, 39, '#3a6a2a');
   }
-  // The grave-light, from under the door.
-  p.hline(4, 11, 39, f % 2 ? '#ffe8a0' : '#e8c870');
+  // The grave-light, from under the door, breathing.
+  const gl = ['#ffe8a0', '#f0d888', '#e8c870', '#f0d888'][f % 4];
+  p.hline(3, 12, 39, gl);
+  if (f % 2) p.hline(5, 10, 38, '#fff4c8');
   return p;
 };
 // The Sundered Reach: the air split open on nothing, a seam of white fire
@@ -1276,26 +1305,52 @@ FAR_SPRITES.rift_door = (rot, st, f) => {
   for (const [x, y] of [[7, 12], [9, 18], [6, 25], [8, 31], [7, 21]]) p.set(x, y + (f % 2 ? 0 : 1), (x + y) % 2 ? '#ffffff' : '#a080ff');
   return p;
 };
-// The Gullet of the World: a hole in the earth like a throat, ringed with
-// teeth of stone, a warm breath and a green light coming up out of it.
+// The Gullet of the World: a hole in the earth like a throat, its walls
+// wet and ridged and moving as it breathes, rings of stone teeth leaning
+// in, spit hanging off them and dripping, and far down a green light that
+// swells and dims with its breath. (Round 73: redrawn, four frames.)
 FAR_SPRITES.gullet_mouth = (rot, st, f) => {
   const p = spr(TALL_H);
+  const k = [0.92, 1.0, 1.1, 1.0][f % 4];
   for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 5 + y * 7) % 13 === 0 ? '#4a3a2a' : (x + y) % 5 === 0 ? '#6a5038' : '#5a4430');
-  const breathe = f % 2 ? 0.92 : 1.08;
-  arch(p, 7.5, 6.4, 22, 12, (x, y) => p.set(x, y, shade(y > 32 ? '#2a3a10' : '#1a0a08', breathe)));
-  archRim(p, 7.5, 6.4, 22, 12, (x, y) => ((x + y) % 3 ? '#8a6a5a' : '#a8806a'));
-  // Its teeth, round the throat.
-  for (const [x, y, d] of [[3, 14, 1], [5, 11, 1], [8, 10, 1], [10, 11, 1], [12, 14, 1], [2, 20, 1], [13, 20, 1]]) for (let k = 0; k < 3; k++) p.set(x + (k === 2 ? 0 : 0), y + k * d, k === 2 ? '#c8b8a0' : '#f0e8d0');
-  for (let x = 3; x <= 12; x += 3) {
+  // The throat: ridged flesh, darker going down, the green light deep in it.
+  arch(p, 7.5, 6.6, 20, 12, (x, y) => {
+    const deep = (y - 8) / 32;
+    const ridge = (y + Math.round(f / 2)) % 4 === 0;
+    let c = ridge ? '#5a2020' : deep < 0.35 ? '#7a2a28' : deep < 0.6 ? '#4a1414' : '#220808';
+    if (y > 30 && Math.abs(x - 7.5) < 3.5 - (39 - y) * 0.15) c = shade('#5aa020', k * (1 - Math.abs(x - 7.5) / 5));
+    p.set(x, y, shade(c, k));
+  });
+  archRim(p, 7.5, 6.6, 20, 12, (x, y) => ((x + y) % 3 ? '#8a5a4a' : '#a8705a'));
+  // Its teeth, two rings of them leaning in, spit on them.
+  for (const [x, y] of [[2, 12], [4, 9], [7, 8], [9, 8], [11, 9], [13, 12], [1, 18], [14, 18]]) {
+    p.set(x, y, '#f4ecd8');
+    p.set(x + (x < 8 ? 1 : -1), y + 1, '#e8dcc0');
+    p.set(x + (x < 8 ? 1 : -1) * 2, y + 2, '#c8b8a0');
+  }
+  for (const [x, y] of [[4, 18], [11, 18], [3, 24], [12, 24]]) {
+    p.set(x, y, '#e8dcc0');
+    p.set(x + (x < 8 ? 1 : -1), y + 1, '#c8b8a0');
+  }
+  // Spit, dripping (a drop further down each frame).
+  for (const [x, y0] of [[5, 11], [10, 11], [3, 20]]) {
+    p.set(x, y0 + 1, '#c8e8a0');
+    p.set(x, y0 + 2 + (f % 4), '#a8d080');
+  }
+  // The lower jaw's teeth.
+  for (let x = 2; x <= 13; x += 2) {
     p.set(x, 39, '#f0e8d0');
     p.set(x, 38, '#e0d8c0');
-    p.set(x, 37, '#c8b8a0');
+    if (x % 4 === 2) p.set(x, 37, '#c8b8a0');
   }
-  p.set(7, 30, '#c8e070');
-  p.set(8, 33 + (f % 2), '#a8c040');
+  // A glint of something down there, looking up.
+  if (f === 2) {
+    p.set(6, 34, '#e8ff60');
+    p.set(9, 34, '#e8ff60');
+  }
   return p;
 };
-export const FAR_ANIM = { catacomb_door: 2, vault_door: 2, gut_mouth: 2, salt_door: 2, warren_hole: 2, mound_door: 4, broch_door: 2, athanor_door: 2, champion_door: 2, rift_door: 4, gullet_mouth: 2 };
+export const FAR_ANIM = { catacomb_door: 2, vault_door: 2, gut_mouth: 2, salt_door: 2, warren_hole: 2, mound_door: 4, broch_door: 2, athanor_door: 2, champion_door: 4, rift_door: 4, gullet_mouth: 4 };
 
 // --------------------------------------------------------------- creatures
 // The far lands' beasts (16 x 16, facing left, two frames).

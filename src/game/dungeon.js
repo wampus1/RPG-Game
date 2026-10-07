@@ -16,8 +16,8 @@
 // under glyph seals.
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier, FAR_LOOT } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
-import { farDanger, farMotes } from './fardeep.js';
-import { ancientTick, ancientDanger, ancientMotes } from './ancient.js';
+import { farMotes } from './fardeep.js';
+import { ancientTick, ancientMotes, gulletPass } from './ancient.js';
 import { dropEvolvedLoot } from './evolvedgear.js';
 import { noteSeen, flushSeen } from '../ui/dungeonmap.js';
 import { settleAfflictions } from './afflict.js';
@@ -30,7 +30,7 @@ import { maybeWallFalls } from './wallfall.js';
 import { Creature } from '../entities/creature.js';
 import { fits, fitNear } from '../entities/footprint.js';
 import { restoreFields } from '../entities/fields.js';
-import { addHazard, lineTiles, areaTiles, BOSS_TITLES, sporeCloud, sentinelDown } from '../entities/monsters.js';
+import { addHazard, lineTiles, BOSS_TITLES, sporeCloud, sentinelDown } from '../entities/monsters.js';
 import { countItem, removeItem, addItem, canAdd } from './inventory.js';
 import { hash4 } from '../util/rng.js';
 import { restamp } from '../world/sites.js';
@@ -573,7 +573,8 @@ export class DungeonRun {
     c.spawnId = o.id;
     c.carries = o.key || null;
     c.home = { x, z };
-    if (o.ambush) c.dormant = 2;
+    // (Round 73: lying in wait, they rise a little sooner: four paces, not two.)
+    if (o.ambush) c.dormant = 4;
     // (Down here, nothing's minding its own business: see fardeep.js.)
     if (c.S.mode === 'neutral') c.angry = true;
     if (species === 'drowned' && game.world.isWaterAt(x, y, z)) c.submerged = true;
@@ -684,7 +685,10 @@ export class DungeonRun {
         continue;
       }
       const d = Math.min(...party.map((q) => Math.max(Math.abs(c.x - q.x), Math.abs(c.z - q.z))));
-      if (d <= c.dormant || c.hp < c.maxHp) {
+      // (Round 73) And a fight close by rouses them: one of their own
+      // already after you, a few paces off.
+      const stirred = !c.guardian && this.creatures().some((o) => o !== c && !o.dead && !o.dormant && o.target && o.target.kind === 'player' && Math.max(Math.abs(o.x - c.x), Math.abs(o.z - c.z)) <= 6);
+      if (d <= c.dormant || c.hp < c.maxHp || stirred) {
         c.dormant = 0;
         game.renderer.emit(c.x, c.y + 1, c.z, { n: 10, color: c.S.construct ? ['#5ad8f0', '#ffffff'] : ['#8a8270', '#d8d0b8'], up: 30, speed: 40, life: 0.5 });
         game.audio?.play(c.S.construct ? 'hum' : 'scream', c);
@@ -740,6 +744,8 @@ export class DungeonRun {
     // (Round 71) An ancient place's rooms, doing what they do (see
     // ancient.js).
     if (this.data.anc) ancientTick(this, dt);
+    // (Round 73) The Gullet's master, passing through above its hall.
+    gulletPass(this, dt);
     // Into the master's hall: the gate comes down behind you, and it wakes.
     const br = this.data.bossRoom;
     const entrant = br && !this.rec.cleared && !this.fight && party.find((q) => !q.dead && inHall(q, br));
@@ -748,7 +754,7 @@ export class DungeonRun {
     // (Its dangers come for one of you at a time.)
     const up = party.filter((q) => !q.dead);
     const victim = up.length ? up[Math.floor(Math.random() * up.length)] : p;
-    game.asPlayer(victim, () => this.placeDangers(dt));
+    game.asPlayer(victim, () => this.placeDangers());
     this.spikesTick(dt);
     this.ambience(dt);
     // Notes left (an adventurer's remains): told as you come near. (A pack
@@ -877,15 +883,9 @@ export class DungeonRun {
   }
 
   // ------------------------------------------------------------ its dangers
-  // What each kind of place does to you, besides its dead and its beasts:
-  //   a mine's roof comes down (dust trickles first: move);
-  //   a barrow's dead reach up out of the earth for your ankles;
-  //   a crypt's cold draughts gutter your light to nothing a moment;
-  //   a holdout's gongs rouse the whole place when one of them sees you;
-  //   a Wildwood Hollow's briars whip up out of the moss round you;
-  //   a Kiln-Deep's old vents flare under your feet;
-  //   a Tide Grotto's surges sweep through and knock you off your feet.
-  placeDangers(dt) {
+  // What a place does besides its dead and its beasts: a holdout's gongs
+  // rouse the whole place when one of them sees you.
+  placeDangers() {
     const game = this.game;
     const p = game.player;
     const type = this.rec.type;
@@ -899,85 +899,10 @@ export class DungeonRun {
         if (gong) this.ringGong(gong, c);
       }
     }
-    // (Not in the master's hall, not in the first room.)
-    if (this.fight || this.rec.cleared) return;
-    this.hazardT -= dt;
-    if (this.hazardT > 0) return;
-    this.hazardT = 22 + Math.random() * 22;
-    const dmg = 3 + this.floor + (this.rec.level || 1);
-    if (type === 'mine') {
-      // The roof: dust first, then the rocks, round where you stand.
-      const tiles = areaTiles(p.x + Math.round(Math.random() * 2 - 1), p.z + Math.round(Math.random() * 2 - 1), 1).filter(() => Math.random() < 0.75);
-      tiles.push({ x: p.x, z: p.z });
-      for (const t of tiles) game.renderer.emit(t.x, FY + 2.4, t.z, { n: 3, color: ['#8a7a5a', '#6a5a40'], up: -10, speed: 6, gravity: 120, life: 0.9, oy: -10 });
-      addHazard(game, { tiles, y: FY, dur: 1.6, dmg, stun: 0.4, kind: 'rocks', color: [200, 150, 90], trap: true, place: true });
-      game.audio?.play('rumble');
-      game.shake = Math.min(1, (game.shake || 0) + 0.35);
-      if (!this.toldRoof) game.ui.msg('Dust trickles from the roof... (it\'s coming down: move!)', '#e0c8a0', true);
-      this.toldRoof = true;
-    } else if (type === 'barrow') {
-      // Hands up out of the earth, where you stand and round it.
-      const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.35)];
-      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#c8d0c0', '#8a9a8a'], up: 8, speed: 6, life: 1.1, oy: 6, shape: 'puff' });
-      addHazard(game, { tiles, y: FY, dur: 1.3, dmg: Math.round(dmg * 0.6), chill: 2, kind: 'cold', color: [150, 170, 160], trap: true, place: true, onFire: (g, h, hit) => {
-        for (const e of hit) {
-          if (e.kind !== 'player') continue;
-          e.grabbedT = 1.2;
-          game.renderer.floatText(e.x, e.y + 2.4, e.z, 'grasped! (roll free)', '#a0c8b0');
-        }
-        for (const t of h.tiles) game.renderer.emit(t.x, FY + 0.4, t.z, { n: 4, color: ['#e8e4d4', '#a8a088'], up: 30, speed: 20, life: 0.5, oy: 2 });
-      } });
-      game.audio?.play('whisper');
-      if (!this.toldHands) game.ui.msg('The earth stirs under your feet... (something reaches up: move!)', '#a0c8b0', true);
-      this.toldHands = true;
-    } else if (type === 'grove') {
-      // Briars, whipping up out of the moss.
-      const tiles = [{ x: p.x, z: p.z }, ...areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.4)];
-      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 3, color: ['#5a8a3a', '#8ac060'], up: 6, speed: 6, life: 0.9, oy: 6 });
-      addHazard(game, { tiles, y: FY, dur: 1.2, dmg: Math.round(dmg * 0.6), kind: 'erupt', color: [110, 170, 70], trap: true, place: true, onFire: (g, h, hit) => {
-        for (const e of hit) if (e.kind === 'player') {
-          e.grabbedT = 1;
-          game.renderer.floatText(e.x, e.y + 2.4, e.z, 'caught in briars! (roll free)', '#a0d070');
-        }
-      } });
-      game.audio?.play('whip');
-      if (!this.toldBriars) game.ui.msg('The moss stirs round your feet... (briars: move!)', '#a0d070', true);
-      this.toldBriars = true;
-    } else if (type === 'forge') {
-      // An old vent flaring up under you.
-      const tiles = areaTiles(p.x, p.z, 1).filter(() => Math.random() < 0.6);
-      tiles.push({ x: p.x, z: p.z });
-      for (const t of tiles) game.renderer.emit(t.x, FY + 0.1, t.z, { n: 2, color: ['#ff9030', '#ffd070'], up: 10, speed: 6, life: 0.7, glow: true });
-      addHazard(game, { tiles, y: FY, dur: 1.4, dmg, burn: 2, kind: 'fire', center: { x: p.x, z: p.z }, color: [255, 140, 40], trap: true, place: true });
-      game.audio?.play('hiss');
-      if (!this.toldVents) game.ui.msg('The floor glows red under your feet... (a vent: move!)', '#ffb070', true);
-      this.toldVents = true;
-    } else if (type === 'grotto') {
-      // A surge of the tide through the caves: a row of water, knocking
-      // you down the way it runs.
-      const across = Math.random() < 0.5;
-      const dir = Math.random() < 0.5 ? 1 : -1;
-      const tiles = [];
-      for (let k = -3; k <= 3; k++) tiles.push(across ? { x: p.x + k, z: p.z } : { x: p.x, z: p.z + k });
-      for (const t of tiles) game.renderer.emit(t.x, FY + 0.2, t.z, { n: 2, color: ['#80c8e8', '#e0f8ff'], up: 6, speed: 8, life: 0.8, shape: 'puff' });
-      const from = across ? { x: p.x, z: p.z - dir } : { x: p.x - dir, z: p.z };
-      addHazard(game, { tiles, y: FY, dur: 1.5, dmg: Math.round(dmg * 0.5), knock: 2, from, chill: 1, kind: 'cold', color: [120, 200, 230], trap: true, place: true });
-      game.audio?.play('wave');
-      if (!this.toldSurge) game.ui.msg('You hear the sea coming through the rock... (a surge: get out of its way!)', '#a0e0f0', true);
-      this.toldSurge = true;
-    } else if (ancientDanger(this, type, p, dmg)) {
-      // (Round 71: an ancient place's own peril: see ancient.js.)
-    } else if (farDanger(this, type, p, dmg)) {
-      // (Round 68: a far land's own place's own peril: see fardeep.js.)
-    } else if (type === 'crypt' && p.heldLightKind && p.heldLightKind() === 'fire') {
-      // A cold draught: your flame bows, and goes out a moment.
-      p.snuff?.(2.5);
-      game.audio?.play('wind');
-      game.audio?.play('whisper');
-      game.renderer.emit(p.x, p.y + 1.2, p.z, { n: 12, color: ['#a0d8ff', '#e0f4ff'], up: 4, speed: 40, life: 0.8, shape: 'puff' });
-      game.ui.msg(this.toldDraught ? 'Another cold draught...' : 'A cold draught moans through the crypt, and your flame gutters out!', '#a0c8e0', true);
-      this.toldDraught = true;
-    }
+    // (Round 73: and nothing else. The perils that once came for you
+    // wherever you stood, every half-minute or so (the roof, the hands in
+    // the earth, the vents, the surges, the ancient places' own), are gone:
+    // what can hurt you down here is where it is, and can be seen.)
   }
 
   // A gong struck: the whole holdout knows you're here.

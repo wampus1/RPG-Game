@@ -305,6 +305,7 @@ export class Ships {
 
   // Off on a voyage: a port abroad, the merchants aboard with their wares.
   voyage(L, P, day, rng) {
+    if (!rng || typeof rng.weighted !== 'function') rng = new RNG(hash4(P.sid || 0, day, 0x7a1));
     const s = L.settlement;
     const sim = this.sim;
     if (sim.war.unsafe(s)) {

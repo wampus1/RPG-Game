@@ -31,8 +31,8 @@ export const ANCIENT_DTYPES = {
   athanor: {
     name: 'Athanor', isle: 'velmarch', ancient: true, wall: B.marble, floor: B.tile_blue, alt: B.kiln_tile, beam: null, regions: [2, 2], floors: [3, 3],
     kits: ['circle', 'distillery', 'mercury', 'crucibles', 'library', 'observatory', 'circle', 'vats', 'salt_garden', 'furnace', 'trap', 'treasure', 'guard', 'distillery', 'observatory'],
-    mobs: [['slime', 3], ['wisp', 3], ['golem', 1], ['mite', 2]],
-    swap: { skeleton: ['wisp'], wight: ['golem'], ghoul: ['slime'], crawler: ['mite'] },
+    // (Round 73: its own, and nothing borrowed: see entities/ancientmobs.js.)
+    mobs: [['quicksilver_homunculus', 3], ['alembic_golem', 2], ['sulphur_imp', 3]], only: true,
     bosses: ['divine_alchemist'], torches: 0.3,
     shapes: { octagon: 3, round: 2, hex: 2, rect: 2, star: 1 }, wiggle: 0.2, decor: [['crucible', 2], ['candles', 3], ['glass_lamp', 2], ['statue', 1], ['marble_column', 1], ['bookshelf', 1]],
     dark: [0.1, 0.08, 0.12], motes: ['#ffd070', '#c8a0ff', '#80e8ff'], ambient: ['drone', 'drip', 'chime', 'hum'],
@@ -41,7 +41,7 @@ export const ANCIENT_DTYPES = {
   champion: {
     name: 'Hall of the Last Champion', isle: 'velmarch', ancient: true, wall: B.mossy_bricks, floor: B.flagstone, alt: B.cracked_bricks, beam: B.planks_dark, regions: [2, 2], floors: [3, 3],
     kits: ['trial', 'armory', 'statues', 'blades', 'chapel', 'tomb', 'arena', 'burial', 'reliquary', 'trial', 'trap', 'treasure', 'guard', 'statues', 'tomb'],
-    mobs: [['skeleton', 4], ['wight', 2], ['ghoul', 2], ['legion_shade', 1]],
+    mobs: [['oathbound_squire', 4], ['trial_sentinel', 2], ['banner_wraith', 2]], only: true,
     bosses: ['the_hero'], torches: 0.35,
     shapes: { rect: 3, octagon: 2, cross: 2, round: 1 }, wiggle: 0, decor: [['statue', 3], ['war_banner', 3], ['weapon_rack', 2], ['candles', 2], ['skull_pile', 1], ['triumph_column', 1], ['hanging_chains', 1]],
     dark: [0.09, 0.08, 0.07], motes: ['#ffe8a0', '#c8c8c8'], ambient: ['march', 'whisper', 'chains', 'drone'],
@@ -50,8 +50,7 @@ export const ANCIENT_DTYPES = {
   rift: {
     name: 'Sundered Reach', isle: 'ostria', ancient: true, wall: B.obsidian, floor: B.rock_void, alt: B.blight_floor, beam: null, regions: [2, 2], floors: [3, 3],
     kits: ['portals', 'fracture', 'echo', 'shards', 'shardstorm', 'portals', 'gravity', 'flicker', 'trap', 'treasure', 'guard', 'fracture', 'shardstorm', 'flicker'],
-    mobs: [['wisp', 3], ['mite', 3], ['drone', 2], ['crawler', 1]],
-    swap: { skeleton: ['wisp'], wight: ['drone'], ghoul: ['mite'] },
+    mobs: [['void_stalker', 3], ['shard_mote', 3], ['echo_shade', 3]], only: true,
     bosses: ['rift_crawler'], torches: 0.05,
     shapes: { star: 2, diamond: 2, crescent: 2, zigzag: 1, teeth: 1, cave: 2 }, wiggle: 0.6, decor: [['glow_crystal', 4], ['void_bloom', 2], ['eye_stalk', 1], ['tendril', 2], ['obsidian', 1]],
     dark: [0.06, 0.04, 0.1], motes: ['#c8a0ff', '#5ad8f0', '#ffffff'], ambient: ['hum', 'whisper', 'pulse', 'drone'],
@@ -60,8 +59,7 @@ export const ANCIENT_DTYPES = {
   gullet: {
     name: 'Gullet of the World', isle: 'ostria', ancient: true, wall: B.cave_rock, floor: B.mud, alt: B.bone_sand, beam: B.log_acacia, regions: [2, 2], floors: [3, 3],
     kits: ['acid', 'eggs', 'quake', 'bones', 'leech_pool', 'acid', 'tunnel', 'throat', 'nest', 'trap', 'treasure', 'guard', 'eggs', 'throat'],
-    mobs: [['slime', 3], ['crawler', 3], ['rat', 2], ['tunneler', 2]],
-    swap: { skeleton: ['crawler'], wight: ['tunneler'], ghoul: ['slime'] },
+    mobs: [['gut_leech', 3], ['acid_spitter', 2], ['maw_larva', 4]], only: true,
     bosses: ['alinelidan'], torches: 0.05,
     shapes: { cave: 5, round: 3 }, wiggle: 1.6, decor: [['bones', 4], ['roots', 2], ['rubble', 2], ['skull_pile', 1], ['stalagmite', 2], ['whale_rib', 1]],
     dark: [0.07, 0.06, 0.04], motes: ['#c8e070', '#a07a50'], ambient: ['heart', 'rumble', 'drip', 'skitter'],
@@ -429,6 +427,10 @@ export const ANCIENT_GATE = {
       put(dx, h + 2, 0, B.marble_column);
     }
     for (let dx = -1; dx <= 1; dx++) put(dx, h + 3, 0, B.gilt_trim);
+    // (Round 73) A brazier either side of the doors, burning for him while
+    // he's unbeaten, and a hanging chain of his to each side of the lintel.
+    for (const dx of [-3, 3]) put(dx, h + 1, 1, B.brazier, lit);
+    for (const dx of [-2, 2]) put(dx, h + 4, 0, B.hanging_chains);
     // His companions before the door: statues on plinths, triumphal
     // columns beyond them.
     for (const dx of [-3, 3]) {
@@ -582,6 +584,10 @@ export const ANCIENT_GATE = {
     for (const dx of [-3, 3]) for (let y = h - 2; y <= h - 1; y++) put(dx, y, C.z - 2, B.whalebone);
     put(0, h - 2, C.z - 2, B.gullet_mouth);
     put(0, h - 1, C.z - 2, B.air);
+    // (Round 73) Its spit pooled in the bottom of the throat, glowing, and
+    // a second row of teeth over the mouth.
+    for (const [dx, dz] of [[-1, C.z], [1, C.z], [0, C.z + 1], [-2, C.z + 1], [2, C.z + 1]]) put(dx, h - 3, dz, B.acid_pool);
+    for (const dx of [-2, 0, 2]) put(dx, h + 3 - Math.abs(dx), C.z - 3, B.stalagmite, dx < 0 ? 0 : 1);
     for (const dx of [-1, 1]) {
       put(dx, h - 2, C.z - 2, B.cave_rock);
       put(dx, h - 1, C.z - 2, B.stalagmite, dx < 0 ? 0 : 1);

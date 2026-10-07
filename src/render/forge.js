@@ -71,11 +71,17 @@ export function forgePaint(species, f, st = {}) {
 }
 
 const frames = new Map();
+// (Round 73) The latest painted frame of each species at each step of its
+// breath, whatever state it was painted in: shown while the one wanted is
+// still to paint, so a change of state (a blow wound up, its death) never
+// costs more than one painting a frame. (It was three a frame: a master
+// winding up or going down could stall the screen for a moment.)
+const anyState = new Map();
 let budgetT = -1;
-let budget = 0;
+let painted = 0;
 const keyOf = (st) => Object.keys(st).filter((k) => k !== 'rage').sort().map((k) => k + st[k]).join(',');
-// A frame (painted as first wanted, a few a frame, the nearest painted one
-// shown till then).
+// A frame (painted as first wanted, one a frame at most once there's
+// something to show, the nearest painted one shown till then).
 export function forgeFrame(species, f, st = {}, now = null) {
   const sk = keyOf(st);
   const k = `${species}|${sk}|${f}`;
@@ -84,20 +90,27 @@ export function forgeFrame(species, f, st = {}, now = null) {
   if (now !== null) {
     if (now !== budgetT) {
       budgetT = now;
-      budget = 3;
+      painted = 0;
     }
-    if (budget <= 0) {
+    if (painted >= 1) {
+      // Its nearest step in this state, else this step in any state.
       for (let d = 1; d < FRAMES; d++) {
         for (const g of [f - d, f + d]) {
           const w = frames.get(`${species}|${sk}|${(g + FRAMES) % FRAMES}`);
           if (w) return w;
         }
       }
+      const A = anyState.get(species);
+      const w = A && (A[f] || A.find(Boolean));
+      if (w) return w;
     }
-    budget--;
+    painted++;
   }
   v = toCanvas(forgePaint(species, f, st));
   frames.set(k, v);
+  let A = anyState.get(species);
+  if (!A) anyState.set(species, (A = new Array(FRAMES).fill(null)));
+  A[f] = v;
   return v;
 }
 

@@ -393,8 +393,10 @@ WORLD_DRAW.divine_alchemist = (r, game, c, add, S) => {
       const ctx = r.ctx;
       const al = ctx.globalAlpha;
       ctx.globalAlpha = al * fade * (cut ? Math.max(0, 1 - cut.t / 1.4) : 1);
+      // (Round 73: dabbed every two and a half pixels, not one and a half:
+      // twelve arms of it was thousands of stamps a frame.)
       drawLimb(ctx, pts, [E.pal[0], E.pal[1], E.pal[2]], {
-        t: r.time, vein: E.glow,
+        t: r.time, vein: E.glow, step: 2.5,
         band: (k) => ((k > 0.08 && k < 0.13) || (k > 0.38 && k < 0.42) || (k > 0.66 && k < 0.7) ? [GOLD_LO, GOLD_HI] : null),
       });
       if (!cut) {
@@ -978,7 +980,9 @@ const WBONE_LO = '#9a8a70';
 const WMAW = { x: 46, y: 68 };
 forge({
   alinelidan: {
-    size: 128, ax: 64, ay: 124, breath: 1.4, fps: 9, walk: true, walkFps: 14,
+    // (Round 73: anchored lower, its head down level with the rings of its
+    // body behind it, not floating over them.)
+    size: 128, ax: 64, ay: 100, breath: 1.4, fps: 9, walk: true, walkFps: 14,
     body(X, J, t, st) {
       const b = J.b;
       const heave = st.walk ? Math.sin(t * TAU * 2) * 1.5 : 0;

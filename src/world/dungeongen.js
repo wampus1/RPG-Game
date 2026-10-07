@@ -1026,6 +1026,14 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
     if (r.kit === 'boss' || r.kit === 'vault' || r.kit === 'entry') continue;
     spawnIn(ctx, r, pickMob(ctx), 1);
   }
+  // (Round 73) A place that keeps only its own: whoever else a room set
+  // out (an ambush in the walls, a guard) is one of its own instead.
+  if (T.only) {
+    for (const sp of out.spawns) {
+      if (sp.boss || sp.guardian || sp.twin || T.mobs.some(([k]) => k === sp.species)) continue;
+      sp.species = rng.weighted(T.mobs.map(([k, w]) => [k, w]));
+    }
+  }
   b.finish();
   out.regions = b.regions;
   out.depth = rec.depth;
@@ -1177,7 +1185,10 @@ function spawnIn(ctx, r, species0, n = 1, opts = {}) {
   for (let i = 0; i < n; i++) {
     // (On another island, its own in their place: see isledeep.js.)
     const sw = ctx.T.swap && ctx.T.swap[species0];
-    const species = sw ? rng.pick(sw) : species0;
+    let species = sw ? rng.pick(sw) : species0;
+    // (Round 73) A place that keeps only its own: anything else asked for
+    // here is one of them instead.
+    if (ctx.T.only && !ctx.T.mobs.some(([k]) => k === species)) species = rng.weighted(ctx.T.mobs.map(([k, w]) => [k, w]));
     for (let t = 0; t < 20; t++) {
       const x = rng.int(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 1));
       const z = rng.int(r.z0 + 1, Math.max(r.z0 + 1, r.z1 - 1));

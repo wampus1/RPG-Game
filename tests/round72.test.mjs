@@ -19,7 +19,7 @@ import { FEATS, FEAT } from '../src/game/achievements.js';
 import { musicMood } from '../src/game/music.js';
 import { dungeonIcon } from '../src/render/dungeonart.js';
 import { STEPS } from '../src/game/migrate.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 
 const TYPES = ['athanor', 'champion', 'rift', 'gullet'];
 const DOORS = { athanor: 'athanor_door', champion: 'champion_door', rift: 'rift_door', gullet: 'gullet_mouth' };
@@ -198,13 +198,15 @@ test('used: a ring of the element round you; a mark, then a rift; the Hero\'s st
   assert.equal(clawMult(p), 1.5);
   assert.equal(clawSoak(p, 10), 7);
   assert.equal(clawSoak({ kind: 'player', clawT: 0 }, 10), 10);
-  // The Tooth: eight paces on, through anything (pointed whichever way
-  // there's ground to come up through).
+  // The Tooth: down into the ground, steered along under it, and up
+  // again (Round 73: no longer a jump straight there; pointed whichever
+  // way there's ground to come up through).
   const x0 = p.x;
   const z0 = p.z;
   for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     game.aimAngle = () => a;
     use('worm_tooth');
+    for (let i = 0; i < 60 && p.tunnel; i++) game.update(0.05, input);
     if (p.x !== x0 || p.z !== z0) break;
   }
   delete game.aimAngle;
@@ -274,7 +276,7 @@ test('an arena is a trial of one champion; a nest\'s eggs hatch in twos', () => 
 });
 
 test('0.72.0: a migration step for it, and the version', () => {
-  assert.equal(GAME_VERSION, '0.72.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.72.0') >= 0);
   const s = STEPS.find((q) => q.to === '0.72.0');
   assert.ok(s && s.data && s.game);
   const log = [];

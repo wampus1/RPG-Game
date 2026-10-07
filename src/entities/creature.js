@@ -8,6 +8,7 @@ import { beginAttack, tickAttack, inReach, styleOf } from '../game/combat.js';
 import { MONSTER_SPECIES, BRAINS, blightTick, bossBreach, lob, groundFire, addZone } from './monsters.js';
 import { ISLE_MOB_SPECIES, ISLE_DEEP_SPECIES } from './islemobs.js';
 import { FAR_DEEP_SPECIES } from './farmobs.js';
+import { ANCIENT_SPECIES } from './ancientmobs.js';
 import { FAR_BOSS_SPECIES } from './bosses_far.js';
 import { KHAROS_BOSSES } from './bosses_kharos.js';
 import { MYRROW_BOSSES } from './bosses_myrrow.js';
@@ -99,6 +100,8 @@ export const SPECIES = {
   ...ISLE_DEEP_SPECIES,
   // (Round 68: the far lands' old places' own: see farmobs.js.)
   ...FAR_DEEP_SPECIES,
+  // (Round 73: and the ancient places' own: see ancientmobs.js.)
+  ...ANCIENT_SPECIES,
   ...FAR_BOSS_SPECIES,
   ...KHAROS_BOSSES,
   ...MYRROW_BOSSES,
@@ -265,7 +268,10 @@ export class Creature extends Entity {
     if (master && this.lostT > 0) this.lostT = 0;
     if (this.lostT > 0 && this.target && this.target.kind === 'player') this.target = null;
     if (this.hostileNow && !this.tie && !(this.lostT > 0)) {
-      if (!this.target || this.target.dead || this.distTo(this.target) > this.S.aggro * 2) this.target = game.findPrey(this, this.S.aggro || 6);
+      // (Round 73: below ground, where there's nothing else to mind, they
+      // notice you from further off.)
+      const sight = this.inst ? Math.max(9, Math.round((this.S.aggro || 6) * 1.3)) : this.S.aggro || 6;
+      if (!this.target || this.target.dead || this.distTo(this.target) > sight * 2) this.target = game.findPrey(this, sight);
       // A master through whatever you've built in its way.
       if (this.isBoss && this.inst && bossBreach(this, dt)) return;
       // Changed by the blight (see monsters.js, blightTick).

@@ -535,7 +535,9 @@ function dying(r, ctx, e, tex, x, y, pose, tint) {
     const W = tex.w;
     const H = tex.h;
     const data = tex.img.getContext('2d').getImageData(0, 0, W, H).data;
-    const step = W * H > 2500 ? 2 : 1;
+    // (Round 73: no more than six hundred or so motes, however big it is:
+    // a great master's thousands of them made its end crawl.)
+    const step = Math.max(1, Math.ceil(Math.sqrt((W * H) / 600)));
     A.dust = [];
     for (let ty = 0; ty < H; ty += step) {
       for (let tx = 0; tx < W; tx += step) {
@@ -552,12 +554,19 @@ function dying(r, ctx, e, tex, x, y, pose, tint) {
       }
     }
   }
-  if (A.dust) {
+  // (Once a frame, however many of its parts are drawn: a master in many
+  // pieces drew all its motes again for every one of them.)
+  if (A.dust && A.dustAt !== r.time) {
+    A.dustAt = r.time;
     const dt = A.dt || 0.016;
+    const g0 = ctx.globalAlpha;
+    const glints = [];
     for (const q of A.dust) {
       q.t += dt;
       if (q.t < 0) {
-        dot(ctx, x + q.x, y + q.y, q.c, 1);
+        ctx.globalAlpha = g0;
+        ctx.fillStyle = q.c;
+        ctx.fillRect(Math.round((x + q.x) / TEXEL) * TEXEL, Math.round((y + q.y) / TEXEL) * TEXEL, TEXEL, TEXEL);
         continue;
       }
       q.vy -= 18 * dt;
@@ -566,14 +575,20 @@ function dying(r, ctx, e, tex, x, y, pose, tint) {
       q.y += q.vy * dt;
       const a = 1 - q.t / q.life;
       if (a <= 0) continue;
-      dot(ctx, x + q.x, y + q.y, q.t < 0.1 ? '#ffffff' : q.c, a);
-      if (a > 0.5 && Math.random() < 0.05) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        dot(ctx, x + q.x, y + q.y, tint[0], 0.6);
-        ctx.restore();
-      }
+      ctx.globalAlpha = g0 * a;
+      ctx.fillStyle = q.t < 0.1 ? '#ffffff' : q.c;
+      ctx.fillRect(Math.round((x + q.x) / TEXEL) * TEXEL, Math.round((y + q.y) / TEXEL) * TEXEL, TEXEL, TEXEL);
+      if (a > 0.5 && glints.length < 24 && Math.random() < 0.05) glints.push(q);
     }
+    ctx.globalAlpha = g0;
+    if (glints.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const q of glints) dot(ctx, x + q.x, y + q.y, tint[0], 0.6);
+      ctx.restore();
+    }
+    // (All gone: let them go.)
+    if (A.dust.every((q) => q.t >= q.life)) A.dust = [];
   }
 }
 

@@ -31,6 +31,7 @@ const SNAP_W = Math.ceil(Math.hypot(VIEW_W, VIEW_H)) + 4;
 const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
 import { MODS } from '../mod/state.js';
+import { TUNNEL_DIG } from '../game/evolvedgear.js';
 import { displayItems, paintingSubject } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
 
@@ -1494,6 +1495,29 @@ export class Renderer {
   drawEntity(ctx, e, rp, game) {
     // (Swallowed: out of sight, inside it.)
     if (e.kind === 'player' && e.swallowed) return;
+    // (Round 73) Gone down into the ground with the Tooth: sinking into it
+    // (what's below the floor cut away), then out of sight (see
+    // evolvedgear.tooth).
+    if (e.tunnel) {
+      if (e.tunnel.phase !== 'dig') return;
+      if (!e.sinking) {
+        const k = Math.min(1, e.tunnel.t / TUNNEL_DIG);
+        const feet = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY) + 10;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-2000, -2000, 6000, feet + 2001);
+        ctx.clip();
+        ctx.translate(0, Math.round(k * 22));
+        e.sinking = true;
+        try {
+          this.drawEntity(ctx, e, rp, game);
+        } finally {
+          e.sinking = false;
+          ctx.restore();
+        }
+        return;
+      }
+    }
     // (Round 71: drawn by its master, as part of it: see evolvedfx.js.)
     if (e.S && e.S.unseen) return;
     let sx = Math.round(rp.x * TILE - this.camX);
@@ -1707,6 +1731,17 @@ export class Renderer {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
           ctx.fillRect(sx + 2, top + CHAR_H - 5, 12, 2);
+        } else if (e.wading && !rolling && !e.S?.floats) {
+          // (Round 73) Down in acid or quicksilver to the shins: the liquid's
+          // own colour lapping round them, rippling.
+          ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 3, sx, top + 2 - SPR_PAD, CHAR_W, SHEET_H - 3);
+          const acid = e.wading === 'acid_pool';
+          const k = Math.sin(this.time * 6 + e.id) > 0 ? 1 : 0;
+          ctx.fillStyle = acid ? 'rgba(130,210,60,0.75)' : 'rgba(200,208,224,0.85)';
+          ctx.fillRect(sx + 1 + k, top + CHAR_H - 3, 14 - k, 2);
+          ctx.fillStyle = acid ? 'rgba(220,255,140,0.8)' : 'rgba(255,255,255,0.9)';
+          ctx.fillRect(sx + 3 + k * 2, top + CHAR_H - 3, 2, 1);
+          ctx.fillRect(sx + 10 - k, top + CHAR_H - 3, 2, 1);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
         else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
         if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));

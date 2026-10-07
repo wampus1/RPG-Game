@@ -316,6 +316,8 @@ test('the world map zooms in and out (condensed tiles, then dots) and pans with 
   const keys = new Set();
   const ui = { game, input: { isDown: (k) => keys.has(k) }, mouse: { x: 0, y: 0, down: false }, mouseCell: null, audio: null, msg() {} };
   const w = new MapWindow(ui);
+  // (The list down the right put away: the map has the window to itself.)
+  w.listOpen = false;
   assert.equal(mapMode(w.z), 'glyphs', 'opens close in');
   // Out, step by step: the glyphs squeeze into tiles, then into dots.
   const modes = [];

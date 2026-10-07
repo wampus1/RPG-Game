@@ -86,9 +86,9 @@ test('a town hall\'s chests are locked under an advanced lock, and a shop\'s are
     assert.ok(game.chestLocked(q.x, q.y, q.z), `the ${q.b.type}'s chest is locked`);
   }
   const c = chests[0];
-  game.ui.msgs.length = 0;
+  game.player.lockedSaidT = null;
   game.interact(c.x, c.y, c.z);
-  assert.ok(game.ui.msgs.some((t) => /locked/i.test(t)), 'and says so');
+  assert.ok(game.player.lockedSaidT != null, 'and says so');
 });
 
 // ------------------------------------------------------------ the square

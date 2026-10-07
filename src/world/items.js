@@ -757,6 +757,17 @@ export function canEnhance(key, kind) {
   if (kind === 'plating') return it.kind === 'armor' && it.slot !== 'shield' && it.armor > 0;
   return false;
 }
+// (Round 73) A weapon that takes both hands hits harder than it did: two
+// to four more a blow (the heavier and slower, the more), so it holds its
+// own against a light blade in each hand. (Before the alloyed and
+// gem-set kinds below are made from it.)
+export const TWO_HAND_BONUS = (it) => (!it || it.hands !== 2 || it.ranged || !it.damage ? 0 : (it.cooldown || 0.5) >= 0.88 ? 4 : (it.cooldown || 0.5) >= 0.6 ? 3 : 2);
+for (const key of Object.keys(ITEMS)) {
+  const it = ITEMS[key];
+  const n = TWO_HAND_BONUS(it);
+  if (n) ITEMS[key] = { ...it, damage: it.damage + n };
+}
+
 for (const key of Object.keys(ITEMS)) {
   for (const kind of ['edge', 'plating']) {
     if (!canEnhance(key, kind)) continue;

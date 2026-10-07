@@ -5618,6 +5618,69 @@ Worm-Slayer.
   **throats** that clench and carry you along, one way and then the
   other; **nests** of eggs that hatch in twos as you come near.
 
+## Round 73: the QOL update
+
+**Towns and building:**
+- **Streets** in some peoples' towns curve and wander; others' still run
+  rigid and square. A breach knocked in a town wall now gets a road
+  through it, joined up to the streets inside.
+- **Houses** come in more shapes (L-shapes, long halls, wide ones), some
+  of them three storeys, and the bigger ones are split into **rooms**.
+- **Weapon racks** hold three weapons, drawn on them as they hang; a
+  **display stand** holds one fine piece, a **wall hanger** another.
+  Click one with a weapon in hand to put it up, empty-handed to take it
+  down (someone else's are theirs: taking is stealing). Towns and
+  guardhouses have them out, some already filled.
+- **Paintings**, small and large, each of something (a beast, a face, a
+  place, a map, a thing), the same one always for the same spot. All
+  four can be crafted.
+- **Locked doors**: some peoples lock their front doors (behind them as
+  they go out, and barred at night). Knock (whoever's home may open up),
+  pick the lock, or break it down with an axe (loudly). Locked things
+  say so with a sound and a short message.
+- Coastal towns get a **dock** sized to the town (a jetty, a pier with
+  lamps, a great T-headed quay), and once a town knows trade ships, a
+  **shipwright** lays a keel and you can buy a ship there.
+- Far lands start with more of the tech tree, trade ships first; their
+  biomes, peoples and names vary more (a few villages of incomers among
+  them), and names everywhere draw on more of each culture.
+
+**People:**
+- Rare **starborn** folk who can dash on wings of light. Only the fallen
+  star's own island knows of it; elsewhere nobody's heard. More things
+  to say all round, and the verbal tics (", love.", "Hey you!") are gone.
+- People eat what they carry when they're hurt; guards and adventurers
+  parry; freed captives fight back when they're armed; rattlesnakes only
+  bite when provoked.
+- Wild horses don't shy from you with food they eat held out, nor just
+  after they've been fed.
+- A **quest finder**: the person a quest sends you to has a marker over
+  them (blinking), with an arrow at the screen's edge when they're off it.
+
+**Below ground:**
+- A **dungeon map** (M below): fog of what you've seen, floor by floor,
+  kept when you come back.
+- The ancient places have **their own creatures**: quicksilver homunculi
+  and beads, alembic golems and sulphur imps in the Athanor; oathbound
+  squires, trial sentinels and banner wraiths in the Champion's hall;
+  void stalkers, shard motes and echo shades in the Reach; gut leeches,
+  acid spitters and maw larvae in the Gullet.
+- Acid and quicksilver pools are **liquid**: you wade, slowly, and acid
+  burns. The Alinelidan's body now crawls through the Gullet's floors
+  now and then (no harm in it, and nothing harms it).
+- Monsters below notice you from further off; ambushes stir properly.
+  Traps that could be anywhere are gone (the gongs stay).
+- The Champion's and the Gullet's gates are redrawn.
+
+**Fixes:** marble less glaring; cactus seams; glow smoothed; quicksilver
+textured; the offhand torch; a merchant gone missing; quest reveals;
+sitting; the hotbar (1–9 while hovering swaps); crafting in a dungeon
+gave starred gear; lag in the Alchemist's fight and on a master's death;
+the HUD vanishing in a fight; the Alinelidan's head and tail; the
+Tooth's dig (you sink into the ground, steer under it and burst out).
+Two-handed weapons hit 2–4 harder. "Too low/too high" messages and the
+B key are gone.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5690,7 +5753,8 @@ src/
                        evolved (the evolved masters' phases, rising,
                        grabbing and throwing, bouncers and rifts),
                        evolved_alchemist, evolved_rift, evolved_hero,
-                       evolved_worm (the four of them),
+                       evolved_worm (the four of them), ancientmobs
+                       (the ancient places' own creatures),
                        item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
@@ -5728,6 +5792,8 @@ src/
                        its cracks and lights), evolvedfx (the evolved masters' arms,
                        the worm's body, rifts and bouncing things, drawn
                        in the world's rows),
+                       paintings (each painting's picture), ancientart
+                       (the ancient places' creatures),
                        lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
@@ -5739,7 +5805,8 @@ src/
                        ancient (the Ancient Technology Tree), crewtalk
                        (talking to the ship's crew), portal (where an
                        arch can take you), lockpick (a lock cut away,
-                       picked pin by pin)
+                       picked pin by pin), dungeonmap (an old place's
+                       map, floor by floor, under its fog)
   game/                game rules, input, dialogue, villager chatter, crop
                        growth and soil moisture, fishing, children's games,
                        hero (character creation and perks), combat (wind-
@@ -5763,6 +5830,9 @@ src/
                        (being down below: floors, traps, puzzles), relics,
                        kavtech (the Kavorent's gear and gadgets),
                        evolvedgear (the evolved masters' leavings),
+                       displays (racks, stands and hangers; paintings),
+                       doorlocks (locked front doors: knocking, picking,
+                       breaking), questfinder (who a quest sends you to),
                        ancient (what the ancient places' rooms and perils
                        do to you),
                        lockpick (how a lock's pins set, bind and snap your

@@ -147,55 +147,153 @@ function gauntlet(game, p) {
   return true;
 }
 
-// The Tooth: under the ground and up again where you point.
+// The Tooth: under the ground and up again where you point. (Round 73) In
+// three parts: you sink into the earth (a fountain of it thrown up round
+// you); under it you go where you point, a mound of earth heaving along
+// over you, up to eight paces from where you went down, through walls and
+// all; and up you come in a burst of earth and a shockwave, throwing back
+// whoever's there and leaving a pool of the worm's acid behind you.
+export const TUNNEL_DIG = 0.5;
+const TUNNEL_UNDER = 1.7;
+const TUNNEL_SPEED = 7;
+const TUNNEL_REACH = 8;
 function tooth(game, p) {
-  const ang = aimOf(game, p);
-  const dx = Math.cos(ang);
-  const dz = Math.sin(ang);
+  if (p.tunnel) return false;
   const w = game.world;
-  let best = null;
-  for (let d = 2; d <= 8; d++) {
-    const x = Math.round(p.x + dx * d);
-    const z = Math.round(p.z + dz * d);
-    const y = w.findStandY(x, z, p.y);
-    if (y < 0 || Math.abs(y - p.y) > 1 || !w.canStand(x, y, z) || game.occupiedBySolid?.(x, y, z, p)) continue;
-    best = { x, y, z };
+  // (Somewhere to come up within reach at all.)
+  let any = false;
+  for (let dz = -TUNNEL_REACH; dz <= TUNNEL_REACH && !any; dz++) {
+    for (let dx = -TUNNEL_REACH; dx <= TUNNEL_REACH && !any; dx++) {
+      if (Math.abs(dx) + Math.abs(dz) < 2) continue;
+      const y = w.findStandY(p.x + dx, p.z + dz, p.y);
+      if (y >= 0 && Math.abs(y - p.y) <= 1 && w.canStand(p.x + dx, y, p.z + dz)) any = true;
+    }
   }
-  if (!best) {
-    game.ui.msg('No ground to come up through that way.', '#c8f080', true);
+  if (!any) {
+    game.renderer.floatText(p.x, p.y + 2.2, p.z, 'no way through', '#c8f080');
     game.audio?.play('error');
     return false;
   }
-  const r = game.renderer;
-  const from = { x: p.x, y: p.y, z: p.z };
-  r.emit(from.x, from.y + 0.2, from.z, { n: 16, color: ['#7a5a3a', '#5a4430', '#a8885a'], up: 30, speed: 30, gravity: 200, life: 0.6, oy: 4 });
-  game.audio?.play('crumble', from);
-  p.teleport(best.x, best.y, best.z);
+  p.tunnel = { phase: 'dig', t: 0, from: { x: p.x, y: p.y, z: p.z }, x: p.x, z: p.z, y: p.y, puff: 0 };
   p.rollT = 0;
   p.grabbedT = 0;
-  // Up out of the ground: the earth thrown up, whoever's near thrown back,
-  // and the worm's acid left in the hole.
-  r.effect?.({ type: 'ring', wx: best.x, wy: best.y, wz: best.z, r0: 4, r1: 40, color: ['#c8f080', '#ffffff'], life: 0.45, oy: 4, flat: 0.5, thick: 2 });
-  r.emit(best.x, best.y + 0.3, best.z, { n: 26, color: ['#7a5a3a', '#5a4430', '#a8885a', '#c8f080'], up: 50, speed: 50, gravity: 220, life: 0.7, oy: 4 });
-  const dmg = Math.max(6, Math.round(blowOf(game) * 1.2));
-  const foes = foesNear(game, p, 2.2);
+  p.swing = null;
+  game.audio?.play('crumble', p);
+  game.audio?.play('rumble', p);
+  return true;
+}
+
+// Where to come up: the nearest open ground to where you are under it
+// (and failing that, back toward where you went down).
+function toothSpot(game, p, T) {
+  const w = game.world;
+  const try_ = (x, z) => {
+    const y = w.findStandY(x, z, T.y);
+    if (y < 0 || Math.abs(y - T.y) > 1 || !w.canStand(x, y, z) || game.occupiedBySolid?.(x, y, z, p)) return null;
+    return { x, y, z };
+  };
+  const cx = Math.round(T.x);
+  const cz = Math.round(T.z);
+  for (let r = 0; r <= 3; r++) {
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      const q = try_(cx + dx, cz + dz);
+      if (q) return q;
+    }
+  }
+  const n = Math.ceil(Math.hypot(T.x - T.from.x, T.z - T.from.z));
+  for (let i = n; i >= 0; i--) {
+    const k = n ? i / n : 0;
+    const q = try_(Math.round(T.from.x + (T.x - T.from.x) * k), Math.round(T.from.z + (T.z - T.from.z) * k));
+    if (q) return q;
+  }
+  return { x: T.from.x, y: T.from.y, z: T.from.z };
+}
+
+function toothTick(game, p, dt) {
+  const T = p.tunnel;
+  const r = game.renderer;
+  T.t += dt;
+  const dirt = ['#7a5a3a', '#5a4430', '#a8885a', '#3a2a1a'];
+  if (T.phase === 'dig') {
+    if (Math.random() < dt * 30) r.emit(p.x + (Math.random() - 0.5) * 1.2, p.y + 0.2, p.z + (Math.random() - 0.5) * 0.6, { n: 3, color: dirt, up: 40, speed: 30, gravity: 220, life: 0.6, oy: 4 });
+    game.shake = Math.max(game.shake || 0, 0.15);
+    if (T.t >= TUNNEL_DIG) {
+      T.phase = 'under';
+      T.t = 0;
+      r.emit(p.x, p.y + 0.2, p.z, { n: 20, color: dirt, up: 50, speed: 40, gravity: 220, life: 0.7, oy: 4 });
+      game.audio?.play('crumble', p);
+    }
+    return;
+  }
+  if (T.phase === 'under') {
+    // Steering: where you point.
+    const ang = aimOf(game, p);
+    let nx = T.x + Math.cos(ang) * TUNNEL_SPEED * dt;
+    let nz = T.z + Math.sin(ang) * TUNNEL_SPEED * dt;
+    const d = Math.hypot(nx - T.from.x, nz - T.from.z);
+    if (d > TUNNEL_REACH) {
+      nx = T.from.x + ((nx - T.from.x) / d) * TUNNEL_REACH;
+      nz = T.from.z + ((nz - T.from.z) / d) * TUNNEL_REACH;
+    }
+    T.x = nx;
+    T.z = nz;
+    // The earth heaving over you as you go: a mound, cracks, a trail.
+    T.puff -= dt;
+    if (T.puff <= 0) {
+      T.puff = 0.05;
+      r.emit(T.x, T.y + 0.1, T.z, { n: 3, color: dirt, up: 18, speed: 14, gravity: 160, life: 0.5, oy: 4 });
+      r.emit(T.x, T.y + 0.05, T.z, { n: 1, color: ['#5a4430', '#4a3828'], up: 2, speed: 2, life: 1.2, shape: 'puff', grow: 1 });
+    }
+    game.shake = Math.max(game.shake || 0, 0.12);
+    // (The camera keeps with you, under it.)
+    p.underAt = { x: T.x, z: T.z };
+    if (T.t >= TUNNEL_UNDER) toothBurst(game, p);
+  }
+}
+
+function toothBurst(game, p) {
+  const T = p.tunnel;
+  const r = game.renderer;
+  const w = game.world;
+  const best = toothSpot(game, p, T);
+  const from = T.from;
+  p.tunnel = null;
+  p.underAt = null;
+  p.teleport(best.x, best.y, best.z);
+  // Up out of the ground: the earth thrown up, a shockwave across the
+  // floor, whoever's near thrown back, and the worm's acid in the hole.
+  r.effect?.({ type: 'ring', wx: best.x, wy: best.y, wz: best.z, r0: 4, r1: 56, color: ['#c8f080', '#ffffff', '#a8885a'], life: 0.55, oy: 4, flat: 0.5, thick: 3 });
+  r.effect?.({ type: 'ring', wx: best.x, wy: best.y, wz: best.z, r0: 2, r1: 30, color: ['#ffffff', '#c8f080'], life: 0.35, oy: 4, flat: 0.5, thick: 2 });
+  r.emit(best.x, best.y + 0.3, best.z, { n: 46, color: ['#7a5a3a', '#5a4430', '#a8885a', '#c8f080', '#3a2a1a'], up: 70, speed: 70, gravity: 240, life: 0.9, oy: 4 });
+  r.emit(best.x, best.y + 0.2, best.z, { n: 14, color: ['#8a6a4a', '#6a5038'], up: 8, speed: 40, life: 1.3, shape: 'puff', grow: 2 });
+  r.flashScreen?.('#e8f0c0', 0.15);
+  const dmg = Math.max(6, Math.round(blowOf(game) * 1.3));
+  const foes = foesNear(game, p, 2.6);
   for (const e of foes) {
     game.damage(e, dmg, p);
     if (!e.moving && e.hp > 0) knock(game, p, e, 2);
   }
   const tiles = areaTiles(best.x, best.z, 1, true).filter((q) => !(q.x === best.x && q.z === best.z) && !BLOCKS[w.getBlock(q.x, best.y, q.z)].solid);
   addZone(game, { by: p, all: true, kind: 'bile', tiles, y: best.y, life: 5, tick: 0.7, dmg: 2, slow: true, color: [150, 210, 60], puff: ['#a8e040', '#d8f080', '#5a8a20'] });
-  game.shake = Math.min(1, (game.shake || 0) + 0.4);
+  game.shake = Math.min(1.2, (game.shake || 0) + 0.7);
   game.audio?.play('erupt', best);
+  game.audio?.play('boom', best);
   game.lightDirty = true;
-  game.ui.msg(`You go down into the ground like the worm, and come up ${Math.round(Math.hypot(best.x - from.x, best.z - from.z))} paces on${foes.length ? `, under ${foes.length === 1 ? 'something' : `${foes.length} of them`}` : ''}!`, '#c8f080');
-  return true;
+  if (foes.length) game.renderer.floatText(best.x, best.y + 2.6, best.z, foes.length === 1 ? 'up under it!' : `up under ${foes.length}!`, '#c8f080');
+  return Math.hypot(best.x - from.x, best.z - from.z);
 }
 
 // ------------------------------------------------------------ each frame
 export function updateEvolvedGear(game, dt) {
   const p = game.player;
   if (!p) return;
+  if (p.tunnel) {
+    if (p.dead) {
+      p.tunnel = null;
+      p.underAt = null;
+    } else toothTick(game, p, dt);
+  }
   if (p.clawT > 0) {
     p.clawT -= dt;
     if (Math.random() < dt * 16) game.renderer.emit(p.x + (Math.random() - 0.5) * 0.8, p.y + 0.6 + Math.random() * 0.8, p.z, { n: 1, color: ['#ffe070', '#ff8040'], up: 14, speed: 6, gravity: -8, life: 0.6, glow: true });
