@@ -7,6 +7,7 @@ import {
 import { World } from '../world/world.js';
 import { tickFieldsOff } from '../entities/fields.js';
 import { updateWorks } from '../entities/bosskit.js';
+import { updateEvolved, evoHurt, isEvolved, rise } from '../entities/evolved.js';
 import { BLOCKS, B, META_STATE, LOGS, LEAVES, CROPS, cropMeta, isFarmland, NATURAL, PLANK_BLOCKS } from '../world/blocks.js';
 import { ITEMS, GEMS, rollDrops, itemForBlock, socketed, ARMOR_CAP } from '../world/items.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
@@ -2007,6 +2008,9 @@ export class Game {
     updateHazards(this, dt);
     updateOrbs(this, dt);
     updateLasers(this, dt);
+    // (Round 71) The evolved masters' things loose in the world: what
+    // bounces about their halls, rifts in the air (see evolved.js).
+    updateEvolved(this, dt);
     // (Relics where each of you is: the island's, and each old place's.)
     this.inPlace(null, () => updateRelics(this, dt));
     for (const run of this.runs.values()) if (run.lead()) this.inPlace(run, () => updateRelics(this, dt));
@@ -6402,6 +6406,13 @@ export class Game {
         return;
       }
     }
+    // (Round 71) An evolved master rising rather than dying, the first
+    // time; nothing touching it as it rises; the Hero's mercy (see
+    // entities/evolved.js).
+    if (isEvolved(target) || (source && source.S && source.S.mercy)) {
+      amount = evoHurt(this, target, source, amount);
+      if (amount <= 0) return;
+    }
     target.hp -= amount;
     // (Round 53) A dish that answers a blow taken, or one landed, or your
     // falling below half (see dishacts.js).
@@ -6603,6 +6614,9 @@ export class Game {
       const who = e.kind === 'player' && e.seat ? e.seat : source && source.kind === 'player' && source.seat ? source.seat : null;
       if (who && who !== this.seat) return asSeat(this, who, () => this.kill(e, source));
     }
+    // (Round 71: an evolved master won't die the first time, however it's
+    // put down.)
+    if (isEvolved(e) && !e.enraged && !e.dead && rise(this, e)) return;
     onKill(this, e, source);
     if (MODS.active.length) modKilled(this, e, source);
     // (The stories hear of it: see sim/saga.)

@@ -1499,7 +1499,7 @@ function dress(ctx, r) {
       for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
         const d = Math.hypot(x - r.cx, (z - r.cz) * 1.15);
         if (Math.abs(d - rad) < 0.6 && own(ctx.plan, r, x, z) && !doorBlocked(ctx.plan, r, x, z)) {
-          b.set(x, FY - 1, z, B.turquoise_tile);
+          b.set(x, FY - 1, z, B.marble);
           ringT.push({ x: b.x0 + x, z });
         }
       }
@@ -2509,6 +2509,59 @@ function bossHall(ctx, r, boss) {
     for (let k = 0; k < 7; k++) placeIn(ctx, r, B.coral, rng.int(0, 3), true);
     for (let k = 0; k < 4; k++) placeIn(ctx, r, B.kelp, 0, true);
     for (let k = 0; k < 2; k++) placeIn(ctx, r, B.giant_clam, rng.int(0, 3), true);
+  } else if (type === 'athanor') {
+    // (Round 71: the ancient places' halls, kept open for what lives in
+    // them, their dressing round the walls.) The great work's hall: a ring
+    // of the circle inlaid all round its floor, crucibles at its corners,
+    // marble columns between, lamps of glass.
+    const rad = Math.min(w, d) * 0.42;
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+      const q = Math.hypot((x - r.cx) / (w / Math.min(w, d)), z - r.cz);
+      if (own(plan, r, x, z) && (Math.abs(q - rad) < 0.55 || Math.abs(q - rad * 0.45) < 0.5)) b.set(x, FY - 1, z, B.marble);
+      else if (own(plan, r, x, z) && q < 1.6) b.set(x, FY - 1, z, B.kiln_tile);
+    }
+    for (const [fx, fz] of [[0.1, 0.12], [0.9, 0.12], [0.1, 0.88], [0.9, 0.88]]) put(Math.round(r.x0 + w * fx), Math.round(r.z0 + d * fz), B.crucible, 0, true);
+    for (const [fx, fz] of [[0.3, 0.06], [0.7, 0.06], [0.3, 0.94], [0.7, 0.94], [0.04, 0.5], [0.96, 0.5]]) put(Math.round(r.x0 + w * fx), Math.round(r.z0 + d * fz), B.marble_column, 0, true);
+    for (let k = 0; k < 6; k++) placeIn(ctx, r, B.glass_lamp, 0, true);
+    for (let k = 0; k < 4; k++) placeIn(ctx, r, B.candles, 0, true);
+  } else if (type === 'champion') {
+    // The Champion's tomb-hall: the statues of his companions ranked down
+    // both sides, their banners between, his bier at the back, empty.
+    for (let x = r.x0 + 2; x <= r.x1 - 2; x += 4) {
+      put(x, r.z0, B.statue, 0, true);
+      put(x, r.z1, B.statue, 2, true);
+      put(x + 2, r.z0, B.war_banner, 0, true);
+      put(x + 2, r.z1, B.war_banner, 2, true);
+    }
+    for (let k = 0; k < 3; k++) placeIn(ctx, r, B.weapon_rack, rng.int(0, 3), true);
+    for (let k = 0; k < 6; k++) placeIn(ctx, r, B.candles, 0, true);
+    put(back.x, back.z, B.sarcophagus, 0, true);
+  } else if (type === 'rift') {
+    // Where it came through: the floor broken open on the dark in seams,
+    // crystals grown up out of them, broken columns of black glass.
+    for (let k = 0; k < 5; k++) {
+      let x = rng.int(r.x0 + 2, r.x1 - 2);
+      let z = rng.int(r.z0 + 2, r.z1 - 2);
+      for (let i = 0; i < 7; i++) {
+        if (own(plan, r, x, z) && !doorBlocked(plan, r, x, z)) b.set(x, FY - 1, z, rng.chance(0.5) ? B.rock_void : B.blight_floor);
+        x += rng.int(-1, 1);
+        z += rng.int(-1, 1);
+      }
+    }
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + 0.2;
+      put(Math.round(r.cx + Math.cos(a) * w * 0.44), Math.round(r.cz + Math.sin(a) * d * 0.42), k % 2 ? B.obsidian : B.glow_crystal, 0, k % 2 === 0);
+    }
+    for (let k = 0; k < 5; k++) placeIn(ctx, r, B.void_bloom, 0, false);
+  } else if (type === 'gullet') {
+    // Its lair: the ribs of what it ate long ago standing round the walls,
+    // bones everywhere, the floor gone to mud and bone-sand.
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      put(Math.round(r.cx + Math.cos(a) * w * 0.45), Math.round(r.cz + Math.sin(a) * d * 0.43), B.whale_rib, Math.cos(a) < 0 ? 0 : 1, true);
+    }
+    scatter(ctx, r, 0.04, () => B.bones);
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z) && rng.chance(0.35)) b.set(x, FY - 1, z, rng.chance(0.5) ? B.bone_sand : B.mud);
   }
   // The throne (the dead rule from one; bandits sit on a stolen chair).
   if (type === 'barrow' || type === 'crypt') put(back.x, back.z, B.bone_throne);

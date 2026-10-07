@@ -13,6 +13,7 @@ import { KHAROS_BOSSES } from './bosses_kharos.js';
 import { MYRROW_BOSSES } from './bosses_myrrow.js';
 import { GROVE_BOSSES } from './bosses_grove.js';
 import { SPIRE_BOSSES } from './bosses_spire.js';
+import { EVOLVED_BOSSES } from './evolved_bosses.js';
 import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
 import { bossClock, drift, press, walkCooldowns } from './tempo.js';
@@ -103,6 +104,7 @@ export const SPECIES = {
   ...MYRROW_BOSSES,
   ...GROVE_BOSSES,
   ...SPIRE_BOSSES,
+  ...EVOLVED_BOSSES,
 };
 
 // Inside the bounds something's held to (a master, its hall).
@@ -144,7 +146,8 @@ export class Creature extends Entity {
     this.fleeFrom = null;
     this.angry = false;
     // (The great masters fill three paces across: see footprint.js.)
-    this.foot = S.boss && S.big ? 1 : 0;
+    // (Round 71: an evolved master, five paces across: see evolved.js.)
+    this.foot = S.foot ?? (S.boss && S.big ? 1 : 0);
     if (S.humanoid) this.look = S.look ? MONSTER_LOOKS[S.look] || ISLE_LOOKS[S.look] : S.modLook ? modPersonLook(S.modLook) : SKELETON_LOOK;
     if (species === 'skeleton') {
       let r = this.rng.next();

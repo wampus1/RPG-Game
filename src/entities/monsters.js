@@ -93,6 +93,12 @@ export function tellScale(dur, ref) {
 export function addHazard(game, h) {
   h.t = 0;
   h.y ??= h.by ? h.by.y : game.player.y;
+  // (Round 71: a burst or a fire with no middle given goes off in the
+  // middle of its ground.)
+  if (!h.center && h.tiles && h.tiles.length && (h.kind === 'burst' || h.kind === 'fire')) {
+    const q = h.tiles[Math.floor(h.tiles.length / 2)];
+    h.center = { x: q.x, z: q.z };
+  }
   // A master's blow shown coming: the less warning it gives, the lighter it
   // lands (and it always gives enough to react to); the longer it's in
   // coming, the harder. (The quick bursts that end something already shown

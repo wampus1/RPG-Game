@@ -334,3 +334,88 @@ export function preyIn(c) {
   return [...game.everyone(), ...game.npcs].filter((e) => e && !e.dead && dist(c, e) < 24 && Math.abs(e.y - c.y) <= 2);
 }
 export { TAU };
+
+// ------------------------------------------------------------ rifts
+// A pair of rifts in the air (`a`, `b`), each the way into the other:
+// whoever steps into one comes out of the other, and can't go back
+// through for a moment. `o.life` seconds (Infinity: a place's own: see
+// game/ancient.js); `o.by` whoever cut it (the Rift Crawler goes through
+// its own; nothing else as big fits).
+export function addRift(game, a, b, o = {}) {
+  const R = { a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, t: 0, life: o.life ?? 10, by: o.by || null, y: o.y ?? FY, run: o.run || null, open: o.open ?? 0, cd: new Map(), hue: o.hue || 'void' };
+  (game.rifts ||= []).push(R);
+  game.audio?.play('portal', a);
+  return R;
+}
+// Which end of `R` `e` stands in (null if neither).
+export function riftEnd(R, e) {
+  const r = (e && e.foot) || 0;
+  for (const [at, to] of [[R.a, R.b], [R.b, R.a]]) if (Math.abs(e.x - at.x) <= r && Math.abs(e.z - at.z) <= r) return { at, to };
+  return null;
+}
+export function updateRifts(game, dt) {
+  const L = game.rifts;
+  if (!L || !L.length) return;
+  const all = [...game.everyone(), ...game.npcs, ...game.creatures];
+  for (const R of L) {
+    R.t += dt;
+    R.open = Math.min(1, R.open + dt * 2.5);
+    if (R.t > R.life || (R.by && R.by.dead && R.life !== Infinity)) R.done = true;
+    if (R.done) continue;
+    // (Closing, its last half second: nothing more goes through.)
+    if (R.life - R.t < 0.5) continue;
+    for (const [e, k] of R.cd) if (k - dt <= 0) R.cd.delete(e);
+    else R.cd.set(e, k - dt);
+    if (R.open < 1) continue;
+    for (const e of all) {
+      if (!e || e.dead || e.moving || R.cd.has(e) || Math.abs(e.y - R.y) > 1 || e.anchored || e.heldBy) continue;
+      if (e.foot && e !== R.by) continue;
+      const end = riftEnd(R, e);
+      if (end) riftThrough(game, R, e, end.at, end.to);
+    }
+  }
+  game.rifts = L.filter((R) => !R.done);
+}
+// Through: out of the far end (or as near it as there's room), a beat
+// before they can go back.
+export function riftThrough(game, R, e, from, to) {
+  R.cd.set(e, 1.6);
+  const r = game.renderer;
+  let spot = { x: to.x, y: game.world.findStandY(to.x, to.z, R.y), z: to.z };
+  if (spot.y < 0 || game.occupiedBySolid(spot.x, spot.y, spot.z, e)) spot = game.findFreeSpot(to.x, to.z, R.y);
+  if (!spot) return false;
+  for (const at of [from, to]) {
+    r.emit(at.x, R.y + 1, at.z, { n: 18, color: ['#c8a0ff', '#5ad8f0', '#ffffff', '#3a1a6a'], up: 30, speed: 50, life: 0.6, glow: true });
+    r.effect?.({ type: 'ring', wx: at.x, wy: R.y, wz: at.z, r0: 2, r1: 22, color: ['#c8a0ff', '#ffffff'], life: 0.45, oy: 3, flat: 0.5, thick: 2 });
+  }
+  e.teleport(spot.x, spot.y, spot.z);
+  if (e.kind === 'player') {
+    if (e === game.player) game.renderer.flashScreen?.('#8a60ff', 0.18);
+    if (!R.toldOf) game.asPlayer?.(e, () => game.ui.msg('You step through the rift... and out of the other.', '#c8a0ff'));
+    R.toldOf = true;
+  }
+  game.audio?.play('portal', to);
+  if (R.onThrough) R.onThrough(game, R, e, to);
+  return true;
+}
+
+// ------------------------------------------------------------ each frame
+// Everything of theirs loose in the world: bouncers, rifts.
+export function updateEvolved(game, dt) {
+  updateBouncers(game, dt);
+  updateRifts(game, dt);
+}
+
+// ------------------------------------------------------------ blows
+// A blow on one of them (or by one) as it lands: nothing touches it while
+// it rises; the blow that would kill it the first time, it rises from
+// instead; and the Hero's mercy (see evolved_hero.js). What's left of the
+// blow (0: none of it lands).
+export function evoHurt(game, target, source, amount) {
+  if (isEvolved(target)) {
+    if (target.riseT > 0) return 0;
+    if (!target.enraged && !target.dead && target.hp - amount <= 0 && rise(game, target)) return 0;
+  }
+  if (target.kind === 'player' && source && source.S && source.S.mercy && target.hp - amount <= 0 && source.S.mercy(game, source, target, amount)) return 0;
+  return amount;
+}

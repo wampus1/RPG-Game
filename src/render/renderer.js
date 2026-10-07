@@ -21,6 +21,7 @@ import { drawBossUnder, drawBossBody, bossScale, bossTint, drawnAsMaster, BOSS_S
 import { drawBossArt } from './bossbody.js';
 import { watchBoss } from './bossanim.js';
 import { shipDecos, drawShipGhost } from './shipvox.js';
+import { evolvedDecos } from './evolvedfx.js';
 import { drawCannonballs, drawShipHud } from './shiphud.js';
 
 // A camera turn takes this long; the pictures swung round are big enough to
@@ -812,6 +813,9 @@ export class Renderer {
     this.diceDecos(buckets, zMin, zMax);
     game.wildlife?.decos(this, buckets, zMin, zMax);
     shipDecos(this, game, buckets, zMin, zMax);
+    // (Round 71) The evolved masters' arms, the worm's body, rifts in the
+    // air and what bounces about (see evolvedfx.js).
+    evolvedDecos(this, game, buckets, zMin, zMax);
 
     const player = game.player;
     const prp = player.renderPos();
@@ -1439,6 +1443,8 @@ export class Renderer {
   drawEntity(ctx, e, rp, game) {
     // (Swallowed: out of sight, inside it.)
     if (e.kind === 'player' && e.swallowed) return;
+    // (Round 71: drawn by its master, as part of it: see evolvedfx.js.)
+    if (e.S && e.S.unseen) return;
     let sx = Math.round(rp.x * TILE - this.camX);
     const floorY = Math.round(rp.z * TILE - rp.y * LH + LH - this.camY); // top of floor face
     const feetY = floorY + 10 - (e.hop || 0);

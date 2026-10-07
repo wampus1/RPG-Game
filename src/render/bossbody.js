@@ -28,6 +28,7 @@ import './forge_kharos.js';
 import './forge_myrrow.js';
 import './forge_far_figs.js';
 import './forge_far_beasts.js';
+import './forge_evolved.js';
 
 export const FRAMES = 24;
 const cache = new Map();
@@ -61,6 +62,8 @@ export function artState(e) {
   if (e.inhale) st.inhale = 1;
   if (e.song) st.song = 1;
   if (e.variant) st.variant = e.variant;
+  // (Round 71: an evolved master risen, burning: see evolved.js.)
+  if (e.enraged) st.risen = 1;
   return st;
 }
 const keyOf = (st) => Object.keys(st).filter((k) => k !== 'rage').map((k) => k + st[k]).join(',');

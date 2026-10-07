@@ -17,6 +17,7 @@
 import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, lootTier, FAR_LOOT } from '../world/dungeongen.js';
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { farDanger, farMotes } from './fardeep.js';
+import { ancientTick, ancientDanger, ancientMotes } from './ancient.js';
 import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
@@ -522,7 +523,10 @@ export class DungeonRun {
     game.creatures = game.creatures.filter((c) => !mine(c));
     game.drops = game.drops.filter((d) => !mine(d));
     const at = (q) => (q.tiles && q.tiles[0] ? q.tiles[0].x : q.x0 ?? q.x ?? (q.by && q.by.x));
-    for (const k of ['hazards', 'zones', 'projectiles', 'orbs', 'flames', 'lasers', 'kavSpikes', 'fieldsOff', 'bulwarks']) {
+    // (Round 71: rifts and bouncers too; and a trial-hall's barring.)
+    if (game.rifts) game.rifts = game.rifts.filter((R) => !mine(R.a.x));
+    this.trialOn = null;
+    for (const k of ['hazards', 'zones', 'projectiles', 'orbs', 'flames', 'lasers', 'kavSpikes', 'fieldsOff', 'bulwarks', 'bouncers']) {
       if (!Array.isArray(game[k])) continue;
       game[k] = game[k].filter((q) => !mine(k === 'fieldsOff' ? q.off && q.off[0] && q.off[0].x : k === 'bulwarks' ? q.put && q.put[0] && q.put[0].x : at(q)));
     }
@@ -728,6 +732,9 @@ export class DungeonRun {
       const tiles = lineTiles(game, { x: em.x, y: FY, z: em.z }, to, em.len + 1);
       addHazard(game, { tiles, y: FY, dur: 1.0, dmg: Math.round(3 + this.floor * 0.6), kind: 'beam', from: { x: em.x, z: em.z }, to: tiles[tiles.length - 1] || to, color: [255, 70, 50], trap: true, place: true });
     }
+    // (Round 71) An ancient place's rooms, doing what they do (see
+    // ancient.js).
+    if (this.data.anc) ancientTick(this, dt);
     // Into the master's hall: the gate comes down behind you, and it wakes.
     const br = this.data.bossRoom;
     const entrant = br && !this.rec.cleared && !this.fight && party.find((q) => !q.dead && inHall(q, br));
@@ -953,6 +960,8 @@ export class DungeonRun {
       game.audio?.play('wave');
       if (!this.toldSurge) game.ui.msg('You hear the sea coming through the rock... (a surge: get out of its way!)', '#a0e0f0', true);
       this.toldSurge = true;
+    } else if (ancientDanger(this, type, p, dmg)) {
+      // (Round 71: an ancient place's own peril: see ancient.js.)
     } else if (farDanger(this, type, p, dmg)) {
       // (Round 68: a far land's own place's own peril: see fardeep.js.)
     } else if (type === 'crypt' && p.heldLightKind && p.heldLightKind() === 'fire') {
@@ -1045,6 +1054,12 @@ export class DungeonRun {
       case 'mound':
       case 'broch':
         farMotes(game, this.rec.type, x, z, c);
+        break;
+      case 'athanor':
+      case 'champion':
+      case 'rift':
+      case 'gullet':
+        ancientMotes(game, this.rec.type, x, z, c);
         break;
       case 'holdout':
         // Smoke from the fires, and an ember now and then.

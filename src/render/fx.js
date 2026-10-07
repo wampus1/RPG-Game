@@ -427,6 +427,7 @@ const BEAM_HUES = {
   red: ['#ff1808', '#ff4020', '#ff9060', '#ffe0c8', '#ff6040', '#ff8060', '#ffb060'],
   grave: ['#5a18c8', '#8a40ff', '#c8a0ff', '#f0e0ff', '#a070ff', '#c090ff', '#e0c8ff'],
   arc: ['#0868c8', '#20a8ff', '#5ad8f0', '#e0fbff', '#40c0ff', '#60d0ff', '#a0f0ff'],
+  gold: ['#a86010', '#ffb020', '#ffe070', '#fffbe0', '#ffc040', '#ffd060', '#fff0a0'],
 };
 export function drawLasers(r, ctx, game) {
   if (!game.lasers || !game.lasers.length) return;
@@ -439,7 +440,7 @@ export function drawLasers(r, ctx, game) {
     const rp = o.renderPos ? o.renderPos() : o;
     const [u, v] = r.toView(rp.x, rp.z);
     const sx = u * TILE - r.camX + 8;
-    const sy = v * TILE - rp.y * LH + LH - r.camY - (o.species === 'overseer' ? 30 : o.foot ? 24 : o.isBoss ? 20 : o.kind === 'player' ? 14 : 10);
+    const sy = v * TILE - rp.y * LH + LH - r.camY - (o.S && o.S.beamY ? o.S.beamY : o.species === 'overseer' ? 30 : o.foot ? 24 : o.isBoss ? 20 : o.kind === 'player' ? 14 : 10);
     const [eu, ev] = r.toView(L.end.x, L.end.z);
     const ex = eu * TILE - r.camX + 8;
     const ey = ev * TILE - L.y * LH + LH - r.camY - 2;
