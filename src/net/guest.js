@@ -240,6 +240,7 @@ export class GuestNet {
       // (The storm wall, down on the host's side: down here too.)
       if (m.slow.wallDown) game.world.ow.wallDown = game.wallDown = true;
       game.signIcons = new Map(m.slow.signs || []);
+      game.displayShown = new Map(m.slow.shown || []);
     }
     // Your own map: what's new on it.
     if (m.ex) {

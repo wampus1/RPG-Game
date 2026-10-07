@@ -745,7 +745,9 @@ export class Sim {
     if (sh && (sh.kind === 'carpenter' || sh.kind === 'general') && npc.layout && !sh.personal) {
       const s = npc.layout.settlement;
       const P = this.ships && this.ships.port(s.id);
-      if (P && P.state === 'docked') {
+      // (Round 73: every coastal town has a dock now; ships are for the
+      // realms that know how to build them.)
+      if (P && P.state === 'docked' && this.tech.has(s, 'trade_ships')) {
         const tech = (k) => this.tech.has(s, k);
         sh.store.cannonball = Math.max(sh.store.cannonball || 0, 24);
         sh.store.sailors_articles = Math.max(sh.store.sailors_articles || 0, 4);

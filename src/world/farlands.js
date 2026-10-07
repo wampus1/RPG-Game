@@ -56,6 +56,20 @@ export const FAR_LANDS = {
   wyrd: { peoples: ['wyrd'], civs: 1, towns: 1, villages: 3, biome: 'rune_heath' },
   skerries: { peoples: ['skerry'], civs: 1, towns: 1, villages: 3, biome: 'sea_cliffs' },
 };
+// (Round 73) More to each far land, in a world made from 0.73 on: other
+// ground in among its own (`alt`, by how warm and wet it is there), and
+// villages of other peoples settled among its own (`minor`: whoever sailed
+// there and stayed).
+const FAR_EXTRA = {
+  velmarch: { alt: { warm: ['moor', 'savanna'], cold: ['rune_heath', 'tundra'], any: ['moor'] }, minor: ['salt', 'skerry', 'wyrd'] },
+  ostria: { alt: { wet: ['mangrove', 'lantern_hollows'], dry: ['savanna', 'salt_flats'], any: ['jungle'] }, minor: ['salt', 'hollow', 'velari'] },
+  corrow: { alt: { any: ['sea_cliffs', 'moor', 'taiga'] }, minor: ['skerry', 'wyrd'] },
+  saltmere: { alt: { any: ['mangrove', 'savanna', 'beach'] }, minor: ['kesh', 'velari'] },
+  hollowmark: { alt: { any: ['fungal', 'forest', 'bamboo_grove'] }, minor: ['wyrd', 'jade'] },
+  wyrd: { alt: { any: ['moor', 'taiga', 'sea_cliffs'] }, minor: ['corrow', 'rime'] },
+  skerries: { alt: { any: ['rune_heath', 'tundra', 'moor'] }, minor: ['rime', 'corrow'] },
+};
+for (const [k, m] of Object.entries(FAR_EXTRA)) Object.assign(FAR_LANDS[k], m);
 export const FAR_KEYS = Object.keys(FAR_LANDS);
 
 // What makes an empire's capital: bigger than any city (three map squares

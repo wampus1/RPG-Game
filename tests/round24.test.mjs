@@ -454,11 +454,20 @@ test('trade ships: a harbour, a great ship, a voyage abroad with the merchants a
   T.stateOf(s).done.push('trade_ships');
   L.econ.treasury = 1000;
   SH.daily(L, game.day, new RNG(1));
-  const P = SH.port(s.id);
+  let P = SH.port(s.id);
+  // (Round 73: a town on the coast has had its dock from the first; the
+  // great ship's keel is laid beside it once the realm learns.)
+  if (P && P.state === 'docked' && P.ship === false) SH.daily(L, game.day, new RNG(1));
+  P = SH.port(s.id);
   assert.equal(P.state, 'building');
-  const proj = game.sim.works.projects.find((q) => q.id === P.project);
-  assert.ok(proj && proj.kind === 'dock', 'shipwrights at work on a pier');
-  game.sim.works.finishNow(L, proj);
+  const proj = P.project != null ? game.sim.works.projects.find((q) => q.id === P.project) : null;
+  if (proj) {
+    assert.ok(proj.kind === 'dock', 'shipwrights at work on a pier');
+    game.sim.works.finishNow(L, proj);
+  } else {
+    assert.ok(P.hullFrom !== undefined, 'a hull going up by the pier');
+    setAbs(game, game.sim.abs + 3 * DAY + 1);
+  }
   SH.daily(L, game.day + 1, new RNG(2));
   assert.equal(P.state, 'docked');
   assert.match(L.econ.ledger.map((e) => e.text || e).join(' '), new RegExp(`The ${P.name} was launched`));

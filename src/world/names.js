@@ -98,6 +98,133 @@ for (const [k, P] of Object.entries(FAR_PEOPLES)) {
   CULTURES[k] = { label: P.label, civ: P.civ, placePre: P.placePre, placeSuf: P.placeSuf, first: P.first, lastPre: P.lastPre, lastSuf: P.lastSuf, lastWhole: P.lastWhole };
 }
 
+// (Round 73) More names for every people, in worlds made from 0.73 on
+// (see nameEra: an older world keeps the names it was made with): names of
+// their own beyond the obvious ones, and a few borrowed from the peoples
+// they trade and marry with (CONTACT). `drop`: names that were never
+// really theirs.
+const EXTRA = {
+  vale: {
+    first: ['Anwen', 'Bartle', 'Cressida', 'Dorran', 'Eluned', 'Fenwick', 'Gilly', 'Hob', 'Ismay', 'Jessamy', 'Kemble', 'Lettice', 'Morwen', 'Nye', 'Odo', 'Petra', 'Rafe', 'Sabeth', 'Thane', 'Wystan', 'Yolande', 'Corin', 'Damaris', 'Emlyn', 'Hesper', 'Lowen', 'Merrin', 'Tamsy'],
+    placePre: ['Wether', 'Cobble', 'Hazel', 'Lark', 'Pell', 'Saffron', 'Tansy', 'Quill', 'Rush', 'Marrow'],
+    placeSuf: ['wold', 'combe', 'hythe', 'thwaite', 'ing', 'cote', 'nap'],
+    lastWhole: ['Pargeter', 'Wainwright', 'Hollins', 'Lambkin', 'Ostler', 'Quarrier'],
+  },
+  north: {
+    first: ['Aud', 'Bera', 'Eyvind', 'Gyda', 'Hallbera', 'Ketilrid', 'Lodin', 'Oddvar', 'Ragnfrid', 'Steinunn', 'Thorgest', 'Ulfhild', 'Vebjorn', 'Arnora', 'Hroald', 'Ingunn', 'Kolbein', 'Sæunn', 'Torfa', 'Gest'],
+    placePre: ['Myr', 'Selja', 'Hval', 'Lund', 'Ber', 'Asp', 'Eik'],
+    placeSuf: ['øy', 'sund', 'vang', 'stø', 'rud'],
+    lastWhole: ['Skaldbrekka', 'Nordhaug', 'Sjøvik', 'Elvestad'],
+  },
+  sun: {
+    first: ['Azadeh', 'Behruz', 'Chenoa', 'Darius', 'Esfir', 'Faranak', 'Golnar', 'Hushang', 'Kaveh', 'Laleh', 'Mehri', 'Navid', 'Parisa', 'Roshan', 'Shirin', 'Taji', 'Yasaman', 'Zarir', 'Afsaneh', 'Kian', 'Tahmina', 'Bijan'],
+    placePre: ['Pasar', 'Kesh', 'Nisa', 'Tus', 'Var', 'Anah'],
+    placeSuf: ['gird', 'shan', 'van', 'and', 'dasht'],
+    lastWhole: ['Zarrin', 'Kashani', 'Golestan', 'Mehrdad'],
+  },
+  wild: {
+    first: ['Anku', 'Chaska', 'Ekeko', 'Huaca', 'Inti', 'Killa', 'Mayta', 'Nina', 'Qori', 'Sumaq', 'Tika', 'Urpi', 'Wayra', 'Yuri', 'Amaru', 'Cusi', 'Illari', 'Paqari', 'Rumi', 'Sisa'],
+    placePre: ['Huay', 'Coll', 'Pach', 'Ollan', 'Qosq', 'Tamb'],
+    placeSuf: ['marca', 'pampa', 'bamba', 'cancha', 'llacta'],
+    lastPre: ['Mist', 'Canopy', 'Orchid', 'Macaw', 'Tapir'],
+  },
+  high: {
+    drop: ['Balin', 'Dain', 'Dvalin', 'Frerin', 'Gloin', 'Kili', 'Ori', 'Thrain', 'Nori'],
+    first: ['Aldra', 'Bardek', 'Corla', 'Dravin', 'Ebba', 'Faskil', 'Gesta', 'Haldor', 'Imra', 'Jorvek', 'Kestra', 'Lodra', 'Merek', 'Nessa', 'Orvald', 'Pella', 'Regna', 'Stellan', 'Tamra', 'Vekka', 'Wendra', 'Yorvik', 'Zelda', 'Brakka'],
+    placePre: ['Hask', 'Vor', 'Skel', 'Ruth', 'Edd', 'Glas'],
+    placeSuf: ['shelf', 'tor', 'cleft', 'scar', 'reach'],
+    lastWhole: ['Shaftwarden', 'Lampwright', 'Seamfinder', 'Cairnkeeper'],
+  },
+  ember: {
+    first: ['Alcine', 'Brisk', 'Corvo', 'Dessa', 'Esk', 'Fiora', 'Galt', 'Hesk', 'Isolt', 'Jarrow', 'Kesk', 'Lisle', 'Mirro', 'Nessk', 'Oriel', 'Pell', 'Quen', 'Russet', 'Sienna', 'Teza', 'Varo', 'Wreth'],
+    placePre: ['Glow', 'Tuff', 'Lap', 'Ochre', 'Grim'],
+    placeSuf: ['crater', 'flue', 'scorch', 'well'],
+  },
+  mist: {
+    first: ['Arden', 'Bellflower', 'Calla', 'Dorrit', 'Ellery', 'Fallow', 'Gwyll', 'Harrow', 'Ione', 'Kestrel', 'Lowry', 'Merle', 'Nolwenn', 'Osier', 'Plover', 'Rhosyn', 'Shale', 'Teasel', 'Verity', 'Wynn'],
+    placePre: ['Dim', 'Lull', 'Sallow', 'Wisp', 'Marsh'],
+    placeSuf: ['hollow', 'reed', 'murk', 'pool'],
+  },
+  tide: {
+    first: ['Anela', 'Bolo', 'Erelu', 'Fetu', 'Hoku', 'Ika', 'Kalea', 'Lagi', 'Malie', 'Noa', 'Oke', 'Pania', 'Rewa', 'Sefa', 'Talia', 'Vai', 'Atea', 'Mahina', 'Tavita', 'Lose'],
+    placePre: ['Vaka', 'Tapa', 'Hau', 'Fetu', 'Moku'],
+    placeSuf: ['atoll', 'pier', 'spit', 'hale', 'tai'],
+  },
+  velari: {
+    first: ['Arruns', 'Larth', 'Ramtha', 'Thana', 'Velia', 'Tanaquil', 'Caeles', 'Fastia', 'Mamarce', 'Seianti', 'Vel', 'Ati', 'Hasti', 'Larthia'],
+    placePre: ['Vel', 'Tarch', 'Clev', 'Pupl'],
+    placeSuf: ['una', 'arna', 'sa'],
+  },
+  rime: {
+    first: ['Aili', 'Elina', 'Jalmari', 'Katri', 'Leevi', 'Miina', 'Oskari', 'Pihla', 'Ronja', 'Selma', 'Toivo', 'Venla', 'Ahti', 'Hilja', 'Kaapo', 'Siiri'],
+    placePre: ['Siika', 'Kontio', 'Paljas', 'Ruska'],
+    placeSuf: ['vuoma', 'luoto', 'selkä', 'lampi'],
+  },
+  jade: {
+    first: ['Anh', 'Bich', 'Duc', 'Hanh', 'Khoa', 'Linh', 'Minh', 'Ngoc', 'Phuong', 'Quan', 'Thao', 'Vy', 'Hyun', 'Seo', 'Ji-ho', 'Min-ji'],
+    placePre: ['Kim', 'Thanh', 'Hoa', 'Seon', 'Han'],
+    placeSuf: ['an', 'giang', 'ju', 'won'],
+  },
+  kesh: {
+    first: ['Abeni', 'Dalila', 'Imani', 'Jabari', 'Kito', 'Lulu', 'Makena', 'Nuru', 'Rehema', 'Sefu', 'Tumaini', 'Zawadi', 'Amani', 'Baraka', 'Neema'],
+    placePre: ['Ras', 'Tiz', 'Ksar', 'Amen'],
+    placeSuf: ['ghat', 'ksar', 'zou', 'tin'],
+  },
+  corrow: {
+    first: ['Aled', 'Bethan', 'Cadoc', 'Dilys', 'Elis', 'Gwenllian', 'Hywel', 'Iestyn', 'Llinos', 'Meinir', 'Nia', 'Owain', 'Rhian', 'Siwan', 'Tegid'],
+    placePre: ['Aber', 'Pen', 'Llan', 'Tre'],
+    placeSuf: ['wen', 'mawr', 'ydd', 'och'],
+  },
+  salt: {
+    first: ['Adara', 'Elias', 'Ilana', 'Kalliope', 'Lior', 'Mirela', 'Nerina', 'Orsola', 'Pasha', 'Selin', 'Tamar', 'Vasilis', 'Zehra', 'Arda', 'Deniz'],
+    placePre: ['Lim', 'Sard', 'Myr', 'Ost'],
+    placeSuf: ['ena', 'opolis', 'ari', 'yra'],
+  },
+  hollow: {
+    first: ['Bryn', 'Cobble', 'Dapple', 'Fable', 'Glow', 'Hob', 'Inkle', 'Kettle', 'Lantern', 'Mumble', 'Nook', 'Pebble', 'Ruffle', 'Snug', 'Tumble', 'Wisp'],
+    placePre: ['Snug', 'Warm', 'Pebble', 'Nook'],
+    placeSuf: ['bottom', 'nook', 'warren', 'hole'],
+  },
+  wyrd: {
+    first: ['Ailbhe', 'Blathnat', 'Conall', 'Dervla', 'Eoghan', 'Fiadh', 'Lughaidh', 'Muireann', 'Ronan', 'Sadhbh', 'Senan', 'Ultan', 'Ide', 'Ruadhan'],
+    placePre: ['Rath', 'Cnoc', 'Lis', 'Inis'],
+    placeSuf: ['more', 'beg', 'aun', 'een'],
+  },
+  skerry: {
+    first: ['Aald', 'Brenda', 'Ertie', 'Ganny', 'Helga', 'Ibbie', 'Johnnie', 'Leebie', 'Mallie', 'Ollie', 'Rasmie', 'Sibbie', 'Teenie', 'Vala'],
+    placePre: ['Quoy', 'Grut', 'Hous', 'Swar'],
+    placeSuf: ['wick', 'sta', 'ster', 'ay'],
+  },
+};
+// Who marries whom: a name now and then from a neighbouring people.
+const CONTACT = {
+  vale: ['north', 'high', 'mist'], north: ['vale', 'high'], sun: ['wild', 'tide'], wild: ['sun', 'vale'], high: ['north', 'vale'],
+  ember: ['high', 'sun'], mist: ['vale', 'tide'], tide: ['mist', 'sun'],
+  velari: ['rime', 'salt'], rime: ['velari', 'skerry'], jade: ['kesh'], kesh: ['jade', 'salt'],
+  corrow: ['wyrd', 'skerry'], salt: ['velari', 'kesh'], hollow: ['wyrd'], wyrd: ['corrow', 'hollow'], skerry: ['rime', 'corrow'],
+};
+let ERA = 1;
+const merged = new Map();
+// (Called as a world is made: which names it's made with.)
+export function nameEra(wg) {
+  if ((wg || 1) === ERA) return;
+  ERA = wg || 1;
+  merged.clear();
+}
+// A people's names as this world has them.
+function namesOf(culture) {
+  const c = CULTURES[culture];
+  if (ERA < 4 || !EXTRA[culture]) return c;
+  let m = merged.get(culture);
+  if (m) return m;
+  const E = EXTRA[culture];
+  const drop = new Set(E.drop || []);
+  const join = (a, b) => [...(a || []).filter((n) => !drop.has(n)), ...(b || [])];
+  m = { ...c, first: join(c.first, E.first), placePre: join(c.placePre, E.placePre), placeSuf: join(c.placeSuf, E.placeSuf), lastPre: join(c.lastPre, E.lastPre), lastSuf: join(c.lastSuf, E.lastSuf), lastWhole: join(c.lastWhole, E.lastWhole) };
+  merged.set(culture, m);
+  return m;
+}
+
 export const CIV_TITLES = ['Kingdom', 'Dominion', 'Republic', 'Confederacy', 'Principality', 'Commonwealth', 'Duchy', 'League', 'Empire', 'Realm', 'Union', 'Compact', 'Protectorate', 'Grand Duchy', 'March', 'Hegemony', 'Alliance', 'Free State'];
 
 // A civilization's name: a title of its own people or a common one, before
@@ -112,7 +239,7 @@ export function civName(rng, culture) {
 }
 
 export function placeName(rng, culture) {
-  const c = CULTURES[culture];
+  const c = namesOf(culture);
   let name = rng.pick(c.placePre) + rng.pick(c.placeSuf);
   if (name.includes('-')) {
     const [a, b] = name.split('-');
@@ -122,13 +249,19 @@ export function placeName(rng, culture) {
 }
 
 export function personName(rng, culture, family) {
-  const c = CULTURES[culture];
-  const first = rng.pick(c.first);
+  const c = namesOf(culture);
+  let first = rng.pick(c.first);
+  // (Round 73) Now and then a name from the people next door (the same
+  // draw always decides it, so a person's name is their own).
+  if (ERA >= 4 && CONTACT[culture] && (first.charCodeAt(0) * 7 + first.length * 13 + (first.charCodeAt(first.length - 1) || 0)) % 12 === 0) {
+    const o = namesOf(CONTACT[culture][first.charCodeAt(0) % CONTACT[culture].length]);
+    if (o && o.first) first = o.first[(first.charCodeAt(1) || 0) % o.first.length];
+  }
   return { first, last: family || familyName(rng, culture) };
 }
 
 export function familyName(rng, culture) {
-  const c = CULTURES[culture];
+  const c = namesOf(culture);
   // (Two draws either way: now and then a trade or a father's name instead.)
   const a = rng.next();
   const b = rng.next();

@@ -106,19 +106,138 @@ export function starWary(rec, sid) {
 
 export const isStar = (hero) => !!hero && hero.origin === 'star';
 
-// What they say when you walk up (now and then: see dialogue.js).
-export function starGreeting(rec, sid, rng) {
+// Who knows you fell? Only the village that saw it come down and its near
+// neighbours (Round 73): anywhere else, they just see someone with a very
+// strange wing. (`hero.starSid`: the village, kept on the hero; for older
+// characters, the first village the fall would have picked.)
+const KNOWN_RANGE = 170;
+export function starHomeSid(game) {
+  const h = game && game.hero;
+  if (!h) return null;
+  if (h.starSid != null) return h.starSid;
+  const ow = game.world && game.world.ow;
+  if (!ow) return null;
+  const thessa = ow.islands[0];
+  const villages = ow.settlements.filter((s) => s.type === 'village' && s.condition !== 'abandoned' && !s.deserted && s.island === thessa.key);
+  if (!villages.length) return null;
+  const rng = new RNG(hash4(game.seed >>> 0, 0, 0x57a2));
+  h.starSid = rng.shuffle(villages.slice())[0].id;
+  return h.starSid;
+}
+export function knowsFall(game, sid) {
+  const home = starHomeSid(game);
+  if (home == null || sid == null) return false;
+  if (home === sid) return true;
+  const ow = game.world.ow;
+  const a = ow.settlements.find((s) => s.id === home);
+  const b = ow.settlements.find((s) => s.id === sid);
+  if (!a || !b || a.island !== b.island) return false;
+  return Math.hypot(a.cx + a.cw / 2 - (b.cx + b.cw / 2), a.cz + a.cd / 2 - (b.cz + b.cd / 2)) < KNOWN_RANGE;
+}
+
+// What they say when you walk up (now and then: see dialogue.js). Those
+// near where you fell know what you are; everyone else sees only the wing.
+const GREET = {
+  knownChild: [
+    'Is that a real wing? Can you fly? Show me!',
+    'Mum says you fell out of the sky. Did it hurt?',
+    'You\'re the star! I saw you come down! Well, I saw the light.',
+    'My brother says you\'re a ghost. You\'re not a ghost, are you?',
+    'Did you see the moon up close? What\'s it made of?',
+    'Everybody hid under the table when you landed. Not me.',
+  ],
+  knownWary: [
+    'Keep that wing away from me.',
+    'You\'re the one that came down out of the sky. I want no part of whatever you are.',
+    'Half my roof came off the night you fell. I haven\'t forgotten.',
+    'Stay where I can see you, star-thing.',
+    'The crops in the low field still won\'t take. Where you landed. Just saying.',
+    'My dog won\'t stop barking when you\'re about. Dogs know things.',
+    'Whatever you are, I hope you\'re not staying long.',
+  ],
+  knownWarm: [
+    'The one who fell from the sky! I saw the light of it from my window.',
+    'You came down like the sun rising. Are you well?',
+    'Folk say you\'re a star that fell. I\'m glad you landed softly, at least.',
+    'Still here, then? Some of us had bets you\'d float back up.',
+    'The whole lane talks about the night you came down. It was like noon at midnight.',
+    'I went out to the crater the next morning. The ground was still warm.',
+    'You look more like one of us every day. Except for the wing, of course.',
+    'My grandmother says a fallen star brings a good harvest. No pressure.',
+  ],
+  child: [
+    'Whoa! What happened to your arm? Is that a wing?',
+    'Can I touch it? Does it bite?',
+    'Why have you only got one? Did you lose the other one?',
+    'That\'s the weirdest thing I ever saw. Can you fly?',
+    'Is that a costume? It looks real.',
+    'My friend won\'t believe me. Don\'t go anywhere!',
+  ],
+  wary: [
+    'What in the world is that on your back?',
+    'Is that... growing out of you? Keep your distance.',
+    'I don\'t know what you are and I\'m not sure I want to.',
+    'That thing on your back moved. I saw it move.',
+    'Some kind of curse, is it? Don\'t pass it on.',
+    'You\'ll not bring that thing into my house.',
+  ],
+  curious: [
+    'Forgive me staring. That\'s a... wing? Just the one?',
+    'I\'ve seen plenty of odd folk on the road, but never one with a wing.',
+    'Is that some new fashion from the cities? It looks almost alive.',
+    'A wing! Were you born with that, or is there a story?',
+    'Strange thing you\'ve got there. It shines, a little. Is it meant to?',
+    'Huh. One wing. Like a bat\'s, but blue. Never seen the like.',
+    'You must get asked about that a lot. I\'ll try not to.',
+  ],
+};
+export function starGreeting(rec, sid, rng, game = null) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
-  if (rec.age === 'child') return pick(['Is that a real wing? Can you fly? Show me!', 'Mum says you fell out of the sky. Did it hurt?', 'Is that a dragon\'s wing? Can I touch it?']);
-  if (starWary(rec, sid)) return pick(['Keep that wing away from me.', 'You\'re the one that came down out of the sky. I want no part of whatever you are.', 'A wing on a person isn\'t natural. What do you want?', 'Stay where I can see you, star-thing.']);
-  return pick(['The one who fell from the sky! I saw the light of it from my window.', 'That wing... so the stories are true. Hello.', 'You came down like the sun rising. Are you well?', 'Folk say you\'re a star that fell. I\'m glad you landed softly, at least.']);
+  const known = game ? knowsFall(game, sid) : true;
+  if (rec.age === 'child') return pick(known ? GREET.knownChild : GREET.child);
+  if (starWary(rec, sid)) return pick(known ? GREET.knownWary : GREET.wary);
+  return pick(known ? GREET.knownWarm : GREET.curious);
 }
 
 // Asked about your wing.
-export function wingTalk(rec, sid) {
-  if (rec.age === 'child') return ['It\'s so blue! It glows a bit in the dark, did you know?', 'If I find a star, will I get a wing too?'];
-  if (starWary(rec, sid)) return ['I\'d rather not talk about it.', 'My grandmother said things that fall from the sky bring trouble with them. I hope she was wrong.'];
-  return ['It shines a little, even in daylight. Like it remembers where it came from.', 'They say the old priests wrote of stars that walked. I never thought I\'d meet one.'];
+const WING = {
+  knownChild: [
+    ['It\'s so blue! It glows a bit in the dark, did you know?', 'If I find a star, will I get a wing too?'],
+    ['When you landed the whole sky went white. I want to do that.', 'Can you take me up there one day?'],
+    ['Does it get cold? It looks cold.', 'I\'d keep it under a blanket.'],
+  ],
+  knownWary: [
+    ['I\'d rather not talk about it.', 'My grandmother said things that fall from the sky bring trouble with them. I hope she was wrong.'],
+    ['I saw what came down that night. A wing doesn\'t make it any less strange.'],
+    ['The priest says to leave it be. I\'m leaving it be.'],
+  ],
+  knownWarm: [
+    ['It shines a little, even in daylight. Like it remembers where it came from.', 'They say the old priests wrote of stars that walked. I never thought I\'d meet one.'],
+    ['When you came down, there was a long tail of light behind you. I think the wing is all that\'s left of it.'],
+    ['It suits you, honestly. Whatever you were up there, you\'re one of us down here.'],
+    ['Folk from the next valley came to look at the crater. Nobody\'s been able to grow a thing in it.', 'I think it\'s the most beautiful thing that ever happened here.'],
+  ],
+  child: [
+    ['It\'s really blue! Is it a dragon\'s? Did you fight one?'],
+    ['If I had a wing I\'d use it to get away from my chores.'],
+    ['It moved again! It does that when you\'re talking.'],
+  ],
+  wary: [
+    ['I\'ll not pretend I like the look of it.', 'Folk round here don\'t trust what they can\'t explain.'],
+    ['Whatever it is, it isn\'t natural. That\'s all I\'ll say.'],
+    ['Did a witch do that to you? I\'ve heard of such things, out east.'],
+  ],
+  curious: [
+    ['A wing, and only the one. Can it carry you at all?', 'I suppose it\'d have to be a strange bird that lost the other.'],
+    ['I\'ve heard sailors\' tales of winged folk past the storm. Are you from out there?'],
+    ['It looks like a dragon\'s, almost. The scholars would pay to have a look at that.'],
+    ['It glows a little. Is it warm? I won\'t touch it. Unless you\'d let me.'],
+  ],
+};
+export function wingTalk(rec, sid, game = null) {
+  const known = game ? knowsFall(game, sid) : true;
+  const set = rec.age === 'child' ? (known ? WING.knownChild : WING.child) : starWary(rec, sid) ? (known ? WING.knownWary : WING.wary) : known ? WING.knownWarm : WING.curious;
+  return set[Math.floor(Math.random() * set.length)];
 }
 
 // ------------------------------------------------------------ the shock

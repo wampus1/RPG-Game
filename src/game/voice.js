@@ -3,7 +3,9 @@
 // terse or gruff) that follows from who they are, a word they call you by,
 // and a filler or two they lean on. Every line they say is passed through
 // it, so the same news sounds different from the mayor and the miner, but
-// the miner always sounds like the miner.
+// the miner always sounds like the miner. (The word they call you by and
+// their fillers are kept on the voice for other uses, but are no longer
+// tacked onto lines.)
 import { hash4 } from '../util/rng.js';
 
 const FORMAL_JOBS = new Set(['mayor', 'noble', 'priest', 'scholar']);
@@ -30,7 +32,6 @@ const FILLERS = {
   terse: [],
   gruff: ['Hmph.', 'Listen,', 'Bah.'],
 };
-const COMMON = new Set(['The', 'It', 'We', 'You', 'That', 'There', 'This', 'What', 'Our', 'My', 'No', 'Yes', 'A', 'An', 'They', 'He', 'She', 'Not', 'Just', 'Nothing', 'Some', 'Everyone', 'Nobody', 'If', 'Who', 'Why', 'How', 'When', 'Where', 'Any', 'All', 'Do', 'Did', 'Is', 'Are', 'Can', 'Come', 'Go', 'Here', 'Taxes', 'Fines', 'Good', 'Sure', 'Oh', 'Well']);
 const TAGS = { formal: [], plain: [', you know.', '.'], rough: [', eh?', ', see.'], chirpy: ['!', '!'], terse: [], gruff: ['.'] };
 
 export function voiceOf(rec) {
@@ -49,15 +50,9 @@ export function voiceOf(rec) {
   return v;
 }
 
-// Deterministic per line, so the same line comes out the same way.
-function roll(rec, text, k) {
-  let x = 0;
-  for (let i = 0; i < text.length; i++) x = (x * 31 + text.charCodeAt(i)) >>> 0;
-  return (hash4(rec.idx, x, k, 0x70e) % 1000) / 1000;
-}
-
 // One line in their voice. `first` marks the opening line of a reply.
-export function speak(rec, text, { first = false, warm = false, cold = false } = {}) {
+// (Options such as `first`, `warm` and `cold` are accepted for older callers.)
+export function speak(rec, text, _opts = {}) {
   if (!text || typeof text !== 'string' || text.startsWith('(') || text.startsWith('*')) return text;
   const v = voiceOf(rec);
   let t = text;
@@ -67,20 +62,7 @@ export function speak(rec, text, { first = false, warm = false, cold = false } =
     // Short and to the point: pleasantries go.
     t = t.replace(/^(Well|Oh|Ah|Hm+|So),?\s+/i, '').replace(/,? you know\.?$/, '.');
   }
-  // Their habits: a filler at the start, a tag at the end, what they call you.
-  if (first && v.filler && roll(rec, t, 1) < v.rate * 0.45 && !/^[A-Z][a-z]+[!,]/.test(t)) {
-    if (v.filler.endsWith(',')) {
-      const w = t.split(/[\s,.!?']/)[0];
-      t = `${v.filler} ${COMMON.has(w) ? t[0].toLowerCase() + t.slice(1) : t}`;
-    } else t = `${v.filler} ${t}`;
-  }
-  if (v.tag && v.tag !== '.' && roll(rec, t, 2) < v.rate * 0.4 && /[a-z]\.$/.test(t) && t.length < 90) t = t.slice(0, -1) + v.tag;
-  // "Friend" is for people who like you; a stranger is a traveller to them.
-  let addr = cold && v.reg !== 'formal' ? 'stranger' : v.address;
-  if (!warm && addr && /friend/.test(addr)) addr = v.reg === 'chirpy' ? 'mister' : 'traveller';
-  if (first && addr && !cold && (warm || v.reg !== 'gruff') && roll(rec, t, 3) < v.rate * 0.45 && /[.!?]$/.test(t) && t.length < 80 && !/,\s*\w+[.!?]$/.test(t)) {
-    t = t.replace(/([.!?])$/, `, ${addr}$1`);
-  }
+  // (No tacked-on fillers, tags or pet names: they read as noise, not voice.)
   return t;
 }
 

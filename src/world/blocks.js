@@ -372,7 +372,7 @@ def('skull_pile', { ...sprite, solid: true, hardness: 0.6, drop: [{ item: 'bone'
 def('mine_cart', { ...sprite, solid: true, tool: 'axe', hardness: 2, drop: [{ item: 'iron_ore', chance: 0.5 }, { item: 'coal', chance: 0.5 }], label: 'Ore Cart' });
 def('stalagmite', { ...sprite, solid: true, tool: 'pick', hardness: 1.5, drop: [{ item: 'cobblestone', chance: 0.6 }], label: 'Stalagmite' });
 def('glowshroom', { ...dressing, hardness: 0.05, light: 5, drop: null, label: 'Glowcaps' });
-def('weapon_rack', { ...sprite, solid: true, tool: 'axe', hardness: 1.5, drop: [{ item: 'spear', chance: 0.2 }, { item: 'planks', chance: 0.6 }], label: 'Weapon Rack' });
+def('weapon_rack', { ...sprite, solid: true, interact: 'display', display: 3, displayKind: 'weapon', tool: 'axe', hardness: 1.5, label: 'Weapon Rack' });
 def('war_banner', { ...dressing, tall: true, tool: 'axe', hardness: 0.3, drop: [{ item: 'cloth', chance: 0.6 }], label: 'War Banner' });
 def('hanging_chains', { ...dressing, tall: true, tool: 'pick', hardness: 1, drop: null, label: 'Hanging Chains' });
 def('powder_keg', { ...sprite, solid: true, hardness: 0.3, drop: null, label: 'Powder Keg' });
@@ -656,10 +656,6 @@ def('gullet_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', h
 // round it, burnt black and cracked.
 def('abyss_floor', { hardness: Infinity, drop: null, light: 2, label: 'The Void' });
 def('scorched_earth', { tool: 'shovel', hardness: 0.8, drop: 'dirt', label: 'Sundered Earth' });
-// (Round 73) Liquids sunk in the floor, waded (stood in, not on): the
-// Athanor's quicksilver, heavy and cold; the Gullet's acid.
-def('quicksilver', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 2, label: 'Quicksilver' });
-def('acid_pool', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 4, label: 'Acid' });
 // (Round 70) Thin walls, a post with a wall running off it to whatever's
 // beside it (another wall, a fence, a solid block): bridges' parapets, and
 // anyone's to build. One of each stone (and wood) a bridge's made of.
@@ -669,6 +665,18 @@ for (const base of WALL_BASES) {
   if (!o) continue;
   def(`${base}_wall`, { opaque: false, render: 'wall', wallOf: base, standable: false, tool: o.tool, hardness: o.hardness, label: `${o.label} Wall` });
 }
+
+// (Round 73) Liquids sunk in the floor, waded (stood in, not on): the
+// Athanor's quicksilver, heavy and cold; the Gullet's acid.
+def('quicksilver', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 2, label: 'Quicksilver' });
+def('acid_pool', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 4, label: 'Acid' });
+// (Round 73) Things to show things on (see game/displays.js): a weapon
+// rack's three pegs (above), a stand for one piece, a hook on the wall for
+// another; and paintings, small and large, of whatever the painter saw.
+def('display_stand', { ...sprite, solid: true, interact: 'display', display: 1, tool: 'axe', hardness: 0.8, label: 'Display Stand' });
+def('wall_hanger', { ...sprite, solid: false, interact: 'display', display: 1, tool: 'axe', hardness: 0.4, label: 'Wall Hanger' });
+def('painting_small', { ...sprite, solid: false, interact: 'painting', painting: 'small', tool: 'axe', hardness: 0.3, label: 'Painting' });
+def('painting_large', { ...sprite, solid: false, interact: 'painting', painting: 'large', tool: 'axe', hardness: 0.3, label: 'Large Painting' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

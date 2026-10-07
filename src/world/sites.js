@@ -811,7 +811,7 @@ export function restamp(world, s) {
     const r = kept.get(key);
     if (!r) continue;
     const i = Region.idx(x - r.x0, y, z - r.z0);
-    if (BLOCKS[r.blocks[i]]?.interact === 'container' && BLOCKS[id]?.interact !== 'container') r.containers.delete(i);
+    if ((BLOCKS[r.blocks[i]]?.interact === 'container' || BLOCKS[r.blocks[i]]?.display) && !(BLOCKS[id]?.interact === 'container' || BLOCKS[id]?.display)) r.containers.delete(i);
     r.blocks[i] = id;
     r.meta[i] = meta || 0;
   }

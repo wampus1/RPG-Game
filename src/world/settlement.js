@@ -12,6 +12,37 @@ import { farTable } from './farlands.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
 const Y0 = GROUND; // first layer above the floor
+// (Round 73) The peoples whose streets wind (see roads).
+const CURVY_STYLES = new Set(['wild', 'mist', 'tide', 'vale', 'jade', 'salt', 'wyrd', 'hollow', 'skerry']);
+// (Round 73) How much each people likes paintings on its walls, a fine
+// piece on a stand, a weapon on a hook (chances, per building: see
+// showPieces).
+const SHOW_TASTE = {
+  vale: { paint: 0.45, stand: 0.02, hook: 0.03 },
+  high: { paint: 0.35, stand: 0.06, hook: 0.08 },
+  north: { paint: 0.1, stand: 0.03, hook: 0.14 },
+  sun: { paint: 0.3, stand: 0.05, hook: 0.03 },
+  wild: { paint: 0.08, stand: 0.01, hook: 0.1 },
+  ember: { paint: 0.15, stand: 0.06, hook: 0.06 },
+  mist: { paint: 0.4, stand: 0.03, hook: 0.02 },
+  tide: { paint: 0.25, stand: 0.02, hook: 0.07 },
+  velari: { paint: 0.6, stand: 0.09, hook: 0.03 },
+  rime: { paint: 0.12, stand: 0.03, hook: 0.12 },
+  jade: { paint: 0.65, stand: 0.08, hook: 0.02 },
+  kesh: { paint: 0.3, stand: 0.06, hook: 0.04 },
+  corrow: { paint: 0.05, stand: 0.02, hook: 0.08 },
+  salt: { paint: 0.2, stand: 0.02, hook: 0.05 },
+  hollow: { paint: 0.06, stand: 0.01, hook: 0.06 },
+  wyrd: { paint: 0.18, stand: 0.04, hook: 0.1 },
+  skerry: { paint: 0.08, stand: 0.01, hook: 0.09 },
+};
+// (Round 73) More shapes of home (see sizesFor).
+const HOUSE_SHAPES = {
+  house_s: [[5, 6], [6, 6], [7, 5]],
+  house_m: [[8, 5], [8, 6], [6, 7], [7, 7]],
+  house_l: [[10, 7], [11, 7], [9, 8], [8, 9]],
+  manor: [[13, 8], [11, 9], [12, 9]],
+};
 
 const SPECS = {
   house_s: { size: [[5, 5], [6, 5]], beds: 2, residential: true },
@@ -542,6 +573,40 @@ class Layout {
     else if (m === M.FREE || m === M.YARD) this.setMask(x, z, M.ROAD);
   }
 
+  // (Round 73) A street that winds: off its straight line by up to `amp`
+  // tiles and back, on its line again at both ends and at the middle (where
+  // the square is), each step at most one tile across so it stays joined.
+  wavyH(z, xa, xb, w, amp, phase = 0) {
+    const x0 = Math.min(xa, xb);
+    const x1 = Math.max(xa, xb);
+    let prev = 0;
+    for (let x = x0; x <= x1; x++) {
+      const t = (x - x0) / Math.max(1, x1 - x0);
+      let off = Math.round(amp * Math.sin(2 * Math.PI * t + phase));
+      off = Math.max(prev - 1, Math.min(prev + 1, off));
+      for (let k = 0; k < w; k++) {
+        this.paveRoad(x, z + off + k);
+        if (off !== prev) this.paveRoad(x, z + prev + k);
+      }
+      prev = off;
+    }
+  }
+  wavyV(x, za, zb, w, amp, phase = 0) {
+    const z0 = Math.min(za, zb);
+    const z1 = Math.max(za, zb);
+    let prev = 0;
+    for (let z = z0; z <= z1; z++) {
+      const t = (z - z0) / Math.max(1, z1 - z0);
+      let off = Math.round(amp * Math.sin(2 * Math.PI * t + phase));
+      off = Math.max(prev - 1, Math.min(prev + 1, off));
+      for (let k = 0; k < w; k++) {
+        this.paveRoad(x + off + k, z);
+        if (off !== prev) this.paveRoad(x + prev + k, z);
+      }
+      prev = off;
+    }
+  }
+
   hRoad(z, xa, xb, w) {
     for (let x = Math.min(xa, xb); x <= Math.max(xa, xb); x++) for (let k = 0; k < w; k++) this.paveRoad(x, z + k);
   }
@@ -555,6 +620,35 @@ class Layout {
     const rng = this.rng.fork('roads');
     const cx = b.x0 + Math.floor(this.W / 2) + rng.int(-3, 3);
     const cz = b.z0 + Math.floor(this.D / 2) + rng.int(-2, 2);
+    let pw;
+    let pd;
+    // (Round 73) Some peoples lay their streets out in winding curves,
+    // others in straight lines and hard corners (worlds made from 0.73 on).
+    const curvy = (this.world.ow.wg || 1) >= 4 && CURVY_STYLES.has(s.style);
+    if (curvy) {
+      const rc = this.rng.fork('curves');
+      const amp = s.type === 'village' ? 2 : 3;
+      const hR = this.hRoad.bind(this);
+      const vR = this.vRoad.bind(this);
+      // (The town's main streets, and a city's side streets, wind; a city's
+      // ring road inside its walls stays straight, as the walls are.)
+      this.hRoad = (z, xa, xb, w) => (Math.abs(xb - xa) >= 10 && !(s.type === 'city' && (z === b.z0 + 2 || z === b.z1 - 3)) ? this.wavyH(z, xa, xb, w, w >= 3 ? amp : Math.max(1, amp - 1), rc.chance(0.5) ? 0 : Math.PI) : hR(z, xa, xb, w));
+      this.vRoad = (x, za, zb, w) => (Math.abs(zb - za) >= 10 && !(s.type === 'city' && (x === b.x0 + 2 || x === b.x1 - 3)) ? this.wavyV(x, za, zb, w, w >= 3 ? amp : Math.max(1, amp - 1), rc.chance(0.5) ? 0 : Math.PI) : vR(x, za, zb, w));
+    }
+    try {
+      this.layStreets(s, b, rng, cx, cz);
+    } finally {
+      if (curvy) {
+        delete this.hRoad;
+        delete this.vRoad;
+      }
+    }
+    ({ pw, pd } = this.streetPlaza);
+    delete this.streetPlaza;
+    this.finishRoads(cx, cz, pw, pd);
+  }
+
+  layStreets(s, b, rng, cx, cz) {
     let pw;
     let pd;
     if (s.type === 'village') {
@@ -587,6 +681,10 @@ class Layout {
       for (const g of [[b.x0 + 1, cz + 1], [b.x1 - 1, cz + 1], [cx + 1, b.z0 + 1], [cx + 1, b.z1 - 1]]) this.patrol.push({ x: g[0], z: g[1] });
       this.patrol.push({ x: b.x0 + 3, z: b.z0 + 3 }, { x: b.x1 - 4, z: b.z1 - 4 }, { x: b.x1 - 4, z: b.z0 + 3 }, { x: b.x0 + 3, z: b.z1 - 4 });
     }
+    this.streetPlaza = { pw, pd };
+  }
+
+  finishRoads(cx, cz, pw, pd) {
     // Plaza around the main intersection.
     const px0 = cx + 1 - Math.floor(pw / 2);
     const pz0 = cz + 1 - Math.floor(pd / 2);
@@ -643,15 +741,18 @@ class Layout {
     return true;
   }
 
-  sizesFor(type) {
+  sizesFor(type, rng = null) {
     if (type === 'townhall' && this.settlement.type === 'village') return [[8, 6], [7, 6]];
+    // (Round 73) Homes of more shapes in worlds made from 0.73 on: long
+    // and narrow, deep, square, broad; tried in an order of their own.
+    if (rng && HOUSE_SHAPES[type] && (this.world.ow.wg || 1) >= 4) return rng.shuffle([...SPECS[type].size, ...HOUSE_SHAPES[type]]);
     return SPECS[type].size;
   }
 
   placeBuilding(type, cands, rng) {
     const allowWater = this.settlement.biome === 'swamp';
     for (const c of cands) {
-      for (const [w, d] of this.sizesFor(type)) {
+      for (const [w, d] of this.sizesFor(type, rng)) {
         const offs = rng.shuffle([...Array(Math.max(1, w - 2)).keys()].map((i) => i + 1)).slice(0, 3);
         for (const off of offs) {
           const r = this.rectFor(c, w, d, off);
@@ -691,6 +792,8 @@ class Layout {
       mats: this.buildingMats(type, rng),
       tall: type === 'townhall' && this.settlement.type === 'village' ? 2 : SPECS[type].tall || 2,
     };
+    // (Round 73) Now and then a home stands a storey taller.
+    if ((this.world.ow.wg || 1) >= 4 && (type === 'house_m' || type === 'house_l') && rng.chance(0.3)) bld.tall = 3;
     const DX = [0, -1, 0, 1];
     const DZ = [1, 0, -1, 0];
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
@@ -1493,6 +1596,41 @@ class Layout {
     return { list, tiles };
   }
 
+  // (Round 73) The way in through a breach: from the gap, over open ground
+  // and yards, to the nearest street inside (a short walk, never through a
+  // house). Tiles, or [] if there's no street near.
+  breachLink(gap) {
+    const inGap = new Set(gap.map(([x, z]) => x * 65536 + z));
+    const open = (m) => m === M.FREE || m === M.YARD || m === M.DECOR || m === undefined;
+    const goal = (m) => m === M.ROAD || m === M.PLAZA || m === M.BRIDGE;
+    const from = new Map();
+    const q = [];
+    for (const [x, z] of gap) {
+      from.set(x * 65536 + z, null);
+      q.push([x, z, 0]);
+    }
+    for (let i = 0; i < q.length; i++) {
+      const [x, z, d] = q[i];
+      if (d > 40) break;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const nz = z + dz;
+        const k = nx * 65536 + nz;
+        if (from.has(k) || !this.inside(nx, nz)) continue;
+        const m = this.maskAt(nx, nz);
+        if (goal(m) && !inGap.has(k)) {
+          const out = [];
+          for (let c = x * 65536 + z; c !== null && !inGap.has(c); c = from.get(c)) out.push([Math.floor(c / 65536), c % 65536]);
+          return out;
+        }
+        if (!open(m)) continue;
+        from.set(k, x * 65536 + z);
+        q.push([nx, nz, d + 1]);
+      }
+    }
+    return [];
+  }
+
   // Wall or breach finished (or restored): the layout mask follows.
   applyWall(tiles, open) {
     for (const [x, z] of tiles) {
@@ -1958,10 +2096,31 @@ class Layout {
     if (b.residential) {
       const nBeds = t === 'house_s' ? 2 : t === 'house_m' ? 3 : t === 'manor' ? 5 : 6;
       const grand = t === 'manor' || t === 'palace';
-      hearth();
-      for (let i = 0; i < nBeds; i++) {
-        const bed = tryPlace(B.bed, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.bed, 'any', { access: true });
-        if (bed) b.beds.push({ x: bed.x, z: bed.z, access: bed.access });
+      // (Round 73) A bigger home is walled off into rooms: the bedrooms
+      // through doors off the main room (worlds made from 0.73 on).
+      const rooms = (this.world.ow.wg || 1) >= 4 && t !== 'house_s' && !b.playerHome && !ruined ? this.partition(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 }, rng) : null;
+      if (rooms) {
+        const main = rooms.main;
+        const within = (set) => ({ within: set });
+        const t0 = tryPlace(B.furnace, 'north', { access: true, rot: 0, ...within(main) }) || tryPlace(B.furnace, 'wall', { access: true, rot: 'wall', ...within(main) });
+        if (t0 && !b.mats.flat) this.chimney(b, t0);
+        if (!t0) hearth();
+        for (let i = 0; i < nBeds; i++) {
+          const side = rooms.beds[i % rooms.beds.length];
+          const bed = tryPlace(B.bed, 'wall', { access: true, rot: 'wall', within: side }) || tryPlace(B.bed, 'any', { access: true, within: side }) || tryPlace(B.bed, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.bed, 'any', { access: true });
+          if (bed) b.beds.push({ x: bed.x, z: bed.z, access: bed.access });
+        }
+        for (const side of rooms.beds) {
+          tryPlace(B.torch, 'corner', { solid: false, lit: true, within: side });
+          if (rng.chance(0.5)) tryPlace(rugId, 'any', { solid: false, within: side });
+        }
+        b.homeRooms = rooms.list;
+      } else {
+        hearth();
+        for (let i = 0; i < nBeds; i++) {
+          const bed = tryPlace(B.bed, 'wall', { access: true, rot: 'wall' }) || tryPlace(B.bed, 'any', { access: true });
+          if (bed) b.beds.push({ x: bed.x, z: bed.z, access: bed.access });
+        }
       }
       // (Every household keeps a chest, before the table if room's short:
       // against a wall if it'll go there, anywhere it'll go if not.)
@@ -2207,6 +2366,9 @@ class Layout {
         else if (rng.chance(0.12)) this.put(f.x, Y0, f.z, rng.pick([B.tall_grass, B.fern, B.mushroom_brown]));
       }
     }
+    // (Round 73) Paintings on the walls, and now and then a piece set out
+    // for show: as each people likes (worlds made from 0.73 on).
+    if ((this.world.ow.wg || 1) >= 4 && !ruined && !b.playerHome) this.showPieces(b, t, rng, tryPlace);
     b.free = interior.filter((q) => !occ.has(key(q.x, q.z)) || this.at(q.x, Y0, q.z) === B.chair || this.at(q.x, Y0, q.z) === B.torch || (this.at(q.x, Y0, q.z) || 0) >= B.rug_red && this.at(q.x, Y0, q.z) <= B.rug_green);
     b.homeSpots = b.free.map((q) => ({ x: q.x, y: Y0, z: q.z }));
   }
@@ -2445,6 +2607,107 @@ class Layout {
   // (b.inn) for whoever rents it (see Sim.bedOwner and dialogue.js), with
   // the blocks it's made of (for a tavern built before there were rooms:
   // see migrate.js).
+  // (Round 73) What hangs on a building's walls and stands about in it, by
+  // its people's tastes: paintings (most peoples, some far more than
+  // others), a stand with a fine piece on it (rare), a weapon on a hook
+  // (rare), and racks of arms in a guardhouse.
+  showPieces(b, t, rng, tryPlace) {
+    const style = this.settlement.style;
+    const T = SHOW_TASTE[style] || SHOW_TASTE.vale;
+    const grand = t === 'manor' || t === 'palace' || t === 'townhall' || t === 'library' || t === 'academy' || t === 'college';
+    const hall = t === 'tavern' || t === 'temple';
+    if (t === 'guardhouse' || t === 'stockade') {
+      for (let i = 0; i < 2; i++) if (rng.chance(0.75)) tryPlace(B.weapon_rack, 'wall', { rot: 'wall' });
+    }
+    const paint = (b.residential ? T.paint : grand ? Math.min(1, T.paint + 0.4) : hall ? T.paint : T.paint * 0.4);
+    if (rng.chance(paint)) tryPlace(grand || (hall && rng.chance(0.5)) ? B.painting_large : B.painting_small, 'north', { solid: false });
+    if ((grand || b.residential) && rng.chance(paint * 0.45)) tryPlace(B.painting_small, 'north', { solid: false });
+    if (grand && rng.chance(T.paint * 0.6)) tryPlace(B.painting_large, 'north', { solid: false });
+    if ((b.residential || grand) && rng.chance(grand ? T.stand * 2.5 : T.stand)) tryPlace(B.display_stand, 'corner', { access: true });
+    if ((b.residential || hall) && rng.chance(T.hook)) tryPlace(B.wall_hanger, 'north', { solid: false });
+  }
+
+  // (Round 73) Walls across a home's floor, each with a door: a bedroom
+  // to one side of the main room (two, one either side, in a broad home).
+  // The main room keeps the way in from the street. Returns { main, beds:
+  // [tile key sets], list }, or null if it won't divide.
+  partition(b, f, rng) {
+    const { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 } = f;
+    const W = ix1 - ix0 + 1;
+    const Dp = iz1 - iz0 + 1;
+    if (W < 6 && Dp < 6) return null;
+    const top = Y0 + (b.tall || 2) - 1;
+    const inX = b.inside.x;
+    const inZ = b.inside.z;
+    // Candidate walls: down the floor at x = c (along z), or across it at
+    // z = c (along x), the room beyond at least two tiles deep.
+    const cands = [];
+    if (W >= 6) {
+      for (let c = ix0 + 2; c <= ix1 - 2; c++) {
+        if (Math.abs(c - inX) < 2) continue;
+        cands.push({ along: 'z', c, far: c < inX ? -1 : 1, size: c < inX ? c - ix0 : ix1 - c });
+      }
+    }
+    if (Dp >= 6) {
+      for (let c = iz0 + 2; c <= iz1 - 2; c++) {
+        if (Math.abs(c - inZ) < 2) continue;
+        cands.push({ along: 'x', c, far: c < inZ ? -1 : 1, size: c < inZ ? c - iz0 : iz1 - c });
+      }
+    }
+    // (A room two or three tiles deep; the main room the larger.)
+    const good = cands.filter((q) => q.size >= 2 && q.size <= 4);
+    rng.shuffle(good);
+    good.sort((a, c) => Math.abs(a.size - 3) - Math.abs(c.size - 3));
+    const made = [];
+    const tilesOf = (q) => {
+      const out = [];
+      if (q.along === 'z') for (let z = iz0; z <= iz1; z++) out.push({ x: q.c, z });
+      else for (let x = ix0; x <= ix1; x++) out.push({ x, z: q.c });
+      return out;
+    };
+    const tryWall = (q) => {
+      const line = tilesOf(q);
+      if (line.some((t) => occ.has(key(t.x, t.z)) || reserved.has(key(t.x, t.z)))) return false;
+      // The door: somewhere along it away from the ends.
+      const mid = line.slice(1, -1);
+      const door = mid[Math.floor(mid.length / 2) + (rng.chance(0.5) ? 0 : -1)] || mid[0];
+      if (!door) return false;
+      const wall = line.filter((t) => t !== door);
+      for (const t of wall) occ.add(key(t.x, t.z));
+      if (!connected()) {
+        for (const t of wall) occ.delete(key(t.x, t.z));
+        return false;
+      }
+      // (Clear on both sides of the door, so it opens.)
+      const [dx, dz] = q.along === 'z' ? [1, 0] : [0, 1];
+      for (const [ax, az] of [[door.x + dx, door.z + dz], [door.x - dx, door.z - dz]]) if (isIn(ax, az)) reserved.add(key(ax, az));
+      reserved.add(key(door.x, door.z));
+      for (const t of wall) for (let y = Y0; y <= top; y++) this.put(t.x, y, t.z, b.mats.wall);
+      const rot = q.along === 'z' ? 1 : 0;
+      this.put(door.x, Y0, door.z, B.door, rot);
+      this.put(door.x, Y0 + 1, door.z, B.door_top, rot);
+      for (let y = Y0 + 2; y <= top; y++) this.put(door.x, y, door.z, b.mats.wall);
+      made.push({ ...q, door });
+      return true;
+    };
+    for (const q of good) {
+      if (made.length >= ((W >= 10 || Dp >= 9) && b.type !== 'house_m' ? 2 : 1)) break;
+      // (A second wall on the other side of the main room, not beside the first.)
+      if (made.some((m) => m.along !== q.along || m.far === q.far)) continue;
+      tryWall(q);
+    }
+    if (!made.length) return null;
+    const side = (t, m) => (m.along === 'z' ? Math.sign(t.x - m.c) === m.far : Math.sign(t.z - m.c) === m.far);
+    const beds = made.map((m) => {
+      const set = new Set();
+      for (let z = iz0; z <= iz1; z++) for (let x = ix0; x <= ix1; x++) if (side({ x, z }, m)) set.add(key(x, z));
+      return set;
+    });
+    const main = new Set();
+    for (let z = iz0; z <= iz1; z++) for (let x = ix0; x <= ix1; x++) if (!made.some((m) => side({ x, z }, m) || (m.along === 'z' ? x === m.c : z === m.c))) main.add(key(x, z));
+    return { main, beds, list: made.map((m) => ({ along: m.along, at: m.c, door: m.door })) };
+  }
+
   innRoom(b, f) {
     const { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 } = f;
     if (ix1 - ix0 < 3 || iz1 - iz0 < 3) return;

@@ -571,6 +571,14 @@ export class Works {
     }
     if (p.kind === 'wall' || p.kind === 'breach') {
       L.applyWall(plan.tiles, p.kind === 'breach');
+      // (Round 73) A street through the gap, joined up to the town's own.
+      if (p.kind === 'breach' && plan.tiles.length) {
+        const link = L.breachLink(plan.tiles);
+        const road = [...plan.tiles, ...link];
+        this.sim.setBlocks(L.roadOps(road));
+        for (const [x, z] of road) L.markRoad(x, z);
+        (L.econ.streets ||= []).push(road);
+      }
       if (p.kind === 'wall') {
         L.econ.walled = true;
         if (p.rect) L.econ.wallRect = p.rect;

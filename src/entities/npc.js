@@ -19,7 +19,7 @@ import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
-import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch } from '../game/combat.js';
+import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch, npcWingWatch, starborn } from '../game/combat.js';
 import { doorLocked, knock as knockDoor } from '../game/doorlocks.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
@@ -69,6 +69,8 @@ export class NPC extends Entity {
     this.maxHp = rec.maxHp;
     this.rng = new RNG(hash4(rec.idx, layout.settlement.seed, 77, game.day));
     this.state = 'routine';
+    // (Round 73) One of the rare few with a fallen star's wing.
+    if (starborn(rec)) this.wing = { k: 1 };
     this.path = null;
     this.pathI = 0;
     this.goal = null;
@@ -489,6 +491,10 @@ export class NPC extends Entity {
         const s = spots.length ? spots[rng.int(0, spots.length - 1)] : null;
         return s ? { x: s.x, y: s.y, z: s.z, face: s.face, tag: 'forage', hunt: true, trap: s.trap } : roadTile();
       }
+      case 'harbour':
+        // (Round 73) The shipwright's trade, down at the pier.
+        if (e.target) return { x: e.target.x, y: GROUND, z: e.target.z, near: 1, tag: 'harbour' };
+        return plazaTile();
       case 'travel': {
         // Off by ship: out along the pier, and aboard.
         if (e.place === 'dock' && e.target) return { x: e.target.x, y: GROUND, z: e.target.z, near: 0, leave: true };
@@ -1077,6 +1083,7 @@ export class NPC extends Entity {
     // pack, to mend on.
     if (this.snackT > 0 && (this.snackT -= dt) <= 0) this.snackItem = null;
     npcParryWatch(this.game, this, dt);
+    npcWingWatch(this.game, this, dt);
     this.trailEatT = (this.trailEatT || 0) - dt;
     if (this.trailEatT <= 0) {
       this.trailEatT = 3;

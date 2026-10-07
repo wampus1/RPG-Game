@@ -1,5 +1,6 @@
 // The World owns the overworld map, lazily generated regions, settlement
 // layouts, and exposes block access in global tile coordinates.
+import { displayDefault } from '../game/displays.js';
 import { REGION_W, REGION_D, WORLD_Y, MAP_W, MAP_H, INST_RX, INST_X0, instSlotOf } from '../config.js';
 import { B, BLOCKS, META_STATE } from './blocks.js';
 import { Overworld } from './worldgen.js';
@@ -10,6 +11,8 @@ import { layoutJob } from './settlement.js';
 import { rollContainerLoot } from './loot.js';
 import { settleSites } from './sites.js';
 import { MODS } from '../mod/state.js';
+// (Round 73) What keeps things in it: a chest, or a rack or stand for show.
+const holds = (b) => !!b && (b.interact === 'container' || !!b.display);
 
 export class World {
   // `o.wg`: how the world's made (see worldgen.WORLD_GEN).
@@ -210,7 +213,7 @@ export class World {
       const ti = lz * REGION_W + lx;
       if (id !== 0 && y + 1 > r.top[ti]) r.top[ti] = y + 1;
       else if (id === 0 && y + 1 === r.top[ti]) r.recomputeTop(lx, lz);
-      if (BLOCKS[old].interact === 'container' && BLOCKS[id].interact !== 'container') r.containers.delete(i);
+      if (holds(BLOCKS[old]) && !holds(BLOCKS[id])) r.containers.delete(i);
     }
     if (this.onChange) this.onChange(x, y, z, old, id);
     return true;
@@ -263,7 +266,7 @@ export class World {
       const b = BLOCKS[r.blocks[i]];
       // (Round 62) A chest in a mod's structure fills from its loot table;
       // a mod's own chest starts empty, its size its own.
-      c = this.modContainer?.(x, y, z, b) || (b.mod ? new Array(b.modSlots || 9).fill(null) : rollContainerLoot(this, x, y, z, b.name, s));
+      c = this.modContainer?.(x, y, z, b) || (b.mod ? new Array(b.modSlots || 9).fill(null) : b.display ? displayDefault(this, x, y, z, b) : rollContainerLoot(this, x, y, z, b.name, s));
       r.containers.set(i, c);
       r.modified = true;
     }

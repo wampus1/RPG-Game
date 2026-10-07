@@ -939,3 +939,84 @@ export function npcParryWatch(game, n, dt) {
   n.parryUpT = left + 0.18;
   n.guardT = Math.max(n.guardT || 0, n.parryUpT);
 }
+
+// (Round 73) Now and then someone else fell, long ago: one in a few
+// hundred grown folk carries a star's wing, the same as yours (see
+// render/wing.js). Always the same people.
+export function starborn(rec) {
+  if (!rec || rec.age === 'child') return false;
+  let h = (rec.idx | 0) * 2654435761;
+  for (const ch of String((rec.name && rec.name.first) || '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return ((h >>> 0) % 1000) < 4;
+}
+
+// ...and they use it as you do: a beat of the wing and a dash, out from
+// under a blow or away from whatever's after them. Spent, it fills back in
+// over a few seconds.
+export function npcWingWatch(game, n, dt) {
+  if (!n.wing) return;
+  if (n.rollT > 0) n.rollT -= dt;
+  if (n.wingDash > 0) n.wingDash = Math.max(0, n.wingDash - dt);
+  if (n.wing.k < 1) n.wing.k = Math.min(1, n.wing.k + dt / 7);
+  if (n.wingCd > 0) n.wingCd -= dt;
+  if (n.wing.k < 0.999 || n.wingCd > 0 || n.dead || n.down || n.sleeping || n.sitting || n.moving || n.deck) return;
+  let from = null;
+  for (const p of game.everyone()) {
+    if (p.swing && p.swing.target === n && p.swing.dur - p.swing.t < 0.3) from = p;
+  }
+  if (!from) {
+    for (const c of [...game.creatures, ...(game.npcs || [])]) {
+      const w = c.windup;
+      if (!w || w.target !== n || c.dead || Math.max(Math.abs(c.x - n.x), Math.abs(c.z - n.z)) > 2 || w.dur - w.t > 0.3) continue;
+      from = c;
+      break;
+    }
+  }
+  if (!from && n.state === 'flee' && n.threat && !n.threat.dead && Math.max(Math.abs(n.threat.x - n.x), Math.abs(n.threat.z - n.z)) <= 2) from = n.threat;
+  if (!from) return;
+  n.wingCd = 0.6;
+  if (n.rng && !n.rng.chance(0.7)) return;
+  npcWingDash(game, n, from);
+}
+
+export function npcWingDash(game, n, from) {
+  const w = game.world;
+  // (Away from them, or to the side if there's no room behind.)
+  const ax = Math.sign(n.x - from.x);
+  const az = Math.sign(n.z - from.z);
+  const dirs = [];
+  if (ax || az) dirs.push(Math.abs(n.x - from.x) >= Math.abs(n.z - from.z) && ax ? [ax, 0] : [0, az || 1]);
+  dirs.push([az, ax], [-az, -ax], [1, 0], [-1, 0], [0, 1], [0, -1]);
+  for (const [dx, dz] of dirs) {
+    if (!dx && !dz) continue;
+    let x = n.x;
+    let y = n.y;
+    let z = n.z;
+    let land = null;
+    for (let i = 0; i < 4; i++) {
+      const ny = w.stepTarget(x, y, z, x + dx, z + dz, false);
+      if (ny < 0 || w.isWaterAt(x + dx, ny, z + dz)) break;
+      x += dx;
+      z += dz;
+      y = ny;
+      if (!game.occupiedBySolid(x, y, z, n)) land = { x, y, z, n: i + 1 };
+    }
+    if (!land || land.n < 2) continue;
+    n.path = null;
+    n.wing.k = 0;
+    n.wingDash = 0.55;
+    n.rollT = 0.42;
+    n.rollDur = 0.42;
+    n.rollDir = [dx, dz];
+    n.startMove(land.x, land.y, land.z, 0.075 * land.n);
+    n.moveEase = 'out';
+    const r = game.renderer;
+    r.effect?.({ type: 'wingbeat', wx: n.x, wz: n.z, wy: n.y, oy: -9, dx, dz, life: 0.55 });
+    r.effect?.({ type: 'ring', wx: n.x, wz: n.z, wy: n.y, oy: 2, r0: 4, r1: 22, flat: 0.45, thick: 1, color: ['#a8dcff', '#e0f4ff', '#4f8fe8'], life: 0.4 });
+    r.emit(n.x, n.y + 1.2, n.z, { n: 14, color: ['#a8dcff', '#e0f4ff', '#ffffff', '#5ea4f0'], up: 22, speed: 36, life: 0.6, gravity: 10, glow: true });
+    game.audio?.play('flap', n);
+    game.audio?.play('whoosh', n);
+    return true;
+  }
+  return false;
+}

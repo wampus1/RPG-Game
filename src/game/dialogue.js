@@ -27,6 +27,7 @@ import { gossipLines } from '../sim/society.js';
 import { geoTalk } from './geotalk.js';
 import { fortuneOf } from '../sim/prosperity.js';
 import { isStar, starGreeting, wingTalk } from './starfall.js';
+import { starborn } from './combat.js';
 import { sagaTopics, sagaRespond, isSagaTopic } from '../sim/saga/talk.js';
 import { MOTIFS, pidOf as sagaPidOf } from '../sim/saga/core.js';
 import { INN_NIGHTS, innFor, innPrice, stayAt, rentRoom, stayLeft } from '../sim/inns.js';
@@ -137,7 +138,12 @@ function openingRaw(npc, game) {
   if (game.isWanted(s.id) && rec.job !== 'guard') return pick(rng, ['I have nothing to say to the likes of you.', 'Guards! Someone help!', 'Please... just go.']);
   // A fallen star: the first time, and now and then after, it's your wing
   // they talk about (some of them warily: see starfall.js).
-  if (isStar(game.hero) && (!entry.met || rng.next() < 0.2)) return starGreeting(rec, s.id, () => rng.next());
+  if (isStar(game.hero) && (!entry.met || rng.next() < 0.2)) return starGreeting(rec, s.id, () => rng.next(), game);
+  // (Round 73) One of the rare few who carry a wing of their own.
+  if (starborn(rec) && (!entry.met || rng.next() < 0.15)) {
+    if (isStar(game.hero)) return pick(rng, ['You too? I thought I was the only one left with one of these.', 'Another wing. Did you fall as well? I don\'t remember mine at all.', 'Well, look at us. Two odd birds.']);
+    return pick(rng, ['Yes, it\'s a wing. No, I can\'t fly. Everyone asks.', 'My mother found me in a burnt field when I was small. The wing came with me.', 'Don\'t stare. It only glows when I\'m nervous.', 'Folk call me the star-child here. I was never much of a star.']);
+  }
   // Your own family (if you were born here).
   const kin = sim.familyOf(rec);
   const first = name.split(' ')[0];
@@ -179,7 +185,7 @@ function openingRaw(npc, game) {
     const pr = sim.favors.progress(fv);
     if (pr.have >= pr.need) return pick(rng, ['Oh! Did you manage it?', `${name}! Any luck with that favour?`]);
   }
-  if (rep <= -25) return pick(rng, ['What do you want?', 'Make it quick.', 'Oh. It\'s you.']);
+  if (rep <= -25) return pick(rng, ['What do you want?', 'Make it quick.', 'Oh. It\'s you.', 'I\'m busy.', 'Can it wait? Forever, perhaps?', 'Whatever it is, the answer\'s probably no.', 'You again.']);
   const warns = sim.diplomacy.warnedBy(s.id);
   if (!entry.met && warns.length && rep < 10 && rec.age !== 'child') {
     entry.met = true;
@@ -199,10 +205,10 @@ function openingRaw(npc, game) {
   }
   if (!entry.met) {
     entry.met = true;
-    if (p.kindness < 0.3) return pick(rng, ['What do you want?', 'Hmph. Another wanderer.']);
+    if (p.kindness < 0.3) return pick(rng, ['What do you want?', 'Hmph. Another wanderer.', 'We don\'t get many visitors. We like it that way.', 'If you\'re selling something, I\'m not buying.', 'New, are you? Mind where you put your feet.']);
     return p.sociability > 0.65
-      ? pick(rng, [`Good ${tw}, traveler! Welcome to ${s.name}!`, `Oh, a new face! Welcome to ${s.name}. And you are...? ${name}? Lovely.`])
-      : pick(rng, [`Good ${tw}.`, `Hello. You're not from ${s.name}, are you?`, 'Oh. Hello there.']);
+      ? pick(rng, [`Good ${tw}, traveller! Welcome to ${s.name}!`, `Oh, a new face! Welcome to ${s.name}. And you are...? ${name}? Lovely.`, `Welcome, welcome! First time in ${s.name}? You picked a good ${tw} for it.`, `A visitor! Don't mind the mud, ${s.name} is nicer than it looks.`, `Hello! I know everyone here, so you must be new. I'm ${rec.name.first}.`, `Oh, hello! Lost, or just looking around?`])
+      : pick(rng, [`Good ${tw}.`, `Hello. You're not from ${s.name}, are you?`, 'Oh. Hello there.', 'Hm. Can I help you?', `Passing through ${s.name}?`, 'Hello. Don\'t think I know you.']);
   }
   // Bad weather gets a mention now and then.
   const sky = game.weatherIn ? game.weatherIn(s) : 'clear';
@@ -214,8 +220,8 @@ function openingRaw(npc, game) {
   // (Born and raised here, you're no newcomer.)
   if (sim.isCitizen(s.id) && rep >= 10 && sim.citizen.native) return pick(rng, [`Morning, ${first}! How's the family?`, `Good ${tw}, ${first}. I remember when you were this high.`, `${first}! Tell your folks I said hello.`, `Good ${tw}, neighbour!`]);
   if (sim.isCitizen(s.id) && rep >= 10) return pick(rng, [`Hello again, ${name}! How's life treating our newest citizen?`, `Good ${tw}, neighbour!`, `${name}! What can I do for you?`]);
-  if (rep >= 35) return pick(rng, [`${name}! Good to see you.`, `Ah, ${name}, my friend!`, `Always a pleasure, ${name}.`]);
-  return pick(rng, [`Good ${tw}.`, 'Hello again.', `Yes, ${name}?`, 'Hm? What is it?']);
+  if (rep >= 35) return pick(rng, [`${name}! Good to see you.`, `Ah, ${name}, my friend!`, `Always a pleasure, ${name}.`, `There's a face I'm glad to see.`, `${name}! Sit a while, if you've the time.`, `Back again? Good. Things are duller without you.`, `${name}! I was just thinking about you.`]);
+  return pick(rng, [`Good ${tw}.`, 'Hello again.', `Yes, ${name}?`, 'Hm? What is it?', 'Oh, hello.', `Good ${tw}. Need something?`, 'Back again, are you?', 'What can I do for you?', `${name}. Hello.`, 'Mm? Sorry, miles away. Hello.']);
 }
 
 // Topics available right now, most relevant first. Questions about the
@@ -1601,7 +1607,7 @@ function respondRaw(npc, game, id, arg) {
         g.condoled = true;
         sim.changeRep(npc, p.kindness > 0.5 ? 4 : 2);
       }
-      return { lines: [pick(rng, ['Thank you. That means more than you know.', `Thank you. ${g.first} would have liked you.`, '...Thank you.'])] };
+      return { lines: [pick(rng, ['Thank you. That means more than you know.', `Thank you. ${g.first} would have liked you.`, '...Thank you.', `Most people don't know what to say. Thank you for trying.`, `${g.first} always said this town was kind. I suppose they were right.`])] };
     }
     case 'howdied': {
       const g = griefOf(rec);
@@ -1628,8 +1634,8 @@ function respondRaw(npc, game, id, arg) {
     case 'kind': {
       const d = sim.chat(npc, 'kind');
       const lvl = repLevel(sim.opinion(npc));
-      if (!d) return { lines: [pick(rng, ['Ha, you already said that today.', 'You\'re sweet, but we just chatted.', 'Yes, yes. Thank you.'])] };
-      const first = p.kindness < 0.3 ? pick(rng, ['...Fine. Thanks, I suppose.', 'Hmph. You\'re not so bad.']) : pick(rng, ['Oh, that\'s kind of you to say!', 'Ha! You\'re a charmer.', 'What a lovely thing to say.', 'Well, aren\'t you pleasant company!']);
+      if (!d) return { lines: [pick(rng, ['Ha, you already said that today.', 'You\'re sweet, but we just chatted.', 'Yes, yes. Thank you.', 'Twice in a day? You\'ll turn my head.', 'I heard you the first time. Still nice, though.', 'Careful, I\'ll start to think you want something.'])] };
+      const first = p.kindness < 0.3 ? pick(rng, ['...Fine. Thanks, I suppose.', 'Hmph. You\'re not so bad.', 'What are you after?', 'Flattery won\'t get you a discount.', 'Right. Well. Good for you.']) : pick(rng, ['Oh, that\'s kind of you to say!', 'Ha! You\'re a charmer.', 'What a lovely thing to say.', 'Well, aren\'t you pleasant company!', 'You\'ve made my day, you know that?', 'Oh, stop it. No, go on.', 'Nobody\'s said that to me in years.', 'That\'s a nice thing to hear on a day like this.', 'Thank you! I\'m doing well, all things considered.']);
       // Chatty folk ask you something back.
       if (rec.age !== 'child' && rng.chance(0.35 + p.sociability * 0.5)) {
         const q = askQuestion(npc, game);
@@ -1661,7 +1667,7 @@ function respondRaw(npc, game, id, arg) {
         sim.careers.stripGuard('insulted the mayor');
         return { lines: ['You insult ME? Hand over that badge. You\'re off the watch!'], close: true };
       }
-      return { lines: [angry ? pick(rng, ['What did you just say to me?!', 'Say that again, I dare you!', 'Get out of my sight!']) : pick(rng, ['...That was uncalled for.', 'How rude!', 'I don\'t have to listen to this.'])], close: angry };
+      return { lines: [angry ? pick(rng, ['What did you just say to me?!', 'Say that again, I dare you!', 'Get out of my sight!', 'You\'ve got some nerve.', 'Another word and you\'ll be picking your teeth up off the road.', 'Who do you think you are?']) : pick(rng, ['...That was uncalled for.', 'How rude!', 'I don\'t have to listen to this.', 'Well. I see.', 'I thought better of you.', 'There\'s no need for that.', 'Charming. Truly.'])], close: angry };
     }
     case 'gift': return { open: 'gift' };
     case 'trade': return { open: 'trade' };
@@ -1677,7 +1683,7 @@ function respondRaw(npc, game, id, arg) {
         return { lines: [tn === 'cold' ? `Figure it out yourself. ...Fine. It's ${dir}.` : `The ${pl.label.replace(/^The /, '')} is ${dir}.`] };
       }
       return { lines: ['Where to?'], choices: placesFor(npc, game).map((pl) => ({ id: 'directions', arg: pl.key, label: pl.label })) };
-    case 'wing': return { lines: wingTalk(rec, s.id) };
+    case 'wing': return { lines: wingTalk(rec, s.id, game) };
     case 'surrender': {
       const sid = s.id;
       return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid, npc) };
@@ -1922,7 +1928,7 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['May the light watch over you. (Fully healed)'] };
     }
     case 'bye':
-      return { lines: [pick(rng, tn === 'warm' ? [`Take care, ${name}!`, 'Come back soon!'] : tn === 'cold' ? ['Finally.', 'Good riddance.', '...'] : ['Farewell.', 'Safe travels.', 'Bye now.'])], close: true };
+      return { lines: [pick(rng, tn === 'warm' ? [`Take care, ${name}!`, 'Come back soon!', 'Mind how you go.', 'Don\'t be a stranger.', `See you around, ${name}.`, 'Look after yourself out there.'] : tn === 'cold' ? ['Finally.', 'Good riddance.', '...', 'Don\'t hurry back.', 'Hmph.'] : ['Farewell.', 'Safe travels.', 'Bye now.', 'Until next time.', 'Good day to you.', 'Off you go, then.'])], close: true };
     default:
       return { lines: ['...'] };
   }

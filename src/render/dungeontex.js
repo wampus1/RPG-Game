@@ -893,20 +893,71 @@ Object.assign(DSPRITES, {
     return p;
   },
   weapon_rack() {
+    // (Round 73) Bare: what hangs in it is drawn over it (see
+    // Renderer.drawDisplay), three pegs' worth.
     const p = spr();
     const w = P.planks_dark;
     p.rect(1, 12, 14, 2, w[1]);
     p.rect(1, 22, 14, 2, w[1]);
-    p.vline(1, 12, 25, w[0]);
-    p.vline(14, 12, 25, w[0]);
-    // Spears and a sword leaning in it.
-    for (const x of [4, 7, 10]) {
-      p.vline(x, 4, 24, '#6a4a2a');
-      p.rect(x - 1, 2, 3, 3, IRON[2]);
+    p.vline(1, 10, 25, w[0]);
+    p.vline(14, 10, 25, w[0]);
+    p.hline(1, 14, 10, w[2]);
+    for (const x of [4, 8, 12]) {
+      p.set(x, 12, IRON[2]);
+      p.set(x, 22, IRON[2]);
     }
-    p.vline(12, 8, 24, IRON[2]);
-    p.hline(11, 13, 18, '#8a6a30');
     return p.outline(OUT);
+  },
+  // (Round 73) A stand to show one fine piece on (drawn over it), and a
+  // hook on the wall to hang another from; frames for paintings (their
+  // pictures painted in over them, see Renderer.drawPainting).
+  display_stand() {
+    const p = spr();
+    const w = P.planks_dark;
+    p.rect(3, 24, 10, 3, w[1]);
+    p.hline(3, 12, 24, w[2]);
+    p.rect(6, 15, 4, 9, w[0]);
+    p.vline(6, 15, 23, w[2]);
+    p.rect(4, 13, 8, 2, w[1]);
+    p.hline(4, 11, 13, w[2]);
+    p.set(7, 18, '#c8a040');
+    p.set(8, 18, '#c8a040');
+    return p.outline(OUT);
+  },
+  wall_hanger() {
+    const p = spr();
+    const w = P.planks[1];
+    p.rect(3, 4, 10, 3, w);
+    p.hline(3, 12, 4, P.planks[2]);
+    p.hline(3, 12, 6, P.planks_dark[0]);
+    for (const x of [5, 10]) {
+      p.set(x, 7, IRON[2]);
+      p.set(x, 8, IRON[0]);
+    }
+    p.set(7, 5, '#c8a040');
+    return p.outline(OUT);
+  },
+  painting_small() {
+    const p = spr();
+    const fr = ['#8a5a28', '#5e3a18', '#c08a40'];
+    p.rect(2, 3, 12, 11, fr[0]);
+    p.hline(2, 13, 3, fr[2]);
+    p.vline(2, 3, 13, fr[2]);
+    p.hline(2, 13, 13, fr[1]);
+    p.vline(13, 3, 13, fr[1]);
+    p.rect(3, 4, 10, 9, '#d8ccb0');
+    return p.outline(OUT);
+  },
+  painting_large() {
+    const p = spr();
+    const fr = ['#b08a30', '#7a5a18', '#e8c860'];
+    p.rect(0, 1, 16, 15, fr[0]);
+    p.hline(0, 15, 1, fr[2]);
+    p.vline(0, 1, 15, fr[2]);
+    p.hline(0, 15, 15, fr[1]);
+    p.vline(15, 1, 15, fr[1]);
+    p.rect(1, 2, 14, 13, '#d8ccb0');
+    return p;
   },
   war_banner(rot, st, f) {
     const p = spr(TALL);

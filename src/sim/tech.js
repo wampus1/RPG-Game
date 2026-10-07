@@ -19,6 +19,7 @@ import { M } from '../world/settlement.js';
 import { GROUND, SURFACE } from '../config.js';
 import { tradeWeekly } from './isletrades.js';
 import { farTable } from '../world/farlands.js';
+import { LANDMASSES } from '../world/geography.js';
 import { FAR_TECH_DEFS, FAR_TREES } from './fartech.js';
 
 export const BRANCHES = [
@@ -386,7 +387,12 @@ export class Tech {
     const towns = ow.settlements.filter((q) => q.civ === civ && !q.deserted);
     const size = towns.reduce((n, q) => n + (q.type === 'city' ? 3 : q.type === 'town' ? 2 : 1), 0);
     const rng = new RNG(hash4(this.game.seed >>> 0, civ.id, 0x7ec5));
-    const want = Math.max(1, Math.min(7, 1 + Math.round(size / 3) + rng.int(-1, 1)));
+    // (Round 73) The far lands have had their realms longer: twenty to
+    // thirty steps on the continents, ten to fifteen on the outer isles.
+    const land = civ.far ? LANDMASSES.find((L) => L.key === civ.island) : null;
+    const cont = land && land.kind === 'continent';
+    const want = land ? (cont ? rng.int(20, 30) : rng.int(10, 15)) : Math.max(1, Math.min(7, 1 + Math.round(size / 3) + rng.int(-1, 1)));
+    const maxTier = land ? (cont ? 5 : 4) : 3;
     const lean = {};
     for (const v of civ.values || []) for (const [b, n] of Object.entries(LEAN[v] || {})) lean[b] = (lean[b] || 0) + n;
     for (const [b, n] of Object.entries(CULTURE_LEAN[civ.style] || {})) lean[b] = (lean[b] || 0) + n;
@@ -394,12 +400,28 @@ export class Tech {
     // (Round 68: a far people knows its own first steps from the start:
     // the Velari's census, the Jade Court's silk, the Keshari's adobe...)
     if (FAR_TREES[st.isle]) for (const k of tree.ids) if (TECHS[k].isles && tree.techs[k].tier === 1 && !tree.techs[k].req.length && !st.done.includes(k)) st.done.push(k);
+    // ...and they sail (first, so the rest fills in round it): every continental realm knows trade ships from the
+    // start, and most out on the isles do too.
+    if (land && tree.techs.trade_ships && (cont || rng.chance(0.8))) this.learnWithReqs(st, 'trade_ships');
     while (st.done.length < want) {
-      const open = tree.ids.filter((k) => !st.done.includes(k) && tree.techs[k].tier <= 3 && this.ready(st, k));
+      const open = tree.ids.filter((k) => !st.done.includes(k) && tree.techs[k].tier <= maxTier && this.ready(st, k));
       if (!open.length) break;
       st.done.push(rng.weighted(open.map((k) => [k, (1 + (lean[tree.techs[k].branch] || 0) * 1.5) * this.fit(civ, null, k) / tree.techs[k].tier])));
     }
     st.start = st.done.length;
+  }
+
+  // A step and whatever it stands on (the first of any either-or), learned
+  // outright (a realm's start: see startingPerks).
+  learnWithReqs(st, id, depth = 0) {
+    if (st.done.includes(id) || depth > 12 || !this.def(st, id)) return;
+    const t = this.def(st, id);
+    for (const r of t.req || []) {
+      if (met(st.done, r)) continue;
+      this.learnWithReqs(st, Array.isArray(r) ? r[0] : r, depth + 1);
+    }
+    for (const k of t.also || []) this.learnWithReqs(st, k, depth + 1);
+    if (!this.barred(st, id)) st.done.push(id);
   }
 
   // Born knowing how to work iron? (A free town: if it had a forge going

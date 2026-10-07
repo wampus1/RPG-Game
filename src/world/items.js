@@ -178,7 +178,7 @@ const NOT_ITEMS = new Set([
   'stairs_up', 'brazier', 'barrow_door', 'sinkhole', 'mine_shaft', 'cave_mouth', 'rubble_seal', 'kav_pillar', 'kav_door', 'kav_lift',
   'kav_wall', 'kav_floor', 'kav_glow', 'kav_debris', 'kav_field', 'kav_console', 'kav_plate', 'kav_node', 'kav_seal', 'kav_cache',
   'kav_emitter', 'relic', 'kav_lamp', 'kav_pylon', 'kav_basin', 'sail', 'helm',
-  'cobweb', 'urn', 'candles', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'glowshroom', 'weapon_rack', 'war_banner', 'hanging_chains',
+  'cobweb', 'urn', 'candles', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'glowshroom', 'war_banner', 'hanging_chains',
   'powder_keg', 'roots', 'rubble', 'bone_throne', 'boss_gate', 'boss_gate_open', 'kav_gate', 'gong',
   'kav_keystone', 'void_bloom', 'glow_crystal', 'tendril', 'eye_stalk', 'leaves_void',
   'kav_statue', 'kav_monolith', 'kav_holo', 'kav_conduit', 'kav_husk', 'kav_vent', 'satchel', 'spikes', 'idol', 'blight_floor', 'blight_wall',

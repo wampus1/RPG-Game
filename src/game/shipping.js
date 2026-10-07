@@ -47,12 +47,13 @@ export function updateShips(game, dt) {
   for (const [sid, a] of game.active) {
     const P = S.port(sid);
     let e = game.shipProps.get(sid);
-    if (!P || P.state === 'planned') continue;
+    // (Round 73: a dock with no great ship, in a realm that can't build one.)
+    if (!P || P.state === 'planned' || P.ship === false) continue;
     const site = P.site;
     // Her hull going up beside the pier as it's built.
     if (P.state === 'building') {
-      const p = game.sim.works.projects.find((q) => q.id === P.project);
-      const k = p ? game.sim.works.frameProgress(p) : 0;
+      const p = P.project != null ? game.sim.works.projects.find((q) => q.id === P.project) : null;
+      const k = p ? game.sim.works.frameProgress(p) : P.hullFrom !== undefined ? Math.min(1, (now - P.hullFrom) / (3 * 1440)) : 0;
       if (!e && game.world.regionAt(site.moor.x, site.moor.z)) e = make(game, P, sid, site.moor.x, site.moor.z, true);
       if (e && is3d(e)) setBuild(e, 0.15 + k * 0.85);
       continue;

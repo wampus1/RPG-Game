@@ -78,6 +78,12 @@ r('workbench', 'chair', 1, { planks: 2, stick: 2 });
 r('workbench', 'bench', 1, { planks: 3, stick: 2 });
 r('workbench', 'bed', 1, { planks: 3, cloth: 3 });
 r('workbench', 'bookshelf', 1, { planks: 6, book: 3 });
+// (Round 73) Things to show things on, and paintings to hang.
+r('workbench', 'weapon_rack', 1, { planks: 4, stick: 3, iron_ingot: 1 });
+r('workbench', 'display_stand', 1, { planks: 3, stick: 1 });
+r('workbench', 'wall_hanger', 1, { planks: 1, stick: 2 });
+r('workbench', 'painting_small', 1, { planks: 1, cloth: 1, paper: 1 });
+r('workbench', 'painting_large', 1, { planks: 3, cloth: 2, paper: 2 });
 r('workbench', 'sign', 1, { planks: 3, stick: 1 });
 r('workbench', 'counter', 2, { planks: 4 });
 r('workbench', 'furnace', 1, { cobblestone: 8 });

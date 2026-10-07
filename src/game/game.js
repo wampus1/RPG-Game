@@ -83,6 +83,7 @@ import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
 import { runMigrations } from './migrate.js';
 import { dishLines } from '../world/dishes.js';
 import { Riding, HORSE_FOOD } from './riding.js';
+import { useDisplay, paintingSubject } from './displays.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
@@ -296,6 +297,8 @@ export class Game {
         this.loadAround(sx, sz, true);
         makeCrater(this, sx, sz);
         this.starAt = star;
+        // (Round 73: the village that saw it, remembered.)
+        if (this.hero) this.hero.starSid = star.sid;
       }
       let host = null;
       if (home) {
@@ -2504,7 +2507,10 @@ export class Game {
       this.world.ow.markExplored(p.x, p.z, 2);
       if (p.awakeSince === undefined) p.awakeSince = this.day * DAY_MINUTES + this.minute;
       this.currentSettlement = this.world.ow.settlementAt(p.x, p.z);
-      if (star) this.starAt = star;
+      if (star) {
+        this.starAt = star;
+        if (this.hero) this.hero.starSid = star.sid;
+      }
       // Their story's opening, on their screen; set down in the world when
       // it's done (see intros.js).
       if (!saved && this.hero && this.intros !== false) startIntro(this);
@@ -3717,8 +3723,9 @@ export class Game {
         if (byPlayer && got.owner) this.tookPlaced(x, z, got);
       }
     } else {
-      if (b.interact === 'container') {
+      if (b.interact === 'container' || b.display) {
         const slots = w.getContainer(x, y, z);
+        if (b.display) this.markContainer(x, y, z, true);
         for (const s of slots || []) if (s) drops.push({ ...s });
         // Smashing open someone else's chest is still stealing.
         if (byPlayer) {
@@ -4539,6 +4546,17 @@ export class Game {
       case 'gate':
         this.useGate(x, y, z);
         break;
+      // (Round 73) A rack, a stand, a hook: something set on it, or taken
+      // down (see displays.js); a painting, looked at.
+      case 'display':
+        useDisplay(this, x, y, z);
+        break;
+      case 'painting': {
+        const sub = paintingSubject(x, y, z, this.seed);
+        const what = { beast: 'a beast of the wilds', face: 'someone\'s likeness', place: 'a far-off place', map: 'an old map', thing: 'a fine thing', sea: 'the sea', still: 'a table set with food' }[sub.kind] || 'something';
+        this.renderer.floatText(x, y + 1.8, z, what, '#e8dcc0');
+        break;
+      }
       case 'container': {
         // (An outlaws' strongbox: see sim/saga.)
         if (this.sim.saga && this.sim.saga.chest(x, y, z)) break;
@@ -4918,6 +4936,19 @@ export class Game {
     if (this.day - at < RELOCK_DAYS) return false;
     this.picked.delete(k);
     return true;
+  }
+
+  // (Round 73) What's on a rack or stand now, kept for drawing it (and for
+  // the others in the world: see net/host.js). `gone`: it's been broken.
+  markContainer(x, y, z, gone = false) {
+    const k = `${x},${y},${z}`;
+    this.displayShown ||= new Map();
+    if (gone) {
+      this.displayShown.set(k, []);
+      return;
+    }
+    const slots = this.world.peekContainer(x, y, z);
+    if (slots) this.displayShown.set(k, slots.map((q) => (q ? q.item : null)));
   }
 
   // (Round 73) Tried and locked: "locked" over your head, the rattle of

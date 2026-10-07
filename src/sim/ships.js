@@ -6,7 +6,7 @@
 // comes home. Near you, you see it all (game/shipping.js): the ship at the
 // pier, the merchants walking out along it to go aboard, the ship putting
 // out and sailing off, and coming home again.
-import { alive, ledger, DAY, packGoods, notableNews } from './econ.js';
+import { alive, ledger, DAY, packGoods, notableNews, setOverride } from './econ.js';
 import { deserted } from './civic.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { SURFACE, GROUND } from '../config.js';
@@ -26,8 +26,16 @@ const NAMES = {
   tide: ['Pearl Diver', 'Turtle Back', 'Swift Gull', 'Reef Dancer', 'Tide Bride'],
 };
 Object.assign(NAMES, farTable('ships'));
-const DOCK_COST = 150;
 const CREW = 5;
+// (Round 73) Every town on the coast has a dock, as big as the town: a
+// little plank jetty for a village, a broad pier with posts for a town, a
+// long pier with a T-head and lamps for a city. It grows with the town.
+export const DOCKS = {
+  small: { len: 4, wide: 2, cost: 40, rank: 0, label: 'a jetty' },
+  medium: { len: 6, wide: 3, cost: 90, rank: 1, label: 'a pier' },
+  large: { len: 8, wide: 3, head: 2, cost: 150, rank: 2, label: 'a harbour pier' },
+};
+export const dockSizeFor = (s) => (s && (s.empire || s.type === 'city') ? 'large' : s && s.type === 'town' ? 'medium' : 'small');
 
 export class Ships {
   constructor(game, sim) {
@@ -47,7 +55,8 @@ export class Ships {
   // Where a pier can go: from a bit of open shore near the square, two
   // planks wide and four long, straight out over the water, with open water
   // beyond its end for the ship to lie in.
-  dockSite(L) {
+  dockSite(L, size = 'small') {
+    const D = DOCKS[size] || DOCKS.small;
     const b = L.bounds;
     const P = L.plaza;
     const ok = (m) => m === M.FREE || m === M.ROAD || m === M.YARD || m === M.PLAZA || m === undefined;
@@ -79,6 +88,8 @@ export class Ships {
       const c = L.col(x, z);
       return !!c && c.water < 0 && c.h === SURFACE && ok(L.maskAt(x, z));
     };
+    const len = D.len;
+    const head = D.head || 0;
     let best = null;
     for (let z = b.z0 - 14; z <= b.z1 + 14; z++) {
       for (let x = b.x0 - 14; x <= b.x1 + 14; x++) {
@@ -86,27 +97,57 @@ export class Ships {
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const [px, pz] = [-dz, dx];
           let fit = true;
-          for (let k = 1; k <= 7 && fit; k++) {
+          for (let k = 1; k <= len + 3 && fit; k++) {
             if (!wet(x + dx * k, z + dz * k)) fit = false;
-            else if (k <= 4 && !wet(x + dx * k + px, z + dz * k + pz)) fit = false;
+            else if (k <= len) for (let w = 1; w < D.wide && fit; w++) if (!wet(x + dx * k + px * w, z + dz * k + pz * w)) fit = false;
+          }
+          // (A city's T-head: the end of the pier runs out to either side.)
+          for (let k = len - 1; k <= len && fit && head; k++) {
+            for (let w = -head; w < D.wide + head && fit; w++) if (!wet(x + dx * k + px * w, z + dz * k + pz * w)) fit = false;
           }
           if (!fit) continue;
           const score = Math.hypot(x - P.cx, z - P.cz);
           if (best && score >= best.score) continue;
-          if (room(x + dx * 6, z + dz * 6) < 22) continue;
+          if (room(x + dx * (len + 2), z + dz * (len + 2)) < 22) continue;
           best = { x, z, dx, dz, px, pz, score };
         }
       }
     }
     if (!best) return null;
     const { x, z, dx, dz, px, pz } = best;
+    const tiles = [];
+    const seen = new Set();
+    const put = (tx, tz) => {
+      const k = `${tx},${tz}`;
+      if (seen.has(k)) return;
+      seen.add(k);
+      tiles.push([tx, tz]);
+    };
+    for (let k = 1; k <= len; k++) for (let w = 0; w < D.wide; w++) put(x + dx * k + px * w, z + dz * k + pz * w);
+    if (head) for (let k = len - 1; k <= len; k++) for (let w = -head; w < D.wide + head; w++) put(x + dx * k + px * w, z + dz * k + pz * w);
+    // Posts along its outer edges every few planks (a medium pier and up),
+    // lamps at the head of a city's.
+    const posts = [];
+    const lamps = [];
+    if (D.rank >= 1) {
+      for (let k = 2; k <= len; k += 3) {
+        posts.push([x + dx * k + px * (D.wide - 1), z + dz * k + pz * (D.wide - 1)]);
+        if (k < len - 1 || !head) posts.push([x + dx * k, z + dz * k]);
+      }
+    }
+    if (head) {
+      lamps.push([x + dx * len - px * head, z + dz * len - pz * head], [x + dx * len + px * (D.wide - 1 + head), z + dz * len + pz * (D.wide - 1 + head)]);
+    }
     return {
+      size,
       root: { x, z },
       dir: { x: dx, z: dz },
       // Where you step off at the far end, and where the ship lies.
-      end: { x: x + dx * 4, z: z + dz * 4 },
-      moor: { x: x + dx * 6, z: z + dz * 6 },
-      tiles: [1, 2, 3, 4].flatMap((k) => [[x + dx * k, z + dz * k], [x + dx * k + px, z + dz * k + pz]]),
+      end: { x: x + dx * len, z: z + dz * len },
+      moor: { x: x + dx * (len + 2), z: z + dz * (len + 2) },
+      tiles,
+      posts,
+      lamps,
       side: { x: px, z: pz },
     };
   }
@@ -114,12 +155,30 @@ export class Ships {
   pierBlocks(site, style = 'vale') {
     // (In the people's own wood: see blocks.planksOf.)
     const ops = site.tiles.map(([x, z]) => [x, SURFACE, z, planksOf(style), 0]);
+    const used = new Set();
     // A bollard to tie up to, at the end on the side plank; barrels at the
     // landward end.
-    const [ex, ez] = site.tiles[site.tiles.length - 1];
+    const D = DOCKS[site.size] || DOCKS.small;
+    const [ex, ez] = [site.end.x + site.side.x * (D.wide - 1), site.end.z + site.side.z * (D.wide - 1)];
     ops.push([ex, GROUND, ez, B.fence, 0]);
+    used.add(`${ex},${ez}`);
+    for (const [x, z] of site.posts || []) {
+      if (used.has(`${x},${z}`)) continue;
+      used.add(`${x},${z}`);
+      ops.push([x, GROUND, z, B.fence, 0]);
+    }
+    for (const [x, z] of site.lamps || []) {
+      if (used.has(`${x},${z}`)) continue;
+      used.add(`${x},${z}`);
+      ops.push([x, GROUND, z, B.fence, 0], [x, GROUND + 1, z, B.lantern, 0]);
+    }
     const [rx, rz] = site.tiles[1];
-    ops.push([rx, GROUND, rz, B.barrel, 0]);
+    if (!used.has(`${rx},${rz}`)) ops.push([rx, GROUND, rz, B.barrel, 0]);
+    // (A crate or two on a bigger pier.)
+    if (site.size && site.size !== 'small' && site.tiles[3]) {
+      const [cx, cz] = site.tiles[site.tiles.length > 8 ? 5 : 3];
+      if (!used.has(`${cx},${cz}`)) ops.push([cx, GROUND, cz, B.crate, 0]);
+    }
     return ops;
   }
 
@@ -129,43 +188,119 @@ export class Ships {
     if (deserted(s) || s.condition === 'abandoned' || !this.wet(s)) return null;
     const knows = this.sim.tech.has(s, 'trade_ships');
     let P = this.ports[s.id];
-    if (!knows && (!P || P.state === 'planned')) return null;
+    // (Round 73) A town on the coast always has a dock; on a river, only
+    // once it knows how to build ships.
+    const first = L.econ.dockChecked === undefined;
+    L.econ.dockChecked = day;
+    if (!s.coast && !knows && (!P || P.state === 'planned')) return null;
+    const want = dockSizeFor(s);
     if (!P) {
       // (Nowhere for a pier: looked for again now and then, as the town
       // changes, not every day.)
       if (L.econ.noDock !== undefined && day - L.econ.noDock < 7) return null;
-      const site = this.dockSite(L);
+      let site = null;
+      for (const size of ['large', 'medium', 'small'].slice(2 - DOCKS[want].rank)) if ((site = this.dockSite(L, size))) break;
       if (!site) {
         L.econ.noDock = day;
         return null;
       }
       delete L.econ.noDock;
       const names = NAMES[s.style] || NAMES.vale;
-      P = this.ports[s.id] = { sid: s.id, site, state: 'planned', name: names[hash4(s.id, s.seed >>> 0, 0x5b1) % names.length], voyage: null, next: day, voyages: 0, earned: 0 };
+      P = this.ports[s.id] = { sid: s.id, site, size: site.size, ship: knows, state: 'planned', name: names[hash4(s.id, s.seed >>> 0, 0x5b1) % names.length], voyage: null, next: day, voyages: 0, earned: 0 };
+      // (There from the first: a town that's always been on the coast has
+      // always had its dock.)
+      if (first) {
+        const xs = site.tiles.map((t) => t[0]);
+        const zs = site.tiles.map((t) => t[1]);
+        const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(site, s.style || 'vale'), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: 'the dock', quiet: true });
+        this.sim.works.finishNow(L, p);
+        P.state = 'docked';
+        P.next = day + 1;
+        return null;
+      }
     }
+    P.size ||= 'small';
+    P.site.size ||= P.size;
     // The pier first, when the town can pay for it.
     if (P.state === 'planned') {
-      if (L.econ.treasury < DOCK_COST + 30 || this.sim.works.active(s.id).some((q) => q.kind === 'dock')) return null;
+      const cost = (DOCKS[P.size] || DOCKS.small).cost;
+      if (L.econ.treasury < cost + 30 || this.sim.works.active(s.id).some((q) => q.kind === 'dock')) return null;
       const xs = P.site.tiles.map((t) => t[0]);
       const zs = P.site.tiles.map((t) => t[1]);
-      const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(P.site, s.style || 'vale'), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: 'building a harbour pier' });
-      L.econ.treasury -= DOCK_COST;
+      const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(P.site, s.style || 'vale'), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: `building ${(DOCKS[P.size] || DOCKS.small).label}` });
+      L.econ.treasury -= cost;
       P.state = 'building';
       P.project = p.id;
-      ledger(L, day, `${s.name} has paid ¤${DOCK_COST} for a harbour: a pier for the great ship the shipwrights are building.`);
+      ledger(L, day, P.ship === false ? `${s.name} has paid ¤${cost} for ${(DOCKS[P.size] || DOCKS.small).label} on the shore, for the fishing boats.` : `${s.name} has paid ¤${cost} for a harbour: a pier for the great ship the shipwrights are building.`);
       return { building: p };
     }
     if (P.state === 'building') {
-      const p = this.sim.works.projects.find((q) => q.id === P.project);
-      if (p && !p.done) return null;
+      if (P.hullFrom !== undefined) {
+        if (this.sim.abs - P.hullFrom < 3 * DAY) return null;
+        delete P.hullFrom;
+      } else {
+        const p = this.sim.works.projects.find((q) => q.id === P.project);
+        if (p && !p.done) return null;
+      }
       P.state = 'docked';
       P.next = day + 1;
-      ledger(L, day, `The ${P.name} was launched at ${s.name}'s new pier: a great ship, for trade with ports abroad.`);
-      return { launched: P };
+      if (P.ship !== false) ledger(L, day, `The ${P.name} was launched at ${s.name}'s pier: a great ship, for trade with ports abroad.`);
+      return P.ship !== false ? { launched: P } : null;
     }
+    // (Round 73) Learned to build ships since: the shipwrights lay down a
+    // great ship's keel beside the pier.
+    if (P.state === 'docked' && P.ship === false && knows) {
+      P.ship = true;
+      P.state = 'building';
+      P.hullFrom = this.sim.abs;
+      P.project = null;
+      ledger(L, day, `${s.name}'s shipwrights have laid down the keel of a great ship, the ${P.name}, beside the pier.`);
+      return null;
+    }
+    // ...and the town grown since: the dock grows with it.
+    if (P.state === 'docked' && DOCKS[want].rank > (DOCKS[P.size] || DOCKS.small).rank && !P.grow && L.econ.treasury >= DOCKS[want].cost + 40 && !this.sim.works.active(s.id).some((q) => q.kind === 'dock')
+      && (L.econ.noGrowDock === undefined || day - L.econ.noGrowDock >= 7)) {
+      const site = this.dockSite(L, want);
+      if (!site) L.econ.noGrowDock = day;
+      else {
+        const xs = site.tiles.map((t) => t[0]);
+        const zs = site.tiles.map((t) => t[1]);
+        const p = this.sim.works.add({ sid: s.id, kind: 'dock', blocks: this.pierBlocks(site, s.style || 'vale'), bounds: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }, bid: L.buildings.length - 0.2, label: `building ${DOCKS[want].label}` });
+        L.econ.treasury -= DOCKS[want].cost;
+        P.grow = { site, project: p.id };
+        ledger(L, day, `${s.name} has outgrown its ${P.size === 'small' ? 'jetty' : 'pier'}: ¤${DOCKS[want].cost} for ${DOCKS[want].label}.`);
+      }
+    }
+    if (P.grow) {
+      const p = this.sim.works.projects.find((q) => q.id === P.grow.project);
+      if (!p || p.done) {
+        // (The ship moves round to the new pier when she's next in.)
+        if (!P.voyage) {
+          P.site = P.grow.site;
+          P.size = P.grow.site.size;
+          delete P.grow;
+        }
+      }
+    }
+    // The shipwright, down at the pier of a day, selling ships (see
+    // Sim.shopOf).
+    if (P.state === 'docked' && knows) this.shipwrightDay(L, P, day);
     // (Taken by a realm that doesn't know how to sail her: she stays tied up.)
-    if (P.state === 'docked' && knows && day >= P.next && !P.voyage) return { voyage: this.voyage(L, P, day, rng) };
+    if (P.state === 'docked' && knows && P.ship !== false && day >= P.next && !P.voyage) return { voyage: this.voyage(L, P, day, rng) };
     return null;
+  }
+
+  // The town's carpenter keeps the shipwright's trade at the pier from mid
+  // morning to late afternoon: that's where you buy a ship.
+  shipwrightDay(L, P, day) {
+    const rec = this.shipwright(L);
+    if (!rec || rec.override || rec.away || rec.trip?.phase?.startsWith('away')) return;
+    const at = P.site.root;
+    setOverride(rec, day * DAY + 9 * 60 + 30, day * DAY + 16 * 60 + 30, 'harbour', { place: 'harbour', target: { x: at.x, z: at.z } });
+  }
+
+  shipwright(L) {
+    return L.npcs.find((r) => alive(r) && r.job === 'carpenter' && r.age === 'adult' && !r.visitor && r.captive === undefined) || null;
   }
 
   // Off on a voyage: a port abroad, the merchants aboard with their wares.

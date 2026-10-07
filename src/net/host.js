@@ -688,7 +688,7 @@ export class HostNet {
     g.sent.slow -= step;
     if (g.sent.slow <= 0) {
       g.sent.slow = 0.5;
-      const slow = { placed: [...game.placed], relics: game.relics ? [...game.relics].map(([k, v]) => [k, enc(v, 3)]) : [], signs: game.signIcons ? [...game.signIcons] : [], wallDown: !!game.world.ow.wallDown };
+      const slow = { placed: [...game.placed], relics: game.relics ? [...game.relics].map(([k, v]) => [k, enc(v, 3)]) : [], signs: game.signIcons ? [...game.signIcons] : [], shown: game.displayShown ? [...game.displayShown] : [], wallDown: !!game.world.ow.wallDown };
       const sj = JSON.stringify(slow);
       if (sj !== g.sent.slowLast) {
         g.sent.slowLast = sj;

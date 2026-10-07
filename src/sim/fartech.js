@@ -127,12 +127,12 @@ export const FAR_TECH_DEFS = {
 // dropped needs it no more.)
 export const FAR_TREES = {
   velari: { drop: ['longbows', 'aqueducts', 'shieldwall', 'catapults'], move: { crossbows: { req: [['v_testudo', 'greatweapons']] } }, prune: true },
-  rime: { drop: ['trade_ships', 'aqueducts', 'granaries', 'clemency', 'greatweapons'], move: { conscription: { req: ['ironlaw'] }, prison_labor: { req: ['ironlaw'] }, fortress: { req: ['cranes', 'r_ice_cellars'] } }, prune: true },
+  rime: { drop: ['aqueducts', 'granaries', 'clemency', 'greatweapons'], move: { conscription: { req: ['ironlaw'] }, prison_labor: { req: ['ironlaw'] }, fortress: { req: ['cranes', 'r_ice_cellars'] } }, prune: true },
   jade: { drop: ['longbows', 'lodestones', 'crossbows'], move: { portals: { req: ['j_compass'] } }, prune: true },
-  kesh: { drop: ['trade_ships', 'cavalry', 'wells'], move: { mills: { req: ['k_canals'], side: -1.5 }, steel: { req: ['fieldworks'] } }, prune: true },
+  kesh: { drop: ['cavalry', 'wells'], move: { mills: { req: ['k_canals'], side: -1.5 }, steel: { req: ['fieldworks'] } }, prune: true },
   corrow: { drop: ['cavalry', 'mills', 'aqueducts', 'granaries', 'fortress', 'rams', 'catapults', 'portals'], move: { steel: { req: ['fieldworks'] } }, prune: true },
   salt: { drop: ['cavalry', 'mining', 'lodestones', 'portals', 'rams', 'catapults', 'longbows', 'fortress'], move: { steel: { req: ['fieldworks'] } }, prune: true },
-  hollow: { drop: ['cavalry', 'greatweapons', 'rams', 'catapults', 'trade_ships', 'portals', 'conscription', 'prison_labor'], move: { steel: { req: ['fieldworks'] } }, prune: true },
-  wyrd: { drop: ['cavalry', 'mining', 'lodestones', 'portals', 'trade_ships', 'rams', 'catapults', 'banking'], move: { steel: { req: ['fieldworks'] } }, prune: true },
+  hollow: { drop: ['cavalry', 'greatweapons', 'rams', 'catapults', 'portals', 'conscription', 'prison_labor'], move: { steel: { req: ['fieldworks'] } }, prune: true },
+  wyrd: { drop: ['cavalry', 'mining', 'lodestones', 'portals', 'rams', 'catapults', 'banking'], move: { steel: { req: ['fieldworks'] } }, prune: true },
   skerry: { drop: ['cavalry', 'mining', 'lodestones', 'portals', 'rams', 'catapults', 'aqueducts', 'free_trade'], move: { steel: { req: ['fieldworks'] } }, prune: true },
 };

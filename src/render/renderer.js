@@ -31,6 +31,8 @@ const SNAP_W = Math.ceil(Math.hypot(VIEW_W, VIEW_H)) + 4;
 const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
 import { MODS } from '../mod/state.js';
+import { displayItems, paintingSubject } from '../game/displays.js';
+import { paintingArt } from './paintings.js';
 
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
@@ -524,6 +526,52 @@ export class Renderer {
     this.drawFlashes(game, dt);
   }
 
+  // (Round 73) What's set out on a rack, a stand or a hook (see
+  // game/displays.js): weapons upright in a rack's pegs, a piece on a stand
+  // turning a little in the light, a blade hung on the wall.
+  drawDisplay(ctx, game, wx, y, wz, id, sx, top) {
+    const shown = game.displayShown && game.displayShown.get(`${wx},${y},${wz}`);
+    const items = shown || (displayItems(game.world, wx, y, wz) || []).map((q) => (q ? q.item : null));
+    if (!items.some(Boolean)) return;
+    if (id === B.weapon_rack) {
+      items.forEach((key, i) => {
+        if (!key) return;
+        ctx.save();
+        ctx.translate(sx + 4 + i * 4, top + 16);
+        ctx.rotate(-Math.PI / 4);
+        ctx.scale(0.8, 0.8);
+        ctx.drawImage(itemIcon(key), -8, -8);
+        ctx.restore();
+      });
+      return;
+    }
+    const key = items[0];
+    if (!key) return;
+    if (id === B.display_stand) {
+      const bob = Math.round(Math.sin(this.time * 1.6 + wx * 0.7 + wz) * 1);
+      drawJewelled(ctx, itemIcon(key), key, sx, top - 2 + bob, this.time, true);
+      // (Now and then a glint off it.)
+      if (((this.time * 0.6 + wx * 0.13 + wz * 0.29) % 3) < 0.12) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx + 10, top + 1 + bob, 1, 3);
+        ctx.fillRect(sx + 9, top + 2 + bob, 3, 1);
+      }
+      return;
+    }
+    // A hook on the wall: hung a little aslant.
+    ctx.save();
+    ctx.translate(sx + 8, top + 13);
+    ctx.rotate(0.35 + Math.sin(this.time * 0.8 + wx) * 0.03);
+    ctx.drawImage(itemIcon(key), -8, -6);
+    ctx.restore();
+  }
+
+  drawPainting(ctx, game, wx, y, wz, size, sx, top) {
+    const art = paintingArt(paintingSubject(wx, y, wz, game.seed), size, game.seed >>> 0);
+    if (size === 'large') ctx.drawImage(art, sx + 8 - 15, top - 2);
+    else ctx.drawImage(art, sx + 3, top + 4);
+  }
+
   // A dodge roll: curled up and spinning over the ground (the way you're
   // rolling), ghosts of you trailing behind, dust kicked up.
   drawTumble(ctx, e, sheet, dir, sx, top) {
@@ -978,6 +1026,9 @@ export class Renderer {
                 ctx.restore();
               } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
               if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+              // (Round 73) What's on a rack or a stand, and what a painting shows.
+              if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
+              else if (b.painting) this.drawPainting(ctx, game, wx, y, wz, b.painting, sx, sy + SPR_H - s.h);
               // Hanging signs show what the building is.
               if (id === B.hanging_sign) {
                 const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);
@@ -1495,7 +1546,7 @@ export class Renderer {
     }
     if (e.flash > 0) ctx.filter = 'brightness(3)';
     // Rolling: a tumble, head over heels, with a blur of afterimages.
-    const rolling = (e.kind === 'player' || e.kind === 'creature') && e.rollT > 0 && !e.mount && !e.raft;
+    const rolling = (e.kind === 'player' || e.kind === 'creature' || (e.kind === 'npc' && e.wing)) && e.rollT > 0 && !e.mount && !e.raft;
     if (!rolling && e.rollTrail) e.rollTrail = null;
     if (e.kind === 'creature' && e.species === 'horse') {
       // A horse, bigger than the rest: side on, turned the way it's going.

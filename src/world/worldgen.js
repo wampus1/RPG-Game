@@ -7,7 +7,7 @@ import {
 import { RNG, hash4, clamp, smoothstep } from '../util/rng.js';
 import { makeNoise2D } from '../util/noise.js';
 import { BIOMES, BIOME_STYLE, BIOME_SETTLE } from './biomes.js';
-import { placeName, civName, CULTURES } from './names.js';
+import { placeName, civName, CULTURES, nameEra } from './names.js';
 import { genSites } from './sites.js';
 import { buildLandmasses, landValue, landmassAt, stormAt, stormNear, insideStorm, DETAIL, DAGONI_KEYS, LANDMASSES } from './geography.js';
 import { shapeLands } from './shapes.js';
@@ -46,8 +46,12 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // 2, the lands shaped by the seed (see shapes.js) and bridged, and the far
 // lands lived in (see farlands.js); (round 70) 3, an empire's cities
 // filled out with landmarks and houses (see empire.js: a city already laid
-// out in an older world keeps its plan).
-export const WORLD_GEN = 3;
+// out in an older world keeps its plan); (round 73) 4, streets that wind
+// for the peoples who build that way, houses of more shapes with rooms,
+// paintings and display pieces in their builds, and more variety in the
+// far lands' ground, peoples and names. (A town laid out in an older world
+// keeps its plan.)
+export const WORLD_GEN = 4;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
@@ -57,6 +61,8 @@ export class Overworld {
     this.seed = seed >>> 0;
     const s = this.seed;
     this.wg = o.wg ?? WORLD_GEN;
+    // (Round 73: the names this world is made with.)
+    nameEra(this.wg);
     this.biomeRules = o.rules || MODS.biomeRules || [];
     this.plan = o.plan !== undefined ? o.plan : MODS.world || null;
     // (What couldn't be as the world map has it: said when the world's made.)
@@ -328,6 +334,12 @@ export class Overworld {
     // cold; Ostria's bamboo where it's wet and red mesas where it's dry;
     // each far isle's own, over most of it. (See farlands.js.)
     const F = this.wg >= 2 && key ? FAR_LANDS[key] : null;
+    // (Round 73) Other ground in among a far land's own.
+    if (F && F.alt && this.wg >= 4 && rng.chance(0.24)) {
+      const A = F.alt;
+      const list = (temp > 0.5 && A.warm) || (temp < 0.3 && A.cold) || (moist > 0.55 && A.wet) || (moist < 0.45 && A.dry) || A.any || [];
+      if (list.length) return list[Math.floor(rng.next() * list.length)];
+    }
     if (F && F.biome && rng.chance(0.62)) return F.biome;
     if (F && F.biomes) {
       if (F.biomes.warm && temp > 0.42 && moist < 0.78 && rng.chance(0.6)) return F.biomes.warm;
@@ -896,8 +908,12 @@ export class Overworld {
     for (const { c } of rng.shuffle(cand.slice(0, Math.max(8, Math.floor(cand.length * 0.8))))) {
       if (villages >= F.villages) break;
       if (tooClose(c.cx, c.cz, cont ? 6 : 4.6)) continue;
-      const civ = civWithin(c.cx, c.cz);
-      place('village', c, 1, 1, civ, civ ? civ.style : peopleFor(L.key, c.biome));
+      let civ = civWithin(c.cx, c.cz);
+      // (Round 73) Now and then a free village of incomers, of another
+      // people (on a small isle, even within its realm's reach).
+      const incomers = this.wg >= 4 && F.minor && (!civ || !cont) && rng.chance(civ ? 0.3 : 0.4) ? F.minor[Math.floor(rng.next() * F.minor.length)] : null;
+      if (incomers) civ = null;
+      place('village', c, 1, 1, civ, civ ? civ.style : incomers || peopleFor(L.key, c.biome));
       villages++;
     }
   }
