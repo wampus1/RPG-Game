@@ -24,6 +24,7 @@ import { poseOf, drawPoseFx, drawPoseBehind } from './bossanim.js';
 import './farbosses.js';
 // (Round 71: the masters forged anew: see forge.js.)
 import './forge_base.js';
+import './forge_kharos.js';
 
 export const FRAMES = 24;
 const cache = new Map();

@@ -530,6 +530,32 @@ export function weapon(X, hand, ang, o = {}) {
     for (let i = 0; i < L; i += 2) X.ball(...at(i), 0.7, 0.7, '#8a8070', 'metal', { z });
     X.ball(...at(L + 2.5), 3, 3.4, col, o.mat || 'metal', { z: z + 1, rz: 2.4 });
     X.ball(...at(L + 2.5), 1.8, 2.1, o.glow || '#ffd060', 'glass', { z: z + 3, rz: 1, glow: o.glow || '#ffd060', glowK: 0.85 });
+  } else if (kind === 'crossbow') {
+    // Its stock along `ang` from the hand, the bow across its end, drawn,
+    // a bolt laid in it.
+    const L = o.len ?? 14;
+    X.tube(...at(-5), ...at(L), 1.5, 1.1, grip, o.gripMat || 'wood', { z });
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8 - 0.5;
+      pts.push([...at(L - 2 - Math.cos(k * Math.PI) * 3, k * 16), 1.1 - Math.abs(k) * 0.8, z + 1]);
+    }
+    X.limb(pts, col, o.mat || 'metal');
+    X.tube(...at(L - 2.5, -8), ...at(L - 6, 0), 0.3, 0.3, '#e8e0d0', 'cloth', { z: z + 0.5 });
+    X.tube(...at(L - 2.5, 8), ...at(L - 6, 0), 0.3, 0.3, '#e8e0d0', 'cloth', { z: z + 0.5 });
+    X.tube(...at(L - 6, 0), ...at(L + 4, 0), 0.5, 0.5, o.bolt || '#8a6a3a', 'wood', { z: z + 2 });
+    X.slab([at(L + 3, -1.2), at(L + 3, 1.2), at(L + 6, 0)], o.tipCol || '#c8ccd8', 'metal', { z: z + 2.4, rz: 0.8, bevel: 0.6 });
+  } else if (kind === 'horn') {
+    // A great horn, its mouth flaring, bound in bands.
+    const L = o.len ?? 14;
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8;
+      pts.push([...at(k * L, Math.sin(k * Math.PI) * -2.5), 0.7 + k * k * 2.6, z + k]);
+    }
+    X.limb(pts, col, o.mat || 'bone');
+    for (const k of [0.3, 0.6]) X.ball(...at(k * L, Math.sin(k * Math.PI) * -2.5), 0.9 + k * k * 2.6, 1, o.band || '#8a6a3a', 'gold', { z: z + 1.6, rz: 0.8 });
+    X.ball(...at(L + 0.2), 2.4, 3.2, dk(col, 0.4), 'ink', { z: z + 2, rz: 0.4 });
   } else if (kind === 'torch') {
     haft(-3, 10, 1.2);
     X.ball(...at(11), 2.4, 2.4, '#3a2a1a', 'wood', { z: z + 1, rz: 1.6 });
@@ -745,7 +771,7 @@ export function figure(S) {
     armF: { ...far, at: (J) => [J.shF.x + 1, J.shF.y + 1] },
     armN: { ...near, at: (J) => [J.shN.x, J.shN.y + 1] },
   };
-  if (S.weapon) parts.blade = weaponPart(near, S.weapon, { fist: S.fist, paint: S.weapon.paint, glow: S.weapon.glow });
+  if (S.weapon) parts.blade = weaponPart(near, S.weapon, { fist: S.fist, paint: S.weapon.paint, glow: typeof S.weapon.glow === 'function' ? S.weapon.glow : S.weapon.glowFn });
   if (S.cape) parts.cape = { ...capePart(S.cape), at: (J) => [J.neck.x + 1, J.neck.y + (S.cape.dy ?? 0)] };
   const hw = S.head?.w ?? 28;
   const hh = S.head?.h ?? 30;
@@ -880,4 +906,299 @@ export function crease(P, x0, y0, x1, y1, k = 0.55) {
     const q = P.get(x, y);
     if (q[3]) P.set(x, y, shade(q, k));
   }
+}
+
+// ------------------------------------------------------------ beasts
+// A four-legged body side on, facing left: a barrel, a deep chest, the
+// haunch, a neck rising to where its head hangs (the head's a part), and
+// four legs (the far pair darker, behind), trotting as it goes (J.st.walk).
+// `o`: cx, cy (the barrel's middle), len (chest to haunch), girth, legLen,
+// leg thickness `lr`, `col`/`mat` (and `belly`), `paw` ('paw', 'hoof',
+// 'claw'), `neck` [x, y] where the neck ends.
+export function quadruped(X, J, o = {}) {
+  const cx = o.cx ?? 34;
+  const cy = (o.cy ?? 36) - J.b * 0.5;
+  const len = o.len ?? 26;
+  const g = o.girth ?? 10;
+  const col = o.col || '#7a6a5a';
+  const mat = o.mat || 'fur';
+  const legLen = o.legLen ?? 18;
+  const lr = o.lr ?? 3.4;
+  const ground = o.ground ?? 61;
+  const walk = J.st && J.st.walk;
+  const ph = J.t * TAU;
+  const legs = [
+    { x: cx - len * 0.36, far: true, p: 0.5 }, { x: cx + len * 0.38, far: true, p: 0 },
+    { x: cx - len * 0.32, far: false, p: 0 }, { x: cx + len * 0.42, far: false, p: 0.5 },
+  ];
+  for (const L of legs) {
+    X.in(L.far ? 0 : 3, 1.4);
+    const c = L.far ? dk(col, 0.78) : col;
+    const front = L.x < cx;
+    const sw = walk ? Math.sin(ph + L.p * TAU) : 0;
+    const lift = walk ? Math.max(0, Math.cos(ph + L.p * TAU)) * 4 : 0;
+    const top = { x: L.x, y: cy + g * 0.35 };
+    const foot = { x: L.x + sw * 5 - (front ? 1 : -1), y: ground - lift };
+    const knee = { x: (top.x + foot.x) / 2 + (front ? 1.5 : -2.5) + sw * 1.5, y: (top.y + foot.y) / 2 - lift * 0.3 };
+    const z = L.far ? -3 : 4;
+    X.ball(top.x, top.y - 1, lr * (front ? 1.5 : 1.8), lr * 1.7, c, mat, { z, rz: lr * 1.2 });
+    X.limb([[top.x, top.y, lr * 1.25, z + 1], [knee.x, knee.y, lr * 0.85, z + 1.5], [foot.x, foot.y - 1.5, lr * 0.7, z + 1.5]], c, mat);
+    if (o.paw === 'hoof') X.ball(foot.x - 0.5, foot.y - 0.6, lr * 0.85, lr * 0.6, o.hoof || '#2a2420', 'chitin', { z: z + 2, rz: 1.2 });
+    else {
+      X.ball(foot.x - 1.2, foot.y - 0.8, lr * 1.05, lr * 0.62, c, mat, { z: z + 2, rz: 1.2 });
+      if (o.claws) for (let k = 0; k < 3; k++) X.tube(foot.x - 2 - k * 0.8, foot.y - 0.4, foot.x - 3.8 - k * 0.8, foot.y + 0.4, 0.5, 0.15, o.claws, 'bone', { z: z + 3 });
+    }
+  }
+  X.in(1, 3);
+  // The barrel, the chest, the haunch.
+  X.ball(cx, cy, len * 0.62, g, col, mat, { rz: g * 0.9, along: 'x' });
+  X.ball(cx - len * 0.36, cy - g * 0.1, g * 1.05, g * 1.08, col, mat, { rz: g * 0.95, z: 2 });
+  X.ball(cx + len * 0.4, cy - g * 0.15, g * 0.95, g * 1.0, col, mat, { rz: g * 0.9, z: 1 });
+  if (o.belly) X.ball(cx - 2, cy + g * 0.55, len * 0.45, g * 0.45, o.belly, o.bellyMat || mat, { rz: 3, z: 4, along: 'x' });
+  // The neck, up to where the head hangs.
+  const nk = o.neck || [cx - len * 0.55, cy - g * 1.4];
+  X.limb([[cx - len * 0.3, cy - g * 0.4, g * 0.75, 3], [nk[0], nk[1], g * 0.55, 4]], col, mat);
+  return { cx, cy, len, g, neck: nk };
+}
+// A head as a part (hinged at the neck), for a beast: `kind` 'dog' (a long
+// muzzle), 'cat', 'bear', 'horse', 'dragon', 'boar', 'bird' (a beak),
+// built round its middle; a `jaw` it can open (a part of its own, hung on
+// it: see jawPart). `extra`, `paint`, `glow` its own.
+export function beastHead(o = {}) {
+  const w = o.w ?? 30;
+  const h = o.h ?? 26;
+  const c = { x: o.cx ?? 16, y: o.cy ?? 13 };
+  const r = o.r ?? 6;
+  const col = o.col || '#7a6a5a';
+  const mat = o.mat || 'fur';
+  const kind = o.kind || 'dog';
+  const snout = { dog: 1.3, cat: 0.7, bear: 1, horse: 1.6, dragon: 1.5, boar: 1.2, bird: 1.1, ox: 1 }[kind] ?? 1;
+  return {
+    w, h, px: o.px ?? c.x + r * 0.8, py: o.py ?? c.y + r * 0.7, role: 'head', layer: 'front', z: o.z ?? 6, at: o.at, amp: o.amp ?? 1,
+    c, r,
+    body(X) {
+      X.in(0, 1.4);
+      X.ball(c.x + r * 0.2, c.y, r, r * 0.9, col, mat, { rz: r * 0.8 });
+      if (kind === 'bird') {
+        X.limb([[c.x - r * 0.5, c.y + r * 0.1, r * 0.42, 6], [c.x - r * 1.6, c.y + r * 0.35, r * 0.22, 7], [c.x - r * 2.1, c.y + r * 0.85, r * 0.05, 7]], o.beak || '#e0b040', 'chitin');
+      } else {
+        X.limb([[c.x - r * 0.3, c.y + r * 0.15, r * 0.7, 5], [c.x - r * (0.6 + snout), c.y + r * 0.35, r * 0.48, 6]], col, mat);
+        X.ball(c.x - r * (0.75 + snout), c.y + r * 0.25, r * 0.36, r * 0.3, o.nose || '#1a1414', kind === 'dragon' ? 'chitin' : 'flesh', { z: 8, rz: 1 });
+      }
+      if (o.ears) for (const s of [0, 1]) X.limb([[c.x + r * (0.3 + s * 0.4), c.y - r * 0.6, r * 0.32, 3 + s * 3], [c.x + r * (0.6 + s * 0.4), c.y - r * (1.3 + (o.ears === 'tall' ? 0.6 : 0)), r * 0.08, 3 + s * 3]], s ? col : dk(col, 0.8), mat);
+      if (o.horns) {
+        for (const s of [0, 1]) {
+          const hc = o.hornCol || '#d8ccb0';
+          const bx = c.x + r * (0.3 + s * 0.35);
+          const by = c.y - r * 0.55;
+          if (o.horns === 'swept') X.limb([[bx, by, r * 0.24, 4 + s * 4], [bx + r * 1.0, by - r * 0.5, r * 0.15, 4 + s * 4], [bx + r * 1.9, by - r * 0.35, r * 0.04, 4 + s * 4]], hc, 'bone');
+          else if (o.horns === 'antler') {
+            X.limb([[bx, by, r * 0.12, 4 + s * 4], [bx + r * 0.4, by - r * 1.4, r * 0.1, 4 + s * 4], [bx + r * 1.2, by - r * 2.6, r * 0.06, 4 + s * 4]], hc, 'bone');
+            X.tube(bx + r * 0.25, by - r * 0.9, bx - r * 0.5, by - r * 1.6, r * 0.08, r * 0.04, hc, 'bone', { z: 4 + s * 4 });
+            X.tube(bx + r * 0.7, by - r * 1.8, bx + r * 1.4, by - r * 1.6, r * 0.07, r * 0.04, hc, 'bone', { z: 4 + s * 4 });
+          } else X.limb([[bx, by, r * 0.24, 4 + s * 4], [bx + r * 0.3, by - r * 0.9, r * 0.14, 4 + s * 4], [bx - r * 0.1, by - r * 1.6, r * 0.04, 4 + s * 4]], hc, 'bone');
+        }
+      }
+      if (o.extra) o.extra(X, c, r);
+    },
+    paint(P) {
+      if (mat === 'fur') strands(P, 'fur', { dir: [1, 0.35], len: 2.5, density: 0.18 });
+      if (o.paint) o.paint(P, c, r);
+    },
+    glow(P) {
+      if (o.eye) {
+        const ex = Math.round(c.x - r * 0.2);
+        const ey = Math.round(c.y - r * 0.25);
+        eyes(P, [[ex, ey]], o.eye, { big: !!o.bigEye });
+        glow(P, ex, ey, 2, o.eye, 0.45);
+      }
+      if (o.glow) o.glow(P, c, r);
+    },
+  };
+}
+// A lower jaw, as a part hung on a head part: hinged at its back, its
+// teeth along it.
+export function jawPart(head, o = {}) {
+  const r = head.r;
+  const c = head.c;
+  const len = o.len ?? r * 1.9;
+  const w = Math.ceil(len + 6);
+  const h = Math.ceil(r + 6);
+  return {
+    w, h, px: w - 3, py: 3, role: 'jaw', layer: 'front', parent: o.parent || 'head', z: (head.z ?? 6) + 0.5, at: o.at || [c.x + r * 0.1, c.y + r * 0.45], amp: o.amp ?? 1,
+    body(X) {
+      X.in(0, 1);
+      X.limb([[w - 3, 3, r * 0.42, 2], [w - 3 - len, 4.5, r * 0.26, 3]], o.col || head.col || '#6a5a4a', o.mat || 'fur');
+    },
+    paint(P) {
+      if (o.teeth !== false) for (let i = 2; i < len - 1; i += 2) P.set(Math.round(w - 3 - i), 2, hex(o.tooth || '#f0e8d8'));
+      if (o.tongue) P.set(Math.round(w - 3 - len * 0.5), 4, hex(o.tongue));
+    },
+  };
+}
+// A tail as a part (hinged at its root): a tapering limb of `n` joints
+// curving as it goes (`curl`), a tuft or a spade or spikes at its end.
+export function tailPart(o = {}) {
+  const n = o.n ?? 6;
+  const seg = o.seg ?? 4;
+  const r0 = o.r0 ?? 3;
+  const curl = o.curl ?? 0.25;
+  const pts = [];
+  let a = o.ang ?? -0.2;
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i <= n; i++) {
+    pts.push([x, y, r0 * (1 - i / (n + 1)) + 0.4]);
+    a += curl;
+    x += Math.cos(a) * seg;
+    y += Math.sin(a) * seg;
+  }
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const x0 = Math.floor(Math.min(...xs)) - r0 - 5;
+  const y0 = Math.floor(Math.min(...ys)) - r0 - 5;
+  const w = Math.ceil(Math.max(...xs)) - x0 + r0 + 6;
+  const h = Math.ceil(Math.max(...ys)) - y0 + r0 + 6;
+  const P0 = pts.map(([px, py, r]) => [px - x0, py - y0, r]);
+  return {
+    w, h, px: -x0, py: -y0, role: 'tail', layer: o.layer || 'back', z: o.z ?? -2, at: o.at, amp: o.amp ?? 1, depth: o.depth, rate: o.rate,
+    body(X) {
+      X.in(0, 1.4);
+      X.limb(P0.map(([px, py, r], i) => [px, py, r, 2 + i * 0.2]), o.col || '#7a6a5a', o.mat || 'fur');
+      const e = P0[P0.length - 1];
+      if (o.tip === 'tuft') X.ball(e[0], e[1], r0 * 0.9, r0 * 1.1, o.tipCol || dk(o.col || '#7a6a5a', 0.7), 'fur', { z: 4, rz: 2 });
+      if (o.tip === 'spade') X.slab([[e[0] - 1, e[1] - 3], [e[0] + 5, e[1] + 1], [e[0] - 1, e[1] + 4]], o.tipCol || o.col, o.mat || 'scales', { z: 4, rz: 1.4, bevel: 1 });
+      if (o.spikes) for (let i = 1; i < P0.length - 1; i++) X.tube(P0[i][0], P0[i][1] - P0[i][2] * 0.6, P0[i][0] + 1, P0[i][1] - P0[i][2] - 2.4, 0.9, 0.15, o.spikes, 'bone', { z: 3 });
+    },
+    paint(P) {
+      if ((o.mat || 'fur') === 'fur') strands(P, 'fur', { dir: [1, 0.3], len: 3, density: 0.2 });
+    },
+  };
+}
+// A wing as a part (hinged at its root, spread up and back): `kind`
+// 'feather' (rows of feathers, each its own, coverts over secondaries
+// over the long primaries at the tip) or 'membrane' (a bat's or a
+// dragon's: finger bones and the skin between, a claw at the wrist).
+// `len` its span, `col` (and `tip`, the feathers' ends), `bone`.
+export function wingPart(o = {}) {
+  const L = o.len ?? 30;
+  const a0 = o.ang ?? -1.15;
+  const kind = o.kind || 'feather';
+  const dir = (a, d) => ({ x: Math.cos(a) * d, y: Math.sin(a) * d });
+  const wrist = dir(a0, L * 0.42);
+  const a1 = a0 + (o.bend ?? 0.75);
+  const tip = { x: wrist.x + Math.cos(a1) * L * 0.6, y: wrist.y + Math.sin(a1) * L * 0.6 };
+  // The trailing edge's way: across the bone, back and down.
+  const across = (a) => a + Math.PI / 2;
+  const feathers = [];
+  if (kind === 'feather') {
+    const rows = o.rows ?? [{ n: 7, len: 0.22, w: 1.6, col: o.cover || o.col }, { n: 8, len: 0.38, w: 1.5, col: o.col }, { n: 6, len: 0.55, w: 1.5, col: o.tip || o.col, primary: true }];
+    rows.forEach((row, ri) => {
+      for (let i = 0; i < row.n; i++) {
+        const k = (i + 0.5) / row.n;
+        // Along the bone: root to wrist to tip.
+        const onArm = row.primary ? 0.42 + k * 0.58 : k;
+        const base = onArm < 0.42 ? dir(a0, L * onArm) : { x: wrist.x + Math.cos(a1) * L * (onArm - 0.42), y: wrist.y + Math.sin(a1) * L * (onArm - 0.42) };
+        const ba = onArm < 0.42 ? a0 : a1;
+        const fa = across(ba) + (row.primary ? -0.9 + k * 0.6 : -0.25 + k * 0.1);
+        const fl = L * row.len * (row.primary ? 0.8 + k * 0.4 : 0.8 + Math.sin(k * Math.PI) * 0.3);
+        feathers.push({ base, a: fa, len: fl, w: row.w, col: row.col, ri, k });
+      }
+    });
+  }
+  const pts = [{ x: 0, y: 0 }, wrist, tip, ...feathers.map((f) => ({ x: f.base.x + Math.cos(f.a) * f.len, y: f.base.y + Math.sin(f.a) * f.len }))];
+  if (kind === 'membrane') {
+    for (let i = 0; i < 4; i++) {
+      const fa = a1 + 0.2 + i * 0.42;
+      pts.push({ x: wrist.x + Math.cos(fa) * L * (0.6 - i * 0.06), y: wrist.y + Math.sin(fa) * L * (0.6 - i * 0.06) });
+    }
+  }
+  const x0 = Math.floor(Math.min(...pts.map((p) => p.x))) - 5;
+  const y0 = Math.floor(Math.min(...pts.map((p) => p.y))) - 5;
+  const w = Math.ceil(Math.max(...pts.map((p) => p.x))) - x0 + 6;
+  const h = Math.ceil(Math.max(...pts.map((p) => p.y))) - y0 + 6;
+  const S = (p) => [p.x - x0, p.y - y0];
+  return {
+    w, h, px: -x0, py: -y0, role: 'wing', layer: o.layer || 'back', z: o.z ?? -1, at: o.at, amp: o.amp ?? 1, depth: o.depth ?? 0.22, rate: o.rate ?? 1.2, squash: o.squash, lift: o.lift ?? 0.6,
+    body(X) {
+      const bone = o.bone || o.col || '#6a5a4a';
+      if (kind === 'membrane') {
+        // The skin between the fingers, then the bones over it.
+        X.in(0, 1.2);
+        const fingers = [0, 1, 2, 3].map((i) => {
+          const fa = a1 + 0.2 + i * 0.42;
+          return { x: wrist.x + Math.cos(fa) * L * (0.6 - i * 0.06), y: wrist.y + Math.sin(fa) * L * (0.6 - i * 0.06) };
+        });
+        const poly = [S({ x: 0, y: 0 }), S(wrist), ...fingers.map(S), S({ x: wrist.x * 0.2, y: wrist.y * 0.2 + L * 0.18 })];
+        X.slab(poly, o.skin || dk(o.col || '#6a3a2a', 0.85), o.skinMat || 'leather', { rz: 1.2, bevel: 1, z: 0 });
+        X.in(1, 0.8);
+        X.limb([[...S({ x: 0, y: 0 }), L * 0.07, 3], [...S(wrist), L * 0.05, 3]], bone, o.boneMat || 'scales');
+        for (const f of fingers) X.limb([[...S(wrist), L * 0.035, 3], [...S(f), L * 0.015, 3]], bone, o.boneMat || 'scales');
+        X.tube(...S(wrist), ...S({ x: wrist.x - 2, y: wrist.y - 4 }), 1, 0.2, o.claw || '#e0d8c0', 'bone', { z: 5 });
+      } else {
+        // The arm's bone and its coverts, then the feathers row by row, the
+        // long ones at the back.
+        X.in(0, 1.6);
+        X.limb([[...S({ x: 0, y: 0 }), L * 0.09, 2], [...S(wrist), L * 0.07, 3], [...S(tip), L * 0.03, 3]], o.cover || o.col || '#6a5a4a', 'feather');
+        const order = [...feathers].sort((a, b) => b.ri - a.ri);
+        order.forEach((f, i) => {
+          X.in(1 + (2 - f.ri), 0.6);
+          const b = S(f.base);
+          const e = [b[0] + Math.cos(f.a) * f.len, b[1] + Math.sin(f.a) * f.len];
+          const n = [-Math.sin(f.a) * f.w, Math.cos(f.a) * f.w];
+          X.slab([[b[0] - n[0], b[1] - n[1]], [b[0] + n[0], b[1] + n[1]], [e[0] + n[0] * 0.6, e[1] + n[1] * 0.6], [e[0], e[1]], [e[0] - n[0] * 0.4, e[1] - n[1] * 0.4]], f.col || o.col, 'feather', { rz: 1.2, bevel: 0.8, z: 2 + (2 - f.ri) * 1.5 + i * 0.01 });
+        });
+      }
+      if (o.extra) o.extra(X, S);
+    },
+    paint(P) {
+      if (kind === 'feather' && o.tip) {
+        // Each feather's end in the tip colour, its shaft lighter.
+        for (const f of feathers) {
+          const b = S(f.base);
+          for (let s = 0; s < f.len; s++) {
+            const x = Math.round(b[0] + Math.cos(f.a) * s);
+            const y = Math.round(b[1] + Math.sin(f.a) * s);
+            const q = P.get(x, y);
+            if (!q[3]) continue;
+            const k = s / f.len;
+            if (k > 0.55 && o.tip) P.set(x, y, mix(q, hex(o.tip), (k - 0.55) * 1.6));
+            else if (k < 0.5) P.set(x, y, shade(q, 1.12));
+          }
+        }
+      }
+      if (o.paint) o.paint(P, S);
+    },
+    glow(P) {
+      if (o.glow) o.glow(P, S);
+    },
+  };
+}
+
+// ------------------------------------------------------------ orbits
+// Things going round it (shards, panes, stones), each a part twice over:
+// once behind it, once before it, shown as it comes round (see forge.js
+// drawParts `show`). `o`: cx, cy (the middle of their round, on its
+// picture), rx, ry, speed, spin (each turning as it goes), bob, and the
+// picture of each, `body(X, i, layer)` (`w`, `h`), `paint`, `glow`.
+export function orbit(name, n, o) {
+  const out = {};
+  for (let i = 0; i < n; i++) {
+    for (const layer of ['back', 'front']) {
+      const ang = (R) => (R ? R.t : 0) * (o.speed ?? 0.8) + (i / n) * TAU;
+      out[`${name}${i}${layer}`] = {
+        w: o.w, h: o.h, px: o.w / 2, py: o.h / 2, role: 'sway', layer, z: o.z ?? 1, depth: o.depth ?? 0.05, phase: i,
+        at: (J, R) => {
+          const a = ang(R);
+          return [o.cx + Math.cos(a) * o.rx, o.cy + Math.sin(a) * o.ry + Math.sin((R ? R.t : 0) * 2 + i) * (o.bob ?? 1)];
+        },
+        show: (R) => (Math.sin(ang(R)) >= 0) === (layer === 'front'),
+        extra: o.spin ? (R) => (R ? R.t : 0) * o.spin + i : undefined,
+        body: (X) => o.body(X, i, layer),
+        paint: o.paint ? (P) => o.paint(P, i, layer) : undefined,
+        glow: o.glow ? (P) => o.glow(P, i, layer) : undefined,
+      };
+    }
+  }
+  return out;
 }

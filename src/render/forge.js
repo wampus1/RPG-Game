@@ -316,3 +316,36 @@ export function tone(c, k) {
   return `#${f((n >> 16) & 255)}${f((n >> 8) & 255)}${f(n & 255)}`;
 }
 export { hash2 };
+
+// ------------------------------------------------------------ fx in pose
+// Draw `fn` on the world's canvas as if on the master's picture: in its
+// pose (leaning, squashed, as bossanim has it), turned the way it faces,
+// so a point (R.ox + x, R.oy + y) is where that pixel of its picture is
+// drawn. (For what it gives off, kept fast to it, but not rimmed.)
+export function inPose(R, ctx, pose, fn) {
+  ctx.save();
+  ctx.translate(Math.round(R.x + (pose ? pose.dx || 0 : 0)), Math.round(R.y + (pose ? pose.dy || 0 : 0)));
+  if (pose) {
+    if (pose.rot) ctx.rotate(pose.rot);
+    if (pose.shear) ctx.transform(1, 0, pose.shear, 1, 0, 0);
+    if (pose.sx !== undefined || pose.sy !== undefined) ctx.scale(pose.sx ?? 1, pose.sy ?? 1);
+  }
+  if (R.flip) ctx.scale(-1, 1);
+  ctx.translate(-R.x, -R.y);
+  fn();
+  ctx.restore();
+}
+// Where a point on a part's own picture (lx, ly) is now, on the master's
+// (as drawn in `front`/`behind`, or `inPose`).
+export function partAt(R, name, lx, ly) {
+  const D = R.D;
+  if (!R.placed) R.placed = placeParts(R, D);
+  const p = R.placed[name];
+  const q = D.parts[name];
+  if (!p) return { x: R.ox + lx, y: R.oy + ly, ang: 0 };
+  const dx = lx - q.px;
+  const dy = (ly - q.py) * (p.sy ?? 1);
+  const c = Math.cos(p.ang);
+  const s = Math.sin(p.ang);
+  return { x: p.x + dx * c - dy * s, y: p.y + dx * s + dy * c, ang: p.ang };
+}
