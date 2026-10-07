@@ -1586,7 +1586,7 @@ export function addBeasts(more) {
   Object.assign(BEASTS, more);
   for (const k of Object.keys(more)) if (!BEAST_SPECIES.includes(k)) BEAST_SPECIES.push(k);
 }
-export { part as beastPart, serpent as beastSerpent, curl as beastCurl, ashSkin, wyrmCfg, drakeChain, heartChains, beatOf, krakenArms };
+export { part as beastPart, serpent as beastSerpent, curl as beastCurl, ashSkin, wyrmCfg, drakeChain, heartChains, beatOf, krakenArms, lampreyCfg, lampreyUnder, bloatFeelers, shoal, mothMarks };
 export function paintBeast(species, t, st) {
   const B = BEASTS[species];
   const X = new Sculpt(B.w, B.h, { seed: species.length * 13, t });
