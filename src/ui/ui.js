@@ -3,6 +3,7 @@
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { dishLines, ingredientTypes } from '../world/dishes.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
+import { DungeonMapWindow } from './dungeonmap.js';
 import { ITEMS, maxStack, GEMS, SHARD_MAX } from '../world/items.js';
 import { relicReach } from '../game/relics.js';
 import { gemText } from '../game/gems.js';
@@ -52,6 +53,24 @@ export function buffKey(q) {
 export function shortLeft(min) {
   if (min >= 60) return `${Math.floor(min / 60)}h`;
   return `${Math.max(1, Math.ceil(min))}m`;
+}
+
+
+// (Round 73) A message's spelled-out advice taken off it: a bracketed
+// "(move!)", "(keep off the seams)", "(roll free when it takes you)" and
+// the like (what to do about it is the player's to work out), and the
+// messages that are nothing but a tutorial.
+const HINT_START = /^(keep|watch|move|don'?t|stand|get|run|roll|time|fight|plant|take|use|hold|press|look|tread|strike|talk|step|stay|go|dig|out|mind|wait|avoid|kill|beat|break|find|follow|bring|carry|try|hit|duck|run|jump|it's coming|something reaches|briars|a vent|a surge|they fill|the ring|right-click|f to|t to|m:|quest log|or "reveal|cook something|don't hold|an anvil|a chair)\b/i;
+const QUIET = [
+  /^There's a block over your head/,
+  /^Too low to/,
+  /^Sit down somewhere first/,
+  /^Nothing to (?:set down|put down)/,
+];
+export function trimHint(text) {
+  if (QUIET.some((r) => r.test(text))) return '';
+  const out = text.replace(/\s*\(([^()]*)\)/g, (m, inner) => (HINT_START.test(inner.trim()) || /!\s*$/.test(inner.trim()) ? '' : m)).trim();
+  return out || text;
 }
 
 export class UI {
@@ -127,6 +146,9 @@ export class UI {
     // (A colour that came as null, over the wire or from a story: the
     // usual one, never black. Round 56.)
     color ||= C.fg;
+    // (Round 73: what's for the player to work out isn't spelled out.)
+    text = trimHint(String(text ?? ''));
+    if (!text) return;
     if (merge && this.messages.length) {
       const last = this.messages[this.messages.length - 1];
       const m = /^\+(\d+) (.*)$/.exec(text);
@@ -193,7 +215,8 @@ export class UI {
           if (!game.player.dead) this.toggle('inventory', () => new W.InventoryWindow(this));
           continue;
         case 'KeyM':
-          this.toggle('map', () => new W.MapWindow(this));
+          // (Round 73: below ground, the map of where you are.)
+          this.toggle('map', () => (game && game.dungeon && !game.dungeon.ship ? new DungeonMapWindow(this) : new W.MapWindow(this)));
           continue;
         case 'KeyC':
           if (!game.player.dead) this.toggle('craft', () => new W.CraftWindow(this, 'hand'));

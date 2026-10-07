@@ -264,7 +264,7 @@ export class Lighting {
     if (dark > 0.15) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const mine = player.lightLevel > 4 ? [{ x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true, cold: player.heldLightKind && player.heldLightKind() === 'cold' }] : [];
+      const mine = player.lightLevel > 4 ? [{ x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true, ent: player, cold: player.heldLightKind && player.heldLightKind() === 'cold' }] : [];
       const glowSources = [...this.sources, ...mine, ...ents.map((q) => ({ ...q, player: true }))];
       for (const s of glowSources) {
         if (s.x < x0 - 2 || s.x > x1 + 2 || s.z < z0 - 2 || s.z > z1 + 2) continue;
@@ -276,9 +276,12 @@ export class Lighting {
           if (s.covered === undefined) s.covered = this.coveredAbove(world, s, r);
           if (s.covered) continue;
         }
-        const [su, sv] = r.toView ? r.toView(s.x, s.z) : [s.x, s.z];
+        // (Round 73: on whoever carries it, where they're drawn, between
+        // one pace and the next, not snapped from tile to tile.)
+        const rp = s.ent && s.ent.renderPos ? s.ent.renderPos() : s;
+        const [su, sv] = r.toView ? r.toView(rp.x, rp.z) : [rp.x, rp.z];
         const sx = su * TILE - r.camX + 8;
-        const sy = sv * TILE - s.y * LH - r.camY + LH + 2;
+        const sy = sv * TILE - (rp.y + (s.ent ? s.dy || 0 : 0)) * LH - r.camY + LH + 2;
         if (sx < -40 || sy < -40 || sx > (r.vw || VIEW_W) + 40 || sy > (r.vh || VIEW_H) + 40) continue;
         const size = 20 + s.L * 3;
         ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08) * (s.dim ?? 1);

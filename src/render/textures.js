@@ -474,8 +474,10 @@ function cubeTop(name, v, rand, rot) {
     case 'timber': return planks(p, P.planks_dark, rand);
     case 'log_wall': return planks(p, pal, rand, 4);
     case 'marble': {
-      speckle(p, pal, rand, 0.08);
-      randomWalk(p, rand, rand() * 16, 0, 20, pal[2]);
+      // (Round 73: its top a soft grey-white, veined, not glaring.)
+      speckle(p, ['#c8c8d0', '#b4b4c0', '#d4d4dc'], rand, 0.18);
+      randomWalk(p, rand, rand() * 16, 0, 20, '#9a9aaa');
+      if (v % 2) randomWalk(p, rand, rand() * 16, rand() * 16, 9, '#a8a8b8');
       return p;
     }
     case 'sandstone': {
@@ -1796,10 +1798,12 @@ const SPRITES = {
   cactus(rot, st, f, rand) {
     const p = spr();
     const g = ['#4a9a3a', '#387a2c', '#62b44a'];
-    p.rect(4, 0, 8, 26, g[0]);
-    p.vline(4, 0, 25, g[2]);
-    p.vline(11, 0, 25, g[1]);
-    p.vline(7, 0, 25, g[1]);
+    // (Round 73: down to the frame's foot, so one stacked on another meets
+    // it without a dark line between them.)
+    p.rect(4, 0, 8, SPR_H, g[0]);
+    p.vline(4, 0, SPR_H - 1, g[2]);
+    p.vline(11, 0, SPR_H - 1, g[1]);
+    p.vline(7, 0, SPR_H - 1, g[1]);
     for (let y = 2; y < 25; y += 4) {
       p.set(3, y, '#f0e8c0');
       p.set(12, y + 2, '#f0e8c0');

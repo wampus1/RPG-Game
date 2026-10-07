@@ -9,6 +9,7 @@
 //     a lost child, someone to lead home. Some follow you once you've
 //     spoken to them.
 import { playerOf } from '../sim/saga/refs.js';
+import { ITEMS } from '../world/items.js';
 
 const far = (n, x, z) => Math.max(Math.abs(n.x - x), Math.abs(n.z - z));
 
@@ -195,6 +196,8 @@ export function sagaTalk(n, dt) {
     return;
   }
   if (s.leaving) return leave(n, s, dt);
+  // (Round 73) A captive let out, with monsters on them: armed, they fight.
+  if (s.role === 'captive' && (s.follow || s.homeward) && defend(n, s, dt)) return;
   if (s.homeward) return homeward(n, s, dt);
   if (s.follow) return follow(n, s, dt);
   if (s.seek) return seek(n, s, dt);
@@ -211,6 +214,80 @@ export function sagaTalk(n, dt) {
     n.say(n.rng.pick(s.lines), 3, s.lineColor || undefined);
   }
   if (p.d < 7 && !n.moving && n.rng.chance(dt * 0.6)) n.face(p.p.x, p.p.z);
+}
+
+// (Round 73) A captive out of the cage, with something coming for them:
+// a blade of theirs, they fight it off; none, one off a fallen outlaw
+// lying near (they go and get it); none of those either, they call to you
+// for one (drop or throw them one, G: they'll pick it up).
+const BLADE = (k) => {
+  const it = ITEMS[k];
+  return !!(it && it.kind === 'weapon' && !it.ranged && (it.hands || 1) === 1);
+};
+function defend(n, s, dt) {
+  const g = n.game;
+  let foe = null;
+  let fd = 8;
+  for (const c of g.creatures) {
+    if (c.dead || !c.hostileNow || Math.abs(c.y - n.y) > 2) continue;
+    const d = n.distTo(c);
+    if (d < fd) {
+      foe = c;
+      fd = d;
+    }
+  }
+  if (!foe) {
+    s.defending = false;
+    return false;
+  }
+  const eq = n.rec && n.rec.equipment;
+  const armed = !!n.sagaBlade || (eq && (BLADE(eq.tool) || (eq.items || []).some((i) => BLADE(i.item))));
+  if (armed) {
+    if (!s.defending) {
+      s.defending = true;
+      n.say(n.rng.pick(['Come on, then!', 'Not again. Never again!', 'Stay back! I\'m warning you!']), 2.5, '#ffb080');
+    }
+    n.threat = foe;
+    n.state = 'fight';
+    n.fight(dt);
+    n.state = 'saga';
+    return true;
+  }
+  // A blade lying near, off one of them that fell.
+  let drop = null;
+  let dd = 9;
+  for (const d of g.drops || []) {
+    if (d.dead || !BLADE(d.item) || Math.abs(d.y - n.y) > 2) continue;
+    const q = Math.max(Math.abs(d.x - n.x), Math.abs(d.z - n.z));
+    if (q < dd) {
+      drop = d;
+      dd = q;
+    }
+  }
+  if (drop) {
+    if (dd <= 1) {
+      drop.dead = true;
+      n.sagaBlade = drop.item;
+      if (eq) {
+        (eq.items ||= []).push({ item: drop.item, count: 1 });
+        eq.tool = drop.item;
+      }
+      n.doAction?.(0.3);
+      n.say(n.rng.pick(['This\'ll do.', 'Right. My turn.', 'Let\'s see how they like it.']), 2.5, '#ffb080');
+      g.audio?.play('pickup', n);
+      return true;
+    }
+    goTo(n, drop.x, drop.z, 0);
+    return true;
+  }
+  // Nothing: they ask you for one.
+  s.askT = (s.askT || 0) - dt;
+  const p = g.closestPlayer(n.x, n.z);
+  if (s.askT <= 0 && p && p.d < 14) {
+    s.askT = 12;
+    n.say(n.rng.pick(['A blade! Throw me a blade, anything!', 'I\'ve nothing to fight with! Give me something!', 'Have you a knife? Toss it here!']), 3.5, '#ffd080');
+  }
+  return false;
 }
 
 // On home alone (a captive led back to their own people: see captive.js),

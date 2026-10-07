@@ -1490,11 +1490,112 @@ function simpleIcon(key) {
       }
       p.vline(8, 7, 12, '#c8c0b0');
       break;
+    // (Round 73) The far lands' goods that had no picture.
+    case 'olives':
+      for (const [x, y, c] of [[6, 9, '#5a6a2a'], [9, 8, '#3a4a1a'], [8, 11, '#6a7a32'], [11, 11, '#2a2a1a'], [5, 12, '#4a5a22']]) {
+        p.ellipse(x, y, 1.6, 1.2, c);
+        p.set(x - 1, y - 1, shade(c, 1.5));
+      }
+      p.line(7, 6, 11, 3, '#6a5a3a');
+      p.set(12, 4, '#7a9a4a');
+      p.set(11, 5, '#7a9a4a');
+      break;
+    case 'grapes':
+      for (const [x, y] of [[6, 6], [9, 6], [12, 6], [7, 9], [10, 9], [8, 12], [11, 11.5], [9, 14]]) {
+        p.ellipse(x, y, 1.5, 1.5, '#6a2a7a');
+        p.set(Math.round(x) - 1, Math.round(y) - 1, '#b07ac0');
+      }
+      p.line(9, 4, 10, 1, '#6a5a3a');
+      p.ellipse(12, 3, 2, 1, '#5aa83a');
+      break;
+    case 'cherries':
+      p.line(6, 10, 9, 3, '#4a6a2a');
+      p.line(11, 10, 9, 3, '#4a6a2a');
+      for (const x of [5, 11]) {
+        p.ellipse(x, 11, 2.2, 2.2, '#c01a2a');
+        p.set(x - 1, 10, '#ff8090');
+      }
+      p.ellipse(11, 3, 2, 1, '#5aa83a');
+      break;
+    case 'cactus_fruit':
+      p.ellipse(8, 9, 4, 5, '#c02a5a');
+      p.ellipse(7, 8, 2, 3, '#e05a80');
+      for (const [x, y] of [[6, 6], [10, 7], [8, 11], [11, 10], [5, 10]]) p.set(x, y, '#f8e0a0');
+      p.hline(6, 10, 4, '#5a8a3a');
+      break;
+    case 'glowberries':
+      for (const [x, y] of [[6, 9], [9, 8], [8, 11], [11, 11], [5, 12]]) {
+        p.ellipse(x, y, 1.6, 1.6, '#ffd040');
+        p.set(x, y, '#fff8c0');
+      }
+      p.line(8, 6, 9, 3, '#4a6a2a');
+      p.set(10, 3, '#5aa83a');
+      break;
+    case 'lantern_pod':
+      p.ellipse(8, 9, 3.5, 4.5, '#ff9030');
+      p.ellipse(8, 9, 2, 3, '#ffd070');
+      p.set(8, 9, '#fff8e0');
+      for (const y of [6, 9, 12]) p.hline(5, 11, y, '#c86020');
+      p.line(8, 4, 8, 2, '#5a4a2a');
+      break;
+    case 'bamboo_cane':
+      p.line(4, 14, 12, 2, '#9ac850');
+      p.line(5, 14, 13, 2, '#6a9a30');
+      for (const k of [0.3, 0.62]) p.set(Math.round(4 + 8 * k), Math.round(14 - 12 * k), '#e0e8a0');
+      p.set(12, 4, '#4a7a2a');
+      p.set(13, 5, '#5aa83a');
+      break;
+    case 'salt':
+      p.ellipse(8, 11, 5, 3, '#e8e8f0');
+      p.ellipse(8, 10, 3.5, 2, '#ffffff');
+      for (const [x, y] of [[6, 7], [9, 6], [11, 8], [7, 9]]) p.rect(x, y, 2, 2, '#f4f4ff');
+      p.set(10, 6, '#c8c8d8');
+      break;
+    case 'frost_crystal':
+      p.line(8, 2, 5, 9, '#a0d8ff');
+      p.line(8, 2, 11, 9, '#60a8e0');
+      p.line(5, 9, 8, 14, '#80c0f0');
+      p.line(11, 9, 8, 14, '#4a88c0');
+      p.vline(8, 3, 13, '#e8f8ff');
+      p.set(7, 5, '#ffffff');
+      break;
+    case 'antler':
+      p.line(4, 14, 7, 6, '#c8b088');
+      p.line(7, 6, 10, 2, '#e0c8a0');
+      p.line(7, 8, 3, 4, '#d8c098');
+      p.line(8, 5, 13, 4, '#d8c098');
+      p.line(9, 3, 12, 1, '#e8d8b8');
+      p.set(4, 14, '#8a7458');
+      break;
+    case 'tiger_pelt':
+      p.rect(4, 4, 8, 9, '#e08a30');
+      p.rect(3, 5, 1, 2, '#e08a30');
+      p.rect(12, 5, 1, 2, '#e08a30');
+      p.rect(3, 10, 1, 2, '#e08a30');
+      p.rect(12, 10, 1, 2, '#e08a30');
+      for (let y = 5; y < 13; y += 2) p.hline(5 + (y % 4 ? 1 : 0), 9 + (y % 4 ? 1 : 0), y, '#2a1a10');
+      p.vline(8, 5, 12, '#f0b060');
+      break;
+    case 'pink_feather':
+      p.line(4, 13, 12, 3, '#f8a0c8');
+      p.line(6, 12, 12, 5, '#e070a0');
+      p.line(5, 11, 10, 4, '#ffc8e0');
+      p.line(3, 14, 5, 12, '#c8a0a8');
+      break;
+    case 'scorpion_sting':
+      p.line(4, 13, 8, 7, '#8a5a2a');
+      p.line(8, 7, 11, 5, '#a86a30');
+      p.ellipse(11, 5, 2, 1.6, '#6a3a1a');
+      p.line(12, 4, 13, 2, '#2a1a10');
+      p.set(13, 1, '#c0e040');
+      for (const [x, y] of [[5, 12], [6, 10], [7, 8]]) p.set(x, y, '#c88a4a');
+      break;
     default:
       p.rect(4, 4, 8, 8, '#ff00ff');
   }
   return p.outline(OUT);
 }
+export const MISSING_ICON = '#ff00ff';
 
 function blockIcon(id) {
   const b = BLOCKS[id];

@@ -79,7 +79,7 @@ export const SPECIES = {
   crane: { name: 'Red-Crowned Crane', hp: 4, dmg: 0, step: 0.3, mode: 'passive', drops: [['feather', 1, 3, 1], ['raw_meat', 1, 1, 0.5]], isle: 'ostria' },
   tiger: { name: 'Tiger', hp: 22, dmg: 5, step: 0.28, mode: 'neutral', aggro: 0, drops: [['raw_meat', 2, 3, 1], ['tiger_pelt', 1, 1, 0.6]], isle: 'ostria' },
   coyote: { name: 'Coyote', hp: 8, dmg: 2, step: 0.24, mode: 'hostile', aggro: 8, drops: [['raw_meat', 1, 2, 1], ['leather', 1, 1, 0.5]], packs: true, night: true, isle: 'ostria' },
-  rattlesnake: { name: 'Rattlesnake', hp: 5, dmg: 3, step: 0.4, mode: 'neutral', aggro: 0, drops: [['raw_meat', 1, 1, 0.6], ['leather', 1, 1, 0.4]], isle: 'ostria' },
+  rattlesnake: { name: 'Rattlesnake', hp: 5, dmg: 3, step: 0.4, mode: 'neutral', aggro: 0, bite: true, drops: [['raw_meat', 1, 1, 0.6], ['leather', 1, 1, 0.4]], isle: 'ostria' },
   bone_crab: { name: 'Bone Crab', hp: 14, dmg: 3, step: 0.44, mode: 'neutral', aggro: 0, drops: [['crab_meat', 1, 2, 1], ['bone', 1, 2, 0.6]], isle: 'corrow' },
   gull: { name: 'Gull', hp: 3, dmg: 0, step: 0.3, mode: 'passive', drops: [['feather', 1, 2, 1]], isle: 'corrow' },
   flamingo: { name: 'Flamingo', hp: 5, dmg: 0, step: 0.36, mode: 'passive', drops: [['pink_feather', 1, 3, 1], ['raw_meat', 1, 1, 0.5]], isle: 'saltmere' },
@@ -236,6 +236,17 @@ export class Creature extends Entity {
     }
     this.thinkT -= dt;
     const game = this.game;
+    // (Round 73) A snake in the rocks: walk right into it and it strikes.
+    if (this.S.bite && !this.angry) {
+      for (const q of game.everyone()) {
+        if (q.dead || Math.abs(q.y - this.y) > 1 || Math.abs(q.x - this.x) + Math.abs(q.z - this.z) > 1) continue;
+        this.angry = true;
+        this.target = q;
+        game.audio?.play('hiss', this);
+        game.renderer.floatText(this.x, this.y + 1.4, this.z, 'rattle!', '#e0c080');
+        break;
+      }
+    }
     // On a lead: pulled along after whoever holds it (or straining to
     // break free of it).
     if ((this.leadBy || this.leadTied) && leadTick(this, dt)) return;

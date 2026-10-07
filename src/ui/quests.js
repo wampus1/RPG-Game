@@ -175,7 +175,7 @@ export class QuestWindow extends Window {
       return;
     }
     const label = e.t ? e.t.pinLabel || e.t.title : e.th.title;
-    game.world.ow.pin(at.x, at.z, label, (e.t && e.t.glyph) || '!');
+    game.world.ow.pin(at.x, at.z, label, (e.t && e.t.glyph) || '!', { quest: true });
     game.ui.msg('Marked on your map.', C.cyan);
     this.ui.audio?.play('select');
   }

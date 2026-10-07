@@ -55,6 +55,7 @@ function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
     const sx = x + 1 + c * 4;
     const sy = y + 1 + r * 3;
     const hover = win.hovering(sx, sy, 3, 2);
+    if (hover) win.hoverSlot = { slots, i };
     const sel = opts.selected === i;
     g.fill(sx, sy, 3, 2, ' ', C.fg, sel ? C.bgHi : hover ? 'rgba(70,60,90,0.95)' : 'rgba(26,22,34,0.95)');
     const s = slots[i];
@@ -66,6 +67,23 @@ function slotTable(win, g, x, y, cols, slots, start, count, opts = {}) {
     });
   }
   return rows * 3 + 1;
+}
+
+// (Round 73) A number key pressed over a slot: what's in it swapped into
+// that place on your belt (and what was there back where it came from).
+export function beltSwap(win, p, k) {
+  const m = /^Digit([1-9])$/.exec(k.code);
+  if (!m || !win.hoverSlot || win.ui.cursorStack) return false;
+  const { slots, i } = win.hoverSlot;
+  const d = +m[1] - 1;
+  if (d >= BELT_SIZE || (slots === p.inv && i === d)) return true;
+  const a = slots[i];
+  const b = p.inv[d];
+  if (!a && !b) return true;
+  slots[i] = b || null;
+  p.inv[d] = a || null;
+  win.ui.audio?.play('select');
+  return true;
 }
 
 export function slotClick(ui, slots, i, ck, quickTarget) {
@@ -117,7 +135,11 @@ export class InventoryWindow extends Window {
   constructor(ui) {
     super(ui, 76, 20, { kind: 'inventory' });
   }
+  onKey(k, game) {
+    return !!game && beltSwap(this, game.player, k);
+  }
   draw(g, game) {
+    this.hoverSlot = null;
     const p = game.player;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'INVENTORY' });
     g.text(2, 1, 'Belt (1-9)', C.dim);
@@ -180,8 +202,15 @@ export class InventoryWindow extends Window {
         return;
       }
       const old = p.equip[k];
+      // (Round 73: the same thing already there, nothing changes; a stack
+      // of something else, the rest of it stays on the cursor and what was
+      // there goes back into your pack.)
+      if (old === cs.item) return;
       p.equip[k] = cs.item;
-      ui.cursorStack = old ? { item: old, count: 1 } : cs.count > 1 ? { item: cs.item, count: cs.count - 1 } : null;
+      if (old && cs.count > 1) {
+        ui.cursorStack = { item: cs.item, count: cs.count - 1 };
+        if (addItem(p.inv, old, 1)) ui.game?.spawnDrop?.(old, 1, p.x, p.y, p.z, true);
+      } else ui.cursorStack = old ? { item: old, count: 1 } : cs.count > 1 ? { item: cs.item, count: cs.count - 1 } : null;
       ui.audio?.play('equip');
       this.ui.game.lightDirty = true;
       return;
@@ -264,7 +293,11 @@ export class ContainerWindow extends Window {
     }
     if (taken.length && game.onContainerTake(this.pos, taken) && held) this.close();
   }
+  onKey(k, game) {
+    return !!game && beltSwap(this, game.player, k);
+  }
   draw(g, game) {
+    this.hoverSlot = null;
     const p = game.player;
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: this.title.toUpperCase() });
     const h = slotTable(this, g, 1, 1, 9, this.slots, 0, this.slots.length, { quick: () => p.inv });
@@ -1664,7 +1697,6 @@ export class HelpWindow extends Window {
       ['SIT', 'Click a chair, bench or stool · move to stand'],
       ['SLEEP', 'Click a bed at night (yours, or your host\'s)'],
       ['TOSS', 'G throws one item · CTRL+G the whole stack'],
-      ['SET DOWN', 'B sets one down · CTRL+B the stack · mine it back up'],
       ['EAT', 'F (or RMB) while holding food'],
       ['FISH', 'Hold a fishing rod and right-click water'],
       ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],

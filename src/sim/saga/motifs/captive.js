@@ -716,8 +716,9 @@ function postTasks(th, S, b) {
   });
   t.rumour = `${nameOf(S, c)} is held captive by ${b.name}`;
   t.glyph = 'c';
-  // (Everyone else playing hears of it at once.)
-  for (const q of others) {
+  // (One of you taken: everyone else playing hears of it at once. Someone
+  // of a town's: word of it goes round as word does, Round 73.)
+  for (const q of c.t === 'pl' ? others : []) {
     S.hear(q, t);
     S.tell(q, `${nameOf(S, c)} has been taken captive by ${b.name}! (See your quest log: O)`, '#ffb080');
   }

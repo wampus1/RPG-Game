@@ -317,7 +317,7 @@ test('the Alinelidan leaves holes of acid where it dives, filled in with dirt af
   c.gapT = 0;
   const at = { x: c.x, z: c.z };
   run(game, input, 1.4);
-  assert.equal(game.world.getBlock(at.x, FY - 1, at.z), B.sulfur_crust, 'acid where it went down');
+  assert.equal(game.world.getBlock(at.x, FY - 1, at.z), B.acid_pool, 'acid where it went down');
   run(game, input, 17);
   assert.equal(game.world.getBlock(at.x, FY - 1, at.z), B.mud, 'filled in with dirt');
 });

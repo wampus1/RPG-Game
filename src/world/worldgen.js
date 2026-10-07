@@ -155,11 +155,11 @@ export class Overworld {
   }
 
   // Put a told-of place on the map (once per square and name).
-  pin(x, z, label, glyph = '•') {
+  pin(x, z, label, glyph = '•', extra = null) {
     const cx = Math.floor(x / REGION_W);
     const cz = Math.floor(z / REGION_D);
     if (this.pins.some((q) => Math.floor(q.x / REGION_W) === cx && Math.floor(q.z / REGION_D) === cz && q.label === label)) return false;
-    this.pins.push({ x: Math.round(x), z: Math.round(z), label, glyph });
+    this.pins.push({ x: Math.round(x), z: Math.round(z), label, glyph, ...(extra || {}) });
     if (this.pins.length > 60) this.pins.shift();
     return true;
   }

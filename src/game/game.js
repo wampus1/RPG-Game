@@ -48,6 +48,8 @@ import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scen
 import { BLIGHT_R } from '../world/sites.js';
 import { ancientAir } from './ancient.js';
 import { updateEvolvedGear, clawMult, clawRend, clawSoak } from './evolvedgear.js';
+import { updateQuestFinder } from './questfinder.js';
+import { doorLocked, knock as knockDoor, houseOfDoor, unlockFor, updateKnocks } from './doorlocks.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, fitShard, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '../entities/monsters.js';
@@ -80,7 +82,7 @@ import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
 import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
 import { runMigrations } from './migrate.js';
 import { dishLines } from '../world/dishes.js';
-import { Riding } from './riding.js';
+import { Riding, HORSE_FOOD } from './riding.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
@@ -2018,6 +2020,8 @@ export class Game {
     for (const run of this.runs.values()) if (run.lead()) this.inPlace(run, () => updateRelics(this, dt));
     updateKavTech(this, dt);
     updateEvolvedGear(this, dt);
+    updateQuestFinder(this, dt);
+    updateKnocks(this, dt);
     this.sim.ancient.update(dt);
     // Each old place someone's down: its own goings-on. (Fields the
     // Overseer turned off, and what a master's done to its hall, put back
@@ -2872,9 +2876,6 @@ export class Game {
           break;
         case 'KeyG':
           this.toss(k.ctrl);
-          break;
-        case 'KeyB':
-          this.setDownHeld(k.ctrl);
           break;
         case 'KeyT':
           // Sitting down: let some hours go by.
@@ -3980,6 +3981,20 @@ export class Game {
   checkVandalism(x, y, z, b) {
     const s = this.world.ow.settlementAt(x, z);
     if (!s || !this.active.has(s.id)) return;
+    // (Round 73) Someone's front door broken down: a crash heard all
+    // down the street.
+    if (b && (b.id === B.door || b.id === B.door_top) && houseOfDoor(this, x, z)) {
+      this.audio?.play('crash', { x, z });
+      this.shake = Math.min(1, (this.shake || 0) + 0.25);
+      const wits = this.sim.witnesses(s.id, x, z, 14).filter((n) => !n.sleeping || Math.random() < 0.6);
+      for (const n of wits) {
+        n.sleeping = false;
+        n.face(x, z);
+        n.emoteShow?.('!', '#ff8060', 1.5);
+      }
+      if (wits.length) this.sim.justice.commit(s.id, 'vandalism', { witnesses: wits, desc: 'Breaking down a door' });
+      return;
+    }
     const L = this.active.get(s.id).layout;
     const here = L.buildings.filter((q) => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1);
     // Your own house is yours to knock about: nobody minds.
@@ -4510,6 +4525,14 @@ export class Game {
     switch (b.interact) {
       case 'door': {
         const open = w.getState(x, y, z);
+        // (Round 73) Someone's front door, locked: pick it (with a pick in
+        // your hand) or knock.
+        const by = w.getBlock(x, y, z) === B.door_top ? y - 1 : y;
+        if (!open && doorLocked(this, x, by, z)) {
+          if (p.heldItem() === 'lockpick') this.pickDoor(x, by, z);
+          else knockDoor(this, x, by, z);
+          break;
+        }
         this.setDoor(x, y, z, !open);
         break;
       }
@@ -4845,13 +4868,13 @@ export class Game {
       // (A master of an old place sheds its own light, in its own colour.)
       const master = (c.S.boss || c.species === 'saint_shade') && c.inst;
       if (c.dead || !(c.S.light || master) || !near(c) || c.burrowed || c.submerged) continue;
-      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null });
+      out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null, ent: c, dy: c.S.floats ? 1 : 0 });
     }
     for (const n of this.npcs) {
       if (n.dead || !near(n)) continue;
       const held = n.heldItem ? n.heldItem() : null;
       const off = n.offhandItem ? n.offhandItem() : null;
-      if (held === 'torch' || off === 'torch' || off === 'lantern') out.push({ x: n.x, y: n.y, z: n.z, L: 9 });
+      if (held === 'torch' || off === 'torch' || off === 'lantern') out.push({ x: n.x, y: n.y, z: n.z, L: 9, ent: n });
     }
     // (A witch-light lights its way across her hall.)
     for (const o of this.orbs || []) if (!o.done && near(o)) out.push({ x: Math.round(o.x), y: o.y, z: Math.round(o.z), L: 5, tint: o.back ? '#ffe070' : '#a0ff70' });
@@ -4897,6 +4920,40 @@ export class Game {
     return true;
   }
 
+  // (Round 73) Tried and locked: "locked" over your head, the rattle of
+  // the lock (not too often).
+  lockedAt(x, y, z) {
+    const p = this.player;
+    const now = this.sim.abs || 0;
+    if ((p.lockedSaidT || -9) > now - 0.6) return;
+    p.lockedSaidT = now;
+    this.renderer.floatText(p.x, p.y + 2.6, p.z, 'locked', '#e8d8a0');
+    this.audio?.play('locked', { x, z });
+  }
+
+  // (Round 73) A locked front door, picked (see doorlocks.js).
+  pickDoor(x, y, z) {
+    const H = houseOfDoor(this, x, z);
+    const owner = H ? { kind: 'house', id: H.b.id, sid: H.s.id, label: H.b.family ? `${H.b.family} family` : null, b: H.b } : null;
+    if (owner && this.lockWatched(owner)) {
+      this.lockedAt(x, y, z);
+      this.peekWarning(owner);
+      return;
+    }
+    this.audio?.play('locked');
+    this.ui.open(new LockWindow(this.ui, this, {
+      tier: lockTier(H ? H.s : null, owner || {}),
+      seed: hash4(x, y, z, 0x7c5),
+      label: owner && owner.label ? `The ${owner.label}'s door` : 'This door',
+      watched: () => !!owner && this.lockWatched(owner),
+      onOpen: () => {
+        this.stats.locksPicked = (this.stats.locksPicked || 0) + 1;
+        unlockFor(this, x, y, z);
+        this.setDoor(x, y, z, true);
+      },
+    }));
+  }
+
   // Can anyone see you at a household's lock?
   lockWatched(owner) {
     const p = this.player;
@@ -4910,8 +4967,9 @@ export class Game {
     const name = owner.label ? owner.label.replace(/ \(.*\)$/, '') : '';
     const whose = name ? `${/^the /i.test(name) ? name : `The ${name}`}'s chest` : 'This chest';
     if (countItem(this.player.inv, 'lockpick') <= 0) {
-      this.ui.msg(`${whose} is locked. (A lockpick would open it: four are beaten out of an iron ingot at an anvil.)`, '#c8c8c8', true);
-      this.audio?.play('locked');
+      // (Round 73: said over your head, with the rattle of it.)
+      this.lockedAt(x, y, z);
+      void whose;
       return;
     }
     if (this.lockWatched(owner)) {
@@ -6220,6 +6278,8 @@ export class Game {
       interrupt(target, heavy ? 0.9 : 0.5);
       this.renderer.floatText(target.x, target.y + 2.8, target.z, 'interrupted', '#ffd0a0');
     }
+    // (Round 73) A guard or an adventurer with their blade up for it: parried.
+    if (target.kind === 'npc' && target.parryUpT > 0 && guardBlow(this, p, target, dmg, st || {}) === 'parried') return true;
     // Another player (when the host lets players fight) may have a shield
     // up to it, or parry it, as against anyone.
     if (target.kind === 'player') {
@@ -6635,7 +6695,14 @@ export class Game {
   }
 
   nearestThreatTo(c, r) {
-    for (const p of this.everyone()) if (!p.dead && !p.limbo && c.distTo(p) <= r && !(c.S.tame && !p.heldDef()?.damage)) return p;
+    for (const p of this.everyone()) {
+      if (p.dead || p.limbo || c.distTo(p) > r) continue;
+      // (Round 73: a beast that can be tamed isn't put off by an empty
+      // hand, nor by something it'd eat held out; and not at all just
+      // after it's been fed.)
+      if (c.S.tame && (c.calm > 0 || !p.heldDef()?.damage || HORSE_FOOD.has(p.heldItem()))) continue;
+      return p;
+    }
     for (const o of this.creatures) if (o !== c && o.hostileNow && c.distTo(o) <= r) return o;
     return null;
   }

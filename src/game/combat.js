@@ -424,6 +424,16 @@ function strike(game, a, w) {
 // and whether they were guarding; or 'parried', up just as it came.
 export function guardBlow(game, a, v, amount, st, opts = null) {
   const text = (s, c) => game.renderer.floatText(v.x, v.y + 2, v.z, s, c);
+  // (Round 73) A guard's or an adventurer's blade up, just in time (they
+  // showed it: see npcParryWatch): turned aside, and whoever swung is left
+  // reeling, unable to move or swing or roll for a few seconds.
+  if (v.kind === 'npc' && v.parryUpT > 0 && facing(v, a) && !st.charge && !st.ranged) {
+    v.parryUpT = 0;
+    v.doAction?.(0.3);
+    parried(game, v, a);
+    if (a.kind === 'player') a.stunT = Math.max(a.stunT || 0, 2.2);
+    return 'parried';
+  }
   const sh = shieldOf(v);
   const guarding = v.kind === 'player' ? v.blocking : sh && v.state === 'fight' && v.rng && v.rng.chance(v.rec && v.rec.job === 'guard' ? 0.45 : 0.25);
   if (guarding && facing(v, a)) {
@@ -896,4 +906,36 @@ export function roll(game, p, dirv = null) {
   // aside, a blow straight out of it.)
   onRoll(game, p, start, land ? past.filter((e) => Math.abs(e.x - start.x) + Math.abs(e.z - start.z) < land.n) : []);
   return true;
+}
+
+// (Round 73) Guards and adventurers read a blow coming (a beast winding up
+// on them, or you swinging at them) and, now and then, put their blade up
+// to parry it: they show it, raised and flashing yellow, the moment before
+// it lands. Called from NPC.update.
+export const PARRY_JOBS = new Set(['guard']);
+export function npcParryWatch(game, n, dt) {
+  if (n.parryUpT > 0) n.parryUpT -= dt;
+  if (n.parryCd > 0) n.parryCd -= dt;
+  if (n.parryCd > 0 || n.parryUpT > 0 || n.dead || n.down || n.sleeping) return;
+  const can = (n.rec && PARRY_JOBS.has(n.rec.job)) || n.adventurer;
+  if (!can || !n.weapon || !n.weapon()) return;
+  // Something about to land on them.
+  let left = null;
+  for (const p of game.everyone()) {
+    if (p.swing && p.swing.target === n && !p.swing.heavy) left = Math.max(0, p.swing.dur - p.swing.t);
+  }
+  if (left === null) {
+    for (const c of game.creatures) {
+      const w = c.windup;
+      if (!w || w.target !== n || c.dead || Math.max(Math.abs(c.x - n.x), Math.abs(c.z - n.z)) > 2) continue;
+      left = Math.max(0, w.dur - w.t);
+      break;
+    }
+  }
+  if (left === null) return;
+  n.parryCd = 1.2;
+  if (!n.rng || !n.rng.chance(n.adventurer ? 0.45 : 0.35)) return;
+  n.parryCd = 3.5;
+  n.parryUpT = left + 0.18;
+  n.guardT = Math.max(n.guardT || 0, n.parryUpT);
 }

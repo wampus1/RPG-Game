@@ -19,6 +19,7 @@ import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.
 import { farDanger, farMotes } from './fardeep.js';
 import { ancientTick, ancientDanger, ancientMotes } from './ancient.js';
 import { dropEvolvedLoot } from './evolvedgear.js';
+import { noteSeen, flushSeen } from '../ui/dungeonmap.js';
 import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
@@ -495,6 +496,7 @@ export class DungeonRun {
   // dead), for when you're back.
   saveFloor() {
     if (!this.data) return;
+    flushSeen(this);
     this.settleMimics();
     if (this.state && this.placed) this.state.placed = [...this.placed];
     // (Not a Field Projector's wall: that's only for the moment. A field
@@ -657,6 +659,8 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     const party = this.partyHere();
+    // (Round 73) What you've seen of the floor, for its map.
+    noteSeen(this, p, dt);
     this.scaleBosses(party.length);
     const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
     const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;

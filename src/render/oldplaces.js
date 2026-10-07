@@ -10,6 +10,7 @@ import { placeTag } from '../game/relics.js';
 import { FY } from '../world/dungeongen.js';
 import { spireDissolve } from '../game/scenes.js';
 import { drawAncientGates } from './ancientfx.js';
+import { drawQuestFinder } from '../game/questfinder.js';
 
 // Little glyphs, 4 wide and 5 tall (bit rows).
 export const GLYPHS = [
@@ -28,6 +29,8 @@ export function glyph(ctx, g, x, y, k = 1) {
 export function drawOldPlaces(r, game, dt) {
   const ctx = r.ctx;
   const p = game.player;
+  // (Round 73) Who a quest of yours sends you to, in this town.
+  drawQuestFinder(r, game);
   if (!game.dungeon) {
     for (const s of game.world.sites || []) {
       if (s.type !== 'kavorent' || s.x === undefined || Math.abs(s.x - p.x) > 40 || Math.abs(s.z - p.z) > 34) continue;

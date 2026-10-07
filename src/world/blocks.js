@@ -656,6 +656,10 @@ def('gullet_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', h
 // round it, burnt black and cracked.
 def('abyss_floor', { hardness: Infinity, drop: null, light: 2, label: 'The Void' });
 def('scorched_earth', { tool: 'shovel', hardness: 0.8, drop: 'dirt', label: 'Sundered Earth' });
+// (Round 73) Liquids sunk in the floor, waded (stood in, not on): the
+// Athanor's quicksilver, heavy and cold; the Gullet's acid.
+def('quicksilver', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 2, label: 'Quicksilver' });
+def('acid_pool', { solid: false, opaque: false, render: 'liquid', standable: true, hardness: Infinity, drop: null, light: 4, label: 'Acid' });
 // (Round 70) Thin walls, a post with a wall running off it to whatever's
 // beside it (another wall, a fence, a solid block): bridges' parapets, and
 // anyone's to build. One of each stone (and wood) a bridge's made of.

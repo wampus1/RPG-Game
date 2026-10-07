@@ -208,6 +208,22 @@ function puffImage(kind) {
   return c;
 }
 
+// (Round 73) A quest's marker (from the quest log), and an arrowhead.
+export const isQuestPin = (q) => !!(q && (q.quest || q.glyph === '!'));
+function arrowHead(ctx, x, y, ux, uy, r, col) {
+  const px = -uy;
+  const py = ux;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(x + ux * r, y + uy * r);
+  ctx.lineTo(x - ux * r * 0.6 + px * r * 0.7, y - uy * r * 0.6 + py * r * 0.7);
+  ctx.lineTo(x - ux * r * 0.2, y - uy * r * 0.2);
+  ctx.lineTo(x - ux * r * 0.6 - px * r * 0.7, y - uy * r * 0.6 - py * r * 0.7);
+  ctx.closePath();
+  ctx.fill();
+}
+const LIST_W = 30;
+
 export class MapWindow extends Window {
   constructor(ui) {
     super(ui, COLS - 2, ROWS - 2, { kind: 'map' });
@@ -220,11 +236,17 @@ export class MapWindow extends Window {
     this.goal = { ...this.cam };
     this.drag = null;
     this.hoverSq = null;
+    // (Round 73) The list down the right: open, what's searched for, how
+    // far it's scrolled.
+    this.listOpen = true;
+    this.search = '';
+    this.searching = false;
+    this.listScroll = 0;
   }
 
   // The map's area on screen, in pixels.
   area() {
-    return { x0: (this.x + 1) * CHAR_W, y0: (this.y + 1) * CHAR_H, x1: (this.x + this.w - 1) * CHAR_W, y1: (this.y + this.h - 4) * CHAR_H };
+    return { x0: (this.x + 1) * CHAR_W, y0: (this.y + 1) * CHAR_H, x1: (this.x + this.w - 1 - (this.listOpen ? LIST_W : 2)) * CHAR_W, y1: (this.y + this.h - 4) * CHAR_H };
   }
 
   // Pixels per square, across and down.
@@ -333,11 +355,31 @@ export class MapWindow extends Window {
 
   onWheel(d) {
     const m = this.ui.mouse;
+    if (this.listOpen && m && m.x >= (this.x + this.w - 1 - LIST_W) * CHAR_W) {
+      this.listScroll = Math.max(0, this.listScroll + (d > 0 ? 3 : -3));
+      return;
+    }
     this.zoomTo(this.zi + (d > 0 ? -1 : 1), m ? m.x : null, m ? m.y : null);
   }
 
   onKey(k) {
     const game = this.ui.game;
+    // (Typing into the list's search.)
+    if (this.searching) {
+      if (k.code === 'Escape' || k.code === 'Enter') this.searching = false;
+      else if (k.code === 'Backspace') this.search = this.search.slice(0, -1);
+      else if (k.key && k.key.length === 1 && this.search.length < 22) this.search += k.key;
+      this.listScroll = 0;
+      return true;
+    }
+    if (k.code === 'Tab') {
+      this.listOpen = !this.listOpen;
+      return true;
+    }
+    if (k.code === 'Slash' && this.listOpen) {
+      this.searching = true;
+      return true;
+    }
     if (k.code === 'KeyV') this.civView = !this.civView;
     else if (k.code === 'Equal' || k.code === 'NumpadAdd') this.zoomTo(this.zi + 1);
     else if (k.code === 'Minus' || k.code === 'NumpadSubtract') this.zoomTo(this.zi - 1);
@@ -448,8 +490,90 @@ export class MapWindow extends Window {
       put(y0 + 1, '', C.dim);
     }
     put(y0 + 2, `⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire • told of${game.guildMates && game.guildMates().length ? ' @ guild' : ''}`, C.faint);
-    const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [M] close `;
+    this.drawList(g, game);
+    const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [TAB] list [M] close `;
     g.text(Math.max(1, this.w - t.length - 1), this.h - 1, t.slice(0, this.w - 2), game.cheats?.mapTeleport ? C.hi : C.dim);
+  }
+
+  // (Round 73) What's in the list: quest markers first, then the places
+  // and old places you know, each marked if a quest's there.
+  listEntries(game) {
+    const ow = game.world.ow;
+    const known = (x, z) => game.revealMap || ow.explored[Math.floor(z / REGION_D) * MAP_W + Math.floor(x / REGION_W)];
+    const sq = (x, z) => `${Math.floor(x / REGION_W)},${Math.floor(z / REGION_D)}`;
+    const quests = (ow.pins || []).filter(isQuestPin);
+    const qsq = new Set(quests.map((q) => sq(q.x, q.z)));
+    const out = [];
+    for (const q of quests) out.push({ kind: 'quest', label: q.label, x: q.x, z: q.z, quest: true, color: '#ffd060' });
+    const seen = new Set();
+    for (const icon of settlementIcons(game).values()) {
+      const s = icon.s;
+      if (seen.has(s.id)) continue;
+      const x = (s.cx + s.cw / 2) * REGION_W;
+      const z = (s.cz + s.cd / 2) * REGION_D;
+      if (!known(x, z)) continue;
+      seen.add(s.id);
+      out.push({ kind: 'place', label: s.name, x, z, quest: qsq.has(sq(x, z)), color: s.civ ? s.civ.color.hex : C.fg, sub: s.empire ? 'capital' : s.type });
+    }
+    for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
+      if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
+      out.push({ kind: 'old', label: cap(d.name), x: d.x, z: d.z, quest: qsq.has(sq(d.x, d.z)), color: d.cleared ? '#8a8478' : '#f0d8a0', sub: dtypeOf(d).name });
+    }
+    const f = this.search.trim().toLowerCase();
+    const list = f ? out.filter((e) => e.label.toLowerCase().includes(f) || (e.sub || '').toLowerCase().includes(f)) : out;
+    // (Quest-bound first within each kind.)
+    const rank = { quest: 0, place: 1, old: 2 };
+    return list.sort((a, b) => rank[a.kind] - rank[b.kind] || b.quest - a.quest || a.label.localeCompare(b.label));
+  }
+
+  drawList(g, game) {
+    const bx = this.w - 1 - (this.listOpen ? LIST_W : 2);
+    // The tab to open or close it.
+    const tab = this.listOpen ? '▶' : '◀';
+    const hovTab = this.hovering(bx, 1, 1, 3);
+    for (let y = 1; y <= 3; y++) g.text(bx, y, y === 2 ? tab : ' ', hovTab ? C.white : C.hi, hovTab ? '#5a4628' : '#2a2016');
+    this.hit(bx, 1, 1, 3, () => {
+      this.listOpen = !this.listOpen;
+    });
+    if (!this.listOpen) return;
+    const x = bx + 1;
+    const W = LIST_W - 1;
+    const bottom = this.h - 5;
+    for (let y = 1; y <= bottom; y++) g.text(x, y, ' '.repeat(W), C.fg, '#100c14');
+    // The search.
+    const sHov = this.hovering(x, 1, W, 1);
+    const cur = this.searching && Math.floor((this.ui.time || 0) * 2) % 2 ? '_' : '';
+    g.text(x, 1, ` ${this.search || (this.searching ? '' : 'search... (/)')}${cur}`.padEnd(W).slice(0, W), this.search || this.searching ? C.white : C.faint, this.searching ? '#3a2e1e' : sHov ? '#2a2418' : '#1c1620');
+    this.hit(x, 1, W, 1, () => {
+      this.searching = true;
+    });
+    const entries = this.listEntries(game);
+    const rows = bottom - 2;
+    this.listScroll = Math.max(0, Math.min(this.listScroll, Math.max(0, entries.length - rows)));
+    let y = 3;
+    let lastKind = null;
+    for (let i = this.listScroll; i < entries.length && y <= bottom; i++) {
+      const e = entries[i];
+      if (e.kind !== lastKind) {
+        lastKind = e.kind;
+        g.text(x, y++, { quest: 'QUESTS', place: 'PLACES', old: 'OLD PLACES' }[e.kind], C.dim);
+        if (y > bottom) break;
+      }
+      const hov = this.hovering(x, y, W, 1);
+      const label = `${e.quest ? '! ' : '  '}${e.label}`;
+      g.text(x, y, label.padEnd(W).slice(0, W), hov ? C.white : e.color, hov ? '#3a2e1e' : undefined);
+      if (e.quest && Math.floor((this.ui.time || 0) * 3) % 2) g.text(x, y, '!', '#ffd040');
+      this.hit(x, y, W, 1, () => this.goTo(e));
+      y++;
+    }
+    if (!entries.length) g.text(x, 3, this.search ? '  nothing by that name' : '  nothing known yet', C.faint);
+  }
+
+  // Off to an entry in the list: the map moved there, and close in on it.
+  goTo(e) {
+    this.goal = { x: e.x / REGION_W, z: e.z / REGION_D };
+    if (this.zi < 4) this.zoomTo(4);
+    this.ui.audio?.play('select');
   }
 
   // A battle, a raid, a camp or an old place at a square (for the words
@@ -604,6 +728,9 @@ export class MapWindow extends Window {
       ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 3, 2, 6);
       ctx.fillRect(Math.round(q.x) - 3, Math.round(q.y) - 1, 6, 2);
     }
+    // (Round 73) A faint arrow from you toward each quest marker (at the
+    // map's edge, if it's off it).
+    this.drawQuestArrows(ctx, game, q, a, time);
     // The others in your guild, wherever they are (down an old place: at its
     // way in), each in their own colour.
     this.drawMates(ctx, game, o, w, h, blink);
@@ -618,6 +745,35 @@ export class MapWindow extends Window {
     // Still working out the far reaches of the world.
     if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
     ctx.restore();
+  }
+
+  drawQuestArrows(ctx, game, me, a, time) {
+    const pins = (game.world.ow.pins || []).filter(isQuestPin);
+    if (!pins.length) return;
+    const pulse = 0.35 + 0.2 * Math.sin(time * 4);
+    for (const pin of pins.slice(-4)) {
+      const t = this.at(pin.x, pin.z);
+      const dx = t.x - me.x;
+      const dy = t.y - me.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 18) continue;
+      const ux = dx / d;
+      const uy = dy / d;
+      // Near you, pointing its way.
+      const ax = me.x + ux * 14;
+      const ay = me.y + uy * 14;
+      arrowHead(ctx, ax, ay, ux, uy, 6, `rgba(255,220,96,${pulse})`);
+      // And at the edge, if it's off the map's window.
+      const inside = t.x >= a.x0 && t.x < a.x1 && t.y >= a.y0 && t.y < a.y1;
+      if (!inside) {
+        const k = Math.min(...[ux > 0 ? (a.x1 - 8 - me.x) / ux : ux < 0 ? (a.x0 + 8 - me.x) / ux : Infinity, uy > 0 ? (a.y1 - 8 - me.y) / uy : uy < 0 ? (a.y0 + 8 - me.y) / uy : Infinity].filter((v) => v > 0));
+        if (Number.isFinite(k)) arrowHead(ctx, me.x + ux * k, me.y + uy * k, ux, uy, 7, `rgba(255,200,80,${pulse + 0.25})`);
+      } else {
+        // (A faint line of dots between.)
+        ctx.fillStyle = `rgba(255,220,96,${pulse * 0.5})`;
+        for (let s = 22; s < d - 6; s += 6) ctx.fillRect(Math.round(me.x + ux * s), Math.round(me.y + uy * s), 1, 1);
+      }
+    }
   }
 
   // Guildmates on the map (see game/guilds.js).
@@ -886,7 +1042,11 @@ export class MapWindow extends Window {
       put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : anc ? '#3a0a10' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}${anc ? ', an ancient place' : ''}) · ${what}${tierTxt}`, kav ? '#7ae0ff' : anc ? '#ff9080' : '#f0d8a0', true);
     }
     // What people have told you of: a lake, a river, the coast.
-    for (const q of game.world.ow.pins || []) put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
+    for (const q of game.world.ow.pins || []) {
+      // (Round 73: a quest's marker blinks.)
+      if (isQuestPin(q)) put(q.x, q.z, q.glyph || '!', blink ? '#1a1000' : '#fff4c0', blink ? '#ffd040' : '#c06010', `${q.label} (quest)`, '#ffd060', true);
+      else put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
+    }
     // (Round 68) The realms' ships at sea, where you know the water.
     const civs = game.world.ow.civs || [];
     for (const v of voyagesNow(game)) {

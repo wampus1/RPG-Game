@@ -121,7 +121,7 @@ export function ancientTick(run, dt) {
   // Its quicksilver: wading it, slowly; and cold.
   for (const M of A.mercury) {
     for (const p of here(M.box)) {
-      if (!game.world.isWaterAt(p.x, p.y, p.z)) continue;
+      if (game.world.getBlock(p.x, p.y - 1, p.z) !== B.quicksilver) continue;
       chill(p, 0.6);
       if (Math.random() < dt * 4) r.emit(p.x, p.y + 0.2, p.z, { n: 2, color: ['#e8e8f0', '#a8a8b8', '#ffffff'], up: 8, speed: 10, life: 0.5, glow: true });
       say(p, 'mercury', 'Quicksilver, heavy and cold: it drags at your legs like a hand.', '#d8d8e8');

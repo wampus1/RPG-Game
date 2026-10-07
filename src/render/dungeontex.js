@@ -85,6 +85,29 @@ export function dungeonTop(name, v, rand) {
       p.set(12, 10, '#ffffff');
       return p;
     }
+    case 'quicksilver': case 'acid_pool': {
+      // (Round 73) Liquids in the floor, each frame (v) the surface moved
+      // on: quicksilver a mirror of greys, bright ripples going round;
+      // acid a sickly green, bubbles rising and bursting.
+      const Q = name === 'quicksilver';
+      const pal = Q ? ['#9a9aa8', '#7a7a8a', '#c8c8d4', '#f0f0f8'] : ['#6a9a2a', '#4a7a1a', '#8ac03a', '#d0f070'];
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const w = Math.sin((x + v * 2) * 0.6 + y * 0.35) + Math.sin((y - v * 1.5) * 0.7 - x * 0.25);
+        p.set(x, y, w > 1.3 ? pal[3] : w > 0.5 ? pal[2] : w < -1.1 ? pal[1] : pal[0]);
+      }
+      if (Q) {
+        p.hline(2, 6, (3 + v * 4) % 16, '#ffffff');
+        p.hline(9, 12, (10 + v * 3) % 16, '#ffffff');
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const bx = (3 + i * 5 + v) % 15;
+          const by = (12 - v * 3 + i * 4 + 16) % 16;
+          p.ellipse(bx, by, i === v % 3 ? 1.6 : 1, i === v % 3 ? 1.6 : 1, '#e8ff90');
+          p.set(bx, by, pal[1]);
+        }
+      }
+      return p;
+    }
     case 'abyss_floor': {
       // (Round 72) The bottom of the rift: next to nothing, a dark with a
       // few stars in it and a vein of violet now and then.
@@ -301,6 +324,16 @@ export function dungeonFront(name, v, rand, rot) {
       }
       return frontify(p, 0.85);
     }
+    case 'quicksilver':
+      p.fill('#8a8a98');
+      p.hline(0, 15, 0, '#e8e8f4');
+      p.hline(0, 15, LH - 1, '#5a5a68');
+      return p;
+    case 'acid_pool':
+      p.fill('#5a8a22');
+      p.hline(0, 15, 0, '#c8f060');
+      p.hline(0, 15, LH - 1, '#3a5a12');
+      return p;
     case 'abyss_floor':
       speckle(p, ['#0a0612', '#06040a', '#140c20'], rand, 0.3);
       p.set(rand() * 16, rand() * LH, '#8a60c0');

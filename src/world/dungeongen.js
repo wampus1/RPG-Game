@@ -1528,9 +1528,14 @@ function dress(ctx, r) {
     }
     // Pools of quicksilver, heavy and cold: wade it, slowly.
     case 'mercury': {
-      blob(ctx, r, r.cx, r.cz, Math.min(4, (r.x1 - r.x0) / 3), (x, z) => b.set(x, FY, z, B.water));
+      // (Round 73: in the floor, its own liquid.)
+      const pool = [];
+      blob(ctx, r, r.cx, r.cz, Math.min(4, (r.x1 - r.x0) / 3), (x, z) => {
+        b.set(x, FY - 1, z, B.quicksilver);
+        pool.push({ x: b.x0 + x, z });
+      });
       for (let k = 0; k < 3; k++) placeIn(ctx, r, B.glass_lamp, 0, true);
-      anc(ctx).mercury.push({ box: box(b, r) });
+      anc(ctx).mercury.push({ box: box(b, r), tiles: pool });
       group('slime', 1, 3);
       break;
     }
@@ -1660,7 +1665,7 @@ function dress(ctx, r) {
     case 'acid': {
       const tiles = [];
       blob(ctx, r, r.cx + rng.int(-2, 2), r.cz + rng.int(-1, 1), Math.min(4, (r.x1 - r.x0) / 3), (x, z) => {
-        b.set(x, FY - 1, z, B.sulfur_crust);
+        b.set(x, FY - 1, z, B.acid_pool);
         tiles.push({ x: b.x0 + x, z });
       });
       if (tiles.length) anc(ctx).acid.push({ tiles, box: box(b, r) });
@@ -1819,7 +1824,7 @@ function dress(ctx, r) {
     case 'leech_pool': {
       const tiles = [];
       blob(ctx, r, r.cx, r.cz, Math.min(4.5, (r.x1 - r.x0) / 2.6), (x, z) => {
-        b.set(x, FY - 1, z, B.sulfur_crust);
+        b.set(x, FY - 1, z, B.acid_pool);
         tiles.push({ x: b.x0 + x, z });
       });
       if (tiles.length) {

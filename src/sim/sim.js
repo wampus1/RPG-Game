@@ -671,10 +671,16 @@ export class Sim {
     const L = npc.layout;
     const rec = npc.rec;
     const o = rec.override;
-    const r = buyAt(L, rec, o, this.game.day);
+    const keeper = o.seller !== undefined ? L.npcs[o.seller] : L.npcs.find((q) => alive(q) && q.work && q.work.building === o.building && q.ent && !q.ent.dead && q.ent.distTo(npc) < 10);
     rec.override = null;
     npc.activity = null;
-    const keeper = o.seller !== undefined ? L.npcs[o.seller] : L.npcs.find((q) => alive(q) && q.work && q.work.building === o.building && q.ent && !q.ent.dead && q.ent.distTo(npc) < 10);
+    // (Round 73) Nobody minding the counter (or the stall): nothing sold.
+    // They'll be back another time.
+    if (!keeper || !keeper.ent || keeper.ent.dead || keeper.ent.distTo(npc) > 10 || keeper.ent.sleeping) {
+      npc.say(npc.rng.pick(['Nobody minding the shop. Another time.', 'Hello? ...Closed, then.', 'Not here. I\'ll come back.']), 3);
+      return { none: true, away: true };
+    }
+    const r = buyAt(L, rec, o, this.game.day);
     if (!r || r.none) {
       npc.say(npc.rng.pick(['None left? Never mind.', 'Sold out, is it? Another day, then.']), 3);
       return r;

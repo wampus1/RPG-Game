@@ -242,9 +242,9 @@ export class Player extends Entity {
     else if (BLOCKS[w.getBlock(nx, this.y, nz)].standable && !solid(nx, this.y + 1, nz) && solid(nx, this.y + 2, nz)) text = 'Too low to climb onto. Hold Shift and dig at the step to clear the block over it.';
     // A gap only one block high.
     else if (!solid(nx, this.y, nz) && solid(nx, this.y + 1, nz) && BLOCKS[w.getBlock(nx, this.y - 1, nz)].standable) text = 'Too low to get through: dig the block at your feet there, and the one over it goes with it.';
+    // (Round 73: not said. The player can see it for themselves.)
     if (!text) return;
     this.hintT = 8;
-    this.game.ui.msg(text, '#a0c8ff', true);
   }
 
   update(dt, input, blocked) {

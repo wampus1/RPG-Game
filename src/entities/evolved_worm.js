@@ -379,7 +379,7 @@ const WORM = {
 function digHole(c, at) {
   const game = c.game;
   const tiles = areaTiles(at.x, at.z, 1).filter((q) => openFloor(game, q.x, q.z));
-  for (const q of tiles) work(game, q.x, c.y - 1, q.z, B.sulfur_crust, 16, c, { floor: true });
+  for (const q of tiles) work(game, q.x, c.y - 1, q.z, B.acid_pool, 16, c, { floor: true });
   addZone(game, { by: c, kind: 'bile', tiles, y: c.y, life: 16, tick: 0.5, dmg: 2, slow: true, color: TOX, puff: BILE });
   game.renderer.emit(at.x, c.y + 0.4, at.z, { n: 30, color: ['#7a5a3a', '#5a4430', '#a8885a'], up: 50, speed: 60, gravity: 160, life: 0.8 });
   // (Filled in with dirt, after.)

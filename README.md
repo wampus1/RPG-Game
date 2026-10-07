@@ -150,7 +150,6 @@ with the music off; `&nointro` skips a new character's opening scene.
 | Raft | Hold a raft and right-click water; A/D turn, W paddles, S back-paddles, F steps ashore |
 | Sleep | Click a bed at night (your own, or your host family's guest bed); any key wakes you |
 | Toss item | G (Ctrl+G throws the whole stack), or drag it out of a window |
-| Set what you hold down on the ground (it stays until you mine it back up) | B (Ctrl+B sets down the whole stack) |
 | Eat or drink what you hold, read a newspaper, or put on held armour and clothes | F or right-click |
 | Fish | Hold a fishing rod and right-click water |
 | Horses | Right-click a wild horse holding an apple, carrot, wheat, berries or cabbage to win it over; right-click your horse holding a saddle to saddle it, then again to ride; F gets down |

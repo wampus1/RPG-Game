@@ -19,7 +19,8 @@ import { lawOn } from '../sim/laws.js';
 import { activityFor, entryStart, invCount, invTake, invAdd, setOverride, weatherBreak, stockOf } from '../sim/econ.js';
 import { buildingAt } from '../sim/sim.js';
 import { fortuneOf } from '../sim/prosperity.js';
-import { beginAttack, tickAttack, inReach, styleOf, offhandOf } from '../game/combat.js';
+import { beginAttack, tickAttack, inReach, styleOf, offhandOf, npcParryWatch } from '../game/combat.js';
+import { doorLocked, knock as knockDoor } from '../game/doorlocks.js';
 import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk, storyTick } from './sagaman.js';
@@ -1072,6 +1073,15 @@ export class NPC extends Entity {
       return;
     }
     if (this.shoveCd > 0) this.shoveCd -= dt;
+    // (Round 73) Hurt, out of town and not fighting: something from the
+    // pack, to mend on.
+    if (this.snackT > 0 && (this.snackT -= dt) <= 0) this.snackItem = null;
+    npcParryWatch(this.game, this, dt);
+    this.trailEatT = (this.trailEatT || 0) - dt;
+    if (this.trailEatT <= 0) {
+      this.trailEatT = 3;
+      if (this.hp < this.maxHp * 0.75 && this.state !== 'fight' && !this.sleeping && !(this.layout && this.layout.inside && this.layout.inside(this.x, this.z))) this.trailMeal();
+    }
     // Somehow up on a roof or a wall (nobody's meant to be): back down.
     this.roofT = (this.roofT || 0) - dt;
     if (this.roofT <= 0 && !this.moving) {
@@ -1247,6 +1257,23 @@ export class NPC extends Entity {
     this.say(this.rng.pick(['*drinks a salve*', '*gulps down a salve*', 'That\'s better.']), 1.6, '#a0ffa0');
     this.game.renderer.emit(this.x, this.y + 1, this.z, { n: 8, color: ['#60e080', '#c0ffc0'], up: 20, life: 0.6, gravity: -10, glow: true });
     this.game.audio?.play('gulp', this);
+    return true;
+  }
+
+  // (Round 73) A bite of whatever food they carry, for a little health.
+  trailMeal() {
+    const inv = this.rec && this.rec.inv;
+    if (!inv || !inv.length) return false;
+    const it = inv.find((q) => q && q.count > 0 && ITEMS[q.item] && ITEMS[q.item].kind === 'food');
+    if (!it) return false;
+    const def = ITEMS[it.item];
+    invTake(inv, it.item, 1);
+    this.hp = Math.min(this.maxHp, this.hp + Math.max(2, def.heal || def.food || 3));
+    this.snackItem = it.item;
+    this.snackT = 2;
+    this.doAction?.(0.4);
+    if (this.rng.chance(0.4)) this.say(this.rng.pick(['*eats*', 'Need to keep my strength up.', '*chews*']), 1.6);
+    this.game.audio?.play('eat', this);
     return true;
   }
 
@@ -2765,6 +2792,24 @@ export class NPC extends Entity {
     // it again behind them).
     if (feet === B.city_gate && !w.getState(nx, ty, nz)) this.game.setGate(nx, nz, true);
     if (feet === B.door) {
+      // (Round 73) Someone else's front door, locked: a knock, and a wait
+      // to see if anyone comes; nobody does, they go elsewhere.
+      if (!w.getState(nx, ty, nz) && doorLocked(this.game, nx, ty, nz, this)) {
+        const k = `${nx},${nz}`;
+        if (this.knockAt !== k) {
+          this.knockAt = k;
+          this.knockWait = 4;
+          knockDoor(this.game, nx, ty, nz, this);
+          this.face(nx, nz);
+          return false;
+        }
+        this.knockWait -= 0.25;
+        if (this.knockWait <= 0) {
+          this.knockAt = null;
+          this.path = null;
+        }
+        return false;
+      }
       // Open it (or find it open) on the way through; shut it after.
       if (!w.getState(nx, ty, nz)) this.game.setDoor(nx, ty, nz, true);
       if (!this.openedDoors.some((d) => d.x === nx && d.z === nz)) this.openedDoors.push({ x: nx, y: ty, z: nz });

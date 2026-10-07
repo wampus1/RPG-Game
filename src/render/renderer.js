@@ -1580,7 +1580,7 @@ export class Renderer {
         if (mount) lift = this.drawMount(ctx, e, mount, sx, feetY);
         // (Down on one knee, a bout lost: low, as if sitting on nothing.)
         const kneel = e.kneelT > 0 && !mount && !e.moving;
-        const frame = e.actionTimer > 0 && !mount && !kneel ? 3 : e.raft || mount || kneel ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
+        const frame = e.actionTimer > 0 && !mount && !kneel && !e.sitting ? 3 : e.raft || mount || kneel ? 4 : e.moving ? 1 + (Math.floor(this.time * 7) % 2) : e.sitting ? 4 : 0;
         const dir = mount ? (this.sideOf(e) ? 1 : 3) : this.viewDir(e.dir);
         // Guard up: the shield comes off the arm and up in front of them
         // (see drawRaisedShield); the blade's held across instead.
@@ -1608,6 +1608,13 @@ export class Renderer {
           const a = ctx.globalAlpha;
           ctx.globalAlpha = a * (0.3 + 0.25 * (0.5 + 0.5 * Math.sin(this.time * 2.4 + e.id)));
           ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, GEMS[stone].color), sx - 1, top - SPR_PAD - 1);
+          ctx.globalAlpha = a;
+        }
+        // (Round 73) A parry coming: their blade up, flashing yellow.
+        if (e.parryUpT > 0 && !inWater) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha = a * (Math.floor(this.time * 12) % 2 ? 0.95 : 0.45);
+          ctx.drawImage(frameGlow(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, '#ffe040'), sx - 1, top - SPR_PAD - 1);
           ctx.globalAlpha = a;
         }
         // Gone into shadow (onyx): you're half there, dusk-violet.

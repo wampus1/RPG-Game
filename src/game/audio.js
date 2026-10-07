@@ -291,6 +291,7 @@ export class Audio {
       case 'sea_bell': this.tone(196, 2.4, 'sine', 0.05, -2); this.tone(392, 1.8, 'triangle', 0.02, -4, 0.02); this.tone(587, 1.2, 'sine', 0.012, 0, 0.03); break;
       case 'bones': for (let i = 0; i < 4; i++) this.tone(900 + Math.random() * 500, 0.03, 'square', 0.04, -300, i * 0.04); break;
       case 'shatter': this.noise(0.15, 0.2, 3200); for (let i = 0; i < 3; i++) this.tone(2400 + Math.random() * 1600, 0.05, 'triangle', 0.04, 0, 0.03 + i * 0.04); break;
+      case 'knock': for (let i = 0; i < 3; i++) { this.tone(110, 0.07, 'sine', 0.16, -40, i * 0.18); this.noise(0.04, 0.12, 500, i * 0.18); } break;
       case 'thud': this.tone(90, 0.1, 'sine', 0.14, -40); this.noise(0.06, 0.1, 400); break;
       // A metal foot coming down.
       // Spikes shooting up out of the floor.

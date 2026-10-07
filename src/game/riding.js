@@ -12,7 +12,7 @@ import { letGo } from './leads.js';
 import { has as heroHas } from './hero.js';
 
 // What a horse will come to you for.
-export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage']);
+export const HORSE_FOOD = new Set(['apple', 'carrot', 'wheat', 'berries', 'cabbage', 'hay_bale']);
 
 export class Riding {
   constructor(game) {
