@@ -5,7 +5,7 @@
 // glass and bone, the Reaver, the Bombard Queen, the chained Drake, the
 // Slag Titan and the Molten Heart in its chains.
 import { forge, inPose, partAt } from './forge.js';
-import { stance, legs, torso, head, eyes, glow, glowLine, rivets, along, dk, lt, mx, HG, figure, crease, quadruped, beastHead, jawPart, tailPart, wingPart, orbit } from './forgekit.js';
+import { eyes, glow, glowLine, rivets, along, dk, lt, mx, HG, figure, crease, quadruped, beastHead, jawPart, tailPart, wingPart, orbit } from './forgekit.js';
 import { flame, embers, smoke, puff, drops, glowAt, sparks, dot } from './forgefx.js';
 import { hex, mix, shade, toHex } from './pixel.js';
 import { hash2 } from './paint.js';

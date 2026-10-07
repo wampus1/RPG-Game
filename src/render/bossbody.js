@@ -26,6 +26,8 @@ import './farbosses.js';
 import './forge_base.js';
 import './forge_kharos.js';
 import './forge_myrrow.js';
+import './forge_far_figs.js';
+import './forge_far_beasts.js';
 
 export const FRAMES = 24;
 const cache = new Map();

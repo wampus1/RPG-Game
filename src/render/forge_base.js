@@ -1,7 +1,7 @@
 // (Round 71) The masters of the Dagoni Islands' old places, forged anew
 // (see forge.js, forgekit.js).
 import { forge, tone } from './forge.js';
-import { stance, legs, torso, breastplate, belt, pauldron, head, eyes, glow, glowLine, rivets, armPart, farArmPart, capePart, weaponPart, along, dk, lt, HG, figure, ribs, crease } from './forgekit.js';
+import { stance, legs, torso, breastplate, belt, pauldron, head, eyes, glow, glowLine, rivets, armPart, farArmPart, capePart, weaponPart, along, HG, figure, crease } from './forgekit.js';
 import { hex, mix, shade } from './pixel.js';
 import { strands } from './forgekit.js';
 import { hash2 } from './paint.js';

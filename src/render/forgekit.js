@@ -530,6 +530,23 @@ export function weapon(X, hand, ang, o = {}) {
     for (let i = 0; i < L; i += 2) X.ball(...at(i), 0.7, 0.7, '#8a8070', 'metal', { z });
     X.ball(...at(L + 2.5), 3, 3.4, col, o.mat || 'metal', { z: z + 1, rz: 2.4 });
     X.ball(...at(L + 2.5), 1.8, 2.1, o.glow || '#ffd060', 'glass', { z: z + 3, rz: 1, glow: o.glow || '#ffd060', glowK: 0.85 });
+  } else if (kind === 'sabre') {
+    // A curved blade, single-edged, its back thick, a knuckle-guard.
+    const L = o.len ?? 18;
+    haft(-3.5, 2.5, 1);
+    X.ball(...at(-4.2), 1.3, 1.3, o.pommel || '#c8a040', 'gold', { z: z + 1, rz: 1 });
+    X.limb([[...at(2.4, -3), 0.7, z + 1.5], [...at(-1, -3.4), 0.6, z + 1.5], [...at(-3.6, -1.4), 0.6, z + 1.5]], o.guard || '#b89040', o.guardMat || 'gold');
+    X.tube(...at(2.4, -2.6), ...at(2.4, 2.2), 0.9, 0.9, o.guard || '#b89040', o.guardMat || 'gold', { z: z + 1.5 });
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8;
+      pts.push(at(3 + k * (L - 3), k * k * 4.5 - 1.4));
+    }
+    for (let i = 8; i >= 0; i--) {
+      const k = i / 8;
+      pts.push(at(3 + k * (L - 3) - (i === 8 ? 2.4 : 0), k * k * 4.5 + 1.2 * (1 - k * 0.7)));
+    }
+    X.slab(pts, col, o.mat || 'metal', { z: z + 1, rz: 1.4, bevel: 1 });
   } else if (kind === 'crossbow') {
     // Its stock along `ang` from the hand, the bow across its end, drawn,
     // a bolt laid in it.
@@ -922,7 +939,6 @@ export function quadruped(X, J, o = {}) {
   const g = o.girth ?? 10;
   const col = o.col || '#7a6a5a';
   const mat = o.mat || 'fur';
-  const legLen = o.legLen ?? 18;
   const lr = o.lr ?? 3.4;
   const ground = o.ground ?? 61;
   const walk = J.st && J.st.walk;
@@ -972,7 +988,7 @@ export function beastHead(o = {}) {
   const col = o.col || '#7a6a5a';
   const mat = o.mat || 'fur';
   const kind = o.kind || 'dog';
-  const snout = { dog: 1.3, cat: 0.7, bear: 1, horse: 1.6, dragon: 1.5, boar: 1.2, bird: 1.1, ox: 1 }[kind] ?? 1;
+  const snout = { dog: 1.3, cat: 0.6, bear: 0.8, horse: 1.6, dragon: 1.5, boar: 1.2, bird: 1.1, ox: 1 }[kind] ?? 1;
   return {
     w, h, px: o.px ?? c.x + r * 0.8, py: o.py ?? c.y + r * 0.7, role: 'head', layer: 'front', z: o.z ?? 6, at: o.at, amp: o.amp ?? 1,
     c, r,
@@ -981,6 +997,11 @@ export function beastHead(o = {}) {
       X.ball(c.x + r * 0.2, c.y, r, r * 0.9, col, mat, { rz: r * 0.8 });
       if (kind === 'bird') {
         X.limb([[c.x - r * 0.5, c.y + r * 0.1, r * 0.42, 6], [c.x - r * 1.6, c.y + r * 0.35, r * 0.22, 7], [c.x - r * 2.1, c.y + r * 0.85, r * 0.05, 7]], o.beak || '#e0b040', 'chitin');
+      } else if (kind === 'bear' || kind === 'cat') {
+        // A short, round muzzle, a chin under it, a broad nose.
+        X.ball(c.x - r * (0.35 + snout * 0.5), c.y + r * 0.35, r * (0.4 + snout * 0.3), r * 0.5, col, mat, { rz: r * 0.4, z: 5 });
+        X.ball(c.x - r * (0.3 + snout * 0.4), c.y + r * 0.75, r * 0.42, r * 0.3, dk(col, 0.9), mat, { rz: r * 0.25, z: 4.6 });
+        X.ball(c.x - r * (0.65 + snout * 0.75), c.y + r * 0.18, r * 0.3, r * 0.24, o.nose || '#1a1414', 'flesh', { z: 8, rz: 1 });
       } else {
         X.limb([[c.x - r * 0.3, c.y + r * 0.15, r * 0.7, 5], [c.x - r * (0.6 + snout), c.y + r * 0.35, r * 0.48, 6]], col, mat);
         X.ball(c.x - r * (0.75 + snout), c.y + r * 0.25, r * 0.36, r * 0.3, o.nose || '#1a1414', kind === 'dragon' ? 'chitin' : 'flesh', { z: 8, rz: 1 });
@@ -1055,10 +1076,10 @@ export function tailPart(o = {}) {
   }
   const xs = pts.map((p) => p[0]);
   const ys = pts.map((p) => p[1]);
-  const x0 = Math.floor(Math.min(...xs)) - r0 - 5;
-  const y0 = Math.floor(Math.min(...ys)) - r0 - 5;
-  const w = Math.ceil(Math.max(...xs)) - x0 + r0 + 6;
-  const h = Math.ceil(Math.max(...ys)) - y0 + r0 + 6;
+  const x0 = Math.floor(Math.min(...xs) - r0 - 5);
+  const y0 = Math.floor(Math.min(...ys) - r0 - 5);
+  const w = Math.ceil(Math.max(...xs) - x0 + r0 + 6);
+  const h = Math.ceil(Math.max(...ys) - y0 + r0 + 6);
   const P0 = pts.map(([px, py, r]) => [px - x0, py - y0, r]);
   return {
     w, h, px: -x0, py: -y0, role: 'tail', layer: o.layer || 'back', z: o.z ?? -2, at: o.at, amp: o.amp ?? 1, depth: o.depth, rate: o.rate,
@@ -1201,4 +1222,86 @@ export function orbit(name, n, o) {
     }
   }
   return out;
+}
+
+// ------------------------------------------------------------ hats
+// Something worn on a head (sculpted on it: `c` its middle, `r` its size,
+// facing left): `h.kind` 'helm' (an open helm: its bowl, a nasal and cheek
+// guards, a `crest` across it or `spikes` round it, `horns`), 'veil',
+// 'wreath', 'cone' (a tall hat, a `knob` at its top), 'doge' (the corno),
+// 'tricorn', 'crown', 'thorns' (with `flowers`), 'antlers', 'band'.
+export function hat(X, c, r, h = {}) {
+  const col = h.col || '#6a6a72';
+  X.in(HG.head, 1);
+  const k = h.kind;
+  if (k === 'helm') {
+    const m = h.mat || 'metal';
+    X.ball(c.x + r * 0.3, c.y - r * 0.45, r * 1.12, r * 0.85, col, m, { z: 18, rz: r * 0.7 });
+    X.ball(c.x + r * 0.3, c.y - r * 0.05, r * 1.16, r * 0.2, dk(col, 0.82), m, { z: 18.6, rz: 0.8 });
+    X.tube(c.x - r * 0.75, c.y - r * 0.3, c.x - r * 0.85, c.y + r * 0.45, r * 0.13, r * 0.11, lt(col, 1.08), m, { z: 19.4 });
+    X.slab([[c.x + r * 0.15, c.y], [c.x + r * 0.85, c.y], [c.x + r * 0.7, c.y + r * 0.95], [c.x + r * 0.2, c.y + r * 0.8]], dk(col, 0.92), m, { z: 18.2, rz: 1, bevel: 0.8 });
+    if (h.crest) {
+      const pts = [];
+      for (let i = 0; i <= 6; i++) {
+        const a = -2.7 + (i / 6) * 2.5;
+        pts.push([c.x + 0.4 + Math.cos(a) * r * 1.22, c.y - r * 0.35 + Math.sin(a) * r * 1.15, r * (0.18 + Math.sin((i / 6) * Math.PI) * 0.2), 20]);
+      }
+      X.limb(pts, h.crest, h.crestMat || 'hair');
+    }
+    if (h.spikes) for (let i = 0; i < 5; i++) {
+      const a = -2.6 + (i / 4) * 2.2;
+      const bx = c.x + 0.3 + Math.cos(a) * r * 1.05;
+      const by = c.y - r * 0.45 + Math.sin(a) * r * 0.8;
+      X.tube(bx, by, bx + Math.cos(a) * r * 0.7, by + Math.sin(a) * r * 0.7 - r * 0.2, r * 0.18, r * 0.04, h.spikes, h.spikeMat || 'metal', { z: 19 });
+    }
+    if (h.horns) for (const s of [0, 1]) {
+      const bx = c.x + r * (0.1 + s * 0.6);
+      const by = c.y - r * 0.8;
+      X.limb([[bx, by, r * 0.22, 17 + s * 3], [bx + r * (s ? 0.9 : -0.5), by - r * 0.7, r * 0.15, 17 + s * 3], [bx + r * (s ? 1.1 : -0.7), by - r * 1.5, r * 0.05, 17 + s * 3]], h.horns, 'bone');
+    }
+  } else if (k === 'veil') {
+    X.ball(c.x + r * 0.4, c.y - r * 0.5, r * 1.18, r * 0.88, col, h.mat || 'velvet', { z: 16, rz: 3 });
+    X.limb([[c.x + r * 0.7, c.y - r * 0.3, r * 0.95, 13], [c.x + r * 1.2, c.y + r * 1.4, r * 0.9, 12], [c.x + r * 1.4, c.y + r * 2.8, r * 0.75, 11]], col, h.mat || 'velvet');
+    if (h.trim) X.tube(c.x - r * 0.9, c.y - r * 0.6, c.x + r * 0.9, c.y - r * 0.95, r * 0.14, r * 0.14, h.trim, h.trimMat || 'gold', { z: 17.5 });
+  } else if (k === 'wreath') {
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI + (i / 8) * Math.PI;
+      X.ball(c.x + 0.6 + Math.cos(a) * r * 1.05, c.y - r * 0.55 + Math.sin(a) * r * 0.35, r * 0.26, r * 0.15, i % 2 ? col : h.col2 || dk(col, 0.8), h.mat || 'moss', { z: 19, rz: 0.8 });
+    }
+  } else if (k === 'cone') {
+    X.ball(c.x + r * 0.3, c.y - r * 0.75, r * 1.25, r * 0.4, dk(col, 0.85), h.mat || 'cloth', { z: 18, rz: 1.4 });
+    X.slab([[c.x - r * 0.75, c.y - r * 0.8], [c.x + r * 1.3, c.y - r * 0.9], [c.x + r * 0.35, c.y - r * (h.tall ?? 2.6)]], col, h.mat || 'cloth', { z: 18.6, rz: 2, bevel: 1.4 });
+    if (h.knob) X.ball(c.x + r * 0.35, c.y - r * (h.tall ?? 2.6), r * 0.3, r * 0.3, h.knob, 'glass', { z: 20, rz: 0.8 });
+  } else if (k === 'doge') {
+    // The corno: a stiff cap, its horn rising at the back.
+    X.ball(c.x + r * 0.3, c.y - r * 0.6, r * 1.15, r * 0.7, col, h.mat || 'velvet', { z: 18, rz: 2 });
+    X.limb([[c.x + r * 0.3, c.y - r * 0.9, r * 0.8, 18.4], [c.x + r * 0.9, c.y - r * 1.7, r * 0.55, 18.4]], col, h.mat || 'velvet');
+    X.tube(c.x - r * 0.85, c.y - r * 0.15, c.x + r * 1.4, c.y - r * 0.2, r * 0.16, r * 0.16, h.trim || '#ffffff', 'cloth', { z: 19 });
+  } else if (k === 'tricorn') {
+    X.ball(c.x + r * 0.4, c.y - r * 0.85, r * 1.1, r * 0.55, col, h.mat || 'leather', { z: 19, rz: 2 });
+    X.slab([[c.x - r * 1.5, c.y - r * 0.6], [c.x + r * 0.4, c.y - r * 0.95], [c.x + r * 2.1, c.y - r * 0.5], [c.x + r * 0.4, c.y - r * 0.25]], col, h.mat || 'leather', { z: 18.4, rz: 1.4, bevel: 1 });
+    if (h.trim) X.tube(c.x - r * 1.4, c.y - r * 0.6, c.x + r * 2, c.y - r * 0.5, r * 0.12, r * 0.12, h.trim, 'gold', { z: 20 });
+  } else if (k === 'crown') {
+    crown(X, { x: c.x + 0.6, y: c.y - r * 0.85 }, { r: r * 0.95, col, mat: h.mat || 'gold', gem: h.gem, n: h.n ?? 5, tall: h.tall ?? 3.6 });
+  } else if (k === 'thorns') {
+    for (let i = 0; i < 8; i++) {
+      const a = Math.PI + (i / 7) * Math.PI;
+      const bx = c.x + 0.6 + Math.cos(a) * r * 1.02;
+      const by = c.y - r * 0.6 + Math.sin(a) * r * 0.32;
+      X.ball(bx, by, r * 0.2, r * 0.16, col, 'bark', { z: 19, rz: 0.6 });
+      X.tube(bx, by, bx + Math.cos(a) * r * 0.5, by - r * 0.45, r * 0.08, r * 0.02, col, 'bark', { z: 19 });
+      if (h.flowers && i % 3 === 1) X.ball(bx, by - r * 0.2, r * 0.24, r * 0.22, h.flowers, 'velvet', { z: 20, rz: 0.8 });
+    }
+  } else if (k === 'antlers') {
+    for (const s of [0, 1]) {
+      const bx = c.x + r * (0.1 + s * 0.6);
+      const by = c.y - r * 0.75;
+      const cc = s ? col : dk(col, 0.82);
+      X.limb([[bx, by, r * 0.16, 17 + s * 3], [bx + r * (s ? 0.6 : -0.3), by - r * 1.3, r * 0.13, 17 + s * 3], [bx + r * (s ? 1.4 : -0.1), by - r * 2.4, r * 0.08, 17 + s * 3]], cc, h.mat || 'bone');
+      X.tube(bx + r * (s ? 0.4 : -0.2), by - r * 0.9, bx + r * (s ? -0.4 : -0.9), by - r * 1.6, r * 0.09, r * 0.05, cc, h.mat || 'bone', { z: 17 + s * 3 });
+      X.tube(bx + r * (s ? 0.9 : 0), by - r * 1.8, bx + r * (s ? 1.8 : 0.6), by - r * 1.9, r * 0.08, r * 0.04, cc, h.mat || 'bone', { z: 17 + s * 3 });
+    }
+  } else if (k === 'band') {
+    X.tube(c.x - r * 0.95, c.y - r * 0.55, c.x + r * 1.05, c.y - r * 0.7, r * 0.2, r * 0.2, col, h.mat || 'cloth', { z: 18 });
+  }
 }
