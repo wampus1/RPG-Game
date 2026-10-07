@@ -20,7 +20,18 @@
 //   And at its end: it staggers, reels, falls back, light breaking out of
 // it, and comes apart, texel by texel, into motes that rise and are gone.
 import { bossTint } from './bossart.js';
-import { TEXEL, drawTex, drawRim } from './bosstex.js';
+import { TEXEL, drawTex, drawRim as texRim, drawScratchRim, drawScratch } from './bosstex.js';
+// (A forged master has no mask of its own: its rim's drawn from the scratch
+// canvas it's still on. See forge.js.)
+const drawRim = (ctx, tex, x, y, color, alpha, pose) => {
+  if (!tex.forged) return texRim(ctx, tex, x, y, color, alpha, pose);
+  // (Its shape in the light, then itself over it again: only the rim shows.)
+  const op = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'source-over';
+  drawScratchRim(ctx, x, y, pose, tex.big, color, alpha);
+  drawScratch(ctx, x, y, pose, tex.big);
+  ctx.globalCompositeOperation = op;
+};
 
 const TAU = Math.PI * 2;
 const clamp01 = (k) => (k < 0 ? 0 : k > 1 ? 1 : k);
@@ -89,7 +100,9 @@ const lasering = (r, e) => {
 // ------------------------------------------------------------ the pose
 // { dx, dy, sx, sy, rot, shear } about its feet, in screen pixels. `K`: how
 // much bigger than painted it's drawn (its moves as big as it is).
-export function poseOf(r, e, K = 1) {
+// (`soft`: a master whose parts move of themselves, forge.js: its whole
+// body bent and squashed only half as much.)
+export function poseOf(r, e, K = 1, soft = false) {
   const A = animOf(r, e);
   const P = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0, shear: 0, alpha: 1, m: Math.max(0.8, K) };
   const m = P.m;
@@ -267,6 +280,11 @@ export function poseOf(r, e, K = 1) {
     P.dy += 3 * m * fall;
     P.alpha = 1 - clamp01((d - 0.55) / 0.3);
   }
+  if (soft) {
+    P.sx = 1 + (P.sx - 1) * 0.5;
+    P.sy = 1 + (P.sy - 1) * 0.5;
+    P.shear *= 0.5;
+  }
   return P;
 }
 
@@ -352,7 +370,8 @@ export function drawPoseBehind(r, ctx, e, tex, x, y, pose) {
   A.ghosts.forEach((g, i) => {
     if (i === 0) return;
     ctx.globalAlpha = ga * (0.32 - i * 0.06);
-    drawTex(ctx, tex, g.x, g.y, pose);
+    if (tex.forged) drawScratch(ctx, g.x, g.y, pose, tex.big);
+    else drawTex(ctx, tex, g.x, g.y, pose);
     drawRim(ctx, tex, g.x, g.y, tint[0], 0.6, pose);
   });
   ctx.globalAlpha = ga;

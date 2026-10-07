@@ -465,3 +465,71 @@ export function drawRim(ctx, tex, x, y, color, alpha, pose = null) {
   drawTex(ctx, { img: g, tx0: tex.tx0, ty0: tex.ty0, w: tex.w, h: tex.h }, x, y, pose);
   ctx.globalAlpha = a;
 }
+
+// ------------------------------------------------------------ forged
+// (A master painted at its size, forge.js: what's on the scratch canvas
+// drawn as it is, one pixel to one, posed; no texture made of it.)
+function posed(dest, x, y, pose) {
+  dest.translate(Math.round(x + (pose ? pose.dx || 0 : 0)), Math.round(y + (pose ? pose.dy || 0 : 0)));
+  if (pose) {
+    if (pose.rot) dest.rotate(pose.rot);
+    if (pose.shear) dest.transform(1, 0, pose.shear, 1, 0, 0);
+    if (pose.sx !== undefined || pose.sy !== undefined) dest.scale(pose.sx ?? 1, pose.sy ?? 1);
+  }
+}
+export function drawScratch(dest, x, y, pose, big) {
+  const c = scratchCanvas();
+  const R = reachOf(big);
+  const sm = dest.imageSmoothingEnabled;
+  dest.imageSmoothingEnabled = false;
+  dest.save();
+  posed(dest, x, y, pose);
+  dest.drawImage(c.canvas, AX - R.l, AY - R.u, R.l + R.r, R.u + R.d, -R.l, -R.u, R.l + R.r, R.u + R.d);
+  dest.restore();
+  dest.imageSmoothingEnabled = sm;
+}
+// Its rim of light: its shape in `color`, a pixel out all round it (drawn
+// before it is).
+let sil = null;
+export function drawScratchRim(dest, x, y, pose, big, color, alpha) {
+  if (alpha <= 0.01) return;
+  const c = scratchCanvas();
+  const R = reachOf(big);
+  const W = R.l + R.r;
+  const H = R.u + R.d;
+  if (!sil) sil = document.createElement('canvas');
+  if (sil.width < W || sil.height < H) {
+    sil.width = Math.max(sil.width, W);
+    sil.height = Math.max(sil.height, H);
+  }
+  const s = sil.getContext('2d');
+  s.globalCompositeOperation = 'source-over';
+  s.clearRect(0, 0, W, H);
+  s.drawImage(c.canvas, AX - R.l, AY - R.u, W, H, 0, 0, W, H);
+  s.globalCompositeOperation = 'source-in';
+  s.fillStyle = color;
+  s.fillRect(0, 0, W, H);
+  s.globalCompositeOperation = 'source-over';
+  const sm = dest.imageSmoothingEnabled;
+  dest.imageSmoothingEnabled = false;
+  const a = dest.globalAlpha;
+  dest.globalAlpha = a * alpha;
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    dest.save();
+    posed(dest, x + ox, y + oy, pose);
+    dest.drawImage(sil, 0, 0, W, H, -R.l, -R.u, W, H);
+    dest.restore();
+  }
+  dest.globalAlpha = a;
+  dest.imageSmoothingEnabled = sm;
+}
+// What's on the scratch canvas now, round its feet (w by h, its feet at
+// (-tx0, -ty0) in it), as a texture (its motes, as it comes apart).
+export function snapScratch(tx0, ty0, w, h) {
+  const c = scratchCanvas();
+  const img = document.createElement('canvas');
+  img.width = w;
+  img.height = h;
+  img.getContext('2d').drawImage(c.canvas, AX + tx0, AY + ty0, w, h, 0, 0, w, h);
+  return { img, tx0, ty0, w, h };
+}

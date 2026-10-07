@@ -337,6 +337,12 @@ export class Sculpt {
     this.seed = o.seed || 1;
     this.group = 0;
     this.k = 2.5;
+    // (Round 71: `pix`, drawn as a pixel artist would: the light in clean
+    // bands of its ramp, no checker between them, the grain of what it's
+    // made of softened, its shine in solid pops. See render/forge.js.)
+    this.pix = !!o.pix;
+    this.texK = o.texK ?? (this.pix ? 0.55 : 1);
+    this.steps = o.steps ?? (this.pix ? 6 : 7);
   }
   // From here on, parts go in group `g`, blended over `k` pixels.
   in(g, k = this.k) {
@@ -561,19 +567,28 @@ export class Sculpt {
           if (hh > h0) occ += Math.min(1, (hh - h0) / (Math.hypot(ox, oy) * 1.6));
         }
         const ao = 1 - clamp(occ / 8, 0, 0.55);
-        let lv = (0.16 + 0.84 * diff) * ao + (tx.lv || 0);
+        let lv = (0.16 + 0.84 * diff) * ao + (tx.lv || 0) * this.texK;
+        // (More between its lights and its shadows, drawn as a pixel artist
+        // draws.)
+        if (this.pix) lv = 0.52 + (lv - 0.52) * 1.28;
         if (p.o.lift) lv += p.o.lift;
         const spec = Math.pow(Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]), tx.pow || M.pow) * (tx.spec ?? M.spec) * ao;
         const rim = Math.pow(Math.max(0, nx * RIM[0] + ny * RIM[1] + (1 - nz) * 0.6), 2) * (M.rim || 0);
         // Onto its colour's ramp.
-        const R = ramp(p.col, 7);
+        const R = ramp(p.col, this.steps);
         const f = clamp(lv, 0, 0.999) * (R.length - 1);
         let i = Math.floor(f);
         const fr = f - i;
-        if (fr > 0.72 || (fr > 0.45 && BAYER[(x & 1) + (y & 1) * 2] < 0.5)) i++;
+        if (this.pix) {
+          if (fr > 0.55) i++;
+        } else if (fr > 0.72 || (fr > 0.45 && BAYER[(x & 1) + (y & 1) * 2] < 0.5)) i++;
         let col = R[Math.min(R.length - 1, i)];
         if (tx.col) col = mix(col, hex(tx.col), tx.k ?? 0.5);
-        if (spec > 0.08) col = mix(col, [255, 250, 236], clamp(spec, 0, 0.85));
+        if (this.pix) {
+          // (Its shine in pops: the lightest of its ramp, then near white.)
+          if (spec > 0.5) col = mix(R[R.length - 1], [255, 252, 240], 0.7);
+          else if (spec > 0.22) col = mix(R[R.length - 1], [255, 250, 236], 0.25);
+        } else if (spec > 0.08) col = mix(col, [255, 250, 236], clamp(spec, 0, 0.85));
         if (rim > 0.05) col = mix(col, hex(o.rim || '#b8d0ff'), clamp(rim * 0.5, 0, 0.45));
         if (tx.glint) col = mix(col, [255, 255, 255], 0.8);
         if (tx.glow) col = mix(col, hex(tx.glow[0]), tx.glow[1]);
@@ -606,6 +621,9 @@ export class Sculpt {
     }
     this.height = height;
     this.owner = owner;
+    this.U = U;
+    this.V = V;
+    this.gid = gid;
     if (o.outline !== false) outlineSel(out);
     return out;
   }

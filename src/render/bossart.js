@@ -308,7 +308,7 @@ export const LEGGED = new Set(Object.keys(RIGS));
 // was to where it's going). Kept on the entity, in world tiles.
 // (Round 71: `K`, how much bigger than painted it's drawn: its feet set
 // out so much further, to match. See bosstex.js.)
-function rigUpdate(r, e, rig, wp, front, dt, game, K = 1) {
+export function rigUpdate(r, e, rig, wp, front, dt, game, K = 1) {
   const homes = [];
   rig.legs.forEach(([u], j) => {
     for (const side of [0, 1]) {
@@ -421,7 +421,7 @@ const SKULL = new Part(() => {
   X.ball(4.5, 6.4, 2.2, 1.4, '#d8d0b8', 'bone', { z: 1.4, rz: 1 });
   return X.render({ outline: false });
 }, 4.5, 4.5);
-function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, faceR) {
+export function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, faceR) {
   const { kx, ky, fx: ex, fy: ey } = knee(hx, hy, fx, fy, rig.L1, rig.L2);
   const L = LEG[style === 'spider' ? 'spider' : style === 'bone' ? 'bone' : 'mech'];
   const len = rig.L1 + rig.L2;
