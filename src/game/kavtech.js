@@ -8,6 +8,7 @@ import { ITEMS, enhanced, canEnhance } from '../world/items.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { mainWeapon } from './combat.js';
 import { startLaser } from './laser.js';
+import { useEvolvedGear } from './evolvedgear.js';
 
 const DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
 
@@ -99,6 +100,11 @@ export function useGadget(game, def) {
   else if (k === 'kav_bulwark') ok = bulwark(game, p);
   else if (k === 'kav_lodestar') ok = lodestar(game, p);
   else if (k === 'overseer_eye') ok = overseerEye(game, p);
+  else if (def.evolved) {
+    // (Round 72) The evolved masters' things: see evolvedgear.js.
+    const r = useEvolvedGear(game, p, k);
+    ok = r === true;
+  }
   else if (k === 'kav_everlight') {
     game.ui.msg('The Everlight needs nothing doing: hold it, or carry it in your off hand (right-click it in your pack), and it lights the way.', '#a8f4ff');
     return true;

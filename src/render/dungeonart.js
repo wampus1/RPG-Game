@@ -446,6 +446,64 @@ export function dungeonIcon(key, it) {
     return p;
   }
   switch (key) {
+    // (Round 72) The evolved masters' leavings: see game/evolvedgear.js.
+    case 'alchemist_hand': {
+      // A hand of gold, more fingers than a hand should have, fanned out;
+      // the Alchemist's blue eye in its palm.
+      p.ellipse(8, 11, 3.5, 3, '#c89020');
+      p.ellipse(8, 11, 2.5, 2, '#f0c040');
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI + (i / 6) * Math.PI;
+        const L = i === 0 || i === 6 ? 4 : 6;
+        p.line(8 + Math.cos(a) * 2, 10 + Math.sin(a) * 1.5, 8 + Math.cos(a) * L, 9 + Math.sin(a) * L, i % 2 ? '#f0c040' : '#ffe890');
+      }
+      p.ellipse(8, 11, 1.3, 1.1, '#5ad8f0');
+      p.set(8, 11, '#ffffff');
+      p.rect(7, 14, 3, 2, '#8a6010');
+      return p.outline(OUT);
+    }
+    case 'rift_needle': {
+      // A black spine, long, a seam of violet down it, and the rift it
+      // tears at its tip.
+      p.line(3, 14, 12, 3, '#1a1024');
+      p.line(4, 14, 13, 3, '#3a2a5a');
+      p.line(4, 13, 12, 4, '#8a40c0');
+      p.set(12, 3, '#ffffff');
+      p.set(13, 2, '#c8a0ff');
+      p.ellipse(12, 3, 2.2, 1.4, '#c8a0ff', 160);
+      p.ellipse(12, 3, 1.2, 0.7, '#05010a');
+      p.ellipse(3, 14, 1.5, 1.5, '#2a1e3a');
+      return p.outline(OUT);
+    }
+    case 'hero_gauntlet': {
+      // A fist of worn gold and steel, knuckles studded, the claws of the
+      // curse still on its fingertips.
+      p.rect(4, 6, 8, 7, '#c8a040');
+      p.rect(5, 7, 6, 5, '#e8c860');
+      p.rect(4, 12, 8, 2, '#8a7050');
+      for (let i = 0; i < 4; i++) {
+        p.set(5 + i * 2, 6, '#fff0a0');
+        p.line(5 + i * 2, 5, 5 + i * 2 + (i < 2 ? -1 : 1), 2, '#ff8040');
+      }
+      p.rect(3, 9, 2, 3, '#a08040');
+      p.hline(5, 10, 9, '#a07830');
+      p.rect(6, 13, 4, 2, '#6a5a40');
+      return p.outline(OUT);
+    }
+    case 'worm_tooth': {
+      // A fang of old ivory, curved, its root dark, the worm's acid still
+      // dripping off its point.
+      p.line(5, 14, 7, 9, '#c8b890');
+      p.line(6, 14, 8, 9, '#f0e8c8');
+      p.line(7, 9, 10, 4, '#f0e8c8');
+      p.line(8, 9, 11, 4, '#fff8e0');
+      p.line(6, 10, 8, 6, '#e8d8a8');
+      p.rect(4, 13, 4, 3, '#6a5a44');
+      p.set(11, 3, '#ffffff');
+      p.set(12, 5, '#a8e040');
+      p.set(12, 7, '#c8f080');
+      return p.outline(OUT);
+    }
     case 'old_coin':
       p.ellipse(6, 9, 3.5, 3.5, '#8a8a98');
       p.ellipse(6, 9, 2.5, 2.5, '#b8b8c4');

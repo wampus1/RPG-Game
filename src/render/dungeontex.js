@@ -74,6 +74,34 @@ export function dungeonTop(name, v, rand) {
       p.rect(0, 0, 16, 2, '#0a0808');
       return p;
     }
+    case 'rift_door': {
+      // (Round 72) The rift's heart: void-stone split open on nothing, a
+      // white seam round the hole, stars in it.
+      speckle(p, ['#3a2a4e', '#2a1e3a', '#4a3660'], rand, 0.3);
+      p.ellipse(8, 8, 6.5, 5.5, '#c8a0ff');
+      p.ellipse(8, 8, 5.5, 4.5, '#05010a');
+      for (let i = 0; i < 6; i++) p.set(4 + rand() * 8, 5 + rand() * 6, i % 2 ? '#ffffff' : '#5ad8f0');
+      p.set(3, 6, '#ffffff');
+      p.set(12, 10, '#ffffff');
+      return p;
+    }
+    case 'abyss_floor': {
+      // (Round 72) The bottom of the rift: next to nothing, a dark with a
+      // few stars in it and a vein of violet now and then.
+      speckle(p, ['#08040f', '#0e0818', '#120a20'], rand, 0.3);
+      if (v % 2 === 0) randomWalk(p, rand, rand() * 16, rand() * 16, 5, '#2a1448');
+      for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * 16, i === 0 ? '#ffffff' : i === 1 ? '#8a60c0' : '#3a60a0');
+      return p;
+    }
+    case 'scorched_earth': {
+      // Earth burnt black round the rift, cracked, a glow of the void in
+      // the deepest cracks.
+      speckle(p, ['#2a2024', '#1e1618', '#3a2e30'], rand, 0.35);
+      for (let i = 0; i < 2 + v % 2; i++) randomWalk(p, rand, rand() * 16, rand() * 16, 10, '#120c14');
+      if (v !== 1) randomWalk(p, rand, rand() * 16, rand() * 16, 4, v === 3 ? '#8a40c0' : '#5a2a7a');
+      for (let i = 0; i < 3; i++) p.set(rand() * 16, rand() * 16, '#4a4044');
+      return p;
+    }
     case 'sinkhole': {
       speckle(p, ['#5a4632', '#463626', '#6a5440'], rand, 0.3);
       p.ellipse(8, 8, 6.5, 6, '#2a1e16');
@@ -273,7 +301,15 @@ export function dungeonFront(name, v, rand, rot) {
       }
       return frontify(p, 0.85);
     }
-    case 'stairs_down': case 'sinkhole': case 'mine_shaft': case 'rubble_seal':
+    case 'abyss_floor':
+      speckle(p, ['#0a0612', '#06040a', '#140c20'], rand, 0.3);
+      p.set(rand() * 16, rand() * LH, '#8a60c0');
+      return p;
+    case 'scorched_earth':
+      speckle(p, ['#241c20', '#1a1216', '#302628'], rand, 0.3);
+      randomWalk(p, rand, rand() * 16, 0, 8, '#120c14');
+      return frontify(p, 0.85);
+    case 'stairs_down': case 'sinkhole': case 'mine_shaft': case 'rubble_seal': case 'rift_door':
       speckle(p, ['#5a4e44', '#463c34', '#6a5e52'], rand, 0.3);
       return frontify(p, 0.8);
     case 'kav_keystone': {

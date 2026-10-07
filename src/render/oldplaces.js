@@ -9,6 +9,7 @@ import { RELICS } from '../world/items.js';
 import { placeTag } from '../game/relics.js';
 import { FY } from '../world/dungeongen.js';
 import { spireDissolve } from '../game/scenes.js';
+import { drawAncientGates } from './ancientfx.js';
 
 // Little glyphs, 4 wide and 5 tall (bit rows).
 export const GLYPHS = [
@@ -46,6 +47,8 @@ export function drawOldPlaces(r, game, dt) {
       if (Math.abs(b.x - p.x) > 40 || Math.abs(b.z - p.z) > 40) continue;
       beacon(r, ctx, b);
     }
+    // (Round 72) The ancient places' gates: see ancientfx.js.
+    drawAncientGates(r, game, dt);
   }
   relicCircles(r, ctx, game);
   stairOutlines(r, ctx, game);

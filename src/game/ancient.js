@@ -20,12 +20,20 @@
 //   The Gullet of the World: its acid eats at whoever wades it; its eggs
 //     hatch as you pass; its halls quake and the roof comes in. Its peril:
 //     the whole gut heaves (it drags you along), and leeches drop on you.
+// (Round 72: and more of each. The Athanor's orreries, their planets
+// turning through you; its salt gardens, light leaping crystal to crystal;
+// its furnaces, fire up through the vents in turn. The Champion's tombs,
+// whose dead sit up as you pass; his arena, one champion alone; his
+// reliquaries, under the ghosts' bows. The Reach's shard-storms, void
+// loose off the walls; its flickering floors, stripe by stripe. The
+// Gullet's leech-pools; its throats that carry you along; its nests.)
 import { FY } from '../world/dungeongen.js';
 import { B, BLOCKS } from '../world/blocks.js';
 import { addHazard, addZone, areaTiles } from '../entities/monsters.js';
 import { chill } from './gems.js';
 import { work, drag } from '../entities/bosskit.js';
-import { addRift } from '../entities/evolved.js';
+import { addRift, addBouncer } from '../entities/evolved.js';
+import { knock } from './combat.js';
 
 const ELEMENTS = [
   { kind: 'fire', burn: 2, color: [255, 120, 40], puff: ['#ff8030', '#ffd060', '#ffffff'], word: 'fire' },
@@ -250,12 +258,9 @@ export function ancientTick(run, dt) {
   }
   // Its eggs, hatching as you pass.
   for (const G of A.eggs) {
-    for (const e of G.eggs) {
-      if (e.hatched) continue;
-      const p = party.find((q) => Math.max(Math.abs(q.x - e.x), Math.abs(q.z - e.z)) <= 2);
-      if (!p) continue;
+    const hatch = (e, p) => {
       e.hatched = true;
-      if (game.world.getBlock(e.x, FY, e.z) !== B.void_bloom) continue;
+      if (game.world.getBlock(e.x, FY, e.z) !== B.void_bloom) return;
       game.world.setBlock(e.x, FY, e.z, B.air);
       r.emit(e.x, FY + 0.6, e.z, { n: 16, color: ['#c8e070', '#e8d8b0', '#8a6a4a'], up: 30, speed: 30, life: 0.7 });
       game.audio?.play('splash', e);
@@ -264,7 +269,19 @@ export function ancientTick(run, dt) {
         c.target = p;
         c.dormant = 0;
       }
-      say(p, 'eggs', 'The egg splits, and something wet and hungry comes out of it!', '#e0d0a0');
+    };
+    for (const e of G.eggs) {
+      if (e.hatched) continue;
+      // (Round 72: a nest's eggs feel you coming further off, and hatch in
+      // twos.)
+      const p = party.find((q) => Math.max(Math.abs(q.x - e.x), Math.abs(q.z - e.z)) <= (G.nest ? 3 : 2));
+      if (!p) continue;
+      hatch(e, p);
+      if (G.nest && Math.random() < 0.5) {
+        const e2 = G.eggs.find((o) => !o.hatched && Math.max(Math.abs(o.x - e.x), Math.abs(o.z - e.z)) <= 3);
+        if (e2) hatch(e2, p);
+      }
+      say(p, 'eggs', G.nest ? 'The nest stirs at your step: eggs split all round you, and what\'s in them comes out hungry!' : 'The egg splits, and something wet and hungry comes out of it!', '#e0d0a0');
     }
   }
   // Its quaking halls: the roof comes in, here and there, round you.
@@ -284,6 +301,210 @@ export function ancientTick(run, dt) {
       say(p, 'quake', 'The whole hall shudders, and the roof starts to come in! (watch the dust)', '#e0c8a0');
     }
     game.audio?.play('rumble', in_[0]);
+  }
+
+  // ---------------------------------------------------- (Round 72) more of each
+  // The Athanor's orreries: their planets turning, each a ball of light,
+  // through whoever's in its path.
+  for (const O of A.orreries) {
+    const in_ = here(O.box);
+    O.t = (O.t || 0) + dt;
+    if (!in_.length) continue;
+    O.hit ||= new Map();
+    for (const orb of O.orbits) {
+      const a = orb.a0 + O.t * orb.w;
+      const x = O.x + Math.cos(a) * orb.r * 1.15;
+      const z = O.z + Math.sin(a) * orb.r;
+      r.emit(x, FY + 0.7, z, { n: 1, color: ['#ffd070', '#ffffff', '#80e8ff'], up: 3, speed: 2, life: 0.25, glow: true });
+      for (const p of in_) {
+        if (Math.hypot(p.x - x, p.z - z) > 0.8 || p.rollT > 0 || (O.hit.get(p) || 0) > O.t) continue;
+        O.hit.set(p, O.t + 0.9);
+        game.damage(p, Math.round(dmg * 0.8), null);
+        knock(game, { x: O.x, z: O.z }, p, 1);
+        r.emit(x, FY + 1, z, { n: 10, color: ['#ffd070', '#ffffff'], up: 30, speed: 40, life: 0.5, glow: true });
+        game.audio?.play('chime', p);
+        say(p, 'orrery', 'The orrery turns, and its planets come round through you like stones from a sling! (keep off its rings)', '#ffd070');
+      }
+    }
+  }
+  // Its salt gardens: the crystals sing, and light leaps between them.
+  for (const G of A.gardens) {
+    const in_ = here(G.box);
+    if (!in_.length) continue;
+    G.t = (G.t || 0) + dt;
+    if (Math.random() < dt * 6) {
+      const c = G.crystals[Math.floor(Math.random() * G.crystals.length)];
+      r.emit(c.x, FY + 1, c.z, { n: 1, color: ['#ffe8a0', '#ffffff', '#80e8ff'], up: 8, speed: 4, life: 0.6, glow: true });
+    }
+    if (G.t < 2.6) continue;
+    G.t = 0;
+    const a = G.crystals[Math.floor(Math.random() * G.crystals.length)];
+    const rest = G.crystals.filter((c) => c !== a);
+    const b = rest[Math.floor(Math.random() * rest.length)];
+    const tiles = [];
+    const seen = new Set();
+    const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) * 2);
+    for (let k = 0; k <= n; k++) {
+      const x = Math.round(a.x + ((b.x - a.x) * k) / n);
+      const z = Math.round(a.z + ((b.z - a.z) * k) / n);
+      if (seen.has(`${x},${z}`) || solidAt(game, x, z)) continue;
+      seen.add(`${x},${z}`);
+      tiles.push({ x, z });
+    }
+    if (!tiles.length) continue;
+    r.emit(a.x, FY + 1, a.z, { n: 8, color: ['#ffe8a0', '#ffffff'], up: 20, speed: 10, life: 0.5, glow: true });
+    addHazard(game, { tiles, y: FY, dur: 1.0, dmg: Math.round(dmg * 0.9), kind: 'beam', from: a, to: b, beamColor: '#ffffff', halo: '#ffe070', width: 2, chill: 1, color: [255, 230, 120], trap: true, place: true });
+    game.audio?.play('chime', a);
+    say(in_[0], 'garden', 'The crystals sing, and light leaps from one to the next... (don\'t stand between them!)', '#ffe8a0');
+  }
+  // Its furnaces: the kiln's fire up through the vents, one after the
+  // next, all the way round.
+  for (const F of A.furnaces) {
+    const in_ = here(F.box);
+    if (!in_.length) continue;
+    F.t = (F.t || 0) + dt;
+    if (F.t < 0.9) continue;
+    F.t = 0;
+    F.k = ((F.k ?? -1) + 1) % F.vents.length;
+    const at = F.vents[F.k];
+    const tiles = areaTiles(at.x, at.z, 1, true).filter((q) => !solidAt(game, q.x, q.z));
+    if (tiles.length) addHazard(game, { tiles, y: FY, dur: 0.7, dmg: Math.round(dmg * 0.7), kind: 'fire', burn: 2, center: at, radius: 1, color: [255, 120, 40], trap: true, place: true });
+    const next = F.vents[(F.k + 1) % F.vents.length];
+    r.emit(next.x, FY + 0.3, next.z, { n: 4, color: ['#ff8030', '#ffd060'], up: 14, speed: 6, life: 0.5, glow: true });
+    game.audio?.play('hiss', at);
+    say(in_[0], 'furnace', 'The kiln\'s fire comes up through the vents, one after the next, all the way round! (run with it, not into it)', '#ff9050');
+  }
+
+  // The Champion's companions' tombs: pass one, and what's in it sits up.
+  for (const Tb of A.tombs) {
+    const in_ = here(Tb.box);
+    if (!in_.length) continue;
+    for (const t of Tb.list) {
+      if (t.open) continue;
+      const key = `tomb${t.x},${t.z}`;
+      if (run.state.solved[key]) {
+        t.open = true;
+        continue;
+      }
+      const p = in_.find((q) => Math.abs(q.x - t.x) <= 1 && Math.abs(q.z - t.z) <= 1);
+      if (!p) continue;
+      t.open = true;
+      run.state.solved[key] = true;
+      const x = t.x;
+      const z = t.z + t.dz;
+      r.emit(t.x, FY + 1, t.z, { n: 14, color: ['#c8c8c8', '#8a8a80', '#ffe8a0'], up: 24, speed: 20, life: 0.8, shape: 'puff' });
+      game.audio?.play('creak', t);
+      if (Math.random() < 0.35) {
+        game.spawnDrop('old_coin', 3 + Math.floor(Math.random() * 6), x, FY, z, true);
+        say(p, 'tomb_gold', 'The lid grinds aside: only bones in it, and the coins they were buried with.', '#e0d8c0');
+        continue;
+      }
+      const c = !solidAt(game, x, z) && !game.entityAt?.(x, FY, z) ? run.spawn(Math.random() < 0.6 ? 'wight' : 'legion_shade', x, FY, z, {}) : null;
+      if (c) c.target = p;
+      say(p, 'tomb', 'The lid of the sarcophagus grinds aside as you pass, and what was laid in it sits up! (his companions keep their watch)', '#e0d8c0');
+    }
+  }
+  // His reliquaries: the companions' ghosts drawing on whoever's in them.
+  for (const Rq of A.reliquaries) {
+    const in_ = here(Rq.box);
+    if (!in_.length) {
+      Rq.t = 0;
+      continue;
+    }
+    Rq.t = (Rq.t || 0) + dt;
+    if (Rq.t < 4.5) continue;
+    Rq.t = 1.5;
+    const p = in_[Math.floor(Math.random() * in_.length)];
+    ancientDanger(run, 'champion', p, Math.round(dmg * 0.8));
+    say(p, 'reliquary', 'The companions\' ghosts stand guard over their relics, and their bows are on you as long as you\'re in here. (take what you came for, and go)', '#c8e0ff');
+  }
+
+  // The Reach's shard-storms: splinters of the void loose in the hall.
+  for (const St of A.storms) {
+    const in_ = here(St.box, 1);
+    St.live = (St.live || []).filter((b) => !b.done);
+    if (!in_.length) {
+      for (const b of St.live) b.done = true;
+      St.live = [];
+      continue;
+    }
+    St.t = (St.t || 0) + dt;
+    if (St.live.length >= St.n || St.t < 1.2) continue;
+    St.t = 0;
+    const bx = St.box;
+    let x = 0;
+    let z = 0;
+    let ok = false;
+    for (let i = 0; i < 12 && !ok; i++) {
+      x = bx.x0 + 1 + Math.floor(Math.random() * Math.max(1, bx.x1 - bx.x0 - 1));
+      z = bx.z0 + 1 + Math.floor(Math.random() * Math.max(1, bx.z1 - bx.z0 - 1));
+      ok = !solidAt(game, x, z) && !in_.some((q) => Math.hypot(q.x - x, q.z - z) < 2.5);
+    }
+    if (!ok) continue;
+    const a = Math.random() * Math.PI * 2;
+    St.live.push(addBouncer(game, { x, z, y: FY, vx: Math.cos(a), vz: Math.sin(a), v: 4.2, life: 14, dmg: Math.round(dmg * 0.8), r: 0.7, color: VOID, kind: 'void', slow: 1, spent: false }));
+    r.emit(x, FY + 1, z, { n: 12, color: VOID, up: 24, speed: 30, life: 0.5, glow: true });
+    game.audio?.play('void', { x, z });
+    say(in_[0], 'storm', 'Splinters of the void fly about the hall, off its walls and back again! (roll through them, or round)', '#c8a0ff');
+  }
+  // Where the floor flickers: its stripes go over to the void by turns.
+  for (const Fl of A.flickers) {
+    const in_ = here(Fl.box);
+    if (!in_.length) continue;
+    Fl.t = (Fl.t || 0) + dt;
+    const k = Fl.k ?? 0;
+    if (Fl.t > 2 && Math.random() < dt * 40) {
+      const q = Fl.bands[k][Math.floor(Math.random() * Fl.bands[k].length)];
+      r.emit(q.x, FY + 0.2, q.z, { n: 1, color: VOID, up: 6, speed: 3, life: 0.4, glow: true });
+    }
+    if (Fl.t < 3) continue;
+    Fl.t = 0;
+    Fl.k = 1 - k;
+    const tiles = Fl.bands[k].filter((q) => !solidAt(game, q.x, q.z));
+    if (tiles.length) addHazard(game, { tiles, y: FY, dur: 0.6, dmg, kind: 'hex', chill: 1.2, color: [140, 90, 230], trap: true, place: true, quiet: true });
+    game.audio?.play('void', in_[0]);
+    say(in_[0], 'flicker', 'The floor flickers, stripe by stripe, and the void shows through where it was! (stand on the stripes that aren\'t)', '#c8a0ff');
+  }
+
+  // The Gullet's leech-pools: what lives in the acid, up round whoever wades.
+  for (const Lp of A.leeches) {
+    const in_ = here(Lp.box);
+    if (!in_.length) continue;
+    Lp.t = (Lp.t || 0) + dt;
+    Lp.live = (Lp.live || []).filter((c) => !c.dead);
+    if (Lp.t < 2.5 || Lp.live.length >= 4) continue;
+    const p = in_.find((q) => Lp.tiles.some((t) => t.x === q.x && t.z === q.z));
+    if (!p) continue;
+    Lp.t = 0;
+    const spots = areaTiles(p.x, p.z, 1, true).filter((q) => !(q.x === p.x && q.z === p.z) && !solidAt(game, q.x, q.z) && !game.entityAt?.(q.x, FY, q.z));
+    if (!spots.length) continue;
+    const q = spots[Math.floor(Math.random() * spots.length)];
+    const c = run.spawn('slugling', q.x, FY, q.z, {});
+    if (c) {
+      c.target = p;
+      Lp.live.push(c);
+      r.emit(q.x, FY + 0.4, q.z, { n: 12, color: ['#c8e070', '#a8c040', '#5a8a2a'], up: 24, speed: 20, life: 0.6 });
+      game.audio?.play('splash', q);
+    }
+    say(p, 'leeches', 'Something in the acid wakes at your wading, and comes up out of it, hungry! (out of the pool!)', '#c8e070');
+  }
+  // Its throats: the gut clenches and carries you along it.
+  for (const Th of A.throats) {
+    const in_ = here(Th.box);
+    if (!in_.length) {
+      Th.t = 0;
+      continue;
+    }
+    Th.t = (Th.t || 0) + dt;
+    if (Th.t < 2.4) continue;
+    Th.t = 0;
+    Th.dir = -(Th.dir || 1);
+    for (const p of in_) drag(game, p, Th.axis === 'x' ? { x: p.x + Th.dir * 3, z: p.z } : { x: p.x, z: p.z + Th.dir * 3 }, 2);
+    const bx = Th.box;
+    for (let i = 0; i < 6; i++) r.emit(bx.x0 + Math.random() * (bx.x1 - bx.x0), FY + 0.3, bx.z0 + Math.random() * (bx.z1 - bx.z0), { n: 1, color: ['#a07a50', '#c8a080'], up: 10, speed: 6, life: 0.7, shape: 'puff' });
+    game.shake = Math.min(1, (game.shake || 0) + 0.3);
+    game.audio?.play('rumble', in_[0]);
+    say(in_[0], 'throat', 'The walls of the gut clench and heave, and carry you along it, one way and then the other! (plant your feet between heaves)', '#c8a080');
   }
 }
 
@@ -321,7 +542,8 @@ function trial(run, T, dt, party, dmg) {
   if (on.mobs.length) return;
   on.t -= dt;
   if (on.t > 0) return;
-  if (on.wave >= 3) {
+  const waves = T.arena ? 1 : 3;
+  if (on.wave >= waves) {
     // Beaten.
     run.state.solved[key] = true;
     lift();
@@ -331,7 +553,9 @@ function trial(run, T, dt, party, dmg) {
   }
   on.wave++;
   on.t = 1.6;
-  const kinds = on.wave === 1 ? ['skeleton', 'skeleton', 'skeleton'] : on.wave === 2 ? ['skeleton', 'wight', 'ghoul', 'ghoul'] : ['legion_shade', 'wight', 'wight', 'skeleton'];
+  // (Round 72: an arena's trial is one champion of the old wars, alone,
+  // and twice the fighter any of the dead are.)
+  const kinds = T.arena ? ['legion_shade'] : on.wave === 1 ? ['skeleton', 'skeleton', 'skeleton'] : on.wave === 2 ? ['skeleton', 'wight', 'ghoul', 'ghoul'] : ['legion_shade', 'wight', 'wight', 'skeleton'];
   const B0 = T.box;
   for (const k of kinds) {
     for (let i = 0; i < 20; i++) {
@@ -341,13 +565,18 @@ function trial(run, T, dt, party, dmg) {
       const c = run.spawn(k, x, FY, z, {});
       if (!c) break;
       c.target = party[0];
+      if (T.arena) {
+        c.maxHp = Math.round(c.maxHp * 2.5);
+        c.hp = c.maxHp;
+        c.arena = true;
+      }
       on.mobs.push(c);
       game.renderer.emit(x, FY + 0.2, z, { n: 12, color: ['#e8e4d4', '#a8a088', '#ffe8a0'], up: 30, speed: 20, life: 0.7, shape: 'puff' });
       break;
     }
   }
   game.audio?.play('march', { x: (B0.x0 + B0.x1) / 2, z: (B0.z0 + B0.z1) / 2 });
-  run.eachHere(() => game.ui.msg(`Trial: wave ${on.wave} of 3. The dead rise up out of the floor!`, '#ffe8a0'));
+  run.eachHere(() => game.ui.msg(T.arena ? 'A champion of the old wars steps out onto the sand, and salutes you.' : `Trial: wave ${on.wave} of 3. The dead rise up out of the floor!`, '#ffe8a0'));
   void dmg;
 }
 
@@ -448,4 +677,39 @@ export function ancientMotes(game, type, x, z, c) {
       return true;
   }
   return false;
+}
+
+// (Round 72) What's in the air round an ancient place's gate, outside, as
+// you come up to it (`s` the site, `d` your distance from its door): its
+// sounds, now and then, and the gullet's slow heartbeat through the ground.
+// Quiet once its master's beaten. (Its lights and motes: render/ancientfx.js.)
+export function ancientAir(game, s, d, dt) {
+  const rec = game.sim.dungeons.get?.(s.id);
+  if ((rec && rec.cleared) || d > 34) { game.ancientAirT = 0; return; }
+  const near = 1 - Math.min(1, Math.max(0, (d - 6) / 28));
+  const t = (game.ancientAirT = (game.ancientAirT || 0) + dt);
+  const a = game.audio;
+  const vol = 0.3 + near * 0.7;
+  switch (s.type) {
+    case 'athanor':
+      if (t > 4.5 + Math.random() * 3) { a?.play(Math.random() < 0.6 ? 'hum' : 'chime', vol); game.ancientAirT = 0; }
+      break;
+    case 'champion':
+      if (t > 7 + Math.random() * 5) { a?.play(Math.random() < 0.5 ? 'march' : 'whisper', vol); game.ancientAirT = 0; }
+      break;
+    case 'rift':
+      if (t > 3.5 + Math.random() * 4) {
+        a?.play(Math.random() < 0.6 ? 'void' : 'whisper', vol);
+        if (near > 0.5 && Math.random() < 0.5) game.renderer.flashScreen?.('#c8a0ff', 0.05 + near * 0.06);
+        game.ancientAirT = 0;
+      }
+      break;
+    case 'gullet':
+      if (t > 2.2) {
+        a?.play('heart', vol);
+        game.shake = Math.min(1, (game.shake || 0) + 0.05 + near * 0.12);
+        game.ancientAirT = 0;
+      }
+      break;
+  }
 }

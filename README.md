@@ -5533,6 +5533,92 @@ with every phase and again when they rise.
   World-Swallow, the floor heaving in waves and the maw coming up under
   you.
 
+## Round 72: grand gates, and what the evolved masters leave
+
+**The ways into the ancient places are made over**, each four times the
+size it was, and the camera draws back as you come up to them:
+- the **Athanor**: a precinct of marble thirty paces across, its floor in
+  rings of blue glaze and gold; a drum of columns with lamps of glass,
+  a dome of glass ribbed with copper over it, the great alembic's neck
+  up out of its crown and its bulb hung burning over the doors of beaten
+  gold (gold dust rising, the sign of the great work turning in the air
+  before the doors), four towers at the corners, braziers down the
+  avenue;
+- the **Hall of the Last Champion**: a barrow as big as a hill, a
+  colossus of him on its summit (shafts of light on it, his eyes lit),
+  his companions' banners round it, its face a wall of mossed stone with
+  his door in it, statues and triumphal columns before it, a ring of
+  standing stones and broken swords, flowers the folk still leave;
+- the **Sundered Reach**: no building at all, only the ground torn open:
+  a rift thirty paces long across it, jagged, narrow at its ends and
+  widest in the middle where it opens on a basin (the way down at the
+  bottom of it), its floor fallen away to nothing (stars turning in the
+  dark), its lips seamed with white fire crawling along them, the ground
+  burnt black for paces round it and cracked, the cracks lit from below
+  and pulsing, lightning across it now and then; and a vortex over the
+  way down. (Two new blocks: the void's floor, and sundered earth.)
+- the **Gullet of the World**: a crater like a mouth, sunk in terraces
+  of bone-sand, mud and black peat to a throat ringed with teeth, a jaw
+  of bone over its mouth (a green light beating in it like a heart), a
+  ribcage of what it ate either side of the way down, skulls, flies, and
+  the ground heaving as it breathes.
+Each has its own sounds outside (the Athanor's hum and chime, the
+Champion's march and whispers, the Reach's void, the Gullet's heartbeat
+through the ground), its own music as you come near, and all of it dims
+once the master's beaten.
+
+**The evolved masters painted better**, after good pixel art: a cold rim
+of light down their edges, plate with its streak of light and its dark
+crease, dents, rust and moss on the Hero (and horns of gold on his helm,
+a bigger helm and pauldrons in lames, tassets, a broader sword, his
+shield rimmed and bossed, his cloak in folds and tatters); the Rift
+Crawler's armour in lapped plates with lit lips, more of the void in its
+cracks, shards of void-glass out of its abdomen, a bigger crown of
+horns; the Alinelidan darker and higher in contrast, a crest of bone
+plates and horns over its head and down its rings, a pale brow over the
+maw, its hide creased out from the maw and bristling at its edge; the
+Alchemist's white shaded cool and its gold glinting.
+
+**What they leave**: each evolved master drops a thing of its own power,
+used from your belt (F, or the right button) like the Kavorent's
+gadgets:
+- the **Hand of the Great Work** (the Divine Alchemist): a ring of its
+  element breaks out of the ground three paces round you, fire, then
+  frost, then acid (and a pool of it left), then lightning, each use the
+  next (9 s to gather itself);
+- the **Crawler's Needle** (the Rift Crawler): used once it marks where
+  you stand; used again, elsewhere, it tears a rift between the mark and
+  you for twenty seconds, that you (and anything else) can step through
+  either way (6 s);
+- the **Champion's Gauntlet** (the Hero): twelve seconds of his strength:
+  your blows land half again as hard and rend whoever else is before
+  you, and what lands on you lands lighter by a third (40 s);
+- the **Alinelidan's Tooth** (the Alinelidan): you go down into the
+  ground as it did and come up under where you point, up to eight paces
+  off and through anything between; whoever's there is bitten and thrown
+  back, and the hole is left full of acid (14 s).
+And with it **three or four five-star pieces** of the best arms and
+armour there are (with the land's own now and then), and an
+**achievement** each, with a title: Transmuter, Sunderer, Oathkeeper,
+Worm-Slayer.
+
+**More rooms in the ancient places** (and more of their dressing):
+- the Athanor: **observatories** with an orrery of brass in the floor,
+  its planets turning through whoever's in their path; **salt gardens**
+  whose crystals sing and leap light from one to the next; **furnaces**
+  whose fire comes up through the vents in turn, all the way round;
+- the Champion's hall: **tombs** of his companions, whose sarcophagi
+  open as you pass (what's in them sits up, or it's only coins);
+  an **arena**, a trial of one champion of the old wars, alone and
+  twice the fighter; **reliquaries** of gold and chests, under the
+  companions' ghosts' bows as long as you're in them;
+- the Sundered Reach: **shard-storms**, splinters of the void loose off
+  the walls (roll through them); **flickering floors** whose stripes go
+  over to the void by turns;
+- the Gullet: **leech-pools** whose leeches come up round whoever wades;
+  **throats** that clench and carry you along, one way and then the
+  other; **nests** of eggs that hatch in twos as you come near.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5639,7 +5725,8 @@ src/
                        as it fights, what it gives off), forge_base,
                        forge_kharos, forge_myrrow, forge_far_figs,
                        forge_far_beasts, forge_evolved (the masters
-                       themselves), evolvedfx (the evolved masters' arms,
+                       themselves), ancientfx (the ancient places' gates: the rift,
+                       its cracks and lights), evolvedfx (the evolved masters' arms,
                        the worm's body, rifts and bouncing things, drawn
                        in the world's rows),
                        lighting, crt
@@ -5676,6 +5763,7 @@ src/
                        horse taken out by a citizen), leads, dungeon
                        (being down below: floors, traps, puzzles), relics,
                        kavtech (the Kavorent's gear and gadgets),
+                       evolvedgear (the evolved masters' leavings),
                        ancient (what the ancient places' rooms and perils
                        do to you),
                        lockpick (how a lock's pins set, bind and snap your

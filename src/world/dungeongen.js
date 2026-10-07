@@ -674,7 +674,7 @@ function fill(rng, size, picks, star = null) {
 // Arms and armour by how far down, for a master's or a mimic's leavings
 // (see gearFor; a chest's are its own, in lootFor): scraps near the top,
 // good steel deep.
-const GEAR_TIERS = [
+export const GEAR_TIERS = [
   ['dagger', 'short_sword', 'hand_axe', 'leather_cap', 'wooden_shield', 'leather_boots', 'leather_tunic', 'leather_trousers'],
   ['iron_sword', 'mace', 'spear', 'leather_tunic', 'bow', 'iron_boots', 'wooden_shield', 'iron_helmet', 'round_shield'],
   ['steel_sword', 'sabre', 'flail', 'chainmail', 'iron_helmet', 'iron_shield', 'longbow', 'iron_greaves', 'iron_boots'],
@@ -1322,7 +1322,7 @@ const RELIC_KEYS = Object.keys(RELICS);
 // (Round 71) What an ancient place's rooms keep, for game/ancient.js: the
 // floor's lists of circles, vents, rifts, cracks, trial-halls and the rest.
 function anc(ctx) {
-  return (ctx.out.anc ||= { circles: [], vents: [], mercury: [], portals: [], cracks: [], echoes: [], wells: [], trials: [], statues: [], blades: [], acid: [], eggs: [], quakes: [] });
+  return (ctx.out.anc ||= { circles: [], vents: [], mercury: [], portals: [], cracks: [], echoes: [], wells: [], trials: [], statues: [], blades: [], acid: [], eggs: [], quakes: [], orreries: [], gardens: [], furnaces: [], tombs: [], reliquaries: [], storms: [], flickers: [], leeches: [], throats: [] });
 }
 // A room's bounds, in the world.
 const box = (b, r) => ({ x0: b.x0 + r.x0, z0: r.z0, x1: b.x0 + r.x1, z1: r.z1 });
@@ -1694,6 +1694,163 @@ function dress(ctx, r) {
       for (let k = 0; k < 3; k++) placeIn(ctx, r, B.roots, 0, true);
       group('tunneler', 1, 3);
       break;
+    // (Round 72: more of each place's rooms.)
+    // The Athanor's observatory: an orrery of brass inlaid in the floor,
+    // its sun a lamp at the middle, its planets turning round it (and
+    // through you, if you're in their way).
+    case 'observatory': {
+      const R = Math.max(3, Math.min(5, Math.floor(Math.min(r.x1 - r.x0, r.z1 - r.z0) / 2) - 1));
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+        const d = Math.hypot(x - r.cx, (z - r.cz) * 1.15);
+        if (!own(ctx.plan, r, x, z) || doorBlocked(ctx.plan, r, x, z)) continue;
+        if (Math.abs(d - R) < 0.5 || Math.abs(d - R * 0.55) < 0.5) b.set(x, FY - 1, z, B.gilt_trim);
+        else if (d < 1.2) b.set(x, FY - 1, z, B.kiln_tile);
+      }
+      if (freeIn(ctx, r, r.cx, r.cz)) b.set(r.cx, FY, r.cz, B.glass_lamp, 0);
+      for (let k = 0; k < 2; k++) placeIn(ctx, r, B.bookshelf, rng.int(0, 3), true);
+      anc(ctx).orreries.push({ x: b.x0 + r.cx, z: r.cz, box: box(b, r), orbits: [{ r: R * 0.55, w: 1.3, a0: rng.float(0, 6.28) }, { r: R, w: -0.75, a0: rng.float(0, 6.28) }, { r: R, w: -0.75, a0: 0 }] });
+      anc(ctx).orreries[anc(ctx).orreries.length - 1].orbits[2].a0 = anc(ctx).orreries[anc(ctx).orreries.length - 1].orbits[1].a0 + Math.PI;
+      group('wisp', 1, 2);
+      break;
+    }
+    // Its salt garden: crystals grown up out of a floor of salt, and light
+    // leaping between them.
+    case 'salt_garden': {
+      const crystals = [];
+      blob(ctx, r, r.cx, r.cz, Math.min(4, (r.x1 - r.x0) / 2.5), (x, z) => b.set(x, FY - 1, z, B.salt_crust));
+      for (let k = 0; k < 6; k++) {
+        const at = placeIn(ctx, r, B.glow_crystal, rng.int(0, 3), false);
+        if (at) crystals.push({ x: b.x0 + at.x, z: at.z });
+      }
+      if (crystals.length >= 2) anc(ctx).gardens.push({ crystals, box: box(b, r) });
+      group('mite', 1, 3);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1);
+      break;
+    }
+    // Its furnace: the great kiln's fire let up through vents in a ring,
+    // one after the next, all the way round.
+    case 'furnace': {
+      const vents = [];
+      const R = Math.max(2, Math.min(4, Math.floor(Math.min(r.x1 - r.x0, r.z1 - r.z0) / 2) - 1));
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const x = Math.round(r.cx + Math.cos(a) * R * 1.2);
+        const z = Math.round(r.cz + Math.sin(a) * R);
+        if (!freeIn(ctx, r, x, z)) continue;
+        b.set(x, FY, z, B.steam_vent, 0);
+        vents.push({ x: b.x0 + x, z });
+      }
+      for (let z = r.cz - 1; z <= r.cz + 1; z++) for (let x = r.cx - 1; x <= r.cx + 1; x++) if (own(ctx.plan, r, x, z)) b.set(x, FY - 1, z, B.kiln_tile);
+      if (freeIn(ctx, r, r.cx, r.cz)) b.set(r.cx, FY, r.cz, B.crucible, 0);
+      if (vents.length >= 3) anc(ctx).furnaces.push({ vents, box: box(b, r) });
+      group('golem', 0, 1);
+      break;
+    }
+    // The Champion's companions' tombs: sarcophagi along the walls; pass
+    // one and it opens, and what's in it comes out.
+    case 'tomb': {
+      const list = [];
+      for (let x = r.x0 + 1; x <= r.x1 - 1; x += 2) {
+        for (const z of [r.z0, r.z1]) {
+          if (!own(ctx.plan, r, x, z) || doorBlocked(ctx.plan, r, x, z) || b.get(x, FY, z) !== B.air || ctx.reserved?.has(z * ctx.plan.W + x)) continue;
+          b.set(x, FY, z, B.sarcophagus, z === r.z0 ? 0 : 2);
+          list.push({ x: b.x0 + x, z, dz: z === r.z0 ? 1 : -1 });
+        }
+      }
+      for (let k = 0; k < 4; k++) placeIn(ctx, r, B.candles, 0, true);
+      if (list.length) anc(ctx).tombs.push({ list, box: box(b, r) });
+      if (rng.chance(0.5)) chestIn(ctx, r, 1.2);
+      break;
+    }
+    // His arena: a ring sunk in the floor, columns at its corners, and one
+    // champion of the old wars waiting in it for you (a trial of one wave).
+    case 'arena': {
+      const R = Math.max(2, Math.min(5, Math.floor(Math.min(r.x1 - r.x0, r.z1 - r.z0) / 2) - 1));
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+        const d = Math.hypot(x - r.cx, (z - r.cz) * 1.2);
+        if (!own(ctx.plan, r, x, z)) continue;
+        if (Math.abs(d - R) < 0.6) b.set(x, FY - 1, z, B.cracked_bricks);
+        else if (d < R) b.set(x, FY - 1, z, B.gravel);
+      }
+      for (let k = 0; k < 4; k++) placeIn(ctx, r, B.triumph_column, 0, true);
+      for (let k = 0; k < 2; k++) placeIn(ctx, r, B.weapon_rack, rng.int(0, 3), true);
+      const doors = doorways(ctx.plan, r).map((d) => ({ x: b.x0 + d.outX, z: d.outZ }));
+      anc(ctx).trials.push({ box: box(b, r), doors, room: r.id, arena: true });
+      chestIn(ctx, r, 1.4);
+      break;
+    }
+    // His reliquary: gold in the floor, the companions' relics in chests,
+    // and their ghosts drawing on whoever's in there with them.
+    case 'reliquary': {
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(ctx.plan, r, x, z) && (x === r.cx || z === r.cz)) b.set(x, FY - 1, z, B.gilt_trim);
+      chestIn(ctx, r, 1.5);
+      if (rng.chance(0.6)) chestIn(ctx, r, 1.2);
+      for (let k = 0; k < 4; k++) placeIn(ctx, r, B.candles, 0, true);
+      placeIn(ctx, r, B.idol, META_STATE, true);
+      anc(ctx).reliquaries.push({ box: box(b, r) });
+      break;
+    }
+    // The Reach's shard-storm: splinters of the void loose in the hall,
+    // bouncing off its walls.
+    case 'shardstorm': {
+      for (let k = 0; k < 3; k++) placeIn(ctx, r, B.obsidian, 0, false);
+      for (let k = 0; k < 3; k++) placeIn(ctx, r, B.glow_crystal, rng.int(0, 3), true);
+      anc(ctx).storms.push({ box: box(b, r), n: Math.min(4, 2 + Math.floor((r.x1 - r.x0) / 5)) });
+      group('wisp', 0, 2);
+      if (rng.chance(0.5)) chestIn(ctx, r, 1.1);
+      break;
+    }
+    // Where the floor flickers: its stripes go over to the void by turns.
+    case 'flicker': {
+      const bands = [[], []];
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) {
+        if (!own(ctx.plan, r, x, z) || doorBlocked(ctx.plan, r, x, z)) continue;
+        const k = Math.floor((x - r.x0) / 2) % 2;
+        b.set(x, FY - 1, z, k ? B.blight_floor : B.rock_void);
+        bands[k].push({ x: b.x0 + x, z });
+      }
+      if (bands[0].length && bands[1].length) anc(ctx).flickers.push({ box: box(b, r), bands });
+      for (let k = 0; k < 2; k++) placeIn(ctx, r, B.void_bloom, 0, true);
+      group('mite', 1, 2);
+      break;
+    }
+    // The Gullet's leech-pools: acid, and what lives in it, rising round
+    // whoever wades.
+    case 'leech_pool': {
+      const tiles = [];
+      blob(ctx, r, r.cx, r.cz, Math.min(4.5, (r.x1 - r.x0) / 2.6), (x, z) => {
+        b.set(x, FY - 1, z, B.sulfur_crust);
+        tiles.push({ x: b.x0 + x, z });
+      });
+      if (tiles.length) {
+        anc(ctx).acid.push({ tiles, box: box(b, r) });
+        anc(ctx).leeches.push({ tiles, box: box(b, r) });
+      }
+      for (let k = 0; k < 2; k++) placeIn(ctx, r, B.bones, 0, true);
+      break;
+    }
+    // Its throat: a gut of a hall that heaves, and carries you along it.
+    case 'throat': {
+      for (let k = 0; k < 4; k++) placeIn(ctx, r, B.roots, 0, true);
+      for (let k = 0; k < 3; k++) placeIn(ctx, r, B.stalagmite, rng.int(0, 3), true);
+      for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(ctx.plan, r, x, z) && rng.chance(0.3)) b.set(x, FY - 1, z, B.peat);
+      anc(ctx).throats.push({ box: box(b, r), axis: r.x1 - r.x0 >= r.z1 - r.z0 ? 'x' : 'z' });
+      group('slime', 0, 2);
+      break;
+    }
+    // Its nest: eggs everywhere, and the bones of what fed them.
+    case 'nest': {
+      const eggs = [];
+      for (let k = 0; k < 9; k++) {
+        const at = placeIn(ctx, r, B.void_bloom, 0, false);
+        if (at) eggs.push({ x: b.x0 + at.x, z: at.z });
+      }
+      scatter(ctx, r, 0.08, () => B.bones);
+      for (let k = 0; k < 2; k++) placeIn(ctx, r, B.skull_pile, rng.int(0, 3), true);
+      if (eggs.length) anc(ctx).eggs.push({ eggs, box: box(b, r), nest: true });
+      if (rng.chance(0.6)) chestIn(ctx, r, 1.2);
+      break;
+    }
     case 'trap':
       // (A plated passage, below: this room's just a dead end with bones in.)
       for (let i = 0; i < 3; i++) placeIn(ctx, r, B.bones);
@@ -2331,7 +2488,7 @@ function ensureWays(ctx, r) {
 // --------------------------------------------------------------- dressing
 // Each kind of place dressed in its own things (see DTYPES.decor): a few to
 // a room, by its size; the solid ones against the walls, out of the way.
-const WALLWARD = new Set(['urn', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'weapon_rack', 'powder_keg', 'war_banner', 'hanging_chains', 'roots', 'candles', 'kav_conduit', 'kav_statue', 'kav_holo', 'kav_monolith', 'kav_husk']);
+const WALLWARD = new Set(['urn', 'statue', 'skull_pile', 'mine_cart', 'stalagmite', 'weapon_rack', 'powder_keg', 'war_banner', 'hanging_chains', 'roots', 'candles', 'kav_conduit', 'kav_statue', 'kav_holo', 'kav_monolith', 'kav_husk', 'marble_column', 'bookshelf', 'crucible', 'triumph_column', 'whale_rib', 'obsidian']);
 function decorate(ctx, r) {
   const { rng, T, plan, b } = ctx;
   if (!T.decor || !T.decor.length || r.kit === 'vault' || r.kit === 'hidden' || r.kit === 'boss') return;

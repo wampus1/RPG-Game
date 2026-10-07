@@ -541,6 +541,13 @@ export function musicMood(game) {
     const rec = game.sim.dungeons.get?.(s.id);
     if (Math.hypot(s.x - p.x, s.z - p.z) < 20 && !(rec && rec.cleared)) return rec && rec.spire && rec.spire.open !== null && rec.spire.open !== undefined ? 'spire_open' : 'spire';
   }
+  // (Round 72) Near an ancient place's gate (not one whose master's
+  // beaten): its own music, from outside.
+  if (!game.dungeon && game.nearAncient) {
+    const s = game.nearAncient;
+    const rec = game.sim.dungeons.get?.(s.id);
+    if (Math.hypot(s.x - p.x, s.z - p.z) < 22 && !(rec && rec.cleared)) return `dungeon_${s.type}`;
+  }
   // Out on a raft: a sea-song; into the storm, its own music, darker the
   // deeper in; and when it's over, the wreck's.
   const SS = game.stormSea;

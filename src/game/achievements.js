@@ -13,6 +13,8 @@
 const n = (g, k) => (g.stats && g.stats[k]) || 0;
 const coins = (p) => (p && p.inv ? p.inv.reduce((s, q) => s + (q && q.item === 'coin' ? q.count : 0), 0) : 0);
 const sceneIs = (g, kind) => !!(g.scene && g.scene.kind === kind);
+// (An evolved master's fall: its ghost in the scene of it.)
+const fell = (g, species) => sceneIs(g, 'boss_down') && !!(g.scene.ghost && g.scene.ghost.species === species);
 // (In the world: not watching an opening, not held out of it.)
 const inWorld = (g) => !!(g.player && !g.player.limbo && !g.cutscene && !(g.scene && g.scene.intro));
 
@@ -48,6 +50,12 @@ export const FEATS = [
   { id: 'hero', name: 'Hero of the Town', about: 'Be named a hero by a town.', title: 'Hero', test: (g) => !!(g.sim && g.sim.renown && g.sim.renownTitle && [...g.sim.renown.keys()].some((sid) => g.sim.renownTitle(sid) === 'Hero')) },
   { id: 'outlaw', name: 'Wanted', about: 'Be wanted by the law somewhere.', title: 'Outlaw', test: (g) => !!(g.wanted && g.wanted.size) },
   { id: 'bounty', name: 'Bounty Hunter', about: 'Bring down a bandit leader.', title: 'Bounty Hunter', test: (g) => !!(g.sim && g.sim.bandits && g.sim.bandits.heads && Object.keys(g.sim.bandits.heads).length) },
+  // (Round 72) The evolved masters of the ancient places (see
+  // world/ancient.js): one each.
+  { id: 'transmuter', name: 'The Great Work Undone', about: 'Bring down the Divine Alchemist in the Athanor.', title: 'Transmuter', test: (g) => fell(g, 'divine_alchemist') },
+  { id: 'sunderer', name: 'The Reach Sealed', about: 'Bring down the Rift Crawler in the Sundered Reach.', title: 'Sunderer', test: (g) => fell(g, 'rift_crawler') },
+  { id: 'oathkeeper', name: 'The Last War Ended', about: 'Bring down the Hero in the Hall of the Last Champion.', title: 'Oathkeeper', test: (g) => fell(g, 'the_hero') },
+  { id: 'wormsbane', name: 'The Gullet Stilled', about: 'Bring down the Alinelidan in the Gullet of the World.', title: 'Worm-Slayer', test: (g) => fell(g, 'alinelidan') },
 ];
 export const FEAT = Object.fromEntries(FEATS.map((f) => [f.id, f]));
 

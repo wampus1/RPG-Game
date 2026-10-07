@@ -649,8 +649,13 @@ def('blueprint_table', { ...sprite, solid: true, interact: 'blueprint', tool: 'a
 // after every other block, so a saved world's blocks keep their numbers.
 def('athanor_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 6, label: 'Athanor Doors' });
 def('champion_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 3, label: 'Champion\'s Door' });
-def('rift_door', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 7, label: 'The Rift' });
+def('rift_door', { interact: 'dungeon', hardness: Infinity, drop: null, light: 7, label: 'The Rift\'s Heart' });
 def('gullet_mouth', { ...sprite, tall: true, solid: true, interact: 'dungeon', hardness: Infinity, drop: null, light: 2, label: 'The Gullet' });
+// (Round 72) The Sundered Reach's ground (see world/ancient.js, riftShape):
+// the floor of the rift, which is nothing much at all, and the ground
+// round it, burnt black and cracked.
+def('abyss_floor', { hardness: Infinity, drop: null, light: 2, label: 'The Void' });
+def('scorched_earth', { tool: 'shovel', hardness: 0.8, drop: 'dirt', label: 'Sundered Earth' });
 // (Round 70) Thin walls, a post with a wall running off it to whatever's
 // beside it (another wall, a fence, a solid block): bridges' parapets, and
 // anyone's to build. One of each stone (and wood) a bridge's made of.

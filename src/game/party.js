@@ -13,7 +13,7 @@ export const GAME_FIELDS = [
   'player', 'hero', 'playerName', 'ui', 'input', 'cursor', 'mining', 'pending', 'placeRepeat', 'queuedBlow', 'fishing', 'sleep', 'waiting', 'sleepFast',
   'scene', 'shake', 'hurtFlash', 'healFlash', 'lastHp', 'beatT', 'bonusT', 'currentSettlement', 'biomeCache', 'stats', 'dummyLog', 'duel', 'charging',
   'combatT', 'combatWith', 'wanted', 'hitStop', 'slowMo', 'slowMoScale', 'diceGame', 'talkingTo', 'stormWarned', 'lavaWarned', 'lastPrayDay', 'aimFixed',
-  'nearSpire', 'looseKeys', 'revealMap', 'stormSea', 'duelAfter', 'spireStorm', 'spireBoltT', 'wallPending',
+  'nearSpire', 'nearAncient', 'looseKeys', 'revealMap', 'stormSea', 'duelAfter', 'spireStorm', 'spireBoltT', 'wallPending',
   // (Each one's own cheats from the command console: map teleport, god.)
   'cheats',
   // (The old place each is down, if any: see DungeonRun. And the sky over

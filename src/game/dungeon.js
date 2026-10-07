@@ -18,6 +18,7 @@ import { buildFloor, FY, dtypeOf, kavFloor, SPIKE_CYCLE, KAV_KINDS, gearFor, loo
 import { ISLE_BOSS_HP, ISLE_BOSS_DMG, ISLE_BOSS_TEMPO } from '../world/isledeep.js';
 import { farDanger, farMotes } from './fardeep.js';
 import { ancientTick, ancientDanger, ancientMotes } from './ancient.js';
+import { dropEvolvedLoot } from './evolvedgear.js';
 import { settleAfflictions } from './afflict.js';
 import { clearWorks, dropWorks, raiseWorks } from '../entities/bosskit.js';
 import { Region } from '../world/region.js';
@@ -1459,6 +1460,9 @@ export class DungeonRun {
       // And the arms and armour of those who came down before you and
       // didn't go back up: one piece or two, the best of the place's.
       this.dropGear(e, Math.random() < 0.5 ? 2 : 1, lootTier(this.rec, this.floor) + 1, true);
+      // (Round 72) An evolved master: its own thing, and the best arms and
+      // armour there are (see evolvedgear.js).
+      dropEvolvedLoot(this, e);
       // (Round 61) A time crystal of its tier: with it, a beaten place can
       // be turned back to what it was, and harder (see timecrystal.js).
       const tier = e.tier || this.rec.tier || 1;

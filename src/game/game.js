@@ -46,6 +46,8 @@ import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.j
 import { newFeats, noteIsle } from './achievements.js';
 import { spireOpening, bossTint, liftRide, deathRitual, duelYield } from './scenes.js';
 import { BLIGHT_R } from '../world/sites.js';
+import { ancientAir } from './ancient.js';
+import { updateEvolvedGear, clawMult, clawRend, clawSoak } from './evolvedgear.js';
 import { useGadget, fitEnhancer, lanceThrust, pierceOf, updateKavTech, dropFields, raiseFields } from './kavtech.js';
 import { setRelic, fitShard, relicAt, relicItem, relicDamage, updateRelics, nearRelic, serializeRelics, loadRelics } from './relics.js';
 import { updateHazards, guardFront, kegBlast, throwDynamite, sameSide } from '../entities/monsters.js';
@@ -2015,6 +2017,7 @@ export class Game {
     this.inPlace(null, () => updateRelics(this, dt));
     for (const run of this.runs.values()) if (run.lead()) this.inPlace(run, () => updateRelics(this, dt));
     updateKavTech(this, dt);
+    updateEvolvedGear(this, dt);
     this.sim.ancient.update(dt);
     // Each old place someone's down: its own goings-on. (Fields the
     // Overseer turned off, and what a master's done to its hall, put back
@@ -2107,11 +2110,11 @@ export class Game {
       this.checkFeats();
     }
     // The camera: drawn back near a spire, or wherever a scene takes it.
-    const nearSpire = this.dungeon ? 0 : this.spireNearness(dt);
+    const nearSpire = this.dungeon ? 0 : this.placeNearness(dt);
     // (Round 69: at a ship's wheel, drawn back to see all of her.)
     const helm = this.scene ? null : helmView(this);
     this.helmFocus = helm ? helm.focus : null;
-    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + 0.32 * nearSpire, helm ? helm.zoom : 1);
+    this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
     this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
     if (this.audio) this.audio.listener = this.player;
@@ -4763,28 +4766,50 @@ export class Game {
 
   // Near a Kavorent spire: the camera drawn back to take it in, and the
   // blight's motes drifting about you. Returns how near (0 far, 1 at it).
+  // How far the camera's drawn back for the great places you're near (as
+  // much again of the view): a Kavorent spire, from well out past the
+  // blight's edge in to a few paces from its door; an ancient place's
+  // gate (round 72), from further off and further back, to take the whole
+  // of it in. Eased at both ends.
+  // How near the nearest spire is, 0 (out past its blight) to 1 (at its
+  // door): as it was before the ancient places shared the camera's
+  // drawing back (see placeNearness).
   spireNearness(dt) {
+    this.placeNearness(dt);
+    return this.spireK || 0;
+  }
+
+  placeNearness(dt) {
     const p = this.player;
     const rp = p.renderPos ? p.renderPos() : p;
-    // (Drawn back gradually: from well out past the blight's edge, all the
-    // way in to a few paces from its door, eased at both ends.)
-    const far = BLIGHT_R + 14;
-    const near = 5;
-    let best = null;
+    let bestSpire = null;
+    let bestAnc = null;
+    let zoom = 0;
+    let spireK = 0;
     for (const s of this.world.sites || []) {
-      if (s.type !== 'kavorent' || s.x === undefined) continue;
+      if (s.x === undefined) continue;
+      const spire = s.type === 'kavorent';
+      if (!spire && !s.ancient) continue;
+      const far = spire ? BLIGHT_R + 14 : 42;
+      const near = spire ? 5 : 7;
       const d = Math.hypot(s.x - rp.x, s.z - rp.z);
-      if (d < far && (!best || d < best.d)) best = { s, d };
+      if (d >= far) continue;
+      if (spire && (!bestSpire || d < bestSpire.d)) bestSpire = { s, d };
+      if (!spire && (!bestAnc || d < bestAnc.d)) bestAnc = { s, d };
+      const q = Math.max(0, Math.min(1, (far - d) / (far - near)));
+      zoom = Math.max(zoom, q * q * (3 - 2 * q) * (spire ? 0.32 : 0.55));
+      if (spire) spireK = Math.max(spireK, q * q * (3 - 2 * q));
     }
-    this.nearSpire = best ? best.s : null;
-    if (!best) return 0;
-    const q = Math.max(0, Math.min(1, (far - best.d) / (far - near)));
-    const k = q * q * (3 - 2 * q);
+    this.spireK = spireK;
+    this.nearSpire = bestSpire ? bestSpire.s : null;
+    this.nearAncient = bestAnc ? bestAnc.s : null;
     // (Violet motes in the blight, rising.)
-    if (best.d < BLIGHT_R && Math.random() < dt * 12) {
+    if (bestSpire && bestSpire.d < BLIGHT_R && Math.random() < dt * 12) {
       this.renderer.emit(p.x + (Math.random() - 0.5) * 18, p.y + Math.random() * 0.5, p.z + (Math.random() - 0.5) * 12, { n: 1, color: ['#b070e0', '#e090ff', '#5ad8f0'], up: 8, speed: 4, life: 2.2, glow: true, gravity: -6 });
     }
-    return k;
+    // (What's in the air round an ancient place: see game/ancient.js.)
+    if (bestAnc) ancientAir(this, bestAnc.s, bestAnc.d, dt);
+    return zoom;
   }
 
   // A relic set down, taken up again.
@@ -6182,6 +6207,8 @@ export class Game {
     if (crit) dmg *= riposte ? 2.2 : 1.8;
     // (A merciless blade: half as hard again on a foe worn low.)
     dmg *= bladeMult(p, target);
+    // (Round 72) The Champion's Gauntlet closed on your hand.
+    dmg *= clawMult(p);
     if (riposte) {
       p.riposte = 0;
       this.renderer.floatText(target.x, target.y + 2.4, target.z, 'riposte!', '#ffe070');
@@ -6204,6 +6231,7 @@ export class Game {
     onSwing(this, p, target);
     lanceThrust(this, p, target);
     this.damage(target, Math.max(1, Math.round(dmg)), p, crit);
+    clawRend(this, p, target, dmg);
     onBladeHit(this, p, target, { dmg, heavy, crit });
     onBladeMods(this, p, target);
     this.impact(target, heavy || crit || st.heavy ? 2 : 1, st);
@@ -6414,6 +6442,8 @@ export class Game {
       amount = evoHurt(this, target, source, amount);
       if (amount <= 0) return;
     }
+    // (Round 72) The Champion's Gauntlet on you: a blow lands lighter.
+    amount = clawSoak(target, amount);
     target.hp -= amount;
     // (Round 53) A dish that answers a blow taken, or one landed, or your
     // falling below half (see dishacts.js).

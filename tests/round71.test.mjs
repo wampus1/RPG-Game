@@ -24,7 +24,7 @@ import '../src/render/bossbody.js';
 import { WORLD_DRAW } from '../src/render/evolvedfx.js';
 import { THEMES } from '../src/game/music.js';
 import { STEPS } from '../src/game/migrate.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { B, BLOCKS } from '../src/world/blocks.js';
 
 const TYPES = ['athanor', 'champion', 'rift', 'gullet'];
@@ -324,7 +324,7 @@ test('the Alinelidan leaves holes of acid where it dives, filled in with dirt af
 
 // ------------------------------------------------------------ the version
 test('0.71.0: a migration step for it, and the version', () => {
-  assert.equal(GAME_VERSION, '0.71.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.71.0') >= 0);
   const s = STEPS.find((q) => q.to === '0.71.0');
   assert.ok(s && s.data && s.game);
   const log = [];

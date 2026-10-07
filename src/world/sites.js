@@ -8,7 +8,7 @@ import { B, BLOCKS } from './blocks.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { OWN_TYPE } from './isledeep.js';
 import { FAR_SITES, FAR_OWN_SHARE, FAR_OWN_TYPE } from './fardeep.js';
-import { ancientSites, ANCIENT_GATE } from './ancient.js';
+import { ancientSites, ANCIENT_GATE, GATE_REACH } from './ancient.js';
 import { Region } from './region.js';
 import { MODS } from '../mod/state.js';
 
@@ -541,6 +541,13 @@ export function siteBlocks(s, state = {}) {
         put(ox, h + 2, oz, B.air);
       }
     }
+    return out;
+  }
+  // (Round 71) An ancient place's gate: its own, beaten or not (it stays
+  // standing; only its fires go out), and as wide as it is.
+  if (ANCIENT_GATE[s.type]) {
+    s.reach = GATE_REACH;
+    ANCIENT_GATE[s.type](put, clear, h, rng, state, s);
     return out;
   }
   if (state.cleared) {

@@ -397,6 +397,27 @@ export const STEPS = [
       if (n) log.push(`${n} ancient places stand on the great continents now (look for them on your map, once you've heard of them).`);
     },
   },
+  {
+    // Round 72: the ancient places' gates made over, grand (and the Reach
+    // a rift torn in the ground); the evolved masters painted better, and
+    // each leaving a thing of its power, five-star arms, and an
+    // achievement; more rooms in their places.
+    to: '0.72.0',
+    data(d, log) {
+      log.push('The ways into the ancient places are made over, each four times the size it was: the Athanor\'s precinct and dome, the Champion\'s barrow and its colossus, the Gullet\'s crater of bone; and the Sundered Reach is no building at all but a rift torn across the ground, cracked and alight. The camera draws back as you come up to them.');
+      log.push('Each evolved master now leaves a thing of its own power when it falls (the Hand of the Great Work, the Crawler\'s Needle, the Champion\'s Gauntlet, the Alinelidan\'s Tooth: used from your belt), three or four five-star pieces of arms and armour, and an achievement with a title to go by.');
+      log.push('The ancient places have more kinds of room (orreries, salt gardens, furnaces; tombs, an arena, reliquaries; shard-storms and flickering floors; leech-pools, throats, nests), and more of their own dressing.');
+    },
+    game(game, log) {
+      let n = 0;
+      for (const s of game.world.sites || []) {
+        if (!s.ancient || s.x === undefined) continue;
+        restamp(game.world, s);
+        n++;
+      }
+      if (n) log.push(`The ${n} ancient places' gates have been raised anew, grander than they were.`);
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

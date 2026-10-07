@@ -16,12 +16,60 @@ import { WORLD_DRAW, drawLimb, glow, bez, scr, sculpted } from './evolvedfx.js';
 import { ELEMS } from '../entities/evolved_alchemist.js';
 import { wormRings as wormRingsOf } from '../entities/evolved_worm.js';
 import { TILE, LH } from '../config.js';
+import { hex, mix, shade } from './pixel.js';
+import { hash2 } from './paint.js';
+import { seam, crease, rivets, fringe } from './forgekit.js';
 
 const TAU = Math.PI * 2;
 const GOLD = '#d8a838';
 const GOLD_HI = '#ffe070';
 const GOLD_LO = '#8a5a18';
 const PEARL = '#ece4d4';
+
+// (Round 72) A painter's finishing passes over them, after the reference
+// art: a cold rim of light down the edges of a stuff where the light's
+// behind it (`dirs`: which neighbours empty make an edge), and the wear
+// on plate: dents, rust at the joints, moss where it's stood so long.
+function rimLight(P, mat, col, k = 0.55, dirs = [[1, -1], [1, 0], [0, -1]]) {
+  const X = P.X;
+  if (!X || !X.owner) return;
+  const W = P.w;
+  const H = P.h;
+  const isMat = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    const i = X.owner[y * W + x];
+    return i >= 0 && (mat === '*' || X.prims[i].mat === mat);
+  };
+  const empty = (x, y) => x < 0 || y < 0 || x >= W || y >= H || !P.get(x, y)[3];
+  const c = hex(col);
+  const adds = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!isMat(x, y)) continue;
+    if (dirs.some(([dx, dy]) => empty(x + dx, y + dy))) adds.push([x, y, mix(P.get(x, y), c, k)]);
+  }
+  for (const [x, y, c2] of adds) P.set(x, y, c2);
+}
+function wear(P, mat, o = {}) {
+  const X = P.X;
+  if (!X || !X.owner) return;
+  const W = P.w;
+  const H = P.h;
+  const sd = o.seed || 1;
+  const moss = hex('#4a7a3a');
+  const rust = hex('#8a4a22');
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = X.owner[y * W + x];
+    if (i < 0 || X.prims[i].mat !== mat) continue;
+    const q = P.get(x, y);
+    if (!q[3]) continue;
+    if (hash2(x, y, sd) < (o.dents || 0)) {
+      P.set(x, y, shade(q, 0.55));
+      const q2 = P.get(x + 1, y + 1);
+      if (q2[3]) P.set(x + 1, y + 1, mix(q2, [255, 255, 255], 0.25));
+    } else if (hash2(x >> 2, y >> 2, sd + 1) < (o.moss || 0) && hash2(x, y, sd + 2) < 0.6) P.set(x, y, mix(q, moss, 0.55));
+    else if (hash2(x >> 1, y >> 1, sd + 3) < (o.rust || 0)) P.set(x, y, mix(q, rust, 0.5));
+  }
+}
 
 // ------------------------------------------------------------ the Alchemist
 // The eye's middle on its picture, this frame.
@@ -132,6 +180,17 @@ forge({
         if (i % 2) continue;
         P.set(Math.round(c.x + Math.cos(a) * 24.8), Math.round(c.y + Math.sin(a) * 24.2), '#5a3a10');
       }
+      // (Round 72) The white of it shaded under, cool; the gold's edges
+      // catching the light.
+      for (let dy = 6; dy <= 23; dy++) for (let dx = -23; dx <= 23; dx++) {
+        const d = Math.hypot(dx, dy * 1.02);
+        if (d > 23.5 || d < 16.5 || (dx + dy) % 2) continue;
+        const x = Math.round(c.x + dx);
+        const y = Math.round(c.y + dy);
+        const q = P.get(x, y);
+        if (q[3]) P.set(x, y, mix(q, [120, 110, 170], 0.24 * Math.min(1, (dy - 5) / 10)));
+      }
+      rimLight(P, 'gold', '#fff0b0', 0.35, [[-1, -1], [0, -1]]);
     },
     glow(P, J, t, st) {
       const c = EYE(J);
@@ -374,9 +433,10 @@ export { TILE, LH, scr };
 // neck rising out of its front; its head (cut free: it sways, it lunges, it
 // roars) a wedge crowned with eyes, a slit of a mouth burning; and out of
 // its head two long arms ending in blades of void-glass.
-const CHI = '#241c32';
-const CHI_HI = '#4a3c62';
+const CHI = '#2c2240';
+const CHI_HI = '#5a4a7c';
 const CHI_LO = '#120c1c';
+const CHI_TOP = '#8a78b0';
 const VGLOW = '#c8a0ff';
 const VCYAN = '#5ad8f0';
 // The head's hinge on its picture.
@@ -413,14 +473,29 @@ forge({
       // Its hip-joints, where the legs go in.
       X.in(4, 0.6);
       for (const x of [58, 86]) X.ball(x, 74 - b, 5, 4, CHI, 'chitin', { z: 12, rz: 4 });
+      // (Round 72) Its armour: plates along its back, each lapped over the
+      // next, bevelled, their lips catching the light; shards of void-glass
+      // grown up out of its abdomen.
+      X.in(5, 0.5);
+      for (let i = 0; i < 5; i++) {
+        const x = 52 + i * 8;
+        X.slab([[x - 4, 61 - b], [x + 5, 60 - b], [x + 6, 71 - b], [x - 3, 73 - b]], i % 2 ? CHI_HI : CHI_TOP, 'chitin', { rz: 2.5, bevel: 2, z: 20 });
+      }
+      X.in(6, 0.4);
+      for (const [x, y, ex, ey] of [[94, 56, 90, 44], [102, 54, 104, 42], [108, 60, 116, 50]]) X.slab([[x - 2.5, y - b], [x + 2.5, y - b], [ex, ey - b]], '#3a2460', 'obsidian', { rz: 2, bevel: 1, z: 14 });
     },
     paint(P, J) {
       const b = J.b * 0.6;
-      // Plate lines across its thorax.
-      for (let i = 0; i < 4; i++) for (let y = -9; y <= 9; y++) {
-        const x = 58 + i * 8 + Math.round(y * 0.2);
-        P.set(x, Math.round(68 - b + y), '#08050c');
+      // The edges of its plates: a dark crease, a lit lip beside it; specks
+      // of the void in the black of it; a cold rim of light down its back.
+      for (let i = 0; i < 5; i++) {
+        const x = 55 + i * 8;
+        crease(P, x, 60 - b, x + 1, 72 - b, 0.42);
+        seam(P, x + 1, 61 - b, x + 2, 71 - b, 1.35);
       }
+      for (let i = 0; i < 14; i++) P.set(50 + ((i * 7) % 60), Math.round(58 - b + ((i * 5) % 16)), i % 3 ? '#7a68a8' : '#ffffff');
+      rimLight(P, 'chitin', '#b0a0e0', 0.5);
+      rimLight(P, 'obsidian', '#c8a0ff', 0.6);
     },
     glow(P, J, t) {
       const b = J.b * 0.6;
@@ -428,6 +503,13 @@ forge({
       const k = 0.6 + 0.4 * Math.sin(t * TAU * 2);
       crackLine(P, 56, 66 - b, 26, 1, k > 0.8 ? VCYAN : VGLOW);
       crackLine(P, 62, 72 - b, 18, 2, VGLOW);
+      crackLine(P, 72, 62 - b, 16, 3, VGLOW);
+      crackLine(P, 88, 72 - b, 14, 4, k > 0.5 ? VCYAN : VGLOW);
+      // (The void's light on the air round it.)
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * TAU + t * TAU * 0.5;
+        P.fx(76 + Math.cos(a) * 34, 64 - b + Math.sin(a) * 18, VGLOW, 0.22);
+      }
       // The rift down its abdomen: a seam of light, open a little.
       for (let y = -10; y <= 10; y++) {
         const w = Math.max(0, Math.round((1 - Math.abs(y) / 10) * 2.4 * (0.7 + 0.3 * Math.sin(t * TAU * 3 + y))));
@@ -447,11 +529,17 @@ forge({
           X.ball(22, 16, 9, 8, CHI, 'chitin', { z: 4, rz: 6 });
           // Its crown of horns.
           X.in(1, 0.5);
-          for (const [x, y, ex, ey] of [[20, 9, 22, 1], [26, 9, 31, 2], [14, 10, 12, 3]]) X.tube(x, y, ex, ey, 2.2, 0.5, CHI_LO, 'obsidian', { z: 6 });
+          for (const [x, y, ex, ey] of [[20, 9, 22, 1], [26, 9, 31, 2], [14, 10, 12, 3], [23, 8, 26, -1], [17, 9, 16, 0]]) X.tube(x, y, ex, ey, 2.2, 0.5, CHI_LO, 'obsidian', { z: 6 });
           // Mandibles.
           X.in(2, 0.6);
           X.limb([[6, 22, 1.8, 5], [3, 27, 1.2, 5], [6, 29, 0.6, 5]], '#2a2236', 'chitin');
           X.limb([[12, 24, 1.6, 6], [11, 28, 1, 6]], '#2a2236', 'chitin');
+        },
+        paint(P) {
+          crease(P, 10, 12, 30, 9, 0.5);
+          seam(P, 10, 13, 30, 10, 1.3);
+          rimLight(P, 'chitin', '#b0a0e0', 0.5);
+          rimLight(P, 'obsidian', '#c8a0ff', 0.5);
         },
         glow(P) {
           // Its eyes, six of them, in two arcs.
@@ -565,6 +653,7 @@ const FLESH = '#6a7a42';
 const FLESH_LO = '#3a4a2a';
 const RAW = '#9a3040';
 const BONE = '#e8dcc0';
+const STEEL_SPEC = '#e8ecf8';
 const formOfE = (e) => e.form || {};
 forge({
   the_hero: {
@@ -574,13 +663,18 @@ forge({
       const w = st.walk ? Math.sin(t * TAU) : 0;
       if (!st.legs) {
         // His legs: greaves and sabatons, striding as he goes.
+        // (Round 72: heavier, as a man twice a man's height in full plate
+        // is: cuisses over the thighs, knee-cops of gold, broad sabatons.)
         X.in(0, 1.6);
-        X.limb([[71, 86, 6.5, 1], [71 - w * 5, 104, 5.4, 2], [71 - w * 9, 119, 4.6, 2]], STEEL_LO, 'metal');
-        X.ball(68 - w * 9, 121, 7, 3.4, STEEL_LO, 'metal', { z: 3, rz: 3 });
+        X.limb([[72, 86, 7.4, 1], [72 - w * 5, 104, 6.2, 2], [72 - w * 9, 119, 5.4, 2]], STEEL_LO, 'metal');
+        X.ball(72 - w * 2.5, 95, 6.6, 7.5, STEEL_LO, 'metal', { z: 4, rz: 4 });
+        X.ball(69 - w * 9, 121, 8, 3.6, STEEL_LO, 'metal', { z: 3, rz: 3 });
+        X.ball(72 - w * 5, 104, 4.4, 3.8, '#a07a28', 'gold', { z: 5, rz: 2.5 });
         X.in(1, 1.6);
-        X.limb([[56, 86, 7, 4], [56 + w * 5, 104, 5.8, 5], [56 + w * 9, 119, 5, 5]], STEEL, 'metal');
-        X.ball(53 + w * 9, 121, 7.6, 3.6, STEEL, 'metal', { z: 6, rz: 3 });
-        X.ball(56 + w * 5, 103, 4.6, 4, TRIM, 'gold', { z: 9, rz: 3 });
+        X.limb([[55, 86, 8.2, 4], [55 + w * 5, 104, 6.8, 5], [55 + w * 9, 119, 5.8, 5]], STEEL, 'metal');
+        X.ball(55 + w * 2.5, 95, 7.6, 8.2, STEEL_HI, 'metal', { z: 8, rz: 5 });
+        X.ball(52 + w * 9, 121, 8.4, 3.8, STEEL, 'metal', { z: 6, rz: 3 });
+        X.ball(55 + w * 5, 104, 5.4, 4.6, TRIM, 'gold', { z: 10, rz: 3 });
       } else {
         // His legs come apart: a mass of tentacles, writhing.
         X.in(0, 1.2);
@@ -594,21 +688,28 @@ forge({
       // His mail skirt, and the plates over his hips.
       X.in(2, 1.8);
       X.slab([[46, 78 - b * 0.3], [78, 78 - b * 0.3], [80, 94], [44, 94]], '#5a5e6a', 'mail', { rz: 6, bevel: 3, z: 6 });
-      X.ball(62, 81 - b * 0.4, 16, 5, STEEL_LO, 'metal', { z: 10, rz: 4 });
+      X.ball(62, 81 - b * 0.4, 17, 5, STEEL_LO, 'metal', { z: 10, rz: 4 });
+      // (Round 72) Tassets over the skirt, lapped.
+      X.slab([[44, 82 - b * 0.3], [57, 82 - b * 0.3], [56, 96], [43, 94]], STEEL, 'metal', { rz: 2.5, bevel: 2, z: 13 });
+      X.slab([[67, 82 - b * 0.3], [80, 82 - b * 0.3], [81, 94], [68, 96]], STEEL_LO, 'metal', { rz: 2.5, bevel: 2, z: 12 });
       // His breastplate (or what's become of it), his gorget, his
-      // pauldrons.
+      // pauldrons (Round 72: broader, in lames, rimmed in gold).
       X.in(3, 2.2);
-      X.ball(62, 63 - b, 16, 18, STEEL, 'metal', { z: 10, rz: 13 });
+      X.ball(62, 63 - b, 19, 20, STEEL, 'metal', { z: 10, rz: 14 });
+      if (!st.maw) X.ball(62, 62 - b, 4, 15, STEEL_HI, 'metal', { z: 22, rz: 3 });
       if (st.maw) {
         // The mouth in his chest: the plate split, lips of raw flesh.
         X.ball(62, 64 - b, 8.5, 13, RAW, 'flesh', { z: 19, rz: 5 });
         X.ball(62, 64 - b, 5.5, 10.5, '#2a0408', 'flesh', { z: 21, rz: 2 });
       }
-      X.ball(62, 46 - b, 9, 4.6, STEEL_HI, 'metal', { z: 14, rz: 4 });
+      X.ball(62, 46 - b, 11, 5.2, STEEL_HI, 'metal', { z: 14, rz: 4 });
       X.in(4, 1);
-      X.ball(76, 50 - b, 8, 6.5, STEEL_LO, 'metal', { z: 6, rz: 6 });
-      X.ball(48, 50 - b, 10, 8, STEEL_HI, 'metal', { z: 18, rz: 8 });
-      X.ball(48, 50 - b, 6, 4.4, TRIM, 'gold', { z: 23, rz: 3 });
+      X.ball(80, 56 - b, 8.5, 3.6, STEEL_LO, 'metal', { z: 4, rz: 3 });
+      X.ball(78, 50 - b, 10, 8, STEEL_LO, 'metal', { z: 6, rz: 6 });
+      X.ball(43, 60 - b, 9.5, 3.6, STEEL_LO, 'metal', { z: 15, rz: 3 });
+      X.ball(44, 56 - b, 11, 4.2, STEEL, 'metal', { z: 16, rz: 3 });
+      X.ball(46, 49 - b, 13, 9.5, STEEL_HI, 'metal', { z: 18, rz: 9 });
+      X.ball(46, 48 - b, 7.5, 5.2, TRIM, 'gold', { z: 25, rz: 3 });
       // His belt and its buckle.
       X.ball(62, 80 - b * 0.4, 14, 2.6, '#3a2418', 'leather', { z: 16, rz: 2 });
       X.ball(62, 80 - b * 0.4, 3, 2.6, TRIM, 'gold', { z: 19, rz: 2 });
@@ -638,6 +739,16 @@ forge({
         for (let i = 0; i < 9; i++) P.set(52 + i, Math.round(56 - b + i * 0.4), '#5a5e6a');
         for (let i = 0; i < 7; i++) P.set(70 - (i % 2), Math.round(68 - b + i), '#3a3e4a');
       }
+      // (Round 72) Plate as plate is: a streak of light down the left of
+      // each piece, a dark crease at its edge; dents in it, rust at the
+      // joints, moss where he's stood so long in the dark; rivets along
+      // the rims; and a cold rim of light down his right side.
+      for (const [x0, y0, x1, y1] of [[50, 50, 47, 72], [36, 46, 34, 54], [50, 90, 48, 118], [66, 92, 64, 118], [46, 84, 45, 94]]) seam(P, x0, y0 - b, x1, y1 - b, 1.4);
+      for (const [x0, y0, x1, y1] of [[45, 58, 44, 80], [79, 58, 80, 80], [57, 82, 56, 96], [67, 82, 68, 96]]) crease(P, x0, y0 - b, x1, y1 - b, 0.5);
+      wear(P, 'metal', { dents: 0.025, moss: 0.06, rust: 0.03, seed: 11 });
+      rivets(P, [[38, 52], [42, 55], [47, 57], [52, 57], [73, 54], [77, 56], [82, 57], [50, 82], [62, 83], [74, 82]].map(([x, y]) => [x, Math.round(y - b * 0.5)]), '#e8e8f0');
+      rimLight(P, 'metal', '#c8d8f0', 0.45);
+      rimLight(P, 'gold', '#fff0b0', 0.4);
     },
     glow(P, J, t, st) {
       const b = J.b;
@@ -655,6 +766,12 @@ forge({
         },
         paint(P) {
           for (let y = 14; y < 60; y += 7) for (let x = 8; x < 38; x += 9) P.set(x + (y % 2), y, '#5a0a10');
+          // (Round 72) Its folds, hanging; holes worn through it; its hem
+          // in tatters.
+          for (let x = 9; x < 38; x += 5) crease(P, x, 8, x + (x % 2 ? 2 : -1), 60, 0.7);
+          for (const [x, y] of [[14, 40], [30, 30], [22, 52], [34, 50]]) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) P.set(x + dx, y + dy, '#000000', 0);
+          fringe(P, 'velvet', { density: 0.5, len: 3, lean: 0.3 });
+          rimLight(P, 'velvet', '#d08090', 0.35);
         },
       },
       // His wings, when the curse gives him them: a dragon's, torn out of
@@ -694,12 +811,26 @@ forge({
           X.slab([[9, 27], [33, 27], [35, 43], [22, 63], [7, 43]], '#2a3a6a', 'metal', { rz: 3, bevel: 1, z: 9 });
         },
         paint(P, v) {
-          if (v === 'tentacle') return;
+          if (v === 'tentacle') {
+            rimLight(P, 'flesh', '#d8e0a0', 0.35);
+            return;
+          }
           for (let i = 0; i < 8; i++) {
             const a = (i / 8) * TAU;
             for (let k = 2; k < 7; k++) P.set(Math.round(21 + Math.cos(a) * k), Math.round(40 + Math.sin(a) * k), TRIM);
           }
           for (let x = 6; x < 37; x++) P.set(x, 24, TRIM);
+          // (Round 72) Its rim of gold, its boss, the rivets round it, the
+          // paint of it chipped and the plate under showing through.
+          for (let i = 0; i <= 20; i++) {
+            const k = i / 20;
+            P.set(Math.round(6 + 16 * k), Math.round(24 + 44 * k), TRIM);
+            P.set(Math.round(36 + 2 * k - 16 * Math.max(0, k - 0.45) * 1.8), Math.round(24 + 44 * k), TRIM);
+          }
+          for (let y = 28; y <= 30; y++) for (let x = 19; x <= 23; x++) P.set(x, y, y === 28 ? '#ffe070' : TRIM);
+          rivets(P, [[9, 27], [15, 26], [27, 26], [33, 27], [10, 42], [32, 42]], '#ffe8a0');
+          wear(P, 'metal', { dents: 0.03, rust: 0.02, seed: 19 });
+          rimLight(P, 'metal', '#c8d8f0', 0.45);
         },
       },
       // His sword-arm: the greatsword (as himself), a claw, or a blade of
@@ -728,13 +859,19 @@ forge({
           X.ball(13, 19, 4.6, 3.6, TRIM, 'gold', { z: 8, rz: 3 });
           X.ball(12, 34, 5.4, 4.6, STEEL_HI, 'metal', { z: 8, rz: 4 });
           X.in(1, 0.5);
-          X.tube(4, 33, 22, 35, 1.8, 1.8, TRIM, 'gold', { z: 10 });
-          X.tube(13, 36, 15, 82, 2.6, 1.2, STEEL_HI, 'metal', { z: 9 });
+          X.tube(2, 33, 24, 35, 2.2, 2.2, TRIM, 'gold', { z: 10 });
+          X.tube(13, 36, 15, 84, 3.6, 1.4, STEEL_HI, 'metal', { z: 9 });
           X.tube(11, 26, 12, 33, 1.3, 1.3, '#3a2418', 'leather', { z: 10 });
           X.ball(11, 25, 2, 2, TRIM, 'gold', { z: 11, rz: 2 });
         },
         paint(P, v) {
-          if (v === 'sword') for (let y = 40; y < 80; y++) P.set(14, y, '#e8ecf8');
+          if (v === 'sword') {
+            for (let y = 40; y < 80; y++) P.set(14, y, STEEL_SPEC);
+            crease(P, 11, 38, 13, 82, 0.6);
+            wear(P, 'metal', { dents: 0.02, rust: 0.02, seed: 13 });
+          }
+          rimLight(P, 'metal', '#c8d8f0', 0.45);
+          rimLight(P, 'bone', '#fff8e8', 0.4);
         },
         glow(P, v) {
           if (v === 'sword') for (let y = 42; y < 78; y += 6) P.fx(14, y, '#ffe8a0', 0.4);
@@ -747,8 +884,11 @@ forge({
         variant: (R) => formOfE(R.e).head || 'helm',
         body(X, v) {
           X.in(0, 1.6);
-          X.ball(20, 24, 10, 11, STEEL, 'metal', { z: 6, rz: 9 });
-          X.ball(17, 27, 7, 6, STEEL_HI, 'metal', { z: 12, rz: 5 });
+          X.ball(20, 24, 11.5, 12.5, STEEL, 'metal', { z: 6, rz: 10 });
+          X.ball(17, 27, 8, 7, STEEL_HI, 'metal', { z: 12, rz: 5 });
+          // (Round 72) Horns of gold off the helm.
+          X.tube(12, 17, 5, 8, 1.8, 0.6, TRIM, 'gold', { z: 8 });
+          X.tube(29, 17, 36, 9, 1.8, 0.6, TRIM, 'gold', { z: 8 });
           if (v === 'stalks') {
             X.in(1, 0.8);
             for (const [ex, ey, k] of [[6, 2, 0], [14, 0, 1], [24, 1, 2], [32, 6, 3], [2, 12, 4]]) {
@@ -759,7 +899,7 @@ forge({
           }
           // His crest.
           X.in(1, 0.6);
-          X.slab([[18, 12], [24, 12], [34, 2], [30, 10], [26, 16]], '#a01818', 'velvet', { rz: 2, bevel: 1, z: 8 });
+          X.slab([[17, 12], [24, 12], [37, 0], [31, 9], [26, 16]], '#a01818', 'velvet', { rz: 2, bevel: 1, z: 8 });
           X.tube(20, 14, 20, 34, 1.4, 1.4, TRIM, 'gold', { z: 14 });
         },
         paint(P, v) {
@@ -767,6 +907,9 @@ forge({
           for (let x = 9; x < 22; x++) P.set(x, 25, '#0a0810');
           for (let x = 11; x < 18; x++) P.set(x, 26, '#1a1820');
           if (v !== 'stalks') for (let i = 0; i < 5; i++) P.set(24 + (i % 2), 20 + i * 2, '#3a3e4a');
+          seam(P, 12, 16, 11, 30, 1.4);
+          wear(P, 'metal', { dents: 0.02, rust: 0.03, seed: 17 });
+          rimLight(P, 'metal', '#c8d8f0', 0.45);
         },
         glow(P, v) {
           if (v === 'stalks') {
@@ -826,10 +969,12 @@ WORLD_DRAW.the_hero = (r, game, c, add, S) => {
 // drawn over it, opening as it bites, screams, spits) and its tentacles
 // writhing out. Behind it in the world, ring after ring of its body (see
 // WORLD_DRAW below).
-const WFL = '#b8887e';
-const WFL_HI = '#e0b8a8';
-const WFL_LO = '#6a4440';
+const WFL = '#9a6058';
+const WFL_HI = '#d8a898';
+const WFL_LO = '#4a2830';
 const WDARK = '#2a1014';
+const WBONE = '#e0d4b8';
+const WBONE_LO = '#9a8a70';
 const WMAW = { x: 46, y: 68 };
 forge({
   alinelidan: {
@@ -860,6 +1005,16 @@ forge({
         const a = (i / 14) * TAU;
         X.ball(WMAW.x + Math.cos(a) * 21, WMAW.y - b + Math.sin(a) * 20, 4, 3.4, i % 2 ? WFL : WFL_HI, 'flesh', { z: 28, rz: 3 });
       }
+      // (Round 72) The bone of it: a crest of plates up over its head and
+      // back, horns out of them, and a pale brow of it over the maw.
+      X.in(4, 0.8);
+      for (let i = 0; i < 5; i++) {
+        const x = 60 + i * 9;
+        const y = 36 - b + i * 2.2;
+        X.slab([[x - 5, y + 6], [x + 5, y + 5], [x + 7, y - 4 - (i % 2) * 3], [x - 2, y - 7 - (i % 2) * 2]], i % 2 ? WBONE_LO : WBONE, 'bone', { rz: 3, bevel: 2, z: 26 - i * 2 });
+      }
+      for (const [x, y, ex, ey] of [[64, 34, 56, 20], [82, 36, 84, 18], [98, 44, 110, 34]]) X.tube(x, y - b, ex, ey - b, 3, 0.8, WBONE_LO, 'bone', { z: 24 });
+      X.ball(50, 44 - b, 14, 5, WBONE, 'bone', { z: 33, rz: 3 });
     },
     paint(P, J, t) {
       const b = J.b;
@@ -885,10 +1040,23 @@ forge({
         P.set(Math.round(x + 1), Math.round(y - 1), '#4a2a26');
       }
       // Blind spots where its eyes were.
-      for (const [x, y] of [[78, 44], [86, 52], [70, 40]]) {
+      for (const [x, y] of [[78, 48], [86, 56], [72, 52]]) {
         P.set(x, y - Math.round(b), '#e8d8c8');
         P.set(x + 1, y - Math.round(b), '#c8b8a8');
+        P.set(x, y + 1 - Math.round(b), '#6a3a3a');
       }
+      // (Round 72) Its hide: creases out from the maw, puckered, a lit
+      // fold beside each; pale scars across it; a cold rim of light on its
+      // back, and bristles standing off its edge.
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU;
+        crease(P, WMAW.x + Math.cos(a) * 25, WMAW.y - b + Math.sin(a) * 24, WMAW.x + Math.cos(a) * 34, WMAW.y - b + Math.sin(a) * 32, 0.55);
+        seam(P, WMAW.x + Math.cos(a + 0.12) * 26, WMAW.y - b + Math.sin(a + 0.12) * 25, WMAW.x + Math.cos(a + 0.12) * 33, WMAW.y - b + Math.sin(a + 0.12) * 31, 1.3);
+      }
+      for (const [x, y, n] of [[84, 70, 7], [76, 84, 5], [94, 60, 6]]) for (let k = 0; k < n; k++) P.set(x + k, Math.round(y - b + (k % 2)), '#d8b8b0');
+      rimLight(P, 'flesh', '#f0d8d0', 0.4);
+      rimLight(P, 'bone', '#fff8e8', 0.5);
+      fringe(P, 'flesh', { density: 0.25, len: 2.2, lean: 0.3, up: true });
     },
     glow(P, J, t) {
       const b = J.b;
@@ -996,7 +1164,10 @@ function wormRing(size) {
     X.in(1, 0.6);
     X.ball(c, c - size * 0.08, size / 2 - 1.5, size / 2 - 4, WFL_HI, 'flesh', { z: size * 0.18, rz: size * 0.2 });
     for (let i = -3; i <= 3; i++) X.ball(c + i * (size / 9), c - size * 0.42 + Math.abs(i) * 0.8, 1.6, 2.2, WFL_LO, 'flesh', { z: size * 0.4, rz: 1.5 });
-    X.in(2, 0.4);
+    // (Round 72) A ridge of bone plates along the top of each ring.
+    X.in(2, 0.5);
+    for (let i = -2; i <= 2; i++) X.slab([[c + i * (size / 6) - 2, c - size * 0.3], [c + i * (size / 6) + 2, c - size * 0.3], [c + i * (size / 6) + 1, c - size * 0.48 - (i % 2 ? 2 : 0)]], i % 2 ? WBONE_LO : WBONE, 'bone', { rz: 2, bevel: 1, z: size * 0.42 });
+    X.in(3, 0.4);
     X.ball(c, c + size * 0.3, size / 2 - 3, 2, WFL_LO, 'flesh', { z: size * 0.25, rz: 2 });
   });
 }
