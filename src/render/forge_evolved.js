@@ -14,6 +14,7 @@
 import { forge, tone } from './forge.js';
 import { WORLD_DRAW, drawLimb, glow, bez, scr, sculpted } from './evolvedfx.js';
 import { ELEMS } from '../entities/evolved_alchemist.js';
+import { wormRings as wormRingsOf } from '../entities/evolved_worm.js';
 import { TILE, LH } from '../config.js';
 
 const TAU = Math.PI * 2;
@@ -365,3 +366,676 @@ WORLD_DRAW.divine_alchemist = (r, game, c, add, S) => {
   }
 };
 export { TILE, LH, scr };
+
+// ------------------------------------------------------------ the Rift Crawler
+// A body of black chitin, long, cracked through to the void (light in its
+// cracks), its abdomen a bulb with a rift down it; four long legs (planted,
+// each foot where it falls: see bossart.js, the 'rift' style); a stalk of a
+// neck rising out of its front; its head (cut free: it sways, it lunges, it
+// roars) a wedge crowned with eyes, a slit of a mouth burning; and out of
+// its head two long arms ending in blades of void-glass.
+const CHI = '#241c32';
+const CHI_HI = '#4a3c62';
+const CHI_LO = '#120c1c';
+const VGLOW = '#c8a0ff';
+const VCYAN = '#5ad8f0';
+// The head's hinge on its picture.
+const RC_NECK = (J) => [36, 34 - J.b * 0.6];
+function crackLine(P, x0, y0, n, seed, col) {
+  let x = x0;
+  let y = y0;
+  for (let i = 0; i < n; i++) {
+    P.fx(Math.round(x), Math.round(y), i % 4 === 0 ? '#ffffff' : col, 0.95);
+    x += 1;
+    y += Math.sin(seed * 3.1 + i * 1.7) > 0.3 ? 1 : Math.sin(seed + i) < -0.4 ? -1 : 0;
+  }
+}
+forge({
+  rift_crawler: {
+    size: 128, ax: 64, ay: 126, walk: true, breath: 1, fps: 10, walkFps: 14,
+    body(X, J) {
+      const b = J.b * 0.6;
+      // Its neck: a stalk of ringed chitin, up out of its front.
+      X.in(0, 1.4);
+      const neck = [[56, 66], [48, 58], [42, 48], [38, 40], [36, 34]];
+      neck.forEach(([x, y], i) => X.ball(x, y - b, 6.2 - i * 0.5, 5.6 - i * 0.4, i % 2 ? CHI : CHI_HI, 'chitin', { z: 6, rz: 5 }));
+      // Its abdomen: a bulb out behind, the rift down it.
+      X.in(1, 2);
+      X.ball(98, 66 - b, 17, 13, CHI, 'chitin', { z: 4, rz: 12 });
+      X.ball(110, 70 - b, 9, 7, CHI_LO, 'chitin', { z: 3, rz: 6 });
+      // Its thorax: long, plated, ridged along its back.
+      X.in(2, 2.2);
+      X.ball(70, 68 - b, 22, 12, CHI_HI, 'chitin', { z: 8, rz: 12 });
+      for (let i = 0; i < 5; i++) X.ball(54 + i * 8, 58 - b - Math.sin(i * 0.8) * 2, 5, 4, i % 2 ? CHI : CHI_HI, 'chitin', { z: 14, rz: 4 });
+      // Spines along its back.
+      X.in(3, 0.6);
+      for (let i = 0; i < 6; i++) X.slab([[52 + i * 9, 55 - b], [56 + i * 9, 55 - b], [55 + i * 9 + 3, 44 - b - (i % 2) * 4]], CHI_LO, 'obsidian', { rz: 2, bevel: 1, z: 12 });
+      // Its hip-joints, where the legs go in.
+      X.in(4, 0.6);
+      for (const x of [58, 86]) X.ball(x, 74 - b, 5, 4, CHI, 'chitin', { z: 12, rz: 4 });
+    },
+    paint(P, J) {
+      const b = J.b * 0.6;
+      // Plate lines across its thorax.
+      for (let i = 0; i < 4; i++) for (let y = -9; y <= 9; y++) {
+        const x = 58 + i * 8 + Math.round(y * 0.2);
+        P.set(x, Math.round(68 - b + y), '#08050c');
+      }
+    },
+    glow(P, J, t) {
+      const b = J.b * 0.6;
+      // The void in its cracks, pulsing.
+      const k = 0.6 + 0.4 * Math.sin(t * TAU * 2);
+      crackLine(P, 56, 66 - b, 26, 1, k > 0.8 ? VCYAN : VGLOW);
+      crackLine(P, 62, 72 - b, 18, 2, VGLOW);
+      // The rift down its abdomen: a seam of light, open a little.
+      for (let y = -10; y <= 10; y++) {
+        const w = Math.max(0, Math.round((1 - Math.abs(y) / 10) * 2.4 * (0.7 + 0.3 * Math.sin(t * TAU * 3 + y))));
+        for (let x = -w; x <= w; x++) P.fx(98 + x + Math.round(y * 0.3), 66 - b + y, Math.abs(x) === w ? VGLOW : '#ffffff', 0.9);
+      }
+      // Its neck's joints lit.
+      for (const [x, y] of [[48, 58], [38, 40]]) P.fx(x, y - b, VCYAN, 0.7);
+    },
+    parts: {
+      // Its head: a wedge, crowned with eyes; a slit of a mouth.
+      head: {
+        w: 34, h: 30, px: 22, py: 18, role: 'head', layer: 'front', z: 6, amp: 1.4,
+        at: (J) => RC_NECK(J),
+        body(X) {
+          X.in(0, 1.4);
+          X.slab([[2, 18], [14, 8], [28, 6], [33, 14], [30, 22], [18, 26], [6, 24]], CHI_HI, 'chitin', { rz: 7, bevel: 3 });
+          X.ball(22, 16, 9, 8, CHI, 'chitin', { z: 4, rz: 6 });
+          // Its crown of horns.
+          X.in(1, 0.5);
+          for (const [x, y, ex, ey] of [[20, 9, 22, 1], [26, 9, 31, 2], [14, 10, 12, 3]]) X.tube(x, y, ex, ey, 2.2, 0.5, CHI_LO, 'obsidian', { z: 6 });
+          // Mandibles.
+          X.in(2, 0.6);
+          X.limb([[6, 22, 1.8, 5], [3, 27, 1.2, 5], [6, 29, 0.6, 5]], '#2a2236', 'chitin');
+          X.limb([[12, 24, 1.6, 6], [11, 28, 1, 6]], '#2a2236', 'chitin');
+        },
+        glow(P) {
+          // Its eyes, six of them, in two arcs.
+          for (const [x, y, big] of [[10, 13, 1], [15, 11, 1], [20, 10, 0], [13, 16, 0], [18, 14, 0], [24, 12, 0]]) {
+            P.fx(x, y, big ? '#ffffff' : VGLOW, 1);
+            if (big) {
+              P.fx(x + 1, y, VGLOW, 0.9);
+              P.fx(x, y + 1, VGLOW, 0.7);
+            }
+          }
+          // The slit of its mouth.
+          for (let i = 0; i < 9; i++) P.fx(4 + i, 21 + Math.round(i * 0.25), i % 3 ? VCYAN : '#ffffff', 0.9);
+        },
+      },
+      // Its arms, out of its head: chitin, jointed, and a long blade.
+      ...Object.fromEntries([['armF', 'front', 'weapon', 1], ['armB', 'back', 'offhand', -1]].map(([name, layer, role, s]) => [name, {
+        w: 22, h: 52, px: 6, py: 4, role, layer, z: layer === 'front' ? 8 : -2, parent: 'head', at: [s > 0 ? 18 : 24, 20], a0: s > 0 ? 0.25 : -0.15, amp: 1.2,
+        show: (R) => !(R.e.reach && R.e.reach.side === (s > 0 ? 0 : 1)),
+        body(X) {
+          X.in(0, 1);
+          X.limb([[6, 4, 3, 2], [8, 18, 2.6, 3], [7, 22, 2.2, 3]], s > 0 ? CHI_HI : CHI, 'chitin');
+          X.limb([[7, 22, 2.2, 3], [10, 32, 1.8, 4]], s > 0 ? CHI_HI : CHI, 'chitin');
+          X.ball(7.5, 21, 2.8, 2.6, CHI_LO, 'chitin', { z: 5, rz: 2 });
+          // The blade: void-glass, curved.
+          X.in(1, 0.4);
+          X.slab([[9, 31], [12, 31], [17, 40], [19, 50], [14, 44], [9, 36]], '#2a1a4a', 'obsidian', { rz: 2, bevel: 1, z: 6 });
+        },
+        glow(P) {
+          for (let i = 0; i < 16; i++) P.fx(12 + Math.round(i * 0.42), 32 + Math.round(i * 1.1), i % 5 === 0 ? '#ffffff' : VGLOW, 0.85);
+        },
+      }])),
+    },
+    legs: {
+      style: 'rift', L1: 50, L2: 58, stepT: 0.2, reach: 0.9, arc: 16, thud: true,
+      legs: [[2.4], [-2.2]], vFar: -1.2, vNear: 1.1,
+      hips: [[[60, 74], [56, 78]], [[84, 74], [88, 78]]],
+    },
+    fx(R, ctx) {
+      // Specks of the void about it, and a shimmer where the air's thin.
+      const { x, y, r } = R;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 10; i++) {
+        const a = r.time * (0.6 + i * 0.07) + i * 0.63;
+        const px = x + Math.cos(a) * (30 + (i % 3) * 8);
+        const py = y - 66 + Math.sin(a * 1.3) * 18;
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(r.time * 4 + i);
+        ctx.fillStyle = i % 3 ? VGLOW : VCYAN;
+        ctx.fillRect(Math.round(px), Math.round(py), 1, 1);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  },
+});
+
+// A head-arm out in the world: from its head out to where it's reaching,
+// its blade at the end.
+WORLD_DRAW.rift_crawler = (r, game, c, add, S) => {
+  const R = c.reach;
+  if (!R) return;
+  const wp = c.renderPos();
+  const base = S(wp.x, wp.y, wp.z);
+  const flip = c.faceR ? -1 : 1;
+  const head = { x: base.x + 11 - 64 + 36 + (flip < 0 ? 2 * (64 - 36) : 0) - 11, y: base.y + 11 - 126 + 34 };
+  head.x = base.x + (flip > 0 ? -28 : 28);
+  const k = R.back ? Math.max(0, 1 - R.back / 0.35) : Math.min(1, R.t / Math.max(0.05, R.dur));
+  const tx = R.x0 + (R.x - R.x0) * 1;
+  const tz = R.z0 + (R.z - R.z0) * 1;
+  const end = S(tx, wp.y + 0.8, tz);
+  const tip = { x: head.x + (end.x - head.x) * k, y: head.y + (end.y - 6 - head.y) * k };
+  const mid = { x: (head.x + tip.x) / 2, y: Math.min(head.y, tip.y) - 22 * k };
+  const pts = [];
+  for (let i = 0; i <= 10; i++) {
+    const q = bez(head, { x: head.x, y: mid.y }, { x: tip.x, y: mid.y }, tip, i / 10);
+    pts.push({ x: q.x, y: q.y, r: 3.2 - (i / 10) * 1.6 });
+  }
+  const front = end.v > base.v;
+  add(front ? end.row : base.row, Math.max(base.layer, end.layer), front ? 99 : -1, () => {
+    const ctx = r.ctx;
+    drawLimb(ctx, pts, [CHI_LO, CHI_HI, '#6a5a8a'], { t: r.time, vein: VGLOW, band: (q) => (Math.abs(q - 0.5) < 0.04 ? ['#0c0812', VGLOW] : null) });
+    // Its blade, hooked down at the end.
+    const ang = Math.atan2(tip.y - pts[8].y, tip.x - pts[8].x);
+    ctx.fillStyle = '#05010a';
+    for (let i = 0; i < 12; i++) {
+      const bx = tip.x + Math.cos(ang + 0.9) * i * 0.9;
+      const by = tip.y + Math.sin(ang + 0.9) * i * 0.9 + i * 0.4;
+      ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
+    }
+    ctx.fillStyle = VGLOW;
+    for (let i = 0; i < 12; i++) {
+      const bx = tip.x + Math.cos(ang + 0.9) * i * 0.9;
+      const by = tip.y + Math.sin(ang + 0.9) * i * 0.9 + i * 0.4;
+      ctx.fillRect(Math.round(bx), Math.round(by), 1, 1);
+    }
+    glow(ctx, tip.x, tip.y, 10, VGLOW, 0.4);
+  });
+};
+
+// ------------------------------------------------------------ the Hero
+// Twice a man's height in battered plate, gold-trimmed; a red cloak in
+// tatters; and what the curse has made of him this moment (see
+// entities/evolved_hero.js): each part of him cut free and painted as he
+// is or as it's turned (`variant`), his legs and his chest in the body
+// itself (one painting for each way they can be).
+const STEEL = '#8a909e';
+const STEEL_HI = '#c8cedc';
+const STEEL_LO = '#4a4e5e';
+const TRIM = '#c8a040';
+const CLOAK = '#8a1a20';
+const FLESH = '#6a7a42';
+const FLESH_LO = '#3a4a2a';
+const RAW = '#9a3040';
+const BONE = '#e8dcc0';
+const formOfE = (e) => e.form || {};
+forge({
+  the_hero: {
+    size: 128, ax: 64, ay: 125, walk: true, fps: 8, walkFps: 12, breath: 1,
+    body(X, J, t, st) {
+      const b = J.b;
+      const w = st.walk ? Math.sin(t * TAU) : 0;
+      if (!st.legs) {
+        // His legs: greaves and sabatons, striding as he goes.
+        X.in(0, 1.6);
+        X.limb([[71, 86, 6.5, 1], [71 - w * 5, 104, 5.4, 2], [71 - w * 9, 119, 4.6, 2]], STEEL_LO, 'metal');
+        X.ball(68 - w * 9, 121, 7, 3.4, STEEL_LO, 'metal', { z: 3, rz: 3 });
+        X.in(1, 1.6);
+        X.limb([[56, 86, 7, 4], [56 + w * 5, 104, 5.8, 5], [56 + w * 9, 119, 5, 5]], STEEL, 'metal');
+        X.ball(53 + w * 9, 121, 7.6, 3.6, STEEL, 'metal', { z: 6, rz: 3 });
+        X.ball(56 + w * 5, 103, 4.6, 4, TRIM, 'gold', { z: 9, rz: 3 });
+      } else {
+        // His legs come apart: a mass of tentacles, writhing.
+        X.in(0, 1.2);
+        for (let i = 0; i < 8; i++) {
+          const ph = t * TAU * 1.5 + i * 1.3;
+          const x0 = 50 + i * 3.6;
+          const ex = x0 + (i - 3.5) * 5 + Math.sin(ph) * 6;
+          X.limb([[x0, 84, 4.6, i % 2 ? 2 : 5], [x0 + (i - 3.5) * 2 + Math.sin(ph + 1) * 4, 102, 3.4, 4], [ex, 120, 1.4, 4], [ex + Math.sin(ph + 2) * 4, 124, 0.6, 4]], i % 2 ? FLESH_LO : FLESH, 'flesh');
+        }
+      }
+      // His mail skirt, and the plates over his hips.
+      X.in(2, 1.8);
+      X.slab([[46, 78 - b * 0.3], [78, 78 - b * 0.3], [80, 94], [44, 94]], '#5a5e6a', 'mail', { rz: 6, bevel: 3, z: 6 });
+      X.ball(62, 81 - b * 0.4, 16, 5, STEEL_LO, 'metal', { z: 10, rz: 4 });
+      // His breastplate (or what's become of it), his gorget, his
+      // pauldrons.
+      X.in(3, 2.2);
+      X.ball(62, 63 - b, 16, 18, STEEL, 'metal', { z: 10, rz: 13 });
+      if (st.maw) {
+        // The mouth in his chest: the plate split, lips of raw flesh.
+        X.ball(62, 64 - b, 8.5, 13, RAW, 'flesh', { z: 19, rz: 5 });
+        X.ball(62, 64 - b, 5.5, 10.5, '#2a0408', 'flesh', { z: 21, rz: 2 });
+      }
+      X.ball(62, 46 - b, 9, 4.6, STEEL_HI, 'metal', { z: 14, rz: 4 });
+      X.in(4, 1);
+      X.ball(76, 50 - b, 8, 6.5, STEEL_LO, 'metal', { z: 6, rz: 6 });
+      X.ball(48, 50 - b, 10, 8, STEEL_HI, 'metal', { z: 18, rz: 8 });
+      X.ball(48, 50 - b, 6, 4.4, TRIM, 'gold', { z: 23, rz: 3 });
+      // His belt and its buckle.
+      X.ball(62, 80 - b * 0.4, 14, 2.6, '#3a2418', 'leather', { z: 16, rz: 2 });
+      X.ball(62, 80 - b * 0.4, 3, 2.6, TRIM, 'gold', { z: 19, rz: 2 });
+    },
+    paint(P, J, t, st) {
+      const b = J.b;
+      if (st.maw) {
+        // Its teeth, both lips; a tongue.
+        for (let i = -10; i <= 10; i += 2) {
+          const wdt = Math.round(Math.sqrt(Math.max(0, 1 - (i / 11) ** 2)) * 5.5);
+          P.set(62 - wdt, Math.round(64 - b + i), BONE);
+          P.set(62 + wdt, Math.round(64 - b + i), BONE);
+          P.set(62 - wdt + 1, Math.round(64 - b + i), '#b8a888');
+          P.set(62 + wdt - 1, Math.round(64 - b + i), '#b8a888');
+        }
+        for (let y = 2; y < 9; y++) P.set(62 + (y % 2), Math.round(64 - b + y), '#c84050');
+        // (The plate torn back round it, ragged.)
+        for (let i = 0; i < 14; i++) P.set(Math.round(53 + Math.random() * 0 + (i % 2) * 2), Math.round(52 - b + i * 1.7), '#2a2e38');
+      } else {
+        // The sun of his order, on his breast, worn and scratched.
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * TAU;
+          for (let k = 3; k < 7; k++) P.set(Math.round(62 + Math.cos(a) * k), Math.round(62 - b + Math.sin(a) * k), k < 5 ? TRIM : '#a07a28');
+        }
+        for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y <= 5) P.set(62 + x, Math.round(62 - b + y), '#ffe070');
+        // Scratches across the plate, and a crack.
+        for (let i = 0; i < 9; i++) P.set(52 + i, Math.round(56 - b + i * 0.4), '#5a5e6a');
+        for (let i = 0; i < 7; i++) P.set(70 - (i % 2), Math.round(68 - b + i), '#3a3e4a');
+      }
+    },
+    glow(P, J, t, st) {
+      const b = J.b;
+      if (st.maw) for (let y = -8; y <= 8; y++) for (let x = -3; x <= 3; x++) if ((x * x) / 9 + (y * y) / 64 < 1 && (x + y + Math.floor(t * 24)) % 3 === 0) P.fx(62 + x, 64 - b + y, '#ff4030', 0.5);
+      if (st.legs) for (let i = 0; i < 8; i++) P.fx(50 + i * 3.6, 92 + (i % 3) * 6, '#c8ff60', 0.6);
+    },
+    parts: {
+      // His cloak, red and in tatters, behind him.
+      cape: {
+        w: 44, h: 72, px: 22, py: 4, role: 'cape', layer: 'back', z: -4, at: (J) => [66, 46 - J.b],
+        body(X) {
+          X.in(0, 1.4);
+          X.slab([[10, 2], [34, 2], [42, 56], [36, 62], [30, 58], [24, 70], [18, 60], [10, 66], [4, 58]], CLOAK, 'velvet', { rz: 8, bevel: 4 });
+          X.ball(22, 6, 11, 5, '#6a1218', 'velvet', { z: 4, rz: 4 });
+        },
+        paint(P) {
+          for (let y = 14; y < 60; y += 7) for (let x = 8; x < 38; x += 9) P.set(x + (y % 2), y, '#5a0a10');
+        },
+      },
+      // His wings, when the curse gives him them: a dragon's, torn out of
+      // his back.
+      ...Object.fromEntries([['wingB', 'back', -6, 1], ['wingF', 'front', 3, -1]].map(([name, layer, z, s]) => [name, {
+        w: 64, h: 56, px: 6, py: 50, role: 'wing', layer, z, depth: 0.32, rate: 1.4, squash: 0.3, lift: 0.4, a0: s > 0 ? -0.2 : 0.15, sign: s > 0 ? -1 : 1,
+        at: (J) => [s > 0 ? 74 : 60, 52 - J.b],
+        show: (R) => formOfE(R.e).back === 'wings',
+        body(X) {
+          X.in(0, 1);
+          // Its arm-bone along the top, and its fingers.
+          X.limb([[6, 50, 3, 4], [26, 22, 2.6, 5], [44, 6, 2, 5], [60, 2, 1, 5]], '#4a2a2a', 'scales');
+          for (const [ex, ey] of [[30, 50], [44, 40], [56, 26]]) X.limb([[26 + (ex - 30) * 0.4, 20 + (ey - 50) * 0.1, 1.6, 5], [ex, ey, 0.8, 5]], '#4a2a2a', 'scales');
+          X.in(1, 0.4);
+          X.slab([[8, 50], [26, 22], [44, 6], [60, 2], [56, 26], [44, 40], [30, 50], [18, 54]], s > 0 ? '#6a2030' : '#8a2a38', 'flesh', { rz: 3, bevel: 2, z: 1 });
+        },
+        paint(P) {
+          for (let i = 0; i < 30; i++) P.set(10 + i * 1.4, 48 - i * 0.6, '#4a1018');
+        },
+      }])),
+      // His shield-arm: the shield (as himself), or a tentacle.
+      armB: {
+        w: 44, h: 70, px: 22, py: 6, role: 'offhand', layer: 'back', z: -1, amp: 1, at: (J) => [76, 50 - J.b],
+        variant: (R) => formOfE(R.e).off || 'shield',
+        body(X, v) {
+          if (v === 'tentacle') {
+            X.in(0, 1);
+            X.limb([[22, 6, 5, 2], [26, 24, 4.2, 3], [18, 42, 3.4, 3], [24, 56, 2.2, 3], [30, 66, 1, 3]], FLESH, 'flesh');
+            for (let i = 0; i < 6; i++) X.ball(20 + Math.sin(i) * 4, 14 + i * 9, 1.6, 1.4, '#c8b8a0', 'flesh', { z: 6, rz: 1 });
+            return;
+          }
+          X.in(0, 1);
+          X.limb([[22, 6, 4.6, 2], [22, 22, 3.8, 3], [18, 34, 3.4, 3]], STEEL_LO, 'metal');
+          // The shield: kite-shaped, his order's sun on it.
+          X.in(1, 1.4);
+          X.slab([[6, 24], [36, 24], [38, 44], [22, 68], [4, 44]], '#3a4a8a', 'metal', { rz: 6, bevel: 3, z: 6 });
+          X.slab([[9, 27], [33, 27], [35, 43], [22, 63], [7, 43]], '#2a3a6a', 'metal', { rz: 3, bevel: 1, z: 9 });
+        },
+        paint(P, v) {
+          if (v === 'tentacle') return;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * TAU;
+            for (let k = 2; k < 7; k++) P.set(Math.round(21 + Math.cos(a) * k), Math.round(40 + Math.sin(a) * k), TRIM);
+          }
+          for (let x = 6; x < 37; x++) P.set(x, 24, TRIM);
+        },
+      },
+      // His sword-arm: the greatsword (as himself), a claw, or a blade of
+      // bone.
+      armF: {
+        w: 44, h: 84, px: 14, py: 6, role: 'weapon', layer: 'front', z: 4, amp: 1.1, at: (J) => [48, 52 - J.b],
+        variant: (R) => formOfE(R.e).arm || 'sword',
+        body(X, v) {
+          if (v === 'claw') {
+            X.in(0, 1.4);
+            X.limb([[14, 6, 7, 3], [12, 24, 7.5, 4], [10, 38, 8, 4]], FLESH, 'flesh');
+            X.ball(10, 42, 10, 8, FLESH_LO, 'flesh', { z: 4, rz: 6 });
+            for (const [dx, len] of [[-8, 18], [-2, 22], [5, 20], [11, 14]]) X.limb([[10 + dx * 0.6, 46, 2.4, 6], [10 + dx, 46 + len * 0.6, 1.8, 7], [10 + dx * 1.3, 46 + len, 0.5, 7]], BONE, 'bone');
+            return;
+          }
+          if (v === 'blade') {
+            X.in(0, 1);
+            X.limb([[14, 6, 6, 3], [12, 22, 5.4, 4], [12, 32, 4.4, 4]], FLESH, 'flesh');
+            X.in(1, 0.6);
+            X.slab([[8, 30], [17, 30], [22, 52], [18, 80], [13, 70], [8, 48]], BONE, 'bone', { rz: 4, bevel: 2, z: 6 });
+            return;
+          }
+          // His arm in plate, his gauntlet, and his greatsword.
+          X.in(0, 1.4);
+          X.limb([[14, 6, 5.6, 3], [13, 20, 4.8, 4], [12, 32, 4.4, 4]], STEEL, 'metal');
+          X.ball(13, 19, 4.6, 3.6, TRIM, 'gold', { z: 8, rz: 3 });
+          X.ball(12, 34, 5.4, 4.6, STEEL_HI, 'metal', { z: 8, rz: 4 });
+          X.in(1, 0.5);
+          X.tube(4, 33, 22, 35, 1.8, 1.8, TRIM, 'gold', { z: 10 });
+          X.tube(13, 36, 15, 82, 2.6, 1.2, STEEL_HI, 'metal', { z: 9 });
+          X.tube(11, 26, 12, 33, 1.3, 1.3, '#3a2418', 'leather', { z: 10 });
+          X.ball(11, 25, 2, 2, TRIM, 'gold', { z: 11, rz: 2 });
+        },
+        paint(P, v) {
+          if (v === 'sword') for (let y = 40; y < 80; y++) P.set(14, y, '#e8ecf8');
+        },
+        glow(P, v) {
+          if (v === 'sword') for (let y = 42; y < 78; y += 6) P.fx(14, y, '#ffe8a0', 0.4);
+        },
+      },
+      // His head: his great helm (a crest, a cracked visor, eyes in the
+      // dark of it), or the stalks of the curse's eyes burst out of it.
+      head: {
+        w: 40, h: 44, px: 20, py: 36, role: 'head', layer: 'front', z: 6, at: (J) => [62, 44 - J.b],
+        variant: (R) => formOfE(R.e).head || 'helm',
+        body(X, v) {
+          X.in(0, 1.6);
+          X.ball(20, 24, 10, 11, STEEL, 'metal', { z: 6, rz: 9 });
+          X.ball(17, 27, 7, 6, STEEL_HI, 'metal', { z: 12, rz: 5 });
+          if (v === 'stalks') {
+            X.in(1, 0.8);
+            for (const [ex, ey, k] of [[6, 2, 0], [14, 0, 1], [24, 1, 2], [32, 6, 3], [2, 12, 4]]) {
+              X.limb([[16 + k * 2, 16, 2, 7], [(16 + k * 2 + ex) / 2, (16 + ey) / 2 - 2, 1.4, 8], [ex, ey + 3, 1.2, 8]], FLESH, 'flesh');
+              X.ball(ex, ey + 2, 2.6, 2.6, '#e8e0c8', 'flesh', { z: 10, rz: 2 });
+            }
+            return;
+          }
+          // His crest.
+          X.in(1, 0.6);
+          X.slab([[18, 12], [24, 12], [34, 2], [30, 10], [26, 16]], '#a01818', 'velvet', { rz: 2, bevel: 1, z: 8 });
+          X.tube(20, 14, 20, 34, 1.4, 1.4, TRIM, 'gold', { z: 14 });
+        },
+        paint(P, v) {
+          // The visor's slit.
+          for (let x = 9; x < 22; x++) P.set(x, 25, '#0a0810');
+          for (let x = 11; x < 18; x++) P.set(x, 26, '#1a1820');
+          if (v !== 'stalks') for (let i = 0; i < 5; i++) P.set(24 + (i % 2), 20 + i * 2, '#3a3e4a');
+        },
+        glow(P, v) {
+          if (v === 'stalks') {
+            for (const [ex, ey] of [[6, 2], [14, 0], [24, 1], [32, 6], [2, 12]]) {
+              P.fx(ex, ey + 2, '#c8ff40', 1);
+              P.fx(ex - 1, ey + 2, '#203010', 0.8);
+            }
+          } else {
+            P.fx(12, 25, '#ffe8a0', 0.9);
+            P.fx(16, 25, '#ffe8a0', 0.9);
+          }
+        },
+      },
+    },
+    fx(R, ctx) {
+      // The curse in him: a sickly light breaking out of his joints now
+      // and then, more of it the more of him it has.
+      const { e, x, y, r } = R;
+      const F = formOfE(e);
+      const n = Object.entries(F).filter(([k, v]) => v !== { chest: 'plate', arm: 'sword', off: 'shield', legs: 'legs', head: 'helm', back: 'none' }[k]).length;
+      if (!n) return;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n * 3; i++) {
+        const a = r.time * 1.3 + i * 2.1;
+        ctx.globalAlpha = 0.35 + 0.35 * Math.sin(r.time * 5 + i);
+        ctx.fillStyle = i % 2 ? '#c8ff60' : '#8ac040';
+        ctx.fillRect(Math.round(x - 8 + Math.cos(a) * 14), Math.round(y - 70 + Math.sin(a * 0.7) * 26), 1, 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  },
+});
+
+// His tentacle-arm, lashed out into the world as it takes you.
+WORLD_DRAW.the_hero = (r, game, c, add, S) => {
+  const L = c.lashTo;
+  if (!L) return;
+  const wp = c.renderPos();
+  const base = S(wp.x, wp.y, wp.z);
+  const sh = { x: base.x + (c.faceR ? -12 : 12), y: base.y + 11 - 125 + 50 };
+  const k = Math.min(1, L.t / 0.3) * Math.min(1, (1.1 - L.t) / 0.3);
+  const end = S(L.x, wp.y + 1, L.z);
+  const tip = { x: sh.x + (end.x - sh.x) * k, y: sh.y + (end.y - sh.y) * k };
+  const pts = [];
+  for (let i = 0; i <= 10; i++) {
+    const q = bez(sh, { x: sh.x, y: sh.y - 20 }, { x: tip.x, y: tip.y - 16 }, tip, i / 10);
+    pts.push({ x: q.x + Math.sin(r.time * 9 + i) * 1.5, y: q.y, r: 4 - (i / 10) * 2.6 });
+  }
+  add(Math.max(base.row, end.row), base.layer, 99, () => drawLimb(r.ctx, pts, [FLESH_LO, FLESH, '#a8b880'], { t: r.time, vein: '#c8ff60' }));
+};
+
+// ------------------------------------------------------------ the Alinelidan
+// Its head: a great blunt mass of grey-pink flesh, ridged and wrinkled,
+// bristling, blind spots where eyes were once; its maw, round, ringed with
+// teeth going back and back, splitting four ways as it opens (its jaws:
+// drawn over it, opening as it bites, screams, spits) and its tentacles
+// writhing out. Behind it in the world, ring after ring of its body (see
+// WORLD_DRAW below).
+const WFL = '#b8887e';
+const WFL_HI = '#e0b8a8';
+const WFL_LO = '#6a4440';
+const WDARK = '#2a1014';
+const WMAW = { x: 46, y: 68 };
+forge({
+  alinelidan: {
+    size: 128, ax: 64, ay: 124, breath: 1.4, fps: 9, walk: true, walkFps: 14,
+    body(X, J, t, st) {
+      const b = J.b;
+      const heave = st.walk ? Math.sin(t * TAU * 2) * 1.5 : 0;
+      // The neck going back into its body, ringed.
+      X.in(0, 2.2);
+      for (let i = 0; i < 4; i++) X.ball(96 - i * 6, 82 - i * 3 - b * 0.3 + heave * (i % 2 ? 1 : -1), 22 - i * 1.5, 24 - i * 2, i % 2 ? WFL_LO : WFL, 'flesh', { z: 2 + i * 2, rz: 14 });
+      // The head itself.
+      X.in(1, 3);
+      X.ball(62, 66 - b, 36, 34, WFL, 'flesh', { z: 10, rz: 26 });
+      X.ball(70, 50 - b, 22, 14, WFL_HI, 'flesh', { z: 16, rz: 10 });
+      // Its maw's rim, thick, puckered.
+      X.in(2, 1.4);
+      X.ball(WMAW.x, WMAW.y - b, 24, 23, WFL_LO, 'flesh', { z: 22, rz: 10 });
+      X.ball(WMAW.x, WMAW.y - b, 19, 18, '#4a1a20', 'flesh', { z: 26, rz: 6 });
+      X.ball(WMAW.x, WMAW.y - b, 13, 12, WDARK, 'flesh', { z: 24, rz: 3 });
+      // Ridges round its head, ring on ring, each a fold of hide.
+      X.in(3, 1.2);
+      for (let r = 0; r < 4; r++) for (let i = -10; i <= 10; i++) {
+        const a = (i / 10) * 1.35;
+        X.ball(72 + r * 8 + Math.cos(a) * 5, 66 - b + Math.sin(a) * (33 - r * 3), 3.4, 2.8, r % 2 ? WFL_LO : '#8a5e58', 'flesh', { z: 20 - r * 3, rz: 2.4 });
+      }
+      // Its lips, folded round the maw.
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * TAU;
+        X.ball(WMAW.x + Math.cos(a) * 21, WMAW.y - b + Math.sin(a) * 20, 4, 3.4, i % 2 ? WFL : WFL_HI, 'flesh', { z: 28, rz: 3 });
+      }
+    },
+    paint(P, J, t) {
+      const b = J.b;
+      // Its rings of teeth, going back into the dark.
+      for (const [rr, n, col] of [[17, 22, '#f0e8d0'], [12.5, 16, '#d8ccb0'], [8, 11, '#a89880']]) {
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * TAU + rr * 0.3 + t * TAU * (rr === 12.5 ? -0.25 : 0.25);
+          const x = WMAW.x + Math.cos(a) * rr;
+          const y = WMAW.y - b + Math.sin(a) * rr * 0.95;
+          const ix = WMAW.x + Math.cos(a) * (rr - 3);
+          const iy = WMAW.y - b + Math.sin(a) * (rr - 3) * 0.95;
+          P.set(Math.round(x), Math.round(y), col);
+          P.set(Math.round((x + ix) / 2), Math.round((y + iy) / 2), col);
+          P.set(Math.round(ix), Math.round(iy), '#ffffff');
+        }
+      }
+      // Wrinkles, and bristles.
+      for (let i = 0; i < 26; i++) {
+        const a = i * 2.39;
+        const x = 70 + Math.cos(a) * (14 + (i % 5) * 4);
+        const y = 62 - b + Math.sin(a) * (14 + (i % 4) * 5);
+        P.set(Math.round(x), Math.round(y), WFL_LO);
+        P.set(Math.round(x + 1), Math.round(y - 1), '#4a2a26');
+      }
+      // Blind spots where its eyes were.
+      for (const [x, y] of [[78, 44], [86, 52], [70, 40]]) {
+        P.set(x, y - Math.round(b), '#e8d8c8');
+        P.set(x + 1, y - Math.round(b), '#c8b8a8');
+      }
+    },
+    glow(P, J, t) {
+      const b = J.b;
+      // Bile in its throat, glowing.
+      for (let i = 0; i < 20; i++) {
+        const a = (i / 20) * TAU + t * TAU;
+        P.fx(WMAW.x + Math.cos(a) * 4, WMAW.y - b + Math.sin(a) * 4, '#c8e070', 0.4 + 0.3 * Math.sin(t * TAU * 3 + i));
+      }
+      P.fx(WMAW.x, WMAW.y - b, '#e8ff90', 0.8);
+    },
+    // Its jaws over the maw (opening as it bites, screams, spits, calls
+    // its leeches), and its tentacles writhing out between them.
+    front(R) {
+      const { ctx, e, ox, oy, t, A } = R;
+      const b = R.J.b;
+      const cx = ox + WMAW.x;
+      const cy = oy + WMAW.y - b;
+      const k0 = A && A.k ? Math.min(1, A.t / Math.max(0.05, A.dur)) : 0;
+      const busy = A && ['strike', 'roar', 'breath', 'throw', 'cast', 'summon', 'charge'].includes(A.k) ? Math.sin(Math.PI * k0) : 0;
+      const open = Math.max(e.jawT > 0 ? 0.85 : 0.3 + 0.08 * Math.sin(t * 2), busy, e.windup ? 0.6 : 0);
+      // Tentacles first, out of the maw.
+      const n = 6;
+      for (let i = 0; i < n; i++) {
+        const a0 = (i / n) * TAU + 0.4;
+        const len = 10 + open * 22;
+        let x = cx;
+        let y = cy;
+        for (let s = 0; s <= 12; s++) {
+          const q = s / 12;
+          const a = a0 + Math.sin(t * 3 + i + q * 4) * 0.5 * q;
+          const nx = cx + Math.cos(a) * len * q - q * q * 6;
+          const ny = cy + Math.sin(a) * len * q * 0.9 + q * q * 4;
+          const r = Math.max(0.6, 3 - q * 2.4);
+          ctx.fillStyle = '#2a0c10';
+          ctx.fillRect(Math.round(nx - r - 1), Math.round(ny - r), Math.round(r * 2 + 2), Math.round(r * 2));
+          ctx.fillStyle = q > 0.8 ? '#e8a0a0' : '#a84a54';
+          ctx.fillRect(Math.round(nx - r), Math.round(ny - r + 0.5), Math.max(1, Math.round(r * 2)), Math.max(1, Math.round(r * 2 - 1)));
+          if (s % 3 === 1) {
+            ctx.fillStyle = '#f0d0c8';
+            ctx.fillRect(Math.round(nx), Math.round(ny + r - 1), 1, 1);
+          }
+          x = nx;
+          y = ny;
+        }
+        void x;
+        void y;
+      }
+      // Its four jaws: toothed flaps round the maw, folding open.
+      for (let j = 0; j < 4; j++) {
+        const a = (j / 4) * TAU + Math.PI / 4;
+        const hx = cx + Math.cos(a) * 16;
+        const hy = cy + Math.sin(a) * 15;
+        // (Closed, it lies over the maw, its point in the middle; open, it
+        // peels back toward the rim, the maw opening behind it.)
+        const dir = a + Math.PI + Math.sin(t * 2 + j) * 0.05;
+        const L = 18 * (1 - 0.72 * open);
+        const W = 8 + open * 5;
+        const tipx = hx + Math.cos(dir) * L;
+        const tipy = hy + Math.sin(dir) * L * 0.9;
+        const px = -Math.sin(dir);
+        const py = Math.cos(dir);
+        const poly = [[hx + px * W, hy + py * W], [tipx, tipy], [hx - px * W, hy - py * W]];
+        // Fill it, a pixel at a time, edge darkened, teeth along it.
+        const minx = Math.floor(Math.min(...poly.map((p) => p[0])));
+        const maxx = Math.ceil(Math.max(...poly.map((p) => p[0])));
+        const miny = Math.floor(Math.min(...poly.map((p) => p[1])));
+        const maxy = Math.ceil(Math.max(...poly.map((p) => p[1])));
+        const inside = (x, y) => {
+          let s = 0;
+          for (let i = 0; i < 3; i++) {
+            const [ax, ay] = poly[i];
+            const [bx, by] = poly[(i + 1) % 3];
+            const cr = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+            s += cr > 0 ? 1 : cr < 0 ? -1 : 0;
+          }
+          return Math.abs(s) === 3;
+        };
+        for (let y = miny; y <= maxy; y++) for (let x = minx; x <= maxx; x++) {
+          if (!inside(x + 0.5, y + 0.5)) continue;
+          const edge = !inside(x - 0.5, y + 0.5) || !inside(x + 1.5, y + 0.5) || !inside(x + 0.5, y - 0.5) || !inside(x + 0.5, y + 1.5);
+          const lit = (x - hx) * -0.6 + (y - hy) * -0.8 > 0;
+          ctx.fillStyle = edge ? '#2a1014' : lit ? WFL_HI : WFL;
+          ctx.fillRect(x, y, 1, 1);
+        }
+        // Teeth along its inner edge.
+        for (let s = 2; s < 10; s += 2) {
+          const q = s / 10;
+          const ex = hx + (tipx - hx) * q - px * W * (1 - q) * 0.9;
+          const ey = hy + (tipy - hy) * q - py * W * (1 - q) * 0.9;
+          ctx.fillStyle = '#f0e8d0';
+          ctx.fillRect(Math.round(ex), Math.round(ey), 1, 2);
+        }
+      }
+    },
+  },
+});
+
+// Its body, ring after ring behind its head, each where its head has
+// been; sinking into the floor as it dives.
+function wormRing(size) {
+  return sculpted(`wring${size}`, size + 4, size + 4, (X) => {
+    const c = (size + 4) / 2;
+    X.in(0, 2);
+    X.ball(c, c, size / 2, size / 2 - 1, WFL, 'flesh', { rz: size * 0.4 });
+    X.in(1, 0.6);
+    X.ball(c, c - size * 0.08, size / 2 - 1.5, size / 2 - 4, WFL_HI, 'flesh', { z: size * 0.18, rz: size * 0.2 });
+    for (let i = -3; i <= 3; i++) X.ball(c + i * (size / 9), c - size * 0.42 + Math.abs(i) * 0.8, 1.6, 2.2, WFL_LO, 'flesh', { z: size * 0.4, rz: 1.5 });
+    X.in(2, 0.4);
+    X.ball(c, c + size * 0.3, size / 2 - 3, 2, WFL_LO, 'flesh', { z: size * 0.25, rz: 2 });
+  });
+}
+WORLD_DRAW.alinelidan = (r, game, c, add, S) => {
+  if (c.burrowed || !c.trail || !c.trail.length) return;
+  const rings = wormRingsOf(c);
+  const sink = c.diving ? Math.min(1, c.diving.t / c.diving.dur) : 0;
+  const wp = c.renderPos();
+  const hurt = c.flash > 0;
+  rings.forEach((q, i) => {
+    const size = Math.round(44 - q.k * 26);
+    const pic = wormRing(size - (size % 2));
+    if (!pic) return;
+    const p = S(q.x, wp.y, q.z);
+    const down = sink * (1.4 + (1 - q.k)) * 36;
+    const bob = Math.sin(r.time * 4 - i * 0.6) * 1.5;
+    add(p.row, p.layer, 40 - i * 0.01, () => {
+      const ctx = r.ctx;
+      const h = pic.h;
+      const y = Math.round(p.y + 10 - h * 0.85 + bob + down);
+      if (down >= h) return;
+      ctx.save();
+      // (Sinking: only what's still above the floor.)
+      ctx.beginPath();
+      ctx.rect(p.x - pic.w, p.y + 10 - 200, pic.w * 2, 200);
+      ctx.clip();
+      ctx.drawImage(pic.cv, Math.round(p.x - pic.w / 2), y);
+      if (hurt) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(pic.cv, Math.round(p.x - pic.w / 2), y);
+      }
+      ctx.restore();
+      // Its shadow.
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(Math.round(p.x - size / 2 + 2), Math.round(p.y + 9), size - 4, 2);
+      ctx.restore();
+    });
+  });
+};

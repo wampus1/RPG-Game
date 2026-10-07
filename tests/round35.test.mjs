@@ -361,7 +361,8 @@ test('the Elder Stag charges; sidestepped by a wall, he\'s stunned against it', 
 });
 
 test('every master is painted, one to one, in frames that move', () => {
-  const masters = Object.keys(SPECIES).filter((k) => SPECIES[k].boss);
+  // (Round 71: the evolved masters are only ever forged: see round71.)
+  const masters = Object.keys(SPECIES).filter((k) => SPECIES[k].boss && !SPECIES[k].evolved);
   for (const sp of masters) {
     const S = SPECIES[sp];
     if (['brood_mother', 'horror', 'overseer'].includes(sp)) continue;

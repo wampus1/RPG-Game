@@ -252,7 +252,8 @@ test('every master is sculpted and surfaced as what it is, in twenty-four frames
   assert.equal(FRAMES, 24);
   assert.equal(BODY_FRAMES, 24);
   for (const m of ['skin', 'cloth', 'leather', 'mail', 'metal', 'scales', 'chitin', 'fur', 'feather', 'bark', 'bone', 'glass', 'molten', 'obsidian', 'coral', 'fungus']) assert.ok(MATERIALS.includes(m), `${m} is a material`);
-  const masters = Object.keys(SPECIES).filter((k) => SPECIES[k].boss);
+  // (Round 71: the evolved masters are only ever forged: see round71.)
+  const masters = Object.keys(SPECIES).filter((k) => SPECIES[k].boss && !SPECIES[k].evolved);
   for (const sp of masters) assert.ok(hasBossArt(sp) || LEGGED.has(sp), `${sp} is painted`);
   // (Its breath comes round without a jump: from the last frame to the
   // first is no bigger a step than any other. Lava, slime, sparks and
@@ -271,7 +272,8 @@ test('every master is sculpted and surfaced as what it is, in twenty-four frames
     assert.ok(filled(a) > 500, `${k} is something`);
     assert.ok(diff(a, rigBody(k, 6)) > 30, `${k} breathes`);
   }
-  assert.deepEqual(Object.keys(LEG_STYLES).sort(), ['bone', 'mech', 'spider']);
+  // (Round 71: and the Rift Crawler's.)
+  assert.deepEqual(Object.keys(LEG_STYLES).sort(), ['bone', 'mech', 'rift', 'spider']);
 });
 
 test('a sculpted part is shaded as the stuff it is: fur isn\'t metal isn\'t glass', () => {

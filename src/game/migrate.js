@@ -19,6 +19,7 @@ import { invAdd, invCount, kitchenOf, alive, traderOf } from '../sim/econ.js';
 import { ITEMS } from '../world/items.js';
 import { B } from '../world/blocks.js';
 import { REGION_W, REGION_D } from '../config.js';
+import { restamp } from '../world/sites.js';
 
 export const STEPS = [
   {
@@ -374,6 +375,26 @@ export const STEPS = [
       log.push('Dungeon chests can hold a dish cooked from what that kind of dungeon keeps (its own ingredients), and now and then the recipe for one.');
       log.push('A task you take up without being asked (a beast caught, a find) says so, and whose it is; the journal says whose a task is ("For ...") rather than who asked.');
       log.push('Imperial cities in worlds made from now have arenas, parks, training yards, animal pens, market squares and monuments, an academy or college, and many more houses and shops (a world already made keeps its cities as they are).');
+    },
+  },
+  {
+    // Round 71: every master of the old places painted anew, its parts
+    // moving on it; and four ancient places on the great continents, each
+    // with its evolved master, raised in a world already made (their
+    // doors set in the ground, wherever it's been kept).
+    to: '0.71.0',
+    data(d, log) {
+      log.push('Every master of the old places has been painted anew, bigger and in far more detail, its arms, heads, jaws, wings and tails moving on it as it fights, with new effects for its blows, its phases and its fall.');
+      log.push('Four ancient places have opened on the great continents: the Athanor and the Hall of the Last Champion on Velmarch, the Sundered Reach and the Gullet of the World on Ostria. Their masters are evolved: twice the size of any other, four or five phases, a dozen ways to kill you each, and they rise again the first time they fall.');
+    },
+    game(game, log) {
+      let n = 0;
+      for (const s of game.world.sites || []) {
+        if (!s.ancient || s.x === undefined) continue;
+        restamp(game.world, s);
+        n++;
+      }
+      if (n) log.push(`${n} ancient places stand on the great continents now (look for them on your map, once you've heard of them).`);
     },
   },
 ];

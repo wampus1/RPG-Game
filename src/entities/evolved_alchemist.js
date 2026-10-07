@@ -718,7 +718,7 @@ function haulTick(c, dt) {
 
 // ------------------------------------------------------------ the fight
 const WORKS = [
-  ['opusCd', 4, 22, ALCH.opus, { enraged: true, rest: 3 }],
+  ['opusCd', 4, 20, ALCH.opus, { enraged: true, rest: 3, fixed: true }],
   ['cocoonCd', 18, 20, ALCH.cocoon, { ph: 2, when: (c) => (c.meleeT || 0) > 4, rest: 1 }],
   ['graspCd', 6, 9, ALCH.grasp, { max: 10, rest: 1.2 }],
   ['steamCd', 5, 13, ALCH.steam, { max: 9 }],
@@ -771,7 +771,7 @@ export const ALCHEMIST_BOSSES = {
       }
       return Math.max(1, Math.round(n * 0.25));
     },
-    drops: [['gold_ingot', 6, 12, 1], ['gem', 4, 8, 1], ['frost_crystal', 3, 6, 1], ['old_coin', 30, 60, 1], ['heart_crystal', 1, 1, 1]],
+    drops: [['gold_ingot', 6, 12, 1], ['gem', 4, 8, 1], ['frost_crystal', 3, 6, 1], ['old_coin', 30, 60, 1], ['shard_topaz', 2, 4, 1], ['shard_sapphire', 2, 4, 1]],
   },
   // One of its hands: what you strike when you strike its arms (see
   // makeHand). Drawn with its arm (render/forge_evolved.js), never alone.
@@ -783,7 +783,8 @@ export const ALCHEMIST_BOSSES = {
       const c = h.master;
       if (c && !c.dead && !(c.riseT > 0)) {
         game.dotHit = true;
-        const k = Math.max(1, Math.round(n * 0.4));
+        // (No more of it than the hand had left to give.)
+        const k = Math.max(1, Math.round(Math.min(n, Math.max(0, h.hp)) * 0.4));
         game.damage(c, k, src);
         game.dotHit = false;
       }

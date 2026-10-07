@@ -2561,7 +2561,7 @@ function bossHall(ctx, r, boss) {
       put(Math.round(r.cx + Math.cos(a) * w * 0.45), Math.round(r.cz + Math.sin(a) * d * 0.43), B.whale_rib, Math.cos(a) < 0 ? 0 : 1, true);
     }
     scatter(ctx, r, 0.04, () => B.bones);
-    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z) && rng.chance(0.35)) b.set(x, FY - 1, z, rng.chance(0.5) ? B.bone_sand : B.mud);
+    for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (own(plan, r, x, z) && rng.chance(0.12)) b.set(x, FY - 1, z, rng.chance(0.3) ? B.bone_sand : B.mud);
   }
   // The throne (the dead rule from one; bandits sit on a stolen chair).
   if (type === 'barrow' || type === 'crypt') put(back.x, back.z, B.bone_throne);

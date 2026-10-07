@@ -1320,7 +1320,29 @@ function sporePuffer(f) {
   return p.outline(OUT);
 }
 
+// (Round 71) A leech of the Gullet, the Alinelidan's: as long as your
+// arm, ringed, glistening dark red, a round sucker of a mouth ringed with
+// teeth; it humps along (frame 1 bunched up).
+function gulletLeech(f) {
+  const p = new Px(16, 16);
+  const cx = 8;
+  const cy = 12;
+  const len = f ? 5 : 6;
+  p.ellipse(cx + (f ? 1 : 0), cy - (f ? 0.5 : 0), len, f ? 3 : 2.4, hex('#4a1a24'));
+  p.ellipse(cx + (f ? 1 : 0), cy - 1, len - 1, f ? 1.8 : 1.4, hex('#6e2a34'));
+  for (let x = -4; x <= 4; x += 2) p.vline(cx + x + (f ? 1 : 0), cy - 2, cy + 1, '#2a0c12');
+  p.hline(cx - 3, cx + 3, cy - 2 - (f ? 1 : 0), hex('#a85a64'));
+  const hx = cx - len + (f ? 1 : 0);
+  p.ellipse(hx, cy, 1.8, 1.8, hex('#8a3a44'));
+  p.set(hx, cy, '#1a0408');
+  p.set(hx - 1, cy - 1, '#e8dcc0');
+  p.set(hx - 1, cy + 1, '#e8dcc0');
+  p.set(hx + 1, cy - 1, '#e8dcc0');
+  return p.outline(OUT);
+}
+
 export const ISLE_CREATURES = {
+  gullet_leech: { frames: 2, draw: (f) => gulletLeech(f) },
   ash_wraith: { frames: 2, draw: (f) => ashWraith(f) },
   magma_slug: { frames: 2, draw: (f) => magmaSlug(f, false) },
   slugling: { frames: 2, draw: (f) => magmaSlug(f, true) },

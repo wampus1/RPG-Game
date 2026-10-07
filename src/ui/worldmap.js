@@ -33,7 +33,7 @@ const TILES_FROM = 6; // ...or condensed tiles of them
 export function mapMode(z) {
   return z >= GLYPHS_FROM ? 'glyphs' : z >= TILES_FROM ? 'tiles' : 'dots';
 }
-const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ', catacomb: '†', vault: '⌂', gut: '§', saltworks: '◊', warren: '◎', mound: '∆', broch: '♜' };
+const OLD_PLACE_GLYPH = { barrow: '∩', mine: '¥', crypt: '▼', holdout: 'Ω', kavorent: '║', grove: '♣', forge: '♨', grotto: 'Ψ', catacomb: '†', vault: '⌂', gut: '§', saltworks: '◊', warren: '◎', mound: '∆', broch: '♜', athanor: '✦', champion: '‖', rift: '∴', gullet: '●' };
 const LAKE = '#2a5a9a';
 
 function hexRgb(h) {
@@ -877,11 +877,13 @@ export class MapWindow extends Window {
     for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
       if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
       const kav = d.type === 'kavorent';
-      const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : '#f0d8a0';
+      // (Round 71: an ancient place, in the colour of old blood.)
+      const anc = !!dtypeOf(d).ancient;
+      const fg = d.cleared ? '#8a8478' : kav ? (blink ? '#c8fbff' : '#5ad8f0') : anc ? (blink ? '#ffd0c0' : '#ff6a50') : '#f0d8a0';
       const what = d.cleared ? `beaten${d.clearedBy ? ` by ${d.clearedBy}` : ''}` : d.entered ? `${d.depth} floors deep` : kav ? (d.spire && d.spire.open !== null && d.spire.open !== undefined ? 'its door stands open' : 'sealed; it wants a cut stone') : 'never entered';
       // (Turned back with a time crystal: its tier. Round 61.)
       const tierTxt = (d.tier || 1) > 1 ? ` · tier ${['', 'I', 'II', 'III'][d.tier]}` : '';
-      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}) · ${what}${tierTxt}`, kav ? '#7ae0ff' : '#f0d8a0', true);
+      put(d.x, d.z, OLD_PLACE_GLYPH[d.type] || '∩', fg, d.cleared ? '#26221e' : kav ? '#0e2430' : anc ? '#3a0a10' : '#3a2a16', `${cap(d.name)} (${dtypeOf(d).name}${anc ? ', an ancient place' : ''}) · ${what}${tierTxt}`, kav ? '#7ae0ff' : anc ? '#ff9080' : '#f0d8a0', true);
     }
     // What people have told you of: a lake, a river, the coast.
     for (const q of game.world.ow.pins || []) put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);

@@ -12,7 +12,7 @@ import { GEMS, ITEMS, socketed, canSocket } from '../src/world/items.js';
 import { recipesFor } from '../src/world/recipes.js';
 import { B } from '../src/world/blocks.js';
 import { INST_X0, GROUND } from '../src/config.js';
-import { buildFloor, DTYPES } from '../src/world/dungeongen.js';
+import { buildFloor, DTYPES, dtypeOf } from '../src/world/dungeongen.js';
 import { DungeonRun } from '../src/game/dungeon.js';
 import { setRelic, relicDamage, inRelic, serializeRelics, loadRelics, updateRelics } from '../src/game/relics.js';
 import { useGadget, pierceOf } from '../src/game/kavtech.js';
@@ -145,7 +145,9 @@ test('the bigger world has old places of every kind, each with a reason to be th
     assert.ok(d.name && d.origin && d.origin.text.length > 30, d.name);
     // (Round 30: most one to three floors, a mine now and then a fourth;
     // a Kavorent ruin four.)
-    assert.ok(d.depth >= DTYPES[d.type].floors[0] && d.depth <= DTYPES[d.type].floors[1] + (d.type === 'mine' ? 1 : 0));
+    // (Round 71: the ancient places' kinds are their own: see dtypeOf.)
+    const T = DTYPES[d.type] || dtypeOf(d);
+    assert.ok(d.depth >= T.floors[0] && d.depth <= T.floors[1] + (d.type === 'mine' ? 1 : 0));
     if (d.type !== 'kavorent') assert.ok(d.depth >= 1 && d.depth <= 4);
     else assert.equal(d.depth, 4);
   }

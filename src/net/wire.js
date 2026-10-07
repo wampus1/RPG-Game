@@ -21,6 +21,9 @@ const SKIP = new Set([
   '_dishFx', 'dishStatKey', 'tacGoal',
   // (Round 68: a ship's hand's own reckoning, and their place on her crew list.)
   'recRef', 'task', 'hpath', 'hpathTried', 'upTried', 'wx', 'wz',
+  // (Round 71: an evolved master's own reckoning: what it remembers, what
+  // it's counted of your arms, what it's told you.)
+  'mem', 'memT', 'usedArms', 'toldForms', 'haulArms',
 ]);
 // Of a townsperson's record, what anyone sees of them.
 const REC = ['idx', 'sid', 'name', 'age', 'job', 'look', 'equipment', 'wear', 'traits', 'personality', 'hp', 'maxHp', 'gems', 'tier', 'soldier', 'bandit', 'drafted', 'captive', 'ruler', 'councillor', 'title', 'alive'];

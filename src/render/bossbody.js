@@ -64,6 +64,8 @@ export function artState(e) {
   if (e.variant) st.variant = e.variant;
   // (Round 71: an evolved master risen, burning: see evolved.js.)
   if (e.enraged) st.risen = 1;
+  // (And its own: the Hero's cursed parts, say: see evolved_hero.js.)
+  if (e.S && e.S.artSt) e.S.artSt(e, st);
   return st;
 }
 const keyOf = (st) => Object.keys(st).filter((k) => k !== 'rage').map((k) => k + st[k]).join(',');

@@ -31,7 +31,7 @@ export const ROLES4 = ['giver', 'other', 'third', 'fourth'];
 // Where in a story something can be.
 export const PLACES = ['the town', 'the giver', 'the other', 'the third', 'the fourth', 'a player in it', 'where its task is', 'the story\'s place', 'out near the town', 'far out in the wilds', 'the sea off the town', 'the nearest other town'];
 export const SHIP_KINDS = [['sloop', 'a sloop'], ['brigantine', 'a brigantine'], ['galleon', 'a galleon'], ['frigate', 'a frigate']];
-export const DUNGEON_KINDS = ['any', 'barrow', 'mine', 'crypt', 'holdout', 'grove', 'forge', 'grotto', 'kavorent', 'catacomb', 'vault', 'gut', 'saltworks', 'warren', 'mound', 'broch'];
+export const DUNGEON_KINDS = ['any', 'barrow', 'mine', 'crypt', 'holdout', 'grove', 'forge', 'grotto', 'kavorent', 'catacomb', 'vault', 'gut', 'saltworks', 'warren', 'mound', 'broch', 'athanor', 'champion', 'rift', 'gullet'];
 const S2 = (cat, color) => (type, o) => def(type, { cat, story: true, color, ...o, in: [flowIn, ...(o.in || [])] });
 const flow = S2('Story: ways', C.flow);
 const people = S2('Story: people', C.people);

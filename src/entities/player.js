@@ -303,9 +303,11 @@ export class Player extends Entity {
     // No wound closes on its own: food, potions, a herbalist, a night's
     // sleep (or a stone) mend you. Only a delightful meal keeps on doing
     // you good a while after (a heart every few seconds while it lasts).
+    // (Round 71: worms in you, the Alinelidan's, slow it: see afflict.js.)
+    const wk = this.worms > 0 ? Math.max(0.25, 1 - 0.25 * this.worms) : 1;
     if (this.wellFed > 0) {
       this.wellFed -= dt;
-      this.regenT = this.hp < this.maxHp ? this.regenT + dt : 0;
+      this.regenT = this.hp < this.maxHp ? this.regenT + dt * wk : 0;
       if (this.regenT > (this.sitting ? 2 : 4) && this.hp < this.maxHp && this.hp > 0) {
         this.regenT = 0;
         this.hp = Math.min(this.maxHp, this.hp + 1);
@@ -324,7 +326,7 @@ export class Player extends Entity {
     // A hot meal working through you: a heart at a time.
     const sh = this.slowHeal;
     if (sh && sh.left > 0 && this.hp > 0 && !this.dead) {
-      sh.acc += sh.rate * dt;
+      sh.acc += sh.rate * dt * wk;
       while (sh.acc >= 1 && sh.left > 0) {
         sh.acc -= 1;
         sh.left -= 1;

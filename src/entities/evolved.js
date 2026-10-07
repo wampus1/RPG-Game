@@ -19,6 +19,7 @@ import { chill } from '../game/gems.js';
 import { evoPhase, ready, used } from './tempo.js';
 import { FY, dist, hallOf, openFloor, cd, shout } from './bosskit.js';
 import { cue } from './cue.js';
+import { fits } from './footprint.js';
 
 const TAU = Math.PI * 2;
 export { evoPhase };
@@ -35,7 +36,8 @@ export function evoPace(c) {
 // Its works in order of preference: [key, first, every, fn(c, t, game, o),
 // o]. `o.ph` not before this phase; `o.max`/`o.min` how far you may be;
 // `o.rest` a breath after it; `o.say` its words; `o.enraged` only once
-// it's risen. The first that's ready and does something goes off.
+// it's risen; `o.fixed` its time its own, not quickened with the rest.
+// The first that's ready and does something goes off.
 export function evoFight(c, dt, list) {
   const game = c.game;
   const t = c.target;
@@ -47,7 +49,8 @@ export function evoFight(c, dt, list) {
     if (o.ph && ph < o.ph) continue;
     if (o.enraged && !c.enraged) continue;
     if (o.when && !o.when(c, t)) continue;
-    if (!cd(c, key, dt / Math.max(0.3, k), first)) continue;
+    // (`o.fixed`: its own time, however it's quickened: its last work.)
+    if (!cd(c, key, o.fixed ? dt : dt / Math.max(0.3, k), first)) continue;
     if (!ready(c)) continue;
     if (d < (o.min ?? 0) || d > (o.max ?? 30)) continue;
     if (!fn(c, t, game, o)) {
@@ -269,6 +272,12 @@ export function updateBouncers(game, dt) {
     for (let s = 0; s < steps; s++) {
       const nx = b.x + (b.vx * b.v * dt) / steps;
       const nz = b.z + (b.vz * b.v * dt) / steps;
+      // (A straight shot: spent on whatever it hits first.)
+      if (b.straight && (blocked(nx, b.z, b) || blocked(b.x, b.z + (b.vz * b.v * dt) / steps, b))) {
+        b.done = true;
+        if (b.onEnd) b.onEnd(game, b);
+        break;
+      }
       if (blocked(nx, b.z, b)) {
         b.vx = -b.vx;
         b.bounces = (b.bounces || 0) + 1;
@@ -306,7 +315,7 @@ export function updateBouncers(game, dt) {
 // A bouncer set off from `at` toward `t` (or at an angle).
 export function bounceAt(game, c, at, toward, o = {}) {
   const a = toward ? Math.atan2(toward.z - at.z, toward.x - at.x) + (o.spread || 0) : (o.ang ?? Math.random() * TAU);
-  return addBouncer(game, { by: c, x: at.x, z: at.z, y: c.y, vx: Math.cos(a), vz: Math.sin(a), v: o.v || 5, life: o.life || 7, dmg: o.dmg || 4, slow: o.slow, r: o.r || 0.7, color: o.color, kind: o.kind || 'void', ring: o.ring || null, spent: o.spent, onHit: o.onHit, onBounce: o.onBounce });
+  return addBouncer(game, { by: c, x: at.x, z: at.z, y: c.y, vx: Math.cos(a), vz: Math.sin(a), v: o.v || 5, life: o.life || 7, dmg: o.dmg || 4, slow: o.slow, r: o.r || 0.7, color: o.color, kind: o.kind || 'void', ring: o.ring || null, spent: o.spent, onHit: o.onHit, onBounce: o.onBounce, straight: !!o.straight, onEnd: o.onEnd });
 }
 
 // ------------------------------------------------------------ the hall
@@ -364,6 +373,7 @@ export function updateRifts(game, dt) {
     if (R.done) continue;
     // (Closing, its last half second: nothing more goes through.)
     if (R.life - R.t < 0.5) continue;
+    R.cd ||= new Map();
     for (const [e, k] of R.cd) if (k - dt <= 0) R.cd.delete(e);
     else R.cd.set(e, k - dt);
     if (R.open < 1) continue;
@@ -371,7 +381,8 @@ export function updateRifts(game, dt) {
       if (!e || e.dead || e.moving || R.cd.has(e) || Math.abs(e.y - R.y) > 1 || e.anchored || e.heldBy) continue;
       if (e.foot && e !== R.by) continue;
       const end = riftEnd(R, e);
-      if (end) riftThrough(game, R, e, end.at, end.to);
+      // (Something as big as its maker comes out only where it fits.)
+      if (end && (!e.foot || fits(game, e, end.to.x, e.y, end.to.z, true))) riftThrough(game, R, e, end.at, end.to);
     }
   }
   game.rifts = L.filter((R) => !R.done);
@@ -416,6 +427,8 @@ export function evoHurt(game, target, source, amount) {
     if (target.riseT > 0) return 0;
     if (!target.enraged && !target.dead && target.hp - amount <= 0 && rise(game, target)) return 0;
   }
+  // (Spared once by the Hero: a moment no blow of theirs lands on you.)
+  if (target.kind === 'player' && target.mercyT > 0 && source && isEvolved(source)) return 0;
   if (target.kind === 'player' && source && source.S && source.S.mercy && target.hp - amount <= 0 && source.S.mercy(game, source, target, amount)) return 0;
   return amount;
 }

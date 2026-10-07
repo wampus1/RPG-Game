@@ -1191,7 +1191,111 @@ FAR_SPRITES.broch_door = (rot, st, f) => {
 };
 
 // (Their frames.)
-export const FAR_ANIM = { catacomb_door: 2, vault_door: 2, gut_mouth: 2, salt_door: 2, warren_hole: 2, mound_door: 4, broch_door: 2 };
+// (Round 71) The ways into the ancient places (see world/ancient.js).
+// The Athanor: doors of beaten gold in a marble arch, the great work's
+// sign worked on them (a circle in a triangle in a square), a lamp of
+// glass either side burning blue and gold.
+FAR_SPRITES.athanor_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 7 + y * 5) % 19 === 0 ? '#c8c4d0' : (x + y) % 11 === 0 ? '#f8f4ff' : y % 7 === 0 ? '#d8d4e0' : '#e8e4f0');
+  arch(p, 7.5, 5.6, 18, 8, (x, y) => {
+    const edge = x === 7 || x === 8;
+    const glint = (x + y + f) % 9 === 0;
+    p.set(x, y, edge ? '#6a4a10' : glint ? '#fff8c0' : (x + y) % 4 === 0 ? '#c89030' : y % 5 === 0 ? '#a87020' : '#e0b040');
+  });
+  archRim(p, 7.5, 5.6, 18, 8, (x, y) => ((x + y) % 2 ? '#a8a4b8' : '#8a86a0'));
+  // The sign of the great work.
+  for (let x = 4; x <= 11; x++) {
+    p.set(x, 19, '#7a4a10');
+    p.set(x, 27, '#7a4a10');
+  }
+  for (let y = 19; y <= 27; y++) {
+    p.set(4, y, '#7a4a10');
+    p.set(11, y, '#7a4a10');
+  }
+  for (let k = 0; k <= 6; k++) {
+    p.set(5 + Math.round(k * 0.45), 26 - k, '#7a4a10');
+    p.set(10 - Math.round(k * 0.45), 26 - k, '#7a4a10');
+  }
+  p.hline(5, 10, 26, '#7a4a10');
+  p.set(7, 23, f % 2 ? '#80e8ff' : '#c8a0ff');
+  p.set(8, 23, f % 2 ? '#c8a0ff' : '#80e8ff');
+  // Its lamps.
+  for (const x of [1, 14]) {
+    p.rect(x - 1, 22, 2, 5, '#2a6a8a');
+    p.set(x, 23, f % 2 ? '#a0f0ff' : '#ffe070');
+    p.set(x - 1, 24, '#ffffff');
+    p.hline(x - 1, x, 21, '#c89030');
+  }
+  return p;
+};
+// The Hall of the Last Champion: a door of old oak bound in iron, deep
+// in mossy stone, his sword carved over it point down, and the flowers
+// the folk leave at his door, fresh.
+FAR_SPRITES.champion_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) {
+    const row = Math.floor(y / 4);
+    const j = (x + (row % 2) * 4) % 8 === 0;
+    p.set(x, y, y % 4 === 0 || j ? '#3a4232' : (x * 3 + y * 5) % 9 === 0 ? '#5a7a3a' : '#5a6252');
+  }
+  arch(p, 7.5, 5, 20, 7, (x, y) => {
+    const edge = x === 7 || x === 8;
+    p.set(x, y, edge ? '#2a1a10' : y % 6 === 0 ? '#4a4a52' : x % 3 === 0 ? '#5a3a20' : '#6a4a2a');
+  });
+  archRim(p, 7.5, 5, 20, 7, '#8a8a7a');
+  // His sword over the door.
+  p.vline(7, 2, 10, '#c8ccd8');
+  p.vline(8, 2, 10, '#8a8e98');
+  p.hline(5, 10, 4, '#c8a040');
+  p.set(7, 11, '#e8ecf8');
+  // Flowers at the foot of it.
+  for (const [x, c] of [[2, '#e85060'], [3, '#f8e070'], [12, '#a070e8'], [13, '#e85060'], [4, '#ffffff']]) {
+    p.set(x, 38, c);
+    p.set(x, 39, '#3a6a2a');
+  }
+  // The grave-light, from under the door.
+  p.hline(4, 11, 39, f % 2 ? '#ffe8a0' : '#e8c870');
+  return p;
+};
+// The Sundered Reach: the air split open on nothing, a seam of white fire
+// along its edges, stars in the dark of it.
+FAR_SPRITES.rift_door = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 4; y < TALL_H; y++) {
+    const k = 1 - Math.abs(y - 22) / 19;
+    if (k <= 0) continue;
+    const w = Math.round(Math.sqrt(k) * 5 + Math.sin(y * 1.7 + f * 2) * 1);
+    if (w <= 0) continue;
+    for (let x = 8 - w; x <= 7 + w; x++) p.set(x, y, '#05010a');
+    p.set(7 - w, y, '#ffffff');
+    p.set(8 + w, y, '#ffffff');
+    p.set(6 - w, y, (y + f) % 3 ? '#c8a0ff' : '#5ad8f0');
+    p.set(9 + w, y, (y + f) % 3 ? '#5ad8f0' : '#c8a0ff');
+  }
+  for (const [x, y] of [[7, 12], [9, 18], [6, 25], [8, 31], [7, 21]]) p.set(x, y + (f % 2 ? 0 : 1), (x + y) % 2 ? '#ffffff' : '#a080ff');
+  return p;
+};
+// The Gullet of the World: a hole in the earth like a throat, ringed with
+// teeth of stone, a warm breath and a green light coming up out of it.
+FAR_SPRITES.gullet_mouth = (rot, st, f) => {
+  const p = spr(TALL_H);
+  for (let y = 0; y < TALL_H; y++) for (let x = 0; x < 16; x++) p.set(x, y, (x * 5 + y * 7) % 13 === 0 ? '#4a3a2a' : (x + y) % 5 === 0 ? '#6a5038' : '#5a4430');
+  const breathe = f % 2 ? 0.92 : 1.08;
+  arch(p, 7.5, 6.4, 22, 12, (x, y) => p.set(x, y, shade(y > 32 ? '#2a3a10' : '#1a0a08', breathe)));
+  archRim(p, 7.5, 6.4, 22, 12, (x, y) => ((x + y) % 3 ? '#8a6a5a' : '#a8806a'));
+  // Its teeth, round the throat.
+  for (const [x, y, d] of [[3, 14, 1], [5, 11, 1], [8, 10, 1], [10, 11, 1], [12, 14, 1], [2, 20, 1], [13, 20, 1]]) for (let k = 0; k < 3; k++) p.set(x + (k === 2 ? 0 : 0), y + k * d, k === 2 ? '#c8b8a0' : '#f0e8d0');
+  for (let x = 3; x <= 12; x += 3) {
+    p.set(x, 39, '#f0e8d0');
+    p.set(x, 38, '#e0d8c0');
+    p.set(x, 37, '#c8b8a0');
+  }
+  p.set(7, 30, '#c8e070');
+  p.set(8, 33 + (f % 2), '#a8c040');
+  return p;
+};
+export const FAR_ANIM = { catacomb_door: 2, vault_door: 2, gut_mouth: 2, salt_door: 2, warren_hole: 2, mound_door: 4, broch_door: 2, athanor_door: 2, champion_door: 2, rift_door: 4, gullet_mouth: 2 };
 
 // --------------------------------------------------------------- creatures
 // The far lands' beasts (16 x 16, facing left, two frames).

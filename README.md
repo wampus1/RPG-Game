@@ -5425,6 +5425,114 @@ one. Never in a Kavorent vault.
   you caught, a find), says so ("In your journal now: ...", and whose it
   is); the journal says "For" whoever it's for, rather than who asked.
 
+## Round 71: the masters forged anew, and the ancient places
+
+**Every master of the old places is painted anew**, one by one (all 120
+of them): each its own picture, 64 pixels square (128 for the
+Kavorent's and the evolved masters), lit and shaded as a pixel artist
+would paint it, every stuff as what it is (fur, feather, plate, chitin,
+bone, cloth, molten crust, glass). What moves on it of itself is cut
+free and moved as it fights: the arm that swings the weapon, the head,
+the jaw, wings, tails, tentacles, capes, chains, orbiting shards, legs
+that plant each foot where it falls. Every attack has its animation
+(a blow wound back and snapped through, a slam, a breath, a beam, a
+working, a summoning, a throw, a charge, a blink), and so do its idle,
+its phases (it rears and roars, its light strobing, rings running out
+from it) and its fall (it staggers, reels and comes apart into light).
+Fire, embers, smoke, sparks, glows and drips come off those that have
+them.
+
+**Four ancient places** stand deep in the great continents, two on each:
+on Velmarch the **Athanor** (a furnace-vault of gilded marble and glass)
+and the **Hall of the Last Champion** (a hero's barrow); on Ostria the
+**Sundered Reach** (black glass split open on the void) and the **Gullet
+of the World** (earth and mud and bone, and something breathing). They
+are marked in red on your map once you've heard of them. Each is laid
+out its own way, in its own stone, its own beasts, and with rooms that
+do things to you:
+- the Athanor: **transmutation circles** that flare, the ring and then
+  what's inside it, fire then frost then acid; **stills** breathing
+  poison by turns; **quicksilver** that drags at your legs; crucibles
+  with fire let into the floor; vats things get out of;
+- the Champion's hall: **trial-halls** that bar their doors behind you
+  and send the dead at you in three waves (beat them and the bars go
+  up); **statues** that bring their swords down across their aisles;
+  rows of **pendulum blades**; armouries whose armour gets up;
+- the Sundered Reach: **rifts** in pairs that take you through, one to
+  the other; **void spikes** up out of the cracks in the floor; **echo
+  halls** where your own steps come back for you; **wells** that drag
+  you in;
+- the Gullet: pools of **acid**; clutches of **eggs** that hatch as you
+  pass; halls that **quake** and fall in; tunnels.
+And each its own peril now and then wherever you are (a flask of the
+great work bursting over you, a volley of ghost-arrows down your row, a
+slice of the void across the hall, the whole gut heaving).
+
+**The evolved masters** wait at the bottom of them: twice the size of any
+other, four phases each (five for the Alinelidan), a dozen ways to kill
+you and more coming out with each phase, and the first time each should
+die it **rises again** instead (everyone down there sees it): healed,
+burning with its own light, quicker, with a last work it held back. The
+second time it dies. Their **music** is the darkest there is, climbing
+with every phase and again when they rise.
+- **The Divine Alchemist**: a vortex of an eye in a cage of gilded rings,
+  and twelve arms, one of each element (fire, frost, acid, lightning,
+  earth, water, wind, light, shadow, quicksilver, salt, aether): four
+  out at first, then six, nine, all twelve. Its arms lash, slam down in
+  turn, grab you (strike the hand and it lets go) to swing you about or
+  throw you into a wall, take hold of the far side of the hall and haul
+  the eye across, and work in pairs: steam (fire and frost), a magma
+  rift (earth and fire), a flood and the storm into it (water and
+  lightning), a gale of acid with a gap in it (acid and wind), the floor
+  in dark squares and light (shadow and light), a cage of salt over a
+  pool of quicksilver with aether poured in (salt and quicksilver), a
+  lattice of beams (aether and light). Its eye gazes (a beam), draws
+  everything in and bursts; it calls up homunculi; worn, it wraps itself
+  in its arms. **Strike its hands** to hurt it a little and, struck
+  enough, cut the arm off (a burst of its element, and it reels; they
+  grow back at its next phase). Risen: its Magnum Opus, the floor made
+  over ring by ring from the walls in.
+- **The Rift Crawler**: four long legs, a stalk of a neck, a head crowned
+  with eyes and two bladed arms out of it. It cuts **rifts** you can use
+  as well as it, steps through its own to come at you, **takes you with
+  an arm and throws you through a rift into the wall** on the far side,
+  strikes in combinations, lunges, scissors its arms, drives void spikes
+  along the floor and in rings, looses **balls of the void** that bounce
+  off the walls and slow you, blinks behind you, opens rifts all over
+  its hall, fractures time where you stand. It **rewinds** itself to
+  where and how whole it was three seconds ago; hurt it hard as it
+  gathers itself and the thread snaps. Risen: the Unmaking, the hall
+  torn open at its corners and the void through all of it but beside
+  them.
+- **The Hero**: the greatest of them, twice a man's height in battered
+  plate, cursed: every five to eight seconds part of him changes (a
+  mouth in his chest, a claw, a blade of bone, a tentacle for an arm, a
+  mass of tentacles for legs, stalked eyes, dragon's wings), one part at
+  a time at first and more as he's worn, all of him once risen. What he
+  can do is what he is just now: his sword in combinations, his shield
+  driven into you, a hero's leap, his war-cry (his companions' shades);
+  the mouth draws you in and bites, or spews; the claw rends and rakes;
+  the blade whirls and impales; the tentacle drags you in; the tentacle
+  legs hold you; the eyes burn in lines and loose a swarm; the wings
+  buffet, dive and breathe fire. **The first time he would kill one of
+  you, he can't**: everyone down there sees him fight the curse a breath,
+  and you roll clear. Never again.
+- **The Alinelidan**: the World-Worm, its maw splitting four ways, its
+  tentacles writhing out, ring after ring of its body following it over
+  the floor. It **learns**: whatever you hurt it with most in one stage,
+  it barely feels in the next (change your arms). It bites, calls up its
+  leeches, screams (the hall shakes, toxic bombs rain), dashes three
+  times through where you stand, spits toxin, whips its body round,
+  **burrows** and comes up under you (leaving pits of acid that shrink
+  the hall, till they fill in with dirt), throws its **coils round you**
+  and spits toxin that bounces about inside them (hurt it enough and it
+  lets go), lashes you in with its tentacles, rains acid. It
+  **infests** you: a choking cough, then one straight shot; caught, a
+  worm in you (it bites, your wounds close slower, your armour's softer,
+  more of them worse, till they work their way out). Risen: the
+  World-Swallow, the floor heaving in waves and the maw coming up under
+  you.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5473,7 +5581,9 @@ src/
                        (floors from room kits: shaped rooms, routed
                        passages, sealed rooms, dressing), isledeep (each
                        island's old places: their kinds, stone, dwellers
-                       and masters), voyage (the ship in the
+                       and masters), ancient (the four ancient places on
+                       the great continents: where, what, their gates),
+                       voyage (the ship in the
                        castaway's opening), region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), acts (what people look like
@@ -5492,6 +5602,10 @@ src/
                        bosses_kharos, bosses_myrrow, bosses_grove (the
                        islands' own masters), bosses_spire (the Crucible
                        and the Condenser, in the far islands' spires),
+                       evolved (the evolved masters' phases, rising,
+                       grabbing and throwing, bouncers and rifts),
+                       evolved_alchemist, evolved_rift, evolved_hero,
+                       evolved_worm (the four of them),
                        item drops, A* pathing
   render/              font (bitmap ASCII), textures + sprites (procedural
                        pixel art), renderer (oblique painter), fx (flame
@@ -5520,6 +5634,14 @@ src/
                        isleart (Kharos's and Myrrow's ground, trees,
                        lava, goods and creatures), islebossart (the
                        islands' masters and their kin),
+                       forge + forgekit + forgefx (every master forged
+                       anew: its painting, its parts cut free and moved
+                       as it fights, what it gives off), forge_base,
+                       forge_kharos, forge_myrrow, forge_far_figs,
+                       forge_far_beasts, forge_evolved (the masters
+                       themselves), evolvedfx (the evolved masters' arms,
+                       the worm's body, rifts and bouncing things, drawn
+                       in the world's rows),
                        lighting, crt
   ui/                  character grid + dissolve animation, UI manager/HUD,
                        windows (inventory/profile, journal, containers,
@@ -5554,6 +5676,8 @@ src/
                        horse taken out by a citizen), leads, dungeon
                        (being down below: floors, traps, puzzles), relics,
                        kavtech (the Kavorent's gear and gadgets),
+                       ancient (what the ancient places' rooms and perils
+                       do to you),
                        lockpick (how a lock's pins set, bind and snap your
                        pick), mastery (ranks in the fine work: fishing,
                        setting, study, lockpicking), laser

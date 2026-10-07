@@ -875,6 +875,10 @@ export class HostNet {
       flames: pick(game.flames, (f) => [f.x, f.z]),
       kavSpikes: pick(game.kavSpikes, (s) => [s.x, s.z]),
       cannonballs: pick(game.cannonballs, (b) => [b.x, b.z]),
+      // (Round 71) Rifts in the air, and what bounces about the evolved
+      // masters' halls: what's needed to draw them.
+      rifts: (game.rifts || []).filter((R) => !R.done && close(R.a.x, R.a.z)).slice(0, 40).map((R) => ({ a: R.a, b: R.b, t: Math.round(R.t * 100) / 100, life: R.life === Infinity ? 1e9 : R.life, open: Math.round(R.open * 100) / 100, y: R.y })),
+      bouncers: (game.bouncers || []).filter((b) => !b.done && close(b.x, b.z)).slice(0, 60).map((b) => ({ x: Math.round(b.x * 100) / 100, z: Math.round(b.z * 100) / 100, y: b.y, kind: b.kind })),
     };
   }
 

@@ -387,6 +387,9 @@ function knee(hx, hy, fx, fy, L1, L2) {
 const SPIDER = hex('#3e302a');
 const BONE = hex('#d8d0b8');
 const PLATE = hex(K.plate);
+const CHITIN = hex('#1a1424');
+const VOID_HOT = hex('#c8a0ff');
+const VOID_CRACK = hex('#5ad8f0');
 const EDGE = hex(K.edge);
 const LEG = {
   spider: {
@@ -406,6 +409,19 @@ const LEG = {
     skin: () => (k, u, v) => (hash2(Math.floor(u / 2), Math.floor((v + 1) * 3), 5) > 0.9 ? shade(BONE, 0.7) : BONE),
     gloss: 0.15,
   },
+  // (Round 71) The Rift Crawler's: long and black, glossy chitin, cracked
+  // through to the void (its light in the cracks), knees burning.
+  rift: {
+    rad: (k) => (k < 0.47 ? 3.4 - k * 2 : Math.max(0.8, 2.5 - (k - 0.47) * 3.2)),
+    skin: (L1) => (k, u, v, ny) => {
+      if (Math.abs(u - L1) < 2.2) return VOID_HOT;
+      const cr = hash2(Math.floor(u / 2.5), Math.floor((v + 1) * 2.5), 17);
+      if (cr > 0.9) return VOID_CRACK;
+      if (Math.floor(u) % 9 === 0) return shade(CHITIN, 1.5);
+      return ny > 0.5 ? shade(CHITIN, 0.7) : CHITIN;
+    },
+    gloss: 0.85,
+  },
   mech: {
     rad: (k) => (k < 0.47 ? 3 - k : Math.max(1, 2.4 - (k - 0.47) * 2.6)),
     skin: () => (k, u) => {
@@ -423,7 +439,7 @@ const SKULL = new Part(() => {
 }, 4.5, 4.5);
 export function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, faceR) {
   const { kx, ky, fx: ex, fy: ey } = knee(hx, hy, fx, fy, rig.L1, rig.L2);
-  const L = LEG[style === 'spider' ? 'spider' : style === 'bone' ? 'bone' : 'mech'];
+  const L = LEG[style] || LEG.mech;
   const len = rig.L1 + rig.L2;
   const b = bodyOf([{ x: hx, y: hy }, { x: kx, y: ky }, { x: ex, y: ey }], { rad: (k) => L.rad(k, rig.L1, len), skin: L.skin(rig.L1), gloss: L.gloss, flip: faceR }, cache);
   drawBody(ctx, b.back);
@@ -449,6 +465,17 @@ export function drawLeg(ctx, style, hx, hy, fx, fy, rig, time, i, tint, cache, f
     }
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+  } else if (style === 'rift') {
+    // Its knee burning with the void, and a spike of a foot.
+    const on = 0.5 + 0.5 * Math.sin(time * 4 + i * 1.7);
+    ctx.fillStyle = OUT;
+    ctx.fillRect(Math.round(kx) - 2, Math.round(ky) - 2, 5, 5);
+    ctx.fillStyle = on > 0.6 ? '#ffffff' : '#c8a0ff';
+    ctx.fillRect(Math.round(kx) - 1, Math.round(ky) - 1, 3, 3);
+    ctx.fillStyle = '#5ad8f0';
+    ctx.fillRect(Math.round(kx), Math.round(ky), 1, 1);
+    ctx.fillStyle = '#e0d8f0';
+    ctx.fillRect(Math.round(ex), Math.round(ey) - 1, 1, 3);
   } else {
     ctx.fillStyle = '#120c0a';
     ctx.fillRect(Math.round(ex), Math.round(ey), 1, 1);

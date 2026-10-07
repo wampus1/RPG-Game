@@ -6326,7 +6326,8 @@ export class Game {
     if (target.kind === 'player' && !this.dotHit && source && source !== target && runeWard(this, target)) return;
     if (target.kind === 'player') {
       // Your armour, and the watch's mail if you wear the colours.
-      const a = Math.min(ARMOR_CAP, this.sim.careers.armor() + target.armorValue()) * (1 - phase);
+      // (Round 71: softer with the Alinelidan's worms in you.)
+      const a = Math.min(ARMOR_CAP, this.sim.careers.armor() + target.armorValue()) * (1 - phase) * (target.worms > 0 ? Math.max(0.3, 1 - 0.18 * target.worms) : 1);
       if (a > 0) amount = Math.max(1, Math.round(amount * (1 - a)));
       armored = a >= 0.1;
       // (A dish that toughens you, or leaves you the softer: cooking.js.)

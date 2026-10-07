@@ -271,6 +271,24 @@ export function ink(game, p, secs) {
 // ------------------------------------------------------------ each frame
 export function tickAfflictions(game, p, dt) {
   if (!p) return;
+  // (Round 71) Infested by the Alinelidan: each worm's bite, every couple
+  // of seconds, till they work their way out (one at a time).
+  if (p.worms > 0) {
+    p.wormBite = (p.wormBite || 0) + dt;
+    if (p.wormBite >= 2) {
+      p.wormBite = 0;
+      game.dotHit = true;
+      game.damage(p, p.worms, null);
+      game.dotHit = false;
+      game.renderer?.emit?.(p.x, p.y + 1, p.z, { n: 3, color: ['#c8e070', '#8a4a3a'], up: 10, speed: 10, life: 0.5 });
+    }
+    p.wormT = (p.wormT ?? 45) - dt;
+    if (p.wormT <= 0) {
+      p.worms--;
+      p.wormT = 45;
+      if (p.worms <= 0) say(game, p, 'the worms are out', '#c8e070');
+    }
+  }
   if (p.mazeT > 0) {
     p.mazeT -= dt;
     if (Math.random() < dt * 8) game.renderer?.emit?.(p.x, p.y + 2.1, p.z, { n: 1, color: ['#e0b0ff', '#ffffff', '#c890ff'], up: 6, speed: 14, life: 0.5, glow: true, shape: 'star' });
@@ -316,6 +334,7 @@ export function afflictionsOf(p) {
   if (p.spores > 0.05) out.push({ text: `SPORES ${'▮'.repeat(Math.ceil(p.spores * 5))}${'▯'.repeat(5 - Math.ceil(p.spores * 5))}`, color: '#c8f070' });
   if (p.soulsTaken > 0) out.push({ text: `SOUL -${p.soulsTaken}`, color: '#80e8d0' });
   if (p.inkT > 0) out.push({ text: 'INKED', color: '#c8a0d0' });
+  if (p.worms > 0) out.push({ text: `INFESTED ×${p.worms}`, color: '#e0ff90' });
   return out;
 }
 
@@ -330,6 +349,7 @@ export function settleAfflictions(game, boss = null) {
   }
   p.mazeT = 0;
   p.inkT = 0;
+  p.worms = 0;
   p.glaze = 0;
   p.spores = 0;
   for (const c of game.creatures) if (c.souls && c.soulOf === p) freeSouls(game, c);

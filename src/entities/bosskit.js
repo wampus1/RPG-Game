@@ -38,8 +38,9 @@ export function work(game, x, y, z, id, life = 0, by = null, opts = {}) {
   if (!old && !opts.floor && !SOFT.has(cur) && !(opts.dig && BLOCKS[cur].solid && !BLOCKS[cur].interact && BLOCKS[cur].hardness !== Infinity && cur !== B.bedrock)) return false;
   if (opts.floor && (cur === B.air || BLOCKS[cur].interact)) return false;
   const solid = BLOCKS[id].solid;
-  if (solid && (game.entityAt?.(x, y, z) || (game.player && game.player.x === x && game.player.z === z && Math.abs(game.player.y - y) <= 1))) return false;
-  if (solid && game.creatures.some((c) => !c.dead && c.foot && Math.abs(c.x - x) <= c.foot && Math.abs(c.z - z) <= c.foot)) return false;
+  // (The floor itself changed under whoever's on it: that's no matter.)
+  if (solid && !opts.floor && (game.entityAt?.(x, y, z) || (game.player && game.player.x === x && game.player.z === z && Math.abs(game.player.y - y) <= 1))) return false;
+  if (solid && !opts.floor && game.creatures.some((c) => !c.dead && c.foot && Math.abs(c.x - x) <= c.foot && Math.abs(c.z - z) <= c.foot)) return false;
   if (old) {
     old.id = id;
     old.t = 0;
