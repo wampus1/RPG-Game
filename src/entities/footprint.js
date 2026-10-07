@@ -41,6 +41,9 @@ export function inReach(from, e, reach) {
 
 // Paces between two (edge to edge: 0 when they touch, or overlap).
 export function apart(a, b) {
+  // (Round 69) Both on the same ship's deck: paces of hers, not of the
+  // world (turned, two next to each other can round two tiles apart).
+  if (a && b && a.deck && b.deck && a.deck.s === b.deck.s) return Math.max(Math.abs(a.deck.cx - b.deck.cx), Math.abs(a.deck.cz - b.deck.cz));
   const r = ((a && a.foot) || 0) + ((b && b.foot) || 0);
   return Math.max(0, Math.abs(a.x - b.x) - r, Math.abs(a.z - b.z) - r);
 }

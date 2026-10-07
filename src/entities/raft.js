@@ -78,7 +78,8 @@ export function steer(p, dt, input) {
   if (Math.abs(r.v) < 0.02 && !fwd && !backK) r.v = 0;
   r.paddle = fwd || backK || left || right ? (r.paddle || 0) + dt : 0;
   const f = heading(r.ang);
-  const ok = (x, z) => floatable(w, Math.round(x), Math.round(z)) && !p.game.occupiedBySolid(Math.round(x), GROUND, Math.round(z), p);
+  // (Round 69: a ship's hull is as solid as any bank.)
+  const ok = (x, z) => floatable(w, Math.round(x), Math.round(z)) && !p.game.occupiedBySolid(Math.round(x), GROUND, Math.round(z), p) && !(p.game.shipHullAt && p.game.shipHullAt(x, z));
   // Each axis on its own, so it slides along a bank instead of sticking.
   const nx = r.x + f.x * r.v * dt;
   const nz = r.z + f.z * r.v * dt;
@@ -90,6 +91,8 @@ export function steer(p, dt, input) {
     if (p.game.stormTurnsBack) p.game.stormTurnsBack(true);
     return;
   }
+  // Run into a ship of your own: you make the raft fast and climb aboard.
+  if (r.v > 0.3 && p.game.raftMeetsShip && p.game.raftMeetsShip(p, nx, nz) === 'board') return;
   let hit = false;
   if (ok(nx, r.z)) r.x = nx;
   else hit = true;

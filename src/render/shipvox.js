@@ -1078,6 +1078,43 @@ export function frontRow(r, S) {
   return { front: Math.ceil(v0 + mx), back: Math.floor(v0 + mn) };
 }
 
+// (Round 69) Where on the screen the middle of her cell (x, y, z) is, as
+// she's drawn now (null if she isn't).
+export function cellScreen(r, S, x, y, z) {
+  const D = S.drawn;
+  if (!D) return null;
+  const T = rot(S.m, (D.q / BUCKETS) * TAU);
+  const du = T.u(x + 0.5, z + 0.5);
+  const dv = T.v(x + 0.5, z + 0.5);
+  return { x: D.O.X + du * TILE, y: D.O.Y + dv * TILE - y * LH + LH / 2, near: 3 * dv + 4 * y };
+}
+
+// (Round 69) The hole of hers nearest the pointer (`mx`, `my`) on the
+// screen, within `px` pixels: the nearest the eye of any as near. -1 if
+// none. (From outside, through a hole, the pointer's on what's beyond it:
+// this finds the hole itself.)
+export function holeAt(r, S, mx, my, px = 9) {
+  const m = S.m;
+  let best = -1;
+  let bd = Infinity;
+  for (let i = 0; i < m.N; i++) {
+    if (S.vox[i] || !m.vox[i] || !m.struct[i]) continue;
+    const x = i % m.W;
+    const z = Math.floor(i / m.W) % m.L;
+    const y = Math.floor(i / (m.W * m.L));
+    const s = cellScreen(r, S, x, y, z);
+    if (!s) return -1;
+    const d = Math.hypot(s.x - mx, s.y - my);
+    if (d > px) continue;
+    const score = d - s.near * 0.5;
+    if (score < bd) {
+      bd = score;
+      best = i;
+    }
+  }
+  return best;
+}
+
 // Where someone aboard her is drawn (the view position drawEntity wants),
 // standing in cell-middle (lx, lz) with their feet at layer fy of hers.
 export function deckView(r, S, lx, lz, fy, O = shipOrigin(r, S)) {
@@ -1164,6 +1201,48 @@ export function drawShip(r, game, S, aboard) {
     ctx.globalAlpha = a0;
   }
   S.drawn = { O, Rs, q };
+  // (Round 69) A plank of hers being knocked out: cracking as it goes.
+  const M = game && game.shipMining;
+  if (M && M.s === S.id && M.k > 0.05) drawCracks(r, S, M.vi, M.k);
+}
+
+// Cracks over her cell vi, more of them the nearer it is to giving way
+// (`k`: 0 to 1), and the cell outlined.
+function drawCracks(r, S, vi, k) {
+  const m = S.m;
+  const x = vi % m.W;
+  const z = Math.floor(vi / m.W) % m.L;
+  const y = Math.floor(vi / (m.W * m.L));
+  const p = cellScreen(r, S, x, y, z);
+  if (!p) return;
+  const ctx = r.ctx;
+  const cx = Math.round(p.x);
+  const cy = Math.round(p.y);
+  ctx.save();
+  ctx.globalAlpha = 0.35 + k * 0.4;
+  ctx.fillStyle = '#ffe8b0';
+  ctx.fillRect(cx - 8, cy - 7, 16, 1);
+  ctx.fillRect(cx - 8, cy + 6, 16, 1);
+  ctx.fillRect(cx - 8, cy - 7, 1, 14);
+  ctx.fillRect(cx + 7, cy - 7, 1, 14);
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#1a1008';
+  const n = 1 + Math.floor(k * 6);
+  let h = hash4(vi, S.id, 31, 7);
+  for (let i = 0; i < n; i++) {
+    h = hash4(h, i, 5, 9);
+    const a = ((h & 255) / 255) * TAU;
+    const len = 3 + ((h >> 8) & 7) * k;
+    let px = cx;
+    let py = cy;
+    for (let t = 0; t < len; t++) {
+      px += Math.round(Math.cos(a + Math.sin(t + i) * 0.5));
+      py += Math.round(Math.sin(a + Math.sin(t + i) * 0.5) * 0.8);
+      if (Math.abs(px - cx) > 7 || Math.abs(py - cy) > 6) break;
+      ctx.fillRect(px, py, 1, 1);
+    }
+  }
+  ctx.restore();
 }
 
 function mergeDepth(D, E) {

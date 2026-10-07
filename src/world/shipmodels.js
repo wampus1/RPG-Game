@@ -177,9 +177,21 @@ function build(type) {
   // the steps coming up at either side.
   const stepsUp = (z1, dir, from, to) => {
     // Steps down from a deck at `from` to one at `to`, starting at frame
-    // z1 + dir and going `dir`-ward, at the two sides.
+    // z1 + dir and going `dir`-ward, at the two sides. (Round 69: at the
+    // sides of the castle's own front row, just in from its rail, so they
+    // come up onto its deck however narrow she is there: before, at the
+    // narrow bow and stern they came up beside it, against its rail, and
+    // whoever got up there some other way couldn't get down again.)
     const n = from - to - 1;
-    for (const x of [1, W - 2]) {
+    let x0 = -1;
+    let x1 = -1;
+    for (let x = 0; x < W; x++) {
+      if (!inHull(x, from, z1)) continue;
+      if (x0 < 0) x0 = x;
+      x1 = x;
+    }
+    const xs = x0 < 0 ? [1, W - 2] : x1 - x0 >= 4 ? [x0 + 1, x1 - 1] : [x0 + 1];
+    for (const x of xs) {
       for (let k = 1; k <= n; k++) {
         const z = z1 + dir * k;
         for (let y = to + 1; y <= from - k; y++) set(x, y, z, B.deck_planks);
@@ -424,6 +436,12 @@ function build(type) {
     for (const x of [1, W - 2]) if (get(x, tt, 0) !== 0) sternLights.push({ x, y: tt + 1, z: 0 });
     if (T.W >= 9) sternLights.push({ x: cx, y: tt + 1, z: 0 });
   }
+  // (Round 69) Every part of her decks to be got to, and away from: a
+  // corner of a deck that can only be dropped into (railed round, too high
+  // to climb out of) has the rail in its way opened, till there's none.
+  const spawn = { x: cx, y: T.deck + 1, z: Math.round(L * 0.55) };
+  while (get(spawn.x, spawn.y, spawn.z) !== 0 && spawn.z > 2) spawn.z--;
+  connectDecks({ W, H, L, deckLevel }, vox, spawn);
   // Where she's walked on, and what's her: worked out for the ones who
   // use her (see shipLocal.js).
   const struct = new Uint8Array(N);
@@ -456,8 +474,6 @@ function build(type) {
   }
   // (The bow's tip and the bowsprit's reach.)
   perim.push({ x: mid + 0.5, z: L + 0.3, cx: cx, cz: L - 1 });
-  const spawn = { x: cx, y: T.deck + 1, z: Math.round(L * 0.55) };
-  while (get(spawn.x, spawn.y, spawn.z) !== 0 && spawn.z > 2) spawn.z--;
   return {
     type, T, W, H, L, N, vox, meta, hull, skin, deckLevel, inside, struct, total, perim,
     // (The pivot she turns about: the middle of her plan.)
@@ -471,6 +487,69 @@ function build(type) {
 
 // --- reading a ship's cells (her own copy: what's knocked out, mended) ----
 export const vidx = (m, x, y, z) => (y * m.L + z) * m.W + x;
+// (Round 69) Her decks joined up: from every place to stand on them, a way
+// back to the middle of her main deck (`spawn`), stepping as anyone aboard
+// does (see stepOn). Where there isn't one, the rail between that corner
+// and a part that has a way is taken out (a gap in it), and again, till
+// every corner has a way (or there's no rail left to open).
+export function connectDecks(m, vox, spawn) {
+  const { W, L, H } = m;
+  const at = (x, y, z) => (y * L + z) * W + x;
+  const cells = [];
+  for (let z = 0; z < L; z++) for (let x = 0; x < W; x++) for (let y = 1; y <= H; y++) if (standOn(m, vox, x, y, z) && !isInside(m, x, y, z)) cells.push([x, y, z]);
+  const reach = () => {
+    const key = (x, y, z) => at(x, y, z);
+    const ok = new Set();
+    const s = cells.find((c) => c[0] === spawn.x && c[2] === spawn.z) || cells[0];
+    if (!s) return ok;
+    ok.add(key(...s));
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const [x, y, z] of cells) {
+        const k = key(x, y, z);
+        if (ok.has(k) || !standOn(m, vox, x, y, z)) continue;
+        for (let dz = -1; dz <= 1 && !ok.has(k); dz++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dz) continue;
+          if (dx && dz && (stepOn(m, vox, x, y, z, x + dx, z) < 0 || stepOn(m, vox, x, y, z, x, z + dz) < 0)) continue;
+          if (!onPlan(m, x + dx, z + dz)) continue;
+          const ny = stepOn(m, vox, x, y, z, x + dx, z + dz);
+          if (ny < 0 || isInside(m, x + dx, ny, z + dz)) continue;
+          if (ok.has(key(x + dx, ny, z + dz))) {
+            ok.add(k);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    return ok;
+  };
+  for (let round = 0; round < 12; round++) {
+    const ok = reach();
+    const lost = cells.filter(([x, y, z]) => standOn(m, vox, x, y, z) && !ok.has(at(x, y, z)));
+    if (!lost.length) return 0;
+    let opened = 0;
+    for (const [x, y, z] of lost) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const nz = z + dz;
+        if (!onPlan(m, nx, nz)) continue;
+        // (A rail in the way, at their feet or a step up: out.)
+        for (const yy of [y, y + 1]) {
+          if (vAt(m, vox, nx, yy, nz) !== B.ship_rail) continue;
+          vox[at(nx, yy, nz)] = 0;
+          opened++;
+          break;
+        }
+        if (opened) break;
+      }
+      if (opened) break;
+    }
+    if (!opened) return lost.length;
+  }
+  return 0;
+}
+
 export function vAt(m, vox, x, y, z) {
   if (x < 0 || y < 0 || z < 0 || x >= m.W || y >= m.H || z >= m.L) return 0;
   return vox[(y * m.L + z) * m.W + x];

@@ -81,6 +81,7 @@ export class Ship {
     this.sinking = 0;
     this.manualT = 0;
     this.shakeT = 0;
+    this.hitMsgT = 0;
     this.stormT = 3;
     this.wake = [];
     this.recount();
@@ -237,7 +238,7 @@ export function windOf(game) {
 // How well each kind of sail draws with the wind at angle θ (degrees,
 // 0 dead astern, 180 dead ahead), trimmed right.
 const SQ_EFF = [[0, 0.92], [45, 1], [90, 0.84], [115, 0.52], [135, 0.12], [150, -0.1], [180, -0.35]];
-const FA_EFF = [[0, 0.58], [45, 0.78], [90, 1], [120, 0.9], [135, 0.62], [150, 0.04], [180, 0]];
+const FA_EFF = [[0, 0.58], [45, 0.78], [90, 1], [120, 0.9], [135, 0.66], [150, 0.22], [165, 0.06], [180, 0]];
 function table(T, x) {
   for (let i = 1; i < T.length; i++) {
     if (x <= T[i][0]) {
@@ -339,8 +340,10 @@ function sail(game, S, W, dt) {
   // The crew trim them (unless whoever's at the wheel has lately).
   if (S.manualT > 0) S.manualT -= dt;
   const crew = (game.sailors || []).filter((c) => c.deck && c.deck.s === S.id && !c.dead).length;
-  if (crew > 0 && S.manualT <= 0) {
-    const skill = Math.min(1, 0.4 + crew / Math.max(2, T.crew));
+  // (Round 69: whoever has her, crew or none, keeps her sheets trimmed,
+  // unless they're trimming them by hand: a crew does it better.)
+  if (S.manualT <= 0) {
+    const skill = Math.min(1, 0.55 + crew / Math.max(2, T.crew));
     const goal = P.ideal + Math.sin(((game.renderer && game.renderer.time) || 0) * 0.3 + S.id) * 0.06 * (1 - skill);
     S.sheet += Math.sign(goal - S.sheet) * Math.min(Math.abs(goal - S.sheet), dt * 0.12 * skill);
   }
@@ -358,11 +361,20 @@ function sail(game, S, W, dt) {
   S.drive = P.drive;
   // How fast she'd go, as she's sailed.
   const h = hands(game, S);
-  const handling = Math.sqrt(Math.min(1, (h + 2) / (T.crew + 2)));
+  const handling = Math.max(0.62, Math.sqrt(Math.min(1, (h + 3) / (T.crew + 3))));
   const masts = S.sailHp.reduce((a, b) => a + b, 0) / S.sailHp.length;
   const hull = Math.max(0.2, 1 - S.flood * 0.7 - (1 - S.whole) * 0.6);
   let goal = T.speed * S.sailSet * P.drive * Math.min(1.25, W.k) * handling * masts * hull;
   goal = Math.min(T.speed * 1.05, goal);
+  // (Round 69) Steerage way: with sail set she always carries a little,
+  // whatever the wind, so she answers her helm; and head to wind (in
+  // irons), with nobody putting the helm over, she falls off it of
+  // herself, to where it fills her sails again.
+  if (S.sailSet > 0.25 && !S.backT) goal = Math.max(goal, T.speed * 0.13 * S.sailSet * hull);
+  if (P.deg > 132 && S.sailSet > 0.1 && Math.abs(S.rudder) < 0.25 && !S.anchor) {
+    const away = W.x * Math.cos(S.yaw) - W.z * Math.sin(S.yaw);
+    S.yawV += (away >= 0 ? 1 : -1) * dt * 0.22 * Math.min(1, (P.deg - 132) / 25);
+  }
   if (S.anchor) goal = 0;
   if (S.sinking) goal *= 0.2;
   // (Sails laid aback to back her off: hard aground, or on purpose.)
@@ -411,6 +423,24 @@ function sail(game, S, W, dt) {
     if (g.recoil > 0) g.recoil = Math.max(0, g.recoil - dt * 1.4);
   }
   if (S.shakeT > 0) S.shakeT -= dt;
+  if (S.hitMsgT > 0) S.hitMsgT -= dt;
+  // (Round 69) Her own sounds, near: her timbers working in a sea, her
+  // canvas flogging when it's not drawing.
+  const near = game.player && Math.hypot(game.player.x - S.x, game.player.z - S.z) < 26;
+  if (near && game.audio) {
+    S.creakT = (S.creakT ?? 4 + Math.random() * 6) - dt * (0.6 + Math.abs(S.v) / 10);
+    if (S.creakT <= 0) {
+      S.creakT = 5 + Math.random() * 9;
+      game.audio.play('ship_creak', ...shipWhere(S));
+    }
+    if (S.sailSet > 0.3 && (P.drive < 0.15 || S.trim < 0.35)) {
+      S.flapT = (S.flapT ?? 1) - dt;
+      if (S.flapT <= 0) {
+        S.flapT = 1.6 + Math.random();
+        game.audio.play('sail_flap', ...shipWhere(S));
+      }
+    }
+  }
   // Spray at her bow, going fast.
   const r = game.renderer;
   if (r && r.emit && Math.abs(S.v) > 6 && Math.random() < dt * Math.abs(S.v) * 0.6) {
@@ -462,6 +492,7 @@ function strike(game, S, hits, other) {
     }
     shakeAboard(game, S, Math.min(1.2, 0.3 + sp * 0.06));
     game.audio?.play('crash', ...shipWhere(S));
+    game.audio?.play('ship_creak', ...shipWhere(S));
     const [wx, wz] = S.toWorld(pts[0].x, pts[0].z);
     game.renderer?.emit(wx, GROUND + 0.5, wz, { n: 18, color: ['#8a6438', '#5a3c22', '#c8e0f0', '#ffffff'], up: 50, speed: 50, gravity: 120, life: 0.9 });
   }
@@ -563,6 +594,7 @@ function flooding(game, S, dt) {
     S.sinking = 0.001;
     for (const e of aboardOf(game, S)) if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`${theShip(S, true)} is going down! Over the side!`, '#ff8060'));
     game.audio?.play('crash', ...shipWhere(S));
+    game.audio?.play('water_rush', ...shipWhere(S));
   }
 }
 
@@ -629,12 +661,33 @@ export function breakVoxel(game, S, vi, why = null) {
   S.recount();
   holdVoxel(game, S, vi);
   game.net?.shipChanged?.(S, vi);
-  // Splinters.
+  // Splinters (round 69: of what she was made of there, flung and
+  // falling; dust; the sea spouting in at a hole low in her side; the
+  // crack of it).
   const [wx, wz] = S.toWorld(x + 0.5, z + 0.5);
   const r = game.renderer;
-  if (r && r.emit && why !== 'quiet') r.emit(wx, S.layerY(y) + 0.4, wz, { n: 7, color: ['#8a6438', '#5a3c22', '#c8a070'], up: 40, speed: 45, gravity: 140, life: 0.7 });
+  if (r && r.emit && why !== 'quiet') {
+    const wy = S.layerY(y) + 0.4;
+    const cols = CHIPS[BLOCKS[id] && BLOCKS[id].name] || CHIPS.wood;
+    r.emit(wx, wy, wz, { n: 10, color: cols, up: 46, speed: 52, gravity: 150, life: 0.85, shape: 'shard' });
+    r.emit(wx, wy, wz, { n: 4, color: cols, up: 24, speed: 22, gravity: 120, life: 1.2 });
+    r.emit(wx, wy + 0.2, wz, { n: 5, color: ['#c8bca8', '#a89c88', '#e0d8c8'], up: 10, speed: 14, gravity: -6, life: 1.1, size: 2, shape: 'puff' });
+    if (m.skin[vi] && y <= m.wl - (S.yOff || 0)) r.emit(wx, GROUND + 0.6, wz, { n: 12, color: ['#ffffff', '#c8e8ff', '#80b8e0'], up: 60, speed: 28, gravity: 160, life: 0.8 });
+    if (why !== 'shot') game.audio?.play(id === B.stern_window ? 'shatter' : 'plank_break', { x: Math.round(wx), y: Math.round(wy), z: Math.round(wz) });
+  }
   return true;
 }
+
+// The chips off each thing she's made of.
+const CHIPS = {
+  wood: ['#8a6438', '#5a3c22', '#c8a070', '#a07848'],
+  gilt_trim: ['#e8c050', '#a07820', '#fff0a0'],
+  copper_sheath: ['#c87840', '#5aa088', '#e8a060'],
+  stern_window: ['#d8eef8', '#ffffff', '#88b0c8'],
+  ship_rail: ['#6a4a2a', '#3a2814', '#8a6438'],
+  ship_cannon: ['#3a3a40', '#5a5a60', '#1a1a1e'],
+  ship_mast: ['#7a5a32', '#c8a070', '#4a3420'],
+};
 
 // Knock out what's within `rad` of cell (x, y, z) of hers.
 export function breakNear(game, S, x, y, z, rad, why) {
@@ -677,6 +730,16 @@ export function mendVoxel(game, S, vi) {
   S.recount();
   holdVoxel(game, S, vi);
   game.net?.shipChanged?.(S, vi);
+  // (Round 69) Hammered home: the knocks, sawdust, a gleam of new wood.
+  const r = game.renderer;
+  if (r && r.emit) {
+    const y = Math.floor(vi / (m.W * m.L));
+    const [wx, wz] = S.toWorld(x + 0.5, z + 0.5);
+    const wy = S.layerY(y) + 0.5;
+    r.emit(wx, wy, wz, { n: 8, color: ['#e8d0a0', '#c8a070', '#fff4d8'], up: 18, speed: 20, gravity: 80, life: 0.6 });
+    r.emit(wx, wy + 0.3, wz, { n: 4, color: ['#fff8e0', '#ffffff'], up: 20, speed: 8, gravity: -10, life: 0.5, glow: true, shape: 'star' });
+    game.audio?.play('plank_mend', { x: Math.round(wx), y: Math.round(wy), z: Math.round(wz) });
+  }
   return true;
 }
 
@@ -765,9 +828,15 @@ function ballHits(game, b) {
     if (!id) continue;
     breakNear(game, S, cx, ly, cz, 1.25, 'shot');
     shakeAboard(game, S, 0.5);
-    r?.emit(b.x, b.y + 0.3, b.z, { n: 16, color: ['#8a6438', '#5a3c22', '#c8a070', '#3a3a3a'], up: 50, speed: 60, gravity: 140, life: 0.9 });
-    r?.emit(b.x, b.y + 0.3, b.z, { n: 8, color: ['#b8b4ac', '#d8d4cc'], up: 14, speed: 16, gravity: -8, life: 1.4, size: 2 });
-    game.audio?.play('crash', { x: Math.round(b.x), y: GROUND, z: Math.round(b.z) });
+    r?.emit(b.x, b.y + 0.3, b.z, { n: 22, color: ['#8a6438', '#5a3c22', '#c8a070', '#3a3a3a'], up: 60, speed: 70, gravity: 140, life: 1, shape: 'shard' });
+    r?.emit(b.x, b.y + 0.3, b.z, { n: 10, color: ['#b8b4ac', '#d8d4cc', '#8a8680'], up: 16, speed: 18, gravity: -8, life: 1.8, size: 2, shape: 'puff' });
+    r?.emit(b.x, b.y + 0.3, b.z, { n: 6, color: ['#fff0a0', '#ffb040'], up: 20, speed: 40, gravity: 0, life: 0.15, glow: true });
+    game.audio?.play('hull_hit', { x: Math.round(b.x), y: GROUND, z: Math.round(b.z) });
+    // (Those aboard see what it did to her.)
+    if (aboardOf(game, S).some((q) => q.kind === 'player') && S.hitMsgT <= 0) {
+      S.hitMsgT = 2.5;
+      for (const q of aboardOf(game, S)) if (q.kind === 'player') game.asPlayer(q, () => game.ui.msg(`Hit! ${theShip(S, true)}'s hull at ${Math.round(S.whole * 100)}%${S.leaks && S.leaks.length ? `, holed below (${S.leaks.length})` : ''}.`, '#ffb080', true));
+    }
     game.onShipShot?.(S, b);
     return true;
   }
@@ -1099,23 +1168,195 @@ export function deckUpdate(game, p, dt, input, blocked) {
   }
   if (!du && !dv) {
     if (d.edgeT) d.edgeT = Math.max(0, d.edgeT - dt * 4);
+    d.stuckT = 0;
+    // (Round 69) On somewhere by itself: to the wheel, a gun, a hatch
+    // you clicked.
+    if (d.auto) autoWalk(game, S, p);
     return;
   }
+  d.auto = null;
   const view = game.renderer ? game.renderer.view || 0 : 0;
   const [wdx, wdz] = toWorldDir(du, dv, view);
   const [ldx, ldz] = S.dirLocal(wdx, wdz);
-  const k = Math.round(Math.atan2(ldz, ldx) / (Math.PI / 4));
-  const a = k * (Math.PI / 4);
-  const sx = Math.round(Math.cos(a));
-  const sz = Math.round(Math.sin(a));
+  const ang = Math.atan2(ldz, ldx);
   const sprint = (down('ShiftLeft') || down('ShiftRight')) && (p.stamina ?? 10) > 0.4;
   const dur = PLAYER_STEP_TIME * (sprint ? 0.72 : 1);
-  if (!deckStep(game, S, p, sx, sz, dur)) {
-    // (Along whichever way's open, if the straight way isn't.)
-    if (sx && sz) {
-      if (!deckStep(game, S, p, sx, 0, dur)) deckStep(game, S, p, 0, sz, dur);
+  // (Round 69) Toward a hatch or a cabin door, near enough: in, as
+  // meant, whatever way she's lying on the screen.
+  if (entryStep(game, S, p, ang, dur)) {
+    d.stuckT = 0;
+    return;
+  }
+  // The way pressed (to the nearest of her eight); if that's shut, the
+  // nearer of the two either side of it, then the other.
+  const f = ang / (Math.PI / 4);
+  const k = Math.round(f);
+  const order = [k, f >= k ? k + 1 : k - 1, f >= k ? k - 1 : k + 1];
+  for (const kk of order) {
+    const a = kk * (Math.PI / 4);
+    if (deckStep(game, S, p, Math.round(Math.cos(a)), Math.round(Math.sin(a)), dur)) {
+      d.stuckT = 0;
+      return;
     }
   }
+  // (Pressing on and getting nowhere a good while: wherever that is,
+  // somewhere with a way back to the rest of her.)
+  d.stuckT = (d.stuckT || 0) + dt;
+  if (d.stuckT > 2.5) {
+    d.stuckT = 0;
+    unstick(game, S, p);
+  }
+}
+
+// (Round 69) Her ways in from her deck: the head of each hatch's stairs
+// and each cabin's door, with the way in from there. [{ x, z, y (feet
+// there), dx, dz (the step in), inX, inZ (the cell inside) }].
+export function entrances(m) {
+  if (m.entries) return m.entries;
+  const out = [];
+  for (const h of m.hatches) {
+    if (!h.top) continue;
+    out.push({ x: h.x, z: h.z + h.n, y: m.deck + 1, dx: 0, dz: -1, inX: h.x, inZ: h.z + h.n - 1, kind: 'hatch' });
+  }
+  for (const c of m.cabins || []) {
+    const dr = c.door;
+    if (!dr) continue;
+    for (const dz of [-1, 1]) {
+      const z = dr.z + dz;
+      if (!onPlan(m, dr.x, z) || isInside(m, dr.x, c.y, z)) continue;
+      out.push({ x: dr.x, z, y: c.y, dx: 0, dz: -dz, inX: dr.x, inZ: dr.z, kind: 'door' });
+    }
+  }
+  m.entries = out;
+  return out;
+}
+
+const angDiff = (a, b) => {
+  let d = (a - b) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return Math.abs(d);
+};
+
+// Pressing (her way `ang`) toward one of her ways in: a step in (from its
+// head), or onto its head (from beside it). True if a step was taken.
+function entryStep(game, S, p, ang, dur) {
+  const d = p.deck;
+  for (const E of entrances(S.m)) {
+    if (Math.abs(d.y - E.y) > 1) continue;
+    const at = d.cx === E.x && d.cz === E.z;
+    if (at) {
+      if (angDiff(ang, Math.atan2(E.dz, E.dx)) <= 1.25 && deckStep(game, S, p, E.dx, E.dz, dur)) return true;
+      continue;
+    }
+    const gx = E.x - d.cx;
+    const gz = E.z - d.cz;
+    if (Math.max(Math.abs(gx), Math.abs(gz)) !== 1) continue;
+    // (Beside its head, pressing toward the way in.)
+    const toIn = Math.atan2(E.inZ - d.cz, E.inX - d.cx);
+    if (angDiff(ang, toIn) > 0.9) continue;
+    if (deckStep(game, S, p, Math.sign(gx), Math.sign(gz), dur)) return true;
+    if (gx && gz && (deckStep(game, S, p, Math.sign(gx), 0, dur) || deckStep(game, S, p, 0, Math.sign(gz), dur))) return true;
+  }
+  return false;
+}
+
+// The way across her deck from cell `from` to `to` (each { x, y, z }),
+// cell by cell (four ways round): null if there's none. Not down a hatch
+// unless that's where it's going.
+export function deckPath(S, from, to, maxN = 1500) {
+  const m = S.m;
+  const key = (x, y, z) => (y * m.L + z) * m.W + x;
+  const prev = new Map([[key(from.x, from.y, from.z), null]]);
+  const q = [[from.x, from.y, from.z]];
+  for (let i = 0; i < q.length && i < maxN; i++) {
+    const [x, y, z] = q[i];
+    if (x === to.x && z === to.z && Math.abs(y - to.y) <= 1) {
+      const path = [];
+      let k = key(x, y, z);
+      let cur = [x, y, z];
+      while (cur) {
+        path.push(cur);
+        cur = prev.get(k);
+        if (cur) k = key(cur[0], cur[1], cur[2]);
+      }
+      path.reverse();
+      path.shift();
+      return path;
+    }
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const nz = z + dz;
+      if (!onPlan(m, nx, nz)) continue;
+      const ny = stepOn(m, S.vox, x, y, z, nx, nz);
+      if (ny < 0) continue;
+      if (isInside(m, nx, ny, nz) && !(nx === to.x && nz === to.z)) continue;
+      const k = key(nx, ny, nz);
+      if (prev.has(k)) continue;
+      prev.set(k, [x, y, z]);
+      q.push([nx, ny, nz]);
+    }
+  }
+  return null;
+}
+
+// (Round 69) Walk a player aboard to somewhere of hers and then do what's
+// there: `then` { kind: 'helm' } | { kind: 'gun', gi } | { kind: 'below',
+// E (an entrance) } | null. False if there's no way there.
+export function walkAboard(game, p, S, to, then = null) {
+  const d = p.deck;
+  if (!d || d.s !== S.id) return false;
+  const here = d.cx === to.x && d.cz === to.z && Math.abs(d.y - to.y) <= 1;
+  const path = here ? [] : deckPath(S, { x: d.cx, y: d.y, z: d.cz }, to);
+  if (!path) return false;
+  d.auto = { path, then, tries: 0 };
+  d.role = null;
+  return true;
+}
+
+function autoWalk(game, S, p) {
+  const d = p.deck;
+  const A = d.auto;
+  if (A.path.length) {
+    const [nx, , nz] = A.path[0];
+    if (deckStep(game, S, p, Math.sign(nx - d.cx), Math.sign(nz - d.cz), PLAYER_STEP_TIME)) A.path.shift();
+    else if (++A.tries > 3) d.auto = null;
+    return;
+  }
+  d.auto = null;
+  const t = A.then;
+  if (!t) return;
+  if (t.kind === 'helm' || t.kind === 'gun') deckInteract(game, p, t.kind === 'gun' ? t.gi : null);
+  else if (t.kind === 'below' && t.E) {
+    if (d.cx === t.E.x && d.cz === t.E.z) deckStep(game, S, p, t.E.dx, t.E.dz, PLAYER_STEP_TIME);
+  }
+}
+
+// Somewhere of hers with a way back to the middle of her deck, as near
+// as can be: put there (over the rail, or out of a hole in her deck).
+export function unstick(game, S, e) {
+  const d = e.deck;
+  const m = S.m;
+  const home = deckSpotNear(S, m.spawn.x + 0.5, m.spawn.z + 0.5, 6, null);
+  if (!home) return false;
+  if (deckPath(S, { x: d.cx, y: d.y, z: d.cz }, { x: home.cx, y: home.y, z: home.cz }, 2500)) return false;
+  const cands = [];
+  for (let z = 0; z < m.L; z++) for (let x = 0; x < m.W; x++) {
+    if (!onPlan(m, x, z)) continue;
+    for (let y = m.H + 1; y >= 1; y--) {
+      if (!standOn(m, S.vox, x, y, z) || isInside(m, x, y, z)) continue;
+      cands.push({ cx: x, y, cz: z, dd: Math.hypot(x - d.cx, z - d.cz) + Math.abs(y - d.y) * 0.5 });
+      break;
+    }
+  }
+  cands.sort((a, b) => a.dd - b.dd);
+  for (const c of cands.slice(0, 40)) {
+    if (!deckPath(S, { x: c.cx, y: c.y, z: c.cz }, { x: home.cx, y: home.y, z: home.cz }, 2500)) continue;
+    putAboard(game, S, e, c.cx, c.y, c.cz);
+    if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg('You clamber out over the rail.', '#a0d8ff', true));
+    return true;
+  }
+  return false;
 }
 
 // At the wheel: A and D put the helm over, W and S make and take in sail,
@@ -1173,12 +1414,12 @@ function gunControl(game, S, p, dt, input) {
 
 // The helm, a gun, the pump, a hatch, the ship's bell: what F does aboard
 // (the nearest of them to you). True if it did something.
-export function deckInteract(game, p) {
+export function deckInteract(game, p, wantGun = null) {
   const d = p.deck;
   const S = shipById(game, d.s);
   if (!S) return false;
   const m = S.m;
-  if (d.role) {
+  if (d.role && wantGun === null) {
     if (d.role === 'helm') {
       S.helmBy = null;
       game.ui.msg('You let go of the wheel.', '#c8c8c8', true);
@@ -1189,7 +1430,7 @@ export function deckInteract(game, p) {
   }
   const near = (x, y, z, r = 1.6) => Math.hypot(d.cx + 0.5 - (x + 0.5), d.cz + 0.5 - (z + 0.5)) <= r && Math.abs(d.y - y) <= 2;
   // The wheel.
-  if (near(m.helm.x, m.helm.y, m.helm.z) && S.vox[(m.helm.y * m.L + m.helm.z) * m.W + m.helm.x] === B.helm) {
+  if (wantGun === null && near(m.helm.x, m.helm.y, m.helm.z) && S.vox[(m.helm.y * m.L + m.helm.z) * m.W + m.helm.x] === B.helm) {
     if (S.owner && S.owner !== ownerId(game, p) && !game.cheats?.ships) {
       game.ui.msg('She\'s not your ship: her crew won\'t let you near the wheel.', '#ffb080', true);
       return true;
@@ -1208,7 +1449,7 @@ export function deckInteract(game, p) {
   let gi = -1;
   let best = 9;
   m.guns.forEach((g, i) => {
-    if (!g.deck) return;
+    if (!g.deck || (wantGun !== null && i !== wantGun)) return;
     const dd = Math.hypot(d.cx - g.x, d.cz - g.z);
     if (dd < best && dd <= 1.6 && Math.abs(d.y - g.y) <= 1) {
       best = dd;

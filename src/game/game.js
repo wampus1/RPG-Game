@@ -31,7 +31,7 @@ import { tickFires } from './fire.js';
 import { updateEngines, hitEngine } from './engines.js';
 import { updateShips, sailShips } from './shipping.js';
 import { updateShips3d, tickLater, deckRenderPos } from './ships3d.js';
-import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem } from './shipgame.js';
+import { shipKey, shipWheel, shipMouse, shipCursor, shipSave, shipLoad, useShipItem, sailorTalk, hullAt, raftMeetsShip } from './shipgame.js';
 import { holdBlockChanged, holdUse } from './shiphold.js';
 import { fleetsTick, idleShipsTick } from './shipfleets.js';
 import { crewHurt } from './shipcrew.js';
@@ -3363,6 +3363,11 @@ export class Game {
       this.talk(c.entity);
       return;
     }
+    // (Round 69) A ship's hand: a word (and, your own crew, orders).
+    if (c && c.entity && c.entity.kind === 'sailor' && !c.entity.dead && c.entity.distTo(p) <= 4) {
+      sailorTalk(this, c.entity);
+      return;
+    }
     // (Round 62) One of a mod's creatures: talked to (a person), or used.
     if (c && c.entity && c.entity.S && c.entity.S.modKey && !c.entity.dead && c.entity.distTo(p) <= 4 && modTalk(this, p, c.entity)) return;
     // Dice in hand: a throw (on the table there, or one beside you).
@@ -4321,6 +4326,16 @@ export class Game {
   }
 
   // Back onto dry land, the raft under your arm.
+  // (Round 69) For rafts (see raft.js): a ship's hull at world (x, z), and
+  // running into one.
+  shipHullAt(x, z) {
+    return !!hullAt(this, x, z);
+  }
+
+  raftMeetsShip(p, x, z) {
+    return raftMeetsShip(this, p, x, z);
+  }
+
   leaveRaft(force = false) {
     const p = this.player;
     if (!p.raft) return false;

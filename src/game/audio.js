@@ -259,6 +259,20 @@ export class Audio {
       case 'boom': this.tone(48, 0.6, 'sine', 0.3, -20); this.noise(0.5, 0.3, 220); this.noise(0.3, 0.2, 1200, 0.05); break;
       case 'secret': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.05, 0, i * 0.09)); break;
       case 'creak': this.tone(130, 0.5, 'sawtooth', 0.025, 40); this.tone(170, 0.4, 'sawtooth', 0.02, -30, 0.2); break;
+      // (Round 69) The great ships': a gun going off (the bang, the roll of
+      // it), timber giving way, the anchor's cable, a plank split, a plank
+      // hammered home, shot striking her side, canvas flogging, her
+      // timbers groaning in a sea, the sea rushing in, her bell.
+      case 'cannon': this.tone(55, 0.7, 'sine', 0.34, -25); this.noise(0.12, 0.42, 1800); this.noise(0.9, 0.24, 260, 0.04); this.tone(90, 0.4, 'triangle', 0.12, -40, 0.05); break;
+      case 'crash': this.noise(0.35, 0.3, 700); this.tone(80, 0.5, 'sawtooth', 0.08, -30); this.noise(0.25, 0.18, 2400, 0.08); [0.1, 0.19, 0.31].forEach((d) => this.noise(0.05, 0.12, 1400, d)); break;
+      case 'chain': for (let i = 0; i < 9; i++) this.tone(1900 + Math.random() * 900, 0.03, 'square', 0.025, -400, i * 0.045); this.noise(0.45, 0.07, 3000); break;
+      case 'plank_break': this.noise(0.04, 0.3, 3200); this.tone(220, 0.12, 'sawtooth', 0.1, -120); this.noise(0.18, 0.16, 900, 0.03); this.tone(150, 0.2, 'triangle', 0.07, -60, 0.05); break;
+      case 'plank_mend': [0, 0.13, 0.26].forEach((d) => { this.tone(320, 0.05, 'square', 0.08, -150, d); this.noise(0.03, 0.12, 2000, d); }); break;
+      case 'hull_hit': this.tone(70, 0.3, 'sine', 0.28, -30); this.noise(0.08, 0.36, 2600); this.noise(0.3, 0.2, 500, 0.02); break;
+      case 'sail_flap': for (let i = 0; i < 4; i++) this.noise(0.05, 0.08, 700 + i * 120, i * 0.07); break;
+      case 'ship_creak': this.tone(90 + Math.random() * 30, 0.7, 'sawtooth', 0.022, 25); this.tone(120 + Math.random() * 40, 0.5, 'sawtooth', 0.016, -20, 0.25); break;
+      case 'water_rush': this.noise(0.6, 0.14, 600); this.noise(0.5, 0.08, 1500, 0.1); break;
+      case 'ship_bell': this.tone(1320, 0.7, 'sine', 0.12, 0); this.tone(2640, 0.4, 'sine', 0.04, 0); this.tone(1320, 0.7, 'sine', 0.12, 0, 0.35); this.tone(2640, 0.4, 'sine', 0.04, 0, 0.35); break;
       case 'scream': this.tone(700, 0.4, 'sawtooth', 0.04, 300); this.tone(900, 0.35, 'square', 0.02, -200, 0.1); break;
       // Below ground, the places' own sounds: water dripping somewhere,
       // the earth groaning, a whisper on cold air, chains, old power.

@@ -11,12 +11,12 @@
 // broadside on.
 import { NPC_STEP_TIME } from '../config.js';
 import { B } from '../world/blocks.js';
-import { stepOn, standOn, isInside, onPlan } from '../world/shipmodels.js';
+import { standOn } from '../world/shipmodels.js';
 import { Sailor } from '../entities/sailor.js';
 import { findPath } from '../entities/pathfind.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
-import { putAboard, deckSpotNear, deckStep, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel } from './ships3d.js';
+import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel } from './ships3d.js';
 import { holdOf, holdPos, holdLocal } from './shiphold.js';
 
 const TAU = Math.PI * 2;
@@ -54,7 +54,8 @@ export function crewTick(game, S, dt) {
   if (S.crewHere) for (const c of crew) {
     c.update(dt);
     if (c.dead) continue;
-    if (c.deck) deckBrain(game, S, c, dt);
+    if (c.paidOff) goAshore(game, S, c, dt);
+    else if (c.deck) deckBrain(game, S, c, dt);
     else if (S.hold && S.hold.has(c)) holdBrain(game, S, c, dt);
   }
   // Fighting whoever's struck one of them.
@@ -78,6 +79,18 @@ export function crewTick(game, S, dt) {
       }
     }
   }
+}
+
+// (Round 69) Paid off: their kit over their shoulder, over the side and
+// ashore (gone from her books already).
+function goAshore(game, S, c, dt) {
+  c.paidT = (c.paidT ?? 2.4) - dt;
+  if (c.paidT > 0) return;
+  game.renderer?.emit?.(c.x, c.y + 1, c.z, { n: 10, color: ['#ffffff', '#c8e8ff', '#80b8e0'], up: 40, speed: 22, gravity: 130, life: 0.7 });
+  game.removeOcc?.(c);
+  if (S.helmBy === c.id) S.helmBy = null;
+  c.deck = null;
+  game.sailors = (game.sailors || []).filter((o) => o !== c);
 }
 
 function firstHole(S) {
@@ -161,43 +174,6 @@ function despawnCrew(game, S) {
 }
 
 // Cells of hers a step from (x, y, z), walking her deck.
-function deckPath(S, from, to, maxN = 1500) {
-  const m = S.m;
-  const key = (x, y, z) => (y * m.L + z) * m.W + x;
-  const prev = new Map([[key(from.x, from.y, from.z), null]]);
-  const q = [[from.x, from.y, from.z]];
-  for (let i = 0; i < q.length && i < maxN; i++) {
-    const [x, y, z] = q[i];
-    if (x === to.x && z === to.z && Math.abs(y - to.y) <= 1) {
-      const path = [];
-      let k = key(x, y, z);
-      let cur = [x, y, z];
-      while (cur) {
-        path.push(cur);
-        cur = prev.get(k);
-        if (cur) k = key(cur[0], cur[1], cur[2]);
-      }
-      path.reverse();
-      path.shift();
-      return path;
-    }
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = x + dx;
-      const nz = z + dz;
-      if (!onPlan(m, nx, nz)) continue;
-      const ny = stepOn(m, S.vox, x, y, z, nx, nz);
-      if (ny < 0) continue;
-      // (Not down a hatch unless that's where they're going.)
-      if (isInside(m, nx, ny, nz) && !(nx === to.x && nz === to.z)) continue;
-      const k = key(nx, ny, nz);
-      if (prev.has(k)) continue;
-      prev.set(k, [x, y, z]);
-      q.push([nx, ny, nz]);
-    }
-  }
-  return null;
-}
-
 const LINES = {
   idle: ['Fair wind today.', 'Mind the boom!', 'Haul away!', 'Another day, another league.', 'Smells like weather.', 'Who\'s on the next watch?', 'Coil that line, lad.', 'Land ho? No... just cloud.'],
   storm: ['Hold fast!', 'She\'ll hold! She\'ll hold!', 'Lash it down!', 'Pump, you dogs, pump!'],
@@ -237,6 +213,11 @@ function deckBrain(game, S, c, dt) {
       if (Math.random() < dt * 0.3) c.say(pick(LINES.fight), 1.6, '#ffd080');
       return;
     }
+    // (Ordered to the guns: standing by theirs, fight or no fight.)
+    if (c.order === 'guns' && g) {
+      c.dir = facingTo(S, g.side, 0);
+      return;
+    }
   }
   c.thinkT = (c.thinkT || 0) - dt;
   if (c.thinkT > 0) return;
@@ -260,10 +241,15 @@ function deckBrain(game, S, c, dt) {
       return;
     }
   }
-  // A fight: the gunners to their guns.
-  if (S.fight && (c.role === 'gunner' || c.role === 'sailor')) {
-    const taken = new Set(crewOf(game, S).filter((o) => o.task && o.task.kind === 'gun').map((o) => o.task.gi));
-    const gi = S.m.guns.findIndex((g, i) => g.deck && !taken.has(i) && S.vox[(g.y * m.L + g.z) * m.W + g.x] === B.ship_cannon && (S.fight.side === 0 || g.side === S.fight.side));
+  // (Round 69) Ordered below to the pump: there till told otherwise.
+  if (c.order === 'pump') {
+    if (goBelow(game, S, c, 'pump')) return;
+  }
+  // A fight (or their captain's orders): the gunners to their guns.
+  if ((S.fight && (c.role === 'gunner' || c.role === 'sailor')) || c.order === 'guns') {
+    const taken = new Set(crewOf(game, S).filter((o) => o !== c && o.task && (o.task.kind === 'gun' || (o.task.then && o.task.then.kind === 'gun'))).map((o) => (o.task.kind === 'gun' ? o.task.gi : o.task.then.gi)));
+    for (const q of game.everyone ? game.everyone() : [game.player]) if (q && q.deck && q.deck.s === S.id && q.deck.role === 'gun') taken.add(q.deck.gi);
+    const gi = S.m.guns.findIndex((g, i) => g.deck && !taken.has(i) && S.vox[(g.y * m.L + g.z) * m.W + g.x] === B.ship_cannon && (!S.fight || S.fight.side === 0 || g.side === S.fight.side));
     if (gi >= 0) {
       const g = S.m.guns[gi];
       const to = deckSpotNear(S, g.x - g.side + 0.5, g.z + 0.5, 1, g.y);
@@ -325,7 +311,7 @@ function goBelow(game, S, c, why) {
   // (On down the steps.)
   path.push([top.x, top.D + top.n, top.z + top.n - 1]);
   c.task = { kind: 'go', path };
-  c.below = { why, t: why === 'pump' ? 60 : 12 + Math.random() * 20 };
+  c.below = { why, t: c.order === 'pump' ? 1e9 : why === 'pump' ? 60 : 12 + Math.random() * 20 };
   holdOf(game, S);
   return true;
 }
@@ -349,7 +335,7 @@ function holdBrain(game, S, c, dt) {
     if (Math.abs(c.x - px) + Math.abs(c.z - pz) <= 1) {
       S.pumpers = (S.pumpers || 0) + 1;
       if (Math.random() < dt * 3) c.actionTimer = 0.25;
-      if (S.flood > 0.01 && b.t > 0) return;
+      if ((S.flood > 0.01 || c.order === 'pump') && b.t > 0 && (c.order === 'pump' || b.t < 1e8)) return;
     } else if (!c.hpathTried) {
       c.hpathTried = true;
       c.hpath = findPath(game.world, c.x, c.y, c.z, px, py, pz, { near: 1, maxNodes: 2500 }) || [];
