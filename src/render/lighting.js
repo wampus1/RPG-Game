@@ -198,12 +198,33 @@ export class Lighting {
     // (A fallen star's wing: a little blue light of its own. See
     // Renderer.drawEntity.)
     for (const w of r.wingsLit || []) if (ents.length < 12) ents.push({ x: w.x, y: w.y + 1, z: w.z, L: 3, tint: '#78b8ff' });
-    const eKey = ents.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';');
-    if (!this.eflood || this.eflood.key !== eKey || this.eflood.x0 !== this.flood.x0 || this.eflood.z0 !== this.flood.z0) {
-      const F0 = this.flood;
-      this.eflood = ents.length ? { key: eKey, x0: F0.x0, z0: F0.z0, W: F0.W, D: F0.D, ...this.floodFill(world, ents, F0.x0, F0.z0, F0.W, F0.D) } : { key: eKey, x0: F0.x0, z0: F0.z0, W: 0, D: 0 };
+    // (Round 74) Each light that moves has its own little pool, worked out
+    // where its bearer stands (and kept while they stay there); and it's
+    // read shifted by how far they are between one pace and the next, so
+    // the light glides along with them rather than jumping a tile at a
+    // time. (The player's own too.)
+    if (this.eFor !== this.flood) {
+      this.efloods = new Map();
+      this.eFor = this.flood;
     }
-    const EF = this.eflood;
+    const keep = new Map();
+    const moving = [];
+    for (const q of ents) {
+      const R = Math.min(15, Math.max(1, q.L));
+      const k = `${q.x},${q.y},${q.z},${q.L}`;
+      let G = keep.get(k) || this.efloods.get(k);
+      if (!G) {
+        const W = R * 2 + 1;
+        G = { x0: q.x - R, z0: q.z - R, W, D: W, ...this.floodFill(world, [q], q.x - R, q.z - R, W, W) };
+      }
+      keep.set(k, G);
+      const rp = q.ent && q.ent.renderPos ? q.ent.renderPos() : null;
+      moving.push({ G, fx: rp ? rp.x - q.x : 0, fz: rp ? rp.z - q.z : 0 });
+    }
+    this.efloods = keep;
+    const prp = player.renderPos ? player.renderPos() : player;
+    const pfx = prp.x - player.x;
+    const pfz = prp.z - player.z;
     const F = this.flood;
     const PF = this.pflood;
     const pts = this.samples.pts;
@@ -222,22 +243,40 @@ export class Lighting {
     if (!reuse) {
       const img = this.ctx.createImageData(SW, SH);
       const px = img.data;
-      const lightAt = (G, s) => {
-        const lx = s.x - G.x0;
-        const lz = s.z - G.z0;
+      const lightXYZ = (G, x, y, z) => {
+        const lx = x - G.x0;
+        const lz = z - G.z0;
         if (lx < 0 || lz < 0 || lx >= G.W || lz >= G.D) return 0;
         const k = lz * G.W + lx;
         const lv = G.level[k];
         if (lv <= 0) return 0;
-        const dy = Math.abs(s.y - G.srcY[k]);
+        const dy = Math.abs(y - G.srcY[k]);
         return lv * Math.max(0, 1 - Math.max(0, dy - 1) * 0.45);
+      };
+      const lightAt = (G, s) => lightXYZ(G, s.x, s.y, s.z);
+      // (A pool read shifted by part of a pace: between the four tiles.)
+      const lightShift = (G, s, fx, fz) => {
+        if (Math.abs(fx) < 0.01 && Math.abs(fz) < 0.01) return lightAt(G, s);
+        const x = s.x - fx;
+        const z = s.z - fz;
+        const ix = Math.floor(x);
+        const iz = Math.floor(z);
+        const tx = x - ix;
+        const tz = z - iz;
+        const a = lightXYZ(G, ix, s.y, iz) * (1 - tx) + lightXYZ(G, ix + 1, s.y, iz) * tx;
+        const b = lightXYZ(G, ix, s.y, iz + 1) * (1 - tx) + lightXYZ(G, ix + 1, s.y, iz + 1) * tx;
+        return a * (1 - tz) + b * tz;
       };
       for (let i = 0; i < SW * SH; i++) {
         const s = pts[i];
         let amb = 1;
         let t = 0;
         if (s) {
-          t = Math.max(lightAt(F, s), lightAt(PF, s), EF.W ? lightAt(EF, s) : 0);
+          t = Math.max(lightAt(F, s), lightShift(PF, s, pfx, pfz));
+          for (const m of moving) {
+            const v = lightShift(m.G, s, m.fx, m.fz);
+            if (v > t) t = v;
+          }
           if (s.indoor && !below) amb = 0.58;
           // (Below ground, what light there is carries: a torch's circle is
           // warm and clear, and the dark beyond it the darker for it.)

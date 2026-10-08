@@ -188,7 +188,12 @@ export class Realms {
     const R = this.realm(civ);
     const capS = this.game.world.ow.settlements[R.capital];
     if (!capS || deserted(capS)) return null;
-    const L = this.sim.layoutOf(capS.id);
+    // (Round 74: a realm's capital not yet laid out is laid out a
+    // little at a time, and its ruler crowned once it's done; laying out
+    // twenty of them at once froze the first night.)
+    const world = this.game.world;
+    let L = world.layouts.get(capS.id);
+    if (!L) L = world.layOut(capS, 4);
     if (!L || !L.econ) return null;
     const next = this.successor(civ, L, null);
     if (!next) return null;

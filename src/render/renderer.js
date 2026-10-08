@@ -32,7 +32,7 @@ const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
 import { MODS } from '../mod/state.js';
 import { TUNNEL_DIG } from '../game/evolvedgear.js';
-import { displayItems, paintingSubject } from '../game/displays.js';
+import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
 
 const makeCanvas = (w, h) => {
@@ -567,6 +567,39 @@ export class Renderer {
     ctx.restore();
   }
 
+  // (Round 74) A painting on its wall. The wall behind it as you look:
+  // flat on the wall's face, at the height it hangs. A wall to the left or
+  // the right: seen edge on, only the side of its frame. The wall in front:
+  // hidden behind it. (A large one fills the faces of two layers of wall,
+  // and a little of the paces either side.)
+  drawWallPainting(ctx, game, wx, y, wz, size, meta, sx, sy, pickable, id) {
+    const world = game.world;
+    const d = wallDirOf(world, wx, y, wz, meta & 3);
+    const sd = d < 0 ? 2 : this.viewDir(d);
+    const large = size === 'large';
+    if (sd === 2) {
+      const art = paintingArt(paintingSubject(wx, y, wz, game.seed), size, game.seed >>> 0);
+      const ax = large ? sx + 8 - 15 : sx + 3;
+      const ay = large ? sy - 9 : sy + 2;
+      // (A shadow on the wall under its lower edge.)
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(ax + 1, ay + art.height, art.width - 1, 1);
+      ctx.drawImage(art, ax, ay);
+      if (pickable && this.under(null, ax, ay, art.width, art.height, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
+      return;
+    }
+    if (sd === 0) return;
+    // Edge on: the frame's side, down the wall's length.
+    const ex = sd === 1 ? sx : sx + 14;
+    const y0 = large ? sy - 16 : sy + 4;
+    const h = large ? 50 : 18;
+    ctx.fillStyle = '#3a2614';
+    ctx.fillRect(ex, y0, 2, h);
+    ctx.fillStyle = '#8a6438';
+    ctx.fillRect(sd === 1 ? ex + 1 : ex, y0 + 1, 1, h - 2);
+    if (pickable && this.under(null, ex - 2, y0, 6, h, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
+  }
+
   drawPainting(ctx, game, wx, y, wz, size, sx, top) {
     const art = paintingArt(paintingSubject(wx, y, wz, game.seed), size, game.seed >>> 0);
     if (size === 'large') ctx.drawImage(art, sx + 8 - 15, top - 2);
@@ -926,7 +959,13 @@ export class Renderer {
             if (veil !== null && y === SURFACE) id = veil.groundAt(wx, y, wz, id);
             // (Something set down belongs with what it's set on: it shows
             // whenever that does, a cut-away roof or not.)
-            if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) continue;
+            if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) {
+              // (Round 74) A painting hung a pace up, its wall cut away as
+              // you stand inside: shown on the wall's face below, as the
+              // room's plan is drawn.
+              if (BLOCKS[id].painting && !hid(wx, y - 1, wz)) this.drawWallPainting(ctx, game, wx, y, wz, BLOCKS[id].painting, metaAt(ci, y), x0 * TILE + i * TILE - camX, sy + LH, false, id);
+              continue;
+            }
             const b = BLOCKS[id];
             const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
             // (Furniture, doors and windows in the craft of the people whose
@@ -1004,6 +1043,9 @@ export class Renderer {
               ctx.drawImage(img, tx, ty);
               if (pickable && this.under(null, sx - 6, ty + 4, 28, img.height - 4, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
               if (this.tentSleep && this.tentSleep.has(wx * 65536 + wz)) this.drawSnores(ctx, sx + 8, ty + 2, wx * 7 + wz);
+            } else if (b.painting) {
+              // (Round 74) Hung flat on its wall, as the wall is seen.
+              this.drawWallPainting(ctx, game, wx, y, wz, b.painting, metaAt(ci, y), sx, sy, pickable, id);
             } else if (render === 'sprite' || render === 'plant') {
               const meta = metaAt(ci, y);
               const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
@@ -1029,7 +1071,6 @@ export class Renderer {
               if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
               // (Round 73) What's on a rack or a stand, and what a painting shows.
               if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
-              else if (b.painting) this.drawPainting(ctx, game, wx, y, wz, b.painting, sx, sy + SPR_H - s.h);
               // Hanging signs show what the building is.
               if (id === B.hanging_sign) {
                 const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);

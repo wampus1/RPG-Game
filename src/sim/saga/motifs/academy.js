@@ -200,9 +200,18 @@ motif({
   // opening at one now and then.
   scan(S, rng, d) {
     const out = [];
-    for (const L of laidTowns(S)) {
-      if (L.settlement.type !== 'city') continue;
-      const b = academyOf(L) || foundAcademy(S.sim, L);
+    // (Round 74: one city a day gets its Academy raised at most, the one
+    // you're in first; finding room for one, in every city at once, made
+    // the first night stall.)
+    let raise = 1;
+    const here = S.game.currentSettlement && S.game.currentSettlement.id;
+    const towns = laidTowns(S).filter((L) => L.settlement.type === 'city').sort((a, c) => (c.settlement.id === here) - (a.settlement.id === here));
+    for (const L of towns) {
+      let b = academyOf(L);
+      if (!b && raise > 0 && !(L.econ.noAcademy && S.sim.today() - L.econ.noAcademy < 10)) {
+        raise--;
+        b = foundAcademy(S.sim, L);
+      }
       if (!b || S.live().some((t) => t.m === 'academy' && t.sid === L.settlement.id)) continue;
       const last = L.econ.academyTerm ?? -99;
       if (d - last < 2 || !rng.chance(0.5)) continue;

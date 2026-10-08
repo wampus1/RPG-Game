@@ -328,7 +328,9 @@ function voyage(game, F, now, rng, civ, from, to, kind, nav) {
     name: shipName(rng, civ, kind), seed: rng.int(0, 1e9),
   };
   F.voyages.push(v);
-  const L = game.sim.layoutOf(from.id);
+  // (Round 74: in its town's ledger if the town's laid out; never laid out
+  // just for the line, all at once.)
+  const L = game.world.layouts.get(from.id);
   if (L && L.econ) ledger(L, Math.floor(now / DAY), `The ${v.name}, a ${FLEET_KINDS[kind].name}, has sailed for ${to.name}${kind === 'war' ? ', her decks crowded with marines' : kind === 'settlers' ? ', settlers aboard' : ''}.`);
   return v;
 }
@@ -413,8 +415,10 @@ function end(game, F, v, now, how) {
   const from = ow.settlements[v.from];
   const to = ow.settlements[v.to];
   const day = Math.floor(now / DAY);
-  const TL = to ? sim.layoutOf(to.id) : null;
-  const FL = from ? sim.layoutOf(from.id) : null;
+  // (Round 74: only towns already laid out keep accounts to put it in;
+  // none's laid out all at once for it.)
+  const TL = to ? game.world.layouts.get(to.id) : null;
+  const FL = from ? game.world.layouts.get(from.id) : null;
   if (how === 'lost') {
     if (FL && FL.econ) ledger(FL, day, `The ${v.name} is lost at sea, bound for ${to ? to.name : 'abroad'}, with all hands.`);
     return;

@@ -12,6 +12,7 @@
 //     its people.
 // What can't be brought in is what's made only with a new world: its
 // land, its places.
+import { shortName } from '../world/dungeonnames.js';
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
 import { cookDish, parseDish } from '../world/dishes.js';
@@ -451,6 +452,25 @@ export const STEPS = [
         g++;
       }
       if (g) log.push('The Champion\'s and the Gullet\'s gates have been made over.');
+    },
+  },
+  {
+    to: '0.74.0',
+    data(d, log) {
+      log.push('Paintings hang on walls now, drawn flat against them whichever way you look, and need no floor under them. Worlds made from now on hang them a pace up the wall, have homes of two storeys with a stair up, and academies and research halls walled into more rooms and better fitted out. (Towns already laid out keep their plans.)');
+    },
+    game(game, log) {
+      // Old places' names, four words at most.
+      let n = 0;
+      for (const rec of (game.sim && game.sim.dungeons && game.sim.dungeons.all) || []) {
+        if (!rec.name) continue;
+        const short = shortName(rec.name);
+        if (short !== rec.name) {
+          rec.name = short;
+          n++;
+        }
+      }
+      if (n) log.push(`${n} old place${n === 1 ? ' goes' : 's go'} by a shorter name now.`);
     },
   },
 ];

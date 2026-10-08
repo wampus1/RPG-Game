@@ -51,7 +51,7 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // paintings and display pieces in their builds, and more variety in the
 // far lands' ground, peoples and names. (A town laid out in an older world
 // keeps its plan.)
-export const WORLD_GEN = 4;
+export const WORLD_GEN = 5;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:

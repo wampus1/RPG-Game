@@ -13,6 +13,7 @@
 // killed down there stays taken and killed; a master they've slain stays
 // slain, and the way in falls shut behind them. (Never a spire's master:
 // they go into the spires only to steal a core or two, and get out.)
+import { fitName, bareName, shortName } from '../world/dungeonnames.js';
 import { RNG, hash4, clamp } from '../util/rng.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { ISLE_TYPE_LORE, HOME_ISLE, FAR_DELVE_DAY, FAR_DELVE_GRACE, FAR_DELVE_LATEST } from '../world/isledeep.js';
@@ -126,13 +127,13 @@ export class Dungeons {
         rec.origin = { y, who, text: `In ${y}, ${who}${tn ? ` of ${tn}` : ''} was laid in a barrow ${dirFrom(town, s)} with their hearth-guard and their grave goods, and the stone door was sealed. They say the guard still keeps it.`, short: `${who} was laid in a barrow ${dirFrom(town, s)}, with the hearth-guard and the grave goods.` };
       } else if (s.type === 'mine') {
         const ore = rng.pick(ORE);
-        rec.name = `the Old ${cap(ore)} Workings${tn ? ` of ${tn}` : ''}`;
+        rec.name = fitName(tn ? `${tn}'s ${cap(ore)} Mine` : null, `the Old ${cap(ore)} Workings`);
         const lost = rng.int(9, 60);
         rec.origin = { y, text: `In ${y}, ${tn ? `${tn}'s` : 'the old'} ${ore} mine ${dirFrom(town, s)} fell in on its deepest gallery, and ${lost} miners were lost. Nobody would work it after; things were heard in it.`, short: `The ${ore} mine ${dirFrom(town, s)} fell in, and ${lost} were lost below.` };
       } else if (s.type === 'crypt') {
         const faith = town ? religionOf(town) : null;
         const god = (faith && faith.god) || rng.pick(['the Old Mother', 'the Pale Lord', 'the Lamp-Bearer', 'the Sleeper']);
-        rec.name = `the Drowned Crypt of ${god.replace(/^the /i, 'the ')}`;
+        rec.name = fitName(`${god}'s Crypt`, `${bareName(god)}'s Crypt`, 'the Drowned Crypt');
         rec.origin = { y, text: `In ${y}, the water came up through the floor of the crypt of the temple of ${god} ${dirFrom(town, s)}, and the priests who stayed to save the reliquary never came out. The chapel above fell in after.`, short: `The crypt of the old temple of ${god} ${dirFrom(town, s)} was drowned, and its priests with it.` };
       } else if (ISLE_TYPE_LORE[s.type]) {
         // An island's own kind of place (see isledeep.js).
@@ -151,6 +152,8 @@ export class Dungeons {
         rec.spire = { open: null };
         rec.cores = 4;
       }
+      // (Round 74: four words at most.)
+      rec.name = shortName(rec.name);
       rec.town = town ? town.id : null;
       s.state = s.state || {};
       this.list.push(rec);

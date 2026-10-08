@@ -675,8 +675,10 @@ def('acid_pool', { solid: false, opaque: false, render: 'liquid', standable: tru
 // another; and paintings, small and large, of whatever the painter saw.
 def('display_stand', { ...sprite, solid: true, interact: 'display', display: 1, tool: 'axe', hardness: 0.8, label: 'Display Stand' });
 def('wall_hanger', { ...sprite, solid: false, interact: 'display', display: 1, tool: 'axe', hardness: 0.4, label: 'Wall Hanger' });
-def('painting_small', { ...sprite, solid: false, interact: 'painting', painting: 'small', tool: 'axe', hardness: 0.3, label: 'Painting' });
-def('painting_large', { ...sprite, solid: false, interact: 'painting', painting: 'large', tool: 'axe', hardness: 0.3, label: 'Large Painting' });
+// (Round 74: hung on a wall, nothing under them: `onWall`, the wall's
+// side in the low bits of the meta. See displays.wallDirOf.)
+def('painting_small', { ...sprite, support: false, onWall: true, solid: false, interact: 'painting', painting: 'small', tool: 'axe', hardness: 0.3, label: 'Painting' });
+def('painting_large', { ...sprite, support: false, onWall: true, solid: false, interact: 'painting', painting: 'large', tool: 'axe', hardness: 0.3, label: 'Large Painting' });
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

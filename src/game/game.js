@@ -83,7 +83,7 @@ import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
 import { runMigrations } from './migrate.js';
 import { dishLines } from '../world/dishes.js';
 import { Riding, HORSE_FOOD } from './riding.js';
-import { useDisplay, paintingSubject } from './displays.js';
+import { wallDirOf, dirToward, WALL_DIRS, useDisplay, paintingSubject } from './displays.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
@@ -3023,12 +3023,20 @@ export class Game {
       c.plan = !!hit.plan;
       if (placeId !== null && placeId !== undefined && !ent && !hit.wall) {
         let t;
+        const hang = !!BLOCKS[placeId]?.onWall;
+        const wallish = (q) => q && q.solid && (q.render === 'cube' || q.render === 'wall');
         if (hit.fixed || (b.replaceable && hit.id !== B.air) || hit.id === B.air) t = { x: hit.x, y: hit.y, z: hit.z };
-        else if (hit.face === 'top') t = { x: hit.x, y: hit.y + 1, z: hit.z };
+        else if (hang && wallish(b) && hit.face === 'top') {
+          // (Round 74: a painting pointed at a wall's top goes on its face,
+          // the side toward you, just under where you pointed.)
+          const [fx, fz] = r.toWorld ? r.toWorld(0, 1) : [0, 1];
+          t = { x: hit.x + fx, y: hit.y, z: hit.z + fz, wall: { x: hit.x, z: hit.z } };
+        } else if (hit.face === 'top') t = { x: hit.x, y: hit.y + 1, z: hit.z };
         else {
           // In front of the face you're pointing at (towards the camera).
           const [fx, fz] = r.toWorld ? r.toWorld(0, 1) : [0, 1];
           t = { x: hit.x + fx, y: hit.y, z: hit.z + fz };
+          if (hang && wallish(b)) t.wall = { x: hit.x, z: hit.z };
         }
         const why = !reach(t.x, t.y, t.z) ? 'too far' : this.placeProblem(placeId, t.x, t.y, t.z);
         const ok = !why;
@@ -3108,6 +3116,7 @@ export class Game {
     if (b.solid && this.occupiedAny(x, y, z)) return 'someone is standing there';
     if (!this.canPlace(id, x, y, z)) {
       if (CROPS[id]) return 'needs farmland';
+      if (b.onWall) return 'needs a wall to hang on';
       if (b.support) return 'needs something under it';
       return 'no room';
     }
@@ -3763,6 +3772,7 @@ export class Game {
     // (A powder keg broken open goes up.)
     if (id === B.powder_keg) kegBlast(this, x, y, z);
     this.popUnsupported(x, y + 1, z);
+    this.popHung(x, y, z);
     this.flowWater(x, y, z);
     if (byPlayer) {
       this.stats.mined++;
@@ -3955,6 +3965,26 @@ export class Game {
     if (logs.length > 1) this.ui.msg('Timber!', '#c8e070');
   }
 
+  // (Round 74) A wall gone: what was hung on it comes down.
+  popHung(x, y, z) {
+    const w = this.world;
+    for (let d = 0; d < 4; d++) {
+      const [dx, dz] = WALL_DIRS[d];
+      const hx = x - dx;
+      const hz = z - dz;
+      const id = w.getBlock(hx, y, hz);
+      if (!BLOCKS[id] || !BLOCKS[id].onWall) continue;
+      if ((w.getMeta(hx, y, hz) & 3) !== d || wallDirOf(w, hx, y, hz, d) === d) continue;
+      if (wallDirOf(w, hx, y, hz, d) >= 0) {
+        // (Another wall beside it to hang from instead.)
+        w.setMeta(hx, y, hz, wallDirOf(w, hx, y, hz, d));
+        continue;
+      }
+      w.setBlock(hx, y, hz, B.air);
+      for (const q of rollDrops(id, Math.random)) this.spawnDrop(q.item, q.count, hx, y, hz, true);
+    }
+  }
+
   popUnsupported(x, y, z) {
     const w = this.world;
     for (let i = 0; i < 4; i++) {
@@ -4041,6 +4071,8 @@ export class Game {
     if (!(cur.replaceable || cur.id === B.air)) return false;
     const b = BLOCKS[id];
     if (b.solid && this.occupiedAny(x, y, z)) return false;
+    // (Round 74: a painting needs a wall beside it, not a floor under it.)
+    if (b.onWall && wallDirOf(w, x, y, z) < 0) return false;
     const below = BLOCKS[w.getBlock(x, y - 1, z)];
     if (b.support && !(below.solid || below.render === 'fence' || below.render === 'wall' || (b.render === 'flat' && below.liquid) || below.name === 'table' || below.name === 'counter')) return false;
     if (CROPS[id] && !isFarmland(w.getBlock(x, y - 1, z))) return false;
@@ -4071,8 +4103,15 @@ export class Game {
     const id = def.kind === 'block' ? def.block : def.plant;
     const b = BLOCKS[id];
     // The facing you chose is the one you see on screen.
-    const rot = b.rotatable ? (p.rot - (this.renderer.view || 0)) & 3 : 0;
+    let rot = b.rotatable ? (p.rot - (this.renderer.view || 0)) & 3 : 0;
     const w = this.world;
+    // (Round 74: hung on the wall you pointed at, or the one behind it as
+    // you look, or any.)
+    if (b.onWall) {
+      const behind = (2 - (this.renderer.view || 0)) & 3;
+      const pref = t.wall ? dirToward(t.x, t.z, t.wall.x, t.wall.z) : behind;
+      rot = Math.max(0, wallDirOf(w, t.x, t.y, t.z, pref < 0 ? behind : pref));
+    }
     w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
     if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
     dishTrigger(this, p, 'place', { at: { x: t.x, y: t.y, z: t.z } });

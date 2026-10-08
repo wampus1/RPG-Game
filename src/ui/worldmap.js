@@ -222,7 +222,7 @@ function arrowHead(ctx, x, y, ux, uy, r, col) {
   ctx.closePath();
   ctx.fill();
 }
-const LIST_W = 30;
+const LIST_W = 22;
 
 export class MapWindow extends Window {
   constructor(ui) {
@@ -239,6 +239,9 @@ export class MapWindow extends Window {
     // (Round 73) The list down the right: open, what's searched for, how
     // far it's scrolled.
     this.listOpen = true;
+    // (Round 74: how far out it's slid, in columns, easing toward open or
+    // shut.)
+    this.listW = LIST_W;
     this.search = '';
     this.searching = false;
     this.listScroll = 0;
@@ -246,7 +249,12 @@ export class MapWindow extends Window {
 
   // The map's area on screen, in pixels.
   area() {
-    return { x0: (this.x + 1) * CHAR_W, y0: (this.y + 1) * CHAR_H, x1: (this.x + this.w - 1 - (this.listOpen ? LIST_W : 2)) * CHAR_W, y1: (this.y + this.h - 4) * CHAR_H };
+    return { x0: (this.x + 1) * CHAR_W, y0: (this.y + 1) * CHAR_H, x1: (this.x + this.w - 1 - this.listCols()) * CHAR_W, y1: (this.y + this.h - 4) * CHAR_H };
+  }
+
+  // How many columns the list (or its tab, shut) takes up just now.
+  listCols() {
+    return Math.max(2, Math.round(this.listW ?? (this.listOpen ? LIST_W : 0)));
   }
 
   // Pixels per square, across and down.
@@ -341,13 +349,26 @@ export class MapWindow extends Window {
       if (this.drag.moved < 4) this.clicked(m.x, m.y);
       this.drag = null;
     }
+    // (The list sliding out or in.)
+    const want = this.listOpen ? LIST_W : 0;
+    this.listW += (want - this.listW) * Math.min(1, dt * 14);
+    if (Math.abs(want - this.listW) < 0.3) this.listW = want;
     const e = Math.min(1, dt * 12);
     this.cam.x += (this.goal.x - this.cam.x) * e;
     this.cam.z += (this.goal.z - this.cam.z) * e;
     this.clampCam();
   }
 
-  onClick(ck) {
+  onClick(ck, cx, cy, game) {
+    // (The list's own buttons first: its entries, its search, its tab.)
+    for (let i = this.hits.length - 1; i >= 0; i--) {
+      const h = this.hits[i];
+      if (cx >= h.x && cy >= h.y && cx < h.x + h.w && cy < h.y + h.h) {
+        h.fn(ck, game, cx, cy);
+        return true;
+      }
+    }
+    this.searching = false;
     const a = this.area();
     if (ck.button === 0 && ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cz: this.cam.z, moved: 0 };
     return true;
@@ -355,7 +376,7 @@ export class MapWindow extends Window {
 
   onWheel(d) {
     const m = this.ui.mouse;
-    if (this.listOpen && m && m.x >= (this.x + this.w - 1 - LIST_W) * CHAR_W) {
+    if (this.listOpen && m && m.x >= (this.x + this.w - 1 - this.listCols()) * CHAR_W) {
       this.listScroll = Math.max(0, this.listScroll + (d > 0 ? 3 : -3));
       return;
     }
@@ -527,17 +548,21 @@ export class MapWindow extends Window {
   }
 
   drawList(g, game) {
-    const bx = this.w - 1 - (this.listOpen ? LIST_W : 2);
-    // The tab to open or close it.
-    const tab = this.listOpen ? '▶' : '◀';
-    const hovTab = this.hovering(bx, 1, 1, 3);
-    for (let y = 1; y <= 3; y++) g.text(bx, y, y === 2 ? tab : ' ', hovTab ? C.white : C.hi, hovTab ? '#5a4628' : '#2a2016');
-    this.hit(bx, 1, 1, 3, () => {
+    const cols = this.listCols();
+    const bx = this.w - 1 - cols;
+    // The tab to open or close it (a book drawn on it: see drawListTab).
+    const hovTab = this.hovering(bx, 1, 2, 3);
+    this.tabHov = hovTab;
+    for (let y = 1; y <= 3; y++) g.text(bx, y, '  ', C.hi, hovTab ? '#5a4628' : '#2a2016');
+    this.tabAt = { x: bx, y: 1 };
+    this.hit(bx, 1, 2, 3, () => {
       this.listOpen = !this.listOpen;
+      if (!this.listOpen) this.searching = false;
+      this.ui.audio?.play('page');
     });
-    if (!this.listOpen) return;
-    const x = bx + 1;
-    const W = LIST_W - 1;
+    if (cols <= 3) return;
+    const x = bx + 2;
+    const W = cols - 2;
     const bottom = this.h - 5;
     for (let y = 1; y <= bottom; y++) g.text(x, y, ' '.repeat(W), C.fg, '#100c14');
     // The search.
@@ -571,8 +596,9 @@ export class MapWindow extends Window {
 
   // Off to an entry in the list: the map moved there, and close in on it.
   goTo(e) {
-    this.goal = { x: e.x / REGION_W, z: e.z / REGION_D };
     if (this.zi < 4) this.zoomTo(4);
+    this.goal = { x: e.x / REGION_W, z: e.z / REGION_D };
+    this.searching = false;
     this.ui.audio?.play('select');
   }
 
@@ -745,6 +771,7 @@ export class MapWindow extends Window {
     // Still working out the far reaches of the world.
     if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
     ctx.restore();
+    this.drawListTab(ctx);
   }
 
   drawQuestArrows(ctx, game, me, a, time) {
@@ -882,6 +909,47 @@ export class MapWindow extends Window {
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
+  // (Round 74) A little book on the list's tab: shut when the list is
+  // put away, open when it's out.
+  drawListTab(ctx) {
+    const t = this.tabAt;
+    if (!t) return;
+    const x = Math.round((this.x + t.x) * CHAR_W + 1);
+    const y = Math.round((this.y + t.y + 1) * CHAR_H - 1);
+    const hov = this.tabHov;
+    const cover = hov ? '#d07a40' : '#a0522d';
+    const dark = '#5a2a14';
+    const page = '#f0e2c0';
+    ctx.save();
+    if (this.listOpen) {
+      // Open: two pages and a spine down the middle.
+      ctx.fillStyle = cover;
+      ctx.fillRect(x, y + 1, 10, 8);
+      ctx.fillStyle = page;
+      ctx.fillRect(x + 1, y, 4, 8);
+      ctx.fillRect(x + 6, y, 4, 8);
+      ctx.fillStyle = dark;
+      ctx.fillRect(x + 5, y, 1, 9);
+      ctx.fillStyle = '#9a8a6a';
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(x + 2, y + 2 + i * 2, 2, 1);
+        ctx.fillRect(x + 7, y + 2 + i * 2, 2, 1);
+      }
+    } else {
+      // Shut: a cover, its spine and the edge of its pages.
+      ctx.fillStyle = dark;
+      ctx.fillRect(x + 1, y, 8, 10);
+      ctx.fillStyle = cover;
+      ctx.fillRect(x + 2, y, 7, 9);
+      ctx.fillStyle = page;
+      ctx.fillRect(x + 2, y + 9, 7, 1);
+      ctx.fillStyle = '#e8c060';
+      ctx.fillRect(x + 4, y + 3, 3, 1);
+      ctx.fillRect(x + 4, y + 5, 3, 1);
+    }
     ctx.restore();
   }
 

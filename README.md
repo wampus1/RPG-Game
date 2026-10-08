@@ -5681,6 +5681,38 @@ Tooth's dig (you sink into the ground, steer under it and burst out).
 Two-handed weapons hit 2–4 harder. "Too low/too high" messages and the
 B key are gone.
 
+## Round 74: shorter names, the map's list, paintings on walls, two storeys
+
+**Fixes:**
+- The game no longer **freezes on the first night** (most of all while
+  you sleep through it): realms' capitals are laid out a little at a time
+  rather than twenty at once to crown their rulers, ships' ledgers no
+  longer lay a town out just to write a line, and only one city a day
+  finds room for its Academy.
+- **Old places' names** are four words at most, made without their fluff:
+  "Dorrin Stonefist's Barrow", "Ashford's Silver Mine", "the Old Ones'
+  Hammer". (Saved worlds' names are shortened too.)
+- The **map's list**: a click on a place takes the map there and closes in
+  on it; the search box can be clicked and typed in; it's narrower, slides
+  out and back, and its tab shows a book.
+- The **light** round you (and anyone carrying one) at night glides along
+  with you, rather than jumping from pace to pace.
+
+**Paintings** hang on walls: flat against the wall's face as you look at
+it, its frame's edge when the wall runs away from you, hidden behind a
+wall in front. Nothing's needed under them, pointing at a wall's face (or
+its top) hangs one there, and they come down if their wall does. In worlds
+made from now on, towns hang them a pace up the wall.
+
+**Homes of two storeys** (worlds made from now on, about half the bigger
+homes): a stair of three steps along a wall, a floor over the house, and a
+room up there with a bed or two, a chest, a lamp and a rug.
+
+**Academies** and research halls are walled into more rooms and fitted
+out better (shelves, crates, candles, banners, rugs, a prize on a stand);
+one too narrow for its four rooms is divided in two rather than left one
+great room.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5732,7 +5764,8 @@ src/
                        and masters), ancient (the four ancient places on
                        the great continents: where, what, their gates),
                        voyage (the ship in the
-                       castaway's opening), region/world storage
+                       castaway's opening), dungeonnames (old places'
+                       names, four words at most), region/world storage
   entities/            player, npc (AI), npcgen (jobs, personality, hobbies,
                        schedules, families), acts (what people look like
                        doing things: dice, meals, drinks, cooking), warrior

@@ -121,3 +121,25 @@ export function paintingSubject(x, y, z, seed = 0) {
 export const isPainting = (id) => !!(BLOCKS[id] && BLOCKS[id].painting);
 export const isDisplay = (id) => !!(BLOCKS[id] && BLOCKS[id].display);
 export const DISPLAY_IDS = () => [B.weapon_rack, B.display_stand, B.wall_hanger];
+
+// (Round 74) Which way a thing hung on a wall has its wall: 0 the +z side,
+// 1 the -x, 2 the -z, 3 the +x (as facings are counted: see
+// Renderer.viewDir). The one in its meta if there's a wall there, else
+// whichever side has one (one hung before they knew), else -1.
+export const WALL_DIRS = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+const wallAt = (world, x, y, z) => {
+  const b = BLOCKS[world.getBlock(x, y, z)];
+  return !!(b && b.solid && (b.render === 'cube' || b.render === 'wall' || b.render === 'door'));
+};
+export function wallDirOf(world, x, y, z, pref = 2) {
+  const order = [pref & 3, 2, 1, 3, 0];
+  for (const d of order) if (wallAt(world, x + WALL_DIRS[d][0], y, z + WALL_DIRS[d][1])) return d;
+  return -1;
+}
+// The side a wall is on from (x, z), toward (wx, wz) beside it, or -1.
+export function dirToward(x, z, wx, wz) {
+  const dx = Math.sign(wx - x);
+  const dz = Math.sign(wz - z);
+  if (dx && dz) return -1;
+  return WALL_DIRS.findIndex(([a, b]) => a === dx && b === dz);
+}
