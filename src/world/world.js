@@ -286,9 +286,10 @@ export class World {
     const feet = BLOCKS[this.getBlock(x, y, z)];
     // Doors are passable when open (NPCs path through closed ones and open them).
     if (feet.solid && !((feet.interact === 'door' || feet.interact === 'gate') && (allowDoors || this.getState(x, y, z)))) return false;
-    const head = BLOCKS[this.getBlock(x, y + 1, z)];
-    if (head.solid || head.liquid) return false;
     const below = BLOCKS[this.getBlock(x, y - 1, z)];
+    const head = BLOCKS[this.getBlock(x, y + 1, z)];
+    // (Round 75: on a stair you stoop under whatever's over it.)
+    if ((head.solid && !below.stair) || head.liquid) return false;
     return below.standable;
   }
 
@@ -296,8 +297,13 @@ export class World {
   // height it would end up at (step up 1, level, or drop up to 2), or -1.
   stepTarget(fromX, fromY, fromZ, x, z, allowDoors = false) {
     if (this.canStand(x, fromY, z, allowDoors)) return fromY;
+    // (Round 75) Off a stair down onto the one below it: down, not up onto
+    // whatever floor's over that one.
+    if (BLOCKS[this.getBlock(fromX, fromY - 1, fromZ)].stair && BLOCKS[this.getBlock(x, fromY - 2, z)].stair && this.canStand(x, fromY - 1, z, allowDoors)) return fromY - 1;
     // Step up needs head room above the current position.
-    if (this.canStand(x, fromY + 1, z, allowDoors) && !BLOCKS[this.getBlock(fromX, fromY + 2, fromZ)].solid) return fromY + 1;
+    // (Round 75: not up onto a stair, or from one: you stoop.)
+    const stairs = BLOCKS[this.getBlock(x, fromY, z)].stair || BLOCKS[this.getBlock(fromX, fromY - 1, fromZ)].stair;
+    if (this.canStand(x, fromY + 1, z, allowDoors) && (stairs || !BLOCKS[this.getBlock(fromX, fromY + 2, fromZ)].solid)) return fromY + 1;
     if (this.canStand(x, fromY - 1, z, allowDoors)) return fromY - 1;
     if (this.canStand(x, fromY - 2, z, allowDoors) && !BLOCKS[this.getBlock(x, fromY - 1, z)].solid && !BLOCKS[this.getBlock(x, fromY, z)].solid) return fromY - 2;
     return -1;

@@ -2,7 +2,7 @@
 // and rotation-dependent shading), prop sprites, plants and overlays. All
 // images are packed into a single atlas canvas.
 import { TILE, LH } from '../config.js';
-import { BLOCKS, CROPS } from '../world/blocks.js';
+import { B, BLOCKS, CROPS } from '../world/blocks.js';
 import { Px, shade, hex } from './pixel.js';
 import { mulberry32, hash4 } from '../util/rng.js';
 import { dungeonTop, dungeonFront, dungeonFlat, bonesSprite, DSPRITES, DANIM } from './dungeontex.js';
@@ -2220,6 +2220,14 @@ function buildBlock(b, TEX) {
           for (let v = 0; v < n; v++) arr.push(addImage(name === 'water' ? waterFront(v) : cubeFront(name, v, seed(v * 10 + 5 + rot), rot)));
           TEX.front[id * 4 + rot] = arr;
         }
+      }
+    } else if (b.render === 'stair') {
+      // (Round 75) A stair wears its floor's own faces (see
+      // Renderer.drawStair: cut into steps there).
+      const base = B[b.stairOf];
+      for (let rot = 0; rot < 4; rot++) {
+        TEX.top[id * 4 + rot] = TEX.top[base * 4];
+        TEX.front[id * 4 + rot] = TEX.front[base * 4];
       }
     } else if (b.render === 'wall') {
       // (Round 70) A thin wall: its parts (see wallParts).

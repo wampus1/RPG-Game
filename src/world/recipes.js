@@ -1,6 +1,7 @@
 // Crafting recipes grouped by the station they need.
 
 import { DYEABLE, DYES, DYE_FROM, GEMS } from './items.js';
+import { STAIR_BASES } from './blocks.js';
 
 export const STATIONS = {
   hand: 'By Hand',
@@ -109,6 +110,8 @@ r('workbench', 'rug_blue', 2, { cloth: 2 });
 r('workbench', 'rug_green', 2, { cloth: 2 });
 r('workbench', 'training_dummy', 1, { hay_bale: 1, stick: 3 });
 r('workbench', 'log_wall', 4, { log: 2 });
+// (Round 75) Stairs of each floor's stuff: three of it makes four.
+for (const base of STAIR_BASES) r('workbench', `${base}_stairs`, 4, { [base]: 3 });
 r('workbench', 'stool', 2, { planks: 1, stick: 2 });
 r('workbench', 'hanging_sign', 1, { planks: 2, stick: 1, string: 1 });
 r('workbench', 'snare', 1, { stick: 2, string: 2 });

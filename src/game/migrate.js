@@ -13,6 +13,8 @@
 // What can't be brought in is what's made only with a new world: its
 // land, its places.
 import { shortName } from '../world/dungeonnames.js';
+import { stairFor } from '../world/blocks.js';
+import { SURFACE } from '../config.js';
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
 import { cookDish, parseDish } from '../world/dishes.js';
@@ -471,6 +473,38 @@ export const STEPS = [
         }
       }
       if (n) log.push(`${n} old place${n === 1 ? ' goes' : 's go'} by a shorter name now.`);
+    },
+  },
+  {
+    to: '0.75.0',
+    data(d, log) {
+      log.push('Stairs, in each kind of floor\'s stone or wood: a step you can climb with something over your head, drawn turned the way it climbs. Houses of two storeys go up them.');
+    },
+    game(game, log) {
+      // Houses of two storeys already standing: their plank steps made over
+      // into stairs of their own floor (where the house is loaded).
+      const w = game.world;
+      const Y0 = SURFACE + 1;
+      let n = 0;
+      for (const L of w.layouts.values()) {
+        for (const b of L.buildings || []) {
+          const st = b.stair;
+          if (b.storeys !== 2 || !st || w.getBlock(st.low.x, Y0, st.low.z) !== B.planks_dark) continue;
+          const floor = b.mats && b.mats.floor ? b.mats.floor : B.planks;
+          const stair = stairFor(floor);
+          const up = b.stairUp ?? (st.mid.z > st.low.z ? 0 : st.mid.x < st.low.x ? 1 : st.mid.z < st.low.z ? 2 : 3);
+          w.setBlock(st.low.x, Y0, st.low.z, stair, up);
+          w.setBlock(st.low.x, Y0 + 1, st.low.z, B.air);
+          w.setBlock(st.low.x, Y0 + 2, st.low.z, floor);
+          w.setBlock(st.mid.x, Y0, st.mid.z, floor);
+          w.setBlock(st.mid.x, Y0 + 1, st.mid.z, stair, up);
+          w.setBlock(st.top.x, Y0, st.top.z, floor);
+          w.setBlock(st.top.x, Y0 + 1, st.top.z, floor);
+          w.setBlock(st.top.x, Y0 + 2, st.top.z, stair, up);
+          n++;
+        }
+      }
+      if (n) log.push(`${n} house${n === 1 ? '\'s' : 's\''} steps made over into stairs.`);
     },
   },
 ];

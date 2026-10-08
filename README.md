@@ -5713,6 +5713,22 @@ out better (shelves, crates, candles, banners, rugs, a prize on a stand);
 one too narrow for its four rooms is divided in two rather than left one
 great room.
 
+## Round 75: stairs
+
+**Stairs**, one kind for each floor a people lays (oak, dark and drift
+planks, cinder, bog, birch and lacquered planks, bamboo, flagstone,
+cobblestone, stone brick, marble, blue and turquoise tile, travertine, salt
+brick), three of the stuff making four at the workbench. A stair is a step
+you can climb even with a block over your head (you stoop under it), and
+walking off one onto the stair below takes you down it, not up onto the
+floor over it. Each is turned the way it climbs, and drawn cut into two
+steps that way however the camera's turned.
+
+Houses of two storeys go up stairs of their own floor's stuff now: one on
+the floor, one on a block, the last in the floor above, with only one
+hole cut for it. (Houses already standing have their plank steps made over
+into stairs when the world's brought up to date.)
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

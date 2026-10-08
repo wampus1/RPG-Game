@@ -3,7 +3,7 @@
 // bucketed per region, plus semantic data (buildings, spots) used by NPCs.
 import { SURFACE, GROUND, REGION_W, REGION_D } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf } from './blocks.js';
+import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf, stairFor } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
@@ -142,6 +142,9 @@ const SHOP_NAMES = {
 };
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// (Round 75) The way from one tile to the next beside it, as facings are
+// counted (0 +z, 1 -x, 2 -z, 3 +x): which way a stair climbs.
+const stairDir = (a, b) => (b.z > a.z ? 0 : b.x < a.x ? 1 : b.z < a.z ? 2 : 3);
 // The narrowest way through a town wall.
 const GATE_MIN = 4;
 
@@ -2829,15 +2832,18 @@ class Layout {
         continue;
       }
       reserved.add(key(run[3].x, run[3].z));
-      const mat = B.planks_dark;
-      // (The first step one block high, the middle two; the top two and
-      // the floor's plank over it.)
-      // (Its top under the floor plank, three high with it.)
-      for (const y of [Y0, Y0 + 1]) {
-        this.put(steps[0].x, y, steps[0].z, mat);
-        this.put(steps[1].x, y, steps[1].z, mat);
-      }
-      this.put(steps[2].x, Y0, steps[2].z, mat);
+      // (Round 75) Stairs in the floor's own stuff: the first on the
+      // floor, the second on a block of it, the third (up in the floor
+      // above, see upstairs) on two; each turned the way it climbs.
+      const floor = b.mats.floor || B.planks;
+      const stair = stairFor(floor);
+      const up = stairDir(steps[2], steps[1]);
+      this.put(steps[2].x, Y0, steps[2].z, stair, up);
+      this.put(steps[1].x, Y0, steps[1].z, floor);
+      this.put(steps[1].x, Y0 + 1, steps[1].z, stair, up);
+      this.put(steps[0].x, Y0, steps[0].z, floor);
+      this.put(steps[0].x, Y0 + 1, steps[0].z, floor);
+      b.stairUp = up;
       b.stair = { top: steps[0], mid: steps[1], low: steps[2], from: run[3] };
       return b.stair;
     }
@@ -2853,8 +2859,12 @@ class Layout {
     const FY = Y0 + 2;
     const UY = Y0 + 3;
     const floor = b.mats.floor || B.planks;
-    const hole = (x, z) => (x === st.mid.x && z === st.mid.z) || (x === st.low.x && z === st.low.z);
+    // (Round 75: the only hole is over the middle step, where your feet
+    // go; the last step's stair is in the floor itself, and you stoop
+    // under the floor on the first.)
+    const hole = (x, z) => x === st.mid.x && z === st.mid.z;
     for (let z = iz0; z <= iz1; z++) for (let x = ix0; x <= ix1; x++) if (!hole(x, z)) this.put(x, FY, z, floor);
+    this.put(st.top.x, FY, st.top.z, stairFor(floor), b.stairUp ?? stairDir(st.mid, st.top));
     const keep = new Set([`${st.top.x},${st.top.z}`]);
     const taken = new Set([`${st.mid.x},${st.mid.z}`, `${st.low.x},${st.low.z}`, `${st.top.x},${st.top.z}`]);
     // (Round the landing: clear.)

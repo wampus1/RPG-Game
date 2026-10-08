@@ -679,6 +679,20 @@ def('wall_hanger', { ...sprite, solid: false, interact: 'display', display: 1, t
 // side in the low bits of the meta. See displays.wallDirOf.)
 def('painting_small', { ...sprite, support: false, onWall: true, solid: false, interact: 'painting', painting: 'small', tool: 'axe', hardness: 0.3, label: 'Painting' });
 def('painting_large', { ...sprite, support: false, onWall: true, solid: false, interact: 'painting', painting: 'large', tool: 'axe', hardness: 0.3, label: 'Large Painting' });
+// (Round 75) Stairs, one for each kind of floor a people lays: a step up
+// that needs no head room over it (see World.canStand and stepTarget),
+// turned the way it climbs (the low bits of its meta: the way you go up
+// it, as facings are counted), and drawn in its floor's own stone or wood.
+export const STAIR_BASES = ['planks', 'planks_dark', 'planks_drift', 'planks_cinder', 'planks_bog', 'planks_birch', 'planks_lacquer', 'bamboo', 'flagstone', 'cobblestone', 'stone_bricks', 'marble', 'tile_blue', 'turquoise_tile', 'travertine', 'salt_brick'].filter((n) => B[n] !== undefined);
+for (const base of STAIR_BASES) {
+  const o = BLOCKS[B[base]];
+  def(`${base}_stairs`, { solid: true, opaque: false, render: 'stair', stair: true, stairOf: base, rotatable: true, standable: true, tool: o.tool, hardness: o.hardness, label: `${o.label || cap(base.replace(/_/g, ' '))} Stairs` });
+}
+// The stair for a floor of `id` (wood's own plank stair if there's none).
+export function stairFor(id) {
+  const n = BLOCKS[id] && BLOCKS[id].name;
+  return B[`${n}_stairs`] ?? B.planks_stairs;
+}
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);

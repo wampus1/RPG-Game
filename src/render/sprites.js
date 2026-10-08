@@ -1615,7 +1615,7 @@ function blockIcon(id) {
     }
     return p;
   }
-  if (b.render === 'cube' || b.render === 'door') {
+  if (b.render === 'cube' || b.render === 'door' || b.render === 'stair') {
     const top = TEX.top[id * 4][0];
     const front = TEX.front[id * 4][0];
     // Squash the 16x16 top into 14x8 and put the front below it.
@@ -1632,6 +1632,12 @@ function blockIcon(id) {
       const sy = y * 2;
       const i = (sy * 16 + sx) * 4;
       if (fd[i + 3]) p.set(x + 1, y + 9, [fd[i], fd[i + 1], fd[i + 2]], 255);
+    }
+    // (Round 75) A stair: its low step cut out of the block's left half,
+    // the high one's riser shaded beside it.
+    if (b.render === 'stair') {
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) p.set(x, y, [0, 0, 0], 0);
+      for (let y = 5; y < 9; y++) p.set(8, y, [40, 30, 20], 255);
     }
     return p.outline(OUT);
   }

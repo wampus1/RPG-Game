@@ -567,6 +567,61 @@ export class Renderer {
     ctx.restore();
   }
 
+  // (Round 75) A stair: its high step and its low one, each a piece of
+  // its floor's top and front, laid out by the way it climbs on screen
+  // (0 toward you, 1 to the left, 2 away, 3 to the right). A step is half
+  // a layer (6px) high and half a pace deep.
+  drawStair(ctx, atl, T, id, v, sd, sx, sy) {
+    const tops = T.top[id * 4];
+    const fronts = T.front[id * 4];
+    if (!tops || !fronts) return;
+    const t = tops[v % tops.length];
+    const f = fronts[v % fronts.length];
+    const H = LH / 2;
+    const top = (x0, y0, w, h, dx, dy) => ctx.drawImage(atl, t.x + x0, t.y + y0, w, h, sx + dx, sy + dy, w, h);
+    const front = (x0, y0, w, h, dx, dy) => ctx.drawImage(atl, f.x + x0, f.y + y0, w, h, sx + dx, sy + dy, w, h);
+    const shade = (dx, dy, w, h, a) => {
+      ctx.fillStyle = `rgba(0,0,0,${a})`;
+      ctx.fillRect(sx + dx, sy + dy, w, h);
+    };
+    const edge = (dx, dy, w) => {
+      ctx.fillStyle = 'rgba(255,245,220,0.28)';
+      ctx.fillRect(sx + dx, sy + dy, w, 1);
+    };
+    if (sd === 2) {
+      // Climbing away: the high step behind, its riser, the low step in front.
+      top(0, 0, 16, 8, 0, 0);
+      front(0, 0, 16, H, 0, 8);
+      shade(0, 8, 16, H, 0.12);
+      top(0, 8, 16, 8, 0, 8 + H);
+      edge(0, 8 + H, 16);
+      front(0, H, 16, H, 0, 16 + H);
+      shade(0, 8 + H, 16, 8 + H, 0.08);
+      edge(0, 0, 16);
+    } else if (sd === 0) {
+      // Climbing toward you: the low step behind, the high one in front,
+      // its face the full height.
+      top(0, 0, 16, 8, 0, H);
+      shade(0, H, 16, 8, 0.12);
+      top(0, 8, 16, 8, 0, 8);
+      edge(0, 8, 16);
+      front(0, 0, 16, LH, 0, 16);
+    } else {
+      // Climbing to one side: the high half that side, the low half the
+      // other, a step down between.
+      const hx = sd === 1 ? 0 : 8;
+      const lx = 8 - hx;
+      top(hx, 0, 8, 16, hx, 0);
+      front(hx, 0, 8, LH, hx, 16);
+      top(lx, 0, 8, 16, lx, H);
+      front(lx, H, 8, H, lx, 16 + H);
+      shade(lx, H, 8, 16 + H, 0.1);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(sx + (sd === 1 ? 8 : 7), sy + H, 1, 16);
+      edge(hx, 0, 8);
+    }
+  }
+
   // (Round 74) A painting on its wall. The wall behind it as you look:
   // flat on the wall's face, at the height it hangs. A wall to the left or
   // the right: seen edge on, only the side of its frame. The wall in front:
@@ -1018,6 +1073,12 @@ export class Renderer {
                 ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
                 if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
               }
+            } else if (render === 'stair') {
+              // (Round 75) A stair, in its floor's stone or wood, cut into
+              // two steps the way it climbs as you look at it.
+              const sd = ((metaAt(ci, y) & META_ROT) + view) & 3;
+              this.drawStair(ctx, atl, T, id, v, sd, sx, sy);
+              if (pickable && mouse.x >= sx && mouse.x < sx + 16 && mouse.y >= sy && mouse.y < sy + SPR_H) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq };
             } else if (render === 'door') {
               const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
               const s = T.sprite[id * 4 + rot][0];
