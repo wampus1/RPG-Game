@@ -35,7 +35,8 @@ export const FAR_P = {
   grass_gold: ['#c8a848', '#a88a34', '#e0c460', '#7a6a2a'],
   frost_grass: ['#9ab8c8', '#7a98aa', '#d8ecf8', '#ffffff'],
   red_rock: ['#b85a34', '#984628', '#d0744a', '#6a2e1a'],
-  salt_crust: ['#f4f0ea', '#dcd6cc', '#ffffff', '#c8bcb8'],
+  // (Round 76: toned down; out in the sun it was a glare.)
+  salt_crust: ['#d4cec4', '#bcb4a8', '#e2ddd4', '#a69c92'],
   bone_sand: ['#e8dcc0', '#d0c4a6', '#f6eedc', '#a89a80'],
   heath: ['#7a6a88', '#5e5070', '#9a88a8', '#4a6a3a'],
 };
@@ -495,7 +496,7 @@ export function farTop(name, v, rand, rot = 0) {
       // Polygons of crust, their raised white rims.
       const pal = FAR_P.salt_crust;
       cobble(p, [pal[0], pal[3], pal[2]], rand, 6);
-      for (let i = 0; i < 6; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), '#ffffff');
+      for (let i = 0; i < 6; i++) p.set(Math.floor(rand() * 16), Math.floor(rand() * 16), '#ece8e0');
       return p;
     }
     case 'bone_sand': {
@@ -643,7 +644,7 @@ export function farFront(name, v, rand) {
     }
     case 'salt_crust': {
       const pal = FAR_P.salt_crust;
-      speckle(p, ['#d8c8b0', '#c8b498', '#e8dcc8'], rand, 0.3);
+      speckle(p, ['#c4b6a0', '#b0a088', '#d2c6b2'], rand, 0.3);
       for (let x = 0; x < 16; x++) for (let y = 0; y < 2 + (x % 3 === 0 ? 1 : 0); y++) p.set(x, y, y === 0 ? pal[2] : pal[0]);
       return frontify(p, 0.92);
     }

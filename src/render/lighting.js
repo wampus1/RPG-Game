@@ -232,8 +232,11 @@ export class Lighting {
     // the last one drawn again between, so long as the view's not moved
     // on. Round 57.)
     const was = this.lastLit;
-    const reuse = this.fast && was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && ++was.n % 3 !== 0;
-    if (!reuse) this.lastLit = { k0, m0, SW, SH, n: 0 };
+    // (Round 76: never while a carried light's gliding from one pace to the
+    // next: the pool stuttered behind its bearer, a flicker as they walked.)
+    const mk = [pfx, pfz, ...moving.flatMap((m) => [m.fx, m.fz])].map((q) => Math.round(q * 8)).join(',') + `|${player.x},${player.z}`;
+    const reuse = this.fast && was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && was.mk === mk && ++was.n % 3 !== 0;
+    if (!reuse) this.lastLit = { k0, m0, SW, SH, mk, n: 0 };
     if (this.canvas.width !== SW || this.canvas.height !== SH) {
       this.canvas.width = SW;
       this.canvas.height = SH;
@@ -323,7 +326,11 @@ export class Lighting {
         const sy = sv * TILE - (rp.y + (s.ent ? s.dy || 0 : 0)) * LH - r.camY + LH + 2;
         if (sx < -40 || sy < -40 || sx > (r.vw || VIEW_W) + 40 || sy > (r.vh || VIEW_H) + 40) continue;
         const size = 20 + s.L * 3;
-        ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + s.x * 3 + s.z) * 0.08) * (s.dim ?? 1);
+        // (Round 76: a carried light's flicker keeps its own beat as its
+        // bearer walks; taken from where it stood, it jumped a step at
+        // every pace.)
+        const beat = s.ent ? ((s.ent.id ?? 0) * 1.37) % 6.28 : s.x * 3 + s.z;
+        ctx.globalAlpha = Math.min(1, dark * 1.2) * (0.85 + Math.sin(r.time * 9 + beat) * (s.ent ? 0.04 : 0.08)) * (s.dim ?? 1);
         ctx.drawImage(s.tint ? this.tintGlow(s.tint) : s.cold ? (pal ? this.palGlow(pal) : this.coldGlow) : this.glow, sx - size / 2, sy - size / 2, size, size);
       }
       ctx.restore();

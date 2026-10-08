@@ -13,7 +13,9 @@
 // What can't be brought in is what's made only with a new world: its
 // land, its places.
 import { shortName } from '../world/dungeonnames.js';
-import { stairFor } from '../world/blocks.js';
+import { stairFor, BLOCKS } from '../world/blocks.js';
+import { NO_PAINTINGS } from '../world/settlement.js';
+import { wallDirOf, WALL_DIRS } from './displays.js';
 import { SURFACE } from '../config.js';
 import { GAME_VERSION, compareVersions } from '../version.js';
 import { stockPantry, PANTRY } from './cooking.js';
@@ -505,6 +507,44 @@ export const STEPS = [
         }
       }
       if (n) log.push(`${n} house${n === 1 ? '\'s' : 's\''} steps made over into stairs.`);
+    },
+  },
+  {
+    to: '0.76.0',
+    data(d, log) {
+      log.push('Folk who knock at a door wait half a minute for an answer and then go on their way, and never at their own; the salt flats are less of a glare; a carried torch\'s light no longer flickers as you walk.');
+    },
+    game(game, log) {
+      // Paintings hung where they never should have been: in temples,
+      // jails, barns and the like; over a door; with no wall behind them;
+      // or in the place of a wall between rooms (put back).
+      const w = game.world;
+      let n = 0;
+      for (const L of w.layouts.values()) {
+        for (const b of L.buildings || []) {
+          if (b.x0 === undefined) continue;
+          const deny = NO_PAINTINGS.has(b.type);
+          for (let z = b.z0; z <= b.z1; z++) {
+            for (let x = b.x0; x <= b.x1; x++) {
+              for (let y = SURFACE + 1; y <= SURFACE + 6; y++) {
+                const id = w.getBlock(x, y, z);
+                if (!BLOCKS[id] || !BLOCKS[id].painting) continue;
+                const below = w.getBlock(x, y - 1, z);
+                const above = w.getBlock(x, y + 1, z);
+                const wallMat = b.mats && b.mats.wall;
+                const inWall = wallMat !== undefined && below === wallMat && above === wallMat;
+                const d = wallDirOf(w, x, y, z, w.getMeta(x, y, z) & 3);
+                const behind = d >= 0 ? BLOCKS[w.getBlock(x + WALL_DIRS[d][0], y, z + WALL_DIRS[d][1])] : null;
+                const overDoor = !!(behind && (behind.interact === 'door' || behind.name === 'door_top'));
+                if (!(deny || inWall || d < 0 || overDoor)) continue;
+                w.setBlock(x, y, z, inWall ? wallMat : B.air);
+                n++;
+              }
+            }
+          }
+        }
+      }
+      if (n) log.push(`${n} painting${n === 1 ? '' : 's'} hung where ${n === 1 ? 'it' : 'they'} shouldn't have been taken down.`);
     },
   },
 ];

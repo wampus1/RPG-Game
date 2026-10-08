@@ -2802,21 +2802,36 @@ export class NPC extends Entity {
       // (Round 73) Someone else's front door, locked: a knock, and a wait
       // to see if anyone comes; nobody does, they go elsewhere.
       if (!w.getState(nx, ty, nz) && doorLocked(this.game, nx, ty, nz, this)) {
+        // (Round 76) One knock, then half a minute's wait for an answer;
+        // nobody comes, they go on elsewhere, and don't come knocking at
+        // that door again for a couple of hours.
         const k = `${nx},${nz}`;
+        const now = performance.now() / 1000;
+        const day = this.game.sim ? this.game.sim.abs : 0;
+        this.knockedOff ||= new Map();
+        if ((this.knockedOff.get(k) ?? -Infinity) > day) {
+          this.path = null;
+          this.goal = null;
+          this.idleT = Math.max(this.idleT || 0, 3);
+          return false;
+        }
         if (this.knockAt !== k) {
           this.knockAt = k;
-          this.knockWait = 4;
+          this.knockSince = now;
           knockDoor(this.game, nx, ty, nz, this);
           this.face(nx, nz);
           return false;
         }
-        this.knockWait -= 0.25;
-        if (this.knockWait <= 0) {
+        if (now - this.knockSince >= 30) {
           this.knockAt = null;
+          this.knockedOff.set(k, day + 120);
           this.path = null;
+          this.goal = null;
+          this.say?.(this.rng.pick(['Nobody home, then.', 'Hm. Another time.', 'Out, it seems.']), 2.5);
         }
         return false;
       }
+      if (this.knockAt === `${nx},${nz}`) this.knockAt = null;
       // Open it (or find it open) on the way through; shut it after.
       if (!w.getState(nx, ty, nz)) this.game.setDoor(nx, ty, nz, true);
       if (!this.openedDoors.some((d) => d.x === nx && d.z === nz)) this.openedDoors.push({ x: nx, y: ty, z: nz });

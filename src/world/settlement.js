@@ -142,6 +142,8 @@ const SHOP_NAMES = {
 };
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// (Round 76) Where no painting's hung.
+export const NO_PAINTINGS = new Set(['temple', 'shrine', 'chapel', 'monastery', 'prison', 'stockade', 'jail', 'guardhouse', 'barracks', 'barn', 'stables', 'windmill', 'warehouse', 'granary', 'smithy', 'forge', 'mill', 'kiln', 'tannery', 'butcher', 'mine', 'dock', 'shipyard', 'watchtower']);
 // (Round 75) The way from one tile to the next beside it, as facings are
 // counted (0 +z, 1 -x, 2 -z, 3 +x): which way a stair climbs.
 const stairDir = (a, b) => (b.z > a.z ? 0 : b.x < a.x ? 1 : b.z < a.z ? 2 : 3);
@@ -2018,7 +2020,10 @@ class Layout {
     const hung = new Set();
     const hang = (id) => {
       const large = BLOCKS[id].painting === 'large';
-      const list = rng.shuffle(interior.filter((t) => t.z === iz0 && (t.x - b.x0) % 2 === 1 && !hung.has(t.x) && (!large || (!hung.has(t.x - 1) && !hung.has(t.x + 1)))));
+      // (Round 76: never where anything stands, a wall across the room,
+      // a stair, a tall piece; nor over a door in the wall behind.)
+      const clear = (x) => !occ.has(key(x, iz0)) && !(b.door && b.door.x === x && b.door.z === b.z0) && !(b.stair && [b.stair.top, b.stair.mid, b.stair.low].some((q) => q.x === x && q.z === iz0));
+      const list = rng.shuffle(interior.filter((t) => t.z === iz0 && (t.x - b.x0) % 2 === 1 && !hung.has(t.x) && clear(t.x) && (!large || (!hung.has(t.x - 1) && !hung.has(t.x + 1) && clear(t.x - 1) && clear(t.x + 1) && t.x - 1 >= ix0 && t.x + 1 <= ix1))));
       const t = list[0];
       if (!t) return null;
       for (let dx = large ? -1 : 0; dx <= (large ? 1 : 0); dx++) hung.add(t.x + dx);
@@ -2715,12 +2720,15 @@ class Layout {
     if (t === 'guardhouse' || t === 'stockade') {
       for (let i = 0; i < 2; i++) if (rng.chance(0.75)) tryPlace(B.weapon_rack, 'wall', { rot: 'wall' });
     }
-    const paint = (b.residential ? T.paint : grand ? Math.min(1, T.paint + 0.4) : hall ? T.paint : T.paint * 0.4);
+    // (Round 76: none in a house of the gods, a jail, a barn or a
+    // workshop of the rough trades.)
+    const noArt = NO_PAINTINGS.has(t) || (this.jail && this.jail.building === b.id && t !== 'townhall');
+    const paint = noArt ? 0 : (b.residential ? T.paint : grand ? Math.min(1, T.paint + 0.4) : t === 'tavern' ? T.paint : T.paint * 0.4);
     if (rng.chance(paint)) tryPlace(grand || (hall && rng.chance(0.5)) ? B.painting_large : B.painting_small, 'north', { solid: false });
     if ((grand || b.residential) && rng.chance(paint * 0.45)) tryPlace(B.painting_small, 'north', { solid: false });
-    if (grand && rng.chance(T.paint * 0.6)) tryPlace(B.painting_large, 'north', { solid: false });
+    if (grand && !noArt && rng.chance(T.paint * 0.6)) tryPlace(B.painting_large, 'north', { solid: false });
     if ((b.residential || grand) && rng.chance(grand ? T.stand * 2.5 : T.stand)) tryPlace(B.display_stand, 'corner', { access: true });
-    if ((b.residential || hall) && rng.chance(T.hook)) tryPlace(B.wall_hanger, 'north', { solid: false });
+    if ((b.residential || hall) && !noArt && rng.chance(T.hook)) tryPlace(B.wall_hanger, 'north', { solid: false });
   }
 
   // (Round 73) Walls across a home's floor, each with a door: a bedroom

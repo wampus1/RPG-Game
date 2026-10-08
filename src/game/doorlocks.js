@@ -44,11 +44,21 @@ function inside(game, H) {
   return out;
 }
 
+// (Round 76) One of the house: who lives there, or of its family, from
+// the same town; their own door's never locked to them.
+export function ofHouse(n, H) {
+  const r = n.rec;
+  if (!r) return false;
+  if (r.home !== null && r.home !== undefined && String(r.home) === String(H.b.id) && (!n.layout || n.layout === H.L)) return true;
+  const last = r.name && r.name.last;
+  return !!(last && H.b.family && last === H.b.family && (!n.layout || n.layout === H.L));
+}
+
 // Locked to `who` (the player, or someone not of the house)?
 export function doorLocked(game, x, y, z, who = game.player) {
   const H = houseOfDoor(game, x, z);
   if (!H) return false;
-  if (who && who.rec && who.rec.home === H.b.id) return false;
+  if (who && who.rec && ofHouse(who, H)) return false;
   // (The watch has keys; and nobody's stopped by a lock running for their life.)
   if (who && who.rec && (who.rec.job === 'guard' || who.state === 'flee' || who.state === 'fight')) return false;
   if (who && who.kind === 'player' && game.sim.isGuest && game.sim.isGuest(H.s.id, H.b.id)) return false;

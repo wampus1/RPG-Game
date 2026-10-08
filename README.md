@@ -5729,6 +5729,23 @@ the floor, one on a block, the last in the floor above, with only one
 hole cut for it. (Houses already standing have their plank steps made over
 into stairs when the world's brought up to date.)
 
+## Round 76: fixes
+
+- **Paintings** are never hung where something already stands (a wall
+  between rooms, a stair, a tall piece of furniture) nor over a door, and
+  never in temples, jails, guardhouses, barns, stables, mills, smithies or
+  the like. (Saved worlds: such paintings already hung are taken down, and
+  a wall a painting took the place of is put back.)
+- **Knocking**: a door is never locked to anyone of the house, nor of its
+  family from the same town. Whoever knocks waits half a minute for an
+  answer; nobody comes, they say so and go on elsewhere, and don't knock at
+  that door again for a couple of hours.
+- The **salt flats** are toned down: a grey-white crust, not a glare.
+- A carried **torch's light** no longer flickers as you walk: its glow keeps
+  its own beat rather than jumping at every step, and the light's worked
+  out afresh every frame while it moves (with the faster lighting setting
+  too).
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
