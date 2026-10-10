@@ -389,7 +389,9 @@ export class Terrain {
     // Snow caps: patchy on the upper slopes, solid on the peaks (but never
     // on the fire island's hot ground).
     const snowN = this.nPatch(x / 9 + 700, z / 9) * 0.5 + 0.5;
-    if (bh.climate !== 'hot' && (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && bh.climate === 'cold' && snowN > 0.3))) surf = B.snow;
+    // (Round 79: a landform's heights are snowy only in the cold lands.)
+    const formWarm = out.form && bh.climate !== 'cold';
+    if (bh.climate !== 'hot' && !formWarm && (h >= SURFACE + 8 || (h >= SURFACE + 6 && snowN > 0.35) || (h >= SURFACE + 4 && bh.climate === 'cold' && snowN > 0.3))) surf = B.snow;
     if (surf === B.ice) sub = B.dirt;
     out.surf = surf;
     out.sub = sub;

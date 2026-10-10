@@ -87,6 +87,8 @@ export function generateRegion(world, rx, rz) {
       const bd = BIOMES[c.biome];
       // (Mangroves stand in the shallows; nothing else does.)
       if (!bd.trees.length || (c.water >= 0 && !(bd.wetTrees && !c.deep && !c.lava)) || c.flat > 0.02 || c.bridge) continue;
+      // (Round 79: none through a landmark, up a cone, on a pillar.)
+      if (c.landmark || c.form === 'cone' || c.form === 'pillar' || c.form === 'sinkhole') continue;
       const x = c.x;
       const z = c.z;
       const S = bd.treeSpacing;

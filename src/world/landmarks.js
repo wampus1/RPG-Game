@@ -26,11 +26,11 @@ export const LANDMARK_KINDS = {
   spring: { word: 'a hot spring', names: ['The Steaming Pool', '{place} Springs', 'The Warm Waters', 'The Kettle'] },
 };
 const FITS = {
-  tree: (b) => ['forest', 'jungle', 'taiga', 'plains', 'swamp', 'birch', 'meadow', 'mangrove'].includes(b),
-  bones: (b) => ['desert', 'savanna', 'tundra', 'beach', 'badlands', 'snowfield', 'plains'].includes(b),
-  crater: () => true,
-  arch: (b) => ['desert', 'savanna', 'plains', 'badlands', 'hills', 'tundra', 'mountain'].includes(b),
-  spring: (b) => !['desert', 'beach', 'swamp'].includes(b),
+  tree: (b) => ['forest', 'jungle', 'taiga', 'plains', 'swamp', 'rimewood', 'mangrove', 'moor'].includes(b),
+  bones: (b) => ['desert', 'savanna', 'tundra', 'bone_strand', 'red_mesa', 'salt_flats', 'plains'].includes(b),
+  crater: (b) => b !== 'mountain',
+  arch: (b) => ['desert', 'savanna', 'plains', 'red_mesa', 'tundra', 'moor', 'olive_hills', 'taiga'].includes(b),
+  spring: (b) => !['desert', 'beach', 'swamp', 'mountain', 'salt_flats'].includes(b),
 };
 
 // The landmark of stretch (cx, cz) of world `ow`, or null.
@@ -50,7 +50,14 @@ function landmarkOf(ow, cx, cz) {
     if (b && b !== 'ocean' && b !== 'volcano' && BIOMES[b] && !near(48) && !(V && Math.hypot(x - V.x, z - V.z) < V.r * 1.6)) {
       const kinds = Object.keys(LANDMARK_KINDS).filter((q) => FITS[q](b) && !(q === 'spring' && BIOMES[b].climate === 'hot' && hashf(cx, cz, s, 0x3a3) < 0.5));
       if (kinds.length) {
-        const kind = kinds[Math.floor(hashf(cx, cz, s, 0x3a4) * kinds.length)];
+        // (Some likelier than others: a hot spring's the rarest.)
+        const W = { tree: 3, bones: 2, crater: 1.2, arch: 2.2, spring: 1 };
+        let r = hashf(cx, cz, s, 0x3a4) * kinds.reduce((a, q) => a + W[q], 0);
+        let kind = kinds[kinds.length - 1];
+        for (const q of kinds) if ((r -= W[q]) <= 0) {
+          kind = q;
+          break;
+        }
         const rng = new RNG(hash4(s, cx, cz, 0x3a5));
         const K = LANDMARK_KINDS[kind];
         const place = placeName(rng, 'vale');
@@ -96,6 +103,11 @@ export function landmarkGround(lm, x, z, out, h) {
     }
     out.fsurf = B.gravel;
     return Math.max(h, SURFACE + 1);
+  }
+  if (lm.kind !== 'spring') {
+    // (Under it, or by it: kept clear of trees.)
+    if (d < lm.r + 2) out.landmark = lm;
+    return null;
   }
   if (lm.kind === 'spring') {
     if (d < lm.r * 0.7) {

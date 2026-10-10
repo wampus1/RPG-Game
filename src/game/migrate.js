@@ -566,6 +566,22 @@ export const STEPS = [
       log.push('The coach and the ferry carry you the whole way (T hurries the hours on, on your own); ladders, a grappling hook, blueprints and a shipwright\'s bench for ships of your own; towns vote on their laws and their mayors; pirates have a cove, and raiders put out from it; and every save is looked over as it loads, and anything out of place put right.');
     },
   },
+  {
+    // (Round 79) Your own map markers and the landmarks found (none yet);
+    // the stories' director and what the towns remember of them (from
+    // now on); a mod's versioned steps run once its world opens (see
+    // mod/scripts.js). The land itself stays as it was made: landforms,
+    // rivers with character and landmarks are for worlds made from now.
+    to: '0.79.0',
+    data(d, log) {
+      d.mapMarks ||= [];
+      d.landmarksFound ||= {};
+      const sg = d.sim && d.sim.saga;
+      if (sg && typeof sg === 'object') sg.memories ||= [];
+      if (d.mods && d.mods.state) d.mods.state.migrated ||= {};
+      log.push('Stories now come at a pace (a quiet stretch after something hard, an opening after a loss), folk remember the ones you had a hand in, and more of them can be settled without a fight; trails lead from town to town and over the sea; map markers of your own; crafting by fives or as many as you can; and mods can have scripts, commands and steps of their own. (New worlds also get landforms, rivers with character and landmarks.)');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

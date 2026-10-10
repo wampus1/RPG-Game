@@ -5891,6 +5891,101 @@ into stairs when the world's brought up to date.)
 - **Tests**: `npm test` is now a quick set (the essentials and this round's
   tests); the whole lot is `npm run test:full`.
 
+## Round 79: a director for the stories, scripts for mods, a land with character
+
+- **Music in another tab** keeps time: the notes that came due while the
+  tab was in the background are skipped, not crammed in together when you
+  come back.
+- **War banners and log walls** from a bandit camp's fortifying are never
+  put inside a town (or over anything built).
+- **People's idle moments**: more of them, more often (a stretch and a
+  yawn, a look about, a wave of a hand, leaning on a wall), with their
+  hands drawn doing it.
+- **Stairs** stand out from the floor (a darker tread, a bright nosing).
+- **Paintings** all have a thin wooden frame.
+- **Frost logs** (the Rimeborn's) redrawn: rounded logs with bark, frost in
+  patches and icicles; their floors are of bog planks, which go better.
+- **Market stalls**: each people's own canopy (stripes, fringes, checks,
+  curled eaves, straw mats, laced hide, gilt scallops, lacquered boards).
+  A save's old stalls are given their town's style as it loads.
+- **The well** is drawn round, with a roof, a windlass, rope and bucket.
+- **A town's own weapon racks and stands** (in its yards and squares):
+  taking from one is theft, as from a shop. A rack you put up is yours.
+- **Rugs** laid side by side join into one carpet, its border round the
+  whole of it.
+- **Fishing line** two pixels thick, drawn whole.
+- **T on the coach or ferry** opens the wait window (as when sitting down
+  anywhere), with "till we're in" to sleep the way away; any key stops it.
+- **Map markers of your own**: right-click the world map to put one down
+  (and name it, typing); they're listed under MARKERS on the right, and an
+  x there (or right-click again) takes one up.
+- **Crafting**: each recipe has 1, x5 and max buttons, and "Craft all you
+  can" (click twice) makes everything you have the makings for.
+- **The stories' director**: what happens is weighed (a raid, a battle, a
+  death, being taken weigh heavy; a festival or a peace made, light). After
+  something hard, a quiet stretch of a few days; after a long quiet, more
+  starts; each day's new stories come in a number drawn for the day, in a
+  shuffled order, now and then a wild day. After a loss (killed, taken,
+  raided, a story gone badly) an opening comes your way a day or two
+  later: a cache someone tells you of, a patron's well-paid errand, or a
+  trader's bargain.
+- **Memories**: when a story you had a hand in ends, its town keeps it.
+  Folk bring it up now and then, those it happened to most of all (warmly
+  if you helped, coldly if you knew and never came).
+- **Other ways out**: mediate (talk each side round), bribe, show a forged
+  paper (on a sheet of paper you carry; botched and spotted, it's forgery),
+  or expose who's behind it (ask round town; with two things found out, go
+  to the mayor or the watch). On duels, strikes, rivalries, moneylenders,
+  inheritances, witch hunts, elections, murders, thefts, smuggling, a
+  pretender's claim, a sore loser, a gambler's debts and a band's grudge.
+- **Trails**: something gone (an heirloom, a letter, an heir, a cure)
+  leads from town to town, over to another island, and, once the storm wall
+  is down, to the far lands. While the storm stands, nothing crosses it:
+  the trail ends at a port this side, with what washed up from the wreck.
+  At its end, buy it back or talk it out of whoever has it.
+- **Failure branches**: a task you took on that runs out of time (more
+  often than not) becomes a story of its own: the trouble grew and the
+  town needs mending; someone blames you (say sorry or make it good); word
+  gets round; or a trail goes cold, and later a new lead turns up.
+- **ModScript** (Workshop, Script tab): text scripts of a mod's own, in a
+  small language read and run by the game itself, reaching the game only
+  through a fixed list of calls (words, sounds, effects, items, blocks,
+  creatures, time, weather, kept values, events, other mods). Every run is
+  counted (steps, time, depth, sizes) and stopped when it goes over; a
+  script that keeps going over is switched off. Handlers: on load, tick,
+  hour, day, command, event, kill, break, migrate.
+- **Mod commands**: a script's `on command "name"` or a graph's On command
+  node adds a console command; "help" lists them.
+- **Mods together**: a mod can say which others it needs (and at what
+  version) and which it can't go with (Overview). The world's mod list and
+  the new world's mod picker warn of one missing, two that can't go
+  together, and two changing the same thing (a rule, an item's or block's
+  or creature's numbers, a game story, a game biome, a command); needed
+  mods go in first.
+- **Other mods from yours**: nodes for the mods that are on, another mod's
+  info and kept values (to read and set), telling it an event, and running
+  a command; and the same from scripts.
+- **Versioned steps**: `on migrate "1.2.0"` in a mod's script runs once,
+  in order, when a world last played with an older version is opened.
+- **The story debugger** (F4, or "debugger"): every story under way as a
+  tree of its nodes (where it is, where it's been) with what it holds; the
+  world's mods' graphs (each node and how often it's run), scripts and
+  commands; the director's mood; and a log of what fired and why.
+- **The land** (worlds made from now on, world gen 7): landforms over and
+  above the biome (mesas in terraces, canyons with streams and falls,
+  escarpments with boulders at their feet, sinkholes, stone pillars, dunes,
+  glacial valleys with moraines and meltwater falls, volcanic cones);
+  rivers with braided stretches, rapids, frozen reaches in the cold, deltas
+  at the sea and oxbow lakes; biome edges dappled together; rare landmarks
+  (a giant fallen tree, old bones, a crater, a stone arch, a hot spring),
+  named on the map when found, with tales told of them in the towns near,
+  a task from someone there, and now and then a cache buried by one; and
+  small things in the country: cave mouths, burrows, animal trails,
+  abandoned farms and old roads.
+- **Ambience**: mist in the valleys at dawn and dusk, wind streaming past
+  on high ground (with its sound), and the air shimmering over sand and
+  salt flats in the heat of the day.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press
@@ -5899,7 +5994,8 @@ you've typed. These are for exploring and testing, and they change your game.
 
 | Command | What it does |
 | --- | --- |
-| `help [command]` | lists the commands, or explains one |
+| `help [command]` | lists the commands, or explains one (and any the world's mods add) |
+| `debugger` | the story and mod debugger (F4): stories as trees of nodes, mods' graphs and scripts, the director, and a log of what fired and why |
 | `tp <town>` / `tp <x> <z>` / `tp home` | teleports you to a town (by name, or the start of one), a spot in the world, or your spawn |
 | `teleport [on\|off]` | while on, click anywhere you've seen on the world map (M) to go there |
 | `reveal [off]` | shows the whole world map |
