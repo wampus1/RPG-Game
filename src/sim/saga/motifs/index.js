@@ -20,3 +20,6 @@ import './kin.js';
 import './troubles.js';
 import './roads.js';
 import './tides.js';
+import './fortune.js';
+import './trails.js';
+import './fallout.js';

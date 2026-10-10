@@ -3,6 +3,7 @@
 // other townsfolk, directions, small talk with questions back, favours,
 // jobs, professions, escorts, citizenship, the law...). Lines refer to
 // other people by name, never by gendered pronouns.
+import { storyCallback } from '../sim/saga/memory.js';
 import { isPlanKey, planOf, quote, commission } from './plans.js';
 import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
@@ -74,6 +75,9 @@ function greetRaw(npc, game, rep, citizen) {
   // (Round 77) What you did to them, good or bad, not forgotten.
   const mem = rng.chance(0.4) ? memoryLine(npc, game, false) : null;
   if (mem) return mem;
+  // (Round 79) A story you had a hand in, brought up now and then.
+  const sc = rng.chance(0.15) && game.sim && game.sim.saga ? storyCallback(game.sim.saga, npc, game, rng) : null;
+  if (sc) return sc.text;
   if (rep <= -60) return pick(rng, ['Get lost.', 'You again...', '*glares*', 'Leave us be.']);
   if (rep <= -25) return pick(rng, ['Hmph.', 'Watch yourself.', 'Keep walking.', '*mutters*']);
   if (npc.rec.hungry >= 2 && rng.chance(0.5)) return pick(rng, ['So hungry...', 'Got any bread to spare?']);
@@ -205,6 +209,15 @@ function openingRaw(npc, game) {
   // (Round 77) What you did to them, the first time you speak in a day.
   const mem = memoryLine(npc, game, true);
   if (mem) return mem;
+  // (Round 79) Or a story you had a hand in (once a day, and not always).
+  const sr = sim.repEntry(sim.repSidOf(npc), rec.idx);
+  if (sr.storySaid !== game.day && game.sim.saga) {
+    const sc = rng.chance(0.5) ? storyCallback(game.sim.saga, npc, game, rng) : null;
+    if (sc) {
+      sr.storySaid = game.day;
+      return sc.text;
+    }
+  }
   // Townsfolk on an outing: on the road, or there.
   const o = rec.trip && rec.trip.outing ? sim.outings.get(rec.trip.outing) : null;
   if (npc.caravan && rec.trip && rec.trip.outing) {

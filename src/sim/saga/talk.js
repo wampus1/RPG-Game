@@ -8,6 +8,7 @@ import { MOTIFS, R, sameRef, nameOf, NameOf, pidOf, resolve, isAlive, lcFirst } 
 import { RNG, hash4 } from '../../util/rng.js';
 import { ITEMS } from '../../world/items.js';
 import { countItem, removeItem } from '../../game/inventory.js';
+import { peaceTopics, peaceRespond, isPeaceTopic } from './resolve.js';
 
 // (A task's 'food' is any food at all.)
 const isFood = (k) => ITEMS[k] && ITEMS[k].kind === 'food';
@@ -84,6 +85,12 @@ export function sagaTopics(npc, game) {
       }
     }
   }
+  // (Round 79) Other ways out of a story than a fight (see resolve.js).
+  try {
+    out.push(...peaceTopics(S, npc, pid));
+  } catch (e) {
+    S.fault(null, e);
+  }
   if (npc.rec && npc.rec.age !== 'child' && !npc.rec.visitor && S.tasksIn(townOf(npc), pid).some((t) => !isGiver(t, npc))) out.push({ id: 'sg_trouble', label: 'Heard of any trouble round here?' });
   return out;
 }
@@ -93,6 +100,14 @@ export function sagaTopics(npc, game) {
 export function sagaRespond(npc, game, id, arg) {
   const S = game.sim.saga;
   const pid = pidOf(game.player);
+  if (isPeaceTopic(id)) {
+    try {
+      return peaceRespond(S, npc, game, id, arg) || { lines: ['Hm?'] };
+    } catch (e) {
+      S.fault(null, e);
+      return { lines: ['Hm?'] };
+    }
+  }
   const rng = new RNG(hash4(npc.id | 0, Math.floor(S.now), 0x7a1c));
   const t = arg !== undefined && /^\d+$/.test(String(arg)) ? S.task(+arg) : null;
   const th = t ? S.threadOf(t) : npc.saga ? S.thread(npc.saga.th) : null;

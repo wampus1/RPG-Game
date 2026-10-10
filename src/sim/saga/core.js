@@ -30,6 +30,8 @@ import { DAY, ledger, hearNews, alive as recAlive } from '../econ.js';
 import { RNG, hash4, hashString, clamp } from '../../util/rng.js';
 import { asSeat } from '../../game/party.js';
 import { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, seatOfPid, playerOf, playerName, townMid, directions, poss } from './refs.js';
+import { Director } from './director.js';
+import { rememberStory } from './memory.js';
 
 export { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, playerOf, playerName, townMid, directions, poss };
 
@@ -56,6 +58,11 @@ export const HOOKS = { subdue: [], feud: [], door: [], read: [], chest: [], rejo
 // each turn a story takes. Before it ('turn'): { to } to go elsewhere, or
 // { end } to end it there; after it's arrived ('arrive'): nothing.
 export const GO_HOOKS = [];
+// (Round 79) A task someone had taken on ran out of time: what comes of it
+// (see motifs/fallout.js), each f(S, th, task).
+export const LAPSE_HOOKS = [];
+// (Round 79) How many lines of the stories' trace are kept (see trace).
+const TRACE_KEEP = 400;
 export function motif(def) {
   MOTIFS[def.id] = def;
   return def;
@@ -98,6 +105,20 @@ export class Saga {
     this.liveT = 0;
     this.chronicle = [];
     this.byTask = new Map();
+    // (Round 79) When new stories start (see director.js); the stories
+    // remembered (memory.js); and what's fired and why, for the story
+    // debugger (ui/storydebug.js).
+    this.director = new Director(this);
+    this.memories = [];
+    this.traceLog = [];
+    this.traceN = 0;
+  }
+
+  // (Round 79) A line in the trace: `kind` (start, node, end, director,
+  // peace, branch, event, mod...), what happened and why; `th` the story.
+  trace(kind, text, th = null) {
+    this.traceLog.push({ n: ++this.traceN, at: this.now, kind, text, th: th ? th.id : null, m: th ? th.m : null });
+    if (this.traceLog.length > TRACE_KEEP) this.traceLog.splice(0, this.traceLog.length - TRACE_KEEP);
   }
 
   get now() {
@@ -196,6 +217,12 @@ export class Saga {
   }
 
   handle(ev) {
+    // (Round 79) Weighed by the director (see director.js).
+    try {
+      this.director.observe(ev);
+    } catch (e) {
+      this.fault(null, e);
+    }
     // Stories under way hear it first (in the node they're in, then the
     // story as a whole).
     for (const th of this.live()) {
@@ -204,6 +231,7 @@ export class Saga {
       const node = M.nodes[th.node];
       const fn = (node && node.on && node.on[ev.type]) || (M.on && M.on[ev.type]);
       if (!fn) continue;
+      this.trace('event', `${th.title} heard ${ev.type}${node && node.on && node.on[ev.type] ? ` (in ${th.node})` : ''}`, th);
       try {
         fn(th, ev, this);
       } catch (e) {
@@ -228,7 +256,11 @@ export class Saga {
         } catch (e) {
           this.fault(null, e);
         }
-        for (const o of [].concat(made || [])) if (o) this.begin(M.id, o);
+        for (const o of [].concat(made || [])) {
+          if (!o) continue;
+          const th = this.begin(M.id, o);
+          if (th) this.trace('start', `${th.title} began: set off by ${ev.type}`, th);
+        }
       }
     }
   }
@@ -381,6 +413,7 @@ export class Saga {
         this.fault(th, e);
       }
     }
+    this.trace('node', `${th.title}: ${th.node || 'start'} -> ${to}${line ? `: ${line}` : ''}`, th);
     th.node = to;
     th.nodeAt = this.now;
     th.clock = 0;
@@ -413,6 +446,13 @@ export class Saga {
     th.done = true;
     th.outcome = outcome;
     th.ended = this.now;
+    this.trace('end', `${th.title} ended: ${outcome}${line ? ` (${line})` : ''}`, th);
+    // (Round 79) Remembered by its town, if anyone playing had a hand in it.
+    try {
+      rememberStory(this, th);
+    } catch (e) {
+      this.fault(null, e);
+    }
     for (const t of th.tasks) if (t.status === 'open') this.closeTask(t, 'void');
     for (const a of th.actors) this.dismissActor(th, a.key);
     const M = MOTIFS[th.m];
@@ -721,9 +761,18 @@ export class Saga {
       for (const t of th.tasks) {
         if (t.status !== 'open' || !t.due || this.now < t.due) continue;
         this.closeTask(t, 'lapsed');
+        this.trace('lapse', `${th.title}: "${t.title}" ran out of time`, th);
         const M = MOTIFS[th.m];
         const fn = M.tasks && M.tasks[t.role] && M.tasks[t.role].lapsed;
         if (fn) fn(th, t, this);
+        // (Round 79) What comes of it, if someone playing had taken it on.
+        for (const f of LAPSE_HOOKS) {
+          try {
+            f(this, th, t);
+          } catch (e) {
+            this.fault(th, e);
+          }
+        }
       }
     }
   }
@@ -746,12 +795,19 @@ export class Saga {
     }
     // Stories that have run into each other.
     this.meetUp();
-    // New stories, out of how things stand.
+    // New stories, out of how things stand: (Round 79) as many as the
+    // director allows today, of the kinds it allows, looked at in a
+    // shuffled order (see director.js).
     const rng = new RNG(hash4(this.game.seed | 0, d, 0x5a9a));
-    for (const M of Object.values(MOTIFS)) {
-      if (!M.scan || !this.room(M)) continue;
+    this.director.newDay(d, rng);
+    for (const M of rng.shuffle(Object.values(MOTIFS))) {
+      if (!M.scan || !this.room(M) || !this.director.allows(M, rng)) continue;
       try {
-        for (const o of [].concat(M.scan(this, rng, d) || [])) if (o && this.room(M)) this.begin(M.id, o);
+        for (const o of [].concat(M.scan(this, rng, d) || [])) {
+          if (!o || !this.room(M)) continue;
+          const th = this.begin(M.id, o);
+          if (th) this.director.begun(M, th);
+        }
       } catch (e) {
         this.fault(null, e);
       }
@@ -1444,6 +1500,7 @@ export class Saga {
       threads: this.threads.map((t) => ({ ...t, near: undefined })),
       next: this.next, taskNext: this.taskNext, people: this.people, named: this.named, dens: this.dens, tally: this.tally,
       lastHour: this.lastHour, started: this.started, chronicle: this.chronicle, queue: this.queue.slice(-50),
+      director: this.director.save(), memories: this.memories,
     };
   }
 
@@ -1471,6 +1528,8 @@ export class Saga {
     this.started = !!d.started;
     this.chronicle = d.chronicle || [];
     this.queue = d.queue || [];
+    this.director.load(d.director);
+    this.memories = d.memories || [];
   }
 
   // ------------------------------------------------------------ for the journal

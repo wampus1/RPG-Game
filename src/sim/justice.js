@@ -28,6 +28,8 @@ export const CRIMES = {
   jailbreak: { label: 'Escaping jail', sev: 'moderate', fine: 60 },
   murder: { label: 'Murder', sev: 'severe', fine: 250 },
   desertion: { label: 'Desertion', sev: 'severe', fine: 120 },
+  // (Round 79) A forged paper, spotted (see saga/resolve.js).
+  forgery: { label: 'Forgery', sev: 'moderate', fine: 50 },
 };
 export const SEV_RANK = { minor: 1, moderate: 2, severe: 3 };
 const HOURLY_RATE = 5; // coins of fine worked off per hour in a cell
