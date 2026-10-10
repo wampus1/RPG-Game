@@ -44,7 +44,7 @@ import { barCells } from './homebar.js';
 import { picCanvas } from '../ui/modpick.js';
 
 // Which tool edits each collection.
-export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear' };
+export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear', scripts: 'script' };
 const TOOLS = [
   { id: 'overview', name: 'Overview', icon: 'home', key: '1', side: false, tip: 'The mod: its name, its picture, what\'s in it, and what\'s wrong with it.' },
   { id: 'pixel', name: 'Pixel', icon: 'pencil', key: '2', tip: 'Pixel art: textures, icons, creatures, animations.' },
@@ -61,6 +61,8 @@ const TOOLS = [
   { id: 'sound', name: 'Sound', icon: 'speaker', key: '2', shift: true, tip: 'Sounds: brought in, cut, mixed, slowed, echoed. For nodes, effects, songs and biomes.' },
   { id: 'gear', name: 'Gear', icon: 'helm', key: '3', shift: true, tip: 'How armour, weapons and tools look on someone: worn (art over the person) and held (art, grip, size, slant).' },
   { id: 'rules', name: 'Rules', icon: 'scales', key: '4', shift: true, side: false, tip: 'The game\'s own rules for worlds with the mod: breaking, hearts, damage, creatures, days, prices; and any item, block or creature\'s numbers.' },
+  // (Round 79.)
+  { id: 'script', name: 'Script', icon: 'text', key: '5', shift: true, tip: 'Text scripts: console commands with effects, things done on the hour, answers to events, other mods, and the mod\'s versioned steps.' },
 ];
 const LOADERS = {
   overview: async () => ({ default: OverviewTool }),
@@ -77,6 +79,7 @@ const LOADERS = {
   sound: () => import('./sound.js'),
   rules: () => import('./rules.js'),
   gear: () => import('./gear.js'),
+  script: () => import('./script.js'),
 };
 // The explorer's sections, in order.
 // (Round 66: each its own colour, for the mod's page.)
@@ -97,6 +100,7 @@ const SECTIONS = [
   { key: 'songs', name: 'Songs', icon: 'note', color: '#b0a0ff' },
   { key: 'sounds', name: 'Sounds', icon: 'speaker', color: '#80d8ff' },
   { key: 'gear', name: 'Gear looks', icon: 'helm', color: '#c8b0a0' },
+  { key: 'scripts', name: 'Scripts', icon: 'text', color: '#a0e0c0' },
 ];
 
 let cssDone = false;
@@ -530,6 +534,7 @@ export class Workshop {
     if (sub('worlds')) items.push({ label: 'World map', icon: 'globe', onClick: () => this.tool3('world', (t) => t.newWorld()) });
     if (sub('chargen')) items.push({ label: 'Character tab', icon: 'bust', onClick: () => this.tool3('chargen', (t) => t.newTab()) });
     if (sub('gear')) items.push({ label: 'Gear look (worn, held)', icon: 'helm', onClick: () => this.create('gear', { name: 'Gear look' }) });
+    if (sub('scripts')) items.push({ label: 'Script', icon: 'text', onClick: () => this.create('scripts', { name: 'Script' }) });
     if (sub('songs')) items.push({ label: 'Song', icon: 'note', sub: [
       { label: 'Empty', onClick: () => this.create('songs', { name: 'Song' }) },
       { label: 'With a tune to start from', onClick: () => this.create('songs', { name: 'Song' }, { demo: true }) },
@@ -1186,9 +1191,10 @@ const DEFAULTS = {
   songs: (d, app, o = {}) => newSong({ name: d.name, demo: !!o.demo }),
   sounds: (d) => newSound({ name: d.name }),
   gear: (d) => ({ name: 'Gear look', item: d.item || null }),
+  scripts: () => ({ name: 'Script' }),
 };
 
-const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags, rules: m.rules ? JSON.parse(JSON.stringify(m.rules)) : null });
+const metaOf = (m) => ({ name: m.name, author: m.author, version: m.version, description: m.description, color: m.color, icon: m.icon, tags: m.tags, rules: m.rules ? JSON.parse(JSON.stringify(m.rules)) : null, requires: (m.requires || []).map((q) => ({ ...q })), conflicts: [...(m.conflicts || [])] });
 const rootType = (e) => {
   const r = (e.graph && e.graph.nodes || []).find((n) => NODES[n.type] && NODES[n.type].root);
   return r ? r.type : null;
@@ -1270,7 +1276,12 @@ class OverviewTool {
       field('Version', textInput({ value: m.version, max: 16, onChange: (v) => set('version', cleanName(v, 16, m.version)) }), { tip: 'Raise it when you send a new version out (1.0.0 → 1.1.0).' }),
       field('Colour', colorButton(m.color, (v) => set('color', v.slice(0, 7), true))),
       field('Tags', textInput({ value: (m.tags || []).join(', '), max: 160, placeholder: 'magic, dungeons, cosy', onChange: (v) => set('tags', v.split(',').map((t) => cleanName(t, 16, '')).filter(Boolean).slice(0, 8)) }), { tip: 'A few words for what it is, with commas between.' }),
-      field('About it', textInput({ value: m.description, long: true, max: 2000, placeholder: 'What it adds, and how to find it in a world.', onChange: (v) => set('description', v) }), { wide: true }));
+      field('About it', textInput({ value: m.description, long: true, max: 2000, placeholder: 'What it adds, and how to find it in a world.', onChange: (v) => set('description', v) }), { wide: true }),
+      // (Round 79) What it needs, and what it can't be on with (see
+      // mod/deps.js): ids, with a version after a space if need be.
+      field('Needs mods', textInput({ value: (m.requires || []).map((q) => `${q.id}${q.version ? ` ${q.version}` : ''}`).join(', '), max: 400, placeholder: 'abcd1234 1.2.0, efgh5678', onChange: (v) => set('requires', v.split(',').map((q) => q.trim().split(/\s+/)).filter((q) => /^[a-z][a-z0-9]{3,31}$/.test(q[0] || '')).map(([id, ver]) => ({ id, version: cleanName(ver || '', 16, '') })).slice(0, 16)) }), { tip: 'Other mods (by their ids) this one needs on with it, each at a version or newer. A world is warned if one\'s missing, and they go in first.', wide: true }),
+      field('Can\'t go with', textInput({ value: (m.conflicts || []).join(', '), max: 400, placeholder: 'ijkl9012', onChange: (v) => set('conflicts', v.split(',').map((q) => q.trim()).filter((q) => /^[a-z][a-z0-9]{3,31}$/.test(q)).slice(0, 16)) }), { tip: 'Mods (by their ids) this one can\'t be on with: a world with both is warned.', wide: true }),
+      h('div', { class: 'note' }, `This mod's id: ${m.id} (for others to name it by).`));
     wrap.append(h('h2', null, 'What it is'), details);
     // What it's made of: a bar of squares.
     const counts = SECTIONS.map((S) => ({ ...S, n: Object.keys(m[S.key] || {}).length }));

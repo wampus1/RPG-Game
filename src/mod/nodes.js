@@ -1606,6 +1606,63 @@ inf('q.random', { title: 'Someone at random', help: 'Someone near a place, picke
     return list.length ? list[Math.floor(Math.random() * list.length)] : null;
   } });
 
+// ------------------------------------------------------------ (Round 79) commands, and other mods
+def('ev.command', {
+  cat: 'Events', title: 'On command', starts: true, color: C.event,
+  help: 'A console command of the mod\'s own: when someone types it ("name" and whatever follows). It\'s listed in "help".',
+  in: [txt('name', 'Command', 'mycommand'), txt('help', 'Help text', '')],
+  out: [F('fire', 'Typed'), out('args', T.text, 'What follows'), out('first', T.text, 'First word'), out('who', T.ent, 'Who typed it')],
+  eval: (x, nn, port) => (port === 'args' ? String(x.payload ?? '') : port === 'first' ? String(x.payload ?? '').split(/\s+/)[0] || '' : x.player),
+});
+const modNode = (type, o) => def(type, { cat: 'Mods', color: '#2a5a5a', ...o });
+modNode('mod.list', {
+  title: 'Mods on', help: 'The mods on in this world (their ids, a list), and how many.',
+  out: [out('list', T.list, 'Ids'), out('n', T.num, 'How many')],
+  eval: (x, nn, p) => (p === 'n' ? SVC.modList(x).length : SVC.modList(x)),
+});
+modNode('mod.on', {
+  title: 'Mod is on', help: 'Whether another mod (by its id: see Mods on) is on in this world. For working with it when it is, and without it when not.',
+  in: [txt('id', 'Mod id', '')], out: [out('on', T.bool, 'Is on')],
+  eval: (x, nn, p, api) => SVC.modList(x).includes(String(api.in('id') || '')),
+});
+modNode('mod.info', {
+  title: 'Mod info', help: 'Another mod\'s name, version and who made it (by its id).',
+  in: [txt('id', 'Mod id', '')], out: [out('name', T.text, 'Name'), out('version', T.text, 'Version'), out('author', T.text, 'Made by')],
+  eval: (x, nn, p, api) => {
+    const m = SVC.modInfo(x, String(api.in('id') || ''));
+    return m ? m[p] : '';
+  },
+});
+modNode('mod.var', {
+  title: 'Another mod\'s value', help: 'A value another mod keeps with the world (its Set variable, World; a script\'s setvar).',
+  in: [txt('id', 'Mod id', ''), txt('name', 'Name', 'count')], out: [out('value', T.any, 'Value')],
+  eval: (x, nn, p, api) => SVC.modVar(x, String(api.in('id') || ''), String(api.in('name') || '')),
+});
+act('act.modsetvar', {
+  cat: 'Mods', color: '#2a5a5a', title: 'Set another mod\'s value', help: 'Changes a value another mod keeps with the world (as if it had set it itself).',
+  in: [txt('id', 'Mod id', ''), txt('name', 'Name', 'count'), { id: 'value', t: T.any, label: 'Value', def: null }],
+  run: (x, nn, api) => {
+    SVC.setModVar(x, String(api.in('id') || ''), String(api.in('name') || ''), api.in('value'));
+    return 'then';
+  },
+});
+act('act.modtell', {
+  cat: 'Mods', color: '#2a5a5a', title: 'Tell another mod', help: 'Sends an event to one other mod only: its On event nodes (and scripts\' on event) of that name hear it. A way to work its processes from yours.',
+  in: [txt('id', 'Mod id', ''), txt('name', 'Event name', 'my_event'), { id: 'value', t: T.any, label: 'Value', def: null }],
+  run: (x, nn, api) => {
+    SVC.send(x, `${String(api.in('id') || '')}:${String(api.in('name') || '')}`, api.in('value'));
+    return 'then';
+  },
+});
+act('act.command', {
+  cat: 'Mods', color: '#2a5a5a', title: 'Run a command', help: 'Runs a console command a mod has (this one or another), as if typed, with what follows it.',
+  in: [txt('name', 'Command', 'mycommand'), txt('args', 'What follows', '')],
+  run: (x, nn, api) => {
+    SVC.command(x, String(api.in('name') || ''), String(api.in('args') || ''));
+    return 'then';
+  },
+});
+
 // What a template makes, for lists (the Workshop's "New" menu and so on).
 export const TEMPLATE_INFO = {
   'tpl.block': { group: 'World', icon: 'cube', blurb: 'A block to place and break: stone, glowing crystal, a trapdoor.' },

@@ -34,6 +34,7 @@ import { ModLibrary } from './mod/library.js';
 import { installMods, uninstallMods, remapRegion, MODS } from './mod/registry.js';
 import { useWorldMap } from './mod/worldplan.js';
 import { exportMod, modHash } from './mod/format.js';
+import { checkMods } from './mod/deps.js';
 import { ModPickWindow } from './ui/modpick.js';
 import { ModManagerWindow } from './ui/modmanager.js';
 import './mod/render.js';
@@ -406,8 +407,12 @@ function openModPick(title, go, back) {
   } catch {
     last = [];
   }
+  // (Round 79) Each mod whole, to say what's wrong with those ticked.
+  const whole = new Map();
+  Promise.all(list.map((e) => modLib.get(e.id).then((m) => m && whole.set(e.id, m)).catch(() => {}))).catch(() => {});
   ui.open(new ModPickWindow(ui, {
     title,
+    check: (ids) => checkMods(ids.map((id) => whole.get(id)).filter(Boolean), [...whole.values()]),
     list: list.map((e) => ({ id: e.id, name: e.name, version: e.version, author: e.author, color: e.color, things: +e.things || 0, mine: e.mine, pic: e.pic || null })),
     chosen: last.filter((id) => modLib.has(id)),
     go: 'Next',
@@ -449,8 +454,21 @@ async function openWorldMods() {
   });
   const library = modLib.list().filter((e) => !inWorld.has(e.id)).map((e) => row(e));
   const locked = ui.guest ? 'Only whoever hosts this world can change its mods.' : g.net ? 'Close the world to others first (its players would be cut off when it reloads).' : g.cutscene || (g.scene && g.scene.intro) ? 'Once the story has begun, the world can be saved and its mods changed.' : null;
+  // (Round 79) Every mod there is, whole, to say what's wrong with them
+  // together (see mod/deps.js).
+  const full = new Map(used.map((m) => [m.id, m]));
+  const yours = new Map();
+  for (const e of modLib.list()) {
+    try {
+      const m = await modLib.get(e.id);
+      if (m) yours.set(e.id, m);
+    } catch {
+      // (Unreadable: left out.)
+    }
+  }
   ui.open(new ModManagerWindow(ui, {
     world, library, locked,
+    check: (ids, newer = []) => checkMods(ids.map((id) => (newer.includes(id) ? yours.get(id) : full.get(id) || yours.get(id))).filter(Boolean), [...yours.values()]),
     onApply: (plan) => changeWorldMods(plan),
   }));
 }

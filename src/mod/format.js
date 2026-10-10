@@ -35,15 +35,16 @@ import { GAME_VERSION } from '../version.js';
 
 export const MOD_FORMAT = 'tessera-mod';
 export const MOD_FV = 1;
-export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear'];
+export const COLLECTIONS = ['assets', 'vfx', 'rigs', 'structures', 'layouts', 'dungeons', 'loot', 'stories', 'patches', 'entities', 'biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear', 'scripts'];
 // (Collections a mod made before round 63 hasn't got: left out of its hash
 // while empty, so its hash stays as it was.)
-const LATER = ['biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear'];
+const LATER = ['biomes', 'worlds', 'chargen', 'sounds', 'songs', 'gear', 'scripts'];
 // What each collection holds, said plainly (for lists and messages).
 export const KIND_NAMES = {
   assets: ['art', 'art'], vfx: ['effect', 'effects'], rigs: ['rig', 'rigs'], structures: ['structure', 'structures'], layouts: ['layout', 'layouts'],
   dungeons: ['dungeon', 'dungeons'], loot: ['loot table', 'loot tables'], stories: ['story', 'stories'], patches: ['story change', 'story changes'], entities: ['entity', 'entities'],
   biomes: ['biome', 'biomes'], worlds: ['world map', 'world maps'], chargen: ['character tab', 'character tabs'], sounds: ['sound', 'sounds'], songs: ['song', 'songs'], gear: ['gear look', 'gear looks'],
+  scripts: ['script', 'scripts'],
 };
 // Limits that keep a mod (and a world using it) workable.
 export const LIMITS = { assetSide: 256, frames: 64, layers: 16, palette: 255, blueprintSide: 96, blueprintH: 16 };
@@ -117,6 +118,12 @@ export function normalizeMod(m) {
   }
   // (Round 66) Its rules (see mod/rules.js): an object, or none.
   if (m.rules !== undefined && (!m.rules || typeof m.rules !== 'object' || Array.isArray(m.rules))) delete m.rules;
+  // (Round 79) What it needs, and what it can't be on with (see deps.js):
+  // [{ id, version }] and [id].
+  const okId = (q) => typeof q === 'string' && /^[a-z][a-z0-9]{3,31}$/.test(q);
+  m.requires = Array.isArray(m.requires) ? m.requires.map((q) => (typeof q === 'string' ? { id: q } : q)).filter((q) => q && okId(q.id)).map((q) => ({ id: q.id, version: q.version ? cleanName(q.version, 16, '') : '' })).slice(0, 16) : [];
+  m.conflicts = Array.isArray(m.conflicts) ? m.conflicts.filter(okId).slice(0, 16) : [];
+  for (const sc of Object.values(m.scripts || {})) sc.code = String(sc.code || '').slice(0, 60000);
   m.created ||= Date.now();
   m.updated ||= m.created;
   return m;
@@ -203,6 +210,8 @@ export function modHash(m) {
   delete rest.hash;
   for (const k of LATER) if (rest[k] && typeof rest[k] === 'object' && !Object.keys(rest[k]).length) delete rest[k];
   if (rest.rules && typeof rest.rules === 'object' && !Object.keys(rest.rules).length) delete rest.rules;
+  // (Round 79: none needed, none barred: as a mod from before had it.)
+  for (const k of ['requires', 'conflicts']) if (Array.isArray(rest[k]) && !rest[k].length) delete rest[k];
   const s = canonical(rest);
   const a = hashString(s) >>> 0;
   const b = hashString(`${s.length}|${s.slice(0, 4096)}|${s.slice(-4096)}`) ^ (a * 2654435761);

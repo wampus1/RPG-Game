@@ -12,6 +12,7 @@ import { makeCrew } from './shipcrew.js';
 
 export const COMMANDS = {
   help: { args: '[command]', about: 'List the commands, or explain one.' },
+  debugger: { args: '', about: 'The story and mod debugger (F4): every story under way and its nodes, the world\'s mods\' graphs and scripts, the director, and a log of what fired and why.' },
   tp: { args: '<town> | <x> <z> | home', about: 'Teleport to a town (by name, or the start of one), to a spot in the world (tiles), or to where you wake up.' },
   teleport: { args: '[on|off]', about: 'While on, click anywhere you have seen on the world map (M) to teleport there.' },
   reveal: { args: '[off]', about: 'Show the whole world map (or hide what you haven\'t explored again).' },
@@ -176,13 +177,17 @@ export function runCommand(game, text) {
     }
     case 'mod':
       return modCommand(game, words);
+    case 'debugger':
+      game.ui.openStoryDebug?.();
+      return ['The story and mod debugger (F4 opens and shuts it).'];
     case 'help':
     case '?': {
       if (words[0] && COMMANDS[words[0]]) {
         const c = COMMANDS[words[0]];
         return [`${words[0]} ${c.args}`, c.about];
       }
-      return ['Commands:', ...Object.entries(COMMANDS).map(([k, c]) => `${k}${c.args ? ` ${c.args}` : ''}`), '("help <command>" for more; [TAB] completes, [↑↓] history)'];
+      const modCmds = MODS.commandList ? MODS.commandList() : [];
+      return ['Commands:', ...Object.entries(COMMANDS).map(([k, c]) => `${k}${c.args ? ` ${c.args}` : ''}`), ...(modCmds.length ? ['From the world\'s mods:', ...modCmds.map(([k, a]) => `${k}: ${a}`)] : []), '("help <command>" for more; [TAB] completes, [↑↓] history)'];
     }
     case 'tp': {
       if (!words.length) return ['tp <town> | <x> <z> | home'];
@@ -367,8 +372,12 @@ export function runCommand(game, text) {
       W.declare(a, b, { k: 'whim', text: 'an old grudge' }, game.day, new RNG(hash4(game.seed, game.day, 0x3a77)));
       return [`The ${a.name.replace(/^The /, '')} declare war on the ${b.name.replace(/^The /, '')}.`];
     }
-    default:
+    default: {
+      // (Round 79) A mod's own command (see mod/scripts.js).
+      const r = MODS.runCommand ? MODS.runCommand(game, cmd, words) : null;
+      if (r) return r;
       return [`Unknown command "${cmd}". Type "help".`];
+    }
   }
 }
 

@@ -1,5 +1,6 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
+import { StoryDebugWindow } from './storydebug.js';
 import { rideLine } from '../game/rides.js';
 import { compareGear } from '../game/invtools.js';
 import { ChatWindow, drawChat } from './chat.js';
@@ -249,6 +250,10 @@ export class UI {
           continue;
         case 'F3':
           this.debug = !this.debug;
+          continue;
+        // (Round 79) The story and mod debugger.
+        case 'F4':
+          this.toggle('storydebug', () => new StoryDebugWindow(this, game));
           continue;
         case 'Backquote':
         case 'Slash':
@@ -1449,6 +1454,10 @@ export class UI {
   openCrafting(station) {
     this.closeAll();
     this.open(new W.CraftWindow(this, station));
+  }
+  // (Round 79) See storydebug.js.
+  openStoryDebug() {
+    if (!this.find('storydebug')) this.open(new StoryDebugWindow(this, this.game));
   }
   openWait(opts = {}) {
     this.open(new W.WaitWindow(this, this.game, opts));

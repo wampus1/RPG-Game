@@ -21,6 +21,7 @@ import { Px } from '../render/pixel.js';
 import { gameKey, tagRange, isModKey, assetPixels, modHash } from './format.js';
 import { cleanSound } from './sound.js';
 import { cleanSong } from './song.js';
+import { checkMods, orderMods } from './deps.js';
 
 export { assetPixels };
 import { compile, Runner, NODES } from './graph.js';
@@ -68,9 +69,12 @@ export function toPx(pix) {
 export function installMods(mods, o = {}) {
   uninstallMods();
   if (!vanilla) vanilla = { blocks: BLOCKS.length };
+  // (Round 79) Each after those it needs; and what's wrong with them
+  // together said (see deps.js).
+  mods = orderMods(mods);
   MODS.active = mods.slice();
   MODS.serial++;
-  const report = [];
+  const report = checkMods(mods).map((q) => ({ level: q.level, text: q.text }));
   const keep = { ...(o.blockIds || {}) };
   const remap = {};
   for (const m of mods) {

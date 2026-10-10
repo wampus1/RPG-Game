@@ -25,6 +25,16 @@ export function picCanvas(pic) {
   return c;
 }
 
+// (Round 79) A mod list's warnings (see mod/deps.js), a line or two up
+// from the window's foot, worst first.
+export function drawModWarnings(g, win, ws, y) {
+  if (!ws || !ws.length) return;
+  const list = [...ws].sort((a, b) => (a.level === 'error' ? 0 : 1) - (b.level === 'error' ? 0 : 1));
+  const first = list[0];
+  g.text(3, y, `${first.level === 'error' ? '! ' : '~ '}${first.text}`.slice(0, win.w - 6), first.level === 'error' ? '#ff8070' : '#ffd070');
+  if (list.length > 1) g.text(3, y + 1, `(and ${list.length - 1} more: ${list.slice(1, 3).map((q) => q.text.split(':')[0]).join('; ')})`.slice(0, win.w - 6), C.faint);
+}
+
 export class ModPickWindow extends Window {
   // o: { list: [{ id, name, version, author, color, description, things,
   // mine }], chosen: [ids], title, go (label), onDone(ids), onBack(),
@@ -74,6 +84,9 @@ export class ModPickWindow extends Window {
       });
     }
     if (list.length > this.rows) g.text(this.w - 12, 3, `${this.scroll + 1}-${Math.min(list.length, this.scroll + this.rows)}/${list.length}`, C.faint);
+    // (Round 79) What's wrong with these together: one needed and not
+    // ticked, two that can't go together, two changing the same thing.
+    drawModWarnings(g, this, o.check ? o.check([...this.chosen]) : [], this.h - 5);
     const y = this.h - 3;
     const btn = (x, label, fn, col) => {
       const w = label.length + 2;

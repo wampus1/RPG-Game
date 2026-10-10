@@ -7608,6 +7608,9 @@ export class Game {
     // (Round 62) What the world's mods keep (they're put into the game
     // before it's made: see main.js).
     if (data.mods) modLoad(this, data.mods);
+    // (Round 79) The versions of its mods it was last played with: any
+    // newer mod's steps since then run as it starts (see mod/scripts.js).
+    if (data.mods && data.mods.refs) this.modStepsFrom = data.mods.refs;
     if (data.party) {
       this.partyWorld = data.party.world || { name: 'A world' };
       this.pvp = !!data.party.pvp;

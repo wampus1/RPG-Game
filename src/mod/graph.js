@@ -188,6 +188,9 @@ export function compile(g, meta = {}) {
 // { game, mod, prog, self, target, pos, item, block, payload, vars,
 // steps }. Everything that runs a graph comes through here.
 const MAX_STEPS = 4000;
+// (Round 79) Told of each node run (the story debugger's trace: see
+// mod/scripts.js), when set.
+export const RUN_HOOK = { node: null };
 export class Runner {
   constructor(prog, host) {
     this.prog = prog;
@@ -220,6 +223,7 @@ export class Runner {
     if (!n) return;
     const d = NODES[n.type];
     if (!d.run) return;
+    if (RUN_HOOK.node) RUN_HOOK.node(x, n);
     let r;
     try {
       r = d.run(x, n, this.api(x, n));
@@ -301,6 +305,7 @@ export class Runner {
     const r = this.prog.root;
     if (!r || !this.prog.next.has(`${r.id}.${port}`)) return false;
     const x = this.ctx(base);
+    x.cause ||= port;
     this.fire(x, r.id, port);
     return true;
   }

@@ -6,7 +6,7 @@
 // registry.installMods): the Apply button does both.
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
-import { picCanvas } from './modpick.js';
+import { picCanvas, drawModWarnings } from './modpick.js';
 
 // What's to become of a mod: kept as it is, taken out, its newer version
 // put in (one of the world's), or added (one of your library's).
@@ -44,8 +44,8 @@ export class ModManagerWindow extends Window {
   }
 
   get shown() {
-    // (Room for the two headings too.)
-    return Math.floor((this.h - 13) / 2) - 1;
+    // (Room for the two headings, and the warnings, too.)
+    return Math.floor((this.h - 15) / 2) - 1;
   }
 
   // A row's next state, clicked (or Space).
@@ -102,6 +102,8 @@ export class ModManagerWindow extends Window {
     if (rows.length > this.shown) g.text(this.w - 12, 3, `${this.scroll + 1}-${Math.min(rows.length, this.scroll + this.shown)}/${rows.length}`, C.faint);
     const plan = planOf(rows);
     const n = plan.remove.length + plan.update.length + plan.add.length;
+    // (Round 79) What's wrong with them together, as they'd be.
+    if (o.check) drawModWarnings(g, this, o.check(rows.filter((r) => (r.inWorld ? r.to !== OUT : r.to === ADD)).map((r) => r.id), plan.update), this.h - 8);
     const note = n ? `${n} change${n > 1 ? 's' : ''}: the world is saved and loaded again with ${n > 1 ? 'them' : 'it'}. Blocks of a mod taken out are left as gaps.` : '[SPACE] change  [UP/DOWN] choose';
     wrap(note, this.w - 6).slice(0, 2).forEach((l, i) => g.text(3, this.h - 6 + i, l, n ? C.orange : C.faint));
     const by = this.h - 3;

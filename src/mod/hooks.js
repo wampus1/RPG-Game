@@ -27,6 +27,7 @@ import { compareValues } from './storyrun.js';
 import { townOf as townOfV, townValue, nearestTown, townFact, changeTown, personFact, changePerson, newcomerIn, peopleOf } from './towns.js';
 import './build.js';
 import './storyrun.js';
+import { scriptsTick, scriptsEvent, scriptsKill, scriptsBreak } from './scripts.js';
 
 export { modStat };
 
@@ -1730,12 +1731,19 @@ export function sendEvent(game, name, value, o = {}) {
     if (rec.f.when !== 'custom event' || String(rec.f.custom) !== name) continue;
     worldEvent(game, rec, { payload: value, target: o.target, pos: o.pos, sendDepth: depth + 1 });
   }
+  // (Round 79) "id:name": for that mod only (see Tell another mod).
+  const only = /^([a-z][a-z0-9]{3,31}):(.+)$/.exec(name);
+  const forMod = only && MODS.byId.has(only[1]) ? only[1] : null;
+  const local = forMod ? only[2] : name;
+  // (And the scripts: see scripts.js.)
+  scriptsEvent(game, name, value, { player: o.target && o.target.kind === 'player' ? o.target : null });
   for (const rec of MODS.ents.values()) {
+    if (forMod && rec.mod.id !== forMod) continue;
     for (const n of rec.prog.starts) {
       if (n.type !== 'ev.custom') continue;
-      if (String((n.v && n.v.name) ?? 'my_event') !== name) continue;
+      if (String((n.v && n.v.name) ?? 'my_event') !== local) continue;
       const run = (self) => {
-        const x = rec.runner.ctx({ ...ctx(game, rec, { self, target: o.target, pos: o.pos, payload: value }), sendDepth: depth + 1 });
+        const x = rec.runner.ctx({ ...ctx(game, rec, { self, target: o.target, pos: o.pos, payload: value }), sendDepth: depth + 1, cause: `event ${name}` });
         rec.runner.fire(x, n.id, 'fire');
       };
       if (rec.kind === 'creature') for (const c of game.creatures) if (!c.dead && c.species === rec.key) run(c);
@@ -1856,11 +1864,15 @@ export function modKilled(game, e, src) {
     if (want && e.species !== want) continue;
     worldEvent(game, rec, { target: src, pos: posOf(e), payload: e.species || e.kind });
   }
+  // (Round 79) And the scripts' `on kill`.
+  scriptsKill(game, e);
 }
 
 // A block's events.
 export function modBlockBroken(game, x, y, z, id, byPlayer) {
   const rec = MODS.blocks.get(id);
+  // (Round 79) The scripts' `on break`.
+  if (byPlayer) scriptsBreak(game, x, y, z, BLOCKS[id] ? BLOCKS[id].name : 'air');
   const p = byPlayer ? game.player : null;
   if (p) {
     const k = p.heldItem();
@@ -2122,6 +2134,8 @@ export function modTick(game, dt) {
     }
   }
   tickShots(game, dt);
+  // (Round 79) The mods' scripts (see scripts.js).
+  scriptsTick(game, dt);
   // (Round 63) What the character screen gave: lasting effects,
   // companions, stories begun.
   game.modCgT = (game.modCgT || 0) - dt;
@@ -2271,12 +2285,12 @@ function nearChecks(game) {
 export function modSave(game) {
   if (!MODS.active.length) return null;
   const st = modState(game);
-  return { refs: MODS.active.map((m) => ({ id: m.id, hash: m.hash, name: m.name, version: m.version, author: m.author, color: m.color })), blockIds: { ...MODS.blockIds }, state: { vars: st.vars, once: st.once, blocks: st.blocks, events: st.events, killed: st.killed || {}, trig: st.trig || {} } };
+  return { refs: MODS.active.map((m) => ({ id: m.id, hash: m.hash, name: m.name, version: m.version, author: m.author, color: m.color })), blockIds: { ...MODS.blockIds }, state: { vars: st.vars, once: st.once, blocks: st.blocks, events: st.events, killed: st.killed || {}, trig: st.trig || {}, migrated: st.migrated || {} } };
 }
 export function modLoad(game, data) {
   if (!data) return;
   const st = modState(game);
-  Object.assign(st, { vars: {}, once: {}, blocks: {}, events: {}, killed: {}, trig: {}, ...(data.state || {}) });
+  Object.assign(st, { vars: {}, once: {}, blocks: {}, events: {}, killed: {}, trig: {}, migrated: {}, ...(data.state || {}) });
 }
 
 // What build.js (and others) reach through MODS.
