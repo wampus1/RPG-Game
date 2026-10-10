@@ -77,6 +77,8 @@ import { eatDish, dishFx, learnRecipe } from './cooking.js';
 import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
+import { TravelWindow } from '../ui/travel.js';
+import { coachStand, ferryStand, arrivalSpot, wayTime } from '../sim/coaches.js';
 import { InstrumentWindow } from '../ui/instrument.js';
 import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
 import { R as SR, pidOf as sagaPid } from '../sim/saga/refs.js';
@@ -352,6 +354,13 @@ export class Game {
     const b = this.buildingAtPlayer ? this.buildingAtPlayer() : null;
     const indoors = !!b && !b.underConstruction;
     const w = this.weather;
+    // (Round 77) Rain as long as it falls: on the roof over you, muffled,
+    // indoors (or under a roof of rock), a hiss all round you outdoors;
+    // now and then a drip inside.
+    const rainy = w && w.kind === 'rain' && !this.dungeon && !this.sleep ? Math.min(1, w.level) : 0;
+    const under = indoors || !!(this.renderer && this.renderer.hidden);
+    a.setRain?.(rainy, under);
+    if (rainy > 0.3 && under && Math.random() < dt * 0.12) a.play('drip');
     this.ambT = (this.ambT ?? 3) - dt;
     if (this.ambT > 0 || indoors || this.sleep || this.dungeon) return;
     this.ambT = 2 + Math.random() * 5;
@@ -1548,7 +1557,7 @@ export class Game {
       }
       n.say(n.rng.pick(['Well fought! You have my respect.', 'Ha! You got me. Fair and square.', 'I yield! Where did you learn that?']), 3.5, '#a0ffa0');
       this.ui.msg(`You won the bout with ${n.name}${pay ? ` and ¤${pay}` : ''}.`, '#a0ffa0');
-      this.sim.changeRep(n, 15);
+      this.sim.changeRep(n, 15, 'bout');
       if (adv) adv.beaten = (adv.beaten || 0) + 1;
       gainMastery(this, 'dueling', 1.5);
     } else {
@@ -1715,7 +1724,7 @@ export class Game {
     this.engines = [];
     this.wildlife.clear();
     if (this.shipProps) this.shipProps.clear();
-    this.skipping = { left: n * 24, total: n * 24, day0: this.day };
+    this.skipping = { left: Math.max(1, Math.round(n * 24)), total: Math.max(1, Math.round(n * 24)), day0: this.day };
     this.waiting = null;
     this.mining = null;
     this.charging = null;
@@ -1737,13 +1746,45 @@ export class Game {
       sim.update(0.5);
     }
     const done = sk.total - sk.left;
-    if (done % 24 === 0 || !sk.left) this.ui.msg(`Day ${this.day}...`, '#c8d8ff', true);
+    if (!sk.journey && (done % 24 === 0 || !sk.left)) this.ui.msg(`Day ${this.day}...`, '#c8d8ff', true);
     if (sk.left > 0) return;
     this.skipping = null;
+    if (sk.journey) return this.endJourney(sk.journey);
     this.player.hp = this.player.maxHp;
     this.player.awakeSince = this.day * DAY_MINUTES + this.minute;
     this.updateSettlements(true);
     this.ui.msg(`${this.day - sk.day0} day${this.day - sk.day0 === 1 ? '' : 's'} pass. It's day ${this.day}.`, '#ffe8a0');
+  }
+
+  // (Round 77) Off by coach or ferry (see sim/coaches.js): the fare paid,
+  // the hours of the way gone by (the world living them, as when days are
+  // skipped), and you're set down at the far end. With others playing,
+  // nobody's time can be taken from them: you're there as you set off.
+  journey(link) {
+    const p = this.player;
+    if (countItem(p.inv, 'coin') < link.fare) return false;
+    removeItem(p.inv, 'coin', link.fare);
+    const to = { sid: link.s.id, kind: link.kind, name: link.s.name, mins: link.mins };
+    this.audio?.play(link.kind === 'ferry' ? 'ship_bell' : 'horn');
+    this.ui.msg(link.kind === 'ferry' ? `You pay ¤${link.fare} and go aboard the ferry for ${link.s.name}.` : `You pay ¤${link.fare} and climb into the coach for ${link.s.name}.`, '#e8e0a0');
+    if (this.isParty() || this.remote || !this.skipDays(link.mins / (24 * 60))) {
+      this.endJourney(to);
+      return true;
+    }
+    this.skipping.journey = to;
+    return true;
+  }
+
+  endJourney(to) {
+    const s = this.world.ow.settlements[to.sid];
+    if (!s) return;
+    const at = arrivalSpot(this, s, to.kind);
+    this.loadAround(at.x, at.z, true);
+    const spot = this.findFreeSpot(at.x, at.z, GROUND);
+    this.teleportPlayer(spot.x, spot.y, spot.z);
+    this.world.ow.markExplored(spot.x, spot.z, 2);
+    this.updateSettlements(true);
+    this.ui.msg(to.kind === 'ferry' ? `After ${wayTime(to.mins)} at sea, the ferry ties up at ${to.name}.` : `After ${wayTime(to.mins)} on the road, the coach sets you down at ${to.name}.`, '#ffe8a0');
   }
 
   // Out at the storm round the Dagoni Islands: thrown back (a raft, or you
@@ -2142,7 +2183,8 @@ export class Game {
     this.visibleEntities = vis;
     if (this.autosaveDue && !this.cutscene && !(this.scene && this.scene.intro)) {
       this.autosaveDue = false;
-      if (this.autosave) this.autosave();
+      // (Round 77: unless it's turned off in Settings.)
+      if (this.autosave && !(this.ui && this.ui.noAutosave)) this.autosave();
     }
     if (this.net) this.net.afterUpdate(dt);
   }
@@ -3428,6 +3470,23 @@ export class Game {
       this.riding.useHorse(c.entity);
       return;
     }
+    // (Round 77) Snow shovelled off where it lies (see render/groundfx.js).
+    const gfx = this.renderer && this.renderer.gfx;
+    if (held && /_shovel$/.test(held.key) && c && c.block && c.inReach && gfx && gfx.depth(c.x, c.z) > 0) {
+      gfx.clear(c.x, c.z, 1);
+      this.audio?.play('dig', p);
+      this.renderer.emit(c.x, c.y, c.z, { n: 6, color: ['#f4f8ff', '#dce8f8'], up: 30, speed: 30, life: 0.5, oy: -4 });
+      return;
+    }
+    // (Round 77) The coach, or the ferry: where it goes.
+    if (c && c.entity && c.entity.kind === 'prop' && c.entity.stop) {
+      if (c.entity.distTo ? c.entity.distTo(p) > 6 : Math.max(Math.abs(c.entity.x - p.x), Math.abs(c.entity.z - p.z)) > 6) {
+        this.ui.msg(c.entity.stop.kind === 'ferry' ? 'Go down to the pier to take the ferry.' : 'Walk over to the coach to take it.', '#a0c8ff');
+        return;
+      }
+      this.ui.open(new TravelWindow(this.ui, c.entity.stop));
+      return;
+    }
     if (c && c.entity && c.entity.kind === 'prop' && c.entity.type === 'wagon') {
       this.riding.useWagon(c.entity, c.part || 'back');
       return;
@@ -4177,6 +4236,13 @@ export class Game {
         for (const h of st.horses) add({ ...h, type: 'horse' });
         for (const w of st.wagons) add({ ...w, type: 'wagon' });
       }
+      // (Round 77) The coach out of town, and the ferry off the pier.
+      if (!L.settlement.deserted && L.settlement.condition !== 'abandoned') {
+        const cs = coachStand(L);
+        if (cs) add(cs);
+        const fs = ferryStand(this, L);
+        if (fs) add(fs);
+      }
       // Visitors from other towns tie their horses up at the post here too.
       const guests = (this.sim.visits.get(L.settlement.id) || []).filter((v) => v.guest && v.mount && now >= v.arrive && now < v.leave);
       const post = guests.length ? this.sim.stables.hitch(L) : null;
@@ -4212,6 +4278,12 @@ export class Game {
       // (Killed: not stood up again in its place. Round 57.)
       if (this.slainStand && this.slainStand.has(k)) continue;
       if (Math.max(Math.abs(sp.x - p.x), Math.abs(sp.z - p.z)) > 36 || !this.world.regionAt(sp.x, sp.z)) continue;
+      // (Round 77) The ferry: on the water off the pier, as it is.
+      if (sp.type === 'ship') {
+        if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'ship', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
+        Object.assign(this.props.get(k), { x: sp.x, y: GROUND, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, sail: false, stop: sp.stop });
+        continue;
+      }
       // On the ground near where it belongs, never up on a roof: if the
       // spot's built over, the nearest open ground close by instead.
       const near = this.groundNear(sp, sp.y ?? GROUND);
@@ -4220,7 +4292,7 @@ export class Game {
       sp = { ...sp, x: near.x, z: near.z };
       if (sp.type === 'wagon') {
         if (!this.props.has(k)) this.props.set(k, { kind: 'prop', type: 'wagon', id: 90000 + (this.propN = (this.propN || 0) + 1), dead: false, renderPos() { return { x: this.x, y: this.y, z: this.z }; } });
-        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null });
+        Object.assign(this.props.get(k), { x: sp.x, y, z: sp.z, face: sp.face ?? 1, banner: sp.banner || null, own: sp.own || null, hood: sp.hood, horse: sp.horse || null, stop: sp.stop || null });
       } else if (this.tied.has(k) && !this.tied.get(k).dead) {
         // (Saddled by the handler while you watched.)
         const c = this.tied.get(k);
@@ -6925,7 +6997,7 @@ export class Game {
       const sid = this.sim.repSidOf(n);
       deeds.set(sid, (deeds.get(sid) || 0) + (n.rec.job === 'guard' ? 1 : 3));
       const gain = n.rec.job === 'guard' ? 3 : 8;
-      this.sim.changeRep(n, gain);
+      this.sim.changeRep(n, gain, 'saved');
       n.say(n.rng.pick(n.rec.job === 'guard' ? ['Good work. I owe you one.', 'Nicely done!'] : ['You saved me! Thank you!', 'Thank the stars you were here!', 'I thought I was done for... thank you!']), 3.5, '#a0e0a0');
       n.face(p.x, p.z);
       const a = this.active.get(n.settlement.id);

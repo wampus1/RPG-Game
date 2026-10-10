@@ -293,10 +293,25 @@ export class World {
     return below.standable;
   }
 
+  // (Round 77) Swimming at the top of water two deep: water there and
+  // under it, the bottom under that, the air over your head.
+  canSwim(x, y, z) {
+    if (y < 3 || y >= WORLD_Y - 1) return false;
+    if (this.getBlock(x, y, z) !== B.water || this.getBlock(x, y - 1, z) !== B.water) return false;
+    const bed = BLOCKS[this.getBlock(x, y - 2, z)];
+    const head = BLOCKS[this.getBlock(x, y + 1, z)];
+    return !!bed && bed.solid && !bed.liquid && !head.solid && !head.liquid;
+  }
+
   // Given an entity at height y moving into column (x, z), find the feet
   // height it would end up at (step up 1, level, or drop up to 2), or -1.
-  stepTarget(fromX, fromY, fromZ, x, z, allowDoors = false) {
+  // (`swim`: out into water two deep, swimming: see canSwim.)
+  stepTarget(fromX, fromY, fromZ, x, z, allowDoors = false, swim = false) {
     if (this.canStand(x, fromY, z, allowDoors)) return fromY;
+    if (swim) {
+      if (this.canSwim(x, fromY, z)) return fromY;
+      if (this.canSwim(x, fromY - 1, z)) return fromY - 1;
+    }
     // (Round 75) Off a stair down onto the one below it: down, not up onto
     // whatever floor's over that one.
     if (BLOCKS[this.getBlock(fromX, fromY - 1, fromZ)].stair && BLOCKS[this.getBlock(x, fromY - 2, z)].stair && this.canStand(x, fromY - 1, z, allowDoors)) return fromY - 1;

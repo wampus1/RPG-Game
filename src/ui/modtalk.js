@@ -76,7 +76,6 @@ export class ModTalkWindow extends Window {
     });
     const done = Math.floor(this.shown) >= this.lines.join(' ').length;
     if (!done) {
-      g.text(this.w - 22, this.h - 1, ' [SPACE] skip ', C.faint);
       this.hit(0, 0, this.w, this.h, () => (this.shown = 1e9));
       return;
     }
@@ -88,7 +87,6 @@ export class ModTalkWindow extends Window {
       g.text(17, y, `${i + 1}. ${t}`, hov ? C.hi : C.fg, undefined, this.w - 20);
       this.hit(16, y, this.w - 18, 1, () => this.pick(i));
     });
-    g.text(this.w - 16, this.h - 1, ' [ESC] leave ', C.faint);
   }
 
   pick(i) {

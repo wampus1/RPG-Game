@@ -57,7 +57,7 @@ function fleetState(game) {
 }
 
 // The open-sea square nearest a port (its own, if it's on the coast).
-function seaOff(ow, s) {
+export function seaOff(ow, s) {
   for (let r = 0; r <= 6; r++) {
     for (let dz = -r; dz <= r; dz++) {
       for (let dx = -r; dx <= r; dx++) {
@@ -73,16 +73,40 @@ function seaOff(ow, s) {
 // The way across open sea between two squares of it (squares in turn), or
 // null: round the land, and (while the wall stands) never through the
 // storm round the islands.
-export function seaRoute(game, a, b) {
+// (Round 77) Worked out `ms` milliseconds at a time where it's asked for
+// so (see voyage): undefined till it's done, the way a step further on each
+// time it's asked.
+export function seaRoute(game, a, b, ms = Infinity) {
   const ow = game.world.ow;
   const cache = (game.seaRoutes ||= new Map());
   const k = `${a.cx},${a.cz}>${b.cx},${b.cz}|${ow.wallDown ? 1 : 0}`;
   if (cache.has(k)) return cache.get(k);
+  const jobs = (game.seaJobs ||= new Map());
+  let job = jobs.get(k);
+  if (!job) jobs.set(k, (job = seaRouteSteps(game, a, b, k)));
+  const t0 = performance.now();
+  let r;
+  do r = job.next();
+  while (!r.done && performance.now() - t0 < ms);
+  if (!r.done) return undefined;
+  jobs.delete(k);
+  return r.value;
+}
+
+function* seaRouteSteps(game, a, b, k) {
+  const ow = game.world.ow;
+  const cache = game.seaRoutes;
+  // (Whether each square's open sea, worked out once: see open.)
+  const wd = ow.wallDown ? 1 : 0;
+  if (!game.seaOpen || game.seaOpen.wd !== wd) game.seaOpen = { wd, grid: new Int8Array(MAP_W * MAP_H).fill(-1) };
+  const grid = game.seaOpen.grid;
   const open = (cx, cz) => {
+    const i = cz * MAP_W + cx;
+    if (grid[i] >= 0) return grid[i] === 1;
     const c = ow.cell(cx, cz);
-    if (!c || c.biome !== 'ocean') return false;
-    if (!ow.wallDown && ow.stormAt((cx + 0.5) * REGION_W, (cz + 0.5) * REGION_D) > 0.05) return false;
-    return true;
+    const ok = !(!c || c.biome !== 'ocean') && !(!ow.wallDown && ow.stormAt((cx + 0.5) * REGION_W, (cz + 0.5) * REGION_D) > 0.05);
+    grid[i] = ok ? 1 : 0;
+    return ok;
   };
   const key = (x, z) => z * MAP_W + x;
   const g = new Map([[key(a.cx, a.cz), 0]]);
@@ -124,6 +148,7 @@ export function seaRoute(game, a, b) {
   while (heap.length && n < 60000) {
     const [, x, z] = pop();
     n++;
+    if (n % 400 === 0) yield;
     if (x === b.cx && z === b.cz) {
       found = true;
       break;
@@ -318,7 +343,9 @@ function voyage(game, F, now, rng, civ, from, to, kind, nav) {
   const a = seaOff(ow, from);
   const b = seaOff(ow, to);
   if (!a || !b) return null;
-  const route = seaRoute(game, a, b);
+  // (A way not yet worked out is worked on a little each time: no ship
+  // sails on it till it is.)
+  const route = seaRoute(game, a, b, game.instantWork ? Infinity : 3);
   if (!route || route.length < 2) return null;
   const type = kind === 'war' ? nav.war : kind === 'trade' ? nav.merchant : nav.big;
   const len = routeLen(route);

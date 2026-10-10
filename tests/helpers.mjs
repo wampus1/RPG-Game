@@ -54,6 +54,9 @@ export function stubInput() {
 export function makeGame(seed = 12345, { learned = true, wg = 1 } = {}) {
   const game = new Game({ seed, renderer: stubRenderer(), audio: null, ui: stubUI(), learned, wg });
   game.sim.tech.cheat = learned;
+  // (What a game spreads over frames (a far town laid out, a way across
+  // the sea) done there and then, so a test sees it at once.)
+  game.instantWork = true;
   return game;
 }
 

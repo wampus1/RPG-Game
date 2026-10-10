@@ -150,11 +150,10 @@ export class CookWindow extends Window {
       g.text(x + 1, y, label, dis ? C.faint : hov ? C.white : col);
       if (!dis) this.hit(x, y, w, 1, fn);
     };
-    if (off) btn(2, 18, '[L] Light the fire', () => this.toggleFire(), C.orange);
-    else btn(2, 18, this.tab === 'recipes' ? '[ENTER] Make it' : '[C] Cook it', () => (this.tab === 'recipes' ? this.fromRecipe() : this.start()), C.hi, this.tab === 'pack' && !this.picked.length);
-    if (this.st === 'c' && this.o.lit) btn(21, 18, '[P] Put the fire out', () => this.toggleFire(), C.dim);
-    btn(this.w - 11, 9, '[ESC]', () => this.close(), C.fg);
-    g.center(this.h - 2, this.tab === 'pack' ? '↑↓ choose · SPACE put in / take out · TAB recipes' : '↑↓ · ENTER make it · S copy onto a scroll · TAB pack', C.faint);
+    if (off) btn(2, 18, 'Light the fire', () => this.toggleFire(), C.orange);
+    else btn(2, 18, this.tab === 'recipes' ? 'Make it' : 'Cook it', () => (this.tab === 'recipes' ? this.fromRecipe() : this.start()), C.hi, this.tab === 'pack' && !this.picked.length);
+    if (this.st === 'c' && this.o.lit) btn(21, 18, 'Put the fire out', () => this.toggleFire(), C.dim);
+    btn(this.w - 11, 9, 'Close', () => this.close(), C.fg);
   }
 
   drawPack(g) {
@@ -214,7 +213,7 @@ export class CookWindow extends Window {
     if (this.st === 'p') g.center(this.h - 4, `Simmering: ${Math.max(0, Math.ceil(m.dur - m.t))}s`, C.faint);
     if (this.st === 'o') g.center(this.h - 4, m.stage === 'crimp' ? `Crimp ${m.k + 1} of ${m.seq.length}: ${ARROWS[m.seq[m.k]] || ''}` : 'Baking...', m.stage === 'crimp' ? C.hi : C.faint);
     if (this.st === 't') g.center(this.h - 4, `Cuts ${m.cuts.length} of ${m.marks.length}`, C.faint);
-    g.center(this.h - 2, 'ESC: give up (what\'s in it is kept)', C.faint);
+    g.center(this.h - 2, 'Close it to give up (what\'s in it is kept)', C.faint);
   }
 
   // The top of the reveal and of what it came out as: its name (on two
@@ -268,10 +267,10 @@ export class CookWindow extends Window {
       if (!dis) this.hit(x, yy, w, 1, fn);
     };
     const y1 = this.h - 4;
-    btn(2, y1, 28, known ? 'In your recipes' : '[W] Write down the recipe', () => this.writeDown(), C.hi, known);
-    btn(31, y1, 29, scrolls ? '[S] Copy it onto a scroll' : 'No blank scroll to copy to', () => this.toScroll(r.key), C.hi, !scrolls);
-    btn(2, y1 + 1, 28, '[C] Cook another', () => this.again(), C.fg);
-    btn(31, y1 + 1, 29, '[ENTER] Done', () => this.close(), C.fg);
+    btn(2, y1, 28, known ? 'In your recipes' : 'Write down the recipe', () => this.writeDown(), C.hi, known);
+    btn(31, y1, 29, scrolls ? 'Copy it onto a scroll' : 'No blank scroll to copy to', () => this.toScroll(r.key), C.hi, !scrolls);
+    btn(2, y1 + 1, 28, 'Cook another', () => this.again(), C.fg);
+    btn(31, y1 + 1, 29, 'Done', () => this.close(), C.fg);
     if (this.msg) g.center(this.h - 5, this.msg.text.slice(0, this.w - 4), this.msg.color);
   }
 
@@ -1042,7 +1041,6 @@ export class RecipeScrollWindow extends Window {
       });
     });
     if (this.msg) g.center(this.h - 4, this.msg.text.slice(0, this.w - 4), this.msg.color);
-    g.center(this.h - 2, '↑↓ choose · ENTER copy it onto a scroll · ESC', C.faint);
   }
 
   write() {

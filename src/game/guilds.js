@@ -65,7 +65,7 @@ export class Guilds {
       if (mine.invites.includes(to)) return fail(`${nameOf(to)} has already been asked.`);
       mine.invites.push(to);
       told.push([by, `You asked ${nameOf(to)} to join ${mine.name}.`]);
-      told.push([to, `${nameOf(by)} invites you to join the guild ${mine.name}. (Press P to answer.)`]);
+      told.push([to, `${nameOf(by)} invites you to join the guild ${mine.name}. (Answer in the Multiplayer window.)`]);
       return { ok: true, guild: mine, told };
     }
     if (op === 'join') {

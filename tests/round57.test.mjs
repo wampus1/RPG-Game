@@ -8,7 +8,7 @@ import { makeGame, stubInput, stubUI, stubRenderer } from './helpers.mjs';
 import { Game } from '../src/game/game.js';
 import { HostNet } from '../src/net/host.js';
 import { GuestNet } from '../src/net/guest.js';
-import { DEFAULTS, SETTING_ROWS, SETTING_KEYS, changeSetting, applySettings } from '../src/game/settings.js';
+import { DEFAULTS, SETTING_ROWS, SETTING_KEYS, SETTING_TABS, changeSetting, applySettings } from '../src/game/settings.js';
 import { SettingsWindow } from '../src/ui/windows.js';
 import { Renderer } from '../src/render/renderer.js';
 import { STEPS } from '../src/game/migrate.js';
@@ -118,7 +118,8 @@ test('a company walking off in the morning isn\'t stood back up behind you', () 
 
 test('settings for a slow machine: frame rate, lighting, particles, rain and snow, online updates', () => {
   for (const k of ['frameCap', 'lighting', 'particles', 'weatherFx', 'netRate']) assert.ok(k in DEFAULTS, k);
-  assert.ok(SETTING_ROWS.some((r) => r.section));
+  // (Round 77: in tabs.)
+  assert.ok(SETTING_ROWS.every((r) => r.tab));
   const s = { ...DEFAULTS };
   changeSetting(s, 'particles', 1);
   changeSetting(s, 'particles', 1);
@@ -147,9 +148,14 @@ test('settings for a slow machine: frame rate, lighting, particles, rain and sno
   // The window fits on the screen, every setting on it.
   const w = new SettingsWindow({ ...stubUI(), mouseCell: { x: -1, y: -1 }, hooks: {} }, { ...DEFAULTS });
   assert.ok(w.h <= 36, `${w.h} rows`);
+  // (Round 77: every setting on its tab.)
   const seen = [];
-  w.hits = [];
-  w.draw({ fill() {}, box() {}, center() {}, text: (x, y, t) => seen.push(String(t)) });
+  for (const tab of SETTING_TABS) {
+    w.tab = tab;
+    w.top = 0;
+    w.hits = [];
+    w.draw({ fill() {}, box() {}, center() {}, put() {}, text: (x, y, t) => seen.push(String(t)) });
+  }
   for (const r of SETTING_KEYS) assert.ok(seen.includes(r.label), r.label);
 });
 

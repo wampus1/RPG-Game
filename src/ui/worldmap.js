@@ -507,13 +507,20 @@ export class MapWindow extends Window {
         else put(y0 + 1, '', C.dim);
       }
     } else {
-      put(y0, `Zoom ${Math.round((this.z / 12) * 100)}% · each square = 2x2 screens · point at anything for details.`, C.dim);
+      put(y0, `Zoom ${Math.round((this.z / 12) * 100)}%`, C.dim);
       put(y0 + 1, '', C.dim);
     }
-    put(y0 + 2, `⌂ village ■ town ╔╗ city † ruin X battle ! raid ▲ bandits ∩¥▼Ω old place ║ spire • told of${game.guildMates && game.guildMates().length ? ' @ guild' : ''}`, C.faint);
     this.drawList(g, game);
-    const t = ` ${game.cheats?.mapTeleport ? '[CLICK] teleport  ' : ''}[WHEEL/+-] zoom [DRAG/WASD] move [SPACE] you [V] ${this.civView ? 'biomes' : 'realms'} [TAB] list [M] close `;
-    g.text(Math.max(1, this.w - t.length - 1), this.h - 1, t.slice(0, this.w - 2), game.cheats?.mapTeleport ? C.hi : C.dim);
+    // (Round 77: no key, no legend; a button to switch between the land and
+    // its realms.)
+    const vt = ` ${this.civView ? 'Show the land' : 'Show the realms'} `;
+    const vx = Math.max(1, this.w - vt.length - 2);
+    const vh = this.hovering(vx, this.h - 1, vt.length, 1);
+    g.text(vx, this.h - 1, vt, vh ? C.white : C.dim, vh ? '#3a2e1e' : undefined);
+    this.hit(vx, this.h - 1, vt.length, 1, () => {
+      this.civView = !this.civView;
+      this.ui.audio?.play('select');
+    });
   }
 
   // (Round 73) What's in the list: quest markers first, then the places

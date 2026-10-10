@@ -7,7 +7,7 @@ import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf, stairFo
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
-import { empireQuarter } from './empire.js';
+import { empireQuarterSteps } from './empire.js';
 import { farTable } from './farlands.js';
 
 export const M = { FREE: 0, ROAD: 1, BUILD: 2, WATER: 3, FIELD: 4, PLAZA: 5, YARD: 6, WALL: 7, BRIDGE: 8, DECOR: 9 };
@@ -146,6 +146,10 @@ const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export const NO_PAINTINGS = new Set(['temple', 'shrine', 'chapel', 'monastery', 'prison', 'stockade', 'jail', 'guardhouse', 'barracks', 'barn', 'stables', 'windmill', 'warehouse', 'granary', 'smithy', 'forge', 'mill', 'kiln', 'tannery', 'butcher', 'mine', 'dock', 'shipyard', 'watchtower']);
 // (Round 75) The way from one tile to the next beside it, as facings are
 // counted (0 +z, 1 -x, 2 -z, 3 +x): which way a stair climbs.
+// (Round 77) The trades that may set up over another's shop, and the
+// shops they may set up over (see stackTrade).
+const UPPER_TRADES = new Set(['tailor', 'herbalist', 'workshop']);
+const UPPER_HOSTS = new Set(['shop', 'bakery', 'tailor', 'herbalist']);
 const stairDir = (a, b) => (b.z > a.z ? 0 : b.x < a.x ? 1 : b.z < a.z ? 2 : 3);
 // The narrowest way through a town wall.
 const GATE_MIN = 4;
@@ -282,6 +286,7 @@ class Layout {
     yield;
     yield* this.scanTerrainSteps();
     if (s.type === 'city') this.cityWalls();
+    yield;
     this.roads();
     yield;
     yield* this.placeBuildingsSteps();
@@ -294,7 +299,16 @@ class Layout {
     this.clearDoorways();
     this.paintGround();
     this.decorBase = null;
+    // (Round 77) The beds upstairs: in worlds made from 0.77 on, there from
+    // the first for the families; in older ones, for those born since (so
+    // nobody's moved from the home they had).
+    const wg = this.world.ow.wg || 1;
+    const upBeds = () => {
+      for (const b of this.buildings) if (b.upBeds) b.beds.push(...b.upBeds.filter((q) => q.access));
+    };
+    if (wg >= 6) upBeds();
     if (s.condition !== 'abandoned') this.npcs = generateNPCs(this, this.plan, hash4(s.seed, 0x5eed));
+    if (wg < 6) upBeds();
     this.local = null; // free construction scratch
   }
 
@@ -755,10 +769,30 @@ class Layout {
   }
 
   placeBuilding(type, cands, rng) {
+    const steps = this.placeBuildingSteps(type, cands, rng, Infinity);
+    let r;
+    do r = steps.next();
+    while (!r.done);
+    return r.value;
+  }
+
+  // (Round 77) The same, a few hundred lots at a time (for a town laid out
+  // in the background: see World.layOut). The building, or null.
+  *placeBuildingSteps(type, cands, rng, every = 120) {
     const allowWater = this.settlement.biome === 'swamp';
+    let k = 0;
     for (const c of cands) {
+      if (++k % every === 0) yield;
+      // (Round 77) A lot that can't be built on whatever the size (its
+      // door's square or the step out to the street taken) is passed over
+      // without measuring every size against it. The dice are still
+      // thrown as before, so every town comes out as it always has.
+      const dm = this.maskAt(c.x + 2 * c.dx, c.z + 2 * c.dz);
+      const fm0 = this.maskAt(c.x + c.dx, c.z + c.dz);
+      const dead = !(dm === M.FREE || (allowWater && dm === M.WATER)) || !(fm0 === M.FREE || fm0 === M.ROAD || fm0 === M.YARD);
       for (const [w, d] of this.sizesFor(type, rng)) {
         const offs = rng.shuffle([...Array(Math.max(1, w - 2)).keys()].map((i) => i + 1)).slice(0, 3);
+        if (dead) continue;
         for (const off of offs) {
           const r = this.rectFor(c, w, d, off);
           if (!this.rectOk(r, allowWater)) continue;
@@ -770,6 +804,26 @@ class Layout {
       }
     }
     return null;
+  }
+
+  // (Round 77) `t` set up over a shop already standing (a different trade,
+  // with room for a stair): the shop's two storeys, the trade a building
+  // of its own up there (the same walls: see upperShop). Whether it was.
+  stackTrade(t, rng) {
+    if (!rng.chance(0.6)) return false;
+    const host = this.buildings.find((b) => UPPER_HOSTS.has(b.type) && b.type !== t && b.upper === undefined && b.upperOf === undefined && !b.storeys && b.x1 - b.x0 >= 6 && b.z1 - b.z0 >= 4);
+    if (!host) return false;
+    host.storeys = 2;
+    host.tall = 5;
+    const up = {
+      id: this.buildings.length, type: t, name: BUILDING_NAMES[t], x0: host.x0, z0: host.z0, x1: host.x1, z1: host.z1,
+      door: host.door, outside: host.outside, inside: host.inside, residential: false, beds: [], work: [], seats: [], free: [], homeSpots: [], household: null,
+      mats: host.mats, tall: host.tall, upperOf: host.id,
+    };
+    this.nameShop(up);
+    host.upper = up.id;
+    this.buildings.push(up);
+    return true;
   }
 
   commitBuilding(type, r, front, rng) {
@@ -805,6 +859,12 @@ class Layout {
       bld.storeys = 2;
       bld.tall = 5;
     } else if (wg === 4 && (type === 'house_m' || type === 'house_l') && rng.chance(0.3)) bld.tall = 3;
+    // (Round 77, worlds made from 0.77 on) A town's tavern has rooms
+    // upstairs for those passing through (see lodgingUpstairs).
+    if (wg >= 6 && type === 'tavern' && this.settlement.type !== 'village') {
+      bld.storeys = 2;
+      bld.tall = 5;
+    }
     const DX = [0, -1, 0, 1];
     const DZ = [1, 0, -1, 0];
     bld.inside = { x: r.door.x - DX[r.door.rot], z: r.door.z - DZ[r.door.rot] };
@@ -868,11 +928,13 @@ class Layout {
           late.push(t);
           continue;
         }
-        this.placeBuilding(t, nearCands, rng);
+        yield* this.placeBuildingSteps(t, nearCands, rng);
       }
     }
+    yield;
     // Cities are dense: their graveyard claims ground before the houses.
     if (s.type === 'city') this.cemetery(rng.fork('cemetery'));
+    yield;
     // Houses: one per household, sized to fit it; nobles get manors.
     const hhs = [...this.plan.households].sort((a, b) => b.members.length - a.members.length);
     let nobles = jc('noble');
@@ -889,13 +951,13 @@ class Layout {
       }
       let bld = null;
       if (t === 'palace') {
-        bld = this.placeBuilding('palace', byPlaza(this.frontage()), rng);
+        bld = yield* this.placeBuildingSteps('palace', byPlaza(this.frontage()), rng);
         if (!bld) t = 'manor';
       }
       for (let attempt = 0; attempt < 4 && !bld; attempt++) {
-        bld = this.placeBuilding(t, cands, rng);
-        if (!bld && t === 'manor') bld = this.placeBuilding('house_l', cands, rng);
-        if (!bld && n <= 5 && t === 'house_l') bld = this.placeBuilding('house_m', cands, rng);
+        bld = yield* this.placeBuildingSteps(t, cands, rng);
+        if (!bld && t === 'manor') bld = yield* this.placeBuildingSteps('house_l', cands, rng);
+        if (!bld && n <= 5 && t === 'house_l') bld = yield* this.placeBuildingSteps('house_m', cands, rng);
         if (!bld && lanes < 24 && this.growLane(rng)) {
           lanes++;
           cands = rng.shuffle(this.frontage());
@@ -908,13 +970,19 @@ class Layout {
     if (!this.graveyard && !this.cemetery(rng.fork('cemetery')) && this.growLane(rng)) this.cemetery(rng.fork('cemetery2'));
     yield;
     for (const t of late) {
-      if (!this.placeBuilding(t, byPlaza(this.frontage()), rng) && this.growLane(rng)) this.placeBuilding(t, byPlaza(this.frontage()), rng);
+      // (Round 77, worlds made from 0.77 on) A trade up over another's
+      // shop, now and then, in a town or a city.
+      if ((this.world.ow.wg || 1) >= 6 && UPPER_TRADES.has(t) && s.type !== 'village' && this.stackTrade(t, rng)) {
+        yield;
+        continue;
+      }
+      if (!(yield* this.placeBuildingSteps(t, byPlaza(this.frontage()), rng)) && this.growLane(rng)) yield* this.placeBuildingSteps(t, byPlaza(this.frontage()), rng);
       yield;
     }
     // (Round 70) An empire's city: its landmarks, and its streets built up
     // (see empire.js).
     if (s.empire && s.type === 'city' && s.condition !== 'abandoned' && (this.world.ow.wg || 1) >= 3) {
-      empireQuarter(this, rng.fork('empire'));
+      yield* empireQuarterSteps(this, rng.fork('empire'));
       yield;
     }
     // Empty lots the town can build on later (e.g. for new citizens).
@@ -1131,8 +1199,36 @@ class Layout {
     return ops;
   }
 
+  // (Round 77) The ground for `margin` tiles round the town's edge, worked
+  // out (and kept: see col) two rows at a time.
+  *edgeSteps(margin) {
+    const b = this.bounds;
+    if (!this.ctx) return;
+    // (Kept only so many: no use working out more than are kept.)
+    const ring = (b.x1 - b.x0 + 1 + 2 * margin) * (b.z1 - b.z0 + 1 + 2 * margin) - this.W * this.D;
+    if (ring > 36000) return;
+    this.outCols ||= new Map();
+    for (let z = b.z0 - margin; z <= b.z1 + margin; z++) {
+      const edge = z < b.z0 || z > b.z1;
+      for (let x = b.x0 - margin; x <= b.x1 + margin; x++) {
+        if (!edge && x === b.x0) x = b.x1 + 1;
+        this.col(x, z);
+      }
+      if ((z - b.z0) % 2 === 0) yield;
+    }
+  }
+
   // A lot just outside the edge (on the flattened fringe) facing the town.
   fringePlot(sign = true, reach = 7, flat = 0.05, needRoad = true, spaced = true, side = 5) {
+    const steps = this.fringePlotSteps(sign, reach, flat, needRoad, spaced, side, Infinity);
+    let r;
+    do r = steps.next();
+    while (!r.done);
+    return r.value;
+  }
+
+  // (Round 77) The same, `every` lots looked at a time (see openPlotSteps).
+  *fringePlotSteps(sign = true, reach = 7, flat = 0.05, needRoad = true, spaced = true, side = 5, every = 150) {
     // (A square lot `side` tiles across; h is its middle, e the far edge.)
     const e = side - 1;
     const h = Math.floor(side / 2);
@@ -1195,7 +1291,9 @@ class Layout {
     }
     cands.sort((a, c) => a.d - c.d);
     const exits = this.exits();
+    let looked = 0;
     for (const { x, z } of cands) {
+      if (++looked % every === 0) yield;
       let ok = true;
       // Lots marked out later stand a little further from their neighbours.
       const pad = sign || !spaced ? 1 : 2;
@@ -1453,7 +1551,10 @@ class Layout {
     // Further and further out, on rougher ground, and closer together.
     for (const [reach, flat, spaced] of [[7, 0.05, true], [12, 0, true], [17, 0, true], [12, 0, false]]) {
       yield;
-      const plot = this.fringePlot(false, reach, flat, true, spaced, side);
+      // (Round 77: the ground out there worked out first, a few rows at a
+      // time, so the look round itself is quick.)
+      yield* this.edgeSteps(reach + side + 4);
+      const plot = yield* this.fringePlotSteps(false, reach, flat, true, spaced, side);
       if (plot) return plot;
     }
     return null;
@@ -1729,6 +1830,8 @@ class Layout {
 
   // ------------------------------------------------------------ construction
   construct(b, rng) {
+    // (Round 77: a trade up over another's shop is built with it.)
+    if (b.upperOf !== undefined) return;
     const s = this.settlement;
     const spec = SPECS[b.type];
     const mats = b.mats;
@@ -2120,6 +2223,19 @@ class Layout {
     if (b.jailCand && !this.jail && !b.playerHome) this.jailCell(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
     // (Round 54) A tavern's room to let: two beds behind a wall and a door,
     // in a back corner (before the bar and the tables are set out).
+    // (Round 77) A stair up first in a tavern or a shop of two storeys, so
+    // nothing's set in its way.
+    const f0 = { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 };
+    const upStair = b.storeys === 2 && !b.residential && !ruined ? this.stairwell(b, f0, rng) : null;
+    if (b.storeys === 2 && !b.residential && !upStair) {
+      b.storeys = 1;
+      if (b.upper !== undefined) {
+        // (No room for a stair after all: the trade upstairs goes without.)
+        const up = this.buildings[b.upper];
+        up.upperOf = b.id;
+        up.vacant = true;
+      }
+    }
     if (b.type === 'tavern' && !b.playerHome && s.condition !== 'abandoned') this.innRoom(b, { isIn, occ, reserved, key, connected, ix0, iz0, ix1, iz1 });
 
     if (b.residential) {
@@ -2411,6 +2527,11 @@ class Layout {
         if (rng.chance(0.18)) this.put(f.x, Y0 + 1, f.z, B.cobweb);
         else if (rng.chance(0.12)) this.put(f.x, Y0, f.z, rng.pick([B.tall_grass, B.fern, B.mushroom_brown]));
       }
+    }
+    // (Round 77) Upstairs: the trade over the shop, or the tavern's rooms.
+    if (upStair) {
+      if (b.upper !== undefined) this.upperShop(b, this.buildings[b.upper], upStair, { ix0, iz0, ix1, iz1, rng, lit });
+      else if (t === 'tavern') this.lodgingUpstairs(b, upStair, { ix0, iz0, ix1, iz1, rng, lit });
     }
     // (Round 73) Paintings on the walls, and now and then a piece set out
     // for show: as each people likes (worlds made from 0.73 on).
@@ -2897,9 +3018,13 @@ class Layout {
       return t;
     };
     const beds = 1 + (b.type === 'house_l' ? 1 : 0);
+    const upBeds = [];
     for (let i = 0; i < beds; i++) {
       const t = take();
-      if (t) this.put(t.x, UY, t.z, B.bed, (t.side + 2) % 4);
+      if (t) {
+        this.put(t.x, UY, t.z, B.bed, (t.side + 2) % 4);
+        upBeds.push(t);
+      }
     }
     const ch = take();
     if (ch) this.put(ch.x, UY, ch.z, B.chest, (ch.side + 2) % 4);
@@ -2926,6 +3051,144 @@ class Layout {
     const cz = Math.round((iz0 + iz1) / 2);
     if (!taken.has(`${cx},${cz}`) && !hole(cx, cz) && !DIRS4.some(([dx, dz]) => hole(cx + dx, cz + dz))) this.put(cx, UY, cz, rugId);
     b.upstairs = { y: UY };
+    // (Round 77) Its beds slept in: each with the tile beside it to get in
+    // from (see Layout.generateSteps for when they're counted).
+    const reach = this.upReach(st, { ix0, iz0, ix1, iz1 }, taken, hole);
+    b.upBeds = upBeds.map((t) => ({ x: t.x, y: UY, z: t.z, access: this.upAccess(t, reach), up: true }));
+  }
+
+  // (Round 77) The floor upstairs that can be walked to from the top of
+  // the stair (round what's set out up there).
+  upReach(st, box, taken, hole) {
+    const seen = new Set([`${st.top.x},${st.top.z}`]);
+    const q = [st.top];
+    while (q.length) {
+      const c = q.pop();
+      for (const [dx, dz] of DIRS4) {
+        const x = c.x + dx;
+        const z = c.z + dz;
+        const k = `${x},${z}`;
+        if (x < box.ix0 || x > box.ix1 || z < box.iz0 || z > box.iz1 || seen.has(k) || taken.has(k) || hole(x, z)) continue;
+        seen.add(k);
+        q.push({ x, z });
+      }
+    }
+    return seen;
+  }
+
+  // (Round 77) Beside an upstairs bed (or bench), a tile of floor to stand
+  // on that can be got to from the stair.
+  upAccess(t, reach) {
+    for (const [dx, dz] of DIRS4) {
+      const x = t.x + dx;
+      const z = t.z + dz;
+      if (reach.has(`${x},${z}`)) return { x, z };
+    }
+    return null;
+  }
+
+  // (Round 77) A floor laid over the ground floor, the stair coming up
+  // through it (as for a house's: see upstairs): what's left along its
+  // walls to set things out on, and a way to take them.
+  upperFloor(b, st, f) {
+    const { ix0, iz0, ix1, iz1, rng } = f;
+    const FY = Y0 + 2;
+    const floor = b.mats.floor || B.planks;
+    const hole = (x, z) => x === st.mid.x && z === st.mid.z;
+    for (let z = iz0; z <= iz1; z++) for (let x = ix0; x <= ix1; x++) if (!hole(x, z)) this.put(x, FY, z, floor);
+    this.put(st.top.x, FY, st.top.z, stairFor(floor), b.stairUp ?? stairDir(st.mid, st.top));
+    const taken = new Set([`${st.mid.x},${st.mid.z}`, `${st.low.x},${st.low.z}`, `${st.top.x},${st.top.z}`]);
+    const keep = new Set([`${st.top.x},${st.top.z}`]);
+    for (const [dx, dz] of DIRS4) keep.add(`${st.top.x + dx},${st.top.z + dz}`);
+    const wallTiles = [];
+    const inner = [];
+    for (let z = iz0; z <= iz1; z++) {
+      for (let x = ix0; x <= ix1; x++) {
+        const k = `${x},${z}`;
+        if (taken.has(k) || keep.has(k) || hole(x, z) || DIRS4.some(([dx, dz]) => hole(x + dx, z + dz))) continue;
+        const side = z === iz0 ? 2 : x === ix0 ? 1 : x === ix1 ? 3 : z === iz1 ? 0 : -1;
+        if (side >= 0) wallTiles.push({ x, z, side });
+        else inner.push({ x, z, side });
+      }
+    }
+    rng.shuffle(wallTiles);
+    const take = (pred = () => true, from = wallTiles) => {
+      const t = from.find((q) => !taken.has(`${q.x},${q.z}`) && pred(q));
+      if (!t) return null;
+      taken.add(`${t.x},${t.z}`);
+      return t;
+    };
+    return { UY: Y0 + 3, taken, hole, take, inner, box: { ix0, iz0, ix1, iz1 } };
+  }
+
+  // (Round 77) A second trade up over a shop (worlds made from 0.77 on):
+  // its bench or counter and its goods along the walls, its own lamp. Its
+  // keeper works up here (see the upper building's work spots).
+  upperShop(host, up, st, f) {
+    const U = this.upperFloor(host, st, f);
+    const { UY, take } = U;
+    const face = (t) => (t.side + 2) % 4;
+    const work = (t) => {
+      if (!t) return;
+      const a = this.upAccess(t, this.upReach(st, U.box, U.taken, U.hole));
+      if (!a) return;
+      U.taken.add(`${a.x},${a.z}`);
+      const sp = this.addSpot(a.x, a.z, faceToward(a.x, a.z, t.x, t.z), ['work'], { building: up.id });
+      sp.y = UY;
+      up.work.push(sp);
+    };
+    const put = (t, id, rot = 0) => {
+      if (t) this.put(t.x, UY, t.z, id, rot);
+      return t;
+    };
+    const T = up.type;
+    if (T === 'tailor') {
+      work(put(take((t) => t.side === 2), B.loom, 0));
+      work(put(take(), B.table));
+    } else if (T === 'herbalist') {
+      work(put(take((t) => t.side === 2), B.alembic, 0));
+      work(put(take(), B.table));
+    } else if (T === 'workshop') {
+      work(put(take((t) => t.side === 2), B.workbench, 0));
+      work(put(take(), B.workbench));
+    } else {
+      work(put(take(), B.counter));
+    }
+    const ch = take();
+    if (ch) this.put(ch.x, UY, ch.z, B.chest, face(ch));
+    put(take(), B.barrel);
+    const lamp = take();
+    if (lamp) this.put(lamp.x, UY, lamp.z, B.torch, f.lit);
+    const reach = this.upReach(st, U.box, U.taken, U.hole);
+    const free = U.inner.filter((q) => reach.has(`${q.x},${q.z}`));
+    up.free = free.map((q) => ({ x: q.x, z: q.z }));
+    up.homeSpots = free.map((q) => ({ x: q.x, y: UY, z: q.z }));
+    host.upstairs = { y: UY };
+  }
+
+  // (Round 77) Rooms up over a tavern for those passing through (worlds
+  // made from 0.77 on): beds along the walls, a chest, a lamp. Visitors to
+  // the town sleep up here (see npc.js, visit), and whoever's let the
+  // tavern's room may too (see inns.js).
+  lodgingUpstairs(b, st, f) {
+    const U = this.upperFloor(b, st, f);
+    const { UY, take } = U;
+    const beds = [];
+    for (let i = 0; i < 4; i++) {
+      const t = take();
+      if (!t) break;
+      this.put(t.x, UY, t.z, B.bed, (t.side + 2) % 4);
+      beds.push(t);
+    }
+    const ch = take();
+    if (ch) this.put(ch.x, UY, ch.z, B.chest, (ch.side + 2) % 4);
+    const lamp = take();
+    if (lamp) this.put(lamp.x, UY, lamp.z, B.torch, f.lit);
+    const reach = this.upReach(st, U.box, U.taken, U.hole);
+    b.lodging = beds.map((t) => ({ x: t.x, y: UY, z: t.z, access: this.upAccess(t, reach), up: true })).filter((q) => q.access);
+    b.upstairs = { y: UY };
+    // (No room downstairs to let: these are let instead.)
+    if (!b.inn && b.lodging.length) b.inn = { beds: b.lodging.slice(0, 2).map((q) => ({ x: q.x, z: q.z })), floor: [], door: null, front: b.lodging[0].access, blocks: [], y: UY };
   }
 
   innRoom(b, f) {
@@ -3133,6 +3396,18 @@ class Layout {
     if (cond !== 'abandoned' || rng.chance(0.4)) {
       this.put(o.x, Y0 + 2, o.z, B.hanging_sign, b.door.rot);
       this.signs.push({ x: o.x, y: Y0 + 2, z: o.z, kind: 'building', building: b.id });
+    }
+    // (Round 77) A trade upstairs: its own sign hung a storey up, beside
+    // the shop's.
+    const up = b.upper !== undefined ? this.buildings[b.upper] : null;
+    if (up && !up.vacant && cond !== 'abandoned') {
+      const DXs = [0, -1, 0, 1];
+      const DZs = [1, 0, -1, 0];
+      const r0 = b.door.rot;
+      const sx = o.x + (DZs[r0] !== 0 ? 1 : 0);
+      const sz = o.z + (DXs[r0] !== 0 ? 1 : 0);
+      this.put(sx, Y0 + 3, sz, B.hanging_sign, r0);
+      this.signs.push({ x: sx, y: Y0 + 3, z: sz, kind: 'building', building: up.id });
     }
     // Lantern beside the door in nice places.
     const side = [];
@@ -3990,7 +4265,7 @@ class Layout {
         return { kind: 'spot', spot: this.spots.indexOf(stalls[stallLoad]) };
       }
     }
-    const opts = this.buildings.filter((b) => b.type === J.place);
+    const opts = this.buildings.filter((b) => b.type === J.place && !b.vacant);
     if (!opts.length) return { kind: 'plaza' };
     opts.sort((a, b) => load(a.id) - load(b.id));
     bump(opts[0].id);

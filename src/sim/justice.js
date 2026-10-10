@@ -142,9 +142,9 @@ export class Justice {
     if (hm >= 1320 || hm < 300) r.night = (r.night || 0) + 1;
     r.calm = 0;
     const hit = { minor: 6, moderate: 12, severe: 25 }[sev];
-    for (const w of wits) this.sim.changeRep(w, -hit);
+    for (const w of wits) this.sim.changeRep(w, -hit, 'crime');
     for (const i of seen) this.sim.changeRep({ rec: L.npcs[i], settlement: s }, -Math.ceil(hit / 3));
-    if (info.victimNpc && !info.victimNpc.dead) this.sim.changeRep(info.victimNpc, -hit * 2);
+    if (info.victimNpc && !info.victimNpc.dead) this.sim.changeRep(info.victimNpc, -hit * 2, { why: 'victim', how: type === 'theft' ? 'robbed me' : type === 'assault' || type === 'murder' ? 'attacked me' : 'wronged me' });
     const was = game.isWanted(sid);
     game.wanted.set(sid, Math.max(game.wanted.get(sid) || 0, sev === 'minor' ? 240 : 1e9));
     const shouter = wits.find((n) => n.state === 'routine' || n.rec.job === 'guard') || wits[0];

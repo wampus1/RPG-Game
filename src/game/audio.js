@@ -3,12 +3,33 @@
 import { MODS } from '../mod/state.js';
 import { clipBuffer } from '../mod/sound.js';
 
+// (Round 77) The kinds of sound, each with its own volume.
+export const SOUND_GROUPS = ['creatures', 'blocks', 'items', 'bosses', 'world', 'ui'];
+const GROUP_OF = {};
+for (const [g, names] of Object.entries({
+  ui: 'ui_open ui_close select error tag save star_ding reveal_great reveal_good reveal_poor reveal_bad cook_build',
+  blocks: 'step step_grass step_stone step_wood step_sand step_snow dig break place door chop stone crop pour fill chest lever gate crumble locked unlock knock pick_tick pick_bind pick_set pick_strain pick_snap plank_break plank_mend glass creak torch thud',
+  world: 'splash chirp hoot bird cricket owl howl gull wave wind frog thunder eruption rumble drip wind_low sail_flap ship_creak water_rush ship_bell crackle hiss drone whisper puff bell salt_song sea_bell',
+  creatures: 'hurt death growl baa scream shout voices skitter bones flap',
+  bosses: 'roar sting gate_slam victory',
+})) for (const n of names.split(' ')) GROUP_OF[n] = g;
+
+// Which kind a sound is (a master's own are the masters'; anything not
+// listed is items and fighting).
+export function soundGroup(name, src = null) {
+  if (src && src.isBoss) return 'bosses';
+  return GROUP_OF[name] || 'items';
+}
+
 export class Audio {
   constructor() {
     this.ctx = null;
     this.enabled = true;
     this.volume = 0.35;
     this.last = new Map();
+    this.groupVol = {};
+    // (Where the next voice's notes go: its kind's volume, or the master.)
+    this.dest = null;
     const unlock = () => {
       if (!this.ctx) {
         try {
@@ -17,6 +38,14 @@ export class Audio {
           this.master.gain.value = this.volume;
           this.master.connect(this.ctx.destination);
           this.noiseBuf = this.makeNoise();
+          // (Round 77) Each kind of sound through its own volume.
+          this.groups = {};
+          for (const k of SOUND_GROUPS) {
+            const g = this.ctx.createGain();
+            g.gain.value = this.groupVol[k] ?? 1;
+            g.connect(this.master);
+            this.groups[k] = g;
+          }
         } catch {
           this.enabled = false;
         }
@@ -29,6 +58,50 @@ export class Audio {
   setVolume(v) {
     this.volume = v;
     if (this.master) this.master.gain.value = v;
+  }
+
+  // (Round 77) The volume of each kind of sound, 0-1 (see settings.js).
+  setGroups(vols) {
+    this.groupVol = { ...this.groupVol, ...vols };
+    for (const [k, g] of Object.entries(this.groups || {})) g.gain.value = this.groupVol[k] ?? 1;
+  }
+
+  // (Round 77) Rain, as long as it lasts: a hiss outdoors, a muffled
+  // drumming on the roof inside. `level` 0-1 (0 stops it).
+  setRain(level, indoors = false) {
+    if (!this.ctx || !this.enabled) return;
+    if (!this.rain && level > 0) {
+      const c = this.ctx;
+      const s = c.createBufferSource();
+      s.buffer = this.noiseBuf;
+      s.loop = true;
+      const f = c.createBiquadFilter();
+      f.type = 'lowpass';
+      const g = c.createGain();
+      g.gain.value = 0;
+      s.connect(f).connect(g).connect(this.groups?.world || this.master);
+      s.start();
+      this.rain = { s, f, g };
+    }
+    if (!this.rain) return;
+    const t = this.ctx.currentTime;
+    const vol = level <= 0 ? 0 : (indoors ? 0.035 : 0.06) * Math.min(1, level);
+    this.rain.g.gain.setTargetAtTime(vol, t, 0.4);
+    this.rain.f.frequency.setTargetAtTime(indoors ? 420 : 2600, t, 0.3);
+    if (level <= 0 && !this.rain.stopping) {
+      this.rain.stopping = true;
+      const r = this.rain;
+      setTimeout(() => {
+        if (this.rain === r && r.stopping) {
+          try {
+            r.s.stop();
+          } catch {
+            // (Already stopped.)
+          }
+          this.rain = null;
+        }
+      }, 2500);
+    } else if (level > 0) this.rain.stopping = false;
   }
 
   makeNoise() {
@@ -48,7 +121,7 @@ export class Audio {
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.dest || this.master);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -66,7 +139,7 @@ export class Audio {
     g.gain.setValueAtTime(0.0005, t);
     g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.95);
     g.gain.exponentialRampToValueAtTime(0.0005, t + dur + 0.08);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.dest || this.master);
     o.start(t);
     o.stop(t + dur + 0.1);
   }
@@ -82,7 +155,7 @@ export class Audio {
     const g = c.createGain();
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    s.connect(f).connect(g).connect(this.master);
+    s.connect(f).connect(g).connect(this.dest || this.master);
     s.start(t);
     s.stop(t + dur + 0.02);
   }
@@ -97,10 +170,15 @@ export class Audio {
     this.last.set(name, now);
     if (typeof name === 'string' && name.startsWith('m:')) {
       const r = MODS.sounds.get(name);
-      if (r) this.playClip(r.v, o || {});
+      if (r) this.playClip(r.v, { ...(o || {}), dest: this.groups?.[soundGroup(name, src)] });
       return;
     }
-    this.voice(name);
+    this.dest = this.groups?.[soundGroup(name, src)] || null;
+    try {
+      this.voice(name);
+    } finally {
+      this.dest = null;
+    }
   }
 
   // (Round 66) A sound clip (a mod's: see mod/sound.js) played as it is,

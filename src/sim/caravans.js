@@ -96,7 +96,7 @@ export class Caravans {
     this.sim.camps.strike(`c:${g.id}`);
     this.list = this.list.filter((q) => q !== g);
     const s = this.game.world.ow.settlements[g.at ?? g.dest];
-    const L = s && this.sim.layoutOf(s.id);
+    const L = s && this.sim.laidOut(s.id);
     if (L) ledger(L, Math.floor(this.sim.abs / DAY), `${g.name[0].toUpperCase()}${g.name.slice(1)} will trade no more: the last of them is dead.`);
   }
 
@@ -182,7 +182,10 @@ export class Caravans {
       this.depart(g, rng);
       return;
     }
-    const L = this.sim.layoutOf(s.id);
+    // (Round 77: into a town that's been laid out; else it is, and they
+    // come in a moment later.)
+    const L = this.sim.laidOut(s.id);
+    if (!L) return;
     g.state = 'stay';
     g.at = s.id;
     g.stays++;
@@ -380,7 +383,7 @@ export class Caravans {
   roadTravellers() {
     const out = [];
     for (const r of this.roadSpots()) {
-      const L = this.game.world.layouts.get(r.to.id) || this.sim.layoutOf(r.to.id);
+      const L = this.sim.laidOut(r.to.id);
       if (!L || !L.econ) continue;
       // (In file behind the lead wagon, along the way.)
       const ahead = this.sim.diplomacy.wayAt(r.way, r.f * r.way.len + 4);

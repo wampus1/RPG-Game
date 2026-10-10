@@ -547,6 +547,15 @@ export const STEPS = [
       if (n) log.push(`${n} painting${n === 1 ? '' : 's'} hung where ${n === 1 ? 'it' : 'they'} shouldn't have been taken down.`);
     },
   },
+  {
+    to: '0.77.0',
+    data(d, log) {
+      // (Nothing in the save to change: the beds upstairs are counted as the
+      // towns are laid out, the coaches and ferries stand ready at runtime,
+      // and folk start remembering what you do from now.)
+      log.push('Folk sleep upstairs in houses of two storeys (room for children born from now on); a coach stands outside every town and a ferry off every pier near the sea; rain, snow and water show on the ground; and people remember what you do for them, or to them.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

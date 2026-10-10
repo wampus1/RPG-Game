@@ -253,6 +253,22 @@ export class Sim {
     return s ? this.game.world.getLayout(s) : null;
   }
 
+  // (Round 77) A town's layout if it's been laid out, else null, and it's
+  // laid out next, a little each frame (for what can wait a moment: a
+  // far town's comings and goings, never worth a stalled frame).
+  laidOut(sid) {
+    const world = this.game.world;
+    const s = world.ow.settlements[sid];
+    if (!s) return null;
+    const L = world.layouts.get(s.id);
+    if (L) return L;
+    // (Run all at once, as the tests do: there and then.)
+    if (this.game.instantWork) return world.getLayout(s);
+    this.layQueue ||= [];
+    if (this.laying !== s && !this.layQueue.includes(s)) this.layQueue.push(s);
+    return null;
+  }
+
   // Towns you've been to keep living while you're away: one at a time, a
   // day's worth at most per step, so the world moves on without a stall.
   // Places you've never been (in lands you haven't found yet) live too:
@@ -260,16 +276,7 @@ export class Sim {
   // grow, build and trade like anywhere else.
   backgroundTick() {
     const world = this.game.world;
-    if (!this.allLaid && !this.laying) {
-      this.layT = (this.layT ?? 2) - 0.5;
-      if (this.layT <= 0) {
-        this.layT = 2;
-        const s = world.ow.settlements.find((q) => !world.layouts.has(q.id));
-        // (Laid out a few milliseconds a frame: see update.)
-        if (s) this.laying = s;
-        else this.allLaid = true;
-      }
-    }
+    this.nextLay();
     // (A town's day of business still being worked through: see civicTick.)
     if (this.civicJob) return;
     const list = [...world.layouts.values()].filter((L) => L.econ && !this.game.active.has(L.settlement.id));
@@ -282,6 +289,25 @@ export class Sim {
       simulateTo(this, L, Math.min(this.abs, L.econ.lastAbs + DAY));
     } finally {
       this.civicLater = false;
+    }
+  }
+
+  // The next town to lay out in the background, if any (laid out a few
+  // milliseconds a frame: see update).
+  nextLay() {
+    const world = this.game.world;
+    while (!this.laying && this.layQueue && this.layQueue.length) {
+      // (Asked for first: see laidOut.)
+      const s = this.layQueue.shift();
+      if (!world.layouts.has(s.id)) this.laying = s;
+    }
+    if (!this.allLaid && !this.laying) {
+      // (Round 77: one after another, with no wait between: each only a few
+      // milliseconds a frame, so the sooner they're all done, the sooner
+      // nothing need ever be laid out all at once.)
+      const s = world.ow.settlements.find((q) => !world.layouts.has(q.id));
+      if (s) this.laying = s;
+      else this.allLaid = true;
     }
   }
 
@@ -326,7 +352,10 @@ export class Sim {
       this.religion.update();
       this.market.update();
     }
-    if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) this.laying = null;
+    if (this.laying && this.game.world.layOut(this.laying, LAY_MS)) {
+      this.laying = null;
+      this.nextLay();
+    }
     if (this.civicJob) this.civicTick(LAY_MS);
     this.war.update(dt);
     this.volcano.update(dt);
@@ -472,13 +501,22 @@ export class Sim {
     return clamp(Math.round(v), -100, 100);
   }
 
-  changeRep(npc, delta) {
+  // (`why`, round 77: what was done, for them to remember you by: a word
+  // ('gift', 'favor', 'saved', 'insult', 'crime', 'victim', ...) or
+  // { why, item, how }. See dialogue.remembers.)
+  changeRep(npc, delta, why = null) {
     const sid = this.repSidOf(npc);
     const rec = npc.rec || npc;
     const r = this.repEntry(sid, rec.idx);
     if (delta > 0) delta = Math.round(delta * repGainMult(this.game.hero) * 10) / 10;
     r.v = clamp(r.v + delta, -100, 100);
     r.met = true;
+    if (why || Math.abs(delta) >= 6) {
+      const w = typeof why === 'string' ? { why } : why || {};
+      r.mem ||= [];
+      r.mem.push({ d: delta, day: this.game.day, ...w });
+      if (r.mem.length > 4) r.mem.shift();
+    }
     this.areaCache.delete(sid);
     const e = npc.emoteShow ? npc : rec.ent;
     if (e && !e.dead && e.emoteShow && Math.abs(delta) >= 3) e.emoteShow(delta > 0 ? '♥' : '×', delta > 0 ? '#ff80a0' : '#ff6040', 1.6);
@@ -604,7 +642,7 @@ export class Sim {
     }
     if (r.gift === day && score > 0) score *= 0.35;
     r.gift = day;
-    const gained = this.changeRep(npc, Math.round(score));
+    const gained = this.changeRep(npc, Math.round(score), score >= 3 ? { why: 'gift', item } : score < 0 ? 'insult' : null);
     // The gift goes into their inventory (food gets eaten when needed).
     if (item === 'coin') rec.coins += 1;
     else invAdd(rec.inv, item, 1);
@@ -624,13 +662,13 @@ export class Sim {
       if (r.chat === day) return 0;
       r.chat = day;
       const d = Math.round(2 + p.sociability * 3 + p.kindness * 2);
-      this.changeRep(npc, d);
+      this.changeRep(npc, d, d >= 5 ? 'kind' : null);
       return d;
     }
     if (kind === 'rude') {
       const d = -Math.round(6 + p.temper * 6);
       r.insult = day;
-      this.changeRep(npc, d);
+      this.changeRep(npc, d, 'insult');
       return d;
     }
     return 0;
@@ -1228,6 +1266,9 @@ export class Sim {
     this.tech.daily(L, day, rng);
     yield;
     this.ancient.townDay(L, day, rng);
+    // (Round 77: where a pier might go looked over first, a little at a
+    // time: see Ships.prepSteps.)
+    yield* this.ships.prepSteps(L, day);
     this.ships.daily(L, day, rng);
     yield;
     this.portals.daily(L, day);
@@ -1731,7 +1772,7 @@ export class Sim {
       if (!living.length || b.beds.length <= members.length) continue;
       const bed = b.beds[members.length];
       const kind = living.reduce((a, r) => a + r.personality.kindness, 0) / living.length;
-      if (!best || kind > best.kind) best = { house: b, bed: { x: bed.x, y: GROUND, z: bed.z }, kind, family: b.family };
+      if (!best || kind > best.kind) best = { house: b, bed: { x: bed.x, y: bed.y ?? GROUND, z: bed.z }, kind, family: b.family };
     }
     return best;
   }
@@ -1929,7 +1970,7 @@ export class Sim {
     if (mine && this.citizen && this.citizen.sid === c.sid) {
       this.citizen.home = bld.id;
       const bed = bld.beds[0];
-      if (bed) this.citizen.homeBed = { x: bed.x, y: GROUND, z: bed.z };
+      if (bed) this.citizen.homeBed = { x: bed.x, y: bed.y ?? GROUND, z: bed.z };
     }
     this.clearBuilders(L);
     if (!silent) {

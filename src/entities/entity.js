@@ -74,6 +74,8 @@ export class Entity {
     this.moveT = 0;
     // (Chilled by frost: slower.)
     this.inWater = this.game.world.isWaterAt(nx, ny, nz);
+    // (Round 77) Out of your depth: swimming.
+    this.swimming = this.inWater && this.game.world.isWaterAt(nx, ny - 1, nz);
     // (Round 73) Wading a liquid sunk in the floor (acid, quicksilver):
     // slower through it, and down in it to the shins.
     this.wading = wadeOf(this.game.world, nx, ny, nz);
@@ -89,6 +91,7 @@ export class Entity {
     this.fz = z;
     this.moveT = 1;
     this.inWater = this.game.world.isWaterAt(x, y, z);
+    this.swimming = this.inWater && this.game.world.isWaterAt(x, y - 1, z);
     this.wading = wadeOf(this.game.world, x, y, z);
   }
 

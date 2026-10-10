@@ -50,8 +50,12 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // for the peoples who build that way, houses of more shapes with rooms,
 // paintings and display pieces in their builds, and more variety in the
 // far lands' ground, peoples and names. (A town laid out in an older world
-// keeps its plan.)
-export const WORLD_GEN = 5;
+// keeps its plan.) (Round 74) 5, houses of two storeys, paintings hung,
+// academies of many rooms. (Round 77) 6, a tavern's rooms upstairs for
+// those passing through, a trade now and then up over another's shop, and
+// coaches between the towns and ferries across to the islands (see
+// sim/coaches.js).
+export const WORLD_GEN = 6;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:

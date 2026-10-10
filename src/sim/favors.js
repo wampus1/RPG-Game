@@ -247,7 +247,7 @@ export class Favors {
       if (left) this.game.spawnDrop('coin', left, p.x, p.y, p.z, true);
       this.game.audio?.play('coin');
     }
-    this.sim.changeRep(npc, f.rep);
+    this.sim.changeRep(npc, f.rep, 'favor');
     this.sim.addRenown(f.sid, f.official ? 3 : 2, 'your help');
     this.list = this.list.filter((q) => q !== f);
     this.done++;

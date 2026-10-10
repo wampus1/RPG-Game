@@ -126,7 +126,7 @@ export class Nomads {
     const g = this.game;
     for (const b of this.bands) {
       if (b.done) continue;
-      const L = this.sim.layoutOf(b.sid);
+      const L = this.sim.laidOut(b.sid);
       if (!L) continue;
       if (now >= b.arrive && !b.announced) {
         b.announced = true;

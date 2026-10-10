@@ -140,14 +140,14 @@ export class AccountWindow extends Window {
     });
     if (this.err) g.text(2, 27, this.err, C.red, undefined, this.w - 4);
     const bw = 30;
-    button(this, g, 2, 28, bw, this.editing ? '[ENTER] Save' : '[ENTER] Make my account', () => this.save(), { color: C.hi });
-    button(this, g, 2, 30, bw, this.editing ? '[ESC] Close' : '[ESC] Back', () => this.close());
-    if (this.editing) button(this, g, 34, 28, bw, '[X] Copy my account code', () => this.exportCode());
-    else button(this, g, 34, 28, bw, '[I] Use an account code...', () => this.importCode());
+    button(this, g, 2, 28, bw, this.editing ? 'Save' : 'Make my account', () => this.save(), { color: C.hi });
+    button(this, g, 2, 30, bw, this.editing ? 'Close' : 'Back', () => this.close());
+    if (this.editing) button(this, g, 34, 28, bw, 'Copy my account code', () => this.exportCode());
+    else button(this, g, 34, 28, bw, 'Use an account code...', () => this.importCode());
     if (this.code) {
       g.text(34, 30, 'Your code (copied, if allowed):', C.dim);
       g.text(2, 32, this.code.slice(0, this.w - 4), C.cyan);
-    } else g.text(2, 32, '↑↓ choose · ←→ change · type to write', C.faint);
+    }
   }
 
   change(id, d) {
@@ -264,13 +264,17 @@ export class MultiplayerWindow extends Window {
       g.text(6, 2, a.name, C.hi);
       g.text(6, 3, (a.desc || 'No description yet.').slice(0, this.w - 34), C.dim);
     } else g.text(2, 2, 'Make an account to play with others.', C.orange);
-    button(this, g, this.w - 26, 2, 24, a ? '[A] Account & friends' : '[A] Make an account', () => hooks.account(), { color: a ? C.fg : C.hi });
+    button(this, g, this.w - 26, 2, 24, a ? 'Account & friends' : 'Make an account', () => hooks.account(), { color: a ? C.fg : C.hi });
     let y = 6;
     g.text(2, y++, 'YOUR WORLDS', C.border);
     const full = (saves || []).length >= 3;
-    button(this, g, 2, y, this.w - 4, '[N] New multiplayer world (random)', () => hooks.newWorld(), { off: !a || full, hint: full ? 'delete one first' : null });
+    button(this, g, 2, y, this.w - 4, 'New multiplayer world (random)', () => hooks.newWorld(), { off: !a || full, hint: full ? 'delete one first' : null });
     y += 2;
-    button(this, g, 2, y, this.w - 4, '[S] New multiplayer world from seed...', () => hooks.seedWorld(), { off: !a || full });
+    button(this, g, 2, y, this.w - 4, 'New multiplayer world from seed...', () => hooks.seedWorld(), { off: !a || full });
+    y += 2;
+    // (Round 77) A world played alone, made a world to host (a copy: the
+    // one you play alone is kept as it is).
+    button(this, g, 2, y, this.w - 4, 'Convert singleplayer save to multiplayer...', () => this.ui.open(new ConvertWindow(this.ui, this.ctx)), { off: !a || full || !(hooks.soloSaves && hooks.soloSaves().length), hint: full ? 'delete one first' : null });
     y += 2;
     (saves || []).slice(0, 3).forEach((s, i) => {
       const m = s.meta;
@@ -278,20 +282,19 @@ export class MultiplayerWindow extends Window {
       // SaveDetailsWindow. Round 50: not from the list itself.)
       const other = !sameVersion(m.gv);
       const up = canUpgrade(m.gv);
-      button(this, g, 2, y, this.w - 4, `[${i + 1}] ${m.world || m.name}`.slice(0, 40), () => this.details(s.id), { off: !a, color: other ? C.orange : C.fg, hint: other ? `${versionText(m.gv)}${up ? ' · can update' : ''} · day ${m.day}` : `day ${m.day} · ${m.players || 1} played` });
+      button(this, g, 2, y, this.w - 4, `${m.world || m.name}`.slice(0, 40), () => this.details(s.id), { off: !a, color: other ? C.orange : C.fg, hint: other ? `${versionText(m.gv)}${up ? ' · can update' : ''} · day ${m.day}` : `day ${m.day} · ${m.players || 1} played` });
       y += 2;
     });
     y += 1;
     g.text(2, y++, 'ON THIS NETWORK', C.border);
     const worlds = networkWorlds(lan);
     worlds.forEach((w, i) => {
-      const key = JOIN_KEYS[i];
       const old = w.v && w.v !== NET_VERSION;
       // (A world on another version of the game: you're told, and can't.
       // Not knowing which it's on isn't reason enough: the host's own
       // server asks, and turns you away then if it must.)
       const other = !old && !!w.gv && !sameVersion(w.gv);
-      button(this, g, 2, y, this.w - 4, `[${key}] Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => (other ? hooks.otherVersion(w) : hooks.join(w.at)), { off: !a || w.players >= w.max || old, color: other ? C.orange : C.hi, hint: old || other ? `${versionText(w.gv || null)}` : `${w.players}/${w.max}` });
+      button(this, g, 2, y, this.w - 4, `Join "${w.name || 'a world'}" hosted by ${w.hostName || 'someone'}`.slice(0, this.w - 16), () => (other ? hooks.otherVersion(w) : hooks.join(w.at)), { off: !a || w.players >= w.max || old, color: other ? C.orange : C.hi, hint: old || other ? `${versionText(w.gv || null)}` : `${w.players}/${w.max}` });
       // (Found elsewhere on the network: where. With mods: which.)
       const mods = (w.mods || []).map((q) => q.name).join(', ');
       if (w.at || mods) g.text(7, y + 1, `${w.at ? `on another computer, at ${w.at.addr}` : ''}${w.at && mods ? ' · ' : ''}${mods ? `mods: ${mods}` : ''}`.slice(0, this.w - 9), mods ? C.purple : C.faint);
@@ -308,7 +311,7 @@ export class MultiplayerWindow extends Window {
       g.text(3, y++, `${addrs[0]}${lan.mdns ? ` or http://${lan.mdns}:${lan.port}` : ''}`.slice(0, this.w - 5), C.cyan);
       g.text(3, y++, 'in their browser (or it shows up here, in their own copy).', C.faint);
     }
-    button(this, g, 2, this.h - 3, 20, '[ESC] Back', () => this.close());
+    button(this, g, 2, this.h - 3, 20, 'Back', () => this.close());
     g.text(24, this.h - 3, `Up to ${MAX_PLAYERS} players in a world.`, C.faint);
   }
 
@@ -376,8 +379,8 @@ export class HostWindow extends Window {
     g.text(2, 8, '( )', C.faint);
     g.text(6, 8, 'Cloud hosting', C.faint);
     g.text(20, 8, '(coming soon: not available yet)', C.faint);
-    button(this, g, 2, 12, 26, '[ENTER] Start the world', () => this.start(), { off: !ok, color: C.hi });
-    button(this, g, 30, 12, 26, '[ESC] Back', () => this.close());
+    button(this, g, 2, 12, 26, 'Start the world', () => this.start(), { off: !ok, color: C.hi });
+    button(this, g, 30, 12, 26, 'Back', () => this.close());
     g.text(2, 15, `Up to ${MAX_PLAYERS} players. You can kick, ban and invite`, C.faint);
     g.text(2, 16, 'from the pause menu (Esc, then P).', C.faint);
   }
@@ -428,7 +431,7 @@ export class PartyWindow extends Window {
     } else g.text(2, y++, `In ${c.hostName || 'the host'}'s world.`, C.dim);
     // Fighting between players: the host's to allow.
     if (c.host) {
-      const label = `[V] Players can hurt each other: ${c.pvp ? 'ON' : 'OFF'}`;
+      const label = `Players can hurt each other: ${c.pvp ? 'ON' : 'OFF'}`;
       button(this, g, 2, y++, label.length + 2, label, () => H.pvp(), { color: c.pvp ? C.red : C.dim });
     } else g.text(2, y++, c.pvp ? 'Players can hurt each other here (the host allows it).' : 'Players can\'t hurt each other here.', c.pvp ? C.red : C.faint);
     y++;
@@ -471,7 +474,7 @@ export class PartyWindow extends Window {
       entry({ name: mine.name, color: mine.color, desc: names }, [['Leave', () => H.guild('leave'), C.orange]]);
       line('Guildmates see each other on the maps, and down the side of the screen.');
     } else {
-      list.push({ h: 2, draw: (yy) => button(this, g, 2, yy, 30, '[G] Found a guild...', () => H.foundGuild(), { color: C.hi }) });
+      list.push({ h: 2, draw: (yy) => button(this, g, 2, yy, 30, 'Found a guild...', () => H.foundGuild(), { color: C.hi }) });
       line('A guild\'s members see each other on the maps, wherever they are.');
     }
     for (const q of guilds.filter((o) => o.invites.includes(c.me) && !o.members.includes(c.me))) {
@@ -519,9 +522,9 @@ export class PartyWindow extends Window {
     if (this.scroll > 0) g.text(this.w - 4, top, '▲', C.dim);
     if (this.scroll < this.maxScroll) g.text(this.w - 4, bottom - 1, '▼', C.dim);
     if (c.note) g.text(2, this.h - 4, c.note.slice(0, this.w - 4), C.cyan);
-    button(this, g, 2, this.h - 2, 22, '[A] Your account', () => H.account());
-    if (!c.host) button(this, g, 26, this.h - 2, 22, '[L] Leave the world', () => H.leave(), { color: C.orange });
-    button(this, g, this.w - 22, this.h - 2, 20, '[ESC] Close', () => this.close());
+    button(this, g, 2, this.h - 2, 22, 'Your account', () => H.account());
+    if (!c.host) button(this, g, 26, this.h - 2, 22, 'Leave the world', () => H.leave(), { color: C.orange });
+    button(this, g, this.w - 22, this.h - 2, 20, 'Close', () => this.close());
   }
 
   onKey(k) {
@@ -570,7 +573,7 @@ export class PermsWindow extends Window {
       wrap(q.about, this.w - 6).slice(0, 2).forEach((l, j) => g.text(4, y + 1 + j, l, C.faint));
     });
     g.center(this.h - 3, 'Kept with this world: they have it whenever they come back.', C.faint);
-    button(this, g, this.w - 22, this.h - 2, 20, '[ESC] Close', () => this.close());
+    button(this, g, this.w - 22, this.h - 2, 20, 'Close', () => this.close());
   }
 
   toggle(i) {
@@ -606,8 +609,8 @@ export class GuildNameWindow extends Window {
     g.fill(2, 4, this.w - 4, 1, ' ', C.fg, C.bgSel);
     g.text(3, 4, this.name + (Math.floor(this.ui.time * 2) % 2 ? '_' : ''), C.white);
     g.text(2, 6, `At most ${GUILD_NAME_MAX} letters. You can ask others to join after.`, C.faint, undefined, this.w - 4);
-    button(this, g, 2, 8, 22, '[ENTER] Found it', () => this.done(), { off: this.name.trim().length < 3, color: C.hi });
-    button(this, g, 26, 8, 22, '[ESC] Back', () => this.close());
+    button(this, g, 2, 8, 22, 'Found it', () => this.done(), { off: this.name.trim().length < 3, color: C.hi });
+    button(this, g, 26, 8, 22, 'Back', () => this.close());
   }
 
   done() {
@@ -647,21 +650,21 @@ export class ProfileWindow extends Window {
     if (p.title) g.text(14, 3, `the ${p.title}`, C.dim);
     wrap(p.desc || 'No description.', this.w - 16).slice(0, 8).forEach((l, i) => g.text(14, 5 + i, l, p.desc ? C.fg : C.faint));
     const mine = p.id === c.me;
-    if (mine) button(this, g, 2, 14, 24, '[E] Edit your profile', () => c.hooks.edit());
+    if (mine) button(this, g, 2, 14, 24, 'Edit your profile', () => c.hooks.edit());
     else if (c.friend) g.text(3, 14, '♥ Friends', C.green);
     else if (c.sent) g.text(3, 14, 'Friend request sent.', C.dim);
-    else if (c.asked) button(this, g, 2, 14, 27, '[F] Accept their request', () => c.hooks.accept(p), { color: C.green });
-    else button(this, g, 2, 14, 27, '[F] Send friend request', () => c.hooks.request(p), { color: C.hi });
+    else if (c.asked) button(this, g, 2, 14, 27, 'Accept their request', () => c.hooks.accept(p), { color: C.green });
+    else button(this, g, 2, 14, 27, 'Send friend request', () => c.hooks.request(p), { color: C.hi });
     // A bout with them (in the same world): for what purse, if any.
     if (!mine && c.bout) {
-      if (!this.picking) button(this, g, 30, 14, 24, '[D] Challenge to a bout', () => (this.picking = true), { color: C.orange });
+      if (!this.picking) button(this, g, 30, 14, 24, 'Challenge to a bout', () => (this.picking = true), { color: C.orange });
       else {
         g.text(2, 16, 'Purse:', C.dim);
-        BOUT_PURSES.forEach((w, i) => button(this, g, 9 + i * 11, 16, 10, `[${i + 1}] ${w ? `¤${w}` : 'none'}`, () => this.challenge(w), { color: C.orange }));
+        BOUT_PURSES.forEach((w, i) => button(this, g, 9 + i * 11, 16, 10, `${w ? `¤${w}` : 'none'}`, () => this.challenge(w), { color: C.orange }));
         return;
       }
     }
-    button(this, g, this.w - 16, 16, 14, '[ESC] Close', () => this.close());
+    button(this, g, this.w - 16, 16, 14, 'Close', () => this.close());
   }
 
   challenge(wager) {
@@ -714,8 +717,8 @@ export class BoutAskWindow extends Window {
     g.text(6, 2, f.name || 'Someone', C.hi);
     g.text(6, 3, `challenges you to a bout${a.wager ? `, for ¤${a.wager}` : ''}.`, C.fg);
     wrap('The first down to a quarter of their strength yields' + (a.wager ? ', and pays the purse.' : '.'), this.w - 4).slice(0, 2).forEach((l, i) => g.text(2, 5 + i, l, C.dim));
-    button(this, g, 2, 9, 22, '[Y] Accept', () => this.answer(true), { color: C.green });
-    button(this, g, 26, 9, 22, '[N] Decline', () => this.answer(false));
+    button(this, g, 2, 9, 22, 'Accept', () => this.answer(true), { color: C.green });
+    button(this, g, 26, 9, 22, 'Decline', () => this.answer(false));
   }
 
   answer(yes) {
@@ -751,8 +754,7 @@ export class GuestPauseWindow extends Window {
       const y = 2 + i;
       const hov = this.hovering(2, y, this.w - 4, 1);
       g.fill(2, y, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
-      g.text(3, y, `[${k}]`, C.hi);
-      g.text(10, y, label, hov ? C.white : C.fg);
+      g.text(4, y, label, hov ? C.white : C.fg);
       this.hit(2, y, this.w - 4, 1, () => fn());
     });
     g.text(3, this.h - 3, 'The world goes on while you\'re', C.faint);
@@ -782,8 +784,8 @@ export class InviteWindow extends Window {
     if (cv) g.image(2, 2, cv, 0, 0);
     g.text(6, 2, f.name || 'A friend', C.hi);
     wrap(`invites you to play in "${this.invite.world || 'their world'}".`, this.w - 10).slice(0, 2).forEach((l, i) => g.text(6, 3 + i, l, C.fg));
-    button(this, g, 2, 7, 22, '[Y] Join them', () => this.answer(true), { color: C.green });
-    button(this, g, 26, 7, 22, '[N] Not now', () => this.answer(false));
+    button(this, g, 2, 7, 22, 'Join them', () => this.answer(true), { color: C.green });
+    button(this, g, 26, 7, 22, 'Not now', () => this.answer(false));
   }
 
   answer(yes) {
@@ -834,3 +836,40 @@ export function drawNotes(ui, ctx) {
 }
 
 export { COLS };
+
+// (Round 77) Pick one of your own saves to become a world you host.
+export class ConvertWindow extends Window {
+  constructor(ui, ctx) {
+    super(ui, 56, 18, { kind: 'convert' });
+    this.ctx = ctx;
+    this.note = null;
+  }
+
+  draw(g) {
+    const { hooks } = this.ctx;
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, PANEL);
+    g.box(0, 0, this.w, this.h, { bg: PANEL, double: true, title: 'CONVERT A SAVE' });
+    g.text(2, 2, 'Pick a save to host as a multiplayer world. It is', C.dim);
+    g.text(2, 3, 'copied: the one you play alone stays as it is.', C.dim);
+    let y = 5;
+    for (const sv of hooks.soloSaves()) {
+      const m = sv.meta;
+      const label = `${sv.id === 'auto' ? 'Autosave' : `Slot ${sv.id}`}: ${m.name || 'Wanderer'}, day ${m.day}`;
+      button(this, g, 2, y, this.w - 4, label.slice(0, this.w - 8), () => {
+        this.note = 'Converting...';
+        Promise.resolve(hooks.convert(sv.id)).then((ok) => {
+          if (ok) this.close();
+          else this.note = 'It could not be converted.';
+        });
+      }, { hint: m.place || null });
+      y += 2;
+    }
+    if (this.note) g.text(2, this.h - 4, this.note, C.orange);
+    button(this, g, 2, this.h - 3, 16, 'Back', () => this.close());
+  }
+
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    return true;
+  }
+}

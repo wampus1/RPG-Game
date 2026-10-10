@@ -155,9 +155,6 @@ export class DungeonMapWindow extends Window {
       g.text(px + 1, y, label.slice(0, PANEL - 3), !seen ? C.faint : on ? C.white : here ? C.cyan : C.fg);
       if (seen) this.hit(px, y, PANEL - 2, 1, () => this.pick(f));
     }
-    g.text(px, this.h - 4, '1-9 / [ ] floors', C.faint);
-    const t = ' [M] close ';
-    g.text(this.w - t.length - 1, this.h - 1, t, C.dim);
   }
   drawPixels(ctx, game) {
     const run = this.run();

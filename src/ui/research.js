@@ -178,7 +178,6 @@ export class TechWindow extends Window {
     g.text(2, 2, cur ? `Studying ${cur.name} ${bar(st.progress / cur.cost, 12)} ${pct(st.progress, cur.cost)}%` : 'Nothing under study', cur ? '#c8a060' : C.dim);
     const n = `${st.done.filter((k) => this.tree.techs[k]).length} of ${this.tree.ids.length} learned`;
     g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, C.faint);
-    g.text(2, this.h - 1, ' wheel zoom · drag to move · click a step · arrows pan · ESC close ', C.faint);
     // With a Kavorent core in hand: the other tree, the Kavorent's.
     if (canSeeAncient(game, s)) {
       const label = ' ♦ ANCIENT TECHNOLOGY [T] ';
@@ -685,7 +684,7 @@ export class ResearchWindow extends Window {
       g.text(3, 6 + i * 2, GEAR_SAY[k], k === 'counter' ? C.cyan : k === 'with' ? C.green : k === 'gear' ? C.orange : C.faint);
     });
     g.text(2, this.h - 6, rankText(game, 'study', 6), '#8a6a40');
-    g.text(2, this.h - 1, ' ←→ turn · ↑↓ ring · SPACE record · ESC leave ', C.faint);
+    g.text(2, this.h - 1, ' ←→ turn · ↑↓ ring · SPACE record ', C.faint);
   }
   // The desk, the astrolabe, the candle: in pixels.
   drawPixels(ctx) {

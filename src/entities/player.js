@@ -406,7 +406,8 @@ export class Player extends Entity {
     }
     // Onto a ship's deck, from a pier or up her side out of the water.
     if (this.game.ships3d && this.game.ships3d.length && tryBoardStep(this.game, this, nx, nz)) return;
-    const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false);
+    // (Round 77) On foot, out into water two deep: swimming.
+    const ny = w.stepTarget(this.x, this.y, this.z, nx, nz, false, !this.mount && !this.raft);
     if (ny < 0) {
       this.blockedHint(nx, nz);
       return;
@@ -450,7 +451,7 @@ export class Player extends Entity {
     }
     const water = w.isWaterAt(nx, ny, nz);
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
-    const swim = water && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1;
+    const swim = (water && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1) * (water && w.isWaterAt(nx, ny - 1, nz) ? 1.25 : 1);
     // In the saddle or on the wagon's bench: quicker (and no sprinting).
     const ride = this.mount ? this.game.riding.pace() : 1;
     // (Shield up: a slow, careful step, and no running.)

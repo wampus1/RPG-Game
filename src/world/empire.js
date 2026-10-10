@@ -31,24 +31,35 @@ let BAD = null;
 
 // Lay an empire city's quarter out (on Layout `L`).
 export function empireQuarter(L, rng) {
+  const steps = empireQuarterSteps(L, rng);
+  while (!steps.next().done);
+}
+
+// (Round 77) A step at a time, so a far city laid out in the background
+// never holds up a frame for long.
+export function* empireQuarterSteps(L, rng) {
   L.landmarks ||= [];
   L.pens ||= [];
   const s = L.settlement;
   // Its academy first (it wants the most ground), else a research hall.
   const has = (t) => L.buildings.some((b) => b.type === t);
-  if (!has('college') && !L.placeBuilding('college', near(L, L.frontage()), rng) && !has('academy')) L.placeBuilding('academy', near(L, L.frontage()), rng);
+  if (!has('college') && !(yield* L.placeBuildingSteps('college', near(L, L.frontage()), rng)) && !has('academy')) yield* L.placeBuildingSteps('academy', near(L, L.frontage()), rng);
+  yield;
   // The landmarks, each where it fits best (the arena and the park toward
   // the middle; the pens out toward the edge).
   for (const lm of LANDMARKS) {
     const lot = findLot(L, lm.sizes, rng, lm.kind === 'pens' ? 'edge' : 'mid');
+    yield;
     if (!lot) continue;
     claim(L, lot);
     const mark = { kind: lm.kind, name: `${s.name} ${lm.name}`, x0: lot.x, z0: lot.z, x1: lot.x + lot.W - 1, z1: lot.z + lot.D - 1 };
     lm.lay(L, lot, rng, mark);
     L.landmarks.push(mark);
+    yield;
   }
   // Stables for its horses, by its pens if it can.
-  if (!has('stables')) L.placeBuilding('stables', near(L, L.frontage()), rng);
+  if (!has('stables')) yield* L.placeBuildingSteps('stables', near(L, L.frontage()), rng);
+  yield;
   // And its streets built up: houses (for those still to come), and a few
   // more shops among them, on every lot that's left by a street.
   let n = 0;
@@ -56,11 +67,12 @@ export function empireQuarter(L, rng) {
     const cands = rng.shuffle(L.frontage());
     if (!cands.length) break;
     const t = rng.pick(['house_s', 'house_s', 'house_m', 'house_m', 'house_l', 'shop']);
-    const b = L.placeBuilding(t, cands.slice(0, 300), rng);
+    const b = yield* L.placeBuildingSteps(t, cands.slice(0, 300), rng);
     if (!b) {
-      if (!L.placeBuilding('house_s', cands.slice(0, 300), rng)) break;
+      if (!(yield* L.placeBuildingSteps('house_s', cands.slice(0, 300), rng))) break;
     }
     n++;
+    yield;
   }
   L.fillers = n;
 }

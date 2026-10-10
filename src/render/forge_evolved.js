@@ -985,10 +985,8 @@ forge({
     size: 128, ax: 64, ay: 100, breath: 1.4, fps: 9, walk: true, walkFps: 14,
     body(X, J, t, st) {
       const b = J.b;
-      const heave = st.walk ? Math.sin(t * TAU * 2) * 1.5 : 0;
-      // The neck going back into its body, ringed.
-      X.in(0, 2.2);
-      for (let i = 0; i < 4; i++) X.ball(96 - i * 6, 82 - i * 3 - b * 0.3 + heave * (i % 2 ? 1 : -1), 22 - i * 1.5, 24 - i * 2, i % 2 ? WFL_LO : WFL, 'flesh', { z: 2 + i * 2, rz: 14 });
+      // (Round 77: no stub of neck behind it: its body's rings follow it
+      // in the world, see WORLD_DRAW below.)
       // The head itself.
       X.in(1, 3);
       X.ball(62, 66 - b, 36, 34, WFL, 'flesh', { z: 10, rz: 26 });

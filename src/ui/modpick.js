@@ -83,13 +83,12 @@ export class ModPickWindow extends Window {
       this.hit(x, y, w, 1, fn);
       return x + w + 2;
     };
-    const x = btn(3, `[ENTER] ${o.go || 'Next'}${this.chosen.size ? ` (${this.chosen.size} mod${this.chosen.size > 1 ? 's' : ''})` : ' (no mods)'}`, () => this.done(), C.hi);
-    if (o.onWorkshop) btn(x, '[W] Workshop', () => {
+    const x = btn(3, `${o.go || 'Next'}${this.chosen.size ? ` (${this.chosen.size} mod${this.chosen.size > 1 ? 's' : ''})` : ' (no mods)'}`, () => this.done(), C.hi);
+    if (o.onWorkshop) btn(x, 'Workshop', () => {
       this.close();
       o.onWorkshop();
     }, C.fg);
-    btn(this.w - 13, '[ESC] Back', () => this.back(), C.dim);
-    g.text(3, this.h - 5, '[SPACE] tick  [UP/DOWN] choose  [A] all/none', C.faint);
+    btn(this.w - 13, 'Back', () => this.back(), C.dim);
   }
 
   toggle(id) {

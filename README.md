@@ -5746,6 +5746,68 @@ into stairs when the world's brought up to date.)
   out afresh every frame while it moves (with the faster lighting setting
   too).
 
+## Round 77: QOL, part 3
+
+- **Menus**: no more tagline on the title screen; no key hints on menus,
+  buttons or windows (minigames still say how they're played), and no key
+  on the world map (its realms/land view is a button). **How to Play** is
+  compact and scrolls, in sections that fold open: Controls (with your own
+  keys), Mining, Crafting, Combat, Overview of Towns, Becoming a citizen,
+  Jobs and Dungeon Delving.
+- **Achievements** scroll like any other page; hover one for its details.
+- **Multiplayer**: *Convert singleplayer save to multiplayer* makes a copy
+  of a solo save as a world you can host (it needs a free world slot).
+- **Settings** in tabs, each scrolling: General (autosave, frame rate,
+  damage numbers, quest markers, tooltips), Visuals (brightness, lighting
+  style and quality, particles, rain and snow, splashes/snow/tracks, shore
+  foam and ripples, wall outlines indoors, shake, flashes, window
+  animations, CRT), Sound (music, all effects, and creatures, blocks,
+  items, masters, weather, menus each), **Controls** (click an action, press
+  a key: rebinds anything, swaps with whatever had that key, kept between
+  games; Reset all), and Multiplayer (connection, private profile: your
+  name and look only, notices when others join).
+- **No more freezes** from a town being laid out all at once: every town is
+  laid out in the background a few milliseconds a frame, one after
+  another, those asked for first; what comes to a town not yet laid out
+  (adventurers, caravans, ships home, nomads) waits a moment for it. The
+  big cities' plans are worked out in small steps (the same plans as
+  ever), the realms' sea routes a little at a time, and a town's search for
+  a pier or an edge lot spread over frames.
+- The **Alinelidan**'s head has lost the stub of neck behind it.
+- **Upstairs**: beds in the room over a two-storey house are slept in
+  (families grow into them; in older worlds, from now on). In worlds made
+  from 0.77 on: now and then a tailor, herbalist or workshop sets up over
+  another's shop, with its own stair, bench, keeper and a sign hung a storey
+  up; a town's tavern has rooms upstairs where visitors from other towns
+  sleep, and whoever rents the tavern's room may sleep there too.
+- **Coaches and ferries**: a coach stands outside every town, its horse in
+  the traces; click it for the towns along its roads (and its realm's
+  neighbours), the fare and how long it takes. A ferry lies off any pier
+  near the sea, crossing to other lands (never across the storm round the
+  islands while it stands). The hours of the way go by as when days are
+  skipped (with others playing, you're there at once).
+- **Weather on the ground**: rain splashes off what it lands on and rings
+  the water, and sounds different under a roof (muffled) than out in it;
+  snow lies, a dusting and then deeper (roofs too), melts after, is trodden
+  into paths, shovelled off (a shovel, used on it) or swept by the
+  townsfolk; everything with legs leaves tracks in it a while, and wagons
+  leave ruts (in mud too, after rain). Off in Settings if you like.
+- **Swimming**: water two deep can be swum across (slower, in to the
+  shoulders).
+- **Water**: foam along the shore, rings round whoever's wading or swimming
+  (off in Settings if you like).
+- **Indoors**, the walls a storey up show as a faint ghost of themselves.
+- **Lighting**: smooth (a torch's pool fades off round and even) or tiled
+  (a pace's light, square), in Settings.
+- **Dialogue** in kinds, a tab each: Right now, Business, Town & realm,
+  Talk, Gifts & manners; Goodbye always in the corner.
+- **Folk remember you**: a gift, a favour, a rescue, a bout won, a kind
+  word; an insult, a crime they saw, a wrong done them. They bring it up
+  when they greet you, and when you first speak to them in a day.
+- **Idle townsfolk** sweep by their doors and in their shops (and sweep
+  off the snow), lean on walls, and talk with their hands to whoever's
+  stood by.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

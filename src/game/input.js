@@ -1,3 +1,5 @@
+import { remapKey } from './keybinds.js';
+
 // Keyboard + mouse state. Pointer positions are mapped through the CRT
 // curvature so clicks land on what the player sees.
 
@@ -15,18 +17,21 @@ export class Input {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       // (Round 62: the Workshop open over the game: its keys are its own.)
       if (this.paused) return;
-      const k = normKey(e);
+      // (Round 77: through the player's own bindings; `raw` is the key
+      // itself, for choosing a binding.)
+      const raw = normKey(e);
+      const k = remapKey(raw);
       // (Ctrl with a game key mustn't reach the browser: Ctrl+G is "find
       // next", Ctrl+B bookmarks, Ctrl+D bookmarks the page, and so on.)
       const ctrlGame = (e.ctrlKey || e.metaKey) && ['KeyG', 'KeyB', 'KeyD', 'KeyF', 'KeyS', 'KeyE', 'KeyQ', 'KeyH', 'KeyJ', 'KeyK', 'KeyP'].includes(k);
-      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'F3', 'Backquote', 'Slash'].includes(k) || ctrlGame) e.preventDefault();
+      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'F2', 'F3', 'Backquote', 'Slash'].some((q) => q === k || q === raw) || ctrlGame) e.preventDefault();
       if (!this.keys.has(k)) {
-        this.pressed.push({ code: k, key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
+        this.pressed.push({ code: k, raw, key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
         if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) this.lastMoveKey = k;
       }
       this.keys.add(k);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(normKey(e)));
+    window.addEventListener('keyup', (e) => this.keys.delete(remapKey(normKey(e))));
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.mouse.down = false;

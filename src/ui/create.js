@@ -656,10 +656,9 @@ export class CharacterWindow extends Window {
       g.text(px + 1, y, label, hov ? C.white : col);
       this.hit(px - 1, y, 29, 1, fn);
     };
-    btn(28, '[ENTER]  Begin', () => this.begin(), C.hi);
-    btn(30, '[0]      Randomise', () => this.randomise());
-    btn(32, '[ESC]    Back', () => this.close());
-    g.text(2, this.h - 1, `1-${Math.min(9, n)}/TAB switch tab · ↑↓ choose · ←→ change · type to rename`, C.faint);
+    btn(28, 'Begin', () => this.begin(), C.hi);
+    btn(30, 'Randomise', () => this.randomise());
+    btn(32, 'Back', () => this.close());
   }
 
   // A list's scroll kept on the line you're on, when you move with the

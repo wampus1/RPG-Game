@@ -65,7 +65,7 @@ export class LockWindow extends Window {
     const done = L.pins.filter((p) => p.set).length;
     g.text(46, 19, `Set ${done}/${L.pins.length}`, done ? C.hi : C.dim);
     g.text(4, 20, rankText(this.game, 'lockpick', 6), '#8a6a40');
-    g.center(21, '←→ pin · ↑ flick it up · SPACE turn the plug · ESC stop', C.faint);
+    g.center(21, '←→ pin · ↑ flick it up · SPACE turn the plug', C.faint);
     g.center(22, 'or: click a pin to flick it, right-click to turn', C.faint);
     // A pin's column, to click.
     const lay = this.layout();

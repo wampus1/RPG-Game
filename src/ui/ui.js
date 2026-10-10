@@ -435,6 +435,8 @@ export class UI {
 
   // A notice at the side of the screen (someone joined: see multiplayer.js).
   notify(text, profile = null, color = C.fg) {
+    // (Round 77: comings and goings can be turned off in Settings.)
+    if (this.noJoinNotes && / (has joined|has left) the world\.$/.test(String(text))) return;
     addNote(this, text, profile, color);
   }
 
@@ -911,23 +913,20 @@ export class UI {
         y--;
       }
     }
-    // Layer / rotation / hints.
+    // Layer and rotation. (Round 77: no keys shown.)
     const rx = COLS - 24;
-    g.fill(rx, BELT_Y, 23, 4, ' ', C.fg, 'rgba(10,8,16,0.55)');
+    g.fill(rx, BELT_Y, 23, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');
     g.text(rx + 1, BELT_Y, 'LAYER', C.dim);
     g.text(rx + 7, BELT_Y, game.layerLabel(), p.layerMode === null ? C.green : C.cyan);
-    g.text(rx + 1, BELT_Y + 1, 'Z/X layer  V auto', C.faint);
     const hd = p.heldDef();
     const rotatable = hd && hd.kind === 'block' && BLOCKS[hd.block].rotatable;
-    g.text(rx + 1, BELT_Y + 2, 'ROT', C.dim);
+    g.text(rx + 1, BELT_Y + 1, 'ROT', C.dim);
     // The arrow is how it will face on screen; the letter, which way that is.
     const view = game.renderer.view || 0;
-    g.text(rx + 5, BELT_Y + 2, `${['↓', '←', '↑', '→'][p.rot]} ${['S', 'W', 'N', 'E'][(p.rot - view) & 3]}`, rotatable ? C.hi : C.faint);
-    g.text(rx + 10, BELT_Y + 2, '[R]  Q/E turn', C.faint);
-    g.text(rx + 1, BELT_Y + 3, 'H help  TAB bag  M map', C.faint);
+    g.text(rx + 5, BELT_Y + 1, `${['↓', '←', '↑', '→'][p.rot]} ${['S', 'W', 'N', 'E'][(p.rot - view) & 3]}`, rotatable ? C.hi : C.faint);
     // World hover tooltip.
     const c = game.cursor;
-    if (c && !this.modal) this.worldTooltip(game, c);
+    if (c && !this.modal && !this.noTooltips) this.worldTooltip(game, c);
     if (this.debug) {
       g.text(25, 0, `${fps | 0}fps x${p.x} y${p.y} z${p.z} npcs${game.npcs.filter((n) => !n.dead).length} cr${game.creatures.length} reg${game.world.regions.size}`, C.green, 'rgba(0,0,0,0.6)');
     }
@@ -944,7 +943,7 @@ export class UI {
         else if (t.status === 'open' && S.claimedBy(t, pid)) on++;
       }
     }
-    const label = ` QUEST LOG ${done ? `${done}✓` : on || ''}`.padEnd(13) + '[O]';
+    const label = ` QUEST LOG ${done ? `${done}✓` : on || ''}`;
     const btn = { x: bx, y: 8, w: 16 };
     const mc = this.mouseCell || { x: -1, y: -1 };
     const hov = !this.modal && mc.y === btn.y && mc.x >= btn.x && mc.x < btn.x + btn.w;

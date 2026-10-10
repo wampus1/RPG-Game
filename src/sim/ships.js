@@ -61,10 +61,26 @@ export class Ships {
     const P = L.plaza;
     const ok = (m) => m === M.FREE || m === M.ROAD || m === M.YARD || m === M.PLAZA || m === undefined;
     // (Open water: nothing of the town's on it, no bridge, no street.)
-    const wet = (x, z) => {
+    // (Round 77: each square looked at once, then remembered for the rest
+    // of the search: it was looked at a great many times over.)
+    const pad = 14 + (D.len || 0) + (D.head || 0) + (D.wide || 1) + 40;
+    const GX = b.x0 - pad;
+    const GZ = b.z0 - pad;
+    const GW = b.x1 - b.x0 + 1 + pad * 2;
+    const GD = b.z1 - b.z0 + 1 + pad * 2;
+    const memo = new Int8Array(GW * GD).fill(-1);
+    const wet0 = (x, z) => {
       const c = L.col(x, z);
       const m = L.maskAt(x, z);
       return !!c && c.water >= 0 && (m === M.FREE || m === undefined);
+    };
+    const wet = (x, z) => {
+      const lx = x - GX;
+      const lz = z - GZ;
+      if (lx < 0 || lz < 0 || lx >= GW || lz >= GD) return wet0(x, z);
+      const i = lz * GW + lx;
+      if (memo[i] < 0) memo[i] = wet0(x, z) ? 1 : 0;
+      return memo[i] === 1;
     };
     // How far a ship could sail from a spot (out of sight of the town, it
     // must be able to get).
@@ -183,6 +199,19 @@ export class Ships {
   }
 
   // ------------------------------------------------------------ daily
+  // (Round 77) Ahead of a look for where a pier could go (see daily): the
+  // shore round the town worked out a few rows a frame.
+  *prepSteps(L, day) {
+    const s = L.settlement;
+    if (deserted(s) || s.condition === 'abandoned' || !this.wet(s) || !L.edgeSteps) return;
+    const P = this.ports[s.id];
+    if (P && P.state !== 'docked') return;
+    if (!P && L.econ.noDock !== undefined && day - L.econ.noDock < 7) return;
+    if (L.shoreWarm) return;
+    yield* L.edgeSteps(14 + 10);
+    L.shoreWarm = true;
+  }
+
   daily(L, day, rng) {
     const s = L.settlement;
     if (deserted(s) || s.condition === 'abandoned' || !this.wet(s)) return null;
@@ -364,7 +393,10 @@ export class Ships {
       if (P.aboard && P.aboard.length) this.ashore(P, now);
       const v = P.voyage;
       if (!v || now < v.back) continue;
-      const L = this.sim.layoutOf(P.sid);
+      // (Round 77: a home port not laid out yet is, first; she's in a moment
+      // later.)
+      const L = this.sim.laidOut(P.sid);
+      if (!L) continue;
       P.voyage = null;
       P.aboard = v.crew.slice();
       if (!L || !L.econ) continue;
@@ -386,7 +418,8 @@ export class Ships {
 
   // The merchants off the ship and home (with what they made abroad).
   ashore(P, now) {
-    const L = this.sim.layoutOf(P.sid);
+    const L = this.sim.laidOut(P.sid);
+    if (!L) return;
     // (Still coming in to the pier, in front of you: not till she's tied up.)
     const e = this.game.shipProps && this.game.shipProps.get(P.sid);
     const coming = e && e.phase === 'in';

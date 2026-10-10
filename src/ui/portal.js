@@ -32,13 +32,11 @@ export class PortalWindow extends Window {
       g.center(2, 'The arch is dark.', C.dim);
       g.center(4, here.civ ? `The ${here.civ.name.replace(/^The /, '')} doesn't know the art:` : 'It answers to no realm now:', C.fg);
       g.center(5, 'its other ends are closed to it.', C.fg);
-      g.center(this.h - 2, '[ESC] step back', C.faint);
       return;
     }
     if (!this.dests.length) {
       g.center(2, 'The light swirls, but goes nowhere yet:', C.fg);
       g.center(3, 'no other town of the realm has a portal.', C.dim);
-      g.center(this.h - 2, '[ESC] step back', C.faint);
       return;
     }
     const fare = P.fareFor(this.sid);
@@ -55,7 +53,6 @@ export class PortalWindow extends Window {
       g.text(this.w - 3 - what.length, y, what, C.dim);
       this.hit(2, y, this.w - 4, 1, () => this.go(i));
     });
-    g.center(this.h - 2, '↑↓ choose · [ENTER] step through · [ESC] stay', C.faint);
   }
 
   // Through: the fare, a flash of violet, and out by the other arch.

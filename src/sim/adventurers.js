@@ -159,7 +159,10 @@ export class Adventurers {
       this.depart(a, rng);
       return;
     }
-    const L = this.sim.layoutOf(sid);
+    // (Round 77: a town not yet laid out is, first; they arrive a moment
+    // later.)
+    const L = this.sim.laidOut(sid);
+    if (!L) return;
     a.state = 'stay';
     a.at = sid;
     a.from = a.from ?? null;

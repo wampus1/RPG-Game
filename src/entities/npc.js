@@ -2,6 +2,7 @@
 // simulation gives them: mourning, hunting for food, building, trials,
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
+import { idleTick } from './idleanims.js';
 import { Entity } from './entity.js';
 
 // The four ways (a tent's doorway faces one: see sim/camps.js).
@@ -345,8 +346,9 @@ export class NPC extends Entity {
     switch (e.act) {
       case 'sleep': {
         const bed = home && home.beds[rec.bed];
-        if (bed && bed.access) return { x: bed.access.x, y: GROUND, z: bed.access.z, bed };
-        if (bed) return { x: bed.x, y: GROUND, z: bed.z, bed, near: 1 };
+        // (Round 77: a bed upstairs is slept in up there.)
+        if (bed && bed.access) return { x: bed.access.x, y: bed.y ?? GROUND, z: bed.access.z, bed };
+        if (bed) return { x: bed.x, y: bed.y ?? GROUND, z: bed.z, bed, near: 1 };
         return inBuilding(home);
       }
       case 'eat':
@@ -520,6 +522,13 @@ export class NPC extends Entity {
             return { x, y: GROUND, z, near: 2, tag: 'event', face: z < st.z0 ? 0 : 2 };
           }
           const m = this.game.minute;
+          // (Round 77) Late, to bed in a room over the tavern, if it has
+          // them (each guest their own bed).
+          if (m >= 22 * 60 || m < 6 * 60) {
+            const inn = L.buildings.find((b) => b.type === 'tavern' && b.lodging && b.lodging.length && !b.underConstruction);
+            const bed = inn && inn.lodging[hash4(this.rec.idx, this.visit.id || 0, 0x10d9) % inn.lodging.length];
+            if (bed && bed.access && !this.game.npcs.some((n) => n !== this && n.sleeping && n.bedTile === bed)) return { x: bed.access.x, y: bed.y, z: bed.access.z, bed };
+          }
           if (m >= 18 * 60 || m < 7 * 60) return inBuilding(buildingOf('tavern'), rng.chance(0.5) ? 'drink' : 'eat') || tagged('social') || plazaTile();
           return rng.chance(0.45) ? plazaTile() : rng.chance(0.5) ? roadTile() : claim(L.spotsByTag('shop')) || tagged('social') || plazaTile();
         }
@@ -1803,6 +1812,25 @@ export class NPC extends Entity {
         this.atGoal = false;
       }
     }
+    // (Round 77) A guest from another town: up to a room over the tavern
+    // late at night, and up and out again in the morning.
+    if (this.visit && this.visit.guest) {
+      const m = game.minute;
+      const night = m >= 22 * 60 || m < 6 * 60;
+      if (this.sleeping && this.bedTile && this.bedTile.up && !night) {
+        this.wake();
+        this.goal = this.pickGoal(act.entry);
+        this.path = null;
+        this.atGoal = false;
+      } else if (!this.sleeping && night && !(this.goal && this.goal.bed) && this.rng.chance(dt * 0.2)) {
+        const g = this.pickGoal(act.entry);
+        if (g && g.bed) {
+          this.goal = g;
+          this.path = null;
+          this.atGoal = false;
+        }
+      }
+    }
     // Rain or snow sends the less dedicated home early.
     if (act.entry.act === 'work' && !this.visit && !this.nomad && this.rng.chance(dt * 0.04)) {
       const sky = game.weatherIn(this.settlement);
@@ -2053,6 +2081,8 @@ export class NPC extends Entity {
     }
     if (act.act === 'mourn' || act.act === 'funeral') return this.mourn(act);
     if (act.act === 'event') return this.atEvent(act, dt);
+    // (Round 77) A broom, a wall to lean on, a word with whoever's by.
+    if (idleTick(this, act, g, dt)) return;
     if (act.act === 'adventure') return this.adventureAt(act, dt);
     // Looking busy at it: food going down, the drink, the dice, the pot on
     // the fire, notes off the lute (see acts.js).

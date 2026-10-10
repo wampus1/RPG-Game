@@ -79,7 +79,6 @@ export class QuestWindow extends Window {
     }
     if (this.tab === 'name') this.drawName(g, game);
     else this.drawList(g, game);
-    g.text(2, this.h - 2, this.tab === 'name' ? 'wheel scroll · 1-4 / TAB tabs · ESC close' : '↑↓ choose · wheel or ▲▼ scroll · M mark on map · G give up · 1-4/TAB tabs · ESC', C.faint, undefined, this.w - 4);
   }
 
   entriesCount(game, tab) {
@@ -150,9 +149,9 @@ export class QuestWindow extends Window {
       if (on) this.hit(bx, y, w, 1, fn);
       return bx + w + 2;
     };
-    let bx = btn(x, '[M] Mark on map', !!this.markAt(e, game), () => this.mark(e, game), C.cyan);
+    let bx = btn(x, 'Mark on map', !!this.markAt(e, game), () => this.mark(e, game), C.cyan);
     const sure = this.confirmDrop === this.dropKey(e);
-    bx = btn(bx, sure ? '[G] Give it up? Again to be sure' : '[G] Give up', this.droppable(e, game).length > 0, () => this.giveUp(e, game), sure ? C.orange : C.fg);
+    bx = btn(bx, sure ? 'Give it up? Again to be sure' : 'Give up', this.droppable(e, game).length > 0, () => this.giveUp(e, game), sure ? C.orange : C.fg);
     void bx;
   }
 

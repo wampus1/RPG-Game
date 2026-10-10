@@ -45,7 +45,8 @@ export function stayAt(L, b, now) {
 
 // Is (x, z) one of a tavern's room beds? Its building if so.
 export function innBedAt(L, x, z) {
-  for (const b of innsOf(L)) if (b.inn.beds.some((q) => q.x === x && q.z === z)) return b;
+  // (Round 77: and the rooms upstairs, where it has them.)
+  for (const b of innsOf(L)) if (b.inn.beds.some((q) => q.x === x && q.z === z) || (b.lodging || []).some((q) => q.x === x && q.z === z)) return b;
   return null;
 }
 

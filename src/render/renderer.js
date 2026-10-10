@@ -34,6 +34,7 @@ import { MODS } from '../mod/state.js';
 import { TUNNEL_DIG } from '../game/evolvedgear.js';
 import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
+import { GroundFx } from './groundfx.js';
 
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
@@ -136,6 +137,8 @@ export class Renderer {
     this.time = 0;
     this.wobbles = new Map();
     this.particles = [];
+    // (Round 77) Rain, snow and water on the ground (see groundfx.js).
+    this.gfx = new GroundFx(this);
     this.fx = [];
     this.floaters = [];
     this.lighting = new Lighting();
@@ -521,10 +524,74 @@ export class Renderer {
       this.drawSpin(game, dt);
       return;
     }
+    this.gfx.tick(game, dt);
     this.drawScene(game, dt);
     this.drawOverlays(game);
     if (this.zoomK === 1) drawShipHud(this, game);
     this.drawFlashes(game, dt);
+    // (Round 77) Brightness, from Settings: lighter by a soft wash, darker
+    // by a dim one.
+    const br = this.brightness ?? 1;
+    if (Math.abs(br - 1) > 0.01) {
+      const ctx = this.ctx;
+      ctx.save();
+      if (br > 1) {
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = `rgba(255,248,230,${Math.min(0.35, (br - 1) * 0.35)})`;
+      } else ctx.fillStyle = `rgba(0,0,0,${Math.min(0.6, (1 - br) * 0.6)})`;
+      ctx.fillRect(0, 0, this.vw, this.vh);
+      ctx.restore();
+    }
+  }
+
+  // (Round 77) How far someone leaning on a wall tips (radians), as you
+  // see them: toward the wall's side.
+  leanOf(ia) {
+    const DXw = [0, -1, 0, 1];
+    const DZw = [1, 0, -1, 0];
+    const [du, dv] = this.toView(DXw[ia.wall], DZw[ia.wall]);
+    const k = Math.min(1, ia.t / 0.6);
+    return (du !== 0 ? du * 0.13 : dv < 0 ? 0.05 : -0.05) * k;
+  }
+
+  // (Round 77) A broom in someone's hands, going side to side.
+  drawBroom(ctx, sx, top, feetY, dir) {
+    const sw = Math.round(Math.sin(this.time * 7) * 3);
+    const hx = sx + (dir === 1 ? 4 : dir === 3 ? 12 : 10);
+    const hy = top + 10;
+    const bx = hx + sw + (dir === 1 ? -3 : 3);
+    const by = feetY - 1;
+    ctx.fillStyle = '#8a6036';
+    const steps = Math.max(1, by - hy);
+    for (let i = 0; i <= steps; i++) ctx.fillRect(Math.round(hx + ((bx - hx) * i) / steps), hy + i, 1, 1);
+    ctx.fillStyle = '#d8b860';
+    ctx.fillRect(bx - 2, by - 1, 5, 2);
+    ctx.fillStyle = '#b09040';
+    ctx.fillRect(bx - 2, by + 1, 5, 1);
+  }
+
+  // (Round 77) A wall cut away indoors, a storey up: its top and front
+  // drawn faint over the room (see drawWorld).
+  drawWallHint(ctx, id, wx, y, wz, sx, sy, above, front, frontCut) {
+    const tops = TEX.top[id * 4];
+    const fronts = TEX.front[id * 4];
+    if (!tops || !fronts) return;
+    const v = hash4(wx, y, wz) % VARIANTS;
+    ctx.globalAlpha = 0.2;
+    const ab = BLOCKS[above];
+    if (!(ab && ab.opaque && ab.render === 'cube')) {
+      const s = tops[v % tops.length];
+      ctx.drawImage(this.atlas, s.x, s.y, 16, 16, sx, sy, 16, 16);
+    }
+    const fb = BLOCKS[front];
+    if (frontCut || !(fb && fb.opaque && fb.render === 'cube')) {
+      const s = fronts[v % fronts.length];
+      ctx.drawImage(this.atlas, s.x, s.y, 16, LH, sx, sy + 16, 16, LH);
+    }
+    ctx.globalAlpha = 1;
+    // (Its edge, picked out.)
+    ctx.fillStyle = 'rgba(255,240,210,0.16)';
+    ctx.fillRect(sx, sy, 16, 1);
   }
 
   // (Round 73) What's set out on a rack, a stand or a hook (see
@@ -713,6 +780,8 @@ export class Renderer {
 
   // The whole view lit for an instant (a parry's crack of light).
   flashScreen(color = '#ffffff', dur = 0.2) {
+    // (Round 77: unless flashes are turned off in Settings.)
+    if (this.noFlash) return;
     this.flash = { color, t: dur, dur };
   }
 
@@ -987,6 +1056,11 @@ export class Renderer {
     };
     const hid = veil ? (x, y, z) => cutAway(x, y, z) || veil.veiled(x, y, z, world.getBlock(x, y, z)) : cutAway;
     this.cursorDrawList = null;
+    const gfx = this.gfx;
+    const gfxOn = !!gfx && (gfx.snow.size > 0 || gfx.marks.size > 0 || gfx.ripples.size > 0 || !this.noWaterFx);
+    // (Round 77) Indoors, the walls cut away a storey up shown as a faint
+    // ghost of themselves, so the room's height still reads.
+    const hint = this.wallHint !== false && hidden !== null && !this.underground;
 
     for (let r = 0; r < nRows - 1; r++) {
       const z = zMin + r;
@@ -1019,6 +1093,7 @@ export class Renderer {
               // you stand inside: shown on the wall's face below, as the
               // room's plan is drawn.
               if (BLOCKS[id].painting && !hid(wx, y - 1, wz)) this.drawWallPainting(ctx, game, wx, y, wz, BLOCKS[id].painting, metaAt(ci, y), x0 * TILE + i * TILE - camX, sy + LH, false, id);
+              else if (hint && y === hLevel && BLOCKS[id].render === 'cube' && BLOCKS[id].opaque) this.drawWallHint(ctx, id, wx, y, wz, x * TILE - camX, sy, getAt(ci, y + 1), getAt(frontBase + i, y), hid(colWX[frontBase + i], y, colWZ[frontBase + i]));
               continue;
             }
             const b = BLOCKS[id];
@@ -1073,6 +1148,8 @@ export class Renderer {
                 ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
                 if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
               }
+              // (Round 77) Snow lying, tracks, ruts; foam and rings on water.
+              if (showTop && gfxOn && !aboveHidden) gfx.drawTop(ctx, world, wx, y, wz, id, liquid, sx, sy, this.time);
             } else if (render === 'stair') {
               // (Round 75) A stair, in its floor's stone or wood, cut into
               // two steps the way it climbs as you look at it.
@@ -1829,6 +1906,17 @@ export class Renderer {
             ctx.fillRect(sx + 6, feetY - 4, 1, 1);
             ctx.fillRect(sx + 9, feetY - 4, 1, 1);
           }
+        } else if (inWater && e.swimming && !mount) {
+          // (Round 77) Swimming: in to the shoulders, bobbing, the water
+          // breaking white round them.
+          const bob = Math.round(Math.sin(this.time * 4 + (e.id || 0)) * 1);
+          ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 11, sx, top + 8 + bob - SPR_PAD, CHAR_W, SHEET_H - 11);
+          ctx.fillStyle = 'rgba(70,140,210,0.6)';
+          ctx.fillRect(sx + 1, top + CHAR_H - 4 + bob, 14, 2);
+          ctx.fillStyle = 'rgba(235,245,255,0.85)';
+          const k = Math.floor(this.time * 6 + (e.id || 0)) % 2;
+          ctx.fillRect(sx + 2 + k, top + CHAR_H - 4 + bob, 3, 1);
+          ctx.fillRect(sx + 10 - k, top + CHAR_H - 4 + bob, 3, 1);
         } else if (inWater) {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H - 6, sx, top + 3 - SPR_PAD, CHAR_W, SHEET_H - 6);
           ctx.fillStyle = 'rgba(80,150,220,0.55)';
@@ -1845,7 +1933,20 @@ export class Renderer {
           ctx.fillRect(sx + 3 + k * 2, top + CHAR_H - 3, 2, 1);
           ctx.fillRect(sx + 10 - k, top + CHAR_H - 3, 2, 1);
         } else if (rolling) this.drawTumble(ctx, e, sheet, dir, sx, top);
-        else ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+        else {
+          // (Round 77) Leaning on a wall: tipped back against it.
+          const ia = e.idleAnim && !e.moving ? e.idleAnim : null;
+          const lean = ia && ia.kind === 'lean' ? this.leanOf(ia) : 0;
+          if (lean) {
+            ctx.save();
+            ctx.translate(sx + 8, feetY);
+            ctx.rotate(lean);
+            ctx.translate(-(sx + 8), -feetY);
+          }
+          ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
+          if (lean) ctx.restore();
+          if (ia && ia.kind === 'sweep' && !mount) this.drawBroom(ctx, sx, top, feetY, dir);
+        }
         if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
         // ...and now and then a mote of its light drifting off it.
         if (wing && wing.k >= 0.999 && !this.spin) {
@@ -1940,7 +2041,7 @@ export class Renderer {
     // one of the stories' own who wants a word with you (a blue "!"). See
     // sim/saga.
     if (e.kind === 'npc' && !e.dead && !e.sleeping && game && !(e.windup && !e.windup.dash)) {
-      const mk = game.remote ? e.netMark : game.questMark ? game.questMark(e) : null;
+      const mk = this.noQuestMarks ? null : game.remote ? e.netMark : game.questMark ? game.questMark(e) : null;
       if (mk) {
         const ch = mk === 'ready' || mk === 'busy' ? '?' : '!';
         const col = mk === 'ready' ? '#80f070' : mk === 'busy' ? '#a8a090' : mk === 'talk' ? '#80c8ff' : '#ffd040';

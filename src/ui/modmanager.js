@@ -114,9 +114,9 @@ export class ModManagerWindow extends Window {
       return x + w + 2;
     };
     let x = 3;
-    if (n && !o.locked) x = btn(x, '[ENTER] Apply (save and reload)', () => this.apply(), C.hi);
-    if (n) btn(x, '[R] Undo changes', () => this.reset(), C.fg);
-    btn(this.w - 13, '[ESC] Back', () => this.close(), C.dim);
+    if (n && !o.locked) x = btn(x, 'Apply (save and reload)', () => this.apply(), C.hi);
+    if (n) btn(x, 'Undo changes', () => this.reset(), C.fg);
+    btn(this.w - 13, 'Back', () => this.close(), C.dim);
   }
 
   reset() {

@@ -70,6 +70,9 @@ function greetRaw(npc, game, rep, citizen) {
   if (game.isWanted(npc.settlement.id)) return pick(rng, ['Stay away from me!', 'Criminal...', 'The guards are after you!', '...']);
   const g = griefOf(npc.rec);
   if (g) return pick(rng, ['...', `*sigh*`, `I keep thinking about ${g.first}...`]);
+  // (Round 77) What you did to them, good or bad, not forgotten.
+  const mem = rng.chance(0.4) ? memoryLine(npc, game, false) : null;
+  if (mem) return mem;
   if (rep <= -60) return pick(rng, ['Get lost.', 'You again...', '*glares*', 'Leave us be.']);
   if (rep <= -25) return pick(rng, ['Hmph.', 'Watch yourself.', 'Keep walking.', '*mutters*']);
   if (npc.rec.hungry >= 2 && rng.chance(0.5)) return pick(rng, ['So hungry...', 'Got any bread to spare?']);
@@ -82,6 +85,50 @@ function greetRaw(npc, game, rep, citizen) {
   if (p.kindness < 0.3) return pick(rng, ['Hmph.', 'What?', 'Move along.', 'Busy.']);
   if (p.sociability > 0.7) return pick(rng, [`Good ${tw}!`, 'Hello there!', 'Lovely day!', 'Hi, stranger!', 'Welcome!']);
   return pick(rng, [`${tw === 'night' ? 'Evening' : 'Hello'}.`, 'Hm? Oh, hi.', `Good ${tw}.`, 'Safe travels.']);
+}
+
+// (Round 77) What they remember of you: the thing you did that meant the
+// most to them (for good or ill), lately; null if nothing much. `talk`:
+// the first thing they say when you start talking (said once a day).
+export function remembers(npc, game) {
+  const sim = game.sim;
+  if (!sim || !npc.rec) return null;
+  const r = sim.repEntry(sim.repSidOf(npc), npc.rec.idx);
+  const day = game.day;
+  const fresh = (r.mem || []).filter((m) => day - m.day <= 60);
+  if (!fresh.length) return null;
+  // (The worst wrong outweighs a kindness of the same size.)
+  return fresh.reduce((a, b) => (Math.abs(b.d) * (b.d < 0 ? 1.3 : 1) > Math.abs(a.d) * (a.d < 0 ? 1.3 : 1) ? b : a));
+}
+
+const ITEM_THE = (k) => `the ${(ITEMS[k] && ITEMS[k].name ? ITEMS[k].name : String(k || 'something').replace(/_/g, ' ')).toLowerCase()}`;
+
+function memoryLine(npc, game, talk) {
+  const m = remembers(npc, game);
+  if (!m) return null;
+  const sim = game.sim;
+  const r = sim.repEntry(sim.repSidOf(npc), npc.rec.idx);
+  if (talk) {
+    if (r.memSaid === game.day) return null;
+    r.memSaid = game.day;
+  }
+  const rng = npc.rng;
+  const name = game.playerName.split(' ')[0];
+  const ago = game.day - m.day <= 2 ? 'the other day' : game.day - m.day <= 10 ? 'not long ago' : 'a while back';
+  const w = m.why || (m.d > 0 ? 'good' : 'bad');
+  const L = {
+    gift: [`${name}! I still think of ${m.item ? ITEM_THE(m.item) : 'the gift'} you gave me ${ago}.`, `You're the one who gave me ${m.item ? ITEM_THE(m.item) : 'that gift'}. I haven't forgotten.`],
+    favor: [`${name}! You helped me ${ago}. I won't forget it.`, `There's the one who helped me when I needed it. Good to see you.`],
+    saved: [`You saved my life out there, ${name}. Anything you need.`, `I'd not be standing here if not for you. Thank you again.`],
+    bout: [`The one who bested me in a bout! I've been practising.`, `${name}! Fancy another bout one day? I owe you one.`],
+    kind: [`You were kind to me ${ago}. It meant a lot.`, `${name}, isn't it? You cheered me up ${ago}.`],
+    good: [`I remember you, ${name}. You've been good to me.`, `Ah, ${name}. Always a friend here.`],
+    insult: [`You! I remember what you said to me ${ago}.`, `Come to insult me again, have you?`],
+    crime: [`I saw what you did ${ago}. I haven't forgotten.`, `I know who you are. I saw you, ${ago}.`],
+    victim: [`You're the one who ${m.how || 'wronged me'}! I've not forgotten.`, `Stay away from me. I know what you did.`],
+    bad: [`I know who you are. I haven't forgotten.`, `You. I remember you.`],
+  };
+  return pick(rng, L[w] || L[m.d > 0 ? 'good' : 'bad']);
 }
 
 // Legacy one-liners.
@@ -154,6 +201,9 @@ function openingRaw(npc, game) {
   if (rep <= -60) return pick(rng, ['Leave me alone.', 'I don\'t want to talk to you.', 'Go away.']);
   const g = griefOf(rec);
   if (g) return g.byPlayer ? `You... you're the one who killed ${g.first}. Get away from me.` : pick(rng, [`Sorry, I'm not myself today. We just lost ${g.first}.`, `Hello... forgive me. I can't stop thinking about ${g.first}.`]);
+  // (Round 77) What you did to them, the first time you speak in a day.
+  const mem = memoryLine(npc, game, true);
+  if (mem) return mem;
   // Townsfolk on an outing: on the road, or there.
   const o = rec.trip && rec.trip.outing ? sim.outings.get(rec.trip.outing) : null;
   if (npc.caravan && rec.trip && rec.trip.outing) {
@@ -226,7 +276,37 @@ function openingRaw(npc, game) {
 
 // Topics available right now, most relevant first. Questions about the
 // person and the town sit in an "ask about..." submenu.
+// (Round 77) What can be said, in kinds: what's pressing just now (a
+// story's business, a letter, someone waiting on you), business (trade, a
+// room, work), the town and the realm, talk, and gifts and manners; and
+// Goodbye. Each topic its kind (see DialogueWindow: a tab each).
+export const TOPIC_CATS = [
+  { id: 'now', label: 'Right now' },
+  { id: 'business', label: 'Business' },
+  { id: 'town', label: 'Town & realm' },
+  { id: 'talk', label: 'Talk' },
+  { id: 'manners', label: 'Gifts & manners' },
+];
+const CAT_OF = {};
+for (const [cat, ids] of Object.entries({
+  now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host',
+  business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard',
+  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign',
+  talk: 'ask chat kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
+  manners: 'gift rude',
+})) for (const id of ids.split(' ')) CAT_OF[id] = cat;
+
+export function topicCat(o) {
+  if (o.id === 'bye') return 'bye';
+  if (isSagaTopic(o.id)) return 'now';
+  return CAT_OF[o.id] || 'talk';
+}
+
 export function topicsFor(npc, game) {
+  return topicsRaw(npc, game).map((o) => ({ ...o, cat: topicCat(o) }));
+}
+
+function topicsRaw(npc, game) {
   const rec = npc.rec;
   const s = npc.settlement;
   const sim = game.sim;

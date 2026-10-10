@@ -44,7 +44,7 @@ export class InstrumentWindow extends Window {
       g.text(x + Math.floor((5 - lab.length) / 2), 4, lab, on ? C.hi : C.faint);
       this.hit(x, 2, 5, 3, () => this.play(i));
     });
-    g.center(this.h - 2, 'Press the keys (or click them) to play · ESC: put it away', C.faint);
+    g.center(this.h - 2, 'Press the keys (or click them) to play', C.faint);
   }
 
   drawPixels(ctx) {

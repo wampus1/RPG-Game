@@ -297,8 +297,38 @@ export class Lighting {
     }
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.canvas, 0, 0, SW, SH, k0 * TILE - r.camX, m0 * TILE - r.camY, SW * TILE, SH * TILE);
+    if (this.tiled) {
+      // (Round 77) Tiled, in the settings: a pace's light, square and even.
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(this.canvas, 0, 0, SW, SH, k0 * TILE - r.camX, m0 * TILE - r.camY, SW * TILE, SH * TILE);
+    } else {
+      // (Round 77) Smooth: the paces' light run together, drawn up four
+      // times over and softened, so a torch's pool fades off round and
+      // even rather than in steps.
+      const k = 4;
+      if (!this.soft) this.soft = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      const sc = this.soft;
+      if (sc) {
+        if (sc.width !== SW * k || sc.height !== SH * k) {
+          sc.width = SW * k;
+          sc.height = SH * k;
+          this.softCtx = sc.getContext('2d');
+        }
+        const g = this.softCtx;
+        if (!reuse || !this.softDone) {
+          g.imageSmoothingEnabled = true;
+          g.filter = 'blur(3px)';
+          g.drawImage(this.canvas, 0, 0, SW, SH, 0, 0, SW * k, SH * k);
+          g.filter = 'none';
+          this.softDone = true;
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(sc, 0, 0, SW * k, SH * k, k0 * TILE - r.camX, m0 * TILE - r.camY, SW * TILE, SH * TILE);
+      } else {
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(this.canvas, 0, 0, SW, SH, k0 * TILE - r.camX, m0 * TILE - r.camY, SW * TILE, SH * TILE);
+      }
+    }
     ctx.restore();
     ctx.imageSmoothingEnabled = false;
     // Additive glows around lights at night.

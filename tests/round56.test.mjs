@@ -268,8 +268,9 @@ test('the quest log: a button to mark it on the map, one to give it up (asked tw
   const g = { box() {}, fill() {}, put() {}, center() {}, text: (x, y, s) => out.push({ x, y, s: String(s) }) };
   w.hits = [];
   w.draw(g, game);
-  const mark = out.find((q) => /\[M\] Mark on map/.test(q.s));
-  const drop = out.find((q) => /\[G\] Give up/.test(q.s));
+  // (Round 77: no keys shown on the buttons.)
+  const mark = out.find((q) => /Mark on map/.test(q.s));
+  const drop = out.find((q) => /Give up/.test(q.s));
   assert.ok(mark && drop, 'both buttons');
   const pins = game.world.ow.pins.length;
   w.onClick(null, mark.x, mark.y, game);

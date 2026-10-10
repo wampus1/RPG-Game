@@ -1,4 +1,5 @@
 // All UI windows. Each draws itself into a character grid every frame.
+import { actionKeyName, ACTIONS, keyOf, keyName, bind, resetKeybinds } from '../game/keybinds.js';
 import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
@@ -7,7 +8,7 @@ import { starable, starGear } from '../world/quality.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
 import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
-import { openingLine, topicsFor, respond } from '../game/dialogue.js';
+import { openingLine, topicsFor, respond, TOPIC_CATS } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
 import { AncientWindow } from './ancient.js';
 import { humanoidSheet, SPR_PAD, SHEET_H } from '../render/sprites.js';
@@ -21,7 +22,7 @@ import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
-import { SETTING_ROWS, SETTING_KEYS, changeSetting } from '../game/settings.js';
+import { SETTING_ROWS, SETTING_TABS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
@@ -356,10 +357,9 @@ export class CraftWindow extends Window {
       this.hit(1, y, this.w - 2, 2, (ck, gm) => this.craft(r, gm, ck.shift ? 5 : 1));
     }
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
-    g.text(2, this.h - 1, ' click craft · SHIFT x5 · wheel scroll ', C.faint);
     // The scribe's desk prints; the jeweller's bench sets stones; at a
     // furnace or an oven, a dish of your own (see ui/cook.js).
-    const extra = { scribe: ' [P] print a newspaper ', jeweller: ' [S] set a gem ', furnace: ' [K] Cook a dish in the pot ', baker: ' [K] Bake a dish of your own ' }[this.station] || null;
+    const extra = { scribe: ' print a newspaper ', jeweller: ' set a gem ', furnace: ' Cook a dish in the pot ', baker: ' Bake a dish of your own ' }[this.station] || null;
     if (extra) {
       const ey = this.h - 3;
       const hov = this.hovering(this.w - extra.length - 2, ey, extra.length, 1);
@@ -480,20 +480,30 @@ export class DialogueWindow extends Window {
       return label === o.label ? o : { ...o, label };
     });
   }
-  // Long option labels get the full width (one column of seven).
+  // Long option labels get the full width (one column).
   isWide(all) {
-    return all.some((o) => o.label.length > Math.floor((this.w - 4) / 2) - 4);
+    return all.some((o) => o.label.length > Math.floor((this.w - 4) / 2) - 2);
+  }
+  // (Round 77) The topics in their kinds, a tab each (see
+  // dialogue.TOPIC_CATS); an answer's own follow-ups as they come.
+  cats(all) {
+    return TOPIC_CATS.filter((c) => all.some((o) => o.cat === c.id));
   }
   options(game) {
     const all = this.allOptions(game);
-    const wide = this.isWide(all);
-    if (all.length <= (wide ? 7 : 10)) return all;
-    const per = wide ? 6 : 9;
-    const pages = Math.ceil(all.length / per);
+    let list = all;
+    if (!this.choices) {
+      const cats = this.cats(all);
+      if (!cats.some((c) => c.id === this.cat)) this.cat = cats.length ? cats[0].id : null;
+      list = all.filter((o) => o.cat === this.cat);
+      this.bye = all.find((o) => o.id === 'bye') || null;
+    } else this.bye = null;
+    const wide = this.isWide(list);
+    const per = wide ? 5 : 10;
+    const pages = Math.max(1, Math.ceil(list.length / per));
     if (this.page >= pages) this.page = 0;
-    const page = all.slice(this.page * per, this.page * per + per);
-    page.push({ id: 'more', label: `More... (${this.page + 1}/${pages})` });
-    return page;
+    this.pages = pages;
+    return list.slice(this.page * per, this.page * per + per);
   }
   choose(o, game) {
     const n = this.npc;
@@ -556,26 +566,54 @@ export class DialogueWindow extends Window {
     const shown = line.slice(0, Math.floor(this.chars));
     const wl = wrap(shown, this.w - 6);
     wl.slice(0, 3).forEach((l, k) => g.text(3, 7 + k, (k === 0 ? '"' : ' ') + l + (k === wl.length - 1 && this.chars >= line.length ? '"' : ''), C.white));
-    if (this.queue && this.queue.length && this.chars >= line.length) g.text(this.w - 12, 10, '[SPACE] ►', Math.floor(this.ui.time * 3) % 2 ? C.hi : C.dim);
+    if (this.queue && this.queue.length && this.chars >= line.length) g.text(this.w - 4, 10, '►', Math.floor(this.ui.time * 3) % 2 ? C.hi : C.dim);
     g.text(2, 11, '─'.repeat(this.w - 4), C.faint);
-    // Options: two columns, numbered.
     const opts = this.options(game);
+    // (Round 77) The kinds of thing to say, as tabs.
+    if (!this.choices) {
+      let x = 2;
+      for (const c of this.cats(this.allOptions(game))) {
+        const w = c.label.length + 2;
+        const on = c.id === this.cat;
+        const hov = this.hovering(x, 12, w, 1);
+        g.fill(x, 12, w, 1, ' ', C.fg, on ? C.bgHi : hov ? '#3a3250' : '#1c1626');
+        g.text(x + 1, 12, c.label, on ? C.hi : hov ? C.white : C.dim);
+        this.hit(x, 12, w, 1, () => {
+          this.cat = c.id;
+          this.page = 0;
+          this.ui.audio?.play('select');
+        });
+        x += w + 1;
+      }
+    }
     this.opts = opts;
     const wide = this.isWide(opts);
     const colW = wide ? this.w - 4 : Math.floor((this.w - 4) / 2);
+    const top = this.choices ? 12 : 13;
     opts.forEach((o, i) => {
       const col = wide ? 0 : i < 5 ? 0 : 1;
       const row = wide ? i : i % 5;
       const x = 2 + col * colW;
-      const y = 12 + row;
-      const key = i === 9 ? '0' : String(i + 1);
+      const y = top + row;
       const hov = this.hovering(x, y, colW - 1, 1);
       g.fill(x, y, colW - 1, 1, ' ', C.fg, hov ? C.bgHi : undefined);
-      g.text(x, y, `${key}`, C.hi);
-      g.text(x + 2, y, o.label.slice(0, colW - 4), hov ? C.white : o.id === 'rude' ? C.orange : o.id === 'bye' ? C.dim : C.fg);
+      g.text(x + 1, y, o.label.slice(0, colW - 3), hov ? C.white : o.id === 'rude' ? C.orange : o.id === 'bye' || o.id === 'back' ? C.dim : C.fg);
       this.hit(x, y, colW - 1, 1, (ck, gm) => this.choose(o, gm));
     });
-    g.text(2, this.h - 2, '1-9 choose · SPACE continue · T trade · G gift · ESC leave', C.faint);
+    // More of this kind, and Goodbye, along the bottom.
+    if (this.pages > 1) {
+      const lbl = ` More (${this.page + 1}/${this.pages}) `;
+      const hov = this.hovering(2, 19, lbl.length, 1);
+      g.text(2, 19, lbl, hov ? C.white : C.cyan, hov ? C.bgHi : undefined);
+      this.hit(2, 19, lbl.length, 1, () => this.choose({ id: 'more' }, game));
+    }
+    if (this.bye) {
+      const lbl = ` ${this.bye.label} `;
+      const x = this.w - 2 - lbl.length;
+      const hov = this.hovering(x, 19, lbl.length, 1);
+      g.text(x, 19, lbl, hov ? C.white : C.dim, hov ? C.bgHi : undefined);
+      this.hit(x, 19, lbl.length, 1, () => this.choose(this.bye, game));
+    }
   }
   onClose(game) {
     if (game && game.talkingTo === this.npc) game.talkingTo = null;
@@ -606,11 +644,21 @@ export class DialogueWindow extends Window {
       else if (this.queue && this.queue.length) this.next();
       return true;
     }
-    const m = /^Digit(\d)$/.exec(k.code) || /^Numpad(\d)$/.exec(k.code);
+    const m = /^Digit(\d)$/.exec(k.raw || k.code) || /^Numpad(\d)$/.exec(k.raw || k.code);
     if (m) {
       const i = m[1] === '0' ? 9 : +m[1] - 1;
       const o = this.opts && this.opts[i];
       if (o) this.choose(o, game);
+      return true;
+    }
+    // (Round 77) From one kind of topic to the next.
+    if ((k.raw || k.code) === 'ArrowLeft' || (k.raw || k.code) === 'ArrowRight') {
+      const cats = this.choices ? [] : this.cats(this.allOptions(game));
+      const i = cats.findIndex((c) => c.id === this.cat);
+      if (cats.length) {
+        this.cat = cats[(i + ((k.raw || k.code) === 'ArrowRight' ? 1 : cats.length - 1)) % cats.length].id;
+        this.page = 0;
+      }
       return true;
     }
     if (k.code === 'KeyT') {
@@ -638,7 +686,6 @@ export class GiftWindow extends Window {
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `GIFT FOR ${this.npc.rec.name.first.toUpperCase()}` });
     g.text(2, 1, 'Click an item to give one.', C.dim);
     slotTable(this, g, 1, 2, 9, p.inv, 0, INV_SIZE, { onClick: (i, ck, gm) => this.give(i, gm) });
-    g.text(2, this.h - 1, ' ESC cancel ', C.faint);
   }
   give(i, game) {
     const p = game.player;
@@ -786,7 +833,6 @@ export class TradeWindow extends Window {
     if (e && !this.npc.visit) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
     const parts = game.sim.priceParts(this.npc);
     if (parts.discount < 1) g.text(40, 21, `Discount ${Math.round((1 - parts.discount) * 100)}%: ${parts.reasons.join(', ')}`.slice(0, 37), C.green);
-    g.text(2, this.h - 1, ' click buy/sell · SHIFT x5 / whole stack · ESC close ', C.faint);
   }
   buy(k, game, n) {
     const p = game.player;
@@ -1149,8 +1195,6 @@ export class JournalWindow extends Window {
       if (this.scroll > 0) g.text(this.w - 12, top - 1, '▲ more', C.faint);
       if (this.scroll < this.maxScroll) g.text(this.w - 12, this.h - 2, '▼ more', C.faint);
     }
-    g.text(2, this.h - 1, this.maxScroll > 0 ? ' wheel / ↑↓ scroll ' : '', C.faint);
-    g.text(this.w - 14, this.h - 1, ' [J/ESC] ok ', C.faint);
   }
   onWheel(d) {
     this.scroll = Math.max(0, Math.min(this.maxScroll || 0, this.scroll + Math.sign(d) * 3));
@@ -1384,8 +1428,6 @@ export class LedgerWindow extends Window {
       const pos = Math.round((room - bar) * this.scroll / this.maxScroll);
       for (let i = 0; i < room; i++) g.put(this.w - 3, y + i, i >= pos && i < pos + bar ? '█' : '│', i >= pos && i < pos + bar ? '#c8a878' : '#5a4a3a');
     }
-    g.text(3, this.h - 1, ` ←→ / TAB switch${this.maxScroll ? ' · ↑↓ scroll' : ''} `, C.faint);
-    g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);
   }
   onWheel(d) {
     this.scroll = Math.max(0, Math.min(this.maxScroll || 0, (this.scroll || 0) + Math.sign(d) * 3));
@@ -1596,7 +1638,6 @@ export class TextWindow extends Window {
   draw(g) {
     g.box(0, 0, this.w, this.h, { bg: this.book ? 'rgba(40,30,20,0.96)' : C.bg, double: true, title: this.title });
     this.lines.forEach((l, i) => g.center(2 + i, l, i === 0 && !this.book ? C.hi : this.book ? '#f0e0c0' : C.fg));
-    g.text(this.w - 12, this.h - 1, ' [ESC] ok ', C.faint);
   }
   onKey(k) {
     if (k.code === 'Enter' || k.code === 'Space' || k.code === 'KeyE') {
@@ -1678,54 +1719,99 @@ export class CardWindow extends Window {
 // ---------------------------------------------------------------- help
 export class HelpWindow extends Window {
   constructor(ui) {
-    super(ui, 76, 36, { kind: 'help' });
+    super(ui, 66, 34, { kind: 'help' });
     this.closeOnOutside = true;
+    this.open = new Set(['Controls']);
+    this.top = 0;
+  }
+  // (Round 77) Each part folds open or shut; the whole scrolls.
+  lines() {
+    const k = actionKeyName;
+    const out = [];
+    for (const sec of HELP_SECTIONS) {
+      out.push({ head: sec.title });
+      if (!this.open.has(sec.title)) continue;
+      if (sec.title === 'Controls') {
+        const rows = [
+          ['Move', `${k('up')} ${k('left')} ${k('down')} ${k('right')} (or arrows) · hold ${k('sprint')} to sprint`],
+          ['Roll', k('roll')],
+          ['Turn the view', `${k('turnL')} / ${k('turnR')}`],
+          ['Belt', `${k('belt1')}-${k('belt9')} or the mouse wheel`],
+          ['Mine', 'hold the left button on a block'],
+          ['Place', 'pick a block on the belt, click where it goes'],
+          ['Attack', 'click a creature (hold for a heavy blow)'],
+          ['Block / parry', 'hold the right button in a fight'],
+          ['Use / talk', `right-click, or ${k('use')}`],
+          ['Rotate a block', k('rotate')],
+          ['Build layer', `${k('layerDown')} / ${k('layerUp')} · ${k('layerAuto')} for auto`],
+          ['Throw an item', k('toss')],
+          ['Wait (sitting)', k('wait')],
+          ['Bag · craft · map', `${k('bag')} · ${k('craft')} · ${k('map')}`],
+          ['Journal · quests', `${k('journal')} · ${k('quests')}`],
+          ['Achievements', k('feats')],
+          ['Menu', 'Esc'],
+        ];
+        for (const [a, b] of rows) out.push({ key: a, text: b });
+        out.push({ text: 'Every key can be changed in Settings, under Controls.', dim: true });
+      } else for (const l of wrap(sec.text, this.w - 8)) out.push({ text: l });
+      out.push({ gap: true });
+    }
+    return out;
   }
   draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, C.bg);
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: 'HOW TO PLAY' });
-    const rows = [
-      ['MOVE', 'WASD / Arrows (tile by tile) · SHIFT sprint'],
-      ['CAMERA', 'Q / E turn the view a quarter turn either way'],
-      ['BELT', '1-9 or mouse wheel to select'],
-      ['INTERACT', 'Click doors, chests, benches, beds, signs, snares...'],
-      ['', 'F: use what you point at / face · RMB also works'],
-      ['MINE', 'Hold LMB on a block with a tool or empty hand'],
-      ['PLACE', 'Select a block, then click (hold to paint)'],
-      ['ROTATE', 'R cycles facing for chairs, beds, doors, roofs...'],
-      ['LAYER', 'Z/X lock the mining/placing layer · V auto'],
-      ['ATTACK', 'Click a creature or person (bows need arrows)'],
-      ['TALK', 'Right-click a villager, pick topics with 1-9'],
-      ['SIT', 'Click a chair, bench or stool · move to stand'],
-      ['SLEEP', 'Click a bed at night (yours, or your host\'s)'],
-      ['TOSS', 'G throws one item · CTRL+G the whole stack'],
-      ['EAT', 'F (or RMB) while holding food'],
-      ['FISH', 'Hold a fishing rod and right-click water'],
-      ['RIDE', 'Feed a wild horse, saddle it, RMB to ride · F gets down'],
-      ['LEAD', 'Hold a lead, RMB an animal · RMB a fence to tie it up'],
-      ['STUDY', 'Researcher at a desk: A/D turn rings · W/S pick · SPACE'],
-      ['WINDOWS', 'TAB bag · C craft · M map · J journal · O quests · L achievements · ESC menu · F2 CRT'],
-    ];
-    rows.forEach(([k, v], i) => {
-      g.text(3, 2 + i, k, C.hi);
-      g.text(13, 2 + i, v, C.fg);
-    });
-    const tips = [
-      'Towns live on without you: cooks buy from trappers and fishers and',
-      'cook meals (good or awful), mayors set taxes and laws, merchants',
-      'travel between towns. Read the notice board on the square.',
-      'People remember you: gifts, kind words and fair trade win them over;',
-      'stealing and violence do not. Crimes only count if someone SEES',
-      'them. Guards arrest you (or knock you out); a hearing decides the',
-      'fine or jail time. Repeat offenders are banished or executed.',
-      'Talk to the mayor in the town hall to become a citizen: a family',
-      'takes you in while builders put up a house of your own.',
-    ];
-    tips.forEach((t, i) => g.text(3, 3 + rows.length + i, t, C.dim));
-    g.text(3, this.h - 3, 'Every world is generated from its seed: biomes, rivers,', C.faint);
-    g.text(3, this.h - 2, 'civilizations, towns and every villager\'s life story.', C.faint);
-    g.text(this.w - 16, this.h - 1, ' [H/ESC] close ', C.faint);
+    const ls = this.lines();
+    const rows = this.h - 4;
+    this.maxTop = Math.max(0, ls.length - rows);
+    this.top = Math.max(0, Math.min(this.top, this.maxTop));
+    for (let i = 0; i < rows; i++) {
+      const l = ls[this.top + i];
+      if (!l) break;
+      const y = 2 + i;
+      if (l.head) {
+        const on = this.open.has(l.head);
+        const hov = this.hovering(2, y, this.w - 4, 1);
+        g.fill(2, y, this.w - 5, 1, ' ', C.fg, hov ? C.bgHi : '#1c1626');
+        g.text(3, y, `${on ? '▼' : '►'} ${l.head}`, on ? C.hi : hov ? C.white : C.fg);
+        this.hit(2, y, this.w - 5, 1, () => {
+          if (on) this.open.delete(l.head);
+          else this.open.add(l.head);
+          this.ui.audio?.play('select');
+        });
+      } else if (l.key) {
+        g.text(5, y, l.key, C.cyan);
+        g.text(24, y, l.text, C.fg, undefined, this.w - 27);
+      } else if (l.text) g.text(5, y, l.text, l.dim ? C.faint : C.fg);
+    }
+    if (this.maxTop > 0) {
+      const bar = Math.max(1, Math.round((rows * rows) / (rows + this.maxTop)));
+      const at = Math.round((this.top / this.maxTop) * (rows - bar));
+      for (let i = 0; i < rows; i++) g.put(this.w - 2, 2 + i, i >= at && i < at + bar ? '█' : '│', C.faint);
+    }
+  }
+  onWheel(d) {
+    this.top = Math.max(0, Math.min(this.maxTop || 0, this.top + Math.sign(d) * 3));
+  }
+  onKey(k) {
+    if (k.code === 'ArrowDown') this.onWheel(1);
+    else if (k.code === 'ArrowUp') this.onWheel(-1);
+    else return false;
+    return true;
   }
 }
+
+// (Round 77) What How to Play tells of, part by part.
+const HELP_SECTIONS = [
+  { title: 'Controls' },
+  { title: 'Mining', text: 'Hold the left button on a block to mine it; a pickaxe is quicker on stone and ore, an axe on wood, a shovel on earth and sand, and an empty hand does for soft things. Next to you, the block over the one you mine comes away too, so you can walk into the gap. To cut a step up out of a hole, hold Sprint and mine the block beside your feet: it stays as the step. What you mine drops; walk over it to pick it up. Ore needs a furnace to smelt.' },
+  { title: 'Crafting', text: 'Open crafting to make things from what you carry: simple things by hand, more at a workbench, metal at a furnace and an anvil, and finer work at the trades\' own benches (a loom, a jeweller\'s bench, a still...). Stand by a bench and click it to use it. Recipes you can make are shown first; hover one to see what it needs. Cooking is done at a fire, an oven or a furnace, and recipes can be written onto scrolls.' },
+  { title: 'Combat', text: 'Click a creature or person to strike; hold the click for a heavy blow. Hold the right button to raise your shield or weapon, and raise it just as a blow lands to parry. Roll to get out of the way. Bows, crossbows and slings shoot at range; javelins are thrown. Fighting costs stamina; eat to heal. Gear has stars and modifiers, gems can be set in it, and two-handed weapons hit harder. Masters below ground fight in phases: watch for what they do before they do it.' },
+  { title: 'Overview of Towns', text: 'Towns live on without you. Everyone has a home, a family, a job and a day: farmers, smiths, cooks, guards, merchants and more, trading with one another and with other towns. Mayors set taxes and laws; the notice board on the square has work and news. People remember how you treat them: gifts, kind words and fair trade win them over, while theft and violence don\'t, and crimes count if someone sees them. Guards arrest you and a hearing decides the fine or jail.' },
+  { title: 'Becoming a citizen', text: 'Ask the mayor in the town hall to become a citizen. A family takes you in while the town\'s builders put up a cottage for you; you can sleep in their beds and use their chests till then. Citizens pay a little tax each day and get better prices and warmer greetings. Ask the mayor or a builder to enlarge your house later.' },
+  { title: 'Jobs', text: 'The mayor licenses professions: join the town watch (paid for walking your beat, a bounty for beasts killed near town), or work as a trapper, fisher or farmer with starter tools and buyers for your goods. Shopkeepers may take you on for shifts: chores and customers, paid at closing. Researchers study at an academy or library. The journal shows your job and your chores.' },
+  { title: 'Dungeon Delving', text: 'Old places lie about the land: barrows, mines, crypts, holdouts, and stranger things on the far islands and continents. Folk tell of them, and they appear on your map once you know of them. Each has floors going down, with traps, locked doors, puzzles and sealed rooms, and a master at the bottom. Bring light, food and a way back up; the map shows the floors you\'ve seen. Chests deeper down hold better gear.' },
+];
 
 // ---------------------------------------------------------------- pause
 export class PauseWindow extends Window {
@@ -1765,8 +1851,7 @@ export class PauseWindow extends Window {
       const y = 2 + i;
       const hov = this.hovering(2, y, this.w - 4, 1);
       g.fill(2, y, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
-      g.text(3, y, `[${k}]`, C.hi);
-      g.text(10, y, label, hov ? C.white : C.fg);
+      g.text(4, y, label, hov ? C.white : C.fg);
       this.hit(2, y, this.w - 4, 1, (ck, gm) => fn(gm));
     });
     if (game) g.text(3, this.h - 3, `Seed ${game.seed}`, C.faint);
@@ -1827,8 +1912,7 @@ export class SaveSlotsWindow extends Window {
     });
     const y = this.h - 3;
     if (this.confirm) g.center(y, this.confirm.text, C.orange);
-    else g.center(y, load ? 'Click a save or press its key to see it, and load it.' : 'Click a slot or press 1-5 to save there.', C.dim);
-    g.center(this.h - 2, load ? '[↑↓] choose  [ENTER] open  [ESC] back' : '[↑↓] choose  [ENTER] save  [X] delete  [ESC] back', C.faint);
+    else g.center(y, load ? 'Click a save to see it, and load it.' : 'Click a slot to save there.', C.dim);
   }
   pick(game) {
     const q = this.store.list()[this.sel];
@@ -1948,10 +2032,10 @@ export class SaveDetailsWindow extends Window {
       g.text(x + 1, y, label, off ? C.faint : hov ? C.white : col);
       if (!off) this.hit(x, y, w, 1, fn);
     };
-    btn(2, 14, this.o.mp ? '[ENTER] Host' : '[ENTER] Load', () => this.load(), C.hi, !m);
-    btn(17, 12, '[U] Update', () => this.upgrade(), C.hi, !m || !canUpgrade(m.gv));
-    btn(30, 12, this.sure ? '[X] Sure?' : '[X] Delete', () => this.remove(), this.sure ? C.red : C.dim, !m);
-    btn(43, 7, '[ESC]', () => this.close(), C.fg);
+    btn(2, 14, this.o.mp ? 'Host' : 'Load', () => this.load(), C.hi, !m);
+    btn(17, 12, 'Update', () => this.upgrade(), C.hi, !m || !canUpgrade(m.gv));
+    btn(30, 12, this.sure ? 'Sure?' : 'Delete', () => this.remove(), this.sure ? C.red : C.dim, !m);
+    btn(43, 7, 'Close', () => this.close(), C.fg);
     if (this.sure) g.center(this.h - 2, 'Press X again to delete it for good.', C.orange);
   }
   load() {
@@ -2017,16 +2101,16 @@ export class ConfirmWindow extends Window {
       this.hit(x, y, w, 1, fn);
     };
     if (this.only) {
-      btn(3, `[ENTER] ${this.yes}`, () => this.answer(true), C.hi);
+      btn(3, this.yes, () => this.answer(true), C.hi);
       return;
     }
-    btn(3, `[Y] ${this.yes}`, () => this.answer(true), C.hi);
+    btn(3, `${this.yes}`, () => this.answer(true), C.hi);
     if (this.cancel) {
-      btn(Math.floor((this.w - this.no.length - 6) / 2), `[N] ${this.no}`, () => this.answer(false), C.fg);
-      btn(this.w - this.cancel.length - 11, `[ESC] ${this.cancel}`, () => this.close(), C.dim);
+      btn(Math.floor((this.w - this.no.length - 6) / 2), `${this.no}`, () => this.answer(false), C.fg);
+      btn(this.w - this.cancel.length - 11, this.cancel, () => this.close(), C.dim);
       return;
     }
-    btn(this.w - this.no.length - 9, `[N] ${this.no}`, () => this.answer(false), C.fg);
+    btn(this.w - this.no.length - 9, `${this.no}`, () => this.answer(false), C.fg);
   }
   answer(yes) {
     this.close();
@@ -2063,7 +2147,7 @@ export class WaitWindow extends Window {
     this.hit(this.w - 10, 4, 4, 1, () => this.change(1));
     const hov = this.hovering(9, 7, 16, 1);
     g.fill(9, 7, 16, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
-    g.center(7, '[ENTER] Wait', hov ? C.white : C.hi);
+    g.center(7, 'Wait', hov ? C.white : C.hi);
     this.hit(9, 7, 16, 1, () => this.go());
   }
   change(d) {
@@ -2092,53 +2176,126 @@ export class WaitWindow extends Window {
 // what to turn down if it lags.)
 export class SettingsWindow extends Window {
   constructor(ui, settings) {
-    super(ui, 50, SETTING_ROWS.length + SETTING_ROWS.filter((r) => r.section).length + 6, { kind: 'settings' });
+    super(ui, 60, 32, { kind: 'settings' });
     this.s = settings;
-    this.sel = 0;
+    // (Round 77) In tabs, each scrolling; Controls rebinds the keys.
+    this.tab = 'General';
+    this.top = 0;
+    this.capture = null;
+  }
+  lines() {
+    if (this.tab !== 'Controls') return SETTING_ROWS.filter((r) => r.tab === this.tab).map((r) => ({ row: r }));
+    const out = [];
+    let group = null;
+    for (const a of ACTIONS) {
+      if (a.group !== group) {
+        if (group) out.push({ gap: true });
+        out.push({ head: (group = a.group) });
+      }
+      out.push({ act: a });
+    }
+    out.push({ gap: true }, { reset: true });
+    return out;
   }
   draw(g) {
     g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
     g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: 'SETTINGS' });
-    let y = 2;
-    let i = 0;
-    for (const r of SETTING_ROWS) {
-      if (r.section) {
-        y++;
-        g.text(3, y++, r.section, C.hi);
-        continue;
-      }
-      const k = i++;
-      const hov = this.hovering(2, y, this.w - 4, 1);
-      g.fill(2, y, this.w - 4, 1, ' ', C.fg, this.sel === k ? C.bgHi : hov ? '#3a3250' : undefined);
-      g.text(3, y, r.label, this.sel === k ? C.white : C.fg);
-      const v = this.s[r.key];
-      g.text(24, y, '◄', C.hi);
-      if (r.kind === 'bool') g.text(26, y, v ? 'On' : 'Off', v ? C.green : C.faint);
-      else if (r.kind === 'choice') g.text(26, y, String(r.opts[v] || r.opts[0]).slice(0, this.w - 32), v ? C.cyan : C.fg);
-      else g.text(26, y, `${'■'.repeat(v)}${'□'.repeat(r.max - v)}`, C.cyan);
-      g.text(this.w - 5, y, '►', C.hi);
-      this.hit(24, y, 2, 1, () => this.change(k, -1));
-      this.hit(this.w - 6, y, 3, 1, () => this.change(k, 1));
-      this.hit(2, y, 21, 1, () => {
-        this.sel = k;
-      });
-      y++;
+    let x = 2;
+    for (const t of SETTING_TABS) {
+      const w = t.length + 2;
+      const on = t === this.tab;
+      const hov = this.hovering(x, 2, w, 1);
+      g.fill(x, 2, w, 1, ' ', C.fg, on ? C.bgHi : hov ? '#3a3250' : '#1c1626');
+      g.text(x + 1, 2, t, on ? C.hi : hov ? C.white : C.fg);
+      this.hit(x, 2, w, 1, () => this.setTab(t));
+      x += w + 1;
     }
-    g.center(this.h - 2, '↑↓ choose · ←→ change · ESC close', C.faint);
+    const ls = this.lines();
+    const rows = this.h - 6;
+    this.maxTop = Math.max(0, ls.length - rows);
+    this.top = Math.max(0, Math.min(this.top, this.maxTop));
+    for (let i = 0; i < rows; i++) {
+      const l = ls[this.top + i];
+      if (!l) break;
+      const y = 4 + i;
+      if (l.row) this.drawRow(g, l.row, y);
+      else if (l.head) g.text(3, y, l.head, C.hi);
+      else if (l.act) this.drawBind(g, l.act, y);
+      else if (l.reset) {
+        const hov = this.hovering(3, y, 24, 1);
+        g.text(3, y, ' Reset all to defaults ', hov ? C.white : C.fg, hov ? C.bgHi : '#2a2238');
+        this.hit(3, y, 24, 1, () => {
+          resetKeybinds();
+          this.capture = null;
+          this.ui.audio?.play('select');
+        });
+      }
+    }
+    if (this.maxTop > 0) {
+      const bar = Math.max(1, Math.round((rows * rows) / (rows + this.maxTop)));
+      const at = Math.round((this.top / this.maxTop) * (rows - bar));
+      for (let i = 0; i < rows; i++) g.put(this.w - 2, 4 + i, i >= at && i < at + bar ? '█' : '│', C.faint);
+    }
+    if (this.capture) g.center(this.h - 2, 'Press the key to use (Esc to leave it as it is)', C.hi);
   }
-  change(i, d) {
-    this.sel = i;
-    changeSetting(this.s, SETTING_KEYS[i].key, d);
+  drawRow(g, r, y) {
+    const hov = this.hovering(2, y, this.w - 5, 1);
+    if (hov) g.fill(2, y, this.w - 5, 1, ' ', C.fg, '#2a2238');
+    g.text(3, y, r.label, hov ? C.white : C.fg);
+    const v = this.s[r.key];
+    const vx = 32;
+    g.text(vx - 2, y, '◄', C.hi);
+    if (r.kind === 'bool') g.text(vx, y, v ? 'On' : 'Off', v ? C.green : C.faint);
+    else if (r.kind === 'choice') g.text(vx, y, String(r.opts[v] || r.opts[0]).slice(0, this.w - vx - 6), v ? C.cyan : C.fg);
+    else g.text(vx, y, `${'■'.repeat(v)}${'□'.repeat(r.max - v)}`, C.cyan);
+    g.text(this.w - 5, y, '►', C.hi);
+    this.hit(2, y, vx - 3, 1, () => this.change(r.key, 1));
+    this.hit(vx - 3, y, 2, 1, () => this.change(r.key, -1));
+    this.hit(vx, y, this.w - vx - 6, 1, () => this.change(r.key, 1));
+    this.hit(this.w - 6, y, 3, 1, () => this.change(r.key, 1));
+  }
+  drawBind(g, a, y) {
+    const hov = this.hovering(2, y, this.w - 5, 1);
+    const on = this.capture === a.id;
+    if (hov || on) g.fill(2, y, this.w - 5, 1, ' ', C.fg, on ? C.bgHi : '#2a2238');
+    g.text(5, y, a.label, hov || on ? C.white : C.fg);
+    const name = on ? '...' : keyName(keyOf(a.id));
+    const moved = keyOf(a.id) !== a.def;
+    g.text(34, y, ` ${name} `, on ? C.hi : moved ? C.cyan : C.fg, '#2a2238');
+    this.hit(2, y, this.w - 5, 1, () => {
+      this.capture = on ? null : a.id;
+      this.ui.audio?.play('select');
+    });
+  }
+  setTab(t) {
+    if (t === this.tab) return;
+    this.tab = t;
+    this.top = 0;
+    this.capture = null;
+    this.ui.audio?.play('select');
+  }
+  change(key, d) {
+    changeSetting(this.s, key, d);
     this.ui.hooks.settingsChanged && this.ui.hooks.settingsChanged(this.s);
     this.ui.audio?.play('select');
   }
+  onWheel(d) {
+    this.top = Math.max(0, Math.min(this.maxTop || 0, this.top + Math.sign(d) * 3));
+  }
   onKey(k) {
-    const n = SETTING_KEYS.length;
-    if (k.code === 'Escape') this.close();
-    else if (k.code === 'ArrowUp' || k.code === 'KeyW') this.sel = (this.sel + n - 1) % n;
-    else if (k.code === 'ArrowDown' || k.code === 'KeyS') this.sel = (this.sel + 1) % n;
-    else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.change(this.sel, -1);
-    else if (k.code === 'ArrowRight' || k.code === 'KeyD' || k.code === 'Enter' || k.code === 'Space') this.change(this.sel, 1);
+    const code = k.raw || k.code;
+    if (this.capture) {
+      if (code !== 'Escape') bind(this.capture, code);
+      this.capture = null;
+      this.ui.audio?.play('select');
+      return true;
+    }
+    const i = SETTING_TABS.indexOf(this.tab);
+    if (code === 'Escape') this.close();
+    else if (code === 'ArrowDown') this.onWheel(1);
+    else if (code === 'ArrowUp') this.onWheel(-1);
+    else if (code === 'ArrowLeft') this.setTab(SETTING_TABS[(i + SETTING_TABS.length - 1) % SETTING_TABS.length]);
+    else if (code === 'ArrowRight') this.setTab(SETTING_TABS[(i + 1) % SETTING_TABS.length]);
     return true;
   }
 }
@@ -2161,12 +2318,12 @@ export class DeathWindow extends Window {
     } else g.center(5, this.below === 'none' ? 'You lost nothing down here.' : 'You dropped half your coins.', C.dim);
     if (this.below === 'pack') {
       const hv = this.hovering(12, 8, 20, 1);
-      g.center(8, '[R] Rise again', hv ? C.hi : C.fg);
+      g.center(8, 'Rise again', hv ? C.hi : C.fg);
       this.hit(0, 8, this.w, 1, (ck, gm) => this.respawn(gm));
       return;
     }
     const hov = this.hovering(12, 7, 20, 1);
-    g.center(7, '[R] Rise again', hov ? C.hi : C.fg);
+    g.center(7, 'Rise again', hov ? C.hi : C.fg);
     this.hit(0, 7, this.w, 1, (ck, gm) => this.respawn(gm));
   }
   respawn(game) {
@@ -2225,7 +2382,6 @@ export class TitleWindow extends Window {
         g.put(lx + k, 4 + i, row[k], hue);
       }
     });
-    g.center(10, '~ a tale of tiles, towns and torchlight ~', C.dim);
     const last = this.hasSave ? this.store.latest() : null;
     const opts = [
       ...(last ? [['C', `Continue: ${last.meta.name}, day ${last.meta.day}`.slice(0, 34)]] : []),
@@ -2241,14 +2397,13 @@ export class TitleWindow extends Window {
     ];
     opts.forEach(([k, label], i) => {
       const y = 13 + i * 2;
-      const text = `[${k}]  ${label}`;
+      const text = label;
       const x = Math.floor((this.w - 38) / 2);
       const hov = this.hovering(x - 1, y, 40, 1);
       g.fill(x - 1, y, 40, 1, ' ', C.fg, hov ? C.bgHi : 'rgba(20,16,28,0.9)');
       g.text(x, y, text, hov ? C.hi : C.fg);
       this.hit(x - 1, y, 40, 1, () => this.choose(k));
     });
-    if (Math.floor(t * 2) % 2) g.center(this.h - 2, 'PRESS A KEY', C.faint);
     // The game's version, bottom right.
     const ver = versionText(GAME_VERSION);
     g.text(this.w - ver.length - 1, this.h - 1, ver, C.dim);
@@ -2328,9 +2483,8 @@ export class PrintWindow extends Window {
     const ok = this.picked.size && press.canPrint(this.copies);
     const hov = this.hovering(3, y2 + 2, 22, 1);
     g.fill(3, y2 + 2, 22, 1, ' ', C.fg, ok ? (hov ? C.bgHi : '#2a2230') : '#1a1418');
-    g.text(4, y2 + 2, '[ENTER] Print edition', ok ? C.hi : C.faint);
+    g.text(4, y2 + 2, 'Print edition', ok ? C.hi : C.faint);
     this.hit(3, y2 + 2, 22, 1, () => this.print());
-    g.text(this.w - 36, this.h - 1, ' ↑↓ story · SPACE pick · ←→ copies ', C.faint);
   }
   toggle(i) {
     if (this.picked.has(i)) this.picked.delete(i);
@@ -2398,8 +2552,6 @@ export class ConsoleWindow extends Window {
     const shown = `> ${this.text}`.slice(-(this.w - 5));
     g.fill(1, this.h - 2, this.w - 2, 1, ' ', C.fg, '#141a22');
     g.text(2, this.h - 2, shown + blink, C.white, '#141a22');
-    const foot = ' [TAB] complete  [↑↓] history  [ESC] close ';
-    g.text(this.w - foot.length - 2, this.h - 1, foot, C.faint);
   }
   run() {
     const t = this.text.trim();
@@ -2557,7 +2709,7 @@ export class SettingWindow extends Window {
     this.gem = Math.min(this.gem, gems.length - 1);
     const pc = pieces[this.piece];
     const gk = gems[this.gem];
-    g.text(3, 2, 'Piece (↑↓):', C.dim);
+    g.text(3, 2, 'Piece:', C.dim);
     g.text(16, 2, `${ITEMS[pc.key].name}${pc.ref.kind === 'equip' ? ' (worn)' : ''}`, C.white);
     g.text(3, 4, 'Stone (←→):', C.dim);
     g.text(16, 4, `${GEMS[gk].name} ×${countItem(this.game.player.inv, gk)}`, GEMS[gk].color);
@@ -2574,7 +2726,7 @@ export class SettingWindow extends Window {
     if (ways.length) g.text(3, 13, `Your work now: ${ways.join(', ')}.`.slice(0, this.w - 5), C.dim);
     const hov = this.hovering(3, 15, 22, 1);
     g.fill(3, 15, 22, 1, ' ', C.fg, hov ? C.bgHi : '#2a2230');
-    g.text(4, 15, '[ENTER] Begin setting', C.hi);
+    g.text(4, 15, 'Begin setting', C.hi);
     this.hit(3, 15, 22, 1, () => this.begin());
   }
   // (The bench itself is drawn in pixels: see drawPixels.)

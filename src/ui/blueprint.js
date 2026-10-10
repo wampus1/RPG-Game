@@ -74,7 +74,7 @@ export class BlueprintWindow extends Window {
     g.text(6, sy, '[ Save  ENTER ]', sv ? C.hi : '#c8e8c8', sv ? C.bgHi : undefined);
     this.hit(6, sy, 15, 1, () => this.save());
     const cv = this.hovering(25, sy, 14, 1);
-    g.text(25, sy, '[ Leave  ESC ]', cv ? C.hi : C.fg, cv ? C.bgHi : undefined);
+    g.text(25, sy, '[ Leave ]', cv ? C.hi : C.fg, cv ? C.bgHi : undefined);
     this.hit(25, sy, 14, 1, () => this.close());
   }
 

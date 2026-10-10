@@ -125,7 +125,6 @@ export class AncientWindow extends Window {
     g.text(2, 2, cores, st.cores ? '#7ae0ff' : C.dim);
     const n = `${st.done.length} of ${ANCIENT_IDS.length} mastered`;
     g.text(this.w - 2 - n.length - (this.sel ? PANEL : 0), 2, n, '#3a8aa0');
-    g.text(2, this.h - 1, ` click a seal · ${this.back ? '[T] the realm\'s own learning · ' : ''}ESC close `, '#3a8aa0');
     const m = this.ui.mouse;
     this.hover = m ? this.nodeAt(m.x, m.y) : null;
     if (this.hover) {

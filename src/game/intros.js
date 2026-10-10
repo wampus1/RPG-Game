@@ -20,6 +20,7 @@
 //
 // Each has its own music (see music.js: cs_home, cs_voyage, cs_gale, and
 // the wreck's after).
+import { actionKeyName } from './keybinds.js';
 import { VIEW_W, VIEW_H, CHAR_W } from '../config.js';
 import { RNG, hash4, hashf } from '../util/rng.js';
 import { drawText } from '../render/font.js';
@@ -204,7 +205,7 @@ export function homeScene(game, info) {
     end(g) {
       g.ui.fade = Math.max(g.ui.fade || 0, 1.2);
       g.introduce();
-      g.ui.msg('Press H for help.', '#a0c8ff');
+      g.ui.msg(`Press ${actionKeyName('help')} for help.`, '#a0c8ff');
     },
     // How much of the town is up (0 bare land, 1 as it is today): from its
     // founding on, steadily.
@@ -502,7 +503,7 @@ export function wreckScene(game, info) {
     end(g) {
       g.ui.fade = Math.max(g.ui.fade || 0, 2);
       g.introduce();
-      g.ui.msg('Press H for help.', '#a0c8ff');
+      g.ui.msg(`Press ${actionKeyName('help')} for help.`, '#a0c8ff');
     },
     draw(ctx) {
       if (!art) art = paintWreck(info);

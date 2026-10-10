@@ -10,6 +10,7 @@ import { UI } from './ui/ui.js';
 import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow, ConsoleWindow } from './ui/windows.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
+import { loadKeybinds, actionKeyName } from './game/keybinds.js';
 import { hashString } from './util/rng.js';
 import { SaveStore, openSaveDB } from './game/saves.js';
 import { MachineSync } from './net/machine.js';
@@ -104,7 +105,15 @@ try {
   // Not offered here.
 }
 // Volumes and visuals, as the player left them.
+loadKeybinds(browserStorage());
 const settings = loadSettings(browserStorage());
+
+// (Round 77) What others are shown of you: with Private profile set in
+// Settings, your name and look only, not your words or title.
+function shownProfile() {
+  const p = accounts.profile;
+  return p && settings.privateProfile ? { ...p, desc: '', title: '', priv: true } : p;
+}
 const applyAll = () => applySettings(settings, { audio, music, crt, renderer, ui, net: session && session.role === 'guest' ? session.net : null });
 applyAll();
 
@@ -257,7 +266,7 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     ui.lastSettlement = undefined;
     hideLoading();
     if (!save && !hero && !opts.arrive) ui.msg(`Welcome to the world of seed ${s}.`, '#ffe070');
-    if (!game.cutscene && !game.scene) ui.msg('Press H for help.', '#a0c8ff');
+    if (!game.cutscene && !game.scene) ui.msg(`Press ${actionKeyName('help')} for help.`, '#a0c8ff');
     console.log(`world ready in ${(performance.now() - t0).toFixed(0)}ms`);
     window.__game = game;
     if (params.has('goto')) window.__goto(params.get('goto'));
@@ -581,7 +590,7 @@ function featNote(id) {
   const f = FEAT[id];
   if (!f) return;
   audio.play('fanfare');
-  ui.notify(`Achievement: ${f.name}. You can now go by the title "${f.title}" (press L).`, null, '#ffe070');
+  ui.notify(`Achievement: ${f.name}. You can now go by the title "${f.title}" (press ${actionKeyName('feats')}).`, null, '#ffe070');
 }
 
 // Your achievements, and a title to go by.
@@ -660,7 +669,7 @@ function syncLobby() {
       return;
     }
     lobbyWs = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'lobby', account: accounts.profile }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'lobby', account: shownProfile() }));
     ws.onmessage = (ev) => {
       let m;
       try {
@@ -767,8 +776,40 @@ const mpCtx = {
     // (Hosted in another version of the game: you can't join it.)
     otherVersion: (w) => ui.open(new ConfirmWindow(ui, 'ANOTHER VERSION', refusal('gameversion', { host: w.gv || null }), null, { yes: 'OK', only: true })),
     deleteWorld: (id) => store.remove(id),
+    // (Round 77) Your own saves, and one of them made a world to host.
+    soloSaves: () => store.list().filter((q) => q.meta),
+    convert: (id) => convertSolo(id),
   },
 };
+
+// (Round 77) A save played alone, copied into a free world-to-host slot:
+// the same world and your character in it, now a world others can join.
+async function convertSolo(id) {
+  if (!accounts.profile) {
+    openAccount();
+    return false;
+  }
+  const slot = store.freeWorld();
+  if (!slot) {
+    ui.notify('You keep three worlds to host: delete one first.');
+    return false;
+  }
+  try {
+    const text = await store.rawText(id);
+    if (!text) return false;
+    const data = JSON.parse(text);
+    const name = `${data.playerName || accounts.profile.name}'s world`;
+    data.party = { world: { name }, pvp: false, host: accounts.profile, chars: [], bans: null, perms: {} };
+    const meta = { ...(store.index()[id] || {}), world: name, players: 1, savedAt: Date.now() };
+    await store.putText(slot, JSON.stringify(data), meta);
+    store.onChange?.(slot, store.index()[slot]);
+    ui.notify(`"${name}" is ready to host, under Your worlds.`);
+    return true;
+  } catch (e) {
+    ui.notify('Converting failed: ' + e.message);
+    return false;
+  }
+}
 
 function openMultiplayer() {
   refreshLan();
@@ -821,7 +862,7 @@ function beginHosting(g, name) {
   }
   const sess = { role: 'host', ws, net: null, world: name, game: g };
   session = sess;
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: accounts.profile, world: { name, gv: GAME_VERSION, mods: worldModRefs() }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, role: 'host', account: shownProfile(), world: { name, gv: GAME_VERSION, mods: worldModRefs() }, bans: { ids: g.partyBans && g.partyBans.ids ? g.partyBans.ids : [] } }));
   ws.onmessage = (ev) => {
     if (session !== sess) return;
     const text = String(ev.data);
@@ -866,7 +907,7 @@ function makeHostNet(g, sess) {
   };
   const net = new HostNet(g, {
     send,
-    profile: accounts.profile,
+    profile: shownProfile(),
     world: { name: sess.world, mods: worldModRefs() },
     bans: g.partyBans,
     // (A mod of the world's, for someone joining without it.)
@@ -919,7 +960,7 @@ function joinWorld(at = null) {
       send: (text) => {
         if (ws.readyState === 1) ws.send(text);
       },
-      profile: accounts.profile,
+      profile: shownProfile(),
       build: (save) => buildGuestGame(save, sess),
       onNeedHero: (m) => {
         hideLoading();
@@ -957,7 +998,7 @@ function joinWorld(at = null) {
     net.openPause = () => openGuestPause();
     net.onLocalKey = (k) => guestKey(k);
     net.onProfile = (p) => openProfile(p);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, gv: GAME_VERSION, role: 'guest', account: accounts.profile }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: NET_VERSION, gv: GAME_VERSION, role: 'guest', account: shownProfile() }));
     ws.onmessage = (ev) => {
       if (session === sess) net.receive(String(ev.data));
     };
