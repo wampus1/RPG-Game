@@ -153,7 +153,7 @@ test('a furnace\'s crafting window has its button for cooking in the pot', () =>
   w.draw(g, game);
   const rows = [];
   for (let y = 0; y < g.h; y++) rows.push(g.ch.slice(y * g.w, (y + 1) * g.w).join(''));
-  assert.ok(rows.some((l) => /\[K\] Cook/.test(l)), rows.join('\n'));
+  assert.ok(rows.some((l) => /Cook a dish in the pot/.test(l)), rows.join('\n'));
   const opened = [];
   game.openCooking = (st) => opened.push(st);
   ui.game = game;

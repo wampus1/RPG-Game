@@ -130,7 +130,8 @@ test('one of a band long out still fights: how long they\'ve been about isn\'t h
 
 test('a captive you\'re leading: squeezed past, and once home they go on alone', () => {
   const { game, p } = start();
-  const n = game.npcs.find((q) => q.rec && !q.dead && q.rec.age === 'adult' && q.rec.job !== 'guard');
+  // (Someone stood still: mid-step, nobody's turned about.)
+  const n = game.npcs.find((q) => q.rec && !q.dead && q.rec.age === 'adult' && q.rec.job !== 'guard' && !q.moving);
   n.state = 'saga';
   n.saga = { follow: 'host' };
   // Going on alone: walking off, and out of the world once there.
