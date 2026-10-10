@@ -179,6 +179,9 @@ export class Causes {
       } else what = `${m ? full(m) : 'the mayor'} stays on as mayor`;
     }
     ledger(L, day, `The town has voted, ${t[0]} to ${t[1]}: ${what}.`);
+    // (The stories hear of it: the losing side's champion may not take it
+    // well. See saga/motifs/tides.js.)
+    this.sim.saga?.emit('cause_decided', { sid: s.id, kind: q.kind, what, loser: q.champ ? q.champ[1 - win] : null, title: q.title, margin: Math.abs(t[0] - t[1]) });
     // Whoever you stood with, and what came of it.
     if (q.side !== null) {
       const won = q.side === win;

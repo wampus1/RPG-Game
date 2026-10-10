@@ -39,7 +39,7 @@ export class ShipDesignWindow extends Window {
   draw(g, game) {
     const d = this.d;
     g.fill(0, 0, this.w, this.h, ' ', C.fg, C.bg);
-    g.box(0, 0, this.w, this.h, { bg: 'rgba(16,24,38,0.97)', double: true, title: 'SHIPWRIGHT\'S BENCH · A SHIP OF YOUR OWN', fg: '#7ab0e0' });
+    g.box(0, 0, this.w, this.h, { bg: '#101826', double: true, title: 'SHIPWRIGHT\'S BENCH · A SHIP OF YOUR OWN', fg: '#7ab0e0' });
     const lab = (x, y, t) => g.text(x, y, t, '#a8c8e8');
     // A number to step up and down.
     const step = (x, y, label, k, by, lo, hi, show = (v) => `${v}`) => {
@@ -82,7 +82,7 @@ export class ShipDesignWindow extends Window {
     // ---- her name
     const cur = Math.floor(Date.now() / 450) % 2 ? '_' : ' ';
     lab(2, 2, 'Name');
-    g.fill(7, 2, 30, 1, ' ', C.fg, 'rgba(232,224,200,0.12)');
+    g.fill(7, 2, 30, 1, ' ', C.fg, '#2a3040');
     g.text(8, 2, `${d.name}${cur}`, '#fff0c0', undefined, 28);
     // ---- her hull
     g.text(2, 4, 'HULL', C.dim);
@@ -122,7 +122,7 @@ export class ShipDesignWindow extends Window {
       const canDrop = d.masts.length > 1;
       g.text(2, y, '+ a mast', canAdd ? (this.hovering(2, y, 8, 1) ? C.white : C.hi) : C.faint);
       if (canAdd) this.hit(2, y, 8, 1, () => this.set('masts', [...d.masts, d.masts.length === 1 ? 'gaff' : 'lateen']));
-      g.text(12, y, '− the last', canDrop ? (this.hovering(12, y, 10, 1) ? C.white : C.hi) : C.faint);
+      g.text(12, y, '- the last', canDrop ? (this.hovering(12, y, 10, 1) ? C.white : C.hi) : C.faint);
       if (canDrop) this.hit(12, y, 10, 1, () => this.set('masts', d.masts.slice(0, -1)));
       if (!canAdd && maxMasts < 3) g.text(24, y, `(${maxMasts === 1 ? 20 : 26} long for more)`, C.faint);
     }
@@ -143,12 +143,16 @@ export class ShipDesignWindow extends Window {
     swatches(2, 27, 'Sails', 'sail', SAILS);
     lab(2, 28, 'Mark');
     let ex = 10;
+    let ey = 28;
     for (const em of EMBLEMS) {
       const t = em || 'none';
       const on = em === d.emblem;
-      if (ex + t.length + 2 > 44) break;
-      g.text(ex, 28, `${on ? '[' : ' '}${t}${on ? ']' : ' '}`, on ? C.hi : this.hovering(ex, 28, t.length + 2, 1) ? C.white : C.fg);
-      this.hit(ex, 28, t.length + 2, 1, () => this.set('emblem', em));
+      if (ex + t.length + 2 > 44) {
+        ex = 10;
+        ey++;
+      }
+      g.text(ex, ey, `${on ? '[' : ' '}${t}${on ? ']' : ' '}`, on ? C.hi : this.hovering(ex, ey, t.length + 2, 1) ? C.white : C.fg);
+      this.hit(ex, ey, t.length + 2, 1, () => this.set('emblem', em));
       ex += t.length + 2;
     }
     // ---- her, drawn
@@ -173,15 +177,16 @@ export class ShipDesignWindow extends Window {
     const ok = coins >= c.coin && c.items.every(([k, n]) => cnt(k) >= n);
     // ---- your designs
     const mine = game.shipDesigns ? [...game.shipDesigns.values()] : [];
-    g.text(2, 30, 'YOUR DESIGNS', C.dim);
-    if (!mine.length) g.text(16, 30, 'none yet: build one and it\'s kept here', C.faint);
+    const dy = 31;
+    g.text(2, dy, 'YOUR DESIGNS', C.dim);
+    if (!mine.length) g.text(16, dy, 'none yet: build one and it\'s kept here', C.faint);
     else {
       let dx = 16;
       for (const q of mine.slice(-5)) {
         const t = q.name.slice(0, 12);
-        const hov = this.hovering(dx, 30, t.length + 2, 1);
-        g.text(dx, 30, ` ${t} `, hov ? C.white : '#a0d0f0', hov ? C.bgSel : undefined);
-        this.hit(dx, 30, t.length + 2, 1, () => {
+        const hov = this.hovering(dx, dy, t.length + 2, 1);
+        g.text(dx, dy, ` ${t} `, hov ? C.white : '#a0d0f0', hov ? C.bgSel : undefined);
+        this.hit(dx, dy, t.length + 2, 1, () => {
           this.d = tidy({ ...q });
           delete this.d.id;
           this.ui.audio?.play('select');
@@ -202,7 +207,7 @@ export class ShipDesignWindow extends Window {
       this.d = tidy(blankDesign());
       this.ui.audio?.play('select');
     });
-    g.text(41, by, ok ? 'From your pack and your chests about the bench.' : 'Short of something: see what she\'d take.', C.faint);
+    g.text(41, by, ok ? 'From your pack and chests near.' : 'Short: see what she\'d take.', C.faint);
     g.text(2, H - 2, 'Type to name her · ESC to leave the bench', C.faint);
   }
 
@@ -261,20 +266,27 @@ export class ShipDesignWindow extends Window {
         g.text(cx, ry, '│', '#6a4a2a');
       }
       const sailTop = base - q.base - hh + 1;
-      const sq = q.rig.startsWith('square') || q.rig === 'mizzen';
-      for (let ry = Math.max(top, sailTop + 1); ry < base - q.base - 1; ry++) {
-        if (sq) {
-          for (const dx of [-1, 1]) g.text(cx + dx, ry, '▌', this.d.sail);
-        } else {
-          const span = Math.max(1, Math.round(((ry - sailTop) / Math.max(1, hh)) * (q.rig === 'lateen' ? 3 : 4)));
-          for (let dx = 1; dx <= span; dx++) g.text(cx - dx, ry, '▐', this.d.sail);
+      const foot = base - q.base - 2;
+      // (Square sails: one above another, narrowing upward; fore-and-aft
+      // ones: a sail aft of the mast, widest at its foot.)
+      const tiers = q.rig === 'square3' ? 3 : q.rig === 'square2' ? 2 : q.rig === 'mizzen' ? 1 : 0;
+      for (let ry = Math.max(top, sailTop + 1); ry <= foot; ry++) {
+        const f = (ry - sailTop) / Math.max(1, foot - sailTop);
+        if (tiers) {
+          const tier = Math.min(tiers - 1, Math.floor((1 - f) * tiers));
+          const half = Math.max(1, 2 - tier + (f > 0.95 ? 0 : 0));
+          for (let dx = -half; dx <= half; dx++) if (dx) g.text(cx + dx, ry, '█', this.d.sail);
+        }
+        if (!tiers || q.rig === 'mizzen') {
+          const span = Math.max(1, Math.round(f * (q.rig === 'lateen' ? 3 : 4)));
+          for (let dx = 1; dx <= span; dx++) g.text(cx - dx, ry, '█', this.d.sail);
         }
       }
-      g.text(cx, Math.max(top, sailTop - 1), '▸', this.d.flag);
+      g.text(cx, Math.max(top, sailTop - 1), '►', this.d.flag);
     }
     const bx = ox + Math.floor(m.L * scale);
     const by = base - (m.bowsprit.y - 1);
-    for (let k = 0; k < Math.min(4, Math.round(m.bowsprit.len * scale * 0.4)); k++) if (bx + k < x0 + w) g.text(bx + k, by - (k > 1 ? 1 : 0), k > 1 ? '╱' : '─', '#6a4a2a');
+    for (let k = 0; k < Math.min(4, Math.round(m.bowsprit.len * scale * 0.4)); k++) if (bx + k < x0 + w) g.text(bx + k, by - (k > 1 ? 1 : 0), k > 1 ? '/' : '─', '#6a4a2a');
   }
 
   build(game) {

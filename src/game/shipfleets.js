@@ -333,6 +333,7 @@ function navalBattles(game, F, now) {
         const L = game.world.layouts.get(sid);
         if (L && L.econ) ledger(L, day, text);
       }
+      sim.saga?.emit('sea_fight', { sid: loser.from, ship: loser.name, winner: winner.name, off: near ? near.name : null });
     }
   }
 }
@@ -522,6 +523,7 @@ function end(game, F, v, now, how) {
   if ((v.kind === 'trade' || v.kind === 'cargo' || v.kind === 'settlers') && !S && takenAtSea(game, v, rng)) {
     const cove = coveOf(game);
     if (FL && FL.econ) ledger(FL, day, `Pirates${cove ? ` out of ${cove.name}` : ''} took the ${v.name} at sea, bound for ${to ? to.name : 'abroad'}: her cargo gone, her crew put adrift.`);
+    if (from) sim.saga?.emit('ship_taken', { sid: from.id, ship: v.name, cove: cove ? cove.name : null, to: to ? to.name : null });
     return;
   }
   // (Round 78) A troopship in: her army ashore on the enemy's coast.
@@ -530,6 +532,7 @@ function end(game, F, v, now, how) {
     if (enemies && TL && TL.econ && FL && FL.econ) {
       const raid = sim.war.planRaid(from.civ, to.civ, from, to, day, rng, 'ship');
       ledger(TL, day, `The ${v.name}, a troopship of the ${from.civ.name.replace(/^The /, '')}, has put an army ashore on the coast. They'll march on ${to.name}${raid ? ' by nightfall' : ''}.`);
+      if (raid) sim.saga?.emit('troops_landed', { sid: to.id, raid: raid.id, ship: v.name, foe: from.civ.name.replace(/^The /, '') });
     } else if (TL && TL.econ) ledger(TL, day, `A troopship, the ${v.name}, put in at the harbour and sailed again.`);
     return;
   }

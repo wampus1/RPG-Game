@@ -94,6 +94,7 @@ import { stallsTick } from './stalls.js';
 import { isBlueprint, ghostProblem, placeGhost, removeGhost, plansSave, plansLoad } from './plans.js';
 import { boxPress, boxDrag, boxWheel, openPlanWindow } from '../ui/plans.js';
 import { ShipDesignWindow } from '../ui/shipdesign.js';
+import { checkRegion, healthNote } from './savehealth.js';
 import { startRide, tick as rideTick, hurry as rideHurry, getOff as rideOff, endRide as rideEnd, rideSave, rideLoad } from './rides.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
@@ -194,6 +195,9 @@ export class Game {
     this.playtime = new Playtime(this);
     this.world.onRegionLoad = (r) => {
       this.sim.applyPending(r);
+      // (Round 78) Brought back from the save: looked over (see
+      // savehealth.js).
+      if (r.fromSave) checkRegion(this, r);
       this.crops.scanRegion(r);
       // (Near the mountain on Kharos: its flows as they are now.)
       this.sim.volcano.regionLoaded(r);
@@ -2103,6 +2107,15 @@ export class Game {
     // Horses and wagons led ashore from a ship.
     pirateTick(this, dt);
     stallsTick(this, dt);
+    // (Round 78) What the save check put right, said once it's settled.
+    if (this.health && this.health.fixed > this.health.told) {
+      this.healthT = (this.healthT ?? 2) - dt;
+      if (this.healthT <= 0) {
+        this.healthT = 2;
+        const t = healthNote(this);
+        if (t) this.ui.msg(t, '#a0d8a0');
+      }
+    }
     updateLabor(this, dt);
     // (The great masters, who fill more than the one tile: see
     // entities/footprint.js.)

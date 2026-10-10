@@ -147,6 +147,8 @@ export class World {
     }
     const saved = this.saved.get(key);
     r = saved ? Region.deserialize(saved) : generateRegion(this, rx, rz);
+    // (Round 78: so it's looked over as it comes in: see game/savehealth.js.)
+    if (saved) r.fromSave = true;
     this.regions.set(key, r);
     if (this.onRegionLoad) this.onRegionLoad(r);
     return r;

@@ -570,6 +570,7 @@ export class Works {
       if (p.kind === 'path') sim.roads.paved(L, p);
       // (Round 78) Yours, built: word sent.
       if (p.kind === 'plans' && !silent) this.game.ui?.msg?.(`The builders of ${L.settlement.name} have finished ${p.label}.`, '#a0e8a0');
+      if (p.kind === 'plans') this.sim.saga?.emit('plan_built', { sid: L.settlement.id, label: p.label });
       return;
     }
     if (p.kind === 'wall' || p.kind === 'breach') {

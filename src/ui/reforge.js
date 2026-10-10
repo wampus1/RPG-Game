@@ -105,7 +105,7 @@ export class ReforgeWindow extends Window {
       const d = modOf(cls, m);
       const on = this.mod === m;
       const hov = this.hovering(x, y, 30, 1);
-      g.text(x, y, `${on ? '▶' : ' '} ${d.name}`, on ? C.white : hov ? C.hi : C.fg, on ? '#3a3050' : undefined);
+      g.text(x, y, `${on ? '►' : ' '} ${d.name}`, on ? C.white : hov ? C.hi : C.fg, on ? '#3a3050' : undefined);
       this.hit(x, y, 30, 1, () => {
         this.mod = m;
         this.ui.audio?.play('select');

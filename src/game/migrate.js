@@ -556,6 +556,16 @@ export const STEPS = [
       log.push('Folk sleep upstairs in houses of two storeys (room for children born from now on); a coach stands outside every town and a ferry off every pier near the sea; rain, snow and water show on the ground; and people remember what you do for them, or to them.');
     },
   },
+  {
+    // (Round 78) Nothing in the save to change: what's new keeps itself
+    // (ships of your own design, causes, rides, blueprints), and anything
+    // out of place in the world is put right as it loads, every time, by
+    // the save check (see savehealth.js), not by a step here.
+    to: '0.78.0',
+    data(d, log) {
+      log.push('The coach and the ferry carry you the whole way (T hurries the hours on, on your own); ladders, a grappling hook, blueprints and a shipwright\'s bench for ships of your own; towns vote on their laws and their mayors; pirates have a cove, and raiders put out from it; and every save is looked over as it loads, and anything out of place put right.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

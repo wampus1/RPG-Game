@@ -34,7 +34,8 @@ way you make your character first. **C** continues your latest save and **L**
 lists all of them.
 
 ```sh
-npm test           # world generation, settlement and NPC simulation tests
+npm test           # the quick set: the essentials and this round's tests, in a minute or so
+npm run test:full  # every test from every round (slow: ten minutes and more)
 ```
 
 ### Playing together on your network
@@ -5807,6 +5808,88 @@ into stairs when the world's brought up to date.)
 - **Idle townsfolk** sweep by their doors and in their shops (and sweep
   off the snow), lean on walls, and talk with their hands to whoever's
   stood by.
+
+## Round 78: rides, ladders, blueprints, votes, ships of your own, pirates
+
+- **Snow** on a roof is bright white, on the ground a little greyer, so
+  heights read at a glance.
+- **Workshop, Rules**: an item, block or creature you pick stays on the
+  list to be set, even before you've changed anything about it.
+- **Coach and ferry** carry you the whole way: the coach down the road (or
+  across country), the ferry out of the harbour, across the sea and in to
+  the far pier (or to an anchorage off a shore with no pier, and a boat
+  rows you in). On your own, **T** hurries the hours on and T again eases
+  off; with others in the world nobody's hours can be hurried and you sit
+  it out. **F** gets you down off a coach on the way. At the ferry you can
+  pay to ship your horse and your wagon, and to put goods in her hold: they
+  are set down beside you at the far end, the goods in a chest of your own.
+- **Fishing**: the rod shows as just a rod; casting is a pull back and a
+  throw, the line flying out and the float landing with a splash, and a
+  strike or a reel-in pulls back up. Fishers in towns cast the same way.
+- **Running away**: a beast (or foe) fleeing you goes at three quarters of
+  its pace.
+- **Ladders**: three sticks make two by hand. Hung on a wall, nothing to
+  bump into; walk into the wall to climb, away from it to go down; drawn
+  for whichever way you look at them.
+- **Grappling hook** (an iron ingot and four string at a workbench): right-
+  click a ledge up to twelve high and nine away and you're hauled up to it.
+  A blow lets you go.
+- **Setting a block where you stand** hops you up onto it.
+- **Chat** (multiplayer): Enter to talk; Tab changes channel: Global,
+  Local (a hundred paces) or Instance (the dungeon or hold you're in); or
+  start a line with /g, /l or /i.
+- **The pack**: Sort (like with like, by kind), Stack to chests (your odds
+  and ends into nearby chests that already hold the same), a piece of gear
+  weighed against what you have on in its tooltip, and the bench draws on
+  your own chests within a few paces as well as your pack.
+- **Autosave** going down into a dungeon and coming out; and no "save
+  first?" on quitting within five minutes of a save (or of joining).
+- **The anvil** (and smith) reforges a piece of gear (its make and
+  modifiers rolled again, stars kept, now and then one more) or moves a
+  modifier from one piece onto another of the same kind (the first is used
+  up).
+- **Blueprints** (paper and ink at a workbench): right-click one to name it,
+  lay it out where you point, fold it, turn it, or copy a building onto it
+  with a box (click two corners, drag a side, the wheel for its top).
+  In your off hand, the blocks you set go onto the plan as see-through
+  ghosts instead of the world; strike one to take it off. Show it to a
+  town's builder: a price for each block (more for rarer stuff; some
+  things can't be built), and it joins their work.
+- **Politics**: now and then a town argues a law or a mayor's seat, a vote
+  on a day. Ask anyone how they lean; take a side; put your money behind a
+  champion; talk people round. The result is the town's law (or its new
+  mayor), and its people remember which side you were on.
+- **Ships and stalls**: a brigantine carries two horses, a galleon four and
+  two wagons, a frigate one: ride or drive up her side and they go below;
+  step ashore beside her and they're led off after you.
+- **The shipwright's bench** (planks, iron and paper at a workbench): a ship
+  of your own design. Her length, beam and decks; a raised quarterdeck or a
+  cabin under it (and a great cabin over that), a forecastle or a galley;
+  one to three masts, each rigged its own way; guns on deck and a gun deck;
+  her hold, stalls and wagon room; her paint, trim, colours, mark and sail
+  cloth. You see her drawn from the side as you go, what she'd do and what
+  she'd take; Build her, and she's yours in a bottle to launch.
+- **War at sea**: realms at war send men-of-war and troopships against each
+  other's shores. Enemy ships meeting at sea fight it out (in sight of you,
+  gun for gun); a troopship puts an army ashore, which marches on the town.
+- **Pirates**: their cove lies off the shore of a lonely isle (marked on
+  your map once sighted), black-flagged ships at anchor that come out for
+  you. Now and then a raider hunts a ship near you: guns at range, then
+  grapnels to haul alongside, then over the rail with cutlasses while her
+  archers shoot from her side. Beat them off and the rest strike their
+  colours; her plunder and the ship are yours. Away from you, a voyage may
+  be taken (word comes to port).
+- **More stories that grow out of what happens**: a hand taken by pirates
+  (pay the ransom, or burn out the cove), a stone for a ship lost in a sea
+  fight, standing with the watch when an army comes ashore, the loser of a
+  vote who won't let it lie, a neighbour who wants to draw a house like
+  the one built from your plans, and a bounty on a raider off the coast.
+- **Save check**: every save is looked over as it loads, and what's plainly
+  out of place put right (things hung on no wall, a painting over a door or
+  in a temple, half a door, a chest with no room in it, old plank steps
+  made into stairs); you're told what was mended.
+- **Tests**: `npm test` is now a quick set (the essentials and this round's
+  tests); the whole lot is `npm run test:full`.
 
 ## Command console
 

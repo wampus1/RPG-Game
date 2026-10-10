@@ -486,6 +486,8 @@ export class War {
       ledger(TL, day, `Raiders of the ${plain(a)} came ${raid.naval === 'ship' ? 'ashore from a troopship' : raid.naval ? 'ashore by raft' : 'over the fields'} in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
       ledger(FL, day, `Our raid on ${ts} was beaten back.${out.lost.length ? ` ${names(out.lost)} did not come home${out.taken && out.taken.length ? ` (${names(out.taken)} taken prisoner)` : ''}.` : ''}`);
     }
+    // (Round 78: the stories hear how it went: see saga/motifs/tides.js.)
+    this.sim.saga?.emit('war_raid', { sid: TL.settlement.id, raid: raid.id, naval: raid.naval || false, won: out.result === 'plundered', loot: out.loot || 0 });
     if (a && b) {
       this.realms.shift(a, b, out.result === 'plundered' ? -10 : -6, day);
       this.raidLog.push({ a: a.id, b: b.id, from: raid.from, to: raid.to, day, result: out.result });

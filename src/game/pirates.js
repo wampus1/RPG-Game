@@ -14,6 +14,7 @@ import { addShip, shipsOf, shipById, waterSpot, boardAt, deckPath, ownerId } fro
 import { makeCrew, crewOf } from './shipcrew.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { DAY } from '../sim/econ.js';
+import { pidOf } from '../sim/saga/refs.js';
 
 const COVE_NAMES = ['Gallows Cove', 'Blackwater Bight', 'Corsair\'s Rest', 'Rattlebone Inlet', 'Widow\'s Hook', 'Skull Haven'];
 const SHIP_NAMES = ['Black Gull', 'Red Widow', 'Sea Wolf', 'Grinning Jack', 'Bloody Mary', 'Kraken\'s Due', 'Hangman\'s Luck'];
@@ -109,7 +110,7 @@ export function pirateTick(game, dt) {
   // (Sighted from afar: on your map.)
   if (cove && !P.sighted && nearAny(game, cove.x, cove.z, 360)) {
     P.sighted = true;
-    game.world.ow.pin(cove.x, cove.z, `${cove.name} (pirates)`, '☠');
+    game.world.ow.pin(cove.x, cove.z, `${cove.name} (pirates)`, '×');
     game.ui.msg(`Off the shore of ${cove.land}, black sails at anchor: ${cove.name}, a pirates' nest. (Marked on your map.)`, '#ff9070');
   }
   // The cove: a ship or two at anchor while you're near; roused when
@@ -143,6 +144,9 @@ export function pirateTick(game, dt) {
       const ang = Math.random() * Math.PI * 2;
       const S = spawnPirate(game, target.x + Math.cos(ang) * 70, target.z + Math.sin(ang) * 70, { target: target.S ? target.S : { player: true } });
       if (S && nearAny(game, S.x, S.z, 120)) game.ui.msg(`A sail on the horizon, under black colours: ${S.name}, and she's coming about toward ${target.S && !target.S.owner ? theirName(target.S) : 'you'}!`, '#ff7060');
+      // (Word of her reaches the nearest port: see saga/motifs/tides.js.)
+      const port = S && nearestPort(game, S.x, S.z);
+      if (port) game.sim.saga?.emit('pirate_seen', { sid: port.id, ship: S.id, name: S.name });
     }
   }
 }
@@ -302,10 +306,28 @@ function fightTick(game, dt) {
         game.ui.msg(`${S.name}'s crew are beaten. In her hold, the plunder: ¤${n}, and she's adrift for you to take.`, '#ffe070');
       }) : who.give('coin', n);
       if (S.cove) state(game).coveDone = true;
+      game.sim.saga?.emit('pirates_beaten', { ship: S.id, name: S.name, cove: !!S.cove, pid: pidOf(who) });
     }
     // (Hers now: kept with the world, no longer one of theirs.)
     if (who) Object.assign(S, { owner: ownerId(game, who), transient: false, pirate: false, wasPirate: true, flag: '#e0c040', emblem: 'stripe' });
   }
+}
+
+// The nearest lived-in port town to (x, z), within reach of word.
+function nearestPort(game, x, z) {
+  const ports = game.sim.ships ? game.sim.ships.ports : {};
+  let best = null;
+  let bd = 900;
+  for (const P of Object.values(ports)) {
+    const s = game.world.ow.settlements[P.sid];
+    if (!s || s.deserted || !game.world.layouts.get(s.id)) continue;
+    const d = Math.hypot((s.cx + s.cw / 2) * REGION_W - x, (s.cz + s.cd / 2) * REGION_D - z);
+    if (d < bd) {
+      bd = d;
+      best = s;
+    }
+  }
+  return best;
 }
 
 // One of a pirate crew (wherever they've got to: their own deck, or one
