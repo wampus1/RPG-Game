@@ -119,6 +119,9 @@ export function updateHazards(game, dt) {
   updateZones(game, dt);
   if (!game.hazards || !game.hazards.length) return;
   for (const h of game.hazards) {
+    // (Round 80) An old place's trap away from its master's hall, while
+    // the master's fought: held as it was (see DungeonRun.focused).
+    if (h.trap && h.tiles && h.tiles[0] && game.heldStill?.(h.tiles[0])) continue;
     h.t += dt;
     // (A lit fuse fizzing where it lies.)
     if (h.spark && Math.random() < dt * 30) game.renderer.emit(h.spark.x, h.spark.y + 0.4, h.spark.z, { n: 1, color: ['#ffe070', '#ff9030', '#ffffff'], up: 22, speed: 30, life: 0.3, glow: true, oy: 2 });

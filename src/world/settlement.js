@@ -154,6 +154,28 @@ const stairDir = (a, b) => (b.z > a.z ? 0 : b.x < a.x ? 1 : b.z < a.z ? 2 : 3);
 // The narrowest way through a town wall.
 const GATE_MIN = 4;
 
+// (Round 80) The top of building `b`'s roof over row z: flat, or up its
+// pitch from either side.
+export function roofTopAt(b, z) {
+  const r = b.roofLine;
+  if (!r) return b.roofBase;
+  return r.z0 === null ? r.base : r.base + Math.min(z - r.z0, r.z1 - z);
+}
+
+// (Round 80) 1..n shuffled (as rng.shuffle would, the same throws), in
+// a list kept for it: read its first few before shuffling again.
+const OFFS = new Int32Array(64);
+function shuffledOffsets(rng, n) {
+  for (let i = 0; i < n; i++) OFFS[i] = i + 1;
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng.next() * (i + 1));
+    const t = OFFS[i];
+    OFFS[i] = OFFS[j];
+    OFFS[j] = t;
+  }
+  return OFFS;
+}
+
 export function buildLayout(world, s) {
   const L = new Layout(world, s);
   L.generate();
@@ -165,6 +187,28 @@ export function buildLayout(world, s) {
 export function layoutJob(world, s) {
   const L = new Layout(world, s);
   return { L, steps: L.generateSteps() };
+}
+
+// (Round 80) A town laid out on another thread (see laywork.js), made a
+// layout of this world's, for this world's settlement `s`: what came back
+// (`data`), its dice thrown as far as they were there, its ground worked
+// out again as it's looked at (see col).
+export function adoptLayout(world, s, data) {
+  const L = Object.create(Layout.prototype);
+  const { rngDraws = 0, ...rest } = data;
+  Object.assign(L, rest);
+  L.world = world;
+  L.settlement = s;
+  // (The settlement's own bounds, as a layout made here has them.)
+  L.bounds = s.bounds;
+  L.rng = new RNG(hash4(s.seed, 0x1a70));
+  for (let i = 0; i < rngDraws; i++) L.rng.next();
+  L.cols = new Array(L.W * L.D);
+  L.ctx = null;
+  L.outCols = null;
+  L.local = null;
+  L.sums = null;
+  return L;
 }
 
 class Layout {
@@ -210,6 +254,7 @@ class Layout {
     const lz = z - this.bounds.z0;
     if (lx < 0 || lz < 0 || lx >= this.W || lz >= this.D) return;
     const i = lz * this.W + lx;
+    if (this.mask[i] !== v) this.maskV = (this.maskV || 0) + 1;
     // Things set on the square or a street keep its paving underneath.
     const old = this.mask[i];
     if (v === M.DECOR && (old === M.PLAZA || old === M.ROAD)) {
@@ -328,12 +373,22 @@ class Layout {
       for (let lx = 0; lx < this.W; lx++) {
         const c = terrain.column(b.x0 + lx, b.z0 + lz, ctx, {});
         this.cols[lz * this.W + lx] = c;
-        if (c.water >= 0) this.mask[lz * this.W + lx] = M.WATER;
+        if (c.water >= 0) {
+          this.mask[lz * this.W + lx] = M.WATER;
+          this.maskV = (this.maskV || 0) + 1;
+        }
       }
       if (lz % 8 === 7) yield;
     }
   }
   col(x, z) {
+    // (Round 80) A town laid out on another thread comes back without its
+    // ground (see adoptLayout): worked out again here, a tile at a time as
+    // it's looked at, the same as it was there.
+    if (!this.ctx) {
+      const b = this.bounds;
+      this.ctx = this.world.terrain.context(b.x0 - 16, b.z0 - 16, b.x1 + 16, b.z1 + 16);
+    }
     if (!this.inside(x, z)) {
       // (The ground round the edge, looked at over and over as the town
       // hunts for lots: worked out once a tile.)
@@ -347,7 +402,8 @@ class Layout {
       }
       return c;
     }
-    return this.cols[(z - this.bounds.z0) * this.W + (x - this.bounds.x0)];
+    const i = (z - this.bounds.z0) * this.W + (x - this.bounds.x0);
+    return this.cols[i] || (this.cols[i] = this.world.terrain.column(x, z, this.ctx, {}));
   }
 
   pickSettlementMats() {
@@ -724,13 +780,19 @@ class Layout {
   frontage() {
     const out = [];
     const b = this.bounds;
-    for (let z = b.z0; z <= b.z1; z++) {
-      for (let x = b.x0; x <= b.x1; x++) {
-        const m = this.maskAt(x, z);
+    // (Round 80: straight off the mask, a town's every tile looked at
+    // again each time a building goes up.)
+    const { W, D, mask } = this;
+    for (let lz = 0; lz < D; lz++) {
+      for (let lx = 0; lx < W; lx++) {
+        const m = mask[lz * W + lx];
         if (m !== M.ROAD && m !== M.PLAZA) continue;
         for (const [dx, dz] of DIRS4) {
-          const n = this.maskAt(x + dx, z + dz);
-          if (n === M.FREE && this.inside(x + dx, z + dz, 1)) out.push({ x, z, dx, dz });
+          const nx = lx + dx;
+          const nz = lz + dz;
+          // (One in from the edge: inside(x, z, 1).)
+          if (nx < 1 || nz < 1 || nx > W - 2 || nz > D - 2 || mask[nz * W + nx] !== M.FREE) continue;
+          out.push({ x: b.x0 + lx, z: b.z0 + lz, dx, dz });
         }
       }
     }
@@ -744,20 +806,83 @@ class Layout {
     return { x0: c.x + 2, x1: c.x + 2 + d - 1, z0: c.z - off, z1: c.z - off + w - 1, door: { x: c.x + 2, z: c.z, rot: 1 } };
   }
 
+  // A building's lot: every tile of it free (or, in a swamp, shallow
+  // water), and nothing round it that it mustn't touch (a wall, a field; in
+  // a village, another building: towns and cities allow terraced buildings
+  // that share a wall line).
+  // (Round 80: by counts over the mask, four looks a test rather than a
+  // look at every tile of it and the ring round it: see maskSums.)
   rectOk(r, allowWater) {
     const inset = this.settlement.type === 'city' ? 2 : 1;
     if (!this.inside(r.x0, r.z0, inset) || !this.inside(r.x1, r.z1, inset)) return false;
-    for (let z = r.z0 - 1; z <= r.z1 + 1; z++) {
-      for (let x = r.x0 - 1; x <= r.x1 + 1; x++) {
-        const m = this.maskAt(x, z);
-        const ring = x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1;
-        if (ring) {
-          // Towns and cities allow terraced buildings that share a wall line.
-          if ((m === M.BUILD && this.settlement.type === 'village') || m === M.WALL || m === M.FIELD) return false;
-        } else if (!(m === M.FREE || (allowWater && m === M.WATER && !this.col(x, z).deep))) return false;
+    const S = this.maskSums();
+    const area = (r.x1 - r.x0 + 1) * (r.z1 - r.z0 + 1);
+    if (this.sumIn(allowWater ? this.wetSums(S) : S.free, r.x0, r.z0, r.x1, r.z1) !== area) return false;
+    // (Inside, every tile's free, and free's never in the way: so what's in
+    // the way anywhere in the lot and its ring is in the ring.)
+    return this.sumIn(S.bad, r.x0 - 1, r.z0 - 1, r.x1 + 1, r.z1 + 1) === 0;
+  }
+
+  // (Round 80) Running counts over the mask (summed-area tables): of the
+  // free tiles, and of those a building mustn't touch. Made again only
+  // when the mask has changed since (see setMask).
+  maskSums() {
+    const type = this.settlement.type;
+    const S = this.sums;
+    if (S && S.mask === this.mask && S.v === this.maskV && S.type === type) return S;
+    const { W, D, mask } = this;
+    const W1 = W + 1;
+    const free = new Int32Array(W1 * (D + 1));
+    const bad = new Int32Array(W1 * (D + 1));
+    const village = type === 'village';
+    for (let lz = 0; lz < D; lz++) {
+      let rf = 0;
+      let rb = 0;
+      const row = lz * W;
+      const at = (lz + 1) * W1;
+      for (let lx = 0; lx < W; lx++) {
+        const m = mask[row + lx];
+        if (m === M.FREE) rf++;
+        else if (m === M.WALL || m === M.FIELD || (village && m === M.BUILD)) rb++;
+        free[at + lx + 1] = free[at - W1 + lx + 1] + rf;
+        bad[at + lx + 1] = bad[at - W1 + lx + 1] + rb;
       }
     }
-    return true;
+    this.sums = { mask, v: this.maskV, type, free, bad, wet: null };
+    return this.sums;
+  }
+
+  // (Round 80) The same, of the tiles a swamp's houses can stand on: free,
+  // or shallow water.
+  wetSums(S) {
+    if (S.wet) return S.wet;
+    const { W, D, mask } = this;
+    const W1 = W + 1;
+    const wet = new Int32Array(W1 * (D + 1));
+    const b = this.bounds;
+    for (let lz = 0; lz < D; lz++) {
+      let rw = 0;
+      const at = (lz + 1) * W1;
+      for (let lx = 0; lx < W; lx++) {
+        const m = mask[lz * W + lx];
+        if (m === M.FREE || (m === M.WATER && !this.col(b.x0 + lx, b.z0 + lz).deep)) rw++;
+        wet[at + lx + 1] = wet[at - W1 + lx + 1] + rw;
+      }
+    }
+    S.wet = wet;
+    return wet;
+  }
+
+  // (Round 80) The count in table `T` over the tiles x0..x1, z0..z1 (all
+  // inside the town's bounds).
+  sumIn(T, x0, z0, x1, z1) {
+    const b = this.bounds;
+    const W1 = this.W + 1;
+    const a0 = x0 - b.x0;
+    const a1 = x1 - b.x0 + 1;
+    const c0 = (z0 - b.z0) * W1;
+    const c1 = (z1 - b.z0 + 1) * W1;
+    return T[c1 + a1] - T[c0 + a1] - T[c1 + a0] + T[c0 + a0];
   }
 
   sizesFor(type, rng = null) {
@@ -791,9 +916,13 @@ class Layout {
       const fm0 = this.maskAt(c.x + c.dx, c.z + c.dz);
       const dead = !(dm === M.FREE || (allowWater && dm === M.WATER)) || !(fm0 === M.FREE || fm0 === M.ROAD || fm0 === M.YARD);
       for (const [w, d] of this.sizesFor(type, rng)) {
-        const offs = rng.shuffle([...Array(Math.max(1, w - 2)).keys()].map((i) => i + 1)).slice(0, 3);
+        // (Round 80: shuffled in a list kept for it, not a new one each
+        // lot: the same throws of the dice, the same three offsets.)
+        const n = Math.max(1, w - 2);
+        const offs = shuffledOffsets(rng, n);
         if (dead) continue;
-        for (const off of offs) {
+        for (let oi = 0; oi < Math.min(3, n); oi++) {
+          const off = offs[oi];
           const r = this.rectFor(c, w, d, off);
           if (!this.rectOk(r, allowWater)) continue;
           const front = { x: c.x + c.dx, z: c.z + c.dz };
@@ -2042,7 +2171,9 @@ class Layout {
           else if (!edge && ash && rng.chance(0.06)) this.put(x, roofBase + 1, z, rng.pick([B.barrel, B.fire_lily]));
         }
       }
-      b.roofTop = (z) => roofBase;
+      // (Round 80: the roof's line as data, not a function: a town laid out
+      // on another thread comes back whole. See roofTopAt.)
+      b.roofLine = { base: roofBase, z0: null, z1: null };
       return;
     }
     const depth = z1 - z0 + 1;
@@ -2066,7 +2197,7 @@ class Layout {
         }
       }
     }
-    b.roofTop = (z) => roofBase + Math.min(z - z0, z1 - z);
+    b.roofLine = { base: roofBase, z0, z1 };
   }
 
   // Furnish interior: place items so all free tiles stay connected to the door.
@@ -3277,7 +3408,7 @@ class Layout {
 
   chimney(b, t) {
     // Chimney column rising through the roof above a hearth.
-    const top = b.roofTop(t.z) + 1;
+    const top = roofTopAt(b, t.z) + 1;
     for (let y = b.roofBase; y <= top; y++) this.put(t.x, y, t.z, B.bricks);
     if (this.settlement.condition !== 'abandoned') this.chimneys.push({ x: t.x, y: top + 1, z: t.z });
   }

@@ -7,7 +7,8 @@ import { Overworld } from './worldgen.js';
 import { Terrain } from './terrain.js';
 import { generateRegion } from './regiongen.js';
 import { Region } from './region.js';
-import { layoutJob } from './settlement.js';
+import { layoutJob, adoptLayout } from './settlement.js';
+import { layAway } from './laywork.js';
 import { rollContainerLoot } from './loot.js';
 import { settleSites } from './sites.js';
 import { MODS } from '../mod/state.js';
@@ -97,6 +98,22 @@ export class World {
   layOut(s, ms = Infinity) {
     const done = this.layouts.get(s.id);
     if (done) return done;
+    // (Round 80) Someone else's world, seen from here: its towns are the
+    // host's to lay out and keep; never built here.
+    if (this.remote) return null;
+    // (Round 80) In the background (a few milliseconds a frame): laid out
+    // on another thread if it can be, the game's frame left alone, and
+    // taken in whole once it's back (see laywork.js). Wanted at once, or
+    // with mods in play: here, as ever.
+    if (ms !== Infinity && this.offThread && !MODS.active.length) {
+      const got = layAway(this, s);
+      if (got === 'wait') return null;
+      if (got) {
+        if (got.delta) Object.assign(s, got.delta);
+        this.layJobs?.delete(s.id);
+        return this.laidOut(s, adoptLayout(this, s, got.data));
+      }
+    }
     this.layJobs ||= new Map();
     let job = this.layJobs.get(s.id);
     if (!job) this.layJobs.set(s.id, (job = layoutJob(this, s)));
@@ -117,7 +134,12 @@ export class World {
     }
     if (!r.done) return null;
     this.layJobs.delete(s.id);
-    const L = job.L;
+    return this.laidOut(s, job.L);
+  }
+
+  // A town's layout, done (here or on another thread): kept, and the game
+  // told (it moves its people in: see Sim.attach).
+  laidOut(s, L) {
     this.layouts.set(s.id, L);
     if (this.onLayout) this.onLayout(L);
     return L;

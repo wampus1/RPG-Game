@@ -612,7 +612,7 @@ export class Works {
       L.spots = L.spots.filter((s) => !(s.building === b.id || (s.x >= nb.x0 && s.x <= nb.x1 && s.z >= nb.z0 && s.z <= nb.z1)));
       Object.assign(b, {
         type: nb.type, x0: nb.x0, z0: nb.z0, x1: nb.x1, z1: nb.z1, beds: nb.beds, seats: nb.seats, work: nb.work, free: nb.free,
-        homeSpots: nb.homeSpots, roofTop: nb.roofTop, roofBase: nb.roofBase, chestPos: nb.chestPos, name: nb.name,
+        homeSpots: nb.homeSpots, roofLine: nb.roofLine, roofBase: nb.roofBase, chestPos: nb.chestPos, name: nb.name,
       });
       b.rev = p.rev;
       b.planRef = { kind: 'expand', bounds: p.bounds, rev: p.rev, from };

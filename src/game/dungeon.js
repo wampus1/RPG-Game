@@ -128,6 +128,34 @@ export class DungeonRun {
     return this.game.creatures.filter((c) => this.has(c));
   }
 
+  // (Round 80) Is (x, z) in its master's hall (or `pad` from it)?
+  inHall(x, z, pad = 2) {
+    const br = this.data && this.data.bossRoom;
+    return !!br && x >= br.x0 - pad && x <= br.x1 + pad && z >= br.z0 - pad && z <= br.z1 + pad;
+  }
+
+  // (Round 80) Its master being fought, with none of you down here
+  // anywhere but the hall (the dead aside): the rest of the place holds
+  // still till the fight's won or lost (its beasts elsewhere, its traps,
+  // its machines, the notes left about). One of you off on the floor
+  // still, and it all goes on as ever.
+  focused() {
+    if (!this.fight || !this.data || !this.data.bossRoom) return false;
+    const all = this.players();
+    return all.length > 0 && all.every((q) => q.dead || this.inHall(q.x, q.z, 1));
+  }
+
+  // (Round 80) Does `c` (one of its own) carry on while the place holds
+  // still? In the hall, the master's own and what it raised, and anything
+  // already at one of you.
+  inFight(c) {
+    const f = this.fight;
+    if (!f) return true;
+    if (this.inHall(c.x, c.z, 3) || f.boss.includes(c)) return true;
+    const s = c.summoner;
+    return !!s && (s.isBoss || f.boss.includes(s));
+  }
+
   // Everyone down here (each player whose old place this is).
   players() {
     const game = this.game;
@@ -670,13 +698,17 @@ export class DungeonRun {
     const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
     const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;
     this.t += dt;
+    // (Round 80) The master being fought with all of you in its hall: the
+    // rest of the place holds still (see focused).
+    this.focus = this.focused();
+    const own = this.focus ? this.creatures().filter((c) => this.inFight(c)) : this.creatures();
     // (Fields the Overseer turned off, and what a master's done to its
     // hall, are put back in their time once a frame for every old place
     // at once: see Game.update.)
     this.markStairs();
     if (this.arriveT > 0) this.arriveT -= dt;
     // The dead stirring as you pass; golems waking.
-    for (const c of this.creatures()) {
+    for (const c of own) {
       if (!c.dormant || c.dead) continue;
       if (c.waiting) {
         // (Struck where it waits, by you, from its hall or its doorway: it
@@ -691,7 +723,7 @@ export class DungeonRun {
       const d = Math.min(...party.map((q) => Math.max(Math.abs(c.x - q.x), Math.abs(c.z - q.z))));
       // (Round 73) And a fight close by rouses them: one of their own
       // already after you, a few paces off.
-      const stirred = !c.guardian && this.creatures().some((o) => o !== c && !o.dead && !o.dormant && o.target && o.target.kind === 'player' && Math.max(Math.abs(o.x - c.x), Math.abs(o.z - c.z)) <= 6);
+      const stirred = !c.guardian && own.some((o) => o !== c && !o.dead && !o.dormant && o.target && o.target.kind === 'player' && Math.max(Math.abs(o.x - c.x), Math.abs(o.z - c.z)) <= 6);
       if (d <= c.dormant || c.hp < c.maxHp || stirred) {
         c.dormant = 0;
         game.renderer.emit(c.x, c.y + 1, c.z, { n: 10, color: c.S.construct ? ['#5ad8f0', '#ffffff'] : ['#8a8270', '#d8d0b8'], up: 30, speed: 40, life: 0.5 });
@@ -700,7 +732,7 @@ export class DungeonRun {
       }
     }
     // Plates trodden on (by anyone: the dead set traps off too).
-    for (const e of [...party, ...this.creatures()]) {
+    for (const e of [...party, ...own]) {
       if (!e || e.dead || e.burrowed || e.S?.floats) continue;
       const k = `${e.x},${e.z}`;
       const prev = this.plateOn.get(e);
@@ -725,7 +757,7 @@ export class DungeonRun {
     // A dynamo floor's pylons, arcing between each pair in turn (a crackle
     // and sparks at both as it gathers).
     for (const ar of this.data.arcs || []) {
-      if (!near(ar.a.x, ar.a.z, 18, 12)) continue;
+      if (!near(ar.a.x, ar.a.z, 18, 12) || (this.focus && !this.inHall(ar.a.x, ar.a.z, 4))) continue;
       ar.t = (ar.t ?? ar.phase) + dt;
       if (ar.t > 3.2 && Math.random() < dt * 14) for (const e of [ar.a, ar.b]) game.renderer.emit(e.x, FY + 1.4, e.z, { n: 1, color: ['#c8fbff', '#ffffff', '#5ad8f0'], up: 20, speed: 30, life: 0.25, glow: true });
       if (ar.t < 4.2) continue;
@@ -737,7 +769,7 @@ export class DungeonRun {
     }
     // The Kavorent's emitters, firing across their halls in turn.
     for (const em of this.data.emitters) {
-      if (!near(em.x, em.z, 16, 12)) continue;
+      if (!near(em.x, em.z, 16, 12) || (this.focus && !this.inHall(em.x, em.z, 4))) continue;
       em.t = (em.t ?? em.phase) + dt;
       if (em.t < 3.4) continue;
       em.t = 0;
@@ -758,12 +790,12 @@ export class DungeonRun {
     // (Its dangers come for one of you at a time.)
     const up = party.filter((q) => !q.dead);
     const victim = up.length ? up[Math.floor(Math.random() * up.length)] : p;
-    game.asPlayer(victim, () => this.placeDangers());
+    if (!this.focus) game.asPlayer(victim, () => this.placeDangers());
     this.spikesTick(dt);
     this.ambience(dt);
     // Notes left (an adventurer's remains): told as you come near. (A pack
     // someone fell and left: told to each of you, as theirs or yours.)
-    for (const nt of this.notes || []) {
+    for (const nt of this.focus ? [] : this.notes || []) {
       if (nt.told || (nt.floor !== undefined && nt.floor !== this.floor)) continue;
       const by = party.find((q) => Math.abs(nt.x - q.x) <= 3 && Math.abs(nt.z - q.z) <= 3 && !(nt.toldTo && nt.toldTo.has(q)));
       if (!by) continue;
@@ -1463,7 +1495,7 @@ export class DungeonRun {
     for (const [e, t] of this.spikeHit) if (t - dt <= 0) this.spikeHit.delete(e);
     else this.spikeHit.set(e, t - dt);
     for (const sp of list) {
-      if (!near(sp.x, sp.z, 20, 14)) continue;
+      if (!near(sp.x, sp.z, 20, 14) || (this.focus && !this.inHall(sp.x, sp.z, 3))) continue;
       if (w.getBlock(sp.x, FY, sp.z) !== B.spikes) continue;
       const ph = (this.t + sp.phase) % SPIKE_CYCLE;
       const up = ph > SPIKE_CYCLE - 1;
@@ -1481,7 +1513,7 @@ export class DungeonRun {
         }
       }
       if (!up) continue;
-      for (const e of [...party, ...this.creatures()]) {
+      for (const e of [...party, ...(this.focus ? this.creatures().filter((c) => this.inFight(c)) : this.creatures())]) {
         if (!e || e.dead || e.burrowed || e.S?.floats || e.x !== sp.x || e.z !== sp.z || this.spikeHit.has(e)) continue;
         if (e.kind !== 'player' && (e.S?.construct || e.isBoss)) continue;
         // (Not while you're busy in your pack or a chest.)

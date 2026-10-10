@@ -139,6 +139,11 @@ export class GuestNet {
     w.wantRegion = (rx, rz) => this.need(rx, rz);
     w.dropRegion = (rx, rz) => this.out({ t: 'drop', rx, rz });
     w.onRegionLoad = null;
+    // (Round 80) The world runs on the host's machine, not here: no town
+    // laid out, kept or lived in on this one (see World.layOut), nothing
+    // of the host's simulation (see Game.update: a player's copy only
+    // carries on what it's shown, between words).
+    w.onLayout = null;
     // (Someone else's opinion of you is theirs to tell: the host does.)
     game.sim.opinion = (npc) => (npc && npc.netOp !== undefined ? npc.netOp : 0);
     this.onParty(this.party);

@@ -262,7 +262,11 @@ export class Dungeons {
     const ow = this.game.world.ow;
     for (const a of adv.list) {
       if (a.dead) continue;
-      if (a.state === 'delve' && now >= a.delve.end && a.delve.lead === a.id) this.comeBack(a);
+      if (a.state !== 'delve' || now < a.delve.end || a.delve.lead !== a.id) continue;
+      // (Round 80) Not while the place's master is being fought by you:
+      // they come back up once that's done.
+      if (this.fighting(a.delve.id)) continue;
+      this.comeBack(a);
     }
     for (const a of adv.list) {
       if (a.dead || a.state !== 'stay' || now >= a.leave - 120) continue;
@@ -273,7 +277,7 @@ export class Dungeons {
       const here = ow.settlements[a.at];
       if (!here) continue;
       // Somewhere they could hope to come back from.
-      const want = this.all.filter((d) => !d.cleared && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3) && !d.noDelve && this.openToDelvers(d, now)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
+      const want = this.all.filter((d) => !d.cleared && !this.fighting(d.id) && Math.hypot(d.cx - here.cx, (d.cz - here.cz) * 1.4) < 12 && (d.type !== 'kavorent' || a.level >= 3) && !d.noDelve && this.openToDelvers(d, now)).sort((p, q) => Math.hypot(p.cx - here.cx, p.cz - here.cz) - Math.hypot(q.cx - here.cx, q.cz - here.cz))[0];
       if (!want) continue;
       // A band, if others are in town (the bolder they are, the more likely).
       const others = adv.list.filter((b) => b !== a && !b.dead && b.state === 'stay' && b.at === a.at).slice(0, 2);
@@ -288,6 +292,13 @@ export class Dungeons {
       const names = party.map((m) => `${m.name.first} ${m.name.last}`);
       if (L) ledger(L, Math.floor(now / DAY), `${list(names)} set out for ${want.name}${party.length > 1 ? ', together' : ', alone'}.`);
     }
+  }
+
+  // (Round 80) Is old place `id`'s master being fought right now (by one
+  // of you down there)?
+  fighting(id) {
+    const run = this.game.runs && this.game.runs.get(id);
+    return !!(run && run.fight);
   }
 
   // The far islands' old places are left alone a good while: not before

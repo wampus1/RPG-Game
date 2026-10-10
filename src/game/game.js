@@ -195,6 +195,9 @@ export class Game {
       this.world.netRegions = new Map();
     }
     this.remoteCopy = remote;
+    // (Round 80) Towns laid out in the background on a thread of their own
+    // (see world/laywork.js), where there is one.
+    this.world.offThread = !remote;
     this.world.onChange = (x, y, z, o, n) => this.onBlockChange(x, y, z, o, n);
     this.sim = new Sim(this);
     // (For testing: a world where everything is already known, from the
@@ -282,7 +285,9 @@ export class Game {
       this.applySave(save);
       // (Saved in an older version: what's new brought into it. See
       // migrate.js; the save itself was brought up before it got here.)
-      if (save.pending && save.pending.length) this.migrated = runMigrations(this, save.pending);
+      // (Round 80: not in someone else's world, seen from here: the host
+      // brought theirs up.)
+      if (save.pending && save.pending.length && !remote) this.migrated = runMigrations(this, save.pending);
       sx = this.player.x;
       sz = this.player.z;
     } else {
@@ -2137,6 +2142,9 @@ export class Game {
     const groups = new Map([[null, []]]);
     for (const c of this.creatures) {
       const run = c.inst ? this.runAt(c.x) : null;
+      // (Round 80) An old place whose master's being fought, all of you in
+      // its hall: the rest of what's down there holds still till it's done.
+      if (run && run.focus && !run.inFight(c)) continue;
       if (!groups.has(run)) groups.set(run, []);
       groups.get(run).push(c);
     }
@@ -2158,7 +2166,7 @@ export class Game {
     }
     // Burning, chilled, dazzled; wounds an emerald closes.
     this.dotHit = true;
-    for (const e of [...this.everyone(), ...this.npcs, ...this.creatures]) if (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.poisonT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature') tickStatus(this, e, dt);
+    for (const e of [...this.everyone(), ...this.npcs, ...this.creatures]) if (!(e.inst && this.heldStill(e)) && (e.burnT > 0 || e.slowT > 0 || e.stunT > 0 || e.bleedT > 0 || e.poisonT > 0 || e.markT > 0 || e.frozenT > 0 || e.lostT > 0 || e.kind !== 'creature')) tickStatus(this, e, dt);
     this.lavaTick(dt);
     this.dotHit = false;
     this.ownWorldPhase(dt);
@@ -2860,6 +2868,14 @@ export class Game {
     if (x === undefined || !this.world.inInstance(x)) return null;
     for (const run of this.runs.values()) if (run.has(x)) return run;
     return null;
+  }
+
+  // (Round 80) Is `e` (one of an old place's own, or a spot { x, z }) held
+  // still, its place's master being fought elsewhere (see
+  // DungeonRun.focused)?
+  heldStill(e) {
+    const run = this.runAt(e.x);
+    return !!run && !!run.focus && (e.kind === 'creature' ? !run.inFight(e) : !run.inHall(e.x, e.z, 3));
   }
 
   // Those up on the island (not down an old place).
