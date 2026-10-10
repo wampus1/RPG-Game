@@ -21,6 +21,37 @@ body {
   image-rendering: crisp-edges;
 }
 
+/* (Round 80) The screen's place on the page: with the CRT effect off, the
+   frame's own canvas (and the drawn-back world's, under it) shown here,
+   scaled up by the browser, pixel-sharp; the screen's canvas stays on top,
+   unseen, for the pointer. */
+#stage {
+  position: relative;
+  line-height: 0;
+}
+
+#stage canvas.direct {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  z-index: 1;
+}
+
+#stage canvas.direct.under {
+  z-index: 0;
+}
+
+#screen.unseen {
+  position: relative;
+  z-index: 2;
+  opacity: 0;
+}
+
 #loading {
   display: none;
   position: fixed;

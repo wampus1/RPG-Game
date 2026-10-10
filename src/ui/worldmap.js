@@ -712,13 +712,116 @@ export class MapWindow extends Window {
     ctx.fillStyle = '#0c0b12';
     ctx.fillRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
     // The squares in view.
+    const M = worldCache(ow);
+    const icons = settlementIcons(game);
+    this.icons = icons;
+    // (Round 80) The map's still parts (the land's squares, roads and
+    // bridges) from a picture kept of them, redrawn only when what they
+    // show changes or the view's gone past its edge: panning just moves it.
+    // See stillLayer.
+    const still = this.stillLayer(game, a, o, w, h, icons, known, reveal, M);
+    if (still) {
+      ctx.drawImage(still.canvas, o.x + still.px0, o.y + still.py0);
+      this.stormGlyphs(ctx, ow, a, o, w, h, time);
+    } else this.drawStill(ctx, game, a, o, w, h, icons, known, reveal, M, time);
+    if (!ow.wallDown) this.drawStorm(ctx, game, o, w, h, time);
+    this.drawVolcano(ctx, game, w, h, time);
+    this.drawPlaces(ctx, game, o, w, h, icons, known, blink);
+    this.drawMoving(ctx, game, w, h, icons, known, time);
+    this.drawLabels(ctx, game, w, h);
+    // You.
+    const p = game.mapPos ? game.mapPos() : game.player;
+    const q = this.at(p.x, p.z);
+    if (this.z >= GLYPHS_FROM) {
+      if (blink) {
+        ctx.fillStyle = '#c02020';
+        const sc = this.z / GLYPHS_FROM;
+        const hx = o.x + Math.floor(p.x / REGION_W) * w + ((p.x % REGION_W) >= REGION_W / 2 ? w / 2 : 0);
+        const hy = o.y + Math.floor(p.z / REGION_D) * h;
+        ctx.fillRect(hx, hy, w / 2, h);
+        drawGlyph(ctx, '@', hx, hy, '#ffffff', sc);
+      }
+    } else {
+      ctx.fillStyle = blink ? '#ffffff' : '#ff3030';
+      ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 3, 2, 6);
+      ctx.fillRect(Math.round(q.x) - 3, Math.round(q.y) - 1, 6, 2);
+    }
+    // (Round 73) A faint arrow from you toward each quest marker (at the
+    // map's edge, if it's off it).
+    this.drawQuestArrows(ctx, game, q, a, time);
+    // The others in your guild, wherever they are (down an old place: at its
+    // way in), each in their own colour.
+    this.drawMates(ctx, game, o, w, h, blink);
+    // The square pointed at.
+    if (this.hoverSq && this.z >= TILES_FROM) {
+      ctx.strokeStyle = 'rgba(255,240,200,0.8)';
+      ctx.lineWidth = 1;
+      const hq = this.hoverSq;
+      if (hq.hf !== null && hq.hf !== undefined) ctx.strokeRect(o.x + hq.cx * w + (hq.hf * w) / 2 + 0.5, o.y + hq.cz * h + 0.5, w / 2 - 1, h - 1);
+      else ctx.strokeRect(o.x + hq.cx * w + 0.5, o.y + hq.cz * h + 0.5, w - 1, h - 1);
+    }
+    // Still working out the far reaches of the world.
+    if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
+    ctx.restore();
+    this.drawListTab(ctx);
+  }
+
+  // (Round 80) The picture of the map's still parts, made again if what it
+  // shows has changed (the zoom, the realms view, what you've seen, the
+  // roads, the world still being charted, the storm) or the view's moved
+  // past it. It covers the view and as much again round it, in the map's
+  // own pixels from its corner (px0, py0 on); null where there's no
+  // drawing apart (the tests).
+  stillLayer(game, a, o, w, h, icons, known, reveal, M) {
+    if (typeof document === 'undefined') return null;
+    const ow = game.world.ow;
+    const roads = game.sim.diplomacy.roads;
+    let rk = roads.length;
+    for (const r of roads) rk = (rk * 31 + (r.fromA ?? r.built ?? 0) * 7 + (r.fromB || 0) * 3 + (r.done ? 1 : 0)) % 1000000007;
+    // (The realms' borders move with their wars: looked at again now and
+    // then, with them showing.)
+    const civT = this.civView ? Math.floor(this.ui.time / 2) : 0;
+    const key = `${this.z}|${this.civView ? 1 : 0}|${civT}|${reveal ? 1 : 0}|${ow.exploredN || 0}|${M.row}|${ow.wallDown ? 1 : 0}|${rk}|${(ow.bridges || []).length}|${icons.size}`;
+    const S = this.still;
+    const vx0 = a.x0 - o.x;
+    const vy0 = a.y0 - o.y;
+    const vx1 = a.x1 - o.x;
+    const vy1 = a.y1 - o.y;
+    if (S && S.key === key && S.of === ow.explored && vx0 >= S.px0 && vy0 >= S.py0 && vx1 <= S.px1 && vy1 <= S.py1) return S;
+    const mw = Math.ceil((vx1 - vx0) / 2);
+    const mh = Math.ceil((vy1 - vy0) / 2);
+    const px0 = Math.floor(vx0 - mw);
+    const py0 = Math.floor(vy0 - mh);
+    const px1 = Math.ceil(vx1 + mw);
+    const py1 = Math.ceil(vy1 + mh);
+    const canvas = (S && S.canvas) || document.createElement('canvas');
+    if (canvas.width !== px1 - px0 || canvas.height !== py1 - py0) {
+      canvas.width = px1 - px0;
+      canvas.height = py1 - py0;
+    }
+    const c = canvas.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, canvas.width, canvas.height);
+    c.imageSmoothingEnabled = false;
+    // (Drawn as the map would be, its corner moved to the picture's.)
+    const o2 = { x: -px0, y: -py0 };
+    const a2 = { x0: 0, y0: 0, x1: canvas.width, y1: canvas.height };
+    this.stormSq = [];
+    this.drawStill(c, game, a2, o2, w, h, icons, known, reveal, M, null);
+    this.still = { canvas, key, of: ow.explored, px0, py0, px1, py1 };
+    return this.still;
+  }
+
+  // The map's still parts, drawn: the land's squares (dots far out, its
+  // tiles closer, its glyphs close in), under the fog of what you haven't
+  // seen; the roads; the bridges. (`time` null: into the kept picture, the
+  // storm's churning water left to stormGlyphs.)
+  drawStill(ctx, game, a, o, w, h, icons, known, reveal, M, time) {
+    const ow = game.world.ow;
     const cx0 = Math.max(0, Math.floor((a.x0 - o.x) / w));
     const cz0 = Math.max(0, Math.floor((a.y0 - o.y) / h));
     const cx1 = Math.min(MAP_W - 1, Math.floor((a.x1 - o.x) / w));
     const cz1 = Math.min(MAP_H - 1, Math.floor((a.y1 - o.y) / h));
-    const M = worldCache(ow);
-    const icons = settlementIcons(game);
-    this.icons = icons;
     if (mapMode(this.z) === 'dots') {
       // Far out: the world a dot a square, under its fog.
       refreshFog(ow, reveal);
@@ -786,7 +889,8 @@ export class MapWindow extends Window {
               if (cell.biome === 'ocean' && cell.storm > 0 && !ow.wallDown) {
                 bg = shadeHex('#3a4a60', 0.6 + cell.storm * 0.4);
                 fg = '#c8d8e8';
-                ch = (cx + cz + Math.floor(time * 4)) % 3 ? '≈' : '~';
+                ch = time === null ? '≈' : (cx + cz + Math.floor(time * 4)) % 3 ? '≈' : '~';
+                if (time === null && hf === 0) this.stormSq.push(cx, cz);
               }
               ctx.fillStyle = civBg || bg;
               ctx.fillRect(x + (hf * w) / 2, y, w / 2, h);
@@ -815,48 +919,32 @@ export class MapWindow extends Window {
         }
       }
     }
-    if (!ow.wallDown) this.drawStorm(ctx, game, o, w, h, time);
     this.drawRoads(ctx, game, o, w, h, icons, known);
-    this.drawVolcano(ctx, game, w, h, time);
-    this.drawPlaces(ctx, game, o, w, h, icons, known, blink);
-    this.drawBridges(ctx, game, known);
-    this.drawMoving(ctx, game, w, h, icons, known, time);
-    this.drawLabels(ctx, game, w, h);
-    // You.
-    const p = game.mapPos ? game.mapPos() : game.player;
-    const q = this.at(p.x, p.z);
-    if (this.z >= GLYPHS_FROM) {
-      if (blink) {
-        ctx.fillStyle = '#c02020';
-        const sc = this.z / GLYPHS_FROM;
-        const hx = o.x + Math.floor(p.x / REGION_W) * w + ((p.x % REGION_W) >= REGION_W / 2 ? w / 2 : 0);
-        const hy = o.y + Math.floor(p.z / REGION_D) * h;
-        ctx.fillRect(hx, hy, w / 2, h);
-        drawGlyph(ctx, '@', hx, hy, '#ffffff', sc);
+    this.drawBridges(ctx, game, known, o, w, h);
+  }
+
+  // (Round 80) The storm's own water, churning (close in, over the kept
+  // picture): its squares in view, drawn again.
+  stormGlyphs(ctx, ow, a, o, w, h, time) {
+    if (mapMode(this.z) !== 'glyphs' || ow.wallDown || !this.stormSq) return;
+    const sc = this.z / GLYPHS_FROM;
+    const L = this.stormSq;
+    for (let i = 0; i < L.length; i += 2) {
+      const cx = L[i];
+      const cz = L[i + 1];
+      const x = o.x + cx * w;
+      const y = o.y + cz * h;
+      if (x + w < a.x0 || x > a.x1 || y + h < a.y0 || y > a.y1) continue;
+      const cell = ow.cell(cx, cz);
+      if (!cell) continue;
+      const bg = this.civView && cell.civ !== null && ow.civs[cell.civ] ? shadeHex(ow.civs[cell.civ].color.hex, 0.45) : shadeHex('#3a4a60', 0.6 + cell.storm * 0.4);
+      const ch = (cx + cz + Math.floor(time * 4)) % 3 ? '≈' : '~';
+      for (let hf = 0; hf < 2; hf++) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(x + (hf * w) / 2, y, w / 2, h);
+        drawGlyph(ctx, ch, x + (hf * w) / 2, y, '#c8d8e8', sc);
       }
-    } else {
-      ctx.fillStyle = blink ? '#ffffff' : '#ff3030';
-      ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 3, 2, 6);
-      ctx.fillRect(Math.round(q.x) - 3, Math.round(q.y) - 1, 6, 2);
     }
-    // (Round 73) A faint arrow from you toward each quest marker (at the
-    // map's edge, if it's off it).
-    this.drawQuestArrows(ctx, game, q, a, time);
-    // The others in your guild, wherever they are (down an old place: at its
-    // way in), each in their own colour.
-    this.drawMates(ctx, game, o, w, h, blink);
-    // The square pointed at.
-    if (this.hoverSq && this.z >= TILES_FROM) {
-      ctx.strokeStyle = 'rgba(255,240,200,0.8)';
-      ctx.lineWidth = 1;
-      const hq = this.hoverSq;
-      if (hq.hf !== null && hq.hf !== undefined) ctx.strokeRect(o.x + hq.cx * w + (hq.hf * w) / 2 + 0.5, o.y + hq.cz * h + 0.5, w / 2 - 1, h - 1);
-      else ctx.strokeRect(o.x + hq.cx * w + 0.5, o.y + hq.cz * h + 0.5, w - 1, h - 1);
-    }
-    // Still working out the far reaches of the world.
-    if (M.row < MAP_H && this.z < TILES_FROM) drawText(ctx, 'charting the world...', a.x0 + 4, a.y1 - 10, '#c8b890', '#000');
-    ctx.restore();
-    this.drawListTab(ctx);
   }
 
   drawQuestArrows(ctx, game, me, a, time) {
@@ -1216,13 +1304,14 @@ export class MapWindow extends Window {
 
   // (Round 68) The bridges across the straits of a land split in pieces:
   // a pale span with its piers, once either end's been seen.
-  drawBridges(ctx, game, known) {
+  drawBridges(ctx, game, known, o, w, h) {
+    const at = (x, z) => ({ x: o.x + (x / REGION_W) * w, y: o.y + (z / REGION_D) * h });
     for (const b of game.world.ow.bridges || []) {
       const k0 = known(Math.floor(b.x0 / REGION_W), Math.floor(b.z0 / REGION_D));
       const k1 = known(Math.floor(b.x1 / REGION_W), Math.floor(b.z1 / REGION_D));
       if (!k0 && !k1) continue;
-      const a = this.at(b.x0, b.z0);
-      const c = this.at(b.x1, b.z1);
+      const a = at(b.x0, b.z0);
+      const c = at(b.x1, b.z1);
       const wide = Math.max(1, Math.min(4, Math.round(this.z * (b.kind === 'causeway' ? 0.5 : 0.32))));
       ctx.strokeStyle = 'rgba(30,20,10,0.75)';
       ctx.lineWidth = wide + 2;
@@ -1241,7 +1330,7 @@ export class MapWindow extends Window {
         const n = Math.max(2, Math.round(b.len / 16));
         ctx.fillStyle = '#6a6458';
         for (let i = 1; i < n; i++) {
-          const q = this.at(b.x0 + ((b.x1 - b.x0) * i) / n, b.z0 + ((b.z1 - b.z0) * i) / n);
+          const q = at(b.x0 + ((b.x1 - b.x0) * i) / n, b.z0 + ((b.z1 - b.z0) * i) / n);
           ctx.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 2, 2);
         }
       }

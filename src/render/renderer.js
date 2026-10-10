@@ -504,6 +504,9 @@ export class Renderer {
     this.layer = null;
     if (this.zoomK !== 1) {
       this.layer = this.zcanvas;
+      // (Round 80: a new drawing of it, for the screen to take: see
+      // CRT.present.)
+      this.layerV = (this.layerV || 0) + 1;
       main.clearRect(0, 0, VIEW_W, VIEW_H);
       this.bubbleK = z;
       if (!this.deferBubbles) this.drawBubbles(main);

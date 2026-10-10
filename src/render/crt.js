@@ -1,6 +1,11 @@
 // CRT post-process: the low-res frame is uploaded as a texture and drawn
 // through a shader with barrel curvature, scanlines, an aperture-grille mask,
 // chromatic fringing, vignette, flicker and a soft bloom "glow".
+// (Round 80) With the effect off, none of that: the frame's canvas (and the
+// drawn-back world's, under it) are on the page themselves, scaled up by
+// the browser, pixel-sharp; WebGL isn't touched. With it on, the blurred
+// levels the glow is drawn from are made only when there's a glow, and the
+// drawn-back world's picture is sent only when it's been drawn again.
 import { VIEW_W, VIEW_H } from '../config.js';
 
 const VERT = `#version 300 es
@@ -90,6 +95,14 @@ export class CRT {
     this.out = outCanvas;
     this.src = srcCanvas;
     this.enabled = true;
+    // (Round 80) The frame on the page itself, the effect off (see direct).
+    this.directOn = false;
+    this.shownWorld = null;
+    // What of the drawn-back world was last sent (its picture, and which
+    // drawing of it: `worldV`, set with `world`).
+    this.sentWorld = null;
+    this.sentV = -1;
+    this.worldV = 0;
     this.curve = 0.8;
     this.glow = 1;
     this.gl = null;
@@ -180,39 +193,84 @@ export class CRT {
     return { x: u * VIEW_W, y: v * VIEW_H };
   }
 
+  // (Round 80) The frame on the page itself (the effect off, or no WebGL):
+  // its canvas (and the drawn-back world's, under it) put on the page in
+  // the screen's place, scaled up by the browser, pixel-sharp (see
+  // style.css). The screen's own canvas stays on top, unseen, for the
+  // pointer.
+  direct(on, world = null) {
+    if (on !== this.directOn) {
+      this.directOn = on;
+      const stage = this.stage();
+      if (on) stage.appendChild(this.src);
+      else this.src.remove();
+      this.src.classList.toggle('direct', on);
+      this.out.classList.toggle('unseen', on);
+      if (!on && this.shownWorld) {
+        this.shownWorld.remove();
+        this.shownWorld = null;
+      }
+    }
+    if (!on || world === this.shownWorld) return;
+    if (this.shownWorld) this.shownWorld.remove();
+    this.shownWorld = world;
+    if (world) {
+      world.classList.add('direct', 'under');
+      this.stage().insertBefore(world, this.src);
+    }
+  }
+
+  // What the screen's canvas sits in on the page (made the first time).
+  stage() {
+    let st = this.out.parentElement;
+    if (st && st.id === 'stage') return st;
+    st = document.createElement('div');
+    st.id = 'stage';
+    this.out.replaceWith(st);
+    st.appendChild(this.out);
+    return st;
+  }
+
   // `this.world`, when set: the world drawn apart from the view, finer than
   // it (the camera drawn back); the view is then only what's over it.
+  // (`this.worldV`: which drawing of it this is.)
   present(time) {
     const world = this.world || null;
-    if (!this.gl) {
-      const ctx = this.ctx2d;
-      ctx.imageSmoothingEnabled = false;
-      if (world) ctx.drawImage(world, 0, 0, this.out.width, this.out.height);
-      ctx.drawImage(this.src, 0, 0, this.out.width, this.out.height);
+    if (!this.gl || !this.enabled) {
+      this.direct(true, world);
       return;
     }
+    this.direct(false);
     const gl = this.gl;
+    // (The glow is drawn from the frame's blurred levels: made only when
+    // there's a glow to draw. Without, the sharp look's all there is.)
+    const glow = this.glow > 0;
     gl.viewport(0, 0, this.out.width, this.out.height);
     gl.useProgram(this.prog);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.src);
-    gl.generateMipmap(gl.TEXTURE_2D);
+    if (glow) gl.generateMipmap(gl.TEXTURE_2D);
     gl.bindSampler(0, this.sharp);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    gl.bindSampler(1, this.soft);
+    gl.bindSampler(1, glow ? this.soft : this.sharp);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.wtex);
-    if (world) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, world);
-      gl.generateMipmap(gl.TEXTURE_2D);
-    }
+    // (The drawn-back world: sent again only once it's been drawn again,
+    // its blurred levels only for a glow, and once a drawing.)
+    if (world && (world !== this.sentWorld || this.worldV !== this.sentV || (glow && !this.sentMips))) {
+      if (world !== this.sentWorld || this.worldV !== this.sentV) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, world);
+      if (glow) gl.generateMipmap(gl.TEXTURE_2D);
+      this.sentWorld = world;
+      this.sentV = this.worldV;
+      this.sentMips = glow;
+    } else if (!world) this.sentWorld = null;
     gl.bindSampler(2, this.sharp);
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.wtex);
-    gl.bindSampler(3, this.soft);
+    gl.bindSampler(3, glow && this.sentMips ? this.soft : this.sharp);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.uniform1i(this.u.uSharp, 0);
     gl.uniform1i(this.u.uSoft, 1);
