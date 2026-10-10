@@ -207,6 +207,8 @@ export class Game {
     this.crops = new CropGrowth(this);
     this.playtime = new Playtime(this);
     this.world.onRegionLoad = (r) => {
+      // (Round 80: its lights, looked for at once: see Lighting.draw.)
+      this.lightDirty = true;
       this.sim.applyPending(r);
       // (Round 78) Brought back from the save: looked over (see
       // savehealth.js).
@@ -4614,7 +4616,8 @@ export class Game {
     w.setState(x, by, z, open);
     if (w.getBlock(x, by + 1, z) === B.door_top) w.setState(x, by + 1, z, open);
     if (Math.max(Math.abs(x - this.player.x), Math.abs(z - this.player.z)) < 12) this.audio?.play('door');
-    this.lightDirty = true;
+    // (Round 80: no new look at the light for it: a door, open or shut,
+    // never stood in its way. See Lighting.floodFill.)
   }
 
   // Out onto the water.
@@ -7520,10 +7523,18 @@ export class Game {
   }
 
   onBlockChange(x, y, z, o, n) {
+    // (Round 80) The ground's pictures there drawn again (see
+    // Renderer.groundStrip).
+    this.renderer?.noteBlock?.(x, y, z);
     if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
     // (Inside one of the great ships: the same in her. See shiphold.js.)
     if (this.ships3d && this.ships3d.length && this.world.inInstance(x)) holdBlockChanged(this, x, y, z, o, n);
-    if (o === -1 || (BLOCKS[o] && (BLOCKS[o].light || BLOCKS[o].opaque)) || (BLOCKS[n] && (BLOCKS[n].light || BLOCKS[n].opaque))) this.lightDirty = true;
+    // (Round 80: a block's state changed only matters to the light if the
+    // block's a light that's lit by it, a lantern hung or a brazier.)
+    if (o === -1) {
+      const b = BLOCKS[this.world.getBlock(x, y, z)];
+      if (b && (b.lightWhenState || b.lightState)) this.lightDirty = true;
+    } else if ((BLOCKS[o] && (BLOCKS[o].light || BLOCKS[o].opaque)) || (BLOCKS[n] && (BLOCKS[n].light || BLOCKS[n].opaque))) this.lightDirty = true;
   }
 
   // ------------------------------------------------------------ save

@@ -156,7 +156,10 @@ export class Lighting {
       const sources = this.scan(world, ax0 - MARGIN, az0 - MARGIN, ax1 + MARGIN, az1 + MARGIN, below);
       const key = sources.map((q) => `${q.x},${q.y},${q.z},${q.L}`).join(';') + `|${ax0},${az0}`;
       // (Fast, in the settings: the lights looked for less often.)
-      this.scanTimer = this.fast ? 1.5 : 0.5;
+      // (Round 80: only now and then at all. A light set down or taken up,
+      // lit or put out, a wall raised or broken, the ground loaded: each
+      // marks it to be looked at again at once (game.lightDirty).)
+      this.scanTimer = this.fast ? 6 : 4;
       if (!this.flood || key !== this.flood.key || game.lightDirty) {
         const W = ax1 - ax0 + 1;
         const D = az1 - az0 + 1;
@@ -235,14 +238,21 @@ export class Lighting {
     // (Round 76: never while a carried light's gliding from one pace to the
     // next: the pool stuttered behind its bearer, a flicker as they walked.)
     const mk = [pfx, pfz, ...moving.flatMap((m) => [m.fx, m.fz])].map((q) => Math.round(q * 8)).join(',') + `|${player.x},${player.z}`;
-    const reuse = this.fast && was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && was.mk === mk && ++was.n % 3 !== 0;
-    if (!reuse) this.lastLit = { k0, m0, SW, SH, mk, n: 0 };
+    // (Round 80) And never again at all while nothing it's made from has
+    // changed: the same view of the same ground, the same lights where they
+    // were, the sky the same (to the shade).
+    const q8 = (v) => Math.round(v * 255);
+    const tintNow = pal ? pal.tint : below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
+    const same = `${q8(sky[0])},${q8(sky[1])},${q8(sky[2])}|${q8(blackout)}|${below ? 1 : 0}|${tintNow.join(',')}|${moving.length}|${[...keep.keys()].join(';')}`;
+    const still = was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && was.mk === mk && was.F === F && was.PF === PF && was.pts === pts && was.same === same;
+    const reuse = still || (this.fast && was && was.k0 === k0 && was.m0 === m0 && was.SW === SW && was.SH === SH && was.mk === mk && ++was.n % 3 !== 0);
+    if (!reuse) this.lastLit = { k0, m0, SW, SH, mk, n: 0, F, PF, pts, same };
     if (this.canvas.width !== SW || this.canvas.height !== SH) {
       this.canvas.width = SW;
       this.canvas.height = SH;
     }
     // (The Kavorent's halls are lit cold.)
-    const tint = pal ? pal.tint : below && game.dungeon.kav ? [0.72, 0.92, 1.08] : [1.05, 0.78, 0.46];
+    const tint = tintNow;
     if (!reuse) {
       const img = this.ctx.createImageData(SW, SH);
       const px = img.data;
@@ -302,10 +312,11 @@ export class Lighting {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.canvas, 0, 0, SW, SH, k0 * TILE - r.camX, m0 * TILE - r.camY, SW * TILE, SH * TILE);
     } else {
-      // (Round 77) Smooth: the paces' light run together, drawn up four
-      // times over and softened, so a torch's pool fades off round and
-      // even rather than in steps.
-      const k = 4;
+      // (Round 77) Smooth: the paces' light run together, drawn up and
+      // softened, so a torch's pool fades off round and even rather than in
+      // steps. (Round 80: twice over, not four times, and softened as much
+      // for it: a quarter of the work, and it's drawn up smooth anyway.)
+      const k = 2;
       if (!this.soft) this.soft = typeof document !== 'undefined' ? document.createElement('canvas') : null;
       const sc = this.soft;
       if (sc) {
@@ -317,7 +328,7 @@ export class Lighting {
         const g = this.softCtx;
         if (!reuse || !this.softDone) {
           g.imageSmoothingEnabled = true;
-          g.filter = 'blur(3px)';
+          g.filter = 'blur(1.5px)';
           g.drawImage(this.canvas, 0, 0, SW, SH, 0, 0, SW * k, SH * k);
           g.filter = 'none';
           this.softDone = true;

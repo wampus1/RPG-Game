@@ -4,7 +4,7 @@
 import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
-import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
+import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, REGION_D, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
@@ -47,6 +47,15 @@ const makeCanvas = (w, h) => {
 };
 
 const CULL_SAME = new Set();
+// (Round 80) Rows' layers of ground drawn again into their pictures (see
+// groundStrip) at most this many a frame; past that, a layer's drawn the
+// old way, square by square, till its turn comes.
+const STRIP_BUDGET = 6;
+// How far past the view (columns, each side) a picture of a row reaches,
+// so walking on doesn't call for a new one every step.
+const STRIP_REACH = 14;
+// (Rows' pictures not used this many frames are let go.)
+const STRIP_KEEP = 240;
 
 // Lights carried in the hand: where the flame sits in the item's picture,
 // its glow, and how often an ember flies off it.
@@ -1148,191 +1157,213 @@ export class Renderer {
     // ghost of themselves, so the room's height still reads.
     const hint = this.wallHint !== false && hidden !== null && !this.underground;
 
+    // (Round 80) The ground below your level comes from pictures kept of
+    // each row's layers of it (see groundStrip): drawn again only when what
+    // they show changes, not every frame. What moves or changes on it
+    // (water, plants, things set down, snow and tracks, the pointer) is
+    // drawn over in its place, as ever. Not under a scene's veil; down in
+    // the ground, not the layer at your feet (cut flat as a plan).
+    const Lc = this.groundCache !== false && veil === null ? (this.underground ? pLayer - 1 : pLayer) : 0;
+    this.stripBudget = STRIP_BUDGET;
+    this.stripFrame = (this.stripFrame || 0) + 1;
+    // (Where the drawing's got to: the row, its layer, where that is on
+    // screen, whether it fades for you.)
+    let z = 0;
+    let y = 0;
+    let sy = 0;
+    let rowBase = 0;
+    let frontBase = 0;
+    let fadeRow = false;
+    let fadeLayer = false;
+    // One square of the row at this layer, drawn (column i of the view).
+    const drawAt = (i) => {
+      const ci = rowBase + i;
+      if (y >= colTop[ci]) return;
+      let id = getAt(ci, y);
+      if (id === 0) return;
+      const x = x0 + i;
+      const wx = colWX[ci];
+      const wz = colWZ[ci];
+      if (veil !== null && y === SURFACE) id = veil.groundAt(wx, y, wz, id);
+      // (Something set down belongs with what it's set on: it shows
+      // whenever that does, a cut-away roof or not.)
+      if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) {
+        // (Round 74) A painting hung a pace up, its wall cut away as
+        // you stand inside: shown on the wall's face below, as the
+        // room's plan is drawn.
+        if (BLOCKS[id].painting && !hid(wx, y - 1, wz)) this.drawWallPainting(ctx, game, wx, y, wz, BLOCKS[id].painting, metaAt(ci, y), x0 * TILE + i * TILE - camX, sy + LH, false, id);
+        else if (hint && y === hLevel && BLOCKS[id].render === 'cube' && BLOCKS[id].opaque) this.drawWallHint(ctx, id, wx, y, wz, x * TILE - camX, sy, getAt(ci, y + 1), getAt(frontBase + i, y), hid(colWX[frontBase + i], y, colWZ[frontBase + i]));
+        return;
+      }
+      const b = BLOCKS[id];
+      const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
+      // (Furniture, doors and windows in the craft of the people whose
+      // town they're in: see textures.CRAFTS.)
+      const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
+      const sx = x * TILE - camX;
+      let alpha = 1;
+      if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
+      if (alpha < 1) ctx.globalAlpha = alpha;
+      // Blocks faded out because they hide the player can be clicked through.
+      const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
+      const v = hash4(wx, y, wz) % VARIANTS;
+      const render = b.render;
+      if (render === 'cube' || render === 'liquid' || (render === 'door' && !(metaAt(ci, y) & META_STATE))) {
+        const rot = b.rotatable ? ((metaAt(ci, y) & META_ROT) + view) & 3 : 0;
+        // Top face.
+        const above = getAt(ci, y + 1);
+        const ab = BLOCKS[above];
+        const aboveHidden = hid(wx, y + 1, wz);
+        const showTop = aboveHidden || !(ab.opaque && ab.render === 'cube') && !(CULL_SAME.has(id) && above === id) && !(render === 'liquid' && ab.liquid);
+        const liquid = render === 'liquid';
+        if (showTop) {
+          const tops = T.top[id * 4 + rot];
+          const s = liquid ? tops[waterFrame] : tops[v % tops.length];
+          const oy = liquid ? 3 : 0;
+          ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
+          if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
+          if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
+          // Higher ground is a touch brighter so terraces read as height.
+          if (y > 6 && !liquid && b.opaque) {
+            ctx.fillStyle = `rgba(255,250,235,${Math.min(0.16, (y - 6) * 0.028)})`;
+            ctx.fillRect(sx, sy, 16, 16);
+          }
+          if (aboveHidden && b.opaque && (veil === null || cutAway(wx, y + 1, wz))) {
+            // Cut-away wall tops read like a floor-plan section.
+            ctx.fillStyle = 'rgba(16,12,24,0.62)';
+            ctx.fillRect(sx, sy, 16, 16);
+            ctx.fillStyle = 'rgba(255,240,200,0.18)';
+            ctx.fillRect(sx, sy, 16, 1);
+          }
+        }
+        // Front face.
+        const fr = getAt(frontBase + i, y);
+        const fb = BLOCKS[fr];
+        const frontHidden = hid(colWX[frontBase + i], y, colWZ[frontBase + i]);
+        const showFront = frontHidden || !(fb.opaque && fb.render === 'cube') && !(CULL_SAME.has(id) && fr === id) && !(liquid && fb.liquid);
+        if (showFront && !(liquid && fb.solid)) {
+          const fronts = T.front[id * 4 + rot];
+          const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
+          ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
+          if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
+        }
+        // (Round 77) Snow lying, tracks, ruts; foam and rings on water.
+        if (showTop && gfxOn && !aboveHidden) gfx.drawTop(ctx, world, wx, y, wz, id, liquid, sx, sy, this.time);
+      } else if (render === 'stair') {
+        // (Round 75) A stair, in its floor's stone or wood, cut into
+        // two steps the way it climbs as you look at it.
+        const sd = ((metaAt(ci, y) & META_ROT) + view) & 3;
+        this.drawStair(ctx, atl, T, id, v, sd, sx, sy);
+        if (pickable && mouse.x >= sx && mouse.x < sx + 16 && mouse.y >= sy && mouse.y < sy + SPR_H) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq };
+      } else if (render === 'door') {
+        const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
+        const s = T.sprite[id * 4 + rot][0];
+        ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
+        if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+      } else if (PIECE_IDS[id] === 1) {
+        // A great thing on its square: drawn whole from the plinth
+        // nearest you (below), or from here if it stands alone.
+        const [fx, fz] = this.toWorld(0, 1);
+        if (world.getBlock(wx + fx, y, wz + fz) !== B.plinth) this.drawPiece(game, ctx, wx, y, wz, id, metaAt(ci, y), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
+      } else if (id === B.plinth) {
+        const [fx, fz] = this.toWorld(0, 1);
+        const cid = world.getBlock(wx - fx, y, wz - fz);
+        if (PIECE_IDS[cid] === 1) this.drawPiece(game, ctx, wx - fx, y, wz - fz, cid, world.getMeta(wx - fx, y, wz - fz), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
+      } else if (id === B.tent) {
+        // A tent: bigger than its pace (see sprites.tentSprite), and
+        // whoever's asleep in it snoring away over it.
+        const meta = metaAt(ci, y);
+        const rot = ((meta & META_ROT) + view) & 3;
+        const img = tentSprite(rot, (meta >> CANOPY_SHIFT) & 3, !!(meta & META_STATE));
+        const tx = sx + 8 - (img.width >> 1);
+        const ty = sy + SPR_H + 2 - img.height;
+        ctx.drawImage(img, tx, ty);
+        if (pickable && this.under(null, sx - 6, ty + 4, 28, img.height - 4, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
+        if (this.tentSleep && this.tentSleep.has(wx * 65536 + wz)) this.drawSnores(ctx, sx + 8, ty + 2, wx * 7 + wz);
+      } else if (b.painting) {
+        // (Round 74) Hung flat on its wall, as the wall is seen.
+        this.drawWallPainting(ctx, game, wx, y, wz, b.painting, metaAt(ci, y), sx, sy, pickable, id);
+      } else if (render === 'sprite' || render === 'plant') {
+        const meta = metaAt(ci, y);
+        const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
+        const arr = T.sprite[id * 4 + rot];
+        const st = meta & META_STATE ? 1 : 0;
+        let idx;
+        if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
+        else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
+        else if (id === B.canopy) idx = ((meta >> CANOPY_STYLE_SHIFT) & 7) * 8 + st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+        else if (id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+        else idx = st * 4 + (animFrame + wx + wz) % 4;
+        const s = arr[idx] || arr[0];
+        // (A training dummy just struck rocks on its post.)
+        const wob = id === B.training_dummy && this.wobbles.size ? this.wobbles.get(`${wx},${y},${wz}`) : null;
+        if (wob) {
+          const k = wob.t / wob.dur;
+          const a = Math.sin(wob.t * 34) * 0.2 * wob.amp * (1 - k) * (1 - k);
+          ctx.save();
+          ctx.translate(sx + 8, sy + SPR_H - 1);
+          ctx.rotate(a);
+          ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
+          ctx.restore();
+        } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+        if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+        // (Round 73) What's on a rack or a stand, and what a painting shows.
+        if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
+        // Hanging signs show what the building is.
+        if (id === B.hanging_sign) {
+          const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);
+          if (ic) ctx.drawImage(this.dropIcon(ic), sx + 3, sy + SPR_H - s.h + 4);
+        }
+      } else if (render === 'placed') {
+        // Something set down: lying on the ground, a little shadow under it.
+        const got = game.placed && game.placed.get(`${wx},${y},${wz}`);
+        if (got) {
+          const sh = TEX.misc.shadow;
+          ctx.globalAlpha = 0.6 * (alpha < 1 ? alpha : 1);
+          ctx.drawImage(atl, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
+          ctx.globalAlpha = alpha < 1 ? alpha : 1;
+          const icon = got.bites ? bittenIcon(got.item, got.bites) : itemIcon(got.item);
+          drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time, true);
+          if (got.count > 1) drawText(ctx, String(got.count), sx + 10, sy + SPR_H - 6, '#ffffff', '#000');
+          if (pickable && this.under(null, sx, sy + SPR_H - 16, 16, 14, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
+        }
+      } else if (render === 'flat') {
+        const arr = TEX.sprite[id * 4];
+        // (A glyph plate shows its own glyph.)
+        // (Round 79: rugs side by side, one carpet.)
+        const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : BLOCKS[id].rug ? rugJoin(world, wx, y, wz, id) : v % arr.length];
+        const below = getAt(ci, y - 1);
+        const oy = BLOCKS[below].liquid ? 3 : 0;
+        ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
+        if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
+      } else if (render === 'fence') {
+        if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, this.craftAt(game, wx, wz)) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+      } else if (render === 'wall') {
+        if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, 0, TEX.wall && TEX.wall[id]) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
+      }
+      if (alpha < 1) ctx.globalAlpha = 1;
+      if (cur && cur.x === wx && cur.y === y && cur.z === wz) {
+        this.cursorDrawList = { sx, sy, b };
+      }
+    };
     for (let r = 0; r < nRows - 1; r++) {
-      const z = zMin + r;
+      z = zMin + r;
       const ents = buckets.get(z);
       if (ents) ents.sort((a, b) => a.layer - b.layer || a.rp.y - b.rp.y);
       let ei = 0;
-      const rowBase = r * W;
-      const frontBase = (r + 1) * W;
-      const fadeRow = z >= pz && z <= pz + 7;
-      for (let y = 0; y < WORLD_Y; y++) {
-        const sy = z * TILE - y * LH - camY;
+      rowBase = r * W;
+      frontBase = (r + 1) * W;
+      fadeRow = z >= pz && z <= pz + 7;
+      for (y = 0; y < WORLD_Y; y++) {
+        sy = z * TILE - y * LH - camY;
         // (Down past the bottom of the screen a little, at the ground, so
         // the great things in a square, taller than a pace, don't vanish
         // while their tops still show: see pieces.js.)
         if (sy < this.vh + 4 + (y === GROUND ? 68 : 0) && sy + SPR_H + LH > -4) {
-          const fadeLayer = fadeRow && y >= pLayer && (z > pz || y > pLayer + 1);
-          for (let i = 0; i < W; i++) {
-            const ci = rowBase + i;
-            if (y >= colTop[ci]) continue;
-            let id = getAt(ci, y);
-            if (id === 0) continue;
-            const x = x0 + i;
-            const wx = colWX[ci];
-            const wz = colWZ[ci];
-            if (veil !== null && y === SURFACE) id = veil.groundAt(wx, y, wz, id);
-            // (Something set down belongs with what it's set on: it shows
-            // whenever that does, a cut-away roof or not.)
-            if (hid(wx, id === B.placed_item ? y - 1 : y, wz)) {
-              // (Round 74) A painting hung a pace up, its wall cut away as
-              // you stand inside: shown on the wall's face below, as the
-              // room's plan is drawn.
-              if (BLOCKS[id].painting && !hid(wx, y - 1, wz)) this.drawWallPainting(ctx, game, wx, y, wz, BLOCKS[id].painting, metaAt(ci, y), x0 * TILE + i * TILE - camX, sy + LH, false, id);
-              else if (hint && y === hLevel && BLOCKS[id].render === 'cube' && BLOCKS[id].opaque) this.drawWallHint(ctx, id, wx, y, wz, x * TILE - camX, sy, getAt(ci, y + 1), getAt(frontBase + i, y), hid(colWX[frontBase + i], y, colWZ[frontBase + i]));
-              continue;
-            }
-            const b = BLOCKS[id];
-            const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
-            // (Furniture, doors and windows in the craft of the people whose
-            // town they're in: see textures.CRAFTS.)
-            const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
-            const sx = x * TILE - camX;
-            let alpha = 1;
-            if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
-            if (alpha < 1) ctx.globalAlpha = alpha;
-            // Blocks faded out because they hide the player can be clicked through.
-            const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
-            const v = hash4(wx, y, wz) % VARIANTS;
-            const render = b.render;
-            if (render === 'cube' || render === 'liquid' || (render === 'door' && !(metaAt(ci, y) & META_STATE))) {
-              const rot = b.rotatable ? ((metaAt(ci, y) & META_ROT) + view) & 3 : 0;
-              // Top face.
-              const above = getAt(ci, y + 1);
-              const ab = BLOCKS[above];
-              const aboveHidden = hid(wx, y + 1, wz);
-              const showTop = aboveHidden || !(ab.opaque && ab.render === 'cube') && !(CULL_SAME.has(id) && above === id) && !(render === 'liquid' && ab.liquid);
-              const liquid = render === 'liquid';
-              if (showTop) {
-                const tops = T.top[id * 4 + rot];
-                const s = liquid ? tops[waterFrame] : tops[v % tops.length];
-                const oy = liquid ? 3 : 0;
-                ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + oy, 16, 16);
-                if (pickable && this.under(s, sx, sy + oy, 16, 16, false)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq };
-                if (!liquid && !aboveHidden && !(veil !== null && veil.inside(wx, wz))) this.edgeShade(ctx, getAt, ci, W, y, sx, sy, id);
-                // Higher ground is a touch brighter so terraces read as height.
-                if (y > 6 && !liquid && b.opaque) {
-                  ctx.fillStyle = `rgba(255,250,235,${Math.min(0.16, (y - 6) * 0.028)})`;
-                  ctx.fillRect(sx, sy, 16, 16);
-                }
-                if (aboveHidden && b.opaque && (veil === null || cutAway(wx, y + 1, wz))) {
-                  // Cut-away wall tops read like a floor-plan section.
-                  ctx.fillStyle = 'rgba(16,12,24,0.62)';
-                  ctx.fillRect(sx, sy, 16, 16);
-                  ctx.fillStyle = 'rgba(255,240,200,0.18)';
-                  ctx.fillRect(sx, sy, 16, 1);
-                }
-              }
-              // Front face.
-              const fr = getAt(frontBase + i, y);
-              const fb = BLOCKS[fr];
-              const frontHidden = hid(colWX[frontBase + i], y, colWZ[frontBase + i]);
-              const showFront = frontHidden || !(fb.opaque && fb.render === 'cube') && !(CULL_SAME.has(id) && fr === id) && !(liquid && fb.liquid);
-              if (showFront && !(liquid && fb.solid)) {
-                const fronts = T.front[id * 4 + rot];
-                const s = liquid ? fronts[waterFrame] : fronts[v % fronts.length];
-                ctx.drawImage(atl, s.x, s.y, 16, LH, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH);
-                if (pickable && this.under(s, sx, sy + 16 + (liquid ? 3 : 0), 16, liquid ? LH - 3 : LH, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq };
-              }
-              // (Round 77) Snow lying, tracks, ruts; foam and rings on water.
-              if (showTop && gfxOn && !aboveHidden) gfx.drawTop(ctx, world, wx, y, wz, id, liquid, sx, sy, this.time);
-            } else if (render === 'stair') {
-              // (Round 75) A stair, in its floor's stone or wood, cut into
-              // two steps the way it climbs as you look at it.
-              const sd = ((metaAt(ci, y) & META_ROT) + view) & 3;
-              this.drawStair(ctx, atl, T, id, v, sd, sx, sy);
-              if (pickable && mouse.x >= sx && mouse.x < sx + 16 && mouse.y >= sy && mouse.y < sy + SPR_H) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq };
-            } else if (render === 'door') {
-              const rot = ((metaAt(ci, y) & META_ROT) + view) & 3;
-              const s = T.sprite[id * 4 + rot][0];
-              ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy, s.w, s.h);
-              if (pickable && this.under(s, sx, sy)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
-            } else if (PIECE_IDS[id] === 1) {
-              // A great thing on its square: drawn whole from the plinth
-              // nearest you (below), or from here if it stands alone.
-              const [fx, fz] = this.toWorld(0, 1);
-              if (world.getBlock(wx + fx, y, wz + fz) !== B.plinth) this.drawPiece(game, ctx, wx, y, wz, id, metaAt(ci, y), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
-            } else if (id === B.plinth) {
-              const [fx, fz] = this.toWorld(0, 1);
-              const cid = world.getBlock(wx - fx, y, wz - fz);
-              if (PIECE_IDS[cid] === 1) this.drawPiece(game, ctx, wx - fx, y, wz - fz, cid, world.getMeta(wx - fx, y, wz - fz), sx, sy, z, fadeRow && y >= pLayer, pRect, pz);
-            } else if (id === B.tent) {
-              // A tent: bigger than its pace (see sprites.tentSprite), and
-              // whoever's asleep in it snoring away over it.
-              const meta = metaAt(ci, y);
-              const rot = ((meta & META_ROT) + view) & 3;
-              const img = tentSprite(rot, (meta >> CANOPY_SHIFT) & 3, !!(meta & META_STATE));
-              const tx = sx + 8 - (img.width >> 1);
-              const ty = sy + SPR_H + 2 - img.height;
-              ctx.drawImage(img, tx, ty);
-              if (pickable && this.under(null, sx - 6, ty + 4, 28, img.height - 4, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
-              if (this.tentSleep && this.tentSleep.has(wx * 65536 + wz)) this.drawSnores(ctx, sx + 8, ty + 2, wx * 7 + wz);
-            } else if (b.painting) {
-              // (Round 74) Hung flat on its wall, as the wall is seen.
-              this.drawWallPainting(ctx, game, wx, y, wz, b.painting, metaAt(ci, y), sx, sy, pickable, id);
-            } else if (render === 'sprite' || render === 'plant') {
-              const meta = metaAt(ci, y);
-              const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
-              const arr = T.sprite[id * 4 + rot];
-              const st = meta & META_STATE ? 1 : 0;
-              let idx;
-              if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
-              else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
-              else if (id === B.canopy) idx = ((meta >> CANOPY_STYLE_SHIFT) & 7) * 8 + st * 4 + ((meta >> CANOPY_SHIFT) & 3);
-              else if (id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
-              else idx = st * 4 + (animFrame + wx + wz) % 4;
-              const s = arr[idx] || arr[0];
-              // (A training dummy just struck rocks on its post.)
-              const wob = id === B.training_dummy && this.wobbles.size ? this.wobbles.get(`${wx},${y},${wz}`) : null;
-              if (wob) {
-                const k = wob.t / wob.dur;
-                const a = Math.sin(wob.t * 34) * 0.2 * wob.amp * (1 - k) * (1 - k);
-                ctx.save();
-                ctx.translate(sx + 8, sy + SPR_H - 1);
-                ctx.rotate(a);
-                ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
-                ctx.restore();
-              } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
-              if (pickable && this.under(s, sx, sy + SPR_H - s.h)) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
-              // (Round 73) What's on a rack or a stand, and what a painting shows.
-              if (b.display) this.drawDisplay(ctx, game, wx, y, wz, id, sx, sy + SPR_H - s.h);
-              // Hanging signs show what the building is.
-              if (id === B.hanging_sign) {
-                const ic = game.signIcons && game.signIcons.get(`${wx},${y},${wz}`);
-                if (ic) ctx.drawImage(this.dropIcon(ic), sx + 3, sy + SPR_H - s.h + 4);
-              }
-            } else if (render === 'placed') {
-              // Something set down: lying on the ground, a little shadow under it.
-              const got = game.placed && game.placed.get(`${wx},${y},${wz}`);
-              if (got) {
-                const sh = TEX.misc.shadow;
-                ctx.globalAlpha = 0.6 * (alpha < 1 ? alpha : 1);
-                ctx.drawImage(atl, sh.x, sh.y, 16, 8, sx + 1, sy + SPR_H - 6, 14, 6);
-                ctx.globalAlpha = alpha < 1 ? alpha : 1;
-                const icon = got.bites ? bittenIcon(got.item, got.bites) : itemIcon(got.item);
-                drawJewelled(ctx, icon, got.item, sx, sy + SPR_H - 14, this.time, true);
-                if (got.count > 1) drawText(ctx, String(got.count), sx + 10, sy + SPR_H - 6, '#ffffff', '#000');
-                if (pickable && this.under(null, sx, sy + SPR_H - 16, 16, 14, false)) this.pick = { x: wx, y, z: wz, face: 'front', id, seq: ++this.pickSeq, prop: true };
-              }
-            } else if (render === 'flat') {
-              const arr = TEX.sprite[id * 4];
-              // (A glyph plate shows its own glyph.)
-              // (Round 79: rugs side by side, one carpet.)
-              const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : BLOCKS[id].rug ? rugJoin(world, wx, y, wz, id) : v % arr.length];
-              const below = getAt(ci, y - 1);
-              const oy = BLOCKS[below].liquid ? 3 : 0;
-              ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
-              if (pickable && this.under(s, sx, sy + LH + oy, 16, 16)) this.pick = { x: wx, y, z: wz, face: 'top', id, seq: ++this.pickSeq, prop: true, flat: true };
-            } else if (render === 'fence') {
-              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, this.craftAt(game, wx, wz)) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
-            } else if (render === 'wall') {
-              if (this.drawFence(ctx, world, wx, y, wz, sx, sy, pickable, 0, TEX.wall && TEX.wall[id]) && pickable) this.pick = { x: wx, y, z: wz, face: mouse.y - sy < 16 ? 'top' : 'front', id, seq: ++this.pickSeq, prop: true };
-            }
-            if (alpha < 1) ctx.globalAlpha = 1;
-            if (cur && cur.x === wx && cur.y === y && cur.z === wz) {
-              this.cursorDrawList = { sx, sy, b };
-            }
-          }
+          fadeLayer = fadeRow && y >= pLayer && (z > pz || y > pLayer + 1);
+          const st = y < Lc ? this.groundStrip(game, z, y, x0, x1, kAt) : null;
+          if (st) this.drawStrip(ctx, game, st, z, y, x0, x1, sy, drawAt, gfxOn);
+          else for (let i = 0; i < W; i++) drawAt(i);
         }
         // Entities standing in this row whose body occupies up to this layer.
         if (ents) {
@@ -1351,6 +1382,237 @@ export class Renderer {
         }
       }
     }
+  }
+
+  // ------------------------------------------------------------ ground strips
+  // (Round 80) The ground below your level, a row's layer at a time: the
+  // solid blocks of row `v` (the view's row, the camera as it's turned) at
+  // layer `y`, drawn once into a picture of their own (just as they'd be
+  // drawn here), and taken from it while nothing they show has changed (a
+  // block changed in the row or either side of it: see noteBlock; the
+  // ground under it loaded, or swapped for another floor; the camera
+  // turned). What else is on the layer (water, plants, doors open, things
+  // set down) is listed, to be drawn square by square over it, in order.
+  // Null if it's not to be had this frame (too many made already): the
+  // layer's drawn the old way.
+  groundStrip(game, v, y, x0, x1, kAt) {
+    const world = game.world;
+    const cache = (this.strips ||= new Map());
+    if (this.stripView !== this.view || this.stripAtlas !== this.atlas || this.stripWorld !== world || this.stripDungeon !== !!game.dungeon) {
+      cache.clear();
+      this.rowVer = new Map();
+      this.stripView = this.view;
+      this.stripAtlas = this.atlas;
+      this.stripWorld = world;
+      this.stripDungeon = !!game.dungeon;
+    }
+    const key = v * 32 + y;
+    let st = cache.get(key);
+    const ver = this.rowVer.get(v) || 0;
+    if (st && st.ver === ver && st.kAt === kAt && st.u0 <= x0 && st.u1 >= x1 && this.stripRegions(world, st)) {
+      st.used = this.stripFrame;
+      return st;
+    }
+    if (this.stripBudget <= 0) return null;
+    this.stripBudget--;
+    st = this.buildStrip(game, v, y, x0 - STRIP_REACH, x1 + STRIP_REACH, kAt, st);
+    st.ver = ver;
+    st.used = this.stripFrame;
+    cache.set(key, st);
+    // (Now and then, the pictures of rows long out of sight let go.)
+    if (cache.size > 400 && this.stripFrame % 60 === 0) for (const [k, q] of cache) if (this.stripFrame - q.used > STRIP_KEEP) cache.delete(k);
+    return st;
+  }
+
+  // Is the ground a strip was drawn from still the same ground (each
+  // stretch of it the same, loaded or not)?
+  stripRegions(world, st) {
+    const R = st.regs;
+    for (let k = 0; k < R.length; k += 3) if (world.regionAt(R[k], R[k + 1]) !== R[k + 2]) return false;
+    return true;
+  }
+
+  // Draw row `v`'s layer `y`, from view column u0 to u1, into its picture
+  // (`old`'s, if it's big enough). The picture holds the solid blocks
+  // (closed doors among them) from the first column one's shown on to the
+  // last; and with it, where each top and front shown is (for the
+  // pointer), the tops (for snow and tracks), the blocks (for the pointer's
+  // own outline), and the columns of what's left to draw over it.
+  buildStrip(game, v, y, u0, u1, kAt, old = null) {
+    const world = game.world;
+    const view = this.view;
+    const atlas = this.atlas;
+    const Wp = u1 - u0 + 3;
+    // The columns of rows v - 1, v and v + 1 (one more each side), as
+    // drawWorld has them: where each is in the world, and its ground.
+    const n = Wp * 3;
+    const lr = new Array(n);
+    const lb = new Int32Array(n);
+    const lwx = new Int32Array(n);
+    const lwz = new Int32Array(n);
+    const regs = [];
+    const seen = new Set();
+    for (let rr = 0; rr < 3; rr++) {
+      for (let k = 0; k < Wp; k++) {
+        const [wx, wz] = this.toWorld(u0 - 1 + k, v - 1 + rr);
+        const reg = world.regionAt(wx, wz);
+        const ci = rr * Wp + k;
+        lr[ci] = reg;
+        lwx[ci] = wx;
+        lwz[ci] = wz;
+        if (reg) lb[ci] = ((wz - reg.z0) * REGION_W + (wx - reg.x0)) * WORLD_Y;
+        const rk = reg ? reg : `${Math.floor(wx / REGION_W)},${Math.floor(wz / REGION_D)}`;
+        if (!seen.has(rk)) {
+          seen.add(rk);
+          regs.push(wx, wz, reg);
+        }
+      }
+    }
+    const getAt = (ci, yy) => {
+      const reg = lr[ci];
+      if (!reg || yy < 0 || yy >= WORLD_Y) return yy < 0 ? B.bedrock : B.air;
+      return reg.blocks[lb[ci] + yy];
+    };
+    // What each column of the row is at this layer: drawn here (and which
+    // faces), drawn over it, or nothing.
+    const plan = [];
+    const dyn = [];
+    let cu0 = Infinity;
+    let cu1 = -Infinity;
+    for (let u = u0; u <= u1; u++) {
+      const ci = Wp + (u - u0 + 1);
+      const reg = lr[ci];
+      if (!reg) continue;
+      const ti = (lwz[ci] - reg.z0) * REGION_W + (lwx[ci] - reg.x0);
+      if (y >= reg.top[ti]) continue;
+      const id = reg.blocks[lb[ci] + y];
+      if (id === 0) continue;
+      const b = BLOCKS[id];
+      const meta = reg.meta[lb[ci] + y];
+      if (!(b.render === 'cube' || (b.render === 'door' && !(meta & META_STATE)))) {
+        dyn.push(u);
+        continue;
+      }
+      const above = getAt(ci, y + 1);
+      const ab = BLOCKS[above];
+      const showTop = !(ab.opaque && ab.render === 'cube') && !(CULL_SAME.has(id) && above === id);
+      const fr = getAt(ci + Wp, y);
+      const fb = BLOCKS[fr];
+      const showFront = !(fb.opaque && fb.render === 'cube') && !(CULL_SAME.has(id) && fr === id);
+      plan.push(u, ci, id, meta, (showTop ? 1 : 0) | (showFront ? 2 : 0));
+      if (showTop || showFront) {
+        if (u < cu0) cu0 = u;
+        if (u > cu1) cu1 = u;
+      }
+    }
+    const st = old || {};
+    st.u0 = u0;
+    st.u1 = u1;
+    st.kAt = kAt;
+    st.regs = regs;
+    st.dyn = dyn;
+    st.faces = [];
+    st.tops = [];
+    st.cubes = new Map();
+    st.cu0 = cu0;
+    if (cu1 < cu0) {
+      st.canvas = null;
+      for (let k = 0; k < plan.length; k += 5) st.cubes.set(plan[k], plan[k + 2]);
+      return st;
+    }
+    const w = (cu1 - cu0 + 1) * TILE;
+    let c = st.canvas;
+    if (!c || c.width < w || c.width > w * 2) {
+      c = document.createElement('canvas');
+      c.width = w;
+      c.height = SPR_H;
+    }
+    st.canvas = c;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, c.width, c.height);
+    for (let k = 0; k < plan.length; k += 5) {
+      const u = plan[k];
+      const ci = plan[k + 1];
+      const id = plan[k + 2];
+      const meta = plan[k + 3];
+      const show = plan[k + 4];
+      st.cubes.set(u, id);
+      if (!show) continue;
+      const wx = lwx[ci];
+      const wz = lwz[ci];
+      const b = BLOCKS[id];
+      const atl = kAt !== null && kavTinted()[id] === 1 ? kAt : atlas;
+      const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
+      const sx = (u - cu0) * TILE;
+      const vr = hash4(wx, y, wz) % VARIANTS;
+      const rot = b.rotatable ? ((meta & META_ROT) + view) & 3 : 0;
+      if (show & 1) {
+        const tops = T.top[id * 4 + rot];
+        const s = tops[vr % tops.length];
+        g.drawImage(atl, s.x, s.y, 16, 16, sx, 0, 16, 16);
+        st.faces.push(u, 0, wx, wz, id);
+        this.edgeShade(g, getAt, ci, Wp, y, sx, 0, id);
+        if (y > 6 && b.opaque) {
+          g.fillStyle = `rgba(255,250,235,${Math.min(0.16, (y - 6) * 0.028)})`;
+          g.fillRect(sx, 0, 16, 16);
+        }
+        st.tops.push(u, wx, wz, id);
+      }
+      if (show & 2) {
+        const fronts = T.front[id * 4 + rot];
+        const s = fronts[vr % fronts.length];
+        g.drawImage(atl, s.x, s.y, 16, LH, sx, 16, 16, LH);
+        st.faces.push(u, 1, wx, wz, id);
+      }
+    }
+    return st;
+  }
+
+  // A row's layer from its picture, and over it what's drawn square by
+  // square (in the order drawWorld would have): snow and tracks on its
+  // tops, then the rest of the layer; the pointer, as if each block had
+  // been drawn here.
+  drawStrip(ctx, game, st, v, y, x0, x1, sy, drawAt, gfxOn) {
+    const camX = this.camX;
+    if (st.canvas) ctx.drawImage(st.canvas, st.cu0 * TILE - camX, sy);
+    const gfx = this.gfx;
+    if (gfxOn && gfx && (gfx.snow.size > 0 || gfx.marks.size > 0)) {
+      const T = st.tops;
+      for (let k = 0; k < T.length; k += 4) {
+        const u = T[k];
+        if (u < x0 || u > x1) continue;
+        gfx.drawTop(ctx, game.world, T[k + 1], y, T[k + 2], T[k + 3], false, u * TILE - camX, sy, this.time);
+      }
+    }
+    const m = this.mouse;
+    if (m && st.faces.length && m.y >= sy && m.y < sy + SPR_H) {
+      const F = st.faces;
+      for (let k = 0; k < F.length; k += 5) {
+        const sx = F[k] * TILE - camX;
+        if (m.x < sx || m.x >= sx + 16) continue;
+        const front = F[k + 1] === 1;
+        const fy = front ? sy + 16 : sy;
+        if (m.y < fy || m.y >= fy + (front ? LH : 16)) continue;
+        this.pick = { x: F[k + 2], y, z: F[k + 3], face: front ? 'front' : 'top', id: F[k + 4], seq: ++this.pickSeq };
+      }
+    }
+    const cur = game.cursor;
+    if (cur && cur.y === y) {
+      const [cu, cv] = this.toView(cur.x, cur.z);
+      const id = cv === v ? st.cubes.get(cu) : undefined;
+      if (id !== undefined) this.cursorDrawList = { sx: cu * TILE - camX, sy, b: BLOCKS[id] };
+    }
+    for (const u of st.dyn) if (u >= x0 && u <= x1) drawAt(u - x0);
+  }
+
+  // (Round 80) A block changed at (x, y, z): the pictures of its row, and
+  // of the rows either side (whose faces and edges it touches), are drawn
+  // again when next wanted.
+  noteBlock(x, y, z) {
+    if (!this.rowVer) return;
+    const v = this.toView(x, z)[1];
+    for (let k = v - 1; k <= v + 1; k++) this.rowVer.set(k, (this.rowVer.get(k) || 0) + 1);
   }
 
   // How see-through a block drawn at (sx, sy) is because it hides the
