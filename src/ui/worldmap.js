@@ -223,6 +223,16 @@ function arrowHead(ctx, x, y, ux, uy, r, col) {
   ctx.fill();
 }
 const LIST_W = 22;
+const MARK_FG = '#80ffc0';
+
+// (Round 79) A marker of your own put down at (x, z), named in turn.
+export function addMark(game, x, z, label = null) {
+  const marks = (game.mapMarks ||= []);
+  const m = { x: Math.round(x), z: Math.round(z), label: label || `Marker ${marks.length + 1}`, named: !!label };
+  marks.push(m);
+  if (marks.length > 60) marks.shift();
+  return m;
+}
 
 export class MapWindow extends Window {
   constructor(ui) {
@@ -245,6 +255,8 @@ export class MapWindow extends Window {
     this.search = '';
     this.searching = false;
     this.listScroll = 0;
+    // (Round 79) A marker of your own being named (typed into).
+    this.naming = null;
   }
 
   // The map's area on screen, in pixels.
@@ -369,9 +381,36 @@ export class MapWindow extends Window {
       }
     }
     this.searching = false;
+    this.naming = null;
     const a = this.area();
-    if (ck.button === 0 && ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cz: this.cam.z, moved: 0 };
+    const inMap = ck.x >= a.x0 && ck.x < a.x1 && ck.y >= a.y0 && ck.y < a.y1;
+    if (ck.button === 0 && inMap) this.drag = { x: ck.x, y: ck.y, cx: this.cam.x, cz: this.cam.z, moved: 0 };
+    // (Round 79) Right-click: a marker of your own put down there (or the
+    // one there taken up).
+    else if (ck.button === 2 && inMap && game) this.toggleMark(game, ck.x, ck.y);
     return true;
+  }
+
+  // (Round 79) Your own markers: put one down at a spot on the map (and
+  // name it, typing), or take up the one in that square.
+  toggleMark(game, px, py) {
+    const q = this.squareAt(px, py);
+    if (!q) return null;
+    const marks = (game.mapMarks ||= []);
+    const i = marks.findIndex((m) => Math.floor(m.x / REGION_W) === q.cx && Math.floor(m.z / REGION_D) === q.cz);
+    if (i >= 0) {
+      const [gone] = marks.splice(i, 1);
+      this.ui.msg(`Marker "${gone.label}" taken off the map.`, '#c8c8c8');
+      this.ui.audio?.play('page');
+      return null;
+    }
+    const o = this.origin();
+    const half = q.hf !== null ? q.hf === 1 : (px - o.x) / this.z - q.cx >= 0.5;
+    const m = addMark(game, q.cx * REGION_W + (half ? REGION_W * 0.75 : REGION_W * 0.25), q.cz * REGION_D + REGION_D / 2);
+    this.naming = m;
+    this.listOpen = true;
+    this.ui.audio?.play('select');
+    return m;
   }
 
   onWheel(d) {
@@ -385,6 +424,20 @@ export class MapWindow extends Window {
 
   onKey(k) {
     const game = this.ui.game;
+    // (Round 79) Naming a marker just put down.
+    if (this.naming) {
+      const m = this.naming;
+      if (k.code === 'Escape' || k.code === 'Enter') {
+        if (!m.label.trim()) m.label = `Marker ${(game.mapMarks || []).indexOf(m) + 1}`;
+        this.naming = null;
+      } else if (k.code === 'Backspace') m.label = m.named ? m.label.slice(0, -1) : '';
+      else if (k.key && k.key.length === 1 && (m.named ? m.label.length : 0) < 20) {
+        m.label = m.named ? m.label + k.key : k.key;
+        m.named = true;
+      }
+      if (k.code === 'Backspace') m.named = true;
+      return true;
+    }
     // (Typing into the list's search.)
     if (this.searching) {
       if (k.code === 'Escape' || k.code === 'Enter') this.searching = false;
@@ -508,7 +561,7 @@ export class MapWindow extends Window {
       }
     } else {
       put(y0, `Zoom ${Math.round((this.z / 12) * 100)}%`, C.dim);
-      put(y0 + 1, '', C.dim);
+      put(y0 + 1, 'Right-click the map to put down a marker of your own (again to take it up).', C.faint);
     }
     this.drawList(g, game);
     // (Round 77: no key, no legend; a button to switch between the land and
@@ -533,6 +586,8 @@ export class MapWindow extends Window {
     const qsq = new Set(quests.map((q) => sq(q.x, q.z)));
     const out = [];
     for (const q of quests) out.push({ kind: 'quest', label: q.label, x: q.x, z: q.z, quest: true, color: '#ffd060' });
+    // (Round 79) Your own markers.
+    for (const m of game.mapMarks || []) out.push({ kind: 'mark', label: m.label, x: m.x, z: m.z, quest: false, color: MARK_FG, sub: 'marker', mark: m });
     const seen = new Set();
     for (const icon of settlementIcons(game).values()) {
       const s = icon.s;
@@ -550,8 +605,8 @@ export class MapWindow extends Window {
     const f = this.search.trim().toLowerCase();
     const list = f ? out.filter((e) => e.label.toLowerCase().includes(f) || (e.sub || '').toLowerCase().includes(f)) : out;
     // (Quest-bound first within each kind.)
-    const rank = { quest: 0, place: 1, old: 2 };
-    return list.sort((a, b) => rank[a.kind] - rank[b.kind] || b.quest - a.quest || a.label.localeCompare(b.label));
+    const rank = { quest: 0, mark: 1, place: 2, old: 3 };
+    return list.sort((a, b) => rank[a.kind] - rank[b.kind] || b.quest - a.quest || (a.kind === 'mark' ? 0 : a.label.localeCompare(b.label)));
   }
 
   drawList(g, game) {
@@ -588,14 +643,34 @@ export class MapWindow extends Window {
       const e = entries[i];
       if (e.kind !== lastKind) {
         lastKind = e.kind;
-        g.text(x, y++, { quest: 'QUESTS', place: 'PLACES', old: 'OLD PLACES' }[e.kind], C.dim);
+        g.text(x, y++, { quest: 'QUESTS', mark: 'MARKERS', place: 'PLACES', old: 'OLD PLACES' }[e.kind], C.dim);
         if (y > bottom) break;
       }
       const hov = this.hovering(x, y, W, 1);
-      const label = `${e.quest ? '! ' : '  '}${e.label}`;
-      g.text(x, y, label.padEnd(W).slice(0, W), hov ? C.white : e.color, hov ? '#3a2e1e' : undefined);
+      // (Round 79) A marker: ◆, the name (being typed, a cursor), and an x
+      // to take it off the map; right-click it to name it again.
+      const naming = e.mark && this.naming === e.mark;
+      const cur = naming && Math.floor((this.ui.time || 0) * 2) % 2 ? '_' : '';
+      const label = `${e.quest ? '! ' : e.mark ? '◆ ' : '  '}${e.label}${cur}`;
+      g.text(x, y, label.padEnd(W).slice(0, W), hov || naming ? C.white : e.color, naming ? '#1e3a2e' : hov ? '#3a2e1e' : undefined);
       if (e.quest && Math.floor((this.ui.time || 0) * 3) % 2) g.text(x, y, '!', '#ffd040');
-      this.hit(x, y, W, 1, () => this.goTo(e));
+      this.hit(x, y, W, 1, (ck) => {
+        if (e.mark && ck && ck.button === 2) {
+          this.naming = e.mark;
+          e.mark.named = false;
+        } else this.goTo(e);
+      });
+      if (e.mark) {
+        const xh = this.hovering(x + W - 2, y, 2, 1);
+        g.text(x + W - 2, y, ' x', xh ? '#ff9080' : C.faint, xh ? '#3a1e1e' : undefined);
+        this.hit(x + W - 2, y, 2, 1, (ck, game2) => {
+          const list = (game2 || game).mapMarks || [];
+          const i = list.indexOf(e.mark);
+          if (i >= 0) list.splice(i, 1);
+          if (this.naming === e.mark) this.naming = null;
+          this.ui.audio?.play('page');
+        });
+      }
       y++;
     }
     if (!entries.length) g.text(x, 3, this.search ? '  nothing by that name' : '  nothing known yet', C.faint);
@@ -1122,6 +1197,8 @@ export class MapWindow extends Window {
       if (isQuestPin(q)) put(q.x, q.z, q.glyph || '!', blink ? '#1a1000' : '#fff4c0', blink ? '#ffd040' : '#c06010', `${q.label} (quest)`, '#ffd060', true);
       else put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
     }
+    // (Round 79) Your own markers, wherever they are.
+    for (const m of game.mapMarks || []) put(m.x, m.z, '◆', MARK_FG, '#0e3a2a', `${m.label} (your marker)`, MARK_FG, true);
     // (Round 68) The realms' ships at sea, where you know the water.
     const civs = game.world.ow.civs || [];
     for (const v of voyagesNow(game)) {

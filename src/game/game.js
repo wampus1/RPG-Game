@@ -2972,7 +2972,8 @@ export class Game {
           this.toss(k.ctrl);
           break;
         case 'KeyT':
-          // (Round 78) Riding the coach or the ferry: hurry the hours on.
+          // (Round 78) Riding the coach or the ferry: (Round 79) the wait
+          // window, as anywhere else.
           if (p._ride) rideHurry(this, p);
           // Sitting down: let some hours go by.
           else if (p.sitting && !this.waiting) this.ui.openWait?.();
@@ -5586,6 +5587,9 @@ export class Game {
       this.sleepFast = 0;
       if (why) this.ui.msg(why, '#c8d8ff');
     };
+    // (Round 79) Waiting on the coach or ferry: done when it's in (and
+    // that's said as you're set down).
+    if (w.anywhere === 'ride' && !p._ride) return stop(null);
     if ((!p.sitting && !w.anywhere) || p.dead) return stop('You get up.');
     if (p.hp < w.hp) return stop('Something disturbs you!');
     if (pressed && pressed.some((k) => !['ShiftLeft', 'ShiftRight'].includes(k.code)) && w.t > 0.3) return stop('You stop waiting.');
@@ -7534,6 +7538,8 @@ export class Game {
       // set down (see invtools.js).
       ride: rideSave(p),
       myChests: this.myChests ? [...this.myChests] : [],
+      // (Round 79) Your own markers on the map.
+      mapMarks: (this.mapMarks || []).map((m) => ({ x: m.x, z: m.z, label: m.label })),
       // (Round 78) What's drawn on blueprints (see plans.js).
       plans: plansSave(this),
       player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
@@ -7666,6 +7672,7 @@ export class Game {
     // (Round 78) Saved on the coach or the ferry: still on it.
     if (data.ride && !this.remoteCopy) rideLoad(this, this.player, data.ride);
     this.myChests = new Set(data.myChests || []);
+    this.mapMarks = (data.mapMarks || []).map((m) => ({ ...m, named: true }));
     plansLoad(this, data.plans);
     const shipAt = this.player.deck || (data.ships && data.ships.below && this.world.inInstance(this.player.x));
     // Saved down below: back down there.

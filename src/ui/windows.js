@@ -346,6 +346,29 @@ export class CraftWindow extends Window {
     for (const [k, n] of Object.entries(r.in)) if (countFrom(inv, k) < n) return false;
     return true;
   }
+  // (Round 79) How many times over the makings would stretch.
+  maxTimes(inv, r) {
+    let most = Infinity;
+    for (const [k, n] of Object.entries(r.in)) most = Math.min(most, Math.floor(countFrom(inv, k) / n));
+    return Number.isFinite(most) ? Math.max(0, Math.min(999, most)) : 0;
+  }
+  // (Round 79) Each thing you can make, as many as you can, in the
+  // list's order; said once, all together.
+  craftAll(game) {
+    const src = craftSources(game);
+    const done = [];
+    for (const r of this.sorted || this.recipes) {
+      const n = this.maxTimes(src, r);
+      if (n <= 0) continue;
+      const got = this.craft(r, game, n, true);
+      if (got > 0) done.push(`${ITEMS[r.out]?.name || r.out} x${got * r.n}`);
+    }
+    if (done.length) {
+      game.audio?.play('craft');
+      this.ui.msg(`Crafted all you could: ${done.slice(0, 4).join(', ')}${done.length > 4 ? ` and ${done.length - 4} more` : ''}.`, C.green);
+    } else game.audio?.play('error');
+    return done.length;
+  }
   draw(g, game) {
     const inv = craftSources(game);
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `CRAFTING · ${STATIONS[this.station].toUpperCase()}` });
@@ -373,10 +396,41 @@ export class CraftWindow extends Window {
         g.text(xx, y + 1, it.text, it.ok ? C.green : C.red);
         xx += it.text.length + 2;
       }
-      if (ok) g.text(this.w - 10, y, '[craft]', hover ? C.hi : C.faint);
       this.hit(1, y, this.w - 2, 2, (ck, gm) => this.craft(r, gm, ck.shift ? 5 : 1));
+      // (Round 79) One, five, or as many as the makings allow.
+      if (ok) {
+        const most = this.maxTimes(inv, r);
+        const btns = [['1', 1], ['x5', 5], [`max ${most}`, most]];
+        let bx = this.w - 2;
+        for (let i = btns.length - 1; i >= 0; i--) {
+          const [t, n] = btns[i];
+          const lbl = `[${t}]`;
+          bx -= lbl.length + (i < btns.length - 1 ? 1 : 0);
+          const on = this.hovering(bx, y, lbl.length, 1);
+          const can = n <= most;
+          g.text(bx, y, lbl, on && can ? C.white : can ? (hover ? C.hi : C.faint) : '#4a4450', on && can ? '#3a5a2a' : undefined);
+          if (can) this.hit(bx, y, lbl.length, 1, (ck, gm) => this.craft(r, gm, n));
+        }
+      }
     }
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
+    // (Round 79) Everything you can make from what you have, as much of
+    // each as it allows (asked twice: it can eat up a lot).
+    const anyOk = list.some((r) => this.canCraft(inv, r));
+    const allTxt = this.allArmed ? ' Sure? Click again to craft all ' : ' Craft all you can ';
+    const ay = this.h - 3;
+    const aHov = this.hovering(2, ay, allTxt.length, 1);
+    if (this.allArmed && !aHov) this.allArmed = false;
+    g.text(2, ay, allTxt, !anyOk ? '#5a5460' : aHov || this.allArmed ? C.white : C.hi, this.allArmed ? '#5a2a20' : aHov && anyOk ? '#3a5a2a' : '#2a2230');
+    if (anyOk) this.hit(2, ay, allTxt.length, 1, (ck, gm) => {
+      if (!this.allArmed) {
+        this.allArmed = true;
+        this.ui.audio?.play('select');
+        return;
+      }
+      this.allArmed = false;
+      this.craftAll(gm);
+    });
     if (inv.length > 1) g.text(2, this.h - 1, ` + ${inv.length - 1} chest${inv.length > 2 ? 's' : ''} of yours nearby `, C.green);
     // The scribe's desk prints; the jeweller's bench sets stones; at a
     // furnace or an oven, a dish of your own (see ui/cook.js).
@@ -417,7 +471,7 @@ export class CraftWindow extends Window {
     const game = this.ui.game;
     if (game && game.openCooking) game.openCooking(this.station === 'furnace' ? 'p' : 'o');
   }
-  craft(r, game, times) {
+  craft(r, game, times, quiet = false) {
     const inv = game.player.inv;
     const src = craftSources(game);
     let made = 0;
@@ -452,16 +506,17 @@ export class CraftWindow extends Window {
       made++;
     }
     if (made) {
-      game.audio?.play('craft');
+      if (!quiet) game.audio?.play('craft');
       game.stats.crafted += made - burnt;
-      if (made > burnt) this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * (made - burnt)}`, C.green);
+      if (made > burnt && !quiet) this.ui.msg(`Crafted ${ITEMS[r.out].name} x${r.n * (made - burnt)}`, C.green);
       if (burnt) this.ui.msg(`You burnt ${burnt > 1 ? `${burnt} batches` : 'a batch'}: nothing to eat from ${burnt > 1 ? 'them' : 'it'}.`, '#ff9060');
       // (Each piece's stars, and anything special about it.)
       for (const k of madeKeys) this.ui.msg(`${'★'.repeat(ITEMS[k].stars)} ${ITEMS[k].name}${ITEMS[k].mods.length ? `: ${ITEMS[k].mods.length > 1 ? 'modifiers' : 'a modifier'}!` : ''}`, ITEMS[k].mods.length ? '#f0c070' : '#ffd060');
       if (saved.length) this.ui.msg(`(And ${saved.length > 1 ? `${saved.length} things` : saved[0]} to spare.)`, '#a8e090');
       // (Round 53: a dish that answers something made: see dishacts.js.)
       if (made > burnt) dishTrigger(game, game.player, 'craft', {});
-    } else game.audio?.play('error');
+    } else if (!quiet) game.audio?.play('error');
+    return made - burnt;
   }
   onWheel(d) {
     this.scroll += d;
@@ -2153,9 +2208,13 @@ export class ConfirmWindow extends Window {
 
 // ---------------------------------------------------------------- waiting
 export class WaitWindow extends Window {
-  constructor(ui, game) {
-    super(ui, 34, 9, { kind: 'wait' });
+  // (Round 79) `opts.ride`: on the coach or ferry, the minutes yet till
+  // it's in (a "till we're there" choice beside the hours).
+  constructor(ui, game, opts = {}) {
+    super(ui, 34, opts.ride ? 11 : 9, { kind: 'wait' });
     this.game = game;
+    this.ride = opts.ride || 0;
+    this.rideKind = opts.kind || 'coach';
     this.hours = 1;
   }
   draw(g, game) {
@@ -2173,20 +2232,32 @@ export class WaitWindow extends Window {
     g.fill(9, 7, 16, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
     g.center(7, 'Wait', hov ? C.white : C.hi);
     this.hit(9, 7, 16, 1, () => this.go());
+    if (this.ride) {
+      const h2 = this.hovering(5, 9, 24, 1);
+      const left = this.ride >= 60 ? `${Math.floor(this.ride / 60)}h ${this.ride % 60}m` : `${this.ride}m`;
+      g.fill(5, 9, 24, 1, ' ', C.fg, h2 ? C.bgHi : '#1a1622');
+      g.center(9, `Till we're in (${left})`, h2 ? C.white : C.hi);
+      this.hit(5, 9, 24, 1, () => this.go(this.ride / 60 + 0.1));
+    }
   }
   change(d) {
     this.hours = Math.max(1, Math.min(24, this.hours + d));
     this.ui.audio?.play('select');
   }
-  go() {
+  go(hours = this.hours) {
     this.close();
-    this.game.startWait(this.hours);
+    if (this.ride) {
+      if (this.game.startWait(hours, 'ride')) this.ui.msg(this.rideKind === 'ferry' ? 'You settle down on the deck and let the hours slip by on the swell. (Any key to stop.)' : 'You settle back and let the hours roll by with the wheels. (Any key to stop.)', '#c8d8ff', true);
+      return;
+    }
+    this.game.startWait(hours);
   }
   onKey(k) {
     if (k.code === 'Escape') this.close();
     else if (k.code === 'ArrowLeft' || k.code === 'KeyA') this.change(-1);
     else if (k.code === 'ArrowRight' || k.code === 'KeyD') this.change(1);
     else if (k.code === 'Enter' || k.code === 'Space') this.go();
+    else if (k.code === 'KeyT' && this.ride) this.go(this.ride / 60 + 0.1);
     else {
       const d = /^Digit([1-9])$/.exec(k.code);
       if (d) this.hours = Number(d[1]);

@@ -405,15 +405,15 @@ export function tick(game, p, dt) {
     const ahead = pointAt({ ...R }, d + Math.min(160, 40 + speed * 3));
     game.loadAround(Math.round(ahead.x), Math.round(ahead.z), false);
   }
-  // Hurried on (on your own only), and eased off as you come in.
-  if (!game.isParty()) {
-    const left = (R.len - d) / R.pace;
-    game.sleepFast = R.fast ? Math.max(1, Math.min(RIDE_FAST, left / 4)) : 0;
-  }
+  // (Round 79) Waiting the hours away (T: the wait window, as anywhere),
+  // on your own only: no faster than the land ahead can be got ready, and
+  // eased off as you come in.
+  const waiting = !game.isParty() && game.waiting && game.waiting.anywhere === 'ride';
+  if (waiting) game.sleepFast = Math.max(1, Math.min(game.sleepFast || 1, RIDE_FAST, (R.len - d) / R.pace / 4));
   // The line on the screen: whither, and how long yet.
   const leftMin = Math.max(0, Math.ceil((R.len - d) / R.pace));
   const info = p.rideInfo;
-  if (!info || info.left !== leftMin || info.fast !== R.fast) p.rideInfo = { kind: R.kind, name: R.name, left: leftMin, fast: R.fast };
+  if (!info || info.left !== leftMin || info.fast !== !!waiting) p.rideInfo = { kind: R.kind, name: R.name, left: leftMin, fast: !!waiting };
   // Now and then, the sounds of it.
   R.sndT = (R.sndT ?? 2) - dt;
   if (R.sndT <= 0) {
@@ -423,7 +423,8 @@ export function tick(game, p, dt) {
   if (d >= R.len) endRide(game, p, 'there');
 }
 
-// T, riding: hurry on, or ease off.
+// T, riding (Round 79): the wait window, as when sat down anywhere, with
+// "till we're there" in it too. (Waiting, any key stops it.)
 export function hurry(game, p) {
   const R = p._ride;
   if (!R) return false;
@@ -431,10 +432,14 @@ export function hurry(game, p) {
     game.ui.msg('With others in the world, nobody\'s hours can be hurried: you sit back and watch it go by.', '#c8c8c8', true);
     return true;
   }
-  R.fast = !R.fast;
-  if (!R.fast) game.sleepFast = 0;
-  game.ui.msg(R.fast ? (R.kind === 'ferry' ? 'The hours slip by on the swell. (T to ease off.)' : 'The hours roll by with the wheels. (T to ease off.)') : 'You sit up and watch the way go by.', '#c8d8ff', true);
+  if (!game.waiting) game.ui.openWait?.({ ride: rideLeft(p), kind: R.kind });
   return true;
+}
+
+// Minutes yet till the coach or ferry's in.
+export function rideLeft(p) {
+  const i = p && p.rideInfo;
+  return i ? i.left : 0;
 }
 
 // F, riding: down off the coach, where it is (no fare back); not off the

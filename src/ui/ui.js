@@ -876,7 +876,7 @@ export class UI {
         g.text(1, y++, rl.text.slice(0, 24), '#e8e0a0');
         if (!game.isParty || !game.isParty()) {
           g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
-          g.text(1, y++, rl.fast ? 'HURRYING ON · T: EASE OFF' : 'T: HURRY ON', rl.fast ? '#a0c8ff' : C.dim);
+          g.text(1, y++, rl.fast ? 'WAITING · ANY KEY: STOP' : 'T: SKIP TIME', rl.fast ? '#a0c8ff' : C.dim);
         }
       }
       // Below ground: what you've found there isn't yours till you're out.
@@ -1450,8 +1450,8 @@ export class UI {
     this.closeAll();
     this.open(new W.CraftWindow(this, station));
   }
-  openWait() {
-    this.open(new W.WaitWindow(this, this.game));
+  openWait(opts = {}) {
+    this.open(new W.WaitWindow(this, this.game, opts));
   }
   openNews() {
     this.closeAll();
