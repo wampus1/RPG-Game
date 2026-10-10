@@ -1771,6 +1771,36 @@ const SPRITES = {
     p.rect(7, 15, 2, 3, '#4a7a2a');
     return p.outline(OUT);
   },
+  // (Round 78) A ladder, as you see it (`rot` turned by the camera): face
+  // on up the wall behind it, its rungs across; from behind through the
+  // wall's far side, darker; side on against a wall left or right, the
+  // rails edge on with the rung ends standing out of them.
+  ladder(rot) {
+    const p = spr();
+    const w = ['#9a6a3a', '#6a4422', '#c08a52'];
+    if (rot === 2 || rot === 0) {
+      const back = rot === 0;
+      const rail = back ? w[1] : w[0];
+      for (const x of [3, 12]) {
+        p.vline(x, 0, 13, rail);
+        if (!back) p.vline(x - 1, 0, 13, w[1]);
+      }
+      for (let y = 2; y < 13; y += 3) {
+        p.hline(4, 11, y, back ? w[1] : w[2]);
+        if (!back) p.hline(4, 11, y + 1, w[1]);
+      }
+      if (back) for (let i = 0; i < p.d.length; i += 4) if (p.d[i + 3]) p.d[i + 3] = 150;
+      return p.outline(OUT);
+    }
+    // (Against a wall on the left (1) or the right (3): from the floor at
+    // its near edge up past the wall's face, a pace high either side.)
+    const x = rot === 1 ? 1 : 13;
+    const out = rot === 1 ? 1 : -1;
+    p.vline(x, 2, 25, w[0]);
+    p.vline(x + (rot === 1 ? -1 : 1), 2, 25, w[1]);
+    for (let y = 4; y < 25; y += 3) p.set(x + out, y, w[2]);
+    return p.outline(OUT);
+  },
   cobweb() {
     const p = spr();
     const c = '#e8e8f0';

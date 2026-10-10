@@ -19,7 +19,9 @@ import { dishTrigger } from './dishacts.js';
 import { pidOf } from '../sim/saga/refs.js';
 
 const BITE_WINDOW = 1.4; // seconds to strike once the bobber dips
-export const ZONE = 0.3; // width of the catch zone on the bar (at the start)
+export const ZONE = 0.3;
+// (Round 78) How long a cast takes, drawn back to the bobber landing.
+export const CAST_T = 0.85; // width of the catch zone on the bar (at the start)
 
 // The kinds on the end of the line. `move`: how it fights (see swim);
 // `fight`: how hard; `rank`: the practice it takes to hook one at all;
@@ -101,14 +103,15 @@ export function castLine(game, c, rand = Math.random) {
   if (game.fishing) {
     if (game.fishing.phase === 'bite') return hook(game);
     game.ui.msg('You reel in your line.', '#80c8ff');
+    p.castRod(0.4, true);
     game.fishing = null;
     return false;
   }
   p.face(c.x, c.z);
-  p.doAction(0.35);
-  game.fishing = { phase: 'wait', x: c.x, y: c.y, z: c.z, t: waitTime(game, rand), nibble: 2 + rand() * 3, dip: 0, px: p.x, pz: p.z };
-  game.audio?.play('splash');
-  game.renderer.emit(c.x, c.y, c.z, { n: 6, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.5, oy: 2 });
+  // (Round 78) Drawn back and cast out: the bobber lands a moment later.
+  p.castRod(CAST_T);
+  game.fishing = { phase: 'wait', x: c.x, y: c.y, z: c.z, t: waitTime(game, rand) + CAST_T, nibble: 2 + rand() * 3 + CAST_T, dip: 0, px: p.x, pz: p.z, fly: CAST_T };
+  game.audio?.play('swing');
   game.ui.msg('You cast your line... watch the bobber.', '#80c8ff');
   return true;
 }
@@ -133,6 +136,7 @@ export function hook(game, rand = Math.random) {
   // (How big: the bigger, the harder it fights, and the more it lands.)
   const size = K.item ? 1 : 0.75 + rand() * (0.45 + 0.05 * rank);
   f.phase = 'reel';
+  game.player.castRod(0.4, true);
   f.kind = kind;
   f.catch = K.item || 'fish';
   f.size = size;
@@ -224,6 +228,14 @@ export function updateFishing(game, dt, input, rand = Math.random) {
     return;
   }
   f.dip = Math.max(0, f.dip - dt * 3);
+  // (The bobber in the air yet: a splash where it comes down.)
+  if (f.fly > 0) {
+    f.fly -= dt;
+    if (f.fly <= 0) {
+      game.audio?.play('splash');
+      game.renderer.emit(f.x, f.y, f.z, { n: 6, color: ['#8cc4f0', '#e0f4ff'], up: 25, life: 0.5, oy: 2 });
+    }
+  }
   if (f.phase === 'wait') {
     f.t -= dt;
     f.nibble -= dt;

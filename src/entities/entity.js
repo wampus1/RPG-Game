@@ -99,6 +99,15 @@ export class Entity {
     if (this.moveT < 1) this.moveT = Math.min(1, this.moveT + dt / this.moveDur);
     if (this.flash > 0) this.flash -= dt;
     if (this.actionTimer > 0) this.actionTimer -= dt;
+    if (this.cast) {
+      this.cast.t += dt;
+      if (this.cast.t >= this.cast.dur) this.cast = null;
+    }
+    // (Round 78) A little jump (a block set under your own feet).
+    if (this.hopT > 0) {
+      this.hopT = Math.max(0, this.hopT - dt);
+      this.hop = this.hopT > 0 ? Math.round(Math.sin((1 - this.hopT / 0.25) * Math.PI) * 6) : 0;
+    }
     if (this.bubble) {
       this.bubble.t -= dt;
       if (this.bubble.t <= 0) this.bubble = null;
@@ -134,6 +143,13 @@ export class Entity {
   doAction(dur = 0.25) {
     this.actionTimer = dur;
     this.actionDur = dur;
+  }
+
+  // (Round 78) A rod cast: drawn back over the shoulder, then whipped out,
+  // the bobber flying off its tip to the water (`reel`: pulled up and back,
+  // a strike or a catch). See renderer.rodPose and fishingDecos.
+  castRod(dur = 0.85, reel = false) {
+    this.cast = { t: 0, dur, reel };
   }
 
   face(tx, tz) {

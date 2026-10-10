@@ -1,6 +1,7 @@
 // The town simulation layer that sits between the game and the settlement
 // records: economy ticks, reputation, mourning and graves, citizenship and
 // house building, traveling merchants, deferred world edits, and saving.
+import { Causes } from './causes.js';
 import { asSeat } from '../game/party.js';
 import { townMigrations } from '../game/migrate.js';
 import { isStar, starWary } from '../game/starfall.js';
@@ -158,6 +159,8 @@ export class Sim {
     this.portals = new Portals(game, this);
     this.labor = new Labor(game, this);
     this.politics = new Politics(game, this);
+    // (Round 78) Questions put to a town's vote (see causes.js).
+    this.causes = new Causes(game, this);
     this.war = new War(game, this);
     this.caravans = new Caravans(game, this);
     this.outings = new Outings(game, this);
@@ -1274,6 +1277,7 @@ export class Sim {
     this.portals.daily(L, day);
     this.labor.daily(L, day, rng);
     this.politics.townDay(L, day, rng);
+    this.causes.daily(L, day);
     this.war.townDay(L, day, rng);
     this.outings.daily(L, day);
     yield;
@@ -2397,6 +2401,7 @@ export class Sim {
       deserted: [...this.deserted],
       renown: [...this.renown],
       petition: this.petition || null,
+      causes: this.causes.serialize(),
       // How towns have grown: their size now, and ground they've spread onto.
       grown: this.game.world.ow.settlements.filter((s) => s.baseType || s.suburbs || s.reach).map((s) => [s.id, s.type, s.baseType || s.type, s.suburbs || null, s.reach || null]),
       favors: this.favors.serialize(),
@@ -2491,6 +2496,7 @@ export class Sim {
     this.deserted = new Set(data.deserted || []);
     this.renown = new Map(data.renown || []);
     this.petition = data.petition || null;
+    this.causes.load(data.causes);
     for (const [id, type, base, suburbs, reach] of data.grown || []) {
       const s = this.game.world.ow.settlements[id];
       if (!s) continue;

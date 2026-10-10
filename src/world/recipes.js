@@ -44,8 +44,16 @@ r('hand', 'stick', 4, { planks: 2 });
 r('hand', 'torch', 4, { stick: 1, coal: 1 });
 r('hand', 'workbench', 1, { planks: 4 });
 r('hand', 'campfire', 1, { stick: 3, cobblestone: 2 });
+// (Round 78) A ladder: a few sticks lashed together.
+r('hand', 'ladder', 2, { stick: 3 });
 r('hand', 'club', 1, { stick: 1, planks: 2 });
 r('workbench', 'wooden_spear', 1, { stick: 3 });
+// (Round 78) A blueprint: plans drawn up on paper (see game/plans.js).
+r('workbench', 'blueprint', 2, { paper: 2, ink: 1 });
+// (Round 78) Ships of your own design: see ui/shipdesign.js.
+r('workbench', 'shipwright_bench', 1, { planks: 8, iron_ingot: 2, paper: 2 });
+// (Round 78) Three iron hooks on a coil of rope.
+r('workbench', 'grapple_hook', 1, { iron_ingot: 1, string: 4 });
 
 // Leather and cloth, sewn by hand.
 r('hand', 'leather_cap', 1, { leather: 2, string: 1 });

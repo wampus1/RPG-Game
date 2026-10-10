@@ -3,6 +3,7 @@
 // other townsfolk, directions, small talk with questions back, favours,
 // jobs, professions, escorts, citizenship, the law...). Lines refer to
 // other people by name, never by gendered pronouns.
+import { isPlanKey, planOf, quote, commission } from './plans.js';
 import { speak, speakAll } from './voice.js';
 import { JOBS, HOBBIES, jobTitle } from '../entities/npcgen.js';
 import { MAP_W } from '../config.js';
@@ -290,8 +291,8 @@ export const TOPIC_CATS = [
 const CAT_OF = {};
 for (const [cat, ids] of Object.entries({
   now: 'trip trip_when conduct surrender serve turn_away escort dismiss deliver favor_check host',
-  business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard',
-  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign',
+  business: 'trade inn_room job hire companion bless research paper myworks expand wing adv_guard plan_build plan_pay',
+  town: 'towns mail dispatch give_core give_plans bounty donate ownhome renounce citizen profession petition sign cause_ask cause_sway cause_join cause_fund',
   talk: 'ask chat kind weathertalk favor who trip_tell adv_road adv_why adv_swap adv_duel adv_tip co_route co_company co_road nomad',
   manners: 'gift rude',
 })) for (const id of ids.split(' ')) CAT_OF[id] = cat;
@@ -448,6 +449,17 @@ function topicsRaw(npc, game) {
   else if (car.canEmploy(npc) && rep >= -10) add('job', `Could you use a hand at the ${bare(npc.layout.buildings[rec.work.building].name)}?`);
   if (rec.job === 'guard' && !npc.hired && !npc.visit) add('hire', 'I\'d like to hire you as an escort.');
   else if (!npc.hired && !npc.visit && rec.age === 'adult' && rep >= 60 && !car.escort) add('companion', 'Come travel with me for a while?');
+  // (Round 78) The town's vote coming up (see sim/causes.js).
+  const cq = sim.causes && s && sim.causes.of(s.id);
+  if (cq && rec.age !== 'child' && !npc.visit && !rec.visitor && rec.sid === s.id) {
+    const ci = cq.champ.indexOf(rec.idx);
+    if (ci >= 0) {
+      if (cq.side !== ci) add('cause_join', `I'm with you: ${cq.sides[ci].toLowerCase()}.`);
+      add('cause_fund', 'I\'d like to put some money into your side.');
+    } else add('cause_ask', 'What do you make of the vote?');
+  }
+  // (Round 78) A blueprint of yours, to have built.
+  if ((rec.job === 'builder' || rec.job === 'carpenter') && !npc.visit && myPlans(game).length) add('plan_build', 'Could you build this for me? (a blueprint)');
   // Your workshop and your house, waiting for a lot or going up.
   if (rec.job === 'mayor' || rec.job === 'builder' || rec.job === 'carpenter' || (rec.override && rec.override.act === 'build')) {
     const yours = sim.roads.yours(npc.layout);
@@ -1567,6 +1579,14 @@ function respondRaw(npc, game, id, arg) {
     case 'adv_duel':
     case 'adv_tip':
       return adventurerTalk(npc, game, id, arg);
+    case 'plan_build':
+    case 'plan_pay':
+      return planTalk(npc, game, id, arg);
+    case 'cause_ask':
+    case 'cause_sway':
+    case 'cause_join':
+    case 'cause_fund':
+      return causeTalk(npc, game, id, arg);
     case 'co_route':
     case 'co_company':
     case 'co_road':
@@ -2417,4 +2437,100 @@ function innTalk(npc, game, id, arg) {
   game.audio?.play('coin');
   sim.changeRep(npc, 1);
   return { lines: [pick(rng, ['Here\'s the key. Breakfast isn\'t included, but I won\'t tell if you take a roll.', 'There you are. The door sticks: lift it as you push.', 'It\'s yours. Sleep well.']), `(The room in the corner is yours: ${stayLeft(now, sim.abs)}.)`] };
+}
+
+// (Round 78) The blueprints in your pack with something drawn on them.
+function myPlans(game) {
+  const out = [];
+  for (const s of game.player.inv) {
+    if (!s || !isPlanKey(s.item)) continue;
+    const plan = planOf(game, s.item);
+    if (plan && plan.cells.length && !out.includes(plan)) out.push(plan);
+  }
+  return out;
+}
+
+// (Round 78) A builder looks over a blueprint of yours: what it'd cost (by
+// the block, the rarer the dearer), or why they can't; paid, it's in their
+// queue (see game/plans.js and sim/works.js).
+function planTalk(npc, game, id, arg) {
+  const plans = myPlans(game);
+  const s = npc.settlement;
+  if (id === 'plan_build' && !arg) {
+    if (plans.length === 1) return planTalk(npc, game, 'plan_build', String(plans[0].id));
+    return { lines: ['Let\'s have a look. Which one?'], choices: [...plans.slice(0, 6).map((q) => ({ id: 'plan_build', arg: String(q.id), label: `${q.name} (${q.cells.length} blocks)` })), { id: 'bye', label: 'Never mind.' }] };
+  }
+  const plan = plans.find((q) => String(q.id) === String(arg));
+  if (!plan) return { lines: ['I don\'t see it. Have you still got it on you?'] };
+  const q = quote(game, plan, s);
+  if (id === 'plan_build') {
+    if (!q.ok) return { lines: [`${plan.name}, is it? ${q.why}`] };
+    const queued = game.sim.works.active(s.id).length;
+    return {
+      lines: [`${plan.name}: ${q.n} blocks. Stone and timber, the dearer stuff, our hands and our time: call it ¤${q.total}.`, queued ? `We've ${queued} job${queued > 1 ? 's' : ''} ahead of it, mind. It goes in the queue.` : 'We could make a start on it straight away.'],
+      choices: [{ id: 'plan_pay', arg: String(plan.id), label: `Build it. (¤${q.total})` }, { id: 'bye', label: 'Too dear for now.' }],
+    };
+  }
+  // Paid.
+  if (!q.ok) return { lines: [q.why] };
+  if (countItem(game.player.inv, 'coin') < q.total) return { lines: [`That's ¤${q.total}, and you're short of it. Come back when you've the coin.`] };
+  removeItem(game.player.inv, 'coin', q.total);
+  const p = commission(game, plan, npc.layout);
+  if (!p) return { lines: ['Something\'s not right with where it\'s laid out. Lay it out again and come back.'] };
+  game.sim.changeRep?.(npc, 3, { why: 'business' });
+  return { lines: [`Done. ${plan.name}'s in the book, and we'll build it where you've laid it out, a block at a time.`, 'Keep the plan laid out, so we can see it.'], close: true };
+}
+
+// (Round 78) The town's vote, talked over (see sim/causes.js).
+function causeTalk(npc, game, id, arg) {
+  const C0 = game.sim.causes;
+  const L = npc.layout;
+  const q = C0 && C0.of(npc.settlement.id);
+  if (!q) return { lines: ['The vote? That\'s all done with now.'] };
+  const rec = npc.rec;
+  const champ = (i) => L.npcs.find((r) => r.idx === q.champ[i]);
+  if (id === 'cause_ask') {
+    const v = C0.view(L, q, npc);
+    const strong = Math.abs(v.lean) > 0.5;
+    const why = q.kind === 'law'
+      ? (v.side === 0 ? (q.enact ? 'We need it' : 'It\'s done more harm than good') : (q.enact ? 'We\'ve managed well enough without it' : 'It keeps us right'))
+      : `${champ(v.side) ? `${champ(v.side).name.first}` : 'they'} is the one for it`;
+    const lines = [`${q.title}`, v.swayed ? `You talked me round. ${q.sides[v.side]}.` : `${strong ? 'No question' : 'I think'}: ${q.sides[v.side].toLowerCase()}. ${why}.`];
+    const choices = [];
+    if (!q.asked[rec.idx]) {
+      if (q.side !== null) {
+        if (v.side !== q.side) choices.push({ id: 'cause_sway', arg: String(q.side), label: `You should vote: ${q.sides[q.side].toLowerCase()}.` });
+      } else choices.push({ id: 'cause_sway', arg: String(1 - v.side), label: `Hear me out on the other side (${q.sides[1 - v.side].toLowerCase()}).` });
+    }
+    const t = C0.tally(L, q);
+    lines.push(`(The way it stands: ${t[0]} to ${t[1]}. The vote's on day ${q.end + 1}.)`);
+    choices.push({ id: 'bye', label: 'Fair enough.' });
+    return { lines, choices };
+  }
+  if (id === 'cause_sway') {
+    const r = C0.sway(L, q, npc, Number(arg) === 1 ? 1 : 0);
+    if (r.ok) game.sim.changeRep(npc, 1, { why: 'cause' });
+    return { lines: [r.text] };
+  }
+  const ci = q.champ.indexOf(rec.idx);
+  if (ci < 0) return { lines: ['...'] };
+  if (id === 'cause_join') {
+    C0.join(L, q, ci);
+    return { lines: [rec.personality.kindness > 0.5 ? 'Thank you. It means a lot, someone standing up with us.' : 'Good. Then go and talk some sense into the rest of them.', `(You stand with ${q.sides[ci].toLowerCase()}: ${rec.name.first}'s side.)`] };
+  }
+  if (id === 'cause_fund') {
+    const coins = countItem(game.player.inv, 'coin');
+    if (!arg) {
+      const choices = [25, 50, 100].filter((n) => n <= coins).map((n) => ({ id: 'cause_fund', arg: String(n), label: `¤${n}` }));
+      choices.push({ id: 'bye', label: 'Another time.' });
+      return { lines: ['Every coin helps: pamphlets, a barrel for the square, a word in the right ear. What can you spare?'], choices };
+    }
+    const n = Math.min(coins, Number(arg) || 0);
+    if (n <= 0) return { lines: ['That\'s kind, but your purse is empty.'] };
+    removeItem(game.player.inv, 'coin', n);
+    C0.fund(L, q, ci, n);
+    if (q.side === null) C0.join(L, q, ci);
+    return { lines: [`¤${n}! That'll turn a few heads. Thank you.`] };
+  }
+  return { lines: ['...'] };
 }

@@ -13,6 +13,9 @@ export const SAILOR_ROLES = {
   marine: { name: 'Marine', hp: 28, dmg: 5 },
   merchant: { name: 'Merchant', hp: 14, dmg: 1 },
   passenger: { name: 'Passenger', hp: 14, dmg: 1 },
+  // (Round 78: a pirate crew's; see game/pirates.js.)
+  pirate: { name: 'Pirate', hp: 20, dmg: 3 },
+  pirate_archer: { name: 'Pirate Archer', hp: 16, dmg: 2 },
 };
 
 export class Sailor extends Entity {
@@ -38,7 +41,8 @@ export class Sailor extends Entity {
   // What's in their hand (a gunner's rammer, a marine's musket's no
   // part of the game: a cutlass).
   heldItem() {
-    return this.role === 'marine' || this.angry ? 'sabre' : null;
+    if (this.role === 'pirate_archer') return 'bow';
+    return this.role === 'marine' || this.role === 'pirate' || this.angry ? 'sabre' : null;
   }
 
   offhandItem() {

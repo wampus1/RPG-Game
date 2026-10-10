@@ -3,10 +3,10 @@ import { actionKeyName, ACTIONS, keyOf, keyName, bind, resetKeybinds } from '../
 import { COLS, ROWS, REGION_W, REGION_D, BELT_SIZE, CHAR_W, CHAR_H, INV_SIZE } from '../config.js';
 import { Window, cap, describeActivity } from './window.js';
 import { C, wrap } from './ascii.js';
-import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandable, offhandLight } from '../world/items.js';
+import { ITEMS, maxStack, WEAR_SLOTS, GEMS, canSocket, socketed, twoHanded, offhandLight, offhandOk } from '../world/items.js';
 import { starable, starGear } from '../world/quality.js';
 import { recipesFor, STATIONS } from '../world/recipes.js';
-import { addItem, removeItem, countItem, countAny, removeAny, anyName } from '../game/inventory.js';
+import { addItem, removeItem, countItem, anyName } from '../game/inventory.js';
 import { has as heroHas } from '../game/hero.js';
 import { openingLine, topicsFor, respond, TOPIC_CATS } from '../game/dialogue.js';
 import { TechWindow } from './research.js';
@@ -28,6 +28,8 @@ import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
 import { pidOf as sagaPid } from '../sim/saga/refs.js';
 import { questSummary } from './quests.js';
+import { sortPack, quickStack, craftSources, countFrom, takeFrom } from '../game/invtools.js';
+import { ReforgeWindow } from './reforge.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
 // peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
@@ -164,8 +166,8 @@ export class InventoryWindow extends Window {
       // (The shield arm: a shield, or a second blade to fight with.)
       const slung = k === 'shield' && it && twoHanded(p.heldItem());
       const lamp = k === 'shield' && it && offhandLight(p.equip[k]);
-      g.text(sx + 5, sy, k === 'shield' ? (it && (it.kind === 'weapon' || lamp) ? 'Off hand' : 'Shield') : cap(k), it ? C.fg : C.faint);
-      g.text(sx + 5, sy + 1, slung ? 'slung (2-hand)' : lamp ? 'lights the way' : it ? (it.kind === 'weapon' ? `dmg ${it.damage}` : it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', slung ? C.orange : C.dim);
+      g.text(sx + 5, sy, k === 'shield' ? (it && (it.kind === 'weapon' || lamp || it.blueprint) ? 'Offhand' : 'Shield') : cap(k), it ? C.fg : C.faint);
+      g.text(sx + 5, sy + 1, slung ? 'slung (2-hand)' : lamp ? 'lights the way' : it && it.blueprint ? 'drawing' : it ? (it.kind === 'weapon' ? `dmg ${it.damage}` : it.block ? `blocks ${Math.round(it.block * 100)}%` : it.armor ? `-${Math.round(it.armor * 100)}%` : 'worn') : '', slung ? C.orange : it && it.blueprint ? '#7ab0ff' : C.dim);
       this.hit(sx, sy, 3, 2, () => this.wearClick(p, k));
     });
     g.text(40, 18, `Armour ${Math.round(p.armorValue() * 100)}%`, C.cyan);
@@ -189,6 +191,22 @@ export class InventoryWindow extends Window {
     g.text(x + 1, 15, 'Right-click armour:', C.faint);
     g.text(x + 1, 16, 'wear · C craft · J', C.faint);
     g.text(2, 19, ' Drag outside to drop ', C.faint);
+    // (Round 78) The pack put in order; its things put away in the chests
+    // about you that hold the same.
+    const btn = (x, label, fn) => {
+      const hov = this.hovering(x, 19, label.length, 1);
+      g.text(x, 19, label, hov ? C.white : C.hi, hov ? '#3a3050' : '#2a2230');
+      this.hit(x, 19, label.length, 1, (ck, gm) => fn(gm || game));
+    };
+    btn(25, ' Sort pack ', (gm) => {
+      const moved = sortPack(gm.player.inv);
+      this.ui.audio?.play(moved ? 'select' : 'error');
+    });
+    btn(37, ' Stack to chests ', (gm) => {
+      const r = quickStack(gm);
+      this.ui.audio?.play(r.moved ? 'chest' : 'error');
+      this.ui.msg(r.moved ? `Put away ${r.moved} thing${r.moved > 1 ? 's' : ''} into ${r.chests > 1 ? `${r.chests} chests` : 'a chest'} nearby.` : 'No chest about you holds any of what\'s in your pack (or none\'s yours to put things in).', r.moved ? C.green : C.dim, true);
+    });
   }
   // A worn place clicked: put on what's on the cursor, or take off what's there.
   wearClick(p, k) {
@@ -196,7 +214,7 @@ export class InventoryWindow extends Window {
     const cs = ui.cursorStack;
     if (cs) {
       const it = ITEMS[cs.item];
-      const fits = it && ((it.kind === 'armor' && it.slot === k) || (k === 'shield' && (offhandable(cs.item) || offhandLight(cs.item))));
+      const fits = it && ((it.kind === 'armor' && it.slot === k) || (k === 'shield' && offhandOk(cs.item)));
       if (!fits) {
         ui.audio?.play('error');
         if (it && it.kind === 'weapon' && k === 'shield') ui.msg(it.hands === 2 ? 'That takes both hands.' : 'That\'s no weapon for the off hand.', '#c8c8c8', true);
@@ -231,10 +249,10 @@ export class InventoryWindow extends Window {
     }
     // Right-click a one-handed blade: into the off hand, to fight with two.
     // (Or a torch, to light the way with a blade still in the other.)
-    if (ck.button === 2 && p.inv[i] && (offhandable(p.inv[i].item) || offhandLight(p.inv[i].item)) && !this.ui.cursorStack) {
+    if (ck.button === 2 && p.inv[i] && offhandOk(p.inv[i].item) && !this.ui.cursorStack) {
       if (p.wear(i)) {
         this.ui.audio?.play('equip');
-        this.ui.msg(`${ITEMS[p.equip.shield].name} in your off hand.`, '#c8e0ff', true);
+        this.ui.msg(`${ITEMS[p.equip.shield].name} in your off hand.${ITEMS[p.equip.shield].blueprint ? ' The blocks you set down now go onto it.' : ''}`, '#c8e0ff', true);
       }
       return;
     }
@@ -322,12 +340,14 @@ export class CraftWindow extends Window {
     this.scroll = 0;
     this.recipes = recipesFor(station);
   }
+  // (Round 78) `inv`: where the makings come from (your pack, and the
+  // chests you've set down nearby: see invtools.craftSources).
   canCraft(inv, r) {
-    for (const [k, n] of Object.entries(r.in)) if (countAny(inv, k) < n) return false;
+    for (const [k, n] of Object.entries(r.in)) if (countFrom(inv, k) < n) return false;
     return true;
   }
   draw(g, game) {
-    const inv = game.player.inv;
+    const inv = craftSources(game);
     g.box(0, 0, this.w, this.h, { bg: C.bg, double: true, title: `CRAFTING · ${STATIONS[this.station].toUpperCase()}` });
     const list = [...this.recipes].sort((a, b) => (this.canCraft(inv, b) ? 1 : 0) - (this.canCraft(inv, a) ? 1 : 0));
     this.sorted = list;
@@ -345,7 +365,7 @@ export class CraftWindow extends Window {
       g.text(6, y, name, ok ? C.hi : C.dim);
       g.text(6 + name.length + 1, y, r.n > 1 ? `x${r.n}` : '', C.dim);
       const ing = Object.entries(r.in).map(([key, n]) => {
-        const have = countAny(inv, key);
+        const have = countFrom(inv, key);
         return { text: `${n} ${anyName(key) || ITEMS[key]?.name || key}`, ok: have >= n };
       });
       let xx = 6;
@@ -357,9 +377,10 @@ export class CraftWindow extends Window {
       this.hit(1, y, this.w - 2, 2, (ck, gm) => this.craft(r, gm, ck.shift ? 5 : 1));
     }
     if (list.length > perPage) g.text(this.w - 14, this.h - 1, ` ${this.scroll + 1}-${Math.min(list.length, this.scroll + perPage)}/${list.length} `, C.dim);
+    if (inv.length > 1) g.text(2, this.h - 1, ` + ${inv.length - 1} chest${inv.length > 2 ? 's' : ''} of yours nearby `, C.green);
     // The scribe's desk prints; the jeweller's bench sets stones; at a
     // furnace or an oven, a dish of your own (see ui/cook.js).
-    const extra = { scribe: ' print a newspaper ', jeweller: ' set a gem ', furnace: ' Cook a dish in the pot ', baker: ' Bake a dish of your own ' }[this.station] || null;
+    const extra = { scribe: ' print a newspaper ', jeweller: ' set a gem ', furnace: ' Cook a dish in the pot ', baker: ' Bake a dish of your own ', anvil: ' Reforge · move a modifier ', smith: ' Reforge · move a modifier ' }[this.station] || null;
     if (extra) {
       const ey = this.h - 3;
       const hov = this.hovering(this.w - extra.length - 2, ey, extra.length, 1);
@@ -378,9 +399,11 @@ export class CraftWindow extends Window {
       }
       this.ui.open(new PrintWindow(this.ui, game, game.world.getLayout(s)));
     } else if (this.station === 'jeweller') this.ui.open(new SettingWindow(this.ui, game));
+    // (Round 78) See ui/reforge.js.
+    else if (this.station === 'anvil' || this.station === 'smith') this.ui.open(new ReforgeWindow(this.ui));
   }
   onKey(k) {
-    if ((this.station === 'scribe' && k.code === 'KeyP') || (this.station === 'jeweller' && k.code === 'KeyS')) {
+    if ((this.station === 'scribe' && k.code === 'KeyP') || (this.station === 'jeweller' && k.code === 'KeyS') || ((this.station === 'anvil' || this.station === 'smith') && k.code === 'KeyR')) {
       this.extra();
       return true;
     }
@@ -396,14 +419,15 @@ export class CraftWindow extends Window {
   }
   craft(r, game, times) {
     const inv = game.player.inv;
+    const src = craftSources(game);
     let made = 0;
     const madeKeys = [];
     const saved = [];
     let burnt = 0;
     for (let t = 0; t < times; t++) {
-      if (!this.canCraft(inv, r)) break;
+      if (!this.canCraft(src, r)) break;
       const used = [];
-      for (const [k, n] of Object.entries(r.in)) used.push(...removeAny(inv, k, n));
+      for (const [k, n] of Object.entries(r.in)) used.push(...takeFrom(src, k, n));
       // A cook gets more out of the pot; a tinker wastes less.
       const food = ITEMS[r.out]?.kind === 'food';
       const extra = food && heroHas(game.hero, 'cook') && Math.random() < 0.35 ? 1 : 0;

@@ -97,7 +97,9 @@ test('upstairs: beds slept in, a trade over a shop, rooms over the tavern; and t
   assert.ok(links.length, 'somewhere to go by coach');
   game.player.give('coin', 200);
   game.journey(links[0]);
-  for (let i = 0; i < 400 && game.skipping; i++) game.update(0.05, input);
+  // (Round 78: ridden the whole way, hurried on.)
+  game.handleKeys([{ code: 'KeyT', raw: 'KeyT' }], 0);
+  for (let i = 0; i < 4000 && (game.skipping || game.player._ride); i++) game.update(0.05, input);
   assert.equal(W.ow.settlementAt(game.player.x, game.player.z)?.id, links[0].s.id, 'set down there');
 });
 

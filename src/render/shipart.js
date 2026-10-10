@@ -288,6 +288,30 @@ SHIP_SPRITES.blueprint_table = function blueprintTable() {
   for (const [x, y] of [[2, 11], [13, 11]]) p.set(x, y, '#c82020');
   return p.outline(OUT);
 };
+// (Round 78) The shipwright's bench: a long bench, a half-planked hull on
+// its stocks, a plane and a rolled draught beside it.
+SHIP_SPRITES.shipwright_bench = function shipwrightBench() {
+  const p = new Px(16, SPR_H);
+  const wood = '#7a5a34';
+  p.rect(0, 16, 16, 3, wood);
+  p.hline(0, 15, 16, shade(wood, 1.25));
+  for (const x of [1, 14]) p.vline(x, 19, 26, shade(wood, 0.75));
+  p.hline(1, 14, 23, shade(wood, 0.7));
+  // The hull on its stocks: ribs, a few planks on.
+  p.hline(3, 11, 15, '#4a3420');
+  for (let x = 3; x <= 11; x += 2) p.vline(x, 10, 14, '#c8a070');
+  p.hline(3, 11, 14, '#8a5a30');
+  p.hline(4, 10, 13, '#9a6a3a');
+  p.set(12, 11, '#c8a070');
+  p.set(12, 12, '#c8a070');
+  p.vline(7, 5, 12, '#5a3c22');
+  // The plane, and the draught rolled up.
+  p.rect(12, 14, 3, 1, '#a07040');
+  p.set(13, 13, '#3a3a42');
+  p.rect(0, 13, 2, 2, '#c8dcf0');
+  p.set(1, 13, '#2a4a8a');
+  return p.outline(OUT);
+};
 export const SHIP_ANIM = { ship_pump: 2 };
 
 // ------------------------------------------------------------ item icons
@@ -319,7 +343,8 @@ export function shipIcon(key) {
   // (Round 69) Every ship's in a bottle: lying on its stand, corked, her
   // in miniature inside it (an empty one, a ship bottle, to put one in).
   if (key === 'ship_bottle') return bottle(p, null);
-  const m = /^ship_(sloop|brigantine|galleon|frigate)$/.exec(key);
+  // (Round 78: one of your own design, too: see game/shipdesign.js.)
+  const m = /^ship_(sloop|brigantine|galleon|frigate|design)(?:_\d+)?$/.exec(key);
   if (!m) return null;
   return bottle(p, m[1]);
 }
@@ -346,9 +371,9 @@ function bottle(p, type) {
     // A sea of blue putty, and her on it: her hull, her masts, her sails.
     p.hline(2, 11, 11, '#2e6a94');
     p.hline(3, 10, 9, '#7a4a28');
-    p.hline(4, 9, 10, '#8a2a1e');
+    p.hline(4, 9, 10, type === 'design' ? '#2a4a8a' : '#8a2a1e');
     if (type === 'galleon') p.rect(2, 7, 2, 2, '#7a4a28');
-    const masts = { sloop: [6], brigantine: [5, 8], galleon: [5, 7, 9], frigate: [4, 7, 9] }[type];
+    const masts = { sloop: [6], brigantine: [5, 8], galleon: [5, 7, 9], frigate: [4, 7, 9], design: [5, 8] }[type];
     for (const x of masts) {
       p.vline(x, 4, 8, '#4a2e14');
       if (type === 'sloop') {

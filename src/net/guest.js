@@ -4,6 +4,7 @@
 // they're doing, the blows in the air, your own windows, how you are. It
 // draws that, plays its sounds, and sends back what you press and click
 // and point at, for the host to do as you.
+import { heard } from './chat.js';
 import { applyEntity, resolveEntity, dec } from './wire.js';
 import { applyFrame } from './uiwire.js';
 import { Region } from '../world/region.js';
@@ -19,10 +20,11 @@ import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
 import { GAME_VERSION, versionText } from '../version.js';
 import { applyShips, driftShips } from '../game/ships3d.js';
+import { registerDesign } from '../game/shipdesign.js';
 
 // Keys that are this screen's own business (the camera, help, the map,
 // the picture), not the host's.
-export const LOCAL_KEYS = new Set(['KeyQ', 'KeyE', 'KeyH', 'F1', 'F2', 'F3', 'KeyM', 'KeyP', 'KeyL', 'Backquote', 'Slash']);
+export const LOCAL_KEYS = new Set(['KeyQ', 'KeyE', 'KeyH', 'F1', 'F2', 'F3', 'KeyM', 'KeyP', 'KeyL', 'Backquote', 'Slash', 'Enter', 'NumpadEnter']);
 // (With one of the host's windows open over the world, it has your keys,
 // all but these: the picture's own.)
 const SCREEN_KEYS = new Set(['F2', 'F3']);
@@ -104,6 +106,8 @@ export class GuestNet {
       this.guilds = m.guilds || [];
       this.onParty(this.party);
     } else if (m.t === 'note') this.onNote(m.text, m.profile);
+    // (Round 78) A line someone said that reaches you.
+    else if (m.t === 'chat') heard(this.game && this.game.ui, m);
     // (What a command run on the host said: into the console.)
     else if (m.t === 'cmdOut') this.commandOut(m.lines || [], m.flags || null);
     else if (m.t === 'feat') this.onFeat?.(m.id);
@@ -155,6 +159,11 @@ export class GuestNet {
   canCommand() {
     const me = (this.party || []).find((q) => this.profile && q.id === this.profile.id);
     return !!(me && me.perm && me.perm.commands);
+  }
+
+  // (Round 78) A line said, on a channel (the host passes it on).
+  chat(ch, text) {
+    this.out({ t: 'chat', ch, text: String(text).slice(0, 200) });
   }
 
   // A command typed in the console: the host runs it, as you.
@@ -240,6 +249,9 @@ export class GuestNet {
       // (The storm wall, down on the host's side: down here too.)
       if (m.slow.wallDown) game.world.ow.wallDown = game.wallDown = true;
       game.signIcons = new Map(m.slow.signs || []);
+      // (Round 78) Blueprints laid out about you (see game/plans.js).
+      game.plans = new Map((m.slow.plans || []).map((q) => [q.id, q]));
+      for (const d of m.slow.designs || []) if (!game.shipDesigns || !game.shipDesigns.has(d.id)) registerDesign(game, d, d.id);
       game.displayShown = new Map(m.slow.shown || []);
     }
     // Your own map: what's new on it.

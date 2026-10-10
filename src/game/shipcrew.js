@@ -16,7 +16,7 @@ import { Sailor } from '../entities/sailor.js';
 import { findPath } from '../entities/pathfind.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
-import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel } from './ships3d.js';
+import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel, roomFor } from './ships3d.js';
 import { holdOf, holdPos, holdLocal } from './shiphold.js';
 
 const TAU = Math.PI * 2;
@@ -55,6 +55,10 @@ export function crewTick(game, S, dt) {
     c.update(dt);
     if (c.dead) continue;
     if (c.paidOff) goAshore(game, S, c, dt);
+    // (Round 78) Over the rail onto another ship (a pirate's boarders):
+    // walking her deck, not their own; the fight's theirs to see to (see
+    // pirates.js).
+    else if (c.deck && c.deck.s !== S.id) boarderBrain(game, c);
     else if (c.deck) deckBrain(game, S, c, dt);
     else if (S.hold && S.hold.has(c)) holdBrain(game, S, c, dt);
   }
@@ -181,6 +185,17 @@ const LINES = {
   hurt: ['We\'re holed!', 'Water in the hold!', 'Man the pumps!'],
 };
 
+function boarderBrain(game, c) {
+  const d = c.deck;
+  const on = shipById(game, d.s);
+  if (!on || d.mv) return;
+  const t = c.task;
+  if (!t || !t.path || !t.path.length) return;
+  const [nx, , nz] = t.path[0];
+  if (deckStep(game, on, c, Math.sign(nx - d.cx), Math.sign(nz - d.cz), NPC_STEP_TIME * 0.85)) t.path.shift();
+  else t.path = null;
+}
+
 function deckBrain(game, S, c, dt) {
   const d = c.deck;
   if (d.mv) return;
@@ -278,7 +293,7 @@ function deckBrain(game, S, c, dt) {
       const path = deckPath(S, here, { x: to.cx, y: to.y, z: to.cz });
       c.task = path ? { kind: 'go', path, then: { kind: 'haul', t: 3 + Math.random() * 4 } } : { kind: 'haul', t: 3 };
     }
-  } else if (R < 0.42 && c.role !== 'captain') {
+  } else if (R < 0.42 && c.role !== 'captain' && !(S.pirate && S.fight)) {
     goBelow(game, S, c, 'visit');
   } else if (R < 0.85) {
     for (let k = 0; k < 6; k++) {
@@ -428,17 +443,32 @@ export function helmsman(game, S, dt) {
     }
   }
   const foe = f && f.ship ? shipById(game, f.ship) : null;
+  // (Round 78) A pirate lashed alongside: the grapnels have her (see
+  // pirates.js), her guns still run out.
+  if (S.pirate && S.grapple && foe) {
+    S.sailGoal = 0.1;
+    S.rudder *= 0.9;
+    S.runOut = true;
+    return;
+  }
   if ((foe && !foe.sinking) || (f && f.x !== undefined)) {
     // Broadside on: steer to bring her side to bear at a good range.
     const dx = (foe ? foe.x : f.x) - S.x;
     const dz = (foe ? foe.z : f.z) - S.z;
     const d = Math.hypot(dx, dz);
+    // (Round 78) A pirate pounds away at range a while (or till her foe's
+    // hurt), then closes to throw her grapnels across.
+    let closing = false;
+    if (S.pirate && foe) {
+      S.fightT = (S.fightT || 0) + dt;
+      closing = S.fightT > 16 || foe.whole < 0.8;
+    }
     const bearing = Math.atan2(dx, dz);
     const side = f.side || (angleDiff(bearing, S.yaw) > 0 ? 1 : -1);
     f.side = side;
     // (Course: the bearing less a right angle toward her chosen side; in
     // close, open the range.)
-    const off = d < 12 ? 2.1 : d > 35 ? 0.6 : Math.PI / 2;
+    const off = closing ? (d < 16 ? 1.25 : 0.25) : d < 12 ? 2.1 : d > 35 ? 0.6 : Math.PI / 2;
     const course = bearing - side * off;
     tx = S.x + Math.sin(course) * 20;
     tz = S.z + Math.cos(course) * 20;
@@ -500,6 +530,35 @@ export function helmsman(game, S, dt) {
   const W = windOf(game);
   const P = pointOfSail(S, W);
   if (P.deg > 140 && Math.abs(diff) < 0.4) S.rudder = S.rudder >= 0 ? 0.8 : -0.8;
+  // (Round 78) Caught in irons, no way on her to steer by: her headsail
+  // backed, and she falls off the wind till it fills her again.
+  // (And held fast against a shore or a hull with her canvas full: she's
+  // backed off it, and turned.)
+  S.stallT = Math.abs(S.v) < 0.5 && S.sailSet > 0.3 ? (S.stallT || 0) + dt : 0;
+  if ((P.deg > 130 && Math.abs(S.v) < 1) || S.stallT > 3) {
+    S.yaw += (S.rudder >= 0 ? 1 : -1) * 0.3 * dt;
+    S.yaw = ((S.yaw % TAU) + TAU) % TAU;
+  }
+  // (Still fast after a while: warped off it, a few paces into open
+  // water and turned toward her course, as if kedged off.)
+  if (S.stallT > 5 && !S.grapple && !S.grappledBy) {
+    S.stallT = 0;
+    const want = Math.atan2(tx - S.x, tz - S.z);
+    outer: for (let r = 2; r <= 10; r += 2) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * TAU;
+        const x = S.x + Math.cos(a) * r;
+        const z = S.z + Math.sin(a) * r;
+        for (const yaw of [want, want + 0.6, want - 0.6, S.yaw]) {
+          if (!roomFor(game, S.type, x, z, yaw, S, 2)) continue;
+          S.x = x;
+          S.z = z;
+          S.yaw = ((yaw % TAU) + TAU) % TAU;
+          break outer;
+        }
+      }
+    }
+  }
   if (!S.crewHere) S.sheet += (P.ideal - S.sheet) * Math.min(1, dt * 0.5);
 }
 

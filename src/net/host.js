@@ -7,6 +7,7 @@
 // and sounds, their own windows, their own state. So there's one world,
 // and everyone sees the same one: the same wolf in the same place,
 // going for one of you; the same block where someone set it.
+import { parseLine, hears, heard } from './chat.js';
 import { openEnvelope, toPlayer, toRelay, MAX_PLAYERS } from './protocol.js';
 import { asSeat, seatMap } from '../game/party.js';
 import { enc, diffFields, packEntity } from './wire.js';
@@ -342,6 +343,25 @@ export class HostNet {
     } else if (m.t === 'friend') this.friendWord(g.profile, m.to, m.yes);
     else if (m.t === 'guild') this.guildOp(g.profile, m);
     else if (m.t === 'bout') challengeBout(this.game, seat, m.to, m.wager);
+    // (Round 78) A line said, on a channel: passed on to whoever hears it.
+    else if (m.t === 'chat') this.chat(g, m.ch, m.text);
+  }
+
+  // (Round 78) Someone's line (`g` a guest, or null for the host): heard
+  // by each of you it reaches (see net/chat.js).
+  chat(g, ch, text) {
+    const line = parseLine(text, ch);
+    if (!line) return;
+    const game = this.game;
+    const from = g ? g.seat.ent : game.player;
+    const prof = g ? g.profile : this.profile;
+    const out = { t: 'chat', ch: line.ch, text: line.text, from: (prof && prof.name) || 'Someone', pid: prof ? prof.id : null };
+    // (The host, on their own screen.)
+    if (hears(game, from, game.player, line.ch)) heard(game.ui, out);
+    for (const o of this.guests.values()) {
+      if (o.state !== 'in' || !o.seat) continue;
+      if (hears(game, from, o.seat.ent, line.ch)) this.to(o, out);
+    }
   }
 
   // A guild's doings (see game/guilds.js), by player `by` (their profile:
@@ -688,7 +708,11 @@ export class HostNet {
     g.sent.slow -= step;
     if (g.sent.slow <= 0) {
       g.sent.slow = 0.5;
-      const slow = { placed: [...game.placed], relics: game.relics ? [...game.relics].map(([k, v]) => [k, enc(v, 3)]) : [], signs: game.signIcons ? [...game.signIcons] : [], shown: game.displayShown ? [...game.displayShown] : [], wallDown: !!game.world.ow.wallDown };
+      const slow = { placed: [...game.placed], relics: game.relics ? [...game.relics].map(([k, v]) => [k, enc(v, 3)]) : [], signs: game.signIcons ? [...game.signIcons] : [], shown: game.displayShown ? [...game.displayShown] : [], wallDown: !!game.world.ow.wallDown,
+        // (Round 78) Blueprints laid out near them.
+        plans: game.plans ? [...game.plans.values()].filter((q) => q.at && q.cells.length && Math.hypot(q.at.x - p.x, q.at.z - p.z) < 160).map((q) => ({ id: q.id, name: q.name, at: q.at, cells: q.cells })) : [],
+        // (Round 78) Ships of the players' own design: their kinds.
+        designs: game.shipDesigns ? [...game.shipDesigns.values()] : [] };
       const sj = JSON.stringify(slow);
       if (sj !== g.sent.slowLast) {
         g.sent.slowLast = sj;

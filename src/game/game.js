@@ -87,6 +87,14 @@ import { dishLines } from '../world/dishes.js';
 import { Riding, HORSE_FOOD } from './riding.js';
 import { wallDirOf, dirToward, WALL_DIRS, useDisplay, paintingSubject } from './displays.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
+import { throwGrapple, grappleTick } from './grapple.js';
+import { notePlaced } from './invtools.js';
+import { pirateTick, piratesSave, piratesLoad, isPirate } from './pirates.js';
+import { stallsTick } from './stalls.js';
+import { isBlueprint, ghostProblem, placeGhost, removeGhost, plansSave, plansLoad } from './plans.js';
+import { boxPress, boxDrag, boxWheel, openPlanWindow } from '../ui/plans.js';
+import { ShipDesignWindow } from '../ui/shipdesign.js';
+import { startRide, tick as rideTick, hurry as rideHurry, getOff as rideOff, endRide as rideEnd, rideSave, rideLoad } from './rides.js';
 import { lawOn } from '../sim/laws.js';
 import { PROFESSIONS } from '../sim/careers.js';
 import { EVENT_BLOCKS } from '../sim/events.js';
@@ -1763,6 +1771,9 @@ export class Game {
   journey(link) {
     const p = this.player;
     if (countItem(p.inv, 'coin') < link.fare) return false;
+    // (Round 78) Carried there, the whole way, in the coach or aboard the
+    // ferry (see rides.js); the old way only if there's no way to be had.
+    if (startRide(this, link)) return true;
     removeItem(p.inv, 'coin', link.fare);
     const to = { sid: link.s.id, kind: link.kind, name: link.s.name, mins: link.mins };
     this.audio?.play(link.kind === 'ferry' ? 'ship_bell' : 'horn');
@@ -2088,6 +2099,10 @@ export class Game {
     tickLater(this, dt);
     fleetsTick(this, dt);
     idleShipsTick(this, dt);
+    // (Round 78) Pirates: their cove, their raiders, grapnels and boarders.
+    // Horses and wagons led ashore from a ship.
+    pirateTick(this, dt);
+    stallsTick(this, dt);
     updateLabor(this, dt);
     // (The great masters, who fill more than the one tile: see
     // entities/footprint.js.)
@@ -2182,9 +2197,11 @@ export class Game {
     if (this.cutscene && this.cutscene.actors) for (const a of this.cutscene.actors) if (!a.dead) vis.push(a);
     this.visibleEntities = vis;
     if (this.autosaveDue && !this.cutscene && !(this.scene && this.scene.intro)) {
+      const why = this.autosaveDue;
       this.autosaveDue = false;
-      // (Round 77: unless it's turned off in Settings.)
-      if (this.autosave && !(this.ui && this.ui.noAutosave)) this.autosave();
+      // (Round 77: unless it's turned off in Settings. Round 78: the reason,
+      // going into a dungeon or out, or true for the morning's.)
+      if (this.autosave && !(this.ui && this.ui.noAutosave)) this.autosave(typeof why === 'string' ? why : null);
     }
     if (this.net) this.net.afterUpdate(dt);
   }
@@ -2307,6 +2324,9 @@ export class Game {
     // and bleat; nothing more. See dishacts.js.)
     const sheep = this.player.sheepT > 0;
     if (!blocked) this.handleKeys(sheep ? sheepFilter(this, this.player, uiRes.pressed) : uiRes.pressed, uiRes.wheel);
+    // (Round 78) On the coach or the ferry: carried along. On a rope: up it.
+    if (this.player._ride) rideTick(this, this.player, dt);
+    if (this.player._grapple) grappleTick(this, this.player, dt);
     // What you wear and hold, and the potions you've drunk.
     this.bonusT = (this.bonusT || 0) - dt;
     if (this.bonusT <= 0) {
@@ -2383,7 +2403,7 @@ export class Game {
   // Nothing under your feet any more: down to the first ground below (a
   // long drop hurts). Not on a raft, a horse, a seat or in a wagon.
   settleFall(p) {
-    if (!p || p.dead || p.moving || p.raft || p.deck || p.mount || p.inWagon || p.sitting || p.sleeping || p.swallowed || p.down) return false;
+    if (!p || p.dead || p.moving || p.raft || p.deck || p.mount || p.inWagon || p.sitting || p.sleeping || p.swallowed || p.down || p._grapple) return false;
     const w = this.world;
     const below = BLOCKS[w.getBlock(p.x, p.y - 1, p.z)];
     if (below.standable || below.liquid || w.isWaterAt(p.x, p.y, p.z)) return false;
@@ -2678,6 +2698,9 @@ export class Game {
     // were the last down there.)
     asSeat(this, seat, () => {
       if (this.dungeon) this.dungeon.leave();
+      // (Round 78) Gone mid-way on the coach or the ferry: kept as set
+      // down at the far end.
+      if (this.player._ride) rideEnd(this, this.player, 'there');
     });
     this.partyChars.set(seat.id, this.seatSave(seat));
     const p = seat.ent;
@@ -2927,8 +2950,10 @@ export class Game {
           this.toss(k.ctrl);
           break;
         case 'KeyT':
+          // (Round 78) Riding the coach or the ferry: hurry the hours on.
+          if (p._ride) rideHurry(this, p);
           // Sitting down: let some hours go by.
-          if (p.sitting && !this.waiting) this.ui.openWait?.();
+          else if (p.sitting && !this.waiting) this.ui.openWait?.();
           else if (!p.sitting) this.ui.msg('Sit down somewhere first (a chair, bench or stool) to wait.', '#c8c8c8', true);
           break;
         case 'KeyR':
@@ -2968,6 +2993,9 @@ export class Game {
     // The wheel turns the belt, shift held or not. (The layer you build on
     // is Z, X and V.)
     if (wheel && shipWheel(this, wheel)) return;
+    // (Round 78) The copy box's top raised or lowered (its bottom, with
+    // Shift held).
+    if (wheel && p.copyBox && p.heldDef()?.blueprint && boxWheel(this, p, wheel)) return;
     if (wheel) this.selectSlot((p.selected + Math.sign(wheel) + BELT_SIZE) % BELT_SIZE);
   }
 
@@ -3020,7 +3048,8 @@ export class Game {
       hit = { x: t.x, y: L, z: t.z, face: 'top', id: w.getBlock(t.x, L, t.z), fixed: true };
     } else if (r.underground && r.hidden) {
       hit = this.pickPlan(mx, my, drawn ? r.pick : null);
-    } else if (drawn && r.pick && w.getBlock(r.pick.x, r.pick.y, r.pick.z) === r.pick.id) {
+    } else if (drawn && r.pick && (r.pick.ghost || w.getBlock(r.pick.x, r.pick.y, r.pick.z) === r.pick.id)) {
+      // (Round 78: a planned block, see-through, picked as itself.)
       hit = { ...r.pick };
     } else if (!drawn || r.pick) hit = this.pickGeometric(mx, my);
     // Someone under the cursor, if they were drawn over the block there.
@@ -3058,6 +3087,7 @@ export class Game {
       const b = BLOCKS[hit.id];
       c.block = hit.id !== B.air ? b : null;
       c.empty = hit.id === B.air;
+      c.ghost = !!hit.ghost;
       if (!c.inReach) c.inReach = reach(hit.x, hit.y, hit.z);
       // Placement target.
       const held = p.heldDef();
@@ -3080,8 +3110,12 @@ export class Game {
           t = { x: hit.x + fx, y: hit.y, z: hit.z + fz };
           if (hang && wallish(b)) t.wall = { x: hit.x, z: hit.z };
         }
-        const why = !reach(t.x, t.y, t.z) ? 'too far' : this.placeProblem(placeId, t.x, t.y, t.z);
+        // (Round 78) A blueprint in your off hand: onto the plan instead,
+        // nothing in the way of it but a block, or another planned one.
+        const draft = isBlueprint(p.equip && p.equip.shield);
+        const why = !reach(t.x, t.y, t.z) ? 'too far' : draft ? ghostProblem(this, t.x, t.y, t.z) : this.placeProblem(placeId, t.x, t.y, t.z);
         const ok = !why;
+        if (draft) t.ghost = true;
         // Seeds and carrots only offer to plant where they can grow.
         if (ok || held.kind === 'block') c.place = { ...t, id: placeId, rot: p.rot, ok, why };
       }
@@ -3155,7 +3189,7 @@ export class Game {
     const cur = BLOCKS[w.getBlock(x, y, z)];
     if (!(cur.replaceable || cur.id === B.air)) return 'something is there';
     const b = BLOCKS[id];
-    if (b.solid && this.occupiedAny(x, y, z)) return 'someone is standing there';
+    if (b.solid && this.occupiedAny(x, y, z) && !this.jumpPlace(id, x, y, z)) return this.selfAt(x, y, z) ? 'no room over your head to jump up' : 'someone is standing there';
     if (!this.canPlace(id, x, y, z)) {
       if (CROPS[id]) return 'needs farmland';
       if (b.onWall) return 'needs a wall to hang on';
@@ -3335,9 +3369,22 @@ export class Game {
           continue;
         }
         const held = p.heldDef();
-        if (c && c.place && held && (held.kind === 'block' || held.plant) && !(c.block && c.block.interact)) {
+        // (Round 78) A blueprint in hand with its copy box out: the box's
+        // corners set, or one of its sides dragged.
+        if (p.copyBox && held && held.blueprint) {
+          boxPress(this, p, c);
+          this.pending = null;
+          continue;
+        }
+        if (c && c.place && held && (held.kind === 'block' || held.plant) && !(c.block && c.block.interact && !c.ghost)) {
           this.tryPlace(c.place);
           this.placeRepeat = 0.25;
+          this.pending = null;
+          continue;
+        }
+        // A planned block, struck: off the plan.
+        if (c && c.ghost && (!held || held.kind !== 'weapon')) {
+          removeGhost(this, c.x, c.y, c.z);
           this.pending = null;
           continue;
         }
@@ -3351,6 +3398,7 @@ export class Game {
         if (c && c.block && c.inReach) this.pending = { x: c.x, y: c.y, z: c.z, t: 0 };
         else if (!c || !c.block) this.swing();
       } else if (ck.type === 'up' && ck.button === 0) {
+        if (p.copyBox) p.copyBox.drag = null;
         if (this.pending && this.pending.t < 0.25 && c && c.block && c.block.interact && c.x === this.pending.x && c.y === this.pending.y && c.z === this.pending.z) {
           this.interact(c.x, c.y, c.z);
         }
@@ -3366,6 +3414,11 @@ export class Game {
         this.rightClick();
       }
     }
+    // (Round 78) A side of the copy box being dragged.
+    if (p.copyBox && p.copyBox.drag && input.mouse.down) {
+      boxDrag(this, p, c);
+      return;
+    }
     // Holding the mouse: mine (tool/empty hand) or keep placing blocks.
     if (input.mouse.down && c) {
       const held = p.heldDef();
@@ -3376,7 +3429,7 @@ export class Game {
           this.tryPlace(c.place);
           this.placeRepeat = 0.22;
         }
-      } else if (c.block && c.inReach && !(held && held.kind === 'weapon') && !p.bowDraw && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
+      } else if (c.block && !c.ghost && c.inReach && !(held && held.kind === 'weapon') && !p.bowDraw && (!c.block.interact || !this.pending || this.pending.t >= 0.25)) {
         this.mineTick(dt, c);
       } else this.mining = null;
     } else {
@@ -3497,6 +3550,16 @@ export class Game {
     }
     if (c && c.block && c.inReach && c.block.interact) {
       this.interact(c.x, c.y, c.z);
+      return;
+    }
+    // (Round 78) A blueprint in hand: what's on it, and what to do with it.
+    if (held && held.blueprint) {
+      openPlanWindow(this, p.selected);
+      return;
+    }
+    // (Round 78) A grappling hook thrown up at a ledge (or let go of).
+    if (held && held.grapple && (this.player._grapple || (c && c.block))) {
+      throwGrapple(this, c);
       return;
     }
     // Buckets: fill from open water, pour over farmland (or the crops on it).
@@ -3832,6 +3895,7 @@ export class Game {
     if (id === B.powder_keg) kegBlast(this, x, y, z);
     this.popUnsupported(x, y + 1, z);
     this.popHung(x, y, z);
+    if (b.interact === 'container' && this.myChests) notePlaced(this, x, y, z, false);
     this.flowWater(x, y, z);
     if (byPlayer) {
       this.stats.mined++;
@@ -4129,7 +4193,7 @@ export class Game {
     const cur = BLOCKS[w.getBlock(x, y, z)];
     if (!(cur.replaceable || cur.id === B.air)) return false;
     const b = BLOCKS[id];
-    if (b.solid && this.occupiedAny(x, y, z)) return false;
+    if (b.solid && this.occupiedAny(x, y, z) && !this.jumpPlace(id, x, y, z)) return false;
     // (Round 74: a painting needs a wall beside it, not a floor under it.)
     if (b.onWall && wallDirOf(w, x, y, z) < 0) return false;
     const below = BLOCKS[w.getBlock(x, y - 1, z)];
@@ -4141,6 +4205,27 @@ export class Game {
       if (this.occupiedAny(x, y, z)) return false;
     }
     return true;
+  }
+
+  // (Round 78) Where you stand yourself (and nobody else).
+  selfAt(x, y, z) {
+    const p = this.player;
+    return !!p && p.x === x && p.y === y && p.z === z;
+  }
+
+  // (Round 78) A block set down where you're standing: you jump, and it
+  // goes in under your feet, as long as there's room over your head (and
+  // you're on your own two feet, nobody else there).
+  jumpPlace(id, x, y, z) {
+    const p = this.player;
+    const b = BLOCKS[id];
+    if (!this.selfAt(x, y, z) || !b || !b.solid || p.moving || p.mount || p.raft || p.deck || p.inWagon || p.sitting || p._ride || p._grapple) return false;
+    const w = this.world;
+    const up = BLOCKS[w.getBlock(x, y + 2, z)];
+    if (!up || up.solid || up.liquid) return false;
+    const other = this.occ.get(this.occKey(x, y - 1, z));
+    if (other && other !== p && !other.dead) return false;
+    return !this.bigAt(x, y, z, null);
   }
 
   occupiedAny(x, y, z) {
@@ -4161,6 +4246,14 @@ export class Game {
     const def = ITEMS[slot.item];
     const id = def.kind === 'block' ? def.block : def.plant;
     const b = BLOCKS[id];
+    // (Round 78) Drawn on the blueprint in your off hand, not built (and
+    // nothing used up).
+    if (t.ghost || isBlueprint(p.equip && p.equip.shield)) {
+      const rot0 = b.rotatable ? (p.rot - (this.renderer.view || 0)) & 3 : 0;
+      const rot = b.onWall ? Math.max(0, wallDirOf(this.world, t.x, t.y, t.z, (2 - (this.renderer.view || 0)) & 3)) : rot0;
+      if (placeGhost(this, p, t, id, rot)) p.doAction(0.15);
+      return;
+    }
     // The facing you chose is the one you see on screen.
     let rot = b.rotatable ? (p.rot - (this.renderer.view || 0)) & 3 : 0;
     const w = this.world;
@@ -4170,6 +4263,12 @@ export class Game {
       const behind = (2 - (this.renderer.view || 0)) & 3;
       const pref = t.wall ? dirToward(t.x, t.z, t.wall.x, t.wall.z) : behind;
       rot = Math.max(0, wallDirOf(w, t.x, t.y, t.z, pref < 0 ? behind : pref));
+    }
+    // (Round 78) Under your own feet: up you jump, and it goes in below.
+    const jump = this.jumpPlace(id, t.x, t.y, t.z);
+    if (jump) {
+      p.startMove(t.x, t.y + 1, t.z, 0.2);
+      p.hopT = 0.25;
     }
     w.setBlock(t.x, t.y, t.z, id, rot | (b.lightWhenState ? META_STATE : 0) | cropMeta(id, 0));
     if (CROPS[id]) this.crops.sow(t.x, t.y, t.z, id, 0);
@@ -4184,13 +4283,15 @@ export class Game {
       const r = w.regionAt(t.x, t.z);
       const idx = ((t.z - r.z0) * REGION_W + (t.x - r.x0)) * WORLD_Y + t.y;
       r.containers.set(idx, makeSlots(CONTAINER_SIZE[b.name] || b.modSlots || 9));
+      // (Round 78) Yours: the bench draws on it (see invtools.js).
+      notePlaced(this, t.x, t.y, t.z, true);
     }
     if (id === B.sapling) this.saplings.push({ x: t.x, y: t.y, z: t.z, t: 90 + Math.random() * 120 });
     if (def.relic) setRelic(this, t.x, t.y, t.z, def.relic, def.shards || 0);
     slot.count--;
     if (slot.count <= 0) p.inv[p.selected] = null;
     p.doAction(0.2);
-    p.face(t.x, t.z);
+    if (!jump) p.face(t.x, t.z);
     this.audio?.play('place');
     this.stats.placed++;
     this.renderer.emit(t.x, t.y, t.z, { n: 4, color: this.blockColor(id), up: 15, life: 0.3, oy: -2 });
@@ -4333,7 +4434,8 @@ export class Game {
         Object.assign(this.props.get(k), { x: sl.x, y: sl.y, z: sl.z, along: sl.along, nx: sl.nx ?? 0, nz: sl.nz ?? (sl.along ? 1 : 0), seed: i, spin: (L.settlement.condition === 'abandoned' ? 0.25 : 0.7) * windy });
       });
     }
-    for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k)) this.props.delete(k);
+    // (Round 78: not a coach or ferry under way with someone in it.)
+    for (const k of [...this.props.keys()]) if (!want.has(k) && !mills.has(k) && !k.startsWith('ride:')) this.props.delete(k);
     // You, sat in the back of one.
     for (const q of this.props.values()) this.riding.seatShown(q);
     if (p.inWagon && !this.props.has([...this.props].find(([, q]) => q === p.inWagon)?.[0])) p.inWagon = null;
@@ -4538,6 +4640,8 @@ export class Game {
     }
     if (this.player.raft) return this.leaveRaft();
     if (this.player.mount) return this.riding.dismount();
+    // (Round 78) Riding the coach: down, where it is.
+    if (this.player._ride) return rideOff(this, this.player);
     if (this.player.inWagon) return this.riding.climbOut();
     const c = this.cursor;
     if (c && c.entity && c.entity.kind === 'npc' && c.entity.distTo(this.player) <= 4) return this.talk(c.entity);
@@ -4779,6 +4883,10 @@ export class Game {
       case 'cannon':
       case 'blueprint':
         holdUse(this, p, x, y, z, b.interact);
+        break;
+      // (Round 78) A ship of your own drawn up and built.
+      case 'shipdesign':
+        this.ui.open(new ShipDesignWindow(this.ui, this));
         break;
       case 'bell':
         this.ringBell(x, z, null, p);
@@ -6963,7 +7071,10 @@ export class Game {
       const roasted = e.burnT !== undefined && e.burnT > -1.5;
       // (A tracker knows how to dress a carcass.)
       const dress = source && source.kind === 'player' && heroHas(this.hero, 'tracker');
-      for (const [drop, min, max, chance] of e.S.drops) {
+      // (Round 78) A ship's hand (a pirate's, say) has no beast's drops: a
+      // pirate has a few coins on them, now and then their cutlass.
+      const drops = e.S ? e.S.drops : e.kind === 'sailor' && isPirate(e) ? [['coin', 2, 9, 0.7], ['sabre', 1, 1, 0.08]] : [];
+      for (const [drop, min, max, chance] of drops) {
         if (Math.random() > (dress && (drop === 'raw_meat' || drop === 'leather') ? Math.min(1, chance + 0.3) : chance)) continue;
         const item = roasted && drop === 'raw_meat' ? 'cooked_meat' : drop;
         const n = min + Math.floor(Math.random() * (max - min + 1)) + (dress && (drop === 'raw_meat' || drop === 'leather') ? 1 : 0);
@@ -6973,7 +7084,7 @@ export class Game {
       // (What it had taken off you: a lantern thief's prize.)
       if (e.loot) this.spawnDrop(e.loot.item, e.loot.n, e.x, e.y, e.z, true);
       // (What its kind does as it dies: see islemobs.js.)
-      if (e.S.onDeath) e.S.onDeath(this, e, source);
+      if (e.S && e.S.onDeath) e.S.onDeath(this, e, source);
       if (npcKill) source.onKill?.(e);
     }
   }
@@ -7392,6 +7503,12 @@ export class Game {
       wg: this.world.ow.wg,
       minute: this.minute,
       day: this.day,
+      // (Round 78) On the coach or the ferry, partway; the chests you've
+      // set down (see invtools.js).
+      ride: rideSave(p),
+      myChests: this.myChests ? [...this.myChests] : [],
+      // (Round 78) What's drawn on blueprints (see plans.js).
+      plans: plansSave(this),
       player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
       name: this.playerName,
       hero: this.hero || null,
@@ -7427,6 +7544,8 @@ export class Game {
       party: this.partyWorld ? this.partySave() : null,
       // (Round 68) The great ships, and whether you were aboard one.
       ships: shipSave(this),
+      // (Round 78) The pirates' doings (see pirates.js).
+      pirates: piratesSave(this),
     };
   }
 
@@ -7516,6 +7635,11 @@ export class Game {
     this.sim.careers.applyLook();
     // (Round 68) The great ships; aboard one, or below her decks.
     shipLoad(this, data.ships);
+    piratesLoad(this, data.pirates);
+    // (Round 78) Saved on the coach or the ferry: still on it.
+    if (data.ride && !this.remoteCopy) rideLoad(this, this.player, data.ride);
+    this.myChests = new Set(data.myChests || []);
+    plansLoad(this, data.plans);
     const shipAt = this.player.deck || (data.ships && data.ships.below && this.world.inInstance(this.player.x));
     // Saved down below: back down there.
     const dg = data.dungeon;

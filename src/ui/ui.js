@@ -1,5 +1,8 @@
 // UI manager: routes input to windows, animates their dissolve/reform
 // transitions, and draws the HUD.
+import { rideLine } from '../game/rides.js';
+import { compareGear } from '../game/invtools.js';
+import { ChatWindow, drawChat } from './chat.js';
 import { COLS, ROWS, CHAR_W, CHAR_H, VIEW_W, VIEW_H, BELT_SIZE, TILE, LH } from '../config.js';
 import { dishLines, ingredientTypes } from '../world/dishes.js';
 import { Grid, drawGrid, C, wrap } from './ascii.js';
@@ -251,6 +254,14 @@ export class UI {
         case 'Slash':
           this.toggle('console', () => new W.ConsoleWindow(this));
           continue;
+        // (Round 78) A word to the others in a world you share.
+        case 'Enter':
+        case 'NumpadEnter':
+          if (!top && (game.remote || (game.net && game.isParty && game.isParty()))) {
+            this.open(new ChatWindow(this));
+            continue;
+          }
+          break;
       }
       if (!this.modal) out.pressed.push(k);
     }
@@ -684,7 +695,7 @@ export class UI {
     const lines = [{ text: d.name + (slot.count > 1 ? ` x${slot.count}` : ''), color: C.hi }];
     // Its stars (and where it came from).
     if (d.stars) lines.push({ text: `${'★'.repeat(d.stars)}${'☆'.repeat(STAR_MAX - d.stars)}${d.origin === 'd' ? '  Ω from the deep' : '  made by hand'}`, color: d.origin === 'd' ? '#c8a8ff' : '#ffd060' });
-    if (d.kind === 'tool') lines.push({ text: `${cap(d.tool === 'pick' ? 'pickaxe' : d.tool || 'tool')} · speed ${d.speed}`, color: C.cyan });
+    if (d.kind === 'tool' && d.speed !== undefined) lines.push({ text: `${cap(d.tool === 'pick' ? 'pickaxe' : d.tool || 'tool')} · speed ${d.speed}`, color: C.cyan });
     if (d.damage) lines.push({ text: d.ranged ? `Damage ${d.damage} · range ${d.range}` : `Damage ${d.damage} · reach ${d.reach}`, color: C.orange });
     if (d.kind === 'weapon') {
       const ammo = d.thrown ? 'thrown; pick it up again' : d.ranged ? (d.ammo === 'none' ? 'no ammunition: draws stamina' : `shoots ${d.ammo === 'cobblestone' ? 'stones' : d.ammo === 'bolt' ? 'bolts' : 'arrows'}`) : null;
@@ -723,6 +734,9 @@ export class UI {
       lines.push({ text: 'Set it down to use it', color: C.green });
     } else if (d.kind === 'relic_shard') lines.push({ text: 'Use it [RMB]: into a relic in your pack', color: C.green });
     else if (d.plant) lines.push({ text: 'Plant on farmland', color: C.green });
+    // (Round 78) Against what you've on, or in hand.
+    const gm = this.game;
+    for (const l of compareGear(gm && gm.player, slot.item)) lines.push({ text: l.text, color: l.good === null ? C.dim : l.good ? '#90e890' : '#f08070' });
     lines.push({ text: d.exchange ? `Value ¤1 for ${d.exchange}` : `Value ¤${d.value}`, color: C.dim });
     this.tooltip = { lines };
   }
@@ -855,6 +869,16 @@ export class UI {
         g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
         g.text(1, y++, `SLEEPLESS ${tired}d · -${tired} STAMINA`, Math.floor(this.time * 1.5) % 2 ? '#c090ff' : '#a070e0');
       }
+      // (Round 78) On the coach or the ferry: whither, how long yet.
+      const rl = rideLine(game.player);
+      if (rl) {
+        g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+        g.text(1, y++, rl.text.slice(0, 24), '#e8e0a0');
+        if (!game.isParty || !game.isParty()) {
+          g.fill(0, y, 25, 1, ' ', C.fg, 'rgba(10,8,16,0.55)');
+          g.text(1, y++, rl.fast ? 'HURRYING ON · T: EASE OFF' : 'T: HURRY ON', rl.fast ? '#a0c8ff' : C.dim);
+        }
+      }
       // Below ground: what you've found there isn't yours till you're out.
       const ub = dg && dg.unbound ? dg.unbound().length : 0;
       if (ub) {
@@ -913,6 +937,8 @@ export class UI {
         y--;
       }
     }
+    // (Round 78) What the others have said (see ui/chat.js).
+    drawChat(this, g, COLS - 46, BELT_Y - 5, !!this.find('chat'));
     // Layer and rotation. (Round 77: no keys shown.)
     const rx = COLS - 24;
     g.fill(rx, BELT_Y, 23, 3, ' ', C.fg, 'rgba(10,8,16,0.55)');

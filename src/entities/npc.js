@@ -26,7 +26,7 @@ import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk, storyTick } from './sagaman.js';
 import { laborTick } from '../sim/labor.js';
-import { FLEE } from '../config.js';
+import { FLEE, FLEE_PLAYER } from '../config.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -2225,12 +2225,25 @@ export class NPC extends Entity {
     // Fishers watch their bobber; now and then something bites.
     if (act.act === 'work' && this.rec.job === 'fisher' && this.fishSpot()) {
       this.fishDip = Math.max(0, (this.fishDip || 0) - dt * 2);
-      if (this.rng.chance(dt * 0.07)) {
+      // (Round 78) A line cast on coming to the spot, and again after each
+      // catch, drawn back and whipped out (see Entity.castRod).
+      if (this.fishCast !== this.fishKey) {
+        this.fishCast = this.fishKey;
+        this.castRod();
+        this.recastT = 0;
+      }
+      if (this.recastT > 0) {
+        this.recastT -= dt;
+        if (this.recastT <= 0) this.castRod();
+        if (this.idleT > 0) return;
+      } else if (!this.cast && this.rng.chance(dt * 0.07)) {
         const t = this.fishSpot();
         this.fishDip = 1;
         game.renderer.emit(t.x, t.y, t.z, { n: 8, color: ['#8cc4f0', '#e0f4ff', '#ffffff'], up: 30, life: 0.5, oy: 2 });
         if (this.rng.chance(0.55)) {
-          this.doAction(0.4);
+          // (Pulled up, and the line out again in a moment.)
+          this.castRod(0.45, true);
+          this.recastT = this.rng.float(1.4, 2.6);
           if (this.distTo(game.player) < 14) {
             game.audio?.play('splash', this);
             if (this.rng.chance(0.4)) this.say(this.rng.pick(['Got one!', 'A big one!', 'Ha! Supper.', 'Just a tiddler.']), 2.5);
@@ -2872,9 +2885,12 @@ export class NPC extends Entity {
     // off): 15% slower than it was.
     const wb = this.warband;
     const fleeing = this.state === 'flee' || this.state === 'retreat' || (this.state === 'warband' && wb && (wb.phase === 'flee' || wb.phase === 'done'));
+    // (Round 78) A foe breaking away from a player (an outlaw, a raider):
+    // 25% slower, so they can be caught.
+    const foe = fleeing && this.state !== 'flee' && this.threat && this.threat.kind === 'player';
     // In the saddle (or up on a wagon): quicker than walking.
     const ride = this.mount ? (this.mount.kind === 'wagon' ? 0.75 : 0.65) : 1;
-    this.startMove(nx, ty, nz, this.step * pace * ride * (fleeing ? FLEE : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    this.startMove(nx, ty, nz, this.step * pace * ride * (foe ? FLEE_PLAYER : fleeing ? FLEE : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
     this.pathI++;
     return false;
   }

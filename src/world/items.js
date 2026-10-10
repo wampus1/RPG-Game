@@ -1,5 +1,6 @@
 // Item registry. Placeable blocks get an item with the same key as the block.
 import { BLOCKS, B } from './blocks.js';
+import { SHIP_TYPES, DESIGNS } from './shipmodels.js';
 import { deriveStarred, softArmor } from './quality.js';
 import { deriveDish, deriveRecipe, RECIPE_PREFIX } from './dishes.js';
 import { rule } from '../mod/rules.js';
@@ -18,7 +19,7 @@ const isStarred = (k) => typeof k === 'string' && (k.includes('~') || k.includes
 function starred(k) {
   // (A dish cooked up, its make-up in its key, and a recipe for one
   // written on a scroll: see dishes.js.)
-  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
+  if (!STARRED.has(k)) STARRED.set(k, k.startsWith('dish~') ? deriveDish(k) : k.startsWith(RECIPE_PREFIX) ? deriveRecipe(k) : k.startsWith('note~') ? deriveNote(k) : k.startsWith('bottled~') ? deriveBottled(k) : k.startsWith('plans~') ? derivePlan(k) : k.startsWith('shipd~') ? deriveDesign(k) : k.includes('~') ? deriveStarred(k) : k.includes('*') ? deriveGrown(k) : deriveVariant(k));
   return STARRED.get(k) || undefined;
 }
 // (Mods come and go: what was made up of theirs is forgotten with them.)
@@ -150,6 +151,40 @@ function deriveBottled(k) {
   if (!base) return undefined;
   const name = fromHex(hex || '');
   return { ...base, key: k, value: Math.round(base.value * 0.8), shipPrice: undefined, bottled: +n, shipName: name, about: `${name || 'A ship of yours'}, in a bottle, and everyone who was aboard her with her (her crew, whoever came with you), and all her stores. Right-click by open water to uncork her and launch her again, just as she was.` };
+}
+
+// (Round 78) A blueprint drawn on: "plans~<n>", what's on it kept with the
+// world (game.plans[n]: see game/plans.js).
+function derivePlan(k) {
+  const n = +String(k).split('~')[1];
+  if (!Number.isFinite(n)) return undefined;
+  return { key: k, kind: 'misc', name: 'Drawn Blueprint', icon: 'blueprint_drawn', stack: 1, value: 8, plan: n, blueprint: true, about: 'Right-click it in hand to name it, lay it out, turn it, fold it up, or copy a building onto it. In your off hand, the blocks you set go onto it, not the ground. Show it to a town\'s builder to have it built.' };
+}
+
+// (Round 78) A ship of your own design in her bottle, from a shipwright's
+// bench: "shipd~<id>" (see game/shipdesign.js). Her name and price are
+// the design's, looked up when asked (a guest may hear of it later).
+function deriveDesign(k) {
+  const n = +String(k).split('~')[1];
+  if (!Number.isFinite(n)) return undefined;
+  const type = `design_${n}`;
+  return {
+    key: k, kind: 'tool', stack: 1, design: n, shipKit: type,
+    get name() {
+      const d = DESIGNS.get(n);
+      return `${d ? d.name : 'Ship'} in a Bottle`;
+    },
+    get value() {
+      return (SHIP_TYPES[type] && SHIP_TYPES[type].cost) || 500;
+    },
+    get shipPrice() {
+      return this.value;
+    },
+    get about() {
+      const T = SHIP_TYPES[type];
+      return `A ship of your own design in a bottle: right-click by open water to uncork her and launch her. ${T ? T.blurb : ''} She comes with no crew: sign sailors on with Sailor's Articles.`;
+    },
+  };
 }
 
 function item(key, props) {
@@ -418,6 +453,8 @@ item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });
 // A rope lead, to lead an animal about or tie it up at a fence.
 item('lead', { name: 'Lead', kind: 'misc', stack: 8, value: 6 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
+// (Round 78) Thrown up at a ledge, and climbed (see game/grapple.js).
+item('grapple_hook', { name: 'Grappling Hook', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 30, grapple: true, about: 'Right-click a ledge above you (up to 12 high, 9 out) to throw it; you climb the rope to the top. Right-click again to let go.' });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15, hands: 2 });
 item('arrow', { value: 1 });
 // Further, harder or cheaper than a hunting bow: a longbow (far and hard,
@@ -500,6 +537,11 @@ export function offhandable(key) {
 export function offhandLight(key) {
   return key === 'torch' || key === 'lantern' || key === 'kav_everlight';
 }
+// (Round 78) Anything that goes in the off hand: a blade, a light, or a
+// blueprint (to draw on: see game/plans.js).
+export function offhandOk(key) {
+  return offhandable(key) || offhandLight(key) || key === 'blueprint' || (typeof key === 'string' && key.startsWith('plans~'));
+}
 export function registerSockets() {
   for (const key of Object.keys(ITEMS)) {
     if (!canSocket(key)) continue;
@@ -555,6 +597,8 @@ potion('spore_tincture', 'Fogsight Tincture', 20, { sight: true, hours: 4 });
 
 // --- the scribe's trade -----------------------------------------------------------
 item('paper', { value: 2 });
+// (Round 78) A blank blueprint (see game/plans.js).
+item('blueprint', { name: 'Blueprint', kind: 'misc', stack: 8, value: 6, blueprint: true, about: 'Put it in your off hand (right-click it in your pack) and the blocks you set down go onto it as a plan, not into the ground. Right-click it in hand for more.' });
 item('ink', { name: 'Pot of Ink', value: 3, stack: 16 });
 // Printed at a scribe's desk from the events they've recorded: the latest
 // edition is what every copy says (see the Press in sim.js).

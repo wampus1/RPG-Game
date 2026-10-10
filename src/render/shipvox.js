@@ -692,6 +692,8 @@ const RIGS = {
 export const RIG_INFO = RIGS;
 
 const CLOTH = [240, 234, 216];
+// (Round 78) The cloth of the ship being drawn: her own, if she has one.
+let clothNow = CLOTH;
 const ROPE = '#2e241a';
 const SPAR = '#6a4a2a';
 const MAST = '#8a6438';
@@ -720,9 +722,9 @@ function clothShade(f, emblem, hp, seed, fade = 1) {
     const seam = (u * 12) % 1 < 0.09;
     const reef = Math.abs(v - 0.22) < 0.012 || Math.abs(v - 0.4) < 0.012;
     const edge = u < 0.025 || u > 0.975 || v < 0.03 || v > 0.97;
-    let r = CLOTH[0];
-    let g = CLOTH[1];
-    let b = CLOTH[2];
+    let r = clothNow[0];
+    let g = clothNow[1];
+    let b = clothNow[2];
     if (emblem) {
       const em = emblem.kind;
       const inMark = markAt(em, u, v);
@@ -797,6 +799,7 @@ function rigFor(S, T, D, low, time) {
   const brace = S.brace || 0;
   const boom = S.boom || 0;
   const emblemRGB = hexRGB(S.flag || '#a02020');
+  clothNow = S.sailCloth ? hexRGB(S.sailCloth) : CLOTH;
   const rowAt = (lx, lz) => Math.floor(T.v(lx, lz) + 0.5) + 200;
   const deckH = (mm) => mm.base - 1;
   const fwdIdx = m.masts.reduce((bi, mm, i) => (mm.z > m.masts[bi].z ? i : bi), 0);
@@ -1159,7 +1162,7 @@ export function drawShip(r, game, S, aboard) {
   const gk = (S.guns || []).map((g) => `${Math.round((g.aim || 0) * 20)}:${Math.round((g.elev || 0) * 20)}:${Math.round((g.recoil || 0) * 10)}`).join(';');
   const key = [q, S.noRig ? 1 : 0, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
     Math.round((S.wheel || 0) * 12), gk, S.runOut ? 1 : 0, (S.sailHp || []).map((h) => Math.round(h * 20)).join(':'), S.night ? 1 : 0, tq,
-    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem].join(',');
+    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem, S.sailCloth || ''].join(',');
   if (!S.dyn || S.dyn.k !== key) {
     const low = pooled(S, 'low', Rs.ox - 24, Rs.oy - 24, Rs.ox + Rs.w + 24, Rs.oy + Rs.h + 8, Rs);
     deckWorks(S, T, low, tq);

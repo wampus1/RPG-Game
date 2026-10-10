@@ -21,6 +21,7 @@
 //   Whoever's aboard walks her deck (her own cells, turned with her: see
 // deck*), goes below (down her hatches, through a cabin door, through a
 // hole in her deck), takes her wheel, mans a gun, or goes over the side.
+import { loadAboard } from './stalls.js';
 import { GROUND, SURFACE, PLAYER_STEP_TIME } from '../config.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { shipModel, SHIP_TYPES, standOn, stepOn, onPlan, isInside, vAt } from '../world/shipmodels.js';
@@ -72,6 +73,8 @@ export class Ship {
     this.paint2 = o.paint2 || '#1e1e24';
     this.flag = o.flag || '#a02020';
     this.emblem = o.emblem || null;
+    // (Round 78) Her sails' cloth, if not the plain sailcloth (see shipdesign.js).
+    this.sailCloth = o.sailCloth || null;
     this.anchor = o.anchor ?? true;
     this.crewRecs = o.crew || [];
     this.store = new Map(o.store || []);
@@ -157,7 +160,7 @@ export class Ship {
     return {
       id: this.id, type: this.type, x: Math.round(this.x * 100) / 100, z: Math.round(this.z * 100) / 100, yaw: Math.round(this.yaw * 1000) / 1000,
       sailSet: this.sailGoal, sheet: this.sheet, flood: Math.round(this.floodCells * 10) / 10, sailHp: this.sailHp, owner: this.owner, civ: this.civ,
-      name: this.name, paint: this.paint, paint2: this.paint2, flag: this.flag, emblem: this.emblem, anchor: this.anchor, crew: this.crewRecs,
+      name: this.name, paint: this.paint, paint2: this.paint2, flag: this.flag, emblem: this.emblem, sailCloth: this.sailCloth, anchor: this.anchor, crew: this.crewRecs,
       store: [...this.store], mission: this.mission, ammo: this.ammo, diff,
     };
   }
@@ -1109,6 +1112,9 @@ export function boardAt(game, S, e, wx, wz) {
   const [lx, lz] = S.toLocal(wx, wz);
   const spot = deckSpotNear(S, lx, lz, 4, null);
   if (!spot) return false;
+  // (Round 78) Riding up her side: your horse (and wagon) aboard too, if
+  // she's room for them (see stalls.js).
+  if (e.kind === 'player' && e.mount) loadAboard(game, e, S);
   putAboard(game, S, e, spot.cx, spot.y, spot.cz);
   if (e.kind === 'player') game.asPlayer(e, () => {
     game.ui.msg(`You climb aboard ${theShip(S)}.`, '#a0d8ff', true);
@@ -1672,7 +1678,7 @@ export function packShip(S, withCells) {
     id: S.id, type: S.type, x: r2(S.x), z: r2(S.z), yaw: Math.round(S.yaw * 1000) / 1000, v: r2(S.v), yv: Math.round(S.yawV * 1000) / 1000, yo: r2(S.yOff),
     ss: r2(S.sailSet), sg: r2(S.sailGoal), sh: r2(S.sheet), br: r2(S.brace), bo: r2(S.boom), fi: r2(S.fill || 0), le: S.lee || 1, wh: r2(S.wheel), ru: r2(S.rudder),
     ro: S.runOut ? 1 : 0, hp: S.sailHp.map(r2), g: S.guns.map((g) => [r2(g.aim), r2(g.elev), g.cd > 0 ? r2(g.cd) : 0, r2(g.recoil)]),
-    n: S.name, pa: S.paint, p2: S.paint2, fl: S.flag, em: S.emblem, ow: S.owner, fd: r2(S.floodCells), an: S.anchor ? 1 : 0, sk: r2(S.sinking || 0),
+    n: S.name, pa: S.paint, p2: S.paint2, fl: S.flag, em: S.emblem, sc: S.sailCloth || null, ow: S.owner, fd: r2(S.floodCells), an: S.anchor ? 1 : 0, sk: r2(S.sinking || 0),
     wl: S.windLocal ? [r2(S.windLocal.x), r2(S.windLocal.z)] : null, ver: S.ver, hb: S.helmBy ?? null, am: S.ammo,
   };
   if (withCells) {
@@ -1690,6 +1696,8 @@ export function applyShips(game, list) {
   const ships = shipsOf(game);
   for (const d of list || []) {
     keep.add(d.id);
+    // (Round 78: one of a design not yet heard of here: when it is.)
+    if (!SHIP_TYPES[d.type]) continue;
     let S = shipById(game, d.id);
     if (!S) {
       S = new Ship({ id: d.id, type: d.type, x: d.x, z: d.z, yaw: d.yaw, name: d.n });
@@ -1726,6 +1734,7 @@ export function applyShips(game, list) {
     S.paint2 = d.p2;
     S.flag = d.fl;
     S.emblem = d.em;
+    S.sailCloth = d.sc || null;
     S.owner = d.ow;
     S.floodCells = d.fd;
     S.anchor = !!d.an;

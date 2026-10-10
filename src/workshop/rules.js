@@ -40,11 +40,15 @@ const KINDS = [
 export default class RulesTool {
   constructor(app) {
     this.app = app;
+    // (Things picked to change, `kind:ref`, kept on show while unchanged.)
+    this.open = new Set();
   }
 
   mount(stage, insp) {
     this.stage = stage;
     this.insp = insp;
+    if (this.openFor !== this.app.mod?.id) this.open.clear();
+    this.openFor = this.app.mod?.id;
     this.draw();
   }
 
@@ -102,6 +106,9 @@ export default class RulesTool {
   }
 
   draw() {
+    // (Where you'd scrolled to, kept: a card added at the foot is in view.)
+    const was = this.stage.querySelector('.rules');
+    const top = was ? was.scrollTop : 0;
     clear(this.stage);
     clear(this.insp);
     const r = this.rules || {};
@@ -129,6 +136,7 @@ export default class RulesTool {
     // Things, changed.
     for (const K of KINDS) wrap.append(this.thingSection(K));
     this.stage.append(wrap);
+    wrap.scrollTop = top;
     this.drawCount();
   }
 
@@ -160,22 +168,23 @@ export default class RulesTool {
       const anchor = e.currentTarget;
       const pick = (ref) => {
         if (!ref) return;
-        if (list[ref]) {
+        if (list[ref] || this.open.has(`${K.key}:${ref}`)) {
           toast('That one\'s already here: change it below.');
           return;
         }
-        this.set((x) => {
-          x[K.key] ||= {};
-          x[K.key][ref] = {};
-        }, true);
+        // (Round 78) Shown to be changed, though nothing's changed on it
+        // yet: a change with nothing in it isn't kept in the mod (see set),
+        // and the card used to vanish the moment it was picked.
+        this.open.add(`${K.key}:${ref}`);
+        this.draw();
       };
       if (K.key === 'blocks') pickBlock(app, anchor, null, pick);
       else pickRef(app, K.key === 'items' ? 'item' : 'creature', anchor, pick);
     } });
     sec.append(h('h2', null, K.name, h('span', { class: 'note', style: { marginLeft: '10px', fontFamily: 'var(--mono)', fontSize: '12px' } }, K.tip)), add);
-    const refs = Object.keys(list);
+    const refs = [...new Set([...Object.keys(list), ...[...this.open].filter((k) => k.startsWith(`${K.key}:`)).map((k) => k.slice(K.key.length + 1))])];
     if (!refs.length) sec.append(h('div', { class: 'note', style: { marginTop: '6px' } }, `None changed: ${K.key} are as they are.`));
-    for (const ref of refs) sec.append(this.thingCard(K, ref, list[ref]));
+    for (const ref of refs) sec.append(this.thingCard(K, ref, list[ref] || {}));
     return sec;
   }
 
@@ -191,7 +200,10 @@ export default class RulesTool {
     }
     const card = h('div', { class: 'rule-card' });
     const head = h('div', { class: 'rc-head' }, h('span', { class: 'thumb' }, thumb || ic(K.icon)), h('b', null, label || ref), h('span', { class: 'note' }, ref[0] === '@' ? 'yours' : ref), h('span', { class: 'grow' }),
-      button(null, { icon: 'trash', small: true, kind: 'ghost', title: 'As the game has it', onClick: () => this.set((x) => delete x[K.key][ref], true) }));
+      button(null, { icon: 'trash', small: true, kind: 'ghost', title: 'As the game has it', onClick: () => {
+        this.open.delete(`${K.key}:${ref}`);
+        this.set((x) => x[K.key] && delete x[K.key][ref], true);
+      } }));
     const body = h('div', { class: 'rc-fields' });
     for (const [f, name, kind] of K.fields) {
       const gv = gameValue(K.key, ref, f);
@@ -199,7 +211,8 @@ export default class RulesTool {
       if (K.key === 'items' && ref[0] !== '@' && gv === null && f !== 'name') continue;
       const v = ch[f];
       const setF = (nv) => this.set((x) => {
-        const c = x[K.key][ref];
+        x[K.key] ||= {};
+        const c = (x[K.key][ref] ||= {});
         if (nv === null || nv === '' || nv === undefined) delete c[f];
         else c[f] = nv;
       });

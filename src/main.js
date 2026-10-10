@@ -8,6 +8,7 @@ import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
 import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow, ConsoleWindow } from './ui/windows.js';
+import { ChatWindow } from './ui/chat.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
 import { loadKeybinds, actionKeyName } from './game/keybinds.js';
@@ -135,6 +136,8 @@ function saveTo(id, note, quiet = false) {
     return store.save(id, g).then(() => {
       if (id !== 'auto') g.slot = id;
       if (id !== 'auto' || (g.partyWorld && g.slot)) g.savedClock = clockOf(g);
+      // (Round 78) Saved at all, autosaves too, a moment ago: see unsaved.
+      g.savedAt = Date.now();
       if (note) ui.msg(note, '#80e070');
       if (!quiet) audio.play('save');
       return true;
@@ -152,10 +155,14 @@ function clockOf(g) {
 // Play since this game was last saved to a slot (or loaded): what'd be lost
 // leaving it now. (Not a world you host, kept as it's closed; not someone
 // else's; not before the story's begun.)
+const RECENT_SAVE_MS = 5 * 60 * 1000;
 function unsaved() {
   const g = game;
   if (!g || ui.guest || session || (g.partyWorld && g.slot)) return false;
   if (g.cutscene || (g.scene && g.scene.intro)) return false;
+  // (Round 78) Saved, or come back into this world, in the last five
+  // minutes: not asked.
+  if (g.savedAt && Date.now() - g.savedAt < RECENT_SAVE_MS) return false;
   return g.savedClock !== clockOf(g);
 }
 
@@ -250,8 +257,10 @@ function startGame(seed, save = null, slot = null, hero = null, opts = {}) {
     game.slot = slot && slot !== 'auto' ? slot : null;
     // (Loaded, it's as saved: see unsaved.)
     if (save) game.savedClock = clockOf(game);
+    // (Round 78: and come into just now: see unsaved.)
+    if (save) game.savedAt = Date.now();
     // (A world crossed into keeps its own place: see crossWorlds.)
-    game.autosave = () => saveTo((game.partyWorld || game.worldRoot) && game.slot ? game.slot : 'auto', `Autosaved (day ${game.day}, 7:00).`);
+    game.autosave = (why = null) => saveTo((game.partyWorld || game.worldRoot) && game.slot ? game.slot : 'auto', why ? `Autosaved (${why}).` : `Autosaved (day ${game.day}, 7:00).`);
     // (Round 65) Come from another world: as you were there, and who came
     // (or was sent on ahead).
     if (opts.arrive || game.slot) {
@@ -1129,6 +1138,8 @@ function guestKey(k) {
   else if (k.code === 'F3') ui.debug = !ui.debug;
   // The command console: if the host has let you (see the Multiplayer
   // window's Permissions).
+  // (Round 78) A word to the others (see ui/chat.js).
+  else if (k.code === 'Enter' || k.code === 'NumpadEnter') ui.open(new ChatWindow(ui));
   else if (k.code === 'Backquote' || k.code === 'Slash') {
     const net = session && session.net;
     if (net && net.canCommand && net.canCommand()) ui.toggle('console', () => new ConsoleWindow(ui));

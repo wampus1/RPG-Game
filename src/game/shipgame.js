@@ -12,6 +12,7 @@ import { SHIP_TYPES, shipModel } from '../world/shipmodels.js';
 import { bottledKey } from '../world/items.js';
 import { makeCrew, addHand } from './shipcrew.js';
 import { fleetsSave, fleetsLoad } from './shipfleets.js';
+import { designsSave, designsLoad, designOfType } from './shipdesign.js';
 import { enterHold, holdShipAt, holdLocal, closeHold } from './shiphold.js';
 import { addItem, removeItem } from './inventory.js';
 
@@ -806,11 +807,13 @@ export function shipSave(game) {
     const [lx, ly, lz] = holdLocal(S, p.x, p.y, p.z);
     below = { s: S.id, lx, ly, lz };
   }
-  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game), bottles: game.shipBottles || {}, bseq: game.shipBottleSeq || 0 };
+  return { ships: saveShips(game), deck: p.deck ? { s: p.deck.s, cx: p.deck.cx, cz: p.deck.cz, y: p.deck.y } : null, below, seq: game.shipSeq || 0, fleets: fleetsSave(game), bottles: game.shipBottles || {}, bseq: game.shipBottleSeq || 0, designs: designsSave(game) };
 }
 
 export function shipLoad(game, data) {
   if (!data) return;
+  // (Round 78) Ships of your own design: their kinds, before any of them.
+  designsLoad(game, data.designs);
   loadShips(game, data.ships);
   fleetsLoad(game, data.fleets);
   // (Round 69) Ships of yours in bottles.
@@ -854,11 +857,14 @@ export function useShipItem(game, held) {
     const T = SHIP_TYPES[type];
     // A ship of yours bottled before: out again just as she was.
     if (held.bottled !== undefined) return uncork(game, p, held, at);
-    const name = `The ${OWN_NAMES[(shipsOf(game).length * 7 + Math.floor(Math.random() * 12)) % OWN_NAMES.length]}`;
+    // (Round 78) One of your own design: her name, her paint, her sails.
+    const D = designOfType(game, type);
+    const name = D ? D.name : `The ${OWN_NAMES[(shipsOf(game).length * 7 + Math.floor(Math.random() * 12)) % OWN_NAMES.length]}`;
     // (Round 69) No crew: you sign them on (Sailor's Articles).
     addShip(game, {
       type, x: at.x, z: at.z, yaw: at.yaw, owner: ownerId(game, p), name, anchor: true, ammo: Math.round(T.speed),
-      crew: [], paint: '#2a4a8a', paint2: '#1a1a20', flag: '#e0c040', emblem: 'stripe',
+      crew: [], paint: D ? D.paint : '#2a4a8a', paint2: D ? D.paint2 : '#1a1a20', flag: D ? D.flag : '#e0c040', emblem: D ? D.emblem : 'stripe',
+      sailCloth: D && D.sail && D.sail !== '#f0ead8' ? D.sail : null,
     });
     removeItem(p.inv, held.key, 1);
     uncorkFx(game, p, at);

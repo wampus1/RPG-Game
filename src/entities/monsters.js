@@ -32,7 +32,7 @@ import { startLaser } from '../game/laser.js';
 import { GAME_MINUTES_PER_SECOND } from '../config.js';
 import { onTiles, fits, fitNear, footTiles } from './footprint.js';
 import { phaseOf, ready, used } from './tempo.js';
-import { FLEE } from '../config.js';
+import { FLEE, FLEE_PLAYER } from '../config.js';
 import { fieldWay, lowerFields } from './fields.js';
 
 export { BOSS_TITLES };
@@ -473,7 +473,7 @@ function backOff(c, t, pace = 1) {
   const opts = Math.random() < 0.5 ? [[dx, 0], [0, dz], [dx, dz], [-dz, dx], [dz, -dx]] : [[0, dz], [dx, 0], [dx, dz], [dz, -dx], [-dz, dx]];
   for (const [ox, oz] of opts) {
     if (!ox && !oz) continue;
-    if (c.tryStep(c.x + Math.sign(ox), c.z + Math.sign(oz), c.stepTime() * pace * FLEE)) {
+    if (c.tryStep(c.x + Math.sign(ox), c.z + Math.sign(oz), c.stepTime() * pace * (t.kind === 'player' ? FLEE_PLAYER : FLEE))) {
       c.face(t.x, t.z);
       return true;
     }

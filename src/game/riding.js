@@ -37,9 +37,11 @@ export class Riding {
     const hitched = new Set(this.wagons.map((w) => w.horse).filter((h) => h !== null && h !== undefined));
     const riding = this.game.player.mount;
     const busy = (id) => riding && (riding.horseId === id);
-    for (const h of this.horses) if (!hitched.has(h.id) && !busy(h.id)) out.push({ key: `own:h${h.id}`, type: 'horse', x: h.x, y: h.y, z: h.z, coat: h.coat, own: h, saddled: h.saddled });
+    // (Round 78: not one aboard a ship, or on the ferry: see stalls.js.)
+    const away = (q) => (q.aboard !== undefined && q.aboard !== null) || q.ferried;
+    for (const h of this.horses) if (!hitched.has(h.id) && !busy(h.id) && !away(h)) out.push({ key: `own:h${h.id}`, type: 'horse', x: h.x, y: h.y, z: h.z, coat: h.coat, own: h, saddled: h.saddled });
     for (const w of this.wagons) {
-      if (riding && riding.wagonId === w.id) continue;
+      if ((riding && riding.wagonId === w.id) || away(w)) continue;
       const h = w.horse ? this.horse(w.horse) : null;
       out.push({ key: `own:w${w.id}`, type: 'wagon', x: w.x, y: w.y, z: w.z, face: w.face ?? 1, own: w, hood: false, horse: h ? { coat: h.coat, saddle: h.saddled } : null });
     }
@@ -247,6 +249,12 @@ export class Riding {
 
   // Who's shown sat on a standing wagon: you, on its bench or in its back.
   seatShown(prop) {
+    // (Round 78) A coach or ferry carrying someone: them, and its driver.
+    if (prop.ride) {
+      prop.bench = prop.driver || null;
+      prop.riders = prop.rideOwner && prop.rideOwner.look ? [prop.rideOwner.look] : [];
+      return;
+    }
     const p = this.game.player;
     const here = p && p.inWagon === prop;
     prop.bench = here && p.wagonSeat === 'bench' ? p.look : null;

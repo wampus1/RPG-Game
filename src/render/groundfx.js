@@ -19,6 +19,16 @@ const K = (x, z) => x * 65536 + z;
 const DX = [0, -1, 0, 1];
 const DZ = [1, 0, -1, 0];
 
+// (Round 78) The colour of snow lying on a top at height `y` (r,g,b):
+// greyer and bluer at the ground, white up on the roofs.
+const TINTS = [];
+export function snowTint(y) {
+  const i = Math.max(0, Math.min(63, y | 0));
+  if (TINTS[i]) return TINTS[i];
+  const k = Math.max(0, Math.min(1, (i - 5) / 5));
+  return (TINTS[i] = `${Math.round(196 + 59 * k)},${Math.round(208 + 47 * k)},${Math.round(228 + 27 * k)}`);
+}
+
 export class GroundFx {
   constructor(r) {
     this.r = r;
@@ -257,13 +267,16 @@ export class GroundFx {
     if (d) {
       // A dusting first, then white, then a layer you can see the depth of.
       const a = Math.min(0.94, 0.25 + d * 0.32);
-      ctx.fillStyle = `rgba(240,246,255,${a})`;
+      // (Round 78) Snow the higher it lies the brighter: on a roof it's
+      // white in the sun, on the ground a shade greyer and bluer, so the
+      // one stands out from the other.
+      ctx.fillStyle = `rgba(${snowTint(y)},${a})`;
       if (d < 0.6) {
         for (let i = 0; i < 16; i++) ctx.fillRect(sx + ((i * 7 + wx * 3) % 16), sy + ((i * 5 + wz * 3) % 16), 2, 1);
       } else ctx.fillRect(sx, sy, 16, 16);
       if (d >= 1.2) {
         const h = Math.min(4, Math.floor(d));
-        ctx.fillStyle = 'rgba(236,242,252,0.95)';
+        ctx.fillStyle = `rgba(${snowTint(y - 1)},0.95)`;
         ctx.fillRect(sx, sy + 16, 16, h);
         ctx.fillStyle = 'rgba(170,190,220,0.6)';
         ctx.fillRect(sx, sy + 16 + h, 16, 1);

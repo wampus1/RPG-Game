@@ -47,9 +47,108 @@ export function coachLinks(game, from) {
     if (!road && !(from.civ && s.civ === from.civ && dist <= 10 * REGION_W)) continue;
     // (A road winds: the way's a little longer than the crow flies.)
     const way = dist * 1.25;
-    out.push({ s, kind: 'coach', road, dist: way, mins: Math.max(30, Math.round(way / COACH_PACE)), fare: Math.max(3, Math.round(way / 45)), known: known(game, s) });
+    out.push({ s, from, kind: 'coach', road, dist: way, mins: Math.max(30, Math.round(way / COACH_PACE)), fare: Math.max(3, Math.round(way / 45)), known: known(game, s) });
   }
   return out.sort((a, b) => a.dist - b.dist).slice(0, 8);
+}
+
+// (Round 78) Where a ferry lies off a town's pier, or null.
+export function pierBerth(game, s) {
+  const P = game.sim.ships && game.sim.ships.ports[s.id];
+  const st = P && P.site;
+  if (!st) return null;
+  const side = st.side || { x: -st.dir.z, z: st.dir.x };
+  return { x: Math.round(st.end.x + st.dir.x - side.x * 3), z: Math.round(st.end.z + st.dir.z - side.z * 3) };
+}
+
+// (Round 78) The way out from a town's pier to the open sea, by the water
+// that's there (out of a bay, down a river): points, null if its water
+// never gets there (a pier on a lake), undefined while it's being found (a
+// few milliseconds of it each time it's asked, `ms`).
+export function harbourWay(game, s, ms = Infinity) {
+  const cache = (game.harbours ||= new Map());
+  if (cache.has(s.id)) return cache.get(s.id);
+  const jobs = (game.harbourJobs ||= new Map());
+  let job = jobs.get(s.id);
+  if (!job) jobs.set(s.id, (job = harbourSteps(game, s)));
+  const t0 = performance.now();
+  let r;
+  do r = job.next();
+  while (!r.done && performance.now() - t0 < ms);
+  if (!r.done) return undefined;
+  jobs.delete(s.id);
+  cache.set(s.id, r.value);
+  return r.value;
+}
+
+const HARBOUR_R = 240;
+
+function* harbourSteps(game, s) {
+  const ow = game.world.ow;
+  const P = game.sim.ships && game.sim.ships.ports[s.id];
+  const st = P && P.site;
+  if (!st) return null;
+  const T = game.world.terrain;
+  const b0 = pierBerth(game, s);
+  const ctx = T.context(b0.x - HARBOUR_R, b0.z - HARBOUR_R, b0.x + HARBOUR_R, b0.z + HARBOUR_R);
+  const col = {};
+  const wetK = new Map();
+  const wet = (x, z) => {
+    const k = x * 65536 + z;
+    let v = wetK.get(k);
+    if (v === undefined) {
+      const c = T.column(x, z, ctx, col);
+      v = c.water >= 0 && !c.lava && !c.hot;
+      wetK.set(k, v);
+    }
+    return v;
+  };
+  // (From the berth, or the pier's end if that's no good.)
+  const starts = [b0, { x: st.end.x + st.dir.x, z: st.end.z + st.dir.z }, { x: st.end.x + st.dir.x * 2, z: st.end.z + st.dir.z * 2 }];
+  const a = starts.find((q) => wet(q.x, q.z));
+  if (!a) return null;
+  const prev = new Map([[a.x * 65536 + a.z, -1]]);
+  const q = [a.x * 65536 + a.z];
+  let hit = -1;
+  for (let i = 0; i < q.length; i++) {
+    if (i % 1500 === 0) yield;
+    const k = q[i];
+    const x = Math.floor(k / 65536);
+    const z = k % 65536;
+    if (ow.continentAt(x, z) < -0.03) {
+      hit = k;
+      break;
+    }
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const nz = z + dz;
+      if (Math.abs(nx - a.x) > HARBOUR_R || Math.abs(nz - a.z) > HARBOUR_R) continue;
+      const nk = nx * 65536 + nz;
+      if (prev.has(nk) || !wet(nx, nz)) continue;
+      prev.set(nk, k);
+      q.push(nk);
+    }
+  }
+  if (hit < 0) return null;
+  const cells = [];
+  for (let k = hit; k !== -1; k = prev.get(k)) cells.push({ x: Math.floor(k / 65536), z: k % 65536 });
+  cells.reverse();
+  // (Straightened: on from each point to the furthest in plain sight.)
+  const clear = (p0, p1) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(p1.x - p0.x, p1.z - p0.z)));
+    for (let i = 1; i < n; i++) if (!wet(Math.round(p0.x + ((p1.x - p0.x) * i) / n), Math.round(p0.z + ((p1.z - p0.z) * i) / n))) return false;
+    return true;
+  };
+  const out = [cells[0]];
+  let i = 0;
+  while (i < cells.length - 1) {
+    let j = Math.min(cells.length - 1, i + 400);
+    while (j > i + 1 && !clear(cells[i], cells[j])) j--;
+    out.push(cells[j]);
+    i = j;
+    if (out.length % 20 === 0) yield;
+  }
+  return out;
 }
 
 // The ferry's crossings from `from` (a town with a pier): as coachLinks,
@@ -61,6 +160,9 @@ export function ferryLinks(game, from) {
   const land = landOf(ow, from);
   const a = seaOff(ow, from);
   if (!a) return [];
+  // (Round 78) Its pier's water has to reach the sea for a ferry to sail.
+  const out0 = harbourWay(game, from, game.instantWork ? Infinity : 4);
+  if (out0 === null) return [];
   const c0 = centre(from);
   // (While the storm round the islands stands, no ferry crosses it: the
   // islands' own waters, or the open sea outside, but not between.)
@@ -78,15 +180,19 @@ export function ferryLinks(game, from) {
   for (const { s } of cands) {
     const b = seaOff(ow, s);
     if (!b) continue;
+    // (A pier on a lake, the far side: no ferry goes there.)
+    const P1 = game.sim.ships.ports[s.id];
+    const inn = P1 && P1.site ? harbourWay(game, s, game.instantWork ? Infinity : 3) : false;
+    if (inn === null) continue;
     const route = seaRoute(game, a, b, game.instantWork ? Infinity : 4);
     if (route === null) continue;
-    if (route === undefined) {
-      out.push({ s, kind: 'ferry', pending: true, known: known(game, s) });
+    if (route === undefined || out0 === undefined || inn === undefined) {
+      out.push({ s, from, kind: 'ferry', pending: true, known: known(game, s) });
       continue;
     }
     let len = 0;
     for (let i = 1; i < route.length; i++) len += Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z);
-    out.push({ s, kind: 'ferry', dist: len, mins: Math.max(60, Math.round(len / FERRY_PACE)), fare: Math.max(12, Math.round(12 + len / 60)), known: known(game, s) });
+    out.push({ s, from, kind: 'ferry', dist: len, mins: Math.max(60, Math.round(len / FERRY_PACE)), fare: Math.max(12, Math.round(12 + len / 60)), known: known(game, s) });
   }
   return out;
 }

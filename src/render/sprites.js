@@ -1260,6 +1260,40 @@ function simpleIcon(key) {
       p.line(13, 2, 13, 11, '#e8e8f0');
       p.set(13, 12, '#d02a2a');
       break;
+    case 'blueprint':
+    case 'blueprint_drawn':
+      // A rolled-out sheet of blue paper, its corner curling; drawn on, a
+      // white plan across it.
+      p.rect(2, 3, 12, 10, '#2a5aa8');
+      p.hline(2, 13, 3, '#4a7ac8');
+      p.vline(13, 3, 12, '#1a3a78');
+      p.hline(2, 13, 12, '#1a3a78');
+      p.set(13, 12, '#c8d8f0');
+      p.set(12, 12, '#c8d8f0');
+      if (key === 'blueprint_drawn') {
+        p.rect(4, 5, 6, 5, '#e8f0ff');
+        p.rect(5, 6, 4, 3, '#2a5aa8');
+        p.hline(4, 11, 10, '#e8f0ff');
+        p.set(7, 4, '#e8f0ff');
+      } else for (let x = 4; x < 12; x += 2) p.set(x, 7, '#6a9ae0');
+      break;
+    case 'grapple_hook':
+      // A coil of rope and the three-pronged iron hook on its end.
+      p.ellipse(5.5, 10.5, 4, 3.5, '#b89a6a');
+      p.ellipse(5.5, 10.5, 2.4, 2, '#8a7048');
+      p.line(8, 9, 11, 5, '#b89a6a');
+      p.line(11, 5, 11, 2, '#8a8a92');
+      p.line(11, 5, 8, 3, '#a8a8b0');
+      p.line(11, 5, 14, 3, '#a8a8b0');
+      p.set(8, 2, '#c8c8d0');
+      p.set(14, 2, '#c8c8d0');
+      break;
+    // (Round 78) The rod in hand with its line out: the rod alone, the line
+    // and the bobber drawn out to the water (see renderer.fishingDecos).
+    case 'fishing_rod_out':
+      p.line(2, 14, 13, 2, HANDLE[0]);
+      p.set(13, 2, '#e8e8f0');
+      break;
     case 'lute':
       // A round-backed body, its rose, the neck and the bent-back pegbox.
       p.line(8, 8, 12, 3, '#6a4a2a');
@@ -1995,6 +2029,18 @@ export function itemIcon(key) {
   // (Round 69) A ship of yours in a bottle: the bottle she came in.
   if (it && it.bottled !== undefined) {
     c = itemIcon(`ship_${it.shipKit}`);
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 78) A ship of your own design, in her bottle.
+  if (it && it.design !== undefined) {
+    c = itemIcon('ship_design');
+    iconCache.set(key, c);
+    return c;
+  }
+  // (Round 78) A blueprint drawn on.
+  if (it && it.plan !== undefined) {
+    c = itemIcon('blueprint_drawn');
     iconCache.set(key, c);
     return c;
   }

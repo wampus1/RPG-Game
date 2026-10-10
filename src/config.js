@@ -76,3 +76,6 @@ export function dirFromDelta(dx, dz) {
 // off, a townsperson from a fight, an outlaw breaking off) goes 15% slower
 // than it used to: each of its steps takes this much longer.
 export const FLEE = 1 / 0.85;
+// (Round 78) An enemy running from a player (a monster backing off, an
+// outlaw or a raider breaking away from you): 25% slower than it would go.
+export const FLEE_PLAYER = 1 / 0.75;

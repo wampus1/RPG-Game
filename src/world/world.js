@@ -290,7 +290,8 @@ export class World {
     const head = BLOCKS[this.getBlock(x, y + 1, z)];
     // (Round 75: on a stair you stoop under whatever's over it.)
     if ((head.solid && !below.stair) || head.liquid) return false;
-    return below.standable;
+    // (Round 78) On a ladder, hanging on to it: nothing under you needed.
+    return below.standable || !!feet.ladder;
   }
 
   // (Round 77) Swimming at the top of water two deep: water there and

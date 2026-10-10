@@ -1,6 +1,8 @@
 // World renderer: draws the voxel grid in an oblique 3/4 projection using
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
+import { planDecos, drawCopyBox } from './planfx.js';
+import { drawGrapples } from './seafx.js';
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
 import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
@@ -324,9 +326,13 @@ export class Renderer {
     this.drawWorld(game);
     this.drawProjectiles(game);
     drawCannonballs(this, game);
+    // (Round 78) A pirate's grapnels (see render/seafx.js).
+    drawGrapples(this, game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.drawAshfall(game, dt);
     this.lighting.draw(this, game);
+    // (Round 78) A copy box out (see render/planfx.js), over the light.
+    drawCopyBox(this, game);
     if (this.underground && this.hidden) this.drawDigView(game);
     drawStormSea(this, game, snap ? 'world' : 'all');
     drawOldPlaces(this, game, dt);
@@ -1019,6 +1025,8 @@ export class Renderer {
     this.diceDecos(buckets, zMin, zMax);
     game.wildlife?.decos(this, buckets, zMin, zMax);
     shipDecos(this, game, buckets, zMin, zMax);
+    // (Round 78) Blueprints laid out: their blocks, see-through.
+    planDecos(this, game, buckets, zMin, zMax);
     // (Round 71) The evolved masters' arms, the worm's body, rifts in the
     // air and what bounces about (see evolvedfx.js).
     evolvedDecos(this, game, buckets, zMin, zMax);
@@ -2189,7 +2197,11 @@ export class Renderer {
     if (!key) return;
     // (Round 66: a mod's piece held its own way: see mod/gear.js.)
     const hl = MODS.heldLook ? MODS.heldLook(key) : null;
-    const icon = hl && hl.img ? hl.img : itemIcon(key);
+    // (Round 78) A rod with its line out: the rod alone, the line and the
+    // bobber off its tip drawn out to the water (see fishingDecos).
+    const rod = key === 'fishing_rod' && !off;
+    const rodOut = rod && (e.rodFrame === this.frameNo || (e.cast && !e.cast.reel));
+    const icon = hl && hl.img ? hl.img : itemIcon(rodOut ? 'fishing_rod_out' : key);
     const dir = this.viewDir(e.dir);
     const act = e.actionTimer > 0 ? e.actionTimer / e.actionDur : 0;
     const look = e.look || {};
@@ -2207,7 +2219,7 @@ export class Renderer {
     const gy = hl ? -hl.y : upright ? -12 : -13;
     const S = hl ? hl.scale : 0.8;
     const mir = off && dir === 0 ? true : dir === 1;
-    const pose = this.swingPose(e, dir, off, mir) || (guard ? this.guardPose(e, dir, off, mir) : null);
+    const pose = this.swingPose(e, dir, off, mir) || (guard ? this.guardPose(e, dir, off, mir) : null) || (rod ? this.rodPose(e, mir, rodOut) : null);
     if (!pose && act <= 0 && dir === 2) return; // behind them
     if (off && !pose && dir === 2) return;
     ctx.save();
@@ -2239,6 +2251,13 @@ export class Renderer {
     ctx.rotate(ang + (hl ? (mir ? -hl.ang : hl.ang) : 0));
     ctx.scale(mir ? -S : S, S);
     drawJewelled(ctx, icon, key, gx, gy, this.time, true);
+    // (Where the rod's tip is, on the world's picture, for the line.)
+    if (rod) {
+      const m = ctx.getTransform();
+      const px = gx + 13.5;
+      const py = gy + 2.5;
+      e.rodTip = { x: m.a * px + m.c * py + m.e + this.camX, y: m.b * px + m.d * py + m.f + this.camY, f: this.frameNo };
+    }
     // A flame carried: embers off its head now and then, and a flicker of
     // brightness round it (the Everlight a steady cold shimmer).
     if (HELD_FLAMES[key] && !(e.snuffT > 0)) {
@@ -2260,6 +2279,34 @@ export class Renderer {
     }
     ctx.restore();
     if (!off && e.bowDraw && (dir === 1 || dir === 3)) this.drawNocked(ctx, e, dir, hx, hy);
+  }
+
+  // (Round 78) A rod: drawn back over the shoulder and whipped out as it's
+  // cast, pulled up and back on a strike, and held out low over the water
+  // while the line's in. Null: just carried.
+  rodPose(e, mir, out) {
+    const sg = mir ? -1 : 1;
+    const c = e.cast;
+    if (c) {
+      const f = Math.min(1, c.t / c.dur);
+      if (c.reel) {
+        // (A sharp pull up and back, easing to upright.)
+        const k = f < 0.3 ? f / 0.3 : 1 - (f - 0.3) / 0.7;
+        return { ang: sg * (0.45 - 1.45 * k), dx: -sg * 2 * k, dy: -2 * k, smear: 0 };
+      }
+      if (f < 0.45) {
+        // Wound back over the shoulder, a tremble at the top.
+        const k = f / 0.45;
+        const e2 = 1 - (1 - k) * (1 - k);
+        const shake = k > 0.8 ? Math.sin(this.time * 60) * 0.04 : 0;
+        return { ang: -sg * (1.35 * e2 + shake), dx: -sg * 2 * e2, dy: -2 * e2, smear: 0 };
+      }
+      // Whipped forward, past where it'll be held, and settling there.
+      const k = (f - 0.45) / 0.55;
+      const fw = k < 0.4 ? -1.35 + (0.85 + 1.35) * (k / 0.4) : 0.85 - 0.4 * ((k - 0.4) / 0.6);
+      return { ang: sg * fw, dx: sg * (k < 0.4 ? 1 : 1 - (k - 0.4) / 0.6), dy: 0, smear: k < 0.4 ? 0.6 * (1 - k / 0.4) : 0 };
+    }
+    return out ? { ang: sg * 0.45, dx: 0, dy: 0, smear: 0 } : null;
   }
 
   // A blade held up to take a blow: across the chest face on (two blades
@@ -2427,13 +2474,17 @@ export class Renderer {
   fishingDecos(game, buckets, zMin, zMax) {
     const ctx = this.ctx;
     const lines = [];
+    this.frameNo = (this.frameNo || 0) + 1;
     const f = game.fishing;
     if (f) lines.push({ e: game.player, t: f, dip: f.dip || 0, reel: f.phase === 'reel' ? f.fish - 0.5 : 0 });
     for (const n of game.visibleEntities || []) {
       if (n.kind !== 'npc' || !n.fishSpot) continue;
       const t = n.fishSpot();
-      if (t) lines.push({ e: n, t, dip: n.fishDip || 0, reel: 0 });
+      // (Pulled up after a catch: the line's out of the water a moment.)
+      if (t && !(n.recastT > 0) && !(n.cast && n.cast.reel)) lines.push({ e: n, t, dip: n.fishDip || 0, reel: 0 });
     }
+    // (Round 78) A grappling hook's rope, up to where it bit.
+    for (const q of game.everyone ? game.everyone() : [game.player]) if (q && q.grappleAt) lines.push({ e: q, t: { x: q.grappleAt.x, y: q.grappleAt.y - 1, z: q.grappleAt.z }, dip: 0, reel: 0, rope: q.grappleAt.k ?? 1 });
     const add = (row, layer, order, deco) => {
       if (row < zMin || row > zMax) return;
       let arr = buckets.get(row);
@@ -2447,42 +2498,75 @@ export class Renderer {
       const rp = { x: ru, y: wp.y, z: rv };
       const [tu, tv] = tv0(L.t.x, L.t.z);
       const T = { x: tu, y: L.t.y, z: tv };
-      const row = Math.ceil(rp.z - 0.001);
       const layer = Math.ceil(rp.y - 0.001) + 1;
       const hx = rp.x * TILE + 8 - this.camX;
       const hy = rp.z * TILE - rp.y * LH + LH + 10 - this.camY - 12;
-      const bx = T.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
+      let bx = T.x * TILE + 8 - this.camX + Math.round(L.reel * 6);
       const bob = Math.sin(this.time * 3 + L.t.x) * 0.8;
-      const by = T.z * TILE - T.y * LH - this.camY + 10 + bob + L.dip * 2;
+      let by = T.z * TILE - T.y * LH - this.camY + 10 + bob + L.dip * 2;
+      // (Round 78) The line runs from the tip of the rod in their hand (as
+      // it was drawn: see drawHeld), no stick of its own beside it.
+      if (L.rope === undefined) L.e.rodFrame = this.frameNo;
+      const tip = L.rope === undefined && L.e.rodTip && this.frameNo - L.e.rodTip.f <= 2 ? L.e.rodTip : null;
       const dx = Math.sign(bx - hx) || 1;
-      const tx = hx + dx * 7;
-      const ty = hy - 9;
-      // Rod: just after the one holding it.
-      add(row, layer, rp.y + 0.01, () => {
-        ctx.fillStyle = '#6a4a2a';
-        for (let i = 0; i <= 7; i++) ctx.fillRect(Math.round(hx + dx * i), Math.round(hy - i * 9 / 7), 1, 1);
-      });
+      const tx = tip ? tip.x - this.camX : L.rope !== undefined ? hx + dx * 2 : hx + dx * 7;
+      const ty = tip ? tip.y - this.camY : L.rope !== undefined ? hy - 6 : hy - 9;
+      // (Cast: the bobber at the rod's tip as it's drawn back, then flying
+      // out in an arc to the water.)
+      const c = L.e.cast;
+      let fly = 1;
+      if (L.rope !== undefined) {
+        // (A rope: from the hands, straight up to the hook (flying, then
+        // bitten), taut.)
+        fly = L.rope;
+        const k = 1 - (1 - fly) * (1 - fly);
+        bx = tx + (bx - tx) * k;
+        by = ty + (by - 4 - ty) * k - Math.sin(k * Math.PI) * 8;
+      } else if (c && !c.reel) {
+        const cf = Math.min(1, c.t / c.dur);
+        fly = cf < 0.5 ? 0 : (cf - 0.5) / 0.5;
+        const k = 1 - (1 - fly) * (1 - fly);
+        bx = tx + (bx - tx) * k;
+        by = ty + 6 + (by - ty - 6) * k - Math.sin(k * Math.PI) * 14;
+      }
       // The line sags between rod tip and bobber, a row at a time.
       const n = 14;
-      const bLayer = L.t.y + 2;
+      const bLayer = fly < 1 ? layer : L.t.y + 2;
+      const bRow = fly < 1 ? Math.round(rp.z + (T.z - rp.z) * fly) : T.z;
       const pieces = new Map();
       for (let i = 1; i < n; i++) {
         const k = i / n;
-        const r = Math.round(rp.z + (T.z - rp.z) * k);
+        const r = Math.round(rp.z + (bRow - rp.z) * k);
         const px = Math.round(tx + (bx - tx) * k);
-        const py = Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (L.dip > 0.6 ? 1 : 4));
+        const py = Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (fly < 1 || L.rope !== undefined ? 0 : L.dip > 0.6 ? 1 : 4));
         let pc = pieces.get(r);
         if (!pc) pieces.set(r, (pc = { pts: [], layer: Math.round(layer + (bLayer - layer) * k) }));
         pc.pts.push(px, py);
       }
+      const rope = L.rope !== undefined;
       for (const [r, pc] of pieces) {
         add(r, pc.layer, 99, () => {
-          ctx.fillStyle = 'rgba(232,232,240,0.85)';
+          ctx.fillStyle = rope ? '#b89a6a' : 'rgba(232,232,240,0.85)';
           for (let i = 0; i < pc.pts.length; i += 2) ctx.fillRect(pc.pts[i], pc.pts[i + 1], 1, 1);
         });
       }
       // Bobber (half under when something bites), floating on the water.
-      add(T.z, bLayer, 99, () => {
+      add(bRow, bLayer, 99, () => {
+        if (rope) {
+          // The hook: three iron prongs over the edge.
+          ctx.fillStyle = '#9a9aa4';
+          ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 1);
+          ctx.fillRect(Math.round(bx), Math.round(by) - 3, 1, 3);
+          ctx.fillStyle = '#d0d0d8';
+          ctx.fillRect(Math.round(bx) - 2, Math.round(by) - 2, 1, 1);
+          ctx.fillRect(Math.round(bx) + 2, Math.round(by) - 2, 1, 1);
+          return;
+        }
+        if (fly < 1) {
+          ctx.fillStyle = '#d02a2a';
+          ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 2, 2);
+          return;
+        }
         const under = L.dip > 0.6;
         ctx.fillStyle = '#d02a2a';
         ctx.fillRect(Math.round(bx) - 1, Math.round(by) - 2 + (under ? 2 : 0), 3, under ? 1 : 2);

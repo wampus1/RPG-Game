@@ -340,7 +340,11 @@ export class War {
     // Word on the road: riders seen. Merchants stay home.
     TL.econ.raidAlert = at + 12 * 60;
     FL.econ.raidAlert = Math.max(FL.econ.raidAlert || 0, at);
-    if (naval) {
+    // (Round 78) Come by troopship (see game/shipfleets.js): her ledger
+    // lines are her own.
+    if (naval === 'ship') {
+      ledger(FL, day, `A party of ${party.length} took ship for ${to.name} of the ${plain(b)}, aboard a troopship.`);
+    } else if (naval) {
       ledger(TL, day, `Rafts of the ${plain(a)} have been sighted ${to.coast ? 'off the coast' : to.river ? 'on the river' : 'out on the lake'}. Merchants are staying home, and the watch is on edge.`);
       ledger(FL, day, `A party of ${party.length} put out on rafts, bound for ${to.name} of the ${plain(b)}.`);
     } else {
@@ -476,10 +480,10 @@ export class War {
     const ts = TL.settlement.name;
     const names = (list) => list.map((r) => r.name.first).join(list.length > 2 ? ', ' : ' and ');
     if (out.result === 'plundered') {
-      ledger(TL, day, `Raiders of the ${plain(a)} ${raid.naval ? `came ashore by raft at ${ts}` : `struck ${ts}`} in the night and got away with ¤${out.loot} and stores${out.hurt && out.hurt.length ? `; ${fullName(out.hurt[0])} was ${out.fallen ? 'killed' : 'hurt'}` : ''}.${out.lost.length ? ` ${out.lost.length} of them fell.` : ''}`);
+      ledger(TL, day, `Raiders of the ${plain(a)} ${raid.naval ? `came ashore ${raid.naval === 'ship' ? 'from a troopship' : 'by raft'} at ${ts}` : `struck ${ts}`} in the night and got away with ¤${out.loot} and stores${out.hurt && out.hurt.length ? `; ${fullName(out.hurt[0])} was ${out.fallen ? 'killed' : 'hurt'}` : ''}.${out.lost.length ? ` ${out.lost.length} of them fell.` : ''}`);
       ledger(FL, day, `Our raiders came back from ${ts} with ¤${out.loot}.${out.lost.length ? ` ${names(out.lost)} did not come home.` : ''}`);
     } else {
-      ledger(TL, day, `Raiders of the ${plain(a)} came ${raid.naval ? 'ashore by raft' : 'over the fields'} in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
+      ledger(TL, day, `Raiders of the ${plain(a)} came ${raid.naval === 'ship' ? 'ashore from a troopship' : raid.naval ? 'ashore by raft' : 'over the fields'} in the night${out.rode ? '; the watch rode out to meet them' : ''} and drove them off.${out.lost.length ? ` ${out.lost.length} of the raiders fell${out.taken && out.taken.length ? `, ${out.taken.length} of them taken alive and locked up` : ''}.` : ''}`);
       ledger(FL, day, `Our raid on ${ts} was beaten back.${out.lost.length ? ` ${names(out.lost)} did not come home${out.taken && out.taken.length ? ` (${names(out.taken)} taken prisoner)` : ''}.` : ''}`);
     }
     if (a && b) {

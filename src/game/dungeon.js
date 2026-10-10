@@ -193,6 +193,8 @@ export class DungeonRun {
     if (this.rec.cleared) game.ui.msg('It\'s quiet down here now.', '#c8c8c8');
     game.audio?.play(this.kav ? 'lift' : 'door');
     game.renderer.flashScreen?.('#000000', 0.6);
+    // (Round 78) Saved as you go down (see Game.autosave).
+    game.autosaveDue = `going down into ${this.rec.name}`;
   }
 
   // Back up to the surface (or a respawn): you alone (anyone else down here
@@ -228,6 +230,8 @@ export class DungeonRun {
     game.lightDirty = true;
     game.updateSettlements(true);
     game.ui.msg(fallsIn ? `You climb out of ${this.rec.name} into the air. Behind you, the way down falls in.` : `You climb back up into the air.`, '#e0c890');
+    // (Round 78) And saved again as you come up.
+    if (!p.dead) game.autosaveDue = `out of ${this.rec.name}`;
     game.renderer.flashScreen?.('#ffffff', 0.25);
     // The way in coming down: dust, the rumble of it, the ground shaking
     // (for all of you there to see).

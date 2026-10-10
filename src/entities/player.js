@@ -4,7 +4,7 @@ import { Entity } from './entity.js';
 import { tickDishes, dishFx } from '../game/cooking.js';
 import { PLAYER_STEP_TIME, INV_SIZE, GROUND } from '../config.js';
 import { makeSlots, addItem } from '../game/inventory.js';
-import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandable, offhandLight } from '../world/items.js';
+import { ITEMS, WEAR_SLOTS, ARMOR_CAP, twoHanded, offhandOk, offhandLight } from '../world/items.js';
 import { offhandOf } from '../game/combat.js';
 import { BLOCKS, LEAVES } from '../world/blocks.js';
 import { has as heroHas, stepMult, WING_BACK } from '../game/hero.js';
@@ -114,7 +114,7 @@ export class Player extends Entity {
     const s = this.inv[i];
     const it = s && ITEMS[s.item];
     // (A one-handed blade can go in the off hand, where a shield would.)
-    const slot = it && it.kind === 'armor' ? it.slot : offhandable(s && s.item) || offhandLight(s && s.item) ? 'shield' : null;
+    const slot = it && it.kind === 'armor' ? it.slot : offhandOk(s && s.item) ? 'shield' : null;
     if (!slot) return null;
     const old = this.equip[slot];
     this.equip[slot] = s.item;
@@ -230,6 +230,38 @@ export class Player extends Entity {
 
   // Walked into something you could climb, or squeeze through, if it
   // weren't for one block: said once in a while.
+  // (Round 78) Climbing a ladder (see blocks.ladder): pressing toward the
+  // wall it's on takes you up a rung (to the next ladder above, while there
+  // is one: at the top, the step onto the wall's top is an ordinary one),
+  // away from it, down (while there's ladder under you). True if you went.
+  climb(dx, dz) {
+    const w = this.game.world;
+    const here = BLOCKS[w.getBlock(this.x, this.y, this.z)];
+    if (!here || !here.ladder) return false;
+    const d = w.getMeta(this.x, this.y, this.z) & 3;
+    const tx = [0, -1, 0, 1][d];
+    const tz = [1, 0, -1, 0][d];
+    const dur = PLAYER_STEP_TIME * 1.5;
+    if (dx === tx && dz === tz) {
+      const up = BLOCKS[w.getBlock(this.x, this.y + 1, this.z)];
+      const over = BLOCKS[w.getBlock(this.x, this.y + 2, this.z)];
+      if (!up || !up.ladder || (over && over.solid)) return false;
+      this.dir = d;
+      this.startMove(this.x, this.y + 1, this.z, dur);
+      this.game.onPlayerStep?.(this.x, this.y, this.z, false);
+      return true;
+    }
+    if (dx === -tx && dz === -tz) {
+      const down = BLOCKS[w.getBlock(this.x, this.y - 1, this.z)];
+      if (!down || !down.ladder) return false;
+      this.dir = d;
+      this.startMove(this.x, this.y - 1, this.z, dur * 0.8);
+      this.game.onPlayerStep?.(this.x, this.y, this.z, false);
+      return true;
+    }
+    return false;
+  }
+
   blockedHint(nx, nz) {
     const w = this.game.world;
     const solid = (x, y, z) => BLOCKS[w.getBlock(x, y, z)].solid;
@@ -372,9 +404,13 @@ export class Player extends Entity {
     if (!d) return;
     // (Mesmerised: your feet go the wrong way. See afflict.js.)
     if (this.mazeT > 0) d = [-d[0], -d[1]];
+    // (Round 78: on a rope, you go up it, not about.)
+    if (this._grapple) return;
     this.sitting = null;
     // Sat in the back of a wagon: moving climbs you down.
     if (this.inWagon) {
+      // (Round 78: not off a coach or a ferry under way, by walking.)
+      if (this._ride) return;
       this.game.riding.climbOut();
       return;
     }
@@ -404,6 +440,8 @@ export class Player extends Entity {
         return;
       }
     }
+    // (Round 78) On a ladder: toward its wall, up it; away, down it.
+    if (this.climb(dx, dz)) return;
     // Onto a ship's deck, from a pier or up her side out of the water.
     if (this.game.ships3d && this.game.ships3d.length && tryBoardStep(this.game, this, nx, nz)) return;
     // (Round 77) On foot, out into water two deep: swimming.

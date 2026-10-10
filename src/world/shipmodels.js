@@ -39,7 +39,7 @@ export const SHIP_TYPES = {
     masts: [{ z: 0.66, h: 17, rig: 'square3' }, { z: 0.36, h: 18, rig: 'gaff' }],
     bowsprit: 7, deckGuns: [7, 10, 13, 16], gunDeck: null,
     speed: 20, turn: 0.7, accel: 0.42, crew: 6, hold: 4, cost: 3600,
-    blurb: 'Two masts: square sails forward, a great gaff sail aft. Fast and weatherly; eight guns on her deck.',
+    blurb: 'Two masts: square sails forward, a great gaff sail aft. Fast and weatherly; eight guns on her deck; stalls below for two horses.',
   },
   galleon: {
     name: 'Galleon', L: 32, W: 11, wl: 4, deck: 7, floors: [1, 4],
@@ -47,7 +47,7 @@ export const SHIP_TYPES = {
     masts: [{ z: 0.72, h: 18, rig: 'square2' }, { z: 0.5, h: 21, rig: 'square3' }, { z: 0.2, h: 15, rig: 'lateen' }],
     bowsprit: 8, deckGuns: [12, 15, 18, 21], gunDeck: [7, 10, 13, 16, 19, 22],
     speed: 16, turn: 0.4, accel: 0.26, crew: 12, hold: 8, cost: 7200,
-    blurb: 'A towering castle of a ship: cabins under her castles, a deep hold for cargo, a gun deck and guns on her main deck. Slow to turn, slow to stop.',
+    blurb: 'A towering castle of a ship: cabins under her castles, a deep hold for cargo (room for four horses and two wagons), a gun deck and guns on her main deck. Slow to turn, slow to stop.',
   },
   frigate: {
     name: 'Frigate', L: 30, W: 9, wl: 3, deck: 7, floors: [1, 4],
@@ -55,10 +55,13 @@ export const SHIP_TYPES = {
     masts: [{ z: 0.72, h: 20, rig: 'square3' }, { z: 0.48, h: 23, rig: 'square3' }, { z: 0.22, h: 18, rig: 'mizzen' }],
     bowsprit: 9, deckGuns: [10, 18], gunDeck: [6, 9, 12, 15, 18, 21, 24],
     speed: 30, turn: 0.6, accel: 0.36, crew: 10, hold: 4, cost: 9000,
-    blurb: 'Built to fly: long and lean, three masts of square sail, fourteen guns on her gun deck. The fastest thing on the sea, handled well.',
+    blurb: 'Built to fly: long and lean, three masts of square sail, fourteen guns on her gun deck; a stall for one horse. The fastest thing on the sea, handled well.',
   },
 };
 export const SHIP_KINDS = Object.keys(SHIP_TYPES);
+// (Round 78) Ships of the players' own design, by id (see
+// game/shipdesign.js, which adds each to SHIP_TYPES as a kind of its own).
+export const DESIGNS = new Map();
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
@@ -105,6 +108,17 @@ export function shipModel(type) {
     MODELS.set(type, m);
   }
   return m;
+}
+
+// (Round 78) A model of a kind not (yet) a kind, made fresh, not kept:
+// the shipwright's bench's picture of the design on it.
+export function previewModel(T) {
+  SHIP_TYPES.__preview = T;
+  try {
+    return build('__preview');
+  } finally {
+    delete SHIP_TYPES.__preview;
+  }
 }
 
 function build(type) {

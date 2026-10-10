@@ -20,6 +20,7 @@ import { hash4, RNG } from '../util/rng.js';
 import { addShip, shipsOf, shipById, waterSpot } from './ships3d.js';
 import { makeCrew, crewOf } from './shipcrew.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
+import { coveOf, takenAtSea } from './pirates.js';
 
 const NEAR = 110;
 const FAR = 170;
@@ -32,6 +33,8 @@ export const FLEET_KINDS = {
   settlers: { name: 'settler ship', crew: ['captain', 'mate', 'sailor', 'passenger', 'passenger', 'passenger', 'passenger'] },
   war: { name: 'man-of-war', crew: ['captain', 'mate', 'gunner', 'gunner', 'gunner', 'marine', 'marine', 'marine', 'marine'] },
   cargo: { name: 'cargo hulk', crew: ['captain', 'sailor', 'sailor', 'sailor'] },
+  // (Round 78) An army shipped across to an enemy's shore.
+  troops: { name: 'troopship', crew: ['captain', 'mate', 'sailor', 'marine', 'marine', 'marine', 'marine', 'marine', 'marine', 'marine'] },
 };
 
 // Can this realm send ships across the open sea, and of what kinds?
@@ -239,6 +242,7 @@ export function fleetsTick(game, dt) {
     F.next = now + 45;
     dispatch(game, F, now);
   }
+  navalBattles(game, F, now);
   for (const v of [...F.voyages]) {
     const S = v.ship !== null && v.ship !== undefined ? shipById(game, v.ship) : null;
     if (v.ship !== null && v.ship !== undefined && !S) {
@@ -268,6 +272,68 @@ export function fleetsTick(game, dt) {
     }
     const pos = along(v.route, d);
     if (nearAny(game, pos.x, pos.z, NEAR)) make(game, v, pos, d);
+  }
+}
+
+// (Round 78) Enemy men-of-war (and troopships) meeting at sea: in sight of
+// you, they close and fight it out, gun for gun; away from you, it's
+// reckoned up, and one of them goes down (word of it reaching both ports).
+function navalBattles(game, F, now) {
+  const sim = game.sim;
+  if (!sim.war) return;
+  const ow = game.world.ow;
+  const armed = F.voyages.filter((v) => v.kind === 'war' || v.kind === 'troops');
+  // (Since last looked: time hurried on, or slept through, two ships may
+  // have met and passed in it. Looked over a step at a time.)
+  const since = Math.max(F.navT ?? now, now - 24 * 60);
+  F.navT = now;
+  const where = (v, t) => along(v.route, Math.max(0, Math.min(v.len, v.at + (t - v.atT) * v.pace)));
+  const closest = (a, b) => {
+    let best = Infinity;
+    const step = Math.max(0.5, 30 / (a.pace + b.pace));
+    for (let t = since; t <= now; t += step) {
+      const pa = where(a, t);
+      const pb = where(b, t);
+      best = Math.min(best, Math.hypot(pa.x - pb.x, pa.z - pb.z));
+      if (now - since < 1) break;
+    }
+    return best;
+  };
+  for (let i = 0; i < armed.length; i++) {
+    for (let j = i + 1; j < armed.length; j++) {
+      const a = armed[i];
+      const b = armed[j];
+      if (a.done || b.done) continue;
+      const ca = ow.civs.find((c) => c.id === a.civ);
+      const cb = ow.civs.find((c) => c.id === b.civ);
+      if (!ca || !cb || !sim.war.enemies(ca, cb)) continue;
+      const SA = a.ship !== null && a.ship !== undefined ? shipById(game, a.ship) : null;
+      const SB = b.ship !== null && b.ship !== undefined ? shipById(game, b.ship) : null;
+      const pa = SA ? { x: SA.x, z: SA.z } : along(a.route, Math.min(a.len, a.at + (now - a.atT) * a.pace));
+      const pb = SB ? { x: SB.x, z: SB.z } : along(b.route, Math.min(b.len, b.at + (now - b.atT) * b.pace));
+      const d = Math.hypot(pa.x - pb.x, pa.z - pb.z);
+      if (SA && SB) {
+        if (d < 90 && !SA.fight) SA.fight = { ship: SB.id };
+        if (d < 90 && !SB.fight) SB.fight = { ship: SA.id };
+        continue;
+      }
+      if (SA || SB || Math.min(d, closest(a, b)) > 60) continue;
+      // Reckoned: the bigger ship, and luck.
+      const rng = new RNG(hash4(a.id, b.id, Math.floor(now)));
+      const wa = (SHIP_TYPES[a.type] ? SHIP_TYPES[a.type].crew : 4) * (a.kind === 'war' ? 1.4 : 1);
+      const wb = (SHIP_TYPES[b.type] ? SHIP_TYPES[b.type].crew : 4) * (b.kind === 'war' ? 1.4 : 1);
+      const loser = rng.chance(wb / (wa + wb)) ? a : b;
+      const winner = loser === a ? b : a;
+      loser.done = true;
+      F.voyages = F.voyages.filter((q) => q !== loser);
+      const day = Math.floor(now / DAY);
+      const near = ow.settlements.filter((s) => game.world.layouts.get(s.id)).sort((p, q) => Math.hypot((p.cx + 0.5) * REGION_W - pa.x, (p.cz + 0.5) * REGION_D - pa.z) - Math.hypot((q.cx + 0.5) * REGION_W - pa.x, (q.cz + 0.5) * REGION_D - pa.z))[0];
+      const text = `A sea fight: the ${winner.name} and the ${loser.name} met at sea${near ? ` off ${near.name}` : ''}, and the ${loser.name} went down with her colours flying.`;
+      for (const sid of [winner.from, loser.from]) {
+        const L = game.world.layouts.get(sid);
+        if (L && L.econ) ledger(L, day, text);
+      }
+    }
   }
 }
 
@@ -320,7 +386,8 @@ function dispatch(game, F, now) {
     let kind;
     let to;
     if (enemy.length && rng.chance(0.6)) {
-      kind = 'war';
+      // (Round 78: or a troopship, with an army aboard for their shore.)
+      kind = rng.chance(0.35) ? 'troops' : 'war';
       to = rng.pick(enemy);
     } else {
       const friendly = away.filter((s) => !(sim.war && sim.war.enemies(civ, s.civ)) && sim.realms && sim.realms.standing(civ, s.civ) !== 'hostile');
@@ -451,6 +518,21 @@ function end(game, F, v, now, how) {
     return;
   }
   const rng = new RNG(hash4(v.id, v.seed, 0xa11));
+  // (Round 78) Taken by pirates on the way, now and then (see pirates.js).
+  if ((v.kind === 'trade' || v.kind === 'cargo' || v.kind === 'settlers') && !S && takenAtSea(game, v, rng)) {
+    const cove = coveOf(game);
+    if (FL && FL.econ) ledger(FL, day, `Pirates${cove ? ` out of ${cove.name}` : ''} took the ${v.name} at sea, bound for ${to ? to.name : 'abroad'}: her cargo gone, her crew put adrift.`);
+    return;
+  }
+  // (Round 78) A troopship in: her army ashore on the enemy's coast.
+  if (v.kind === 'troops') {
+    const enemies = sim.war && from && to && sim.war.enemies(from.civ, to.civ);
+    if (enemies && TL && TL.econ && FL && FL.econ) {
+      const raid = sim.war.planRaid(from.civ, to.civ, from, to, day, rng, 'ship');
+      ledger(TL, day, `The ${v.name}, a troopship of the ${from.civ.name.replace(/^The /, '')}, has put an army ashore on the coast. They'll march on ${to.name}${raid ? ' by nightfall' : ''}.`);
+    } else if (TL && TL.econ) ledger(TL, day, `A troopship, the ${v.name}, put in at the harbour and sailed again.`);
+    return;
+  }
   if (v.kind === 'trade' || v.kind === 'cargo') {
     const gain = Math.round((v.kind === 'trade' ? 90 : 60) + v.len / 60 + rng.int(0, 40));
     if (FL && FL.econ) FL.econ.treasury += gain;

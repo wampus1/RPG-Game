@@ -688,6 +688,13 @@ for (const base of STAIR_BASES) {
   const o = BLOCKS[B[base]];
   def(`${base}_stairs`, { solid: true, opaque: false, render: 'stair', stair: true, stairOf: base, rotatable: true, standable: true, tool: o.tool, hardness: o.hardness, label: `${o.label || cap(base.replace(/_/g, ' '))} Stairs` });
 }
+// (Round 78) A ladder up a wall: nothing to bump into, hung on the wall it
+// climbs (its facing, the low bits of its meta, the side the wall's on, as
+// a painting's is), and climbed (see World.canStand and Player.climb).
+def('ladder', { ...sprite, solid: false, support: false, onWall: true, rotatable: true, ladder: true, tool: 'axe', hardness: 0.4, label: 'Ladder' });
+// (Round 78) A shipwright's bench: ships of your own design drawn up and
+// built on it (see ui/shipdesign.js).
+def('shipwright_bench', { ...sprite, solid: true, interact: 'shipdesign', tool: 'axe', hardness: 2, support: false, label: 'Shipwright\'s Bench' });
 // The stair for a floor of `id` (wood's own plank stair if there's none).
 export function stairFor(id) {
   const n = BLOCKS[id] && BLOCKS[id].name;
