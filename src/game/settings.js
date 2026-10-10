@@ -1,6 +1,15 @@
 // Player settings: volumes and visuals, kept in the browser between games.
 export const SETTINGS_KEY = 'tessera-settings';
 
+// (Round 80) Particles and effects a frame, by the setting (fxCap): new
+// particles, new effects, and how many of each can be about at once (see
+// Renderer.room and fx.addEffect).
+export const FX_CAPS = [
+  { parts: 300, fx: 24, alive: 900, fxAlive: 60 },
+  { parts: 150, fx: 12, alive: 600, fxAlive: 40 },
+  { parts: 60, fx: 6, alive: 300, fxAlive: 24 },
+];
+
 export const DEFAULTS = {
   music: 5, // 0-10
   sound: 7, // 0-10
@@ -16,6 +25,9 @@ export const DEFAULTS = {
   frameCap: 0, // 0 full, 1 at most 30 a second
   lighting: 0, // 0 full, 1 fast
   particles: 0, // 0 all, 1 fewer, 2 none
+  // (Round 80) New particles and effects a frame, from everything at once:
+  // 0 many (300), 1 some (150), 2 few (60).
+  fxCap: 0,
   weatherFx: true,
   netRate: 0, // 0 smooth (20 a second), 1 light (10)
   // (Round 77)
@@ -54,6 +66,7 @@ export const SETTING_ROWS = [
   { key: 'lightStyle', tab: 'Visuals', label: 'Lighting style', kind: 'choice', opts: ['Smooth', 'Tiled'] },
   { key: 'lighting', tab: 'Visuals', label: 'Lighting quality', kind: 'choice', opts: ['Full', 'Fast'] },
   { key: 'particles', tab: 'Visuals', label: 'Particles', kind: 'choice', opts: ['All', 'Fewer', 'None'] },
+  { key: 'fxCap', tab: 'Visuals', label: 'Particles and effects a frame', kind: 'choice', opts: ['Many (300)', 'Some (150)', 'Few (60)'] },
   { key: 'weatherFx', tab: 'Visuals', label: 'Falling rain and snow', kind: 'bool' },
   { key: 'weatherGround', tab: 'Visuals', label: 'Splashes, snow and tracks', kind: 'bool' },
   { key: 'waterFx', tab: 'Visuals', label: 'Shore foam and ripples', kind: 'bool' },
@@ -112,6 +125,7 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     renderer.noShake = !s.shake;
     renderer.noDamageNumbers = !s.damageNumbers;
     renderer.particleK = [1, 0.4, 0][s.particles] ?? 1;
+    renderer.fxCap = FX_CAPS[s.fxCap] || FX_CAPS[0];
     renderer.noWeatherFx = !s.weatherFx;
     if (renderer.lighting) renderer.lighting.fast = s.lighting === 1;
     // (Round 77)

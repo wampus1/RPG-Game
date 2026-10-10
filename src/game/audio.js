@@ -21,9 +21,16 @@ export function soundGroup(name, src = null) {
   return GROUP_OF[name] || 'items';
 }
 
+// (Round 80) How many of each kind of voice are kept (see voiceFor), and
+// how long they're kept with nothing played.
+const VOICES = { tone: 24, noise: 16 };
+const VOICES_QUIET = 12000;
+
 export class Audio {
   constructor() {
     this.ctx = null;
+    // (Kept voices: the game's own sounds, live. See voiceFor.)
+    this.pooled = true;
     this.enabled = true;
     this.volume = 0.35;
     this.last = new Map();
@@ -111,9 +118,91 @@ export class Audio {
     return b;
   }
 
+  // ------------------------------------------------------------ voices
+  // (Round 80) The sounds' own voices, kept and played again rather than
+  // made new for every sound: a few dozen oscillators (each through its
+  // own volume) and noise players (through a band and a volume), started
+  // once and left running, silent, between notes. Each note takes a voice
+  // that's free (or the one free soonest, cut off, when they're all busy),
+  // sets its wave, pitch and loudness for the time it plays, and gives it
+  // back. Put away after a quiet spell, made again when next wanted. (Not
+  // when a sound's being made into samples: see renderGameSound.)
+  voiceFor(kind, t) {
+    const c = this.ctx;
+    if (!this.pooled) return null;
+    if (!this.pool || this.pool.ctx !== c) this.pool = { ctx: c, tone: [], noise: [] };
+    const list = this.pool[kind];
+    const now = c.currentTime;
+    let v = null;
+    for (const q of list) if (q.until <= now && (!v || q.until < v.until)) v = q;
+    if (!v && list.length < VOICES[kind]) {
+      v = { until: 0, dest: null };
+      v.g = c.createGain();
+      v.g.gain.value = 0;
+      if (kind === 'tone') {
+        v.o = c.createOscillator();
+        v.o.connect(v.g);
+        v.o.start();
+      } else {
+        v.s = c.createBufferSource();
+        v.s.buffer = this.noiseBuf;
+        v.s.loop = true;
+        v.f = c.createBiquadFilter();
+        v.f.type = 'bandpass';
+        v.s.connect(v.f).connect(v.g);
+        v.s.start();
+      }
+      list.push(v);
+    }
+    if (!v) for (const q of list) if (!v || q.until < v.until) v = q;
+    const dest = this.dest || this.master;
+    if (v.dest !== dest) {
+      v.g.disconnect();
+      v.g.connect(dest);
+      v.dest = dest;
+    }
+    // (Whatever it was doing, let go of.)
+    v.g.gain.cancelScheduledValues(now);
+    v.g.gain.setValueAtTime(0, now);
+    if (v.o) v.o.frequency.cancelScheduledValues(now);
+    if (v.f) v.f.frequency.cancelScheduledValues(now);
+    this.quietLater();
+    return v;
+  }
+
+  // (Round 80) After a quiet spell, the voices put away (they're made
+  // again when next wanted).
+  quietLater() {
+    globalThis.clearTimeout(this.quietT);
+    this.quietT = setTimeout(() => {
+      const P = this.pool;
+      this.pool = null;
+      if (!P) return;
+      for (const v of [...P.tone, ...P.noise]) {
+        try {
+          (v.o || v.s).stop();
+          v.g.disconnect();
+        } catch {
+          // (Gone already.)
+        }
+      }
+    }, VOICES_QUIET);
+  }
+
   tone(freq, dur, type = 'square', vol = 0.3, slide = 0, delay = 0) {
     const c = this.ctx;
     const t = c.currentTime + delay;
+    const v = this.voiceFor('tone', t);
+    if (v) {
+      v.o.type = type;
+      v.o.frequency.setValueAtTime(freq, t);
+      if (slide) v.o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+      v.g.gain.setValueAtTime(vol, t);
+      v.g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      v.g.gain.setValueAtTime(0, t + dur + 0.02);
+      v.until = t + dur + 0.02;
+      return;
+    }
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = type;
@@ -131,6 +220,18 @@ export class Audio {
   swell(freq, dur, type = 'sine', vol = 0.2, slide = 0, delay = 0) {
     const c = this.ctx;
     const t = c.currentTime + delay;
+    const v = this.voiceFor('tone', t);
+    if (v) {
+      v.o.type = type;
+      v.o.frequency.setValueAtTime(freq, t);
+      if (slide) v.o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+      v.g.gain.setValueAtTime(0.0005, t);
+      v.g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.95);
+      v.g.gain.exponentialRampToValueAtTime(0.0005, t + dur + 0.08);
+      v.g.gain.setValueAtTime(0, t + dur + 0.1);
+      v.until = t + dur + 0.1;
+      return;
+    }
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = type;
@@ -147,6 +248,15 @@ export class Audio {
   noise(dur, vol = 0.3, freq = 1200, delay = 0) {
     const c = this.ctx;
     const t = c.currentTime + delay;
+    const v = this.voiceFor('noise', t);
+    if (v) {
+      v.f.frequency.setValueAtTime(freq, t);
+      v.g.gain.setValueAtTime(vol, t);
+      v.g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      v.g.gain.setValueAtTime(0, t + dur + 0.02);
+      v.until = t + dur + 0.02;
+      return;
+    }
     const s = c.createBufferSource();
     s.buffer = this.noiseBuf;
     const f = c.createBiquadFilter();

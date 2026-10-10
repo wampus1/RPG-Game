@@ -20,6 +20,11 @@
 // filter without its Q), it plays plainer, dry and in the middle.
 
 export const midiHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+// (Round 80) How long past its envelope's end a note's volumes and filters
+// are left before they're kept for another (anything set to fade by hand,
+// a filter's own sweep), and how many of each are kept.
+const NOTE_TAIL = 1.5;
+const SPARE_MAX = 96;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // A parameter worked out once a block (a few milliseconds) rather than
@@ -221,20 +226,76 @@ export class Rack {
     }
   }
 
+  // (Round 80) A note's own volumes and filters are kept once it's rung
+  // out (see play), and played again rather than made new: given back the
+  // way they were made, every setting let go of.
   gain(v) {
-    const g = this.c.createGain();
+    const kept = this.noting && this.spare && this.spare.gain.pop();
+    const g = kept || this.c.createGain();
+    if (kept) g.gain.cancelScheduledValues(0);
     g.gain.value = v;
+    if (this.noting) this.noting.push(g);
     return g;
   }
 
   filter(type, f, q) {
-    const n = this.c.createBiquadFilter();
+    const kept = this.noting && this.spare && this.spare.filter.pop();
+    const n = kept || this.c.createBiquadFilter();
     n.type = type;
-    krate(n.frequency);
-    krate(n.Q);
+    if (kept) {
+      for (const p of [n.frequency, n.Q, n.gain, n.detune]) if (p) p.cancelScheduledValues(0);
+      if (n.Q) n.Q.value = 1;
+      if (n.gain) n.gain.value = 0;
+      if (n.detune) n.detune.value = 0;
+    } else {
+      krate(n.frequency);
+      krate(n.Q);
+    }
     n.frequency.value = f;
     if (q !== undefined && n.Q) n.Q.value = q;
+    if (this.noting) this.noting.push(n);
     return n;
+  }
+
+  // (Round 80) A note begun: what it makes of volumes and filters is
+  // noted, to be kept once it's over (rung out, and a moment more).
+  noteOn(t, dur) {
+    this.reclaim();
+    this.noting = [];
+    this.noteEnd = t + dur;
+  }
+
+  noteOff() {
+    const list = this.noting;
+    this.noting = null;
+    if (!list || !list.length) return;
+    (this.held ||= []).push({ at: this.noteEnd + NOTE_TAIL, list });
+  }
+
+  // The notes rung out since: their volumes and filters let go of
+  // (unhooked from all they fed) and kept for the next.
+  reclaim() {
+    const H = this.held;
+    if (!H || !H.length) return;
+    const now = this.c.currentTime;
+    this.spare ||= { gain: [], filter: [] };
+    let k = 0;
+    for (const h of H) {
+      if (h.at > now) {
+        H[k++] = h;
+        continue;
+      }
+      for (const n of h.list) {
+        try {
+          n.disconnect();
+        } catch {
+          // (Not hooked to anything.)
+        }
+        const kind = n.gain && n.frequency ? 'filter' : 'gain';
+        if (this.spare[kind].length < SPARE_MAX) this.spare[kind].push(n);
+      }
+    }
+    H.length = k;
   }
 
   // `node` placed left (-1) to right (1), where the card can; what to
@@ -378,6 +439,7 @@ export class Rack {
   adsr(p, t, dur, peak, a, d, s, r) {
     const hold = Math.max(a, dur);
     const sus = peak * s;
+    if (this.noting) this.noteEnd = Math.max(this.noteEnd, t + hold + r);
     p.setValueAtTime(0.0001, t);
     p.linearRampToValueAtTime(peak, t + a);
     let lvl = peak;
@@ -392,6 +454,7 @@ export class Rack {
 
   // A struck envelope: up fast, dying away.
   perc(p, t, peak, a, decay) {
+    if (this.noting) this.noteEnd = Math.max(this.noteEnd, t + a + decay);
     p.setValueAtTime(0.0001, t);
     p.linearRampToValueAtTime(Math.max(0.0002, peak), t + a);
     p.exponentialRampToValueAtTime(0.0001, t + a + decay);
@@ -402,6 +465,7 @@ export class Rack {
   // `dur`, dying over `ring`, then damped).
   ring(p, t, dur, peak, ringT, damp = 0.3) {
     const hold = Math.min(dur, ringT * 1.5);
+    if (this.noting) this.noteEnd = Math.max(this.noteEnd, t + hold + damp);
     p.setValueAtTime(0.0001, t);
     p.linearRampToValueAtTime(peak, t + 0.004);
     p.setTargetAtTime(0.0001, t + 0.004, ringT / 3);
@@ -439,7 +503,12 @@ export class Rack {
     const fs = Array.isArray(f) ? f : [f];
     if (!fs.length) return;
     const P = PATCH[patch] || PATCH.pad;
-    P(this, ch, fs, t, dur, vel * (LOUD[patch] || 1), o);
+    this.noteOn(t, dur);
+    try {
+      P(this, ch, fs, t, dur, vel * (LOUD[patch] || 1), o);
+    } finally {
+      this.noteOff();
+    }
   }
 
   // A drum: from its sample, once there is one (see Samples); struck live
@@ -457,7 +526,13 @@ export class Rack {
       return;
     }
     const D = DRUM[drum];
-    if (D) D(this, ch, t, vel * (DRUM_LOUD[drum] || 1), o);
+    if (!D) return;
+    this.noteOn(t, o.dur || 0.5);
+    try {
+      D(this, ch, t, vel * (DRUM_LOUD[drum] || 1), o);
+    } finally {
+      this.noteOff();
+    }
   }
 }
 

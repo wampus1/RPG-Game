@@ -52,7 +52,8 @@ import { MODS } from '../mod/state.js';
 const GLYPHS = ['the ring', 'the eye', 'the three bars', 'the spiral'];
 // Which way floors are laid out (see dungeongen.js). A floor kept from an
 // older way is made afresh rather than patched onto a new plan.
-const FLOOR_GEN = 5;
+// (Round 80: 6, the floors with great rooms in them.)
+const FLOOR_GEN = 6;
 // How much tougher a floor's master is than its kind (its health, its
 // blows).
 // (Round 61: half as much again, 1.43 before.)

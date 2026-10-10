@@ -34,6 +34,7 @@ const SNAP_W = Math.ceil(Math.hypot(VIEW_W, VIEW_H)) + 4;
 const SNAP_H = VIEW_H * 2;
 import { raftSprite, RAFT_BOX } from '../entities/raft.js';
 import { MODS } from '../mod/state.js';
+import { FX_CAPS } from '../game/settings.js';
 import { TUNNEL_DIG } from '../game/evolvedgear.js';
 import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
@@ -528,6 +529,11 @@ export class Renderer {
 
   renderFrame(game, dt) {
     this.frameDt = dt;
+    // (Round 80) This frame's share of new particles and effects (see room
+    // and fx.addEffect).
+    const cap = this.fxCap || FX_CAPS[0];
+    this.partLeft = cap.parts;
+    this.fxLeft = cap.fx;
     this.game = game;
     this.time += dt;
     // (Round 62) The atlas grown (or cut back) for a world's mods.
@@ -2616,7 +2622,7 @@ export class Renderer {
       ctx.fillStyle = g;
       ctx.fillRect(tip.x - fl.r, tip.y - fl.r, fl.r * 2, fl.r * 2);
       ctx.globalAlpha = 1;
-      if (Math.random() < fl.ember * (this.frameDt || 0.016) * 60 && this.particles.length < 800) {
+      if (Math.random() < fl.ember * (this.frameDt || 0.016) * 60 && this.particles.length < 800 && this.room(1)) {
         this.particles.push({ x: tip.x + this.camX + (Math.random() - 0.5) * 2, y: tip.y + this.camY, vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 14, g: -6, life: 0.5 + Math.random() * 0.5, max: 0.8, color: fl.colors[Math.floor(Math.random() * fl.colors.length)], size: 1, glow: true, grow: 0, chunk: null });
       }
     }
@@ -3099,7 +3105,7 @@ export class Renderer {
         const fy = Math.round(cy + uy2 * 4.5);
         ctx.fillStyle = '#fff4a0';
         ctx.fillRect(fx, fy, 1, 1);
-        if (Math.random() < 0.7) this.particles.push({ x: fx + this.camX, y: fy + this.camY, vx: (Math.random() - 0.5) * 30, vy: -Math.random() * 30, g: 60, life: 0.3, max: 0.3, color: Math.random() < 0.5 ? '#ffe070' : '#ff9030', size: 1, glow: true, grow: 0, chunk: null });
+        if (Math.random() < 0.7 && this.room(1)) this.particles.push({ x: fx + this.camX, y: fy + this.camY, vx: (Math.random() - 0.5) * 30, vy: -Math.random() * 30, g: 60, life: 0.3, max: 0.3, color: Math.random() < 0.5 ? '#ffe070' : '#ff9030', size: 1, glow: true, grow: 0, chunk: null });
         continue;
       }
       if (a.kind === 'orb') {
@@ -3144,7 +3150,7 @@ export class Renderer {
         ctx.fillRect(sx - 2, sy - 2, 5, 5);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx - 1, sy - 1, 3, 3);
-        if (Math.random() < 0.5) this.particles.push({ x: sx + this.camX, y: sy + this.camY, vx: (Math.random() - 0.5) * 24, vy: (Math.random() - 0.5) * 24, g: 0, life: 0.35, max: 0.35, color: '#a8f4ff', size: 1, glow: true, grow: 0, chunk: null });
+        if (Math.random() < 0.5 && this.room(1)) this.particles.push({ x: sx + this.camX, y: sy + this.camY, vx: (Math.random() - 0.5) * 24, vy: (Math.random() - 0.5) * 24, g: 0, life: 0.35, max: 0.35, color: '#a8f4ff', size: 1, glow: true, grow: 0, chunk: null });
         continue;
       }
       // A sling stone: a grey pellet, a streak behind it.
@@ -3276,7 +3282,9 @@ export class Renderer {
     // (Fewer, or none, in the settings: round 57.)
     const k = this.particleK ?? 1;
     const want = (opts.n || 6) * k;
-    const n = Math.floor(want) + (Math.random() < want % 1 ? 1 : 0);
+    // (Round 80: and no more a frame than the settings allow, from
+    // anything: see room.)
+    const n = this.room(Math.floor(want) + (Math.random() < want % 1 ? 1 : 0));
     for (let i = 0; i < n; i++) {
       this.particles.push({
         x: x * TILE + (opts.spreadX ?? 8) * (Math.random() - 0.5) * 2 + 8,
@@ -3295,7 +3303,18 @@ export class Renderer {
         chunk: opts.chunk ? this.chunkOf(opts.chunk) : null,
       });
     }
-    if (this.particles.length > 900) this.particles.splice(0, this.particles.length - 900);
+    const most = this.fxCap ? this.fxCap.alive : 900;
+    if (this.particles.length > most) this.particles.splice(0, this.particles.length - most);
+  }
+
+  // (Round 80) How many of `n` new sparks, puffs and motes there's room
+  // for this frame (each frame's share, in the settings: see fxCap), and
+  // that many taken from it.
+  room(n) {
+    const left = this.partLeft ?? Infinity;
+    const got = Math.max(0, Math.min(n, left));
+    if (left !== Infinity) this.partLeft = left - got;
+    return got;
   }
 
   // A crumb's worth of an item's picture: a few pixels from somewhere solid

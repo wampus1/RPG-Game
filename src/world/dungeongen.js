@@ -175,6 +175,171 @@ class Plan {
   }
 }
 
+// (Round 80) A great room walled into rooms within it, by `r.grand`:
+//   ring       an inner chamber ringed round its middle, two ways in;
+//   galleries  walls run out from either side in turn, galleries between;
+//   chapels    short walls along both long sides, chapels off a nave;
+//   quarters   a wall across each way, four rooms, a door in each wall;
+//   pods       a small room walled off in each of its corners.
+// The inner walls are rock on the plan (so all that's set about the room
+// later stands clear of them), never on a passage or beside where one
+// comes in, nor the room's middle; and every part of the room's left with
+// a way to the rest (a wall opened where it has to be).
+function subRooms(plan, r, rng) {
+  const W = plan.W;
+  const w = r.x1 - r.x0 + 1;
+  const d = r.z1 - r.z0 + 1;
+  const near = (x, z) => {
+    for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) if (plan.corr[(z + oz) * W + x + ox]) return true;
+    return false;
+  };
+  const inner = [];
+  const wallAt = (x, z, end = false) => {
+    if (x <= r.x0 || z <= r.z0 || x >= r.x1 || z >= r.z1) return;
+    const i = z * W + x;
+    if (plan.room[i] !== r.id || !plan.open[i] || near(x, z) || (x === r.cx && z === r.cz)) return;
+    plan.open[i] = 0;
+    plan.room[i] = -1;
+    inner.push({ x, z, end });
+  };
+  const style = r.grand;
+  if (style === 'ring') {
+    // An inner chamber round the middle: the line where the oval of it
+    // ends, left open at two places opposite.
+    const rin = 0.45;
+    const a0 = rng.float(0, Math.PI);
+    const dd = (x, z) => Math.hypot((x - r.cx) / (w / 2), (z - r.cz) / (d / 2));
+    for (let z = r.z0 + 1; z < r.z1; z++) {
+      for (let x = r.x0 + 1; x < r.x1; x++) {
+        if (dd(x, z) < rin) continue;
+        // (Any of the eight round it inside: a wall that's whole, no
+        // squeezing through between two corners.)
+        if (![[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([ox, oz]) => dd(x + ox, z + oz) < rin)) continue;
+        const a = Math.atan2(z - r.cz, x - r.cx);
+        const off = (q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q)));
+        if (off(a0) < 0.3 || off(a0 + Math.PI) < 0.3) continue;
+        wallAt(x, z);
+      }
+    }
+  } else if (style === 'galleries') {
+    // Walls out from one side, then the other, a gallery between each.
+    const along = w >= d;
+    const len = along ? w : d;
+    const across = along ? d : w;
+    const n = Math.max(2, Math.min(4, Math.floor(len / 5)));
+    for (let k = 1; k <= n; k++) {
+      const at = Math.round((k * len) / (n + 1));
+      const reach = Math.max(2, Math.round(across * rng.float(0.5, 0.66)));
+      const fromLow = k % 2 === 1;
+      for (let j = 0; j < reach; j++) {
+        const t = fromLow ? j + 1 : across - 2 - j;
+        const x = along ? r.x0 + at : r.x0 + t;
+        const z = along ? r.z0 + t : r.z0 + at;
+        wallAt(x, z, j === reach - 1);
+      }
+    }
+  } else if (style === 'chapels') {
+    // Down both long sides, a short wall every few paces: chapels off the
+    // nave between them.
+    const along = w >= d;
+    const len = along ? w : d;
+    const across = along ? d : w;
+    const deep = Math.max(2, Math.min(3, Math.floor((across - 4) / 2)));
+    for (let a = 3; a < len - 2; a += 4) {
+      for (const side of [0, 1]) {
+        for (let j = 1; j <= deep; j++) {
+          const t = side ? across - 1 - j : j;
+          wallAt(along ? r.x0 + a : r.x0 + t, along ? r.z0 + t : r.z0 + a, j === deep);
+        }
+      }
+    }
+  } else if (style === 'quarters') {
+    // A wall across each way (off the middle), a door in each part of it.
+    const vx = r.cx + (rng.chance(0.5) ? 2 : -2);
+    const hz = r.cz + (rng.chance(0.5) ? 2 : -2);
+    for (let z = r.z0 + 1; z < r.z1; z++) wallAt(vx, z);
+    for (let x = r.x0 + 1; x < r.x1; x++) wallAt(x, hz);
+    // (The doors: one in each stretch of wall, two wide.)
+    const open = (x, z) => {
+      const i = z * W + x;
+      const at = inner.findIndex((q) => q.x === x && q.z === z);
+      if (at < 0) return;
+      inner.splice(at, 1);
+      plan.open[i] = 1;
+      plan.room[i] = r.id;
+    };
+    for (const [a, b2] of [[r.z0 + 1, hz - 1], [hz + 1, r.z1 - 1]]) {
+      if (b2 - a < 1) continue;
+      const z = rng.int(a, b2 - 1);
+      open(vx, z);
+      open(vx, z + 1);
+    }
+    for (const [a, b2] of [[r.x0 + 1, vx - 1], [vx + 1, r.x1 - 1]]) {
+      if (b2 - a < 1) continue;
+      const x = rng.int(a, b2 - 1);
+      open(x, hz);
+      open(x + 1, hz);
+    }
+  } else if (style === 'pods') {
+    // In each corner, a small room walled off, its way in on one side.
+    const s = Math.max(3, Math.min(5, Math.floor(Math.min(w, d) / 3)));
+    for (const [sx, sz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const ex = sx ? r.x1 - s : r.x0 + s;
+      const ez = sz ? r.z1 - s : r.z0 + s;
+      const gapOnX = rng.chance(0.5);
+      const gap = 1 + rng.int(0, s - 3);
+      for (let j = 1; j <= s; j++) {
+        const z = sz ? r.z1 - j : r.z0 + j;
+        const x = sx ? r.x1 - j : r.x0 + j;
+        if (!(gapOnX && j === gap)) wallAt(ex, z, j === s);
+        if (!(!gapOnX && j === gap)) wallAt(x, ez, j === s);
+      }
+    }
+  }
+  // (Every part of it with a way to the rest: where a stretch can't be
+  // reached from the middle, the wall beside it's opened.)
+  for (let guard = 0; guard < 40; guard++) {
+    const seen = new Uint8Array(plan.W * plan.D);
+    const q = [r.cz * W + r.cx];
+    seen[q[0]] = 1;
+    while (q.length) {
+      const i = q.pop();
+      const x = i % W;
+      const z = (i / W) | 0;
+      for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + ox;
+        const nz = z + oz;
+        if (nx < r.x0 || nz < r.z0 || nx > r.x1 || nz > r.z1) continue;
+        const j = nz * W + nx;
+        if (seen[j] || !plan.open[j]) continue;
+        seen[j] = 1;
+        q.push(j);
+      }
+    }
+    let cut = null;
+    for (const w2 of inner) {
+      const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oz]) => (w2.z + oz) * W + w2.x + ox);
+      if (sides.some((j) => seen[j]) && sides.some((j) => plan.open[j] && !seen[j] && plan.room[j] === r.id)) {
+        cut = w2;
+        break;
+      }
+    }
+    if (!cut) {
+      // (Nothing left out of reach?)
+      let lost = false;
+      for (let z = r.z0; z <= r.z1 && !lost; z++) for (let x = r.x0; x <= r.x1 && !lost; x++) if (plan.room[z * W + x] === r.id && plan.open[z * W + x] && !seen[z * W + x]) lost = true;
+      if (!lost) break;
+      // (Cut off by more than a wall's width: the nearest wall to it opened.)
+      cut = inner[0];
+      if (!cut) break;
+    }
+    inner.splice(inner.indexOf(cut), 1);
+    plan.open[cut.z * W + cut.x] = 1;
+    plan.room[cut.z * W + cut.x] = r.id;
+  }
+  r.inner = inner;
+}
+
 function overlaps(a, b, gap) {
   return a.x0 - gap <= b.x1 && b.x0 - gap <= a.x1 && a.z0 - gap <= b.z1 && b.z0 - gap <= a.z1;
 }
@@ -209,6 +374,30 @@ export const COFFINS_MAX = 8;
 // Rooms with one way in, and only one: the sealed vault, the master's
 // hall, a treasure room behind its gate.
 export const SEALED = new Set(['vault', 'boss', 'treasure']);
+
+// (Round 80) Great rooms: on each floor one or two of its rooms made
+// larger and walled into rooms within (see subRooms), each kind of place
+// its own way: a barrow's tomb ringed inside its mound, a mine's cavern
+// timbered off into galleries, a crypt's hall with chapels down each side,
+// a holdout's caves walled into quarters, a Kavorent hall with pods in its
+// corners; and the islands' and far lands' places each one of those, as
+// suits them.
+const SUB_STYLE = {
+  barrow: 'ring', mine: 'galleries', crypt: 'chapels', holdout: 'quarters', kavorent: 'pods',
+  grove: 'galleries', forge: 'chapels', grotto: 'galleries',
+  catacomb: 'chapels', vault: 'quarters', gut: 'galleries', saltworks: 'ring', warren: 'quarters', mound: 'ring', broch: 'ring',
+};
+// (The shape each way wants its room.)
+const SUB_SHAPE = { ring: 'round', galleries: 'rect', chapels: 'rect', quarters: 'rect', pods: 'rect' };
+// Rooms never made great: the sealed, the ways in and out, the master's,
+// those whose fittings need a shape of their own, the wet ones, the tiny.
+const NOT_GREAT = new Set(['entry', 'exit', 'boss', 'vault', 'foundry', 'flooded', 'trap', 'treasure', 'cache', 'shaft', 'tidepool', 'spring', 'cooling', 'reef', 'pearlbed', 'bilepool', 'brinepool']);
+export function greatKit(kit, T) {
+  return !!T && !T.ancient && !SEALED.has(kit) && !KIT_SHAPES[kit] && !NOT_GREAT.has(kit);
+}
+export function subStyle(rec, T) {
+  return SUB_STYLE[rec.type] || ((T && T.wiggle) >= 1 ? 'galleries' : (T && T.wiggle) === 0 ? 'chapels' : 'quarters');
+}
 
 function roomSize(kit, rng, big, T = null) {
   // (Round 71) An evolved master's hall: as big as a hall gets.
@@ -330,24 +519,33 @@ function inMask(r, x, z) {
 
 // Lay rooms out and join them up. Returns the plan (with plan.ok false if
 // a sealed room couldn't be given its one way in: try again).
-function layout(rng, W, D, kits, big, T) {
+function layout(rng, W, D, kits, big, T, great = null) {
   let plan = null;
   for (let attempt = 0; attempt < 8; attempt++) {
-    plan = tryLayout(rng, W, D, kits, big, T);
+    plan = tryLayout(rng, W, D, kits, big, T, great);
     if (plan.ok) break;
   }
   return plan;
 }
 
-function tryLayout(rng, W, D, kits, big, T) {
+function tryLayout(rng, W, D, kits, big, T, great = null) {
   const plan = new Plan(W, D);
   // (The sealed rooms placed early, while there's space for them.)
   const want = ['entry', 'exit', ...kits.filter((k) => SEALED.has(k)), ...kits.filter((k) => !SEALED.has(k))];
   let tries = 0;
+  // (Round 80: the first rooms that can be, made great: see subRooms.)
+  let greatLeft = great ? great.n : 0;
   for (const kit of want) {
+    const grand = greatLeft > 0 && greatKit(kit, T);
     for (let t = 0; t < 80; t++) {
       tries++;
-      const [w, d] = roomSize(kit, rng, big, T);
+      let [w, d] = roomSize(kit, rng, big, T);
+      // (Great while there's room for it; an ordinary one if not.)
+      const isGrand = grand && t < 50;
+      if (isGrand) {
+        w = Math.max(13, Math.round(w * 1.7));
+        d = Math.max(11, Math.round(d * 1.7));
+      }
       if (w + 7 > W || d + 7 > D) continue;
       const x0 = rng.int(2, W - w - 3);
       const z0 = rng.int(2, D - d - 3);
@@ -356,6 +554,11 @@ function tryLayout(rng, W, D, kits, big, T) {
       r.cx = Math.floor((r.x0 + r.x1) / 2);
       r.cz = Math.floor((r.z0 + r.z1) / 2);
       r.shape = pickShape(kit, T, rng, w, d);
+      if (isGrand) {
+        r.grand = great.style;
+        r.shape = SUB_SHAPE[great.style] || 'rect';
+        greatLeft--;
+      }
       r.mask = makeMask(r, rng);
       plan.rooms.push(r);
       for (let z = r.z0; z <= r.z1; z++) for (let x = r.x0; x <= r.x1; x++) if (inMask(r, x, z)) plan.carve(x, z, r.id);
@@ -883,8 +1086,14 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   // Golem stands waiting.)
   if (rec.vaults ? rec.vaults.includes(n) : n === rec.vaultFloor) kits.push('vault');
   if (big && n === FOUNDRY_FLOOR) kits.push('foundry');
-  const plan = layout(rng, W, D, kits, big, T);
+  // (Round 80) One or two great rooms on the floor (two or three in a
+  // Kavorent ruin), walled into rooms within, each kind of place its own
+  // way: see subRooms.
+  const grng = new RNG(hash4(rec.seed >>> 0, n, 0x6a7d));
+  const great = T.ancient ? null : { n: big ? 2 + (grng.chance(0.5) ? 1 : 0) : 1 + (grng.chance(0.55) ? 1 : 0), style: subStyle(rec, T) };
+  const plan = layout(rng, W, D, kits, big, T, great);
   const R = plan.rooms;
+  for (const r of R) if (r.grand) subRooms(plan, r, grng);
   const entry = R[0];
   const dep = depths(plan, 0);
   // The way down (or the master's hall) is the room furthest from the way in.
@@ -974,6 +1183,18 @@ export function buildFloor(rec, n, rx0 = INST_RX) {
   out.kind = kind;
   const ctx = { rng, b, plan, T, rec, n, out, last, big, W, D, kind, mobs: kind ? KAV_KINDS[kind].mobs : null, reserved, lavaRooms: [] };
   for (const r of R) dress(ctx, r);
+  // (Round 80) A great room's more to it: a chest in one of its rooms
+  // within, more of the place's own about, and its inner walls dressed as
+  // the place's are (a mine's timbered, a Kavorent hall's lit).
+  for (const r of R) {
+    if (!r.grand) continue;
+    if (grng.chance(0.6)) chestIn(ctx, r, 1);
+    spawnIn(ctx, r, pickMob(ctx), 1 + grng.int(0, 1));
+    for (const q of r.inner || []) {
+      if (T.beam && q.end) b.set(q.x, FY, q.z, T.beam);
+      else if (big && q.end) b.set(q.x, FY + 1, q.z, B.kav_glow);
+    }
+  }
   for (const r of R) decorate(ctx, r);
   // A Kavorent floor's own character (see KAV_KINDS).
   if (kind) floorCharacter(ctx);

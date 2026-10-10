@@ -70,8 +70,13 @@ export function addEffect(r, o) {
     e.ex = tu * TILE + 8;
     e.ey = tv * TILE - (o.ty ?? o.wy ?? 0) * LH + LH + (o.oy ?? -6);
   }
+  // (Round 80: no more a frame than the settings allow; one past that's
+  // made, not shown.)
+  if ((r.fxLeft ?? 1) <= 0) return e;
+  if (r.fxLeft !== undefined) r.fxLeft--;
   r.fx.push(e);
-  if (r.fx.length > 60) r.fx.shift();
+  const most = r.fxCap ? r.fxCap.fxAlive : 60;
+  if (r.fx.length > most) r.fx.shift();
   return e;
 }
 
@@ -83,6 +88,7 @@ function drawWingbeat(ctx, f, k, ox, oy) {
 }
 
 function spark(r, x, y, color, o = {}) {
+  if (r.room && !r.room(1)) return;
   r.particles.push({
     x, y, vx: o.vx ?? (Math.random() - 0.5) * 30, vy: o.vy ?? -(10 + Math.random() * 25), g: o.g ?? -20,
     life: o.life ?? 0.4 + Math.random() * 0.3, max: o.life ?? 0.6, color, size: o.size ?? 1, shape: o.shape,

@@ -33,6 +33,11 @@ import { ModTalkWindow } from './modtalk.js';
 import { ownerId } from '../game/ships3d.js';
 import { BlueprintWindow } from './blueprint.js';
 
+// (Round 80) Who's shown down the side of the screen of your guild: those
+// within this many paces of you lately (MATE_RECENT ms: half a minute).
+const MATE_NEAR = 100;
+const MATE_RECENT = 30000;
+
 // The tool pictured for a block that wants one.
 // (Round 68) The far lands, by name: for a piece's own land's modifier.
 const LAND_NAME = { velmarch: 'Velmarch', ostria: 'Ostria', corrow: 'Corrow', saltmere: 'Saltmere', hollowmark: 'Hollowmark', wyrd: 'the Wyrd Isle', skerries: 'the Grey Skerries' };
@@ -1402,44 +1407,51 @@ export class UI {
   }
 
   // The others in your guild, down the side of the screen under the little
-  // map: each one's face and body (as they look now), name, and health
-  // (and where they are, if not with you).
+  // map: each one's face (as they look now), name, and health.
+  // (Round 80: a line each, not three; and only those playing now who've
+  // been within a hundred paces of you in the last half a minute, so a
+  // big guild spread over the world doesn't fill the side of the screen.)
   drawGuildStrip(ctx, game) {
     this.notesTop = 0;
-    const mates = game && game.guildMates ? game.guildMates() : [];
-    if (!mates.length || !this.minimapPos) return;
+    const all = game && game.guildMates ? game.guildMates() : [];
+    if (!all.length || !this.minimapPos) return;
+    const p = game.player;
+    const now = performance.now();
+    const seen = (this.mateSeen ||= new Map());
+    for (const m of all) if (p && m.here && Math.max(Math.abs(m.x - p.x), Math.abs(m.z - p.z)) <= MATE_NEAR) seen.set(m.id, now);
+    const mates = all.filter((m) => now - (seen.get(m.id) ?? -Infinity) <= MATE_RECENT);
+    if (!mates.length) return;
     const x0 = this.minimapPos.x - CHAR_W + 2;
     let y = this.minimapPos.y + 48;
-    const W = 16 * CHAR_W - 4;
-    for (const m of mates.slice(0, 7)) {
-      const H = 26;
-      ctx.fillStyle = 'rgba(10,8,16,0.78)';
+    const W = 13 * CHAR_W - 4;
+    const H = 15;
+    for (const m of mates.slice(0, 10)) {
+      ctx.fillStyle = 'rgba(10,8,16,0.72)';
       ctx.fillRect(x0, y, W, H);
       ctx.fillStyle = m.color;
       ctx.fillRect(x0, y, 2, H);
-      // (Their face and body: the top of their sprite, as they look now.)
+      // (Their face: the top of their sprite, as they look now.)
       if (m.look) {
         try {
           const sheet = humanoidSheet(m.look);
           ctx.save();
           if (m.dead) ctx.globalAlpha = 0.45;
-          ctx.drawImage(sheet, 0, SPR_PAD - 2, 16, 24, x0 + 3, y + 1, 16, 24);
+          ctx.drawImage(sheet, 0, SPR_PAD - 2, 16, 13, x0 + 2, y + 1, 16, 13);
           ctx.restore();
         } catch {
           // (No look to draw: the colour's enough.)
         }
       }
-      drawText(ctx, m.name.slice(0, 13), x0 + 22, y + 2, m.dead ? '#a0a0a0' : m.color, '#000');
-      // Their health, a bar that runs down (red when it's low).
-      const frac = m.maxHp ? Math.max(0, Math.min(1, m.hp / m.maxHp)) : 0;
-      const bw = W - 26;
-      ctx.fillStyle = '#3a1418';
-      ctx.fillRect(x0 + 22, y + 12, bw, 4);
+      drawText(ctx, m.name.slice(0, 9), x0 + 19, y + 1, m.dead ? '#a0a0a0' : m.color, '#000');
+      // Their health, a bar that runs down (red when it's low; grey,
+      // fallen).
+      const frac = m.dead ? 0 : m.maxHp ? Math.max(0, Math.min(1, m.hp / m.maxHp)) : 0;
+      const bw = W - 22;
+      ctx.fillStyle = m.dead ? '#3a3a3a' : '#3a1418';
+      ctx.fillRect(x0 + 19, y + 10, bw, 3);
       ctx.fillStyle = frac > 0.5 ? '#60d060' : frac > 0.25 ? '#e0c040' : '#e04040';
-      ctx.fillRect(x0 + 22, y + 12, Math.round(bw * frac), 4);
-      const where = m.dead ? 'fallen' : m.below ? `below: ${m.below}` : m.here ? `${m.hp}/${m.maxHp}` : `${m.hp}/${m.maxHp} · far`;
-      drawText(ctx, where.slice(0, 15), x0 + 22, y + 17, '#a8a0b8', '#000');
-      y += H + 2;
+      ctx.fillRect(x0 + 19, y + 10, Math.round(bw * frac), 3);
+      y += H + 1;
       if (y > VIEW_H - 60) break;
     }
     // (Notices go under it.)
