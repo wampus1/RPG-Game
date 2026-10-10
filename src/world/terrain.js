@@ -1,11 +1,13 @@
 // Terrain column sampling: turns the continuous overworld fields into a
 // concrete column (surface height, water, surface/sub blocks) at any tile.
 import { SURFACE, WATER_Y, WORLD_Y } from '../config.js';
-import { hash4, clamp, smoothstep, lerp } from '../util/rng.js';
+import { hash4, hashf, clamp, smoothstep, lerp } from '../util/rng.js';
 import { makeNoise2D, fbm, ridged } from '../util/noise.js';
 import { B } from './blocks.js';
 import { BIOMES } from './biomes.js';
 import { onBridge } from './bridges.js';
+import { Landforms, LANDFORM_WG, chunkCharacter, oxbowOf, inOxbow } from './landforms.js';
+import { landmarksIn, landmarkGround } from './landmarks.js';
 
 // (What each biome's banks, beds and snow are: its own climate, bank and
 // bed, see biomes.js. Kharos's fire biomes are 'hot': no snow on them,
@@ -23,6 +25,10 @@ export class Terrain {
     this.nBed = makeNoise2D(hash4(s, 25));
     this.nClump = makeNoise2D(hash4(s, 26));
     this._bi = {};
+    // (Round 79) The lie of the land beyond its biomes: landforms, rivers
+    // with character, blended edges, landmarks (in worlds made since: see
+    // landforms.js).
+    this.forms = (ow.wg ?? 1) >= LANDFORM_WG ? new Landforms(ow) : null;
   }
 
   context(x0, z0, x1, z1) {
@@ -34,14 +40,41 @@ export class Terrain {
       setts.push(s);
     }
     // (Round 68: and any bridge across a strait: see bridges.js.)
-    return { segs: wf.segs, lakes: wf.lakes, setts, bridges: this.ow.bridgesIn ? this.ow.bridgesIn(x0 - 4, z0 - 4, x1 + 4, z1 + 4) : [] };
+    const ctx = { segs: wf.segs, lakes: wf.lakes, setts, bridges: this.ow.bridgesIn ? this.ow.bridgesIn(x0 - 4, z0 - 4, x1 + 4, z1 + 4) : [] };
+    // (Round 79) What each stretch of river is like (in step with segs),
+    // the oxbow lakes by them, their mouths at the sea; and landmarks.
+    if (this.forms) {
+      const ow = this.ow;
+      const rivs = [];
+      const oxbows = [];
+      const mouths = [];
+      const m = 12;
+      for (const r of ow.rivers || []) {
+        const n = r.chunks.length;
+        r.chunks.forEach((ch, ci) => {
+          const near = (pad) => !(ch.x1 + pad < x0 || ch.x0 - pad > x1 || ch.z1 + pad < z0 || ch.z0 - pad > z1);
+          const cc = chunkCharacter(ow.seed, r.id, ci, n);
+          if (near(m)) rivs.push(cc);
+          if (cc.oxbow && near(40)) oxbows.push(oxbowOf(ow.seed, r.id, ci, ch.pts));
+        });
+        const last = r.pts[r.pts.length - 1];
+        if (last && last.x > x0 - 50 && last.x < x1 + 50 && last.z > z0 - 50 && last.z < z1 + 50 && ow.continentAt(last.x, last.z) < 0.06) mouths.push({ x: last.x, z: last.z });
+      }
+      ctx.rivs = rivs.length === ctx.segs.length ? rivs : null;
+      ctx.oxbows = oxbows;
+      ctx.mouths = mouths;
+      ctx.landmarks = landmarksIn(ow, x0 - 16, z0 - 16, x1 + 16, z1 + 16);
+    }
+    return ctx;
   }
 
   riverDist(x, z, segs) {
     let best = Infinity;
     let bestD = Infinity;
     let bestHw = 0;
-    for (const pts of segs) {
+    let bestSi = -1;
+    for (let si = 0; si < segs.length; si++) {
+      const pts = segs[si];
       for (let i = 0; i < pts.length - 1; i++) {
         const a = pts[i];
         const b = pts[i + 1];
@@ -58,10 +91,11 @@ export class Terrain {
           best = d - hw;
           bestD = d;
           bestHw = hw;
+          bestSi = si;
         }
       }
     }
-    return { d: bestD, hw: bestHw, rel: best };
+    return { d: bestD, hw: bestHw, rel: best, si: bestSi };
   }
 
   lakeValue(x, z, lakes) {
@@ -90,6 +124,20 @@ export class Terrain {
     out.liquid = 0;
     out.hot = false;
     out.cooled = null;
+    // (Round 79: what the landforms and landmarks make of it.)
+    out.fsurf = null;
+    out.fsub = null;
+    out.form = null;
+    out.band = false;
+    out.boulder = false;
+    out.fall = 0;
+    out.stream = 0;
+    out.canyonWater = false;
+    out.pool = -1;
+    out.coneLava = 0;
+    out.landmark = null;
+    out.springWater = false;
+    out.rapid = false;
     out.bridge = ctx.bridges && ctx.bridges.length ? onBridge(ctx.bridges, x, z) : null;
 
     // --- settlement flattening weight
@@ -118,7 +166,8 @@ export class Terrain {
     }
 
     const bi = ow.biomeAt(x, z, this._bi);
-    let biome = bi.biome;
+    // (Round 79: where two kinds of land meet, dappled together.)
+    let biome = this.forms && out.flat < 0.5 ? this.forms.blendBiome(x, z, bi) : bi.biome;
     const bdef = BIOMES[biome];
     const b2 = BIOMES[bi.biome2];
     const t = smoothstep(0, 14, bi.edge);
@@ -159,25 +208,78 @@ export class Terrain {
       mountainH = Math.floor(m * (0.3 + 0.7 * rn) * 9.5);
       h = Math.max(h, SURFACE + mountainH);
     }
+    // (Round 79) The landforms, and the ground under a landmark.
+    const F = this.forms;
+    if (F && out.flat < 0.02 && biome !== 'mountain' && biome !== 'volcano') {
+      h = F.shape(x, z, out, h);
+      for (const lm of ctx.landmarks || []) {
+        const g = landmarkGround(lm, x, z, out, h);
+        if (g !== null) h = g;
+      }
+    }
     // Coasts slope down to sea level.
     if (c < 0.1) h = Math.min(h, SURFACE + Math.floor(Math.max(0, c - 0.03) / 0.07 * 2));
     const beach = c < 0.035;
     if (beach && biome !== 'mountain') biome = 'beach';
 
+    // (Round 79) Falls over a rim, the stream that feeds them, a pool down
+    // a sinkhole, a crater's lava: water (or lava) that isn't at the sea's
+    // level, and nothing else to do here.
+    if (out.fall || out.stream || out.pool >= 0 || out.coneLava) {
+      out.biome = biome;
+      out.h = clamp(h, 1, MAX_H);
+      out.wet = 0;
+      out.surf = out.coneLava ? B.basalt : B.gravel;
+      out.sub = B.stone;
+      out.water = out.fall || out.stream || (out.pool >= 0 ? out.pool : out.coneLava);
+      if (out.coneLava) out.lava = true;
+      return out;
+    }
     // --- rivers & lakes
     let water = false;
     let depth = 0;
     let bank = false;
+    let bar = false;
+    if (out.canyonWater || out.springWater) {
+      water = true;
+      depth = out.springWater ? WATER_Y - h : 1;
+      if (out.springWater) out.hot = true;
+    }
     if (ctx.segs.length) {
       const r = this.riverDist(x, z, ctx.segs);
+      const ch = F && ctx.rivs ? ctx.rivs[r.si] : null;
       if (r.rel < 0) {
         water = true;
         depth = r.d < r.hw * 0.55 && r.hw > 1.3 ? 2 : 1;
+        // (Round 79) A braided stretch: gravel bars between its channels;
+        // rapids: rocks in the stream.
+        if (ch && ch.braided && r.hw > 1.5 && r.d > r.hw * 0.22 && F.nBar(x / 5, z / 5) > 0.3) {
+          water = false;
+          bar = true;
+        } else if (ch && ch.rapids && hashf(x, z, ow.seed, 0x2c9) < 0.11) out.rapid = true;
       } else {
         out.wet = Math.min(out.wet, r.rel);
         if (r.rel < 5) h = Math.min(h, SURFACE + Math.floor(r.rel / 2));
         if (r.rel < 0.9) bank = true;
       }
+    }
+    // (Round 79) An oxbow lake by a bend; a delta's channels at a mouth.
+    if (F && !water && !bar) {
+      for (const o of ctx.oxbows || []) if (inOxbow(o, x, z)) {
+        water = true;
+        depth = 1;
+      }
+      for (const m of ctx.mouths || []) {
+        const d = Math.hypot(x - m.x, z - m.z);
+        if (d < 38 && c < 0.16 && Math.abs(F.nDelta(x / 7, z / 7)) < 0.075 * (1 - d / 38) + 0.02) {
+          water = true;
+          depth = 1;
+        } else if (d < 38 && c < 0.16) out.wet = Math.min(out.wet, 1.5);
+      }
+    }
+    if (bar) {
+      h = SURFACE;
+      out.fsurf = F.nBar(x / 3, z / 3) > 0.5 ? B.sand : B.gravel;
     }
     if (!water && ctx.lakes.length) {
       const lv = this.lakeValue(x, z, ctx.lakes);
@@ -226,6 +328,14 @@ export class Terrain {
     h = clamp(h, 1, MAX_H);
 
     out.biome = biome;
+    // (Round 79) A rock in the rapids.
+    if (water && out.rapid) {
+      out.h = WATER_Y;
+      out.wet = 0;
+      out.surf = B.stone;
+      out.sub = B.stone;
+      return out;
+    }
     if (water) {
       out.h = WATER_Y - depth;
       out.water = WATER_Y;
@@ -246,6 +356,9 @@ export class Terrain {
           out.wet = 99;
         } else out.liquid = bdef.liquid;
       }
+      // (Round 79) Rivers and lakes in the cold: frozen over, with a hole
+      // or two of open water.
+      if (F && !pond && !out.hot && bdef.climate === 'cold' && this.nPool(x / 7 + 900, z / 7) < 0.45) out.liquid = B.ice;
       return out;
     }
 
@@ -266,6 +379,9 @@ export class Terrain {
       if (mountainH <= 1 && h <= SURFACE + 1) surf = BIOMES[bi.biome2].surface === B.sand ? B.sand : B.grass_taiga;
       sub = B.stone;
     }
+    // (Round 79: a landform's or landmark's own ground.)
+    if (out.fsurf !== null) surf = out.fsurf;
+    if (out.fsub !== null) sub = out.fsub;
     const bh = BIOMES[biome];
     if (bank && bh.bank !== undefined) surf = bh.bank;
     // A flow that's cooled: black rock, glassy where it cooled fastest.

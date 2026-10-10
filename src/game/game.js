@@ -88,6 +88,7 @@ import { Riding, HORSE_FOOD } from './riding.js';
 import { wallDirOf, dirToward, WALL_DIRS, useDisplay, paintingSubject } from './displays.js';
 import { canLead, leadUse, tieLeads, isPost, leading, leadsOut } from './leads.js';
 import { throwGrapple, grappleTick } from './grapple.js';
+import { landmarkTick } from './landmarkfind.js';
 import { notePlaced } from './invtools.js';
 import { pirateTick, piratesSave, piratesLoad, isPirate } from './pirates.js';
 import { stallsTick } from './stalls.js';
@@ -2116,6 +2117,8 @@ export class Game {
     // Horses and wagons led ashore from a ship.
     pirateTick(this, dt);
     stallsTick(this, dt);
+    // (Round 79) Landmarks come upon (see landmarkfind.js).
+    landmarkTick(this, dt);
     // (Round 78) What the save check put right, said once it's settled.
     if (this.health && this.health.fixed > this.health.told) {
       this.healthT = (this.healthT ?? 2) - dt;
@@ -7540,6 +7543,8 @@ export class Game {
       myChests: this.myChests ? [...this.myChests] : [],
       // (Round 79) Your own markers on the map.
       mapMarks: (this.mapMarks || []).map((m) => ({ x: m.x, z: m.z, label: m.label })),
+      // (Round 79) The landmarks found or told of.
+      landmarksFound: this.landmarksFound || {},
       // (Round 78) What's drawn on blueprints (see plans.js).
       plans: plansSave(this),
       player: { x: p.x, y: p.y, z: p.z, hp: p.hp, awake: p.awakeSince, inv: p.inv, selected: p.selected, spawn: p.spawn, vigor: p.vigor, blue: p.blue, buffs: p.buffs || [], recipes: p.recipes || [], kinds: p.kinds || [], raft: p.raft ? { x: p.raft.x, z: p.raft.z, ang: p.raft.ang } : null, equip: p.equip, look: p.baseLook, mount: p.mount || null },
@@ -7676,6 +7681,7 @@ export class Game {
     if (data.ride && !this.remoteCopy) rideLoad(this, this.player, data.ride);
     this.myChests = new Set(data.myChests || []);
     this.mapMarks = (data.mapMarks || []).map((m) => ({ ...m, named: true }));
+    this.landmarksFound = data.landmarksFound || {};
     plansLoad(this, data.plans);
     const shipAt = this.player.deck || (data.ships && data.ships.below && this.world.inInstance(this.player.x));
     // Saved down below: back down there.

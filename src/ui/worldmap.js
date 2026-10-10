@@ -224,6 +224,7 @@ function arrowHead(ctx, x, y, ux, uy, r, col) {
 }
 const LIST_W = 22;
 const MARK_FG = '#80ffc0';
+const LANDMARK_WORD = { tree: 'a giant fallen tree', bones: 'old bones', crater: 'a crater', arch: 'a stone arch', spring: 'a hot spring' };
 
 // (Round 79) A marker of your own put down at (x, z), named in turn.
 export function addMark(game, x, z, label = null) {
@@ -598,6 +599,8 @@ export class MapWindow extends Window {
       seen.add(s.id);
       out.push({ kind: 'place', label: s.name, x, z, quest: qsq.has(sq(x, z)), color: s.civ ? s.civ.color.hex : C.fg, sub: s.empire ? 'capital' : s.type });
     }
+    // (Round 79) Landmarks found or told of.
+    for (const q of ow.pins || []) if (q.landmark) out.push({ kind: 'landmark', label: q.label, x: q.x, z: q.z, quest: qsq.has(sq(q.x, q.z)), color: '#ffe8a0', sub: LANDMARK_WORD[q.kind] || 'landmark' });
     for (const d of game.sim.dungeons ? game.sim.dungeons.all : []) {
       if (!(d.known || d.seen || game.revealMap) || d.x === undefined) continue;
       out.push({ kind: 'old', label: cap(d.name), x: d.x, z: d.z, quest: qsq.has(sq(d.x, d.z)), color: d.cleared ? '#8a8478' : '#f0d8a0', sub: dtypeOf(d).name });
@@ -605,7 +608,7 @@ export class MapWindow extends Window {
     const f = this.search.trim().toLowerCase();
     const list = f ? out.filter((e) => e.label.toLowerCase().includes(f) || (e.sub || '').toLowerCase().includes(f)) : out;
     // (Quest-bound first within each kind.)
-    const rank = { quest: 0, mark: 1, place: 2, old: 3 };
+    const rank = { quest: 0, mark: 1, place: 2, landmark: 3, old: 4 };
     return list.sort((a, b) => rank[a.kind] - rank[b.kind] || b.quest - a.quest || (a.kind === 'mark' ? 0 : a.label.localeCompare(b.label)));
   }
 
@@ -643,7 +646,7 @@ export class MapWindow extends Window {
       const e = entries[i];
       if (e.kind !== lastKind) {
         lastKind = e.kind;
-        g.text(x, y++, { quest: 'QUESTS', mark: 'MARKERS', place: 'PLACES', old: 'OLD PLACES' }[e.kind], C.dim);
+        g.text(x, y++, { quest: 'QUESTS', mark: 'MARKERS', place: 'PLACES', landmark: 'LANDMARKS', old: 'OLD PLACES' }[e.kind], C.dim);
         if (y > bottom) break;
       }
       const hov = this.hovering(x, y, W, 1);
@@ -1195,6 +1198,8 @@ export class MapWindow extends Window {
     for (const q of game.world.ow.pins || []) {
       // (Round 73: a quest's marker blinks.)
       if (isQuestPin(q)) put(q.x, q.z, q.glyph || '!', blink ? '#1a1000' : '#fff4c0', blink ? '#ffd040' : '#c06010', `${q.label} (quest)`, '#ffd060', true);
+      // (Round 79) A landmark, found or told of.
+      else if (q.landmark) put(q.x, q.z, '♦', '#ffe8a0', '#3a2a10', `${q.label} (${LANDMARK_WORD[q.kind] || 'a landmark'})`, '#ffe8a0', true);
       else put(q.x, q.z, q.glyph || '•', '#bfe8ff', '#14304a', `${q.label} (told of)`, '#bfe8ff', true);
     }
     // (Round 79) Your own markers, wherever they are.

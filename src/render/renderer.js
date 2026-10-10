@@ -1,6 +1,7 @@
 // World renderer: draws the voxel grid in an oblique 3/4 projection using
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
+import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
@@ -350,7 +351,11 @@ export class Renderer {
     drawGrapples(this, game);
     this.drawWeather(game, dt, snap ? 'tint' : 'all');
     this.drawAshfall(game, dt);
+    // (Round 79) Valley fog, ridge wind (see ambience.js).
+    if (!snap) drawAmbience(this, game, dt, 'under');
     this.lighting.draw(this, game);
+    // (And the heat's shimmer, over all of it.)
+    if (!snap) drawAmbience(this, game, dt, 'over');
     // (Round 78) A copy box out (see render/planfx.js), over the light.
     drawCopyBox(this, game);
     if (this.underground && this.hidden) this.drawDigView(game);

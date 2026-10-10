@@ -8,11 +8,16 @@ import { TREE_BUILDERS, TREE_MARGIN } from './trees.js';
 import { Region } from './region.js';
 import { stampSites } from './sites.js';
 import { BRIDGE_KINDS, bridgeMats, DECK_Y } from './bridges.js';
+import { landmarkCells, cacheSpot } from './landmarks.js';
+import { featuresIn, featureOps } from './features.js';
 
 const GREEN = new Set([B.grass, B.grass_lush, B.grass_dry, B.grass_jungle, B.grass_taiga, B.mud, B.dirt]);
 const SANDY = new Set([B.sand, B.sandstone, B.gravel]);
 // (The other islands' ground, that things grow in too.)
 const ISLE_GROUND = new Set([B.ash, B.cinder, B.scorched, B.moss, B.peat, B.mycelium, B.basalt, B.sulfur_crust]);
+
+// (A spring's landmark sits on its water.)
+const WATER_Y_OF = (c) => (c.water >= 0 ? c.water : c.h);
 
 function pickWeighted(list, r) {
   let total = 0;
@@ -50,6 +55,8 @@ export function generateRegion(world, rx, rz) {
       for (let y = 1; y <= h; y++) {
         let id;
         if (y === h) id = c.surf;
+        // (Round 79) A mesa's (or a canyon's) banded rock, in the hot lands.
+        else if (c.band && y >= 2) id = (y >> 1) & 1 ? B.clay : B.sandstone;
         else if (y >= h - 2 && c.sub !== B.stone) id = c.surf === B.sand || c.surf === B.sandstone ? (y === h - 1 ? B.sand : B.sandstone) : c.sub;
         else id = B.stone;
         if (id === B.stone) id = oreAt(x, y, z, seed);
@@ -115,6 +122,53 @@ export function generateRegion(world, rx, rz) {
     }
   }
 
+  // (Round 79) Landmarks, their caches, and the small things out in the
+  // country (see landmarks.js and features.js), in worlds made since.
+  if (terrain.forms) {
+    // (Any tile's column: this region's own, else worked out on its own.)
+    const extra = new Map();
+    const col = (x, z) => {
+      const lx = x - x0;
+      const lz = z - z0;
+      if (lx >= -M && lz >= -M && lx < REGION_W + M && lz < REGION_D + M) return colAt(lx, lz);
+      const k = x * 100003 + z;
+      if (!extra.has(k)) extra.set(k, terrain.column(x, z, terrain.context(x - 1, z - 1, x + 1, z + 1), {}));
+      return extra.get(k);
+    };
+    const putIn = (wx, wy, wz, id, force = false) => {
+      if (!inRegion(wx, wy, wz)) return;
+      const lx = wx - x0;
+      const lz = wz - z0;
+      const cur = region.get(lx, wy, lz);
+      const cd = BLOCKS[cur];
+      if (force || cur === B.air || (cd && cd.replaceable && !cd.liquid) || (cd && cd.name.startsWith('leaves'))) region.set(lx, wy, lz, id);
+    };
+    for (const lm of ctx.landmarks || []) {
+      const centre = col(lm.x, lm.z);
+      const lying = lm.kind === 'tree' || lm.kind === 'bones';
+      for (const [dx, dy, dz, id] of landmarkCells(lm)) {
+        const wx = lm.x + dx;
+        const wz = lm.z + dz;
+        const base = lying ? col(wx, wz) : centre;
+        if (!base || (base.water >= 0 && lm.kind !== 'spring')) continue;
+        putIn(wx, (lm.kind === 'spring' ? WATER_Y_OF(base) : base.h) + 1 + dy - (lm.kind === 'crater' ? 1 : 0), wz, id, lm.kind === 'crater');
+      }
+      // (Its secret: a chest under the ground by its foot.)
+      const g = lm.secret ? col(lm.x + lm.secret.dx * 2, lm.z + lm.secret.dz * 2) : null;
+      const cs = g && g.water < 0 ? cacheSpot(lm, g.h - 1) : null;
+      if (cs && inRegion(cs.x, cs.y, cs.z)) region.set(cs.x - x0, cs.y, cs.z - z0, B.chest);
+    }
+    for (const f of featuresIn(world.ow, x0, z0, x0 + REGION_W - 1, z0 + REGION_D - 1)) {
+      const ops = featureOps(f, col);
+      if (!ops) continue;
+      for (const o of ops) {
+        if (!inRegion(o.x, o.y, o.z)) continue;
+        if (o.surface || o.id === B.air || o.id === B.gravel) region.set(o.x - x0, o.y, o.z - z0, o.id);
+        else putIn(o.x, o.y, o.z, o.id);
+      }
+    }
+  }
+
   // 4. Plants, rocks, lily pads.
   for (let lz = 0; lz < REGION_D; lz++) {
     for (let lx = 0; lx < REGION_W; lx++) {
@@ -132,6 +186,12 @@ export function generateRegion(world, rx, rz) {
       }
       const y = c.h + 1;
       if (y >= WORLD_Y || region.get(lx, y, lz) !== B.air) continue;
+      // (Round 79) A boulder fallen from a cliff, or left by the ice.
+      if (c.boulder) {
+        region.set(lx, y, lz, r < 0.5 ? B.cobblestone : B.stone);
+        if (r < 0.3 && y + 1 < WORLD_Y) region.set(lx, y + 1, lz, B.stone);
+        continue;
+      }
       let density = bd.plantDensity;
       if (c.flat > 0) {
         if (layoutMask(x, z) !== 0) continue;

@@ -54,8 +54,10 @@ Object.assign(ISLAND_VALUES, farTable('values'));
 // academies of many rooms. (Round 77) 6, a tavern's rooms upstairs for
 // those passing through, a trade now and then up over another's shop, and
 // coaches between the towns and ferries across to the islands (see
-// sim/coaches.js).
-export const WORLD_GEN = 6;
+// sim/coaches.js). (Round 79) 7, the lie of the land beyond its biomes:
+// landforms, rivers with character, blended edges, landmarks and small
+// things in the country (see landforms.js, landmarks.js, features.js).
+export const WORLD_GEN = 7;
 
 export class Overworld {
   // `o.rules`: where mods' biomes grow (see mod/biomerules.js); `o.plan`:
@@ -170,7 +172,11 @@ export class Overworld {
     const cz = Math.floor(z / REGION_D);
     if (this.pins.some((q) => Math.floor(q.x / REGION_W) === cx && Math.floor(q.z / REGION_D) === cz && q.label === label)) return false;
     this.pins.push({ x: Math.round(x), z: Math.round(z), label, glyph, ...(extra || {}) });
-    if (this.pins.length > 60) this.pins.shift();
+    // (Round 79: the oldest told-of place makes room; a landmark stays.)
+    if (this.pins.length > 60) {
+      const i = this.pins.findIndex((q) => !q.landmark);
+      this.pins.splice(i >= 0 ? i : 0, 1);
+    }
     return true;
   }
 
