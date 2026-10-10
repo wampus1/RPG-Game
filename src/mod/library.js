@@ -99,7 +99,7 @@ export class ModLibrary {
   // ------------------------------------------------------------ raw
   async putRaw(key, text) {
     if (this.db) {
-      await this.db.put(key, await pack(text));
+      await this.db.put(key, await pack(text, this.db));
       return;
     }
     try {

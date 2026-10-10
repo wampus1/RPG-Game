@@ -7,7 +7,7 @@ import { Input } from './game/input.js';
 import { Audio } from './game/audio.js';
 import { Game, SAVE_VERSION } from './game/game.js';
 import { UI } from './ui/ui.js';
-import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow, ConsoleWindow } from './ui/windows.js';
+import { TitleWindow, HelpWindow, SaveSlotsWindow, SettingsWindow, ConfirmWindow, ConsoleWindow, SeedWindow } from './ui/windows.js';
 import { ChatWindow } from './ui/chat.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from './version.js';
 import { loadSettings, saveSettings, applySettings } from './game/settings.js';
@@ -39,6 +39,9 @@ import { ModPickWindow } from './ui/modpick.js';
 import { ModManagerWindow } from './ui/modmanager.js';
 import './mod/render.js';
 import { ITEMS } from './world/items.js';
+import { appStorage, desktopApp } from './util/appstore.js';
+import { CarryWindow } from './ui/carry.js';
+import { CARRY_KEY, exportBundle } from './game/carry.js';
 
 // Deep links like ?autostart&seed=123&time=1320 are handy for testing.
 const params = new URLSearchParams(location.search);
@@ -76,17 +79,15 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 // (Closing the tab on play not yet saved: the browser asks. See unsaved.)
+// (In the desktop app, the window's own close asks instead: see quitApp.)
 window.addEventListener('beforeunload', (e) => {
-  if (!params.has('autostart') && unsaved()) e.preventDefault();
+  if (!desktopApp() && !params.has('autostart') && unsaved()) e.preventDefault();
 });
 resize();
 
+// (Round 81: in the desktop app, its own data folder: see util/appstore.js.)
 function browserStorage() {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+  return appStorage();
 }
 const store = new SaveStore(browserStorage());
 // (Round 62) The mods on this computer (see mod/library.js).
@@ -102,7 +103,7 @@ const dbReady = openSaveDB().then((db) => {
   modLib.db = db;
 });
 try {
-  window.navigator.storage?.persist?.();
+  if (!desktopApp()) window.navigator.storage?.persist?.();
 } catch {
   // Not offered here.
 }
@@ -178,6 +179,84 @@ function leaving(go) {
     Promise.resolve(saveTo(g.slot, `Game saved to slot ${g.slot}.`)).then((ok) => ok && go());
   }, { yes: g.slot ? `Save (slot ${g.slot})` : 'Save', no: 'Don\'t save', onNo: go, cancel: 'Back' }));
   return null;
+}
+
+// (Round 81) The desktop app's window closed (its X, Alt+F4, the title's
+// Quit): with play not yet saved, asked first, as leaving for the title
+// is; a world you're hosting saved as it goes; then the app closes.
+let quitAsk = null;
+function quitApp() {
+  const app = desktopApp();
+  if (!app) return;
+  if (quitAsk && ui.windows.includes(quitAsk) && quitAsk.state !== 'closing') return;
+  quitAsk = null;
+  const go = () => {
+    quitAsk = null;
+    if (session && session.role === 'host' && game && game.slot) {
+      Promise.resolve(saveTo(game.slot, null, true)).finally(() => app.closeNow());
+      return;
+    }
+    app.closeNow();
+  };
+  if (leaving(go) === null) quitAsk = [...ui.windows].reverse().find((w) => w.kind === 'confirm') || null;
+}
+desktopApp()?.onCloseAsked(() => {
+  desktopApp().closeAck();
+  quitApp();
+});
+
+// A seed as typed: a number as it is, words by their hash.
+function seedOf(v) {
+  const t = String(v).trim();
+  return /^\d+$/.test(t) ? parseInt(t, 10) >>> 0 : hashString(t);
+}
+
+// (Round 81) Worlds from the browser version, brought into the desktop
+// app (see ui/carry.js): asked the first time it's opened, and from
+// Settings after. (Brought in, the game starts again, with them.)
+function openCarry(first = false) {
+  const app = desktopApp();
+  if (!app || ui.find('carry')) return;
+  if (game) {
+    ui.msg('Go back to the title screen to bring in worlds from the browser version.', '#ffb080');
+    return;
+  }
+  ui.open(new CarryWindow(ui, { app, storage: browserStorage(), store, modLib, onDone: (changed) => changed && window.location.reload() }, { first }));
+}
+
+// (Round 81) What the buttons under the settings do.
+function settingAction(act, from = null) {
+  const app = desktopApp();
+  if (act === 'savesFolder' && app) {
+    app.openFolder('saves').then((err) => err && ui.msg(`Couldn't open it: ${err}`, '#ff5a50'), () => {});
+  } else if (act === 'carry' && app) {
+    if (!game && from) from.close();
+    openCarry(false);
+  } else if (act === 'export' && !app) exportAll();
+}
+
+// (Round 81) Everything this browser keeps of the game (worlds, account,
+// settings, mods), saved to a file for the desktop app to bring in.
+async function exportAll() {
+  ui.msg('Gathering your worlds...', '#a0d8ff');
+  try {
+    const b = await exportBundle({ storage: browserStorage(), store, modLib, from: window.location.host });
+    let blob = new window.Blob([JSON.stringify(b)], { type: 'application/json' });
+    if (globalThis.CompressionStream) blob = await new window.Response(blob.stream().pipeThrough(new globalThis.CompressionStream('gzip'))).blob();
+    const name = `tessera-worlds-${new Date().toISOString().slice(0, 10)}.tessera`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const n = Object.keys(b.blobs).filter((k) => k.startsWith('tessera-save-') && !k.includes('~')).length;
+    ui.msg(`Saved ${n} world${n === 1 ? '' : 's'} to ${name}. In the desktop app: Settings, General, "Bring them in...", then "Pick a file...".`, '#80e070');
+  } catch (e) {
+    ui.msg(`Couldn't save them: ${e && e.message ? e.message : e}`, '#ff5a50');
+  }
 }
 
 function loadFrom(id) {
@@ -403,7 +482,7 @@ function openModPick(title, go, back) {
   const list = modLib.list();
   let last = [];
   try {
-    last = JSON.parse(localStorage.getItem('mods-last-picked') || '[]');
+    last = JSON.parse(appStorage()?.getItem('mods-last-picked') || '[]');
   } catch {
     last = [];
   }
@@ -418,7 +497,7 @@ function openModPick(title, go, back) {
     go: 'Next',
     onDone: async (ids) => {
       try {
-        localStorage.setItem('mods-last-picked', JSON.stringify(ids));
+        appStorage()?.setItem('mods-last-picked', JSON.stringify(ids));
       } catch {
         // Fine.
       }
@@ -524,12 +603,11 @@ async function worldMods(data, go) {
 
 ui.hooks = {
   start: (seed) => newGame(seed),
-  askSeed: () => {
-    const v = window.prompt('World seed (number or text):', '');
-    if (v === null) return;
-    const n = /^\d+$/.test(v.trim()) ? parseInt(v.trim(), 10) >>> 0 : hashString(v.trim());
-    newGame(n);
-  },
+  // (Round 81) The desktop app's own: quitting it; its data folder.
+  quitApp: desktopApp() ? () => quitApp() : null,
+  desktop: !!desktopApp(),
+  settingAction: (act, from) => settingAction(act, from),
+  askSeed: () => ui.open(new SeedWindow(ui, (v) => newGame(seedOf(v)))),
   save: () => {
     if (!game) return;
     // (A world you host is kept in its own place.)
@@ -639,7 +717,9 @@ function openFeats() {
 // the same whatever address the game is opened at (see net/machine.js).
 const machine = new MachineSync({ storage: browserStorage(), accounts, store });
 window.__machine = machine;
-dbReady.then(() => machine.start()).catch(() => {});
+// (Round 81: not in the desktop app, which keeps them in its own folder
+// and nowhere else.)
+if (!desktopApp()) dbReady.then(() => machine.start()).catch(() => {});
 let lan = null;
 let lobbyWs = null;
 let partyNote = null;
@@ -680,7 +760,7 @@ function relayRefusal(why) {
   return {
     busy: 'Someone else is already hosting a world from this machine.',
     'not this machine': 'Only the computer running the game\'s server can host on it.',
-    version: 'The game\'s server is a different version: restart it with "npm start".',
+    version: desktopApp() ? 'The game\'s network service is a different version: restart Tessera.' : 'The game\'s server is a different version: restart it with "npm start".',
   }[why] || `Couldn't open the world to your network (${why || 'no reason given'}).`;
 }
 
@@ -792,11 +872,7 @@ const mpCtx = {
   hooks: {
     account: () => openAccount(),
     newWorld: () => newHosted(null),
-    seedWorld: () => {
-      const v = window.prompt('World seed (number or text):', '');
-      if (v === null) return;
-      newHosted(/^\d+$/.test(v.trim()) ? parseInt(v.trim(), 10) >>> 0 : hashString(v.trim()));
-    },
+    seedWorld: () => ui.open(new SeedWindow(ui, (v) => newHosted(seedOf(v)), 'A WORLD TO HOST, FROM A SEED')),
     continueWorld: (id) => continueHosted(id),
     upgradeWorld: (id, meta) => upgradeSave(id, meta),
     join: (at = null) => joinWorld(at),
@@ -919,7 +995,7 @@ function beginHosting(g, name) {
     if (sess.net) {
       sess.net.close();
       ui.notify('Lost touch with the game\'s server: the others were sent home. Your world goes on.', null, '#ffb080');
-    } else ui.notify('Couldn\'t open the world to your network: is the game running from "npm start"?', null, '#ffb080');
+    } else ui.notify(desktopApp() ? 'Couldn\'t open the world to your network: restart Tessera and try again.' : 'Couldn\'t open the world to your network: is the game running from "npm start"?', null, '#ffb080');
   };
 }
 
@@ -1360,9 +1436,9 @@ function playtest(mod, where = {}) {
   let seed = (Math.random() * 2 ** 32) >>> 0;
   try {
     const k = `ws-test-seed-${mod.id}`;
-    const had = +localStorage.getItem(k);
+    const had = +appStorage()?.getItem(k);
     if (had > 0) seed = had >>> 0;
-    else localStorage.setItem(k, String(seed));
+    else appStorage()?.setItem(k, String(seed));
   } catch {
     // A new one each time, then.
   }
@@ -1522,7 +1598,12 @@ if (params.has('autostart')) {
   const origin = params.get('origin');
   startGame(seed, null, null, origin ? { ...randomHero(seed), origin } : null);
 }
-else ui.open(new TitleWindow(ui, store));
+else {
+  ui.open(new TitleWindow(ui, store));
+  // (Round 81) The desktop app's first opening: your worlds from the
+  // browser version, asked after once.
+  if (desktopApp() && browserStorage().getItem(CARRY_KEY) === null) openCarry(true);
+}
 if (params.has('nocrt')) crt.enabled = false;
 if (params.has('nomusic')) music.setVolume(0);
 

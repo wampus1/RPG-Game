@@ -1,12 +1,88 @@
 {
   "name": "rpg-game",
-  "version": "0.80.0",
+  "productName": "Tessera",
+  "version": "0.81.0",
   "private": true,
   "type": "module",
   "description": "A 2.5D top-down grid RPG with a retro pixel/CRT look.",
+  "author": "Tessera",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node tools/serve.mjs",
+    "app": "electron .",
+    "icons": "node tools/icon.mjs",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:linux": "electron-builder --linux AppImage --publish never",
     "test": "node tools/quicktest.mjs",
     "test:full": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.tessera.game",
+    "productName": "Tessera",
+    "copyright": "Tessera",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "style.css",
+      "favicon.png",
+      "src/**/*",
+      "electron/**/*",
+      "tools/server.mjs",
+      "tools/relay.mjs",
+      "tools/lan.mjs",
+      "tools/store.mjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "executableName": "Tessera"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tessera",
+      "uninstallDisplayName": "Tessera",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Tessera.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "artifactName": "Tessera.AppImage",
+      "executableName": "tessera"
+    }
   }
 }

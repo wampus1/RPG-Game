@@ -95,6 +95,15 @@ export const SETTING_ROWS = [
 // (The rows that are settings, not section headings.)
 export const SETTING_KEYS = SETTING_ROWS.filter((r) => r.key);
 
+// (Round 81) Things to do rather than settings, under them on their tab: a
+// button each (`act`, done by the UI's settingAction hook). `only`: 'app'
+// in the desktop app alone, 'web' in a browser alone.
+export const SETTING_ACTIONS = [
+  { tab: 'General', label: 'Your saves', act: 'savesFolder', btn: 'Open their folder', only: 'app' },
+  { tab: 'General', label: 'Worlds from the browser', act: 'carry', btn: 'Bring them in...', only: 'app' },
+  { tab: 'General', label: 'To the desktop app', act: 'export', btn: 'Save it all to a file', only: 'web' },
+];
+
 export function loadSettings(storage) {
   try {
     return { ...DEFAULTS, ...(JSON.parse(storage && storage.getItem(SETTINGS_KEY)) || {}) };

@@ -22,7 +22,7 @@ import { describe, lcFirst } from '../sim/justice.js';
 import { SLOTS, agoText, timeText } from '../game/saves.js';
 import { GAME_VERSION, versionText, sameVersion, canUpgrade } from '../version.js';
 import { LAWS, lawList, byDecree } from '../sim/laws.js';
-import { SETTING_ROWS, SETTING_TABS, changeSetting } from '../game/settings.js';
+import { SETTING_ROWS, SETTING_TABS, SETTING_ACTIONS, changeSetting } from '../game/settings.js';
 import { runCommand, complete } from '../game/commands.js';
 import { gemText } from '../game/gems.js';
 import { mastery, gainMastery, rankText } from '../game/mastery.js';
@@ -2206,6 +2206,52 @@ export class ConfirmWindow extends Window {
   }
 }
 
+// ---------------------------------------------------------------- a seed
+// (Round 81) A world's seed, typed in: a number, or any words (the same
+// seed is the same world every time). (In place of the browser's own
+// little box, which the desktop app hasn't got.) `onDone(text)`.
+export class SeedWindow extends Window {
+  constructor(ui, onDone, title = 'NEW WORLD FROM A SEED') {
+    super(ui, 52, 12, { kind: 'seed' });
+    this.text = '';
+    this.onDone = onDone;
+    this.title = title;
+  }
+  draw(g) {
+    g.fill(0, 0, this.w, this.h, ' ', C.fg, '#100c18');
+    g.box(0, 0, this.w, this.h, { bg: '#100c18', double: true, title: this.title });
+    g.text(3, 2, 'A number, or any words you like:', C.fg);
+    g.text(3, 3, 'the same seed makes the same world every time.', C.dim);
+    g.fill(3, 5, this.w - 6, 1, ' ', C.fg, '#2a2238');
+    const shown = this.text.length > this.w - 9 ? this.text.slice(-(this.w - 9)) : this.text;
+    g.text(4, 5, shown + (Math.floor((this.ui.time || 0) * 2) % 2 ? '_' : ' '), C.white);
+    const y = this.h - 3;
+    const ok = this.text.trim().length > 0;
+    const btn = (x, label, fn, col) => {
+      const w = label.length + 2;
+      const hov = this.hovering(x, y, w, 1);
+      g.fill(x, y, w, 1, ' ', C.fg, hov ? C.bgHi : '#1a1622');
+      g.text(x + 1, y, label, hov ? C.white : col);
+      this.hit(x, y, w, 1, fn);
+    };
+    btn(3, 'Make the world', () => this.done(), ok ? C.hi : C.faint);
+    btn(this.w - 9, 'Back', () => this.close(), C.dim);
+  }
+  done() {
+    const t = this.text.trim();
+    if (!t) return;
+    this.close();
+    this.onDone(t);
+  }
+  onKey(k) {
+    if (k.code === 'Escape') this.close();
+    else if (k.code === 'Enter' || k.code === 'NumpadEnter') this.done();
+    else if (k.code === 'Backspace') this.text = this.text.slice(0, -1);
+    else if (k.key && k.key.length === 1 && this.text.length < 40 && !k.ctrl && !k.meta) this.text += k.key;
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------- waiting
 export class WaitWindow extends Window {
   // (Round 79) `opts.ride`: on the coach or ferry, the minutes yet till
@@ -2279,7 +2325,14 @@ export class SettingsWindow extends Window {
     this.capture = null;
   }
   lines() {
-    if (this.tab !== 'Controls') return SETTING_ROWS.filter((r) => r.tab === this.tab).map((r) => ({ row: r }));
+    if (this.tab !== 'Controls') {
+      const out = SETTING_ROWS.filter((r) => r.tab === this.tab).map((r) => ({ row: r }));
+      // (Round 81) And what can be done from here, in the app or a browser.
+      const app = !!(this.ui.hooks && this.ui.hooks.desktop);
+      const acts = SETTING_ACTIONS.filter((a) => a.tab === this.tab && (!a.only || (a.only === 'app') === app));
+      if (acts.length && this.ui.hooks && this.ui.hooks.settingAction) out.push({ gap: true }, ...acts.map((a) => ({ act2: a })));
+      return out;
+    }
     const out = [];
     let group = null;
     for (const a of ACTIONS) {
@@ -2316,6 +2369,7 @@ export class SettingsWindow extends Window {
       if (l.row) this.drawRow(g, l.row, y);
       else if (l.head) g.text(3, y, l.head, C.hi);
       else if (l.act) this.drawBind(g, l.act, y);
+      else if (l.act2) this.drawAction(g, l.act2, y);
       else if (l.reset) {
         const hov = this.hovering(3, y, 24, 1);
         g.text(3, y, ' Reset all to defaults ', hov ? C.white : C.fg, hov ? C.bgHi : '#2a2238');
@@ -2348,6 +2402,16 @@ export class SettingsWindow extends Window {
     this.hit(vx - 3, y, 2, 1, () => this.change(r.key, -1));
     this.hit(vx, y, this.w - vx - 6, 1, () => this.change(r.key, 1));
     this.hit(this.w - 6, y, 3, 1, () => this.change(r.key, 1));
+  }
+  drawAction(g, a, y) {
+    g.text(3, y, a.label, C.fg);
+    const w = a.btn.length + 2;
+    const hov = this.hovering(30, y, w, 1);
+    g.text(30, y, ` ${a.btn} `, hov ? C.white : C.hi, hov ? C.bgHi : '#2a2238');
+    this.hit(30, y, w, 1, () => {
+      this.ui.audio?.play('select');
+      this.ui.hooks.settingAction(a.act, this);
+    });
   }
   drawBind(g, a, y) {
     const hov = this.hovering(2, y, this.w - 5, 1);
@@ -2489,6 +2553,8 @@ export class TitleWindow extends Window {
       ['A', 'Achievements'],
       ['O', 'Settings'],
       ['H', 'How to play'],
+      // (Round 81) In the desktop app: back to the desktop.
+      ...(this.ui.hooks.quitApp ? [['Q', 'Quit']] : []),
     ];
     opts.forEach(([k, label], i) => {
       const y = 13 + i * 2;
@@ -2528,10 +2594,11 @@ export class TitleWindow extends Window {
     if (k === 'M' && h.multiplayer) h.multiplayer();
     if (k === 'A' && h.feats) h.feats();
     if (k === 'W' && h.workshop) h.workshop();
+    if (k === 'Q' && h.quitApp) h.quitApp();
   }
   onKey(k) {
-    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', KeyA: 'A', KeyW: 'W', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
-    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite', 'feats', 'confirm', 'modpick'].some((k2) => this.ui.find(k2))) return false;
+    const map = { KeyN: 'N', KeyC: 'C', KeyL: 'L', KeyS: 'S', KeyH: 'H', KeyO: 'O', KeyM: 'M', KeyA: 'A', KeyW: 'W', KeyQ: 'Q', Enter: this.hasSave ? 'C' : 'N', Space: this.hasSave ? 'C' : 'N' };
+    if (['help', 'saves', 'create', 'settings', 'multiplayer', 'account', 'host', 'invite', 'feats', 'confirm', 'modpick', 'seed', 'carry'].some((k2) => this.ui.find(k2))) return false;
     if (map[k.code]) this.choose(map[k.code]);
     return true;
   }

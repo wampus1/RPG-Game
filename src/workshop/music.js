@@ -12,6 +12,7 @@ import { newChan, freeChanId, cleanSong, barSteps, stepSecs, songSecs, SongPlaye
 import { master, midiHz, Rack } from '../game/synth.js';
 import { encodeWav, packClip, convertRate, cleanSound } from '../mod/sound.js';
 import { freeId } from '../mod/format.js';
+import { appStorage } from '../util/appstore.js';
 
 const COLORS = ['#ffd84a', '#5ab4ff', '#5ce07a', '#ff9a3c', '#b88cff', '#ff5a72', '#5ce1e6', '#e8a0ff', '#c8e060', '#ffb0a0', '#80a8ff', '#f0f0f0'];
 const CELL = 30; // a bar's square in the song
@@ -55,7 +56,7 @@ export default class MusicTool {
     this.typed = '';
     this.vol = 0.7;
     try {
-      const v = parseFloat(localStorage.getItem('ws-music-vol'));
+      const v = parseFloat(appStorage()?.getItem('ws-music-vol'));
       if (v >= 0 && v <= 1) this.vol = v;
     } catch {
       // Fine.
@@ -226,7 +227,7 @@ export default class MusicTool {
   setVol(v) {
     this.vol = v;
     try {
-      localStorage.setItem('ws-music-vol', String(v));
+      appStorage()?.setItem('ws-music-vol', String(v));
     } catch {
       // Fine.
     }

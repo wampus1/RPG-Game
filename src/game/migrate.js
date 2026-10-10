@@ -593,6 +593,14 @@ export const STEPS = [
       log.push(`The game runs lighter: towns are laid out on a thread of their own, the ground and the light are drawn again only when they change, and a master's hall holds the rest of its place still while you fight it. ${kept ? 'The old places you\'ve been down are laid out afresh (some of their rooms bigger now, walled into rooms within), so their floors are as new.' : 'Some of the old places\' rooms are bigger now, walled into rooms within.'}`);
     },
   },
+  {
+    // (Round 81) Nothing in a world changes: Tessera is a desktop app now
+    // too, which keeps its worlds in its own folder (see electron/data.js).
+    to: '0.81.0',
+    data(d, log) {
+      log.push('Tessera can be played as a desktop app now (Tessera.exe), keeping its worlds in a folder of its own on your computer; this world plays as it did.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

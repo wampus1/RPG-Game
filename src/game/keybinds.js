@@ -4,6 +4,8 @@
 // whatever it's bound to, so nothing else needs to know: press N for the
 // map, and the map hears KeyM.
 //   Kept in the browser between games (see Settings: Controls).
+import { appStorage } from '../util/appstore.js';
+
 export const KEYBINDS_KEY = 'tessera-keybinds';
 
 export const ACTIONS = [
@@ -64,7 +66,7 @@ export function remapKey(code) {
 }
 
 // Bind `id` to `code`; whatever had that key takes this one's old key.
-export function bind(id, code, storage = globalThis.localStorage) {
+export function bind(id, code, storage = appStorage()) {
   const a = BY_ID.get(id);
   if (!a || !code || ['Escape', 'Enter', 'Backspace', 'F1', 'F3'].includes(code)) return false;
   const old = keyOf(id);
@@ -81,13 +83,13 @@ export function bind(id, code, storage = globalThis.localStorage) {
   return true;
 }
 
-export function resetKeybinds(storage = globalThis.localStorage) {
+export function resetKeybinds(storage = appStorage()) {
   chosen = {};
   rebuild();
   saveKeybinds(storage);
 }
 
-export function loadKeybinds(storage = globalThis.localStorage) {
+export function loadKeybinds(storage = appStorage()) {
   try {
     const got = JSON.parse(storage && storage.getItem(KEYBINDS_KEY)) || {};
     chosen = {};
@@ -98,7 +100,7 @@ export function loadKeybinds(storage = globalThis.localStorage) {
   rebuild();
 }
 
-export function saveKeybinds(storage = globalThis.localStorage) {
+export function saveKeybinds(storage = appStorage()) {
   try {
     storage && storage.setItem(KEYBINDS_KEY, JSON.stringify(chosen));
   } catch {

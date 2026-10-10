@@ -1,0 +1,43 @@
+# (Round 81) Tessera.exe, the Windows installer, built on GitHub's own
+# Windows machines: on demand (Actions, "Desktop app", Run workflow), when
+# the desktop app's own files change, and for each release tag (v0.81.0
+# and so on), which also puts it on that release's page for players to
+# download.
+name: Desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    # (Branch pushes only when these change; a tag always.)
+    paths:
+      - 'electron/**'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/desktop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tessera-installer
+          path: dist/Tessera.exe
+          if-no-files-found: error
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Tessera.exe

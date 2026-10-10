@@ -60,6 +60,8 @@ export class Audio {
     };
     // Browsers only allow sound after the first click, tap or key press.
     for (const ev of ['mousedown', 'pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, unlock);
+    // (Round 81) The desktop app lets it play from the start.
+    if (globalThis.tesseraApp && globalThis.tesseraApp.desktop) unlock();
   }
 
   setVolume(v) {

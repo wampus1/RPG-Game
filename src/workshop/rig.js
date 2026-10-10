@@ -14,6 +14,7 @@ import { RigPose, quickRig, autoAnims, keyAt, apply, ROLES, ANIMS, PART_COLORS, 
 import { composite, decodeCel, encodeCel, LIMITS } from '../mod/format.js';
 import { MODS } from '../mod/state.js';
 import { NODES } from '../mod/graph.js';
+import { appStorage } from '../util/appstore.js';
 
 const MODES = [['cut', 'Cut into parts', 'Paint which part each pixel belongs to'], ['bones', 'Bones', 'Where the joints are, and which bone each part hangs from'], ['anim', 'Animate', 'Waves and keyframes; drag a bone to pose it']];
 const CUT_TOOLS = [['brush', 'pencil', 'Paint pixels into the chosen part', 'B'], ['erase', 'eraser', 'Take pixels out of their part (they go with the body)', 'E'], ['fill', 'bucket', 'Fill: touching pixels of one colour into the part', 'G'], ['rect', 'rect', 'A box of pixels into the part', 'U']];
@@ -36,7 +37,7 @@ export default class RigTool {
     this.keySel = null;
     this.pan = { x: 0, y: 0 };
     try {
-      this.lookShut = localStorage.getItem('ws-rig-look') === 'shut';
+      this.lookShut = appStorage()?.getItem('ws-rig-look') === 'shut';
     } catch {
       this.lookShut = false;
     }
@@ -287,7 +288,7 @@ export default class RigTool {
     this.lookBtn = button(null, { icon: this.lookShut ? 'eye' : 'eyeOff', small: true, kind: 'ghost', cls: 'rig-look-btn', title: this.lookShut ? 'Show it as the game will' : 'Hide the game\'s view of it', onClick: () => {
       this.lookShut = !this.lookShut;
       try {
-        localStorage.setItem('ws-rig-look', this.lookShut ? 'shut' : '');
+        appStorage()?.setItem('ws-rig-look', this.lookShut ? 'shut' : '');
       } catch {
         // Fine.
       }

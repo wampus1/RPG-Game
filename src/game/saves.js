@@ -2,6 +2,7 @@
 // key in browser storage, with a small index (who, where, when) so the
 // slot list can be shown without reading every save.
 import { GAME_VERSION } from '../version.js';
+import { appDb } from '../util/appstore.js';
 export const SLOTS = ['auto', '1', '2', '3', '4', '5'];
 // Worlds you host for others, kept apart (see multiplayer.js).
 export const MP_SLOTS = ['mp1', 'mp2', 'mp3'];
@@ -60,6 +61,9 @@ const DB_NAME = 'tessera';
 const DB_STORE = 'saves';
 
 export function openSaveDB(idb = globalThis.indexedDB) {
+  // (Round 81) In the desktop app, its own data folder: a file each.
+  const own = appDb();
+  if (own) return Promise.resolve(own);
   if (!idb) return Promise.resolve(null);
   return new Promise((resolve) => {
     let req;
@@ -90,7 +94,10 @@ export function openSaveDB(idb = globalThis.indexedDB) {
   });
 }
 
-export async function pack(text) {
+// (`db`: where it's going. The app's data folder takes the text as it is,
+// and gzips it there.)
+export async function pack(text, db = null) {
+  if (db && db.raw) return { text };
   const { CompressionStream: Gzip, Blob: B, Response: R } = globalThis;
   if (!Gzip || !B || !R) return { text };
   const blob = await new R(new B([text]).stream().pipeThrough(new Gzip('gzip'))).blob();
@@ -204,7 +211,7 @@ export class SaveStore {
     const meta = metaOf(game);
     meta.size = data.length;
     if (this.db) {
-      await this.db.put(slotKey(id), await pack(data));
+      await this.db.put(slotKey(id), await pack(data, this.db));
       meta.db = true;
       // An older copy in browser storage only takes up room now.
       try {
@@ -235,7 +242,7 @@ export class SaveStore {
     const m = { ...meta };
     delete m.db;
     if (this.db) {
-      await this.db.put(slotKey(id), await pack(text));
+      await this.db.put(slotKey(id), await pack(text, this.db));
       m.db = true;
     } else this.st.setItem(slotKey(id), text);
     this.forget(id);

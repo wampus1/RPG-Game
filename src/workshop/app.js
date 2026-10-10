@@ -42,6 +42,7 @@ import { newSound, clipSecs } from '../mod/sound.js';
 import { waveThumb } from './audiokit.js';
 import { barCells } from './homebar.js';
 import { picCanvas } from '../ui/modpick.js';
+import { appStorage } from '../util/appstore.js';
 
 // Which tool edits each collection.
 export const TOOL_OF = { assets: 'pixel', vfx: 'vfx', rigs: 'rig', structures: 'builder', layouts: 'builder', dungeons: 'builder', loot: 'builder', stories: 'story', patches: 'story', entities: 'graph', biomes: 'biome', worlds: 'world', chargen: 'chargen', songs: 'music', sounds: 'sound', gear: 'gear', scripts: 'script' };
@@ -136,7 +137,7 @@ export class Workshop {
     this.thumbs = new Map();
     this.closed = {};
     try {
-      this.closed = JSON.parse(localStorage.getItem('ws-closed') || '{}');
+      this.closed = JSON.parse(appStorage()?.getItem('ws-closed') || '{}');
     } catch {
       this.closed = {};
     }
@@ -438,7 +439,7 @@ export class Workshop {
     this.history.clear();
     this.thumbs.clear();
     try {
-      localStorage.setItem('ws-last-mod', id);
+      appStorage()?.setItem('ws-last-mod', id);
     } catch {
       // Fine.
     }
@@ -856,7 +857,7 @@ export class Workshop {
       head.addEventListener('click', () => {
         this.closed[S.key] = !this.closed[S.key];
         try {
-          localStorage.setItem('ws-closed', JSON.stringify(this.closed));
+          appStorage()?.setItem('ws-closed', JSON.stringify(this.closed));
         } catch {
           // Fine.
         }

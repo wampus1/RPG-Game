@@ -11,6 +11,7 @@
 // afresh under them, and a drag is one step to undo. The colour picker's
 // "lately used" row only keeps colours that were used.
 import { iconSvg } from './icons.js';
+import { appStorage } from '../util/appstore.js';
 
 // ------------------------------------------------------------ elements
 // h('div', { class, style, on: { click }, ...attrs }, ...children)
@@ -486,7 +487,7 @@ export function panel(title, body, o = {}) {
   const key = o.key ? `ws-panel-${o.key}` : null;
   let open = o.open ?? true;
   try {
-    if (key && localStorage.getItem(key) !== null) open = localStorage.getItem(key) === '1';
+    if (key && appStorage()?.getItem(key) !== null) open = appStorage()?.getItem(key) === '1';
   } catch {
     // No storage: as given.
   }
@@ -499,7 +500,7 @@ export function panel(title, body, o = {}) {
     open = !open;
     el.classList.toggle('closed', !open);
     try {
-      if (key) localStorage.setItem(key, open ? '1' : '0');
+      if (key) appStorage()?.setItem(key, open ? '1' : '0');
     } catch {
       // Fine.
     }
@@ -540,7 +541,7 @@ let recentColors = null;
 function recents() {
   if (!recentColors) {
     try {
-      recentColors = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter((c) => HEX.test(c)).slice(0, 16);
+      recentColors = JSON.parse(appStorage()?.getItem(RECENT_KEY) || '[]').filter((c) => HEX.test(c)).slice(0, 16);
     } catch {
       recentColors = [];
     }
@@ -557,7 +558,7 @@ export function rememberColor(hex) {
   list.unshift(c);
   list.length = Math.min(list.length, 16);
   try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+    appStorage()?.setItem(RECENT_KEY, JSON.stringify(list));
   } catch {
     // Fine.
   }
@@ -1019,7 +1020,7 @@ export function tooltips(root2) {
 export function splitter(el, side, key) {
   const bar = h('div', { class: `split ${side}` });
   try {
-    const w = +localStorage.getItem(`ws-w-${key}`);
+    const w = +appStorage()?.getItem(`ws-w-${key}`);
     if (w > 0) el.style.width = `${w}px`;
   } catch {
     // Fine.
@@ -1034,7 +1035,7 @@ export function splitter(el, side, key) {
     fold.setAttribute('data-tip', on ? 'Show this panel' : 'Fold this panel away');
     if (keep) {
       try {
-        localStorage.setItem(`ws-fold-${key}`, on ? '1' : '');
+        appStorage()?.setItem(`ws-fold-${key}`, on ? '1' : '');
       } catch {
         // Fine.
       }
@@ -1043,7 +1044,7 @@ export function splitter(el, side, key) {
   };
   let folded = false;
   try {
-    folded = localStorage.getItem(`ws-fold-${key}`) === '1';
+    folded = appStorage()?.getItem(`ws-fold-${key}`) === '1';
   } catch {
     folded = false;
   }
@@ -1072,7 +1073,7 @@ export function splitter(el, side, key) {
       bar.removeEventListener('pointermove', move);
       bar.removeEventListener('pointerup', up);
       try {
-        localStorage.setItem(`ws-w-${key}`, String(Math.round(el.getBoundingClientRect().width)));
+        appStorage()?.setItem(`ws-w-${key}`, String(Math.round(el.getBoundingClientRect().width)));
       } catch {
         // Fine.
       }

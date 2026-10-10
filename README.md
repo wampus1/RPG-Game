@@ -11,6 +11,7 @@ schedules, and towns that actually run: kitchens, taxes, laws, trials,
 funerals and trading trips, whether or not you're there to see them.
 
 No dependencies and no build step: it's plain JavaScript modules and a canvas.
+(The desktop app wraps the same files in Electron: see below.)
 
 ![Title screen](docs/title.jpg)
 
@@ -22,6 +23,31 @@ No dependencies and no build step: it's plain JavaScript modules and a canvas.
 | ![A hearing at the village jail](docs/hearing.jpg) | ![Falling asleep](docs/sleep.jpg) |
 
 ## Running
+
+### The desktop app (Windows)
+
+Download **Tessera.exe** (from the repository's Releases page, or the latest
+run of the *Desktop app* workflow under Actions) and double-click it. It
+installs Tessera for you alone (no administrator needed; you can pick the
+folder), puts a **Tessera** shortcut on the desktop and in the Start menu,
+and starts the game. No command prompt, nothing else to install. Uninstall
+it from Windows' Settings, Apps.
+
+The app keeps everything in its own folder, `%APPDATA%\Tessera`: your
+worlds in `saves` (Settings, General, *Open their folder*), your account,
+settings and mods beside them. Uninstalling leaves them be. The first time
+it's opened it looks for your worlds from the browser version and offers to
+bring them in (see Round 81).
+
+Hosting for friends works as it does from `npm start` (the app runs the
+game's server itself): the first time you open it, Windows may ask whether
+Tessera may use your network; allow it on private networks.
+
+To build the installer yourself: `npm install`, then `npm run dist:win`
+(it's written to `dist/Tessera.exe`; `npm run app` runs the app from the
+folder without building it, and `npm run icons` redraws its icon).
+
+### In a browser
 
 ```sh
 npm start          # serves the folder on http://localhost:8080
@@ -6043,6 +6069,43 @@ into stairs when the world's brought up to date.)
   (on the free tile farthest from you, if nowhere three paces off is
   free); before, now and then it couldn't, and the trial was won with no
   fight at all.
+
+## Round 81: Tessera on the desktop
+
+- **Tessera.exe**: the game as a Windows app, with an installer of its
+  own (see Running). It's the same game in a window of its own (F11 or
+  Alt+Enter for the whole screen), with the game's server running inside
+  it, so hosting for friends on your network, finding their worlds, and
+  their joining from a browser all work as with `npm start`. Its title
+  screen has a **Quit**; closing its window with play not yet saved asks
+  first (save, don't, or back), as leaving for the title does, and a world
+  you're hosting is saved as it closes. Music plays from the start.
+- **Its icon**: a gold-framed tile of the title's night, the logo's T in
+  amber and gold over snowy peaks, a forest and water that catches its
+  light; drawn as pixel art for every size Windows asks for (16 to 256),
+  with the installer's side picture to match.
+- **Saves in its own folder**: in the app, nothing is kept in a browser's
+  storage or by the game's server any more. Each world is a gzipped file
+  in `%APPDATA%\Tessera\saves`, with the slot list beside them; mods in
+  `mods`; the account, settings, keys and achievements in `storage.json`.
+  Each is written whole beside the old one and then put in its place, so a
+  crash part-way leaves the last good one (the slot list and storage.json
+  keep the one before them as `.bak` too).
+- **Your worlds come along, once**: the first time the app's opened it
+  looks for the browser version's worlds (the copy `npm start` kept of
+  them, in the game folder's `saves\local`: in the app's own folder, home,
+  Desktop, Documents, Downloads and where code's usually kept) and offers
+  to bring them in, with your account. Or pick that folder yourself, or a
+  file the browser version saved: its Settings, General, has *Save it all
+  to a file*, which takes everything (mods and settings too). Each world
+  goes into its own slot, or into the first free one of its kind if that
+  slot already holds another world here (the worlds crossed into from it go
+  with it); the same world kept here already is left as it is, unless the
+  one brought is newer. Not now: it's not asked again, and Settings,
+  General, *Bring them in...* does it any time.
+- **A seed typed in the game**: *New game from seed* (and a hosted world
+  from a seed) asks in a window of the game's own, in place of the
+  browser's little box (which the app hasn't got).
 
 ## Command console
 

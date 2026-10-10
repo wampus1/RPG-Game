@@ -13,6 +13,7 @@ import { MAX_PLAYERS, NET_VERSION } from '../net/protocol.js';
 import { versionText, sameVersion, canUpgrade } from '../version.js';
 import { GUILD_NAME_MAX } from '../game/guilds.js';
 import { SaveDetailsWindow } from './windows.js';
+import { desktopApp } from '../util/appstore.js';
 
 // (Solid: nothing behind shows through.)
 const PANEL = '#100c18';
@@ -301,8 +302,8 @@ export class MultiplayerWindow extends Window {
       y += 2;
     });
     if (!worlds.length) {
-      g.text(3, y++, lan ? 'Nobody is hosting a world on your network right now.' : 'This copy of the game wasn\'t started with "npm start",', C.dim);
-      if (!lan) g.text(3, y++, 'so it can\'t host or find worlds on your network.', C.dim);
+      g.text(3, y++, lan ? 'Nobody is hosting a world on your network right now.' : desktopApp() ? 'The game couldn\'t reach its network service,' : 'This copy of the game wasn\'t started with "npm start",', C.dim);
+      if (!lan) g.text(3, y++, desktopApp() ? 'so it can\'t host or find worlds: restart Tessera.' : 'so it can\'t host or find worlds on your network.', C.dim);
       y++;
     }
     const addrs = lan && lan.addrs && lan.addrs.length ? lan.addrs.map((x) => `http://${x}:${lan.port}`) : [];
@@ -375,7 +376,7 @@ export class HostWindow extends Window {
       const a = this.lan.addrs && this.lan.addrs[0];
       g.text(6, 6, a ? `Friends on your Wi-Fi open http://${a}:${this.lan.port}` : 'No network found: only this machine can join.', C.dim, undefined, this.w - 8);
       if (a && this.lan.mdns) g.text(6, 7, `(or http://${this.lan.mdns}:${this.lan.port})`, C.faint, undefined, this.w - 8);
-    } else g.text(6, 6, 'Start the game with "npm start" to host on your network.', C.orange, undefined, this.w - 8);
+    } else g.text(6, 6, desktopApp() ? 'The game couldn\'t reach its network service: restart Tessera to host.' : 'Start the game with "npm start" to host on your network.', C.orange, undefined, this.w - 8);
     g.text(2, 8, '( )', C.faint);
     g.text(6, 8, 'Cloud hosting', C.faint);
     g.text(20, 8, '(coming soon: not available yet)', C.faint);
