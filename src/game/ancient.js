@@ -557,11 +557,30 @@ function trial(run, T, dt, party, dmg) {
   // and twice the fighter any of the dead are.)
   const kinds = T.arena ? ['legion_shade'] : on.wave === 1 ? ['skeleton', 'skeleton', 'skeleton'] : on.wave === 2 ? ['skeleton', 'wight', 'ghoul', 'ghoul'] : ['legion_shade', 'wight', 'wight', 'skeleton'];
   const B0 = T.box;
+  // (A small hall can have hardly a tile in it three paces from you: then
+  // the free one farthest off. A wave that couldn't stand up anywhere would
+  // have the trial won with no fight at all.)
+  const farthest = () => {
+    let best = null;
+    let bd = 0;
+    for (let z = B0.z0 + 1; z <= B0.z1 - 1; z++) {
+      for (let x = B0.x0 + 1; x <= B0.x1 - 1; x++) {
+        if (solidAt(game, x, z) || game.entityAt?.(x, FY, z)) continue;
+        const d = Math.min(...party.map((q) => Math.abs(q.x - x) + Math.abs(q.z - z)));
+        if (d > bd) [best, bd] = [{ x, z }, d];
+      }
+    }
+    return best;
+  };
   for (const k of kinds) {
-    for (let i = 0; i < 20; i++) {
-      const x = B0.x0 + 1 + Math.floor(Math.random() * Math.max(1, B0.x1 - B0.x0 - 1));
-      const z = B0.z0 + 1 + Math.floor(Math.random() * Math.max(1, B0.z1 - B0.z0 - 1));
-      if (solidAt(game, x, z) || game.entityAt?.(x, FY, z) || party.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < 3)) continue;
+    for (let i = 0; i < 21; i++) {
+      let x = B0.x0 + 1 + Math.floor(Math.random() * Math.max(1, B0.x1 - B0.x0 - 1));
+      let z = B0.z0 + 1 + Math.floor(Math.random() * Math.max(1, B0.z1 - B0.z0 - 1));
+      if (i === 20) {
+        const f = farthest();
+        if (!f) break;
+        ({ x, z } = f);
+      } else if (solidAt(game, x, z) || game.entityAt?.(x, FY, z) || party.some((q) => Math.abs(q.x - x) + Math.abs(q.z - z) < 3)) continue;
       const c = run.spawn(k, x, FY, z, {});
       if (!c) break;
       c.target = party[0];

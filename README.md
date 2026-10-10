@@ -6039,6 +6039,10 @@ into stairs when the world's brought up to date.)
   in its corners (the islands' and far lands' places each one of these).
   Each has a chest in it now and then, and more about. Floors you'd been
   down before are laid out afresh with them.
+- **An arena's trial in a small hall**: its champion now always steps out
+  (on the free tile farthest from you, if nowhere three paces off is
+  free); before, now and then it couldn't, and the trial was won with no
+  fight at all.
 
 ## Command console
 

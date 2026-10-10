@@ -136,7 +136,9 @@ test('each evolved master leaves its own thing, and three or four five-star piec
     const key = EVOLVED_LOOT[ANCIENT_BOSSES[type]];
     assert.ok(got.includes(key), `${type}: ${key} (${got.join(',')})`);
     const five = got.filter((k) => parseStar(k) && parseStar(k).stars === 5);
-    assert.ok(five.length >= 3 && five.length <= 5, `${type}: five-star pieces (${five.length})`);
+    // (Its own three or four; and every master's one or two pieces of the
+    // place's best besides, which can be five-star too.)
+    assert.ok(five.length >= 3 && five.length <= 6, `${type}: five-star pieces (${five.length})`);
     assert.ok(game.scene && game.scene.kind === 'boss_down' && game.scene.ghost === c);
     const feat = FEATS.find((f) => f.test(game) && ['transmuter', 'sunderer', 'oathkeeper', 'wormsbane'].includes(f.id));
     assert.ok(feat, `${type}: its achievement`);
