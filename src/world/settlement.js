@@ -3,7 +3,7 @@
 // bucketed per region, plus semantic data (buildings, spots) used by NPCs.
 import { SURFACE, GROUND, REGION_W, REGION_D } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
-import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, planksOf, stairFor } from './blocks.js';
+import { B, BLOCKS, META_STATE, CROPS, cropMeta, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, CANOPY_STYLES, planksOf, stairFor } from './blocks.js';
 import { TREE_BUILDERS } from './trees.js';
 import { planPopulation, generateNPCs, JOBS } from '../entities/npcgen.js';
 import { ISLE_TRADES, TRADE_BUILDINGS } from '../sim/isletrades.js';
@@ -4027,7 +4027,8 @@ class Layout {
         } else if (!behind.some((m) => m === M.PLAZA)) continue;
         placed.push(st);
         // (Facing the customers; the colour above the rotation bits.)
-        const canopy = (st.dz > 0 ? 0 : 2) | (Math.max(0, colour) << CANOPY_SHIFT);
+        const cs = CANOPY_STYLES[s.style] ?? CANOPY_STYLES[s.culture] ?? 0;
+        const canopy = (st.dz > 0 ? 0 : 2) | (Math.max(0, colour) << CANOPY_SHIFT) | (cs << CANOPY_STYLE_SHIFT);
         for (let dx = -1; dx <= 2; dx++) this.put(st.x + dx, Y0 + 2, back, B.canopy, canopy);
         for (const dx of [-1, 2]) {
           for (let y = Y0; y < Y0 + 2; y++) this.put(st.x + dx, y, back, B.fence);

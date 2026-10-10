@@ -285,8 +285,20 @@ export class SongPlayer {
     return clamp(to, 0, S.bars - 1) * barSteps(S);
   }
 
-  schedule(until) {
+  schedule(until, now = -Infinity) {
     let guard = 0;
+    // (Round 79: fallen behind, in a background tab: the steps missed let
+    // go by rather than all struck at once.)
+    while (!this.stopped && this.next < now - 0.02 && guard++ < 4096) {
+      const sd = stepSecs(this.song);
+      if (this.pos >= this.endStep()) {
+        if (this.o.loop === false) break;
+        this.pos = this.loopStep();
+      }
+      this.next += sd;
+      this.pos++;
+    }
+    guard = 0;
     while (!this.stopped && this.next < until && guard++ < 1024) {
       const sd = stepSecs(this.song);
       if (this.pos >= this.endStep()) {

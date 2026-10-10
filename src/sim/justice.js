@@ -629,6 +629,8 @@ export class Justice {
     else if (owner && owner.kind === 'biz' && item === 'coin' && L.treasury && L.treasury.some((t) => t.building === owner.id)) e.treasury += n;
     else if (owner && owner.kind === 'biz' && e.biz[owner.id]) st.add(e.biz[owner.id].store, item, n);
     else if (owner && owner.kind === 'rec' && L.npcs[owner.id]) invAdd(L.npcs[owner.id].inv, item, n);
+    // (Round 79) The town's own racks: their worth back to the treasury.
+    else if (owner && owner.kind === 'town') e.treasury += (ITEMS[item]?.value || 1) * n;
   }
 
   // The hearing waits for daylight, and for everyone who has to be there

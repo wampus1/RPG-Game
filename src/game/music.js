@@ -1289,7 +1289,14 @@ class Voice {
     if (K.crash && last && b === M / 2 && T.form !== 'calm') this.hit('swell', t, 0.8, { dur: sd * (M / 2) });
   }
 
-  schedule(until) {
+  schedule(until, now = -Infinity) {
+    // (Round 79) Fallen behind (the tab in the background, its timers
+    // slowed): the notes that should have sounded already let go by, the
+    // beat kept, rather than all struck at once in a burst.
+    while (!this.stopped && this.next < now - 0.02) {
+      this.next += this.stepDur;
+      this.step++;
+    }
     while (!this.stopped && this.next < until) {
       this.play(this.step, this.next);
       this.next += this.stepDur;
@@ -1351,8 +1358,8 @@ class SongVoice {
     }
   }
 
-  schedule(until) {
-    if (this.player) this.player.schedule(until);
+  schedule(until, now) {
+    if (this.player) this.player.schedule(until, now);
   }
 
   retune(key) {
@@ -1418,6 +1425,9 @@ export class Music {
     this.samples = new Samples(c, n);
     for (const d of ['kick', 'snare', 'clap', 'hat', 'hatO', 'shaker', 'rim', 'tom', 'conga', 'bongo', 'taiko', 'wood', 'crash', 'timp']) this.samples.get(d);
     this.timer = globalThis.setInterval(() => this.tick(), 60);
+    // (Round 79) Gone to the background: the next stretch scheduled at
+    // once, before the timers slow.
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => this.tick());
     return true;
   }
 
@@ -1430,7 +1440,11 @@ export class Music {
   tick() {
     const c = this.ctx;
     if (!c || c.state !== 'running' || !this.voice) return;
-    this.voice.schedule(c.currentTime + 0.3);
+    // (Round 79) With the tab in the background its timers run a second
+    // or more apart: the music scheduled well ahead then, so it plays on
+    // unbroken.
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    this.voice.schedule(c.currentTime + (hidden ? 3 : 0.3), c.currentTime);
     // (Dipped under a sound a moment: back up once it's gone.)
     if (this.ducked && c.currentTime >= this.ducked) {
       this.ducked = 0;

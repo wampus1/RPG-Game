@@ -4,7 +4,7 @@
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
 import { TILE, LH, VIEW_W, VIEW_H, WORLD_Y, REGION_W, GROUND, SURFACE, DAY_MINUTES } from '../config.js';
-import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
+import { BLOCKS, B, META_ROT, META_STATE, CROPS, cropStage, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, NATURAL, ORE_GLINT } from '../world/blocks.js';
 import { TEX, SPR_H, VARIANTS, WATER_FRAMES, buildTextures, CRAFTS, CRAFTED } from './textures.js';
 import { pieceFrame, PIECE_NAMES, PIECE_W, PIECE_FRAMES, PIECE_FPS, drawWards } from './pieces.js';
 import './farpieces.js';
@@ -67,6 +67,26 @@ const PIECE_IDS = new Uint8Array(BLOCKS.length);
 for (const n of PIECE_NAMES) PIECE_IDS[B[n]] = 1;
 // Which blocks are made in a people's craft (see textures.CRAFTED).
 let craftedIds = null;
+// (Round 79) A line two pixels thick from (x0, y0) to (x1, y1): a pixel
+// wider across the way it runs.
+function thickLine(ctx, x0, y0, x1, y1) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
+  const steep = Math.abs(dy) > Math.abs(dx);
+  for (let i = 0; i < steps; i++) {
+    const x = Math.round(x0 + (dx * i) / steps);
+    const y = Math.round(y0 + (dy * i) / steps);
+    ctx.fillRect(x, y, steep ? 2 : 1, steep ? 1 : 2);
+  }
+}
+
+// (Round 79) Which sides of a rug run on into the same rug (1 up, 2
+// right, 4 down, 8 left).
+function rugJoin(world, x, y, z, id) {
+  return (world.getBlock(x, y, z - 1) === id ? 1 : 0) | (world.getBlock(x + 1, y, z) === id ? 2 : 0) | (world.getBlock(x, y, z + 1) === id ? 4 : 0) | (world.getBlock(x - 1, y, z) === id ? 8 : 0);
+}
+
 function craftedId() {
   if (!craftedIds) {
     craftedIds = new Uint8Array(BLOCKS.length);
@@ -560,6 +580,32 @@ export class Renderer {
     return (du !== 0 ? du * 0.13 : dv < 0 ? 0.05 : -0.05) * k;
   }
 
+  // (Round 79) Hands: one raised a moment while they talk, both up over
+  // their head for a stretch.
+  drawIdleHands(ctx, e, ia, sx, top, dir) {
+    const skin = (e.look && e.look.skin) || '#d8a880';
+    ctx.fillStyle = skin;
+    if (ia.kind === 'stretch') {
+      const k = Math.min(1, ia.t / 0.4) * Math.min(1, Math.max(0, (ia.dur - ia.t) / 0.4));
+      const up = Math.round(k * 5);
+      for (const hx of [sx + 3, sx + 11]) {
+        ctx.fillRect(hx, top + 9 - up, 2, 2);
+        ctx.fillStyle = (e.look && e.look.shirt) || '#806040';
+        ctx.fillRect(hx, top + 11 - up, 2, up);
+        ctx.fillStyle = skin;
+      }
+      return;
+    }
+    const since = ia.t - (ia.hand ?? -9);
+    if (since < 0 || since > 0.7) return;
+    const lift = Math.round(Math.sin((since / 0.7) * Math.PI) * 4);
+    const side = dir === 1 ? -1 : dir === 3 ? 1 : ia.side || 1;
+    const hx = sx + 7 + side * 6;
+    ctx.fillRect(hx, top + 12 - lift, 2, 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(hx, top + 14 - lift, 2, 1);
+  }
+
   // (Round 77) A broom in someone's hands, going side to side.
   drawBroom(ctx, sx, top, feetY, dir) {
     const sw = Math.round(Math.sin(this.time * 7) * 3);
@@ -657,28 +703,49 @@ export class Renderer {
       ctx.fillStyle = `rgba(0,0,0,${a})`;
       ctx.fillRect(sx + dx, sy + dy, w, h);
     };
+    // (Round 79) The nosing of a step: a bright edge, and the shadow it
+    // casts on the riser under it, so a stair stands out from the floor
+    // it's made of.
     const edge = (dx, dy, w) => {
-      ctx.fillStyle = 'rgba(255,245,220,0.28)';
+      ctx.fillStyle = 'rgba(255,245,220,0.5)';
       ctx.fillRect(sx + dx, sy + dy, w, 1);
+    };
+    const under = (dx, dy, w) => {
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(sx + dx, sy + dy, w, 1);
+    };
+    // (A warm wash over the whole of it: worn by feet, and oiled.)
+    const wash = (dx, dy, w, h) => {
+      ctx.fillStyle = 'rgba(70,40,10,0.12)';
+      ctx.fillRect(sx + dx, sy + dy, w, h);
     };
     if (sd === 2) {
       // Climbing away: the high step behind, its riser, the low step in front.
       top(0, 0, 16, 8, 0, 0);
       front(0, 0, 16, H, 0, 8);
-      shade(0, 8, 16, H, 0.12);
+      shade(0, 8, 16, H, 0.26);
+      under(0, 8, 16);
       top(0, 8, 16, 8, 0, 8 + H);
+      shade(0, 8 + H, 16, 8, 0.1);
       edge(0, 8 + H, 16);
       front(0, H, 16, H, 0, 16 + H);
-      shade(0, 8 + H, 16, 8 + H, 0.08);
+      shade(0, 16 + H, 16, H, 0.22);
+      under(0, 16 + H, 16);
       edge(0, 0, 16);
+      wash(0, 0, 16, 16 + LH);
     } else if (sd === 0) {
       // Climbing toward you: the low step behind, the high one in front,
       // its face the full height.
       top(0, 0, 16, 8, 0, H);
-      shade(0, H, 16, 8, 0.12);
+      shade(0, H, 16, 8, 0.24);
       top(0, 8, 16, 8, 0, 8);
       edge(0, 8, 16);
       front(0, 0, 16, LH, 0, 16);
+      shade(0, 16, 16, LH, 0.14);
+      under(0, 16, 16);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(sx, sy + 16 + H, 16, 1);
+      wash(0, 0, 16, 16 + LH);
     } else {
       // Climbing to one side: the high half that side, the low half the
       // other, a step down between.
@@ -688,10 +755,13 @@ export class Renderer {
       front(hx, 0, 8, LH, hx, 16);
       top(lx, 0, 8, 16, lx, H);
       front(lx, H, 8, H, lx, 16 + H);
-      shade(lx, H, 8, 16 + H, 0.1);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      shade(lx, H, 8, 16 + H, 0.22);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fillRect(sx + (sd === 1 ? 8 : 7), sy + H, 1, 16);
+      ctx.fillStyle = 'rgba(255,245,220,0.4)';
+      ctx.fillRect(sx + (sd === 1 ? 7 : 8), sy, 1, 16);
       edge(hx, 0, 8);
+      wash(0, 0, 16, 16 + LH);
     }
   }
 
@@ -707,8 +777,8 @@ export class Renderer {
     const large = size === 'large';
     if (sd === 2) {
       const art = paintingArt(paintingSubject(wx, y, wz, game.seed), size, game.seed >>> 0);
-      const ax = large ? sx + 8 - 15 : sx + 3;
-      const ay = large ? sy - 9 : sy + 2;
+      const ax = large ? sx + 8 - 16 : sx + 2;
+      const ay = large ? sy - 10 : sy + 1;
       // (A shadow on the wall under its lower edge.)
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fillRect(ax + 1, ay + art.height, art.width - 1, 1);
@@ -730,8 +800,8 @@ export class Renderer {
 
   drawPainting(ctx, game, wx, y, wz, size, sx, top) {
     const art = paintingArt(paintingSubject(wx, y, wz, game.seed), size, game.seed >>> 0);
-    if (size === 'large') ctx.drawImage(art, sx + 8 - 15, top - 2);
-    else ctx.drawImage(art, sx + 3, top + 4);
+    if (size === 'large') ctx.drawImage(art, sx + 8 - 16, top - 3);
+    else ctx.drawImage(art, sx + 2, top + 3);
   }
 
   // A dodge roll: curled up and spinning over the ground (the way you're
@@ -1200,7 +1270,8 @@ export class Renderer {
               let idx;
               if (render === 'plant') idx = CROPS[id] ? cropStage(meta) : v;
               else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
-              else if (id === B.canopy || id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+              else if (id === B.canopy) idx = ((meta >> CANOPY_STYLE_SHIFT) & 7) * 8 + st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+              else if (id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
               else idx = st * 4 + (animFrame + wx + wz) % 4;
               const s = arr[idx] || arr[0];
               // (A training dummy just struck rocks on its post.)
@@ -1238,7 +1309,8 @@ export class Renderer {
             } else if (render === 'flat') {
               const arr = TEX.sprite[id * 4];
               // (A glyph plate shows its own glyph.)
-              const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : v % arr.length];
+              // (Round 79: rugs side by side, one carpet.)
+              const s = arr[id === B.kav_plate ? metaAt(ci, y) & 3 : BLOCKS[id].rug ? rugJoin(world, wx, y, wz, id) : v % arr.length];
               const below = getAt(ci, y - 1);
               const oy = BLOCKS[below].liquid ? 3 : 0;
               ctx.drawImage(atl, s.x, s.y, 16, 16, sx, sy + LH + oy, 16, 16);
@@ -1954,6 +2026,7 @@ export class Renderer {
           ctx.drawImage(sheet, frame * CHAR_W, dir * SHEET_H, CHAR_W, SHEET_H, sx, top - SPR_PAD, CHAR_W, SHEET_H);
           if (lean) ctx.restore();
           if (ia && ia.kind === 'sweep' && !mount) this.drawBroom(ctx, sx, top, feetY, dir);
+          if (ia && (ia.kind === 'gesture' || ia.kind === 'stretch') && !mount) this.drawIdleHands(ctx, e, ia, sx, top, dir);
         }
         if (wing && wingInFront(dir)) drawWing(ctx, dir, sx, top, wing.k, this.time + (e.id || 0));
         // ...and now and then a mote of its light drifting off it.
@@ -2533,21 +2606,27 @@ export class Renderer {
       const n = 14;
       const bLayer = fly < 1 ? layer : L.t.y + 2;
       const bRow = fly < 1 ? Math.round(rp.z + (T.z - rp.z) * fly) : T.z;
+      // (Round 79) Drawn whole, two pixels thick (not dots a pixel wide),
+      // each stretch with the row it crosses.
       const pieces = new Map();
-      for (let i = 1; i < n; i++) {
+      let lx = Math.round(tx);
+      let ly = Math.round(ty);
+      for (let i = 1; i <= n; i++) {
         const k = i / n;
         const r = Math.round(rp.z + (bRow - rp.z) * k);
         const px = Math.round(tx + (bx - tx) * k);
         const py = Math.round(ty + (by - ty) * k + Math.sin(k * Math.PI) * (fly < 1 || L.rope !== undefined ? 0 : L.dip > 0.6 ? 1 : 4));
         let pc = pieces.get(r);
-        if (!pc) pieces.set(r, (pc = { pts: [], layer: Math.round(layer + (bLayer - layer) * k) }));
-        pc.pts.push(px, py);
+        if (!pc) pieces.set(r, (pc = { segs: [], layer: Math.round(layer + (bLayer - layer) * k) }));
+        pc.segs.push(lx, ly, px, py);
+        lx = px;
+        ly = py;
       }
       const rope = L.rope !== undefined;
       for (const [r, pc] of pieces) {
         add(r, pc.layer, 99, () => {
           ctx.fillStyle = rope ? '#b89a6a' : 'rgba(232,232,240,0.85)';
-          for (let i = 0; i < pc.pts.length; i += 2) ctx.fillRect(pc.pts[i], pc.pts[i + 1], 1, 1);
+          for (let i = 0; i < pc.segs.length; i += 4) thickLine(ctx, pc.segs[i], pc.segs[i + 1], pc.segs[i + 2], pc.segs[i + 3]);
         });
       }
       // Bobber (half under when something bites), floating on the water.

@@ -214,9 +214,9 @@ def('statue', { ...sprite, interact: 'statue', tool: 'pick', hardness: 4, tall: 
 def('training_dummy', { ...sprite, tool: 'axe', hardness: 0.6, tall: true, drop: 'hay_bale' });
 def('scarecrow', { ...sprite, tool: 'axe', hardness: 0.5, tall: true, drop: 'hay_bale' });
 def('pumpkin', { ...sprite, hardness: 0.4, standable: false });
-def('rug_red', { ...nonSolid, render: 'flat', hardness: 0.2, support: true, label: 'Red Rug' });
-def('rug_blue', { ...nonSolid, render: 'flat', hardness: 0.2, support: true, label: 'Blue Rug' });
-def('rug_green', { ...nonSolid, render: 'flat', hardness: 0.2, support: true, label: 'Green Rug' });
+def('rug_red', { ...nonSolid, render: 'flat', rug: true, hardness: 0.2, support: true, label: 'Red Rug' });
+def('rug_blue', { ...nonSolid, render: 'flat', rug: true, hardness: 0.2, support: true, label: 'Blue Rug' });
+def('rug_green', { ...nonSolid, render: 'flat', rug: true, hardness: 0.2, support: true, label: 'Green Rug' });
 def('cobweb', { ...nonSolid, render: 'sprite', hardness: 0.3, drop: 'string', support: false });
 def('rock', { ...sprite, tool: 'pick', hardness: 1, drop: [{ item: 'cobblestone', min: 1, max: 2 }] });
 def('cactus', { ...sprite, hardness: 0.4 });
@@ -255,6 +255,11 @@ def('bell', { ...sprite, interact: 'bell', tool: 'pick', hardness: 4, drop: 'iro
 // A market stall's striped cloth canopy: its rotation is the way the stall's
 // front faces, and its colour is kept in the bits above (see CANOPY_SHIFT).
 export const CANOPY_SHIFT = 3;
+// (Round 79) And its people's way with a canopy, in the bits above that
+// (see CANOPY_STYLES): stripes, a fringed cloth, a check, a curled eave, a
+// woven mat, a laced hide, a gilt scallop, a lacquered board.
+export const CANOPY_STYLE_SHIFT = 5;
+export const CANOPY_STYLES = { vale: 0, mist: 1, tide: 2, jade: 3, sun: 4, kesh: 4, north: 5, rime: 5, skerry: 5, velmarch: 6, ostria: 6, velari: 6, ember: 7, corrow: 2, salt: 4, hollow: 1, wyrd: 3 };
 def('canopy', { ...sprite, solid: false, rotatable: true, support: false, tool: 'axe', hardness: 0.3, drop: 'cloth', label: 'Stall Canopy' });
 // Trade benches: every licensed trade has its own to work at (its
 // `station` names the trade, and the recipes made there).

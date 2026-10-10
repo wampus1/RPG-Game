@@ -8,7 +8,7 @@
 // settlement.js (see placeBuildingsSteps) after everything a town of its
 // size would have, in whatever's left.
 import { GROUND, SURFACE } from '../config.js';
-import { B, META_STATE } from './blocks.js';
+import { B, META_STATE, CANOPY_SHIFT, CANOPY_STYLE_SHIFT, CANOPY_STYLES } from './blocks.js';
 import { M } from './settlement.js';
 
 const Y0 = GROUND;
@@ -358,7 +358,8 @@ function market(L, lot, rng, mark) {
   for (let pz = z + 1; pz <= z + D - 2; pz += 3) {
     for (let px = x + 1; px <= x + W - 2; px += 3) {
       L.put(px, Y0, pz, rng.pick([B.crate, B.barrel, B.table]));
-      L.put(px, Y0 + 1, pz, B.canopy, rng.int(0, 3));
+      // (Round 79: in the empire's own way, a gilt-hemmed cloth.)
+      L.put(px, Y0 + 1, pz, B.canopy, rng.int(0, 3) | (rng.int(0, 3) << CANOPY_SHIFT) | ((CANOPY_STYLES[L.settlement.style] ?? 6) << CANOPY_STYLE_SHIFT));
       if (pz + 1 <= z + D - 1) L.addSpot(px, pz + 1, 2, ['market', 'shop', 'social', 'stroll']);
     }
   }

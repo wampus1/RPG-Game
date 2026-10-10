@@ -158,6 +158,15 @@ function creatureSnap(c) {
   return { species: c.species, hp: c.hp, modVars: c.modVars ? JSON.parse(JSON.stringify(c.modVars)) : null, pet: !!c.petOf };
 }
 
+// (Round 79) Did the town itself set a rack or stand out at (x, y, z)?
+function townPlaced(w, L, x, y, z) {
+  const id = w.getBlock(x, y, z);
+  const p = L.placements && L.placements.get(w.regionKey(Math.floor(x / REGION_W), Math.floor(z / REGION_D)));
+  if (!p) return false;
+  for (let i = 0; i < p.length; i += 5) if (p[i] === x && p[i + 1] === y && p[i + 2] === z && p[i + 3] === id) return true;
+  return false;
+}
+
 export class Game {
   constructor({ seed, renderer, audio, ui, save = null, hero = null, learned = false, intro = false, remote = false, worldMap = null, worldRoot = null, wg = undefined }) {
     this.seed = seed >>> 0;
@@ -3908,7 +3917,7 @@ export class Game {
     if (id === B.powder_keg) kegBlast(this, x, y, z);
     this.popUnsupported(x, y + 1, z);
     this.popHung(x, y, z);
-    if (b.interact === 'container' && this.myChests) notePlaced(this, x, y, z, false);
+    if ((b.interact === 'container' || b.display) && this.myChests) notePlaced(this, x, y, z, false);
     this.flowWater(x, y, z);
     if (byPlayer) {
       this.stats.mined++;
@@ -4292,6 +4301,8 @@ export class Game {
       this.dungeon.notePlaced(t.x, t.y, t.z);
       if (id === B.door) this.dungeon.notePlaced(t.x, t.y + 1, t.z);
     }
+    // (Round 79) A rack or stand you put up is yours too.
+    if (b.display) notePlaced(this, t.x, t.y, t.z, true);
     if (b.interact === 'container') {
       const r = w.regionAt(t.x, t.z);
       const idx = ((t.z - r.z0) * REGION_W + (t.x - r.x0)) * WORLD_Y + t.y;
@@ -5270,7 +5281,9 @@ export class Game {
     if (!s || s.condition === 'abandoned' || s.deserted) return null;
     const L = this.world.getLayout(s);
     const b = buildingAt(L, x, z);
-    if (!b) return null;
+    // (Round 79) A rack or stand the town set out in its yards and squares
+    // (not one you put up): the town's.
+    if (!b) return BLOCKS[this.world.getBlock(x, y, z)]?.display && !this.myChests?.has(`${x},${y},${z}`) && townPlaced(this.world, L, x, y, z) ? { kind: 'town', id: null, sid: s.id, label: s.name } : null;
     const c = this.sim.citizen;
     if (b.playerHome) return c && c.home === b.id && c.sid === s.id ? { kind: 'mine', sid: s.id, label: 'yours' } : { kind: 'house', id: b.id, sid: s.id, label: 'not yours' };
     // Your workshop is yours.
@@ -5303,15 +5316,16 @@ export class Game {
     const sid = owner.sid;
     const p = this.player;
     const wits = this.sim.witnesses(sid, p.x, p.z, 7);
-    const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : `the ${owner.label || 'shop'}`;
+    const where = owner.kind === 'house' ? `the ${owner.label || 'a'} home` : owner.kind === 'town' ? `${owner.label}'s rack` : `the ${owner.label || 'shop'}`;
+    const whose = owner.kind === 'house' ? 'house' : owner.kind === 'town' ? 'town' : 'biz';
     const desc = `Stealing ${taken.map((t) => `${t.count} ${ITEMS[t.item]?.name || t.item}`).slice(0, 2).join(', ')} from ${where}`;
     if (!wits.length) {
       // Nobody saw. The owners will notice later...
-      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, bid: owner.id, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.label });
+      this.sim.justice.unseen(sid, { type: 'theft', x: p.x, z: p.z, value, items: taken, desc, bid: owner.id, owner: { kind: whose, id: owner.id }, ownerName: owner.kind === 'house' ? `${owner.label || ''}`.replace(/ family$/, 's') : owner.kind === 'town' ? `${owner.label} guard` : owner.label });
       return false;
     }
     const victim = wits.find((n) => n.rec.home === owner.id || (n.rec.work && n.rec.work.building === owner.id));
-    this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, bid: owner.id, owner: { kind: owner.kind === 'house' ? 'house' : 'biz', id: owner.id }, victimNpc: victim });
+    this.sim.justice.commit(sid, 'theft', { witnesses: wits, value, items: taken, desc, bid: owner.id, owner: { kind: whose, id: owner.id }, victimNpc: victim });
     return true;
   }
 

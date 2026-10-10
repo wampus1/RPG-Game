@@ -1329,38 +1329,90 @@ const SPRITES = {
     }
     return p.outline(OUT);
   },
-  canopy(rot, st, f, rand, colour = 0) {
-    // A thin striped cloth over the back of a stall, low in its cell so it
-    // rests on the posts below, its scalloped edge hanging toward the
-    // customers. `rot` is the way the stall's front faces on screen (0 down,
-    // 1 left, 2 up, 3 right); the colour is kept separately.
-    const col = ['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][colour & 3];
-    const light = '#f0ece0';
+  canopy(rot, st, f, rand, colour = 0, style = 0) {
+    // A cloth (or mat, hide or board) over the back of a stall, low in its
+    // cell so it rests on the posts below, its edge hanging toward the
+    // customers. `rot` is the way the stall's front faces on screen (0
+    // down, 1 left, 2 up, 3 right); its colour and (round 79) its people's
+    // style (see CANOPY_STYLES) are kept separately.
+    const col = hex(['#c83a32', '#3264c0', '#e0b030', '#3c9a48'][colour & 3]);
+    const light = hex('#f0ece0');
+    const gold = hex('#e8c050');
     const p = spr();
     const top = LH;
+    // The cover at (u along the stall 0-15, v from the back 0 to its front
+    // edge 6), and what hangs under its edge (row 0 or 1 below it, or null).
+    const cover = (u, v) => {
+      switch (style) {
+        case 1: // a plain cloth, its weave showing, a band near the front
+          return v === 5 ? shade(col, 0.75) : (u + v) % 3 === 0 ? shade(col, 0.92) : col;
+        case 2: // a check
+          return ((u >> 1) + (v >> 1)) % 2 ? light : (u + v) % 2 ? col : shade(col, 0.88);
+        case 3: // tiles of a curled eave, a ridge at the back
+          return v === 0 ? shade(col, 0.6) : v % 2 ? shade(col, 0.85) : u % 2 ? col : shade(col, 1.1);
+        case 4: { // a woven mat of straw, a ribbon of colour through it
+          if (v === 3) return col;
+          const straw = hex('#c8a858');
+          return (u + v * 2) % 4 < 2 ? straw : shade(straw, 0.82);
+        }
+        case 5: { // a hide, laced at the back
+          const hide = hex('#a07848');
+          if (v === 1 && u % 3 === 1) return col;
+          return (u * 7 + v * 13) % 11 === 0 ? shade(hide, 0.8) : (u * 3 + v) % 9 === 0 ? shade(hide, 1.12) : hide;
+        }
+        case 6: // cloth with a gilt band
+          return v === 5 ? gold : v === 0 ? shade(col, 0.8) : (u >> 2) % 2 ? col : shade(col, 1.12);
+        case 7: { // lacquered boards, a line of colour, brass studs
+          const lac = hex('#5a1a18');
+          if (v === 2) return col;
+          if (v === 4 && u % 4 === 1) return gold;
+          return u % 4 === 3 ? shade(lac, 0.7) : lac;
+        }
+        default: // stripes
+          return (u >> 2) % 2 ? light : col;
+      }
+    };
+    const hang = (u, row) => {
+      switch (style) {
+        case 1: return row === 0 ? shade(col, 0.7) : u % 2 === 0 ? shade(col, 0.6) : null; // a fringe
+        case 2: return row === 0 ? shade(col, 0.75) : null;
+        case 3: return row === 0 ? hex('#2a1c14') : (u === 0 || u === 15 ? hex('#2a1c14') : null); // the beam, its ends curled
+        case 4: return row === 0 ? hex('#a88a40') : (u * 5) % 3 === 0 ? hex('#e0c878') : null; // straw ends
+        case 5: return row === 0 ? hex('#7a5430') : (u % 5 === 2 ? hex('#7a5430') : null); // a ragged edge
+        case 6: return row === 0 ? shade(col, 0.8) : u % 4 === 1 ? gold : u % 4 === 2 ? shade(col, 0.8) : null; // gilt points
+        case 7: return row === 0 ? hex('#2a0c0a') : null;
+        default: return row === 0 || u % 4 < 2 ? shade((u >> 2) % 2 ? light : col, 0.8) : null; // scallops
+      }
+    };
     if (rot === 0 || rot === 2) {
-      // Stripes across; the edge along the front (near or far side).
+      // The cloth across; its edge along the front (near or far side).
       const y0 = rot === 0 ? top : top + 9;
-      const edge = rot === 0 ? y0 + 7 : y0 - 1;
       for (let x = 0; x < 16; x++) {
-        const c = (x >> 2) % 2 ? light : col;
-        p.vline(x, y0, y0 + 6, c);
-        p.set(x, edge, shade(hex(c), 0.8));
-        if (x % 4 < 2) p.set(x, rot === 0 ? edge + 1 : edge - 1, shade(hex(c), 0.8));
+        for (let v = 0; v <= 6; v++) p.set(x, rot === 0 ? y0 + v : y0 + 6 - v, cover(x, v));
+        for (let row = 0; row < 2; row++) {
+          const c = hang(x, row);
+          if (c) p.set(x, rot === 0 ? y0 + 7 + row : y0 - 1 - row, c);
+        }
       }
-      p.hline(0, 15, rot === 0 ? y0 : y0 + 6, '#ffffff');
+      // (A curled eave lifts at its ends.)
+      if (style === 3) for (const x of [0, 15]) p.set(x, rot === 0 ? y0 - 1 : y0 + 7, shade(col, 0.6));
+      if (style === 0) p.hline(0, 15, rot === 0 ? y0 : y0 + 6, '#ffffff');
     } else {
-      // Seen end on: the cloth runs down the screen with the stall, stripes
-      // across it, the edge down the side the customers stand on.
+      // Seen end on: the cover runs down the screen with the stall, its
+      // edge down the side the customers stand on.
       const x0 = rot === 1 ? 7 : 0;
-      const edge = rot === 1 ? x0 - 1 : x0 + 9;
       for (let y = top; y < top + 16; y++) {
-        const c = ((y - top) >> 2) % 2 ? light : col;
-        p.hline(x0, x0 + 8, y, c);
-        p.set(edge, y, shade(hex(c), 0.8));
-        if ((y - top) % 4 < 2) p.set(rot === 1 ? edge - 1 : edge + 1, y, shade(hex(c), 0.8));
+        const u = y - top;
+        for (let v = 0; v <= 8; v++) {
+          const vv = Math.min(6, Math.round((v * 6) / 8));
+          p.set(rot === 1 ? x0 + 8 - v : x0 + v, y, cover(u, vv));
+        }
+        for (let row = 0; row < 2; row++) {
+          const c = hang(u, row);
+          if (c) p.set(rot === 1 ? x0 - 1 - row : x0 + 9 + row, y, c);
+        }
       }
-      p.vline(rot === 1 ? x0 + 8 : x0, top, top + 15, '#ffffff');
+      if (style === 0) p.vline(rot === 1 ? x0 + 8 : x0, top, top + 15, '#ffffff');
     }
     return p;
   },
@@ -1600,19 +1652,74 @@ const SPRITES = {
     return p.outline(OUT);
   },
   well() {
+    // (Round 79) Drawn as the world is, looking down at it a little: the
+    // round of its stones seen from above (the rim, the shaft going down
+    // into the dark, the water glinting at the bottom), its curved face of
+    // coursed stone lit from the left, two posts and a little gabled roof
+    // over it, the windlass, the rope and a bucket hung over the shaft.
     const p = spr(TALL_H);
     const s = P.cobblestone;
-    p.rect(1, 24, 14, 14, s[0]);
-    for (let y = 26; y < 38; y += 3) for (let x = 1 + ((y / 3) % 2) * 2; x < 15; x += 4) p.set(x, y, s[1]);
-    p.ellipse(7.5, 25, 6, 3, s[2]);
-    p.ellipse(7.5, 25, 4, 2, '#1e3a6a');
-    p.set(6, 25, '#4a7ab0');
-    p.rect(1, 8, 2, 18, P.planks_dark[0]);
-    p.rect(13, 8, 2, 18, P.planks_dark[0]);
-    p.hline(1, 14, 10, P.planks[1]);
-    for (let y = 0; y < 8; y++) p.hline(7 - y, 8 + y, y + 1, y % 2 ? P.roof_red[0] : P.roof_red[1]);
-    p.vline(8, 11, 20, '#c8b890');
-    p.rect(7, 20, 3, 3, '#7a7a82');
+    const lit = hex(s[2]);
+    const mid = hex(s[0]);
+    const dk = hex(s[1]);
+    // The face of the ring: a short cylinder, rows of stone curving round.
+    const cy = 29;
+    for (let y = cy; y <= 38; y++) {
+      for (let x = 1; x <= 14; x++) {
+        const u = (x - 7.5) / 6.5;
+        // (Rounded: lit on the left, shadowed on the right.)
+        const k = 1.05 - u * 0.25 - Math.max(0, Math.abs(u) - 0.7) * 0.6;
+        const course = (y - cy) % 3 === 2;
+        const joint = (x + ((Math.floor((y - cy) / 3) % 2) * 2)) % 4 === 0;
+        let c = shade(mid, k);
+        if (course || joint) c = shade(dk, k);
+        else if ((x * 7 + y * 3) % 11 === 0) c = shade(lit, k);
+        p.set(x, y, c);
+      }
+    }
+    // (Its foot, sunk in the ground: a dark line.)
+    p.hline(2, 13, 38, shade(dk, 0.7));
+    // The rim from above: a ring of capstones, the shaft inside it.
+    p.ellipse(7.5, cy, 6.6, 3.4, lit);
+    for (let x = 1; x <= 14; x += 3) p.set(x, cy + (x < 4 || x > 11 ? 1 : 2), shade(dk, 1.1));
+    p.ellipse(7.5, cy - 0.2, 4.6, 2.2, shade(dk, 0.75));
+    // Down the shaft: the far wall lit, the near one dark, the water deep down.
+    p.hline(4, 11, cy - 2, shade(mid, 0.8));
+    p.ellipse(7.5, cy + 0.3, 3.2, 1.3, '#0e1a30');
+    p.set(6, cy, '#3a6aa8');
+    p.set(9, cy + 1, '#5a8ac8');
+    // The posts: square timbers, a lit face and a dark one.
+    for (const x of [1, 13]) {
+      p.rect(x, 9, 2, cy - 8, '#6a4a2a');
+      p.vline(x, 9, cy, '#8a6438');
+      p.vline(x + 1, 9, cy, '#4a3018');
+    }
+    // The little roof: its top slopes seen from above, its gable end toward you.
+    for (let y = 0; y < 7; y++) {
+      const half = 2 + y;
+      for (let x = 8 - half; x <= 7 + half; x++) {
+        const c = x < 8 ? P.roof_red[0] : P.roof_red[1];
+        p.set(x, y + 1, (x + y) % 3 === 0 ? shade(hex(c), 0.85) : c);
+      }
+    }
+    p.hline(0, 15, 8, '#5a2a1c');
+    p.hline(1, 14, 9, '#3a1a10');
+    // (The ridge.)
+    p.vline(7, 1, 7, shade(hex(P.roof_red[0]), 1.2));
+    // The windlass across, its crank on the right.
+    p.hline(3, 12, 13, '#8a6438');
+    p.hline(3, 12, 14, '#5a3c22');
+    p.set(13, 12, '#4a4a52');
+    p.set(14, 11, '#6a6a72');
+    p.set(14, 10, '#4a4a52');
+    // The rope wound on it, and down to the bucket over the shaft.
+    for (let x = 6; x <= 9; x++) p.set(x, 13, x % 2 ? '#d8c898' : '#b8a878');
+    p.vline(8, 15, 22, '#c8b890');
+    p.rect(6, 22, 4, 3, '#7a5430');
+    p.hline(6, 9, 22, '#9a7040');
+    p.hline(6, 9, 24, '#4a4a52');
+    p.set(5, 21, '#4a4a52');
+    p.set(10, 21, '#4a4a52');
     return p.outline(OUT);
   },
   // A portal: two dressed-stone pillars and a keystone arch, a swirl of
@@ -2063,15 +2170,39 @@ function flatSprite(name, v, rand) {
     }
     return p;
   }
-  const col = { rug_red: ['#a83232', '#d8a040'], rug_blue: ['#32509a', '#d8c070'], rug_green: ['#32804a', '#e0d090'] }[name] || ['#888', '#aaa'];
-  p.rect(1, 2, 14, 12, col[0]);
-  p.rect(2, 3, 12, 10, col[1]);
-  p.rect(3, 4, 10, 8, col[0]);
-  p.rect(6, 6, 4, 4, col[1]);
-  for (let x = 1; x < 15; x += 2) {
-    p.set(x, 1, col[1]);
-    p.set(x, 14, col[1]);
+  return rugSprite(p, name, v);
+}
+
+// (Round 79) A rug, by which of its sides run on into more of the same
+// (v: 1 up, 2 right, 4 down, 8 left): laid side by side, rugs make one
+// big carpet, its border round the whole and its field's lattice running
+// on unbroken from one to the next. On its own (v 0), a rug as it was,
+// with its medallion.
+function rugSprite(p, name, v) {
+  const col = { rug_red: ['#a83232', '#d8a040', '#7a2222'], rug_blue: ['#32509a', '#d8c070', '#22386e'], rug_green: ['#32804a', '#e0d090', '#22583a'] }[name] || ['#888', '#aaa', '#666'];
+  const INF = 99;
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const top = v & 1 ? INF : y - 1;
+      const bot = v & 4 ? INF : 14 - y;
+      const lft = v & 8 ? INF : x - 1;
+      const rgt = v & 2 ? INF : 14 - x;
+      const d = Math.min(top, bot, lft, rgt);
+      if (d < 0) {
+        // The fringe, at the ends (not the sides).
+        if ((top < 0 || bot < 0) && lft >= 0 && rgt >= 0 && x % 2) p.set(x, y, col[1]);
+        continue;
+      }
+      if (d === 0 || d === 2) p.set(x, y, col[0]);
+      else if (d === 1) p.set(x, y, col[1]);
+      else {
+        const k = (x + y) % 8;
+        const j = (x - y + 16) % 8;
+        p.set(x, y, k === 0 || j === 0 ? col[2] : (k === 4 && j === 4) ? col[1] : col[0]);
+      }
+    }
   }
+  if (!v) p.rect(6, 6, 4, 4, col[1]);
   return p;
 }
 
@@ -2280,11 +2411,17 @@ function buildBlock(b, TEX) {
         const arr = [];
         if (b.render === 'plant' && CROPS[id]) for (let st = 0; st < CROPS[id].stages; st++) arr.push(addImage(cropSprite(name, st, CROPS[id].stages, seed(st))));
         else if (b.render === 'plant') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(plantSprite(name, v, seed(v))));
-        else if (b.render === 'flat') for (let v = 0; v < VARIANTS; v++) arr.push(addImage(flatSprite(name, v, seed(v))));
+        else if (b.render === 'flat') for (let v = 0; v < (b.rug ? 16 : VARIANTS); v++) arr.push(addImage(flatSprite(name, v, seed(v))));
         else if (SPRITES[name]) {
           const frames = ANIM[name] || 1;
           const variants = name === 'rock' || name === 'bed' || name === 'canopy' || name === 'tent' || name === 'bunting' || name === 'festival_banner' ? VARIANTS : 1;
           // Layout: [state * 4 + frame] for animated props, or variants.
+          // (Round 79: a canopy's, [style * 8 + state * 4 + colour].)
+          if (name === 'canopy') {
+            for (let cs = 0; cs < 8; cs++) for (let st = 0; st < 2; st++) for (let f = 0; f < 4; f++) arr.push(addImage(SPRITES.canopy(rot, st, 0, seed(f), f, cs)));
+            TEX.sprite[id * 4 + rot] = arr;
+            continue;
+          }
           for (let st = 0; st < 2; st++) {
             for (let f = 0; f < 4; f++) {
               if (variants > 1) arr.push(addImage(SPRITES[name](rot, st, 0, seed(f), f)));

@@ -163,27 +163,42 @@ export function paintingArt(sub, size, seed = 0) {
   const key = `${size}:${sub.kind}:${sub.v}:${sub.beast || sub.thing || ''}`;
   let c = cache.get(key);
   if (c) return c;
+  // (Round 79) Every one in a frame of wood a pixel wide, lit along its
+  // top and left (a large one's gilt inside it).
+  const wood = (g, w, h) => {
+    px(g, 0, 0, w, h, '#5a3a1c');
+    px(g, 0, 0, w, 1, '#8a6438');
+    px(g, 0, 0, 1, h, '#8a6438');
+    px(g, 0, h - 1, w, 1, '#3a2410');
+    px(g, w - 1, 0, 1, h, '#3a2410');
+  };
   if (size === 'large') {
-    c = canvas(30, 20);
+    c = canvas(32, 22);
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
+    wood(g, 32, 22);
     // The gilt frame.
-    px(g, 0, 0, 30, 20, '#b08a30');
-    px(g, 0, 0, 30, 1, '#e8c860');
-    px(g, 0, 0, 1, 20, '#e8c860');
-    px(g, 0, 19, 30, 1, '#6a4a10');
-    px(g, 29, 0, 1, 20, '#6a4a10');
-    px(g, 1, 1, 28, 18, '#3a2a10');
+    px(g, 1, 1, 30, 20, '#b08a30');
+    px(g, 1, 1, 30, 1, '#e8c860');
+    px(g, 1, 1, 1, 20, '#e8c860');
+    px(g, 1, 20, 30, 1, '#6a4a10');
+    px(g, 30, 1, 1, 20, '#6a4a10');
+    px(g, 2, 2, 28, 18, '#3a2a10');
     const inner = canvas(26, 16);
     const ig = inner.getContext('2d');
     ig.imageSmoothingEnabled = false;
     paint(ig, 26, 16, sub, seed);
-    g.drawImage(inner, 2, 2);
+    g.drawImage(inner, 3, 3);
   } else {
-    c = canvas(10, 9);
+    c = canvas(12, 11);
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
-    paint(g, 10, 9, sub, seed);
+    wood(g, 12, 11);
+    const inner = canvas(10, 9);
+    const ig = inner.getContext('2d');
+    ig.imageSmoothingEnabled = false;
+    paint(ig, 10, 9, sub, seed);
+    g.drawImage(inner, 1, 1);
   }
   if (cache.size > 300) cache.clear();
   cache.set(key, c);

@@ -18,8 +18,26 @@ function yAt(S, x, z) {
   return y > 0 ? y : GROUND;
 }
 
+// (Round 79) Not in a town (its houses, its streets), nor over anything
+// solid already standing there: a camp's stakes and banners went up in
+// folk's houses when a band camped close by.
+function inTown(S, x, z) {
+  for (const L of S.game.world.layouts.values()) {
+    const b = L.bounds;
+    if (b && x >= b.x0 - 3 && x <= b.x1 + 3 && z >= b.z0 - 3 && z <= b.z1 + 3) return true;
+  }
+  return false;
+}
+
 function put(S, band, ops) {
   const w = S.game.world;
+  ops = ops.filter(([x, y, z]) => {
+    if (inTown(S, x, z)) return false;
+    if (!w.regionAt(x, z)) return true;
+    const b = BLOCKS[w.getBlock(x, y, z)];
+    return !b || b.name === 'air' || b.replaceable;
+  });
+  if (!ops.length) return;
   // (Brush and saplings out of the way first.)
   const clear = ops.filter(([x, y, z]) => w.regionAt(x, z) && w.getBlock(x, y, z) !== B.air && BLOCKS[w.getBlock(x, y, z)] && BLOCKS[w.getBlock(x, y, z)].replaceable).map(([x, y, z]) => [x, y, z, B.air, 0]);
   if (clear.length) S.sim.setBlocks(clear);

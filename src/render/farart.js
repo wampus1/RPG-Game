@@ -17,7 +17,8 @@ export const FAR_P = {
   travertine: ['#e2d6bc', '#cbbd9e', '#f0e8d4', '#a8987a'],
   roof_terracotta: ['#c45a34', '#9a3e22', '#e07a4a', '#5a2012'],
   marble_column: ['#ece8e0', '#d2ccc2', '#ffffff', '#aaa298'],
-  log_frost: ['#3a3438', '#2a2428', '#4a4448', '#dce8f4'],
+  // (Round 79: lighter, weathered silver-brown, not near-black.)
+  log_frost: ['#6e646a', '#4c4449', '#8c8288', '#e4eef8', '#3a3238'],
   roof_turf: ['#5a8a3a', '#467430', '#72a24c', '#33521f'],
   planks_lacquer: ['#a8202a', '#78141c', '#d24a44', '#e0b040'],
   paper_wall: ['#f4ecd8', '#e4d8bc', '#fffaf0', '#5a3a22'],
@@ -130,28 +131,48 @@ function flutes(p, rand, h) {
 }
 
 // Logs laid one on another, frost gathered along the top of each.
+// (Round 79) Each log rounded: lit along its crown, its bark in long
+// streaks, shadowed underneath and into the chink before the next; the
+// frost only along the crown, in patches, an icicle here and there.
 function frostLogs(p, rand, v, h) {
   const pal = FAR_P.log_frost;
   const logH = 4;
+  const rows = [pal[2], pal[0], pal[0], pal[1]];
   for (let y = 0; y < h; y++) {
     const i = y % logH;
+    const log = Math.floor(y / logH);
+    // (Each log a little different in tone.)
+    const tone = 0.94 + ((log * 37 + v * 11) % 7) * 0.02;
     for (let x = 0; x < 16; x++) {
-      let c = i === 0 ? pal[2] : i === logH - 1 ? pal[1] : pal[0];
-      if (rand() < 0.12) c = shade(hex(c), 0.85);
-      if (i === 1 && rand() < 0.08) c = pal[2];
+      let c = shade(hex(rows[i]), tone);
+      // Bark: long streaks along the log.
+      if (i > 0 && i < logH - 1 && (x + log * 5 + v) % 7 === 0) c = shade(hex(pal[1]), tone);
+      if (rand() < 0.06) c = shade(hex(c), 0.9);
       p.set(x, y, c);
     }
-    // Frost along the top of the log, thick in places.
-    if (i === 0) for (let x = 0; x < 16; x++) if (rand() < 0.62) p.set(x, y, rand() < 0.3 ? '#ffffff' : pal[3]);
+    // The chink between logs: a dark line.
+    if (i === logH - 1) for (let x = 0; x < 16; x++) if (rand() < 0.5) p.set(x, y, pal[4]);
+    // Frost on the crown, in patches.
+    if (i === 0) {
+      let on = rand() < 0.5;
+      for (let x = 0; x < 16; x++) {
+        if (rand() < 0.25) on = !on;
+        if (on) p.set(x, y, rand() < 0.25 ? '#ffffff' : pal[3]);
+      }
+      // (An icicle, now and then, off the log above.)
+      if (y > 0 && rand() < 0.5) p.set(Math.floor(rand() * 16), y - 1, '#c8dcf0');
+    }
   }
-  // (The ends of the logs at the corner notch, cut and frosted.)
+  // (The ends of the logs at the corner notch, cut and ringed.)
   if (v % 2 === 0) {
     for (let r = 0; r * logH < h; r++) {
-      const y = r * logH + 1;
-      p.set(1, y, '#8a6a4a');
-      p.set(2, y, '#a8845a');
-      p.set(1, y + 1, '#6a4a32');
-      p.set(2, y + 1, '#8a6a4a');
+      const y = r * logH;
+      p.set(1, y + 1, '#b08a5e');
+      p.set(2, y + 1, '#c8a070');
+      p.set(1, y + 2, '#8a6a4a');
+      p.set(2, y + 2, '#a8845a');
+      p.set(3, y + 1, pal[1]);
+      p.set(3, y + 2, pal[1]);
     }
   }
   return p;
@@ -427,9 +448,17 @@ export function farTop(name, v, rand, rot = 0) {
       return p;
     }
     case 'log_frost': {
+      // (Round 79) The top of the wall: the logs' crowns side by side,
+      // frost lying over them in drifts, not a speckle all over.
       frostLogs(p, rand, v, 16);
-      // (Snow lying on top.)
-      for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) if (rand() < 0.45) p.set(x, y, rand() < 0.5 ? '#e8f0f8' : '#c8d4e4');
+      const pal = FAR_P.log_frost;
+      for (let y = 0; y < 16; y++) {
+        const drift = 0.5 + 0.35 * Math.sin((y + v * 3) * 0.7);
+        for (let x = 0; x < 16; x++) {
+          const k = Math.sin(x * 0.6 + y * 0.3 + v) * 0.5 + 0.5;
+          if (k < drift * 0.8) p.set(x, y, k < drift * 0.3 ? '#ffffff' : pal[3]);
+        }
+      }
       return p;
     }
     case 'roof_turf': return roofTone(turf(p, rand, v), rot, FAR_P.roof_turf);

@@ -18,7 +18,7 @@
 // it should be. A thing at the edge of a region whose neighbour isn't in
 // yet is left till it can be judged.
 import { REGION_W, REGION_D, WORLD_Y, SURFACE } from '../config.js';
-import { BLOCKS, B, stairFor } from '../world/blocks.js';
+import { BLOCKS, B, stairFor, CANOPY_STYLE_SHIFT, CANOPY_STYLES } from '../world/blocks.js';
 import { CONTAINER_SIZE } from '../world/loot.js';
 import { makeSlots } from './inventory.js';
 import { NO_PAINTINGS } from '../world/settlement.js';
@@ -31,6 +31,15 @@ const wallAt = (w, x, y, z) => {
 
 // Can (x, z) be judged yet (its region in)?
 const known = (w, x, z) => !!w.regionAt(x, z);
+
+// The town (x, z) is in, if any.
+function layoutAt(w, x, z) {
+  for (const L of w.layouts.values()) {
+    const bd = L.bounds;
+    if (bd && x >= bd.x0 - 2 && x <= bd.x1 + 2 && z >= bd.z0 - 2 && z <= bd.z1 + 2) return L;
+  }
+  return null;
+}
 
 // The town building (x, z) is in, if any.
 function buildingAt(w, x, z) {
@@ -103,6 +112,16 @@ export function checkRegion(game, r) {
           tally(game, 'door');
           continue;
         }
+        // (Round 79) A stall's canopy from before peoples had their own:
+        // given its town's.
+        if (id === B.canopy && !(r.meta[col + y] >> CANOPY_STYLE_SHIFT)) {
+          const L = layoutAt(w, x, z);
+          const cs = L ? CANOPY_STYLES[L.settlement.style] || 0 : 0;
+          if (cs) {
+            set(x, y, z, id, r.meta[col + y] | (cs << CANOPY_STYLE_SHIFT));
+            tally(game, 'canopy');
+          }
+        }
         // A chest with nothing in it to hold things.
         if (b.interact === 'container' && !r.containers.has(col + y)) {
           r.containers.set(col + y, makeSlots(CONTAINER_SIZE[b.name] || b.modSlots || 9));
@@ -149,7 +168,7 @@ function oldSteps(game, r) {
 
 // What was put right since last said, said (once things have settled:
 // see Game.update).
-const WORDS = { painting: ['painting', 'paintings'], hung: ['thing hung on nothing', 'things hung on nothing'], door: ['door', 'doors'], chest: ['chest', 'chests'], stairs: ['old stair', 'old stairs'] };
+const WORDS = { canopy: ['stall canopy restyled', 'stall canopies restyled'], painting: ['painting', 'paintings'], hung: ['thing hung on nothing', 'things hung on nothing'], door: ['door', 'doors'], chest: ['chest', 'chests'], stairs: ['old stair', 'old stairs'] };
 export function healthNote(game) {
   const H = game.health;
   if (!H || H.fixed <= H.told) return null;

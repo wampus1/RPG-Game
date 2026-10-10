@@ -453,11 +453,13 @@ const MORE = {
       () => 'The northern lights came down so low one winter that the children could touch them. Nobody born that year has ever been cold.',
     ],
     chiefs: ['the Drum-King Sampo', 'Biret Bear-Sister', 'the Herdlord Aslak', 'Old Kerttu of the Lights'],
-    look: { roofs: ['#4a6a34', '#566e3a', '#3e5a2c'], wall: '#3a3438', timber: '#2a2428', shape: 'steep' },
+    look: { roofs: ['#4a6a34', '#566e3a', '#3e5a2c'], wall: '#6e646a', timber: '#4c4449', shape: 'steep' },
     build: {
-      wall: [['log_frost', 4], ['planks_dark', 2]], corner: 'log_frost', floor: 'planks_dark', roof: [['roof_turf', 1]],
-      civic: { wall: [['log_frost', 2], ['drystone', 2]], corner: 'log_frost', floor: 'planks_dark', roof: [['roof_turf', 2], ['roof_wood', 1]] },
-      road: ['path', 'gravel', 'gravel'], plaza: ['gravel', 'cobblestone', 'cobblestone'], planks: 'planks_dark', cityWall: 'log_frost', barn: ['planks_dark', 'log_frost'],
+      // (Round 79: weathered grey boards with the frost-dark logs, not the
+      // dark planks, which clashed with them.)
+      wall: [['log_frost', 4], ['planks_bog', 2]], corner: 'log_frost', floor: 'planks_bog', roof: [['roof_turf', 1]],
+      civic: { wall: [['log_frost', 2], ['drystone', 2]], corner: 'log_frost', floor: 'planks_bog', roof: [['roof_turf', 2], ['roof_wood', 1]] },
+      road: ['path', 'gravel', 'gravel'], plaza: ['gravel', 'cobblestone', 'cobblestone'], planks: 'planks_bog', cityWall: 'log_frost', barn: ['planks_bog', 'log_frost'],
     },
     piece: 'frost_hearth',
     views: {
