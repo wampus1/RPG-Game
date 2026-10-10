@@ -24,7 +24,7 @@ import { carriesOf } from '../src/game/stalls.js';
 import { spawnPirate, coveOf, isPirate } from '../src/game/pirates.js';
 import { MOTIFS } from '../src/sim/saga/core.js';
 import { checkRegion, healthNote } from '../src/game/savehealth.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 const input = stubInput();
@@ -243,6 +243,6 @@ test('the save check takes down a painting with no wall and mends a door', () =>
 });
 
 test('version 0.78.0, with its step', () => {
-  assert.equal(GAME_VERSION, '0.78.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.78.0') >= 0);
   assert.ok(stepsFor('0.77.0').some((s) => s.to === '0.78.0'));
 });

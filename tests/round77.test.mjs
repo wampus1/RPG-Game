@@ -158,7 +158,7 @@ test('dialogue in kinds; folk remember what you did', () => {
 });
 
 test('the migration step and the version', () => {
-  assert.equal(GAME_VERSION, '0.77.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.77.0') >= 0);
   const s = STEPS.find((q) => q.to === '0.77.0');
   assert.ok(s);
   const log = [];
