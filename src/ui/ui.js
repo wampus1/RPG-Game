@@ -32,6 +32,7 @@ import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 import { ModTalkWindow } from './modtalk.js';
 import { ownerId } from '../game/ships3d.js';
 import { BlueprintWindow } from './blueprint.js';
+import { nearMates } from '../game/guilds.js';
 
 // (Round 80) Who's shown down the side of the screen of your guild: those
 // within this many paces of you lately (MATE_RECENT ms: half a minute).
@@ -1415,11 +1416,7 @@ export class UI {
     this.notesTop = 0;
     const all = game && game.guildMates ? game.guildMates() : [];
     if (!all.length || !this.minimapPos) return;
-    const p = game.player;
-    const now = performance.now();
-    const seen = (this.mateSeen ||= new Map());
-    for (const m of all) if (p && m.here && Math.max(Math.abs(m.x - p.x), Math.abs(m.z - p.z)) <= MATE_NEAR) seen.set(m.id, now);
-    const mates = all.filter((m) => now - (seen.get(m.id) ?? -Infinity) <= MATE_RECENT);
+    const mates = nearMates(all, game.player, (this.mateSeen ||= new Map()), performance.now(), MATE_NEAR, MATE_RECENT);
     if (!mates.length) return;
     const x0 = this.minimapPos.x - CHAR_W + 2;
     let y = this.minimapPos.y + 48;

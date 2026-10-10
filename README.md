@@ -5986,6 +5986,60 @@ into stairs when the world's brought up to date.)
   on high ground (with its sound), and the air shimmering over sand and
   salt flats in the heat of the day.
 
+## Round 80: a lighter game, great rooms below
+
+- **A master's hall**: while its master's fought with all of you down there
+  in the hall, the rest of the old place holds still (its beasts elsewhere
+  on the floor, its traps and machines, the notes left about, adventurers
+  coming back up from it) till the fight's won or lost. One of you still
+  out on the floor, and it all goes on as ever.
+- **Playing in someone else's world**: your machine never lays out a town,
+  brings a save up a version, or runs anything of the host's world; it
+  only shows what the host sends and carries it on between words.
+- **Towns built off the game's thread**: a town laid out in the background
+  is laid out whole on a Web Worker (a copy of the world made from its
+  seed, brought up to date: the towns as they've grown, a lava flow, the
+  storm wall) and taken in at once when it's done; the very same town as
+  laid out here (checked, block for block). Wanted at once, or with mods in
+  play, it's laid out here as before. The builder's own lot test now works
+  from running counts over the town's plan (four looks a test, not one at
+  every tile): about 40% quicker, towns unchanged.
+- **The screen**: with the CRT effect off, the frame goes to the page as
+  it is, scaled by the browser, pixel-sharp, and WebGL isn't used at all.
+  With it on, the blurred copies the glow is drawn from are only made when
+  there's a glow, and the drawn-back world is sent only when it's been
+  drawn again.
+- **The world map** keeps a picture of its still parts (the land's squares,
+  roads and bridges), drawn again only when the zoom, what you've seen, the
+  roads or the realms change, or you've panned past it; panning just moves
+  it. Close in, several times quicker.
+- **The ground below you**: the ground below your level is drawn from kept
+  pictures, a row's layer at a time, made again only when a block there
+  changes (or the camera turns, or the ground's loaded); water, plants,
+  doors, snow and tracks are drawn over it each frame as before. The same
+  picture to the pixel, about a third less drawing a frame.
+- **Light**: worked out again only when a light, the view or the blocks
+  change (a light carried, or a door, no longer marks it all to be done
+  again), and softened at half the size.
+- **Sounds**: the game's own sounds play on a set of voices kept and used
+  again (put away after a quiet spell), and the music's notes reuse their
+  volumes and filters once they've rung out, instead of making new ones
+  every time.
+- **Particles and effects a frame**: a cap on how many new sparks, puffs
+  and effects anything can make in a frame, and how many can be about at
+  once (Settings, Visuals: Many, Some or Few).
+- **The guild strip**: a line each (face, name, health), and only those of
+  your guild playing now who've been within a hundred paces of you in the
+  last half a minute.
+- **Great rooms**: one or two rooms on each floor of an old place (two or
+  three in a Kavorent ruin) much bigger, walled into rooms within, each
+  kind of place its own way: a barrow's inner tomb ringed round, a mine's
+  cavern timbered off into galleries, a crypt's hall with chapels down each
+  side, a holdout's caves walled into quarters, a Kavorent hall with pods
+  in its corners (the islands' and far lands' places each one of these).
+  Each has a chest in it now and then, and more about. Floors you'd been
+  down before are laid out afresh with them.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -582,6 +582,17 @@ export const STEPS = [
       log.push('Stories now come at a pace (a quiet stretch after something hard, an opening after a loss), folk remember the ones you had a hand in, and more of them can be settled without a fight; trails lead from town to town and over the sea; map markers of your own; crafting by fives or as many as you can; and mods can have scripts, commands and steps of their own. (New worlds also get landforms, rivers with character and landmarks.)');
     },
   },
+  {
+    // (Round 80) Nothing in the save changes shape. The old places' floors
+    // are laid out afresh as they're next gone down (with their great
+    // rooms: see dungeongen.subRooms), and what's kept of the ones you've
+    // been on is let go of (see dungeon.FLOOR_GEN): said so here.
+    to: '0.80.0',
+    data(d, log) {
+      const kept = Object.values((d.sim && d.sim.dungeons && d.sim.dungeons.list) || []).some((q) => q && q.floors && Object.keys(q.floors).length);
+      log.push(`The game runs lighter: towns are laid out on a thread of their own, the ground and the light are drawn again only when they change, and a master's hall holds the rest of its place still while you fight it. ${kept ? 'The old places you\'ve been down are laid out afresh (some of their rooms bigger now, walled into rooms within), so their floors are as new.' : 'Some of the old places\' rooms are bigger now, walled into rooms within.'}`);
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

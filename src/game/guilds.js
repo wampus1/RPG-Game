@@ -153,3 +153,12 @@ export function guildMates(game) {
   }
   return out;
 }
+
+// (Round 80) Which of `mates` (see guildMates) are shown down the side of
+// the screen: those who've been within `near` paces of `p` in the last
+// `recent` ms (`seen`: when each was last that near, kept by the caller;
+// `now` in ms).
+export function nearMates(mates, p, seen, now, near = 100, recent = 30000) {
+  for (const m of mates) if (p && m.here && Math.max(Math.abs(m.x - p.x), Math.abs(m.z - p.z)) <= near) seen.set(m.id, now);
+  return mates.filter((m) => now - (seen.get(m.id) ?? -Infinity) <= recent);
+}
