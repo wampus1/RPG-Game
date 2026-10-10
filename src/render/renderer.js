@@ -3284,7 +3284,8 @@ export class Renderer {
     const want = (opts.n || 6) * k;
     // (Round 80: and no more a frame than the settings allow, from
     // anything: see room.)
-    const n = this.room(Math.floor(want) + (Math.random() < want % 1 ? 1 : 0));
+    const n0 = Math.floor(want) + (Math.random() < want % 1 ? 1 : 0);
+    const n = typeof this.room === 'function' ? this.room(n0) : n0;
     for (let i = 0; i < n; i++) {
       this.particles.push({
         x: x * TILE + (opts.spreadX ?? 8) * (Math.random() - 0.5) * 2 + 8,

@@ -16,6 +16,7 @@ import { hears, parseLine } from '../src/net/chat.js';
 import { sortPack, compareGear } from '../src/game/invtools.js';
 import { starKey } from '../src/world/quality.js';
 import { reforge, moveMod } from '../src/game/reforge.js';
+import { RNG } from '../src/util/rng.js';
 import { planOf, ghostAt, copyBox } from '../src/game/plans.js';
 import { blankDesign, typeOf, registerDesign, designsSave, designsLoad } from '../src/game/shipdesign.js';
 import { previewModel, SHIP_TYPES } from '../src/world/shipmodels.js';
@@ -119,7 +120,9 @@ test('reforging keeps the stars; a modifier moves onto another piece', () => {
   p.inv[1] = { item: starKey('iron_sword', 1, 'c', 7, []), count: 1 };
   p.inv[2] = { item: 'coin', count: 999 };
   p.inv[3] = { item: 'iron_ingot', count: 20 };
-  const r = reforge(game, 1);
+  // (Its own dice: a loose throw could give it venom too, and then
+  // there'd be nothing to move.)
+  const r = reforge(game, 1, new RNG(1));
   assert.ok(r.ok, r.why);
   assert.ok(ITEMS[r.key].stars >= 1);
   const m = moveMod(game, 0, 1, 'venom');
