@@ -26,6 +26,13 @@ export function soundGroup(name, src = null) {
 const VOICES = { tone: 24, noise: 16 };
 const VOICES_QUIET = 12000;
 
+// (Round 93) Sounds asked for by names the synth never had, and the voice
+// each is given.
+export const SOUND_ALIAS = {
+  fire: 'crackle', lava: 'crackle', sizzle: 'hiss', steam: 'hiss', zap: 'pulse', erupt: 'eruption',
+  rain: 'splash', chest_open: 'chest', beep: 'click', page: 'select',
+};
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -275,7 +282,11 @@ export class Audio {
   // `src` (optional) is an entity; far-away sounds are skipped. (Round 66:
   // a mod's sound by its key, 'm:mod:id'; `o`: { vol, pitch } for it.)
   play(name, src = null, game = null, o = null) {
+    // (Round 93: how many asked for, heard or not: see tempo.attackCue.)
+    this.plays = (this.plays || 0) + 1;
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+    // (Names asked for that were never given a voice of their own.)
+    if (SOUND_ALIAS[name]) name = SOUND_ALIAS[name];
     if (src && this.listener && Math.hypot(src.x - this.listener.x, src.z - this.listener.z) > 14) return;
     const now = performance.now();
     if (now - (this.last.get(name) || 0) < 40) return;

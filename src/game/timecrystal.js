@@ -11,6 +11,7 @@ import { VIEW_W, VIEW_H } from '../config.js';
 import { restamp } from '../world/sites.js';
 import { ledger } from '../sim/econ.js';
 import { TIER_MAX, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
+import { pidOf } from '../sim/saga/refs.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp01 = (k) => Math.max(0, Math.min(1, k));
@@ -18,6 +19,9 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 // The tier a crystal turns a place back to: one above its own (at most 3).
+// (Round 93) How long after a pack's warning using it again goes ahead.
+const WARN_MS = 30000;
+
 export const restoredTier = (crystalTier) => Math.min(TIER_MAX, (crystalTier || 1) + 1);
 
 // The old place whose way in is within a few paces of (x, z), if any.
@@ -35,14 +39,15 @@ export function placeNear(game, x, z, r = 6) {
   return best;
 }
 
-// Why a crystal can't turn `rec` back just now (null if it can).
-export function cantRestore(game, rec) {
+// Why a crystal can't turn `rec` back just now (null if it can). `packsOk`:
+// the packs left down there already warned of, and to be lost to time.
+export function cantRestore(game, rec, packsOk = false) {
   if (!rec) return 'Hold it at the way into an old place, one whose master is beaten, and use it there.';
   if (!rec.cleared) return `${cap(rec.name)}'s master still waits below. There's nothing yet to turn back.`;
   const run = game.runs && game.runs.get(rec.id);
   if (run && run.players().length) return 'Someone is still down there. Not while they are.';
   const pk = (rec.packs || [])[0];
-  if (pk) return `${pk.name ? `${pk.name}'s` : 'A'} pack still lies down there, on floor ${pk.floor + 1}. Fetch it up first, or it's lost to time.`;
+  if (pk && !packsOk) return `${pk.name ? `${pk.name}'s` : 'A'} pack still lies down there, on floor ${pk.floor + 1}. Fetch it up first, or use the crystal again and it's lost to time.`;
   return null;
 }
 
@@ -56,12 +61,18 @@ export function useTimeCrystal(game, def, rec = null) {
   }
   if (game.scene) return true;
   rec ||= placeNear(game, p.x, p.z);
-  const why = cantRestore(game, rec);
+  // (Round 93) Told of a pack still down there, and used again here: so be
+  // it (the pack's lost to time with the rest).
+  const warned = game.crystalWarned;
+  const again = !!(rec && warned && warned.id === rec.id && warned.at === pidOf(p) && Date.now() - warned.t < WARN_MS);
+  const why = cantRestore(game, rec, again);
   if (why) {
+    if (rec && (rec.packs || []).length && !cantRestore(game, rec, true)) game.crystalWarned = { id: rec.id, at: pidOf(p), t: Date.now() };
     game.ui.msg(why, '#c8a0ff');
     game.audio?.play('error');
     return true;
   }
+  game.crystalWarned = null;
   const tier = restoredTier(def.tier);
   const slot = p.inv[p.selected];
   if (slot && slot.item === def.key) {

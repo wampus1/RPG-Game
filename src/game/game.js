@@ -40,7 +40,7 @@ import { updateLabor } from '../sim/labor.js';
 import { drawable, beginDraw, tickDraw, cancelDraw, releaseDraw, throwAimed, flyAimed, arrowStrikes } from './archery.js';
 import { throwDice, tickDice } from './dicegame.js';
 import { Wildlife } from './wildlife.js';
-import { packLabel, DungeonRun, DUNGEON_INTERACTS } from './dungeon.js';
+import { packLabel, DungeonRun, DUNGEON_INTERACTS, ownerName } from './dungeon.js';
 import { startIntro } from './cutscene.js';
 import { starSpot, makeCrater, starShockwave, starfallScene } from './starfall.js';
 import { newFeats, noteIsle } from './achievements.js';
@@ -4832,6 +4832,12 @@ export class Game {
       this.useOldPlace(x, y, z, b);
       return;
     }
+    // (Round 93) A fallen pack: clicked, it bursts, and all that was in it
+    // spills out.
+    if (w.getBlock(x, y, z) === B.satchel) {
+      this.burstPack(x, y, z);
+      return;
+    }
     // (Below ground, a chest might have teeth.)
     if (b.interact === 'container' && this.dungeon && this.dungeon.wakeMimic(x, y, z)) return;
     if (b.interact === 'container' && this.dungeon && this.dungeon.locked(x, z)) {
@@ -5247,6 +5253,30 @@ export class Game {
   packAt(x, y, z) {
     const run = this.dungeon;
     return run && run.packAt && this.world.getBlock(x, y, z) === B.satchel ? run.packAt(x, z) : null;
+  }
+
+  // (Round 93) A fallen pack burst open: everything in it out on the floor
+  // about it, the pack gone (and no longer marked, nor waiting for anyone).
+  burstPack(x, y, z) {
+    const w = this.world;
+    const pk = this.packAt(x, y, z);
+    const slots = (w.peekContainer ? w.peekContainer(x, y, z) : w.getContainer(x, y, z)) || [];
+    const items = slots.filter(Boolean).map((s) => ({ item: s.item, count: s.count }));
+    w.setBlock(x, y, z, B.air);
+    for (const s of items) this.spawnDrop(s.item, s.count, x + 0.5, y + 0.3, z + 0.5, true);
+    const run = this.dungeon;
+    if (run) {
+      const here = (q) => q.floor === run.floor && q.x === x && q.z === z;
+      run.rec.packs = (run.rec.packs || []).filter((q) => !here(q));
+      if (run.rec.pack && here(run.rec.pack)) run.rec.pack = run.rec.packs[run.rec.packs.length - 1] || null;
+      if (run.notes) run.notes = run.notes.filter((n) => !(n.pack && here(n.pack)));
+    }
+    this.renderer?.emit?.(x + 0.5, y + 0.5, z + 0.5, { n: 14, color: ['#8a6a40', '#c8a070', '#5a4028'], up: 30, speed: 40, life: 0.6, gravity: 60 });
+    this.audio?.play('chest');
+    this.audio?.play('break', { x, y, z });
+    const whose = pk && pk.name ? (pk.name === ownerName(this, this.player) ? 'Your' : `${pk.name}'s`) : 'The';
+    this.ui.msg(`${whose} pack bursts open, and everything in it spills out.`, '#ffb080');
+    return items;
   }
 
   openContainerAt(x, y, z, owner = this.containerOwner(x, y, z)) {

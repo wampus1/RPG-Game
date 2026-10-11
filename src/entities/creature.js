@@ -17,7 +17,7 @@ import { SPIRE_BOSSES } from './bosses_spire.js';
 import { EVOLVED_BOSSES } from './evolved_bosses.js';
 import { ISLE_LOOKS } from '../render/islebossart.js';
 import { apart, fits } from './footprint.js';
-import { bossClock, drift, press, walkCooldowns } from './tempo.js';
+import { bossClock, drift, press, walkCooldowns, attackCue } from './tempo.js';
 import { tierTick } from './bosstier.js';
 import { walksFields, fieldWay, lowerFields } from './fields.js';
 import { MONSTER_LOOKS } from '../render/dungeonart.js';
@@ -290,9 +290,16 @@ export class Creature extends Entity {
       if (this.S.modBrain && game.modBrainOf?.(this, dt)) return;
       // Its own way of fighting (see monsters.js), if it has one. (A master
       // never stands about long: see tempo.drift.)
-      if (this.S.brain && BRAINS[this.S.brain](this, dt)) {
-        if (master && !this.moving) drift(this, dt);
-        return;
+      if (this.S.brain) {
+        // (Round 93: an attack it began without a sound gets one.)
+        const cast0 = this.casts || 0;
+        const snd0 = game.audio ? game.audio.plays || 0 : 0;
+        const acted = BRAINS[this.S.brain](this, dt);
+        if (master && (this.casts || 0) > cast0 && game.audio && (game.audio.plays || 0) === snd0) attackCue(this);
+        if (acted) {
+          if (master && !this.moving) drift(this, dt);
+          return;
+        }
       }
       if (master && drift(this, dt)) return;
       // (Those that fight from afar: a skeleton with a bow, a wisp.)

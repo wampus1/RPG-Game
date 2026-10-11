@@ -715,6 +715,14 @@ export const STEPS = [
       log.push('A time crystal used at a way in is seen by every player near it now.');
     },
   },
+  {
+    // (Round 93) Fallen packs burst when clicked; a crystal used twice
+    // over a pack's warning goes ahead. Nothing kept changes.
+    to: '0.93.0',
+    data(d, log) {
+      log.push('A fallen pack bursts open when clicked, spilling all it held; a time crystal used again after its warning about a pack goes ahead; and every master\'s attacks have their sounds.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

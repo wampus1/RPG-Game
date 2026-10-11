@@ -510,7 +510,10 @@ export class HostNet {
         const args = [name, w ? { x: w.x, z: w.z, y: where.y } : null];
         if (o && (o.vol !== undefined || o.pitch !== undefined)) args.push({ vol: o.vol, pitch: o.pitch });
         this.fx('sound', args, w);
-        if (!w && !this.hostTurn()) return undefined;
+        if (!w && !this.hostTurn()) {
+          real.plays = (real.plays || 0) + 1;
+          return undefined;
+        }
         return real.play(name, where, g, o);
       };
       game.audio = proxy;

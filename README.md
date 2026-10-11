@@ -6522,6 +6522,13 @@ into stairs when the world's brought up to date.)
 - **On guests' screens.** The scene is now sent to guests, so a guest who uses a crystal (or watches one being used) sees the whole thing. Before, a guest saw nothing of it.
 - **Turned back once.** Only the player who held the crystal up restores the place, on the host. The copies watchers and guests see only show it. On the host, the scene's particles and sounds aren't also relayed to guests, since each screen plays its own copy, so nothing doubles up.
 
+## Round 93: Fallen packs, time crystals over a pack, and boss sounds
+
+- **Fallen packs burst.** Clicking a pack someone dropped when they died below ground breaks it open and spills everything it held onto the floor. It's no longer marked on the map or waiting for anyone. The message says whose pack it was ("Your pack…" or "Wren's pack…").
+- **A time crystal over a pack's warning goes ahead.** The first use at an entrance with a pack still below gives the warning (it now says that using the crystal again loses the pack). Using it again within 30 seconds, at the same place, by the same player, skips the warning and turns the place back, and the pack is lost to time.
+- **No boss attack starts in silence.** Many bosses (most of those on Kharos, Myrrow, in the grove and in the far lands) started some or all of their attacks without a sound. Every far-land move now has a sound for its kind (a roar for a breath, thunder for lightning, a rumble for a quake, and so on). For any other boss, an attack that starts without a sound gets a wind-up that suits it: a growl or bite for beasts, a swing for armed fighters, a roar or stomp for great things, wingbeats for flyers, magic for casters.
+- **Sounds the synth never had now play.** Some sounds were asked for by names the synth never had (`fire`, `zap`, `steam`, `lava` and a few more), so they were silent. Each is now mapped to the nearest real sound. Fire hazards, for one, now crackle when they land.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

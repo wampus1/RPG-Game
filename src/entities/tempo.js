@@ -342,3 +342,31 @@ export function fightPhase(fight) {
   if (fight.tier >= 3 && fight.frac <= PHASE4) return 4;
   return fight.frac <= MARKS[1] ? 3 : fight.frac <= MARKS[0] ? 2 : 1;
 }
+
+// (Round 93) An attack begun with no sound of its own: a cue that suits
+// what it is (a beast's growl, a blade's swing, a great thing's roar,
+// something's magic), so none comes on in silence.
+const CUES = {
+  bite: ['growl', 'bite', 'hiss'],
+  blade: ['swing', 'whoosh', 'swing'],
+  great: ['roar', 'stomp', 'rumble'],
+  wings: ['flap', 'whoosh', 'scream'],
+  magic: ['magic', 'pulse', 'whoosh'],
+  thing: ['whoosh', 'growl', 'hiss'],
+};
+export function cueKind(S) {
+  if (!S) return 'thing';
+  if (S.flies || S.flying || S.wings) return 'wings';
+  if (S.humanoid && (S.arms || S.offhand) && !S.ranged) return 'blade';
+  if (S.big || S.huge || S.foot) return 'great';
+  if (S.style === 'bite' || S.style === 'snap') return 'bite';
+  if (S.light >= 3 || S.ranged || S.humanoid) return 'magic';
+  return 'thing';
+}
+export function attackCue(c) {
+  const game = c.game;
+  if (!game || !game.audio) return;
+  const list = CUES[cueKind(c.S)];
+  c.cueN = (c.cueN || 0) + 1;
+  game.audio.play(list[c.cueN % list.length], c);
+}

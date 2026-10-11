@@ -83,6 +83,15 @@ const puff = (game, at, P, n = 14) => game.renderer.emit(at.x, (at.y ?? FY) + 1,
 
 // ------------------------------------------------------------ the works
 // Each: (c, t, game, o) -> true if it went off.
+// (Round 93) The sound each kind of move begins with (its own `sound`
+// over it, where it has one).
+const MOVE_SOUNDS = {
+  breath: 'roar', beam: 'beam', cross: 'charge', slam: 'stomp', quake: 'rumble', erupt: 'eruption', volley: 'bow', rain: 'whoosh',
+  charge: 'charge', pounce: 'growl', blink: 'void', summon: 'horn', zone: 'magic', pull: 'chain', gust: 'gust', mark: 'sting',
+  wall: 'crumble', spiral: 'pulse', spin: 'whip', ward: 'clang', heal: 'heal', howl: 'howl', mirage: 'whisper', swap: 'portal',
+  lightning: 'thunder', flood: 'water_rush', blind: 'puff', rob: 'steal',
+};
+
 export const MOVES = {
   // A breath, a spray, a scream: a cone toward you.
   breath(c, t, game, o) {
@@ -431,7 +440,7 @@ function fight(c, dt, list) {
     c.decree = true;
     c.poseT = Math.max(0.5, (o.dur ?? 1) * 0.8);
     if (o.say) shout(c, Array.isArray(o.say) ? pick(o.say) : o.say, o.sayColor || '#ffe0a0');
-    if (o.sound) game.audio?.play(o.sound, c);
+    game.audio?.play(o.sound || MOVE_SOUNDS[kind] || 'whoosh', c);
     return true;
   }
   return false;
