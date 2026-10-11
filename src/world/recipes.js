@@ -54,6 +54,7 @@ r('workbench', 'blueprint', 2, { paper: 2, ink: 1 });
 r('workbench', 'shipwright_bench', 1, { planks: 8, iron_ingot: 2, paper: 2 });
 // (Round 78) Three iron hooks on a coil of rope.
 r('workbench', 'grapple_hook', 1, { iron_ingot: 1, string: 4 });
+r('workbench', 'spyglass', 1, { gold_ingot: 1, iron_ingot: 1, glass: 2 }); // (Round 86)
 
 // Leather and cloth, sewn by hand.
 r('hand', 'leather_cap', 1, { leather: 2, string: 1 });

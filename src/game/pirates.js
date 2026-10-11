@@ -8,6 +8,10 @@
 // rail with cutlasses, and her archers loose from her side. Beat them off
 // (or sink her first) and what she's plundered is yours. Away from you, a
 // voyage may simply be taken: word of it reaches port.
+// (Round 86) Three guilds of them, each with its own cove and colours (see
+// GUILDS). One known for a pirate (see piracy.js) can sail into a cove and
+// not be fired on; one sworn to a guild is left be by its ships, but its
+// rivals' may still come for them.
 import { REGION_W, REGION_D, GROUND } from '../config.js';
 import { RNG, hash4 } from '../util/rng.js';
 import { addShip, shipsOf, shipById, waterSpot, boardAt, deckPath, ownerId } from './ships3d.js';
@@ -15,14 +19,74 @@ import { makeCrew, crewOf } from './shipcrew.js';
 import { SHIP_TYPES } from '../world/shipmodels.js';
 import { DAY } from '../sim/econ.js';
 import { pidOf } from '../sim/saga/refs.js';
+import { pirateFoe, guildOfP, piracyTick } from './piracy.js';
 
 const COVE_NAMES = ['Gallows Cove', 'Blackwater Bight', 'Corsair\'s Rest', 'Rattlebone Inlet', 'Widow\'s Hook', 'Skull Haven'];
 const SHIP_NAMES = ['Black Gull', 'Red Widow', 'Sea Wolf', 'Grinning Jack', 'Bloody Mary', 'Kraken\'s Due', 'Hangman\'s Luck'];
+// (Round 86) The brotherhoods: each its name, its colours, and its cove.
+export const GUILDS = [
+  { id: 'gull', name: 'the Black Gull Brethren', flag: '#121212', layers: [{ shape: 'skull', color: '#f0f0e8' }] },
+  { id: 'hand', name: 'the Red Hand Company', flag: '#6a1010', layers: [{ shape: 'swords', color: '#f0f0e8' }, { shape: 'border', color: '#121212' }] },
+  { id: 'tide', name: 'the Free Tide', flag: '#1a2440', layers: [{ shape: 'wave', color: '#e8e0d0' }, { shape: 'crescent', color: '#e0c040' }] },
+];
 const GRAPPLE_AT = 10; // paces between hulls when the grapnels fly
 const BOARD_AFTER = 2.5; // seconds lashed together before they come over
 
 function state(game) {
-  return (game.pirates ||= { cove: undefined, nextRaid: null, raider: null, taken: 0 });
+  return (game.pirates ||= { cove: undefined, nextRaid: null, raider: null, taken: 0, cs: [] });
+}
+
+// (Round 86) What's become of each cove: sighted, its ships out, beaten.
+function coveState(P, i) {
+  P.cs ||= [];
+  return (P.cs[i] ||= { sighted: false, spawned: false, done: false, warned: false, hailed: {} });
+}
+
+// Every guild's cove: the first (coveOf) the Black Gulls', then one each
+// for the others, on other lands, far from it and from any town.
+export function covesOf(game) {
+  const P = state(game);
+  if (P.coves) return P.coves;
+  const first = coveOf(game);
+  const out = first ? [{ ...first, guild: 0 }] : [];
+  if (first) {
+    const ow = game.world.ow;
+    const rng = new RNG(hash4(game.seed >>> 0, 0x9148f));
+    const far = (x, z) => ow.settlements.every((s) => Math.hypot((s.cx + s.cw / 2) * REGION_W - x, (s.cz + s.cd / 2) * REGION_D - z) > 260) && out.every((c) => Math.hypot(c.x - x, c.z - z) > 500);
+    const lands = [...(ow.lands || [])].filter((L) => L.name !== first.land).sort(() => rng.next() - 0.5);
+    for (const L of lands) {
+      if (out.length >= GUILDS.length) break;
+      const c = shoreSpot(ow, L, rng, far);
+      if (c) out.push({ ...c, guild: out.length, name: COVE_NAMES.filter((n) => !out.some((o) => o.name === n))[rng.int(0, COVE_NAMES.length - 1 - out.length)] });
+    }
+  }
+  P.coves = out;
+  return out;
+}
+
+// Open water off a land's shore that `ok` allows, or null.
+function shoreSpot(ow, L, rng, ok) {
+  const cx = (L.x0 + L.x1) / 2;
+  const cz = (L.z0 + L.z1) / 2;
+  const reach = Math.max(L.x1 - L.x0, L.z1 - L.z0) * 0.75;
+  const a0 = rng.next() * Math.PI * 2;
+  for (let k = 0; k < 24; k++) {
+    const a = a0 + (k / 24) * Math.PI * 2;
+    let wasLand = false;
+    for (let r = 0; r < reach; r += 6) {
+      const x = Math.round(cx + Math.cos(a) * r);
+      const z = Math.round(cz + Math.sin(a) * r);
+      const c = ow.continentAt(x, z);
+      if (c > 0.05) wasLand = true;
+      else if (wasLand && c < -0.02) {
+        const ox = Math.round(cx + Math.cos(a) * (r + 18));
+        const oz = Math.round(cz + Math.sin(a) * (r + 18));
+        if (ow.continentAt(ox, oz) < -0.02 && ok(ox, oz) && !(!ow.wallDown && ow.insideStorm && ow.insideStorm(ox, oz))) return { x: ox, z: oz, shore: { x, z }, land: L.name };
+        break;
+      }
+    }
+  }
+  return null;
 }
 
 // Where their cove is: the open water off the shore of a lonely isle (the
@@ -86,17 +150,24 @@ export function spawnPirate(game, x, z, o = {}) {
     look: { ...r.look, outfit: i === 0 ? 'noble' : 'plain', hat: i === 0 ? 'feather' : rng.pick(['bandana', 'bandana', 'cap', null]), hatColor: rng.pick(['#8a1a1a', '#1a1a1a', '#2a2a5a']), eyepatch: rng.chance(0.25), shirt: rng.pick(['#3a2a2a', '#5a1a1a', '#e8e0d0', '#2a2a2a']) },
     pirate: true,
   }));
+  // (Round 86) Under her guild's colours.
+  const gi = o.guild ?? rng.int(0, GUILDS.length - 1);
+  const Gd = GUILDS[gi] || GUILDS[0];
   const S = addShip(game, {
     type, x: at.x, z: at.z, yaw: at.yaw ?? 0, name: `The ${SHIP_NAMES[rng.int(0, SHIP_NAMES.length - 1)]}`,
-    crew, ammo: 999, paint: '#24222a', paint2: '#0e0c10', flag: '#121212', emblem: 'saltire', anchor: !!o.anchor, sailSet: o.anchor ? 0 : 0.9,
+    crew, ammo: 999, paint: '#24222a', paint2: '#0e0c10', flag: Gd.flag, flagLayers: Gd.layers, emblem: 'saltire', markColor: '#121212', anchor: !!o.anchor, sailSet: o.anchor ? 0 : 0.9,
   });
   S.pirate = true;
+  S.guild = gi;
   S.hostile = true;
   S.transient = true;
   S.plunder = 60 + rng.int(0, 140) + (type === 'brigantine' ? 80 : 0);
   if (o.target) S.fight = o.target.player ? { player: true } : { ship: o.target.id };
   return S;
 }
+
+// (Round 86) Anyone near (x, z) her guild would fire on.
+const foeNear = (game, S, r) => (game.everyone ? game.everyone() : [game.player]).some((q) => q && !q.dead && Math.hypot(q.x - S.x, q.z - S.z) < r && pirateFoe(game, q, S.guild ?? 0));
 
 // ------------------------------------------------------------ each tick
 export function pirateTick(game, dt) {
@@ -106,48 +177,21 @@ export function pirateTick(game, dt) {
   // (The ones lashed to someone: hauled alongside, and over the rail.)
   for (const S of pirates(game)) grappleTick(game, S, dt);
   fightTick(game, dt);
+  piracyTick(game, dt);
   if (P.t > 0) return;
   P.t = 2;
-  const cove = coveOf(game);
-  // (Sighted from afar: on your map.)
-  if (cove && !P.sighted && nearAny(game, cove.x, cove.z, 360)) {
-    P.sighted = true;
-    game.world.ow.pin(cove.x, cove.z, `${cove.name} (pirates)`, '×');
-    game.ui.msg(`Off the shore of ${cove.land}, black sails at anchor: ${cove.name}, a pirates' nest. (Marked on your map.)`, '#ff9070');
-  }
-  // The cove: a ship or two at anchor while you're near; roused when
-  // you come close.
-  if (cove && nearAny(game, cove.x, cove.z, 170)) {
-    const here = pirates(game).filter((S) => S.cove);
-    // (Round 85: beaten once, they're back while they've someone's kin
-    // in their holds: see saga/motifs/tides.js.)
-    const held = captivesHeld(game);
-    if ((!P.coveDone || held) && here.length < 2 && !P.coveSpawned) {
-      P.coveSpawned = true;
-      for (let i = 0; i < 2; i++) {
-        const S = spawnPirate(game, cove.x + (i ? 24 : -12), cove.z + (i ? 10 : -6), { anchor: true, seed: hash4(game.seed >>> 0, i, 0xc0fe) });
-        if (S) S.cove = true;
-      }
-      if (!P.warned || held) game.ui.msg(`Black sails at anchor ahead: ${cove.name}.${held ? ' The captives will be in their holds.' : ''} Come in close and they'll come out for you.`, '#ff9070');
-      P.warned = true;
-    }
-    for (const S of here) {
-      if (!S.fight && nearAny(game, S.x, S.z, 70)) {
-        S.fight = { player: true };
-        S.anchor = false;
-        S.sailGoal = 0.9;
-      }
-    }
-  } else if (P.coveSpawned && !pirates(game).some((S) => S.cove)) P.coveSpawned = false;
+  for (const cove of covesOf(game)) coveTick(game, P, cove);
   // A raider, now and then (a day or more apart, and not often).
   const now = game.sim.abs;
   if (P.nextRaid === null) P.nextRaid = now + DAY * (1 + Math.random() * 3);
   if (now >= P.nextRaid && !pirates(game).some((S) => !S.cove)) {
     P.nextRaid = now + DAY * (2 + Math.random() * 4);
-    const target = raidTarget(game);
+    // (Round 86: out of one guild's cove; she leaves its own be.)
+    const guild = Math.floor(Math.random() * GUILDS.length);
+    const target = raidTarget(game, guild);
     if (target) {
       const ang = Math.random() * Math.PI * 2;
-      const S = spawnPirate(game, target.x + Math.cos(ang) * 70, target.z + Math.sin(ang) * 70, { target: target.S ? target.S : { player: true } });
+      const S = spawnPirate(game, target.x + Math.cos(ang) * 70, target.z + Math.sin(ang) * 70, { guild, target: target.S ? target.S : { player: true } });
       if (S && nearAny(game, S.x, S.z, 120)) game.ui.msg(`A sail on the horizon, under black colours: ${S.name}, and she's coming about toward ${target.S && !target.S.owner ? theirName(target.S) : 'you'}!`, '#ff7060');
       // (Word of her reaches the nearest port: see saga/motifs/tides.js.)
       const port = S && nearestPort(game, S.x, S.z);
@@ -156,13 +200,72 @@ export function pirateTick(game, dt) {
   }
 }
 
+// One guild's cove, each tick: sighted from afar and marked; a ship or two
+// at anchor in it while you're near, roused when you come close (unless
+// they'd not fire on you: a known pirate, or one of theirs).
+function coveTick(game, P, cove) {
+  const i = cove.guild;
+  const C = coveState(P, i);
+  const G = GUILDS[i] || GUILDS[0];
+  if (!C.sighted && nearAny(game, cove.x, cove.z, 360)) {
+    C.sighted = true;
+    game.world.ow.pin(cove.x, cove.z, `${cove.name} (pirates)`, '×');
+    game.ui.msg(`Off the shore of ${cove.land}, black sails at anchor: ${cove.name}, a nest of ${G.name}. (Marked on your map.)`, '#ff9070');
+  }
+  if (nearAny(game, cove.x, cove.z, 170)) {
+    const here = pirates(game).filter((S) => S.cove && (S.coveIdx ?? 0) === i);
+    // (Round 85: beaten once, they're back while they've someone's kin
+    // in their holds: see saga/motifs/tides.js. Only the first cove's.)
+    const held = i === 0 && captivesHeld(game);
+    if ((!C.done || held) && here.length < 2 && !C.spawned) {
+      C.spawned = true;
+      for (let k = 0; k < 2; k++) {
+        const S = spawnPirate(game, cove.x + (k ? 24 : -12), cove.z + (k ? 10 : -6), { anchor: true, guild: i, seed: hash4(game.seed >>> 0, k + i * 7, 0xc0fe) });
+        if (S) {
+          S.cove = true;
+          S.coveIdx = i;
+        }
+      }
+      if (!C.warned || held) {
+        const peace = !foeNear(game, { x: cove.x, z: cove.z, guild: i }, 170);
+        game.ui.msg(peace ? `Black sails at anchor ahead: ${cove.name}, ${G.name}'s. They know you for one of their own trade: they'll let you in. (Talk to a captain there to swear to them.)` : `Black sails at anchor ahead: ${cove.name}.${held ? ' The captives will be in their holds.' : ''} Come in close and they'll come out for you.`, '#ff9070');
+      }
+      C.warned = true;
+    }
+    for (const S of here) {
+      if (S.fight || !nearAny(game, S.x, S.z, 70)) continue;
+      if (foeNear(game, S, 70)) {
+        S.fight = { player: true };
+        S.anchor = false;
+        S.sailGoal = 0.9;
+      } else hail(game, S, G);
+    }
+  } else if (C.spawned && !pirates(game).some((S) => S.cove && (S.coveIdx ?? 0) === i)) C.spawned = false;
+}
+
+// (Round 86) A known pirate sailing in: hailed, not fired on.
+function hail(game, S, G) {
+  for (const q of game.everyone ? game.everyone() : [game.player]) {
+    if (!q || q.dead || Math.hypot(q.x - S.x, q.z - S.z) > 70) continue;
+    const pid = pidOf(q);
+    S.hailed ||= {};
+    if (S.hailed[pid]) continue;
+    S.hailed[pid] = true;
+    const sworn = guildOfP(game, q) === S.guild;
+    const say = () => game.ui.msg(sworn ? `${S.name} dips her colours to you: a brother of ${G.name}, home again.` : `${S.name} hails you: "Ahoy, ye black-hearted wretch! Come aboard and drink with us, and swear to ${G.name} if ye've a mind." (F on her captain.)`, '#ffd080');
+    game.asPlayer ? game.asPlayer(q, say) : say();
+  }
+}
+
 const theirName = (S) => S.name || 'a merchantman';
 
 // Who a raider goes for: a voyage near one of you (a merchantman, a
 // hulk), or your own ship at sea.
-function raidTarget(game) {
+function raidTarget(game, guild = 0) {
   const ships = shipsOf(game).filter((S) => !S.pirate && !S.sinking && nearAny(game, S.x, S.z, 140));
-  const mine = ships.find((S) => S.owner && !S.anchor && Math.abs(S.v) > 1);
+  // (Round 86: not a ship of someone they'd leave be.)
+  const theirs = (S) => (game.everyone ? game.everyone() : [game.player]).some((q) => q && ownerId(game, q) === S.owner && pirateFoe(game, q, guild));
+  const mine = ships.find((S) => S.owner && !S.anchor && Math.abs(S.v) > 1 && theirs(S));
   if (mine) return { S: mine, x: mine.x, z: mine.z };
   const voy = ships.find((S) => S.voyage !== null && S.voyage !== undefined);
   if (voy) return { S: voy, x: voy.x, z: voy.z };
@@ -242,7 +345,9 @@ function fightTick(game, dt) {
     const across = pirate && c.role === 'pirate_archer' && S.pirate && S.grapple ? S.grapple.ship : null;
     const there = (q) => q.deck && (q.deck.s === S.id || q.deck.s === across);
     if (pirate) {
-      for (const q of players) if (q && !q.dead && there(q)) foes.push(q);
+      // (Round 86: not one they'd leave be, unless they've struck at them.)
+      const own = c.shipId !== null && c.shipId !== undefined ? shipById(game, c.shipId) : S;
+      for (const q of players) if (q && !q.dead && there(q) && (c.foe === q.id || pirateFoe(game, q, own ? own.guild ?? 0 : 0))) foes.push(q);
       for (const q of sailors) if (!isPirate(q) && there(q)) foes.push(q);
     } else for (const q of sailors) if (isPirate(q) && q.deck.s === S.id) foes.push(q);
     if (!foes.length) continue;
@@ -310,7 +415,7 @@ function fightTick(game, dt) {
         who.give('coin', n);
         game.ui.msg(`${S.name}'s crew are beaten. In her hold, the plunder: ¤${n}, and she's adrift for you to take.`, '#ffe070');
       }) : who.give('coin', n);
-      if (S.cove) state(game).coveDone = true;
+      if (S.cove) coveState(state(game), S.coveIdx ?? 0).done = true;
       game.sim.saga?.emit('pirates_beaten', { ship: S.id, name: S.name, cove: !!S.cove, pid: pidOf(who) });
     }
     // (Hers now: kept with the world, no longer one of theirs.)
@@ -366,8 +471,12 @@ export function grapples(game) {
 
 export function piratesSave(game) {
   const P = game.pirates;
-  return P ? { nextRaid: P.nextRaid, taken: P.taken, coveDone: !!P.coveDone, sighted: !!P.sighted } : null;
+  const cs = P ? (P.cs || []).map((C) => (C ? { sighted: !!C.sighted, done: !!C.done } : null)) : [];
+  return P ? { nextRaid: P.nextRaid, taken: P.taken, coveDone: !!(cs[0] && cs[0].done), sighted: !!(cs[0] && cs[0].sighted), cs, piracy: game.piracy || null } : null;
 }
 export function piratesLoad(game, d) {
-  game.pirates = { cove: undefined, nextRaid: d ? d.nextRaid ?? null : null, raider: null, taken: d ? d.taken || 0 : 0, coveDone: !!(d && d.coveDone), sighted: !!(d && d.sighted) };
+  // (Round 86: each cove's own; an older save's one cove is the first.)
+  const cs = d && Array.isArray(d.cs) ? d.cs.map((C) => (C ? { sighted: !!C.sighted, spawned: false, done: !!C.done, warned: false, hailed: {} } : null)) : [{ sighted: !!(d && d.sighted), spawned: false, done: !!(d && d.coveDone), warned: false, hailed: {} }];
+  game.pirates = { cove: undefined, nextRaid: d ? d.nextRaid ?? null : null, raider: null, taken: d ? d.taken || 0 : 0, cs };
+  game.piracy = d && d.piracy ? d.piracy : null;
 }

@@ -2,6 +2,7 @@
 // the painter's algorithm (rows north->south, layers bottom->top), with
 // entities interleaved, roof cut-aways, occlusion fading and lighting.
 import { LOOKED, LOOK_OF } from './lookart.js';
+import { drawSpyRing } from '../game/spyglass.js';
 import { drawAmbience } from './ambience.js';
 import { planDecos, drawCopyBox } from './planfx.js';
 import { drawGrapples } from './seafx.js';
@@ -627,7 +628,8 @@ export class Renderer {
     const player = game.player;
     // (An opening scene moves the camera its own way: see cutscene.js.)
     // (Round 69: at a ship's wheel, her middle: see shipgame.js helmView.)
-    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : game.helmFocus || player.renderPos();
+    // (Round 86: through a spyglass, where it's looking: see spyglass.js.)
+    const rp = game.cutscene && game.cutscene.focus ? game.cutscene.focus() : game.scene && game.scene.focus ? game.scene.focus() : game.helmFocus || game.spyFocus || player.renderPos();
     const [pu, pv] = this.toView(rp.x, rp.z);
     // Camera follows the player's feet (smoothed, pixel snapped).
     const tx = pu * TILE + 8 - this.vw / 2;
@@ -653,6 +655,7 @@ export class Renderer {
     this.gfx.tick(game, dt);
     this.drawScene(game, dt);
     this.drawOverlays(game);
+    if (game.spyFocus) drawSpyRing(this.ctx, this.vw || VIEW_W, this.vh || VIEW_H, this.time);
     if (this.zoomK === 1) drawShipHud(this, game);
     this.drawFlashes(game, dt);
     // (Round 77) Brightness, from Settings: lighter by a soft wash, darker

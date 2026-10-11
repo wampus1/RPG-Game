@@ -342,6 +342,20 @@ export function shipIcon(key) {
   }
   // (Round 69) Every ship's in a bottle: lying on its stand, corked, her
   // in miniature inside it (an empty one, a ship bottle, to put one in).
+  // (Round 86) A brass spyglass, drawn out: three tubes and the glass.
+  if (key === 'spyglass') {
+    p.line(2, 13, 6, 9, '#8a6a2a');
+    p.line(3, 13, 7, 9, '#a8803a');
+    p.line(6, 9, 10, 5, '#c8a04a');
+    p.line(7, 9, 11, 5, '#e0c060');
+    p.line(10, 5, 13, 2, '#a8803a');
+    p.line(11, 5, 14, 2, '#c8a04a');
+    p.set(6, 9, '#5a4018');
+    p.set(10, 5, '#5a4018');
+    p.set(14, 1, '#a8d8f0');
+    p.set(13, 1, '#e8f4ff');
+    return p.outline(OUT);
+  }
   if (key === 'ship_bottle') return bottle(p, null);
   // (Round 78: one of your own design, too: see game/shipdesign.js.)
   const m = /^ship_(sloop|brigantine|galleon|frigate|design)(?:_\d+)?$/.exec(key);

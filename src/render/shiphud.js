@@ -59,6 +59,8 @@ export function drawShipHud(r, game) {
   ctx.fillStyle = 'rgba(200,170,110,0.5)';
   ctx.fillRect(x0, y0, W, 1);
   drawText(ctx, S.name.slice(0, 22), x0 + 3, y0 + 2, '#f0e0b0', '#000');
+  // (Round 86) Known for a pirate (and sworn to whom), under her panel.
+  if (st.pirate) drawText(ctx, st.pirate, x0 + 3, y0 + H + 2, '#ff9070', '#000');
   // Her hull, and the water in her.
   drawText(ctx, 'HULL', x0 + 3, y0 + 12, '#c8c0b0', '#000');
   bar(ctx, x0 + 28, y0 + 13, 34, (st.hull - 0.45) / 0.55, st.hull > 0.75 ? '#80c860' : st.hull > 0.6 ? '#e8c040' : '#e05040');
@@ -90,7 +92,8 @@ export function drawShipHud(r, game) {
   drawText(ctx, st.drive < 0 ? 'ABACK!' : st.deg > 140 ? 'IN IRONS' : q > 0.8 ? 'DRAWING WELL' : q > 0.45 ? 'LUFFING' : 'FLOGGING', x0 + 72, y0 + 42, st.drive < 0 ? '#ff8060' : q > 0.8 ? '#a0e8a0' : '#e8c880', '#000');
   // Her guns.
   drawText(ctx, `GUNS ${st.loaded}/${st.guns}`, x0 + 72, y0 + 32, '#d8c8a8', '#000');
-  if (st.anchor) drawText(ctx, 'ANCHORED', x0 + 72, y0 + 22 + 0, '#ffb080', '#000');
+  // (Round 86: being weighed, how far up.)
+  if (st.anchor) drawText(ctx, st.weigh !== null && st.weigh !== undefined ? `WEIGHING ${Math.round(st.weigh * 100)}%` : 'ANCHORED', x0 + 72, y0 + 22 + 0, '#ffb080', '#000');
   // The compass: her bow up, the wind blowing along the arrow.
   const cx = x0 + W - 18;
   const cy = y0 + 20;

@@ -13,6 +13,7 @@ import { NPC_STEP_TIME } from '../config.js';
 import { B } from '../world/blocks.js';
 import { standOn, isInside, onPlan } from '../world/shipmodels.js';
 import { Sailor } from '../entities/sailor.js';
+import { capstanOf, capstanHands } from './anchor.js';
 import { makeTraveller } from '../entities/npcgen.js';
 import { RNG } from '../util/rng.js';
 import { putAboard, deckSpotNear, deckStep, deckPath, sailable, fireGun, shipsOf, shipById, windOf, pointOfSail, mendVoxel, roomFor } from './ships3d.js';
@@ -210,12 +211,23 @@ function deckBrain(game, S, c, dt) {
     if (!c.deck) return;
     return;
   }
+  // (Round 86) A mutineer, or one fighting them: no ship's work till it's done.
+  if (c.mutineer || (c.angry && c.foe !== undefined && (game.sailors || []).some((o) => o.id === c.foe && o.mutineer))) return;
   // (Round 84) Below her decks: at the pump, or about, and back up.
   if (c.below && belowBrain(game, S, c, dt)) return;
   // At the wheel: stays there.
   if (t && t.kind === 'helm' && S.helmBy === c.id) {
     c.dir = facingTo(S, 0, -1);
     return;
+  }
+  // (Round 86) Leaning on the capstan bars, round and round.
+  if (t && t.kind === 'capstan') {
+    if (S.weigh && S.anchor) {
+      if (Math.random() < dt * 3) c.actionTimer = 0.3;
+      if (Math.random() < dt * 0.15) c.say(pick(['Heave!', 'Heave, and pawl!', 'Round she goes!', 'Put your backs in it!']), 1.4, '#ffd080');
+      return;
+    }
+    c.task = null;
   }
   if (t && t.kind === 'haul') {
     t.t -= dt;
@@ -257,6 +269,25 @@ function deckBrain(game, S, c, dt) {
       const path = deckPath(S, here, { x: to.cx, y: to.y, z: to.cz });
       if (path) c.task = { kind: 'go', path };
       return;
+    }
+  }
+  // (Round 86) Her anchor being weighed: to the capstan bars.
+  if (S.weigh && S.anchor && S.helmBy !== c.id) {
+    const cap = capstanOf(S);
+    if (cap) {
+      const at = capstanHands(game, S).includes(c);
+      if (at) {
+        c.task = { kind: 'capstan' };
+        return;
+      }
+      const to = deckSpotNear(S, cap.x + 0.5, cap.z + 0.5, 1, cap.y);
+      if (to) {
+        const path = deckPath(S, here, { x: to.cx, y: to.y, z: to.cz });
+        if (path) {
+          c.task = { kind: 'go', path };
+          return;
+        }
+      }
     }
   }
   // (Round 69) Ordered below to the pump: there till told otherwise.
@@ -643,7 +674,9 @@ export function crewHurt(game, c, by) {
   if (!by) return;
   const S = shipById(game, c.shipId);
   if (!S) return;
+  // (Round 86: in a mutiny, each side stands by its own.)
   for (const o of crewOf(game, S)) {
+    if (!!o.mutineer !== !!c.mutineer || o === by) continue;
     o.angry = true;
     o.foe = by.id;
   }
@@ -653,7 +686,7 @@ export function crewHurt(game, c, by) {
 export function crewFight(game, S, dt) {
   for (const c of crewOf(game, S)) {
     if (!c.angry || c.dead) continue;
-    const foe = (game.everyone ? game.everyone() : []).find((q) => q.id === c.foe);
+    const foe = (game.everyone ? game.everyone() : []).find((q) => q.id === c.foe) || (game.sailors || []).find((q) => q.id === c.foe && !q.dead);
     if (!foe || foe.dead) {
       c.angry = false;
       continue;

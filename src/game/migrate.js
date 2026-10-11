@@ -658,6 +658,17 @@ export const STEPS = [
       log.push('A holed ship floods while you sleep or wait too, and any solid block (cobblestone, stone) patches a hole. Ships you fire on fight back or run.');
     },
   },
+  {
+    // (Round 86) Anchors weighed at the capstan, flags in layers, piracy and
+    // the pirate guilds, the spyglass. The pirates' one cove is now the first
+    // of three (one per guild): what's known of it carries over (see
+    // pirates.piratesLoad); nothing else in a save needs changing.
+    to: '0.86.0',
+    data(d, log) {
+      log.push('Anchors are weighed at the capstan now: bigger ships want more hands at the bars. Flags can be built up in layers at the blueprint table.');
+      log.push('Sink ships that never fired on you and you turn pirate: their realm hunts you, honest crew mutiny, and the pirate coves (three guilds now) let you in to swear to them. Ports sell a spyglass.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

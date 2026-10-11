@@ -30,6 +30,9 @@ import { hash4 } from '../util/rng.js';
 import { STORM_WALL } from '../entities/raft.js';
 import { belowTick, floodLevel, noteBelow, useInside, insideFitting } from './shiphold.js';
 import { crewTick } from './shipcrew.js';
+import { weighTick } from './anchor.js';
+import { cleanLayers } from '../render/shipvox.js';
+import { noteHit, shipSunk, pirateTag } from './piracy.js';
 import { washAshore } from './stormsea.js';
 
 const TAU = Math.PI * 2;
@@ -74,6 +77,9 @@ export class Ship {
     this.paint2 = o.paint2 || '#1e1e24';
     this.flag = o.flag || '#a02020';
     this.emblem = o.emblem || null;
+    // (Round 86) Her flag's layers over its field, and her sail mark's colour.
+    this.flagLayers = cleanLayers(o.flagLayers);
+    this.markColor = o.markColor || null;
     // (Round 78) Her sails' cloth, if not the plain sailcloth (see shipdesign.js).
     this.sailCloth = o.sailCloth || null;
     this.anchor = o.anchor ?? true;
@@ -161,7 +167,7 @@ export class Ship {
     return {
       id: this.id, type: this.type, x: Math.round(this.x * 100) / 100, z: Math.round(this.z * 100) / 100, yaw: Math.round(this.yaw * 1000) / 1000,
       sailSet: this.sailGoal, sheet: this.sheet, flood: Math.round(this.floodCells * 10) / 10, sailHp: this.sailHp, owner: this.owner, civ: this.civ,
-      name: this.name, paint: this.paint, paint2: this.paint2, flag: this.flag, emblem: this.emblem, sailCloth: this.sailCloth, anchor: this.anchor, crew: this.crewRecs,
+      name: this.name, paint: this.paint, paint2: this.paint2, flag: this.flag, emblem: this.emblem, flagLayers: this.flagLayers, markColor: this.markColor, sailCloth: this.sailCloth, anchor: this.anchor, crew: this.crewRecs,
       store: [...this.store], mission: this.mission, ammo: this.ammo, diff,
     };
   }
@@ -342,6 +348,7 @@ export function updateShips3d(game, dt) {
   collideShips(game);
   for (const S of [...list]) {
     flooding(game, S, fdt);
+    weighTick(game, S, dt);
     if (S.sinking) sinkTick(game, S, dt);
   }
   tickBalls(game, dt);
@@ -631,6 +638,7 @@ function flooding(game, S, dt) {
   floodLevel(S);
   if (!S.sinking && (f >= 0.98 || S.whole < 0.45)) {
     S.sinking = 0.001;
+    shipSunk(game, S);
     for (const e of aboardOf(game, S)) if (e.kind === 'player') game.asPlayer(e, () => game.ui.msg(`${theShip(S, true)} is going down! Over the side!`, '#ff8060'));
     game.audio?.play('crash', ...shipWhere(S));
     game.audio?.play('water_rush', ...shipWhere(S));
@@ -890,6 +898,8 @@ function ballHits(game, b) {
       S.hitMsgT = 2.5;
       for (const q of aboardOf(game, S)) if (q.kind === 'player') game.asPlayer(q, () => game.ui.msg(`Hit! ${theShip(S, true)}'s hull at ${Math.round(S.whole * 100)}%${S.leaks && S.leaks.length ? `, holed below (${S.leaks.length})` : ''}.`, '#ffb080', true));
     }
+    // (Round 86) Who hit her (for piracy: see piracy.js).
+    noteHit(game, S, b);
     // (Round 85) Fired on: she fights back, or runs.
     shotAt(game, S, b);
     game.onShipShot?.(S, b);
@@ -1286,6 +1296,32 @@ export function deckUpdate(game, p, dt, input, blocked) {
     d.stuckT = 0;
     return;
   }
+  // (Round 86) On her stairs, or at the foot or head of them: pressed
+  // anything like up or down them, straight up or down them, however
+  // she's lying on the screen; and never off their side to the deck below
+  // unless that's very nearly the way pressed.
+  const onStair = stairBy(S, d);
+  if (onStair) {
+    let best = null;
+    let bd = Infinity;
+    for (let k8 = 0; k8 < 8; k8++) {
+      const a = k8 * (Math.PI / 4);
+      const sx = Math.round(Math.cos(a));
+      const sz = Math.round(Math.sin(a));
+      if (sx && sz) continue;
+      const ny = stepOn(S.m, S.vox, d.cx, d.y, d.cz, d.cx + sx, d.cz + sz);
+      if (ny < 0 || !(ny !== d.y || stairCell(S, d.cx + sx, ny - 1, d.cz + sz))) continue;
+      const dd = angDiff(ang, a);
+      if (dd < bd) {
+        bd = dd;
+        best = [sx, sz];
+      }
+    }
+    if (best && bd <= 1.2 && deckStep(game, S, p, best[0], best[1], dur)) {
+      d.stuckT = 0;
+      return;
+    }
+  }
   // The way pressed (to the nearest of her eight); if that's shut, the
   // nearer of the two either side of it, then the other.
   const f = ang / (Math.PI / 4);
@@ -1293,7 +1329,13 @@ export function deckUpdate(game, p, dt, input, blocked) {
   const order = [k, f >= k ? k + 1 : k - 1, f >= k ? k - 1 : k + 1];
   for (const kk of order) {
     const a = kk * (Math.PI / 4);
-    if (deckStep(game, S, p, Math.round(Math.cos(a)), Math.round(Math.sin(a)), dur)) {
+    const sx = Math.round(Math.cos(a));
+    const sz = Math.round(Math.sin(a));
+    if (onStair && angDiff(ang, a) > 0.45) {
+      const ny = stepOn(S.m, S.vox, d.cx, d.y, d.cz, d.cx + sx, d.cz + sz);
+      if (ny >= 0 && ny < d.y) continue;
+    }
+    if (deckStep(game, S, p, sx, sz, dur)) {
       d.stuckT = 0;
       return;
     }
@@ -1305,6 +1347,22 @@ export function deckUpdate(game, p, dt, input, blocked) {
     d.stuckT = 0;
     unstick(game, S, p);
   }
+}
+
+// (Round 86) A stair of hers at cell (x, y, z)?
+function stairCell(S, x, y, z) {
+  const m = S.m;
+  if (x < 0 || z < 0 || y < 0 || x >= m.W || z >= m.L || y >= m.H) return false;
+  const id = S.vox[(y * m.L + z) * m.W + x];
+  return !!(id && BLOCKS[id].stair);
+}
+// Standing on her stairs, or a step from them (at their foot or head)?
+function stairBy(S, d) {
+  if (stairCell(S, d.cx, d.y - 1, d.cz)) return true;
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (stairCell(S, d.cx + dx, d.y, d.cz + dz) || stairCell(S, d.cx + dx, d.y - 1, d.cz + dz) || stairCell(S, d.cx + dx, d.y - 2, d.cz + dz)) return true;
+  }
+  return false;
 }
 
 // (Round 69) Her ways in from her deck: the head of each hatch's stairs
@@ -1702,8 +1760,10 @@ export function shipStatus(game, S) {
   const P = pointOfSail(S, W);
   return {
     name: S.name, type: S.type, speed: Math.abs(S.v), raft: Math.abs(S.v) / 5, set: S.sailSet, goal: S.sailGoal, sheet: S.sheet, ideal: P.ideal, trim: P.trim, drive: P.drive,
-    deg: P.deg, hull: S.whole, flood: S.flood, anchor: S.anchor, windRel: Math.atan2(...S.dirLocal(W.x, W.z)), windK: W.k, ammo: S.ammo,
+    deg: P.deg, hull: S.whole, flood: S.flood, anchor: S.anchor, weigh: S.weigh ? Math.min(1, S.weigh.k) : null, windRel: Math.atan2(...S.dirLocal(W.x, W.z)), windK: W.k, ammo: S.ammo,
     loaded: S.guns.filter((g) => g.cd <= 0).length, guns: S.guns.length, sails: S.sailHp.reduce((a, b) => a + b, 0) / S.sailHp.length,
+    // (Round 86) What the sea knows you for.
+    pirate: pirateTag(game, game.player),
   };
 }
 
@@ -1778,7 +1838,7 @@ export function packShip(S, withCells) {
     id: S.id, type: S.type, x: r2(S.x), z: r2(S.z), yaw: Math.round(S.yaw * 1000) / 1000, v: r2(S.v), yv: Math.round(S.yawV * 1000) / 1000, yo: r2(S.yOff),
     ss: r2(S.sailSet), sg: r2(S.sailGoal), sh: r2(S.sheet), br: r2(S.brace), bo: r2(S.boom), fi: r2(S.fill || 0), le: S.lee || 1, wh: r2(S.wheel), ru: r2(S.rudder),
     ro: S.runOut ? 1 : 0, hp: S.sailHp.map(r2), g: S.guns.map((g) => [r2(g.aim), r2(g.elev), g.cd > 0 ? r2(g.cd) : 0, r2(g.recoil)]),
-    n: S.name, pa: S.paint, p2: S.paint2, fl: S.flag, em: S.emblem, sc: S.sailCloth || null, ow: S.owner, fd: r2(S.floodCells), an: S.anchor ? 1 : 0, sk: r2(S.sinking || 0),
+    n: S.name, pa: S.paint, p2: S.paint2, fl: S.flag, em: S.emblem, fy: S.flagLayers && S.flagLayers.length ? S.flagLayers : null, mc: S.markColor || null, sc: S.sailCloth || null, ow: S.owner, fd: r2(S.floodCells), an: S.anchor ? 1 : 0, sk: r2(S.sinking || 0),
     wl: S.windLocal ? [r2(S.windLocal.x), r2(S.windLocal.z)] : null, ver: S.ver, hb: S.helmBy ?? null, am: S.ammo,
   };
   if (withCells) {
@@ -1834,6 +1894,8 @@ export function applyShips(game, list) {
     S.paint2 = d.p2;
     S.flag = d.fl;
     S.emblem = d.em;
+    S.flagLayers = cleanLayers(d.fy);
+    S.markColor = d.mc || null;
     S.sailCloth = d.sc || null;
     S.owner = d.ow;
     S.floodCells = d.fd;

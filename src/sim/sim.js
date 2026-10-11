@@ -803,6 +803,8 @@ export class Sim {
         const tech = (k) => this.tech.has(s, k);
         sh.store.cannonball = Math.max(sh.store.cannonball || 0, 24);
         sh.store.sailors_articles = Math.max(sh.store.sailors_articles || 0, 4);
+        // (Round 86) A spyglass or two, in a port.
+        sh.store.spyglass = Math.max(sh.store.spyglass || 0, 1);
         if (sh.kind === 'carpenter') {
           sh.store.ship_bottle = Math.max(sh.store.ship_bottle || 0, 2);
           sh.store.ship_sloop = 1;

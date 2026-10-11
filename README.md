@@ -6368,6 +6368,65 @@ into stairs when the world's brought up to date.)
   and runs, away from you and never straight into the wind. A chase is
   given up once you're far off.
 
+## Round 86: Anchors, colours, pirates and the spyglass
+
+- **Pointing at a ship**: the block under your pointer on a ship is now
+  outlined (yellow in reach, grey out of it), and the tooltip names it,
+  the ship, and what you can do with it (go up the stairs, take the
+  wheel, turn the capstan, patch a hole, knock it out).
+- **Stairs aboard**: a stair you point at lights up. Walking a ship's
+  stairs with WASD or the arrow keys now holds you on them even when
+  she's turned at an angle: you go up or down the flight instead of
+  stepping off its side.
+- **Holes below decks**: below decks (or holding a block near a ship),
+  her holes are outlined, red and tinted blue when they're under the
+  waterline, so you can find them and patch them.
+- **No false flooding**: the inside of a ship no longer looks flooded
+  where it's only the sea's surface showing through. Water is only drawn
+  where she's really taken it on.
+- **Out of your depth**: in water too deep to swim in (thrown off a ship
+  going down, say) you can still swim to water no deeper than where you
+  are, and so make for the shallows. You can't swim out into deeper.
+- **The anchor and the capstan**: every ship has a capstan on her deck
+  now. Right-click it (or press R at the wheel) to drop the anchor at
+  once. Weighing it takes hands at the capstan bars: stand next to it
+  (your crew come to help). A sloop wants one hand and about 5 seconds,
+  a brigantine 2 hands and 10 seconds, a frigate 3 hands and 14, a
+  galleon 4 hands and 18. Fewer hands work slower. The helm panel shows
+  **WEIGHING n%**.
+- **The blueprint table**: redone, larger. It sets her name, hull paint
+  and trim, sail cloth, the mark on her mainsail and its colour, and her
+  flag. **Flags are built in layers** now: a field colour, then up to
+  five shapes on top, each with its own colour. You can pick, reorder and
+  remove layers, and start from presets (jolly roger, red jack, sun,
+  union). There are 24 shapes now (border, pale, bend, stripes, checks,
+  triangle, diamond, ring, crescent, wave, star, skull, crossed swords
+  and more), for sails as well. Her ensign at the stern flies the layered
+  flag. On the shipwright's bench the mainsail mark is chosen with ◄ ►.
+- **Piracy**: sink a ship that never fired on you and that's piracy.
+  Her realm hears of it: its towns think worse of you, its warships come
+  about to take you on sight, and its merchantmen run. Fighting back
+  against a ship that fired first doesn't count. After 3 such sinkings
+  you're known as a pirate (shown under the ship's panel).
+- **Your crew and escorts**: some of the hands you've hired are rogues
+  who cheer you on. Honest ones warn you after the first ship you sink,
+  then mutiny after the next. Mutineers fight you, and the loyal hands
+  fight them; a beaten mutineer yields and goes over the side. A hired
+  escort with a conscience warns you once too, then turns on you (or,
+  if they're timid, leaves).
+- **The pirate guilds**: there are three now, the Black Gull Brethren,
+  the Red Hand Company and the Free Tide. Each has its own cove on a
+  different land and flies its own layered colours. Once you're known as
+  a pirate, their coves don't fire on you: they hail you instead. Talk
+  to a pirate captain (F) to swear to their guild. That guild's ships
+  never attack you, but the other guilds' raiders and coves still will.
+  Sink a ship of your own guild and you're cast out.
+- **The spyglass**: sold in ports, or made at a workbench (gold ingot,
+  iron ingot, 2 glass). Right-click with it to look through it. The view
+  runs out ahead of you. Move the mouse around the middle of the screen
+  to turn it, with you as the pivot, and scroll to look further out (up
+  to 84 tiles) or nearer. Right-click again, or put it away, to lower it.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

@@ -11,13 +11,11 @@ import { C } from './ascii.js';
 import { B } from '../world/blocks.js';
 import { ITEMS } from '../world/items.js';
 import { previewModel } from '../world/shipmodels.js';
-import { FLAG_COLORS, EMBLEMS, HULL_PAINTS } from './blueprint.js';
+import { FLAG_COLORS, EMBLEMS, HULL_PAINTS, TRIMS, SAILS } from './blueprint.js';
 import { blankDesign, tidy, typeOf, costOf, stallRoom, registerDesign, RIGS, RIG_NAMES, LIMITS } from '../game/shipdesign.js';
 import { craftSources, countFrom, takeFrom } from '../game/invtools.js';
 import { addItem } from '../game/inventory.js';
 
-const TRIMS = ['#1a1a20', '#e8e0d0', '#a07820', '#5a1a14', '#1a3a5a', '#2a4a2a'];
-const SAILS = ['#f0ead8', '#e8d8b0', '#c8b8a0', '#a83a30', '#3a3a40', '#d8c070'];
 const W = 80;
 const H = 35;
 
@@ -142,18 +140,17 @@ export class ShipDesignWindow extends Window {
     swatches(2, 26, 'Colours', 'flag', FLAG_COLORS.slice(0, 8));
     swatches(2, 27, 'Sails', 'sail', SAILS);
     lab(2, 28, 'Mark');
-    let ex = 10;
-    let ey = 28;
-    for (const em of EMBLEMS) {
-      const t = em || 'none';
-      const on = em === d.emblem;
-      if (ex + t.length + 2 > 44) {
-        ex = 10;
-        ey++;
-      }
-      g.text(ex, ey, `${on ? '[' : ' '}${t}${on ? ']' : ' '}`, on ? C.hi : this.hovering(ex, ey, t.length + 2, 1) ? C.white : C.fg);
-      this.hit(ex, ey, t.length + 2, 1, () => this.set('emblem', em));
-      ex += t.length + 2;
+    {
+      // (Round 86: a long list of marks now; turned through, ◄ and ►.)
+      const i = Math.max(0, EMBLEMS.indexOf(d.emblem));
+      const turn = (k) => this.set('emblem', EMBLEMS[(i + k + EMBLEMS.length) % EMBLEMS.length]);
+      g.text(10, 28, '◄', this.hovering(10, 28, 1, 1) ? C.white : C.hi);
+      g.text(12, 28, (d.emblem || 'none').padEnd(10), C.white);
+      g.text(23, 28, '►', this.hovering(23, 28, 1, 1) ? C.white : C.hi);
+      this.hit(10, 28, 1, 1, () => turn(-1));
+      this.hit(23, 28, 1, 1, () => turn(1));
+      g.text(26, 28, '(flag layers: at her', C.faint);
+      g.text(26, 29, ' blueprint table)', C.faint);
     }
     // ---- her, drawn
     this.drawSide(g, 45, 2, 33, 17);

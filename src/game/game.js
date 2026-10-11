@@ -93,6 +93,7 @@ import { throwGrapple, grappleTick } from './grapple.js';
 import { landmarkTick } from './landmarkfind.js';
 import { notePlaced } from './invtools.js';
 import { pirateTick, piratesSave, piratesLoad, isPirate } from './pirates.js';
+import { toggleSpyglass, spyWheel, spyTick } from './spyglass.js';
 import { stallsTick } from './stalls.js';
 import { isBlueprint, ghostProblem, placeGhost, removeGhost, plansSave, plansLoad } from './plans.js';
 import { boxPress, boxDrag, boxWheel, openPlanWindow } from '../ui/plans.js';
@@ -2216,6 +2217,8 @@ export class Game {
     // (Round 69: at a ship's wheel, drawn back to see all of her.)
     const helm = this.scene ? null : helmView(this);
     this.helmFocus = helm ? helm.focus : null;
+    // (Round 86) A spyglass to your eye: where it's looking.
+    this.spyFocus = spyTick(this, input, dt);
     this.renderer.zoomGoal = this.scene && this.scene.zoom ? this.scene.zoom : Math.max(1 + nearSpire, helm ? helm.zoom : 1);
     // (A scene's zoom is its own smooth curve: taken as it comes.)
     this.renderer.zoomSnap = !!(this.scene && this.scene.zoom);
@@ -3039,6 +3042,7 @@ export class Game {
     }
     // The wheel turns the belt, shift held or not. (The layer you build on
     // is Z, X and V.)
+    if (wheel && spyWheel(this, wheel)) return;
     if (wheel && shipWheel(this, wheel)) return;
     // (Round 78) The copy box's top raised or lowered (its bottom, with
     // Shift held).
@@ -3597,6 +3601,11 @@ export class Game {
       return;
     }
     // (Round 78) A grappling hook thrown up at a ledge (or let go of).
+    // (Round 86) A spyglass: up to your eye, or down.
+    if (held && held.key === 'spyglass') {
+      toggleSpyglass(this);
+      return;
+    }
     if (held && held.grapple && (this.player._grapple || (c && c.block))) {
       throwGrapple(this, c);
       return;
@@ -3670,6 +3679,7 @@ export class Game {
       this.audio?.play('etch');
       return true;
     }
+    if (d.key === 'spyglass') return toggleSpyglass(this);
     if (d.key === 'scroll') {
       if (!(p.recipes || []).length) {
         this.ui.msg('A blank scroll. Once you know a recipe (cook something good and write it down), you can copy it onto one.', '#c8c8c8');

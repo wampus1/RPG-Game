@@ -135,6 +135,10 @@ function rasterStatic(S, q, sink, cut = null) {
   // she's settled), a quarter layer down.
   const waterH = m.wl - 0.25 + sink / LH;
   const sea = [26, 70, 92];
+  // (Round 86) Inside her, nothing's under the sea: what's in her hold
+  // isn't drawn as if it were (only the water she's really taken on is:
+  // see below). Out of her, below her waterline, it is.
+  const dryIn = (i) => (m.inside[i] ? -99 : waterH);
   const paint = hexRGB(S.paint || '#8a2a1e');
   const paint2 = hexRGB(S.paint2 || '#1e1e24');
   const W = m.W;
@@ -172,7 +176,7 @@ function rasterStatic(S, q, sink, cut = null) {
         const row = rowOf(x + 0.5, zz + 0.5);
         if (DYNAMIC.has(b.name)) {
           // (Round 84: below, cut away, her lanterns and hammocks show.)
-          if (cut !== null && (b.name === 'lantern' || b.name === 'hammock')) rasterProp(R, T, PROPS[b.name], x, y, zz, row, vi, waterH, sea);
+          if (cut !== null && (b.name === 'lantern' || b.name === 'hammock')) rasterProp(R, T, PROPS[b.name], x, y, zz, row, vi, dryIn(vi), sea);
           continue;
         }
         if (id === mast && y > m.deckLevel[zz * W + x]) continue;
@@ -180,12 +184,12 @@ function rasterStatic(S, q, sink, cut = null) {
         // (Round 84) A stair: two steps, the way it climbs.
         if (b.stair) {
           if (hidden(vi)) continue;
-          rasterStair(R, T, S, x, y, zz, row, vi, waterH, sea);
+          rasterStair(R, T, S, x, y, zz, row, vi, dryIn(vi), sea);
           continue;
         }
         if (b.render !== 'cube') {
           if (hidden(vi)) continue;
-          rasterProp(R, T, PROPS[b.name] || PROPS.crate, x, y, zz, row, vi, waterH, sea);
+          rasterProp(R, T, PROPS[b.name] || PROPS.crate, x, y, zz, row, vi, dryIn(vi), sea);
           continue;
         }
         const tex = texOf(id, variant);
@@ -195,7 +199,7 @@ function rasterStatic(S, q, sink, cut = null) {
         if (!(capped && covers(at(x, y + 1, zz))) && !(y + 1 < H && hidden(idx(x, y + 1, zz)))) {
           let f = 1.02 + ((hash4(x, y, zz) & 7) - 3.5) * 0.012;
           if (insideAir(x, y + 1, zz)) f *= dimIn;
-          faceTop(R, T, x, y, zz, tex.top, f, row, vi, waterH, sea);
+          faceTop(R, T, x, y, zz, tex.top, f, row, vi, insideAir(x, y + 1, zz) ? -99 : waterH, sea);
         }
         // The sides that face the camera.
         for (let k = 0; k < 4; k++) {
@@ -217,7 +221,7 @@ function rasterStatic(S, q, sink, cut = null) {
             if (paintRows.includes(y)) tint = paint;
             else if (y === bootRow) tint = paint2;
           }
-          faceSide(R, T, x, y, zz, nx, nz, tex.side, f, tint, row, vi * 8 + 2 + k, waterH, sea);
+          faceSide(R, T, x, y, zz, nx, nz, tex.side, f, tint, row, vi * 8 + 2 + k, inner ? -99 : waterH, sea);
         }
       }
     }
@@ -759,14 +763,80 @@ const MAST = '#8a6438';
 // bands, the bolt rope round it; her mark on the great sails; holes where
 // it's been shot through (`hp` how much of it is whole).
 // (Round 69) Is (u, v) of a sail inside the mark on it (see ui/blueprint.js)?
+// (Round 86: more shapes, for her flag's layers too: u across from the
+// hoist, v down.)
 export function markAt(em, u, v) {
-  if (em === 'cross') return Math.abs(u - 0.5) < 0.08 || Math.abs(v - 0.45) < 0.08;
-  if (em === 'stripe') return Math.abs(v - 0.5) < 0.12;
-  if (em === 'disc') return (u - 0.5) * (u - 0.5) + (v - 0.48) * (v - 0.48) < 0.04;
-  if (em === 'saltire') return Math.abs(u - v) < 0.09 || Math.abs(u + v - 1) < 0.09;
-  if (em === 'quarter') return u < 0.5 && v < 0.5;
-  if (em === 'chevron') return Math.abs(v - (0.25 + Math.abs(u - 0.5) * 0.8)) < 0.1;
-  return false;
+  const dx = u - 0.5;
+  const dy = v - 0.48;
+  const r2 = dx * dx + dy * dy;
+  switch (em) {
+    case 'cross': return Math.abs(u - 0.5) < 0.08 || Math.abs(v - 0.45) < 0.08;
+    case 'stripe': return Math.abs(v - 0.5) < 0.12;
+    case 'disc': return r2 < 0.04;
+    case 'saltire': return Math.abs(u - v) < 0.09 || Math.abs(u + v - 1) < 0.09;
+    case 'quarter': return u < 0.5 && v < 0.5;
+    case 'chevron': return Math.abs(v - (0.25 + Math.abs(u - 0.5) * 0.8)) < 0.1;
+    case 'border': return u < 0.09 || u > 0.91 || v < 0.11 || v > 0.89;
+    case 'pale': return Math.abs(u - 0.5) < 0.14;
+    case 'bend': return Math.abs(u - v) < 0.13;
+    case 'hoist': return u < 0.34;
+    case 'fly': return u > 0.66;
+    case 'chief': return v < 0.34;
+    case 'base': return v > 0.66;
+    case 'stripes': return Math.floor(v * 6) % 2 === 0;
+    case 'pales': return Math.floor(u * 6) % 2 === 1;
+    case 'checks': return (Math.floor(u * 6) + Math.floor(v * 4)) % 2 === 0;
+    case 'triangle': return u < 0.5 * (1 - Math.abs(v - 0.5) * 2);
+    case 'diamond': return Math.abs(dx) + Math.abs(v - 0.5) < 0.3;
+    case 'ring': return r2 < 0.055 && r2 > 0.025;
+    case 'crescent': return r2 < 0.07 && (dx - 0.09) * (dx - 0.09) + (dy + 0.03) * (dy + 0.03) > 0.05;
+    case 'wave': return Math.abs(v - 0.5 - 0.09 * Math.sin(u * Math.PI * 4)) < 0.08;
+    case 'star': {
+      // (Five points, one up.)
+      const a = Math.atan2(dy, dx) + Math.PI / 2;
+      const s = ((a / ((Math.PI * 2) / 5)) % 1 + 1) % 1;
+      const t = Math.abs(s - 0.5) * 2;
+      const R = 0.13 + 0.24 * t * t * t;
+      return Math.sqrt(r2) < R;
+    }
+    case 'skull': {
+      // (The jolly roger: a skull over crossed bones.)
+      const hx = u - 0.5;
+      const hy = v - 0.34;
+      const eye = (ex) => (u - ex) * (u - ex) + (v - 0.33) * (v - 0.33) < 0.0028;
+      if (hx * hx + hy * hy * 0.8 < 0.032 && !eye(0.44) && !eye(0.56)) return true;
+      if (Math.abs(hx) < 0.1 && v > 0.45 && v < 0.56 && Math.abs(v - 0.505) > 0.015) return true;
+      const by = v - 0.75;
+      return Math.abs(hx) < 0.3 && v > 0.6 && v < 0.92 && (Math.abs(hx - by * 1.6) < 0.05 || Math.abs(hx + by * 1.6) < 0.05);
+    }
+    case 'swords': {
+      const by = v - 0.5;
+      return Math.abs(dx) < 0.22 && v > 0.22 && v < 0.82 && (Math.abs(dx - by * 0.8) < 0.025 || Math.abs(dx + by * 0.8) < 0.025 || (Math.abs(by - 0.18) < 0.025 && Math.abs(Math.abs(dx) - 0.11) < 0.07));
+    }
+    default: return false;
+  }
+}
+
+// Every mark there is, in the order the blueprint table offers them.
+export const MARKS = ['stripe', 'cross', 'disc', 'saltire', 'quarter', 'chevron', 'border', 'pale', 'bend', 'hoist', 'fly', 'chief', 'base', 'stripes', 'pales', 'checks', 'triangle', 'diamond', 'ring', 'crescent', 'wave', 'star', 'skull', 'swords'];
+export const FLAG_LAYERS_MAX = 5;
+
+// (Round 86) Her flag's colour at (u, v): its field, and each layer laid
+// over it in turn (the last on top). F is the ship, or a design.
+export function flagColorAt(F, u, v) {
+  let c = F.flag || '#a02020';
+  for (const L of F.flagLayers || []) if (L && markAt(L.shape, u, v)) c = L.color;
+  return c;
+}
+
+// Her layers, as a short key (for what's cached of her drawing).
+export const layersKey = (F) => (F.flagLayers || []).map((L) => `${L.shape}${L.color}`).join('');
+
+// Tidy layers from a save, a design, or the net: known shapes, a colour
+// each, no more than there's room for.
+export function cleanLayers(a) {
+  if (!Array.isArray(a)) return [];
+  return a.filter((L) => L && MARKS.includes(L.shape) && typeof L.color === 'string' && /^#[0-9a-f]{6}$/i.test(L.color)).slice(0, FLAG_LAYERS_MAX).map((L) => ({ shape: L.shape, color: L.color }));
 }
 
 function clothShade(f, emblem, hp, seed, fade = 1) {
@@ -855,7 +925,7 @@ function rigFor(S, T, D, low, time) {
   const flutter = (1 - Math.min(1, Math.abs(fill) * 1.6)) * 0.12;
   const brace = S.brace || 0;
   const boom = S.boom || 0;
-  const emblemRGB = hexRGB(S.flag || '#a02020');
+  const emblemRGB = hexRGB(S.markColor || S.flag || '#a02020');
   clothNow = S.sailCloth ? hexRGB(S.sailCloth) : CLOTH;
   const rowAt = (lx, lz) => Math.floor(T.v(lx, lz) + 0.5) + 200;
   const deckH = (mm) => mm.base - 1;
@@ -1040,9 +1110,11 @@ function rigFor(S, T, D, low, time) {
     const wl = S.windLocal || { x: 0, z: -1 };
     const fc = hexRGB(S.flag || '#a02020');
     const tc = hexRGB(S.paint || '#e0c060');
+    // (Round 86: her layered colours, if she's been given them.)
+    const layered = S.flagLayers && S.flagLayers.length;
     const F = (u, v) => [sx + wl.x * 1.6 * u - wl.z * Math.sin(time * 6 + u * 4) * 0.2 * u, sz - 0.5 + wl.z * 1.6 * u + wl.x * Math.sin(time * 6 + u * 4) * 0.2 * u, sh0 + 3.1 - v * 1.1];
     sailSurface(D, T, F, (f) => (u, v) => {
-      const cc = Math.abs(v - 0.5) < 0.17 ? tc : fc;
+      const cc = layered ? hexRGB(flagColorAt(S, u, v)) : Math.abs(v - 0.5) < 0.17 ? tc : fc;
       return pack(Math.min(255, cc[0] * f) | 0, Math.min(255, cc[1] * f) | 0, Math.min(255, cc[2] * f) | 0);
     }, sRow, 4, 2);
   }
@@ -1241,7 +1313,7 @@ export function drawShip(r, game, S, aboard) {
   const gk = (S.guns || []).map((g) => `${Math.round((g.aim || 0) * 20)}:${Math.round((g.elev || 0) * 20)}:${Math.round((g.recoil || 0) * 10)}`).join(';');
   const key = [q, S.noRig ? 1 : 0, Rs.ms !== undefined ? S.rcacheVer : 0, Math.round((S.sailSet || 0) * 20), Math.round((S.brace || 0) * 40), Math.round((S.boom || 0) * 40), Math.round((S.fill || 0) * 10), S.lee || 0,
     Math.round((S.wheel || 0) * 12), gk, S.runOut ? 1 : 0, (S.sailHp || []).map((h) => Math.round(h * 20)).join(':'), S.night ? 1 : 0, tq,
-    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem, S.sailCloth || '', cut ?? ''].join(',');
+    Math.round(((S.windLocal || {}).x || 0) * 10), Math.round(((S.windLocal || {}).z || 0) * 10), S.flag, S.emblem, S.markColor || '', layersKey(S), S.sailCloth || '', cut ?? ''].join(',');
   if (!S.dyn || S.dyn.k !== key) {
     const low = pooled(S, 'low', Rs.ox - 24, Rs.oy - 24, Rs.ox + Rs.w + 24, Rs.oy + Rs.h + 8, Rs);
     deckWorks(S, T, low, tq, cut);
@@ -1306,6 +1378,81 @@ export function drawShip(r, game, S, aboard) {
   // (Round 69) A plank of hers being knocked out: cracking as it goes.
   const M = game && game.shipMining;
   if (M && M.s === S.id && M.k > 0.05) drawCracks(r, S, M.vi, M.k);
+  // (Round 86) Her holes, seen from below her decks (or anyone's, near,
+  // with a plank or a block in hand): each one outlined and pulsing, red
+  // where the sea's coming in.
+  if (game && game.player) showHoles(r, game, S, cut);
+  // (Round 86) The cell of hers under the pointer, outlined as a block is
+  // ashore; a stair lit up.
+  const c = game && game.cursor;
+  if (c && c.ship && c.ship.s === S.id) {
+    const m = S.m;
+    const vi = c.ship.vi;
+    const id = S.vox[vi];
+    const b = id ? BLOCKS[id] : null;
+    const pulse = 0.55 + 0.35 * Math.sin((r.time || 0) * 6);
+    const col = c.inReach ? `rgba(255,240,160,${pulse})` : `rgba(160,160,160,${pulse * 0.6})`;
+    const x = vi % m.W;
+    const z = Math.floor(vi / m.W) % m.L;
+    const y = Math.floor(vi / (m.W * m.L));
+    cellOutline(r, S, x, y, z, col, b && b.stair ? `rgba(255,236,150,${0.22 + pulse * 0.18})` : null);
+  }
+}
+
+// (Round 86) The edges of cell (x, y, z) of hers on the screen, as a
+// block's outline is drawn ashore (`fill`: its top filled too).
+export function cellOutline(r, S, x, y, z, color, fill = null) {
+  const D = S.drawn;
+  if (!D) return;
+  const T = rot(S.m, (D.q / BUCKETS) * TAU);
+  const pt = (ux, uz, h) => [D.O.X + T.u(ux, uz) * TILE, D.O.Y + T.v(ux, uz) * TILE - h * LH + LH];
+  const cs = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]];
+  const top = cs.map(([a, b]) => pt(a, b, y + 1));
+  const bot = cs.map(([a, b]) => pt(a, b, y));
+  const ctx = r.ctx;
+  ctx.save();
+  ctx.lineWidth = 1;
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    top.forEach(([X, Y], i) => (i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y)));
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  for (const ring of [top, bot]) ring.forEach(([X, Y], i) => (i ? ctx.lineTo(X + 0.5, Y + 0.5) : ctx.moveTo(X + 0.5, Y + 0.5)));
+  ctx.closePath();
+  for (let i = 0; i < 4; i++) {
+    ctx.moveTo(top[i][0] + 0.5, top[i][1] + 0.5);
+    ctx.lineTo(bot[i][0] + 0.5, bot[i][1] + 0.5);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// (Round 86) Her holes, marked where they'd be hard to make out: from
+// below her decks, or to anyone near with something to mend her with in
+// hand. (Under her waterline, red: the sea's coming in there.)
+function showHoles(r, game, S, cut) {
+  const p = game.player;
+  const held = p.heldDef ? p.heldDef() : null;
+  const mending = held && held.kind === 'block' && Math.hypot(S.x - p.x, S.z - p.z) < S.m.L;
+  if (cut === null && !mending) return;
+  const m = S.m;
+  const line = m.wl - (S.yOff || 0);
+  const pulse = 0.5 + 0.4 * Math.sin((r.time || 0) * 5);
+  let n = 0;
+  for (let i = 0; i < m.N && n < 40; i++) {
+    if (S.vox[i] || !m.vox[i] || !m.struct[i]) continue;
+    const y = Math.floor(i / (m.W * m.L));
+    if (cut !== null && y > cut + 1) continue;
+    const x = i % m.W;
+    const z = Math.floor(i / m.W) % m.L;
+    const wet = m.skin[i] && y <= line;
+    n++;
+    cellOutline(r, S, x, y, z, wet ? `rgba(255,90,70,${pulse})` : `rgba(255,210,120,${pulse * 0.8})`, wet ? `rgba(120,180,255,${0.15 + pulse * 0.15})` : null);
+  }
 }
 
 // Cracks over her cell vi, more of them the nearer it is to giving way

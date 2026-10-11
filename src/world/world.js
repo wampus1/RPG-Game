@@ -339,6 +339,18 @@ export class World {
     if (swim) {
       if (this.canSwim(x, fromY, z)) return fromY;
       if (this.canSwim(x, fromY - 1, z)) return fromY - 1;
+      // (Round 86) In over your depth (thrown into the sea where it's
+      // deeper than you can swim in, off a ship going down): you can still
+      // make for water no deeper than where you are, and so to the
+      // shallows; never out into deeper.
+      const here = this.waterDepth(fromX, fromY, fromZ);
+      if (here > 2) {
+        for (const y of [fromY, fromY + 1, fromY - 1]) {
+          const head = BLOCKS[this.getBlock(x, y + 1, z)];
+          if (!this.isWaterAt(x, y, z) || head.solid || head.liquid) continue;
+          if (this.waterDepth(x, y, z) <= here) return y;
+        }
+      }
     }
     // (Round 75) Off a stair down onto the one below it: down, not up onto
     // whatever floor's over that one.
@@ -364,6 +376,14 @@ export class World {
 
   isWaterAt(x, y, z) {
     return this.getBlock(x, y, z) === B.water;
+  }
+
+  // (Round 86) How deep the water is from (x, y, z) down (0 if it's not
+  // water there).
+  waterDepth(x, y, z) {
+    let n = 0;
+    while (y - n > 0 && n < 64 && this.getBlock(x, y - n, z) === B.water) n++;
+    return n;
   }
 }
 

@@ -14,6 +14,9 @@ import { makeCrew, addHand } from './shipcrew.js';
 import { fleetsSave, fleetsLoad } from './shipfleets.js';
 import { designsSave, designsLoad, designOfType } from './shipdesign.js';
 import { insideFitting, nearFitting, useInside, boardBelow } from './shiphold.js';
+import { startWeigh, letGo } from './anchor.js';
+import { GUILDS } from './pirates.js';
+import { piracyOf, isKnownPirate, pledge, PIRATE_AT } from './piracy.js';
 import { addItem, removeItem } from './inventory.js';
 
 // A key aboard (or beside) a ship: true if it was hers to handle.
@@ -40,10 +43,10 @@ export function shipKey(game, code) {
   if (code === 'KeyR' && p.deck && p.deck.role === 'helm') {
     const S = shipById(game, p.deck.s);
     if (!S) return false;
-    S.anchor = !S.anchor;
-    if (S.anchor) S.sailGoal = 0;
-    game.ui.msg(S.anchor ? 'Let go the anchor!' : 'Weigh anchor!', '#a0d8ff', true);
-    game.audio?.play(S.anchor ? 'chain' : 'select');
+    // (Round 86) From the helm: the order given (the hands at the capstan
+    // bring it up; see anchor.js).
+    if (S.anchor) startWeigh(game, S, p);
+    else letGo(game, S);
     return true;
   }
   return false;
@@ -567,10 +570,11 @@ export function useFitting(game, p, S, f) {
       game.ui.msg('Closer to the capstan, to work it.', '#c8c8c8', true);
       return true;
     }
-    S.anchor = !S.anchor;
-    if (S.anchor) S.sailGoal = 0;
-    game.ui.msg(S.anchor ? 'You let go the anchor: the cable runs out.' : 'You heave at the capstan: the anchor\'s aweigh!', '#a0d8ff', true);
-    game.audio?.play(S.anchor ? 'chain' : 'select');
+    // (Round 86) Let go at once; weighed turn by turn, by whoever's at
+    // the bars (stay by it: see anchor.js).
+    if (!S.anchor) letGo(game, S);
+    else if (S.weigh) game.ui.msg(`Heave! The anchor's ${Math.round(S.weigh.k * 100)}% up. (Stay at the capstan.)`, '#a0d8ff', true);
+    else startWeigh(game, S, p);
     return true;
   }
   if (f.kind === 'inside') {
@@ -766,6 +770,8 @@ export function sailorTalk(game, c) {
   if (!game.ui || !game.ui.openModTalk) return void c.say(line, 3.5);
   const mine = S && S.owner && S.owner === ownerId(game, p);
   const talk = (text, choices, onPick) => game.ui.openModTalk({ game, speaker: c, text, choices, onPick, x: { game, player: p } });
+  // (Round 86) A pirate captain: to swear to their guild, if they'd have you.
+  if (S && S.pirate && c.role === 'captain' && !S.fight) return pirateCaptain(game, c, S, p, talk);
   if (!mine) {
     const bound = S && S.route && S.route.length ? 'We\'re bound away soon, wind willing.' : 'We lie here a while yet.';
     return talk(line, ['Where are you bound?', 'Fair winds.'], (i) => {
@@ -790,6 +796,21 @@ export function sailorTalk(game, c) {
       c.paidOff = true;
       c.say('Fair enough. I\'ll find another berth.', 3);
     }
+  });
+}
+
+function pirateCaptain(game, c, S, p, talk) {
+  const gi = S.guild ?? 0;
+  const G = GUILDS[gi] || GUILDS[0];
+  const r = piracyOf(game, p);
+  if (r.guild === gi) return talk(`Welcome aboard, brother. ${G.name.replace(/^the /, 'The ')} look after their own. Fair winds, and fat prizes.`, ['Fair winds.'], null);
+  if (!isKnownPirate(game, p)) return talk(`You? You've not the stomach for our trade. Sink a few fat merchantmen (${PIRATE_AT - r.n} more), and then come and talk to me.`, ['I\'ll be going.'], null);
+  const other = r.guild !== null ? GUILDS[r.guild] : null;
+  const ask = other ? `You're sworn to ${other.name}. Turn your coat and swear to ${G.name} instead? They'll not forgive it.` : `So you're the one sending honest ships to the bottom. Swear to ${G.name}, and no ship of ours will ever fire on you. Other guilds' may, mind.`;
+  talk(ask, [`I swear to ${G.name}.`, 'Not today.'], (i) => {
+    if (i !== 0) return;
+    pledge(game, p, gi, G);
+    c.say('Welcome to the brotherhood! Yo-ho!', 3, '#ffd080');
   });
 }
 
@@ -853,7 +874,7 @@ export function useShipItem(game, held) {
     // (Round 69) No crew: you sign them on (Sailor's Articles).
     addShip(game, {
       type, x: at.x, z: at.z, yaw: at.yaw, owner: ownerId(game, p), name, anchor: true, ammo: Math.round(T.speed),
-      crew: [], paint: D ? D.paint : '#2a4a8a', paint2: D ? D.paint2 : '#1a1a20', flag: D ? D.flag : '#e0c040', emblem: D ? D.emblem : 'stripe',
+      crew: [], paint: D ? D.paint : '#2a4a8a', paint2: D ? D.paint2 : '#1a1a20', flag: D ? D.flag : '#e0c040', emblem: D ? D.emblem : 'stripe', flagLayers: D ? D.flagLayers : [], markColor: D ? D.markColor : null,
       sailCloth: D && D.sail && D.sail !== '#f0ead8' ? D.sail : null,
     });
     removeItem(p.inv, held.key, 1);

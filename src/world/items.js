@@ -454,6 +454,8 @@ item('wagon', { name: 'Wagon', kind: 'misc', stack: 1, value: 60 });
 item('lead', { name: 'Lead', kind: 'misc', stack: 8, value: 6 });
 item('fishing_rod', { name: 'Fishing Rod', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 8, fishing: true });
 // (Round 78) Thrown up at a ledge, and climbed (see game/grapple.js).
+// (Round 86) See game/spyglass.js.
+item('spyglass', { name: 'Spyglass', kind: 'misc', stack: 1, value: 60, about: 'A brass telescope. Right-click to put it to your eye: move the mouse round to turn the view (you\'re its pivot), and scroll to look further out or bring it back in. Right-click again to lower it.' });
 item('grapple_hook', { name: 'Grappling Hook', kind: 'tool', stack: 1, damage: 1, reach: 1.5, cooldown: 0.5, value: 30, grapple: true, about: 'Right-click a ledge above you (up to 12 high, 9 out) to throw it; you climb the rope to the top. Right-click again to let go.' });
 item('bow', { name: 'Hunting Bow', kind: 'weapon', stack: 1, damage: 4, reach: 1.2, range: 8, ranged: true, cooldown: 0.9, value: 15, hands: 2 });
 item('arrow', { value: 1 });

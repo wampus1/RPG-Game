@@ -30,7 +30,9 @@ import { MARKS, fightPhase } from '../entities/tempo.js';
 import { afflictionsOf } from '../game/afflict.js';
 import { addNote, tickNotes, drawNotes } from './multiplayer.js';
 import { ModTalkWindow } from './modtalk.js';
-import { ownerId } from '../game/ships3d.js';
+import { ownerId, PATCHES } from '../game/ships3d.js';
+// (Round 86) What a ship's fittings do, in a word.
+const FITTING_HINT = { helm: 'RMB take the wheel', ship_cannon: 'RMB man the gun', capstan: 'RMB turn the capstan: weigh or drop anchor', hatch: 'RMB go below', ship_pump: 'RMB work the pump', blueprint_table: 'RMB the blueprint table' };
 import { BlueprintWindow } from './blueprint.js';
 import { nearMates } from '../game/guilds.js';
 
@@ -1247,6 +1249,29 @@ export class UI {
         else if (horse && !e.tie) lines.push({ text: e.own ? (e.saddled ? 'RMB ride' : 'RMB with a saddle to saddle up') : e.loose ? 'someone\'s horse' : 'RMB with food to win it over', color: C.faint });
         else if (horse && e.town && !e.own && game.sim && game.sim.isCitizen(e.town.sid)) lines.push({ text: 'RMB untie and take out (citizen)', color: C.faint });
         if (game.player.heldItem() === 'lead' && !e.tie && !e.leadBy) lines.push({ text: 'RMB put a lead on it', color: C.faint });
+      }
+    } else if (c.ship) {
+      // (Round 86) A cell of a ship's: what it is, whose ship, and what
+      // can be done with it.
+      const sh = game.ships3d ? game.ships3d.find((q) => q.id === c.ship.s) : null;
+      const id = sh ? sh.vox[c.ship.vi] : 0;
+      const b = id ? BLOCKS[id] : null;
+      if (b) {
+        lines.push({ text: b.label || b.name, color: c.inReach ? C.hi : C.dim });
+        const own = !!(sh.owner && sh.owner === ownerId(game, game.player));
+        lines.push({ text: `${sh.name}${own ? ' · your ship' : ''}`, color: C.cyan });
+        const hints = [];
+        if (b.stair) hints.push('walk onto it to go up or down');
+        else if (FITTING_HINT[b.name]) hints.push(FITTING_HINT[b.name]);
+        const hd = game.player.heldDef();
+        if (hd && PATCHES(hd.key)) hints.push('click a hole beside it to patch it');
+        else if (isFinite(b.hardness)) hints.push('hold knock it out');
+        if (hints.length) lines.push({ text: hints.join(' · '), color: C.faint });
+        if (game.shipMining && game.shipMining.s === sh.id && game.shipMining.vi === c.ship.vi) {
+          const n = Math.floor((game.shipMining.k || 0) * 10);
+          lines.push({ text: '[' + '▓'.repeat(n) + '░'.repeat(10 - n) + ']', color: C.orange });
+        }
+        this.tooltip = { lines, tool: null, far: !c.inReach };
       }
     } else if (c.block && c.block.id !== B.air) {
       const b = c.block;

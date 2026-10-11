@@ -461,10 +461,19 @@ function build(type) {
   // barrels lashed by the rail.
   const deckProps = [];
   {
-    const z = mainZ + 2;
-    if (free(cx, T.deck + 1, z) && !hatches.some((h) => Math.abs(h.z - z) <= h.n + 1)) {
+    // (Round 86: the first clear spot on her centreline near the mainmast,
+    // clear of the hatches on her deck; it was too often where a hatch was,
+    // and she went without.)
+    // (Up on her open deck, over the hull's own cells: clear above, deck
+    // planking under it.)
+    const onDeck = (h) => h.top || h.U === T.deck;
+    const clear = (x, y, z) => inBox(x, y, z) && get(x, y, z) === 0 && get(x, y + 1, z) === 0 && get(x, y - 1, z) === B.deck_planks;
+    for (const dz of [2, -2, 3, -3, 4, -4, 5, -5]) {
+      const z = mainZ + dz;
+      if (!clear(cx, T.deck + 1, z) || hatches.some((h) => onDeck(h) && Math.abs(h.z - z) <= h.n + 1)) continue;
       set(cx, T.deck + 1, z, B.capstan);
       deckProps.push({ x: cx, y: T.deck + 1, z, id: B.capstan });
+      break;
     }
   }
   const sternLights = [];
