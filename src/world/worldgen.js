@@ -175,6 +175,8 @@ export class Overworld {
     const cz = Math.floor(z / REGION_D);
     if (this.pins.some((q) => Math.floor(q.x / REGION_W) === cx && Math.floor(q.z / REGION_D) === cz && q.label === label)) return false;
     this.pins.push({ x: Math.round(x), z: Math.round(z), label, glyph, ...(extra || {}) });
+    // (Round 85: changed, for those playing along: see host.js.)
+    this.pinsV = (this.pinsV || 0) + 1;
     // (Round 79: the oldest told-of place makes room; a landmark stays.)
     if (this.pins.length > 60) {
       const i = this.pins.findIndex((q) => !q.landmark);

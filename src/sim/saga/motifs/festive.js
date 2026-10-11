@@ -244,9 +244,20 @@ motif({
     S.note(th, `Outlaws came for the festival purse, and ${pid ? nameOf(S, R.pl(pid)) : 'the town'} drove them off. The dancing started again before the dust settled.`, { news: [th.sid] });
   },
   tasks: {
-    tables: { done(th) { th.vars.cheer++; }, thanks: () => ['Now THAT\'S a feast. Save room for pie.'] },
-    flowers: { done(th) { th.vars.cheer++; }, thanks: () => ['Oh, it\'ll look like a garden! Thank you!'] },
-    watch: {},
+    tables: {
+      done(th) { th.vars.cheer++; },
+      thanks: () => ['Now THAT\'S a feast. Save room for pie.'],
+      how: (th, t, S) => `Give ${t.giverName || 'the cook'} in ${townName(S, th.sid)} 6 things to eat (any food), before day ${th.vars.day + 1}.`,
+    },
+    flowers: {
+      done(th) { th.vars.cheer++; },
+      thanks: () => ['Oh, it\'ll look like a garden! Thank you!'],
+      how: (th, t, S) => `Pick 5 ${ITEMS[t.item] ? ITEMS[t.item].name : 'flowers'} (they grow wild in the grass) and give them to ${t.giverName || 'the host'} in ${townName(S, th.sid)}, before day ${th.vars.day + 1}.`,
+    },
+    watch: {
+      where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+      how: (th, t, S) => `Be by the square in ${townName(S, th.sid)} on day ${th.vars.day + 1}, from four in the afternoon when the festival starts, and fight off the outlaws if they come.`,
+    },
     music: {},
   },
   townTalk(th, npc, pid, S) {
@@ -914,6 +925,7 @@ motif({
   },
   tasks: {
     bring: {
+      how: (th, t, S) => `Go to ${townName(S, th.sid)}'s fields (marked on your map) and stay there working for half an hour, before the storm.`,
       reach(th, t, pid, S) {
         // (An hour in the fields, and it counts.)
         th.vars.inField ||= {};
@@ -926,12 +938,14 @@ motif({
       },
     },
     cure: {
+      how: (th, t, S) => `Gather 4 herbs (they grow wild in the grass and the woods) and give them to ${t.giverName || 'the herbalist'} in ${townName(S, th.sid)}, within four days.`,
       done(th, t, by, S) {
         S.end(th, 'saved', `${nameOf(S, by)} brought the herbs, and the blight was stopped at the edge of the last field. Most of the harvest is saved.`, { news: [th.sid] });
       },
       thanks: () => ['Bitter enough to curl your hair. Perfect. Out to the fields!'],
     },
     boars: {
+      how: (th, t, S) => `Go to ${townName(S, th.sid)}'s fields (marked on your map) at night, when the boars come, and kill 4 of them.`,
       done(th, t, by, S) {
         S.end(th, 'saved', `${nameOf(S, by)} drove the boars from the fields. There'll be bacon at the harvest supper.`, { news: [th.sid] });
       },

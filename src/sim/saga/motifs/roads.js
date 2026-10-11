@@ -514,7 +514,10 @@ motif({
       S.dismissActor(th, 'bout');
     },
   },
-  tasks: { thief: {} },
+  tasks: { thief: {
+    where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+    how: (th, t, S) => `Ask people in ${townName(S, th.sid)} if they've seen anyone with silver candlesticks. When someone names the thief, talk to the thief and accuse them.`,
+  } },
 });
 
 // ------------------------------------------------------------ a noble in hiding
@@ -718,6 +721,7 @@ motif({
       thanks: () => ['Ashface? ASHFACE? The old devil is alive!'],
     },
     chest: {
+      how: (th) => `Go to the spot ${th.names.vet} described (marked on your map) and dig there.`,
       reach(th, t, pid, S) {
         const rng = S.rng(th, 0x0e9);
         S.complete(t, R.pl(pid));

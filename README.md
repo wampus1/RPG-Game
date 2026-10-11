@@ -6326,6 +6326,48 @@ into stairs when the world's brought up to date.)
 - **Save check**: no longer "fixes" unopened chests, which emptied them
   (they're filled when first opened).
 
+## Round 85: Quests that point the way, and ships that fight back
+
+- **Quests say what to do and where**: every task in the quest log (O)
+  now has a **To do** line, one plain sentence of what to actually do
+  (who to talk to, what to bring and to whom, where to go and what to do
+  there), and a **Where** line (in which town, or how far and which way
+  from the nearest one, or at sea). When you take on a task that's done
+  somewhere else, it's marked on your map and you're told so; the mark
+  moves to whoever asked once it's done ("go back to ..."), and goes when
+  the task is over. Quests you'd already taken on are marked the first
+  time you load. **Mark on map** uses the same place.
+- **The pirates who took someone's family**: the story only starts when
+  there's a real pirates' cove to sail to. The task names it and says
+  where it is (at sea, off which shore), and it's marked on your map when
+  you take it on. You'll need a ship: sail in close and beat the pirate
+  ships at anchor there, and the one they took is found in a hold. The
+  cove fills up again while it still holds anyone's family, even if
+  you've cleared it before.
+- **Quests that couldn't be finished**: the old person's lost heirloom
+  is now really somewhere: in the strongbox of an outlaw camp nearby
+  (marked), or with a trader in a nearby town who'll sell it to you. Any
+  outlaw camp holding something stolen (a saint's relic, a merchant's
+  goods, a stolen treasure) always has its strongbox to take it from.
+- **Plainer words throughout**: the murder investigation names who might
+  have seen something; the lost child, the injured traveller, the
+  runaway, the White Stag, the shipwreck, the beacons, the trail, the
+  wedding, the will, the feud, the festival, the herbs and the rest each
+  say exactly what to do.
+- **No lights on boats**: a torch or lantern carried aboard a ship no
+  longer lights up the water around the hull (yours or anyone else's).
+- **Flooding keeps time**: a holed ship takes on water while you sleep or
+  wait, not just in real seconds; her crew keep mending and pumping as
+  long. If you're asleep aboard when the water gets high, you wake up.
+- **Patching with any solid block**: a hole in a ship's hull or deck can
+  be stopped with cobblestone, stone or any solid block, not only
+  planks; the water stops coming in. (Masts and guns still need planks.)
+- **Ships you fire on react**: a warship, a troopship, a pirate, or any
+  ship with guns enough to match yours runs out her guns, comes about and
+  fights; an unarmed merchantman or one that's outgunned crowds on sail
+  and runs, away from you and never straight into the wind. A chase is
+  given up once you're far off.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

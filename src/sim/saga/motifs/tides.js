@@ -21,6 +21,8 @@ import { makePerson } from '../actors.js';
 import { mayorOf, alive } from '../../econ.js';
 import { relocate } from '../../civic.js';
 import { removeItem } from '../../../game/inventory.js';
+import { coveOf } from '../../../game/pirates.js';
+import { shipById } from '../../../game/ships3d.js';
 
 const tid = (th) => `t${th.id}`;
 const first = (r) => (r ? r.name.first : 'them');
@@ -30,6 +32,11 @@ const someoneIn = (L, rng, f = () => true) => {
   return list.length ? pick(rng, list) : null;
 };
 const guardOf = (L) => L.npcs.find((r) => alive(r) && r.job === 'guard') || mayorOf(L);
+// (Round 85) The pirates' cove, as a place to go: { x, z, words }.
+const coveSpot = (S) => {
+  const c = coveOf(S.game);
+  return c ? { x: c.x, z: c.z, words: `${c.name}, at sea off the shore of ${c.land}` } : null;
+};
 
 // ------------------------------------------------------------ taken at sea
 motif({
@@ -42,7 +49,8 @@ motif({
     const L = layoutOf(S, ev.sid);
     if (!L) return null;
     const kin = someoneIn(L, { next: Math.random });
-    if (!kin) return null;
+    // (Round 85: only with a cove there is to sail to.)
+    if (!kin || !ev.cove) return null;
     return { cast: { kin: R.rec(ev.sid, kin.idx), town: R.town(ev.sid) }, sid: ev.sid, vars: { ship: ev.ship, cove: ev.cove || 'their cove', to: ev.to } };
   } }],
   nodes: {
@@ -73,6 +81,8 @@ motif({
           if (!ev.cove) return;
           const t = S.tasksOf(th, 'free')[0];
           const by = ev.pid ? R.pl(ev.pid) : null;
+          // (Round 85: found, and said so to whoever found them.)
+          if (ev.pid) S.tell(ev.pid, `In the pirates' hold you find ${th.vars.hand}, taken with the ${th.vars.ship}: alive. They'll make their own way home to ${townName(S, th.sid)}.`, '#ffe070');
           if (t && by) S.complete(t, by);
           S.end(th, 'freed', `When ${th.vars.cove}'s ships were beaten, ${th.vars.hand} was found in a hold, alive. ${th.vars.hand} is home with ${th.names.kin}.`, { news: [th.sid] });
         },
@@ -87,7 +97,17 @@ motif({
       fade: 14,
     },
   },
-  tasks: { free: { thanks: (th) => [`${th.vars.hand}... you brought ${th.vars.hand} home. I don't know how we'll ever repay you.`] } },
+  tasks: { free: {
+    thanks: (th) => [`${th.vars.hand}... you brought ${th.vars.hand} home. I don't know how we'll ever repay you.`],
+    // (Round 85) Where they're held, and what to do.
+    where: (th, t, S) => coveSpot(S),
+    how: (th, t, S, pid) => {
+      const c = coveOf(S.game);
+      const cove = c ? c.name : th.vars.cove;
+      if (pid && S.claimedBy(t, pid)) return `Sail a ship to ${cove} (marked on your map) and beat the pirate ships anchored there: ${th.vars.hand} is in one of their holds. Then go back to ${th.names.kin} in ${townName(S, th.sid)}.`;
+      return `Talk to ${th.names.kin} in ${townName(S, th.sid)}: pay the ¤${th.vars.ransom} ransom, or offer to go to ${cove} yourself.`;
+    },
+  } },
   townTalk(th, npc, pid, S) {
     if (!isRec(npc, th.cast.kin)) return [];
     const t = S.tasksOf(th, 'free')[0];
@@ -106,7 +126,8 @@ motif({
     if (id === 'tid_cove') {
       if (t) S.accept(t, R.pl(pid));
       S.touch(th, pid);
-      return { lines: [`${th.vars.cove}. Nobody who sails there comes back the same. If you mean it... find the ship that holds ${th.vars.hand}. Please.`, '(Beat the pirates of the cove, and the captives are freed.)'], close: true };
+      const c = coveSpot(S);
+      return { lines: [`${th.vars.cove}. Nobody who sails there comes back the same. If you mean it... find the ship that holds ${th.vars.hand}. Please.`, `(${c ? `${c.words}: marked on your map. ` : ''}You'll need a ship. Sail in close, and beat the pirate ships anchored there to free ${th.vars.hand}.)`], close: true };
     }
     return null;
   },
@@ -198,7 +219,11 @@ motif({
       fade: 4,
     },
   },
-  tasks: { hold: { thanks: () => ['We held. We HELD. Drinks are on the watch tonight.'] } },
+  tasks: { hold: {
+    thanks: () => ['We held. We HELD. Drinks are on the watch tonight.'],
+    where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+    how: (th, t, S) => `Be in ${townName(S, th.sid)} tonight, when the ${th.vars.foe}'s soldiers attack, and help the watch drive them off.`,
+  } },
 });
 
 // ------------------------------------------------------------ sore losers
@@ -252,7 +277,9 @@ motif({
       fade: 8,
     },
   },
-  tasks: { mend: {} },
+  tasks: { mend: {
+    how: (th, t, S) => `Talk to ${th.names.loser} in ${townName(S, th.sid)} and talk them into staying, before day ${th.vars.due}.`,
+  } },
   townTalk(th, npc, pid, S) {
     if (!isRec(npc, th.cast.loser) || !S.tasksOf(th, 'mend')[0]) return [];
     return [
@@ -356,6 +383,14 @@ motif({
       fade: 6,
     },
   },
-  tasks: { hunt: { thanks: (th) => [`${th.vars.name}, finished. The harbour owes you, and pays its debts.`] } },
+  tasks: { hunt: {
+    thanks: (th) => [`${th.vars.name}, finished. The harbour owes you, and pays its debts.`],
+    // (Round 85) Where she is now, at sea.
+    where: (th, t, S) => {
+      const sh = shipById(S.game, th.vars.ship);
+      return sh && !sh.sinking ? { x: Math.round(sh.x), z: Math.round(sh.z) } : null;
+    },
+    how: (th) => `Find ${th.vars.name} at sea (her last place is marked on your map). Sink her, or board her and beat her crew. You'll need a ship.`,
+  } },
 });
 

@@ -476,6 +476,8 @@ function make(game, v, pos, d) {
   });
   S.transient = true;
   S.voyage = v.id;
+  // (Round 85: what she's out for, to know whether to fight or run.)
+  S.vkind = v.kind;
   S.sailGoal = 1;
   S.stores = 200;
   // (Her way on from here; at the end, in toward the port.)

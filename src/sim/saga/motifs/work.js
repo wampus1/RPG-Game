@@ -223,6 +223,13 @@ motif({
   },
   tasks: {
     job: {
+      // (Round 85) The hunting jobs, plainly (the rest say themselves).
+      how: (th, t, S) => {
+        const v = th.vars;
+        if (v.kind === 'watch') return `Kill ${t.need} hostile creatures near ${townName(S, th.sid)} at night (within about ninety paces of the middle of town). So far: ${Math.min(t.count, t.need)}.`;
+        if (v.kind === 'clear') return `Kill ${t.need} hostile creatures in the fields and woods around ${townName(S, th.sid)}. So far: ${Math.min(t.count, t.need)}.`;
+        return null;
+      },
       done(th, t, by, S) {
         S.end(th, 'done', `${nameOf(S, by)} saw to it: ${t.title.toLowerCase()}.`);
       },
@@ -232,6 +239,7 @@ motif({
       },
     },
     lost: {
+      how: (th, t, S) => `Search the place marked on your map for ${th.vars.thing.replace(/^their /, `${nameOf(S, th.cast.giver)}'s `)}, and bring it back to ${nameOf(S, th.cast.giver)} in ${townName(S, th.sid)}.`,
       reach(th, t, pid, S) {
         S.tell(pid, `You find it, half hidden in the grass: ${th.vars.thing.replace(/^their /, `${nameOf(S, th.cast.giver)}'s `)}.`, '#e8e0a0');
         S.complete(t, R.pl(pid));

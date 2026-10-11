@@ -9,7 +9,8 @@
 //     hot spring and say if the tales are true. Done, they tell what they
 //     know (and of any cache, where it's buried).
 import { motif, R, nameOf } from '../core.js';
-import { pick, laidTowns, adults, isRec, townMid, directions } from './lib.js';
+import { pick, laidTowns, adults, isRec, townMid, directions, townName } from './lib.js';
+import { ITEMS } from '../../../world/items.js';
 import { landmarksIn } from '../../../world/landmarks.js';
 import { knowLandmark } from '../../../game/landmarkfind.js';
 import { REGION_W } from '../../../config.js';
@@ -172,6 +173,10 @@ motif({
   },
   tasks: {
     visit: {
+      // (Round 85) Plainly.
+      how: (th, t, S) => (th.vars.lm.kind === 'arch'
+        ? `Go to ${th.vars.lm.name} (marked on your map) and stand under it at dusk (from half past five to half past nine in the evening). Then go back to ${th.vars.who} in ${townName(S, th.sid)}.`
+        : `Go to ${th.vars.lm.name} (marked on your map) and get into the water. Then go back to ${th.vars.who} in ${townName(S, th.sid)}.`),
       reach(th, t, pid, S) {
         const k = th.vars.lm.kind;
         // (Round 84) The arch at dusk, as asked: any other time of day,
@@ -205,6 +210,8 @@ motif({
       },
     },
     bring: {
+      where: (th) => ({ x: th.vars.lm.x, z: th.vars.lm.z }),
+      how: (th, t, S) => `Go to ${th.vars.lm.name} (marked on your map), gather ${t.n > 1 ? `${t.n} ` : 'a '}${ITEMS[t.item] ? ITEMS[t.item].name : t.item} there, and give ${t.n > 1 ? 'them' : 'it'} to ${th.vars.who} in ${townName(S, th.sid)}.`,
       thanks(th) {
         return [({ tree: 'Look at the grain on it! A hundred years, at least.', bones: 'Extraordinary. This will keep me busy for a year.', crater: 'It\'s warm still, can you feel it? Star-stone. Truly.' })[th.vars.lm.kind] || 'Thank you.'];
       },

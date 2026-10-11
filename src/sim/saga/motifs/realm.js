@@ -95,6 +95,7 @@ motif({
       accepted(th, t, who, S) {
         if (who.t === 'pl') S.give(who.pid, th.vars.note, 1);
       },
+      how: (th, t, S) => `Take the sealed orders to the mayor of ${townName(S, th.cast.front.sid)} (marked on your map) and talk to them. Enemy riders may come after you on the road.`,
       thanks: () => ['Orders, from the court? Thank the gods. You rode through all that?'],
       done(th, t, by, S) {
         S.end(th, 'delivered', `${nameOf(S, by)} carried the court's orders through to ${townName(S, th.cast.front.sid)}.`, { news: [th.cast.front.sid] });
@@ -144,6 +145,7 @@ motif({
   },
   tasks: {
     look: {
+      how: (th, t, S) => `Walk into the middle of ${townName(S, th.vars.mark)} (marked on your map) at night, after nine, without getting caught. Then go back to ${t.giverName || 'the mayor'} in ${townName(S, th.sid)}.`,
       reach(th, t, pid, S) {
         const night = S.game.minute >= 1260 || S.game.minute < 300;
         if (!night) {
@@ -209,6 +211,9 @@ motif({
   },
   tasks: {
     ransom: {
+      // (Round 85) The council that holds them.
+      where: (th, t, S) => townMid(town(S, th.vars.at)),
+      how: (th, t, S) => `Take the ¤${th.vars.ransom} to the mayor of ${townName(S, th.vars.at)} (marked on your map) and pay for ${th.names.prisoner}'s release.`,
       accepted(th, t, who, S) {
         if (who.t !== 'pl') return;
         S.give(who.pid, 'coin', th.vars.ransom);
@@ -282,8 +287,8 @@ motif({
     },
   },
   tasks: {
-    claimant: { accepted: (th, t, who, S) => giveLetters(th, t, who, S, 'claimant') },
-    ruler: { accepted: (th, t, who, S) => giveLetters(th, t, who, S, 'ruler') },
+    claimant: { accepted: (th, t, who, S) => giveLetters(th, t, who, S, 'claimant'), where: (th, t, S) => nextTown(th, S, 'claimant'), how: (th, t, S) => lettersHow(th, S, 'claimant') },
+    ruler: { accepted: (th, t, who, S) => giveLetters(th, t, who, S, 'ruler'), where: (th, t, S) => nextTown(th, S, 'ruler'), how: (th, t, S) => lettersHow(th, S, 'ruler') },
   },
   // A letter handed to a council: that town leans one way.
   townTalk(th, npc, pid, S) {
@@ -313,6 +318,17 @@ motif({
     return { lines: [side === 'claimant' ? 'Hm. A bold claim. The council will think on it.' : 'The crown has our loyalty. Tell them so.'] };
   },
 });
+
+// (Round 85) The next town still to be given a letter, and what to do.
+function nextTown(th, S, side) {
+  const id = (th.vars.towns || []).find((q) => !(th.vars[`gave_${side}`] || []).includes(q));
+  return id === undefined ? null : townMid(town(S, id));
+}
+function lettersHow(th, S, side) {
+  const left = (th.vars.towns || []).filter((q) => !(th.vars[`gave_${side}`] || []).includes(q)).map((q) => townName(S, q));
+  return `Give ${th.names[side]}'s letter to the mayor of each of these towns: ${left.join(', ') || 'none left'}. The next is marked on your map.`;
+}
+
 
 function giveLetters(th, t, who, S, side) {
   if (who.t !== 'pl') return;

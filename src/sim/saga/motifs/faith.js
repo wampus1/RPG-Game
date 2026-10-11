@@ -72,6 +72,12 @@ motif({
       done(th, t, by, S) {
         S.end(th, 'returned', `${nameOf(S, by)} brought the bones of ${th.vars.saint} home to ${townName(S, th.sid)}.`, { news: [th.sid] });
       },
+      // (Round 85) Their camp, where it is now.
+      where: (th, t, S) => {
+        const b = resolve(S, th.cast.band);
+        return b && b.camp ? { x: b.camp.x, z: b.camp.z } : null;
+      },
+      how: (th, t, S) => `Go to ${nameOf(S, th.cast.band)}'s camp (marked on your map), take back the holy relic, and bring it to ${t.giverName || 'the temple'} in ${townName(S, th.sid)}.`,
     },
   },
 });
@@ -160,6 +166,11 @@ motif({
       accepted(th, t, who, S) {
         if (who.t === 'pl' && th.node === 'asking') S.go(th, 'walking', null, { pid: who.pid });
       },
+      // (Round 85) Where they're going.
+      where: (th, t, S) => (th.node === 'walking' ? townMid(town(S, th.cast.dest.sid)) : null),
+      how: (th, t, S) => (th.node === 'walking'
+        ? `Walk with ${th.names.pilgrim} to ${townName(S, th.cast.dest.sid)} (marked on your map). They follow you; keep them safe on the road.`
+        : `Talk to ${th.names.pilgrim} in ${townName(S, th.sid)}, then walk with them to the temple in ${townName(S, th.cast.dest.sid)}.`),
       thanks: () => ['I\'ve seen it. I\'ve seen it with my own eyes. Here, child: everything I brought. I won\'t need it now.'],
     },
   },

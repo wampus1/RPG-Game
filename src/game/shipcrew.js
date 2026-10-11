@@ -69,15 +69,19 @@ export function crewTick(game, S, dt) {
     if (S.runOutT <= 0) S.runOut = false;
   }
   // Mending her, slowly, plank by plank (her carpenter's stores).
+  // (Round 85: by the world's clock, as the water comes in: see
+  // ships3d.floodTime.)
   if (crew.length && !S.fight) {
-    S.mendT = (S.mendT || 0) - dt;
-    if (S.mendT <= 0) {
-      S.mendT = 3.5;
+    S.mendT = (S.mendT || 0) - Math.max(dt, game.shipFdt || 0);
+    for (let k = 0; S.mendT <= 0 && k < 60; k++) {
+      S.mendT += 3.5;
       const vi = firstHole(S);
-      if (vi >= 0 && (S.stores === undefined || S.stores > 0)) {
-        mendVoxel(game, S, vi);
-        if (S.stores !== undefined) S.stores--;
+      if (vi < 0 || !(S.stores === undefined || S.stores > 0)) {
+        S.mendT = Math.max(S.mendT, 0);
+        break;
       }
+      mendVoxel(game, S, vi);
+      if (S.stores !== undefined) S.stores--;
     }
   }
 }
@@ -447,6 +451,44 @@ export function helmsman(game, S, dt) {
     }
   }
   const foe = f && f.ship ? shipById(game, f.ship) : null;
+  // (Round 85) A chase given up: the foe out of sight.
+  if (f && !f.player && foe && Math.hypot(foe.x - S.x, foe.z - S.z) > 160) {
+    S.fight = null;
+    return;
+  }
+  // (Round 85) Running from whoever fired on her: dead away from them,
+  // every sail set, till she's clear.
+  const fl = S.flee;
+  if (fl && !f) {
+    const from = shipById(game, fl.from);
+    fl.t -= dt;
+    if (!from || from.sinking || fl.t <= 0 || Math.hypot(from.x - S.x, from.z - S.z) > 150) S.flee = null;
+    else {
+      // (Away from them, as near dead away as there's open water and the
+      // wind will let her: never straight up into it.)
+      const away = Math.atan2(S.x - from.x, S.z - from.z);
+      const W = windOf(game);
+      const wl = Math.hypot(W.x, W.z) || 1;
+      let head = away;
+      let found = false;
+      for (const pass of [0, 1]) {
+        for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35]) {
+          const h = away + off;
+          const up = (Math.sin(h) * W.x + Math.cos(h) * W.z) / wl < -0.55;
+          if ((pass === 0 && up) || !clearAhead(game, S, h, 24)) continue;
+          head = h;
+          found = true;
+          break;
+        }
+        if (found) break;
+      }
+      tx = S.x + Math.sin(head) * 30;
+      tz = S.z + Math.cos(head) * 30;
+      S.sailGoal = 1;
+      S.anchor = false;
+      S.runOut = false;
+    }
+  }
   // (Round 78) A pirate lashed alongside: the grapnels have her (see
   // pirates.js), her guns still run out.
   if (S.pirate && S.grapple && foe) {
@@ -455,7 +497,9 @@ export function helmsman(game, S, dt) {
     S.runOut = true;
     return;
   }
-  if ((foe && !foe.sinking) || (f && f.x !== undefined)) {
+  if (S.flee) {
+    // (Running: see above.)
+  } else if ((foe && !foe.sinking) || (f && f.x !== undefined)) {
     // Broadside on: steer to bring her side to bear at a good range.
     const dx = (foe ? foe.x : f.x) - S.x;
     const dz = (foe ? foe.z : f.z) - S.z;

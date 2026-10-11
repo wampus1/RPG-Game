@@ -23,7 +23,7 @@ import { TechWindow } from '../src/ui/research.js';
 import { topicsFor } from '../src/game/dialogue.js';
 import { yardsOf } from '../src/sim/sim.js';
 import { checkRegion } from '../src/game/savehealth.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor, migrateSave } from '../src/game/migrate.js';
 import { runCommand } from '../src/game/commands.js';
 
@@ -315,14 +315,14 @@ test('the save check leaves a chest nobody\'s opened alone (filled as it\'s open
 
 // ------------------------------------------------------------ the version
 test('0.84.0: its step, and an old world told what\'s new for it', () => {
-  assert.equal(GAME_VERSION, '0.84.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.84.0') >= 0);
   const steps = stepsFor('0.83.0');
-  assert.deepEqual(steps.map((q) => q.to), ['0.84.0']);
+  assert.ok(steps.map((q) => q.to).includes('0.84.0'));
   const d = { gv: '0.83.0', wg: 7, pending: [] };
   const { log } = migrateSave(d);
   assert.ok(log.some((l) => /lower decks/.test(l)));
   assert.ok(log.some((l) => /provinces/.test(l)));
-  assert.equal(d.gv, '0.84.0');
+  assert.ok(compareVersions(d.gv, '0.84.0') >= 0);
   const meta = META_STATE;
   assert.ok(meta > 0);
 });

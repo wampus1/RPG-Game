@@ -759,8 +759,10 @@ export class HostNet {
       if (fresh.length) msg.ex = fresh;
     }
     const pins = om.pins || [];
-    if (pins.length !== g.sent.pinsN) {
+    // (Round 85: or changed without growing: a quest's mark moved or gone.)
+    if (pins.length !== g.sent.pinsN || (om.pinsV || 0) !== g.sent.pinsV) {
       g.sent.pinsN = pins.length;
+      g.sent.pinsV = om.pinsV || 0;
       msg.pins = pins;
     }
     // (Round 56) The old places and outlaws' camps known of, as they come

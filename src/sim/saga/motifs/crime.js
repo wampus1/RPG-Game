@@ -11,7 +11,7 @@
 //   - Smuggling: a shady sort wants a bundle carried past the watch into a
 //     town where it's banned, or taxed to the bone.
 import { motif, R, nameOf } from '../core.js';
-import { pick, layoutOf, laidTowns, townName, adults, fullName, kinOf, recOf, hairWord } from './lib.js';
+import { pick, layoutOf, laidTowns, townName, adults, fullName, kinOf, recOf, hairWord, andList, townAt } from './lib.js';
 import {} from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { countItem, removeItem } from '../../../game/inventory.js';
@@ -121,7 +121,15 @@ motif({
       fade: 12,
     },
   },
-  tasks: { solve: {} },
+  tasks: { solve: {
+    // (Round 85) Who to ask, by name, and who to tell.
+    where: (th, t, S) => townAt(S, th.sid),
+    how: (th, t, S, pid) => {
+      const L = layoutOf(S, th.sid);
+      const left = L ? th.vars.wits.filter((w) => !pid || !w.told.includes(pid)).map((w) => L.npcs[w.idx]).filter((r) => r && alive(r)).map(fullName) : [];
+      return `Ask people in ${townName(S, th.sid)} what they saw${left.length ? ` (these may know something: ${andList(left)})` : ''}. When you think you know who did it, tell one of the town's guards.`;
+    },
+  } },
   townTalk(th, npc, pid, S) {
     if (npc.rec.sid !== th.sid || th.done) return [];
     const out = [];
@@ -225,7 +233,9 @@ motif({
       },
     },
   },
-  tasks: { watch: {} },
+  tasks: { watch: {
+    how: (th, t, S) => `Wait in ${townName(S, th.sid)}'s market square after dark, and catch the thief when they come.`,
+  } },
   hello(th, a, npc, pid) {
     return `!! ...Oh. It's you. Look, I can explain.`;
   },
@@ -301,6 +311,7 @@ motif({
       accepted(th, t, who, S) {
         if (who.t === 'pl') S.give(who.pid, 'stolen_goods', 1);
       },
+      how: (th, t, S) => `Take the bundle to ${th.names.fence} in ${townName(S, th.vars.to)} and talk to them. Don't let the guards there see it.`,
     },
   },
   townTalk(th, npc, pid, S) {

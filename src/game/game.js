@@ -5176,11 +5176,12 @@ export class Game {
     for (const c of this.creatures) {
       // (A master of an old place sheds its own light, in its own colour.)
       const master = (c.S.boss || c.species === 'saint_shade') && c.inst;
-      if (c.dead || !(c.S.light || master) || !near(c) || c.burrowed || c.submerged) continue;
+      // (Round 85: nor aboard a ship: see Lighting.)
+      if (c.dead || !(c.S.light || master) || !near(c) || c.burrowed || c.submerged || c.deck) continue;
       out.push({ x: c.x, y: c.y + (c.S.floats ? 1 : 0), z: c.z, L: Math.max(c.S.light || 0, master ? 5 : 0), cold: !!(c.S.construct || c.species === 'wisp'), noHalo: !!c.S.noHalo, tint: master ? bossTint(c)[0] : null, ent: c, dy: c.S.floats ? 1 : 0 });
     }
     for (const n of this.npcs) {
-      if (n.dead || !near(n)) continue;
+      if (n.dead || !near(n) || n.deck) continue;
       const held = n.heldItem ? n.heldItem() : null;
       const off = n.offhandItem ? n.offhandItem() : null;
       if (held === 'torch' || off === 'torch' || off === 'lantern') out.push({ x: n.x, y: n.y, z: n.z, L: 9, ent: n });

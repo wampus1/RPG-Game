@@ -15,7 +15,7 @@
 // At its end, what's sought can be bought back, talked out of whoever has
 // it, or (where they won't be talked round) taken.
 import { motif, R, nameOf } from '../core.js';
-import { pick, laidTowns, town, adults, persuade, purse, townMid, layoutOf } from './lib.js';
+import { pick, laidTowns, town, townName, adults, persuade, purse, townMid, layoutOf } from './lib.js';
 import { removeItem } from '../../../game/inventory.js';
 import { REGION_W, REGION_D } from '../../../config.js';
 
@@ -137,6 +137,23 @@ motif({
   },
   tasks: {
     ask: {
+      // (Round 85) Each step of the trail, plainly.
+      where: (th, t, S) => {
+        if (th.node === 'end_of_trail') return townMid(town(S, th.vars.legs[th.vars.legs.length - 1]));
+        if (th.node === 'following') return townMid(town(S, th.vars.legs[th.vars.leg || 0]));
+        return null;
+      },
+      how: (th, t, S) => {
+        if (th.node === 'end_of_trail') {
+          const s = town(S, th.vars.legs[th.vars.legs.length - 1]);
+          return `In ${s ? s.name : 'the last town'}, ask the merchants, innkeepers, fishers, smiths and farmers about ${th.vars.whatThe}. Buy it back or ask for it, then bring it home to ${th.names.giver} in ${townName(S, th.sid)}.`;
+        }
+        if (th.node === 'following') {
+          const s = town(S, th.vars.legs[th.vars.leg || 0]);
+          return `Follow the trail: go to ${s ? s.name : 'the next town'} (marked on your map).`;
+        }
+        return `Talk to ${th.names.giver} in ${townName(S, th.sid)} and offer to follow the trail.`;
+      },
       accepted(th, t, who, S) {
         if (who.t !== 'pl') return;
         th.vars.pid = who.pid;
@@ -148,6 +165,12 @@ motif({
       },
     },
     leg: {
+      how: (th, t, S) => {
+        const i = t.data.leg;
+        const s = town(S, th.vars.legs[i]);
+        const from = town(S, i ? th.vars.legs[i - 1] : th.sid);
+        return `Go to ${s ? s.name : 'the next town'} (marked on your map): the trail picks up there. ${wayThere(S, from, s)}`;
+      },
       reach(th, t, pid, S) {
         const i = t.data.leg;
         S.closeTask(t, 'done', R.pl(pid));

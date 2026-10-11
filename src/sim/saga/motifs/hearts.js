@@ -20,12 +20,13 @@
 //     outlaws) comes home. Welcomed with a feast, or not welcome at all, or
 //     come back a stranger with a secret.
 import { motif, R, nameOf } from '../core.js';
-import { pick, say, layoutOf, laidTowns, townMid, living, adults, fullName, kinOf, recOf, purse, has, nat, single, blood, persuade, repWith, isRec } from './lib.js';
+import { pick, say, layoutOf, laidTowns, townName, whereOf, townMid, bandsNear, resolve, living, adults, fullName, kinOf, recOf, purse, has, nat, single, blood, persuade, repWith, isRec } from './lib.js';
 import { alive, DAY, ledger } from '../../econ.js';
 import { relocate, newcomer } from '../../civic.js';
 import { makePerson } from '../actors.js';
 import { marry } from '../../events.js';
 import { ITEMS } from '../../../world/items.js';
+import { stash } from './camp.js';
 import { removeItem } from '../../../game/inventory.js';
 
 const tid = (th) => `t${th.id}`;
@@ -468,9 +469,17 @@ motif({
       },
       thanks: (th) => [`They read it? What did they... no, don't tell me. I'll go and find out myself.`, `(${th.names.b} has the letter now.)`],
     },
-    win: {},
-    blessing: {},
+    // (Round 85) Who to talk to.
+    win: {
+      where: (th, t, S) => whereOf(S, th.cast.b),
+      how: (th, t, S) => `Talk to ${th.names.b} in ${townName(S, th.sid)} and speak well of ${th.names.a}, or tell ${th.names.rival} to leave ${th.names.b} alone.`,
+    },
+    blessing: {
+      where: (th, t, S) => whereOf(S, th.cast.kin),
+      how: (th, t, S) => `Talk to ${th.names.kin} in ${townName(S, th.sid)} and ask them to give ${th.names.a} and ${th.names.b} their blessing.`,
+    },
     gift: {
+      how: (th, t, S) => `Get ${t.n > 1 ? `${t.n} ` : 'a '}${ITEMS[t.item] ? ITEMS[t.item].name : t.item} and give ${t.n > 1 ? 'them' : 'it'} to ${th.names.a} in ${townName(S, th.sid)}, for ${th.names.b}.`,
       done(th, t, by, S) {
         const rng = S.rng(th, 0x61f);
         const b = recOf(S, th.cast.b);
@@ -489,6 +498,7 @@ motif({
       thanks: () => ['Perfect. It\'s perfect. Wish me luck.'],
     },
     guest: {
+      how: (th, t, S) => `Be in ${townName(S, t.sid)} while the wedding is on (on the day in its title), and stand near the square.`,
       reach(th, t, pid, S) {
         const L = layoutOf(S, th.sid);
         const ev = L && (L.econ.events || []).find((q) => q.id === th.vars.ev);
@@ -1013,8 +1023,22 @@ motif({
         else if (w === 'song') t = S.post(th, { ...o, role: 'wish', kind: 'talk', title: `Play music for ${first(e)}`, pitch: th.vars.byKin ? `${first(e)} used to dance every night. Now they can't. But they'd love to hear someone play. Do you have an instrument?` : 'Do you play? Anything. I used to dance, you know. Long ago. I\'d like to hear music played for me, once more.' });
         else if (w === 'sword') {
           th.vars.spot = null;
-          t = S.post(th, { ...o, role: 'wish', kind: 'fetch', item: 'heirloom', n: 1, title: `Find ${first(e)}'s lost ${th.vars.thing}`, pitch: `The family ${th.vars.thing}. ${rng.pick(['Lost in a flood when I was a girl.', 'My brother sold it for drink, forty years ago.', 'Taken by outlaws, the year the barn burnt.'])} Someone has it somewhere. A trader, maybe. I'd like to hold it, once.` });
-          t.data.hint = rng.pick(['a merchant on the road', 'an old outlaw camp', 'the ruins out past the hills']);
+          // (Round 85) Somewhere it really is: in a strongbox at an outlaw
+          // camp near, or for sale by a trader in a town about.
+          const band = bandsNear(S, th.sid, 14)[0];
+          const sellers = band ? [] : laidTowns(S).filter((T) => T !== L && !T.settlement.deserted && Math.hypot(T.settlement.cx - L.settlement.cx, T.settlement.cz - L.settlement.cz) < 14).flatMap((T) => adults(T).filter((r) => alive(r) && ['merchant', 'jeweller', 'fence', 'barkeep'].includes(r.job)).map((r) => ({ T, r })));
+          const home = adults(L).find((r) => alive(r) && r.job === 'merchant' && r !== e);
+          const seller = sellers.length ? rng.pick(sellers) : home ? { T: L, r: home } : null;
+          if (band) {
+            stash(S, band, [{ item: 'heirloom', count: 1 }]);
+            th.vars.band = band.id;
+          } else if (seller) {
+            th.cast.seller = R.rec(seller.T.settlement.id, seller.r.idx);
+            th.names.seller = fullName(seller.r);
+            th.vars.price = 25 + rng.int(0, 5) * 5;
+          }
+          const where = band ? `Taken by outlaws, the year the barn burnt. ${band.name} have it in their camp now, I'd stake my life on it.` : seller ? `My brother sold it for drink, forty years ago. They say ${th.names.seller} in ${townName(S, th.cast.seller.sid)} has it now, and wants money for it.` : 'Lost in a flood when I was a girl.';
+          t = S.post(th, { ...o, role: 'wish', kind: 'fetch', item: 'heirloom', n: 1, title: `Find ${first(e)}'s lost ${th.vars.thing}`, pitch: `The family ${th.vars.thing}. ${where} I'd like to hold it, once.` });
         } else if (w === 'letter') t = S.post(th, { ...o, role: 'wish', kind: 'deliver', target: th.cast.friend, title: `Carry ${first(e)}'s letter to ${th.vars.friend} in ${th.vars.town}`, pitch: `I've written to ${th.vars.friend}. We were inseparable, once. Forty years... Would you take it? I'd like to know they read it.` });
         else t = S.post(th, { ...o, role: 'wish', kind: 'talk', title: `Take ${first(e)} to see the sea`, pitch: th.vars.byKin ? `${first(e)} grew up by the sea. They talk about it all the time now. They can't go alone. Would you take them?` : 'I was born by the sea. I\'d like to see it once more. My legs are bad, but they\'ll go if someone walks with me.' });
         t.offerLabel = pick(rng, ['You look like you\'re far away, grandmother.', 'Is there anything I can do for you?', 'You seem sad today.']);
@@ -1061,10 +1085,40 @@ motif({
       done(th, t, by, S) {
         granted(th, S, by && by.t === 'pl' ? by.pid : null);
       },
+      // (Round 85) Each wish, plainly.
+      where: (th, t, S) => {
+        if (th.vars.wish === 'sword') {
+          const b = th.vars.band !== undefined ? resolve(S, R.band(th.vars.band)) : null;
+          if (b && b.camp) return b.camp.cage ? { x: b.camp.cage.stash.x, z: b.camp.cage.stash.z } : { x: b.camp.x, z: b.camp.z };
+          if (th.cast.seller) return whereOf(S, th.cast.seller);
+        }
+        if (th.vars.wish === 'sea' && th.vars.walking) return null;
+        return null;
+      },
+      how: (th, t, S) => {
+        const e = th.names.elder;
+        const at = townName(S, th.sid);
+        switch (th.vars.wish) {
+          case 'dish': return `Cook or buy ${th.vars.dishName || 'the dish'} (${ITEMS[th.vars.dish] ? ITEMS[th.vars.dish].name : 'a dish'}) and give it to ${t.giverName || e} in ${at}.`;
+          case 'song': return `Get an instrument (a lute, flute or drum), then talk to ${e} in ${at} and play for them.`;
+          case 'sword': {
+            const b = th.vars.band !== undefined ? resolve(S, R.band(th.vars.band)) : null;
+            if (b) return `The ${th.vars.thing} is in the strongbox at ${b.name}'s camp (marked on your map). Take it, and give it to ${t.giverName || e} in ${at}.`;
+            if (th.cast.seller) return `Buy the ${th.vars.thing} from ${th.names.seller} in ${townName(S, th.cast.seller.sid)} (¤${th.vars.price}), and give it to ${t.giverName || e} in ${at}.`;
+            return `Find an Heirloom (they turn up in outlaw camps and old ruins) and give it to ${t.giverName || e} in ${at}.`;
+          }
+          case 'letter': return `Take the letter to ${th.vars.friend} in ${th.vars.town} and talk to them.`;
+          default: return th.vars.walking ? `Walk ${e} to the sea: any shore with deep water. They follow you.` : `Talk to ${e} in ${at}, then walk with them to the sea (any shore with deep water).`;
+        }
+      },
       thanks: (th) => (th.vars.wish === 'dish' ? ['...Oh. Oh, that\'s it. That\'s exactly it. I\'m six years old again.'] : th.vars.wish === 'letter' ? ['They read it? ...Then that\'s all I needed.'] : ['Thank you, child. Thank you.']),
     },
   },
   townTalk(th, npc, pid, S) {
+    // (Round 85) The trader who has the heirloom, selling it.
+    if (th.vars.wish === 'sword' && th.cast.seller && !th.vars.sold && isRec(npc, th.cast.seller) && th.node === 'wishing' && S.tasksOf(th, 'wish')[0]) {
+      return [{ id: 'sgw_buy', arg: tid(th), label: `I hear you have an old ${th.vars.thing} with a family mark on it. (¤${th.vars.price})` }];
+    }
     if (!isRec(npc, th.cast.elder) || th.node !== 'wishing') return [];
     const out = [];
     const t = S.tasksOf(th, 'wish')[0];
@@ -1077,9 +1131,18 @@ motif({
     if (th.vars.wish === 'sword') out.push({ id: 'sgw_hint', arg: tid(th), label: `Where might the ${th.vars.thing} be?` });
     return out;
   },
+
   respond(th, npc, pid, id, arg, S) {
     const rng = S.rng(th, 0x77a);
     const t = S.tasksOf(th, 'wish')[0];
+    if (id === 'sgw_buy') {
+      if (purse(S, pid) < th.vars.price) return { lines: [`¤${th.vars.price}. It's old silver, and it's mine till it's paid for.`] };
+      S.asPid(pid, (p) => removeItem(p.inv, 'coin', th.vars.price));
+      th.vars.sold = true;
+      S.give(pid, 'heirloom', 1);
+      S.touch(th, pid);
+      return { lines: [`There. Some old family's ${th.vars.thing}. I never could sell it: nobody wanted someone else's mark on their things.`, `(Take it to ${th.names.elder} in ${townName(S, th.sid)}.)`], close: true };
+    }
     if (id === 'sgw_play') {
       if (!t) return { lines: ['...'] };
       S.complete(t, R.pl(pid));
@@ -1103,8 +1166,10 @@ motif({
       return { lines: ['Slowly, now. My legs aren\'t what they were.', '(They\'ll follow you. Walk them to the water\'s edge: the sea, or any deep water.)'], close: true };
     }
     if (id === 'sgw_hint') {
-      const h = t && t.data.hint;
-      return { lines: [h ? `Last anyone saw it, it was with ${h}. And it'd look like... well, you'd know it: it has our mark on it.` : 'I don\'t know. Somewhere.', '(Old heirlooms turn up in ruins, outlaw camps and traders\' packs: an heirloom brought here would do.)'] };
+      const b = th.vars.band !== undefined ? resolve(S, R.band(th.vars.band)) : null;
+      const where = b ? `${b.name} have it, in the strongbox at their camp.` : th.cast.seller ? `${th.names.seller} in ${townName(S, th.cast.seller.sid)} has it, and wants ¤${th.vars.price} for it.` : (t && t.data.hint ? `Last anyone saw it, it was with ${t.data.hint}.` : 'I don\'t know. Somewhere.');
+      if (t) S.markTask(t);
+      return { lines: [`${where} You'd know it: it has our mark on it.`, b || th.cast.seller ? '(Marked on your map.)' : '(Old heirlooms turn up in outlaw camps and ruins: an heirloom brought here would do.)'] };
     }
     return null;
   },
@@ -1286,9 +1351,22 @@ motif({
     S.note(th, `The outlaws who came for ${th.vars.name} in the night were beaten off${pid ? `, ${nameOf(S, R.pl(pid))} standing in the door` : ''}.`, { news: [th.sid] });
   },
   tasks: {
-    truth: {},
-    welcome: {},
-    guard: {},
+    // (Round 85) Who to talk to, and when to be there.
+    truth: {
+      where: (th, t, S) => {
+        const e = S.actorEnt(th, 'back');
+        return e ? { x: Math.round(e.x), z: Math.round(e.z) } : townMid(S.game.world.ow.settlements[th.sid]);
+      },
+      how: (th, t, S) => `Find ${th.vars.name} in ${townName(S, th.sid)} and ask them about the summer of the flood. Then tell ${th.names.kin} what you think.`,
+    },
+    welcome: {
+      where: (th, t, S) => whereOf(S, th.cast.kin),
+      how: (th, t, S) => `Talk to ${th.names.kin} in ${townName(S, th.sid)} and ask them to take ${th.vars.name} back.`,
+    },
+    guard: {
+      where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+      how: (th, t, S) => `Be near the middle of ${townName(S, th.sid)} after dark on day ${Math.floor((th.vars.huntAt || 0) / DAY) + 1}, and fight off the outlaws who come for ${th.vars.name}.`,
+    },
   },
   hello(th, a, npc) {
     return pick(npc.rng, LINES[th.vars.truth] || ['Home. I\'m home.']);

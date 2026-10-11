@@ -114,7 +114,11 @@ motif({
       fade: 14,
     },
   },
-  tasks: { home: {} },
+  tasks: { home: {
+    // (Round 85) Who to ask: anyone grown in town.
+    where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+    how: (th, t, S) => `Ask grown-ups in ${townName(S, th.sid)} if they'll take in ${th.names.child}. Kind people are likelier to say yes.`,
+  } },
   townTalk(th, npc, pid, S) {
     if (th.vars.who !== 'nobody' || th.done || !npc.rec || npc.rec.sid !== th.sid || npc.rec.age === 'child' || (th.vars.asked || []).includes(`${pid}:${npc.rec.idx}`)) return [];
     return [{ id: 'sgo_take', arg: tid(th), label: `Would you take in ${first(recOf(S, th.cast.child))}? They've nobody.` }];
@@ -230,7 +234,9 @@ motif({
     },
   },
   tasks: {
-    song: {},
+    song: {
+      how: (th, t, S) => `Get an instrument (a lute, flute or drum), then tell ${t.giverName || 'them'} in ${townName(S, th.sid)} you'll play ${th.vars.song} at the party on day ${th.vars.day + 1}.`,
+    },
     ring: { done(th) { th.vars.ring = true; th.vars.joy++; }, thanks: () => ['It\'s perfect. The smith can have it done by the party. Not a word!'] },
   },
   townTalk(th, npc, pid, S) {
@@ -410,6 +416,7 @@ motif({
   },
   tasks: {
     find: {
+      how: (th) => `Go into ${th.names.dead}'s house (marked on your map) and look around inside.`,
       reach(th, t, pid, S) {
         const L = layoutOf(S, th.sid);
         const rng = S.rng(th, 0x112);
@@ -609,6 +616,7 @@ motif({
   },
   tasks: {
     follow: {
+      how: (th) => `Go to ${th.vars.place} (marked on your map) at night, after nine, and see what's there.`,
       reach(th, t, pid, S) {
         const night = S.game.minute >= 1260 || S.game.minute < 270;
         if (!night) {

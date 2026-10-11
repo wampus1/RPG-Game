@@ -181,7 +181,7 @@ motif({
     if (r && r.venture === th.id) r.venture = null;
   },
   tasks: {
-    invest: {},
+    invest: { how: (th, t, S) => `Talk to ${th.names.owner} in ${townName(S, th.sid)} and put money into their ${th.vars.biz.replace(/^a |^an /, '')} (¤10, ¤25 or ¤50).` },
     stock: { done(th) { th.vars.stock = true; }, thanks: () => ['Now I can open properly. Thank you!'] },
     payout: { thanks: (th) => [`Your share, as I promised. ${th.vars.luck > 0.55 ? 'With interest. You earned it.' : 'It\'s not much. But it\'s honest.'}`] },
   },
@@ -462,6 +462,7 @@ const MOTIF_MAP = motif({
   },
   tasks: {
     dig: {
+      how: (th) => `Go to the spot on the map (marked on your map too) and dig there. Others may have heard of it.`,
       accepted(th, t, who, S) {
         if (who.t === 'pl' && th.vars.map) S.give(who.pid, th.vars.map, 1);
         // (Beaten to it: someone else heard about the map too.)
@@ -811,7 +812,7 @@ motif({
     },
   },
   tasks: {
-    planks: { done(th) { th.vars.planks = true; }, thanks: () => ['Timber! Now we\'ll have it up in a day, you\'ll see.'] },
+    planks: { done(th) { th.vars.planks = true; }, thanks: () => ['Timber! Now we\'ll have it up in a day, you\'ll see.'], how: (th, t, S) => `Get 12 Planks and give them to ${th.names.family} in ${townName(S, th.sid)} before day ${th.vars.day + 1}. (You can help build on the day too: tell them you'll come.)` },
   },
   townTalk(th, npc, pid, S) {
     if (!isRec(npc, th.cast.family) || (th.vars.helpers || []).includes(pid)) return [];

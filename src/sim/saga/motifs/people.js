@@ -21,7 +21,7 @@
 //   - A challenge: someone with a name (you) is challenged by a champion
 //     who wants it.
 import { motif, HOOKS, R, refKey, nameOf, NameOf, isAlive, resolve, pidOf, playerOf, poss } from '../core.js';
-import { pick, say, layoutOf, laidTowns, town, townName, townMid, directions, living, adults, fullName, kinOf, relWord, spotNear, bandsNear, outInTheOpen, inTown, recOf, purse } from './lib.js';
+import { pick, say, layoutOf, laidTowns, town, townName, townMid, directions, whereOf, living, adults, fullName, kinOf, relWord, spotNear, bandsNear, outInTheOpen, inTown, recOf, purse } from './lib.js';
 import { makePerson } from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { ITEMS } from '../../../world/items.js';
@@ -174,6 +174,23 @@ motif({
     avenge: {
       npcs: { adv: 0.1, guard: 0 },
       thanks: () => ['It\'s done? Then my rest will come. Thank you.'],
+      // (Round 85) Where they are now: the den, or the camp.
+      where: (th, t, S) => {
+        const k = t.target;
+        if (!k) return null;
+        if (k.t === 'den') {
+          const d = S.dens[k.key];
+          return d ? { x: d.x, z: d.z } : null;
+        }
+        if (k.t === 'band') {
+          const b = resolve(S, k);
+          return b && b.camp ? { x: b.camp.x, z: b.camp.z } : null;
+        }
+        return null;
+      },
+      how: (th, t, S) => (t.target && t.target.t === 'den'
+        ? `Go to the beasts' den (marked on your map) and kill them. Then go back to ${t.giverName || 'them'} in ${townName(S, th.sid)}.`
+        : `Find ${th.names.killer}${t.target && t.target.t === 'band' ? ` at their camp (marked on your map)` : ''} and kill them. Then go back to ${t.giverName || 'them'} in ${townName(S, th.sid)}.`),
     },
   },
   hello(th, a, npc, pid) {
@@ -337,6 +354,11 @@ motif({
   tasks: {
     find: {
       npcs: { adv: 0.1, guard: 0.15 },
+      // (Round 85) Where they were seen, and what to do.
+      where: (th) => (th.vars.at && !th.vars.leader ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+      how: (th, t, S) => (th.vars.leader
+        ? `Lead ${th.names.child} home to ${townName(S, th.sid)}: they follow you.`
+        : `Search the woods ${directions(town(S, th.sid), th.vars.at.x, th.vars.at.z)} (marked on your map) for ${th.names.child}. Talk to them, then lead them home.`),
       offer: (th, t, pid, S) => [`They were seen going ${directions(town(S, th.sid), th.vars.at.x, th.vars.at.z).replace(/ of .*$/, '')}, into the trees.`],
       thanks: () => ['You found them! Oh, you found them. Thank you, thank you!'],
     },
@@ -451,7 +473,14 @@ motif({
       },
     },
   },
-  tasks: { find: { npcs: { adv: 0.08, guard: 0.1 } } },
+  tasks: { find: {
+    npcs: { adv: 0.08, guard: 0.1 },
+    // (Round 85) Where they lie hurt.
+    where: (th) => (th.vars.at && !th.vars.leader ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+    how: (th, t, S) => (th.vars.leader
+      ? `Help ${th.names.lost || 'them'} home to ${townName(S, th.sid)}: they lean on you.`
+      : `Follow the road ${directions(town(S, th.sid), th.vars.at.x, th.vars.at.z)} (marked on your map), find ${th.names.lost || 'them'}, and help them home.`),
+  } },
   hello: (th) => (th.vars.leader ? 'Not far now, I hope.' : 'Thank the gods. Someone came.'),
   talk(th, a, npc, pid) {
     if (th.vars.leader) return [];
@@ -540,7 +569,10 @@ motif({
       fade: 20,
     },
   },
-  tasks: { mediate: {} },
+  tasks: { mediate: {
+    where: (th, t, S) => whereOf(S, th.vars.calmA ? th.cast.b : th.cast.a),
+    how: (th, t, S) => `Talk to ${th.names.a} and ${th.names.b} in ${townName(S, th.sid)}, and calm each of them down about their quarrel.`,
+  } },
   townTalk(th, npc, pid, S) {
     const out = [];
     for (const side of ['a', 'b']) {
@@ -653,6 +685,7 @@ motif({
   },
   tasks: {
     herbs: {
+      how: (th, t, S) => `Gather 6 ${ITEMS[t.item] ? ITEMS[t.item].name : 'herbs'} (${t.item === 'glowcap' ? 'glowing mushrooms, in caves and dark woods' : 'they grow wild in the grass'}) and give them to ${t.giverName || 'the herbalist'} in ${townName(S, th.sid)}.`,
       done(th, t, by, S) {
         th.vars.cured = true;
         S.note(th, `${nameOf(S, by)} brought the herbs. The herbalist is brewing a cure for everyone.`);
@@ -768,7 +801,12 @@ motif({
       },
     },
   },
-  tasks: { bring: {} },
+  tasks: { bring: {
+    where: (th, t, S) => (th.vars.leader ? townMid(town(S, th.sid)) : null),
+    how: (th, t, S) => (th.vars.leader
+      ? `Lead ${th.names.youth} home to ${townName(S, th.sid)}: they follow you.`
+      : `Go to the outlaws' camp (marked on your map), talk ${th.names.youth} into coming home, and lead them back to ${townName(S, th.sid)}.`),
+  } },
   hello: (th, a, npc, pid) => (th.vars.leader ? 'Fine. I\'m coming.' : 'What do you want? Did my parents send you?'),
   talk(th, a, npc, pid) {
     if (th.vars.leader) return [];

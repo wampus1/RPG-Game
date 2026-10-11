@@ -5,7 +5,7 @@
 import { Window } from './window.js';
 import { C, wrap } from './ascii.js';
 import { ITEMS } from '../world/items.js';
-import { MOTIFS, pidOf, nameOf, lcFirst, directions, townMid } from '../sim/saga/core.js';
+import { MOTIFS, pidOf, nameOf, lcFirst } from '../sim/saga/core.js';
 import { DAY } from '../sim/econ.js';
 
 const TABS = [['tasks', ' TASKS '], ['heard', ' HEARD OF '], ['stories', ' STORIES '], ['name', ' YOUR NAME ']];
@@ -156,15 +156,23 @@ export class QuestWindow extends Window {
   }
 
   // Where on the map a task (or a story you're in) is.
+  // (Round 85: where the task's guide says: see Saga.guide.)
   markAt(e, game) {
-    if (e.t) return e.t.at || null;
     const S = game.sim.saga;
-    const pid = this.pid(game);
-    const tasks = e.th.tasks.filter((t) => t.status === 'open' && t.at);
-    const t = tasks.find((q) => S.claimedBy(q, pid)) || tasks[0];
-    if (t) return t.at;
+    const t = this.taskOf(e, game);
+    if (t) return S.guide(t, this.pid(game)).at;
     if (e.th.done) return null;
     return S.anchors(e.th)[0] || null;
+  }
+
+  // The task an entry's about (a story's: the one of yours in it, else
+  // its first open one).
+  taskOf(e, game) {
+    if (e.t) return e.t;
+    const S = game.sim.saga;
+    const pid = this.pid(game);
+    const tasks = e.th.tasks.filter((t) => t.status === 'open' || (t.status === 'won' && t.ready === pid));
+    return tasks.find((q) => S.claimedBy(q, pid) || q.ready === pid) || tasks[0] || null;
   }
 
   mark(e, game) {
@@ -173,8 +181,9 @@ export class QuestWindow extends Window {
       game.ui.msg('Nowhere in particular to mark for that.', C.dim);
       return;
     }
-    const label = e.t ? e.t.pinLabel || e.t.title : e.th.title;
-    game.world.ow.pin(at.x, at.z, label, (e.t && e.t.glyph) || '!', { quest: true });
+    const t = this.taskOf(e, game);
+    if (t) game.sim.saga.markTask(t);
+    else game.world.ow.pin(at.x, at.z, e.th.title, '!', { quest: true });
     game.ui.msg('Marked on your map.', C.cyan);
     this.ui.audio?.play('select');
   }
@@ -227,13 +236,13 @@ export class QuestWindow extends Window {
     if (e.t) {
       const t = e.t;
       put(t.title, C.hi);
-      put(e.ready ? `Done. Go back to ${t.giverName || 'whoever asked'} for your reward.` : S.claimedBy(t, pid) ? 'You\'ve taken this on.' : 'You\'ve heard of this.', e.ready ? C.green : C.cyan);
+      put(e.ready ? 'Done.' : S.claimedBy(t, pid) ? 'You\'ve taken this on.' : 'You\'ve heard of this.', e.ready ? C.green : C.cyan);
+      // (Round 85) What to do, plainly, and where.
+      const gd = S.guide(t, pid);
+      if (gd.how) put(`To do: ${gd.how}`, C.white);
+      if (gd.where) put(`Where: ${gd.where[0].toUpperCase()}${gd.where.slice(1)}.${S.markedTask(t) ? ' (Marked on your map.)' : ''}`, C.cyan);
       // (Round 70: whose it is; not "asked by", which they mightn't have.)
       if (t.giverName && !e.ready) put(`For ${t.giverName}${t.giver && t.giver.t === 'rec' ? ` of ${game.world.ow.settlements[t.giver.sid]?.name || 'a town'}` : ''}.`, C.dim);
-      if (t.at) {
-        const near = game.world.ow.settlementsNear(t.at.x, t.at.z)[0];
-        put(`Where: ${near ? directions(near, t.at.x, t.at.z) : 'out in the wilds'}.`, C.dim);
-      }
       if (t.kind === 'slay') put(`Progress: ${Math.min(t.count, t.need)} of ${t.need}.`, C.dim);
       if (t.item) put(`Bring: ${ITEMS[t.item] ? ITEMS[t.item].name : t.item}.`, C.dim);
       if (t.due) put(`Time left: ${this.subOf(e, game)}.`, C.dim);
@@ -421,6 +430,5 @@ export function questSummary(game) {
     if (t.status === 'won' && t.ready === pid) out.push({ text: `${t.title}: done, go back to ${t.giverName || 'them'}`, ready: true });
     else if (t.status === 'open' && S.claimedBy(t, pid)) out.push({ text: t.title });
   }
-  void townMid;
   return out;
 }

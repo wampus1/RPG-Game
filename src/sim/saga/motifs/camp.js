@@ -149,6 +149,8 @@ export function cage(S, band) {
 // not watched (see captive.js).
 export function stash(S, band, items, owner = null) {
   if (!items.length) return;
+  // (Round 85: in a box there is to open: the strongbox made if it wasn't.)
+  if (band.camp && !band.camp.cage) cage(S, band);
   band.stash ||= [];
   for (const it of items) band.stash.push({ item: it.item, count: it.count, owner });
 }

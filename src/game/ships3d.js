@@ -22,7 +22,8 @@
 // deck*), goes below (down her hatches, through a cabin door, through a
 // hole in her deck), takes her wheel, mans a gun, or goes over the side.
 import { loadAboard } from './stalls.js';
-import { GROUND, SURFACE, PLAYER_STEP_TIME } from '../config.js';
+import { GROUND, SURFACE, PLAYER_STEP_TIME, GAME_MINUTES_PER_SECOND } from '../config.js';
+import { rule } from '../mod/rules.js';
 import { B, BLOCKS, PLANK_BLOCKS } from '../world/blocks.js';
 import { shipModel, SHIP_TYPES, standOn, stepOn, onPlan, isInside, vAt } from '../world/shipmodels.js';
 import { hash4 } from '../util/rng.js';
@@ -326,6 +327,11 @@ export function updateShips3d(game, dt) {
   const list = shipsOf(game);
   if (!list.length && !(game.cannonballs && game.cannonballs.length)) return;
   const W = windOf(game);
+  // (Round 85) The water comes in by the world's clock: asleep, or
+  // waiting, hours go by in moments, and a holed ship fills as fast as
+  // they do (and her crew mend and pump as long).
+  const fdt = floodTime(game, dt);
+  game.shipFdt = fdt;
   for (const S of [...list]) {
     // (Far from all of you, she lies where she is.)
     const near = game.nearPlayer ? game.nearPlayer(S, 160) : true;
@@ -335,7 +341,7 @@ export function updateShips3d(game, dt) {
   }
   collideShips(game);
   for (const S of [...list]) {
-    flooding(game, S, dt);
+    flooding(game, S, fdt);
     if (S.sinking) sinkTick(game, S, dt);
   }
   tickBalls(game, dt);
@@ -588,6 +594,18 @@ function stormTick(game, S, dt) {
   shakeAboard(game, S, 0.4 + depth * 0.5);
 }
 
+// (Round 85) How long's gone by since the last frame, in the seconds the
+// flooding counts in (as long as the frame, awake; as long as the hours
+// slept or waited through, else: at most three days' worth at once).
+export function floodTime(game, dt) {
+  const abs = (game.day || 0) * 1440 + (game.minute || 0);
+  const was = game.shipClock;
+  game.shipClock = abs;
+  if (was === undefined || abs <= was) return dt;
+  const perSec = GAME_MINUTES_PER_SECOND / (rule('day') || 1);
+  return Math.max(dt, Math.min(abs - was, 3 * 1440) / perSec);
+}
+
 // Water coming in through her holes under the waterline (the deeper she
 // settles, the more of them are under it); the crew at the pumps.
 function flooding(game, S, dt) {
@@ -596,9 +614,18 @@ function flooding(game, S, dt) {
   let inflow = 0;
   for (const L of S.leaks || []) if (L.y <= line) inflow += (L.y <= m.wl - 1 ? 1.1 : 0.7) * (1 + Math.abs(S.v) / 25);
   const pumping = (S.pumpers || 0) * 1.1 + (game.sailors || []).filter((c) => c.deck && c.deck.s === S.id && !c.dead).length * 0.12;
-  S.floodCells = Math.max(0, S.floodCells + (inflow - pumping) * dt);
+  const was = S.flood;
+  S.floodCells = Math.max(0, Math.min(S.capacity || Infinity, S.floodCells + (inflow - pumping) * dt));
   S.pumpers = 0;
   const f = S.flood;
+  // (Round 85) Asleep aboard her as the water rises: woken by it.
+  if (game.sleep && (f >= 0.35 || S.sinking) && was < f) {
+    const p = game.player;
+    if (p && p.deck && p.deck.s === S.id && game.wakeUp) {
+      game.wakeUp(true);
+      game.ui.msg(`You wake to cold water round your ankles: ${theShip(S, true)} is ${Math.round(f * 100)}% flooded! Mend her holes and man the pump.`, '#ff9070');
+    }
+  }
   const goal = -f * (m.deck - m.wl) * 0.8 - (S.sinking ? S.sinking * 0.7 : 0);
   S.yOff += (goal - S.yOff) * Math.min(1, dt * 0.8);
   floodLevel(S);
@@ -724,11 +751,15 @@ export function breakNear(game, S, x, y, z, rad, why) {
 }
 
 // Mend cell vi of hers with a plank (or put back what was there): whatever
-// it was built of. True if mended.
-export function mendVoxel(game, S, vi) {
+// it was built of. True if mended. (Round 85: or patched with `with`, a
+// block of something else solid: cobblestone, say, in a hole in her side
+// or her deck. It keeps the sea out as well as a plank would.)
+export function mendVoxel(game, S, vi, withId = null) {
   const m = S.m;
   if (S.vox[vi] !== 0 || m.vox[vi] === 0) return false;
-  S.vox[vi] = m.vox[vi];
+  const patch = withId && !PLANK_BLOCKS.has(withId) && withId !== m.vox[vi];
+  if (patch && !patchable(m, vi)) return false;
+  S.vox[vi] = patch ? withId : m.vox[vi];
   S.ver++;
   const x = vi % m.W;
   const z = Math.floor(vi / m.W) % m.L;
@@ -753,6 +784,20 @@ export function mendVoxel(game, S, vi) {
 
 // What can mend a plank of hers: any planks.
 export const MENDS = (key) => key === 'planks' || (B[key] !== undefined && PLANK_BLOCKS.has(B[key]));
+
+// (Round 85) What can patch a hole of hers: planks, or any other solid
+// block (stone, cobblestone, dirt...), in her hull and decks.
+export const PATCHES = (key) => {
+  if (MENDS(key)) return true;
+  const id = B[key];
+  const b = id !== undefined ? BLOCKS[id] : null;
+  return !!(b && b.solid && b.opaque && b.render === 'cube' && Number.isFinite(b.hardness) && !b.liquid && !b.container && !b.stair);
+};
+// A plain cell of her hull or decks (not a mast, a gun, a fitting).
+function patchable(m, vi) {
+  const b = BLOCKS[m.vox[vi]];
+  return !!(b && b.render === 'cube' && m.vox[vi] !== B.ship_mast && m.struct[vi]);
+}
 
 // ----------------------------------------------------------- the guns
 // Fire gun `gi` of hers (`by`: whoever fired it). False if it's not ready.
@@ -845,6 +890,8 @@ function ballHits(game, b) {
       S.hitMsgT = 2.5;
       for (const q of aboardOf(game, S)) if (q.kind === 'player') game.asPlayer(q, () => game.ui.msg(`Hit! ${theShip(S, true)}'s hull at ${Math.round(S.whole * 100)}%${S.leaks && S.leaks.length ? `, holed below (${S.leaks.length})` : ''}.`, '#ffb080', true));
     }
+    // (Round 85) Fired on: she fights back, or runs.
+    shotAt(game, S, b);
     game.onShipShot?.(S, b);
     return true;
   }
@@ -878,6 +925,38 @@ function ballHits(game, b) {
     return true;
   }
   return false;
+}
+
+// (Round 85) A ship with her own captain, fired on by another: she runs
+// out her guns and comes about to fight (a warship, a pirate, a troopship,
+// or any armed ship a match for the one firing on her), or crowds on sail
+// and runs (an unarmed merchantman, a settler, one outgunned). A player's
+// own ship is theirs to decide for.
+export function shotAt(game, S, b) {
+  if (S.sinking || S.owner || S.beaten) return;
+  const from = b.ship !== undefined && b.ship !== null ? shipById(game, b.ship) : null;
+  if (!from || from === S || from.sinking) return;
+  if (S.fight && (S.fight.ship === from.id || S.fight.player)) return;
+  if (S.flee && S.flee.from === from.id) {
+    S.flee.t = Math.max(S.flee.t, 90);
+    return;
+  }
+  const armed = (q) => q.m.guns.filter((g) => q.vox[(g.y * q.m.L + g.z) * q.m.W + g.x] === B.ship_cannon).length;
+  const warlike = S.pirate || S.vkind === 'war' || S.vkind === 'troops';
+  const mine = armed(S) * (warlike ? 1.6 : 1) * (0.4 + S.whole * 0.6);
+  const theirs = armed(from) * (0.4 + from.whole * 0.6);
+  const fight = armed(S) > 0 && (warlike || mine >= theirs * 0.8);
+  S.anchor = false;
+  S.mission = S.mission ? { ...S.mission, moor: false } : S.mission;
+  const near = (game.everyone ? game.everyone() : [game.player]).filter((q) => q && !q.dead && Math.hypot(q.x - S.x, q.z - S.z) < 140);
+  if (fight) {
+    S.fight = { ship: from.id };
+    S.hostile = true;
+    for (const q of near) game.asPlayer ? game.asPlayer(q, () => game.ui.msg(`${theShip(S, true)} runs out her guns and comes about to fight!`, '#ff9070')) : game.ui.msg(`${theShip(S, true)} runs out her guns and comes about to fight!`, '#ff9070');
+  } else {
+    S.flee = { from: from.id, t: 120 };
+    for (const q of near) game.asPlayer ? game.asPlayer(q, () => game.ui.msg(`${theShip(S, true)} crowds on sail and turns to run!`, '#ffd080')) : game.ui.msg(`${theShip(S, true)} crowds on sail and turns to run!`, '#ffd080');
+  }
 }
 
 function findBy(game, id) {
@@ -1644,15 +1723,22 @@ export function loadShips(game, list) {
   }
 }
 
-// Mended by hand: hammer a plank into hole vi of hers.
+// Mended by hand: hammer a plank into hole vi of hers (or, Round 85, the
+// block in hand: whatever's solid stops a hole).
 export function mendWith(game, p, S, vi) {
   const inv = p.inv || [];
-  const k = inv.findIndex((s) => s && MENDS(s.item));
+  const held = p.heldDef ? p.heldDef() : null;
+  const hk = held && PATCHES(held.key) && !MENDS(held.key) ? inv.findIndex((s) => s && s.item === held.key) : -1;
+  const k = hk >= 0 ? hk : inv.findIndex((s) => s && MENDS(s.item));
   if (k < 0) {
-    game.ui.msg('You need planks to mend her.', '#ffb080', true);
+    game.ui.msg('You need planks (or a solid block, like stone) to mend her.', '#ffb080', true);
     return false;
   }
-  if (!mendVoxel(game, S, vi)) return false;
+  const withId = hk >= 0 ? B[inv[k].item] : null;
+  if (!mendVoxel(game, S, vi, withId)) {
+    if (withId) game.ui.msg('Only planks will mend her there.', '#c8c8c8', true);
+    return false;
+  }
   inv[k].count--;
   if (inv[k].count <= 0) inv[k] = null;
   game.audio?.play('place');

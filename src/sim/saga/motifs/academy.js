@@ -898,8 +898,19 @@ motif({
     sponsor: {
       // (Paid at the desk, or to them: see respond.)
       thanks: () => ['I won\'t let you down. I won\'t!'],
+      how: (th, t, S) => `Pay ¤${th.vars.fee} for ${th.names.hopeful}'s place at ${th.vars.name}: talk to them in ${townName(S, th.sid)}, or to the registrar at the Academy's desk.`,
     },
     attend: {
+      // (Round 85) The Academy's door, and the next class.
+      where: (th, t, S) => {
+        const b = academyOf(layoutOf(S, th.sid));
+        return b && b.door ? { x: b.door.x, z: b.door.z } : null;
+      },
+      how: (th, t, S) => {
+        const nc = th.vars.sched[nextClass(th.vars.sched, S.now)];
+        const when = nc ? ` Next: ${SUBJECTS[nc.subject].title}, ${nc.day === S.day ? 'today' : `day ${nc.day + 1}`} at ${clock(nc.from)}, in ${ROOM_WORD[SUBJECTS[nc.subject].room]}.` : '';
+        return `Go to ${th.vars.name} in ${townName(S, th.sid)} and stay in the right room for an hour of each class.${when}`;
+      },
       status: (th, t, pid) => {
         const st = th.vars.players[pid];
         if (!st) return ['You\'re not enrolled.'];
@@ -1373,6 +1384,7 @@ motif({
     fund: {
       // (Given: see respond.)
       thanks: () => ['You... you\'d do that? I\'ll make you proud. I\'ll make everyone proud.'],
+      how: (th, t, S) => `Give ${th.names.student || 'them'} ¤${th.vars.need}: talk to them in ${townName(S, th.sid)}.`,
     },
   },
   townTalk(th, npc, pid, S) {

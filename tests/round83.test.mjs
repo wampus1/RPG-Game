@@ -20,7 +20,7 @@ import { PLAYER_STEP_TIME, FLEE_REST } from '../src/config.js';
 import { RNG } from '../src/util/rng.js';
 import { ITEMS } from '../src/world/items.js';
 import { topicsFor } from '../src/game/dialogue.js';
-import { GAME_VERSION } from '../src/version.js';
+import { GAME_VERSION, compareVersions } from '../src/version.js';
 import { stepsFor } from '../src/game/migrate.js';
 
 const input = stubInput();
@@ -225,6 +225,6 @@ test('the trade window says why they won\'t buy, their purse shaking red when it
 });
 
 test('version 0.83.0 has its step', () => {
-  assert.equal(GAME_VERSION, '0.83.0');
+  assert.ok(compareVersions(GAME_VERSION, '0.83.0') >= 0);
   assert.ok(stepsFor('0.82.0').some((s) => s.to === '0.83.0'));
 });

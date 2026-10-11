@@ -180,7 +180,10 @@ export class Lighting {
     // (Night eyes see further by it; the night-blind hardly at all.)
     const hero = game.hero;
     const own = hasTrait(hero, 'night_eyes') ? 6 : hasTrait(hero, 'night_blind') ? 2 : below ? 3 : 4;
-    const pl = Math.max(player.lightLevel, Math.round(own * (1 - blackout)), 1);
+    // (Round 85: aboard a ship, no pool of light about you: the ground
+    // under it is the sea, and it lit the water round the hull.)
+    const aboard = !!player.deck;
+    const pl = aboard ? 1 : Math.max(player.lightLevel, Math.round(own * (1 - blackout)), 1);
     const pKey = `${player.x},${player.y},${player.z},${pl}`;
     if (!this.pflood || this.pflood.key !== pKey) {
       const R = pl;
@@ -350,7 +353,7 @@ export class Lighting {
     if (dark > 0.15) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const mine = player.lightLevel > 4 ? [{ x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true, ent: player, cold: player.heldLightKind && player.heldLightKind() === 'cold' }] : [];
+      const mine = !aboard && player.lightLevel > 4 ? [{ x: player.x, y: player.y, z: player.z, L: player.lightLevel, player: true, ent: player, cold: player.heldLightKind && player.heldLightKind() === 'cold' }] : [];
       const glowSources = [...this.sources, ...mine, ...ents.map((q) => ({ ...q, player: true }))];
       for (const s of glowSources) {
         if (s.x < x0 - 2 || s.x > x1 + 2 || s.z < z0 - 2 || s.z > z1 + 2) continue;

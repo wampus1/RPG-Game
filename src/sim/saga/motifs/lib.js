@@ -11,6 +11,10 @@ export { R, nameOf, NameOf, resolve, isAlive, whereOf, townMid, directions, pidO
 
 export const pick = (rng, a) => a[Math.floor(rng.next() * a.length)];
 export const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+// (Round 85) "A", "A and B", "A, B and C".
+export const andList = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
+// (Round 85) The middle of town `sid`, as a place for a task's guide.
+export const townAt = (S, sid) => townMid(S.game.world.ow.settlements[sid]);
 
 // "{who} saw {what}" with { who, what }.
 export function fill(t, v = {}) {

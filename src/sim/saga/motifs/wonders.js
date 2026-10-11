@@ -19,7 +19,7 @@
 //   - Ill luck: something brought into a town that shouldn't have been, and
 //     everything going wrong since. Or is it?
 import { motif, R, nameOf } from '../core.js';
-import { pick, say, layoutOf, laidTowns, townName, townMid, living, adults, fullName, recOf, has, nat, spotNear, biomeAt, persuade, repWith, isRec, someone } from './lib.js';
+import { pick, say, layoutOf, laidTowns, townName, townMid, whereOf, living, adults, fullName, recOf, has, nat, spotNear, biomeAt, persuade, repWith, isRec, someone } from './lib.js';
 import { makePerson } from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { BIOMES } from '../../../world/biomes.js';
@@ -129,7 +129,17 @@ motif({
       slain(th, S, ev.by && ev.by.t === 'pl' ? ev.by.pid : null);
     },
   },
-  tasks: { hunt: {}, spare: {} },
+  // (Round 85) Plainly, either way.
+  tasks: {
+    hunt: {
+      where: (th) => (th.vars.at ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+      how: (th, t, S) => `Find the White Stag (last seen where it's marked on your map) and kill it. Then go back to ${t.giverName || 'the hunter'} in ${townName(S, th.sid)}.`,
+    },
+    spare: {
+      where: (th, t, S) => (th.cast.hunter ? whereOf(S, th.cast.hunter) : null),
+      how: (th, t, S) => `Talk ${th.names.hunter || 'the hunter'} in ${townName(S, th.sid)} out of hunting the White Stag, and don't let anyone kill it.`,
+    },
+  },
   townTalk(th, npc, pid, S) {
     if (th.done || !isRec(npc, th.cast.hunter) || th.vars.talked) return [];
     return [{ id: 'sgw2_leave', arg: tid(th), label: 'Leave the stag be. Some things shouldn\'t be hunted.' }];
@@ -275,6 +285,7 @@ motif({
   },
   tasks: {
     rider: {
+      how: (th) => `Search the place marked on your map for ${th.vars.rider || 'the rider'}, who was thrown from the horse.`,
       reach(th, t, pid, S) {
         S.complete(t, R.pl(pid));
         S.dismissActor(th, 'rider');
@@ -360,6 +371,7 @@ motif({
   },
   tasks: {
     look: {
+      how: (th) => `Go inside ${th.vars.house} (marked on your map) at night, after eight, and see what's there.`,
       reach(th, t, pid, S) {
         const night = S.game.minute >= 1200 || S.game.minute < 300;
         if (!night) {
@@ -507,7 +519,10 @@ motif({
       fade: 4,
     },
   },
-  tasks: { rescue: {} },
+  tasks: { rescue: {
+    where: (th) => (th.vars.at ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+    how: (th, t, S) => `Go to the shore by ${townName(S, th.sid)} (marked on your map) and talk to each survivor there to help them out of the water. Hurry: they won't last two days.`,
+  } },
   hello(th, a, npc) {
     return pick(npc.rng, ['Thank the gods! Help me!', 'Is it over? Is everyone...?', '*coughs*']);
   },
@@ -594,7 +609,10 @@ motif({
       fade: 12,
     },
   },
-  tasks: { water: {} },
+  tasks: { water: {
+    where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+    how: (th, t, S) => `Ask the old folk of ${townName(S, th.sid)} if the well has ever run dry before. If they name someone, talk to that person.`,
+  } },
   townTalk(th, npc, pid, S) {
     if (th.done || !npc.rec || npc.rec.sid !== th.sid || npc.rec.age === 'child') return [];
     const out = [];
@@ -696,6 +714,7 @@ motif({
   },
   tasks: {
     star: {
+      how: () => 'Go to where it came down (marked on your map) and see what fell.',
       reach(th, t, pid, S) {
         const rng = S.rng(th, 0x57e);
         S.complete(t, R.pl(pid));
@@ -780,7 +799,10 @@ motif({
       fade: 20,
     },
   },
-  tasks: { catch: {} },
+  tasks: { catch: {
+    where: (th) => (th.vars.at ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+    how: (th, t, S) => `Fish off the landing at ${townName(S, th.sid)} (marked on your map) with a fishing rod until you land ${th.vars.fish}: a big one.`,
+  } },
 });
 
 // ------------------------------------------------------------ the pig chase
@@ -850,7 +872,13 @@ motif({
     if (r && pid) repWith(S, layoutOf(S, th.sid), r, -25);
     S.end(th, 'killed', `${th.vars.name} the ${th.vars.beast} was killed${pid ? ` by ${nameOf(S, R.pl(pid))}` : ''}. "I said GENTLY," says ${th.names.owner}.`, { news: [th.sid] });
   },
-  tasks: { catch: {} },
+  tasks: { catch: {
+    where: (th, t, S) => {
+      const e = S.actorEnt(th, 'beast');
+      return e ? { x: Math.round(e.x), z: Math.round(e.z) } : townMid(S.game.world.ow.settlements[th.sid]);
+    },
+    how: (th, t, S) => `Find ${th.vars.name} the ${th.vars.beast}, loose in ${townName(S, th.sid)}, and walk right up to them to grab them.`,
+  } },
 });
 
 // ------------------------------------------------------------ the swarm
@@ -895,6 +923,7 @@ motif({
   },
   tasks: {
     smoke: {
+      how: (th, t, S) => `Get 3 ${ITEMS[t.item] ? ITEMS[t.item].name : 'Peat Turf'} (${t.item === 'peat_turf' ? 'dig peat in bogs and moors' : 'they grow wild in the grass'}) and give them to ${t.giverName || 'the beekeeper'} in ${townName(S, th.sid)}.`,
       done(th, t, by, S) {
         S.end(th, 'hived', `${nameOf(S, by)} helped smoke the bees out of ${th.vars.where}, into a proper hive. ${townName(S, th.sid)} has honey now.`, { news: [th.sid] });
       },
@@ -951,6 +980,7 @@ motif({
   },
   tasks: {
     lift: {
+      how: (th, t, S) => `Get ${t.item === 'prayer_beads' ? 'Prayer Beads (they turn up in temple chests)' : 'a Wild Herb'} and give ${t.item === 'prayer_beads' ? 'them' : 'it'} to ${t.giverName || 'the priest'} in ${townName(S, th.sid)}.`,
       done(th, t, by, S) {
         S.end(th, 'lifted', `The priest blessed the town with ${nameOf(S, by)}'s beads, and folk say the luck has turned. ${th.vars.real ? 'It has.' : 'It may never have been gone.'}`, { news: [th.sid] });
       },

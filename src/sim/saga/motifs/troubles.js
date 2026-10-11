@@ -19,7 +19,7 @@
 //     Win it back, catch the cheat, or talk them out of the next throw.
 //   - The tonic: a travelling doctor's miracle cure. It might even work.
 import { motif, R, nameOf } from '../core.js';
-import { pick, say, layoutOf, laidTowns, townName, townMid, living, adults, fullName, kinOf, recOf, purse, has, nat, spotNear, persuade, repWith, isRec, someone } from './lib.js';
+import { pick, say, layoutOf, laidTowns, townName, townMid, whereOf, living, adults, fullName, kinOf, recOf, purse, has, nat, spotNear, persuade, repWith, isRec, someone } from './lib.js';
 import { makePerson } from '../actors.js';
 import { mayorOf, alive, DAY } from '../../econ.js';
 import { relocate } from '../../civic.js';
@@ -101,7 +101,14 @@ motif({
       fade: 10,
     },
   },
-  tasks: { save: {} },
+  tasks: { save: {
+    // (Round 85) Two ways out, plainly.
+    where: (th, t, S) => {
+      const e = S.actorEnt(th, 'lender');
+      return e ? { x: Math.round(e.x), z: Math.round(e.z) } : (th.cast.lender ? whereOf(S, th.cast.lender) : townMid(S.game.world.ow.settlements[th.sid]));
+    },
+    how: (th, t, S) => `Talk to ${th.vars.lenderName} in ${townName(S, th.sid)}: pay off ${th.names.debtor}'s debt (¤${th.vars.sum - th.vars.paid}), or ask others in town who've borrowed from them for proof they cheat.`,
+  } },
   hello(th, a, npc) {
     return pick(npc.rng, ['Business?', 'If you\'re here about the debt, the answer\'s no.', 'Everyone owes someone.']);
   },
@@ -225,6 +232,7 @@ motif({
   },
   tasks: {
     look: {
+      how: (th) => `Go to where ${th.vars.scheme} is meant to be (marked on your map) and see for yourself.`,
       reach(th, t, pid, S) {
         S.complete(t, R.pl(pid));
         th.vars.seen = pid;
@@ -658,7 +666,10 @@ motif({
       fade: 12,
     },
   },
-  tasks: { defend: {} },
+  tasks: { defend: {
+    where: (th, t, S) => townMid(S.game.world.ow.settlements[th.sid]),
+    how: (th, t, S) => `Talk to people in ${townName(S, th.sid)} and tell them ${th.names.accused} has done nothing wrong.`,
+  } },
   townTalk(th, npc, pid, S) {
     if (th.done || !npc.rec || npc.rec.sid !== th.sid || isRec(npc, th.cast.accused) || npc.rec.age === 'child' || (th.vars.talked || []).includes(`${pid}:${npc.rec.idx}`)) return [];
     return [
@@ -828,6 +839,11 @@ motif({
   hello(th) {
     return 'Care for a throw? Small stakes. Friendly.';
   },
+  // (Round 85) Who to find, and what you can do.
+  tasks: { stop: {
+    where: (th) => (th.vars.at ? { x: th.vars.at.x, z: th.vars.at.z } : null),
+    how: (th, t, S) => `Find ${th.vars.sharp}, the dice player, in ${townName(S, th.sid)} (marked on your map): win the money back at dice, watch their hands for cheating, or tell them to leave. Or talk ${th.names.gambler} into quitting.`,
+  } },
   talk(th, a) {
     if (a.role !== 'sharp') return [];
     return [
@@ -952,6 +968,14 @@ motif({
       fade: 6,
     },
   },
+  // (Round 85) Where to buy it, and who to give it to.
+  tasks: { test: {
+    where: (th, t, S) => {
+      const e = S.actorEnt(th, 'doc');
+      return e ? { x: Math.round(e.x), z: Math.round(e.z) } : townMid(S.game.world.ow.settlements[th.sid]);
+    },
+    how: (th, t, S) => `Buy a bottle of tonic from ${th.vars.doctor} in ${townName(S, th.sid)}'s square (¤5), and give it to ${th.names.herb || 'the herbalist'}.`,
+  } },
   hello(th) {
     return 'Ailing, friend? I see it in your eyes. A spoonful of this...';
   },

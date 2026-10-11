@@ -646,6 +646,18 @@ export const STEPS = [
       if ((d.wg || 1) < 8) log.push('This world keeps its continents as they were made: a new world has Velmarch and Ostria parted into provinces of their own country, and more than one graveyard in each city.');
     },
   },
+  {
+    // (Round 85) Quests say plainly what to do and where (the journal's
+    // "To do" and "Where", worked out as it's read: nothing in the save
+    // to change), and what you'd taken on is marked on the map the first
+    // time the world runs (see Saga.update). Ships flood by the world's
+    // clock, and take a patch of any solid block.
+    to: '0.85.0',
+    data(d, log) {
+      log.push('Quests say plainly what to do and where: see "To do" and "Where" in the quest log (O). What you\'ve taken on is marked on your map.');
+      log.push('A holed ship floods while you sleep or wait too, and any solid block (cobblestone, stone) patches a hole. Ships you fire on fight back or run.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

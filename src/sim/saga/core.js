@@ -33,6 +33,7 @@ import { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, p
 import { Director } from './director.js';
 import { rememberStory } from './memory.js';
 import { storyOn } from '../../mod/rules.js';
+import { ITEMS } from '../../world/items.js';
 
 export { R, refKey, sameRef, resolve, isAlive, nameOf, NameOf, whereOf, entOf, pidOf, playerOf, playerName, townMid, directions, poss };
 
@@ -70,13 +71,18 @@ export function motif(def) {
 }
 
 const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+// (Round 85) "12 Planks", "a Kavorent Core".
+function itemWords(k, n = 1) {
+  const name = ITEMS[k] ? ITEMS[k].name : String(k).replace(/_/g, ' ');
+  return n > 1 ? `${n} ${name}` : `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
 // (A task's title in the middle of a sentence: its first word only.)
 export const lcFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 // (A story's title in the middle of a sentence: "the Feud..." but never
 // "gwen and Giles".)
 // (Round 56) Those whose death a story doesn't end on: the one it's out to
 // see dead, villains, rivals, the dead already, go-betweens.
-const PASSING = new Set(['target', 'killer', 'thief', 'fence', 'culprit', 'spy', 'rival', 'mayor', 'contact', 'victim', 'dead', 'lost', 'member', 'mid', 'avenger']);
+const PASSING = new Set(['target', 'killer', 'thief', 'fence', 'culprit', 'spy', 'rival', 'mayor', 'contact', 'victim', 'dead', 'lost', 'member', 'mid', 'avenger', 'seller']);
 const pick1 = (rng, a) => a[rng.int(0, a.length - 1)];
 const inLine = (t) => (/^(The|A|An) /.test(t || '') ? lcFirst(t) : t);
 
@@ -696,6 +702,20 @@ export class Saga {
     if (!this.game.world || !this.game.world.ow) return;
     this.start();
     this.drain();
+    // (Round 85) What anyone had already taken on, before tasks were
+    // marked as they're taken: marked now, once.
+    if (!this.marked85) {
+      this.marked85 = true;
+      for (const th of this.threads) for (const t of th.tasks) {
+        if (!(t.status === 'open' && t.claims.some((c) => c.who.t === 'pl')) && !(t.status === 'won' && t.ready)) continue;
+        if (this.markedTask(t)) continue;
+        try {
+          this.markTask(t);
+        } catch (e) {
+          this.fault(th, e);
+        }
+      }
+    }
     const hour = Math.floor(this.now / 60);
     if (this.lastHour === null) this.lastHour = hour;
     // (Hours slept or waited through: caught up, a day's worth at most a
@@ -900,6 +920,130 @@ export class Saga {
     return t;
   }
 
+  // (Round 85) What to do about a task, said plainly, and where:
+  // { how (one plain sentence), at ({x, z}, or null), where (the place in
+  // words) }. The story's own words for it first (its task handler's
+  // `how` and `where`: see motifs), else made from what the task is (who
+  // it's for, what to bring, who to take it to). Done and waiting to be
+  // turned in: back to whoever asked.
+  guide(t, pid = null) {
+    const th = this.threadOf(t);
+    const M = th && MOTIFS[th.m];
+    const h = M && M.tasks && M.tasks[t.role];
+    let how = null;
+    let at = null;
+    if (t.status === 'won') {
+      at = t.giver ? whereOf(this, t.giver) : null;
+      how = `Go back to ${t.giverName || 'whoever asked'}${this.inTown(t.giver)} for your reward.`;
+    } else {
+      try {
+        if (h && h.where) at = h.where(th, t, this) || null;
+      } catch (e) {
+        this.fault(th, e);
+      }
+      try {
+        if (h && h.how) how = h.how(th, t, this, pid) || null;
+      } catch (e) {
+        this.fault(th, e);
+      }
+      at = at || t.at || this.placeOf(t);
+      how = how || this.howOf(t);
+    }
+    return { how, at, where: at ? (at.words || this.whereWords(at)) : null };
+  }
+
+  // Where a task without a place of its own is done: with whoever it's
+  // about (the one to take it to, the one to bring down), else with
+  // whoever asked, else in its town.
+  placeOf(t) {
+    const ow = this.game.world.ow;
+    const at = (t.target && whereOf(this, t.target)) || (t.giver && whereOf(this, t.giver)) || (t.sid !== null && t.sid !== undefined ? townMid(ow.settlements[t.sid]) : null);
+    return at ? { x: at.x, z: at.z } : null;
+  }
+
+  // " in Ashford" (for someone of a town), else "".
+  inTown(r) {
+    if (!r || r.t !== 'rec') return '';
+    const s = this.game.world.ow.settlements[r.sid];
+    return s ? ` in ${s.name}` : '';
+  }
+
+  // A place in words: in a town, or how far and which way from the
+  // nearest.
+  whereWords(at) {
+    const ow = this.game.world.ow;
+    const inside = ow.settlementAt ? ow.settlementAt(at.x, at.z) : null;
+    if (inside) return `in ${inside.name}`;
+    let near = null;
+    let bd = Infinity;
+    for (const s of ow.settlements) {
+      if (s.deserted) continue;
+      const m = townMid(s);
+      const d = Math.hypot(m.x - at.x, m.z - at.z);
+      if (d < bd) {
+        bd = d;
+        near = s;
+      }
+    }
+    const sea = ow.continentAt && ow.continentAt(at.x, at.z) < 0;
+    return `${sea ? 'at sea, ' : ''}${near ? directions(near, at.x, at.z) : 'out in the wilds'}`;
+  }
+
+  // What to do, made from what the task is (when its story hasn't said).
+  howOf(t) {
+    const g = t.giverName || 'whoever asked';
+    const inG = this.inTown(t.giver);
+    const tg = t.target ? nameOf(this, t.target) : null;
+    const inT = this.inTown(t.target);
+    const it = t.item && !String(t.item).startsWith('note~') ? itemWords(t.item, t.n || t.need || 1) : null;
+    switch (t.kind) {
+      case 'fetch':
+        if (t.item === 'food') return `Give ${g}${inG} ${t.n || 1} things to eat (any food).`;
+        return it ? `Get ${it} and give ${(t.n || 1) > 1 ? 'them' : 'it'} to ${g}${inG}.` : `Bring ${g}${inG} what they asked for.`;
+      case 'deliver': {
+        const what = t.item && String(t.item).startsWith('note~') ? `the ${String(t.item).split('~')[3] || 'letter'}` : t.item && ITEMS[t.item] ? `the ${ITEMS[t.item].name}` : 'it';
+        return tg ? `Take ${what} to ${tg}${inT} and talk to them.` : `Take ${what} where ${g} asked.`;
+      }
+      case 'pay': return `Talk to ${g}${inG} and pay.`;
+      case 'talk': return `Talk to ${g}${inG}.`;
+      case 'meet': case 'visit': return 'Go to the place marked on your map.';
+      case 'find': return 'Go to the place marked on your map and search there.';
+      case 'hunt': return tg ? `Find ${tg} and kill them.` : 'Find them and kill them.';
+      case 'slay': return `Kill ${t.need > 1 ? t.need : 'them'}${t.need > 1 ? ' of them' : ''}.`;
+      case 'clear': return 'Go to the place marked on your map and kill everything there.';
+      case 'rescue': return tg ? `Free ${tg} and bring them out.` : 'Free them and bring them out.';
+      case 'retrieve': return `Get ${t.item && ITEMS[t.item] ? `the ${ITEMS[t.item].name}` : 'it'} back from the place marked on your map, and give it to ${g}${inG}.`;
+      case 'defend': return `Be there when the fighting starts, and help.`;
+      case 'escort': return tg ? `Walk with ${tg} and keep them safe.` : 'Walk with them and keep them safe.';
+      case 'contract': return tg ? `Track down ${tg} and ${/alive/i.test(t.title || '') ? 'take them alive' : 'kill them'}.` : null;
+      default: return null;
+    }
+  }
+
+  // (Round 85) Marked on the map, for a task you've taken on (each task
+  // has one mark at most, moved as it goes on, and gone when it's over).
+  markTask(t) {
+    const g = this.guide(t);
+    const ow = this.game.world.ow;
+    if (!g.at || !ow.pin) return false;
+    this.unmarkTask(t);
+    ow.pin(g.at.x, g.at.z, t.status === 'won' ? `${t.pinLabel || t.title} (go back to ${t.giverName || 'them'})` : t.pinLabel || t.title, t.glyph || '!', { quest: true, task: t.id });
+    return true;
+  }
+
+  unmarkTask(t) {
+    const ow = this.game.world.ow;
+    if (!ow.pins || !ow.pins.some((q) => q.task === t.id)) return;
+    ow.pins = ow.pins.filter((q) => q.task !== t.id);
+    ow.pinsV = (ow.pinsV || 0) + 1;
+  }
+
+  // Marked already?
+  markedTask(t) {
+    const ow = this.game.world.ow;
+    return !!(ow.pins && ow.pins.some((q) => q.task === t.id));
+  }
+
   tasksOf(th, role = null) {
     return th.tasks.filter((t) => t.status === 'open' && (!role || t.role === role));
   }
@@ -956,6 +1100,8 @@ export class Saga {
         this.tell(who.pid, `In your journal now: ${t.title}${t.giverName ? ` (it's ${t.giverName}'s${town ? `, of ${town}` : ''})` : ''}.`, '#e8d8a8');
       }
       this.touch(th, who.pid, `${nameOf(this, who)} took it on: ${lcFirst(t.title)}.`);
+      // (Round 85) Somewhere else to go: marked on the map, and said so.
+      this.markAway(t, who.pid);
     } else if (th) this.note(th, `${NameOf(this, who)} took it on: ${lcFirst(t.title)}.`);
     const M = MOTIFS[th.m];
     const fn = M.tasks && M.tasks[t.role] && M.tasks[t.role].accepted;
@@ -963,14 +1109,26 @@ export class Saga {
     return true;
   }
 
+  // (Round 85) Marked on the map for `pid`, if it's done somewhere away
+  // from where they are; and what to do, told plainly.
+  markAway(t, pid) {
+    const g = this.guide(t, pid);
+    const p = playerOf(this.game, pid);
+    const far = g.at && (!p || Math.hypot(g.at.x - p.x, g.at.z - p.z) > 24);
+    if (far) this.markTask(t);
+    if (g.how) this.tell(pid, `${g.how}${far ? ` (${g.where ? `${capFirst(g.where)}: m` : 'M'}arked on your map.)` : ''}`, '#a0e0ff');
+  }
+
   drop(t, who) {
     t.claims = t.claims.filter((c) => !sameRef(c.who, who));
+    if (who.t === 'pl' && !t.claims.some((c) => c.who.t === 'pl')) this.unmarkTask(t);
   }
 
   closeTask(t, status, by = null) {
     if (t.status !== 'open' && t.status !== 'won') return;
     t.status = status;
     t.closed = this.now;
+    this.unmarkTask(t);
     if (by) {
       t.doneBy = by;
       t.doneName = nameOf(this, by);
@@ -994,7 +1152,9 @@ export class Saga {
       t.doneBy = by;
       t.doneName = who;
       t.ready = by.pid;
-      this.tell(by.pid, `Done: ${t.title}. Go back to ${nameOf(this, t.giver)} for your reward.`, '#a0e0ff');
+      this.tell(by.pid, `Done: ${t.title}. Go back to ${nameOf(this, t.giver)}${this.inTown(t.giver)} for your reward.`, '#a0e0ff');
+      // (Round 85: the mark on the map moved to them, if there was one.)
+      if (this.markedTask(t)) this.markTask(t);
     } else {
       this.closeTask(t, 'done', by);
       if (by && by.t === 'pl') this.reward(t, by.pid);
@@ -1558,7 +1718,7 @@ export class Saga {
       threads: this.threads.map((t) => ({ ...t, near: undefined })),
       next: this.next, taskNext: this.taskNext, people: this.people, named: this.named, dens: this.dens, tally: this.tally,
       lastHour: this.lastHour, started: this.started, chronicle: this.chronicle, queue: this.queue.slice(-50),
-      director: this.director.save(), memories: this.memories,
+      director: this.director.save(), memories: this.memories, marked85: !!this.marked85,
     };
   }
 
@@ -1588,6 +1748,7 @@ export class Saga {
     this.queue = d.queue || [];
     this.director.load(d.director);
     this.memories = d.memories || [];
+    this.marked85 = !!d.marked85;
   }
 
   // ------------------------------------------------------------ for the journal

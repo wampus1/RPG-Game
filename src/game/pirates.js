@@ -67,6 +67,8 @@ export function coveOf(game) {
 }
 
 const pirates = (game) => shipsOf(game).filter((S) => S.pirate && !S.sinking);
+// (Round 85) Someone taken at sea, still held at the cove.
+const captivesHeld = (game) => ((game.sim && game.sim.saga && game.sim.saga.threads) || []).some((th) => th.m === 'taken_at_sea' && !th.done);
 const nearAny = (game, x, z, r) => (game.everyone ? game.everyone() : [game.player]).some((q) => q && !q.dead && Math.hypot(q.x - x, q.z - z) < r);
 
 // A pirate ship, out of nowhere at (x, z): hostile, after `target`.
@@ -117,13 +119,16 @@ export function pirateTick(game, dt) {
   // you come close.
   if (cove && nearAny(game, cove.x, cove.z, 170)) {
     const here = pirates(game).filter((S) => S.cove);
-    if (!P.coveDone && here.length < 2 && !P.coveSpawned) {
+    // (Round 85: beaten once, they're back while they've someone's kin
+    // in their holds: see saga/motifs/tides.js.)
+    const held = captivesHeld(game);
+    if ((!P.coveDone || held) && here.length < 2 && !P.coveSpawned) {
       P.coveSpawned = true;
       for (let i = 0; i < 2; i++) {
         const S = spawnPirate(game, cove.x + (i ? 24 : -12), cove.z + (i ? 10 : -6), { anchor: true, seed: hash4(game.seed >>> 0, i, 0xc0fe) });
         if (S) S.cove = true;
       }
-      if (!P.warned) game.ui.msg(`Black sails at anchor ahead: ${cove.name}. Come in close and they'll come out for you.`, '#ff9070');
+      if (!P.warned || held) game.ui.msg(`Black sails at anchor ahead: ${cove.name}.${held ? ' The captives will be in their holds.' : ''} Come in close and they'll come out for you.`, '#ff9070');
       P.warned = true;
     }
     for (const S of here) {

@@ -514,6 +514,18 @@ motif({
       },
       status: (th) => [th.node === 'held' ? 'Still in the cage, as far as anyone knows.' : 'Out, I hear.'],
       thanks: () => ['You brought them back. The whole town owes you.'],
+      // (Round 85) The cage, where it is now, and how to open it.
+      where: (th, t, S) => {
+        const b = bandOf(S, th);
+        const cg = b && b.camp && b.camp.cage;
+        return cg ? { x: cg.cell.x, z: cg.cell.z } : b && b.camp ? { x: b.camp.x, z: b.camp.z } : null;
+      },
+      how: (th, t, S) => {
+        const b = bandOf(S, th);
+        const who = nameOf(S, th.cast.captive);
+        if (th.node !== 'held') return `${who} is out of the cage: see them safely home.`;
+        return `Go to ${b ? `${poss(b.name)} camp` : 'the outlaws\' camp'} (marked on your map). ${who} is in the cage there: take the key from the jailer (or kill the guards), or pick the lock, and let them out.`;
+      },
     },
   },
   // The jailer, the chief, a captive townsperson: what they say.
@@ -898,7 +910,14 @@ motif({
       fade: 30,
     },
   },
-  tasks: { reclaim: {} },
+  tasks: { reclaim: {
+    where: (th, t, S) => {
+      const b = bandOf(S, th);
+      const cg = b && b.camp && b.camp.cage;
+      return cg ? { x: cg.stash.x, z: cg.stash.z } : null;
+    },
+    how: () => 'Go back to the camp (marked on your map) and open the strongbox, when nobody is watching it, to take your things back.',
+  } },
 });
 
 export { listTaken };

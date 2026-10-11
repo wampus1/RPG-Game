@@ -66,8 +66,9 @@ motif({
             pitch: `${who.name.first} pulls you aside ${why}: "My grandfather buried something out ${directions(L.settlement, at.x, at.z)}. I've no use for it. You have."`,
             reward: { coins: rng.int(40, 90), items: [[pick(rng, ['gem', 'gold_ingot', 'potion_vigor', 'potion_fortitude']), 1]].filter(([k]) => ITEMS[k]), fame: 1 },
           });
+          t.pinLabel = 'A buried kindness';
+          // (Round 85: marked as it's taken on: see Saga.markAway.)
           S.accept(t, R.pl(pid));
-          S.game.world.ow.pin?.(at.x, at.z, 'A buried kindness', '!', { quest: true });
           S.tell(pid, `${th.names.giver} of ${L.settlement.name} has heard of your luck ${why}: there's something buried ${directions(L.settlement, at.x, at.z)}, and it's yours. (Marked on your map.)`, '#a0ffc0');
         } else if (kind === 'patron') {
           const others = laidTowns(S).filter((o) => o !== L && Math.hypot(o.settlement.cx - L.settlement.cx, o.settlement.cz - L.settlement.cz) <= 10);
@@ -99,6 +100,7 @@ motif({
   },
   tasks: {
     cache: {
+      how: () => 'Go to the spot marked on your map and dig there.',
       reach(th, t, pid, S) {
         S.complete(t, R.pl(pid), `${nameOf(S, R.pl(pid))} dug up what ${th.names.giver}'s grandfather buried.`);
         S.tell(pid, 'Under a flat stone, wrapped in oilcloth: it\'s yours now.', '#a0ffc0');
@@ -106,6 +108,7 @@ motif({
       },
     },
     carry: {
+      how: (th, t, S) => `Go to ${townName(S, th.vars.to)} (marked on your map). The word is delivered when you get there.`,
       reach(th, t, pid, S) {
         S.complete(t, R.pl(pid), `${nameOf(S, R.pl(pid))} carried ${th.names.giver}'s word to ${townName(S, th.vars.to)}.`);
         S.end(th, 'done');

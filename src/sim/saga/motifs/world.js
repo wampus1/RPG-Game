@@ -15,7 +15,7 @@
 //   - Stolen goods: a merchant robbed on the road wants the goods back from
 //     the band that took them.
 import { motif, R, refKey, nameOf, resolve } from '../core.js';
-import { layoutOf, laidTowns, town, townName, living, adults } from './lib.js';
+import { layoutOf, laidTowns, town, townName, townMid, living, adults } from './lib.js';
 import { makePerson } from '../actors.js';
 import { stash } from './camp.js';
 import { mayorOf, alive, DAY, hearNews } from '../../econ.js';
@@ -66,7 +66,18 @@ motif({
       fade: 25,
     },
   },
-  tasks: { core: { thanks: () => ['A core... a real one. You don\'t know what you\'ve done for us. Here: the realm keeps its word.'] } },
+  tasks: { core: {
+    thanks: () => ['A core... a real one. You don\'t know what you\'ve done for us. Here: the realm keeps its word.'],
+    // (Round 85) The nearest Kavorent spire there is to go into.
+    where: (th, t, S) => {
+      const m = townMid(town(S, th.sid));
+      const spires = (S.sim.dungeons ? S.sim.dungeons.all : []).filter((d) => d.type === 'kavorent' && !d.cleared && d.x !== undefined);
+      if (!m || !spires.length) return null;
+      const d = spires.reduce((a, b) => (Math.hypot(b.x - m.x, b.z - m.z) < Math.hypot(a.x - m.x, a.z - m.z) ? b : a));
+      return { x: d.x, z: d.z };
+    },
+    how: (th, t, S) => `Get a Kavorent Core (from the vault at the top of a Kavorent spire: the nearest is marked on your map) and give it to ${t.giverName || 'the scholars'} in ${townName(S, th.sid)}.`,
+  } },
 });
 
 // ------------------------------------------------------------ refugees
@@ -121,6 +132,7 @@ motif({
   },
   tasks: {
     feed: {
+      how: (th, t, S) => `Give ${t.giverName || 'the mayor'} in ${townName(S, th.sid)} 8 things to eat (any food).`,
       done(th, t, by, S) {
         th.vars.fed = true;
       },
@@ -238,7 +250,16 @@ motif({
       fade: 20,
     },
   },
-  tasks: { back: { thanks: () => ['My goods! You\'re a marvel.'] } },
+  tasks: { back: {
+    thanks: () => ['My goods! You\'re a marvel.'],
+    // (Round 85) The strongbox at their camp.
+    where: (th, t, S) => {
+      const b = resolve(S, th.cast.band);
+      const cg = b && b.camp && b.camp.cage;
+      return cg ? { x: cg.stash.x, z: cg.stash.z } : b && b.camp ? { x: b.camp.x, z: b.camp.z } : null;
+    },
+    how: (th, t, S) => `Go to ${nameOf(S, th.cast.band)}'s camp (marked on your map), take the stolen goods from their strongbox, and give them to ${th.names.merchant} in ${townName(S, th.sid)}.`,
+  } },
 });
 
 export { hearNews };

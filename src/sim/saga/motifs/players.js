@@ -345,6 +345,7 @@ motif({
   },
   tasks: {
     race: {
+      how: (th, t, S) => `Kill ${t.need} hostile creatures (anywhere, by day or night) before ${nameOf(S, th.cast.a.pid === (t.only || [])[0] ? th.cast.b : th.cast.a)} does. So far: ${Math.min(t.count, t.need)}.`,
       done(th, t, by, S) {
         for (const o of S.tasksOf(th, 'race')) if (o !== t) S.closeTask(o, 'failed', by);
         const loser = th.cast.a.pid === by.pid ? th.cast.b : th.cast.a;
@@ -421,6 +422,7 @@ motif({
   tasks: {
     beacon: {
       anyone: true,
+      how: (th, t, S) => `Stand at the ${t.data.side === 'a' ? 'first' : 'second'} beacon of ${townName(S, th.sid)} (marked on your map) at the same moment someone else stands at the other one.`,
       reach(th, t, pid, S) {
         const side = t.data.side;
         if (!S.claimedBy(t, pid)) S.accept(t, R.pl(pid));

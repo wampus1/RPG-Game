@@ -1181,6 +1181,13 @@ motif({
   tasks: {
     recover: {
       npcs: { adv: 0.2, guard: 0 },
+      // (Round 85) Where it's kept now: the camp's strongbox.
+      where: (th, t, S) => {
+        const b = resolve(S, th.cast.band);
+        const cg = b && b.camp && b.camp.cage;
+        return cg ? { x: cg.stash.x, z: cg.stash.z } : b && b.camp ? { x: b.camp.x, z: b.camp.z } : null;
+      },
+      how: (th, t, S) => `Go to ${nameOf(S, th.cast.band)}'s camp (marked on your map), take the ${ITEMS[t.item] ? ITEMS[t.item].name : 'treasure'} from their strongbox, and give it to ${t.giverName || 'whoever asked'}${t.giver && t.giver.t === 'rec' ? ` in ${townName(S, t.giver.sid)}` : ''}.`,
       // Handed over (see talk.js: it's in your pack).
       done(th, t, by, S) {
         for (const o of S.tasksOf(th, 'recover')) {
@@ -1278,7 +1285,9 @@ motif({
       },
     },
   },
-  tasks: { assault: {} },
+  tasks: { assault: {
+    how: (th, t, S) => `Be at the gate of ${poss(nameOf(S, th.cast.band))} stronghold (marked on your map) at noon on day ${Math.floor((th.vars.at || 0) / DAY) + 1}, and fight with the soldiers.`,
+  } },
 });
 
 // Noon: the soldiers march.

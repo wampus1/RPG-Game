@@ -6,7 +6,7 @@
 // right-click with planks to mend a hole.
 import { B, BLOCKS } from '../world/blocks.js';
 import { REACH, NPC_STEP_TIME, SURFACE, TILE, LH, VIEW_W, VIEW_H } from '../config.js';
-import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, MENDS, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck, sailable, Ship } from './ships3d.js';
+import { shipsOf, shipById, deckInteract, deckClick, boardAt, breakVoxel, mendWith, holeBeside, saveShips, loadShips, putAboard, deckSpotNear, PATCHES, shipAtWorld, waterSpot, addShip, ownerId, entrances, walkAboard, deckStep, deckPath, leaveDeck, sailable, Ship } from './ships3d.js';
 import { holeAt, cellScreen } from '../render/shipvox.js';
 import { SHIP_TYPES, shipModel, onPlan, standOn } from '../world/shipmodels.js';
 import { bottledKey } from '../world/items.js';
@@ -639,7 +639,7 @@ export function shipMouse(game, dt, clicks, input) {
   let used = false;
   // (Round 69) Planks in hand: a hole of hers mended, from inside or out
   // (a click to place them, as anywhere, or the right button).
-  if (held && MENDS(held.key) && !(c && c.entity)) {
+  if (held && PATCHES(held.key) && !(c && c.entity)) {
     for (const ck of clicks) {
       if (ck.type !== 'down' || (ck.button !== 0 && ck.button !== 2)) continue;
       const t = mendTarget(game, p, c);
@@ -676,7 +676,7 @@ export function shipMouse(game, dt, clicks, input) {
     if (ck.button === 2 && !p.deck && c.inReach) boardAt(game, S, p, p.x, p.z);
   }
   // Holding the button on her: knocking a plank out.
-  if (input.mouse.down && !game.shipClickHeld && c.inReach && !(held && (held.kind === 'weapon' || MENDS(held.key)))) {
+  if (input.mouse.down && !game.shipClickHeld && c.inReach && !(held && (held.kind === 'weapon' || PATCHES(held.key)))) {
     const m = S.m;
     const vi = c.ship.vi;
     const id = S.vox[vi];
