@@ -617,6 +617,18 @@ export const STEPS = [
       log.push('Coaches keep to the roads and streets now, and you pick where to go on a map; horses and wagons turn as they go (A and D to turn them, W and S to go).');
     },
   },
+  {
+    // (Round 83) Nothing kept in a world needs changing: an Academy built
+    // before keeps its size (new ones are bigger, with a room at the back
+    // for the registrar), and its classes, and its registrar's hours, are
+    // the new kind from the next one on. (The weather and water effects'
+    // settings became one, Environmental VFX: see loadSettings.)
+    to: '0.83.0',
+    data(d, log) {
+      log.push('Academy classes are real lessons now: the master shows you how things are done, puts questions to the room (answer for practice) and sets work at the room\'s own oven, dummies, desk or bench. The registrar keeps hours, eating at noon and sleeping at night.');
+      log.push('Notice boards list the town\'s positions, and more varied odd jobs; most peoples bar their doors at night; you walk a quarter slower (horses and wagons as quick as ever).');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

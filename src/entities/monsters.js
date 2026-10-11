@@ -32,7 +32,7 @@ import { startLaser } from '../game/laser.js';
 import { GAME_MINUTES_PER_SECOND } from '../config.js';
 import { onTiles, fits, fitNear, footTiles } from './footprint.js';
 import { phaseOf, ready, used } from './tempo.js';
-import { FLEE, FLEE_PLAYER } from '../config.js';
+import { FLEE, FLEE_PLAYER, FLEE_REST } from '../config.js';
 import { fieldWay, lowerFields } from './fields.js';
 
 export { BOSS_TITLES };
@@ -469,15 +469,22 @@ export function dynamiteBlast(game, x, y, z, by = null, o = {}) {
 }
 
 // A pace away from `t` (any way that isn't toward them). True if it moved.
+// (Round 83: never on the slant, and a moment's pause on each tile before
+// the next, from a player: they can be caught.)
+const clockS = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
 function backOff(c, t, pace = 1) {
   if (c.moving) return false;
+  const now = clockS();
+  if (t.kind === 'player' && now < (c.fleeNextAt || 0)) return true;
   const dx = Math.sign(c.x - t.x) || (Math.random() < 0.5 ? 1 : -1);
   const dz = Math.sign(c.z - t.z) || (Math.random() < 0.5 ? 1 : -1);
-  const opts = Math.random() < 0.5 ? [[dx, 0], [0, dz], [dx, dz], [-dz, dx], [dz, -dx]] : [[0, dz], [dx, 0], [dx, dz], [dz, -dx], [-dz, dx]];
+  const opts = Math.random() < 0.5 ? [[dx, 0], [0, dz], [-dz, dx], [dz, -dx]] : [[0, dz], [dx, 0], [dz, -dx], [-dz, dx]];
   for (const [ox, oz] of opts) {
-    if (!ox && !oz) continue;
-    if (c.tryStep(c.x + Math.sign(ox), c.z + Math.sign(oz), c.stepTime() * pace * (t.kind === 'player' ? FLEE_PLAYER : FLEE))) {
+    if ((!ox && !oz) || (ox && oz)) continue;
+    const dur = c.stepTime() * pace * (t.kind === 'player' ? FLEE_PLAYER : FLEE);
+    if (c.tryStep(c.x + Math.sign(ox), c.z + Math.sign(oz), dur)) {
       c.face(t.x, t.z);
+      if (t.kind === 'player') c.fleeNextAt = now + dur + FLEE_REST;
       return true;
     }
   }

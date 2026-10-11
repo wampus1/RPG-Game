@@ -73,7 +73,9 @@ const SPECS = {
   // classrooms off it (a kitchen, a practice hall, a lecture room, a gem
   // workshop), where anyone who pays may study for a term. See
   // sim/college.js.
-  college: { size: [[13, 13], [13, 13]], tall: 3, civic: true },
+  // (Round 83: grown to 17 across, for roomier classrooms and the
+  // registrar's own room at the back of the hall.)
+  college: { size: [[17, 17], [17, 17]], tall: 3, civic: true },
   // A village's (or a small town's) place of learning: a room of books
   // and a desk, so even the smallest free town can work out something new.
   study: { size: [[6, 5], [6, 6]] },
@@ -2862,8 +2864,34 @@ class Layout {
       if (t) b.seats.push(this.addSpot(t.x, t.z, faceToward(t.x, t.z, near.x, near.z), tags, { building: b.id, seat: true }));
       return t;
     };
+    // (Round 83) A roomy Academy (17 across) has more of everything in its
+    // classrooms: a station each for more of the class, and seats.
+    const roomy = b.rooms.kitchen.tiles.length >= 30;
     // The kitchen: the oven and a hearth, a table to work at, a barrel.
     workAt(tryPlace(B.oven, 'any', { access: true, ...inRoom('kitchen') }), ['work', 'class', 'cook']);
+    if (roomy) {
+      workAt(tryPlace(B.oven, 'wall', { access: true, rot: 'wall', ...inRoom('kitchen') }), ['work', 'class', 'cook']);
+      const kt2 = tryPlace(B.table, 'any', { access: true, ...inRoom('kitchen') });
+      if (kt2) {
+        workAt(kt2, ['work', 'class', 'cook']);
+        seatIn(['class', 'study'], kt2, 'kitchen');
+      }
+      workAt(tryPlace(B.jeweler_bench, 'wall', { access: true, rot: 'wall', ...inRoom('gems') }), ['work', 'class', 'gems']);
+      const gt2 = tryPlace(B.table, 'any', { access: true, ...inRoom('gems') });
+      if (gt2) {
+        seatIn(['class', 'study'], gt2, 'gems');
+        seatIn(['class', 'study'], gt2, 'gems');
+      }
+      workAt(tryPlace(B.writing_desk, 'wall', { access: true, rot: 'wall', ...inRoom('lecture') }), ['work', 'read', 'study', 'class', 'research']);
+      const lt2 = tryPlace(B.table, 'any', { access: true, ...inRoom('lecture') });
+      if (lt2) {
+        this.put(lt2.x, Y0 + 1, lt2.z, B.candles, lit);
+        seatIn(['class', 'study', 'read'], lt2, 'lecture');
+        seatIn(['class', 'study', 'read'], lt2, 'lecture');
+      }
+      tryPlace(B.training_dummy, 'any', inRoom('yard'));
+      tryPlace(B.training_dummy, 'any', inRoom('yard'));
+    }
     const hearth = tryPlace(B.furnace, 'any', { access: true, ...inRoom('kitchen') });
     if (hearth) {
       workAt(hearth, ['work', 'class', 'cook']);
@@ -2899,10 +2927,35 @@ class Layout {
     deco(rugId, 'yard');
     // The hall: the registrar's desk at the back, benches down the sides,
     // the notice board by the door, lamps.
-    const back = W(0, Dp - 1);
+    //   (Round 83) A roomy one keeps the registrar's own room at the very
+    // back, through a door behind the desk: a bed, a chest, a lamp.
+    const quarters = Dp >= 13 && bm <= Dp - 4;
+    if (quarters) {
+      for (const u of [-1, 1]) wall(u, Dp - 3);
+      const qd = doorAt(0, Dp - 3, false);
+      for (const v of [Dp - 2, Dp - 4]) {
+        const t = W(0, v);
+        reserved.add(key(t.x, t.z));
+      }
+      const bed = W(-1, Dp - 1);
+      const side = W(-1, Dp - 2);
+      const chest = W(1, Dp - 1);
+      this.put(bed.x, Y0, bed.z, B.bed, (b.door.rot + 1) & 3);
+      occ.add(key(bed.x, bed.z));
+      reserved.add(key(side.x, side.z));
+      this.put(chest.x, Y0, chest.z, B.chest, b.door.rot);
+      occ.add(key(chest.x, chest.z));
+      const lampAt = W(1, Dp - 2);
+      this.put(lampAt.x, Y0, lampAt.z, B.torch, lit);
+      reserved.add(key(lampAt.x, lampAt.z));
+      b.quarters = { bed: { x: bed.x, z: bed.z }, side: { x: side.x, z: side.z }, door: { x: qd.x, z: qd.z } };
+    }
+    // (With the room behind, the registrar stands between the desk and
+    // its door, facing whoever comes up the hall.)
+    const back = quarters ? W(0, Dp - 5) : W(0, Dp - 1);
     this.put(back.x, Y0, back.z, B.writing_desk, (b.door.rot + 2) & 3);
     occ.add(key(back.x, back.z));
-    const desk = W(0, Dp - 2);
+    const desk = quarters ? W(0, Dp - 4) : W(0, Dp - 2);
     if (!connected()) {
       occ.delete(key(back.x, back.z));
       this.put(back.x, Y0, back.z, B.air);
@@ -2918,6 +2971,11 @@ class Layout {
         this.put(t.x, Y0, t.z, B.bench, (b.door.rot + (u < 0 ? 1 : 3)) & 3);
         occ.add(key(t.x, t.z));
         b.seats.push(this.addSpot(t.x, t.z, 0, ['class', 'social', 'study'], { building: b.id, seat: true }));
+        // (Round 83) The registrar eats at the bench nearest the desk.
+        if (b.registrar && (!b.registrarMeal || Math.abs(t.x - b.registrar.x) + Math.abs(t.z - b.registrar.z) < Math.abs(b.registrarMeal.x - b.registrar.x) + Math.abs(b.registrarMeal.z - b.registrar.z))) {
+          const mid0 = W(0, v);
+          b.registrarMeal = { x: t.x, z: t.z, face: { x: mid0.x, z: mid0.z } };
+        }
       }
     }
     for (let v = 0; v < Dp; v++) {

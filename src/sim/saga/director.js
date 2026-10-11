@@ -149,6 +149,18 @@ export class Director {
     return true;
   }
 
+  // (Round 83) The day's odd jobs for a town's notice board (see
+  // motifs/work.js): how many, and how likely the risky ones (things to be
+  // fought) are, by the mood: after hard days the everyday, when it's been
+  // quiet a while more danger. Some days a town has more to ask than others.
+  workPlan(rng) {
+    const base = { quiet: [1, 2], steady: [1, 3], rising: [2, 3] }[this.mood] || [1, 3];
+    const risky = this.mood === 'quiet' ? 0.15 : this.mood === 'rising' ? 0.7 : 0.4;
+    const n = rng.int(base[0], base[1]) + (this.wild ? 1 : 0);
+    this.trace?.(`odd jobs today: up to ${n} a town, risky ones ${Math.round(risky * 100)}% (${this.mood})`);
+    return { n, risky };
+  }
+
   begun(M, th) {
     this.made++;
     if (th) this.trace(`started ${th.title} (${toneOf(M)}, ${this.mood})`);

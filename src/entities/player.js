@@ -510,7 +510,9 @@ export class Player extends Entity {
     const leafy = LEAVES.has(w.getBlock(nx, ny, nz)) || LEAVES.has(w.getBlock(nx, ny + 1, nz));
     const swim = (water && !heroHas(this.game.hero, 'swimmer') ? (heroHas(this.game.hero, 'poor_swimmer') ? 2.35 : 1.9) : 1) * (water && w.isWaterAt(nx, ny - 1, nz) ? 1.25 : 1);
     // In the saddle or on the wagon's bench: quicker (and no sprinting).
-    const ride = this.mount ? this.game.riding.pace() : 1;
+    // (Round 83: on foot a quarter slower; a horse or a wagon as quick as it
+    // ever was.)
+    const ride = this.mount ? this.game.riding.pace() * 0.75 : 1;
     // (Shield up: a slow, careful step, and no running.)
     const guard = this.blocking ? 1.7 : 1;
     // (Just up out of a roll: a little slower for a moment. An arrow on

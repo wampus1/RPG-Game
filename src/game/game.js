@@ -78,6 +78,7 @@ import { gainMastery } from './mastery.js';
 import { dishTrigger, dishWarded, sheepFilter } from './dishacts.js';
 import { CookWindow, RecipeScrollWindow } from '../ui/cook.js';
 import { TravelWindow, CoachMapWindow } from '../ui/travel.js';
+import { chairTable, moveChair } from './chairs.js';
 import { coachStand, ferryStand, arrivalSpot, wayTime } from '../sim/coaches.js';
 import { InstrumentWindow } from '../ui/instrument.js';
 import { spawnPerson, spawnBeast } from '../sim/saga/actors.js';
@@ -4862,9 +4863,20 @@ export class Game {
         } else this.ui.msg('A snare, set and waiting. Nothing caught yet.', '#c8c8c8');
         break;
       }
-      case 'sit':
+      case 'sit': {
+        // (Round 83) Shift: a chair at a table pushed in, or pulled out,
+        // without sitting on it.
+        const inp = this.input;
+        const shift = !!(inp && inp.isDown && (inp.isDown('ShiftLeft') || inp.isDown('ShiftRight')));
+        if (shift && id === B.chair && chairTable(this.world, x, y, z)) {
+          const out = !(this.world.getMeta(x, y, z) & META_STATE);
+          moveChair(this, x, y, z, out);
+          this.ui.msg(out ? 'You pull the chair out from the table.' : 'You push the chair in under the table.', '#c8c8c8', true);
+          break;
+        }
         this.sitOn(x, y, z);
         break;
+      }
       // (Round 62) A mod's block, with something to do when it's used.
       case 'mod':
         modBlockUse(this, x, y, z, id);
@@ -4900,6 +4912,14 @@ export class Game {
         // trade's own goods are for a licensed baker. Round 50.)
         if (st === 'baker' && !this.sim.careers.canUseBench(st)) {
           this.openCooking('o', x, y, z);
+          break;
+        }
+        // (Round 83) A class at the Academy working at the room's own desk
+        // or bench: theirs to use for the lesson, licence or not.
+        if (!this.sim.careers.canUseBench(st) && this.sim.saga?.bench(st, x, z, sagaPid(p))) {
+          if (st === 'scribe') this.ui.open(new ResearchWindow(this.ui, this, this.currentSettlement));
+          else if (st === 'jeweller') this.ui.openSetting();
+          else this.ui.openCrafting(st);
           break;
         }
         if (!this.sim.careers.canUseBench(st)) {
@@ -5674,6 +5694,8 @@ export class Game {
       return;
     }
     if (!this.world.canStand(x, y, z)) return;
+    // (Round 83) Pulled out from its table first.
+    moveChair(this, x, y, z, true, true);
     p.teleport(x, y, z);
     const id = this.world.getBlock(x, y, z);
     if (BLOCKS[id].rotatable) p.dir = this.world.getMeta(x, y, z) & 3;
@@ -6418,6 +6440,8 @@ export class Game {
     this.audio?.play('hit', at);
     this.hitStop = Math.max(this.hitStop || 0, heavy || crit ? 0.06 : 0.03);
     this.shake = Math.min(1, (this.shake || 0) + (heavy ? 0.18 : 0.06));
+    // (Round 83: heard by a class in the practice hall.)
+    this.sim.saga?.emit('dummy_hit', { pid: sagaPid(this.player), x: at.x, z: at.z, heavy, dmg });
     const key = `${at.x},${at.y},${at.z}`;
     const log = this.dummyLog && this.dummyLog.key === key ? this.dummyLog : (this.dummyLog = { key, at, total: 0, n: 0, best: 0, t0: this.sim.abs });
     log.total += dmg;
@@ -7362,7 +7386,15 @@ export class Game {
       const b = s.bounds;
       // (Or the heart of the mire.)
       const margin = night ? (this.sim.ancient.has(s, 'lamps') || this.sim.tech.settledIn(s, 'mist_heart', this.day) ? 34 : 14) : 6;
-      if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin && s.condition !== 'abandoned' && !s.deserted) return;
+      if (s.condition === 'abandoned' || s.deserted) continue;
+      if (x > b.x0 - margin && x < b.x1 + margin && z > b.z0 - margin && z < b.z1 + margin) return;
+      // (Round 83) Nor in, or right by, what the town has put up out past
+      // where it began: the lots it's spread onto, and every building of
+      // its own (a new house at the edge, a farm out in the fields).
+      const m2 = night ? 8 : 3;
+      if (s.suburbs && s.suburbs.some((r) => x > r.x0 - m2 && x < r.x1 + m2 && z > r.z0 - m2 && z < r.z1 + m2)) return;
+      const L = this.world.layouts.get(s.id);
+      if (L && L.buildings.some((q) => x >= q.x0 - m2 && x <= q.x1 + m2 && z >= q.z0 - m2 && z <= q.z1 + m2)) return;
     }
     const y = this.world.findStandY(x, z, p.y);
     if (y < 0 || this.world.isWaterAt(x, y, z) || this.entityAt(x, y, z)) return;
@@ -7534,6 +7566,8 @@ export class Game {
       const id = this.world.getBlock(x, y, z);
       const meta = this.world.getMeta(x, y, z);
       if (BLOCKS[id] && BLOCKS[id].render === 'door' && ((om ^ meta) & META_STATE)) this.renderer.swing(x, y, z, !!(meta & META_STATE));
+      // (Round 83) A chair pushed in or pulled out: slid there.
+      else if (id === B.chair && ((om ^ meta) & META_STATE)) this.renderer.chairMove?.(x, y, z);
     }
     if (isFarmland(n) && this.crops) this.crops.trackSoil(x, y, z, n);
     // (Inside one of the great ships: the same in her. See shiphold.js.)

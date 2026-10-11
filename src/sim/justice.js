@@ -13,6 +13,8 @@ import { DAY, ledger, mayorOf, alive, st, setOverride, invAdd } from './econ.js'
 import { removeItem, countItem } from '../game/inventory.js';
 import { findPath } from '../entities/pathfind.js';
 import { lawOn } from './laws.js';
+import { innsOf, stayAt } from './inns.js';
+import { pidOf } from './saga/refs.js';
 
 export const CRIMES = {
   theft: { label: 'Theft', sev: 'minor', fine: 10 },
@@ -480,6 +482,11 @@ export class Justice {
       this.guardBeside(g);
       if (e.unstuck >= 3) e.t = 999;
     }
+    if (e.t > 90 && e.out) {
+      // (Stuck on the way out: out you go anyway.)
+      game.teleportPlayer(e.goal.x, e.goal.y, e.goal.z);
+      return this.letOut(e);
+    }
     if (e.t > 90) {
       // Taking too long (stuck somewhere): march straight to the cell.
       g.calmDown(true);
@@ -535,11 +542,34 @@ export class Justice {
   escortArrived() {
     const e = this.escort;
     if (!e || e.phase !== 'walk') return;
+    // (Round 83) Walked out of town after curfew: let go there.
+    if (e.out) return this.letOut(e);
     const L = this.sim.layoutOf(e.sid);
     e.phase = 'enter';
     e.t = Math.min(e.t, 100);
     this.setCellDoor(L, true);
     this.game.audio?.play('door');
+  }
+
+  // (Round 83) Out past the edge of town: the rope off, and back in the
+  // morning (back in before then, and it's the cells).
+  letOut(e) {
+    const game = this.game;
+    const p = game.player;
+    const g = e.guard;
+    this.escort = null;
+    p.restrained = false;
+    const now = this.sim.abs;
+    const m = now % DAY;
+    // (Till six in the morning.)
+    this.curfewOut = { sid: e.sid, until: now - m + (m >= 360 ? DAY : 0) + 360 };
+    this.curfewT = null;
+    if (g && !g.dead) {
+      g.face(p.x, p.z);
+      g.say(g.rng.pick(['There. Come back in the daylight, and welcome.', 'Off you go. Gates are open from six.', 'Morning\'s soon enough. Don\'t let me see you before then.']), 3.5);
+      g.calmDown(true);
+    }
+    game.ui.msg('The guard unties you outside the town. Come back after six in the morning (back in tonight, and it\'s the cells).', '#ffe070', true);
   }
 
   resist(sid, guard) {
@@ -1098,20 +1128,91 @@ export class Justice {
     else this.curfewT = null;
   }
 
+  // (Round 83) Not from round here: no citizen of the town, nobody with a
+  // home in it, nor a room let at its tavern.
+  outsider(L) {
+    const s = L.settlement;
+    if (this.sim.isCitizen(s.id)) return false;
+    const pid = pidOf(this.game.player);
+    const now = this.sim.abs;
+    for (const b of innsOf(L)) {
+      const st0 = stayAt(L, b, now);
+      if (st0 && st0.pid === pid) return false;
+    }
+    return true;
+  }
+
+  // (Round 83) Out after curfew, and you'd rather be walked out of town
+  // than arrested: a guard ties your hands and leads you out past its
+  // edge on a rope (where you're let go, to come back in the morning).
+  leadOut(sid, guard) {
+    const game = this.game;
+    const L = this.sim.layoutOf(sid);
+    const p = game.player;
+    if (!guard || guard.dead || !L || p.dead) return this.commit(sid, 'curfew', { witnesses: guard ? [guard] : [] });
+    const goal = this.townEdge(L, p);
+    game.stopPlayerActions?.();
+    p.sitting = null;
+    this.escort = { sid, guard, goal, phase: 'walk', t: 0, wait: 0, stepT: 0, out: true };
+    p.restrained = true;
+    guard.wake?.();
+    guard.state = 'escort';
+    guard.escortOf = p;
+    guard.threat = null;
+    guard.path = null;
+    guard.releaseSpot();
+    this.guardBeside(guard);
+    guard.face(p.x, p.z);
+    guard.say('Hands out. This way: and no trouble.', 3);
+    game.ui.msg(`${guard.name} ties a rope round your wrists and walks you out of ${L.settlement.name}.`, '#ffb080');
+    game.audio?.play('select');
+  }
+
+  // Just outside a town, the nearest way out from (p.x, p.z).
+  townEdge(L, p) {
+    const s = L.settlement;
+    const b = s.bounds;
+    const w = this.game.world;
+    const opts = [{ x: b.x0 - 3, z: p.z }, { x: b.x1 + 3, z: p.z }, { x: p.x, z: b.z0 - 3 }, { x: p.x, z: b.z1 + 3 }];
+    opts.sort((a, c) => Math.abs(a.x - p.x) + Math.abs(a.z - p.z) - (Math.abs(c.x - p.x) + Math.abs(c.z - p.z)));
+    for (const o of opts) {
+      for (let k = 0; k < 8; k++) {
+        const x = Math.round(o.x + (o.x === p.x ? k * (k % 2 ? 1 : -1) : 0));
+        const z = Math.round(o.z + (o.z === p.z ? k * (k % 2 ? 1 : -1) : 0));
+        if (!w.regionAt(x, z)) continue;
+        const y = w.findStandY(x, z, p.y);
+        if (y > 0 && !w.isWaterAt(x, y, z)) return { x, y, z };
+      }
+    }
+    return { x: b.x0 - 3, y: p.y, z: p.z };
+  }
+
   curfewWatch(a, L, p, b) {
     const game = this.game;
     const s = L.settlement;
     const now = this.sim.abs;
     const onWatch = (n) => n.rec.job === 'guard' && !n.dead && !n.sleeping && (n.state === 'routine' || n.state === 'curfew');
     // The player.
-    if (!b && !this.sim.careers.isGuard(s.id) && !game.isWanted(s.id)) {
+    if (!b && !this.escort && !p.restrained && !this.sim.careers.isGuard(s.id) && !game.isWanted(s.id)) {
       const c = this.curfewT;
       let guard = c && c.guard && onWatch(c.guard) ? c.guard : null;
       if (!guard) guard = this.sim.witnesses(s.id, p.x, p.z, 12).find(onWatch) || null;
       if (guard) {
         const d = guard.distTo(p);
-        if (!this.curfewT || this.curfewT.guard !== guard) this.curfewT = { t: 0, guard, warned: false, done: false };
+        if (!this.curfewT || this.curfewT.guard !== guard) this.curfewT = { t: 0, guard, warned: false, done: false, stage: 0 };
         const ct = this.curfewT;
+        // (Round 83) Someone not from round here (no citizen, no home here,
+        // no room at the tavern) is given more of a chance: told to leave
+        // town till morning, then told again, more firmly, and only then
+        // offered the choice of being walked out on a rope, or arrest.
+        // Back again the same night, after being put out: no more chances.
+        const away = this.outsider(L);
+        const back = this.curfewOut && this.curfewOut.sid === s.id && now < this.curfewOut.until;
+        if (back && ct.stage < 2) {
+          ct.stage = 2;
+          ct.warned = true;
+          ct.t = 14;
+        }
         // Over to you first (and, once they've warned you, they stay and
         // keep an eye on you till you're indoors).
         if (!ct.done && (d > 3 || ct.warned)) {
@@ -1119,15 +1220,32 @@ export class Justice {
           if (guard.activity && guard.activity.entry.act !== 'watch') guard.activity = null;
           else if (guard.goal && Math.abs(guard.goal.x - p.x) + Math.abs(guard.goal.z - p.z) > 2) guard.activity = null;
         }
-        if (d <= 4 && !ct.warned) {
-          ct.warned = true;
+        const tell = (line, msg, col = '#ffe070') => {
           guard.face(p.x, p.z);
-          guard.say(guard.rng.pick(['It\'s past curfew! Get indoors, or I\'ll have to fine you.', 'Curfew! Off the streets, now.', 'You there! Home with you. It\'s past ten.']), 3.5, '#ffe070');
-        } else if (ct.warned && !ct.done && (ct.t += 1) >= 20 && d <= 8) {
+          guard.say(line, 4, col);
+          if (msg) game.ui.msg(msg, col, true);
+        };
+        if (d <= 4 && ct.stage === 0) {
+          ct.warned = true;
+          ct.stage = 1;
+          ct.t = 0;
+          if (away) tell(guard.rng.pick(['Evening, stranger. There\'s a curfew here: nobody on the streets after ten. Find a bed, or head out of town and come back by day.', 'You\'re not from here, are you? Curfew\'s on. Off the streets: out of town, or into a room at the tavern.']), `${s.name} keeps a curfew. Get indoors (a room at the tavern), or leave town till morning.`);
+          else tell(guard.rng.pick(['It\'s past curfew! Get indoors, or I\'ll have to fine you.', 'Curfew! Off the streets, now.', 'You there! Home with you. It\'s past ten.']), `Curfew in ${s.name}: get indoors, or you'll be fined.`);
+        } else if (ct.stage === 1 && (ct.t += 1) >= 18 && d <= 8) {
+          ct.stage = 2;
+          ct.t = 0;
+          if (away) tell(guard.rng.pick(['I said out. I mean it. Leave town, now, and come back in the morning.', 'I won\'t ask again, stranger. Out of town, or into a room. Now.']), 'The guard means it: leave town, or find a room, or they\'ll see you out themselves.', '#ffb080');
+          else tell(guard.rng.pick(['Last warning. Indoors. Now.', 'I won\'t tell you again. Home!']), 'Last warning: get indoors.', '#ffb080');
+        } else if (ct.stage === 2 && !ct.done && (ct.t += 1) >= 15 && d <= 8) {
           ct.done = true;
-          guard.say('I warned you.', 2.5, '#ffb080');
-          this.commit(s.id, 'curfew', { witnesses: [guard] });
           if (guard.rec.override && guard.rec.override.curfew) guard.rec.override = null;
+          if (away && !back && !game.ui.modal && game.ui.openCurfew) {
+            tell(guard.rng.pick(['Right. You\'re coming with me: I\'ll walk you out myself.', 'That\'s it. Out you go: on a rope, if need be.']), null, '#ffb080');
+            game.ui.openCurfew(guard, s.id);
+          } else {
+            guard.say(back ? 'I told you not to come back tonight.' : 'I warned you.', 2.5, '#ffb080');
+            this.commit(s.id, 'curfew', { witnesses: [guard] });
+          }
         }
       }
     } else if (b && this.curfewT) {

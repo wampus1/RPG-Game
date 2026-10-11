@@ -22,15 +22,28 @@ export function lockingCulture(s) {
   return r < (s.type === 'city' ? 55 : s.type === 'town' ? 40 : 28);
 }
 
-// The house a door's the front door of (and its town), or null.
+// (Round 83) And most of the rest, though they leave the door on the
+// latch by day, out or in, bar it at night: all but a few trusting
+// peoples (and fewer of those in a city).
+export function nightLocking(s) {
+  if (lockingCulture(s)) return true;
+  if (!s || s.condition === 'abandoned' || s.deserted) return false;
+  const k = String(s.style || (s.civ && s.civ.name) || '');
+  let h = 11;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0;
+  return hash4(h, 0x10c8) % 100 < (s.type === 'city' ? 90 : s.type === 'town' ? 80 : 65);
+}
+
+// The house a door's the front door of (and its town), or null. (`full`:
+// its people keep it locked when they're out, not only at night.)
 export function houseOfDoor(game, x, z) {
   const s = game.world.ow.settlementAt(x, z);
-  if (!s || !lockingCulture(s)) return null;
+  if (!s || !nightLocking(s)) return null;
   const L = game.world.getLayout ? game.world.getLayout(s) : null;
   if (!L) return null;
   const b = buildingAt(L, x, z);
   if (!b || !b.residential || b.playerHome || !b.door || b.door.x !== x || b.door.z !== z) return null;
-  return { s, L, b };
+  return { s, L, b, full: lockingCulture(s) };
 }
 
 // Who of the household is in, and awake.
@@ -64,10 +77,11 @@ export function doorLocked(game, x, y, z, who = game.player) {
   if (who && who.kind === 'player' && game.sim.isGuest && game.sim.isGuest(H.s.id, H.b.id)) return false;
   const t = (game.doorOpenUntil || new Map()).get(keyOf(x, y, z));
   if (t !== undefined && game.sim.abs < t) return false;
-  // Out, or abed: locked. In and up: it's on the latch in the day.
-  const inn = inside(game, H);
+  // Out, or abed: locked. In and up: it's on the latch in the day. (Most
+  // peoples only bar it at night: see nightLocking.)
   const night = game.minute < 330 || game.minute >= 1260;
-  return night || inn.awake.length === 0;
+  if (night) return true;
+  return !!H.full && inside(game, H).awake.length === 0;
 }
 
 // Opened (picked, or to a knock): unlocked a while.

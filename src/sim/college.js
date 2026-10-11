@@ -21,7 +21,8 @@ export const SUBJECTS = {
 export const SUBJECT_KEYS = Object.keys(SUBJECTS);
 // A class's hours (from, to) and how much of one you must be there for
 // (minutes).
-export const SLOTS = [[9 * 60, 11 * 60], [14 * 60, 16 * 60], [18 * 60, 20 * 60]];
+// (Round 83: three hours each now, time for a proper lesson.)
+export const SLOTS = [[9 * 60, 12 * 60], [14 * 60, 17 * 60], [18 * 60, 21 * 60]];
 export const ATTEND = 60;
 
 export function academyOf(L) {
@@ -56,9 +57,10 @@ export function foundAcademy(sim, L) {
   // (A city already tried and found no room: not every day.)
   const e = L.econ;
   if (e.noAcademy && sim.today() - e.noAcademy < 10) return null;
-  // (As big a lot as there's room for out there, 13 across down to 11.)
+  // (As big a lot as there's room for out there: (Round 83) 17 across,
+  // down to 11.)
   let plot = null;
-  for (const [side, reach] of [[13, 18], [13, 30], [12, 30], [11, 30]]) {
+  for (const [side, reach] of [[17, 22], [17, 34], [15, 30], [13, 30], [12, 30], [11, 30]]) {
     plot = L.fringePlot(false, reach, 0, true, true, side);
     if (plot) break;
   }

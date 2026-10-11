@@ -394,7 +394,9 @@ function topicsRaw(npc, game) {
     }
     return out;
   }
-  if (rec.job === 'guard' && !npc.hired && (wanted || sim.justice.pendingIn(s.id).length)) add('surrender', 'I surrender.');
+  // (Round 83: not from behind bars, nor on a guard's rope already.)
+  const held = !!(sim.justice.jail || sim.justice.escort || game.player.restrained);
+  if (rec.job === 'guard' && !npc.hired && !held && (wanted || sim.justice.pendingIn(s.id).length)) add('surrender', 'I surrender.');
   if (wanted || sim.justice.exiled.has(s.id)) {
     add('bye', 'Goodbye.');
     return out;
@@ -1798,6 +1800,7 @@ function respondRaw(npc, game, id, arg) {
       return { lines: ['Where to?'], choices: placesFor(npc, game).map((pl) => ({ id: 'directions', arg: pl.key, label: pl.label })) };
     case 'wing': return { lines: wingTalk(rec, s.id, game) };
     case 'surrender': {
+      if (sim.justice.jail || sim.justice.escort || game.player.restrained) return { lines: ['You\'re in our hands already.'], close: true };
       const sid = s.id;
       return { lines: ['A wise choice. Come along.'], close: true, after: () => sim.justice.surrender(sid, npc) };
     }

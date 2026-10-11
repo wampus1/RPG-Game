@@ -40,6 +40,7 @@ import { displayItems, paintingSubject, wallDirOf } from '../game/displays.js';
 import { paintingArt } from './paintings.js';
 import { GroundFx } from './groundfx.js';
 import { steedSprite, dirAngle, easeAngle } from './steeds.js';
+import { chairTable } from '../game/chairs.js';
 
 const makeCanvas = (w, h) => {
   const c = document.createElement('canvas');
@@ -229,6 +230,8 @@ export class Renderer {
     this.wobbles = new Map();
     // (Round 82) Doors swinging, chests' lids lifted (see swing, lidOpen).
     this.swings = new Map();
+    // (Round 83) Chairs being pushed in or pulled out: key -> { t, from, k }.
+    this.chairs = new Map();
     this.lids = new Map();
     this.lidHeld = new Map();
     this.particles = [];
@@ -1164,7 +1167,11 @@ export class Renderer {
       const wp = e.renderPos();
       const [u, v] = this.toView(wp.x, wp.z);
       const rp = { x: u, y: wp.y, z: v };
-      const row = Math.ceil(rp.z - 0.001);
+      let row = Math.ceil(rp.z - 0.001);
+      // (Round 83) A windmill's sails turn in the row out from its wall:
+      // drawn with that row (over a sign hung there), when that's the row
+      // nearer you.
+      if (e.kind === 'prop' && e.type === 'sails' && this.toViewDir(e.nx || 0, e.nz || 0)[1] > 0) row++;
       if (row < zMin || row > zMax) continue;
       let arr = buckets.get(row);
       if (!arr) buckets.set(row, (arr = []));
@@ -1221,7 +1228,7 @@ export class Renderer {
     const hid = veil ? (x, y, z) => cutAway(x, y, z) || veil.veiled(x, y, z, world.getBlock(x, y, z)) : cutAway;
     this.cursorDrawList = null;
     const gfx = this.gfx;
-    const gfxOn = !!gfx && (gfx.marks.size > 0 || gfx.ripples.size > 0 || !this.noWaterFx);
+    const gfxOn = !!gfx;
     // (Round 77) Indoors, the walls cut away a storey up shown as a faint
     // ghost of themselves, so the room's height still reads.
     const hint = this.wallHint !== false && hidden !== null && !this.underground;
@@ -1271,7 +1278,9 @@ export class Renderer {
       const T = craftedId()[id] === 1 ? TEX.craft[this.craftAt(game, wx, wz)] || TEX : TEX;
       const sx = x * TILE - camX;
       let alpha = 1;
-      if (fadeLayer && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
+      // (Round 83: never the water, which hides nothing of you: it went
+      // thin under you as you swam up the screen.)
+      if (fadeLayer && !b.liquid && sx + TILE > pRect.x0 && sx < pRect.x1 && sy + SPR_H > pRect.y0 && sy < pRect.y1) alpha = this.fadeFor(sx, sy, psx, psy);
       if (alpha < 1) ctx.globalAlpha = alpha;
       // Blocks faded out because they hide the player can be clicked through.
       const pickable = mouse && alpha >= 0.6 && mouse.x >= sx - 2 && mouse.x < sx + 18 && mouse.y >= sy - 16 && mouse.y < sy + SPR_H + 2;
@@ -1374,8 +1383,22 @@ export class Renderer {
         else if (id === B.rock || id === B.bed) idx = st * 4 + (id === B.bed ? hash4(wx, wz, 5) % 4 : v);
         else if (id === B.canopy) idx = ((meta >> CANOPY_STYLE_SHIFT) & 7) * 8 + st * 4 + ((meta >> CANOPY_SHIFT) & 3);
         else if (id === B.tent || id === B.bunting || id === B.festival_banner) idx = st * 4 + ((meta >> CANOPY_SHIFT) & 3);
+        else if (id === B.chair) idx = (animFrame + wx + wz) % 4;
         else idx = st * 4 + (animFrame + wx + wz) % 4;
         const s = arr[idx] || arr[0];
+        // (Round 83) A chair at a table: pushed in under it (unless it's
+        // been pulled out), slid there as it's moved.
+        let csx = sx;
+        let csy = sy;
+        if (id === B.chair) {
+          const tb = chairTable(world, wx, y, wz);
+          if (tb) {
+            const k = this.chairTuck(wx, y, wz, !(meta & META_STATE));
+            const [du, dv] = this.toViewDir(tb.dx, tb.dz);
+            csx += Math.round(du * 6 * k);
+            csy += Math.round(dv * 5 * k);
+          }
+        }
         // (A training dummy just struck rocks on its post.)
         const wob = id === B.training_dummy && this.wobbles.size ? this.wobbles.get(`${wx},${y},${wz}`) : null;
         if (wob) {
@@ -1386,7 +1409,7 @@ export class Renderer {
           ctx.rotate(a);
           ctx.drawImage(atl, s.x, s.y, s.w, s.h, -8, 1 - s.h, s.w, s.h);
           ctx.restore();
-        } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, sx, sy + SPR_H - s.h, s.w, s.h);
+        } else ctx.drawImage(atl, s.x, s.y, s.w, s.h, csx, csy + SPR_H - s.h, s.w, s.h);
         // (Round 82) A chest open (or opening, or shutting): its lid up.
         if (id === B.chest && this.lids.size) {
           const lk = this.lids.get(`${wx},${y},${wz}`);
@@ -1663,7 +1686,7 @@ export class Renderer {
     const camX = this.camX;
     if (st.canvas) ctx.drawImage(st.canvas, st.cu0 * TILE - camX, sy);
     const gfx = this.gfx;
-    if (gfxOn && gfx && gfx.marks.size > 0) {
+    if (gfxOn && gfx && (gfx.marks.size > 0 || gfx.splashes.size > 0 || gfx.wet > 0.25)) {
       const T = st.tops;
       for (let k = 0; k < T.length; k += 4) {
         const u = T[k];
@@ -1700,6 +1723,30 @@ export class Renderer {
   swing(x, y, z, open) {
     this.swings.set(`${x},${y},${z}`, { t: 0, open, x, y, z });
     this.noteBlock(x, y, z);
+  }
+
+  // (Round 83) A chair pushed in or pulled out at (x, y, z): slid there
+  // over a moment (see chairTuck).
+  chairMove(x, y, z) {
+    const k = `${x},${y},${z}`;
+    const was = this.chairs.get(k);
+    this.chairs.set(k, { t: 0, from: was ? was.k : null });
+  }
+
+  // How far in under its table a chair is drawn (1 all the way, 0 out),
+  // easing to where it's set.
+  chairTuck(x, y, z, inUnder) {
+    const want = inUnder ? 1 : 0;
+    if (!this.chairs.size) return want;
+    const key = `${x},${y},${z}`;
+    const c = this.chairs.get(key);
+    if (!c) return want;
+    if (c.from === null) c.from = 1 - want;
+    c.t += this.frameDt || 0.016;
+    const f = Math.min(1, c.t / 0.3);
+    c.k = c.from + (want - c.from) * (1 - (1 - f) * (1 - f));
+    if (f >= 1) this.chairs.delete(key);
+    return c.k;
   }
 
   // A chest's lid held up a while by someone at it (yours stays up while
@@ -1961,6 +2008,11 @@ export class Renderer {
   // camera is: full on, the four sails sweeping round; side on, edge-on,
   // rising and falling past the hub.
   drawSails(ctx, e, sx, feetY) {
+    // (Round 83) Not while you're inside the mill (its roof and walls up
+    // there cut away), nor where its hub is cut away.
+    const inside = this.game && this.game.buildingAtPlayer ? this.game.buildingAtPlayer() : null;
+    if (inside && inside.sails && inside.sails.x === e.x && inside.sails.y === e.y && inside.sails.z === e.z) return;
+    if (this.hidden !== null && this.isHidden(e.x, e.y, e.z)) return;
     const [du, dv] = this.toViewDir(e.along ? 1 : 0, e.along ? 0 : 1);
     // The hub's middle, moved out to its outer face (the way it faces, as
     // the camera has it: its face toward you, away, or to a side), and a
@@ -3480,17 +3532,21 @@ export class Renderer {
     if (!this.weatherDrops) this.weatherDrops = Array.from({ length: 440 }, () => ({ x: Math.random() * this.vw, y: Math.random() * this.vh, s: 0.6 + Math.random() * 0.8 }));
     const n = Math.min(this.weatherDrops.length, Math.floor(220 * w.level * (indoor ? 0.25 : 1)));
     const wind = w.wind || 1;
-    const rain = w.kind === 'rain';
+    // (Round 83) What's falling, as it eases off: the rain (or snow) that
+    // was, never snow because the sky's cleared. (Fog doesn't fall.)
+    if (w.kind === 'rain' || w.kind === 'snow' || w.kind === 'fog') this.lastFall = w.kind;
+    const kind = w.kind === 'rain' || w.kind === 'snow' || w.kind === 'fog' ? w.kind : this.lastFall || 'rain';
+    const rain = kind === 'rain';
     if (part !== 'drops') {
-      ctx.fillStyle = w.kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(0.34, 0.18 * w.level)})` : `rgba(200,210,230,${0.1 * w.level})`;
+      ctx.fillStyle = kind === 'fog' ? `rgba(190,200,210,${0.28 * w.level})` : rain ? `rgba(40,50,70,${Math.min(0.34, 0.18 * w.level)})` : `rgba(200,210,230,${0.1 * w.level})`;
       ctx.fillRect(0, 0, this.vw, this.vh);
     }
-    if (part === 'tint' || w.kind === 'fog') return;
-    // (No falling rain or snow, in the settings: the sky's dark all the same.)
-    if (this.noWeatherFx) return;
+    if (part === 'tint' || kind === 'fog') return;
     const lit = part === 'drops' ? skyLight(game.minute) : [1, 1, 1];
     const tone = (r, g, b, a) => `rgba(${Math.round(r * Math.max(0.25, lit[0]))},${Math.round(g * Math.max(0.25, lit[1]))},${Math.round(b * Math.max(0.3, lit[2]))},${a})`;
-    ctx.fillStyle = rain ? tone(170, 190, 230, 0.55) : tone(245, 248, 255, 0.9);
+    // (Round 83: the rain a little brighter, a little longer: it was hard
+    // to see at all.)
+    ctx.fillStyle = rain ? tone(190, 208, 242, 0.72) : tone(245, 248, 255, 0.9);
     for (let i = 0; i < n; i++) {
       const d = this.weatherDrops[i];
       if (rain) {
@@ -3500,7 +3556,7 @@ export class Renderer {
           // (Driven slantwise.)
           const k = Math.round(wind - 1);
           for (let q = 0; q < 4; q++) ctx.fillRect(Math.round(d.x + ((3 - q) * k) / 3), Math.round(d.y) + q, 1, 1);
-        } else ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
+        } else ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 5);
         if (d.y > this.vh * (0.3 + d.s * 0.5) && Math.random() < 0.08) {
           ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 4, 3, 1);
           d.y = -4;

@@ -5786,8 +5786,8 @@ into stairs when the world's brought up to date.)
   of a solo save as a world you can host (it needs a free world slot).
 - **Settings** in tabs, each scrolling: General (autosave, frame rate,
   damage numbers, quest markers, tooltips), Visuals (brightness, lighting
-  style and quality, particles, rain and snow, splashes/snow/tracks, shore
-  foam and ripples, wall outlines indoors, shake, flashes, window
+  style and quality, particles, Environmental VFX (from Round 83: the
+  rain, ground and water switches made one), wall outlines indoors, shake, flashes, window
   animations, CRT), Sound (music, all effects, and creatures, blocks,
   items, masters, weather, menus each), **Controls** (click an action, press
   a key: rebinds anything, swaps with whatever had that key, kept between
@@ -5818,11 +5818,12 @@ into stairs when the world's brought up to date.)
   snow lies, a dusting and then deeper (roofs too), melts after, is trodden
   into paths, shovelled off (a shovel, used on it) or swept by the
   townsfolk; everything with legs leaves tracks in it a while, and wagons
-  leave ruts (in mud too, after rain). Off in Settings if you like.
+  leave ruts (in mud too, after rain). (From Round 83 the rain and tracks
+  always show; Environmental VFX switches off the splashes.)
 - **Swimming**: water two deep can be swum across (slower, in to the
   shoulders).
 - **Water**: foam along the shore, rings round whoever's wading or swimming
-  (off in Settings if you like).
+  (always on from Round 83; the ripples follow the particle cap).
 - **Indoors**, the walls a storey up show as a faint ghost of themselves.
 - **Lighting**: smooth (a torch's pool fades off round and even) or tiled
   (a pace's light, square), in Settings.
@@ -6053,7 +6054,8 @@ into stairs when the world's brought up to date.)
   every time.
 - **Particles and effects** (a frame): a cap on how many new sparks, puffs
   and effects anything can make in a frame, and how many can be about at
-  once (Settings, Visuals: Many, Some or Few).
+  once (Settings, Visuals: Few, Some or Many; from Round 83, Very Many and
+  So Very Many too).
 - **The guild strip**: a line each (face, name, health), and only those of
   your guild playing now who've been within a hundred paces of you in the
   last half a minute.
@@ -6171,6 +6173,94 @@ into stairs when the world's brought up to date.)
   with a tick (and the whole family's): untick one and it never begins in
   a world the mod is on in (one already under way plays out). Kept in the
   mod as `rules.stories.off`.
+
+## Round 83: Lessons at the Academy, and the town's work on the board
+
+- **Heat haze, all the way down**: the shimmer over hot sand and salt flats
+  covers the whole screen now (it faded out half way before), and it's
+  half as strong.
+- **Environmental VFX**: one setting (Visuals) for the ambience (valley
+  fog, ridge wind, heat haze) and rain splashes, in place of the old
+  weather, ground and water switches. The rain itself, tracks and the
+  shore's foam always show; the ripples on water and puddles go by the
+  particle cap. (Off before, in the old switches, and it's off now.)
+- **Rain that stays rain**: as a shower dies away it eases off as rain (it
+  used to turn to snow for a moment, in the desert too). Rain shows
+  properly now: brighter, longer drops, splashes where it lands, and
+  puddles here and there on the ground that ring as it falls.
+- **Particle caps**: Very Many (600) and So Very Many (1200) besides Few,
+  Some and Many, and the setting steps through them smallest to largest.
+- **Water while walking up the screen**: water in front of you no longer
+  fades out with what's between you and the camera.
+- **Windmills and signs**: a mill's sails are drawn in front of the signs
+  by its door, and they're hidden once you're inside the mill.
+- **Lights behind walls**: a lantern or torch carried by someone round
+  the corner or below a roof no longer glows over the tiles in front of
+  it.
+- **Chairs pushed in**: a chair at a table sits pushed in under it, out of
+  the way. Sit on it and you pull it out; Shift and right-click pushes it in
+  or pulls it out without sitting. Townsfolk pull theirs out as they come to
+  sit, and push it back in when they get up and go.
+- **The work board**: odd jobs of more kinds (stocking a shop with what its
+  trade runs on, gathering for a household, a lost thing found outside
+  town, a parcel carried, beasts cleared from the fields or thinned out
+  after dark), each day's own, and how many and how risky goes with how
+  the story director judges things stand (quiet days, quieter work).
+  Under them, **Positions**: the shops taking someone on (the job, pay a
+  task, the shift, who to ask), the watch taking on guards (citizens), and
+  the trades the mayor licenses, with what each costs you.
+- **The Academy**: built bigger (17 across) in cities that raise one from
+  now on, with roomier classrooms (more ovens, dummies, desks, a second
+  bench, chairs at the tables) and a room for the registrar behind the
+  desk. The **registrar** keeps hours: at the desk by day, off to eat at
+  noon and in the evening, and to bed at night (in that room, or home
+  through the door where there isn't one, back in the morning). The
+  masters and the students walk in through the front door to class and
+  out again after: nobody appears in their place.
+- **Classes are lessons**: three hours each. The master greets the class,
+  shows a thing or two at the room's own oven, dummies, desk or bench
+  (how it's really done: the keys, the timing, what the stones do), puts a
+  question to the room (a window comes up for each of you in the room:
+  answer 1 to 3, or go up and say it), sets work done the real way (cook
+  something in the kitchen; a few blows on the dummies and a heavy one; a
+  problem worked through at the lecture room's desk; a stone set at the
+  bench, with a practice stone lent if you've none: the desk and bench are
+  yours to use for the lesson, licence or not), puts a second question to
+  one of you by name, and ends it. The students answer too, right or
+  wrong, and go to the stations and work. What you put in counts:
+  practice in the craft, and a better showing at the term's end. With
+  others playing, each of you gets the question; the first right answer
+  gets the most.
+- **Masters as people**: each has their own way of teaching (warm, dry,
+  quiet, restless, curious, plain, a storyteller), a past of their own (a
+  swordmaster who learnt it as a dance, a cook who fed a ship's crew),
+  what they do when they're not teaching, and a habit you notice in class.
+  Ask them how they came to it, what they do of an evening, or to show you
+  something useful.
+- **No monsters in the new houses**: nothing hostile spawns in or right
+  by a town's buildings put up past where it began, or on the lots it's
+  spread onto.
+- **Doors barred at night**: most peoples bar their front doors at night
+  now (a few lock them whenever they're out, as before); knock, or pick
+  the lock.
+- **On foot, a quarter slower** (horses and wagons as quick as ever).
+- **Running away**: a monster or an outlaw backing off from you stops a
+  moment on each tile before the next, and never cuts across on the
+  slant.
+- **Curfew**: a guard warns you twice before a fine. Someone not from
+  round here (no citizen, nowhere to sleep in town) is told to leave town
+  till morning, then told again more firmly, and then offered a choice:
+  be walked out of town on a rope (let go past the edge, to come back
+  after six), or resist and be arrested. Back in the same night, and it's
+  the cells.
+- **No surrendering from a cell**: "I surrender" isn't offered to a guard
+  while you're in a cell or already on a guard's rope.
+- **Selling fixed**: selling ordinary things to a trader works again (a
+  slip in the count turned down every sale but old coin's, with "I've got
+  more of those than I can use").
+- **Why they won't buy**: the trade window says why under your coins (not
+  what they trade in, they've all they can use, they can't afford it), and
+  their purse shakes and flashes red when it's the money.
 
 ## Command console
 

@@ -2,6 +2,7 @@
 // simulation gives them: mourning, hunting for food, building, trials,
 // trading trips) by walking tile by tile; open/close doors; react to threats
 // by fighting, calling the guards, or fleeing.
+import { npcChair } from '../game/chairs.js';
 import { idleTick } from './idleanims.js';
 import { Entity } from './entity.js';
 
@@ -26,7 +27,7 @@ import { actFx, finishDrink, MESS } from './acts.js';
 import { warTick, warBonus, captiveTick } from './warrior.js';
 import { sagaTalk, storyTick } from './sagaman.js';
 import { laborTick } from '../sim/labor.js';
-import { FLEE, FLEE_PLAYER } from '../config.js';
+import { FLEE, FLEE_PLAYER, FLEE_REST } from '../config.js';
 import { swingMult, onSwing, onBladeHit, gemsOf, burn, chill, stun, mend, knockBack } from '../game/gems.js';
 
 const EMOTES = {
@@ -140,6 +141,8 @@ export class NPC extends Entity {
 
   // Sitting down on a chair, bench or stool they walked to.
   get sitting() {
+    // (Round 83: one of a story's own, sat down to eat or to listen.)
+    if (this.state === 'saga') return !!(this.saga && this.saga.seated) && !this.moving && !this.sleeping;
     return this.atGoal && !this.moving && !this.sleeping && this.state === 'routine' && this.spot && this.spot.seat && this.x === this.spot.x && this.z === this.spot.z;
   }
 
@@ -1096,6 +1099,8 @@ export class NPC extends Entity {
       return;
     }
     if (this.shoveCd > 0) this.shoveCd -= dt;
+    // (Round 83) A chair pulled out to sit on, pushed in again after.
+    if (this.layout) npcChair(this, dt);
     // (Round 73) Hurt, out of town and not fighting: something from the
     // pack, to mend on.
     if (this.snackT > 0 && (this.snackT -= dt) <= 0) this.snackItem = null;
@@ -2887,6 +2892,12 @@ export class NPC extends Entity {
       if (!w.getState(nx, ty, nz)) this.game.setDoor(nx, ty, nz, true);
       if (!this.openedDoors.some((d) => d.x === nx && d.z === nz)) this.openedDoors.push({ x: nx, y: ty, z: nz });
     }
+    // (Round 83) A foe running from a player stops a moment on each tile
+    // before the next (see FLEE_REST).
+    const wb0 = this.warband;
+    const foeRun = this.threat && this.threat.kind === 'player' && this.state !== 'flee' && (this.state === 'retreat' || (this.state === 'warband' && wb0 && (wb0.phase === 'flee' || wb0.phase === 'done')));
+    const nowS = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+    if (foeRun && nowS < (this.fleeNextAt || 0)) return false;
     this.face(nx, nz);
     const pace = this.state === 'hired' ? 0.55 : this.state === 'flee' ? 0.6 : this.state === 'fight' ? 0.7 : this.prey ? 0.75 : this.activity?.entry.act === 'play' ? this.playPace || 0.8 : 1;
     // (Round 55) Running away (from a fight, to safety, an outlaw breaking
@@ -2898,7 +2909,9 @@ export class NPC extends Entity {
     const foe = fleeing && this.state !== 'flee' && this.threat && this.threat.kind === 'player';
     // In the saddle (or up on a wagon): quicker than walking.
     const ride = this.mount ? (this.mount.kind === 'wagon' ? 0.75 : 0.65) : 1;
-    this.startMove(nx, ty, nz, this.step * pace * ride * (foe ? FLEE_PLAYER : fleeing ? FLEE : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1));
+    const dur = this.step * pace * ride * (foe ? FLEE_PLAYER : fleeing ? FLEE : 1) * (w.isWaterAt(nx, ty, nz) ? 1.8 : 1);
+    this.startMove(nx, ty, nz, dur);
+    if (foeRun) this.fleeNextAt = nowS + dur + FLEE_REST;
     this.pathI++;
     return false;
   }

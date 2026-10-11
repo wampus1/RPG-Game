@@ -198,22 +198,134 @@ export function sagaTalk(n, dt) {
   if (s.leaving) return leave(n, s, dt);
   // (Round 73) A captive let out, with monsters on them: armed, they fight.
   if (s.role === 'captive' && (s.follow || s.homeward) && defend(n, s, dt)) return;
+  // (Round 83) Off out through the door (a class over, the day's work
+  // done), and someone who keeps hours: to eat, to bed.
+  if (s.exit) return exitTo(n, s, dt);
+  if (s.staff && staffDay(n, s, dt)) return;
   if (s.homeward) return homeward(n, s, dt);
   if (s.follow) return follow(n, s, dt);
   if (s.seek) return seek(n, s, dt);
   // Standing where they are (or where they're told to).
   const h = s.home;
-  if (h && far(n, h.x, h.z) > (s.roam || 1)) {
-    goTo(n, h.x, h.z, 1);
+  // (Round 83: right on the spot, for one sent to a chair or a station.)
+  const near = s.roam === 0 ? 0 : s.roam || 1;
+  if (h && far(n, h.x, h.z) > near) {
+    s.seated = false;
+    goTo(n, h.x, h.z, near ? 1 : 0);
     return;
   }
+  // (Sat down on the chair they were sent to.)
+  if (s.sitHome && h && !n.moving) s.seated = far(n, h.x, h.z) === 0;
   s.lineT = (s.lineT ?? 3) - dt;
   const p = g.closestPlayer(n.x, n.z);
   if (s.lineT <= 0 && p.d < 10 && s.lines && s.lines.length) {
     s.lineT = n.rng.float(9, 18);
     n.say(n.rng.pick(s.lines), 3, s.lineColor || undefined);
   }
-  if (p.d < 7 && !n.moving && n.rng.chance(dt * 0.6)) n.face(p.p.x, p.p.z);
+  if (p.d < 7 && !n.moving && !s.busyAt && n.rng.chance(dt * 0.6)) n.face(p.p.x, p.p.z);
+  else if (s.busyAt && !n.moving) n.face(s.busyAt.x, s.busyAt.z);
+}
+
+// (Round 83) Out through a door and gone (out of the world once there, or
+// once nobody can see them).
+function exitTo(n, s, dt) {
+  const g = n.game;
+  // (Off home for the night, and it's morning before they're out of the
+  // door: back to the desk.)
+  if (s.exitStaff && staffHours(g.minute) !== 'sleep') {
+    s.exit = null;
+    s.exitStaff = false;
+    s.exitT = 0;
+    return;
+  }
+  s.exitT = (s.exitT || 0) + dt;
+  if (n.sleeping) wake(n);
+  s.seated = false;
+  if (far(n, s.exit.x, s.exit.z) <= 1.5 || (s.exitT > 5 && !g.inSight(n.x, n.z, 2)) || s.exitT > 40) {
+    g.despawnNpc(n);
+    return;
+  }
+  goTo(n, s.exit.x, s.exit.z, 0);
+}
+
+function wake(n) {
+  n.sleeping = false;
+  const f = n.fromTile;
+  if (f) n.teleport(f.x, f.y ?? n.y, f.z);
+  n.bedTile = null;
+  n.fromTile = null;
+}
+
+// (Round 83) Someone who keeps the Academy's hours (its registrar): at
+// their desk through the day; off to eat at noon and again in the
+// evening; to bed at night (their own bed at the back of the hall, or home
+// through the door where there's none: see Saga.actor's `away`).
+//   s.staff: { bed, bedSide, meal, mealFace, door }. True while they're
+//   seeing to themselves (not at the desk).
+export function staffHours(m) {
+  const t = ((m % 1440) + 1440) % 1440;
+  if (t >= 21 * 60 + 30 || t < 6 * 60 + 30) return 'sleep';
+  if ((t >= 12 * 60 && t < 12 * 60 + 50) || (t >= 18 * 60 + 30 && t < 19 * 60 + 10)) return 'eat';
+  return 'work';
+}
+
+function staffDay(n, s, dt) {
+  const g = n.game;
+  const st = s.staff;
+  const now = staffHours(g.minute);
+  if (now === 'sleep') {
+    s.seated = false;
+    n.snackItem = null;
+    if (!st.bed) {
+      if (!n.sleeping) n.say(n.rng.pick(['That\'s me done. The desk opens at half six.', 'Home, and bed.', 'Closing up. Come back in the morning.']), 2.5);
+      s.exit = st.door || null;
+      s.exitStaff = true;
+      s.exitT = 0;
+      if (!s.exit) g.despawnNpc(n);
+      return true;
+    }
+    if (n.sleeping) return true;
+    const side = st.bedSide || st.bed;
+    if (far(n, side.x, side.z) > 0) {
+      goTo(n, side.x, side.z, 0);
+      return true;
+    }
+    n.fromTile = { x: n.x, y: n.y, z: n.z };
+    n.teleport(st.bed.x, n.y, st.bed.z);
+    n.sleeping = true;
+    n.bedTile = { x: st.bed.x, z: st.bed.z };
+    return true;
+  }
+  if (n.sleeping) {
+    wake(n);
+    n.say(n.rng.pick(['*yawns*', 'Morning already.', 'Right. Ledgers.']), 2);
+  }
+  if (now === 'eat' && st.meal) {
+    if (far(n, st.meal.x, st.meal.z) > 0) {
+      s.seated = false;
+      n.snackItem = null;
+      if (!s.mealSaid) {
+        s.mealSaid = true;
+        n.say(n.rng.pick(['Back shortly: I\'m off to eat.', 'The desk can wait. Lunch can\'t.', 'Ten minutes. Then I\'m yours.']), 2.5);
+      }
+      goTo(n, st.meal.x, st.meal.z, 0);
+      return true;
+    }
+    s.seated = true;
+    if (st.mealFace) n.face(st.mealFace.x, st.mealFace.z);
+    n.snackItem ||= n.rng.pick(['bread', 'apple', 'cooked_fish', 'pie']);
+    n.biteT = (n.biteT ?? 1) - dt;
+    if (n.biteT <= 0) {
+      n.biteT = n.rng.float(2.2, 4);
+      n.doAction?.(0.3);
+      if (n.rng.chance(0.3)) g.audio?.play('eat', n);
+    }
+    return true;
+  }
+  s.mealSaid = false;
+  s.seated = false;
+  n.snackItem = null;
+  return false;
 }
 
 // (Round 73) A captive out of the cage, with something coming for them:

@@ -1480,6 +1480,20 @@ export class UI {
     this.closeAll();
     this.open(new W.DialogueWindow(this, npc, this.game));
   }
+  // (Round 83) A question put to a class (see saga/motifs/academy.js):
+  // only over nothing else that's open (it's in the master's talk too).
+  openQuestion(spec) {
+    if (this.top()) return false;
+    this.open(new W.QuestionWindow(this, spec));
+    return true;
+  }
+  openSetting() {
+    this.open(new W.SettingWindow(this, this.game));
+  }
+  openCurfew(guard, sid) {
+    this.closeAll();
+    this.open(new W.CurfewWindow(this, guard, sid));
+  }
   openHalt(guard, crimes) {
     this.closeAll();
     this.open(new W.HaltWindow(this, guard, crimes));

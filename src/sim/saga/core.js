@@ -54,7 +54,7 @@ export const MOTIFS = {};
 // alive instead?), two players who may fight (a contract between them?), a
 // cell door used, a letter read. Each a list of (S, ...) => true if it was
 // theirs.
-export const HOOKS = { subdue: [], feud: [], door: [], read: [], chest: [], rejoin: [] };
+export const HOOKS = { subdue: [], feud: [], door: [], read: [], chest: [], rejoin: [], answer: [], bench: [] };
 // (Round 62) Mods' changes to the stories: (th, from, to, S, phase) at
 // each turn a story takes. Before it ('turn'): { to } to go elsewhere, or
 // { end } to end it there; after it's arrived ('arrive'): nothing.
@@ -79,6 +79,14 @@ export const lcFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 const PASSING = new Set(['target', 'killer', 'thief', 'fence', 'culprit', 'spy', 'rival', 'mayor', 'contact', 'victim', 'dead', 'lost', 'member', 'mid', 'avenger']);
 const pick1 = (rng, a) => a[rng.int(0, a.length - 1)];
 const inLine = (t) => (/^(The|A|An) /.test(t || '') ? lcFirst(t) : t);
+
+
+// (Round 83) Minute of the day `m` within [from, to) (over midnight if
+// from > to).
+export function offHours([from, to], m) {
+  const t = ((m % 1440) + 1440) % 1440;
+  return from < to ? t >= from && t < to : t >= from || t < to;
+}
 
 export class Saga {
   constructor(game, sim) {
@@ -804,12 +812,15 @@ export class Saga {
     const rng = new RNG(hash4(this.game.seed | 0, d, 0x5a9a));
     this.director.newDay(d, rng);
     for (const M of rng.shuffle(Object.values(MOTIFS))) {
-      if (!M.scan || !this.room(M) || !this.director.allows(M, rng)) continue;
+      // (Round 83: the odd jobs on the boards, each day's own, aren't
+      // counted against the stories the director lets start: it shapes
+      // them itself, see Director.workPlan.)
+      if (!M.scan || !this.room(M) || (!M.daily && !this.director.allows(M, rng))) continue;
       try {
         for (const o of [].concat(M.scan(this, rng, d) || [])) {
           if (!o || !this.room(M)) continue;
           const th = this.begin(M.id, o);
-          if (th) this.director.begun(M, th);
+          if (th && !M.daily) this.director.begun(M, th);
         }
       } catch (e) {
         this.fault(null, e);
@@ -1237,10 +1248,35 @@ export class Saga {
   // orders: see entities/sagaman.js) }.
   actor(th, a) {
     const i = th.actors.findIndex((q) => q.key === a.key);
-    const spec = { gone: false, dead: false, spawned: false, ...a };
+    const spec = { gone: false, dead: false, spawned: false, walkOff: false, ...a };
     if (i >= 0) th.actors[i] = { ...th.actors[i], ...spec };
     else th.actors.push(spec);
+    // (Round 83: called back while still on their way out: they turn round
+    // and take up their new orders.)
+    const e = this.actors.get(`${th.id}:${a.key}`);
+    if (e && !e.dead && e.saga && e.saga.exit) {
+      e.saga.exit = null;
+      Object.assign(e.saga, a.orders || {});
+    }
     return spec;
+  }
+
+  // (Round 83) Sent off on foot (out through the door, say) rather than
+  // gone from where they stand: out of the story at once, and out of the
+  // world once they're there, or out of sight.
+  walkOff(th, key, to) {
+    const a = this.actorSpec(th, key);
+    if (!a || a.gone) return;
+    const e = this.actorEnt(th, key);
+    a.gone = true;
+    if (!e || e.kind !== 'npc' || !e.saga || !to || !this.game.inSight(e.x, e.z, 2)) {
+      this.dismissActor(th, key);
+      return;
+    }
+    a.walkOff = true;
+    e.saga.exit = { x: to.x, z: to.z };
+    e.saga.exitT = 0;
+    e.saga.seated = false;
   }
 
   actorSpec(th, key) {
@@ -1273,7 +1309,10 @@ export class Saga {
         const k = `${th.id}:${a.key}`;
         const e = this.actors.get(k);
         if (a.gone) {
+          // (Walking off: left to get where they're going.)
+          if (e && !e.dead && a.walkOff && e.saga && e.saga.exit) continue;
           if (e && !e.dead) this.dismissActor(th, a.key);
+          else if (e) this.actors.delete(k);
           continue;
         }
         if (e && !e.dead) {
@@ -1314,8 +1353,10 @@ export class Saga {
           }
         }
         if (!a.at || this.nearest([a.at]) > SEEN || !g.world.regionAt(a.at.x, a.at.z)) continue;
-        // (Things of the night only come out at night.)
+        // (Things of the night only come out at night; (Round 83) and
+        // someone with hours of their own isn't about outside them.)
         if (a.night && g.isDay()) continue;
+        if (a.away && offHours(a.away, g.minute)) continue;
         if (g.dungeon && g.world.inInstance(g.player.x) && !g.isParty()) continue;
         const ent = this.spawnActor(th, a);
         if (ent) this.actors.set(k, ent);
@@ -1363,6 +1404,20 @@ export class Saga {
   // players may not)? Yes, if one has taken a contract on the other.
   feud(a, b) {
     for (const fn of HOOKS.feud) if (fn(this, a, b)) return true;
+    return false;
+  }
+
+  // (Round 83) An answer given to a question put to a class (see
+  // motifs/academy.js), from its window. True if it was heard.
+  answer(tid, pid, i) {
+    for (const fn of HOOKS.answer) if (fn(this, tid, pid, i)) return true;
+    return false;
+  }
+
+  // (Round 83) A trade's bench used by one not of the trade: let, for a
+  // class at the Academy that's working at it? True if so.
+  bench(st, x, z, pid) {
+    for (const fn of HOOKS.bench) if (fn(this, st, x, z, pid)) return true;
     return false;
   }
 

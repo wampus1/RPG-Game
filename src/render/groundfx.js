@@ -5,12 +5,22 @@
 //   - foam along the shore, and rings round whoever's wading or swimming.
 // (Round 82: snow no longer lies in layers, nor holds tracks: what it cost
 // to draw wasn't worth what it showed.)
-// None of it's in the world itself: it's the picture's own (and it can be
-// turned off in Settings: Rain splashes and ruts; Shore foam and
-// ripples).
+// None of it's in the world itself: it's the picture's own. (Round 83: the
+// splashes go with Environmental VFX in the settings; ruts and foam are
+// always there; rings on the water as many as the particle limit allows.)
 import { B, BLOCKS } from '../world/blocks.js';
+import { hash4 } from '../util/rng.js';
 
 const MUDDY = new Set([B.dirt, B.path, B.mud, B.farmland, B.gravel, B.clay, B.grass]);
+// (Round 83) Where puddles gather after a while of rain: low, soft ground
+// and paving (a few squares of it in each stretch).
+const PUDDLY = new Set([B.dirt, B.path, B.mud, B.farmland, B.gravel, B.clay, B.grass, B.cobblestone, B.flagstone].filter((q) => q !== undefined));
+// (A square's puddle, if it has one: its size and where it lies in it.)
+export function puddleOf(x, z) {
+  const h = hash4(x, z, 0x9d1e);
+  if (h % 100 >= 7) return null;
+  return { w: 7 + (h >>> 8) % 6, d: 3 + (h >>> 12) % 3, ox: ((h >>> 16) % 5) - 2, oz: ((h >>> 20) % 5) - 2 };
+}
 const K = (x, z) => x * 65536 + z;
 const DX = [0, -1, 0, 1];
 const DZ = [1, 0, -1, 0];
@@ -24,10 +34,16 @@ export class GroundFx {
     this.last = new WeakMap(); // entity -> the tile it was on
     this.wet = 0; // how wet the ground is (0..1): ruts in mud
     this.foamT = 0;
+    this.nRipples = 0;
+    // (Round 83) Drops bursting on the ground: tile -> [{ y, ox, oz, t }].
+    this.splashes = new Map();
   }
 
-  get on() {
-    return !this.r.noWeatherGround;
+  // (Round 83) How many rings may be spreading at once: by the particle
+  // limit in the settings.
+  get rippleCap() {
+    const c = this.r.fxCap;
+    return Math.max(12, Math.round((c ? c.parts : 300) / 3));
   }
 
   // Every frame: the weather on the ground, and who's walked where.
@@ -47,13 +63,13 @@ export class GroundFx {
     }
     this.ageMarks(dt);
     this.ageRipples(dt);
-    if (!this.on) {
-      if (this.marks.size) this.marks.clear();
-    } else {
-      if (raining) this.rain(game, dt, w.level);
-      this.tread(game, dt);
+    for (const [key, l] of this.splashes) {
+      for (let i = l.length - 1; i >= 0; i--) if ((l[i].t += dt) >= 0.22) l.splice(i, 1);
+      if (!l.length) this.splashes.delete(key);
     }
-    if (!this.r.noWaterFx) this.wade(game, dt);
+    if (raining) this.rain(game, dt, w.level);
+    this.tread(game, dt);
+    this.wade(game, dt);
   }
 
   mark(x, z, kind, dir, life) {
@@ -95,37 +111,51 @@ export class GroundFx {
     const world = game.world;
     const p = game.player;
     const r = this.r;
-    // (Many drops looked at: those on water ring it; a quarter of the rest
-    // splash, as many as the eye can follow.)
-    const n = level * 150 * dt;
+    // (Many drops looked at: those on water (or a puddle) ring it; the rest
+    // burst on the ground in a little crown, as many as the eye can follow.
+    // Round 83: seen, now; they were a speck or two.)
+    const n = level * 220 * dt;
     const count = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
-    const splash = 0.25 * (r.particleK ?? 1);
+    const splash = 0.6 * (r.particleK ?? 1);
     for (let i = 0; i < count; i++) {
-      const x = p.x + Math.floor((Math.random() - 0.5) * 30);
-      const z = p.z + Math.floor((Math.random() - 0.5) * 26);
+      const x = p.x + Math.floor((Math.random() - 0.5) * 34);
+      const z = p.z + Math.floor((Math.random() - 0.5) * 28);
       const top = world.topAt(x, z);
       if (top <= 0) continue;
       const id = world.getBlock(x, top - 1, z);
       const b = BLOCKS[id];
-      if (b && b.liquid) {
-        if (!r.noWaterFx) this.ripple(x, top - 1, z, false);
-      } else if (Math.random() < splash) r.emit(x, top - 1, z, { n: 2, color: ['#c8dcf4', '#a8c0e0'], up: 22, speed: 26, gravity: 200, life: 0.22, shape: 'drop', oy: -4, spreadY: 10 });
+      if (b && b.liquid) this.ripple(x, top - 1, z, false);
+      else if (this.wet > 0.3 && PUDDLY.has(id) && puddleOf(x, z)) this.ripple(x, top - 1, z, false);
+      else if (!r.noEnvFx && Math.random() < splash && this.nRipples < this.rippleCap) {
+        const key = K(x, z);
+        let l = this.splashes.get(key);
+        if (!l) this.splashes.set(key, (l = []));
+        if (l.length < 2) l.push({ y: top - 1, ox: Math.round((Math.random() - 0.5) * 10), oz: Math.round((Math.random() - 0.5) * 10), t: 0 });
+      }
     }
   }
 
   ripple(x, y, z, big) {
+    if (this.nRipples >= this.rippleCap) return;
+    this.nRipples = (this.nRipples || 0) + 1;
     const key = K(x, z);
     let l = this.ripples.get(key);
     if (!l) this.ripples.set(key, (l = []));
-    if (l.length > 3) l.shift();
+    if (l.length > 3) {
+      l.shift();
+      this.nRipples--;
+    }
     l.push({ y, ox: Math.round((Math.random() - 0.5) * 8), oz: Math.round((Math.random() - 0.5) * 8), t: 0, max: big ? 1.1 : 0.7, big });
   }
 
   ageRipples(dt) {
+    let n = 0;
     for (const [key, l] of this.ripples) {
       for (let i = l.length - 1; i >= 0; i--) if ((l[i].t += dt) >= l[i].max) l.splice(i, 1);
       if (!l.length) this.ripples.delete(key);
+      n += l.length;
     }
+    this.nRipples = n;
   }
 
   // Rings round whoever's in the water (wading, swimming), the more as
@@ -163,10 +193,8 @@ export class GroundFx {
   // Over a block's top just drawn at (sx, sy): what lies on it. `liquid`:
   // water (drawn 3px lower).
   drawTop(ctx, world, wx, y, wz, id, liquid, sx, sy, t) {
-    const r = this.r;
     const key = K(wx, wz);
     if (liquid) {
-      if (r.noWaterFx) return;
       if (BLOCKS[id] && id === B.water && !BLOCKS[world.getBlock(wx, y + 1, wz)]?.liquid) {
         const m = this.shore(world, wx, y, wz);
         if (m) this.drawFoam(ctx, m, sx, sy + 3, t, wx + wz);
@@ -175,11 +203,47 @@ export class GroundFx {
       if (l) for (const q of l) if (q.y === y) this.drawRing(ctx, sx + 8 + q.ox, sy + 3 + 8 + q.oz, q);
       return;
     }
-    if (!this.on) return;
     const ms = this.marks.get(key);
-    if (!ms) return;
+    const sp = this.splashes.size ? this.splashes.get(key) : null;
+    const pud = this.wet > 0.25 && PUDDLY.has(id) ? puddleOf(wx, wz) : null;
+    if (!ms && !sp && !pud) return;
     if (world.topAt(wx, wz) !== y + 1) return;
-    for (const q of ms) this.drawMark(ctx, q, sx, sy);
+    if (ms) for (const q of ms) this.drawMark(ctx, q, sx, sy);
+    // (Round 83) Puddles, a while into the rain (drying slowly after), the
+    // drops ringing them; and the drops' crowns on the ground.
+    if (pud) {
+      this.drawPuddle(ctx, pud, sx, sy, Math.min(1, (this.wet - 0.25) / 0.35));
+      const l = this.ripples.get(key);
+      if (l) for (const q of l) if (q.y === y) this.drawRing(ctx, sx + 8 + pud.ox + Math.round(q.ox / 3), sy + 8 + pud.oz + Math.round(q.oz / 4), { ...q, big: false });
+    }
+    if (sp) for (const q of sp) if (q.y === y) this.drawSplash(ctx, sx + 8 + q.ox, sy + 8 + q.oz, q.t / 0.22);
+  }
+
+  // A puddle lying on a square's top: dark water with the sky's sheen on
+  // it, `k` how much of it there is yet.
+  drawPuddle(ctx, q, sx, sy, k) {
+    const cx = sx + 8 + q.ox;
+    const cy = sy + 8 + q.oz;
+    const w = Math.max(2, Math.round(q.w * (0.5 + k * 0.5)));
+    const d = Math.max(1, Math.round(q.d * (0.5 + k * 0.5)));
+    ctx.fillStyle = `rgba(52,66,92,${0.5 * k})`;
+    for (let j = -d; j <= d; j++) {
+      const half = Math.round(w * Math.sqrt(1 - (j / (d + 0.5)) ** 2));
+      ctx.fillRect(cx - half, cy + j, half * 2, 1);
+    }
+    ctx.fillStyle = `rgba(200,220,245,${0.35 * k})`;
+    ctx.fillRect(cx - Math.round(w / 2), cy - Math.max(0, d - 1), Math.max(1, Math.round(w / 2)), 1);
+  }
+
+  // A drop bursting on the ground: a pale crown, spreading and gone.
+  drawSplash(ctx, cx, cy, f) {
+    const a = 0.8 * (1 - f);
+    const r = 1 + Math.round(f * 2);
+    ctx.fillStyle = `rgba(215,230,250,${a})`;
+    ctx.fillRect(cx - r, cy - 1 - Math.round(f * 2), 1, 1);
+    ctx.fillRect(cx + r, cy - 1 - Math.round(f * 2), 1, 1);
+    ctx.fillRect(cx, cy - 2 - Math.round(f * 3), 1, 1);
+    ctx.fillRect(cx - 1, cy, 3, 1);
   }
 
   drawFoam(ctx, m, sx, sy, t, seed) {

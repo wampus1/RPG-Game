@@ -24,3 +24,4 @@ import './fortune.js';
 import './trails.js';
 import './fallout.js';
 import './landmarks.js';
+import './work.js';

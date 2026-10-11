@@ -8,6 +8,9 @@ import { BLOCKS, B, META_STATE } from '../world/blocks.js';
 import { has as hasTrait } from '../game/hero.js';
 import { dishFx } from '../game/cooking.js';
 
+// (A block's picture, its top and its face, in pixels.)
+const SPR_H = TILE + LH;
+
 const MARGIN = 10;
 const CHEST_GLOW = '#ffcf6a';
 
@@ -358,10 +361,15 @@ export class Lighting {
         if (!s.player) {
           if (s.covered === undefined) s.covered = this.coveredAbove(world, s, r);
           if (s.covered) continue;
-        }
+        } else if (s.ent !== player && this.coveredAbove(world, { x: s.ent ? s.ent.x : s.x, y: s.ent ? s.ent.y : s.y, z: s.ent ? s.ent.z : s.z }, r)) continue;
         // (Round 73: on whoever carries it, where they're drawn, between
         // one pace and the next, not snapped from tile to tile.)
         const rp = s.ent && s.ent.renderPos ? s.ent.renderPos() : s;
+        // (Round 83) Not over a wall or a roof that stands in front of it,
+        // as you look (a lamp behind a house, someone with a torch round
+        // the far side of one). Yours shows through: what hides you is
+        // drawn faint.)
+        if (s.ent !== player && this.hiddenBehind(world, r, rp, s.ent ? s.dy || 0 : 0)) continue;
         const [su, sv] = r.toView ? r.toView(rp.x, rp.z) : [rp.x, rp.z];
         const sx = su * TILE - r.camX + 8;
         const sy = sv * TILE - (rp.y + (s.ent ? s.dy || 0 : 0)) * LH - r.camY + LH + 2;
@@ -376,6 +384,30 @@ export class Lighting {
       }
       ctx.restore();
     }
+  }
+
+  // (Round 83) Whether a light at `rp` (lifted `dy`) is behind something
+  // solid drawn over it: a block in a row nearer you, standing as high on
+  // the screen as the light is.
+  hiddenBehind(world, r, rp, dy) {
+    const [su, sv] = r.toView ? r.toView(rp.x, rp.z) : [rp.x, rp.z];
+    const u = Math.round(su);
+    const yl = rp.y + dy;
+    // (Where the light's middle is drawn, in the world's pixels.)
+    const py = sv * TILE - yl * LH + LH + 2;
+    const v0 = Math.round(sv);
+    for (let k = 1; k <= 6; k++) {
+      const v = v0 + k;
+      const hi = Math.floor((v * TILE - py) / LH);
+      const lo = Math.ceil((v * TILE - py - SPR_H) / LH);
+      for (let y = Math.max(lo, Math.floor(yl)); y <= hi; y++) {
+        if (y < 0 || y >= WORLD_Y) continue;
+        const [x, z] = r.toWorld ? r.toWorld(u, v) : [u, v];
+        const b = BLOCKS[world.getBlock(x, y, z)];
+        if (b && b.opaque && b.render === 'cube' && !r.isHidden(x, y, z)) return true;
+      }
+    }
+    return false;
   }
 
   // Lights under a roof don't glow through it (unless the roof is cut away).

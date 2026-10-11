@@ -77,6 +77,8 @@ export function drawAmbience(r, game, dt, part) {
     for (const q of ['fog', 'wind', 'heat']) A[q] += (A.want[q] - A[q]) * k;
   }
   if (r.hidden !== null && r.hidden !== undefined) return;
+  // (Round 83: all of it one setting, Environmental VFX.)
+  if (r.noEnvFx && part === 'under') return;
   const ctx = r.ctx;
   const W = r.vw;
   const H = r.vh;
@@ -119,15 +121,22 @@ export function drawAmbience(r, game, dt, part) {
         game.audio?.play('wind', null, null, { vol: 0.25 + A.wind * 0.35 });
       }
     }
-  } else if (part === 'over' && A.heat > 0.05 && !r.noWeatherFx) {
-    // (The air wavering: thin bands of the picture nudged side to side.)
-    const amp = 1.4 * A.heat;
+  } else if (part === 'over' && A.heat > 0.05 && !r.noEnvFx) {
+    // (The air wavering: thin bands of the picture nudged a pixel side to
+    // side, over the whole of it. Round 83: all the way down (it used to
+    // fade to nothing half way), and half as strong: a band's nudge laid
+    // over it half seen.)
     const c = ctx.canvas;
-    const top = Math.floor(H * 0.05);
-    const bottom = Math.floor(H * 0.75);
-    for (let y = top; y < bottom; y += 3) {
-      const off = Math.round(Math.sin(time * 3.2 + y * 0.11) * amp * (0.4 + 0.6 * (1 - (y - top) / (bottom - top))));
-      if (off) ctx.drawImage(c, 0, y, W, 3, off, y, W, 3);
+    const sx = c.width / W;
+    const sy = c.height / H;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, A.heat) * 0.5;
+    for (let y = 0; y < H; y += 3) {
+      const w = Math.sin(time * 3.2 + y * 0.11);
+      if (Math.abs(w) < 0.35) continue;
+      const off = w > 0 ? 1 : -1;
+      ctx.drawImage(c, 0, y * sy, W * sx, 3 * sy, off, y, W, 3);
     }
+    ctx.restore();
   }
 }

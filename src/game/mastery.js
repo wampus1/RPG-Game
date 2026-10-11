@@ -3,6 +3,8 @@
 // 10), and the work changes as you rise: rarer and fiercer fish bite, the
 // settings get fiddlier, the problems on the desk harder (and pay better),
 // your hands steadier at a lock. (Kept with your other records.)
+import { pidOf } from '../sim/saga/refs.js';
+
 export const CRAFTS = {
   fishing: { name: 'Angling', rank: ['Novice', 'Dabbler', 'Angler', 'Angler', 'Fisher', 'Fisher', 'Old Hand', 'Old Hand', 'Master Angler', 'Legend of the Water'] },
   setting: { name: 'Gem setting', rank: ['Novice', 'Apprentice', 'Apprentice', 'Setter', 'Setter', 'Journeyman', 'Journeyman', 'Fine Setter', 'Master Setter', 'Master Jeweller'] },
@@ -34,6 +36,9 @@ export function mastery(game, key) {
 
 // A success (worth `n`): true if it brought you up a rank.
 export function gainMastery(game, key, n = 1) {
+  // (Round 83: practice, as a class at the Academy hears of it.)
+  const p = game.player;
+  if (p && game.sim && game.sim.saga) game.sim.saga.emit('practised', { pid: pidOf(p), craft: key, n, x: Math.round(p.x), z: Math.round(p.z) });
   const before = mastery(game, key).rank;
   const m = ((game.stats ||= {}).mastery ||= {});
   m[key] = (m[key] || 0) + n;

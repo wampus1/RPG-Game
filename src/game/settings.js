@@ -4,11 +4,17 @@ export const SETTINGS_KEY = 'tessera-settings';
 // (Round 80) Particles and effects a frame, by the setting (fxCap): new
 // particles, new effects, and how many of each can be about at once (see
 // Renderer.room and fx.addEffect).
+// (Round 83: and more, for a quick machine: very many (600), so very many
+// (1200). Kept by their old places, the new ones after; shown in order of
+// how many, see FX_ORDER.)
 export const FX_CAPS = [
   { parts: 300, fx: 24, alive: 900, fxAlive: 60 },
   { parts: 150, fx: 12, alive: 600, fxAlive: 40 },
   { parts: 60, fx: 6, alive: 300, fxAlive: 24 },
+  { parts: 600, fx: 40, alive: 1800, fxAlive: 100 },
+  { parts: 1200, fx: 64, alive: 3600, fxAlive: 160 },
 ];
+export const FX_ORDER = [2, 1, 0, 3, 4];
 
 export const DEFAULTS = {
   music: 5, // 0-10
@@ -26,9 +32,13 @@ export const DEFAULTS = {
   lighting: 0, // 0 full, 1 fast
   particles: 0, // 0 all, 1 fewer, 2 none
   // (Round 80) New particles and effects a frame, from everything at once:
-  // 0 many (300), 1 some (150), 2 few (60).
+  // 0 many (300), 1 some (150), 2 few (60); (Round 83) 3 very many (600),
+  // 4 so very many (1200).
   fxCap: 0,
-  weatherFx: true,
+  // (Round 83) The land's own effects, as one: valley fog, ridge wind, the
+  // desert's heat, rain splashing off the ground. (Rain and snow falling,
+  // ruts, shore foam: always; ripples, as many as the particles allow.)
+  envFx: true,
   netRate: 0, // 0 smooth (20 a second), 1 light (10)
   // (Round 77)
   autosave: true,
@@ -38,8 +48,6 @@ export const DEFAULTS = {
   flashes: true,
   lightStyle: 0, // 0 smooth, 1 tiled
   wallHint: true,
-  weatherGround: true, // splashes, and ruts in the mud
-  waterFx: true, // foam on the shore, rings where you wade
   sndCreatures: 10,
   sndBlocks: 10,
   sndItems: 10,
@@ -66,10 +74,8 @@ export const SETTING_ROWS = [
   { key: 'lightStyle', tab: 'Visuals', label: 'Lighting style', kind: 'choice', opts: ['Smooth', 'Tiled'] },
   { key: 'lighting', tab: 'Visuals', label: 'Lighting quality', kind: 'choice', opts: ['Full', 'Fast'] },
   { key: 'particles', tab: 'Visuals', label: 'Particles', kind: 'choice', opts: ['All', 'Fewer', 'None'] },
-  { key: 'fxCap', tab: 'Visuals', label: 'Particles and effects', kind: 'choice', opts: ['Many (300)', 'Some (150)', 'Few (60)'] },
-  { key: 'weatherFx', tab: 'Visuals', label: 'Falling rain and snow', kind: 'bool' },
-  { key: 'weatherGround', tab: 'Visuals', label: 'Rain splashes and ruts', kind: 'bool' },
-  { key: 'waterFx', tab: 'Visuals', label: 'Shore foam and ripples', kind: 'bool' },
+  { key: 'fxCap', tab: 'Visuals', label: 'Particles and effects', kind: 'choice', opts: ['Many (300)', 'Some (150)', 'Few (60)', 'Very Many (600)', 'So Very Many (1200)'], order: FX_ORDER },
+  { key: 'envFx', tab: 'Visuals', label: 'Environmental VFX', kind: 'bool' },
   { key: 'wallHint', tab: 'Visuals', label: 'Wall outlines indoors', kind: 'bool' },
   { key: 'shake', tab: 'Visuals', label: 'Screen shake', kind: 'bool' },
   { key: 'flashes', tab: 'Visuals', label: 'Screen flashes', kind: 'bool' },
@@ -106,7 +112,12 @@ export const SETTING_ACTIONS = [
 
 export function loadSettings(storage) {
   try {
-    return { ...DEFAULTS, ...(JSON.parse(storage && storage.getItem(SETTINGS_KEY)) || {}) };
+    const got = JSON.parse(storage && storage.getItem(SETTINGS_KEY)) || {};
+    // (Round 83) The old weather switches made one: off if the falling
+    // weather was.
+    if (got.envFx === undefined && got.weatherFx === false) got.envFx = false;
+    for (const k of ['weatherFx', 'weatherGround', 'waterFx']) delete got[k];
+    return { ...DEFAULTS, ...got };
   } catch {
     return { ...DEFAULTS };
   }
@@ -135,15 +146,13 @@ export function applySettings(s, { audio, music, crt, renderer, ui, net }) {
     renderer.noDamageNumbers = !s.damageNumbers;
     renderer.particleK = [1, 0.4, 0][s.particles] ?? 1;
     renderer.fxCap = FX_CAPS[s.fxCap] || FX_CAPS[0];
-    renderer.noWeatherFx = !s.weatherFx;
+    renderer.noEnvFx = s.envFx === false;
     if (renderer.lighting) renderer.lighting.fast = s.lighting === 1;
     // (Round 77)
     if (renderer.lighting) renderer.lighting.tiled = s.lightStyle === 1;
     renderer.brightness = (s.brightness ?? 5) / 5;
     renderer.noFlash = !s.flashes;
     renderer.wallHint = s.wallHint !== false;
-    renderer.noWeatherGround = !s.weatherGround;
-    renderer.noWaterFx = !s.waterFx;
     renderer.noQuestMarks = !s.questMarkers;
   }
   // (Playing in someone else's world: how often the host sends word.)
@@ -171,7 +180,12 @@ export function changeSetting(s, key, d) {
   const row = SETTING_ROWS.find((r) => r.key === key);
   if (!row) return s;
   if (row.kind === 'bool') s[key] = !s[key];
-  else if (row.kind === 'choice') s[key] = (((s[key] || 0) + (d || 1)) % row.opts.length + row.opts.length) % row.opts.length;
+  else if (row.kind === 'choice' && row.order) {
+    // (Round 83) Gone through in the order shown (fewest to most), not the
+    // order they're kept in.
+    const i = Math.max(0, row.order.indexOf(s[key] || 0));
+    s[key] = row.order[(((i + (d || 1)) % row.order.length) + row.order.length) % row.order.length];
+  } else if (row.kind === 'choice') s[key] = (((s[key] || 0) + (d || 1)) % row.opts.length + row.opts.length) % row.opts.length;
   else s[key] = Math.max(0, Math.min(row.max, s[key] + d));
   return s;
 }

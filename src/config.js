@@ -53,7 +53,8 @@ export const GAME_MINUTES_PER_SECOND = 1.0; // one in-game day == 24 real minute
 
 // --- Gameplay ---------------------------------------------------------------
 export const REACH = 4.5; // tiles
-export const PLAYER_STEP_TIME = 0.16; // seconds per tile
+// (Round 83: a quarter slower than it was, on foot: 0.16 before.)
+export const PLAYER_STEP_TIME = 0.16 / 0.75; // seconds per tile
 export const NPC_STEP_TIME = 0.3;
 export const BELT_SIZE = 9;
 export const INV_SIZE = 36; // belt (first 9) + backpack
@@ -79,3 +80,6 @@ export const FLEE = 1 / 0.85;
 // (Round 78) An enemy running from a player (a monster backing off, an
 // outlaw or a raider breaking away from you): 25% slower than it would go.
 export const FLEE_PLAYER = 1 / 0.75;
+// (Round 83) And it stops this long (seconds) on each tile before the
+// next, never cutting across on the slant.
+export const FLEE_REST = 0.28;

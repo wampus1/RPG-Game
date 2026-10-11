@@ -30,6 +30,7 @@ import { pidOf as sagaPid } from '../sim/saga/refs.js';
 import { questSummary } from './quests.js';
 import { sortPack, quickStack, craftSources, countFrom, takeFrom } from '../game/invtools.js';
 import { ReforgeWindow } from './reforge.js';
+import { clock } from '../sim/careers.js';
 
 // How much old coin a merchant will change in a day: one on the road (a
 // peddler, a trader, a trading company), up to a hundred; a shop, a few dozen.
@@ -907,7 +908,12 @@ export class TradeWindow extends Window {
     }
     const purse = sh ? sh.purse.get() : 0;
     g.text(40, 18, `Your coins: ¤${coins}`, C.hi);
-    g.text(40, 19, `Their purse: ¤${purse}`, purse < 10 ? C.orange : C.dim);
+    // (Round 83) Turned down for want of coin: their purse shakes, red, a
+    // moment; and why they won't take it, said here, under it all.
+    const no = this.notice;
+    const shake = no && no.purse && no.t < 0.6 ? (Math.floor(no.t * 22) % 2 ? 1 : -1) : 0;
+    g.text(40 + shake, 19, `Their purse: ¤${Math.floor(purse)}`, no && no.purse && no.t < 1.6 ? C.red : purse < 10 ? C.orange : C.dim);
+    if (no) wrap(no.text, 36).slice(0, 3).forEach((l, i) => g.text(40, 22 + i, l, no.t < 2.4 ? C.red : C.orange));
     const e = this.npc.layout.econ;
     if (e && !this.npc.visit) g.text(40, 20, `Sales tax ${Math.round(e.tax * 50)}% · ${repLevel(game.sim.opinion(this.npc)).label} prices`, C.faint);
     const parts = game.sim.priceParts(this.npc);
@@ -939,13 +945,21 @@ export class TradeWindow extends Window {
       this.npc.say(this.npc.rng.pick(['Pleasure doing business!', 'Thank you kindly.', 'Enjoy!', 'Come again!']), 2);
     } else game.audio?.play('error');
   }
+  // (Round 83) Why they won't (or can't) take it, in the window itself
+  // (and their purse shaken red, if it's for want of coin).
+  refuse(text, purse = false) {
+    this.notice = { text, purse, t: 0 };
+  }
   sell(i, game, all) {
     const p = game.player;
     const s = p.inv[i];
     const sh = this.shop(game);
     if (!s || s.item === 'coin' || !sh) return;
+    const first = this.npc.name.split(' ')[0];
+    const iname = ITEMS[s.item].name;
     if (!this.wants(s.item, game)) {
       this.npc.say(this.npc.rng.pick(['I\'ve no use for that.', 'Not interested, sorry.']), 2);
+      this.refuse(`${first} has no use for ${iname}: it's not what they trade in.`);
       game.audio?.play('error');
       return;
     }
@@ -956,16 +970,20 @@ export class TradeWindow extends Window {
     const lot = ITEMS[item].exchange || 1;
     if (s.count < lot) {
       this.npc.say(`I change those ${lot} for a coin. You've only the ${s.count === 1 ? 'one' : s.count}.`, 2.5);
+      this.refuse(`Old coin is changed ${lot} at a time: you've only ${s.count}.`);
       game.audio?.play('error');
       return;
     }
     const room = ITEMS[item].exchange ? this.oldRoom(game) : Infinity;
     if (room < lot) {
       this.npc.say('I\'ve changed all the old coin I can carry today.', 2.5);
+      this.refuse(`${first} has changed all the old coin they will today.`);
       game.audio?.play('error');
       return;
     }
-    const want = Math.min(all ? s.count - (s.count % lot) : lot, room - (room % lot));
+    // (Round 83: no cap on most things. Infinity % 1 is NaN, which made a
+    // NaN of the count and turned down every sale but old coin's.)
+    const want = Math.min(all ? s.count - (s.count % lot) : lot, room === Infinity ? Infinity : room - (room % lot));
     let n = 0;
     let paid = 0;
     let why = null;
@@ -988,7 +1006,10 @@ export class TradeWindow extends Window {
       const purse = Math.max(0, Math.floor(sh.purse.get()));
       const line = why === 'full' ? this.npc.rng.pick(['I\'ve got more of those than I can use.', 'No more of those, thanks. I\'m full up.', 'I couldn\'t sell another one.']) : `I'd give you ¤${this.sellPrice(item, game)} for that, but I've only ¤${purse} to my name. Come back once I've sold a few things.`;
       this.npc.say(line, 3.5);
-      if (why === 'money') game.ui.msg(`${this.npc.name.split(' ')[0]} can't afford it: their purse holds ¤${purse}. Buy something from them first, or come back another day.`, '#ffb080');
+      if (why === 'money') {
+        game.ui.msg(`${first} can't afford it: their purse holds ¤${purse}. Buy something from them first, or come back another day.`, '#ffb080');
+        this.refuse(`${first} can't afford it: ¤${this.sellPrice(item, game)} wanted, ¤${purse} in their purse. Buy something first, or come back later.`, true);
+      } else this.refuse(`${first} has all the ${iname} they can use just now.`);
       game.audio?.play('error');
       return;
     }
@@ -1010,11 +1031,14 @@ export class TradeWindow extends Window {
         this.npc.say(this.npc.rng.pick(['Oh, I\'ll be making this one!', 'Now that\'s a dish worth knowing.', 'I\'ll try it tonight.']), 2.5, '#ffe0a0');
       }
     }
-    if (why === 'full') this.npc.say('That\'s all of those I can take.', 2.5);
-    else if (why === 'money') {
+    if (why === 'full') {
+      this.npc.say('That\'s all of those I can take.', 2.5);
+      this.refuse(`${first} took ${n}: that's all the ${iname} they can use.`);
+    } else if (why === 'money') {
       this.npc.say('That\'s all I can afford for now.', 2.5);
-      game.ui.msg(`${this.npc.name.split(' ')[0]} ran out of coin after ${n} (¤${paid}). Their purse is empty for now.`, '#ffb080');
-    }
+      game.ui.msg(`${first} ran out of coin after ${n} (¤${paid}). Their purse is empty for now.`, '#ffb080');
+      this.refuse(`${first} ran out of coin after ${n} (¤${paid}): their purse is empty for now.`, true);
+    } else this.notice = null;
   }
   onWheel(d) {
     this.scroll += Math.sign(d);
@@ -1028,11 +1052,101 @@ export class TradeWindow extends Window {
     if (game) game.sim.closeShop(this.npc);
   }
   update(dt, game) {
-    if (this.npc.dead || this.npc.distTo(game.player) > 6) this.close();
+    if (this.notice && (this.notice.t += dt) > 4) this.notice = null;
+    if (game && (this.npc.dead || this.npc.distTo(game.player) > 6)) this.close();
   }
 }
 
 // ---------------------------------------------------------------- justice
+// (Round 83) A master's question to the class (see saga/motifs/academy.js):
+// pick an answer (1 to 3), or let it pass (Esc, or wait). The same answers
+// are in the master's talk, for anyone who'd rather go up and say it.
+export class QuestionWindow extends Window {
+  constructor(ui, spec) {
+    super(ui, 58, 9 + Math.min(4, wrap(spec.q, 54).length), { kind: 'question' });
+    this.spec = spec;
+    this.t = 0;
+  }
+  draw(g, game) {
+    const s = this.spec;
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(16,22,34,0.96)', double: true, fg: C.cyan, title: s.mine ? 'PUT TO YOU' : 'A QUESTION' });
+    g.text(2, 1, `${s.who} asks${s.mine ? ' you' : ' the room'}:`.slice(0, this.w - 4), C.cyan);
+    const q = wrap(`"${s.q}"`, this.w - 4).slice(0, 4);
+    q.forEach((l, i) => g.text(2, 2 + i, l, C.white));
+    s.opts.forEach((o, i) => {
+      const y = 3 + q.length + i;
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
+      g.text(3, y, `[${i + 1}] ${o}`.slice(0, this.w - 5), hov ? C.white : C.fg);
+      this.hit(2, y, this.w - 4, 1, () => this.answer(game, i));
+    });
+    const left = Math.max(0, 1 - this.t / (s.time || 25));
+    const bw = this.w - 28;
+    g.text(2, this.h - 1, ' 1-3 answer · Esc pass ', C.faint);
+    g.text(this.w - bw - 2, this.h - 1, '■'.repeat(Math.round(left * bw)).padEnd(bw, '·'), left > 0.3 ? C.cyan : C.orange);
+  }
+  answer(game, i) {
+    this.close();
+    game.sim.saga?.answer(this.spec.tid, sagaPid(game.player), i);
+  }
+  onKey(k, game) {
+    const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(k.code);
+    if (i >= 0 && i < this.spec.opts.length) this.answer(game, i);
+    else if (k.code === 'Escape') this.close();
+    return true;
+  }
+  update(dt) {
+    this.t += dt;
+    if (this.t > (this.spec.time || 25)) this.close();
+  }
+}
+
+// (Round 83) Out after curfew, told twice to leave town, and still here
+// (and not from round here): be walked out on a rope, or resist and be
+// arrested.
+export class CurfewWindow extends Window {
+  constructor(ui, guard, sid) {
+    super(ui, 60, 12, { kind: 'halt' });
+    this.guard = guard;
+    this.sid = sid;
+  }
+  draw(g, game) {
+    const s = game.world.ow.settlements[this.sid];
+    g.box(0, 0, this.w, this.h, { bg: 'rgba(40,24,8,0.96)', double: true, fg: C.hi, title: 'CURFEW' });
+    g.text(2, 1, `${this.guard.name}, ${this.guard.title}:`, C.cyan);
+    const lines = wrap(`"You've been told twice. You're not staying out on ${s ? s.name : 'our'} streets tonight. I'll walk you out of town, and you can come back in the morning. Or you can make this hard."`, this.w - 4);
+    lines.slice(0, 4).forEach((l, i) => g.text(2, 3 + i, l, C.white));
+    const opts = [['1', 'Be led out of town on a rope (back after six)', () => this.answer(game, true)], ['2', 'Resist (the guards will arrest you)', () => this.answer(game, false)]];
+    opts.forEach(([k, label, fn], i) => {
+      const y = 8 + i;
+      const hov = this.hovering(2, y, this.w - 4, 1);
+      g.fill(2, y, this.w - 4, 1, ' ', C.fg, hov ? C.bgHi : undefined);
+      g.text(3, y, `[${k}] ${label}`, hov ? C.white : C.fg);
+      this.hit(2, y, this.w - 4, 1, fn);
+    });
+    g.text(2, this.h - 1, ' 1/2 choose ', C.faint);
+  }
+  answer(game, out) {
+    this.answered = true;
+    this.close();
+    const J = game.sim.justice;
+    if (out) J.leadOut(this.sid, this.guard);
+    else {
+      J.commit(this.sid, 'curfew', { witnesses: [this.guard] });
+      J.resist(this.sid, this.guard);
+    }
+  }
+  onKey(k, game) {
+    if (k.code === 'Digit1' || k.code === 'Enter') this.answer(game, true);
+    else if (k.code === 'Digit2' || k.code === 'Escape') this.answer(game, false);
+    return true;
+  }
+  update(dt, game) {
+    if (this.guard.dead) this.close();
+    else for (const g of game.guardsOf(this.sid)) g.haltT = Math.max(g.haltT, 2);
+  }
+}
+
 export class HaltWindow extends Window {
   constructor(ui, guard, crimes) {
     super(ui, 60, 13, { kind: 'halt' });
@@ -1323,6 +1437,36 @@ export class LedgerWindow extends Window {
       const pay = t.reward && t.reward.coins ? ` ¤${t.reward.coins}.` : '';
       for (const l of wrap(`${where}${pay}`.trim(), this.w - 11)) lines.push({ t: `  ${l}`, c: '#b8a888' });
       if (!t.giver && !mine && t.status === 'open') lines.push({ t: '  [Take it on]', c: C.cyan, act: t.id });
+    }
+    // (Round 83) Steady work: the shops wanting a hand, the watch, and the
+    // trades the mayor licenses (all taken up by asking them in person).
+    const car = game.sim.careers;
+    const o = car && car.openings ? car.openings(this.L) : null;
+    if (!o) return lines;
+    const W = this.w - 9;
+    const head = o.elder ? 'the elder' : 'the mayor';
+    const ask = o.mayor ? o.mayor : head;
+    lines.push({ t: '', c: C.fg });
+    lines.push({ t: 'POSITIONS', c: C.hi });
+    if (!o.shops.length) for (const l of wrap('No shop is taking anyone on today.', W)) lines.push({ t: l, c: C.dim });
+    for (const j of o.shops) {
+      lines.push({ t: '', c: C.fg });
+      for (const l of wrap(`${j.mine ? '✓ ' : '• '}${j.role} at the ${j.bname}`, W)) lines.push({ t: l, c: j.mine ? C.green : '#f0e0c0' });
+      for (const l of wrap(`¤${j.wage} a task, ${clock(j.shift[0])}-${clock(j.shift[1])}. ${j.mine ? 'Your place.' : `Ask ${j.who}.`}`, W - 2)) lines.push({ t: `  ${l}`, c: '#b8a888' });
+    }
+    if (o.watch) {
+      lines.push({ t: '', c: C.fg });
+      for (const l of wrap(`${o.watch.mine ? '✓ ' : '• '}The watch is taking on guards`, W)) lines.push({ t: l, c: o.watch.mine ? C.green : '#f0e0c0' });
+      const how = o.watch.mine ? 'You\'re sworn in.' : `Citizens only${o.watch.citizen ? ' (you are one)' : ''}; sworn service, no fee. Paid by the hour on duty. Ask ${ask}.`;
+      for (const l of wrap(how, W - 2)) lines.push({ t: `  ${l}`, c: o.watch.citizen || o.watch.mine ? '#b8a888' : C.dim });
+    }
+    if (o.trades.length) {
+      lines.push({ t: '', c: C.fg });
+      for (const l of wrap(`• Licensed trades (ask ${ask})`, W)) lines.push({ t: l, c: '#f0e0c0' });
+      for (const t of o.trades) {
+        const fee = t.mine ? 'yours' : `¤${t.fee}${t.workshop ? ' with a workshop' : ''}`;
+        lines.push({ t: `  ${t.title}: ${fee}`.slice(0, W + 2), c: t.mine ? C.green : '#b8a888' });
+      }
     }
     return lines;
   }

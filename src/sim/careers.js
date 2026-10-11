@@ -3,7 +3,7 @@
 // customers to serve), customers who seek you out, guards hired to travel
 // along as escorts, and friends who come along as companions.
 import { JOBS } from '../entities/npcgen.js';
-import { alive, ledger, setOverride, invAdd, st, STOCK } from './econ.js';
+import { alive, ledger, setOverride, invAdd, st, STOCK, mayorOf } from './econ.js';
 import { equipFor } from './shops.js';
 import { countItem, removeItem } from '../game/inventory.js';
 import { ITEMS, tabardFor } from '../world/items.js';
@@ -357,6 +357,45 @@ export class Careers {
   // Your workshop for a trade in a town (built, or going up), if any.
   workshopIn(L, job) {
     return L.buildings.find((b) => b.playerShop === job) || null;
+  }
+
+  // (Round 83) What a town is looking for, as its notice board posts it:
+  // shopkeepers wanting a hand (those doing well enough to pay, a few of
+  // them on a given day), the watch taking on guards, and the trades the
+  // mayor licenses, with what each costs you.
+  openings(L) {
+    const s = L.settlement;
+    const sim = this.sim;
+    const rng = new RNG(hash4(s.id, this.game.day, this.game.seed >>> 0, 0x40b5));
+    const shops = [];
+    const seen = new Set();
+    for (const rec of L.npcs) {
+      if (!alive(rec) || rec.migrated || rec.visitor || rec.age !== 'adult') continue;
+      if (!JOBS[rec.job]?.trader && rec.job !== 'barkeep') continue;
+      const bid = rec.work && rec.work.building;
+      const b = bid !== null && bid !== undefined ? L.buildings[bid] : null;
+      const biz = b && L.econ.biz[bid];
+      if (!biz || b.underConstruction || seen.has(bid) || biz.till < 20) continue;
+      seen.add(bid);
+      // (Not every shop every day: a busy week, a slow one.)
+      if (!rng.chance(0.6)) continue;
+      const J = JOBS[rec.job] || { start: 480, end: 1080 };
+      const mine = this.job && this.job.kind === 'employee' && this.job.sid === s.id && this.job.building === bid;
+      shops.push({
+        bname: bare(b.name), role: ROLES[b.type] || 'Hired Hand', who: rec.name.first, mine,
+        wage: Math.max(3, Math.min(8, Math.round(3 + biz.till / 50))), shift: [J.start, Math.min(J.end, J.start + 600)],
+      });
+    }
+    const m = mayorOf(L);
+    const citizen = sim.isCitizen(s.id);
+    const lic = licensesFor(s.type, s.style).filter((k) => !PROFESSIONS[k].needs || L.buildings.some((b) => PROFESSIONS[k].needs.includes(b.type) && !b.underConstruction));
+    const watch = lic.includes('guard') ? { citizen, mine: this.licensed('guard', s.id) } : null;
+    const trades = lic.filter((k) => k !== 'guard').map((k) => {
+      const P = PROFESSIONS[k];
+      const f = licenceFee(k, s, citizen, !!this.workshopIn(L, k));
+      return { job: k, title: P.title, fee: f.total, workshop: f.workshop, mine: this.licensed(k, s.id), citizen: !!P.citizen };
+    });
+    return { shops, watch, trades, mayor: m ? m.name.first + ' ' + m.name.last : null, elder: s.type === 'village' };
   }
 
   // Can you work this trade bench? (Anyone licensed in the trade, in any town.)

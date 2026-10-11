@@ -18,7 +18,7 @@
 //     found or not, the road may be kind or not; they may study, graduate
 //     and come home with a new trade, or come home ashamed, or never come
 //     home at all.
-import { motif, R, nameOf } from '../core.js';
+import { motif, R, nameOf, HOOKS } from '../core.js';
 import { pick, say, layoutOf, laidTowns, town, townName, living, adults, fullName, kinOf, recOf, purse, bandsNear } from './lib.js';
 import { makePerson } from '../actors.js';
 import { alive, DAY, ledger } from '../../econ.js';
@@ -29,7 +29,11 @@ import { learnRecipe } from '../../../game/cooking.js';
 import { removeItem } from '../../../game/inventory.js';
 import { retrain } from '../../../entities/npcgen.js';
 import { RNG, hash4 } from '../../../util/rng.js';
-import { ITEMS } from '../../../world/items.js';
+import { ITEMS, GEMS } from '../../../world/items.js';
+import { B, BLOCKS } from '../../../world/blocks.js';
+import { playerOf } from '../refs.js';
+import { GROUND } from '../../../config.js';
+import { TEMPERS, LESSONS, masterNature, shuffleQuestion } from '../../lessons.js';
 
 const tid = (th) => `t${th.id}`;
 const ROOM_WORD = { kitchen: 'the kitchen', yard: 'the practice hall', lecture: 'the lecture room', gems: 'the gem workshop' };
@@ -37,50 +41,8 @@ const TERMS = ['the Lantern Term', 'the Harvest Term', 'the Frost Term', 'the Em
 // What each master is like, and says as they teach.
 const MASTER_KIND = { cooking: 'elder', dueling: 'champion', research: 'scholar', gemcraft: 'scholar' };
 const MASTER_TITLE = { cooking: 'Master of Cookery', dueling: 'Swordmaster', research: 'Master of Philosophy', gemcraft: 'Master Setter' };
-const LESSON = {
-  cooking: [
-    'Heat first, then patience. Most cooks have only one of them.',
-    'Taste it. Now taste it again. Now tell me what it needs.',
-    'Salt early for a stew, late for a roast. Write it down.',
-    'A burnt pot teaches more than a good one. Look at it.',
-    'No, no: you\'re drowning it. Let it speak for itself.',
-    'Who brought onions to a sweet tart? ...Oh. It works. Carry on.',
-    'Again! And this time stir as though you mean it.',
-  ],
-  dueling: [
-    'Feet first. A blade is only as good as the feet under it.',
-    'Watch the shoulder, not the sword. The shoulder never lies.',
-    'Parry late. Later. LATER. There!',
-    'You swing like you\'re chopping wood. They\'re not wood.',
-    'Breathe out as you strike. Out, I said.',
-    'Again. And this time, don\'t look at where you mean to hit.',
-    'A good duellist is a patient one. A dead one is usually not.',
-  ],
-  research: [
-    'A question well asked is half answered. Most of you ask badly.',
-    'Write down what you see, not what you expected to see.',
-    'Why does the ash on Kharos fall grey and not black? Anyone? Anyone?',
-    'The Kavorent built those spires for a reason. Find it.',
-    'Wrong. Interestingly wrong, though. Go on.',
-    'Measure it twice. No: three times. Scholars are not carpenters.',
-    'If the numbers agree with you too readily, check the numbers.',
-  ],
-  gemcraft: [
-    'Gently. The stone has waited a thousand years: it can wait for you.',
-    'See the line in it? Follow that. Never fight the grain.',
-    'A setting holds a stone. It doesn\'t strangle it.',
-    'Turn it to the light. Now. That\'s where it wants to be cut.',
-    'Steady hands come from a steady breath. And no ale at lunch.',
-    'Ruby for fire, sapphire for speed: but the setting decides how much.',
-    'You\'ve chipped it. Never mind. Everyone chips their first hundred.',
-  ],
-};
-const ADVICE = {
-  cooking: ['Never cook angry. The food knows.', 'Cook what\'s good in the market, not what\'s in the book.', 'A pinch of something unexpected. Then stop.'],
-  dueling: ['Make them come to you.', 'Your guard\'s too high when you\'re tired. Everyone\'s is. Watch theirs.', 'A parry at the last instant leaves them wide open. Practise it till you dream of it.'],
-  research: ['Read the old histories. They lie, but in useful ways.', 'Keep a notebook. Then keep another, for the notebook.', 'Talk to the miners: they know the rock better than any book.'],
-  gemcraft: ['A setter\'s hands should be warm. Hold a cup of tea before you start.', 'Start with the cheap stones. Everyone ruins a few.', 'The best settings are the ones you don\'t notice.'],
-};
+// (Round 83: what the masters say, and do, is each master's own, and each
+// subject's: see sim/lessons.js.)
 
 // The Academy's own: its masters and registrar (kept with the city).
 function bookOf(S, L, rng) {
@@ -95,6 +57,9 @@ function bookOf(S, L, rng) {
     if (k !== 'dueling') p.weapon = null;
     A.masters[k] = p;
   }
+  // (Round 83) Each master their own person (kept with them; given to
+  // those from before).
+  for (const k of SUBJECT_KEYS) A.masters[k].nature ||= masterNature(hash4(S.game.seed | 0, L.settlement.id, A.terms), k, A.terms);
   if (!A.registrar) {
     const p = makePerson(rng, style, 'scholar');
     p.title = 'Registrar';
@@ -129,9 +94,13 @@ function teachPlayer(th, S, pid, c) {
       const left = p.give(key, 1);
       if (left) g.spawnDrop(key, left, p.x, p.y, p.z, true);
     } else if (c.subject === 'gemcraft') {
-      const left = p.give('gem', 1);
-      if (left) g.spawnDrop('gem', left, p.x, p.y, p.z, true);
-      got.push('a stone you cut yourself');
+      // (Round 83: not if a stone was lent you to set in the class.)
+      const lent = th.vars.les && th.vars.les.i === c.i && th.vars.les.lent[pid];
+      if (!lent) {
+        const left = p.give('gem', 1);
+        if (left) g.spawnDrop('gem', left, p.x, p.y, p.z, true);
+        got.push('a stone you cut yourself');
+      }
     } else if (c.subject === 'research') {
       const s = town(S, th.sid);
       if (s && S.sim.tech && S.sim.tech.addPoints) S.sim.tech.addPoints(s, 3, S.day);
@@ -145,50 +114,470 @@ function teachPlayer(th, S, pid, c) {
   S.person(pid).fame += 0.3;
 }
 
-// The term's masters and students in the room, while a class is on (and
-// gone after).
+// The way in and out of the Academy: the hall just inside the front door,
+// and the street just outside it.
+function entryOf(b) {
+  return b.inside ? { x: b.inside.x, z: b.inside.z } : { x: b.door.x, z: b.door.z };
+}
+function exitOf(b) {
+  return b.outside ? { x: b.outside.x, z: b.outside.z } : { x: b.door.x, z: b.door.z };
+}
+
+// Where the class sit or stand in a room: its chairs first (sat on, pulled
+// out from the tables), then free floor.
+function classSpots(S, b, room) {
+  const r = b.rooms[room];
+  const set = new Set(r.tiles.map((t) => `${t.x},${t.z}`));
+  const w = S.game.world;
+  const out = [];
+  for (const t of r.tiles) if (w.getBlock(t.x, GROUND, t.z) === B.chair) out.push({ x: t.x, z: t.z, seat: true });
+  for (const t of r.tiles) {
+    const id = w.getBlock(t.x, GROUND, t.z);
+    if (id !== B.chair && set.has(`${t.x},${t.z}`) && open(id)) out.push({ x: t.x, z: t.z, seat: false });
+  }
+  return out;
+}
+
+// Floor that can be stood on (bare, or a rug).
+const open = (id) => id === B.air || !BLOCKS[id] || !BLOCKS[id].solid;
+
+// The room's own stations for the subject (its ovens, dummies, desks or
+// benches), each with somewhere to stand at it.
+const STATION_IDS = {
+  cooking: () => [B.oven, B.furnace, B.table],
+  dueling: () => [B.training_dummy],
+  research: () => [B.writing_desk, B.alembic],
+  gemcraft: () => [B.jeweler_bench],
+};
+function stationsIn(S, b, room, subject) {
+  const r = b.rooms[room];
+  const ids = new Set(STATION_IDS[subject]().filter((q) => q !== undefined));
+  const w = S.game.world;
+  const set = new Set(r.tiles.map((t) => `${t.x},${t.z}`));
+  const out = [];
+  for (const t of r.tiles) {
+    if (!ids.has(w.getBlock(t.x, GROUND, t.z))) continue;
+    for (const [dx, dz] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+      const x = t.x + dx;
+      const z = t.z + dz;
+      if (!set.has(`${x},${z}`)) continue;
+      if (!open(w.getBlock(x, GROUND, z))) continue;
+      out.push({ x: t.x, z: t.z, sx: x, sz: z });
+      break;
+    }
+  }
+  return out;
+}
+
+// The term's masters and students in the room, while a class is on: they
+// come in through the front door and walk to their places, and (Round 83)
+// walk out again after, rather than being there, and then not.
 function stageClass(th, S, cur) {
   const L = layoutOf(S, th.sid);
   const b = L && L.buildings[th.vars.bid];
   const A = L && L.econ.academy;
-  if (!b || !A) return;
-  const key = `master:${cur.c.subject}`;
-  if (th.vars.staged !== cur.i) {
-    // (Last class's people go.)
-    for (const a of th.actors) if (!a.gone && (a.key.startsWith('master:') || a.key.startsWith('stu:'))) S.dismissActor(th, a.key);
-    th.vars.staged = cur.i;
-    if (th.vars.cancelled && th.vars.cancelled.includes(cur.i)) return;
-    const mid = roomMid(b, SUBJECTS[cur.c.subject].room);
-    if (!mid) return;
-    const m = A.masters[cur.c.subject];
-    // (Its master ill, and someone playing taking it instead.)
-    const sub = th.vars.sub && th.vars.sub.done && th.vars.sub.i === cur.i;
-    if (!sub) S.actor(th, {
-      key, kind: 'npc', role: 'master', talk: true, at: mid, stay: true, subject: cur.c.subject,
-      person: { ...m, age: m.age || 'adult', maxHp: m.maxHp || 20 },
-      orders: { home: mid, roam: 1, lines: LESSON[cur.c.subject], mark: null },
-    });
-    // A few of the students (those boarding: their town lets them go).
-    const tiles = b.rooms[SUBJECTS[cur.c.subject].room].tiles;
-    (th.vars.npcs || []).filter((n) => n.att && n.att[cur.i]).slice(0, 3).forEach((n, i) => {
-      const r = recOf(S, n.ref);
-      if (!r) return;
-      const at = tiles[(i * 4 + 2) % tiles.length];
-      S.actor(th, {
-        key: `stu:${n.ref.sid}:${n.ref.idx}`, kind: 'npc', role: 'student', talk: true, at, stay: true,
-        person: { name: r.name, look: r.look, personality: r.personality, traits: r.traits, age: r.age, job: r.job, maxHp: r.maxHp || 18, title: 'Student' },
-        orders: { home: at, roam: 1, lines: STUDENT_LINES[cur.c.subject] },
-      });
+  if (!b || !A || th.vars.staged === cur.i) return;
+  // (Last class's people go.)
+  sendOff(th, S, b);
+  th.vars.staged = cur.i;
+  th.vars.les = null;
+  if (th.vars.cancelled && th.vars.cancelled.includes(cur.i)) return;
+  const room = SUBJECTS[cur.c.subject].room;
+  const mid = roomMid(b, room);
+  if (!mid) return;
+  const m = A.masters[cur.c.subject];
+  // (A class well begun when you come by: they're in their places
+  // already.)
+  const late = (S.now % DAY) - cur.c.from > 12;
+  const entry = entryOf(b);
+  // (Its master ill, and someone playing taking it instead.)
+  const sub = th.vars.sub && th.vars.sub.done && th.vars.sub.i === cur.i;
+  if (!sub) S.actor(th, {
+    key: `master:${cur.c.subject}`, kind: 'npc', role: 'master', talk: true, at: late ? mid : entry, stay: true, subject: cur.c.subject,
+    person: { ...m, age: m.age || 'adult', maxHp: m.maxHp || 20 },
+    orders: { home: { x: mid.x, z: mid.z }, roam: 0, lines: null, mark: null },
+  });
+  // The students boarding there who've come to it (more of them than
+  // there was room for before).
+  const spots = classSpots(S, b, room);
+  const rng = new RNG(hash4(th.seed, cur.i, 0x57d));
+  let k = 0;
+  for (const n of th.vars.npcs || []) {
+    const r = recOf(S, n.ref);
+    if (!r || !alive(r)) continue;
+    n.att ||= {};
+    if (n.att[cur.i] === undefined) n.att[cur.i] = rng.chance(0.55 + (r.personality?.diligence ?? 0.5) * 0.4);
+    if (!n.att[cur.i] || k >= 6 || !spots.length) continue;
+    const at = spots[k++ % spots.length];
+    S.actor(th, {
+      key: `stu:${n.ref.sid}:${n.ref.idx}`, kind: 'npc', role: 'student', talk: true, at: late ? at : entry, stay: true,
+      person: { name: r.name, look: r.look, personality: r.personality, traits: r.traits, age: r.age, job: r.job, maxHp: r.maxHp || 18, title: 'Student' },
+      orders: { home: { x: at.x, z: at.z }, roam: 0, lines: null, sitHome: at.seat, skill: (r.skills && r.skills[SUBJECTS[cur.c.subject].skill]) || 0.2 },
     });
   }
 }
 
-const STUDENT_LINES = {
-  cooking: ['Is it meant to smell like that?', 'Mine\'s curdled again.', 'I think I\'ve got it!', '*chop chop chop*'],
-  dueling: ['Ow.', 'Again!', 'My arms...', 'I nearly had that.'],
-  research: ['*scribble*', 'Could you say that again, Master?', 'I don\'t follow.', 'Oh! Oh, I see!'],
-  gemcraft: ['Steady... steady...', 'It cracked. It cracked!', 'Look how it catches the light.', 'Hmm.'],
-};
+// The masters and students of the class just over: out through the door.
+function sendOff(th, S, b) {
+  const out = exitOf(b);
+  for (const a of th.actors) if (!a.gone && (a.key.startsWith('master:') || a.key.startsWith('stu:'))) S.walkOff(th, a.key, out);
+}
+
+// ------------------------------------------------------------ a class
+// (Round 83) A class as it goes, in parts of its hours: the class come in
+// and the master greets them; the master shows them something, at the
+// room's own oven, dummies, desk or bench; a question to the room
+// (answered by whoever's quickest: those playing, from the window that
+// comes up or by going and saying it, or one of the students, right or
+// wrong); work set, and done the way it's really done, at the room's own
+// stations (those playing, by doing it: see the `on` handlers below; the
+// students at theirs); another question, put to one of you by name; and
+// the master's word to end, with something for each of you for your part.
+// Kept in th.vars.les, a class at a time.
+const PHASES = [['gather', 0], ['show', 0.06], ['ask', 0.28], ['work', 0.46], ['ask2', 0.78], ['close', 0.93]];
+
+function phaseAt(f) {
+  let p = 'gather';
+  for (const [k, t] of PHASES) if (f >= t) p = k;
+  return p;
+}
+
+function natureOf(A, k) {
+  return (A.masters[k] && A.masters[k].nature) || masterNature(0, k);
+}
+
+// Those playing who are in the room just now (enrolled or not).
+function inRoom(th, S, b, room) {
+  return S.players().filter(({ p }) => roomAt(b, Math.round(p.x), Math.round(p.z)) === room);
+}
+
+function lessonOf(th, cur) {
+  const v = th.vars;
+  if (!v.les || v.les.i !== cur.i) v.les = { i: cur.i, phase: null, said: {}, q: null, shown: [], next: 0, done: {}, merit: {}, hits: {}, lent: {}, busy: {} };
+  return v.les;
+}
+
+function runLesson(th, S, cur) {
+  const L = layoutOf(S, th.sid);
+  const b = L && L.buildings[th.vars.bid];
+  const A = L && L.econ.academy;
+  if (!b || !A || !b.rooms) return;
+  const c = cur.c;
+  const subj = c.subject;
+  const room = SUBJECTS[subj].room;
+  const les = lessonOf(th, cur);
+  const master = S.actorEnt(th, `master:${subj}`);
+  if (!master) return;
+  const T = TEMPERS[natureOf(A, subj).temper] || TEMPERS.plain;
+  const Ls = LESSONS[subj];
+  const rng = new RNG(hash4(th.seed, cur.i, Math.floor(S.now * 2), 0x1e5));
+  const m = S.now % DAY;
+  const f = Math.max(0, Math.min(1, (m - c.from) / Math.max(1, c.to - c.from)));
+  const ph = phaseAt(f);
+  const here = inRoom(th, S, b, room);
+  const studs = th.actors.filter((a) => !a.gone && a.key.startsWith('stu:')).map((a) => S.actorEnt(th, a.key)).filter(Boolean);
+  les.stations ||= stationsIn(S, b, room, subj);
+  const mid = roomMid(b, room);
+  const talk = (e, text, t = 4, col) => e && !e.dead && e.say(text, t, col);
+  const mname = masterName(A, subj);
+  // A new part of the class.
+  if (ph !== les.phase) {
+    const was = les.phase;
+    les.phase = ph;
+    master.saga.roam = 0;
+    if ((was === 'ask' || was === 'ask2') && les.q && !les.q.by) {
+      talk(master, `${T.wrong === TEMPERS.quiet.wrong ? '' : 'No one? '}${les.q.why}`, 5);
+      les.q = null;
+    }
+    if (ph === 'show') les.next = S.now;
+    if (ph === 'ask' || ph === 'ask2') askQuestion(th, S, cur, les, master, here, ph === 'ask2', mname, rng);
+    if (ph === 'work') {
+      master.saga.home = { x: mid.x, z: mid.z };
+      master.saga.busyAt = null;
+      talk(master, Ls.work.ask, 5);
+      for (const { pid } of here) {
+        if (!enrolled(th, pid)) continue;
+        S.tell(pid, `${mname}: "${Ls.work.ask}" (${Ls.work.how})`, '#a0e0ff');
+        // (No stone to set: one lent, to set in something of yours.)
+        if (subj === 'gemcraft' && !les.lent[pid]) {
+          const has = S.asPid(pid, (p) => p.inv.some((q) => q && GEMS[q.item]));
+          if (!has) {
+            les.lent[pid] = true;
+            S.give(pid, rng.pick(['ruby', 'sapphire', 'emerald', 'topaz', 'amethyst']), 1);
+            S.tell(pid, `${mname} presses a cut stone into your hand. "Yours, if you set it well."`, '#a0e0ff');
+          }
+        }
+      }
+      // The students to the stations.
+      studs.forEach((e, i) => {
+        const st = les.stations.length ? les.stations[i % les.stations.length] : null;
+        if (!st) return;
+        e.saga.home = { x: st.sx, z: st.sz };
+        e.saga.busyAt = { x: st.x, z: st.z };
+        e.saga.seated = false;
+        e.saga.sitHomeWas = e.saga.sitHome;
+        e.saga.sitHome = false;
+      });
+    }
+    if (ph === 'ask2' || ph === 'close') {
+      // (Back to their places.)
+      for (const e of studs) {
+        if (e.saga.sitHomeWas !== undefined) e.saga.sitHome = e.saga.sitHomeWas;
+        const a = th.actors.find((q) => q.key === e.saga.key);
+        if (a && a.orders && a.orders.home) e.saga.home = { ...a.orders.home };
+        e.saga.busyAt = null;
+      }
+    }
+    if (ph === 'close') closeLesson(th, S, cur, les, master, T, here, mname);
+  }
+  // Greeted, once the master's in the room.
+  if (!les.said.open && roomAt(b, Math.round(master.x), Math.round(master.z)) === room) {
+    les.said.open = true;
+    const nat = natureOf(A, subj);
+    talk(master, pick(rng, T.open), 4);
+    if (here.length && rng.chance(0.5)) les.quirkAt = S.now + 6;
+    les.nat = nat.quirk;
+  }
+  if (les.quirkAt && S.now >= les.quirkAt) {
+    les.quirkAt = null;
+    for (const { pid } of here) S.tell(pid, `(${mname} ${les.nat}.)`, '#9ab0c8');
+  }
+  // What the master shows: a thing or two, at the room's own stations.
+  if (ph === 'show' && S.now >= les.next && les.shown.length < 2) {
+    const left = Ls.show.map((_, i) => i).filter((i) => !les.shown.includes(i) && !(th.vars.shownAll || []).includes(`${subj}:${i}`));
+    const pool = left.length ? left : Ls.show.map((_, i) => i).filter((i) => !les.shown.includes(i));
+    const i = pick(rng, pool);
+    les.shown.push(i);
+    (th.vars.shownAll ||= []).push(`${subj}:${i}`);
+    const st = les.stations.length ? pick(rng, les.stations) : null;
+    if (st) {
+      master.saga.home = { x: st.sx, z: st.sz };
+      master.saga.busyAt = { x: st.x, z: st.z };
+      les.act = { at: S.now + 4, x: st.x, z: st.z };
+    }
+    talk(master, Ls.show[i], 6);
+    for (const { pid } of here) S.tell(pid, `${mname}: "${Ls.show[i]}"`, '#c8dcf0');
+    les.next = S.now + Math.max(12, (c.to - c.from) * 0.1);
+  }
+  // Doing it, as they say it.
+  if (les.act && S.now >= les.act.at && Math.max(Math.abs(master.x - master.saga.home.x), Math.abs(master.z - master.saga.home.z)) <= 1) {
+    workAt(S, master, les.act, subj);
+    les.act.at = S.now + 3;
+    les.act.n = (les.act.n || 0) + 1;
+    if (les.act.n >= 3) les.act = null;
+  }
+  // A question waiting on an answer.
+  if ((ph === 'ask' || ph === 'ask2') && les.q && !les.q.by) {
+    const q = les.q;
+    if (q.react && S.now >= q.react.at) {
+      const rr = q.react;
+      q.react = null;
+      talk(master, rr.right ? `${pick(rng, T.right)} ${q.why}` : pick(rng, T.wrong), 4);
+      if (rr.right) q.by = rr.by;
+    } else if (!q.react && S.now >= q.npcAt && studs.length && (!q.to || S.now >= q.at + 18)) {
+      // One of the students puts a hand up.
+      const tried = q.npcTried || [];
+      const e = studs.find((s0) => !tried.includes(s0.saga.key));
+      if (e) {
+        tried.push(e.saga.key);
+        q.npcTried = tried;
+        const right = rng.chance(0.3 + (e.saga.skill || 0.2) * 0.6);
+        const wrong = [0, 1, 2].filter((k) => k !== q.right && !(q.out || []).includes(k));
+        const pickI = right || !wrong.length ? q.right : pick(rng, wrong);
+        if (!right) (q.out ||= []).push(pickI);
+        e.emoteShow?.('!', '#ffe070', 1.5);
+        e.face(master.x, master.z);
+        talk(e, `${q.opts[pickI]}?`, 3);
+        q.react = { at: S.now + 3, right: pickI === q.right, by: 'npc' };
+        q.npcAt = S.now + 12;
+        if (pickI === q.right) {
+          const n = (th.vars.npcs || []).find((nn) => `stu:${nn.ref.sid}:${nn.ref.idx}` === e.saga.key);
+          const r = n && recOf(S, n.ref);
+          if (r) teachRec(r, subj);
+        }
+      }
+    } else if (!q.nudged && S.now >= q.at + 10 && !studs.length) {
+      q.nudged = true;
+      talk(master, pick(rng, T.nudge), 3);
+    }
+  }
+  // The work: the students at it, the master going round.
+  if (ph === 'work') {
+    for (const e of studs) {
+      const bz = e.saga.busyAt;
+      if (!bz || e.moving || Math.max(Math.abs(e.x - e.saga.home.x), Math.abs(e.z - e.saga.home.z)) > 0) continue;
+      const k = e.saga.key;
+      les.busy[k] = (les.busy[k] ?? rng.float(0, 3)) - 0.5;
+      if (les.busy[k] > 0) continue;
+      les.busy[k] = rng.float(2.5, 5);
+      workAt(S, e, bz, subj);
+      if (rng.chance(0.18)) talk(e, pick(rng, Ls.npc), 2.5);
+    }
+    les.roundT = (les.roundT ?? 6) - 0.5;
+    if (les.roundT <= 0) {
+      les.roundT = rng.float(10, 16);
+      // To one of them (someone playing, mostly), and a word.
+      const who = here.filter(({ pid }) => enrolled(th, pid));
+      const tgt = who.length && rng.chance(0.6) ? pick(rng, who) : null;
+      const e = tgt ? tgt.p : studs.length ? pick(rng, studs) : null;
+      if (e) {
+        master.saga.home = { x: Math.round(e.x), z: Math.round(e.z) };
+        master.saga.roam = 1;
+        master.saga.busyAt = { x: Math.round(e.x), z: Math.round(e.z) };
+        const line = tgt ? (les.done[tgt.pid] ? pick(rng, T.praise) : `${pick(rng, T.nudge)} ${Ls.work.how}`) : pick(rng, rng.chance(0.5) ? T.praise : T.nudge);
+        talk(master, line, 4);
+      }
+    }
+  }
+}
+
+// At the station: hands busy, and what comes of it.
+function workAt(S, e, at, subject) {
+  e.face(at.x, at.z);
+  e.doAction?.(0.4);
+  const r = S.game.renderer;
+  const g = S.game;
+  if (!r || !g.nearPlayer?.(e, 20)) return;
+  if (subject === 'cooking') {
+    r.emit(at.x, GROUND + 1, at.z, { n: 3, color: ['#f0f0f0', '#d8d8d8'], up: 14, speed: 5, gravity: -10, life: 0.9, oy: 2 });
+    if (Math.random() < 0.3) g.audio?.play('sizzle', { x: at.x, y: GROUND, z: at.z }, null, { vol: 0.4 });
+  } else if (subject === 'dueling') {
+    r.wobble?.(at.x, GROUND, at.z, 1);
+    r.emit(at.x, GROUND + 1, at.z, { n: 4, color: ['#e8cc70', '#d0b050'], up: 22, speed: 36, gravity: 120, life: 0.5, oy: -10 });
+    g.audio?.play('hit', { x: at.x, y: GROUND, z: at.z }, null, { vol: 0.5 });
+  } else if (subject === 'research') {
+    r.emit(at.x, GROUND + 1, at.z, { n: 2, color: ['#c8d8ff', '#ffffff'], up: 8, speed: 4, gravity: -6, life: 0.8, oy: 0 });
+    if (Math.random() < 0.3) g.audio?.play('page', { x: at.x, y: GROUND, z: at.z }, null, { vol: 0.4 });
+  } else {
+    r.emit(at.x, GROUND + 1, at.z, { n: 3, color: ['#fff4b0', '#ffd040', '#ffffff'], up: 10, speed: 12, gravity: 40, life: 0.5, oy: 0 });
+    if (Math.random() < 0.4) g.audio?.play('clang', { x: at.x, y: GROUND, z: at.z }, null, { vol: 0.35 });
+  }
+}
+
+// A question to the room (or, the second time, to one of you by name).
+function askQuestion(th, S, cur, les, master, here, named, mname, rng) {
+  const subj = cur.c.subject;
+  const Q = LESSONS[subj].questions;
+  const used = (th.vars.qUsed ||= []);
+  const left = Q.map((_, i) => i).filter((i) => !used.includes(`${subj}:${i}`));
+  const k = left.length ? pick(rng, left) : pick(rng, Q.map((_, i) => i));
+  used.push(`${subj}:${k}`);
+  const q = shuffleQuestion(Q[k], rng);
+  const them = here.filter(({ pid }) => enrolled(th, pid));
+  const to = named && them.length ? pick(rng, them).pid : null;
+  les.q = { ...q, k, at: S.now, by: null, tries: {}, npcAt: S.now + (to ? 18 : 12), to };
+  const toName = to ? nameOf(S, R.pl(to)).split(' ')[0] : null;
+  master.saga.home = { ...(roomMid(layoutOf(S, th.sid).buildings[th.vars.bid], SUBJECTS[subj].room)) };
+  master.saga.busyAt = null;
+  master.say(`${toName ? `${toName}: ` : ''}${q.q}`, 6, '#e8f0ff');
+  for (const { pid } of them) {
+    const mine = pid === to;
+    S.tell(pid, `${mname} asks ${mine ? 'you' : toName || 'the room'}: "${q.q}" ${q.opts.map((o, i) => `[${i + 1}] ${o}`).join(' ')}`, '#a0e0ff');
+    S.asPid(pid, () => S.game.ui.openQuestion?.({ tid: th.id, who: mname, q: q.q, opts: q.opts, mine, time: 25 }));
+  }
+}
+
+// An answer from someone playing (the window, or the master's talk).
+function answerQ(th, S, pid, i) {
+  const les = th.vars.les;
+  const q = les && les.q;
+  const L = layoutOf(S, th.sid);
+  const A = L && L.econ.academy;
+  const cur = classNow(th.vars.sched, S.now);
+  if (!q || !cur || cur.i !== les.i || !A) return { lines: ['We\'ve moved on from that one.'] };
+  const T = TEMPERS[natureOf(A, cur.c.subject).temper] || TEMPERS.plain;
+  const master = S.actorEnt(th, `master:${cur.c.subject}`);
+  const rng = new RNG(hash4(th.seed, cur.i, Math.floor(S.now * 2), 0xa45));
+  const who = nameOf(S, R.pl(pid)).split(' ')[0];
+  if (!enrolled(th, pid)) return { lines: ['Enrolled students only, I\'m afraid. You\'re welcome to listen.'] };
+  if (q.tries[pid] !== undefined) return { lines: ['You\'ve had your go at this one. Let someone else try.'] };
+  if (q.to && q.to !== pid && !q.by && S.now < q.at + 18) return { lines: [`Let ${nameOf(S, R.pl(q.to)).split(' ')[0]} have a go first.`] };
+  q.tries[pid] = i;
+  const right = i === q.right;
+  const say0 = (t) => master && !master.dead && master.say(t, 4);
+  const pp = playerOf(S.game, pid);
+  if (master && !master.dead && pp) master.face(pp.x, pp.z);
+  if (right && !q.by) {
+    q.by = pid;
+    q.react = null;
+    les.merit[pid] = (les.merit[pid] || 0) + (q.to === pid ? 3 : 2);
+    const line = `${pick(rng, T.right)} ${q.why}`;
+    say0(line);
+    for (const { pid: o } of S.players()) if (o !== pid && enrolled(th, o)) S.tell(o, `${who} answered: "${q.opts[i]}". Right.`, '#a0e0ff');
+    S.tell(pid, `Right! (+practice for your part)`, '#a0ffa0');
+    return { lines: [line], close: true };
+  }
+  if (right) {
+    les.merit[pid] = (les.merit[pid] || 0) + 1;
+    return { lines: [`Yes: as was said. ${q.why}`], close: true };
+  }
+  const line = pick(rng, T.wrong);
+  say0(line);
+  (q.out ||= []).push(i);
+  return { lines: [line], close: true };
+}
+
+// The end of a class: the master's word, and something for each of you
+// for your part (an answer got right, the work done).
+function closeLesson(th, S, cur, les, master, T, here, mname) {
+  const rng = new RNG(hash4(th.seed, cur.i, 0xc105));
+  master.say(pick(rng, T.close), 4);
+  const craft = SUBJECTS[cur.c.subject].craft;
+  for (const { pid } of here) {
+    if (!enrolled(th, pid)) continue;
+    const st = th.vars.players[pid];
+    const merit = (les.merit[pid] || 0) + (les.done[pid] ? 3 : 0);
+    st.merit = (st.merit || 0) + merit;
+    if (!merit) {
+      S.tell(pid, `${mname}: "Have a go next time. Answer something, do the work: that's how it sticks."`, '#c8c8c8');
+      continue;
+    }
+    S.asPid(pid, () => gainMastery(S.game, craft, Math.min(4, merit * 0.5)));
+    const did = [les.done[pid] ? 'did the work' : null, les.merit[pid] ? 'answered well' : null].filter(Boolean).join(' and ');
+    S.tell(pid, `${mname}: "Good. You ${did || 'took part'}." (Practice for it, and it counts at the term's end.)`, '#a0ffa0');
+  }
+}
+
+// One of you playing did the work set, the way it's done.
+function workDone(th, S, pid, what) {
+  const les = th.vars.les;
+  const cur = classNow(th.vars.sched, S.now);
+  if (!les || !cur || cur.i !== les.i || les.phase !== 'work' || les.done[pid] || !enrolled(th, pid)) return;
+  les.done[pid] = true;
+  const L = layoutOf(S, th.sid);
+  const A = L && L.econ.academy;
+  const master = S.actorEnt(th, `master:${cur.c.subject}`);
+  const T = TEMPERS[natureOf(A, cur.c.subject).temper] || TEMPERS.plain;
+  const rng = new RNG(hash4(th.seed, cur.i, 0xd0e, pid.length));
+  const line = pick(rng, T.praise);
+  if (master && !master.dead) master.say(line, 3.5);
+  S.tell(pid, `${masterName(A, cur.c.subject)}: "${line}" (You ${what}.)`, '#a0ffa0');
+}
+
+// (Round 83) The registrar: at the desk by day; off to eat at noon and in
+// the evening (at the bench nearest the desk); to bed at night, in their
+// room at the back of the hall (or, in an Academy built before there was
+// one, home through the front door, and back in the morning).
+function registrarSpec(b, A) {
+  const reg = b.registrar || roomMid(b, 'lecture');
+  const q = b.quarters || null;
+  let meal = b.registrarMeal || null;
+  if (!meal) {
+    const benches = (b.seats || []).filter((t) => t.tags && t.tags.includes('social'));
+    benches.sort((a, c) => Math.abs(a.x - reg.x) + Math.abs(a.z - reg.z) - (Math.abs(c.x - reg.x) + Math.abs(c.z - reg.z)));
+    meal = benches[0] ? { x: benches[0].x, z: benches[0].z, face: { x: reg.x, z: reg.z } } : null;
+  }
+  return {
+    key: 'registrar', kind: 'npc', role: 'registrar', talk: true, at: { x: reg.x, z: reg.z }, stay: true,
+    away: q ? null : [21 * 60 + 30, 6 * 60 + 30],
+    person: { ...A.registrar, age: 'adult', maxHp: 16 },
+    orders: {
+      home: { x: reg.x, z: reg.z }, roam: 0, mark: 'talk',
+      lines: ['Enrolment\'s open. Desk\'s here.', 'Fees in advance, if you please.', 'Next!', '*stamps a paper*', 'Has anyone seen my good pen?', 'Schedules on request.'],
+      staff: { bed: q ? q.bed : null, bedSide: q ? q.side : null, meal: meal ? { x: meal.x, z: meal.z } : null, mealFace: meal ? meal.face || null : null, door: exitOf(b) },
+    },
+  };
+}
 
 motif({
   id: 'academy',
@@ -283,13 +672,9 @@ motif({
           });
           t.offerLabel = 'You look like you\'ve something on your mind.';
         }
-        // The registrar at the desk.
-        const reg = b.registrar || roomMid(b, 'lecture');
-        S.actor(th, {
-          key: 'registrar', kind: 'npc', role: 'registrar', talk: true, at: reg, stay: true,
-          person: { ...A.registrar, age: 'adult', maxHp: 16 },
-          orders: { home: reg, roam: 0, lines: ['Enrolment\'s open. Desk\'s here.', 'Fees in advance, if you please.', 'Next!', '*stamps a paper*'], mark: 'talk' },
-        });
+        // The registrar at the desk (who keeps hours: see registrarSpec).
+        S.actor(th, registrarSpec(b, A));
+        th.vars.staffed = 2;
         const first = th.vars.sched[0];
         S.note(th, `${th.vars.name} opened ${th.vars.termName}${focus ? `, with ${SUBJECTS[focus].title.toLowerCase()} taught more than most` : ''}. Classes from day ${first.day + 1}; ¤${th.vars.fee} to enrol (ask the registrar at the back of the hall).${th.vars.newMaster ? ` ${th.vars.newMaster.was} has gone, and ${th.vars.newMaster.now} teaches ${SUBJECTS[th.vars.newMaster.subject].title.toLowerCase()} now.` : ''}`, { news: [th.sid] });
         for (const n of th.vars.npcs) {
@@ -322,19 +707,29 @@ motif({
         }
       },
       live(th, S) {
+        const L = layoutOf(S, th.sid);
+        const b = L && L.buildings[th.vars.bid];
+        // (Round 83: a registrar from before keeps hours now.)
+        if (th.vars.staffed !== 2 && b && L.econ.academy) {
+          th.vars.staffed = 2;
+          const spec = registrarSpec(b, L.econ.academy);
+          S.actor(th, spec);
+          const e = S.actorEnt(th, 'registrar');
+          if (e && e.saga) Object.assign(e.saga, spec.orders);
+        }
         const cur = classNow(th.vars.sched, S.now);
         if (!cur) {
           if (th.vars.staged !== undefined && th.vars.staged !== null) {
-            for (const a of th.actors) if (!a.gone && (a.key.startsWith('master:') || a.key.startsWith('stu:'))) S.dismissActor(th, a.key);
+            if (b) sendOff(th, S, b);
+            else for (const a of th.actors) if (!a.gone && (a.key.startsWith('master:') || a.key.startsWith('stu:'))) S.dismissActor(th, a.key);
             th.vars.staged = null;
           }
           return;
         }
         stageClass(th, S, cur);
         if (th.vars.cancelled && th.vars.cancelled.includes(cur.i)) return;
+        runLesson(th, S, cur);
         // Who's sitting through it.
-        const L = layoutOf(S, th.sid);
-        const b = L && L.buildings[th.vars.bid];
         for (const { p, pid } of S.players()) {
           if (!enrolled(th, pid)) continue;
           const st = th.vars.players[pid];
@@ -385,6 +780,33 @@ motif({
         const lastClass = th.vars.sched[th.vars.sched.length - 1];
         if (S.day > lastClass.day) S.go(th, 'judged');
       },
+      // (Round 83) The work set the class, done the way it's done: a dish
+      // cooked in the kitchen, blows on the practice hall's dummies, a
+      // problem worked at the lecture room's desk, a stone set at the
+      // workshop's bench.
+      on: {
+        practised(th, ev, S) {
+          const cur = classNow(th.vars.sched, S.now);
+          if (!cur || SUBJECTS[cur.c.subject].craft !== ev.craft) return;
+          const L = layoutOf(S, th.sid);
+          const b = L && L.buildings[th.vars.bid];
+          if (roomAt(b, ev.x, ev.z) !== SUBJECTS[cur.c.subject].room) return;
+          workDone(th, S, ev.pid, LESSONS[cur.c.subject].work.done);
+        },
+        dummy_hit(th, ev, S) {
+          const cur = classNow(th.vars.sched, S.now);
+          const les = th.vars.les;
+          if (!cur || cur.c.subject !== 'dueling' || !les || les.i !== cur.i || les.phase !== 'work' || les.done[ev.pid]) return;
+          const L = layoutOf(S, th.sid);
+          const b = L && L.buildings[th.vars.bid];
+          if (roomAt(b, ev.x, ev.z) !== 'yard') return;
+          const h = (les.hits[ev.pid] ||= { n: 0, heavy: 0 });
+          h.n++;
+          if (ev.heavy) h.heavy++;
+          if (h.n >= (LESSONS.dueling.work.hits || 4) && h.heavy >= 1) workDone(th, S, ev.pid, LESSONS.dueling.work.done);
+          else if (h.n === (LESSONS.dueling.work.hits || 4) && !h.heavy) S.tell(ev.pid, 'Now a heavy one: hold the strike before you let it go.', '#a0e0ff');
+        },
+      },
       fade: 10,
     },
     judged: {
@@ -401,13 +823,13 @@ motif({
           if (!r || !alive(r)) continue;
           r.away = false;
           r.academy = null;
-          const went = Object.keys(n.att).length / Math.max(1, total);
+          const went = Object.values(n.att).filter(Boolean).length / Math.max(1, total);
           const roll = went * 0.7 + (r.personality?.diligence ?? 0.5) * 0.3 + rng.float(-0.2, 0.2);
           const result = roll > 0.8 ? 'honours' : roll > 0.45 ? 'pass' : 'fail';
           th.vars.results.push({ ref: n.ref, result, from: n.from || null });
           if (result !== 'fail' && A) A.alumni.push({ name: fullName(r), sid: n.ref.sid, day: S.day });
           // (Some take up a trade they learnt there.)
-          const fav = Object.keys(n.att).map((i) => th.vars.sched[+i].subject);
+          const fav = Object.keys(n.att).filter((i) => n.att[i]).map((i) => th.vars.sched[+i].subject);
           const k = fav.length ? fav.sort((a, b) => fav.filter((q) => q === b).length - fav.filter((q) => q === a).length)[0] : null;
           const HL = layoutOf(S, n.ref.sid);
           if (k && result !== 'fail' && HL && rng.chance(result === 'honours' ? 0.6 : 0.3) && !['mayor', 'guard', 'priest'].includes(r.job) && !SUBJECTS[k].jobs.includes(r.job)) {
@@ -422,7 +844,8 @@ motif({
         }
         // Those playing who enrolled.
         for (const [pid, st] of Object.entries(th.vars.players || {})) {
-          const went = st.credited.length / Math.max(1, total);
+          // (Round 83: and what you put into the classes counts.)
+          const went = st.credited.length / Math.max(1, total) + Math.min(0.2, (st.merit || 0) * 0.015);
           const result = went >= 0.85 ? 'honours' : went >= 0.5 ? 'pass' : 'fail';
           st.result = result;
           if (result === 'fail') {
@@ -460,7 +883,7 @@ motif({
           for (let i = 0; i < 6; i++) hall.push({ x: b.inside.x + (b.registrar ? Math.sign(b.registrar.x - b.inside.x) * (2 + i) : i), z: b.inside.z + (b.registrar ? Math.sign(b.registrar.z - b.inside.z) * (2 + i) : 0) });
           SUBJECT_KEYS.forEach((k, i) => {
             const at = hall[Math.min(hall.length - 1, i + 1)];
-            S.actor(th, { key: `gm:${k}`, kind: 'npc', role: 'master', talk: true, at, stay: true, subject: k, person: { ...A.masters[k], age: 'adult', maxHp: 20 }, orders: { home: at, roam: 0, lines: pick(rng, [['Well done.', 'I expected no less.', 'Don\'t forget what you learnt.'], ['Go and be useful.', 'Proud of you. Some of you.', 'Write to us.']]) } });
+            S.actor(th, { key: `gm:${k}`, kind: 'npc', role: 'master', talk: true, at: entryOf(b), stay: true, subject: k, person: { ...A.masters[k], age: 'adult', maxHp: 20 }, orders: { home: at, roam: 0, lines: pick(rng, [['Well done.', 'I expected no less.', 'Don\'t forget what you learnt.'], ['Go and be useful.', 'Proud of you. Some of you.', 'Write to us.']]) } });
           });
         }
         if (S.now >= th.vars.ceremony + 90) S.end(th, 'graduated', `The graduates of ${th.vars.termName} took their diplomas in the hall of ${th.vars.name}.`, { news: [th.sid] });
@@ -484,10 +907,28 @@ motif({
       },
     },
   },
-  hello(th, a, npc, pid) {
-    if (a.role === 'registrar') return enrolled(th, pid) ? 'Back again? The schedule\'s on the board. Well, it\'s in my head. Ask.' : pick(npc.rng, ['Enrolment? Name, and the fee.', 'Here to study, or here to look?', 'Welcome to the Academy. Mind the step.']);
-    if (a.role === 'master') return enrolled(th, pid) ? pick(npc.rng, ['Ah. Late, but here.', 'Sit. Watch. Learn.', 'You. Good. We\'re starting.']) : pick(npc.rng, ['This class is for the enrolled. You may watch from the door.', 'Enrolled? No? Then hush.']);
-    if (a.role === 'student') return pick(npc.rng, ['Shh, I\'m trying to listen.', 'Is this your first term too?', 'The masters are terrifying. I love it.']);
+  hello(th, a, npc, pid, S) {
+    if (a.role === 'registrar') {
+      if (npc.saga && npc.saga.seated) return pick(npc.rng, ['*chewing* Mm. One moment. Go on.', 'I\'m on my lunch, but go on.']);
+      return enrolled(th, pid) ? 'Back again? The schedule\'s on the board. Well, it\'s in my head. Ask.' : pick(npc.rng, ['Enrolment? Name, and the fee.', 'Here to study, or here to look?', 'Welcome to the Academy. Mind the step.']);
+    }
+    if (a.role === 'master') {
+      // (Round 83) Each master in their own way.
+      const L = S && layoutOf(S, th.sid);
+      const A = L && L.econ.academy;
+      const nat = A && a.subject ? natureOf(A, a.subject) : null;
+      const T = (nat && TEMPERS[nat.temper]) || TEMPERS.plain;
+      const q = th.vars.les && th.vars.les.q && !th.vars.les.q.by ? th.vars.les.q : null;
+      if (q && enrolled(th, pid)) return `${pick(npc.rng, T.nudge)} "${q.q}"`;
+      if (!enrolled(th, pid)) return pick(npc.rng, [`${pick(npc.rng, T.open)} (You're not enrolled: you're welcome to watch.)`, 'Visitors at the back, please. Enrolled students up front.', 'Thinking of enrolling? The registrar\'s at the back of the hall.']);
+      return pick(npc.rng, T.open);
+    }
+    if (a.role === 'student') {
+      const phase = th.vars.les && th.vars.les.phase;
+      if (phase === 'work') return pick(npc.rng, ['Can\'t talk, I\'m nearly there.', 'Have you done yours yet?', 'Watch this. ...Oh. Don\'t watch this.']);
+      if (phase === 'ask' || phase === 'ask2') return pick(npc.rng, ['I think I know this one!', 'Do you know the answer? I won\'t tell.', 'Shh, I\'m thinking.']);
+      return pick(npc.rng, ['Is this your first term too?', 'I came all this way. I\'m not missing a word.', 'Our master\'s nothing like I expected.']);
+    }
     return '...';
   },
   talk(th, a, npc, pid, S) {
@@ -503,7 +944,14 @@ motif({
       if (enrolled(th, pid) && th.node !== 'judged') out.push({ id: 'sga_quit', arg: tid(th), label: 'I want to leave the Academy.' });
     }
     if (a.role === 'master' && th.node === 'term') {
-      out.push({ id: 'sga_advice', arg: `${tid(th)}:${a.subject}`, label: 'Any advice, Master?' });
+      // (Round 83) A question put to the class: answered here too.
+      const les = th.vars.les;
+      const q = les && les.q && !les.q.by && enrolled(th, pid) && les.q.tries[pid] === undefined ? les.q : null;
+      if (q) q.opts.forEach((o, i) => out.push({ id: 'sga_ans', arg: `${tid(th)}:${i}`, label: `"${o}."` }));
+      if (les && les.phase === 'work' && enrolled(th, pid) && !les.done[pid]) out.push({ id: 'sga_how', arg: `${tid(th)}:${a.subject}`, label: 'What should I be doing?' });
+      out.push({ id: 'sga_advice', arg: `${tid(th)}:${a.subject}`, label: 'Could you show me something useful?' });
+      out.push({ id: 'sga_past', arg: `${tid(th)}:${a.subject}`, label: `How did you come to ${SUBJECTS[a.subject].verb}?` });
+      out.push({ id: 'sga_life', arg: `${tid(th)}:${a.subject}`, label: 'What do you do when you\'re not teaching?' });
       if (a.subject === 'dueling' && enrolled(th, pid)) out.push({ id: 'sga_spar', arg: tid(th), label: 'Spar with me?' });
     }
     if (th.vars.sub && th.vars.sub.subject && a.role === 'registrar' && !th.vars.sub.done && S.game && L) {
@@ -589,8 +1037,29 @@ motif({
         return { lines };
       }
       case 'sga_advice': {
+        // (Round 83) Something you can use: how a thing's really done.
         const k = String(arg).split(':')[1];
-        return { lines: [pick(rng, ADVICE[k] || ['Practise.'])] };
+        const Ls = LESSONS[k];
+        if (!Ls) return { lines: ['Practise.'] };
+        const i = rng.int(0, Ls.show.length - 1);
+        return { lines: [Ls.show[i], Ls.show[(i + 1) % Ls.show.length]] };
+      }
+      case 'sga_ans':
+        return answerQ(th, S, pid, +String(arg).split(':')[1]);
+      case 'sga_how': {
+        const k = String(arg).split(':')[1];
+        return { lines: [LESSONS[k] ? LESSONS[k].work.how : 'Watch, for now.'] };
+      }
+      case 'sga_past':
+      case 'sga_life': {
+        const k = String(arg).split(':')[1];
+        const nat = A ? natureOf(A, k) : null;
+        if (!nat) return { lines: ['Oh, this and that.'] };
+        const T = TEMPERS[nat.temper] || TEMPERS.plain;
+        if (id === 'sga_past') {
+          return { lines: [pick(rng, [`Me? I ${nat.past}.`, `Long story. Short version: I ${nat.past}.`, `I ${nat.past}. Nobody expects that.`]), pick(rng, [...T.praise, 'Funny how things go.', 'And here I am.'])] };
+        }
+        return { lines: [pick(rng, [`I ${nat.pastime}.`, `When I'm not here? I ${nat.pastime}.`]), pick(rng, ['Don\'t tell the students. Oh. You are one.', 'Everyone needs something that isn\'t work.', 'Come and see some time.', 'It keeps me sane.'])] };
       }
       case 'sga_spar': {
         if (S.game.duel) return { lines: ['One bout at a time.'] };
@@ -636,10 +1105,10 @@ function npcClasses(th, S, rng) {
     for (const n of th.vars.npcs || []) {
       const r = recOf(S, n.ref);
       if (!r || !alive(r)) continue;
-      if (rng.chance(0.55 + (r.personality?.diligence ?? 0.5) * 0.4)) {
-        n.att[i] = true;
-        teachRec(r, c.subject);
-      }
+      n.att ||= {};
+      // (Round 83: decided as the class began, if anyone was there to see.)
+      if (n.att[i] === undefined) n.att[i] = rng.chance(0.55 + (r.personality?.diligence ?? 0.5) * 0.4);
+      if (n.att[i]) teachRec(r, c.subject);
     }
   }
   th.vars.npcUpTo = i;
@@ -928,3 +1397,30 @@ motif({
   },
 });
 
+
+// (Round 83) An answer from a class's question window (see ui/windows.js
+// QuestionWindow).
+HOOKS.answer.push((S, tid0, pid, i) => {
+  const th = S.thread(+tid0);
+  if (!th || th.m !== 'academy' || th.done) return false;
+  const r = answerQ(th, S, pid, i);
+  if (r && r.lines && r.lines.length) S.tell(pid, r.lines.join(' '), '#c8dcf0');
+  return true;
+});
+
+// (Round 83) The room's own desk or bench, for those enrolled in a class
+// that's working at it (no licence wanted, for the lesson).
+HOOKS.bench.push((S, st, x, z, pid) => {
+  const want = { scribe: 'research', jeweller: 'gemcraft' };
+  if (!want[st]) return false;
+  for (const th of S.live()) {
+    if (th.m !== 'academy' || th.node !== 'term' || !enrolled(th, pid)) continue;
+    const cur = classNow(th.vars.sched, S.now);
+    if (!cur || cur.c.subject !== want[st]) continue;
+    const L = layoutOf(S, th.sid);
+    const b = L && L.buildings[th.vars.bid];
+    if (roomAt(b, x, z) !== SUBJECTS[cur.c.subject].room && roomAt(b, x + 1, z) !== SUBJECTS[cur.c.subject].room && roomAt(b, x - 1, z) !== SUBJECTS[cur.c.subject].room && roomAt(b, x, z + 1) !== SUBJECTS[cur.c.subject].room && roomAt(b, x, z - 1) !== SUBJECTS[cur.c.subject].room) continue;
+    return true;
+  }
+  return false;
+});
