@@ -40,6 +40,12 @@ import { seatField } from './party.js';
 import { applyTier, roman, CRYSTAL_COLORS } from '../entities/bosstier.js';
 import { REGION_W, INST_RX, INST_X0, INST_SLOT_RX } from '../config.js';
 
+// (Round 91) A floor as it's laid out (a mod's as it builds it): for the
+// map, on a guest's screen too.
+export function planFloor(rec, n, rx0) {
+  return rec.mod && MODS.buildFloor ? MODS.buildFloor(rec, n, rx0) : buildFloor(rec, n, rx0);
+}
+
 // (Round 69) A place the sea has (or had): its master may have a ship in
 // a bottle about it (see onKill).
 export const SUNKEN_SHIP_CHANCE = 0.35;
@@ -352,7 +358,7 @@ export class DungeonRun {
     const game = this.game;
     this.floor = n;
     // (Round 62) A mod's dungeon: its floors as built (see mod/build.js).
-    const data = this.rec.mod && MODS.buildFloor ? MODS.buildFloor(this.rec, n, this.rx0) : buildFloor(this.rec, n, this.rx0);
+    const data = planFloor(this.rec, n, this.rx0);
     let kept = this.rec.floors[n];
     // (Kept from before each old place had its own space: moved over.)
     if (kept && kept.gen === FLOOR_GEN && kept.rx0 === undefined) kept = this.rec.floors[n] = movedFloor(game, this.rec, n, kept, this.rx0);
@@ -693,8 +699,9 @@ export class DungeonRun {
     const game = this.game;
     const p = game.player;
     const party = this.partyHere();
-    // (Round 73) What you've seen of the floor, for its map.
-    noteSeen(this, p, dt);
+    // (Round 73) What you've seen of the floor, for its map (Round 91: each
+    // of you, so the record has what guests have seen too).
+    party.forEach((q, i) => noteSeen(this, q, i ? 0 : dt));
     this.scaleBosses(party.length);
     const near = (x, z, rx, rz) => party.some((q) => Math.abs(x - q.x) <= rx && Math.abs(z - q.z) <= rz);
     const inHall = (q, br, m = 0) => q.x >= br.x0 - m && q.x <= br.x1 + m && q.z >= br.z0 - m && q.z <= br.z1 + m;

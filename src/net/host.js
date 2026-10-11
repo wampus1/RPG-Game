@@ -654,6 +654,15 @@ export class HostNet {
         g.sent.glob = gj;
         msg.w = glob;
       }
+      // (Round 91) What's been seen of the floor they're on, for their map
+      // (as the record has it: each of you who's been down here).
+      const dn = game.dungeon;
+      const hex = dn && dn.rec.seenMap ? dn.rec.seenMap[dn.floor] : null;
+      const sk = hex ? `${dn.rec.id}:${dn.floor}:${hex}` : null;
+      if (hex && sk !== g.sent.seenMap) {
+        g.sent.seenMap = sk;
+        msg.ds = { id: dn.rec.id, f: dn.floor, m: hex };
+      }
     });
     // Everything about them.
     const near = (e) => Math.abs(e.x - p.x) <= VIEW && Math.abs(e.z - p.z) <= VIEW;
@@ -875,6 +884,10 @@ export class HostNet {
       dungeon: d ? {
         id: d.rec.id,
         floor: d.floor,
+        // (Its space, and how often it's been turned back: so a guest can
+        // lay its floors out the same, for the map.)
+        rx0: d.rx0,
+        restores: d.rec.restores || 0,
         fight: enc(d.fight, 3),
         fallen: enc(d.fallen, 2),
         bossRoom: d.data && d.data.bossRoom ? enc(d.data.bossRoom, 2) : null,

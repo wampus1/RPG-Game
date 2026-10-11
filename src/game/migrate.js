@@ -699,6 +699,14 @@ export const STEPS = [
       log.push('Riding in another player\'s wagon works now: only its owner drives, and whoever\'s sat in it is carried along.');
     },
   },
+  {
+    // (Round 91) The map below ground on a guest's screen: nothing kept
+    // changes (what's been seen is kept as before, and now by all of you).
+    to: '0.91.0',
+    data(d, log) {
+      log.push('Guests see the map below ground now, with what everyone down there has seen.');
+    },
+  },
 ];
 // (What each kind of shop took in, in 0.51.)
 const NEW_STOCK = { general: ['lute', 'flute', 'pipe', 'scroll'], carpenter: ['lyre', 'fiddle', 'hand_drum'], trapper: ['hunting_horn'] };

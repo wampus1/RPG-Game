@@ -14,8 +14,14 @@ import { buildFloor } from '../world/dungeongen.js';
 
 const SEE_R = 6;
 const PANEL = 20;
-const bits = new Map();
-const keyOf = (rec, f) => `${rec.id}:${f}`;
+// (Each record its own: Round 91, so another world's, or a guest's copy,
+// never shares one.)
+const bits = new WeakMap();
+const floorsOf = (rec) => {
+  let m = bits.get(rec);
+  if (!m) bits.set(rec, (m = new Map()));
+  return m;
+};
 
 function decode(hexs, n) {
   const a = new Uint8Array(n);
@@ -33,16 +39,23 @@ function encode(a) {
 }
 // What's been seen of a floor (made from the record the first time).
 export function seenOf(rec, f, n) {
-  const k = keyOf(rec, f);
-  let a = bits.get(k);
+  const m = floorsOf(rec);
+  let a = m.get(f);
   if (!a || a.length !== n) {
     a = decode(rec.seenMap && rec.seenMap[f], n);
-    bits.set(k, a);
+    m.set(f, a);
   }
   return a;
 }
+// (Round 91) What the host's record holds of a floor (sent to guests),
+// added to what's been seen here.
+export function mergeSeen(rec, f, n, hexs) {
+  const a = seenOf(rec, f, n);
+  const b = decode(hexs, n);
+  for (let i = 0; i < n; i++) if (b[i]) a[i] = 1;
+}
 export function hasSeen(rec, f) {
-  return !!(rec.seenMap && rec.seenMap[f]) || bits.has(keyOf(rec, f));
+  return !!(rec.seenMap && rec.seenMap[f]) || !!(bits.get(rec) && bits.get(rec).has(f));
 }
 
 // Each moment down there: what's round you, seen (from DungeonRun.update).

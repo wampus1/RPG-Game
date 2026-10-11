@@ -15,7 +15,8 @@ import { starfallScene } from '../game/starfall.js';
 import { introFrom } from '../game/intros.js';
 import { wallFall } from '../game/wallfall.js';
 import { eruptionScene } from '../game/eruption.js';
-import { DungeonRun } from '../game/dungeon.js';
+import { DungeonRun, planFloor } from '../game/dungeon.js';
+import { noteSeen, mergeSeen } from '../ui/dungeonmap.js';
 import { dtypeOf } from '../world/dungeongen.js';
 import { restamp } from '../world/sites.js';
 import { GAME_VERSION, versionText } from '../version.js';
@@ -246,6 +247,8 @@ export class GuestNet {
     if (m.sh) applyShips(game, m.sh);
     if (m.l) this.lists(m.l);
     if (m.w) this.globals(m.w);
+    // (Round 91) What's been seen of this floor, by any of you.
+    if (m.ds) this.seenFloor(m.ds);
     if (m.own) this.ownState(m.own);
     // The others in your guild, as they are now.
     if (m.gm) this.mates = m.gm;
@@ -406,9 +409,31 @@ export class GuestNet {
     run.floor = d.floor;
     run.fight = dec(d.fight, find);
     run.fallen = dec(d.fallen, find);
-    run.data = { bossRoom: d.bossRoom, up: d.up, upAt: d.upAt, down: d.down };
+    // (Round 91) The floor's plan, laid out here as the host has it, for
+    // the map (made once a floor).
+    if (d.rx0 !== undefined && d.rx0 !== null) run.rx0 = d.rx0;
+    if (d.restores !== undefined) rec.restores = d.restores;
+    if (run.planned !== `${d.floor}:${run.rx0}:${rec.restores || 0}`) {
+      run.planned = `${d.floor}:${run.rx0}:${rec.restores || 0}`;
+      let b = null;
+      try {
+        b = run.rx0 !== undefined ? planFloor(rec, d.floor, run.rx0) : null;
+      } catch {
+        b = null;
+      }
+      run.plan = b ? { plan: b.plan, x0: b.x0, z0: b.z0, rooms: b.rooms, bossGate: b.bossGate, up: b.up } : {};
+    }
+    run.data = { ...run.plan, bossRoom: d.bossRoom, up: d.up || run.plan.up, upAt: d.upAt, down: d.down };
     run.packs = d.packs || [];
     run.update = () => {};
+  }
+
+  // (Round 91) The record's fog for a floor, added to what you've seen here.
+  seenFloor(s) {
+    const rec = this.game.sim.dungeons.get(s.id);
+    const run = this.game.dungeon;
+    const P = run && run.rec === rec && run.floor === s.f && run.data && run.data.plan;
+    if (rec && P) mergeSeen(rec, s.f, P.W * P.D, s.m);
   }
 
   // Your own: sleep, scene, how you feel, where you stand with the town.
@@ -514,6 +539,8 @@ export class GuestNet {
     game.dt = dt;
     const ui = game.ui;
     const ev = input.consume();
+    // (Round 91) What you see down there, for your map.
+    if (game.dungeon && game.dungeon.data && game.dungeon.data.plan && game.player) noteSeen(game.dungeon, game.player, dt);
     const remoteModal = ui.windows.some((w) => w.remote && w.modal && w.state !== 'closing');
     const local = ui.windows.find((w) => !w.remote && w.kind !== 'banner' && w.state !== 'closing');
     const fwd = { pressed: [], clicks: [], wheel: 0, wheelShift: ev.wheelShift };

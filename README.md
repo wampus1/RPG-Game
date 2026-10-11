@@ -6510,6 +6510,12 @@ into stairs when the world's brought up to date.)
 - **Never two at the reins.** Trying to drive a wagon someone's already driving says "Someone's driving it." A horse anyone is riding counts as busy for every player, and so does a wagon being driven, so no duplicates appear in the world.
 - If the wagon is taken away entirely, anyone left in it is put down.
 
+## Round 91: The map below ground, for guests
+
+- **Guests can open the dungeon map.** Pressing M below ground on a guest's screen now opens the dungeon map (it used to always open the world map). The guest's copy of the dungeon now gets the floor's layout too. The host sends where the dungeon sits and how many times it's been restored, so the guest lays out each floor exactly as the host's.
+- **Shared fog.** What every player down there has seen is noted on the dungeon's record, not just what the host has seen, so it's kept in the save. Each guest's map gets that shared fog whenever it changes, on top of what they've seen themselves.
+- What's been seen is now kept separately for each world's copy of a dungeon, so another world loaded in the same session never shares it.
+
 ## Command console
 
 Press **`** (or **/**) to open the command console. Type a command and press

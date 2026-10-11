@@ -26,6 +26,7 @@ import { NET_PATH, LAN_PATH, NET_VERSION, toRelay } from './net/protocol.js';
 import { windowPixels } from './net/uiwire.js';
 import { AccountWindow, MultiplayerWindow, HostWindow, PartyWindow, ProfileWindow, GuestPauseWindow, InviteWindow, GuildNameWindow, PermsWindow } from './ui/multiplayer.js';
 import { MapWindow } from './ui/worldmap.js';
+import { DungeonMapWindow } from './ui/dungeonmap.js';
 import { FeatsWindow } from './ui/feats.js';
 import { FeatBook, FEAT } from './game/achievements.js';
 import { avatarFromKey } from './render/avatar.js';
@@ -1222,7 +1223,11 @@ function openGuestPause() {
 // Keys that are your own screen's business in someone else's world.
 function guestKey(k) {
   if (k.code === 'KeyH' || k.code === 'F1') ui.toggle('help', () => new HelpWindow(ui));
-  else if (k.code === 'KeyM') ui.toggle('map', () => new MapWindow(ui));
+  else if (k.code === 'KeyM') ui.toggle('map', () => {
+    // (Round 91: below ground, the map of where you are, as the host's.)
+    const d = ui.game && ui.game.dungeon;
+    return d && !d.ship && d.data && d.data.plan ? new DungeonMapWindow(ui) : new MapWindow(ui);
+  });
   else if (k.code === 'KeyP') openParty();
   else if (k.code === 'KeyL') {
     const w = ui.find('feats');
